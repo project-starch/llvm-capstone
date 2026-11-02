@@ -339,6 +339,15 @@ def start(args: argparse.Namespace, state: Path) -> int:
         # Without CF_PCREL a translated block belongs to one virtual pc, so a plugin's
         # instruction addresses are the addresses that ran (capstone-qemu's x-pcrel).
         no_pcrel = bool(getattr(args, "no_pcrel", False))
+        # Extra CPU properties (QEMU -cpu key=value), e.g. capstone-qemu's test scaffolds
+        # x-capstone-test-csrs=true; and -icount shift=N, which ties guest time to the
+        # instruction count so that timers and quanta fall at the same instructions every run.
+        cpu_props = list(getattr(args, "cpu_props", None) or [])
+        if any("," in value or "=" not in value for value in cpu_props):
+            raise VMError("CPU properties must be key=value without commas")
+        icount = getattr(args, "icount", None)
+        if icount is not None and not 0 <= icount <= 10:
+            raise VMError("icount shift must be between 0 and 10")
         share = args.share.resolve(strict=True)
         if not share.is_dir() or "," in str(share):
             raise VMError("Share must be a directory whose path contains no comma")
@@ -370,6 +379,10 @@ def start(args: argparse.Namespace, state: Path) -> int:
             identity_config["plugin_args"] = plugin_args
         if no_pcrel:
             identity_config["pcrel"] = False
+        if cpu_props:
+            identity_config["cpu_props"] = cpu_props
+        if icount is not None:
+            identity_config["icount"] = icount
         if running(state):
             old = json.loads((state / "config.json").read_text())
             if old.get("identity") != identity_config or args.port not in (0, old["port"]):
@@ -469,6 +482,10 @@ insmod /mnt/control/module
         ]
         if no_pcrel:
             command[-1] += ",x-pcrel=false"
+        for value in cpu_props:
+            command[-1] += "," + value
+        if icount is not None:
+            command += ["-icount", f"shift={icount}"]
         if "plugin" in files:
             command += ["-plugin", ",".join([str(files["plugin"]), *plugin_args])]
         config = {"port": port, "share": str(share), "command": command, "identity": identity_config}
@@ -547,6 +564,10 @@ def main(argv: list[str] | None = None) -> int:
     up.add_argument("--no-pcrel", action="store_true",
                     help="QEMU keys translated blocks by virtual pc too (x-pcrel=false), so a "
                          "plugin's instruction addresses are the addresses that ran")
+    up.add_argument("--cpu-prop", dest="cpu_props", action="append", default=[],
+                    help="Extra QEMU CPU property key=value (e.g. x-capstone-test-csrs=true); part of the VM identity")
+    up.add_argument("--icount", type=int,
+                    help="QEMU -icount shift=N: guest time follows the instruction count, so a run's timers and quanta are reproducible")
     up.add_argument("--port", type=int, default=0)
     up.add_argument("--memory", default="8G")
     up.add_argument("--cma-mib", type=int, default=512,
@@ -590,7 +611,9 @@ def main(argv: list[str] | None = None) -> int:
                             exact_bounds=config.get("exact_bounds", False),
                             share_model=config.get("share_model", "none"),
                             plugin_args=config.get("plugin_args", []),
-                            no_pcrel=config.get("pcrel", True) is False, port=0, boot_timeout=120)
+                            no_pcrel=config.get("pcrel", True) is False,
+                            cpu_props=config.get("cpu_props", []), icount=config.get("icount"),
+                            port=0, boot_timeout=120)
             return start(argparse.Namespace(**settings), state)
         if args.action == "status":
             active = running(state)

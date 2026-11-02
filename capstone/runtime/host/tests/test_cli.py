@@ -171,7 +171,8 @@ class TransportTests(unittest.TestCase):
                     if command[0] == str(root / "qemu"):
                         raise RuntimeError("stop")
                     return real_popen(command, *args, **kwargs)
-                extra = dict(plugin=root / "libcapprof.so", plugin_args=["out=/tmp/o"]) if plugin else {}
+                extra = dict(plugin=root / "libcapprof.so", plugin_args=["out=/tmp/o"],
+                             cpu_props=["x-capstone-test-csrs=true", "x-capstone-addr=sv39"], icount=0) if plugin else {}
                 with patch.dict(os.environ, {"CAPSTONE_QEMU_LOCK": str(root / "lock")}), \
                      patch.object(cli.subprocess, "Popen", side_effect=popen):
                     with self.assertRaisesRegex(RuntimeError, "stop"):
@@ -183,9 +184,13 @@ class TransportTests(unittest.TestCase):
                 config = json.loads((state / "config.json").read_text())
                 command, identity = config["command"], config["identity"]
                 cpu = command[command.index("-cpu") + 1]
-                self.assertEqual(cpu.endswith(",x-pcrel=false"), no_pcrel)
+                self.assertEqual(",x-pcrel=false" in cpu, no_pcrel)
                 self.assertEqual(identity.get("pcrel"), False if no_pcrel else None)
                 if plugin:
+                    self.assertTrue(cpu.endswith(",x-pcrel=false,x-capstone-test-csrs=true,x-capstone-addr=sv39"), cpu)
+                    self.assertEqual(command[command.index("-icount") + 1], "shift=0")
+                    self.assertEqual(identity["cpu_props"], ["x-capstone-test-csrs=true", "x-capstone-addr=sv39"])
+                    self.assertEqual(identity["icount"], 0)
                     self.assertEqual(command[command.index("-plugin") + 1],
                                      f"{root / 'libcapprof.so'},out=/tmp/o")
                     self.assertEqual(identity["files"]["plugin"]["sha256"], cli.fingerprint(root / "libcapprof.so"))
@@ -194,6 +199,9 @@ class TransportTests(unittest.TestCase):
                     self.assertNotIn("-plugin", command)
                     self.assertNotIn("plugin", identity["files"])
                     self.assertNotIn("plugin_args", identity)
+                    self.assertNotIn("-icount", command)
+                    self.assertNotIn("cpu_props", identity)
+                    self.assertNotIn("icount", identity)
 
     def test_plugin_arguments_are_checked(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -201,7 +209,10 @@ class TransportTests(unittest.TestCase):
                 Path(directory, name).write_text("x")
             for extra, message in (({"plugin_args": ["out=x"]}, "needs --plugin"),
                                    ({"plugin": Path(directory, "p.so"), "plugin_args": ["a=b,c=d"]}, "key=value"),
-                                   ({"plugin": Path(directory, "p.so"), "plugin_args": ["flag"]}, "key=value")):
+                                   ({"plugin": Path(directory, "p.so"), "plugin_args": ["flag"]}, "key=value"),
+                                   ({"cpu_props": ["x-a=1,x-b=2"]}, "CPU properties"),
+                                   ({"cpu_props": ["flag"]}, "CPU properties"),
+                                   ({"icount": 11}, "icount shift")):
                 with self.assertRaisesRegex(cli.VMError, message):
                     cli.start(cli.argparse.Namespace(
                         qemu=Path(directory, "qemu"), kernel=Path(directory, "kernel"),
@@ -216,13 +227,14 @@ class TransportTests(unittest.TestCase):
                         for k in ("qemu", "kernel", "firmware", "rootfs", "plugin")},
                         "share": "/tmp/share", "memory": "2G", "cma_mib": 768,
                         "process_cache_mib": 384, "environment": {}, "profile": "physical",
-                        "plugin_args": ["out=/tmp/o"], "pcrel": False}
+                        "plugin_args": ["out=/tmp/o"], "pcrel": False,
+                        "cpu_props": ["x-capstone-test-csrs=true"], "icount": 0}
             (state / "config.json").write_text(json.dumps({"identity": identity}))
             with patch.object(cli, "running", return_value=False), patch.object(cli, "start", return_value=0) as start:
                 self.assertEqual(cli.main(["--state", directory, "restart"]), 0)
                 args, _ = start.call_args.args
-                self.assertEqual((args.plugin, args.plugin_args, args.no_pcrel),
-                                 (Path("/tmp/plugin"), ["out=/tmp/o"], True))
+                self.assertEqual((args.plugin, args.plugin_args, args.no_pcrel, args.cpu_props, args.icount),
+                                 (Path("/tmp/plugin"), ["out=/tmp/o"], True, ["x-capstone-test-csrs=true"], 0))
 
     def test_unknown_share_model_is_refused(self):
         with tempfile.TemporaryDirectory() as directory:
