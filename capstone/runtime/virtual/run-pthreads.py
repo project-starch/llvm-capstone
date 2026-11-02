@@ -55,7 +55,7 @@ echo VIRTUAL_STAGED_DONE
                           '--work', str(a.work/'guest'), '--timeout', str(a.timeout)] + (['--exact-bounds'] if a.exact_bounds else ['--no-exact-bounds']))
     log = (a.work/'guest/serial.log').read_text(errors='replace').replace('\r', '')
     checks = {name: log.count('VIRTUAL_PTHREAD_OK ' + name) == 1 for name in
-              ('unsupported_clone_refused', 'tls mutex cond tagged_join', 'timed_wait', 'independent_blocking_io', 'private_epoll_events', 'shared_tls_transport', '64_joined_lifetimes', 'concurrent_allocator_remap', 'exit_word_untouched_stack')}
+              ('unsupported_clone_refused', 'tls mutex cond tagged_join', 'timed_wait', 'independent_blocking_io', 'private_epoll_events', 'shared_tls_transport', '64_joined_lifetimes', 'concurrent_allocator_remap', 'transport_lifetime', 'exit_word_untouched_stack')}
     # The exit word's page (VIRTUAL_PTHREAD_WORD, in the main stack: the reg 2 grant) must have
     # been admitted by the launcher's CV_TOUCH before its store: a `touch` line for that arena and
     # page index. Without CV_TOUCH (the commit before it) the line is absent and this fails.
