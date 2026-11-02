@@ -43,6 +43,22 @@ rm -rf "$ARCH_DIR"
 cp -r "$MUSL_SRC_DIR/arch/riscv64" "$ARCH_DIR"
 cp -a "$SCRIPT_DIR/arch-capstone64/." "$ARCH_DIR/"
 
+# The arch's math. musl selects src/math/$(ARCH)/*.c over the generic C through
+# its REPLACED_OBJS rule; the port's arch is capstone64, so lay a capstone64 math
+# directory beside arch/capstone64. These files mirror upstream arch/riscv64's
+# math (fsqrt.d, fabs.d, fmadd.d, fmax.d, fmin.d, fsgnj.d and the .s forms) but
+# guard on __capstone_flen, which clang defines from the enabled F/D features
+# (clang/lib/Basic/Targets/Capstone.cpp), not __riscv_flen, which it never
+# defines. So the virtual profile (F and D on, __capstone_flen 64) gets the
+# hardware instructions and the physical profile (no F/D, __capstone_flen
+# undefined) falls back to the generic C exactly as riscv64 does. survey-musl-
+# capstone.py applies the REPLACED_OBJS rule so only the capstone64 form is
+# archived.
+MATH_DIR="$MUSL_SRC_DIR/src/math/capstone64"
+rm -rf "$MATH_DIR"
+mkdir -p "$MATH_DIR"
+cp -a "$SCRIPT_DIR/src-math-capstone64/." "$MATH_DIR/"
+
 # Generated headers, exactly as musl's Makefile builds them (Makefile:98-106).
 # Done here rather than by `make` because configure cannot probe a target it
 # cannot link for, and the survey only needs the headers, not a build system.

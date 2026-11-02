@@ -180,6 +180,34 @@ def main() -> int:
         print(f"ERROR: every source was filtered out as foreign-arch", file=sys.stderr)
         return 2
 
+    # musl's REPLACED_OBJS rule: a source under the arch directory
+    # src/<group>/capstone64/<base>.c replaces the generic src/<group>/<base>.c.
+    # This survey compiles every kept directory rather than running musl's
+    # Makefile, so without this an arch source and its generic namesake (and the
+    # upstream riscv64 namesake, which is kept for its headers/asm but whose math
+    # .c files only ever fall back to the generic C) all land in the archive and
+    # which one a program links is left to ar member order. Apply the rule here so
+    # exactly one definition of sqrt()/fabs()/... survives: the capstone64 one.
+    provided = set()
+    for f in files:
+        parts = f.relative_to(musl).parts
+        if len(parts) >= 4 and parts[0] == "src" and parts[2] == "capstone64":
+            provided.add((parts[1], parts[-1]))
+
+    def superseded(f: pathlib.Path) -> bool:
+        parts = f.relative_to(musl).parts
+        if len(parts) == 3 and parts[0] == "src":            # generic src/G/base.c
+            return (parts[1], parts[2]) in provided
+        if len(parts) >= 4 and parts[0] == "src" and parts[2] == "riscv64":
+            return (parts[1], parts[-1]) in provided
+        return False
+
+    replaced = [f for f in files if superseded(f)]
+    files = [f for f in files if not superseded(f)]
+    if replaced:
+        print(f"replaced       {len(replaced)} generic/riscv64 source(s) by their "
+              f"capstone64 arch form ({', '.join(sorted(str(f.relative_to(musl)) for f in replaced))})")
+
     flags = compile_flags(musl)
 
     def movc_feature() -> str:
