@@ -117,13 +117,15 @@ if [ -n "${CAPSTONE_SPEC_PROFRUN:-}" ]; then
   case "$o" in "$share"/*) redirect=">/mnt/host/${o#"$share"/}" ;; esac
   case "$e" in "$share"/*) redirect="$redirect 2>/mnt/host/${e#"$share"/}" ;; esac
   profile=(--prefix "$CAPSTONE_SPEC_PROFRUN" -e "CAPSTONE_PROFILE_RECORD=/mnt/host/${CAPSTONE_SPEC_RECORD#"$share"/}/image-records.txt")
+  # An arm's guest environment (tools/profile.sh, arm "env"): NAME=value words, for the launcher.
+  for e in ${CAPSTONE_SPEC_GUEST_ENV:-}; do profile+=(-e "$e"); done
   # The shell applies the redirections and execs the launcher; it is in the window (a few hundred instructions).
   [ -z "$redirect" ] || profile+=(--prefix sh --prefix=-c --prefix "exec \"\$0\" \"\$@\" $redirect")   # --prefix=-c: argparse would read a bare -c as an option
 fi
 if [ $plain = 1 ]; then
   # A plain program runs as the guest's own process. The share is mounted with the host's
   # permissions (share model none), so the image executes in place and perl's t/TEST finds $^X.
-  cmd="cd $(printf %q "$guest") && exec ${CAPSTONE_SPEC_PROFRUN:+$(printf %q "$CAPSTONE_SPEC_PROFRUN") }$(printf '%q ' "${words[@]}")$redirect"
+  cmd="cd $(printf %q "$guest") && exec ${CAPSTONE_SPEC_GUEST_ENV:+env $CAPSTONE_SPEC_GUEST_ENV }${CAPSTONE_SPEC_PROFRUN:+$(printf %q "$CAPSTONE_SPEC_PROFRUN") }$(printf '%q ' "${words[@]}")$redirect"
   env PYTHONPATH="$CAPSTONE_VM_HOST" python3 -m capstone_vm --state "$CAPSTONE_VM_STATE" exec -- sh -c "$cmd" || rc=$?
   echo "{\"exit\": $rc}" > "$inv/$id.guest.json"
   route=guest-plain

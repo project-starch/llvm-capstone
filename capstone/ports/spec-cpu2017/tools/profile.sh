@@ -92,6 +92,8 @@ if [ -n "$MODPARAMS" ]; then
 fi
 export CAPSTONE_SPEC_PROFRUN=/tmp/profrun
 STAGE=$(jopt "arms.$ARM.stage_image" share); note "stage_image $STAGE"
+GUEST_ENV=$(python3 -c "import json,sys;print(' '.join(json.load(open(sys.argv[1]))['arms'][sys.argv[2]].get('env',[])))" "$ARMS" "$ARM"); note "guest_env ${GUEST_ENV:-none}"
+[ -z "$GUEST_ENV" ] || export CAPSTONE_SPEC_GUEST_ENV=$GUEST_ENV
 [ "$STAGE" = share ] || export CAPSTONE_SPEC_STAGE=$STAGE
 cd "$SPEC_ROOT"
 set +u; source ./shrc > /dev/null; set -u
