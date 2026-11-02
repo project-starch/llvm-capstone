@@ -17,6 +17,7 @@
 
 #include "Capstone.h"
 #include "CapstoneSubtarget.h"
+#include "llvm/ADT/DenseSet.h"
 #include "llvm/CodeGen/MachineFunctionPass.h"
 #include <queue>
 
@@ -93,6 +94,21 @@ bool CapstoneFoldMemOffset::foldOffset(
   // Map to hold how much the offset contributes to the value of this register.
   DenseMap<Register, int64_t> RegToOffsetMap;
 
+  // Capability cursors the fold leaves in place (CIncOffset / CIncOffsetImm
+  // results downstream of the root), and the registers that end up as the
+  // base of a folded memory op. Erasing the root moves every surviving cursor
+  // by the root's constant, and a cursor that drifts more than ~2 KiB outside
+  // its object loses its tag (R-60). A surviving cursor that is the base of a
+  // folded access sits within that access's simm12 displacement of an
+  // in-bounds address, inside the window; one that only feeds further cursor
+  // arithmetic has nothing bounding it: with bounds [0x10000,0x10010) and
+  // cursor 0x10000, `CIncOffsetImm 2047; CIncOffset -3072; CIncOffset 1025;
+  // LBU 0` visits 0x107ff, 0xfbff, 0x10000 (all representable), while the
+  // folded form visits 0xf400 first, untagged, and the in-bounds load faults.
+  // So every surviving capability intermediate must be a folded base, or the
+  // whole fold is vetoed (checked after the walk).
+  DenseSet<Register> CapIntermediates, FoldedBases;
+
   // Insert root offset into the map.
   RegToOffsetMap[OrigReg] = InitialOffset;
 
@@ -124,6 +140,8 @@ bool CapstoneFoldMemOffset::foldOffset(
         if (auto I = RegToOffsetMap.find(User.getOperand(2).getReg());
             I != RegToOffsetMap.end())
           Offset += I->second;
+        if (User.getOpcode() == Capstone::CIncOffset)
+          CapIntermediates.insert(User.getOperand(0).getReg());
         break;
       // A constant cursor move downstream of the root stays in place with its
       // own immediate (only the root is erased), so just the folded delta
@@ -134,6 +152,7 @@ bool CapstoneFoldMemOffset::foldOffset(
         if (auto I = RegToOffsetMap.find(User.getOperand(1).getReg());
             I != RegToOffsetMap.end())
           Offset = I->second;
+        CapIntermediates.insert(User.getOperand(0).getReg());
         break;
       case Capstone::SH1ADD:
         if (auto I = RegToOffsetMap.find(User.getOperand(1).getReg());
@@ -227,6 +246,7 @@ bool CapstoneFoldMemOffset::foldOffset(
           return false;
 
         FoldableInstrs[&User] = CombinedOffset;
+        FoldedBases.insert(User.getOperand(1).getReg());
         continue;
       }
       }
@@ -247,6 +267,13 @@ bool CapstoneFoldMemOffset::foldOffset(
       }
     }
   }
+
+  // Every surviving capability cursor must be the base of a folded access
+  // (see the comment at CapIntermediates); otherwise the fold could move it
+  // out of the representable window.
+  for (Register R : CapIntermediates)
+    if (!FoldedBases.count(R))
+      return false;
 
   return true;
 }

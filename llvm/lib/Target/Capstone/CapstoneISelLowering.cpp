@@ -21314,6 +21314,14 @@ static SDValue performCIncOffsetCombine(SDNode *N, SelectionDAG &DAG) {
   // the object than before is created: no R-60 tag loss (the window reaches
   // x+(C1+C2) because the original formed it). Beneficial regardless of what
   // consumes the result, so this runs before the load/store-use test below.
+  //
+  // Policy (lane owner, 2026-11-03): the collapse can KEEP a tag the original
+  // lost, never lose one. cincoffset(cincoffset(x, -4096), 4097) leaves the
+  // window at x-4096, clears the tag, and returns untagged to x+1;
+  // cincoffset(x, 1) keeps the tag, and llvm.capstone.cap.get.tag can observe
+  // the difference. That excursion is accepted as eliminable, in the same
+  // direction as CHERI LLVM's rule that folding offsets is allowed while
+  // splitting one is not; `cincoffset-const-collapse.ll` @cancel documents it.
   if (auto *C2N = dyn_cast<ConstantSDNode>(Off)) {
     if (Base.getOpcode() == CapstoneISD::CIncOffset && Base.hasOneUse()) {
       if (auto *C1N = dyn_cast<ConstantSDNode>(Base.getOperand(1))) {
