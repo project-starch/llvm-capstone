@@ -45,6 +45,11 @@ int main(int argc, char **argv)
     volatile char *a = mmap(NULL, PAGES * PAGE, PROT_READ | PROT_WRITE,
                             MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     require(a != MAP_FAILED, "mmap");
+    /* The region's address, so the runner counts the pins of THIS arena (the module's diag_admit
+     * lines name arenas by address) rather than the process's pinned-page total, which also
+     * holds the program's own lazily admitted pages. */
+    printf("PIN_REGION:%p\n", (void *)a);
+    fflush(stdout);
     if (!strcmp(mode, "seq")) {
         a[0] = 1;
     } else if (!strcmp(mode, "stop")) {

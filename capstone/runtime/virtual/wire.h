@@ -74,6 +74,17 @@ struct cv_global {
 #define CV_REMAP_BEGIN _IOW('V', 25, struct cv_remap)
 #define CV_REMAP_END _IOW('V', 26, struct cv_remap)
 #define CV_PROFILE _IOR('V', 27, __u64)
+/* A span the launcher is about to WRITE on the domain's behalf through Linux: a thread's exit
+ * word, a worker's meta block and exchange region. Every page of it inside a lazily admitted
+ * arena is admitted first, pinned and checked exactly as the domain's own fault would admit it,
+ * so the launcher's write never creates backing the domain can store a capability into without
+ * the module's pin and sweep (a frame freed at exit_mm with its tags). Pages already held and
+ * arenas pinned whole need nothing; a span outside every arena is refused (EINVAL), one inside
+ * the image's read+execute prefix too (EACCES). Launcher and module change together. */
+struct cv_touch {
+    __u64 address, bytes;
+};
+#define CV_TOUCH _IOW('V', 29, struct cv_touch)
 /* The image file, by descriptor, before the launcher validates it: the module
  * denies writers to it (ETXTBSY, as Linux does for a running executable) until
  * the context is released, so the bytes validated are the bytes loaded. */
