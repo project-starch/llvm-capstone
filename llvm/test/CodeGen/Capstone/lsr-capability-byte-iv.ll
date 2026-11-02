@@ -1,10 +1,23 @@
 ; RUN: opt -mtriple=capstone64 -passes=loop-reduce -verify-each -S < %s | FileCheck %s --check-prefix=CURSOR
 ; RUN: opt -mtriple=capstone64 -passes=loop-reduce -lsr-capability-byte-iv -verify-each -S < %s | FileCheck %s --check-prefix=BYTE --implicit-check-not=ptrtoint --implicit-check-not=inttoptr
-; RUN: llc -mtriple=capstone64 -mattr=+m,+f,+d -O2 -lsr-capability-byte-iv -capstone-gp-free -verify-machineinstrs < %s | FileCheck %s --check-prefix=ASM
+; RUN: llc -mtriple=capstone64 -mattr=+m,+f,+d -O2 -lsr-capability-byte-iv -capstone-gp-free -verify-machineinstrs < %s -o %t.s
+; RUN: FileCheck %s --check-prefix=ASM < %t.s
+; RUN: FileCheck %s --check-prefix=BASES --implicit-check-not='cincoffset {{[a-z0-9]+}}, {{(a[3-7]|t[0-6]|s[0-9]+|ra|sp|gp|tp)}},' < %t.s
 ;
 ; Conditional accesses to two bases share one integer byte IV. No capability
 ; derivation moves above the access guard, and no neighbor capability is
 ; precomputed. The integer step need not fit the capability window.
+;
+; The ASM checks trace every store to the capability argument it belongs to:
+; the two %a stores go through registers that cincoffset derives from a0, the
+; two %b stores through registers derived from a1. Forming %b's accesses from
+; %a's capability plus the integer address difference would reach the same
+; address with %a's bounds and lifetime; such code has no second cincoffset
+; from a1 feeding a store and fails the ASM pass. The BASES pass has no DAG
+; block, so its implicit check covers the whole function: no cincoffset may
+; use a base other than an incoming capability argument (a0, a1 and the flags
+; in a2), which rejects a cursor derived from another cursor even when every
+; argument-based derivation is still present.
 
 target datalayout = "e-m:e-p:64:128-p200:128:128:128:64-i64:64-i128:128-n32:64-S128-ni:200-A200-P200-G200"
 
@@ -31,9 +44,19 @@ target datalayout = "e-m:e-p:64:128-p200:128:128:128:64-i64:64-i128:128-n32:64-S
 ;
 ; ASM-LABEL: shared_byte_iv:
 ; ASM-NOT: slli {{.*}}, 3{{$}}
-; ASM: cincoffset
+; ASM-DAG: cincoffset [[A0:[a-z0-9]+]], a0, {{[a-z0-9]+}}
+; ASM-DAG: cincoffset [[A1:[a-z0-9]+]], a0, {{[a-z0-9]+}}
+; ASM-DAG: cincoffset [[B0:[a-z0-9]+]], a1, {{[a-z0-9]+}}
+; ASM-DAG: cincoffset [[B1:[a-z0-9]+]], a1, {{[a-z0-9]+}}
+; ASM-DAG: fsd fa0, 0([[A0]])
+; ASM-DAG: fsd fa0, 0([[A1]])
+; ASM-DAG: fsd fa0, 0([[B0]])
+; ASM-DAG: fsd fa0, 0([[B1]])
 ; ASM-NOT: slli {{.*}}, 3{{$}}
 ; ASM: ret
+;
+; BASES-LABEL: shared_byte_iv:
+; BASES: ret
 define void @shared_byte_iv(ptr addrspace(200) %a, ptr addrspace(200) %b, ptr addrspace(200) %flags, i64 %n, double %v) {
 entry:
   %enter = icmp ugt i64 %n, 0
