@@ -115,6 +115,49 @@ mechanism, so that a surprise is a surprise:
 - The 16 cases placed differently from the collaborator's populations carry no prediction
   beyond the mechanism above; whatever they read is a reading of this instrument.
 
+### The same arms, split by where the release was MEASURED to go
+
+The split above is `population`, which is defined by the `stockalloc` ASan run. This one is the
+measurement in `results/2026-11-02-release-destination/`: the probe in Zend's allocator says, per
+case, whether the block was parked in `AG(cache)` or passed to libc. The two axes are different
+statements and they disagree on nine cases, which is the point of having both. Generated, never
+typed: `tools/result-tables.py --by-release results/2026-11-02-release-destination/matrix.tsv
+--across results/2026-10-28-run18 results/2026-10-30-cheribsd`.
+
+**Default scoring**, the 55 temporal cases:
+
+| release destination | cases | stock | system allocator | nested | nested exact | CheriBSD revocation |
+|---|--:|--:|--:|--:|--:|--:|
+| reaches libc `free()` | 14 | 0 of 14 | 4 of 14 | 4 of 14 | 4 of 14 | 1 of 14 |
+| stays in `AG(cache)` | 31 | 0 of 31 | 7 of 31 | 20 of 31 | 20 of 31 | 0 of 31 |
+| in `AG(cache)`, drained at shutdown | 3 | 0 of 3 | 0 of 3 | 0 of 3 | 0 of 3 | 0 of 3 |
+| never Zend's to allocate | 2 | 1 of 2 | 1 of 2 | 1 of 2 | 1 of 2 | 0 of 2 |
+| no release observed | 5 | 0 of 5 | 0 of 5 | 0 of 5 | 0 of 5 | 0 of 5 |
+| **total** | **55** | **1 of 55** | **12 of 55** | **25 of 55** | **25 of 55** | **1 of 55** |
+
+**Sensitivity scoring**, the 55 temporal cases:
+
+| release destination | cases | stock | system allocator | nested | nested exact | CheriBSD revocation |
+|---|--:|--:|--:|--:|--:|--:|
+| reaches libc `free()` | 14 | 0 of 14 | 11 of 14 | 13 of 14 | 13 of 14 | 2 of 14 |
+| stays in `AG(cache)` | 31 | 0 of 31 | 12 of 31 | 30 of 31 | 30 of 31 | 6 of 31 |
+| in `AG(cache)`, drained at shutdown | 3 | 0 of 3 | 0 of 3 | 3 of 3 | 3 of 3 | 0 of 3 |
+| never Zend's to allocate | 2 | 2 of 2 | 2 of 2 | 2 of 2 | 2 of 2 | 0 of 2 |
+| no release observed | 5 | 0 of 5 | 0 of 5 | 0 of 5 | 0 of 5 | 0 of 5 |
+| **total** | **55** | **2 of 55** | **25 of 55** | **48 of 55** | **48 of 55** | **8 of 55** |
+
+What the measured axis buys is the baseline column. Over the 48 cases `nested exact` catches, a
+mechanism that sees only system-allocator events catches **13 of the 15** whose block reaches libc
+and **12 of the 33** whose block does not -- 87 % against 36 %. Split the same 48 by this corpus's
+own `population` instead and the same column reads 53 % against 52 %, which does not tell the two
+sides apart at all. The upstream reading lands between them, 67 % against 33 %.
+
+Two things this table cannot do. `nested exact` reads 48 of 48 on that subset **by construction**,
+because the subset is defined as its catches; the 55-case rows above are the ones to quote. And
+there are no spatial rows: the axis is where a release lands, and a spatial defect has no temporal
+release, so all 12 spatial cases read `no release observed`. Splitting those would need a
+different measurement -- allocation origin -- and on PHP that axis is degenerate, 54 of 56 in the
+sibling corpora being sub-allocations.
 ## Pre-registration for the `cheribsd-revocation` arm, before it ran (2026-10-30)
 
 A fourth arm, declared in `corpus.json` and written into every case by `tools/build-cases.py`:

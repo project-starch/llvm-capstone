@@ -3,7 +3,7 @@
 them with the matrix; it does not compare the matrix against constants kept here, because a checker
 that holds its own copy of the answer passes whatever the README says. Negative-tested: change one
 digit in the README and this exits 1."""
-import collections, csv, re, sys
+import collections, csv, json, re, sys
 from pathlib import Path
 R = Path(sys.argv[1] if len(sys.argv) > 1 else ".").resolve()
 rows = list(csv.DictReader(open(R/"matrix.tsv"), delimiter="\t"))
@@ -68,5 +68,50 @@ wrong = sorted(r["source_id"] for r in tmp if r["population_here"] == "asan-blin
                and r["release_destination"] in ("non-nested", "nested-until-teardown", "not-Zend"))
 chk(named == wrong, f"the cases the README names are the ones the matrix finds\n"
                     f"         matrix={wrong}\n         named ={named}")
+# --- the corpus README's by-release section quotes rates from these same bundles ---
+corpus_md = R.parent.parent / "README.md"
+if corpus_md.is_file() and "split by where the release was MEASURED to go" in corpus_md.read_text():
+    cmd = corpus_md.read_text()
+    cls = {r["source_id"]: r["release_destination"] for r in rows}
+    ids = {d.name: json.loads((d/"oracle.json").read_text())["id"]
+           for d in sorted((R.parent.parent).iterdir()) if (d/"oracle.json").is_file()}
+    pop = {d.name: json.loads((d/"oracle.json").read_text()) for d in sorted((R.parent.parent).iterdir())
+           if (d/"oracle.json").is_file()}
+    def bundle(path):
+        return {json.loads(l)["observation"]["case"]: json.loads(l)
+                for l in (R.parent.parent/path).read_text().splitlines() if l.strip()}
+    base = bundle("results/2026-10-28-run18/sensitivity/bundle-virtual-malloc/verdicts.jsonl")
+    ne = bundle("results/2026-10-28-run18/sensitivity/bundle-virtual-nested-exact/verdicts.jsonl")
+    s48 = [c for c in ids if pop[c]["cwe"] in TEMPORAL and ne[c]["verdict"] == "CAUGHT"]
+    def rate(sel):
+        hit = sum(1 for c in sel if base[c]["verdict"] == "CAUGHT")
+        return hit, len(sel), round(100 * hit / len(sel)) if sel else 0
+    grp = {"reach": [c for c in s48 if cls[ids[c]] in ("non-nested", "not-Zend")],
+           "park":  [c for c in s48 if cls[ids[c]] in ("nested", "nested-until-teardown")]}
+    for key, phrase in (("reach", r"\*\*(\d+) of the (\d+)\*\* whose block reaches libc"),
+                        ("park",  r"\*\*(\d+) of the (\d+)\*\* whose block does not")):
+        m = re.search(phrase, cmd)
+        h, n, _ = rate(grp[key])
+        chk(m and (int(m.group(1)), int(m.group(2))) == (h, n),
+            f"corpus README, baseline on the {key} side: README "
+            f"{m.groups() if m else '?'}, bundles ({h}, {n})")
+    m = re.search(r"(\d+) % against (\d+) %\. Split", cmd)
+    chk(m and (int(m.group(1)), int(m.group(2))) == (rate(grp["reach"])[2], rate(grp["park"])[2]),
+        f"corpus README, measured-axis rates: README {m.groups() if m else '?'}, "
+        f"bundles ({rate(grp['reach'])[2]}, {rate(grp['park'])[2]})")
+    for field, pat in (("population", r"reads (\d+) % against (\d+) %, which does not tell"),
+                       ("collaborator_population", r"between them, (\d+) % against (\d+) %")):
+        vis = [c for c in s48 if pop[c].get(field) == "temporal-asan-visible"]
+        bld = [c for c in s48 if pop[c].get(field) == "asan-blind"]
+        m = re.search(pat, cmd)
+        chk(m and (int(m.group(1)), int(m.group(2))) == (rate(vis)[2], rate(bld)[2]),
+            f"corpus README, {field} rates: README {m.groups() if m else '?'}, "
+            f"bundles ({rate(vis)[2]}, {rate(bld)[2]})")
+    sp = sum(1 for c in ids if pop[c]["cwe"] in ("CWE-125", "CWE-787"))
+    m = re.search(r"all (\d+) spatial cases read `no release observed`", cmd)
+    chk(m and int(m.group(1)) == sp and all(cls[ids[c]] == "no-release-observed"
+                                            for c in ids if pop[c]["cwe"] in ("CWE-125", "CWE-787")),
+        f"corpus README, spatial count: README {m.group(1) if m else '?'}, corpus {sp}")
+
 print("\nALL README NUMBERS RE-DERIVED FROM matrix.tsv" if not fail else f"\n{fail} MISMATCH(ES)")
 sys.exit(1 if fail else 0)
