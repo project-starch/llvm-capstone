@@ -152,6 +152,13 @@ static bool useFramePointerForTargetByDefault(const llvm::opt::ArgList &Args,
 }
 
 static bool useLeafFramePointerForTargetByDefault(const llvm::Triple &Triple) {
+  // Capstone keeps a frame in every function that calls (the launcher's fault
+  // record walks the frame chain), but a leaf needs none: its callee-saved
+  // s0 still holds the caller's record and ra its return address, and the
+  // frame cost eight instructions per call of a leaf such as musl's exp.
+  if (Triple.getArch() == llvm::Triple::capstone64 ||
+      Triple.getArch() == llvm::Triple::capstone32)
+    return false;
   if (Triple.isAArch64() || Triple.isPS() || Triple.isVE() ||
       (Triple.isAndroid() && !Triple.isARM()))
     return false;
