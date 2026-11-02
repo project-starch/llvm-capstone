@@ -34,21 +34,39 @@ declare i64 @llvm.capstone.cap.get.tag.p200(ptr addrspace(200))
 ; excursion x-4096 leaves the ~2 KiB representable window and clears the tag,
 ; and the return to x+1 stays untagged; the collapsed cincoffset(x, 1) keeps
 ; the tag, which get-tag observes. That is accepted, in the direction of CHERI
-; LLVM's rule (folding offsets is allowed, splitting one is not). The backend
-; already eliminates this excursion at -O0 through DAG constant folding of the
-; address round trip; the nested-constant collapse in performCIncOffsetCombine
-; extends it to a nesting of target nodes. Both levels: one `cincoffsetimm 1`,
-; no -4096 materialised.
+; LLVM's rule (folding offsets is allowed, splitting one is not).
+;
+; What this test pins: the WHOLE body, anchored at the label and checked line
+; by line, is one `cincoffsetimm a0, a0, 1` and the get-tag lowering; no
+; materialised excursion (`lui 1048575; cincoffset; lui 1; cincoffset`, the
+; shape a retained -4096/+4097 pair takes, since neither fits simm12) anywhere
+; in it, at -O2 and at -O0. The mechanism, read off `-debug-only=dagcombine`
+; rather than inferred from the -O0 output (target combines run at -O0 too):
+; recoverCapabilityFromAddressArith rebuilds the outer add from the
+; ptrtoint/add/inttoptr round trip as `CIncOffset (CIncOffset x, -4096), 4097`,
+; and the nested-constant collapse of performCIncOffsetCombine turns that into
+; `CIncOffset x, 1` ("Combining: t15: c128 = CIncOffset t16, Constant:i64<4097>
+; ... into: t18: c128 = CIncOffset t2, Constant:i64<1>").
+; MUTATION: delete the nested-constant collapse -> the two cursor moves are
+; materialised and the CHECK-NEXT chain breaks right after `# %bb.0:`. The
+; chain is anchored at the label and runs through every line of the function,
+; so an excursion kept anywhere in the body (before or after `# %bb.0:`) is
+; rejected; the review's `lui 1048575; cincoffset; lui 1; cincoffset` prelude
+; fails both prefixes at either placement.
 ; CHECK-LABEL: cancel:
-; CHECK:      cincoffsetimm a0, a0, 1
-; CHECK-NEXT: lcc a0, a0, 1
-; CHECK-NEXT: sltiu a0, a0, 7
-; CHECK-NOT:  4096
-; CHECK:      ret
+; CHECK-NEXT:   .cfi_startproc
+; CHECK-NEXT: # %bb.0:
+; CHECK-NEXT:   cincoffsetimm a0, a0, 1
+; CHECK-NEXT:   lcc a0, a0, 1
+; CHECK-NEXT:   sltiu a0, a0, 7
+; CHECK-NEXT:   ret
 ; O0-LABEL: cancel:
-; O0:         cincoffsetimm a0, a0, 1
-; O0-NOT:     4096
-; O0:         ret
+; O0-NEXT:   .cfi_startproc
+; O0-NEXT: # %bb.0:
+; O0-NEXT:   cincoffsetimm a0, a0, 1
+; O0-NEXT:   lcc a0, a0, 1
+; O0-NEXT:   sltiu a0, a0, 7
+; O0-NEXT:   ret
 define i64 @cancel(ptr addrspace(200) %x) {
   %p = getelementptr i8, ptr addrspace(200) %x, i64 -4096
   %a = ptrtoint ptr addrspace(200) %p to i64

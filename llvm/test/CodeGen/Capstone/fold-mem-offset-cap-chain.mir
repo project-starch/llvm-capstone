@@ -20,11 +20,27 @@
 # @cap_root_chain the surviving register add IS a folded base (within 112 of
 # an in-bounds access), which is why it may fold.
 #
+# @untaken_access (review 2, P1): an access that merely EXISTS does not bound
+# a cursor. Same values as above; `LBU %p` sits in one successor and `LBU %q`
+# (q derived from p) in the other. On the path through the second, the first
+# never executes: originally p = 0xfbff, q = 0x10000 and the load succeeds;
+# folded, p = 0xf400 loses its tag, q inherits the untagged state and the
+# in-bounds load faults. The pass requires the FIRST use of every surviving
+# cursor, in its defining block, to be a folded access through it (the path
+# argument in the pass); here p's first use is the derived q, so no fold.
+# @taken_access is the allowed shape: p's first use is `LBU %p` in its own
+# block, before the branch, so on every path it executes before the derived
+# q, whose own first use is its load. Both loads fold (+2047) and the other
+# use of p in bb.1 (dominated, so after that access) folds too, -4 -> 2043
+# (a +4 there would need 2051, outside simm12, and the all-or-nothing walk
+# would veto the whole fold for that reason alone).
+#
 # MUTATION: `Offset = map[rs1] + imm` in the pass's CIncOffsetImm case ->
 # `LW [[T]], 608` and `FLD [[U]], 120` (the fault); dropping CIncOffsetImm from
 # the root test leaves @cap_root_chain's `CIncOffsetImm 112` and `FLD ..., 0`;
-# dropping the CapIntermediates veto folds @unbounded_intermediate
-# (`LBU ..., 2047`, no `CIncOffsetImm`).
+# dropping the first-use veto folds @unbounded_intermediate (`LBU ..., 2047`,
+# no `CIncOffsetImm`); weakening it to "some folded access exists" folds
+# @untaken_access the same way.
 #
 # RUN: llc -mtriple=capstone64 -mattr=+m,+f,+d -run-pass=capstone-fold-mem-offset -verify-machineinstrs -o - %s | FileCheck %s
 --- |
@@ -32,6 +48,8 @@
   define void @chain() { ret void }
   define void @cap_root_chain() { ret void }
   define void @unbounded_intermediate() { ret void }
+  define void @untaken_access() { ret void }
+  define void @taken_access() { ret void }
 ...
 ---
 name: chain
@@ -99,5 +117,73 @@ body: |
     %5:gpcr = CIncOffset %4, %2
     %6:gpr = LBU %5, 0
     $x10 = COPY %6
+    PseudoRET implicit $x10
+...
+---
+name: untaken_access
+tracksRegLiveness: true
+body: |
+  bb.0:
+    successors: %bb.1, %bb.2
+    liveins: $c10, $x11, $x12, $x13
+    ; CHECK-LABEL: name: untaken_access
+    ; CHECK:      [[R:%[0-9]+]]:gpcr = CIncOffsetImm {{%[0-9]+}}, 2047
+    ; CHECK-NEXT: [[P:%[0-9]+]]:gpcr = CIncOffset [[R]], {{%[0-9]+}}
+    ; CHECK-NEXT: [[Q:%[0-9]+]]:gpcr = CIncOffset [[P]], {{%[0-9]+}}
+    ; CHECK:      LBU [[P]], 0
+    ; CHECK:      LBU [[Q]], 0
+    %0:gpcr = COPY $c10
+    %1:gpr = COPY $x11
+    %2:gpr = COPY $x12
+    %3:gpr = COPY $x13
+    %4:gpcr = CIncOffsetImm %0, 2047
+    %5:gpcr = CIncOffset %4, %1
+    %6:gpcr = CIncOffset %5, %2
+    BNE %3, $x0, %bb.1
+    PseudoBR %bb.2
+  bb.1:
+    %7:gpr = LBU %5, 0
+    $x10 = COPY %7
+    PseudoRET implicit $x10
+  bb.2:
+    %8:gpr = LBU %6, 0
+    $x10 = COPY %8
+    PseudoRET implicit $x10
+...
+---
+name: taken_access
+tracksRegLiveness: true
+body: |
+  bb.0:
+    successors: %bb.1, %bb.2
+    liveins: $c10, $x11, $x12, $x13
+    ; CHECK-LABEL: name: taken_access
+    ; CHECK-NOT:  CIncOffsetImm
+    ; CHECK:      [[P:%[0-9]+]]:gpcr = CIncOffset {{%[0-9]+}}, {{%[0-9]+}}
+    ; CHECK-NEXT: {{%[0-9]+}}:gpr = LBU [[P]], 2047
+    ; CHECK:      bb.1:
+    ; CHECK:      LBU [[P]], 2043
+    ; CHECK:      bb.2:
+    ; CHECK:      [[Q:%[0-9]+]]:gpcr = CIncOffset [[P]], {{%[0-9]+}}
+    ; CHECK-NEXT: {{%[0-9]+}}:gpr = LBU [[Q]], 2047
+    %0:gpcr = COPY $c10
+    %1:gpr = COPY $x11
+    %2:gpr = COPY $x12
+    %3:gpr = COPY $x13
+    %4:gpcr = CIncOffsetImm %0, 2047
+    %5:gpcr = CIncOffset %4, %1
+    %6:gpr = LBU %5, 0
+    BNE %3, $x0, %bb.1
+    PseudoBR %bb.2
+  bb.1:
+    %7:gpr = LBU %5, -4
+    %8:gpr = ADD %6, %7
+    $x10 = COPY %8
+    PseudoRET implicit $x10
+  bb.2:
+    %9:gpcr = CIncOffset %5, %2
+    %10:gpr = LBU %9, 0
+    %11:gpr = ADD %6, %10
+    $x10 = COPY %11
     PseudoRET implicit $x10
 ...

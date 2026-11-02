@@ -95,19 +95,29 @@ bool CapstoneFoldMemOffset::foldOffset(
   DenseMap<Register, int64_t> RegToOffsetMap;
 
   // Capability cursors the fold leaves in place (CIncOffset / CIncOffsetImm
-  // results downstream of the root), and the registers that end up as the
-  // base of a folded memory op. Erasing the root moves every surviving cursor
-  // by the root's constant, and a cursor that drifts more than ~2 KiB outside
-  // its object loses its tag (R-60). A surviving cursor that is the base of a
-  // folded access sits within that access's simm12 displacement of an
-  // in-bounds address, inside the window; one that only feeds further cursor
-  // arithmetic has nothing bounding it: with bounds [0x10000,0x10010) and
-  // cursor 0x10000, `CIncOffsetImm 2047; CIncOffset -3072; CIncOffset 1025;
-  // LBU 0` visits 0x107ff, 0xfbff, 0x10000 (all representable), while the
-  // folded form visits 0xf400 first, untagged, and the in-bounds load faults.
-  // So every surviving capability intermediate must be a folded base, or the
-  // whole fold is vetoed (checked after the walk).
-  DenseSet<Register> CapIntermediates, FoldedBases;
+  // results downstream of the root). Erasing the root moves every surviving
+  // cursor by the root's constant, and a cursor that drifts more than ~2 KiB
+  // outside its object loses its tag (R-60): with bounds [0x10000,0x10010)
+  // and cursor 0x10000, `CIncOffsetImm 2047; CIncOffset -3072; CIncOffset
+  // 1025; LBU 0` visits 0x107ff, 0xfbff, 0x10000 (all representable), while
+  // the folded form visits 0xf400 first, untagged, and the in-bounds load
+  // faults. The fold is therefore allowed only under a PATH argument, checked
+  // after the walk: the first use of every surviving cursor, in block order
+  // of its defining block, must be a folded access through it. On any
+  // executed path that defines the cursor that access runs before anything
+  // derived from it (a use in another block is dominated by the definition,
+  // so it comes after that access too); its effective address is unchanged
+  // by the fold, so it faults after the fold only where the cursor is outside
+  // the window, which means the access was out of bounds and faulted
+  // originally at the same instruction (possibly on bounds, cause 28, where it
+  // now faults untagged, cause 24: the fault-cause change the DAG combine in
+  // CapstoneISelLowering.cpp documents for defects); if it succeeds, the
+  // cursor is within simm12 of an in-bounds address, inside the window and
+  // tagged, and the argument repeats for each derived cursor. An access that
+  // merely EXISTS is not enough: with the same values, `LBU %p` in one
+  // successor and `LBU %q` (q derived from p) in the other, the path through
+  // the second never executes the first, and the folded form faults there.
+  DenseSet<Register> CapIntermediates;
 
   // Insert root offset into the map.
   RegToOffsetMap[OrigReg] = InitialOffset;
@@ -246,7 +256,6 @@ bool CapstoneFoldMemOffset::foldOffset(
           return false;
 
         FoldableInstrs[&User] = CombinedOffset;
-        FoldedBases.insert(User.getOperand(1).getReg());
         continue;
       }
       }
@@ -268,12 +277,31 @@ bool CapstoneFoldMemOffset::foldOffset(
     }
   }
 
-  // Every surviving capability cursor must be the base of a folded access
-  // (see the comment at CapIntermediates); otherwise the fold could move it
-  // out of the representable window.
-  for (Register R : CapIntermediates)
-    if (!FoldedBases.count(R))
+  // The path argument (see the comment at CapIntermediates): the first use of
+  // each surviving cursor in its defining block must be a folded access with
+  // the cursor as base. No use in that block, or a first use that is anything
+  // else (a derived cursor above all), vetoes the fold.
+  for (Register R : CapIntermediates) {
+    const MachineInstr *Def = MRI.getVRegDef(R);
+    if (!Def)
       return false;
+    const MachineBasicBlock *MBB = Def->getParent();
+    bool Bounded = false;
+    for (auto I = std::next(Def->getIterator()); I != MBB->end(); ++I) {
+      bool Reads = false;
+      for (const MachineOperand &MO : I->uses())
+        if (MO.isReg() && MO.getReg() == R)
+          Reads = true;
+      if (!Reads)
+        continue;
+      auto F = FoldableInstrs.find(const_cast<MachineInstr *>(&*I));
+      Bounded = F != FoldableInstrs.end() && I->getOperand(1).isReg() &&
+                I->getOperand(1).getReg() == R;
+      break;
+    }
+    if (!Bounded)
+      return false;
+  }
 
   return true;
 }
