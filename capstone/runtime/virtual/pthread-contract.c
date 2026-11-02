@@ -100,6 +100,25 @@ static void *exit_word_worker(void *arg)
     (void)arg;
     __capstone_vm_thread_exit_clear((uintptr_t)exit_word, 0, 0, 0);
 }
+/* A worker's transport cannot be retired under it (transport_lifetime): worker A names its
+ * exchange mapping and blocks in a read; the main thread tries to unmap that mapping, which must
+ * be refused with EBUSY -- the launcher will write A's read result into it, through Linux, and a
+ * fresh mapping at the same address would be backing the module never admitted. Then the pipe
+ * is fed, A's read completes into its own exchange, and A exits normally. On a launcher without
+ * the hold the unmap succeeds and the OK line is never printed. */
+extern void *__capstone_virtual_exchange(void);
+static void *transport_exchange;
+static volatile int transport_blocked;
+static int transport_pipe[2];
+static void *transport_worker(void *arg)
+{
+    char byte;
+    transport_exchange = __capstone_virtual_exchange();
+    assert(transport_exchange);
+    transport_blocked = 1;
+    assert(read(transport_pipe[0], &byte, 1) == 1 && byte == 't');
+    return arg;
+}
 static void *allocator_worker(void *arg)
 {
     for (unsigned i=0; i<8; ++i) {
@@ -185,6 +204,24 @@ int main(void)
     assert(!pthread_join(a, &result) && result == &values[0]);
     assert(!pthread_join(b, &result) && result == &values[1]);
     puts("VIRTUAL_PTHREAD_OK concurrent_allocator_remap");
+
+    {
+        assert(!pipe(transport_pipe));
+        assert(!pthread_create(&a, NULL, transport_worker, &values[0]));
+        while (!transport_blocked) sched_yield();
+        struct timespec settle = {0, 100000000};
+        nanosleep(&settle, NULL);   /* A is in its read by now; a race here reads as a FAIL */
+        /* munmap needs only the cursor: an integer-derived pointer names the mapping. */
+        uintptr_t base = (uintptr_t)transport_exchange;
+        int unmapped = munmap((void *)base, 1UL << 20);
+        int reason = errno;
+        assert(write(transport_pipe[1], "t", 1) == 1);
+        assert(!pthread_join(a, &result) && result == &values[0]);
+        close(transport_pipe[0]); close(transport_pipe[1]);
+        if (unmapped == 0) puts("VIRTUAL_PTHREAD_TRANSPORT_UNMAPPED");
+        else if (reason == EBUSY) puts("VIRTUAL_PTHREAD_OK transport_lifetime");
+        else printf("VIRTUAL_PTHREAD_TRANSPORT_ERRNO:%d\n", reason);
+    }
 
     {
         volatile char slab[64 * 4096];   /* 64 pages of the main stack nothing writes */

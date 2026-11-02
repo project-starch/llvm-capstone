@@ -32,13 +32,30 @@ extern size_t __capstone_signals_thread_state_size(void);
 extern uint64_t __capstone_sigmask_current(void);
 extern void __capstone_signals_thread_detach(void);
 
+/* A worker's meta block and exchange region are whole mappings of their own, not heap blocks:
+ * the launcher writes them for the worker's whole life and holds their mappings against
+ * retirement until the worker exits (exec.c, struct mapping.transport), and a mapping that is
+ * exactly the block can be given back with one munmap here, by the worker itself, which is the
+ * one retirement the launcher allows while the hold is up. */
+#define VIRTUAL_EXCHANGE_BYTES (1UL << 20)
 static void release_clone(struct virtual_clone *r)
 {
     __capstone_signals_thread_detach();
     free(r->transport);
-    free(r->meta);
-    free(r->exchange);
+    if (r->meta) munmap(r->meta, CAPSTONE_DELEGATE_META_BYTES);
+    if (r->exchange) munmap(r->exchange, VIRTUAL_EXCHANGE_BYTES);
     free(r);
+}
+static void *transport_block(size_t bytes)
+{
+    void *p = mmap(NULL, bytes, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    return p == MAP_FAILED ? NULL : p;
+}
+/* The calling worker's exchange region (NULL on the main thread): what a program needs to name
+ * the mapping, as the transport-lifetime contract does. */
+void *__capstone_virtual_exchange(void)
+{
+    return current_clone ? current_clone->exchange : NULL;
 }
 
 static void *clone_entry(void *p)
@@ -75,11 +92,14 @@ int __clone(int (*entry)(void *), void *stack, int flags, void *arg, ...)
         .clear = flags & CLONE_CHILD_CLEARTID ? clear : NULL};
     fegetenv(&r->fenv);
     r->transport = calloc(1, __capstone_delegate_thread_state_size());
-    r->meta = calloc(1, CAPSTONE_DELEGATE_META_BYTES);
-    r->exchange = malloc(1UL << 20);
+    r->meta = transport_block(CAPSTONE_DELEGATE_META_BYTES);
+    r->exchange = transport_block(VIRTUAL_EXCHANGE_BYTES);
     r->signals = calloc(1, __capstone_signals_thread_state_size());
     if (!r->transport || !r->meta || !r->exchange || !r->signals) {
-        free(r->signals); free(r->transport); free(r->meta); free(r->exchange); free(r);
+        free(r->signals); free(r->transport);
+        if (r->meta) munmap(r->meta, CAPSTONE_DELEGATE_META_BYTES);
+        if (r->exchange) munmap(r->exchange, VIRTUAL_EXCHANGE_BYTES);
+        free(r);
         return -ENOMEM;
     }
     ((struct capstone_signal_block *)((char *)r->meta + CAPSTONE_SIGNAL_OFFSET))->initial_mask =
@@ -87,7 +107,9 @@ int __clone(int (*entry)(void *), void *stack, int flags, void *arg, ...)
     long id = capstone_virtual_thread_create(clone_entry, r, stack, tls);
     if (id < 0) {
         int error = errno;
-        free(r->signals); free(r->transport); free(r->meta); free(r->exchange); free(r);
+        free(r->signals); free(r->transport);
+        munmap(r->meta, CAPSTONE_DELEGATE_META_BYTES); munmap(r->exchange, VIRTUAL_EXCHANGE_BYTES);
+        free(r);
         return -error;
     }
     /* pthread_create holds the thread-list lock until __clone returns;
