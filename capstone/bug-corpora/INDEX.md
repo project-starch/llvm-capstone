@@ -100,7 +100,6 @@ Protection fixtures under `capstone/ports/*/security-tests/` are **not** bug mat
 - `capstone/bug-corpora/mruby/release-differential` has no triage inventory under docs/ref/.
 - `capstone/bug-corpora/perl/release-differential` has no triage inventory under docs/ref/.
 - `capstone/bug-corpora/php/engine-repros` has no triage inventory under docs/ref/.
-- `capstone/bug-corpora/php/engine-repros` commits no result bundle of its own.
 - `capstone/bug-corpora/php/plain-temporal-repros` has no triage inventory under docs/ref/.
 - `capstone/bug-corpora/php/zend-alloc-repros` has no triage inventory under docs/ref/.
 - `capstone/bug-corpora/postgres/c-repros` has no triage inventory under docs/ref/.

@@ -21,6 +21,9 @@
     "true": 70
   },
   "checker": "capstone/bug-corpora/tools/check-corpus.py",
+  "evidence": [
+    "capstone/bug-corpora/php/engine-repros/results/2026-11-02-release-destination"
+  ],
   "related": [
     "capstone/ports/php/app",
     "capstone/ports/php/zend-alloc",
