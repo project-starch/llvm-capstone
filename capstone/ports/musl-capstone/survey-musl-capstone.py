@@ -31,7 +31,7 @@ import sys
 
 # Pinned baseline: the OK count this port is known to reach. Raise it when a
 # patch improves things (that is the point), never lower it to make a run pass.
-BASELINE_OK = 1355
+BASELINE_OK = 1343
 
 # RAISED 2026-09-16, 1270 -> 1355, measured against clang built from f7b50f081ca4 (dev plus
 # three commits, only one of which touches the backend and it is an unrelated ra-spill fix).
@@ -39,6 +39,15 @@ BASELINE_OK = 1355
 # csqrtl.c were built ONE AT A TIME with these flags, not inferred from a total. If a
 # dev-built compiler reports 1270 again, that is the first thing to check and the number
 # above is where it will say so.
+#
+# RESET 2026-11-02, 1355 -> 1343 (physical) and the virtual default 1361 -> 1349: the SOURCE
+# POPULATION changed, not what the compiler can do. src/math/capstone64 (the arch's hardware
+# math, 12 files) now replaces its 12 generic and 12 riscv64 namesakes under musl's
+# REPLACED_OBJS rule (see main()), so the survey sees 1349 files instead of 1361 (+12 - 24);
+# the 24 dropped were duplicate definitions of those same 12 symbols. Measured with a dev
+# b9dd0ccc clang plus that change: virtual surveyed 1349 / compiled 1349 / failed 0;
+# physical surveyed 1349 / compiled 1343 / failed 6, all six src/malloc/mallocng (the
+# MUST_FAIL control, as before). Every file that compiled before still compiles.
 
 # A file that MUST compile, and a file that MUST NOT, with the reason it fails.
 CONTROL_MUST_PASS = "src/stdlib/abs.c"
@@ -156,7 +165,7 @@ def main() -> int:
 
     virtual = args.profile == "virtual"
     if args.expect_ok is None:
-        args.expect_ok = 1361 if virtual else BASELINE_OK
+        args.expect_ok = 1349 if virtual else BASELINE_OK
     musl = pathlib.Path(args.musl_dir).resolve()
     clang = os.environ.get("CAPSTONE_CLANG")
     if not clang or not pathlib.Path(clang).exists():
