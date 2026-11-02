@@ -44,6 +44,14 @@ public:
                                    const Constant *C,
                                    Align &Alignment) const override;
 
+  /// The five-argument form AsmPrinter::emitConstantPool uses (the suffix is
+  /// the static-data partition's hot/unlikely prefix). Under the image-gp ABI
+  /// it ignores the suffix, so the layout CapstoneFoldMemOffset predicts
+  /// through the four-argument form is the layout the AsmPrinter emits.
+  MCSection *getSectionForConstant(const DataLayout &DL, SectionKind Kind,
+                                   const Constant *C, Align &Alignment,
+                                   StringRef SectionSuffix) const override;
+
   void getModuleMetadata(Module &M) override;
 
   bool isInSmallSection(uint64_t Size) const;

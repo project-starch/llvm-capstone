@@ -17,6 +17,8 @@
 
 using namespace llvm;
 
+bool capstoneImageGpAbiActive(); // CapstoneISelDAGToDAG.cpp
+
 unsigned CapstoneELFTargetObjectFile::getTextSectionAlignment() const {
   return CapstoneMCObjectFileInfo::getTextSectionAlignment(
       *getContext().getSubtargetInfo());
@@ -175,7 +177,36 @@ MCSection *CapstoneELFTargetObjectFile::getSectionForConstant(
     return SmallRODataSection;
   }
 
+  // Under the image-gp ABI, emit mergeable constant-pool entries into .rodata
+  // rather than the SHF_MERGE .rodata.cst* sections, so that a function's
+  // entries stay contiguous, in constant-pool order, at the byte offsets
+  // AsmPrinter::emitConstantPool assigns (alignment padding between entries),
+  // which the linker never splits or reorders. CapstoneFoldMemOffset
+  // (rebaseConstantPool) relies on that layout to address a function's whole
+  // pool through one gp-derived base capability. The price is the merge
+  // section's deduplication of identical constants across functions.
+  if (capstoneImageGpAbiActive() && Kind.isMergeableConst())
+    return ReadOnlySection;
+
   // Otherwise, we work the same as ELF.
   return TargetLoweringObjectFileELF::getSectionForConstant(DL, Kind, C,
                                                             Alignment);
+}
+
+MCSection *CapstoneELFTargetObjectFile::getSectionForConstant(
+    const DataLayout &DL, SectionKind Kind, const Constant *C, Align &Alignment,
+    StringRef SectionSuffix) const {
+  // AsmPrinter::emitConstantPool goes through this form, with the static-data
+  // partition's "hot"/"unlikely" suffix when -partition-static-data-sections
+  // and a profile are active. The ELF default would then place an entry in
+  // .rodata.cst8.hot. while an unprofiled neighbour stays in .rodata, and the
+  // pool layout rebaseConstantPool predicted (through the four-argument form,
+  // which has no profile) would no longer be the one emitted. Under the
+  // image-gp ABI the suffix is therefore ignored for every entry: the layout
+  // is the four-argument form's whatever the profile says.
+  if (capstoneImageGpAbiActive())
+    return getSectionForConstant(DL, Kind, C, Alignment);
+  return TargetLoweringObjectFileELF::getSectionForConstant(DL, Kind, C,
+                                                            Alignment,
+                                                            SectionSuffix);
 }

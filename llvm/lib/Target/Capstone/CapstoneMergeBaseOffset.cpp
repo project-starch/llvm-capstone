@@ -46,6 +46,12 @@ public:
 
   bool foldIntoMemoryOps(MachineInstr &Hi, MachineInstr &Lo);
   bool foldThroughGlobalBase(MachineInstr &Hi, MachineInstr &Lo);
+  bool mergeGlobalBaseUses(MachineInstr &Lo, Register LoReg);
+
+  // Whether any instruction of the function writes gp (c3 or a part of it):
+  // then two PseudoCapGlobalBase of one address may derive from different gp
+  // values and are not merged.
+  bool GpModified = false;
 
   CapstoneMergeBaseOffsetOpt() : MachineFunctionPass(ID) {}
 
@@ -573,6 +579,88 @@ bool CapstoneMergeBaseOffsetOpt::foldIntoMemoryOps(MachineInstr &Hi,
 // narrows the capability itself (SHRINK, a copy, a store of it, a cursor read)
 // would see the unfinished cursor. Constant-pool entries are never narrowed to
 // an object's bounds, which is why only they are folded.
+// Several PseudoCapGlobalBase of one constant-pool address. MachineCSE's PRE
+// hoists the PseudoLLA (auipc + addi, no register operands) to a common
+// dominator of its users but not the PseudoCapGlobalBase (a virtual-register
+// operand), so after it a hoisted Lo can feed one base per using block:
+//
+//   bb.0:  %lo = ADDI %hi, %pcrel_lo(...)
+//   bb.1:  %c1 = PseudoCapGlobalBase %lo, implicit $x3
+//   bb.2:  %c2 = PseudoCapGlobalBase %lo, implicit $x3
+//
+// 544.nab_r's mme34 then spilled the 64-bit address and re-derived the
+// capability (ld + scc) in every loop that read a pool entry. This keeps one
+// base and replaces the others with it. The primary is chosen by INSTRUCTION
+// order, never by use-list order (whose order is the order the operands were
+// (re)added in, which earlier passes change): the first base after Lo in Lo's
+// block if there is one, which every other base is dominated by (same block:
+// later; other block: Lo's block dominates every use of Lo in SSA); otherwise
+// the first base in function order, moved to just after Lo, where it dominates
+// all of them. No cursor value changes: every base forms the same cursor from
+// the same address operand and the same gp, and PseudoCapGlobalBase expands to
+// a plain scc of gp under the image-gp ABI (no delin, no shrink), which cannot
+// fault, so moving it above a branch hoists no derivation above a guard. The
+// derivation must keep the same authority and lifetime, so the merge is
+// refused when anything in the function writes gp (GpModified): then the two
+// bases could derive from different gp values. Calls do not count: gp is a
+// reserved register the ABI preserves across calls, which every existing use
+// of gp after a call already relies on.
+bool CapstoneMergeBaseOffsetOpt::mergeGlobalBaseUses(MachineInstr &Lo,
+                                                     Register LoReg) {
+  if (GpModified)
+    return false;
+  SmallVector<MachineInstr *, 4> Bases;
+  for (MachineOperand &MO : MRI->use_operands(LoReg)) {
+    MachineInstr *UseMI = MO.getParent();
+    // A debug use is not a base; conservatively refuse (as the single-use
+    // path does for the capability).
+    if (UseMI->getOpcode() != Capstone::PseudoCapGlobalBase ||
+        UseMI->getOperandNo(&MO) != 1)
+      return false;
+    Bases.push_back(UseMI);
+  }
+  if (Bases.size() < 2)
+    return false;
+
+  MachineBasicBlock *LoMBB = Lo.getParent();
+  MachineInstr *Primary = nullptr;
+  for (MachineBasicBlock::iterator It = std::next(Lo.getIterator()),
+                                   E = LoMBB->end();
+       It != E; ++It) {
+    if (It->getOpcode() == Capstone::PseudoCapGlobalBase &&
+        It->getOperand(1).getReg() == LoReg) {
+      Primary = &*It;
+      break;
+    }
+  }
+  if (!Primary) {
+    for (MachineBasicBlock &MBB : *LoMBB->getParent()) {
+      for (MachineInstr &MI : MBB) {
+        if (llvm::is_contained(Bases, &MI)) {
+          Primary = &MI;
+          break;
+        }
+      }
+      if (Primary)
+        break;
+    }
+    assert(Primary && "a use of LoReg is in no block");
+    LoMBB->splice(std::next(Lo.getIterator()), Primary->getParent(), Primary);
+  }
+
+  Register PrimaryCap = Primary->getOperand(0).getReg();
+  for (MachineInstr *B : Bases) {
+    if (B == Primary)
+      continue;
+    MRI->replaceRegWith(B->getOperand(0).getReg(), PrimaryCap);
+    B->eraseFromParent();
+  }
+  // The primary may now be read after what was the last use of either value.
+  MRI->clearKillFlags(LoReg);
+  MRI->clearKillFlags(PrimaryCap);
+  return true;
+}
+
 bool CapstoneMergeBaseOffsetOpt::foldThroughGlobalBase(MachineInstr &Hi,
                                                        MachineInstr &Lo) {
   // Only under the image-gp ABI (exact bounds): there gp's cursor is simply
@@ -584,24 +672,30 @@ bool CapstoneMergeBaseOffsetOpt::foldThroughGlobalBase(MachineInstr &Hi,
       &Lo == &Hi)
     return false;
   Register LoReg = Lo.getOperand(0).getReg();
-  if (!MRI->hasOneUse(LoReg))
-    return false;
+  // Several bases of one pool address: merge them into one first (a change on
+  // its own, whether or not the fold below then applies).
+  bool Merged = false;
+  if (!MRI->hasOneUse(LoReg)) {
+    if (!mergeGlobalBaseUses(Lo, LoReg))
+      return false;
+    Merged = true;
+  }
   MachineInstr &Base = *MRI->use_instr_begin(LoReg);
   if (Base.getOpcode() != Capstone::PseudoCapGlobalBase ||
       Base.getOperand(1).getReg() != LoReg)
-    return false;
+    return Merged;
   Register CapReg = Base.getOperand(0).getReg();
   if (!CapReg.isVirtual() || MRI->use_nodbg_empty(CapReg))
-    return false;
+    return Merged;
 
   std::optional<int64_t> CommonOffset;
   for (const MachineOperand &MO : MRI->use_operands(CapReg)) {
     const MachineInstr &UseMI = *MO.getParent();
     if (UseMI.isDebugInstr())
-      return false;
+      return Merged;
     switch (UseMI.getOpcode()) {
     default:
-      return false;
+      return Merged;
     case Capstone::LB:
     case Capstone::LH:
     case Capstone::LW:
@@ -615,16 +709,16 @@ bool CapstoneMergeBaseOffsetOpt::foldThroughGlobalBase(MachineInstr &Hi,
       break;
     }
     if (UseMI.getOperandNo(&MO) != 1 || !UseMI.getOperand(2).isImm())
-      return false;
+      return Merged;
     int64_t Offset = UseMI.getOperand(2).getImm();
     if (CommonOffset && Offset != *CommonOffset)
-      return false;
+      return Merged;
     CommonOffset = Offset;
   }
 
   int64_t NewOffset = Hi.getOperand(1).getOffset() + *CommonOffset;
   if (!isInt<32>(NewOffset))
-    return false;
+    return Merged;
   Hi.getOperand(1).setOffset(NewOffset);
   MachineOperand ImmOp = Lo.getOperand(2);
   for (MachineInstr &UseMI :
@@ -645,6 +739,28 @@ bool CapstoneMergeBaseOffsetOpt::runOnMachineFunction(MachineFunction &Fn) {
 
   bool MadeChange = false;
   MRI = &Fn.getRegInfo();
+
+  // Any register write of gp (c3 or a part of it, e.g. an inline-asm clobber)
+  // disables mergeGlobalBaseUses. Call regmasks are not consulted: gp is
+  // reserved and preserved across calls by the ABI.
+  const TargetRegisterInfo *TRI = ST->getRegisterInfo();
+  GpModified = false;
+  for (MachineBasicBlock &MBB : Fn) {
+    for (MachineInstr &MI : MBB) {
+      for (const MachineOperand &MO : MI.operands()) {
+        if (MO.isReg() && MO.isDef() && MO.getReg().isPhysical() &&
+            TRI->regsOverlap(MO.getReg(), Capstone::C3)) {
+          GpModified = true;
+          break;
+        }
+      }
+      if (GpModified)
+        break;
+    }
+    if (GpModified)
+      break;
+  }
+
   for (MachineBasicBlock &MBB : Fn) {
     LLVM_DEBUG(dbgs() << "MBB: " << MBB.getName() << "\n");
     for (MachineInstr &Hi : MBB) {
