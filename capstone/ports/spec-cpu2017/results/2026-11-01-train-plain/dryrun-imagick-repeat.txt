@@ -1,0 +1,87 @@
+18:35:44 BEGIN 538.imagick_r-test-r10-spatial-objb
+18:36:31 END 538.imagick_r-test-r10-spatial-objb rc=0
+    RUN backend qemu kit $CAPSTONE_WORK/spec/kit-q34 completed=True transcript=$CAPSTONE_WORK/spec/census-repeat/538.imagick_r-test-r10-spatial-objb/guest/serial.log control=None spec={'kind': 'exit', 'value': 0}
+    READ 538.imagick_r test capstone-spatial.r0: 2/2 commands ended, rc!=0: 0, hashes 7, in-band 4, specdiff 1/1 PASS
+    READ 538.imagick_r test capstone-spatial.r1: 2/2 commands ended, rc!=0: 0, hashes 7, in-band 4, specdiff 1/1 PASS
+    READ 538.imagick_r test capstone-spatial.r2: 2/2 commands ended, rc!=0: 0, hashes 7, in-band 4, specdiff 1/1 PASS
+    READ 538.imagick_r test capstone-spatial.r3: 2/2 commands ended, rc!=0: 0, hashes 7, in-band 4, specdiff 1/1 PASS
+    READ 538.imagick_r test capstone-spatial.r4: 2/2 commands ended, rc!=0: 0, hashes 7, in-band 4, specdiff 1/1 PASS
+    READ 538.imagick_r test capstone-spatial.r5: 2/2 commands ended, rc!=0: 0, hashes 7, in-band 4, specdiff 1/1 PASS
+    READ 538.imagick_r test capstone-spatial.r6: 2/2 commands ended, rc!=0: 0, hashes 7, in-band 4, specdiff 1/1 PASS
+    READ 538.imagick_r test capstone-spatial.r7: 2/2 commands ended, rc!=0: 0, hashes 7, in-band 4, specdiff 1/1 PASS
+    READ 538.imagick_r test capstone-spatial.r8: 2/2 commands ended, rc!=0: 0, hashes 7, in-band 4, specdiff 1/1 PASS
+    READ 538.imagick_r test capstone-spatial.r9: 2/2 commands ended, rc!=0: 0, hashes 7, in-band 4, specdiff 1/1 PASS
+    READ outputs capstone-spatial.r0 vs capstone-spatial.r1: identical
+    READ outputs capstone-spatial.r0 vs capstone-spatial.r2: identical
+    READ outputs capstone-spatial.r0 vs capstone-spatial.r3: identical
+    READ outputs capstone-spatial.r0 vs capstone-spatial.r4: identical
+    READ outputs capstone-spatial.r0 vs capstone-spatial.r5: identical
+    READ outputs capstone-spatial.r0 vs capstone-spatial.r6: identical
+    READ outputs capstone-spatial.r0 vs capstone-spatial.r7: identical
+    READ outputs capstone-spatial.r0 vs capstone-spatial.r8: identical
+    READ outputs capstone-spatial.r0 vs capstone-spatial.r9: identical
+18:36:31 BEGIN 538.imagick_r-test-r10-maplife-full
+18:38:05 END 538.imagick_r-test-r10-maplife-full rc=0
+    RUN backend qemu kit $CAPSTONE_WORK/spec/kit-q34 completed=True transcript=$CAPSTONE_WORK/spec/census-repeat/538.imagick_r-test-r10-maplife-full/guest/serial.log control=None spec={'kind': 'exit', 'value': 0}
+    READ 538.imagick_r test capstone-spatial.r0: 2/2 commands ended, rc!=0: 0, hashes 7, in-band 4, specdiff 1/1 PASS
+    READ 538.imagick_r test capstone-lifetimes.r0: 2/2 commands ended, rc!=0: 0, hashes 7, in-band 4, specdiff 1/1 PASS
+    READ 538.imagick_r test capstone-spatial.r1: 2/2 commands ended, rc!=0: 0, hashes 7, in-band 4, specdiff 1/1 PASS
+    READ 538.imagick_r test capstone-lifetimes.r1: 2/2 commands ended, rc!=0: 0, hashes 7, in-band 4, specdiff 1/1 PASS
+    READ 538.imagick_r test capstone-spatial.r2: 2/2 commands ended, rc!=0: 0, hashes 7, in-band 4, specdiff 1/1 PASS
+    READ 538.imagick_r test capstone-lifetimes.r2: 2/2 commands ended, rc!=0: 0, hashes 7, in-band 4, specdiff 1/1 PASS
+    READ 538.imagick_r test capstone-spatial.r3: 2/2 commands ended, rc!=0: 0, hashes 7, in-band 4, specdiff 1/1 PASS
+    READ 538.imagick_r test capstone-lifetimes.r3: 2/2 commands ended, rc!=0: 0, hashes 7, in-band 4, specdiff 1/1 PASS
+    READ 538.imagick_r test capstone-spatial.r4: 2/2 commands ended, rc!=0: 0, hashes 7, in-band 4, specdiff 1/1 PASS
+    READ 538.imagick_r test capstone-lifetimes.r4: 2/2 commands ended, rc!=0: 0, hashes 7, in-band 4, specdiff 1/1 PASS
+    READ 538.imagick_r test capstone-spatial.r5: 2/2 commands ended, rc!=0: 0, hashes 7, in-band 4, specdiff 1/1 PASS
+    READ 538.imagick_r test capstone-lifetimes.r5: 2/2 commands ended, rc!=0: 0, hashes 7, in-band 4, specdiff 1/1 PASS
+    READ 538.imagick_r test capstone-spatial.r6: 2/2 commands ended, rc!=0: 0, hashes 7, in-band 4, specdiff 1/1 PASS
+    READ 538.imagick_r test capstone-lifetimes.r6: 2/2 commands ended, rc!=0: 0, hashes 7, in-band 4, specdiff 1/1 PASS
+    READ 538.imagick_r test capstone-spatial.r7: 2/2 commands ended, rc!=0: 0, hashes 7, in-band 4, specdiff 1/1 PASS
+    READ 538.imagick_r test capstone-lifetimes.r7: 2/2 commands ended, rc!=0: 0, hashes 7, in-band 4, specdiff 1/1 PASS
+    READ 538.imagick_r test capstone-spatial.r8: 2/2 commands ended, rc!=0: 0, hashes 7, in-band 4, specdiff 1/1 PASS
+    READ 538.imagick_r test capstone-lifetimes.r8: 2/2 commands ended, rc!=0: 0, hashes 7, in-band 4, specdiff 1/1 PASS
+    READ 538.imagick_r test capstone-spatial.r9: 2/2 commands ended, rc!=0: 0, hashes 7, in-band 4, specdiff 1/1 PASS
+    READ 538.imagick_r test capstone-lifetimes.r9: 2/2 commands ended, rc!=0: 0, hashes 7, in-band 4, specdiff 1/1 PASS
+    READ outputs capstone-spatial.r0 vs capstone-lifetimes.r0: identical
+    READ outputs capstone-spatial.r0 vs capstone-spatial.r1: identical
+    READ outputs capstone-spatial.r0 vs capstone-lifetimes.r1: identical
+    READ outputs capstone-spatial.r0 vs capstone-spatial.r2: identical
+    READ outputs capstone-spatial.r0 vs capstone-lifetimes.r2: identical
+    READ outputs capstone-spatial.r0 vs capstone-spatial.r3: identical
+    READ outputs capstone-spatial.r0 vs capstone-lifetimes.r3: identical
+    READ outputs capstone-spatial.r0 vs capstone-spatial.r4: identical
+    READ outputs capstone-spatial.r0 vs capstone-lifetimes.r4: identical
+    READ outputs capstone-spatial.r0 vs capstone-spatial.r5: identical
+    READ outputs capstone-spatial.r0 vs capstone-lifetimes.r5: identical
+    READ outputs capstone-spatial.r0 vs capstone-spatial.r6: identical
+    READ outputs capstone-spatial.r0 vs capstone-lifetimes.r6: identical
+    READ outputs capstone-spatial.r0 vs capstone-spatial.r7: identical
+    READ outputs capstone-spatial.r0 vs capstone-lifetimes.r7: identical
+    READ outputs capstone-spatial.r0 vs capstone-spatial.r8: identical
+    READ outputs capstone-spatial.r0 vs capstone-lifetimes.r8: identical
+    READ outputs capstone-spatial.r0 vs capstone-spatial.r9: identical
+    READ outputs capstone-spatial.r0 vs capstone-lifetimes.r9: identical
+18:38:05 BEGIN 538.imagick_r-test-r10-plain
+18:38:13 END 538.imagick_r-test-r10-plain rc=0
+    RUN backend qemu kit $CAPSTONE_WORK/spec/kit-q34 completed=True transcript=$CAPSTONE_WORK/spec/census-repeat/538.imagick_r-test-r10-plain/guest/serial.log control=None spec={'kind': 'exit', 'value': 0}
+    READ 538.imagick_r test plain-rv64.r0: 2/2 commands ended, rc!=0: 0, hashes 7, in-band 4, specdiff 1/1 PASS
+    READ 538.imagick_r test plain-rv64.r1: 2/2 commands ended, rc!=0: 0, hashes 7, in-band 4, specdiff 1/1 PASS
+    READ 538.imagick_r test plain-rv64.r2: 2/2 commands ended, rc!=0: 0, hashes 7, in-band 4, specdiff 1/1 PASS
+    READ 538.imagick_r test plain-rv64.r3: 2/2 commands ended, rc!=0: 0, hashes 7, in-band 4, specdiff 1/1 PASS
+    READ 538.imagick_r test plain-rv64.r4: 2/2 commands ended, rc!=0: 0, hashes 7, in-band 4, specdiff 1/1 PASS
+    READ 538.imagick_r test plain-rv64.r5: 2/2 commands ended, rc!=0: 0, hashes 7, in-band 4, specdiff 1/1 PASS
+    READ 538.imagick_r test plain-rv64.r6: 2/2 commands ended, rc!=0: 0, hashes 7, in-band 4, specdiff 1/1 PASS
+    READ 538.imagick_r test plain-rv64.r7: 2/2 commands ended, rc!=0: 0, hashes 7, in-band 4, specdiff 1/1 PASS
+    READ 538.imagick_r test plain-rv64.r8: 2/2 commands ended, rc!=0: 0, hashes 7, in-band 4, specdiff 1/1 PASS
+    READ 538.imagick_r test plain-rv64.r9: 2/2 commands ended, rc!=0: 0, hashes 7, in-band 4, specdiff 1/1 PASS
+    READ outputs plain-rv64.r0 vs plain-rv64.r1: identical
+    READ outputs plain-rv64.r0 vs plain-rv64.r2: identical
+    READ outputs plain-rv64.r0 vs plain-rv64.r3: identical
+    READ outputs plain-rv64.r0 vs plain-rv64.r4: identical
+    READ outputs plain-rv64.r0 vs plain-rv64.r5: identical
+    READ outputs plain-rv64.r0 vs plain-rv64.r6: identical
+    READ outputs plain-rv64.r0 vs plain-rv64.r7: identical
+    READ outputs plain-rv64.r0 vs plain-rv64.r8: identical
+    READ outputs plain-rv64.r0 vs plain-rv64.r9: identical
+18:38:13 chain done

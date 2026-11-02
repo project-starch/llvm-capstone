@@ -118,12 +118,20 @@ def main():
                     "rdinstret before and after each command (@@SPEC-CTR, from --rdctr)")
     ap.add_argument("--rdctr", type=Path, metavar="EXE", help="a static riscv64 Linux program printing 'cycles=N instret=N' "
                     "from rdcycle and rdinstret (needed with --plain-arms)")
+    ap.add_argument("--repeat", type=int, default=1, metavar="N",
+                    help="run the arms N times in one boot, interleaved (r0 of every arm, then r1, ...); each run is its own "
+                         "arm in the result, labelled <arm>.r<k>, with the same executables. Repeated timing of a short stage.")
     ap.add_argument("--out", type=Path, required=True)
     a = ap.parse_args()
     arms = a.arms.split(",")
     plain = set(x for x in a.plain_arms.split(",") if x)
     if plain - set(arms):
         sys.exit(f"make-stage: --plain-arms names arms not in --arms: {sorted(plain - set(arms))}")
+    if a.repeat < 1:
+        sys.exit("make-stage: --repeat must be at least 1")
+    # (label, arm) in run order; with --repeat 1 the label is the arm, and every output is byte for byte as before.
+    labels = [(arm, arm) for arm in arms] if a.repeat == 1 else \
+        [(f"{arm}.r{k}", arm) for k in range(a.repeat) for arm in arms]
     if plain and not a.rdctr:
         sys.exit("make-stage: --plain-arms needs --rdctr")
     bdir = a.tree / "benchspec/CPU" / a.bench
@@ -154,6 +162,10 @@ def main():
         if plan[arm] != plan[first]:
             sys.exit(f"make-stage: {arm}'s commands differ from {first}'s once the label is normalised")
     p = plan[first]
+    named = [x for c in p["cmds"] + p["cmp"] for x in c["argv"][1:] + [c["input"], c["output"], c["error"]] if x and "ARM" in x]
+    if a.repeat > 1 and (p["gen"] or a.bench == "500.perlbench_r" or named):
+        # A label must not reach a file name or argv: those use the arm, and the reader replaces only the label.
+        sys.exit(f"make-stage: --repeat supports benchmarks whose commands never name the arm, without input generation")
     # Inputs: identical across arms, the executables and runcpu's own files aside.
     files = {arm: tree_files(r, lambda rel, arm=arm: is_exe(rel, arm) or RUNCPU_FILES.match(rel) is not None)
              for arm, r in runs.items()}
@@ -258,9 +270,10 @@ def main():
          "up() { cut -d' ' -f1 /proc/uptime; }",
          "# the module's cumulative in-context counters (sysfs, 0444): their delta over a command sums every context it ran",
          "sysb() { for f in cycles instret entries; do cat /sys/module/capstone_vm/parameters/bench_$f 2>/dev/null || echo 0; done | tr '\\n' ' '; }",
-         f"echo \"@@SPEC-STAGE {a.bench} {a.size} arms={','.join(arms)} commands={len(p['cmds'])} validations={len(tgt_val)}\""]
+         f"echo \"@@SPEC-STAGE {a.bench} {a.size} arms={','.join(l for l, _ in labels)} commands={len(p['cmds'])} validations={len(tgt_val)}\""]
 
-    def run_line(tag, arm, i, c, wrap):
+    def run_line(tag, arm, i, c, wrap, label=None):
+        label = label or arm
         argv = [x.replace("ARM", arm) for x in c["argv"]]
         prog = argv[0]
         args = " ".join('"$S/' + x[3:] + '"' if x.startswith("$S/") else q(x) for x in argv[1:])
@@ -290,26 +303,26 @@ def main():
         if bare:
             # No module line belongs to a plain command: nbench=0 and an empty bench quote, so the reader takes none
             # (the control step's bench line would otherwise read as this command's).
-            return [f'echo "@@SPEC-BEGIN $n {tag} {arm} {i}"', 'k0=$("$S/rdctr")', "u0=$(up)",
+            return [f'echo "@@SPEC-BEGIN $n {tag} {label} {i}"', 'k0=$("$S/rdctr")', "u0=$(up)",
                     f"{cmd}{redir}", "rc=$?", "u1=$(up)", 'k1=$("$S/rdctr")',
-                    f'echo "@@SPEC-CTR $n {arm} $k0 $k1"',
-                    f'echo "@@SPEC-END $n {tag} {arm} {i} rc=$rc up0=$u0 up1=$u1 nbench=0 :: plain"', "n=$((n+1))"]
-        return [f'echo "@@SPEC-BEGIN $n {tag} {arm} {i}"', "s0=$(sysb)", "u0=$(up)",
+                    f'echo "@@SPEC-CTR $n {label} $k0 $k1"',
+                    f'echo "@@SPEC-END $n {tag} {label} {i} rc=$rc up0=$u0 up1=$u1 nbench=0 :: plain"', "n=$((n+1))"]
+        return [f'echo "@@SPEC-BEGIN $n {tag} {label} {i}"', "s0=$(sysb)", "u0=$(up)",
                 f"{cmd}{redir}", "rc=$?", "u1=$(up)", "s1=$(sysb)",
                 "sys=$(echo $s0 $s1 | awk '{printf \"%.0f,%.0f,%.0f\", $4-$1, $5-$2, $6-$3}')",
-                f'echo "@@SPEC-END $n {tag} {arm} {i} rc=$rc up0=$u0 up1=$u1 sys=$sys nbench=$(nbench) '
+                f'echo "@@SPEC-END $n {tag} {label} {i} rc=$rc up0=$u0 up1=$u1 sys=$sys nbench=$(nbench) '
                 f'$(grep -a CAPSTONE_VM_STATS {err} 2>/dev/null | tail -1) :: $(bench)"', "n=$((n+1))"]
 
-    for arm in arms:
+    for label, arm in labels:
         if a.link_inputs:
             # The inputs stay in the stage (the board's initramfs) and the run directory links to them: on the board the
             # initramfs already holds them in RAM, so a copy would hold them twice (xz train: 24 MB). The commands read
             # their inputs and write only new files, which land in /tmp/sr itself; `find -type f` hashes outputs only.
-            L += [f'echo "@@SPEC-ARM-BEGIN {arm}"', "cd / && rm -rf /tmp/sr && mkdir -p /tmp/sr && cd \"$S/in\" && "
+            L += [f'echo "@@SPEC-ARM-BEGIN {label}"', "cd / && rm -rf /tmp/sr && mkdir -p /tmp/sr && cd \"$S/in\" && "
                   "find . -type d | while read -r d; do mkdir -p \"/tmp/sr/$d\"; done && "
                   "find . -type f | while read -r f; do ln -s \"$S/in/$f\" \"/tmp/sr/$f\"; done && cd /tmp/sr || exit 1"]
         else:
-            L += [f'echo "@@SPEC-ARM-BEGIN {arm}"', "cd / && rm -rf /tmp/sr && mkdir -p /tmp/sr && cp -a \"$S/in/.\" /tmp/sr/ && cd /tmp/sr || exit 1"]
+            L += [f'echo "@@SPEC-ARM-BEGIN {label}"', "cd / && rm -rf /tmp/sr && mkdir -p /tmp/sr && cp -a \"$S/in/.\" /tmp/sr/ && cd /tmp/sr || exit 1"]
         if a.bench == "500.perlbench_r" and arm in plain:
             img = f"$S/bin/{arm}/" + p["cmds"][0]["argv"][0].replace("ARM", arm)
             L += ["rm -rf /tmp/sw && mkdir -p /tmp/sw || exit 1", f'ln -s "{img}" /tmp/sw/perl || exit 1']
@@ -321,19 +334,19 @@ def main():
         for i, c in enumerate(p["gen"]):
             L += run_line("gen", arm, i, dict(c, argv=["ldecod"] + c["argv"][1:]), wrap=False)
         for i, c in enumerate(p["cmds"]):
-            L += run_line("run", arm, i, c, wrap=True)
+            L += run_line("run", arm, i, c, wrap=True, label=label)
         for i, c in enumerate(tgt_val):
-            L += run_line("val", arm, i, c, wrap=True)
-        L += [f'echo "@@SPEC-HASH-BEGIN {arm}"', "find . -type f | sort | while read -r f; do sha256sum \"$f\"; done",
-              f'echo "@@SPEC-HASH-END {arm}"']
+            L += run_line("val", arm, i, c, wrap=True, label=label)
+        L += [f'echo "@@SPEC-HASH-BEGIN {label}"', "find . -type f | sort | while read -r f; do sha256sum \"$f\"; done",
+              f'echo "@@SPEC-HASH-END {label}"']
         for f in (x.replace("ARM", arm) for x in outs):
-            L += [f'if [ -f {q(f)} ] && [ $(wc -c < {q(f)}) -le ${{SPEC_INBAND_MAX:-{a.inband_max}}} ]; then echo "@@SPEC-FILE {arm} {f}"; '
+            L += [f'if [ -f {q(f)} ] && [ $(wc -c < {q(f)}) -le ${{SPEC_INBAND_MAX:-{a.inband_max}}} ]; then echo "@@SPEC-FILE {label} {f}"; '
                   f'gzip -9c {q(f)} | base64; echo "@@SPEC-FILE-END"; fi']
-        L += [f'echo "@@SPEC-ARM-END {arm}"']
+        L += [f'echo "@@SPEC-ARM-END {label}"']
     L += ["cd / && rm -rf /tmp/sr /tmp/sw", f'echo "@@SPEC-DONE {a.bench} {a.size}"', ""]
     (stage / "run.sh").write_text("\n".join(L))
     (stage / "run.sh").chmod(0o755)
-    meta = dict(bench=a.bench, size=a.size, arms=arms, commands=p["cmds"], generation=p["gen"], target_validation=tgt_val,
+    meta = dict(bench=a.bench, size=a.size, arms=[l for l, _ in labels], commands=p["cmds"], generation=p["gen"], target_validation=tgt_val,
                 host_validation=host_val, outputs=outs, excluded=sorted(excl), perl_pack_stub=stub,
                 inputs={k: v for k, v in files[first].items() if k not in excl},
                 executables={arm: {e.replace("ARM", arm): hashlib.sha256((stage / "bin" / arm / e.replace("ARM", arm)).read_bytes()).hexdigest()
@@ -341,8 +354,11 @@ def main():
                 ldecod=hashlib.sha256(a.ldecod.read_bytes()).hexdigest() if p["gen"] else None, stripped=bool(a.strip),
                 refs={k: os.path.relpath(v, spec_root) for k, v in refs.items()})
     if plain:
-        meta["plain_arms"] = sorted(plain)   # absent otherwise, as selection is
+        meta["plain_arms"] = sorted(l for l, arm in labels if arm in plain)   # absent otherwise, as selection is
         meta["rdctr"] = hashlib.sha256(a.rdctr.read_bytes()).hexdigest()
+    if a.repeat > 1:
+        meta["repeat"] = a.repeat   # absent by default, as selection is
+        meta["arm_of"] = {l: arm for l, arm in labels}
     if selection:
         meta["selection"] = selection   # absent by default, so a stage of every command keeps its plan.json byte for byte
     (a.out / "plan.json").write_text(json.dumps(meta, indent=1) + "\n")

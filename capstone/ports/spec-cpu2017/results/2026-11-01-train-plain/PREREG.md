@@ -300,3 +300,58 @@ Offline on the QEMU twin, with the same images and no board time:
 - Plain's user/kernel instruction split.
 
 The twin profile describes the board run only where its instret matches the board's.
+
+## Addendum 4 (2026-11-02 18:45): imagick test repeated ten times per configuration
+
+**Why.** One imagick test run is too short to weigh. Its main command runs about 16 s in context and 33 s elapsed, and
+about half of a command's elapsed time is launch and I/O. A single reading cannot separate a 4 % configuration
+difference from run-to-run noise. The lead asked for repetitions, with a mean, a spread and an interval.
+
+**What runs.** `make-stage.py --repeat N` runs a stage's arms N times in one boot, interleaved: r0 of every arm, then
+r1, and so on. Each run is its own arm in the result, labelled `<arm>.r<k>`, with the same executables. The images are
+the single-run test stages', by hash: imagick_r c2fa368c2b62 (capstone-spatial) and a7ddf8d556c6 (capstone-lifetimes),
+and the Plain f7f3e78a5a49.
+
+| Stage (N = 10) | Board, bitstream | Arms | Slot in the queue |
+|---|---|---|---|
+| `538.imagick_r-test-r10-spatial-objb` | 2, ObjBounds 603528b8b | Spatial | after xz Spatial test, before mcf |
+| `538.imagick_r-test-r10-maplife-full` | 1, bitstream 3 | MapLife and Full, alternating | after perlbench Full train |
+| `538.imagick_r-test-r10-plain` | 1, bitstream 3 | Plain | after the MapLife/Full stage, before Plain test |
+
+**Generator unchanged at N = 1.**
+- With `--repeat 1`, make-stage.py output is byte-identical to the current generator's for the one-arm Spatial, Plain
+  and two-arm imagick test stages.
+- The reader change in run-stage.py touches only the twin lookup: a label is compared with the twin's same label,
+  or else with its arm.
+- With the new reader, the result.json and verdict lines are identical to the old reader's on the recorded nab Spatial,
+  imagick MapLife/Full and xz Full test results.
+
+**Dry run on the QEMU twin** (census-repeat, kit-q34, 936M):
+- All 40 runs: rc 0, specdiff PASS. Outputs are identical across repetitions and to the single-run twin.
+- Run-command instret spread across repetitions is at most 1.1e-5 in each Capstone arm.
+- Plain's hart-wide instret spreads 7.9 %. It includes the kernel, so it is not a determinism measure.
+- **Positive control.** One repetition's test_output.tga hash is corrupted in a copy of the transcript. The reader
+  reports `r0 vs r4: DIFFER` and `r4 vs twin: DIFFER`, rc 1.
+
+**Predictions.**
+- **R1.** Every run returns rc 0 and specdiff PASS. Outputs are identical across repetitions and to the twin.
+- **R2.** Within each Capstone arm, run-command instret is within 0.1 %. Spatial and MapLife instret are within 0.1 %:
+  same images.
+- **R3.** Per arm, the run command's coefficient of variation is at most 3 % in elapsed time and at most 1 % in
+  in-context cycles.
+- **R4.** Run-command in-context cycles: MapLife / Spatial in [1.00, 1.10], Full / MapLife in [0.95, 1.05]. Run-command
+  elapsed: Spatial / Plain in [1.1, 3.5].
+
+**Statistics.** Per arm and command (run, val): mean, standard deviation, CV, a 95 % t-interval (t = 2.262, 9 degrees of
+freedom), and box plots with 1.5 IQR whiskers. Metrics: elapsed time, in-context cycles, instret, entries; Plain's hart
+cycles.
+
+Ratios:
+- MapLife / Full alternate in one boot, so their ratio is paired, per repetition. The paired ratio's mean and its
+  t-interval are reported.
+- The ratios across boots and boards (MapLife / Spatial, Spatial / Plain) are ratios of means. Their 95 % interval
+  comes from a bootstrap: 10,000 resamples per arm, drawn independently.
+
+**Caveat.** Spatial runs on board 2 and the other arms run on board 1. A ratio across the boards therefore carries a
+board term that this design cannot remove. Each boot's crc.K0 control step is read beside the results as a
+cross-board reference; it is not a gate.

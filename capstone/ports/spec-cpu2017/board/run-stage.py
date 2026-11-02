@@ -170,7 +170,9 @@ def read(a):
         tw = json.loads(Path(a.twin).read_text())
         res["vs_twin"] = {}
         for arm in arms:
-            th = {k.replace(arm, "ARM"): v for k, v in tw["arms"].get(arm, {}).get("hashes", {}).items()}
+            # A --repeat stage's label (<arm>.r<k>) is compared with the twin's same label, or else its run of the arm.
+            th = {k.replace(arm, "ARM"): v for k, v in (tw["arms"].get(arm) or tw["arms"].get(plan.get("arm_of", {}).get(arm, arm), {}))
+                  .get("hashes", {}).items()}
             mine = outhash(arm)
             th = {k: v for k, v in th.items() if not k.endswith(".err") and k != "log.dec" and (k in outs or k not in plan["inputs"])}
             res["vs_twin"][arm] = sorted(k for k in set(mine) | set(th) if mine.get(k) != th.get(k))
