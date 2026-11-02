@@ -337,8 +337,10 @@ allocator, so it controls the TEMPORAL operand only, and both configurations dec
 `controls_for_missed: [poscontrol]`. The two spatial cells `cheribsd-platform` scores MISSED
 therefore rest on a control for the other operand of the conjunction. A bounds control in the same
 boot is owed; until it exists the positive evidence that a bounds fault is visible to this harness
-at all is the same run's six spatial catches at `si_code=1`, which is a demonstration and not a
-control. Both configurations carry that in a `controls_owed` key rather than in this file alone.
+at all is that FOUR of the same run's six spatial catches are `si_code=1` PROT_CHERI_BOUNDS --
+the other two are `si_code=2` -- which is a demonstration and not a control. An earlier revision of
+this paragraph said all six were `si_code=1`; that overstated the bounds evidence and is corrected
+here. Both configurations carry that in a `controls_owed` key rather than in this file alone.
 The bundles' rows also carry no `image_sha256`: the 2026-10-30 runner recorded none, so the hashes
 sit in each `inputs.json` under `images`, taken on 2026-10-31 with the basis stated (every binary's
 mtime precedes the run's first record, and the fold refuses to write the block otherwise). The
