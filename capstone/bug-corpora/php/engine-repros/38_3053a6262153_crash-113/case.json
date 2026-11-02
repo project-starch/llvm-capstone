@@ -30,6 +30,12 @@
    "verdict": "CAUGHT",
    "verdict_note": "cause=25 pc=0x3fb106af88 in zend_hash_find; by function: zend_hash_find at Zend/zend_hash.c:850 is the function this case declares (fault_sites, ASan frame #0 of our native run), at ASan's own line",
    "verdict_from": "results/2026-10-28-run18/bundle-virtual-nested-exact"
+  },
+  "cheribsd-revocation": {
+   "oracle": "the same trigger on stock CheriBSD purecap -- no nested layer at all, the real interpreter cross-built by ports/php/cheribsd/build.sh -- in the boot at the platform default (security.cheri.runtime_revocation_default=1, every_free=0): a SIGPROT at the ASan site with the bounds-malloc control faulting in the same boot, the same binary run with revocation off as the pair that attributes the fault, or the trigger ends and this arm did not see it (tools/arms.json cheribsd-default)",
+   "verdict": "MISSED",
+   "verdict_note": "reached (route B: the trigger printed its own output, so it ran: boom) and completed with no fault; NOT-REISSUED: no capability fault at the platform default, but the eager configuration (runtime_revocation_every_free_default=1) faults on this case, so the stale pointer IS followed. The eager fault lands inside the script body, which is what tells a revoked object apart from the allocator's cache being drained back to libc at shutdown. Context, not a verdict: every-free also faults on accesses nothing is meant to catch",
+   "verdict_from": "results/2026-10-30-cheribsd/bundle-cheribsd-revocation"
   }
  },
  "status": "built 2026-10-27 from the corpus and our native oracle; what has run is in this record's arms (verdict, verdict_from) and under results/",

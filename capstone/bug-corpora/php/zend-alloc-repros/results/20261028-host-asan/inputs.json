@@ -1,0 +1,32 @@
+{
+ "pin": "php 5.0.0, museum tarball sha256 5783e0c0ba94f165633a565fe73a83e59cf17b6880ef95fa8f936dc6301d6919, with the source corpus's modern-gcc patch (zend_modules.h includes zend_compile.h)",
+ "population": "the 30 cases of this corpus",
+ "arm": "host-asan",
+ "arms": {
+  "host-asan": {
+   "binary_sha256": "a971eeccc81cfd911e41c0ab4a3db667fe9e4b2aa8c18dbfd7eb369449903c9f",
+   "fullext_binary_sha256": "94294bf3792ade2a5a1ffb476e5222e617c5cad189fafb976a0e35ad898eabe7",
+   "what_differs": "the detector build: Zend's size-class cache off (ZEND_DISABLE_MEMORY_CACHE 0->1) and REAL_SIZE unrounded, so every efree reaches free() and ASan can see a lifetime end. THE ORACLE"
+  },
+  "stockalloc": {
+   "binary_sha256": "ccfd8ccbf16babc73fac544943da65a222d9051fc3fd1e043d43483ea027a01c",
+   "fullext_binary_sha256": "1ff203395cf85679fd04202722bf59ab0fe5beb10dc71a36d278607af8419b5f",
+   "what_differs": "the same source and compiler with Zend's allocator AS SHIPPED. This is not a protection arm: it is the reading that decides which corpus a case belongs to, because a release the system allocator never sees cannot be read by anything that interposes at malloc"
+  }
+ },
+ "held_fixed": "one source tree, one compiler, one host, one runner; the two builds differ only in the two zend_alloc.c defines",
+ "platform": {
+  "compiler": "gcc (Ubuntu 7.5.0-3ubuntu1~18.04) 7.5.0, libasan.so.4",
+  "host": "x86_64 Linux, the project's own machine; not the machine the source corpus was measured on (gcc 13.3.0 / libasan.so.8)",
+  "runner": "the source corpus's own scripts/run-corpus.py, --asan, 30 s per case"
+ },
+ "build_deviations": [
+  "configure's AC_PROG_LEX probe needs a lex this host does not have; PHP 5.0.0 ships its generated scanners and the build script's timestamp guard keeps make from regenerating them, so a configure-only flex stub was put on PATH. No generated file was rebuilt",
+  "this host's binutils needs -ldl at link (dlsym in ext/standard/dl.c); added to LDFLAGS",
+  "the stock-allocator variant is the corpus's own build script with its two zend_alloc.c patches removed, built from a clean extract rather than by editing a configured tree -- an edited copy of a configured tree keeps the original's absolute srcdir and silently rebuilds nothing"
+ ],
+ "pristine_column": "the source corpus's own unsanitised, unpatched run (results-pristine-default.json). It is what route A of the virtual runner's `reached` test reads: a case that completes there is one whose silence on a protection arm can be a reading. The four fullext cases are not in that file and say not-recorded",
+ "control": "the detector build reproduces the source corpus's own recorded outcome for 55 of the 56 selected cases; the one that differs is CRASH-092, which needs a loopback listener this host does not provide, and it is not in either corpus",
+ "cache_is_active_proof": "the stock build is not merely a relink: on one alloc/free loop ASan counts 3243 mallocs in the 48-byte size class for the detector build and 214 for the stock build",
+ "not_committed": "the per-case stdout/stderr captures stay out of the repo (SCHEMA.md: results are summaries, never captures). They live with the source corpus as results-asan-default-56.json and results-asan-stockalloc-56.json"
+}

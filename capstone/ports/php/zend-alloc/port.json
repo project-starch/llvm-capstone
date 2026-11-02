@@ -17,6 +17,10 @@
   "evidence": [
     "capstone/ports/php/zend-alloc/sublet/results/derive-rebase-2026-10-26"
   ],
+  "corpora": [
+    "capstone/bug-corpora/php/plain-temporal-repros",
+    "capstone/bug-corpora/php/zend-alloc-repros"
+  ],
   "related": [
     "capstone/ports/php/app",
     "capstone/ports/php/engine"

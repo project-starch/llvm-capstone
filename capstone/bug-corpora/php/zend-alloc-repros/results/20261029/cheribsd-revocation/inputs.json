@@ -1,0 +1,69 @@
+{
+  "arm": "cheribsd-revocation",
+  "binaries": {
+    "php": "b389e2399540f5e5449bff7c58c8112f73cba65be7639db941791dd1ad86f442",
+    "php-fullext": "39ecce285c0e27ec49ac214b0c6bd139c2742de42feaf90c7e47fe54935acd15",
+    "which_cases_use_fullext": []
+  },
+  "boot": {
+    "booted": true,
+    "completed": true,
+    "mounted": true,
+    "panic": false
+  },
+  "cases": 30,
+  "configuration": "cheribsd-default",
+  "contract": "verdicts-v1",
+  "corpus": "zend-alloc-repros",
+  "note": "boots: the arm at the platform default, the same binary with revocation off, and (when --eager) a third at every-free. The default is the only one a verdict comes from; off is what attributes a fault, since a purecap SIGPROT carries no symbol here; eager only separates a quarantined-but-never-reissued chunk from a genuine miss, and is recorded in the notes rather than scored",
+  "platform": {
+    "compiler": "the CheriBSD SDK clang that built ports/php/cheribsd",
+    "firmware": "bbl purecap (the SDK's own)",
+    "kernel": "the CheriBSD purecap rootfs kernel",
+    "qemu": "cheri-qemu, ports/php/cheribsd/run-cheribsd-cases.py",
+    "runner": "capstone/bug-corpora/php/tools/run-php-corpus.py"
+  },
+  "population": "the 30 cases of php/zend-alloc-repros",
+  "revocation": {
+    "default": [
+      {
+        "read_back": "1",
+        "set": "security.cheri.runtime_revocation_default=1"
+      },
+      {
+        "read_back": "0",
+        "set": "security.cheri.runtime_revocation_every_free_default=0"
+      }
+    ],
+    "eager": [
+      {
+        "read_back": "1",
+        "set": "security.cheri.runtime_revocation_default=1"
+      },
+      {
+        "read_back": "1",
+        "set": "security.cheri.runtime_revocation_every_free_default=1"
+      }
+    ],
+    "off": [
+      {
+        "read_back": "0",
+        "set": "security.cheri.runtime_revocation_default=0"
+      },
+      {
+        "read_back": "0",
+        "set": "security.cheri.runtime_revocation_every_free_default=0"
+      }
+    ]
+  },
+  "tally": {
+    "CAUGHT": 7,
+    "MISSED": 20,
+    "NO-READING:inconclusive": 3
+  },
+  "boot_provenance": {
+    "boots_read": "the three cheribsd-*.json records under the raw run directory for 2026-10-29",
+    "eager_boot_rerun": "The eager boot was run twice. THE FIRST IS VOID AND IS NOT THE ONE READ HERE: a concurrent run of the same driver rewrote the guest script in the shared stage directory while it was executing, and its transcript ends after 9 of 31 entries with a garbled console. The driver now names the guest script after its own pid so two runs cannot collide. The boot read here is the re-run, which also carries the auto_append_file END marker that places each eager fault inside the script body or in request shutdown.",
+    "placement_control": "A boot where no case printed PHPB_TRIGGER_END cannot place a fault, and the runner now says `unplaced` instead of defaulting to `inside the script body`. Both corpora's eager boots were re-run with the marker for that reason."
+  }
+}

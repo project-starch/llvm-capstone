@@ -1,0 +1,20 @@
+{
+ "what": "which defence ends a PHP corpus case on CheriBSD, measured instead of inferred",
+ "binary": "controls/abort-probe.c, built purecap by the same flags as the port",
+ "platform": {
+  "compiler": "the CheriBSD SDK clang that built ports/php/cheribsd",
+  "qemu": "cheri-qemu from the SDK, run by run-cheribsd-cases.py",
+  "firmware": "bbl purecap (the SDK's own)",
+  "kernel": "the CheriBSD purecap rootfs kernel",
+  "runner": "capstone/ports/php/cheribsd/run-cheribsd-cases.py"
+ },
+ "configuration": "security.cheri.runtime_revocation_default=1 (the platform default), every_free=0",
+ "result": {
+  "double free": "SIGABRT (exit 134), NOTHING written to stderr -- byte for byte the signature of the 15 plain-temporal cases that read NO-READING:inconclusive",
+  "free of an interior pointer": "the same",
+  "read after free": "COMPLETES, and reads the old byte back",
+  "write after free": "COMPLETES"
+ },
+ "reading": "Two things, both measured. (1) The aborts in the corpus are CheriBSD's own ALLOCATOR consistency check, not a capability fault: ktrace shows thr_kill(SIGABRT) with code=SI_LWP, the process raising the signal on itself, and this probe reproduces it from a plain double free. (2) At the platform default a use after free does not trap at all -- the chunk sits in quarantine, the stale capability is still valid and still reads the old bytes, because revocation is DEFERRED until a sweep. A short-lived CLI process can exit before any sweep runs. That is why the eager configuration (every free sweeps) turns 12 of those 15 into SIGPROT.",
+ "consequence": "An abort may not be scored as CAUGHT on this arm: the arm measures CHERI, and what fired is a software check any allocator could carry. The judge keeps them as NO-READING and the bundle's notes name the defence."
+}

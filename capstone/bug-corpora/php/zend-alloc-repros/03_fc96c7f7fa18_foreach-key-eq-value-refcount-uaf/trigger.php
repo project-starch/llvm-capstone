@@ -1,0 +1,1 @@
+<?php foreach(array("x") as $f=>$f);
