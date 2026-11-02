@@ -60,6 +60,10 @@ static int trace;
  * default: a gcc test run admits ~400 grants, and each line is an unbuffered write(2) to wherever
  * stderr goes -- a 9p file in a harness that does not redirect it. */
 static int grants;
+/* CV_STEP returns by kind (1 quantum, 3 service, 4 fault, else other) and services by number,
+ * for the CAPSTONE_VM_STATS line: which exits the step protocol actually makes, and how many. A
+ * retried EINTR/EAGAIN is not a return. Relaxed atomics: every virtual thread's loop counts. */
+static unsigned long step_kinds[8], step_services[16];
 static void *meta;
 static void *virtual_thread_worker(void *opaque);
 
@@ -914,12 +918,20 @@ static int virtual_service(uint64_t tid, struct cv_step *step)
             struct cv_stats stats;
             if (tid == 0 && (getenv("CAPSTONE_VM_STATS") || getenv("CAPSTONE_DELEGATE_STATS")) &&
                 !ioctl(device, CV_STATS, &stats))
-                fprintf(stderr, "CAPSTONE_VM_STATS arenas=%llu pages=%llu peak=%llu nodes=%llu steps=%llu faults=%llu collections=%llu reclaimed=%llu rounds=%llu bytes_in=%llu bytes_out=%llu node_bytes=%llu node_capacity=%llu node_growths=%llu launch_ns=%llu elapsed_ns=%llu\n",
+                fprintf(stderr, "CAPSTONE_VM_STATS arenas=%llu pages=%llu peak=%llu nodes=%llu steps=%llu faults=%llu collections=%llu reclaimed=%llu rounds=%llu bytes_in=%llu bytes_out=%llu node_bytes=%llu node_capacity=%llu node_growths=%llu launch_ns=%llu elapsed_ns=%llu"
+                                " step_returns=quantum:%lu,service:%lu,fault:%lu,other:%lu"
+                                " services=delegate:%lu,map:%lu,unmap:%lu,thread_create:%lu,thread_exit:%lu,thread_join:%lu,protect:%lu,wait:%lu,futex:%lu,pthread_exit:%lu,thread_delegate:%lu,thread_self:%lu,nodes:%lu,remap:%lu\n",
                     stats.arenas, stats.pinned_pages, stats.peak_pages, stats.nodes, stats.steps,
                     stats.faults, stats.collections, stats.reclaimed, (unsigned long long)host.rounds,
                     (unsigned long long)host.bytes_in, (unsigned long long)host.bytes_out,
                     stats.node_bytes, stats.node_capacity, stats.node_growths,
-                    launch_ns, now_ns() - start_ns);
+                    launch_ns, now_ns() - start_ns,
+                    step_kinds[1], step_kinds[3], step_kinds[4],
+                    step_kinds[0] + step_kinds[2] + step_kinds[5] + step_kinds[6] + step_kinds[7],
+                    step_services[0], step_services[1], step_services[2], step_services[3],
+                    step_services[4], step_services[5], step_services[6], step_services[7],
+                    step_services[8], step_services[9], step_services[10], step_services[11],
+                    step_services[12], step_services[13]);
             /* The image's identity on a run that ENDS, not only on one that faults: a
              * transcript that carries no digest cannot be tied to the image it claims to be
              * from, and a judge that reads a probe's successful run (the putenv probe) has
@@ -964,6 +976,10 @@ static int virtual_service_loop(uint64_t tid)
     for (;;) {
         while (ioctl(device, CV_STEP, &step))
             if (errno != EINTR && errno != EAGAIN) return die("step");
+        __atomic_fetch_add(&step_kinds[step.kind < 8 ? step.kind : 7], 1, __ATOMIC_RELAXED);
+        if (step.kind == 3)
+            __atomic_fetch_add(&step_services[step.args[7] < 16 ? step.args[7] : 15], 1,
+                               __ATOMIC_RELAXED);
         step.reply = 0;
         if (step.kind == 1) {
             /* The supervisor quantum is the preemption point. Yielding here
