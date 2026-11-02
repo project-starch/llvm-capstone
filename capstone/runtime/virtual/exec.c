@@ -166,14 +166,37 @@ static void *reserve(size_t bytes)
     if (tail) munmap((void *)(base + bytes), tail);
     return private_pages((void *)base, bytes);
 }
+/* A per-process virtual-address cursor for aligned arenas, growing DOWN. It is seeded by the
+ * first over-map-and-trim reservation and holds the base of the most recently placed arena;
+ * thereafter each arena is tried at the next `alignment`-aligned slot below the previous one. */
+static uintptr_t aligned_cursor;
 static void *reserve_aligned(size_t bytes, size_t alignment)
 {
-    /* mmap() promises page alignment only. Over-map by the worst-case distance to the next
-     * alignment boundary -- the raw base is already page-aligned, so that is alignment - 4096
-     * -- then trim both ends, leaving EXACTLY `bytes` mapped. Mapping exactly `bytes` is the
-     * point: remap_mapping() below matches a heap on m->bytes == m->visible, so a padded heap
-     * can never grow. At alignment == 4096 the slack is zero and this reduces to a plain
-     * mmap() of `bytes`, which is what the heap path used to do. */
+    /* Fast path: place the arena at the cursor with MAP_FIXED_NOREPLACE, so the kernel confirms
+     * the slot is free with one maple-tree probe instead of running its top-down free-area search
+     * (mas_empty_area_rev). Nothing about the mapping or its registration changes -- same bytes,
+     * same PROT_READ|PROT_WRITE, same madvise via private_pages(), and the base is aligned to
+     * `alignment` (>= the bounds granule) exactly as the trim path below produces, so grant()'s
+     * representability check and the CV_ADD are identical; only HOW the free virtual range is found
+     * differs. A taken hint -- EEXIST, or an older kernel without MAP_FIXED_NOREPLACE handing back
+     * a different address -- falls back to the trim path and reseeds the cursor, so two arenas can
+     * never land at one address and correctness never depends on the hint being honoured. */
+    if (aligned_cursor > bytes) {
+        uintptr_t hint = (aligned_cursor - bytes) & ~(uintptr_t)(alignment - 1);
+        if (hint) {
+            void *p = mmap((void *)hint, bytes, PROT_READ | PROT_WRITE,
+                           MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED_NOREPLACE, -1, 0);
+            if (p == (void *)hint) { aligned_cursor = hint; return private_pages(p, bytes); }
+            if (p != MAP_FAILED) munmap(p, bytes);
+        }
+    }
+    /* Fallback / first call. mmap() promises page alignment only. Over-map by the worst-case
+     * distance to the next alignment boundary -- the raw base is already page-aligned, so that is
+     * alignment - 4096 -- then trim both ends, leaving EXACTLY `bytes` mapped. Mapping exactly
+     * `bytes` is the point: remap_mapping() below matches a heap on m->bytes == m->visible, so a
+     * padded heap can never grow. At alignment == 4096 the slack is zero and this reduces to a
+     * plain mmap() of `bytes`, which is what the heap path used to do. Seed the cursor at the base
+     * so the next arena is placed just below this one. */
     size_t slack = alignment - 4096;
     char *raw = mmap(NULL, bytes + slack, PROT_READ | PROT_WRITE,
                      MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
@@ -182,6 +205,7 @@ static void *reserve_aligned(size_t bytes, size_t alignment)
     if (base != (uintptr_t)raw) munmap(raw, base - (uintptr_t)raw);
     size_t tail = (uintptr_t)raw + bytes + slack - (base + bytes);
     if (tail) munmap((void *)(base + bytes), tail);
+    aligned_cursor = base;
     return private_pages((void *)base, bytes);
 }
 /* The highest mapping starting at or below p, or NULL. */
