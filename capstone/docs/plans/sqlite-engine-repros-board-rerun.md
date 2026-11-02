@@ -6,6 +6,34 @@ that must NOT move. Nothing here needs a reflash. The corpus side is done and on
 -- `check-corpus.py` CLEAN, `derive-verdicts.py --check` current, `test_verdicts.py` 29/29 -- so
 what is owed is board time and nothing else.
 
+## Read this first: 19 and 17 are the SAME defects, not two corpora
+
+**There are 27 counted defects, and nothing here is a new corpus.** SQLite's allocator is a build
+choice, so each of those defects is built twice from one `case.c` and measured twice:
+
+- **nested** -- `SQLITE_CONFIG_HEAP` over a static array. memsys5 sub-allocates inside one object
+  that the platform's allocator sees as live from first use until exit, so a `sqlite3_free` is not
+  a free that allocator ever hears about.
+- **non-nested** -- the same source with memsys5 left out of the build (`build-virtual.py` without
+  `--memsys5`; on CheriBSD `SYSALLOC=1`). Every SQLite object now comes straight from the
+  platform's own allocator -- mallocng on the virtual profile, libc `malloc` on CheriBSD -- and
+  its end IS a free that allocator sees.
+
+So **19 + 17 is not 36 bugs.** It is 19 temporal defects measured nested, and 17 of those same
+defects measured again with the arena removed. The rows are 19 + 8 nested and 17 + 8 non-nested =
+**52 rows over 27 defects**, and the two configurations must never be summed as if they were
+separate bug counts. The whole point of measuring twice is that the nested and non-nested columns
+of the SAME defect differ -- that difference is what the nested allocator costs.
+
+**Why 17 and not 19 on the non-nested side.** Cases 07 and 22 call
+`sqlite3_config(SQLITE_CONFIG_HEAP)` from their own `run_case()`, so they never reach the build
+switch at all and have no non-nested form: they are `NO-READING:out-of-denominator` on both
+non-nested arms, which is also what the Capstone image builder already reports for them. The
+spatial axis is 8 in both configurations.
+
+**And 19 and not 20.** Case 08 was withdrawn on 2026-10-30: its trigger does not reach the defect
+it names. That is the whole difference from the 20 / 18 the earlier tables carried.
+
 ## Why
 
 Two things changed under the board's feet since 2026-10-18/20, and both change what a board run of
@@ -53,9 +81,10 @@ and the platform is what differs (`SCHEMA.md`, the `vp2-malloc` row).
 
 ## Pre-registered readings
 
-Over the **27 counted** cases. Each arm's 33-row bundle also carries the six out-of-denominator
-cases; score cell by cell against the QEMU bundle named above, as the q15 runs did with
-`subset-bundle.py` and `compare-pilot.py`.
+Over the **27 counted** cases -- 19 temporal and 8 spatial, each measured in both
+configurations, not 27 per configuration. Each arm's 33-row bundle also carries the six
+out-of-denominator cases; score cell by cell against the QEMU bundle named above, as the q15 runs
+did with `subset-bundle.py` and `compare-pilot.py`.
 
 | arm | temporal (n=19) | spatial (n=8) | bundle tally over all 33 | QEMU reads |
 |---|---|---|---|---|

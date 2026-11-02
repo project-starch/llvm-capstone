@@ -121,6 +121,11 @@ when 08 was withdrawn for the reason 01 and 09 already carried.
 
 **Two configurations, and `tools/catch-tables.py --all --board` prints the nested one.** The
 non-nested table is recomputed the same way, from the same cells, by the arms named under it.
+**The two tables are the same defects measured twice, so their counts are not additive**: 19
+temporal nested and 17 temporal non-nested is 19 defects, 17 of which also have a non-nested form,
+not 36 bugs. Each case is built twice from one `case.c` -- with `SQLITE_CONFIG_HEAP` over a static
+array, and with memsys5 left out of the build so every object comes from the platform's own
+allocator -- and the difference between a defect's two columns is what the nested allocator costs.
 
 ### Nested: memsys5 over the case's static arena
 
