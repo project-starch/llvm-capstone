@@ -1,0 +1,138 @@
+# 2026-11-02 15:00, Addendum 2: dryrun-spatial-b2.sh over spatial-b2.list with the seven Spatial test lines
+===== normal (exit 0)
+SP START 2026-11-02 14:58:54 waiting for board 2's chain (pid 656830)
+SP chain ended 14:58:54
+SP FLASH BEGIN 14:58:54 booking book 2 30 vp2 ObjBounds caplifive_vp2c_603528b8b REFLASH for SPEC Spatial (board 2)
+SP FLASH END rc=0 14:58:54
+SP READBACK ok rc=3
+SP BARE BEGIN 14:58:54
+STUB bare board 2 caplifive_vp2c_603528b8b -> 0
+SP BARE END rc=0 14:58:54
+SP PILOT BEGIN 14:58:54
+STUB CHAIN board 2 list pilot.list SB_KIT=$CAPSTONE_WORK/t3-smoke/bkit15-objb-b2 SB_BITSTREAM=603528b8b
+  stub ran 519.lbm_r-train-capstone-spatial
+SP PILOT END rc=0 14:58:54
+  G1 PASS: done=True commands 1/1 rc=[0]
+  G2 PASS: specdiff ['PASS']
+  G3 PASS: 3 reference hashes (stderr excluded), differing or missing: []
+  G4 PASS: largest instret deviation 0.0
+  GATE PASS
+SP GATE rc=0
+SP MAIN BEGIN 14:58:54
+STUB CHAIN board 2 list spatial-b2.list SB_KIT=$CAPSTONE_WORK/t3-smoke/bkit15-objb-b2 SB_BITSTREAM=603528b8b
+  stub ran 519.lbm_r-test-capstone-spatial
+  stub ran 544.nab_r-test-capstone-spatial
+  stub ran 538.imagick_r-test-capstone-spatial
+  stub ran 557.xz_r-test-capstone-spatial
+  stub ran 505.mcf_r-test-capstone-spatial
+  stub ran 500.perlbench_r-test-capstone-spatial
+  stub ran 525.x264_r-test-capstone-spatial
+  stub ran 505.mcf_r-train-capstone-spatial
+  stub ran 500.perlbench_r-train-capstone-spatial
+  stub ran 525.x264_r-train-capstone-spatial
+  stub ran 538.imagick_r-train-capstone-spatial
+  stub ran 544.nab_r-train-capstone-spatial
+  stub ran 557.xz_r-train-capstone-spatial-link-c0
+SP MAIN END rc=0 14:58:54
+SP BACK BEGIN 14:58:54
+SP BACK END rc=0 14:58:54
+SP CONTINUE 14:58:54: after-train.sh 2 (ObjLife rest, then Plain)
+STUB after-train 2 656907
+SP DONE 14:58:54 after-train rc=0
+===== no-done-marker (exit 1)
+SP START 2026-11-02 14:58:54 waiting for board 2's chain (pid 656916)
+SP STOP: board 2's chain ended without .chain-b2-done; nothing launched
+===== store-control (exit 1)
+SP START 2026-11-02 14:58:54 waiting for board 2's chain (pid 656929)
+SP chain ended 14:58:54
+SP STOP: store-has control read rc=0, not 1
+===== bad-bit-hash (exit 1)
+SP START 2026-11-02 14:58:54 waiting for board 2's chain (pid 656952)
+SP chain ended 14:58:54
+SP STOP: local bitstream hash is not 0f03b097bbd1693bdc3424a872eb2c88f086d5d5fc3d771b29d4945490ec18c1
+===== flash-fails (exit 1)
+SP START 2026-11-02 14:58:54 waiting for board 2's chain (pid 656966)
+SP chain ended 14:58:54
+SP FLASH BEGIN 14:58:54 booking book 2 30 vp2 ObjBounds caplifive_vp2c_603528b8b REFLASH for SPEC Spatial (board 2)
+SP FLASH END rc=1 14:58:54
+SP STOP: the flash did not read back caplifive_vp2c_603528b8b.bit
+SP BACK BEGIN 14:58:54
+SP BACK END rc=0 14:58:54
+===== bare-not-confirmed (exit 0)
+SP START 2026-11-02 14:58:54 waiting for board 2's chain (pid 656997)
+SP chain ended 14:58:54
+SP FLASH BEGIN 14:58:54 booking book 2 30 vp2 ObjBounds caplifive_vp2c_603528b8b REFLASH for SPEC Spatial (board 2)
+SP FLASH END rc=0 14:58:54
+SP READBACK ok rc=3
+SP BARE BEGIN 14:58:54
+STUB bare board 2 caplifive_vp2c_603528b8b -> 4
+SP BARE END rc=4 14:58:54
+SP HOLD: bare kit rc=4 (0 CONFIRMED only); no SPEC stage on this flash
+SP BACK BEGIN 14:58:54
+SP BACK END rc=0 14:58:54
+SP CONTINUE 14:58:54: after-train.sh 2 (ObjLife rest, then Plain)
+STUB after-train 2 657031
+SP DONE 14:58:54 after-train rc=0
+===== pilot-gate-miss (exit 0)
+SP START 2026-11-02 14:58:54 waiting for board 2's chain (pid 657039)
+SP chain ended 14:58:54
+SP FLASH BEGIN 14:58:54 booking book 2 30 vp2 ObjBounds caplifive_vp2c_603528b8b REFLASH for SPEC Spatial (board 2)
+SP FLASH END rc=0 14:58:54
+SP READBACK ok rc=3
+SP BARE BEGIN 14:58:54
+STUB bare board 2 caplifive_vp2c_603528b8b -> 0
+SP BARE END rc=0 14:58:54
+SP PILOT BEGIN 14:58:54
+STUB CHAIN board 2 list pilot.list SB_KIT=$CAPSTONE_WORK/t3-smoke/bkit15-objb-b2 SB_BITSTREAM=603528b8b
+  stub ran 519.lbm_r-train-capstone-spatial
+SP PILOT END rc=0 14:58:54
+  G1 PASS: done=True commands 1/1 rc=[0]
+  G2 PASS: specdiff ['PASS']
+  G3 MISS: 3 reference hashes (stderr excluded), differing or missing: ['lbm.out']
+  G4 PASS: largest instret deviation 0.0
+  GATE MISS (1)
+SP GATE rc=1
+SP HOLD: the pilot did not pass its gate; the other six do not run
+SP BACK BEGIN 14:58:54
+SP BACK END rc=0 14:58:54
+SP CONTINUE 14:58:54: after-train.sh 2 (ObjLife rest, then Plain)
+STUB after-train 2 657082
+SP DONE 14:58:54 after-train rc=0
+===== back-fails (exit 1)
+SP START 2026-11-02 14:58:54 waiting for board 2's chain (pid 657090)
+SP chain ended 14:58:54
+SP FLASH BEGIN 14:58:54 booking book 2 30 vp2 ObjBounds caplifive_vp2c_603528b8b REFLASH for SPEC Spatial (board 2)
+SP FLASH END rc=0 14:58:54
+SP READBACK ok rc=3
+SP BARE BEGIN 14:58:54
+STUB bare board 2 caplifive_vp2c_603528b8b -> 0
+SP BARE END rc=0 14:58:54
+SP PILOT BEGIN 14:58:54
+STUB CHAIN board 2 list pilot.list SB_KIT=$CAPSTONE_WORK/t3-smoke/bkit15-objb-b2 SB_BITSTREAM=603528b8b
+  stub ran 519.lbm_r-train-capstone-spatial
+SP PILOT END rc=0 14:58:54
+  G1 PASS: done=True commands 1/1 rc=[0]
+  G2 PASS: specdiff ['PASS']
+  G3 PASS: 3 reference hashes (stderr excluded), differing or missing: []
+  G4 PASS: largest instret deviation 0.0
+  GATE PASS
+SP GATE rc=0
+SP MAIN BEGIN 14:58:54
+STUB CHAIN board 2 list spatial-b2.list SB_KIT=$CAPSTONE_WORK/t3-smoke/bkit15-objb-b2 SB_BITSTREAM=603528b8b
+  stub ran 519.lbm_r-test-capstone-spatial
+  stub ran 544.nab_r-test-capstone-spatial
+  stub ran 538.imagick_r-test-capstone-spatial
+  stub ran 557.xz_r-test-capstone-spatial
+  stub ran 505.mcf_r-test-capstone-spatial
+  stub ran 500.perlbench_r-test-capstone-spatial
+  stub ran 525.x264_r-test-capstone-spatial
+  stub ran 505.mcf_r-train-capstone-spatial
+  stub ran 500.perlbench_r-train-capstone-spatial
+  stub ran 525.x264_r-train-capstone-spatial
+  stub ran 538.imagick_r-train-capstone-spatial
+  stub ran 544.nab_r-train-capstone-spatial
+  stub ran 557.xz_r-train-capstone-spatial-link-c0
+SP MAIN END rc=0 14:58:54
+SP BACK BEGIN 14:58:54
+SP BACK END rc=1 14:58:54
+SP STOP: board 2 is not confirmed back on bitstream 3; nothing more launched

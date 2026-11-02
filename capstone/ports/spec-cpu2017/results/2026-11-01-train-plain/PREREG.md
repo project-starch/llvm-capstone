@@ -189,3 +189,54 @@ Controls, run on the recorded lbm results:
 starts it after mcf ObjLife, about 04:30 on 2 November, and ends near 6 November. Board 1 runs the remaining Full
 stages (about 68 h), then Plain (about 54 h). Board 2 joins whatever is left once it is back on bitstream 3. All three
 configurations should complete around 7 November.
+
+## Addendum 2 (2026-11-02 15:00): SPEC test in all three configurations, ahead of the remaining train stages
+
+Written and pushed before any of these test stages boots. The project lead asked for SPEC test in Plain, Spatial and
+Full by 3 November, without stopping a running stage.
+
+**What exists.** The board test runs of 28-30 October (`results/2026-10-28-board-test`) are two arms on bitstream 3:
+`capstone-lifetimes` (Full) and `capstone-spatial`, which on bitstream 3 is **MapLife**, not Spatial. Neither Plain
+nor Spatial has run on test. The images are the pre-fix campaign images. perlbench test's second command fails specdiff
+in both Capstone arms; this is the heap defect of Addendum 16 of that run, and it recurs in any arm built from those
+images.
+
+**Spatial test** (board 2, already on `caplifive_vp2c_603528b8b`, no extra flash). The same images as the MapLife test:
+- perlbench, mcf, xz and x264 use the very stage directories MapLife's test ran (`stages-board/*-test-capstone-spatial`).
+- lbm, nab and imagick ran as two-arm stages, so one-arm `capstone-spatial` stages were made from the same tree
+  (`stages-test-objb/`, `make-stage.py --arms capstone-spatial`). Each plan.json's `capstone-spatial` executable sha256
+  equals the two-arm stage's, and every other field is equal, apart from the new `stripped: false`.
+- gcc is left out: it is not in the seven-benchmark set.
+- The lines go into `spatial-b2.list` after the lbm train pilot, so they run only if the pilot passes its gate.
+  Order, short first: lbm, nab, imagick, xz, mcf, perlbench, x264. The Spatial train stages follow.
+- The stubbed dry run of `spatial-b2.sh` was repeated over the new list. It covers all eight branches, including the
+  stage-directory check on every line.
+
+**Plain test** (board 1, bitstream 3, after the running perlbench Full stage, about 00:30 on 3 November).
+- The stages come from `make-stage.py --plain-arms plain-rv64 --rdctr rdctr --size test` over `tree-plain`, with
+  the test options of the Capstone test stages.
+- Each one reaches the board only after its QEMU twin run passes (`plain-gate.py`, as for train).
+- Its image hashes and twin results go into Addendum 3, before the first Plain test boot.
+
+**Predictions.**
+- **T1.** Spatial test against MapLife test, per benchmark, with `spatial-gate.py` (G1-G4):
+  - every command ends rc 0;
+  - outputs are equal (stderr excepted);
+  - in-context instret is within 0.1 %.
+  Exceptions:
+  - x264's host validation is NO-OUTPUT by design (the board stage has no imagevalidate), so its G2 reads by
+    output-hash equality;
+  - perlbench's failing command is set off by allocation history (Addendum 16 of the test run), so its output and
+    instret may differ from MapLife's, and G2 is predicted MISS for it, as in both Capstone arms.
+- **T2.** MapLife / Spatial elapsed:
+  - lbm and nab in [1.000, 1.02];
+  - every other benchmark in [1.00, 1.40].
+- **T3.** Full / Spatial in [1.00, 1.50], and Spatial / Plain in [1.1, 3.5], as S4.
+- **T4.** Plain test passes the twin and the board with rc 0 and specdiff PASS for all seven benchmarks, perlbench
+  included: Plain does not use the Capstone heap.
+
+**Board time and the cost to train.**
+- Spatial test is about MapLife test's 36 h: board 2, from the pilot gate (about 16:00 on 2 November) to about 04:00
+  on 4 November. lbm, nab, imagick, xz and mcf land by about 01:00 on 3 November; perlbench and x264 last.
+- Plain test is about 0.5-0.7 of MapLife's, 18-25 h: board 1, about 00:30 on 3 November to about 20:00-01:00.
+- Both push the remaining train stages back by the same amount, about 1.5 days on board 2 and about 1 day on board 1.
