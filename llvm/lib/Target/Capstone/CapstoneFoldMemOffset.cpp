@@ -277,17 +277,54 @@ bool CapstoneFoldMemOffset::foldOffset(
     }
   }
 
-  // The path argument (see the comment at CapIntermediates): the first use of
-  // each surviving cursor in its defining block must be a folded access with
-  // the cursor as base. No use in that block, or a first use that is anything
-  // else (a derived cursor above all), vetoes the fold.
+  // Per surviving cursor, three conditions (see the comment at
+  // CapIntermediates for the window argument):
+  //
+  // 1. Address policy (isa.md, "address policy"): a tagged cursor must be a
+  //    canonical address (sv39: bits 63:39 equal bit 38, so [2^38, 2^64-2^38)
+  //    is refused; sv48/sv57 likewise at 47/56; phys56: bits 63:56 clear), and
+  //    an operation whose result carries a refused cursor writes it UNTAGGED.
+  //    The representable window says nothing about this boundary. The fold
+  //    moves every surviving cursor by MINUS its tracked delta (the erased
+  //    displacement ahead of it), so require delta >= 0: the cursor only moves
+  //    DOWN, by at most 4095 (the access's new displacement and its old one
+  //    each fit simm12). A downward move of that size from a tagged user-half
+  //    address stays below 2^38 or, wrapping below 0, lands in the all-ones
+  //    kernel half, canonical under sv39/sv48/sv57; under phys56 a wrap would
+  //    be refused, but tags exist only in the tagged physical region (from
+  //    0x80000000), so no tagged cursor lies within 4095 of 0. An UPWARD move
+  //    (delta < 0) can reach 2^38 from an object that ends just below it, which
+  //    Linux can map (the top of the user half): with bounds [2^38-4096, 2^38),
+  //    cursor 2^38-2048, `CIncOffsetImm -1; CIncOffset 2048; LBU 0` reads
+  //    2^38-1 tagged, while the folded form's cursor 2^38 is refused and the
+  //    `LBU -1` at the unchanged address faults. A delta of 0 moves nothing.
+  //    An all-constant chain with no surviving cursor has no exposure: its
+  //    folded accesses use the untouched root input.
+  // 2. The path argument: the first use of the cursor in block order of its
+  //    defining block must be a folded access with the cursor as base. No use
+  //    in that block, or a first use that is anything else (a derived cursor
+  //    above all), vetoes the fold.
+  // 3. Unwinding: the scan to that first use stops at a call or inline asm,
+  //    which may leave the block through an unwind edge before the access
+  //    runs, with the derived cursor used in the landing pad; and a defining
+  //    block with an EH-pad successor is vetoed outright. A non-returning trap
+  //    is not a bypass: the launcher terminates through SIGSEGV and nothing
+  //    derived from the cursor runs afterwards.
   for (Register R : CapIntermediates) {
+    auto D = RegToOffsetMap.find(R);
+    if (D == RegToOffsetMap.end() || D->second < 0)
+      return false;
     const MachineInstr *Def = MRI.getVRegDef(R);
     if (!Def)
       return false;
     const MachineBasicBlock *MBB = Def->getParent();
+    for (const MachineBasicBlock *Succ : MBB->successors())
+      if (Succ->isEHPad())
+        return false;
     bool Bounded = false;
     for (auto I = std::next(Def->getIterator()); I != MBB->end(); ++I) {
+      if (I->isCall() || I->isInlineAsm())
+        break;
       bool Reads = false;
       for (const MachineOperand &MO : I->uses())
         if (MO.isReg() && MO.getReg() == R)
