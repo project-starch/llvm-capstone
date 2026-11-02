@@ -181,7 +181,12 @@ populations merged (`tools/merge-population-bundles.py`), every table computed f
 - `results/2026-10-28-run17/`: the same 70 cases on the reduced nested layer, every cell identical to run16.
 - `results/2026-10-28-run18/`: **the current record**, the same 70 cases under the renamed layer ("seam" is now "nested"), every cell identical to run17. `corpus.json`'s `verdict_bundles` names its arm bundles, `derive-verdicts.py` wrote their verdicts into every `case.json`, and `check-corpus.py` re-judges them.
 
-Over the 55 temporal cases (51 CWE-416, 3 CWE-590, 1 CWE-415), from `results/2026-10-28-run18/README.md` (identical to run16's and run17's):
+Over the 55 temporal cases (51 CWE-416, 3 CWE-590, 1 CWE-415). The four virtual arms come from
+`results/2026-10-28-run18/README.md` (identical to run16's and run17's) and `cheribsd-revocation`
+from `results/2026-10-30-cheribsd/README.md`. Those are separate boots on separate vehicles, so the
+rows are set side by side and not merged; the generator states each row's record and refuses two
+records claiming one arm. Generated, never typed:
+`tools/result-tables.py --across results/2026-10-28-run18 results/2026-10-30-cheribsd`.
 
 **Default scoring** (the native crashers out of the denominator):
 
@@ -191,6 +196,7 @@ Over the 55 temporal cases (51 CWE-416, 3 CWE-590, 1 CWE-415), from `results/202
 | system allocator | 12 | 1 | 12 | infra 1, not-reached 2, out-of-denominator 27, unattributed 1 |
 | nested | 25 | 1 | 0 | infra 2, out-of-denominator 27, unattributed 1 |
 | nested exact | 25 | 1 | 0 | infra 2, out-of-denominator 27, unattributed 1 |
+| CheriBSD revocation | 1 | n/a | 26 | inconclusive 1, out-of-denominator 27 |
 
 **Sensitivity scoring** (every case scored by fault site; reported beside the default, never instead):
 
@@ -200,6 +206,20 @@ Over the 55 temporal cases (51 CWE-416, 3 CWE-590, 1 CWE-415), from `results/202
 | system allocator | 25 | 1 | 12 | infra 2, not-reached 2, out-of-denominator 1, setup-fault 9, unattributed 4 |
 | nested | 48 | 2 | 0 | infra 3, out-of-denominator 1, unattributed 3 |
 | nested exact | 48 | 2 | 0 | infra 3, out-of-denominator 1, unattributed 3 |
+| CheriBSD revocation | 8 | n/a | 32 | inconclusive 13, infra 1, out-of-denominator 1 |
+
+("n/a" in the chain column: the CheriBSD arm does not attribute a catch by call path at all -- it
+attributes by the paired boot with revocation off -- so it has no chain catch to count. That is a
+property of the arm, not a reading of it.)
+
+**A CAUGHT in the CheriBSD row is not the same event as a CAUGHT in the others, and the column is
+not one scale.** Every one of its catches is a `cause=34` capability fault, and for all but one the
+paired boot with `security.cheri.runtime_revocation_default=0` faults as well, so what fired is the
+platform's bounds check and not revocation. Exactly one catch in the whole corpus is revocation's
+(CRASH-081); its pristine record is a `SIGNAL`, so the default scoring excludes it and **over the
+default denominator revocation's figure is 0**. A further 26 temporal cases are NOT-REISSUED --
+silent at the platform default, faulting under every-free -- which reads the deployed sweep policy
+and decides no verdict. The arm's own section below holds the attribution group by group.
 
 Read with the plan document (`docs/plans/2026-10-12-php-virtual-capstone-retarget.md`, runs 8 to 16):
 the system allocator's catches are a strict subset of the nested arms'; a catch "by chain" is attributed
