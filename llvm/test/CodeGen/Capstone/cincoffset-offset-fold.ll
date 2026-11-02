@@ -138,10 +138,14 @@ define i64 @edgeneg(ptr addrspace(200) %x, i64 %k) {
   ret i64 %v
 }
 
-; ... CONTROL: -257 * 8 = -2056 does not, and stays in the offset chain.
+; ... CONTROL: -257 * 8 = -2056 stays in the integer offset. Sharing the
+; scale must not introduce an intermediate cursor outside the window.
 ; CHECK-LABEL: farneg:
-; CHECK:     addi {{a[0-9]+}}, {{a[0-9]+}}, -257
+; CHECK-NOT: cincoffset
+; CHECK:     slli
+; CHECK-NOT: cincoffset
 ; CHECK:     cincoffset {{a[0-9]+}}, a0, {{a[0-9]+}}
+; CHECK-NOT: cincoffset
 ; CHECK:     ld a0, 0({{a[0-9]+}})
 define i64 @farneg(ptr addrspace(200) %x, i64 %k) {
   %k1 = add i64 %k, -257
