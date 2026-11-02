@@ -979,6 +979,18 @@ static int virtual_service(uint64_t tid, struct cv_step *step)
         if (h->exec_requested) request->result = tid ? -ENOSYS : exec_in_place();
         if (h->exiting) {
             struct cv_stats stats;
+            if (tid == 0 && getenv("CAPSTONE_VM_STATS_MARK")) {
+                /* A mark in the kernel log right before the counters are read, so a gate can
+                 * set the module's per-arena census (dmesg) against pages=: the arenas retired
+                 * after the mark are the ones pages= still counts. Its own variable, not
+                 * CAPSTONE_VM_STATS: a guest whose console is up prints the line to its UART,
+                 * ~0.5 M instruction attempts in a profile that sets CAPSTONE_VM_STATS. */
+                int kmsg = open("/dev/kmsg", O_WRONLY | O_CLOEXEC);
+                if (kmsg >= 0) {
+                    if (write(kmsg, "CAPSTONE_VM_STATS_MARK\n", 23) < 0) { /* diagnostic only */ }
+                    close(kmsg);
+                }
+            }
             if (tid == 0 && (getenv("CAPSTONE_VM_STATS") || getenv("CAPSTONE_DELEGATE_STATS")) &&
                 !ioctl(device, CV_STATS, &stats)) {
                 fprintf(stderr, "CAPSTONE_VM_STATS arenas=%llu pages=%llu peak=%llu nodes=%llu steps=%llu faults=%llu collections=%llu reclaimed=%llu rounds=%llu bytes_in=%llu bytes_out=%llu node_bytes=%llu node_capacity=%llu node_growths=%llu launch_ns=%llu elapsed_ns=%llu\n",

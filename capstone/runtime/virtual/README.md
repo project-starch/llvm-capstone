@@ -416,12 +416,20 @@ reschedule, a signal, an expired budget or `SIGKILL` at four points of
 `CV_STEP`, and a short GUP result, and checks that no `CSRUNV` and no GUP
 follows an injection, that pins and fault counts match uninjected runs, that GUP is
 never asked for more than 16 pages, and that every `FOLL_PIN` pin is released.
-Both count the pins and faults of the REGION'S arena, from the module's
-`diag_admit` lines (one per page an arena gains or loses, read with `dmesg`
-after each run), not the process's pinned-page total: since grants are admitted
-at first touch, that total also holds the program's own pages, which vary with
-placement (the allocator's address-hashed index in `.bss`) and with windows the
-quantum cuts. A module without the parameter is measured on the process total.
+Both count the pins and faults of the REGION'S arena from the census every
+arena prints at its retirement under `diag_admit` (admitted at faults, by
+windows, by the resident scan, by `CV_TOUCH`, pinned whole at the mint;
+released; swept -- read with `dmesg` after each run), and hold the module's
+counters to it: what a mode adds over base in `CAPSTONE_VM_STATS` pages, peak
+and faults must be the window's arithmetic plus the difference in the
+program's own pages, which the census gives and which is zero for a module
+without the parameter (the same assertion for every module), and every run's
+`pages=` must equal what the arenas retired after the launcher's
+`CAPSTONE_VM_STATS_MARK` still held. The process total alone would not do:
+since grants are admitted at first touch it also holds the program's own
+pages, which vary with placement (the allocator's address-hashed index in
+`.bss`) and with windows the quantum cuts. `run-pin-ahead.py --evaluate` runs
+the checks on a saved transcript.
 
 A write the launcher makes into domain memory on the domain's behalf -- a
 thread's exit word, a worker's meta block and exchange region -- is preceded by
