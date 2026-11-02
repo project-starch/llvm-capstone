@@ -240,3 +240,63 @@ images.
   on 4 November. lbm, nab, imagick, xz and mcf land by about 01:00 on 3 November; perlbench and x264 last.
 - Plain test is about 0.5-0.7 of MapLife's, 18-25 h: board 1, about 00:30 on 3 November to about 20:00-01:00.
 - Both push the remaining train stages back by the same amount, about 1.5 days on board 2 and about 1 day on board 1.
+
+## Addendum 3 (2026-11-02 15:30): the Plain test stages, their twin run, and what is measured for the overhead split
+
+Written and pushed before the first Plain test stage boots (board 1, after perlbench Full, about 00:30 on 3 November).
+
+**Stages** (`spec/stages-test-plain`):
+- `runcpu --fake --action=run --size=test` in `tree-plain`. The Plain executables' sha256 is unchanged by it.
+- Then `make-stage.py --arms plain-rv64 --plain-arms plain-rv64 --rdctr rdctr --size test`, with the Capstone test
+  stages' options: perlbench `--strip --native-harness --keep-lib perl-test-lib.txt`, x264 `--ldecod
+  --no-target-validation`.
+- Their plan.json commands, generation, host validations, outputs, exclusions, inputs and ldecod equal the Capstone
+  test stages' field for field. The exceptions are the staged name of imagick's reference image and the stub path in
+  perlbench's pack.t record, which name the stage directory.
+- Executables are the Plain train images: lbm bd72cb22753b, nab d0c47f5c4a14, imagick f7f3e78a5a49 (imagevalidate
+  47e170a94b81), xz b889d0f57fcd, mcf 2e1b522831e9, x264 5adf7cac02e0. perlbench is bf1813c35f7f: the train image
+  stripped, as the Capstone test images are.
+
+**Twin** (`census-plain-test`, kit-q34, 936M), 15:01-15:13: every command ends rc 0.
+- lbm, nab, imagick, xz, mcf and perlbench pass specdiff (perlbench 2/2, unlike both Capstone arms) and pass
+  `plain-gate.py`.
+- x264 is HELD by the gate: its three host validations are NO-OUTPUT. This is by design, as in both Capstone arms:
+  the board stage has no imagevalidate.
+  - The dumped frames (frame_{0,50,100,150,155}.yuv), BuckBunny.264/.yuv and dataDec.txt are hash-equal to the
+    Capstone arms'. x264 Plain goes on the board by that reading, the one the Capstone x264 test was read by.
+  - **Prediction miss (P3, x264).** The encoded BuckBunny_New.264 differs from the Capstone arms' (eddbb3318627 vs
+    0e453c440e68). Every Capstone build gives 0e453c440e68: MapLife and Full on the board, the q34 twin, and the
+    fixed-heap twin.
+  - Equal dumped frames do not show that the encoding work is equal: frames that were not dumped can differ.
+  - Not yet explained. The candidates are the stream's options SEI and floating-point codegen in rate control.
+    Until it is settled, x264's Spatial / Plain and Full / Plain carry this caveat.
+
+**Board order** (board 1, bitstream 3, `b1-resume-oom.list` after perlbench Full): lbm, nab, imagick, xz, mcf,
+perlbench, x264.
+
+**Prediction T5.** Board outputs equal the Plain twin's for perlbench, mcf, xz and x264, and specdiff passes for lbm,
+nab and imagick. Plain elapsed is below MapLife's test elapsed for every benchmark.
+
+**What is measured for the overhead split.** The board harness is unchanged. Changing it now would break the
+comparison with the MapLife and Full test runs already recorded and with the running train stages.
+
+Per command, the board records:
+- elapsed time;
+- in the Capstone arms: in-context cycles and instret, context entries, peak pages, lifetime nodes and collections;
+- in Plain: hart cycles and instret, which include the kernel.
+
+The split:
+- **Elapsed ratio = instruction ratio × CPI ratio, plus time outside the context.** Time outside the context is elapsed
+  × 25 MHz minus in-context cycles: kernel, launcher and escapes.
+- **Spatial against MapLife:** the same images, so instret is equal within 0.1 % (G4), and the cycle difference is the
+  hardware check alone.
+- **Full against Spatial:** the instret difference is the lifetime runtime in software. The cycles beyond it are the
+  check plus memory and kernel effects, read from entries, peak pages and collections.
+
+Offline on the QEMU twin, with the same images and no board time:
+- the instruction mix by class (capability loads and stores, plain loads and stores, capability operations);
+- the share of malloc, free and the runtime;
+- an L1 cache simulation;
+- Plain's user/kernel instruction split.
+
+The twin profile describes the board run only where its instret matches the board's.
