@@ -99,10 +99,17 @@ descriptors pass. Build the native test from
 `linux/signals.c`, `linux/spawner.c`, `linux/park.c`, `common/delegate.c`, `common/msghdr.c` and
 `common/spawn.c`, with `-I runtime/include -lpthread`.
 
-The loader registers image, stack, startup and exchange mappings. Startup
-pages are pinned. Growing private anonymous mappings initially have absent PTEs: the module
-asks Linux's GUP interface to resolve the first touch, then retains a pin
-until retirement. A permitted write fault after `mprotect` is resolved by Linux
+The loader registers image, stack, startup and exchange mappings. Every
+grant's pages are admitted one by one at the domain's first touch: the module
+asks Linux's GUP interface to resolve it, checks that the page is exclusive
+anonymous backing mapped once and that no other page of the arena holds its
+frame, then retains a pin until retirement. Pages already resident at the
+grant (the startup block the launcher packed) are pinned at the grant under
+the same checks. Two grants are pinned whole at the grant: the meta block and
+the exchange region, which the launcher writes on the domain's behalf after
+the grant, where a Linux fault is invisible to the module (module parameter
+`lazy_grants`; 0 pins every non-linear grant whole, as before 2026-11-03). A
+permitted write fault after `mprotect` is resolved by Linux
 and must retain the same physical backing; a denied VMA access is never fixed
 by granting more permissions. It does not supply a pager or change VMA permissions to
 make a denied access succeed. TLS uses the common capability libc setup.
