@@ -25,8 +25,9 @@ ARMS=$(readlink -f "$1") ARM=$2 SIZE=$3 BENCH=$4 OUT=$5
 [ -e "$OUT" ] && { echo "profile: $OUT exists" >&2; exit 2; }
 mkdir -p "$OUT"; OUT=$(cd "$OUT" && pwd -P)
 KIT=$(cd "$(dirname "$0")/.." && pwd -P)
-j() { python3 -c "import json,sys;d=json.load(open(sys.argv[1]));[d:=d[k] for k in sys.argv[2].split('.')];print(d if not isinstance(d,(list,dict)) else json.dumps(d))" "$ARMS" "$1"; }
-jopt() { python3 -c "import json,sys;d=json.load(open(sys.argv[1]));[d:=d.get(k,{}) for k in sys.argv[2].split('.')];print(d if d!={} else sys.argv[3])" "$ARMS" "$1" "$2"; }
+# Values are printed with ~ expanded, so the arms file may be written as the example is.
+j() { python3 -c "import json,os,sys;d=json.load(open(sys.argv[1]));[d:=d[k] for k in sys.argv[2].split('.')];print(os.path.expanduser(d) if isinstance(d,str) else d if not isinstance(d,(list,dict)) else json.dumps(d))" "$ARMS" "$1"; }
+jopt() { python3 -c "import json,os,sys;d=json.load(open(sys.argv[1]));[d:=d.get(k,{}) for k in sys.argv[2].split('.')];print(os.path.expanduser(d) if isinstance(d,str) else d if d!={} else sys.argv[3])" "$ARMS" "$1" "$2"; }
 SHARE=$(cd "$(j share)" && pwd -P); SPEC_ROOT=$(cd "$(j spec_root)" && pwd -P); VMHOST=$(j vm_host); PL=$(cd "$(j platform.dir)" && pwd -P)
 KIND=$(j "arms.$ARM.kind"); CFG=$(j "arms.$ARM.config"); LABEL=$(j "arms.$ARM.label"); SHARE_MODEL=$(jopt "arms.$ARM.share_model" mapped-xattr)
 case "$OUT" in "$SHARE"/*) ;; *) echo "profile: $OUT is not below the share $SHARE" >&2; exit 2 ;; esac
@@ -89,6 +90,8 @@ MODPARAMS=$(jopt "arms.$ARM.module_params" ""); note "module_params ${MODPARAMS:
 if [ -n "$MODPARAMS" ]; then
   vm exec -- sh -c "rmmod capstone_vm && insmod /mnt/control/module $MODPARAMS && for p in /sys/module/capstone_vm/parameters/*; do echo \"param \$(basename \$p)=\$(cat \$p)\"; done" > "$OUT/module-params.txt" 2>&1 \
     || { echo "profile: reloading the module with $MODPARAMS failed" >&2; cat "$OUT/module-params.txt" >&2; exit 1; }
+  # the reloaded module's section addresses, for the attribution (the ones above are the first load's)
+  vm exec -- sh -c "cd /sys/module/capstone_vm/sections && for f in .* *; do [ -f \"\$f\" ] && echo \"\$f \$(cat \"\$f\")\"; done; cat /proc/cmdline; for p in /sys/module/capstone_vm/parameters/*; do echo \"param \$(basename \$p)=\$(cat \$p)\"; done" > "$OUT/module-sections.txt"
 fi
 export CAPSTONE_SPEC_PROFRUN=/tmp/profrun
 STAGE=$(jopt "arms.$ARM.stage_image" share); note "stage_image $STAGE"
@@ -144,10 +147,16 @@ PY
 # not all there exits 1, so a batch cannot read it as a result.
 windows_rc=0
 python3 - "$OUT" <<'PY' || windows_rc=$?
-import glob, json, os, sys
+import glob, json, os, re, sys
 out = sys.argv[1]; bad = []
 inv = [json.load(open(f)) for f in sorted(glob.glob(os.path.join(out, "invocations", "[0-9]" * 4 + ".json")))]
 guest = [d for d in inv if d.get("route") in ("guest", "guest-plain")]
+seen = [d.get("detail", {}).get("window") for d in guest]
+if sorted(x for x in seen if x is not None) != list(range(len(guest))):
+    bad.append(f"window indices {seen} are not 0..{len(guest) - 1} once each")
+stray = [f for f in os.listdir(os.path.join(out, "capprof")) if not re.fullmatch(r"window-\d+\.tsv", f)]
+if stray:
+    bad.append(f"stray files in capprof/: {stray}")
 for d in guest:
     n = d.get("detail", {}).get("window")
     p = os.path.join(out, "capprof", f"window-{n}.tsv")
@@ -169,11 +178,16 @@ r = json.load(open(os.path.join(out, "result.json")))
 if r.get("verdict") != "PASS":
     bad.append("verdict " + str(r.get("verdict")))
 json.dump({"windows_ok": not bad, "problems": bad, "guest_invocations": len(guest)}, open(os.path.join(out, "windows.json"), "w"), indent=1)
+if bad and r.get("verdict") == "PASS":   # the verdict file must not say PASS for a run without complete windows
+    r["verdict"] = "FAIL"; r["reasons"] = r.get("reasons", []) + ["windows: " + "; ".join(bad)]
+    json.dump(r, open(os.path.join(out, "result.json"), "w"), indent=1)
 print("windows:", "ok" if not bad else bad)
 sys.exit(1 if bad else 0)
 PY
 # Attribution of every window to layers and functions.
 mkdir -p "$OUT/profile"
-python3 "$KIT/tools/prof-report.py" --out "$OUT" --platform "$PL" --kind "$KIND" --nm "$(jopt nm llvm-nm)" > "$OUT/profile/summary.txt" 2> "$OUT/profile/report.err" || echo "prof-report rc=$?" >> "$OUT/profile/summary.txt"
+report_rc=0
+python3 "$KIT/tools/prof-report.py" --out "$OUT" --platform "$PL" --kind "$KIND" --nm "$(jopt nm llvm-nm)" > "$OUT/profile/summary.txt" 2> "$OUT/profile/report.err" || report_rc=$?
+[ $report_rc = 0 ] || { echo "prof-report failed (rc=$report_rc): $(tail -1 "$OUT/profile/report.err")" | tee -a "$OUT/profile/summary.txt" >&2; }
 head -30 "$OUT/profile/summary.txt"
-exit $windows_rc
+[ $windows_rc = 0 ] && [ $report_rc = 0 ] || exit 1

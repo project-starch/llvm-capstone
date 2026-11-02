@@ -33,13 +33,16 @@ n=0; while ! mkdir "$inv/$(printf %04d $n).reserved" 2>/dev/null; do n=$((n + 1)
 id=$(printf %04d $n)
 here=$(pwd -P)
 exe=$(readlink -f "$1" 2>/dev/null || echo "$1")
+exe_sha256=
 record() { # route status [extra-json]
-  python3 - "$inv/$id.json" "$1" "$2" "${3:-null}" "$here" "$exe" "$@" <<'PY'
+  python3 - "$inv/$id.json" "$1" "$2" "${3:-null}" "$here" "$exe" "${exe_sha256:-}" "$@" <<'PY'
 import hashlib, json, sys
-out, route, status, extra, cwd, exe = sys.argv[1:7]
-argv = sys.argv[10:]
-try: sha = hashlib.sha256(open(exe, 'rb').read()).hexdigest()
-except OSError: sha = None
+out, route, status, extra, cwd, exe, pre = sys.argv[1:8]
+argv = sys.argv[11:]
+sha = pre or None
+if sha is None:
+    try: sha = hashlib.sha256(open(exe, 'rb').read()).hexdigest()
+    except OSError: sha = None
 json.dump({"route": route, "status": int(status), "cwd": cwd, "argv": argv, "exe": exe,
            "exe_sha256": sha, "detail": json.loads(extra)}, open(out, 'w'))
 PY
@@ -95,6 +98,9 @@ case "${words[0]}" in /*) [ "${words[0]#/mnt/host/}" != "${words[0]}" ] || refus
 # denial works, is what a deployment has; the plain arm is staged the same way for symmetry.
 staged=null
 if [ "${CAPSTONE_SPEC_STAGE:-}" = tmpfs ]; then
+  # The image's hash is taken from the host file BEFORE it is copied, and recorded as this
+  # invocation's: a rebuild that replaces the host file during the run cannot relabel it.
+  exe_sha256=$(sha256sum "$exe" | cut -c1-64)
   staged=/tmp/stage-$id-$(basename "$exe")
   env PYTHONPATH="$CAPSTONE_VM_HOST" python3 -m capstone_vm --state "$CAPSTONE_VM_STATE" exec -- sh -c "cp $(printf %q "/mnt/host/${exe#"$share"/}") $(printf %q "$staged") && chmod 0755 $(printf %q "$staged")" \
     || refuse "staging the image to the guest's tmpfs failed" "$@"
@@ -107,7 +113,12 @@ rc=0
 window=null; profile=()
 redirect=
 if [ -n "${CAPSTONE_SPEC_PROFRUN:-}" ]; then
-  window=$(find "$inv" -maxdepth 1 -name '*.guest.json' | wc -l)   # not ls: with pipefail its "no match" exit 2 ends the script
+  # The window index is the count of guest invocations before this one; the count and this
+  # invocation's claim are one critical section, so two wrappers cannot both claim an index.
+  exec 9>> "$inv/.window.lock"; flock 9
+  window=$(find "$inv" -maxdepth 1 -name '*.window' | wc -l)   # not ls: with pipefail its "no match" exit 2 ends the script
+  echo "$window" > "$inv/$id.window"
+  flock -u 9
   case "$CAPSTONE_SPEC_RECORD" in "$share"/*) ;; *) refuse "profiling: the record directory $CAPSTONE_SPEC_RECORD is not below the share" "$@" ;; esac
   # runcpu redirects this command's stdout and stderr to files in the run directory, on the host.
   # Through SSH, every line the guest prints is encrypted inside the window (the launcher's 403
@@ -143,7 +154,8 @@ else
   route=guest
 fi
 if [ -n "${copyback:-}" ]; then   # the guest's output files onto runcpu's, after the window
-  env PYTHONPATH="$CAPSTONE_VM_HOST" python3 -m capstone_vm --state "$CAPSTONE_VM_STATE" exec -- sh -c "$copyback; rm -f /tmp/out-$id /tmp/err-$id" \
+  # all or nothing: a failed copy keeps the guest's files and fails the invocation
+  env PYTHONPATH="$CAPSTONE_VM_HOST" python3 -m capstone_vm --state "$CAPSTONE_VM_STATE" exec -- sh -c "${copyback//; / && } && rm -f /tmp/out-$id /tmp/err-$id" \
     || refuse "copying the guest's output files back failed" "$@"
 fi
 vm=$(python3 -c "import json,sys;print(json.dumps(json.load(open(sys.argv[1]))['identity']))" "$CAPSTONE_VM_STATE/config.json")

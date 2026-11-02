@@ -33,4 +33,8 @@ printf '%s\n' "${jobs[@]}" | xargs -P "${JOBS:-8}" -L 1 bash -c '
   v=$(python3 -c "import json,sys;print(json.load(open(sys.argv[1]))[\"verdict\"])" "$out/result.json" 2>/dev/null || echo NONE)
   t=$(python3 -c "import json,sys;print(json.load(open(sys.argv[1]))[\"total_attempts\"])" "$out/profile.json" 2>/dev/null || echo -)
   echo "$a $b rc=$rc verdict=$v attempts=$t wall=$(( $(date +%s) - start ))s"
+  exit $rc
 ' | tee -a "$OUTROOT/batch.log"
+# xargs exits 123 when a worker failed; the batch says so and fails too.
+failed=$(grep -cE "rc=[1-9]" "$OUTROOT/batch.log" || true)
+[ "$failed" = 0 ] || { echo "profile-batch: $failed run(s) failed (see $OUTROOT/batch.log)" >&2; exit 1; }

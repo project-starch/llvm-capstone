@@ -902,7 +902,9 @@ static int virtual_service(uint64_t tid, struct cv_step *step)
             if (profile && *profile) {
                 /* No digest here: hashing a large image is most of a short run's
                  * instructions. The profiler hashes the image itself. */
-                int fd = open(profile, O_WRONLY | O_CREAT | O_APPEND | O_CLOEXEC, 0600);
+                /* O_NONBLOCK: a FIFO without a reader fails to open instead of blocking the exit,
+                 * and a full pipe fails the write instead of waiting; a regular file is unaffected. */
+                int fd = open(profile, O_WRONLY | O_CREAT | O_APPEND | O_CLOEXEC | O_NONBLOCK, 0600);
                 if (fd >= 0) {
                     capstone_delegate_image_record(fd, h, image_path);
                     close(fd);

@@ -154,10 +154,13 @@ def insn_class(b, ln):
             }.get(op, f"op={op:#x}")
 
 
-IDLE = re.compile(r"^(do_idle|cpu_idle_poll|default_idle_call|arch_cpu_idle|cpuidle_|ct_idle_|ct_kernel_(enter|exit)|"
-                  r"tick_nohz_|tick_check_broadcast_expired|can_stop_idle_tick|rcu_needs_cpu|timer_clear_idle|"
-                  r"sched_idle_|cpu_startup_entry|menu_|nohz_run_idle_balance|tick_sched_|hrtimer_next_event_without|"
-                  r"get_next_timer_interrupt|rcu_idle_|irq_enter_rcu|irq_exit_rcu|tick_irq_enter|tick_nohz_get_sleep_length)")
+# The idle loop and the functions only it calls. Not the context-tracking and irq entry/exit
+# functions (ct_kernel_enter/exit, irq_enter_rcu, tick_sched_*): those run on every kernel entry.
+IDLE = re.compile(r"^(do_idle|cpu_idle_poll|default_idle_call|arch_cpu_idle|cpuidle_|ct_idle_|"
+                  r"tick_nohz_idle_|tick_nohz_next_event|tick_nohz_get_sleep_length|tick_nohz_stop_|tick_nohz_restart|"
+                  r"tick_check_broadcast_expired|can_stop_idle_tick|rcu_needs_cpu|timer_clear_idle|"
+                  r"sched_idle_|cpu_startup_entry|menu_|nohz_run_idle_balance|hrtimer_next_event_without|"
+                  r"get_next_timer_interrupt|rcu_idle_)")
 
 # The guest invocations, in order: each is one window (capstone-run.sh records the index).
 invocations = []
@@ -234,13 +237,13 @@ for k, (inv_id, inv) in enumerate(invocations):
             # Several static images share the low link address: the first whose BYTES match wins;
             # an address inside images that all disagree is unattributed and counted per image.
             containing = [im for im in images if im.contains(va)]
-            for im in containing:
-                if im.bytes_match(va, ln, b):
-                    cls, fn = im.name, im.function(va)
-                    break
-            else:
-                if containing:
-                    mismatch["/".join(im.name for im in containing)] += att
+            matching = [im for im in containing if im.bytes_match(va, ln, b)]
+            if len(matching) == 1:
+                cls, fn = matching[0].name, matching[0].function(va)
+            elif matching:   # the same bytes at the same address in two images: no way to tell
+                cls, fn = "ambiguous " + "/".join(im.name for im in matching), f"{va:#x}"
+            elif containing:
+                mismatch["/".join(im.name for im in containing)] += att
         if cls is None:
             if ktext[0] and ktext[0] <= va < ktext[1]:
                 i = bisect.bisect_right(kaddrs, va) - 1
