@@ -70,6 +70,12 @@ struct arena {
      * frame-checked and still is not. */
     unsigned long *frames;
     unsigned count;
+    /* The arena's page census, printed once at its retirement under diag_admit: pages admitted
+     * at a fault, by a pin-ahead window, by the resident scan, by CV_TOUCH, or pinned whole at
+     * the mint; released before retirement by a remap's truncation. admits + windows + scans +
+     * touches + eager - released is what the retirement sweeps. Counted, not printed, inside a
+     * window: a printk per page there added work before the next batch's deadline check. */
+    unsigned admits, windows, scans, touches, eager, released;
     /* Pages are admitted one by one at the domain's first access (resolve). */
     bool lazy;
     /* The grant was LINEAR: the heap's move-only shape, the one CV_REMAP may grow. lazy used
@@ -333,12 +339,13 @@ module_param(pin_ahead_pages, ulong, 0444);
 static bool lazy_grants = true;
 module_param(lazy_grants, bool, 0444);
 MODULE_PARM_DESC(lazy_grants, "admit NONLIN grants page by page at first access (0: pin whole at mint)");
-/* One line per page an arena gains or loses: `admit` at a fault (with cause and pc), `window`
- * from a pin-ahead window, `scan` from the resident scan, `touch` from CV_TOUCH, and `retire`
- * with the count swept. The instrument for a run whose pinned page count differs from another
- * run of the same program (which a whole-arena pin could not show and a lazy one can), and what
- * the pin-ahead and step-hooks gates read to count one arena's pins instead of the process's.
- * Off by default; 0644 so a boot can turn it on for one run. */
+/* One line per page an arena gains outside a window: `admit` at a fault (with cause and pc),
+ * `scan` from the resident scan, `touch` from CV_TOUCH; and one `retire` line per arena with its
+ * whole census (admit, window, scan, touch, eager, released, swept). The instrument for a run
+ * whose pinned page count differs from another run of the same program (which a whole-arena pin
+ * could not show and a lazy one can), and what the pin-ahead, step-hooks and pthread gates read
+ * to count one arena's pins and to check the module's counters against them. Off by default;
+ * 0644 so a boot can turn it on for one run. */
 static bool diag_admit;
 module_param(diag_admit, bool, 0644);
 
@@ -801,6 +808,7 @@ static int pin_remaining(struct context *c, struct arena *a, unsigned int gup_fl
         if (diag_admit)
             pr_info("capstone_vm: scan arena 0x%lx+0x%lx page %u pfn 0x%lx flags 0x%x\n",
                     a->address, a->bytes, j, page_to_pfn(page), gup_flags);
+        ++a->scans;
         a->pages[j] = page;
         ++c->stats.pinned_pages;
         c->stats.peak_pages = max(c->stats.peak_pages, c->stats.pinned_pages);
@@ -1095,7 +1103,9 @@ static int retire(struct context *c, struct arena *a, bool destroying)
         ++swept;
     }
     if (diag_admit)
-        pr_info("capstone_vm: retire arena 0x%lx+0x%lx swept %u\n", a->address, a->bytes, swept);
+        pr_info("capstone_vm: retire arena 0x%lx+0x%lx admit=%u window=%u scan=%u touch=%u eager=%u "
+                "released=%u swept=%u\n", a->address, a->bytes, a->admits, a->windows, a->scans,
+                a->touches, a->eager, a->released, swept);
     --c->stats.arenas;
     rb_erase(&a->node, &c->arenas);
     xa_erase(&c->ids, a->id);
@@ -1294,6 +1304,7 @@ static int add(struct context *c, struct cv_thread *t, struct cv_map *r)
     c->registered_bytes += a->bytes;
     r->id = c->next_id = a->id;
     /* The whole-arena pin's n pages are counted here; the resident scan counted its own. */
+    a->eager = n;
     ++c->stats.arenas; c->stats.pinned_pages += n;
     c->stats.peak_pages = max(c->stats.peak_pages, c->stats.pinned_pages);
     if (t->started) t->reply_cap = true;
@@ -1304,6 +1315,9 @@ unpin:
         unpin_user_page(pages[i]);
         if (a->lazy) --c->stats.pinned_pages;
     }
+    /* The scan's lines were printed; a census reading them needs the unwind too. */
+    if (diag_admit && a->scans)
+        pr_info("capstone_vm: unwind arena 0x%lx+0x%lx scan=%u\n", a->address, a->bytes, a->scans);
     kvfree(a->frames);
     kvfree(pages);
     xa_erase(&c->ids, a->id); kfree(a);
@@ -1390,6 +1404,7 @@ static int remap_end(struct context *c, const struct cv_remap *r)
         clear_page_tags(a->pages[i]);
         set_page_dirty_lock(a->pages[i]); unpin_user_page(a->pages[i]);
         --c->stats.pinned_pages;
+        ++a->released;
     }
     kvfree(a->pages); a->pages = c->remap_pages; c->remap_pages = NULL;
     /* Rekeying the tree allocates nothing: no new failure after the commit. */
@@ -1550,9 +1565,7 @@ static void pin_ahead(struct context *c, struct arena *a,
                 }
                 return;
             }
-            if (diag_admit)
-                pr_info("capstone_vm: window arena 0x%lx+0x%lx page %lu pfn 0x%lx\n",
-                        a->address, a->bytes, (unsigned long)first + done + j, page_to_pfn(pages[j]));
+            ++a->windows;
             ++c->stats.pinned_pages;
         }
         if (n != batch)
@@ -1931,6 +1944,7 @@ static int resolve(struct context *c, struct cv_thread *t, u64 deadline)
         if (diag_admit)
             pr_info("capstone_vm: admit arena 0x%lx+0x%lx page %u cause %lu pc 0x%lx pfn 0x%lx\n",
                     a->address, a->bytes, index, cause, t->frame[4], page_to_pfn(page));
+        ++a->admits;
         a->pages[index] = page;
         ++c->stats.pinned_pages;
         c->stats.peak_pages = max(c->stats.peak_pages, c->stats.pinned_pages);
@@ -1969,6 +1983,7 @@ static int admit_page(struct context *c, struct arena *a, unsigned index)
     if (diag_admit)
         pr_info("capstone_vm: touch arena 0x%lx+0x%lx page %u pfn 0x%lx\n",
                 a->address, a->bytes, index, page_to_pfn(page));
+    ++a->touches;
     a->pages[index] = page;
     ++c->stats.pinned_pages;
     c->stats.peak_pages = max(c->stats.peak_pages, c->stats.pinned_pages);

@@ -52,7 +52,7 @@ CONFIGS = {
 }
 SCRIPT = '''#!/bin/sh
 cd /mnt/vm || exit 1
-export CAPSTONE_VM_STATS=1
+export CAPSTONE_VM_STATS=1 CAPSTONE_VM_STATS_MARK=1
 pins() { echo 1 > /proc/sys/vm/stat_refresh; grep -E "^nr_foll_pin_(acquired|released) " /proc/vmstat | tr "\\n" " "; }
 dmesg -n 1
 dmesg -c > /dev/null
@@ -92,22 +92,24 @@ def pins(text):
     return int(v['acquired']), int(v['released'])
 
 
-DIAG = re.compile(r'capstone_vm: (admit|window|scan|touch|retire) arena 0x([0-9a-f]+)\+0x[0-9a-f]+ '
-                  r'(?:page (\d+)|swept (\d+))')
+# The module's per-arena census: one `retire` line per arena (every arena is retired by the
+# process's exit at the latest) with the pages it admitted by each route and the pages swept.
+RETIRE = re.compile(r'capstone_vm: retire arena 0x([0-9a-f]+)\+0x[0-9a-f]+ admit=(\d+) window=(\d+) '
+                    r'scan=(\d+) touch=(\d+) eager=(\d+) released=(\d+) swept=(\d+)')
 ADD_OK = re.compile(r'CAPSTONE_VM_ADD_OK slot=\d+ base=0x([0-9a-f]+) bytes=(\d+) ')
 
 
 def region_counts(run):
-    """(pins, faults) of the arena holding the run's region, from its diag lines; (0, 0) for a
-    mode without a region (syscalls)."""
+    """(pins, faults) of the arena holding the run's region, from its retire line: the pages
+    pinned in it by every route and its demand faults; (0, 0) for a mode without a region
+    (syscalls)."""
     if run.get('region') is None:
         return (0, 0)
     arena = next((base for base, bytes_ in run['arenas'] if base <= run['region'] < base + bytes_), None)
-    if arena is None:
+    if arena is None or arena not in run['census']:
         return None
-    pins = sum(1 for kind, base, _ in run['diag'] if base == arena and kind != 'retire')
-    faults = sum(1 for kind, base, _ in run['diag'] if base == arena and kind == 'admit')
-    return pins, faults
+    c = run['census'][arena]
+    return c['admit'] + c['window'] + c['scan'] + c['touch'] + c['eager'], c['admit']
 
 
 def main():
@@ -150,14 +152,16 @@ def main():
         if m:
             current = (m.group(1), m.group(2))
             runs[current] = {'before': pins(m.group(3)), 'stats': None, 'ok': False,
-                             'region': None, 'arenas': [], 'diag': []}
+                             'region': None, 'arenas': [], 'census': {}}
             continue
         if current and line.startswith('PIN_REGION:0x'):
             runs[current]['region'] = int(line[len('PIN_REGION:'):], 16); continue
         if current and (m := ADD_OK.search(line)):
             runs[current]['arenas'].append((int(m.group(1), 16), int(m.group(2)))); continue
-        if current and line.startswith('HOOK_DIAG:') and (m := DIAG.search(line)):
-            runs[current]['diag'].append((m.group(1), int(m.group(2), 16), int(m.group(3) or m.group(4))))
+        if current and line.startswith('HOOK_DIAG:') and (m := RETIRE.search(line)):
+            runs[current]['census'][int(m.group(1), 16)] = dict(zip(
+                ('admit', 'window', 'scan', 'touch', 'eager', 'released', 'swept'),
+                (int(m.group(i)) for i in range(2, 9))))
             continue
         m = re.match(r'HOOK_EXIT:(\w+):(\w+):(\d+)$', line)
         if m and current == (m.group(1), m.group(2)):
