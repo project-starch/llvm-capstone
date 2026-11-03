@@ -200,6 +200,45 @@ and `pcc_v_q`, `pcc_live_q`, `pcc_id_q*` (lsu_i) and `pc_revnode_unk_q` (commit_
 The POS control is `pc_revnode_valid_q`, present on both trees; the NEG is b3's routed dcp, which reads 0 for the four
 new names.
 
+**The two confirming readings (synth, gate checkpoint, C.5a / b3), both as ruled:**
+- (a) Primitive cells. `*dynlt*` 307 / 0; `*pcc_v_q*` 3 (1 FF) / 0; `*pcc_live_q*` 59 (1 FF) / 0; `*pcc_id_q*` 30 FF, all
+  under lsu_i / 0; `*pc_revnode_unk_q*` 30 (1 FF) / 0. The POS control `*pc_revnode_valid_q*` reads 3 / 14. Every
+  register the change adds is present, and none is present on b3.
+- (b) LUT rows outside ex, issue and commit with |delta| > 500: dom_switcher 10,358 -> 8,065 (-2,293), csr_regfile_i
+  27,862 -> 28,966 (+1,104), nothing else. The remaining -959 is spread across modules each under 500. Neither file is
+  in the change: `git diff --stat e7af48457 1fc2cd5aa` lists six files, none of them the switcher or the CSR file. Both
+  moves are inside the per-module floor, so this is re-homing, now named.
+
+## Full build: the seal and the grade (2026-11-04)
+
+The synth lane's run exited 0 after about 2h31m. Run peak 21.59 GB, largest single process 5.92 GB, collection
+14.04 GB. **.bit sha256 5b7b1edcd9bcd2521bd4bd59107747e268487056f1bfcd96403fd612eeb6d764**, 11,443,722 B; the copy
+in the tarball is byte-identical. Tarball synth-1fc2cd5aa-exit0.tar.gz, sha256 83cdc0e1..., and its PROVENANCE reads
+1fc2cd5aac78.
+
+| Key | Reading | Grade |
+|---|---|---|
+| 5 | placed LUT 169,738 (<= 171,061); FF 63,642 (63,690 ± 300); slices 48,694, 95.57 % (b3 94.38 %, ObjBounds 93.94 %) | PASS |
+| 6 | placer max East global 32x32 at level 5; router effective congestion 5 (2 readings at 4, 2 at 5); one Route 35-447 (congestion prevents routing all nets), which neither b3 nor ObjBounds had | PASS, at the limit |
+| 7 | failed, unrouted, partially routed and overlapping nets 0; overlaps 223,569 -> 63,775 -> 20,121 -> 246 -> 0 | PASS |
+| 8 | check_timing 0 loops (control 1); LUTLP-1 0; TIMING-23 0 | PASS |
+| 9 | on the routed dcp: `*dynlt*` 307; `pcc_v_q`, `pcc_live_q` 1 FF each and `pcc_id_q` 30 FF, all in lsu_i; `pc_revnode_unk_q` 1 FF in commit_stage_i; POS `pc_revnode_valid_q` 3 (b3 14); NEG b3 0 for all five | PASS |
+| 10 | WNS −13.758 (b3 −10.047, Δ −3.711); TNS −218,814 (b3 −44,011); failing endpoints 38,719 / 188,738 (b3 13,396); WHS +0.053 | reported, not graded |
+| 11 | .bit sha256 as above | PASS |
+
+- **The grade: a flash candidate on every graded key.** Flashing is the lead's decision. The synth lane rules any
+  negative WNS not flashable, which is its standing rule, so it calls this NOT FLASHABLE.
+- **WNS** moved −3.711 ns. That is inside the one-sample null band of 3.74 ns, at its edge. The worst path is bitstream
+  3's own family (csr_regfile `cpmp_q` -> issue_read_operands `fu_data_q`), and C.5a's source does not touch it.
+- **TNS and failing endpoints** grew about 5x and 2.9x. The failures are concentrated where C.5a's CAP_WB merge feeds:
+  issue_read_operands 11,137, scoreboard 10,580, lsu_i 4,324 and dyn_unit 2,073. The synth lane could not diff these
+  by module, because b3's table covers only 4,206 of its 13,396. This growth is NOT ATTRIBUTED.
+- **The reading that attributes it**, requested before the flash decision: C.5a's own cells on the worst 500 paths,
+  with a POS control. Those cells are `*dynlt*`, `*dyn_ldst*`, `pcc_*` and `pc_revnode_unk_q`. Also requested: the
+  worst slack through any of them, and the same-family slack of `cpmp_q` and `cur_idx_q` against b3.
+- **Congestion** is at the pre-registered limit, with a router warning that b3 lacked. Slices are at 95.57 %, the
+  highest of the three builds. This is consistent with the routability memory: around 170k LUT is marginal.
+
 ## Pre-registered silicon readings (first boots; the runtime and board lanes run them)
 
 - **hpm kit** (`hpm-bare-2026-11-03`): hpm-3 and hpm-4 read ObjBounds' stall and cycle pattern, not bitstream 3's.
