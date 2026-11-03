@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /* Standalone trusted-mm qualification. No protected application may run in
- * this guest. CPTAG acknowledgement inspects actual tag words even when the
- * sticky summary is already clear, so a free check does not trust query alone. */
+ * this guest. CPTAG acknowledgement inspects actual tag words before clearing
+ * the sticky summary. Query alone can retain conservative false positives. */
 #include <linux/module.h>
 #include <linux/mm.h>
 #include <linux/highmem.h>
