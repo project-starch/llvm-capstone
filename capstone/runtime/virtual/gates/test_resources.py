@@ -134,6 +134,21 @@ class Resources(unittest.TestCase):
                             "bash", "-c", "exit 23"], env=self.env, capture_output=True)
         self.assertEqual(r.returncode, 23)
 
+    def test_dispatch_refuses_unsupported_and_conflicting_configuration(self):
+        driver = self.root / "driver.sh"
+        marker = self.root / "executed"
+        driver.write_text(f'#!/bin/bash\ntouch "{marker}"\n')
+        cmd = ["bash", str(HERE / "gate-queue.sh"), "bash", str(driver), str(self.root / "out")]
+        env = dict(self.env, GATE_PARALLEL="1")
+        r = subprocess.run(cmd, env=env, capture_output=True)
+        self.assertEqual(r.returncode, 2)
+        self.assertFalse(marker.exists())
+        driver.write_text('# GATE_SLOT_PROTOCOL=1\n' + driver.read_text())
+        for extra in (dict(GATE_SLOTS="0"), dict(GATE_SLOTS="3"), dict(GATE_SLOT="0")):
+            r = subprocess.run(cmd, env=dict(env, **extra), capture_output=True)
+            self.assertEqual(r.returncode, 2)
+            self.assertFalse(marker.exists())
+
     def test_dispatch_parallel_and_legacy_exclusion(self):
         driver = self.root / "driver.sh"
         driver.write_text('#!/bin/bash\n# GATE_SLOT_PROTOCOL=1\nexec python3 "$TEST_RESOURCES" "$1" '
@@ -147,6 +162,9 @@ class Resources(unittest.TestCase):
             self.children.append(p)
         for name, p in zip(("a", "b"), self.children):
             self.ready(name, p)
+        pending = subprocess.Popen(["bash", str(HERE / "gate-queue.sh"), "bash", str(driver), str(self.root / "pending")],
+                                   env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        self.children.append(pending)
         legacy = subprocess.Popen(["bash", str(HERE / "gate-queue.sh"), "bash", str(driver), str(self.root / "legacy")],
                                   env=dict(env, GATE_PARALLEL="0"), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
         self.children.append(legacy)
@@ -157,6 +175,8 @@ class Resources(unittest.TestCase):
         self.assertLess(max(a["start"], b["start"]), min(a["end"], b["end"]))
         self.assertGreater(c["start"], max(a["end"], b["end"]))
         self.assertNotIn("GATE_SLOT", c["env"])
+        pending_result = json.loads((self.root / "pending.json").read_text())
+        self.assertGreater(pending_result["start"], c["end"])
 
 
 if __name__ == "__main__":

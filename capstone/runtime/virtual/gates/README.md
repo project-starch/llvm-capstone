@@ -9,12 +9,16 @@ execution coverage before comparing outcomes; INCOMPLETE is never a match.
 
 ## Snapshot slots
 
-Parallel qualification is pending. Keep using the serial queue until the full
-same-tree comparison has succeeded three times, including every memcached row.
-Host process tests alone do not qualify guest timing or test outcomes.
+Parallel gate dispatch is not qualified. Keep using the serial queue until the
+full same-tree comparison has succeeded three times, including every memcached
+row. The initial trial found guest accounting differences in pin-ahead and
+step-hooks, despite complete row coverage. The dispatcher remains a candidate;
+host process tests alone do not qualify guest timing or test outcomes. Preserve
+these gate assertions when investigating differences.
 
 `GATE_SLOT=0` or `GATE_SLOT=1` opts into resource isolation. The resource wrapper
 owns a nonblocking lease for the entire arm, before building or launching gates.
+`PHASE=build` takes only the output lease and does not occupy a snapshot slot.
 A second arm in that slot exits 75 with `REFUSED: resource busy`, including when
 the arms use different trees and outputs. Invalid slots, unavailable CPUs, a
 busy native port, and a conflicting QEMU lock override also fail before running
@@ -53,6 +57,7 @@ This audit is for the nine calls in this driver, not every runner in the repo.
 | Host temporary files | `TMPDIR`, `TMP`, `TEMP`, XDG cache/state and clang crash directories are private to OUT and the slot. Runtime's `virtual-app.*` directories are under `OUT/gates/tmp`; other stage disks and logs are under their gate's work directory. |
 | Guest paths and module names | `/tmp/one.out`, `/tmp/virtual.db`, `/tmp/mc-*`, `/dev/capstone-vm`, `capstone_vm`, `/mnt/vm` and the stage filenames are private to each fresh guest kernel/rootfs snapshot. They must remain unchanged in the checks. |
 | Source tree and kit | Python bytecode writes are disabled. Contract and app builds write beneath `OUT/build`; native harness compilation writes beneath `OUT/gates/memcached`. SDKs, compiler binaries, platform files and already finished build images are read-only inputs. No gate writes a kit image. Build recipes retain their own per-build locks. |
+| Native dependency build tests | libevent's `make verify` uses kernel-chosen TCP/UDP ports, socketpairs, and a high-port bind search for its bind test. Its `regress_make_tmpfile` uses `/tmp/eventtmp.XXXXXX` with `mkstemp` and immediate unlink; that upstream helper ignores TMPDIR but shares no filename. Test binaries and logs are under the private memcached build. The parallel gate proof reuses one finished image build; it does not qualify overlapping full application builds. |
 | Output directories | `OUT/.arm.lock` excludes simultaneous writers even across distinct slots. Existing phase outputs are refused. A gates-only repeat may symlink `OUT/build` to the same finished build; never rebuild that shared input while gates run. |
 | Coordination files | Slot leases, QEMU/domain locks, queue locks and the queue log are intentionally shared. Never unlink a live lock file: replacing its inode defeats exclusion. |
 
