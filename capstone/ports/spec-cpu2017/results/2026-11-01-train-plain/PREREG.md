@@ -355,3 +355,34 @@ Ratios:
 **Caveat.** Spatial runs on board 2 and the other arms run on board 1. A ratio across the boards therefore carries a
 board term that this design cannot remove. Each boot's crc.K0 control step is read beside the results as a
 cross-board reference; it is not a gate.
+
+## Addendum 5 (2026-11-03 13:05): Plain's user and system time, to split Plain into inside and outside
+
+**Why.** A Capstone run splits into time inside the program's context (its own cycle counter) and outside it. Plain's
+counters are hart-wide, kernel included, so Plain could not be split the same way. Linux's own CPU accounting can: the
+board kernel ticks at HZ=100 with tick accounting (CONFIG_TICK_CPU_ACCOUNTING=y), and the shell's `times` reports the
+user and system time of its waited-for children.
+
+**Stages.** `plain-times-stage.sh` copies each Plain test stage, binaries and inputs unchanged (hard links), and adds
+`echo "@@SPEC-TIMES0 <n>"; times` right before and `echo "@@SPEC-TIMES1 <n>"; times` right after every benchmark
+command. The difference of the children line is the command's user and system time. Stages
+`spec/stages-plain-times/{538.imagick_r,544.nab_r,519.lbm_r,557.xz_r,505.mcf_r}-test-plain-rv64-times`.
+
+**Dry run on the QEMU twin** (`census-plain-times`, kit-q34, 936M): all five rc 0, specdiff PASS. Control: on the twin
+(-icount, 1 instruction = 1 ns) the user/system split equals the instruction split counted by the capmix plugin on the
+same images: lbm user 6.03 s, system 0.62 s against 6.02e9 user and 0.63e9 kernel+firmware instructions; mcf 27.32 s /
+0.82 s against 27.32e9 / 0.82e9.
+
+**Placement.** Board 1, right after perlbench Plain test (reader offset 1981 of b1-resume-oom.list), before x264 Plain
+test, short first: imagick, nab, lbm, xz, mcf. About 6 board-hours; x264 Plain moves by the same.
+
+**Predictions.**
+- **U1.** Every command rc 0 and specdiff PASS; outputs equal to the twin and to the earlier Plain test run.
+- **U2.** Elapsed within 5 % of the earlier Plain test run (imagick: inside its ten-run range, 16.3-20.1 s).
+- **U3.** user + system within 3 % of elapsed: one process, inputs on tmpfs, nothing else runs.
+- **U4.** The system share, system / (user + system), within [0.5x, 2x] of the board's kernel-instruction share
+  (board hart instret minus the twin's user instructions, over hart instret): imagick 0.21 -> [0.10, 0.42],
+  nab 0.09 -> [0.05, 0.18], lbm 0.22 -> [0.11, 0.44], xz 0.19 -> [0.09, 0.37], mcf 0.20 -> [0.10, 0.40].
+
+**Reading.** Plain inside = user time, outside = system time, set beside Capstone's inside (in-context cycles) and
+outside (the rest). Tick accounting samples at 10 ms; over runs of 15 min to 2.5 h its error is well under 1 %.
