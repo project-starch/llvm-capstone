@@ -6649,6 +6649,11 @@ bool CodeGenPrepare::splitLargeGEPOffsets() {
   bool Changed = false;
   for (auto &Entry : LargeOffsetGEPMap) {
     Value *OldBase = Entry.first;
+    // The chosen common cursor may only have been formed and accessed on a
+    // different path. Do not introduce that capability as a new dependency
+    // of the other accesses, or speculate its computation at the old base.
+    if (DL->isNonIntegralPointerType(OldBase->getType()))
+      continue;
     SmallVectorImpl<std::pair<AssertingVH<GetElementPtrInst>, int64_t>>
         &LargeOffsetGEPs = Entry.second;
     auto compareGEPOffset =

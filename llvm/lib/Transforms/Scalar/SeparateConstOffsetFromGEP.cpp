@@ -1044,6 +1044,12 @@ bool SeparateConstOffsetFromGEP::reorderGEP(GetElementPtrInst *GEP,
 }
 
 bool SeparateConstOffsetFromGEP::splitGEP(GetElementPtrInst *GEP) {
+  // Extracting an offset or reordering GEPs changes an intermediate cursor.
+  // On a capability pointer, returning to the original final address cannot
+  // restore a tag lost at that new cursor.
+  if (DL->isNonIntegralPointerType(GEP->getType()->getScalarType()))
+    return false;
+
   // Skip vector GEPs.
   if (GEP->getType()->isVectorTy())
     return false;

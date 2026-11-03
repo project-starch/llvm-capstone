@@ -4,6 +4,30 @@ The compiler preserves capability provenance while reducing repeated address
 arithmetic. It does not convert non-integral pointers to integers or create
 far neighbor capabilities in a loop preheader.
 
+## Cursor preservation in IR
+
+A capability can lose its tag at either the representable-window boundary or
+the machine's address-policy boundary. Returning to a valid address does not
+restore the tag. Offset rewrites must preserve the value of each surviving
+cursor, remove intermediate cursors, or reuse an original accessed cursor.
+Distance from an access alone is insufficient: even `p - 1` can be refused
+under phys56 when `p` is zero.
+
+InstCombine keeps multi-index capability GEPs whole and does not move constants
+across variable GEPs. Adjacent merging and cancellation that remove a cursor
+remain legal. LICM does not swap capability GEP offsets to hoist one of them.
+IndVarSimplify keeps a capability exit computation when expanding it would
+introduce an enclosing recurrence. SCEV expansion keeps a non-integral
+pointer sum whole instead of splitting its offsets by loop. CodeGenPrepare
+does not create common capability bases for large offsets, and the optional
+separate-offset pass leaves capability GEPs intact.
+
+The generic LSR solver does not reduce non-integral pointer values. Its
+post-increment normalization can initialize a recurrence at an unaccessed
+`p - step`, and it can step a nonnull pointer on skipped iterations. The
+integer offsets still participate in ordinary LSR; the specialized reduction
+below is the path for introducing capability recurrences.
+
 ## Integer offset sharing
 
 `performCIncOffsetCombine` distributes a scale over an integer index plus a
@@ -16,7 +40,7 @@ continues to use the representable-window restriction.
 ## Accessed cursor recurrence
 
 After the ordinary LSR solver, `reduceCapabilityIndexGroups` recognizes groups
-that the IVUsers speculation gate leaves as integer-index uses. Its scope is
+that IVUsers leaves as integer-index uses. Its scope is
 an innermost simplified loop with a native 64-bit counter, zero start, positive
 constant increment, and signed and unsigned no-wrap. The base must be loop
 invariant, dominate the preheader, and use a non-integral pointer with a
@@ -30,6 +54,9 @@ therefore establish an anchor even when neither access dominates the latch.
 
 The capability PHI starts with the original base. Its byte increment must
 satisfy `isCapabilityStepInWindow`, including the final unused increment.
+Every increment consumed by another iteration reaches that iteration's
+accessed anchor. A refused final increment is unused; no live-out value may
+be reconstructed from it.
 Residual neighbor GEPs stay at their original instruction sites and preserve
 the checked address. In particular, the transformation retains a narrowed
 base produced by `shrink`; it never substitutes an earlier, wider base.
@@ -57,6 +84,12 @@ The focused tests are:
 - `llvm/test/CodeGen/Capstone/lsr-capability-diamond-iv.ll`
 - `llvm/test/CodeGen/Capstone/lsr-capability-byte-iv.ll`
 - `llvm/test/Transforms/LoopStrengthReduce/Capstone/capability-pointer-iv.ll`
+- `llvm/test/Transforms/LoopStrengthReduce/Capstone/cursor-boundaries.ll`
+- `llvm/test/Transforms/InstCombine/capstone-gep-cursors.ll`
+- `llvm/test/Transforms/LICM/capstone-gep-reassociate.ll`
+- `llvm/test/Transforms/IndVarSimplify/capstone-exit-cursor.ll`
+- `llvm/test/Transforms/CodeGenPrepare/capstone-gep-cursors.ll`
+- `llvm/test/Transforms/SeparateConstOffsetFromGEP/capstone-gep-cursors.ll`
 
 They cover positive and negative large displacements, narrow indices, skipped
 accesses, early exit calls, mismatched anchors, oversized steps, wrapping

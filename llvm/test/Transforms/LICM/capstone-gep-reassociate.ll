@@ -71,4 +71,3 @@ loop:
 exit:
   ret i8 %v
 }
-
