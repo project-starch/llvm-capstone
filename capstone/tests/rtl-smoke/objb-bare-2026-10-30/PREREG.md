@@ -251,3 +251,45 @@ capability, and every refused TIGHTEN resumes at mepc + 4 as the stale accesses 
 - **FINDING** for any other reading. In particular 0 at any of positions 10-12 means that node was live on ObjBounds
   silicon: the arm's identity reading for that path is then attributable to an ineffective revocation, and the
   ObjBounds cost readings are re-examined before they are used.
+
+## Addendum 3 (2026-11-04, before any C.5a boot): the C.5a arm
+
+The C.5a bitstream is capstone-ariane 1fc2cd5aa: LDC/STC take the LSU's cached lifetime verdict, and the PC tracker
+checks a new PC capability. The record is `docs/plans/2026-11-03-c5a-bitstream.md`. These images and the witness
+`objb-stale-w` were simulated on c5a-wt a642f4891, whose core is identical to 1fc2cd5aa, with PROVENANCE
+`rtl_dirty=no`, memory delay 12 and time_out 3,000,000. The ELFs reproduce `images/SHA256SUMS`.
+
+| image | C.5a vector | against the two sealed trees |
+|---|---|---|
+| objb-pcc-ctrl | `0xbb5 0x0 0x0` | the same on all three |
+| objb-stale | `0x19 0x19 0x19 0x19 0x0 0x19 0x19 0x77 0x6` | = bitstream 3 |
+| objb-stale-w | `0x19 0x19 0x19 0x19 0x0 0x19 0x19 0x77 0x6 0x0 0x19 0x19 0x19 0x0 0x9` | = bitstream 3 |
+| objb-pcc | does not return (it loops in its trap handler; recorder count never written) | = bitstream 3 |
+| s1 | `0x4156 0x1403 0x5a 0x0 0x0` | cycles +7 against both |
+| s2 | `0x145f 0xc03 0x80004000 0x0 0x0` | = ObjBounds |
+| s3 | `0x2c76a 0x1804 0x80004000 0x0 0x0` | cycles ABOVE bitstream 3, +4,193 (4.1 per LDC) |
+| s4 | `0x5b2 0xc3 0x1d0 0xc3 0x80004000 0x0 0x0` | pass 1 1,458, above bitstream 3's 656; pass 2 = ObjBounds |
+| s5 | `0xa0c5f 0x4ca48 0x400a 0xffc00 0x0 0x0` | pass 1 = ObjBounds; pass 2 313,928, between them |
+| s6 | `0x1429 0x503 0x0 0x0 0x0` | cycles = ObjBounds + 7 |
+| s7 | `0x18ca 0x503 0x80004000 0x0 0x0` | cycles = ObjBounds + 6 |
+
+- Every non-cycle position equals both sealed trees.
+- Two magnitudes differ from the C.5a record's predictions, which came from the in-tree arms, not these images: s3 is
+  +4.1 per LDC, not "about +3", and s4's pass 1 reads 1,458, not 1,364. The directions are as predicted. These image
+  vectors are the binding ones.
+- **The grade:** `grade/objb-grade.py <run> c5a <bitstream 3 run>`. AS EXPECTED with the pattern HOLDING is rc 0. The
+  arm REQUIRES the bitstream 3 dir (rc 2 without it), and the witness image runs in the same boot.
+  - The identity images and the witness must be exact. An ObjBounds vector on objb-stale or objb-stale-w is STOP.
+  - objb-pcc returning is FINDING.
+  - The cost images' non-cycle positions must be exact.
+  - The cycle positions are graded by direction against bitstream 3: s1 and s5 pass 1 equal within 1 %; s2, s4
+    pass 2, s6 and s7 LOWER; s3 and s4 pass 1 HIGHER; s5 pass 2 reported.
+  - The resident name must contain 1fc2cd5aa.
+- **Controls, run before any C.5a boot**, on mock dirs built from each tree's simulated vectors:
+  - C.5a's vectors give rc 0;
+  - bitstream 3's vectors under the C.5a name give COST PATTERN FAILS, rc 1;
+  - ObjBounds' vectors under the C.5a name give STOP, rc 1;
+  - the wrong resident name gives rc 1, and no bitstream 3 dir or an empty dir gives rc 2.
+  - The bs3 and objb arms still read rc 0 on their own trees' vectors.
+- **Prediction:** AS EXPECTED, with the cost pattern HOLDING. objb-pcc runs LAST, as on bitstream 3, because it does
+  not return.
