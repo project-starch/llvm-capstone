@@ -374,10 +374,11 @@ static bool isPoolLoadOpc(unsigned Opc) {
 // a load that carried a negative immediate off a higher entry would otherwise
 // become a negative displacement off the base, which the argument above does
 // not cover), so every access lies at or above the base, inside the pool, and
-// bounds and permissions are still checked at each access against gp's. Only
-// the access is checked, as before (foldThroughGlobalBase in
-// CapstoneMergeBaseOffset relies on the same property of gp-derived pool
-// capabilities).
+// bounds and permissions are still checked at each access against gp's. The
+// cursor &cp#B itself is the address of a pool entry in the mapped image,
+// inside gp's bounds, so the address policy accepts it and it is
+// representable, whichever path runs: unlike a partial address (the %pcrel_lo
+// fold CapstoneMergeBaseOffset does not do), it is a real object address.
 //
 // The layout prediction uses the same hook as AsmPrinter::emitConstantPool
 // (the five-argument getSectionForConstant); under the image-gp ABI the

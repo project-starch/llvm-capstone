@@ -585,6 +585,19 @@ bool CapstoneRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
       // instruction will add 4 to the immediate. If that would overflow 12
       // bits, we can't fold the offset.
       MI.getOperand(FIOperandNum + 1).ChangeToImmediate(0);
+    } else if (isCapabilityFrameReg(FrameReg) && !isInt<12>(Val)) {
+      // Off a capability frame register the offset is NOT split into a high
+      // part added to the cursor and a low part in the user's immediate. The
+      // split forms frame + (Val - Lo12), a cursor the program never forms,
+      // up to 2048 bytes above the slot when Lo12 < 0 (and below it when
+      // Lo12 > 0); a cursor the address policy refuses is written untagged
+      // (isa.md, "address policy": sv39 refuses [2^38, 2^64-2^38)), and a
+      // stack can end at the top of the user half, so an in-bounds access at
+      // a high slot of an outer frame would fault. The compiler cannot tell
+      // where the stack is, so the whole offset is materialized and the
+      // cursor is the slot's own address (one more instruction when Lo12 is
+      // not 0).
+      MI.getOperand(FIOperandNum + 1).ChangeToImmediate(0);
     } else {
       // We can encode an add with 12 bit signed immediate in the immediate
       // operand of our user instruction.  As a result, the remaining
@@ -597,7 +610,11 @@ bool CapstoneRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
 
   if (Offset.getScalable() || Offset.getFixed()) {
     Register DestReg;
-    if (MI.getOpcode() == Capstone::ADDI)
+    // A cursor move off the frame (the frame object's address) can compute
+    // its result in place, as ADDI does; the zero move left is erased below.
+    if (MI.getOpcode() == Capstone::ADDI ||
+        (MI.getOpcode() == Capstone::CIncOffsetImm &&
+         MI.getOperand(FIOperandNum + 1).getImm() == 0))
       DestReg = MI.getOperand(0).getReg();
     else
       // The scratch must be in the class adjustReg will WRITE. It decides by
@@ -623,8 +640,10 @@ bool CapstoneRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
                                                  /*IsKill*/false);
   }
 
-  // If after materializing the adjustment, we have a pointless ADDI, remove it
-  if (MI.getOpcode() == Capstone::ADDI &&
+  // If after materializing the adjustment, we have a pointless ADDI (or
+  // cursor move), remove it
+  if ((MI.getOpcode() == Capstone::ADDI ||
+       MI.getOpcode() == Capstone::CIncOffsetImm) &&
       MI.getOperand(0).getReg() == MI.getOperand(1).getReg() &&
       MI.getOperand(2).getImm() == 0) {
     MI.eraseFromParent();

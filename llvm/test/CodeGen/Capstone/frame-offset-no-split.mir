@@ -1,0 +1,61 @@
+# eliminateFrameIndex off a capability frame register does not split a large
+# frame offset into a high part added to the cursor and a low part in the
+# user's immediate: the split formed sp + (Val - Lo12), a cursor the program
+# never forms, up to 2048 bytes above the slot when Lo12 < 0. A cursor the
+# address policy refuses is written untagged (sv39 refuses 2^38 and up), a
+# stack can end at the top of the user half, and the in-bounds access at a
+# high slot of an outer frame would fault. The whole offset is materialized
+# instead, and the cursor is the slot's own address.
+#
+# @far_slot: %stack.0 lands at sp+3016 (Lo12 = -1080): before, `LUI 1;
+# CIncOffset $c10, $c2; LD $c10, -1080` formed sp+4096. @far_object: the frame
+# object's own address (CIncOffsetImm %stack.1, 0, the shape every alloca
+# pointer takes) is computed in place, with no intermediate cursor.
+#
+# RUN: llc -mtriple=capstone64 -mattr=+m,+f,+d -capstone-gp-free -run-pass=prologepilog -verify-machineinstrs -o - %s | FileCheck %s
+--- |
+  target datalayout = "e-m:e-p:64:128-p200:128:128:128:64-i64:64-i128:128-n32:64-S128-ni:200-A200-P200-G200"
+  target triple = "capstone64"
+  define i64 @far_slot() addrspace(200) { ret i64 0 }
+  define void @far_object() addrspace(200) { ret void }
+...
+---
+# CHECK-LABEL: name: far_slot
+# CHECK:       $c2 = frame-setup CIncOffset $c2
+# CHECK:       [[T:\$x[0-9]+]] = LUI 1
+# CHECK-NEXT:  [[T]] = ADDI{{W?}} killed [[T]], -1080
+# CHECK-NEXT:  [[C:\$c[0-9]+]] = CIncOffset $c2, killed [[T]]
+# CHECK-NEXT:  $x10 = LD killed [[C]], 0
+# CHECK-NEXT:  $x11 = LD $c2, 16
+name: far_slot
+tracksRegLiveness: true
+stack:
+  - { id: 0, size: 3000, alignment: 8 }
+  - { id: 1, size: 3000, alignment: 8 }
+body: |
+  bb.0:
+    $x10 = LD %stack.0, 0
+    $x11 = LD %stack.1, 0
+    $x10 = ADD $x10, $x11
+    PseudoRET implicit $x10
+...
+---
+# CHECK-LABEL: name: far_object
+# CHECK:       $c2 = frame-setup CIncOffset $c2
+# CHECK:       [[T:\$x[0-9]+]] = LUI 1
+# CHECK-NEXT:  [[T]] = ADDI{{W?}} killed [[T]], -1080
+# CHECK-NEXT:  $c10 = CIncOffset $c2, killed [[T]]
+# CHECK-NEXT:  $c11 = CIncOffsetImm $c2, 16
+# CHECK-NOT:   CIncOffsetImm
+# CHECK:       PseudoRET
+name: far_object
+tracksRegLiveness: true
+stack:
+  - { id: 0, size: 3000, alignment: 8 }
+  - { id: 1, size: 3000, alignment: 8 }
+body: |
+  bb.0:
+    $c10 = CIncOffsetImm %stack.0, 0
+    $c11 = CIncOffsetImm %stack.1, 0
+    PseudoRET implicit $c10, implicit $c11
+...

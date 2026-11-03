@@ -31,17 +31,16 @@
 # offsets, so the %pcrel_lo fold does not apply and the addi stays.
 #
 #
-# A merged base keeps Lo's COMPLETE address: the %pcrel_lo fold that follows
-# for a single-use Lo (foldThroughGlobalBase: delete Lo, derive from the
-# auipc's high part, push the low part into the loads) must not run after a
-# merge. @sibling_equal_offsets and @policy_boundary are the shapes where it
-# would (every load at one common offset): with H = 2^38, gp bounds
-# [H-4096, H), the auipc at H-4096 and the entry at H-16, the relocation is
-# hi +4096 / lo -16; scc of the complete address forms H-16 (tagged), scc of
-# the high part forms H, refused under sv39 and written untagged, and the
-# `fld -16` off it faults at the unchanged effective address. Both cases
-# folded on the first version of this change (the addi deleted, the loads at
-# `target-flags(capstone-pcrel-lo)`); these CHECKs keep the addi.
+# A merged base keeps Lo's COMPLETE address, as every pool base does: there is
+# no %pcrel_lo fold (deleting Lo, deriving from the auipc's high part, pushing
+# the low part into the loads). @sibling_equal_offsets and @policy_boundary are
+# the shapes such a fold would take after a merge (every load at one common
+# offset): with H = 2^38, gp bounds [H-4096, H), the auipc at H-4096 and the
+# entry at H-16, the relocation is hi +4096 / lo -16; scc of the complete
+# address forms H-16 (tagged), scc of the high part forms H, refused under
+# sv39 and written untagged, and the `fld -16` off it faults at the unchanged
+# effective address. These CHECKs keep the addi. @single_use is the same
+# boundary with one base and one load: it keeps the addi too.
 #
 # RUN: llc -mtriple=capstone64 -mattr=+m,+f,+d -capstone-gp-free -capstone-image-gp -run-pass=machine-cse,capstone-merge-base-offset -verify-machineinstrs -o - %s | FileCheck %s
 --- |
@@ -52,6 +51,7 @@
   define void @child_block_merged() { ret void }
   define void @sibling_equal_offsets() { ret void }
   define void @policy_boundary() { ret void }
+  define void @single_use() { ret void }
 ...
 ---
 # CHECK-LABEL: name: same_block_reversed
@@ -251,5 +251,26 @@ body: |
     %6:fpr64 = FLD %5, 0 :: (load (s64) from constant-pool, addrspace 200)
     %7:fpr64 = nofpexcept FADD_D %4, %6, 7, implicit $frm
     $f10_d = COPY %7
+    PseudoRET implicit $f10_d
+...
+---
+# CHECK-LABEL: name: single_use
+# CHECK:       [[HI:%[0-9]+]]:gpr = AUIPC target-flags(capstone-pcrel-hi) %const.0
+# CHECK-NEXT:  [[LO:%[0-9]+]]:gpr = ADDI [[HI]], target-flags(capstone-pcrel-lo) <mcsymbol .Lpcrel_hi6>
+# CHECK-NEXT:  [[CAP:%[0-9]+]]:gpcr = PseudoCapGlobalBase [[LO]], implicit $x3
+# CHECK-NEXT:  {{%[0-9]+}}:fpr64 = FLD [[CAP]], 0
+name: single_use
+tracksRegLiveness: true
+constants:
+  - id: 0
+    value: 'double 1.000000e+00'
+    alignment: 8
+body: |
+  bb.0:
+    %0:gpr = AUIPC target-flags(capstone-pcrel-hi) %const.0, pre-instr-symbol <mcsymbol .Lpcrel_hi6>
+    %1:gpr = ADDI %0, target-flags(capstone-pcrel-lo) <mcsymbol .Lpcrel_hi6>
+    %3:gpcr = PseudoCapGlobalBase %1, implicit $x3
+    %4:fpr64 = FLD %3, 0 :: (load (s64) from constant-pool, addrspace 200)
+    $f10_d = COPY %4
     PseudoRET implicit $f10_d
 ...

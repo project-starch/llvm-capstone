@@ -4538,8 +4538,15 @@ bool CapstoneDAGToDAGISel::SelectAddrRegImm(SDValue Addr, SDValue &Base,
     }
   }
 
-  // Handle ADD with large immediates.
-  if (Addr.getOpcode() == ISD::ADD && isa<ConstantSDNode>(Addr.getOperand(1))) {
+  // Handle ADD with large immediates. Not for a capability address: both
+  // splits below form base + part of the displacement, a cursor the program
+  // never formed (the AddiPair split lies up to 2048 bytes from the access,
+  // the hi/lo12 one up to 2048 above it), which the address policy can refuse
+  // and write untagged; the access then faults at its unchanged, in-bounds
+  // address. A capability ADD with a large constant is selected whole
+  // instead (selectCIncOffset), so the cursor is the access's address.
+  if (Addr.getOpcode() == ISD::ADD && isa<ConstantSDNode>(Addr.getOperand(1)) &&
+      !isCapabilityVT(VT)) {
     int64_t CVal = cast<ConstantSDNode>(Addr.getOperand(1))->getSExtValue();
     assert(!isInt<12>(CVal) && "simm12 not already handled?");
 
@@ -4659,8 +4666,10 @@ bool CapstoneDAGToDAGISel::SelectAddrRegImmLsb00000(SDValue Addr, SDValue &Base,
     }
   }
 
-  // Handle ADD with large immediates.
-  if (Addr.getOpcode() == ISD::ADD && isa<ConstantSDNode>(Addr.getOperand(1))) {
+  // Handle ADD with large immediates (not for a capability address: see
+  // SelectAddrRegImm).
+  if (Addr.getOpcode() == ISD::ADD && isa<ConstantSDNode>(Addr.getOperand(1)) &&
+      !isCapabilityVT(VT)) {
     int64_t CVal = cast<ConstantSDNode>(Addr.getOperand(1))->getSExtValue();
     assert(!isInt<12>(CVal) && "simm12 not already handled?");
 

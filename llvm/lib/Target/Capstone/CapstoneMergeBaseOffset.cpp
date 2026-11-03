@@ -27,8 +27,6 @@ using namespace llvm;
 bool capstoneImageGpAbiActive(); // CapstoneISelDAGToDAG.cpp
 
 STATISTIC(NumPoolBasesMerged, "Pool addresses whose several bases were merged");
-STATISTIC(NumMergedFoldRefused,
-          "Merged pool bases the %pcrel_lo fold would have taken (refused)");
 
 namespace {
 
@@ -50,7 +48,7 @@ public:
                          MachineInstr &TailShXAdd, Register GSReg);
 
   bool foldIntoMemoryOps(MachineInstr &Hi, MachineInstr &Lo);
-  bool foldThroughGlobalBase(MachineInstr &Hi, MachineInstr &Lo);
+  bool mergePoolBases(MachineInstr &Hi, MachineInstr &Lo);
   bool mergeGlobalBaseUses(MachineInstr &Lo, Register LoReg);
 
   // Whether any instruction of the function writes gp (c3 or a part of it):
@@ -569,21 +567,28 @@ bool CapstoneMergeBaseOffsetOpt::foldIntoMemoryOps(MachineInstr &Hi,
   return true;
 }
 
-// A constant-pool entry reached through a gp-derived capability:
+// A constant-pool entry reached through a gp-derived capability keeps its
+// complete address:
 //
-// Hi:   1:auipc vreg1, %pcrel_hi(.LCPI)        1:auipc vreg1, %pcrel_hi(.LCPI+8)
-// Lo:   addi  vreg2, vreg1, %pcrel_lo(1b) ---> (deleted)
-// Base: vcap = PseudoCapGlobalBase vreg2       vcap = PseudoCapGlobalBase vreg1
-// Tail: fld f, 8(vcap)                         fld f, %pcrel_lo(1b)(vcap)
+// Hi:   1:auipc vreg1, %pcrel_hi(.LCPI)
+// Lo:   addi  vreg2, vreg1, %pcrel_lo(1b)
+// Base: vcap = PseudoCapGlobalBase vreg2
+// Tail: fld f, 0(vcap)
 //
-// PseudoCapGlobalBase only moves gp's cursor (scc/cincoffset gp), so the
-// capability now has its cursor at the auipc result instead of at the entry,
-// and the access adds the low part. Only the access is checked against gp's
-// bounds: the cursor in between may lie anywhere. That is why every use of the
-// capability must be a load at one common offset: anything that reads or
-// narrows the capability itself (SHRINK, a copy, a store of it, a cursor read)
-// would see the unfinished cursor. Constant-pool entries are never narrowed to
-// an object's bounds, which is why only they are folded.
+// The %pcrel_lo is NOT folded into the loads (deleting Lo, deriving the
+// capability from the auipc's partial address), although only the access is
+// checked against gp's bounds: the cursor in between may not lie anywhere:
+// a cursor the address policy refuses is written untagged (isa.md, "address
+// policy"). The partial address is the entry's address minus its signed low
+// 12 bits, up to 2048 bytes above the entry: with H = 2^38, gp bounds
+// [H-4096, H), the auipc at H-4096 and the entry at H-16 the relocation splits
+// into hi +4096 and lo -16, scc of the high part alone forms H, refused under
+// sv39, and the `fld -16` off it faults at the unchanged effective address.
+// The low part is a link-time value, so no compile-time test can tell the
+// safe shapes apart, and the rule (no rewrite changes the value of a
+// surviving cursor) leaves no fold: the capability is derived from the entry's
+// address, which the program forms.
+//
 // Several PseudoCapGlobalBase of one constant-pool address. MachineCSE's PRE
 // hoists the PseudoLLA (auipc + addi, no register operands) to a common
 // dominator of its users but not the PseudoCapGlobalBase (a virtual-register
@@ -668,101 +673,21 @@ bool CapstoneMergeBaseOffsetOpt::mergeGlobalBaseUses(MachineInstr &Lo,
   return true;
 }
 
-// The one immediate every use of CapReg reads at, when every use is the base
-// of a load (the shapes foldThroughGlobalBase can rewrite); none otherwise.
-static std::optional<int64_t> poolLoadCommonOffset(MachineRegisterInfo &MRI,
-                                                   Register CapReg) {
-  std::optional<int64_t> CommonOffset;
-  for (const MachineOperand &MO : MRI.use_operands(CapReg)) {
-    const MachineInstr &UseMI = *MO.getParent();
-    if (UseMI.isDebugInstr())
-      return std::nullopt;
-    switch (UseMI.getOpcode()) {
-    default:
-      return std::nullopt;
-    case Capstone::LB:
-    case Capstone::LH:
-    case Capstone::LW:
-    case Capstone::LBU:
-    case Capstone::LHU:
-    case Capstone::LWU:
-    case Capstone::LD:
-    case Capstone::FLH:
-    case Capstone::FLW:
-    case Capstone::FLD:
-      break;
-    }
-    if (UseMI.getOperandNo(&MO) != 1 || !UseMI.getOperand(2).isImm())
-      return std::nullopt;
-    int64_t Offset = UseMI.getOperand(2).getImm();
-    if (CommonOffset && Offset != *CommonOffset)
-      return std::nullopt;
-    CommonOffset = Offset;
-  }
-  return CommonOffset;
-}
-
-bool CapstoneMergeBaseOffsetOpt::foldThroughGlobalBase(MachineInstr &Hi,
-                                                       MachineInstr &Lo) {
-  // Only under the image-gp ABI (exact bounds): there gp's cursor is simply
-  // set, and only the access is checked. Elsewhere the unfinished cursor would
-  // have to stay representable, which nothing here establishes.
+bool CapstoneMergeBaseOffsetOpt::mergePoolBases(MachineInstr &Hi,
+                                                MachineInstr &Lo) {
+  // Only under the image-gp ABI, where PseudoCapGlobalBase is a plain scc of
+  // gp (see mergeGlobalBaseUses).
   if (!capstoneImageGpAbiActive())
     return false;
   if (Hi.getOpcode() != Capstone::AUIPC || !Hi.getOperand(1).isCPI() ||
       &Lo == &Hi)
     return false;
   Register LoReg = Lo.getOperand(0).getReg();
-  // Several bases of one pool address: merge them into one, and STOP. The
-  // fold below re-derives the capability from the auipc's partial address
-  // (the high part only) and pushes the low part into the loads, which moves
-  // the cursor the program forms: with H = 2^38, gp bounds [H-4096, H), the
-  // auipc at H-4096 and the entry at H-16, the relocation splits into hi +4096
-  // and lo -16; scc of Lo's complete address forms H-16 (tagged), scc of the
-  // high part alone forms H, refused under sv39 and written untagged, and the
-  // `fld -16` off it faults at the unchanged effective address. The single-use
-  // guard used to keep a multi-base Lo out of that fold; merging the bases
-  // must not let it in: a merged base keeps Lo's complete address.
-  if (!MRI->hasOneUse(LoReg)) {
-    if (!mergeGlobalBaseUses(Lo, LoReg))
-      return false;
-    ++NumPoolBasesMerged;
-    // Count the merges the fold below would have taken (for the record of
-    // what this refusal costs; the fold itself does not run).
-    Register MergedCap = MRI->use_instr_begin(LoReg)->getOperand(0).getReg();
-    if (std::optional<int64_t> Off = poolLoadCommonOffset(*MRI, MergedCap);
-        Off && isInt<32>(Hi.getOperand(1).getOffset() + *Off)) {
-      ++NumMergedFoldRefused;
-      LLVM_DEBUG(dbgs() << "merged pool base kept complete (the fold would "
-                           "have taken it): "
-                        << Lo);
-    }
-    return true;
-  }
-  MachineInstr &Base = *MRI->use_instr_begin(LoReg);
-  if (Base.getOpcode() != Capstone::PseudoCapGlobalBase ||
-      Base.getOperand(1).getReg() != LoReg)
+  // Several bases of one pool address: merge them into one, each keeping
+  // Lo's complete address.
+  if (MRI->hasOneUse(LoReg) || !mergeGlobalBaseUses(Lo, LoReg))
     return false;
-  Register CapReg = Base.getOperand(0).getReg();
-  if (!CapReg.isVirtual() || MRI->use_nodbg_empty(CapReg))
-    return false;
-
-  std::optional<int64_t> CommonOffset = poolLoadCommonOffset(*MRI, CapReg);
-  if (!CommonOffset)
-    return false;
-
-  int64_t NewOffset = Hi.getOperand(1).getOffset() + *CommonOffset;
-  if (!isInt<32>(NewOffset))
-    return false;
-  Hi.getOperand(1).setOffset(NewOffset);
-  MachineOperand ImmOp = Lo.getOperand(2);
-  for (MachineInstr &UseMI :
-       llvm::make_early_inc_range(MRI->use_instructions(CapReg))) {
-    UseMI.removeOperand(2);
-    UseMI.addOperand(ImmOp);
-  }
-  Base.getOperand(1).setReg(Hi.getOperand(0).getReg());
-  Lo.eraseFromParent();
+  ++NumPoolBasesMerged;
   return true;
 }
 
@@ -806,7 +731,7 @@ bool CapstoneMergeBaseOffsetOpt::runOnMachineFunction(MachineFunction &Fn) {
       if (foldIntoMemoryOps(Hi, *Lo))
         MadeChange = true;
       else
-        MadeChange |= foldThroughGlobalBase(Hi, *Lo);
+        MadeChange |= mergePoolBases(Hi, *Lo);
     }
   }
 
