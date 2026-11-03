@@ -12,13 +12,27 @@ dataflow and preserves explicit caller overrides.
 
 Same-compiler BASE=3 QEMU pairs pass SPEC test inputs gcc, imagick, lbm and nab.
 They do not establish a performance improvement: program instruction attempts
-increase slightly, and total counts include variable kernel/idle work. PHP's
+increase slightly, and total counts include variable kernel/idle work. Removing
+the flag also enables SimplifyCFG lookup tables, including bounded scalar
+loads and capability-table startup initialization, so dispatch cost alone
+does not explain every increase. PHP's
 `zend_inline_hash_func` does inline into `zend_hash_find` when the flag is
 removed (cost 265 versus 325, threshold 325); full PHP execution is not
 requalified. Compiler tests pass except the known source-copy
 `shared-patches-present` check; the SDK compiler unit tests pass. This is lane
 qualification on the reused BASE=3 compiler, not a new silicon result or a
 fresh build of the current compiler.
+
+Landing qualification rebases this lane onto dev `3702f61342ee`. The repaired
+runtime gates, with fresh SDKs and all application images built for each arm,
+compare IDENTICAL across all nine gates (dev on p13, lane on p12). All rows ran;
+neither arm logs thread-slot refusals or image-format errors. This matches the
+control's failures, including pthread transport checks and memcached's pthread,
+stderr and fx24 checks; it does not claim those checks pass. The compiler is
+dev `976df58996f3`'s reused build: no LLVM/Clang source changed through the new
+base. CodeGen/Capstone gives 147 passed, one unsupported and the known exported
+source `shared-patches-present` failure; all 19 SDK compiler tests pass.
+Virtual jump-table coverage also includes O0 and explicit PIC/O2 lowering.
 
 ## Read this first (2026-10-13)
 

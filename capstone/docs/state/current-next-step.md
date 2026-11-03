@@ -1,6 +1,8 @@
 **2026-11-03 — SDK jump-table lane.** The same-compiler SPEC test-input pairs
 for gcc, imagick, lbm and nab pass, with no demonstrated program instruction
-saving. Preserve the image-gp cursor/PCC dataflow checks and gp-captable refusal.
+saving. Landing qualification on dev `3702f61342ee` now has all nine repaired
+runtime gates IDENTICAL to the control, including its recorded failures.
+Preserve the image-gp cursor/PCC dataflow checks and gp-captable refusal.
 Next qualify full PHP execution and wider switch-heavy inputs before claiming
 a workload benefit from the confirmed hash-helper inlining change. See the
 [lane qualification](current-state.md#2026-11-03--sdk-jump-tables-lane-qualification).
