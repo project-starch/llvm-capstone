@@ -55,3 +55,28 @@ Rates for the run command, per 1,000 instructions, with issue stall as a share o
   cannot say whether that difference comes from the arm or is run-to-run variation. A repeat will tell.
 - Issue stall is CVA6's event 22. Its silicon count matched simulation on the hpm bare kit (1530). It is not yet split
   by cause.
+
+## Addendum 1 boots (4 Nov 00:59-01:21, bookings 633 and 634, grab-gap)
+
+Both boots pass P1 and P5: the control PASSED, specdiff PASS, outputs identical to the twin, every bench line fresh.
+
+| Boot | Arm | Cycles (baseline) | Instret (baseline) | P2 / P3 |
+|---|---|---|---|---|
+| gcc test | Full | 206,862,339 (205,767,280, +0.53 %) | 30,692,200 (30,690,680, +0.005 %) | hold |
+| imagick repeat | MapLife | 402,930,143 (402,555,914, +0.09 %) | 108,726,992 (108,724,600, +0.002 %) | hold |
+| imagick repeat | Full | 395,854,200 (395,108,674, +0.19 %) | 108,745,845 (108,744,930, +0.001 %) | hold |
+
+| Context | L1I miss | L1D miss | DTLB miss | Mispredict | Issue stall | Scoreboard full |
+|---|---|---|---|---|---|---|
+| gcc Full run | 1,852,170 | 544,398 | 43,381 | 1,007,028 | 70,236,565 | 11,257,917 |
+| imagick MapLife run | 720,328 | 1,485,483 | 307,855 | 2,008,567 | 161,673,061 | 2,621,815 |
+| imagick Full run | 487,261 | 1,477,549 | 307,779 | 1,611,354 | 164,778,976 | 2,635,519 |
+
+- **P4 holds.** hpm3-7 are > 0 and < cycles in every run command.
+- **P6 holds.** MapLife reads more L1I misses than Full in both boots (720 k vs 487 k; first boot 716 k vs 489 k), and
+  more mispredicts (2.01 M vs 1.61 M, as before). L1D is within 0.4 % of the first boot in both arms. The arms'
+  L1I-miss and mispredict difference therefore reproduces. It is read as coming from the arm, which runs different
+  executables, not as noise. The cause is not identified.
+- **gcc Full run.** CPI 6.74. Per 1,000 instructions: L1I 60.3, L1D 17.7, DTLB 1.4, mispredicts 32.8. Issue stall is
+  34 % of cycles and scoreboard full 5.4 %. gcc's L1I miss rate is 9× imagick's and 3.4× its own L1D rate. Of the
+  readings so far, it is the one that bears most on direction 3 (code size).
