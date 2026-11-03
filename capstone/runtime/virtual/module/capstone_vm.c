@@ -85,6 +85,8 @@ struct arena {
      * unreachable by the domain before its first entry. A second retire is not an error, but the
      * non-destroying path reports one, so it must be skipped rather than tolerated. */
     bool ancestor_retired;
+    /* Native-task mappings only; initial transport cannot be retired. */
+    bool dom_dynamic, dom_metadata;
 };
 struct context;
 struct cv_thread {
@@ -149,6 +151,11 @@ struct context {
     struct page **remap_pages;
     u64 remap_thread;
     unsigned long remap_bytes;
+    /* Private native-task driver state; never copied from the trampoline. */
+    unsigned long dom_meta, dom_exchange, dom_exchange_bytes;
+    struct cv_step dom_step;
+    pid_t dom_pid;
+    bool dom_protect_pending;
 };
 static DEFINE_MUTEX(vm_lock);
 /* Quotas are in base pages; zero means the 30-bit ISA limit. Parameters are
@@ -2672,11 +2679,16 @@ static int vm_release(struct inode *inode, struct file *f)
 static const struct file_operations ops = {
     .owner = THIS_MODULE, .open = vm_open, .release = vm_release, .unlocked_ioctl = vm_ioctl,
 };
+#include "binfmt-dom.h"
+
 static struct miscdevice device = {
     .minor = MISC_DYNAMIC_MINOR, .name = "capstone-vm", .fops = &ops, .mode = 0600,
 };
 static int __init init(void)
 {
+#ifdef CONFIG_TRANSPARENT_HUGEPAGE
+    if (dom_binfmt) return -EOPNOTSUPP;
+#endif
 #ifdef CAPSTONE_VM_FLAT_TABLE
     /* Refuse the LOAD, so a bad value cannot reach a run. 2 because ids 0 and 1 are the header;
      * the maximum because silicon saturates capacity there; whole pages because the table is one
@@ -2720,14 +2732,18 @@ static int __init init(void)
          * rest are being read through dmesg. One line per insmod, before the rungs begin. */
         pr_emerg("capstone_vm: loaded, diag %s, supervisor_slots=%lu, diag_emerg=%d\n",
                  CV_DIAG_TAG, supervisor_slots, diag_emerg);
+        if (dom_binfmt) insert_binfmt(&capstone_dom);
         return 0;
     }
 }
+static void __exit done(void)
+{
+    if (dom_binfmt) unregister_binfmt(&capstone_dom);
 #ifdef CV_TEST_HOOKS
-static void __exit done(void) { test_report("unload"); misc_deregister(&device); }
-#else
-static void __exit done(void) { misc_deregister(&device); }
+    test_report("unload");
 #endif
+    misc_deregister(&device);
+}
 module_init(init); module_exit(done);
 MODULE_LICENSE("GPL");
 MODULE_DESCRIPTION("Private virtual Capstone execution adapter");

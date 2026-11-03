@@ -123,3 +123,97 @@ Artifacts: `p12:~/lanes/laneAG/step1-smoke`. Latest prebuild disk check:
 
 UNRESOLVED: native implementation, contracts, gates and paired per-process
 cost are pending. No speedup or production safety qualification is claimed.
+
+## Step 2 design amendment, before the protection bridge
+
+The first native smoke failed, so its attempt window is INVALID as a performance
+result. Command `bash ~/lanes/laneAG/native-smoke.sh` produced:
+
+```
+LQ plain exec n=10 processes=10 bad=10
+capstone_dom: fault rc=-14 kind=2 cause=24 pc=0x3ff7f81de0 address=0xfffffffffffffedc
+```
+
+Disassembly places that PC in `mprotect` writing errno before TLS initialization.
+The SDK's mallocng startup needs to open an initially PROT_NONE reservation.
+The matching kernel's `Module.symvers` exports `vm_mmap` and `vm_brk`, but no
+mprotect helper. Returning ENOSYS here cannot start an unchanged SDK program.
+
+Extend B with one bounded syscall bridge: the module validates a page-aligned
+span inside a dynamic arena, excluding all initial grants, and supplies scalar
+mprotect arguments in the trampoline registers. A distinct positive return
+selects that operation; its result returns via a private completion ioctl before
+any domain re-entry. The module retains the pending service and a single task
+owns the transport. No capability or domain-supplied syscall number reaches the
+trampoline. This uses Linux's ordinary protection implementation and TLB work
+without an unexported call, kernel patch, or recreated mm internals. Other
+unsupported services still return ENOSYS. The trampoline becomes slightly larger
+than the original ten-instruction loop. This is a kernel export gap discovered
+by the experiment, not a reason to suppress mallocng's protection checks.
+
+## Step 2 implementation and contracts
+
+`dom_binfmt=1` inserts the loader ahead of binfmt_misc; it is absent from the
+binary-format list by default. The module owns an anonymous context fd, parses
+bounded ELF metadata, reuses the existing arena/step/retirement machinery and
+runs the scalar trampoline. MAP/UNMAP/NODES, self, read/write and exit work;
+PROTECT uses the validated bridge described above. Read-only attribution
+parameters expose the last image/trampoline base for measurement outside a
+window. The image's declared 15 extra transport slots are accepted as metadata;
+creating threads remains unsupported. Inherited seccomp still applies.
+
+Build on p12: `bash ~/lanes/laneAG/build-native.sh`, exit 0, no diagnostic output.
+Module SHA-256:
+`5d2dd8a7679d2eea04b63c90c86420e6d6e20c3eee151c05e10ed90df8c1e0f6`.
+The RV64I trampoline was assembled/disassembled on p12 to verify its branch
+words; it is 92 bytes. Its assembly source is retained beside the implementation.
+
+`bash ~/lanes/laneAG/native-smoke.sh` after the protection bridge produced:
+
+```
+0000 rc=0 window 0 new 0:tsv records=0 exec 10 /tmp/child-cap
+LQ plain exec n=10 processes=10 bad=0
+window 0 (invocation 0000, lqmicro): 11,692,165 attempts
+```
+
+This smoke used a plain parent, so it is not a comparison with the earlier
+Capstone-parent smoke. Attribution and paired runs remain pending.
+
+`bash ~/lanes/laneAG/contracts.sh`, with binfmt_misc disabled to prevent fallback,
+produced the following on p12 (exit 0):
+
+```
+PASS hello
+PASS loop
+PASS malloc
+PASS mmap
+PASS read
+PASS unsupported
+PASS startup
+PASS exit
+PASS no-helper-children
+PASS one-linux-thread
+PASS stop
+PASS continue
+PASS terminate-wait
+PASS truncated
+PASS marker
+PASS overflow
+PASS wx
+PASS setuid
+native contract failures=0
+unload_rc=0
+```
+
+The driver verifies every output byte of the 1 MiB allocation/write, argv/env
+startup and cached task IDs, exit status 37, one Linux thread/no child helpers,
+and wait's signal status. `getcwd` remains ENOSYS; the first draft of the test
+incorrectly expected it to succeed and was corrected to match the stated scope.
+Negative images test truncated tables, a bad marker, overflowed file offset,
+write+execute text and setuid refusal. Module unload after exit succeeded.
+Artifacts: `p12:~/lanes/laneAG/contracts-final` and `native-smoke2`.
+
+UNRESOLVED: full signals, capability ptrace, fork, raw brk authority and direct
+capability-checked kernel copies. The SDK mmap path works; raw scalar brk is
+not implemented because it cannot mint usable capability authority. No full
+syscall compatibility or production safety qualification is claimed.
