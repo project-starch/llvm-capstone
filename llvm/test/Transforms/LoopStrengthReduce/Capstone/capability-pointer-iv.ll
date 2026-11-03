@@ -1,45 +1,24 @@
 ; RUN: opt -mtriple=capstone64 -passes=loop-reduce -S < %s | FileCheck %s --implicit-check-not=ptrtoint --implicit-check-not=inttoptr
 ;
-; A loop that walks a capability-typed array gets a pointer induction variable
-; (a `ptr addrspace(200)` phi stepped by a GEP) when the loop runs the address
-; computation on every iteration anyway, so that stepping the capability
-; cannot fault where the original program would not have. Otherwise the
-; address keeps being recomputed from the integer index.
+; Generic LSR must keep non-integral pointers as indexed uses. Even a small
+; normalized start can cross an address-policy boundary, and a nonnull base
+; does not justify stepping through skipped iterations. Integer offsets may
+; still be strength-reduced. The specialized accessed-anchor recurrence is
+; covered by CodeGen/Capstone/lsr-capability-diamond-iv.ll.
 ;
-; On this target address arithmetic on a capability can trap (cincoffset on a
-; base that holds no capability -- sealed or uninitialised; issue C-19), so
-; the fork's isSafeToSpeculativelyExecute refuses a GEP on a base not known
-; to be non-null on its own, and IVUsers asks it without a context: a null
-; check before the loop would prove non-nullness, not that the base is a
-; capability, and a GEP the original skips must not be stepped on its behalf.
-; A GEP the loop is guaranteed to execute on every iteration (in the header,
-; behind only instructions that transfer execution) qualifies without a
-; proof. A walk whose start moves with an enclosing loop is left as it is:
-; forming it would carry that outer recurrence in an induction variable of
-; the enclosing loop, outside its checks, or in a value picked by SCEV
-; identity, which is blind to poison. And LSR's expander never hoists a
-; non-integral pointer expression above the preheader of the loop it
-; reduces, so an invariant start stays below the checks of the enclosing
-; loops. Without any of this every capability GEP whose base was not non-null
-; on its own (an argument, a loaded pointer -- anything but an alloca, a
-; global or a nonnull parameter) was refused, and every such indexed loop
-; paid a shift and a cincoffset per access and per iteration (538.imagick_r:
-; 6.7M of 103M attempts; 544.nab_r: 711M of 7850M).
-;
-; The address space is non-integral, so no ptrtoint/inttoptr may appear
-; anywhere in the output (the implicit checks above).
+; Preserve the original guarded bases, live-out values, and pointer PHIs.
+; No pointer/integer casts may appear (the implicit checks above).
 
 target datalayout = "e-m:e-p:64:128-p200:128:128:128:64-i64:64-i128:128-n32:64-S128-ni:200-A200-P200-G200"
 
-; The access runs on every iteration (the null check before the loop proves
-; nothing about the capability and is not what admits it): a pointer phi,
-; stepped by 8, and the accesses at +0 and +2 are folded onto it.
+; Keep the original accessed cursor in @guarded; only its integer offset changes.
 ; CHECK-LABEL: @guarded(
-; CHECK:       for.body:
-; CHECK:         [[IV:%[a-z0-9.]+]] = phi ptr addrspace(200) [ %{{[a-z0-9.]+}}, %{{[a-z0-9.]+}} ], [ [[STEP:%[a-z0-9.]+]], %for.body ]
-; CHECK-NOT:     shl
-; CHECK:         [[STEP]] = getelementptr i8, ptr addrspace(200) [[IV]], i64 8
-; CHECK:         ret void
+; CHECK-NOT: getelementptr
+; CHECK: for.body:
+; CHECK-NOT: phi ptr addrspace(200)
+; CHECK: %a0 = getelementptr inbounds nuw i8, ptr addrspace(200) %p, i64 %
+; CHECK-NOT: phi ptr addrspace(200)
+; CHECK: ret void
 define void @guarded(ptr addrspace(200) %p, i64 %n) addrspace(200) {
 entry:
   %nonnull = icmp ne ptr addrspace(200) %p, null
@@ -70,8 +49,7 @@ for.end:
 ; null check that dominates the loop: non-nullness does not prove the base
 ; is a capability (a sealed one is non-null), and a GEP the original skips
 ; must not be stepped on its behalf -- so %p keeps being indexed from the
-; integer counter. The flags walk, which runs on every iteration, gets its
-; pointer phi.
+; integer counter. The flags walk also retains its indexed cursor.
 ; CHECK-LABEL: @guarded_conditional(
 ; CHECK-NOT:     phi ptr addrspace(200) [ %p,
 ; CHECK:         getelementptr inbounds nuw i8, ptr addrspace(200) %p, i64
@@ -108,14 +86,14 @@ for.end:
   ret void
 }
 
-; A nonnull parameter is known non-null without any context, so this walk was
-; already reduced before this change: a control that the change keeps it.
+; Keep the original accessed cursor in @attributed; only its integer offset changes.
 ; CHECK-LABEL: @attributed(
-; CHECK:       for.body:
-; CHECK:         [[IV:%[a-z0-9.]+]] = phi ptr addrspace(200) [ %p, %{{[a-z0-9.]+}} ], [ [[STEP:%[a-z0-9.]+]], %for.body ]
-; CHECK-NOT:     shl
-; CHECK:         [[STEP]] = getelementptr i8, ptr addrspace(200) [[IV]], i64 8
-; CHECK:         ret void
+; CHECK-NOT: getelementptr
+; CHECK: for.body:
+; CHECK-NOT: phi ptr addrspace(200)
+; CHECK: %a0 = getelementptr inbounds nuw i8, ptr addrspace(200) %p, i64 %
+; CHECK-NOT: phi ptr addrspace(200)
+; CHECK: ret void
 define void @attributed(ptr addrspace(200) nonnull %p, i64 %n) addrspace(200) {
 entry:
   %positive = icmp sgt i64 %n, 0
@@ -136,18 +114,14 @@ for.end:
   ret void
 }
 
-; No null check, but the access sits in the loop header behind nothing that
-; could leave: every iteration, the first included, computes the address, so
-; a null %p faults on the first iteration either way and the capability may
-; be stepped. This is the shape of a function's own parameter walked in a
-; counted loop, which the callers checked (ImageMagick's HorizontalFilter,
-; nab's mme34).
+; Keep the original accessed cursor in @every_iteration; only its integer offset changes.
 ; CHECK-LABEL: @every_iteration(
-; CHECK:       for.body:
-; CHECK:         [[IV:%[a-z0-9.]+]] = phi ptr addrspace(200) [ %p, %{{[a-z0-9.]+}} ], [ [[STEP:%[a-z0-9.]+]], %for.body ]
-; CHECK-NOT:     shl
-; CHECK:         [[STEP]] = getelementptr i8, ptr addrspace(200) [[IV]], i64 8
-; CHECK:         ret void
+; CHECK-NOT: getelementptr
+; CHECK: for.body:
+; CHECK-NOT: phi ptr addrspace(200)
+; CHECK: %a0 = getelementptr inbounds nuw i8, ptr addrspace(200) %p, i64 %
+; CHECK-NOT: phi ptr addrspace(200)
+; CHECK: ret void
 define void @every_iteration(ptr addrspace(200) %p, i64 %n) addrspace(200) {
 entry:
   %positive = icmp sgt i64 %n, 0
@@ -168,19 +142,16 @@ for.end:
   ret void
 }
 
-; The inner loop of a nest, entered only past a null check in the outer loop,
-; walking the parameter from +48 (the shape of issue C-58): the walk gets its
-; pointer phi, and its start, invariant in both loops, is formed in the inner
-; preheader -- below the check -- not in the entry block.
+; A guarded inner walk retains its own base and both original cursors.
 ; CHECK-LABEL: @nested_guard(
-; CHECK:       entry:
-; CHECK-NOT:     getelementptr
-; CHECK:       inner.ph:
-; CHECK-NEXT:    [[START:%[a-z0-9.]+]] = getelementptr i8, ptr addrspace(200) %p, i64 48
-; CHECK:       inner:
-; CHECK:         [[IV:%[a-z0-9.]+]] = phi ptr addrspace(200) [ [[STEP:%[a-z0-9.]+]], %inner ], [ [[START]], %inner.ph ]
-; CHECK:         [[STEP]] = getelementptr i8, ptr addrspace(200) [[IV]], i64 16
-; CHECK:         ret void
+; CHECK: entry:
+; CHECK-NOT: getelementptr
+; CHECK: inner:
+; CHECK-NOT: phi ptr addrspace(200)
+; CHECK: %items = getelementptr i8, ptr addrspace(200) %p, i64 48
+; CHECK: %slot = getelementptr ptr addrspace(200), ptr addrspace(200) %items, i64 %i
+; CHECK: load ptr addrspace(200), ptr addrspace(200) %slot
+; CHECK: ret void
 define void @nested_guard(ptr addrspace(200) %p, i64 %n, i64 %m, ptr addrspace(200) %out) addrspace(200) {
 entry:
   br label %outer
@@ -256,19 +227,14 @@ exit:
   ret void
 }
 
-; The GEP in the header ahead of an early exit: every iteration, the first
-; included, computes the address before the exit test, so the walk gets its
-; phi; its start is %p itself (no arithmetic before the loop) and its step
-; sits in the latch, which only an iteration past the exit reaches.
+; Keep the original accessed cursor in @header_exit; only its integer offset changes.
 ; CHECK-LABEL: @header_exit(
-; CHECK:       loop.preheader:
-; CHECK-NEXT:    br label %loop
-; CHECK:       loop:
-; CHECK:         [[IV:%[a-z0-9.]+]] = phi ptr addrspace(200) [ %p, %loop.preheader ], [ [[STEP:%[a-z0-9.]+]], %latch ]
-; CHECK:         load i16, ptr addrspace(200) [[IV]]
-; CHECK:       latch:
-; CHECK:         [[STEP]] = getelementptr i8, ptr addrspace(200) [[IV]], i64 8
-; CHECK:         ret void
+; CHECK-NOT: getelementptr
+; CHECK: loop:
+; CHECK-NOT: phi ptr addrspace(200)
+; CHECK: %a = getelementptr inbounds nuw i8, ptr addrspace(200) %p, i64 %
+; CHECK-NOT: phi ptr addrspace(200)
+; CHECK: ret void
 define void @header_exit(ptr addrspace(200) %p, ptr addrspace(200) %stop, i64 %n) addrspace(200) {
 entry:
   %positive = icmp sgt i64 %n, 0
@@ -521,19 +487,13 @@ exit:
   ret void
 }
 
-; An exit test that compares the walked address with an end pointer: the walk
-; gets its pointer phi, and LSR rewrites the comparison into a count-down
-; compared through a null-based byte GEP, which the backend lowers as integer
-; arithmetic (C-40; the CodeGen test checks that no cincoffset on the zero
-; register comes of it).
+; Compare the program's two cursors without normalizing either pointer.
 ; CHECK-LABEL: @cmp_end(
-; CHECK:       loop:
-; CHECK:         [[IV:%[a-z0-9.]+]] = phi ptr addrspace(200) [ %p, %loop.preheader ], [ [[STEP:%[a-z0-9.]+]], %loop ]
-; CHECK:         load i16, ptr addrspace(200) [[IV]], align 2
-; CHECK:         [[END:%[a-z0-9.]+]] = getelementptr i8, ptr addrspace(200) null, i64 %
-; CHECK:         [[STEP]] = getelementptr i8, ptr addrspace(200) [[IV]], i64 8
-; CHECK:         icmp eq ptr addrspace(200) [[END]], null
-; CHECK:         ret i16
+; CHECK-NOT: phi ptr addrspace(200)
+; CHECK: %a = getelementptr inbounds nuw i8, ptr addrspace(200) %p, i64 %
+; CHECK: %end = getelementptr inbounds nuw i8, ptr addrspace(200) %p, i64 %nidx
+; CHECK: icmp eq ptr addrspace(200) %a, %end
+; CHECK: ret i16
 define i16 @cmp_end(ptr addrspace(200) %p, i64 %n) addrspace(200) {
 entry:
   %nonnull = icmp ne ptr addrspace(200) %p, null
@@ -763,17 +723,14 @@ for.end:
 
 declare void @may_not_return(i64) addrspace(200) nounwind
 
-; The last address is live out of the loop: the walk gets its phi (LSR may
-; normalize its start so that the stepped value is the last address), and the
-; value handed on is that stepped capability, derived from %p (no cast).
+; A live-out cursor must come from the original access, regardless of step size.
 ; CHECK-LABEL: @live_out(
-; CHECK:       for.body:
-; CHECK:         [[IV:%[a-z0-9.]+]] = phi ptr addrspace(200) [ %{{[a-z0-9.]+}}, %{{[a-z0-9.]+}} ], [ [[STEP:%[a-z0-9.]+]], %for.body ]
-; CHECK:         [[STEP]] = getelementptr i8, ptr addrspace(200) [[IV]], i64 8
-; CHECK:         [[OUT:%[a-z0-9.]+]] = phi ptr addrspace(200) [ [[STEP]], %for.body ]
-; CHECK:       for.end:
-; CHECK:         [[LAST:%[a-z0-9.]+]] = phi ptr addrspace(200) [ %p, %entry ], [ [[OUT]], %{{[a-z0-9.]+}} ]
-; CHECK:         ret ptr addrspace(200) [[LAST]]
+; CHECK-NOT: getelementptr
+; CHECK: for.body:
+; CHECK-NOT: phi ptr addrspace(200)
+; CHECK: [[ADDR:%.*]] = getelementptr inbounds nuw i8, ptr addrspace(200) %p, i64 %
+; CHECK: [[OUT:%.*]] = phi ptr addrspace(200) [ [[ADDR]], %for.body ]
+; CHECK: ret ptr addrspace(200)
 define ptr addrspace(200) @live_out(ptr addrspace(200) %p, i64 %n) addrspace(200) {
 entry:
   %nonnull = icmp ne ptr addrspace(200) %p, null
@@ -797,30 +754,18 @@ for.end:
   ret ptr addrspace(200) %last
 }
 
-; ---------------------------------------------------------------------------
-; The window. A capability moved outside the range its compressed bounds can
-; represent loses its tag (R-60). The representable window starts at least
-; 2 KiB below the base (2^(E+11), decompress_bounds in ariane_pkg.sv) and
-; ends at least about 4 KiB above the end, so a cursor LSR forms where the
-; program formed none must stay within 2 KiB of an address the program does
-; form. A use after the loop reads the post-incremented value, so LSR expresses
-; it on an IV whose start is the first address less one step and hands on the
-; stepped capability. With a step of a few hundred bytes that start is inside
-; the window around the object; with 4 KiB, 64 KiB or a variable step it need
-; not be, and the value handed on would have lost its tag where the program's
-; had not. Such a value stays computed by the program (the loop's own accesses
-; are reduced as before).
-; ---------------------------------------------------------------------------
+; Representable-window slack alone does not justify normalizing a live-out
+; pointer. Even p-8 can cross phys56 near zero; large and variable steps also
+; risk leaving the compressed bounds window. Keep all these original cursors.
 
-; A step of 2 KiB is the bound: the value after the loop is the stepped
-; capability less one step, both inside the window.
+; A live-out cursor must come from the original access, regardless of step size.
 ; CHECK-LABEL: @live_out_2k(
-; CHECK-NOT:   getelementptr i8, ptr addrspace(200) %p, i64 -
-; CHECK:       for.body:
-; CHECK:         [[IV:%[a-z0-9.]+]] = phi ptr addrspace(200) [ %p, %{{[a-z0-9.]+}} ], [ [[STEP:%[a-z0-9.]+]], %for.body ]
-; CHECK:         [[STEP]] = getelementptr i8, ptr addrspace(200) [[IV]], i64 2048
-; CHECK:         getelementptr i8, ptr addrspace(200) [[STEP]], i64 -2048
-; CHECK:         ret ptr addrspace(200)
+; CHECK-NOT: getelementptr
+; CHECK: for.body:
+; CHECK-NOT: phi ptr addrspace(200)
+; CHECK: [[ADDR:%.*]] = getelementptr inbounds nuw i8, ptr addrspace(200) %p, i64 %
+; CHECK: [[OUT:%.*]] = phi ptr addrspace(200) [ [[ADDR]], %for.body ]
+; CHECK: ret ptr addrspace(200)
 define ptr addrspace(200) @live_out_2k(ptr addrspace(200) %p, i64 %n) addrspace(200) {
 entry:
   %nonnull = icmp ne ptr addrspace(200) %p, null
@@ -844,18 +789,14 @@ for.end:
   ret ptr addrspace(200) %last
 }
 
-; Above the bound no capability at p-4096 is formed (an object of 4 to 8 KiB
-; has less than 4 KiB below its base in the window); the value after the loop
-; is the program's own address.
+; A live-out cursor must come from the original access, regardless of step size.
 ; CHECK-LABEL: @live_out_4k(
-; CHECK-NOT:   getelementptr i8, ptr addrspace(200) %p, i64 -
-; CHECK:       for.body:
-; CHECK:         [[IV:%[a-z0-9.]+]] = phi ptr addrspace(200) [ %p, %{{[a-z0-9.]+}} ], [ [[STEP:%[a-z0-9.]+]], %for.body ]
-; CHECK:         [[A0:%[a-z0-9.]+]] = getelementptr inbounds nuw i8, ptr addrspace(200) %p, i64 %idx
-; CHECK:         [[STEP]] = getelementptr i8, ptr addrspace(200) [[IV]], i64 4096
-; CHECK-NOT:     i64 -4096
-; CHECK:         phi ptr addrspace(200) [ [[A0]], %for.body ]
-; CHECK:         ret ptr addrspace(200)
+; CHECK-NOT: getelementptr
+; CHECK: for.body:
+; CHECK-NOT: phi ptr addrspace(200)
+; CHECK: [[ADDR:%.*]] = getelementptr inbounds nuw i8, ptr addrspace(200) %p, i64 %
+; CHECK: [[OUT:%.*]] = phi ptr addrspace(200) [ [[ADDR]], %for.body ]
+; CHECK: ret ptr addrspace(200)
 define ptr addrspace(200) @live_out_4k(ptr addrspace(200) %p, i64 %n) addrspace(200) {
 entry:
   %nonnull = icmp ne ptr addrspace(200) %p, null
@@ -879,14 +820,14 @@ for.end:
   ret ptr addrspace(200) %last
 }
 
-; The same with a 64 KiB step.
+; A live-out cursor must come from the original access, regardless of step size.
 ; CHECK-LABEL: @live_out_64k(
-; CHECK-NOT:   getelementptr i8, ptr addrspace(200) %p, i64 -
-; CHECK:       for.body:
-; CHECK:         [[A0:%[a-z0-9.]+]] = getelementptr inbounds nuw i8, ptr addrspace(200) %p, i64 %idx
-; CHECK-NOT:     i64 -65536
-; CHECK:         phi ptr addrspace(200) [ [[A0]], %for.body ]
-; CHECK:         ret ptr addrspace(200)
+; CHECK-NOT: getelementptr
+; CHECK: for.body:
+; CHECK-NOT: phi ptr addrspace(200)
+; CHECK: [[ADDR:%.*]] = getelementptr inbounds nuw i8, ptr addrspace(200) %p, i64 %
+; CHECK: [[OUT:%.*]] = phi ptr addrspace(200) [ [[ADDR]], %for.body ]
+; CHECK: ret ptr addrspace(200)
 define ptr addrspace(200) @live_out_64k(ptr addrspace(200) %p, i64 %n) addrspace(200) {
 entry:
   %nonnull = icmp ne ptr addrspace(200) %p, null
@@ -910,14 +851,14 @@ for.end:
   ret ptr addrspace(200) %last
 }
 
-; A step known only at run time: nothing bounds the start, so the value after
-; the loop is the program's own address.
+; A live-out cursor must come from the original access, regardless of step size.
 ; CHECK-LABEL: @live_out_variable(
-; CHECK-NOT:   getelementptr i8, ptr addrspace(200) %p,
-; CHECK:       for.body:
-; CHECK:         [[A0:%[a-z0-9.]+]] = getelementptr inbounds i8, ptr addrspace(200) %p, i64 %idx
-; CHECK:         phi ptr addrspace(200) [ [[A0]], %for.body ]
-; CHECK:         ret ptr addrspace(200)
+; CHECK-NOT: getelementptr
+; CHECK: for.body:
+; CHECK-NOT: phi ptr addrspace(200)
+; CHECK: [[ADDR:%.*]] = getelementptr inbounds i8, ptr addrspace(200) %p, i64 %
+; CHECK: [[OUT:%.*]] = phi ptr addrspace(200) [ [[ADDR]], %for.body ]
+; CHECK: ret ptr addrspace(200)
 define ptr addrspace(200) @live_out_variable(ptr addrspace(200) %p, i64 %n, i64 %s) addrspace(200) {
 entry:
   %nonnull = icmp ne ptr addrspace(200) %p, null
@@ -941,13 +882,14 @@ for.end:
   ret ptr addrspace(200) %last
 }
 
-; A walk downwards by 4 KiB, last address live out: the program's address too.
+; A live-out cursor must come from the original access, regardless of step size.
 ; CHECK-LABEL: @live_out_down_4k(
-; CHECK:       for.body:
-; CHECK:         [[A0:%[a-z0-9.]+]] = getelementptr inbounds nuw i8, ptr addrspace(200) %p, i64 %idx
-; CHECK:         getelementptr i8, ptr addrspace(200) %{{[a-z0-9.]+}}, i64 -4096
-; CHECK:         phi ptr addrspace(200) [ [[A0]], %for.body ]
-; CHECK:         ret ptr addrspace(200)
+; CHECK-NOT: getelementptr
+; CHECK: for.body:
+; CHECK-NOT: phi ptr addrspace(200)
+; CHECK: [[ADDR:%.*]] = getelementptr inbounds nuw i8, ptr addrspace(200) %p, i64 %
+; CHECK: [[OUT:%.*]] = phi ptr addrspace(200) [ [[ADDR]], %for.body ]
+; CHECK: ret ptr addrspace(200)
 define ptr addrspace(200) @live_out_down_4k(ptr addrspace(200) %p, i64 %n) addrspace(200) {
 entry:
   %nonnull = icmp ne ptr addrspace(200) %p, null
@@ -972,14 +914,14 @@ for.end:
   ret ptr addrspace(200) %last
 }
 
-; A constant offset in the index is the program's own address, not a bias:
-; a[i+K] starts the walk where the first access is, and no capability below
-; the base (-65536) is formed.
+; Keep the original accessed cursor in @plus_k; only its integer offset changes.
 ; CHECK-LABEL: @plus_k(
-; CHECK:       for.body.preheader:
-; CHECK:         getelementptr i8, ptr addrspace(200) %p, i64 65536
-; CHECK-NOT:     i64 -65536
-; CHECK:         ret void
+; CHECK-NOT: getelementptr
+; CHECK: for.body:
+; CHECK-NOT: phi ptr addrspace(200)
+; CHECK: %a0 = getelementptr inbounds i8, ptr addrspace(200) %p, i64 %
+; CHECK-NOT: phi ptr addrspace(200)
+; CHECK: ret void
 define void @plus_k(ptr addrspace(200) %p, i64 %n) addrspace(200) {
 entry:
   %positive = icmp sgt i64 %n, 0
@@ -1000,15 +942,14 @@ for.end:
   ret void
 }
 
-; a[i] and a[i-K] together (the loop runs from K): the walk starts at the base,
-; and the second access is a positive offset from it, not a capability below
-; the base.
+; Keep the original accessed cursor in @minus_k; only its integer offset changes.
 ; CHECK-LABEL: @minus_k(
-; CHECK-NOT:   i64 -65536
-; CHECK:       for.body:
-; CHECK:         [[IV:%[a-z0-9.]+]] = phi ptr addrspace(200) [ %p, %{{[a-z0-9.]+}} ], [ %{{[a-z0-9.]+}}, %for.body ]
-; CHECK-NOT:     i64 -65536
-; CHECK:         ret void
+; CHECK-NOT: getelementptr
+; CHECK: for.body:
+; CHECK-NOT: phi ptr addrspace(200)
+; CHECK: %a0 = getelementptr inbounds i8, ptr addrspace(200) %p, i64 %
+; CHECK-NOT: phi ptr addrspace(200)
+; CHECK: ret void
 define void @minus_k(ptr addrspace(200) %p, i64 %n) addrspace(200) {
 entry:
   %positive = icmp sgt i64 %n, 65536
@@ -1029,14 +970,14 @@ for.end:
   ret void
 }
 
-; A reversed walk: the IV starts at the last element and never goes below the
-; base, so no constant offset of four or more digits below it appears.
+; Keep the original accessed cursor in @reversed; only its integer offset changes.
 ; CHECK-LABEL: @reversed(
-; CHECK:       for.body:
-; CHECK:         phi ptr addrspace(200)
-; CHECK:         getelementptr i8, ptr addrspace(200) %{{[a-z0-9.]+}}, i64 -8
-; CHECK-NOT:     i64 -{{[0-9][0-9][0-9][0-9]+}}
-; CHECK:         ret void
+; CHECK-NOT: getelementptr
+; CHECK: for.body:
+; CHECK-NOT: phi ptr addrspace(200)
+; CHECK: %a0 = getelementptr inbounds i8, ptr addrspace(200) %p, i64 %
+; CHECK-NOT: phi ptr addrspace(200)
+; CHECK: ret void
 define void @reversed(ptr addrspace(200) %p, i64 %n) addrspace(200) {
 entry:
   %positive = icmp sgt i64 %n, 0
@@ -1058,21 +999,18 @@ for.end:
   ret void
 }
 
-; The loop-terminating comparison of a walked pointer against a bound held in an
-; independent argument can be expressed on the post-incremented value, whose
-; normalized start is the original start less one step. As for a value handed on
-; out of the loop, that start must stay in the window around the object: where the
-; step is larger than 2 KiB, or not a constant, the comparison keeps the
-; pre-increment value instead.
+; Pointer comparisons retain the original cursor at every step size. A
+; normalized p-step is not necessarily a legal capability address.
 
-; A step of 8 bytes keeps the post-increment comparison: its start is a few bytes
-; below the object, inside the window.
+; No step size justifies an unaccessed normalized capability start.
 ; CHECK-LABEL: @cmp_end_8(
-; CHECK:         getelementptr i8, ptr addrspace(200) %p, i64 -8
-; CHECK:       loop:
-; CHECK:         [[IV:%[a-z0-9.]+]] = phi ptr addrspace(200) [ [[NEXT:%[a-z0-9.]+]], %loop ]
-; CHECK:         [[NEXT]] = getelementptr i8, ptr addrspace(200) [[IV]], i64 8
-; CHECK:         icmp eq ptr addrspace(200) [[NEXT]], %end
+; CHECK-NOT: getelementptr
+; CHECK: loop:
+; CHECK-NOT: phi ptr addrspace(200)
+; CHECK: %a = getelementptr inbounds nuw i8, ptr addrspace(200) %p, i64 %
+; CHECK: icmp eq ptr addrspace(200) %a, %end
+; CHECK-NOT: getelementptr
+; CHECK: ret i16
 define i16 @cmp_end_8(ptr addrspace(200) nonnull %p, ptr addrspace(200) %end) addrspace(200) {
 entry:
   br label %loop
@@ -1092,14 +1030,15 @@ exit:
   ret i16 %acc.next
 }
 
-; 2048 bytes is the bound: no capability at p-2048 is formed in the preheader, and
-; the comparison keeps its post-increment form.
+; No step size justifies an unaccessed normalized capability start.
 ; CHECK-LABEL: @cmp_end_2k(
-; CHECK-NOT:   getelementptr i8, ptr addrspace(200) %p, i64 -
-; CHECK:       loop:
-; CHECK:         [[AHEAD:%[a-z0-9.]+]] = getelementptr i8, ptr addrspace(200) %lsr.iv, i64 2048
-; CHECK:         [[BACK:%[a-z0-9.]+]] = getelementptr i8, ptr addrspace(200) [[AHEAD]], i64 -2048
-; CHECK:         icmp eq ptr addrspace(200) [[BACK]], %end
+; CHECK-NOT: getelementptr
+; CHECK: loop:
+; CHECK-NOT: phi ptr addrspace(200)
+; CHECK: %a = getelementptr inbounds nuw i8, ptr addrspace(200) %p, i64 %
+; CHECK: icmp eq ptr addrspace(200) %a, %end
+; CHECK-NOT: getelementptr
+; CHECK: ret i16
 define i16 @cmp_end_2k(ptr addrspace(200) nonnull %p, ptr addrspace(200) %end) addrspace(200) {
 entry:
   br label %loop
@@ -1119,13 +1058,15 @@ exit:
   ret i16 %acc.next
 }
 
-; Above the bound, 2056 bytes: the comparison uses the pre-increment value.
+; No step size justifies an unaccessed normalized capability start.
 ; CHECK-LABEL: @cmp_end_2056(
-; CHECK-NOT:   getelementptr i8, ptr addrspace(200) %p, i64 -
-; CHECK:       loop:
-; CHECK:         [[IV:%[a-z0-9.]+]] = phi ptr addrspace(200) [ [[STEP:%[a-z0-9.]+]], %loop ], [ %p, %entry ]
-; CHECK:         icmp eq ptr addrspace(200) [[IV]], %end
-; CHECK:         [[STEP]] = getelementptr i8, ptr addrspace(200) [[IV]], i64 2056
+; CHECK-NOT: getelementptr
+; CHECK: loop:
+; CHECK-NOT: phi ptr addrspace(200)
+; CHECK: %a = getelementptr inbounds nuw i8, ptr addrspace(200) %p, i64 %
+; CHECK: icmp eq ptr addrspace(200) %a, %end
+; CHECK-NOT: getelementptr
+; CHECK: ret i16
 define i16 @cmp_end_2056(ptr addrspace(200) nonnull %p, ptr addrspace(200) %end) addrspace(200) {
 entry:
   br label %loop
@@ -1145,13 +1086,15 @@ exit:
   ret i16 %acc.next
 }
 
-; A 4 KiB step: an object of 4 to 8 KiB has less than 4 KiB below its base in the window, so p-4096 is not formed.
+; No step size justifies an unaccessed normalized capability start.
 ; CHECK-LABEL: @cmp_end_4k(
-; CHECK-NOT:   getelementptr i8, ptr addrspace(200) %p, i64 -
-; CHECK:       loop:
-; CHECK:         [[IV:%[a-z0-9.]+]] = phi ptr addrspace(200) [ [[STEP:%[a-z0-9.]+]], %loop ], [ %p, %entry ]
-; CHECK:         icmp eq ptr addrspace(200) [[IV]], %end
-; CHECK:         [[STEP]] = getelementptr i8, ptr addrspace(200) [[IV]], i64 4096
+; CHECK-NOT: getelementptr
+; CHECK: loop:
+; CHECK-NOT: phi ptr addrspace(200)
+; CHECK: %a = getelementptr inbounds nuw i8, ptr addrspace(200) %p, i64 %
+; CHECK: icmp eq ptr addrspace(200) %a, %end
+; CHECK-NOT: getelementptr
+; CHECK: ret i16
 define i16 @cmp_end_4k(ptr addrspace(200) nonnull %p, ptr addrspace(200) %end) addrspace(200) {
 entry:
   br label %loop
@@ -1171,13 +1114,15 @@ exit:
   ret i16 %acc.next
 }
 
-; The same with a 64 KiB step.
+; No step size justifies an unaccessed normalized capability start.
 ; CHECK-LABEL: @cmp_end_64k(
-; CHECK-NOT:   getelementptr i8, ptr addrspace(200) %p, i64 -
-; CHECK:       loop:
-; CHECK:         [[IV:%[a-z0-9.]+]] = phi ptr addrspace(200) [ [[STEP:%[a-z0-9.]+]], %loop ], [ %p, %entry ]
-; CHECK:         icmp eq ptr addrspace(200) [[IV]], %end
-; CHECK:         [[STEP]] = getelementptr i8, ptr addrspace(200) [[IV]], i64 65536
+; CHECK-NOT: getelementptr
+; CHECK: loop:
+; CHECK-NOT: phi ptr addrspace(200)
+; CHECK: %a = getelementptr inbounds nuw i8, ptr addrspace(200) %p, i64 %
+; CHECK: icmp eq ptr addrspace(200) %a, %end
+; CHECK-NOT: getelementptr
+; CHECK: ret i16
 define i16 @cmp_end_64k(ptr addrspace(200) nonnull %p, ptr addrspace(200) %end) addrspace(200) {
 entry:
   br label %loop
@@ -1197,13 +1142,15 @@ exit:
   ret i16 %acc.next
 }
 
-; A walk downward by 4 KiB.
+; No step size justifies an unaccessed normalized capability start.
 ; CHECK-LABEL: @cmp_end_down_4k(
-; CHECK-NOT:   getelementptr i8, ptr addrspace(200) %p, i64 -
-; CHECK:       loop:
-; CHECK:         [[IV:%[a-z0-9.]+]] = phi ptr addrspace(200) [ [[STEP:%[a-z0-9.]+]], %loop ], [ %p, %entry ]
-; CHECK:         icmp eq ptr addrspace(200) [[IV]], %end
-; CHECK:         [[STEP]] = getelementptr i8, ptr addrspace(200) [[IV]], i64 -4096
+; CHECK-NOT: getelementptr
+; CHECK: loop:
+; CHECK-NOT: phi ptr addrspace(200)
+; CHECK: %a = getelementptr inbounds nuw i8, ptr addrspace(200) %p, i64 %
+; CHECK: icmp eq ptr addrspace(200) %a, %end
+; CHECK-NOT: getelementptr
+; CHECK: ret i16
 define i16 @cmp_end_down_4k(ptr addrspace(200) nonnull %p, ptr addrspace(200) %end) addrspace(200) {
 entry:
   br label %loop
@@ -1223,13 +1170,15 @@ exit:
   ret i16 %acc.next
 }
 
-; A run-time step.
+; No step size justifies an unaccessed normalized capability start.
 ; CHECK-LABEL: @cmp_end_variable(
-; CHECK-NOT:   getelementptr i8, ptr addrspace(200) %p, i64 -
-; CHECK:       loop:
-; CHECK:         [[IV:%[a-z0-9.]+]] = phi ptr addrspace(200) [ [[STEP:%[a-z0-9.]+]], %loop ], [ %p, %entry ]
-; CHECK:         icmp eq ptr addrspace(200) [[IV]], %end
-; CHECK:         [[STEP]] = getelementptr i8, ptr addrspace(200) [[IV]], i64 %s
+; CHECK-NOT: getelementptr
+; CHECK: loop:
+; CHECK-NOT: phi ptr addrspace(200)
+; CHECK: %a = getelementptr inbounds nuw i8, ptr addrspace(200) %p, i64 %
+; CHECK: icmp eq ptr addrspace(200) %a, %end
+; CHECK-NOT: getelementptr
+; CHECK: ret i16
 define i16 @cmp_end_variable(ptr addrspace(200) nonnull %p, ptr addrspace(200) %end, i64 %s) addrspace(200) {
 entry:
   br label %loop

@@ -2653,15 +2653,10 @@ LSRInstance::OptimizeLoopTermCond() {
     if (!DT.dominates(ExitingBlock, LatchBlock))
       continue;
 
-    // A comparison of a capability against a bound would be expressed on the
-    // normalized IV, whose start is the original start less one step. Where
-    // the step takes that start out of the window around the object, the
-    // capability has lost its tag where the program's own had not (see
-    // isCapabilityStepInWindow): keep the pre-increment value, as IVUsers does
-    // for a capability handed on out of the loop.
+    // Never normalize a capability comparison onto a different cursor.
+    // Window slack does not protect p-step from the address-policy boundary.
     if (L->getHeader()->getDataLayout().isNonIntegralPointerType(
-            CondUse->getOperandValToReplace()->getType()) &&
-        !isCapabilityStepInWindow(IU.getStride(*CondUse, L)))
+            CondUse->getOperandValToReplace()->getType()))
       continue;
 
     // Conservatively avoid trying to use the post-inc value in non-latch
