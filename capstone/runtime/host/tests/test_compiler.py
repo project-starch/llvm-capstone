@@ -225,6 +225,21 @@ class CompileOnlyTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 compile_only(bad)
 
+    def test_compile_driver_does_not_force_no_jump_tables(self):
+        import json
+        from capstone_vm.compiler import main
+        with tempfile.TemporaryDirectory() as directory:
+            config = {**VIRTUAL, "version": 1, "application_abi": 2,
+                      "cc": "/bin/clang", "musl": "/musl"}
+            (Path(directory) / "sdk.json").write_text(json.dumps(config))
+            with patch.dict(os.environ, {"CAPSTONE_SDK": directory}), \
+                 patch("capstone_vm.compiler.runs_only_clang") as check_plan, \
+                 patch("capstone_vm.compiler.subprocess.call", return_value=0) as call:
+                self.assertEqual(main(["-O2", "-c", "a.c", "-o", "a.o"]), 0)
+                target = check_plan.call_args.args[0]
+                self.assertNotIn("-fno-jump-tables", target)
+                self.assertNotIn("-fno-jump-tables", call.call_args.args[0])
+
 
 class PlannedJobTests(unittest.TestCase):
     """clang's -### plan, whatever route its arguments took (-Wp, -Xpreprocessor ...)."""
