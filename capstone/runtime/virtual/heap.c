@@ -121,7 +121,8 @@ void __capstone_malloc_slot_key(struct capstone_malloc_slot *r, void *p, size_t 
 #define IDS_ASK (CV_NODE_RESERVE + 256)
 /* The most records one heap call takes before its next ensure_ids: a mapping's root and its group
  * lifetime (group_map, see "Recycled group mappings" below), a nested group and the object's own
- * child. */
+ * child. A group on a NEW mapping takes one record more than before recycling (root and lifetime,
+ * where one mapping group was); a group on a kept mapping takes one (the lifetime). */
 #define IDS_PER_CALL 4
 static size_t ids_budget;   /* records the heap may still take before asking; under the heap lock */
 static int ensure_ids(size_t need)
@@ -275,26 +276,30 @@ static size_t mapping_length(size_t bytes)
  * release was an UNMAP service, each new group a MAP service, and every page of the new mapping
  * faulted again (in SPEC's gcc test most of the launcher's returns were these). A released group's
  * MAPPING is kept here instead, registered and resident, and the next group_map of the same length
- * takes it without any service. What makes that sound is that a mapping's authority never reaches the
- * program; the program holds only object capabilities, each a descendant of one group LIFETIME:
+ * takes it without any service. What makes that sound is that a mapping's authority never enters the
+ * program's pointer flow; the program holds only object capabilities, each a descendant of one group
+ * LIFETIME (the trust boundary below says what that does and does not cover):
  *
  *   mapping grant (kernel)
  *     +-- root: CDERIVE child, kept for the mapping's life in THIS FILE'S static state only
  *           +-- group lifetime: CDERIVE child of the root, one per group (bind_slots' parent)
  *                 +-- slot parents (narrowed copies) -> objects, nested groups (CDERIVE)
  *
- * TRUST BOUNDARY. The program and this runtime run in one Capstone context. What the heap
- * protects is the program's OBJECTS: a capability it gets from malloc, calloc, realloc,
- * aligned_alloc or the nested-allocator trio covers its object (or, with
- * CAPSTONE_HEAP_OBJECT_BOUNDS=0, its group) and dies when that object, or its group, is released.
- * It does not defend against code that calls the SDK-internal entry points (the
- * __capstone_malloc_* functions musl and some ports call, __capstone_malloc_find among them) or
- * walks the allocator's statics: those reach slot records, metas and group capabilities, which
- * cover more than one object until the group is released. The root is the one capability that
- * outlives a group, so it is kept where none of those reach: in root_heads/recycle below, never in
- * a meta, a slot record or a return value. Everything an internal entry point can hand out
- * descends from a group lifetime and dies at the group's release (malloc-contract.c
- * recycle-root).
+ * TRUST BOUNDARY (decision 2026-11-03, after review). What the heap's temporal guarantee covers is
+ * the program's own pointer flow: a pointer the program obtained from malloc, calloc, realloc,
+ * aligned_alloc or the nested-allocator trio, and kept past the free (or past its group's release),
+ * cannot reach a later object -- including after the mapping it pointed into has been reused for a
+ * new group. What it does NOT cover is code that reads allocator state on purpose: code that follows
+ * the image-wide gp capability into libc's statics, or calls the SDK-internal entry points
+ * (__capstone_malloc_find and the other __capstone_malloc_* functions musl and some ports call).
+ * Such code reaches slot records, metas and whole-group capabilities, and through this file's
+ * statics the mapping roots too. That boundary is pre-existing -- on dev the same code already
+ * reaches mallocng's metas and their whole-group capabilities -- and recycling leaves it where it
+ * was, with one difference: a root now outlives the groups derived from it, so such code could
+ * derive a sibling of a group that survives the group's release. The root is therefore kept out of
+ * every record and return value (root_heads/recycle below; malloc-contract.c recycle-root), so no
+ * entry point hands it out; it is still inside gp's bounds. Closing the boundary means moving
+ * allocator state out of what gp covers, a separate item.
  *
  * (1) Nothing derived from the old group survives: releasing the group CREVOKEs its lifetime
  *     from the root, which ends every descendant at once -- objects, nested groups and the

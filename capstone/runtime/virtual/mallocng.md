@@ -152,10 +152,15 @@ mappings stay registered arenas: the module's collection sweeps them and its
 teardown retires them at exit. `CAPSTONE_HEAP_RECYCLE_TRACE=1` prints a line
 per reuse and per kept release.
 
-The trust boundary is the program's objects: the SDK-internal entry points
-(`__capstone_malloc_find` and the other `__capstone_malloc_*` calls musl and
-some ports make) return records whose capabilities reach beyond one object
-until the group is released; none of them reaches the root. `run-malloc.py`'s
+The trust boundary is the program's own pointer flow: a pointer obtained from
+malloc and kept past free cannot reach a later object, including across
+mapping reuse. Code that reads allocator state on purpose -- through the
+image-wide gp capability into libc's statics, or through the SDK-internal
+entry points (`__capstone_malloc_find` and the other `__capstone_malloc_*`
+calls musl and some ports make) -- is outside it, as it already was before
+recycling; such code can reach the roots in `heap.c`'s statics, though no
+entry point returns one. Moving allocator state out of gp's bounds is a
+separate item. `run-malloc.py`'s
 `recycle-*` cases qualify this under every heap configuration (with object
 bounds off they are that arm's whole gate) and fail if the mapping was not
 reused: stale use after reuse (`recycle-stale`, `-free`, `-geometry`,
