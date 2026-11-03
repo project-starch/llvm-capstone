@@ -75,6 +75,32 @@ static const struct { uint16_t wire; long host; } numbers[] = {
 };
 #undef MAP
 
+#ifdef CAPSTONE_VM_TORTURE
+#include <signal.h>
+/* Test-only: the page-movement torture test's fork.
+ * With CAPSTONE_VM_TORTURE_FORK=<seconds> in the launcher's environment, every delegated
+ * sched_yield first forks a child of the launcher that sleeps that long and exits: while it
+ * lives, every private page of the domain is shared copy-on-write, so the domain's next store
+ * to each page makes Linux copy it (wp_page_copy). The child runs no domain code and touches
+ * nothing; it holds references only. Unset (every real run), nothing changes. */
+static void torture_fork(void) {
+  static long seconds = -1;
+  if (seconds < 0) {
+    const char *v = getenv("CAPSTONE_VM_TORTURE_FORK");
+    seconds = v && *v ? atol(v) : 0;
+  }
+  if (seconds <= 0)
+    return;
+  long pid = syscall(SYS_clone, SIGCHLD, 0, 0, 0, 0);
+  if (pid == 0) {
+    struct timespec t = {seconds, 0};
+    syscall(SYS_nanosleep, &t, NULL);
+    syscall(SYS_exit_group, 0);
+  }
+}
+
+#endif
+
 static long host_number(uint64_t nr) {
   if (nr == CAPSTONE_NR_FCNTL_LOCK)
     nr = CAPSTONE_SYS_fcntl;
@@ -669,6 +695,10 @@ static long run(struct capstone_delegate_host *host, const struct capstone_deleg
     long number = host_number(entry->nr);
     if (number < 0)
       return -ENOSYS;
+#ifdef CAPSTONE_VM_TORTURE
+    if (entry->nr == CAPSTONE_SYS_sched_yield)
+      torture_fork();
+#endif
     /* A wait with a temporary mask classifies the events it accepts. */
     int has_wait = 0;
     uint64_t wait_mask = 0;
