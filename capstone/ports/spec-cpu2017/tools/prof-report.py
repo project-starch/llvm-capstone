@@ -7,7 +7,7 @@ usage: prof-report.py --out OUT --platform PLATFORM --kind capstone|plain [--nm 
 
 Every counted instruction (vaddr, length, bytes, attempts) goes to exactly one class:
   program   capstone: the domain image's code, located by the launcher's image record (entry and
-            code range, OUT/image-records.txt, one record per guest invocation in order) and mapped
+            code range, OUT/image-records.txt, grouped by staged invocation) and mapped
             to link addresses by entry - domain_main; plain: the program's executable segments
   launcher  capstone-vexec's executable segments (capstone only)
   profrun   the window helper's segments
@@ -20,6 +20,7 @@ image's ("other (bytes differ)"). Functions are the containing symbol of the ima
 (machine-code functions; inlined code counts for the function it is in).
 """
 import argparse, bisect, collections, glob, json, os, re, struct, subprocess, sys
+from prof_images import group_image_records
 
 ap = argparse.ArgumentParser()
 ap.add_argument("--out", required=True)
@@ -179,8 +180,11 @@ if A.kind == "capstone":
         m = re.search(r"entry=0x([0-9a-f]+) code=0x([0-9a-f]+)-0x([0-9a-f]+)", line)
         if m:
             records.append(tuple(int(m.group(i), 16) for i in (1, 2, 3)) + (line.strip(),))
-    if len(records) != len(invocations):
-        fail(f"{len(records)} image records for {len(invocations)} guest invocations")
+    try:
+        image_groups = group_image_records(records, invocations)
+    except ValueError as exc:
+        fail(str(exc))
+    records = [group[0] for group in image_groups]
 
 ktab, ktext = kernel_table()
 kaddrs = [a for a, _ in ktab]
@@ -293,6 +297,7 @@ for k, (inv_id, inv) in enumerate(invocations):
         "all_functions": [[c, f, v] for (c, f), v in funcs.most_common()],
         "mix": {c: dict(m.most_common()) for c, m in mix.items()},
         "image_record": records[k][3] if A.kind == "capstone" else None,
+        "image_records": [record[3] for record in image_groups[k]] if A.kind == "capstone" else [],
         "images": {im.name: im.sha for im in images},
     }
     json.dump(report, open(os.path.join(OUT, "profile", f"window-{n}.json"), "w"), indent=1)

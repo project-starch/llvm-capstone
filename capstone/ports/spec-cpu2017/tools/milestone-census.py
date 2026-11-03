@@ -328,7 +328,7 @@ runcpu --config=capstone-virtual --action=build --tune=base --define sdk="$SDK" 
     kit = out / 'kit'
     shutil.copytree(src / 'capstone/ports/spec-cpu2017', kit)
     for name in ('prof-northstar.py', 'prof-buckets.py', 'milestone-census.py', 'milestone-census.sh',
-                 'profile-watchdog.py', 'capstone-run.sh'):
+                 'profile-watchdog.py', 'capstone-run.sh', 'prof-report.py', 'prof_images.py'):
         shutil.copy2(HERE / name, kit / 'tools' / name)
     header = source_platform / 'adapter/module/cap_rev_table_abi.h'
     target = src / 'capstone/capstone-qemu/target/riscv/cap_rev_table_abi.h'

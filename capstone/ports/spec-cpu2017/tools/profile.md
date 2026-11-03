@@ -63,13 +63,22 @@ images, adapter, module, plugin, profrun, System.map), `qemu-command.json` (the 
 line, CPU properties included), `module-sections.txt` (the module's section addresses, the
 kernel's command line, the module parameters, ASLR state), `invocations/NNNN.json` (route, argv,
 cwd, executable hash, VM identity, guest exit record, window index), `image-records.txt` (the
-launcher's entry and code range per invocation), `capprof/window-N.tsv` (the raw counts with the
+launcher's entry and code range per image launch), `capprof/window-N.tsv` (the raw counts with the
 plugin's footer), `spec/` (runcpu's log and reports, the run directory's command and output
 files), `rundir.sha256`, `result.json` (`tools/verdict.py`: PASS only when runcpu validated the
 outputs), `windows.json` (every guest invocation has a complete, valid window), `profile.json`
 and `profile/window-N.json` (the attribution). The build's `build-record.txt` holds the compiler
 and SDK hashes and the executables'. A run whose verdict is not PASS or whose windows are
 incomplete exits 1.
+
+Nested re-exec can emit several image records within one window. The reporter
+associates them with the invocation's unique staged path, allowing the extra
+`../` prefixes used by perlbench's test driver. Every record in that group must
+have the same entry and code range; unknown images, missing groups, reordered
+groups and differing placements are refused. Instruction bytes and executable
+hashes are still checked, and raw attempts are counted once. Each window's
+`image_records` retains the entire group. A quick slice's synthetic single
+record keeps its existing stop-site byte checks.
 
 ## Validation of the instrument
 
@@ -293,6 +302,7 @@ Tool regressions on the measurement host:
 python3 tools/test-prof-northstar.py
 python3 tools/test-milestone-census.py
 python3 tools/test-profile-watchdog.py
+python3 tools/test-prof-images.py
 ```
 
 Qualification on 2026-11-03: dev `114b90b7be2e`, p12,
