@@ -1,5 +1,28 @@
 # Current Capstone state
 
+## 2026-11-03 — Compact capability initialization qualified on its branch
+
+`compiler/cap-init-table`, based on `d43089b43aa8`, converts image-gp capability
+initializers after GlobalMerge into scalar records read by a shared startup
+helper. Other ABIs retain constructor stores. Compiler and SDK must be rebuilt
+together; the versioned helper makes an older SDK fail to link. The
+[format and authority contract](../design/capability-globals-init-decision.md#virtual-image-gp-table-path)
+describe the supported values and fallback cases.
+
+All four SPEC test inputs (gcc, imagick, lbm, nab) pass. The Capstone codegen
+suite has 150 passes, one unsupported test and only the known
+`shared-patches-present` failure in the exported source tree. On p13, all nine
+standard gate failure sets match the control; existing port failures remain.
+Directed pointer-field checks pass at O0/O2 and in constructor mode, while the
+omitted-store control fails as required.
+
+For gcc against the same-time compiler control, `.text` falls by 927,884 bytes,
+records add 465,664 bytes, and peak RSS falls by 404 KiB. Initializer instruction
+attempts rise from 235,376 to 482,266. Data stores remain eager. Total attempts
+vary substantially with kernel/idle activity, so this is a footprint tradeoff,
+not an established end-to-end speedup. These are branch qualification results,
+not a claim of integration into `dev` or silicon validation.
+
 ## Read this first (2026-10-13)
 
 This file was 2,030 lines and its companion 1,560, most of it instructions and

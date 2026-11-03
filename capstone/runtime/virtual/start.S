@@ -42,6 +42,37 @@ _start:
     call domain_main
     ebreak
 .text
+/* Table ABI v1: four 32-bit scalar words per record. Slot and target are
+ * signed displacements from the record; size zero retains image bounds;
+ * addend moves the cursor AFTER narrowing. All values inherit gp's NONLIN
+ * type, permissions and lifetime. No DELIN, sealing or new authority.
+ * a0 is the table capability, a1 the count. Caller-saved registers only.
+ * The symbol makes objects compiled for this ABI fail to link with old SDKs.
+ */
+.global __capstone_cap_init_table_v1
+.hidden __capstone_cap_init_table_v1
+.type __capstone_cap_init_table_v1,@function
+__capstone_cap_init_table_v1:
+    beqz a1, 3f
+1:  lw t0, 0(a0)
+    lw t1, 4(a0)
+    lwu t2, 8(a0)
+    lw t3, 12(a0)
+    mv t4, a0
+    add t0, t4, t0
+    add t1, t4, t1
+    scc t5, gp, t1
+    beqz t2, 2f
+    add t2, t1, t2
+    shrink t5, t1, t2
+2:  cincoffset t5, t5, t3
+    scc t6, gp, t0
+    stc t5, 0(t6)
+    cincoffsetimm a0, a0, 16
+    addi a1, a1, -1
+    bnez a1, 1b
+3:  ret
+.size __capstone_cap_init_table_v1, .-__capstone_cap_init_table_v1
 .global __capstone_yield
 .global __capstone_vm_delegate_transport
 .global __capstone_vm_thread_self

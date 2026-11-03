@@ -6,7 +6,7 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// Capstone capability-global initialization (constructor-codegen).
+// Capstone capability-global initialization (constructors and image-gp tables).
 //
 // On Capstone a capability tag is out-of-band metadata that cannot be encoded in
 // a static ELF image, so a file-scope global that holds a capability (a pointer
@@ -31,6 +31,11 @@
 // aggregates. Only leaves whose target is a GlobalVariable, a Function or a
 // label (BlockAddress) are materialized; null elements need no tag.
 //
+// Under the virtual image-gp ABI, a second invocation after GlobalMerge replaces
+// the per-leaf code with compact scalar records and a call to the SDK helper.
+// This preserves the final merged-object bounds while avoiding large spill
+// frames. Other ABIs and diagnostic limits keep constructor code.
+//
 // Design note + rationale (constructor-codegen vs a GCT runtime consumer):
 // capstone/docs/design/capability-globals-init-decision.md.
 //
@@ -41,11 +46,13 @@
 #include "llvm/IR/DerivedTypes.h"
 #include "llvm/IR/Function.h"
 #include "llvm/IR/GlobalVariable.h"
-#include "llvm/Support/CommandLine.h"
 #include "llvm/IR/IRBuilder.h"
+#include "llvm/IR/Operator.h"
 #include "llvm/IR/Module.h"
 #include "llvm/InitializePasses.h"
 #include "llvm/Pass.h"
+#include "llvm/Support/CommandLine.h"
+#include "llvm/Support/MathExtras.h"
 
 using namespace llvm;
 
@@ -76,13 +83,23 @@ static cl::opt<bool> CapstoneCapInitPrint(
 
 static constexpr unsigned CapAS = 200;
 
+extern cl::opt<bool> CapstoneShrinkGlobals;
+bool capstoneImageGpAbiActive();
+
+static cl::opt<bool> CapstoneCapInitTable(
+    "capstone-cap-init-table", cl::init(true), cl::Hidden,
+    cl::desc("Use compact capability initializer records under the image-gp ABI"));
+
 namespace {
 
 class CapstoneCapGlobalInit : public ModulePass {
 public:
   static char ID;
 
-  CapstoneCapGlobalInit() : ModulePass(ID) {}
+  explicit CapstoneCapGlobalInit(bool Table = false)
+      : ModulePass(ID), Table(Table) {}
+
+  bool Table;
 
   bool runOnModule(Module &M) override;
 
@@ -182,7 +199,43 @@ static void collectCapInits(GlobalVariable *Holder, Type *AggTy, Constant *C,
         {Holder, AggTy, SmallVector<uint64_t, 4>(Path.begin(), Path.end()), C});
 }
 
+// Reduce a leaf without following aliases: ISel leaves aliases at image bounds,
+// even when the aliasee is a sized data object. SHRINK precedes cursor adjustment.
+static bool tableTarget(Constant *Value, const DataLayout &DL,
+                        Constant *&Target, uint64_t &Size, int64_t &Addend) {
+  APInt Offset(64, 0);
+  Target = Value;
+  while (auto *CE = dyn_cast<ConstantExpr>(Target)) {
+    if (auto *GEP = dyn_cast<GEPOperator>(CE)) {
+      APInt Part(64, 0);
+      if (!GEP->accumulateConstantOffset(DL, Part))
+        return false;
+      Offset += Part;
+    } else if (CE->getOpcode() != Instruction::BitCast &&
+               CE->getOpcode() != Instruction::AddrSpaceCast) {
+      return false;
+    }
+    Target = CE->getOperand(0);
+  }
+  if (!isa<GlobalValue>(Target) && !isa<BlockAddress>(Target))
+    return false;
+  Size = 0;
+  if (auto *GV = dyn_cast<GlobalVariable>(Target)) {
+    if (GV->isThreadLocal())
+      return false;
+    if (CapstoneShrinkGlobals && GV->getValueType()->isSized())
+      Size = DL.getTypeAllocSize(GV->getValueType());
+  }
+  Addend = Offset.getSExtValue();
+  return isUInt<32>(Size) && isInt<32>(Addend);
+}
+
 bool CapstoneCapGlobalInit::runOnModule(Module &M) {
+  // The early invocation deliberately retains the constructor through
+  // GlobalMerge, so it sees the same uses and makes the same merging decisions.
+  // Convert only afterwards, using the resulting containers and offsets.
+  if (Table && (!CapstoneCapInitTable || !capstoneImageGpAbiActive()))
+    return false;
   LLVMContext &Ctx = M.getContext();
   Type *I64 = Type::getInt64Ty(Ctx);
 
@@ -223,6 +276,16 @@ bool CapstoneCapGlobalInit::runOnModule(Module &M) {
 
   if (Items.empty())
     return false;
+  if (Table) {
+    Function *Old = M.getFunction("__capstone_cap_init");
+    if (!Old || Old->isDeclaration())
+      return false;
+    // Diagnostic limits refer to the early pass's leaf order. Keep its exact
+    // constructor instead of reordering or applying the limit a second time.
+    if (CapstoneCapInitLimit || CapstoneCapInitPrint)
+      return false;
+    Old->eraseFromParent();
+  }
 
   // Every holder is written at run time, so none of them is a constant: a
   // `const char *const tbl[] = {...}` would otherwise be placed in .rodata,
@@ -254,6 +317,20 @@ bool CapstoneCapGlobalInit::runOnModule(Module &M) {
   IRBuilder<> B(BB);
 
   Type *I32 = Type::getInt32Ty(Ctx);
+  SmallVector<Constant *, 16> Records;
+  StructType *RecordTy = StructType::get(Ctx, {I32, I32, I32, I32});
+  GlobalVariable *RecordsGV = nullptr;
+  if (Table) {
+    // Private scalar data, read through gp. The target image is constrained to
+    // less than 2 GiB by the virtual linker script and image loader.
+    RecordsGV = new GlobalVariable(
+        M, ArrayType::get(RecordTy, 0), true, GlobalValue::PrivateLinkage,
+        ConstantAggregateZero::get(ArrayType::get(RecordTy, 0)),
+        "__capstone_cap_init_records", nullptr, GlobalValue::NotThreadLocal,
+        CapAS);
+    RecordsGV->setSection(".capstone_cap_relocs");
+    RecordsGV->setAlignment(Align(4));
+  }
   unsigned Emitted = 0;
   for (const StoreItem &It : Items) {
     if (CapstoneCapInitLimit && Emitted >= CapstoneCapInitLimit)
@@ -288,10 +365,48 @@ bool CapstoneCapGlobalInit::runOnModule(Module &M) {
         Idx.push_back(ConstantInt::get(I64, P));
       }
     }
-    Value *Slot = B.CreateInBoundsGEP(It.AggTy, It.Holder, Idx);
+    Constant *Slot = cast<Constant>(B.CreateInBoundsGEP(It.AggTy, It.Holder, Idx));
+    Constant *Target;
+    uint64_t Size;
+    int64_t Addend;
+    if (Table && tableTarget(It.Value, M.getDataLayout(), Target, Size, Addend)) {
+      // Both relative addresses use the start of this record, not their field.
+      Constant *Here = ConstantExpr::getAdd(
+          ConstantExpr::getPtrToInt(RecordsGV, I64),
+          ConstantInt::get(I64, Records.size() * 16));
+      auto Relative = [&](Constant *Address) {
+        return ConstantExpr::getTrunc(ConstantExpr::getSub(
+            ConstantExpr::getPtrToInt(Address, I64), Here), I32);
+      };
+      Records.push_back(ConstantStruct::get(
+          RecordTy, {Relative(Slot), Relative(Target),
+                     ConstantInt::get(I32, Size), ConstantInt::get(I32, Addend)}));
+      continue;
+    }
     // Volatile so the store is never elided as redundant with the (untagged)
     // static initializer; it must run to set the tag in place.
     B.CreateStore(It.Value, Slot, /*isVolatile=*/true);
+  }
+  if (RecordsGV) {
+    if (Records.empty()) {
+      RecordsGV->eraseFromParent();
+    } else {
+      auto *ArrayTy = ArrayType::get(RecordTy, Records.size());
+      auto *TableGV = new GlobalVariable(
+          M, ArrayTy, true, GlobalValue::PrivateLinkage,
+          ConstantArray::get(ArrayTy, Records), "", nullptr,
+          GlobalValue::NotThreadLocal, CapAS);
+      TableGV->takeName(RecordsGV);
+      TableGV->setSection(RecordsGV->getSection());
+      TableGV->setAlignment(Align(4));
+      RecordsGV->replaceAllUsesWith(TableGV);
+      RecordsGV->eraseFromParent();
+      FunctionType *HelperTy = FunctionType::get(
+          Type::getVoidTy(Ctx), {TableGV->getType(), I64}, false);
+      FunctionCallee Helper = M.getOrInsertFunction(
+          "__capstone_cap_init_table_v1", HelperTy);
+      B.CreateCall(Helper, {TableGV, ConstantInt::get(I64, Records.size())});
+    }
   }
   B.CreateRetVoid();
 
@@ -309,6 +424,6 @@ INITIALIZE_PASS(CapstoneCapGlobalInit, DEBUG_TYPE, PASS_NAME, false, false)
 
 char CapstoneCapGlobalInit::ID = 0;
 
-ModulePass *llvm::createCapstoneCapGlobalInitPass() {
-  return new CapstoneCapGlobalInit();
+ModulePass *llvm::createCapstoneCapGlobalInitPass(bool Table) {
+  return new CapstoneCapGlobalInit(Table);
 }

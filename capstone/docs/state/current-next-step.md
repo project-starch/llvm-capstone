@@ -1,3 +1,15 @@
+**2026-11-03, compact capability initialization on `compiler/cap-init-table`.**
+The compiler/SDK change is qualified on the four SPEC test inputs, the codegen
+suite (apart from its known exported-tree failure), directed pointer checks,
+and identical failure sets in all nine p13 gates. Integration must rebuild the
+compiler and SDK together. Evaluate the measured code/residency saving against
+the additional initializer instructions before adopting the default. Attribution
+of the first gcc run's large kernel/idle increase remains unresolved; it did not
+repeat with the same images run sequentially. Lazy data initialization remains
+separate work requiring a page-admission and synchronization design. See the
+[table contract](../design/capability-globals-init-decision.md#virtual-image-gp-table-path)
+and [branch qualification](current-state.md#2026-11-03--compact-capability-initialization-qualified-on-its-branch).
+
 **2026-10-21, the cross-lane plan to the next bitstream (runtime/semantics lane, coordinating on the lead's word).**
 Goal: the six-item batch bitstream, then the WHOLE corpus on vp2, including the two arms the current bitstreams
 cannot run (cpython lt1 and postgres pg-pools, both "needs collection", which item 6's hardware recycling provides).

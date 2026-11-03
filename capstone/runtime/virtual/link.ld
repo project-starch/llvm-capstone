@@ -3,7 +3,7 @@
  *
  *   text  R+X  .text .rodata, and the tables that are only READ at run time:
  *              .capstone_application, the init/fini arrays (link addresses as
- *              plain integers), .capstone_cap_init (PC-relative offsets), .gct
+ *              plain integers), .capstone_cap_init (PC-relative offsets), .capstone_cap_relocs, .gct
  *   data  R+W  .data .tdata .bss: everything written at run time, including
  *              every global a capability initializer stores into (the compiler
  *              places those holders in .data even when they are `const`)
@@ -109,6 +109,13 @@ SECTIONS {
     __capstone_cap_init_end = .;
   } :text
 
+  /* Compact image-gp initializer records: scalar, read-only, four words each.
+   * Keep them together so the sequential helper does not pull unrelated data
+   * into memory through file fault-around. Module wrappers reference them. */
+  .capstone_cap_relocs : ALIGN(4) {
+    *(.capstone_cap_relocs)
+  } :text
+
   /* Scalar descriptors of the capability globals; nothing writes them. */
   .gct : ALIGN(16) {
     KEEP(*(.gct))
@@ -190,6 +197,10 @@ SECTIONS {
     *(COMMON)
     . = ALIGN(16);
   } :data
+
+  /* Compact capability initializer records use signed 32-bit displacements.
+   * Include the zero link address (undefined weak symbols) in this limit. */
+  ASSERT(. < 0x80000000, "virtual image exceeds capability initializer range")
 
   .capstone_virtual 0 : { KEEP(*(.capstone_virtual)) }
 

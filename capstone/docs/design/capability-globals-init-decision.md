@@ -1,6 +1,54 @@
 # Decision: how to tag capability globals (constructor-codegen vs GCT-consumer)
 
-Status: **implemented & validated (single-module).** 2026-06-24.
+Status: constructor path implemented in 2026-06; virtual table path qualified
+on `compiler/cap-init-table` in 2026-11. The sections after the table contract
+record the original constructor decision and its historical validation.
+
+## Virtual image-gp table path
+
+The virtual image-gp ABI can replace the per-leaf constructor code with scalar
+records and `__capstone_cap_init_table_v1` in `runtime/virtual/start.S`. Each
+module retains a small constructor wrapper in the existing PC-relative
+`.capstone_cap_init` call table. The helper symbol is required at link time,
+so objects using this path require an SDK with that helper. The physical and
+gp-captable ABIs retain constructor stores. The diagnostic cap-init limit and
+print options also retain that path and its original leaf order.
+
+Records occupy the read-only `.capstone_cap_relocs` section, grouped for
+sequential reads. Each is four little-endian 32-bit words, aligned to four bytes:
+
+| Word | Meaning |
+| --- | --- |
+| 0 | Signed displacement from the record to the destination capability slot |
+| 1 | Signed displacement from the record to the target symbol |
+| 2 | Object size in bytes; zero preserves the image capability's bounds |
+| 3 | Signed cursor offset, applied after narrowing |
+
+The compiler converts initialization after GlobalMerge, preserving the merged
+containers and offsets that normal lowering sees. Sized data globals use their
+allocation size when global narrowing is enabled. Functions, block addresses,
+aliases and zero-size/incomplete data use zero. Nulls need no record. TLS
+holders with capability initializers remain rejected; TLS targets and sizes or
+cursor offsets outside the compact fields retain constructor stores. The
+virtual linker script bounds the image below the signed-displacement limit.
+
+The helper uses SCC from the explicitly granted image `gp`, SHRINK when the
+size is nonzero, CINCOFFSET for the cursor and STC for the slot. It preserves
+the root's non-linear type, permissions and lifetime; it does not seal,
+delinearize, mint or revoke. The image-gp ABI already requires NONLIN `gp`.
+Stores are still eager and holders remain writable. This reduces executable
+initializer code and its spill frames, but does not avoid dirtying data pages.
+The record pages themselves also contribute to residency. Lazy initialization
+would need a separate page-admission and synchronization design.
+
+`-capstone-cap-init-table=false` selects constructor code for comparison.
+`static-cap-init-table*.ll` covers the encoding and fallback; the virtual
+`cap-init-contract.c` compares initialized pointers against ordinary lowering,
+including tags, cursors, bounds, type, permissions, aliases and labels.
+After sourcing `capstone/tests/capstone-test-env.sh`, run
+`python3 capstone/runtime/virtual/run-cap-init.py --sdk SDK --platform PLATFORM
+--work NEW_DIRECTORY`. It checks both optimization levels, constructor mode,
+and a diagnostic omitted-store control that must fail a field check.
 
 ## Problem
 

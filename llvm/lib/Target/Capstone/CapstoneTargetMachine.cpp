@@ -553,6 +553,9 @@ bool CapstonePassConfig::addPreISel() {
                                   /* MergeExternalByDefault */ true));
   }
 
+  // Preserve GlobalMerge's object bounds in the compact initializer records.
+  addPass(createCapstoneCapGlobalInitPass(/*Table=*/true));
+
   return false;
 }
 
