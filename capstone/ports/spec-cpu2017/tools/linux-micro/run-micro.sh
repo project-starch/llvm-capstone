@@ -95,9 +95,15 @@ while IFS= read -r line <&3 || [ -n "$line" ]; do
   start=$(date -u +%FT%TZ)
   if [ "$KIND" = capstone ]; then
     EOPT=(); for e in "${RUNENV[@]}"; do EOPT+=(-e "$e"); done
+    # The launcher's output (a CAPSTONE_VM_ADD_OK line per grant) goes to the guest's tmpfs and is
+    # copied back after the window, as tools/capstone-run.sh does: streamed through the SSH session
+    # each line costs ~20k attempts of the SSH server and the network stack inside the window.
     vm run --cwd /tmp --result "$OUT/invocations/$n.guest.json" -e CAPSTONE_VM_STATS=1 \
-      -e CAPSTONE_PROFILE_RECORD=/mnt/host/$REL/invocations/$n.rec "${EOPT[@]}" -- /tmp/lqmicro "${ARGS[@]}" \
-      > "$OUT/invocations/$n.out" 2> "$OUT/invocations/$n.err"; rc=$?
+      -e CAPSTONE_PROFILE_RECORD=/mnt/host/$REL/invocations/$n.rec "${EOPT[@]}" \
+      --prefix sh --prefix=-c --prefix 'exec "$0" "$@" >/tmp/lq.out 2>/tmp/lq.err' -- /tmp/lqmicro "${ARGS[@]}" \
+      > "$OUT/invocations/$n.vm.out" 2> "$OUT/invocations/$n.vm.err"; rc=$?
+    vm exec -- sh -c "cat /tmp/lq.out; rm -f /tmp/lq.out" > "$OUT/invocations/$n.out" 2>/dev/null
+    vm exec -- sh -c "cat /tmp/lq.err; rm -f /tmp/lq.err" > "$OUT/invocations/$n.err" 2>/dev/null
   else
     vm exec -- sh -c "cd /tmp && exec env ${RUNENV[*]} /tmp/lqmicro ${ARGS[*]}" > "$OUT/invocations/$n.out" 2> "$OUT/invocations/$n.err"; rc=$?
   fi
