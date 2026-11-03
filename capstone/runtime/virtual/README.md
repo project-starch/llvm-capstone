@@ -176,7 +176,8 @@ revocation run in the application's C context. Upstream musl chooses size
 classes, slots, offset cycling, retention and realloc behavior; Linux supplies
 mapping growth, release and remapping. There is no per-object heap service or
 fixed block-record array. The capability port changes metadata representation,
-not allocation policy. `malloc_trim` is a compatibility no-op.
+not allocation policy. `malloc_trim` unmaps the group mappings the runtime keeps
+for reuse ([Recycled group mappings](mallocng.md#recycled-group-mappings)).
 
 The profile needs no `x-capstone-exact-bounds=true` (option iii). Bounds are
 representable by construction: the allocator's slot geometry keeps every outward-

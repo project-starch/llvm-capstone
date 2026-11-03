@@ -118,9 +118,10 @@ void __capstone_malloc_slot_key(struct capstone_malloc_slot *r, void *p, size_t 
  * escape and the module's collection; a hint, if one is ever wanted, is a service call like the one
  * below and never a CSR. */
 #define IDS_ASK (CV_NODE_RESERVE + 256)
-/* The most records one heap call takes before its next ensure_ids: a mapping group, a nested group
- * and the object's own child. */
-#define IDS_PER_CALL 3
+/* The most records one heap call takes before its next ensure_ids: a mapping's root and its group
+ * lifetime (group_map, see "Recycled group mappings" below), a nested group and the object's own
+ * child. */
+#define IDS_PER_CALL 4
 static size_t ids_budget;   /* records the heap may still take before asking; under the heap lock */
 static int ensure_ids(size_t need)
 {
@@ -172,7 +173,7 @@ unsigned long __capstone_malloc_map_ok_base;
 unsigned long __capstone_malloc_map_ok[2];     /* bytes, align */
 unsigned long __capstone_malloc_map_admitted;
 static void *bind_slots(struct capstone_malloc_slot *slots, void *group,
-                        size_t stride, unsigned count)
+                        size_t stride, unsigned count, unsigned char stale)
 {
     size_t base = __builtin_capstone_cap_get_cursor(group);
     /* Option (iii): the slot array starts after a GRANULE-sized group header, not a 16-byte one,
@@ -218,6 +219,7 @@ static void *bind_slots(struct capstone_malloc_slot *slots, void *group,
 #else
         slots[i].issued = group;
 #endif
+        slots[i].stale = stale;
     }
     return group;
 }
@@ -255,6 +257,109 @@ static void *mapping_group(sublet_cap *grant, size_t bytes)
     take_id();
     return capstone_cap_derive(cap_vm_copyable(grant), 0, bytes);
 }
+/* The length __capstone_malloc_map maps for a request of `bytes` (at most CV_MAX_REGION_BYTES).
+ * Option (iii): above 4 MiB the bounds granule EXCEEDS a page (8 KiB at 4 MiB, 128 KiB at
+ * 64 MiB), so a page-aligned mapping is not enough -- the encoder truncates an unaligned base
+ * downward and the object would gain authority below itself. Measured: 4, 8, 16, 64 and 88 MiB
+ * all decode inexact at a page-aligned base, while 2 MiB and 4 MiB - 4 KiB decode exact.
+ * cap_vm_acquire already takes an alignment, so this is the alignment argument rather than an
+ * over-map and trim, and `bytes` is rounded to the granule so both edges are multiples. */
+static size_t mapping_length(size_t bytes)
+{
+    return capstone_repr_round((bytes + 4095) & -4096UL);
+}
+
+/* Recycled group mappings (decision D10, 2026-11-03). mallocng releases an empty mapped group
+ * (free.c okay_to_free, unchanged) and maps a new one when the class needs a group again; each
+ * release was an UNMAP service, each new group a MAP service, and every page of the new mapping
+ * faulted again (in SPEC's gcc test most of the launcher's returns were these). A released group's
+ * MAPPING is kept here instead, registered and resident, and the next group_map of the same length
+ * takes it without any service. What makes that sound is that a mapping's authority never reaches the
+ * program; the program holds only object capabilities, each a descendant of one group LIFETIME:
+ *
+ *   mapping grant (kernel)
+ *     +-- root: CDERIVE child, allocator-only, kept for the mapping's life (meta cap_root, here)
+ *           +-- group lifetime: CDERIVE child of the root, one per group (bind_slots' parent)
+ *                 +-- slot parents (narrowed copies) -> objects, nested groups (CDERIVE)
+ *
+ * (1) Nothing derived from the old group survives: releasing the group CREVOKEs its lifetime
+ *     from the root, which ends every descendant at once -- objects, nested groups and the
+ *     nested-allocator trio's children -- whether or not each was already revoked by free
+ *     (prepare_free), an in-place or moving realloc (publish, mallocng's free) or the nested
+ *     group's release. Without per-object lifetimes it is the one point where stale objects
+ *     end, exactly as the unmap's retirement was.
+ * (2) Nothing of the old group's metadata is reused: the new group has a fresh lifetime (a new
+ *     CDERIVE of the root), bind_slots re-derives every slot parent from it, and the meta and
+ *     its slot records are fresh (mallocng's free_meta zeroes them). The root is the one
+ *     capability kept across groups, and only the allocator holds it.
+ * (3) The bytes a program can reach are clean: every slot of a group placed in a recycled
+ *     mapping is marked stale, and its first take (enframe, before any child over it is
+ *     derived) zeroes the slot, which clears every tag in it; a plain store clears its
+ *     granule's tag. Objects and nested groups lie inside slots, so no issued capability covers
+ *     an unscrubbed granule. The header and the slack after the last slot are read only as
+ *     scalars by the allocator. Scrubbing at first take rather than at reuse touches only the
+ *     slots that are used again, so no page the new group does not use is faulted in.
+ * (4) Bounded: RECYCLE_PER_LENGTH mappings of one length, RECYCLE_ENTRIES in all, at most
+ *     RECYCLE_BYTES, none above RECYCLE_MAX_ENTRY; a release beyond a bound is unmapped as
+ *     before; malloc_trim unmaps every kept mapping. Kept mappings stay registered arenas, so
+ *     the module's collection sweeps their
+ *     pages like any live heap, and at exit its teardown retires them (vm_release -> retire),
+ *     the same path an unmap takes. Large (sc 63) and remapped mappings carry no root and are
+ *     always unmapped. All of this runs under the heap lock (malloc, free and realloc hold it
+ *     around mallocng). */
+#define RECYCLE_PER_LENGTH 4U
+#define RECYCLE_ENTRIES 32U
+#define RECYCLE_BYTES (1UL << 20)
+#define RECYCLE_MAX_ENTRY (256UL << 10)
+static struct { void *root; size_t bytes; } recycle[RECYCLE_ENTRIES];
+static unsigned recycle_count;
+static size_t recycle_bytes;
+/* Read by malloc-contract.c's recycle cases: groups placed in a kept mapping, releases kept,
+ * releases unmapped because a bound was full or the mapping too large. */
+unsigned long __capstone_malloc_recycle_hits;
+unsigned long __capstone_malloc_recycle_kept;
+unsigned long __capstone_malloc_recycle_unmapped;
+static void *recycle_take(size_t bytes)
+{
+    for (unsigned i = recycle_count; i--; )
+        if (recycle[i].bytes == bytes) {
+            void *root = recycle[i].root;
+            recycle_bytes -= bytes;
+            recycle[i] = recycle[--recycle_count];
+            recycle[recycle_count].root = NULL;
+            recycle[recycle_count].bytes = 0;
+            return root;
+        }
+    return NULL;
+}
+static int recycle_fits(size_t bytes)
+{
+    if (bytes > RECYCLE_MAX_ENTRY || recycle_count >= RECYCLE_ENTRIES ||
+        recycle_bytes + bytes > RECYCLE_BYTES) return 0;
+    unsigned same = 0;
+    for (unsigned i = 0; i < recycle_count; ++i) same += recycle[i].bytes == bytes;
+    return same < RECYCLE_PER_LENGTH;
+}
+/* A group's lifetime: a fresh CDERIVE child of the mapping's root, over the whole mapping. */
+static void *group_lifetime(void *root, size_t bytes)
+{
+    take_id();
+    return capstone_cap_derive(root, 0, bytes);
+}
+void __capstone_malloc_group_unmap(void *group, size_t bytes, void *root)
+{
+    if (root && recycle_fits(bytes)) {
+        capstone_cap_revoke_child(root, group);
+        recycle[recycle_count].root = root;
+        recycle[recycle_count].bytes = bytes;
+        ++recycle_count; recycle_bytes += bytes;
+        ++__capstone_malloc_recycle_kept;
+        return;
+    }
+    if (root) ++__capstone_malloc_recycle_unmapped;
+    /* The unmap retires the mapping's grant, and with it the root and every descendant. */
+    munmap(group, bytes);
+}
 void *__capstone_malloc_map(size_t bytes)
 {
     __capstone_malloc_map_calls++;
@@ -263,14 +368,7 @@ void *__capstone_malloc_map(size_t bytes)
         __capstone_malloc_map_refused_early++;
         errno = ENOMEM; return MAP_FAILED;
     }
-    bytes = (bytes + 4095) & -4096UL;
-    /* Option (iii): above 4 MiB the bounds granule EXCEEDS a page (8 KiB at 4 MiB, 128 KiB at
-     * 64 MiB), so a page-aligned mapping is not enough -- the encoder truncates an unaligned base
-     * downward and the object would gain authority below itself. Measured: 4, 8, 16, 64 and 88 MiB
-     * all decode inexact at a page-aligned base, while 2 MiB and 4 MiB - 4 KiB decode exact.
-     * cap_vm_acquire already takes an alignment, so this is the alignment argument rather than an
-     * over-map and trim, and `bytes` is rounded to the granule so both edges are multiples. */
-    bytes = capstone_repr_round(bytes);
+    bytes = mapping_length(bytes);
     size_t align = capstone_repr_granule(bytes);
     if (align < 4096UL) align = 4096UL;
     if (cap_vm_acquire(&pending_mapping, bytes, align,
@@ -303,15 +401,24 @@ void *__capstone_malloc_group_attach(struct capstone_malloc_slot *slots,
      * shrink in bind_slots could not be derived -- which is what returned NULL for every
      * allocation on this path. */
     return bind_slots(slots, mapping_group(&pending_mapping, bytes),
-                      bytes - group_header(bytes), 1);
+                      bytes - group_header(bytes), 1, 0);
 }
 void *__capstone_malloc_group_map(struct capstone_malloc_slot *slots,
-                                 size_t bytes, size_t stride, unsigned count)
+                                 size_t bytes, size_t stride, unsigned count, void **root)
 {
-    void *p = __capstone_malloc_map(bytes);
-    if (p == MAP_FAILED) return p;
-    size_t mapped = sublet_end(&pending_mapping) - sublet_base(&pending_mapping);
-    return bind_slots(slots, mapping_group(&pending_mapping, mapped), stride, count);
+    /* A kept mapping of the length __capstone_malloc_map would map, or a new mapping. */
+    size_t mapped = bytes && bytes <= CV_MAX_REGION_BYTES ? mapping_length(bytes) : 0;
+    void *r = mapped ? recycle_take(mapped) : NULL;
+    unsigned char stale = r != NULL;
+    if (r) ++__capstone_malloc_recycle_hits;
+    else {
+        void *p = __capstone_malloc_map(bytes);
+        if (p == MAP_FAILED) return p;
+        mapped = sublet_end(&pending_mapping) - sublet_base(&pending_mapping);
+        r = mapping_group(&pending_mapping, mapped);
+    }
+    *root = r;
+    return bind_slots(slots, group_lifetime(r, mapped), stride, count, stale);
 }
 void *__capstone_malloc_group_nested(struct capstone_malloc_slot *slots,
                                     size_t stride, unsigned count,
@@ -322,18 +429,24 @@ void *__capstone_malloc_group_nested(struct capstone_malloc_slot *slots,
     parent->issued = issue_child(parent->parent,
         base - __builtin_capstone_cap_get_base(parent->parent), 16 + stride * count);
     parent->kind = SLOT_NESTED;
-    return bind_slots(slots, parent->issued, stride, count);
+    return bind_slots(slots, parent->issued, stride, count, 0);
 #else
     /* The host slot keeps its group authority in `issued`; the nested group is a fresh shrink. */
     void *nested = issue_child(parent->parent,
         base - __builtin_capstone_cap_get_base(parent->parent), 16 + stride * count);
     parent->kind = SLOT_NESTED;
-    return bind_slots(slots, nested, stride, count);
+    return bind_slots(slots, nested, stride, count, 0);
 #endif
 }
 void *__capstone_malloc_slot_take(struct capstone_malloc_slot *r)
 {
     void *p = r->parent;
+    /* First take of a slot in a recycled mapping: clear the previous group's bytes and tags
+     * before any capability over them is issued (condition 3 at group_unmap). */
+    if (r->stale) {
+        memset(p, 0, __builtin_capstone_cap_get_end(p) - __builtin_capstone_cap_get_base(p));
+        r->stale = 0;
+    }
     __capstone_malloc_slot_key(r, p, r->nominal);
     return p;
 }
@@ -423,7 +536,7 @@ void *__capstone_malloc_group_remap(struct capstone_malloc_slot *slots,
      * appeared once growth began completing at all -- the overrun is 496 bytes on a 401408-byte
      * mapping, and get_stride() (which realloc.c now uses) disagrees with it. */
     void *header = bind_slots(slots, mapping_group(&root, bytes),
-                              bytes - group_header(bytes), 1);
+                              bytes - group_header(bytes), 1, 0);
     void *raw = (char *)r->parent + offset;
     __capstone_malloc_slot_key(r, raw, r->nominal);
     *(unsigned long *)header = (unsigned long)r->group;
@@ -659,4 +772,23 @@ size_t malloc_usable_size(void *p)
     if (!p) return 0;
     lock_heap(); size_t n = checked(p)->nominal; unlock_heap(); return n;
 }
-int malloc_trim(size_t pad) { (void)pad; return 0; }
+/* musl's group-release decisions are its own and happen during free; what is left to trim is the
+ * runtime's kept mappings ("Recycled group mappings"), which are unmapped here, so a program that
+ * asks for its freed memory back gets it (the runtime gate's heap-threads case does, and reads the
+ * pages released). Returns 1 when something was released, as glibc's does. */
+int malloc_trim(size_t pad)
+{
+    (void)pad;
+    lock_heap();
+    int released = recycle_count != 0;
+    while (recycle_count) {
+        --recycle_count;
+        void *root = recycle[recycle_count].root;
+        size_t bytes = recycle[recycle_count].bytes;
+        recycle[recycle_count].root = NULL; recycle[recycle_count].bytes = 0;
+        recycle_bytes -= bytes;
+        munmap(root, bytes);
+    }
+    unlock_heap();
+    return released;
+}
