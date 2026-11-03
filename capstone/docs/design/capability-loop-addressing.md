@@ -13,7 +13,9 @@ cursor, remove intermediate cursors, or reuse an original accessed cursor.
 Distance from an access alone is insufficient: even `p - 1` can be refused
 under phys56 when `p` is zero.
 
-InstCombine keeps multi-index capability GEPs whole and does not move constants
+SelectionDAG lowering sums all indices of a non-integral GEP in the integer
+index type before applying one pointer offset. InstCombine keeps multi-index
+capability GEPs whole and does not move constants
 across variable GEPs. Adjacent merging and cancellation that remove a cursor
 remain legal. LICM does not swap capability GEP offsets to hoist one of them.
 SCEV expansion uses an integer offset recurrence plus a complete-offset GEP
@@ -37,8 +39,9 @@ below is the path for introducing capability recurrences.
 constant. For large displacements, the result remains one capability
 increment with the complete integer byte offset. This shares the scale and
 exposes invariant integer constants to machine code motion without creating
-an intermediate capability cursor. The existing small-displacement rewrite
-continues to use the representable-window restriction.
+an intermediate capability cursor. Small displacements also stay in the
+integer offset; the backend cursor rule does not permit a new intermediate
+cursor merely because it is nearby.
 
 ## Accessed cursor recurrence
 
