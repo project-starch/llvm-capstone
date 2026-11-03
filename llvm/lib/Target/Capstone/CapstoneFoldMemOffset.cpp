@@ -17,6 +17,7 @@
 
 #include "Capstone.h"
 #include "CapstoneSubtarget.h"
+#include "llvm/ADT/DenseSet.h"
 #include "llvm/CodeGen/MachineFunctionPass.h"
 #include <queue>
 
@@ -93,6 +94,17 @@ bool CapstoneFoldMemOffset::foldOffset(
   // Map to hold how much the offset contributes to the value of this register.
   DenseMap<Register, int64_t> RegToOffsetMap;
 
+  // Capability cursors the fold leaves in place (CIncOffset / CIncOffsetImm
+  // results downstream of the root). Erasing the root moves every surviving
+  // cursor by the root's constant, and a cursor that drifts more than ~2 KiB
+  // outside its object loses its tag (R-60): with bounds [0x10000,0x10010)
+  // and cursor 0x10000, `CIncOffsetImm 2047; CIncOffset -3072; CIncOffset
+  // 1025; LBU 0` visits 0x107ff, 0xfbff, 0x10000 (all representable), while
+  // the folded form visits 0xf400 first, untagged, and the in-bounds load
+  // faults. The window is not the only hazard either (see the rule after the
+  // walk), so a surviving cursor may not move at all.
+  DenseSet<Register> CapIntermediates;
+
   // Insert root offset into the map.
   RegToOffsetMap[OrigReg] = InitialOffset;
 
@@ -113,12 +125,30 @@ bool CapstoneFoldMemOffset::foldOffset(
       default:
         return false;
       case Capstone::ADD:
+      // A cursor add moves a capability by a register amount; the folded
+      // constant rides on whichever operand carries it (the capability base
+      // for `cincoffset cap, idx`, where the dynamic idx is not in the map).
+      // Same accumulation as ADD.
+      case Capstone::CIncOffset:
         if (auto I = RegToOffsetMap.find(User.getOperand(1).getReg());
             I != RegToOffsetMap.end())
           Offset = I->second;
         if (auto I = RegToOffsetMap.find(User.getOperand(2).getReg());
             I != RegToOffsetMap.end())
           Offset += I->second;
+        if (User.getOpcode() == Capstone::CIncOffset)
+          CapIntermediates.insert(User.getOperand(0).getReg());
+        break;
+      // A constant cursor move downstream of the root stays in place with its
+      // own immediate (only the root is erased), so just the folded delta
+      // flows through it, as through ADD. Adding its immediate here counted
+      // it twice: 538.imagick_r CloneImageInfo then stored at s7+0x3c+0x238
+      // for s7+0x40 and faulted on bounds (cause 28).
+      case Capstone::CIncOffsetImm:
+        if (auto I = RegToOffsetMap.find(User.getOperand(1).getReg());
+            I != RegToOffsetMap.end())
+          Offset = I->second;
+        CapIntermediates.insert(User.getOperand(0).getReg());
         break;
       case Capstone::SH1ADD:
         if (auto I = RegToOffsetMap.find(User.getOperand(1).getReg());
@@ -182,7 +212,12 @@ bool CapstoneFoldMemOffset::foldOffset(
       case Capstone::LD:
       case Capstone::FLD:
       case Capstone::SD:
-      case Capstone::FSD: {
+      case Capstone::FSD:
+      // Capability load/store (128-bit). Same operand order: dest/value, base,
+      // simm12. Every memory op on this target already takes a GPCR base, so
+      // these opcodes are the capability-addressed forms.
+      case Capstone::LDC:
+      case Capstone::STC: {
         // Can't fold into store value.
         if (User.getOperand(0).getReg() == Reg)
           return false;
@@ -228,6 +263,42 @@ bool CapstoneFoldMemOffset::foldOffset(
     }
   }
 
+  // Soundness rule for the capability forms: NO surviving cursor may change
+  // value. The fold moves every surviving cursor by MINUS its tracked delta
+  // (the erased displacement ahead of it), and a moved cursor can lose its tag
+  // in two ways that the window argument above does not cover: a tagged
+  // cursor must also be a canonical address (isa.md, "address policy": sv39
+  // refuses [2^38, 2^64-2^38), sv48/sv57 likewise at 47/56, phys56 requires
+  // bits 63:56 clear), and a result that would carry a refused cursor is
+  // written UNTAGGED. An upward move can reach 2^38 from an object that ends
+  // just below it, which Linux can map (bounds [2^38-4096, 2^38), cursor
+  // 2^38-2048: `CIncOffsetImm -1; CIncOffset 2048; LBU 0` reads 2^38-1 tagged,
+  // the folded `LBU -1` off a cursor of 2^38 faults). A downward move is
+  // canonical under sv39/sv48/sv57 (it stays below 2^38 or wraps into the
+  // all-ones kernel half), but under phys56 a wrap below 0 is refused, and a
+  // tagged cursor near 0 is possible: the tagged physical region restricts
+  // where tags persist in MEMORY, not which addresses a tagged REGISTER may
+  // hold (the ISA permits a fabricated tagged cursor of 0, and QEMU's `none`
+  // machine maps RAM at 0): with bounds [0,16), cursor 2, `CIncOffsetImm 2;
+  // CIncOffset -3; LBU 0` reads address 1, the folded `LBU 2` off a cursor of
+  // 2^64-1 faults. This pass runs in the shared pipeline with no profile
+  // feature to tell the profiles apart, so the rule is delta == 0.
+  //
+  // On this target every memory base is a capability, so a chain from the
+  // root to an access passes through at least one surviving cursor, which
+  // carries the root's delta: with this rule the capability forms never fold.
+  // The mechanism is kept, measured and reviewed, behind the rule; a profile
+  // feature under which delta >= 0 is sound (the sv39/sv48/sv57 address
+  // policy) would re-enable it. Because no surviving cursor changes value,
+  // the earlier path argument (first use is the folded access; no call,
+  // inline asm or EH-pad successor before it) has nothing left to establish
+  // and is gone.
+  for (Register R : CapIntermediates) {
+    auto D = RegToOffsetMap.find(R);
+    if (D == RegToOffsetMap.end() || D->second != 0)
+      return false;
+  }
+
   return true;
 }
 
@@ -246,15 +317,21 @@ bool CapstoneFoldMemOffset::runOnMachineFunction(MachineFunction &MF) {
     for (MachineInstr &MI : llvm::make_early_inc_range(MBB)) {
       // FIXME: We can support ADDIW from an LUI+ADDIW pair if the result is
       // equivalent to LUI+ADDI.
-      if (MI.getOpcode() != Capstone::ADDI)
+      // CIncOffsetImm is the capability cursor-move analogue of ADDI: same
+      // operand order (dest, base reg, simm12) and a pure constant move, so it
+      // roots a fold the same way. It lets a constant cursor offset sink past a
+      // dynamic `cincoffset` into the load/store immediate (libm exp).
+      unsigned RootOpc = MI.getOpcode();
+      if (RootOpc != Capstone::ADDI && RootOpc != Capstone::CIncOffsetImm)
         continue;
 
-      // We only want to optimize register ADDIs.
+      // We only want to optimize register roots.
       if (!MI.getOperand(1).isReg() || !MI.getOperand(2).isImm())
         continue;
 
-      // Ignore 'li'.
-      if (MI.getOperand(1).getReg() == Capstone::X0)
+      // Ignore 'li' (ADDI from x0). A cincoffsetimm base is always a capability
+      // register, never x0.
+      if (RootOpc == Capstone::ADDI && MI.getOperand(1).getReg() == Capstone::X0)
         continue;
 
       int64_t Offset = MI.getOperand(2).getImm();

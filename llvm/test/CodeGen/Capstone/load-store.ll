@@ -73,10 +73,17 @@ entry:
 ; Large-offset capability load: offset 2224 matches sglib_rbtree_iterator::subcomparator
 ; on Capstone (capabilities are 16 bytes; path[128] at offset 144 pushes
 ; subcomparator to 2224, exceeding ldc's 12-bit immediate range of 2047).
-; The backend must split: cincoffset(base, 2224) then ldc at offset 0.
+; The backend must split: lui 1 (4096) plus addi -1872 into the register, that
+; register into the cursor, and the ldc at 0 of it. The checks pin the -1872
+; materialisation and its connection, so a lowering of base+4096 (`lui 1;
+; cincoffset; ldc 0` without the addi) does not pass. CapstoneFoldMemOffset
+; does not sink the -1872 into the ldc: no surviving cursor may move (see the
+; rule in the pass).
 ; CHECK-LABEL: load_cap_large_offset:
-; CHECK: cincoffset
-; CHECK: ldc {{.*}}, 0(
+; CHECK:      lui [[T:a[0-9]+]], 1
+; CHECK-NEXT: addi [[T]], [[T]], -1872
+; CHECK-NEXT: cincoffset [[B:a[0-9]+]], a0, [[T]]
+; CHECK-NEXT: ldc a0, 0([[B]])
 ; CHECK: cjalr zero, 0(ra)
 define ptr addrspace(200) @load_cap_large_offset(ptr addrspace(200) %ptr) {
 entry:
@@ -85,10 +92,12 @@ entry:
   ret ptr addrspace(200) %0
 }
 
-; Large-offset capability store: symmetric fix for STC.
+; Large-offset capability store: symmetric fix for STC, pinned the same way.
 ; CHECK-LABEL: store_cap_large_offset:
-; CHECK: cincoffset
-; CHECK: stc {{.*}}, 0(
+; CHECK:      lui [[T:a[0-9]+]], 1
+; CHECK-NEXT: addi [[T]], [[T]], -1872
+; CHECK-NEXT: cincoffset [[B:a[0-9]+]], a0, [[T]]
+; CHECK-NEXT: stc a1, 0([[B]])
 ; CHECK: cjalr zero, 0(ra)
 define void @store_cap_large_offset(ptr addrspace(200) %ptr, ptr addrspace(200) %val) {
 entry:
@@ -151,11 +160,14 @@ entry:
 
 ; Large-offset truncating stores: cincoffset decomposition for SW/SH/SB.
 ; Offsets >2047 do not fit in a 12-bit immediate, so the backend must emit
-; cincoffset(base, 2224) then sw/sh/sb at offset 0 of the adjusted pointer.
+; lui 1 + addi -1872 into a register, cincoffset(base, that) and the store at
+; 0 of the adjusted pointer; pinned as for the ldc above.
 
 ; CHECK-LABEL: store_ptrdiff_as_i32_large_offset:
-; CHECK: cincoffset
-; CHECK: sw {{.*}}, 0(
+; CHECK:      lui [[T:a[0-9]+]], 1
+; CHECK-NEXT: addi [[T]], [[T]], -1872
+; CHECK-NEXT: cincoffset [[B:a[0-9]+]], a2, [[T]]
+; CHECK-NEXT: sw a0, 0([[B]])
 ; CHECK: cjalr zero, 0(ra)
 define void @store_ptrdiff_as_i32_large_offset(ptr addrspace(200) %p1,
                                                 ptr addrspace(200) %p2,
@@ -172,8 +184,10 @@ entry:
 }
 
 ; CHECK-LABEL: store_ptrdiff_as_i16_large_offset:
-; CHECK: cincoffset
-; CHECK: sh {{.*}}, 0(
+; CHECK:      lui [[T:a[0-9]+]], 1
+; CHECK-NEXT: addi [[T]], [[T]], -1872
+; CHECK-NEXT: cincoffset [[B:a[0-9]+]], a2, [[T]]
+; CHECK-NEXT: sh a0, 0([[B]])
 ; CHECK: cjalr zero, 0(ra)
 define void @store_ptrdiff_as_i16_large_offset(ptr addrspace(200) %p1,
                                                 ptr addrspace(200) %p2,
@@ -190,8 +204,10 @@ entry:
 }
 
 ; CHECK-LABEL: store_ptrdiff_as_i8_large_offset:
-; CHECK: cincoffset
-; CHECK: sb {{.*}}, 0(
+; CHECK:      lui [[T:a[0-9]+]], 1
+; CHECK-NEXT: addi [[T]], [[T]], -1872
+; CHECK-NEXT: cincoffset [[B:a[0-9]+]], a2, [[T]]
+; CHECK-NEXT: sb a0, 0([[B]])
 ; CHECK: cjalr zero, 0(ra)
 define void @store_ptrdiff_as_i8_large_offset(ptr addrspace(200) %p1,
                                                ptr addrspace(200) %p2,

@@ -1,0 +1,277 @@
+# CapstoneFoldMemOffset, capability forms, pinned in MIR (the shapes reach the
+# pass here regardless of what isel does to the matching IR).
+#
+# The rule after four reviews: no surviving cursor (a CIncOffset / CIncOffsetImm
+# result downstream of the erased root) may change value. Every case below is
+# therefore a NO-fold case; each comment says which hazard the shape showed
+# while the rule was weaker, and @chain / @cap_root_chain / @taken_access /
+# @policy_boundary_pos are the shapes that folded under those weaker rules.
+# On this target every memory base is a capability, so a chain from the root
+# to an access passes through a surviving cursor carrying the root's delta,
+# and the capability forms never fold; the mechanism stays behind the rule
+# for a profile feature that could re-enable it (not built).
+#
+# Hazards, in review order:
+# - @chain, @cap_root_chain: an intermediate `CIncOffsetImm` downstream of the
+#   root keeps its own immediate (counting it again gave 608 / 120, the
+#   538.imagick_r CloneImageInfo fault); the pass still tracks only the delta.
+# - @unbounded_intermediate: a surviving register cursor that only feeds more
+#   cursor arithmetic can leave the ~2 KiB representable window (0xf400 for
+#   bounds [0x10000,0x10010)).
+# - @untaken_access: an access that EXISTS does not bound a cursor on a path
+#   that never executes it; @taken_access was the allowed shape of the path
+#   argument (first use is the access).
+# - @policy_boundary: a tagged cursor must also be canonical; moving up by 1
+#   from 2^38-1 reaches the refused [2^38, 2^64-2^38) (sv39) and the cursor is
+#   written untagged. @policy_boundary_pos (+1, moves down) folded under the
+#   "only downward" rule.
+# - @unwind_bypass: a call before the bounding access may leave the block
+#   through an unwind edge, the landing pad using the derived cursor.
+# - @policy_wrap_low: a downward move is not safe either: under phys56 a wrap
+#   below 0 is refused, and a tagged cursor near 0 is possible (the tagged
+#   physical region restricts tags in memory, not register addresses; the ISA
+#   permits a tagged cursor of 0; QEMU's `none` machine maps RAM at 0). With
+#   bounds [0,16), cursor 2, n = -3: `CIncOffsetImm 2; CIncOffset n; LBU 0`
+#   reads 1; folded, `LBU 2` off 2^64-1 faults.
+#
+# MUTATION: replace the rule's `!= 0` by `< 0` (the round-3 rule) and @chain,
+# @cap_root_chain, @taken_access, @policy_boundary_pos and @policy_wrap_low fold
+# (`LW ..., 604`, `FLD ..., 112`, `LBU ..., 2047`, `LBU ..., 1`, `LBU ..., 2`);
+# drop the rule altogether and every case folds.
+#
+# RUN: llc -mtriple=capstone64 -mattr=+m,+f,+d -run-pass=capstone-fold-mem-offset -verify-machineinstrs -o - %s | FileCheck %s
+--- |
+  target triple = "capstone64"
+  declare void @thrower()
+  define void @chain() { ret void }
+  define void @cap_root_chain() { ret void }
+  define void @unbounded_intermediate() { ret void }
+  define void @untaken_access() { ret void }
+  define void @taken_access() { ret void }
+  define void @policy_boundary() { ret void }
+  define void @policy_boundary_pos() { ret void }
+  define void @unwind_bypass() personality ptr null { ret void }
+  define void @policy_wrap_low() { ret void }
+...
+---
+name: chain
+tracksRegLiveness: true
+body: |
+  bb.0:
+    liveins: $c10
+    ; CHECK-LABEL: name: chain
+    ; CHECK:      [[L:%[0-9]+]]:gpr = LUI 4
+    ; CHECK-NEXT: [[A:%[0-9]+]]:gpr = ADDI [[L]], 544
+    ; CHECK-NEXT: [[S:%[0-9]+]]:gpcr = CIncOffset {{%[0-9]+}}, [[A]]
+    ; CHECK-NEXT: {{%[0-9]+}}:gpr = LW [[S]], 60
+    ; CHECK-NEXT: [[T:%[0-9]+]]:gpcr = CIncOffsetImm [[S]], 60
+    ; CHECK-NEXT: {{%[0-9]+}}:gpr = LW [[T]], 4
+    %0:gpcr = COPY $c10
+    %1:gpr = LUI 4
+    %2:gpr = ADDI %1, 544
+    %3:gpcr = CIncOffset %0, %2
+    %4:gpr = LW %3, 60
+    %5:gpcr = CIncOffsetImm %3, 60
+    %6:gpr = LW %5, 4
+    %7:gpr = ADD %4, %6
+    $x10 = COPY %7
+    PseudoRET implicit $x10
+...
+---
+name: cap_root_chain
+tracksRegLiveness: true
+body: |
+  bb.0:
+    liveins: $c10, $x11
+    ; CHECK-LABEL: name: cap_root_chain
+    ; CHECK:      [[R:%[0-9]+]]:gpcr = CIncOffsetImm {{%[0-9]+}}, 112
+    ; CHECK-NEXT: [[P:%[0-9]+]]:gpcr = CIncOffset [[R]], {{%[0-9]+}}
+    ; CHECK-NEXT: {{%[0-9]+}}:fpr64 = FLD [[P]], 0
+    ; CHECK-NEXT: [[U:%[0-9]+]]:gpcr = CIncOffsetImm [[P]], 8
+    ; CHECK-NEXT: {{%[0-9]+}}:fpr64 = FLD [[U]], 0
+    %0:gpcr = COPY $c10
+    %1:gpr = COPY $x11
+    %2:gpcr = CIncOffsetImm %0, 112
+    %3:gpcr = CIncOffset %2, %1
+    %4:fpr64 = FLD %3, 0
+    %5:gpcr = CIncOffsetImm %3, 8
+    %6:fpr64 = FLD %5, 0
+    %7:fpr64 = FADD_D %4, %6, 7
+    $f10_d = COPY %7
+    PseudoRET implicit $f10_d
+...
+---
+name: unbounded_intermediate
+tracksRegLiveness: true
+body: |
+  bb.0:
+    liveins: $c10, $x11, $x12
+    ; CHECK-LABEL: name: unbounded_intermediate
+    ; CHECK:      [[R:%[0-9]+]]:gpcr = CIncOffsetImm {{%[0-9]+}}, 2047
+    ; CHECK-NEXT: [[P:%[0-9]+]]:gpcr = CIncOffset [[R]], {{%[0-9]+}}
+    ; CHECK-NEXT: [[Q:%[0-9]+]]:gpcr = CIncOffset [[P]], {{%[0-9]+}}
+    ; CHECK-NEXT: {{%[0-9]+}}:gpr = LBU [[Q]], 0
+    %0:gpcr = COPY $c10
+    %1:gpr = COPY $x11
+    %2:gpr = COPY $x12
+    %3:gpcr = CIncOffsetImm %0, 2047
+    %4:gpcr = CIncOffset %3, %1
+    %5:gpcr = CIncOffset %4, %2
+    %6:gpr = LBU %5, 0
+    $x10 = COPY %6
+    PseudoRET implicit $x10
+...
+---
+name: untaken_access
+tracksRegLiveness: true
+body: |
+  bb.0:
+    successors: %bb.1, %bb.2
+    liveins: $c10, $x11, $x12, $x13
+    ; CHECK-LABEL: name: untaken_access
+    ; CHECK:      [[R:%[0-9]+]]:gpcr = CIncOffsetImm {{%[0-9]+}}, 2047
+    ; CHECK-NEXT: [[P:%[0-9]+]]:gpcr = CIncOffset [[R]], {{%[0-9]+}}
+    ; CHECK-NEXT: [[Q:%[0-9]+]]:gpcr = CIncOffset [[P]], {{%[0-9]+}}
+    ; CHECK:      LBU [[P]], 0
+    ; CHECK:      LBU [[Q]], 0
+    %0:gpcr = COPY $c10
+    %1:gpr = COPY $x11
+    %2:gpr = COPY $x12
+    %3:gpr = COPY $x13
+    %4:gpcr = CIncOffsetImm %0, 2047
+    %5:gpcr = CIncOffset %4, %1
+    %6:gpcr = CIncOffset %5, %2
+    BNE %3, $x0, %bb.1
+    PseudoBR %bb.2
+  bb.1:
+    %7:gpr = LBU %5, 0
+    $x10 = COPY %7
+    PseudoRET implicit $x10
+  bb.2:
+    %8:gpr = LBU %6, 0
+    $x10 = COPY %8
+    PseudoRET implicit $x10
+...
+---
+name: taken_access
+tracksRegLiveness: true
+body: |
+  bb.0:
+    successors: %bb.1, %bb.2
+    liveins: $c10, $x11, $x12, $x13
+    ; CHECK-LABEL: name: taken_access
+    ; CHECK:      [[R:%[0-9]+]]:gpcr = CIncOffsetImm {{%[0-9]+}}, 2047
+    ; CHECK-NEXT: [[P:%[0-9]+]]:gpcr = CIncOffset [[R]], {{%[0-9]+}}
+    ; CHECK-NEXT: {{%[0-9]+}}:gpr = LBU [[P]], 0
+    ; CHECK:      bb.1:
+    ; CHECK:      LBU [[P]], -4
+    ; CHECK:      bb.2:
+    ; CHECK:      [[Q:%[0-9]+]]:gpcr = CIncOffset [[P]], {{%[0-9]+}}
+    ; CHECK-NEXT: {{%[0-9]+}}:gpr = LBU [[Q]], 0
+    %0:gpcr = COPY $c10
+    %1:gpr = COPY $x11
+    %2:gpr = COPY $x12
+    %3:gpr = COPY $x13
+    %4:gpcr = CIncOffsetImm %0, 2047
+    %5:gpcr = CIncOffset %4, %1
+    %6:gpr = LBU %5, 0
+    BNE %3, $x0, %bb.1
+    PseudoBR %bb.2
+  bb.1:
+    %7:gpr = LBU %5, -4
+    %8:gpr = ADD %6, %7
+    $x10 = COPY %8
+    PseudoRET implicit $x10
+  bb.2:
+    %9:gpcr = CIncOffset %5, %2
+    %10:gpr = LBU %9, 0
+    %11:gpr = ADD %6, %10
+    $x10 = COPY %11
+    PseudoRET implicit $x10
+...
+---
+name: policy_boundary
+tracksRegLiveness: true
+body: |
+  bb.0:
+    liveins: $c10, $x11
+    ; CHECK-LABEL: name: policy_boundary
+    ; CHECK:      [[R:%[0-9]+]]:gpcr = CIncOffsetImm {{%[0-9]+}}, -1
+    ; CHECK-NEXT: [[P:%[0-9]+]]:gpcr = CIncOffset [[R]], {{%[0-9]+}}
+    ; CHECK-NEXT: {{%[0-9]+}}:gpr = LBU [[P]], 0
+    %0:gpcr = COPY $c10
+    %1:gpr = COPY $x11
+    %2:gpcr = CIncOffsetImm %0, -1
+    %3:gpcr = CIncOffset %2, %1
+    %4:gpr = LBU %3, 0
+    $x10 = COPY %4
+    PseudoRET implicit $x10
+...
+---
+name: policy_boundary_pos
+tracksRegLiveness: true
+body: |
+  bb.0:
+    liveins: $c10, $x11
+    ; CHECK-LABEL: name: policy_boundary_pos
+    ; CHECK:      [[R:%[0-9]+]]:gpcr = CIncOffsetImm {{%[0-9]+}}, 1
+    ; CHECK-NEXT: [[P:%[0-9]+]]:gpcr = CIncOffset [[R]], {{%[0-9]+}}
+    ; CHECK-NEXT: {{%[0-9]+}}:gpr = LBU [[P]], 0
+    %0:gpcr = COPY $c10
+    %1:gpr = COPY $x11
+    %2:gpcr = CIncOffsetImm %0, 1
+    %3:gpcr = CIncOffset %2, %1
+    %4:gpr = LBU %3, 0
+    $x10 = COPY %4
+    PseudoRET implicit $x10
+...
+---
+name: unwind_bypass
+tracksRegLiveness: true
+body: |
+  bb.0:
+    successors: %bb.1, %bb.2
+    liveins: $c10, $x11, $x12
+    ; CHECK-LABEL: name: unwind_bypass
+    ; CHECK:      [[R:%[0-9]+]]:gpcr = CIncOffsetImm {{%[0-9]+}}, 2047
+    ; CHECK-NEXT: [[P:%[0-9]+]]:gpcr = CIncOffset [[R]], {{%[0-9]+}}
+    ; CHECK-NEXT: PseudoCALL
+    ; CHECK-NEXT: {{%[0-9]+}}:gpr = LBU [[P]], 0
+    ; CHECK:      landing-pad
+    ; CHECK:      [[Q:%[0-9]+]]:gpcr = CIncOffset [[P]], {{%[0-9]+}}
+    ; CHECK-NEXT: {{%[0-9]+}}:gpr = LBU [[Q]], 0
+    %0:gpcr = COPY $c10
+    %1:gpr = COPY $x11
+    %2:gpr = COPY $x12
+    %3:gpcr = CIncOffsetImm %0, 2047
+    %4:gpcr = CIncOffset %3, %1
+    PseudoCALL @thrower, csr_ilp32_lp64, implicit-def dead $x1, implicit-def $x2
+    %5:gpr = LBU %4, 0
+    PseudoBR %bb.1
+  bb.1:
+    $x10 = COPY %5
+    PseudoRET implicit $x10
+  bb.2 (landing-pad):
+    %6:gpcr = CIncOffset %4, %2
+    %7:gpr = LBU %6, 0
+    $x10 = COPY %7
+    PseudoRET implicit $x10
+...
+---
+name: policy_wrap_low
+tracksRegLiveness: true
+body: |
+  bb.0:
+    liveins: $c10, $x11
+    ; CHECK-LABEL: name: policy_wrap_low
+    ; CHECK:      [[R:%[0-9]+]]:gpcr = CIncOffsetImm {{%[0-9]+}}, 2
+    ; CHECK-NEXT: [[P:%[0-9]+]]:gpcr = CIncOffset [[R]], {{%[0-9]+}}
+    ; CHECK-NEXT: {{%[0-9]+}}:gpr = LBU [[P]], 0
+    %0:gpcr = COPY $c10
+    %1:gpr = COPY $x11
+    %2:gpcr = CIncOffsetImm %0, 2
+    %3:gpcr = CIncOffset %2, %1
+    %4:gpr = LBU %3, 0
+    $x10 = COPY %4
+    PseudoRET implicit $x10
+...
