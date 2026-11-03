@@ -29,6 +29,10 @@ _mc_key=$( {
   cat "$CAPSTONE_REPO_ROOT/capstone/ports/common/application/build-sdk.sh"
   cat "$_mc_musl_port"/musl-patches/*.patch
   find "$_mc_musl_port/arch-capstone64" -type f -print0 | sort -z | xargs -0 cat
+  # The arch's math sources and the scripts that lay the tree out and choose its file set: a
+  # change there (capstone64 math replacing the generic C) must miss the cached archive.
+  find "$_mc_musl_port/src-math-capstone64" -type f -print0 | sort -z | xargs -0 cat
+  cat "$_mc_musl_port/prepare-musl-capstone.sh" "$_mc_musl_port/survey-musl-capstone.py"
 } | sha256sum | cut -c1-16)
 
 # One libc and one runtime per key, never rebuilt in place: a build that sourced this file keeps

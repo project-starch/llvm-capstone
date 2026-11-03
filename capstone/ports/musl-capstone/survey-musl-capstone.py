@@ -31,7 +31,7 @@ import sys
 
 # Pinned baseline: the OK count this port is known to reach. Raise it when a
 # patch improves things (that is the point), never lower it to make a run pass.
-BASELINE_OK = 1355
+BASELINE_OK = 1343
 
 # RAISED 2026-09-16, 1270 -> 1355, measured against clang built from f7b50f081ca4 (dev plus
 # three commits, only one of which touches the backend and it is an unrelated ra-spill fix).
@@ -39,6 +39,15 @@ BASELINE_OK = 1355
 # csqrtl.c were built ONE AT A TIME with these flags, not inferred from a total. If a
 # dev-built compiler reports 1270 again, that is the first thing to check and the number
 # above is where it will say so.
+#
+# RESET 2026-11-02, 1355 -> 1343 (physical) and the virtual default 1361 -> 1349: the SOURCE
+# POPULATION changed, not what the compiler can do. src/math/capstone64 (the arch's hardware
+# math, 12 files) now replaces its 12 generic and 12 riscv64 namesakes under musl's
+# REPLACED_OBJS rule (see main()), so the survey sees 1349 files instead of 1361 (+12 - 24);
+# the 24 dropped were duplicate definitions of those same 12 symbols. Measured with a dev
+# b9dd0ccc clang plus that change: virtual surveyed 1349 / compiled 1349 / failed 0;
+# physical surveyed 1349 / compiled 1343 / failed 6, all six src/malloc/mallocng (the
+# MUST_FAIL control, as before). Every file that compiled before still compiles.
 
 # A file that MUST compile, and a file that MUST NOT, with the reason it fails.
 CONTROL_MUST_PASS = "src/stdlib/abs.c"
@@ -156,7 +165,7 @@ def main() -> int:
 
     virtual = args.profile == "virtual"
     if args.expect_ok is None:
-        args.expect_ok = 1361 if virtual else BASELINE_OK
+        args.expect_ok = 1349 if virtual else BASELINE_OK
     musl = pathlib.Path(args.musl_dir).resolve()
     clang = os.environ.get("CAPSTONE_CLANG")
     if not clang or not pathlib.Path(clang).exists():
@@ -179,6 +188,34 @@ def main() -> int:
     if not files:
         print(f"ERROR: every source was filtered out as foreign-arch", file=sys.stderr)
         return 2
+
+    # musl's REPLACED_OBJS rule: a source under the arch directory
+    # src/<group>/capstone64/<base>.c replaces the generic src/<group>/<base>.c.
+    # This survey compiles every kept directory rather than running musl's
+    # Makefile, so without this an arch source and its generic namesake (and the
+    # upstream riscv64 namesake, which is kept for its headers/asm but whose math
+    # .c files only ever fall back to the generic C) all land in the archive and
+    # which one a program links is left to ar member order. Apply the rule here so
+    # exactly one definition of sqrt()/fabs()/... survives: the capstone64 one.
+    provided = set()
+    for f in files:
+        parts = f.relative_to(musl).parts
+        if len(parts) >= 4 and parts[0] == "src" and parts[2] == "capstone64":
+            provided.add((parts[1], parts[-1]))
+
+    def superseded(f: pathlib.Path) -> bool:
+        parts = f.relative_to(musl).parts
+        if len(parts) == 3 and parts[0] == "src":            # generic src/G/base.c
+            return (parts[1], parts[2]) in provided
+        if len(parts) >= 4 and parts[0] == "src" and parts[2] == "riscv64":
+            return (parts[1], parts[-1]) in provided
+        return False
+
+    replaced = [f for f in files if superseded(f)]
+    files = [f for f in files if not superseded(f)]
+    if replaced:
+        print(f"replaced       {len(replaced)} generic/riscv64 source(s) by their "
+              f"capstone64 arch form ({', '.join(sorted(str(f.relative_to(musl)) for f in replaced))})")
 
     flags = compile_flags(musl)
 
