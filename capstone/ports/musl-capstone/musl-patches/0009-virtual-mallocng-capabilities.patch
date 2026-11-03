@@ -52,40 +52,64 @@ MAPPING is the runtime's: it ends the group's lifetime and keeps the mapping for
 the same length, or unmaps it as before (heap.c "Recycled group mappings"). The mapping's root
 authority stays in heap.c's private state; no meta field or return value carries it.
 
+One lookup per call (2026-11-03). The prefix of an object at its slot's start lives in the slot
+record, and cap_prefix found that record by the runtime's address index on every access: six times
+per enframe and four per free on SPEC's gcc test, 38,657 lookups for about 7,000 allocator calls,
+although enframe holds the record (g->cap_slots[idx]) and free and realloc are called by a runtime
+that has just found it from the program's pointer. cap_prefix, get_nominal_size and set_size now
+take the record (CAP_SLOT / CAP_S, empty upstream); the runtime's free and realloc pass it
+(__capstone_mallocng_free_slot, realloc's third argument), and mallocng's own free(p) looks p up
+once. free_meta clears the header and the last_idx+1 bound records instead of the whole 3 KiB meta
+through a zeroed temporary and a copy. No decision code changes.
+
 --- a/src/malloc/mallocng/aligned_alloc.c	2024-03-01 10:07:33.000000000 +0800
 +++ b/src/malloc/mallocng/aligned_alloc.c
-@@ -29,7 +29,10 @@
+@@ -25,36 +25,53 @@
+ 	if (!p)
+ 		return 0;
+ 
++#ifdef CAPSTONE_MUSL_MALLOC
++	struct capstone_malloc_slot *cap_s = cap_slot_of(p);
++	struct meta *g = cap_s->group;
++	int idx = cap_s->index;
++#else
+ 	struct meta *g = get_meta(p);
  	int idx = get_slot_index(p);
++#endif
  	size_t stride = get_stride(g);
  	unsigned char *start = g->mem->storage + stride*idx;
 -	unsigned char *end = g->mem->storage + stride*(idx+1) - IB;
 +#ifdef CAPSTONE_MUSL_MALLOC
-+	start = __capstone_malloc_slot_start(&g->cap_slots[idx]);
++	start = __capstone_malloc_slot_start(cap_s);
 +#endif
 +	unsigned char *end = start + stride - IB;
  	size_t adj = -(uintptr_t)p & (align-1);
  
  	if (!adj) {
-@@ -39,22 +42,30 @@
+-		set_size(p, end, len);
++		set_size(p, end, len CAP_S);
+ 		return p;
+ 	}
  	p += adj;
  	uint32_t offset = (size_t)(p-g->mem->storage)/UNIT;
  	if (offset <= 0xffff) {
 -		*(uint16_t *)(p-2) = offset;
 -		p[-4] = 0;
-+		*(uint16_t *)(cap_prefix(p)+2) = offset;
-+		cap_prefix(p)[0] = 0;
++		*(uint16_t *)(cap_prefix(p, cap_s)+2) = offset;
++		cap_prefix(p, cap_s)[0] = 0;
  	} else {
  		// use a 32-bit offset if 16-bit doesn't fit. for this,
  		// 16-bit field must be zero, [-4] byte nonzero.
 -		*(uint16_t *)(p-2) = 0;
-+		*(uint16_t *)(cap_prefix(p)+2) = 0;
++		*(uint16_t *)(cap_prefix(p, cap_s)+2) = 0;
  		*(uint32_t *)(p-8) = offset;
 -		p[-4] = 1;
-+		cap_prefix(p)[0] = 1;
++		cap_prefix(p, cap_s)[0] = 1;
  	}
 -	p[-3] = idx;
-+	cap_prefix(p)[1] = idx;
- 	set_size(p, end, len);
+-	set_size(p, end, len);
++	cap_prefix(p, cap_s)[1] = idx;
++	set_size(p, end, len CAP_S);
  	// store offset to aligned enframing. this facilitates cycling
  	// offset and also iteration of heap for debugging/measurement.
  	// for extreme overalignment it won't fit but these are classless
@@ -96,11 +120,11 @@ authority stays in heap.c's private state; no meta field or return value carries
 +	*(uint16_t *)(g->cap_slots[idx].prefix+2) = (size_t)(p-start)/UNIT;
 +	g->cap_slots[idx].prefix[1] = 7<<5;
 +#else
-+	*(uint16_t *)(cap_prefix(start)+2) = (size_t)(p-start)/UNIT;
-+	cap_prefix(start)[1] = 7<<5;
++	*(uint16_t *)(cap_prefix(start, cap_s)+2) = (size_t)(p-start)/UNIT;
++	cap_prefix(start, cap_s)[1] = 7<<5;
 +#endif
 +#ifdef CAPSTONE_MUSL_MALLOC
-+	__capstone_malloc_slot_key(&g->cap_slots[idx], p, len);
++	__capstone_malloc_slot_key(cap_s, p, len);
 +#endif
  	return p;
  }
@@ -149,37 +173,47 @@ authority stays in heap.c's private state; no meta field or return value carries
  		// not checking size/reserved here; it's intentionally invalid
  		mi = nontrivial_free(m, idx);
  	}
-@@ -101,18 +109,27 @@
+@@ -98,21 +106,36 @@
+ 	return (struct mapinfo){ 0 };
+ }
+ 
++#ifdef CAPSTONE_MUSL_MALLOC
++/* The runtime's free validates the program's pointer, finds its slot record once and passes
++ * both here (heap.c free); mallocng's own frees go through free() below, one lookup. */
++void __capstone_mallocng_free_slot(void *p, struct capstone_malloc_slot *cap_s)
++{
++	struct meta *g = cap_s->group;
++	int idx = cap_s->index;
++#else
  void free(void *p)
  {
  	if (!p) return;
-+#ifdef CAPSTONE_MUSL_MALLOC
-+	p = __capstone_malloc_prepare_free(p);
-+#endif
  
  	struct meta *g = get_meta(p);
  	int idx = get_slot_index(p);
++#endif
  	size_t stride = get_stride(g);
  	unsigned char *start = g->mem->storage + stride*idx;
 +#ifdef CAPSTONE_MUSL_MALLOC
-+	start = __capstone_malloc_slot_start(&g->cap_slots[idx]);
++	start = __capstone_malloc_slot_start(cap_s);
 +#endif
  	unsigned char *end = start + stride - IB;
- 	get_nominal_size(p, end);
+-	get_nominal_size(p, end);
++	get_nominal_size(p, end CAP_S);
  	uint32_t self = 1u<<idx, all = (2u<<g->last_idx)-1;
 -	((unsigned char *)p)[-3] = 255;
-+	cap_prefix(p)[1] = 255;
++	cap_prefix(p, cap_s)[1] = 255;
  	// invalidate offset to group header, and cycle offset of
  	// used region within slot if current offset is zero.
 -	*(uint16_t *)((char *)p-2) = 0;
-+	*(uint16_t *)(cap_prefix(p)+2) = 0;
++	*(uint16_t *)(cap_prefix(p, cap_s)+2) = 0;
 +#ifdef CAPSTONE_MUSL_MALLOC
-+	__capstone_malloc_slot_release(&g->cap_slots[idx]);
++	__capstone_malloc_slot_release(cap_s);
 +#endif
  
  	// release any whole pages contained in the slot to be freed
  	// unless it's a single-slot group that will be unmapped.
-@@ -145,7 +162,14 @@
+@@ -145,7 +168,22 @@
  	unlock();
  	if (mi.len) {
  		int e = errno;
@@ -194,6 +228,14 @@ authority stays in heap.c's private state; no meta field or return value carries
  		errno = e;
  	}
  }
++#ifdef CAPSTONE_MUSL_MALLOC
++
++void free(void *p)
++{
++	if (!p) return;
++	__capstone_mallocng_free_slot(p, __capstone_malloc_prepare_free(p));
++}
++#endif
 --- a/src/malloc/mallocng/glue.h	2024-03-01 10:07:33.000000000 +0800
 +++ b/src/malloc/mallocng/glue.h
 @@ -20,9 +20,18 @@
@@ -296,7 +338,7 @@ authority stays in heap.c's private state; no meta field or return value carries
  		p = enframe(g, idx, UNIT*size_classes[j]-IB, ctx.mmap_counter);
  		m->maplen = 0;
 -		p[-3] = (p[-3]&31) | (6<<5);
-+		cap_prefix(p)[1] = (cap_prefix(p)[1]&31) | (6<<5);
++		cap_prefix(p, &g->cap_slots[idx])[1] = (cap_prefix(p, &g->cap_slots[idx])[1]&31) | (6<<5);
  		for (int i=0; i<=cnt; i++)
  			p[UNIT+i*size-4] = 0;
 +#ifdef CAPSTONE_MUSL_MALLOC
@@ -370,19 +412,41 @@ authority stays in heap.c's private state; no meta field or return value carries
 +
 --- a/src/malloc/mallocng/malloc_usable_size.c	2024-03-01 10:07:33.000000000 +0800
 +++ b/src/malloc/mallocng/malloc_usable_size.c
-@@ -8,6 +8,9 @@
+@@ -4,10 +4,19 @@
+ size_t malloc_usable_size(void *p)
+ {
+ 	if (!p) return 0;
++#ifdef CAPSTONE_MUSL_MALLOC
++	struct capstone_malloc_slot *cap_s = cap_slot_of(p);
++	struct meta *g = cap_s->group;
++	int idx = cap_s->index;
++#else
+ 	struct meta *g = get_meta(p);
  	int idx = get_slot_index(p);
++#endif
  	size_t stride = get_stride(g);
  	unsigned char *start = g->mem->storage + stride*idx;
 +#ifdef CAPSTONE_MUSL_MALLOC
-+	start = __capstone_malloc_slot_start(&g->cap_slots[idx]);
++	start = __capstone_malloc_slot_start(cap_s);
 +#endif
  	unsigned char *end = start + stride - IB;
- 	return get_nominal_size(p, end);
+-	return get_nominal_size(p, end);
++	return get_nominal_size(p, end CAP_S);
  }
 --- a/src/malloc/mallocng/meta.h	2024-03-01 10:07:33.000000000 +0800
 +++ b/src/malloc/mallocng/meta.h
-@@ -15,9 +15,17 @@
+@@ -5,6 +5,10 @@
+ #include <errno.h>
+ #include <limits.h>
+ #include "glue.h"
++#ifdef CAPSTONE_MUSL_MALLOC
++#include <stddef.h>
++#include <string.h>
++#endif
+ 
+ __attribute__((__visibility__("hidden")))
+ extern const uint16_t size_classes[];
+@@ -15,9 +19,17 @@
  #define IB 4
  
  struct group {
@@ -401,7 +465,7 @@ authority stays in heap.c's private state; no meta field or return value carries
  	unsigned char storage[];
  };
  
-@@ -29,8 +37,16 @@
+@@ -29,8 +41,16 @@
  	uintptr_t freeable:1;
  	uintptr_t sizeclass:6;
  	uintptr_t maplen:8*sizeof(uintptr_t)-12;
@@ -418,62 +482,97 @@ authority stays in heap.c's private state; no meta field or return value carries
  struct meta_area {
  	uint64_t check;
  	struct meta_area *next;
-@@ -121,17 +137,37 @@
+@@ -108,7 +128,17 @@
+ 
+ static inline void free_meta(struct meta *m)
+ {
++#ifdef CAPSTONE_MUSL_MALLOC
++	/* A meta carries 32 slot records, about 3 KiB, and `*m = (struct meta){0}` cleared all of
++	 * them through a zeroed stack temporary and a copy. A group binds and writes only the first
++	 * last_idx+1 records (bind_slots, the loop after it in alloc_group), and a meta comes either
++	 * fresh from a meta area or from this queue, zeroed here, so the records past those are
++	 * still zero: clearing the header and the bound records clears the whole meta. */
++	memset(m->cap_slots, 0, (m->last_idx+1) * sizeof *m->cap_slots);
++	memset(m, 0, offsetof(struct meta, cap_slots));
++#else
+ 	*m = (struct meta){0};
++#endif
+ 	queue(&ctx.free_meta_head, m);
+ }
+ 
+@@ -121,17 +151,51 @@
  	return m->avail_mask = mask & act;
  }
  
+-static inline int get_slot_index(const unsigned char *p)
 +#ifdef CAPSTONE_MUSL_MALLOC
-+static inline unsigned char *cap_prefix(const unsigned char *p)
++/* The four prefix bytes of the object at p, whose slot record is s. An object at its slot's
++ * start keeps them in the record, because the bytes before the slot are outside the slot's
++ * bounds; one further in keeps them in the slot, before itself. Every caller passes the record
++ * it already holds -- enframe g->cap_slots[idx], free and realloc the record the runtime found
++ * from the program's pointer -- so a prefix access is no lookup. CAP_SLOT declares that record
++ * as the parameter cap_s of the helpers below and CAP_S passes the caller's cap_s; both are
++ * empty upstream, where cap_prefix ignores it. */
++static inline unsigned char *cap_prefix(const unsigned char *p, struct capstone_malloc_slot *s)
 +{
 +	if (__builtin_capstone_cap_get_cursor((void *)p) ==
-+	    __builtin_capstone_cap_get_base((void *)p)) {
-+		struct capstone_malloc_slot *s = __capstone_malloc_find(p);
-+		assert(s);
++	    __builtin_capstone_cap_get_base((void *)p))
 +		return s->prefix;
-+	}
 +	return (unsigned char *)p - 4;
 +}
++#define CAP_SLOT , struct capstone_malloc_slot *cap_s
++#define CAP_S , cap_s
++/* The record of a pointer mallocng did not receive with one: aligned_alloc's own malloc result,
++ * malloc_usable_size and is_allzero, none on a hot path. */
++static inline struct capstone_malloc_slot *cap_slot_of(const unsigned char *p)
++{
++	struct capstone_malloc_slot *s = __capstone_malloc_find(p);
++	assert(s);
++	return s;
++}
 +#else
-+#define cap_prefix(p) ((unsigned char *)(p) - 4)
++#define cap_prefix(p, s) ((unsigned char *)(p) - 4)
++#define CAP_SLOT
++#define CAP_S
 +#endif
 +
- static inline int get_slot_index(const unsigned char *p)
++static inline int get_slot_index(const unsigned char *p CAP_SLOT)
  {
 -	return p[-3] & 31;
-+	return cap_prefix(p)[1] & 31;
++	return cap_prefix(p, cap_s)[1] & 31;
  }
  
  static inline struct meta *get_meta(const unsigned char *p)
  {
 +#ifdef CAPSTONE_MUSL_MALLOC
-+	struct capstone_malloc_slot *s = __capstone_malloc_find(p);
-+	assert(s);
-+	return s->group;
++	return cap_slot_of(p)->group;
 +#else
  	assert(!((uintptr_t)p & 15));
 -	int offset = *(const uint16_t *)(p - 2);
-+	int offset = *(const uint16_t *)(cap_prefix(p)+2);
- 	int index = get_slot_index(p);
+-	int index = get_slot_index(p);
 -	if (p[-4]) {
-+	if (cap_prefix(p)[0]) {
++	int offset = *(const uint16_t *)(cap_prefix(p, cap_s)+2);
++	int index = get_slot_index(p CAP_S);
++	if (cap_prefix(p, cap_s)[0]) {
  		assert(!offset);
  		offset = *(uint32_t *)(p - 8);
  		assert(offset > 0xffff);
-@@ -154,11 +190,12 @@
+@@ -154,11 +218,12 @@
  		assert(offset <= meta->maplen*4096UL/UNIT - 1);
  	}
  	return (struct meta *)meta;
 +#endif
  }
  
- static inline size_t get_nominal_size(const unsigned char *p, const unsigned char *end)
+-static inline size_t get_nominal_size(const unsigned char *p, const unsigned char *end)
++static inline size_t get_nominal_size(const unsigned char *p, const unsigned char *end CAP_SLOT)
  {
 -	size_t reserved = p[-3] >> 5;
-+	size_t reserved = cap_prefix(p)[1] >> 5;
++	size_t reserved = cap_prefix(p, cap_s)[1] >> 5;
  	if (reserved >= 5) {
  		assert(reserved == 5);
  		reserved = *(const uint32_t *)(end-4);
-@@ -172,10 +209,28 @@
+@@ -172,16 +237,34 @@
  	return end-reserved-p;
  }
  
@@ -502,14 +601,21 @@ authority stays in heap.c's private state; no meta field or return value carries
  	} else {
  		return UNIT*size_classes[g->sizeclass];
  	}
-@@ -190,19 +245,101 @@
+ }
+ 
+-static inline void set_size(unsigned char *p, unsigned char *end, size_t n)
++static inline void set_size(unsigned char *p, unsigned char *end, size_t n CAP_SLOT)
+ {
+ 	int reserved = end-p-n;
+ 	if (reserved) end[-reserved] = 0;
+@@ -190,19 +273,104 @@
  		end[-5] = 0;
  		reserved = 5;
  	}
 -	p[-3] = (p[-3]&31) + (reserved<<5);
-+	cap_prefix(p)[1] = (cap_prefix(p)[1]&31) + (reserved<<5);
- }
- 
++	cap_prefix(p, cap_s)[1] = (cap_prefix(p, cap_s)[1]&31) + (reserved<<5);
++}
++
 +#ifdef CAPSTONE_MUSL_MALLOC
 +/* Option (iii): a slot's base must be a multiple of its own bounds granule, or the capability the
 + * runtime derives over an object in it is not exactly representable -- the compressed encoder
@@ -578,7 +684,7 @@ authority stays in heap.c's private state; no meta field or return value carries
 +		hdr = h;
 +	}
 +	return 0;
-+}
+ }
 +static inline int cap_hdr_fits(size_t size, int cnt, size_t pagesize)
 +{
 +	size_t needed = size*(size_t)cnt + UNIT;
@@ -588,27 +694,30 @@ authority stays in heap.c's private state; no meta field or return value carries
 +#else
 +#define cap_hdr_pad(stride) ((size_t)0)
 +#endif
-+
+ 
  static inline void *enframe(struct meta *g, int idx, size_t n, int ctr)
  {
++#ifdef CAPSTONE_MUSL_MALLOC
++	struct capstone_malloc_slot *cap_s = &g->cap_slots[idx];
++#endif
  	size_t stride = get_stride(g);
  	size_t slack = (stride-IB-n)/UNIT;
 -	unsigned char *p = g->mem->storage + stride*idx;
 +	unsigned char *p = g->mem->storage + cap_hdr_pad(stride) + stride*idx;
 +#ifdef CAPSTONE_MUSL_MALLOC
-+	p = __capstone_malloc_slot_take(&g->cap_slots[idx]);
++	p = __capstone_malloc_slot_take(cap_s);
 +#endif
  	unsigned char *end = p+stride-IB;
  	// cycle offset within slot to increase interval to address
  	// reuse, facilitate trapping double-free.
 -	int off = (p[-3] ? *(uint16_t *)(p-2) + 1 : ctr) & 255;
 -	assert(!p[-4]);
-+	int off = (cap_prefix(p)[1] ? *(uint16_t *)(cap_prefix(p)+2) + 1 : ctr) & 255;
-+	assert(!cap_prefix(p)[0]);
++	int off = (cap_prefix(p, cap_s)[1] ? *(uint16_t *)(cap_prefix(p, cap_s)+2) + 1 : ctr) & 255;
++	assert(!cap_prefix(p, cap_s)[0]);
  	if (off > slack) {
  		size_t m = slack;
  		m |= m>>1; m |= m>>2; m |= m>>4;
-@@ -210,19 +347,43 @@
+@@ -210,19 +378,43 @@
  		if (off > slack) off -= slack+1;
  		assert(off <= slack);
  	}
@@ -638,48 +747,72 @@ authority stays in heap.c's private state; no meta field or return value carries
  		// if enframing at non-zero offset.
 -		*(uint16_t *)(p-2) = off;
 -		p[-3] = 7<<5;
-+		*(uint16_t *)(cap_prefix(p)+2) = off;
-+		cap_prefix(p)[1] = 7<<5;
++		*(uint16_t *)(cap_prefix(p, cap_s)+2) = off;
++		cap_prefix(p, cap_s)[1] = 7<<5;
  		p += UNIT*off;
  		// for nonzero offset there is no permanent check
  		// byte, so make one.
 -		p[-4] = 0;
-+		cap_prefix(p)[0] = 0;
++		cap_prefix(p, cap_s)[0] = 0;
  	}
 -	*(uint16_t *)(p-2) = (size_t)(p-g->mem->storage)/UNIT;
 -	p[-3] = idx;
-+	*(uint16_t *)(cap_prefix(p)+2) = (size_t)(p-g->mem->storage)/UNIT;
-+	cap_prefix(p)[1] = idx;
- 	set_size(p, end, n);
+-	set_size(p, end, n);
++	*(uint16_t *)(cap_prefix(p, cap_s)+2) = (size_t)(p-g->mem->storage)/UNIT;
++	cap_prefix(p, cap_s)[1] = idx;
++	set_size(p, end, n CAP_S);
 +#ifdef CAPSTONE_MUSL_MALLOC
-+	__capstone_malloc_slot_key(&g->cap_slots[idx], p, n);
++	__capstone_malloc_slot_key(cap_s, p, n);
 +#endif
  	return p;
  }
  
 --- a/src/malloc/mallocng/realloc.c	2024-03-01 10:07:33.000000000 +0800
 +++ b/src/malloc/mallocng/realloc.c
-@@ -13,6 +13,9 @@
+@@ -4,24 +4,40 @@
+ #include <string.h>
+ #include "meta.h"
+ 
++#ifdef CAPSTONE_MUSL_MALLOC
++/* cap_s: the slot record of p, found by the runtime from the program's pointer (heap.c realloc). */
++void *realloc(void *p, size_t n, struct capstone_malloc_slot *cap_s)
++#else
+ void *realloc(void *p, size_t n)
++#endif
+ {
+ 	if (!p) return malloc(n);
+ 	if (size_overflows(n)) return 0;
+ 
++#ifdef CAPSTONE_MUSL_MALLOC
++	struct meta *g = cap_s->group;
++	int idx = cap_s->index;
++#else
+ 	struct meta *g = get_meta(p);
  	int idx = get_slot_index(p);
++#endif
  	size_t stride = get_stride(g);
  	unsigned char *start = g->mem->storage + stride*idx;
 +#ifdef CAPSTONE_MUSL_MALLOC
-+	start = __capstone_malloc_slot_start(&g->cap_slots[idx]);
++	start = __capstone_malloc_slot_start(cap_s);
 +#endif
  	unsigned char *end = start + stride - IB;
- 	size_t old_size = get_nominal_size(p, end);
+-	size_t old_size = get_nominal_size(p, end);
++	size_t old_size = get_nominal_size(p, end CAP_S);
  	size_t avail_size = end-(unsigned char *)p;
-@@ -22,6 +25,9 @@
+ 	void *new;
+ 
+ 	// only resize in-place if size class matches
  	if (n <= avail_size && n<MMAP_THRESHOLD
  	    && size_to_class(n)+1 >= g->sizeclass) {
- 		set_size(p, end, n);
+-		set_size(p, end, n);
++		set_size(p, end, n CAP_S);
 +#ifdef CAPSTONE_MUSL_MALLOC
-+		__capstone_malloc_slot_key(&g->cap_slots[idx], p, n);
++		__capstone_malloc_slot_key(cap_s, p, n);
 +#endif
  		return p;
  	}
  
-@@ -30,15 +36,72 @@
+@@ -30,15 +46,72 @@
  		assert(g->sizeclass==63);
  		size_t base = (unsigned char *)p-start;
  		size_t needed = (n + base + UNIT + IB + 4095) & -4096;
@@ -745,9 +878,10 @@ authority stays in heap.c's private state; no meta field or return value carries
  			end = g->mem->storage + (needed - UNIT) - IB;
 +#endif
  			*end = 0;
- 			set_size(p, end, n);
+-			set_size(p, end, n);
++			set_size(p, end, n CAP_S);
 +#ifdef CAPSTONE_MUSL_MALLOC
-+		__capstone_malloc_slot_key(&g->cap_slots[idx], p, n);
++		__capstone_malloc_slot_key(cap_s, p, n);
 +#endif
  			return p;
  		}

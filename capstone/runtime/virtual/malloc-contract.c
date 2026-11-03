@@ -666,12 +666,210 @@ static int recycle_path(const char *mode, int may_survive)
     return survived(mode, may_survive);
 }
 #endif
+#ifdef __CAPSTONE_PURECAP__
+/* calloc-clean (2026-11-03): calloc skips its memset for an object whose slot was clean when it
+ * was taken -- a fresh mapping's slot nobody took before, or a reused mapping's slot, scrubbed at
+ * that take (heap.c calloc). Every calloc here must still read zero and untagged over its whole
+ * extent: (1) a fresh mapping's single slot, which takes the skip; (2) a slot of a live group that
+ * an earlier object filled with bytes and capabilities and freed, which must not (the memset
+ * zeroes it); (3) the first slot's mapping after its group was released and kept, reused: scrubbed,
+ * so the skip again. With object bounds off the program holds its group's authority and could write
+ * a slot nobody took, so that arm never skips. Each step's condition (a fresh map, the dirty
+ * bytes' reuse, a recycle hit) is required, so a run that never creates it fails, not passes. */
+extern unsigned long __capstone_malloc_calloc_clean;
+static void zero_untagged(const char *p, size_t n, const char *what)
+{
+    for (size_t i = 0; i < n; ++i) require(!p[i], what);
+    for (size_t o = 0; o + 16 <= n; o += 16)
+        require(!__builtin_capstone_cap_get_tag(*(void *const volatile *)(p + o)), what);
+}
+static void dirty(char *p, size_t n, void *value)
+{
+    memset(p, 0xa5, n);
+    for (size_t o = 0; o + 16 <= n; o += 16) *(void *volatile *)(p + o) = value;
+    require(__builtin_capstone_cap_get_tag(*(void *volatile *)p), "calloc-clean: the reader sees a stored tag");
+}
+static int calloc_clean(void)
+{
+    char *live = malloc(32); require(live != NULL, "calloc-clean live object");
+    /* (2) first, in the 100-byte class that the denial cases use: 112-byte slots, offset 0 */
+    anchored = calloc(1, 100); require(anchored != NULL, "calloc-clean anchor");
+    char *old = calloc(1, 100); require(old != NULL, "calloc-clean old"); anchored_with(old);
+    int bounds_off = whole_group(old);
+    zero_untagged(old, 100, "calloc-clean: a first-use object is zero");
+    dirty(old, 100, live);
+    uintptr_t address = (uintptr_t)old;
+    free(old);
+    static char *held[4096]; unsigned count = 0, reused = 0, cleaned = 0;
+    while (count < 4096) {
+        unsigned long before = __capstone_malloc_calloc_clean;
+        held[count] = calloc(1, 100); require(held[count] != NULL, "calloc-clean reuse search");
+        zero_untagged(held[count], 100, "calloc-clean: every object is zero and untagged");
+        if ((uintptr_t)held[count++] == address) { reused = 1; cleaned = __capstone_malloc_calloc_clean != before; break; }
+    }
+    require(reused, "calloc-clean: the dirty slot was reused");
+    require(!cleaned, "calloc-clean: a reused slot is zeroed, not skipped");
+    /* (1) and (3) */
+    unsigned long maps = __capstone_malloc_map_calls, hits = __capstone_malloc_recycle_hits;
+    unsigned long skipped = __capstone_malloc_calloc_clean;
+    char *first = calloc(1, RECYCLE_SIZE);
+    require(first && __capstone_malloc_map_calls == maps + 1 && __capstone_malloc_recycle_hits == hits,
+            "calloc-clean: a fresh mapping");
+    require(__capstone_malloc_calloc_clean == skipped + !bounds_off, "calloc-clean: a fresh slot skips the memset");
+    zero_untagged(first, RECYCLE_SIZE, "calloc-clean: a fresh slot is zero and untagged");
+    dirty(first, RECYCLE_SIZE, live);
+    unsigned long kept = __capstone_malloc_recycle_kept;
+    free(first);
+    require(__capstone_malloc_recycle_kept == kept + 1, "calloc-clean: the released mapping was kept");
+    maps = __capstone_malloc_map_calls; skipped = __capstone_malloc_calloc_clean;
+    char *again = calloc(1, RECYCLE_SIZE);
+    require(again && __capstone_malloc_map_calls == maps && __capstone_malloc_recycle_hits == hits + 1,
+            "calloc-clean: the kept mapping was reused");
+    require((uintptr_t)again < (uintptr_t)first + RECYCLE_SIZE && (uintptr_t)first < (uintptr_t)again + RECYCLE_SIZE,
+            "calloc-clean: the reuse overlaps the dirtied object");
+    require(__capstone_malloc_calloc_clean == skipped + !bounds_off, "calloc-clean: a scrubbed slot skips the memset");
+    zero_untagged(again, RECYCLE_SIZE, "calloc-clean: a reused mapping's slot is zero and untagged");
+    printf("MALLOC_CALLOC_CLEAN reused_after=%u skipped=%lu bounds_off=%d\n", count, __capstone_malloc_calloc_clean,
+           bounds_off);
+    puts("MALLOC_FAULT_READY:calloc-clean");
+    puts("MALLOC_SURVIVED:calloc-clean"); fflush(stdout);
+    return 0;
+}
+/* The directed cases of the review (2026-11-03), each a survivor under every heap configuration.
+ * calloc-shrink: an object filled with bytes and capabilities, shrunk in place, then freed; the
+ * calloc that reuses its address must zero the whole extent again, the tail the shrink gave up
+ * included (the slot is not clean, so no skip). */
+static int calloc_shrink(void)
+{
+    char *live = malloc(32); require(live != NULL, "calloc-shrink live object");
+    anchored = malloc(100); char *p = malloc(100); require(anchored && p, "calloc-shrink setup"); anchored_with(p);
+    dirty(p, 100, live);
+    uintptr_t address = (uintptr_t)p;
+    char *q = realloc(p, 90);
+    require(q && (uintptr_t)q == address, "calloc-shrink: the shrink is in place");
+    free(q);
+    static char *held[4096]; unsigned count = 0, found = 0, skipped = 0;
+    while (count < 4096 && !found) {
+        unsigned long before = __capstone_malloc_calloc_clean;
+        held[count] = calloc(1, 100); require(held[count] != NULL, "calloc-shrink reuse search");
+        zero_untagged(held[count], 100, "calloc-shrink: every object is zero and untagged");
+        found = (uintptr_t)held[count++] == address; skipped = __capstone_malloc_calloc_clean != before;
+    }
+    require(found, "calloc-shrink: the shrunk object's slot was reused");
+    require(!skipped, "calloc-shrink: a reused slot is zeroed, not skipped");
+    printf("MALLOC_CALLOC_SHRINK reused_after=%u\n", count);
+    puts("MALLOC_FAULT_READY:calloc-shrink"); puts("MALLOC_SURVIVED:calloc-shrink"); fflush(stdout);
+    return 0;
+}
+/* calloc-geometry: a multi-slot group's object filled and freed, its mapping kept; a calloc of a
+ * single-slot size of the same mapping length takes the mapping with other slot boundaries. Its
+ * whole extent must read zero and untagged, and it skips the memset (the slot was scrubbed). */
+static int calloc_geometry(void)
+{
+    char *live = malloc(32); require(live != NULL, "calloc-geometry live object");
+    unsigned long length; size_t size;
+    char *a = fresh_multi_slot(&length, &size);
+    int bounds_off = whole_group(a);
+    dirty(a, size, live);
+    free_kept(a, "calloc-geometry: kept");
+    size_t single = length - 68;   /* as recycle-geometry: room for the footer and a header up to 64 */
+    unsigned long maps = __capstone_malloc_map_calls, hits = __capstone_malloc_recycle_hits;
+    unsigned long skipped = __capstone_malloc_calloc_clean;
+    char *c = calloc(1, single);
+    require(c && __capstone_malloc_map_calls == maps && __capstone_malloc_recycle_hits == hits + 1,
+            "calloc-geometry: a single-slot group took the kept mapping");
+    struct capstone_malloc_slot *r = __capstone_malloc_find(c);
+    require(r && __builtin_capstone_cap_get_end(r->parent) - __builtin_capstone_cap_get_base(r->parent) >= single,
+            "calloc-geometry: the new group is a single slot");
+    require(__capstone_malloc_calloc_clean == skipped + !bounds_off, "calloc-geometry: a scrubbed slot skips the memset");
+    zero_untagged(c, single, "calloc-geometry: the new object is zero and untagged");
+    printf("MALLOC_CALLOC_GEOMETRY length=%lu multi=%lu single=%lu\n", length, (unsigned long)size,
+           (unsigned long)single);
+    puts("MALLOC_FAULT_READY:calloc-geometry"); puts("MALLOC_SURVIVED:calloc-geometry"); fflush(stdout);
+    return 0;
+}
+/* meta-reuse: free_meta clears only the records a group bound (musl patch 0009). A meta's 32 slot
+ * records are the array r - r->index of any of its records. The bound count is the meta's own
+ * last_idx + 1, read from its header (mallocng meta.h: prev, next and mem capabilities, the two
+ * masks, then the bitfield word with last_idx in bits 0-4 at byte 56; cap_slots at byte 80, which
+ * the scan checks against r - r->index before trusting the layout). Counting the records that name
+ * the meta would not do: a record left uncleared still names it (the first negative control read
+ * exactly that). Records below the bound must name the meta; every other one must be all zero bytes
+ * (no capability, no tag). Metas are seen bound with many slots, then reused by single-slot groups,
+ * then by many-slot groups again; both transitions must be observed on some meta, and the invariant
+ * holds on every meta scanned. */
+#define META_SEEN 512
+static struct { size_t meta; unsigned many, few_after, many_after; } seen[META_SEEN];
+static unsigned nseen, transitions_few, transitions_many, scanned, bound_tags;
+static unsigned scan_meta(void *p, const char *what)
+{
+    struct capstone_malloc_slot *r = __capstone_malloc_find(p);
+    require(r && r->group && r->index < 32, what);
+    struct capstone_malloc_slot *s = r - r->index;
+    size_t meta = __builtin_capstone_cap_get_cursor(r->group);
+    require(__builtin_capstone_cap_get_cursor(s) == meta + 80, "meta-reuse: the slot records start at meta + 80");
+    unsigned bound = (unsigned)(*(const volatile unsigned long *)((const char *)r->group + 56) & 31) + 1;
+    require(r->index < bound, "meta-reuse: the record is inside its meta's bound");
+    for (unsigned k = 0; k < 32; ++k) {
+        if (k < bound) {
+            require(s[k].group && __builtin_capstone_cap_get_cursor(s[k].group) == meta,
+                    "meta-reuse: a bound record names its meta");
+            bound_tags += __builtin_capstone_cap_get_tag(s[k].parent) != 0; continue;
+        }
+        const unsigned char *b = (const unsigned char *)&s[k];
+        for (size_t i = 0; i < sizeof s[k]; ++i) require(!b[i], "meta-reuse: a record past the bound is zero");
+        for (size_t o = 0; o + 16 <= sizeof s[k]; o += 16)
+            require(!__builtin_capstone_cap_get_tag(*(void *const volatile *)(b + o)), "meta-reuse: a record past the bound is untagged");
+    }
+    ++scanned;
+    return bound;
+}
+static void note_meta(void *p, int phase)
+{
+    unsigned bound = scan_meta(p, "meta-reuse: slot record");
+    size_t meta = __builtin_capstone_cap_get_cursor(__capstone_malloc_find(p)->group);
+    unsigned i = 0;
+    while (i < nseen && seen[i].meta != meta) ++i;
+    if (i == nseen) { if (nseen == META_SEEN) return; seen[nseen++].meta = meta; }
+    if (phase == 0 && bound >= 2) seen[i].many = 1;
+    if (phase == 1 && bound == 1 && seen[i].many && !seen[i].few_after) { seen[i].few_after = 1; ++transitions_few; }
+    if (phase == 2 && bound >= 2 && seen[i].few_after && !seen[i].many_after) { seen[i].many_after = 1; ++transitions_many; }
+}
+static int meta_reuse(void)
+{
+    enum { SMALL = 600, BIG = 48 };
+    static char *small[SMALL], *big[BIG];
+    for (int round = 0; round < 2; ++round) {
+        for (unsigned i = 0; i < SMALL; ++i) {
+            small[i] = malloc(i % 2 ? 48 : 200); require(small[i] != NULL, "meta-reuse small");
+            note_meta(small[i], round ? 2 : 0);
+        }
+        for (unsigned i = 0; i < SMALL; ++i) free(small[i]);
+        if (round) break;
+        for (unsigned i = 0; i < BIG; ++i) {
+            big[i] = malloc(RECYCLE_SIZE + 4096 * (i % 4)); require(big[i] != NULL, "meta-reuse big");
+            note_meta(big[i], 1);
+        }
+        for (unsigned i = 0; i < BIG; ++i) free(big[i]);
+    }
+    printf("MALLOC_META_REUSE metas=%u scanned=%u many_to_few=%u few_to_many=%u bound_tags=%u\n", nseen, scanned,
+           transitions_few, transitions_many, bound_tags);
+    require(bound_tags > 0, "meta-reuse: the reader sees the bound records' tags");
+    require(transitions_few > 0 && transitions_many > 0, "meta-reuse: a meta went many -> few -> many slots");
+    puts("MALLOC_FAULT_READY:meta-reuse"); puts("MALLOC_SURVIVED:meta-reuse"); fflush(stdout);
+    return 0;
+}
+#endif
 int main(int argc, char **argv)
 {
     const char *mode = argc > 1 ? argv[1] : "ok";
     int may_survive = argc > 2 && !strcmp(argv[2], "may-survive");
 #ifdef __CAPSTONE_PURECAP__
     if (!strncmp(mode, "recycle-", 8)) return recycle_case(mode, may_survive);
+    if (!strcmp(mode, "calloc-clean")) return calloc_clean();
+    if (!strcmp(mode, "calloc-shrink")) return calloc_shrink();
+    if (!strcmp(mode, "calloc-geometry")) return calloc_geometry();
+    if (!strcmp(mode, "meta-reuse")) return meta_reuse();
 #endif
     if (!strcmp(mode, "hot")) { hot(0); return 0; }
     if (!strcmp(mode, "hot-service-control")) { hot(1); return 0; }

@@ -68,7 +68,14 @@ def main():
                      'recycle-tags': None, 'recycle-header': None, 'recycle-slack': None, 'recycle-limits': None,
                      'recycle-root': (25, 'cap_malloc_fault_store'), 'recycle-geometry': (25, 'cap_malloc_fault_store'),
                      'recycle-nested': (25, 'cap_malloc_fault_store'), 'recycle-aligned': (25, 'cap_malloc_fault_store'),
-                     'recycle-realloc': (25, 'cap_malloc_fault_store')}
+                     'recycle-realloc': (25, 'cap_malloc_fault_store'),
+                     # calloc's skipped memset (heap.c calloc): zero and untagged on a fresh, a dirty and a
+                     # recycled slot, under every heap configuration.
+                     'calloc-clean': None,
+                     # the review's directed cases: calloc after an in-place shrink, calloc across a recycled
+                     # mapping's geometry change, and a meta reused many -> few -> many slots (records past
+                     # the bound all zero).
+                     'calloc-shrink': None, 'calloc-geometry': None, 'meta-reuse': None}
     recycle_loop = ' '.join(c for c in recycle_sites if c != 'recycle-tags')
     nm = Path(os.environ.get('CAPSTONE_LLVM_BIN', '')) / 'llvm-nm'
     symbols = {name: int(value, 16) for value, _, name in
