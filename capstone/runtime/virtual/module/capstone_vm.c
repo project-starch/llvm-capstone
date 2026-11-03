@@ -2335,7 +2335,9 @@ static int vm_release(struct inode *inode, struct file *f)
              (long long)atomic64_read(&c->bench_cycles), (long long)atomic64_read(&c->bench_instret),
              (long long)atomic64_read(&c->bench_entries));
 #ifdef CAPSTONE_VM_BENCH_HPM
-    pr_emerg("capstone_vm: bench hpm3=%lld hpm4=%lld hpm5=%lld hpm6=%lld hpm7=%lld hpm8=%lld\n",
+    /* Its own prefix, never "capstone_vm: bench": a stage's run.sh takes the LAST dmesg line matching that and counts
+     * them to check freshness, so a second bench line per context broke both (QEMU gate, 3 Nov). */
+    pr_emerg("capstone_vm: hpm hpm3=%lld hpm4=%lld hpm5=%lld hpm6=%lld hpm7=%lld hpm8=%lld\n",
              (long long)atomic64_read(&c->bench_hpm[0]), (long long)atomic64_read(&c->bench_hpm[1]),
              (long long)atomic64_read(&c->bench_hpm[2]), (long long)atomic64_read(&c->bench_hpm[3]),
              (long long)atomic64_read(&c->bench_hpm[4]), (long long)atomic64_read(&c->bench_hpm[5]));
