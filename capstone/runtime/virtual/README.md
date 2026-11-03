@@ -74,7 +74,11 @@ mutex/condition synchronization, timeout, independent blocking I/O, private
 epoll event conversion and 64
 successive joined lifetimes, plus preempted I/O through a shared-TLS explicit
 context. Wire ownership uses the trusted context ID, not the TLS address.
-Compile `pthread-contract.c` with the SDK and `-I capstone/runtime/include`,
+It also checks the transport hold (another thread's unmap of a blocked
+worker's exchange, and the worker's own while attached, answer `EBUSY`; a
+worker's exit leaves the hold of the next worker at its reused address alone)
+and, from `/proc/vmstat`, that every `FOLL_PIN` pin the run took was released
+by `rmmod`. Compile `pthread-contract.c` with the SDK and `-I capstone/runtime/include`,
 then run `run-pthreads.py` with adapter, application, QEMU, images and a fresh
 work directory. Cancellation, arbitrary `pthread_kill`, main-thread-only
 `pthread_exit` and full POSIX signal/register semantics are not qualified by
