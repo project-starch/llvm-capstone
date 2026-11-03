@@ -1,3 +1,12 @@
+## 2026-11-03 — Judge milestones with seven complete benchmark pairs
+
+Use the [widened census](../../ports/spec-cpu2017/tools/profile.md#one-command-milestone-census)
+for gcc, imagick, lbm, nab, perlbench, mcf and xz. Keep full PASS pairs separate
+from the qualified quick prefixes: the perl prefix covers makerand.pl only,
+and the xz prefix covers its first invocation. Full perlbench needs relative
+staging, guest-owned files and two supervisor slots; full xz needs all twelve
+invocations. Retain timeout/cleanup failures as failures, never as slices.
+
 **2026-10-21, the cross-lane plan to the next bitstream (runtime/semantics lane, coordinating on the lead's word).**
 Goal: the six-item batch bitstream, then the WHOLE corpus on vp2, including the two arms the current bitstreams
 cannot run (cpython lt1 and postgres pg-pools, both "needs collection", which item 6's hardware recycling provides).

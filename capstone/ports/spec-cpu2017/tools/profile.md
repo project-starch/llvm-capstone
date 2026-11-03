@@ -316,3 +316,40 @@ The boundary variation, especially imagick's, limits what a small
 change in one quick check can establish. Full P/K/H terms and the compatible
 quick-to-quick comparison are in each run's `northstar.{txt,json}`; the full
 [census 5](../../../docs/plans/2026-11-03-boundary-north-star.md) is separate.
+
+### Seven-benchmark quick qualification (QC2)
+
+On dev `114b90b7be2e`, p12 runs
+`~/lanes/laneQC/quick-results/runs/{qc2-fixed-quick1,qc2-fixed-quick2}`
+validate all 28 rows as SLICE. Elapsed times including adapter builds and
+preparation were **270.111 s** and **297.417 s**. Both use the same compiler,
+SDK, executables, corrected staging wrapper, watchdog and driver.
+
+| Benchmark | Program 1 % | Program 2 % | Spread pp | Boundary 1 % | Boundary 2 % | Spread pp |
+|---|---:|---:|---:|---:|---:|---:|
+| 502.gcc_r | 29.881559 | 29.954796 | 0.073236 | 36.145779 | 36.658368 | 0.512589 |
+| 538.imagick_r | 22.564139 | 22.309460 | 0.254679 | 66.990340 | 68.375300 | 1.384960 |
+| 519.lbm_r | 1.860512 | 1.872154 | 0.011642 | 13.053159 | 13.481661 | 0.428502 |
+| 544.nab_r | 10.915134 | 11.037602 | 0.122468 | 6.687585 | 7.536146 | 0.848561 |
+| 500.perlbench_r | 39.640020 | 39.459475 | 0.180545 | 47.018071 | 46.545641 | 0.472430 |
+| 505.mcf_r | 2.623631 | 2.631289 | 0.007658 | 0.049863 | 0.294608 | 0.244745 |
+| 557.xz_r | 1.448389 | 1.448414 | 0.000025 | 25.199259 | 25.206328 | 0.007069 |
+
+P_A and P_B are identical across repeats for all seven programs; the program
+percentage spread comes from the K_A denominator. Spread is max minus min of
+two observations, not a confidence interval. All watchdogs reported zero
+cleanup signals and zero remaining descendants. Perl's recorded CPU/module
+slots are both two, both shares use mapped-xattr, and staged program words
+remain relative. Both xz slices stop in window zero with one invocation.
+
+Command: `python3 ~/lanes/laneQC/qc2-summarize.py qc2-fixed-quick1 qc2-fixed-quick2`.
+The output `~/lanes/laneQC/qc2-fixed-quick-summary.txt` checks the metrics,
+verdicts, windows, stop sites, effective perl settings and watchdogs.
+
+The earlier `qc2-quick{1,2}` prefixes used the original wrapper and plain
+share setting. The first full attempt, `runs/census6`, exposed its invalid
+absolute staged perl path and was excluded. The corrected prefixes above
+supersede those initial quick numbers. Perl's prefix covers `makerand.pl`;
+it does not validate the nested test driver. Full xz and perlbench acceptance
+require the complete SPEC oracle, with the kit's existing run-directory
+`pack.t` adaptations explicitly retained.

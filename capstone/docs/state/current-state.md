@@ -1,5 +1,16 @@
 # Current Capstone state
 
+## 2026-11-03 — Seven-benchmark quick census
+
+The [QC2 driver](../../ports/spec-cpu2017/tools/profile.md#seven-benchmark-quick-qualification-qc2)
+adds perlbench, mcf and xz, per-row deadlines and descendant-only VM cleanup.
+Two corrected p12 prefix batches on dev `114b90b7be2e` validate all 28 SLICE
+rows in 270.111 s and 297.417 s, including preparation. P_A and P_B agree
+exactly across repeats for every program. Perl needs two supervisor slots,
+relative tmpfs staging and mapped-xattr ownership in both arms. The first
+full attempt exposed the old staged-path failure and is excluded; quick
+prefixes do not establish complete-program correctness or exit costs.
+
 ## 2026-11-03 — Automated north-star census 5
 
 The paired SPEC test census on dev `114b90b7be2e` (including the launcher
