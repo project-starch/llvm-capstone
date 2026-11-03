@@ -75,6 +75,19 @@ v, why = verdict(out); expect("plain slice with foreign bytes inside stopat_f", 
 open(os.path.join(out, "slice.json"), "w").write(json.dumps(json.load(open(os.path.join(root, "plain", "slice.json")))))
 rc, why = report(out, "plain"); expect("plain slice with foreign bytes inside stopat_f, prof-report", rc, 1, why)
 
+# A record translated in the window but never executed there (0 attempts) is no execution: a
+# zero-attempt record with other bytes inside stopat_f (plain) or the text (domain) must not fail.
+def add_record(out, window, va, bytes_, att):
+    p = os.path.join(out, "capprof", f"window-{window}.tsv")
+    lines = open(p).read().splitlines()
+    lines.insert(2, f"{va:x}\t4\t{bytes_:08x}\t{att}\t1")
+    open(p, "w").write("\n".join(lines) + "\n")
+
+out = make("plain-zero", "plain-stop", "plain-stop", "stopat-plain", 1, "plain")
+add_record(out, 1, site + 4, 0x00100093, 0)
+v, why = verdict(out); expect("plain slice with a zero-attempt foreign record inside stopat_f", v, "SLICE", why)
+rc, why = report(out, "plain"); expect("plain slice with a zero-attempt foreign record, prof-report", rc, 0, why)
+
 out = make("plain-start-unreached", "plain-start", "plain-start", "stopat-plain", 1, "plain")
 os.remove(os.path.join(out, "capprof", "stopped"))
 json.dump({"verdict": "PASS", "reasons": []}, open(os.path.join(out, "result.json"), "w"))
@@ -91,5 +104,8 @@ out = make("cap-foreign", "cap-stop", "cap-stop", "stopat-cap", 1, "capstone")
 tamper_window(out, 1, lambda f: base <= int(f[0], 16) < base + cap["text"]["size"] and int(f[0], 16) != base + cap["sites"]["stop"]["link"] - cap["low"],
               lambda f: f[:2] + [f"{int(f[2], 16) ^ 0x100:08x}"] + f[3:])
 v, why = verdict(out); expect("domain slice with foreign bytes in the text", v, "FAIL", why)
+out = make("cap-zero", "cap-stop", "cap-stop", "stopat-cap", 1, "capstone")
+add_record(out, 1, base + 0x100, 0x00100093, 0)
+v, why = verdict(out); expect("domain slice with a zero-attempt foreign record in the text", v, "SLICE", why)
 print("ALL PASS" if ok else "SOME FAIL")
 sys.exit(0 if ok else 1)

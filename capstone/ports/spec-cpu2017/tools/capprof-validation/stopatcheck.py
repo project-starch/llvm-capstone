@@ -210,6 +210,22 @@ check("cap-inter: stopped at entry 500 fed by two images at two armed bases (eac
       and all(int(c[3]) <= 300 for c in entered) and "armed_bases=2" in " ".join(f or [])
       and all(int(c[4]) == 0 for c in cands),
       f"{st} candidates {entered}")
+# A site in the anchor's own first block (translated before the anchor ran).
+EM = {m: (m << 20) | 0xe0e13 for m in (0x3f7, 0x3f8, 0x3f9)}
+def emarks(recs):
+    return {m: sum(r[3] for r in recs if r[2] == wd and r[1] == 4) for m, wd in EM.items()}
+es = json.load(open(f"{d}/plain-entry.json"))
+w, f = window("plain-entry", 0)
+st = open(f"{d}/plain-entry/capprof/stopped").read().strip() if os.path.exists(f"{d}/plain-entry/capprof/stopped") else ""
+check("plain-entry: the site in the anchor's own block stops at entry 1 (anchor and site ran, successor not)",
+      st.startswith(f"stopped_at={es['sites']['stop']['link']:x}:1 window=0 ") and es["anchor"]["link"] + 4 == es["sites"]["stop"]["link"]
+      and w is not None and emarks(w) == {0x3f7: 1, 0x3f8: 1, 0x3f9: 0}, f"{st} marks {w is not None and emarks(w)}")
+if os.path.isdir(f"{d}/plain-entry-old3"):
+    w, f = window("plain-entry-old3", 0)
+    e = [l for l in (f or []) if l.startswith("# stop_entries_so_far")]
+    print(f"INFO plain-entry-old3 (648d7b7805): stopped {os.path.exists(f'{d}/plain-entry-old3/capprof/stopped')} {e}")
+    check("negative control: 648d7b7805 misses the entry (no image add in the anchor's block): no stop, broken=1",
+          not os.path.exists(f"{d}/plain-entry-old3/capprof/stopped") and e and e[0].split()[2] == "0" and "broken=1" in e[0], "")
 # Refusals.
 r = open(f"{d}/refusals.txt").read()
 print("INFO refusals:\n" + r.strip())

@@ -18,10 +18,14 @@
 #                domain (supervisor_slots=1, the processor's one saved-context slot), and with two
 #                slots this platform halts the guest (cause 24 in the firmware), so the second
 #                domain enters only when the first has ended
+#   plain-entry  stopat-entry (entry stopat_entry, -DSTOPAT_ENTRY): stop at entry 1 of stopat_e, a site in
+#                the anchor's own first block, translated before the anchor ran; the window is
+#                opened by profrun before the exec
 #   refusals     the resolver and the plugin refuse an anchor that is the site
 # Negative controls, each only when its plugin is given (the arguments that plugin does not know
 # are dropped): OLD_PLUGIN (671eacb23e, entries = arrivals at a block end): plain-fault-old;
-# OLD2_PLUGIN (136068aae7, completion flag cleared by any successor arrival): plain-handler-old2.
+# OLD2_PLUGIN (136068aae7, completion flag cleared by any successor arrival): plain-handler-old2;
+# OLD3_PLUGIN (648d7b7805, image counters only in blocks translated after arming): plain-entry-old3.
 # Then stopatcheck.py and stopat-kit-test.py. Environment: PLATFORM (default ~/prof-dev/platform)
 # with plugins/libcapprof.so and profrun, SDK (capstone-cc), RVCC (plain driver), NM (llvm-nm),
 # SHARE (a directory below which TAG/ is made; it is the guest's /mnt/host).
@@ -36,6 +40,7 @@ cp "$HERE/stopat.c" "$OUT/"; cp "$PL/profrun" "$OUT/profrun"
 "${RVCC:-$D/rv/rv-cc}" -O2 -DSTOPAT_PLAIN -o "$OUT/stopat-plain" "$OUT/stopat.c"
 "${SDK:-$D/cap/sdk}/capstone-cc" -O2 -o "$OUT/stopat-cap" "$OUT/stopat.c"
 "${SDK:-$D/cap/sdk}/capstone-cc" -O2 -DSTOPAT_BIG -o "$OUT/stopat-cap2" "$OUT/stopat.c"
+"${RVCC:-$D/rv/rv-cc}" -O2 -DSTOPAT_PLAIN -DSTOPAT_ENTRY -Wl,-e,stopat_entry -o "$OUT/stopat-entry" "$OUT/stopat.c"
 res() { # NAME KIND EXE ARGS...
   local name=$1 kind=$2 exe=$3; shift 3
   python3 "$HERE/../stop-at.py" resolve --nm "$NM" --kind $kind --exe "$OUT/$exe" "$@" > "$OUT/$name.json"
@@ -50,6 +55,7 @@ done
 res plain-k1 plain stopat-plain --symbol stopat_f --count 1
 res plain-handler plain stopat-plain --symbol stopat_h --count 5
 res plain-handlercount plain stopat-plain --symbol stopat_h --count 1000
+res plain-entry plain stopat-entry --symbol stopat_e --count 1
 res cap-inter capstone stopat-cap --symbol stopat_f --count 500
 res cap2-inter capstone stopat-cap2 --symbol stopat_f --count 500   # its offsets must equal stopat-cap's
 strip() { # SRC DST PREFIX...: a plugin's arguments without the ones an older plugin does not know
@@ -58,6 +64,7 @@ strip() { # SRC DST PREFIX...: a plugin's arguments without the ones an older pl
 }
 [ -z "${OLD_PLUGIN:-}" ] || strip plain-fault plain-fault-old anchor_ stop_next_bytes text_
 [ -z "${OLD2_PLUGIN:-}" ] || strip plain-handler plain-handler-old2 stop_next_bytes text_
+[ -z "${OLD3_PLUGIN:-}" ] || cp "$OUT/plain-entry.json" "$OUT/plain-entry-old3.json"
 
 # Refusals: the resolver refuses the image's entry as a site, and the plugin an anchor at a site.
 {
@@ -77,7 +84,7 @@ boot() { # NAME PROGRAM... (plain|cap|plainf|capf|plainh|inter), plugin argument
   local name=$1; shift
   local o=$OUT/$name; mkdir -p "$o/capprof"
   local args=() plugin=$PL/plugins/libcapprof.so
-  case $name in *-old) plugin=$OLD_PLUGIN ;; *-old2) plugin=$OLD2_PLUGIN ;; esac
+  case $name in *-old) plugin=$OLD_PLUGIN ;; *-old2) plugin=$OLD2_PLUGIN ;; *-old3) plugin=$OLD3_PLUGIN ;; esac
   if [ -f "$OUT/$name.json" ]; then
     mapfile -t pa < <(python3 -c "import json,sys;print('\n'.join(json.load(open(sys.argv[1]))['plugin_args']))" "$OUT/$name.json")
     for a in "${pa[@]}"; do args+=(--plugin-arg "$a"); done
@@ -97,6 +104,7 @@ boot() { # NAME PROGRAM... (plain|cap|plainf|capf|plainh|inter), plugin argument
     rc=0
     case $p in
       cap|capfault) vm run --cwd /mnt/host/$TAG -e CAPSTONE_PROFILE_RECORD=/mnt/host/$TAG/$name/image-records.txt -- ./stopat-cap ${p#cap} > "$o/$p.out" 2> "$o/$p.err" || rc=$? ;;
+      entry) vm exec -- sh -c "for f in stopat-entry profrun; do cp /mnt/host/$TAG/\$f /tmp/ && chmod 0755 /tmp/\$f || exit 125; done; /tmp/profrun /tmp/stopat-entry inter 3" > "$o/$p.out" 2> "$o/$p.err" || rc=$? ;;
       inter) vm exec -- sh -c "for f in stopat-cap stopat-cap2 profrun; do cp /mnt/host/$TAG/\$f /tmp/ && chmod 0755 /tmp/\$f || exit 125; done; /tmp/profrun sh -c '/tmp/stopat-cap inter 300 & /tmp/stopat-cap2 inter 300 & wait'" > "$o/$p.out" 2> "$o/$p.err" || rc=$? ;;
       *) vm exec -- sh -c "cp /mnt/host/$TAG/stopat-plain /tmp/ && chmod 0755 /tmp/stopat-plain && /tmp/stopat-plain ${p#plain}" > "$o/$p.out" 2> "$o/$p.err" || rc=$? ;;
     esac
@@ -119,8 +127,10 @@ boot cap-faultcount capfault
 boot plain-handler plainhandler
 boot plain-handlercount plainhandler
 boot cap-inter inter
+boot plain-entry entry
 [ -z "${OLD_PLUGIN:-}" ] || boot plain-fault-old plainfault
 [ -z "${OLD2_PLUGIN:-}" ] || boot plain-handler-old2 plainhandler
+[ -z "${OLD3_PLUGIN:-}" ] || boot plain-entry-old3 entry
 rc=0; python3 "$HERE/stopatcheck.py" "$OUT" > "$OUT/stopatcheck.txt" 2>&1 || rc=$?
 cat "$OUT/stopatcheck.txt"
 rc2=0; python3 "$HERE/stopat-kit-test.py" "$OUT" "$PL" "$NM" > "$OUT/stopat-kit-test.txt" 2>&1 || rc2=$?

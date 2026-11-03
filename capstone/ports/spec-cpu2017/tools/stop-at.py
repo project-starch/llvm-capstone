@@ -142,14 +142,16 @@ def resolve(a):
 
 
 def foreign(wfile, loads, slide, lo, hi):
-    """(attempts, addresses) of a window's records in [lo, hi) (link addresses; run-time = link +
-    slide) whose bytes are not the image's; None when there are none."""
+    """(attempts, addresses) of a window's EXECUTED records in [lo, hi) (link addresses; run-time =
+    link + slide) whose bytes are not the image's; None when there are none."""
     att = n = 0
     for line in (open(wfile) if os.path.exists(wfile) else []):
         if line[0] == "#":
             continue
         rva, ln, b, a, _ = line.split("\t")
         link, ln = int(rva, 16) - slide, int(ln)
+        if not int(a):
+            continue    # translated in the window, never executed there (prof-report skips these too)
         if lo <= link < hi:
             seg = [l for l in loads if l[0] <= link < l[0] + len(l[3])]
             if not seg or int.from_bytes(seg[0][3][link - seg[0][0]:link - seg[0][0] + ln], "little") != int(b, 16):

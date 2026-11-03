@@ -35,6 +35,13 @@
 #ifdef STOPAT_BIG
 char stopat_big[3 << 20];
 #endif
+#ifdef STOPAT_ENTRY
+/* -Wl,-e,stopat_entry: the program's entry (the anchor), a site in the anchor's own first block,
+ * its successor, then the usual start. That block is translated before the anchor has run. */
+__asm__(".text\n.globl stopat_entry\n.type stopat_entry,@function\nstopat_entry:\n addi t3, t3, 0x3f7\n"
+        ".globl stopat_e\n.type stopat_e,@function\nstopat_e:\n addi t3, t3, 0x3f8\n addi t3, t3, 0x3f9\n"
+        " j _start\n");
+#endif
 
 #define START() asm volatile(".insn i 0x13, 2, x0, x0, 0x7a1" ::: "memory")
 #define STOP()  asm volatile(".insn i 0x13, 2, x0, x0, 0x7a2" ::: "memory")

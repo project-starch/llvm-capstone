@@ -98,7 +98,7 @@ K-th entry exactly as the stop marker closes it, and the plugin ends the VM. Ent
 open windows only and accumulate over the run's windows (an invocation's window continues the
 previous one's count). An entry is counted when the instruction after the site runs and the last
 instruction executed in that image's text before it was the site (each image instruction carries
-one more counter), so a first instruction that faults and is retried counts once, a handler that
+one more counter, from its first translation, armed or not), so a first instruction that faults and is retried counts once, a handler that
 reaches the instruction after the site by another path counts nothing, and the window ends after
 the site's K-th execution. A site that transfers control has no such successor, and a site at the
 image's entry (or next to it) would be reset by it: both are refused. Identity: a site counts only
@@ -116,7 +116,8 @@ A stopped run's verdict is SLICE, never PASS: runcpu cannot validate an output c
 `tools/stop-at.py finish` requires the plugin's `capprof/stopped` record to match the request
 (entry K, the symbol's bytes, the plain link address or the anchored base, aligned to the grant
 size), ONE (address, page) candidate to have entered the site in the stopped window, every
-instruction the stopped window counted in the domain's text at that base (in the plain arm: inside
+instruction the stopped window EXECUTED (attempts > 0; a record of a translation alone is not
+execution) in the domain's text at that base (in the plain arm: inside
 the stop function, since other static programs share the link addresses) to be the image's own
 bytes, every guest invocation before the stopped one to have passed and the stopped one to be the
 resolved binary's. `prof-report.py` refuses a slice (and the verdict becomes FAIL) whose stop
