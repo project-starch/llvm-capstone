@@ -29,6 +29,24 @@ _Static_assert(sizeof(struct cv_step) == 136, "cv_step is two user-copy chunks a
 #include "representable.h"
 _Static_assert(CV_NODE_RESERVE == CAP_REV_TABLE_RESERVE, "processor reserve ABI");
 
+#ifdef CAPSTONE_VM_BENCH_HPM
+#ifndef CAPSTONE_VM_BENCH_COUNTERS
+#error "CAPSTONE_VM_BENCH_HPM needs CAPSTONE_VM_BENCH_COUNTERS"
+#endif
+/* Performance build only: hpmcounter3..8 (CSR 0xC03-0xC08) read around every CSRUNV, beside cycle and instret.
+ * The module only READS them. Which event each one counts is set in M-mode by a firmware built with
+ * CAPSTONE_HPM_EVENTS (mhpmevent3..8, and mcountinhibit[8:3] cleared); the board kernel has no perf driver to change
+ * them. CVA6's counters have no privilege filter, so a window counts what cycle counts: the context, plus any monitor
+ * work inside its CSRUNV. On a firmware that leaves them inhibited every reading is 0: the control that the events
+ * were set. */
+#define CV_BENCH_HPM_N 6
+static __always_inline void cv_read_hpm(unsigned long v[CV_BENCH_HPM_N])
+{
+    v[0] = csr_read(CSR_HPMCOUNTER3); v[1] = csr_read(CSR_HPMCOUNTER4); v[2] = csr_read(CSR_HPMCOUNTER5);
+    v[3] = csr_read(CSR_HPMCOUNTER6); v[4] = csr_read(CSR_HPMCOUNTER7); v[5] = csr_read(CSR_HPMCOUNTER8);
+}
+#endif
+
 /* One registered mapping. Arenas are allocated one by one and never move, so
  * the remap window may hold a pointer across its unlocked mremap. */
 struct arena {
@@ -100,6 +118,9 @@ struct context {
      * summed over every thread of the context. Linux's own work (escapes, delegated calls, fault
      * resolution) is outside the window. */
     atomic64_t bench_cycles, bench_instret, bench_entries;
+#ifdef CAPSTONE_VM_BENCH_HPM
+    atomic64_t bench_hpm[CV_BENCH_HPM_N];
+#endif
 #endif
     /* The image file, writers denied from CV_IMAGE until release. */
     struct file *image;
@@ -2032,9 +2053,18 @@ thread_unwind:
 #ifdef CAPSTONE_VM_BENCH_COUNTERS
             {
                 /* Interrupts are off: both reads bracket the CSRUNV alone. */
+#ifdef CAPSTONE_VM_BENCH_HPM
+                unsigned long hp0[CV_BENCH_HPM_N], hp1[CV_BENCH_HPM_N];
+                cv_read_hpm(hp0);
+#endif
                 unsigned long cy0 = csr_read(CSR_CYCLE), in0 = csr_read(CSR_INSTRET);
                 t->event = run_event(t, action);
                 unsigned long dcy = csr_read(CSR_CYCLE) - cy0, din = csr_read(CSR_INSTRET) - in0;
+#ifdef CAPSTONE_VM_BENCH_HPM
+                cv_read_hpm(hp1);
+                for (int k = 0; k < CV_BENCH_HPM_N; k++)
+                    atomic64_add(hp1[k] - hp0[k], &c->bench_hpm[k]);
+#endif
                 atomic64_add(dcy, &c->bench_cycles);
                 atomic64_add(din, &c->bench_instret);
                 WRITE_ONCE(bench_cycles, bench_cycles + dcy);
@@ -2304,6 +2334,12 @@ static int vm_release(struct inode *inode, struct file *f)
     pr_emerg("capstone_vm: bench cycles=%lld instret=%lld entries=%lld\n",
              (long long)atomic64_read(&c->bench_cycles), (long long)atomic64_read(&c->bench_instret),
              (long long)atomic64_read(&c->bench_entries));
+#ifdef CAPSTONE_VM_BENCH_HPM
+    pr_emerg("capstone_vm: bench hpm3=%lld hpm4=%lld hpm5=%lld hpm6=%lld hpm7=%lld hpm8=%lld\n",
+             (long long)atomic64_read(&c->bench_hpm[0]), (long long)atomic64_read(&c->bench_hpm[1]),
+             (long long)atomic64_read(&c->bench_hpm[2]), (long long)atomic64_read(&c->bench_hpm[3]),
+             (long long)atomic64_read(&c->bench_hpm[4]), (long long)atomic64_read(&c->bench_hpm[5]));
+#endif
 #endif
     list_for_each_entry_safe(t, tmp, &c->threads, link) {
         list_del(&t->link);
