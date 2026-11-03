@@ -698,13 +698,15 @@ static inline size_t request_round(size_t n)
     return n < 4096 ? (n ? n : 1) : capstone_repr_round(n);
 }
 /* *clean (if given): whether the object's bytes are all zero and untagged, because its slot was
- * clean or scrubbed at this take (calloc then skips its memset). */
+ * clean or scrubbed at this take (calloc then skips its memset). Counted here, under the heap lock,
+ * in __capstone_malloc_calloc_clean (malloc-contract.c calloc-clean reads it). */
+unsigned long __capstone_malloc_calloc_clean;
 static void *publish(void *p, size_t n, int *clean)
 {
     if (!p) return NULL;
     struct capstone_malloc_slot *r = record_of_result(p);
     if (!r) __builtin_trap();
-    if (clean) *clean = r == keyed && r->taken_clean;
+    if (clean) { *clean = r == keyed && r->taken_clean; __capstone_malloc_calloc_clean += *clean; }
     /* Successful in-place realloc replaces the public lifetime; failure
      * never reaches here. Remapping already retired the old mapping. */
 #if CAPSTONE_HEAP_OBJECT_BOUNDS
@@ -859,14 +861,12 @@ void *__capstone_malloc_reclaim(void *child, size_t offset)
  * untagged, as upstream's calloc skips the memset for fresh mmapped memory (__malloc_allzerop):
  * nothing but its first owner can have written it, since every capability the program holds
  * covers only the slot it was issued from. */
-unsigned long __capstone_malloc_calloc_clean;   /* callocs that skipped the memset; malloc-contract.c calloc-clean */
 void *calloc(size_t n, size_t size)
 {
     if (size && n > SIZE_MAX / size) { errno = ENOMEM; return NULL; }
     int clean = 0;
     void *p = allocate(n * size, &clean);
     if (p && !clean) memset(p, 0, n * size);
-    else if (p) ++__capstone_malloc_calloc_clean;
     return p;
 }
 /* mallocng keeps an object's offset when it grows it in place, or through the remap of a

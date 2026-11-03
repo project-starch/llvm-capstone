@@ -188,7 +188,12 @@ the group's own (`recycle-root`), and the bounds plus a concurrent
 `malloc_trim` (`recycle-limits`). `calloc-clean` reads every byte and granule
 of callocs on a fresh slot, a slot reused after an object filled it with
 bytes and capabilities, and a recycled mapping's slot, and requires the
-skip exactly where the slot was clean.
+skip exactly where the slot was clean. `calloc-shrink` (a calloc reusing the
+slot of an object that was filled, shrunk in place and freed),
+`calloc-geometry` (a single-slot calloc on a kept mapping a multi-slot
+group's dirtied object used) and `meta-reuse` (metas reused many -> few ->
+many slots: every record past the meta's `last_idx` is all zero bytes) read
+the same properties on the paths around it.
 
 ## VM remapping
 
