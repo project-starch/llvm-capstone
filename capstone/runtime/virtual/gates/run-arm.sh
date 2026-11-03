@@ -92,7 +92,7 @@ build_phase() {
   img "$cc" -O2 "$V/hosted-noreturn.c" -o "$B/img/noreturn.dom"
   img "$cc" -O1 -I"$inc" "$V/contract.c" -o "$B/img/contract.dom"
   img "$cc" -O1 -I"$inc" "$V/node-contract.c" -o "$B/img/node.dom"
-  img "$cc" -I"$V" "$V/malloc-contract.c" -o "$B/img/malloc.dom"
+  img "$cc" -I"$V" -I"$inc" "$V/malloc-contract.c" -o "$B/img/malloc.dom"
   img "$CROSS_GCC" -static -O1 -o "$B/img/native-hosted" "$V/hosted-contract.c"
   img "$CROSS_GCC" -static -O1 -o "$B/img/native-malloc" "$V/malloc-contract.c"
   img "$cc" -O1 -I"$inc" "$V/pin-ahead-contract.c" -o "$B/img/pin-ahead.dom" -lpthread
@@ -183,7 +183,7 @@ gates_phase() {
     --perl "$(cat "$B/apps/perl.image")" --record "$G/runtime.json" --timeout 900 "${plat[@]}"
   gate nodes python3 "$V/run-nodes.py" --adapter "$P/adapter" --application "$I/node.dom" "${plat[@]}" --work "$G/nodes"
   gate malloc python3 "$V/run-malloc.py" --adapter "$P/adapter" --application "$I/malloc.dom" \
-    --native "$I/native-malloc" "${plat[@]}" --work "$G/malloc"
+    --native "$I/native-malloc" --sdk "$(cat "$B/SDK")" "${plat[@]}" --work "$G/malloc"
   gate pin-ahead python3 "$V/run-pin-ahead.py" --adapter "$P/adapter" --application "$I/pin-ahead.dom" "${plat[@]}" --work "$G/pin-ahead"
   gate fp python3 "$V/run-fp.py" --adapter "$P/adapter" --application "$I/fp.dom" "${plat[@]}" --work "$G/fp"
   gate pthread python3 "$V/run-pthreads.py" --adapter "$P/adapter" --application "$I/pthread.dom" "${plat[@]}" --work "$G/pthread"

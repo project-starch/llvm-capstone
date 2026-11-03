@@ -203,6 +203,68 @@ groups of many -> few -> many slots: every record of the array past the
 meta's `last_idx` is all zero bytes) read the same properties on the paths
 around it.
 
+## Shared backing for small groups
+
+The group-mapping trace motivates sharing backing for groups with at least
+three slots and at most 16 KiB of page-rounded storage. The measured PHP ary2
+workload creates 15,000 groups of twenty 192-byte slots: each occupies a
+4 KiB mapping although its header and slots need only 3,856 bytes. This is
+a mapping-service cost as well as page padding. Single-slot groups include
+page slack in their stride; removing that slack would be a separate change
+to their representation, not a consequence of sharing backing.
+
+The runtime carves these groups from 64 KiB aligned regions. Each region holds
+equal-sized extents: header plus slots, rounded to a 16-byte granule and then to exactly
+representable bounds. Extents smaller than 1 KiB retain dedicated backing,
+bounding the region occupancy bitmap at 64 bits. The descriptor and root stay
+in private runtime state; each group receives a separately bounded CDERIVE
+child. Neither mallocng's meta nor a slot record receives the region root.
+The region lookup uses the group's address; available regions are indexed by
+extent size. No program-supplied pointer becomes allocator authority.
+
+Release revokes the group before making its extent available. A persistent
+dirty bit marks reuse even when the new group has different slot geometry.
+Each reused slot is scrubbed before its first take, using the existing slot
+record flags; with object bounds disabled, the entire extent is scrubbed
+before binding slots. The slot arrays and pointer index retain their existing
+ownership and lookup rules. Single-slot groups, including every mremap
+candidate, keep dedicated mappings and the existing recycling cache.
+
+Empty regions share the cache's 1 MiB retention budget. `malloc_trim` returns
+all empty regions through the retiring VM unmap path; partially occupied
+regions are never unmapped or advised away. A failed region unmap leaves its
+descriptor registered so trim can retry. All region and cache operations use
+the existing heap lock. The mallocng representation patches and allocation
+policy are unchanged.
+
+Fewer mappings need not mean fewer resident pages. In particular, the measured
+PHP shape above fits sixteen extents in 64 KiB: seventeen need 65,552 bytes.
+The region's 3,840-byte tail therefore consumes the page padding saved between
+those sixteen groups. Other shapes can pack more densely, but region tails,
+partially occupied regions and private descriptors must be included when
+assessing page savings. The current region size bounds bookkeeping and reuse;
+it does not promise the ideal packing bound from a group-padding census.
+
+The malloc gate includes `coarse-reuse`, `coarse-stale` and `coarse-bounds` in
+all three heap configurations. These call the internal group interface in a
+single thread, so per-object revocation cannot hide a missing group revoke.
+Twenty groups must occupy two 64 KiB regions with 3,360-byte extents; siblings
+must share a page and survive release, partial-region trim and reuse. Reuse
+changes nineteen 176-byte slots into eleven 304-byte slots at the same address.
+Every returned slot must contain zero bytes and no tags, with a stored-tag
+positive control; bounds-off heaps must also clear the whole extent before
+any slot is taken. Stale and out-of-bounds stores must fault with causes 25
+and 28 respectively at the labelled store, with exit 139. Missing or duplicate
+process records fail the oracle. Partial-region trim must release no region;
+final trim must release exactly two.
+
+The same contract on the dev control without coarse regions reports
+`coarse_backing=dedicated`: twenty 4 KiB mappings. It checks group revocation,
+geometry-changing cache reuse, scrubbing and final trim there; shared-page
+placement and partial-region trim do not apply. The runner selects the expected
+layout from the linked heap's coarse-region symbol, so a shared heap falling
+back to dedicated mappings cannot silently pass the sharing checks.
+
 ## VM remapping
 
 Large realloc follows upstream's mremap branch. Heap mappings use their
@@ -252,7 +314,7 @@ translation units to compile, including the six mallocng files. The physical
 survey retains its original layout and failure control.
 
 ```sh
-"$out/sdk/capstone-cc" -Icapstone/runtime/virtual \
+"$out/sdk/capstone-cc" -Icapstone/runtime/virtual -Icapstone/runtime/include \
   capstone/runtime/virtual/malloc-contract.c -o "$out/malloc.dom"
 python3 capstone/runtime/virtual/run-malloc.py \
   --adapter "$out/adapter" --application "$out/malloc.dom" \

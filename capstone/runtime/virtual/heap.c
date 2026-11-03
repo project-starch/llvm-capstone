@@ -424,7 +424,7 @@ static size_t mapping_length(size_t bytes)
  *     the header, the untaken slots and the slack, so that arm zeroes the whole mapping when it
  *     is reused, before the new group is bound.
  * (4) Bounded: RECYCLE_PER_LENGTH mappings of one length, RECYCLE_ENTRIES in all, at most
- *     RECYCLE_BYTES, none above RECYCLE_MAX_ENTRY; a release beyond a bound is unmapped as
+ *     RECYCLE_BYTES including empty shared regions, none above RECYCLE_MAX_ENTRY; a release beyond a bound is unmapped as
  *     before; malloc_trim unmaps every kept mapping. Kept mappings stay registered arenas, so
  *     the module's collection sweeps their
  *     pages like any live heap, and at exit its teardown retires them (vm_release -> retire),
@@ -438,6 +438,7 @@ static size_t mapping_length(size_t bytes)
 static struct { void *root; size_t bytes; } recycle[RECYCLE_ENTRIES];
 static unsigned recycle_count;
 static size_t recycle_bytes;
+static size_t coarse_empty_bytes;
 /* The roots of live mapped groups, by mapping base: entered by group_map, taken out by
  * group_unmap. Entries come from a static seed and then from pages of their own (mmap), which
  * only this table points to; a mapping whose entry cannot be had is simply not recyclable. */
@@ -528,7 +529,7 @@ static void *recycle_take(size_t bytes)
 static int recycle_fits(size_t bytes)
 {
     if (bytes > RECYCLE_MAX_ENTRY || recycle_count >= RECYCLE_ENTRIES ||
-        recycle_bytes + bytes > RECYCLE_BYTES) return 0;
+        recycle_bytes + coarse_empty_bytes + bytes > RECYCLE_BYTES) return 0;
     unsigned same = 0;
     for (unsigned i = 0; i < recycle_count; ++i) same += recycle[i].bytes == bytes;
     return same < RECYCLE_PER_LENGTH;
@@ -539,8 +540,172 @@ static void *group_lifetime(void *root, size_t bytes)
     take_id();
     return capstone_cap_derive(root, 0, bytes);
 }
+/* Small multi-slot groups share 64 KiB regions. A region contains equal-sized extents, each
+ * large enough for the group's header and slots, rounded to a 16-byte granule and then to
+ * representable bounds. mallocng still chooses every slot/count/stride; only backing placement changes.
+ * Single/two-slot groups and mappings above 16 KiB keep the existing recycling path. In
+ * particular, every group that can reach mallocng's mremap path remains a separate mapping.
+ *
+ * The root and occupancy maps are private, just like root_heads. Each occupied extent has its
+ * own CDERIVE child, which is all bind_slots sees. A release CREVOKEs that child before clearing
+ * its occupancy bit. `dirty` survives release: reusing that extent must scrub its slots (or the
+ * whole group with object bounds off). Equal extents may hold different group geometries.
+ * Slot records remain lane Y's zeroed arrays, and program pointers still use the address index.
+ *
+ * Region bases are 64 KiB aligned, so a group's address finds its region through a hash table,
+ * without walking all live regions. A second table contains only regions with free extents.
+ * Empty regions share RECYCLE_BYTES with the dedicated-mapping cache; malloc_trim returns all
+ * of them. munmap performs the VM retirement before Linux can reuse any region page. No partial
+ * region is unmapped or advised away. All operations hold heap_mutex. */
+#define COARSE_REGION_BYTES (64UL << 10)
+#define COARSE_GROUP_MAX (16UL << 10)
+#define COARSE_BUCKETS 64U
+struct coarse_region {
+    struct coarse_region *hash_next, *avail_next, *avail_prev;
+    void *root;
+    size_t base, span;
+    unsigned long free, dirty, mask;
+};
+static struct coarse_region *coarse_heads[COARSE_BUCKETS];
+static struct coarse_region *coarse_avail[COARSE_BUCKETS];
+static struct coarse_region *coarse_free;
+static struct coarse_region coarse_seed[8];
+static unsigned coarse_seeded;
+unsigned long __capstone_malloc_coarse_regions;
+unsigned long __capstone_malloc_coarse_groups;
+unsigned long __capstone_malloc_coarse_reused;
+unsigned long __capstone_malloc_coarse_released;
+unsigned long __capstone_malloc_coarse_unmapped;
+static void *malloc_map_aligned(size_t bytes, size_t align);
+static unsigned coarse_bucket(size_t key)
+{ return (unsigned)((key * 11400714819323198485UL) >> 58); }
+static void coarse_avail_add(struct coarse_region *r)
+{
+    unsigned b = coarse_bucket(r->span >> 4);
+    r->avail_prev = NULL; r->avail_next = coarse_avail[b];
+    if (r->avail_next) r->avail_next->avail_prev = r;
+    coarse_avail[b] = r;
+}
+static void coarse_avail_remove(struct coarse_region *r)
+{
+    if (r->avail_prev) r->avail_prev->avail_next = r->avail_next;
+    else coarse_avail[coarse_bucket(r->span >> 4)] = r->avail_next;
+    if (r->avail_next) r->avail_next->avail_prev = r->avail_prev;
+    r->avail_next = r->avail_prev = NULL;
+}
+static struct coarse_region *coarse_entry_new(void)
+{
+    if (!coarse_seeded) {
+        coarse_seeded = 1;
+        for (unsigned i = 0; i < sizeof coarse_seed / sizeof *coarse_seed; ++i) {
+            coarse_seed[i].hash_next = coarse_free; coarse_free = &coarse_seed[i];
+        }
+    }
+    if (!coarse_free) {
+        int e = errno;
+        char *page = mmap(NULL, 4096, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+        errno = e;
+        if (page == MAP_FAILED) return NULL;
+        for (size_t o = 0; o + sizeof(struct coarse_region) <= 4096; o += sizeof(struct coarse_region)) {
+            struct coarse_region *r = (struct coarse_region *)(page + o);
+            r->hash_next = coarse_free; coarse_free = r;
+        }
+    }
+    struct coarse_region *r = coarse_free;
+    coarse_free = r->hash_next;
+    memset(r, 0, sizeof *r);
+    return r;
+}
+static void coarse_entry_free(struct coarse_region *r)
+{
+    memset(r, 0, sizeof *r);
+    r->hash_next = coarse_free; coarse_free = r;
+}
+/* Failure keeps the empty region registered and available, so trim can retry. */
+static int coarse_drop(struct coarse_region *r)
+{
+    if (r->free != r->mask) __builtin_trap();
+    if (munmap(r->root, COARSE_REGION_BYTES)) return 0;
+    unsigned b = coarse_bucket(r->base >> 16);
+    struct coarse_region **p = &coarse_heads[b];
+    while (*p != r) {
+        if (!*p) __builtin_trap();
+        p = &(*p)->hash_next;
+    }
+    *p = r->hash_next;
+    coarse_avail_remove(r);
+    coarse_empty_bytes -= COARSE_REGION_BYTES;
+    coarse_entry_free(r);
+    ++__capstone_malloc_coarse_unmapped;
+    return 1;
+}
+static void *coarse_take(size_t bytes, size_t stride, unsigned count, unsigned char *stale)
+{
+    if (count < 3 || bytes > COARSE_GROUP_MAX) return NULL;
+    size_t hdr = capstone_repr_granule(stride);
+    if (hdr < 16) hdr = 16;
+    /* Check before multiplication, even though mallocng supplies bounded counts and strides. */
+    if (bytes < hdr || !stride || count > (bytes - hdr) / stride) return NULL;
+    size_t span = capstone_repr_round((hdr + stride * count + 15) & -16UL);
+    if (span < 1024 || span > bytes) return NULL;
+    unsigned b = coarse_bucket(span >> 4);
+    struct coarse_region *r;
+    for (r = coarse_avail[b]; r && r->span != span; r = r->avail_next) {}
+    if (!r) {
+        r = coarse_entry_new();
+        if (!r) return NULL;
+        if (malloc_map_aligned(COARSE_REGION_BYTES, COARSE_REGION_BYTES) == MAP_FAILED) {
+            coarse_entry_free(r); return NULL;
+        }
+        r->root = mapping_group(&pending_mapping, COARSE_REGION_BYTES);
+        r->base = __builtin_capstone_cap_get_cursor(r->root);
+        r->span = span;
+        unsigned capacity = COARSE_REGION_BYTES / span;
+        r->mask = capacity == 64 ? ~0UL : (1UL << capacity) - 1;
+        r->free = r->mask;
+        unsigned h = coarse_bucket(r->base >> 16);
+        r->hash_next = coarse_heads[h]; coarse_heads[h] = r;
+        coarse_avail_add(r);
+        coarse_empty_bytes += COARSE_REGION_BYTES;
+        ++__capstone_malloc_coarse_regions;
+    }
+    if (r->free == r->mask) coarse_empty_bytes -= COARSE_REGION_BYTES;
+    unsigned slot = __builtin_ctzl(r->free);
+    unsigned long bit = 1UL << slot;
+    *stale = (r->dirty & bit) != 0;
+    r->free &= ~bit; r->dirty |= bit;
+    if (!r->free) coarse_avail_remove(r);
+    ++__capstone_malloc_coarse_groups;
+    __capstone_malloc_coarse_reused += *stale;
+    take_id();
+    return capstone_cap_derive(r->root, slot * span, span);
+}
+static int coarse_release(void *group, size_t bytes)
+{
+    size_t address = __builtin_capstone_cap_get_cursor(group);
+    size_t base = address & -COARSE_REGION_BYTES;
+    struct coarse_region *r = coarse_heads[coarse_bucket(base >> 16)];
+    for (; r && r->base != base; r = r->hash_next) {}
+    if (!r) return 0;
+    size_t offset = address - base;
+    unsigned slot = offset / r->span;
+    if (offset % r->span || slot >= 64 || !(r->mask & (1UL << slot)) ||
+        (r->free & (1UL << slot)) || bytes != mapping_length(r->span) ||
+        __builtin_capstone_cap_get_base(group) != address ||
+        __builtin_capstone_cap_get_end(group) - address != r->span) __builtin_trap();
+    capstone_cap_revoke_child(r->root, group);
+    if (!r->free) coarse_avail_add(r);
+    r->free |= 1UL << slot;
+    ++__capstone_malloc_coarse_released;
+    if (r->free == r->mask) {
+        coarse_empty_bytes += COARSE_REGION_BYTES;
+        if (coarse_empty_bytes + recycle_bytes > RECYCLE_BYTES) coarse_drop(r);
+    }
+    return 1;
+}
 void __capstone_malloc_group_unmap(void *group, size_t bytes)
 {
+    if (coarse_release(group, bytes)) return;
     void *root = root_remove(__builtin_capstone_cap_get_cursor(group));
     if (root && recycle_fits(bytes)) {
         capstone_cap_revoke_child(root, group);
@@ -555,7 +720,7 @@ void __capstone_malloc_group_unmap(void *group, size_t bytes)
     /* The unmap retires the mapping's grant, and with it the root and every descendant. */
     munmap(group, bytes);
 }
-void *__capstone_malloc_map(size_t bytes)
+static void *malloc_map_aligned(size_t bytes, size_t align)
 {
     __capstone_malloc_map_calls++;
     __capstone_malloc_map_last[3] = bytes;
@@ -564,7 +729,8 @@ void *__capstone_malloc_map(size_t bytes)
         errno = ENOMEM; return MAP_FAILED;
     }
     bytes = mapping_length(bytes);
-    size_t align = capstone_repr_granule(bytes);
+    size_t granule = capstone_repr_granule(bytes);
+    if (align < granule) align = granule;
     if (align < 4096UL) align = 4096UL;
     if (cap_vm_acquire(&pending_mapping, bytes, align,
                        PROT_READ | PROT_WRITE, 6, CAP_VM_HEAP)) {
@@ -586,6 +752,8 @@ void *__capstone_malloc_map(size_t bytes)
      * The linear grant remains in its consuming slot throughout alloc_meta. */
     return (void *)sublet_base(&pending_mapping);
 }
+void *__capstone_malloc_map(size_t bytes)
+{ return malloc_map_aligned(bytes, 4096UL); }
 void *__capstone_malloc_group_attach(struct capstone_malloc_slot *slots,
                                     void *p, size_t bytes)
 {
@@ -601,6 +769,18 @@ void *__capstone_malloc_group_attach(struct capstone_malloc_slot *slots,
 void *__capstone_malloc_group_map(struct capstone_malloc_slot *slots,
                                  size_t bytes, size_t stride, unsigned count)
 {
+    unsigned char reused = 0;
+    void *small = coarse_take(bytes, stride, count, &reused);
+    if (small) {
+#if !CAPSTONE_HEAP_OBJECT_BOUNDS
+        if (reused) {
+            memset(small, 0, __builtin_capstone_cap_get_end(small) -
+                             __builtin_capstone_cap_get_base(small));
+            reused = 0;
+        }
+#endif
+        return bind_slots(slots, small, stride, count, reused, !reused);
+    }
     /* A kept mapping of the length __capstone_malloc_map would map, or a new mapping. */
     size_t mapped = bytes && bytes <= CV_MAX_REGION_BYTES ? mapping_length(bytes) : 0;
     void *r = mapped ? recycle_take(mapped) : NULL;
@@ -1023,6 +1203,14 @@ int malloc_trim(size_t pad)
         recycle[recycle_count].root = NULL; recycle[recycle_count].bytes = 0;
         recycle_bytes -= bytes;
         munmap(root, bytes);
+    }
+    for (unsigned b = 0; b < COARSE_BUCKETS; ++b) {
+        struct coarse_region *r = coarse_heads[b];
+        while (r) {
+            struct coarse_region *next = r->hash_next;
+            if (r->free == r->mask) released |= coarse_drop(r);
+            r = next;
+        }
     }
     unlock_heap();
     return released;
