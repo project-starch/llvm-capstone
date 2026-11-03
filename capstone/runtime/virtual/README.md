@@ -498,6 +498,22 @@ images that are each wrong in one header field; every one must be refused with `
 unmodified image must load. Run it with another `exec.c` as its argument to see the cases fail on
 an older `load()`.
 
+### Landing gates
+
+A runtime or SDK change lands when the nine gates (hosted, runtime, nodes, malloc,
+pin-ahead, fp, pthread, step-hooks, memcached) give the same FAIL sets on the change and on a
+same-time control. `gates/run-arm.sh` runs them for one arm and builds every image they run from
+that arm's tree: the contract programs and the SDK, and the applications too (SQLite and mruby
+with the arm's SDK, Perl and memcached with the SDK their recipes build from the same tree).
+`gates/compare.py CONTROL ARM` gives the verdict. It splits each gate into the rows it executes
+and calls a row NOT RUN when its launch exited 125 to 127 (the launcher's own setup failed, the
+image was refused, no program), the launcher refused the image, the image ran without its
+arguments, or the row left no marker; a NOT RUN row on either side makes the verdict
+INCOMPLETE, never IDENTICAL. Prebuilt application images from an older image ABI are refused by
+the launcher in both arms, and their rows used to compare as a match while neither had run.
+`gates/test_compare.py` is the comparator's host test: it plants each such omission and requires
+INCOMPLETE.
+
 ## Qualification and limits
 
 The growing-table [qualification manifest](results/node-growth/qualification.json)
