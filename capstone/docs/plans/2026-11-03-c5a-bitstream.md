@@ -160,6 +160,46 @@ Failure branches:
   retry.
 - A routing failure gives the placed area, keys 1-5 and a congestion census, and NO WNS.
 
+## Synthesis-only gate: readings and ruling (2026-11-04)
+
+The synth lane ran the gate on 1fc2cd5aa under synth-guard (40 GB) with the 34 GB watchdog and the 9 GB per-process
+alarm. It stopped as planned after synthesis (1h46m). Keys 5-11 above stand as written, except key 9's names, which
+are corrected below. Three clauses failed as written. Each one was a key written against something it could not
+measure; none of them reads growth. The corrections are mine, made after the reading, and are named as corrections.
+
+| Key | Reading | Grade |
+|---|---|---|
+| 1 | mapping peak 5,082.0 MB (b3 5,004.9); largest single process 4.48 GB (the 9 GB alarm did not fire); run peak 21.77 GB | PASS |
+| 2 | "Found timing loop" 0, Synth 8-326 0 (control vp3g 7 / 73); check_timing 0 loops (control: 1 on an earlier dcp) | PASS |
+| 3 | dyn unit sha256 131818fb5bfda03c; `*dynlt*` 307 cells (293 lsu_i, 9 ex_stage, 5 other; b3 0); `*lsu*rvc*` 1,833 LUT (b3 1,980, −7.4 %) | PASS |
+| 3 | `*pcc_verdict*` / `*pcc_hold*` cells 0 (b3 0); `*pcc_verdict*` nets 37 (b3 0), id bits 0-17 each FDCE-driven | FAIL as written; key mis-named |
+| 4 | load_store_unit LUT +838 / FF +27; commit_stage FF +1 / LUT +86; core LUT 145,391 (+807); LUTRAM 870 | PASS |
+| 4 | dyn_unit 12,692 LUT vs ObjBounds 6,540 (+6,152) and b3 13,237 (−545); all of it in `_spawn_0` (b3 12,226, ObjBounds 5,367, C.5a 11,703) | FAIL as written; wrong reference |
+| 4 | ex+issue +2,869 (ex −292; issue +3,161 = issue_read_operands +3,425, scoreboard −264) vs ±2,500 | FAIL as written; band below the floor |
+
+- **`*pcc_*` (key 3).** `pcc_verdict` is the LABEL of the `always_ff` block (load_store_unit.sv:1562), and `pcc_hold` is a
+  combinational net in commit_stage (:234, :382, :402). Neither can be a cell name. The registers are `pcc_v_q`,
+  `pcc_live_q` and `pcc_id_q[29:0]` under lsu_i, and `pc_revnode_unk_q` under commit_stage_i. b3's source contains none of
+  those four names. The reading already in hand shows the register: its id bits are FDCE-driven nets that b3 does not
+  have. The commit-stage FF delta, +1, is exactly `pc_revnode_unk_q`, because the held id `pc_revnode_id_q` was already in
+  b3. Graded PASS on that evidence. The confirming cell reading by the `_q` names is requested, and it does not gate.
+- **dyn_unit (key 4).** The pre-registration said "It is the same file, so a difference is homing". That was wrong.
+  A module's synthesised size also depends on what its environment consumes. ObjBounds' build pruned the LSU's whole
+  lifetime verdict (key 3's `*lsu*rvc*` read 0 there and 1,833 here), so its 5,367 is a pruned reading of the same source.
+  C.5a's environment is b3's, so the right reference is b3. Against b3 the unit reads −545, and −523 of that is in
+  `_spawn_0`. That is the direction the only source change predicts: the two `get_node_query_validity` calls are gone.
+  Which cells ObjBounds pruned has not been read. Graded PASS against b3.
+- **ex+issue (key 4).** The band was the single-module floor (±2,500) applied to a two-module sum. The core total is
+  +807, so modules outside ex, issue and commit moved by about −2,148, and none of them has a source change. That is
+  re-homing into issue_read_operands, but it is an inference until the rows name those modules. The full flow is gated
+  by the placed total (key 5, ≤ 171,061); about +807 at synthesis puts it near 169.9k. Graded PASS with that stated.
+  Requested, not gating: the hierarchical rows of every module outside ex, issue and commit with |Δ| > 500 against b3.
+
+**Ruling: the gate passes, and the full flow goes.** Key 9 now reads: `*dynlt*` present under lsu_i and ex_stage_i,
+and `pcc_v_q`, `pcc_live_q`, `pcc_id_q*` (lsu_i) and `pc_revnode_unk_q` (commit_stage_i) present on the routed dcp.
+The POS control is `pc_revnode_valid_q`, present on both trees; the NEG is b3's routed dcp, which reads 0 for the four
+new names.
+
 ## Pre-registered silicon readings (first boots; the runtime and board lanes run them)
 
 - **hpm kit** (`hpm-bare-2026-11-03`): hpm-3 and hpm-4 read ObjBounds' stall and cycle pattern, not bitstream 3's.
