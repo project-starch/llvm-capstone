@@ -4,6 +4,12 @@ Branch: `experiment/module-binfmt`, based on `origin/dev` at `a799be44704b`.
 Worktree: `~/llvm-capstone-laneAG`. Remote artifacts: `p12:~/lanes/laneAG`
 and `p13:~/lanes/laneAG`. Experimental only; not a landing candidate.
 
+Verified at `346af62c417d`: native exec 1.159 M attempts/process versus 2.554 M
+launcher and 0.199 M plain; 18 native contract checks passed. The final errno
+correction and two added checks remain UNRESOLVED because SSH authentication
+expired. p13 qualification is also UNRESOLVED; the overlapping control run was
+stopped and invalidated. No full compatibility or landing approval is claimed.
+
 ## Design, written before implementation
 
 Choose B: `load_binary` completes exec and returns to a tiny scalar RV64
@@ -94,7 +100,7 @@ copies are being transferred into this lane's p12 directory. Local `du -sh`
 reported `1.8G` for the prepared kernel and `249M` for the toolchain.
 The named micro README is absent in both local and remote branch trees;
 `run-micro.sh` has the complete usage header and was read with `lqmicro.c` and
-`micro-table.py`. No performance measurement has run yet.
+`micro-table.py`. At this preflight point no performance measurement had run.
 
 ## Results
 
@@ -121,8 +127,8 @@ This is a functionality smoke, not a paired per-process measurement.
 Artifacts: `p12:~/lanes/laneAG/step1-smoke`. Latest prebuild disk check:
 `39G` available, load averages `20.29, 20.07, 19.76`.
 
-UNRESOLVED: native implementation, contracts, gates and paired per-process
-cost are pending. No speedup or production safety qualification is claimed.
+At step 1, native implementation, contracts, gates and paired per-process
+cost were pending. The later sections record the completed experiments.
 
 ## Step 2 design amendment, before the protection bridge
 
@@ -217,3 +223,144 @@ UNRESOLVED: full signals, capability ptrace, fork, raw brk authority and direct
 capability-checked kernel copies. The SDK mmap path works; raw scalar brk is
 not implemented because it cannot mint usable capability authority. No full
 syscall compatibility or production safety qualification is claimed.
+
+## Matched exec measurement (commit 346af62c417d)
+
+Command on p12: `bash ~/lanes/laneAG/contracts/measure.sh` (exit 0), followed by
+`python3 ~/lanes/laneAG/contracts/summarize.py ~/lanes/laneAG` (exit 0).
+The unchanged micro source is from `perf/linux-question-micro` at
+`390a4043851a9995be74b726fc72ceec1cd6a7b8`. All three arms use the same plain
+parent and experimental module; plain/launcher use dom_binfmt=0, native uses 1.
+The launcher binary is baseline-identical, and the Capstone child is identical
+between launcher and native. SLOTS=2, 8G, no-pcrel, icount=0, ASLR disabled,
+no huge pages. Every one of the 18 invocations had rc=0, bad=0 and exactly one
+complete window. No kernel-idle attempts were classified in these windows.
+
+Quoted summary output (attempts, `(W100-W10)/90`):
+
+```
+plain pair=1 W10=2007312 W100=19896582 per_process=198769.67
+plain pair=2 W10=1957930 W100=19882335 per_process=199160.06
+plain pair=3 W10=1954060 W100=19837155 per_process=198701.06
+plain mean=198876.93 range=198701.06..199160.06 busy=198876.93
+launcher pair=1 W10=25661690 W100=255372746 per_process=2552345.07
+launcher pair=2 W10=25419364 W100=255353978 per_process=2554829.04
+launcher pair=3 W10=25417956 W100=255280726 per_process=2554030.78
+launcher mean=2553734.96 range=2552345.07..2554829.04 busy=2553734.96
+native pair=1 W10=11639130 W100=115987800 per_process=1159429.67
+native pair=2 W10=11585489 W100=115844820 per_process=1158437.01
+native pair=3 W10=11590695 W100=115905783 per_process=1159056.53
+native mean=1158974.40 range=1158437.01..1159429.67 busy=1158974.40
+native reduction=54.616% speedup=2.203x
+```
+
+This is an instruction-attempt ratio, not measured wall-clock acceleration.
+The historical 3.50 M launcher result used a Capstone parent; the matched
+plain-parent launcher control here is 2.554 M. It would be incorrect to divide
+3.50 M by this experiment's 1.159 M and call that a measured speedup.
+
+Mean attempts per process by layer, quoted from the same command:
+
+```
+layer plain launcher native native-minus-launcher
+domain: 0.00 16305.00 16305.00 +0.00
+firmware: 17.03 649.25 285.76 -363.49
+kernel: 196223.90 2318866.24 1062521.30 -1256344.94
+launcher: 0.00 143170.38 0.00 -143170.38
+module: 0.00 72745.06 78015.32 +5270.26
+other: 0.00 245.04 0.00 -245.04
+program: 2636.00 1754.00 1754.00 +0.00
+trampoline: 0.00 0.00 93.03 +93.03
+```
+
+The added module work is small beside the eliminated Linux and launcher work.
+The domain's own instruction count is identical. The largest function deltas
+(native minus launcher, attempts per process) from that command are:
+
+```
+kernel do_seccomp -163113.00
+kernel __memset -80481.59
+kernel bpf_convert_filter -57262.00
+launcher memcpy -49850.00
+kernel __memcpy -41586.50
+kernel __mod_memcg_lruvec_state -41159.05
+kernel unmap_page_range -40983.37
+kernel __mod_lruvec_page_state -31988.00
+launcher msort_with_tmp -24207.00
+kernel folio_flags.constprop.0 -23948.77
+```
+
+Module sections were recorded after reload. Six unmeasured launcher probes
+agreed on image base `0x3ff7f00000`; all six native samples agreed on image
+`0x3ff7f80000` and trampoline `0x3ff7f6b000`. Attribution checks instruction bytes
+at those placements, preserves any ambiguous matches, and uses the exact image
+hashes recorded by the harness. No ambiguous bucket appeared in these results.
+`other` remains explicit. Native read-only parameter reads and launcher probes
+occur after the measured windows. Artifacts:
+`p12:~/lanes/laneAG/measure-{plain,launcher,native}` and
+`p12:~/lanes/laneAG/measurement-summary.txt`.
+
+The 1 MiB malloc/write program passed byte-for-byte functionality; its attempt
+cost was not separately profiled.
+
+## Gate status and review follow-up
+
+UNRESOLVED: no valid sequential p13 gate comparison. The prepared plain/hooks
+modules use supervisor_slots=32, with SHA-256 respectively:
+`0d7ac5070347e2270862e4eb009dbf86b0934138500c6396f15912d685182819` and
+`6b2c8998123f082e89511f60c634332ee9f02bd09c83c91dc2ccc292789919a8`.
+Both platforms were real-file copies of platform-landing inside this lane.
+The control's preflight lacked an empty llvm directory; that was corrected.
+More materially, another lane started an arm while these copies were prepared.
+The final ps check printed its active jobs but the shell did not stop on them.
+I detected the overlap, verified every member of this lane's process group
+660555, and terminated only that group. The experiment arm never started.
+The incomplete `p13:~/lanes/laneAG/out-ctl` is invalid for qualification, even
+where individual checks passed. The other lane was still active on recheck.
+No other lane's process or artifact was changed.
+
+A final source review found that negative read/write fds returned EFAULT rather
+than EBADF. The final branch includes the small errno correction and tests for invalid fds
+plus protection of invalid/initial ranges. UNRESOLVED: their build and runtime
+verification were blocked when p12 SSH demanded a new Tailscale authentication
+check. p13 later required reauthentication too. Only this lane's waiting local
+SSH/rsync process groups were stopped; no remote verification command from that
+blocked upload was started. The measurements and 18-pass contract result above describe the tested
+commit 346af62c417d, not the unverified correction. The final driver now contains 20 checks; the
+two new checks have not been run. The last successful p12 disk check reported
+28G free; the last successful p13 check reported 38G free.
+
+## Recommendation
+
+GO for continued experimentation; NO-GO for landing this prototype. Native exec
+works for the stated single-thread contracts and removes over half the matched
+process-start attempts, but most remaining attempts are still in Linux. Keep
+the trampoline approach: it preserves ordinary exec completion and signal/wait
+behavior while requiring only 92 bytes of scalar code. A supported kernel
+mprotect export could remove its sole syscall bridge.
+
+Next: obtain a clean default-off gate comparison, validate the errno correction,
+then investigate the remaining kernel startup/pin/teardown work with the same
+matched harness. Keep the fixed transport until a capability-checked copy
+primitive can validate object liveness; arena membership alone cannot do that.
+Full signal delivery needs a capability register/frame ABI, ptrace needs a
+capability regset, fork needs a context/namespace lifetime design, and raw brk
+needs an authority-return ABI. These are UNRESOLVED, not silently emulated.
+
+Commits so far: `613da802c07b` (design), `613acaa0482e` (step extraction),
+`346af62c417d` (opt-in loader and validated protection bridge). Every commit's
+staged precommit scan exited 0 and reported CLEAN. The scanner warned that its
+external name denylist was absent; the FPGA URL check was explicitly disabled
+as required by the lane brief. New committed content was also reviewed for
+personal names and home-directory paths.
+
+The final validation commit adds the reproducible contract, malformed-image,
+mixed-image profiler and matched-pair summary scripts under
+`capstone/runtime/virtual/tests/native-dom`. The module's fd correction changes
+only its invalid-descriptor errno; it is kept explicit rather than claiming a
+build or test that authentication prevented. `git diff --check` passed. The
+assembly-byte check on p12 also printed:
+
+```
+PASS trampoline assembled words match; bytes=92
+```

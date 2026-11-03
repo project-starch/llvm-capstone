@@ -207,8 +207,9 @@ static long dom_rw(struct context *c, const struct dom_entry *e)
     bool write = e->nr == 64, locked = false;
     unsigned long buf;
     long rc;
-    if (e->count != 1 || e->flags != 2 || e->args[0] > INT_MAX ||
+    if (e->count != 1 || e->flags != 2 ||
         !dom_within(e->args[1], e->args[2], c->dom_exchange_bytes)) return -EFAULT;
+    if (e->args[0] > INT_MAX) return -EBADF;
     file = fget(e->args[0]);
     if (!file) return -EBADF;
     /* The private context descriptor is never an application I/O target. */
