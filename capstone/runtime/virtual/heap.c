@@ -51,7 +51,7 @@
  * not 4,096: the table is 16-byte capability heads in .bss, and the multiplicative hash spreads even
  * a few hundred live objects over every one of its pages, so 4,096 buckets faulted all 16 pages
  * (SPEC's gcc test) where 1,024 fault 4. Since one lookup per call (below), only free, realloc,
- * malloc_usable_size and the trio search a chain, and slot_release and a moved key unlink one, so a
+ * malloc_usable_size and the trio search a chain, and nested release and a moved key walk to unlink, so a
  * load four times higher costs a few chain steps on those calls and none on allocation. */
 #define INDEX_BITS 10U
 #define INDEX_BUCKETS (1U << INDEX_BITS)
@@ -68,14 +68,18 @@ static void unlock_heap(void)
 { __atomic_store_n(&heap_mutex, 0, __ATOMIC_RELEASE); }
 static unsigned bucket(size_t key)
 { return ((key >> 4) * 11400714819323198485UL) >> (64U - INDEX_BITS); }
+static void unlink_slot(struct capstone_malloc_slot **p, struct capstone_malloc_slot *r)
+{
+    *p = r->next;
+    r->next = NULL; r->key = 0;
+}
 static void unindex(struct capstone_malloc_slot *r)
 {
     if (!r->key) return;
     struct capstone_malloc_slot **p = &index_heads[bucket(r->key)];
     while (*p && *p != r) p = &(*p)->next;
     if (!*p) __builtin_trap();
-    *p = r->next;
-    r->next = NULL; r->key = 0;
+    unlink_slot(p, r);
 }
 /* THE ONE LOOKUP PER CALL (lane S, 2026-11-03). The index maps an object's start to its slot
  * record; it is how the runtime gets from a pointer the PROGRAM passed (free, realloc,
@@ -89,13 +93,17 @@ static void unindex(struct capstone_malloc_slot *r)
  * Allocation needs no lookup at all: enframe keys the record it took as its last step, and
  * publish takes that record (`keyed`), checking its key against the returned pointer. */
 static struct capstone_malloc_slot *keyed;   /* the record slot_key keyed last; under the heap lock */
-struct capstone_malloc_slot *__capstone_malloc_find(const void *p)
+/* Keep the link while the heap lock is held: free can remove the record it found without
+ * hashing and walking the same chain again. No index mutation may intervene before unlink. */
+static struct capstone_malloc_slot **find_link(const void *p)
 {
     size_t key = __builtin_capstone_cap_get_cursor((void *)p);
-    for (struct capstone_malloc_slot *r = index_heads[bucket(key)]; r; r = r->next)
-        if (r->key == key) return r;
-    return NULL;
+    struct capstone_malloc_slot **link = &index_heads[bucket(key)];
+    while (*link && (*link)->key != key) link = &(*link)->next;
+    return link;
 }
+struct capstone_malloc_slot *__capstone_malloc_find(const void *p)
+{ return *find_link(p); }
 void __capstone_malloc_slot_key(struct capstone_malloc_slot *r, void *p, size_t n)
 {
     size_t key = __builtin_capstone_cap_get_cursor(p);
@@ -884,7 +892,10 @@ static struct capstone_malloc_slot *prepare_slot(struct capstone_malloc_slot *r)
  * one lookup. The program's free reaches mallocng with the record free() found (free below). */
 struct capstone_malloc_slot *__capstone_malloc_prepare_free(void *p)
 {
-    return prepare_slot(__capstone_malloc_find(p));
+    struct capstone_malloc_slot **link = find_link(p);
+    struct capstone_malloc_slot *r = prepare_slot(*link);
+    unlink_slot(link, r);
+    return r;
 }
 /* A real Linux mremap is a VM slow path. The returned grant is new authority
  * over the retained physical frames; the old mapping's descendants are dead. */
@@ -1001,21 +1012,27 @@ __attribute__((noinline, noreturn)) static void invalid_free(void)
     __asm__ volatile(".global cap_malloc_invalid_free\ncap_malloc_invalid_free:\nunimp" ::: "memory");
     __builtin_unreachable();
 }
-__attribute__((noinline)) static struct capstone_malloc_slot *checked(void *p)
+__attribute__((noinline)) static struct capstone_malloc_slot **checked(void *p)
 {
     __asm__ volatile(".global cap_malloc_validate\ncap_malloc_validate:\nlbu zero, 0(%0)"
                      : : "r"(p) : "memory");
-    struct capstone_malloc_slot *r = __capstone_malloc_find(p);
+    struct capstone_malloc_slot **link = find_link(p);
+    struct capstone_malloc_slot *r = *link;
     if (!r || r->kind != SLOT_PUBLIC) invalid_free();
-    return r;
+    return link;
 }
 void free(void *p)
 {
     if (!p) return;
     int e = errno;
     lock_heap();
-    struct capstone_malloc_slot *r = prepare_slot(checked(p));
-    __capstone_mallocng_free_slot(backend_pointer(r), r);
+    struct capstone_malloc_slot **link = checked(p);
+    struct capstone_malloc_slot *r = prepare_slot(*link);
+    void *raw = backend_pointer(r);
+    /* Revocation precedes unlink; unlink precedes any backend index mutation. The backend
+     * receives its pointer and record directly and no longer needs the record's key. */
+    unlink_slot(link, r);
+    __capstone_mallocng_free_slot(raw, r);
     unlock_heap();
     errno = e;
 }
@@ -1153,7 +1170,7 @@ void *realloc(void *p, size_t n)
 {
     if (!p) return malloc(n);
     lock_heap();
-    struct capstone_malloc_slot *r = checked(p);
+    struct capstone_malloc_slot *r = *checked(p);
     /* Round the REQUEST as malloc does, not just the published size: publish() derives the child
      * over the nominal size, so that size must be representable, and asking mallocng for the
      * rounded size is what makes the block actually that big. Publishing a rounded size over an
@@ -1194,7 +1211,7 @@ void *memalign(size_t a, size_t n) { return aligned_alloc(a, n); }
 size_t malloc_usable_size(void *p)
 {
     if (!p) return 0;
-    lock_heap(); size_t n = checked(p)->nominal; unlock_heap(); return n;
+    lock_heap(); size_t n = (*checked(p))->nominal; unlock_heap(); return n;
 }
 /* musl's group-release decisions are its own and happen during free; what is left to trim is the
  * runtime's kept mappings ("Recycled group mappings"), which are unmapped here, so a program that

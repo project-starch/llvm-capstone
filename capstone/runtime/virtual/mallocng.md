@@ -50,6 +50,11 @@ receives a pointer from the program (`free`, `realloc`, `malloc_usable_size`,
 the nested-allocator trio): the record found there is passed on to mallocng's
 `free` and `realloc`, whose prefix accesses take it as an argument
 (`cap_prefix(p, s)`), and `enframe` passes the record of the slot it takes.
+Free retains the index link from that lookup until it revokes and unlinks the
+record, under the same heap lock. The backend receives the record and its
+pointer directly; its slot release sees an already unlinked record. Nested
+group releases and moved keys still locate their links when needed. This avoids
+a second index walk without caching a link across an index mutation.
 An allocation consults the index not at all: `enframe` keys the record as its
 last step and the runtime publishes the object from that record. Non-overlap follows mallocng's slot geometry;
 the managed lifetime instructions do not enforce non-overlap.
