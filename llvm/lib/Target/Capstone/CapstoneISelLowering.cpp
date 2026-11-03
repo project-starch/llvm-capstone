@@ -21281,20 +21281,24 @@ static SDValue recoverCapabilityFromAddressArith(SDNode *N, SelectionDAG &DAG,
 // address 1, the rewrite forms 2^64-1). Either way the in-bounds access
 // faults. The window argument this combine used to rest on covers neither.
 //
-// So the rewrite runs only when X+Y is a cursor the PROGRAM ITSELF forms and
-// accesses memory at, in this block: an existing (cincoffset X, Y) node that a
-// load or store already uses as its address (vec3's x[3k], prev's x[k]). Its
-// value, and so its tag, are the same in both programs (same X, same Y). If
-// it is tagged, (X+Y)+C is X+(Y+C) with X's bounds: the same cursor and the
-// same tag as the original's. If it is not, the original's access at X+Y
+// So the shared cursor is never a new one: the rewrite runs only when the
+// PROGRAM ITSELF forms and accesses memory at a sibling cursor X+(Y+C') of
+// the group, in this block (an existing cincoffset(X, Y + C') node that a
+// load or store already uses as its address; C' = 0 is vec3's x[3k] and
+// prev's x[k], C' = 8 the first of LBM_performStreamCollideTRT's obstacle
+// copies, whose +0 element is read in another block), and N becomes
+// cincoffset(that sibling, C - C'). The sibling's value, and so its tag, are
+// the same in both programs (same X, same offset). If it is tagged,
+// (X+Y+C')+(C-C') is X+(Y+C) with X's bounds: the same cursor and the same
+// tag as the original's. If it is not, the original's access through it
 // faults. That access is reached whenever the rewritten ones are because
 // nothing in the block can leave it early: no call (one may longjmp, unwind
 // or exit), no inline asm, no trap and no chained intrinsic, or the rewrite
-// is refused (mayLeaveBlockEarly). A preceding fault
-// ends both programs on the same SIGSEGV path. The rewrite then changes at
-// most WHICH access of the block faults first, for a program whose own access
-// at X+Y is certain to fault. A node formed only by this combine is never the
-// witness: it never creates the inner node, it only reuses one that exists.
+// is refused (mayLeaveBlockEarly). A preceding fault ends both programs on
+// the same SIGSEGV path. The rewrite then changes at most WHICH access of the
+// block faults first, for a program whose own access at the sibling is
+// certain to fault. The combine never creates a sibling, it only reuses one
+// (what it creates is cincoffset(cursor, constant), never a sibling's form).
 // The end pointer of a loop (X+n, compared or stored, never accessed) next to
 // an access at X+(n-1) is the shape the "accessed" condition exists for: at
 // the top of the user half X+n is exactly the refused cursor.
@@ -21306,7 +21310,7 @@ static SDValue recoverCapabilityFromAddressArith(SDNode *N, SelectionDAG &DAG,
 // integer in selectCIncOffset.
 // Measured on 544.nab_r's mme34 (SPEC test input): the three-vector accesses
 // cost two extra `addi`, two `slli` and two `cincoffset` per pair, ~120M
-// instruction attempts; every element group there includes its +0 access.
+// instruction attempts.
 // A target opcode reaches PerformDAGCombine without a setTargetDAGCombine
 // registration (that bitmap indexes builtin opcodes only).
 
@@ -21446,7 +21450,7 @@ static SDValue performCIncOffsetCombine(SDNode *N, SelectionDAG &DAG) {
     if (Shifted.ashr(S) != CN->getAPIntValue())
       return SDValue();
     C = Shifted.getSExtValue();
-    // Not built yet: the cursor case below must find this node, not make it.
+    // Not built: the cursor case below finds the siblings, it makes none.
     Y = SDValue();
   } else {
     return SDValue();
@@ -21486,20 +21490,56 @@ static SDValue performCIncOffsetCombine(SDNode *N, SelectionDAG &DAG) {
     return DAG.getNode(CapstoneISD::CIncOffset, DL, VT, Base, Offset);
   }
 
-  // The intermediate must be a cursor the program forms and accesses at, in
-  // this block, with nothing that can leave the block early (see above).
-  if (!Y) {
-    SDValue Index = Off.getOperand(0).getOperand(0);
-    Y = findExistingNode(ISD::SHL, Index, Off.getOperand(1), Index);
-    if (!Y)
-      return SDValue();
+  // The shared cursor must be one the program forms and accesses memory at,
+  // in this block, with nothing that can leave the block early (see above):
+  // a sibling cincoffset(X, Off') whose offset is the same index plus another
+  // constant C' (C' = 0: Off' = Y itself) and that a load or store uses as its
+  // address. N becomes cincoffset(sibling, C - C'). The sibling with C' = 0 is
+  // preferred, then the one with the smallest C', so that the siblings of one
+  // group agree on one shared cursor (the smallest is never rewritten: no
+  // sibling below it qualifies). N itself as the choice means no change.
+  SDValue Index =
+      Off.getOpcode() == ISD::SHL ? Off.getOperand(0).getOperand(0) : Y;
+  SDValue Witness;
+  int64_t WitnessC = 0;
+  auto consider = [&](SDValue SiblingOff, int64_t SiblingC) {
+    SDValue Sibling =
+        findExistingNode(CapstoneISD::CIncOffset, Base, SiblingOff, SiblingOff);
+    if (!Sibling || Sibling.getValueType() != VT ||
+        !isInt<12>(C - SiblingC) || !isAccessAddress(Sibling))
+      return;
+    bool Better = !Witness || (SiblingC == 0 && WitnessC != 0) ||
+                  (WitnessC != 0 && SiblingC < WitnessC);
+    if (Better) {
+      Witness = Sibling;
+      WitnessC = SiblingC;
+    }
+  };
+  // The offset of a sibling with constant C1 in the index: Index + C1 for the
+  // ADD form, (Index + C1) << S for the SHL form (C' = C1 << S).
+  unsigned S = Off.getOpcode() == ISD::SHL
+                   ? cast<ConstantSDNode>(Off.getOperand(1))->getZExtValue()
+                   : 0;
+  auto siblingOffset = [&](SDValue IndexPlus) -> SDValue {
+    if (Off.getOpcode() != ISD::SHL)
+      return IndexPlus;
+    return findExistingNode(ISD::SHL, IndexPlus, Off.getOperand(1), IndexPlus);
+  };
+  if (SDValue ZeroOff = siblingOffset(Index))
+    consider(ZeroOff, 0);
+  for (SDNode *U : Index->users()) {
+    if (U->getOpcode() != ISD::ADD || U->getOperand(0) != Index)
+      continue;
+    auto *C1N = dyn_cast<ConstantSDNode>(U->getOperand(1));
+    if (!C1N || C1N->getAPIntValue().getSignificantBits() > 12)
+      continue;
+    if (SDValue SibOff = siblingOffset(SDValue(U, 0)))
+      consider(SibOff, (int64_t)((uint64_t)C1N->getSExtValue() << S));
   }
-  SDValue Inner = findExistingNode(CapstoneISD::CIncOffset, Base, Y, Y);
-  if (!Inner || Inner.getValueType() != VT || !isAccessAddress(Inner) ||
-      mayLeaveBlockEarly(DAG))
+  if (!Witness || Witness.getNode() == N || mayLeaveBlockEarly(DAG))
     return SDValue();
-  return DAG.getNode(CapstoneISD::CIncOffset, DL, VT, Inner,
-                     DAG.getSignedConstant(C, DL, OffVT));
+  return DAG.getNode(CapstoneISD::CIncOffset, DL, VT, Witness,
+                     DAG.getSignedConstant(C - WitnessC, DL, OffVT));
 }
 
 SDValue CapstoneTargetLowering::PerformDAGCombine(SDNode *N,

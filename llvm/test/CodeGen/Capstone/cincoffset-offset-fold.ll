@@ -5,9 +5,10 @@
 ; Before, each element cost its own `addi`/`slli` chain and `cincoffset`
 ; (544.nab_r mme34, ~120M attempts on the SPEC test input).
 ;
-; The shared cursor X+Y is formed by the rewrite, so it must be one the
-; program itself forms AND accesses memory at in the same block (x[3k] here),
-; with no call or inline asm in the block; otherwise nothing moves. A cursor
+; The shared cursor must be one the program itself forms AND accesses memory
+; at in the same block (x[3k] here; the group's lowest accessed element when
+; there is no +0 one), with no call, inline asm, trap or chained intrinsic in
+; the block; otherwise nothing moves. A cursor
 ; the program never formed can be refused by the address policy and written
 ; untagged: for C < 0 it lies above the access (sv39 refuses 2^38 and up), for
 ; C > 0 below it (phys56 refuses a wrap below 0), and the in-bounds access
@@ -154,6 +155,52 @@ define i64 @edgeneg(ptr addrspace(200) %x, i64 %k) {
   %w = load i64, ptr addrspace(200) %p0
   %s = add i64 %v, %w
   ret i64 %s
+}
+
+; A group without its +0 element (LBM_performStreamCollideTRT's obstacle
+; copies read x[i+1..19] in a block whose x[i] is read elsewhere): the shared
+; cursor is the group's lowest accessed element, x[k+1], which the program
+; reads itself, and the others load at 8 and 16 off it. The earlier combine
+; formed x+8k, a cursor the program never formed, and loaded at 8/16/24.
+; CHECK-LABEL: group_no_zero:
+; CHECK:      cincoffset [[B:a[0-9]+]], a0, {{a[0-9]+}}
+; CHECK-NOT:  cincoffset
+; CHECK-DAG:  fld {{f[a-z0-9]+}}, 0([[B]])
+; CHECK-DAG:  fld {{f[a-z0-9]+}}, 8([[B]])
+; CHECK-DAG:  fld {{f[a-z0-9]+}}, 16([[B]])
+; CHECK:      ret
+define double @group_no_zero(ptr addrspace(200) %x, i64 %k) {
+  %k1 = add i64 %k, 1
+  %k2 = add i64 %k, 2
+  %k3 = add i64 %k, 3
+  %p1 = getelementptr double, ptr addrspace(200) %x, i64 %k1
+  %p2 = getelementptr double, ptr addrspace(200) %x, i64 %k2
+  %p3 = getelementptr double, ptr addrspace(200) %x, i64 %k3
+  %v1 = load double, ptr addrspace(200) %p1
+  %v2 = load double, ptr addrspace(200) %p2
+  %v3 = load double, ptr addrspace(200) %p3
+  %s = fadd double %v1, %v2
+  %t = fadd double %s, %v3
+  ret double %t
+}
+
+; The same below the index: x[k-2], x[k-1] share x[k-2] (0 and 8), not x+8k
+; (-16 and -8), which lies above both accesses.
+; CHECK-LABEL: group_below:
+; CHECK:      cincoffset [[B:a[0-9]+]], a0, {{a[0-9]+}}
+; CHECK-NOT:  cincoffset
+; CHECK-DAG:  fld {{f[a-z0-9]+}}, 0([[B]])
+; CHECK-DAG:  fld {{f[a-z0-9]+}}, 8([[B]])
+; CHECK:      ret
+define double @group_below(ptr addrspace(200) %x, i64 %k) {
+  %km2 = add i64 %k, -2
+  %km1 = add i64 %k, -1
+  %p2 = getelementptr double, ptr addrspace(200) %x, i64 %km2
+  %p1 = getelementptr double, ptr addrspace(200) %x, i64 %km1
+  %v2 = load double, ptr addrspace(200) %p2
+  %v1 = load double, ptr addrspace(200) %p1
+  %s = fsub double %v1, %v2
+  ret double %s
 }
 
 ; ... CONTROL: -257 * 8 = -2056 stays in the integer offset. Sharing the
