@@ -2,6 +2,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <signal.h>
+#include <sched.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -81,6 +82,22 @@ static void refused(const char *suffix, int error)
     if (!pid) { execl(path, path, "hello", (char *)0); _exit(errno == error ? 0 : 1); }
     check(suffix, pid > 0 && waitpid(pid, &st, 0) == pid && WIFEXITED(st) && WEXITSTATUS(st) == 0);
 }
+static int shared_fs_child(void *unused)
+{
+    (void)unused;
+    execl(image, image, "exit", (char *)0); /* success exits 37, refusal exits 0 */
+    return errno == EACCES ? 0 : 1;
+}
+static void shared_fs_refused(void)
+{
+    void *stack = malloc(65536);
+    int st = -1;
+    pid_t pid = stack ? clone(shared_fs_child, (char *)stack + 65536,
+                              CLONE_FS | SIGCHLD, NULL) : -1;
+    check("shared-fs-refused", pid > 0 && waitpid(pid, &st, 0) == pid &&
+          WIFEXITED(st) && WEXITSTATUS(st) == 0);
+    free(stack);
+}
 int main(int argc, char **argv)
 {
     if (argc != 2) return 2;
@@ -95,6 +112,7 @@ int main(int argc, char **argv)
     simple("wire", 0, 0); simple("private-fd", 0, 0); simple("signal-mask", 0, 0); simple("exit", 37, 0); signals();
     refused("truncated", ENOEXEC); refused("marker", ENOEXEC);
     refused("overflow", ENOEXEC); refused("wx", ENOEXEC); refused("setuid", EACCES);
+    shared_fs_refused();
     printf("native contract failures=%d\n", failures);
     return failures != 0;
 }

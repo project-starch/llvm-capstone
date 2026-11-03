@@ -12,6 +12,7 @@
 #include <linux/cred.h>
 #include <linux/pid_namespace.h>
 #include <linux/ptrace.h>
+#include <linux/security.h>
 #include <asm/processor.h>
 #include <asm/cacheflush.h>
 #include "capstone/delegate.h"
@@ -434,6 +435,7 @@ static int dom_load_binary(struct linux_binprm *bprm)
     Elf64_Ehdr *h = (void *)bprm->buf;
     if (memcmp(h->e_ident, ELFMAG, SELFMAG) || h->e_machine != 259) return -ENOEXEC;
     if (!uid_eq(current_euid(), GLOBAL_ROOT_UID) || bprm->secureexec ||
+        (bprm->unsafe & LSM_UNSAFE_SHARE) ||
         (file_inode(bprm->file)->i_mode & (S_ISUID | S_ISGID))) return -EACCES;
     if (!one_inode_per_file(bprm->file) || !file_inode(bprm->file)->i_nlink) return -EOPNOTSUPP;
     if (bprm->argc < 1 || bprm->argc > DOM_MAX_STRINGS ||

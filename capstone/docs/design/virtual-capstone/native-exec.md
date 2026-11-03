@@ -14,7 +14,9 @@ domain's image, stack, startup block, metadata and fixed exchange grants.
 It returns from Linux exec into a scalar trampoline, so Linux completes exec
 and retains its ordinary wait, stop, termination and task teardown paths.
 There is no glibc launcher, spawner, dummy thread or newly installed seccomp
-filter. Existing Linux credentials and inherited filters still apply.
+filter. VFS operations use the current Linux credentials. Inherited filters
+constrain actual scalar syscalls and ioctls; kernel services behind an admitted
+ioctl use the module policy, not per-virtual-call seccomp emulation.
 
 The trampoline contains no libc and only a step loop, a validated protection
 bridge, a generic prepared syscall bridge, completion ioctls and exit. Its
@@ -78,7 +80,10 @@ initially granted. All other inherited fds, including directories, sockets,
 process-memory files and device handles, are inaccessible. New descriptors come
 only from the broker; close revokes the grant before scalar dispatch. Thread
 creation, fd duplication, descriptor receipt and exec are unsupported, so no
-concurrent task can replace a granted number. The private context fd is never
+concurrent task can replace a granted number. Exec unshares the Linux fd table;
+the loader rejects LSM_UNSAFE_SHARE so an external CLONE_FS peer cannot share
+cwd/umask with the new domain. A native clone/exec negative control verifies
+this refusal. The private context fd is never
 admitted. The caller explicitly grants the selected stdio files; the directory
 policy is not a sandbox against an overbroad or sensitive file chosen by that
 trusted caller.
@@ -112,7 +117,9 @@ also serves exit, thread-self, anonymous MAP, whole-grant UNMAP, PROTECT and nod
 reservation. MAP chooses a fresh range; PROTECT/UNMAP require owned dynamic
 arenas and cannot name the image, fixed transport or scalar bridge. The
 trampoline's own ioctl/mprotect/exit_group calls receive only module-prepared
-arguments. Existing inherited seccomp filters still apply.
+arguments. This is not semantic equivalence to arbitrary inherited filters
+written for direct Linux file syscalls; those filters must account for the
+module ioctl API.
 
 ## Authority audit
 
