@@ -40,10 +40,12 @@ extern void __capstone_signals_thread_detach(void);
  * each; before the detach that munmap is refused, to the worker too. */
 #define VIRTUAL_EXCHANGE_BYTES (1UL << 20)
 extern long __capstone_vm_transport_detach(void);
+extern void __capstone_delegate_thread_detach(void);
 static void release_transport(struct virtual_clone *r)
 {
     if (!r->transport) return;
     __capstone_signals_thread_detach();
+    __capstone_delegate_thread_detach();
     free(r->transport);
     r->transport = NULL;
     __capstone_vm_transport_detach();
@@ -66,6 +68,13 @@ static void *transport_block(size_t bytes)
 void *__capstone_virtual_exchange(void)
 {
     return current_clone ? current_clone->exchange : NULL;
+}
+/* The calling worker gives its transport back before it exits, as its exit would: detach, then
+ * unmap both blocks. Its later calls (musl's own exit path makes some) go through the process
+ * transport. The contract's identity case needs a worker alive without a transport. */
+void __capstone_virtual_transport_release(void)
+{
+    if (current_clone) release_transport(current_clone);
 }
 
 static void *clone_entry(void *p)

@@ -124,6 +124,36 @@ static void *transport_worker(void *arg)
     transport_own_unmap = munmap(transport_exchange, 1UL << 20) ? errno : 0;
     return arg;
 }
+/* A hold is released only for the mapping it was taken on (transport_identity): worker A attaches
+ * (a delegated write), gives its transport back (detach, then munmap of both blocks) and stays
+ * alive without one; worker B is created next and its exchange takes the address A's had (the
+ * launcher reuses the most recently retired range of the same size); B attaches and waits. Then
+ * A exits, and the main thread's munmap of B's exchange must still be refused with EBUSY. A
+ * launcher that releases a hold by the exiting worker's old address (the nearest mapping at or
+ * below it) drops B's hold at A's exit, and the munmap succeeds under B's attachment. The
+ * workers wait by spinning on a flag with no call at all (the quantum preempts them): B must make
+ * none between the main thread's munmap and its report. Runs before transport_lifetime, which a launcher that exempts the owner does not survive. */
+extern void __capstone_virtual_transport_release(void);
+static int identity_pipe[2];
+static volatile int identity_state;
+static void *volatile identity_exchange[2];
+static void *identity_first(void *arg)
+{
+    assert(write(identity_pipe[1], "a", 1) == 1);   /* attached */
+    identity_exchange[0] = __capstone_virtual_exchange();
+    __capstone_virtual_transport_release();
+    identity_state = 1;
+    while (identity_state < 3) { }
+    return arg;
+}
+static void *identity_second(void *arg)
+{
+    assert(write(identity_pipe[1], "b", 1) == 1);   /* attached */
+    identity_exchange[1] = __capstone_virtual_exchange();
+    identity_state = 2;
+    while (identity_state < 4) { }
+    return arg;
+}
 static void *allocator_worker(void *arg)
 {
     for (unsigned i=0; i<8; ++i) {
@@ -209,6 +239,31 @@ int main(void)
     assert(!pthread_join(a, &result) && result == &values[0]);
     assert(!pthread_join(b, &result) && result == &values[1]);
     puts("VIRTUAL_PTHREAD_OK concurrent_allocator_remap");
+
+    {
+        assert(!pipe(identity_pipe));
+        assert(!pthread_create(&a, NULL, identity_first, &values[0]));
+        while (identity_state < 1) sched_yield();
+        assert(!pthread_create(&b, NULL, identity_second, &values[1]));
+        while (identity_state < 2) sched_yield();
+        identity_state = 3;
+        assert(!pthread_join(a, &result) && result == &values[0]);
+        int unmapped = munmap((void *)(uintptr_t)identity_exchange[1], 1UL << 20);
+        int reason = errno;
+        /* Reported before B goes on: without the hold, B's own exit would fault in the unmapped
+         * exchange first. */
+        if (identity_exchange[0] != identity_exchange[1])
+            printf("VIRTUAL_PTHREAD_IDENTITY_NOT_REUSED:0x%lx:0x%lx\n",
+                   (unsigned long)(uintptr_t)identity_exchange[0],
+                   (unsigned long)(uintptr_t)identity_exchange[1]);
+        else if (unmapped == 0) puts("VIRTUAL_PTHREAD_IDENTITY_UNMAPPED");
+        else if (reason != EBUSY) printf("VIRTUAL_PTHREAD_IDENTITY_ERRNO:%d\n", reason);
+        else puts("VIRTUAL_PTHREAD_OK transport_identity");
+        fflush(stdout);
+        identity_state = 4;
+        assert(!pthread_join(b, &result) && result == &values[1]);
+        close(identity_pipe[0]); close(identity_pipe[1]);
+    }
 
     {
         assert(!pipe(transport_pipe));

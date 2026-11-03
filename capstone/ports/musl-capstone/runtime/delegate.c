@@ -311,6 +311,10 @@ void __capstone_delegate_thread_attach(void *state, void *entry, void *exchange,
   extern void __capstone_signals_thread_attach(void *, void *);
   __capstone_signals_thread_attach(signals, entry);
 }
+/* The calling context gives its transport back (virtual/pthread.c, before the blocks are
+ * freed and unmapped): from here on its calls go through the process transport, as those of a
+ * context that never had one of its own (a raw virtual thread), never through freed state. */
+void __capstone_delegate_thread_detach(void) { private_transport = NULL; }
 size_t __capstone_delegate_thread_state_size(void) { return sizeof(struct dl_transport); }
 #endif
 

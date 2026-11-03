@@ -330,17 +330,35 @@ static int grant(void *base, size_t bytes, unsigned reg, unsigned perms,
     return 0;
 }
 /* The calling worker's attachment: its meta block and exchange region, the two spans this
- * launcher writes for it, each in a mapping it holds. Zero while detached: the worker's next
- * delegate service attaches again, CV_TOUCH and all. */
-static __thread uintptr_t transport_at[2];
+ * launcher writes for it, each with the identity of the mapping it holds. The identity is the
+ * module's arena id (CV_ADD's r.id): a per-context counter, never reused, so it names one
+ * registration, not an address or a slot that a later mapping can take over. Zero while
+ * detached: the worker's next delegate service attaches again, CV_TOUCH and all. */
+static __thread struct { uintptr_t at; uint64_t id; } transport_at[2];
+/* The mapping a worker's attachment holds, found by exact identity: the address must lie inside
+ * the mapping, which must carry the recorded id and this worker as holder. Anything else is a
+ * launcher defect (the hold refuses retirement and remapping, so it cannot happen through the
+ * services); it is logged and nothing is released. */
+static struct mapping *transport_mapping(uint64_t tid, unsigned i)
+{
+    uintptr_t at = transport_at[i].at;
+    struct mapping *m = map_floor(at);
+    if (m && at - (uintptr_t)m->address < m->visible && m->id == transport_at[i].id &&
+        m->holder == tid) return m;
+    fprintf(stderr, "CAPSTONE_VM_TRANSPORT_MISMATCH tid=%llu block=%u at=0x%lx id=%llu found=%llu\n",
+            (unsigned long long)tid, i, (unsigned long)at, (unsigned long long)transport_at[i].id,
+            m ? (unsigned long long)m->id : 0ULL);
+    return NULL;
+}
 /* Release the calling worker's holds and its host state: the worker's own detach service and
  * its exit, nothing else. After it this launcher writes nothing into the blocks. */
 static void transport_detach(uint64_t tid)
 {
     for (unsigned i = 0; i < 2; ++i) {
-        struct mapping *m = transport_at[i] ? map_floor(transport_at[i]) : NULL;
-        if (m && m->holder == tid) m->holder = 0;
-        transport_at[i] = 0;
+        if (!transport_at[i].at) continue;
+        struct mapping *m = transport_mapping(tid, i);
+        if (m) m->holder = 0;
+        transport_at[i].at = 0; transport_at[i].id = 0;
     }
     if (worker_host) {
         capstone_signals_detach();
@@ -958,8 +976,8 @@ static int virtual_service(uint64_t tid, struct cv_step *step)
                     if (touch(step->args[0], CAPSTONE_DELEGATE_META_BYTES) ||
                         touch(step->args[1], step->args[2])) return -1;
                     held_meta->holder = held_exchange->holder = tid;
-                    transport_at[0] = step->args[0];
-                    transport_at[1] = step->args[1];
+                    transport_at[0].at = step->args[0]; transport_at[0].id = held_meta->id;
+                    transport_at[1].at = step->args[1]; transport_at[1].id = held_exchange->id;
                     worker_host = calloc(1, sizeof *worker_host);
                     if (!worker_host) return -1;
                     worker_host->exchange = (void *)(uintptr_t)step->args[1];
