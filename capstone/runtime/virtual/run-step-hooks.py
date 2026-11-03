@@ -56,7 +56,7 @@ CONFIGS = {
 }
 SCRIPT = '''#!/bin/sh
 cd /mnt/vm || exit 1
-export CAPSTONE_VM_STATS=1 CAPSTONE_VM_STATS_MARK=1
+export CAPSTONE_VM_STATS=1 CAPSTONE_VM_STATS_MARK=1 CAPSTONE_VM_GRANTS=1
 pins() { echo 1 > /proc/sys/vm/stat_refresh; grep -E "^nr_foll_pin_(acquired|released) " /proc/vmstat | tr "\\n" " "; }
 dmesg -n 1
 dmesg -c > /dev/null

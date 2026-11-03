@@ -74,12 +74,13 @@ static int trace;
  * stderr goes -- a 9p file in a harness that does not redirect it. */
 static int grants;
 /* CV_STEP returns by kind (1 quantum, 3 service, 4 fault, else other) and services by their
- * vm-abi.h number (CV_SERVICE_DELEGATE 0 .. CV_SERVICE_REMAP 13; not Linux syscall numbers),
+ * vm-abi.h number (CV_SERVICE_DELEGATE 0 .. CV_SERVICE_TRANSPORT_DETACH 14; not Linux syscall
+ * numbers),
  * for the CAPSTONE_VM_STEPS line: which exits the step protocol actually makes, and how many. A
  * number above the last service counts as other. A retried EINTR/EAGAIN is not a return.
  * Relaxed atomics on both sides: every virtual thread's loop counts, and the main thread reads
  * at exit while a worker may still be returning. */
-#define STEP_SERVICE_COUNT (CV_SERVICE_REMAP + 1)
+#define STEP_SERVICE_COUNT (CV_SERVICE_TRANSPORT_DETACH + 1)
 static unsigned long step_kinds[8], step_services[STEP_SERVICE_COUNT + 1];
 static unsigned long step_count(const unsigned long *counter)
 { return __atomic_load_n(counter, __ATOMIC_RELAXED); }
@@ -317,8 +318,9 @@ static int grant(void *base, size_t bytes, unsigned reg, unsigned perms,
      * refusal side is always printed; without the success side a diff cannot say WHICH grant
      * first differs, only that something did. Asked for with CAPSTONE_VM_GRANTS=1 (or the
      * trace), unlike the refusal: at one write(2) per grant it is the launcher's largest
-     * stderr traffic, and no runtime gate parses it. The board lane's parsers and the
-     * benchmark console audit set it. */
+     * stderr traffic. The board lane's parsers, the benchmark console audit and the three
+     * gates that find their arenas by address (run-pin-ahead.py, run-step-hooks.py,
+     * run-pthreads.py) set it. */
     /* slot= is the number of mappings registered before this one: the old array slot until the
      * first unmap, so the image's grant still reads slot=0 for the board lane's parsers. */
     if (grants)
@@ -1041,7 +1043,8 @@ static int virtual_service(uint64_t tid, struct cv_step *step)
                                 " service5_thread_join=%lu service6_protect=%lu service7_wait=%lu"
                                 " service8_futex=%lu service9_pthread_exit=%lu"
                                 " service10_thread_delegate=%lu service11_thread_self=%lu"
-                                " service12_nodes=%lu service13_remap=%lu service_other=%lu\n",
+                                " service12_nodes=%lu service13_remap=%lu"
+                                " service14_transport_detach=%lu service_other=%lu\n",
                     step_count(&step_kinds[1]), step_count(&step_kinds[3]), step_count(&step_kinds[4]),
                     step_count(&step_kinds[0]) + step_count(&step_kinds[2]) + step_count(&step_kinds[5]) +
                         step_count(&step_kinds[6]) + step_count(&step_kinds[7]),
@@ -1052,7 +1055,7 @@ static int virtual_service(uint64_t tid, struct cv_step *step)
                     step_count(&step_services[8]), step_count(&step_services[9]),
                     step_count(&step_services[10]), step_count(&step_services[11]),
                     step_count(&step_services[12]), step_count(&step_services[13]),
-                    step_count(&step_services[STEP_SERVICE_COUNT]));
+                    step_count(&step_services[14]), step_count(&step_services[STEP_SERVICE_COUNT]));
             }
             /* The image's identity on a run that ENDS, not only on one that faults: a
              * transcript that carries no digest cannot be tied to the image it claims to be

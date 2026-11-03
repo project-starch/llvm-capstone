@@ -31,7 +31,7 @@ MODES = ('base', 'seq', 'stop', 'vma', 'vmax', 'rowrite', 'retire')
 # counter assertions below are the same with a census of zero.
 SCRIPT = '''#!/bin/sh
 cd /mnt/vm || exit 1
-export CAPSTONE_VM_STATS=1 CAPSTONE_VM_STATS_MARK=1 CAPSTONE_EXEC_DIAGNOSTICS=1
+export CAPSTONE_VM_STATS=1 CAPSTONE_VM_STATS_MARK=1 CAPSTONE_VM_GRANTS=1 CAPSTONE_EXEC_DIAGNOSTICS=1
 dmesg -n 1
 dmesg -c > /dev/null
 for w in ''' + ' '.join(map(str, WINDOWS)) + '''; do

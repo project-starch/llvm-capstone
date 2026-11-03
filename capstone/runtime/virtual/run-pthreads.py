@@ -48,7 +48,7 @@ pins() { echo 1 > /proc/sys/vm/stat_refresh; grep -E "^nr_foll_pin_(acquired|rel
 dmesg -n 1
 echo "PTHREAD_PINS_BEFORE:$(pins)"
 insmod capstone_vm.ko ''' + ('diag_admit=1' if instrumented else '') + ''' || exit 1
-CAPSTONE_EXEC_DIAGNOSTICS=1 CAPSTONE_VM_STATS=1 CAPSTONE_VM_STATS_MARK=1 ./capstone-vexec pthread.dom
+CAPSTONE_EXEC_DIAGNOSTICS=1 CAPSTONE_VM_STATS=1 CAPSTONE_VM_STATS_MARK=1 CAPSTONE_VM_GRANTS=1 ./capstone-vexec pthread.dom
 echo PTHREAD_EXIT:$?
 dmesg | grep -E "capstone_vm: |CAPSTONE_VM_STATS_MARK" | sed "s/^/PTHREAD_DIAG:/"
 rmmod capstone_vm
