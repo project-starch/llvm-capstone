@@ -67,6 +67,7 @@ static void check_page(unsigned i)
     same_cap(cap_init_pages[i].interior, cap_init_target + 7);
     same_cap(cap_init_pages[i].end, cap_init_target + 64);
     same_cap((void *)cap_init_pages[i].function, (void *)target_function);
+    same_cap((void *)cap_init_pages[i].literal, (void *)"page-init");
     same_cap(cap_init_pages[i].alias, cap_init_alias);
     require(cap_init_pages[i].function() == 37, "function call");
     require(!strcmp(cap_init_pages[i].literal, "page-init"), "literal");

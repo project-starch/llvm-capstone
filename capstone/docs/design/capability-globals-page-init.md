@@ -103,8 +103,11 @@ Build `capstone/runtime/virtual/cap-init-page-contract.c` together with
 
 The comparisons read the capability tag and both stored encoding words against
 an ordinary materialization, including the lifetime bits. Literal dereference
-is checked separately. Run with the default compressed-bounds profile and the
-exact-bounds profile. With `diag_admit=1`, count admissions only in the printed
+is also checked. The narrowed-PCC probe creates a capability return link with
+CJALR before entering the restricted range; the gp-free caller's integer return
+address alone would not restore the original PCC. Run with the default
+compressed-bounds profile and the exact-bounds profile. With `diag_admit=1`,
+count admissions only in the printed
 holder interval; process-wide page counts also include libc and stack pages.
 The eager control is expected to admit every holder page even in `cold` mode.
 A lazy candidate must admit none in `cold`, just the requested page in `one`

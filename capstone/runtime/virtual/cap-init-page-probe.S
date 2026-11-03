@@ -7,13 +7,20 @@
 .global cap_init_page_probe
 .type cap_init_page_probe,@function
 cap_init_page_probe:
+    cincoffsetimm sp, sp, -16
+    stc ra, 0(sp)
     lla t0, cap_init_page_probe_body
     scc t0, gp, t0
     beqz a1, 1f
     mv t1, t0
     addi t2, t1, 16
     shrink t0, t1, t2
-1:  cjalr zero, 0(t0)
+    /* The gp-free caller supplied an integer return address. CJALR must
+     * create a capability return link before entering the narrowed PCC. */
+1:  cjalr ra, 0(t0)
+    ldc ra, 0(sp)
+    cincoffsetimm sp, sp, 16
+    ret
 .size cap_init_page_probe, .-cap_init_page_probe
 
 .balign 16
