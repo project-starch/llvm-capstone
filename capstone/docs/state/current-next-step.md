@@ -1,3 +1,10 @@
+**2026-11-03 — SDK jump-table lane.** The same-compiler SPEC test-input pairs
+for gcc, imagick, lbm and nab pass, with no demonstrated program instruction
+saving. Preserve the image-gp cursor/PCC dataflow checks and gp-captable refusal.
+Next qualify full PHP execution and wider switch-heavy inputs before claiming
+a workload benefit from the confirmed hash-helper inlining change. See the
+[lane qualification](current-state.md#2026-11-03--sdk-jump-tables-lane-qualification).
+
 **2026-10-21, the cross-lane plan to the next bitstream (runtime/semantics lane, coordinating on the lead's word).**
 Goal: the six-item batch bitstream, then the WHOLE corpus on vp2, including the two arms the current bitstreams
 cannot run (cpython lt1 and postgres pg-pools, both "needs collection", which item 6's hardware recycling provides).

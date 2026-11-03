@@ -1,5 +1,25 @@
 # Current Capstone state
 
+## 2026-11-03 — SDK jump tables (lane qualification)
+
+`compiler/capstone-jump-tables` removes the SDK's residual
+`-fno-jump-tables` default. The virtual image-gp lowering already loads signed
+label differences through an image capability and branches under the existing
+PCC; it never creates code authority from an integer. The full scalar table
+address precedes SCC, preserving the cursor-window rule. The gp-captable ABI
+still refuses tables in the backend. Regression coverage now checks that
+dataflow and preserves explicit caller overrides.
+
+Same-compiler BASE=3 QEMU pairs pass SPEC test inputs gcc, imagick, lbm and nab.
+They do not establish a performance improvement: program instruction attempts
+increase slightly, and total counts include variable kernel/idle work. PHP's
+`zend_inline_hash_func` does inline into `zend_hash_find` when the flag is
+removed (cost 265 versus 325, threshold 325); full PHP execution is not
+requalified. Compiler tests pass except the known source-copy
+`shared-patches-present` check; the SDK compiler unit tests pass. This is lane
+qualification on the reused BASE=3 compiler, not a new silicon result or a
+fresh build of the current compiler.
+
 ## Read this first (2026-10-13)
 
 This file was 2,030 lines and its companion 1,560, most of it instructions and

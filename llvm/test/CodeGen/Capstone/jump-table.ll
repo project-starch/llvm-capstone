@@ -17,8 +17,8 @@
 ; RUN: %llc_cap -O0 < %s | FileCheck %s
 ; RUN: %llc_cap -O1 < %s | FileCheck %s
 ; RUN: %llc_cap -O2 < %s | FileCheck %s
-; RUN: %llc_cap -O1 -capstone-gp-free -capstone-image-gp < %s | FileCheck %s --check-prefix=IMAGEGP
-; RUN: %llc_cap -O2 -capstone-gp-free -capstone-image-gp < %s | FileCheck %s --check-prefix=IMAGEGP
+; RUN: %llc_cap -O1 -capstone-gp-free -capstone-image-gp -mattr=+m,+f,+d,+movc-keeps-integer-source < %s | FileCheck %s --check-prefix=IMAGEGP
+; RUN: %llc_cap -O2 -capstone-gp-free -capstone-image-gp -mattr=+m,+f,+d,+movc-keeps-integer-source < %s | FileCheck %s --check-prefix=IMAGEGP
 ; RUN: %llc_cap -O2 -capstone-gp-captable < %s | FileCheck %s --check-prefix=CAPTABLE
 ; RUN: %llc_cap -O2 -capstone-gp-captable -capstone-gp-captable-jump-tables=false < %s | FileCheck %s --check-prefix=CAPTABLE
 ; The refusal is what removes the table, not something else about the ABI:
@@ -30,17 +30,25 @@ define i64 @ten_way(i64 %x, ptr addrspace(200) %p) {
 ; CAPJT: %pcrel_hi(.LJTI0_0)
 ; CAPJT: jr
 ; CAPJT: .LJTI0_0:
+; Complete the scalar PC-relative address before setting a capability cursor:
+; an intermediate out-of-window cursor would lose its tag. The load uses the
+; indexed image capability; only scalar arithmetic computes the target of jr,
+; which remains subject to the current PCC. No new code capability is minted.
 ; IMAGEGP-LABEL: ten_way:
 ; IMAGEGP-NOT: %hi(.LJTI0_0)
-; IMAGEGP: auipc {{[a-z0-9]+}}, %pcrel_hi(.LJTI0_0)
-; IMAGEGP: scc {{[a-z0-9]+}}, gp, {{[a-z0-9]+}}
-; IMAGEGP-NOT: delin
-; IMAGEGP: cincoffset {{[a-z0-9]+}}, {{[a-z0-9]+}}, {{[a-z0-9]+}}
-; IMAGEGP-NEXT: lw {{[a-z0-9]+}}, 0({{[a-z0-9]+}})
-; IMAGEGP: add
-; IMAGEGP: jr
+; IMAGEGP: li [[MAX:[a-z0-9]+]], 9
+; IMAGEGP-NEXT: bltu [[MAX]], [[INDEX:[a-z0-9]+]], .LBB0_{{[0-9]+}}
+; IMAGEGP: slli [[OFFSET:[a-z0-9]+]], [[INDEX]], 2
+; IMAGEGP: auipc [[HI:[a-z0-9]+]], %pcrel_hi(.LJTI0_0)
+; IMAGEGP-NEXT: addi [[VA:[a-z0-9]+]], [[HI]], %pcrel_lo({{\.Lpcrel_hi[0-9]+}})
+; IMAGEGP-NEXT: scc [[TABLE:[a-z0-9]+]], gp, [[VA]]
+; IMAGEGP-NEXT: cincoffset [[SLOT:[a-z0-9]+]], [[TABLE]], [[OFFSET]]
+; IMAGEGP-NEXT: lw [[ENTRY:[a-z0-9]+]], 0([[SLOT]])
+; IMAGEGP-NEXT: mv [[BASE:[a-z0-9]+]], [[TABLE]]
+; IMAGEGP-NEXT: add [[TARGET:[a-z0-9]+]], [[ENTRY]], [[BASE]]
+; IMAGEGP-NEXT: jr [[TARGET]]
 ; IMAGEGP: .LJTI0_0:
-; IMAGEGP-NEXT: .word .LBB0_{{[0-9]+}}-.LJTI0_0
+; IMAGEGP-COUNT-10: .word .LBB0_{{[0-9]+}}-.LJTI0_0
 ; IMAGEGP-NOT: {{\.word \.LBB0_[0-9]+$}}
 ; CHECK-LABEL: ten_way:
 ; CHECK-NOT: %hi(.LJTI0_0)
