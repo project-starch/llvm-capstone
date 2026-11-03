@@ -309,10 +309,370 @@ static void align_probe(void)
     puts("MALLOC_ALIGN_PROBE_DONE");
     fflush(stdout);
 }
+#ifdef __CAPSTONE_PURECAP__
+extern unsigned long __capstone_malloc_recycle_hits;
+extern unsigned long __capstone_malloc_recycle_kept;
+extern unsigned long __capstone_malloc_recycle_unmapped;
+extern int malloc_trim(size_t);
+/* A RECYCLED group mapping (heap.c "Recycled group mappings"). 20000 bytes at zero usage is
+ * mallocng's single-slot group (alloc_group's cnt==1 branch), which it always releases when the
+ * object is freed (okay_to_free: the stride is below the class's); its allocation must map (the
+ * group is new, not one a startup allocation already holds: the first version of this test used
+ * 5000 bytes, whose class a startup object occupies, and failed on exactly that). The release
+ * keeps the mapping (kept advances); the next allocation of that size takes it (hits advances, no
+ * map) and lands on the freed object's bytes. All of these are required, so a run in which the
+ * mapping was not reused fails here instead of reading as a pass. The stale cases then
+ * use the old object's capability, which must fault under either heap configuration: releasing
+ * the group revoked the group lifetime every object descends from. recycle-tags fills the old
+ * object with tagged capabilities to a live object (and reads one back, so the tag reader is
+ * shown to see a tag), and after reuse reads every granule of the new object: none may be
+ * tagged. Release and reuse must reach the launcher for nothing: the gate brackets them with
+ * MALLOC_RECYCLE_BEGIN/END and allows only the END marker's own write. */
+enum { RECYCLE_SIZE = 20000 };
+static char *recycled(char *old, unsigned long kept, unsigned long hits, int bracket)
+{
+    if (bracket) { puts("MALLOC_RECYCLE_BEGIN"); fflush(stdout); }
+    free(old);
+    unsigned long kept_after = __capstone_malloc_recycle_kept;
+    unsigned long maps = __capstone_malloc_map_calls;
+    char *fresh = malloc(RECYCLE_SIZE);
+    unsigned long hits_after = __capstone_malloc_recycle_hits, maps_after = __capstone_malloc_map_calls;
+    if (bracket) { puts("MALLOC_RECYCLE_END"); fflush(stdout); }
+    printf("MALLOC_RECYCLE kept=%lu->%lu hits=%lu->%lu unmapped=%lu old=0x%lx fresh=0x%lx\n", kept,
+           kept_after, hits, hits_after, __capstone_malloc_recycle_unmapped,
+           (unsigned long)(uintptr_t)saved, (unsigned long)(uintptr_t)fresh);
+    fflush(stdout);
+    require(kept_after == kept + 1, "recycle: the released group's mapping was kept");
+    require(fresh && hits_after == hits + 1 && maps_after == maps,
+            "recycle: the next group took the kept mapping");
+    uintptr_t a = (uintptr_t)saved, b = (uintptr_t)fresh;
+    require(a < b + RECYCLE_SIZE && b < a + RECYCLE_SIZE, "recycle: reuse overlaps the freed object");
+    return fresh;
+}
+static int recycle_outside(const char *mode, size_t n);
+static int recycle_root(void);
+static int recycle_limits(void);
+static int recycle_path(const char *mode, int may_survive);
+static int recycle_case(const char *mode, int may_survive)
+{
+    if (!strcmp(mode, "recycle-header")) return recycle_outside(mode, RECYCLE_SIZE);
+    if (!strcmp(mode, "recycle-slack")) return recycle_outside(mode, 0);   /* a multi-slot group */
+    if (!strcmp(mode, "recycle-root")) return recycle_root();
+    if (!strcmp(mode, "recycle-limits")) return recycle_limits();
+    if (!strcmp(mode, "recycle-geometry") || !strcmp(mode, "recycle-nested") ||
+        !strcmp(mode, "recycle-aligned") || !strcmp(mode, "recycle-realloc"))
+        return recycle_path(mode, may_survive);
+    char *live = malloc(32); require(live != NULL, "recycle live object"); live[0] = 5;
+    unsigned long kept = __capstone_malloc_recycle_kept, hits = __capstone_malloc_recycle_hits;
+    unsigned long maps = __capstone_malloc_map_calls;
+    char *old = malloc(RECYCLE_SIZE); require(old != NULL, "recycle setup"); saved = old;
+    require(__capstone_malloc_map_calls == maps + 1 && __capstone_malloc_recycle_hits == hits,
+            "recycle: the old object's group is a new mapping");
+    if (!strcmp(mode, "recycle-tags")) {
+        unsigned granules = RECYCLE_SIZE / 16;
+        for (unsigned i = 0; i < granules; ++i) ((char *volatile *)old)[i] = live;
+        require(__builtin_capstone_cap_get_tag(((char *volatile *)old)[granules / 2]),
+                "recycle-tags: the reader sees a stored tag");
+        char *fresh = recycled(old, kept, hits, 1);
+        unsigned tagged = 0;
+        for (unsigned i = 0; i < granules; ++i)
+            tagged += __builtin_capstone_cap_get_tag(((char *volatile *)fresh)[i]) != 0;
+        printf("MALLOC_RECYCLE_TAGS tagged=%u of %u\n", tagged, granules);
+        require(!tagged, "recycle-tags: no tag of the old group survives into the new object");
+        require(live[0] == 5, "recycle-tags: the live object is untouched");
+        puts("MALLOC_FAULT_READY:recycle-tags"); fflush(stdout);
+        free(fresh); free(live);
+        /* The released group's mapping is kept again; malloc_trim gives it back. */
+        unsigned long maps = __capstone_malloc_map_calls;
+        require(malloc_trim(0) == 1 && malloc_trim(0) == 0, "recycle-tags: malloc_trim releases kept mappings");
+        char *after = malloc(RECYCLE_SIZE);
+        require(after && __capstone_malloc_map_calls == maps + 1, "recycle-tags: after a trim the group maps again");
+        free(after);
+        puts("MALLOC_SURVIVED:recycle-tags"); fflush(stdout);
+        return 0;
+    }
+    char *fresh = recycled(old, kept, hits, 0); (void)fresh;
+    if (!strcmp(mode, "recycle-stale")) {
+        puts("MALLOC_FAULT_READY:recycle-stale"); fflush(stdout); fault_store(saved);
+    } else if (!strcmp(mode, "recycle-free")) {
+        puts("MALLOC_FAULT_READY:recycle-free"); fflush(stdout); free(saved);
+    } else return 2;
+    return survived(mode, may_survive);
+}
+/* The review cases (2026-11-03). Sizes from mallocng's own geometry at zero usage, which the
+ * fresh-map precondition checks rather than assumes: 6000 bytes is a three-slot group of 6544-byte
+ * slots in a 20480-byte mapping (832 bytes of trailing slack), 17000 and 20000 are single-slot groups
+ * of two different classes in 20480-byte mappings (a 32-byte header), posix_memalign(4096, 20000)
+ * is a single slot in 24576 bytes, 300 bytes is a nested group. */
+#include <pthread.h>
+extern unsigned long __capstone_malloc_map_ok[2];
+static int whole_group(const void *p)   /* CAPSTONE_HEAP_OBJECT_BOUNDS=0: the object reaches its group */
+{ return __builtin_capstone_cap_get_base((void *)p) < __builtin_capstone_cap_get_cursor((void *)p); }
+static char *fresh_malloc(size_t n, const char *what)
+{
+    unsigned long maps = __capstone_malloc_map_calls, hits = __capstone_malloc_recycle_hits;
+    char *p = malloc(n);
+    require(p && __capstone_malloc_map_calls == maps + 1 && __capstone_malloc_recycle_hits == hits, what);
+    return p;
+}
+static void free_kept(void *p, const char *what)
+{
+    unsigned long kept = __capstone_malloc_recycle_kept;
+    free(p);
+    require(__capstone_malloc_recycle_kept == kept + 1, what);
+}
+static char *reused_malloc(size_t n, const char *what)
+{
+    unsigned long maps = __capstone_malloc_map_calls, hits = __capstone_malloc_recycle_hits;
+    char *p = malloc(n);
+    require(p && __capstone_malloc_map_calls == maps && __capstone_malloc_recycle_hits == hits + 1, what);
+    return p;
+}
+/* A fresh MULTI-slot group: the first candidate size whose allocation maps a new group whose slot
+ * is at most half the mapping. Which classes a startup allocation already occupies, and so which
+ * first group gets which count, is not assumed (6000 bytes mapped a single 8192-byte slot in the
+ * first run); unsuitable candidates stay allocated so their groups cannot feed the cache. */
+static char *fresh_multi_slot(unsigned long *length, size_t *size)
+{
+    static const size_t sizes[] = {6000, 5000, 9000, 10000, 4500, 7500, 3000, 2500};
+    for (unsigned i = 0; i < sizeof sizes / sizeof *sizes; ++i) {
+        unsigned long maps = __capstone_malloc_map_calls, hits = __capstone_malloc_recycle_hits;
+        char *p = malloc(sizes[i]); require(p != NULL, "multi-slot candidate");
+        unsigned long l = __capstone_malloc_map_ok[0];
+        struct capstone_malloc_slot *r = __capstone_malloc_find(p);
+        size_t stride = r ? __builtin_capstone_cap_get_end(r->parent) - __builtin_capstone_cap_get_base(r->parent) : 0;
+        printf("MALLOC_RECYCLE_MULTI size=%lu maps=+%lu length=%lu stride=%lu\n", (unsigned long)sizes[i],
+               __capstone_malloc_map_calls - maps, l, (unsigned long)stride);
+        if (__capstone_malloc_map_calls == maps + 1 && __capstone_malloc_recycle_hits == hits &&
+            stride && 2 * stride <= l && l >= 16384) { *length = l; *size = sizes[i]; return p; }
+    }
+    require(0, "a fresh multi-slot group of at least 16384 bytes");
+    return NULL;
+}
+/* Every 16-byte granule of [c + from, c + to), c's own bounds clipped. */
+static unsigned fill_caps(char *c, size_t from, size_t to, void *value)
+{
+    unsigned n = 0;
+    for (size_t o = (from + 15) & ~(size_t)15; o + 16 <= to; o += 16, ++n)
+        *(void *volatile *)(c + o) = value;
+    return n;
+}
+static unsigned count_tags(char *c, size_t from, size_t to)
+{
+    unsigned n = 0;
+    for (size_t o = (from + 15) & ~(size_t)15; o + 16 <= to; o += 16)
+        n += __builtin_capstone_cap_get_tag(*(void *volatile *)(c + o)) != 0;
+    return n;
+}
+/* recycle-header / recycle-slack: with object bounds off the program holds the group's authority;
+ * it stores live capabilities into everything of the group outside its own slot -- the header
+ * after the allocator's first granule, the untaken slots, the trailing slack -- and after release
+ * and reuse the new group's authority must read none of them. With object bounds on the program
+ * cannot reach those bytes (outside=0) and the case reads its own object only. */
+static int recycle_outside(const char *mode, size_t n)
+{
+    char *live = malloc(32); require(live != NULL, "recycle live object");
+    unsigned long length = 0;
+    char *p = n ? fresh_malloc(n, "recycle-outside: a new mapping") : fresh_multi_slot(&length, &n);
+    saved = p;
+    unsigned outside = 0;
+    size_t base = __builtin_capstone_cap_get_base(p), end = __builtin_capstone_cap_get_end(p);
+    if (whole_group(p)) {
+        struct capstone_malloc_slot *r = __capstone_malloc_find(p);
+        require(r != NULL, "recycle-outside: slot record");
+        size_t s0 = __builtin_capstone_cap_get_base(r->parent), s1 = __builtin_capstone_cap_get_end(r->parent);
+        char *g = p - (__builtin_capstone_cap_get_cursor(p) - base);
+        outside = fill_caps(g, 16, s0 - base, live) + fill_caps(g, s1 - base, end - base, live);
+        require(outside && count_tags(g, 16, s0 - base) + count_tags(g, s1 - base, end - base) == outside,
+                "recycle-outside: the reader sees the stored tags");
+    }
+    free_kept(p, "recycle-outside: the released group's mapping was kept");
+    char *q = reused_malloc(n, "recycle-outside: the next group took the kept mapping");
+    size_t qb = __builtin_capstone_cap_get_base(q), qe = __builtin_capstone_cap_get_end(q);
+    char *qg = q - (__builtin_capstone_cap_get_cursor(q) - qb);
+    unsigned tagged = count_tags(qg, 0, qe - qb);
+    printf("MALLOC_RECYCLE_OUTSIDE %s outside=%u tagged=%u of %lu group=%d\n", mode, outside, tagged,
+           (unsigned long)((qe - qb) / 16), whole_group(q));
+    fflush(stdout);
+    require(!tagged, "recycle-outside: no tag of the old group survives into the new group");
+    require(!whole_group(q) || qb == base, "recycle-outside: the same mapping");
+    printf("MALLOC_FAULT_READY:%s\n", mode);
+    free(q); free(live);
+    printf("MALLOC_SURVIVED:%s\n", mode); fflush(stdout);
+    return 0;
+}
+/* recycle-root: nothing an exported entry point hands out survives a group's release. Every
+ * capability in the meta that __capstone_malloc_find's record points to and that covers the group
+ * header (only the group's own capability does, and with object bounds off each slot's issued
+ * copy of it) is counted: a root kept in the meta would add one. The one found is then used after
+ * the release and reuse: it must fault. */
+static int recycle_root(void)
+{
+    char *p = fresh_malloc(RECYCLE_SIZE, "recycle-root: a new mapping"); saved = p;
+    struct capstone_malloc_slot *r = __capstone_malloc_find(p);
+    require(r && r->group, "recycle-root: slot record");
+    size_t s0 = __builtin_capstone_cap_get_base(r->parent), obj_end = __builtin_capstone_cap_get_cursor(p) + RECYCLE_SIZE;
+    /* The meta itself: from the record's group pointer, at most 4000 bytes (meta.h asserts
+     * sizeof(struct meta) < 4000), within that capability's bounds. Not the whole meta area,
+     * whose reservation includes a PROT_NONE guard page. */
+    char *m = r->group;
+    size_t mc = __builtin_capstone_cap_get_cursor(m), me = __builtin_capstone_cap_get_end(m);
+    size_t span = me - mc < 4000 ? me - mc : 4000;
+    unsigned found = 0; void *exposed = NULL;
+    for (size_t o = 0; o + 16 <= span; o += 16) {
+        void *c = *(void *volatile *)(m + o);
+        if (!__builtin_capstone_cap_get_tag(c)) continue;
+        if (__builtin_capstone_cap_get_base(c) < s0 && __builtin_capstone_cap_get_end(c) >= obj_end) {
+            ++found; exposed = c;
+        }
+    }
+    unsigned expected = whole_group(p) ? 2 : 1;   /* the meta's group capability (+ the slot's issued copy) */
+    printf("MALLOC_RECYCLE_ROOT found=%u expected=%u meta_bytes=%lu\n", found, expected, (unsigned long)span);
+    fflush(stdout);
+    require(found == expected, "recycle-root: no capability beyond the group's own covers the group");
+    free_kept(p, "recycle-root: the released group's mapping was kept");
+    char *q = reused_malloc(RECYCLE_SIZE, "recycle-root: the next group took the kept mapping"); (void)q;
+    saved = exposed;
+    puts("MALLOC_FAULT_READY:recycle-root"); fflush(stdout);
+    fault_store((char *)saved + (s0 - __builtin_capstone_cap_get_base(exposed)));
+    return 1;
+}
+static volatile unsigned long trims_done;
+static void *trim_loop(void *arg)
+{
+    volatile int *stop = arg;
+    while (!*stop) { malloc_trim(0); ++trims_done; }
+    return NULL;
+}
+/* recycle-limits: more releases of one length than the cache holds; the excess is unmapped. Then
+ * a second thread trims continuously while this one allocates and frees that length. */
+static int recycle_limits(void)
+{
+    enum { N = 6, PER_LENGTH = 4 };
+    char *p[N];
+    for (unsigned i = 0; i < N; ++i) p[i] = fresh_malloc(RECYCLE_SIZE, "recycle-limits: a new mapping each");
+    unsigned long kept = __capstone_malloc_recycle_kept, unmapped = __capstone_malloc_recycle_unmapped;
+    for (unsigned i = 0; i < N; ++i) free(p[i]);
+    require(__capstone_malloc_recycle_kept == kept + PER_LENGTH &&
+            __capstone_malloc_recycle_unmapped == unmapped + (N - PER_LENGTH),
+            "recycle-limits: four kept, the rest unmapped");
+    unsigned long hits = __capstone_malloc_recycle_hits, maps = __capstone_malloc_map_calls;
+    for (unsigned i = 0; i < N; ++i) { p[i] = malloc(RECYCLE_SIZE); require(p[i] != NULL, "recycle-limits: again"); }
+    require(__capstone_malloc_recycle_hits == hits + PER_LENGTH && __capstone_malloc_map_calls == maps + (N - PER_LENGTH),
+            "recycle-limits: four reused, the rest mapped");
+    for (unsigned i = 0; i < N; ++i) free(p[i]);
+    volatile int stop = 0; pthread_t t;
+    require(!pthread_create(&t, NULL, trim_loop, (void *)&stop), "recycle-limits: trim thread");
+    /* At least 2000 rounds, and on until the trim thread has run 100 times (one hart: the threads
+     * interleave by preemption), bounded. */
+    for (unsigned i = 0; i < 2000 || (trims_done < 100 && i < 2000000); ++i) {
+        char *q = malloc(RECYCLE_SIZE); require(q != NULL, "recycle-limits: under trim");
+        q[0] = 1; q[RECYCLE_SIZE - 1] = 2; require(q[0] == 1 && q[RECYCLE_SIZE - 1] == 2, "recycle-limits: contents");
+        free(q);
+    }
+    stop = 1;
+    require(!pthread_join(t, NULL), "recycle-limits: join");
+    unsigned long trims = trims_done;
+    require(trims >= 100, "recycle-limits: the trim thread ran concurrently");
+    malloc_trim(0);
+    printf("MALLOC_RECYCLE_LIMITS hits=%lu kept=%lu unmapped=%lu trims=%lu\n", __capstone_malloc_recycle_hits,
+           __capstone_malloc_recycle_kept, __capstone_malloc_recycle_unmapped, trims);
+    puts("MALLOC_FAULT_READY:recycle-limits"); puts("MALLOC_SURVIVED:recycle-limits"); fflush(stdout);
+    return 0;
+}
+/* recycle-geometry / -nested / -aligned / -realloc: the group is released by another path, its
+ * mapping is reused, and the old object's capability must fault. */
+static int recycle_path(const char *mode, int may_survive)
+{
+    char *live = malloc(32); require(live != NULL, "recycle live object");
+    char *fresh = NULL;
+    if (!strcmp(mode, "recycle-geometry")) {
+        /* a three-slot group's mapping reused by a single-slot group of another class */
+        unsigned long length; size_t size;
+        char *a = fresh_multi_slot(&length, &size); saved = a;
+        require(fill_caps(a, 0, size, live) == size / 16, "recycle-geometry: fill");
+        free_kept(a, "recycle-geometry: kept");
+        /* A single-slot group of the same mapping length: the request that leaves room for the
+         * 4-byte footer and a header of up to 64 bytes (the granule below 64 KiB). */
+        size_t single = length - 68;
+        printf("MALLOC_RECYCLE_GEOMETRY length=%lu multi=%lu single=%lu\n", length, (unsigned long)size,
+               (unsigned long)single); fflush(stdout);
+        fresh = reused_malloc(single, "recycle-geometry: a single-slot group of another class took it");
+        struct capstone_malloc_slot *r = __capstone_malloc_find(fresh);
+        require(r && __builtin_capstone_cap_get_end(r->parent) - __builtin_capstone_cap_get_base(r->parent) >= single,
+                "recycle-geometry: the new group is a single slot");
+        require(!count_tags(fresh, 0, single), "recycle-geometry: the new object is clean");
+    } else if (!strcmp(mode, "recycle-nested")) {
+        /* The object must be in a NESTED group whose host chain ends in a mapped group holding
+         * nothing else, so that freeing the object retires the nested group, then its host's
+         * mapped group, whose mapping the next nested group's chain then reuses. mallocng nests a
+         * class whose first group is at most half a page; the chains for 240..800-byte objects end
+         * in a two-slot group of 2032-byte slots in one page (class 23), which startup objects also
+         * use. So first fill class 23's free slots (2000-byte objects, kept live) until one maps a
+         * group of its own, and free that one: no class-23 group then has a free slot, and the next
+         * nested chain must take a new class-23 group, from the kept mapping. Nesting is not taken
+         * on trust: the object's group must sit inside a host slot whose record says it holds a
+         * nested group (heap.c SLOT_NESTED, 2). CAPSTONE_RECYCLE_NESTED_SIZE forces a candidate
+         * (1100 bytes, a directly mapped seven-slot group, is the control that must fail here). */
+        static const size_t sizes[] = {600, 300, 400, 240, 800, 160, 128};
+        const char *forced = getenv("CAPSTONE_RECYCLE_NESTED_SIZE");
+        size_t only = forced ? strtoul(forced, NULL, 10) : 0;
+        for (unsigned fill = 0; fill < 64; ++fill) {
+            unsigned long maps = __capstone_malloc_map_calls;
+            char *c = malloc(2000); require(c != NULL, "recycle-nested: class-23 filler");
+            if (__capstone_malloc_map_calls != maps) { free(c); break; }
+        }
+        char *p = NULL; size_t n = 0;
+        for (unsigned i = 0; i < (only ? 1 : sizeof sizes / sizeof *sizes) && !p; ++i) {
+            n = only ? only : sizes[i];
+            unsigned long maps = __capstone_malloc_map_calls, hits = __capstone_malloc_recycle_hits;
+            char *c = malloc(n); require(c != NULL, "recycle-nested: candidate");
+            struct capstone_malloc_slot *r = __capstone_malloc_find(c);
+            size_t s0 = __builtin_capstone_cap_get_base(r->parent);
+            size_t stride = __builtin_capstone_cap_get_end(r->parent) - s0;
+            size_t hdr = stride >= 4096 ? (size_t)1 << (63 - __builtin_clzl(stride) - 9) : 16;
+            if (hdr < 16) hdr = 16;
+            size_t group = s0 - r->index * stride - hdr;   /* the nested group's base = its host slot's key */
+            struct capstone_malloc_slot *host = __capstone_malloc_find((void *)group);
+            int nested = host && host->kind == 2;
+            int fresh_chain = __capstone_malloc_map_calls == maps + 1 || __capstone_malloc_recycle_hits == hits + 1;
+            printf("MALLOC_RECYCLE_NESTED size=%lu stride=%lu nested=%d new_chain=%d\n", (unsigned long)n,
+                   (unsigned long)stride, nested, fresh_chain); fflush(stdout);
+            if (nested && fresh_chain) p = c;
+        }
+        require(p != NULL, "recycle-nested: an object in a nested group whose host chain is new");
+        saved = p; free_kept(p, "recycle-nested: the host group's mapping was kept");
+        fresh = reused_malloc(n, "recycle-nested: the next nested group's host took it");
+    } else if (!strcmp(mode, "recycle-aligned")) {
+        void *a = NULL;
+        unsigned long maps = __capstone_malloc_map_calls;
+        require(!posix_memalign(&a, 4096, RECYCLE_SIZE) && __capstone_malloc_map_calls == maps + 1,
+                "recycle-aligned: a new mapping");
+        saved = a; free_kept(a, "recycle-aligned: kept");
+        unsigned long hits = __capstone_malloc_recycle_hits;
+        require(!posix_memalign((void **)&fresh, 4096, RECYCLE_SIZE) && __capstone_malloc_recycle_hits == hits + 1,
+                "recycle-aligned: reused");
+    } else if (!strcmp(mode, "recycle-realloc")) {
+        char *a = fresh_malloc(RECYCLE_SIZE, "recycle-realloc: a new mapping"); saved = a;
+        unsigned long kept = __capstone_malloc_recycle_kept;
+        char *moved = realloc(a, 60000);
+        require(moved && (uintptr_t)moved != (uintptr_t)saved && __capstone_malloc_recycle_kept == kept + 1,
+                "recycle-realloc: the move released and kept the old group");
+        fresh = reused_malloc(RECYCLE_SIZE, "recycle-realloc: reused");
+    } else return 2;
+    (void)fresh;
+    printf("MALLOC_FAULT_READY:%s\n", mode); fflush(stdout);
+    fault_store(saved);
+    return survived(mode, may_survive);
+}
+#endif
 int main(int argc, char **argv)
 {
     const char *mode = argc > 1 ? argv[1] : "ok";
     int may_survive = argc > 2 && !strcmp(argv[2], "may-survive");
+#ifdef __CAPSTONE_PURECAP__
+    if (!strncmp(mode, "recycle-", 8)) return recycle_case(mode, may_survive);
+#endif
     if (!strcmp(mode, "hot")) { hot(0); return 0; }
     if (!strcmp(mode, "hot-service-control")) { hot(1); return 0; }
     if (!strcmp(mode, "population")) { population(); return 0; }

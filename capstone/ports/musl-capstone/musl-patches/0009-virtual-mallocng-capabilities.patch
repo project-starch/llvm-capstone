@@ -45,6 +45,13 @@ check-mallocng-policy.py pins the seven entries and their values and refuses any
 These live here rather than in a sibling patch because build-sdk.sh checks currency by requiring
 every patch to reverse-apply INDEPENDENTLY, and a patch editing the lines this one adds makes this
 one un-reversible -- the SDK build then refuses with "musl source is not current".
+Recycled group mappings (2026-11-03). free() hands a released mapped group's capability and length
+to __capstone_malloc_group_unmap instead of calling munmap. Whether a group is released stays musl's
+decision (okay_to_free and nontrivial_free are untouched and checked); what a release does to the
+MAPPING is the runtime's: it ends the group's lifetime and keeps the mapping for a later group of
+the same length, or unmaps it as before (heap.c "Recycled group mappings"). The mapping's root
+authority stays in heap.c's private state; no meta field or return value carries it.
+
 --- a/src/malloc/mallocng/aligned_alloc.c	2024-03-01 10:07:33.000000000 +0800
 +++ b/src/malloc/mallocng/aligned_alloc.c
 @@ -29,7 +29,10 @@
@@ -172,6 +179,21 @@ one un-reversible -- the SDK build then refuses with "musl source is not current
  
  	// release any whole pages contained in the slot to be freed
  	// unless it's a single-slot group that will be unmapped.
+@@ -145,7 +162,14 @@
+ 	unlock();
+ 	if (mi.len) {
+ 		int e = errno;
++#ifdef CAPSTONE_MUSL_MALLOC
++		/* musl's release decision is unchanged (okay_to_free); what releasing a
++		 * mapped group does is the runtime's: end the group's lifetime and keep the
++		 * mapping for a later group of the same length, or unmap it (heap.c). */
++		__capstone_malloc_group_unmap(mi.base, mi.len);
++#else
+ 		munmap(mi.base, mi.len);
++#endif
+ 		errno = e;
+ 	}
+ }
 --- a/src/malloc/mallocng/glue.h	2024-03-01 10:07:33.000000000 +0800
 +++ b/src/malloc/mallocng/glue.h
 @@ -20,9 +20,18 @@

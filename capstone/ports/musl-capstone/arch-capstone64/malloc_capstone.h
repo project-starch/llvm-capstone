@@ -11,12 +11,19 @@ struct capstone_malloc_slot {
     size_t key, nominal;
     unsigned index, kind;
     unsigned char prefix[4] __attribute__((aligned(4)));
+    /* Set by heap.c bind_slots when the group reuses a released group's mapping: the slot's
+     * bytes may still hold the previous group's data and capability tags, and its first take
+     * clears them before anything over it is issued. Fills the record's padding. */
+    unsigned char stale;
 };
 void *__capstone_malloc_map(size_t);
 void *__capstone_malloc_group_attach(struct capstone_malloc_slot *,
                                     void *, size_t);
 void *__capstone_malloc_group_map(struct capstone_malloc_slot *,
                                  size_t, size_t, unsigned);
+/* A released mapped group (free.c free): its group capability and the mapping length. The runtime
+ * keeps the mapping for reuse or unmaps it (heap.c "Recycled group mappings"). */
+void __capstone_malloc_group_unmap(void *group, size_t bytes);
 void *__capstone_malloc_group_nested(struct capstone_malloc_slot *,
                                     size_t, unsigned, struct capstone_malloc_slot *);
 void *__capstone_malloc_group_remap(struct capstone_malloc_slot *,
