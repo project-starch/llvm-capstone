@@ -51,7 +51,8 @@ int main(int argc, char **argv)
         printf("PIN_OK:%s\n", mode);
         return 0;
     }
-    size_t pages = !strcmp(mode, "stream") ? STREAM_PAGES : PAGES;
+    size_t pages = !strcmp(mode, "stream") ? STREAM_PAGES :
+                   !strcmp(mode, "interleave") ? 2 * PAGES : PAGES;
     int nonlin = !strcmp(mode, "nonlin");
     int clipped = !strcmp(mode, "clip") || !strcmp(mode, "clipx") || !strcmp(mode, "clipwrite");
     volatile char *a = nonlin ? nonlin_region : mmap(NULL, pages * PAGE, PROT_READ | PROT_WRITE,
@@ -63,7 +64,19 @@ int main(int argc, char **argv)
     printf("PIN_REGION:%p\n", (void *)a);
     if (nonlin) printf("PIN_SPAN:%u\n", PAGES);
     fflush(stdout);
-    if (clipped) {
+    if (!strcmp(mode, "interleave")) {
+        /* Two streams in one arena, with a VMA boundary preventing the
+         * first stream's last window from speculating into the second. */
+        require(!mprotect((void *)(a + PAGES * PAGE), PAGES * PAGE,
+                          PROT_READ | PROT_WRITE | PROT_EXEC), "interleave mprotect");
+        for (size_t i = 0; i < PAGES; ++i) {
+            a[i * PAGE] = (char)i;
+            a[(i + PAGES) * PAGE] = (char)(i + 1);
+        }
+        for (size_t i = 0; i < PAGES; ++i)
+            require(a[i * PAGE] == (char)i && a[(i + PAGES) * PAGE] == (char)(i + 1),
+                    "interleave readback");
+    } else if (clipped) {
         int prot = !strcmp(mode, "clipx") ? PROT_READ | PROT_WRITE | PROT_EXEC : PROT_READ;
         require(!mprotect((void *)(a + 8 * PAGE), (PAGES - 8) * PAGE, prot), "clip mprotect");
         for (size_t i = 0; i < 8; ++i) a[i * PAGE] = (char)(i + 1);
@@ -94,8 +107,12 @@ int main(int argc, char **argv)
         require(!mprotect((void *)(a + 8 * PAGE), (PAGES - 8) * PAGE,
                           PROT_READ | PROT_WRITE | PROT_EXEC), "mprotect");
         a[0] = 1;
-    } else if (!strcmp(mode, "walk") || !strcmp(mode, "stream") || nonlin) {
+    } else if (!strcmp(mode, "walk") || !strcmp(mode, "stream") || !strcmp(mode, "gaps") || nonlin) {
         if (nonlin) a[PAGES * PAGE] = 1;
+        /* Cross an existing pin both before training and within a window.
+         * Earlier faults also leave older predictor slots at the same next
+         * page: the active walk must win when those streams converge. */
+        if (!strcmp(mode, "gaps")) a[PAGE] = a[7 * PAGE] = 1;
         for (size_t i = 0; i < pages; ++i)
             a[i * PAGE] = (char)i;
         for (size_t i = 0; i < pages; ++i)

@@ -67,6 +67,8 @@ CONFIGS = {
     'adaptclip':  ('test_full_window=1', 'clip clipx', 0),
     'adaptro':    ('test_full_window=1', 'clipwrite', 139),
     'adaptnonlin': ('test_full_window=1', 'nonlin', 0),
+    'adaptgaps':  ('test_full_window=1', 'gaps', 0),
+    'adaptinterleave': ('test_full_window=1', 'interleave', 0),
 }
 SCRIPT = '''#!/bin/sh
 cd /mnt/vm || exit 1
@@ -356,9 +358,24 @@ def evaluate(log, names, instrumented, completed):
             growth &= e[1] == expected_index and e[2] == want and 0 <= e[3] <= min(want, size - e[1] - 1)
             expected_index = e[1] + 1 + e[3]
         checks[f'adaptdirect_{mode}_growth'] = bool(
-            growth and expected_index == size and
+            growth and expected_index == size and sum(e[3] for e in events) > 0 and
             all(got == (size, len(events) + 2) for got in sources('adaptdirect', mode)) and
             adaptive_counts('adaptdirect', mode, len(events), size - len(events) - 2))
+    checks['adaptres_walk_accounting'] = (
+        all(got == (32, 32) for got in sources('adaptres', 'walk')) and
+        adaptive_counts('adaptres', 'walk', 30, 0))
+    for name, mode, accounting, events in (
+            ('adaptgaps', 'gaps', (32, 7), [(3, 4, 3), (8, 8, 8), (17, 16, 14)]),
+            ('adaptinterleave', 'interleave', (64, 10),
+             # At 16 the first stream's window stops at its VMA's end; its next page then skips
+             # the second array's pages already pinned, to 48, where the second stream's next
+             # also is: the more recent first stream continues (window 32, clipped to 15).
+             [(2, 4, 4), (34, 4, 4), (7, 8, 8), (39, 8, 8), (16, 16, 15), (48, 32, 15)])):
+        actual = region_events(runs.get((name, mode), {}))
+        checks[f'{name}_window'] = (
+            [e[1:4] for e in actual] == events and
+            all(got == accounting for got in sources(name, mode)) and
+            adaptive_counts(name, mode, len(events), sum(e[2] for e in events)))
     # A short GUP retains half a batch, then the next fault must continue from the retained
     # end (not the requested end). Final fault at 31 has a trained but empty window.
     checks['adaptshort_walk_window'] = (

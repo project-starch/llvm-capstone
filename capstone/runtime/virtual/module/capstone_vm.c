@@ -113,7 +113,7 @@ struct cv_thread {
         unsigned long used;    /* stream_clock at its last fault: the least recent is replaced */
         unsigned next;         /* the page index a sequential next fault lands on */
         unsigned run;          /* faults in the stream so far, each at the previous one's next */
-        unsigned window;       /* pages pinned ahead at its last fault */
+        unsigned window;       /* pages requested ahead at its last fault, including empty cuts */
     } streams[4];
     unsigned long stream_clock;
 };
@@ -335,13 +335,14 @@ module_param(pin_ahead_pages, ulong, 0444);
 /* ADAPTIVE FAULT-AHEAD: a context whose faults stream through an arena gets the next pages pinned
  * in the same CV_STEP, a window that grows while the stream lasts.
  *
- * A fault continues a stream when it lands on the page right after what the stream's previous
- * fault pinned (that page, or the end of the window pinned with it), in the same arena (by its
+ * A fault continues a stream when it lands on the first unpinned page after the stream's previous
+ * fault and window, skipping pages admitted earlier, in the same arena (by its
  * mapping ID, which no later arena reuses, even at the same address), for the same context. Once a stream has fault_ahead_after such faults in a row, each further one
  * pins a window ahead of it: FAULT_AHEAD_FIRST pages, then twice the previous window, up to
- * fault_ahead_max. A fault that continues no stream starts one with no window, so a
- * non-sequential fault resets it. Four streams per context, the least recently faulted
- * replaced: a loop that writes one array while it reads another is two streams.
+ * fault_ahead_max. A fault that continues no stream replaces the least recently used slot
+ * with an untrained stream. Other slots survive, including streams in the same arena:
+ * a loop interleaving two arrays in one mapping can train both. When two streams converge
+ * on the same unpinned page, the most recently used stream continues. Four slots per context.
  *
  * The window is pin_ahead()'s, unchanged: clipped to the arena and to the faulting VMA, ended
  * by the first page already pinned, each page pinned exactly as a fault on it would be, 16 at a
@@ -362,7 +363,9 @@ static unsigned long fault_ahead_max = 64;
 module_param(fault_ahead_max, ulong, 0644);
 static unsigned long fault_ahead_after = 2;
 module_param(fault_ahead_after, ulong, 0644);
-/* Pages pinned by adaptive windows, and the windows, since load (read-only counters). */
+/* Pages pinned and window attempts since load (read-only counters). An attempt can pin zero
+ * pages at a VMA boundary or budget cut. Growth follows sequential demand evidence, so an
+ * empty attempt does not reset training. */
 static unsigned long fault_ahead_pages, fault_ahead_windows;
 module_param(fault_ahead_pages, ulong, 0444);
 module_param(fault_ahead_windows, ulong, 0444);
@@ -1666,26 +1669,30 @@ static unsigned long pin_ahead(struct context *c, struct arena *a,
 static unsigned long stream_window(struct cv_thread *t, const struct arena *a, unsigned index,
                                    struct cv_stream **out)
 {
-    struct cv_stream *s, *victim = t->streams;
+    struct cv_stream *s, *match = NULL, *victim = t->streams;
+    unsigned long maximum = min_t(unsigned long, READ_ONCE(fault_ahead_max), UINT_MAX);
     *out = NULL;
-    if (!fault_ahead_max || arena_pin || pin_ahead_pages > 1)
+    if (!maximum || arena_pin || pin_ahead_pages > 1)
         return 0;
     for (s = t->streams; s < t->streams + ARRAY_SIZE(t->streams); ++s) {
         if (s->run && s->arena == a->id && s->next == index) {
-            ++s->run;
-            goto found;
+            if (!match || s->used > match->used)
+                match = s;
         }
         if (s->used < victim->used)
             victim = s;
     }
-    s = victim;
-    s->arena = a->id;
-    s->run = 1;
-    s->window = 0;
-found:
+    s = match ? match : victim;
+    if (match) {
+        if (s->run < UINT_MAX) ++s->run;
+    } else {
+        s->arena = a->id;
+        s->run = 1;
+        s->window = 0;
+    }
     s->used = ++t->stream_clock;
     if (s->run > fault_ahead_after)
-        s->window = (unsigned)min(s->window ? 2UL * s->window : FAULT_AHEAD_FIRST, fault_ahead_max);
+        s->window = (unsigned)min(s->window ? 2UL * s->window : FAULT_AHEAD_FIRST, maximum);
     *out = s;
     return s->window;
 }
@@ -1959,7 +1966,13 @@ static int resolve(struct context *c, struct cv_thread *t, u64 deadline)
             unsigned long ahead = stream_window(t, a, index, &stream);
             unsigned long pinned = pin_ahead(c, a, v, index + 1, ahead, deadline);
             if (stream) {
-                stream->next = index + 1 + pinned;
+                /* The next demand fault lands past pages admitted earlier (a stream crosses
+                 * them without faulting). Bounded to one maximal window: a longer pinned run
+                 * just ends the stream, it never costs a long scan inside the step. */
+                unsigned skip_end = stream->next = index + 1 + pinned;
+                skip_end = min_t(unsigned long, a->count, (unsigned long)skip_end + 64);
+                while (stream->next < skip_end && a->pages[stream->next])
+                    ++stream->next;
                 if (ahead) {
                     ++fault_ahead_windows;
                     fault_ahead_pages += pinned;
