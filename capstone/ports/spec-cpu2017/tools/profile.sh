@@ -41,6 +41,11 @@ esac
 # paged table, in every arm, the plain one included: the guest boots the module) plus the arm's own.
 mapfile -t CPU_PROPS < <(python3 -c "import json,sys;d=json.load(open(sys.argv[1]));print('\n'.join(d['platform'].get('cpu_props',[])+d['arms'][sys.argv[2]].get('cpu_props',[])))" "$ARMS" "$ARM")
 UP_EXTRA=()
+MODPARAMS=$(jopt "arms.$ARM.module_params" "")
+# Unpinned discovery must be selected before vm up's launcher statistics probe.
+# Keep the existing later reload/readback for profiling-section provenance.
+mapfile -t MODULE_PARAMS < <(python3 -c 'import shlex,sys; print("\n".join(shlex.split(sys.argv[1])))' "$MODPARAMS")
+for p in "${MODULE_PARAMS[@]}"; do [ -n "$p" ] && UP_EXTRA+=(--module-param "$p"); done
 for p in "${CPU_PROPS[@]}"; do [ -n "$p" ] && UP_EXTRA+=(--cpu-prop "$p"); done
 [ "$(jopt "arms.$ARM.exact_bounds" false)" = True ] && UP_EXTRA+=(--exact-bounds)
 ICOUNT=$(jopt platform.icount 0); MEM=$(jopt platform.memory 8G)

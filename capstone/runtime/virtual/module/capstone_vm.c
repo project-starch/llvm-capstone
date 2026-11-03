@@ -317,6 +317,17 @@ MODULE_PARM_DESC(node_flat_records,
 static bool arena_pin;
 module_param(arena_pin, bool, 0644);
 
+/* Optional tag-aware Linux path. Read-only: a namespace never changes its
+ * page-ownership contract while active. Stock kernels reject this option. */
+static bool unpinned;
+module_param(unpinned, bool, 0444);
+MODULE_PARM_DESC(unpinned, "Use the platform's raw tag-aware mm instead of payload pins");
+static bool unpinned_exact_bounds;
+static unsigned long unpinned_faults, unpinned_sweep_pages;
+module_param(unpinned_faults, ulong, 0444);
+module_param(unpinned_sweep_pages, ulong, 0444);
+extern int capstone_unpinned_config(unsigned int ids, bool *exact);
+
 /* Pages a lazy-arena fault pins, from the faulting page on, clipped to the
  * arena, the VMA and the first page already pinned. 1 pins only the page. */
 static unsigned long pin_ahead_pages = 1;
@@ -846,6 +857,111 @@ static void collect_free(struct collect_list *list)
     }
 }
 
+static unsigned long unpinned_page_summary(struct page *page)
+{
+    unsigned long result;
+    asm volatile(".insn i 0x0b, 6, %0, %1, 0"
+                 : "=r"(result) : "r"(page_to_phys(page)) : "memory");
+    return result;
+}
+
+/* vm_lock and mmap_lock are held. Temporary page references stabilize the sweep's physical
+ * list, including pages outside currently registered arenas. Shared tagged
+ * backing is refused: this namespace cannot sweep another process's copies.
+ * Migration entries, swapped PTEs and huge mappings fail closed as well.
+ * FOLL_GET references prevent migration's expected-reference freeze. Unlike
+ * FOLL_PIN they do not require unsharing clean launcher pages during a read;
+ * the tagged pages we retain must already be private and exclusively mapped. */
+static int unpinned_hold_mm(struct mm_struct *mm, struct collect_list *held)
+{
+    struct vm_area_struct *v;
+    unsigned long cursor = 0;
+
+    while ((v = find_vma(mm, cursor))) {
+        unsigned long address = v->vm_start, end = v->vm_end;
+        /* Device/PFN mappings cannot be granted as payload arenas. They are
+         * not ordinary tagged RAM and have no GUP page to stabilize. */
+        if (v->vm_flags & (VM_IO | VM_PFNMAP | VM_MIXEDMAP)) {
+            cursor = end;
+            continue;
+        }
+        while (address < end) {
+            struct page *page;
+            unsigned long at, pfn;
+            long found = next_resident(mm, address, end, &at, &pfn);
+            int error;
+            if (found < 0) return found;
+            if (!found) break;
+            address = at + PAGE_SIZE;
+            if (is_zero_pfn(pfn)) continue;
+            found = get_user_pages_remote(mm, at, 1, FOLL_FORCE | FOLL_NOFAULT,
+                                          &page, NULL, NULL);
+            if (found != 1) {
+                pr_warn("capstone_vm: unpinned sweep cannot hold %lx flags %lx: %ld\n",
+                        at, v->vm_flags, found);
+                return found < 0 ? found : -EFAULT;
+            }
+            if (!unpinned_page_summary(page)) {
+                put_page(page);
+                continue;
+            }
+            if (!PageAnon(page) || page_mapcount(page) != 1 ||
+                (v->vm_flags & VM_SHARED)) {
+                put_page(page);
+                return -EOPNOTSUPP;
+            }
+            error = collect_page(held, page_to_phys(page));
+            if (error) { put_page(page); return error; }
+            ++unpinned_sweep_pages;
+        }
+        cursor = end;
+    }
+    return 0;
+}
+
+static void unpinned_release_mm(struct collect_list *held)
+{
+    unsigned long *page = held->head;
+    while (page) {
+        for (unsigned long j = 0; j < page[1]; ++j)
+            put_page(pfn_to_page(page[2 + j] >> PAGE_SHIFT));
+        page = page[0] ? phys_to_virt(page[0]) : NULL;
+    }
+    collect_free(held);
+}
+
+/* Remove an old namespace's storage tags without projecting or changing its
+ * bytes. A raw load supplies the original low word to a scalar store (rule 1).
+ * This runs only before a fresh context is made visible, with mmap_lock held.
+ * Interrupts cannot interpose while an opaque register is live. */
+static int unpinned_scrub_mm(struct mm_struct *mm)
+{
+    struct collect_list held = {0};
+    unsigned long *page;
+    int error;
+    mmap_read_lock(mm);
+    error = unpinned_hold_mm(mm, &held);
+    if (error) goto out;
+    page = held.head;
+    while (page) {
+        for (unsigned long j = 0; j < page[1]; ++j) {
+            void *at = phys_to_virt(page[2 + j]);
+            unsigned long flags, count = PAGE_SIZE / 16;
+            local_irq_save(flags);
+            asm volatile("1: .insn i 0x0b, 4, t0, %0, 0\n\t"
+                         "sd t0, 0(%0)\n\taddi %0, %0, 16\n\t"
+                         "addi %1, %1, -1\n\tbnez %1, 1b\n\tli t0, 0"
+                         : "+r"(at), "+r"(count) : : "t0", "memory");
+            local_irq_restore(flags);
+        }
+        page = page[0] ? phys_to_virt(page[0]) : NULL;
+    }
+out:
+    unpinned_release_mm(&held);
+    mmap_read_unlock(mm);
+    return error;
+}
+
 #if node_table_flat
 /* Q-27: vp2's RTL refuses CSRUNV action 3 at execute as an illegal instruction (rs2 > 2), so on
  * silicon a collection is an S-mode trap; QEMU implements it. Nor can the module collect in
@@ -865,7 +981,7 @@ static unsigned long collect_skips;
 static int collect(struct context *c, struct cv_thread *owner)
 {
     unsigned long flags, result;
-    struct collect_list list = {0};
+    struct collect_list list = {0}, held = {0};
     int error = -ENOMEM;
     struct cv_thread *t;
     struct arena *a;
@@ -876,18 +992,35 @@ static int collect(struct context *c, struct cv_thread *owner)
                  node_retired(c), node_available(c), collect_skips);
     return -ENOMEM;
 #endif
-    /* Include resident pages populated by Linux/the trusted launcher without
-     * a C fault. Missing pages are not materialized; any inspection failure
-     * prevents identity reuse. Saved contexts share this mm's namespace. */
-    for_each_arena(a, c) {
-        int error = pin_remaining(c, a, FOLL_FORCE | FOLL_NOFAULT);
-        if (error) return error;
+    /* The unpinned sweep covers the whole mm, including retired arenas that
+     * are still mapped. Pinning only current arenas could resurrect stale IDs.
+     * Hold mmap_lock through the sweep/recycle so fork and unmap cannot copy or
+     * move a tagged page out of the inspected namespace between those steps. */
+    if (unpinned) {
+        mmap_read_lock(c->mm);
+        error = unpinned_hold_mm(c->mm, &held);
+        if (error) goto out;
+    } else {
+        for_each_arena(a, c) {
+            error = pin_remaining(c, a, FOLL_FORCE | FOLL_NOFAULT);
+            if (error) return error;
+        }
     }
+    error = -ENOMEM;
     list_for_each_entry(t, &c->threads, link)
         if (collect_page(&list, t->frame_pa)) goto out;
-    for_each_arena(a, c)
-        for (unsigned j = 0; j < a->count; ++j)
-            if (a->pages[j] && collect_page(&list, page_to_phys(a->pages[j]))) goto out;
+    if (unpinned) {
+        unsigned long *page = held.head;
+        while (page) {
+            for (unsigned long j = 0; j < page[1]; ++j)
+                if (collect_page(&list, page[2 + j])) goto out;
+            page = page[0] ? phys_to_virt(page[0]) : NULL;
+        }
+    } else {
+        for_each_arena(a, c)
+            for (unsigned j = 0; j < a->count; ++j)
+                if (a->pages[j] && collect_page(&list, page_to_phys(a->pages[j]))) goto out;
+    }
     owner->frame[80] = list.count | CAP_REV_COLLECT_CHAIN;
     owner->frame[81] = virt_to_phys(list.head);
     preempt_disable(); local_irq_save(flags);
@@ -899,6 +1032,10 @@ static int collect(struct context *c, struct cv_thread *owner)
     error = 0;
 out:
     collect_free(&list);
+    if (unpinned) {
+        unpinned_release_mm(&held);
+        mmap_read_unlock(c->mm);
+    }
     return error;
 }
 
@@ -929,10 +1066,14 @@ static int ensure_nodes(struct context *c, unsigned long required)
     collect_min = max(collect_min, node_capacity(c) / 4);
     if (owner && node_retired(c) >= max(required - available, collect_min)) {
         error = collect(c, owner);
-        if (error) return error;
-        c->retired_flat = c->pushed_flat = 0;
-        collected = true;
-        if (node_available(c) >= required) return 0;
+        /* An unpinned sweep can refuse a non-present or shared tagged page.
+         * Keep those identities retired, but permit fresh-node growth. */
+        if (error && !unpinned) return error;
+        if (!error) {
+            c->retired_flat = c->pushed_flat = 0;
+            collected = true;
+            if (node_available(c) >= required) return 0;
+        }
     }
     error = node_grow(c, required);
     if (!error) return 0;
@@ -1075,7 +1216,7 @@ static int retire(struct context *c, struct arena *a, bool destroying)
     unsigned i, swept;
     if (!destroying && arena_has_thread_frame(c, a))
         return -EBUSY;
-    if (!destroying) {
+    if (!destroying && !unpinned) {
         int error = pin_remaining(c, a, FOLL_FORCE | FOLL_NOFAULT);
         if (error) return error;
     }
@@ -1115,7 +1256,7 @@ static int retire(struct context *c, struct arena *a, bool destroying)
      * entry it has not already read. */
     {
         unsigned n = 0;
-        for (i = 0; i < a->count; ++i) {
+        for (i = 0; !unpinned && i < a->count; ++i) {
             if (!a->pages[i]) continue;
             clear_page_tags(a->pages[i]);
             a->pages[n++] = a->pages[i];
@@ -1143,8 +1284,12 @@ static int retire(struct context *c, struct arena *a, bool destroying)
 /* The meta block (reg 10 before the start) stays eager: asynchronous signal publication writes
  * it and cannot issue a sleeping CV_TOUCH. The main exchange (reg 11) is admitted through the
  * delegate dispatcher's prepare_write callback before every possible output span; worker
- * transports are touched at each attachment and held until detach/exit. A launcher write must
- * never populate an unpinned page: exit_mm can free it before vm_release sweeps its tags.
+ * transports are touched at each attachment and held until detach/exit. In pinned mode a
+ * launcher write must not populate an unheld page: exit_mm can free it before vm_release
+ * sweeps its tags. In experimental unpinned mode arch_free_page clears released pages and
+ * the raw copy hooks preserve tags across COW/migration. CV_TOUCH faults pages in without
+ * retaining them. The launcher's cache records admission of the immutable main-exchange
+ * mapping, not residency: eviction does not invalidate that admission or its tag coverage.
  * The stack (reg 2), the image (3) and the startup block (12)
  * are written by the launcher only BEFORE their grant, and those pages are pinned at the mint
  * by the resident scan; after it, only the domain's own accesses populate them, every one of
@@ -1231,6 +1376,17 @@ static int add(struct context *c, struct cv_thread *t, struct cv_map *r)
             mmap_read_unlock(c->mm); return -EOPNOTSUPP;
         }
 #endif
+        if (unpinned && !r->linear && !rx && (!lazy_grants || eager_grant(t, r))) {
+            /* Unpinned: populate every page of a NONLIN grant through the kernel's own
+             * fault path, as pin_user_pages_fast(FOLL_WRITE) below would, but take no pin. Write
+             * access where the VMA grants it, so the PTE comes out writable and dirty as GUP's did. */
+            unsigned long next = min((unsigned long)(r->address + r->bytes), v->vm_end);
+            unsigned int flags = (v->vm_flags & VM_WRITE) ? FAULT_FLAG_WRITE : 0;
+            for (unsigned long p = at; p < next; p += PAGE_SIZE)
+                if (fixup_user_fault(c->mm, p, flags, NULL)) {
+                    mmap_read_unlock(c->mm); return -EFAULT;
+                }
+        }
         at = min(min((unsigned long)(r->address + r->bytes), v->vm_end),
                  rx ? rx_end : ULONG_MAX);
     }
@@ -1262,7 +1418,7 @@ static int add(struct context *c, struct cv_thread *t, struct cv_map *r)
         if (!a->frames) { kvfree(pages); xa_erase(&c->ids, a->id); kfree(a); return -ENOMEM; }
     }
     n = 0;
-    if (!a->lazy) {
+    if (!unpinned && !a->lazy) {
         /* Pinned whole at the mint (lazy_grants off, or eager_grant): Linux resolves each first
          * touch through GUP, then the adapter pins that backing until retirement. Each page:
          * exclusive anonymous backing, mapped once, its frame not held by another page of the
@@ -1273,7 +1429,7 @@ static int add(struct context *c, struct cv_thread *t, struct cv_map *r)
         for (i = 0; i < n; ++i)
             if (!PageAnon(pages[i]) || page_mapcount(pages[i]) != 1 || !frame_insert(a, pages[i]))
                 goto unpin;
-    } else if (!r->linear) {
+    } else if (!unpinned && !r->linear) {
         /* Lazy: the pages already resident -- what the launcher wrote before the grant -- are
          * pinned and checked now, exactly as the whole-arena pin would have (FOLL_WRITE breaks
          * a private file page's copy-on-write); every absent page is admitted at the domain's
@@ -1367,7 +1523,7 @@ static int remap_begin(struct context *c, const struct cv_remap *r)
     a = xa_load(&c->ids, r->id);
     if (!a || !a->linear || arena_has_thread_frame(c, a)) return -EINVAL;
     if (c->registered_bytes - a->bytes + r->bytes > CV_MAX_BYTES) return -ENOMEM;
-    error = pin_remaining(c, a, FOLL_FORCE | FOLL_NOFAULT);
+    error = unpinned ? 0 : pin_remaining(c, a, FOLL_FORCE | FOLL_NOFAULT);
     if (error) return error;
     error = ensure_nodes(c, 2 + CAP_REV_TABLE_RESERVE);
     if (error) return error;
@@ -1821,6 +1977,41 @@ static int resolve(struct context *c, struct cv_thread *t, u64 deadline)
         mmap_read_unlock(c->mm);
         return rc;
     }
+    if (a && !a->lazy && unpinned) {
+        /* Unpinned: an eager grant's page was moved (migration, compaction) or
+         * write-protected (a fork's COW) under the domain. The grant was validated at add();
+         * here only what the kernel's fault path needs: a private VMA with the access. A
+         * private file mapping is allowed (image data: its pages are anonymous COW copies
+         * since add() populated them for write). Same repeat bound as the unpinned path. */
+        int rc;
+        mmap_read_lock(c->mm);
+        v = find_vma(c->mm, address);
+        if (!v || v->vm_start > address || !(v->vm_flags & required) ||
+            (v->vm_flags & VM_SHARED)) {
+            unsigned long f = v ? v->vm_flags : 0UL;
+            mmap_read_unlock(c->mm);
+            CV_RESOLVE_FAIL("unpinned-vma", "found %d flags 0x%lx", !!v, f);
+            return -EACCES;
+        }
+        vmflags = v->vm_flags;
+        if (address == t->last_fault_addr && cause == t->last_fault_cause) {
+            if (++t->fault_repeat > fault_repeat_max) {
+                mmap_read_unlock(c->mm);
+                CV_RESOLVE_FAIL("unpinned-loop", "resolved %u times with no change", t->fault_repeat);
+                return -ELOOP;
+            }
+        } else {
+            t->last_fault_addr = address;
+            t->last_fault_cause = cause;
+            t->fault_repeat = 0;
+        }
+        rc = fixup_user_fault(c->mm, address & PAGE_MASK,
+                              (vmflags & VM_WRITE) ? FAULT_FLAG_WRITE : 0, NULL);
+        mmap_read_unlock(c->mm);
+        if (rc) CV_RESOLVE_FAIL("unpinned", "fixup_user_fault=%d vm_flags 0x%lx", rc, vmflags);
+        ++unpinned_faults;
+        return rc;
+    }
     if (a && a->lazy) {
         unsigned index;
         long n;
@@ -1837,6 +2028,30 @@ static int resolve(struct context *c, struct cv_thread *t, u64 deadline)
             return -EACCES;
         }
         vmflags = v->vm_flags;
+        if (unpinned) {
+            /* Unpinned: the kernel's own fault path, as the image's RX path and the
+             * resolve_dirty path use it, and no pin. Write access where the VMA grants it (GUP's
+             * FOLL_WRITE did the same), so a read fault still materializes private writable
+             * dirty backing rather than the zero page. The repeat bound stays: a resolve that
+             * changes nothing must not report success for ever. */
+            int rc;
+            if (address == t->last_fault_addr && cause == t->last_fault_cause) {
+                if (++t->fault_repeat > fault_repeat_max) {
+                    mmap_read_unlock(c->mm);
+                    CV_RESOLVE_FAIL("unpinned-loop", "resolved %u times with no change", t->fault_repeat);
+                    return -ELOOP;
+                }
+            } else {
+                t->last_fault_addr = address;
+                t->last_fault_cause = cause;
+                t->fault_repeat = 0;
+            }
+            rc = fixup_user_fault(c->mm, address & PAGE_MASK,
+                                  (vmflags & VM_WRITE) ? FAULT_FLAG_WRITE : 0, NULL);
+            mmap_read_unlock(c->mm);
+            if (rc) CV_RESOLVE_FAIL("unpinned", "fixup_user_fault=%d vm_flags 0x%lx", rc, vmflags);
+            return rc;
+        }
         /* Check actual PTE policy first. FORCE then materializes private
          * anonymous backing even for a read-only zero-page first touch. The
          * application still sees its original VMA/PTE protection. */
@@ -1998,6 +2213,12 @@ static int admit_page(struct context *c, struct arena *a, unsigned index)
     if (!v || v->vm_start > address || !(v->vm_flags & VM_READ) || (v->vm_flags & VM_SHARED) ||
         (v->vm_file && !image_data_vma(a, v))) {
         mmap_read_unlock(c->mm); return -EACCES;
+    }
+    if (unpinned) {
+        int rc = fixup_user_fault(c->mm, address,
+                      (v->vm_flags & VM_WRITE) ? FAULT_FLAG_WRITE : 0, NULL);
+        mmap_read_unlock(c->mm);
+        return rc;
     }
     if (pin_user_pages_remote(c->mm, address, 1,
                               FOLL_WRITE | ((v->vm_flags & VM_WRITE) ? 0 : FOLL_FORCE),
@@ -2543,7 +2764,9 @@ static int vm_open(struct inode *inode, struct file *f)
     /* Braced so the declarations stay at the head of a block: the kernel builds with
      * -Wdeclaration-after-statement, and scoping them here keeps the flat build free of
      * -Wunused-variable, which is how the need for this was caught. */
-    {
+    if (unpinned) {
+        available = node_available(c);
+    } else {
         unsigned long flags, previous_root;
         preempt_disable(); local_irq_save(flags);
         previous_root = select_root(c);
@@ -2562,7 +2785,8 @@ static int vm_open(struct inode *inode, struct file *f)
      * The module never WROTE 0x5c0 (one access in the file, a read), so nothing else is lost. */
     c->exact_bounds = false;
 #else
-    { unsigned long profile;
+    if (unpinned) c->exact_bounds = unpinned_exact_bounds;
+    else { unsigned long profile;
       asm volatile("csrr %0, 0x5c0" : "=r"(profile));
       c->exact_bounds = !!(profile & 0x100); }
 #endif
@@ -2583,6 +2807,17 @@ static int vm_open(struct inode *inode, struct file *f)
             kvfree(t); kvfree(c);
             return -EBUSY;
         }
+    if (unpinned) {
+        int error = unpinned_scrub_mm(c->mm);
+        if (error) {
+            mutex_unlock(&vm_lock);
+            mmdrop(c->mm);
+            node_free_table(c);
+            free_page((unsigned long)c->frame);
+            kvfree(t); kvfree(c);
+            return error;
+        }
+    }
     f->private_data = c;
     list_add(&c->link, &contexts);
     mutex_unlock(&vm_lock);
@@ -2663,6 +2898,16 @@ static struct miscdevice device = {
 };
 static int __init init(void)
 {
+    if (unpinned) {
+        typeof(capstone_unpinned_config) *config;
+        int error;
+        if (node_table_flat) return -EOPNOTSUPP;
+        config = symbol_get(capstone_unpinned_config);
+        if (!config) return -EOPNOTSUPP;
+        error = config(CAPSTONE_VM_IDS, &unpinned_exact_bounds);
+        symbol_put(capstone_unpinned_config);
+        if (error) return error;
+    }
 #ifdef CAPSTONE_VM_FLAT_TABLE
     /* Refuse the LOAD, so a bad value cannot reach a run. 2 because ids 0 and 1 are the header;
      * the maximum because silicon saturates capacity there; whole pages because the table is one
