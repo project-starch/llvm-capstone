@@ -5,9 +5,11 @@ and scalar delegate trampoline. The four requested SPEC test inputs pass on
 plain/launcher/native paths; matched native exec uses fewer attempts than the
 launcher. This does not change the verified default runtime. See the
 [native-exec design and qualification limits](../design/virtual-capstone/native-exec.md).
-The scalar-memory probe confirms delegated read/write access to the private
-trampoline through `/proc/self/mem`: integration is NO-GO. Full gate parity and
-caught signals/process creation also remain qualification requirements.
+Round 3 adds a module cwd/file-descriptor resource boundary. The scalar-memory
+probe fails on the old module and is refused on the new one; broader authority
+probes and native contracts pass. SPEC/cost reruns and sequential p13 gates are
+pending. The restricted API, caught signals and process creation still prevent
+integration; the default runtime is unchanged.
 
 ## Read this first (2026-10-13)
 

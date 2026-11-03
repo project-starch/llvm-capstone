@@ -1,12 +1,15 @@
 # Experimental native domain exec
 
-**NO-GO for integration:** `scalar-memory.c` demonstrates delegated access to the
-private scalar trampoline through `/proc/self/mem`. Keep the experiment disabled
-by default until the resource-policy boundary is repaired and qualified.
+**Experimental, default off:** round 3 closes the demonstrated procfs memory
+channel with a module resource policy. `scalar-memory.c` fails on the old module
+and passes with an explicit open refusal on the new module. Full API
+compatibility and p13 gate parity remain separate requirements.
 
 The module parameter `dom_binfmt=1` enables the root-only loader; its default is
 zero. This experiment uses the existing SDK v7 images and Linux 6.1 platform.
 It has one domain thread, fixed pinned transport and no new seccomp filter.
+Round 3 grants the initial cwd and safe stdio only; paths cannot follow symlinks,
+traverse parents or cross mounts. Non-stdio inherited fds are inaccessible.
 Inherited filters still apply. It refuses setuid/setgid and mutable remote
 filesystem images. Stage binaries on guest tmpfs before executing them.
 
@@ -133,6 +136,27 @@ with a reusable prepared kernel; its SHA-256 is
 `fce475cd7464aacaec820803300cb1854f01d1e76395b8dab9d912da343fdeab`.
 The first probe using stdio reported `base_found=0` because ordinary module read
 does not implement the procfs legacy read operation; that is an inconclusive
-probe, preserved in `scalar-memory-result`. A non-reproducing run returns 2,
-not a passing security verdict. A complete fix must cover aliases and inherited
-descriptors as well as the named pathname.
+probe, preserved in `scalar-memory-result`. An explicit EACCES/EPERM on the memory open now returns 0. An unexplained
+non-reproduction still returns 2. The historical failed run remains the required
+negative control; pathname refusal alone is not the full qualification.
+
+
+## Round 3 resource probes
+
+`resource-probe.c` uses the wrapped transport boundary to send raw wire requests,
+so refusals are checked in the module rather than only in libc. Compile it with
+`-Wl,--wrap=__capstone_vm_delegate_transport` and the runtime include directory,
+alongside `scalar-memory.c`, using the same SDK as the native contracts.
+`run-security.sh` creates a private guest fixture with symlink aliases, a nested
+proc mount and device nodes. It passes inherited proc and directory fds, including
+unsafe fd 0, and verifies policy refusals plus ordinary-file positive controls.
+ASLR is disabled for two identical probe execs; the second tests the recorded
+scalar trampoline address, and the runner verifies that placement stayed equal.
+The fixture needs the root-only native experiment. It tears down its guest.
+
+The revised native contracts check overlapping pathname/stat output buffers and
+inaccessible non-stdio descriptors. They retain owned VM, malformed wire, normal
+file I/O, default/ignored signals, Linux termination and malformed-image checks.
+The [authority audit](../../../../docs/design/virtual-capstone/native-exec.md)
+lists the complete syscall and resource boundary, deliberate incompatibilities,
+trust assumptions and vectors tested. The launcher file policy is unchanged.

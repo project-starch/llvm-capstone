@@ -1,9 +1,9 @@
 M4 native-exec experiment, 2026-11-03: keep `dom_binfmt` disabled by default.
-Repair the confirmed `/proc/self/mem` access to scalar host memory, audit aliases
-and inherited descriptors, and complete the sequential p13 gate comparison
-before considering integration; then address caught-signal/restart handover and
-process/thread semantics. Functional SPEC success does not establish those
-properties. [Design and current scope](../design/virtual-capstone/native-exec.md).
+Round 3 adds a cwd/file-descriptor resource boundary and passes the scalar-memory
+negative control, authority probes and native contracts. Complete the SPEC/cost
+reruns and queued sequential p13 comparison, then address caught-signal/restart
+handover and process/thread semantics. The restricted resource ABI is not full
+launcher compatibility. [Design and current scope](../design/virtual-capstone/native-exec.md).
 
 **2026-10-21, the cross-lane plan to the next bitstream (runtime/semantics lane, coordinating on the lead's word).**
 Goal: the six-item batch bitstream, then the WHOLE corpus on vp2, including the two arms the current bitstreams

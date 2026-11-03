@@ -209,6 +209,7 @@ static long dom_rw(struct context *c, const struct capstone_delegate_entry *e)
     if (e->count != 1 || e->flags != 2 ||
         !dom_within(e->args[1], e->args[2], c->dom_exchange_bytes)) return -EFAULT;
     if (e->args[0] > INT_MAX) return -EBADF;
+    if (!dom_fd_allowed(c, e->args[0])) return -EBADF;
     file = fget(e->args[0]);
     if (!file) return -EBADF;
     /* The private context descriptor is never an application I/O target. */
@@ -461,6 +462,9 @@ static int dom_load_binary(struct linux_binprm *bprm)
     rc = vm_open(NULL, ctxfile);
     if (rc) goto out;
     c = ctxfile->private_data;
+    c->dom_fd = -1;
+    rc = dom_resources_init(c);
+    if (rc) goto out;
     rc = deny_write_access(bprm->file);
     if (rc) goto out;
     c->image = get_file(bprm->file);

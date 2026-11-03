@@ -6,6 +6,13 @@
 #include <asm/ioctls.h>
 #include "delegate-wire.c"
 #include "delegate-policy.h"
+#include <linux/namei.h>
+#include <linux/mount.h>
+#include <linux/magic.h>
+#include <linux/kdev_t.h>
+#include <linux/fdtable.h>
+
+#define DOM_FDS 1024
 
 struct dom_delegate {
     struct capstone_delegate_entry request;
@@ -15,7 +22,13 @@ struct dom_delegate {
     struct iovec *wire;
     char *scratch;
     bool pending;
+    struct path root;
+    char *cwd;
+    DECLARE_BITMAP(fds, DOM_FDS);
+    int path_fd;
 };
+
+#include "resource-dom.h"
 
 /* Closed day-one set: all have existing delegated shapes and belong to the
  * launcher's seccomp allowlist. Pointer-retaining, signal-handover, nested
@@ -24,33 +37,28 @@ static bool dom_forwarded(u64 nr)
 {
     switch (nr) {
 #define CALL(name) case CAPSTONE_SYS_##name:
-    CALL(getcwd) CALL(dup) CALL(dup3) CALL(fcntl) CALL(ioctl)
-    CALL(mkdirat) CALL(unlinkat) CALL(ftruncate) CALL(faccessat)
-    CALL(symlinkat) CALL(sync_file_range) CALL(flock) CALL(fchmodat)
-    CALL(chdir) CALL(openat) CALL(close) CALL(pipe2) CALL(getdents64)
+    CALL(getcwd) CALL(fcntl) CALL(ioctl)
+    CALL(unlinkat) CALL(ftruncate)
+    CALL(sync_file_range) CALL(flock)
+    CALL(openat) CALL(close) CALL(getdents64)
     CALL(lseek) CALL(pread64) CALL(pwrite64)
     CALL(readv) CALL(writev) CALL(preadv) CALL(pwritev)
-    CALL(readlinkat) CALL(newfstatat) CALL(fstat) CALL(fsync) CALL(fdatasync)
-    CALL(utimensat) CALL(renameat2) CALL(clock_gettime) CALL(gettimeofday)
+    CALL(newfstatat) CALL(fstat) CALL(fsync) CALL(fdatasync)
+    CALL(clock_gettime) CALL(gettimeofday)
     CALL(times) CALL(getpid) CALL(getppid) CALL(getuid) CALL(geteuid)
     CALL(getgid) CALL(getegid) CALL(gettid) CALL(umask) CALL(uname)
     CALL(sysinfo) CALL(prlimit64) CALL(getrandom) CALL(sched_yield)
-    CALL(getpgid) CALL(getsid) CALL(linkat) CALL(mknodat) CALL(statfs)
-    CALL(fstatfs) CALL(statx) CALL(truncate) CALL(fallocate) CALL(fchdir)
-    CALL(fchmod) CALL(fchown) CALL(fchownat) CALL(faccessat2)
+    CALL(getpgid) CALL(getsid)
+    CALL(fstatfs) CALL(statx) CALL(fallocate)
     CALL(sendfile) CALL(copy_file_range) CALL(readahead) CALL(fadvise64)
-    CALL(sync) CALL(syncfs) CALL(memfd_create) CALL(clock_getres)
-    CALL(getgroups) CALL(getrusage) CALL(getpriority) CALL(setpriority)
-    CALL(sched_getaffinity) CALL(sched_setaffinity)
+    CALL(clock_getres)
+    CALL(getgroups) CALL(getrusage) CALL(getpriority)
+    CALL(sched_getaffinity)
     CALL(sched_get_priority_max) CALL(sched_get_priority_min)
     CALL(sched_rr_get_interval) CALL(getresuid) CALL(getresgid)
     CALL(rt_sigprocmask)
-    CALL(socket) CALL(socketpair) CALL(bind) CALL(listen) CALL(connect)
-    CALL(sendto) CALL(setsockopt) CALL(shutdown) CALL(epoll_create1)
-    CALL(epoll_ctl) CALL(eventfd2) CALL(timerfd_create)
-    CALL(timerfd_settime) CALL(timerfd_gettime)
 #undef CALL
-    case CAPSTONE_NR_FCNTL_LOCK: case CAPSTONE_NR_IOCTL_BUF:
+    case CAPSTONE_NR_FCNTL_LOCK:
         return true;
     default: return false;
     }
@@ -151,6 +159,18 @@ static long dom_prepare(struct context *c, const struct capstone_delegate_entry 
     for (i = 0; i < CAPSTONE_DELEGATE_ARGS; ++i)
         if ((mask & (1U << i)) && (int)e->args[i] == c->dom_fd) return -EBADF;
     if (!command_ok(e->nr, e->args[1])) return -ENOSYS;
+    if (e->nr == CAPSTONE_SYS_fcntl &&
+        e->args[1] != F_GETFD && e->args[1] != F_SETFD &&
+        e->args[1] != F_GETFL) return -ENOSYS;
+    if (e->nr == CAPSTONE_SYS_prlimit64 && (e->flags & 4)) return -EPERM;
+    /* The only path operations resolve in the module. All ordinary fd
+     * arguments must name an explicit grant, including inherited stdio. */
+    if (e->nr != CAPSTONE_SYS_openat && e->nr != CAPSTONE_SYS_unlinkat &&
+        e->nr != CAPSTONE_SYS_newfstatat && e->nr != CAPSTONE_SYS_statx)
+        for (i = 0; i < CAPSTONE_DELEGATE_ARGS; ++i)
+            if ((mask & (1U << i)) && !dom_fd_allowed(c, e->args[i])) return -EBADF;
+    if (e->nr == CAPSTONE_SYS_openat || e->nr == CAPSTONE_SYS_unlinkat)
+        return dom_path_operation(c, e);
     if (e->nr == CAPSTONE_SYS_prlimit64 && (pid_t)e->args[0] != 0 &&
         (pid_t)e->args[0] != task_tgid_vnr(current)) return -EPERM;
     if ((e->nr == CAPSTONE_SYS_sched_getaffinity || e->nr == CAPSTONE_SYS_sched_setaffinity) &&
@@ -165,11 +185,6 @@ static long dom_prepare(struct context *c, const struct capstone_delegate_entry 
         if (e->args[0] < 1 || e->args[0] > 64 || e->args[0] == SIGKILL ||
             e->args[0] == SIGSTOP || e->args[1] > CAPSTONE_SIGNAL_CAUGHT) return -EINVAL;
         if (e->args[1] == CAPSTONE_SIGNAL_CAUGHT) return -ENOSYS;
-    }
-    if (!d) {
-        d = kzalloc(sizeof(*d), GFP_KERNEL);
-        if (!d) return -ENOMEM;
-        c->dom_delegate = d;
     }
     d->request = *e; d->shape = s;
     memcpy(d->lengths, lengths, sizeof(lengths));
@@ -217,6 +232,23 @@ static long dom_prepare(struct context *c, const struct capstone_delegate_entry 
             if (rc) return rc;
         } else if (clear_user((void __user *)a[i], bytes)) return -EFAULT;
     }
+    if (e->nr == CAPSTONE_SYS_newfstatat || e->nr == CAPSTONE_SYS_statx) {
+        struct file *f = dom_path_file(c, e);
+        int fd;
+        if (IS_ERR(f)) return PTR_ERR(f);
+        fd = get_unused_fd_flags(O_CLOEXEC);
+        if (fd < 0) { fput(f); return fd; }
+        fd_install(fd, f);
+        d->path_fd = fd;
+        a[0] = fd;
+        if (put_user(0, (char __user *)a[1])) {
+            close_fd(fd); d->path_fd = -1; return -EFAULT;
+        }
+        /* An already resolved O_PATH descriptor, never another path walk. */
+        if (e->nr == CAPSTONE_SYS_newfstatat) a[3] = AT_EMPTY_PATH;
+        else a[2] = AT_EMPTY_PATH;
+    }
+    if (e->nr == CAPSTONE_SYS_close) clear_bit(e->args[0], d->fds);
     return dom_issue(c, e->nr == CAPSTONE_NR_FCNTL_LOCK ? CAPSTONE_SYS_fcntl :
                          e->nr == CAPSTONE_NR_IOCTL_BUF ? CAPSTONE_SYS_ioctl : e->nr, a);
 }
@@ -226,6 +258,7 @@ static long dom_complete(struct context *c, long result)
     const struct capstone_delegate_entry *e = &d->request;
     unsigned i;
     int rc;
+    if (d->path_fd >= 0) { close_fd(d->path_fd); d->path_fd = -1; }
     if (dom_vector(e->nr)) {
         bool writing = e->nr == CAPSTONE_SYS_writev || e->nr == CAPSTONE_SYS_pwritev;
         size_t left = result < 0 ? 0 : result;
@@ -257,5 +290,7 @@ static void dom_delegate_free(struct context *c)
     if (!d) return;
     kfree(d->wire);
     if (d->scratch) free_page((unsigned long)d->scratch);
+    path_put(&d->root);
+    kfree(d->cwd);
     kfree(d); c->dom_delegate = NULL;
 }

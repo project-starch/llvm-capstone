@@ -35,13 +35,13 @@ static int wire_checks(void)
 {
     if (!wire_meta || wire_bytes < 256) return 30;
     struct capstone_delegate_entry e = {.version = 2, .count = 1,
-        .nr = CAPSTONE_SYS_readlinkat, .flags = 6,
-        .args = {(uint64_t)-100, 16, 16, 128}};
-    strcpy(wire_exchange + 16, "/proc/self/exe");
-    long n = raw(e);
-    if (n <= 0 || n >= 128) return 31;
-    wire_exchange[16 + n] = 0;
-    if (!strstr(wire_exchange + 16, "contract.dom")) return 32;
+        .nr = CAPSTONE_SYS_newfstatat, .flags = 6,
+        .args = {(uint64_t)-100, 16, 16, 0}};
+    strcpy(wire_exchange + 16, "contract.dom");
+    if (raw(e)) return 31;
+    struct stat st;
+    memcpy(&st, wire_exchange + 16, sizeof st);
+    if (!S_ISREG(st.st_mode) || !st.st_size) return 32;
     e.nr = CAPSTONE_SYS_openat; e.flags = 0; e.args[2] = O_RDONLY;
     if (raw(e) != -EINVAL) return 33;
     e.nr = CAPSTONE_SYS_read; e.flags = 2; e.args[0] = 0;
@@ -142,28 +142,15 @@ int main(int argc, char **argv)
         return 0;
     }
     if (!strcmp(argv[1], "private-fd")) {
-        char path[64], target[128];
-        int found = -1;
-        for (int fd = 0; fd < 32; ++fd) {
-            /* Avoid stdio in this descriptor-policy probe. */
-            strcpy(path, "/proc/self/fd/");
-            unsigned n = strlen(path);
-            if (fd >= 10) path[n++] = '0' + fd / 10;
-            path[n++] = '0' + fd % 10; path[n] = 0;
-            ssize_t len = readlink(path, target, sizeof target - 1);
-            if (len < 0) continue;
-            target[len] = 0;
-            if (strstr(target, "capstone-dom")) { found = fd; break; }
+        /* No extra descriptor has been granted to this domain. The private
+         * context and any inherited descriptors must all remain inaccessible. */
+        for (int fd = 3; fd < 32; ++fd) {
+            errno = 0;
+            if (fcntl(fd, F_GETFD) != -1 || errno != EBADF) return 23;
+            errno = 0;
+            if (close(fd) != -1 || errno != EBADF) return 24;
         }
-        if (found < 0) return 23;
-        errno = 0;
-        if (close(found) != -1 || errno != EBADF) return 24;
-        errno = 0;
-        if (dup(found) != -1 || errno != EBADF) return 25;
-        errno = 0;
-        if (dup2(0, found) != -1 || errno != EBADF) return 26;
-        errno = 0;
-        return fcntl(found, F_GETFD) != -1 || errno != EBADF;
+        return 0;
     }
     if (!strcmp(argv[1], "signal-mask")) {
         sigset_t set, old;
