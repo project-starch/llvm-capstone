@@ -143,10 +143,13 @@ Everything else in the boundary overhead is design residue and is in scope.
 Steps without Linux or ISA changes (module, launcher, SDK, compiler):
 
 1. No thread-identity service exit on every delegated syscall (lane AA).
-2. Cheaper process setup (lane T, branch runtime/launcher-fork-server): deferred pthread initialisation measured
-   -1.07 % busy attempts per new process. A persistent fork server is UNRESOLVED there: a child that returns into
-   libc instead of exec'ing needs a proven thread, TLS and robust-list reset, and a shared helper cannot keep the
-   parent and wait semantics. Process setup is fixed structurally by the binfmt of section 3.
+2. Cheaper process setup (lane T, branch runtime/launcher-fork-server, NOT landed): deferred pthread initialisation.
+   The -1.07 % per process first reported for it is within the noise of its four estimates per arm (an independent
+   review: Welch t about 1.5); the work it removes sums to about 3 K attempts per process (about 0.1 %), and only
+   for processes that never install a signal handler or create a thread (gcc still runs it). A persistent fork
+   server is UNRESOLVED: a child that returns into libc instead of exec'ing needs a proven thread, TLS and
+   robust-list reset, and a shared helper cannot keep the parent and wait semantics. Process setup is fixed
+   structurally by the binfmt of section 3, not by a faster launcher.
 3. A lazy or right-sized exchange region; map, unmap and node services handled inside the module.
 4. Fewer pages: allocator metadata (lane Y, landed as dev d8e7fc417637: gcc 2,170 -> 1,954 minor faults, -3.07 %
    busy attempts against a same-time control), capability-global initialisation (lane Z).
