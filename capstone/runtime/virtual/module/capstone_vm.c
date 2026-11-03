@@ -1503,10 +1503,15 @@ static unsigned long test_inject_at;    /* 1 after a demand GUP, 2 before an ent
                                            4 after CSRUNV returns a fault, before resolve() */
 static unsigned long test_inject_every = 1;
 static unsigned long test_short_gup;    /* pin-ahead GUP pins only half of a batch */
+/* Policy-only tests need exact windows despite unrelated scheduling/deadline cuts. The
+ * ordinary and injected-stop configurations leave this off and qualify those cuts separately.
+ * No page/VMA/backing check is bypassed, and the normal window cap still bounds the work. */
+static bool test_full_window;
 module_param(test_inject, ulong, 0444);
 module_param(test_inject_at, ulong, 0444);
 module_param(test_inject_every, ulong, 0444);
 module_param(test_short_gup, ulong, 0444);
+module_param(test_full_window, bool, 0444);
 static u64 test_events, test_injections, test_stops, test_initial_stops, test_violations;
 static u64 test_consumed, test_checks, test_checks_irqs_on, test_entries;
 static u64 test_gup_requests, test_gup_max, test_short_results, test_gup_pending;
@@ -1563,6 +1568,7 @@ static void test_report(const char *why)
 #define TEST_HOOK(at) test_hook(at)
 #define TEST_GUP(pages) test_gup(pages)
 #define TEST_EXPIRED() test_expired
+#define TEST_FULL_WINDOW() test_full_window
 #define TEST_ENTRY() do { test_entry(); ++test_entries; } while (0)
 #define TEST_CHECK() do { ++test_checks; if (!irqs_disabled()) ++test_checks_irqs_on; } while (0)
 #define TEST_STOPPED(initial) do { if (test_pending) { ++test_stops; \
@@ -1574,6 +1580,7 @@ static void test_report(const char *why)
 #define TEST_HOOK(at) do { } while (0)
 #define TEST_GUP(pages) do { } while (0)
 #define TEST_EXPIRED() false
+#define TEST_FULL_WINDOW() false
 #define TEST_ENTRY() do { } while (0)
 #define TEST_CHECK() do { } while (0)
 #define TEST_STOPPED(initial) do { } while (0)
@@ -1616,7 +1623,7 @@ static unsigned long pin_ahead(struct context *c, struct arena *a,
         unsigned long batch = min(count - done, (unsigned long)PIN_AHEAD_BATCH);
         struct page **pages = a->pages + first + done;
         long n;
-        if (cv_step_stop(deadline))
+        if (cv_step_stop(deadline) && !TEST_FULL_WINDOW())
             return done;
         TEST_GUP(batch);
 #ifdef CV_TEST_HOOKS
@@ -1956,6 +1963,10 @@ static int resolve(struct context *c, struct cv_thread *t, u64 deadline)
                 if (ahead) {
                     ++fault_ahead_windows;
                     fault_ahead_pages += pinned;
+                    if (diag_admit)
+                        pr_info("capstone_vm: fault-ahead arena 0x%lx page %u want %lu pinned %lu fault 0x%lx\n",
+                                a->address, index, ahead, pinned,
+                                a->address + a->rx_bytes + (unsigned long)index * PAGE_SIZE);
                 }
             }
         }

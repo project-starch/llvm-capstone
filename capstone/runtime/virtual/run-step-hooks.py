@@ -58,13 +58,18 @@ CONFIGS = {
     # qualifies a FIXED window page for page. 'adapt' walks with it (the 32-page region, and
     # pin.dom's 512-page 'stream' region); 'adaptres' raises a reschedule after every demand GUP,
     # so each window must stop before its first batch.
-    'adapt':      ('', 'walk stream', 0),
+    # Policy-only counts suppress scheduler/budget cuts inside the window, not page or VMA
+    # checks. adaptdirect and every stop-injection case keep the real stop checks enabled.
+    'adapt':      ('test_full_window=1', 'walk stream', 0),
+    'adaptdirect': ('', 'walk stream', 0),
     'adaptres':   ('test_inject=1 test_inject_at=1', 'walk', 0),
+
 }
 SCRIPT = '''#!/bin/sh
 cd /mnt/vm || exit 1
 export CAPSTONE_VM_STATS=1 CAPSTONE_VM_STATS_MARK=1 CAPSTONE_VM_GRANTS=1
 pins() { echo 1 > /proc/sys/vm/stat_refresh; grep -E "^nr_foll_pin_(acquired|released) " /proc/vmstat | tr "\\n" " "; }
+ahead() { for p in fault_ahead_windows fault_ahead_pages; do printf "$p="; cat /sys/module/capstone_vm/parameters/$p 2>/dev/null || echo unavailable; done; }
 dmesg -n 1
 dmesg -c > /dev/null
 '''
@@ -91,8 +96,10 @@ def script(names, instrumented):
         text += f'''insmod capstone_vm.ko {params} {'diag_admit=1' if instrumented else ''} || exit 1
 for mode in {modes}; do
   echo "HOOK_PINS_BEFORE:{name}:$mode:$(pins)"
+  echo "HOOK_AHEAD_BEFORE:{name}:$mode:$(ahead | tr '\\n' ' ')"
   ./capstone-vexec {app(name)}.dom "$mode" > /tmp/pin.out 2>&1
   echo "HOOK_EXIT:{name}:$mode:$?"
+  echo "HOOK_AHEAD_AFTER:{name}:$mode:$(ahead | tr '\\n' ' ')"
   echo "HOOK_PINS_AFTER:{name}:$mode:$(pins)"
   cat /tmp/pin.out
   dmesg -c | grep -E "capstone_vm: |CAPSTONE_VM_STATS_MARK" | grep -v "test unload" | sed "s/^/HOOK_DIAG:/"
@@ -163,7 +170,17 @@ def parse(log):
             current = (m.group(1), m.group(2))
             runs[current] = {'before': pins(m.group(3)), 'stats': None, 'ok': False,
                              'region': None, 'arenas': [], 'census': {}, 'after_mark': set(),
-                             'marked': False}
+                             'marked': False, 'ahead': []}
+            continue
+        m = re.match(r'HOOK_AHEAD_(BEFORE|AFTER):(\w+):(\w+):(.*)$', line)
+        if m and current == (m.group(2), m.group(3)):
+            runs[current]['ahead_' + m.group(1).lower()] = dict(
+                (k, int(v)) for k, v in re.findall(r'(fault_ahead_\w+)=(\d+)', m.group(4)))
+            continue
+        if current and line.startswith('HOOK_DIAG:') and (m := re.search(
+                r'capstone_vm: fault-ahead arena 0x([0-9a-f]+) page (\d+) want (\d+) pinned (\d+) fault 0x([0-9a-f]+)', line)):
+            runs[current]['ahead'].append((int(m.group(1), 16), *(int(m.group(i)) for i in (2, 3, 4)),
+                                           int(m.group(5), 16)))
             continue
         if current and line.startswith('PIN_REGION:0x'):
             runs[current]['region'] = int(line[len('PIN_REGION:'):], 16); continue
@@ -285,20 +302,50 @@ def evaluate(log, names, instrumented, completed):
                 bool(got and want and got[0] >= want[0] and got[1] <= want[1] and
                      (got[0] - want[0]) + (want[1] - got[1]) <= late * (window - ref_window))
                 for got, want in zip(sources(name, mode), sources(ref, mode)))
-    # The adaptive window takes every page a walk touches, and no page outside the region's arena,
-    # in fewer fault events than window 1 -- but never fewer than its policy allows with the
-    # module's defaults (fault_ahead_after=2, first window 4, doubling, cap 64): a window only
-    # after three faults in a row, each window at most twice the last and at most 64 pages. Walk
-    # (32 pages): faults at pages 0 1 2 7 16, at least 5. Stream (512): 0 1 2 7 16 33 66 131 196
-    # 261 326 391 456, at least 13. A window a stop cuts short only adds faults, so these are
-    # floors; the ceilings (31, 64) require that it adapts at all. A module without the adaptive
-    # window takes one fault per page and fails both (the control); one that prefetches before
-    # its stream is trained, or past the cap, falls below the floor.
+    # Exact default-policy census: windows 4, 8, 16, 32, then 64, clipped at the arena's end.
+    # The sysfs counters include startup arenas. Subtract their diagnostic events, but also
+    # require the WHOLE counter delta to equal the whole event census, so a missing event or
+    # a broken counter cannot make a window pass. Empty/missing counters fail (including dev).
+    def region_events(r):
+        arena = region_arena(r)
+        return [e for e in r.get('ahead', []) if e[0] == arena]
+
+    def adaptive_counts(name, mode, windows, pages):
+        r = runs.get((name, mode), {})
+        before, after = r.get('ahead_before', {}), r.get('ahead_after', {})
+        keys = ('fault_ahead_windows', 'fault_ahead_pages')
+        if not instrumented or any(k not in before or k not in after for k in keys):
+            return False
+        delta = tuple(after[k] - before[k] for k in keys)
+        events = r['ahead']
+        own = region_events(r)
+        other = [e for e in events if e not in own]
+        return (delta == (len(events), sum(e[3] for e in events)) and
+                (delta[0] - len(other), delta[1] - sum(e[3] for e in other)) == (windows, pages))
+
+    # Fault indices: walk 0,1,2,7,16; stream adds 33,66,131,196,261,326,391,456.
+    # An 8-page window that never doubles used to pass the broad fault ranges; it must fail.
     checks['adapt_walk_window'] = all(
-        bool(got and base and got[0] == base[0] == 32 and 5 <= got[1] <= 31)
-        for got, base in zip(sources('adapt', 'walk'), sources('base1', 'walk')))
+        bool(got and base and got == (32, 5) and base[0] == 32)
+        for got, base in zip(sources('adapt', 'walk'), sources('base1', 'walk'))) and adaptive_counts('adapt', 'walk', 3, 27)
     checks['adapt_stream_window'] = all(
-        bool(got and got[0] == 512 and 13 <= got[1] <= 64) for got in sources('adapt', 'stream'))
+        got == (512, 13) for got in sources('adapt', 'stream')) and adaptive_counts('adapt', 'stream', 11, 499)
+    # The direct CV_STEP path may stop between batches. It must still request 4,8,16,32,64...
+    # and continue at the first page NOT retained, while the exact sysfs deltas cover every
+    # window (including zero-page cuts). A permanently small window fails the request sequence.
+    for mode, size in (('walk', 32), ('stream', 512)):
+        r = runs.get(('adaptdirect', mode), {})
+        events = region_events(r)
+        expected_index = 2
+        growth = bool(events)
+        for i, e in enumerate(events):
+            want = min(4 << min(i, 4), 64)
+            growth &= e[1] == expected_index and e[2] == want and 0 <= e[3] <= min(want, size - e[1] - 1)
+            expected_index = e[1] + 1 + e[3]
+        checks[f'adaptdirect_{mode}_growth'] = bool(
+            growth and expected_index == size and
+            all(got == (size, len(events) + 2) for got in sources('adaptdirect', mode)) and
+            adaptive_counts('adaptdirect', mode, len(events), size - len(events) - 2))
     # Partial GUP results leave the rest to later faults: every page the walk
     # touched still ends pinned (at least window 1's pins), after more faults
     # than the full window takes.
