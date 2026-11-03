@@ -1164,39 +1164,13 @@ static void *virtual_thread_worker(void *opaque)
     return NULL;
 }
 
-int main(int argc, char **argv)
+/* Enter exactly once in a fresh launcher process. Argument decoding and exec
+ * resume bookkeeping precede this boundary; device ownership, image write
+ * denial and every domain mapping are established here, never by a template. */
+static int launch_application(const char *path, int argc, char **argv,
+                              const struct exec_state *resumed)
 {
-    int binfmt = (getauxval(AT_FLAGS) & AT_FLAGS_PRESERVE_ARGV0) != 0;
-    if (binfmt && argc < 3) return 125;
-    struct exec_state resumed = {0};
-    if (!binfmt && argc > 3 && !strcmp(argv[1], "--resume")) {
-        char *end; long fd = strtol(argv[2], &end, 10);
-        if (*end || fd < 3 || fd > 65535 || read(fd, &resumed, sizeof resumed) != sizeof resumed ||
-            resumed.magic != EXEC_STATE_MAGIC || resumed.child_count > CAPSTONE_DELEGATE_CHILDREN)
-            return 125;
-        close(fd);
-        if (resumed.spawner.socket >= 0 && fcntl(resumed.spawner.socket, F_SETFD, FD_CLOEXEC) < 0)
-            return 125;
-        spawner = resumed.spawner; host.child_count = resumed.child_count;
-        memcpy(host.children, resumed.children, sizeof resumed.children);
-        argc -= 2; argv += 2;
-    }
-    int app_args = !binfmt && argc >= 5 && !strcmp(argv[1], "--application-argv") && !strcmp(argv[3], "--");
-    int literal = binfmt || (argc > 1 && !strcmp(argv[1], "--"));
-    if (literal && !binfmt) { --argc; ++argv; }
-    if (argc < 2) { fprintf(stderr, "usage: capstone-vexec [--] PROGRAM.dom [ARG...]\n"); return 2; }
-    if (!literal && argc == 2 && !strcmp(argv[1], "--stats")) {
-        int fd = open("/dev/capstone-vm", O_RDWR | O_CLOEXEC);
-        struct cv_global stats;
-        if (fd < 0 || ioctl(fd, CV_GLOBAL, &stats)) return 125;
-        close(fd);
-        printf("{\"version\":1,\"live_domains\":%llu,\"live_regions\":%llu,\"live_bytes\":%llu,\"cached_bytes\":0,\"poisoned_blocks\":0,\"nodes_high_water\":%llu,\"nodes_live\":%llu,\"nodes_retired\":%llu,\"nodes_allocated_total\":%llu,\"tag_pages\":%llu,\"node_capacity\":%llu,\"node_bytes\":%llu,\"collections\":%llu,\"nodes_reclaimed\":%llu}\n",
-            stats.contexts, stats.arenas, stats.pinned_pages * 4096,
-            stats.nodes_high_water, stats.nodes_live, stats.nodes_retired, stats.nodes_allocated,
-            stats.pinned_pages, stats.node_capacity, stats.node_bytes, stats.collections, stats.reclaimed);
-        return 0;
-    }
-    image_path = app_args ? argv[2] : argv[1];
+    image_path = path;
     unsigned stdio_mask;
     if (reserve_stdio(&stdio_mask)) return 125;
     start_ns = now_ns();
@@ -1204,7 +1178,7 @@ int main(int argc, char **argv)
     grants = trace || getenv("CAPSTONE_VM_GRANTS") != NULL;
     struct capstone_application_descriptor_v2 desc;
     char resumed_path[64];
-    if (resumed.magic) snprintf(resumed_path, sizeof resumed_path, "/proc/self/fd/%d", resumed.image);
+    if (resumed->magic) snprintf(resumed_path, sizeof resumed_path, "/proc/self/fd/%d", resumed->image);
     /* No copy of the image on a local filesystem: the module denies writers
      * to the file (CV_IMAGE) before it is validated, and holds that until
      * this process ends, as Linux does for a running executable. load()
@@ -1212,9 +1186,9 @@ int main(int argc, char **argv)
      * the bytes loaded, and the domain cannot write its own image while it
      * runs. After exec in place, and on 9p, NFS or FUSE, the image is a
      * sealed copy, which the denial accepts as fixed. */
-    int fd = capstone_application_open(resumed.magic ? resumed_path : image_path);
+    int fd = capstone_application_open(resumed->magic ? resumed_path : image_path);
     int image_error = errno;
-    if (resumed.magic) close(resumed.image);
+    if (resumed->magic) close(resumed->image);
     errno = image_error;
     if (fd < 0) { perror("capstone-vexec: image"); return errno == ENOENT ? 127 : 126; }
     image_fd = fd;
@@ -1248,7 +1222,7 @@ int main(int argc, char **argv)
         .realtime_ns = (uint64_t)rt.tv_sec * 1000000000 + rt.tv_nsec,
         .monotonic_ns = (uint64_t)mt.tv_sec * 1000000000 + mt.tv_nsec };
     int error = cwd ? capstone_launch_pack(startup, CAPSTONE_LAUNCH_BYTES,
-        argc - (app_args ? 4 : binfmt ? 2 : 1), argv + (app_args ? 4 : binfmt ? 2 : 1), environ, cwd, stdio_mask, &task) : ENOMEM;
+        argc, argv, environ, cwd, stdio_mask, &task) : ENOMEM;
     free(cwd);
     if (error) { errno = error; return die("startup"); }
     if (grant(stack, stack_bytes, 2, 6, (uintptr_t)stack + stack_bytes, 0, 0, 0) ||
@@ -1269,4 +1243,40 @@ int main(int argc, char **argv)
     for (int fd = 0; fd < 3; ++fd) if (!(stdio_mask & (1u << fd))) close(fd);
     launch_ns = now_ns() - start_ns;
     return virtual_service_loop(0);
+}
+
+int main(int argc, char **argv)
+{
+    int binfmt = (getauxval(AT_FLAGS) & AT_FLAGS_PRESERVE_ARGV0) != 0;
+    if (binfmt && argc < 3) return 125;
+    struct exec_state resumed = {0};
+    if (!binfmt && argc > 3 && !strcmp(argv[1], "--resume")) {
+        char *end; long fd = strtol(argv[2], &end, 10);
+        if (*end || fd < 3 || fd > 65535 || read(fd, &resumed, sizeof resumed) != sizeof resumed ||
+            resumed.magic != EXEC_STATE_MAGIC || resumed.child_count > CAPSTONE_DELEGATE_CHILDREN)
+            return 125;
+        close(fd);
+        if (resumed.spawner.socket >= 0 && fcntl(resumed.spawner.socket, F_SETFD, FD_CLOEXEC) < 0)
+            return 125;
+        spawner = resumed.spawner; host.child_count = resumed.child_count;
+        memcpy(host.children, resumed.children, sizeof resumed.children);
+        argc -= 2; argv += 2;
+    }
+    int app_args = !binfmt && argc >= 5 && !strcmp(argv[1], "--application-argv") && !strcmp(argv[3], "--");
+    int literal = binfmt || (argc > 1 && !strcmp(argv[1], "--"));
+    if (literal && !binfmt) { --argc; ++argv; }
+    if (argc < 2) { fprintf(stderr, "usage: capstone-vexec [--] PROGRAM.dom [ARG...]\n"); return 2; }
+    if (!literal && argc == 2 && !strcmp(argv[1], "--stats")) {
+        int fd = open("/dev/capstone-vm", O_RDWR | O_CLOEXEC);
+        struct cv_global stats;
+        if (fd < 0 || ioctl(fd, CV_GLOBAL, &stats)) return 125;
+        close(fd);
+        printf("{\"version\":1,\"live_domains\":%llu,\"live_regions\":%llu,\"live_bytes\":%llu,\"cached_bytes\":0,\"poisoned_blocks\":0,\"nodes_high_water\":%llu,\"nodes_live\":%llu,\"nodes_retired\":%llu,\"nodes_allocated_total\":%llu,\"tag_pages\":%llu,\"node_capacity\":%llu,\"node_bytes\":%llu,\"collections\":%llu,\"nodes_reclaimed\":%llu}\n",
+            stats.contexts, stats.arenas, stats.pinned_pages * 4096,
+            stats.nodes_high_water, stats.nodes_live, stats.nodes_retired, stats.nodes_allocated,
+            stats.pinned_pages, stats.node_capacity, stats.node_bytes, stats.collections, stats.reclaimed);
+        return 0;
+    }
+    int first = app_args ? 4 : binfmt ? 2 : 1;
+    return launch_application(app_args ? argv[2] : argv[1], argc - first, argv + first, &resumed);
 }
