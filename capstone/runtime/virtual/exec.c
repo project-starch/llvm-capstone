@@ -474,7 +474,27 @@ static long protect_range(uintptr_t base, size_t bytes, int prot)
 static int touch(uintptr_t address, size_t bytes)
 {
     struct cv_touch r = {address, bytes};
-    return ioctl(device, CV_TOUCH, &r);
+    int rc;
+    /* Admission is idempotent, including pages pinned before an interruption. */
+    do { rc = ioctl(device, CV_TOUCH, &r); } while (rc < 0 && errno == EINTR);
+    return rc;
+}
+/* The initial exchange cannot be retired/remapped by domain services. Cache
+ * only successful admissions for this mapping; worker transports instead repeat
+ * their whole-span touch on every attachment, including address reuse. */
+static unsigned char *exchange_admitted;
+static int exchange_prepare_write(struct capstone_delegate_host *h, size_t offset, size_t bytes)
+{
+    size_t first = offset / 4096, end = (offset + bytes + 4095) / 4096;
+    for (size_t i = first; i < end;) {
+        if (__atomic_load_n(&exchange_admitted[i], __ATOMIC_RELAXED)) { ++i; continue; }
+        size_t start = i++;
+        while (i < end && !__atomic_load_n(&exchange_admitted[i], __ATOMIC_RELAXED)) ++i;
+        if (touch((uintptr_t)h->exchange + start * 4096, (i - start) * 4096)) return errno;
+        for (size_t j = start; j < i; ++j)
+            __atomic_store_n(&exchange_admitted[j], 1, __ATOMIC_RELAXED);
+    }
+    return 0;
 }
 static int registered_span(uintptr_t p, size_t bytes)
 {
@@ -1334,6 +1354,9 @@ int main(int argc, char **argv)
             return die("nested allocator grant");
     }
     host.exchange = exchange; host.exchange_bytes = exchange_bytes;
+    exchange_admitted = calloc(exchange_bytes / 4096, 1);
+    if (!exchange_admitted) return die("exchange admission cache");
+    host.prepare_write = exchange_prepare_write;
     host.private_fds[host.private_count++] = device;
     capstone_signals_settle_libc();
     capstone_signals_init(&host.signals, (void *)((char *)meta + CAPSTONE_SIGNAL_OFFSET));
