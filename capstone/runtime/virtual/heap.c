@@ -279,9 +279,22 @@ static size_t mapping_length(size_t bytes)
  * program; the program holds only object capabilities, each a descendant of one group LIFETIME:
  *
  *   mapping grant (kernel)
- *     +-- root: CDERIVE child, allocator-only, kept for the mapping's life (meta cap_root, here)
+ *     +-- root: CDERIVE child, kept for the mapping's life in THIS FILE'S static state only
  *           +-- group lifetime: CDERIVE child of the root, one per group (bind_slots' parent)
  *                 +-- slot parents (narrowed copies) -> objects, nested groups (CDERIVE)
+ *
+ * TRUST BOUNDARY. The program and this runtime run in one Capstone context. What the heap
+ * protects is the program's OBJECTS: a capability it gets from malloc, calloc, realloc,
+ * aligned_alloc or the nested-allocator trio covers its object (or, with
+ * CAPSTONE_HEAP_OBJECT_BOUNDS=0, its group) and dies when that object, or its group, is released.
+ * It does not defend against code that calls the SDK-internal entry points (the
+ * __capstone_malloc_* functions musl and some ports call, __capstone_malloc_find among them) or
+ * walks the allocator's statics: those reach slot records, metas and group capabilities, which
+ * cover more than one object until the group is released. The root is the one capability that
+ * outlives a group, so it is kept where none of those reach: in root_heads/recycle below, never in
+ * a meta, a slot record or a return value. Everything an internal entry point can hand out
+ * descends from a group lifetime and dies at the group's release (malloc-contract.c
+ * recycle-root).
  *
  * (1) Nothing derived from the old group survives: releasing the group CREVOKEs its lifetime
  *     from the root, which ends every descendant at once -- objects, nested groups and the
@@ -305,8 +318,8 @@ static size_t mapping_length(size_t bytes)
  *     before; malloc_trim unmaps every kept mapping. Kept mappings stay registered arenas, so
  *     the module's collection sweeps their
  *     pages like any live heap, and at exit its teardown retires them (vm_release -> retire),
- *     the same path an unmap takes. Large (sc 63) and remapped mappings carry no root and are
- *     always unmapped. All of this runs under the heap lock (malloc, free and realloc hold it
+ *     the same path an unmap takes. Large (sc 63) and remapped mappings have no root entry and
+ *     are always unmapped, as is a group whose root entry could not be allocated. All of this runs under the heap lock (malloc, free and realloc hold it
  *     around mallocng). */
 #define RECYCLE_PER_LENGTH 4U
 #define RECYCLE_ENTRIES 32U
@@ -315,6 +328,57 @@ static size_t mapping_length(size_t bytes)
 static struct { void *root; size_t bytes; } recycle[RECYCLE_ENTRIES];
 static unsigned recycle_count;
 static size_t recycle_bytes;
+/* The roots of live mapped groups, by mapping base: entered by group_map, taken out by
+ * group_unmap. Entries come from a static seed and then from pages of their own (mmap), which
+ * only this table points to; a mapping whose entry cannot be had is simply not recyclable. */
+struct root_entry { struct root_entry *next; void *root; size_t base; };
+#define ROOT_BUCKETS 64U
+static struct root_entry *root_heads[ROOT_BUCKETS];
+static struct root_entry *root_free;
+static struct root_entry root_seed[32];
+static unsigned root_seeded;
+static unsigned root_bucket(size_t base)
+{ return (unsigned)(((base >> 12) * 11400714819323198485UL) >> 58); }
+static void root_free_push(struct root_entry *e)
+{ e->root = NULL; e->base = 0; e->next = root_free; root_free = e; }
+static struct root_entry *root_entry_new(void)
+{
+    if (!root_seeded) {
+        root_seeded = 1;
+        for (unsigned i = 0; i < sizeof root_seed / sizeof *root_seed; ++i) root_free_push(&root_seed[i]);
+    }
+    if (!root_free) {
+        int e = errno;
+        char *page = mmap(NULL, 4096, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+        errno = e;
+        if (page == MAP_FAILED) return NULL;
+        for (size_t o = 0; o + sizeof(struct root_entry) <= 4096; o += sizeof(struct root_entry))
+            root_free_push((struct root_entry *)(page + o));
+    }
+    struct root_entry *r = root_free;
+    root_free = r->next;
+    return r;
+}
+static void root_enter(void *root, size_t base)
+{
+    struct root_entry *e = root_entry_new();
+    if (!e) return;
+    e->root = root; e->base = base;
+    unsigned b = root_bucket(base);
+    e->next = root_heads[b]; root_heads[b] = e;
+}
+static void *root_remove(size_t base)
+{
+    for (struct root_entry **p = &root_heads[root_bucket(base)]; *p; p = &(*p)->next)
+        if ((*p)->base == base) {
+            struct root_entry *e = *p;
+            void *root = e->root;
+            *p = e->next;
+            root_free_push(e);
+            return root;
+        }
+    return NULL;
+}
 /* Read by malloc-contract.c's recycle cases: groups placed in a kept mapping, releases kept,
  * releases unmapped because a bound was full or the mapping too large. */
 unsigned long __capstone_malloc_recycle_hits;
@@ -365,8 +429,9 @@ static void *group_lifetime(void *root, size_t bytes)
     take_id();
     return capstone_cap_derive(root, 0, bytes);
 }
-void __capstone_malloc_group_unmap(void *group, size_t bytes, void *root)
+void __capstone_malloc_group_unmap(void *group, size_t bytes)
 {
+    void *root = root_remove(__builtin_capstone_cap_get_cursor(group));
     if (root && recycle_fits(bytes)) {
         capstone_cap_revoke_child(root, group);
         recycle[recycle_count].root = root;
@@ -424,7 +489,7 @@ void *__capstone_malloc_group_attach(struct capstone_malloc_slot *slots,
                       bytes - group_header(bytes), 1, 0);
 }
 void *__capstone_malloc_group_map(struct capstone_malloc_slot *slots,
-                                 size_t bytes, size_t stride, unsigned count, void **root)
+                                 size_t bytes, size_t stride, unsigned count)
 {
     /* A kept mapping of the length __capstone_malloc_map would map, or a new mapping. */
     size_t mapped = bytes && bytes <= CV_MAX_REGION_BYTES ? mapping_length(bytes) : 0;
@@ -437,8 +502,9 @@ void *__capstone_malloc_group_map(struct capstone_malloc_slot *slots,
         mapped = sublet_end(&pending_mapping) - sublet_base(&pending_mapping);
         r = mapping_group(&pending_mapping, mapped);
     }
-    *root = r;
-    return bind_slots(slots, group_lifetime(r, mapped), stride, count, stale);
+    root_enter(r, __builtin_capstone_cap_get_cursor(r));
+    void *group = group_lifetime(r, mapped);
+    return bind_slots(slots, group, stride, count, stale);
 }
 void *__capstone_malloc_group_nested(struct capstone_malloc_slot *slots,
                                     size_t stride, unsigned count,
