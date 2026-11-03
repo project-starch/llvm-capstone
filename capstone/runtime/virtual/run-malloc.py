@@ -49,19 +49,34 @@ def main():
     # unknown (null), never assumed. An SDK from before the switches has neither field and
     # was built with both ON.
     heap = dict(lifetimes=True, scrub_free=None)
+    recycle_only = False
     if a.sdk:
         config = json.loads((a.sdk / 'sdk.json').read_text())
-        # CAPSTONE_HEAP_OBJECT_BOUNDS=OFF (the Caps arm) hands out the group's authority, so the contract's
-        # spatial-denial expectations do not hold. Refuse it rather than report them as passes or failures.
-        if config.get('heap_object_bounds', True) is False:
-            sys.exit(f'{a.sdk}: heap_object_bounds is false; the malloc contract has no expectations for it')
         heap = dict(lifetimes=bool(config.get('heap_lifetimes', True)),
                     scrub_free=bool(config.get('heap_scrub_free', True)))
+        # CAPSTONE_HEAP_OBJECT_BOUNDS=OFF (the Caps arm) hands out the group's authority, so the contract's
+        # spatial-denial expectations do not hold and those cases are not run. The recycled-mapping cases
+        # do have expectations there (the arm requires lifetimes off): they are the arm's whole gate.
+        if config.get('heap_object_bounds', True) is False:
+            recycle_only = True
+            heap['object_bounds'] = False
+    # The recycled group mapping cases (heap.c "Recycled group mappings"), one process each.
+    # Survivors print MALLOC_SURVIVED; the others must fault with cause 25 at the labelled store
+    # (or free validation), under every heap configuration: releasing a group revokes the group
+    # lifetime every object of it descends from.
+    recycle_sites = {'recycle-stale': (25, 'cap_malloc_fault_store'), 'recycle-free': (25, 'cap_malloc_validate'),
+                     'recycle-tags': None, 'recycle-header': None, 'recycle-slack': None, 'recycle-limits': None,
+                     'recycle-root': (25, 'cap_malloc_fault_store'), 'recycle-geometry': (25, 'cap_malloc_fault_store'),
+                     'recycle-nested': (25, 'cap_malloc_fault_store'), 'recycle-aligned': (25, 'cap_malloc_fault_store'),
+                     'recycle-realloc': (25, 'cap_malloc_fault_store')}
+    recycle_loop = ' '.join(c for c in recycle_sites if c != 'recycle-tags')
     nm = Path(os.environ.get('CAPSTONE_LLVM_BIN', '')) / 'llvm-nm'
     symbols = {name: int(value, 16) for value, _, name in
                (line.split() for line in subprocess.check_output([str(nm), str(a.application)],
                                                                 text=True).splitlines() if len(line.split()) == 3)}
     required = {'cap_malloc_fault_store', 'cap_malloc_validate', 'cap_malloc_invalid_free', 'cap_malloc_reclaim'}
+    if recycle_only:   # the bounds-off heap refuses the nested-allocator trio, so its reclaim site is gone
+        required.discard('cap_malloc_reclaim')
     if not required <= symbols.keys():
         p.error('application lacks current safety sites; rebuild its SDK and relink')
     elf = a.application.read_bytes()
@@ -81,6 +96,13 @@ def main():
     for key, name in [('launcher', 'capstone-vexec'), ('module', 'capstone_vm.ko'),
                       ('application', 'malloc.dom'), ('native', 'native-malloc')]:
         shutil.copy2(inputs[key], stage / name)
+    recycle_gate = '''CAPSTONE_VM_TRACE=1 ./capstone-vexec malloc.dom recycle-tags
+echo MALLOC_DENIAL_EXIT:recycle-tags:$?
+for case in ''' + recycle_loop + '''; do
+  ./capstone-vexec malloc.dom "$case"
+  echo MALLOC_DENIAL_EXIT:$case:$?
+done
+'''
     gate = '''#!/bin/sh
 cd /mnt/vm || exit 1
 dmesg -n 1
@@ -107,16 +129,17 @@ CAPSTONE_VM_TRACE=1 ./capstone-vexec malloc.dom hot
 echo MALLOC_HOT_EXIT:$?
 CAPSTONE_VM_TRACE=1 ./capstone-vexec malloc.dom hot-service-control
 echo MALLOC_HOT_CONTROL_EXIT:$?
-CAPSTONE_VM_TRACE=1 ./capstone-vexec malloc.dom recycle-tags
-echo MALLOC_DENIAL_EXIT:recycle-tags:$?
-for case in stale inplace-stale remap-stale bounds stale-free reuse-stale reuse-free interior-free nested-ok nested-stale nested-grandchild nested-double recycle-stale recycle-free; do
+for case in stale inplace-stale remap-stale bounds stale-free reuse-stale reuse-free interior-free nested-ok nested-stale nested-grandchild nested-double; do
   ./capstone-vexec malloc.dom "$case"''' + survive + '''
   echo MALLOC_DENIAL_EXIT:$case:$?
 done
-rmmod capstone_vm
+''' + recycle_gate + '''rmmod capstone_vm
 echo MALLOC_CLEANUP:$?
 echo VIRTUAL_STAGED_DONE
 '''
+    if recycle_only:
+        gate = ('#!/bin/sh\ncd /mnt/vm || exit 1\ndmesg -n 1\ninsmod capstone_vm.ko || exit 1\n' + recycle_gate +
+                'rmmod capstone_vm\necho MALLOC_CLEANUP:$?\necho VIRTUAL_STAGED_DONE\n')
     gate = gate.replace('__MALLOC_COUNT__', str(a.malloc_count))
     assert '__MALLOC_COUNT__' not in gate, 'malloc count not substituted'
     (stage / 'gate.sh').write_text(gate)
@@ -173,13 +196,12 @@ echo VIRTUAL_STAGED_DONE
     # heap's child (29 at the CREVOKE); a child reclaimed twice is dead the second time (25 there).
     sites.update({'nested-ok': None, 'nested-stale': (25, 'cap_malloc_fault_store'),
                   'nested-grandchild': (29, 'cap_malloc_reclaim'), 'nested-double': (25, 'cap_malloc_reclaim')})
-    # A RECYCLED group mapping (heap.c "Recycled group mappings"), judged under BOTH heap
-    # configurations: releasing a group revokes the group lifetime every object of it descends
-    # from, so the freed object's capability faults after its mapping holds a new group even
-    # without per-object lifetimes (where nothing else ends it); recycle-tags reads no tag of the
-    # old group in the new object. Each case fails, rather than passes, if the mapping was not reused.
-    sites.update({'recycle-stale': (25, 'cap_malloc_fault_store'), 'recycle-free': (25, 'cap_malloc_validate'),
-                  'recycle-tags': None})
+    # A RECYCLED group mapping (recycle_sites above), judged under every heap configuration. Each
+    # case fails, rather than passes, if the mapping was not reused.
+    sites.update(recycle_sites)
+    if recycle_only:
+        sites = dict(recycle_sites)
+        checks = {k: checks[k] for k in ('cleanup', 'no_kernel_fault')}
     for name, site in sites.items():
         if site is None:
             match = re.search(r'MALLOC_FAULT_READY:' + re.escape(name) + r'\n(.*?)MALLOC_DENIAL_EXIT:' +
@@ -195,28 +217,38 @@ echo VIRTUAL_STAGED_DONE
         checks[name] = bool(fault and int(fault[1]) == cause and
                             int(fault[2], 16) - int(fault[3], 16) == symbols[symbol] - image_base)
     hot = re.search(r'MALLOC_HOT_BEGIN\n(.*?)MALLOC_HOT_END\n', log, re.S)
+    hot_checks = {}
     kinds = re.findall(r'CAPSTONE_VM_BOUNDARY kind=(\d+)', hot[1]) if hot else []
     # The end marker asks for the thread identity (11) and delegates its write
     # through the thread transport (10). No allocator service is permitted.
-    checks['local_allocation_fast_path'] = bool(hot and kinds and kinds == ['11', '10'] and
+    hot_checks['local_allocation_fast_path'] = bool(hot and kinds and kinds == ['11', '10'] and
                                                'MALLOC_HOT_EXIT:0\n' in log)
     controls = list(re.finditer(r'MALLOC_HOT_BEGIN\n(.*?)MALLOC_HOT_END\n', log, re.S))
     control_kinds = re.findall(r'CAPSTONE_VM_BOUNDARY kind=(\d+)', controls[1][1]) if len(controls) == 2 else []
-    checks['fast_path_control_detects_service'] = ('7' in control_kinds and control_kinds != ['11', '10'] and
+    hot_checks['fast_path_control_detects_service'] = ('7' in control_kinds and control_kinds != ['11', '10'] and
                                                 'MALLOC_HOT_CONTROL_EXIT:0\n' in log)
-    checks['real_linux_mremap_growth_and_shrink'] = log.count('CAPSTONE_VM_REMAP_OK') >= 2
+    if not recycle_only:
+        checks.update(hot_checks)
+    if not recycle_only:
+        checks['real_linux_mremap_growth_and_shrink'] = log.count('CAPSTONE_VM_REMAP_OK') >= 2
     # Releasing a group into the kept mappings and taking it back costs no service: between the
     # markers only the END marker's own write (thread identity 11, delegated write 10) may appear.
     recycle = re.search(r'MALLOC_RECYCLE_BEGIN\n(.*?)MALLOC_RECYCLE_END\n', log, re.S)
     recycle_kinds = re.findall(r'CAPSTONE_VM_BOUNDARY kind=(\d+)', recycle[1]) if recycle else []
     checks['recycle_without_service'] = bool(recycle and recycle_kinds == ['11', '10'])
     checks['recycle_tags_clean'] = 'MALLOC_RECYCLE_TAGS tagged=0 of ' in log
+    outside = re.findall(r'MALLOC_RECYCLE_OUTSIDE (\S+) outside=(\d+) tagged=(\d+)', log)
+    # with object bounds off the program reached the header, the untaken slots and the slack, and
+    # stored tags there; with them on it could not (outside=0). Either way none may survive reuse.
+    checks['recycle_outside_clean'] = (sorted(m[0] for m in outside) == ['recycle-header', 'recycle-slack'] and
+                                       all(m[2] == '0' for m in outside) and
+                                       all((m[1] != '0') == recycle_only for m in outside))
     record = dict(status='PASS' if all(checks.values()) else 'FAIL', tests=checks,
                   virtual_vm_abi=image_abi(a.application), harts=1, allocator='Capstone-compiled musl 1.2.5 mallocng; upstream allocation policy',
                   heap=heap, denial_expectations='per-object lifetimes' if heap['lifetimes'] else 'bounds only',
                   # The REQUESTED count is not a result. Report it only when the domain
                   # echoed it back, so a collapsed run cannot publish a figure it never reached.
-                  malloc_count=(a.malloc_count if checks['malloc_count_reported'] else None),
+                  malloc_count=(a.malloc_count if checks.get('malloc_count_reported') else None),
                   remap_unaligned_fallbacks=(remap_counts[0] if remap_counts else None),
                   exact_bounds='physical shadow metadata; QEMU prototype', skipped=['churn'] if a.skip_churn else [],
                   input_sha256={name: sha(path) for name, path in inputs.items()},

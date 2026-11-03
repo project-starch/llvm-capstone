@@ -129,11 +129,12 @@ the survive checks can fail.
 When mallocng releases an empty mapped group (its own `okay_to_free` decision,
 unchanged), the runtime keeps the mapping registered and resident and hands it
 to the next group of the same mapping length, so neither the release nor the
-reuse is a service. Every mapped group's lifetime is a CDERIVE child of an
-allocator-only root derived once per mapping (kept in the meta as `cap_root`):
+reuse is a service. Every mapped group's lifetime is a CDERIVE child of a root
+derived once per mapping and held only in `heap.c`'s private state, never in a
+meta, a slot record or a return value:
 
 ```text
-mapping grant (kernel) +-- root (allocator only, lives as long as the mapping)
+mapping grant (kernel) +-- root (heap.c private state, lives as long as the mapping)
                              +-- group lifetime (one per group) -- slots -- objects, nested groups
 ```
 
@@ -141,14 +142,28 @@ Releasing the group CREVOKEs its lifetime from the root, which ends every
 object and nested group of it at once, with or without per-object lifetimes;
 the next group gets a fresh lifetime and freshly derived slot parents. Each
 slot of a reused mapping is zeroed at its first take, before any capability
-over it is issued, so no tag of the old group reaches the new owner. At most
+over it is issued, so no tag of the old group reaches the new owner; with
+`CAPSTONE_HEAP_OBJECT_BOUNDS=OFF`, where the program holds the group's
+authority, the whole mapping is zeroed before the new group is bound. At most
 4 mappings of one length, 32 in all and 1 MiB are kept, none above 256 KiB;
 a release beyond a bound is unmapped as before, and large (`>= MMAP_THRESHOLD`)
-or remapped mappings always are; `malloc_trim` unmaps all kept mappings. Kept mappings stay registered arenas: the
-module's collection sweeps them and its teardown retires them at exit.
-`run-malloc.py`'s `recycle-stale`, `recycle-free` and `recycle-tags` cases
-qualify this under both heap configurations, and fail if the mapping was not
-reused.
+or remapped mappings always are; `malloc_trim` unmaps all kept mappings. Kept
+mappings stay registered arenas: the module's collection sweeps them and its
+teardown retires them at exit. `CAPSTONE_HEAP_RECYCLE_TRACE=1` prints a line
+per reuse and per kept release.
+
+The trust boundary is the program's objects: the SDK-internal entry points
+(`__capstone_malloc_find` and the other `__capstone_malloc_*` calls musl and
+some ports make) return records whose capabilities reach beyond one object
+until the group is released; none of them reaches the root. `run-malloc.py`'s
+`recycle-*` cases qualify this under every heap configuration (with object
+bounds off they are that arm's whole gate) and fail if the mapping was not
+reused: stale use after reuse (`recycle-stale`, `-free`, `-geometry`,
+`-nested`, `-aligned`, `-realloc`), tags in the reused object (`recycle-tags`)
+and, with object bounds off, in the header, untaken slots and slack
+(`recycle-header`, `-slack`), no internal record exposes a capability beyond
+the group's own (`recycle-root`), and the bounds plus a concurrent
+`malloc_trim` (`recycle-limits`).
 
 ## VM remapping
 
