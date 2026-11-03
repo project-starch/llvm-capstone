@@ -1116,7 +1116,7 @@ silicon-specific is the cost of a delegated round.
   tick on vp2, so the workaround stands regardless. Any other program with a periodic timer faster than ~25 ms will
   storm the same way on silicon.
 
-## Q-04 — QEMU's MOVC does not null a NOT_CAP source; the RTL does, and whether a scalar source MUST be consumed is an open spec question (the 2026-09-10 ruling that the spec settles it was RETRACTED the same day) `DECIDED 2026-10-14 (the lead adopted option 1: MOVC keeps an untagged source, consumes every tagged non-NONLIN source); recorded in llvm/lib/Target/Capstone/CapstoneISASemantics.md (the academic-spec text is not updated), QEMU follows it on the virtual profile and keeps the RTL's MOVC on the physical profile until Q-04 (b) (x0 deviation fixed), virtual SDK drops the C-32 rewrite; RTL change Q-04 (b) NOT YET APPLIED — see plans/2026-10-14-movc-untagged-source.md. Was: OPEN — QEMU/RTL divergence, filed 2026-09-05; the spec question is the lead's; 2026-09-15: masks C-32 on every emulator pass; 2026-09-24: CAPSTONE_MOVC_NULL_SCALAR=1 makes the emulator null it as the RTL does, opt-in`
+## Q-04 — QEMU's MOVC does not null a NOT_CAP source; the RTL does, and whether a scalar source MUST be consumed is an open spec question (the 2026-09-10 ruling that the spec settles it was RETRACTED the same day) `DECIDED 2026-10-14 (the lead adopted option 1: MOVC keeps an untagged source, consumes every tagged non-NONLIN source); recorded in llvm/lib/Target/Capstone/CapstoneISASemantics.md (the academic-spec text is not updated), QEMU follows it on the virtual profile and keeps the RTL's MOVC on the physical profile until Q-04 (b) (x0 deviation fixed), virtual SDK drops the C-32 rewrite; RTL change Q-04 (b) APPLIED in the batch (capstone-ariane c721c1a2a, item 5) and in every sealed bitstream since; PRESENT ON SILICON 2026-11-04 on bitstream 3 (board 1) and ObjBounds (board 2), N = 1 each (kit rtl-smoke/q04-movc-bare-2026-11-03). C-32's board-image rule is the lead's and is not changed by this. See plans/2026-10-14-movc-untagged-source.md. Was: OPEN — QEMU/RTL divergence, filed 2026-09-05; the spec question is the lead's; 2026-09-15: masks C-32 on every emulator pass; 2026-09-24: CAPSTONE_MOVC_NULL_SCALAR=1 makes the emulator null it as the RTL does, opt-in`
 
 > **DECIDED 2026-10-14 by the project lead: option 1, "wie vorgeschlagen, vorsichtig sein".**
 > With `rd != rs1`, MOVC writes `x[rs1]` to `x[rd]`, contents and tag, and nulls `x[rs1]` only if it is
@@ -1136,6 +1136,11 @@ silicon-specific is the cost of a delegated round.
 > - **Q-04 (b), the RTL:** add `NOT_CAP` to the preserve branch of `capstone_flu_unit.anvil:14`.
 >   The exact diff, directed tests, synthesis and board predictions are in the plan. NOT applied;
 >   until it is, the board nulls an integer source and physical-profile code keeps C-32's rewrite.
+>   **2026-11-04: this has since happened.** Q-04 (b) went in with the batch (c721c1a2a, item 5:
+>   `capstone_flu_unit.anvil` preserves NONLIN and NOT_CAP). Silicon keeps an untagged source on bitstream 3
+>   (board 1, 2026-11-03) and on ObjBounds (board 2, 2026-11-04). Both read the kit's PRESENT vector from the
+>   recorder; the kit is `capstone/tests/rtl-smoke/q04-movc-bare-2026-11-03/`. The two sentences above describe the
+>   tree before the batch. Whether board images may drop C-32's rewrite remains the lead's decision.
 
 > **2026-09-24: the emulator can now do what the RTL does here, on request.** capstone-qemu's
 > `CAPSTONE_MOVC_NULL_SCALAR=1` makes `helper_csmovc` null an untagged source too (default off: the
