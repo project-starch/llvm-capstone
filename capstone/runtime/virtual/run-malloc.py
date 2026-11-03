@@ -107,7 +107,9 @@ CAPSTONE_VM_TRACE=1 ./capstone-vexec malloc.dom hot
 echo MALLOC_HOT_EXIT:$?
 CAPSTONE_VM_TRACE=1 ./capstone-vexec malloc.dom hot-service-control
 echo MALLOC_HOT_CONTROL_EXIT:$?
-for case in stale inplace-stale remap-stale bounds stale-free reuse-stale reuse-free interior-free nested-ok nested-stale nested-grandchild nested-double; do
+CAPSTONE_VM_TRACE=1 ./capstone-vexec malloc.dom recycle-tags
+echo MALLOC_DENIAL_EXIT:recycle-tags:$?
+for case in stale inplace-stale remap-stale bounds stale-free reuse-stale reuse-free interior-free nested-ok nested-stale nested-grandchild nested-double recycle-stale recycle-free; do
   ./capstone-vexec malloc.dom "$case"''' + survive + '''
   echo MALLOC_DENIAL_EXIT:$case:$?
 done
@@ -171,6 +173,13 @@ echo VIRTUAL_STAGED_DONE
     # heap's child (29 at the CREVOKE); a child reclaimed twice is dead the second time (25 there).
     sites.update({'nested-ok': None, 'nested-stale': (25, 'cap_malloc_fault_store'),
                   'nested-grandchild': (29, 'cap_malloc_reclaim'), 'nested-double': (25, 'cap_malloc_reclaim')})
+    # A RECYCLED group mapping (heap.c "Recycled group mappings"), judged under BOTH heap
+    # configurations: releasing a group revokes the group lifetime every object of it descends
+    # from, so the freed object's capability faults after its mapping holds a new group even
+    # without per-object lifetimes (where nothing else ends it); recycle-tags reads no tag of the
+    # old group in the new object. Each case fails, rather than passes, if the mapping was not reused.
+    sites.update({'recycle-stale': (25, 'cap_malloc_fault_store'), 'recycle-free': (25, 'cap_malloc_validate'),
+                  'recycle-tags': None})
     for name, site in sites.items():
         if site is None:
             match = re.search(r'MALLOC_FAULT_READY:' + re.escape(name) + r'\n(.*?)MALLOC_DENIAL_EXIT:' +
@@ -196,6 +205,12 @@ echo VIRTUAL_STAGED_DONE
     checks['fast_path_control_detects_service'] = ('7' in control_kinds and control_kinds != ['11', '10'] and
                                                 'MALLOC_HOT_CONTROL_EXIT:0\n' in log)
     checks['real_linux_mremap_growth_and_shrink'] = log.count('CAPSTONE_VM_REMAP_OK') >= 2
+    # Releasing a group into the kept mappings and taking it back costs no service: between the
+    # markers only the END marker's own write (thread identity 11, delegated write 10) may appear.
+    recycle = re.search(r'MALLOC_RECYCLE_BEGIN\n(.*?)MALLOC_RECYCLE_END\n', log, re.S)
+    recycle_kinds = re.findall(r'CAPSTONE_VM_BOUNDARY kind=(\d+)', recycle[1]) if recycle else []
+    checks['recycle_without_service'] = bool(recycle and recycle_kinds == ['11', '10'])
+    checks['recycle_tags_clean'] = 'MALLOC_RECYCLE_TAGS tagged=0 of ' in log
     record = dict(status='PASS' if all(checks.values()) else 'FAIL', tests=checks,
                   virtual_vm_abi=image_abi(a.application), harts=1, allocator='Capstone-compiled musl 1.2.5 mallocng; upstream allocation policy',
                   heap=heap, denial_expectations='per-object lifetimes' if heap['lifetimes'] else 'bounds only',

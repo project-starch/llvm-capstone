@@ -25,7 +25,9 @@ The directed fast-path test holds a free
 slot in a live group and enough node capacity; its malloc/free loop must
 produce no service transitions. A control deliberately inserts a WAIT
 service, which the oracle must detect. A workload that repeatedly causes
-musl to release and recreate whole groups legitimately invokes Linux.
+musl to release and recreate whole groups invokes Linux only when the
+runtime's kept mappings ([Recycled group mappings](#recycled-group-mappings))
+cannot supply one of the needed length.
 
 ## Representation without a new allocation policy
 
@@ -81,8 +83,8 @@ metadata index across same-address-space threads.
 The current process ABI does not expose the launcher's `brk` to application
 libc. mallocng therefore uses its own mmap fallback for metadata. Static
 images do not donate dynamic-loader tails. Neither restriction introduces a
-replacement allocator. `malloc_trim` is a compatibility no-op: musl retains
-its normal group-release decisions. A zero-byte allocation has one byte of
+replacement allocator. musl retains its normal group-release decisions;
+`malloc_trim` only unmaps the runtime's kept group mappings. A zero-byte allocation has one byte of
 capability extent for the validity check, with nominal size zero.
 
 `check-mallocng-policy.py` compares decision functions, tables, constants and
@@ -110,7 +112,7 @@ ON and scrub OFF, are the heap described above.
   next owner's to read. A residual capability to a freed object still faults on use, because
   its lifetime ended; one to a live object stays usable, which is outside what lifetimes
   protect. A mapping that `free` unmaps is cleared of tags by the module's retirement
-  either way. `CAPSTONE_HEAP_SCRUB_FREE=ON` zeroes the object's current extent before the
+  either way, and a kept mapping's slots are zeroed at their first reuse. `CAPSTONE_HEAP_SCRUB_FREE=ON` zeroes the object's current extent before the
   CREVOKE, the hygiene arm of the comparison. It does not reach the tail an in-place
   `realloc` shrink gave up, so it does not make every reused slot clean.
 
@@ -121,6 +123,32 @@ these readings from the anchored denial cases: `bounds` still faults with cause 
 `inplace-stale`, `reuse-stale` and `reuse-free` survive and say `MALLOC_SURVIVED`. The
 same harness on an SDK with lifetimes must still read the lifetimes table, which is what shows
 the survive checks can fail.
+
+## Recycled group mappings
+
+When mallocng releases an empty mapped group (its own `okay_to_free` decision,
+unchanged), the runtime keeps the mapping registered and resident and hands it
+to the next group of the same mapping length, so neither the release nor the
+reuse is a service. Every mapped group's lifetime is a CDERIVE child of an
+allocator-only root derived once per mapping (kept in the meta as `cap_root`):
+
+```text
+mapping grant (kernel) +-- root (allocator only, lives as long as the mapping)
+                             +-- group lifetime (one per group) -- slots -- objects, nested groups
+```
+
+Releasing the group CREVOKEs its lifetime from the root, which ends every
+object and nested group of it at once, with or without per-object lifetimes;
+the next group gets a fresh lifetime and freshly derived slot parents. Each
+slot of a reused mapping is zeroed at its first take, before any capability
+over it is issued, so no tag of the old group reaches the new owner. At most
+4 mappings of one length, 32 in all and 1 MiB are kept, none above 256 KiB;
+a release beyond a bound is unmapped as before, and large (`>= MMAP_THRESHOLD`)
+or remapped mappings always are; `malloc_trim` unmaps all kept mappings. Kept mappings stay registered arenas: the
+module's collection sweeps them and its teardown retires them at exit.
+`run-malloc.py`'s `recycle-stale`, `recycle-free` and `recycle-tags` cases
+qualify this under both heap configurations, and fail if the mapping was not
+reused.
 
 ## VM remapping
 

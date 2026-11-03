@@ -309,10 +309,93 @@ static void align_probe(void)
     puts("MALLOC_ALIGN_PROBE_DONE");
     fflush(stdout);
 }
+#ifdef __CAPSTONE_PURECAP__
+extern unsigned long __capstone_malloc_recycle_hits;
+extern unsigned long __capstone_malloc_recycle_kept;
+extern unsigned long __capstone_malloc_recycle_unmapped;
+extern int malloc_trim(size_t);
+/* A RECYCLED group mapping (heap.c "Recycled group mappings"). 20000 bytes at zero usage is
+ * mallocng's single-slot group (alloc_group's cnt==1 branch), which it always releases when the
+ * object is freed (okay_to_free: the stride is below the class's); its allocation must map (the
+ * group is new, not one a startup allocation already holds: the first version of this test used
+ * 5000 bytes, whose class a startup object occupies, and failed on exactly that). The release
+ * keeps the mapping (kept advances); the next allocation of that size takes it (hits advances, no
+ * map) and lands on the freed object's bytes. All of these are required, so a run in which the
+ * mapping was not reused fails here instead of reading as a pass. The stale cases then
+ * use the old object's capability, which must fault under either heap configuration: releasing
+ * the group revoked the group lifetime every object descends from. recycle-tags fills the old
+ * object with tagged capabilities to a live object (and reads one back, so the tag reader is
+ * shown to see a tag), and after reuse reads every granule of the new object: none may be
+ * tagged. Release and reuse must reach the launcher for nothing: the gate brackets them with
+ * MALLOC_RECYCLE_BEGIN/END and allows only the END marker's own write. */
+enum { RECYCLE_SIZE = 20000 };
+static char *recycled(char *old, unsigned long kept, unsigned long hits, int bracket)
+{
+    if (bracket) { puts("MALLOC_RECYCLE_BEGIN"); fflush(stdout); }
+    free(old);
+    unsigned long kept_after = __capstone_malloc_recycle_kept;
+    unsigned long maps = __capstone_malloc_map_calls;
+    char *fresh = malloc(RECYCLE_SIZE);
+    unsigned long hits_after = __capstone_malloc_recycle_hits, maps_after = __capstone_malloc_map_calls;
+    if (bracket) { puts("MALLOC_RECYCLE_END"); fflush(stdout); }
+    printf("MALLOC_RECYCLE kept=%lu->%lu hits=%lu->%lu unmapped=%lu old=0x%lx fresh=0x%lx\n", kept,
+           kept_after, hits, hits_after, __capstone_malloc_recycle_unmapped,
+           (unsigned long)(uintptr_t)saved, (unsigned long)(uintptr_t)fresh);
+    fflush(stdout);
+    require(kept_after == kept + 1, "recycle: the released group's mapping was kept");
+    require(fresh && hits_after == hits + 1 && maps_after == maps,
+            "recycle: the next group took the kept mapping");
+    uintptr_t a = (uintptr_t)saved, b = (uintptr_t)fresh;
+    require(a < b + RECYCLE_SIZE && b < a + RECYCLE_SIZE, "recycle: reuse overlaps the freed object");
+    return fresh;
+}
+static int recycle_case(const char *mode, int may_survive)
+{
+    char *live = malloc(32); require(live != NULL, "recycle live object"); live[0] = 5;
+    unsigned long kept = __capstone_malloc_recycle_kept, hits = __capstone_malloc_recycle_hits;
+    unsigned long maps = __capstone_malloc_map_calls;
+    char *old = malloc(RECYCLE_SIZE); require(old != NULL, "recycle setup"); saved = old;
+    require(__capstone_malloc_map_calls == maps + 1 && __capstone_malloc_recycle_hits == hits,
+            "recycle: the old object's group is a new mapping");
+    if (!strcmp(mode, "recycle-tags")) {
+        unsigned granules = RECYCLE_SIZE / 16;
+        for (unsigned i = 0; i < granules; ++i) ((char *volatile *)old)[i] = live;
+        require(__builtin_capstone_cap_get_tag(((char *volatile *)old)[granules / 2]),
+                "recycle-tags: the reader sees a stored tag");
+        char *fresh = recycled(old, kept, hits, 1);
+        unsigned tagged = 0;
+        for (unsigned i = 0; i < granules; ++i)
+            tagged += __builtin_capstone_cap_get_tag(((char *volatile *)fresh)[i]) != 0;
+        printf("MALLOC_RECYCLE_TAGS tagged=%u of %u\n", tagged, granules);
+        require(!tagged, "recycle-tags: no tag of the old group survives into the new object");
+        require(live[0] == 5, "recycle-tags: the live object is untouched");
+        puts("MALLOC_FAULT_READY:recycle-tags"); fflush(stdout);
+        free(fresh); free(live);
+        /* The released group's mapping is kept again; malloc_trim gives it back. */
+        unsigned long maps = __capstone_malloc_map_calls;
+        require(malloc_trim(0) == 1 && malloc_trim(0) == 0, "recycle-tags: malloc_trim releases kept mappings");
+        char *after = malloc(RECYCLE_SIZE);
+        require(after && __capstone_malloc_map_calls == maps + 1, "recycle-tags: after a trim the group maps again");
+        free(after);
+        puts("MALLOC_SURVIVED:recycle-tags"); fflush(stdout);
+        return 0;
+    }
+    char *fresh = recycled(old, kept, hits, 0); (void)fresh;
+    if (!strcmp(mode, "recycle-stale")) {
+        puts("MALLOC_FAULT_READY:recycle-stale"); fflush(stdout); fault_store(saved);
+    } else if (!strcmp(mode, "recycle-free")) {
+        puts("MALLOC_FAULT_READY:recycle-free"); fflush(stdout); free(saved);
+    } else return 2;
+    return survived(mode, may_survive);
+}
+#endif
 int main(int argc, char **argv)
 {
     const char *mode = argc > 1 ? argv[1] : "ok";
     int may_survive = argc > 2 && !strcmp(argv[2], "may-survive");
+#ifdef __CAPSTONE_PURECAP__
+    if (!strncmp(mode, "recycle-", 8)) return recycle_case(mode, may_survive);
+#endif
     if (!strcmp(mode, "hot")) { hot(0); return 0; }
     if (!strcmp(mode, "hot-service-control")) { hot(1); return 0; }
     if (!strcmp(mode, "population")) { population(); return 0; }
