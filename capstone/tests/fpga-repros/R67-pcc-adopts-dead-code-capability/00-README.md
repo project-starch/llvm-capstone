@@ -54,7 +54,19 @@ The same lines are in every sealed bitstream's tree: c721c1a2a, dcc6daf6e, e7af4
   other, which are in `PREREG.md`.
 - ObjBounds reads the hole by design, because it removes the PC check's 25 altogether.
 
-**Silicon.** Not yet run. This folder's kit is the reading.
+**Silicon: the hole is present on both sealed bitstreams**, as pre-registered (`PREREG.md`, graded by
+`grade/r67-grade.py`, rc 0 each, image hashes and resident names checked):
+
+| bitstream | board, date | t1-fire | controls |
+|---|---|---|---|
+| bitstream 3 (caplifive_vp2c_e7af48457) | board 1, 2026-11-03 19:25-19:35 | **HOLE**: validity 0 after the crevoke, marker written, 0 traps | all three exact |
+| ObjBounds (caplifive_vp2c_603528b8b) | board 2, 2026-11-04 04:52-05:11 | **HOLE**, the same vector | all three exact |
+
+- On ObjBounds the first pass's t1-norevoke read NO DATA. That was an infrastructure fault: the GDB image load timed
+  out ("busy to go low"). That image alone was re-run in the next booking and read its vector exactly.
+- Each image is its own load, so the graded set (three images from the first pass plus the re-run) is sound.
+- N = 1 per bitstream.
+- The fixed tree's reading waits for the bitstream that carries 1fc2cd5aa.
 
 ## The kit
 

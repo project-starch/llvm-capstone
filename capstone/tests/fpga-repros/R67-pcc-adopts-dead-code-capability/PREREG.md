@@ -42,3 +42,14 @@ tree's image vector is to be simulated before that bitstream is run.
 - N = 1 per bitstream.
 - The hole is shown for CJALR only. CALL/RETURN query the node by design, and an escape or resume installing a dead
   code capability is not exercised here.
+
+## Readings (graded by `grade/r67-grade.py`; nothing was changed after them)
+
+- **Board 1, bitstream 3** (caplifive_vp2c_e7af48457), 2026-11-03 19:25-19:35: `r67-grade.py run-b1-bs3 bs3` gives rc 0.
+  All four vectors read exactly as tabled above, so **t1-fire is HOLE**.
+- **Board 2, ObjBounds** (caplifive_vp2c_603528b8b), 2026-11-04: `r67-grade.py run-b2-objb-r67 objb` gives rc 0. All
+  four vectors read exactly as tabled, so **t1-fire is HOLE**.
+  - The first pass (04:52-05:09) read NO DATA on t1-norevoke because the GDB load_image timed out.
+  - t1-norevoke alone was re-run in the next booking (05:10-05:11) and read its vector exactly.
+  - The other three images are the first pass's files, byte-identical.
+- The runtime lane graded both boards with the same result.

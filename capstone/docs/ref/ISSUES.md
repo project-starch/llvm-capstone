@@ -4033,7 +4033,7 @@ the operation.
 That guard arm also records a refuted prediction of mine. Reading the decoder alone, I predicted that fsqrt returns
 NaN whenever f0 holds a NaN. It does not, because fsqrt never reads f0.
 
-### R-67 — a jump through a code capability whose node has ENDED runs its target: commit's PC tracker adopts every new PC-capability id as live, and CJALR never queries the node `OPEN — DEMONSTRATED IN SIMULATION 2026-11-03 on e7af48457's RTL (found by the external collaborator, conformance rule T1; reproduced by the RTL lane); present in every sealed bitstream's tree; fix in Verilator (capstone-ariane 1fc2cd5aa), going to synthesis with C.5a on the lead's ruling; silicon not run`
+### R-67 — a jump through a code capability whose node has ENDED runs its target: commit's PC tracker adopts every new PC-capability id as live, and CJALR never queries the node `OPEN — DEMONSTRATED IN SIMULATION 2026-11-03 on e7af48457's RTL (found by the external collaborator, conformance rule T1; reproduced by the RTL lane); present in every sealed bitstream's tree; PRESENT ON SILICON on bitstream 3 (board 1, 2026-11-03) and ObjBounds (board 2, 2026-11-04), N = 1 each, as pre-registered (kit tests/fpga-repros/R67-pcc-adopts-dead-code-capability); fix in Verilator (capstone-ariane 1fc2cd5aa), batched with C.5a on the lead's ruling, passed its synthesis-only gate 2026-11-04 (llvm-capstone land/rtl-c5a 7b6100bce4d2); not yet on silicon`
 
 Siblings: R-44, the same adopt at the CPMP trackers, which recorded this one as "latent ... needs a stale CODE
 capability via CALL/RETURN, which has never been constructed"; R-35, the same adopt at the LSU, fixed; Q-29, the fetch
