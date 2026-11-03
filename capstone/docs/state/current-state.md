@@ -1,16 +1,20 @@
 # Current Capstone state
 
-## 2026-11-03 — Fewer-exits runtime branch qualified with repaired gates
+## 2026-11-03 — Fewer-exits runtime branch: review fixes qualified
 
-`runtime/fewer-exits` is rebased onto dev `114b90b7be2e`, including the repaired
-landing gates and AVL launcher. Sequential p13 control/branch runs executed all
-168 required rows per arm with freshly built SDKs and applications. The only
-differences were the new identity and adaptive-window checks, failing on dev and
-passing on the branch; every pre-existing failure set matched. The branch passed
-20/20 pthread and 379/379 step-hooks checks, and actual modules with window growth
-disabled failed the strengthened oracle. The adaptive window stays on by default;
-`fault_ahead_max=0` disables it. This is branch qualification in QEMU, not a claim
-of merge, silicon validation or new performance measurements. See the
+`runtime/fewer-exits` (gp-cursor transport identity, adaptive fault-ahead,
+default on; `fault_ahead_max=0` disables it) passed a second adversarial review
+round in QEMU against dev `114b90b7be2e`. The arms ran sequentially through the
+p13 queue, and every required row ran. Runtime, memcached, hosted, nodes,
+pin-ahead and fp are identical; malloc, pthread and step-hooks differ only in
+the round's new or tightened checks, which fail on dev. Fixed this round:
+- identity slots are no longer recycled while they own the process wire;
+- the launcher serializes the shared process host;
+- explicit contexts are refused on a pthread's TLS;
+- pthread tids no longer collide with musl's lock-word waiter bit, which made
+  nested stdio locks in a virtual pthread deadlock (also on dev);
+- fault-ahead streams step over pages already admitted.
+QEMU only, no silicon claim. See the
 [runtime qualification and limits](../../runtime/virtual/README.md#qualification-and-limits).
 
 ## Read this first (2026-10-13)

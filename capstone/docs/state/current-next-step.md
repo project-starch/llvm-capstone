@@ -1,12 +1,14 @@
-**2026-11-03, fewer-exits runtime branch.** The repaired QEMU landing comparison
-against dev `114b90b7be2e` is complete: all required rows ran, with differences
-only in the new identity/adaptive checks. The branch satisfies that gate
-requirement. Keep the adaptive default on and retain `fault_ahead_max=0`
-as the kill switch. Nonlocal exits from a signal handler inside a delegated call
-still need transport-depth and copy-back unwinding; the stale-owner interaction
-with reused gp slots is documented, not fixed. The committed exhausted-slot
-fallback gate covers private-TLS pthreads; the exploratory shared-TLS raw-context
-stress timeout remains unresolved. See the
+**2026-11-03, fewer-exits runtime branch (fix round 2).** Adversarial review
+findings verified and fixed on the branch. Identity: a slot that still owns the
+process wire is quarantined, never reused. Launcher: every serve on the process
+host takes host_lock. Raw contexts on a pthread's TLS are refused. Virtual
+pthread tids now sit below musl's waiter bit; at 0x40000000 + id, a nested stdio
+lock in any pthread deadlocked, on dev too. Streams skip pages already admitted.
+The runtime gate keeps the shipped window except around its three demand-fault
+launches. Gates against dev `114b90b7be2e`: every difference is a new or
+tightened check failing on dev. Next: land after a re-gate on the current dev
+(rebased without conflicts, not re-gated). Nonlocal exits from a handler inside
+a delegated round remain unsupported: no unwinding, only no aliasing. See the
 [runtime limits](../../runtime/virtual/README.md#qualification-and-limits).
 
 **2026-10-21, the cross-lane plan to the next bitstream (runtime/semantics lane, coordinating on the lead's word).**
