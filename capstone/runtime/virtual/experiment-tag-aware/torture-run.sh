@@ -12,7 +12,7 @@ vm() { env CAPSTONE_QEMU_LOCK=$OUT/qemu.lock PYTHONPATH=${VM_HOST:-$L/vmhost} py
 mkdir -m 700 -p "$L/vm/t-$TAG"; ln -s "$L/vm/t-$TAG" "$OUT/vm"
 sha256sum "$QEMU" "$IMAGE" "$MODULE" "$LAUNCHER" $L/torture/$BIN $L/torture/pfns > "$OUT/inputs.sha256"
 vm up --profile virtual --exact-bounds --memory 2G --share-model mapped-xattr \
-  --cpu-prop x-capstone-test-csrs=true --cpu-prop x-capstone-raw-moves=true --cpu-prop x-capstone-supervisor-slots=2 \
+  --cpu-prop x-capstone-test-csrs=${TEST_CSRS:-true} --cpu-prop x-capstone-raw-moves=true --cpu-prop x-capstone-supervisor-slots=2 \
   --qemu "$QEMU" --kernel "$IMAGE" --firmware $PL/images/fw_jump.elf \
   --rootfs $PL/images/rootfs.ext2 --share $L \
   --launcher "$LAUNCHER" --job-helper $PL/adapter/capstone-job \

@@ -92,3 +92,10 @@ MODPARAMS. Build helpers require private output paths; build-kernel.sh refuses
 an existing output directory. Keep all source, VM state, outputs and lock files
 inside the lane. A real pinned baseline uses its stock kernel on the same QEMU;
 using the summary kernel for the pinned arm can redundantly clear its pages.
+`TEST_CSRS=false` can probe independence from test CSRs. The current virtual
+module still reads urevavail/scapctl during context creation, so the full
+torture stack requires test CSRs even though the raw Linux tag paths do not.
+The runner retains that compatibility default. QEMU's standalone summary
+probes run with test CSRs disabled. The independent raw-page probe requires
+them for its actual-tag oracle. Removing the module's old discovery probes
+requires a separate architectural discovery interface and remains unresolved.
