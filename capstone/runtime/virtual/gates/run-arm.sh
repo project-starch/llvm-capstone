@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# GATE_SLOT_PROTOCOL=1
 # run-arm.sh OUT: the nine virtual-runtime landing gates for one arm, with EVERY image the gates
 # run built from that arm -- the contract programs and the applications alike.
 #
@@ -28,8 +29,8 @@
 # pinned SHA-256: one local archive instead of five downloads per arm.
 #
 # PHASE=build stops after the images; PHASE=gates runs the gates on an OUT whose build finished.
-# Compare two arms with compare.py CONTROL_OUT ARM_OUT. Gate arms share host ports (memcached's
-# native reference): run them one after another, never two at once.
+# Compare two arms with compare.py CONTROL_OUT ARM_OUT. GATE_SLOT=0|1 selects an isolated
+# snapshot domain (see README.md). Unslotted arms still need the serial gate queue.
 set -uo pipefail
 OUT=${1:?usage: run-arm.sh OUT (see the header)}
 : "${TREE:?TREE=<the arm tree>}" "${PLATFORM:?PLATFORM=<platform dir>}" "${HOOKS:?HOOKS=<hooks .ko>}"
@@ -38,6 +39,10 @@ PHASE=${PHASE:-all}
 GATES=${GATES:-hosted runtime nodes malloc pin-ahead fp pthread step-hooks memcached}
 JOBS=${JOBS:-8}
 HERE=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+if [[ ${GATE_ARM_PARENT:-} != "$PPID" ]]; then
+  exec python3 "$HERE/arm-resources.py" "$OUT" bash "$HERE/run-arm.sh" "$OUT"
+fi
+unset GATE_ARM_PARENT
 TREE=$(realpath "$TREE"); PLATFORM=$(realpath "$PLATFORM"); LLVM=$(realpath "$LLVM")
 OUT=$(realpath -m "$OUT")
 V=$TREE/capstone/runtime/virtual
@@ -56,6 +61,12 @@ for v in $(compgen -e); do
 done
 export CAPSTONE_REPO_ROOT=$TREE CAPSTONE_LLVM_BUILD_DIR=$LLVM CAPSTONE_LLVM_BIN=$LLVM/bin
 export CAPSTONE_TMP_ROOT=$OUT/tmp JOBS
+# Source after clearing inherited configuration; snapshot domains share the global
+# reader/writer lock with exclusive QEMU users. Private locks would bypass them.
+source "$TREE/capstone/tests/capstone-test-env.sh" || exit 2
+if [[ -n ${GATE_DOMAIN:-} ]]; then
+  capstone_qemu_domain "$GATE_DOMAIN" || exit 2
+fi
 
 # A gate platform is real files: a symlink into another platform turns a later copy into a write
 # to that platform, and lets two arms run one binary.
@@ -164,7 +175,7 @@ gates_phase() {
   [[ -f $B/BUILD_DONE ]] || { echo "no finished build in $B" >&2; exit 2; }
   [[ ! -e $G ]] || { echo "$G exists: use a fresh OUT" >&2; exit 2; }
   mkdir -p "$G/tmp"
-  export CAPSTONE_QEMU_LOCK=${QEMU_LOCK:-$OUT/qemu.lock} CAPSTONE_TMP_ROOT=$G/tmp
+  export CAPSTONE_QEMU_LOCK=${QEMU_LOCK:-$CAPSTONE_QEMU_LOCK} CAPSTONE_TMP_ROOT=$G/tmp
   export CAPSTONE_QEMU_CPU_EXTRA=${CPU_EXTRA:-x-capstone-test-csrs=true,x-capstone-supervisor-slots=32}
   sha256sum "$P/qemu-system-riscv64" "$P"/images/* "$P/adapter/capstone-vexec" "$P/adapter/capstone-job" \
     "$P/adapter/module/capstone_vm.ko" "$HOOKS" > "$OUT/platform.sha256"
@@ -193,7 +204,8 @@ gates_phase() {
   if [[ -f $B/apps/memcached.image ]]; then
     local m; m=$(cat "$B/apps/memcached.image")
     gate memcached python3 "$TREE/capstone/ports/memcached/app/host/run-virtual.py" --build "$m" \
-      --adapter "$P/adapter" "${plat[@]}" --cross-cc "$CROSS_GCC" --pthread "$m/pthread.dom" --work "$G/memcached"
+      --adapter "$P/adapter" "${plat[@]}" --cross-cc "$CROSS_GCC" --pthread "$m/pthread.dom" --work "$G/memcached" \
+      --port "${GATE_MEMCACHED_PORT:-21299}"
   elif [[ " $GATES " == *" memcached "* ]]; then
     printf '%-10s NOT RUN (no memcached build)\n' memcached >> "$S"
   fi
