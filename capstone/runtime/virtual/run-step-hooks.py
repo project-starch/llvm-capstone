@@ -63,7 +63,10 @@ CONFIGS = {
     'adapt':      ('test_full_window=1', 'walk stream', 0),
     'adaptdirect': ('', 'walk stream', 0),
     'adaptres':   ('test_inject=1 test_inject_at=1', 'walk', 0),
-
+    'adaptshort': ('test_full_window=1 test_short_gup=1', 'walk', 0),
+    'adaptclip':  ('test_full_window=1', 'clip clipx', 0),
+    'adaptro':    ('test_full_window=1', 'clipwrite', 139),
+    'adaptnonlin': ('test_full_window=1', 'nonlin', 0),
 }
 SCRIPT = '''#!/bin/sh
 cd /mnt/vm || exit 1
@@ -170,7 +173,7 @@ def parse(log):
             current = (m.group(1), m.group(2))
             runs[current] = {'before': pins(m.group(3)), 'stats': None, 'ok': False,
                              'region': None, 'arenas': [], 'census': {}, 'after_mark': set(),
-                             'marked': False, 'ahead': []}
+                             'marked': False, 'ahead': [], 'linear': {}}
             continue
         m = re.match(r'HOOK_AHEAD_(BEFORE|AFTER):(\w+):(\w+):(.*)$', line)
         if m and current == (m.group(2), m.group(3)):
@@ -184,8 +187,17 @@ def parse(log):
             continue
         if current and line.startswith('PIN_REGION:0x'):
             runs[current]['region'] = int(line[len('PIN_REGION:'):], 16); continue
+        if current and line.startswith('PIN_SPAN:'):
+            runs[current]['span'] = int(line[len('PIN_SPAN:'):]) * 4096; continue
+        if current and line == 'PIN_ROWRITE_ATTEMPT':
+            runs[current]['rowrite'] = True; continue
         if current and (m := ADD_OK.search(line)):
-            runs[current]['arenas'].append((int(m.group(1), 16), int(m.group(2)))); continue
+            base = int(m.group(1), 16)
+            runs[current]['arenas'].append((base, int(m.group(2))))
+            linear = re.search(r'\blinear=(\d+)', line)
+            if linear:
+                runs[current]['linear'][base] = int(linear.group(1))
+            continue
         if current and line.startswith('HOOK_DIAG:') and 'CAPSTONE_VM_STATS_MARK' in line:
             runs[current]['marked'] = True; continue
         if current and line.startswith('HOOK_DIAG:') and (m := RETIRE.search(line)):
@@ -308,7 +320,8 @@ def evaluate(log, names, instrumented, completed):
     # a broken counter cannot make a window pass. Empty/missing counters fail (including dev).
     def region_events(r):
         arena = region_arena(r)
-        return [e for e in r.get('ahead', []) if e[0] == arena]
+        return [e for e in r.get('ahead', []) if e[0] == arena and
+                ('span' not in r or r['region'] <= e[4] < r['region'] + r['span'])]
 
     def adaptive_counts(name, mode, windows, pages):
         r = runs.get((name, mode), {})
@@ -346,6 +359,29 @@ def evaluate(log, names, instrumented, completed):
             growth and expected_index == size and
             all(got == (size, len(events) + 2) for got in sources('adaptdirect', mode)) and
             adaptive_counts('adaptdirect', mode, len(events), size - len(events) - 2))
+    # A short GUP retains half a batch, then the next fault must continue from the retained
+    # end (not the requested end). Final fault at 31 has a trained but empty window.
+    checks['adaptshort_walk_window'] = (
+        all(got == (32, 9) for got in sources('adaptshort', 'walk')) and
+        adaptive_counts('adaptshort', 'walk', 7, 23) and
+        reports.get('adaptshort', {}).get('short_results', 0) > 0)
+    # At page 7 the VMA boundary clips the entire window. Page 8 must continue the stream
+    # with a 16-page window, and page 25 with 32 (clipped to six by the arena end).
+    for name, mode in (('adaptclip', 'clip'), ('adaptclip', 'clipx'), ('adaptro', 'clipwrite')):
+        r = runs.get((name, mode), {})
+        checks[f'{name}_{mode}_window'] = (
+            adaptive_counts(name, mode, 4, 26) and
+            [e[1:4] for e in region_events(r)] == [(2, 4, 4), (7, 8, 0), (8, 16, 16), (25, 32, 6)])
+        if name == 'adaptro':
+            checks['adaptro_write_denied'] = r.get('rowrite', False) and r.get('exit') == 139
+        else:
+            checks[f'{name}_{mode}_accounting'] = all(got == (32, 6) for got in sources(name, mode))
+    r = runs.get(('adaptnonlin', 'nonlin'), {})
+    checks['adaptnonlin_window'] = (
+        r.get('linear', {}).get(region_arena(r)) == 0 and
+        adaptive_counts('adaptnonlin', 'nonlin', 3, 27) and
+        [((e[4] - r['region']) // 4096, e[2], e[3]) for e in region_events(r)] ==
+        [(2, 4, 4), (7, 8, 8), (16, 16, 15)])
     # Partial GUP results leave the rest to later faults: every page the walk
     # touched still ends pinned (at least window 1's pins), after more faults
     # than the full window takes.

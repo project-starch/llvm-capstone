@@ -446,6 +446,27 @@ holds the program's own pages, which vary with placement (the allocator's
 address-hashed index in `.bss`) and with windows the quantum cuts. Both
 runners' `--evaluate` re-runs the checks on a saved transcript.
 
+The adaptive window is enabled by default (`fault_ahead_max=64`,
+`fault_ahead_after=2`); `fault_ahead_max=0` disables it. Three consecutive
+faults in a stream start a four-page window, doubled at each continuation
+up to 64 pages. Step-hooks reads `fault_ahead_windows` and
+`fault_ahead_pages` from sysfs before and after each launch and reconciles
+their deltas with `diag_admit` window events. After subtracting other arenas,
+the 32-page walk requires exactly 3 windows / 27 pages and the 512-page
+stream 11 / 499. It also checks continuation after partial GUP and VMA
+clipping, read-only prefetched pages refusing stores, and a NONLIN image
+grant's window and frame accounting. Every configuration must balance Linux's
+FOLL_PIN counters after module unload. The fixed-window checks select the
+kill switch explicitly.
+
+The exact-count cases select the test build's `test_full_window=1`, which
+suppresses scheduling and budget cuts inside the window while retaining all
+page, VMA and backing checks and the window cap. This hook is absent from
+production builds. Separate `adaptdirect` cases and every stop-injection case
+keep the real stop checks: cuts between batches are allowed, but each
+requested window must double up to 64, its next fault must follow the pages
+actually retained, and both sysfs counters must equal the event census exactly.
+
 A write the launcher makes into domain memory on the domain's behalf -- a
 thread's exit word, a worker's meta block and exchange region -- is preceded by
 `CV_TOUCH` over the span, which admits every page of it a lazily admitted arena

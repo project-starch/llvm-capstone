@@ -86,7 +86,10 @@ REQUIRED_ROWS = {
         'resched3:syscalls', 'signal3:walk', 'signal3:syscalls', 'kill1:walk', 'kill2:walk',
         'resched4:walk', 'signal4:walk', 'deadline4:walk', 'kill4:walk', 'short64:walk',
         'short64:seq', 'life16:seq', 'life16:stop', 'life16:vma', 'life16:vmax', 'life16:retire',
-        'life64:seq', 'life64:stop', 'life64:vma', 'life64:vmax', 'life64:retire', 'ro64:rowrite')],
+        'life64:seq', 'life64:stop', 'life64:vma', 'life64:vmax', 'life64:retire', 'ro64:rowrite',
+        'adapt:walk', 'adapt:stream', 'adaptdirect:walk', 'adaptdirect:stream',
+        'adaptres:walk', 'adaptshort:walk', 'adaptclip:clip',
+        'adaptclip:clipx', 'adaptro:clipwrite', 'adaptnonlin:nonlin')],
 }
 # The runtime gate's application rows and the runtime.json tests that judge each.
 RUNTIME_TESTS = {"VM_EXIT:sqlite_write": ("sqlite_write", "sqlite_results"),

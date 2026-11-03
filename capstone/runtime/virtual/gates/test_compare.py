@@ -73,6 +73,12 @@ def run(gate, make_ctl, make_arm):
 
 
 def main():
+    def required(gate, missing=None):
+        def make(g):
+            (g / f'{gate}.log').write_text('PASS fixture\n' + ''.join(
+                f'{row}:0\n' for row in compare.REQUIRED_ROWS[gate] if row != missing))
+        return make
+
     def replace(old, new):
         return lambda lines: [new if l == old else l for l in lines]
 
@@ -84,6 +90,8 @@ def main():
 
     both = lambda edit: (lambda g: runtime(g, edit))
     cases = [
+        ('complete adaptive rows', 'step-hooks', required('step-hooks'), required('step-hooks'), 0),
+        ('complete pthread rows', 'pthread', required('pthread'), required('pthread'), 0),
         ("clean runtime", "runtime", runtime, runtime, 0),
         ("sqlite_write exit 126 on both sides (the kit defect)", "runtime",
          both(replace("VM_EXIT:sqlite_write:0", "VM_EXIT:sqlite_write:126")),
@@ -108,6 +116,10 @@ def main():
         ("memcached fixture never begun, on both sides", "memcached",
          lambda g: memcached(g, skip="fx1"), lambda g: memcached(g, skip="fx1"), 2),
     ]
+    for gate, rows in [('step-hooks', [
+            r for r in compare.REQUIRED_ROWS['step-hooks'] if r.startswith('HOOK_EXIT:adapt')])]:
+        for row in rows:
+            cases.append((f'{row} missing on both sides', gate, required(gate, row), required(gate, row), 2))
     with tempfile.TemporaryDirectory() as t:
         (Path(t) / "a").mkdir(); (Path(t) / "b").mkdir()
         empty = subprocess.run([sys.executable, str(COMPARE), f"{t}/a", f"{t}/b", "--gates", ""],
