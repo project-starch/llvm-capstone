@@ -106,3 +106,20 @@ The bridge shares the wire validator, result-byte calculation, fd positions
 and fcntl/ioctl command policy with the launcher. Writes into transport use
 `touch()` before copying. The trampoline touches neither transport nor domain
 objects. Private bounce and vector mappings have no domain grants.
+
+A review before wider qualification found an aliasing difference: strings in
+the launcher point into transport while output buffers use bounce memory.
+Putting both at their exchange offsets in one native bounce could overwrite a
+pathname when a forged wire request overlaps it with output. Reserve separate
+private slices for strings. Ordinary SDK requests use disjoint wire spans;
+this correction is necessary for arbitrary valid wire requests too.
+
+The new raw-wire contract reproduced this bug before the fix:
+`status=7936 output_size=0`, `FAIL wire`, `native contract failures=1`
+(`contracts-wire-before/contract.log`). After rebuilding the module and running
+the same binary against it, `contracts-wire-final/contract.log` contains all
+24 `PASS` lines, including `PASS wire`, and `native contract failures=0`;
+`after.log` ends `unload_rc=0`. The wire test also rejects malformed flags,
+overflowing lengths, hidden-pointer ioctl, clone, raw sigaction and malformed
+exit requests. Final module SHA256:
+`b66ff16ca270d402dc4f78254e44c47112be52d5b2383438cb201f4b10d804ca`.

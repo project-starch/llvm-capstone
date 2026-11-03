@@ -177,7 +177,12 @@ static long dom_prepare(struct context *c, const struct capstone_delegate_entry 
         unsigned long p;
         if (!d->scratch) d->scratch = (char *)__get_free_page(GFP_KERNEL);
         if (!d->scratch) return -ENOMEM;
-        p = dom_reserve(c->dom_exchange_bytes, PAGE_SIZE, PROT_READ | PROT_WRITE);
+        /* Strings must not alias output buffers: the launcher reads strings
+         * from transport while it writes buffers in bounce memory. Reserve
+         * a private slice per argument to preserve that rule, even for an
+         * adversarial wire request with overlapping offsets. */
+        p = dom_reserve(c->dom_exchange_bytes * (CAPSTONE_DELEGATE_ARGS + 1),
+                        PAGE_SIZE, PROT_READ | PROT_WRITE);
         if (IS_ERR_VALUE(p)) return p;
         d->bounce = p;
     }
@@ -205,6 +210,7 @@ static long dom_prepare(struct context *c, const struct capstone_delegate_entry 
                                   c->dom_exchange_bytes - e->args[i]);
             if (n <= 0 || n > c->dom_exchange_bytes - e->args[i]) return -EFAULT;
             bytes = n;
+            a[i] = d->bounce + c->dom_exchange_bytes * (i + 1);
         }
         if (dom_reads(kind) || kind == CAPSTONE_ARG_STR || kind == CAPSTONE_ARG_OPT_STR) {
             rc = dom_copy(d, a[i], c->dom_exchange + e->args[i], bytes);

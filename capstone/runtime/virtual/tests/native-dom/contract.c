@@ -8,7 +8,56 @@
 #include <sys/stat.h>
 #include <sys/uio.h>
 #include <signal.h>
+#include <capstone/delegate.h>
 #include <unistd.h>
+
+/* Capture the actual initial transport at its assembly service boundary so
+ * malformed-wire tests reach the module without the libc prevalidator. */
+static struct capstone_delegate_entry *wire_meta;
+static char *wire_exchange;
+static size_t wire_bytes;
+extern void __real___capstone_vm_delegate_transport(void *, void *, size_t);
+void __wrap___capstone_vm_delegate_transport(void *meta, void *exchange, size_t bytes)
+{
+    wire_meta = meta; wire_exchange = exchange; wire_bytes = bytes;
+    __real___capstone_vm_delegate_transport(meta, exchange, bytes);
+}
+static long raw(struct capstone_delegate_entry e)
+{
+    struct capstone_delegate_entry saved = *wire_meta;
+    *wire_meta = e;
+    __real___capstone_vm_delegate_transport(wire_meta, wire_exchange, wire_bytes);
+    long result = wire_meta->result;
+    *wire_meta = saved;
+    return result;
+}
+static int wire_checks(void)
+{
+    if (!wire_meta || wire_bytes < 256) return 30;
+    struct capstone_delegate_entry e = {.version = 2, .count = 1,
+        .nr = CAPSTONE_SYS_readlinkat, .flags = 6,
+        .args = {(uint64_t)-100, 16, 16, 128}};
+    strcpy(wire_exchange + 16, "/proc/self/exe");
+    long n = raw(e);
+    if (n <= 0 || n >= 128) return 31;
+    wire_exchange[16 + n] = 0;
+    if (!strstr(wire_exchange + 16, "contract.dom")) return 32;
+    e.nr = CAPSTONE_SYS_openat; e.flags = 0; e.args[2] = O_RDONLY;
+    if (raw(e) != -EINVAL) return 33;
+    e.nr = CAPSTONE_SYS_read; e.flags = 2; e.args[0] = 0;
+    e.args[1] = wire_bytes - 1; e.args[2] = UINT64_MAX;
+    if (raw(e) != -EFAULT) return 34;
+    e.nr = CAPSTONE_SYS_ioctl; e.flags = 0; e.args[1] = 0x5413;
+    if (raw(e) != -ENOSYS) return 35;
+    e.nr = CAPSTONE_SYS_clone;
+    if (raw(e) != -ENOSYS) return 36;
+    e.nr = CAPSTONE_SYS_rt_sigaction;
+    if (raw(e) != -ENOSYS) return 37;
+    e.nr = CAPSTONE_SYS_exit_group; e.count = 0;
+    if (raw(e) != -EINVAL) return 38;
+    e.count = 1; e.flags = 64;
+    return raw(e) != -EINVAL ? 39 : 0;
+}
 
 static int output(const char *p, size_t n)
 {
@@ -78,6 +127,7 @@ int main(int argc, char **argv)
         errno = 0;
         return !getcwd(cwd, sizeof cwd) || strcmp(cwd, "/tmp");
     }
+    if (!strcmp(argv[1], "wire")) return wire_checks();
     if (!strcmp(argv[1], "files")) {
         int fd = open("/tmp/native-file", O_CREAT | O_TRUNC | O_RDWR, 0600);
         char b[12] = {0};

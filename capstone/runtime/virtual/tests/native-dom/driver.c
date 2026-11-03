@@ -92,7 +92,7 @@ int main(int argc, char **argv)
     simple("mmap", 0, 0); simple("read", 0, 4); simple("unsupported", 0, 0);
     simple("protect-refuse", 0, 0); simple("bad-fd", 0, 0);
     simple("startup", 0, 0); simple("files", 0, 0);
-    simple("private-fd", 0, 0); simple("signal-mask", 0, 0); simple("exit", 37, 0); signals();
+    simple("wire", 0, 0); simple("private-fd", 0, 0); simple("signal-mask", 0, 0); simple("exit", 37, 0); signals();
     refused("truncated", ENOEXEC); refused("marker", ENOEXEC);
     refused("overflow", ENOEXEC); refused("wx", ENOEXEC); refused("setuid", EACCES);
     printf("native contract failures=%d\n", failures);
