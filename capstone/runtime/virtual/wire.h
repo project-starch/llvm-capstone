@@ -89,4 +89,14 @@ struct cv_touch {
  * denies writers to it (ETXTBSY, as Linux does for a running executable) until
  * the context is released, so the bytes validated are the bytes loaded. */
 #define CV_IMAGE _IOW('V', 28, __s32)
+/* Lane AB experiment (experiment/in-module-io): the launcher's private descriptors -- the image,
+ * the device, the spawner socket -- which the module's in-module I/O (capstone_vm.c inline_io)
+ * must never serve on the domain's behalf, as the launcher's own validator refuses them (EBADF).
+ * Registered once, before the first entry; until then the module serves no call itself. */
+#define CV_IO_PRIVATE_MAX 16
+struct cv_io_private {
+    __u64 count;
+    __s32 fds[CV_IO_PRIVATE_MAX];
+};
+#define CV_IO_PRIVATE _IOW('V', 30, struct cv_io_private)
 #endif

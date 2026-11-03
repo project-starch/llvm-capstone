@@ -1110,6 +1110,20 @@ static int virtual_service(uint64_t tid, struct cv_step *step)
     return 0;
 }
 
+/* Lane AB experiment (experiment/in-module-io): the descriptors the module's in-module I/O must
+ * never serve for the domain -- the ones this launcher's validator refuses (private_fd(): the
+ * image, the device, the spawner socket). Once, before the first entry; a module without the
+ * ioctl answers ENOTTY and serves nothing itself, which is today's behaviour. */
+static void io_private_register(void)
+{
+    struct cv_io_private r = {0};
+    for (unsigned i = 0; i < host.private_count && r.count < CV_IO_PRIVATE_MAX; ++i)
+        r.fds[r.count++] = host.private_fds[i];
+    if (spawner.socket >= 0 && r.count < CV_IO_PRIVATE_MAX) r.fds[r.count++] = spawner.socket;
+    if (ioctl(device, CV_IO_PRIVATE, &r) && trace)
+        fprintf(stderr, "CAPSTONE_VM_IO_PRIVATE errno=%d (in-module I/O off)\n", errno);
+}
+
 static int virtual_service_loop(uint64_t tid)
 {
     struct cv_step step = {.thread = tid};
@@ -1263,6 +1277,7 @@ int main(int argc, char **argv)
     }
     host.exchange = exchange; host.exchange_bytes = exchange_bytes;
     host.private_fds[host.private_count++] = device;
+    io_private_register();
     capstone_signals_settle_libc();
     capstone_signals_init(&host.signals, (void *)((char *)meta + CAPSTONE_SIGNAL_OFFSET));
     if ((error = capstone_delegate_seccomp())) { errno = error; return die("seccomp"); }
