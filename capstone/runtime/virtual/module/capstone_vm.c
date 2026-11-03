@@ -1240,6 +1240,11 @@ static int add(struct context *c, struct cv_thread *t, struct cv_map *r)
      * record, its ID slot and its page array are charged to the process's
      * memory cgroup: there is no count limit, only the registered-bytes one,
      * and a million single-page arenas fit under it. */
+    /* An arena id names one registration for the context's whole life: the launcher releases
+     * a worker's transport hold only on the id it recorded at the attachment (exec.c,
+     * transport_mapping), so ids are never reused. The counter advances only on success and
+     * would wrap after 2^64 registrations; the registration that would wrap it is refused. */
+    if (c->next_id == U64_MAX) return -ENOSPC;
     a = kzalloc(sizeof(*a), GFP_KERNEL_ACCOUNT);
     if (!a) return -ENOMEM;
     a->id = c->next_id + 1;
