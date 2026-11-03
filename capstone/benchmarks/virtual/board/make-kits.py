@@ -140,7 +140,7 @@ for ki, k in enumerate(kits):
                         f'echo "@@PERF-END {n} {p} {arm} {proc} K{kk} rc=$rc stderr_lines=$(wc -l </tmp/perf.err)"; '
                         'rm -f /tmp/perf.err\n')
                 continue
-            f.write(f'echo "@@PERF-BEGIN {n} {p} {arm} {proc} K{kk}"; ./capstone-vexec ./{arm}/{p}.K{kk}.dom {args} 2>/tmp/perf.err; rc=$?; '
+            f.write(f'echo "@@PERF-BEGIN {n} {p} {arm} {proc} K{kk}"; CAPSTONE_VM_GRANTS=1 ./capstone-vexec ./{arm}/{p}.K{kk}.dom {args} 2>/tmp/perf.err; rc=$?; '
                     f'echo "@@PERF-END {n} {p} {arm} {proc} K{kk} rc=$rc stderr_lines=$(wc -l </tmp/perf.err) '
                     f'$(dmesg | grep \'capstone_vm: bench\' | tail -1 | sed \'s/.*capstone_vm: //\')"; rm -f /tmp/perf.err\n')
         f.write(f'echo "@@PERF-{name.upper()}-DONE"\n')

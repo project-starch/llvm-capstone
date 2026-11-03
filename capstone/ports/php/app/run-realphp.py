@@ -445,7 +445,7 @@ def app_output(lines):
     """The application's own stdout: kernel console lines, the VM's stats line and the
     launcher's own diagnostics removed.
 
-    The launcher prints one CAPSTONE_VM_ADD_OK line per grant it makes -- thousands on a
+    The launcher (under CAPSTONE_VM_GRANTS) prints one CAPSTONE_VM_ADD_OK line per grant it makes -- thousands on a
     large case -- onto the same console. They are the platform talking, not PHP, and they
     were reaching the oracle comparison: a case whose PHP output matched the pristine record
     exactly was reported as diverging, and the divergence note then stood beside its verdict

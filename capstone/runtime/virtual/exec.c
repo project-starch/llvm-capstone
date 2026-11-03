@@ -56,6 +56,20 @@ static pthread_mutex_t thread_state_lock = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t thread_state_cond = PTHREAD_COND_INITIALIZER;
 static unsigned long long launch_ns, start_ns;
 static int trace;
+/* CAPSTONE_VM_GRANTS (or the trace): one CAPSTONE_VM_ADD_OK line per admitted grant. Off by
+ * default: a gcc test run admits ~400 grants, and each line is an unbuffered write(2) to wherever
+ * stderr goes -- a 9p file in a harness that does not redirect it. */
+static int grants;
+/* CV_STEP returns by kind (1 quantum, 3 service, 4 fault, else other) and services by their
+ * vm-abi.h number (CV_SERVICE_DELEGATE 0 .. CV_SERVICE_REMAP 13; not Linux syscall numbers),
+ * for the CAPSTONE_VM_STEPS line: which exits the step protocol actually makes, and how many. A
+ * number above the last service counts as other. A retried EINTR/EAGAIN is not a return.
+ * Relaxed atomics on both sides: every virtual thread's loop counts, and the main thread reads
+ * at exit while a worker may still be returning. */
+#define STEP_SERVICE_COUNT (CV_SERVICE_REMAP + 1)
+static unsigned long step_kinds[8], step_services[STEP_SERVICE_COUNT + 1];
+static unsigned long step_count(const unsigned long *counter)
+{ return __atomic_load_n(counter, __ATOMIC_RELAXED); }
 static void *meta;
 static void *virtual_thread_worker(void *opaque);
 
@@ -166,14 +180,37 @@ static void *reserve(size_t bytes)
     if (tail) munmap((void *)(base + bytes), tail);
     return private_pages((void *)base, bytes);
 }
+/* A per-process virtual-address cursor for aligned arenas, growing DOWN. It is seeded by the
+ * first over-map-and-trim reservation and holds the base of the most recently placed arena;
+ * thereafter each arena is tried at the next `alignment`-aligned slot below the previous one. */
+static uintptr_t aligned_cursor;
 static void *reserve_aligned(size_t bytes, size_t alignment)
 {
-    /* mmap() promises page alignment only. Over-map by the worst-case distance to the next
-     * alignment boundary -- the raw base is already page-aligned, so that is alignment - 4096
-     * -- then trim both ends, leaving EXACTLY `bytes` mapped. Mapping exactly `bytes` is the
-     * point: remap_mapping() below matches a heap on m->bytes == m->visible, so a padded heap
-     * can never grow. At alignment == 4096 the slack is zero and this reduces to a plain
-     * mmap() of `bytes`, which is what the heap path used to do. */
+    /* Fast path: place the arena at the cursor with MAP_FIXED_NOREPLACE, so the kernel confirms
+     * the slot is free with one maple-tree probe instead of running its top-down free-area search
+     * (mas_empty_area_rev). Nothing about the mapping or its registration changes -- same bytes,
+     * same PROT_READ|PROT_WRITE, same madvise via private_pages(), and the base is aligned to
+     * `alignment` (>= the bounds granule) exactly as the trim path below produces, so grant()'s
+     * representability check and the CV_ADD are identical; only HOW the free virtual range is found
+     * differs. A taken hint -- EEXIST, or an older kernel without MAP_FIXED_NOREPLACE handing back
+     * a different address -- falls back to the trim path and reseeds the cursor, so two arenas can
+     * never land at one address and correctness never depends on the hint being honoured. */
+    if (aligned_cursor > bytes) {
+        uintptr_t hint = (aligned_cursor - bytes) & ~(uintptr_t)(alignment - 1);
+        if (hint) {
+            void *p = mmap((void *)hint, bytes, PROT_READ | PROT_WRITE,
+                           MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED_NOREPLACE, -1, 0);
+            if (p == (void *)hint) { aligned_cursor = hint; return private_pages(p, bytes); }
+            if (p != MAP_FAILED) munmap(p, bytes);
+        }
+    }
+    /* Fallback / first call. mmap() promises page alignment only. Over-map by the worst-case
+     * distance to the next alignment boundary -- the raw base is already page-aligned, so that is
+     * alignment - 4096 -- then trim both ends, leaving EXACTLY `bytes` mapped. Mapping exactly
+     * `bytes` is the point: remap_mapping() below matches a heap on m->bytes == m->visible, so a
+     * padded heap can never grow. At alignment == 4096 the slack is zero and this reduces to a
+     * plain mmap() of `bytes`, which is what the heap path used to do. Seed the cursor at the base
+     * so the next arena is placed just below this one. */
     size_t slack = alignment - 4096;
     char *raw = mmap(NULL, bytes + slack, PROT_READ | PROT_WRITE,
                      MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
@@ -182,6 +219,7 @@ static void *reserve_aligned(size_t bytes, size_t alignment)
     if (base != (uintptr_t)raw) munmap(raw, base - (uintptr_t)raw);
     size_t tail = (uintptr_t)raw + bytes + slack - (base + bytes);
     if (tail) munmap((void *)(base + bytes), tail);
+    aligned_cursor = base;
     return private_pages((void *)base, bytes);
 }
 /* The highest mapping starting at or below p, or NULL. */
@@ -263,12 +301,16 @@ static int grant(void *base, size_t bytes, unsigned reg, unsigned perms,
         return -1;
     }
     /* Every ADMITTED grant, in order, so two modules' grant sequences can be diffed. The
-     * refusal side is already printed; without the success side a diff cannot say WHICH grant
-     * first differs, only that something did. */
+     * refusal side is always printed; without the success side a diff cannot say WHICH grant
+     * first differs, only that something did. Asked for with CAPSTONE_VM_GRANTS=1 (or the
+     * trace), unlike the refusal: at one write(2) per grant it is the launcher's largest
+     * stderr traffic, and no runtime gate parses it. The board lane's parsers and the
+     * benchmark console audit set it. */
     /* slot= is the number of mappings registered before this one: the old array slot until the
      * first unmap, so the image's grant still reads slot=0 for the board lane's parsers. */
-    fprintf(stderr, "CAPSTONE_VM_ADD_OK slot=%zu base=0x%lx bytes=%zu reg=%u perms=%u linear=%d\n",
-            map_count, (unsigned long)(uintptr_t)base, bytes, reg, perms, linear);
+    if (grants)
+        fprintf(stderr, "CAPSTONE_VM_ADD_OK slot=%zu base=0x%lx bytes=%zu reg=%u perms=%u linear=%d\n",
+                map_count, (unsigned long)(uintptr_t)base, bytes, reg, perms, linear);
     map_insert((struct mapping){.address = base, .bytes = bytes, .visible = bytes,
                                 .id = r.id, .heap = linear,
                                 .kind = linear ? CV_MAP_HEAP : -1});
@@ -881,13 +923,34 @@ static int virtual_service(uint64_t tid, struct cv_step *step)
         if (h->exiting) {
             struct cv_stats stats;
             if (tid == 0 && (getenv("CAPSTONE_VM_STATS") || getenv("CAPSTONE_DELEGATE_STATS")) &&
-                !ioctl(device, CV_STATS, &stats))
+                !ioctl(device, CV_STATS, &stats)) {
                 fprintf(stderr, "CAPSTONE_VM_STATS arenas=%llu pages=%llu peak=%llu nodes=%llu steps=%llu faults=%llu collections=%llu reclaimed=%llu rounds=%llu bytes_in=%llu bytes_out=%llu node_bytes=%llu node_capacity=%llu node_growths=%llu launch_ns=%llu elapsed_ns=%llu\n",
                     stats.arenas, stats.pinned_pages, stats.peak_pages, stats.nodes, stats.steps,
                     stats.faults, stats.collections, stats.reclaimed, (unsigned long long)host.rounds,
                     (unsigned long long)host.bytes_in, (unsigned long long)host.bytes_out,
                     stats.node_bytes, stats.node_capacity, stats.node_growths,
                     launch_ns, now_ns() - start_ns);
+                /* Its own line: the STATS line's fields are all integers, and its collectors
+                 * int() every value. The service keys are vm-abi.h CV_SERVICE_* ids. */
+                fprintf(stderr, "CAPSTONE_VM_STEPS quantum=%lu service=%lu fault=%lu other=%lu"
+                                " service0_delegate=%lu service1_map=%lu service2_unmap=%lu"
+                                " service3_thread_create=%lu service4_thread_exit=%lu"
+                                " service5_thread_join=%lu service6_protect=%lu service7_wait=%lu"
+                                " service8_futex=%lu service9_pthread_exit=%lu"
+                                " service10_thread_delegate=%lu service11_thread_self=%lu"
+                                " service12_nodes=%lu service13_remap=%lu service_other=%lu\n",
+                    step_count(&step_kinds[1]), step_count(&step_kinds[3]), step_count(&step_kinds[4]),
+                    step_count(&step_kinds[0]) + step_count(&step_kinds[2]) + step_count(&step_kinds[5]) +
+                        step_count(&step_kinds[6]) + step_count(&step_kinds[7]),
+                    step_count(&step_services[0]), step_count(&step_services[1]),
+                    step_count(&step_services[2]), step_count(&step_services[3]),
+                    step_count(&step_services[4]), step_count(&step_services[5]),
+                    step_count(&step_services[6]), step_count(&step_services[7]),
+                    step_count(&step_services[8]), step_count(&step_services[9]),
+                    step_count(&step_services[10]), step_count(&step_services[11]),
+                    step_count(&step_services[12]), step_count(&step_services[13]),
+                    step_count(&step_services[STEP_SERVICE_COUNT]));
+            }
             /* The image's identity on a run that ENDS, not only on one that faults: a
              * transcript that carries no digest cannot be tied to the image it claims to be
              * from, and a judge that reads a probe's successful run (the putenv probe) has
@@ -944,6 +1007,11 @@ static int virtual_service_loop(uint64_t tid)
     for (;;) {
         while (ioctl(device, CV_STEP, &step))
             if (errno != EINTR && errno != EAGAIN) return die("step");
+        __atomic_fetch_add(&step_kinds[step.kind < 8 ? step.kind : 7], 1, __ATOMIC_RELAXED);
+        if (step.kind == 3)
+            __atomic_fetch_add(&step_services[step.args[7] < STEP_SERVICE_COUNT
+                                                  ? step.args[7] : STEP_SERVICE_COUNT],
+                               1, __ATOMIC_RELAXED);
         step.reply = 0;
         if (step.kind == 1) {
             /* The supervisor quantum is the preemption point. Yielding here
@@ -1029,6 +1097,7 @@ int main(int argc, char **argv)
     if (reserve_stdio(&stdio_mask)) return 125;
     start_ns = now_ns();
     trace = getenv("CAPSTONE_VM_TRACE") != NULL;
+    grants = trace || getenv("CAPSTONE_VM_GRANTS") != NULL;
     struct capstone_application_descriptor_v2 desc;
     char resumed_path[64];
     if (resumed.magic) snprintf(resumed_path, sizeof resumed_path, "/proc/self/fd/%d", resumed.image);
