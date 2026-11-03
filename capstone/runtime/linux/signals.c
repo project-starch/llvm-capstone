@@ -221,24 +221,63 @@ static int ignored_now(int sig) {
 #endif
 }
 
-/* glibc sets up its internal signals once per process, at its first
-   pthread_create, and installs its own handler on 33 then, over whatever the
-   domain installed. Have it happen now, before any domain disposition, and
-   put back what the process was started with. */
-static void *nothing(void *arg) { return arg; }
-void capstone_signals_settle_libc(void) {
+/* Keep libc's first pthread initialization ahead of any domain use of its
+ * reserved signals. Ordinary signals stay blocked in the temporary worker:
+ * it has no domain context to receive their events. */
+#define LIBC_SIGNALS (UINT64_C(7) << 31) /* glibc 32/33; musl also uses 34 */
 #if defined(__riscv) && __riscv_xlen == 64
-  struct { void *handler; unsigned long flags; uint64_t mask; } k[2];
-  int got[2];
-  for (int i = 0; i < 2; ++i)
-    got[i] = syscall(SYS_rt_sigaction, 32 + i, NULL, &k[i], sizeof k[i].mask) == 0;
+static void *nothing(void *arg) { return arg; }
+static int settle_libc(void) {
+  struct { void *handler; unsigned long flags; uint64_t mask; } k[3];
+  uint64_t all = ~UINT64_C(0), previous;
+  int error = 0, saved = 0;
+  if (syscall(SYS_rt_sigprocmask, SIG_SETMASK, &all, &previous, sizeof previous))
+    return errno;
+  for (; saved < 3; ++saved)
+    if (syscall(SYS_rt_sigaction, 32 + saved, NULL, &k[saved], sizeof k[saved].mask)) {
+      error = errno;
+      goto restore;
+    }
   pthread_t t;
-  if (!pthread_create(&t, NULL, nothing, NULL))
-    pthread_join(t, NULL);
-  for (int i = 0; i < 2; ++i)
-    if (got[i])
-      syscall(SYS_rt_sigaction, 32 + i, &k[i], NULL, sizeof k[i].mask);
+  error = pthread_create(&t, NULL, nothing, NULL);
+  if (!error) error = pthread_join(t, NULL);
+restore:
+  for (int i = 0; i < saved; ++i)
+    if (syscall(SYS_rt_sigaction, 32 + i, &k[i], NULL, sizeof k[i].mask))
+      error = errno;
+  if (syscall(SYS_rt_sigprocmask, SIG_SETMASK, &previous, NULL, sizeof previous))
+    error = errno;
+  return error;
+}
 #endif
+
+int capstone_signals_settle_libc(void) {
+#if defined(__riscv) && __riscv_xlen == 64
+  static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
+  static int settled;
+  int error = pthread_mutex_lock(&lock);
+  if (error) return error;
+  if (!settled) {
+    error = settle_libc();
+    if (!error) settled = 1;
+  }
+  pthread_mutex_unlock(&lock);
+  return error;
+#else
+  return 0;
+#endif
+}
+
+int capstone_signals_prepare_libc(void) {
+#if defined(__riscv) && __riscv_xlen == 64
+  uint64_t mask;
+  if (syscall(SYS_rt_sigprocmask, SIG_BLOCK, NULL, &mask, sizeof mask)) return errno;
+  /* An inherited reserved-signal mask or ignored disposition must be settled
+   * before the application starts, just like its later explicit changes. */
+  if ((mask & LIBC_SIGNALS) || ignored_now(32) || ignored_now(33) || ignored_now(34))
+    return capstone_signals_settle_libc();
+#endif
+  return 0;
 }
 
 void capstone_signals_init(struct capstone_signal_state *s, struct capstone_signal_block *block) {
@@ -295,6 +334,10 @@ long capstone_signals_action(struct capstone_signal_state *s, int signo, unsigne
   if (signo < 1 || signo > CAPSTONE_SIGNAL_MAX || signo == SIGKILL || signo == SIGSTOP ||
       cls > CAPSTONE_SIGNAL_CAUGHT)
     return -EINVAL;
+  if (bit(signo) & LIBC_SIGNALS) {
+    int error = capstone_signals_settle_libc();
+    if (error) return -error;
+  }
   if (cls == CAPSTONE_SIGNAL_CAUGHT)
     /* Linux decides restart against EINTR, resets a one-shot disposition and
        applies the child options; the trampoline records under all signals
@@ -321,6 +364,12 @@ long capstone_signals_procmask(struct capstone_signal_state *s, int how, const u
                                uint64_t *old) {
   uint64_t previous = s->logical;
   if (set) {
+    if (how != SIG_BLOCK && how != SIG_UNBLOCK && how != SIG_SETMASK)
+      return -EINVAL;
+    if (*set & LIBC_SIGNALS) {
+      int error = capstone_signals_settle_libc();
+      if (error) return -error;
+    }
     uint64_t m = *set & ~(bit(SIGKILL) | bit(SIGSTOP));
     switch (how) {
     case SIG_BLOCK: s->logical |= m; break;

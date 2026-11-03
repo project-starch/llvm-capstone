@@ -460,6 +460,23 @@ stack or frame mapping its exit gives back, since the word is stored after
 those unmaps. The error exit does not unmap: Linux releases the mappings after
 exit_group has stopped every worker.
 
+Each application still enters through a fresh launcher process. Argument and
+exec-resume decoding precede `launch_application()`, which owns the device,
+image registration and domain mappings. The launcher defers libc's temporary
+pthread initialization until the first domain worker or a signal action/mask
+using signals 32..34. Inherited state for those signals triggers initialization
+before domain entry. Ordinary single-threaded applications therefore avoid the
+temporary worker. Initialization blocks ordinary signals in that worker,
+restores the caller's mask and reserved dispositions, and reports failures
+without marking initialization complete. `signal-libc-test` checks this on
+native RV64 Linux under the seccomp filter, including failure and retry; its
+native CMake test skips other architectures.
+
+The spawner remains a separate, unfiltered helper for native children. Every
+domain launcher installs its seccomp policy before entry and establishes its
+own module context, image write denial and grants. No application state or
+module context is shared through a persistent launcher.
+
 The launcher validates and loads an image without copying the file first. It
 opens the image read-only and asks the module (`CV_IMAGE`) to deny writers to
 it, as Linux does for a running executable: a launch while the image is open

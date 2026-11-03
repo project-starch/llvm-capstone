@@ -10,14 +10,23 @@ paused capability register state.
 
 ## Startup
 
-1. The launcher validates the application's ELF/profile marker and maps its
-   image, stack, startup data and service transport into its Linux `mm`.
-2. The module creates a private lifetime table and the main context frame.
+1. A fresh launcher decodes arguments and exec-resume state. It opens the
+   application and starts or adopts its unfiltered native-process spawner.
+2. Opening the module creates a private lifetime table and main context frame.
    It binds the device instance to the owning `mm`; another namespace for
    that same `mm` is refused.
-3. For each registered range, `CSMINT` creates a private ancestor and a child
-   grant. The module retains the ancestor ID and prepares initial capabilities.
-4. Through `CV_STEP`, the module invokes `CSRUNV`. The processor consumes
+3. `CV_IMAGE` establishes image write denial before ELF/profile validation
+   and loading. The launcher maps the image, stack, startup data and service
+   transport into its Linux `mm`. For each registered range, `CSMINT` creates
+   a private ancestor and a child grant. The module retains the ancestor ID
+   and prepares initial capabilities.
+4. Signal state is initialized and seccomp installed before domain entry.
+   Libc's temporary pthread is deferred until a real worker or use of its
+   reserved signals requires it; inherited reserved-signal state requires it
+   at startup. Dispositions and masks survive that initialization. The
+   [launcher contract](../../../runtime/virtual/README.md) describes the path
+   and its native RV64 test. Every process retains its own context and grants.
+5. Through `CV_STEP`, the module invokes `CSRUNV`. The processor consumes
    the initial capability slots, binds the page-table and lifetime roots,
    and starts the application's CRT and `main`.
 

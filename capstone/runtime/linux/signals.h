@@ -81,10 +81,15 @@ void capstone_signals_attach(struct capstone_signal_state *s);
 /* The calling thread serves no context from now on: every signal blocked. */
 void capstone_signals_detach(void);
 
-/* Once, before any domain disposition: glibc's one-time setup of its internal
-   signals (its first pthread_create installs a handler on 33), with the
-   dispositions the process started with put back. */
-void capstone_signals_settle_libc(void);
+/* Before domain entry, settle libc only if reserved signals have inherited
+ * state. Ordinary single-threaded applications need no temporary worker. */
+int capstone_signals_prepare_libc(void);
+
+/* Before the first real worker, or any domain change to signals 32..34:
+ * perform libc's one-time pthread setup, preserving dispositions and the
+ * calling thread's mask. Calls are serialized; a failed attempt may retry.
+ * Returns zero or a positive errno. */
+int capstone_signals_settle_libc(void);
 
 /* The calling thread's kernel mask, bypassing the C library, which keeps two
  * of the signals a domain's libc uses (32 and 33, musl's timer and cancel

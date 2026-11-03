@@ -800,8 +800,8 @@ static long exec_in_place(void) {
   return -error;
 }
 
-/* The domain's main stack, as reserved and granted in main(): the bounds the frame walk below
- * checks every read against. */
+/* The domain's main stack, as reserved and granted in launch_application():
+ * the bounds the frame walk below checks every read against. */
 static void *domain_stack;
 static size_t domain_stack_bytes;
 
@@ -876,7 +876,10 @@ static int virtual_service(uint64_t tid, struct cv_step *step)
         step->result = tid + 1; /* zero remains the wire lock's vacant value */
     } else if (step->args[7] == CV_SERVICE_THREAD_CREATE) {
         struct cv_thread_create request = {.frame = step->args[0]};
-        if (ioctl(device, CV_THREAD_CREATE, &request)) {
+        int signal_error = capstone_signals_settle_libc();
+        if (signal_error) {
+            step->result = -signal_error;
+        } else if (ioctl(device, CV_THREAD_CREATE, &request)) {
             step->result = -errno;
         } else if (thread_add(request.thread)) {
             struct cv_thread_control rollback = {.thread = request.thread};
@@ -1237,7 +1240,7 @@ static int launch_application(const char *path, int argc, char **argv,
     }
     host.exchange = exchange; host.exchange_bytes = exchange_bytes;
     host.private_fds[host.private_count++] = device;
-    capstone_signals_settle_libc();
+    if ((error = capstone_signals_prepare_libc())) { errno = error; return die("signal initialization"); }
     capstone_signals_init(&host.signals, (void *)((char *)meta + CAPSTONE_SIGNAL_OFFSET));
     if ((error = capstone_delegate_seccomp())) { errno = error; return die("seccomp"); }
     for (int fd = 0; fd < 3; ++fd) if (!(stdio_mask & (1u << fd))) close(fd);

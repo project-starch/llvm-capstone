@@ -89,6 +89,14 @@ if(BUILD_TESTING AND NOT CMAKE_CROSSCOMPILING)
   target_link_libraries(signal-service-test PRIVATE Capstone::Delegate)
   add_test(NAME signal-service COMMAND signal-service-test)
   set_tests_properties(signal-service PROPERTIES TIMEOUT 30)
+  add_executable(signal-libc-test ../tests/application/signal-libc-test.c
+    ../linux/delegate-service.c ../linux/spawner.c ../linux/signals.c ../linux/stub.S
+    ../linux/park.c)
+  target_compile_options(signal-libc-test PRIVATE -UNDEBUG)
+  target_link_options(signal-libc-test PRIVATE -Wl,--wrap=pthread_create)
+  target_link_libraries(signal-libc-test PRIVATE Capstone::Delegate Threads::Threads)
+  add_test(NAME signal-libc COMMAND signal-libc-test)
+  set_tests_properties(signal-libc PROPERTIES TIMEOUT 30 SKIP_RETURN_CODE 77)
   add_executable(signal-overflow-test ../tests/application/signal-overflow-test.c
     ../linux/signals.c ../linux/stub.S)
   target_link_libraries(signal-overflow-test PRIVATE Capstone::Delegate)

@@ -653,7 +653,8 @@ int main(int argc, char **argv) {
     fprintf(argc < 2 ? stderr : stdout, "usage: capstone-exec [--] PROGRAM [ARG...]\n       capstone-exec --stats\n");
     return argc < 2 ? 2 : 0;
   }
-  capstone_signals_settle_libc();
+  int signal_error = capstone_signals_settle_libc();
+  if (signal_error) { errno = signal_error; perror("capstone-exec: signal initialization"); return 125; }
   if (resumed.magic)
     capstone_signals_set_kernel_mask(resumed.mask);   /* exec in place: the caller's mask */
   struct execution e = {.image = -1, .path = app_args ? argv[2] : argv[1],
