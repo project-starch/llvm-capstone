@@ -79,6 +79,10 @@ if [ -n "$MODPARAMS" ]; then
   vm exec -- sh -c "rmmod capstone_vm && insmod /mnt/control/module $MODPARAMS && $SECS" > "$OUT/module-sections.txt" 2>&1 \
     || { echo "module reload failed"; cat "$OUT/module-sections.txt"; exit 4; }
 fi
+if [ "${DOM_ARM:-}" = native ]; then
+  vm exec -- sh -c 'echo 0 > /proc/sys/fs/binfmt_misc/status && cat /proc/sys/fs/binfmt_misc/status' \
+    > "$OUT/native-exec.txt" 2>&1 || exit 4
+fi
 # the window files' indices (complete .tsv and .invalid alike): an invocation's window is the one
 # new .tsv index; a failure leaves none, and a crash inside a window leaves it open (closed below)
 nwin() { find "$OUT/capprof" -maxdepth 1 -name 'window-*' ! -name '*.part*' -printf '%f\n' | sed 's/window-\([0-9]*\)\.\(tsv\|invalid\)/\1:\2/' | sort -n | tr '\n' ' '; }

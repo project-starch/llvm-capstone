@@ -62,12 +62,14 @@ already able to ptrace this task is outside this boundary.
 Existing files are opened from the checked, pinned dentry. Creation forces
 `O_EXCL` so a racing device or symlink cannot be opened. Truncation follows inode
 validation. Stat calls use a private temporary O_PATH fd and `AT_EMPTY_PATH`;
-the fd is closed before re-entry. Unlink locks the pinned parent and removes one
+the fd is closed before re-entry. Out-of-grant metadata lookups return ENOENT
+without exposing whether a host path exists; opens still return EACCES. Unlink locks the pinned parent and removes one
 leaf without following it. Other path operations return ENOSYS. Open flags are
 explicitly restricted, including refusal of O_PATH and O_TMPFILE requests.
 
 A per-context bitmap grants at most 1,024 fd numbers. Only safe inherited stdio
-(ordinary files on the admitted filesystems, anonymous pipes or `/dev/null`) is
+(ordinary files on the admitted filesystems, anonymous pipes, `/dev/null` or
+`/dev/console`) is
 initially granted. All other inherited fds, including directories, sockets,
 process-memory files and device handles, are inaccessible. New descriptors come
 only from the broker; close revokes the grant before scalar dispatch. Thread
@@ -116,13 +118,13 @@ arguments. Existing inherited seccomp filters still apply.
 | `/proc/self/fd`, cwd, root, exe; thread-self and pid aliases | Magic links and all other symlinks are refused before opening. Absolute paths outside the cwd grant fail. Symlink aliases and an inherited proc directory fd are probed. Numeric pid paths follow the same rule. |
 | Inherited proc/device fds; fd reuse and vector I/O | Only safe stdio is granted. Every I/O fd is checked, including scalar/vector, sendfile/copy-file-range positions and module read/write. Probes include unsafe fd 0, fd 9, directory fd 8, read/write/pread/pwrite/readv/writev/fstat and closed-fd reuse. |
 | `process_vm_readv/writev`, ptrace | Absent from the allowlist; raw-wire refusals are tested. Capability-aware external ptrace remains unresolved. |
-| Raw mmap, mprotect, munmap, mremap, brk, madvise | Absent from the allowlist. Raw-wire refusals and the dedicated PROTECT service against the actual scalar trampoline address are tested. Existing contracts exercise owned map/unmap and invalid protect ranges. |
+| Raw mmap, mprotect, munmap, mremap, brk, madvise | Absent from the allowlist. Raw-wire refusals and the dedicated PROTECT and UNMAP services against the actual scalar trampoline address are tested. Existing contracts exercise owned map/unmap and invalid protect ranges. |
 | prctl, personality, execve/execveat | Absent, with raw-wire refusal probes. No name-space, credentials, memory-policy, executable or native handler changes are exposed. |
 | io_uring, userfaultfd, perf_event_open, bpf | All entry points absent; raw-wire probes. No retained userspace pointers or kernel execution interface admitted. |
 | Arbitrary-fd ioctl and hidden pointers | Untrusted descriptors fail the grant check; only the two fd close-on-exec commands are admitted. Scalar and buffered TIOCSTI probes are refused. No device-specific ioctl dispatch is exposed. |
 | Signals to self or others | kill/tkill/tgkill, timers, sigreturn, altstack and raw sigaction are absent; probes cover them. F_SETOWN/F_SETFL O_ASYNC are refused. Caught handlers are unsupported. External Linux stop/continue/termination remain covered by contracts. |
 | fork/clone/clone3, threads, descriptor passing | Absent, with raw-wire clone/clone3/socket/recvmsg probes and a libc fork refusal contract. No shared-fd-table races are allowed. |
-| General path calls, symlinks, hard links, mounts, devices | Only brokered open/unlink/stat are admitted. Parent traversal, symlink aliases, a nested proc mount, memory/null device nodes, link/symlink/mknod/rename/chdir/fchdir and raw openat2 are probed. New mount/namespace and other unknown syscalls default to ENOSYS. |
+| General path calls, symlinks, hard links, mounts, devices | Only brokered open/unlink/stat are admitted. Parent traversal, symlink aliases, a nested proc mount, memory/null device nodes, link/symlink/mknod/rename/chdir/fchdir and raw openat2 are probed. Mount/namespace, open-by-handle and pidfd_getfd probes are also refused; unknown syscalls default to ENOSYS. |
 | Ordinary output pointers and nested arguments | Shared shape validation, private bounce memory and rebuilt iovecs; strings have independent slices. Overlapping pathname/stat-output wire probe and malformed lengths/flags remain in the contracts. Nested messages and arbitrary pointer-bearing commands are refused. |
 
 The checked boundary prevents the demonstrated domain-to-scalar memory channel

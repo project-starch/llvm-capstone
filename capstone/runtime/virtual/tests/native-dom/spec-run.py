@@ -54,7 +54,9 @@ records = [json.loads(p.read_text()) for p in sorted((CENSUS / 'invocations').gl
 records = [r for r in records if r.get('route') in ('guest', 'guest-plain', 'host-spec-tool')]
 expected = sum(r['route'] != 'host-spec-tool' for r in records)
 expected_oracles = sum(r['route'] == 'host-spec-tool' for r in records)
-if not expected or not expected_oracles or any(r.get('rc') != 0 for r in records):
+if not expected or not expected_oracles or any(
+        r.get('rc', r.get('status')) != 0 or
+        ('rc' in r and 'status' in r and r['rc'] != r['status']) for r in records):
     sys.exit('UNRESOLVED: census must contain successful invocations and SPEC oracles')
 for group in ('all', 'test'):
     inputs = SPEC / 'benchspec/CPU' / BENCH / 'data' / group / 'input'
@@ -108,7 +110,22 @@ try:
         if sha(exe) != r['exe_sha256']: raise RuntimeError('census executable identity changed')
         ident = f'{n:04d}'
         must('exec', '--', 'sh', '-c', f'cp {shlex.quote(guest(exe))} /tmp/program && chmod +x /tmp/program')
-        args = [guest(Path(a)) if a.startswith(str(Path.home()) + '/') else a for a in r['argv'][1:]]
+        args = []
+        staged = []
+        for a in r['argv'][1:]:
+            if a.startswith(str(SPEC) + '/'):
+                # Some SPEC validators receive absolute reference-input paths.
+                # Copy only that immutable input into the explicit cwd grant;
+                # preserve its bytes/hash and record the argv translation.
+                source = Path(a).resolve(strict=True)
+                source.relative_to((SPEC / 'benchspec/CPU' / BENCH / 'data').resolve())
+                target = OUT / 'work' / ('.reference-' + str(len(staged)) + '-' + source.name)
+                shutil.copyfile(source, target)
+                if sha(source) != sha(target): raise RuntimeError('reference input changed')
+                args.append(guest(target))
+                staged.append({'source': str(source), 'target': str(target), 'sha256': sha(target)})
+            else:
+                args.append(guest(Path(a)) if a.startswith(str(Path.home()) + '/') else a)
         command = ['/tmp/program', *args]
         if ARM == 'launcher': command = ['/usr/bin/capstone-exec', '--', *command]
         runenv = ['env', 'OMP_NUM_THREADS=1', 'OMP_THREAD_LIMIT=1']
@@ -142,7 +159,8 @@ try:
         else: line = ''
         with (OUT / 'image-records.txt').open('a') as f: f.write(line)
         rec = dict(route='guest-plain' if ARM == 'plain' else 'guest', exe=str(exe),
-                   exe_sha256=sha(exe), argv=r['argv'], rc=q.returncode, detail={'window': n})
+                   exe_sha256=sha(exe), argv=r['argv'], guest_command=command,
+                   staged_inputs=staged, rc=q.returncode, detail={'window': n})
         (OUT / 'invocations' / f'{ident}.json').write_text(json.dumps(rec, indent=2))
         print(BENCH, ARM, 'invocation', n, 'rc', q.returncode, flush=True)
         n += 1

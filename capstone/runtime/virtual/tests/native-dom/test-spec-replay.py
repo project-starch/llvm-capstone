@@ -16,8 +16,14 @@ with tempfile.TemporaryDirectory(prefix='native-replay-', dir=os.environ['CAPSTO
     census.mkdir(parents=True)
     cases = [([], 'successful invocations and SPEC oracles'),
              ([{'route': 'guest', 'rc': 0}], 'successful invocations and SPEC oracles'),
+             ([{'route': 'guest', 'status': 1}, {'route': 'host-spec-tool', 'status': 0}],
+              'successful invocations and SPEC oracles'),
+             ([{'route': 'guest', 'rc': 0, 'status': 1}, {'route': 'host-spec-tool', 'status': 0}],
+              'successful invocations and SPEC oracles'),
              ([{'route': 'guest', 'rc': 0}, {'route': 'guest', 'rc': 0},
-               {'route': 'host-spec-tool', 'rc': 0}], 'invocation count changed')]
+               {'route': 'host-spec-tool', 'rc': 0}], 'invocation count changed'),
+             ([{'route': 'guest', 'status': 0}, {'route': 'guest', 'status': 0},
+               {'route': 'host-spec-tool', 'status': 0}], 'invocation count changed')]
     for i, (records, reason) in enumerate(cases):
         for p in census.glob('*.json'):
             p.unlink()

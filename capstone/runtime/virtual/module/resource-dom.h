@@ -18,7 +18,8 @@ static bool dom_stdio_file(const struct file *f)
     const struct inode *inode = file_inode(f);
     return (dom_disk_inode(inode) && S_ISREG(inode->i_mode)) ||
            (inode->i_sb->s_magic == PIPEFS_MAGIC && S_ISFIFO(inode->i_mode)) ||
-           (S_ISCHR(inode->i_mode) && inode->i_rdev == MKDEV(1, 3)); /* null */
+           (S_ISCHR(inode->i_mode) &&
+            (inode->i_rdev == MKDEV(1, 3) || inode->i_rdev == MKDEV(5, 1))); /* null/console */
 }
 
 static bool dom_fd_allowed(struct context *c, u64 fd)
@@ -80,7 +81,12 @@ static int dom_parent(struct context *c, const struct capstone_delegate_entry *e
     if (*at == '/') {
         size_t n = strlen(d->cwd);
         if (strncmp(at, d->cwd, n) || (at[n] && at[n] != '/')) {
-            rc = -EACCES; goto out;
+            /* Metadata lookup does not reveal the existence of objects
+             * outside the grant. This also preserves optional search paths
+             * (for example a compiler's absent system include directory). */
+            rc = (e->nr == CAPSTONE_SYS_newfstatat || e->nr == CAPSTONE_SYS_statx) ?
+                 -ENOENT : -EACCES;
+            goto out;
         }
         at += n;
         while (*at == '/') ++at;

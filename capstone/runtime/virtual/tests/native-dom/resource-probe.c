@@ -64,6 +64,7 @@ int main(int argc, char **argv)
         "proc-mount/self/mem", "memory-device", "null-device"
     };
     for (unsigned i = 0; i < sizeof paths / sizeof *paths; ++i) denied_path(paths[i]);
+    check("outside metadata hidden", stat("/proc/self/maps", &st) == -1 && errno == ENOENT);
     check("inherited proc fd pread", pread(9, b, 1, 0) == -1 && errno == EBADF);
     check("inherited proc fd pwrite", pwrite(9, b, 1, 0) == -1 && errno == EBADF);
     check("inherited directory fd", openat(8, "self/mem", O_RDONLY) == -1 && errno == EBADF);
@@ -73,6 +74,10 @@ int main(int argc, char **argv)
     struct iovec v = {b, 1};
     check("inherited proc fd readv", readv(9, &v, 1) == -1 && errno == EBADF);
     check("inherited proc fd writev", writev(9, &v, 1) == -1 && errno == EBADF);
+    uint64_t send_args[6] = {1, 9, 0, 1};
+    check("inherited proc fd sendfile", raw(CAPSTONE_SYS_sendfile, send_args) == -EBADF);
+    uint64_t copy_args[6] = {9, 0, 1, 0, 1, 0};
+    check("inherited proc fd copy_file_range", raw(CAPSTONE_SYS_copy_file_range, copy_args) == -EBADF);
     struct { unsigned nr; const char *name; } calls[] = {
         {270,"process_vm_readv"}, {271,"process_vm_writev"}, {117,"ptrace"},
         {226,"raw mprotect"}, {222,"raw mmap fixed"}, {215,"raw munmap"},
@@ -85,7 +90,10 @@ int main(int argc, char **argv)
         {198,"socket"}, {199,"socketpair"}, {212,"recvmsg rights"},
         {36,"symlinkat"}, {37,"linkat"}, {33,"mknodat"}, {49,"chdir"},
         {50,"fchdir"}, {276,"renameat2"}, {134,"raw sigaction"},
-        {139,"rt_sigreturn"}, {132,"sigaltstack"}, {103,"setitimer"}
+        {139,"rt_sigreturn"}, {132,"sigaltstack"}, {103,"setitimer"},
+        {23,"dup"}, {24,"dup3"}, {59,"pipe2"}, {279,"memfd_create"},
+        {265,"open_by_handle_at"}, {438,"pidfd_getfd"}, {40,"mount"},
+        {97,"unshare"}, {268,"setns"}
     };
     for (unsigned i = 0; i < sizeof calls / sizeof *calls; ++i) {
         uint64_t a[6] = {0};
@@ -122,6 +130,8 @@ int main(int argc, char **argv)
     extern long __capstone_vm_protect(uintptr_t, size_t, int);
     uintptr_t host = argc > 1 ? strtoull(argv[1], NULL, 0) : 0;
     check("grant protect host", host && __capstone_vm_protect(host, 4096, PROT_WRITE) == -EINVAL);
+    extern long __capstone_vm_unmap(uintptr_t, size_t);
+    check("grant unmap host", host && __capstone_vm_unmap(host, 4096) == -EINVAL);
     printf("resource failures=%d\n", failures);
     return failures != 0;
 }

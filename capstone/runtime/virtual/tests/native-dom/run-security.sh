@@ -7,6 +7,8 @@ source capstone/tests/capstone-test-env.sh
 export PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=$W/src/capstone/runtime/host
 PL=${NATIVE_PLATFORM:-$W/platform-native}
 OUT=${SECURITY_OUT:-$W/security}; mkdir -p "$OUT"
+sha256sum "$PL/adapter/module/capstone_vm.ko" "$PL/qemu-system-riscv64" \
+ "$PL/images/Image" "$W/contracts/scalar-memory.dom" "$W/contracts/resource-probe.dom" > "$OUT/inputs.sha256"
 vm() { python3 -m capstone_vm --state "$OUT/vm" "$@"; }
 vm up --profile virtual --memory 8G --share-model mapped-xattr --share "$W" --no-pcrel \
  --cpu-prop x-capstone-supervisor-slots=2 --cpu-prop x-capstone-test-csrs=true \
