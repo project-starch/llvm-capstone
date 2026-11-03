@@ -127,3 +127,20 @@ They do not establish complete ON qualification. One-hart private-anonymous
 lifetime recycling and tested process exits passed; protected fork, SMP,
 shared tagged backing, tagged swap and a whole-system leak bound remain outside
 that evidence.
+
+## Current-dev integration
+
+The default remains OFF. The branch includes dev `6ae238ca3022` without
+rewriting its previously published history. The main exchange (register 11)
+is lazy and uses `prepare_write` / `CV_TOUCH`; only the metadata grant
+(register 10) stays eager. In unpinned mode admission faults a page in without
+pinning it. The launcher's successful-admission cache is valid for the fixed
+main-exchange mapping: later backing changes are covered by the experimental
+kernel copy/free hooks, rather than by continued residency. Retirable worker
+transports continue to touch each attachment.
+
+If an unpinned collection refuses a non-present or shared tagged page, node
+allocation now tries fresh-record growth while keeping unswept IDs retired.
+Collection and open still fail closed on unsupported mappings; this does not
+qualify swap/migration pressure or make ON production-ready. All ON results
+remain **EXPERIMENTAL** and the qualification gaps above still apply.

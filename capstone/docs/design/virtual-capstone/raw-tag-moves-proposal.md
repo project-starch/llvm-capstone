@@ -1,13 +1,13 @@
 # Proposal: trusted raw storage transport and physical tag summaries
 
-Status: proposal on `isa/raw-tag-moves` and `runtime/unpinned-domains`.
+Status: proposal on `isa/raw-tag-moves-2` and `runtime/unpinned-domains-2`.
 No change to the rulings in isa.md is implied. No RTL implementation is supplied.
 
 CLDRAW rd, imm(rs1) and CSTRAW rs2, imm(rs1) transfer one aligned 16-byte
 capability granule. Experimental encodings use custom-0 opcode 0x0b, funct3 4
 (I format) and 5 (S format), with signed 12-bit byte displacement. They require
 the virtual profile and the default-off `x-capstone-raw-moves` option. Only
-trusted S/M may execute them; ordinary U, protected U and supervised capability
+trusted S/M with V=0 may execute them; VS, ordinary U, protected U and supervised capability
 contexts take an illegal-instruction exception.
 
 The effective address uses the scalar base and current privilege's ordinary
@@ -23,8 +23,11 @@ or linear consumption. The resulting register cargo is opaque: its usable
 capability tag is clear, and only CSTRAW can republish the retained storage tag.
 Ordinary register producers and debugger scalar edits destroy the retained tag.
 CSTRAW preserves stale, linear and sealed representations and does not consume
-its source. It may also encode a decoded capability register without applying a
-liveness check. Model side metadata is not an additional architectural payload.
+its source. A decoded capability source instead faults with cause 24 before
+mutation, without consumption. Collections clear raw tags in live and saved
+registers before identity reuse. Model exact bounds use a hart-local side array;
+raw_tag occupies padding after the existing liveness flag, keeping registers at
+96 bytes. Side metadata is not an additional architectural payload.
 
 This does not relax Q-23: S gains no capability memory-access authority. In
 particular, enabling raw transport does not enable scalar-addressed S LDC/STC.
