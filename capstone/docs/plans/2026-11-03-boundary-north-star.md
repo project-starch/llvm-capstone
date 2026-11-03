@@ -42,6 +42,22 @@ runs have identical program counts and differ by -0.36 % in total and +0.31 % in
 establish comparability elsewhere. imagick's boundary figure (-1.4 %) is withheld: its plain run differs from the
 Capstone run by several million attempts in scheduler, lock and harness buckets, so the run conditions differ.
 
+**Census 4** (dev 976df58996f3, p12 `~/prof-dev/runs/census4/cap-dev4`; QEMU pin 5f329b5061, which differs from
+census3's only in the capprof stop-site plugin; plain arm run at the same time in `census4/rv64`; all eight runs
+verdict=PASS). It contains every landing since census3: the sign-extension ABI fix, the cursor rule, the heap record
+lookup (lane S) and the slot-record change (lane Y).
+
+| benchmark | program overhead | boundary overhead | H_A / H_B | change since census3 |
+|---|---|---|---|---|
+| 502.gcc_r | +25.4 % | +49.2 % | 0.62 M / 1.77 M | total attempts -8.1 %; minor faults 2,187 -> 1,955 (plain 1,111) |
+| 538.imagick_r | +3.3 % | -2.1 % | 17.5 M / 14.2 M | total +5.75 %, mostly kernel-other and idle noise, cause unresolved |
+| 519.lbm_r | +2.9 % | +3.7 % | 39.1 M / 27.2 M | total +0.3 %; compiled code +23 M (the cursor rule) |
+| 544.nab_r | +7.1 % | +0.1 % | 2.65 M / 2.60 M | total +0.3 %; compiled code +18 M (the cursor rule) |
+
+imagick's boundary figure is now comparable, because its plain run is from the same batch. The rise of lbm and nab in
+compiled code is the cost of the cursor rule (dev efe1d58bc469); the census does not isolate it, so that attribution
+is the lane's own estimate (+0.4 % program), not a measurement of this batch.
+
 ### 1.2 Per-event costs (busy attempts per unit; p12 lane microbenchmarks `lqmicro`, branch perf/linux-question-micro)
 
 | unit | pinned | tag-aware Linux prototype | plain Linux | source |
