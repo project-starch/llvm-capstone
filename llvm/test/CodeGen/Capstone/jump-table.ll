@@ -17,6 +17,8 @@
 ; RUN: %llc_cap -O0 < %s | FileCheck %s
 ; RUN: %llc_cap -O1 < %s | FileCheck %s
 ; RUN: %llc_cap -O2 < %s | FileCheck %s
+; RUN: %llc_cap -O1 -capstone-gp-free -capstone-image-gp < %s | FileCheck %s --check-prefix=IMAGEGP
+; RUN: %llc_cap -O2 -capstone-gp-free -capstone-image-gp < %s | FileCheck %s --check-prefix=IMAGEGP
 ; RUN: %llc_cap -O2 -capstone-gp-captable < %s | FileCheck %s --check-prefix=CAPTABLE
 ; RUN: %llc_cap -O2 -capstone-gp-captable -capstone-gp-captable-jump-tables=false < %s | FileCheck %s --check-prefix=CAPTABLE
 ; The refusal is what removes the table, not something else about the ABI:
@@ -28,6 +30,18 @@ define i64 @ten_way(i64 %x, ptr addrspace(200) %p) {
 ; CAPJT: %pcrel_hi(.LJTI0_0)
 ; CAPJT: jr
 ; CAPJT: .LJTI0_0:
+; IMAGEGP-LABEL: ten_way:
+; IMAGEGP-NOT: %hi(.LJTI0_0)
+; IMAGEGP: auipc {{[a-z0-9]+}}, %pcrel_hi(.LJTI0_0)
+; IMAGEGP: scc {{[a-z0-9]+}}, gp, {{[a-z0-9]+}}
+; IMAGEGP-NOT: delin
+; IMAGEGP: cincoffset {{[a-z0-9]+}}, {{[a-z0-9]+}}, {{[a-z0-9]+}}
+; IMAGEGP-NEXT: lw {{[a-z0-9]+}}, 0({{[a-z0-9]+}})
+; IMAGEGP: add
+; IMAGEGP: jr
+; IMAGEGP: .LJTI0_0:
+; IMAGEGP-NEXT: .word .LBB0_{{[0-9]+}}-.LJTI0_0
+; IMAGEGP-NOT: {{\.word \.LBB0_[0-9]+$}}
 ; CHECK-LABEL: ten_way:
 ; CHECK-NOT: %hi(.LJTI0_0)
 ; CHECK: auipc {{[a-z0-9]+}}, %pcrel_hi(.LJTI0_0)
