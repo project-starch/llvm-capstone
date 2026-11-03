@@ -35,7 +35,9 @@ end:
 ; CHECK-NEXT: [[FINAL:%.*]] = getelementptr i8, ptr [[VAR]], i64 -1
 ; CHECK: load i8, ptr [[FINAL]]
 ; LOWER-LABEL: @whole_int(
-; LOWER: ret i8
+; LOWER: [[VAR:%.*]] = getelementptr i8, ptr %b, i64 %n
+; LOWER-NEXT: [[FINAL:%.*]] = getelementptr i8, ptr [[VAR]], i64 -1
+; LOWER: load i8, ptr [[FINAL]]
 define i8 @whole_int(ptr %b, i64 %n, i1 %cond) {
 entry:
   %i = add i64 %n, -1

@@ -43,13 +43,13 @@
 
 target datalayout = "e-m:e-p:64:128-p200:128:128:128:64-i64:64-i128:128-n32:64-S128-ni:200-A200-P200-G200"
 target triple = "capstone64-unknown-linux-gnu"
-; author's InstCombine multi_cap: b=2^38-2, n=1, k=-4095; only cursor 2^38-1.
+; InstCombine multi_cap: b=2^38-2, n=1, k=-4095; only cursor 2^38-1.
 define i8 @multi_cap(ptr addrspace(200) %b, i64 %n, i64 %k) {
   %p = getelementptr [4096 x i8], ptr addrspace(200) %b, i64 %n, i64 %k
   %v = load i8, ptr addrspace(200) %p
   ret i8 %v
 }
-; author's canonical_cap: b=2, n=1; cursors 3, 3.
+; canonical_cap: b=2, n=1; cursors 3, 3.
 define i8 @canonical_cap(ptr addrspace(200) %b, i64 %n) {
   %a = getelementptr i8, ptr addrspace(200) %b, i64 1
   %i = add i64 %n, -1
@@ -57,7 +57,7 @@ define i8 @canonical_cap(ptr addrspace(200) %b, i64 %n) {
   %v = load i8, ptr addrspace(200) %p
   ret i8 %v
 }
-; author's constants_cap: b=3, n=-1, k=0; cursors 4, 0, 0, 1.
+; constants_cap: b=3, n=-1, k=0; cursors 4, 0, 0, 1.
 define i8 @constants_cap(ptr addrspace(200) %b, i64 %n, i64 %k) {
   %a = getelementptr i8, ptr addrspace(200) %b, i64 1
   %c = getelementptr i32, ptr addrspace(200) %a, i64 %n
@@ -66,7 +66,7 @@ define i8 @constants_cap(ptr addrspace(200) %b, i64 %n, i64 %k) {
   %v = load i8, ptr addrspace(200) %q
   ret i8 %v
 }
-; author's LICM swap: b=2^38-2, off=2, i=-1.
+; LICM swap: b=2^38-2, off=2, i=-1.
 define i8 @swap(ptr addrspace(200) %b, i64 %off, i64 %n) {
 entry:
   br label %loop
