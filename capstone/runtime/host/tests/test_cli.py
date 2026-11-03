@@ -317,6 +317,18 @@ class TransportTests(unittest.TestCase):
             share=Path(directory), memory="2G", environment={},
             cma_mib=512, process_cache_mib=384, port=0, boot_timeout=1, **settings)
 
+    def test_restart_preserves_initial_module_parameters(self):
+        with tempfile.TemporaryDirectory() as directory:
+            identity = {"files": {}, "share": directory, "memory": "2G",
+                        "environment": {}, "profile": "virtual",
+                        "module_params": ["unpinned=1", "supervisor_slots=2"]}
+            Path(directory, "config.json").write_text(json.dumps({"identity": identity}))
+            with patch.object(cli, "running", return_value=False), \
+                    patch.object(cli, "start", return_value=0) as start:
+                self.assertEqual(cli.main(["--state", directory, "restart"]), 0)
+                args, _ = start.call_args.args
+                self.assertEqual(args.module_params, identity["module_params"])
+
     def test_virtual_start_needs_its_launcher_and_module(self):
         with tempfile.TemporaryDirectory() as directory:
             args = self.virtual_start(directory)

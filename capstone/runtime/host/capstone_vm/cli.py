@@ -320,6 +320,9 @@ def start(args: argparse.Namespace, state: Path) -> int:
         if "launcher" in files and "job_helper" not in files:
             files["job_helper"] = require_file(files["launcher"].with_name("capstone-job"))
         profile = getattr(args, "profile", "virtual")
+        module_params = list(getattr(args, "module_params", None) or [])
+        if module_params and profile != "virtual":
+            raise VMError("--module-param requires the virtual profile")
         if profile == "virtual" and not {"launcher", "module"} <= files.keys():
             raise VMError("Virtual profile requires its launcher and module "
                           "(--launcher, --module; --profile physical for the physical profile)")
@@ -377,6 +380,8 @@ def start(args: argparse.Namespace, state: Path) -> int:
         if exact_bounds:
             # Recorded only when set, so the identity of every VM started without it is unchanged.
             identity_config["exact_bounds"] = True
+        if module_params:
+            identity_config["module_params"] = module_params
         if share_model != "none":
             # Likewise recorded only when it differs from the default.
             identity_config["share_model"] = share_model
@@ -459,9 +464,12 @@ dropbear -s -g -p 22
         if profile == "virtual":
             begin = setup.index("current_cache=")
             end = setup.index("capstone-exec --stats >/dev/null")
-            setup = setup[:begin] + """if [ -c /dev/capstone-vm ]; then rmmod capstone_vm; fi
-insmod /mnt/control/module
-""" + setup[end:]
+            install = "insmod /mnt/control/module"
+            if module_params:
+                install += " " + shlex.join(module_params)
+            setup = (setup[:begin] +
+                     "if [ -c /dev/capstone-vm ]; then rmmod capstone_vm; fi\n" +
+                     install + "\n" + setup[end:])
         (assets / "setup.sh").write_text(setup)
         # An ephemeral host port is chosen once; QEMU fails safely if a racer takes it.
         with socket.socket() as reservation:
@@ -552,6 +560,8 @@ def main(argv: list[str] | None = None) -> int:
     for option in ("qemu", "kernel", "firmware", "rootfs", "share"):
         up.add_argument("--" + option, type=Path, required=True)
     up.add_argument("--profile", choices=("physical", "virtual"), default="virtual")
+    up.add_argument("--module-param", dest="module_params", action="append", default=[],
+                    help="Virtual module parameter at initial load, before the launcher probe; repeatable")
     up.add_argument("--exact-bounds", action="store_true",
                     help="Virtual profile: QEMU's exact-bounds mode. Not required; a two-sided control.")
     for option in ("launcher", "ssh-server", "module", "job-helper"):
@@ -616,6 +626,7 @@ def main(argv: list[str] | None = None) -> int:
                             process_cache_mib=config.get("process_cache_mib", 384),
                             environment=config["environment"], profile=config.get("profile", "physical"),
                             exact_bounds=config.get("exact_bounds", False),
+                            module_params=config.get("module_params", []),
                             share_model=config.get("share_model", "none"),
                             plugin_args=config.get("plugin_args", []),
                             no_pcrel=config.get("pcrel", True) is False,
