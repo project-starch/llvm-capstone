@@ -127,6 +127,9 @@ static struct dl_transport *dl_transport(void) {
   __asm__ volatile("movc %0, tp" : "=r"(tp));
   return tp && private_transport ? private_transport : &default_transport;
 }
+int __capstone_delegate_has_private_transport(void) {
+  return dl_transport() != &default_transport;
+}
 #define dl_entry (dl_transport()->entry)
 #define dl_exchange (dl_transport()->exchange)
 #define dl_capacity (dl_transport()->capacity)
@@ -195,8 +198,9 @@ static unsigned dl_rights(unsigned kind) {
 
 #ifdef CAPSTONE_RUNTIME_VIRTUAL
 /* Serialize each transport through copy-back and signal delivery. POSIX
- * children install private transports; explicit contexts sharing TLS keep
- * their creator's transport. Nested signal handlers may enter recursively.
+ * children install private transports; explicit contexts may share the main
+ * TLS and default transport. Sharing a pthread's private TLS is rejected at
+ * context creation. Nested signal handlers may enter recursively.
  *
  * THE OWNER'S IDENTITY IS THE CURSOR OF gp. The lock needs a value that differs
  * between any two live contexts and stays the same within one, across a nested
@@ -272,6 +276,11 @@ uintptr_t __capstone_context_identity_take(void) {
  * makes no delegated call after this (its next step is its exit service). */
 void __capstone_context_identity_give(uintptr_t identity) {
   uintptr_t slot = (identity - __builtin_capstone_cap_get_base(dl_gp())) / 16;
+  /* A handler can exit while a delegated round still owns the shared wire.
+   * Quarantine that slot: recycling it would let an unrelated context enter
+   * through the recursive-owner path. This does not unwind abandoned rounds. */
+  if (__atomic_load_n(&default_transport.wire_owner, __ATOMIC_ACQUIRE) == identity)
+    return;
   if (slot && slot < DL_IDENTITY_SLOTS && !(identity & 15))
     __atomic_fetch_and(&dl_identity_taken, ~((uint64_t)1 << slot), __ATOMIC_RELEASE);
 }

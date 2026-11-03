@@ -289,8 +289,8 @@ static void acknowledge(struct pending *p) {
  * abandons every handler currently on it.
  * Limitation: this acknowledges signal delivery but does not unwind delegate.c's transport
  * lock recursion (dl_wire_depth). Jumping out of a handler delivered inside a delegated round
- * can strand that lock. With virtual gp identity slots, exiting that context can also leave a
- * stale owner equal to a later slot user. Such nonlocal exits are not supported; a fix needs
+ * can strand that lock. Virtual identity release quarantines a still-owned default-transport
+ * slot so a later context cannot alias it. Such nonlocal exits are not supported; recovery needs
  * to restore the surviving round's lock depth and copy-back state, not just clear the owner. */
 void __capstone_longjmp_reap(void *buf) {
   if (!signal_context()) return;   /* a context without a handover block runs none */

@@ -14,6 +14,7 @@
 #include <sys/epoll.h>
 #include <stdint.h>
 #include <signal.h>
+#include <setjmp.h>
 
 extern int __clone(int (*)(void *), void *, int, void *, ...);
 
@@ -212,11 +213,12 @@ static void *allocator_worker(void *arg)
     return arg;
 }
 
-/* Raw exits deliberately keep their slots. Exhaust all 63, then eight live pthreads
- * exchange checked records with the main thread. Each must take the service fallback.
- * A separate launch keeps the ordinary no-service check intact. */
-#define FALLBACK_THREADS 8
-#define FALLBACK_RECORDS 120
+/* Raw exits deliberately keep their slots. Exhaust all 63, then four raw
+ * contexts sharing the main TLS and default transport write checked records.
+ * Join before reading: all 4096 bytes fit even the minimum Linux pipe size,
+ * so a reader cannot block holding the same wire the writers need. */
+#define FALLBACK_THREADS 4
+#define FALLBACK_RECORDS 32
 extern _Noreturn void __capstone_vm_thread_exit(void);
 static volatile unsigned fallback_arrived, fallback_go;
 static unsigned long fallback_slots[FALLBACK_THREADS];
@@ -231,17 +233,17 @@ static void *fallback_writer(void *arg)
     unsigned t = *(unsigned *)arg;
     fallback_slots[t] = gp_slot();
     __atomic_add_fetch(&fallback_arrived, 1, __ATOMIC_RELEASE);
-    while (!__atomic_load_n(&fallback_go, __ATOMIC_ACQUIRE)) sched_yield();
+    while (!__atomic_load_n(&fallback_go, __ATOMIC_ACQUIRE)) { }
     for (unsigned i = 0; i < FALLBACK_RECORDS; ++i) {
         unsigned record[8];
         for (unsigned j = 0; j < 8; ++j) record[j] = (t * FALLBACK_RECORDS + i) * 8 + j;
         assert(write(pipefd[1], record, sizeof record) == sizeof record);
     }
-    return arg;
+    capstone_virtual_thread_exit(NULL);
 }
 static int fallback_contract(void)
 {
-    char *stacks = mmap(NULL, 65536, PROT_READ | PROT_WRITE,
+    char *stacks = mmap(NULL, FALLBACK_THREADS * 65536, PROT_READ | PROT_WRITE,
                         MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     assert(stacks != MAP_FAILED);
     void *tp;
@@ -250,14 +252,18 @@ static int fallback_contract(void)
         long id = capstone_virtual_thread_create(keep_slot, NULL, stacks + 65536, tp);
         assert(id > 0 && !capstone_virtual_thread_join(id));
     }
-    pthread_t threads[FALLBACK_THREADS];
+    long threads[FALLBACK_THREADS];
     assert(!pipe(pipefd));
     for (unsigned t = 0; t < FALLBACK_THREADS; ++t) {
         fallback_ids[t] = t;
-        assert(!pthread_create(&threads[t], NULL, fallback_writer, &fallback_ids[t]));
+        threads[t] = capstone_virtual_thread_create(fallback_writer, &fallback_ids[t],
+                                                    stacks + (t + 1) * 65536, tp);
+        assert(threads[t] > 0);
     }
-    while (__atomic_load_n(&fallback_arrived, __ATOMIC_ACQUIRE) != FALLBACK_THREADS) sched_yield();
+    while (__atomic_load_n(&fallback_arrived, __ATOMIC_ACQUIRE) != FALLBACK_THREADS) { }
     __atomic_store_n(&fallback_go, 1, __ATOMIC_RELEASE);
+    for (unsigned t = 0; t < FALLBACK_THREADS; ++t)
+        assert(!capstone_virtual_thread_join(threads[t]));
     unsigned char seen[FALLBACK_THREADS * FALLBACK_RECORDS] = {0};
     unsigned bad = 0;
     for (unsigned n = 0; n < FALLBACK_THREADS * FALLBACK_RECORDS; ++n) {
@@ -273,11 +279,10 @@ static int fallback_contract(void)
     }
     unsigned fallback = 0;
     for (unsigned t = 0; t < FALLBACK_THREADS; ++t) {
-        assert(!pthread_join(threads[t], NULL));
         fallback += fallback_slots[t] == 64 * 16;
     }
     close(pipefd[0]); close(pipefd[1]);
-    assert(!munmap(stacks, 65536));
+    assert(!munmap(stacks, FALLBACK_THREADS * 65536));
     printf("VIRTUAL_FALLBACK:slots=%u records=%u bad=%u main=%lu\n", fallback,
            FALLBACK_THREADS * FALLBACK_RECORDS, bad, gp_slot());
     if (fallback == FALLBACK_THREADS && !bad && gp_slot() == 0)
@@ -285,9 +290,111 @@ static int fallback_contract(void)
     return 0;
 }
 
+/* Abandon a default-transport round from its signal handler. The observer
+ * has a private transport so it can report without touching the stranded
+ * wire. A replacement raw context must not inherit the abandoned owner's
+ * gp slot. Both direct handler exit and longjmp followed by exit are covered. */
+static void *abandoned_tp;
+static unsigned long abandoned_slot, replacement_slot;
+static int abandon_jump;
+static jmp_buf abandon_target;
+static void abandon_handler(int signo)
+{
+    (void)signo;
+    abandoned_slot = gp_slot();
+    if (abandon_jump) longjmp(abandon_target, 1);
+    capstone_virtual_thread_exit(NULL);
+}
+static void *abandon_owner(void *arg)
+{
+    (void)arg;
+    sigset_t mask;
+    assert(!sigemptyset(&mask) && !sigaddset(&mask, SIGUSR1));
+    assert(!sigprocmask(SIG_UNBLOCK, &mask, NULL));
+    if (!setjmp(abandon_target)) {
+        /* This is the only native worker with SIGUSR1 unblocked. Raw
+         * shared-TLS contexts do not have an independent musl tid for
+         * raise(), so target the process with kill instead. */
+        assert(!kill(getpid(), SIGUSR1));
+        assert(!"handler returned");
+    }
+    capstone_virtual_thread_exit(NULL);
+}
+static void *replacement_owner(void *arg)
+{
+    (void)arg;
+    replacement_slot = gp_slot();
+    capstone_virtual_thread_exit(NULL);
+}
+static void *observe_abandoned(void *arg)
+{
+    (void)arg;
+    char *stack = mmap(NULL, 65536, PROT_READ | PROT_WRITE,
+                       MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    assert(stack != MAP_FAILED);
+    long id = capstone_virtual_thread_create(abandon_owner, NULL, stack + 65536, abandoned_tp);
+    assert(id > 0 && !capstone_virtual_thread_join(id));
+    id = capstone_virtual_thread_create(replacement_owner, NULL, stack + 65536, abandoned_tp);
+    assert(id > 0 && !capstone_virtual_thread_join(id));
+    printf("VIRTUAL_ABANDONED:old=%lu new=%lu jump=%d\n",
+           abandoned_slot, replacement_slot, abandon_jump);
+    int ok = abandoned_slot && replacement_slot && abandoned_slot != replacement_slot;
+    if (ok) puts("VIRTUAL_PTHREAD_OK abandoned_identity");
+    fflush(stdout);
+    _Exit(ok ? 0 : 1);
+}
+static int abandoned_contract(int jump)
+{
+    abandon_jump = jump;
+    __asm__ volatile("movc %0, tp" : "=r"(abandoned_tp));
+    struct sigaction sa = {.sa_handler = abandon_handler};
+    assert(!sigemptyset(&sa.sa_mask) && !sigaction(SIGUSR1, &sa, NULL));
+    sigset_t mask;
+    assert(!sigemptyset(&mask) && !sigaddset(&mask, SIGUSR1));
+    assert(!sigprocmask(SIG_BLOCK, &mask, NULL));
+    pthread_t observer;
+    assert(!pthread_create(&observer, NULL, observe_abandoned, NULL));
+    for (;;) __asm__ volatile("" ::: "memory");
+}
+
+static void *private_tls_child(void *arg)
+{
+    (void)arg;
+    /* The control accepts creation. Exit before its known fatal transport
+     * attachment, so the oracle reports the missing refusal as a test
+     * failure instead of conflating it with a launcher setup failure. */
+    capstone_virtual_thread_exit(NULL);
+}
+static void *private_tls_creator(void *arg)
+{
+    (void)arg;
+    char *stack = mmap(NULL, 65536, PROT_READ | PROT_WRITE,
+                       MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    assert(stack != MAP_FAILED);
+    /* Attach the creator so a broken implementation encounters its hold. */
+    assert(write(1, "PRIVATE_TLS_BEGIN\n", 18) == 18);
+    void *tp;
+    __asm__ volatile("movc %0, tp" : "=r"(tp));
+    long id = capstone_virtual_thread_create(private_tls_child, NULL, stack + 65536, tp);
+    int reason = errno;
+    if (id > 0) capstone_virtual_thread_join(id);
+    assert(id == -1 && reason == ENOTSUP);
+    assert(!munmap(stack, 65536));
+    puts("VIRTUAL_PTHREAD_OK private_tls_refused");
+    return NULL;
+}
+
 int main(int argc, char **argv)
 {
     if (argc == 2 && !strcmp(argv[1], "fallback")) return fallback_contract();
+    if (argc == 2 && !strcmp(argv[1], "identity-exit")) return abandoned_contract(0);
+    if (argc == 2 && !strcmp(argv[1], "identity-jump")) return abandoned_contract(1);
+    if (argc == 2 && !strcmp(argv[1], "private-tls")) {
+        pthread_t creator;
+        assert(!pthread_create(&creator, NULL, private_tls_creator, NULL));
+        assert(!pthread_join(creator, NULL));
+        return 0;
+    }
     pthread_t a, b;
     unsigned values[2] = {51, 61};
     void *result;

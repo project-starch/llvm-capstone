@@ -58,6 +58,11 @@ echo PTHREAD_FALLBACK_BEGIN
 echo 0 > /sys/module/capstone_vm/parameters/diag_admit 2>/dev/null || true
 CAPSTONE_EXEC_DIAGNOSTICS=1 CAPSTONE_VM_STATS=1 ./capstone-vexec pthread.dom fallback
 echo PTHREAD_FALLBACK_EXIT:$?
+for mode in identity-exit identity-jump private-tls; do
+  echo PTHREAD_IDENTITY_BEGIN:$mode
+  ./capstone-vexec pthread.dom "$mode"
+  echo PTHREAD_IDENTITY_EXIT:$mode:$?
+done
 rmmod capstone_vm
 echo PTHREAD_CLEANUP:$?
 echo "PTHREAD_PINS_END:$(pins)"
@@ -131,7 +136,13 @@ echo VIRTUAL_STAGED_DONE
     checks['fallback_identity'] = (
         fallback_log.count('VIRTUAL_PTHREAD_OK fallback_identity') == 1 and
         fallback_log.count('PTHREAD_FALLBACK_EXIT:0') == 1 and
-        len(fallback_steps) == 1 and int(fallback_steps[0]) >= 960)
+        len(fallback_steps) == 1 and int(fallback_steps[0]) >= 128)
+    for mode in ('identity-exit', 'identity-jump'):
+        part = re.search(r'PTHREAD_IDENTITY_BEGIN:' + mode + r'\n(.*?)PTHREAD_IDENTITY_EXIT:' +
+                         mode + r':0\n', log, re.S)
+        checks[mode] = bool(part and 'VIRTUAL_PTHREAD_OK abandoned_identity\n' in part[1])
+    part = re.search(r'PTHREAD_IDENTITY_BEGIN:private-tls\n(.*?)PTHREAD_IDENTITY_EXIT:private-tls:0\n', log, re.S)
+    checks['private_tls_refused'] = bool(part and 'VIRTUAL_PTHREAD_OK private_tls_refused\n' in part[1])
     checks['exit'] = log.count('PTHREAD_EXIT:0') == 1
     checks['cleanup'] = run.returncode == 0 and log.count('PTHREAD_CLEANUP:0') == 1
     record = dict(status='PASS' if all(v is True or v == 'uninstrumented' for v in checks.values()) else 'FAIL',

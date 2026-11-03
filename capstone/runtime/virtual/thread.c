@@ -13,6 +13,7 @@ extern long __capstone_vm_thread_join(long thread);
 extern uintptr_t __capstone_context_identity_take(void);
 extern void __capstone_context_identity_give(uintptr_t identity);
 extern void __capstone_context_identity_release(void);
+extern int __capstone_delegate_has_private_transport(void);
 
 static void *thread_exit_entry(void *unused)
 {
@@ -28,6 +29,16 @@ long capstone_virtual_thread_create(void *(*entry)(void *), void *argument,
 
     if (!entry || !stack_top) {
         errno = EINVAL;
+        return -1;
+    }
+    /* A pthread's TLS contains its private transport and musl lifecycle
+     * state. A second raw context cannot attach those held mappings.
+     * Refuse this unsupported sharing before creating a worker, rather than
+     * letting its first delegated call terminate the whole application. */
+    void *tp;
+    __asm__ volatile("movc %0, tp" : "=r"(tp));
+    if (thread_pointer == tp && __capstone_delegate_has_private_transport()) {
+        errno = ENOTSUP;
         return -1;
     }
     /* mmap in the virtual profile returns page-aligned, private anonymous
