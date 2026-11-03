@@ -43,6 +43,14 @@ shutil.copy2(exe, template)
 stub = subprocess.run([sys.executable, os.path.join(kit, "tools/perl-pack-stub.py"),
                        os.path.join(template, "t/op/pack.t")], capture_output=True, text=True, check=True).stdout
 groups = [tests[i:i + per] for i in range(0, len(tests), per)]
+# Every group is a full copy of the run directory (~60 MB): refuse a split that would leave the filesystem with less
+# than 10 GB (one script per group is 317 copies, ~19 GB; that filled a shared host once).
+size = int(subprocess.run(["du", "-sb", template], capture_output=True, text=True, check=True).stdout.split()[0])
+st = os.statvfs(out)
+if size * len(groups) + (10 << 30) > st.f_bavail * st.f_frsize:
+    shutil.rmtree(out)
+    sys.exit(f"perl-split-prep: {len(groups)} groups x {size >> 20} MB would leave less than 10 GB free "
+             f"({(st.f_bavail * st.f_frsize) >> 30} GB free now)")
 manifest = {"exe": exe, "exe_sha256": subprocess.run(["sha256sum", exe], capture_output=True, text=True).stdout[:64],
             "tests": len(tests), "per_group": per, "pack_stub": json.loads(stub), "groups": []}
 for g, members in enumerate(groups):
