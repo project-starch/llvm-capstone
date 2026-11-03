@@ -6,6 +6,7 @@
 #include <stddef.h>
 #include <string.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <unistd.h>
 #include <malloc_capstone.h>
 #include <capstone/capability.h>
@@ -319,6 +320,24 @@ static size_t recycle_bytes;
 unsigned long __capstone_malloc_recycle_hits;
 unsigned long __capstone_malloc_recycle_kept;
 unsigned long __capstone_malloc_recycle_unmapped;
+/* CAPSTONE_HEAP_RECYCLE_TRACE=1: one stderr line per kept mapping taken (hit) or released into
+ * the cache (kept), so a run can say whether it went through a reused mapping even when it ends in
+ * a fault, before any exit-time report. write(2) of a stack buffer, never stdio, so the line cannot
+ * re-enter the allocator. Unset, it costs one load per event. */
+static int recycle_trace = -1;
+static void recycle_note(const char *what, size_t bytes)
+{
+    if (recycle_trace < 0) {
+        const char *e = getenv("CAPSTONE_HEAP_RECYCLE_TRACE");
+        recycle_trace = e && e[0] == '1';
+    }
+    if (!recycle_trace) return;
+    char line[128];
+    int n = snprintf(line, sizeof line, "CAPSTONE_HEAP_RECYCLE %s bytes=%lu hits=%lu kept=%lu unmapped=%lu\n",
+                     what, (unsigned long)bytes, __capstone_malloc_recycle_hits,
+                     __capstone_malloc_recycle_kept, __capstone_malloc_recycle_unmapped);
+    if (n > 0) write(2, line, (size_t)n < sizeof line ? (size_t)n : sizeof line - 1);
+}
 static void *recycle_take(size_t bytes)
 {
     for (unsigned i = recycle_count; i--; )
@@ -354,6 +373,7 @@ void __capstone_malloc_group_unmap(void *group, size_t bytes, void *root)
         recycle[recycle_count].bytes = bytes;
         ++recycle_count; recycle_bytes += bytes;
         ++__capstone_malloc_recycle_kept;
+        recycle_note("kept", bytes);
         return;
     }
     if (root) ++__capstone_malloc_recycle_unmapped;
@@ -410,7 +430,7 @@ void *__capstone_malloc_group_map(struct capstone_malloc_slot *slots,
     size_t mapped = bytes && bytes <= CV_MAX_REGION_BYTES ? mapping_length(bytes) : 0;
     void *r = mapped ? recycle_take(mapped) : NULL;
     unsigned char stale = r != NULL;
-    if (r) ++__capstone_malloc_recycle_hits;
+    if (r) { ++__capstone_malloc_recycle_hits; recycle_note("hit", mapped); }
     else {
         void *p = __capstone_malloc_map(bytes);
         if (p == MAP_FAILED) return p;
