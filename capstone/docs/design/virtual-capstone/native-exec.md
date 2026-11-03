@@ -59,7 +59,11 @@ also unsupported. A renamed pinned directory remains the same granted object.
 The Linux kernel, VFS and filesystem server are trusted; a hostile host process
 already able to ptrace this task is outside this boundary.
 
-Existing files are opened from the checked, pinned dentry. Creation forces
+Existing files are opened from the checked, pinned dentry after inode_permission
+and append-only/directory checks; O_PATH and dentry_open alone do not perform
+Linux may_open. The ordinary open still performs file LSM hooks, leases and
+write-access acquisition. A UID-0, capability-empty exec probe verifies DAC
+refusal, with a failing control on the pre-check broker. Creation forces
 `O_EXCL` so a racing device or symlink cannot be opened. Truncation follows inode
 validation. Stat calls use a private temporary O_PATH fd and `AT_EMPTY_PATH`;
 the fd is closed before re-entry. Out-of-grant metadata lookups return ENOENT

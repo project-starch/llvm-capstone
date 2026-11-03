@@ -156,6 +156,7 @@ static long dom_path_operation(struct context *c, const struct capstone_delegate
                        O_NONBLOCK | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC |
                        O_LARGEFILE | O_SYNC | O_DSYNC | O_NOCTTY;
     if (e->nr == CAPSTONE_SYS_openat && (e->args[2] & ~((u64)allowed))) return -EINVAL;
+    if (e->nr == CAPSTONE_SYS_openat && (flags & O_ACCMODE) == O_ACCMODE) return -EINVAL;
     if (e->nr == CAPSTONE_SYS_unlinkat && flags) return -ENOSYS;
     rc = dom_parent(c, e, &parent, &storage, &leaf);
     if (rc) return rc;
@@ -183,12 +184,25 @@ static long dom_path_operation(struct context *c, const struct capstone_delegate
         f = file_open_root(&parent, leaf, flags | O_EXCL | O_NOFOLLOW,
                            (e->args[3] & 0777) & ~current_umask());
     } else {
+        struct inode *inode = file_inode(pin);
+        unsigned access = MAY_OPEN;
         if ((flags & (O_CREAT | O_EXCL)) == (O_CREAT | O_EXCL)) {
             fput(pin); rc = -EEXIST; goto out;
         }
         if ((flags & O_DIRECTORY) && !S_ISDIR(file_inode(pin)->i_mode)) {
             fput(pin); rc = -ENOTDIR; goto out;
         }
+        if ((flags & O_ACCMODE) != O_WRONLY) access |= MAY_READ;
+        if ((flags & O_ACCMODE) != O_RDONLY || (flags & O_TRUNC)) access |= MAY_WRITE;
+        if (flags & O_APPEND) access |= MAY_APPEND;
+        /* O_PATH deliberately bypasses final-inode access checks, and
+         * dentry_open does not perform may_open. Preserve Linux's permission
+         * and append-only restrictions on the very same pinned inode. */
+        rc = inode_permission(mnt_user_ns(pin->f_path.mnt), inode, access);
+        if (!rc && S_ISDIR(inode->i_mode) && ((access & MAY_WRITE) || (flags & O_CREAT))) rc = -EISDIR;
+        if (!rc && IS_APPEND(inode) &&
+            (((access & MAY_WRITE) && !(flags & O_APPEND)) || (flags & O_TRUNC))) rc = -EPERM;
+        if (rc) { fput(pin); goto out; }
         f = dentry_open(&pin->f_path, flags & ~(O_CREAT | O_EXCL | O_TRUNC), current_cred());
         fput(pin);
         if (!IS_ERR(f) && (flags & O_TRUNC)) {

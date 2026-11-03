@@ -51,6 +51,15 @@ int main(int argc, char **argv)
     struct stat st;
     (void)getpid();
     if (!meta || exchange_bytes < 4096) return 2;
+    if (argc == 2 && !strcmp(argv[1], "dac")) {
+        int fd = open("no-permission", O_RDONLY);
+        check("inode read permission", fd < 0 && errno == EACCES);
+        if (fd >= 0) close(fd);
+        fd = open("no-permission", O_WRONLY);
+        check("inode write permission", fd < 0 && errno == EACCES);
+        if (fd >= 0) close(fd);
+        return failures != 0;
+    }
     if (argc == 2 && !strcmp(argv[1], "stdio")) {
         check("unsafe inherited stdio", pread(0, b, 1, 0) == -1 && errno == EBADF);
         return failures != 0;

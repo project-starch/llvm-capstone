@@ -146,7 +146,10 @@ negative control; pathname refusal alone is not the full qualification.
 `resource-probe.c` uses the wrapped transport boundary to send raw wire requests,
 so refusals are checked in the module rather than only in libc. Compile it with
 `-Wl,--wrap=__capstone_vm_delegate_transport` and the runtime include directory,
-alongside `scalar-memory.c`, using the same SDK as the native contracts.
+alongside `scalar-memory.c`, using the same SDK as the native contracts. Compile
+`dac-driver.c` with the plain static RISC-V compiler. It retains UID 0 for the
+experimental loader but drops all capabilities and disables root capability
+regain across exec, to test ordinary file permissions without DAC bypass.
 `run-security.sh` creates a private guest fixture with symlink aliases, a nested
 proc mount and device nodes. It passes inherited proc and directory fds, including
 unsafe fd 0, and verifies policy refusals plus ordinary-file positive controls.
