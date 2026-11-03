@@ -20,10 +20,30 @@ if not u.exists() or not r.exists(): print(f'NO DATA: {D}'); sys.exit(2)
 t = u.read_text(errors='replace'); lg = r.read_text(errors='replace')
 sr = [int(x, 16) for x in re.findall(r'^SR ([0-9A-Fa-f]{16})\s*$', t, re.M)]
 sv = [int(x, 16) for x in re.findall(r'^SV ([0-9A-Fa-f]{16})\s*$', t, re.M)]
+src = 'UART'
+# CORRECTED 2026-11-03 after board 1's reading. This image never reaches the board wrapper's CAP_PASS (the test ends
+# with its own tohost store and `j 1b`), so its UART carries no SR/SV lines on silicon; the readings are in the
+# recorder area, which is where PREREG.md's vectors were simulated from. When the UART has none, read the recorder
+# from the run's own gdb.txt (`x/1gx 0x80001140` = the count, then `x/Ngx 0x80001148`). Was: UART only, and an empty
+# UART graded FINDING instead of NO DATA.
+REC = 0x80001140
+if not sr and (D / 'gdb.txt').exists():
+    g = re.sub(r'\x1b\[[0-9;?]*[A-Za-z]', '', (D / 'gdb.txt').read_text(errors='replace'))
+    words = {}
+    for line in g.split('\n'):
+        m2 = re.match(r'\s*0x([0-9a-f]+):\s+((?:0x[0-9a-f]+\s*)+)$', line.strip())
+        if m2:
+            a = int(m2.group(1), 16)
+            for k, w in enumerate(m2.group(2).split()): words[a + 8 * k] = int(w, 16)
+    if REC in words:
+        n = words[REC]; sr = [n]; sv = [words.get(REC + 8 * (i + 1)) for i in range(n)]
+        src = 'RECORDER (gdb.txt)'
+        if None in sv: sv = []
+if not sr: print(f'NO DATA: no SR line in the UART and no recorder dump at {REC:#x} in gdb.txt ({D})'); sys.exit(2)
 m = re.search(r'image (\S+\.bin) ->', lg); img = pathlib.Path(m.group(1)) if m else None
 h = hashlib.sha256(img.read_bytes()).hexdigest() if img and img.exists() else None
 bs = re.findall(r"resident NV bitstream = '([^']+)'", lg)
-print(f'img {"OK" if h == H else "MISMATCH"} bs {bs} SR {sr} SV {" ".join(hex(x) for x in sv)}')
+print(f'source {src}; img {"OK" if h == H else "MISMATCH"} bs {bs} SR {sr} SV {" ".join(hex(x) for x in sv)}')
 if h != H: v = 'IMAGE MISMATCH'
 elif not bs or RES[ARM] not in bs[-1]: v = 'WRONG BITSTREAM'
 elif sr == [26] and sv == PRESENT: v = 'PRESENT'

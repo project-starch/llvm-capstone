@@ -58,3 +58,26 @@ bitstreams (board 1 bitstream 3, board 2 ObjBounds).
 - FINDING goes to the lead too, as a new defect folder.
 
 **Limits.** N = 1 per bitstream. Only the integer rows decide; types are not visible to the board recorder.
+
+## Correction after board 1's reading (2026-11-03, bitstream 3, board 1, runtime lane's run 19:25-19:35)
+
+**Why the UART was silent.** It is a kit design slip of the RTL lane's, and it is not caused by `-DBOARD_INTS`.
+- The board wrapper prints the recorder over the UART only from its redefined `CAP_PASS` (`inc/asm_insn.h`).
+- `movc-untagged-source.S` ends with its own tohost store and `j 1b`, so on silicon the wrapper's report never runs,
+  and the UART carries only "SUPTEST BEGIN" and the board's own banner.
+- The vectors above were simulated from the RECORDER AREA (board_rec 0x80001140), so the simulation could not show
+  this.
+
+**The reading.** The runner timed out and read the core through GDB: pc 0x80000d06 (the image's final loop), mcause 0,
+count 0x1a = 26 at 0x80001140. The 26 doublewords after it are the PRESENT vector exactly.
+
+**The grader**, corrected after the reading and recorded as such:
+- `grade/q04-grade.py` now reads the recorder from the run's own `gdb.txt` when the UART has no SR line, and prints
+  which source it used.
+- An empty UART with no recorder dump now gives NO DATA (rc 2). Before, it gave FINDING with an empty vector.
+- Controls run after the change: present rc 0; absent rc 1; wrong bitstream rc 1; perturbed rc 1; empty rc 2; a silent
+  UART without a dump rc 2; an ABSENT recorder dump gives ABSENT, rc 1.
+
+**Verdict: board 1, bitstream 3, Q-04 (b) PRESENT** (source: recorder; image hash and resident name checked). N = 1.
+ObjBounds (board 2) is still to run. A future image would end with `CAP_PASS` under `BOARD_INTS`, so that its UART
+carries the vector; this one stays unchanged so the two boards read the same image.
