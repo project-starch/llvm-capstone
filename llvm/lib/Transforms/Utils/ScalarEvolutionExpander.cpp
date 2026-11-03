@@ -1305,6 +1305,16 @@ Value *SCEVExpander::tryToReuseLCSSAPhi(const SCEVAddRecExpr *S) {
 }
 
 Value *SCEVExpander::visitAddRecExpr(const SCEVAddRecExpr *S) {
+  // A pointer PHI steps on every iteration, including iterations on which the
+  // original cursor was never formed. A refused capability cursor cannot regain
+  // its tag on a later, valid iteration. Keep the recurrence in the integer
+  // offset even in non-canonical mode and form each cursor from the same base.
+  if (DL.isNonIntegralPointerType(S->getType())) {
+    Value *Base = expand(SE.getPointerBase(S));
+    return expandAddToGEP(SE.removePointerBase(S), Base,
+                          S->getNoWrapFlags(SCEV::FlagNUW));
+  }
+
   // In canonical mode we compute the addrec as an expression of a canonical IV
   // using evaluateAtIteration and expand the resulting SCEV expression. This
   // way we avoid introducing new IVs to carry on the computation of the addrec

@@ -1772,16 +1772,6 @@ int llvm::rewriteLoopExitValues(Loop *L, LoopInfo *LI, TargetLibraryInfo *TLI,
             continue;
         }
 
-        // Expanding a capability exit value through an enclosing recurrence
-        // creates cursors on iterations where this loop never ran. A refused
-        // start permanently loses its tag, even if the eventual exit address
-        // is valid. Keep the original guarded computation in that case.
-        if (PN->getDataLayout().isNonIntegralPointerType(PN->getType()) &&
-            SCEVExprContains(ExitValue, [](const SCEV *S) {
-              return isa<SCEVAddRecExpr>(S);
-            }))
-          continue;
-
         // Computing the value outside of the loop brings no benefit if it is
         // definitely used inside the loop in a way which can not be optimized
         // away. Avoid doing so unless we know we have a value which computes

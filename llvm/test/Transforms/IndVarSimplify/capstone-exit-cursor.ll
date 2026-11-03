@@ -11,11 +11,11 @@ target datalayout = "e-p:64:64-p200:128:128:128:64-i64:64-n32:64-ni:200"
 ; CHECK-NOT: getelementptr
 ; CHECK: outer:
 ; CHECK-NOT: phi ptr addrspace(200)
+; CHECK: [[OFFSET:%.*]] = phi i64
+; CHECK: [[CURSOR:%.*]] = getelementptr i8, ptr addrspace(200) %b, i64 [[OFFSET]]
 ; CHECK: inner.preheader:
-; CHECK-NOT: phi ptr addrspace(200)
-; CHECK: getelementptr i8, ptr addrspace(200) %b,
 ; CHECK: inner.exit:
-; CHECK: load volatile i8, ptr addrspace(200)
+; CHECK: load volatile i8, ptr addrspace(200) [[CURSOR]]
 define void @nested(ptr addrspace(200) %b, ptr addrspace(200) %out) {
 entry:
   br label %outer

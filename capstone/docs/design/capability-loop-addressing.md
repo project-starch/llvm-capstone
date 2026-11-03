@@ -16,9 +16,12 @@ under phys56 when `p` is zero.
 InstCombine keeps multi-index capability GEPs whole and does not move constants
 across variable GEPs. Adjacent merging and cancellation that remove a cursor
 remain legal. LICM does not swap capability GEP offsets to hoist one of them.
-IndVarSimplify keeps a capability exit computation when expanding it would
-introduce an enclosing recurrence. SCEV expansion keeps a non-integral
-pointer sum whole instead of splitting its offsets by loop. CodeGenPrepare
+SCEV expansion uses an integer offset recurrence plus a complete-offset GEP
+for non-integral pointers, including in non-canonical mode. This covers both
+IndVarSimplify exit values and invariant IV users without a pointer PHI that
+propagates a refused cursor from skipped iterations. It also keeps pointer
+sums whole instead of splitting their offsets by loop. These restrictions
+apply to all non-integral address spaces in this fork, not just AS200. CodeGenPrepare
 does not create common capability bases for large offsets, and the optional
 separate-offset pass leaves capability GEPs intact.
 
