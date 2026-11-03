@@ -31,16 +31,19 @@ struct mapping {
     size_t bytes, visible;
     uint64_t id;
     int heap, kind;
-    /* Live worker transports (a meta block or an exchange region) inside this mapping. This
-     * launcher writes into a worker's transport for the worker's whole life, through Linux and
-     * with service_lock released while a service blocks, so the mapping must outlive the worker:
-     * while the count is up, retirement (unmap), remapping and hence address reuse are refused
-     * to everyone but the owning worker, which releases its own transport at exit (the SDK
-     * unmaps the blocks before the exit service). Without this, a second worker could retire
-     * the mapping under a blocked read, map a fresh one at the same address, and the read's
+    /* The worker whose transport block (its meta block or its exchange region) lies in this
+     * mapping, or 0. This launcher writes into a worker's transport for the worker's whole
+     * attachment, through Linux and with service_lock released while a service blocks, so the
+     * mapping must outlive the attachment: while a holder is set, retirement (unmap) and
+     * remapping are refused to EVERY caller, the holder included, and hence the address is never
+     * reused under it. The hold is released only by the holder's own detach (the SDK detaches
+     * before it gives the blocks back) or by its exit. One holder per mapping and one block per
+     * mapping: the SDK maps each block on its own (pthread.c), and the attachment refuses a
+     * mapping that already has a holder. Without the hold, a second worker could retire the
+     * mapping under a blocked read, map a fresh one at the same address, and the read's
      * copy-back would create backing the module never admitted. On dev since linear arenas
-     * became lazy: the transport blocks are heap mappings. */
-    unsigned transport;
+     * became lazy: the transport blocks were heap blocks. */
+    uint64_t holder;
 };
 /* Registered mappings sorted by address, highest first, grown on demand.
  * Registrations never overlap, so the highest mapping starting at or below an
@@ -326,34 +329,32 @@ static int grant(void *base, size_t bytes, unsigned reg, unsigned perms,
                                 .kind = linear ? CV_MAP_HEAP : -1});
     return 0;
 }
-/* The mapping holding a worker transport block, counted up at the worker's attachment and
- * down at its exit. Looked up each time: a pointer into maps does not survive insert/remove. */
-static void transport_hold(uintptr_t p)
+/* The calling worker's attachment: its meta block and exchange region, the two spans this
+ * launcher writes for it, each in a mapping it holds. Zero while detached: the worker's next
+ * delegate service attaches again, CV_TOUCH and all. */
+static __thread uintptr_t transport_at[2];
+/* Release the calling worker's holds and its host state: the worker's own detach service and
+ * its exit, nothing else. After it this launcher writes nothing into the blocks. */
+static void transport_detach(uint64_t tid)
 {
-    struct mapping *m = map_floor(p);
-    if (m) ++m->transport;
-}
-static void transport_drop(uintptr_t p)
-{
-    struct mapping *m = map_floor(p);
-    if (m && m->transport) --m->transport;
-}
-/* Is m one of the calling worker's own transport mappings? Only that worker may retire it. */
-static int own_transport(const struct mapping *m)
-{
-    return worker_host &&
-           (map_floor((uintptr_t)worker_host->exchange) == m ||
-            map_floor((uintptr_t)worker_host->signals.block - CAPSTONE_SIGNAL_OFFSET) == m);
+    for (unsigned i = 0; i < 2; ++i) {
+        struct mapping *m = transport_at[i] ? map_floor(transport_at[i]) : NULL;
+        if (m && m->holder == tid) m->holder = 0;
+        transport_at[i] = 0;
+    }
+    if (worker_host) {
+        capstone_signals_detach();
+        capstone_delegate_host_free(worker_host);
+        free(worker_host);
+        worker_host = NULL;
+    }
 }
 static long unmap_arena(uintptr_t base, size_t bytes)
 {
     struct mapping *m = map_find(base);
     if (!m || m->visible != bytes || !m->heap || m->kind == CV_MAP_METADATA)
         return -EINVAL;
-    if (m->transport) {
-        if (!own_transport(m)) return -EBUSY;
-        m->transport = 0;
-    }
+    if (m->holder) return -EBUSY;
     if (ioctl(device, CV_RETIRE, &m->id)) return -errno;
     if (munmap(m->address, m->bytes)) return -errno;
     reuse_address = m->address; reuse_bytes = m->bytes;
@@ -449,7 +450,7 @@ static long remap_mapping(uint64_t tid, struct cv_step *step)
         return -EINVAL;
     }
     struct mapping *m = map_find(base);
-    if (m && m->transport) return -EBUSY;
+    if (m && m->holder) return -EBUSY;
     if (m && m->visible == old && m->bytes == old && m->heap && m->kind == CV_MAP_HEAP) {
         /* Option (iii): the GROWN mapping's base must still be a granule multiple, and mremap()
          * promises only page alignment. Above 4 MiB the granule exceeds a page, so even an
@@ -511,11 +512,14 @@ static long remap_mapping(uint64_t tid, struct cv_step *step)
     }
     return -EINVAL;
 }
+/* The error exit's cleanup. It does not unmap the registered mappings: die() runs on any worker
+ * while the others may still be inside a delegated service that writes into their transport,
+ * and an unmap here would bypass the transport hold (unmap_arena) and reopen the address to
+ * reuse under that write. Linux releases the mappings at the process's exit, after exit_group
+ * has stopped every worker, as on the normal exit path. */
 static void cleanup(void)
 {
     if (device >= 0) { close(device); device = -1; }
-    for (size_t i = 0; i < map_count; ++i)
-        munmap(maps[i].address, maps[i].bytes);
     if (image_fd >= 0) { close(image_fd); image_fd = -1; }
     capstone_spawner_stop(&spawner);
     capstone_delegate_host_free(&host);
@@ -878,13 +882,15 @@ static int virtual_service(uint64_t tid, struct cv_step *step)
         int posix = step->args[7] == CV_SERVICE_PTHREAD_EXIT;
         uintptr_t clear = posix ? step->args[0] : 0;
         if (clear && (!registered_word(clear) || touch(clear, sizeof(int)))) return -1;
+        /* The exit word is stored after the two unmaps below, so it must lie in neither: a
+         * store into a range just given back to Linux would land in whatever Linux maps there
+         * next. musl's word is a global (the thread-list lock), never in the thread's stack. */
+        if (clear && posix && step->args[1] && clear - step->args[1] < step->args[2]) return -1;
         if (tid == 0 || ioctl(device, CV_THREAD_EXIT, &request))
             return -1;
-        /* The worker's transport, if it did not retire it itself, may go now. */
-        if (worker_host) {
-            transport_drop((uintptr_t)worker_host->exchange);
-            transport_drop((uintptr_t)worker_host->signals.block - CAPSTONE_SIGNAL_OFFSET);
-        }
+        /* A worker that exits still attached gives its holds back here. */
+        transport_detach(tid);
+        if (clear && request.frame && clear - request.frame < 4096) return -1;
         if (request.frame) {
             long cleanup_rc = unmap_arena(request.frame, 4096);
             if (cleanup_rc && cleanup_rc != -EINVAL) return -1;
@@ -939,11 +945,21 @@ static int virtual_service(uint64_t tid, struct cv_step *step)
             } else if (tid) {
                 if (!worker_host) {
                     /* The worker's meta block (the signal block below is written at once) and
-                     * its exchange region are written by this launcher from here on. */
+                     * its exchange region are written by this launcher from here on: each must
+                     * be alone in its mapping and that mapping free of any other holder
+                     * (registered_span found both above), every page of both is admitted
+                     * (CV_TOUCH, at every attachment: a re-attachment after a detach may name a
+                     * fresh mapping at the same address), and the worker holds both mappings
+                     * until it detaches or exits. */
+                    struct mapping *held_meta = map_floor(step->args[0]);
+                    struct mapping *held_exchange = map_floor(step->args[1]);
+                    if (held_meta == held_exchange || held_meta->holder || held_exchange->holder)
+                        return -1;
                     if (touch(step->args[0], CAPSTONE_DELEGATE_META_BYTES) ||
                         touch(step->args[1], step->args[2])) return -1;
-                    transport_hold(step->args[0]);
-                    transport_hold(step->args[1]);
+                    held_meta->holder = held_exchange->holder = tid;
+                    transport_at[0] = step->args[0];
+                    transport_at[1] = step->args[1];
                     worker_host = calloc(1, sizeof *worker_host);
                     if (!worker_host) return -1;
                     worker_host->exchange = (void *)(uintptr_t)step->args[1];
@@ -1053,6 +1069,9 @@ static int virtual_service(uint64_t tid, struct cv_step *step)
         step->result = remap_mapping(tid, step);
     } else if (step->args[7] == CV_SERVICE_UNMAP) {
         step->result = unmap_arena(step->args[0], step->args[1]);
+    } else if (step->args[7] == CV_SERVICE_TRANSPORT_DETACH) {
+        /* The worker gives its transport back (pthread.c, before it unmaps the blocks). */
+        transport_detach(tid);
     } else if (step->args[7] == CV_SERVICE_PROTECT) {
         step->result = protect_range(step->args[0], step->args[1], step->args[2]);
     } else if (step->args[7] == CV_SERVICE_WAIT) {
@@ -1120,12 +1139,7 @@ static void *virtual_thread_worker(void *opaque)
     /* A virtual thread is hosted by a Linux worker, so normal virtual-thread
      * exit must return from this worker rather than terminate the process. */
     if (result) _exit(result);
-    if (worker_host) {
-        capstone_signals_detach();
-        capstone_delegate_host_free(worker_host);
-        free(worker_host);
-        worker_host = NULL;
-    }
+    /* The exit service detached the worker's transport (transport_detach). */
     return NULL;
 }
 

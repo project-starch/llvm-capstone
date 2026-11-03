@@ -439,6 +439,19 @@ would create backing the domain can store a capability into with no pin and no
 sweep. `run-pthreads.py` checks it with an exit word in an untouched page of the
 main stack.
 
+A worker's meta block and exchange region are each a mapping of their own, and
+from the worker's attachment (its first delegate service) the worker holds both
+mappings: an unmap or a remap of a held mapping answers `EBUSY` to every
+caller, the worker included, so the launcher's writes into them never meet a
+fresh mapping at the same address. An attachment naming a mapping that already
+has a holder, or both blocks in one mapping, is refused. The hold ends only
+with the worker's own detach (`CV_SERVICE_TRANSPORT_DETACH`, which the SDK
+issues before it unmaps the blocks) or its exit; a later delegate service
+attaches again, `CV_TOUCH` included. A thread's exit word may not lie in the
+stack or frame mapping its exit gives back, since the word is stored after
+those unmaps. The error exit does not unmap: Linux releases the mappings after
+exit_group has stopped every worker.
+
 The launcher validates and loads an image without copying the file first. It
 opens the image read-only and asks the module (`CV_IMAGE`) to deny writers to
 it, as Linux does for a running executable: a launch while the image is open

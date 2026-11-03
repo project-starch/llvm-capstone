@@ -104,12 +104,16 @@ static void *exit_word_worker(void *arg)
  * exchange mapping and blocks in a read; the main thread tries to unmap that mapping, which must
  * be refused with EBUSY -- the launcher will write A's read result into it, through Linux, and a
  * fresh mapping at the same address would be backing the module never admitted. Then the pipe
- * is fed, A's read completes into its own exchange, and A exits normally. On a launcher without
- * the hold the unmap succeeds and the OK line is never printed. */
+ * is fed, A's read completes into its own exchange, and A itself tries to unmap it while still
+ * attached: refused too, since an unmap and a fresh mapping at the same address between two of
+ * its services would leave the launcher writing to that address unadmitted. A then exits
+ * normally (the SDK detaches before it unmaps). On a launcher without the hold the main
+ * thread's unmap succeeds; on one that exempts the owner, A's does; either way no OK line. */
 extern void *__capstone_virtual_exchange(void);
 static void *transport_exchange;
 static volatile int transport_blocked;
 static int transport_pipe[2];
+static int transport_own_unmap;
 static void *transport_worker(void *arg)
 {
     char byte;
@@ -117,6 +121,7 @@ static void *transport_worker(void *arg)
     assert(transport_exchange);
     transport_blocked = 1;
     assert(read(transport_pipe[0], &byte, 1) == 1 && byte == 't');
+    transport_own_unmap = munmap(transport_exchange, 1UL << 20) ? errno : 0;
     return arg;
 }
 static void *allocator_worker(void *arg)
@@ -219,8 +224,11 @@ int main(void)
         assert(!pthread_join(a, &result) && result == &values[0]);
         close(transport_pipe[0]); close(transport_pipe[1]);
         if (unmapped == 0) puts("VIRTUAL_PTHREAD_TRANSPORT_UNMAPPED");
-        else if (reason == EBUSY) puts("VIRTUAL_PTHREAD_OK transport_lifetime");
-        else printf("VIRTUAL_PTHREAD_TRANSPORT_ERRNO:%d\n", reason);
+        else if (reason != EBUSY) printf("VIRTUAL_PTHREAD_TRANSPORT_ERRNO:%d\n", reason);
+        else if (transport_own_unmap == 0) puts("VIRTUAL_PTHREAD_TRANSPORT_OWNER_UNMAPPED");
+        else if (transport_own_unmap != EBUSY)
+            printf("VIRTUAL_PTHREAD_TRANSPORT_OWNER_ERRNO:%d\n", transport_own_unmap);
+        else puts("VIRTUAL_PTHREAD_OK transport_lifetime");
     }
 
     {

@@ -33,17 +33,27 @@ extern uint64_t __capstone_sigmask_current(void);
 extern void __capstone_signals_thread_detach(void);
 
 /* A worker's meta block and exchange region are whole mappings of their own, not heap blocks:
- * the launcher writes them for the worker's whole life and holds their mappings against
- * retirement until the worker exits (exec.c, struct mapping.transport), and a mapping that is
- * exactly the block can be given back with one munmap here, by the worker itself, which is the
- * one retirement the launcher allows while the hold is up. */
+ * the launcher writes them while the worker is attached and holds their mappings against
+ * retirement until the worker detaches (exec.c, struct mapping.holder); it refuses an
+ * attachment whose block shares a mapping, so each block is mapped on its own. The worker
+ * detaches (__capstone_vm_transport_detach) and then gives the blocks back with one munmap
+ * each; before the detach that munmap is refused, to the worker too. */
 #define VIRTUAL_EXCHANGE_BYTES (1UL << 20)
-static void release_clone(struct virtual_clone *r)
+extern long __capstone_vm_transport_detach(void);
+static void release_transport(struct virtual_clone *r)
 {
+    if (!r->transport) return;
     __capstone_signals_thread_detach();
     free(r->transport);
-    if (r->meta) munmap(r->meta, CAPSTONE_DELEGATE_META_BYTES);
-    if (r->exchange) munmap(r->exchange, VIRTUAL_EXCHANGE_BYTES);
+    r->transport = NULL;
+    __capstone_vm_transport_detach();
+    munmap(r->meta, CAPSTONE_DELEGATE_META_BYTES);
+    munmap(r->exchange, VIRTUAL_EXCHANGE_BYTES);
+    r->meta = r->exchange = NULL;
+}
+static void release_clone(struct virtual_clone *r)
+{
+    release_transport(r);
     free(r);
 }
 static void *transport_block(size_t bytes)
