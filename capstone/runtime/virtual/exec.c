@@ -70,6 +70,17 @@ static const char *image_path;
 static struct capstone_spawner spawner = {.socket = -1};
 static struct capstone_delegate_host host;
 static __thread struct capstone_delegate_host *worker_host;
+/* The process transport's host state (host: its bounce buffer, its signal ring) is shared by every
+ * context that names the process transport. The domain serializes those contexts with its own
+ * transport lock, but that lock is the domain's: a context that skips it (a forged gp identity, or
+ * code that calls the service directly) must not reach this launcher's state from two native
+ * threads at once. host_lock is this launcher's own serialization of every serve on &host. The
+ * transport service takes it with service_lock released (a blocked read on the process transport
+ * stops only the contexts that share that transport, as their domain lock already does); the
+ * legacy service, which serves under service_lock, takes it inside. Nothing takes service_lock
+ * while holding host_lock. */
+static pthread_mutex_t host_lock = PTHREAD_MUTEX_INITIALIZER;
+static __thread int host_signals_attached;   /* this worker's thread records into host.signals */
 #define CV_MAX_THREADS 32
 static uint64_t thread_ids[CV_MAX_THREADS] = {0};
 static unsigned thread_done[CV_MAX_THREADS];
@@ -439,7 +450,12 @@ static void transport_detach(uint64_t tid)
         capstone_delegate_host_free(worker_host);
         free(worker_host);
         worker_host = NULL;
+    } else if (host_signals_attached) {
+        pthread_mutex_lock(&host_lock);
+        capstone_signals_detach();
+        pthread_mutex_unlock(&host_lock);
     }
+    host_signals_attached = 0;
 }
 static long unmap_arena(uintptr_t base, size_t bytes)
 {
@@ -1053,7 +1069,6 @@ static int virtual_service(uint64_t tid, struct cv_step *step)
             if (request == meta) {
                 if (h->exchange != (void *)(uintptr_t)step->args[1] ||
                     h->exchange_bytes != step->args[2]) return -1;
-                if (tid) capstone_signals_attach(&h->signals);
             } else if (tid) {
                 if (!worker_host) {
                     /* The worker's meta block (the signal block below is written at once) and
@@ -1096,10 +1111,21 @@ static int virtual_service(uint64_t tid, struct cv_step *step)
             } else return -1;
         }
         if (request->version != CAPSTONE_DELEGATE_VERSION) return -1;
-        /* Each native worker owns its bounce buffer and signal ring. A
-         * blocked epoll/read must not stop another virtual context. */
+        /* Each native worker owns its bounce buffer and signal ring, or serves the shared
+         * process host under host_lock. A blocked epoll/read must not stop another virtual
+         * context that does not share its transport. */
         if (separate) pthread_mutex_unlock(&service_lock);
+        if (h == &host) {
+            pthread_mutex_lock(&host_lock);
+            /* A worker on the process transport records its signals into the process ring
+             * (it shares the domain's signal state with every context on that transport). */
+            if (tid && separate) {
+                capstone_signals_attach(&host.signals);
+                host_signals_attached = 1;
+            }
+        }
         capstone_delegate_serve(h, request);
+        if (h == &host) pthread_mutex_unlock(&host_lock);
         if (separate) pthread_mutex_lock(&service_lock);
         if (trace) fprintf(stderr, "CAPSTONE_VM_SERVICE tid=%llu nr=%llu result=%lld\n",
                            (unsigned long long)tid, (unsigned long long)request->nr,
