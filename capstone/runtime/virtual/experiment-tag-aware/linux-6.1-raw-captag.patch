@@ -1,0 +1,181 @@
+diff --git a/arch/riscv/mm/captag.c b/arch/riscv/mm/captag.c
+index 7e46db6feb9d..a67fc936caf9 100644
+--- a/arch/riscv/mm/captag.c
++++ b/arch/riscv/mm/captag.c
+@@ -1,26 +1,9 @@
+ // SPDX-License-Identifier: GPL-2.0-only
+-/*
+- * EXPERIMENT (experiment/tag-aware-mm, never lands): Capstone capability tags follow pages.
+- *
+- * In Capstone's virtual profile a capability's tag is a property of the PHYSICAL granule.
+- * Linux moves and frees pages without knowing that: migration and compaction (folio_copy),
+- * COW (wp_page_copy, fork's copy_present_page), THP collapse and hugetlb copies copy bytes
+- * with scalar stores, so the destination comes out untagged; and a freed page keeps its
+- * tags for its next owner. The pinned capstone_vm module avoids both by pinning every page
+- * a domain can reach and sweeping it at retire. This file is the other design: tags move
+- * with every page copy and are cleared at every page free, so domain pages need no pin.
+- *
+- *  - copy_highpage / copy_user_highpage: copy the bytes, then give the destination exactly
+- *    the source's tags (every user-page copy in mm/ goes through one of the two).
+- *  - arch_free_page: clear the tags of the freed pages (free_pages_prepare, every order).
+- *  - arch_prepare_to_swap: refuse swap-out of a page that holds a tag; the page stays in
+- *    the swap cache, mapped again by the next fault, its tags intact (no swap-side store).
+- *
+- * The moves use the TEST-ONLY tag-move CSRs of capstone-qemu experiment/tag-copy
+- * (0x5c8-0x5cb, present only under x-capstone-test-csrs). They stand in for the raw tag
+- * moves (consensus D1) the ISA does not have: an instruction count prices each at one CSR
+- * access, which is NOT what a real primitive costs. "captag=off" on the command line turns
+- * every hook into the stock behaviour (for a kernel booted on a QEMU without the CSRs).
++/* EXPERIMENT: unpinned capability pages with raw granule transport.
++ * CLDRAW/CSTRAW replace copy_page, including its byte copy: scalar loads may
++ * project a tagged address rather than return the stored representation.
++ * Swap of tagged pages remains refused. The page query and CSR control arm
++ * are TEST-ONLY scaffolds, not proposed page instructions.
+  */
+ #include <linux/highmem.h>
+ #include <linux/init.h>
+@@ -30,38 +13,46 @@
+ #include <linux/string.h>
+ #include <asm/csr.h>
+ 
+-#define CSR_STAGSRC	0x5c8
+-#define CSR_STAGCOPY	0x5c9
+-#define CSR_STAGCLR	0x5ca
+-#define CSR_STAGANY	0x5cb
++#define CSR_STAGSRC  0x5c8
++#define CSR_STAGCOPY 0x5c9
++#define CSR_STAGCLR  0x5ca
++#define CSR_STAGANY  0x5cb
+ 
+ static DEFINE_STATIC_KEY_TRUE(captag_on);
+-
+-/* Counts, for pricing the stand-in: /sys/module/captag/parameters/. One hart. */
+-static unsigned long copies, frees, freed_pages, swap_refused;
++/* Boot selectors: raw (default), csr (control), off (negative control).
++ * Free selectors: tagged (default), scalar (every page), csr (control). */
++static bool copy_csr;
++static int free_mode;
++static unsigned long copies, frees, freed_pages, swap_refused, cleared_pages;
+ module_param(copies, ulong, 0444);
+ module_param(frees, ulong, 0444);
+ module_param(freed_pages, ulong, 0444);
+ module_param(swap_refused, ulong, 0444);
++module_param(cleared_pages, ulong, 0444);
+ 
+ static int __init captag_setup(char *s)
+ {
+ 	if (s && !strcmp(s, "off"))
+ 		static_branch_disable(&captag_on);
++	else if (s && !strcmp(s, "csr")) {
++		copy_csr = true;
++		free_mode = 2;
++	}
+ 	return 1;
+ }
+ __setup("captag=", captag_setup);
+ 
+-static void captag_copy(struct page *to, struct page *from)
++static int __init captag_free_setup(char *s)
+ {
+-	unsigned long flags;
+-
+-	local_irq_save(flags);
+-	csr_write(CSR_STAGSRC, page_to_phys(from));
+-	csr_write(CSR_STAGCOPY, page_to_phys(to));
+-	local_irq_restore(flags);
+-	++copies;
++	if (s && !strcmp(s, "scalar"))
++		free_mode = 1;
++	else if (s && !strcmp(s, "csr"))
++		free_mode = 2;
++	else if (s && !strcmp(s, "tagged"))
++		free_mode = 0;
++	return 1;
+ }
++__setup("captag_free=", captag_free_setup);
+ 
+ static bool captag_page_tagged(struct page *page)
+ {
+@@ -74,11 +65,41 @@ static bool captag_page_tagged(struct page *page)
+ 	return any != 0;
+ }
+ 
++static void captag_copy_raw(void *to, const void *from)
++{
++	unsigned long flags, count = PAGE_SIZE / 16;
++
++	/* The ordinary integer interrupt frame cannot save opaque t0. No
++	 * interrupt/preemption may interpose between its raw load and store. */
++	local_irq_save(flags);
++	asm volatile("1: .insn i 0x0b, 4, t0, %1, 0\n\t"
++		     ".insn s 0x0b, 5, t0, 0(%0)\n\t"
++		     "addi %0, %0, 16\n\taddi %1, %1, 16\n\t"
++		     "addi %2, %2, -1\n\tbnez %2, 1b\n\t"
++		     "li t0, 0"
++		     : "+r" (to), "+r" (from), "+r" (count)
++		     : : "t0", "memory");
++	local_irq_restore(flags);
++}
++
+ void copy_highpage(struct page *to, struct page *from)
+ {
+-	copy_page(page_address(to), page_address(from));
+-	if (static_branch_likely(&captag_on))
+-		captag_copy(to, from);
++	unsigned long flags;
++
++	if (!static_branch_likely(&captag_on)) {
++		copy_page(page_address(to), page_address(from));
++		return;
++	}
++	if (copy_csr) {
++		copy_page(page_address(to), page_address(from));
++		local_irq_save(flags);
++		csr_write(CSR_STAGSRC, page_to_phys(from));
++		csr_write(CSR_STAGCOPY, page_to_phys(to));
++		local_irq_restore(flags);
++	} else {
++		captag_copy_raw(page_address(to), page_address(from));
++	}
++	++copies;
+ }
+ EXPORT_SYMBOL(copy_highpage);
+ 
+@@ -89,13 +110,35 @@ void copy_user_highpage(struct page *to, struct page *from,
+ }
+ EXPORT_SYMBOL(copy_user_highpage);
+ 
++/* One scalar store per granule clears the tag by rule 1. Contents of a
++ * freed page are dead, so zeroing only the first word is sufficient. */
++static void captag_clear_scalar(struct page *page)
++{
++	void *p = page_address(page);
++	unsigned long n = PAGE_SIZE / 16;
++
++	asm volatile("1: sd zero, 0(%0)\n\taddi %0, %0, 16\n\t"
++		     "addi %1, %1, -1\n\tbnez %1, 1b"
++		     : "+r" (p), "+r" (n) : : "memory");
++}
++
+ void arch_free_page(struct page *page, int order)
+ {
++	unsigned long i, n = 1UL << order;
++
+ 	if (!static_branch_likely(&captag_on))
+ 		return;
+-	csr_write(CSR_STAGCLR, page_to_phys(page) | (unsigned long)order);
++	if (free_mode == 2) {
++		csr_write(CSR_STAGCLR, page_to_phys(page) | (unsigned long)order);
++	} else {
++		for (i = 0; i < n; ++i)
++			if (free_mode == 1 || captag_page_tagged(page + i)) {
++				captag_clear_scalar(page + i);
++				++cleared_pages;
++			}
++	}
+ 	++frees;
+-	freed_pages += 1UL << order;
++	freed_pages += n;
+ }
+ 
+ int arch_prepare_to_swap(struct page *page)
