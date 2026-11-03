@@ -75,6 +75,19 @@ class CensusTest(unittest.TestCase):
         self.assertTrue((target / 'benchspec/CPU/other').exists())
         self.assertFalse((target / 'benchspec/CPU/502.gcc_r/run').exists())
 
+    def test_plain_verification_metadata_is_required(self):
+        kit, tree = self.root / 'kit', self.root / 'tree'
+        for path in (kit, tree):
+            (path / 'config').mkdir(parents=True)
+            (path / 'config/riscv-plain.cfg').write_text('flags=baseline\n')
+        with self.assertRaisesRegex(ValueError, 'missing executable'):
+            census.check_plain_config(kit, tree)
+        (tree / 'config/riscv-plain.cfg').write_text('flags=baseline\n__HASH__\nexehash=fixture\n')
+        census.check_plain_config(kit, tree)
+        (kit / 'config/riscv-plain.cfg').write_text('flags=changed\n')
+        with self.assertRaisesRegex(ValueError, 'config changed'):
+            census.check_plain_config(kit, tree)
+
 
 if __name__ == '__main__':
     unittest.main()

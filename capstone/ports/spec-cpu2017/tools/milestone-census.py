@@ -127,6 +127,15 @@ def copy_spec(source, dest):
     shutil.copytree(source, dest, symlinks=False, ignore=ignore)
 
 
+def check_plain_config(kit, specroot):
+    installed = (specroot / 'config/riscv-plain.cfg').read_text()
+    body, marker, hashes = installed.partition('\n__HASH__')
+    if not marker or not hashes.strip():
+        raise ValueError('plain SPEC config is missing executable verification hashes')
+    if body.strip() != (kit / 'config/riscv-plain.cfg').read_text().strip():
+        raise ValueError('plain config changed; supply a template built with that config')
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument('commit')
@@ -230,8 +239,11 @@ bash "$T/capstone/ports/common/application/build-sdk.sh" "$W/sdk" "$MUSLDIR" "$W
         kit = src / 'capstone/ports/spec-cpu2017'
         # Always rebuild our own label: sources, flags and SDK are from this commit.
         label = 'qc' + key
-        for cfg in ('capstone-virtual.cfg', 'riscv-plain.cfg'):
-            shutil.copy2(kit / 'config' / cfg, specroot / 'config' / cfg)
+        shutil.copy2(kit / 'config/capstone-virtual.cfg', specroot / 'config/capstone-virtual.cfg')
+        # SPEC stores executable verification hashes at the end of its installed
+        # config. Keep those for the unchanged plain binaries; replacing this
+        # file with the source-only config makes --nobuild refuse every run.
+        check_plain_config(kit, specroot)
         shell('''source "$T/capstone/tests/capstone-test-env.sh"
 cd "$SPEC_ROOT"
 set +u; source ./shrc >/dev/null; set -u
@@ -255,6 +267,7 @@ runcpu --config=capstone-virtual --action=build --rebuild --tune=base --define s
     for path, digest in record['executables'].items():
         if sha(Path(path)) != digest:
             raise ValueError(f'cached SPEC executable changed: {path}')
+    check_plain_config(cache / 'src/capstone/ports/spec-cpu2017', cache / 'SPEC17')
     print(f"compiler+SDK {cap}; cache {key}", flush=True)
     # Fresh source, kit and adapter per milestone even when compiler inputs match.
     src = out / 'source'

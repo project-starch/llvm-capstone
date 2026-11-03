@@ -204,7 +204,10 @@ input matches a completed capN record; otherwise both are built with the
 census recipe (Release, assertions enabled, default virtual heap protection).
 The SPEC kit tree is additionally part of the executable cache key. New caches
 build the Capstone executables with a private label in a private SPEC copy;
-plain executables retain the template's recorded compiler and label. This is
+plain executables retain the template's recorded compiler, label and installed
+SPEC verification hashes. Their config must match the requested kit before
+its generated `__HASH__` section; a changed plain config requires a newly
+built template. This is
 a same-time plain execution, not a newly built plain compiler. Sources in the
 installed SPEC tree are never edited. Cached compiler, SDK dependencies and
 SPEC executable hashes are checked before reuse.
