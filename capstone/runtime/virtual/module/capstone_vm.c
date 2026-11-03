@@ -1066,10 +1066,14 @@ static int ensure_nodes(struct context *c, unsigned long required)
     collect_min = max(collect_min, node_capacity(c) / 4);
     if (owner && node_retired(c) >= max(required - available, collect_min)) {
         error = collect(c, owner);
-        if (error) return error;
-        c->retired_flat = c->pushed_flat = 0;
-        collected = true;
-        if (node_available(c) >= required) return 0;
+        /* An unpinned sweep can refuse a non-present or shared tagged page.
+         * Keep those identities retired, but permit fresh-node growth. */
+        if (error && !unpinned) return error;
+        if (!error) {
+            c->retired_flat = c->pushed_flat = 0;
+            collected = true;
+            if (node_available(c) >= required) return 0;
+        }
     }
     error = node_grow(c, required);
     if (!error) return 0;
