@@ -386,3 +386,23 @@ test, short first: imagick, nab, lbm, xz, mcf. About 6 board-hours; x264 Plain m
 
 **Reading.** Plain inside = user time, outside = system time, set beside Capstone's inside (in-context cycles) and
 outside (the rest). Tick accounting samples at 10 ms; over runs of 15 min to 2.5 h its error is well under 1 %.
+
+## Addendum 6 (2026-11-03 13:45): gcc test in Spatial and Plain
+
+**Correction.** gcc is in the paper set. An earlier session note treated gcc as excluded; only gcc train needed a change,
+and the lead's decision there is to cut its dataset until it fits the board (planned separately). gcc test already has
+MapLife and Full board runs (29 October, PASS).
+
+**Stages.**
+- Spatial: `stages-board/502.gcc_r-test-capstone-spatial`, the MapLife images unchanged, on board 2 after x264 Spatial.
+- Plain: `502.gcc_r` built into spec/tree-plain with the same plain-cc, musl and config as the other Plain images
+  (runcpu build of gcc alone; the other executables' sha256 checked unchanged), cpugcc_r_base.plain-rv64
+  `6385edb2ab2b`; stage `stages-test-plain/502.gcc_r-test-plain-rv64` (make-stage.py --plain-arms plain-rv64 --rdctr,
+  rdctr `6f05e7be00dc` as every Plain stage) and its `times` copy `stages-plain-times/502.gcc_r-test-plain-rv64-times`.
+- Twin: both rc 0, specdiff 1/1 PASS, plain-gate.py admits both; the outputs (t1.opts-O3_-finline-limit_50000.s
+  `58111208509d`) equal the Capstone test run's.
+- Board 1: both right after perlbench Plain test, before the other `times` stages.
+
+**Predictions.** As T1-T4 and U1-U4: rc 0 and specdiff PASS in Spatial and Plain; Spatial outputs and instret equal
+MapLife's (within 0.1 %); MapLife / Spatial and Full / Spatial in [1.00, 1.40] and [1.00, 1.50]; Spatial / Plain in
+[1.1, 3.5]; user + system within 3 % of elapsed.
