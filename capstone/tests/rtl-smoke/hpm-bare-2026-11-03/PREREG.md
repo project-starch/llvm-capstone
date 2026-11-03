@@ -70,3 +70,21 @@ Every image ends in the wrapper's idle loop at the cycle limit, which is how a b
 **History.** The first cut of arm 7 strode over `.data` (eedb57e45 / 58f84f0b6). Its kit simulation read 65 L1D misses
 of 256, because the wrapper's prologue loads every data doubleword and `.data` is the D$ size. The arm was moved to its
 own capability on 0x80100000 before anything ran on a board.
+
+## Correction after board 1's reading (2026-11-03, bitstream 3, board 1, runtime lane's run 19:25-19:35)
+
+Rule 2 said "every field of hpm-6" is exact. On board 1, hpm-6 read every counter as predicted (load, store, l1d_acc,
+l1d_miss, branch and stall all 0; ev3 5; 0 traps). Its CYCLES read 1,074 against the simulator's 1,171, and under the
+rule as written the arm graded FINDING for that reason alone.
+- Cycles is a timing field on every other image: hpm-1 read 1,078 against 1,128 on the same boot. The arm exists to
+  show that `mcountinhibit` stops the six counters, and cycles is mcycle, which the inhibit does not touch.
+- The rule is corrected to: every field of hpm-6 EXCEPT cycles. This correction is made AFTER the reading and is
+  recorded here as such.
+- Under the rule as written the verdict is FINDING (hpm-6 cycles only). Under the corrected rule it is AS EXPECTED.
+- The grader's controls were re-run after the change: LDC counted as a load gives FINDING, a wrong bitstream gives
+  WRONG BITSTREAM, no check removed gives the pattern FAILS, and an hpm-6 counter reading 5 gives FINDING.
+
+Board 1 by value, every exact field of all 7 images as pre-registered:
+- hpm-3 and hpm-4 stall read 1,530, the simulator's count exactly;
+- LDC and STC count as neither load nor store;
+- hpm-7 counts 256 misses for 256 lines.
