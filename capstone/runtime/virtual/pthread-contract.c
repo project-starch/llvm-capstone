@@ -393,23 +393,36 @@ static void *private_tls_child(void *arg)
      * failure instead of conflating it with a launcher setup failure. */
     capstone_virtual_thread_exit(NULL);
 }
-static void *private_tls_creator(void *arg)
+static void *private_tls_target;
+static volatile int private_tls_ready, private_tls_done;
+static void private_tls_refuse(void *tp)
 {
-    (void)arg;
     char *stack = mmap(NULL, 65536, PROT_READ | PROT_WRITE,
                        MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     assert(stack != MAP_FAILED);
-    /* Attach the creator so a broken implementation encounters its hold. */
-    assert(write(1, "PRIVATE_TLS_BEGIN\n", 18) == 18);
-    void *tp;
-    __asm__ volatile("movc %0, tp" : "=r"(tp));
     long id = capstone_virtual_thread_create(private_tls_child, NULL, stack + 65536, tp);
     int reason = errno;
     if (id > 0) capstone_virtual_thread_join(id);
     assert(id == -1 && reason == ENOTSUP);
     assert(!munmap(stack, 65536));
+}
+static void *private_tls_creator(void *arg)
+{
+    (void)arg;
+    assert(write(1, "PRIVATE_TLS_BEGIN\n", 18) == 18);
+    void *tp;
+    __asm__ volatile("movc %0, tp" : "=r"(tp));
+    private_tls_refuse(tp);
+    private_tls_target = tp;
+    __atomic_store_n(&private_tls_ready, 1, __ATOMIC_RELEASE);
+    while (!__atomic_load_n(&private_tls_done, __ATOMIC_ACQUIRE)) { }
     puts("VIRTUAL_PTHREAD_OK private_tls_refused");
     return NULL;
+}
+static void *private_tls_other(void *arg)
+{
+    private_tls_refuse(arg);
+    return arg;
 }
 
 int main(int argc, char **argv)
@@ -420,7 +433,14 @@ int main(int argc, char **argv)
     if (argc == 2 && !strcmp(argv[1], "private-tls")) {
         pthread_t creator;
         assert(!pthread_create(&creator, NULL, private_tls_creator, NULL));
+        while (!__atomic_load_n(&private_tls_ready, __ATOMIC_ACQUIRE)) { }
+        private_tls_refuse(private_tls_target);  /* main -> another pthread */
+        pthread_t other;
+        assert(!pthread_create(&other, NULL, private_tls_other, private_tls_target));
+        assert(!pthread_join(other, NULL));     /* pthread -> another pthread */
+        __atomic_store_n(&private_tls_done, 1, __ATOMIC_RELEASE);
         assert(!pthread_join(creator, NULL));
+        puts("VIRTUAL_PTHREAD_OK private_tls_other_refused");
         return 0;
     }
     pthread_t a, b;

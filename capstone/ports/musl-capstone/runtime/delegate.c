@@ -127,8 +127,17 @@ static struct dl_transport *dl_transport(void) {
   __asm__ volatile("movc %0, tp" : "=r"(tp));
   return tp && private_transport ? private_transport : &default_transport;
 }
-int __capstone_delegate_has_private_transport(void) {
-  return dl_transport() != &default_transport;
+int __capstone_delegate_has_private_transport(void *target_tp) {
+  if (!target_tp) return 0;
+  void *tp;
+  __asm__ volatile("movc %0, tp" : "=r"(tp));
+  /* Local-exec TLS has the same offset in every live thread. Preserve the
+   * supplied TLS capability when locating its transport slot; inspecting
+   * only our own TLS would miss a different pthread's held transport. */
+  intptr_t offset = __builtin_capstone_cap_get_cursor(&private_transport) -
+                    __builtin_capstone_cap_get_cursor(tp);
+  struct dl_transport **slot = (void *)((char *)target_tp + offset);
+  return *slot != NULL;
 }
 #define dl_entry (dl_transport()->entry)
 #define dl_exchange (dl_transport()->exchange)

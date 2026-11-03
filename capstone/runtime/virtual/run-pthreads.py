@@ -147,6 +147,7 @@ echo VIRTUAL_STAGED_DONE
         checks[mode] = bool(part and 'VIRTUAL_PTHREAD_OK abandoned_identity\n' in part[1])
     part = re.search(r'PTHREAD_IDENTITY_BEGIN:private-tls\n(.*?)PTHREAD_IDENTITY_EXIT:private-tls:0\n', log, re.S)
     checks['private_tls_refused'] = bool(part and 'VIRTUAL_PTHREAD_OK private_tls_refused\n' in part[1])
+    checks['private_tls_other_refused'] = bool(part and 'VIRTUAL_PTHREAD_OK private_tls_other_refused\n' in part[1])
     checks['exit'] = log.count('PTHREAD_EXIT:0') == 1
     checks['cleanup'] = run.returncode == 0 and log.count('PTHREAD_CLEANUP:0') == 1
     record = dict(status='PASS' if all(v is True or v == 'uninstrumented' for v in checks.values()) else 'FAIL',
