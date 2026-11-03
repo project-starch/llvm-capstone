@@ -173,9 +173,22 @@ Steps without Linux or ISA changes (module, launcher, SDK, compiler):
 Experiments that test the principal risks before any production Linux or ISA change (they never land; passing one
 establishes only the properties it tests):
 
-- **Confused deputy** (lane AB): serve read and write inside the module under a hold, race a free and recycle of the
-  buffer, and show with a negative control that without the hold the write lands in the recycled memory. This tests
-  the recycled-memory race, not revocation correctness in general.
+- **Confused deputy** (lane AB, branch experiment/in-module-io 1b1ed8682f3b, does not land): serve read and write
+  inside the module under a hold, race a free and recycle of the buffer. RESULT: a hold on the buffer's mapping
+  prevents the recycled-memory race (the unmap of a range under an in-flight copy is refused with EBUSY, the read
+  completes into the still-held mapping, nothing reaches the new arena at the same address; with the hold disabled the
+  write lands in the new arena, so the test can see the defect), at about 235 attempts per call. A hold cannot
+  protect OBJECT lifetime: when the buffer's capability was revoked but its range is still inside a live, held arena
+  (a heap object freed and reused), the kernel's write lands in the new owner and, in one case, in the allocator's own
+  metadata. The module validates the arena, not the capability, and the SDK's submission check also accepts a revoked
+  capability. Consequence for the end state: range lifetime = a hold, cheap; object lifetime = the kernel needs a
+  hardware-checked capability check per copied buffer argument (trusted S performs no capability memory access,
+  isa.md Q-23, so this is an ISA-visible requirement), and leases are needed only where the copier is a device. Until
+  that exists the temporally safe path is the one that copies back through the caller's capability (it faults), about
+  38 % cheaper than today at 64 KiB. Priced (attempts per call): a 1 B pipe read costs 8.8 to 9.9 K today and 3.1 K
+  with the in-module direct copy against 1.1 K on plain Linux; a 64 KiB pipe read 154 to 160 K, 43.6 K and 40.5 K.
+  The test did not cover interruption by a signal, and a held range makes munmap return EBUSY where Linux would not
+  (a deferred unmap is the alternative, unresolved).
 - **Tag loss without pins** (lane AC; experimental Linux and QEMU-model code): raw granule transfers in the QEMU
   model, the tag-aware Linux prototype rebuilt on them, a torture test (compaction, COW, two processes) with
   stale-capability, reuse and negative controls.
