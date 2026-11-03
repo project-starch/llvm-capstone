@@ -1,7 +1,11 @@
-## 2026-11-03 — Judge milestones with seven complete benchmark pairs
+## 2026-11-04 — Judge milestones with seven complete benchmark pairs
 
 Use the [widened census](../../ports/spec-cpu2017/tools/profile.md#one-command-milestone-census)
-for gcc, imagick, lbm, nab, perlbench, mcf and xz. Keep full PASS pairs separate
+for gcc, imagick, lbm, nab, perlbench, mcf and xz. Use the
+[census6 accounting](../plans/2026-11-03-boundary-north-star.md) in p12
+`~/lanes/laneQC/quick-results/runs/census6-reported` as the seven-program
+baseline; its original capture and offline reporting recovery are retained.
+Keep full PASS pairs separate
 from the qualified quick prefixes: the perl prefix covers makerand.pl only,
 and the xz prefix covers its first invocation. Full perlbench needs relative
 staging, guest-owned files and two supervisor slots; full xz needs all twelve

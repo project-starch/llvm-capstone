@@ -1,5 +1,18 @@
 # Current Capstone state
 
+## 2026-11-04 — Seven-program census 6 reported
+
+The [north-star record](../plans/2026-11-03-boundary-north-star.md) now covers
+gcc, imagick, lbm, nab, perlbench, mcf and xz on dev `114b90b7be2e`.
+All fourteen full SPEC oracles pass. Perlbench's successful execution exposed
+a reporter assumption about nested launches; separate offline reporting with
+the corrected tool validates both windows and all 319 image records. The
+original capture failure is retained, and all 41 previously reported full and
+quick profiles retain identical counts. Canonical results are p12
+`~/lanes/laneQC/quick-results/runs/census6-reported`; the original capture is
+`census6-verified`. Full xz has twelve invocations per arm. No new SPEC source
+adaptation or runtime/compiler change was made for this census.
+
 ## 2026-11-03 — Seven-benchmark quick census
 
 The [QC2 driver](../../ports/spec-cpu2017/tools/profile.md#seven-benchmark-quick-qualification-qc2)

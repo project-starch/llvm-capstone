@@ -77,6 +77,45 @@ change in particular must not be attributed entirely to the mapping registry.
 The [census tool instructions](../../ports/spec-cpu2017/tools/profile.md#one-command-milestone-census)
 define source reuse, disk reserves and the separate fixed-prefix quick checks.
 
+**Census 6 (QC2)** — seven SPEC test benchmarks on dev `114b90b7be2e`,
+captured on p12 on 2026-11-03 UTC and reported on 2026-11-04 local time.
+All fourteen SPEC oracles pass. The canonical accounting is
+`~/lanes/laneQC/quick-results/runs/census6-reported/northstar.{txt,json}`;
+`census6-verified` retains the original capture, verdicts and watchdog records.
+Compiler/SDK inputs still match cap4; QEMU remains `5f329b5061ea`.
+
+| Benchmark | Program overhead | Boundary overhead | H_A / H_B | Change from census5, program / boundary (pp) |
+|---|---:|---:|---:|---:|
+| 502.gcc_r | +25.3811 % | +47.7386 % | 820,412 / 1,260,636 | +0.0080 / -0.8775 |
+| 538.imagick_r | +3.2615 % | -2.4171 % | 19,008,508 / 14,560,339 | +0.0742 / +2.9977 |
+| 519.lbm_r | +2.9238 % | +3.7324 % | 45,089,656 / 34,868,840 | -0.0001 / +0.0479 |
+| 544.nab_r | +7.0872 % | +0.0808 % | 2,249,418 / 2,744,450 | +0.0005 / +0.0081 |
+| 500.perlbench_r | +31.2578 % | +3.6693 % | 9,596,819,827 / 10,045,123,920 | n/a / n/a |
+| 505.mcf_r | -1.5399 % | +8.5151 % | 40,618,006 / 86,217,342 | n/a / n/a |
+| 557.xz_r | +1.9554 % | +8.9644 % | 379,624,898 / 358,474,856 | n/a / n/a |
+
+The captured perlbench pipeline exited nonzero after its successful oracle:
+the old reporter expected two image records but received 319 nested launches.
+The corrected reporter groups the records by staged invocation (1 and 318),
+requires identical entry/code placement within each group, and keeps executable
+hash and instruction-byte checks. Offline reporting of all three QC2 batches
+preserved the counts of all 41 previously successful profiles. The original
+perlbench FAIL/exit-1 records remain intact beside the revalidated oracle and
+successful reporting record; this is a reporting recovery, not a new guest run.
+
+Full perlbench uses two supervisor slots, relative tmpfs staging and mapped-xattr
+ownership in both arms. Its oracle retains the kit's existing four run-copy
+`pack.t` adaptations. Full xz includes twelve invocations in each arm. All
+captured watchdogs have zero remaining descendants. Quick prefixes remain
+separate and do not measure the nested perl tests or all xz invocations.
+
+These are single full pairs on the same runtime/compiler commit as census5,
+with a corrected staging wrapper. Changes from census5 are not runtime gains;
+kernel/harness variation remains, particularly for imagick. The three new
+benchmarks have no compatible census5 history. Full P/K/H terms, signed paired
+top-fifteen function deltas for all seven, and prior-Capstone deltas for the
+original four are retained with the canonical accounting.
+
 ### 1.2 Per-event costs (busy attempts per unit; p12 lane microbenchmarks `lqmicro`, branch perf/linux-question-micro)
 
 | unit | pinned | tag-aware Linux prototype | plain Linux | source |

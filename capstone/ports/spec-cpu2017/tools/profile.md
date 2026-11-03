@@ -363,3 +363,24 @@ supersede those initial quick numbers. Perl's prefix covers `makerand.pl`;
 it does not validate the nested test driver. Full xz and perlbench acceptance
 require the complete SPEC oracle, with the kit's existing run-directory
 `pack.t` adaptations explicitly retained.
+
+### Seven-benchmark full qualification (QC2)
+
+All fourteen SPEC test oracles pass on dev `114b90b7be2e`. The
+[census6 table](../../../docs/plans/2026-11-03-boundary-north-star.md) uses p12
+`~/lanes/laneQC/quick-results/runs/census6-reported`. Its raw capture,
+`census6-verified`, retains a nonzero perlbench reporting exit: the old reporter
+rejected 319 image launches for two top-level invocations after SPEC had passed.
+The corrected reporter handles the two staged groups (1 and 318 records);
+unknown images or differing placements remain errors. No benchmark was rerun
+or raw counter edited to recover reporting.
+
+`qc2-reprocess.py` on p12 rechecks archived windows and the perlbench oracle,
+then writes separate reported directories. Its replay of the full batch and
+both quick batches leaves all 41 previously successful profiles' total,
+function, class and instruction-mix counts identical. The derived perlbench
+`result.json` is the unchanged oracle checker's output; `captured-result.json`
+and `watchdog.json` retain the original failure. `postprocess.json` records the
+successful reporting command and recovery. `qc2-final-summary.py` verifies
+all seven pairs and both quick repeats. The four existing run-copy `pack.t`
+adaptations remain in the full perlbench oracle's scope.
