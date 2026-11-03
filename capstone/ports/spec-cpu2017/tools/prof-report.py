@@ -196,7 +196,10 @@ helpers = [Image("launcher", LAUNCHER), Image("job-helper", JOB)] if A.kind == "
 
 os.makedirs(os.path.join(OUT, "profile"), exist_ok=True)
 total_classes, total_funcs, total_mix = collections.Counter(), collections.Counter(), collections.defaultdict(collections.Counter)
-summary = {"run": OUT, "kind": A.kind, "windows": []}
+# A work-bounded slice (tools/stop-at.py): what it stopped at, so a comparison can insist on the same.
+slice_path = os.path.join(OUT, "slice.json")
+summary = {"run": OUT, "kind": A.kind, "windows": [],
+           "slice": json.load(open(slice_path)) if os.path.exists(slice_path) else None}
 for k, (inv_id, inv) in enumerate(invocations):
     n = inv.get("detail", {}).get("window")
     if n is None:
@@ -224,6 +227,12 @@ for k, (inv_id, inv) in enumerate(invocations):
             fail("a plain program must be ET_EXEC (static, no PIE)")
         code_lo = code_hi = None
         images = [prog, profrun]
+    sl = summary["slice"]
+    if sl and n == sl["window"]:
+        # A slice is only as good as the identity of what stopped it: the stop address must hold
+        # the site's bytes in the image as placed for this window, or the report is refused.
+        if not prog.bytes_match(sl["stopped_at"], sl["len"], sl["bytes"]):
+            fail(f"slice: the image at {sl['stopped_at']:#x} does not hold the stop site's bytes {sl['bytes']:08x}")
     classes, funcs = collections.Counter(), collections.Counter()
     mix, mismatch = collections.defaultdict(collections.Counter), collections.Counter()
     for va, ln, b, att in recs:
@@ -264,6 +273,18 @@ for k, (inv_id, inv) in enumerate(invocations):
         funcs[(cls, fn)] += att
         mix[cls][insn_class(b, ln)] += att
     total = sum(classes.values())
+    if sl and n == sl["window"]:
+        # ... and what ran inside the stop function itself must be the image's bytes: the plain arm
+        # shares its link addresses with other static programs, which may run in a window, but not
+        # inside the site's function unless it is their code that fed the stop.
+        hi = sl["stopped_at"] + max(sl.get("size", 0), sl["len"] + sl.get("next_len", 0))
+        bad = [(va, b) for va, ln, b, att in recs if sl["stopped_at"] <= va < hi and not prog.bytes_match(va, ln, b)]
+        if bad:
+            fail(f"slice: {len(bad)} instructions executed inside {sl['symbol']} at {sl['stopped_at']:#x} are not the "
+                 f"image's bytes (first {bad[0][0]:#x}: {bad[0][1]:08x}): the stop did not happen in the image it names")
+    if sl and n == sl["window"] and classes.get("other (bytes differ)"):
+        fail(f"slice: {classes['other (bytes differ)']:,} attempts in the stopped window's program range are not "
+             "the image's bytes: the stop did not happen in the image it names")
     report = {
         "invocation": inv_id, "window": n, "exe": exe, "exe_sha256": sha, "argv": inv.get("argv"),
         "total_attempts": total, "classes": dict(classes.most_common()),

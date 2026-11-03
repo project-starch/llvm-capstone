@@ -44,11 +44,47 @@ UP_EXTRA=()
 for p in "${CPU_PROPS[@]}"; do [ -n "$p" ] && UP_EXTRA+=(--cpu-prop "$p"); done
 [ "$(jopt "arms.$ARM.exact_bounds" false)" = True ] && UP_EXTRA+=(--exact-bounds)
 ICOUNT=$(jopt platform.icount 0); MEM=$(jopt platform.memory 8G)
+# A work-bounded slice (tools/profile.md, "Work-bounded slices"): the window closes at the K-th
+# entry of a function and the run ends there. PROFILE_STOP_AT=SYMBOL:K[,START_SYMBOL:K] (env) or
+# the arms file's "stop_at": {"symbol": S, "count": K[, "start_symbol": S2, "start_count": K2]},
+# the arm's own over the file's top-level one. The symbol is resolved in the arm's binary.
+STOP_JSON=$(python3 - "$ARMS" "$ARM" "${PROFILE_STOP_AT:-}" <<'PY'
+import json, sys
+d = json.load(open(sys.argv[1])); env = sys.argv[3]
+s = d["arms"][sys.argv[2]].get("stop_at", d.get("stop_at"))
+if env:
+    parts = [p.rpartition(":") for p in env.split(",")]
+    if any(not n or not k.isdigit() for n, _, k in parts) or len(parts) > 2:
+        sys.exit("profile: PROFILE_STOP_AT is SYMBOL:K[,START_SYMBOL:K]")
+    s = {"symbol": parts[0][0], "count": int(parts[0][2])}
+    if len(parts) == 2:
+        s.update(start_symbol=parts[1][0], start_count=int(parts[1][2]))
+print(json.dumps(s) if s else "")
+PY
+)
+STOP_ARGS=()
+if [ -n "$STOP_JSON" ]; then
+  stop_sym=$(python3 -c "import json,sys;print(json.loads(sys.argv[1])['symbol'])" "$STOP_JSON")
+  # the arm's build of this benchmark that defines the symbol; with several, the benchmark's own
+  cands=()
+  for e in "$SPEC_ROOT/benchspec/CPU/$BENCH/exe/"*"_base.$LABEL"; do
+    [ -f "$e" ] && "$(jopt nm llvm-nm)" --defined-only "$e" 2>/dev/null | awk -v s="$stop_sym" '$3 == s && $2 ~ /^[TtWw]$/ {f=1} END {exit !f}' && cands+=("$e")
+  done
+  [ ${#cands[@]} = 1 ] && STOP_EXE=${cands[0]} || STOP_EXE=$SPEC_ROOT/benchspec/CPU/$BENCH/exe/${BENCH#*.}_base.$LABEL
+  [ ${#cands[@]} -ge 1 ] || { echo "profile: no $BENCH binary of label $LABEL defines $stop_sym" >&2; exit 2; }
+  printf '%s\n' "${cands[@]}" | grep -qxF "$STOP_EXE" || { echo "profile: $stop_sym is in ${cands[*]}, not one binary" >&2; exit 2; }
+  python3 "$KIT/tools/stop-at.py" resolve --nm "$(jopt nm llvm-nm)" --kind "$KIND" --exe "$STOP_EXE" \
+    $(python3 -c "import json,sys;d=json.loads(sys.argv[1]);print('--symbol',d['symbol'],'--count',d['count'],*(['--start-symbol',d['start_symbol'],'--start-count',d['start_count']] if d.get('start_symbol') else []))" "$STOP_JSON") \
+    > "$OUT/stop-at.json"
+  mapfile -t stop_plugin < <(python3 -c "import json,sys;print('\n'.join(json.load(open(sys.argv[1]))['plugin_args']))" "$OUT/stop-at.json")
+  for a in "${stop_plugin[@]}"; do STOP_ARGS+=(--plugin-arg "$a"); done
+fi
 R=$OUT/record.txt; : > "$R"
 note() { echo "$*" | tee -a "$R"; }
 note "arm $ARM kind $KIND config $CFG label $LABEL size $SIZE bench $BENCH"
 note "arm_json $(j "arms.$ARM")"
 note "platform $PL icount $ICOUNT memory $MEM share_model $SHARE_MODEL"
+note "stop_at ${STOP_JSON:-none}${STOP_ARGS:+ plugin ${STOP_ARGS[*]}}"
 [ -f "$PL/platform.json" ] && python3 - "$PL" >> "$R" <<'PY'
 import hashlib, json, os, sys
 pl = sys.argv[1]; want = json.load(open(os.path.join(pl, "platform.json"))).get("files", {})
@@ -70,7 +106,7 @@ mkdir -m 700 "$VMSTATE"; ln -s "$VMSTATE" "$OUT/vm"
 vm() { env PYTHONPATH="$VMHOST" python3 -m capstone_vm --state "$OUT/vm" "$@"; }
 mkdir -p "$OUT/capprof"
 vm up --profile virtual --memory "$MEM" --share-model "$SHARE_MODEL" --share "$SHARE" \
-  --plugin "$PL/plugins/libcapprof.so" --plugin-arg out="$OUT/capprof" --no-pcrel --icount "$ICOUNT" "${UP_EXTRA[@]}" \
+  --plugin "$PL/plugins/libcapprof.so" --plugin-arg out="$OUT/capprof" "${STOP_ARGS[@]}" --no-pcrel --icount "$ICOUNT" "${UP_EXTRA[@]}" \
   --qemu "$PL/qemu-system-riscv64" --kernel "$PL/images/Image" --firmware "$PL/images/fw_jump.elf" \
   --rootfs "$PL/images/rootfs.ext2" \
   --launcher "$PL/adapter/capstone-vexec" --job-helper "$PL/adapter/capstone-job" \
@@ -142,8 +178,11 @@ if kind == "plain":
     json.dump(r, open(f"{out}/result.json", "w"), indent=1)
 print(r["verdict"], r.get("reasons"))
 PY
+# A slice: runcpu cannot validate a run that ended inside the program, so the verdict is SLICE when
+# the plugin stopped where asked and everything before the stop passed (tools/stop-at.py finish).
+[ -z "$STOP_JSON" ] || python3 "$KIT/tools/stop-at.py" finish "$OUT" || echo "profile: stop-at.py finish failed; the verdict stays" >&2
 # Every guest invocation must have its window, complete (capprof's "# total" footer) and valid, and
-# no window may exist without an invocation. A run whose verdict is not PASS or whose windows are
+# no window may exist without an invocation. A run whose verdict is not PASS (or SLICE) or whose windows are
 # not all there exits 1, so a batch cannot read it as a result.
 windows_rc=0
 python3 - "$OUT" <<'PY' || windows_rc=$?
@@ -154,7 +193,7 @@ guest = [d for d in inv if d.get("route") in ("guest", "guest-plain")]
 seen = [d.get("detail", {}).get("window") for d in guest]
 if sorted(x for x in seen if x is not None) != list(range(len(guest))):
     bad.append(f"window indices {seen} are not 0..{len(guest) - 1} once each")
-stray = [f for f in os.listdir(os.path.join(out, "capprof")) if not re.fullmatch(r"window-\d+\.tsv", f)]
+stray = [f for f in os.listdir(os.path.join(out, "capprof")) if not re.fullmatch(r"window-\d+\.tsv|stopped", f)]
 if stray:
     bad.append(f"stray files in capprof/: {stray}")
 for d in guest:
@@ -175,10 +214,10 @@ extra = len(glob.glob(os.path.join(out, "capprof", "window-*.tsv"))) - len(guest
 if extra:
     bad.append(f"{extra} more windows than guest invocations")
 r = json.load(open(os.path.join(out, "result.json")))
-if r.get("verdict") != "PASS":
+if r.get("verdict") not in ("PASS", "SLICE"):
     bad.append("verdict " + str(r.get("verdict")))
 json.dump({"windows_ok": not bad, "problems": bad, "guest_invocations": len(guest)}, open(os.path.join(out, "windows.json"), "w"), indent=1)
-if bad and r.get("verdict") == "PASS":   # the verdict file must not say PASS for a run without complete windows
+if bad and r.get("verdict") in ("PASS", "SLICE"):   # the verdict file must not say PASS for a run without complete windows
     r["verdict"] = "FAIL"; r["reasons"] = r.get("reasons", []) + ["windows: " + "; ".join(bad)]
     json.dump(r, open(os.path.join(out, "result.json"), "w"), indent=1)
 print("windows:", "ok" if not bad else bad)
@@ -189,5 +228,13 @@ mkdir -p "$OUT/profile"
 report_rc=0
 python3 "$KIT/tools/prof-report.py" --out "$OUT" --platform "$PL" --kind "$KIND" --nm "$(jopt nm llvm-nm)" > "$OUT/profile/summary.txt" 2> "$OUT/profile/report.err" || report_rc=$?
 [ $report_rc = 0 ] || { echo "prof-report failed (rc=$report_rc): $(tail -1 "$OUT/profile/report.err")" | tee -a "$OUT/profile/summary.txt" >&2; }
+# A slice the attribution refuses (its stop is not in the image it names) is no result.
+[ $report_rc = 0 ] || python3 - "$OUT" <<'PY'
+import json, sys
+p = sys.argv[1] + "/result.json"; r = json.load(open(p))
+if r.get("verdict") == "SLICE":
+    r["verdict"] = "FAIL"; r["reasons"] = r.get("reasons", []) + ["prof-report refused the slice: " + open(sys.argv[1] + "/profile/report.err").read().strip().splitlines()[-1]]
+    json.dump(r, open(p, "w"), indent=1)
+PY
 head -30 "$OUT/profile/summary.txt"
 [ $windows_rc = 0 ] && [ $report_rc = 0 ] || exit 1

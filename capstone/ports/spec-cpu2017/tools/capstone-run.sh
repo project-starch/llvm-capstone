@@ -48,6 +48,14 @@ json.dump({"route": route, "status": int(status), "cwd": cwd, "argv": argv, "exe
 PY
 }
 refuse() { echo "capstone-run: refused ($1): $*" >&2; record refused 125 "$(printf '"%s"' "$1")" "${@:2}"; exit 125; }
+# A work-bounded slice (tools/profile.sh, stop_at) ends the guest at its stop site: capprof writes
+# capprof/stopped and terminates QEMU. Every later command runcpu still issues is recorded as
+# after-stop and fails at once, so neither a dead VM nor SPEC's validation of a cut-short output
+# is waited for.
+if [ -e "$CAPSTONE_SPEC_RECORD/capprof/stopped" ]; then
+  echo "capstone-run: the profiling slice has ended ($(cat "$CAPSTONE_SPEC_RECORD/capprof/stopped")): $*" >&2
+  record after-stop 125 null "$@"; exit 125
+fi
 
 machine=$(od -An -tx1 -j18 -N2 "$exe" 2>/dev/null | tr -d ' \n' || true)
 spec_bin=$(cd "$SPEC/bin" && pwd -P)
@@ -152,6 +160,11 @@ else
   env PYTHONPATH="$CAPSTONE_VM_HOST" python3 -m capstone_vm --state "$CAPSTONE_VM_STATE" \
     run --cwd "$guest" --result "$inv/$id.guest.json" -e CAPSTONE_VM_STATS=1 "${profile[@]}" -- "${words[@]}" || rc=$?
   route=guest
+fi
+if [ -n "${copyback:-}" ] && [ -e "$CAPSTONE_SPEC_RECORD/capprof/stopped" ]; then
+  # A work-bounded slice ended the VM inside this invocation (tools/profile.sh, stop_at): its
+  # output files died with the guest, and the invocation is recorded as the slice's last one.
+  copyback=
 fi
 if [ -n "${copyback:-}" ]; then   # the guest's output files onto runcpu's, after the window
   # all or nothing: a failed copy keeps the guest's files and fails the invocation. (The copies are

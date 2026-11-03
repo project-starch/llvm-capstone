@@ -30,6 +30,17 @@ def load(p):
 
 da, fa = load(A.a)
 db, fb = load(A.b)
+# Two work-bounded slices (tools/stop-at.py) compare only when they stopped at the same entry of the
+# same function: then both did the same work. A slice and a full run, or two slices of different
+# work, are refused.
+def work(d):
+    s = d.get("slice")
+    return None if not s else (s["symbol"], s["count"], json.dumps(s.get("start"), sort_keys=True))
+if work(da) != work(db):
+    sys.exit(f"prof-compare: the runs did not do the same work: A {work(da) or 'full run'}, B {work(db) or 'full run'}")
+if work(da):
+    print(f"slices: both stopped at entry {da['slice']['count']:,} of {da['slice']['symbol']}"
+          + (f", started at {da['slice']['start']}" if da['slice'].get('start') else ""))
 ta, tb = da["total_attempts"], db["total_attempts"]
 print(f"A {A.a}: {ta:,} attempts ({len(da['windows'])} windows)")
 print(f"B {A.b}: {tb:,} attempts ({len(db['windows'])} windows)")
