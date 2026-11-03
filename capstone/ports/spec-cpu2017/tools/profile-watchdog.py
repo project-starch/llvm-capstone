@@ -79,6 +79,8 @@ def main():
         raise OSError(ctypes.get_errno(), 'cannot become child subreaper')
     if not hasattr(os, 'pidfd_open') or not hasattr(signal, 'pidfd_send_signal'):
         raise RuntimeError('Linux pidfd support is required')
+    # Check kernel support before creating anything that would need cleanup.
+    os.close(os.pidfd_open(os.getpid()))
     interrupted = []
     for signum in (signal.SIGTERM, signal.SIGINT, signal.SIGHUP):
         signal.signal(signum, lambda sig, frame: interrupted.append(sig))
@@ -124,7 +126,12 @@ def main():
     args.out.mkdir(parents=True, exist_ok=True)
     if reason:
         path = args.out / 'result.json'
-        result = json.loads(path.read_text()) if path.exists() else {}
+        try:
+            result = json.loads(path.read_text()) if path.exists() else {}
+        except json.JSONDecodeError:
+            # A deadline can interrupt the harness halfway through this write.
+            path.replace(args.out / 'result-interrupted.json')
+            result = {}
         result.update(verdict='FAIL', reasons=result.get('reasons', []) + [reason])
         path.write_text(json.dumps(result, indent=2) + '\n')
     record = dict(limit_seconds=args.seconds, elapsed_seconds=time.monotonic()-started,

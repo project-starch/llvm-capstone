@@ -239,7 +239,8 @@ perlbench uses `x-capstone-supervisor-slots=2` and module parameter
 settings. Each benchmark/arm has its own saved arms file. Full xz includes
 all twelve SPEC test invocations in the harness's normal order, sums their
 windows, and requires the full SPEC oracle to pass. Quick xz stops inside
-the first invocation; later invocations are recorded as `after-stop` refusals.
+the first invocation; the remaining eleven do not execute. Any commands
+subsequently requested by the harness are refused as `after-stop`.
 Its quick number does not represent all six compression levels.
 
 Every profile runs under `profile-watchdog.py`, a Linux child subreaper.

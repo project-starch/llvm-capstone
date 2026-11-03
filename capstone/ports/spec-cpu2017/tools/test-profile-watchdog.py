@@ -79,6 +79,13 @@ else:
                 proc.terminate()
                 proc.communicate(timeout=15)
 
+    def test_timeout_replaces_interrupted_result(self):
+        code = f"from pathlib import Path; import time; p=Path({str(self.out)!r}); p.mkdir(); (p/'result.json').write_text('{{'); time.sleep(60)"
+        result = subprocess.run(self.command(code), capture_output=True, timeout=15)
+        self.assertEqual(result.returncode, 1, result.stderr)
+        self.assertEqual(json.loads((self.out / 'result.json').read_text())['verdict'], 'FAIL')
+        self.assertEqual((self.out / 'result-interrupted.json').read_text(), '{')
+
     def test_clean_exit_and_nonzero_exit(self):
         result = subprocess.run(self.command('pass'), capture_output=True, timeout=10)
         self.assertEqual(result.returncode, 0, result.stderr)
