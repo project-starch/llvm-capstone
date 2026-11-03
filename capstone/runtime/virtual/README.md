@@ -57,7 +57,12 @@ discards only the calling slot and returns its frame mapping to the trusted
 launcher. `capstone_virtual_thread_join` waits for that exit protocol before
 the caller retires the child stack or TLS mapping. The workers share
 the process transport under a wire lock; fork, shared tagged pages and SMP
-remain out of scope.
+remain out of scope. The lock's owner is the calling context's identity, which
+the context reads from the cursor of its own gp with no service exit: gp's
+bounds and permissions are the image's in every context, its cursor is free
+under the gp-free codegen, and the creator gives each child a distinct one
+(`delegate.c` `dl_wire_identity`). `CV_SERVICE_THREAD_SELF` remains for a context
+created when all 63 identity slots are held.
 
 The virtual musl bridge also supplies `pthread_create`, join, TLS, mutexes and
 condition variables. musl owns thread objects, stack layout and join protocol;

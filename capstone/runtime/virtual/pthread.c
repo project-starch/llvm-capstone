@@ -15,6 +15,9 @@
 
 extern _Noreturn void __capstone_vm_thread_exit_clear(uintptr_t, uintptr_t, size_t, long);
 extern long __capstone_vm_futex(void *, int, int, long, long, int);
+/* delegate.c: this context gives back the identity its creator took (thread.c), right before
+ * its exit service, after its last delegated call (release_clone's frees and unmaps). */
+extern void __capstone_context_identity_release(void);
 struct virtual_clone {
     int (*entry)(void *);
     void *arg;
@@ -89,6 +92,7 @@ static void *clone_entry(void *p)
     int result = r->entry(r->arg);
     int *clear = r->clear;
     release_clone(r);
+    __capstone_context_identity_release();
     __capstone_vm_thread_exit_clear((uintptr_t)clear, 0, 0, result);
 }
 
@@ -145,6 +149,7 @@ _Noreturn void __capstone_virtual_pthread_exit(long status)
     /* Free the record while the child still owns its stack and TLS. The
      * trusted launcher releases the clear word only after stopping it. */
     if (r) release_clone(r);
+    __capstone_context_identity_release();
     __capstone_vm_thread_exit_clear((uintptr_t)clear, 0, 0, status);
 }
 
@@ -153,6 +158,7 @@ _Noreturn void __unmapself(void *base, size_t size)
     struct virtual_clone *r = current_clone;
     int *clear = r ? r->clear : NULL;
     if (r) release_clone(r);
+    __capstone_context_identity_release();
     __capstone_vm_thread_exit_clear((uintptr_t)clear, (uintptr_t)base, size, 0);
 }
 

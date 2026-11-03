@@ -13,6 +13,7 @@
 #include <sys/mman.h>
 #include <sys/epoll.h>
 #include <stdint.h>
+#include <signal.h>
 
 extern int __clone(int (*)(void *), void *, int, void *, ...);
 
@@ -64,6 +65,43 @@ static void *epoll_worker(void *arg)
     close(ep); close(p[0]); close(p[1]);
     return arg;
 }
+
+/* The transport lock's context identity (delegate.c dl_wire_identity): the cursor of the
+ * context's own gp, as a slot offset from gp's base. 0 in the first context; nonzero, below
+ * the fallback slot (64 * 16) and distinct in every live further context, whether it has its
+ * own TLS or shares its creator's; unchanged in a handler on an alternate signal stack; and
+ * given back at exit, so a process that creates more contexts than there are slots never
+ * reaches the fallback. Read without a service exit, which the runner checks too. */
+static unsigned long gp_slot(void)
+{
+    void *gp;
+    __asm__ volatile("movc %0, gp" : "=r"(gp));
+    return __builtin_capstone_cap_get_cursor(gp) - __builtin_capstone_cap_get_base(gp);
+}
+static pthread_barrier_t slot_barrier;
+static volatile unsigned long slot_seen[2], raw_slot, handler_slot = ~0UL;
+static volatile long handler_wrote;
+static int slot_pipe[2];
+static void *slot_worker(void *arg)
+{
+    slot_seen[*(unsigned *)arg] = gp_slot();
+    pthread_barrier_wait(&slot_barrier);   /* both alive when each reads its slot */
+    return arg;
+}
+static void *raw_slot_worker(void *arg)
+{
+    (void)arg;
+    raw_slot = gp_slot();
+    capstone_virtual_thread_exit(NULL);
+}
+static void *slot_once(void *arg) { *(unsigned long *)arg = gp_slot(); return arg; }
+static void on_slot_signal(int sig)
+{
+    (void)sig;
+    handler_slot = gp_slot();
+    /* A delegated call nested in the delivery, which runs under the interrupted call's lock. */
+    handler_wrote = write(slot_pipe[1], "s", 1);
+}
 struct shared_writer { int fd; char *bytes; };
 static void *shared_write(void *opaque)
 {
@@ -95,9 +133,14 @@ static void check_file(int fd, char *buffer, char value)
 extern _Noreturn void __capstone_vm_thread_exit_clear(uintptr_t clear, uintptr_t stack,
                                                       size_t bytes, long status);
 static int *exit_word;
+/* Weak: the contract also builds with an SDK from before the identity slots (the control). */
+extern void __capstone_context_identity_release(void) __attribute__((weak));
 static void *exit_word_worker(void *arg)
 {
     (void)arg;
+    /* The raw exit service bypasses the runtime's exits, which give the context's identity slot
+     * back (delegate.c); a context that ends this way gives it back itself, or keeps it. */
+    if (__capstone_context_identity_release) __capstone_context_identity_release();
     __capstone_vm_thread_exit_clear((uintptr_t)exit_word, 0, 0, 0);
 }
 /* A worker's transport cannot be retired under it (transport_lifetime): worker A names its
@@ -286,6 +329,52 @@ int main(void)
         else puts("VIRTUAL_PTHREAD_OK transport_lifetime");
     }
 
+    /* Before the exit-word case, whose check reads its page's touch line from the kernel log:
+     * the threads below admit ~70 MiB of transports, one diag_admit line per page, and would roll
+     * that line out of the ring buffer. */
+    {
+        unsigned which[2] = {0, 1};
+        pthread_t ta, tb;
+        unsigned long main_slot = gp_slot();
+        assert(!pthread_barrier_init(&slot_barrier, NULL, 3));
+        assert(!pthread_create(&ta, NULL, slot_worker, &which[0]));
+        assert(!pthread_create(&tb, NULL, slot_worker, &which[1]));
+        pthread_barrier_wait(&slot_barrier);
+        assert(!pthread_join(ta, NULL) && !pthread_join(tb, NULL));
+        assert(!pthread_barrier_destroy(&slot_barrier));
+        char *rstack = mmap(NULL, 65536, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+        assert(rstack != MAP_FAILED);
+        void *rtp;
+        __asm__ volatile("movc %0, tp" : "=r"(rtp));
+        long rid = capstone_virtual_thread_create(raw_slot_worker, NULL, rstack + 65536, rtp);
+        assert(rid > 0 && !capstone_virtual_thread_join(rid));
+        assert(!munmap(rstack, 65536));
+        unsigned long reused_max = 0;
+        for (unsigned i = 0; i < 70; ++i) {
+            unsigned long got = ~0UL;
+            pthread_t t;
+            assert(!pthread_create(&t, NULL, slot_once, &got) && !pthread_join(t, NULL));
+            if (got > reused_max) reused_max = got;
+        }
+        stack_t alt = {.ss_sp = malloc(65536), .ss_size = 65536};
+        struct sigaction sa = {.sa_handler = on_slot_signal, .sa_flags = SA_ONSTACK};
+        assert(alt.ss_sp && !pipe(slot_pipe) && !sigaltstack(&alt, NULL));
+        assert(!sigemptyset(&sa.sa_mask) && !sigaction(SIGUSR1, &sa, NULL));
+        assert(!raise(SIGUSR1));
+        char byte = 0;
+        assert(read(slot_pipe[0], &byte, 1) == 1 && byte == 's');
+        signal(SIGUSR1, SIG_DFL);
+        stack_t off = {.ss_flags = SS_DISABLE};
+        assert(!sigaltstack(&off, NULL));
+        close(slot_pipe[0]); close(slot_pipe[1]); free(alt.ss_sp);
+        printf("VIRTUAL_PTHREAD_SLOTS:main=%lu a=%lu b=%lu raw=%lu reused_max=%lu handler=%lu\n",
+               main_slot, slot_seen[0], slot_seen[1], raw_slot, reused_max, handler_slot);
+        if (main_slot == 0 && slot_seen[0] && slot_seen[1] && slot_seen[0] != slot_seen[1] && raw_slot &&
+            !(slot_seen[0] % 16) && !(slot_seen[1] % 16) && !(raw_slot % 16) &&
+            slot_seen[0] < 64 * 16 && slot_seen[1] < 64 * 16 && raw_slot < 64 * 16 &&
+            reused_max && reused_max < 64 * 16 && handler_slot == main_slot && handler_wrote == 1)
+            puts("VIRTUAL_PTHREAD_OK context_identity");
+    }
     {
         volatile char slab[64 * 4096];   /* 64 pages of the main stack nothing writes */
         /* Pointer arithmetic, never an integer cast back to a pointer: the word's pointer must

@@ -9,6 +9,10 @@
 extern long __capstone_vm_thread_create_frame(void *frame);
 extern void __capstone_vm_thread_exit(void);
 extern long __capstone_vm_thread_join(long thread);
+/* delegate.c: the context identities its transport lock reads from gp's cursor */
+extern uintptr_t __capstone_context_identity_take(void);
+extern void __capstone_context_identity_give(uintptr_t identity);
+extern void __capstone_context_identity_release(void);
 
 static void *thread_exit_entry(void *unused)
 {
@@ -48,11 +52,20 @@ long capstone_virtual_thread_create(void *(*entry)(void *), void *argument,
     /* Initial x1 is a return trampoline; x2 is the caller-selected stack,
      * x3 is the process image capability, x4 is the optional per-thread TLS
      * pointer, and x10 is the argument.  gp is process authority rather than
-     * thread state, so every same-mm child inherits it. */
+     * thread state, so every same-mm child inherits it -- the same bounds and
+     * permissions; only its cursor is the child's own: the identity its
+     * transport lock reads (delegate.c, dl_wire_identity). */
+    uintptr_t identity = __capstone_context_identity_take();
+    if (!identity) {
+        __capstone_vm_unmap((uintptr_t)frame, 4096);
+        errno = EAGAIN;
+        return -1;
+    }
     capstone_cap_store((capstone_cap_slot *)(frame + 64 + 1 * 16),
                        (void *)thread_exit_entry);
     capstone_cap_store((capstone_cap_slot *)(frame + 64 + 2 * 16), stack_top);
-    __asm__ volatile("stc gp, 0(%0)" : : "r"(frame + 64 + 3 * 16) : "memory");
+    __asm__ volatile("scc t0, gp, %1\n\tstc t0, 0(%0)"
+                     : : "r"(frame + 64 + 3 * 16), "r"(identity) : "t0", "memory");
     if (thread_pointer)
         capstone_cap_store((capstone_cap_slot *)(frame + 64 + 4 * 16), thread_pointer);
     capstone_cap_store((capstone_cap_slot *)(frame + 64 + 10 * 16), argument);
@@ -61,6 +74,7 @@ long capstone_virtual_thread_create(void *(*entry)(void *), void *argument,
     id = __capstone_vm_thread_create_frame(frame);
     if (id < 0) {
         int error = (int)-id;
+        __capstone_context_identity_give(identity);
         __capstone_vm_unmap((uintptr_t)frame, 4096);
         errno = error ? error : EAGAIN;
     }
@@ -70,6 +84,8 @@ long capstone_virtual_thread_create(void *(*entry)(void *), void *argument,
 _Noreturn void capstone_virtual_thread_exit(void *result)
 {
     (void)result;
+    /* The last step before the exit service: no delegated call follows. */
+    __capstone_context_identity_release();
     __capstone_vm_thread_exit();
     for (;;) __asm__ volatile("ebreak");
 }
