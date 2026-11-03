@@ -451,9 +451,10 @@ static void transport_detach(uint64_t tid)
         free(worker_host);
         worker_host = NULL;
     } else if (host_signals_attached) {
-        pthread_mutex_lock(&host_lock);
+        /* Only the calling thread's signal mask and TLS attachment change.
+         * A blocking serve holds host_lock with service_lock released; waiting
+         * for it here would stop the service that can unblock that serve. */
         capstone_signals_detach();
-        pthread_mutex_unlock(&host_lock);
     }
     host_signals_attached = 0;
 }
