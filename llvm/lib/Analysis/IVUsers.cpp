@@ -130,22 +130,6 @@ static bool IVUseShouldUsePostIncValue(Instruction *User, Value *Operand,
   return true;
 }
 
-/// A lower bound on representable-window slack outside an accessed object.
-/// This does not account for address-policy boundaries. Compressed bounds
-/// have a representable window around [base, end): its lower edge is at least
-/// 2^(E+11) >= 2 KiB below the base (decompress_bounds, ariane_pkg.sv), and
-/// its upper edge at least about 4 KiB above the end. A cursor moved outside
-/// the window loses its tag (R-60), and a capability that is live out of the
-/// loop must not have been through one.
-static const uint64_t CapabilityWindowSlack = 2048;
-
-bool llvm::isCapabilityStepInWindow(const SCEV *Step) {
-  if (!Step)
-    return true;
-  const auto *C = dyn_cast<SCEVConstant>(Step);
-  return C && C->getAPInt().abs().ule(CapabilityWindowSlack);
-}
-
 /// Inspect the specified instruction.  If it is a reducible SCEV, recursively
 /// add its users to the IVUsesByStride set and return true.  Otherwise, return
 /// false.
@@ -165,7 +149,8 @@ bool IVUsers::AddUsersIfInteresting(Instruction *I) {
   // skipped. Non-integral pointers can irreversibly lose their tag at any
   // such new cursor, including a small step across an address-policy boundary.
   // Keep the integer index as the IV user instead. LSR's separate capability
-  // index-group reduction proves an accessed anchor on every iteration.
+  // index-group reduction handles affine starts and either step direction,
+  // proving an accessed anchor on every iteration even for a single GEP.
   if (DL.isNonIntegralPointerType(I->getType()))
     return false;
 

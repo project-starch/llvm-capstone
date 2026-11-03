@@ -49,32 +49,34 @@ cursor merely because it is nearby.
 
 ## Accessed cursor recurrence
 
-After the ordinary LSR solver, `reduceCapabilityIndexGroups` recognizes groups
-that IVUsers leaves as integer-index uses. Its scope is
-an innermost simplified loop with a native 64-bit counter, zero start, positive
-constant increment, and signed and unsigned no-wrap. The base must be loop
-invariant, dominate the preheader, and use a non-integral pointer with a
+After the ordinary LSR solver, `reduceCapabilityIndexGroups` recognizes
+single-index GEPs with an affine 64-bit integer index in an innermost
+simplified loop. The start can be nonzero or loop invariant, and the constant
+step can have either sign. One GEP per base is sufficient. The base must be
+loop invariant, dominate the preheader, and use a non-integral pointer with a
 64-bit index. Groups retain the exact base and source element type.
 
 A backwards all-successors analysis proves that every iteration accesses the
-same in-bounds current-element GEP. Direct loads and stores establish the
+same in-bounds current-element GEP. Equality is checked on integer index
+SCEVs with the exact same pointer base. Direct loads and stores establish the
 anchor. Uncovered exits, cycles, and instructions that might not transfer
 control prevent the proof. Identical accesses on both arms of a diamond can
 therefore establish an anchor even when neither access dominates the latch.
 
-The capability PHI starts with the original base. Its byte increment must
-satisfy `isCapabilityStepInWindow`, including the final unused increment.
+The capability PHI starts at the iteration-zero anchor in the loop preheader.
 Every increment consumed by another iteration reaches that iteration's
-accessed anchor. A refused final increment is unused; no live-out value may
-be reconstructed from it.
-Residual neighbor GEPs stay at their original instruction sites and preserve
-the checked address. In particular, the transformation retains a narrowed
-base produced by `shrink`; it never substitutes an earlier, wider base.
+accessed anchor. The final unused increment may lose its tag; live-out uses
+retain the current accessed value rather than that increment. Integer offset
+arithmetic is modular at the GEP index width. An extension of a wrapping
+narrow counter is not accepted unless SCEV proves it affine at that width.
+Residual neighbor GEPs stay at their original instruction sites. In
+particular, the transformation retains a narrowed base produced by `shrink`;
+it never substitutes an earlier, wider base.
 
 ## Selectable integer fallback
 
 `-mllvm -lsr-capability-byte-iv` selects a shared integer byte counter instead
-of the capability recurrence. Equal-sized groups for the same counter share
+of the capability recurrence. Groups with the same byte start and step share
 one PHI across their different bases. Each original GEP becomes a byte GEP
 at its original site, using that counter plus the scaled residual index.
 The added recurrence is ordinary modular integer arithmetic. Conditional
@@ -91,10 +93,13 @@ improvement. Compare complete validated profiles before introducing a policy.
 The focused tests are:
 
 - `llvm/test/CodeGen/Capstone/cincoffset-scaled-large-offset.ll`
+- `llvm/test/CodeGen/Capstone/gep-cursor-sequence.ll`
+- `llvm/test/CodeGen/Capstone/gep-complete-offset.ll`
 - `llvm/test/CodeGen/Capstone/lsr-capability-diamond-iv.ll`
 - `llvm/test/CodeGen/Capstone/lsr-capability-byte-iv.ll`
 - `llvm/test/Transforms/LoopStrengthReduce/Capstone/capability-pointer-iv.ll`
 - `llvm/test/Transforms/LoopStrengthReduce/Capstone/cursor-boundaries.ll`
+- `llvm/test/Transforms/LoopStrengthReduce/Capstone/accessed-affine-cursor.ll`
 - `llvm/test/Transforms/InstCombine/capstone-gep-cursors.ll`
 - `llvm/test/Transforms/LICM/capstone-gep-reassociate.ll`
 - `llvm/test/Transforms/IndVarSimplify/capstone-exit-cursor.ll`
@@ -102,7 +107,7 @@ The focused tests are:
 - `llvm/test/Transforms/SeparateConstOffsetFromGEP/capstone-gep-cursors.ll`
 
 They cover positive and negative large displacements, narrow indices, skipped
-accesses, early exit calls, mismatched anchors, oversized steps, wrapping
+accesses, early exit calls, mismatched anchors, large and negative steps, narrow wrapping
 counters, preservation of `shrink`, and sharing the byte recurrence across
 conditional accesses to different bases. Run them with the Capstone build
 and machine instruction verification after sourcing

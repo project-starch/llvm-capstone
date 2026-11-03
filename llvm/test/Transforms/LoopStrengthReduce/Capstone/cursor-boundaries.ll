@@ -64,10 +64,14 @@ exit:
 ; lost the tag before the first load and also returned an untagged pointer.
 ; CHECK-LABEL: @live_out_phys56(
 ; CHECK-NOT: getelementptr i8, ptr addrspace(200) %p, i64 -8
-; CHECK-NOT: phi ptr addrspace(200)
 ; CHECK: for.body:
-; CHECK: getelementptr inbounds nuw i8, ptr addrspace(200) %p,
-; CHECK: ret ptr addrspace(200)
+; CHECK: [[IV:%.*]] = phi ptr addrspace(200) [ %p, %for.body.preheader ], [ [[NEXT:%.*]], %for.body ]
+; CHECK: load i16, ptr addrspace(200) [[IV]]
+; CHECK: [[NEXT]] = getelementptr i8, ptr addrspace(200) [[IV]], i64 8
+; CHECK: for.end.loopexit:
+; CHECK-NEXT: [[LIVE:%.*]] = phi ptr addrspace(200) [ [[IV]], %for.body ]
+; CHECK: [[LAST:%.*]] = phi ptr addrspace(200) [ %p, %entry ], [ [[LIVE]], %for.end.loopexit ]
+; CHECK: ret ptr addrspace(200) [[LAST]]
 define ptr addrspace(200) @live_out_phys56(ptr addrspace(200) %p, i64 %n) addrspace(200) {
 entry:
   %nonnull = icmp ne ptr addrspace(200) %p, null
@@ -94,9 +98,11 @@ for.end:
 ; comparison must not normalize the pointer IV onto the refused p-8.
 ; CHECK-LABEL: @cmp_end_8(
 ; CHECK-NOT: getelementptr i8, ptr addrspace(200) %p, i64 -8
-; CHECK-NOT: phi ptr addrspace(200)
 ; CHECK: loop:
-; CHECK: getelementptr inbounds nuw i8, ptr addrspace(200) %p,
+; CHECK: [[IV:%.*]] = phi ptr addrspace(200) [ %p, %entry ], [ [[NEXT:%.*]], %loop ]
+; CHECK: load i16, ptr addrspace(200) [[IV]]
+; CHECK: icmp eq ptr addrspace(200) [[IV]], %end
+; CHECK: [[NEXT]] = getelementptr i8, ptr addrspace(200) [[IV]], i64 8
 ; CHECK: ret i16
 define i16 @cmp_end_8(ptr addrspace(200) nonnull %p, ptr addrspace(200) %end) addrspace(200) {
 entry:

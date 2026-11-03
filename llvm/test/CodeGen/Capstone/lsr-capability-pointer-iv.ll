@@ -3,9 +3,9 @@
 ; RUN: %llc_cap -O2 -stop-after=loop-term-fold < %s | FileCheck %s --check-prefix=LTF
 ; RUN: %llc_cap -O2 < %s | FileCheck %s --check-prefix=NOZERO --implicit-check-not='cincoffset{{(imm)?}} {{[a-z0-9]+}}, zero'
 ;
-; Generic LSR shares the integer byte offset and retains a capability
-; increment from the original base at each access. It must not introduce
-; a normalized or conditionally unused capability recurrence.
+; The accessed-anchor reduction carries the original cursor when every
+; iteration accesses it. It must not introduce a normalized start or step
+; on iterations that skip the access.
 ;
 ; The companion IR test is
 ; Transforms/LoopStrengthReduce/Capstone/capability-pointer-iv.ll.
@@ -13,8 +13,8 @@
 ; CHECK-LABEL: guarded:
 ; CHECK:       [[LOOP:\.LBB[0-9_]+]]: # %for.body
 ; CHECK-NOT:     slli
-; CHECK:         cincoffset {{[a-z0-9]+}}, a0, [[OFFSET:[a-z0-9]+]]
-; CHECK:         addi [[OFFSET]], [[OFFSET]], 8
+; CHECK:         lh {{[a-z0-9]+}}, 0(a0)
+; CHECK:         cincoffsetimm a0, a0, 8
 ; CHECK-NOT:     slli
 ; CHECK:         bne {{.*}}[[LOOP]]
 define void @guarded(ptr addrspace(200) %p, i64 %n) addrspace(200) {
@@ -46,8 +46,8 @@ for.end:
 ; CHECK-LABEL: every_iteration:
 ; CHECK:       [[LOOP:\.LBB[0-9_]+]]: # %for.body
 ; CHECK-NOT:     slli
-; CHECK:         cincoffset {{[a-z0-9]+}}, a0, [[OFFSET:[a-z0-9]+]]
-; CHECK:         addi [[OFFSET]], [[OFFSET]], 8
+; CHECK:         lh {{[a-z0-9]+}}, 0(a0)
+; CHECK:         cincoffsetimm a0, a0, 8
 ; CHECK-NOT:     slli
 ; CHECK:         bne {{.*}}[[LOOP]]
 define void @every_iteration(ptr addrspace(200) %p, i64 %n) addrspace(200) {

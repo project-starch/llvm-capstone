@@ -192,13 +192,6 @@ public:
               LoopStandardAnalysisResults &AR);
 };
 
-/// Whether \p Step fits the minimum representable-window slack around an
-/// accessed object. This is only a distance check, not a proof that a new
-/// capability cursor is legal: even a one-byte step may cross an address-policy
-/// boundary. LSR's specialized reduction separately proves an accessed anchor
-/// on every iteration. A null step has nothing to check.
-bool isCapabilityStepInWindow(const SCEV *Step);
-
 }
 
 #endif

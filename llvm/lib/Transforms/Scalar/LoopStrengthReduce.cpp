@@ -2653,12 +2653,6 @@ LSRInstance::OptimizeLoopTermCond() {
     if (!DT.dominates(ExitingBlock, LatchBlock))
       continue;
 
-    // Never normalize a capability comparison onto a different cursor.
-    // Window slack does not protect p-step from the address-policy boundary.
-    if (L->getHeader()->getDataLayout().isNonIntegralPointerType(
-            CondUse->getOperandValToReplace()->getType()))
-      continue;
-
     // Conservatively avoid trying to use the post-inc value in non-latch
     // exits if there may be pre-inc users in intervening blocks.
     if (LatchBlock != ExitingBlock)
@@ -6187,11 +6181,8 @@ LSRInstance::LSRInstance(Loop *L, IVUsers &IU, ScalarEvolution &SE,
 #endif
   Rewriter.disableCanonicalMode();
   Rewriter.enableLSRMode();
-  // An induction variable over a capability (a non-integral pointer) is
-  // admitted by IVUsers on the strength of the loop running its address
-  // arithmetic itself; its start and any invariant address the formulas need
-  // must therefore stay within this loop's preheader, not rise through the
-  // enclosing loops above a check that skips this one.
+  // Keep any non-integral expressions expanded while rewriting integer uses
+  // below the enclosing loops' entry guards.
   Rewriter.setNonIntegralHoistLimit(L);
 
   // First, perform some low-level loop optimizations.
@@ -7020,33 +7011,14 @@ static llvm::PHINode *GetInductionVariable(const Loop &L, ScalarEvolution &SE,
   return nullptr;
 }
 
-// Match one occurrence of the counter in an add tree. Keep all the other
-// operands at the original GEP; they need not be constant or loop invariant.
-static bool collectCapabilityIndexOffset(Value *Index, PHINode *Counter,
-                                         SmallVectorImpl<Value *> &Offset,
-                                         unsigned Depth = 0) {
-  if (Index == Counter)
-    return true;
-  auto *Add = dyn_cast<BinaryOperator>(Index);
-  if (!Add || Add->getOpcode() != Instruction::Add || Depth == 8)
-    return false;
-  for (unsigned Op = 0; Op != 2; ++Op) {
-    if (collectCapabilityIndexOffset(Add->getOperand(Op), Counter, Offset,
-                                     Depth + 1)) {
-      Offset.push_back(Add->getOperand(1 - Op));
-      return true;
-    }
-  }
-  return false;
-}
-
 // A capability recurrence must have a real, in-bounds cursor on every
 // iteration. A pair of identical GEPs in the arms of a diamond can establish
 // this even though neither GEP dominates the latch. Work backwards from an
 // access through an anchor: an uncovered exit, backedge, cycle, or instruction
 // that can leave the function prevents the proof from reaching the header.
 static bool capabilityAnchorAccessedEveryIteration(
-    Loop *L, Value *Base, Type *ElementTy, PHINode *Counter) {
+    Loop *L, Value *Base, Type *ElementTy, const SCEV *Index,
+    ScalarEvolution &SE) {
   SmallPtrSet<BasicBlock *, 16> Covered;
   SmallPtrSet<BasicBlock *, 16> Transfers;
   for (BasicBlock *BB : L->blocks()) {
@@ -7057,7 +7029,7 @@ static bool capabilityAnchorAccessedEveryIteration(
         if (GEP->isInBounds() && GEP->getNumIndices() == 1 &&
             GEP->getPointerOperand() == Base &&
             GEP->getSourceElementType() == ElementTy &&
-            GEP->getOperand(1) == Counter)
+            SE.getSCEV(GEP->getOperand(1)) == Index)
           Anchors.insert(GEP);
       }
       Value *Address = nullptr;
@@ -7094,11 +7066,10 @@ static bool capabilityAnchorAccessedEveryIteration(
   return Covered.contains(L->getHeader());
 }
 
-// IVUsers leaves conditional capability GEPs as integer-index uses. Once the
-// ordinary solver has finished, reuse a cursor that those uses actually
-// access on every iteration. The initial cursor is the original base itself;
-// no neighbor capability is formed in the preheader. Each remaining GEP stays
-// at its original instruction with its complete residual index.
+// Generic LSR may rebase pointers onto unaccessed cursors. Instead, recognize
+// affine integer indices after it runs and carry a cursor that the original
+// program accesses on every iteration. Start at the iteration-zero anchor,
+// and leave complete residual offsets at their original GEPs.
 static bool reduceCapabilityIndexGroups(Loop *L, ScalarEvolution &SE,
                                         DominatorTree &DT) {
   if (!L->isLoopSimplifyForm() || !L->isInnermost())
@@ -7107,136 +7078,124 @@ static bool reduceCapabilityIndexGroups(Loop *L, ScalarEvolution &SE,
   BasicBlock *Preheader = L->getLoopPreheader();
   BasicBlock *Latch = L->getLoopLatch();
   const DataLayout &DL = Header->getDataLayout();
-  SmallVector<PHINode *, 4> Counters;
-  for (PHINode &PN : Header->phis())
-    if (PN.getType()->isIntegerTy(64) && PN.getNumIncomingValues() == 2)
-      Counters.push_back(&PN);
+  SmallVector<WeakVH, 16> Candidates;
+  for (BasicBlock *BB : L->blocks())
+    for (Instruction &I : *BB) {
+      auto *GEP = dyn_cast<GetElementPtrInst>(&I);
+      if (GEP && GEP->getNumIndices() == 1 &&
+          GEP->getOperand(1)->getType()->isIntegerTy(64) &&
+          DL.isNonIntegralPointerType(GEP->getType()) &&
+          DL.getIndexTypeSizeInBits(GEP->getType()) == 64 &&
+          L->isLoopInvariant(GEP->getPointerOperand()))
+        Candidates.push_back(GEP);
+    }
 
   bool Changed = false;
-  for (PHINode *Counter : Counters) {
-    auto *Start =
-        dyn_cast<ConstantInt>(Counter->getIncomingValueForBlock(Preheader));
-    auto *Inc = dyn_cast<BinaryOperator>(Counter->getIncomingValueForBlock(Latch));
-    if (!Start || !Start->isZero() || !Inc ||
-        Inc->getOpcode() != Instruction::Add || !Inc->hasNoUnsignedWrap() ||
-        !Inc->hasNoSignedWrap())
+  DenseMap<const SCEV *, PHINode *> ByteIVs;
+  for (WeakVH &Candidate : Candidates) {
+    auto *Anchor = dyn_cast_or_null<GetElementPtrInst>(Candidate);
+    if (!Anchor)
       continue;
-    ConstantInt *Step = nullptr;
-    if (Inc->getOperand(0) == Counter)
-      Step = dyn_cast<ConstantInt>(Inc->getOperand(1));
-    else if (Inc->getOperand(1) == Counter)
-      Step = dyn_cast<ConstantInt>(Inc->getOperand(0));
-    if (!Step || Step->isZero() || Step->isNegative())
+    Value *Base = Anchor->getPointerOperand();
+    Type *ElementTy = Anchor->getSourceElementType();
+    Type *IndexTy = Anchor->getOperand(1)->getType();
+    if (auto *BaseInst = dyn_cast<Instruction>(Base))
+      if (!DT.dominates(BaseInst, Preheader->getTerminator()))
+        continue;
+    if (!ElementTy->isSized())
+      continue;
+    TypeSize Size = DL.getTypeAllocSize(ElementTy);
+    if (Size.isScalable() || !Size.getFixedValue())
+      continue;
+    const auto *Index = dyn_cast<SCEVAddRecExpr>(SE.getSCEV(Anchor->getOperand(1)));
+    if (!Index || Index->getLoop() != L || !Index->isAffine())
+      continue;
+    const auto *Step = dyn_cast<SCEVConstant>(Index->getStepRecurrence(SE));
+    if (!Step || Step->isZero())
+      continue;
+    if (!CapabilityByteIV &&
+        !capabilityAnchorAccessedEveryIteration(L, Base, ElementTy, Index, SE))
       continue;
 
-    DenseMap<uint64_t, PHINode *> ByteIVs;
-    SmallVector<std::pair<Value *, Type *>, 4> Groups;
-    for (User *U : Counter->users()) {
-      auto *GEP = dyn_cast<GetElementPtrInst>(U);
-      if (!GEP || !L->contains(GEP) || GEP->getNumIndices() != 1 ||
-          GEP->getOperand(1) != Counter ||
-          !DL.isNonIntegralPointerType(GEP->getType()) ||
-          DL.getIndexTypeSizeInBits(GEP->getType()) != 64 ||
-          !L->isLoopInvariant(GEP->getPointerOperand()))
-        continue;
-      auto Key =
-          std::make_pair(GEP->getPointerOperand(), GEP->getSourceElementType());
-      if (!is_contained(Groups, Key))
-        Groups.push_back(Key);
-    }
-    for (auto [Base, ElementTy] : Groups) {
-      if (auto *BaseInst = dyn_cast<Instruction>(Base))
-        if (!DT.dominates(BaseInst, Preheader->getTerminator()))
+    SCEVExpander Expander(SE, DL, "lsr.cap");
+    if (!Expander.isSafeToExpandAt(Index->getStart(),
+                                   Preheader->getTerminator()))
+      continue;
+    SmallVector<std::pair<GetElementPtrInst *, const SCEV *>, 16> Uses;
+    for (BasicBlock *BB : L->blocks())
+      for (Instruction &I : *BB) {
+        auto *GEP = dyn_cast<GetElementPtrInst>(&I);
+        if (!GEP || GEP->getNumIndices() != 1 ||
+            GEP->getPointerOperand() != Base ||
+            GEP->getSourceElementType() != ElementTy ||
+            GEP->getOperand(1)->getType() != IndexTy)
           continue;
-      if (!ElementTy->isSized())
-        continue;
-      TypeSize Size = DL.getTypeAllocSize(ElementTy);
-      if (Size.isScalable() || !Size.getFixedValue())
-        continue;
-      bool Overflow;
-      APInt ByteStep =
-          Step->getValue().umul_ov(APInt(64, Size.getFixedValue()), Overflow);
-      if (Overflow ||
-          (!CapabilityByteIV &&
-           (!isCapabilityStepInWindow(SE.getConstant(ByteStep)) ||
-            !capabilityAnchorAccessedEveryIteration(L, Base, ElementTy,
-                                                   Counter))))
-        continue;
+        const SCEV *Offset = SE.getMinusSCEV(SE.getSCEV(GEP->getOperand(1)), Index);
+        if (Expander.isSafeToExpandAt(Offset, GEP))
+          Uses.emplace_back(GEP, Offset);
+      }
+    if (Uses.empty())
+      continue;
 
-      SmallVector<std::pair<GetElementPtrInst *, SmallVector<Value *, 4>>, 16> Uses;
-      for (BasicBlock *BB : L->blocks())
-        for (Instruction &I : *BB) {
-          auto *GEP = dyn_cast<GetElementPtrInst>(&I);
-          if (!GEP || GEP->getNumIndices() != 1 ||
-              GEP->getPointerOperand() != Base ||
-              GEP->getSourceElementType() != ElementTy ||
-              GEP->getOperand(1)->getType() != Counter->getType())
-            continue;
-          SmallVector<Value *, 4> Offset;
-          if (collectCapabilityIndexOffset(GEP->getOperand(1), Counter, Offset))
-            Uses.emplace_back(GEP, std::move(Offset));
-        }
-      if (Uses.size() < 2)
-        continue;
-
-      LLVM_DEBUG(dbgs() << "LSR using "
-                        << (CapabilityByteIV ? "a shared byte index"
-                                             : "an accessed capability cursor")
-                        << " for " << Uses.size() << " GEPs, byte step "
-                        << ByteStep << ": " << *Base << '\n');
-      PHINode *IV;
-      if (CapabilityByteIV) {
-        // Integer arithmetic cannot fault or lose a capability tag. Keep every
-        // GEP at its use and share one byte counter across equal-sized groups,
-        // including groups whose conditional accesses have no common anchor.
-        PHINode *&ByteIV = ByteIVs[Size.getFixedValue()];
-        if (!ByteIV) {
-          ByteIV = PHINode::Create(Counter->getType(), 2, "lsr.byte.iv",
-                                  Header->getFirstNonPHIIt());
-          ByteIV->addIncoming(ConstantInt::get(Counter->getType(), 0), Preheader);
-          IRBuilder<> Builder(Latch->getTerminator());
-          Value *Next = Builder.CreateAdd(
-              ByteIV, ConstantInt::get(Counter->getType(), ByteStep),
-              "lsr.byte.next");
-          ByteIV->addIncoming(Next, Latch);
-        }
-        IV = ByteIV;
-      } else {
-        IV = PHINode::Create(Base->getType(), 2, "lsr.cap.iv",
-                             Header->getFirstNonPHIIt());
-        IV->addIncoming(Base, Preheader);
+    // These are modular index-width operations, just like the original GEP.
+    // Narrower indices whose extension is not affine never reach this path.
+    APInt ByteStep = Step->getAPInt() * APInt(64, Size.getFixedValue());
+    IRBuilder<> StartBuilder(Preheader->getTerminator());
+    Value *Start = Expander.expandCodeFor(Index->getStart(), IndexTy,
+                                         Preheader->getTerminator());
+    PHINode *IV;
+    if (CapabilityByteIV) {
+      const SCEV *ByteRec =
+          SE.getMulExpr(Index, SE.getConstant(IndexTy, Size.getFixedValue()));
+      PHINode *&ByteIV = ByteIVs[ByteRec];
+      if (!ByteIV) {
+        Value *ByteStart = StartBuilder.CreateMul(
+            Start, ConstantInt::get(IndexTy, Size.getFixedValue()));
+        ByteIV = PHINode::Create(IndexTy, 2, "lsr.byte.iv",
+                                Header->getFirstNonPHIIt());
+        ByteIV->addIncoming(ByteStart, Preheader);
         IRBuilder<> Builder(Latch->getTerminator());
-        Value *Next = Builder.CreateGEP(
-            Builder.getInt8Ty(), IV,
-            ConstantInt::get(Counter->getType(), ByteStep), "lsr.cap.next");
-        IV->addIncoming(Next, Latch);
+        Value *Next = Builder.CreateAdd(
+            ByteIV, ConstantInt::get(IndexTy, ByteStep), "lsr.byte.next");
+        ByteIV->addIncoming(Next, Latch);
       }
-      for (auto &[GEP, Offset] : Uses) {
-        IRBuilder<> Builder(GEP);
-        Value *Index = ConstantInt::get(Counter->getType(), 0);
-        for (Value *Term : Offset)
-          Index = Builder.CreateAdd(Index, Term, "lsr.cap.offset");
-        Value *Address;
-        if (CapabilityByteIV) {
-          if (Offset.empty()) {
-            Index = IV;
-          } else {
-            Index = Builder.CreateMul(
-                Index,
-                ConstantInt::get(Counter->getType(), Size.getFixedValue()));
-            Index = Builder.CreateAdd(IV, Index, "lsr.byte.offset");
-          }
-          Address = Builder.CreateGEP(Builder.getInt8Ty(), Base, Index);
-        } else {
-          Address = Offset.empty() ? IV
-                                   : Builder.CreateGEP(ElementTy, IV, Index);
-        }
-        SE.forgetValue(GEP);
-        GEP->replaceAllUsesWith(Address);
-        GEP->eraseFromParent();
-      }
-      Changed = true;
+      IV = ByteIV;
+    } else {
+      // Every consumed cursor equals an original inbounds accessed anchor,
+      // including the start. The final step may be refused, but has no use
+      // outside this PHI and is never used on the exiting edge.
+      Value *First = Index->getStart()->isZero()
+                         ? Base
+                         : StartBuilder.CreateGEP(ElementTy, Base, Start,
+                                                  "lsr.cap.start");
+      IV = PHINode::Create(Base->getType(), 2, "lsr.cap.iv",
+                           Header->getFirstNonPHIIt());
+      IV->addIncoming(First, Preheader);
+      IRBuilder<> Builder(Latch->getTerminator());
+      Value *Next = Builder.CreateGEP(Builder.getInt8Ty(), IV,
+                                     ConstantInt::get(IndexTy, ByteStep),
+                                     "lsr.cap.next");
+      IV->addIncoming(Next, Latch);
     }
+    for (auto [GEP, Offset] : Uses) {
+      Value *Residual = Expander.expandCodeFor(Offset, IndexTy, GEP);
+      IRBuilder<> Builder(GEP);
+      Value *Address;
+      if (CapabilityByteIV) {
+        Value *Bytes = Builder.CreateMul(
+            Residual, ConstantInt::get(IndexTy, Size.getFixedValue()));
+        Bytes = Offset->isZero() ? IV
+                                : Builder.CreateAdd(IV, Bytes, "lsr.byte.offset");
+        Address = Builder.CreateGEP(Builder.getInt8Ty(), Base, Bytes);
+      } else {
+        Address = Offset->isZero() ? IV
+                                  : Builder.CreateGEP(ElementTy, IV, Residual);
+      }
+      SE.forgetValue(GEP);
+      GEP->replaceAllUsesWith(Address);
+      GEP->eraseFromParent();
+    }
+    Changed = true;
   }
   if (Changed)
     SE.forgetLoop(L);

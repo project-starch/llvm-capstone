@@ -22,13 +22,15 @@
 target datalayout = "e-m:e-p:64:128-p200:128:128:128:64-i64:64-i128:128-n32:64-S128-ni:200-A200-P200-G200"
 
 ; CURSOR-LABEL: define void @shared_byte_iv(
-; CURSOR-NOT: lsr.cap.iv
+; CURSOR-NOT: phi ptr addrspace(200) [ %a,
+; CURSOR-NOT: phi ptr addrspace(200) [ %b,
 ; CURSOR-NOT: lsr.byte.iv
 ; CURSOR: ret void
 ;
 ; BYTE-LABEL: define void @shared_byte_iv(
 ; BYTE: header:
-; BYTE: [[IV:%lsr.byte.iv[^ ]*]] = phi i64 [ 0, %header.preheader ], [ [[NEXT:%[^ ]+]], %latch ]
+; BYTE: [[FLAGS:%lsr.byte.iv[^ ]*]] = phi i64 [ 0, %header.preheader ], [ [[FNEXT:%[^ ]+]], %latch ]
+; BYTE-NEXT: [[IV:%lsr.byte.iv[^ ]*]] = phi i64 [ 0, %header.preheader ], [ [[NEXT:%[^ ]+]], %latch ]
 ; BYTE-NOT: phi
 ; BYTE: br i1 %take, label %access, label %latch
 ; BYTE: access:
@@ -39,6 +41,7 @@ target datalayout = "e-m:e-p:64:128-p200:128:128:128:64-i64:64-i128:128-n32:64-S
 ; BYTE: [[MINUS:%[^ ]+]] = add i64 [[IV]], -15984
 ; BYTE: getelementptr i8, ptr addrspace(200) %b, i64 [[MINUS]]
 ; BYTE: latch:
+; BYTE: [[FNEXT]] = add i64 [[FLAGS]], 300
 ; BYTE: [[NEXT]] = add i64 [[IV]], 2400
 ; BYTE: ret void
 ;
