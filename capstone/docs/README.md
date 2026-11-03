@@ -11,6 +11,10 @@ separate application choice. RTL migration remains separate work.
 Start with the [virtual Capstone guide](design/virtual-capstone/README.md)
 to understand the supervised virtual C profile: ownership,
 processor interface, Linux runtime, application ports and safety limits.
+
+Performance target of the virtual profile: the [north star](plans/2026-11-03-boundary-north-star.md), a domain
+that costs what a plain Linux process costs. It defines the boundary and program overhead metrics, the invariants
+they may never be traded against, the end state and the staged path.
 The core virtual stack, growing node tables, build repairs and local mallocng
 are on `dev`.
 Use its pinned QEMU and the [runtime build instructions](../runtime/virtual/README.md);
