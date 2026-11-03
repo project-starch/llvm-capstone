@@ -83,7 +83,16 @@ successful compilation.
 `torture.c`, `pfns.c`, `reuse.c` and `torture-run.sh` retain movement, COW,
 two-process, stale-reference and reuse stimuli. The launcher's sleeping-child
 COW stimulus exists only when built with `CAPSTONE_VM_TORTURE`; production
-adapter builds contain no such hook. This is not protected fork support.
+adapter builds contain no such hook. Select it with `CAPSTONE_VM_TORTURE=1`
+when running build-adapter.sh. This is not protected fork support.
+
+`mm-probe.c` is a standalone kernel module (`obj-m += mm-probe.o`) for an
+otherwise idle private guest. It checks refusal to acknowledge a live tag,
+copy_highpage tag retention, and same-frame free/reallocation with no tag.
+With `captag=off`, load it with `expect_copy_tags=0`: scalar copying must lose
+the tag, and the production module must refuse `unpinned=1`. The fixture
+scrubs all of its pages before freeing them, including in this negative mode.
+It uses only the proposed raw instructions and architectural mint/root setup.
 
 The model refuses more than one hart in the virtual profile. Protected fork
 requires a separate namespace/context-cloning contract. Tagged pages shared
