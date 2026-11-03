@@ -18,6 +18,10 @@
 struct capstone_delegate_host {
   char *exchange;          /* the launcher's mapping of the exchange region */
   size_t exchange_bytes;
+  /* Optional admission of an output span before a syscall can write it. Returns
+     errno, or zero. The virtual adapter pins lazy exchange pages here; physical
+     transports leave it NULL. Offsets are validated before this callback. */
+  int (*prepare_write)(struct capstone_delegate_host *host, size_t offset, size_t bytes);
   /* Ordinary memory mirroring the exchange region. The region is a
      page-frame mapping the 9p transport cannot pin, so a large read from the
      share fails with EFAULT when the kernel is handed the mapping itself;

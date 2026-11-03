@@ -108,6 +108,14 @@ if(BUILD_TESTING AND NOT CMAKE_CROSSCOMPILING)
   target_compile_definitions(delegate-service-test PRIVATE _GNU_SOURCE)
   target_link_libraries(delegate-service-test PRIVATE Capstone::Delegate)
   add_test(NAME delegate-service COMMAND delegate-service-test)
+  add_executable(delegate-admission-test ../tests/application/delegate-admission-test.c
+    ../linux/delegate-service.c ../linux/spawner.c ../linux/signals.c ../linux/stub.S
+    ../linux/park.c)
+  target_compile_definitions(delegate-admission-test PRIVATE _GNU_SOURCE)
+  target_compile_options(delegate-admission-test PRIVATE -UNDEBUG)
+  target_link_libraries(delegate-admission-test PRIVATE Capstone::Delegate)
+  add_test(NAME delegate-admission COMMAND delegate-admission-test)
+  set_tests_properties(delegate-admission PROPERTIES TIMEOUT 15)
   add_executable(seccomp-filter-test ../tests/application/seccomp-filter-test.c
     ../linux/delegate-service.c ../linux/spawner.c ../linux/signals.c ../linux/stub.S
     ../linux/park.c)

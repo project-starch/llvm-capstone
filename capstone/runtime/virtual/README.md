@@ -109,10 +109,12 @@ asks Linux's GUP interface to resolve it, checks that the page is exclusive
 anonymous backing mapped once and that no other page of the arena holds its
 frame, then retains a pin until retirement. Pages already resident at the
 grant (the startup block the launcher packed) are pinned at the grant under
-the same checks. Two grants are pinned whole at the grant: the meta block and
-the exchange region, which the launcher writes on the domain's behalf after
-the grant, where a Linux fault is invisible to the module (module parameter
-`lazy_grants`; 0 pins every non-linear grant whole, as before 2026-11-03). A
+the same checks. The meta block stays pinned whole for asynchronous signal
+publication. The initial exchange is lazy: validated trusted output spans
+are admitted with `CV_TOUCH` before I/O side effects, and worker transports
+are admitted at every attachment. See the [admission contract](../../docs/design/virtual-capstone/lazy-exchange.md).
+Module parameter `lazy_grants=0` pins every non-linear grant whole, as before
+2026-11-03. A
 permitted write fault after `mprotect` is resolved by Linux
 and must retain the same physical backing; a denied VMA access is never fixed
 by granting more permissions. It does not supply a pager or change VMA permissions to

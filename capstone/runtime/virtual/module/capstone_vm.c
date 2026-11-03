@@ -333,7 +333,7 @@ module_param(pin_ahead_pages, ulong, 0444);
  * no frame twice in the arena (the frame set, frame_insert). Pages already resident at the
  * mint -- the startup block the launcher packed before granting it, the image's partial data
  * page it read in -- are pinned at the mint by the resident scan, so a launcher write that
- * preceded the grant is covered exactly as before. Two grants are still pinned whole, see
+ * preceded the grant is covered exactly as before. The meta grant is still pinned whole, see
  * eager_grant(). 0 restores the whole-arena pin for every NONLIN grant (the A/B arm);
  * read-only, so a run's module-params.txt records which it ran. */
 static bool lazy_grants = true;
@@ -1140,20 +1140,19 @@ static int retire(struct context *c, struct arena *a, bool destroying)
     return 0;
 }
 
-/* The NONLIN grants still pinned whole at mint under lazy_grants: the meta block (reg 10 before
- * the start) and the exchange region (reg 11). The launcher writes both on the domain's behalf
- * AFTER the grant -- a service entry's result, a delegated read's bytes, the signal table -- and
- * a launcher write faults its page in through Linux, where this module sees nothing: the page
- * is then present without a pin, the domain can store a capability into it, and if the process
- * exits, exit_mm frees it with its tags before vm_release can sweep it (the teardown cannot walk
- * the page tables, see vm_release). The stack (reg 2), the image (3) and the startup block (12)
+/* The meta block (reg 10 before the start) stays eager: asynchronous signal publication writes
+ * it and cannot issue a sleeping CV_TOUCH. The main exchange (reg 11) is admitted through the
+ * delegate dispatcher's prepare_write callback before every possible output span; worker
+ * transports are touched at each attachment and held until detach/exit. A launcher write must
+ * never populate an unpinned page: exit_mm can free it before vm_release sweeps its tags.
+ * The stack (reg 2), the image (3) and the startup block (12)
  * are written by the launcher only BEFORE their grant, and those pages are pinned at the mint
  * by the resident scan; after it, only the domain's own accesses populate them, every one of
  * which faults into resolve(). The launcher reads the stack after a fault (its frame chain),
  * which maps the zero page at most. Reply grants (a started context, reg 10) are linear. */
 static bool eager_grant(const struct cv_thread *t, const struct cv_map *r)
 {
-    return !t->started && (r->reg == 10 || r->reg == 11);
+    return !t->started && r->reg == 10;
 }
 
 static int add(struct context *c, struct cv_thread *t, struct cv_map *r)
