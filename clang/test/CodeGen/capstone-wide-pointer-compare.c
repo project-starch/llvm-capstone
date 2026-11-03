@@ -20,7 +20,7 @@ int test(void) {
 
 // CHECK: @bundle = internal addrspace(200) constant %struct.bundle
 // CHECK-LABEL: @test(
-// CHECK: call addrspace(200) i32
+// CHECK: call signext addrspace(200) i32
 // CHECK: icmp eq ptr addrspace(200)
 // CHECK: add nsw i32
 

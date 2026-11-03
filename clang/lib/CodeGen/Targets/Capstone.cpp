@@ -19,13 +19,15 @@ using namespace clang::CodeGen;
 //===----------------------------------------------------------------------===//
 
 namespace {
-// UNREFERENCED. CodeGenModule::createTargetCodeGenInfo has no capstone case, so
-// capstone64 ships on DefaultABIInfo: every aggregate byval/sret, which is
-// tag-correct (a 16-byte {void *} stays a capability in memory). This RISCV-copy
-// classifier would flatten such a struct into [2 x i64] and lose the tag, and
-// would derive XLen from the 128-bit pointer. The validation plan (Tier 4.6,
-// 2026-09-05) keeps DefaultABIInfo and records a register-passing capability
-// ABI as a separate project; the class stays as the starting point for it.
+// UNREFERENCED. CodeGenModule::createTargetCodeGenInfo gives capstone64
+// CapstoneDefaultABIInfo (at the end of this file): DefaultABIInfo's
+// aggregates, every one byval/sret, which is tag-correct (a 16-byte {void *}
+// stays a capability in memory), plus RISC-V's integer extension. This
+// RISCV-copy classifier would flatten such a struct into [2 x i64] and lose
+// the tag, and would derive XLen from the 128-bit pointer. The validation plan
+// (Tier 4.6, 2026-09-05) keeps DefaultABIInfo and records a register-passing
+// capability ABI as a separate project; the class stays as the starting point
+// for it.
 class CapstoneABIInfo : public DefaultABIInfo {
 private:
   // Size of the integer ('x') registers in bits.
@@ -1034,4 +1036,81 @@ CodeGen::createCapstoneTargetCodeGenInfo(CodeGenModule &CGM, unsigned XLen,
                                       unsigned FLen, bool EABI) {
   return std::make_unique<CapstoneTargetCodeGenInfo>(CGM.getTypes(), XLen, FLen,
                                                   EABI);
+}
+
+//===----------------------------------------------------------------------===//
+// The ABI capstone64 and capstone32 compile to
+//===----------------------------------------------------------------------===//
+//
+// DefaultABIInfo's aggregate rule (byval/sret, which keeps a capability inside
+// a struct tagged), plus the scalar integer rule of the RISC-V psABI: an
+// integer narrower than XLEN travels in its register extended to XLEN, and on
+// a 64-bit target a 32-bit integer is sign-extended whether it is signed or
+// not. DefaultABIInfo extended only the promotable types (char, short, bool),
+// so an int result came back with its upper half unspecified and every caller
+// that used it as a 64-bit value sign-extended it again: a sext.w after each
+// call of a qsort comparator. The backend already assumed the rule for the
+// library calls it emits itself (shouldSignExtendTypeInLibCall), whose
+// compiler-rt definitions are compiled by this front end, so callee and caller
+// now agree there too.
+
+namespace {
+class CapstoneDefaultABIInfo : public DefaultABIInfo {
+  // The integer register width, not the 128-bit capability pointer width.
+  unsigned XLen;
+
+  ABIArgInfo extendNarrowInteger(QualType Ty, ABIArgInfo Info) const;
+
+public:
+  CapstoneDefaultABIInfo(CodeGen::CodeGenTypes &CGT, unsigned XLen)
+      : DefaultABIInfo(CGT), XLen(XLen) {}
+
+  void computeInfo(CGFunctionInfo &FI) const override;
+};
+
+class CapstoneDefaultTargetCodeGenInfo : public TargetCodeGenInfo {
+public:
+  CapstoneDefaultTargetCodeGenInfo(CodeGen::CodeGenTypes &CGT, unsigned XLen)
+      : TargetCodeGenInfo(std::make_unique<CapstoneDefaultABIInfo>(CGT, XLen)) {}
+};
+} // namespace
+
+ABIArgInfo CapstoneDefaultABIInfo::extendNarrowInteger(QualType Ty,
+                                                       ABIArgInfo Info) const {
+  // Aggregates (indirect), void (ignore) and wide _BitInts keep their default.
+  if (!Info.isDirect() && !Info.isExtend())
+    return Info;
+  Ty = useFirstFieldIfTransparentUnion(Ty);
+  if (isAggregateTypeForABI(Ty) || Ty->isVectorType())
+    return Info;
+  if (const auto *ED = Ty->getAsEnumDecl())
+    Ty = ED->getIntegerType();
+
+  uint64_t Size = getContext().getTypeSize(Ty);
+  bool Narrow = Size < XLen && Ty->isIntegralOrEnumerationType();
+  if (const auto *EIT = Ty->getAs<BitIntType>())
+    Narrow = Narrow || EIT->getNumBits() < XLen;
+  if (!Narrow)
+    return Info;
+
+  llvm::Type *CoerceTy = CGT.ConvertType(Ty);
+  if (XLen == 64 && Size == 32 && Ty->isUnsignedIntegerOrEnumerationType())
+    return ABIArgInfo::getSignExtend(Ty, CoerceTy);
+  return ABIArgInfo::getExtend(Ty, CoerceTy);
+}
+
+void CapstoneDefaultABIInfo::computeInfo(CGFunctionInfo &FI) const {
+  if (!getCXXABI().classifyReturnType(FI))
+    FI.getReturnInfo() =
+        extendNarrowInteger(FI.getReturnType(),
+                            classifyReturnType(FI.getReturnType()));
+  for (auto &I : FI.arguments())
+    I.info = extendNarrowInteger(I.type, classifyArgumentType(I.type));
+}
+
+std::unique_ptr<TargetCodeGenInfo>
+CodeGen::createCapstoneDefaultTargetCodeGenInfo(CodeGenModule &CGM,
+                                                unsigned XLen) {
+  return std::make_unique<CapstoneDefaultTargetCodeGenInfo>(CGM.getTypes(),
+                                                            XLen);
 }

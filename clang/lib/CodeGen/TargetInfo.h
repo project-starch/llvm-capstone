@@ -571,6 +571,11 @@ std::unique_ptr<TargetCodeGenInfo>
 createCapstoneTargetCodeGenInfo(CodeGenModule &CGM, unsigned XLen,
                                 unsigned FLen, bool EABI);
 
+/// The ABI capstone64/capstone32 use: DefaultABIInfo's aggregates and the
+/// RISC-V rule for integer scalars narrower than \p XLen.
+std::unique_ptr<TargetCodeGenInfo>
+createCapstoneDefaultTargetCodeGenInfo(CodeGenModule &CGM, unsigned XLen);
+
 std::unique_ptr<TargetCodeGenInfo>
 createCommonSPIRTargetCodeGenInfo(CodeGenModule &CGM);
 

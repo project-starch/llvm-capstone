@@ -221,6 +221,11 @@ createTargetCodeGenInfo(CodeGenModule &CGM) {
   case llvm::Triple::msp430:
     return createMSP430TargetCodeGenInfo(CGM);
 
+  case llvm::Triple::capstone32:
+  case llvm::Triple::capstone64:
+    return createCapstoneDefaultTargetCodeGenInfo(
+        CGM, Triple.getArch() == llvm::Triple::capstone64 ? 64 : 32);
+
   case llvm::Triple::riscv32:
   case llvm::Triple::riscv64: {
     StringRef ABIStr = Target.getABI();
