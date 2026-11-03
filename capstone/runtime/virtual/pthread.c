@@ -137,7 +137,11 @@ int __clone(int (*entry)(void *), void *stack, int flags, void *arg, ...)
     }
     /* pthread_create holds the thread-list lock until __clone returns;
      * musl's child cannot finish before the parent publishes this identity. */
-    int tid = 0x40000000 + (int)id;
+    /* From 2^22 up, as context.c mints them: above Linux's pid range, and far below bit 30,
+     * which musl's lock words keep for MAYBE_WAITERS. A tid with that bit set never matched
+     * itself in __lockfile, so a nested stdio lock (puts -> fwrite) in a pthread waited on its
+     * own lock forever. Launcher ids are never reused, so neither is a tid. */
+    int tid = 0x400000 + (int)id;
     if (flags & CLONE_PARENT_SETTID) *parent = tid;
     return tid;
 }
