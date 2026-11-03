@@ -21334,7 +21334,7 @@ static SDValue performCIncOffsetCombine(SDNode *N, SelectionDAG &DAG) {
   } else {
     return SDValue();
   }
-  if (C == 0 || !isInt<12>(C))
+  if (C == 0)
     return SDValue();
 
   // The offset may be shared, but only by other cursor adds: each of those is
@@ -21350,6 +21350,20 @@ static SDValue performCIncOffsetCombine(SDNode *N, SelectionDAG &DAG) {
           U.getOperandNo() != 1)
         return SDValue();
     }
+  }
+
+  if (!isInt<12>(C)) {
+    if (Off.getOpcode() != ISD::SHL)
+      return SDValue();
+
+    // A large displacement cannot be split into two cursor moves: Base+Y
+    // need not be in the capability's representable window. Distribute the
+    // shift only in the integer offset instead. This shares the scaled index
+    // and exposes the byte displacement to constant hoisting without forming
+    // a new cursor or moving the capability derivation above its guard.
+    SDValue Offset = DAG.getNode(ISD::ADD, DL, OffVT, Y,
+                                 DAG.getSignedConstant(C, DL, OffVT));
+    return DAG.getNode(CapstoneISD::CIncOffset, DL, VT, Base, Offset);
   }
 
   SDValue Inner = DAG.getNode(CapstoneISD::CIncOffset, DL, VT, Base, Y);
