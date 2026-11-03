@@ -469,8 +469,8 @@ actually retained, and both sysfs counters must equal the event census exactly.
 
 The pthread gate has a separate `fallback` launch: 63 raw exits retain all
 identity slots, then eight pthreads write 960 checked records to one pipe.
-They must use the service identity fallback. The
-ordinary pthread launch must still make zero `THREAD_SELF` service exits.
+They must use the service identity fallback. The ordinary pthread launch must
+still make zero `THREAD_SELF` service exits.
 Nonlocal exits from handlers delivered inside delegated calls remain
 unsupported: `__capstone_longjmp_reap` acknowledges the signal but does not
 unwind transport lock depth or copy-back state, and a stale owner can collide
@@ -558,6 +558,21 @@ adaptive default remains enabled in production and is tested by step-hooks;
 adding prefetched pages to this oracle would conceal missing demand resolutions.
 
 ## Qualification and limits
+
+On 2026-11-03, `runtime/fewer-exits` was qualified in QEMU against dev
+`114b90b7be2e`, including the repaired gates and AVL launcher. Both arms built
+their SDK, contracts and applications from their own runtime source, using the
+same final test harness. Sequential `run-arm.sh` runs followed by `compare.py`
+executed all 168 required rows per arm. Only the three new identity checks and
+eleven adaptive checks differed: they failed on dev and passed on the branch.
+Every pre-existing failure set matched, including nodes, malloc and five
+memcached checks. The runtime gate passed in both arms. The branch's pthread
+gate passed 20/20 and step-hooks passed 379/379; both rebuilt no-growth modules
+failed the adaptive checks. This qualifies the default-on window with
+`fault_ahead_max=0` as its kill switch, not silicon or the physical profile.
+The fallback fixture uses private-TLS pthreads. Exploratory fallback stress
+with eight raw contexts sharing the main thread's TLS timed out, including a
+nonblocking-pipe variant whose cause remains unresolved.
 
 The growing-table [qualification manifest](results/node-growth/qualification.json)
 records 15/15 node-growth checks, 9/9 pthread checks, 46/46 runtime/application

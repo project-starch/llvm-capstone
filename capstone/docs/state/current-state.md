@@ -1,5 +1,18 @@
 # Current Capstone state
 
+## 2026-11-03 — Fewer-exits runtime branch qualified with repaired gates
+
+`runtime/fewer-exits` is rebased onto dev `114b90b7be2e`, including the repaired
+landing gates and AVL launcher. Sequential p13 control/branch runs executed all
+168 required rows per arm with freshly built SDKs and applications. The only
+differences were the new identity and adaptive-window checks, failing on dev and
+passing on the branch; every pre-existing failure set matched. The branch passed
+20/20 pthread and 379/379 step-hooks checks, and actual modules with window growth
+disabled failed the strengthened oracle. The adaptive window stays on by default;
+`fault_ahead_max=0` disables it. This is branch qualification in QEMU, not a claim
+of merge, silicon validation or new performance measurements. See the
+[runtime qualification and limits](../../runtime/virtual/README.md#qualification-and-limits).
+
 ## Read this first (2026-10-13)
 
 This file was 2,030 lines and its companion 1,560, most of it instructions and

@@ -1,3 +1,14 @@
+**2026-11-03, fewer-exits runtime branch.** The repaired QEMU landing comparison
+against dev `114b90b7be2e` is complete: all required rows ran, with differences
+only in the new identity/adaptive checks. The branch satisfies that gate
+requirement. Keep the adaptive default on and retain `fault_ahead_max=0`
+as the kill switch. Nonlocal exits from a signal handler inside a delegated call
+still need transport-depth and copy-back unwinding; the stale-owner interaction
+with reused gp slots is documented, not fixed. The committed exhausted-slot
+fallback gate covers private-TLS pthreads; the exploratory shared-TLS raw-context
+stress timeout remains unresolved. See the
+[runtime limits](../../runtime/virtual/README.md#qualification-and-limits).
+
 **2026-10-21, the cross-lane plan to the next bitstream (runtime/semantics lane, coordinating on the lead's word).**
 Goal: the six-item batch bitstream, then the WHOLE corpus on vp2, including the two arms the current bitstreams
 cannot run (cpython lt1 and postgres pg-pools, both "needs collection", which item 6's hardware recycling provides).
