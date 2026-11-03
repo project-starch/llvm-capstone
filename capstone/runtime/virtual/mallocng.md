@@ -214,7 +214,7 @@ page slack in their stride; removing that slack would be a separate change
 to their representation, not a consequence of sharing backing.
 
 The runtime carves these groups from 64 KiB aligned regions. Each region holds
-equal-sized extents: header plus slots, rounded to a tag granule and exactly
+equal-sized extents: header plus slots, rounded to a 16-byte granule and then to exactly
 representable bounds. Extents smaller than 1 KiB retain dedicated backing,
 bounding the region occupancy bitmap at 64 bits. The descriptor and root stay
 in private runtime state; each group receives a separately bounded CDERIVE
@@ -244,6 +244,26 @@ those sixteen groups. Other shapes can pack more densely, but region tails,
 partially occupied regions and private descriptors must be included when
 assessing page savings. The current region size bounds bookkeeping and reuse;
 it does not promise the ideal packing bound from a group-padding census.
+
+The malloc gate includes `coarse-reuse`, `coarse-stale` and `coarse-bounds` in
+all three heap configurations. These call the internal group interface in a
+single thread, so per-object revocation cannot hide a missing group revoke.
+Twenty groups must occupy two 64 KiB regions with 3,360-byte extents; siblings
+must share a page and survive release, partial-region trim and reuse. Reuse
+changes nineteen 176-byte slots into eleven 304-byte slots at the same address.
+Every returned slot must contain zero bytes and no tags, with a stored-tag
+positive control; bounds-off heaps must also clear the whole extent before
+any slot is taken. Stale and out-of-bounds stores must fault with causes 25
+and 28 respectively at the labelled store, with exit 139. Missing or duplicate
+process records fail the oracle. Partial-region trim must release no region;
+final trim must release exactly two.
+
+The same contract on the dev control without coarse regions reports
+`coarse_backing=dedicated`: twenty 4 KiB mappings. It checks group revocation,
+geometry-changing cache reuse, scrubbing and final trim there; shared-page
+placement and partial-region trim do not apply. The runner selects the expected
+layout from the linked heap's coarse-region symbol, so a shared heap falling
+back to dedicated mappings cannot silently pass the sharing checks.
 
 ## VM remapping
 
@@ -294,7 +314,7 @@ translation units to compile, including the six mallocng files. The physical
 survey retains its original layout and failure control.
 
 ```sh
-"$out/sdk/capstone-cc" -Icapstone/runtime/virtual \
+"$out/sdk/capstone-cc" -Icapstone/runtime/virtual -Icapstone/runtime/include \
   capstone/runtime/virtual/malloc-contract.c -o "$out/malloc.dom"
 python3 capstone/runtime/virtual/run-malloc.py \
   --adapter "$out/adapter" --application "$out/malloc.dom" \

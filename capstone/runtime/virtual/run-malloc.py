@@ -12,6 +12,7 @@ import struct
 import sys
 
 HERE = Path(__file__).resolve().parent
+COARSE_CASES = ('coarse-reuse', 'coarse-stale', 'coarse-bounds')
 
 
 def sha(path):
@@ -26,6 +27,39 @@ def image_abi(path):
     if len(found) != 1:
         raise SystemExit(f'{path}: cannot identify the VM ABI magic (matched {found})')
     return found[0]
+
+
+def coarse_checks(log, symbols, image_base, bounds_off):
+    """Require complete, unique process records and exact geometry / fault-site oracles."""
+    shared = '__capstone_malloc_coarse_regions' in symbols
+    layout = ('shared groups=20 maps=2 span=3360' if shared else
+              'dedicated groups=20 maps=20 span=4096')
+    rows = re.findall(r'MALLOC_COARSE_CASE:(coarse-[a-z]+)\n(.*?)'
+                      r'MALLOC_DENIAL_EXIT:\1:(\d+)\n', log, re.S)
+    checks = {'coarse_cases_ran': [name for name, _, _ in rows] == list(COARSE_CASES)}
+    for name in COARSE_CASES:
+        matches = [(body, rc) for case, body, rc in rows if case == name]
+        ok = len(matches) == 1
+        body, rc = matches[0] if ok else ('', '')
+        ok = ok and body.count('MALLOC_COARSE_LAYOUT ' + layout + '\n') == 1 and 'MALLOC_FAIL' not in body
+        whole = re.findall(r'MALLOC_COARSE_WHOLE tags=(\d+) bytes=(\d+)\n', body)
+        ok = ok and whole == ([('0', '0')] if bounds_off else [])
+        if name == 'coarse-reuse':
+            ok = (ok and rc == '0' and 'domain fault' not in body and
+                  body.count('MALLOC_COARSE_SCRUB tags=0 bytes=0 slots=11 stride=304\n') == 1 and
+                  body.count('MALLOC_COARSE_TRIM empty_backing_returned=1 regions=' +
+                             ('2' if shared else '0') + '\n') == 1 and
+                  body.count('MALLOC_SURVIVED:coarse-reuse\n') == 1)
+        else:
+            probe = re.search(r'MALLOC_FAULT_READY:' + name + r'\n(.*)', body, re.S)
+            faults = re.findall(r'domain fault cause=(\d+) pc=0x([0-9a-f]+).*?code=0x([0-9a-f]+)-',
+                                probe[1]) if probe else []
+            ok = (ok and rc == '139' and 'MALLOC_SURVIVED' not in body and len(faults) == 1 and
+                  int(faults[0][0]) == (25 if name == 'coarse-stale' else 28) and
+                  int(faults[0][1], 16) - int(faults[0][2], 16) ==
+                  symbols['cap_malloc_fault_store'] - image_base)
+        checks[name] = bool(ok)
+    return checks, 'shared' if shared else 'dedicated'
 
 
 def main():
@@ -56,7 +90,7 @@ def main():
                     scrub_free=bool(config.get('heap_scrub_free', True)))
         # CAPSTONE_HEAP_OBJECT_BOUNDS=OFF (the Caps arm) hands out the group's authority, so the contract's
         # spatial-denial expectations do not hold and those cases are not run. The recycled-mapping cases
-        # do have expectations there (the arm requires lifetimes off): they are the arm's whole gate.
+        # and coarse-group cases do have expectations there (the arm requires lifetimes off).
         if config.get('heap_object_bounds', True) is False:
             recycle_only = True
             heap['object_bounds'] = False
@@ -106,6 +140,11 @@ def main():
     recycle_gate = '''CAPSTONE_VM_TRACE=1 ./capstone-vexec malloc.dom recycle-tags
 echo MALLOC_DENIAL_EXIT:recycle-tags:$?
 for case in ''' + recycle_loop + '''; do
+  ./capstone-vexec malloc.dom "$case"
+  echo MALLOC_DENIAL_EXIT:$case:$?
+done
+for case in ''' + ' '.join(COARSE_CASES) + '''; do
+  echo MALLOC_COARSE_CASE:$case
   ./capstone-vexec malloc.dom "$case"
   echo MALLOC_DENIAL_EXIT:$case:$?
 done
@@ -250,7 +289,10 @@ echo VIRTUAL_STAGED_DONE
     checks['recycle_outside_clean'] = (sorted(m[0] for m in outside) == ['recycle-header', 'recycle-slack'] and
                                        all(m[2] == '0' for m in outside) and
                                        all((m[1] != '0') == recycle_only for m in outside))
+    coarse, coarse_backing = coarse_checks(log, symbols, image_base, recycle_only)
+    checks.update(coarse)
     record = dict(status='PASS' if all(checks.values()) else 'FAIL', tests=checks,
+                  coarse_backing=coarse_backing,
                   virtual_vm_abi=image_abi(a.application), harts=1, allocator='Capstone-compiled musl 1.2.5 mallocng; upstream allocation policy',
                   heap=heap, denial_expectations='per-object lifetimes' if heap['lifetimes'] else 'bounds only',
                   # The REQUESTED count is not a result. Report it only when the domain

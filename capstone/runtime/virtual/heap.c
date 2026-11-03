@@ -541,8 +541,8 @@ static void *group_lifetime(void *root, size_t bytes)
     return capstone_cap_derive(root, 0, bytes);
 }
 /* Small multi-slot groups share 64 KiB regions. A region contains equal-sized extents, each
- * large enough for the group's header and slots, rounded to representable bounds and a tag
- * granule. mallocng still chooses every slot/count/stride; only backing placement changes.
+ * large enough for the group's header and slots, rounded to a 16-byte granule and then to
+ * representable bounds. mallocng still chooses every slot/count/stride; only backing placement changes.
  * Single/two-slot groups and mappings above 16 KiB keep the existing recycling path. In
  * particular, every group that can reach mallocng's mremap path remains a separate mapping.
  *
@@ -602,7 +602,9 @@ static struct coarse_region *coarse_entry_new(void)
         }
     }
     if (!coarse_free) {
+        int e = errno;
         char *page = mmap(NULL, 4096, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+        errno = e;
         if (page == MAP_FAILED) return NULL;
         for (size_t o = 0; o + sizeof(struct coarse_region) <= 4096; o += sizeof(struct coarse_region)) {
             struct coarse_region *r = (struct coarse_region *)(page + o);

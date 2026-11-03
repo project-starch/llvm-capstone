@@ -7,6 +7,7 @@
 #ifdef __CAPSTONE_PURECAP__
 #include "vm.h"
 #include <malloc_capstone.h>
+#include <capstone/capability.h>
 #endif
 static void *volatile saved;
 /* Keeps the denial cases' size class populated, so that freeing the probed object never
@@ -875,12 +876,102 @@ static int meta_reuse(void)
     puts("MALLOC_FAULT_READY:meta-reuse"); puts("MALLOC_SURVIVED:meta-reuse"); fflush(stdout);
     return 0;
 }
+/* Direct group calls isolate group release from per-object revocation. This runs alone in
+ * one thread; the public malloc cases above cover locking and mallocng's placement policy.
+ * The runner requires shared backing when the image contains the coarse-region implementation.
+ * The same source on older heaps exercises dedicated mappings, with that geometry reported. */
+/* The shared heap supplies the strong counter. Older heaps have no regions to unmap. */
+unsigned long __capstone_malloc_coarse_unmapped __attribute__((weak));
+static int coarse_case(const char *mode)
+{
+    enum { GROUPS = 20, SPAN = 3360 };
+    static struct capstone_malloc_slot records[GROUPS][32];
+    static char *groups[GROUPS];
+    static char live[16];
+    malloc_trim(0);
+    unsigned long maps = __capstone_malloc_map_calls;
+    size_t span = 0;
+    for (unsigned i = 0; i < GROUPS; ++i) {
+        groups[i] = __capstone_malloc_group_map(records[i], 4096, 176, 19);
+        require(groups[i] && groups[i] != (void *)-1, "coarse: group mapping");
+        size_t length = __builtin_capstone_cap_get_end(groups[i]) -
+                        __builtin_capstone_cap_get_base(groups[i]);
+        if (!i) span = length;
+        require(length == span && (span == SPAN || span == 4096), "coarse: group bounds");
+    }
+    int shared = span == SPAN;
+    unsigned long mapped = __capstone_malloc_map_calls - maps;
+    require(mapped == (shared ? 2 : GROUPS), "coarse: backing map count");
+    size_t a = __builtin_capstone_cap_get_cursor(groups[0]);
+    size_t b = __builtin_capstone_cap_get_cursor(groups[1]);
+    if (shared) {
+        require(!(a & 65535), "coarse: aligned region");
+        for (unsigned i = 0; i < 19; ++i)
+            require(__builtin_capstone_cap_get_cursor(groups[i]) == a + i * SPAN,
+                    "coarse: nineteen compact extents in first region");
+        size_t last = __builtin_capstone_cap_get_cursor(groups[19]);
+        require(!(last & 65535) && last != a, "coarse: second region");
+        require((a + SPAN - 1) / 4096 == b / 4096, "coarse: siblings share a page");
+    }
+    printf("MALLOC_COARSE_LAYOUT %s groups=20 maps=%lu span=%lu\n",
+           shared ? "shared" : "dedicated", mapped, (unsigned long)span);
+    groups[1][16] = 77;
+    char *stale = capstone_cap_derive(groups[0], 16, 16);
+    unsigned written = fill_caps(groups[0], 0, span, live);
+    require(written == span / 16 && count_tags(groups[0], 0, span) == written,
+            "coarse: tag reader sees every stored capability");
+    unsigned long unmapped = __capstone_malloc_coarse_unmapped;
+    __capstone_malloc_group_unmap(groups[0], 4096);
+    /* Dedicated mappings must stay cached until reuse. A shared region must survive trim
+     * while a sibling is live, including the page that the released extent shared with it. */
+    if (shared) require(malloc_trim(0) == 0 && __capstone_malloc_coarse_unmapped == unmapped,
+                        "coarse: trim retains partial regions");
+    require(groups[1][16] == 77, "coarse: sibling survives release and trim");
+    memset(records[0], 0, sizeof records[0]);
+    groups[0] = __capstone_malloc_group_map(records[0], 4096, 304, 11);
+    require(groups[0] && groups[0] != (void *)-1 &&
+            __builtin_capstone_cap_get_cursor(groups[0]) == a &&
+            __builtin_capstone_cap_get_end(groups[0]) - a == span,
+            "coarse: same extent reused with different geometry");
+    /* With object bounds off, header and untaken slots are reachable immediately. */
+    if (records[0][0].issued) {
+        unsigned tags = count_tags(groups[0], 0, span), bytes = 0;
+        for (size_t o = 0; o < span; ++o) bytes += groups[0][o] != 0;
+        printf("MALLOC_COARSE_WHOLE tags=%u bytes=%u\n", tags, bytes);
+        require(!tags && !bytes, "coarse: whole extent clean before any slot is taken");
+    }
+    if (!strcmp(mode, "coarse-stale") || !strcmp(mode, "coarse-bounds")) {
+        printf("MALLOC_FAULT_READY:%s\n", mode); fflush(stdout);
+        fault_store(!strcmp(mode, "coarse-stale") ? stale : groups[0] + span);
+        return survived(mode, 1);
+    }
+    unsigned tags = 0, bytes = 0;
+    for (unsigned i = 0; i < 11; ++i) {
+        char *p = __capstone_malloc_slot_take(&records[0][i]);
+        require(p && (records[0][i].taken_clean || records[0][i].issued),
+                "coarse: reused slot is clean for calloc");
+        tags += count_tags(p, 0, 304);
+        for (unsigned o = 0; o < 304; ++o) bytes += p[o] != 0;
+    }
+    printf("MALLOC_COARSE_SCRUB tags=%u bytes=%u slots=11 stride=304\n", tags, bytes);
+    require(!tags && !bytes, "coarse: geometry-changing reuse clears bytes and tags");
+    require(groups[1][16] == 77, "coarse: sibling survives reuse scrub");
+    for (unsigned i = 0; i < GROUPS; ++i) __capstone_malloc_group_unmap(groups[i], 4096);
+    require(malloc_trim(0) == 1 && malloc_trim(0) == 0, "coarse: trim returns empty backing");
+    unsigned long released = __capstone_malloc_coarse_unmapped - unmapped;
+    require(released == (shared ? 2 : 0), "coarse: trim returns both empty regions");
+    printf("MALLOC_COARSE_TRIM empty_backing_returned=1 regions=%lu\n", released);
+    printf("MALLOC_SURVIVED:%s\n", mode); fflush(stdout);
+    return 0;
+}
 #endif
 int main(int argc, char **argv)
 {
     const char *mode = argc > 1 ? argv[1] : "ok";
     int may_survive = argc > 2 && !strcmp(argv[2], "may-survive");
 #ifdef __CAPSTONE_PURECAP__
+    if (!strcmp(mode, "coarse-reuse") || !strcmp(mode, "coarse-stale") ||
+        !strcmp(mode, "coarse-bounds")) return coarse_case(mode);
     if (!strncmp(mode, "recycle-", 8)) return recycle_case(mode, may_survive);
     if (!strcmp(mode, "calloc-clean")) return calloc_clean();
     if (!strcmp(mode, "calloc-shrink")) return calloc_shrink();
