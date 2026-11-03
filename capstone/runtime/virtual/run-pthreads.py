@@ -38,15 +38,22 @@ def main():
     # without it (the lazy-grants change's control) runs the gate as before and the check is
     # recorded as uninstrumented rather than passed.
     instrumented = b'diag_admit' in paths['module'].read_bytes()
+    # /proc/vmstat's FOLL_PIN counters, before insmod and after rmmod (when no context is left),
+    # as run-step-hooks.py reads them: every pin the run took must have been released. The
+    # module's census and counters cannot show that -- a module that sweeps, decrements and
+    # prints but never unpins keeps both consistent.
     gate = '''#!/bin/sh
 cd /mnt/vm || exit 1
+pins() { echo 1 > /proc/sys/vm/stat_refresh; grep -E "^nr_foll_pin_(acquired|released) " /proc/vmstat | tr "\\n" " "; }
 dmesg -n 1
+echo "PTHREAD_PINS_BEFORE:$(pins)"
 insmod capstone_vm.ko ''' + ('diag_admit=1' if instrumented else '') + ''' || exit 1
 CAPSTONE_EXEC_DIAGNOSTICS=1 CAPSTONE_VM_STATS=1 CAPSTONE_VM_STATS_MARK=1 ./capstone-vexec pthread.dom
 echo PTHREAD_EXIT:$?
 dmesg | grep -E "capstone_vm: |CAPSTONE_VM_STATS_MARK" | sed "s/^/PTHREAD_DIAG:/"
 rmmod capstone_vm
 echo PTHREAD_CLEANUP:$?
+echo "PTHREAD_PINS_END:$(pins)"
 echo VIRTUAL_STAGED_DONE
 '''
     (stage/'gate.sh').write_text(gate)
@@ -100,6 +107,12 @@ echo VIRTUAL_STAGED_DONE
                 sweep_ok = (swept == held and touch >= 1)
         checks['stack_sweep_complete'] = bool(seen_stack and sweep_ok)
         checks['pages_match_census'] = bool(stats and after_mark and int(stats.group(1)) == alive)
+    def pins(tag):
+        m = re.search('^' + tag + r':(.*)$', log, re.M)
+        v = dict(re.findall(r'nr_foll_pin_(acquired|released) (\d+)', m.group(1))) if m else {}
+        return (int(v['acquired']), int(v['released'])) if len(v) == 2 else None
+    before, end = pins('PTHREAD_PINS_BEFORE'), pins('PTHREAD_PINS_END')
+    checks['pins_balanced'] = bool(before and end and end[0] == end[1] and end[0] > before[0])
     checks['exit'] = log.count('PTHREAD_EXIT:0') == 1
     checks['cleanup'] = run.returncode == 0 and log.count('PTHREAD_CLEANUP:0') == 1
     record = dict(status='PASS' if all(v is True or v == 'uninstrumented' for v in checks.values()) else 'FAIL',
