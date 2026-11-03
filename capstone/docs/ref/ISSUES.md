@@ -4028,6 +4028,44 @@ the operation.
 That guard arm also records a refuted prediction of mine. Reading the decoder alone, I predicted that fsqrt returns
 NaN whenever f0 holds a NaN. It does not, because fsqrt never reads f0.
 
+### R-67 — a jump through a code capability whose node has ENDED runs its target: commit's PC tracker adopts every new PC-capability id as live, and CJALR never queries the node `OPEN — DEMONSTRATED IN SIMULATION 2026-11-03 on e7af48457's RTL (found by the external collaborator, conformance rule T1; reproduced by the RTL lane); present in every sealed bitstream's tree; fix in Verilator (capstone-ariane 1fc2cd5aa), going to synthesis with C.5a on the lead's ruling; silicon not run`
+
+Siblings: R-44, the same adopt at the CPMP trackers, which recorded this one as "latent ... needs a stale CODE
+capability via CALL/RETURN, which has never been constructed"; R-35, the same adopt at the LSU, fixed; Q-29, the fetch
+check's order and scope. Folder: `capstone/tests/fpga-repros/R67-pcc-adopts-dead-code-capability/`.
+
+**Mechanism** (e7af48457, read):
+- The PC check at commit raises 25 only when the tracker's valid bit is clear (`commit_stage.sv:389-391`).
+- The tracker adopts any new tagged PC-capability id with valid = 1. The comment there reads "On domain change
+  (CALL/RETURN/CAPENTER), assume valid — DYN unit already checked" (`:399-404`).
+- That premise fails for CJALR. CJALR is a FLU op whose only check is the tag (`capstone_flu_unit.anvil:332-346`), and
+  the DYN unit has no CJALR.
+- So a code capability installed by CJALR is never queried. The broadcast that ended its node came BEFORE the jump,
+  and nothing clears the adopted bit after it.
+
+**Reading** (simulation, memory delay 12, conformance rule T1 `lv-t1-*`):
+- On 4dcb67e4e (e7af48457's RTL tokens), t1-fire reads lcc validity 0 after the crevoke, and the target still retires
+  its marker store with 0 traps.
+- The controls show the check works otherwise: norevoke writes the marker, an untagged register gives 24, and a target
+  outside C's bounds gives 28.
+- On 1fc2cd5aa the target traps once: cause 25, mepc = the target, no marker. The controls read the same.
+- The folder's kit images read the same HOLE vector on bitstream 3's tokens and on ObjBounds (038b540a3).
+
+**Reach.**
+- The adopt lines are identical in c721c1a2a, dcc6daf6e, e7af48457, 603528b8b and 325966ee4.
+- Any code holding a code capability whose node was revoked can still jump to it with CJALR.
+- Not exercised: an escape or resume that installs a dead code capability.
+
+**Fix** (the external collaborator's 1fc2cd5aa, claim-audited by the RTL lane, no fail-open path found):
+- A new id is adopted UNKNOWN, and the head is held until the LSU answers from the ALLOW or DEAD record or a probe.
+- Its recorded costs:
+  - a probe per PCC id change;
+  - interrupts and the quantum wait out a hold (bounded by the probe time-out, after which a live PCC takes 25);
+  - every new PCC id is refused under `R43_PROBE_TIEOFF`.
+- The lead ruled (2026-11-03) that it is synthesised with C.5a in one bitstream.
+
+**Silicon.** Not yet run. The folder's kit is pre-registered: HOLE on bitstream 3 and on ObjBounds.
+
 ### R-57 — a capability STORE whose translation faults retires WITHOUT its page fault and is committed to the store buffer, which copies an INVALID speculative entry into its commit queue (a ghost head that never drains) and underflows its speculative count: the vp2 wedges r8..r11 `OPEN ON SILICON (caplifive_vp2_bf3db3175); DEMONSTRATED in simulation 2026-10-18 by a matched pair; FIXED on virtual-profile-2-c 2114e11bd for the next bitstream; the store-side twin of R-56; software rule S-25 (no capability store as a page's first access) until then`
 
 **What happens** (bf3db3175, read by the RTL lane and audited by a claim-auditor against the trace). The store syncer
