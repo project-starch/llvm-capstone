@@ -196,7 +196,10 @@ helpers = [Image("launcher", LAUNCHER), Image("job-helper", JOB)] if A.kind == "
 
 os.makedirs(os.path.join(OUT, "profile"), exist_ok=True)
 total_classes, total_funcs, total_mix = collections.Counter(), collections.Counter(), collections.defaultdict(collections.Counter)
-summary = {"run": OUT, "kind": A.kind, "windows": []}
+# A work-bounded slice (tools/stop-at.py): what it stopped at, so a comparison can insist on the same.
+slice_path = os.path.join(OUT, "slice.json")
+summary = {"run": OUT, "kind": A.kind, "windows": [],
+           "slice": json.load(open(slice_path)) if os.path.exists(slice_path) else None}
 for k, (inv_id, inv) in enumerate(invocations):
     n = inv.get("detail", {}).get("window")
     if n is None:

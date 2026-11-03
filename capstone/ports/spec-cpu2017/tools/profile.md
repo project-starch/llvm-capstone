@@ -79,10 +79,51 @@ window that crosses quanta, a prefault and a fault test whose retried stores mus
 twice, and an alias test (the same bytes at two addresses must be two records). `vtcheck.py`
 fails unless every check passes. Run it on every new platform before a measurement.
 
-## Long benchmarks
+## Long benchmarks: work-bounded slices
 
-perlbench, x264, mcf and xz test inputs run for 45-220 minutes. A slice "first N attempts"
-compares unequal work between arms (the arm with more instructions per iteration gets fewer
-iterations), so it is not used. The honest reduction is a smaller workload that finishes
-normally and validates: SPEC's test input where it is short, otherwise a reduced input
-labelled as such. (Open.)
+perlbench, x264, mcf and xz test inputs run for 45-220 minutes in the Capstone arm. A slice of
+"the first N attempts" or "the first N minutes" compares unequal work between arms (the arm with more
+instructions per iteration gets fewer iterations), so it is not used. A WORK-bounded slice is: both
+arms build the same source, so the K-th entry of the same function is the same point of the
+program's work in both.
+
+    PROFILE_STOP_AT=primal_bea_mpp:3551 tools/profile-batch.sh ARMS test OUTROOT cap-dev rv64 -- 505.mcf_r
+    tools/prof-compare.py OUTROOT/rv64/505.mcf_r OUTROOT/cap-dev/505.mcf_r
+
+`PROFILE_STOP_AT=SYMBOL:K[,START_SYMBOL:K]` (or `"stop_at": {"symbol": S, "count": K}` in the arms
+file, top level or per arm, optionally with `start_symbol`/`start_count`) makes `profile.sh`
+resolve the symbol in the arm's binary of the benchmark (`tools/stop-at.py resolve`, with the arms
+file's `nm`) and give the capprof plugin its address: the window then closes at the function's
+K-th entry exactly as the stop marker closes it, and the plugin ends the VM. Entries count inside
+open windows only and accumulate over the run's windows (an invocation's window continues the
+previous one's count). The plain arm's site is the symbol's link address; a domain image is mapped
+by the launcher at a base it reserves at run time, a multiple of the image's grant size, so the
+plugin matches the offset modulo that size together with the instruction's bytes, reports the
+address it stopped at, and the kit derives the image record the launcher never wrote from it.
+
+A stopped run's verdict is SLICE, never PASS: runcpu cannot validate an output cut short.
+`tools/stop-at.py finish` requires the plugin's `capprof/stopped` record to match the request
+(entry K, the symbol's bytes, the plain link address or a base aligned to the grant size), one
+address entered as the site, every guest invocation before the stopped one to have passed and the
+stopped one to be the resolved binary's; every later command runcpu issues is refused at once as
+`after-stop` (`capstone-run.sh`). `prof-compare.py` compares two runs only when both are full runs
+or both are slices with the same symbol, K and start. A K the run never reaches gives a full run,
+whose window footers carry `# stop_entries_so_far` (the site's entries), the count to slice from.
+
+What a slice is not: it measures a PREFIX of the program's work, and the prefix is not the whole
+run in miniature. Measured on the census platform (2026-11-03, slices at 1/5/20 % of the entries
+of mcf's `primal_bea_mpp` and xz's `sha_compress`, against the full test runs): the TOTAL
+Capstone/plain ratio of the 5 % slice was 1.258 against mcf's 1.319 and 1.210 against xz's 1.133.
+The runtime's cost is not spread over the work: page population lands at the start (xz's slices
+carry kernel work worth +15-20 % of the plain attempts, the full run +6.9 %), and the retire sweep
+and teardown at the end, which no slice reaches (mcf's module class is 0.08-0.77 % of the plain
+attempts in a slice, 2.04 % in the full run). The PROGRAM class came closer: mcf 1.238 (5 %) and
+1.255 (20 %) against 1.227, xz 1.026 and 1.031 against 1.027. So a slice compares compiler output
+over equal work; a claim about the kernel and module classes, or about the total, needs the full
+run. Where the run has phases of different cost (xz's twelve invocations at six compression
+levels, per-invocation ratios 1.06-1.25) a prefix slice measures the first phases only. Pick the function from a full
+run's counts: entered often, at a steady rate, the SAME number of times in both arms (a function
+whose first instruction is also a loop header in one build counts the loop's iterations there).
+The correctness test is `tools/capprof-validation/stopat-run.sh` (`stopatcheck.py`): a loop calling
+a function 1000 times over two windows, plain and as a domain, with stop and start sites, checked
+instruction by instruction against the full run.
