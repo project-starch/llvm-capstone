@@ -154,6 +154,9 @@ def benchmark_arms(arms, bench):
         settings['platform']['cpu_props'] = [p for p in settings['platform'].get('cpu_props', [])
             if not p.startswith('x-capstone-supervisor-slots=')] + ['x-capstone-supervisor-slots=2']
         for arm in settings['arms'].values():
+            # Perl's file-owner tests need guest ownership, and its children
+            # execute a relative path to the image staged on local tmpfs.
+            arm.update(share_model='mapped-xattr', stage_image='tmpfs')
             arm['cpu_props'] = [p for p in arm.get('cpu_props', [])
                 if not p.startswith('x-capstone-supervisor-slots=')]
             params = arm.get('module_params', '').split()
@@ -325,7 +328,7 @@ runcpu --config=capstone-virtual --action=build --tune=base --define sdk="$SDK" 
     kit = out / 'kit'
     shutil.copytree(src / 'capstone/ports/spec-cpu2017', kit)
     for name in ('prof-northstar.py', 'prof-buckets.py', 'milestone-census.py', 'milestone-census.sh',
-                 'profile-watchdog.py'):
+                 'profile-watchdog.py', 'capstone-run.sh'):
         shutil.copy2(HERE / name, kit / 'tools' / name)
     header = source_platform / 'adapter/module/cap_rev_table_abi.h'
     target = src / 'capstone/capstone-qemu/target/riscv/cap_rev_table_abi.h'

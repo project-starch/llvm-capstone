@@ -43,9 +43,31 @@ class CensusTest(unittest.TestCase):
         self.assertEqual(perl['arms']['cap']['cpu_props'], [])
         self.assertEqual(perl['arms']['cap']['module_params'], 'debug=1 supervisor_slots=2')
         self.assertEqual(perl['arms']['rv64']['module_params'], 'supervisor_slots=2')
+        for arm in perl['arms'].values():
+            self.assertEqual(arm['share_model'], 'mapped-xattr')
+            self.assertEqual(arm['stage_image'], 'tmpfs')
         self.assertEqual(arms['platform']['cpu_props'], ['x-capstone-supervisor-slots=1'])
         self.assertEqual(census.benchmark_arms(arms, '557.xz_r'), arms)
         self.assertEqual(set(census.SLICES), set(census.BENCHES))
+
+    def test_staged_perl_path_survives_child_prefix(self):
+        wrapper = Path(__file__).with_name('capstone-run.sh').read_text()
+        block = wrapper.split('  case "${words[0]}" in\n', 1)[1].split('  esac', 1)[0]
+        block = 'case "${words[0]}" in\n' + block + 'esac\n'
+        staged = '/tmp/stage-0001-perlbench_r_base.fixture'
+        guest = '/mnt/host/cache/SPEC17/benchspec/CPU/500.perlbench_r/run/run_base_test_fixture.0000'
+        for original in ('../exe/perlbench_r', '/mnt/host/absolute/perlbench_r'):
+            output = subprocess.check_output(['bash', '-c',
+                'words=("$1"); staged=$2\n' + block + 'printf "%s" "${words[0]}"',
+                'fixture', original, staged], text=True)
+            if original.startswith('/'):
+                self.assertEqual(output, staged)
+            else:
+                self.assertFalse(output.startswith('/'))
+                self.assertEqual(os.path.normpath(guest + '/' + output), staged)
+                self.assertEqual(os.path.normpath(guest + '/t/../' + output), staged)
+        # The old absolute program word fails specifically after t/TEST adds ../.
+        self.assertNotEqual(os.path.normpath(guest + '/t/../' + staged), staged)
 
     def git(self, *args):
         return subprocess.check_output(['git', '-C', str(self.root), *args], text=True).strip()

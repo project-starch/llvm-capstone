@@ -236,7 +236,13 @@ builds default to 20 jobs (`CAP_JOBS`), runtime builds to 4, profiling to 4
 
 perlbench uses `x-capstone-supervisor-slots=2` and module parameter
 `supervisor_slots=2` in both arms; the other benchmarks retain their template
-settings. Each benchmark/arm has its own saved arms file. Full xz includes
+settings. Both perlbench arms use `mapped-xattr` and stage images on tmpfs:
+its file-owner tests need guest ownership, and its test driver re-executes
+`../$^X` after entering `t/`. The staged program word therefore stays relative
+via a root-reaching path; an absolute `/tmp/stage-...` would become the invalid
+`..//tmp/stage-...`. The census overlays its `capstone-run.sh` as part of the
+host profiling tools, with the original fix from `aa25b8013ac3`.
+Each benchmark/arm has its own saved arms file. Full xz includes
 all twelve SPEC test invocations in the harness's normal order, sums their
 windows, and requires the full SPEC oracle to pass. Quick xz stops inside
 the first invocation; the remaining eleven do not execute. Any commands
@@ -266,7 +272,7 @@ Quick mode uses these fixed `PROFILE_STOP_AT` prefixes:
 | imagick | `GetVirtualPixelsFromNexus:32` | first 32 virtual pixel fetches |
 | lbm | `LBM_performStreamCollideTRT:3` | two stream/collide steps, then entry of the third |
 | nab | `mme34:5` | four force evaluations, then entry of the fifth |
-| perlbench | `Perl_pp_nextstate:10000` | first 10,000 statement-boundary opcode entries |
+| perlbench | `Perl_pp_nextstate:10000` | first 10,000 statement-boundary opcode entries in makerand.pl |
 | mcf | `primal_bea_mpp:3551` | entry of the 3,551st pricing call |
 | xz | `sha_compress:13392` | first 13,392 hash-compression calls, in the first invocation |
 

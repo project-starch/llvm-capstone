@@ -112,7 +112,15 @@ if [ "${CAPSTONE_SPEC_STAGE:-}" = tmpfs ]; then
   staged=/tmp/stage-$id-$(basename "$exe")
   env PYTHONPATH="$CAPSTONE_VM_HOST" python3 -m capstone_vm --state "$CAPSTONE_VM_STATE" exec -- sh -c "cp $(printf %q "/mnt/host/${exe#"$share"/}") $(printf %q "$staged") && chmod 0755 $(printf %q "$staged")" \
     || refuse "staging the image to the guest's tmpfs failed" "$@"
-  words[0]=$staged
+  # A relative program path stays relative and names the staged copy: 500.perlbench_r's test.pl
+  # chdirs into t/ and re-runs every test as "../$^X", which turns an absolute /tmp/stage-... into
+  # "..//tmp/stage-...", a file that does not exist (every test then fails to start). 24 ".." climb
+  # to / from any cwd up to 24 levels deep (".." of / is /; the run directory is 9 levels deep in
+  # the guest), so the path, and "../" prepended to it, name the staged copy.
+  case "${words[0]}" in
+    /*) words[0]=$staged ;;
+    *) words[0]=$(printf '../%.0s' {1..24})${staged#/} ;;
+  esac
   staged=$(printf '"%s"' "$staged")
 fi
 rc=0
