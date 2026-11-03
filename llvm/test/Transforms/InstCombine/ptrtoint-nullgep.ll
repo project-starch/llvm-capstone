@@ -4,12 +4,12 @@
 ; RUN: opt -passes=verify -S < %s | FileCheck %s --check-prefixes=ALL,LLPARSER
 ; We should be able to fold almost everything in InstSimplify other than the final test which requries InstCombine
 ; RUN: opt -S -passes=instsimplify < %s | FileCheck %s --check-prefixes=ALL,CHECK,INSTSIMPLIFY
-; RUN: opt -S -passes=instcombine < %s | FileCheck %s --check-prefixes=ALL,CHECK,INSTCOMBINE
+; RUN: opt -S -passes=instcombine < %s | FileCheck %s --check-prefixes=ALL,CHECK,INSTCOMBINE,IC
 ; Non-integral pointers limit certain transformations on pointers:
 ; RUN: sed -e 's/p:64:64:64:64/p:64:64:64:64-ni:1/g' %s | opt -S -passes=instsimplify | \
 ; RUN:   FileCheck %s --check-prefixes=ALL,CHECK,INSTSIMPLIFY
 ; RUN: sed -e 's/p:64:64:64:64/p:64:64:64:64-ni:1/g' %s | opt -S -passes=instcombine | \
-; RUN:   FileCheck %s --check-prefixes=ALL,CHECK,INSTCOMBINE
+; RUN:   FileCheck %s --check-prefixes=ALL,CHECK,INSTCOMBINE,IC-NI
 target datalayout = "p:64:64:64:64"
 
 declare void @use_i64(i64)
@@ -452,11 +452,17 @@ define i64 @fold_complex_index_multiple_nonzero(i64 %x) local_unnamed_addr #0 {
 ; INSTSIMPLIFY-NEXT:    [[RET:%.*]] = ptrtoint ptr addrspace(1) [[PTR]] to i64
 ; INSTSIMPLIFY-NEXT:    ret i64 [[RET]]
 ;
-; INSTCOMBINE-LABEL: define {{[^@]+}}@fold_complex_index_multiple_nonzero
-; INSTCOMBINE-SAME: (i64 [[X:%.*]]) local_unnamed_addr {
-; INSTCOMBINE-NEXT:  entry:
-; INSTCOMBINE-NEXT:    [[RET:%.*]] = add i64 [[X]], 96
-; INSTCOMBINE-NEXT:    ret i64 [[RET]]
+; IC-LABEL: define {{[^@]+}}@fold_complex_index_multiple_nonzero
+; IC-SAME: (i64 [[X:%.*]]) local_unnamed_addr {
+; IC-NEXT:  entry:
+; IC-NEXT:    [[RET:%.*]] = add i64 [[X]], 96
+; IC-NEXT:    ret i64 [[RET]]
+;
+; IC-NI-LABEL: define {{[^@]+}}@fold_complex_index_multiple_nonzero
+; IC-NI-SAME: (i64 [[X:%.*]]) local_unnamed_addr {
+; IC-NI-NEXT:  entry:
+; IC-NI-NEXT:    [[PTR_OFFS:%.*]] = add nsw i64 [[X]], 96
+; IC-NI-NEXT:    ret i64 [[PTR_OFFS]]
 ;
 entry:
   %ptr = getelementptr inbounds %struct.S, ptr addrspace(1) null, i64 1, i32 0, i64 1, i32 0, i64 %x
@@ -626,13 +632,20 @@ define i64 @fold_ptrtoint_nested_nullgep_array_variable_multiple_uses(i64 %x, i6
 ; INSTSIMPLIFY-NEXT:    [[RET:%.*]] = ptrtoint ptr addrspace(1) [[PTR]] to i64
 ; INSTSIMPLIFY-NEXT:    ret i64 [[RET]]
 ;
-; INSTCOMBINE-LABEL: define {{[^@]+}}@fold_ptrtoint_nested_nullgep_array_variable_multiple_uses
-; INSTCOMBINE-SAME: (i64 [[X:%.*]], i64 [[Y:%.*]]) {
-; INSTCOMBINE-NEXT:    [[PTR_SPLIT:%.*]] = getelementptr [2 x i16], ptr addrspace(1) null, i64 [[X]]
-; INSTCOMBINE-NEXT:    [[PTR:%.*]] = getelementptr i16, ptr addrspace(1) [[PTR_SPLIT]], i64 [[Y]]
-; INSTCOMBINE-NEXT:    call void @use_ptr(ptr addrspace(1) [[PTR]])
-; INSTCOMBINE-NEXT:    [[RET:%.*]] = ptrtoint ptr addrspace(1) [[PTR]] to i64
-; INSTCOMBINE-NEXT:    ret i64 [[RET]]
+; IC-LABEL: define {{[^@]+}}@fold_ptrtoint_nested_nullgep_array_variable_multiple_uses
+; IC-SAME: (i64 [[X:%.*]], i64 [[Y:%.*]]) {
+; IC-NEXT:    [[PTR_SPLIT:%.*]] = getelementptr [2 x i16], ptr addrspace(1) null, i64 [[X]]
+; IC-NEXT:    [[PTR:%.*]] = getelementptr i16, ptr addrspace(1) [[PTR_SPLIT]], i64 [[Y]]
+; IC-NEXT:    call void @use_ptr(ptr addrspace(1) [[PTR]])
+; IC-NEXT:    [[RET:%.*]] = ptrtoint ptr addrspace(1) [[PTR]] to i64
+; IC-NEXT:    ret i64 [[RET]]
+;
+; IC-NI-LABEL: define {{[^@]+}}@fold_ptrtoint_nested_nullgep_array_variable_multiple_uses
+; IC-NI-SAME: (i64 [[X:%.*]], i64 [[Y:%.*]]) {
+; IC-NI-NEXT:    [[PTR:%.*]] = getelementptr [2 x i16], ptr addrspace(1) null, i64 [[X]], i64 [[Y]]
+; IC-NI-NEXT:    call void @use_ptr(ptr addrspace(1) [[PTR]])
+; IC-NI-NEXT:    [[RET:%.*]] = ptrtoint ptr addrspace(1) [[PTR]] to i64
+; IC-NI-NEXT:    ret i64 [[RET]]
 ;
   %ptr = getelementptr [2 x i16], ptr addrspace(1) null, i64 %x, i64 %y
   call void @use_ptr(ptr addrspace(1) %ptr)
