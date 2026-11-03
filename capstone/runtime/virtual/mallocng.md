@@ -213,14 +213,29 @@ a mapping-service cost as well as page padding. Single-slot groups include
 page slack in their stride; removing that slack would be a separate change
 to their representation, not a consequence of sharing backing.
 
-Small groups can share a region without sharing a lifetime. The region root
-stays in the runtime's private state and each group is a separately bounded
-CDERIVE child. Group release must revoke that child before its extent becomes
-available. Reuse must clear every reachable byte and tag before publishing
-new objects, including the entire group when object bounds are disabled.
-The slot arrays and pointer index keep their existing ownership and lookup
-rules. A fully empty region can be returned only through the retiring VM
-unmap path; a partially occupied region cannot be discarded as a whole.
+The runtime carves these groups from 64 KiB aligned regions. Each region holds
+equal-sized extents: header plus slots, rounded to a tag granule and exactly
+representable bounds. Extents smaller than 1 KiB retain dedicated backing,
+bounding the region occupancy bitmap at 64 bits. The descriptor and root stay
+in private runtime state; each group receives a separately bounded CDERIVE
+child. Neither mallocng's meta nor a slot record receives the region root.
+The region lookup uses the group's address; available regions are indexed by
+extent size. No program-supplied pointer becomes allocator authority.
+
+Release revokes the group before making its extent available. A persistent
+dirty bit marks reuse even when the new group has different slot geometry.
+Each reused slot is scrubbed before its first take, using the existing slot
+record flags; with object bounds disabled, the entire extent is scrubbed
+before binding slots. The slot arrays and pointer index retain their existing
+ownership and lookup rules. Single-slot groups, including every mremap
+candidate, keep dedicated mappings and the existing recycling cache.
+
+Empty regions share the cache's 1 MiB retention budget. `malloc_trim` returns
+all empty regions through the retiring VM unmap path; partially occupied
+regions are never unmapped or advised away. A failed region unmap leaves its
+descriptor registered so trim can retry. All region and cache operations use
+the existing heap lock. The mallocng representation patches and allocation
+policy are unchanged.
 
 ## VM remapping
 
