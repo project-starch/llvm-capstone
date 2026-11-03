@@ -1,12 +1,13 @@
 #!/bin/bash
 # p12 lane artifact layout. Builds are separate; one guest per arm, run serially.
 set -euo pipefail
-W=~/lanes/laneAG
+W=${LANE_ROOT:-$HOME/lanes/laneAG2}
 cd "$W/src"
 export CAPSTONE_TOOLCHAIN_CHECKED=1 CAPSTONE_TMP_ROOT=$W/tmp CAPSTONE_QEMU_LOCK=$W/measure.lock
 source capstone/tests/capstone-test-env.sh
 export PYTHONDONTWRITEBYTECODE=1 CAPSTONE_SPEC_VM_STATES=$W/states SHARE=$W
 export MICRO=$W/micro KIT=$HOME/prof-dev/kit4 VMHOST=$W/src/capstone/runtime/host SLOTS=2
+export DOM_TRAMPOLINE=$W/trampoline.bin
 export DOM_CHILD=$W/micro/lqmicro-cap DOM_PROFILER=$W/contracts/profile.py
 export ORIGINAL_PROF_REPORT=$KIT/tools/prof-report.py NM=$HOME/prof-dev/cap4/build/bin/llvm-nm
 python3 - "$W/platform-native" <<'PY'

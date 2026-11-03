@@ -14,6 +14,7 @@
 #include <linux/ptrace.h>
 #include <asm/processor.h>
 #include <asm/cacheflush.h>
+#include "capstone/delegate.h"
 
 /* Read-only attribution records; sampled outside measurement windows. */
 static unsigned long dom_last_base, dom_last_trampoline;
@@ -25,6 +26,8 @@ MODULE_PARM_DESC(dom_binfmt, "experimental root-only native .dom exec (default o
 #define DOM_STEP _IO('V', 31)
 #define DOM_PROTECT_DONE _IO('V', 32)
 #define DOM_DO_PROTECT 257
+#define DOM_DO_SYSCALL 258
+#define DOM_SYSCALL_DONE _IO('V', 33)
 #define DOM_LAUNCH_BYTES 65536UL
 #define DOM_META_BYTES 16384UL
 #define DOM_MAX_STRINGS 1024
@@ -43,14 +46,8 @@ struct dom_launch_header {
     u32 uid, euid, gid, egid;
     u64 realtime_ns, monotonic_ns, ticks, ticks_per_second;
 };
-struct dom_entry {
-    u32 version, count;
-    u64 nr, args[6], flags;
-    s64 result;
-    u64 pending, status;
-};
 _Static_assert(sizeof(struct dom_launch_header) == 88, "launch ABI");
-_Static_assert(sizeof(struct dom_entry) == 96, "delegate ABI");
+_Static_assert(sizeof(struct capstone_delegate_entry) == 96, "delegate ABI");
 
 static int dom_read(struct file *f, void *buf, size_t n, u64 at)
 {
@@ -195,10 +192,12 @@ static long dom_unmap(struct context *c, unsigned long base, unsigned long bytes
     return rc ? rc : vm_munmap(base, bytes);
 }
 
+#include "delegate-dom.h"
+
 /* The transport is fixed at exec, unretirable and only this task runs the
  * domain. Thus no in-flight service can race its reuse while vm_lock is down.
  * Copies into the caller's object remain capability accesses in the SDK. */
-static long dom_rw(struct context *c, const struct dom_entry *e)
+static long dom_rw(struct context *c, const struct capstone_delegate_entry *e)
 {
     struct file *file;
     struct iovec iov;
@@ -216,6 +215,7 @@ static long dom_rw(struct context *c, const struct dom_entry *e)
     if (file->private_data == c || !file->f_op ||
         !(write ? file->f_op->write_iter : file->f_op->read_iter)) { rc = -EBADF; goto put; }
     buf = c->dom_exchange + e->args[1];
+    if (!write && (rc = dom_touch(c, buf, e->args[2]))) goto put;
     rc = import_single_range(write ? WRITE : READ, (void __user *)buf, e->args[2], &iov, &iter);
     if (rc) goto put;
     mutex_unlock(&vm_lock);
@@ -250,11 +250,23 @@ static long dom_protect(struct context *c, struct cv_step *s)
     return DOM_DO_PROTECT;
 }
 
+static int dom_reply(struct context *c, long result)
+{
+    u64 words[3] = {result, 0, CAPSTONE_ROUND_DONE};
+    u32 zero = 0;
+    int rc = dom_store(c, c->dom_meta + offsetof(struct capstone_delegate_entry, result),
+                       words, sizeof(words));
+    if (!rc) rc = dom_store(c, c->dom_meta + CAPSTONE_SIGNAL_OFFSET +
+                            offsetof(struct capstone_signal_block, count), &zero, sizeof(zero));
+    c->dom_step.result = 0;
+    return rc;
+}
+
 static long dom_service(struct context *c, struct cv_step *s)
 {
-    struct dom_entry e;
-    u64 result[3];
-    u32 zero = 0;
+    struct capstone_delegate_entry e;
+    size_t lengths[CAPSTONE_DELEGATE_ARGS];
+    long rc;
     s->reply = 1;
     s->result = -ENOSYS;
     switch (s->args[7]) {
@@ -273,16 +285,19 @@ static long dom_service(struct context *c, struct cv_step *s)
             (s->args[0] != c->dom_meta || s->args[1] != c->dom_exchange ||
              s->args[2] != c->dom_exchange_bytes)) return -EFAULT;
         if (copy_from_user(&e, (void __user *)c->dom_meta, sizeof(e))) return -EFAULT;
-        if (e.version != 2) return -EINVAL;
-        e.result = -ENOSYS;
-        if (e.nr == 93 || e.nr == 94) return (e.args[0] & 255) + 1;
-        if (e.nr == DOM_HELLO) e.result = 0;
-        if (e.nr == 63 || e.nr == 64) e.result = dom_rw(c, &e);
-        result[0] = e.result; result[1] = result[2] = 0;
-        if (copy_to_user((void __user *)(c->dom_meta + offsetof(struct dom_entry, result)),
-                         result, sizeof(result)) ||
-            copy_to_user((void __user *)(c->dom_meta + 4096 + 16), &zero, sizeof(zero))) return -EFAULT;
-        s->result = 0;
+        rc = capstone_delegate_validate(&e, NULL, c->dom_exchange_bytes, lengths);
+        if (rc) return dom_reply(c, -rc);
+        if (e.nr == CAPSTONE_SYS_exit_group) return (e.args[0] & 255) + 1;
+        if (e.nr == DOM_HELLO || e.nr == CAPSTONE_NR_SIGPOLL) e.result = 0;
+        else if (e.nr == CAPSTONE_SYS_read || e.nr == CAPSTONE_SYS_write)
+            e.result = dom_rw(c, &e);
+        else {
+            rc = dom_prepare(c, &e);
+            if (rc == DOM_DO_SYSCALL) return rc;
+            e.result = rc;
+        }
+        rc = dom_reply(c, e.result);
+        if (rc) return rc;
         break;
     }
     return 0;
@@ -301,7 +316,19 @@ static long dom_ioctl(struct file *f, unsigned int op, unsigned long arg)
         s->result = (long)arg;
         return 0;
     }
-    if (op != DOM_STEP || arg || c->dom_protect_pending) return -EINVAL;
+    if (op == DOM_SYSCALL_DONE) {
+        /* Finish under a noninterruptible lock. A signal must not lose the
+         * result of an already executed syscall or run it twice. */
+        if (!c->dom_delegate || !c->dom_delegate->pending) return -EINVAL;
+        mutex_lock(&vm_lock);
+        rc = dom_complete(c, (long)arg);
+        if (!rc) rc = dom_reply(c, (long)arg);
+        c->dom_delegate->pending = false;
+        if (rc) goto fault;
+        goto out;
+    }
+    if (op != DOM_STEP || arg || c->dom_protect_pending ||
+        (c->dom_delegate && c->dom_delegate->pending)) return -EINVAL;
     if (mutex_lock_interruptible(&vm_lock)) return -EINTR;
     rc = cv_step_locked(c, s);
     if (rc == -EINTR || rc == -EAGAIN) goto out;
@@ -328,7 +355,11 @@ out:
     return rc;
 }
 static int dom_release(struct inode *inode, struct file *f)
-{ return f->private_data ? vm_release(inode, f) : 0; }
+{
+    if (!f->private_data) return 0;
+    dom_delegate_free(f->private_data);
+    return vm_release(inode, f);
+}
 static const struct file_operations dom_ops = {
     .owner = THIS_MODULE, .release = dom_release, .unlocked_ioctl = dom_ioctl,
 };
@@ -380,11 +411,13 @@ static int dom_startup(struct linux_binprm *bprm, void *block)
 /* Pure RV64I, no libc, stack access or capability authority; s0 is the descriptor and s1 the ioctl number from load_binary. */
 static const u32 dom_trampoline[] = {
     0x00040513, 0x00048593, 0x00000613, 0x01d00893, 0x00000073,
-    0x10100293, 0x00550c63, 0xfea052e3, 0xfff50513, 0x05e00893,
-    0x00000073, 0x0000006f,
-    0x00058513, 0x00060593, 0x00068613, 0x0e200893, 0x00000073,
-    0x00050613, 0x00040513, 0x00090593, 0x01d00893, 0x00000073,
-    0xfa9ff06f,
+    0x10100293, 0x02550063, 0x10200293, 0x04550263, 0xfca05ee3,
+    0xfff50513, 0x05e00893, 0x00000073, 0x0000006f, 0x00058513,
+    0x00060593, 0x00068613, 0x0e200893, 0x00000073, 0x00050613,
+    0x00040513, 0x00090593, 0x01d00893, 0x00000073, 0xfa1ff06f,
+    0x00058513, 0x00060593, 0x00068613, 0x00070693, 0x00078713,
+    0x00080793, 0x00000073, 0x00050613, 0x00040513, 0x00098593,
+    0x01d00893, 0x00000073, 0xf6dff06f,
 };
 static struct linux_binfmt capstone_dom;
 static int dom_load_binary(struct linux_binprm *bprm)
@@ -462,6 +495,20 @@ static int dom_load_binary(struct linux_binprm *bprm)
     if (!rc) rc = dom_grant(c, c->dom_meta, DOM_META_BYTES, 10, 6, c->dom_meta, false, 0);
     if (!rc) rc = dom_grant(c, c->dom_exchange, im.exchange, 11, 6, c->dom_exchange, false, 0);
     if (!rc) rc = dom_grant(c, startup, DOM_LAUNCH_BYTES, 12, 4, startup, false, 0);
+    if (!rc) {
+        u64 inherited[2] = {0, 0};
+        unsigned long irqflags;
+        unsigned sig;
+        spin_lock_irqsave(&current->sighand->siglock, irqflags);
+        inherited[0] = current->blocked.sig[0];
+        for (sig = 1; sig <= 64; ++sig)
+            if (current->sighand->action[sig - 1].sa.sa_handler == SIG_IGN)
+                inherited[1] |= 1ULL << (sig - 1);
+        spin_unlock_irqrestore(&current->sighand->siglock, irqflags);
+        rc = dom_store(c, c->dom_meta + CAPSTONE_SIGNAL_OFFSET +
+                        offsetof(struct capstone_signal_block, initial_mask),
+                        inherited, sizeof(inherited));
+    }
     mutex_unlock(&vm_lock);
     if (rc) goto out;
     tramp = vm_mmap(trampfile, 0, PAGE_SIZE, PROT_READ | PROT_EXEC, MAP_PRIVATE, 0);
@@ -469,6 +516,7 @@ static int dom_load_binary(struct linux_binprm *bprm)
     fd = get_unused_fd_flags(O_CLOEXEC);
     if (fd < 0) { rc = fd; goto out; }
     c->dom_pid = task_pid_nr(current);
+    c->dom_fd = fd;
     WRITE_ONCE(dom_last_base, base);
     WRITE_ONCE(dom_last_trampoline, tramp);
     current->mm->start_code = base;
@@ -483,7 +531,7 @@ static int dom_load_binary(struct linux_binprm *bprm)
     memset(regs, 0, sizeof(*regs));
     regs->status = SR_PIE | SR_UXL_64;
     regs->epc = tramp; regs->sp = (bprm->p - 16) & ~15UL;
-    regs->s0 = fd; regs->s1 = DOM_STEP; regs->s2 = DOM_PROTECT_DONE;
+    regs->s0 = fd; regs->s1 = DOM_STEP; regs->s2 = DOM_PROTECT_DONE; regs->s3 = DOM_SYSCALL_DONE;
     fd_install(fd, ctxfile); ctxfile = NULL;
     rc = 0;
 out:

@@ -58,3 +58,51 @@ Remote `df -h ~` outputs showed `30G` available on p12 and `40G` on p13.
 p13 had another lane's gate arm running; no gate was started or disturbed.
 The task's prepared kernel path is absent on p12; locate a reusable build
 before copying or building. This is not yet a build blocker.
+
+## Bridge implementation plan
+
+The scalar trampoline will forward a module-prepared syscall number and six
+register arguments, then return its result through a completion ioctl. Only
+the module constructs native pointers. Ordinary buffer arguments use a private
+untagged bounce mapping; the module copies bounded results into held transport
+through `touch()` (the implementation of CV_TOUCH). The domain receives no
+capability for bounce memory. The shared delegate validator and result-length
+rules are compiled into the module, avoiding a second shape table. Vector
+arguments require a separately rebuilt native iovec array.
+
+Initial implementation excludes caught-signal registration, waits requiring
+signal restart handover, nested message arguments, process creation and job
+control until their existing semantics can be preserved. Refusal is ENOSYS,
+never raw forwarding. Inherited signal mask/ignored dispositions must be
+published at startup even in this restricted mode. Full caught-signal parity
+is UNRESOLVED at this step. SPEC coverage must be established by execution;
+absence of threads alone does not prove compatibility.
+
+The prior four changes replayed without conflicts as `cca762d6cd17`,
+`c939237c9671`, `d2afe5da16c0`, `e84bba350f61`. Each staged scan exited zero.
+The prepared kernel and toolchain from the previous lane are available on
+p12 and reused read-only; no duplicate kernel/compiler build is needed.
+
+## First bridge validation
+
+p12 commands `bash ~/lanes/laneAG2/build.sh` (logs/build-bridge2.log) and
+`bash ~/lanes/laneAG2/contracts/build-contracts.sh` completed successfully.
+The assembled scalar trampoline is 152 bytes. No local build was run.
+`bash ~/lanes/laneAG2/contracts/run-contract.sh` completed with output:
+
+```
+PASS files
+PASS private-fd
+PASS signal-mask
+native contract failures=0
+unload_rc=0
+```
+
+The original exec/negative-image contracts also passed. The new cases exercise
+open/stat/seek/vector and positioned I/O, protect the anonymous context fd from
+close/dup/overwrite/fcntl, and check masks plus default/ignored dispositions.
+The previously unverified invalid-fd and invalid-protection cases now ran.
+The bridge shares the wire validator, result-byte calculation, fd positions
+and fcntl/ioctl command policy with the launcher. Writes into transport use
+`touch()` before copying. The trampoline touches neither transport nor domain
+objects. Private bounce and vector mappings have no domain grants.

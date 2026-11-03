@@ -5,6 +5,9 @@
 #include <stdint.h>
 #include <string.h>
 #include <sys/mman.h>
+#include <sys/stat.h>
+#include <sys/uio.h>
+#include <signal.h>
 #include <unistd.h>
 
 static int output(const char *p, size_t n)
@@ -64,8 +67,8 @@ int main(int argc, char **argv)
     }
     if (!strcmp(argv[1], "unsupported")) {
         errno = 0;
-        int fd = open("/not-supported", O_RDONLY);
-        return fd != -1 || errno != ENOSYS;
+        pid_t pid = fork();
+        return pid != -1 || errno != ENOSYS;
     }
     if (!strcmp(argv[1], "startup")) {
         char cwd[32];
@@ -73,7 +76,55 @@ int main(int argc, char **argv)
         if (!v || strcmp(v, "present")) return 9;
         if (getpid() < 1 || getppid() < 1) return 10;
         errno = 0;
-        return getcwd(cwd, sizeof cwd) != NULL || errno != ENOSYS;
+        return !getcwd(cwd, sizeof cwd) || strcmp(cwd, "/tmp");
+    }
+    if (!strcmp(argv[1], "files")) {
+        int fd = open("/tmp/native-file", O_CREAT | O_TRUNC | O_RDWR, 0600);
+        char b[12] = {0};
+        struct stat st;
+        struct iovec out[2] = {{"hello ", 6}, {"world", 5}};
+        struct iovec in[2] = {{b, 3}, {b + 3, 8}};
+        if (fd < 0 || writev(fd, out, 2) != 11 || fstat(fd, &st) || st.st_size != 11 ||
+            lseek(fd, 0, SEEK_SET) || readv(fd, in, 2) != 11 || strcmp(b, "hello world")) return 20;
+        if (pwrite(fd, "!", 1, 10) != 1 || pread(fd, b, 11, 0) != 11 ||
+            strcmp(b, "hello worl!")) return 21;
+        if (close(fd) || unlink("/tmp/native-file")) return 22;
+        return 0;
+    }
+    if (!strcmp(argv[1], "private-fd")) {
+        char path[64], target[128];
+        int found = -1;
+        for (int fd = 0; fd < 32; ++fd) {
+            /* Avoid stdio in this descriptor-policy probe. */
+            strcpy(path, "/proc/self/fd/");
+            unsigned n = strlen(path);
+            if (fd >= 10) path[n++] = '0' + fd / 10;
+            path[n++] = '0' + fd % 10; path[n] = 0;
+            ssize_t len = readlink(path, target, sizeof target - 1);
+            if (len < 0) continue;
+            target[len] = 0;
+            if (strstr(target, "capstone-dom")) { found = fd; break; }
+        }
+        if (found < 0) return 23;
+        errno = 0;
+        if (close(found) != -1 || errno != EBADF) return 24;
+        errno = 0;
+        if (dup(found) != -1 || errno != EBADF) return 25;
+        errno = 0;
+        if (dup2(0, found) != -1 || errno != EBADF) return 26;
+        errno = 0;
+        return fcntl(found, F_GETFD) != -1 || errno != EBADF;
+    }
+    if (!strcmp(argv[1], "signal-mask")) {
+        sigset_t set, old;
+        struct sigaction sa = {0};
+        sigemptyset(&set); sigaddset(&set, SIGUSR2);
+        if (sigprocmask(SIG_BLOCK, &set, &old) || sigprocmask(SIG_SETMASK, &old, &set) ||
+            sigismember(&set, SIGUSR2) != 1) return 27;
+        sa.sa_handler = SIG_IGN;
+        if (sigaction(SIGUSR1, &sa, 0)) return 28;
+        sa.sa_handler = SIG_DFL;
+        return sigaction(SIGUSR1, &sa, 0) != 0;
     }
     if (!strcmp(argv[1], "spin")) {
         if (output("ready\n", 6)) return 7;

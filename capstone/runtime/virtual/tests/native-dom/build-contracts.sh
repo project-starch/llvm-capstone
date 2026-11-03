@@ -1,7 +1,7 @@
 #!/bin/bash
-# Run on p12 after exporting this directory into ~/lanes/laneAG/contracts.
+# Run on p12 after exporting this directory into ~/lanes/laneAG2/contracts.
 set -euo pipefail
-W=~/lanes/laneAG
+W=${LANE_ROOT:-$HOME/lanes/laneAG2}
 cd "$W/src"
 export CAPSTONE_TOOLCHAIN_CHECKED=1 CAPSTONE_TMP_ROOT=$W/tmp CAPSTONE_QEMU_LOCK=$W/build.lock
 source capstone/tests/capstone-test-env.sh

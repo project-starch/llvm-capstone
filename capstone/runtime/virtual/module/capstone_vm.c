@@ -156,6 +156,8 @@ struct context {
     struct cv_step dom_step;
     pid_t dom_pid;
     bool dom_protect_pending;
+    int dom_fd;
+    struct dom_delegate *dom_delegate;
 };
 static DEFINE_MUTEX(vm_lock);
 /* Quotas are in base pages; zero means the 30-bit ISA limit. Parameters are

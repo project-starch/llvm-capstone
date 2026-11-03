@@ -1,6 +1,6 @@
 #!/bin/bash
 set -euo pipefail
-W=~/lanes/laneAG
+W=${LANE_ROOT:-$HOME/lanes/laneAG2}
 cd "$W/src"
 export CAPSTONE_TMP_ROOT=$W/tmp CAPSTONE_QEMU_LOCK=$W/contracts.lock CAPSTONE_TOOLCHAIN_CHECKED=1
 source capstone/tests/capstone-test-env.sh

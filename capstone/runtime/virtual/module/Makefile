@@ -3,3 +3,5 @@ obj-m += capstone_vm.o
 ifdef CV_TEST_HOOKS
 ccflags-y += -DCV_TEST_HOOKS
 endif
+
+ccflags-y += -I$(src)
