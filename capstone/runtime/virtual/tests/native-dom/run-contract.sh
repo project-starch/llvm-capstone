@@ -5,8 +5,8 @@ cd "$W/src"
 export CAPSTONE_TMP_ROOT=$W/tmp CAPSTONE_QEMU_LOCK=$W/contracts.lock CAPSTONE_TOOLCHAIN_CHECKED=1
 source capstone/tests/capstone-test-env.sh
 export PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=$W/src/capstone/runtime/host
-PL=$W/platform-native
-OUT=$W/contracts-review
+PL=${NATIVE_PLATFORM:-$W/platform-native}
+OUT=${CONTRACT_OUT:-$W/contracts-review}
 mkdir -p "$OUT"
 vm() { python3 -m capstone_vm --state "$OUT/vm" "$@"; }
 vm up --profile virtual --memory 8G --share-model mapped-xattr --share "$W" --no-pcrel \

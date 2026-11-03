@@ -153,7 +153,11 @@ def main():
     p.add_argument('--parallel-last', action='store_true',
                    help='Run the parallel pair immediately before rmmod, not mid-suite '
                         '(one-slot machines: the pair can end the guest)')
+    p.add_argument("--native-exec", action="store_true",
+                   help="Execute .dom directly through the opt-in module binfmt")
     a = p.parse_args()
+    if a.native_exec and any(arg.startswith('dom_binfmt=') for arg in a.module_args.split()):
+        p.error('--native-exec sets dom_binfmt; omit it from --module-args')
     work = Path(tempfile.mkdtemp(prefix='virtual-app.', dir=os.environ['CAPSTONE_TMP_ROOT']))
     stage = work/'stage'; stage.mkdir()
     inputs = {'qemu': a.qemu, 'launcher': a.adapter/'capstone-vexec',
@@ -195,6 +199,16 @@ def main():
         # a machine where rmmod succeeds, and would test nothing about the slot at all.
         script = script.replace(anchor, block + anchor, 1)
         assert script.count(block) == 1, 'parallel block not reinserted'
+    if a.native_exec:
+        for dom in stage.glob('*.dom'):
+            dom.chmod(0o755)
+        script = script.replace('insmod capstone_vm.ko',
+                                'insmod capstone_vm.ko dom_binfmt=1', 1)
+        script = script.replace('export CAPSTONE_VM_CONTRACT=',
+                                'if [ -e /proc/sys/fs/binfmt_misc/status ]; then\n'
+                                '  echo 0 > /proc/sys/fs/binfmt_misc/status || exit 1\n'
+                                'fi\nexport CAPSTONE_VM_CONTRACT=', 1)
+        script = script.replace('./capstone-vexec ', './')
     (stage/'gate.sh').write_text(script)
     disk = work/'stage.ext4'
     with disk.open('wb') as f: f.truncate(64 << 20)
@@ -345,7 +359,8 @@ def main():
     tests['sqlite_results'] = lines.count('SQLITE_SUM=5050') == 1 and lines.count('SQLITE_PERSIST=100') == 1
     tests['mruby_results'] = lines.count('MRUBY_SUM=5050') == 1 and lines.count('MRUBY_FILE=virtual') == 1
     tests['completed'] = lines.count('VIRTUAL_RUNTIME_DONE') == 1
-    result = {'status': 'PASS' if all(tests.values()) else 'FAIL', 'tests': tests,
+    result = {'execution_path': 'native' if a.native_exec else 'launcher',
+              'status': 'PASS' if all(tests.values()) else 'FAIL', 'tests': tests,
               'scope': 'one hart; private anonymous arenas; same-mm virtual threads',
               'virtual_vm_abi': 5,
               'control_omit_application': a.omit_application,

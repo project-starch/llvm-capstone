@@ -2,6 +2,9 @@
 # p12 lane artifact layout. Builds are separate; one guest per arm, run serially.
 set -euo pipefail
 W=${LANE_ROOT:-$HOME/lanes/laneAG2}
+P=${NATIVE_PLATFORM:-$W/platform-native}
+R=${MEASURE_ROOT:-$W}
+mkdir -p "$R"
 cd "$W/src"
 export CAPSTONE_TOOLCHAIN_CHECKED=1 CAPSTONE_TMP_ROOT=$W/tmp CAPSTONE_QEMU_LOCK=$W/measure.lock
 source capstone/tests/capstone-test-env.sh
@@ -10,7 +13,7 @@ export MICRO=$W/micro KIT=$HOME/prof-dev/kit4 VMHOST=$W/src/capstone/runtime/hos
 export DOM_TRAMPOLINE=$W/trampoline.bin
 export DOM_CHILD=$W/micro/lqmicro-cap DOM_PROFILER=$W/contracts/profile.py
 export ORIGINAL_PROF_REPORT=$KIT/tools/prof-report.py NM=$HOME/prof-dev/cap4/build/bin/llvm-nm
-python3 - "$W/platform-native" <<'PY'
+python3 - "$P" <<'PY'
 import hashlib,json,pathlib,sys
 p=pathlib.Path(sys.argv[1]);d=json.loads((p/'platform.json').read_text())
 for f in d['files']: d['files'][f]=hashlib.sha256((p/f).read_bytes()).hexdigest()
@@ -24,5 +27,5 @@ for DOM_ARM in plain launcher native; do
  list=$W/micro/exec-$DOM_ARM.list
  for n in 10 100 10 100 10 100; do echo "-- exec $n $child"; done > "$list"
  df -h "$W"
- bash "$W/contracts/run-micro.sh" "$W/measure-$DOM_ARM" "$W/platform-native" plain 8G "$list" "$mod"
+ bash "$W/contracts/run-micro.sh" "$R/measure-$DOM_ARM" "$P" plain 8G "$list" "$mod"
 done
