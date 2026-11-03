@@ -53,6 +53,13 @@ CONFIGS = {
     'ro64':       ('pin_ahead_pages=64', 'rowrite', 139),
     'malloc16':   ('pin_ahead_pages=16', 'ok', 0, 'malloc'),
     'malloc64':   ('pin_ahead_pages=64', 'ok', 0, 'malloc'),
+    # The adaptive fault-ahead window (capstone_vm.c fault_ahead_max), the module's default: every
+    # other configuration turns it off (fault_ahead_max=0, added in script()), since each
+    # qualifies a FIXED window page for page. 'adapt' walks with it (the 32-page region, and
+    # pin.dom's 512-page 'stream' region); 'adaptres' raises a reschedule after every demand GUP,
+    # so each window must stop before its first batch.
+    'adapt':      ('', 'walk stream', 0),
+    'adaptres':   ('test_inject=1 test_inject_at=1', 'walk', 0),
 }
 SCRIPT = '''#!/bin/sh
 cd /mnt/vm || exit 1
@@ -80,6 +87,7 @@ def script(names, instrumented):
     text = SCRIPT
     for name in names:
         params, modes = CONFIGS[name][:2]
+        params += '' if name.startswith('adapt') else ' fault_ahead_max=0'
         text += f'''insmod capstone_vm.ko {params} {'diag_admit=1' if instrumented else ''} || exit 1
 for mode in {modes}; do
   echo "HOOK_PINS_BEFORE:{name}:$mode:$(pins)"
@@ -277,6 +285,20 @@ def evaluate(log, names, instrumented, completed):
                 bool(got and want and got[0] >= want[0] and got[1] <= want[1] and
                      (got[0] - want[0]) + (want[1] - got[1]) <= late * (window - ref_window))
                 for got, want in zip(sources(name, mode), sources(ref, mode)))
+    # The adaptive window takes every page a walk touches, and no page outside the region's arena,
+    # in fewer fault events than window 1 -- but never fewer than its policy allows with the
+    # module's defaults (fault_ahead_after=2, first window 4, doubling, cap 64): a window only
+    # after three faults in a row, each window at most twice the last and at most 64 pages. Walk
+    # (32 pages): faults at pages 0 1 2 7 16, at least 5. Stream (512): 0 1 2 7 16 33 66 131 196
+    # 261 326 391 456, at least 13. A window a stop cuts short only adds faults, so these are
+    # floors; the ceilings (31, 64) require that it adapts at all. A module without the adaptive
+    # window takes one fault per page and fails both (the control); one that prefetches before
+    # its stream is trained, or past the cap, falls below the floor.
+    checks['adapt_walk_window'] = all(
+        bool(got and base and got[0] == base[0] == 32 and 5 <= got[1] <= 31)
+        for got, base in zip(sources('adapt', 'walk'), sources('base1', 'walk')))
+    checks['adapt_stream_window'] = all(
+        bool(got and got[0] == 512 and 13 <= got[1] <= 64) for got in sources('adapt', 'stream'))
     # Partial GUP results leave the rest to later faults: every page the walk
     # touched still ends pinned (at least window 1's pins), after more faults
     # than the full window takes.

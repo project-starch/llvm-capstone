@@ -14,6 +14,8 @@
  *   retire  write page 0, then munmap: every pin of the window is released.
  * run-step-hooks.py also uses:
  *   walk     write every page in order (one fault per page with window 1);
+ *   stream   the same over a region of STREAM_PAGES pages instead (the adaptive window's
+ *            growth and its cap, capstone_vm.c fault_ahead_max);
  *   syscalls 64 delegated umask() calls, each checking the previous reply. */
 #include <stdio.h>
 #include <stdlib.h>
@@ -23,6 +25,7 @@
 
 #define PAGE 4096
 #define PAGES 32
+#define STREAM_PAGES 512
 
 static void require(int ok, const char *message)
 {
@@ -42,7 +45,8 @@ int main(int argc, char **argv)
         printf("PIN_OK:%s\n", mode);
         return 0;
     }
-    volatile char *a = mmap(NULL, PAGES * PAGE, PROT_READ | PROT_WRITE,
+    size_t pages = !strcmp(mode, "stream") ? STREAM_PAGES : PAGES;
+    volatile char *a = mmap(NULL, pages * PAGE, PROT_READ | PROT_WRITE,
                             MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     require(a != MAP_FAILED, "mmap");
     /* The region's address, so the runner counts the pins of THIS arena (the module's diag_admit
@@ -70,10 +74,10 @@ int main(int argc, char **argv)
         require(!mprotect((void *)(a + 8 * PAGE), (PAGES - 8) * PAGE,
                           PROT_READ | PROT_WRITE | PROT_EXEC), "mprotect");
         a[0] = 1;
-    } else if (!strcmp(mode, "walk")) {
-        for (int i = 0; i < PAGES; ++i)
+    } else if (!strcmp(mode, "walk") || !strcmp(mode, "stream")) {
+        for (size_t i = 0; i < pages; ++i)
             a[i * PAGE] = (char)i;
-        for (int i = 0; i < PAGES; ++i)
+        for (size_t i = 0; i < pages; ++i)
             require(a[i * PAGE] == (char)i, "walk readback");
     } else if (!strcmp(mode, "retire")) {
         a[0] = 1;
