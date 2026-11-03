@@ -15,6 +15,11 @@ struct capstone_malloc_slot {
      * bytes may still hold the previous group's data and capability tags, and its first take
      * clears them before anything over it is issued. Fills the record's padding. */
     unsigned char stale;
+    /* Set by bind_slots when the slot's bytes are all zero and untagged (a fresh mapping, or a
+     * nested group inside a slot that was clean when taken); cleared at the slot's first take,
+     * which records in taken_clean whether the object it got was clean (or scrubbed), so calloc
+     * can skip zeroing it. Also padding. */
+    unsigned char clean, taken_clean;
 };
 void *__capstone_malloc_map(size_t);
 void *__capstone_malloc_group_attach(struct capstone_malloc_slot *,
@@ -33,7 +38,8 @@ void *__capstone_malloc_slot_start(struct capstone_malloc_slot *);
 void __capstone_malloc_slot_key(struct capstone_malloc_slot *, void *, size_t);
 void __capstone_malloc_slot_release(struct capstone_malloc_slot *);
 void __capstone_malloc_nested_release(struct capstone_malloc_slot *);
-void *__capstone_malloc_prepare_free(void *);
+/* mallocng's own free(p): the record of p, its public lifetime ended (heap.c prepare_slot). */
+struct capstone_malloc_slot *__capstone_malloc_prepare_free(void *);
 struct capstone_malloc_slot *__capstone_malloc_find(const void *);
 /* The nested-allocator trio (heap.c): a child of a malloc'd object on the heap's node budget; the
  * object back from one of its children (NULL when no slot record has it, nothing ends); the same
@@ -42,9 +48,12 @@ void *__capstone_malloc_derive(void *object, size_t offset, size_t size);
 void *__capstone_malloc_object(void *child, size_t offset);
 void *__capstone_malloc_reclaim(void *child, size_t offset);
 void *__capstone_mallocng_malloc(size_t);
-void *__capstone_mallocng_realloc(void *, size_t);
+/* The record argument is the slot record of the backend pointer, the one the runtime found from
+ * the program's pointer: mallocng takes it instead of looking the pointer up again. */
+void *__capstone_mallocng_realloc(void *, size_t, struct capstone_malloc_slot *);
 void *__capstone_mallocng_aligned_alloc(size_t, size_t);
 void __capstone_mallocng_free(void *);
+void __capstone_mallocng_free_slot(void *, struct capstone_malloc_slot *);
 
 /* Option (iii): the bounds granule, inline, because enframe needs it on every allocation and a
  * cross-TU call would cost one per malloc.

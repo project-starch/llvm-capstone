@@ -45,7 +45,13 @@ the live population. `enframe` retains musl's offset calculation.
 The four prefix bytes immediately before a slot are represented in that
 record; prefixes at nonzero offsets remain inside the slot. This prevents a
 slot's allocator metadata access from crossing its bounds. Footer checks
-remain inside the owning slot. Non-overlap follows mallocng's slot geometry;
+remain inside the owning slot. The index is consulted once per call that
+receives a pointer from the program (`free`, `realloc`, `malloc_usable_size`,
+the nested-allocator trio): the record found there is passed on to mallocng's
+`free` and `realloc`, whose prefix accesses take it as an argument
+(`cap_prefix(p, s)`), and `enframe` passes the record of the slot it takes.
+An allocation consults the index not at all: `enframe` keys the record as its
+last step and the runtime publishes the object from that record. Non-overlap follows mallocng's slot geometry;
 the managed lifetime instructions do not enforce non-overlap.
 
 ```text
@@ -86,6 +92,17 @@ images do not donate dynamic-loader tails. Neither restriction introduces a
 replacement allocator. musl retains its normal group-release decisions;
 `malloc_trim` only unmaps the runtime's kept group mappings. A zero-byte allocation has one byte of
 capability extent for the validity check, with nominal size zero.
+
+`calloc` skips its `memset` when the object's slot was clean at this take:
+a slot of a fresh mapping (or of a nested group inside such a slot) that no
+object has used, or a reused mapping's slot, zeroed at that take. This is
+upstream's `__malloc_allzerop` (which knows only fresh single-slot and
+individually mapped groups) extended to every slot: no capability the
+program holds covers a slot it was not issued from, so nothing has written
+one nobody took. `CAPSTONE_HEAP_OBJECT_BOUNDS=OFF`, where the program holds
+the group's authority, never skips. A slot reused within its group is zeroed
+by the `memset` as before. `free_meta` clears a meta's header and the slot
+records its group bound, not all 32.
 
 `check-mallocng-policy.py` compares decision functions, tables, constants and
 selection blocks against the verified upstream archive. It is a focused
@@ -168,7 +185,10 @@ reused: stale use after reuse (`recycle-stale`, `-free`, `-geometry`,
 and, with object bounds off, in the header, untaken slots and slack
 (`recycle-header`, `-slack`), no internal record exposes a capability beyond
 the group's own (`recycle-root`), and the bounds plus a concurrent
-`malloc_trim` (`recycle-limits`).
+`malloc_trim` (`recycle-limits`). `calloc-clean` reads every byte and granule
+of callocs on a fresh slot, a slot reused after an object filled it with
+bytes and capabilities, and a recycled mapping's slot, and requires the
+skip exactly where the slot was clean.
 
 ## VM remapping
 

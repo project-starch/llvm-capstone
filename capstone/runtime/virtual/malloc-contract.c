@@ -666,12 +666,83 @@ static int recycle_path(const char *mode, int may_survive)
     return survived(mode, may_survive);
 }
 #endif
+#ifdef __CAPSTONE_PURECAP__
+/* calloc-clean (2026-11-03): calloc skips its memset for an object whose slot was clean when it
+ * was taken -- a fresh mapping's slot nobody took before, or a reused mapping's slot, scrubbed at
+ * that take (heap.c calloc). Every calloc here must still read zero and untagged over its whole
+ * extent: (1) a fresh mapping's single slot, which takes the skip; (2) a slot of a live group that
+ * an earlier object filled with bytes and capabilities and freed, which must not (the memset
+ * zeroes it); (3) the first slot's mapping after its group was released and kept, reused: scrubbed,
+ * so the skip again. With object bounds off the program holds its group's authority and could write
+ * a slot nobody took, so that arm never skips. Each step's condition (a fresh map, the dirty
+ * bytes' reuse, a recycle hit) is required, so a run that never creates it fails, not passes. */
+extern unsigned long __capstone_malloc_calloc_clean;
+static void zero_untagged(const char *p, size_t n, const char *what)
+{
+    for (size_t i = 0; i < n; ++i) require(!p[i], what);
+    for (size_t o = 0; o + 16 <= n; o += 16)
+        require(!__builtin_capstone_cap_get_tag(*(void *const volatile *)(p + o)), what);
+}
+static void dirty(char *p, size_t n, void *value)
+{
+    memset(p, 0xa5, n);
+    for (size_t o = 0; o + 16 <= n; o += 16) *(void *volatile *)(p + o) = value;
+    require(__builtin_capstone_cap_get_tag(*(void *volatile *)p), "calloc-clean: the reader sees a stored tag");
+}
+static int calloc_clean(void)
+{
+    char *live = malloc(32); require(live != NULL, "calloc-clean live object");
+    /* (2) first, in the 100-byte class that the denial cases use: 112-byte slots, offset 0 */
+    anchored = calloc(1, 100); require(anchored != NULL, "calloc-clean anchor");
+    char *old = calloc(1, 100); require(old != NULL, "calloc-clean old"); anchored_with(old);
+    int bounds_off = whole_group(old);
+    zero_untagged(old, 100, "calloc-clean: a first-use object is zero");
+    dirty(old, 100, live);
+    uintptr_t address = (uintptr_t)old;
+    free(old);
+    static char *held[4096]; unsigned count = 0, reused = 0, cleaned = 0;
+    while (count < 4096) {
+        unsigned long before = __capstone_malloc_calloc_clean;
+        held[count] = calloc(1, 100); require(held[count] != NULL, "calloc-clean reuse search");
+        zero_untagged(held[count], 100, "calloc-clean: every object is zero and untagged");
+        if ((uintptr_t)held[count++] == address) { reused = 1; cleaned = __capstone_malloc_calloc_clean != before; break; }
+    }
+    require(reused, "calloc-clean: the dirty slot was reused");
+    require(!cleaned, "calloc-clean: a reused slot is zeroed, not skipped");
+    /* (1) and (3) */
+    unsigned long maps = __capstone_malloc_map_calls, hits = __capstone_malloc_recycle_hits;
+    unsigned long skipped = __capstone_malloc_calloc_clean;
+    char *first = calloc(1, RECYCLE_SIZE);
+    require(first && __capstone_malloc_map_calls == maps + 1 && __capstone_malloc_recycle_hits == hits,
+            "calloc-clean: a fresh mapping");
+    require(__capstone_malloc_calloc_clean == skipped + !bounds_off, "calloc-clean: a fresh slot skips the memset");
+    zero_untagged(first, RECYCLE_SIZE, "calloc-clean: a fresh slot is zero and untagged");
+    dirty(first, RECYCLE_SIZE, live);
+    unsigned long kept = __capstone_malloc_recycle_kept;
+    free(first);
+    require(__capstone_malloc_recycle_kept == kept + 1, "calloc-clean: the released mapping was kept");
+    maps = __capstone_malloc_map_calls; skipped = __capstone_malloc_calloc_clean;
+    char *again = calloc(1, RECYCLE_SIZE);
+    require(again && __capstone_malloc_map_calls == maps && __capstone_malloc_recycle_hits == hits + 1,
+            "calloc-clean: the kept mapping was reused");
+    require((uintptr_t)again < (uintptr_t)first + RECYCLE_SIZE && (uintptr_t)first < (uintptr_t)again + RECYCLE_SIZE,
+            "calloc-clean: the reuse overlaps the dirtied object");
+    require(__capstone_malloc_calloc_clean == skipped + !bounds_off, "calloc-clean: a scrubbed slot skips the memset");
+    zero_untagged(again, RECYCLE_SIZE, "calloc-clean: a reused mapping's slot is zero and untagged");
+    printf("MALLOC_CALLOC_CLEAN reused_after=%u skipped=%lu bounds_off=%d\n", count, __capstone_malloc_calloc_clean,
+           bounds_off);
+    puts("MALLOC_FAULT_READY:calloc-clean");
+    puts("MALLOC_SURVIVED:calloc-clean"); fflush(stdout);
+    return 0;
+}
+#endif
 int main(int argc, char **argv)
 {
     const char *mode = argc > 1 ? argv[1] : "ok";
     int may_survive = argc > 2 && !strcmp(argv[2], "may-survive");
 #ifdef __CAPSTONE_PURECAP__
     if (!strncmp(mode, "recycle-", 8)) return recycle_case(mode, may_survive);
+    if (!strcmp(mode, "calloc-clean")) return calloc_clean();
 #endif
     if (!strcmp(mode, "hot")) { hot(0); return 0; }
     if (!strcmp(mode, "hot-service-control")) { hot(1); return 0; }

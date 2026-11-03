@@ -69,6 +69,18 @@ static void unindex(struct capstone_malloc_slot *r)
     *p = r->next;
     r->next = NULL; r->key = 0;
 }
+/* THE ONE LOOKUP PER CALL (lane S, 2026-11-03). The index maps an object's start to its slot
+ * record; it is how the runtime gets from a pointer the PROGRAM passed (free, realloc,
+ * malloc_usable_size, the trio) to the allocator's own authority over that object, which the
+ * program's capability does not carry. Each such call looks the pointer up once (checked() below)
+ * and hands the record on; mallocng's representation hooks take the record as an argument
+ * (cap_prefix(p, s), musl patch 0009) instead of finding it again. Before, mallocng found the
+ * record of its own backend pointer by this hash up to seven times per call -- 38,657 calls on
+ * SPEC's gcc test, six per enframe and four per free, against 7,000 malloc/free/realloc calls --
+ * although enframe holds the record (g->cap_slots[idx]) and free receives it from here.
+ * Allocation needs no lookup at all: enframe keys the record it took as its last step, and
+ * publish takes that record (`keyed`), checking its key against the returned pointer. */
+static struct capstone_malloc_slot *keyed;   /* the record slot_key keyed last; under the heap lock */
 struct capstone_malloc_slot *__capstone_malloc_find(const void *p)
 {
     size_t key = __builtin_capstone_cap_get_cursor((void *)p);
@@ -78,10 +90,24 @@ struct capstone_malloc_slot *__capstone_malloc_find(const void *p)
 }
 void __capstone_malloc_slot_key(struct capstone_malloc_slot *r, void *p, size_t n)
 {
+    size_t key = __builtin_capstone_cap_get_cursor(p);
+    keyed = r;
+    r->nominal = n;
+    if (r->key == key) return;   /* an in-place realloc keeps its start */
     unindex(r);
-    r->key = __builtin_capstone_cap_get_cursor(p); r->nominal = n;
-    unsigned b = bucket(r->key);
+    r->key = key;
+    unsigned b = bucket(key);
     r->next = index_heads[b]; index_heads[b] = r;
+}
+/* The record of the object mallocng just returned at p: the one slot_key keyed last, which is
+ * p's for every path that returns an object (enframe, an in-place or remapping realloc and
+ * aligned_alloc key it as their last step). The key comparison makes a mismatch a lookup, not
+ * a wrong record. */
+static struct capstone_malloc_slot *record_of_result(void *p)
+{
+    struct capstone_malloc_slot *r = keyed;
+    if (!r || r->key != __builtin_capstone_cap_get_cursor(p)) r = __capstone_malloc_find(p);
+    return r;
 }
 /* Q-21: THE APPLICATION RUNTIME NEVER READS A CSR FOR AVAILABILITY.
  *
@@ -174,8 +200,13 @@ unsigned long __capstone_malloc_map_ok_base;
  * to see an admission is to record it on the success path. */
 unsigned long __capstone_malloc_map_ok[2];     /* bytes, align */
 unsigned long __capstone_malloc_map_admitted;
+/* `stale`: the slots may hold a previous group's bytes and tags (a reused mapping); each is zeroed
+ * at its first take. `clean`: the slots' bytes are all zero and untagged (a fresh mapping, or a
+ * nested group inside a slot that was clean when taken); calloc then need not zero an object at a
+ * slot's first take. Never both. */
 static void *bind_slots(struct capstone_malloc_slot *slots, void *group,
-                        size_t stride, unsigned count, unsigned char stale)
+                        size_t stride, unsigned count, unsigned char stale,
+                        unsigned char clean)
 {
     size_t base = __builtin_capstone_cap_get_cursor(group);
     /* Option (iii): the slot array starts after a GRANULE-sized group header, not a 16-byte one,
@@ -222,6 +253,12 @@ static void *bind_slots(struct capstone_malloc_slot *slots, void *group,
         slots[i].issued = group;
 #endif
         slots[i].stale = stale;
+#if CAPSTONE_HEAP_OBJECT_BOUNDS
+        slots[i].clean = clean;
+#else
+        /* The program holds the group's authority here and can write into a slot nobody took. */
+        (void)clean; slots[i].clean = 0;
+#endif
     }
     return group;
 }
@@ -494,7 +531,7 @@ void *__capstone_malloc_group_attach(struct capstone_malloc_slot *slots,
      * shrink in bind_slots could not be derived -- which is what returned NULL for every
      * allocation on this path. */
     return bind_slots(slots, mapping_group(&pending_mapping, bytes),
-                      bytes - group_header(bytes), 1, 0);
+                      bytes - group_header(bytes), 1, 0, 1);
 }
 void *__capstone_malloc_group_map(struct capstone_malloc_slot *slots,
                                  size_t bytes, size_t stride, unsigned count)
@@ -502,7 +539,7 @@ void *__capstone_malloc_group_map(struct capstone_malloc_slot *slots,
     /* A kept mapping of the length __capstone_malloc_map would map, or a new mapping. */
     size_t mapped = bytes && bytes <= CV_MAX_REGION_BYTES ? mapping_length(bytes) : 0;
     void *r = mapped ? recycle_take(mapped) : NULL;
-    unsigned char stale = r != NULL;
+    unsigned char stale = r != NULL;   /* a fresh mapping is zero and untagged: clean */
     if (r) { ++__capstone_malloc_recycle_hits; recycle_note("hit", mapped); }
     else {
         void *p = __capstone_malloc_map(bytes);
@@ -516,7 +553,7 @@ void *__capstone_malloc_group_map(struct capstone_malloc_slot *slots,
     /* The program holds this whole group's authority in this arm (condition 3 above). */
     if (stale) { memset(group, 0, mapped); stale = 0; }
 #endif
-    return bind_slots(slots, group, stride, count, stale);
+    return bind_slots(slots, group, stride, count, stale, !stale);
 }
 void *__capstone_malloc_group_nested(struct capstone_malloc_slot *slots,
                                     size_t stride, unsigned count,
@@ -527,25 +564,30 @@ void *__capstone_malloc_group_nested(struct capstone_malloc_slot *slots,
     parent->issued = issue_child(parent->parent,
         base - __builtin_capstone_cap_get_base(parent->parent), 16 + stride * count);
     parent->kind = SLOT_NESTED;
-    return bind_slots(slots, parent->issued, stride, count, 0);
+    /* The host slot was taken just before (alloc_group's enframe); if it was clean then, so is
+     * the nested group's storage, which mallocng has written only with its header and zeros. */
+    return bind_slots(slots, parent->issued, stride, count, 0, parent->taken_clean);
 #else
     /* The host slot keeps its group authority in `issued`; the nested group is a fresh shrink. */
     void *nested = issue_child(parent->parent,
         base - __builtin_capstone_cap_get_base(parent->parent), 16 + stride * count);
     parent->kind = SLOT_NESTED;
-    return bind_slots(slots, nested, stride, count, 0);
+    return bind_slots(slots, nested, stride, count, 0, 0);
 #endif
 }
 void *__capstone_malloc_slot_take(struct capstone_malloc_slot *r)
 {
     void *p = r->parent;
+    r->taken_clean = r->clean | r->stale;
+    r->clean = 0;
     /* First take of a slot in a recycled mapping: clear the previous group's bytes and tags
      * before any capability over them is issued (condition 3 at group_unmap). */
     if (r->stale) {
         memset(p, 0, __builtin_capstone_cap_get_end(p) - __builtin_capstone_cap_get_base(p));
         r->stale = 0;
     }
-    __capstone_malloc_slot_key(r, p, r->nominal);
+    /* Not indexed here: enframe keys the record once, at the object's final start, and passes
+     * the record to every prefix access in between (cap_prefix(p, s)). */
     return p;
 }
 void *__capstone_malloc_slot_start(struct capstone_malloc_slot *r)
@@ -564,9 +606,10 @@ void __capstone_malloc_nested_release(struct capstone_malloc_slot *r)
 #endif
     __capstone_malloc_slot_release(r);
 }
-void *__capstone_malloc_prepare_free(void *p)
+/* End the public lifetime of the object in record r before mallocng publishes its slot as free.
+ * r is the record of mallocng's backend pointer; returned for mallocng's free, which takes it. */
+static struct capstone_malloc_slot *prepare_slot(struct capstone_malloc_slot *r)
 {
-    struct capstone_malloc_slot *r = __capstone_malloc_find(p);
     if (!r || r->kind == SLOT_NESTED) __builtin_trap();
     if (r->kind == SLOT_PUBLIC) {
 #if CAPSTONE_HEAP_SCRUB_FREE
@@ -580,7 +623,13 @@ void *__capstone_malloc_prepare_free(void *p)
 #endif
         r->kind = SLOT_INTERNAL;
     }
-    return p;
+    return r;
+}
+/* mallocng's free(p) when it frees an object of its own (realloc's moving path, exact_or_moved):
+ * one lookup. The program's free reaches mallocng with the record free() found (free below). */
+struct capstone_malloc_slot *__capstone_malloc_prepare_free(void *p)
+{
+    return prepare_slot(__capstone_malloc_find(p));
 }
 /* A real Linux mremap is a VM slow path. The returned grant is new authority
  * over the retained physical frames; the old mapping's descendants are dead. */
@@ -634,18 +683,28 @@ void *__capstone_malloc_group_remap(struct capstone_malloc_slot *slots,
      * appeared once growth began completing at all -- the overrun is 496 bytes on a 401408-byte
      * mapping, and get_stride() (which realloc.c now uses) disagrees with it. */
     void *header = bind_slots(slots, mapping_group(&root, bytes),
-                              bytes - group_header(bytes), 1, 0);
+                              bytes - group_header(bytes), 1, 0, 0);
     void *raw = (char *)r->parent + offset;
     __capstone_malloc_slot_key(r, raw, r->nominal);
     *(unsigned long *)header = (unsigned long)r->group;
     ((unsigned char *)header)[8] = 0;
     return header;
 }
-static void *publish(void *p, size_t n)
+/* capstone_repr_round of a request, with the common case first: below 4 KiB the granule is 1 and a
+ * length is its own rounding. capstone_repr_round computes the msb before it can tell, and without
+ * Zbb that is ~40 instructions whose constants the compiler materialises on every call. */
+static inline size_t request_round(size_t n)
+{
+    return n < 4096 ? (n ? n : 1) : capstone_repr_round(n);
+}
+/* *clean (if given): whether the object's bytes are all zero and untagged, because its slot was
+ * clean or scrubbed at this take (calloc then skips its memset). */
+static void *publish(void *p, size_t n, int *clean)
 {
     if (!p) return NULL;
-    struct capstone_malloc_slot *r = __capstone_malloc_find(p);
+    struct capstone_malloc_slot *r = record_of_result(p);
     if (!r) __builtin_trap();
+    if (clean) *clean = r == keyed && r->taken_clean;
     /* Successful in-place realloc replaces the public lifetime; failure
      * never reaches here. Remapping already retired the old mapping. */
 #if CAPSTONE_HEAP_OBJECT_BOUNDS
@@ -660,7 +719,7 @@ static void *publish(void *p, size_t n)
     return (char *)r->issued + (r->key - __builtin_capstone_cap_get_base(r->issued));
 #endif
 }
-void *malloc(size_t n)
+static void *allocate(size_t n, int *clean)
 {
     /* Option (iii): publish() derives the child over the nominal size, so that size has to be
      * representable -- a granule multiple, at a granule-aligned base. Rounding HERE rather than
@@ -669,15 +728,16 @@ void *malloc(size_t n)
      * mallocng's set_size records exactly what the capability covers, so malloc_usable_size and
      * an in-place realloc never report bytes the program cannot reach. The seven raised stride
      * entries are what make the resulting slot's base granule-aligned. */
-    size_t want = capstone_repr_round(n ? n : 1);
+    size_t want = request_round(n);
     if (want < n) { errno = ENOMEM; return NULL; }   /* overflow on a hostile size */
     lock_heap();
     void *raw;
     if (ensure_ids(IDS_PER_CALL)) { __capstone_malloc_ids_failed++; raw = NULL; }
     else { raw = __capstone_mallocng_malloc(want); if (!raw) __capstone_malloc_ng_null++; }
-    void *p = publish(raw, want);
+    void *p = publish(raw, want, clean);
     unlock_heap(); return p;
 }
+void *malloc(size_t n) { return allocate(n, NULL); }
 void *__libc_malloc(size_t n) { return malloc(n); }
 void *__simple_malloc(size_t n) { return malloc(n); }
 __attribute__((noinline, noreturn)) static void invalid_free(void)
@@ -697,7 +757,10 @@ void free(void *p)
 {
     if (!p) return;
     int e = errno;
-    lock_heap(); __capstone_mallocng_free(backend_pointer(checked(p))); unlock_heap();
+    lock_heap();
+    struct capstone_malloc_slot *r = prepare_slot(checked(p));
+    __capstone_mallocng_free_slot(backend_pointer(r), r);
+    unlock_heap();
     errno = e;
 }
 void __libc_free(void *p) { free(p); }
@@ -791,11 +854,19 @@ void *__capstone_malloc_reclaim(void *child, size_t offset)
     }
     return object;
 }
+/* An object in a slot that was clean at this take (a fresh mapping's slot nobody took before, a
+ * nested group's in such a slot, or a reused mapping's slot just scrubbed) is already zero and
+ * untagged, as upstream's calloc skips the memset for fresh mmapped memory (__malloc_allzerop):
+ * nothing but its first owner can have written it, since every capability the program holds
+ * covers only the slot it was issued from. */
+unsigned long __capstone_malloc_calloc_clean;   /* callocs that skipped the memset; malloc-contract.c calloc-clean */
 void *calloc(size_t n, size_t size)
 {
     if (size && n > SIZE_MAX / size) { errno = ENOMEM; return NULL; }
-    void *p = malloc(n * size);
-    if (p) memset(p, 0, n * size);
+    int clean = 0;
+    void *p = allocate(n * size, &clean);
+    if (p && !clean) memset(p, 0, n * size);
+    else if (p) ++__capstone_malloc_calloc_clean;
     return p;
 }
 /* mallocng keeps an object's offset when it grows it in place, or through the remap of a
@@ -815,7 +886,7 @@ void *calloc(size_t n, size_t size)
 static void *exact_or_moved(void *raw, size_t want, size_t old)
 {
     if (!raw) return NULL;
-    struct capstone_malloc_slot *r = __capstone_malloc_find(raw);
+    struct capstone_malloc_slot *r = record_of_result(raw);
     if (!r) __builtin_trap();
     if (capstone_repr_ok(r->key, want)) return raw;
     void *fresh = __capstone_mallocng_malloc(want);
@@ -833,11 +904,12 @@ void *realloc(void *p, size_t n)
      * over the nominal size, so that size must be representable, and asking mallocng for the
      * rounded size is what makes the block actually that big. Publishing a rounded size over an
      * unrounded block would hand out a capability past the allocation. */
-    size_t want = capstone_repr_round(n ? n : 1);
+    size_t want = request_round(n);
     if (want < n) { unlock_heap(); errno = ENOMEM; return NULL; }
     size_t old = r->nominal;
     void *q = ensure_ids(IDS_PER_CALL) ? NULL
-            : publish(exact_or_moved(__capstone_mallocng_realloc(backend_pointer(r), want), want, old), want);
+            : publish(exact_or_moved(__capstone_mallocng_realloc(backend_pointer(r), want, r), want, old),
+                      want, NULL);
     unlock_heap(); return q;
 }
 void *__libc_realloc(void *p, size_t n) { return realloc(p, n); }
@@ -848,10 +920,10 @@ void *aligned_alloc(size_t a, size_t n)
      * granule 8 and 5001 % 8 == 1, so the child derived over the raw size is unrepresentable and
      * the CDERIVE in capstone_cap_derive raises ILLEGAL_OP_VAL. The arena itself was fine; the
      * rounding added to malloc had simply never been applied to its two siblings. */
-    size_t want = capstone_repr_round(n ? n : 1);
+    size_t want = request_round(n);
     if (want < n) { unlock_heap(); errno = ENOMEM; return NULL; }
     void *p = ensure_ids(IDS_PER_CALL) ? NULL
-            : publish(__capstone_mallocng_aligned_alloc(a, want), want);
+            : publish(__capstone_mallocng_aligned_alloc(a, want), want, NULL);
     unlock_heap(); return p;
 }
 int posix_memalign(void **out, size_t a, size_t n)
