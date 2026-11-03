@@ -1,0 +1,13 @@
+500.perlbench_r  Temporal  LDC+STC   11953.6M  miss R  0.113% (conflict 0.037)  E  0.518%  misses 13.53M  hit_dead 0  disagree 0
+500.perlbench_r  MapLife   LDC+STC   23086.4M  miss R  0.034% (conflict 0.000)  E  0.034%  misses 7.77M  hit_dead 0  disagree 0
+502.gcc_r        Temporal  LDC+STC       6.3M  miss R  0.169% (conflict 0.000)  E  0.316%  misses 0.01M  hit_dead 0  disagree 0
+505.mcf_r        Temporal  LDC+STC    9547.6M  miss R  1.883% (conflict 1.813)  E  1.885%  misses 179.77M  hit_dead 0  disagree 0
+505.mcf_r        MapLife   LDC+STC    9547.1M  miss R  0.006% (conflict 0.000)  E  0.006%  misses 0.62M  hit_dead 0  disagree 0
+519.lbm_r        MapLife   LDC+STC     128.1M  miss R  0.001% (conflict 0.000)  E  0.001%  misses 0.00M  hit_dead 0  disagree 0
+519.lbm_r        Temporal  LDC+STC     128.1M  miss R  0.001% (conflict 0.000)  E  0.001%  misses 0.00M  hit_dead 0  disagree 0
+538.imagick_r    MapLife   LDC+STC      22.0M  miss R  0.030% (conflict 0.000)  E  0.030%  misses 0.01M  hit_dead 0  disagree 0
+538.imagick_r    Temporal  LDC+STC      22.0M  miss R  0.033% (conflict 0.000)  E  0.045%  misses 0.01M  hit_dead 0  disagree 0
+544.nab_r        MapLife   LDC+STC     401.8M  miss R  0.001% (conflict 0.000)  E  0.001%  misses 0.00M  hit_dead 0  disagree 0
+544.nab_r        Temporal  LDC+STC     401.8M  miss R  0.004% (conflict 0.003)  E  0.007%  misses 0.02M  hit_dead 0  disagree 0
+557.xz_r         Temporal  LDC+STC    2812.1M  miss R  0.062% (conflict 0.000)  E  0.062%  misses 1.74M  hit_dead 0  disagree 0
+557.xz_r         MapLife   LDC+STC    2812.1M  miss R  0.062% (conflict 0.000)  E  0.062%  misses 1.74M  hit_dead 0  disagree 0
