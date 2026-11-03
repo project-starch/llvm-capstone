@@ -163,3 +163,73 @@ file I/O, default/ignored signals, Linux termination and malformed-image checks.
 The [authority audit](../../../../docs/design/virtual-capstone/native-exec.md)
 lists the complete syscall and resource boundary, deliberate incompatibilities,
 trust assumptions and vectors tested. The launcher file policy is unchanged.
+
+## Round 3 final qualification
+
+The final implementation is commit `26e5a1c13341`. The p12 module SHA-256 is
+`73458974f707ef39dd2647d9364fa9ee4fba2afc7ebca9b8103a039fccd001a9`;
+the p13 gate module, compiled with 32 supervisor slots, is
+`15dc040e1e0a5688567e6f0551a226301eacdba6c73528e4f8568380660bcef6`.
+Only `round3-final5-*` results identify this final build; earlier final/qualified/
+release directories contain superseded candidates. No new seccomp filter is
+installed. The trampoline remains 152 bytes.
+
+`build-contracts.sh` also builds the security probes and the plain DAC/alarm
+helper (`DAC_CC` selects its Linux-UAPI-capable compiler). Rebuilding through
+this entry point produces identical probe binaries. `run-security.sh` reports
+94 main resource checks, scalar-memory refusal, unsafe inherited stdio refusal,
+two DAC checks and three descriptor-limit/recovery checks passing. The actual
+trampoline-address probe and module unload pass. `run-contract.sh` reports 25
+PASS lines, zero failures and successful unload. The descriptor probe crosses fd
+258, which must not be confused with the prepared-syscall marker. Separate old
+build controls reproduce scalar-memory access, DAC bypass, shared-FS acceptance
+and the fd-258 dispatch failure. Six invalid SPEC manifests are refused.
+
+Final matched lane-N lqmicro exec, three 10/100 pairs with a plain parent:
+
+| Child path | Mean attempts/process | Observed range |
+|---|---:|---:|
+| Plain | 198,875.18 | 198,437.38–199,610.01 |
+| Launcher | 2,582,532.63 | 2,553,282.42–2,637,956.84 |
+| Native | 1,164,785.77 | 1,164,609.20–1,164,980.80 |
+
+Native saves 54.898% (2.217x), retaining the earlier approximately 55% reduction.
+Module work rises by 8,231.22 attempts/process while kernel work falls by
+1,281,597.73 and launcher work by 142,607.06. Largest function reductions are
+`do_seccomp` 163,113, `__memset` 80,874.39, `bpf_convert_filter` 57,262 and launcher
+`memcpy` 49,850. These are instruction attempts, not elapsed time or hardware
+performance. This paired experiment does not isolate the broker's marginal cost.
+
+All four full SPEC test inputs pass through direct native exec with binfmt_misc
+disabled. Original executable hashes, invocation identities, oracle commands,
+staged reference-input hashes and complete profile sums are verified. Imagick's
+immutable expected-image input is staged inside its cwd grant, with original and
+translated argv retained. A is the saved Round 2 launcher control in `final/runs`;
+B is the final Round 3 native build. These are one full sample per input, not a
+new paired statistical timing experiment.
+
+| Benchmark | A total attempts | B total attempts | B − A | B − A boundary K | B − A excluded H |
+|---|---:|---:|---:|---:|---:|
+| gcc | 56,585,681 | 53,282,891 | −3,302,790 | −2,926,933 | −374,097 |
+| imagick | 201,730,077 | 196,508,452 | −5,221,625 | −5,453,449 | +235,543 |
+| lbm | 7,115,288,167 | 7,091,282,688 | −24,005,479 | −23,495,704 | −508,488 |
+| nab | 7,375,075,610 | 7,369,195,527 | −5,880,083 | −5,408,849 | −469,960 |
+
+The p13 launcher and native hosted/runtime arms both completed through the shared
+queue, one arm at a time. Both guests log `supervisor_slots=32`; neither logs
+`thread create refused`. The comparison reports `DIFFERENT`, with all three
+hosted and all 25 runtime exit rows present. Launcher hosted passes 93/93 and
+runtime passes. Native hosted reports 41/48 with missing virtual checks; runtime
+fails file operations outside the cwd grant, thread creation, application rows
+and expected diagnostics. For example SQLite cannot open `/tmp/virtual.db`,
+mruby cannot open `/tmp/virtual-ruby`, and Perl cannot open `/dev/null`. Expectations
+were not relaxed. Seven other landing gates have no native qualification here.
+M4 remains **NO-GO for integration**, despite closing the demonstrated memory
+channel under the documented trust assumptions.
+
+Retained p12 evidence: `~/lanes/laneAG2/round3-final5-{security,contracts,spec,measure}`,
+`round3-results/{verified-results.txt,spec-table.json,compare-*.txt,buckets-*.txt,northstar-*.txt}`
+and the negative-control logs. Retained p13 evidence:
+`~/lanes/laneAG2/round3-gates-{launcher,final-native}` and
+`logs/round3/gate-comparison.{txt,json}`. VM disks, copied inputs, build trees and
+platform copies are scratch; result logs, hashes and profiles are retained.

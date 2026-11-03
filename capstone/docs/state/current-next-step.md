@@ -1,8 +1,11 @@
 M4 native-exec experiment, 2026-11-03: keep `dom_binfmt` disabled by default.
 Round 3 adds a cwd/file-descriptor resource boundary and passes the scalar-memory
-negative control, authority probes and native contracts. Complete the SPEC/cost
-reruns and queued sequential p13 comparison, then address caught-signal/restart
-handover and process/thread semantics. The restricted resource ABI is not full
+negative control, authority probes, 25 native contracts and all four requested
+SPEC test inputs. The matched exec saving remains 54.898%. Sequential 32-slot
+p13 hosted/runtime arms complete with DIFFERENT failure sets. Keep M4 NO-GO:
+define explicit file/stdio grants for broader applications, implement protected
+process/thread and caught-signal/restart handover, and restore runtime diagnostics
+before repeating gate qualification. The restricted resource ABI is not full
 launcher compatibility. [Design and current scope](../design/virtual-capstone/native-exec.md).
 
 **2026-10-21, the cross-lane plan to the next bitstream (runtime/semantics lane, coordinating on the lead's word).**

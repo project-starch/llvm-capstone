@@ -7,9 +7,12 @@ launcher. This does not change the verified default runtime. See the
 [native-exec design and qualification limits](../design/virtual-capstone/native-exec.md).
 Round 3 adds a module cwd/file-descriptor resource boundary. The scalar-memory
 probe fails on the old module and is refused on the new one; broader authority
-probes and native contracts pass. SPEC/cost reruns and sequential p13 gates are
-pending. The restricted API, caught signals and process creation still prevent
-integration; the default runtime is unchanged.
+probes and 25 native contracts pass. All four SPEC test inputs and their oracles
+pass on the final build. Matched exec costs 1,164,785.77 instruction attempts per
+process, 54.898% below the launcher. Sequential p13 hosted/runtime gates finish
+with DIFFERENT failure sets, verified 32-slot modules and no slot-refusal logs.
+The restricted file/stdout policy, process/thread semantics and missing runtime
+diagnostics prevent integration. M4 remains NO-GO; the default runtime is unchanged.
 
 ## Read this first (2026-10-13)
 
