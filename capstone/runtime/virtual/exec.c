@@ -45,14 +45,24 @@ struct mapping {
      * became lazy: the transport blocks were heap blocks. */
     uint64_t holder;
 };
-/* Registered mappings sorted by address, highest first, grown on demand.
- * Registrations never overlap, so the highest mapping starting at or below an
- * address is the only one that can contain it. Linux places new mappings below
- * the existing ones (top-down mmap), so a new registration is appended and a
- * recent one is removed from near the end, without moving the rest. A pointer
- * into maps does not survive map_insert or map_remove. */
-static struct mapping *maps;
-static size_t map_count, map_capacity;
+/* Registered mappings, one node each, in an AVL tree keyed by address. Registrations never
+ * overlap, so the highest mapping starting at or below an address is the only one that can
+ * contain it, and map_floor, map_find, map_insert and map_remove each visit one root-to-leaf
+ * path: O(log n) in the number of live mappings. The registry was an array sorted by address
+ * that moved its tail on every insertion and removal; the virtual heap gives every mallocng group
+ * its own mapping and frees the oldest groups first, so with a few thousand live mappings each
+ * unmap moved most of the array (PHP's ary2(150000): 2.29e9 instruction attempts in memmove,
+ * 53 % of that test's Capstone overhead). A pointer to a registered mapping stays valid until
+ * that mapping is removed. Removed nodes go to a free list that map_insert takes from, and
+ * map_reserve refills it (64 nodes per malloc) before the kernel mints a grant, so map_insert
+ * cannot fail after CV_ADD succeeded and a steady map/unmap pattern calls no allocator. */
+struct map_node {
+    struct mapping m;
+    struct map_node *child[2];   /* [0] lower addresses, [1] higher */
+    int height;                  /* of the subtree rooted here; a leaf is 1 */
+};
+static struct map_node *map_root, *map_free;   /* map_free chains through child[0] */
+static size_t map_count;
 static void *reuse_address;
 static size_t reuse_bytes;
 static int device = -1, image_fd = -1;
@@ -239,13 +249,13 @@ static void *reserve_aligned(size_t bytes, size_t alignment)
 /* The highest mapping starting at or below p, or NULL. */
 static struct mapping *map_floor(uintptr_t p)
 {
-    size_t low = 0, high = map_count;
-    while (low < high) {
-        size_t middle = low + (high - low) / 2;
-        if ((uintptr_t)maps[middle].address > p) low = middle + 1;
-        else high = middle;
+    struct map_node *n = map_root, *best = NULL;
+    while (n) {
+        int higher = (uintptr_t)n->m.address <= p;
+        if (higher) best = n;
+        n = n->child[higher];
     }
-    return low < map_count ? &maps[low] : NULL;
+    return best ? &best->m : NULL;
 }
 static struct mapping *map_find(uintptr_t base)
 {
@@ -255,25 +265,87 @@ static struct mapping *map_find(uintptr_t base)
 /* Room for one more mapping, made before the kernel mints its grant. */
 static int map_reserve(void)
 {
-    if (map_count < map_capacity) return 0;
-    size_t capacity = map_capacity ? map_capacity * 2 : 64;
-    struct mapping *grown = realloc(maps, capacity * sizeof(*maps));
-    if (!grown) { errno = ENOMEM; return -1; }
-    maps = grown; map_capacity = capacity;
+    if (map_free) return 0;
+    struct map_node *chunk = malloc(64 * sizeof *chunk);
+    if (!chunk) { errno = ENOMEM; return -1; }
+    for (unsigned i = 0; i < 64; ++i) { chunk[i].child[0] = map_free; map_free = &chunk[i]; }
     return 0;
+}
+static int map_height(const struct map_node *n) { return n ? n->height : 0; }
+static void map_update(struct map_node *n)
+{
+    int low = map_height(n->child[0]), high = map_height(n->child[1]);
+    n->height = 1 + (low > high ? low : high);
+}
+/* Rotate n's child[!side] up into n's place; returns the new subtree root. */
+static struct map_node *map_rotate(struct map_node *n, int side)
+{
+    struct map_node *up = n->child[!side];
+    n->child[!side] = up->child[side];
+    up->child[side] = n;
+    map_update(n); map_update(up);
+    return up;
+}
+/* Restore the AVL property at n after one of its subtrees changed height by one. */
+static struct map_node *map_balance(struct map_node *n)
+{
+    map_update(n);
+    int skew = map_height(n->child[1]) - map_height(n->child[0]);
+    if (skew > 1 || skew < -1) {
+        int heavy = skew > 0;   /* the taller side */
+        struct map_node *c = n->child[heavy];
+        if (map_height(c->child[!heavy]) > map_height(c->child[heavy]))
+            n->child[heavy] = map_rotate(c, heavy);
+        return map_rotate(n, !heavy);
+    }
+    return n;
+}
+static struct map_node *map_link(struct map_node *n, struct map_node *add)
+{
+    if (!n) return add;
+    int higher = (uintptr_t)add->m.address > (uintptr_t)n->m.address;
+    n->child[higher] = map_link(n->child[higher], add);
+    return map_balance(n);
 }
 static void map_insert(struct mapping m)
 {
-    struct mapping *below = map_floor((uintptr_t)m.address);
-    size_t at = below ? (size_t)(below - maps) : map_count;
-    memmove(&maps[at + 1], &maps[at], (map_count - at) * sizeof(*maps));
-    maps[at] = m; ++map_count;
+    /* map_reserve ran first; a missing node is a registry defect. */
+    struct map_node *add = map_free;
+    if (!add) abort();
+    map_free = add->child[0];
+    *add = (struct map_node){.m = m, .height = 1};
+    map_root = map_link(map_root, add);
+    ++map_count;
+}
+/* Detach the lowest node of the subtree n into *lowest; returns the rest, rebalanced. */
+static struct map_node *map_unlink_lowest(struct map_node *n, struct map_node **lowest)
+{
+    if (!n->child[0]) { *lowest = n; return n->child[1]; }
+    n->child[0] = map_unlink_lowest(n->child[0], lowest);
+    return map_balance(n);
+}
+/* Detach the node holding *m (found by its address, then by identity) from the subtree n. */
+static struct map_node *map_unlink(struct map_node *n, const struct mapping *m)
+{
+    if (!n) abort();   /* a mapping that is not registered: a registry defect */
+    if (&n->m != m) {
+        int higher = (uintptr_t)m->address > (uintptr_t)n->m.address;
+        n->child[higher] = map_unlink(n->child[higher], m);
+        return map_balance(n);
+    }
+    if (!n->child[0] || !n->child[1]) return n->child[!n->child[0]];
+    struct map_node *next;
+    struct map_node *rest = map_unlink_lowest(n->child[1], &next);
+    next->child[0] = n->child[0]; next->child[1] = rest;
+    return map_balance(next);
 }
 static void map_remove(struct mapping *m)
 {
-    size_t at = (size_t)(m - maps);
-    memmove(&maps[at], &maps[at + 1], (map_count - at - 1) * sizeof(*maps));
+    struct map_node *gone = (struct map_node *)((char *)m - offsetof(struct map_node, m));
+    map_root = map_unlink(map_root, m);
     --map_count;
+    /* Kept for the next registration (remap_mapping removes, then inserts). */
+    gone->child[0] = map_free; map_free = gone;
 }
 static int grant(void *base, size_t bytes, unsigned reg, unsigned perms,
                  uintptr_t cursor, int linear, uint64_t thread, size_t rx_bytes)

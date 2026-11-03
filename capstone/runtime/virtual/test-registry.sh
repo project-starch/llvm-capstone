@@ -9,5 +9,5 @@ out=${TMPDIR:-/tmp}/test-registry.$$
 trap 'rm -f "$out"' EXIT
 trap 'exit 1' INT TERM
 ${CC:-gcc} -O1 -g -w -I"$here" -I"$here/../include" -I"$here/.." -DEXEC_C="\"$src\"" \
-    "$here/test-registry.c" -o "$out" -pthread -Wl,--unresolved-symbols=ignore-all
+    "$here/test-registry.c" -o "$out" -pthread -lm -Wl,--unresolved-symbols=ignore-all
 "$out"
