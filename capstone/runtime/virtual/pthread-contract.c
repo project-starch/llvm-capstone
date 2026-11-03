@@ -212,8 +212,82 @@ static void *allocator_worker(void *arg)
     return arg;
 }
 
-int main(void)
+/* Raw exits deliberately keep their slots. Exhaust all 63, then eight live pthreads
+ * exchange checked records with the main thread. Each must take the service fallback.
+ * A separate launch keeps the ordinary no-service check intact. */
+#define FALLBACK_THREADS 8
+#define FALLBACK_RECORDS 120
+extern _Noreturn void __capstone_vm_thread_exit(void);
+static volatile unsigned fallback_arrived, fallback_go;
+static unsigned long fallback_slots[FALLBACK_THREADS];
+static unsigned fallback_ids[FALLBACK_THREADS];
+static void *keep_slot(void *arg)
 {
+    (void)arg;
+    __capstone_vm_thread_exit();
+}
+static void *fallback_writer(void *arg)
+{
+    unsigned t = *(unsigned *)arg;
+    fallback_slots[t] = gp_slot();
+    __atomic_add_fetch(&fallback_arrived, 1, __ATOMIC_RELEASE);
+    while (!__atomic_load_n(&fallback_go, __ATOMIC_ACQUIRE)) sched_yield();
+    for (unsigned i = 0; i < FALLBACK_RECORDS; ++i) {
+        unsigned record[8];
+        for (unsigned j = 0; j < 8; ++j) record[j] = (t * FALLBACK_RECORDS + i) * 8 + j;
+        assert(write(pipefd[1], record, sizeof record) == sizeof record);
+    }
+    return arg;
+}
+static int fallback_contract(void)
+{
+    char *stacks = mmap(NULL, 65536, PROT_READ | PROT_WRITE,
+                        MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    assert(stacks != MAP_FAILED);
+    void *tp;
+    __asm__ volatile("movc %0, tp" : "=r"(tp));
+    for (unsigned i = 0; i < 63; ++i) {
+        long id = capstone_virtual_thread_create(keep_slot, NULL, stacks + 65536, tp);
+        assert(id > 0 && !capstone_virtual_thread_join(id));
+    }
+    pthread_t threads[FALLBACK_THREADS];
+    assert(!pipe(pipefd));
+    for (unsigned t = 0; t < FALLBACK_THREADS; ++t) {
+        fallback_ids[t] = t;
+        assert(!pthread_create(&threads[t], NULL, fallback_writer, &fallback_ids[t]));
+    }
+    while (__atomic_load_n(&fallback_arrived, __ATOMIC_ACQUIRE) != FALLBACK_THREADS) sched_yield();
+    __atomic_store_n(&fallback_go, 1, __ATOMIC_RELEASE);
+    unsigned char seen[FALLBACK_THREADS * FALLBACK_RECORDS] = {0};
+    unsigned bad = 0;
+    for (unsigned n = 0; n < FALLBACK_THREADS * FALLBACK_RECORDS; ++n) {
+        unsigned record[8];
+        size_t got = 0;
+        while (got < sizeof record) {
+            ssize_t r = read(pipefd[0], (char *)record + got, sizeof record - got);
+            assert(r > 0); got += r;
+        }
+        unsigned id = record[0] / 8;
+        if (id >= sizeof seen || seen[id]++) ++bad;
+        for (unsigned j = 0; j < 8; ++j) if (record[j] != id * 8 + j) ++bad;
+    }
+    unsigned fallback = 0;
+    for (unsigned t = 0; t < FALLBACK_THREADS; ++t) {
+        assert(!pthread_join(threads[t], NULL));
+        fallback += fallback_slots[t] == 64 * 16;
+    }
+    close(pipefd[0]); close(pipefd[1]);
+    assert(!munmap(stacks, 65536));
+    printf("VIRTUAL_FALLBACK:slots=%u records=%u bad=%u main=%lu\n", fallback,
+           FALLBACK_THREADS * FALLBACK_RECORDS, bad, gp_slot());
+    if (fallback == FALLBACK_THREADS && !bad && gp_slot() == 0)
+        puts("VIRTUAL_PTHREAD_OK fallback_identity");
+    return 0;
+}
+
+int main(int argc, char **argv)
+{
+    if (argc == 2 && !strcmp(argv[1], "fallback")) return fallback_contract();
     pthread_t a, b;
     unsigned values[2] = {51, 61};
     void *result;

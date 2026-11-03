@@ -116,7 +116,7 @@ def main():
         ("memcached fixture never begun, on both sides", "memcached",
          lambda g: memcached(g, skip="fx1"), lambda g: memcached(g, skip="fx1"), 2),
     ]
-    for gate, rows in [('step-hooks', [
+    for gate, rows in [('pthread', ['PTHREAD_FALLBACK_EXIT']), ('step-hooks', [
             r for r in compare.REQUIRED_ROWS['step-hooks'] if r.startswith('HOOK_EXIT:adapt')])]:
         for row in rows:
             cases.append((f'{row} missing on both sides', gate, required(gate, row), required(gate, row), 2))

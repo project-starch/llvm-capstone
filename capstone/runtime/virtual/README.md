@@ -467,6 +467,15 @@ keep the real stop checks: cuts between batches are allowed, but each
 requested window must double up to 64, its next fault must follow the pages
 actually retained, and both sysfs counters must equal the event census exactly.
 
+The pthread gate has a separate `fallback` launch: 63 raw exits retain all
+identity slots, then eight pthreads write 960 checked records to one pipe.
+They must use the service identity fallback. The
+ordinary pthread launch must still make zero `THREAD_SELF` service exits.
+Nonlocal exits from handlers delivered inside delegated calls remain
+unsupported: `__capstone_longjmp_reap` acknowledges the signal but does not
+unwind transport lock depth or copy-back state, and a stale owner can collide
+with a reused identity slot.
+
 A write the launcher makes into domain memory on the domain's behalf -- a
 thread's exit word, a worker's meta block and exchange region -- is preceded by
 `CV_TOUCH` over the span, which admits every page of it a lazily admitted arena

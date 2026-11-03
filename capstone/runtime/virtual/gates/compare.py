@@ -78,7 +78,7 @@ REQUIRED_ROWS = {
         '16:seq', '16:stop', '16:vma', '16:vmax', '16:rowrite', '16:retire', '64:base', '64:seq',
         '64:stop', '64:vma', '64:vmax', '64:rowrite', '64:retire')],
     "fp": ['FP_EXIT'],
-    "pthread": ['PTHREAD_EXIT'],
+    "pthread": ['PTHREAD_EXIT', 'PTHREAD_FALLBACK_EXIT'],
     "step-hooks": ["HOOK_EXIT:" + n for n in (
         'base1:walk', 'base1:syscalls', 'base16:walk', 'base64:walk', 'base64:seq', 'resched2:walk',
         'resched2:syscalls', 'signal2:walk', 'signal2:syscalls', 'deadline2:walk',
