@@ -1,5 +1,14 @@
 # Current Capstone state
 
+M4 experiment, 2026-11-03: `runtime/module-binfmt` has an opt-in native loader
+and scalar delegate trampoline. The four requested SPEC test inputs pass on
+plain/launcher/native paths; matched native exec uses fewer attempts than the
+launcher. This does not change the verified default runtime. See the
+[native-exec design and qualification limits](../design/virtual-capstone/native-exec.md).
+The scalar-memory probe confirms delegated read/write access to the private
+trampoline through `/proc/self/mem`: integration is NO-GO. Full gate parity and
+caught signals/process creation also remain qualification requirements.
+
 ## Read this first (2026-10-13)
 
 This file was 2,030 lines and its companion 1,560, most of it instructions and
