@@ -1,0 +1,64 @@
+# CVA6 counters inside SPEC contexts: first board boot, pre-registration
+
+This file is written and pushed before the boot.
+
+**What changes.** This boot makes one change to the 3 Nov bitstream-3 SPEC test boot of imagick: the kit. The rest is
+the same: the stage `spec/stages/538.imagick_r-test` (tree-board images, MapLife and Full in one stage), the control
+crc.K0, and bitstream `caplifive_vp2c_e7af48457`.
+- **Kit.** `t3-smoke/bkit16-hpm-b3-b1` = `bkit12-perf-b3-b1` with two parts replaced.
+  - **Module.** `capstone_vm.ko` is `2f46170a118fda1d`: runtime/bench-hpm 6f7356368bb1, `-DCAPSTONE_VM_BENCH_COUNTERS
+    -DCAPSTONE_VM_BENCH_HPM`. Built without the HPM define, it gives the kit module's `.text` (6953e0dbd4f5, kit
+    9c60fb53).
+    - It reads hpmcounter3..8 around every CSRUNV, outside the cycle/instret reads.
+    - It prints `capstone_vm: hpm hpm3=.. hpm8=..` per context, after the existing bench line, which is unchanged.
+  - **Firmware.** Wrapper caplifive-opensbi hpm-events 8a39f82, with `-DCAPSTONE_HPM_EVENTS` added to the kit's defines.
+    - `mstatus_init` sets mhpmevent3..8 to 1, 2, 4, 10, 22, 14 and clears mcountinhibit[8:3].
+    - Without the define the firmware is byte-identical to the baseline (1ac724e63196ff21).
+- **Events.** The numbers come from capstone-ariane perf_counters.sv at e7af48457, and they were confirmed on silicon
+  tonight by the hpm bare kit, which read the exact fields on board 1 at 19:25-19:35:
+  - hpm3: L1I miss (event 1)
+  - hpm4: L1D miss (event 2)
+  - hpm5: DTLB miss (event 4)
+  - hpm6: branch mispredict (event 10)
+  - hpm7: issue stall (event 22)
+  - hpm8: scoreboard full (event 14)
+- **Runner.** `perf/hpm/sbhpm/hpm-boot.sh` books board 1 at the SPEC chain's next stage end and runs
+  `sbhpm/spec-board.sh`. That is the lane's spec-board.sh with three changes:
+  - the bkit16 kit;
+  - the module hash and the HPM define are checked;
+  - a pre-taken booking is passed in.
+  - The stubbed dry run reached the runner with the expected arguments and released the booking.
+
+**QEMU gate (done).** lbm test ran in both arms on spec/kit-hpmq-{base,hpm} (QEMU-kernel builds of the same source):
+- rc 0, specdiff PASS, outputs identical in both arms;
+- the bench line is fresh;
+- lifetimes instret is equal to base exactly (7,278,939,488);
+- the hpm line reads 0 on QEMU, which programs no events.
+
+The first gate run printed the new line as a second `capstone_vm: bench` line. That broke the stage's freshness check,
+and it is why the line is now `capstone_vm: hpm`.
+
+**Predictions** (baseline: board run out/538.imagick_r-test, bitstream 3, 3 Nov):
+
+| # | Prediction | Baseline value |
+|---|---|---|
+| P1 | The control crc.K0 passes. Both arms are rc 0, specdiff PASS, and their outputs equal the twin's (census-q34). | |
+| P2 | run0 instret is within 0.1 % of the baseline: counting changes no instruction inside the window. | MapLife 108,724,600; Full 108,744,930 |
+| P3 | run0 cycles are within 2 % of the baseline. This is one run; a larger move would mean the extra reads or the counters cost cycles. | MapLife 402,555,914; Full 395,108,674 |
+| P4 | Every context prints one `capstone_vm: hpm` line. In run0 of both arms, hpm3, hpm4, hpm5, hpm6 and hpm7 are > 0 and each is < cycles; hpm7 < cycles. hpm8 is reported, with no prediction (it may be 0). | |
+| P5 | The stage reads the bench line fresh in every command (no "NOT fresh"). | |
+
+**What each outcome means.**
+- **All six counters read 0 (P4 fails).** The firmware did not set the events. Check the firmware build's defines and
+  the wrapper commit in fw.log. Nothing is concluded about the programs.
+- **Oops, illegal instruction or no boot.** The boot is VOID. Board 1 goes back to bkit12, and the defect goes to a repro
+  folder.
+- **P2 or P3 fails.** The instrument perturbs the window. Counter readings are then reported only with that caveat, and
+  the counter build does not replace the timing build.
+- **Everything holds.** The counter kit runs the evaluation set (lbm, nab, xz, mcf, imagick, gcc test), MapLife/Full on
+  board 1, then the ObjBounds kit bkit16-hpm-objb-b2 on board 2 after its own first boot.
+
+**Limits.**
+- N = 1.
+- Counters have no privilege filter, so a window also counts monitor work inside the CSRUNV, as cycle does.
+- hpm5 (DTLB) counts the S-mode translation the context runs under.

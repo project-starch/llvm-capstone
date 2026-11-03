@@ -1,0 +1,10 @@
+# stubbed dry run of perf/hpm/sbhpm/hpm-boot.sh (hub, runner and unbook stubbed), 3 Nov 20:31
+HB START 2026-11-03 20:31:08 board 1 stage 538.imagick_r-test
+HB BOOKED 4242 20:31:10
+HB END rc=0 20:31:10
+SB BEGIN 20:31:10 board 1 bitstream 3 kit bkit16-hpm-b3-b1 stage 538.imagick_r-test booking 4242
+SB END rc=0 20:31:10
+# runner argv:
+STUB run-stage run --backend board --kit $CAPSTONE_WORK/t3-smoke/bkit16-hpm-b3-b1 --stage $CAPSTONE_WORK/spec/stages/538.imagick_r-test --out <scratch>/out-imagick --tree $CAPSTONE_WORK/spec/tree-board/SPEC17 --control $CAPSTONE_WORK/perf/build2/T1/crc.K0.dom 1 5 --step-s 1200 --twin $CAPSTONE_WORK/spec/census-q34/538.imagick_r-test/result.json
+# unbook:
+STUB unbook 4242
