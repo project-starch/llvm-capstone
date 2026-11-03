@@ -26,6 +26,11 @@
  * writing into them and releases its hold on their mappings, which until then refuses their
  * unmap to everyone, the worker included. The worker's next delegate service attaches again. */
 #define CV_SERVICE_TRANSPORT_DETACH 14
+/* Lane AB experiment (experiment/in-module-io): a delegate entry whose flags are exactly this
+ * bit names its buffer by ADDRESS in args[1] (read, write, pread64, pwrite64 only). The module
+ * serves it inside CV_STEP into or out of the domain's pages, or answers it; it never reaches the
+ * launcher. See inline-io.h and capstone_vm.c inline_io. */
+#define CV_IO_DIRECT (1ULL << 63)
 /* Node instructions pause at this remaining cleanup reserve. */
 #define CV_NODE_RESERVE 256
 #define CV_MAP_HEAP 0
