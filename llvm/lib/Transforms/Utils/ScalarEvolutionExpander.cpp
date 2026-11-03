@@ -571,7 +571,10 @@ Value *SCEVExpander::visitAddExpr(const SCEVAddExpr *S) {
       // The running sum expression is a pointer. Try to form a getelementptr
       // at this level with that as the base.
       SmallVector<const SCEV *, 4> NewOps;
-      for (; I != E && I->first == CurLoop; ++I) {
+      // Splitting a capability offset by loop creates partial cursors that
+      // may lose their tag before the complete offset reaches a valid address.
+      bool KeepOffsetTogether = DL.isNonIntegralPointerType(Sum->getType());
+      for (; I != E && (KeepOffsetTogether || I->first == CurLoop); ++I) {
         // If the operand is SCEVUnknown and not instructions, peek through
         // it, to enable more of it to be folded into the GEP.
         const SCEV *X = I->second;
@@ -1302,6 +1305,16 @@ Value *SCEVExpander::tryToReuseLCSSAPhi(const SCEVAddRecExpr *S) {
 }
 
 Value *SCEVExpander::visitAddRecExpr(const SCEVAddRecExpr *S) {
+  // A pointer PHI steps on every iteration, including iterations on which the
+  // original cursor was never formed. A refused capability cursor cannot regain
+  // its tag on a later, valid iteration. Keep the recurrence in the integer
+  // offset even in non-canonical mode and form each cursor from the same base.
+  if (DL.isNonIntegralPointerType(S->getType())) {
+    Value *Base = expand(SE.getPointerBase(S));
+    return expandAddToGEP(SE.removePointerBase(S), Base,
+                          S->getNoWrapFlags(SCEV::FlagNUW));
+  }
+
   // In canonical mode we compute the addrec as an expression of a canonical IV
   // using evaluateAtIteration and expand the resulting SCEV expression. This
   // way we avoid introducing new IVs to carry on the computation of the addrec

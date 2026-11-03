@@ -60,7 +60,7 @@ exit:
 ; A skip path does not access the cursor. Even a small step cannot authorize
 ; stepping a sealed or uninitialized base on the skipped iterations.
 ; IR-LABEL: define void @skipped(
-; IR-NOT: lsr.cap.
+; IR-NOT: phi ptr addrspace(200) [ %dst,
 ; IR: ret void
 define void @skipped(ptr addrspace(200) %dst, ptr addrspace(200) %flags, i64 %n) {
 entry:
@@ -87,9 +87,12 @@ exit:
   ret void
 }
 
-; The final unused step must stay in the representable window as well.
+; Every consumed cursor is accessed; the final unused step may lose its tag.
 ; IR-LABEL: define void @large_step(
-; IR-NOT: lsr.cap.
+; IR: [[CURSOR:%[^ ]+]] = phi ptr addrspace(200) [ %dst, %header.preheader ], [ [[NEXT:%[^ ]+]], %latch ]
+; IR: store double 1.000000e+00, ptr addrspace(200) [[CURSOR]]
+; IR: store double 3.000000e+00, ptr addrspace(200) [[CURSOR]]
+; IR: [[NEXT]] = getelementptr i8, ptr addrspace(200) [[CURSOR]], i64 2400
 ; IR: ret void
 define void @large_step(ptr addrspace(200) %dst, ptr addrspace(200) %flags, i64 %n) {
 entry:
@@ -125,7 +128,7 @@ exit:
 
 ; A call before the anchors may exit without ever deriving the destination.
 ; IR-LABEL: define void @may_exit(
-; IR-NOT: lsr.cap.
+; IR-NOT: phi ptr addrspace(200) [ %dst,
 ; IR: ret void
 define void @may_exit(ptr addrspace(200) %dst, ptr addrspace(200) %flags, i64 %n) {
 entry:
@@ -162,7 +165,7 @@ exit:
 
 ; Similar SCEVs or nearby addresses do not substitute for the exact anchor.
 ; IR-LABEL: define void @different_anchor(
-; IR-NOT: lsr.cap.
+; IR-NOT: phi ptr addrspace(200) [ %dst,
 ; IR: ret void
 define void @different_anchor(ptr addrspace(200) %dst, ptr addrspace(200) %flags, i64 %n) {
 entry:
@@ -240,9 +243,13 @@ exit:
   ret void
 }
 
-; Unsigned no-wrap alone does not exclude crossing the signed GEP index range.
+; Index-width modular arithmetic preserves the address even without nsw.
+; The inbounds accessed anchor proves each consumed cursor remains valid.
 ; IR-LABEL: define void @unsigned_wrap(
-; IR-NOT: lsr.cap.
+; IR: [[CURSOR:%[^ ]+]] = phi ptr addrspace(200) [ %dst, %header.preheader ], [ [[NEXT:%[^ ]+]], %latch ]
+; IR: store double 1.000000e+00, ptr addrspace(200) [[CURSOR]]
+; IR: store double 3.000000e+00, ptr addrspace(200) [[CURSOR]]
+; IR: [[NEXT]] = getelementptr i8, ptr addrspace(200) [[CURSOR]], i64 160
 ; IR: ret void
 define void @unsigned_wrap(ptr addrspace(200) %dst, ptr addrspace(200) %flags, i64 %n) {
 entry:
@@ -280,7 +287,7 @@ exit:
 ; header: an iteration may leave the loop without accessing the cursor, so the
 ; backwards proof never reaches the header and no cursor is formed.
 ; IR-LABEL: define void @early_exit(
-; IR-NOT: lsr.cap.
+; IR-NOT: phi ptr addrspace(200) [ %dst,
 ; IR: ret void
 define void @early_exit(ptr addrspace(200) %dst, ptr addrspace(200) %flags, i64 %n) {
 entry:

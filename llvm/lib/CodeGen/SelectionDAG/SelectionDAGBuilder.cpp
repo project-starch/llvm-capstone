@@ -4396,6 +4396,25 @@ void SelectionDAGBuilder::visitGetElementPtr(const User &I) {
   auto &TLI = DAG.getTargetLoweringInfo();
   GEPNoWrapFlags NW = cast<GEPOperator>(I).getNoWrapFlags();
 
+  // A multi-index GEP forms one cursor. Applying each index to a capability
+  // separately can lose its tag at a partial offset even when the complete
+  // offset is valid. Accumulate in the index type and apply it to the original
+  // base once. No pointer-to-integer conversion is involved.
+  SDValue PointerBase;
+  if (DAG.getDataLayout().isNonIntegralAddressSpace(AS)) {
+    PointerBase = N;
+    EVT OffsetVT = MVT::getIntegerVT(DAG.getDataLayout().getIndexSizeInBits(AS));
+    if (N.getValueType().isVector())
+      OffsetVT = EVT::getVectorVT(*Context, OffsetVT,
+                                N.getValueType().getVectorElementCount());
+    N = DAG.getConstant(0, dl, OffsetVT);
+  }
+  auto AddOffset = [&](SDValue Offset, SDNodeFlags Flags) {
+    // The GEP's address no-wrap flags do not describe the integer partial sum.
+    return PointerBase ? DAG.getNode(ISD::ADD, dl, N.getValueType(), N, Offset)
+                       : DAG.getMemBasePlusOffset(N, Offset, dl, Flags);
+  };
+
   // For a vector GEP, keep the prefix scalar as long as possible, then
   // convert any scalars encountered after the first vector operand to vectors.
   bool IsVectorGEP = I.getType()->isVectorTy();
@@ -4420,8 +4439,8 @@ void SelectionDAGBuilder::visitGetElementPtr(const User &I) {
             (int64_t(Offset) >= 0 && NW.hasNoUnsignedSignedWrap()))
           Flags |= SDNodeFlags::NoUnsignedWrap;
 
-        N = DAG.getMemBasePlusOffset(
-            N, DAG.getConstant(Offset, dl, getGEPOffsetVT(N, TLI, DAG)), dl, Flags);
+        N = AddOffset(
+            DAG.getConstant(Offset, dl, getGEPOffsetVT(N, TLI, DAG)), Flags);
       }
     } else {
       // IdxSize is the width of the arithmetic according to IR semantics.
@@ -4465,7 +4484,7 @@ void SelectionDAGBuilder::visitGetElementPtr(const User &I) {
 
         OffsVal = DAG.getSExtOrTrunc(OffsVal, dl, getGEPOffsetVT(N, TLI, DAG));
 
-        N = DAG.getMemBasePlusOffset(N, OffsVal, dl, Flags);
+        N = AddOffset(OffsVal, Flags);
         continue;
       }
 
@@ -4537,13 +4556,22 @@ void SelectionDAGBuilder::visitGetElementPtr(const User &I) {
       SDNodeFlags AddFlags;
       AddFlags.setNoUnsignedWrap(NW.hasNoUnsignedWrap());
 
-      N = DAG.getMemBasePlusOffset(N, IdxN, dl, AddFlags);
+      N = AddOffset(IdxN, AddFlags);
     }
   }
 
   if (IsVectorGEP && !N.getValueType().isVector()) {
     EVT VT = EVT::getVectorVT(*Context, N.getValueType(), VectorElementCount);
     N = DAG.getSplat(VT, dl, N);
+  }
+
+  if (PointerBase) {
+    if (IsVectorGEP && !PointerBase.getValueType().isVector()) {
+      EVT VT = EVT::getVectorVT(*Context, PointerBase.getValueType(),
+                              VectorElementCount);
+      PointerBase = DAG.getSplat(VT, dl, PointerBase);
+    }
+    N = DAG.getMemBasePlusOffset(PointerBase, N, dl);
   }
 
   MVT PtrTy = TLI.getPointerTy(DAG.getDataLayout(), AS);

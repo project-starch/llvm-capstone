@@ -5293,7 +5293,9 @@ bool AddressingModeMatcher::matchOperationAddr(User *AddrInst, unsigned Opcode,
 
       if (EnableGEPOffsetSplit && isa<GetElementPtrInst>(AddrInst) &&
           TLI.shouldConsiderGEPOffsetSplit() && Depth == 0 &&
-          ConstantOffset > 0) {
+          (ConstantOffset > 0 ||
+           (ConstantOffset < 0 &&
+            DL.isNonIntegralPointerType(AddrInst->getType())))) {
           // Record GEPs with non-zero offsets as candidates for splitting in
           // the event that the offset cannot fit into the r+i addressing mode.
           // Simple and common case that only one GEP is used in calculating the
@@ -6609,6 +6611,59 @@ bool CodeGenPrepare::mergeSExts(Function &F) {
   return Changed;
 }
 
+// Prove forward coverage from InsertPt, stopping at an original group GEP or
+// a load through the exact base. Loads reject UNINIT and sealed capabilities,
+// as does cursor arithmetic. Stores, including ordinary stores at offset zero,
+// can use an UNINIT base and cannot establish coverage. Uncovered exits, cycles
+// and instructions that may leave the function must not acquire arithmetic.
+static bool capabilityBaseUsedOnEveryPath(
+    Instruction *InsertPt, Value *Base,
+    const SmallPtrSetImpl<Instruction *> &GEPs) {
+  SmallVector<BasicBlock *, 16> Blocks(1, InsertPt->getParent());
+  SmallPtrSet<BasicBlock *, 16> Seen;
+  SmallPtrSet<BasicBlock *, 16> Covered;
+  Seen.insert(InsertPt->getParent());
+  for (unsigned N = 0; N != Blocks.size(); ++N) {
+    BasicBlock *BB = Blocks[N];
+    auto Begin = N == 0 ? InsertPt->getIterator() : BB->begin();
+    for (Instruction &I : make_range(Begin, BB->end())) {
+      Value *Address = nullptr;
+      if (auto *Load = dyn_cast<LoadInst>(&I))
+        Address = Load->getPointerOperand();
+      if (GEPs.contains(&I) || Address == Base) {
+        Covered.insert(BB);
+        break;
+      }
+      if (!isGuaranteedToTransferExecutionToSuccessor(&I))
+        return false;
+    }
+    if (Covered.contains(BB))
+      continue;
+    if (succ_empty(BB))
+      return false;
+    for (BasicBlock *Succ : successors(BB))
+      if (Seen.insert(Succ).second) {
+        // Bound compile time; a larger graph simply retains its original GEPs.
+        if (Blocks.size() == 64)
+          return false;
+        Blocks.push_back(Succ);
+      }
+  }
+  bool Changed;
+  do {
+    Changed = false;
+    for (BasicBlock *BB : reverse(Blocks))
+      if (!Covered.contains(BB) &&
+          all_of(successors(BB), [&](BasicBlock *Succ) {
+            return Covered.contains(Succ);
+          })) {
+        Covered.insert(BB);
+        Changed = true;
+      }
+  } while (Changed);
+  return Covered.contains(InsertPt->getParent());
+}
+
 // Splitting large data structures so that the GEPs accessing them can have
 // smaller offsets so that they can be sunk to the same blocks as their users.
 // For example, a large struct starting from %base is split into two parts
@@ -6651,13 +6706,23 @@ bool CodeGenPrepare::splitLargeGEPOffsets() {
     Value *OldBase = Entry.first;
     SmallVectorImpl<std::pair<AssertingVH<GetElementPtrInst>, int64_t>>
         &LargeOffsetGEPs = Entry.second;
+    bool IsCapability = DL->isNonIntegralPointerType(OldBase->getType());
     auto compareGEPOffset =
         [&](const std::pair<GetElementPtrInst *, int64_t> &LHS,
             const std::pair<GetElementPtrInst *, int64_t> &RHS) {
           if (LHS.first == RHS.first)
             return false;
-          if (LHS.second != RHS.second)
+          if (LHS.second != RHS.second) {
+            // Keep signs separate and visit negative capability offsets from
+            // closest to zero to farthest, mirroring the positive interval.
+            if (IsCapability) {
+              if ((LHS.second < 0) != (RHS.second < 0))
+                return LHS.second >= 0;
+              if (LHS.second < 0)
+                return LHS.second > RHS.second;
+            }
             return LHS.second < RHS.second;
+          }
           return LargeOffsetGEPID[LHS.first] < LargeOffsetGEPID[RHS.first];
         };
     // Sorting all the GEPs of the same data structures based on the offsets.
@@ -6666,6 +6731,38 @@ bool CodeGenPrepare::splitLargeGEPOffsets() {
     // Skip if all the GEPs have the same offsets.
     if (LargeOffsetGEPs.front().second == LargeOffsetGEPs.back().second)
       continue;
+    // Each same-sign group uses its closest-to-zero offset as base, so
+    // every new cursor lies between OldBase and the original final cursor.
+    // Both the representable window and the canonical address range preserve
+    // tags along that interval. This does not justify speculating arithmetic
+    // on a sealed or uninitialised base: require a covered insertion point,
+    // or retain the existing non-null speculation rule (C-19).
+    Instruction *CapabilityInsertPt = nullptr;
+    if (IsCapability) {
+      DominatorTree &DomTree = getDT(*LargeOffsetGEPs.front().first->getFunction());
+      BasicBlock *Common = LargeOffsetGEPs.front().first->getParent();
+      for (auto &G : LargeOffsetGEPs) {
+        Common = DomTree.findNearestCommonDominator(Common, G.first->getParent());
+        if (!Common)
+          break;
+      }
+      for (auto &G : LargeOffsetGEPs) {
+        if (G.first->getParent() == Common &&
+            (!CapabilityInsertPt || G.first->comesBefore(CapabilityInsertPt)))
+          CapabilityInsertPt = G.first;
+      }
+      if (!CapabilityInsertPt && Common &&
+          !Common->getTerminator()->isEHPad()) {
+        SmallPtrSet<Instruction *, 16> GEPs;
+        for (auto &G : LargeOffsetGEPs)
+          GEPs.insert(G.first);
+        if (capabilityBaseUsedOnEveryPath(Common->getTerminator(), OldBase,
+                                         GEPs))
+          CapabilityInsertPt = Common->getTerminator();
+      }
+      if (!CapabilityInsertPt && !isKnownNonZero(OldBase, *DL))
+        continue;
+    }
     GetElementPtrInst *BaseGEP = LargeOffsetGEPs.begin()->first;
     int64_t BaseOffset = LargeOffsetGEPs.begin()->second;
     Value *NewBaseGEP = nullptr;
@@ -6679,7 +6776,10 @@ bool CodeGenPrepare::splitLargeGEPOffsets() {
 
       BasicBlock::iterator NewBaseInsertPt;
       BasicBlock *NewBaseInsertBB;
-      if (auto *BaseI = dyn_cast<Instruction>(OldBase)) {
+      if (CapabilityInsertPt) {
+        NewBaseInsertBB = CapabilityInsertPt->getParent();
+        NewBaseInsertPt = CapabilityInsertPt->getIterator();
+      } else if (auto *BaseI = dyn_cast<Instruction>(OldBase)) {
         // If the base of the struct is an instruction, the new base will be
         // inserted close to it.
         NewBaseInsertBB = BaseI->getParent();
@@ -6705,23 +6805,41 @@ bool CodeGenPrepare::splitLargeGEPOffsets() {
         NewBaseGEP = NewBaseBuilder.CreatePointerCast(NewBaseGEP, I8PtrTy);
       NewBaseGEP =
           NewBaseBuilder.CreatePtrAdd(NewBaseGEP, BaseIndex, "splitgep");
+      if (CapabilityInsertPt)
+        if (auto *NewI = dyn_cast<Instruction>(NewBaseGEP))
+          CapabilityInsertPt = NewI;
       NewGEPBases.insert(NewBaseGEP);
       return;
     };
 
-    // Check whether all the offsets can be encoded with prefered common base.
-    if (int64_t PreferBase = TLI->getPreferredLargeGEPBaseOffset(
-            LargeOffsetGEPs.front().second, LargeOffsetGEPs.back().second)) {
-      BaseOffset = PreferBase;
-      // Create a new base if the offset of the BaseGEP can be decoded with one
-      // instruction.
-      createNewBase(BaseOffset, OldBase, BaseGEP);
+    // Check whether all the offsets can be encoded with a preferred common
+    // base. Opposite signs cannot share a nonzero capability base.
+    int64_t LastOffset = LargeOffsetGEPs.back().second;
+    if (!IsCapability || (BaseOffset < 0) == (LastOffset < 0)) {
+      if (int64_t PreferBase = TLI->getPreferredLargeGEPBaseOffset(
+              std::min(BaseOffset, LastOffset),
+              std::max(BaseOffset, LastOffset))) {
+        // A preference must lie between zero and the closest-to-zero offset.
+        if (!IsCapability ||
+            (PreferBase >= std::min(int64_t(0), BaseOffset) &&
+             PreferBase <= std::max(int64_t(0), BaseOffset))) {
+          BaseOffset = PreferBase;
+          createNewBase(BaseOffset, OldBase, BaseGEP);
+        }
+      }
     }
 
     auto *LargeOffsetGEP = LargeOffsetGEPs.begin();
     while (LargeOffsetGEP != LargeOffsetGEPs.end()) {
       GetElementPtrInst *GEP = LargeOffsetGEP->first;
       int64_t Offset = LargeOffsetGEP->second;
+      if (IsCapability && (Offset < 0) != (BaseOffset < 0)) {
+        // Start a separate interval before subtracting opposite-sign offsets
+        // (whose difference may also overflow int64_t).
+        BaseGEP = GEP;
+        BaseOffset = Offset;
+        NewBaseGEP = nullptr;
+      }
       if (Offset != BaseOffset) {
         TargetLowering::AddrMode AddrMode;
         AddrMode.HasBaseReg = true;
@@ -6759,6 +6877,8 @@ bool CodeGenPrepare::splitLargeGEPOffsets() {
       replaceAllUsesWith(GEP, NewGEP, FreshBBs, IsHugeFunc);
       LargeOffsetGEPID.erase(GEP);
       LargeOffsetGEP = LargeOffsetGEPs.erase(LargeOffsetGEP);
+      if (CapabilityInsertPt == GEP)
+        CapabilityInsertPt = GEP->getNextNode();
       GEP->eraseFromParent();
       Changed = true;
     }

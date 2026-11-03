@@ -2525,6 +2525,13 @@ static bool hoistGEP(Instruction &I, Loop &L, ICFLoopSafetyInfo &SafetyInfo,
   if (!GEP)
     return false;
 
+  // Swapping the offsets creates a capability cursor the loop never formed.
+  // Even a small invariant offset can cross an address-policy boundary and
+  // lose the tag before the loop-variant offset returns to a valid address.
+  if (GEP->getDataLayout().isNonIntegralPointerType(
+          GEP->getType()->getScalarType()))
+    return false;
+
   // Do not try to hoist a constant GEP out of the loop via reassociation.
   // Constant GEPs can often be folded into addressing modes, and reassociating
   // them may inhibit CSE of a common base.

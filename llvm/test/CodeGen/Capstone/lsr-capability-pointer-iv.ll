@@ -3,23 +3,19 @@
 ; RUN: %llc_cap -O2 -stop-after=loop-term-fold < %s | FileCheck %s --check-prefix=LTF
 ; RUN: %llc_cap -O2 < %s | FileCheck %s --check-prefix=NOZERO --implicit-check-not='cincoffset{{(imm)?}} {{[a-z0-9]+}}, zero'
 ;
-; The loop body of a counted array walk steps a capability register by an
-; immediate and folds the element offsets into the accesses; it no longer
-; rebuilds the address from the integer index with a shift and a register
-; cincoffset per iteration. The preheader may still scale the trip count to
-; compute the end pointer. This holds because the access runs on every
-; iteration of the loop, with a null check before the loop or without one.
+; The accessed-anchor reduction carries the original cursor when every
+; iteration accesses it. It must not introduce a normalized start or step
+; on iterations that skip the access.
 ;
-; The companion IR test, with the shapes that must NOT get a pointer induction
-; variable, is Transforms/LoopStrengthReduce/Capstone/capability-pointer-iv.ll.
+; The companion IR test is
+; Transforms/LoopStrengthReduce/Capstone/capability-pointer-iv.ll.
 
 ; CHECK-LABEL: guarded:
 ; CHECK:       [[LOOP:\.LBB[0-9_]+]]: # %for.body
 ; CHECK-NOT:     slli
-; CHECK-NOT:     cincoffset {{[a-z0-9]+}}, {{[a-z0-9]+}}, {{[a-z0-9]+}}
-; CHECK:         cincoffsetimm {{[a-z0-9]+}}, {{[a-z0-9]+}}, 8
+; CHECK:         lh {{[a-z0-9]+}}, 0(a0)
+; CHECK:         cincoffsetimm a0, a0, 8
 ; CHECK-NOT:     slli
-; CHECK-NOT:     cincoffset {{[a-z0-9]+}}, {{[a-z0-9]+}}, {{[a-z0-9]+}}
 ; CHECK:         bne {{.*}}[[LOOP]]
 define void @guarded(ptr addrspace(200) %p, i64 %n) addrspace(200) {
 entry:
@@ -50,10 +46,9 @@ for.end:
 ; CHECK-LABEL: every_iteration:
 ; CHECK:       [[LOOP:\.LBB[0-9_]+]]: # %for.body
 ; CHECK-NOT:     slli
-; CHECK-NOT:     cincoffset {{[a-z0-9]+}}, {{[a-z0-9]+}}, {{[a-z0-9]+}}
-; CHECK:         cincoffsetimm {{[a-z0-9]+}}, {{[a-z0-9]+}}, 8
+; CHECK:         lh {{[a-z0-9]+}}, 0(a0)
+; CHECK:         cincoffsetimm a0, a0, 8
 ; CHECK-NOT:     slli
-; CHECK-NOT:     cincoffset {{[a-z0-9]+}}, {{[a-z0-9]+}}, {{[a-z0-9]+}}
 ; CHECK:         bne {{.*}}[[LOOP]]
 define void @every_iteration(ptr addrspace(200) %p, i64 %n) addrspace(200) {
 entry:
@@ -75,18 +70,16 @@ for.end:
   ret void
 }
 
-; The C-58 nest with inbounds walks: LSR forms the inner pointer phi, and
-; loop-term-fold, which runs next and replaces the counter's exit test with a
-; comparison against the walk's end pointer, forms that end pointer in the
-; inner preheader -- below the outer loop's null check -- not in entry, where
-; its expander used to hoist an invariant value.
+; The guarded nested walk keeps its own GEPs below the null check. Without
+; a pointer recurrence, loop-term-fold retains the integer exit condition.
 ; LTF-LABEL: define void @nested_inbounds(
 ; LTF:       entry:
 ; LTF-NOT:     getelementptr
-; LTF:       inner.ph:
-; LTF:         getelementptr i8, ptr addrspace(200) %p, i64
 ; LTF:       inner:
-; LTF:         icmp eq ptr addrspace(200)
+; LTF-NOT:     phi ptr addrspace(200)
+; LTF:         %items = getelementptr inbounds i8, ptr addrspace(200) %p, i64 48
+; LTF:         %slot = getelementptr inbounds ptr addrspace(200), ptr addrspace(200) %items, i64 %i
+; LTF:         icmp eq i64
 ; LTF:         ret void
 define void @nested_inbounds(ptr addrspace(200) %p, i64 %n, i64 %m, ptr addrspace(200) %out) addrspace(200) {
 entry:
@@ -119,11 +112,8 @@ exit:
   ret void
 }
 
-; An exit test that compares the walked address with an end pointer: LSR's
-; ICmpZero rewrite turns it into a count-down compared through a null-based
-; byte GEP (C-40's shape), which the backend lowers as integer arithmetic --
-; never a cincoffset whose base is the zero register (the implicit check of
-; the NOZERO run covers every function here).
+; Pointer comparisons must not lower to a capability increment from zero.
+; The NOZERO run covers every function in this file.
 ; NOZERO-LABEL: cmp_end:
 ; NOZERO:         cjalr zero, 0(ra)
 define i16 @cmp_end(ptr addrspace(200) %p, i64 %n) addrspace(200) {

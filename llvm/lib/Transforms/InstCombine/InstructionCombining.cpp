@@ -2660,6 +2660,12 @@ static Instruction *canonicalizeGEPOfConstGEPI8(GetElementPtrInst &GEP,
     return nullptr;
   APInt TypeSize(IndexSizeInBits, DL.getTypeAllocSize(BaseType));
   APInt NewOffset = TypeSize * *C2 + *C1;
+  // Moving a constant across the variable offset changes the intermediate
+  // capability cursor. It may lose its tag at an address-policy or bounds
+  // window boundary even when both original cursors are representable.
+  // A zero combined offset only removes the intermediate cursor.
+  if (DL.isNonIntegralPointerType(PtrTy) && !NewOffset.isZero())
+    return nullptr;
   if (NewOffset.isZero() ||
       (Src->hasOneUse() && GEP.getOperand(1)->hasOneUse())) {
     GEPNoWrapFlags Flags = GEPNoWrapFlags::none();
@@ -2683,6 +2689,10 @@ static Instruction *canonicalizeGEPOfConstGEPI8(GetElementPtrInst &GEP,
 /// ptradd (ptradd (ptradd p, C1), x), C2 -> ptradd (ptradd p, x), C1+C2
 static Instruction *combineConstantOffsets(GetElementPtrInst &GEP,
                                            InstCombinerImpl &IC) {
+  // Removing the inner constant changes every skipped capability cursor.
+  // Keeping the final address alone does not preserve a capability's tag.
+  if (IC.getDataLayout().isNonIntegralPointerType(GEP.getType()->getScalarType()))
+    return nullptr;
   if (!GEP.hasAllConstantIndices())
     return nullptr;
 
@@ -3277,6 +3287,11 @@ Instruction *InstCombinerImpl::visitGetElementPtrInst(GetElementPtrInst &GEP) {
       SeenNonZeroIndex = true;
       continue;
     }
+
+    // Splitting creates a partial-offset cursor that the original GEP never
+    // formed. Keep a capability's complete offset in a single operation.
+    if (DL.isNonIntegralPointerType(GEPType->getScalarType()))
+      break;
 
     // GEP has multiple non-zero indices: Split it.
     ArrayRef<Value *> FrontIndices = ArrayRef(Indices).take_front(IdxNum);
