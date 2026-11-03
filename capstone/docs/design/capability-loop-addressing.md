@@ -24,16 +24,17 @@ IndVarSimplify exit values and invariant IV users without a pointer PHI that
 propagates a refused cursor from skipped iterations. It also keeps pointer
 sums whole instead of splitting their offsets by loop. These restrictions
 apply to all non-integral address spaces in this fork, not just AS200. CodeGenPrepare
-shares positive constant offsets from a base no farther than their minimum.
+shares same-sign constant offsets from the offset closest to zero.
 The new cursor lies between the base and each original final cursor. It is
 placed at a dominating original GEP or at a common dominator from which
 every path reaches a group GEP or a load/ordinary store through the exact
 base. The coverage walk refuses uncovered exits, cycles and calls that may
 not transfer control; capability stores are not evidence because they can
 initialize an UNINIT base. Otherwise the existing non-null speculation rule
-is required. Negative offsets are not candidates, and a
-target-preferred base outside the interval is ignored. The optional
-separate-offset pass leaves capability GEPs intact.
+is required. Negative groups use the mirrored interval from their maximum
+offset to zero, with nonpositive residuals. Opposite signs form separate
+groups; a target-preferred base outside the applicable interval is ignored.
+The optional separate-offset pass leaves capability GEPs intact.
 
 The generic LSR solver does not reduce non-integral pointer values. Its
 post-increment normalization can initialize a recurrence at an unaccessed

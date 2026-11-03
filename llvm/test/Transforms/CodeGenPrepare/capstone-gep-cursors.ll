@@ -104,15 +104,17 @@ exit:
   ret i64 0
 }
 
-; A negative minimum would not lie between b and the right-hand cursor.
-; These candidates must never enter a group, even with a non-null base.
+; The negative mirror must use -2100, never -4000, as its common base.
+; Under phys56 with b=2200 the right-hand cursor is 100. Starting at b-4000
+; would clear the tag before returning to 100; starting at b-2100 is safe.
 ; CHECK-LABEL: @negative_group(
 ; CHECK: entry:
-; CHECK-NOT: getelementptr
+; CHECK-NOT: i64 -4000
+; CHECK: [[BASE:%.*]] = getelementptr i8, ptr addrspace(200) %b, i64 -2100
 ; CHECK: left:
-; CHECK: getelementptr i8, ptr addrspace(200) %b, i64 -4000
+; CHECK: getelementptr i8, ptr addrspace(200) [[BASE]], i64 -1900
 ; CHECK: right:
-; CHECK: getelementptr i8, ptr addrspace(200) %b, i64 -2100
+; CHECK: load i64, ptr addrspace(200) [[BASE]]
 ; CHECK: ret i64
 define i64 @negative_group(ptr addrspace(200) nonnull %b, i1 %take) {
 entry:
