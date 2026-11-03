@@ -1100,3 +1100,25 @@ void capstone_delegate_fault_record(int fd, const struct capstone_delegate_host 
   if (flags >= 0)
     fcntl(fd, F_SETFL, flags);
 }
+
+void capstone_delegate_image_record(int fd, const struct capstone_delegate_host *host,
+                                    const char *image) {
+  char line[512], number[24];
+  size_t n = 0;
+#define PUT(text) do { const char *t_ = (text); while (*t_ && n + 1 < sizeof line) line[n++] = *t_++; } while (0)
+#define PUTHEX(v) do { hex(number, (v)); PUT("0x"); PUT(number); } while (0)
+  const struct capstone_delegate_host *first = host && host->owner ? host->owner : host;
+  PUT("capstone-exec: domain image");
+  if (first && first->hello_seen) {
+    PUT(" entry="); PUTHEX(first->entry_address);
+    PUT(" code="); PUTHEX(first->code_base); PUT("-"); PUTHEX(first->code_end);
+  } else {
+    PUT(" entry=unknown");
+  }
+  if (first && first->image_sha256[0]) { PUT(" sha256="); PUT(first->image_sha256); }
+  if (image) { PUT(" image="); PUT(image); }
+  PUT("\n");
+#undef PUT
+#undef PUTHEX
+  (void)!write(fd, line, n);
+}

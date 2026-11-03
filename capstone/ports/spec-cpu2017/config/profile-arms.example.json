@@ -1,0 +1,38 @@
+{
+  "_comment": "tools/profile.sh ARMS ARM SIZE BENCH OUT. Paths are the host's; every arm names what it measures (commit, SDK, compiler) so a number is traceable. share must contain spec_root and every OUT.",
+  "share": "~/prof-dev",
+  "spec_root": "~/prof-dev/tree/SPEC17",
+  "vm_host": "~/prof-dev/host",
+  "ldecod_host": "~/prof-dev/build-cap/ldecod-host",
+  "nm": "~/prof-dev/cap/build/bin/llvm-nm",
+  "platform": {
+    "dir": "~/prof-dev/platform",
+    "memory": "8G",
+    "icount": 0,
+    "cpu_props": [
+      "x-capstone-test-csrs=true"
+    ],
+    "_note": "cpu_props are the module build's needs: dev's default (paged table) module reads the test CSRs, which QEMU a9936e7037 makes illegal unless asked for; the plain arm boots the same module"
+  },
+  "arms": {
+    "cap-dev": {
+      "kind": "capstone",
+      "config": "capstone-virtual",
+      "label": "cap-dev",
+      "sdk": "~/prof-dev/cap/sdk",
+      "exact_bounds": true,
+      "share_model": "mapped-xattr",
+      "commit": "llvm-capstone b9dd0ccc0b31 (dev 2026-11-02), SDK defaults: heap_lifetimes on, heap_scrub_free off",
+      "note": "dev's default module build (paged table), SDK defaults"
+    },
+    "rv64": {
+      "kind": "plain",
+      "config": "riscv-plain",
+      "label": "rv64",
+      "rvcc": "~/prof-dev/rv/rv-cc",
+      "share_model": "none",
+      "commit": "llvm-capstone b9dd0ccc0b31, RISCV target, musl 1.2.5 pristine",
+      "note": "the plain image executes from the share, which therefore keeps the host's permissions"
+    }
+  }
+}

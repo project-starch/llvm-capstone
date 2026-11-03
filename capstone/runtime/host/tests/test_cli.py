@@ -59,6 +59,32 @@ class TransportTests(unittest.TestCase):
             self.assertEqual(seen, arguments)
             self.assertEqual(rc, 139)
 
+    def test_run_prefix_precedes_capstone_exec(self):
+        with tempfile.TemporaryDirectory() as directory:
+            state = Path(directory)
+            (state / "assets").mkdir()
+            (state / "config.json").write_text(json.dumps({"port": 2222}))
+            seen = []
+
+            def execute(command, **kwargs):
+                script = shlex.split(command[-1])[-1]
+                words = shlex.split(script.split("; exec ", 1)[1])
+                seen.extend(words)
+                result_file = state / "assets" / Path(words[1]).relative_to("/mnt/control")
+                result_file.write_text('{"version":1,"kind":"exit","value":0}')
+                class Process:
+                    def wait(self): return 0
+                    def poll(self): return 0
+                return Process()
+
+            with patch.object(cli, "running", return_value=True), patch.object(cli.subprocess, "Popen", execute):
+                rc = cli.main(["--state", directory, "run", "--prefix", "/tmp/profrun", "--", "/mnt/host/app.dom", "x"])
+            self.assertEqual(rc, 0)
+            self.assertEqual(seen[2:], ["--", "/tmp/profrun", "capstone-exec", "--", "/mnt/host/app.dom", "x"])
+            for bad in (["--bad"], ["/tmp/profrun", ""]):
+                with self.assertRaisesRegex(cli.VMError, "prefix"):
+                    cli.run_application(state, {"port": 2222}, ["/mnt/host/app.dom"], prefix=bad)
+
     def test_restart_preserves_paths_and_recorded_environment(self):
         with tempfile.TemporaryDirectory() as directory:
             state = Path(directory)
@@ -155,6 +181,86 @@ class TransportTests(unittest.TestCase):
                 self.assertIn(f"mount_tag=hostshare,security_model={model},", virtfs[0])
                 self.assertIn("mount_tag=control,security_model=none,", virtfs[1])
                 self.assertEqual(config["identity"].get("share_model"), None if model == "none" else model)
+
+    def test_plugin_and_no_pcrel_reach_qemu_and_the_identity(self):
+        for plugin, no_pcrel in ((False, False), (True, True)):
+            with tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                for name in ("qemu", "kernel", "firmware", "rootfs", "libcapprof.so"):
+                    (root / name).write_text("x")
+                (root / "share").mkdir()
+                state = root / "s"
+                state.mkdir(mode=0o700)
+                real_popen = subprocess.Popen
+
+                def popen(command, *args, **kwargs):
+                    if command[0] == str(root / "qemu"):
+                        raise RuntimeError("stop")
+                    return real_popen(command, *args, **kwargs)
+                extra = dict(plugin=root / "libcapprof.so", plugin_args=["out=/tmp/o"],
+                             cpu_props=["x-capstone-test-csrs=true", "x-capstone-addr=sv39"], icount=0) if plugin else {}
+                with patch.dict(os.environ, {"CAPSTONE_QEMU_LOCK": str(root / "lock")}), \
+                     patch.object(cli.subprocess, "Popen", side_effect=popen):
+                    with self.assertRaisesRegex(RuntimeError, "stop"):
+                        cli.start(cli.argparse.Namespace(
+                            qemu=root / "qemu", kernel=root / "kernel", firmware=root / "firmware",
+                            rootfs=root / "rootfs", share=root / "share", profile="physical",
+                            no_pcrel=no_pcrel, memory="2G", cma_mib=512, process_cache_mib=384,
+                            port=0, boot_timeout=1, **extra), state)
+                config = json.loads((state / "config.json").read_text())
+                command, identity = config["command"], config["identity"]
+                cpu = command[command.index("-cpu") + 1]
+                self.assertEqual(",x-pcrel=false" in cpu, no_pcrel)
+                self.assertEqual(identity.get("pcrel"), False if no_pcrel else None)
+                if plugin:
+                    self.assertTrue(cpu.endswith(",x-pcrel=false,x-capstone-test-csrs=true,x-capstone-addr=sv39"), cpu)
+                    self.assertEqual(command[command.index("-icount") + 1], "shift=0")
+                    self.assertEqual(identity["cpu_props"], ["x-capstone-test-csrs=true", "x-capstone-addr=sv39"])
+                    self.assertEqual(identity["icount"], 0)
+                    self.assertEqual(command[command.index("-plugin") + 1],
+                                     f"{root / 'libcapprof.so'},out=/tmp/o")
+                    self.assertEqual(identity["files"]["plugin"]["sha256"], cli.fingerprint(root / "libcapprof.so"))
+                    self.assertEqual(identity["plugin_args"], ["out=/tmp/o"])
+                else:
+                    self.assertNotIn("-plugin", command)
+                    self.assertNotIn("plugin", identity["files"])
+                    self.assertNotIn("plugin_args", identity)
+                    self.assertNotIn("-icount", command)
+                    self.assertNotIn("cpu_props", identity)
+                    self.assertNotIn("icount", identity)
+
+    def test_plugin_arguments_are_checked(self):
+        with tempfile.TemporaryDirectory() as directory:
+            for name in ("qemu", "kernel", "firmware", "rootfs", "p.so"):
+                Path(directory, name).write_text("x")
+            for extra, message in (({"plugin_args": ["out=x"]}, "needs --plugin"),
+                                   ({"plugin": Path(directory, "p.so"), "plugin_args": ["a=b,c=d"]}, "key=value"),
+                                   ({"plugin": Path(directory, "p.so"), "plugin_args": ["flag"]}, "key=value"),
+                                   ({"cpu_props": ["x-a=1,x-b=2"]}, "CPU properties"),
+                                   ({"cpu_props": ["flag"]}, "CPU properties"),
+                                   ({"icount": 11}, "icount shift")):
+                with self.assertRaisesRegex(cli.VMError, message):
+                    cli.start(cli.argparse.Namespace(
+                        qemu=Path(directory, "qemu"), kernel=Path(directory, "kernel"),
+                        firmware=Path(directory, "firmware"), rootfs=Path(directory, "rootfs"),
+                        share=Path(directory), profile="physical", memory="2G",
+                        cma_mib=512, process_cache_mib=384, port=0, boot_timeout=1, **extra), Path(directory))
+
+    def test_restart_preserves_plugin_and_no_pcrel(self):
+        with tempfile.TemporaryDirectory() as directory:
+            state = Path(directory)
+            identity = {"files": {k: {"path": "/tmp/" + k, "sha256": "old"}
+                        for k in ("qemu", "kernel", "firmware", "rootfs", "plugin")},
+                        "share": "/tmp/share", "memory": "2G", "cma_mib": 768,
+                        "process_cache_mib": 384, "environment": {}, "profile": "physical",
+                        "plugin_args": ["out=/tmp/o"], "pcrel": False,
+                        "cpu_props": ["x-capstone-test-csrs=true"], "icount": 0}
+            (state / "config.json").write_text(json.dumps({"identity": identity}))
+            with patch.object(cli, "running", return_value=False), patch.object(cli, "start", return_value=0) as start:
+                self.assertEqual(cli.main(["--state", directory, "restart"]), 0)
+                args, _ = start.call_args.args
+                self.assertEqual((args.plugin, args.plugin_args, args.no_pcrel, args.cpu_props, args.icount),
+                                 (Path("/tmp/plugin"), ["out=/tmp/o"], True, ["x-capstone-test-csrs=true"], 0))
 
     def test_unknown_share_model_is_refused(self):
         with tempfile.TemporaryDirectory() as directory:

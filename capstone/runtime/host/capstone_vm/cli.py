@@ -196,13 +196,18 @@ class InterruptedRun(Exception):
         self.signum = signum
 
 
-def run_application(state: Path, config: dict, words: list[str], *, cwd: str | None = None, environment: list[str] = (), result_path: Path | None = None, user: str | None = None) -> int:
+def run_application(state: Path, config: dict, words: list[str], *, cwd: str | None = None, environment: list[str] = (), result_path: Path | None = None, user: str | None = None, prefix: list[str] = ()) -> int:
     """Forward host interruption without putting pipes through a pseudo-terminal.
 
     The short-lived PID file identifies this SSH command. Verify its random
     environment token before signalling: a stale PID must never kill a new job.
     The guest still runs an ordinary capstone-exec process, with no job daemon.
+    `prefix` is a guest command put in front of capstone-exec (a profiler's window helper such as
+    /tmp/profrun, which execs its argument), so the measured process is the launcher and the
+    application and nothing else; it must not swallow the exit status.
     """
+    if prefix and (not prefix[0] or prefix[0].startswith("-") or any(not word for word in prefix)):
+        raise VMError("A prefix starts with a guest program; its words are not empty")
     if any(not re.match(r"^[A-Za-z_][A-Za-z_0-9]*=", value) or value.startswith("CAPSTONE_JOB=")
            or value.startswith("CAPSTONE_FAULT_RECORD=") for value in environment):
         raise VMError("Environment must contain NAME=value assignments; CAPSTONE_JOB and "
@@ -219,7 +224,7 @@ def run_application(state: Path, config: dict, words: list[str], *, cwd: str | N
     script = (f"cd {shlex.quote(cwd)} || exit 125; " if cwd is not None else "")
     script += f"echo $$ > {remote}; exec " + shlex.join([
         "capstone-job", f"/mnt/control/jobs/{job_id}/result.json",
-        *(["--user", user] if user is not None else []), "--", "capstone-exec", "--", *words])
+        *(["--user", user] if user is not None else []), "--", *prefix, "capstone-exec", "--", *words])
     # The launcher writes a domain fault's record here, off the application
     # streams; it is reported on the host side and kept in the result.
     fault_record = f"/mnt/control/jobs/{job_id}/fault"
@@ -309,7 +314,7 @@ def start(args: argparse.Namespace, state: Path) -> int:
     with lock(state):
         files = {key: require_file(getattr(args, key)) for key in
                  ("qemu", "kernel", "firmware", "rootfs")}
-        for key in ("launcher", "ssh_server", "module", "job_helper"):
+        for key in ("launcher", "ssh_server", "module", "job_helper", "plugin"):
             if getattr(args, key, None):
                 files[key] = require_file(getattr(args, key))
         if "launcher" in files and "job_helper" not in files:
@@ -329,6 +334,25 @@ def start(args: argparse.Namespace, state: Path) -> int:
         share_model = getattr(args, "share_model", "none")
         if share_model not in SHARE_MODELS:
             raise VMError(f"Share model must be one of {', '.join(SHARE_MODELS)}")
+        # A TCG plugin (QEMU -plugin) and its key=value arguments, e.g. capstone-qemu's
+        # contrib/plugins/capprof.c. Its content hash is part of the identity like every file.
+        plugin_args = list(getattr(args, "plugin_args", None) or [])
+        if plugin_args and "plugin" not in files:
+            raise VMError("--plugin-arg needs --plugin")
+        if any("," in value or "=" not in value for value in plugin_args):
+            raise VMError("Plugin arguments must be key=value without commas")
+        # Without CF_PCREL a translated block belongs to one virtual pc, so a plugin's
+        # instruction addresses are the addresses that ran (capstone-qemu's x-pcrel).
+        no_pcrel = bool(getattr(args, "no_pcrel", False))
+        # Extra CPU properties (QEMU -cpu key=value), e.g. capstone-qemu's test scaffolds
+        # x-capstone-test-csrs=true; and -icount shift=N, which ties guest time to the
+        # instruction count so that timers and quanta fall at the same instructions every run.
+        cpu_props = list(getattr(args, "cpu_props", None) or [])
+        if any("," in value or "=" not in value for value in cpu_props):
+            raise VMError("CPU properties must be key=value without commas")
+        icount = getattr(args, "icount", None)
+        if icount is not None and not 0 <= icount <= 10:
+            raise VMError("icount shift must be between 0 and 10")
         share = args.share.resolve(strict=True)
         if not share.is_dir() or "," in str(share):
             raise VMError("Share must be a directory whose path contains no comma")
@@ -356,6 +380,14 @@ def start(args: argparse.Namespace, state: Path) -> int:
         if share_model != "none":
             # Likewise recorded only when it differs from the default.
             identity_config["share_model"] = share_model
+        if plugin_args:
+            identity_config["plugin_args"] = plugin_args
+        if no_pcrel:
+            identity_config["pcrel"] = False
+        if cpu_props:
+            identity_config["cpu_props"] = cpu_props
+        if icount is not None:
+            identity_config["icount"] = icount
         if running(state):
             old = json.loads((state / "config.json").read_text())
             if old.get("identity") != identity_config or args.port not in (0, old["port"]):
@@ -453,6 +485,14 @@ insmod /mnt/control/module
             "-cpu", ("rv64,sstc=false,h=false,sv48=false,sv57=false,x-capstone-u-mode=true"
                      + (",x-capstone-exact-bounds=true" if exact_bounds else "")) if profile == "virtual" else "rv64,sstc=false,h=false,sv48=false,sv57=false",
         ]
+        if no_pcrel:
+            command[-1] += ",x-pcrel=false"
+        for value in cpu_props:
+            command[-1] += "," + value
+        if icount is not None:
+            command += ["-icount", f"shift={icount}"]
+        if "plugin" in files:
+            command += ["-plugin", ",".join([str(files["plugin"]), *plugin_args])]
         config = {"port": port, "share": str(share), "command": command, "identity": identity_config}
         (state / "config.json").write_text(json.dumps(config, indent=2) + "\n")
         global_lock = Path(os.environ.get("CAPSTONE_QEMU_LOCK", Path.home() / ".capstone-locks/qemu.lock"))
@@ -523,6 +563,16 @@ def main(argv: list[str] | None = None) -> int:
                          "files live in host xattrs (needs a host filesystem with user xattrs), "
                          "so the guest's root owns what it creates; on the host such files are "
                          "the QEMU user's with mode 0600 (directories 0700)")
+    up.add_argument("--plugin", type=Path, help="QEMU TCG plugin (-plugin), e.g. capprof")
+    up.add_argument("--plugin-arg", dest="plugin_args", action="append", default=[],
+                    help="key=value argument for --plugin, repeatable")
+    up.add_argument("--no-pcrel", action="store_true",
+                    help="QEMU keys translated blocks by virtual pc too (x-pcrel=false), so a "
+                         "plugin's instruction addresses are the addresses that ran")
+    up.add_argument("--cpu-prop", dest="cpu_props", action="append", default=[],
+                    help="Extra QEMU CPU property key=value (e.g. x-capstone-test-csrs=true); part of the VM identity")
+    up.add_argument("--icount", type=int,
+                    help="QEMU -icount shift=N: guest time follows the instruction count, so a run's timers and quanta are reproducible")
     up.add_argument("--port", type=int, default=0)
     up.add_argument("--memory", default="8G")
     up.add_argument("--cma-mib", type=int, default=512,
@@ -541,6 +591,8 @@ def main(argv: list[str] | None = None) -> int:
             cmd.add_argument("--user", help="Run as numeric guest UID:GID")
             cmd.add_argument("--result", type=Path, help="Write the actual guest exit/signal result as JSON")
             cmd.add_argument("-e", "--env", action="append", default=[], help="Guest NAME=value")
+            cmd.add_argument("--prefix", action="append", default=[],
+                             help="Guest program (and arguments, one per --prefix) run in front of capstone-exec, e.g. a profiler's window helper")
         cmd.add_argument("command", nargs=argparse.REMAINDER)
     args = parser.parse_args(argv)
     state = args.state.expanduser().resolve()
@@ -564,7 +616,11 @@ def main(argv: list[str] | None = None) -> int:
                             process_cache_mib=config.get("process_cache_mib", 384),
                             environment=config["environment"], profile=config.get("profile", "physical"),
                             exact_bounds=config.get("exact_bounds", False),
-                            share_model=config.get("share_model", "none"), port=0, boot_timeout=120)
+                            share_model=config.get("share_model", "none"),
+                            plugin_args=config.get("plugin_args", []),
+                            no_pcrel=config.get("pcrel", True) is False,
+                            cpu_props=config.get("cpu_props", []), icount=config.get("icount"),
+                            port=0, boot_timeout=120)
             return start(argparse.Namespace(**settings), state)
         if args.action == "status":
             active = running(state)
@@ -589,7 +645,7 @@ def main(argv: list[str] | None = None) -> int:
             if not words:
                 raise VMError("An executable and optional arguments are required")
             if args.action == "run":
-                return run_application(state, config, words, cwd=args.cwd, environment=args.env, result_path=args.result, user=args.user)
+                return run_application(state, config, words, cwd=args.cwd, environment=args.env, result_path=args.result, user=args.user, prefix=args.prefix)
             command.append("exec " + shlex.join(words))
         return subprocess.call(command)
     except (VMError, OSError, ValueError, subprocess.CalledProcessError) as error:
