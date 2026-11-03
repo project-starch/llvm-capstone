@@ -2,6 +2,7 @@
 """Accounting and refusal regressions; run with python3 on the measurement host."""
 import importlib.util
 import json
+import os
 from pathlib import Path
 import tempfile
 import unittest
@@ -14,7 +15,7 @@ spec.loader.exec_module(ns)
 
 class NorthstarTest(unittest.TestCase):
     def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory()
+        self.tmp = tempfile.TemporaryDirectory(dir=os.environ.get('CAPSTONE_TMP_ROOT'))
         self.addCleanup(self.tmp.cleanup)
         self.a = Path(self.tmp.name) / "a.json"
         self.b = Path(self.tmp.name) / "b.json"

@@ -150,3 +150,98 @@ block boundary; a SIGSEGV handler that reaches the site's successor by another p
 images at different bases interleaved in one window; the refusals; and `stopat-kit-test.py`, the
 kit's verdicts on run directories built from those boots, tampered copies included (OLD_PLUGIN= and
 OLD2_PLUGIN= run the earlier plugins as negative controls).
+
+## One-command milestone census
+
+On the measurement host, `tools/milestone-census.sh DEV_COMMIT TAG [--quick]`
+creates `runs/TAG/northstar.txt` and `northstar.json`, with a same-time plain
+arm, the P/K/H terms, both overheads, and changes in percentage points from
+the previous completed milestone. `tools/prof-northstar.py A B` also prints
+these terms and one JSON line directly from two run directories (or their
+`profile.json` files). Missing bucket data, non-positive denominators,
+inconsistent totals, failed verdicts and different work boundaries are errors.
+The bucket classifier is shared with `prof-buckets.py`; H is an accounting
+exclusion, not a causal claim about the harness.
+
+The driver needs a local Git object repository containing the target commit,
+the census4 arms/platform and toolchain records, a prepared kernel matching the
+platform Image, and a RISC-V Linux cross compiler. It does not build a new QEMU
+or kernel: an unrecognized QEMU pin is an explicit UNRESOLVED error requiring
+a matching platform. Default inputs are under `~/prof-dev` and
+`~/llvm-capstone`; a private lane can configure them once:
+
+```sh
+export CENSUS_ROOT=~/lanes/laneQC
+export CENSUS_BASE=~/prof-dev
+export CENSUS_REPO=~/lanes/laneQC/repo.git
+export KERNEL_BUILD=~/lanes/laneQC/kernel
+export CROSS_COMPILE=~/lanes/laneQC/host/bin/riscv64-buildroot-linux-gnu-
+tools/milestone-census.sh DEV_COMMIT census5
+tools/milestone-census.sh DEV_COMMIT quick1 --quick
+tools/milestone-census.sh DEV_COMMIT quick2 --quick
+```
+
+`CENSUS_ROOT` must exist. `CENSUS_ARMS` can select a different template.
+`CENSUS_PREVIOUS` and `CENSUS_PREVIOUS_ARM` select a previous run explicitly
+(the previous plain arm is `rv64`). Otherwise the latest completed compatible
+run in this output root is used; the first full run uses census4/cap-dev4,
+and the first quick run establishes its own baseline. A quick run never uses
+a full run as its baseline. Every run has a new tag: existing run directories
+are refused. Failures retain their logs and do not create a completed
+`northstar.json`. An incomplete build cache is also refused until inspected.
+A root lock prevents concurrent invocations from sharing mutable build state.
+
+Compiler/SDK reuse compares Git object hashes for `llvm`, `clang`, `lld`,
+`cmake`, `third-party`, `compiler-rt`, `capstone/ports/common`,
+`capstone/ports/musl-capstone`, `capstone/sublet`, the runtime's root
+`CMakeLists.txt`, `application`, `cmake`, `common`, `domain`, `include`, `host`,
+`capstone/tests/capstone-test-env.sh`, and the non-document files immediately
+under `runtime/virtual`. That last list includes heap, mapping, thread,
+startup, linker script and ABI headers, but excludes module/gate subdirectories.
+The actual hashes are in `source-hashes.json`; the build recipe version is
+also part of the key. Compiler and SDK are reused together only when every
+input matches a completed capN record; otherwise both are built with the
+census recipe (Release, assertions enabled, default virtual heap protection).
+The SPEC kit tree is additionally part of the executable cache key. New caches
+build the Capstone executables with a private label in a private SPEC copy;
+plain executables retain the template's recorded compiler and label. This is
+a same-time plain execution, not a newly built plain compiler. Sources in the
+installed SPEC tree are never edited. Cached compiler, SDK dependencies and
+SPEC executable hashes are checked before reuse.
+
+Each invocation exports the target runtime and kit, builds its launcher and
+module, copies the template platform with `cp -rL`, replaces the adapter and
+regenerates file hashes. It runs both arms using that platform, writes their
+usual records, and saves the top 15 Capstone function deltas against the
+previous milestone. No existing kit, platform or run is updated. The script
+checks for at least **15 GiB free** before copying, building and profiling;
+this is a reserve check, not a reservation against other host users. LLVM
+builds default to 20 jobs (`CAP_JOBS`), runtime builds to 4, profiling to 4
+(`JOBS` for full mode). The musl archive can be selected with `MUSL_ARCHIVE`.
+
+Quick mode uses these fixed `PROFILE_STOP_AT` prefixes:
+
+| Benchmark | Stop site | Meaning |
+|---|---|---|
+| gcc | `final_start_function:1` | first function reaches final code emission |
+| imagick | `GetVirtualPixelsFromNexus:32` | first 32 virtual pixel fetches |
+| lbm | `LBM_performStreamCollideTRT:3` | two stream/collide steps, then entry of the third |
+| nab | `mme34:5` | four force evaluations, then entry of the fifth |
+
+The census4 raw entry counts for these sites agree between Capstone and plain
+(1, 1583, 20, 2007 respectively). Every new quick run must reach the specified
+boundary in both arms and pass the harness's slice validation. Its verdict is
+**SLICE**, never SPEC PASS. Startup/page population is included, teardown is
+excluded, and imagick's separate validation process is excluded. These prefixes
+are regression checks against the *same prefixes*, not estimates of the full
+north-star metric. Initial compiler/SPEC builds are outside the minutes-long
+warm-check expectation. `elapsed_seconds` includes preparation and reports
+that distinction explicitly. Use repeated quick runs to report the observed
+spread; use full PASS runs for milestone claims.
+
+Tool regressions on the measurement host:
+
+```sh
+python3 tools/test-prof-northstar.py
+python3 tools/test-milestone-census.py
+```
