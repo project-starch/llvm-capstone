@@ -97,6 +97,9 @@ struct cv_thread {
     struct page *frame_page;
     bool user_frame;
     bool started, reply_cap, terminal;
+    /* A service handled here has a scalar reply waiting for action 2. Keep
+     * it across quantum/signal stops; the launcher must not reply again. */
+    bool service_reply;
     unsigned long event;
     /* S-24: the same kind-4 fault resolved repeatedly without changing anything. The RTL's walker
      * faults on a clear A bit and never sets it, so a PTE this module leaves untouched can re-fault
@@ -155,6 +158,8 @@ static DEFINE_MUTEX(vm_lock);
  * read-only after module load so concurrent contexts see a stable policy. */
 static unsigned long node_initial_pages = 4, node_batch_pages = 16;
 static unsigned long node_max_pages;
+static bool internal_nodes = true;
+module_param(internal_nodes, bool, 0444);
 module_param(node_initial_pages, ulong, 0444);
 module_param(node_batch_pages, ulong, 0444);
 module_param(node_max_pages, ulong, 0444);
@@ -944,6 +949,14 @@ static int ensure_nodes(struct context *c, unsigned long required)
     return node_available(c) >= required ? 0 : -ENOMEM;
 }
 
+static int request_nodes(struct context *c, u64 available)
+{
+    if (available > CV_ID_RECORDS_MAX - CAP_REV_TABLE_RESERVE) return -ENOMEM;
+    if (node_max_records && available > node_max_records - CAP_REV_TABLE_RESERVE)
+        return -ENOMEM;
+    return ensure_nodes(c, available + CAP_REV_TABLE_RESERVE);
+}
+
 /* Q-?? / sparse wedge: an OPTIONAL hardware fence immediately before the domain entry.
  *
  * Measured in the built object, not assumed: run() inlines to FOUR CSRUNV sites and not one
@@ -1455,7 +1468,7 @@ static int remap_end(struct context *c, const struct cv_remap *r)
  * entered while an injection was pending, and what GUP was asked for. */
 static unsigned long test_inject;       /* 1 resched, 2 signal, 3 deadline, 4 SIGKILL */
 static unsigned long test_inject_at;    /* 1 after a demand GUP, 2 before an entry, 3 before an ioctl's first entry,
-                                           4 after CSRUNV returns a fault, before resolve() */
+                                           4 before resolve(), 5 after an internal service reply */
 static unsigned long test_inject_every = 1;
 static unsigned long test_short_gup;    /* pin-ahead GUP pins only half of a batch */
 module_param(test_inject, ulong, 0444);
@@ -2136,10 +2149,7 @@ retry:
         if (copy_from_user(&r, (void __user *)arg, sizeof(r))) { rc = -EFAULT; goto out; }
         t = find_thread(c, r.thread);
         if (!t || t->terminal) { rc = -ESRCH; goto out; }
-        if (r.available > CV_ID_RECORDS_MAX - CAP_REV_TABLE_RESERVE) { rc = -ENOMEM; goto out; }
-        if (node_max_records &&
-            r.available > node_max_records - CAP_REV_TABLE_RESERVE) { rc = -ENOMEM; goto out; }
-        rc = ensure_nodes(c, r.available + CAP_REV_TABLE_RESERVE);
+        rc = request_nodes(c, r.available);
     } else if (op == CV_ADD) {
         struct cv_map r;
         struct cv_thread *t;
@@ -2290,7 +2300,7 @@ thread_unwind:
         if (copy_from_user(&r, (void __user *)arg, sizeof(r))) { rc = -EFAULT; goto out; }
         t = find_thread(c, r.thread);
         if (!t || t->terminal) { rc = -ESRCH; goto out; }
-        if (r.reply > 1 || (r.reply != (t->started && t->event == 3))) goto out;
+        if (r.reply > 1 || (r.reply != (t->started && t->event == 3 && !t->service_reply))) goto out;
         if (!t->started && (!t->frame[8] || !t->frame[12])) goto out;
         /* A frame that has not started needs a free slot to enter. Waiting is safe ACROSS
          * contexts -- two vexec processes never join each other, so run.py's parallel pair simply
@@ -2318,9 +2328,9 @@ thread_unwind:
         budget_end = ktime_get_ns() + CV_STEP_BUDGET_NS;
         TEST_STEP_BEGIN();
         TEST_HOOK(3);
-        for (unsigned long action = r.reply ? 2 : 0, entries = 0;;
-             action = 0, ++entries) {
-            if (entries && !text) TEST_HOOK(2);  /* after a data fault only, see below */
+        for (unsigned long action = (r.reply || t->service_reply) ? 2 : 0, entries = 0;;
+             ++entries) {
+            if (entries && t->event == 4 && !text) TEST_HOOK(2);
             preempt_disable(); local_irq_save(flags);
             /* Checked with interrupts and preemption off, immediately before
              * CSRUNV: no interrupt can set need_resched or a signal between
@@ -2374,7 +2384,7 @@ thread_unwind:
 #else
             t->event = run_event(t, action);
 #endif
-            t->started = true; t->reply_cap = false;
+            t->started = true; t->reply_cap = false; t->service_reply = false;
             local_irq_restore(flags); preempt_enable();
             ++c->stats.steps;
             if (t->event == CV_EVENT_UNWRITTEN) {
@@ -2399,8 +2409,25 @@ thread_unwind:
                         escape_prints, action, t->event,
                         t->frame[2], t->frame[3], t->frame[4], t->frame[5], t->frame[6]);
             }
-            if (t->event != 4)
+            action = 0;
+            if (t->event != 4) {
+                /* Keep service dispatch off the resolved-fault path. */
+                if (t->event == 3 && internal_nodes && t->frame[79] == CV_SERVICE_NODES) {
+                    /* Same quota, growth and collection path as CV_NODES, under
+                     * vm_lock with interrupts/preemption enabled. Leave a request
+                     * untouched if the budget was already spent. Once handled,
+                     * retain its result until an actual action-2 entry consumes it. */
+                    if (cv_step_stop(budget_end)) break;
+                    t->frame[28] = request_nodes(c, t->frame[72]);
+                    t->frame[29] = 0;
+                    t->service_reply = true;
+                    ++c->stats.internal_nodes;
+                    action = 2;
+                    TEST_HOOK(5);
+                    continue;
+                }
                 break;
+            }
             /* Resolve a page fault here, as CV_RESOLVE would, and resume
              * without the two system calls a return through the launcher
              * costs. resolve() can sleep in mmap_lock and GUP while vm_lock
@@ -2431,7 +2458,9 @@ thread_unwind:
              * when the namespace consists of live or pinned identities. */
             t->frame[2] = error ? 2 : 1;
         }
-        r.kind = t->frame[2]; r.cause = t->frame[3];
+        /* A completed internal service stopped before re-entry is a quantum
+         * to the launcher. Keep the real event and reply in the saved thread. */
+        r.kind = t->service_reply ? 1 : t->frame[2]; r.cause = t->frame[3];
         r.pc = t->frame[4]; r.address = t->frame[5];
         /* The low word of register slots 1 and 8 (byte 80 and 192: x1 = ra,
          * x8 = fp; see wire.h cv_step). The escape writes them on a terminal

@@ -1118,12 +1118,12 @@ static int virtual_service(uint64_t tid, struct cv_step *step)
             }
             if (tid == 0 && (getenv("CAPSTONE_VM_STATS") || getenv("CAPSTONE_DELEGATE_STATS")) &&
                 !ioctl(device, CV_STATS, &stats)) {
-                fprintf(stderr, "CAPSTONE_VM_STATS arenas=%llu pages=%llu peak=%llu nodes=%llu steps=%llu faults=%llu collections=%llu reclaimed=%llu rounds=%llu bytes_in=%llu bytes_out=%llu node_bytes=%llu node_capacity=%llu node_growths=%llu launch_ns=%llu elapsed_ns=%llu\n",
+                fprintf(stderr, "CAPSTONE_VM_STATS arenas=%llu pages=%llu peak=%llu nodes=%llu steps=%llu faults=%llu collections=%llu reclaimed=%llu rounds=%llu bytes_in=%llu bytes_out=%llu node_bytes=%llu node_capacity=%llu node_growths=%llu launch_ns=%llu elapsed_ns=%llu internal_nodes=%llu\n",
                     stats.arenas, stats.pinned_pages, stats.peak_pages, stats.nodes, stats.steps,
                     stats.faults, stats.collections, stats.reclaimed, (unsigned long long)host.rounds,
                     (unsigned long long)host.bytes_in, (unsigned long long)host.bytes_out,
                     stats.node_bytes, stats.node_capacity, stats.node_growths,
-                    launch_ns, now_ns() - start_ns);
+                    launch_ns, now_ns() - start_ns, stats.internal_nodes);
                 /* Its own line: the STATS line's fields are all integers, and its collectors
                  * int() every value. The service keys are vm-abi.h CV_SERVICE_* ids. */
                 fprintf(stderr, "CAPSTONE_VM_STEPS quantum=%lu service=%lu fault=%lu other=%lu"

@@ -177,6 +177,24 @@ The module checks `urevavail` before its first mint, so a processor that does
 not understand the paged format refuses the open instead of taking a mint
 fault in the kernel. Flat tables remain supported by QEMU.
 
+`CV_STEP` handles `CV_SERVICE_NODES` directly through that checked path. A
+completed scalar reply stays in the saved thread until action 2 consumes it;
+if a quantum or signal intervenes, the launcher sees a quantum and supplies
+no replacement reply. `internal_nodes` in `CAPSTONE_VM_STATS` counts these
+requests; `service12_nodes` counts requests returned to the launcher. Loading
+the module with `internal_nodes=0` restores that fallback for comparison.
+MAP, UNMAP and PROTECT still use the launcher and its mapping registry.
+The [service design](../../docs/design/virtual-capstone/in-module-services.md)
+records reply ownership and the unresolved exact-rollback requirement that
+keeps mapping operations external.
+
+Build `node-services-contract.c` like `node-contract.c` and run
+`run-node-services.py --qemu ... --images ... --adapter ... --module <hooks.ko>
+--application <node-services.dom> --work <fresh-dir>` with a `CV_TEST_HOOKS=1`
+module. It compares request totals with the fallback, injects stops after a
+handled reply and before initial entry, checks exact success/error replies,
+and checks pin balance after normal exit and SIGKILL.
+
 Collection requests use linked 4-KiB lists of physical pages. QEMU validates
 the complete list and every issued node page before changing tags. All C
 contexts in the namespace remain stopped through the whole sweep. A small

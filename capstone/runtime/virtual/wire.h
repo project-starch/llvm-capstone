@@ -56,6 +56,7 @@ struct cv_stats {
     __u64 arenas, pinned_pages, peak_pages, nodes, steps, faults;
     __u64 collections, reclaimed, nodes_high_water, nodes_live, nodes_retired;
     __u64 node_capacity, node_bytes, node_growths;
+    __u64 internal_nodes;
 };
 struct cv_global {
     __u64 contexts, arenas, pinned_pages, nodes_allocated, nodes_high_water;
