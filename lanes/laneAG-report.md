@@ -98,5 +98,28 @@ The named micro README is absent in both local and remote branch trees;
 
 ## Results
 
-UNRESOLVED: implementation, build, contracts, gates and per-process cost are
-pending. No speedup or production safety qualification is claimed.
+Step 1 extracted the existing CV_STEP body into `cv_step_locked`, preserving
+request/result copies at the public ioctl boundary. A slot wait now reacquires
+`vm_lock` before returning to its caller. No native loader is enabled yet.
+The prepared kernel and toolchain copies completed inside the lane directory.
+p12 build command: `bash ~/lanes/laneAG/build.sh`; exit 0. Module SHA-256:
+`6ea9346f95db4862cb720854b56b33df07d3f20d2c5e59f062610bba6efd88e0`.
+The launcher is byte-identical to platform-dev4. The partial build tree emits
+a toolchain-freshness warning because it has no compiler test suite; the SDK
+and compiler are unchanged shared baseline artifacts.
+
+Smoke command: `bash ~/lanes/laneAG/step1-smoke.sh`, using a real platform copy
+and the unchanged Capstone micro program. Output:
+
+```
+0000 rc=0 window 0 new 0:tsv records=11 exec 10 /tmp/lqmicro
+LQ capstone exec n=10 processes=10 bad=0
+window 0 (invocation 0000, lqmicro): 36,621,716 attempts
+```
+
+This is a functionality smoke, not a paired per-process measurement.
+Artifacts: `p12:~/lanes/laneAG/step1-smoke`. Latest prebuild disk check:
+`39G` available, load averages `20.29, 20.07, 19.76`.
+
+UNRESOLVED: native implementation, contracts, gates and paired per-process
+cost are pending. No speedup or production safety qualification is claimed.
