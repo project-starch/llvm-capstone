@@ -1,0 +1,230 @@
+diff --git c/arch/riscv/include/asm/page.h w/arch/riscv/include/asm/page.h
+index ac70b0fd9a9a..b107096b7a2b 100644
+--- c/arch/riscv/include/asm/page.h
++++ w/arch/riscv/include/asm/page.h
+@@ -56,6 +56,21 @@
+ #define copy_user_page(vto, vfrom, vaddr, topg) \
+ 			memcpy((vto), (vfrom), PAGE_SIZE)
+ 
++/*
++ * Optional Capstone raw transport: capability tags follow physical pages.
++ * See arch/riscv/mm/captag.c. Every page copy also moves the copied page's tags, and every
++ * page free clears the freed pages' tags.
++ */
++struct page;
++struct vm_area_struct;
++#define __HAVE_ARCH_COPY_HIGHPAGE
++void copy_highpage(struct page *to, struct page *from);
++#define __HAVE_ARCH_COPY_USER_HIGHPAGE
++void copy_user_highpage(struct page *to, struct page *from,
++			unsigned long vaddr, struct vm_area_struct *vma);
++#define HAVE_ARCH_FREE_PAGE
++void arch_free_page(struct page *page, int order);
++
+ /*
+  * Use struct definitions to apply C type checking
+  */
+diff --git c/arch/riscv/include/asm/pgtable.h w/arch/riscv/include/asm/pgtable.h
+index 92ec2d9d7273..1c192c39dce2 100644
+--- c/arch/riscv/include/asm/pgtable.h
++++ w/arch/riscv/include/asm/pgtable.h
+@@ -829,4 +829,11 @@ extern unsigned long empty_zero_page[PAGE_SIZE / sizeof(unsigned long)];
+ 
+ #endif /* !__ASSEMBLY__ */
+ 
++#ifndef __ASSEMBLY__
++/* EXPERIMENT experiment/tag-aware-mm: a page that holds capability tags is not swapped out
++ * (there is no swap-side tag store); see arch/riscv/mm/captag.c. */
++#define __HAVE_ARCH_PREPARE_TO_SWAP
++int arch_prepare_to_swap(struct page *page);
++#endif
++
+ #endif /* _ASM_RISCV_PGTABLE_H */
+diff --git c/arch/riscv/mm/Makefile w/arch/riscv/mm/Makefile
+index d76aabf4b94d..5110956263c7 100644
+--- c/arch/riscv/mm/Makefile
++++ w/arch/riscv/mm/Makefile
+@@ -13,6 +13,7 @@ obj-y += extable.o
+ obj-$(CONFIG_MMU) += fault.o pageattr.o
+ obj-y += cacheflush.o
+ obj-y += context.o
++obj-y += captag.o
+ 
+ ifeq ($(CONFIG_MMU),y)
+ obj-$(CONFIG_SMP) += tlbflush.o
+diff --git c/arch/riscv/mm/captag.c w/arch/riscv/mm/captag.c
+new file mode 100644
+index 000000000000..f9c44684a7c1
+--- /dev/null
++++ w/arch/riscv/mm/captag.c
+@@ -0,0 +1,170 @@
++// SPDX-License-Identifier: GPL-2.0-only
++/* EXPERIMENT: unpinned capability pages with raw granule transport.
++ * CLDRAW/CSTRAW replace copy_page, including its byte copy: scalar loads may
++ * project a tagged address rather than return the stored representation.
++ * Swap of possibly tagged pages remains refused. CPTAG uses the physical
++ * may-hold-tags flag. No test-only page CSR is used.
++ */
++#include <linux/highmem.h>
++#include <linux/init.h>
++#include <linux/jump_label.h>
++#include <linux/mm.h>
++#include <linux/moduleparam.h>
++#include <linux/string.h>
++#include <linux/of.h>
++#include <linux/export.h>
++
++/* Enabled only by a matching opt-in platform declaration. */
++static DEFINE_STATIC_KEY_FALSE(captag_on);
++static bool captag_disabled;
++static unsigned int captag_ids;
++static bool captag_exact;
++static unsigned long copies, frees, freed_pages, swap_refused, cleared_pages;
++module_param(copies, ulong, 0444);
++module_param(frees, ulong, 0444);
++module_param(freed_pages, ulong, 0444);
++module_param(swap_refused, ulong, 0444);
++module_param(cleared_pages, ulong, 0444);
++
++static int __init captag_setup(char *s)
++{
++	if (s && !strcmp(s, "off"))
++		captag_disabled = true;
++	return 1;
++}
++__setup("captag=", captag_setup);
++
++static int __init captag_init(void)
++{
++	struct device_node *node;
++	u32 ids, exact, page, granule;
++	bool valid;
++
++	node = of_find_compatible_node(NULL, NULL, "capstone,unpinned-v1");
++	if (!node)
++		return 0;
++	valid = !of_property_read_u32(node, "id-bits", &ids) &&
++		!of_property_read_u32(node, "exact-bounds", &exact) &&
++		!of_property_read_u32(node, "page-size", &page) &&
++		!of_property_read_u32(node, "granule-size", &granule) &&
++		(ids == 30 || ids == 55) && exact <= 1 &&
++		page == PAGE_SIZE && granule == 16;
++	of_node_put(node);
++	if (!valid || captag_disabled)
++		return 0;
++	captag_ids = ids;
++	captag_exact = exact;
++	static_branch_enable(&captag_on);
++	return 0;
++}
++early_initcall(captag_init);
++
++/* The module resolves this symbol dynamically, so its default pinned build
++ * still loads on a stock kernel. Success certifies both model and mm support. */
++int capstone_unpinned_config(unsigned int ids, bool *exact)
++{
++	if (!static_branch_unlikely(&captag_on) || ids != captag_ids)
++		return -EOPNOTSUPP;
++	*exact = captag_exact;
++	return 0;
++}
++EXPORT_SYMBOL_GPL(capstone_unpinned_config);
++
++/* Hardware owns this flag: every capability publication, including a raw
++ * copy, sets it without a software trap. PG_arch_1 is already dcache state.
++ * Scalar writers leave it set; only a verified-empty acknowledgement resets
++ * it. The physical key covers all aliases and carries no access authority. */
++static unsigned long captag_summary(struct page *page, bool ack)
++{
++	unsigned long result, phys = page_to_phys(page);
++
++	if (ack)
++		asm volatile(".insn i 0x0b, 6, %0, %1, 1"
++			     : "=r" (result) : "r" (phys) : "memory");
++	else
++		asm volatile(".insn i 0x0b, 6, %0, %1, 0"
++			     : "=r" (result) : "r" (phys) : "memory");
++	return result;
++}
++
++static void captag_copy_raw(void *to, const void *from)
++{
++	unsigned long flags, count = PAGE_SIZE / 16;
++
++	/* The ordinary integer interrupt frame cannot save opaque t0. No
++	 * interrupt/preemption may interpose between its raw load and store. */
++	local_irq_save(flags);
++	asm volatile("1: .insn i 0x0b, 4, t0, %1, 0\n\t"
++		     ".insn s 0x0b, 5, t0, 0(%0)\n\t"
++		     "addi %0, %0, 16\n\taddi %1, %1, 16\n\t"
++		     "addi %2, %2, -1\n\tbnez %2, 1b\n\t"
++		     "li t0, 0"
++		     : "+r" (to), "+r" (from), "+r" (count)
++		     : : "t0", "memory");
++	local_irq_restore(flags);
++}
++
++void copy_highpage(struct page *to, struct page *from)
++{
++	if (!static_branch_unlikely(&captag_on)) {
++		copy_page(page_address(to), page_address(from));
++		return;
++	}
++	captag_copy_raw(page_address(to), page_address(from));
++	++copies;
++}
++EXPORT_SYMBOL(copy_highpage);
++
++void copy_user_highpage(struct page *to, struct page *from,
++			unsigned long vaddr, struct vm_area_struct *vma)
++{
++	copy_highpage(to, from);
++}
++EXPORT_SYMBOL(copy_user_highpage);
++
++/* One scalar store per granule clears the tag by rule 1. Contents of a
++ * freed page are dead, so zeroing only the first word is sufficient. */
++static void captag_clear_scalar(struct page *page)
++{
++	unsigned long *p = page_address(page);
++	unsigned long j;
++
++	for (j = 0; j < PAGE_SIZE / sizeof(*p); j += 16) {
++		WRITE_ONCE(p[j], 0UL);      WRITE_ONCE(p[j + 2], 0UL);
++		WRITE_ONCE(p[j + 4], 0UL);  WRITE_ONCE(p[j + 6], 0UL);
++		WRITE_ONCE(p[j + 8], 0UL);  WRITE_ONCE(p[j + 10], 0UL);
++		WRITE_ONCE(p[j + 12], 0UL); WRITE_ONCE(p[j + 14], 0UL);
++	}
++}
++
++void arch_free_page(struct page *page, int order)
++{
++	unsigned long i, n = 1UL << order;
++
++	if (!static_branch_unlikely(&captag_on))
++		return;
++	for (i = 0; i < n; ++i)
++		if (captag_summary(page + i, false)) {
++			captag_clear_scalar(page + i);
++			/* The allocator owns the page exclusively until reuse. */
++			BUG_ON(captag_summary(page + i, true));
++			++cleared_pages;
++		}
++	++frees;
++	freed_pages += n;
++}
++
++int arch_prepare_to_swap(struct page *page)
++{
++	struct folio *folio = page_folio(page);
++	long i, n = folio_nr_pages(folio);
++
++	if (!static_branch_unlikely(&captag_on))
++		return 0;
++	for (i = 0; i < n; i++)
++		if (captag_summary(folio_page(folio, i), false)) {
++			++swap_refused;
++			return -EBUSY;
++		}
++	return 0;
++}
