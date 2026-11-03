@@ -383,6 +383,14 @@ Data access requires a valid tag, the appropriate capability type and rights,
 the complete accessed span inside bounds, and a live node. Translation then
 requires the corresponding user PTE permission. Scalar stores clear tags on
 overlapping physical 16-byte granules, including through kernel aliases.
+Every other non-capability write to main RAM does too, whoever the writer is: partial stores, successful
+SC and AMOs, vector stores, `cbo.zero`, and device DMA. The model (capstone-qemu f4fe3b3052) clears the tag
+together with the bytes under one lock; while a device holds a writable mapping of a granule its tag stays 0
+and no tag is published there (a capability store into it stores the bytes untagged). Tags exist only in main
+RAM. Under the virtual profile the model realizes only an audited list of device types (each one's writes to
+guest RAM go through the hooked paths), refuses external writers to guest RAM (vhost, VFIO, shared memory
+backends), and refuses VM state load, savevm and migration, because the tag map is not machine state. The RTL
+needs the same rule at the memory side (a tag controller that clears for every master), not yet built.
 
 PCC must have an allowed type, execution permission, a live node and bounds
 covering the whole instruction. QEMU checks before reading instruction bytes
