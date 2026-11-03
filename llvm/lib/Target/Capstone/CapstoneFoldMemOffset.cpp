@@ -18,6 +18,7 @@
 #include "Capstone.h"
 #include "CapstoneSubtarget.h"
 #include "llvm/ADT/DenseSet.h"
+#include "llvm/ADT/Statistic.h"
 #include "llvm/CodeGen/MachineConstantPool.h"
 #include "llvm/CodeGen/MachineFunctionPass.h"
 #include "llvm/Target/TargetLoweringObjectFile.h"
@@ -29,6 +30,12 @@ using namespace llvm;
 bool capstoneImageGpAbiActive(); // CapstoneISelDAGToDAG.cpp
 
 #define DEBUG_TYPE "capstone-fold-mem-offset"
+
+STATISTIC(NumPoolChainsRebased, "Constant-pool chains rebased onto the pool base");
+STATISTIC(NumPoolChainsBelowBase,
+          "Constant-pool chains refused: a displacement below the base");
+STATISTIC(NumPoolChainsBeyondImm,
+          "Constant-pool chains refused: a displacement beyond 2047");
 #define Capstone_FOLD_MEM_OFFSET_NAME "Capstone Fold Memory Offset"
 
 namespace {
@@ -356,17 +363,21 @@ static bool isPoolLoadOpc(unsigned Opc) {
 // any surviving capability cursor (a cursor that moves can leave the
 // representable window or be refused by the address policy, after which it is
 // untagged): no surviving cursor moves. Every rewritten chain now forms the
-// cursor &cp#B, which is an address the program already forms through chain
-// B's own PseudoLLA + PseudoCapGlobalBase (B is chosen among the candidates,
-// so that chain exists), with the same gp authority, bounds and lifetime; the
-// chains that formed &cp#i are removed, not moved. Every access's effective
-// address is unchanged: &cp#B + (off_i - off_B + imm) = &cp#i + imm. The
-// displacement is a simm12 (checked per load), the base &cp#B lies inside the
-// pool and the pool inside gp's bounds, so the shared cursor is in bounds (not
-// merely in the window) wherever &cp#i was, and bounds and permissions are
-// still checked at each access against gp's. Only the access is checked, as
-// before (foldThroughGlobalBase in CapstoneMergeBaseOffset relies on the same
-// property of gp-derived pool capabilities).
+// cursor &cp#B, a real constant-pool address inside the image's .rodata,
+// inside gp's bounds, hence canonical and in bounds wherever &cp#i was (and
+// the address chain B itself forms, on whatever path it runs: B is chosen
+// among the candidates); the chains that formed &cp#i are removed, not moved,
+// and &cp#B is the lowest candidate address, so the base moves DOWN from
+// every &cp#i it replaces and never towards the top of the user half. Every
+// access's effective address is unchanged: &cp#B + (off_i - off_B + imm) =
+// &cp#i + imm, and the new displacement lies in [0, 2047] (checked per load:
+// a load that carried a negative immediate off a higher entry would otherwise
+// become a negative displacement off the base, which the argument above does
+// not cover), so every access lies at or above the base, inside the pool, and
+// bounds and permissions are still checked at each access against gp's. Only
+// the access is checked, as before (foldThroughGlobalBase in
+// CapstoneMergeBaseOffset relies on the same property of gp-derived pool
+// capabilities).
 //
 // The layout prediction uses the same hook as AsmPrinter::emitConstantPool
 // (the five-argument getSectionForConstant); under the image-gp ABI the
@@ -470,13 +481,24 @@ static bool rebaseConstantPool(MachineFunction &MF, MachineRegisterInfo &MRI) {
   bool Changed = false;
   for (Candidate &Cand : Candidates) {
     int64_t Disp = Cand.EntryOffset - BaseOffset;
+    assert(Disp >= 0 && "the base is the lowest candidate entry");
     if (Disp == 0)
       continue;
-    // Beyond simm12 the chain keeps its own entry (and its own base).
+    // Outside [0, 2047] the chain keeps its own entry (and its own base): the
+    // upper bound is the load's simm12, the lower one the argument above.
+    if (llvm::any_of(Cand.Loads, [&](MachineInstr *LoadMI) {
+          return LoadMI->getOperand(2).getImm() + Disp < 0;
+        })) {
+      ++NumPoolChainsBelowBase;
+      continue;
+    }
     if (llvm::any_of(Cand.Loads, [&](MachineInstr *LoadMI) {
           return !isInt<12>(LoadMI->getOperand(2).getImm() + Disp);
-        }))
+        })) {
+      ++NumPoolChainsBeyondImm;
       continue;
+    }
+    ++NumPoolChainsRebased;
     MachineOperand &CPOp = Cand.LLA->getOperand(1);
     CPOp.setIndex(BaseCPI);
     for (MachineInstr *LoadMI : Cand.Loads)

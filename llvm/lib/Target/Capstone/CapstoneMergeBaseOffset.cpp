@@ -13,6 +13,7 @@
 
 #include "Capstone.h"
 #include "CapstoneTargetMachine.h"
+#include "llvm/ADT/Statistic.h"
 #include "llvm/CodeGen/MachineFunctionPass.h"
 #include "llvm/CodeGen/Passes.h"
 #include "llvm/MC/TargetRegistry.h"
@@ -24,6 +25,10 @@ using namespace llvm;
 #define DEBUG_TYPE "capstone-merge-base-offset"
 #define Capstone_MERGE_BASE_OFFSET_NAME "Capstone Merge Base Offset"
 bool capstoneImageGpAbiActive(); // CapstoneISelDAGToDAG.cpp
+
+STATISTIC(NumPoolBasesMerged, "Pool addresses whose several bases were merged");
+STATISTIC(NumMergedFoldRefused,
+          "Merged pool bases the %pcrel_lo fold would have taken (refused)");
 
 namespace {
 
@@ -658,44 +663,23 @@ bool CapstoneMergeBaseOffsetOpt::mergeGlobalBaseUses(MachineInstr &Lo,
   // The primary may now be read after what was the last use of either value.
   MRI->clearKillFlags(LoReg);
   MRI->clearKillFlags(PrimaryCap);
+  LLVM_DEBUG(dbgs() << "merged " << Bases.size() << " pool bases of " << Lo
+                    << "  into " << *Primary);
   return true;
 }
 
-bool CapstoneMergeBaseOffsetOpt::foldThroughGlobalBase(MachineInstr &Hi,
-                                                       MachineInstr &Lo) {
-  // Only under the image-gp ABI (exact bounds): there gp's cursor is simply
-  // set, and only the access is checked. Elsewhere the unfinished cursor would
-  // have to stay representable, which nothing here establishes.
-  if (!capstoneImageGpAbiActive())
-    return false;
-  if (Hi.getOpcode() != Capstone::AUIPC || !Hi.getOperand(1).isCPI() ||
-      &Lo == &Hi)
-    return false;
-  Register LoReg = Lo.getOperand(0).getReg();
-  // Several bases of one pool address: merge them into one first (a change on
-  // its own, whether or not the fold below then applies).
-  bool Merged = false;
-  if (!MRI->hasOneUse(LoReg)) {
-    if (!mergeGlobalBaseUses(Lo, LoReg))
-      return false;
-    Merged = true;
-  }
-  MachineInstr &Base = *MRI->use_instr_begin(LoReg);
-  if (Base.getOpcode() != Capstone::PseudoCapGlobalBase ||
-      Base.getOperand(1).getReg() != LoReg)
-    return Merged;
-  Register CapReg = Base.getOperand(0).getReg();
-  if (!CapReg.isVirtual() || MRI->use_nodbg_empty(CapReg))
-    return Merged;
-
+// The one immediate every use of CapReg reads at, when every use is the base
+// of a load (the shapes foldThroughGlobalBase can rewrite); none otherwise.
+static std::optional<int64_t> poolLoadCommonOffset(MachineRegisterInfo &MRI,
+                                                   Register CapReg) {
   std::optional<int64_t> CommonOffset;
-  for (const MachineOperand &MO : MRI->use_operands(CapReg)) {
+  for (const MachineOperand &MO : MRI.use_operands(CapReg)) {
     const MachineInstr &UseMI = *MO.getParent();
     if (UseMI.isDebugInstr())
-      return Merged;
+      return std::nullopt;
     switch (UseMI.getOpcode()) {
     default:
-      return Merged;
+      return std::nullopt;
     case Capstone::LB:
     case Capstone::LH:
     case Capstone::LW:
@@ -709,16 +693,67 @@ bool CapstoneMergeBaseOffsetOpt::foldThroughGlobalBase(MachineInstr &Hi,
       break;
     }
     if (UseMI.getOperandNo(&MO) != 1 || !UseMI.getOperand(2).isImm())
-      return Merged;
+      return std::nullopt;
     int64_t Offset = UseMI.getOperand(2).getImm();
     if (CommonOffset && Offset != *CommonOffset)
-      return Merged;
+      return std::nullopt;
     CommonOffset = Offset;
   }
+  return CommonOffset;
+}
+
+bool CapstoneMergeBaseOffsetOpt::foldThroughGlobalBase(MachineInstr &Hi,
+                                                       MachineInstr &Lo) {
+  // Only under the image-gp ABI (exact bounds): there gp's cursor is simply
+  // set, and only the access is checked. Elsewhere the unfinished cursor would
+  // have to stay representable, which nothing here establishes.
+  if (!capstoneImageGpAbiActive())
+    return false;
+  if (Hi.getOpcode() != Capstone::AUIPC || !Hi.getOperand(1).isCPI() ||
+      &Lo == &Hi)
+    return false;
+  Register LoReg = Lo.getOperand(0).getReg();
+  // Several bases of one pool address: merge them into one, and STOP. The
+  // fold below re-derives the capability from the auipc's partial address
+  // (the high part only) and pushes the low part into the loads, which moves
+  // the cursor the program forms: with H = 2^38, gp bounds [H-4096, H), the
+  // auipc at H-4096 and the entry at H-16, the relocation splits into hi +4096
+  // and lo -16; scc of Lo's complete address forms H-16 (tagged), scc of the
+  // high part alone forms H, refused under sv39 and written untagged, and the
+  // `fld -16` off it faults at the unchanged effective address. The single-use
+  // guard used to keep a multi-base Lo out of that fold; merging the bases
+  // must not let it in: a merged base keeps Lo's complete address.
+  if (!MRI->hasOneUse(LoReg)) {
+    if (!mergeGlobalBaseUses(Lo, LoReg))
+      return false;
+    ++NumPoolBasesMerged;
+    // Count the merges the fold below would have taken (for the record of
+    // what this refusal costs; the fold itself does not run).
+    Register MergedCap = MRI->use_instr_begin(LoReg)->getOperand(0).getReg();
+    if (std::optional<int64_t> Off = poolLoadCommonOffset(*MRI, MergedCap);
+        Off && isInt<32>(Hi.getOperand(1).getOffset() + *Off)) {
+      ++NumMergedFoldRefused;
+      LLVM_DEBUG(dbgs() << "merged pool base kept complete (the fold would "
+                           "have taken it): "
+                        << Lo);
+    }
+    return true;
+  }
+  MachineInstr &Base = *MRI->use_instr_begin(LoReg);
+  if (Base.getOpcode() != Capstone::PseudoCapGlobalBase ||
+      Base.getOperand(1).getReg() != LoReg)
+    return false;
+  Register CapReg = Base.getOperand(0).getReg();
+  if (!CapReg.isVirtual() || MRI->use_nodbg_empty(CapReg))
+    return false;
+
+  std::optional<int64_t> CommonOffset = poolLoadCommonOffset(*MRI, CapReg);
+  if (!CommonOffset)
+    return false;
 
   int64_t NewOffset = Hi.getOperand(1).getOffset() + *CommonOffset;
   if (!isInt<32>(NewOffset))
-    return Merged;
+    return false;
   Hi.getOperand(1).setOffset(NewOffset);
   MachineOperand ImmOp = Lo.getOperand(2);
   for (MachineInstr &UseMI :
