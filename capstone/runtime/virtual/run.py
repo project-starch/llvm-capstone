@@ -48,9 +48,24 @@ export CAPSTONE_VM_CONTRACT=environment CAPSTONE_VM_STATS=1 CAPSTONE_EXEC_DIAGNO
 ./capstone-vexec contract.dom ok argument > /tmp/ok.out 2>&1
 echo VM_EXIT:normal:$?
 cat /tmp/ok.out
+# Only this launch measures page-at-a-time demand faults. Every other row
+# uses the module's shipped policy (or the explicit --module-args override).
+ahead=/sys/module/capstone_vm/parameters/fault_ahead_max
+saved_ahead=unavailable
+if [ -r "$ahead" ]; then
+  saved_ahead=$(cat "$ahead")
+  echo 0 > "$ahead" || exit 1
+fi
+echo VM_DEMAND_POLICY:$saved_ahead
 ./capstone-vexec contract.dom threads > /tmp/threads.out 2>&1
 echo VM_EXIT:threads:$?
 cat /tmp/threads.out
+if [ "$saved_ahead" != unavailable ]; then
+  echo "$saved_ahead" > "$ahead" || exit 1
+  echo VM_RESTORED_POLICY:$(cat "$ahead")
+else
+  echo VM_RESTORED_POLICY:unavailable
+fi
 for mode in vm nested nested-stale heap-threads sparse-churn stale bounds retired vm-ro-write vm-none-read vm-guard vm-padding sparse-stale; do
   ./capstone-vexec contract.dom "$mode" 2>&1
   echo VM_EXIT:$mode:$?
@@ -133,10 +148,7 @@ def main():
     p.add_argument('--perl-smoke', type=Path)
     p.add_argument('--legacy-application', type=Path)
     p.add_argument('--skip-recycling', action='store_true', help='Omit the two long recycling cases; recorded explicitly')
-    # linux_demand_faults counts demand resolutions, not pages admitted by prefetch. Keep this
-    # gate page-at-a-time; run-step-hooks.py qualifies the default adaptive policy separately.
-    # An explicit --module-args can still select other policies for experiments.
-    p.add_argument('--module-args', default='fault_ahead_max=0',
+    p.add_argument('--module-args', default='',
                    help="Parameters appended to insmod (e.g. 'resolve_pte=1 fault_repeat_max=1')")
     p.add_argument('--exact-bounds', action=argparse.BooleanOptionalAction, default=False,
                    help="Run QEMU's exact-bounds profile. Option (iii) does not need it; it is kept "
@@ -318,6 +330,9 @@ def main():
     expected_stats = (10 if a.skip_recycling else 11) + (1 if a.perl else 0) + (1 if a.perl_smoke else 0) + (1 if a.php else 0)
     tests['linux_pages_released'] = len(stats) == expected_stats and len(release_stats) == 3
     tests['linux_demand_faults'] = len(stats) == expected_stats and len(demand_stats) == 3
+    policy = [s.split(':', 1)[1] for s in lines if s.startswith('VM_DEMAND_POLICY:')]
+    restored = [s.split(':', 1)[1] for s in lines if s.startswith('VM_RESTORED_POLICY:')]
+    tests['fault_ahead_policy_restored'] = len(policy) == 1 and policy == restored
     tests['unused_pages_not_populated'] = len(stats) >= 4 and stats[2]['peak'] - stats[2]['pages'] < 32
     tests['shared_heap_pages_released'] = len(stats) >= 5 and stats[4]['peak'] - stats[4]['pages'] >= 768
     if not a.skip_recycling:

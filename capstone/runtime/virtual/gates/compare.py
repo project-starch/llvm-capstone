@@ -78,7 +78,9 @@ REQUIRED_ROWS = {
         '16:seq', '16:stop', '16:vma', '16:vmax', '16:rowrite', '16:retire', '64:base', '64:seq',
         '64:stop', '64:vma', '64:vmax', '64:rowrite', '64:retire')],
     "fp": ['FP_EXIT'],
-    "pthread": ['PTHREAD_EXIT', 'PTHREAD_FALLBACK_EXIT'],
+    "pthread": ['PTHREAD_EXIT', 'PTHREAD_FALLBACK_EXIT',
+                'PTHREAD_IDENTITY_EXIT:identity-exit', 'PTHREAD_IDENTITY_EXIT:identity-jump',
+                'PTHREAD_IDENTITY_EXIT:private-tls'],
     "step-hooks": ["HOOK_EXIT:" + n for n in (
         'base1:walk', 'base1:syscalls', 'base16:walk', 'base64:walk', 'base64:seq', 'resched2:walk',
         'resched2:syscalls', 'signal2:walk', 'signal2:syscalls', 'deadline2:walk',
@@ -89,7 +91,8 @@ REQUIRED_ROWS = {
         'life64:seq', 'life64:stop', 'life64:vma', 'life64:vmax', 'life64:retire', 'ro64:rowrite',
         'adapt:walk', 'adapt:stream', 'adaptdirect:walk', 'adaptdirect:stream',
         'adaptres:walk', 'adaptshort:walk', 'adaptclip:clip',
-        'adaptclip:clipx', 'adaptro:clipwrite', 'adaptnonlin:nonlin')],
+        'adaptclip:clipx', 'adaptro:clipwrite', 'adaptnonlin:nonlin',
+        'adaptgaps:gaps', 'adaptinterleave:interleave')],
 }
 # The runtime gate's application rows and the runtime.json tests that judge each.
 RUNTIME_TESTS = {"VM_EXIT:sqlite_write": ("sqlite_write", "sqlite_results"),
