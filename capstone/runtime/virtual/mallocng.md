@@ -237,6 +237,14 @@ descriptor registered so trim can retry. All region and cache operations use
 the existing heap lock. The mallocng representation patches and allocation
 policy are unchanged.
 
+Fewer mappings need not mean fewer resident pages. In particular, the measured
+PHP shape above fits sixteen extents in 64 KiB: seventeen need 65,552 bytes.
+The region's 3,840-byte tail therefore consumes the page padding saved between
+those sixteen groups. Other shapes can pack more densely, but region tails,
+partially occupied regions and private descriptors must be included when
+assessing page savings. The current region size bounds bookkeeping and reuse;
+it does not promise the ideal packing bound from a group-padding census.
+
 ## VM remapping
 
 Large realloc follows upstream's mremap branch. Heap mappings use their

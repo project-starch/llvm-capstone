@@ -424,7 +424,7 @@ static size_t mapping_length(size_t bytes)
  *     the header, the untaken slots and the slack, so that arm zeroes the whole mapping when it
  *     is reused, before the new group is bound.
  * (4) Bounded: RECYCLE_PER_LENGTH mappings of one length, RECYCLE_ENTRIES in all, at most
- *     RECYCLE_BYTES, none above RECYCLE_MAX_ENTRY; a release beyond a bound is unmapped as
+ *     RECYCLE_BYTES including empty shared regions, none above RECYCLE_MAX_ENTRY; a release beyond a bound is unmapped as
  *     before; malloc_trim unmaps every kept mapping. Kept mappings stay registered arenas, so
  *     the module's collection sweeps their
  *     pages like any live heap, and at exit its teardown retires them (vm_release -> retire),
