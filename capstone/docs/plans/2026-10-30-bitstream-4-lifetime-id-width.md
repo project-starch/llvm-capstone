@@ -167,6 +167,60 @@ first test of csbi-batch d9da397's capstone_csmint.S.
 - va-csmint-emu reads 30 of 32 equal. The other two are the arm's raw record word 1, encoding-only and computed exactly.
   The RTL lane's "identical" prediction missed them because that arm's print list had not been read.
 
+## Exposure census of B's de-tagged slot residue (QEMU, 2026-10-31 to 2026-11-03)
+
+The runtime lane holds that the residue above is a defect: a partial store changes what later loads read from
+bytes the program never wrote. It asked for the exposure to be counted before any ruling. The result is NONZERO in
+perlbench and ZERO in every microbenchmark. It went to the lead through the runtime lane, because it bears on
+whether B stays the bitstream-4 direction.
+
+**Instrument.** capstone-qemu `census/b-residue` 7b7039da9c: the twin's a9832b7180, plus Q-34 verbatim (6300e21c6b),
+plus the census. The census is sim-only and enabled by `CAPSTONE_RESIDUE_CENSUS=1`.
+- A plain store that clears a tagged granule's tag records a residue mask: the bytes of the first doubleword that
+  hold `lo ^ sext39(lo)` and that the store left unwritten.
+- A plain load or an LDC counts only if it reads masked bytes that still hold the recorded value. It is classed by
+  pc as program, firmware or kernel.
+- Kits: kit-f55-nocsr with only the QEMU binary swapped (census-kit, census-kit-micro).
+- Positive control: `ctl-residue` reads 4 residue loads at its planted site; its clean control granule reads 0.
+
+**Counts.**
+
+| run | residue-leaving stores (program / firmware) | program loads | kernel loads | program LDCs |
+|---|---|---|---|---|
+| perlbench test-lifetimes | 134,314,264 / 36,156 | 18,068 | 156,297 | 4,091,112 |
+| perlbench train-lifetimes | 480,195,533 / 71,807 | 4,471 | 12,847 | 340,588 |
+| MapLife build2/T1, 103 K0 images | 127,446 / 1,743 | 0 | 3,285 | 0 |
+| ObjLife build3/T3, 15 allocating | 4,281 / 351 | 0 | 3,192 | 0 |
+| ObjLife build4/T3, the other 88 | 123,170 / 1,452 | 0 | 93 | 0 |
+
+- A re-run of perlbench test with the print cap lifted reproduced the program loads (18,068) and program LDCs
+  (4,091,112) exactly. Kernel and firmware moved by under 0.01 %.
+- Every run completed with rc 0. perlbench's specdiff passed (test 2/2, train 6/6), and every microbenchmark image
+  read ok on every iteration (completed=True, missing=0). Under B semantics, perl's OUTPUT did not change.
+
+**Sites (perlbench test).**
+- The first event of each site in each of the 272 contexts was printed. The pcs map to the stripped image (6b70dbb7)
+  at `pc mod 2 MiB + 0x10000`.
+  - Under that mapping, every load site lands on a load and every LDC site on an LDC: 842 of 842 and 1,224 of 1,224.
+  - Every other alignment tried mismatches.
+- That gives 15 distinct load sites and 15 distinct LDC sites in the image.
+- 3 sites are the copy routine at 0x11c1c-0x11cd4 (16 B LDC/STC, 8 B ld/sd, byte loop). There the residue is copied,
+  not interpreted, but a copy carries the slot bits into the destination.
+- The other 12 load sites read bytes 4-6 of a word whose low half was overwritten:
+  - halfword pairs at 0x1404d4/8, 0x1412ec/f0 and 0x153884-0x1540e8;
+  - a pointer dereference at 0x1ba508, which is `ld` through a just-LDC'd capability + 0x10.
+- On e7af48457 those bytes hold the old address's sign extension, 0 for these user addresses. On B they hold slot bits.
+- The kernel's reads are ONE site in every run, ffffffff01363048 (priv 1).
+
+**Limits.**
+- The image is stripped, and the tree's symbolized exe is a different build (load segments differ), so no site is
+  named by function. Sites are identified by instruction shape only.
+- Per-site totals were not kept, only first events per context.
+- The kernel site is not symbolized.
+- The other six SPEC test stages were not run.
+- Whether perl's logic depends on those bytes is not established. Its output did not change in these runs.
+- Run records: `$CAPSTONE_WORK/census-spec{,-sites}/RUN` and `census-micro/RUN` (the counts above).
+
 ## Option A: ids20, capstone-ariane 741aff6a6 (tests 3f876a255)
 
 The id is {gen[29:20], idx[19:0]}; word1 carries gen at [59:50] and parent at [49:30].
