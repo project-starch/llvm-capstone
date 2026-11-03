@@ -34,6 +34,7 @@ mknod /tmp/resource-root/memory-device c 1 1
 mknod /tmp/resource-root/null-device c 1 3
 : >/tmp/resource-outside
 echo private >/tmp/resource-root/no-permission
+echo file >/tmp/resource-root/fd-input
 chmod 000 /tmp/resource-root/no-permission' > "$OUT/setup.log" 2>&1
 vm exec -- sh -c 'cd /tmp; ./scalar-memory.dom; echo scalar_rc=$?' > "$OUT/scalar.log" 2>&1
 # Two identical resource-probe execs with ASLR disabled: the first records the
@@ -47,13 +48,14 @@ echo resource_rc=$?
 echo trampoline_after=$(cat /sys/module/capstone_vm/parameters/dom_last_trampoline)' > "$OUT/resource.log" 2>&1
 vm exec -- sh -c 'cd /tmp/resource-root; exec 0</proc/self/mem; /tmp/resource-probe.dom stdio; echo stdio_rc=$?' > "$OUT/stdio.log" 2>&1
 vm exec -- sh -c 'cd /tmp/resource-root; /tmp/dac-driver /tmp/resource-probe.dom; echo dac_rc=$?' > "$OUT/dac.log" 2>&1
+vm exec -- sh -c 'cd /tmp/resource-root; /tmp/dac-driver /tmp/resource-probe.dom many-fds; echo fds_rc=$?' > "$OUT/fds.log" 2>&1
 vm exec -- sh -c 'dmesg | tail -20; rmmod capstone_vm; echo unload_rc=$?' > "$OUT/after.log" 2>&1
-cat "$OUT/scalar.log" "$OUT/resource.log" "$OUT/stdio.log" "$OUT/dac.log"
+cat "$OUT/scalar.log" "$OUT/resource.log" "$OUT/stdio.log" "$OUT/dac.log" "$OUT/fds.log"
 python3 - "$OUT" <<'CHECK'
 from pathlib import Path
 import re, sys
 p = Path(sys.argv[1])
-for name, key in [('scalar','scalar'), ('resource','resource'), ('stdio','stdio'), ('dac','dac')]:
+for name, key in [('scalar','scalar'), ('resource','resource'), ('stdio','stdio'), ('dac','dac'), ('fds','fds')]:
     text = (p / (name + '.log')).read_text()
     assert 'FAIL' not in text and key + '_rc=0' in text, text
 text = (p / 'resource.log').read_text()

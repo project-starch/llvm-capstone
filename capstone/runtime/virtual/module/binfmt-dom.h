@@ -295,7 +295,9 @@ static long dom_service(struct context *c, struct cv_step *s)
             e.result = dom_rw(c, &e);
         else {
             rc = dom_prepare(c, &e);
-            if (rc == DOM_DO_SYSCALL) return rc;
+            /* A brokered open may legitimately return fd 258. Only an
+             * actual prepared request authorizes scalar syscall dispatch. */
+            if (rc == DOM_DO_SYSCALL && c->dom_delegate->pending) return rc;
             e.result = rc;
         }
         rc = dom_reply(c, e.result);

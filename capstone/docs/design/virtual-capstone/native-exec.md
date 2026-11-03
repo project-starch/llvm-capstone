@@ -78,7 +78,10 @@ A per-context bitmap grants at most 1,024 fd numbers. Only safe inherited stdio
 `/dev/console`) is
 initially granted. All other inherited fds, including directories, sockets,
 process-memory files and device handles, are inaccessible. New descriptors come
-only from the broker; close revokes the grant before scalar dispatch. Thread
+only from the broker; close revokes the grant before scalar dispatch. Dispatch
+requires both the prepared-syscall marker and the private pending flag: a
+legitimate fd 258 must remain a file result. A descriptor-limit/recovery probe
+crosses that boundary. Thread
 creation, fd duplication, descriptor receipt and exec are unsupported, so no
 concurrent task can replace a granted number. Exec unshares the Linux fd table;
 the loader rejects LSM_UNSAFE_SHARE so an external CLONE_FS peer cannot share

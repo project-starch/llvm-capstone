@@ -51,6 +51,25 @@ int main(int argc, char **argv)
     struct stat st;
     (void)getpid();
     if (!meta || exchange_bytes < 4096) return 2;
+    if (argc == 2 && !strcmp(argv[1], "many-fds")) {
+        int fds[1024], n = 0, crossed = 0, error;
+        puts("descriptor boundary probe starting"); fflush(stdout);
+        while (n < 1024) {
+            int fd = open("fd-input", O_RDONLY);
+            if (fd < 0) break;
+            if (fd == 258) crossed = 1;
+            fds[n++] = fd;
+        }
+        error = errno;
+        check("descriptor 258 is a result", crossed);
+        check("descriptor limit", n > 258 && n < 1024 && error == EMFILE);
+        for (int i = 0; i < n; ++i)
+            if (fstat(fds[i], &st) || !S_ISREG(st.st_mode) || close(fds[i])) ++failures;
+        int fd = open("fd-input", O_RDONLY);
+        check("descriptor recovery", n && fd == fds[0]);
+        if (fd >= 0) close(fd);
+        return failures != 0;
+    }
     if (argc == 2 && !strcmp(argv[1], "dac")) {
         int fd = open("no-permission", O_RDONLY);
         check("inode read permission", fd < 0 && errno == EACCES);
