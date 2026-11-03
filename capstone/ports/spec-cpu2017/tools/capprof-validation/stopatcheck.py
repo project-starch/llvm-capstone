@@ -136,5 +136,39 @@ for boot, (e0, e1) in EXPECT.items():
         # Every completed entry runs the site once and stopat_f's body once; the stopping entry runs neither.
         check(f"{boot} the site's own attempts in window 1 = the body's (the stopping entry excluded)", s == [e1[0x3d1]],
               f"site attempts {s}, body {e1[0x3d1]}")
+# A site that faults and is retried across a block boundary (stopat_g, `stopat fault`).
+FM = {m: (m << 20) | 0xe0e13 for m in (0x3f2, 0x3f3)}
+def fmarks(recs):
+    return {m: sum(r[3] for r in recs if r[2] == w and r[1] == 4) for m, w in FM.items()}
+for k in ("plain", "cap"):
+    sp = json.load(open(f"{d}/{k}-fault.json"))
+    g = sp["sites"]["stop"]
+    if k == "cap" and "cap" not in SLIDE:
+        check("cap fault: base known", False); continue
+    gva = g["link"] - sp.get("low", 0) + (SLIDE["cap"] + spec["cap"]["low"] if k == "cap" else 0)
+    att = lambda recs, va: sum(r[3] for r in recs if r[0] == va)
+    w, f = window(f"{k}-faultcount", 0)
+    if w is None:
+        check(f"{k}-faultcount window", False); continue
+    e = [l for l in f if l.startswith("# stop_entries_so_far")]
+    site_full = att(w, gva)
+    check(f"{k}-faultcount: 64 entries counted, not stopped", e and e[0].split()[2] == "64"
+          and not os.path.exists(f"{d}/{k}-faultcount/capprof/stopped"), e)
+    check(f"{k}-faultcount: the case is created (the site faulted and was retried: attempts > 64)",
+          site_full > 64 and (k != "plain" or site_full == 128), f"site attempts {site_full}, its successor {att(w, gva + 4)}, marks {fmarks(w)}")
+    w, f = window(f"{k}-fault", 0)
+    st = open(f"{d}/{k}-fault/capprof/stopped").read().strip() if os.path.exists(f"{d}/{k}-fault/capprof/stopped") else ""
+    check(f"{k}-fault: stopped at entry 32 of stopat_g in window 0", st.startswith(f"stopped_at={gva:x}:32 window=0 "), st)
+    if w is not None:
+        fm = fmarks(w)
+        check(f"{k}-fault: 32 calls made, 31 completed", fm == {0x3f2: 32, 0x3f3: 31} and att(w, gva + 4) == 31,
+              f"marks {fm}, successor {att(w, gva + 4)}, site attempts {att(w, gva)}")
+if os.path.isdir(f"{d}/plain-fault-old"):
+    # Negative control: the first plugin counted every arrival at a site that ends its block.
+    w, _ = window("plain-fault-old", 0)
+    fm = fmarks(w) if w is not None else {}
+    print(f"INFO plain-fault-old (first plugin, retries counted as entries): marks {fm}, stopped "
+          f"{open(f'{d}/plain-fault-old/capprof/stopped').read().strip() if os.path.exists(f'{d}/plain-fault-old/capprof/stopped') else None}")
+    check("negative control: the first plugin stops early on the same case", w is not None and fm.get(0x3f2, 99) < 32, fm)
 print("ALL PASS" if ok else "SOME FAIL")
 sys.exit(0 if ok else 1)

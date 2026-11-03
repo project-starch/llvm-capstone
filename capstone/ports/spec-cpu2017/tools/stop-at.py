@@ -62,6 +62,16 @@ def first_insn(loads, va):
     die(f"{va:#x} is in no executable segment")
 
 
+def transfers_control(w, length):
+    """As capprof.c: a branch, jump, call, return, ecall/ebreak or Capstone jump has no
+    sequential successor, so its entries cannot be told from fault retries."""
+    if length == 2:
+        q, f3 = w & 3, (w >> 13) & 7
+        return (q == 1 and f3 in (5, 6, 7)) or (q == 2 and f3 == 4 and not (w >> 2) & 31)
+    op, f3, f7 = w & 0x7f, (w >> 12) & 7, w >> 25
+    return op in (0x63, 0x67, 0x6f, 0x73) or (op == 0x5b and (f3 in (5, 6) or (f3 == 1 and f7 in (0x20, 0x21, 0x0d, 0x22, 0x23, 0x24))))
+
+
 def rounded(n):
     size = 4096
     while size < n:
@@ -89,12 +99,22 @@ def resolve(a):
             die(f"{which}: a count K >= 1 is needed")
         link = symbol(a.nm, a.exe, name)
         length, word = first_insn(loads, link)
+        if transfers_control(word, length):
+            die(f"{name}'s first instruction {word:0{2 * length}x} transfers control: its entries cannot be "
+                "told from fault retries; pick another function")
         site = {"symbol": name, "count": count, "link": link, "len": length, "bytes": word}
         where = link - rec["low"] if a.kind == "capstone" else link
         args += [f"{which}_vaddr={where:x}", f"{which}_count={count}", f"{which}_bytes={word:x}"]
         rec["sites"][which] = site
+    # The anchor: the image's entry instruction, which arms the sites in each window (the plain
+    # program's e_entry; the domain's domain_main, where the launcher enters it).
+    anchor = rec["domain_main"] if a.kind == "capstone" else struct.unpack_from("<Q", open(a.exe, "rb").read(), 24)[0]
+    length, word = first_insn(loads, anchor)
+    rec["anchor"] = {"link": anchor, "len": length, "bytes": word}
+    args += [f"anchor_vaddr={anchor - rec.get('low', 0):x}", f"anchor_bytes={word:x}"]
     if a.kind == "capstone":
         args.append(f"slide_align={rec['region']:x}")
+        rec["text"] = loads[0][1]
     if "start" in rec["sites"] and rec["sites"]["start"]["count"] >= rec["sites"]["stop"]["count"] \
             and rec["sites"]["start"]["symbol"] == a.symbol:
         die("start_count must be below stop_count for one symbol")
@@ -123,9 +143,15 @@ def finish(out):
     reasons = []
     stopped_path = os.path.join(out, "capprof", "stopped")
     if not os.path.exists(stopped_path):
-        # The site's K-th entry never came: the run is a full run that did not stop. Its verdict
-        # stands, and the record says how far the site got.
-        result["slice"] = {"requested": stop, "stopped": False}
+        # The site's K-th entry never came. Without a start site the run is a full run that did not
+        # stop: its verdict stands, and the record says how far the site got. With one, the plugin
+        # dropped every count before the start site's entry, so the windows are neither a full run
+        # nor the slice asked for: FAIL.
+        result["slice"] = {"requested": stop, "start": want["sites"].get("start"), "stopped": False}
+        if want["sites"].get("start"):
+            result["runcpu_reasons"] = result.get("reasons", [])
+            result["reasons"] = ["a start site trimmed the windows and the stop site's K-th entry never came"]
+            result["verdict"] = "FAIL"
         json.dump(result, open(result_path, "w"), indent=1)
         print(result["verdict"], "(not stopped: the site's K-th entry never came)", result.get("reasons"))
         return
@@ -141,25 +167,47 @@ def finish(out):
     ft = footer(wfile) if os.path.exists(wfile) else {}
     if "stopped_at" not in ft:
         reasons.append(f"window {window} has no stopped_at footer")
-    cands = [c for c in ft.get("stop_candidates", []) if int(c[1])]
-    if len(cands) != 1:
-        reasons.append(f"{len(cands)} addresses entered as the stop site ({cands}): not one function")
+    # capprof lists one candidate per (address, physical page): vaddr:page:entries:window entries:unarmed.
+    # The stop must have been fed by ONE of them in the stopped window: two images with the site's
+    # bytes at the armed address (another static program at the same link address) would both count.
+    cands = [c for c in ft.get("stop_candidates", []) if int(c[3])]
+    if len(cands) != 1 or int(cands[0][0], 16) != va:
+        reasons.append(f"{len(cands)} (address, page) candidates entered the stop site in window {window} ({cands}): not one image")
     start = want["sites"].get("start")
     if start:
         st = ft.get("started_at")
         if not st or int(st["value"].split(":")[1]) != start["count"]:
             reasons.append(f"no started_at for entry {start['count']} in window {window}")
-        scands = [c for c in ft.get("start_candidates", []) if int(c[1])]
+        scands = [c for c in ft.get("start_candidates", []) if int(c[2])]
         if len(scands) != 1:
             reasons.append(f"{len(scands)} addresses entered as the start site ({scands})")
     image_record = None
+    anchored = int(kv.get("base", "-1"), 16) if kv.get("base", "-1") != "-1" else None
     if want["kind"] == "plain":
-        if va != stop["link"]:
-            reasons.append(f"stopped at {va:#x}, the symbol is at {stop['link']:#x}")
+        if va != stop["link"] or anchored != 0:
+            reasons.append(f"stopped at {va:#x} with anchor base {kv.get('base')}, the symbol is at {stop['link']:#x}")
     else:
         base = va - (stop["link"] - want["low"])
+        if anchored != base:
+            reasons.append(f"stopped at base {base:#x}, the anchor (domain_main) armed base {kv.get('base')}")
         if base % want["region"]:
             reasons.append(f"base {base:#x} is not a multiple of the grant size {want['region']:#x}")
+        # Identity: every instruction the window counted in the image's text at that base must be
+        # the image's own bytes (a full domain run has none that differ).
+        _, loads = elf(want["exe"])
+        v0, _, _, text = loads[0]
+        bad = 0
+        for line in (open(wfile) if os.path.exists(wfile) else []):
+            if line[0] == "#":
+                continue
+            rva, ln, b, att, _ = line.split("\t")
+            rva, ln = int(rva, 16), int(ln)
+            if base <= rva < base + want["text"]:
+                o = rva - base
+                if int.from_bytes(text[o:o + ln], "little") != int(b, 16):
+                    bad += int(att)
+        if bad:
+            reasons.append(f"{bad} attempts in the image's text at base {base:#x} are not the image's bytes")
         entry = base + want["domain_main"] - want["low"]
         image_record = (f"capprof-slice: domain image entry={entry:#x} code={base:#x}-{base + want['region']:#x} "
                         f"(derived from stopped_at; the launcher never exited)")
@@ -189,7 +237,7 @@ def finish(out):
     if image_record and not reasons:
         with open(os.path.join(out, "image-records.txt"), "a") as f:
             f.write(image_record + "\n")
-    sl = {"symbol": stop["symbol"], "count": stop["count"], "start": start and {"symbol": start["symbol"], "count": start["count"]},
+    sl = {"symbol": stop["symbol"], "count": stop["count"], "len": stop["len"], "bytes": stop["bytes"], "start": start and {"symbol": start["symbol"], "count": start["count"]},
           "stopped_at": va, "window": window, "arrivals": int(kv["arrivals"]), "image_record": image_record,
           "stopped": True}
     json.dump(sl, open(os.path.join(out, "slice.json"), "w"), indent=1)

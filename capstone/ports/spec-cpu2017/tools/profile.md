@@ -96,19 +96,30 @@ resolve the symbol in the arm's binary of the benchmark (`tools/stop-at.py resol
 file's `nm`) and give the capprof plugin its address: the window then closes at the function's
 K-th entry exactly as the stop marker closes it, and the plugin ends the VM. Entries count inside
 open windows only and accumulate over the run's windows (an invocation's window continues the
-previous one's count). The plain arm's site is the symbol's link address; a domain image is mapped
-by the launcher at a base it reserves at run time, a multiple of the image's grant size, so the
-plugin matches the offset modulo that size together with the instruction's bytes, reports the
-address it stopped at, and the kit derives the image record the launcher never wrote from it.
+previous one's count). An entry is an arrival that reached the instruction after the site, so a
+first instruction that faults and is retried counts once (a site that transfers control has no
+such successor and is refused). Identity: the site is armed only in the image whose entry
+instruction (the plain program's e_entry, the domain's domain_main) ran last, and only at exactly
+that image's base plus the site's offset. The plain arm runs at its link addresses; a domain image
+is mapped by the launcher at a base it reserves at run time, a multiple of the image's grant size,
+which domain_main's arrival fixes. The plugin keeps one candidate per (address, physical page), so
+another program with the site's bytes at the same address is a second candidate, not more entries
+of the first. The kit derives the domain's image record, which the launcher never wrote, from the
+armed base.
 
 A stopped run's verdict is SLICE, never PASS: runcpu cannot validate an output cut short.
 `tools/stop-at.py finish` requires the plugin's `capprof/stopped` record to match the request
-(entry K, the symbol's bytes, the plain link address or a base aligned to the grant size), one
-address entered as the site, every guest invocation before the stopped one to have passed and the
-stopped one to be the resolved binary's; every later command runcpu issues is refused at once as
-`after-stop` (`capstone-run.sh`). `prof-compare.py` compares two runs only when both are full runs
+(entry K, the symbol's bytes, the plain link address or the anchored base, aligned to the grant
+size), ONE (address, page) candidate to have entered the site in the stopped window, every
+instruction the stopped window counted in the domain's text at that base to be the image's own
+bytes, every guest invocation before the stopped one to have passed and the stopped one to be the
+resolved binary's. `prof-report.py` refuses a slice (and the verdict becomes FAIL) whose stop
+address does not hold the site's bytes in the image as placed, or whose stopped window has
+program-range attempts that are not the image's. Every later command runcpu issues is refused at
+once as `after-stop` (`capstone-run.sh`). `prof-compare.py` compares two runs only when both are full runs
 or both are slices with the same symbol, K and start. A K the run never reaches gives a full run,
-whose window footers carry `# stop_entries_so_far` (the site's entries), the count to slice from.
+whose window footers carry `# stop_entries_so_far` (the site's entries), the count to slice from;
+with a start site that run's windows are trimmed, so it is FAIL.
 
 What a slice is not: it measures a PREFIX of the program's work, and the prefix is not the whole
 run in miniature. Measured on the census platform (2026-11-03, slices at 1/5/20 % of the entries
@@ -126,4 +137,5 @@ run's counts: entered often, at a steady rate, the SAME number of times in both 
 whose first instruction is also a loop header in one build counts the loop's iterations there).
 The correctness test is `tools/capprof-validation/stopat-run.sh` (`stopatcheck.py`): a loop calling
 a function 1000 times over two windows, plain and as a domain, with stop and start sites, checked
-instruction by instruction against the full run.
+instruction by instruction against the full run, and a site whose first instruction faults and is
+retried across a block boundary (with OLD_PLUGIN=, the retry rule's negative control).

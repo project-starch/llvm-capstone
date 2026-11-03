@@ -227,6 +227,12 @@ for k, (inv_id, inv) in enumerate(invocations):
             fail("a plain program must be ET_EXEC (static, no PIE)")
         code_lo = code_hi = None
         images = [prog, profrun]
+    sl = summary["slice"]
+    if sl and n == sl["window"]:
+        # A slice is only as good as the identity of what stopped it: the stop address must hold
+        # the site's bytes in the image as placed for this window, or the report is refused.
+        if not prog.bytes_match(sl["stopped_at"], sl["len"], sl["bytes"]):
+            fail(f"slice: the image at {sl['stopped_at']:#x} does not hold the stop site's bytes {sl['bytes']:08x}")
     classes, funcs = collections.Counter(), collections.Counter()
     mix, mismatch = collections.defaultdict(collections.Counter), collections.Counter()
     for va, ln, b, att in recs:
@@ -267,6 +273,9 @@ for k, (inv_id, inv) in enumerate(invocations):
         funcs[(cls, fn)] += att
         mix[cls][insn_class(b, ln)] += att
     total = sum(classes.values())
+    if sl and n == sl["window"] and classes.get("other (bytes differ)"):
+        fail(f"slice: {classes['other (bytes differ)']:,} attempts in the stopped window's program range are not "
+             "the image's bytes: the stop did not happen in the image it names")
     report = {
         "invocation": inv_id, "window": n, "exe": exe, "exe_sha256": sha, "argv": inv.get("argv"),
         "total_attempts": total, "classes": dict(classes.most_common()),

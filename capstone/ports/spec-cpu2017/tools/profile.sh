@@ -228,5 +228,13 @@ mkdir -p "$OUT/profile"
 report_rc=0
 python3 "$KIT/tools/prof-report.py" --out "$OUT" --platform "$PL" --kind "$KIND" --nm "$(jopt nm llvm-nm)" > "$OUT/profile/summary.txt" 2> "$OUT/profile/report.err" || report_rc=$?
 [ $report_rc = 0 ] || { echo "prof-report failed (rc=$report_rc): $(tail -1 "$OUT/profile/report.err")" | tee -a "$OUT/profile/summary.txt" >&2; }
+# A slice the attribution refuses (its stop is not in the image it names) is no result.
+[ $report_rc = 0 ] || python3 - "$OUT" <<'PY'
+import json, sys
+p = sys.argv[1] + "/result.json"; r = json.load(open(p))
+if r.get("verdict") == "SLICE":
+    r["verdict"] = "FAIL"; r["reasons"] = r.get("reasons", []) + ["prof-report refused the slice: " + open(sys.argv[1] + "/profile/report.err").read().strip().splitlines()[-1]]
+    json.dump(r, open(p, "w"), indent=1)
+PY
 head -30 "$OUT/profile/summary.txt"
 [ $windows_rc = 0 ] && [ $report_rc = 0 ] || exit 1
