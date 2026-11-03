@@ -1,4 +1,4 @@
-/* EXPERIMENT: whole-mapping retirement and untagged reuse on the raw-copy kernel. */
+/* Whole-mapping retirement and untagged reuse on the raw-copy kernel. */
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>

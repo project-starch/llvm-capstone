@@ -1,4 +1,4 @@
-/* EXPERIMENT (lane M): physical frames of a range of another process, from /proc/PID/pagemap (root).
+/* Physical frames of a range of another process, from /proc/PID/pagemap (root).
  * usage: pfns PID ADDR LEN STATEFILE   (ADDR/LEN hex or decimal)
  * Prints "present=N moved=M new=K" against the PFNs saved in STATEFILE by the previous call,
  * then saves the current ones there. moved = present both times at a different frame. */

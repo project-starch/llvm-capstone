@@ -10,7 +10,7 @@ L=${LANE_ROOT:?Set a private lane root}; PL=${PLATFORM:?Set a private platform};
 mkdir -p "$OUT"
 vm() { env CAPSTONE_QEMU_LOCK=$OUT/qemu.lock PYTHONPATH=${VM_HOST:-$L/vmhost} python3 -m capstone_vm --state "$OUT/vm" "$@"; }
 mkdir -m 700 -p "$L/vm/t-$TAG"; ln -s "$L/vm/t-$TAG" "$OUT/vm"
-sha256sum "$QEMU" "$IMAGE" "$MODULE" "$LAUNCHER" $L/torture/$BIN $L/torture/pfns > "$OUT/inputs.sha256"
+sha256sum "$QEMU" "$IMAGE" "$MODULE" "$LAUNCHER" "$L/torture/$BIN" "$L/torture/pfns" > "$OUT/inputs.sha256"
 MODULE_ARGS=()
 read -ra PARAMS <<< "${MODPARAMS:-unpinned=1 supervisor_slots=2}"
 for p in "${PARAMS[@]}"; do MODULE_ARGS+=(--module-param "$p"); done
@@ -21,9 +21,9 @@ vm up "${MODULE_ARGS[@]}" --profile virtual --exact-bounds --memory 2G --share-m
   --launcher "$LAUNCHER" --job-helper $PL/adapter/capstone-job \
   --module "$MODULE" --ssh-server $PL/ssh-server/dropbearmulti > "$OUT/vm-up.log" 2>&1 || { echo "vm up failed"; tail -n 20 "$OUT/vm-up.log"; exit 3; }
 trap 'vm down > /dev/null 2>&1 || true' EXIT
-vm exec -- sh -c 'cp /mnt/host/torture/pfns /tmp/pfns && chmod 755 /tmp/pfns; cp /mnt/host/torture/hog /tmp/hog && chmod 755 /tmp/hog; killall syslogd klogd 2>/dev/null; uname -a; cat /proc/cmdline; echo swaps:; cat /proc/swaps; for p in /sys/module/captag/parameters/* /sys/module/capstone_vm/parameters/unpinned; do [ -f $p ] && echo "$p=$(cat $p)"; done; grep -E "pgmigrate_success|compact_migrate_scanned|thp_fault_alloc" /proc/vmstat' > "$OUT/guest-before.txt" 2>&1
+vm exec -- sh -c 'cp /mnt/host/torture/pfns /tmp/pfns && chmod 755 /tmp/pfns; if [ -f /mnt/host/torture/hog ]; then cp /mnt/host/torture/hog /tmp/hog && chmod 755 /tmp/hog; fi; killall syslogd klogd 2>/dev/null; uname -a; cat /proc/cmdline; echo swaps:; cat /proc/swaps; for p in /sys/module/captag/parameters/* /sys/module/capstone_vm/parameters/unpinned; do [ -f $p ] && echo "$p=$(cat $p)"; done; grep -E "pgmigrate_success|compact_migrate_scanned|thp_fault_alloc" /proc/vmstat' > "$OUT/guest-before.txt" 2>&1
 ENVS=(); [ "$FORK" != 0 ] && ENVS=(-e CAPSTONE_VM_TORTURE_FORK=$FORK)
-if [ -n "${MODPARAMS:-unpinned=1 supervisor_slots=2}" ]; then vm exec -- sh -c "rmmod capstone_vm && insmod /mnt/control/module ${MODPARAMS:-unpinned=1 supervisor_slots=2} && cat /sys/module/capstone_vm/parameters/unpinned" > "$OUT/modparams.txt" 2>&1; fi
+if [ -n "${MODPARAMS:-unpinned=1 supervisor_slots=2}" ]; then vm exec -- sh -c "rmmod capstone_vm && insmod /mnt/control/module ${MODPARAMS:-unpinned=1 supervisor_slots=2} && if [ -f /sys/module/capstone_vm/parameters/unpinned ]; then cat /sys/module/capstone_vm/parameters/unpinned; fi" > "$OUT/modparams.txt" 2>&1; fi
 if [ "$MODE" = stale ]; then ARGS=(stale "$ROUNDS"); else ARGS=("$ROUNDS" 1500); fi
 if [ -n "${HOG:-}" ]; then
   vm exec -- sh -c "nohup /tmp/hog $HOG > /tmp/hog.out 2>&1 < /dev/null & for i in \$(seq 1 120); do grep -q READY /tmp/hog.out && break; sleep 1; done; cat /tmp/hog.out; free -m" > "$OUT/hog.txt" 2>&1
@@ -47,8 +47,18 @@ HOGKILL=${HOG:+1}
     fi
     sleep 1
   done
-  if [ -n "$RUN2" ]; then wait "$RUN2"; echo "rc2=$?" > "$OUT/rc2.txt"; fi
-  wait $RUN; echo "rc=$?" > "$OUT/rc.txt"
+  rc2=0
+  if [ -n "$RUN2" ]; then wait "$RUN2"; rc2=$?; echo "rc2=$rc2" > "$OUT/rc2.txt"; fi
+  wait $RUN; rc1=$?; echo "rc=$rc1" > "$OUT/rc.txt"
 vm exec -- sh -c 'for p in /sys/module/captag/parameters/* /sys/module/capstone_vm/parameters/unpinned_faults; do [ -f $p ] && echo "$p=$(cat $p)"; done; grep -E "pgmigrate_success|pgmigrate_fail|compact_migrate_scanned|thp_fault_alloc" /proc/vmstat; dmesg | grep -i -E "capstone|captag|BUG|Oops" | tail -n 30' > "$OUT/guest-after.txt" 2>&1
 vm down > /dev/null 2>&1; trap - EXIT
 cat "$OUT/rc.txt"; tail -n 3 "$OUT/run.out"; awk '/^heap|^bss/' "$OUT/compact.log" 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i ~ /^moved=/){split($i,a,"=");m[$1]+=a[2]}} END{for(k in m) print k, "moved_total", m[k]}'
+
+if [ "$MODE" = stale ]; then
+  [ "$rc1" = 139 ] && grep -q 'domain fault cause=25 ' "$OUT/run.err" || exit 1
+  if [ -n "$RUN2" ]; then
+    [ "$rc2" = 139 ] && grep -q 'domain fault cause=25 ' "$OUT/run2.err" || exit 1
+  fi
+else
+  [ "$rc1" = 0 ] && [ "$rc2" = 0 ] || exit 1
+fi

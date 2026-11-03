@@ -81,7 +81,11 @@ successful compilation.
 ## Tests and limits
 
 `torture.c`, `pfns.c`, `reuse.c` and `torture-run.sh` retain movement, COW,
-two-process, stale-reference and reuse stimuli. The launcher's sleeping-child
+two-process, stale-reference and reuse stimuli. `build-torture.sh SDK OUT`
+builds them and the optional `hog` fragmentation helper with CROSS_COMPILE set.
+Set OUT to LANE_ROOT/torture for the runner. It returns failure for a nonzero
+normal result or a stale run that fails to report the expected revoked-node
+fault (cause 25). The launcher's sleeping-child
 COW stimulus exists only when built with `CAPSTONE_VM_TORTURE`; production
 adapter builds contain no such hook. Select it with `CAPSTONE_VM_TORTURE=1`
 when running build-adapter.sh. This is not protected fork support.
