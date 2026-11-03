@@ -313,6 +313,9 @@ static size_t mapping_length(size_t bytes)
  *     an unscrubbed granule. The header and the slack after the last slot are read only as
  *     scalars by the allocator. Scrubbing at first take rather than at reuse touches only the
  *     slots that are used again, so no page the new group does not use is faulted in.
+ *     CAPSTONE_HEAP_OBJECT_BOUNDS=0 hands the program the GROUP's authority, which also reaches
+ *     the header, the untaken slots and the slack, so that arm zeroes the whole mapping when it
+ *     is reused, before the new group is bound.
  * (4) Bounded: RECYCLE_PER_LENGTH mappings of one length, RECYCLE_ENTRIES in all, at most
  *     RECYCLE_BYTES, none above RECYCLE_MAX_ENTRY; a release beyond a bound is unmapped as
  *     before; malloc_trim unmaps every kept mapping. Kept mappings stay registered arenas, so
@@ -504,6 +507,10 @@ void *__capstone_malloc_group_map(struct capstone_malloc_slot *slots,
     }
     root_enter(r, __builtin_capstone_cap_get_cursor(r));
     void *group = group_lifetime(r, mapped);
+#if !CAPSTONE_HEAP_OBJECT_BOUNDS
+    /* The program holds this whole group's authority in this arm (condition 3 above). */
+    if (stale) { memset(group, 0, mapped); stale = 0; }
+#endif
     return bind_slots(slots, group, stride, count, stale);
 }
 void *__capstone_malloc_group_nested(struct capstone_malloc_slot *slots,
