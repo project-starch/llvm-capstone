@@ -62,3 +62,18 @@ and it is why the line is now `capstone_vm: hpm`.
 - N = 1.
 - Counters have no privilege filter, so a window also counts monitor work inside the CSRUNV, as cycle does.
 - hpm5 (DTLB) counts the S-mode translation the context runs under.
+
+## Addendum 1 (3 Nov 23:50, after the first boot held P1-P5; result in RESULT.md)
+
+Two more boots go on the same kit, bkit16-hpm-b3-b1. Each is booked in the next board 1 chain gap by
+`sbhpm/hpm-boot2.sh` (grab-gap.py) and runs one after the other.
+- **gcc test, Full.** Stage `spec/stages-board/502.gcc_r-test-capstone-lifetimes`, the 3 Nov board stage. Twin
+  census-q34. Baseline (out/502.gcc_r-test-capstone-lifetimes): cycles 205,767,280, instret 30,690,680.
+- **imagick test, repeat.** The same stage as the first boot. It tells whether the arms' L1I-miss and mispredict
+  difference (716 k vs 489 k; 2.01 M vs 1.61 M) is reproducible.
+
+Predictions:
+- P1-P5 as above, against these baselines. For gcc, P4 holds for its one arm.
+- **P6 (repeat).** If the difference comes from the arm, the repeat again reads MapLife L1I > Full L1I and MapLife
+  mispredicts > Full mispredicts. Each arm's L1D stays within 1 % of the first boot. If either ordering flips, the
+  difference is run-to-run variation, and per-arm counter differences of that size are not read as arm effects.
