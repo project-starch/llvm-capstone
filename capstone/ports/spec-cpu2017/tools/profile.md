@@ -154,9 +154,11 @@ OLD2_PLUGIN= run the earlier plugins as negative controls).
 ## One-command milestone census
 
 On the measurement host, `tools/milestone-census.sh DEV_COMMIT TAG [--quick]`
+runs gcc, imagick, lbm, nab, perlbench, mcf and xz at SPEC test size and
 creates `runs/TAG/northstar.txt` and `northstar.json`, with a same-time plain
 arm, the P/K/H terms, both overheads, and changes in percentage points from
-the previous completed milestone. `tools/prof-northstar.py A B` also prints
+the previous completed milestone. Newly admitted benchmarks have `n/a`
+previous-milestone deltas until a compatible baseline exists. `tools/prof-northstar.py A B` also prints
 these terms and one JSON line directly from two run directories (or their
 `profile.json` files). Missing bucket data, non-positive denominators,
 inconsistent totals, failed verdicts and different work boundaries are errors.
@@ -207,7 +209,9 @@ The actual hashes are in `source-hashes.json`; the build recipe version is
 also part of the key. Compiler and SDK are reused together only when every
 input matches a completed capN record; otherwise both are built with the
 census recipe (Release, assertions enabled, default virtual heap protection).
-The SPEC kit tree is additionally part of the executable cache key. New caches
+The SPEC kit tree is additionally part of the executable cache key. An existing private cache is extended when newly admitted benchmarks lack
+recorded executables; only those benchmarks are built and the hash record is
+updated atomically. New caches
 build the Capstone executables with a private label in a private SPEC copy;
 plain executables retain the template's recorded compiler, label and installed
 SPEC verification hashes. Their config must match the requested kit before
@@ -224,10 +228,34 @@ usual records, and saves the top 15 Capstone function deltas against the
 previous milestone. No existing kit, platform or run is updated. The script
 preserves zero-filled image extents as holes to save disk space; the copies
 are independent regular files with identical bytes, never links. The script
-checks for at least **15 GiB free** before copying, building and profiling;
+checks both the home and output filesystems for at least **15 GiB free**
+before copying, building and profiling, or **20 GiB** before a compiler build;
 this is a reserve check, not a reservation against other host users. LLVM
 builds default to 20 jobs (`CAP_JOBS`), runtime builds to 4, profiling to 4
-(`JOBS` for full mode). The musl archive can be selected with `MUSL_ARCHIVE`.
+(`JOBS` in either mode). The musl archive can be selected with `MUSL_ARCHIVE`.
+
+perlbench uses `x-capstone-supervisor-slots=2` and module parameter
+`supervisor_slots=2` in both arms; the other benchmarks retain their template
+settings. Each benchmark/arm has its own saved arms file. Full xz includes
+all twelve SPEC test invocations in the harness's normal order, sums their
+windows, and requires the full SPEC oracle to pass. Quick xz stops inside
+the first invocation; later invocations are recorded as `after-stop` refusals.
+Its quick number does not represent all six compression levels.
+
+Every profile runs under `profile-watchdog.py`, a Linux child subreaper.
+`CENSUS_RUN_TIMEOUT` sets a positive wall-time limit **per benchmark/arm**,
+including profile preparation and VM boot: default 600 seconds in quick mode,
+14,400 seconds in full mode. The census queue wait is outside this limit;
+profiling uses a private, nonblocking VM lock. The watchdog owns even the
+VM that detaches from `vm up`, so it does not become an orphan under PID 1.
+On timeout or TERM/INT/HUP it signals only its descendants by PID descriptor,
+escalates from TERM to KILL, reaps children and writes `result.json` as FAIL.
+It also rejects a profile that returns with live descendants. `watchdog.json`
+records the deadline, elapsed time, signalled PIDs and any surviving children.
+The isolation depends on Linux subreaper and pidfd support; unavailable support
+refuses the run. An uncatchable kill of the watchdog or host failure is outside
+this cleanup guarantee. Failed rows are retained in `batch.json`, and any
+failure prevents a completed `northstar.json`.
 
 Quick mode uses these fixed `PROFILE_STOP_AT` prefixes:
 
@@ -237,8 +265,11 @@ Quick mode uses these fixed `PROFILE_STOP_AT` prefixes:
 | imagick | `GetVirtualPixelsFromNexus:32` | first 32 virtual pixel fetches |
 | lbm | `LBM_performStreamCollideTRT:3` | two stream/collide steps, then entry of the third |
 | nab | `mme34:5` | four force evaluations, then entry of the fifth |
+| perlbench | `Perl_pp_nextstate:10000` | first 10,000 statement-boundary opcode entries |
+| mcf | `primal_bea_mpp:3551` | entry of the 3,551st pricing call |
+| xz | `sha_compress:13392` | first 13,392 hash-compression calls, in the first invocation |
 
-The census4 raw entry counts for these sites agree between Capstone and plain
+The census4 raw entry counts for the original four sites agree between Capstone and plain
 (1, 1583, 20, 2007 respectively). Every new quick run must reach the specified
 boundary in both arms and pass the harness's slice validation. Its verdict is
 **SLICE**, never SPEC PASS. Startup/page population is included, teardown is
@@ -254,6 +285,7 @@ Tool regressions on the measurement host:
 ```sh
 python3 tools/test-prof-northstar.py
 python3 tools/test-milestone-census.py
+python3 tools/test-profile-watchdog.py
 ```
 
 Qualification on 2026-11-03: dev `114b90b7be2e`, p12,

@@ -2,6 +2,7 @@
 """Build an immutable milestone platform and measure matched SPEC arms."""
 import argparse
 import concurrent.futures
+import copy
 import hashlib
 import fcntl
 import importlib.util
@@ -15,10 +16,13 @@ import sys
 import time
 
 HERE = Path(__file__).resolve().parent
-BENCHES = ['502.gcc_r', '538.imagick_r', '519.lbm_r', '544.nab_r']
+BENCHES = ['502.gcc_r', '538.imagick_r', '519.lbm_r', '544.nab_r',
+           '500.perlbench_r', '505.mcf_r', '557.xz_r']
 # Prefixes, not estimates of whole-program performance. See profile.md.
 SLICES = dict(zip(BENCHES, ['final_start_function:1', 'GetVirtualPixelsFromNexus:32',
-                          'LBM_performStreamCollideTRT:3', 'mme34:5']))
+                          'LBM_performStreamCollideTRT:3', 'mme34:5',
+                          'Perl_pp_nextstate:10000', 'primal_bea_mpp:3551',
+                          'sha_compress:13392']))
 COMPILER = ['llvm', 'clang', 'lld', 'cmake', 'third-party']
 SDK = ['compiler-rt', 'capstone/ports/common', 'capstone/ports/musl-capstone',
        'capstone/sublet', 'capstone/runtime/CMakeLists.txt',
@@ -69,11 +73,12 @@ def sdk_identity(cap):
     return {str(p): sha(p) for p in paths}
 
 
-def disk(root):
-    free = shutil.disk_usage(root).free
-    print(f'disk free {free} bytes; minimum {15 * 1024**3}', flush=True)
-    if free < 15 * 1024**3:
-        raise ValueError('UNRESOLVED: less than 15 GiB free; no copy/build/run started')
+def disk(root, compiler=False):
+    free = min(shutil.disk_usage(root).free, shutil.disk_usage(Path.home()).free)
+    minimum = 20 if compiler else 15
+    print(f'disk free {free} bytes; minimum {minimum * 1024**3}', flush=True)
+    if free < minimum * 1024**3:
+        raise ValueError(f'UNRESOLVED: less than {minimum} GiB free; no copy/build/run started')
 
 
 def git(repo, *args):
@@ -139,6 +144,22 @@ def check_plain_config(kit, specroot):
         raise ValueError('plain SPEC config is missing executable verification hashes')
     if body.strip() != (kit / 'config/riscv-plain.cfg').read_text().strip():
         raise ValueError('plain config changed; supply a template built with that config')
+
+
+def benchmark_arms(arms, bench):
+    settings = copy.deepcopy(arms)
+    if bench == '500.perlbench_r':
+        # The guest boots the module in both arms; keep its slot capacity and
+        # the CPU capacity consistent. Nested perl domains require two slots.
+        settings['platform']['cpu_props'] = [p for p in settings['platform'].get('cpu_props', [])
+            if not p.startswith('x-capstone-supervisor-slots=')] + ['x-capstone-supervisor-slots=2']
+        for arm in settings['arms'].values():
+            arm['cpu_props'] = [p for p in arm.get('cpu_props', [])
+                if not p.startswith('x-capstone-supervisor-slots=')]
+            params = arm.get('module_params', '').split()
+            arm['module_params'] = ' '.join([p for p in params
+                if not p.startswith('supervisor_slots=')] + ['supervisor_slots=2'])
+    return settings
 
 
 def main():
@@ -226,7 +247,7 @@ def main():
             print(f'reuse compiler+SDK {cap}: all listed source hashes equal', flush=True)
         else:
             cap = cache / 'cap'
-            disk(root)
+            disk(root, compiler=True)
             shell('''mkdir -p "$W/build" "$W/musl-src"
 cp "$MUSL_ARCHIVE" "$W/musl-src/musl-1.2.5.tar.gz"
 export CAPSTONE_LLVM_BUILD_DIR="$W/build" CAPSTONE_LLVM_BIN="$W/build/bin"
@@ -252,7 +273,7 @@ bash "$T/capstone/ports/common/application/build-sdk.sh" "$W/sdk" "$MUSLDIR" "$W
         shell('''source "$T/capstone/tests/capstone-test-env.sh"
 cd "$SPEC_ROOT"
 set +u; source ./shrc >/dev/null; set -u
-runcpu --config=capstone-virtual --action=build --rebuild --tune=base --define sdk="$SDK" --define kit="$KIT" --define arm_label="$LABEL" 502.gcc_r 538.imagick_r 519.lbm_r 544.nab_r
+runcpu --config=capstone-virtual --action=build --rebuild --tune=base --define sdk="$SDK" --define kit="$KIT" --define arm_label="$LABEL" 502.gcc_r 538.imagick_r 519.lbm_r 544.nab_r 500.perlbench_r 505.mcf_r 557.xz_r
 ''', out / 'spec-build.log', dict(env, SPEC_ROOT=str(specroot), SDK=str(cap / 'sdk'), KIT=str(kit), LABEL=label,
             CAPSTONE_LLVM_BUILD_DIR=str(cap / 'build'), CAPSTONE_LLVM_BIN=str(cap / 'build/bin')))
         record = dict(commit=commit, cap=str(cap), label=label, hashes=hashes,
@@ -273,13 +294,38 @@ runcpu --config=capstone-virtual --action=build --rebuild --tune=base --define s
         if sha(Path(path)) != digest:
             raise ValueError(f'cached SPEC executable changed: {path}')
     check_plain_config(cache / 'src/capstone/ports/spec-cpu2017', cache / 'SPEC17')
+    specroot = cache / 'SPEC17'
+    missing = [b for b in BENCHES if not any(
+        Path(p).parent.parent.name == b and p.endswith('_base.' + record['label'])
+        for p in record['executables'])]
+    if missing:
+        disk(root)
+        shell('''source "$T/capstone/tests/capstone-test-env.sh"
+cd "$SPEC_ROOT"
+set +u; source ./shrc >/dev/null; set -u
+runcpu --config=capstone-virtual --action=build --tune=base --define sdk="$SDK" --define kit="$KIT" --define arm_label="$LABEL" $BENCHES
+''', out / 'spec-extend.log', dict(os.environ, T=str(cache / 'src'),
+            CAPSTONE_REPO_ROOT=str(cache / 'src'), CAPSTONE_TMP_ROOT=str(cache / 'tmp'),
+            CAPSTONE_LLVM_BUILD_DIR=str(cap / 'build'), CAPSTONE_LLVM_BIN=str(cap / 'build/bin'),
+            SPEC_ROOT=str(specroot), SDK=str(cap / 'sdk'),
+            KIT=str(cache / 'src/capstone/ports/spec-cpu2017'), LABEL=record['label'],
+            BENCHES=' '.join(missing)))
+        for b in missing:
+            built = list((specroot / 'benchspec/CPU' / b / 'exe').glob('*_base.' + record['label']))
+            if not built:
+                raise ValueError(f'{b}: missing built executable')
+            record['executables'].update({str(p): sha(p) for p in
+                (specroot / 'benchspec/CPU' / b / 'exe').glob('*_base.*')})
+        dump(cache / 'ready.json.new', record)
+        (cache / 'ready.json.new').replace(cache / 'ready.json')
     print(f"compiler+SDK {cap}; cache {key}", flush=True)
     # Fresh source, kit and adapter per milestone even when compiler inputs match.
     src = out / 'source'
     export(repo, commit, ['capstone/runtime', 'capstone/tests', 'capstone/ports/spec-cpu2017'], src)
     kit = out / 'kit'
     shutil.copytree(src / 'capstone/ports/spec-cpu2017', kit)
-    for name in ('prof-northstar.py', 'prof-buckets.py', 'milestone-census.py', 'milestone-census.sh'):
+    for name in ('prof-northstar.py', 'prof-buckets.py', 'milestone-census.py', 'milestone-census.sh',
+                 'profile-watchdog.py'):
         shutil.copy2(HERE / name, kit / 'tools' / name)
     header = source_platform / 'adapter/module/cap_rev_table_abi.h'
     target = src / 'capstone/capstone-qemu/target/riscv/cap_rev_table_abi.h'
@@ -328,26 +374,37 @@ runcpu --config=capstone-virtual --action=build --rebuild --tune=base --define s
     env.update(CAPSTONE_SPEC_VM_STATES=str(root / 'vm-states'))
     env.pop('PROFILE_STOP_AT', None)
     disk(root)
-    if args.quick:
-        def profile(pair):
-            bench, arm = pair
-            begin = time.monotonic()
-            dest = out / arm / bench
-            dest.parent.mkdir(exist_ok=True)
-            with (out / (bench + '-' + arm + '.log')).open('w') as stream:
-                run(['bash', kit / 'tools/profile.sh', out / 'arms.json', arm, 'test', bench, dest],
-                    env=dict(env, PROFILE_STOP_AT=SLICES[bench]),
-                    stdout=stream, stderr=subprocess.STDOUT)
-            verdict = json.loads((dest / 'result.json').read_text())['verdict']
-            return f'{arm} {bench} verdict={verdict} wall={time.monotonic()-begin:.3f}s'
-        with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
-            rows = list(pool.map(profile, [(b, a) for b in BENCHES for a in ('cap', 'rv64')]))
-        (out / 'batch.log').write_text('\n'.join(rows) + '\n')
-    else:
-        with (out / 'profile.log').open('w') as stream:
-            run(['bash', kit / 'tools/profile-batch.sh', out / 'arms.json', 'test', out,
-                 'cap', 'rv64', '--', *BENCHES], env=dict(env, JOBS=os.environ.get('JOBS', '4')),
-                stdout=stream, stderr=subprocess.STDOUT)
+    limit = int(os.environ.get('CENSUS_RUN_TIMEOUT', '600' if args.quick else '14400'))
+    jobs = int(os.environ.get('JOBS', '4'))
+    if limit <= 0 or jobs <= 0:
+        raise ValueError('CENSUS_RUN_TIMEOUT and JOBS must be positive')
+    def profile(pair):
+        bench, arm = pair
+        begin = time.monotonic()
+        dest = out / arm / bench
+        dest.parent.mkdir(exist_ok=True)
+        settings = benchmark_arms(arms, bench)
+        armfile = out / (bench + '-' + arm + '-arms.json')
+        dump(armfile, settings)
+        profile_env = dict(env)
+        if args.quick:
+            profile_env['PROFILE_STOP_AT'] = SLICES[bench]
+        with (out / (bench + '-' + arm + '.log')).open('w') as stream:
+            result = subprocess.run(['python3', str(kit / 'tools/profile-watchdog.py'),
+                '--seconds', str(limit), '--out', str(dest), '--',
+                'bash', str(kit / 'tools/profile.sh'), str(armfile), arm, 'test', bench, str(dest)],
+                env=profile_env, stdout=stream, stderr=subprocess.STDOUT)
+        verdict = json.loads((dest / 'result.json').read_text())['verdict'] if (dest / 'result.json').exists() else 'FAIL'
+        return dict(arm=arm, benchmark=bench, verdict=verdict, returncode=result.returncode,
+                    wall_seconds=time.monotonic()-begin)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=jobs) as pool:
+        rows = list(pool.map(profile, [(b, a) for b in BENCHES for a in ('cap', 'rv64')]))
+    dump(out / 'batch.json', rows)
+    (out / 'batch.log').write_text('\n'.join(
+        f"{r['arm']} {r['benchmark']} verdict={r['verdict']} rc={r['returncode']} wall={r['wall_seconds']:.3f}s"
+        for r in rows) + '\n')
+    if any(r['returncode'] or r['verdict'] != ('SLICE' if args.quick else 'PASS') for r in rows):
+        raise ValueError('one or more profiles failed; see batch.json (no completed census)')
     spec = importlib.util.spec_from_file_location('northstar', HERE / 'prof-northstar.py')
     ns = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(ns)
@@ -358,33 +415,38 @@ runcpu --config=capstone-virtual --action=build --rebuild --tune=base --define s
         if r['work'] != wanted:
             raise ValueError(f'{b}: requested work boundary was not reached')
         metrics[b] = r
+        with (out / (b + '-paired-functions.txt')).open('w') as stream:
+            run(['python3', kit / 'tools/prof-compare.py', out / 'rv64' / b,
+                 out / 'cap' / b, '--top', '15'], stdout=stream)
     previous = None
     oldmetrics = None
     previous_arm = os.environ.get('CENSUS_PREVIOUS_ARM', 'cap')
     if os.environ.get('CENSUS_PREVIOUS'):
         previous = envpath('CENSUS_PREVIOUS', '')
-        oldmetrics = {b: ns.compare(previous / 'rv64' / b, previous / previous_arm / b) for b in BENCHES}
+        oldmetrics = {b: ns.compare(previous / 'rv64' / b, previous / previous_arm / b)
+                          for b in BENCHES if (previous / previous_arm / b).is_dir()}
     else:
         for candidate in sorted((root / 'runs').glob('*/northstar.json'), key=lambda p: p.stat().st_mtime, reverse=True):
             data = json.loads(candidate.read_text())
-            if all(data['metrics'][b]['work'] == metrics[b]['work'] for b in BENCHES):
+            if all(b in data['metrics'] and data['metrics'][b]['work'] == metrics[b]['work'] for b in BENCHES):
                 previous, oldmetrics = candidate.parent, data['metrics']
                 break
         if previous is None and not args.quick:
             previous = base / 'runs/census4'
             previous_arm = 'cap-dev4'
-            oldmetrics = {b: ns.compare(previous / 'rv64' / b, previous / previous_arm / b) for b in BENCHES}
-    if oldmetrics and any(oldmetrics[b]['work'] != metrics[b]['work'] for b in BENCHES):
+            oldmetrics = {b: ns.compare(previous / 'rv64' / b, previous / previous_arm / b)
+                          for b in BENCHES if (previous / previous_arm / b).is_dir()}
+    if oldmetrics and any(oldmetrics[b]['work'] != metrics[b]['work'] for b in oldmetrics):
         raise ValueError('refusing previous milestone with different work slices')
     lines = [f'commit {commit}; mode {"quick (SLICE, prefix only)" if args.quick else "full (PASS)"}',
              f'previous {previous or "none; establishing quick baseline"}',
              'benchmark program% boundary% delta-program-pp delta-boundary-pp H_A H_B']
     for b, r in metrics.items():
         delta = (f"{r['program_pct']-oldmetrics[b]['program_pct']:+.4f} {r['boundary_pct']-oldmetrics[b]['boundary_pct']:+.4f}"
-                 if oldmetrics else 'n/a n/a')
+                 if oldmetrics and b in oldmetrics else 'n/a n/a')
         lines.append(f"{b} {r['program_pct']:+.4f} {r['boundary_pct']:+.4f} {delta} {r['a']['H']} {r['b']['H']}")
         lines.append(f"  P_A={r['a']['P']} K_A={r['a']['K']} P_B={r['b']['P']} K_B={r['b']['K']}")
-        if previous:
+        if previous and b in oldmetrics:
             with (out / (b + '-functions.txt')).open('w') as stream:
                 run(['python3', kit / 'tools/prof-compare.py', previous / previous_arm / b,
                      out / 'cap' / b, '--top', '15'], stdout=stream)

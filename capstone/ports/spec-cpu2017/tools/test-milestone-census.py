@@ -27,6 +27,26 @@ class CensusTest(unittest.TestCase):
             usage.return_value.free += 1
             census.disk(self.root)
 
+    def test_compiler_disk_reserve(self):
+        with patch.object(census.shutil, 'disk_usage') as usage:
+            usage.return_value.free = 20 * 1024**3 - 1
+            with self.assertRaisesRegex(ValueError, 'less than 20 GiB'):
+                census.disk(self.root, compiler=True)
+
+    def test_perl_slots_are_consistent_and_other_arms_unchanged(self):
+        arms = {'platform': {'cpu_props': ['x-capstone-supervisor-slots=1']},
+                'arms': {'cap': {'cpu_props': ['x-capstone-supervisor-slots=32'],
+                                 'module_params': 'debug=1 supervisor_slots=32'},
+                         'rv64': {}}}
+        perl = census.benchmark_arms(arms, '500.perlbench_r')
+        self.assertEqual(perl['platform']['cpu_props'], ['x-capstone-supervisor-slots=2'])
+        self.assertEqual(perl['arms']['cap']['cpu_props'], [])
+        self.assertEqual(perl['arms']['cap']['module_params'], 'debug=1 supervisor_slots=2')
+        self.assertEqual(perl['arms']['rv64']['module_params'], 'supervisor_slots=2')
+        self.assertEqual(arms['platform']['cpu_props'], ['x-capstone-supervisor-slots=1'])
+        self.assertEqual(census.benchmark_arms(arms, '557.xz_r'), arms)
+        self.assertEqual(set(census.SLICES), set(census.BENCHES))
+
     def git(self, *args):
         return subprocess.check_output(['git', '-C', str(self.root), *args], text=True).strip()
 
