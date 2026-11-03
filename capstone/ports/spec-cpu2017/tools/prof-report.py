@@ -273,6 +273,15 @@ for k, (inv_id, inv) in enumerate(invocations):
         funcs[(cls, fn)] += att
         mix[cls][insn_class(b, ln)] += att
     total = sum(classes.values())
+    if sl and n == sl["window"]:
+        # ... and what ran inside the stop function itself must be the image's bytes: the plain arm
+        # shares its link addresses with other static programs, which may run in a window, but not
+        # inside the site's function unless it is their code that fed the stop.
+        hi = sl["stopped_at"] + max(sl.get("size", 0), sl["len"] + sl.get("next_len", 0))
+        bad = [(va, b) for va, ln, b, att in recs if sl["stopped_at"] <= va < hi and not prog.bytes_match(va, ln, b)]
+        if bad:
+            fail(f"slice: {len(bad)} instructions executed inside {sl['symbol']} at {sl['stopped_at']:#x} are not the "
+                 f"image's bytes (first {bad[0][0]:#x}: {bad[0][1]:08x}): the stop did not happen in the image it names")
     if sl and n == sl["window"] and classes.get("other (bytes differ)"):
         fail(f"slice: {classes['other (bytes differ)']:,} attempts in the stopped window's program range are not "
              "the image's bytes: the stop did not happen in the image it names")

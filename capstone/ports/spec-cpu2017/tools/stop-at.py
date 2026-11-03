@@ -44,13 +44,18 @@ def elf(path):
     return e_type, loads
 
 
-def symbol(nm, exe, name):
-    out = subprocess.run([nm, "-n", "--defined-only", exe], capture_output=True, text=True, check=True).stdout
-    addrs = sorted({int(p[0], 16) for p in (l.split() for l in out.splitlines())
-                    if len(p) == 3 and p[1] in "TtWw" and p[2] == name})
-    if len(addrs) != 1:
-        die(f"{exe}: {len(addrs)} text symbols named {name} ({[hex(a) for a in addrs]}); need exactly one")
-    return addrs[0]
+def symbol(nm, exe, name, size=False):
+    out = subprocess.run([nm, "-n", "-S", "--defined-only", exe], capture_output=True, text=True, check=True).stdout
+    found = {}
+    for p in (l.split() for l in out.splitlines()):
+        if len(p) == 4 and p[2] in "TtWw" and p[3] == name:
+            found[int(p[0], 16)] = int(p[1], 16)
+        elif len(p) == 3 and p[1] in "TtWw" and p[2] == name:
+            found.setdefault(int(p[0], 16), 0)
+    if len(found) != 1:
+        die(f"{exe}: {len(found)} text symbols named {name} ({[hex(a) for a in found]}); need exactly one")
+    (addr, sz), = found.items()
+    return (addr, sz) if size else addr
 
 
 def first_insn(loads, va):
@@ -93,33 +98,63 @@ def resolve(a):
         low = loads[0][0]
         region = rounded(loads[0][1] + ((loads[1][1] + 4095) & ~4095))
         rec.update(low=low, region=region, domain_main=symbol(a.nm, a.exe, "domain_main"))
+    # The anchor: the image's entry instruction, whose arrival arms the image's base (the plain
+    # program's e_entry; the domain's domain_main, where the launcher enters it).
+    anchor = rec["domain_main"] if a.kind == "capstone" else struct.unpack_from("<Q", open(a.exe, "rb").read(), 24)[0]
+    low = rec.get("low", 0)
+    # The text segment, in the plugin's vaddr space: every instruction in it counts on its image's
+    # counter, which tells a completed site from one reached by another path.
+    tseg = [l for l in loads if l[2] & 1 and l[0] <= anchor < l[0] + l[1]]
+    if len(tseg) != 1:
+        die(f"the entry {anchor:#x} is in {len(tseg)} executable segments")
+    rec["text"] = {"vaddr": tseg[0][0], "size": tseg[0][1]}
     args = []
     for which, name, count in sites:
         if count is None or count < 1:
             die(f"{which}: a count K >= 1 is needed")
-        link = symbol(a.nm, a.exe, name)
+        link, size = symbol(a.nm, a.exe, name, size=True)
         length, word = first_insn(loads, link)
         if transfers_control(word, length):
             die(f"{name}'s first instruction {word:0{2 * length}x} transfers control: its entries cannot be "
                 "told from fault retries; pick another function")
-        site = {"symbol": name, "count": count, "link": link, "len": length, "bytes": word}
-        where = link - rec["low"] if a.kind == "capstone" else link
-        args += [f"{which}_vaddr={where:x}", f"{which}_count={count}", f"{which}_bytes={word:x}"]
+        if link in (anchor, anchor - length) or link + length == anchor:
+            die(f"{name} at {link:#x} is the image's entry {anchor:#x} or next to it: the anchor's arrival would "
+                "reset the site's own; pick another function")
+        if not tseg[0][0] <= link < link + length < tseg[0][0] + tseg[0][1]:
+            die(f"{name} and its successor are not in the entry's text segment")
+        nlen, nword = first_insn(loads, link + length)
+        site = {"symbol": name, "count": count, "link": link, "size": size, "len": length, "bytes": word,
+                "next_len": nlen, "next_bytes": nword}
+        args += [f"{which}_vaddr={link - low:x}", f"{which}_count={count}", f"{which}_bytes={word:x}",
+                 f"{which}_next_bytes={nword:x}"]
         rec["sites"][which] = site
-    # The anchor: the image's entry instruction, which arms the sites in each window (the plain
-    # program's e_entry; the domain's domain_main, where the launcher enters it).
-    anchor = rec["domain_main"] if a.kind == "capstone" else struct.unpack_from("<Q", open(a.exe, "rb").read(), 24)[0]
     length, word = first_insn(loads, anchor)
     rec["anchor"] = {"link": anchor, "len": length, "bytes": word}
-    args += [f"anchor_vaddr={anchor - rec.get('low', 0):x}", f"anchor_bytes={word:x}"]
+    args += [f"anchor_vaddr={anchor - low:x}", f"anchor_bytes={word:x}",
+             f"text_vaddr={tseg[0][0] - low:x}", f"text_size={tseg[0][1]:x}"]
     if a.kind == "capstone":
         args.append(f"slide_align={rec['region']:x}")
-        rec["text"] = loads[0][1]
     if "start" in rec["sites"] and rec["sites"]["start"]["count"] >= rec["sites"]["stop"]["count"] \
             and rec["sites"]["start"]["symbol"] == a.symbol:
         die("start_count must be below stop_count for one symbol")
     rec["plugin_args"] = args
     print(json.dumps(rec, indent=1))
+
+
+def foreign(wfile, loads, slide, lo, hi):
+    """(attempts, addresses) of a window's records in [lo, hi) (link addresses; run-time = link +
+    slide) whose bytes are not the image's; None when there are none."""
+    att = n = 0
+    for line in (open(wfile) if os.path.exists(wfile) else []):
+        if line[0] == "#":
+            continue
+        rva, ln, b, a, _ = line.split("\t")
+        link, ln = int(rva, 16) - slide, int(ln)
+        if lo <= link < hi:
+            seg = [l for l in loads if l[0] <= link < l[0] + len(l[3])]
+            if not seg or int.from_bytes(seg[0][3][link - seg[0][0]:link - seg[0][0] + ln], "little") != int(b, 16):
+                att += int(a); n += 1
+    return (att, n) if n else None
 
 
 def footer(path):
@@ -161,8 +196,9 @@ def finish(out):
     va, k, window = int(va_s, 16), int(k_s), int(kv["window"])
     if k != stop["count"]:
         reasons.append(f"stopped at entry {k}, asked for {stop['count']}")
-    if int(kv["bytes"], 16) != stop["bytes"]:
-        reasons.append(f"stopped on bytes {kv['bytes']}, the symbol's are {stop['bytes']:08x}")
+    if int(kv["bytes"], 16) != stop["bytes"] or int(kv.get("next_bytes", "-1"), 16) != stop["next_bytes"]:
+        reasons.append(f"stopped on bytes {kv['bytes']} / {kv.get('next_bytes')}, the symbol's are "
+                       f"{stop['bytes']:08x} / {stop['next_bytes']:08x}")
     wfile = os.path.join(out, "capprof", f"window-{window}.tsv")
     ft = footer(wfile) if os.path.exists(wfile) else {}
     if "stopped_at" not in ft:
@@ -182,32 +218,26 @@ def finish(out):
         if len(scands) != 1:
             reasons.append(f"{len(scands)} addresses entered as the start site ({scands})")
     image_record = None
-    anchored = int(kv.get("base", "-1"), 16) if kv.get("base", "-1") != "-1" else None
-    if want["kind"] == "plain":
-        if va != stop["link"] or anchored != 0:
-            reasons.append(f"stopped at {va:#x} with anchor base {kv.get('base')}, the symbol is at {stop['link']:#x}")
-    else:
-        base = va - (stop["link"] - want["low"])
-        if anchored != base:
-            reasons.append(f"stopped at base {base:#x}, the anchor (domain_main) armed base {kv.get('base')}")
-        if base % want["region"]:
-            reasons.append(f"base {base:#x} is not a multiple of the grant size {want['region']:#x}")
-        # Identity: every instruction the window counted in the image's text at that base must be
-        # the image's own bytes (a full domain run has none that differ).
-        _, loads = elf(want["exe"])
-        v0, _, _, text = loads[0]
-        bad = 0
-        for line in (open(wfile) if os.path.exists(wfile) else []):
-            if line[0] == "#":
-                continue
-            rva, ln, b, att, _ = line.split("\t")
-            rva, ln = int(rva, 16), int(ln)
-            if base <= rva < base + want["text"]:
-                o = rva - base
-                if int.from_bytes(text[o:o + ln], "little") != int(b, 16):
-                    bad += int(att)
-        if bad:
-            reasons.append(f"{bad} attempts in the image's text at base {base:#x} are not the image's bytes")
+    anchored = int(kv["base"], 16) if "base" in kv else None
+    base = va - (stop["link"] - want.get("low", 0))
+    if anchored != base:
+        reasons.append(f"stopped at {va:#x}, i.e. base {base:#x}, but the plugin's armed base is {kv.get('base')}")
+    if want["kind"] == "plain" and base != 0:
+        reasons.append(f"stopped at {va:#x}, the symbol is at {stop['link']:#x}")
+    if want["kind"] == "capstone" and base % want["region"]:
+        reasons.append(f"base {base:#x} is not a multiple of the grant size {want['region']:#x}")
+    # Identity of what executed: the stopped window's records in the image's text at that base (a
+    # domain: the whole text, which a full domain run never shows foreign bytes in) or in the stop
+    # function's own range (plain: other static programs share the link addresses and run in
+    # windows, but not inside the site's function) must be the image's own bytes.
+    _, loads = elf(want["exe"])
+    seg = [l for l in loads if l[2] & 1 and l[0] <= stop["link"] < l[0] + l[1]][0]
+    lo, hi = (seg[0], seg[0] + seg[1]) if want["kind"] == "capstone" else (stop["link"], stop["link"] + max(stop["size"], stop["len"] + stop["next_len"]))
+    bad = foreign(wfile, loads, base - want.get("low", 0), lo, hi)
+    if bad:
+        reasons.append(f"{bad[0]} attempts at {bad[1]} addresses in {'the text' if want['kind'] == 'capstone' else stop['symbol']} "
+                       f"at base {base:#x} are not the image's bytes")
+    if want["kind"] == "capstone":
         entry = base + want["domain_main"] - want["low"]
         image_record = (f"capprof-slice: domain image entry={entry:#x} code={base:#x}-{base + want['region']:#x} "
                         f"(derived from stopped_at; the launcher never exited)")
@@ -237,7 +267,8 @@ def finish(out):
     if image_record and not reasons:
         with open(os.path.join(out, "image-records.txt"), "a") as f:
             f.write(image_record + "\n")
-    sl = {"symbol": stop["symbol"], "count": stop["count"], "len": stop["len"], "bytes": stop["bytes"], "start": start and {"symbol": start["symbol"], "count": start["count"]},
+    sl = {"symbol": stop["symbol"], "count": stop["count"], "len": stop["len"], "bytes": stop["bytes"],
+          "size": stop["size"], "next_len": stop["next_len"], "base": base, "start": start and {"symbol": start["symbol"], "count": start["count"]},
           "stopped_at": va, "window": window, "arrivals": int(kv["arrivals"]), "image_record": image_record,
           "stopped": True}
     json.dump(sl, open(os.path.join(out, "slice.json"), "w"), indent=1)

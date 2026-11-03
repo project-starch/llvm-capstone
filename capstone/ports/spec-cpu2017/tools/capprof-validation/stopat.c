@@ -11,9 +11,30 @@
  * and 0x3f3 after each call, STOP. stopat_g's first instruction is a store that faults on its
  * fresh page and is retried, and it is the last instruction of its page, so its block ends at it
  * and the instruction after it (ret, the next page) is in another block: an arrival that faults
- * must count as one entry with its retry. */
+ * must count as one entry with its retry.
+ *
+ * `stopat inter N`: a 2 s sleep, then N calls of stopat_f with a 1 ms sleep after each, no markers (a
+ * window opened around two such processes holds both; two domains run one after the other on a
+ * one-slot platform, see stopat-run.sh). Built with -DSTOPAT_BIG it carries a 3 MiB .bss,
+ * so its domain grant (4 MiB, not 512 KiB), and with it the launcher's base for it, differs while
+ * its site's and anchor's offsets do not (stopatcheck.py checks both).
+ *
+ * `stopat handler` (plain builds, -DSTOPAT_PLAIN): START, 10 calls of stopat_h(page) with addi t3
+ * 0x3f4 before and 0x3f5 after each, STOP. stopat_h's first instruction stores to a PROT_NONE page;
+ * the SIGSEGV handler first runs stopat_h's second instruction (addi t3 0x3f6, then ret) by a call
+ * of its own, then opens the page, and the store is retried: site + len is reached once by another
+ * path and once straight from the site, and only the second is an entry. */
+#include <sched.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <unistd.h>
+#ifdef STOPAT_PLAIN
+#include <signal.h>
+#include <sys/mman.h>
+#endif
+#ifdef STOPAT_BIG
+char stopat_big[3 << 20];
+#endif
 
 #define START() asm volatile(".insn i 0x13, 2, x0, x0, 0x7a1" ::: "memory")
 #define STOP()  asm volatile(".insn i 0x13, 2, x0, x0, 0x7a2" ::: "memory")
@@ -28,6 +49,18 @@ __asm__(".text\n.balign 4096\n.skip 4092\n.globl stopat_g\n.type stopat_g,@funct
         "stopat_g:\n sd zero, 0(a0)\n ret\n.size stopat_g, .-stopat_g\n");
 void stopat_g(char *p);
 
+#ifdef STOPAT_PLAIN
+__asm__(".text\n.balign 64\n.globl stopat_h\n.type stopat_h,@function\n"
+        "stopat_h:\n sd zero, 0(a0)\n addi t3, t3, 0x3f6\n ret\n.size stopat_h, .-stopat_h\n");
+void stopat_h(char *p);
+static char *hpage;
+static void on_segv(int sig, siginfo_t *si, void *uc) {
+    (void)sig; (void)si; (void)uc;
+    ((void (*)(void))((char *)stopat_h + 4))();   /* site + len, by a path that is not the site */
+    mprotect(hpage, 4096, PROT_READ | PROT_WRITE);
+}
+#endif
+
 __attribute__((noinline)) long run(long n, long acc) {
     for (long i = 0; i < n; i++) {
         MARK(0x3e2);
@@ -38,6 +71,37 @@ __attribute__((noinline)) long run(long n, long acc) {
 }
 
 int main(int argc, char **argv) {
+    if (argc > 2 && argv[1][0] == 'i') {
+        long n = atol(argv[2]), acc = 0;
+        sleep(2);   /* both processes have started (and anchored) before either loops */
+        for (long i = 0; i < n; i++) {
+            acc = stopat_f(acc);
+            usleep(1000);   /* the other process runs while this one sleeps: arrivals alternate */
+        }
+#ifdef STOPAT_BIG
+        acc += ((volatile char *)stopat_big)[n];   /* keeps the array, and with it the grant size */
+#endif
+        printf("%ld\n", acc);
+        return 0;
+    }
+#ifdef STOPAT_PLAIN
+    if (argc > 1 && argv[1][0] == 'h') {
+        hpage = mmap(0, 4096, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+        struct sigaction sa = { 0 };
+        sa.sa_sigaction = on_segv;
+        sa.sa_flags = SA_SIGINFO | SA_NODEFER;
+        if (hpage == MAP_FAILED || sigaction(SIGSEGV, &sa, 0)) return 1;
+        START();
+        for (int i = 0; i < 10; i++) {
+            mprotect(hpage, 4096, PROT_NONE);
+            MARK(0x3f4);
+            stopat_h(hpage);
+            MARK(0x3f5);
+        }
+        STOP();
+        return 0;
+    }
+#endif
     if (argc > 1) {
         long pages = 64;
         char *p = malloc(pages * 4096 + 4096);

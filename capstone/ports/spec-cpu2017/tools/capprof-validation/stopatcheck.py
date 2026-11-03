@@ -61,12 +61,16 @@ def program(recs, k):
 
 FULL0 = {0x3d1: 300, 0x3d2: 300, 0x3e2: 300, 0x3e3: 300, 0x3e1: 1, 0x3e4: 1, 0x3e5: 0, 0x3e6: 0}
 FULL1 = {0x3d1: 700, 0x3d2: 700, 0x3e2: 700, 0x3e3: 700, 0x3e1: 0, 0x3e4: 0, 0x3e5: 1, 0x3e6: 1}
-STOP1 = {0x3d1: 199, 0x3d2: 199, 0x3e2: 200, 0x3e3: 199, 0x3e1: 0, 0x3e4: 0, 0x3e5: 1, 0x3e6: 0}
-EXPECT = {
-    "plain-stop": (FULL0, STOP1),
-    "cap-stop": (FULL0, STOP1),
-    "plain-start": ({0x3d1: 201, 0x3d2: 201, 0x3e2: 200, 0x3e3: 201, 0x3e1: 0, 0x3e4: 1, 0x3e5: 0, 0x3e6: 0}, STOP1),
-    "cap-start": ({}, {0x3d1: 100, 0x3d2: 100, 0x3e2: 100, 0x3e3: 100, 0x3e1: 0, 0x3e4: 0, 0x3e5: 0, 0x3e6: 0}),
+# An entry counts when the site's successor runs straight after it, and the stop fires there: the
+# window holds the K-th execution of the site and not its successor. The plain build's site is
+# stopat_f's first instruction, the 0x3d1 marker; the domain build's is its prologue, before 0x3d1.
+STOP1 = {"plain": {0x3d1: 200, 0x3d2: 199, 0x3e2: 200, 0x3e3: 199, 0x3e1: 0, 0x3e4: 0, 0x3e5: 1, 0x3e6: 0},
+         "cap": {0x3d1: 199, 0x3d2: 199, 0x3e2: 200, 0x3e3: 199, 0x3e1: 0, 0x3e4: 0, 0x3e5: 1, 0x3e6: 0}}
+EXPECT = {   # boot: (window 0 marks or {} for empty, window 1 marks, the site's attempts in window 1)
+    "plain-stop": (FULL0, STOP1["plain"], 200),
+    "cap-stop": (FULL0, STOP1["cap"], 200),
+    "plain-start": ({0x3d1: 200, 0x3d2: 201, 0x3e2: 200, 0x3e3: 201, 0x3e1: 0, 0x3e4: 1, 0x3e5: 0, 0x3e6: 0}, STOP1["plain"], 200),
+    "cap-start": ({}, {0x3d1: 100, 0x3d2: 100, 0x3e2: 100, 0x3e3: 100, 0x3e1: 0, 0x3e4: 0, 0x3e5: 0, 0x3e6: 0}, 100),
 }
 
 check("no invalid windows", not glob.glob(f"{d}/*/capprof/*.invalid"), glob.glob(f"{d}/*/capprof/*.invalid"))
@@ -98,7 +102,7 @@ else:
 want_va["plain"] = site["plain"]["link"]
 print(f"INFO sites: plain {site['plain']} cap {site['cap']} (cap offset {site['cap']['link'] - spec['cap']['low']:#x}, slide_align {spec['cap']['region']:#x})")
 
-for boot, (e0, e1) in EXPECT.items():
+for boot, (e0, e1, site1) in EXPECT.items():
     k = boot.split("-")[0]
     w0, f0 = window(boot, 0); w1, f1 = window(boot, 1)
     stopped = open(f"{d}/{boot}/capprof/stopped").read().strip() if os.path.exists(f"{d}/{boot}/capprof/stopped") else None
@@ -133,9 +137,8 @@ for boot, (e0, e1) in EXPECT.items():
         check(f"{boot} window 1 <= full window 1, every program instruction", p1 and not over,
               f"{len(p1)} instructions, over {[(hex(a), v) for (a, _), v in list(over.items())[:8]]}")
         s = [v for (a, b), v in p1.items() if a == va]
-        # Every completed entry runs the site once and stopat_f's body once; the stopping entry runs neither.
-        check(f"{boot} the site's own attempts in window 1 = the body's (the stopping entry excluded)", s == [e1[0x3d1]],
-              f"site attempts {s}, body {e1[0x3d1]}")
+        check(f"{boot} the site's own attempts in window 1 (its K-th execution in, its successor's out)", s == [site1],
+              f"site attempts {s}, expected {site1}")
 # A site that faults and is retried across a block boundary (stopat_g, `stopat fault`).
 FM = {m: (m << 20) | 0xe0e13 for m in (0x3f2, 0x3f3)}
 def fmarks(recs):
@@ -161,8 +164,8 @@ for k in ("plain", "cap"):
     check(f"{k}-fault: stopped at entry 32 of stopat_g in window 0", st.startswith(f"stopped_at={gva:x}:32 window=0 "), st)
     if w is not None:
         fm = fmarks(w)
-        check(f"{k}-fault: 32 calls made, 31 completed", fm == {0x3f2: 32, 0x3f3: 31} and att(w, gva + 4) == 31,
-              f"marks {fm}, successor {att(w, gva + 4)}, site attempts {att(w, gva)}")
+        check(f"{k}-fault: 32 calls made, 31 completed, the 32nd store done", fm == {0x3f2: 32, 0x3f3: 31} and att(w, gva + 4) == 31
+              and (k != "plain" or att(w, gva) == 64), f"marks {fm}, successor {att(w, gva + 4)}, site attempts {att(w, gva)}")
 if os.path.isdir(f"{d}/plain-fault-old"):
     # Negative control: the first plugin counted every arrival at a site that ends its block.
     w, _ = window("plain-fault-old", 0)
@@ -170,5 +173,55 @@ if os.path.isdir(f"{d}/plain-fault-old"):
     print(f"INFO plain-fault-old (first plugin, retries counted as entries): marks {fm}, stopped "
           f"{open(f'{d}/plain-fault-old/capprof/stopped').read().strip() if os.path.exists(f'{d}/plain-fault-old/capprof/stopped') else None}")
     check("negative control: the first plugin stops early on the same case", w is not None and fm.get(0x3f2, 99) < 32, fm)
+# K = 1: the stop comes after the site's first execution.
+w, f = window("plain-k1", 0)
+st = open(f"{d}/plain-k1/capprof/stopped").read().strip() if os.path.exists(f"{d}/plain-k1/capprof/stopped") else ""
+check("plain-k1: stopped at entry 1, the site executed once, its successor not",
+      w is not None and st.startswith(f"stopped_at={want_va['plain']:x}:1 window=0 ")
+      and marks(w) == {0x3d1: 1, 0x3d2: 0, 0x3e1: 1, 0x3e2: 1, 0x3e3: 0, 0x3e4: 0, 0x3e5: 0, 0x3e6: 0},
+      f"{st} marks {w is not None and marks(w)}")
+# The successor reached by another path (stopat_h's SIGSEGV handler) before the retry.
+HM = {m: (m << 20) | 0xe0e13 for m in (0x3f4, 0x3f5, 0x3f6)}
+def hmarks(recs):
+    return {m: sum(r[3] for r in recs if r[2] == wd and r[1] == 4) for m, wd in HM.items()}
+w, f = window("plain-handlercount", 0)
+e = [l for l in f if l.startswith("# stop_entries_so_far")] if w is not None else []
+check("plain-handlercount: 10 calls, 10 entries, 10 successor arrivals by the other path",
+      w is not None and hmarks(w) == {0x3f4: 10, 0x3f5: 10, 0x3f6: 20} and e and e[0].split()[2] == "10" and "broken=10" in e[0],
+      f"{e} marks {w is not None and hmarks(w)}")
+w, f = window("plain-handler", 0)
+st = open(f"{d}/plain-handler/capprof/stopped").read().strip() if os.path.exists(f"{d}/plain-handler/capprof/stopped") else ""
+check("plain-handler: stopped at entry 5 in the 5th call (4 completed, successor 4 x 2 + 1)",
+      w is not None and ":5 window=0 " in st and hmarks(w) == {0x3f4: 5, 0x3f5: 4, 0x3f6: 9}, f"{st} marks {w is not None and hmarks(w)}")
+# Two domain images at different bases interleaved in one window: both stay armed.
+ia, ib = json.load(open(f"{d}/cap-inter.json")), json.load(open(f"{d}/cap2-inter.json"))
+same = all(ia["sites"]["stop"][x] == ib["sites"]["stop"][x] for x in ("link", "bytes", "next_bytes")) and ia["low"] == ib["low"] \
+    and ia["anchor"] == ib["anchor"] and ia["region"] != ib["region"]
+check("cap-inter: the two images share the site's offset and bytes and differ in grant size", same,
+      f"regions {ia['region']:#x} {ib['region']:#x}")
+w, f = window("cap-inter", 0)
+st = open(f"{d}/cap-inter/capprof/stopped").read().strip() if os.path.exists(f"{d}/cap-inter/capprof/stopped") else ""
+cl = [l for l in (f or []) if l.startswith("# stop_candidates")]
+cands = [x.split(":") for x in cl[0].split()[2:]] if cl else []
+entered = [c for c in cands if int(c[3])]
+# (Sequential, not interleaved: one live domain at a time on this platform; see stopat-run.sh.)
+check("cap-inter: stopped at entry 500 fed by two images at two armed bases (each <= 300)",
+      ":500 window=0 " in st and len({c[0] for c in entered}) == 2 and sum(int(c[3]) for c in entered) == 500
+      and all(int(c[3]) <= 300 for c in entered) and "armed_bases=2" in " ".join(f or [])
+      and all(int(c[4]) == 0 for c in cands),
+      f"{st} candidates {entered}")
+# Refusals.
+r = open(f"{d}/refusals.txt").read()
+print("INFO refusals:\n" + r.strip())
+check("refusals: the resolver refuses the image entry as a site (plain _start, domain domain_main)",
+      r.count("rc=2") >= 2 and r.count("image's entry") == 2, "")
+pe = open(f"{d}/refuse-plugin.err").read()
+check("refusals: the plugin refuses an anchor at the site", re.search(r"plugin anchor=site rc=[1-9]", r)
+      and "the anchor is the stop site" in pe, [l for l in pe.splitlines() if l.startswith("capprof:")])
+if os.path.isdir(f"{d}/plain-handler-old2"):
+    w, _ = window("plain-handler-old2", 0)
+    print(f"INFO plain-handler-old2 (136068aae7): marks {w is not None and hmarks(w)}")
+    check("negative control: 136068aae7 counts the handler's successor arrival and stops in the 3rd call",
+          w is not None and hmarks(w).get(0x3f4) == 3, "")
 print("ALL PASS" if ok else "SOME FAIL")
 sys.exit(0 if ok else 1)
