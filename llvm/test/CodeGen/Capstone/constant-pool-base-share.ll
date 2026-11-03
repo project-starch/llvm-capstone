@@ -379,16 +379,15 @@ entry:
 
 ; The reassociation G(G(B,C),Off) -> G(G(B,Off),C) (the review's first shape:
 ; with bounds [2^38-4096, 2^38), B = 2^38-2048, C = -1, Off = 2048 the new
-; intermediate cursor is 2^38, refused under sv39) is NOT something this lane
-; adds. This pins what the base already does with the shape: SelectionDAG
-; folds the two GEPs into cincoffset(B, add(Off, C)) and the pre-existing
-; target combine cincoffset(X, add(Y, C)) -> cincoffset(cincoffset(X, Y), C)
-; then forms B+Off. That combine predates this lane and is recorded as an
-; open question of the offset-folding lane's third review; this lane neither
-; adds to it nor removes it.
+; intermediate cursor is 2^38, refused under sv39). SelectionDAG folds the two
+; GEPs into cincoffset(B, add(Off, C)); performCIncOffsetCombine no longer
+; splits that into cincoffset(cincoffset(B, Off), C), because the program never
+; accesses B+Off: the constant stays in the integer offset and the only cursor
+; is the access's own address (cincoffset-offset-fold.ll has the shapes).
 ; CHECK-LABEL: reassoc_preexisting:
-; CHECK:       cincoffset [[P:a[0-9]+]], a0, a1
-; CHECK-NEXT:  lbu a0, -1([[P]])
+; CHECK:       addi [[O:a[0-9]+]], a1, -1
+; CHECK-NEXT:  cincoffset [[P:a[0-9]+]], a0, [[O]]
+; CHECK-NEXT:  lbu a0, 0([[P]])
 ; CHECK-NEXT:  ret
 define i8 @reassoc_preexisting(ptr addrspace(200) %b, i64 %off) addrspace(200) nounwind {
 entry:

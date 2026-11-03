@@ -21263,29 +21263,108 @@ static SDValue recoverCapabilityFromAddressArith(SDNode *N, SelectionDAG &DAG,
 // x[3k+2] become one `cincoffset` and three loads at 0, 8 and 16, where the
 // generic combiner left one `add`/`shl` chain and one `cincoffset` per element
 // (DAGCombiner::visitPTRADD only folds a nested pointer add with a constant
-// inner offset, and this target has no reassociation of its own). The
-// reassociation creates an intermediate cursor X+Y that the source never
-// held, and under R-60 (ruled 2026-10-20) a `cincoffset` whose result leaves
-// the source's representable window writes it UNTAGGED. It stays in the window
-// whenever the access is in bounds: X+Y lies within 2048 bytes of the access
-// (C is simm12), and the window reaches at least 2048 bytes below the base and
-// past the end. That slack was enumerated against QEMU's R-60 predicate
-// (capstone_cursor_representable, capstone-qemu 02f03540d7, by
-// capstone/tests/r60-window-slack/run.sh): 103,045 random
-// exact regions of 16 B..8 GiB, every cursor from base-2048 to end+2048 kept
-// its tag; a 64 KiB demand fails 6,841 of 6,842, so the check can fire. It is
-// a sample of QEMU's model, not of the RTL. What does change is an
-// OUT-of-bounds access (a defect) whose address is still inside the window
-// while X+Y is not: it now faults as an untagged access (cause 24) where it
-// faulted on bounds (cause 28). The offsets stay plain integers of the width
-// they had, so C-31 (an integer operand is an integer write) is untouched, and
-// a constant base is left alone because C-40 lowers a null-based address as
-// an integer in selectCIncOffset.
+// inner offset, and records why it does not reassociate one: the new
+// intermediate need not be a valid pointer).
+//
+// The rule (a rewrite may not change the value of any surviving capability
+// cursor; the compiler has no profile knowledge): the intermediate X+Y is a
+// cursor the rewritten program forms, and a cursor can be written UNTAGGED for
+// two reasons that the access's own bounds check does not see. It can leave
+// the representable window (R-60), and the address policy can refuse it
+// (isa.md, "address policy": sv39 refuses [2^38, 2^64-2^38), phys56 any cursor
+// with bits 63:56 set). X+Y = final - C: for C < 0 it lies |C| <= 2048 bytes
+// ABOVE the access, so with bounds [2^38-4096, 2^38) (Linux can map the top of
+// the user half), X = 2^38-2048, Y = 2048, C = -1 the original reads 2^38-1
+// through a tagged cursor and the reassociated form reads it off 2^38,
+// refused; for C > 0 it lies below the access and, under phys56, wraps below 0
+// for an object near address 0 (X = 2, Y = -3, C = 2: the original reads
+// address 1, the rewrite forms 2^64-1). Either way the in-bounds access
+// faults. The window argument this combine used to rest on covers neither.
+//
+// So the rewrite runs only when X+Y is a cursor the PROGRAM ITSELF forms and
+// accesses memory at, in this block: an existing (cincoffset X, Y) node that a
+// load or store already uses as its address (vec3's x[3k], prev's x[k]). Its
+// value, and so its tag, are the same in both programs (same X, same Y). If
+// it is tagged, (X+Y)+C is X+(Y+C) with X's bounds: the same cursor and the
+// same tag as the original's. If it is not, the original's access at X+Y
+// faults. That access is reached whenever the rewritten ones are because
+// nothing in the block can leave it early: no call (one may longjmp, unwind
+// or exit), no inline asm, no trap and no chained intrinsic, or the rewrite
+// is refused (mayLeaveBlockEarly). A preceding fault
+// ends both programs on the same SIGSEGV path. The rewrite then changes at
+// most WHICH access of the block faults first, for a program whose own access
+// at X+Y is certain to fault. A node formed only by this combine is never the
+// witness: it never creates the inner node, it only reuses one that exists.
+// The end pointer of a loop (X+n, compared or stored, never accessed) next to
+// an access at X+(n-1) is the shape the "accessed" condition exists for: at
+// the top of the user half X+n is exactly the refused cursor.
+//
+// What remains unchanged: a constant offset beyond simm12 is distributed in
+// the integer offset only (no new cursor), the offsets stay plain integers of
+// the width they had (C-31: an integer operand is an integer write), and a
+// constant base is left alone because C-40 lowers a null-based address as an
+// integer in selectCIncOffset.
 // Measured on 544.nab_r's mme34 (SPEC test input): the three-vector accesses
 // cost two extra `addi`, two `slli` and two `cincoffset` per pair, ~120M
-// instruction attempts.
+// instruction attempts; every element group there includes its +0 access.
 // A target opcode reaches PerformDAGCombine without a setTargetDAGCombine
 // registration (that bitmap indexes builtin opcodes only).
+
+// The existing node Opc(Op0, Op1), if the DAG has one; never creates it (a
+// lookup through getNode or getNodeIfExists would also intersect its flags).
+// Searched through the users of Via, one of the two operands (the one with
+// few users: the index, not a shared base or shift amount).
+static SDValue findExistingNode(unsigned Opc, SDValue Op0, SDValue Op1,
+                                SDValue Via) {
+  for (SDNode *U : Via->users())
+    if (U->getOpcode() == Opc && U->getNumOperands() == 2 &&
+        U->getOperand(0) == Op0 && U->getOperand(1) == Op1)
+      return SDValue(U, 0);
+  return SDValue();
+}
+
+// Whether a load or store of this block uses Cursor as its address.
+static bool isAccessAddress(SDValue Cursor) {
+  for (SDNode *User : Cursor->users()) {
+    if (auto *LD = dyn_cast<LoadSDNode>(User)) {
+      if (LD->getBasePtr() == Cursor)
+        return true;
+    } else if (auto *ST = dyn_cast<StoreSDNode>(User)) {
+      if (ST->getBasePtr() == Cursor)
+        return true;
+    }
+  }
+  return false;
+}
+
+// Whether something in this block may transfer control out of it before its
+// end: a call, inline asm, a trap (llvm.trap need not end its IR block), or
+// an intrinsic with a chain, whose callee or effect is not known here (a
+// domain-crossing llvm.capstone.cap.call stays INTRINSIC_W_CHAIN until
+// selection, with no CALLSEQ_START). Deliberately coarse.
+static bool mayLeaveBlockEarly(SelectionDAG &DAG) {
+  for (const SDNode &Node : DAG.allnodes()) {
+    switch (Node.getOpcode()) {
+    case ISD::CALLSEQ_START:
+    case CapstoneISD::CALL:
+    case CapstoneISD::TAIL:
+    case ISD::INLINEASM:
+    case ISD::INLINEASM_BR:
+    case ISD::TRAP:
+    case ISD::DEBUGTRAP:
+    case ISD::UBSANTRAP:
+    case ISD::INTRINSIC_VOID:
+    case ISD::INTRINSIC_W_CHAIN:
+    case ISD::EH_RETURN:
+    case ISD::EH_SJLJ_SETJMP:
+    case ISD::EH_SJLJ_LONGJMP:
+      return true;
+    default:
+      break;
+    }
+  }
+  return false;
+}
 static SDValue performCIncOffsetCombine(SDNode *N, SelectionDAG &DAG) {
   SDLoc DL(N);
   EVT VT = N->getValueType(0);
@@ -21367,8 +21446,8 @@ static SDValue performCIncOffsetCombine(SDNode *N, SelectionDAG &DAG) {
     if (Shifted.ashr(S) != CN->getAPIntValue())
       return SDValue();
     C = Shifted.getSExtValue();
-    Y = DAG.getNode(ISD::SHL, DL, OffVT, Off.getOperand(0).getOperand(0),
-                    Off.getOperand(1));
+    // Not built yet: the cursor case below must find this node, not make it.
+    Y = SDValue();
   } else {
     return SDValue();
   }
@@ -21399,12 +21478,26 @@ static SDValue performCIncOffsetCombine(SDNode *N, SelectionDAG &DAG) {
     // shift only in the integer offset instead. This shares the scaled index
     // and exposes the byte displacement to constant hoisting without forming
     // a new cursor or moving the capability derivation above its guard.
-    SDValue Offset = DAG.getNode(ISD::ADD, DL, OffVT, Y,
+    SDValue Shl = DAG.getNode(ISD::SHL, DL, OffVT,
+                              Off.getOperand(0).getOperand(0),
+                              Off.getOperand(1));
+    SDValue Offset = DAG.getNode(ISD::ADD, DL, OffVT, Shl,
                                  DAG.getSignedConstant(C, DL, OffVT));
     return DAG.getNode(CapstoneISD::CIncOffset, DL, VT, Base, Offset);
   }
 
-  SDValue Inner = DAG.getNode(CapstoneISD::CIncOffset, DL, VT, Base, Y);
+  // The intermediate must be a cursor the program forms and accesses at, in
+  // this block, with nothing that can leave the block early (see above).
+  if (!Y) {
+    SDValue Index = Off.getOperand(0).getOperand(0);
+    Y = findExistingNode(ISD::SHL, Index, Off.getOperand(1), Index);
+    if (!Y)
+      return SDValue();
+  }
+  SDValue Inner = findExistingNode(CapstoneISD::CIncOffset, Base, Y, Y);
+  if (!Inner || Inner.getValueType() != VT || !isAccessAddress(Inner) ||
+      mayLeaveBlockEarly(DAG))
+    return SDValue();
   return DAG.getNode(CapstoneISD::CIncOffset, DL, VT, Inner,
                      DAG.getSignedConstant(C, DL, OffVT));
 }
