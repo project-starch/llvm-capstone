@@ -33,6 +33,11 @@ void *__capstone_malloc_group_nested(struct capstone_malloc_slot *,
                                     size_t, unsigned, struct capstone_malloc_slot *);
 void *__capstone_malloc_group_remap(struct capstone_malloc_slot *,
                                    void *, size_t, size_t);
+/* The slot records of a new group of `count` slots (1..32), every byte zero, or NULL when the
+ * runtime cannot map memory for them; and their return, cleared to zero again by the caller
+ * (mallocng free_meta). heap.c "Slot-record arrays". */
+struct capstone_malloc_slot *__capstone_malloc_slots_new(unsigned count);
+void __capstone_malloc_slots_free(struct capstone_malloc_slot *, unsigned count);
 void *__capstone_malloc_slot_take(struct capstone_malloc_slot *);
 void *__capstone_malloc_slot_start(struct capstone_malloc_slot *);
 void __capstone_malloc_slot_key(struct capstone_malloc_slot *, void *, size_t);

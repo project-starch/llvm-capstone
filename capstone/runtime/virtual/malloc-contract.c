@@ -501,33 +501,48 @@ static int recycle_outside(const char *mode, size_t n)
     printf("MALLOC_SURVIVED:%s\n", mode); fflush(stdout);
     return 0;
 }
+/* mallocng's struct meta under patch 0009 (meta.h): prev, next and mem capabilities, the two
+ * masks, the bitfield word with last_idx in bits 0-4 at byte 56, cap_parent at 64, cap_slots (the
+ * group's slot records, heap.c "Slot-record arrays") at 80, cap_count at 96; 112 bytes. The cases
+ * below check cap_slots against the record they found before trusting the rest. */
+enum { META_BYTES = 112, META_LAST_IDX = 56, META_CAP_SLOTS = 80, META_CAP_COUNT = 96 };
+static struct capstone_malloc_slot *meta_slots(const struct capstone_malloc_slot *r, const char *what)
+{
+    struct capstone_malloc_slot *s = *(struct capstone_malloc_slot *const volatile *)((const char *)r->group + META_CAP_SLOTS);
+    require(s && __builtin_capstone_cap_get_cursor(s) == __builtin_capstone_cap_get_cursor(r - r->index), what);
+    return s;
+}
+static unsigned meta_word(const struct capstone_malloc_slot *r, size_t offset)
+{ return (unsigned)*(const volatile unsigned long *)((const char *)r->group + offset); }
 /* recycle-root: nothing an exported entry point hands out survives a group's release. Every
- * capability in the meta that __capstone_malloc_find's record points to and that covers the group
- * header (only the group's own capability does, and with object bounds off each slot's issued
- * copy of it) is counted: a root kept in the meta would add one. The one found is then used after
- * the release and reuse: it must fault. */
+ * capability in the meta that __capstone_malloc_find's record points to and in its group's slot
+ * records that covers the group header (only the group's own capability does, and with object
+ * bounds off each slot's issued copy of it) is counted: a root kept in the meta or a record would
+ * add one. The one found is then used after the release and reuse: it must fault. */
 static int recycle_root(void)
 {
     char *p = fresh_malloc(RECYCLE_SIZE, "recycle-root: a new mapping"); saved = p;
     struct capstone_malloc_slot *r = __capstone_malloc_find(p);
     require(r && r->group, "recycle-root: slot record");
     size_t s0 = __builtin_capstone_cap_get_base(r->parent), obj_end = __builtin_capstone_cap_get_cursor(p) + RECYCLE_SIZE;
-    /* The meta itself: from the record's group pointer, at most 4000 bytes (meta.h asserts
-     * sizeof(struct meta) < 4000), within that capability's bounds. Not the whole meta area,
-     * whose reservation includes a PROT_NONE guard page. */
-    char *m = r->group;
-    size_t mc = __builtin_capstone_cap_get_cursor(m), me = __builtin_capstone_cap_get_end(m);
-    size_t span = me - mc < 4000 ? me - mc : 4000;
+    /* The meta itself, from the record's group pointer, and the records its cap_slots points to:
+     * the group's bound records, last_idx + 1 of them. */
+    struct capstone_malloc_slot *slots = meta_slots(r, "recycle-root: the meta points to the record's array");
+    unsigned bound = (meta_word(r, META_LAST_IDX) & 31) + 1;
+    const char *regions[2] = { (const char *)r->group, (const char *)slots };
+    size_t spans[2] = { META_BYTES, bound * sizeof *slots };
     unsigned found = 0; void *exposed = NULL;
-    for (size_t o = 0; o + 16 <= span; o += 16) {
-        void *c = *(void *volatile *)(m + o);
-        if (!__builtin_capstone_cap_get_tag(c)) continue;
-        if (__builtin_capstone_cap_get_base(c) < s0 && __builtin_capstone_cap_get_end(c) >= obj_end) {
-            ++found; exposed = c;
+    for (int k = 0; k < 2; ++k)
+        for (size_t o = 0; o + 16 <= spans[k]; o += 16) {
+            void *c = *(void *volatile *)(regions[k] + o);
+            if (!__builtin_capstone_cap_get_tag(c)) continue;
+            if (__builtin_capstone_cap_get_base(c) < s0 && __builtin_capstone_cap_get_end(c) >= obj_end) {
+                ++found; exposed = c;
+            }
         }
-    }
     unsigned expected = whole_group(p) ? 2 : 1;   /* the meta's group capability (+ the slot's issued copy) */
-    printf("MALLOC_RECYCLE_ROOT found=%u expected=%u meta_bytes=%lu\n", found, expected, (unsigned long)span);
+    printf("MALLOC_RECYCLE_ROOT found=%u expected=%u meta_bytes=%lu record_bytes=%lu\n", found, expected,
+           (unsigned long)spans[0], (unsigned long)spans[1]);
     fflush(stdout);
     require(found == expected, "recycle-root: no capability beyond the group's own covers the group");
     free_kept(p, "recycle-root: the released group's mapping was kept");
@@ -788,29 +803,30 @@ static int calloc_geometry(void)
     puts("MALLOC_FAULT_READY:calloc-geometry"); puts("MALLOC_SURVIVED:calloc-geometry"); fflush(stdout);
     return 0;
 }
-/* meta-reuse: free_meta clears only the records a group bound (musl patch 0009). A meta's 32 slot
- * records are the array r - r->index of any of its records. The bound count is the meta's own
- * last_idx + 1, read from its header (mallocng meta.h: prev, next and mem capabilities, the two
- * masks, then the bitfield word with last_idx in bits 0-4 at byte 56; cap_slots at byte 80, which
- * the scan checks against r - r->index before trusting the layout). Counting the records that name
- * the meta would not do: a record left uncleared still names it (the first negative control read
- * exactly that). Records below the bound must name the meta; every other one must be all zero bytes
- * (no capability, no tag). Metas are seen bound with many slots, then reused by single-slot groups,
- * then by many-slot groups again; both transitions must be observed on some meta, and the invariant
- * holds on every meta scanned. */
+/* meta-reuse: a group binds slot records that are all zero (musl patch 0009 free_meta, heap.c
+ * "Slot-record arrays"). A group's records are an array of 1, 2, 4, 8, 16 or 32, the smallest that
+ * holds its slot count (cap_count), reused through one free list per size, so an array is bound
+ * in turn by groups of different counts of one size. The bound count is the meta's own last_idx + 1,
+ * read from its header (META_* above). Counting the records that name the meta would not do: a
+ * record left uncleared still names it (lane S's first negative control read exactly that).
+ * Records below the bound must name the meta; every other record of the array, up to its size,
+ * must be all zero bytes (no capability, no tag). Arrays are seen bound with many slots, then by a
+ * group with fewer (sizes of another class reuse them), then with more again; both transitions must
+ * be observed on some array, and the invariant holds on every array scanned. */
 #define META_SEEN 512
-static struct { size_t meta; unsigned many, few_after, many_after; } seen[META_SEEN];
+static struct { size_t array; unsigned bound, fewer, more; } seen[META_SEEN];
 static unsigned nseen, transitions_few, transitions_many, scanned, bound_tags;
 static unsigned scan_meta(void *p, const char *what)
 {
     struct capstone_malloc_slot *r = __capstone_malloc_find(p);
     require(r && r->group && r->index < 32, what);
-    struct capstone_malloc_slot *s = r - r->index;
+    struct capstone_malloc_slot *s = meta_slots(r, "meta-reuse: the meta points to the record's array");
     size_t meta = __builtin_capstone_cap_get_cursor(r->group);
-    require(__builtin_capstone_cap_get_cursor(s) == meta + 80, "meta-reuse: the slot records start at meta + 80");
-    unsigned bound = (unsigned)(*(const volatile unsigned long *)((const char *)r->group + 56) & 31) + 1;
+    unsigned bound = (meta_word(r, META_LAST_IDX) & 31) + 1, count = meta_word(r, META_CAP_COUNT), size = 1;
+    while (size < count) size <<= 1;
     require(r->index < bound, "meta-reuse: the record is inside its meta's bound");
-    for (unsigned k = 0; k < 32; ++k) {
+    require(count == bound && size <= 32, "meta-reuse: the array was taken for the group's count");
+    for (unsigned k = 0; k < size; ++k) {
         if (k < bound) {
             require(s[k].group && __builtin_capstone_cap_get_cursor(s[k].group) == meta,
                     "meta-reuse: a bound record names its meta");
@@ -824,38 +840,38 @@ static unsigned scan_meta(void *p, const char *what)
     ++scanned;
     return bound;
 }
-static void note_meta(void *p, int phase)
+static void note_meta(void *p)
 {
     unsigned bound = scan_meta(p, "meta-reuse: slot record");
-    size_t meta = __builtin_capstone_cap_get_cursor(__capstone_malloc_find(p)->group);
+    struct capstone_malloc_slot *r = __capstone_malloc_find(p);
+    size_t array = __builtin_capstone_cap_get_cursor(r - r->index);
     unsigned i = 0;
-    while (i < nseen && seen[i].meta != meta) ++i;
-    if (i == nseen) { if (nseen == META_SEEN) return; seen[nseen++].meta = meta; }
-    if (phase == 0 && bound >= 2) seen[i].many = 1;
-    if (phase == 1 && bound == 1 && seen[i].many && !seen[i].few_after) { seen[i].few_after = 1; ++transitions_few; }
-    if (phase == 2 && bound >= 2 && seen[i].few_after && !seen[i].many_after) { seen[i].many_after = 1; ++transitions_many; }
+    while (i < nseen && seen[i].array != array) ++i;
+    if (i == nseen) { if (nseen == META_SEEN) return; seen[nseen].array = array; seen[nseen++].bound = bound; return; }
+    if (bound < seen[i].bound && !seen[i].fewer) { seen[i].fewer = 1; ++transitions_few; }
+    if (bound > seen[i].bound && seen[i].fewer && !seen[i].more) { seen[i].more = 1; ++transitions_many; }
+    seen[i].bound = bound;
 }
+/* Three rounds of 600 small objects, freed after each round. 28 and 200 bytes, then 44 and 120,
+ * then 28 and 200 again: mallocng's counts for these classes grow with the class's usage
+ * (small_cnt_tab, med_cnt_tab), and the classes of the middle round bind the arrays the first
+ * round's groups released with other counts of the same array size. */
 static int meta_reuse(void)
 {
-    enum { SMALL = 600, BIG = 48 };
-    static char *small[SMALL], *big[BIG];
-    for (int round = 0; round < 2; ++round) {
+    enum { SMALL = 600 };
+    static char *small[SMALL];
+    static const size_t sizes[3][2] = { { 28, 200 }, { 44, 120 }, { 28, 200 } };
+    for (int round = 0; round < 3; ++round) {
         for (unsigned i = 0; i < SMALL; ++i) {
-            small[i] = malloc(i % 2 ? 48 : 200); require(small[i] != NULL, "meta-reuse small");
-            note_meta(small[i], round ? 2 : 0);
+            small[i] = malloc(sizes[round][i % 2]); require(small[i] != NULL, "meta-reuse small");
+            note_meta(small[i]);
         }
         for (unsigned i = 0; i < SMALL; ++i) free(small[i]);
-        if (round) break;
-        for (unsigned i = 0; i < BIG; ++i) {
-            big[i] = malloc(RECYCLE_SIZE + 4096 * (i % 4)); require(big[i] != NULL, "meta-reuse big");
-            note_meta(big[i], 1);
-        }
-        for (unsigned i = 0; i < BIG; ++i) free(big[i]);
     }
-    printf("MALLOC_META_REUSE metas=%u scanned=%u many_to_few=%u few_to_many=%u bound_tags=%u\n", nseen, scanned,
+    printf("MALLOC_META_REUSE arrays=%u scanned=%u many_to_few=%u few_to_many=%u bound_tags=%u\n", nseen, scanned,
            transitions_few, transitions_many, bound_tags);
     require(bound_tags > 0, "meta-reuse: the reader sees the bound records' tags");
-    require(transitions_few > 0 && transitions_many > 0, "meta-reuse: a meta went many -> few -> many slots");
+    require(transitions_few > 0 && transitions_many > 0, "meta-reuse: an array went many -> few -> many slots");
     puts("MALLOC_FAULT_READY:meta-reuse"); puts("MALLOC_SURVIVED:meta-reuse"); fflush(stdout);
     return 0;
 }
