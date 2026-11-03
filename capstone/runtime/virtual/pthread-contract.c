@@ -239,7 +239,24 @@ static void *fallback_writer(void *arg)
         for (unsigned j = 0; j < 8; ++j) record[j] = (t * FALLBACK_RECORDS + i) * 8 + j;
         assert(write(pipefd[1], record, sizeof record) == sizeof record);
     }
-    capstone_virtual_thread_exit(NULL);
+    return arg;
+}
+static unsigned fallback_check_records(void)
+{
+    unsigned char seen[FALLBACK_THREADS * FALLBACK_RECORDS] = {0};
+    unsigned bad = 0;
+    for (unsigned n = 0; n < FALLBACK_THREADS * FALLBACK_RECORDS; ++n) {
+        unsigned record[8];
+        size_t got = 0;
+        while (got < sizeof record) {
+            ssize_t r = read(pipefd[0], (char *)record + got, sizeof record - got);
+            assert(r > 0); got += r;
+        }
+        unsigned id = record[0] / 8;
+        if (id >= sizeof seen || seen[id]++) ++bad;
+        for (unsigned j = 0; j < 8; ++j) if (record[j] != id * 8 + j) ++bad;
+    }
+    return bad;
 }
 static int fallback_contract(void)
 {
@@ -264,30 +281,41 @@ static int fallback_contract(void)
     __atomic_store_n(&fallback_go, 1, __ATOMIC_RELEASE);
     for (unsigned t = 0; t < FALLBACK_THREADS; ++t)
         assert(!capstone_virtual_thread_join(threads[t]));
-    unsigned char seen[FALLBACK_THREADS * FALLBACK_RECORDS] = {0};
-    unsigned bad = 0;
-    for (unsigned n = 0; n < FALLBACK_THREADS * FALLBACK_RECORDS; ++n) {
-        unsigned record[8];
-        size_t got = 0;
-        while (got < sizeof record) {
-            ssize_t r = read(pipefd[0], (char *)record + got, sizeof record - got);
-            assert(r > 0); got += r;
-        }
-        unsigned id = record[0] / 8;
-        if (id >= sizeof seen || seen[id]++) ++bad;
-        for (unsigned j = 0; j < 8; ++j) if (record[j] != id * 8 + j) ++bad;
-    }
+    unsigned bad = fallback_check_records();
     unsigned fallback = 0;
     for (unsigned t = 0; t < FALLBACK_THREADS; ++t) {
         fallback += fallback_slots[t] == 64 * 16;
     }
+    /* Exercise __clone, private TLS/transport installation and normal pthread
+     * teardown after exhaustion too. Returning through the pthread trampoline
+     * must release the fallback transport without recycling a real gp slot. */
+    pthread_t pthreads[FALLBACK_THREADS];
+    fallback_arrived = fallback_go = 0;
+    for (unsigned t = 0; t < FALLBACK_THREADS; ++t) {
+        fallback_slots[t] = 0;
+        assert(!pthread_create(&pthreads[t], NULL, fallback_writer, &fallback_ids[t]));
+    }
+    while (__atomic_load_n(&fallback_arrived, __ATOMIC_ACQUIRE) != FALLBACK_THREADS) { }
+    __atomic_store_n(&fallback_go, 1, __ATOMIC_RELEASE);
+    unsigned pthread_slots = 0;
+    for (unsigned t = 0; t < FALLBACK_THREADS; ++t) {
+        void *result;
+        assert(!pthread_join(pthreads[t], &result) && result == &fallback_ids[t]);
+        pthread_slots += fallback_slots[t] == 64 * 16;
+    }
+    unsigned pthread_bad = fallback_check_records();
+    printf("VIRTUAL_FALLBACK_PTHREAD:slots=%u records=%u bad=%u\n",
+           pthread_slots, FALLBACK_THREADS * FALLBACK_RECORDS, pthread_bad);
+    if (pthread_slots == FALLBACK_THREADS && !pthread_bad)
+        puts("VIRTUAL_PTHREAD_OK fallback_pthread");
     close(pipefd[0]); close(pipefd[1]);
     assert(!munmap(stacks, FALLBACK_THREADS * 65536));
     printf("VIRTUAL_FALLBACK:slots=%u records=%u bad=%u main=%lu\n", fallback,
            FALLBACK_THREADS * FALLBACK_RECORDS, bad, gp_slot());
     if (fallback == FALLBACK_THREADS && !bad && gp_slot() == 0)
         puts("VIRTUAL_PTHREAD_OK fallback_identity");
-    return 0;
+    return !(fallback == FALLBACK_THREADS && !bad && gp_slot() == 0 &&
+             pthread_slots == FALLBACK_THREADS && !pthread_bad);
 }
 
 /* Abandon a default-transport round from its signal handler. The observer

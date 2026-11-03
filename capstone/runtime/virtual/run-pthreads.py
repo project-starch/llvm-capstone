@@ -136,7 +136,11 @@ echo VIRTUAL_STAGED_DONE
     checks['fallback_identity'] = (
         fallback_log.count('VIRTUAL_PTHREAD_OK fallback_identity') == 1 and
         fallback_log.count('PTHREAD_FALLBACK_EXIT:0') == 1 and
-        len(fallback_steps) == 1 and int(fallback_steps[0]) >= 128)
+        len(fallback_steps) == 1 and int(fallback_steps[0]) >= 256)
+    checks['fallback_pthread'] = (
+        fallback_log.count('VIRTUAL_PTHREAD_OK fallback_pthread') == 1 and
+        fallback_log.count('VIRTUAL_FALLBACK_PTHREAD:slots=4 records=128 bad=0') == 1 and
+        fallback_log.count('PTHREAD_FALLBACK_EXIT:0') == 1)
     for mode in ('identity-exit', 'identity-jump'):
         part = re.search(r'PTHREAD_IDENTITY_BEGIN:' + mode + r'\n(.*?)PTHREAD_IDENTITY_EXIT:' +
                          mode + r':0\n', log, re.S)
