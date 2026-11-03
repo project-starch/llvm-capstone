@@ -474,7 +474,10 @@ static long protect_range(uintptr_t base, size_t bytes, int prot)
 static int touch(uintptr_t address, size_t bytes)
 {
     struct cv_touch r = {address, bytes};
-    return ioctl(device, CV_TOUCH, &r);
+    int rc;
+    /* Admission is idempotent, including pages pinned before an interruption. */
+    do { rc = ioctl(device, CV_TOUCH, &r); } while (rc < 0 && errno == EINTR);
+    return rc;
 }
 /* The initial exchange cannot be retired/remapped by domain services. Cache
  * only successful admissions for this mapping; worker transports instead repeat
