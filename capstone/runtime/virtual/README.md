@@ -74,7 +74,11 @@ mutex/condition synchronization, timeout, independent blocking I/O, private
 epoll event conversion and 64
 successive joined lifetimes, plus preempted I/O through a shared-TLS explicit
 context. Wire ownership uses the trusted context ID, not the TLS address.
-Compile `pthread-contract.c` with the SDK and `-I capstone/runtime/include`,
+It also checks the transport hold (another thread's unmap of a blocked
+worker's exchange, and the worker's own while attached, answer `EBUSY`; a
+worker's exit leaves the hold of the next worker at its reused address alone)
+and, from `/proc/vmstat`, that every `FOLL_PIN` pin the run took was released
+by `rmmod`. Compile `pthread-contract.c` with the SDK and `-I capstone/runtime/include`,
 then run `run-pthreads.py` with adapter, application, QEMU, images and a fresh
 work directory. Cancellation, arbitrary `pthread_kill`, main-thread-only
 `pthread_exit` and full POSIX signal/register semantics are not qualified by
@@ -99,10 +103,17 @@ descriptors pass. Build the native test from
 `linux/signals.c`, `linux/spawner.c`, `linux/park.c`, `common/delegate.c`, `common/msghdr.c` and
 `common/spawn.c`, with `-I runtime/include -lpthread`.
 
-The loader registers image, stack, startup and exchange mappings. Startup
-pages are pinned. Growing private anonymous mappings initially have absent PTEs: the module
-asks Linux's GUP interface to resolve the first touch, then retains a pin
-until retirement. A permitted write fault after `mprotect` is resolved by Linux
+The loader registers image, stack, startup and exchange mappings. Every
+grant's pages are admitted one by one at the domain's first touch: the module
+asks Linux's GUP interface to resolve it, checks that the page is exclusive
+anonymous backing mapped once and that no other page of the arena holds its
+frame, then retains a pin until retirement. Pages already resident at the
+grant (the startup block the launcher packed) are pinned at the grant under
+the same checks. Two grants are pinned whole at the grant: the meta block and
+the exchange region, which the launcher writes on the domain's behalf after
+the grant, where a Linux fault is invisible to the module (module parameter
+`lazy_grants`; 0 pins every non-linear grant whole, as before 2026-11-03). A
+permitted write fault after `mprotect` is resolved by Linux
 and must retain the same physical backing; a denied VMA access is never fixed
 by granting more permissions. It does not supply a pager or change VMA permissions to
 make a denied access succeed. TLS uses the common capability libc setup.
@@ -409,6 +420,44 @@ reschedule, a signal, an expired budget or `SIGKILL` at four points of
 `CV_STEP`, and a short GUP result, and checks that no `CSRUNV` and no GUP
 follows an injection, that pins and fault counts match uninjected runs, that GUP is
 never asked for more than 16 pages, and that every `FOLL_PIN` pin is released.
+Both count the pins and faults of the REGION'S arena from the census every
+arena prints at its retirement under `diag_admit` (admitted at faults, by
+windows, by the resident scan, by `CV_TOUCH`, pinned whole at the mint;
+released; swept -- read with `dmesg` after each run), and hold the module's
+counters to it: in `run-pin-ahead.py`, what a mode adds over base in
+`CAPSTONE_VM_STATS` pages, peak and faults must be the window's arithmetic plus
+the difference in the program's own pages, which the census gives and which is
+zero for a module without the parameter (the same assertion for every module);
+in `run-step-hooks.py`, an injected run's counters less the program's own pages
+must compare with its reference's exactly as the region's census does, and
+both comparisons must hold. In both, every run's `pages=` must equal what the
+arenas retired after the launcher's `CAPSTONE_VM_STATS_MARK` still held, and
+in step-hooks `faults=` must cover every page admitted at a fault. The process
+total alone would not do: since grants are admitted at first touch it also
+holds the program's own pages, which vary with placement (the allocator's
+address-hashed index in `.bss`) and with windows the quantum cuts. Both
+runners' `--evaluate` re-runs the checks on a saved transcript.
+
+A write the launcher makes into domain memory on the domain's behalf -- a
+thread's exit word, a worker's meta block and exchange region -- is preceded by
+`CV_TOUCH` over the span, which admits every page of it a lazily admitted arena
+does not hold yet, with the same pin and checks as a fault; otherwise the write
+would create backing the domain can store a capability into with no pin and no
+sweep. `run-pthreads.py` checks it with an exit word in an untouched page of the
+main stack.
+
+A worker's meta block and exchange region are each a mapping of their own, and
+from the worker's attachment (its first delegate service) the worker holds both
+mappings: an unmap or a remap of a held mapping answers `EBUSY` to every
+caller, the worker included, so the launcher's writes into them never meet a
+fresh mapping at the same address. An attachment naming a mapping that already
+has a holder, or both blocks in one mapping, is refused. The hold ends only
+with the worker's own detach (`CV_SERVICE_TRANSPORT_DETACH`, which the SDK
+issues before it unmaps the blocks) or its exit; a later delegate service
+attaches again, `CV_TOUCH` included. A thread's exit word may not lie in the
+stack or frame mapping its exit gives back, since the word is stored after
+those unmaps. The error exit does not unmap: Linux releases the mappings after
+exit_group has stopped every worker.
 
 The launcher validates and loads an image without copying the file first. It
 opens the image read-only and asks the module (`CV_IMAGE`) to deny writers to

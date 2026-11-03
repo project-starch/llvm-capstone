@@ -31,6 +31,19 @@ struct mapping {
     size_t bytes, visible;
     uint64_t id;
     int heap, kind;
+    /* The worker whose transport block (its meta block or its exchange region) lies in this
+     * mapping, or 0. This launcher writes into a worker's transport for the worker's whole
+     * attachment, through Linux and with service_lock released while a service blocks, so the
+     * mapping must outlive the attachment: while a holder is set, retirement (unmap) and
+     * remapping are refused to EVERY caller, the holder included, and hence the address is never
+     * reused under it. The hold is released only by the holder's own detach (the SDK detaches
+     * before it gives the blocks back) or by its exit. One holder per mapping and one block per
+     * mapping: the SDK maps each block on its own (pthread.c), and the attachment refuses a
+     * mapping that already has a holder. Without the hold, a second worker could retire the
+     * mapping under a blocked read, map a fresh one at the same address, and the read's
+     * copy-back would create backing the module never admitted. On dev since linear arenas
+     * became lazy: the transport blocks were heap blocks. */
+    uint64_t holder;
 };
 /* Registered mappings sorted by address, highest first, grown on demand.
  * Registrations never overlap, so the highest mapping starting at or below an
@@ -61,12 +74,13 @@ static int trace;
  * stderr goes -- a 9p file in a harness that does not redirect it. */
 static int grants;
 /* CV_STEP returns by kind (1 quantum, 3 service, 4 fault, else other) and services by their
- * vm-abi.h number (CV_SERVICE_DELEGATE 0 .. CV_SERVICE_REMAP 13; not Linux syscall numbers),
+ * vm-abi.h number (CV_SERVICE_DELEGATE 0 .. CV_SERVICE_TRANSPORT_DETACH 14; not Linux syscall
+ * numbers),
  * for the CAPSTONE_VM_STEPS line: which exits the step protocol actually makes, and how many. A
  * number above the last service counts as other. A retried EINTR/EAGAIN is not a return.
  * Relaxed atomics on both sides: every virtual thread's loop counts, and the main thread reads
  * at exit while a worker may still be returning. */
-#define STEP_SERVICE_COUNT (CV_SERVICE_REMAP + 1)
+#define STEP_SERVICE_COUNT (CV_SERVICE_TRANSPORT_DETACH + 1)
 static unsigned long step_kinds[8], step_services[STEP_SERVICE_COUNT + 1];
 static unsigned long step_count(const unsigned long *counter)
 { return __atomic_load_n(counter, __ATOMIC_RELAXED); }
@@ -304,8 +318,9 @@ static int grant(void *base, size_t bytes, unsigned reg, unsigned perms,
      * refusal side is always printed; without the success side a diff cannot say WHICH grant
      * first differs, only that something did. Asked for with CAPSTONE_VM_GRANTS=1 (or the
      * trace), unlike the refusal: at one write(2) per grant it is the launcher's largest
-     * stderr traffic, and no runtime gate parses it. The board lane's parsers and the
-     * benchmark console audit set it. */
+     * stderr traffic. The board lane's parsers, the benchmark console audit and the three
+     * gates that find their arenas by address (run-pin-ahead.py, run-step-hooks.py,
+     * run-pthreads.py) set it. */
     /* slot= is the number of mappings registered before this one: the old array slot until the
      * first unmap, so the image's grant still reads slot=0 for the board lane's parsers. */
     if (grants)
@@ -316,11 +331,50 @@ static int grant(void *base, size_t bytes, unsigned reg, unsigned perms,
                                 .kind = linear ? CV_MAP_HEAP : -1});
     return 0;
 }
+/* The calling worker's attachment: its meta block and exchange region, the two spans this
+ * launcher writes for it, each with the identity of the mapping it holds. The identity is the
+ * module's arena id (CV_ADD's r.id): a per-context counter, never reused, so it names one
+ * registration, not an address or a slot that a later mapping can take over. Zero while
+ * detached: the worker's next delegate service attaches again, CV_TOUCH and all. */
+static __thread struct { uintptr_t at; uint64_t id; } transport_at[2];
+/* The mapping a worker's attachment holds, found by exact identity: the address must lie inside
+ * the mapping, which must carry the recorded id and this worker as holder. Anything else is a
+ * launcher defect (the hold refuses retirement and remapping, so it cannot happen through the
+ * services); it is logged and nothing is released. */
+static struct mapping *transport_mapping(uint64_t tid, unsigned i)
+{
+    uintptr_t at = transport_at[i].at;
+    struct mapping *m = map_floor(at);
+    if (m && at - (uintptr_t)m->address < m->visible && m->id == transport_at[i].id &&
+        m->holder == tid) return m;
+    fprintf(stderr, "CAPSTONE_VM_TRANSPORT_MISMATCH tid=%llu block=%u at=0x%lx id=%llu found=%llu\n",
+            (unsigned long long)tid, i, (unsigned long)at, (unsigned long long)transport_at[i].id,
+            m ? (unsigned long long)m->id : 0ULL);
+    return NULL;
+}
+/* Release the calling worker's holds and its host state: the worker's own detach service and
+ * its exit, nothing else. After it this launcher writes nothing into the blocks. */
+static void transport_detach(uint64_t tid)
+{
+    for (unsigned i = 0; i < 2; ++i) {
+        if (!transport_at[i].at) continue;
+        struct mapping *m = transport_mapping(tid, i);
+        if (m) m->holder = 0;
+        transport_at[i].at = 0; transport_at[i].id = 0;
+    }
+    if (worker_host) {
+        capstone_signals_detach();
+        capstone_delegate_host_free(worker_host);
+        free(worker_host);
+        worker_host = NULL;
+    }
+}
 static long unmap_arena(uintptr_t base, size_t bytes)
 {
     struct mapping *m = map_find(base);
     if (!m || m->visible != bytes || !m->heap || m->kind == CV_MAP_METADATA)
         return -EINVAL;
+    if (m->holder) return -EBUSY;
     if (ioctl(device, CV_RETIRE, &m->id)) return -errno;
     if (munmap(m->address, m->bytes)) return -errno;
     reuse_address = m->address; reuse_bytes = m->bytes;
@@ -338,6 +392,18 @@ static long protect_range(uintptr_t base, size_t bytes, int prot)
     return mprotect((void *)base, bytes, prot) ? -errno : 0;
 }
 
+/* Before this launcher writes a span of domain memory through Linux on the domain's behalf, the
+ * module admits every page of it that a lazily admitted arena does not hold yet (CV_TOUCH: the
+ * same pin and checks as the domain's own fault). Without it the write would create backing the
+ * domain can store a capability into with no pin and no sweep: at exit the frame is freed with
+ * its tags before the module runs. The destinations: a thread's exit word (any registered word
+ * the exiting thread names) and a worker's meta block and exchange region (any registered spans
+ * the worker names), written for the life of the worker transport. */
+static int touch(uintptr_t address, size_t bytes)
+{
+    struct cv_touch r = {address, bytes};
+    return ioctl(device, CV_TOUCH, &r);
+}
 static int registered_span(uintptr_t p, size_t bytes)
 {
     struct mapping *m = map_floor(p);
@@ -404,6 +470,7 @@ static long remap_mapping(uint64_t tid, struct cv_step *step)
         return -EINVAL;
     }
     struct mapping *m = map_find(base);
+    if (m && m->holder) return -EBUSY;
     if (m && m->visible == old && m->bytes == old && m->heap && m->kind == CV_MAP_HEAP) {
         /* Option (iii): the GROWN mapping's base must still be a granule multiple, and mremap()
          * promises only page alignment. Above 4 MiB the granule exceeds a page, so even an
@@ -465,11 +532,14 @@ static long remap_mapping(uint64_t tid, struct cv_step *step)
     }
     return -EINVAL;
 }
+/* The error exit's cleanup. It does not unmap the registered mappings: die() runs on any worker
+ * while the others may still be inside a delegated service that writes into their transport,
+ * and an unmap here would bypass the transport hold (unmap_arena) and reopen the address to
+ * reuse under that write. Linux releases the mappings at the process's exit, after exit_group
+ * has stopped every worker, as on the normal exit path. */
 static void cleanup(void)
 {
     if (device >= 0) { close(device); device = -1; }
-    for (size_t i = 0; i < map_count; ++i)
-        munmap(maps[i].address, maps[i].bytes);
     if (image_fd >= 0) { close(image_fd); image_fd = -1; }
     capstone_spawner_stop(&spawner);
     capstone_delegate_host_free(&host);
@@ -831,9 +901,16 @@ static int virtual_service(uint64_t tid, struct cv_step *step)
         struct cv_thread_control request = {.thread = tid};
         int posix = step->args[7] == CV_SERVICE_PTHREAD_EXIT;
         uintptr_t clear = posix ? step->args[0] : 0;
-        if (clear && !registered_word(clear)) return -1;
+        if (clear && (!registered_word(clear) || touch(clear, sizeof(int)))) return -1;
+        /* The exit word is stored after the two unmaps below, so it must lie in neither: a
+         * store into a range just given back to Linux would land in whatever Linux maps there
+         * next. musl's word is a global (the thread-list lock), never in the thread's stack. */
+        if (clear && posix && step->args[1] && clear - step->args[1] < step->args[2]) return -1;
         if (tid == 0 || ioctl(device, CV_THREAD_EXIT, &request))
             return -1;
+        /* A worker that exits still attached gives its holds back here. */
+        transport_detach(tid);
+        if (clear && request.frame && clear - request.frame < 4096) return -1;
         if (request.frame) {
             long cleanup_rc = unmap_arena(request.frame, 4096);
             if (cleanup_rc && cleanup_rc != -EINVAL) return -1;
@@ -887,6 +964,22 @@ static int virtual_service(uint64_t tid, struct cv_step *step)
                 if (tid) capstone_signals_attach(&h->signals);
             } else if (tid) {
                 if (!worker_host) {
+                    /* The worker's meta block (the signal block below is written at once) and
+                     * its exchange region are written by this launcher from here on: each must
+                     * be alone in its mapping and that mapping free of any other holder
+                     * (registered_span found both above), every page of both is admitted
+                     * (CV_TOUCH, at every attachment: a re-attachment after a detach may name a
+                     * fresh mapping at the same address), and the worker holds both mappings
+                     * until it detaches or exits. */
+                    struct mapping *held_meta = map_floor(step->args[0]);
+                    struct mapping *held_exchange = map_floor(step->args[1]);
+                    if (held_meta == held_exchange || held_meta->holder || held_exchange->holder)
+                        return -1;
+                    if (touch(step->args[0], CAPSTONE_DELEGATE_META_BYTES) ||
+                        touch(step->args[1], step->args[2])) return -1;
+                    held_meta->holder = held_exchange->holder = tid;
+                    transport_at[0].at = step->args[0]; transport_at[0].id = held_meta->id;
+                    transport_at[1].at = step->args[1]; transport_at[1].id = held_exchange->id;
                     worker_host = calloc(1, sizeof *worker_host);
                     if (!worker_host) return -1;
                     worker_host->exchange = (void *)(uintptr_t)step->args[1];
@@ -922,6 +1015,18 @@ static int virtual_service(uint64_t tid, struct cv_step *step)
         if (h->exec_requested) request->result = tid ? -ENOSYS : exec_in_place();
         if (h->exiting) {
             struct cv_stats stats;
+            if (tid == 0 && getenv("CAPSTONE_VM_STATS_MARK")) {
+                /* A mark in the kernel log right before the counters are read, so a gate can
+                 * set the module's per-arena census (dmesg) against pages=: the arenas retired
+                 * after the mark are the ones pages= still counts. Its own variable, not
+                 * CAPSTONE_VM_STATS: a guest whose console is up prints the line to its UART,
+                 * ~0.5 M instruction attempts in a profile that sets CAPSTONE_VM_STATS. */
+                int kmsg = open("/dev/kmsg", O_WRONLY | O_CLOEXEC);
+                if (kmsg >= 0) {
+                    if (write(kmsg, "CAPSTONE_VM_STATS_MARK\n", 23) < 0) { /* diagnostic only */ }
+                    close(kmsg);
+                }
+            }
             if (tid == 0 && (getenv("CAPSTONE_VM_STATS") || getenv("CAPSTONE_DELEGATE_STATS")) &&
                 !ioctl(device, CV_STATS, &stats)) {
                 fprintf(stderr, "CAPSTONE_VM_STATS arenas=%llu pages=%llu peak=%llu nodes=%llu steps=%llu faults=%llu collections=%llu reclaimed=%llu rounds=%llu bytes_in=%llu bytes_out=%llu node_bytes=%llu node_capacity=%llu node_growths=%llu launch_ns=%llu elapsed_ns=%llu\n",
@@ -938,7 +1043,8 @@ static int virtual_service(uint64_t tid, struct cv_step *step)
                                 " service5_thread_join=%lu service6_protect=%lu service7_wait=%lu"
                                 " service8_futex=%lu service9_pthread_exit=%lu"
                                 " service10_thread_delegate=%lu service11_thread_self=%lu"
-                                " service12_nodes=%lu service13_remap=%lu service_other=%lu\n",
+                                " service12_nodes=%lu service13_remap=%lu"
+                                " service14_transport_detach=%lu service_other=%lu\n",
                     step_count(&step_kinds[1]), step_count(&step_kinds[3]), step_count(&step_kinds[4]),
                     step_count(&step_kinds[0]) + step_count(&step_kinds[2]) + step_count(&step_kinds[5]) +
                         step_count(&step_kinds[6]) + step_count(&step_kinds[7]),
@@ -949,7 +1055,7 @@ static int virtual_service(uint64_t tid, struct cv_step *step)
                     step_count(&step_services[8]), step_count(&step_services[9]),
                     step_count(&step_services[10]), step_count(&step_services[11]),
                     step_count(&step_services[12]), step_count(&step_services[13]),
-                    step_count(&step_services[STEP_SERVICE_COUNT]));
+                    step_count(&step_services[14]), step_count(&step_services[STEP_SERVICE_COUNT]));
             }
             /* The image's identity on a run that ENDS, not only on one that faults: a
              * transcript that carries no digest cannot be tied to the image it claims to be
@@ -984,6 +1090,9 @@ static int virtual_service(uint64_t tid, struct cv_step *step)
         step->result = remap_mapping(tid, step);
     } else if (step->args[7] == CV_SERVICE_UNMAP) {
         step->result = unmap_arena(step->args[0], step->args[1]);
+    } else if (step->args[7] == CV_SERVICE_TRANSPORT_DETACH) {
+        /* The worker gives its transport back (pthread.c, before it unmaps the blocks). */
+        transport_detach(tid);
     } else if (step->args[7] == CV_SERVICE_PROTECT) {
         step->result = protect_range(step->args[0], step->args[1], step->args[2]);
     } else if (step->args[7] == CV_SERVICE_WAIT) {
@@ -1051,12 +1160,7 @@ static void *virtual_thread_worker(void *opaque)
     /* A virtual thread is hosted by a Linux worker, so normal virtual-thread
      * exit must return from this worker rather than terminate the process. */
     if (result) _exit(result);
-    if (worker_host) {
-        capstone_signals_detach();
-        capstone_delegate_host_free(worker_host);
-        free(worker_host);
-        worker_host = NULL;
-    }
+    /* The exit service detached the worker's transport (transport_detach). */
     return NULL;
 }
 

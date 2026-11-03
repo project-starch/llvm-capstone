@@ -32,13 +32,49 @@ extern size_t __capstone_signals_thread_state_size(void);
 extern uint64_t __capstone_sigmask_current(void);
 extern void __capstone_signals_thread_detach(void);
 
+/* A worker's meta block and exchange region are whole mappings of their own, not heap blocks:
+ * the launcher writes them while the worker is attached and holds their mappings against
+ * retirement until the worker detaches (exec.c, struct mapping.holder); it refuses an
+ * attachment whose block shares a mapping, so each block is mapped on its own. The worker
+ * detaches (__capstone_vm_transport_detach) and then gives the blocks back with one munmap
+ * each; before the detach that munmap is refused, to the worker too. */
+#define VIRTUAL_EXCHANGE_BYTES (1UL << 20)
+extern long __capstone_vm_transport_detach(void);
+extern void __capstone_delegate_thread_detach(void);
+static void release_transport(struct virtual_clone *r)
+{
+    if (!r->transport) return;
+    __capstone_signals_thread_detach();
+    __capstone_delegate_thread_detach();
+    free(r->transport);
+    r->transport = NULL;
+    __capstone_vm_transport_detach();
+    munmap(r->meta, CAPSTONE_DELEGATE_META_BYTES);
+    munmap(r->exchange, VIRTUAL_EXCHANGE_BYTES);
+    r->meta = r->exchange = NULL;
+}
 static void release_clone(struct virtual_clone *r)
 {
-    __capstone_signals_thread_detach();
-    free(r->transport);
-    free(r->meta);
-    free(r->exchange);
+    release_transport(r);
     free(r);
+}
+static void *transport_block(size_t bytes)
+{
+    void *p = mmap(NULL, bytes, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    return p == MAP_FAILED ? NULL : p;
+}
+/* The calling worker's exchange region (NULL on the main thread): what a program needs to name
+ * the mapping, as the transport-lifetime contract does. */
+void *__capstone_virtual_exchange(void)
+{
+    return current_clone ? current_clone->exchange : NULL;
+}
+/* The calling worker gives its transport back before it exits, as its exit would: detach, then
+ * unmap both blocks. Its later calls (musl's own exit path makes some) go through the process
+ * transport. The contract's identity case needs a worker alive without a transport. */
+void __capstone_virtual_transport_release(void)
+{
+    if (current_clone) release_transport(current_clone);
 }
 
 static void *clone_entry(void *p)
@@ -75,11 +111,14 @@ int __clone(int (*entry)(void *), void *stack, int flags, void *arg, ...)
         .clear = flags & CLONE_CHILD_CLEARTID ? clear : NULL};
     fegetenv(&r->fenv);
     r->transport = calloc(1, __capstone_delegate_thread_state_size());
-    r->meta = calloc(1, CAPSTONE_DELEGATE_META_BYTES);
-    r->exchange = malloc(1UL << 20);
+    r->meta = transport_block(CAPSTONE_DELEGATE_META_BYTES);
+    r->exchange = transport_block(VIRTUAL_EXCHANGE_BYTES);
     r->signals = calloc(1, __capstone_signals_thread_state_size());
     if (!r->transport || !r->meta || !r->exchange || !r->signals) {
-        free(r->signals); free(r->transport); free(r->meta); free(r->exchange); free(r);
+        free(r->signals); free(r->transport);
+        if (r->meta) munmap(r->meta, CAPSTONE_DELEGATE_META_BYTES);
+        if (r->exchange) munmap(r->exchange, VIRTUAL_EXCHANGE_BYTES);
+        free(r);
         return -ENOMEM;
     }
     ((struct capstone_signal_block *)((char *)r->meta + CAPSTONE_SIGNAL_OFFSET))->initial_mask =
@@ -87,7 +126,9 @@ int __clone(int (*entry)(void *), void *stack, int flags, void *arg, ...)
     long id = capstone_virtual_thread_create(clone_entry, r, stack, tls);
     if (id < 0) {
         int error = errno;
-        free(r->signals); free(r->transport); free(r->meta); free(r->exchange); free(r);
+        free(r->signals); free(r->transport);
+        munmap(r->meta, CAPSTONE_DELEGATE_META_BYTES); munmap(r->exchange, VIRTUAL_EXCHANGE_BYTES);
+        free(r);
         return -error;
     }
     /* pthread_create holds the thread-list lock until __clone returns;

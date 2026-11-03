@@ -62,8 +62,25 @@ struct arena {
      * not pinned, not swept. pages[] and count cover the pages after it. */
     unsigned long rx_bytes;
     struct page **pages;
+    /* The frame set of a NONLIN arena: every frame pages[] holds, once, as pfn+1 in an
+     * open-addressing table of frame_slots(count) entries. It is the whole-arena duplicate
+     * check (frames_distinct, commit 35fee9127ec2) kept for the arena's lifetime, so a page
+     * admitted after the mint -- at a fault, in a pin-ahead window or by the resident scan --
+     * is held to the same rule as one pinned at mint. NULL for a linear arena, which was never
+     * frame-checked and still is not. */
+    unsigned long *frames;
     unsigned count;
+    /* The arena's page census, printed once at its retirement under diag_admit: pages admitted
+     * at a fault, by a pin-ahead window, by the resident scan, by CV_TOUCH, or pinned whole at
+     * the mint; released before retirement by a remap's truncation. admits + windows + scans +
+     * touches + eager - released is what the retirement sweeps. Counted, not printed, inside a
+     * window: a printk per page there added work before the next batch's deadline check. */
+    unsigned admits, windows, scans, touches, eager, released;
+    /* Pages are admitted one by one at the domain's first access (resolve). */
     bool lazy;
+    /* The grant was LINEAR: the heap's move-only shape, the one CV_REMAP may grow. lazy used
+     * to imply this; since lazy_grants it does not. */
+    bool linear;
     /* S-21: the ancestor was already CSRETIREd at CV_THREAD_CREATE, to make a child's frame
      * unreachable by the domain before its first entry. A second retire is not an error, but the
      * non-destroying path reports one, so it must be skipped rather than tolerated. */
@@ -304,6 +321,33 @@ module_param(arena_pin, bool, 0644);
  * arena, the VMA and the first page already pinned. 1 pins only the page. */
 static unsigned long pin_ahead_pages = 1;
 module_param(pin_ahead_pages, ulong, 0444);
+
+/* Lazy NONLIN grants (2026-11-03). A non-linear grant used to be pinned WHOLE at mint:
+ * pin_user_pages_fast(FOLL_WRITE) over the arena materialised every page of the stack (1 MiB),
+ * the startup block (64 KiB) and the image's data and bss before the domain ran, 894 pages on
+ * 502.gcc_r's test input of which the program touches a fraction, each one a Linux fault, a
+ * clear_page, a pin, a tag sweep and an unpin -- about 10 K instruction attempts a page. Now a
+ * NONLIN grant's pages are admitted one by one at the domain's first access, as a linear
+ * arena's have been since the lazy path existed, under the same three checks the whole-arena
+ * pin made: exclusive anonymous backing (PageAnon), mapped exactly once (page_mapcount 1), and
+ * no frame twice in the arena (the frame set, frame_insert). Pages already resident at the
+ * mint -- the startup block the launcher packed before granting it, the image's partial data
+ * page it read in -- are pinned at the mint by the resident scan, so a launcher write that
+ * preceded the grant is covered exactly as before. Two grants are still pinned whole, see
+ * eager_grant(). 0 restores the whole-arena pin for every NONLIN grant (the A/B arm);
+ * read-only, so a run's module-params.txt records which it ran. */
+static bool lazy_grants = true;
+module_param(lazy_grants, bool, 0444);
+MODULE_PARM_DESC(lazy_grants, "admit NONLIN grants page by page at first access (0: pin whole at mint)");
+/* One line per page an arena gains outside a window: `admit` at a fault (with cause and pc),
+ * `scan` from the resident scan, `touch` from CV_TOUCH; and one `retire` line per arena with its
+ * whole census (admit, window, scan, touch, eager, released, swept). The instrument for a run
+ * whose pinned page count differs from another run of the same program (which a whole-arena pin
+ * could not show and a lazy one can), and what the pin-ahead, step-hooks and pthread gates read
+ * to count one arena's pins and to check the module's counters against them. Off by default;
+ * 0644 so a boot can turn it on for one run. */
+static bool diag_admit;
+module_param(diag_admit, bool, 0644);
 
 /* The retired count, from wherever this format keeps it. */
 /* The CSMINT descriptor, v7 (Q-23's ruling). Six words, 8-aligned:
@@ -647,63 +691,128 @@ static void clear_thread_frame(struct cv_thread *t)
     memset(t->frame, 0, 656);
 }
 
-/* Called with mmap_read_lock held. Missing PTEs contain no application tags;
- * swapped/huge mappings are outside this profile and fail closed. */
-static int resident_page(struct mm_struct *mm, unsigned long address)
+/* The first address in [address, end) whose PTE is present, written to *at with its frame in
+ * *pfn: 1, or 0 at the end, or an error. An absent table level is skipped at its own
+ * granularity, so a 1 MiB stack with four resident pages costs one PMD lookup and one walk of
+ * that PMD's entries rather than 256 page-table walks. Missing entries hold no application
+ * tags; swapped and huge mappings are outside this profile and fail closed, as they always
+ * did (-EOPNOTSUPP), a bad table -EFAULT. Called with mmap_read_lock held. */
+static long next_resident(struct mm_struct *mm, unsigned long address, unsigned long end,
+                          unsigned long *at, unsigned long *pfn)
 {
-    pgd_t *pgd = pgd_offset(mm, address);
-    p4d_t *p4d;
-    pud_t *pud;
-    pmd_t *pmd;
-    pte_t *pte, value;
-    spinlock_t *lock;
-    if (pgd_none(*pgd)) return 0;
-    if (pgd_bad(*pgd)) return -EFAULT;
-    p4d = p4d_offset(pgd, address);
-    if (p4d_none(*p4d)) return 0;
-    if (p4d_bad(*p4d)) return -EFAULT;
-    pud = pud_offset(p4d, address);
-    if (pud_none(*pud)) return 0;
-    if (pud_leaf(*pud)) return -EOPNOTSUPP;
-    if (pud_bad(*pud)) return -EFAULT;
-    pmd = pmd_offset(pud, address);
-    if (pmd_none(*pmd)) return 0;
-    if (pmd_leaf(*pmd)) return -EOPNOTSUPP;
-    if (pmd_bad(*pmd)) return -EFAULT;
-    pte = pte_offset_map_lock(mm, pmd, address, &lock);
-    if (!pte) return -EFAULT;
-    value = READ_ONCE(*pte);
-    pte_unmap_unlock(pte, lock);
-    if (pte_none(value)) return 0;
-    return pte_present(value) ? 1 : -EOPNOTSUPP;
+    while (address < end) {
+        pgd_t *pgd = pgd_offset(mm, address);
+        p4d_t *p4d;
+        pud_t *pud;
+        pmd_t *pmd;
+        pte_t *pte;
+        spinlock_t *lock;
+        unsigned long stop;
+        long found = 0;
+        if (pgd_none(*pgd)) { address = pgd_addr_end(address, end); continue; }
+        if (pgd_bad(*pgd)) return -EFAULT;
+        p4d = p4d_offset(pgd, address);
+        if (p4d_none(*p4d)) { address = p4d_addr_end(address, end); continue; }
+        if (p4d_bad(*p4d)) return -EFAULT;
+        pud = pud_offset(p4d, address);
+        if (pud_none(*pud)) { address = pud_addr_end(address, end); continue; }
+        if (pud_leaf(*pud)) return -EOPNOTSUPP;
+        if (pud_bad(*pud)) return -EFAULT;
+        pmd = pmd_offset(pud, address);
+        if (pmd_none(*pmd)) { address = pmd_addr_end(address, end); continue; }
+        if (pmd_leaf(*pmd)) return -EOPNOTSUPP;
+        if (pmd_bad(*pmd)) return -EFAULT;
+        pte = pte_offset_map_lock(mm, pmd, address, &lock);
+        if (!pte) return -EFAULT;
+        stop = pmd_addr_end(address, end);
+        for (unsigned long i = 0; address < stop; address += PAGE_SIZE, ++i) {
+            pte_t value = READ_ONCE(pte[i]);
+            if (pte_none(value)) continue;
+            if (!pte_present(value)) { found = -EOPNOTSUPP; break; }
+            *at = address; *pfn = pte_pfn(value);
+            found = 1;
+            break;
+        }
+        pte_unmap_unlock(pte, lock);
+        if (found) return found;
+    }
+    return 0;
 }
-static int pin_remaining(struct context *c, struct arena *a)
+
+/* Slots of a NONLIN arena's frame set for n pages: a power of two of at
+ * least 2n, so linear probing stays short. */
+static unsigned long frame_slots(long n)
+{
+    return roundup_pow_of_two(2 * (unsigned long)n);
+}
+
+/* Record a page's frame in the arena's frame set: false if the frame is there already, i.e.
+ * another page of the arena holds it. Expected O(1): the set is at most half full, since no
+ * index of pages[] is filled twice. A linear arena has no set and is never refused here. */
+static bool frame_insert(struct arena *a, struct page *page)
+{
+    unsigned long mask, key, at;
+    if (!a->frames) return true;
+    mask = frame_slots(a->count) - 1;
+    key = page_to_pfn(page) + 1;
+    at = (key * 0x9e3779b97f4a7c15UL) >> 32 & mask;
+    while (a->frames[at]) {
+        if (a->frames[at] == key) return false;
+        at = (at + 1) & mask;
+    }
+    a->frames[at] = key;
+    return true;
+}
+
+/* Pin, check and record every resident page of the arena that pages[] does not hold yet,
+ * materialising none. Linux may populate a page with no fault this module sees -- the
+ * launcher's writes before a grant, its reads of a stack it walks after a fault, a mapping
+ * moved by mremap -- and such a page can carry a tag only if the domain stored one, so it is
+ * swept with the rest. Each admitted page passes the same three checks as one admitted at a
+ * fault. gup_flags are the caller's: FOLL_FORCE | FOLL_NOFAULT inspects what is there (retire
+ * and collect: a PROT_NONE or read-only page is read, no PTE right changes, no backing is
+ * manufactured); FOLL_WRITE | FOLL_FORCE at the mint of a lazy grant also breaks a private file
+ * page's copy-on-write, as the whole-arena pin did, so the arena never retains a page it does
+ * not own. The zero page is skipped: it holds no tag and the domain's first store to it faults
+ * into resolve(), which gives it real backing. */
+static int pin_remaining(struct context *c, struct arena *a, unsigned int gup_flags)
 {
     int error = 0;
+    unsigned long base = a->address + a->rx_bytes, address, pfn;
+    unsigned j = 0, run_end = 0;
     mmap_read_lock(c->mm);
-    for (unsigned j = 0; j < a->count; ++j) {
+    while (j < a->count) {
         struct page *page;
-        unsigned long address = a->address + a->rx_bytes + j * PAGE_SIZE;
-        int resident;
-        if (a->pages[j]) continue;
-        resident = resident_page(c->mm, address);
-        if (!resident) continue;
+        long resident;
+        /* A page already held is skipped without touching the page tables: at the retire of
+         * a heap arena that is every page (519.lbm_r's 105 K), and a walk per page there cost
+         * 8 M attempts when this was first written. Only the runs of absent entries between
+         * them are walked, and those a table level at a time. */
+        if (a->pages[j]) { ++j; continue; }
+        if (run_end <= j) {
+            run_end = j + 1;
+            while (run_end < a->count && !a->pages[run_end]) ++run_end;
+        }
+        resident = next_resident(c->mm, base + (unsigned long)j * PAGE_SIZE,
+                                 base + (unsigned long)run_end * PAGE_SIZE, &address, &pfn);
         if (resident < 0) { error = resident; break; }
-        /* Trusted inspection may read PROT_NONE/RO pages, but it never faults
-         * in unused pages, changes PTE rights or manufactures fresh backing. */
-        if (pin_user_pages_remote(c->mm, address, 1, FOLL_FORCE | FOLL_NOFAULT,
-                                  &page, NULL, NULL) != 1) {
+        if (!resident) { j = run_end; continue; }
+        j = (address - base) / PAGE_SIZE;
+        if (is_zero_pfn(pfn)) { ++j; continue; }
+        if (pin_user_pages_remote(c->mm, address, 1, gup_flags, &page, NULL, NULL) != 1) {
             error = -EFAULT; break;
         }
-        if (is_zero_pfn(page_to_pfn(page))) {
-            unpin_user_page(page); continue;
-        }
-        if (!PageAnon(page) || page_mapcount(page) != 1) {
+        if (!PageAnon(page) || page_mapcount(page) != 1 || (a->frames && !frame_insert(a, page))) {
             unpin_user_page(page); error = -EACCES; break;
         }
+        if (diag_admit)
+            pr_info("capstone_vm: scan arena 0x%lx+0x%lx page %u pfn 0x%lx flags 0x%x\n",
+                    a->address, a->bytes, j, page_to_pfn(page), gup_flags);
+        ++a->scans;
         a->pages[j] = page;
         ++c->stats.pinned_pages;
         c->stats.peak_pages = max(c->stats.peak_pages, c->stats.pinned_pages);
+        ++j;
     }
     mmap_read_unlock(c->mm);
     return error;
@@ -771,7 +880,7 @@ static int collect(struct context *c, struct cv_thread *owner)
      * a C fault. Missing pages are not materialized; any inspection failure
      * prevents identity reuse. Saved contexts share this mm's namespace. */
     for_each_arena(a, c) {
-        int error = pin_remaining(c, a);
+        int error = pin_remaining(c, a, FOLL_FORCE | FOLL_NOFAULT);
         if (error) return error;
     }
     list_for_each_entry(t, &c->threads, link)
@@ -811,7 +920,8 @@ static int ensure_nodes(struct context *c, unsigned long required)
     if (available >= required) return 0;
     list_for_each_entry(t, &c->threads, link)
         if (t->started && !t->terminal) { owner = t; break; }
-    /* pin_remaining inspects every registered virtual page, including holes.
+    /* pin_remaining walks every registered arena's page tables (holes are skipped a table
+     * level at a time, but a resident page is inspected and a new one pinned).
      * Amortize that scan over at least as many retired identities and one
      * growth batch; a tiny table beside a large sparse VMA must not cause a
      * full scan every few hundred allocations. Existing free IDs win above. */
@@ -962,11 +1072,11 @@ static void clear_page_tags(struct page *page)
 static int retire(struct context *c, struct arena *a, bool destroying)
 {
     unsigned long flags, old, status;
-    unsigned i;
+    unsigned i, swept;
     if (!destroying && arena_has_thread_frame(c, a))
         return -EBUSY;
     if (!destroying) {
-        int error = pin_remaining(c, a);
+        int error = pin_remaining(c, a, FOLL_FORCE | FOLL_NOFAULT);
         if (error) return error;
     }
     /* S-21: skip a retire already done at CV_THREAD_CREATE. Without this, the domain unmapping
@@ -1014,45 +1124,41 @@ static int retire(struct context *c, struct arena *a, bool destroying)
             unpin_user_pages_dirty_lock(a->pages, n, true);
             c->stats.pinned_pages -= n;
         }
+        swept = n;
     }
+    if (diag_admit)
+        pr_info("capstone_vm: retire arena 0x%lx+0x%lx admit=%u window=%u scan=%u touch=%u eager=%u "
+                "released=%u swept=%u\n", a->address, a->bytes, a->admits, a->windows, a->scans,
+                a->touches, a->eager, a->released, swept);
     --c->stats.arenas;
     rb_erase(&a->node, &c->arenas);
     xa_erase(&c->ids, a->id);
     c->registered_bytes -= a->bytes;
     kvfree(a->pages);
+    kvfree(a->frames);
     kfree(a);
     return 0;
 }
-/* Slots of the duplicate check's table for n frames: a power of two of at
- * least 2n, so linear probing stays short. */
-static unsigned long frame_slots(long n)
-{
-    return roundup_pow_of_two(2 * (unsigned long)n);
-}
 
-/* No frame twice among the n pinned pages: each frame number is inserted
- * into an open-addressing table (frame_slots(n) zeroed entries holding pfn+1);
- * finding it already there is a duplicate. Expected O(n) (the table is at
- * most half full); pages keeps the address order the arena records. */
-static bool frames_distinct(struct page **pages, long n, unsigned long *table)
+/* The NONLIN grants still pinned whole at mint under lazy_grants: the meta block (reg 10 before
+ * the start) and the exchange region (reg 11). The launcher writes both on the domain's behalf
+ * AFTER the grant -- a service entry's result, a delegated read's bytes, the signal table -- and
+ * a launcher write faults its page in through Linux, where this module sees nothing: the page
+ * is then present without a pin, the domain can store a capability into it, and if the process
+ * exits, exit_mm frees it with its tags before vm_release can sweep it (the teardown cannot walk
+ * the page tables, see vm_release). The stack (reg 2), the image (3) and the startup block (12)
+ * are written by the launcher only BEFORE their grant, and those pages are pinned at the mint
+ * by the resident scan; after it, only the domain's own accesses populate them, every one of
+ * which faults into resolve(). The launcher reads the stack after a fault (its frame chain),
+ * which maps the zero page at most. Reply grants (a started context, reg 10) are linear. */
+static bool eager_grant(const struct cv_thread *t, const struct cv_map *r)
 {
-    unsigned long mask = frame_slots(n) - 1;
-    for (long i = 0; i < n; ++i) {
-        unsigned long key = page_to_pfn(pages[i]) + 1;
-        unsigned long at = (key * 0x9e3779b97f4a7c15UL) >> 32 & mask;
-        while (table[at]) {
-            if (table[at] == key) return false;
-            at = (at + 1) & mask;
-        }
-        table[at] = key;
-    }
-    return true;
+    return !t->started && (r->reg == 10 || r->reg == 11);
 }
 
 static int add(struct context *c, struct cv_thread *t, struct cv_map *r)
 {
-    unsigned i;
-    unsigned long *pfns = NULL;
+    unsigned i, count;
     struct arena *a;
     unsigned long flags, old, desc[CV_DESC_WORDS], ancestor, *slot;
     struct page **pages;
@@ -1134,30 +1240,47 @@ static int add(struct context *c, struct cv_thread *t, struct cv_map *r)
      * record, its ID slot and its page array are charged to the process's
      * memory cgroup: there is no count limit, only the registered-bytes one,
      * and a million single-page arenas fit under it. */
+    /* An arena id names one registration for the context's whole life: the launcher releases
+     * a worker's transport hold only on the id it recorded at the attachment (exec.c,
+     * transport_mapping), so ids are never reused. The counter advances only on success and
+     * would wrap after 2^64 registrations; the registration that would wrap it is refused. */
+    if (c->next_id == U64_MAX) return -ENOSPC;
     a = kzalloc(sizeof(*a), GFP_KERNEL_ACCOUNT);
     if (!a) return -ENOMEM;
     a->id = c->next_id + 1;
     if (xa_insert(&c->ids, a->id, a, GFP_KERNEL_ACCOUNT)) { kfree(a); return -ENOMEM; }
-    pages = kvcalloc((r->bytes - r->rx_bytes) / PAGE_SIZE, sizeof(*pages), GFP_KERNEL_ACCOUNT);
+    count = (r->bytes - r->rx_bytes) / PAGE_SIZE;
+    pages = kvcalloc(count, sizeof(*pages), GFP_KERNEL_ACCOUNT);
     if (!pages) { xa_erase(&c->ids, a->id); kfree(a); return -ENOMEM; }
+    /* The arena's geometry, before anything is pinned against it. The frame set lives as long
+     * as the arena (a page admitted at any later fault is checked against it), so it is
+     * accounted like the page array. */
+    a->address = r->address; a->bytes = r->bytes; a->rx_bytes = r->rx_bytes;
+    a->pages = pages; a->count = count; a->linear = r->linear;
+    a->lazy = r->linear || (lazy_grants && !eager_grant(t, r));
     if (!r->linear) {
-        /* Freed before the mint, so it is not a lasting allocation: no account. */
-        pfns = kvcalloc(frame_slots(r->bytes / PAGE_SIZE), sizeof(*pfns), GFP_KERNEL);
-        if (!pfns) { kvfree(pages); xa_erase(&c->ids, a->id); kfree(a); return -ENOMEM; }
+        a->frames = kvcalloc(frame_slots(count), sizeof(*a->frames), GFP_KERNEL_ACCOUNT);
+        if (!a->frames) { kvfree(pages); xa_erase(&c->ids, a->id); kfree(a); return -ENOMEM; }
     }
     n = 0;
-    /* Growing RW arenas start with absent PTEs. Linux resolves each first
-     * touch through GUP, then the adapter pins that backing until retirement. */
-    if (!r->linear) {
-        n = pin_user_pages_fast(r->address + r->rx_bytes, (r->bytes - r->rx_bytes) / PAGE_SIZE,
-                                FOLL_WRITE, pages);
-        if (n != (r->bytes - r->rx_bytes) / PAGE_SIZE) goto unpin;
+    if (!a->lazy) {
+        /* Pinned whole at the mint (lazy_grants off, or eager_grant): Linux resolves each first
+         * touch through GUP, then the adapter pins that backing until retirement. Each page:
+         * exclusive anonymous backing, mapped once, its frame not held by another page of the
+         * arena. The last check matters here because GUP-fast takes no mmap lock: a mapping
+         * moved while it walks can show one frame at two addresses, each with mapcount 1. */
+        n = pin_user_pages_fast(r->address + r->rx_bytes, count, FOLL_WRITE, pages);
+        if (n != count) goto unpin;
+        for (i = 0; i < n; ++i)
+            if (!PageAnon(pages[i]) || page_mapcount(pages[i]) != 1 || !frame_insert(a, pages[i]))
+                goto unpin;
+    } else if (!r->linear) {
+        /* Lazy: the pages already resident -- what the launcher wrote before the grant -- are
+         * pinned and checked now, exactly as the whole-arena pin would have (FOLL_WRITE breaks
+         * a private file page's copy-on-write); every absent page is admitted at the domain's
+         * first access by resolve(), under the same checks. */
+        if (pin_remaining(c, a, FOLL_WRITE | FOLL_FORCE)) goto unpin;
     }
-    for (i = 0; i < n; ++i)
-        if (!PageAnon(pages[i]) || page_mapcount(pages[i]) != 1) goto unpin;
-    if (n > 1 && !frames_distinct(pages, n, pfns)) goto unpin;
-    kvfree(pfns);
-    pfns = NULL;
     slot = t->frame + 8 + r->reg * 2;
     /* Q-30: THE FRAME'S REGISTER SLOTS ARE THE CONTEXT'S LIVE STATE, NOT SPARE SPACE.
      *
@@ -1205,19 +1328,26 @@ static int add(struct context *c, struct cv_thread *t, struct cv_map *r)
                  : "=&r"(ancestor) : "r"(slot), "r"(desc) : "memory");
     restore_root(old);
     local_irq_restore(flags); preempt_enable();
-    a->address = r->address; a->bytes = r->bytes; a->ancestor = ancestor;
-    a->rx_bytes = r->rx_bytes;
-    a->pages = pages; a->count = (r->bytes - r->rx_bytes) / PAGE_SIZE; a->lazy = r->linear;
+    a->ancestor = ancestor;
     arena_insert(c, a);
     c->registered_bytes += a->bytes;
     r->id = c->next_id = a->id;
+    /* The whole-arena pin's n pages are counted here; the resident scan counted its own. */
+    a->eager = n;
     ++c->stats.arenas; c->stats.pinned_pages += n;
     c->stats.peak_pages = max(c->stats.peak_pages, c->stats.pinned_pages);
     if (t->started) t->reply_cap = true;
     return 0;
 unpin:
-    for (i = 0; i < max(n, 0L); ++i) unpin_user_page(pages[i]);
-    kvfree(pfns);
+    for (i = 0; i < count; ++i) {
+        if (!pages[i]) continue;
+        unpin_user_page(pages[i]);
+        if (a->lazy) --c->stats.pinned_pages;
+    }
+    /* The scan's lines were printed; a census reading them needs the unwind too. */
+    if (diag_admit && a->scans)
+        pr_info("capstone_vm: unwind arena 0x%lx+0x%lx scan=%u\n", a->address, a->bytes, a->scans);
+    kvfree(a->frames);
     kvfree(pages);
     xa_erase(&c->ids, a->id); kfree(a);
     return -EFAULT;
@@ -1236,9 +1366,9 @@ static int remap_begin(struct context *c, const struct cv_remap *r)
         !r->bytes || r->bytes > CV_MAX_REGION_BYTES || (r->bytes & ~PAGE_MASK))
         return -EINVAL;
     a = xa_load(&c->ids, r->id);
-    if (!a || !a->lazy || arena_has_thread_frame(c, a)) return -EINVAL;
+    if (!a || !a->linear || arena_has_thread_frame(c, a)) return -EINVAL;
     if (c->registered_bytes - a->bytes + r->bytes > CV_MAX_BYTES) return -ENOMEM;
-    error = pin_remaining(c, a);
+    error = pin_remaining(c, a, FOLL_FORCE | FOLL_NOFAULT);
     if (error) return error;
     error = ensure_nodes(c, 2 + CAP_REV_TABLE_RESERVE);
     if (error) return error;
@@ -1303,6 +1433,7 @@ static int remap_end(struct context *c, const struct cv_remap *r)
         clear_page_tags(a->pages[i]);
         set_page_dirty_lock(a->pages[i]); unpin_user_page(a->pages[i]);
         --c->stats.pinned_pages;
+        ++a->released;
     }
     kvfree(a->pages); a->pages = c->remap_pages; c->remap_pages = NULL;
     /* Rekeying the tree allocates nothing: no new failure after the commit. */
@@ -1427,7 +1558,7 @@ static bool cv_step_stop(u64 deadline)
 static void pin_ahead(struct context *c, struct arena *a,
                       struct vm_area_struct *v, unsigned first, u64 deadline)
 {
-    unsigned long start = a->address + (unsigned long)first * PAGE_SIZE;
+    unsigned long start = a->address + a->rx_bytes + (unsigned long)first * PAGE_SIZE;
     unsigned long count = 0, done;
     while ((arena_pin || count + 1 < pin_ahead_pages) && first + count < a->count &&
            start + count * PAGE_SIZE < v->vm_end && !a->pages[first + count])
@@ -1455,13 +1586,15 @@ static void pin_ahead(struct context *c, struct arena *a,
         for (long j = max(n, 0L); j < batch; ++j)
             pages[j] = NULL;
         for (long j = 0; j < max(n, 0L); ++j) {
-            if (!PageAnon(pages[j]) || page_mapcount(pages[j]) != 1) {
+            if (!PageAnon(pages[j]) || page_mapcount(pages[j]) != 1 ||
+                (a->frames && !frame_insert(a, pages[j]))) {
                 for (long k = j; k < n; ++k) {
                     unpin_user_page(pages[k]);
                     pages[k] = NULL;
                 }
                 return;
             }
+            ++a->windows;
             ++c->stats.pinned_pages;
         }
         if (n != batch)
@@ -1649,6 +1782,16 @@ module_param(bench_entries, ullong, 0444);
             t->last_fault_addr, t->last_fault_cause, t->fault_repeat,               \
             ##__VA_ARGS__)
 
+/* A file-backed VMA is admitted only as the image's data: add()'s image-data rule, a private,
+ * readable and writable, never executable mapping of the image file. Its pages are then admitted
+ * like any other, because the FOLL_WRITE pin breaks the copy-on-write and only an exclusive
+ * anonymous copy is ever retained. */
+static bool image_data_vma(const struct arena *a, const struct vm_area_struct *v)
+{
+    return a->rx_bytes && !(v->vm_flags & VM_EXEC) &&
+           (v->vm_flags & (VM_READ | VM_WRITE)) == (VM_READ | VM_WRITE);
+}
+
 static int resolve(struct context *c, struct cv_thread *t, u64 deadline)
 {
     unsigned long address = t->frame[5], cause = t->frame[3];
@@ -1682,11 +1825,12 @@ static int resolve(struct context *c, struct cv_thread *t, u64 deadline)
     if (a && a->lazy) {
         unsigned index;
         long n;
-        index = (address - a->address) / PAGE_SIZE;
+        /* pages[] covers the pages after the read+execute prefix (zero except for the image). */
+        index = (address - a->address - a->rx_bytes) / PAGE_SIZE;
         mmap_read_lock(c->mm);
         v = find_vma(c->mm, address);
         if (!v || v->vm_start > address || !(v->vm_flags & required) ||
-            v->vm_file || (v->vm_flags & VM_SHARED)) {
+            (v->vm_flags & VM_SHARED) || (v->vm_file && !image_data_vma(a, v))) {
             unsigned long f = v ? v->vm_flags : 0UL;
             int file = v ? !!v->vm_file : -1;
             mmap_read_unlock(c->mm);
@@ -1714,6 +1858,15 @@ static int resolve(struct context *c, struct cv_thread *t, u64 deadline)
             mmap_read_unlock(c->mm); unpin_user_page(page); return -EACCES;
         }
         TEST_RESOLVE(a, index);
+        /* A page admitted at a new index may not share its frame with one already admitted:
+         * the whole-arena duplicate check of the mint, applied to this page. A repeat at an
+         * index already filled is judged by the backing comparison below instead. */
+        if (!a->pages[index] && a->frames && !frame_insert(a, page)) {
+            CV_RESOLVE_FAIL("frame", "pfn 0x%lx already backs another page of the arena "
+                            "(mapcount %d refs %d vm_flags 0x%lx)", page_to_pfn(page),
+                            page_mapcount(page), page_ref_count(page), vmflags);
+            mmap_read_unlock(c->mm); unpin_user_page(page); return -EACCES;
+        }
         if (!a->pages[index])
             pin_ahead(c, a, v, index + 1, deadline);
         mmap_read_unlock(c->mm);
@@ -1817,6 +1970,10 @@ static int resolve(struct context *c, struct cv_thread *t, u64 deadline)
         t->last_fault_addr = address;
         t->last_fault_cause = cause;
         t->fault_repeat = 0;
+        if (diag_admit)
+            pr_info("capstone_vm: admit arena 0x%lx+0x%lx page %u cause %lu pc 0x%lx pfn 0x%lx\n",
+                    a->address, a->bytes, index, cause, t->frame[4], page_to_pfn(page));
+        ++a->admits;
         a->pages[index] = page;
         ++c->stats.pinned_pages;
         c->stats.peak_pages = max(c->stats.peak_pages, c->stats.pinned_pages);
@@ -1824,6 +1981,68 @@ static int resolve(struct context *c, struct cv_thread *t, u64 deadline)
     }
     CV_RESOLVE_FAIL("arena", "no lazy arena covers this address");
     return -EFAULT;
+}
+
+/* Admit one absent page of a lazy arena outside a fault, for CV_TOUCH: the launcher is about to
+ * write it through Linux. The same rule as resolve()'s for a page admitted at a fault: the VMA
+ * present, readable, private, a file only as the image's data; the page pinned with FOLL_WRITE
+ * (FOLL_FORCE where the VMA is not writable) so a zero page, a shared page or a file page is
+ * replaced by an exclusive copy; then PageAnon, mapcount 1 and the frame set. Caller holds
+ * vm_lock and has checked that pages[index] is empty. */
+static int admit_page(struct context *c, struct arena *a, unsigned index)
+{
+    unsigned long address = a->address + a->rx_bytes + (unsigned long)index * PAGE_SIZE;
+    struct vm_area_struct *v;
+    struct page *page;
+    mmap_read_lock(c->mm);
+    v = find_vma(c->mm, address);
+    if (!v || v->vm_start > address || !(v->vm_flags & VM_READ) || (v->vm_flags & VM_SHARED) ||
+        (v->vm_file && !image_data_vma(a, v))) {
+        mmap_read_unlock(c->mm); return -EACCES;
+    }
+    if (pin_user_pages_remote(c->mm, address, 1,
+                              FOLL_WRITE | ((v->vm_flags & VM_WRITE) ? 0 : FOLL_FORCE),
+                              &page, NULL, NULL) != 1) {
+        mmap_read_unlock(c->mm); return -EFAULT;
+    }
+    if (!PageAnon(page) || page_mapcount(page) != 1 || (a->frames && !frame_insert(a, page))) {
+        mmap_read_unlock(c->mm); unpin_user_page(page); return -EACCES;
+    }
+    mmap_read_unlock(c->mm);
+    if (diag_admit)
+        pr_info("capstone_vm: touch arena 0x%lx+0x%lx page %u pfn 0x%lx\n",
+                a->address, a->bytes, index, page_to_pfn(page));
+    ++a->touches;
+    a->pages[index] = page;
+    ++c->stats.pinned_pages;
+    c->stats.peak_pages = max(c->stats.peak_pages, c->stats.pinned_pages);
+    return 0;
+}
+
+/* CV_TOUCH: every page of [address, address + bytes) inside a lazy arena is admitted before the
+ * launcher writes it. A page already held, or in an arena pinned whole, needs nothing; a page
+ * outside every arena is refused, as is one in the image's read+execute prefix, which the
+ * launcher never writes. */
+static int touch(struct context *c, const struct cv_touch *r)
+{
+    unsigned long at, end;
+    if (!r->bytes || r->address > ULONG_MAX - r->bytes) return -EINVAL;
+    at = r->address & PAGE_MASK;
+    end = PAGE_ALIGN(r->address + r->bytes);
+    if (end < at) return -EINVAL;
+    for (; at < end; at += PAGE_SIZE) {
+        struct arena *a = arena_at(c, at);
+        unsigned index;
+        int error;
+        if (!a) return -EINVAL;
+        if (at - a->address < a->rx_bytes) return -EACCES;
+        if (!a->lazy) continue;
+        index = (at - a->address - a->rx_bytes) / PAGE_SIZE;
+        if (a->pages[index]) continue;
+        error = admit_page(c, a, index);
+        if (error) return error;
+    }
+    return 0;
 }
 
 static void node_stats(struct context *c)
@@ -2237,6 +2456,10 @@ thread_unwind:
         t = find_thread(c, r.thread);
         rc = t ? resolve(c, t, ktime_get_ns() + CV_STEP_BUDGET_NS) : -ESRCH;
         if (!rc) t->sfence_pending = true;
+    } else if (op == CV_TOUCH) {
+        struct cv_touch r;
+        if (copy_from_user(&r, (void __user *)arg, sizeof(r))) { rc = -EFAULT; goto out; }
+        rc = touch(c, &r);
     } else if (op == CV_RETIRE) {
         u64 id;
         struct arena *a;

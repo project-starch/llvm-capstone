@@ -22,6 +22,10 @@
 #define CV_SERVICE_THREAD_SELF 11
 #define CV_SERVICE_NODES 12
 #define CV_SERVICE_REMAP 13
+/* A worker gives its transport (meta block and exchange region) back: the launcher stops
+ * writing into them and releases its hold on their mappings, which until then refuses their
+ * unmap to everyone, the worker included. The worker's next delegate service attaches again. */
+#define CV_SERVICE_TRANSPORT_DETACH 14
 /* Node instructions pause at this remaining cleanup reserve. */
 #define CV_NODE_RESERVE 256
 #define CV_MAP_HEAP 0
