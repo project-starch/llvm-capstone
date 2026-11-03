@@ -39,7 +39,7 @@ from converting that identifier into a capability.
 A mapping grant is delinearized once and supplies a managed group lifetime.
 Each slot retains a narrowed copy of that group authority; it needs neither
 a linear partition nor its own parent node. The out-of-line slot record holds
-that parent and the current issued child. A private 4,096-bucket index chains
+that parent and the current issued child. A private 1,024-bucket index chains
 these records; bucket count does not limit object count, and chains grow with
 the live population. `enframe` retains musl's offset calculation.
 The four prefix bytes immediately before a slot are represented in that
@@ -76,8 +76,14 @@ from the allocation. There is no separate linear heap loan API. Freeing the
 outer object invalidates its descendants. Linear grants remain at the VM
 boundary, where mapping ownership is transferred.
 
-The capability records enlarge `struct meta`; upstream's existing metadata
-allocator grows according to that representation's `sizeof`. This is a real
+The capability records are not part of `struct meta`: a meta (112 bytes,
+upstream's fields plus three) points to its group's records, one per slot,
+which `heap.c` hands out as arrays of 1, 2, 4, 8, 16 or 32 records, the
+smallest that holds the group's slot count, from chunks it maps for them
+(16 KiB, doubling to 256 KiB), reused through a free list per size. Upstream's
+metadata allocator still sizes meta areas by `sizeof(struct meta)`, so a page
+holds dozens of metas; with 32 records embedded a meta was 3,152 bytes and a
+page held one, whatever the group's slot count. The records are a real
 metadata cost, separate from payload policy. The managed slot record keeps the
 same four capability fields as the previous representation, and the old
 linear tail field is removed from `struct meta`. There is no 65,536-object array
@@ -101,8 +107,9 @@ individually mapped groups) extended to every slot: no capability the
 program holds covers a slot it was not issued from, so nothing has written
 one nobody took. `CAPSTONE_HEAP_OBJECT_BOUNDS=OFF`, where the program holds
 the group's authority, never skips. A slot reused within its group is zeroed
-by the `memset` as before. `free_meta` clears a meta's header and the slot
-records its group bound, not all 32.
+by the `memset` as before. `free_meta` clears the group's slot records
+before returning them and then the meta, so a group always binds records
+that are all zero.
 
 `check-mallocng-policy.py` compares decision functions, tables, constants and
 selection blocks against the verified upstream archive. It is a focused
@@ -191,9 +198,10 @@ bytes and capabilities, and a recycled mapping's slot, and requires the
 skip exactly where the slot was clean. `calloc-shrink` (a calloc reusing the
 slot of an object that was filled, shrunk in place and freed),
 `calloc-geometry` (a single-slot calloc on a kept mapping a multi-slot
-group's dirtied object used) and `meta-reuse` (metas reused many -> few ->
-many slots: every record past the meta's `last_idx` is all zero bytes) read
-the same properties on the paths around it.
+group's dirtied object used) and `meta-reuse` (slot-record arrays reused by
+groups of many -> few -> many slots: every record of the array past the
+meta's `last_idx` is all zero bytes) read the same properties on the paths
+around it.
 
 ## VM remapping
 

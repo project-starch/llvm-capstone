@@ -46,7 +46,15 @@
 #error "CAPSTONE_HEAP_OBJECT_BOUNDS=0 requires CAPSTONE_HEAP_LIFETIMES=0: a per-object lifetime is a CDERIVE child, which has bounds of its own"
 #endif
 
-#define INDEX_BUCKETS 4096U
+/* The address index: INDEX_BUCKETS chains of slot records, keyed by an object's start. The bucket
+ * count bounds nothing; chains grow with the live population. 1,024 buckets (lane Y, 2026-11-03),
+ * not 4,096: the table is 16-byte capability heads in .bss, and the multiplicative hash spreads even
+ * a few hundred live objects over every one of its pages, so 4,096 buckets faulted all 16 pages
+ * (SPEC's gcc test) where 1,024 fault 4. Since one lookup per call (below), only free, realloc,
+ * malloc_usable_size and the trio search a chain, and slot_release and a moved key unlink one, so a
+ * load four times higher costs a few chain steps on those calls and none on allocation. */
+#define INDEX_BITS 10U
+#define INDEX_BUCKETS (1U << INDEX_BITS)
 static struct capstone_malloc_slot *index_heads[INDEX_BUCKETS];
 static sublet_cap pending_mapping;
 static unsigned heap_mutex;
@@ -59,7 +67,7 @@ static void lock_heap(void)
 static void unlock_heap(void)
 { __atomic_store_n(&heap_mutex, 0, __ATOMIC_RELEASE); }
 static unsigned bucket(size_t key)
-{ return ((key >> 4) * 11400714819323198485UL) >> 52; }
+{ return ((key >> 4) * 11400714819323198485UL) >> (64U - INDEX_BITS); }
 static void unindex(struct capstone_malloc_slot *r)
 {
     if (!r->key) return;
@@ -162,6 +170,63 @@ static int ensure_ids(size_t need)
 static inline void take_id(void)
 {
     if (ids_budget) --ids_budget;
+}
+/* Slot-record arrays (lane Y, 2026-11-03). Each mallocng meta points to the slot records of its
+ * group, one per slot, instead of embedding 32 of them: 32 x 96 bytes made every meta 3,152 bytes,
+ * so a meta-area page held one meta whatever the group's slot count, and SPEC's gcc test faulted
+ * 268 meta pages for 268 metas (88 of its 151 live groups have one slot). The records are the same
+ * records with the same contents and the same lifetime -- a meta's, from alloc_group to free_meta --
+ * only stored elsewhere: arrays of 1, 2, 4, 8, 16 or 32 records, the smallest that holds the group's
+ * slot count, cut from chunks this file maps (16 KiB, doubling to 256 KiB) and reused through one
+ * free list per size. Nothing but the metas and this file's free lists points to them, as nothing
+ * but mallocng's meta areas held them before.
+ *
+ * The invariant mallocng relies on is unchanged: a group binds records that are all zero. A chunk
+ * is fresh zero memory; free_meta zeroes a meta's records before returning them; a free array's
+ * first record carries the free-list link in `next`, which this file clears when it hands the
+ * array out. A group writes only its own count of records (bind_slots, alloc_group's loop), so
+ * the records an array holds past that count stay zero for its next group. Every caller is under
+ * the heap lock (mallocng runs only inside malloc, free, realloc and aligned_alloc below). */
+#define SLOT_CLASSES 6U   /* 1 << 0 .. 1 << 5 records */
+#define SLOT_CHUNK_MIN (16UL << 10)
+#define SLOT_CHUNK_MAX (256UL << 10)
+static struct capstone_malloc_slot *slots_free_heads[SLOT_CLASSES];
+static char *slots_next;
+static size_t slots_left, slots_chunk;
+static unsigned slots_class(unsigned count)
+{
+    unsigned c = 0;
+    if (!count || count > 1U << (SLOT_CLASSES - 1)) __builtin_trap();
+    while ((1U << c) < count) ++c;
+    return c;
+}
+struct capstone_malloc_slot *__capstone_malloc_slots_new(unsigned count)
+{
+    unsigned c = slots_class(count);
+    struct capstone_malloc_slot *s = slots_free_heads[c];
+    if (s) {
+        slots_free_heads[c] = s->next;
+        s->next = NULL;
+        return s;
+    }
+    size_t bytes = ((size_t)1 << c) * sizeof *s;
+    if (slots_left < bytes) {
+        /* The rest of the old chunk (less than 3 KiB) is left unused. */
+        size_t chunk = slots_chunk ? 2 * slots_chunk : SLOT_CHUNK_MIN;
+        if (chunk > SLOT_CHUNK_MAX) chunk = SLOT_CHUNK_MAX;
+        char *m = mmap(NULL, chunk, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+        if (m == MAP_FAILED) return NULL;
+        slots_chunk = chunk; slots_next = m; slots_left = chunk;
+    }
+    s = (struct capstone_malloc_slot *)slots_next;
+    slots_next += bytes; slots_left -= bytes;
+    return s;
+}
+void __capstone_malloc_slots_free(struct capstone_malloc_slot *s, unsigned count)
+{
+    unsigned c = slots_class(count);
+    s->next = slots_free_heads[c];
+    slots_free_heads[c] = s;
 }
 /* Keep musl's group geometry. Slot parents are narrowed copies of one
  * managed group, not linear partitions or separate lifetime nodes. The

@@ -62,6 +62,15 @@ take the record (CAP_SLOT / CAP_S, empty upstream); the runtime's free and reall
 once. free_meta clears the header and the last_idx+1 bound records instead of the whole 3 KiB meta
 through a zeroed temporary and a copy. No decision code changes.
 
+Slot records out of the meta (2026-11-03). struct meta embedded cap_slots[32], 32 records of 96
+bytes, so a meta was 3,152 bytes and a meta-area page held one meta whatever the group's slot
+count: SPEC's gcc test faulted 268 meta pages for 268 metas, 88 of its 151 live groups having one
+slot. The meta now points to its group's records (cap_slots, cap_count of them), which the runtime
+hands out as arrays sized by the count (heap.c __capstone_malloc_slots_new) once alloc_group has
+chosen the count, and a meta is 112 bytes. free_meta zeroes the group's records, returns them and
+clears the meta. The records' contents and lifetime are unchanged, and so is every g->cap_slots[i]
+access. No decision code changes.
+
 --- a/src/malloc/mallocng/aligned_alloc.c	2024-03-01 10:07:33.000000000 +0800
 +++ b/src/malloc/mallocng/aligned_alloc.c
 @@ -25,36 +25,53 @@
@@ -300,7 +309,7 @@ through a zeroed temporary and a copy. No decision code changes.
  };
  
  static const uint8_t small_cnt_tab[][3] = {
-@@ -238,15 +238,32 @@
+@@ -238,15 +238,33 @@
  		// bounce counter hasn't triggered, and either it saves memory
  		// or it avoids eagar slot allocation without wasting too much.
  		if (!nosmall && cnt<=7) {
@@ -322,6 +331,7 @@ through a zeroed temporary and a copy. No decision code changes.
  		}
  
 +#ifdef CAPSTONE_MUSL_MALLOC
++		if (!cap_meta_slots(m, cnt)) { free_meta(m); return 0; }
 +		/* The granule-sized group header must fit in the page rounding above. */
 +		assert(cap_hdr_fits(size, cnt, pagesize));
 +		p = __capstone_malloc_group_map(m->cap_slots, needed,
@@ -333,7 +343,17 @@ through a zeroed temporary and a copy. No decision code changes.
  		if (p==MAP_FAILED) {
  			free_meta(m);
  			return 0;
-@@ -266,17 +283,32 @@
+@@ -257,6 +275,9 @@
+ 		if (active_idx > cnt-1) active_idx = cnt-1;
+ 		if (active_idx < 0) active_idx = 0;
+ 	} else {
++#ifdef CAPSTONE_MUSL_MALLOC
++		if (!cap_meta_slots(m, cnt)) { free_meta(m); return 0; }
++#endif
+ 		int j = size_to_class(UNIT+cnt*size-IB);
+ 		int idx = alloc_slot(j, UNIT+cnt*size-IB);
+ 		if (idx < 0) {
+@@ -266,17 +287,32 @@
  		struct meta *g = ctx.active[j];
  		p = enframe(g, idx, UNIT*size_classes[j]-IB, ctx.mmap_counter);
  		m->maplen = 0;
@@ -367,7 +387,7 @@ through a zeroed temporary and a copy. No decision code changes.
  	m->last_idx = cnt-1;
  	m->freeable = 1;
  	m->sizeclass = sc;
-@@ -306,9 +338,19 @@
+@@ -306,20 +342,42 @@
  	int ctr;
  
  	if (n >= MMAP_THRESHOLD) {
@@ -387,7 +407,12 @@ through a zeroed temporary and a copy. No decision code changes.
  		if (p==MAP_FAILED) return 0;
  		wrlock();
  		step_seq();
-@@ -318,8 +360,17 @@
+ 		g = alloc_meta();
++#ifdef CAPSTONE_MUSL_MALLOC
++		if (g && !cap_meta_slots(g, 1)) { free_meta(g); g = 0; }
++#endif
+ 		if (!g) {
+ 			unlock();
  			munmap(p, needed);
  			return 0;
  		}
@@ -405,7 +430,7 @@ through a zeroed temporary and a copy. No decision code changes.
  		g->last_idx = 0;
  		g->freeable = 1;
  		g->sizeclass = 63;
-@@ -385,3 +436,4 @@
+@@ -385,3 +443,4 @@
  	return g->sizeclass >= 48 ||
  		get_stride(g) < UNIT*size_classes[g->sizeclass];
  }
@@ -465,42 +490,66 @@ through a zeroed temporary and a copy. No decision code changes.
  	unsigned char storage[];
  };
  
-@@ -29,8 +41,16 @@
+@@ -29,8 +41,21 @@
  	uintptr_t freeable:1;
  	uintptr_t sizeclass:6;
  	uintptr_t maplen:8*sizeof(uintptr_t)-12;
 +#ifdef CAPSTONE_MUSL_MALLOC
 +	struct capstone_malloc_slot *cap_parent;
-+	struct capstone_malloc_slot cap_slots[32];
++	/* The group's slot records, one per slot: cap_count of them, from the runtime's slot-record
++	 * arrays (heap.c __capstone_malloc_slots_new), not embedded. 32 embedded records made a meta
++	 * 3,152 bytes, one meta per meta-area page, whatever the group's slot count; most groups
++	 * have one slot (SPEC's gcc test: 88 of 151 live groups), and a meta is now 112 bytes. */
++	struct capstone_malloc_slot *cap_slots;
++	unsigned cap_count;
 +#endif
  };
  
 +#ifdef CAPSTONE_MUSL_MALLOC
-+_Static_assert(sizeof(struct meta) < 4000, "mallocng metadata must fit a page");
++_Static_assert(sizeof(struct meta) <= 128, "a meta is upstream's plus three fields, many per page");
 +#endif
 +
  struct meta_area {
  	uint64_t check;
  	struct meta_area *next;
-@@ -108,7 +128,17 @@
+@@ -108,10 +133,36 @@
  
  static inline void free_meta(struct meta *m)
  {
 +#ifdef CAPSTONE_MUSL_MALLOC
-+	/* A meta carries 32 slot records, about 3 KiB, and `*m = (struct meta){0}` cleared all of
-+	 * them through a zeroed stack temporary and a copy. A group binds and writes only the first
-+	 * last_idx+1 records (bind_slots, the loop after it in alloc_group), and a meta comes either
-+	 * fresh from a meta area or from this queue, zeroed here, so the records past those are
-+	 * still zero: clearing the header and the bound records clears the whole meta. */
-+	memset(m->cap_slots, 0, (m->last_idx+1) * sizeof *m->cap_slots);
-+	memset(m, 0, offsetof(struct meta, cap_slots));
++	/* The slot records go back to the runtime all zero, which is what lets a later group of any
++	 * count bind them as fresh (heap.c __capstone_malloc_slots_new hands out zero records). A
++	 * group writes only its own cnt records (bind_slots, the loop after it in alloc_group), and
++	 * the array has room for at least cnt; the records past cnt were never written. The meta is
++	 * small now, so it is cleared whole. */
++	if (m->cap_slots) {
++		memset(m->cap_slots, 0, m->cap_count * sizeof *m->cap_slots);
++		__capstone_malloc_slots_free(m->cap_slots, m->cap_count);
++	}
++	memset(m, 0, sizeof *m);
 +#else
  	*m = (struct meta){0};
 +#endif
  	queue(&ctx.free_meta_head, m);
  }
  
-@@ -121,17 +151,51 @@
++#ifdef CAPSTONE_MUSL_MALLOC
++/* Give the meta of a new group of cnt slots its slot records, once cnt is final. 0 when the
++ * runtime has no memory for them; the caller then frees the meta and fails as for a refused
++ * mapping. */
++static inline int cap_meta_slots(struct meta *m, int cnt)
++{
++	m->cap_slots = __capstone_malloc_slots_new(cnt);
++	if (!m->cap_slots) return 0;
++	m->cap_count = cnt;
++	return 1;
++}
++#endif
++
+ static inline uint32_t activate_group(struct meta *m)
+ {
+ 	assert(!m->avail_mask);
+@@ -121,17 +172,51 @@
  	return m->avail_mask = mask & act;
  }
  
@@ -557,7 +606,7 @@ through a zeroed temporary and a copy. No decision code changes.
  		assert(!offset);
  		offset = *(uint32_t *)(p - 8);
  		assert(offset > 0xffff);
-@@ -154,11 +218,12 @@
+@@ -154,11 +239,12 @@
  		assert(offset <= meta->maplen*4096UL/UNIT - 1);
  	}
  	return (struct meta *)meta;
@@ -572,7 +621,7 @@ through a zeroed temporary and a copy. No decision code changes.
  	if (reserved >= 5) {
  		assert(reserved == 5);
  		reserved = *(const uint32_t *)(end-4);
-@@ -172,16 +237,34 @@
+@@ -172,16 +258,34 @@
  	return end-reserved-p;
  }
  
@@ -608,7 +657,7 @@ through a zeroed temporary and a copy. No decision code changes.
  {
  	int reserved = end-p-n;
  	if (reserved) end[-reserved] = 0;
-@@ -190,19 +273,104 @@
+@@ -190,19 +294,104 @@
  		end[-5] = 0;
  		reserved = 5;
  	}
@@ -684,13 +733,13 @@ through a zeroed temporary and a copy. No decision code changes.
 +		hdr = h;
 +	}
 +	return 0;
- }
++}
 +static inline int cap_hdr_fits(size_t size, int cnt, size_t pagesize)
 +{
 +	size_t needed = size*(size_t)cnt + UNIT;
 +	size_t slack = -needed & (pagesize-1);
 +	return slack >= cap_hdr_pad(size);
-+}
+ }
 +#else
 +#define cap_hdr_pad(stride) ((size_t)0)
 +#endif
@@ -717,7 +766,7 @@ through a zeroed temporary and a copy. No decision code changes.
  	if (off > slack) {
  		size_t m = slack;
  		m |= m>>1; m |= m>>2; m |= m>>4;
-@@ -210,19 +378,43 @@
+@@ -210,19 +399,43 @@
  		if (off > slack) off -= slack+1;
  		assert(off <= slack);
  	}
