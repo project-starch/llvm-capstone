@@ -114,3 +114,37 @@ exchange's latency from its send, and j is the join's own cost (0 or 1 cycle). T
 
 **The pair.** Check on (this design) against check off (the sealed `caplifive_vp2c_603528b8b.bit`). Its tree is
 untouched, so only ONE new build is needed.
+
+## Result (2026-11-03): REFUTED. The design is withdrawn and C.5a is preferred.
+
+**Run.** capstone-ariane ovl-check 715b21b4a, clean tree; vp9 `.sup/ovl1`, memory delay 12, R43_TRACE. Control: the
+recorded runs on 1782d20bd. Every value equals the control's (stale-access 25 everywhere, objb-pcc-ctrl, r43-evict-live).
+
+| shape | control | ovl-check | pre-registered band |
+|---|---|---|---|
+| s6, 1,024 LDC | 9,264 | **9,264** | 5,205-6,229 |
+| s2 | 9,251 | **9,251** | 5,215-6,239 |
+| s7, 1,024 STC | 11,378 | **9,361** | 6,592-7,616 |
+| s3 | 174,952 | **176,394** (worse) | at most 167,533 |
+| hpm-3, 256 LDC | 2,395 | 2,392 | 1,381-1,637 |
+| hpm-4, 256 STC | 2,905 | 2,392 | 1,820-2,076 |
+
+LDC gains nothing. STC recovers about 43 % of its gap. Every band is missed, and the failure branch fires.
+
+**Why the premise was wrong.** This note's own first fact refutes the design: the LSU half of an LDC/STC is
+dual-issued, so on bitstream 3 it ALREADY overlapped the query.
+- When the query returned, the load syncer already held the LSU's result, and the exchange was instant.
+- The query's own latency was the cost. Starting the exchange alongside it cannot remove that.
+- STC's 2 cycles per op came from the store syncer's handshake, which was serial behind the query.
+- Only a faster verdict, one that does not wait for the record read, removes the cost.
+
+**The rejection above is withdrawn too.**
+- "A miss becomes a replay of about 33 cycles" was read off s5's plain-load passes, a mixed reading. The external
+  collaborator's directed arm (perf/c5a-cached-ldc, `c5a-cost.S`) measures 12.1 per LDC miss, 13.0 per STC miss and
+  17.4 on the s3 chase.
+- The three reading changes listed there are avoided by that branch's CAP_WB merge order. Its order is the LSU's
+  exception, then the DYN unit's own faults, then 25 with the latched rs1 cursor as tval, then the replay marker.
+- The verdict does not ride the LSU's exception path, so a page fault still wins.
+
+C.5a (fe5aa8440) is being reproduced on the same arms, together with `ovl-invalid.S` (capstone-ariane ovl-check
+b22ee7afd), before it is recommended for synthesis.
