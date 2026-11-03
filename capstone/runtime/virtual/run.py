@@ -133,10 +133,10 @@ def main():
     p.add_argument('--perl-smoke', type=Path)
     p.add_argument('--legacy-application', type=Path)
     p.add_argument('--skip-recycling', action='store_true', help='Omit the two long recycling cases; recorded explicitly')
-    # Module parameters at insmod, so a two-sided module experiment is one run rather than a
-    # rebuild. Empty by default and the substitution then leaves the insmod line exactly as it
-    # was, so an unused option cannot change a recorded run.
-    p.add_argument('--module-args', default='',
+    # linux_demand_faults counts demand resolutions, not pages admitted by prefetch. Keep this
+    # gate page-at-a-time; run-step-hooks.py qualifies the default adaptive policy separately.
+    # An explicit --module-args can still select other policies for experiments.
+    p.add_argument('--module-args', default='fault_ahead_max=0',
                    help="Parameters appended to insmod (e.g. 'resolve_pte=1 fault_repeat_max=1')")
     p.add_argument('--exact-bounds', action=argparse.BooleanOptionalAction, default=False,
                    help="Run QEMU's exact-bounds profile. Option (iii) does not need it; it is kept "

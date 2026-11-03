@@ -521,6 +521,12 @@ the launcher in both arms, and their rows used to compare as a match while neith
 `gates/test_compare.py` is the comparator's host test: it plants each such omission and requires
 INCOMPLETE.
 
+The runtime gate loads `fault_ahead_max=0`: `linux_demand_faults` requires three
+launches to resolve at least 384 demand faults each. It measures page-at-a-time
+demand admission, not the number of pages backed by speculative windows. The
+adaptive default remains enabled in production and is tested by step-hooks;
+adding prefetched pages to this oracle would conceal missing demand resolutions.
+
 ## Qualification and limits
 
 The growing-table [qualification manifest](results/node-growth/qualification.json)
