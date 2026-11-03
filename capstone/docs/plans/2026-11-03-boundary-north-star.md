@@ -58,6 +58,25 @@ imagick's boundary figure is now comparable, because its plain run is from the s
 compiled code is the cost of the cursor rule (dev efe1d58bc469); the census does not isolate it, so that attribution
 is the lane's own estimate (+0.4 % program), not a measurement of this batch.
 
+**Census 5** (dev `114b90b7be2e`, including the launcher mapping registry tree;
+p12 `~/lanes/laneQC/runs/census5-ad`). `milestone-census.sh` built the adapter
+from that commit and ran Capstone and plain in the same batch: all eight rows
+are PASS. Compiler/SDK source hashes match cap4; QEMU remains `5f329b5061ea`.
+The complete terms and comparison with census4 are in `northstar.{txt,json}`.
+
+| benchmark | program overhead | boundary overhead | H_A / H_B | change from census4, program / boundary (pp) |
+|---|---|---|---|---|
+| 502.gcc_r | +25.3731 % | +48.6161 % | 872,988 / 2,181,357 | -0.0567 / -0.5947 |
+| 538.imagick_r | +3.1873 % | -5.4147 % | 27,481,523 / 11,652,500 | -0.0838 / -3.3322 |
+| 519.lbm_r | +2.9239 % | +3.6845 % | 44,630,022 / 28,373,627 | -0.0012 / -0.0343 |
+| 544.nab_r | +7.0867 % | +0.0727 % | 3,160,143 / 2,589,151 | -0.0001 / -0.0020 |
+
+These are single full runs per arm, not an isolated measurement of the launcher
+change. Kernel and harness counts vary in both arms; the imagick boundary
+change in particular must not be attributed entirely to the mapping registry.
+The [census tool instructions](../../ports/spec-cpu2017/tools/profile.md#one-command-milestone-census)
+define source reuse, disk reserves and the separate fixed-prefix quick checks.
+
 ### 1.2 Per-event costs (busy attempts per unit; p12 lane microbenchmarks `lqmicro`, branch perf/linux-question-micro)
 
 | unit | pinned | tag-aware Linux prototype | plain Linux | source |

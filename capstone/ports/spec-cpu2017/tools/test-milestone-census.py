@@ -36,7 +36,7 @@ class CensusTest(unittest.TestCase):
                  'commit', '-qm', 'fixture')
         return self.git('rev-parse', 'HEAD')
 
-    def test_reuse_tracks_inputs_but_not_gate_docs(self):
+    def test_reuse_tracks_inputs_but_not_launcher_or_gates(self):
         self.git('init', '-q')
         for path in census.COMPILER + census.SDK:
             dest = self.root / path
@@ -53,10 +53,16 @@ class CensusTest(unittest.TestCase):
         (virt / 'gates').mkdir()
         (virt / 'gates/test.py').write_text('gate\n')
         (virt / 'README.md').write_text('docs\n')
+        (virt / 'exec.c').write_text('launcher\n')
+        (virt / 'test-registry.c').write_text('launcher test\n')
+        (virt / 'build-adapter.sh').write_text('adapter build\n')
         self.assertEqual(first, census.identities(self.root, self.commit()))
+        (virt / 'vm.h').write_text('new SDK header\n')
+        header = census.identities(self.root, self.commit())
+        self.assertNotEqual(first, header)
         (virt / 'heap.c').write_text('changed heap\n')
         second = census.identities(self.root, self.commit())
-        self.assertNotEqual(first, second)
+        self.assertNotEqual(header, second)
         (self.root / 'llvm/input.c').write_text('changed compiler\n')
         self.assertNotEqual(second, census.identities(self.root, self.commit()))
 

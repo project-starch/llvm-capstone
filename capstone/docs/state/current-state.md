@@ -1,5 +1,17 @@
 # Current Capstone state
 
+## 2026-11-03 — Automated north-star census 5
+
+The paired SPEC test census on dev `114b90b7be2e` (including the launcher
+mapping registry tree) passes all eight full runs on p12. The
+[north-star record](../plans/2026-11-03-boundary-north-star.md)
+contains the program/boundary table, excluded H counts and comparison with
+census4. This is QEMU instruction-attempt accounting, not hardware timing or
+an isolated attribution to the launcher change.
+Two [fixed-prefix quick checks](../../ports/spec-cpu2017/tools/profile.md#one-command-milestone-census)
+on the same commit validate all sixteen SLICE rows in 160.913 s and 165.993 s;
+their observed program and boundary spreads are recorded separately.
+
 ## Read this first (2026-10-13)
 
 This file was 2,030 lines and its companion 1,560, most of it instructions and

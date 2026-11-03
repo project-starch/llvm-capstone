@@ -181,7 +181,10 @@ tools/milestone-census.sh DEV_COMMIT quick1 --quick
 tools/milestone-census.sh DEV_COMMIT quick2 --quick
 ```
 
-`CENSUS_ROOT` must exist. `CENSUS_ARMS` can select a different template.
+`CENSUS_ROOT` must exist and is also the guest share. Resolved SPEC cache
+paths must stay beneath it, including when using symlinks; on a separate
+scratch filesystem, keep the cache and run directories under one common root.
+`CENSUS_ARMS` can select a different template.
 `CENSUS_PREVIOUS` and `CENSUS_PREVIOUS_ARM` select a previous run explicitly
 (the previous plain arm is `rv64`). Otherwise the latest completed compatible
 run in this output root is used; the first full run uses census4/cap-dev4,
@@ -195,9 +198,11 @@ Compiler/SDK reuse compares Git object hashes for `llvm`, `clang`, `lld`,
 `cmake`, `third-party`, `compiler-rt`, `capstone/ports/common`,
 `capstone/ports/musl-capstone`, `capstone/sublet`, the runtime's root
 `CMakeLists.txt`, `application`, `cmake`, `common`, `domain`, `include`, `host`,
-`capstone/tests/capstone-test-env.sh`, and the non-document files immediately
-under `runtime/virtual`. That last list includes heap, mapping, thread,
-startup, linker script and ABI headers, but excludes module/gate subdirectories.
+`capstone/tests/capstone-test-env.sh`, and these files under `runtime/virtual`:
+`start.S`, `thread.c`, `pthread.c`, `fenv.c`, `mapping.c`, `heap.c`, `link.ld`,
+`build-sdk.sh` and every top-level `.h` header. `Application.cmake`, also
+hashed, controls the SDK source list. Launcher, adapter and standalone gate
+changes do not invalidate compiler/SDK reuse; the adapter is always rebuilt.
 The actual hashes are in `source-hashes.json`; the build recipe version is
 also part of the key. Compiler and SDK are reused together only when every
 input matches a completed capN record; otherwise both are built with the
@@ -213,10 +218,12 @@ installed SPEC tree are never edited. Cached compiler, SDK dependencies and
 SPEC executable hashes are checked before reuse.
 
 Each invocation exports the target runtime and kit, builds its launcher and
-module, copies the template platform with `cp -rL`, replaces the adapter and
+module, copies the template platform with `cp -rL --sparse=always`, replaces the adapter and
 regenerates file hashes. It runs both arms using that platform, writes their
 usual records, and saves the top 15 Capstone function deltas against the
 previous milestone. No existing kit, platform or run is updated. The script
+preserves zero-filled image extents as holes to save disk space; the copies
+are independent regular files with identical bytes, never links. The script
 checks for at least **15 GiB free** before copying, building and profiling;
 this is a reserve check, not a reservation against other host users. LLVM
 builds default to 20 jobs (`CAP_JOBS`), runtime builds to 4, profiling to 4
@@ -248,3 +255,25 @@ Tool regressions on the measurement host:
 python3 tools/test-prof-northstar.py
 python3 tools/test-milestone-census.py
 ```
+
+Qualification on 2026-11-03: dev `114b90b7be2e`, p12,
+`~/lanes/laneQC/quick-results/runs/{quick-s1,quick-s2}`. Both checks validated
+all eight rows as SLICE, with the same executable cache and prefixes above.
+Elapsed time including adapter builds and platform preparation was 160.913 s
+and 165.993 s. The output and cache were on p12's scratch filesystem; each
+platform was an independent sparse copy with its template hashes verified.
+
+| Benchmark | Program spread (pp) | Boundary spread (pp) |
+|---|---:|---:|
+| 502.gcc_r | 0.057804 | 0.278401 |
+| 538.imagick_r | 0.146936 | 3.259637 |
+| 519.lbm_r | 0.006077 | 0.549037 |
+| 544.nab_r | 0.039390 | 0.751334 |
+
+Spread is the maximum minus minimum of two observations, not a confidence
+interval. P_A and P_B were identical across repeats for every benchmark;
+the program percentage spread comes from variation in the K_A denominator.
+The boundary variation, especially imagick's, limits what a small
+change in one quick check can establish. Full P/K/H terms and the compatible
+quick-to-quick comparison are in each run's `northstar.{txt,json}`; the full
+[census 5](../../../docs/plans/2026-11-03-boundary-north-star.md) is separate.

@@ -27,6 +27,10 @@ SDK = ['compiler-rt', 'capstone/ports/common', 'capstone/ports/musl-capstone',
        'capstone/runtime/include', 'capstone/runtime/host',
        'capstone/tests/capstone-test-env.sh']
 VIRTUAL = 'capstone/runtime/virtual'
+# Application.cmake selects these implementation files. Its own hash above
+# invalidates reuse if that source list changes; all local headers are tracked.
+VIRTUAL_SDK = {'start.S', 'thread.c', 'pthread.c', 'fenv.c', 'mapping.c',
+               'heap.c', 'link.ld', 'build-sdk.sh'}
 RECIPE = 'release-assertions-capstone-clang-lld-sdk-virtual-default-v1'
 
 
@@ -78,11 +82,12 @@ def git(repo, *args):
 
 def identities(repo, commit):
     result = {p: git(repo, 'rev-parse', f'{commit}:{p}') for p in COMPILER + SDK}
-    # The SDK consumes the files immediately under virtual/, not gates/, module/
-    # or its README. Hash the entry names/modes/object IDs, including new files.
+    # Launcher, adapter and standalone gate changes do not rebuild the SDK.
+    # Hash entry names/modes/object IDs, including any newly added headers.
     entries = git(repo, 'ls-tree', commit, VIRTUAL + '/').splitlines()
-    entries = [s for s in entries if s.split()[1] == 'blob' and not s.endswith('.md')]
-    result[VIRTUAL + '/* (non-document blobs)'] = hashlib.sha256(
+    entries = [s for s in entries if s.split()[1] == 'blob' and
+               (Path(s.split('\t', 1)[1]).name in VIRTUAL_SDK or s.endswith('.h'))]
+    result[VIRTUAL + '/SDK sources and headers'] = hashlib.sha256(
         '\n'.join(entries).encode()).hexdigest()
     result['recipe'] = RECIPE
     return result
@@ -289,7 +294,10 @@ runcpu --config=capstone-virtual --action=build --rebuild --tune=base --define s
           out / 'adapter-build.log', dict(env, ADAPTER=str(out / 'adapter')))
     disk(root)
     platform = out / 'platform'
-    run(['cp', '-rL', source_platform, platform])
+    # Zero-filled image extents need not consume physical disk blocks. These
+    # are still independent regular files, verified byte-for-byte below.
+    run(['cp', '-rL', '--sparse=always', source_platform, platform])
+    verify_platform(platform)
     shutil.rmtree(platform / 'adapter')
     shutil.copytree(out / 'adapter', platform / 'adapter')
     (platform / 'platform.json.done').unlink(missing_ok=True)
