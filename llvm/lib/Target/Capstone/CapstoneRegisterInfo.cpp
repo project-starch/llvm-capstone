@@ -21,6 +21,7 @@
 #include "llvm/CodeGen/RegisterScavenging.h"
 #include "llvm/CodeGen/TargetFrameLowering.h"
 #include "llvm/CodeGen/TargetInstrInfo.h"
+#include "llvm/Target/TargetMachine.h"
 #include "llvm/IR/DebugInfoMetadata.h"
 #include "llvm/Support/ErrorHandling.h"
 
@@ -146,7 +147,10 @@ BitVector CapstoneRegisterInfo::getReservedRegs(const MachineFunction &MF) const
   markSuperRegs(Reserved, Capstone::X2_H); // sp
   markSuperRegs(Reserved, Capstone::X3_H); // gp
   markSuperRegs(Reserved, Capstone::X4_H); // tp
-  if (TFI->hasFP(MF))
+  // fp: reserved when the function has a frame, and in a frameless leaf of a
+  // "frame-pointer"="non-leaf" build, so that s0 still holds the caller's frame
+  // record when the launcher's fault handler walks the chain from a leaf.
+  if (TFI->hasFP(MF) || MF.getTarget().Options.FramePointerIsReserved(MF))
     markSuperRegs(Reserved, Capstone::X8_H); // fp
   // Reserve the base register if we need to realign the stack and allocate
   // variable-sized objects at runtime.
