@@ -239,6 +239,37 @@ in the tarball is byte-identical. Tarball synth-1fc2cd5aa-exit0.tar.gz, sha256 8
 - **Congestion** is at the pre-registered limit, with a router warning that b3 lacked. Slices are at 95.57 %, the
   highest of the three builds. This is consistent with the routability memory: around 170k LUT is marginal.
 
+**The attribution reading** (synth, read-only, the same script on both routed dcps). The worst 500 setup paths span
+−13.758..−11.048 on C.5a and −10.047..−7.098 on b3.
+- **C.5a's cells on the worst 500:** `pc_revnode_unk_q`'s cells are on 109 paths, one per path (the name matches 24
+  LUT, 5 CARRY4 and 1 FF). `*dynlt*`, `*dyn_ldst*`, `pcc_v_q`, `pcc_live_q` and `pcc_id_q` are on 0. POS `*fu_data_q*`
+  is on 137 paths (b3 81).
+- **The worst slack through each:** `pc_revnode_unk_q` −11.545 at 98 levels; `*dynlt*` −9.626 at 100; `*dyn_ldst*` −8.560
+  at 77; `pcc_v_q`, `pcc_live_q` and `pcc_id_q` are positive (+7.9, +7.8 and +16.9).
+- **The five worst paths through C.5a's cells** all start at csr_regfile `cpmp_q_reg[4]` (bE[1]) and end at dom_switcher
+  `cur_base_q`, at −11.3 to −11.5 and 98 levels. The source shows the arc (commit_stage.sv:379-407, :532):
+  - `pcc_hold` is set from `pc_revnode_unk_d`, the same-cycle next state.
+  - That next state comes from the 30-bit compare of the head's PC-capability id against the tracked id.
+  - The hold gates the commit acknowledge, which reaches the domain switcher.
+  - b3 had the same compare, but it fed only the 25 exception (`!pc_revnode_valid_d`). The new arc is that compare
+    into the commit acknowledge.
+- **The same family against b3:** from `cpmp_q`, the worst is −13.758 at 114 levels against −10.047 at 111, with the same
+  endpoint, fu_data_q[0] cap_metadata_b. 38,712 of the 38,719 failing endpoints are reachable from `cpmp_q`. From
+  `cur_idx_q`: −13.545 at 113 against −9.351 at 112.
+
+**Reading.**
+- The WNS path is NOT through C.5a's cells. b3's own family moved about −3.7 ns at +3 levels, which is delay per level,
+  consistent with the denser placement (95.57 % slices, congestion at level 5).
+- Nearly every failing endpoint hangs off that one family. So the 2.9x endpoint count and the 5x TNS are what a
+  uniform ~3.7 ns shift of the cpmp_q cone would give. That is consistent with the shift, and it is not proof.
+- C.5a adds ONE new path family inside the worst 500, cpmp_q -> the PC-id compare -> `pcc_hold` -> commit acknowledge
+  -> dom_switcher, at −11.5. It is 2.2 ns better than the WNS.
+- One build cannot separate placement density from the new logic. This is the second time the cpmp_q family has led a
+  build: the batch led on it too.
+- **A lever, if a respin is wanted (not proposed here; that is the lead's call, and the code is the external
+  collaborator's):** drive `pcc_hold` from flops by holding on the registered unknown state plus a registered id-change.
+  That costs one cycle per PC-capability change and takes the 30-bit compare off the commit acknowledge.
+
 ## Pre-registered silicon readings (first boots; the runtime and board lanes run them)
 
 - **hpm kit** (`hpm-bare-2026-11-03`): hpm-3 and hpm-4 read ObjBounds' stall and cycle pattern, not bitstream 3's.
