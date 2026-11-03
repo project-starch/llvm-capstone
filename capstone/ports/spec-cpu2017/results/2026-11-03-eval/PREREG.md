@@ -97,3 +97,46 @@ instructions sit: leaf prologues, sign extensions, the comparator calls.
   board out-hfl/538.imagick_r-test-r10-*); it is not restated here.
 - The board ran the baseline on 1-3 Nov and runs these later; board-to-board and day-to-day drift is unmeasured
   except by the known-good control.
+
+## Addendum 1: the Spatial arm on board 2 (4 Nov 05:20, before any of these boots)
+
+**Gate.** The ObjBounds bare kit read Q-04(b) PRESENT on board 2 (caplifive_vp2c_603528b8b, booking 642, source
+RECORDER, q04-grade rc 0). So the devmk images may run there too. HPM is AS EXPECTED, and R-67 reads HOLE after one infra
+rerun of t1-norevoke (GDB load_image timeout).
+
+**Stages.** These are `spec/stages-eval-boarddev/<bench>-test-capstone-spatial` and
+`stages-eval-boarddevmk/<bench>-test-capstone-spatial`, one Spatial-only stage per benchmark and set, for all six
+benchmarks. They run on board 2's chain, kit bkit15-objb-b2. The lines go into spatial-b2.list after gcc test Spatial
+and ahead of the train stages. Each benchmark runs dev then devmk, with the steps and bookings of board 1's table. The
+twin is census-q34. The Spatial twin's instret ratios equal the table above to four places:
+
+| Benchmark | dev / baseline | devmk / dev |
+|---|---|---|
+| lbm | 0.8521 | 0.9996 |
+| nab | 0.9256 | 0.9952 |
+| imagick | 0.9279 | 0.9696 |
+| xz | 0.9966 | 0.9904 |
+| mcf | 0.8168 | 0.9379 |
+| gcc | 0.9475 | 0.9678 |
+
+**Baseline on silicon.** ObjBounds, board 2, 1-4 Nov, run commands, in-context cycles / instret. The baseline images
+are tree-board's; their executables hash-match spec/stages' for lbm, nab and imagick.
+
+| Benchmark | Cycles | Instret | Source |
+|---|---|---|---|
+| lbm | 36,747,116,041 | 7,281,746,737 | out-objb/519.lbm_r-test-capstone-spatial |
+| nab | 23,110,370,921 | 7,993,006,924 | out-objb/544.nab_r-test-capstone-spatial |
+| imagick | 387,772,259 | 108,723,327 | out-objb/538.imagick_r-test-capstone-spatial |
+| xz | 137,086,417,570 | 50,836,750,713 | out-objb/557.xz_r-test-capstone-spatial (12 runs summed) |
+| mcf | 280,126,425,834 | 35,322,229,364 | out-objb/505.mcf_r-test-capstone-spatial |
+| gcc | (its 4 Nov board 2 run, out-objb/502.gcc_r-test-capstone-spatial, runs just before) | | |
+
+**Predictions.** E1-E5 as above, applied to the Spatial arm:
+- E3 on lbm, nab, imagick, mcf and gcc;
+- E4 on mcf, gcc and imagick;
+- E4b on mcf.
+
+The bare kit also gives a check that needs no new boot. Step 2 removes capability store/load pairs, and the lifetime
+check costs ~4/5 cycles per LDC/STC on bitstream 3 but 0 on ObjBounds (cost pattern: 3.98 and 4.98 cycles per op).
+So E4b's cycle saving on mcf is expected to be smaller on Spatial than on Full, by about mcf's C4 pair count times
+~9 cycles. The direction is reported; no magnitude is predicted.
