@@ -89,6 +89,11 @@ __capstone_vm_unmap:
     li a7, CV_SERVICE_UNMAP
     ecall
     ret
+.global __capstone_vm_transport_detach
+__capstone_vm_transport_detach:
+    li a7, CV_SERVICE_TRANSPORT_DETACH
+    ecall
+    ret
 .global __capstone_vm_thread_create_frame
 __capstone_vm_thread_create_frame:
     li a7, CV_SERVICE_THREAD_CREATE
