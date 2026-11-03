@@ -514,6 +514,68 @@ the launcher in both arms, and their rows used to compare as a match while neith
 `gates/test_compare.py` is the comparator's host test: it plants each such omission and requires
 INCOMPLETE.
 
+#### Two gate hosts
+
+Use p12 or p13 for runtime gates, with one arm at a time **on each host**.
+Both hosts have `~/retire-gate/gate-queue.sh`; its lock and log are local to
+that host (`~/retire-gate/.gate-queue.lock` and `gate-queue.log`). Inspect both
+logs and choose the shorter queue. Always enter through the queue, including
+reruns of an individual gate; a per-arm QEMU lock does not protect memcached's
+fixed native port. Arms on different hosts may run concurrently.
+
+```sh
+ssh p12 'tail ~/retire-gate/gate-queue.log'
+ssh p13 'tail ~/retire-gate/gate-queue.log'
+# On the selected host, after exporting the inputs described in run-arm.sh:
+~/retire-gate/gate-queue.sh bash "$TREE/capstone/runtime/virtual/gates/run-arm.sh" "$OUT"
+```
+
+The p12 installation has real-file copies of p13's
+`~/retire-gate/platform-landing`, `~/retire-gate/hooks-landing`, and the real
+contents of `~/v6gate/gates-1018/kit-reg6b`. Its queue script is byte-identical
+to p13's. Four dangling historical kit aliases were omitted; valid links were
+dereferenced. The legacy kit's prebuilt images and path-bound SDK are historical
+inputs, not substitutes for rebuilding the current arm. The current driver
+needs no Python venv and no legacy kit: it builds its SDK and application images
+from `TREE`. Keep `SDK` and `APP_*` unset for that build.
+
+For the matching toolchain use `LLVM=$HOME/prof-dev/cap3/build` on p12
+and `LLVM=$HOME/lanes/gatefix/llvm` on p13, with
+`CROSS_GCC=$HOME/hosted-ab/xtc/bin/riscv64-buildroot-linux-gnu-gcc` on both.
+The compiler binaries/resource headers and complete cross-toolchain manifests
+match; reuse them instead of copying compiler or kernel builds. The source
+export must include runtime, port recipes and patches, common application
+support, compiler-rt builtins, sublet headers, test environment, and the FFmpeg
+safety classifier imported by memcached's checker. Host dependencies include
+Python 3, Bash/flock, GCC, CMake/Ninja, Make, Ruby/rake, Perl, patch, Git, curl,
+archive tools and `mkfs.ext4`. The recipes fetch pinned upstream sources;
+on p12, `MUSL_ARCHIVE=$HOME/retire-gate/dl/musl-1.2.5.tar.gz` supplies
+the verified local musl archive.
+
+Check `df -h ~` before copies/builds and after installation; keep p12 above
+25 GB free. Build and output directories belong under `~/lanes/<lane>`.
+Use a fresh output directory and a real-file platform copy for a runtime
+variant, and retain result records and input hashes when cleaning build scratch.
+
+Qualification at dev `114b90b7be2e2bd1d262f7e0c5d56f644890690d` covers all
+157 required rows, including all 29 memcached rows. Both full p12 executions
+matched p13 on the other eight gates and differed only at the known
+placement-dependent fx24 checks (`fx24_trigger` versus `fx24_prediction`).
+The fifth queued memcached-only replay matched p13. The unchanged comparator
+then returned `VERDICT: IDENTICAL` on an explicitly labelled comparison view
+using the second full p12 run's eight other gates and that replay. This is a
+per-gate qualification with an fx24 replay, not a claim that either original
+full-arm comparison was IDENTICAL, nor that every baseline gate passes.
+No fixture, row or oracle was changed or suppressed. The known fx24 behavior
+remains; these attempts do not establish a new failure-rate estimate.
+
+Both hosts retain `~/lanes/laneGQ2/evidence/`: original arms (`p12-out`,
+`p12-repeat`, `p13-out`), all five `p12-mc-*` replays, comparison text/JSON,
+and `p12-replay-view/PROVENANCE.json` mapping each gate to its actual execution.
+The installed-file manifest is p12's
+`~/retire-gate/p12-install-inputs.sha256`; compiler, cross-toolchain, source,
+runtime-image and musl verification records are in the evidence directory.
+
 ## Qualification and limits
 
 The growing-table [qualification manifest](results/node-growth/qualification.json)
