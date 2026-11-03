@@ -327,16 +327,28 @@ static void *bind_slots(struct capstone_malloc_slot *slots, void *group,
     }
     return group;
 }
-/* A child of a slot's authority over [base + offset, base + offset + size): the CDERIVE
+/* A child of a slot's authority over [start, start + size): the CDERIVE
  * child with a lifetime of its own, or without lifetimes the narrowed copy that bind_slots
- * makes for the slot itself (the same rights, the slot's lifetime). */
-static void *issue_child(void *parent, size_t offset, size_t size)
+ * makes for the slot itself (the same rights, the slot's lifetime).
+ *
+ * Both callers hold a slot record under the heap lock. bind_slots made its parent by
+ * narrowing a NONLIN group, and enframe supplied its absolute object start. Unlike the
+ * public derive API, this path accepts neither a caller's capability nor an offset to
+ * add to its base. SCC therefore cannot consume a linear parent, and there is no
+ * base-plus-offset overflow to precheck. CDERIVE still checks the parent's validity,
+ * rights, bounds and representability before issuing a fresh lifetime. */
+static void *issue_child(void *parent, size_t start, size_t size)
 {
 #if CAPSTONE_HEAP_LIFETIMES
     take_id();
-    return capstone_cap_derive(parent, offset, size);
+    void *child;
+    __asm__ volatile(".insn r 0x5b, 0x1, 0x05, t0, %1, %2\n"
+                     ".insn r 0x5b, 0x1, 0x51, %0, t0, %3\n"
+                     : "=&r"(child)
+                     : "r"(parent), "r"(start), "r"(size)
+                     : "t0", "memory");
+    return child;
 #else
-    size_t start = __builtin_capstone_cap_get_base(parent) + offset;
     void *at = (char *)parent + (ptrdiff_t)(start - __builtin_capstone_cap_get_cursor(parent));
     /* CDERIVE refuses bounds the encoder cannot represent (cause 29); SHRINK rounds outward on
      * silicon. A silently widened child would reach into its neighbours where the qualified
@@ -806,16 +818,14 @@ void *__capstone_malloc_group_nested(struct capstone_malloc_slot *slots,
 {
     size_t base = parent->key;
 #if CAPSTONE_HEAP_OBJECT_BOUNDS
-    parent->issued = issue_child(parent->parent,
-        base - __builtin_capstone_cap_get_base(parent->parent), 16 + stride * count);
+    parent->issued = issue_child(parent->parent, base, 16 + stride * count);
     parent->kind = SLOT_NESTED;
     /* The host slot was taken just before (alloc_group's enframe); if it was clean then, so is
      * the nested group's storage, which mallocng has written only with its header and zeros. */
     return bind_slots(slots, parent->issued, stride, count, 0, parent->taken_clean);
 #else
     /* The host slot keeps its group authority in `issued`; the nested group is a fresh shrink. */
-    void *nested = issue_child(parent->parent,
-        base - __builtin_capstone_cap_get_base(parent->parent), 16 + stride * count);
+    void *nested = issue_child(parent->parent, base, 16 + stride * count);
     parent->kind = SLOT_NESTED;
     return bind_slots(slots, nested, stride, count, 0, 0);
 #endif
@@ -957,8 +967,7 @@ static void *publish(void *p, size_t n, int *clean)
 #if CAPSTONE_HEAP_OBJECT_BOUNDS
     if (r->issued) end_child(r->parent, r->issued);
     r->kind = SLOT_PUBLIC; r->nominal = n;
-    r->issued = issue_child(r->parent,
-        r->key - __builtin_capstone_cap_get_base(r->parent), n ? n : 1);
+    r->issued = issue_child(r->parent, r->key, n ? n : 1);
     return r->issued;
 #else
     /* The group's authority, cursor at the object (offset in integers first; see bind_slots). */

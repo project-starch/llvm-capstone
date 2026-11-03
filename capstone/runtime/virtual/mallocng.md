@@ -67,7 +67,12 @@ The application receives only the requested object bounds. The allocator's
 bounded group copies permit its private prefix/footer operations. `free`
 validates the supplied capability before looking up internal authority and
 revokes the lifetime before the upstream backend publishes the slot as free.
-It leaves the payload's bytes and tags in place unless the SDK is built with
+Object publication uses the slot record's non-linear parent and absolute object
+start directly for SCC/CDERIVE. The parent type follows from group construction;
+hardware still checks validity, rights, bounds and representability. This internal
+path does not accept a program-supplied parent or compute a possibly wrapping
+base-plus-offset sum. The public nested derive API retains those general checks.
+Free leaves the payload's bytes and tags in place unless the SDK is built with
 `CAPSTONE_HEAP_SCRUB_FREE=ON` ([Measurement switches](#measurement-switches)). A successful in-place realloc rotates the
 lifetime; a failed realloc preserves the original. Moving realloc uses the
 existing Capstone memcpy, which copies non-linear tags and consumes linear
