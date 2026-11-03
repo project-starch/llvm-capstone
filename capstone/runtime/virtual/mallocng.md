@@ -6,6 +6,10 @@ Allocation policy belongs to musl: size classes, group counts, slot selection,
 offset cycling, retention and the in-place/moving realloc decisions remain
 upstream's. The launcher does not allocate application objects.
 
+The [publication and free-lookup qualification](results/heap-perlbench/README.md)
+records their instruction costs and protection controls against the same-time
+control SDK.
+
 ```text
 Capstone application
         | ordinary call

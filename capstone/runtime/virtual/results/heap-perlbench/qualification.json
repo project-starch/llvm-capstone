@@ -1,0 +1,2167 @@
+{
+  "control_commit": "3702f61342eef89b52ad978b8f8ae38412181930",
+  "candidate_commit": "10304cbd9adcbad012e7a02b33b92c13aa992dcd",
+  "tools_commit": "7413d847e172e4bb43bb600c70b87c26e74d769f",
+  "qemu_commit": "d064e4b060821ae55d641d52a2a64bbada98b695",
+  "metric": "instruction attempts; not retired instructions, cycles or wall time",
+  "spec": [
+    {
+      "benchmark": "502.gcc_r",
+      "control_path": "census/runs/PH-control-full",
+      "candidate_path": "census-B/runs/PH-lane-full",
+      "control_cap": {
+        "P": 26214239,
+        "K": 28428544,
+        "H": 1883138
+      },
+      "candidate_cap": {
+        "P": 26102503,
+        "K": 28203872,
+        "H": 1510739
+      },
+      "control_plain": {
+        "P": 18081576,
+        "K": 13853538,
+        "H": 725886
+      },
+      "candidate_plain": {
+        "P": 18081576,
+        "K": 13870599,
+        "H": 714049
+      },
+      "program_delta": -111736,
+      "boundary_delta": -224672,
+      "total_delta": -708807,
+      "control_program_overhead_pct": 25.46620938945137,
+      "candidate_program_overhead_pct": 25.102913964385834,
+      "top_program_function_deltas": [
+        [
+          "__capstone_malloc_slot_release",
+          -74403
+        ],
+        [
+          "publish",
+          -45628
+        ],
+        [
+          "free",
+          12355
+        ],
+        [
+          "realloc",
+          -4499
+        ],
+        [
+          "cap_malloc_validate",
+          3010
+        ],
+        [
+          "__capstone_malloc_group_nested",
+          -2871
+        ],
+        [
+          "__capstone_malloc_prepare_free",
+          336
+        ],
+        [
+          "memcpy",
+          -21
+        ]
+      ],
+      "oracle_verdicts": [
+        "PASS",
+        "PASS",
+        "PASS",
+        "PASS"
+      ],
+      "watchdogs": [
+        {
+          "returncode": 0,
+          "reason": null,
+          "signals": [],
+          "remaining": [],
+          "elapsed_seconds": 71.39289997098967
+        },
+        {
+          "returncode": 0,
+          "reason": null,
+          "signals": [],
+          "remaining": [],
+          "elapsed_seconds": 90.71569519792683
+        },
+        {
+          "returncode": 0,
+          "reason": null,
+          "signals": [],
+          "remaining": [],
+          "elapsed_seconds": 80.3163963840343
+        },
+        {
+          "returncode": 0,
+          "reason": null,
+          "signals": [],
+          "remaining": [],
+          "elapsed_seconds": 103.63807759899646
+        }
+      ]
+    },
+    {
+      "benchmark": "538.imagick_r",
+      "control_path": "census/runs/PH-control-imagick-fixed",
+      "candidate_path": "census-B/runs/PH-lane-full",
+      "control_cap": {
+        "P": 160787649,
+        "K": 32322296,
+        "H": 4855060
+      },
+      "candidate_cap": {
+        "P": 160749718,
+        "K": 32585589,
+        "H": 5466190
+      },
+      "control_plain": {
+        "P": 154338492,
+        "K": 38164240,
+        "H": 9967833
+      },
+      "candidate_plain": {
+        "P": 154338492,
+        "K": 38699044,
+        "H": 10737204
+      },
+      "program_delta": -37931,
+      "boundary_delta": 263293,
+      "total_delta": 836492,
+      "control_program_overhead_pct": 3.3501638823494724,
+      "candidate_program_overhead_pct": 3.3212328197144,
+      "top_program_function_deltas": [
+        [
+          "__capstone_malloc_slot_release",
+          -21828
+        ],
+        [
+          "publish",
+          -16885
+        ],
+        [
+          "free",
+          3720
+        ],
+        [
+          "aligned_alloc",
+          -2266
+        ],
+        [
+          "__capstone_malloc_group_nested",
+          -1364
+        ],
+        [
+          "cap_malloc_validate",
+          827
+        ],
+        [
+          "memchr",
+          -120
+        ],
+        [
+          "memcpy",
+          -12
+        ]
+      ],
+      "oracle_verdicts": [
+        "PASS",
+        "PASS",
+        "PASS",
+        "PASS"
+      ],
+      "watchdogs": [
+        {
+          "returncode": 0,
+          "reason": null,
+          "signals": [],
+          "remaining": [],
+          "elapsed_seconds": 76.3083931680303
+        },
+        {
+          "returncode": 0,
+          "reason": null,
+          "signals": [],
+          "remaining": [],
+          "elapsed_seconds": 86.51622367301024
+        },
+        {
+          "returncode": 0,
+          "reason": null,
+          "signals": [],
+          "remaining": [],
+          "elapsed_seconds": 75.80905146687292
+        },
+        {
+          "returncode": 0,
+          "reason": null,
+          "signals": [],
+          "remaining": [],
+          "elapsed_seconds": 98.13106897403486
+        }
+      ]
+    },
+    {
+      "benchmark": "519.lbm_r",
+      "control_path": "census/runs/PH-control-full",
+      "candidate_path": "census-B/runs/PH-lane-full",
+      "control_cap": {
+        "P": 6198119553,
+        "K": 884532183,
+        "H": 28778667
+      },
+      "candidate_cap": {
+        "P": 6198119359,
+        "K": 885944226,
+        "H": 31421243
+      },
+      "control_plain": {
+        "P": 6003861531,
+        "K": 636478604,
+        "H": 38313813
+      },
+      "candidate_plain": {
+        "P": 6003861531,
+        "K": 636499426,
+        "H": 38038519
+      },
+      "program_delta": -194,
+      "boundary_delta": 1412043,
+      "total_delta": 4054425,
+      "control_program_overhead_pct": 2.9254227652602016,
+      "candidate_program_overhead_pct": 2.925410670563341,
+      "top_program_function_deltas": [
+        [
+          "__capstone_malloc_slot_release",
+          -116
+        ],
+        [
+          "publish",
+          -66
+        ],
+        [
+          "memcpy",
+          -21
+        ],
+        [
+          "free",
+          20
+        ],
+        [
+          "memchr",
+          -15
+        ],
+        [
+          "cap_malloc_validate",
+          4
+        ],
+        [
+          "LBM_initializeSpecialCellsForChannel",
+          0
+        ],
+        [
+          "__capstone_signals_deliver",
+          0
+        ]
+      ],
+      "oracle_verdicts": [
+        "PASS",
+        "PASS",
+        "PASS",
+        "PASS"
+      ],
+      "watchdogs": [
+        {
+          "returncode": 0,
+          "reason": null,
+          "signals": [],
+          "remaining": [],
+          "elapsed_seconds": 106.14058323320933
+        },
+        {
+          "returncode": 0,
+          "reason": null,
+          "signals": [],
+          "remaining": [],
+          "elapsed_seconds": 187.7404332868755
+        },
+        {
+          "returncode": 0,
+          "reason": null,
+          "signals": [],
+          "remaining": [],
+          "elapsed_seconds": 128.42330796597525
+        },
+        {
+          "returncode": 0,
+          "reason": null,
+          "signals": [],
+          "remaining": [],
+          "elapsed_seconds": 235.4283835629467
+        }
+      ]
+    },
+    {
+      "benchmark": "544.nab_r",
+      "control_path": "census/runs/PH-control-full",
+      "candidate_path": "census-B/runs/PH-lane-full",
+      "control_cap": {
+        "P": 7351449116,
+        "K": 20634626,
+        "H": 2666573
+      },
+      "candidate_cap": {
+        "P": 7351260439,
+        "K": 20304484,
+        "H": 2009867
+      },
+      "control_plain": {
+        "P": 6863873757,
+        "K": 15766876,
+        "H": 2214459
+      },
+      "candidate_plain": {
+        "P": 6863873757,
+        "K": 15716834,
+        "H": 1916545
+      },
+      "program_delta": -188677,
+      "boundary_delta": -330142,
+      "total_delta": -1175525,
+      "control_program_overhead_pct": 7.087221339167296,
+      "candidate_program_overhead_pct": 7.08453033001132,
+      "top_program_function_deltas": [
+        [
+          "__capstone_malloc_slot_release",
+          -145107
+        ],
+        [
+          "publish",
+          -72413
+        ],
+        [
+          "free",
+          24975
+        ],
+        [
+          "cap_malloc_validate",
+          5081
+        ],
+        [
+          "__capstone_malloc_group_nested",
+          -1155
+        ],
+        [
+          "realloc",
+          -22
+        ],
+        [
+          "memcpy",
+          -21
+        ],
+        [
+          "memchr",
+          -15
+        ]
+      ],
+      "oracle_verdicts": [
+        "PASS",
+        "PASS",
+        "PASS",
+        "PASS"
+      ],
+      "watchdogs": [
+        {
+          "returncode": 0,
+          "reason": null,
+          "signals": [],
+          "remaining": [],
+          "elapsed_seconds": 90.11854746798053
+        },
+        {
+          "returncode": 0,
+          "reason": null,
+          "signals": [],
+          "remaining": [],
+          "elapsed_seconds": 211.86569471796975
+        },
+        {
+          "returncode": 0,
+          "reason": null,
+          "signals": [],
+          "remaining": [],
+          "elapsed_seconds": 108.18749540788122
+        },
+        {
+          "returncode": 0,
+          "reason": null,
+          "signals": [],
+          "remaining": [],
+          "elapsed_seconds": 268.3683857631404
+        }
+      ]
+    },
+    {
+      "benchmark": "500.perlbench_r",
+      "control_path": "census/runs/PH-control-full",
+      "candidate_path": "census-B/runs/PH-lane-full",
+      "control_cap": {
+        "P": 109225276900,
+        "K": 17589918111,
+        "H": 9362990257
+      },
+      "candidate_cap": {
+        "P": 108718640188,
+        "K": 17898656110,
+        "H": 9943428738
+      },
+      "control_plain": {
+        "P": 79692172303,
+        "K": 14493705150,
+        "H": 8824527299
+      },
+      "candidate_plain": {
+        "P": 79692171880,
+        "K": 14495262469,
+        "H": 8677044805
+      },
+      "program_delta": -506636712,
+      "boundary_delta": 308737999,
+      "total_delta": 382539768,
+      "control_program_overhead_pct": 31.356192027554673,
+      "candidate_program_overhead_pct": 30.81777150914418,
+      "top_program_function_deltas": [
+        [
+          "__capstone_malloc_slot_release",
+          -572283382
+        ],
+        [
+          "publish",
+          -197136224
+        ],
+        [
+          "free",
+          80695315
+        ],
+        [
+          "alloc_slot",
+          48765521
+        ],
+        [
+          "nontrivial_free",
+          35500247
+        ],
+        [
+          "realloc",
+          -29815045
+        ],
+        [
+          "cap_malloc_validate",
+          29060065
+        ],
+        [
+          "memset",
+          18352306
+        ]
+      ],
+      "oracle_verdicts": [
+        "PASS",
+        "PASS",
+        "PASS",
+        "PASS"
+      ],
+      "watchdogs": [
+        {
+          "returncode": 0,
+          "reason": null,
+          "signals": [],
+          "remaining": [],
+          "elapsed_seconds": 773.1002231650054
+        },
+        {
+          "returncode": 0,
+          "reason": null,
+          "signals": [],
+          "remaining": [],
+          "elapsed_seconds": 8193.004506706959
+        },
+        {
+          "returncode": 0,
+          "reason": null,
+          "signals": [],
+          "remaining": [],
+          "elapsed_seconds": 844.2702448219061
+        },
+        {
+          "returncode": 0,
+          "reason": null,
+          "signals": [],
+          "remaining": [],
+          "elapsed_seconds": 7644.969374933047
+        }
+      ]
+    },
+    {
+      "benchmark": "505.mcf_r",
+      "control_path": "census/runs/PH-control-full",
+      "candidate_path": "census-B/runs/PH-lane-full",
+      "control_cap": {
+        "P": 26866794919,
+        "K": 3197123256,
+        "H": 84104621
+      },
+      "candidate_cap": {
+        "P": 26864720687,
+        "K": 3196828300,
+        "H": 83536744
+      },
+      "control_plain": {
+        "P": 27299535352,
+        "K": 803889585,
+        "H": 41401739
+      },
+      "candidate_plain": {
+        "P": 27299535352,
+        "K": 800663323,
+        "H": 35441854
+      },
+      "program_delta": -2074232,
+      "boundary_delta": -294956,
+      "total_delta": -2937065,
+      "control_program_overhead_pct": -1.5398138624387694,
+      "candidate_program_overhead_pct": -1.5473722091041409,
+      "top_program_function_deltas": [
+        [
+          "__capstone_malloc_slot_release",
+          -1738840
+        ],
+        [
+          "publish",
+          -659537
+        ],
+        [
+          "free",
+          299780
+        ],
+        [
+          "cap_malloc_validate",
+          59960
+        ],
+        [
+          "__capstone_malloc_group_nested",
+          -35531
+        ],
+        [
+          "realloc",
+          -44
+        ],
+        [
+          "memcpy",
+          -21
+        ],
+        [
+          "__capstone_malloc_prepare_free",
+          16
+        ]
+      ],
+      "oracle_verdicts": [
+        "PASS",
+        "PASS",
+        "PASS",
+        "PASS"
+      ],
+      "watchdogs": [
+        {
+          "returncode": 0,
+          "reason": null,
+          "signals": [],
+          "remaining": [],
+          "elapsed_seconds": 193.57860671309754
+        },
+        {
+          "returncode": 0,
+          "reason": null,
+          "signals": [],
+          "remaining": [],
+          "elapsed_seconds": 1067.7914239100646
+        },
+        {
+          "returncode": 0,
+          "reason": null,
+          "signals": [],
+          "remaining": [],
+          "elapsed_seconds": 208.3709532439243
+        },
+        {
+          "returncode": 0,
+          "reason": null,
+          "signals": [],
+          "remaining": [],
+          "elapsed_seconds": 1072.9876372260042
+        }
+      ]
+    },
+    {
+      "benchmark": "557.xz_r",
+      "control_path": "census/runs/PH-control-full",
+      "candidate_path": "census-B/runs/PH-lane-full",
+      "control_cap": {
+        "P": 50140376095,
+        "K": 14898843765,
+        "H": 354510057
+      },
+      "candidate_cap": {
+        "P": 50140358715,
+        "K": 14899698800,
+        "H": 355704517
+      },
+      "control_plain": {
+        "P": 48993774029,
+        "K": 9641502831,
+        "H": 376655239
+      },
+      "candidate_plain": {
+        "P": 48993774029,
+        "K": 9642453130,
+        "H": 378348165
+      },
+      "program_delta": -17380,
+      "boundary_delta": 855035,
+      "total_delta": 2032115,
+      "control_program_overhead_pct": 1.9554816271059388,
+      "candidate_program_overhead_pct": 1.9554202948475552,
+      "top_program_function_deltas": [
+        [
+          "__capstone_malloc_slot_release",
+          -11832
+        ],
+        [
+          "publish",
+          -5676
+        ],
+        [
+          "__capstone_malloc_group_nested",
+          -2508
+        ],
+        [
+          "free",
+          2040
+        ],
+        [
+          "cap_malloc_validate",
+          408
+        ],
+        [
+          "memcpy",
+          368
+        ],
+        [
+          "memchr",
+          -180
+        ],
+        [
+          "block_encoder_end",
+          0
+        ]
+      ],
+      "oracle_verdicts": [
+        "PASS",
+        "PASS",
+        "PASS",
+        "PASS"
+      ],
+      "watchdogs": [
+        {
+          "returncode": 0,
+          "reason": null,
+          "signals": [],
+          "remaining": [],
+          "elapsed_seconds": 276.7873517109547
+        },
+        {
+          "returncode": 0,
+          "reason": null,
+          "signals": [],
+          "remaining": [],
+          "elapsed_seconds": 1250.6958439419977
+        },
+        {
+          "returncode": 0,
+          "reason": null,
+          "signals": [],
+          "remaining": [],
+          "elapsed_seconds": 245.41602469910868
+        },
+        {
+          "returncode": 0,
+          "reason": null,
+          "signals": [],
+          "remaining": [],
+          "elapsed_seconds": 1140.1568340181839
+        }
+      ]
+    }
+  ],
+  "malloc_matrix": {
+    "control-boff": {
+      "status": "PASS",
+      "test_count": 24,
+      "false_checks": [],
+      "input_sha256": {
+        "launcher": "9d290e77a690ed869c271dd5804095e01efea27a1d5d1c4e84db1b0c6249dfaf",
+        "module": "37e6ae401a9916e18197a18dea67bbcc43bf2212b76a4d3bb2e3093a34055673",
+        "application": "f96d8e119e16fc4d7652111807cf51741b675842135cb0b34a5200ddd806c05b",
+        "native": "27ebd93d5295e3e48bde0e4b0b6c203e3bc5950b254d756567f4c62e9ad514d0",
+        "qemu": "81799a55c3e2fb0232a3d6b6e020dd5338fde2e721430a85214928da0ea7a9b9",
+        "source": "36ebb9f3e2b6c8b732b6baeb67516727f87a3f881ef6dc9fdb959e32d2379a0d",
+        "Image": "e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b",
+        "fw_jump.elf": "5b5c047a00306f35c99bc4b506ec840c784fe1b73dd13ea6ecb4cf793fece9af",
+        "rootfs.ext2": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845",
+        "sdk_json": "b968c7f6fb610379cb9e0d8f36fd6f70d41404a002df6b76851c249376214696"
+      },
+      "heap": {
+        "lifetimes": false,
+        "scrub_free": false,
+        "object_bounds": false
+      }
+    },
+    "control-default": {
+      "status": "FAIL",
+      "test_count": 49,
+      "false_checks": [
+        "real_linux_mremap_growth_and_shrink"
+      ],
+      "input_sha256": {
+        "launcher": "9d290e77a690ed869c271dd5804095e01efea27a1d5d1c4e84db1b0c6249dfaf",
+        "module": "37e6ae401a9916e18197a18dea67bbcc43bf2212b76a4d3bb2e3093a34055673",
+        "application": "d8b29535a79798b5a1b1a2bab66016c5281ce6c75498e5fad6c1390b4b08f359",
+        "native": "27ebd93d5295e3e48bde0e4b0b6c203e3bc5950b254d756567f4c62e9ad514d0",
+        "qemu": "81799a55c3e2fb0232a3d6b6e020dd5338fde2e721430a85214928da0ea7a9b9",
+        "source": "36ebb9f3e2b6c8b732b6baeb67516727f87a3f881ef6dc9fdb959e32d2379a0d",
+        "Image": "e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b",
+        "fw_jump.elf": "5b5c047a00306f35c99bc4b506ec840c784fe1b73dd13ea6ecb4cf793fece9af",
+        "rootfs.ext2": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845",
+        "sdk_json": "a24d6d739e675b842084c20d12dcfc6492874d29a68de0f1fb636c239089ac68"
+      },
+      "heap": {
+        "lifetimes": true,
+        "scrub_free": false
+      }
+    },
+    "control-spatial": {
+      "status": "FAIL",
+      "test_count": 48,
+      "false_checks": [
+        "real_linux_mremap_growth_and_shrink"
+      ],
+      "input_sha256": {
+        "launcher": "9d290e77a690ed869c271dd5804095e01efea27a1d5d1c4e84db1b0c6249dfaf",
+        "module": "37e6ae401a9916e18197a18dea67bbcc43bf2212b76a4d3bb2e3093a34055673",
+        "application": "8583e27625dd391d8f28ffabafae3d71b20b3daa4e265c1e763d0c2faad0ba10",
+        "native": "27ebd93d5295e3e48bde0e4b0b6c203e3bc5950b254d756567f4c62e9ad514d0",
+        "qemu": "81799a55c3e2fb0232a3d6b6e020dd5338fde2e721430a85214928da0ea7a9b9",
+        "source": "36ebb9f3e2b6c8b732b6baeb67516727f87a3f881ef6dc9fdb959e32d2379a0d",
+        "Image": "e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b",
+        "fw_jump.elf": "5b5c047a00306f35c99bc4b506ec840c784fe1b73dd13ea6ecb4cf793fece9af",
+        "rootfs.ext2": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845",
+        "sdk_json": "8214ffb65e078e38e5c291a50f03c77e1d6f360f6dfc5c27a0ece21f7769690c"
+      },
+      "heap": {
+        "lifetimes": false,
+        "scrub_free": false
+      }
+    },
+    "lane-boff": {
+      "status": "PASS",
+      "test_count": 24,
+      "false_checks": [],
+      "input_sha256": {
+        "launcher": "9d290e77a690ed869c271dd5804095e01efea27a1d5d1c4e84db1b0c6249dfaf",
+        "module": "37e6ae401a9916e18197a18dea67bbcc43bf2212b76a4d3bb2e3093a34055673",
+        "application": "d0075954632837a9ef6dbe4b0033b37081ec4bc39542503cb6208f2eb30f8855",
+        "native": "27ebd93d5295e3e48bde0e4b0b6c203e3bc5950b254d756567f4c62e9ad514d0",
+        "qemu": "81799a55c3e2fb0232a3d6b6e020dd5338fde2e721430a85214928da0ea7a9b9",
+        "source": "36ebb9f3e2b6c8b732b6baeb67516727f87a3f881ef6dc9fdb959e32d2379a0d",
+        "Image": "e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b",
+        "fw_jump.elf": "5b5c047a00306f35c99bc4b506ec840c784fe1b73dd13ea6ecb4cf793fece9af",
+        "rootfs.ext2": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845",
+        "sdk_json": "50eb40993e1145c44ae1ab21dea8b8243518c577145cd8c2b8609c5ca1467998"
+      },
+      "heap": {
+        "lifetimes": false,
+        "scrub_free": false,
+        "object_bounds": false
+      }
+    },
+    "lane-default": {
+      "status": "FAIL",
+      "test_count": 49,
+      "false_checks": [
+        "real_linux_mremap_growth_and_shrink"
+      ],
+      "input_sha256": {
+        "launcher": "9d290e77a690ed869c271dd5804095e01efea27a1d5d1c4e84db1b0c6249dfaf",
+        "module": "37e6ae401a9916e18197a18dea67bbcc43bf2212b76a4d3bb2e3093a34055673",
+        "application": "745dffdb82ff2b10d89620a917330c3e947a2097192a9bb3e206ae53f0a0587c",
+        "native": "27ebd93d5295e3e48bde0e4b0b6c203e3bc5950b254d756567f4c62e9ad514d0",
+        "qemu": "81799a55c3e2fb0232a3d6b6e020dd5338fde2e721430a85214928da0ea7a9b9",
+        "source": "36ebb9f3e2b6c8b732b6baeb67516727f87a3f881ef6dc9fdb959e32d2379a0d",
+        "Image": "e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b",
+        "fw_jump.elf": "5b5c047a00306f35c99bc4b506ec840c784fe1b73dd13ea6ecb4cf793fece9af",
+        "rootfs.ext2": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845",
+        "sdk_json": "12f26c50f7e03eb5dfc107ac7e4bd5c0dd460bd1d400b849e9887d9e74833215"
+      },
+      "heap": {
+        "lifetimes": true,
+        "scrub_free": false
+      }
+    },
+    "lane-spatial": {
+      "status": "FAIL",
+      "test_count": 48,
+      "false_checks": [
+        "real_linux_mremap_growth_and_shrink"
+      ],
+      "input_sha256": {
+        "launcher": "9d290e77a690ed869c271dd5804095e01efea27a1d5d1c4e84db1b0c6249dfaf",
+        "module": "37e6ae401a9916e18197a18dea67bbcc43bf2212b76a4d3bb2e3093a34055673",
+        "application": "1fb052650995c22d5bfc1f2cfc84dd67fc041fc251d73ce6595377eafd8212cd",
+        "native": "27ebd93d5295e3e48bde0e4b0b6c203e3bc5950b254d756567f4c62e9ad514d0",
+        "qemu": "81799a55c3e2fb0232a3d6b6e020dd5338fde2e721430a85214928da0ea7a9b9",
+        "source": "36ebb9f3e2b6c8b732b6baeb67516727f87a3f881ef6dc9fdb959e32d2379a0d",
+        "Image": "e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b",
+        "fw_jump.elf": "5b5c047a00306f35c99bc4b506ec840c784fe1b73dd13ea6ecb4cf793fece9af",
+        "rootfs.ext2": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845",
+        "sdk_json": "1dd062c1028ebb57d37f1e2e1a2bd3e81355ba5cf4d6b4e3f6c875a2b9f4ea64"
+      },
+      "heap": {
+        "lifetimes": false,
+        "scrub_free": false
+      }
+    },
+    "no-group-revoke-boff": {
+      "status": "FAIL",
+      "test_count": 24,
+      "false_checks": [
+        "recycle-stale",
+        "recycle-free",
+        "recycle-root",
+        "recycle-geometry",
+        "recycle-nested",
+        "recycle-aligned",
+        "recycle-realloc",
+        "coarse-stale"
+      ],
+      "input_sha256": {
+        "launcher": "9d290e77a690ed869c271dd5804095e01efea27a1d5d1c4e84db1b0c6249dfaf",
+        "module": "37e6ae401a9916e18197a18dea67bbcc43bf2212b76a4d3bb2e3093a34055673",
+        "application": "3bea5fa7c495659d117725229179e8a77949ebbe7b48a34266558ea6e10ca8d1",
+        "native": "27ebd93d5295e3e48bde0e4b0b6c203e3bc5950b254d756567f4c62e9ad514d0",
+        "qemu": "81799a55c3e2fb0232a3d6b6e020dd5338fde2e721430a85214928da0ea7a9b9",
+        "source": "36ebb9f3e2b6c8b732b6baeb67516727f87a3f881ef6dc9fdb959e32d2379a0d",
+        "Image": "e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b",
+        "fw_jump.elf": "5b5c047a00306f35c99bc4b506ec840c784fe1b73dd13ea6ecb4cf793fece9af",
+        "rootfs.ext2": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845",
+        "sdk_json": "9471594efc493782dae9f9e23a02dc12de5bb8a91df86db611ca3fa9c7b52393"
+      },
+      "heap": {
+        "lifetimes": false,
+        "scrub_free": false,
+        "object_bounds": false
+      }
+    },
+    "no-group-revoke-default": {
+      "status": "FAIL",
+      "test_count": 49,
+      "false_checks": [
+        "recycle-root",
+        "real_linux_mremap_growth_and_shrink",
+        "coarse-stale"
+      ],
+      "input_sha256": {
+        "launcher": "9d290e77a690ed869c271dd5804095e01efea27a1d5d1c4e84db1b0c6249dfaf",
+        "module": "37e6ae401a9916e18197a18dea67bbcc43bf2212b76a4d3bb2e3093a34055673",
+        "application": "83fcf08dbb0277ba7f973ef0a03973e3b90a4d4e940d2414c0cb341d76610d0b",
+        "native": "27ebd93d5295e3e48bde0e4b0b6c203e3bc5950b254d756567f4c62e9ad514d0",
+        "qemu": "81799a55c3e2fb0232a3d6b6e020dd5338fde2e721430a85214928da0ea7a9b9",
+        "source": "36ebb9f3e2b6c8b732b6baeb67516727f87a3f881ef6dc9fdb959e32d2379a0d",
+        "Image": "e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b",
+        "fw_jump.elf": "5b5c047a00306f35c99bc4b506ec840c784fe1b73dd13ea6ecb4cf793fece9af",
+        "rootfs.ext2": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845",
+        "sdk_json": "227e4e37a07936db97d96e4982c4ea76d1b02f1bf6fde9239f72eb24b80ce861"
+      },
+      "heap": {
+        "lifetimes": true,
+        "scrub_free": false
+      }
+    },
+    "no-group-revoke-spatial": {
+      "status": "FAIL",
+      "test_count": 48,
+      "false_checks": [
+        "recycle-stale",
+        "recycle-free",
+        "recycle-root",
+        "recycle-geometry",
+        "recycle-nested",
+        "recycle-aligned",
+        "recycle-realloc",
+        "real_linux_mremap_growth_and_shrink",
+        "coarse-stale"
+      ],
+      "input_sha256": {
+        "launcher": "9d290e77a690ed869c271dd5804095e01efea27a1d5d1c4e84db1b0c6249dfaf",
+        "module": "37e6ae401a9916e18197a18dea67bbcc43bf2212b76a4d3bb2e3093a34055673",
+        "application": "b9a1d60884375458a265935d96d3e28a07c01be2fbdad3421904d9325828bb98",
+        "native": "27ebd93d5295e3e48bde0e4b0b6c203e3bc5950b254d756567f4c62e9ad514d0",
+        "qemu": "81799a55c3e2fb0232a3d6b6e020dd5338fde2e721430a85214928da0ea7a9b9",
+        "source": "36ebb9f3e2b6c8b732b6baeb67516727f87a3f881ef6dc9fdb959e32d2379a0d",
+        "Image": "e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b",
+        "fw_jump.elf": "5b5c047a00306f35c99bc4b506ec840c784fe1b73dd13ea6ecb4cf793fece9af",
+        "rootfs.ext2": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845",
+        "sdk_json": "0e77fee398a3e1931f0f0c35e53a0343a26ac598f6713fb0b8b6670c73f52659"
+      },
+      "heap": {
+        "lifetimes": false,
+        "scrub_free": false
+      }
+    },
+    "no-object-revoke-default": {
+      "status": "FAIL",
+      "test_count": 49,
+      "false_checks": [
+        "collection_exercised",
+        "reuse-stale",
+        "reuse-free",
+        "stale",
+        "inplace-stale",
+        "stale-free",
+        "real_linux_mremap_growth_and_shrink"
+      ],
+      "input_sha256": {
+        "launcher": "9d290e77a690ed869c271dd5804095e01efea27a1d5d1c4e84db1b0c6249dfaf",
+        "module": "37e6ae401a9916e18197a18dea67bbcc43bf2212b76a4d3bb2e3093a34055673",
+        "application": "219ea1a0ede410c973d269e7048069c4e285d55d4d76bfcfe57f560cd0000d5d",
+        "native": "27ebd93d5295e3e48bde0e4b0b6c203e3bc5950b254d756567f4c62e9ad514d0",
+        "qemu": "81799a55c3e2fb0232a3d6b6e020dd5338fde2e721430a85214928da0ea7a9b9",
+        "source": "36ebb9f3e2b6c8b732b6baeb67516727f87a3f881ef6dc9fdb959e32d2379a0d",
+        "Image": "e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b",
+        "fw_jump.elf": "5b5c047a00306f35c99bc4b506ec840c784fe1b73dd13ea6ecb4cf793fece9af",
+        "rootfs.ext2": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845",
+        "sdk_json": "961a2cc03e87b50331a12c1f987d65ae392091bb543f147648328d0485b2813e"
+      },
+      "heap": {
+        "lifetimes": true,
+        "scrub_free": false
+      }
+    },
+    "no-reuse-scrub-boff": {
+      "status": "FAIL",
+      "test_count": 24,
+      "false_checks": [
+        "recycle-tags",
+        "recycle-header",
+        "recycle-slack",
+        "recycle-geometry",
+        "recycle_tags_clean",
+        "recycle_outside_clean",
+        "coarse-reuse",
+        "coarse-stale",
+        "coarse-bounds"
+      ],
+      "input_sha256": {
+        "launcher": "9d290e77a690ed869c271dd5804095e01efea27a1d5d1c4e84db1b0c6249dfaf",
+        "module": "37e6ae401a9916e18197a18dea67bbcc43bf2212b76a4d3bb2e3093a34055673",
+        "application": "fbc5b545a199597877254d71f665560dfd666567b2493aefe383003716de7f96",
+        "native": "27ebd93d5295e3e48bde0e4b0b6c203e3bc5950b254d756567f4c62e9ad514d0",
+        "qemu": "81799a55c3e2fb0232a3d6b6e020dd5338fde2e721430a85214928da0ea7a9b9",
+        "source": "36ebb9f3e2b6c8b732b6baeb67516727f87a3f881ef6dc9fdb959e32d2379a0d",
+        "Image": "e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b",
+        "fw_jump.elf": "5b5c047a00306f35c99bc4b506ec840c784fe1b73dd13ea6ecb4cf793fece9af",
+        "rootfs.ext2": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845",
+        "sdk_json": "88526f621f684a79e2a9f553cec5f65f0593eabc01a07e18ee5ce6a902e9dfa0"
+      },
+      "heap": {
+        "lifetimes": false,
+        "scrub_free": false,
+        "object_bounds": false
+      }
+    },
+    "no-reuse-scrub-default": {
+      "status": "FAIL",
+      "test_count": 49,
+      "false_checks": [
+        "recycle-tags",
+        "recycle-geometry",
+        "calloc-clean",
+        "calloc-geometry",
+        "real_linux_mremap_growth_and_shrink",
+        "recycle_tags_clean",
+        "coarse-reuse"
+      ],
+      "input_sha256": {
+        "launcher": "9d290e77a690ed869c271dd5804095e01efea27a1d5d1c4e84db1b0c6249dfaf",
+        "module": "37e6ae401a9916e18197a18dea67bbcc43bf2212b76a4d3bb2e3093a34055673",
+        "application": "4741637cd308f813b839c1b1feebfc4e16b7a18a6a730228ffbc7046246dc235",
+        "native": "27ebd93d5295e3e48bde0e4b0b6c203e3bc5950b254d756567f4c62e9ad514d0",
+        "qemu": "81799a55c3e2fb0232a3d6b6e020dd5338fde2e721430a85214928da0ea7a9b9",
+        "source": "36ebb9f3e2b6c8b732b6baeb67516727f87a3f881ef6dc9fdb959e32d2379a0d",
+        "Image": "e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b",
+        "fw_jump.elf": "5b5c047a00306f35c99bc4b506ec840c784fe1b73dd13ea6ecb4cf793fece9af",
+        "rootfs.ext2": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845",
+        "sdk_json": "60602980ba72141cf93b89335bc67ca60e38dfcd1435261edee6eb9bfa5bbe8b"
+      },
+      "heap": {
+        "lifetimes": true,
+        "scrub_free": false
+      }
+    },
+    "no-reuse-scrub-spatial": {
+      "status": "FAIL",
+      "test_count": 48,
+      "false_checks": [
+        "recycle-tags",
+        "recycle-geometry",
+        "calloc-clean",
+        "calloc-geometry",
+        "real_linux_mremap_growth_and_shrink",
+        "recycle_tags_clean",
+        "coarse-reuse"
+      ],
+      "input_sha256": {
+        "launcher": "9d290e77a690ed869c271dd5804095e01efea27a1d5d1c4e84db1b0c6249dfaf",
+        "module": "37e6ae401a9916e18197a18dea67bbcc43bf2212b76a4d3bb2e3093a34055673",
+        "application": "81b86916568c811ece5baee8d06eb9af3686fa60989ff5f8cc16934c25d0bf8c",
+        "native": "27ebd93d5295e3e48bde0e4b0b6c203e3bc5950b254d756567f4c62e9ad514d0",
+        "qemu": "81799a55c3e2fb0232a3d6b6e020dd5338fde2e721430a85214928da0ea7a9b9",
+        "source": "36ebb9f3e2b6c8b732b6baeb67516727f87a3f881ef6dc9fdb959e32d2379a0d",
+        "Image": "e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b",
+        "fw_jump.elf": "5b5c047a00306f35c99bc4b506ec840c784fe1b73dd13ea6ecb4cf793fece9af",
+        "rootfs.ext2": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845",
+        "sdk_json": "53bc489f22286c314d2c18fd6576904cc1122d3ffd23a9b1a03d9de4604b7b57"
+      },
+      "heap": {
+        "lifetimes": false,
+        "scrub_free": false
+      }
+    },
+    "no-validate-default": {
+      "status": "FAIL",
+      "test_count": 49,
+      "false_checks": [
+        "reuse-free",
+        "stale-free",
+        "recycle-free",
+        "real_linux_mremap_growth_and_shrink"
+      ],
+      "input_sha256": {
+        "launcher": "9d290e77a690ed869c271dd5804095e01efea27a1d5d1c4e84db1b0c6249dfaf",
+        "module": "37e6ae401a9916e18197a18dea67bbcc43bf2212b76a4d3bb2e3093a34055673",
+        "application": "eaacfafbc744ca169f31c688fd4a8a0d63ddf9b7791c7ef10709d7bf2dd2a34e",
+        "native": "27ebd93d5295e3e48bde0e4b0b6c203e3bc5950b254d756567f4c62e9ad514d0",
+        "qemu": "81799a55c3e2fb0232a3d6b6e020dd5338fde2e721430a85214928da0ea7a9b9",
+        "source": "36ebb9f3e2b6c8b732b6baeb67516727f87a3f881ef6dc9fdb959e32d2379a0d",
+        "Image": "e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b",
+        "fw_jump.elf": "5b5c047a00306f35c99bc4b506ec840c784fe1b73dd13ea6ecb4cf793fece9af",
+        "rootfs.ext2": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845",
+        "sdk_json": "5e91cf285826ca88d8d944ede78da8eb9da4ed4aa4da8c88e8c40659d40bd012"
+      },
+      "heap": {
+        "lifetimes": true,
+        "scrub_free": false
+      }
+    }
+  },
+  "gates": {
+    "gates-compare": {
+      "verdict": "DIFFERENT",
+      "gates": {
+        "hosted": {
+          "verdict": "IDENTICAL",
+          "not_run": [],
+          "control": {
+            "rc": "rc=0",
+            "fails": [],
+            "npass": 0,
+            "json": [
+              "status=PASS"
+            ]
+          },
+          "candidate": {
+            "rc": "rc=0",
+            "fails": [],
+            "npass": 0,
+            "json": [
+              "status=PASS"
+            ]
+          },
+          "control_rows": 3,
+          "candidate_rows": 3
+        },
+        "runtime": {
+          "verdict": "IDENTICAL",
+          "not_run": [],
+          "control": {
+            "rc": "rc=0",
+            "fails": [],
+            "npass": 0,
+            "json": [
+              "status=PASS"
+            ]
+          },
+          "candidate": {
+            "rc": "rc=0",
+            "fails": [],
+            "npass": 0,
+            "json": [
+              "status=PASS"
+            ]
+          },
+          "control_rows": 25,
+          "candidate_rows": 25
+        },
+        "nodes": {
+          "verdict": "IDENTICAL",
+          "not_run": [],
+          "control": {
+            "rc": "rc=1",
+            "fails": [
+              "FAIL node_count_reported"
+            ],
+            "npass": 15,
+            "json": []
+          },
+          "candidate": {
+            "rc": "rc=1",
+            "fails": [
+              "FAIL node_count_reported"
+            ],
+            "npass": 15,
+            "json": []
+          },
+          "control_rows": 4,
+          "candidate_rows": 4
+        },
+        "malloc": {
+          "verdict": "IDENTICAL",
+          "not_run": [],
+          "control": {
+            "rc": "rc=1",
+            "fails": [],
+            "npass": 0,
+            "json": [
+              "status=FAIL",
+              "test real_linux_mremap_growth_and_shrink=False"
+            ]
+          },
+          "candidate": {
+            "rc": "rc=1",
+            "fails": [],
+            "npass": 0,
+            "json": [
+              "status=FAIL",
+              "test real_linux_mremap_growth_and_shrink=False"
+            ]
+          },
+          "control_rows": 39,
+          "candidate_rows": 39
+        },
+        "pin-ahead": {
+          "verdict": "IDENTICAL",
+          "not_run": [],
+          "control": {
+            "rc": "rc=0",
+            "fails": [],
+            "npass": 64,
+            "json": []
+          },
+          "candidate": {
+            "rc": "rc=0",
+            "fails": [],
+            "npass": 64,
+            "json": []
+          },
+          "control_rows": 21,
+          "candidate_rows": 21
+        },
+        "fp": {
+          "verdict": "IDENTICAL",
+          "not_run": [],
+          "control": {
+            "rc": "rc=0",
+            "fails": [],
+            "npass": 0,
+            "json": [
+              "status=PASS"
+            ]
+          },
+          "candidate": {
+            "rc": "rc=0",
+            "fails": [],
+            "npass": 0,
+            "json": [
+              "status=PASS"
+            ]
+          },
+          "control_rows": 1,
+          "candidate_rows": 1
+        },
+        "pthread": {
+          "verdict": "IDENTICAL",
+          "not_run": [],
+          "control": {
+            "rc": "rc=0",
+            "fails": [],
+            "npass": 0,
+            "json": [
+              "status=PASS"
+            ]
+          },
+          "candidate": {
+            "rc": "rc=0",
+            "fails": [],
+            "npass": 0,
+            "json": [
+              "status=PASS"
+            ]
+          },
+          "control_rows": 1,
+          "candidate_rows": 1
+        },
+        "step-hooks": {
+          "verdict": "IDENTICAL",
+          "not_run": [],
+          "control": {
+            "rc": "rc=0",
+            "fails": [],
+            "npass": 299,
+            "json": []
+          },
+          "candidate": {
+            "rc": "rc=0",
+            "fails": [],
+            "npass": 299,
+            "json": []
+          },
+          "control_rows": 37,
+          "candidate_rows": 37
+        },
+        "memcached": {
+          "verdict": "DIFFERENT",
+          "not_run": [],
+          "control": {
+            "rc": "rc=1",
+            "fails": [
+              "FAIL fx24_prediction",
+              "FAIL marker_stderr",
+              "FAIL normal1_stderr",
+              "FAIL normal2_stderr",
+              "FAIL usr1_stderr"
+            ],
+            "npass": 100,
+            "json": []
+          },
+          "candidate": {
+            "rc": "rc=1",
+            "fails": [
+              "FAIL fx24_trigger",
+              "FAIL marker_stderr",
+              "FAIL normal1_stderr",
+              "FAIL normal2_stderr",
+              "FAIL usr1_stderr"
+            ],
+            "npass": 100,
+            "json": []
+          },
+          "control_rows": 29,
+          "candidate_rows": 29
+        }
+      }
+    },
+    "memcached-pair-1": {
+      "verdict": "IDENTICAL",
+      "gates": {
+        "memcached": {
+          "verdict": "IDENTICAL",
+          "not_run": [],
+          "control": {
+            "rc": "rc=1",
+            "fails": [
+              "FAIL fx24_trigger",
+              "FAIL marker_stderr",
+              "FAIL normal1_stderr",
+              "FAIL normal2_stderr",
+              "FAIL usr1_stderr"
+            ],
+            "npass": 100,
+            "json": []
+          },
+          "candidate": {
+            "rc": "rc=1",
+            "fails": [
+              "FAIL fx24_trigger",
+              "FAIL marker_stderr",
+              "FAIL normal1_stderr",
+              "FAIL normal2_stderr",
+              "FAIL usr1_stderr"
+            ],
+            "npass": 100,
+            "json": []
+          },
+          "control_rows": 29,
+          "candidate_rows": 29
+        }
+      }
+    },
+    "memcached-pair-2": {
+      "verdict": "IDENTICAL",
+      "gates": {
+        "memcached": {
+          "verdict": "IDENTICAL",
+          "not_run": [],
+          "control": {
+            "rc": "rc=1",
+            "fails": [
+              "FAIL fx24_trigger",
+              "FAIL marker_stderr",
+              "FAIL normal1_stderr",
+              "FAIL normal2_stderr",
+              "FAIL usr1_stderr"
+            ],
+            "npass": 100,
+            "json": []
+          },
+          "candidate": {
+            "rc": "rc=1",
+            "fails": [
+              "FAIL fx24_trigger",
+              "FAIL marker_stderr",
+              "FAIL normal1_stderr",
+              "FAIL normal2_stderr",
+              "FAIL usr1_stderr"
+            ],
+            "npass": 100,
+            "json": []
+          },
+          "control_rows": 29,
+          "candidate_rows": 29
+        }
+      }
+    }
+  },
+  "perlbench_annotations": {
+    "control-full": [
+      {
+        "arm": "cap",
+        "function": "malloc",
+        "attempts": 60712870,
+        "entries": 12142574,
+        "per_entry": 5.0
+      },
+      {
+        "arm": "cap",
+        "function": "allocate",
+        "attempts": 1223402902,
+        "entries": 17921475,
+        "per_entry": 68.26463234750489
+      },
+      {
+        "arm": "cap",
+        "function": "publish",
+        "attempts": 1019177331,
+        "entries": 17921475,
+        "per_entry": 56.869054081765036
+      },
+      {
+        "arm": "cap",
+        "function": "free",
+        "attempts": 1178159332,
+        "entries": 16139385,
+        "per_entry": 72.99902270129871
+      },
+      {
+        "arm": "cap",
+        "function": "checked",
+        "attempts": 754115009,
+        "entries": 18849262,
+        "per_entry": 40.00766762115143
+      },
+      {
+        "arm": "cap",
+        "function": "cap_malloc_validate",
+        "attempts": 678717961,
+        "entries": 18849262,
+        "per_entry": 36.00766762115143
+      },
+      {
+        "arm": "cap",
+        "function": "__capstone_mallocng_malloc",
+        "attempts": 2110045734,
+        "entries": 20158940,
+        "per_entry": 104.67047047116564
+      },
+      {
+        "arm": "cap",
+        "function": "enframe",
+        "attempts": 2833427808,
+        "entries": 20390558,
+        "per_entry": 138.95783568061256
+      },
+      {
+        "arm": "cap",
+        "function": "__capstone_mallocng_free_slot",
+        "attempts": 2178811830,
+        "entries": 18376529,
+        "per_entry": 118.56492757691075
+      },
+      {
+        "arm": "cap",
+        "function": "__capstone_malloc_prepare_free",
+        "attempts": 80605059,
+        "entries": 2237465,
+        "per_entry": 36.02517089652799
+      },
+      {
+        "arm": "cap",
+        "function": "__capstone_malloc_slot_take",
+        "attempts": 429489438,
+        "entries": 20390558,
+        "per_entry": 21.063152759232974
+      },
+      {
+        "arm": "cap",
+        "function": "__capstone_malloc_slot_key",
+        "attempts": 780988048,
+        "entries": 20863294,
+        "per_entry": 37.43359260527125
+      },
+      {
+        "arm": "cap",
+        "function": "__capstone_malloc_slot_release",
+        "attempts": 645792438,
+        "entries": 18376528,
+        "per_entry": 35.14224438914685
+      },
+      {
+        "arm": "cap",
+        "function": "__capstone_malloc_slot_start",
+        "attempts": 42301938,
+        "entries": 21150969,
+        "per_entry": 2.0
+      },
+      {
+        "arm": "cap",
+        "function": "calloc",
+        "attempts": 221124041,
+        "entries": 5778263,
+        "per_entry": 38.26825483713704
+      },
+      {
+        "arm": "cap",
+        "function": "realloc",
+        "attempts": 399932664,
+        "entries": 2710518,
+        "per_entry": 147.54842579905392
+      },
+      {
+        "arm": "cap",
+        "function": "memset",
+        "attempts": 974461827,
+        "entries": 19211942,
+        "per_entry": 50.72167233276053
+      },
+      {
+        "arm": "cap",
+        "function": "S_regmatch",
+        "attempts": 11388349929,
+        "entries": 3367791,
+        "per_entry": 3381.5488933250313
+      },
+      {
+        "arm": "rv64",
+        "function": "malloc",
+        "attempts": 17725779,
+        "entries": 17725779,
+        "per_entry": 1.0
+      },
+      {
+        "arm": "rv64",
+        "function": "__libc_malloc_impl",
+        "attempts": 1326151363,
+        "entries": 19826396,
+        "per_entry": 66.88817085061753
+      },
+      {
+        "arm": "rv64",
+        "function": "free",
+        "attempts": 15983361,
+        "entries": 15983361,
+        "per_entry": 1.0
+      },
+      {
+        "arm": "rv64",
+        "function": "__libc_free",
+        "attempts": 1270586490,
+        "entries": 18083659,
+        "per_entry": 70.26158201722339
+      },
+      {
+        "arm": "rv64",
+        "function": "enframe",
+        "attempts": 1298198216,
+        "entries": 20094635,
+        "per_entry": 64.60421978304159
+      },
+      {
+        "arm": "rv64",
+        "function": "get_meta",
+        "attempts": 881076546,
+        "entries": 18251379,
+        "per_entry": 48.274519202083304
+      },
+      {
+        "arm": "rv64",
+        "function": "nontrivial_free",
+        "attempts": 250954038,
+        "entries": 4992501,
+        "per_entry": 50.26619684202367
+      },
+      {
+        "arm": "rv64",
+        "function": "calloc",
+        "attempts": 228238569,
+        "entries": 5789335,
+        "per_entry": 39.423969937825326
+      },
+      {
+        "arm": "rv64",
+        "function": "realloc",
+        "attempts": 2722362,
+        "entries": 2722362,
+        "per_entry": 1.0
+      },
+      {
+        "arm": "rv64",
+        "function": "memset",
+        "attempts": 1054790896,
+        "entries": 19291075,
+        "per_entry": 54.67766290888403
+      },
+      {
+        "arm": "rv64",
+        "function": "S_regmatch",
+        "attempts": 9359177274,
+        "entries": 3367789,
+        "per_entry": 2779.0272116216306
+      }
+    ],
+    "lane-full": [
+      {
+        "arm": "cap",
+        "function": "malloc",
+        "attempts": 60712870,
+        "entries": 12142574,
+        "per_entry": 5.0
+      },
+      {
+        "arm": "cap",
+        "function": "allocate",
+        "attempts": 1223410727,
+        "entries": 17921475,
+        "per_entry": 68.26506897451242
+      },
+      {
+        "arm": "cap",
+        "function": "publish",
+        "attempts": 822041107,
+        "entries": 17921475,
+        "per_entry": 45.869054137564014
+      },
+      {
+        "arm": "cap",
+        "function": "free",
+        "attempts": 1258854647,
+        "entries": 16139385,
+        "per_entry": 77.99892294532908
+      },
+      {
+        "arm": "cap",
+        "function": "checked",
+        "attempts": 783175075,
+        "entries": 18849262,
+        "per_entry": 41.54937604453691
+      },
+      {
+        "arm": "cap",
+        "function": "cap_malloc_validate",
+        "attempts": 707778026,
+        "entries": 18849262,
+        "per_entry": 37.54937599148444
+      },
+      {
+        "arm": "cap",
+        "function": "__capstone_mallocng_malloc",
+        "attempts": 2110434144,
+        "entries": 20159676,
+        "per_entry": 104.68591578555132
+      },
+      {
+        "arm": "cap",
+        "function": "enframe",
+        "attempts": 2850076619,
+        "entries": 20527435,
+        "per_entry": 138.8423161003798
+      },
+      {
+        "arm": "cap",
+        "function": "__capstone_mallocng_free_slot",
+        "attempts": 2182646088,
+        "entries": 18377264,
+        "per_entry": 118.76882695922527
+      },
+      {
+        "arm": "cap",
+        "function": "__capstone_malloc_prepare_free",
+        "attempts": 90178640,
+        "entries": 2238201,
+        "per_entry": 40.29067988085074
+      },
+      {
+        "arm": "cap",
+        "function": "__capstone_malloc_slot_take",
+        "attempts": 432379265,
+        "entries": 20527435,
+        "per_entry": 21.063482359096497
+      },
+      {
+        "arm": "cap",
+        "function": "__capstone_malloc_slot_key",
+        "attempts": 786179819,
+        "entries": 20999436,
+        "per_entry": 37.438139719561995
+      },
+      {
+        "arm": "cap",
+        "function": "__capstone_malloc_slot_release",
+        "attempts": 73509056,
+        "entries": 18377264,
+        "per_entry": 4.0
+      },
+      {
+        "arm": "cap",
+        "function": "__capstone_malloc_slot_start",
+        "attempts": 42303410,
+        "entries": 21151705,
+        "per_entry": 2.0
+      },
+      {
+        "arm": "cap",
+        "function": "calloc",
+        "attempts": 221158393,
+        "entries": 5778263,
+        "per_entry": 38.27419987632962
+      },
+      {
+        "arm": "cap",
+        "function": "realloc",
+        "attempts": 370117619,
+        "entries": 2710518,
+        "per_entry": 136.5486667124144
+      },
+      {
+        "arm": "cap",
+        "function": "memset",
+        "attempts": 992814133,
+        "entries": 19490028,
+        "per_entry": 50.93959500725192
+      },
+      {
+        "arm": "cap",
+        "function": "S_regmatch",
+        "attempts": 11388349923,
+        "entries": 3367791,
+        "per_entry": 3381.548891543448
+      },
+      {
+        "arm": "rv64",
+        "function": "malloc",
+        "attempts": 17725779,
+        "entries": 17725779,
+        "per_entry": 1.0
+      },
+      {
+        "arm": "rv64",
+        "function": "__libc_malloc_impl",
+        "attempts": 1326151363,
+        "entries": 19826396,
+        "per_entry": 66.88817085061753
+      },
+      {
+        "arm": "rv64",
+        "function": "free",
+        "attempts": 15983361,
+        "entries": 15983361,
+        "per_entry": 1.0
+      },
+      {
+        "arm": "rv64",
+        "function": "__libc_free",
+        "attempts": 1270586490,
+        "entries": 18083659,
+        "per_entry": 70.26158201722339
+      },
+      {
+        "arm": "rv64",
+        "function": "enframe",
+        "attempts": 1298198216,
+        "entries": 20094635,
+        "per_entry": 64.60421978304159
+      },
+      {
+        "arm": "rv64",
+        "function": "get_meta",
+        "attempts": 881076546,
+        "entries": 18251379,
+        "per_entry": 48.274519202083304
+      },
+      {
+        "arm": "rv64",
+        "function": "nontrivial_free",
+        "attempts": 250954038,
+        "entries": 4992501,
+        "per_entry": 50.26619684202367
+      },
+      {
+        "arm": "rv64",
+        "function": "calloc",
+        "attempts": 228238569,
+        "entries": 5789335,
+        "per_entry": 39.423969937825326
+      },
+      {
+        "arm": "rv64",
+        "function": "realloc",
+        "attempts": 2722362,
+        "entries": 2722362,
+        "per_entry": 1.0
+      },
+      {
+        "arm": "rv64",
+        "function": "memset",
+        "attempts": 1054790896,
+        "entries": 19291075,
+        "per_entry": 54.67766290888403
+      },
+      {
+        "arm": "rv64",
+        "function": "S_regmatch",
+        "attempts": 9359177274,
+        "entries": 3367789,
+        "per_entry": 2779.0272116216306
+      }
+    ]
+  },
+  "s_regmatch_mnemonics": {
+    "control-full": {
+      "cap": {
+        "li": 1309960439,
+        "ldc": 1063897016,
+        "stc": 822847631,
+        "movc": 773408556,
+        "addi": 559539654,
+        "bge": 501961516,
+        "j": 489436765,
+        "ld": 426482428,
+        "mv": 414164952,
+        "lw": 387098817,
+        "sd": 358917949,
+        "beqz": 333646632,
+        "add": 332398028,
+        "shrink": 331220042,
+        "lbu": 311940795,
+        "auipc": 273428778,
+        "sw": 272055438,
+        "blt": 251053952,
+        "bgeu": 224200090,
+        "bne": 197210203,
+        "scc": 188067866,
+        "beq": 178698995,
+        "cincoffsetimm": 171201563,
+        "cincoffset": 163448053,
+        "addiw": 159774012,
+        "lui": 138190242,
+        "slli": 131468994,
+        "lhu": 116783427,
+        "andi": 94596553,
+        "bltu": 74118879,
+        "bnez": 73355316,
+        "jalr": 47629669,
+        "sub": 45830998,
+        "xori": 24365058,
+        "lwu": 18941232,
+        "and": 17871177,
+        "srli": 15457202,
+        "ori": 14359690,
+        "sb": 13268586,
+        "sext.w": 12986191,
+        "srl": 8693113,
+        "addw": 7199683,
+        "bltz": 5525829,
+        "sltu": 4852356,
+        "bgez": 4412302,
+        "neg": 3411741,
+        "<d3": 3367791,
+        "<27": 3367791,
+        "ret": 3367791,
+        "srlw": 1735444,
+        "<33": 1700565,
+        "sh": 1266676,
+        "subw": 496379,
+        "lb": 486993,
+        "<3b": 457121,
+        "not": 456422,
+        "srliw": 439412,
+        "lh": 421690,
+        "srai": 294266,
+        "zext.b": 268578,
+        "sllw": 236613,
+        "<b3": 167556,
+        "xor": 135724,
+        "seqz": 135514,
+        "or": 117327,
+        "snez": 43377,
+        "blez": 4662,
+        "slliw": 1684,
+        "sraiw": 842,
+        "sltiu": 778,
+        "bgtz": 275,
+        "sgtz": 250,
+        "<87": 0,
+        "<07": 0
+      },
+      "rv64": {
+        "ld": 1691780582,
+        "addi": 1328445956,
+        "sd": 1125644743,
+        "lw": 514651306,
+        "j": 438746062,
+        "mv": 412851498,
+        "add": 385657296,
+        "li": 350605561,
+        "bgeu": 337661880,
+        "auipc": 316539168,
+        "lbu": 312083345,
+        "sw": 288345226,
+        "slli": 268299220,
+        "beqz": 253788664,
+        "addiw": 156863334,
+        "jr": 128466749,
+        "bne": 121978935,
+        "lhu": 116783416,
+        "and": 101449737,
+        "andi": 94596540,
+        "seqz": 84487167,
+        "bltu": 71222669,
+        "bge": 65802136,
+        "bnez": 63484785,
+        "jal": 46951013,
+        "sub": 46024914,
+        "beq": 36938768,
+        "lui": 30830721,
+        "xori": 24365052,
+        "blt": 21906390,
+        "lwu": 18941229,
+        "srli": 15932715,
+        "ori": 14359689,
+        "sb": 13268586,
+        "sext.w": 12986191,
+        "srl": 8693113,
+        "bgez": 7938866,
+        "addw": 7199681,
+        "sltu": 4852356,
+        "neg": 3409591,
+        "ret": 3367789,
+        "mul": 1875904,
+        "bltz": 1741383,
+        "srlw": 1735444,
+        "sh": 1266676,
+        "jalr": 516711,
+        "not": 510241,
+        "subw": 496379,
+        "mulw": 457121,
+        "srliw": 439412,
+        "lh": 421690,
+        "lb": 344510,
+        "srai": 294266,
+        "zext.b": 271288,
+        "sllw": 236613,
+        "xor": 135724,
+        "or": 117327,
+        "snez": 103826,
+        "blez": 6291,
+        "slliw": 1684,
+        "sraiw": 842,
+        "sltiu": 778,
+        "bgtz": 275,
+        "sgtz": 250,
+        "fld": 0,
+        "fmv.d.x": 0,
+        "fmv.x.d": 0,
+        "feq.d": 0
+      }
+    },
+    "lane-full": {
+      "cap": {
+        "li": 1309960416,
+        "ldc": 1063897016,
+        "stc": 822847642,
+        "movc": 773408557,
+        "addi": 559539659,
+        "bge": 501961516,
+        "j": 489436768,
+        "ld": 426482431,
+        "mv": 414164948,
+        "lw": 387098822,
+        "sd": 358917947,
+        "beqz": 333646634,
+        "add": 332398030,
+        "shrink": 331220051,
+        "lbu": 311940795,
+        "auipc": 273428781,
+        "sw": 272055436,
+        "blt": 251053949,
+        "bgeu": 224200092,
+        "bne": 197210204,
+        "scc": 188067861,
+        "beq": 178698995,
+        "cincoffsetimm": 171201566,
+        "cincoffset": 163448051,
+        "addiw": 159774009,
+        "lui": 138190242,
+        "slli": 131468994,
+        "lhu": 116783424,
+        "andi": 94596550,
+        "bltu": 74118878,
+        "bnez": 73355311,
+        "jalr": 47629669,
+        "sub": 45830995,
+        "xori": 24365058,
+        "lwu": 18941230,
+        "and": 17871179,
+        "srli": 15457204,
+        "ori": 14359689,
+        "sb": 13268587,
+        "sext.w": 12986191,
+        "srl": 8693113,
+        "addw": 7199683,
+        "bltz": 5525829,
+        "sltu": 4852356,
+        "bgez": 4412302,
+        "neg": 3411741,
+        "ret": 3367792,
+        "<d3": 3367791,
+        "<27": 3367791,
+        "srlw": 1735444,
+        "<33": 1700564,
+        "sh": 1266676,
+        "subw": 496380,
+        "lb": 486993,
+        "<3b": 457121,
+        "not": 456422,
+        "srliw": 439412,
+        "lh": 421690,
+        "srai": 294266,
+        "zext.b": 268578,
+        "sllw": 236613,
+        "<b3": 167556,
+        "xor": 135724,
+        "seqz": 135514,
+        "or": 117327,
+        "snez": 43377,
+        "blez": 4662,
+        "slliw": 1684,
+        "sraiw": 842,
+        "sltiu": 778,
+        "bgtz": 275,
+        "sgtz": 250,
+        "<87": 0,
+        "<07": 0
+      },
+      "rv64": {
+        "ld": 1691780582,
+        "addi": 1328445956,
+        "sd": 1125644743,
+        "lw": 514651306,
+        "j": 438746062,
+        "mv": 412851498,
+        "add": 385657296,
+        "li": 350605561,
+        "bgeu": 337661880,
+        "auipc": 316539168,
+        "lbu": 312083345,
+        "sw": 288345226,
+        "slli": 268299220,
+        "beqz": 253788664,
+        "addiw": 156863334,
+        "jr": 128466749,
+        "bne": 121978935,
+        "lhu": 116783416,
+        "and": 101449737,
+        "andi": 94596540,
+        "seqz": 84487167,
+        "bltu": 71222669,
+        "bge": 65802136,
+        "bnez": 63484785,
+        "jal": 46951013,
+        "sub": 46024914,
+        "beq": 36938768,
+        "lui": 30830721,
+        "xori": 24365052,
+        "blt": 21906390,
+        "lwu": 18941229,
+        "srli": 15932715,
+        "ori": 14359689,
+        "sb": 13268586,
+        "sext.w": 12986191,
+        "srl": 8693113,
+        "bgez": 7938866,
+        "addw": 7199681,
+        "sltu": 4852356,
+        "neg": 3409591,
+        "ret": 3367789,
+        "mul": 1875904,
+        "bltz": 1741383,
+        "srlw": 1735444,
+        "sh": 1266676,
+        "jalr": 516711,
+        "not": 510241,
+        "subw": 496379,
+        "mulw": 457121,
+        "srliw": 439412,
+        "lh": 421690,
+        "lb": 344510,
+        "srai": 294266,
+        "zext.b": 271288,
+        "sllw": 236613,
+        "xor": 135724,
+        "or": 117327,
+        "snez": 103826,
+        "blez": 6291,
+        "slliw": 1684,
+        "sraiw": 842,
+        "sltiu": 778,
+        "bgtz": 275,
+        "sgtz": 250,
+        "fld": 0,
+        "fmv.d.x": 0,
+        "fmv.x.d": 0,
+        "feq.d": 0
+      }
+    }
+  },
+  "census_module_identity": {
+    "control_module_sha256": "b3b5914a32d7f265fbd968439f09b63c1ecea986d5772a668bedab75b1d512f8",
+    "candidate_module_sha256": "22f6fa670a5b4b1aa6b29dfb6ed925d9912ba99325e055c89b29aa7d0c13e19c",
+    "text_sha256": "e252b848c1c54cab595f3fe400bba9f4f9a7b30dabe07ffdbae8dee0a39057cb",
+    "changed_sections": [
+      ".note.gnu.build-id",
+      ".rodata.str1.8"
+    ],
+    "section_headers_identical": true,
+    "whole_elf_equal_after_only_filename_and_build_id_normalization": true,
+    "source_filenames": [
+      "~/lanes/lanePH/census/runs/PH-control-full/adapter/module/capstone_vm.c",
+      "~/lanes/lanePH/census-B/runs/PH-lane-full/adapter/module/capstone_vm.c"
+    ],
+    "platform_checks": {
+      "500.perlbench_r/cap": {
+        "files": 10,
+        "all_other_files_identical": true,
+        "module_hashes_match_audit": true
+      },
+      "500.perlbench_r/rv64": {
+        "files": 10,
+        "all_other_files_identical": true,
+        "module_hashes_match_audit": true
+      },
+      "502.gcc_r/cap": {
+        "files": 10,
+        "all_other_files_identical": true,
+        "module_hashes_match_audit": true
+      },
+      "502.gcc_r/rv64": {
+        "files": 10,
+        "all_other_files_identical": true,
+        "module_hashes_match_audit": true
+      },
+      "538.imagick_r/cap": {
+        "files": 10,
+        "all_other_files_identical": true,
+        "module_hashes_match_audit": true
+      },
+      "538.imagick_r/rv64": {
+        "files": 10,
+        "all_other_files_identical": true,
+        "module_hashes_match_audit": true
+      },
+      "519.lbm_r/cap": {
+        "files": 10,
+        "all_other_files_identical": true,
+        "module_hashes_match_audit": true
+      },
+      "519.lbm_r/rv64": {
+        "files": 10,
+        "all_other_files_identical": true,
+        "module_hashes_match_audit": true
+      },
+      "544.nab_r/cap": {
+        "files": 10,
+        "all_other_files_identical": true,
+        "module_hashes_match_audit": true
+      },
+      "544.nab_r/rv64": {
+        "files": 10,
+        "all_other_files_identical": true,
+        "module_hashes_match_audit": true
+      },
+      "505.mcf_r/cap": {
+        "files": 10,
+        "all_other_files_identical": true,
+        "module_hashes_match_audit": true
+      },
+      "505.mcf_r/rv64": {
+        "files": 10,
+        "all_other_files_identical": true,
+        "module_hashes_match_audit": true
+      },
+      "557.xz_r/cap": {
+        "files": 10,
+        "all_other_files_identical": true,
+        "module_hashes_match_audit": true
+      },
+      "557.xz_r/rv64": {
+        "files": 10,
+        "all_other_files_identical": true,
+        "module_hashes_match_audit": true
+      }
+    }
+  },
+  "perl_pack_stub": [
+    {
+      "before": "b3e0961f7898f5bd40d0b2e22e54e522a1769fdba670b6e1be212a5a7f17a9f5",
+      "checks_stubbed": 4,
+      "after": "e32d7f517eb98a9d4757b9ef411c84654cff4f0c9af6c55384c590927cfb3830",
+      "action": "stubbed"
+    },
+    {
+      "before": "e32d7f517eb98a9d4757b9ef411c84654cff4f0c9af6c55384c590927cfb3830",
+      "checks_stubbed": 4,
+      "after": "e32d7f517eb98a9d4757b9ef411c84654cff4f0c9af6c55384c590927cfb3830",
+      "action": "already stubbed"
+    }
+  ]
+}
