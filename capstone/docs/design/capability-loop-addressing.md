@@ -27,10 +27,12 @@ apply to all non-integral address spaces in this fork, not just AS200. CodeGenPr
 shares same-sign constant offsets from the offset closest to zero.
 The new cursor lies between the base and each original final cursor. It is
 placed at a dominating original GEP or at a common dominator from which
-every path reaches a group GEP or a load/ordinary store through the exact
-base. The coverage walk refuses uncovered exits, cycles and calls that may
-not transfer control; capability stores are not evidence because they can
-initialize an UNINIT base. Otherwise the existing non-null speculation rule
+every path reaches a group GEP or a load through the exact base. Loads reject
+UNINIT and sealed capabilities, as does cursor arithmetic. No store establishes
+coverage: ordinary stores at immediate zero, as well as capability stores,
+can use an UNINIT base. The earlier claim that ordinary stores establish this
+proof was wrong. The coverage walk refuses uncovered exits, cycles and calls
+that may not transfer control. Otherwise the existing non-null speculation rule
 is required. Negative groups use the mirrored interval from their maximum
 offset to zero, with nonpositive residuals. Opposite signs form separate
 groups; a target-preferred base outside the applicable interval is ignored.

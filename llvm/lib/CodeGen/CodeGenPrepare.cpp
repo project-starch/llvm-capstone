@@ -6612,8 +6612,10 @@ bool CodeGenPrepare::mergeSExts(Function &F) {
 }
 
 // Prove forward coverage from InsertPt, stopping at an original group GEP or
-// an access through the exact base. Uncovered exits, cycles and instructions
-// that may leave the function must not acquire capability arithmetic.
+// a load through the exact base. Loads reject UNINIT and sealed capabilities,
+// as does cursor arithmetic. Stores, including ordinary stores at offset zero,
+// can use an UNINIT base and cannot establish coverage. Uncovered exits, cycles
+// and instructions that may leave the function must not acquire arithmetic.
 static bool capabilityBaseUsedOnEveryPath(
     Instruction *InsertPt, Value *Base,
     const SmallPtrSetImpl<Instruction *> &GEPs) {
@@ -6628,13 +6630,6 @@ static bool capabilityBaseUsedOnEveryPath(
       Value *Address = nullptr;
       if (auto *Load = dyn_cast<LoadInst>(&I))
         Address = Load->getPointerOperand();
-      else if (auto *Store = dyn_cast<StoreInst>(&I)) {
-        // Capability stores can initialize an UNINIT base, on which cursor
-        // arithmetic is forbidden. Only ordinary stores establish this proof.
-        if (!I.getDataLayout().isNonIntegralPointerType(
-                Store->getValueOperand()->getType()))
-          Address = Store->getPointerOperand();
-      }
       if (GEPs.contains(&I) || Address == Base) {
         Covered.insert(BB);
         break;
