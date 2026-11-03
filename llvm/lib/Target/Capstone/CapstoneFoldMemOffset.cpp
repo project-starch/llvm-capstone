@@ -18,12 +18,24 @@
 #include "Capstone.h"
 #include "CapstoneSubtarget.h"
 #include "llvm/ADT/DenseSet.h"
+#include "llvm/ADT/Statistic.h"
+#include "llvm/CodeGen/MachineConstantPool.h"
 #include "llvm/CodeGen/MachineFunctionPass.h"
+#include "llvm/Target/TargetLoweringObjectFile.h"
+#include "llvm/Target/TargetMachine.h"
 #include <queue>
 
 using namespace llvm;
 
+bool capstoneImageGpAbiActive(); // CapstoneISelDAGToDAG.cpp
+
 #define DEBUG_TYPE "capstone-fold-mem-offset"
+
+STATISTIC(NumPoolChainsRebased, "Constant-pool chains rebased onto the pool base");
+STATISTIC(NumPoolChainsBelowBase,
+          "Constant-pool chains refused: a displacement below the base");
+STATISTIC(NumPoolChainsBeyondImm,
+          "Constant-pool chains refused: a displacement beyond 2047");
 #define Capstone_FOLD_MEM_OFFSET_NAME "Capstone Fold Memory Offset"
 
 namespace {
@@ -302,17 +314,214 @@ bool CapstoneFoldMemOffset::foldOffset(
   return true;
 }
 
+static bool isPoolLoadOpc(unsigned Opc) {
+  switch (Opc) {
+  default:
+    return false;
+  case Capstone::LB:
+  case Capstone::LBU:
+  case Capstone::LH:
+  case Capstone::LHU:
+  case Capstone::LW:
+  case Capstone::LWU:
+  case Capstone::LD:
+  case Capstone::LDC:
+  case Capstone::FLH:
+  case Capstone::FLW:
+  case Capstone::FLD:
+    return true;
+  }
+}
+
+// Constant-pool base sharing (image-gp ABI only).
+//
+// Each constant-pool entry a function reads is lowered to its own address and
+// capability:
+//
+//   %a_i   = PseudoLLA %const.i            (auipc + addi, the entry's address)
+//   %cap_i = PseudoCapGlobalBase %a_i      (scc cap_i, gp, a_i)
+//   %v     = FLD %cap_i, 0
+//
+// With N entries live across a loop that is N capability live ranges, and
+// 519.lbm_r's stream-collide loop spilled seven of them (an ldc per constant
+// per iteration) while 544.nab_r's mme34 re-derived six per iteration. Under
+// the image-gp ABI every mergeable entry of a function is emitted contiguously
+// into .rodata (CapstoneTargetObjectFile), in constant-pool order, padded to
+// each entry's alignment, so the byte offset of entry i from the function's
+// first such entry is known here. This rewrites every candidate chain to the
+// pool's lowest-addressed candidate entry B:
+//
+//   %a_i   = PseudoLLA %const.B
+//   %cap_i = PseudoCapGlobalBase %a_i
+//   %v     = FLD %cap_i, (off_i - off_B)
+//
+// after which Early MachineLICM and MachineCSE, which run next, hoist and merge
+// the now-identical PseudoLLA/PseudoCapGlobalBase pairs into one base
+// capability for the whole pool.
+//
+// Why this is legal under the rule that a rewrite may not change the value of
+// any surviving capability cursor (a cursor that moves can leave the
+// representable window or be refused by the address policy, after which it is
+// untagged): no surviving cursor moves. Every rewritten chain now forms the
+// cursor &cp#B, a real constant-pool address inside the image's .rodata,
+// inside gp's bounds, hence canonical and in bounds wherever &cp#i was (and
+// the address chain B itself forms, on whatever path it runs: B is chosen
+// among the candidates); the chains that formed &cp#i are removed, not moved,
+// and &cp#B is the lowest candidate address, so the base moves DOWN from
+// every &cp#i it replaces and never towards the top of the user half. Every
+// access's effective address is unchanged: &cp#B + (off_i - off_B + imm) =
+// &cp#i + imm, and the new displacement lies in [0, 2047] (checked per load:
+// a load that carried a negative immediate off a higher entry would otherwise
+// become a negative displacement off the base, which the argument above does
+// not cover), so every access lies at or above the base, inside the pool, and
+// bounds and permissions are still checked at each access against gp's. Only
+// the access is checked, as before (foldThroughGlobalBase in
+// CapstoneMergeBaseOffset relies on the same property of gp-derived pool
+// capabilities).
+//
+// The layout prediction uses the same hook as AsmPrinter::emitConstantPool
+// (the five-argument getSectionForConstant); under the image-gp ABI the
+// Capstone override ignores the profile suffix, so passing an empty suffix
+// here predicts exactly what the printer emits with any profile.
+static bool rebaseConstantPool(MachineFunction &MF, MachineRegisterInfo &MRI) {
+  if (!capstoneImageGpAbiActive())
+    return false;
+  const MachineConstantPool *MCP = MF.getConstantPool();
+  if (!MCP)
+    return false;
+  const std::vector<MachineConstantPoolEntry> &CP = MCP->getConstants();
+  if (CP.size() < 2)
+    return false;
+
+  const DataLayout &DL = MF.getDataLayout();
+  const TargetLoweringObjectFile &TLOF =
+      *MF.getTarget().getObjFileLowering();
+  const MCSection *ROSection = TLOF.getReadOnlySection();
+
+  // Byte offset of every entry the printer will place in .rodata, in its
+  // algorithm (AsmPrinter::emitConstantPool: constant-pool order, each entry
+  // aligned to its own alignment, offsets relative to the section's start).
+  DenseMap<unsigned, int64_t> PoolOffset;
+  uint64_t Offset = 0;
+  for (unsigned I = 0, E = CP.size(); I != E; ++I) {
+    const MachineConstantPoolEntry &CPE = CP[I];
+    Align Alignment = CPE.getAlign();
+    SectionKind Kind = CPE.getSectionKind(&DL);
+    const Constant *C =
+        CPE.isMachineConstantPoolEntry() ? nullptr : CPE.Val.ConstVal;
+    const MCSection *S =
+        TLOF.getSectionForConstant(DL, Kind, C, Alignment, /*Suffix=*/"");
+    if (S != ROSection)
+      continue;
+    uint64_t Aligned = alignTo(Offset, CPE.getAlign());
+    PoolOffset[I] = Aligned;
+    Offset = Aligned + CPE.getSizeInBytes(DL);
+  }
+  if (PoolOffset.size() < 2)
+    return false;
+
+  struct Candidate {
+    MachineInstr *LLA;
+    int64_t EntryOffset;
+    SmallVector<MachineInstr *, 4> Loads;
+  };
+  SmallVector<Candidate, 16> Candidates;
+
+  for (MachineBasicBlock &MBB : MF) {
+    for (MachineInstr &MI : MBB) {
+      if (MI.getOpcode() != Capstone::PseudoLLA)
+        continue;
+      const MachineOperand &CPOp = MI.getOperand(1);
+      if (!CPOp.isCPI() || CPOp.getTargetFlags() != 0 || CPOp.getOffset() != 0)
+        continue;
+      auto It = PoolOffset.find(CPOp.getIndex());
+      if (It == PoolOffset.end())
+        continue;
+      Register AddrReg = MI.getOperand(0).getReg();
+      if (!AddrReg.isVirtual() || !MRI.hasOneNonDBGUse(AddrReg))
+        continue;
+      MachineInstr &BaseMI = *MRI.use_instr_nodbg_begin(AddrReg);
+      if (BaseMI.getOpcode() != Capstone::PseudoCapGlobalBase ||
+          BaseMI.getOperand(1).getReg() != AddrReg)
+        continue;
+      Register CapReg = BaseMI.getOperand(0).getReg();
+      if (!CapReg.isVirtual() || MRI.use_nodbg_empty(CapReg))
+        continue;
+      // Every use of the capability must be the base of a load with an
+      // immediate displacement: anything else (a store of it, a copy, a cursor
+      // read, a cursor move) would see the shared cursor instead of &cp#i.
+      SmallVector<MachineInstr *, 4> Loads;
+      bool AllLoads = true;
+      for (MachineOperand &UseMO : MRI.use_nodbg_operands(CapReg)) {
+        MachineInstr &UseMI = *UseMO.getParent();
+        if (!isPoolLoadOpc(UseMI.getOpcode()) ||
+            UseMI.getOperandNo(&UseMO) != 1 || !UseMI.getOperand(2).isImm()) {
+          AllLoads = false;
+          break;
+        }
+        Loads.push_back(&UseMI);
+      }
+      if (!AllLoads)
+        continue;
+      Candidates.push_back({&MI, It->second, std::move(Loads)});
+    }
+  }
+  if (Candidates.size() < 2)
+    return false;
+
+  // The shared base is the lowest-addressed candidate entry: an address the
+  // program forms itself, and every displacement from it is non-negative.
+  const Candidate *BaseCand = &Candidates[0];
+  for (const Candidate &Cand : Candidates)
+    if (Cand.EntryOffset < BaseCand->EntryOffset)
+      BaseCand = &Cand;
+  unsigned BaseCPI = BaseCand->LLA->getOperand(1).getIndex();
+  int64_t BaseOffset = BaseCand->EntryOffset;
+
+  bool Changed = false;
+  for (Candidate &Cand : Candidates) {
+    int64_t Disp = Cand.EntryOffset - BaseOffset;
+    assert(Disp >= 0 && "the base is the lowest candidate entry");
+    if (Disp == 0)
+      continue;
+    // Outside [0, 2047] the chain keeps its own entry (and its own base): the
+    // upper bound is the load's simm12, the lower one the argument above.
+    if (llvm::any_of(Cand.Loads, [&](MachineInstr *LoadMI) {
+          return LoadMI->getOperand(2).getImm() + Disp < 0;
+        })) {
+      ++NumPoolChainsBelowBase;
+      continue;
+    }
+    if (llvm::any_of(Cand.Loads, [&](MachineInstr *LoadMI) {
+          return !isInt<12>(LoadMI->getOperand(2).getImm() + Disp);
+        })) {
+      ++NumPoolChainsBeyondImm;
+      continue;
+    }
+    ++NumPoolChainsRebased;
+    MachineOperand &CPOp = Cand.LLA->getOperand(1);
+    CPOp.setIndex(BaseCPI);
+    for (MachineInstr *LoadMI : Cand.Loads)
+      LoadMI->getOperand(2).setImm(LoadMI->getOperand(2).getImm() + Disp);
+    Changed = true;
+  }
+  return Changed;
+}
+
 bool CapstoneFoldMemOffset::runOnMachineFunction(MachineFunction &MF) {
   if (skipFunction(MF.getFunction()))
     return false;
 
-  // This optimization may increase size by preventing compression.
-  if (MF.getFunction().hasOptSize())
-    return false;
-
   MachineRegisterInfo &MRI = MF.getRegInfo();
 
-  bool MadeChange = false;
+  // Before the fold walk, and before Early MachineLICM / MachineCSE, which
+  // this pass precedes: they do the hoisting and merging the rebase enables.
+  bool MadeChange = rebaseConstantPool(MF, MRI);
+
+  // This optimization may increase size by preventing compression.
+  if (MF.getFunction().hasOptSize())
+    return MadeChange;
+
   for (MachineBasicBlock &MBB : MF) {
     for (MachineInstr &MI : llvm::make_early_inc_range(MBB)) {
       // FIXME: We can support ADDIW from an LUI+ADDIW pair if the result is

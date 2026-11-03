@@ -1,0 +1,59 @@
+# CapstoneFoldMemOffset::rebaseConstantPool, pinned in MIR: the chains that
+# share the pool's lowest candidate entry and the ones that do not.
+#
+# Entries cp#0 (offset 0) and cp#1 (offset 8). The base is cp#0, chain A's own
+# entry. Chain B (cp#1, load at 0) is rebased: `PseudoLLA %const.0`, `FLD 8`.
+# Chain C (cp#1, load at -16) is NOT: its displacement off the base would be
+# -8, below the base, and the legality argument covers displacements in
+# [0, 2047] only (the first version of this change checked simm12 alone and
+# produced `LB cap0, -8`). Chain D (cp#1, load at 2040) is not either: 2048 is
+# outside simm12. Refused chains keep their own entry and their own base.
+#
+# RUN: llc -mtriple=capstone64 -mattr=+m,+f,+d -capstone-gp-free -capstone-image-gp -run-pass=capstone-fold-mem-offset -verify-machineinstrs -o - %s | FileCheck %s
+--- |
+  target triple = "capstone64"
+  define void @rebase() { ret void }
+...
+---
+# CHECK-LABEL: name: rebase
+# CHECK:       [[A:%[0-9]+]]:gpr = PseudoLLA %const.0
+# CHECK-NEXT:  [[AC:%[0-9]+]]:gpcr = PseudoCapGlobalBase [[A]], implicit $x3
+# CHECK-NEXT:  {{%[0-9]+}}:fpr64 = FLD [[AC]], 0
+# CHECK-NEXT:  [[B:%[0-9]+]]:gpr = PseudoLLA %const.0
+# CHECK-NEXT:  [[BC:%[0-9]+]]:gpcr = PseudoCapGlobalBase [[B]], implicit $x3
+# CHECK-NEXT:  {{%[0-9]+}}:fpr64 = FLD [[BC]], 8
+# CHECK-NEXT:  [[C:%[0-9]+]]:gpr = PseudoLLA %const.1
+# CHECK-NEXT:  [[CC:%[0-9]+]]:gpcr = PseudoCapGlobalBase [[C]], implicit $x3
+# CHECK-NEXT:  {{%[0-9]+}}:gpr = LB [[CC]], -16
+# CHECK-NEXT:  [[D:%[0-9]+]]:gpr = PseudoLLA %const.1
+# CHECK-NEXT:  [[DC:%[0-9]+]]:gpcr = PseudoCapGlobalBase [[D]], implicit $x3
+# CHECK-NEXT:  {{%[0-9]+}}:gpr = LB [[DC]], 2040
+name: rebase
+tracksRegLiveness: true
+constants:
+  - id: 0
+    value: 'double 1.000000e+00'
+    alignment: 8
+  - id: 1
+    value: 'double 2.000000e+00'
+    alignment: 8
+body: |
+  bb.0:
+    %0:gpr = PseudoLLA %const.0
+    %1:gpcr = PseudoCapGlobalBase %0, implicit $x3
+    %2:fpr64 = FLD %1, 0 :: (load (s64) from constant-pool, addrspace 200)
+    %3:gpr = PseudoLLA %const.1
+    %4:gpcr = PseudoCapGlobalBase %3, implicit $x3
+    %5:fpr64 = FLD %4, 0 :: (load (s64) from constant-pool, addrspace 200)
+    %6:gpr = PseudoLLA %const.1
+    %7:gpcr = PseudoCapGlobalBase %6, implicit $x3
+    %8:gpr = LB %7, -16 :: (load (s8) from constant-pool, addrspace 200)
+    %9:gpr = PseudoLLA %const.1
+    %10:gpcr = PseudoCapGlobalBase %9, implicit $x3
+    %11:gpr = LB %10, 2040 :: (load (s8) from constant-pool, addrspace 200)
+    %12:fpr64 = nofpexcept FADD_D %2, %5, 7, implicit $frm
+    %13:gpr = ADD %8, %11
+    $f10_d = COPY %12
+    $x10 = COPY %13
+    PseudoRET implicit $f10_d, implicit $x10
+...
