@@ -6609,6 +6609,64 @@ bool CodeGenPrepare::mergeSExts(Function &F) {
   return Changed;
 }
 
+// Prove forward coverage from InsertPt, stopping at an original group GEP or
+// an access through the exact base. Uncovered exits, cycles and instructions
+// that may leave the function must not acquire capability arithmetic.
+static bool capabilityBaseUsedOnEveryPath(
+    Instruction *InsertPt, Value *Base,
+    const SmallPtrSetImpl<Instruction *> &GEPs) {
+  SmallVector<BasicBlock *, 16> Blocks(1, InsertPt->getParent());
+  SmallPtrSet<BasicBlock *, 16> Seen;
+  SmallPtrSet<BasicBlock *, 16> Covered;
+  Seen.insert(InsertPt->getParent());
+  for (unsigned N = 0; N != Blocks.size(); ++N) {
+    BasicBlock *BB = Blocks[N];
+    auto Begin = N == 0 ? InsertPt->getIterator() : BB->begin();
+    for (Instruction &I : make_range(Begin, BB->end())) {
+      Value *Address = nullptr;
+      if (auto *Load = dyn_cast<LoadInst>(&I))
+        Address = Load->getPointerOperand();
+      else if (auto *Store = dyn_cast<StoreInst>(&I)) {
+        // Capability stores can initialize an UNINIT base, on which cursor
+        // arithmetic is forbidden. Only ordinary stores establish this proof.
+        if (!I.getDataLayout().isNonIntegralPointerType(
+                Store->getValueOperand()->getType()))
+          Address = Store->getPointerOperand();
+      }
+      if (GEPs.contains(&I) || Address == Base) {
+        Covered.insert(BB);
+        break;
+      }
+      if (!isGuaranteedToTransferExecutionToSuccessor(&I))
+        return false;
+    }
+    if (Covered.contains(BB))
+      continue;
+    if (succ_empty(BB))
+      return false;
+    for (BasicBlock *Succ : successors(BB))
+      if (Seen.insert(Succ).second) {
+        // Bound compile time; a larger graph simply retains its original GEPs.
+        if (Blocks.size() == 64)
+          return false;
+        Blocks.push_back(Succ);
+      }
+  }
+  bool Changed;
+  do {
+    Changed = false;
+    for (BasicBlock *BB : reverse(Blocks))
+      if (!Covered.contains(BB) &&
+          all_of(successors(BB), [&](BasicBlock *Succ) {
+            return Covered.contains(Succ);
+          })) {
+        Covered.insert(BB);
+        Changed = true;
+      }
+  } while (Changed);
+  return Covered.contains(InsertPt->getParent());
+}
+
 // Splitting large data structures so that the GEPs accessing them can have
 // smaller offsets so that they can be sunk to the same blocks as their users.
 // For example, a large struct starting from %base is split into two parts
@@ -6670,8 +6728,8 @@ bool CodeGenPrepare::splitLargeGEPOffsets() {
     // every new cursor lies between OldBase and the original final cursor.
     // Both the representable window and the canonical address range preserve
     // tags along that interval. This does not justify speculating arithmetic
-    // on a sealed or uninitialised base: prefer an original GEP that dominates
-    // the group, or retain the existing non-null speculation rule (C-19).
+    // on a sealed or uninitialised base: require a covered insertion point,
+    // or retain the existing non-null speculation rule (C-19).
     Instruction *CapabilityInsertPt = nullptr;
     bool IsCapability = DL->isNonIntegralPointerType(OldBase->getType());
     if (IsCapability) {
@@ -6686,6 +6744,15 @@ bool CodeGenPrepare::splitLargeGEPOffsets() {
         if (G.first->getParent() == Common &&
             (!CapabilityInsertPt || G.first->comesBefore(CapabilityInsertPt)))
           CapabilityInsertPt = G.first;
+      }
+      if (!CapabilityInsertPt && Common &&
+          !Common->getTerminator()->isEHPad()) {
+        SmallPtrSet<Instruction *, 16> GEPs;
+        for (auto &G : LargeOffsetGEPs)
+          GEPs.insert(G.first);
+        if (capabilityBaseUsedOnEveryPath(Common->getTerminator(), OldBase,
+                                         GEPs))
+          CapabilityInsertPt = Common->getTerminator();
       }
       if (!CapabilityInsertPt && !isKnownNonZero(OldBase, *DL))
         continue;

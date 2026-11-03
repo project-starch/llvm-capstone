@@ -3,18 +3,18 @@
 ;
 ; Positive offsets permit sharing the smallest offset: the new cursor lies
 ; between the original base and every final cursor. Speculation is a separate
-; restriction: without a dominating original GEP or a known non-null base,
-; keep arithmetic on an unknown capability on its original path.
+; restriction: every path must reach a group GEP or an access through the base,
+; unless the base satisfies the existing non-null speculation rule.
 
 target datalayout = "e-m:e-p:64:128-p200:128:128:128:64-i64:64-i128:128-n32:64-S128-ni:200-A200-P200-G200"
 target triple = "capstone64-unknown-linux-gnu"
 ; CHECK-LABEL: @split(
 ; CHECK: entry:
-; CHECK-NOT: getelementptr
+; CHECK: [[BASE:%.*]] = getelementptr i8, ptr addrspace(200) %b, i64 4096
 ; CHECK: left:
-; CHECK: getelementptr i8, ptr addrspace(200) %b, i64 4096
+; CHECK: load i8, ptr addrspace(200) [[BASE]]
 ; CHECK: right:
-; CHECK: getelementptr i8, ptr addrspace(200) %b, i64 4097
+; CHECK: getelementptr i8, ptr addrspace(200) [[BASE]], i64 1
 ; CHECK: ret i8
 define i8 @split(ptr addrspace(200) %b, i1 %take) {
 entry:
