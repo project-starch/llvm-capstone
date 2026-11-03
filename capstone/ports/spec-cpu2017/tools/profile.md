@@ -79,6 +79,24 @@ window that crosses quanta, a prefault and a fault test whose retried stores mus
 twice, and an alias test (the same bytes at two addresses must be two records). `vtcheck.py`
 fails unless every check passes. Run it on every new platform before a measurement.
 
+## 500.perlbench_r needs its own arms
+
+perlbench's test input is `perlbench -I. -I./lib test.pl`, and test.pl's t/TEST chdirs into `t/`
+and runs each of its 317 scripts as a child perlbench, `../$^X`, waiting for each. Three things
+follow, and `config/profile-arms.example.json` carries them as the `cap-dev-perlbench` and
+`rv64-perlbench` arms:
+- The program path stays relative when the image is staged to tmpfs (`tools/capstone-run.sh`):
+  an absolute `/tmp/stage-...` there makes every child `..//tmp/stage-...`, which does not exist.
+- The Capstone arm needs two supervisor slots, `x-capstone-supervisor-slots=2` in its
+  `cpu_props` and `supervisor_slots=2` in its `module_params`. With one slot (the default of
+  both) the parent domain keeps the slot while it waits for the child, the child's launcher sleeps
+  in `vm_ioctl` waiting for that slot, and the guest idles at load 0.00 for as long as the run is
+  allowed to last: no window ever closes. Two slots carried every script of the test input when
+  it was run split into 32 groups of 10 (2026-11-03, all 32 groups validated).
+- The plain arm needs `share_model: mapped-xattr`: `t/op/stat.t` test 33 (`-o`) expects a file
+  the guest's root creates in the run directory to be root's, which `none` (host ownership) does
+  not give. With the image staged, nothing executes from the share.
+
 ## Long benchmarks
 
 perlbench, x264, mcf and xz test inputs run for 45-220 minutes. A slice "first N attempts"

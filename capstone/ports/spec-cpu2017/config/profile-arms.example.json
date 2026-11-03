@@ -33,6 +33,31 @@
       "share_model": "none",
       "commit": "llvm-capstone b9dd0ccc0b31, RISCV target, musl 1.2.5 pristine",
       "note": "the plain image executes from the share, which therefore keeps the host's permissions"
+    },
+    "cap-dev-perlbench": {
+      "kind": "capstone",
+      "config": "capstone-virtual",
+      "label": "cap-dev",
+      "sdk": "~/prof-dev/cap/sdk",
+      "exact_bounds": true,
+      "share_model": "mapped-xattr",
+      "commit": "llvm-capstone b9dd0ccc0b31 (dev 2026-11-02), SDK defaults: heap_lifetimes on, heap_scrub_free off",
+      "note": "500.perlbench_r: test.pl runs each of its 317 scripts as a child domain and waits for it; with one supervisor slot (QEMU's and the module's default) the waiting parent holds the slot and the child sleeps in vm_ioctl for it forever, so the arm needs two (QEMU property and module parameter)",
+      "stage_image": "tmpfs",
+      "cpu_props": [
+        "x-capstone-supervisor-slots=2"
+      ],
+      "module_params": "supervisor_slots=2"
+    },
+    "rv64-perlbench": {
+      "kind": "plain",
+      "config": "riscv-plain",
+      "label": "rv64",
+      "rvcc": "~/prof-dev/rv/rv-cc",
+      "share_model": "mapped-xattr",
+      "commit": "llvm-capstone b9dd0ccc0b31, RISCV target, musl 1.2.5 pristine",
+      "note": "500.perlbench_r: t/op/stat.t test 33 (-o) needs the files the guest's root creates in the run directory to be root's, which share_model none does not give; the staged image does not run from the share",
+      "stage_image": "tmpfs"
     }
   }
 }
