@@ -33,6 +33,12 @@ static void *at(const struct capstone_delegate_host *host, uint64_t offset) {
   return host->exchange + offset;
 }
 
+static int prepare_write(struct capstone_delegate_host *host, size_t offset, size_t bytes) {
+  if (offset > host->exchange_bytes || bytes > host->exchange_bytes - offset)
+    return EFAULT;
+  return bytes && host->prepare_write ? host->prepare_write(host, offset, bytes) : 0;
+}
+
 /* The wire carries RV64 numbers. On the guest they are the host's numbers;
  * the native tests run this same code on another architecture, so the table
  * below maps each delegated number to the build host's, where it exists. */
@@ -321,6 +327,10 @@ static long vector_call(struct capstone_delegate_host *host,
     offsets[i] = wire[0];
     iov[i].iov_base = host->bounce + wire[0];
     iov[i].iov_len = wire[1];
+    if (!writing) {
+      int error = prepare_write(host, wire[0], wire[1]);
+      if (error) return -error;
+    }
     memcpy(iov[i].iov_base, host->exchange + wire[0], wire[1]);
     total += wire[1];
   }
@@ -393,6 +403,17 @@ static long msg_call(struct capstone_delegate_host *host,
           if (private_fd(host, fd)) return -EBADF;
         }
       }
+  }
+  if (!sending) {
+    /* Use the same snapshot for admission, the syscall and copy-back. Admit
+       every possible destination before consuming a message or receiving FDs. */
+    for (uint64_t i = 0; i < view.block.iovlen; ++i)
+      if ((error = prepare_write(host, view.offsets[i], view.lengths[i]))) return -error;
+    if (view.block.name &&
+        (error = prepare_write(host, view.block.name, view.block.namelen))) return -error;
+    if (view.block.control &&
+        (error = prepare_write(host, view.block.control, view.block.controllen))) return -error;
+    if ((error = prepare_write(host, entry->args[1], sizeof view.block))) return -error;
   }
   long argv[6] = {(long)(int)entry->args[0], (long)(intptr_t)&m, (long)entry->args[2], 0, 0, 0};
   long r = capstone_signals_call(&host->signals, host_number(entry->nr), argv, 0, 0);
@@ -838,6 +859,17 @@ void capstone_delegate_serve(struct capstone_delegate_host *host,
     return;
   }
   s = capstone_delegate_shape(snapshot.nr);
+  /* Includes the special thread-name and signal-mask requests below. Nested
+     vector/message destinations are admitted by their snapshotting helpers. */
+  for (unsigned i = 0; i < s->argc; ++i)
+    if (((snapshot.flags >> i) & 1) && writes(s->args[i].kind) &&
+        (error = prepare_write(host, snapshot.args[i], lengths[i]))) {
+      ++host->refused;
+      entry->result = -error;
+      delegate_trace(host, &snapshot, -error);
+      capstone_signals_publish(&host->signals, entry, 0);
+      return;
+    }
   host->last_nr = snapshot.nr;
   long r;
   if (host->owner && first_context_only(&snapshot)) {
