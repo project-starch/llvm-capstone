@@ -74,17 +74,22 @@ def load(p):
     return d["total_attempts"], out
 
 
-ta, ba = load(sys.argv[1])
-if len(sys.argv) > 2:
-    tb, bb = load(sys.argv[2])
-    keys = sorted(set(ba) | set(bb), key=lambda k: -abs(bb.get(k, 0) - ba.get(k, 0)))
-    print(f"{'bucket':26s} {'A':>16s} {'B':>16s} {'B-A':>16s} {'share of delta':>14s}")
-    delta = tb - ta
-    for k in keys:
-        d = bb.get(k, 0) - ba.get(k, 0)
-        print(f"{k:26s} {ba.get(k, 0):16,} {bb.get(k, 0):16,} {d:+16,} {100 * d / delta if delta else 0:13.1f}%")
-    print(f"{'total':26s} {ta:16,} {tb:16,} {delta:+16,}")
-else:
-    for k, v in sorted(ba.items(), key=lambda kv: -kv[1]):
-        print(f"{k:26s} {v:16,} {100 * v / ta:6.2f}%")
-    print(f"{'total':26s} {ta:16,}")
+def main():
+    ta, ba = load(sys.argv[1])
+    if len(sys.argv) > 2:
+        tb, bb = load(sys.argv[2])
+        keys = sorted(set(ba) | set(bb), key=lambda k: -abs(bb.get(k, 0) - ba.get(k, 0)))
+        print(f"{'bucket':26s} {'A':>16s} {'B':>16s} {'B-A':>16s} {'share of delta':>14s}")
+        delta = tb - ta
+        for k in keys:
+            d = bb.get(k, 0) - ba.get(k, 0)
+            print(f"{k:26s} {ba.get(k, 0):16,} {bb.get(k, 0):16,} {d:+16,} {100 * d / delta if delta else 0:13.1f}%")
+        print(f"{'total':26s} {ta:16,} {tb:16,} {delta:+16,}")
+    else:
+        for k, v in sorted(ba.items(), key=lambda kv: -kv[1]):
+            print(f"{k:26s} {v:16,} {100 * v / ta:6.2f}%")
+        print(f"{'total':26s} {ta:16,}")
+
+
+if __name__ == "__main__":
+    main()
