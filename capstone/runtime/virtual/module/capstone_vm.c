@@ -936,17 +936,27 @@ static void restore_root(unsigned long root)
     (void)root;
     asm volatile("csrw 0x5c1, zero" : : : "memory");
 }
-/* Clear every capability tag in a page, keeping its bytes. A scalar store
+/* Clear every capability tag in a page; its bytes are dead (see below). A scalar store
  * clears the tag of the 16-byte granule it writes into, whatever its width
  * (capstone-qemu's store hook rounds both ends to granules; on the RTL a
  * plain store writes ctag 0 for the granule), so rewriting one 8-byte word
  * of each granule is enough: half the loads and stores of rewriting every
  * word, which was most of 519.lbm_r's module instructions. */
+/* A store to any word of a granule clears its tag; the data does not matter here, because a
+ * page reaches this function only on its way back to Linux (retire of an unmapped or destroyed
+ * arena, the tail a remap truncates), where every pinned page is exclusive anonymous memory
+ * (resolve() admits nothing else) and nobody reads it again. So one store of zero per granule,
+ * eight granules per iteration: the load-and-rewrite form it replaces cost a load, a store and
+ * the loop's three instructions per granule (2.9M attempts of a gcc test run's 2129 pages). */
 static void clear_page_tags(struct page *page)
 {
     unsigned long *p = page_address(page);
-    for (unsigned j = 0; j < PAGE_SIZE / sizeof(*p); j += 16 / sizeof(*p))
-        WRITE_ONCE(p[j], READ_ONCE(p[j]));
+    for (unsigned j = 0; j < PAGE_SIZE / sizeof(*p); j += 8 * 16 / sizeof(*p)) {
+        WRITE_ONCE(p[j], 0UL);      WRITE_ONCE(p[j + 2], 0UL);
+        WRITE_ONCE(p[j + 4], 0UL);  WRITE_ONCE(p[j + 6], 0UL);
+        WRITE_ONCE(p[j + 8], 0UL);  WRITE_ONCE(p[j + 10], 0UL);
+        WRITE_ONCE(p[j + 12], 0UL); WRITE_ONCE(p[j + 14], 0UL);
+    }
 }
 
 static int retire(struct context *c, struct arena *a, bool destroying)
