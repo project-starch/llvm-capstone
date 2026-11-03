@@ -317,6 +317,31 @@ static bool floor;
 #endif
 module_param(floor, bool, 0444);
 
+/* EXPERIMENT experiment/unpinned-domains (never lands): the floor made SAFE by a tag-aware
+ * guest Linux (linux experiment/tag-aware-mm: copy_highpage moves tags, arch_free_page clears
+ * them, arch_prepare_to_swap refuses tagged pages; capstone-qemu experiment/tag-copy's
+ * test-only CSRs). On top of floor: a fault on ANY arena of the domain, not only a lazy one,
+ * is resolved through the kernel's own fault path, because an unpinned page can be migrated,
+ * compacted or COW-copied under the domain and the next access then faults on an eager grant
+ * too. Implies floor. Compiled on with `make CV_UNPINNED=1`; read-only, recorded per run.
+ * Requires the tag-aware kernel: on a stock kernel it is the unsafe floor again. */
+#ifdef CV_UNPINNED
+static bool unpinned = true;
+#else
+static bool unpinned;
+#endif
+module_param(unpinned, bool, 0444);
+/* Faults the unpinned path answered on eager grants (moved or COW-protected pages). */
+static unsigned long unpinned_faults;
+module_param(unpinned_faults, ulong, 0444);
+
+/* EXPERIMENT: let a domain arena be backed by transparent huge pages (the VM_NOHUGEPAGE
+ * requirement of add() is dropped). Only meaningful with unpinned on a kernel built with
+ * CONFIG_TRANSPARENT_HUGEPAGE: per-page accounting is gone with the pins, and THP split and
+ * collapse copy tags through copy_highpage (split moves no bytes). */
+static bool thp;
+module_param(thp, bool, 0444);
+
 /* Pages a lazy-arena fault pins, from the faulting page on, clipped to the
  * arena, the VMA and the first page already pinned. 1 pins only the page. */
 static unsigned long pin_ahead_pages = 1;
@@ -1119,7 +1144,7 @@ static int add(struct context *c, struct cv_thread *t, struct cv_map *r)
                   ((r->permissions & 1) && !(v->vm_flags & (r->linear ? VM_MAYEXEC : VM_EXEC)));
         if (bad) { mmap_read_unlock(c->mm); return -EACCES; }
 #ifdef CONFIG_TRANSPARENT_HUGEPAGE
-        if (!(v->vm_flags & VM_NOHUGEPAGE)) {
+        if (!(v->vm_flags & VM_NOHUGEPAGE) && !(thp && unpinned)) {
             mmap_read_unlock(c->mm); return -EOPNOTSUPP;
         }
 #endif
@@ -1685,6 +1710,41 @@ static int resolve(struct context *c, struct cv_thread *t, u64 deadline)
         }
         rc = fixup_user_fault(c->mm, address, cause == 12 ? FAULT_FLAG_INSTRUCTION : 0, NULL);
         mmap_read_unlock(c->mm);
+        return rc;
+    }
+    if (a && !a->lazy && unpinned) {
+        /* EXPERIMENT unpinned: an eager grant's page was moved (migration, compaction) or
+         * write-protected (a fork's COW) under the domain. The grant was validated at add();
+         * here only what the kernel's fault path needs: a private VMA with the access. A
+         * private file mapping is allowed (image data: its pages are anonymous COW copies
+         * since add() populated them for write). Same repeat bound as the floor path. */
+        int rc;
+        mmap_read_lock(c->mm);
+        v = find_vma(c->mm, address);
+        if (!v || v->vm_start > address || !(v->vm_flags & required) ||
+            (v->vm_flags & VM_SHARED)) {
+            unsigned long f = v ? v->vm_flags : 0UL;
+            mmap_read_unlock(c->mm);
+            CV_RESOLVE_FAIL("unpinned-vma", "found %d flags 0x%lx", !!v, f);
+            return -EACCES;
+        }
+        vmflags = v->vm_flags;
+        if (address == t->last_fault_addr && cause == t->last_fault_cause) {
+            if (++t->fault_repeat > fault_repeat_max) {
+                mmap_read_unlock(c->mm);
+                CV_RESOLVE_FAIL("unpinned-loop", "resolved %u times with no change", t->fault_repeat);
+                return -ELOOP;
+            }
+        } else {
+            t->last_fault_addr = address;
+            t->last_fault_cause = cause;
+            t->fault_repeat = 0;
+        }
+        rc = fixup_user_fault(c->mm, address & PAGE_MASK,
+                              (vmflags & VM_WRITE) ? FAULT_FLAG_WRITE : 0, NULL);
+        mmap_read_unlock(c->mm);
+        if (rc) CV_RESOLVE_FAIL("unpinned", "fixup_user_fault=%d vm_flags 0x%lx", rc, vmflags);
+        ++unpinned_faults;
         return rc;
     }
     if (a && a->lazy) {
@@ -2473,6 +2533,7 @@ static struct miscdevice device = {
 };
 static int __init init(void)
 {
+    if (unpinned) floor = true;   /* EXPERIMENT: unpinned is floor + resolve for every arena */
 #ifdef CAPSTONE_VM_FLAT_TABLE
     /* Refuse the LOAD, so a bad value cannot reach a run. 2 because ids 0 and 1 are the header;
      * the maximum because silicon saturates capacity there; whole pages because the table is one

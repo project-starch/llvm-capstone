@@ -133,6 +133,18 @@ static size_t rounded(size_t n)
     while (size < n) size <<= 1;
     return size;
 }
+/* EXPERIMENT experiment/unpinned-domains (never lands): CAPSTONE_VM_HUGE=1 asks for transparent
+ * huge pages on the domain's private mappings instead of refusing them; only for the unpinned
+ * module with thp=1 on a tag-aware kernel built with THP (the pinned module refuses such VMAs). */
+static int huge_advice(void)
+{
+    static int advice = -1;
+    if (advice < 0) {
+        const char *v = getenv("CAPSTONE_VM_HUGE");
+        advice = v && !strcmp(v, "1") ? MADV_HUGEPAGE : MADV_NOHUGEPAGE;
+    }
+    return advice;
+}
 static void *private_pages(void *p, size_t bytes)
 {
     /* Demand resolution accounts for one base page at a time. The module
@@ -141,7 +153,7 @@ static void *private_pages(void *p, size_t bytes)
      * is asked only once. */
     static int no_huge_pages;
     if (no_huge_pages) return p;
-    if (madvise(p, bytes, MADV_NOHUGEPAGE)) {
+    if (madvise(p, bytes, huge_advice())) {
         if (errno == EINVAL) { no_huge_pages = 1; return p; }
         int error = errno; munmap(p, bytes); errno = error; return NULL;
     }
@@ -553,7 +565,7 @@ static int image_fd_layout(int fd, struct capstone_application_descriptor_v2 *de
 /* As private_pages: kernels without transparent huge pages refuse the advice. */
 static int no_huge_pages(void *p, size_t bytes)
 {
-    return madvise(p, bytes, MADV_NOHUGEPAGE) && errno != EINVAL ? -1 : 0;
+    return madvise(p, bytes, huge_advice()) && errno != EINVAL ? -1 : 0;
 }
 static int load(int fd, struct capstone_application_descriptor_v2 *desc, void **image,
                 size_t *bytes, size_t *rx_bytes, uintptr_t *entry, size_t *stack)

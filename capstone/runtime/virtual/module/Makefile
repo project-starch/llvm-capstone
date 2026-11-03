@@ -7,3 +7,8 @@ endif
 ifdef CV_FLOOR
 ccflags-y += -DCV_FLOOR
 endif
+# make CV_UNPINNED=1: EXPERIMENT build for a tag-aware guest Linux (linux experiment/tag-aware-mm):
+# floor + faults on every arena resolved by the kernel's fault path. Never lands.
+ifdef CV_UNPINNED
+ccflags-y += -DCV_UNPINNED
+endif
