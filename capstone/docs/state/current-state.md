@@ -1,21 +1,20 @@
 # Current Capstone state
 
-## 2026-11-03 — Fewer-exits runtime branch: review fixes qualified
+## 2026-11-04 — Fewer-exits runtime: third review repairs, landing gate pending
 
-`runtime/fewer-exits` (gp-cursor transport identity, adaptive fault-ahead,
-default on; `fault_ahead_max=0` disables it) passed a second adversarial review
-round in QEMU against dev `114b90b7be2e`. The arms ran sequentially through the
-p13 queue, and every required row ran. Runtime, memcached, hosted, nodes,
-pin-ahead and fp are identical; malloc, pthread and step-hooks differ only in
-the round's new or tightened checks, which fail on dev. Fixed this round:
-- identity slots are no longer recycled while they own the process wire;
-- the launcher serializes the shared process host;
-- explicit contexts are refused on a pthread's TLS;
-- pthread tids no longer collide with musl's lock-word waiter bit, which made
-  nested stdio locks in a virtual pthread deadlock (also on dev);
-- fault-ahead streams step over pages already admitted.
-QEMU only, no silicon claim. See the
-[runtime qualification and limits](../../runtime/virtual/README.md#qualification-and-limits).
+`runtime/fewer-exits` fixes a deadlock introduced by the previous review
+round: signal detach no longer waits for the process host lock while holding
+service_lock. A committed native blocking-serve test fails on the old tip
+and passes after the fix. The exhausted-slot gate again covers pthread
+creation and teardown as well as raw contexts sharing one wire; a constant
+fallback identity control fails three launches. Explicit context creation
+now checks the supplied TLS block, refusing another pthread's private
+transport too. These targeted checks pass on p12.
+
+The earlier QEMU qualification used dev `114b90b7be2e`. It did not establish
+that the launcher was deadlock-free. Landing still requires the repaired
+nine-gate comparison on current dev, including its default-off unpinned
+path. See the [runtime qualification and limits](../../runtime/virtual/README.md#qualification-and-limits).
 
 ## Read this first (2026-10-13)
 

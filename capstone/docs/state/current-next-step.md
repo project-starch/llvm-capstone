@@ -1,15 +1,11 @@
-**2026-11-03, fewer-exits runtime branch (fix round 2).** Adversarial review
-findings verified and fixed on the branch. Identity: a slot that still owns the
-process wire is quarantined, never reused. Launcher: every serve on the process
-host takes host_lock. Raw contexts on a pthread's TLS are refused. Virtual
-pthread tids now sit below musl's waiter bit; at 0x40000000 + id, a nested stdio
-lock in any pthread deadlocked, on dev too. Streams skip pages already admitted.
-The runtime gate keeps the shipped window except around its three demand-fault
-launches. Gates against dev `114b90b7be2e`: every difference is a new or
-tightened check failing on dev. Next: land after a re-gate on the current dev
-(rebased without conflicts, not re-gated). Nonlocal exits from a handler inside
-a delegated round remain unsupported: no unwinding, only no aliasing. See the
-[runtime limits](../../runtime/virtual/README.md#qualification-and-limits).
+**2026-11-04, fewer-exits runtime branch (fix round 3).** The blocking-detach
+regression, exhausted-slot pthread coverage and target-TLS refusal are
+repaired and targeted on p12. Next: prepare a detached landing on current
+dev and qualify native contracts and both complete gate arms, with 32-slot
+modules and one queued arm per host. The adaptive window belongs to the
+pinned path; dev's unpinned mode remains default off. Nonlocal exits from a
+handler inside a delegated round remain unsupported: no unwinding, only no
+identity aliasing. See the [runtime limits](../../runtime/virtual/README.md#qualification-and-limits).
 
 **2026-10-21, the cross-lane plan to the next bitstream (runtime/semantics lane, coordinating on the lead's word).**
 Goal: the six-item batch bitstream, then the WHOLE corpus on vp2, including the two arms the current bitstreams

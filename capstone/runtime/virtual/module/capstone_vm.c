@@ -1967,8 +1967,9 @@ static int resolve(struct context *c, struct cv_thread *t, u64 deadline)
             unsigned long pinned = pin_ahead(c, a, v, index + 1, ahead, deadline);
             if (stream) {
                 /* The next demand fault lands past pages admitted earlier (a stream crosses
-                 * them without faulting). Bounded to one maximal window: a longer pinned run
-                 * just ends the stream, it never costs a long scan inside the step. */
+                 * them without faulting). Scan at most 64 pages, independently of
+                 * fault_ahead_max: a longer pinned run ends the stream rather
+                 * than costing an unbounded scan inside the step. */
                 unsigned skip_end = stream->next = index + 1 + pinned;
                 skip_end = min_t(unsigned long, a->count, (unsigned long)skip_end + 64);
                 while (stream->next < skip_end && a->pages[stream->next])

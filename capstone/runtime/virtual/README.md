@@ -477,8 +477,12 @@ every window) must admit all 32 pages by demand faults with 30 empty attempts.
 The pthread gate has a separate `fallback` launch: 63 raw exits retain all
 identity slots, then four raw contexts on the main TLS and the default
 transport write 128 checked records to one pipe, read after they are joined.
-They must use the service identity fallback. The ordinary pthread launch must
-still make zero `THREAD_SELF` service exits.
+Then four pthreads created after exhaustion write another 128 records on
+private transports and return through normal pthread teardown. Both groups
+must use fallback slot 64. A control SDK that makes the identity service call
+but returns a constant instead corrupts the shared-wire records (three runs,
+`bad=4`, exit 1); the normal SDK has `bad=0`, exit 0. The ordinary pthread
+launch must still make zero `THREAD_SELF` service exits.
 Nonlocal exits from handlers delivered inside delegated calls remain
 unsupported: `__capstone_longjmp_reap` acknowledges the signal but does not
 unwind transport lock depth or copy-back state. A context that ends that way
@@ -488,13 +492,20 @@ wait, as they did with launcher identities. `identity-exit` and
 `identity-jump` require a replacement context to receive a different slot.
 A raw context may not share a pthread's TLS (it would inherit the pthread's
 private transport and held mappings): creation fails with ENOTSUP
-(`private-tls`).
+(`private-tls`, from the owning pthread, main and another pthread). The check
+reads the target TLS block's transport slot; a valid live TLS capability is
+still the caller's responsibility.
 
 The launcher never trusts the domain's transport lock for its own state:
 every serve on the process transport's host object (bounce buffer, signal
 ring) holds the launcher's `host_lock`. `test-transport-host.sh` (native)
 drives two workers through the same process transport with no domain lock
-and requires that no host object is served twice at once.
+and requires that no host object is served twice at once. Signal detach only
+changes the calling worker's mask and TLS attachment and takes no host lock:
+waiting for a blocking serve while holding `service_lock` would stop the
+independent service that can unblock it. `test-detach-deadlock.sh` forces that
+ordering with a blocking serve and an independent writer. Both native tests
+run under CTest.
 
 A write the launcher makes into domain memory on the domain's behalf -- a
 thread's exit word, a worker's meta block and exchange region -- is preceded by
@@ -573,12 +584,15 @@ INCOMPLETE.
 
 The runtime gate runs with the module's shipped defaults, adaptive window on,
 except for the three `contract.dom ok argument` launches (normal, parallel_one,
-parallel_two): `linux_demand_faults` requires exactly those three to resolve at
-least 384 demand faults each, a page-at-a-time demand-admission measure, so the
-gate script sets `fault_ahead_max=0` around them and restores it
+parallel_two). `linux_demand_faults` requires exactly three of seven sampled
+launches to resolve at least 384 demand faults; it does not identify them by
+name. Those three launches supply the positive cases, so the gate script sets
+`fault_ahead_max=0` around them and restores it
 (`fault_ahead_policy_restored`). Adding prefetched pages to this oracle would
 conceal missing demand resolutions; with the window on those launches resolve
-about a quarter as many faults (102 against 425 on 2026-11-03).
+about a quarter as many faults (102 against 425 on 2026-11-03). The other four
+samples remain windowed, so the oracle's upper bound of three qualifying
+launches is not a page-at-a-time measurement of those samples.
 
 ## Qualification and limits
 
