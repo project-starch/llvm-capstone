@@ -603,20 +603,46 @@ static int recycle_path(const char *mode, int may_survive)
                 "recycle-geometry: the new group is a single slot");
         require(!count_tags(fresh, 0, single), "recycle-geometry: the new object is clean");
     } else if (!strcmp(mode, "recycle-nested")) {
-        static const size_t sizes[] = {300, 600, 900, 1500, 200, 400, 500, 700, 800, 1000, 1100, 1300, 1700, 1900};
-        char *p = NULL;
-        for (unsigned i = 0; i < sizeof sizes / sizeof *sizes && !p; ++i) {
+        /* The object must be in a NESTED group whose host chain ends in a mapped group holding
+         * nothing else, so that freeing the object retires the nested group, then its host's
+         * mapped group, whose mapping the next nested group's chain then reuses. mallocng nests a
+         * class whose first group is at most half a page; the chains for 240..800-byte objects end
+         * in a two-slot group of 2032-byte slots in one page (class 23), which startup objects also
+         * use. So first fill class 23's free slots (2000-byte objects, kept live) until one maps a
+         * group of its own, and free that one: no class-23 group then has a free slot, and the next
+         * nested chain must take a new class-23 group, from the kept mapping. Nesting is not taken
+         * on trust: the object's group must sit inside a host slot whose record says it holds a
+         * nested group (heap.c SLOT_NESTED, 2). CAPSTONE_RECYCLE_NESTED_SIZE forces a candidate
+         * (1100 bytes, a directly mapped seven-slot group, is the control that must fail here). */
+        static const size_t sizes[] = {600, 300, 400, 240, 800, 160, 128};
+        const char *forced = getenv("CAPSTONE_RECYCLE_NESTED_SIZE");
+        size_t only = forced ? strtoul(forced, NULL, 10) : 0;
+        for (unsigned fill = 0; fill < 64; ++fill) {
             unsigned long maps = __capstone_malloc_map_calls;
-            char *c = malloc(sizes[i]); require(c != NULL, "recycle-nested: candidate");
-            printf("MALLOC_RECYCLE_NESTED size=%lu maps=+%lu\n", (unsigned long)sizes[i], __capstone_malloc_map_calls - maps);
-            if (__capstone_malloc_map_calls == maps + 1) p = c;
-            else free(c);
-            if (p) {
-                saved = p; free_kept(p, "recycle-nested: the host group's mapping was kept");
-                fresh = reused_malloc(sizes[i], "recycle-nested: the next nested group's host took it");
-            }
+            char *c = malloc(2000); require(c != NULL, "recycle-nested: class-23 filler");
+            if (__capstone_malloc_map_calls != maps) { free(c); break; }
         }
-        require(p != NULL, "recycle-nested: a nested size with a new host mapping");
+        char *p = NULL; size_t n = 0;
+        for (unsigned i = 0; i < (only ? 1 : sizeof sizes / sizeof *sizes) && !p; ++i) {
+            n = only ? only : sizes[i];
+            unsigned long maps = __capstone_malloc_map_calls, hits = __capstone_malloc_recycle_hits;
+            char *c = malloc(n); require(c != NULL, "recycle-nested: candidate");
+            struct capstone_malloc_slot *r = __capstone_malloc_find(c);
+            size_t s0 = __builtin_capstone_cap_get_base(r->parent);
+            size_t stride = __builtin_capstone_cap_get_end(r->parent) - s0;
+            size_t hdr = stride >= 4096 ? (size_t)1 << (63 - __builtin_clzl(stride) - 9) : 16;
+            if (hdr < 16) hdr = 16;
+            size_t group = s0 - r->index * stride - hdr;   /* the nested group's base = its host slot's key */
+            struct capstone_malloc_slot *host = __capstone_malloc_find((void *)group);
+            int nested = host && host->kind == 2;
+            int fresh_chain = __capstone_malloc_map_calls == maps + 1 || __capstone_malloc_recycle_hits == hits + 1;
+            printf("MALLOC_RECYCLE_NESTED size=%lu stride=%lu nested=%d new_chain=%d\n", (unsigned long)n,
+                   (unsigned long)stride, nested, fresh_chain); fflush(stdout);
+            if (nested && fresh_chain) p = c;
+        }
+        require(p != NULL, "recycle-nested: an object in a nested group whose host chain is new");
+        saved = p; free_kept(p, "recycle-nested: the host group's mapping was kept");
+        fresh = reused_malloc(n, "recycle-nested: the next nested group's host took it");
     } else if (!strcmp(mode, "recycle-aligned")) {
         void *a = NULL;
         unsigned long maps = __capstone_malloc_map_calls;
