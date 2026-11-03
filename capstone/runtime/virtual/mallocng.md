@@ -203,6 +203,25 @@ groups of many -> few -> many slots: every record of the array past the
 meta's `last_idx` is all zero bytes) read the same properties on the paths
 around it.
 
+## Shared backing for small groups
+
+The group-mapping trace motivates sharing backing for groups with at least
+three slots and at most 16 KiB of page-rounded storage. The measured PHP ary2
+workload creates 15,000 groups of twenty 192-byte slots: each occupies a
+4 KiB mapping although its header and slots need only 3,856 bytes. This is
+a mapping-service cost as well as page padding. Single-slot groups include
+page slack in their stride; removing that slack would be a separate change
+to their representation, not a consequence of sharing backing.
+
+Small groups can share a region without sharing a lifetime. The region root
+stays in the runtime's private state and each group is a separately bounded
+CDERIVE child. Group release must revoke that child before its extent becomes
+available. Reuse must clear every reachable byte and tag before publishing
+new objects, including the entire group when object bounds are disabled.
+The slot arrays and pointer index keep their existing ownership and lookup
+rules. A fully empty region can be returned only through the retiring VM
+unmap path; a partially occupied region cannot be discarded as a whole.
+
 ## VM remapping
 
 Large realloc follows upstream's mremap branch. Heap mappings use their
