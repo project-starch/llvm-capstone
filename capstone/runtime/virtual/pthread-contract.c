@@ -133,14 +133,14 @@ static void check_file(int fd, char *buffer, char value)
 extern _Noreturn void __capstone_vm_thread_exit_clear(uintptr_t clear, uintptr_t stack,
                                                       size_t bytes, long status);
 static int *exit_word;
-/* Weak: the contract also builds with an SDK from before the identity slots (the control). */
-extern void __capstone_context_identity_release(void) __attribute__((weak));
 static void *exit_word_worker(void *arg)
 {
     (void)arg;
-    /* The raw exit service bypasses the runtime's exits, which give the context's identity slot
-     * back (delegate.c); a context that ends this way gives it back itself, or keeps it. */
-    if (__capstone_context_identity_release) __capstone_context_identity_release();
+    /* The raw exit service bypasses the runtime's exits, so this context keeps its identity slot
+     * (delegate.c): one slot of 63, after context_identity has run. Giving it back would need
+     * __capstone_context_identity_release, which dev's SDK (the control) does not define, and a
+     * weak reference to it does not read as null here: the gp-free codegen forms the address
+     * pc-relative, so the undefined symbol is the image's base (control run: cause 12 at it). */
     __capstone_vm_thread_exit_clear((uintptr_t)exit_word, 0, 0, 0);
 }
 /* A worker's transport cannot be retired under it (transport_lifetime): worker A names its
