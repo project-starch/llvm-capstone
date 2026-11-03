@@ -53,3 +53,25 @@ tree's image vector is to be simulated before that bitstream is run.
   - t1-norevoke alone was re-run in the next booking (05:10-05:11) and read its vector exactly.
   - The other three images are the first pass's files, byte-identical.
 - The runtime lane graded both boards with the same result.
+
+## The fixed tree's vectors (pre-registered 2026-11-04, before any board run of the C.5a bitstream)
+
+These images were simulated on c5a-wt a642f4891, whose core is identical to 1fc2cd5aa (C.5a + the CJALR fix), with
+PROVENANCE `rtl_dirty=no` and memory delay 12. The ELFs reproduce `images/SHA256SUMS` byte for byte. Retired counts
+differ per image, so no stale trace was read.
+
+| image | vector (C.5a, 1fc2cd5aa) |
+|---|---|
+| t1-norevoke | 0x7101 0x800009e0 0x1 0x1 0x0 0x4d41524b 0x0 0x0 0xffffffff7ffff620 0x0 0x59 |
+| t1-untagged | 0x7101 0x800009f0 0x1 0x1 0x0 0x0 0x1 0x18 0xfffffffffffffb10 0x800009f0 0x59 |
+| t1-oob | 0x7101 0x800009e0 0x1 0x1 0x0 0x0 0x1 0x1c 0x10 0x800009f0 0x59 |
+| t1-fire | 0x7101 0x800009e0 0x1 0x0 0x0 0x0 0x1 0x19 0x0 0x800009e0 0x59 |
+
+- The three controls read the same vectors as both sealed trees.
+- t1-fire reads validity 0 after the crevoke, the marker word never written (R6 0), one trap, cause 25 (R8 0x19), mepc
+  equal to the target (R9 0), and mtval 0x800009e0.
+- The grade is `r67-grade.py <run> fixed --bitstream <C.5a bitstream name>`; FIXED is rc 0. The rule is unchanged.
+  - On mock run dirs built from these simulated vectors, it reads FIXED, rc 0.
+  - On the ObjBounds simulation's vectors through the same `fixed` arm, it reads HOLE, rc 1. So the arm fires both ways.
+- Prediction for the C.5a bitstream's first boot: **t1-fire FIXED, with exactly the vector above**. HOLE there means the
+  fix did not reach silicon and goes to the lead before anything else on that bitstream.
