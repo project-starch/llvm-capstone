@@ -24,7 +24,11 @@ IndVarSimplify exit values and invariant IV users without a pointer PHI that
 propagates a refused cursor from skipped iterations. It also keeps pointer
 sums whole instead of splitting their offsets by loop. These restrictions
 apply to all non-integral address spaces in this fork, not just AS200. CodeGenPrepare
-does not create common capability bases for large offsets, and the optional
+shares positive constant offsets from a base no farther than their minimum.
+The new cursor lies between the base and each original final cursor. It is
+placed at a dominating original GEP; otherwise the existing non-null
+speculation rule is required. Negative offsets are not candidates, and a
+target-preferred base outside the interval is ignored. The optional
 separate-offset pass leaves capability GEPs intact.
 
 The generic LSR solver does not reduce non-integral pointer values. Its

@@ -6649,11 +6649,6 @@ bool CodeGenPrepare::splitLargeGEPOffsets() {
   bool Changed = false;
   for (auto &Entry : LargeOffsetGEPMap) {
     Value *OldBase = Entry.first;
-    // The chosen common cursor may only have been formed and accessed on a
-    // different path. Do not introduce that capability as a new dependency
-    // of the other accesses, or speculate its computation at the old base.
-    if (DL->isNonIntegralPointerType(OldBase->getType()))
-      continue;
     SmallVectorImpl<std::pair<AssertingVH<GetElementPtrInst>, int64_t>>
         &LargeOffsetGEPs = Entry.second;
     auto compareGEPOffset =
@@ -6671,6 +6666,30 @@ bool CodeGenPrepare::splitLargeGEPOffsets() {
     // Skip if all the GEPs have the same offsets.
     if (LargeOffsetGEPs.front().second == LargeOffsetGEPs.back().second)
       continue;
+    // Candidates have positive signed offsets. With the minimum as base,
+    // every new cursor lies between OldBase and the original final cursor.
+    // Both the representable window and the canonical address range preserve
+    // tags along that interval. This does not justify speculating arithmetic
+    // on a sealed or uninitialised base: prefer an original GEP that dominates
+    // the group, or retain the existing non-null speculation rule (C-19).
+    Instruction *CapabilityInsertPt = nullptr;
+    bool IsCapability = DL->isNonIntegralPointerType(OldBase->getType());
+    if (IsCapability) {
+      DominatorTree &DomTree = getDT(*LargeOffsetGEPs.front().first->getFunction());
+      BasicBlock *Common = LargeOffsetGEPs.front().first->getParent();
+      for (auto &G : LargeOffsetGEPs) {
+        Common = DomTree.findNearestCommonDominator(Common, G.first->getParent());
+        if (!Common)
+          break;
+      }
+      for (auto &G : LargeOffsetGEPs) {
+        if (G.first->getParent() == Common &&
+            (!CapabilityInsertPt || G.first->comesBefore(CapabilityInsertPt)))
+          CapabilityInsertPt = G.first;
+      }
+      if (!CapabilityInsertPt && !isKnownNonZero(OldBase, *DL))
+        continue;
+    }
     GetElementPtrInst *BaseGEP = LargeOffsetGEPs.begin()->first;
     int64_t BaseOffset = LargeOffsetGEPs.begin()->second;
     Value *NewBaseGEP = nullptr;
@@ -6684,7 +6703,10 @@ bool CodeGenPrepare::splitLargeGEPOffsets() {
 
       BasicBlock::iterator NewBaseInsertPt;
       BasicBlock *NewBaseInsertBB;
-      if (auto *BaseI = dyn_cast<Instruction>(OldBase)) {
+      if (CapabilityInsertPt) {
+        NewBaseInsertBB = CapabilityInsertPt->getParent();
+        NewBaseInsertPt = CapabilityInsertPt->getIterator();
+      } else if (auto *BaseI = dyn_cast<Instruction>(OldBase)) {
         // If the base of the struct is an instruction, the new base will be
         // inserted close to it.
         NewBaseInsertBB = BaseI->getParent();
@@ -6710,6 +6732,9 @@ bool CodeGenPrepare::splitLargeGEPOffsets() {
         NewBaseGEP = NewBaseBuilder.CreatePointerCast(NewBaseGEP, I8PtrTy);
       NewBaseGEP =
           NewBaseBuilder.CreatePtrAdd(NewBaseGEP, BaseIndex, "splitgep");
+      if (CapabilityInsertPt)
+        if (auto *NewI = dyn_cast<Instruction>(NewBaseGEP))
+          CapabilityInsertPt = NewI;
       NewGEPBases.insert(NewBaseGEP);
       return;
     };
@@ -6717,10 +6742,13 @@ bool CodeGenPrepare::splitLargeGEPOffsets() {
     // Check whether all the offsets can be encoded with prefered common base.
     if (int64_t PreferBase = TLI->getPreferredLargeGEPBaseOffset(
             LargeOffsetGEPs.front().second, LargeOffsetGEPs.back().second)) {
-      BaseOffset = PreferBase;
-      // Create a new base if the offset of the BaseGEP can be decoded with one
-      // instruction.
-      createNewBase(BaseOffset, OldBase, BaseGEP);
+      // A target preference outside [0, min] lacks the interval proof above.
+      if (!IsCapability || (PreferBase >= 0 && PreferBase <= BaseOffset)) {
+        BaseOffset = PreferBase;
+        // Create a new base if the offset of the BaseGEP can be decoded with
+        // one instruction.
+        createNewBase(BaseOffset, OldBase, BaseGEP);
+      }
     }
 
     auto *LargeOffsetGEP = LargeOffsetGEPs.begin();
@@ -6764,6 +6792,8 @@ bool CodeGenPrepare::splitLargeGEPOffsets() {
       replaceAllUsesWith(GEP, NewGEP, FreshBBs, IsHugeFunc);
       LargeOffsetGEPID.erase(GEP);
       LargeOffsetGEP = LargeOffsetGEPs.erase(LargeOffsetGEP);
+      if (CapabilityInsertPt == GEP)
+        CapabilityInsertPt = GEP->getNextNode();
       GEP->eraseFromParent();
       Changed = true;
     }
