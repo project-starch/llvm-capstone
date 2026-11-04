@@ -1,0 +1,7 @@
+STUB chain board=2 list=gcc.list out=<dryrun>/J-egskip/out/out-xp-ctl SB_KIT=bkit22-ctl-b2 SB_BITSTREAM=e7af48457 SB_MODULE=2f81e8a5842010b3
+STUB chain board=2 list=gcc.list out=<dryrun>/J-egskip/out/out-xp-sweep SB_KIT=bkit22-sweep-b2 SB_BITSTREAM=e7af48457 SB_MODULE=2f81e8a5842010b3
+STUB chain board=2 list=gcc.list out=<dryrun>/J-egskip/out/out-xp-nosweep SB_KIT=bkit22-nosweep-b2 SB_BITSTREAM=e7af48457 SB_MODULE=2f81e8a5842010b3
+STUB chain board=2 list=gcc.list out=<dryrun>/J-egskip/out/out-xp-root SB_KIT=bkit22-root-b2 SB_BITSTREAM=e7af48457 SB_MODULE=2f81e8a5842010b3
+STUB chain board=2 list=imagick.list out=<dryrun>/J-egskip/out/out-xp-root SB_KIT=bkit22-root-b2 SB_BITSTREAM=e7af48457 SB_MODULE=2f81e8a5842010b3
+STUB chain board=2 list=nab.list out=<dryrun>/J-egskip/out/out-xp-q8 SB_KIT=bkit22-q8-b2 SB_BITSTREAM=e7af48457 SB_MODULE=2f81e8a5842010b3
+STUB chain board=2 list=lbm.list out=<dryrun>/J-egskip/out/out-xp-allmod SB_KIT=bkit22-allmod-b2 SB_BITSTREAM=e7af48457 SB_MODULE=2f81e8a5842010b3

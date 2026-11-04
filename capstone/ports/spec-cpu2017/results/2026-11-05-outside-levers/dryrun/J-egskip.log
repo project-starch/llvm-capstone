@@ -1,0 +1,30 @@
+XP 2026-11-05 03:00:18 START pid 181973
+XP 2026-11-05 03:00:18 preconditions ok; waiting for the C.5a session (pid none)
+XP 2026-11-05 03:00:18 QEMU gate passed
+XP 2026-11-05 03:00:18 READBACK caplifive_vp2c_e7af48457 ok rc=0
+XP 2026-11-05 03:00:18 CHAIN ctl gcc BEGIN
+STUB chain board=2 list=gcc.list out=<dryrun>/J-egskip/out/out-xp-ctl SB_KIT=bkit22-ctl-b2 SB_BITSTREAM=e7af48457 SB_MODULE=2f81e8a5842010b3
+XP 2026-11-05 03:00:18 CHAIN ctl gcc END rc=0
+Traceback (most recent call last):
+FileNotFoundError: [Errno 2] No such file or directory: '$CAPSTONE_WORK/modrs/qeg-nab/result.json'
+XP 2026-11-05 03:00:18 SKIP eg: its QEMU gate (modrs/qeg-*) has not passed
+XP 2026-11-05 03:00:18 CHAIN sweep gcc BEGIN
+STUB chain board=2 list=gcc.list out=<dryrun>/J-egskip/out/out-xp-sweep SB_KIT=bkit22-sweep-b2 SB_BITSTREAM=e7af48457 SB_MODULE=2f81e8a5842010b3
+XP 2026-11-05 03:00:18 CHAIN sweep gcc END rc=0
+XP 2026-11-05 03:00:18 CHAIN nosweep gcc BEGIN
+STUB chain board=2 list=gcc.list out=<dryrun>/J-egskip/out/out-xp-nosweep SB_KIT=bkit22-nosweep-b2 SB_BITSTREAM=e7af48457 SB_MODULE=2f81e8a5842010b3
+XP 2026-11-05 03:00:18 CHAIN nosweep gcc END rc=0
+XP 2026-11-05 03:00:18 CHAIN root gcc BEGIN
+STUB chain board=2 list=gcc.list out=<dryrun>/J-egskip/out/out-xp-root SB_KIT=bkit22-root-b2 SB_BITSTREAM=e7af48457 SB_MODULE=2f81e8a5842010b3
+XP 2026-11-05 03:00:18 CHAIN root gcc END rc=0
+XP 2026-11-05 03:00:18 CHAIN root imagick BEGIN
+STUB chain board=2 list=imagick.list out=<dryrun>/J-egskip/out/out-xp-root SB_KIT=bkit22-root-b2 SB_BITSTREAM=e7af48457 SB_MODULE=2f81e8a5842010b3
+XP 2026-11-05 03:00:18 CHAIN root imagick END rc=0
+XP 2026-11-05 03:00:18 CHAIN q8 nab BEGIN
+STUB chain board=2 list=nab.list out=<dryrun>/J-egskip/out/out-xp-q8 SB_KIT=bkit22-q8-b2 SB_BITSTREAM=e7af48457 SB_MODULE=2f81e8a5842010b3
+XP 2026-11-05 03:00:18 CHAIN q8 nab END rc=0
+XP 2026-11-05 03:00:18 CHAIN allmod lbm BEGIN
+STUB chain board=2 list=lbm.list out=<dryrun>/J-egskip/out/out-xp-allmod SB_KIT=bkit22-allmod-b2 SB_BITSTREAM=e7af48457 SB_MODULE=2f81e8a5842010b3
+XP 2026-11-05 03:00:18 CHAIN allmod lbm END rc=0
+XP 2026-11-05 03:00:18 GRADE rc=2
+XP 2026-11-05 03:00:18 DONE chains 7; board 2 on bitstream 3

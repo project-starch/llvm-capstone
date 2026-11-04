@@ -116,3 +116,30 @@ a retired page after its retire. The rootfs lever cannot fire on the twin, which
 on QEMU.
 
 The gate that xp-b2.sh checks (gcc, imagick, nab and lbm) is therefore met.
+
+## Addendum 2 (5 Nov, 03:05): the exact image grant, one more run
+
+**The change.** capstone-vexec 0bde5fd8e0c9c374 is built from wt-fa perf/exact-image-grant with
+`-DCAPSTONE_VEXEC_EXACT_IMAGE`. The default build stays byte-identical (978c09d61f774315).
+- load() grants the image at the smallest exactly representable length, page-rounded, at a granule-aligned base,
+  instead of the next power of two.
+- For gcc's baseline image that is 0x1068000 instead of 0x2000000, so 596 pinned pages instead of 4,588.
+- This padding is the whole of the eval RESULT's gcc page drop (Corrections, 20700808adbf).
+
+**The run.** Kit bkit22-eg-b2 is bkit22-ctl-b2 with that launcher. It runs gcc right after ctl's gcc: same board,
+same session, one variable. The script's copy of spec-board.sh takes SB_VEXEC; the default hash is unchanged.
+
+**Its own QEMU gate.** Kit spec/kit-egq is kit-rsq3 with the QEMU-built launcher a7596c8eaad129f3, on all six
+stages. xp-b2.sh runs eg only once modrs/qeg-{gcc,imagick,nab,lbm,xz,mcf} are all done with rc 0 and specdiff PASS.
+Otherwise it logs SKIP and goes on.
+
+**X7** (eg against ctl, gcc), all three must hold:
+- peak pages at most 2,700, against about 6,150;
+- launch at least 3 s lower: 3,992 fewer pins at 1.1-1.9 ms;
+- run time at least 5 s lower, including about 3.2 s of teardown.
+
+Grader controls:
+- ctl's run given as eg reads FAILS.
+- A mock at the predicted values reads holds.
+
+Dry-run branches J-egskip (the gate not passed) and K-egrun (each chain gets its own launcher hash) are added.

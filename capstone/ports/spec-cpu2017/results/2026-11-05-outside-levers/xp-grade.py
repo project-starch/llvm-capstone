@@ -9,7 +9,7 @@ B = os.path.join(os.environ["CAPSTONE_WORK"], "spec", "board"); REF = os.path.jo
 ROOT = os.environ.get("XP_ROOT", B)
 ARM = "capstone-lifetimes"
 GCC, IMG, NAB, LBM = ("502.gcc_r-test-capstone-lifetimes", "538.imagick_r-test", "544.nab_r-test", "519.lbm_r-test")
-WANT = {"ctl": {"fault_ahead_max": "64"}, "sweep": {"fault_ahead_max": "64", "retire_exit_sweep": "3"},
+WANT = {"ctl": {"fault_ahead_max": "64"}, "eg": {"fault_ahead_max": "64"}, "sweep": {"fault_ahead_max": "64", "retire_exit_sweep": "3"},
         "nosweep": {"fault_ahead_max": "64", "retire_exit_sweep": "2"}, "root": {"fault_ahead_max": "64", "image_rootfs": "Y"},
         "q8": {"fault_ahead_max": "64"},
         "allmod": {"fault_ahead_max": "64", "retire_exit_sweep": "3", "image_rootfs": "Y", "step_budget_ns": "80000000"}}
@@ -32,14 +32,14 @@ def read(d):
     return dict(sec=sum(c["seconds"] for c in runs), cyc=sum(c["cycles"] or 0 for c in runs), why=why,
                 params=dict(re.findall(r"^@@PARAM (\w+)=(\S+)$", T, re.M)), qnt=re.findall(r"QNT0:([0-9A-F]+)", open(os.path.join(d, "guest", "driver.log"), errors="replace").read())[-1:],  # last: the console replays the previous boot first
                 launch=sum(int(s.get("launch_ns", 0)) for s in st) / 1e9, steps=sum(int(s.get("steps", 0)) for s in st),
-                faults=sum(int(s.get("faults", 0)) for s in st), td=td)
+                faults=sum(int(s.get("faults", 0)) for s in st), td=td, peak=max([int(s.get("peak", 0)) for s in st] or [0]))
 
 def nsp(x):  # teardown ns per page over the arm's passes with at least 100 pages
     t = [(p, n) for p, n, _, _ in x["td"] if p >= 100]
     return sum(n for _, n in t) / max(1, sum(p for p, _ in t)) if t else None
 
 fail = 0; seen = 0; res = {}
-for kit, st in (("ctl", GCC), ("sweep", GCC), ("nosweep", GCC), ("root", GCC), ("root", IMG), ("q8", NAB), ("allmod", LBM)):
+for kit, st in (("ctl", GCC), ("eg", GCC), ("sweep", GCC), ("nosweep", GCC), ("root", GCC), ("root", IMG), ("q8", NAB), ("allmod", LBM)):
     x = read(os.path.join(ROOT, f"out-xp-{kit}", st)); ref = read(os.path.join(REF, st))
     lab = f"{kit:8s} {st[:16]:16s}"
     if x is None: print(f"{lab} PENDING"); continue
@@ -76,5 +76,9 @@ else: print("X5 PENDING")
 l6 = res.get(("allmod", LBM)); lref = read(os.path.join(REF, LBM))
 chk("X6 allmod lbm run <= 0.985 x ref", None if not l6 else l6["sec"] <= 0.985 * lref["sec"], f"{l6['sec'] / lref['sec']:.4f}" if l6 else "")
 chk("X6b allmod lbm faults <= 2,500", None if not l6 else l6["faults"] <= 2500, f"{l6['faults']}" if l6 else "")
+ge = res.get(("eg", GCC))
+chk("X7 eg gcc: peak <= 2,700 pages, launch >= 3 s and run >= 5 s below ctl", None if not (ge and g0) else
+    ge["peak"] <= 2700 and ge["launch"] <= g0["launch"] - 3 and ge["sec"] <= g0["sec"] - 5,
+    f"peak {ge['peak']} vs {g0['peak']}, launch {ge['launch']:.2f} vs {g0['launch']:.2f} s, run {ge['sec']:.1f} vs {g0['sec']:.1f} s" if ge and g0 else "")
 if not seen: print("NO DATA: no finished run under out-xp-*"); sys.exit(2)
 sys.exit(fail)

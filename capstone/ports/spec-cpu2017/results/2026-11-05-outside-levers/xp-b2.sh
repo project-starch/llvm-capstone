@@ -14,18 +14,19 @@ main() {
   local SB=$H/wt-spec/capstone/ports/spec-cpu2017 T=$H/t3-smoke
   local RB=${XP_RB:-python3 $SB/results/2026-10-28-board-test/b4/nv-readback.py}
   local BUSY=${XP_BUSY:-python3 /tmp/capstone/wt-b2/capstone/tests/rtl-smoke/board-busy.py 2}
-  local CHAIN=${XP_CHAIN:-bash $H/perf/fa/board/chain-board.sh} OR=${XP_OUTROOT:-$H/spec/board} k li t r ran=0
+  local CHAIN=${XP_CHAIN:-bash $O/board/chain-board.sh} EGV=0bde5fd8e0c9c374 OR=${XP_OUTROOT:-$H/spec/board} k li t r ran=0
   export FPGA_BOARD=2 CAPSTONE_FPGA_URL_FILE=$HOME/.claude-kisp/secrets/fpga-console-url-board2
   log() { echo "XP $(date '+%F %T') $*" >> "$L"; }
   mkdir -p "$O"; log "START pid $$"
-  for k in ctl sweep nosweep root q8 allmod; do
+  for k in ctl eg sweep nosweep root q8 allmod; do
     ( cd "$T/bkit22-$k-b2" && sha256sum -c --quiet SHA256SUMS ) && [ "$(sha256sum "$T/bkit22-$k-b2/adapter/module/capstone_vm.ko" | cut -c1-16)" = $MOD ] \
       && grep -q "^BOARD_BITSTREAM=$B3$" "$T/bkit22-$k-b2/board.env" || { log "STOP: kit bkit22-$k-b2"; return 2; }
   done
+  [ "$(sha256sum "$T/bkit22-eg-b2/adapter/capstone-vexec" | cut -c1-16)" = $EGV ] || { log "STOP: eg launcher"; return 2; }
   grep -q "CAPSTONE_BOOT_QUANTUM=8000000 -DCAPSTONE_SUPERVISOR_QUANTUM=8000000" "$T/bkit22-q8-b2/board.env" || { log "STOP: q8 quantum"; return 2; }
   for li in gcc imagick nab lbm; do [ -s "$O/$li.list" ] || { log "STOP: list $li"; return 2; }; done
   [ -f "$O/xp-grade.py" ] || { log "STOP: grader"; return 2; }
-  for k in ctl sweep nosweep root q8 allmod; do [ -e "$OR/out-xp-$k" ] && { log "STOP: $OR/out-xp-$k exists"; return 2; }; done
+  for k in ctl eg sweep nosweep root q8 allmod; do [ -e "$OR/out-xp-$k" ] && { log "STOP: $OR/out-xp-$k exists"; return 2; }; done
   [ -n "${XP_PREREG:-}" ] && git -C "$H/wt-spec" branch -r --contains "$XP_PREREG" 2>/dev/null | grep -q origin/spec-silicon \
     || { log "STOP: pre-registration ${XP_PREREG:-unset} is not on origin/spec-silicon"; return 2; }
   log "preconditions ok; waiting for the C.5a session (pid ${XP_WAITPID:-none})"
@@ -41,10 +42,18 @@ for b in sys.argv[2:]:
   log "QEMU gate passed"
   $BUSY > /dev/null 2>&1 || { log "STOP: board 2 busy"; return 2; }
   $RB "$B3.bit" "$B3SHA" >> "$L" 2>&1; r=$?; case $r in 0|3) log "READBACK $B3 ok rc=$r";; *) log "STOP: board 2 is not on bitstream 3 (readback rc=$r)"; return 2;; esac
-  for k_li in ctl:gcc sweep:gcc nosweep:gcc root:gcc root:imagick q8:nab allmod:lbm; do
-    k=${k_li%%:*}; li=${k_li##*:}
+  for k_li in ctl:gcc eg:gcc sweep:gcc nosweep:gcc root:gcc root:imagick q8:nab allmod:lbm; do
+    k=${k_li%%:*}; li=${k_li##*:}; local V=978c09d61f774315
+    if [ $k = eg ]; then  # the exact-grant launcher runs only once its own QEMU gate (modrs/qeg-*, Addendum 2) has passed
+      V=$EGV
+      python3 -c 'import json,sys
+for b in sys.argv[2:]:
+    r=json.load(open(sys.argv[1]+"/qeg-"+b+"/result.json")); a=r["arms"]["capstone-spatial"]
+    assert r.get("done") and all(c["rc"]==0 for c in a["commands"]) and all(v["verdict"]=="PASS" for v in a["validation"]), b' \
+        "${XP_QGATE:-$H/modrs}" gcc imagick nab lbm xz mcf >> "$L" 2>&1 || { log "SKIP eg: its QEMU gate (modrs/qeg-*) has not passed"; continue; }
+    fi
     log "CHAIN $k $li BEGIN"
-    SB_KIT=$T/bkit22-$k-b2 SB_BITSTREAM=e7af48457 SB_MODULE=$MOD $CHAIN 2 "$O/$li.list" "$OR/out-xp-$k" >> "$L" 2>&1; r=$?
+    SB_KIT=$T/bkit22-$k-b2 SB_BITSTREAM=e7af48457 SB_MODULE=$MOD SB_VEXEC=$V $CHAIN 2 "$O/$li.list" "$OR/out-xp-$k" >> "$L" 2>&1; r=$?
     log "CHAIN $k $li END rc=$r"; ran=$((ran + 1))
     [ -e "$OR/out-xp-$k/.chain-b2-stopped" ] && { log "STOP: chain $k $li stopped (board busy)"; break; }
   done
