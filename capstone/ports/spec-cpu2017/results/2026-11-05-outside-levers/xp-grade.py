@@ -30,7 +30,7 @@ def read(d):
     st = [dict(re.findall(r"(\w+)=(\d+)", m)) for m in re.findall(r"CAPSTONE_VM_STATS ([^\n]*)", arm_part)]
     td = [tuple(map(int, m)) for m in re.findall(r"capstone_vm: teardown pages=(\d+) ns=(\d+) sweep=(\d+) exiting=(\d+)", T)]  # whole transcript: console lines precede their arm echo
     return dict(sec=sum(c["seconds"] for c in runs), cyc=sum(c["cycles"] or 0 for c in runs), why=why,
-                params=dict(re.findall(r"^@@PARAM (\w+)=(\S+)$", T, re.M)), qnt=re.findall(r"QNT0:([0-9A-F]+)", open(os.path.join(d, "guest", "driver.log"), errors="replace").read())[-1:],  # last: the console replays the previous boot first
+                params=dict(re.findall(r"^@@PARAM (\w+)=(\S+)$", T, re.M)), qnt=re.findall(r"QNT0:([0-9A-F]{8})", open(os.path.join(d, "guest", "board-raw.txt"), errors="replace").read())[-1:],  # reassembled UART: driver.log chunks split the line (sweep, 5 Nov); last: a replayed boot comes first
                 launch=sum(int(s.get("launch_ns", 0)) for s in st) / 1e9, steps=sum(int(s.get("steps", 0)) for s in st),
                 faults=sum(int(s.get("faults", 0)) for s in st), td=td, peak=max([int(s.get("peak", 0)) for s in st] or [0]))
 
