@@ -80,3 +80,29 @@ Both boots pass P1 and P5: the control PASSED, specdiff PASS, outputs identical 
 - **gcc Full run.** CPI 6.74. Per 1,000 instructions: L1I 60.3, L1D 17.7, DTLB 1.4, mispredicts 32.8. Issue stall is
   34 % of cycles and scoreboard full 5.4 %. gcc's L1I miss rate is 9× imagick's and 3.4× its own L1D rate. Of the
   readings so far, it is the one that bears most on direction 3 (code size).
+
+## Addendum 2 boots (5 Nov 02:51-03:15, board 1, bitstream 3): imagick dev against devmk
+
+**The boots.** Run command, in-context, kit bkit16-hpm-b3-b1, out-hpm-eval.
+- **P1-P5 hold.** rc 0, specdiff PASS and outputs equal the twin in both arms of both stages.
+- **Against out-hfl.** instret is within 0.02 % and cycles within 0.3 % (dev MapLife 351,581,908 against 350,906,604; devmk 309,615,164 against 308,778,978).
+
+| Arm | Cycle drop dev → devmk | Issue stall (hpm7) drop | Scoreboard full (hpm8) | L1I miss (hpm3) | L1D miss (hpm4) | Mispredict (hpm6) |
+|---|---|---|---|---|---|---|
+| MapLife | 41,966,744 | 29,253,246 (69.7 %) | 3,148,069 (7.5 %) | 15,554 | 28,240 | −70,268 |
+| Full | 43,331,324 | 29,334,919 (67.7 %) | 2,940,296 (6.8 %) | 51,766 | 31,441 | 86,180 |
+
+**H holds.** The issue-stall drop is 68-70 % of the cycle drop, above the pre-registered half. The cache counters barely move:
+- at the silicon cost of 22.1 cycles per L1I miss (hpm-8, below), the L1I drop is 0.3-1.1 M cycles of a 42-43 M drop;
+- the L1D drop is about 0.1 %.
+
+The movc flag's saving on imagick (about 1.5 M fewer stack-copy pairs, about 27 cycles each on bitstream 3) is therefore core time, mostly issue stalls. It is not instruction fetch. The code-size / L1I hypothesis for the 23-36 cycles per pair is **refuted** on imagick.
+
+## hpm-8, the L1I counter's positive control (5 Nov 03:16, board 1, bitstream 3; Addendum 4)
+
+AS EXPECTED, graded by kit-c950068d's hpm8-grade.py:
+- exact fields OK;
+- L1I misses: pass 1 515 (band 480-560), pass 2 1 (at most 8);
+- cycles: pass 1 13,446, pass 2 2,075, so **22.1 cycles per L1I miss on silicon** (sim 46.8).
+
+The L1I counter (event 1) therefore counts on silicon, and the readings above can be used. gcc's 60.3 L1I misses per 1,000 instructions at 22.1 cycles are about 1.3 of its CPI of 6.74, about 20 % of its in-context cycles, not the 40 % estimated with the sim's cost.
