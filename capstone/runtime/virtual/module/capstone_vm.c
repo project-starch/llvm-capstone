@@ -1508,8 +1508,24 @@ static void clear_page_tags(struct page *page)
     }
 }
 
+/* Exit teardown sweep (perf/retire-sweep-vp2), default 0 = the read-and-rewrite above for every page.
+ * Only for a teardown run while the owning task is exiting (PF_EXITING): its pages are dead, so their
+ * bytes need not be kept, only their tags cleared. 1: store zero into one word of each granule (no load:
+ * a scalar store clears its granule's tag, as clear_page_tags relies on). 2: MEASUREMENT ONLY, no sweep
+ * at all -- leaves tags in frames returned to Linux; never set outside a timing boot. Measured cost of
+ * mode 0 on silicon: about 0.77 ms per page (557.xz_r test, 130,628 pages, ~100 s per command). */
+static unsigned int retire_exit_sweep;
+module_param(retire_exit_sweep, uint, 0644);
+static void zero_page_tags(struct page *page)
+{
+    unsigned long *p = page_address(page);
+    for (unsigned j = 0; j < PAGE_SIZE / sizeof(*p); j += 16 / sizeof(*p))
+        WRITE_ONCE(p[j], 0);
+}
+
 static int retire(struct context *c, struct arena *a, bool destroying)
 {
+    unsigned int sweep = destroying && (current->flags & PF_EXITING) ? READ_ONCE(retire_exit_sweep) : 0;
     unsigned long flags, old, status;
     unsigned i, swept;
     if (!destroying && arena_has_thread_frame(c, a))
@@ -1556,7 +1572,9 @@ static int retire(struct context *c, struct arena *a, bool destroying)
         unsigned n = 0;
         for (i = 0; !unpinned && i < a->count; ++i) {
             if (!a->pages[i]) continue;
-            clear_page_tags(a->pages[i]);
+            /* retire_exit_sweep (exiting task only, see zero_page_tags): 1 one store per granule, 2 none */
+            if (sweep == 1) zero_page_tags(a->pages[i]);
+            else if (sweep != 2) clear_page_tags(a->pages[i]);
             a->pages[n++] = a->pages[i];
         }
         if (n) {
@@ -3699,6 +3717,7 @@ static int vm_release(struct inode *inode, struct file *f)
          * whose broadcasts no longer collide. This line makes the difference readable: one per
          * context, always KERN_EMERG because a verdict reads it. */
         unsigned long attempted = 0, before = c->retired_flat, pushed_before = c->pushed_flat;
+        unsigned long long sweep_pages = c->stats.pinned_pages, sweep_t0 = ktime_get_ns();
         /* One pass over the arenas present now, the next node taken before each
          * retire. The pass ends on its own, not because retire() empties the
          * tree: a refusal added there later leaves a warning and a leaked
@@ -3714,6 +3733,10 @@ static int vm_release(struct inode *inode, struct file *f)
         }
         WARN_ON(!RB_EMPTY_ROOT(&c->arenas));
         xa_destroy(&c->ids);
+        /* Must-fire, its own prefix: the teardown pass's pages and time, and the sweep mode it ran. */
+        pr_emerg("capstone_vm: teardown pages=%llu ns=%llu sweep=%u exiting=%d\n",
+                 sweep_pages - c->stats.pinned_pages, ktime_get_ns() - sweep_t0,
+                 READ_ONCE(retire_exit_sweep), !!(current->flags & PF_EXITING));
         if (node_table_flat)
             pr_emerg("capstone_vm: release retires attempted=%lu succeeded=%lu pushed=%lu first_id=%lu\n",
                      attempted, c->retired_flat - before, c->pushed_flat - pushed_before,
