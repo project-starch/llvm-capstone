@@ -293,3 +293,47 @@ checks a new PC capability. The record is `docs/plans/2026-11-03-c5a-bitstream.m
   - The bs3 and objb arms still read rc 0 on their own trees' vectors.
 - **Prediction:** AS EXPECTED, with the cost pattern HOLDING. objb-pcc runs LAST, as on bitstream 3, because it does
   not return.
+
+## Addendum 4 (2026-11-04, before stage A's first boot): the stage-A arm
+
+**The bitstream.** Stage A is caplifive_vp2c_c9c7952bd: C.5a plus the DYN handshake trim. Its .bit sha256 is
+790ac2c096a0cd73....
+
+**The vectors.** They were simulated from these images on vp9-wt c9c7952bd (PROVENANCE rtl_dirty=no, memory delay 12), and
+the ELFs are byte-identical to the C.5a run's.
+- objb-pcc-ctrl, objb-stale and objb-stale-w read exactly C.5a's vectors.
+- objb-pcc does not return.
+- Every non-cycle field of the perf images equals C.5a's.
+- Only cycles move, all lower or equal.
+
+**The grade.** `objb-grade.py <run> dyntrim <a C.5a run dir>`.
+- The resident name must contain c9c7952bd, and the comparison dir must read 1fc2cd5aa.
+- The cost pattern compares stage A with C.5a, by direction (DT_DIR):
+
+  | shape | sim ratio | clause |
+  |---|---|---|
+  | s1 | 1.000 | eq |
+  | s2 | 0.804 | lo |
+  | s3 | 0.989 | reported only, too close to call |
+  | s4 pass 1 | 0.957 | lo |
+  | s4 pass 2 | 0.869 | lo |
+  | s5 pass 1 | 1.000 | eq |
+  | s5 pass 2 | 0.994 | reported only |
+  | s6 | 0.805 | lo |
+  | s7 | 0.841 | lo |
+
+**Why the shapes drop.** The single-node loops (s2, s6, s7) lose the cycle the registered DYN ready cost each op, and
+LDC loses its claim on its base register.
+
+**Controls.** Fake run dirs were derived from the real C.5a silicon run, relabelled c9c7952bd, with the cycle positions
+scaled by the sim ratios:
+
+| case | result |
+|---|---|
+| the fake run against the real C.5a run | AS EXPECTED, HOLDS, rc 0 |
+| unscaled | the pattern FAILS, rc 1 |
+| a bitstream 3 comparison dir | WRONG COMPARISON, rc 1 |
+| not relabelled (resident 1fc2cd5aa) | WRONG BITSTREAM, rc 1 |
+| no comparison dir | NO DATA, rc 2 |
+
+The real C.5a, ObjBounds and bitstream 3 runs grade as before.
