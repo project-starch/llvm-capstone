@@ -392,7 +392,7 @@ def main():
     a.record.write_text(json.dumps(result, indent=2) + '\n')
     print(f'{result["status"]}: {work / "serial.log"}')
     for s in lines:
-        if s.startswith(('VM_EXIT:', 'VM_MEMORY_MODE:', 'VIRTUAL_', 'CAPSTONE_VM_', 'capstone-vexec:', 'VM_CONTRACT_', 'SQLITE_', 'MRUBY_')): print(s)
+        if s.startswith(('VM_EXIT:', 'VM_MEMORY_MODE:', 'VM_FAST_FAULT:', 'VIRTUAL_', 'CAPSTONE_VM_', 'capstone-vexec:', 'VM_CONTRACT_', 'SQLITE_', 'MRUBY_')): print(s)
     return 0 if result['status'] == 'PASS' else 1
 
 if __name__ == '__main__': raise SystemExit(main())
