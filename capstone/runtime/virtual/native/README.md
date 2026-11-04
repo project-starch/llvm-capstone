@@ -25,6 +25,10 @@ Build `grant-probe.c` with the plain RISC-V Linux compiler, `-static -O2
 context never enters a domain. Five injected failures must preserve the VMA,
 contents, arena count and live/retired node counts exactly. Each is followed
 by an uninjected success that removes the VMA and retires its ancestor.
+The retirement injection returns before the hardware retire instruction. The
+probe checks callback-failure rollback; it does not inject a partial processor
+retirement or prove the instruction's atomicity. Tree injections abort at
+preparation boundaries rather than forcing system-wide allocator exhaustion.
 The probe also refuses partial geometry, stale mapping IDs, unknown versions,
 unsupported map requests, a descriptor inherited into a foreign address space,
 and grants spanning split VMAs. Failed requests have no authority effects.
