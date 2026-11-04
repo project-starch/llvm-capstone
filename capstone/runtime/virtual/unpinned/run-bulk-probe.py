@@ -18,7 +18,8 @@ def main():
     parser.add_argument('--module', type=Path, required=True)
     parser.add_argument('--work', type=Path, required=True)
     parser.add_argument('--bulk', choices=['on', 'off'], default='on')
-    parser.add_argument('--expect', choices=['pass', 'lost-copy', 'stale-free'], default='pass')
+    parser.add_argument('--kernel-arg', action='append', default=[])
+    parser.add_argument('--expect', choices=['pass', 'lost-copy', 'stale-free', 'leaked-tag'], default='pass')
     args = parser.parse_args()
     args.work.mkdir(parents=True, exist_ok=False)
     stage = args.work / 'stage'
@@ -26,6 +27,7 @@ def main():
     shutil.copy2(args.module, stage / 'bulk-probe.ko')
     (stage / 'gate.sh').write_text('''#!/bin/sh
 cd /mnt/vm || exit 1
+cat /proc/cmdline
 echo BULK_ENABLED:$(cat /sys/module/captag/parameters/bulk_enabled)
 insmod bulk-probe.ko
 rc=$?
@@ -39,8 +41,12 @@ echo VIRTUAL_STAGED_DONE
            '--qemu', str(args.qemu.resolve()), '--images', str(args.images.resolve()),
            '--stage', str(stage.resolve()), '--work', str((args.work / 'guest').resolve()),
            '--disk-mib', '16', '--timeout', '180', '--exact-bounds',
-           '--kernel-arg', 'captag_bulk=' + args.bulk]
+           '--kernel-arg', 'captag_bulk=' + args.bulk,
+           '--kernel-arg', 'init_on_alloc=0', '--kernel-arg', 'init_on_free=0']
+    for arg in args.kernel_arg:
+        cmd += ['--kernel-arg', arg]
     paths = [args.qemu, args.module] + [args.images / n for n in ['Image', 'fw_jump.elf', 'rootfs.ext2']]
+    paths += [Path(__file__), here.parent / 'run-staged.py', here / 'linux-6.1-unpinned.patch']
     record = {'command': cmd, 'expected': args.expect,
               'sha256': {str(p): hashlib.sha256(p.read_bytes()).hexdigest() for p in paths}}
     (args.work / 'inputs.json').write_text(json.dumps(record, indent=2) + '\n')
@@ -54,7 +60,8 @@ echo VIRTUAL_STAGED_DONE
     if args.expect == 'pass':
         ok = (result.returncode == 0 and 'BULK_MM PASS' in serial and
               'BULK_INSMOD_RC:0' in serial and
-              serial.count('copy missing_tags=0 bad_bytes=0 granules=256') >= 2 and
+              serial.count('BULK_MM copy missing_tags=0 extra_tags=0 bad_words=0 granules=256') >= 2 and
+              serial.count('BULK_MM mixed_copy missing_tags=0 extra_tags=0 bad_words=0 granules=256') >= 2 and
               'zero page=0 sticky=1 actual_tags=0' in serial and
               'zero page=1 sticky=1 actual_tags=0' in serial and
               'kernel_reuse same_frame=1 actual_tags=0 pages=2' in serial)
@@ -62,10 +69,18 @@ echo VIRTUAL_STAGED_DONE
         ok = (result.returncode == 0 and 'BULK_MM FAIL' in serial and
               bool(re.search(r'copy missing_tags=[1-9][0-9]* ', serial)) and
               bool(re.search(r'BULK_INSMOD_RC:[1-9]', serial)))
-    else:
-        ok = (result.returncode != 0 and 'kernel BUG at' in serial and
+    elif args.expect == 'stale-free':
+        # A BUG may kill insmod while the guest shell remains usable.
+        ok = ((result.returncode != 0 or 'BULK_INSMOD_RC:139' in serial) and
+              'kernel BUG at' in serial and
               'arch_free_page' in serial and
               'zero page=1 sticky=1 actual_tags=0' in serial)
+    else:
+        ok = (result.returncode == 0 and 'BULK_MM FAIL' in serial and
+              bool(re.search(r'kernel_reuse same_frame=1 actual_tags=[1-9]', serial)) and
+              bool(re.search(r'BULK_INSMOD_RC:[1-9]', serial)))
+    if args.expect != 'stale-free':
+        ok = ok and 'VIRTUAL_STAGED_DONE' in serial
     ok = enabled and ok
     if 'thread create refused' in serial or 'Exec format error' in serial:
         ok = False

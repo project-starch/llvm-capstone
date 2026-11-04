@@ -62,7 +62,7 @@ diff --git a/arch/riscv/mm/captag.c b/arch/riscv/mm/captag.c
 new file mode 100644
 --- /dev/null
 +++ b/arch/riscv/mm/captag.c
-@@ -0,0 +1,244 @@
+@@ -0,0 +1,249 @@
 +// SPDX-License-Identifier: GPL-2.0-only
 +/* EXPERIMENT: unpinned capability pages with raw granule transport.
 + * CLDRAW/CSTRAW replace copy_page, including its byte copy: scalar loads may
@@ -137,6 +137,11 @@ new file mode 100644
 +	u32 ids, exact, page, granule;
 +	bool valid;
 +
++	/* Readback describes the static key, never a boot-time parameter value. */
++	bulk_enabled = false;
++	/* Byte-only merging and huge anonymous pages are outside this contract. */
++	if (IS_ENABLED(CONFIG_KSM) || IS_ENABLED(CONFIG_TRANSPARENT_HUGEPAGE))
++		return 0;
 +	node = of_find_compatible_node(NULL, NULL, "capstone,unpinned-v1");
 +	if (!node)
 +		return 0;

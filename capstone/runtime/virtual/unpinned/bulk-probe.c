@@ -42,27 +42,48 @@ static void scrub(struct page *page, int order)
     }
 }
 
-static int check_copy(struct page *src, struct page *dst, struct page *check)
+/* Invalidate a byte outside the word being sampled. Integer reads now see
+ * stored bits, including both halves of a formerly tagged representation. */
+static void stored_words(struct page *check, const void *src, unsigned long words[2])
 {
-    unsigned int i, missing = 0, bad_bytes = 0;
+    unsigned char *p = page_address(check);
+    raw16(p, src);
+    WRITE_ONCE(p[15], 0);
+    words[0] = READ_ONCE(((unsigned long *)p)[0]);
+    raw16(p, src);
+    WRITE_ONCE(p[0], 0);
+    words[1] = READ_ONCE(((unsigned long *)p)[1]);
+    scrub(check, 0);
+}
+
+static int check_copy(struct page *src, struct page *dst, struct page *check, bool mixed)
+{
+    unsigned int i, missing = 0, extra = 0, bad_words = 0;
+    unsigned long a_words[2], b_words[2], tagged;
     unsigned char *a = page_address(src), *b = page_address(dst);
-    for (i = 0; i < PAGE_SIZE; i++)
-        bad_bytes += READ_ONCE(a[i]) != READ_ONCE(b[i]);
     for (i = 0; i < PAGE_SIZE; i += 16) {
+        bool expected = !mixed || (i / 16) % 4 < 2;
         raw16(page_address(check), b + i);
-        missing += query(check, true) != 1;
+        tagged = query(check, true);
+        missing += expected && !tagged;
+        extra += !expected && tagged;
         scrub(check, 0);
+        stored_words(check, a + i, a_words);
+        stored_words(check, b + i, b_words);
+        bad_words += a_words[0] != b_words[0];
+        bad_words += a_words[1] != b_words[1];
     }
-    pr_info("BULK_MM copy missing_tags=%u bad_bytes=%u granules=%lu\n",
-            missing, bad_bytes, PAGE_SIZE / 16);
-    return missing || bad_bytes ? -EIO : 0;
+    pr_info("BULK_MM %s missing_tags=%u extra_tags=%u bad_words=%u granules=%lu\n",
+            mixed ? "mixed_copy" : "copy", missing, extra, bad_words, PAGE_SIZE / 16);
+    return missing || extra || bad_words ? -EIO : 0;
 }
 
 static int __init probe_init(void)
 {
     struct page *src = alloc_pages(GFP_KERNEL | __GFP_ZERO, 1);
     struct page *dst = alloc_pages(GFP_KERNEL | __GFP_ZERO, 1);
-    struct page *table = alloc_page(GFP_KERNEL | __GFP_ZERO);
+    /* Each CSMINT allocates a child and its trusted ancestor. */
+    struct page *table = alloc_pages(GFP_KERNEL | __GFP_ZERO, 2);
     struct page *check = alloc_page(GFP_KERNEL | __GFP_ZERO);
     unsigned long desc[6] __aligned(16), flags, oldroot, id, stale_id, retired;
     unsigned long oldpa, *header, sticky, actual;
@@ -72,7 +93,7 @@ static int __init probe_init(void)
     if (!src || !dst || !table || !check)
         goto out;
     header = page_address(table);
-    header[0] = 255;
+    header[0] = 1023;
     header[1] = 1;
     desc[0] = (unsigned long)page_address(src);
     desc[1] = desc[0] + 2 * PAGE_SIZE;
@@ -97,7 +118,7 @@ static int __init probe_init(void)
         raw16(page_address(src) + i, page_address(src) + (i & 16));
     copy_highpage(dst, src);
     copy_user_highpage(dst + 1, src + 1, 0, NULL);
-    if (check_copy(src, dst, check) || check_copy(src + 1, dst + 1, check))
+    if (check_copy(src, dst, check, false) || check_copy(src + 1, dst + 1, check, false))
         goto out;
     for (i = 0; i < 2; i++) {
         clear_page(page_address(dst + i));
@@ -108,6 +129,42 @@ static int __init probe_init(void)
             memchr_inv(page_address(dst + i), 0, PAGE_SIZE) || !query(src + i, true))
             goto out;
     }
+    /* Unique cursors distinguish reordered granules. Mixed live/stale,
+     * scalar and zero cargo must replace a destination tagged everywhere. */
+    for (i = 0; i < 2 * PAGE_SIZE; i += 16)
+        raw16(page_address(dst) + i, page_address(src));
+    scrub(src, 1);
+    clear_page(page_address(src));
+    clear_page(page_address(src + 1));
+    local_irq_save(flags);
+    oldroot = csr_read(0x5c1);
+    csr_write(0x5c1, page_to_phys(table));
+    retired = 0;
+    for (i = 0; i < 2 * PAGE_SIZE; i += 16) {
+        if ((i / 16) % 4 < 2) {
+            desc[3] = desc[0] + i;
+            asm volatile(".insn r 0x5b, 1, 0x50, %0, %1, %2"
+                         : "=r"(id) : "r"(page_address(src) + i), "r"(desc) : "memory");
+            if (!id) { retired = 1; break; }
+            if ((i / 16) % 4 == 1) {
+                asm volatile(".insn r 0x5b, 1, 0x53, %0, %1, zero"
+                             : "=r"(retired) : "r"(id) : "memory");
+                if (retired) break;
+            }
+        } else if ((i / 16) % 4 == 2) {
+            unsigned long *p = page_address(src) + i;
+            WRITE_ONCE(p[0], 0xa123000000000000UL + i);
+            WRITE_ONCE(p[1], 0xb456000000000000UL + i);
+        }
+    }
+    csr_write(0x5c1, oldroot);
+    local_irq_restore(flags);
+    if (retired)
+        goto out;
+    copy_highpage(dst, src);
+    copy_user_highpage(dst + 1, src + 1, 0, NULL);
+    if (check_copy(src, dst, check, true) || check_copy(src + 1, dst + 1, check, true))
+        goto out;
     oldpa = page_to_phys(src);
     __free_pages(src, 1);
     src = alloc_pages(GFP_KERNEL, 1);
@@ -126,7 +183,7 @@ out:
     if (src) { scrub(src, 1); __free_pages(src, 1); }
     if (dst) { scrub(dst, 1); __free_pages(dst, 1); }
     if (check) { scrub(check, 0); __free_page(check); }
-    if (table) __free_page(table);
+    if (table) __free_pages(table, 2);
     pr_info("BULK_MM %s\n", error ? "FAIL" : "PASS");
     return error;
 }

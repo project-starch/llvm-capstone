@@ -46,6 +46,8 @@ activation. For a SPEC arms file, set `platform.cpu_props` to the recorded CPU
 properties and the Capstone arm's `module_params` to `unpinned=1`.
 
 The patched kernel enables tag-aware mm only after discovering the opt-in node.
+It refuses activation with KSM or transparent huge pages configured; byte-only
+page merging is outside this contract.
 `copy_highpage` and `copy_user_highpage` use a raw granule loop, including bytes,
 instead of a scalar copy. Interrupts stay masked while the opaque temporary is
 live. `arch_free_page` queries each physical page's sticky flag, clears flagged
@@ -80,7 +82,10 @@ It is an interface fixture, not a replacement for kernel qualification.
 `bulk-probe.c` is a trusted private-guest module (`obj-m += bulk-probe.o`).
 Build it against the exact patched kernel. It checks every granule of two
 pages containing alternating live/stale tags through both highpage copy APIs,
-checks zero contents and sticky-versus-actual tag state, and requires same-frame
+then checks mixed live/stale/scalar/zero cargo with unique cursors against a
+previously fully tagged destination. Representation checks sample both stored
+words after invalidating a byte outside the sampled word. It checks zero
+contents and sticky-versus-actual tag state, and requires same-frame
 order-1 kernel reuse without `__GFP_ZERO`. Run each arm through the host gate
 queue:
 
@@ -97,11 +102,19 @@ then build a kernel omitting only the bulk free-hook clear and use
 BUG after the fixture's successful zero tests. Neither an early boot failure
 nor a generic crash counts. Keep these broken kernels out of production.
 The probe's independent scalar cleanup makes the lost-copy case safe to free.
+Also remove both the clear and its acknowledgement assertion and use
+`--expect leaked-tag`: the reuse observation itself must find the surviving
+tag. The runner disables allocation/free zeroing so these controls cannot be
+masked by generic allocator initialization.
 
 This experiment needs actual COW/compaction/fork/reuse torture, unchanged
 runtime gates, matched quick/full census and independent review before landing.
 The sleeping-child torture remains a COW stimulus, not protected fork support.
 Model instruction attempts do not establish hardware latency or bandwidth.
+Local IRQ masking does not establish preservation of opaque temporaries
+across M-mode traps. A firmware/platform proof or a lossless trap ABI remains
+required before claiming complete raw-transport qualification, including for
+the tested firmware.
 
 ## Ownership and lifetime recycling
 
