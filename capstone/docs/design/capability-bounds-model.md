@@ -119,6 +119,16 @@ stack (`ISD::FrameIndex`, `-capstone-shrink-stack`, opt-in), and heap (`malloc`
 `__builtin_capstone_cap_shrink`). The C1 gap this called out is closed for
 globals/heap (default) and stack (opt-in).
 
+Under the image-gp ABI, global materialization already computes the absolute
+symbol address as an untagged PC-relative integer before SCC sets the cursor.
+`selectLGA` reuses that integer for SHRINK's lower bound and adds the object
+size for its upper bound. SCC and SHRINK remain, with identical capability
+operands, cursors and bounds. This avoids reading the same address back out
+of the capability. Other ABIs retain the tag-clearing cursor extraction;
+this rule does not permit a bare integer subregister view of an arbitrary
+tagged capability. `global-bounds-scalar-cursor.ll` checks the scalar reuse,
+variable-index access, escaping object pointer and relative-cursor control.
+
 ## 4. Sibling primitives that exist in the ISA but not in LLVM
 
 | ISA / QEMU | What it does | In LLVM? |

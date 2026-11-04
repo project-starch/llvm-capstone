@@ -7698,3 +7698,52 @@ Cycles per timed iteration, geomean of per-program ratios (two-level bootstrap i
   - **ObjLife / ObjBounds as a single-board figure.** It is cross-board and cross-day (bitstream-3 records against
     board 2), with the controls above.
   - **25 MHz cycles.** DRAM is near in cycles, and a GHz part weighs stalls differently.
+
+## The cached lifetime verdict on silicon: LDC 6.0 → 2.0, STC 8.0 → 3.0, the STC→LDC pair 17.0 → 8.0 cycles (caplifive_vp2c_1fc2cd5aa against caplifive_vp2c_e7af48457, board 2, and bitstream 3 on board 1, 2026-11-04)
+
+**What C.5a is.** The bitstream is capstone-ariane 1fc2cd5aa: bitstream 3's checks, with one change and one fix.
+- The change: LDC and STC take the LSU's cached lifetime verdict for rs1's node, where they used to query the
+  revocation node on every access.
+- The fix: R-67, in the PC tracker.
+- The record is `docs/plans/2026-11-03-c5a-bitstream.md`.
+
+**The kits.**
+- `capstone/tests/rtl-smoke/slot-bare-2026-11-04` and the C.5a arms of `hpm-bare-2026-11-03` and
+  `objb-bare-2026-10-30`.
+- Each was pre-registered with vectors simulated from its own images before any C.5a boot.
+- Each was graded by value; result lines are in spec-silicon f45274ebafe0.
+
+- **Per op over the slot kit's bare loop** (cycles per iteration, 512 iterations):
+
+  | op | bitstream 3, board 1 | bitstream 3, board 2 | C.5a, board 2 | C.5a sim |
+  |---|---|---|---|---|
+  | ldc (one resident node) | 6.01 | 6.01 | 2.03 | 2.08 |
+  | stc | 8.01 | 8.01 | 3.02 | 3.44 |
+  | stc; ldc through one stack slot | 16.97 | 16.97 | 8.01 | 8.42 |
+  | the same pair, another slot | 16.97 | 16.97 | 8.01 | 8.42 |
+  | sd; ld, same / other doubleword | 5.97 / 1.95 | 5.97 / 1.95 | 5.97 / 2.00 | 6.37 / 2.39 |
+
+  - Bitstream 3 reads the same on both boards to within 3 cycles per 512-iteration run.
+  - Every slot of every run sits 1-9 % under its simulated cycles. So on this kit the simulator predicts silicon, for
+    both bitstreams.
+- **The lifetime query's stall** (hpm kit, event 22; 256 ops):
+
+  | image | bitstream 3 | ObjBounds | C.5a |
+  |---|---|---|---|
+  | hpm-3 (LDC) | 1,530 | 511 | 509 |
+  | hpm-4 (STC) | 1,530 | 256 | 254 |
+
+  C.5a removes it as ObjBounds does.
+- **ObjBounds-kit shapes**, C.5a against bitstream 3:
+  - pointer chase over 64 nodes: 0.557;
+  - one resident node: ldc 0.560, stc 0.549;
+  - a 1,024-node chase: 1.057;
+  - 64 nodes after a flush, pass 1: 2.050. A verdict-cache miss costs more than the query it replaced, as predicted.
+  - pass 2 of the same: 0.614.
+  - plain loads and churn: equal within 0.3 %.
+- **Do not cite:**
+  - **As program costs.** These are microbenchmark shapes; SPEC on C.5a is a separate, later reading.
+  - **As forwarding evidence.** The isolated pair's 17.0 cycles on bitstream 3 is smaller than the 23-36 cycles per pair
+    the runtime lane estimated from compiled programs. The excess is not the pair's own cost, and this kit cannot say what it is.
+  - **The hpm counters as exact on C.5a.** l1d_miss read one more than pre-registered on every image with a data access
+    (N = 1, open, see the C.5a record).

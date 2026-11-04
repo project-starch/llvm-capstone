@@ -24,7 +24,6 @@ define void @guarded(ptr addrspace(200) %p, i64 %n) addrspace(200) {
 ; CHECK:       [[FOR_BODY_PREHEADER]]:
 ; CHECK-NEXT:    br label %[[FOR_BODY:.*]]
 ; CHECK:       [[FOR_BODY]]:
-; CHECK-NEXT:    [[LSR_IV1:%.*]] = phi i64 [ 0, %[[FOR_BODY_PREHEADER]] ], [ [[LSR_IV_NEXT2:%.*]], %[[FOR_BODY]] ]
 ; CHECK-NEXT:    [[LSR_IV:%.*]] = phi i64 [ [[N]], %[[FOR_BODY_PREHEADER]] ], [ [[LSR_IV_NEXT:%.*]], %[[FOR_BODY]] ]
 ; CHECK-NEXT:    [[LSR_CAP_IV:%.*]] = phi ptr addrspace(200) [ [[P]], %[[FOR_BODY_PREHEADER]] ], [ [[LSR_CAP_NEXT:%.*]], %[[FOR_BODY]] ]
 ; CHECK-NEXT:    [[V0:%.*]] = load i16, ptr addrspace(200) [[LSR_CAP_IV]], align 2
@@ -35,7 +34,6 @@ define void @guarded(ptr addrspace(200) %p, i64 %n) addrspace(200) {
 ; CHECK-NEXT:    [[N1:%.*]] = xor i16 [[V1]], -1
 ; CHECK-NEXT:    store i16 [[N1]], ptr addrspace(200) [[A1]], align 2
 ; CHECK-NEXT:    [[LSR_IV_NEXT]] = add i64 [[LSR_IV]], -1
-; CHECK-NEXT:    [[LSR_IV_NEXT2]] = add nuw i64 [[LSR_IV1]], 8
 ; CHECK-NEXT:    [[DONE:%.*]] = icmp eq i64 [[LSR_IV_NEXT]], 0
 ; CHECK-NEXT:    [[LSR_CAP_NEXT]] = getelementptr i8, ptr addrspace(200) [[LSR_CAP_IV]], i64 8
 ; CHECK-NEXT:    br i1 [[DONE]], label %[[FOR_END_LOOPEXIT:.*]], label %[[FOR_BODY]]
@@ -83,10 +81,10 @@ define void @guarded_conditional(ptr addrspace(200) %p, ptr addrspace(200) %flag
 ; CHECK-NEXT:    [[ENTER:%.*]] = and i1 [[NONNULL]], [[POSITIVE]]
 ; CHECK-NEXT:    br i1 [[ENTER]], label %[[FOR_BODY_PREHEADER:.*]], label %[[FOR_END:.*]]
 ; CHECK:       [[FOR_BODY_PREHEADER]]:
+; CHECK-NEXT:    [[LSR_CAP_END:%.*]] = getelementptr i8, ptr addrspace(200) [[FLAGS]], i64 [[N]]
 ; CHECK-NEXT:    br label %[[FOR_BODY:.*]]
 ; CHECK:       [[FOR_BODY]]:
 ; CHECK-NEXT:    [[LSR_IV:%.*]] = phi i64 [ 0, %[[FOR_BODY_PREHEADER]] ], [ [[LSR_IV_NEXT:%.*]], %[[FOR_INC:.*]] ]
-; CHECK-NEXT:    [[I:%.*]] = phi i64 [ [[INC:%.*]], %[[FOR_INC]] ], [ 0, %[[FOR_BODY_PREHEADER]] ]
 ; CHECK-NEXT:    [[LSR_CAP_IV:%.*]] = phi ptr addrspace(200) [ [[FLAGS]], %[[FOR_BODY_PREHEADER]] ], [ [[LSR_CAP_NEXT:%.*]], %[[FOR_INC]] ]
 ; CHECK-NEXT:    [[FLAG:%.*]] = load i8, ptr addrspace(200) [[LSR_CAP_IV]], align 1
 ; CHECK-NEXT:    [[TAKE:%.*]] = icmp ne i8 [[FLAG]], 0
@@ -98,11 +96,10 @@ define void @guarded_conditional(ptr addrspace(200) %p, ptr addrspace(200) %flag
 ; CHECK-NEXT:    store i16 [[N0]], ptr addrspace(200) [[A0]], align 2
 ; CHECK-NEXT:    br label %[[FOR_INC]]
 ; CHECK:       [[FOR_INC]]:
-; CHECK-NEXT:    [[INC]] = add nuw nsw i64 [[I]], 1
 ; CHECK-NEXT:    [[LSR_IV_NEXT]] = add i64 [[LSR_IV]], 8
-; CHECK-NEXT:    [[DONE:%.*]] = icmp eq i64 [[N]], [[INC]]
 ; CHECK-NEXT:    [[LSR_CAP_NEXT]] = getelementptr i8, ptr addrspace(200) [[LSR_CAP_IV]], i64 1
-; CHECK-NEXT:    br i1 [[DONE]], label %[[FOR_END_LOOPEXIT:.*]], label %[[FOR_BODY]]
+; CHECK-NEXT:    [[LSR_CAP_DONE:%.*]] = icmp eq ptr addrspace(200) [[LSR_CAP_NEXT]], [[LSR_CAP_END]]
+; CHECK-NEXT:    br i1 [[LSR_CAP_DONE]], label %[[FOR_END_LOOPEXIT:.*]], label %[[FOR_BODY]]
 ; CHECK:       [[FOR_END_LOOPEXIT]]:
 ; CHECK-NEXT:    br label %[[FOR_END]]
 ; CHECK:       [[FOR_END]]:
@@ -148,14 +145,12 @@ define void @attributed(ptr addrspace(200) nonnull %p, i64 %n) addrspace(200) {
 ; CHECK:       [[FOR_BODY_PREHEADER]]:
 ; CHECK-NEXT:    br label %[[FOR_BODY:.*]]
 ; CHECK:       [[FOR_BODY]]:
-; CHECK-NEXT:    [[LSR_IV1:%.*]] = phi i64 [ 0, %[[FOR_BODY_PREHEADER]] ], [ [[LSR_IV_NEXT2:%.*]], %[[FOR_BODY]] ]
 ; CHECK-NEXT:    [[LSR_IV:%.*]] = phi i64 [ [[N]], %[[FOR_BODY_PREHEADER]] ], [ [[LSR_IV_NEXT:%.*]], %[[FOR_BODY]] ]
 ; CHECK-NEXT:    [[LSR_CAP_IV:%.*]] = phi ptr addrspace(200) [ [[P]], %[[FOR_BODY_PREHEADER]] ], [ [[LSR_CAP_NEXT:%.*]], %[[FOR_BODY]] ]
 ; CHECK-NEXT:    [[V0:%.*]] = load i16, ptr addrspace(200) [[LSR_CAP_IV]], align 2
 ; CHECK-NEXT:    [[N0:%.*]] = xor i16 [[V0]], -1
 ; CHECK-NEXT:    store i16 [[N0]], ptr addrspace(200) [[LSR_CAP_IV]], align 2
 ; CHECK-NEXT:    [[LSR_IV_NEXT]] = add i64 [[LSR_IV]], -1
-; CHECK-NEXT:    [[LSR_IV_NEXT2]] = add nuw i64 [[LSR_IV1]], 8
 ; CHECK-NEXT:    [[DONE:%.*]] = icmp eq i64 [[LSR_IV_NEXT]], 0
 ; CHECK-NEXT:    [[LSR_CAP_NEXT]] = getelementptr i8, ptr addrspace(200) [[LSR_CAP_IV]], i64 8
 ; CHECK-NEXT:    br i1 [[DONE]], label %[[FOR_END_LOOPEXIT:.*]], label %[[FOR_BODY]]
@@ -193,14 +188,12 @@ define void @every_iteration(ptr addrspace(200) %p, i64 %n) addrspace(200) {
 ; CHECK:       [[FOR_BODY_PREHEADER]]:
 ; CHECK-NEXT:    br label %[[FOR_BODY:.*]]
 ; CHECK:       [[FOR_BODY]]:
-; CHECK-NEXT:    [[LSR_IV1:%.*]] = phi i64 [ 0, %[[FOR_BODY_PREHEADER]] ], [ [[LSR_IV_NEXT2:%.*]], %[[FOR_BODY]] ]
 ; CHECK-NEXT:    [[LSR_IV:%.*]] = phi i64 [ [[N]], %[[FOR_BODY_PREHEADER]] ], [ [[LSR_IV_NEXT:%.*]], %[[FOR_BODY]] ]
 ; CHECK-NEXT:    [[LSR_CAP_IV:%.*]] = phi ptr addrspace(200) [ [[P]], %[[FOR_BODY_PREHEADER]] ], [ [[LSR_CAP_NEXT:%.*]], %[[FOR_BODY]] ]
 ; CHECK-NEXT:    [[V0:%.*]] = load i16, ptr addrspace(200) [[LSR_CAP_IV]], align 2
 ; CHECK-NEXT:    [[N0:%.*]] = xor i16 [[V0]], -1
 ; CHECK-NEXT:    store i16 [[N0]], ptr addrspace(200) [[LSR_CAP_IV]], align 2
 ; CHECK-NEXT:    [[LSR_IV_NEXT]] = add i64 [[LSR_IV]], -1
-; CHECK-NEXT:    [[LSR_IV_NEXT2]] = add nuw i64 [[LSR_IV1]], 8
 ; CHECK-NEXT:    [[DONE:%.*]] = icmp eq i64 [[LSR_IV_NEXT]], 0
 ; CHECK-NEXT:    [[LSR_CAP_NEXT]] = getelementptr i8, ptr addrspace(200) [[LSR_CAP_IV]], i64 8
 ; CHECK-NEXT:    br i1 [[DONE]], label %[[FOR_END_LOOPEXIT:.*]], label %[[FOR_BODY]]
@@ -366,8 +359,7 @@ define void @header_exit(ptr addrspace(200) %p, ptr addrspace(200) %stop, i64 %n
 ; CHECK:       [[LOOP_PREHEADER]]:
 ; CHECK-NEXT:    br label %[[LOOP:.*]]
 ; CHECK:       [[LOOP]]:
-; CHECK-NEXT:    [[LSR_IV1:%.*]] = phi i64 [ 0, %[[LOOP_PREHEADER]] ], [ [[LSR_IV_NEXT2:%.*]], %[[LATCH:.*]] ]
-; CHECK-NEXT:    [[LSR_IV:%.*]] = phi i64 [ [[N]], %[[LOOP_PREHEADER]] ], [ [[LSR_IV_NEXT:%.*]], %[[LATCH]] ]
+; CHECK-NEXT:    [[LSR_IV:%.*]] = phi i64 [ [[N]], %[[LOOP_PREHEADER]] ], [ [[LSR_IV_NEXT:%.*]], %[[LATCH:.*]] ]
 ; CHECK-NEXT:    [[LSR_CAP_IV:%.*]] = phi ptr addrspace(200) [ [[P]], %[[LOOP_PREHEADER]] ], [ [[LSR_CAP_NEXT:%.*]], %[[LATCH]] ]
 ; CHECK-NEXT:    [[V:%.*]] = load i16, ptr addrspace(200) [[LSR_CAP_IV]], align 2
 ; CHECK-NEXT:    [[LEAVE:%.*]] = icmp eq i16 [[V]], 0
@@ -376,7 +368,6 @@ define void @header_exit(ptr addrspace(200) %p, ptr addrspace(200) %stop, i64 %n
 ; CHECK-NEXT:    [[W:%.*]] = xor i16 [[V]], -1
 ; CHECK-NEXT:    store i16 [[W]], ptr addrspace(200) [[LSR_CAP_IV]], align 2
 ; CHECK-NEXT:    [[LSR_IV_NEXT]] = add i64 [[LSR_IV]], -1
-; CHECK-NEXT:    [[LSR_IV_NEXT2]] = add nuw i64 [[LSR_IV1]], 8
 ; CHECK-NEXT:    [[DONE:%.*]] = icmp eq i64 [[LSR_IV_NEXT]], 0
 ; CHECK-NEXT:    [[LSR_CAP_NEXT]] = getelementptr i8, ptr addrspace(200) [[LSR_CAP_IV]], i64 8
 ; CHECK-NEXT:    br i1 [[DONE]], label %[[EXIT_LOOPEXIT]], label %[[LOOP]]
@@ -775,17 +766,14 @@ define i16 @cmp_end(ptr addrspace(200) %p, i64 %n) addrspace(200) {
 ; CHECK-NEXT:    br label %[[LOOP:.*]]
 ; CHECK:       [[LOOP]]:
 ; CHECK-NEXT:    [[INDVAR:%.*]] = phi i64 [ 0, %[[LOOP_PREHEADER]] ], [ [[INDVAR_NEXT:%.*]], %[[LOOP]] ]
-; CHECK-NEXT:    [[LSR_IV:%.*]] = phi i64 [ 0, %[[LOOP_PREHEADER]] ], [ [[LSR_IV_NEXT:%.*]], %[[LOOP]] ]
 ; CHECK-NEXT:    [[ACC:%.*]] = phi i16 [ [[ACC_NEXT:%.*]], %[[LOOP]] ], [ 0, %[[LOOP_PREHEADER]] ]
 ; CHECK-NEXT:    [[LSR_CAP_IV:%.*]] = phi ptr addrspace(200) [ [[P]], %[[LOOP_PREHEADER]] ], [ [[LSR_CAP_NEXT:%.*]], %[[LOOP]] ]
 ; CHECK-NEXT:    [[TMP1:%.*]] = mul i64 [[INDVAR]], -8
 ; CHECK-NEXT:    [[TMP2:%.*]] = add i64 [[TMP0]], [[TMP1]]
 ; CHECK-NEXT:    [[V:%.*]] = load i16, ptr addrspace(200) [[LSR_CAP_IV]], align 2
 ; CHECK-NEXT:    [[ACC_NEXT]] = add i16 [[ACC]], [[V]]
-; CHECK-NEXT:    [[NIDX:%.*]] = shl nsw i64 [[N]], 3
 ; CHECK-NEXT:    [[TMP3:%.*]] = getelementptr i8, ptr addrspace(200) [[LSR_CAP_IV]], i64 [[TMP2]]
 ; CHECK-NEXT:    [[DONE:%.*]] = icmp eq ptr addrspace(200) [[LSR_CAP_IV]], [[TMP3]]
-; CHECK-NEXT:    [[LSR_IV_NEXT]] = add nuw i64 [[LSR_IV]], 8
 ; CHECK-NEXT:    [[LSR_CAP_NEXT]] = getelementptr i8, ptr addrspace(200) [[LSR_CAP_IV]], i64 8
 ; CHECK-NEXT:    [[INDVAR_NEXT]] = add i64 [[INDVAR]], 1
 ; CHECK-NEXT:    br i1 [[DONE]], label %[[EXIT_LOOPEXIT:.*]], label %[[LOOP]]
@@ -839,13 +827,11 @@ define void @nested_index_start(ptr addrspace(200) %x, i64 %n, ptr addrspace(200
 ; CHECK-NEXT:    [[LSR_CAP_START:%.*]] = getelementptr double, ptr addrspace(200) [[X]], i64 [[LSR_IV3]]
 ; CHECK-NEXT:    br label %[[INNER:.*]]
 ; CHECK:       [[INNER]]:
-; CHECK-NEXT:    [[LSR_IV5:%.*]] = phi i64 [ [[LSR_IV_NEXT6:%.*]], %[[INNER]] ], [ [[LSR_IV3]], %[[INNER_PH]] ]
 ; CHECK-NEXT:    [[LSR_IV1:%.*]] = phi i64 [ [[LSR_IV_NEXT2:%.*]], %[[INNER]] ], [ [[LSR_IV]], %[[INNER_PH]] ]
 ; CHECK-NEXT:    [[LSR_CAP_IV:%.*]] = phi ptr addrspace(200) [ [[LSR_CAP_START]], %[[INNER_PH]] ], [ [[LSR_CAP_NEXT:%.*]], %[[INNER]] ]
 ; CHECK-NEXT:    [[V:%.*]] = load double, ptr addrspace(200) [[LSR_CAP_IV]], align 8
 ; CHECK-NEXT:    store double [[V]], ptr addrspace(200) [[OUT]], align 8
 ; CHECK-NEXT:    [[LSR_IV_NEXT2]] = add i64 [[LSR_IV1]], -1
-; CHECK-NEXT:    [[LSR_IV_NEXT6]] = add i64 [[LSR_IV5]], 3
 ; CHECK-NEXT:    [[JDONE:%.*]] = icmp eq i64 [[LSR_IV_NEXT2]], 0
 ; CHECK-NEXT:    [[LSR_CAP_NEXT]] = getelementptr i8, ptr addrspace(200) [[LSR_CAP_IV]], i64 24
 ; CHECK-NEXT:    br i1 [[JDONE]], label %[[OUTER_LATCH_LOOPEXIT:.*]], label %[[INNER]]
@@ -1142,14 +1128,12 @@ define ptr addrspace(200) @live_out(ptr addrspace(200) %p, i64 %n) addrspace(200
 ; CHECK:       [[FOR_BODY_PREHEADER]]:
 ; CHECK-NEXT:    br label %[[FOR_BODY:.*]]
 ; CHECK:       [[FOR_BODY]]:
-; CHECK-NEXT:    [[LSR_IV1:%.*]] = phi i64 [ 0, %[[FOR_BODY_PREHEADER]] ], [ [[LSR_IV_NEXT2:%.*]], %[[FOR_BODY]] ]
 ; CHECK-NEXT:    [[LSR_IV:%.*]] = phi i64 [ [[N]], %[[FOR_BODY_PREHEADER]] ], [ [[LSR_IV_NEXT:%.*]], %[[FOR_BODY]] ]
 ; CHECK-NEXT:    [[LSR_CAP_IV:%.*]] = phi ptr addrspace(200) [ [[P]], %[[FOR_BODY_PREHEADER]] ], [ [[LSR_CAP_NEXT:%.*]], %[[FOR_BODY]] ]
 ; CHECK-NEXT:    [[V0:%.*]] = load i16, ptr addrspace(200) [[LSR_CAP_IV]], align 2
 ; CHECK-NEXT:    [[N0:%.*]] = xor i16 [[V0]], -1
 ; CHECK-NEXT:    store i16 [[N0]], ptr addrspace(200) [[LSR_CAP_IV]], align 2
 ; CHECK-NEXT:    [[LSR_IV_NEXT]] = add i64 [[LSR_IV]], -1
-; CHECK-NEXT:    [[LSR_IV_NEXT2]] = add nuw i64 [[LSR_IV1]], 8
 ; CHECK-NEXT:    [[DONE:%.*]] = icmp eq i64 [[LSR_IV_NEXT]], 0
 ; CHECK-NEXT:    [[LSR_CAP_NEXT]] = getelementptr i8, ptr addrspace(200) [[LSR_CAP_IV]], i64 8
 ; CHECK-NEXT:    br i1 [[DONE]], label %[[FOR_END_LOOPEXIT:.*]], label %[[FOR_BODY]]
@@ -1198,14 +1182,12 @@ define ptr addrspace(200) @live_out_2k(ptr addrspace(200) %p, i64 %n) addrspace(
 ; CHECK:       [[FOR_BODY_PREHEADER]]:
 ; CHECK-NEXT:    br label %[[FOR_BODY:.*]]
 ; CHECK:       [[FOR_BODY]]:
-; CHECK-NEXT:    [[LSR_IV1:%.*]] = phi i64 [ 0, %[[FOR_BODY_PREHEADER]] ], [ [[LSR_IV_NEXT2:%.*]], %[[FOR_BODY]] ]
 ; CHECK-NEXT:    [[LSR_IV:%.*]] = phi i64 [ [[N]], %[[FOR_BODY_PREHEADER]] ], [ [[LSR_IV_NEXT:%.*]], %[[FOR_BODY]] ]
 ; CHECK-NEXT:    [[LSR_CAP_IV:%.*]] = phi ptr addrspace(200) [ [[P]], %[[FOR_BODY_PREHEADER]] ], [ [[LSR_CAP_NEXT:%.*]], %[[FOR_BODY]] ]
 ; CHECK-NEXT:    [[V0:%.*]] = load i16, ptr addrspace(200) [[LSR_CAP_IV]], align 2
 ; CHECK-NEXT:    [[N0:%.*]] = xor i16 [[V0]], -1
 ; CHECK-NEXT:    store i16 [[N0]], ptr addrspace(200) [[LSR_CAP_IV]], align 2
 ; CHECK-NEXT:    [[LSR_IV_NEXT]] = add i64 [[LSR_IV]], -1
-; CHECK-NEXT:    [[LSR_IV_NEXT2]] = add nuw i64 [[LSR_IV1]], 2048
 ; CHECK-NEXT:    [[DONE:%.*]] = icmp eq i64 [[LSR_IV_NEXT]], 0
 ; CHECK-NEXT:    [[LSR_CAP_NEXT]] = getelementptr i8, ptr addrspace(200) [[LSR_CAP_IV]], i64 2048
 ; CHECK-NEXT:    br i1 [[DONE]], label %[[FOR_END_LOOPEXIT:.*]], label %[[FOR_BODY]]
@@ -1250,14 +1232,12 @@ define ptr addrspace(200) @live_out_4k(ptr addrspace(200) %p, i64 %n) addrspace(
 ; CHECK:       [[FOR_BODY_PREHEADER]]:
 ; CHECK-NEXT:    br label %[[FOR_BODY:.*]]
 ; CHECK:       [[FOR_BODY]]:
-; CHECK-NEXT:    [[LSR_IV1:%.*]] = phi i64 [ 0, %[[FOR_BODY_PREHEADER]] ], [ [[LSR_IV_NEXT2:%.*]], %[[FOR_BODY]] ]
 ; CHECK-NEXT:    [[LSR_IV:%.*]] = phi i64 [ [[N]], %[[FOR_BODY_PREHEADER]] ], [ [[LSR_IV_NEXT:%.*]], %[[FOR_BODY]] ]
 ; CHECK-NEXT:    [[LSR_CAP_IV:%.*]] = phi ptr addrspace(200) [ [[P]], %[[FOR_BODY_PREHEADER]] ], [ [[LSR_CAP_NEXT:%.*]], %[[FOR_BODY]] ]
 ; CHECK-NEXT:    [[V0:%.*]] = load i16, ptr addrspace(200) [[LSR_CAP_IV]], align 2
 ; CHECK-NEXT:    [[N0:%.*]] = xor i16 [[V0]], -1
 ; CHECK-NEXT:    store i16 [[N0]], ptr addrspace(200) [[LSR_CAP_IV]], align 2
 ; CHECK-NEXT:    [[LSR_IV_NEXT]] = add i64 [[LSR_IV]], -1
-; CHECK-NEXT:    [[LSR_IV_NEXT2]] = add nuw i64 [[LSR_IV1]], 4096
 ; CHECK-NEXT:    [[DONE:%.*]] = icmp eq i64 [[LSR_IV_NEXT]], 0
 ; CHECK-NEXT:    [[LSR_CAP_NEXT]] = getelementptr i8, ptr addrspace(200) [[LSR_CAP_IV]], i64 4096
 ; CHECK-NEXT:    br i1 [[DONE]], label %[[FOR_END_LOOPEXIT:.*]], label %[[FOR_BODY]]
@@ -1302,14 +1282,12 @@ define ptr addrspace(200) @live_out_64k(ptr addrspace(200) %p, i64 %n) addrspace
 ; CHECK:       [[FOR_BODY_PREHEADER]]:
 ; CHECK-NEXT:    br label %[[FOR_BODY:.*]]
 ; CHECK:       [[FOR_BODY]]:
-; CHECK-NEXT:    [[LSR_IV1:%.*]] = phi i64 [ 0, %[[FOR_BODY_PREHEADER]] ], [ [[LSR_IV_NEXT2:%.*]], %[[FOR_BODY]] ]
 ; CHECK-NEXT:    [[LSR_IV:%.*]] = phi i64 [ [[N]], %[[FOR_BODY_PREHEADER]] ], [ [[LSR_IV_NEXT:%.*]], %[[FOR_BODY]] ]
 ; CHECK-NEXT:    [[LSR_CAP_IV:%.*]] = phi ptr addrspace(200) [ [[P]], %[[FOR_BODY_PREHEADER]] ], [ [[LSR_CAP_NEXT:%.*]], %[[FOR_BODY]] ]
 ; CHECK-NEXT:    [[V0:%.*]] = load i16, ptr addrspace(200) [[LSR_CAP_IV]], align 2
 ; CHECK-NEXT:    [[N0:%.*]] = xor i16 [[V0]], -1
 ; CHECK-NEXT:    store i16 [[N0]], ptr addrspace(200) [[LSR_CAP_IV]], align 2
 ; CHECK-NEXT:    [[LSR_IV_NEXT]] = add i64 [[LSR_IV]], -1
-; CHECK-NEXT:    [[LSR_IV_NEXT2]] = add nuw i64 [[LSR_IV1]], 65536
 ; CHECK-NEXT:    [[DONE:%.*]] = icmp eq i64 [[LSR_IV_NEXT]], 0
 ; CHECK-NEXT:    [[LSR_CAP_NEXT]] = getelementptr i8, ptr addrspace(200) [[LSR_CAP_IV]], i64 65536
 ; CHECK-NEXT:    br i1 [[DONE]], label %[[FOR_END_LOOPEXIT:.*]], label %[[FOR_BODY]]
@@ -1408,14 +1386,12 @@ define ptr addrspace(200) @live_out_down_4k(ptr addrspace(200) %p, i64 %n) addrs
 ; CHECK-NEXT:    [[LSR_CAP_START:%.*]] = getelementptr i8, ptr addrspace(200) [[P]], i64 [[TMP1]]
 ; CHECK-NEXT:    br label %[[FOR_BODY:.*]]
 ; CHECK:       [[FOR_BODY]]:
-; CHECK-NEXT:    [[LSR_IV:%.*]] = phi i64 [ [[TMP1]], %[[FOR_BODY_PREHEADER]] ], [ [[LSR_IV_NEXT:%.*]], %[[FOR_BODY]] ]
 ; CHECK-NEXT:    [[I:%.*]] = phi i64 [ [[DEC:%.*]], %[[FOR_BODY]] ], [ [[N]], %[[FOR_BODY_PREHEADER]] ]
 ; CHECK-NEXT:    [[LSR_CAP_IV:%.*]] = phi ptr addrspace(200) [ [[LSR_CAP_START]], %[[FOR_BODY_PREHEADER]] ], [ [[LSR_CAP_NEXT:%.*]], %[[FOR_BODY]] ]
 ; CHECK-NEXT:    [[V0:%.*]] = load i16, ptr addrspace(200) [[LSR_CAP_IV]], align 2
 ; CHECK-NEXT:    [[N0:%.*]] = xor i16 [[V0]], -1
 ; CHECK-NEXT:    store i16 [[N0]], ptr addrspace(200) [[LSR_CAP_IV]], align 2
 ; CHECK-NEXT:    [[DEC]] = add nsw i64 [[I]], -1
-; CHECK-NEXT:    [[LSR_IV_NEXT]] = add i64 [[LSR_IV]], -4096
 ; CHECK-NEXT:    [[DONE:%.*]] = icmp eq i64 [[DEC]], 0
 ; CHECK-NEXT:    [[LSR_CAP_NEXT]] = getelementptr i8, ptr addrspace(200) [[LSR_CAP_IV]], i64 -4096
 ; CHECK-NEXT:    br i1 [[DONE]], label %[[FOR_END_LOOPEXIT:.*]], label %[[FOR_BODY]]
@@ -1458,19 +1434,17 @@ define void @plus_k(ptr addrspace(200) %p, i64 %n) addrspace(200) {
 ; CHECK-NEXT:    br i1 [[POSITIVE]], label %[[FOR_BODY_PREHEADER:.*]], label %[[FOR_END:.*]]
 ; CHECK:       [[FOR_BODY_PREHEADER]]:
 ; CHECK-NEXT:    [[LSR_CAP_START:%.*]] = getelementptr i8, ptr addrspace(200) [[P]], i64 65536
+; CHECK-NEXT:    [[TMP0:%.*]] = add i64 [[N]], 65536
+; CHECK-NEXT:    [[LSR_CAP_END:%.*]] = getelementptr i8, ptr addrspace(200) [[P]], i64 [[TMP0]]
 ; CHECK-NEXT:    br label %[[FOR_BODY:.*]]
 ; CHECK:       [[FOR_BODY]]:
-; CHECK-NEXT:    [[LSR_IV1:%.*]] = phi i64 [ 65536, %[[FOR_BODY_PREHEADER]] ], [ [[LSR_IV_NEXT2:%.*]], %[[FOR_BODY]] ]
-; CHECK-NEXT:    [[LSR_IV:%.*]] = phi i64 [ [[N]], %[[FOR_BODY_PREHEADER]] ], [ [[LSR_IV_NEXT:%.*]], %[[FOR_BODY]] ]
 ; CHECK-NEXT:    [[LSR_CAP_IV:%.*]] = phi ptr addrspace(200) [ [[LSR_CAP_START]], %[[FOR_BODY_PREHEADER]] ], [ [[LSR_CAP_NEXT:%.*]], %[[FOR_BODY]] ]
 ; CHECK-NEXT:    [[V0:%.*]] = load i8, ptr addrspace(200) [[LSR_CAP_IV]], align 1
 ; CHECK-NEXT:    [[N0:%.*]] = xor i8 [[V0]], -1
 ; CHECK-NEXT:    store i8 [[N0]], ptr addrspace(200) [[LSR_CAP_IV]], align 1
-; CHECK-NEXT:    [[LSR_IV_NEXT]] = add i64 [[LSR_IV]], -1
-; CHECK-NEXT:    [[LSR_IV_NEXT2]] = add nuw i64 [[LSR_IV1]], 1
-; CHECK-NEXT:    [[DONE:%.*]] = icmp eq i64 [[LSR_IV_NEXT]], 0
 ; CHECK-NEXT:    [[LSR_CAP_NEXT]] = getelementptr i8, ptr addrspace(200) [[LSR_CAP_IV]], i64 1
-; CHECK-NEXT:    br i1 [[DONE]], label %[[FOR_END_LOOPEXIT:.*]], label %[[FOR_BODY]]
+; CHECK-NEXT:    [[LSR_CAP_DONE:%.*]] = icmp eq ptr addrspace(200) [[LSR_CAP_NEXT]], [[LSR_CAP_END]]
+; CHECK-NEXT:    br i1 [[LSR_CAP_DONE]], label %[[FOR_END_LOOPEXIT:.*]], label %[[FOR_BODY]]
 ; CHECK:       [[FOR_END_LOOPEXIT]]:
 ; CHECK-NEXT:    br label %[[FOR_END]]
 ; CHECK:       [[FOR_END]]:
@@ -1504,19 +1478,16 @@ define void @minus_k(ptr addrspace(200) %p, i64 %n) addrspace(200) {
 ; CHECK-NEXT:    br i1 [[POSITIVE]], label %[[FOR_BODY_PREHEADER:.*]], label %[[FOR_END:.*]]
 ; CHECK:       [[FOR_BODY_PREHEADER]]:
 ; CHECK-NEXT:    [[LSR_CAP_START:%.*]] = getelementptr i8, ptr addrspace(200) [[P]], i64 65536
+; CHECK-NEXT:    [[LSR_CAP_END:%.*]] = getelementptr i8, ptr addrspace(200) [[P]], i64 [[N]]
 ; CHECK-NEXT:    br label %[[FOR_BODY:.*]]
 ; CHECK:       [[FOR_BODY]]:
-; CHECK-NEXT:    [[LSR_IV:%.*]] = phi i64 [ 0, %[[FOR_BODY_PREHEADER]] ], [ [[LSR_IV_NEXT:%.*]], %[[FOR_BODY]] ]
-; CHECK-NEXT:    [[I:%.*]] = phi i64 [ [[INC:%.*]], %[[FOR_BODY]] ], [ 65536, %[[FOR_BODY_PREHEADER]] ]
 ; CHECK-NEXT:    [[LSR_CAP_IV:%.*]] = phi ptr addrspace(200) [ [[LSR_CAP_START]], %[[FOR_BODY_PREHEADER]] ], [ [[LSR_CAP_NEXT:%.*]], %[[FOR_BODY]] ]
 ; CHECK-NEXT:    [[V0:%.*]] = load i8, ptr addrspace(200) [[LSR_CAP_IV]], align 1
 ; CHECK-NEXT:    [[TMP0:%.*]] = getelementptr i8, ptr addrspace(200) [[LSR_CAP_IV]], i64 -65536
 ; CHECK-NEXT:    store i8 [[V0]], ptr addrspace(200) [[TMP0]], align 1
-; CHECK-NEXT:    [[INC]] = add nuw nsw i64 [[I]], 1
-; CHECK-NEXT:    [[LSR_IV_NEXT]] = add nuw nsw i64 [[LSR_IV]], 1
-; CHECK-NEXT:    [[DONE:%.*]] = icmp eq i64 [[N]], [[INC]]
 ; CHECK-NEXT:    [[LSR_CAP_NEXT]] = getelementptr i8, ptr addrspace(200) [[LSR_CAP_IV]], i64 1
-; CHECK-NEXT:    br i1 [[DONE]], label %[[FOR_END_LOOPEXIT:.*]], label %[[FOR_BODY]]
+; CHECK-NEXT:    [[LSR_CAP_DONE:%.*]] = icmp eq ptr addrspace(200) [[LSR_CAP_NEXT]], [[LSR_CAP_END]]
+; CHECK-NEXT:    br i1 [[LSR_CAP_DONE]], label %[[FOR_END_LOOPEXIT:.*]], label %[[FOR_BODY]]
 ; CHECK:       [[FOR_END_LOOPEXIT]]:
 ; CHECK-NEXT:    br label %[[FOR_END]]
 ; CHECK:       [[FOR_END]]:
@@ -1554,14 +1525,12 @@ define void @reversed(ptr addrspace(200) %p, i64 %n) addrspace(200) {
 ; CHECK-NEXT:    [[LSR_CAP_START:%.*]] = getelementptr i8, ptr addrspace(200) [[P]], i64 [[TMP1]]
 ; CHECK-NEXT:    br label %[[FOR_BODY:.*]]
 ; CHECK:       [[FOR_BODY]]:
-; CHECK-NEXT:    [[LSR_IV:%.*]] = phi i64 [ [[TMP1]], %[[FOR_BODY_PREHEADER]] ], [ [[LSR_IV_NEXT:%.*]], %[[FOR_BODY]] ]
 ; CHECK-NEXT:    [[I:%.*]] = phi i64 [ [[DEC:%.*]], %[[FOR_BODY]] ], [ [[N]], %[[FOR_BODY_PREHEADER]] ]
 ; CHECK-NEXT:    [[LSR_CAP_IV:%.*]] = phi ptr addrspace(200) [ [[LSR_CAP_START]], %[[FOR_BODY_PREHEADER]] ], [ [[LSR_CAP_NEXT:%.*]], %[[FOR_BODY]] ]
 ; CHECK-NEXT:    [[V0:%.*]] = load i64, ptr addrspace(200) [[LSR_CAP_IV]], align 8
 ; CHECK-NEXT:    [[N0:%.*]] = xor i64 [[V0]], -1
 ; CHECK-NEXT:    store i64 [[N0]], ptr addrspace(200) [[LSR_CAP_IV]], align 8
 ; CHECK-NEXT:    [[DEC]] = add nsw i64 [[I]], -1
-; CHECK-NEXT:    [[LSR_IV_NEXT]] = add i64 [[LSR_IV]], -8
 ; CHECK-NEXT:    [[DONE:%.*]] = icmp eq i64 [[DEC]], 0
 ; CHECK-NEXT:    [[LSR_CAP_NEXT]] = getelementptr i8, ptr addrspace(200) [[LSR_CAP_IV]], i64 -8
 ; CHECK-NEXT:    br i1 [[DONE]], label %[[FOR_END_LOOPEXIT:.*]], label %[[FOR_BODY]]
@@ -1600,13 +1569,11 @@ define i16 @cmp_end_8(ptr addrspace(200) nonnull %p, ptr addrspace(200) %end) ad
 ; CHECK-NEXT:  [[ENTRY:.*]]:
 ; CHECK-NEXT:    br label %[[LOOP:.*]]
 ; CHECK:       [[LOOP]]:
-; CHECK-NEXT:    [[LSR_IV:%.*]] = phi i64 [ [[LSR_IV_NEXT:%.*]], %[[LOOP]] ], [ 0, %[[ENTRY]] ]
 ; CHECK-NEXT:    [[ACC:%.*]] = phi i16 [ 0, %[[ENTRY]] ], [ [[ACC_NEXT:%.*]], %[[LOOP]] ]
 ; CHECK-NEXT:    [[LSR_CAP_IV:%.*]] = phi ptr addrspace(200) [ [[P]], %[[ENTRY]] ], [ [[LSR_CAP_NEXT:%.*]], %[[LOOP]] ]
 ; CHECK-NEXT:    [[V:%.*]] = load i16, ptr addrspace(200) [[LSR_CAP_IV]], align 2
 ; CHECK-NEXT:    [[ACC_NEXT]] = add i16 [[ACC]], [[V]]
 ; CHECK-NEXT:    [[DONE:%.*]] = icmp eq ptr addrspace(200) [[LSR_CAP_IV]], [[END]]
-; CHECK-NEXT:    [[LSR_IV_NEXT]] = add nuw i64 [[LSR_IV]], 8
 ; CHECK-NEXT:    [[LSR_CAP_NEXT]] = getelementptr i8, ptr addrspace(200) [[LSR_CAP_IV]], i64 8
 ; CHECK-NEXT:    br i1 [[DONE]], label %[[EXIT:.*]], label %[[LOOP]]
 ; CHECK:       [[EXIT]]:
@@ -1638,13 +1605,11 @@ define i16 @cmp_end_2k(ptr addrspace(200) nonnull %p, ptr addrspace(200) %end) a
 ; CHECK-NEXT:  [[ENTRY:.*]]:
 ; CHECK-NEXT:    br label %[[LOOP:.*]]
 ; CHECK:       [[LOOP]]:
-; CHECK-NEXT:    [[LSR_IV:%.*]] = phi i64 [ [[LSR_IV_NEXT:%.*]], %[[LOOP]] ], [ 0, %[[ENTRY]] ]
 ; CHECK-NEXT:    [[ACC:%.*]] = phi i16 [ 0, %[[ENTRY]] ], [ [[ACC_NEXT:%.*]], %[[LOOP]] ]
 ; CHECK-NEXT:    [[LSR_CAP_IV:%.*]] = phi ptr addrspace(200) [ [[P]], %[[ENTRY]] ], [ [[LSR_CAP_NEXT:%.*]], %[[LOOP]] ]
 ; CHECK-NEXT:    [[V:%.*]] = load i16, ptr addrspace(200) [[LSR_CAP_IV]], align 2
 ; CHECK-NEXT:    [[ACC_NEXT]] = add i16 [[ACC]], [[V]]
 ; CHECK-NEXT:    [[DONE:%.*]] = icmp eq ptr addrspace(200) [[LSR_CAP_IV]], [[END]]
-; CHECK-NEXT:    [[LSR_IV_NEXT]] = add nuw i64 [[LSR_IV]], 2048
 ; CHECK-NEXT:    [[LSR_CAP_NEXT]] = getelementptr i8, ptr addrspace(200) [[LSR_CAP_IV]], i64 2048
 ; CHECK-NEXT:    br i1 [[DONE]], label %[[EXIT:.*]], label %[[LOOP]]
 ; CHECK:       [[EXIT]]:
@@ -1676,13 +1641,11 @@ define i16 @cmp_end_2056(ptr addrspace(200) nonnull %p, ptr addrspace(200) %end)
 ; CHECK-NEXT:  [[ENTRY:.*]]:
 ; CHECK-NEXT:    br label %[[LOOP:.*]]
 ; CHECK:       [[LOOP]]:
-; CHECK-NEXT:    [[LSR_IV:%.*]] = phi i64 [ [[LSR_IV_NEXT:%.*]], %[[LOOP]] ], [ 0, %[[ENTRY]] ]
 ; CHECK-NEXT:    [[ACC:%.*]] = phi i16 [ 0, %[[ENTRY]] ], [ [[ACC_NEXT:%.*]], %[[LOOP]] ]
 ; CHECK-NEXT:    [[LSR_CAP_IV:%.*]] = phi ptr addrspace(200) [ [[P]], %[[ENTRY]] ], [ [[LSR_CAP_NEXT:%.*]], %[[LOOP]] ]
 ; CHECK-NEXT:    [[V:%.*]] = load i16, ptr addrspace(200) [[LSR_CAP_IV]], align 2
 ; CHECK-NEXT:    [[ACC_NEXT]] = add i16 [[ACC]], [[V]]
 ; CHECK-NEXT:    [[DONE:%.*]] = icmp eq ptr addrspace(200) [[LSR_CAP_IV]], [[END]]
-; CHECK-NEXT:    [[LSR_IV_NEXT]] = add nuw i64 [[LSR_IV]], 2056
 ; CHECK-NEXT:    [[LSR_CAP_NEXT]] = getelementptr i8, ptr addrspace(200) [[LSR_CAP_IV]], i64 2056
 ; CHECK-NEXT:    br i1 [[DONE]], label %[[EXIT:.*]], label %[[LOOP]]
 ; CHECK:       [[EXIT]]:
@@ -1714,13 +1677,11 @@ define i16 @cmp_end_4k(ptr addrspace(200) nonnull %p, ptr addrspace(200) %end) a
 ; CHECK-NEXT:  [[ENTRY:.*]]:
 ; CHECK-NEXT:    br label %[[LOOP:.*]]
 ; CHECK:       [[LOOP]]:
-; CHECK-NEXT:    [[LSR_IV:%.*]] = phi i64 [ [[LSR_IV_NEXT:%.*]], %[[LOOP]] ], [ 0, %[[ENTRY]] ]
 ; CHECK-NEXT:    [[ACC:%.*]] = phi i16 [ 0, %[[ENTRY]] ], [ [[ACC_NEXT:%.*]], %[[LOOP]] ]
 ; CHECK-NEXT:    [[LSR_CAP_IV:%.*]] = phi ptr addrspace(200) [ [[P]], %[[ENTRY]] ], [ [[LSR_CAP_NEXT:%.*]], %[[LOOP]] ]
 ; CHECK-NEXT:    [[V:%.*]] = load i16, ptr addrspace(200) [[LSR_CAP_IV]], align 2
 ; CHECK-NEXT:    [[ACC_NEXT]] = add i16 [[ACC]], [[V]]
 ; CHECK-NEXT:    [[DONE:%.*]] = icmp eq ptr addrspace(200) [[LSR_CAP_IV]], [[END]]
-; CHECK-NEXT:    [[LSR_IV_NEXT]] = add nuw i64 [[LSR_IV]], 4096
 ; CHECK-NEXT:    [[LSR_CAP_NEXT]] = getelementptr i8, ptr addrspace(200) [[LSR_CAP_IV]], i64 4096
 ; CHECK-NEXT:    br i1 [[DONE]], label %[[EXIT:.*]], label %[[LOOP]]
 ; CHECK:       [[EXIT]]:
@@ -1752,13 +1713,11 @@ define i16 @cmp_end_64k(ptr addrspace(200) nonnull %p, ptr addrspace(200) %end) 
 ; CHECK-NEXT:  [[ENTRY:.*]]:
 ; CHECK-NEXT:    br label %[[LOOP:.*]]
 ; CHECK:       [[LOOP]]:
-; CHECK-NEXT:    [[LSR_IV:%.*]] = phi i64 [ [[LSR_IV_NEXT:%.*]], %[[LOOP]] ], [ 0, %[[ENTRY]] ]
 ; CHECK-NEXT:    [[ACC:%.*]] = phi i16 [ 0, %[[ENTRY]] ], [ [[ACC_NEXT:%.*]], %[[LOOP]] ]
 ; CHECK-NEXT:    [[LSR_CAP_IV:%.*]] = phi ptr addrspace(200) [ [[P]], %[[ENTRY]] ], [ [[LSR_CAP_NEXT:%.*]], %[[LOOP]] ]
 ; CHECK-NEXT:    [[V:%.*]] = load i16, ptr addrspace(200) [[LSR_CAP_IV]], align 2
 ; CHECK-NEXT:    [[ACC_NEXT]] = add i16 [[ACC]], [[V]]
 ; CHECK-NEXT:    [[DONE:%.*]] = icmp eq ptr addrspace(200) [[LSR_CAP_IV]], [[END]]
-; CHECK-NEXT:    [[LSR_IV_NEXT]] = add nuw i64 [[LSR_IV]], 65536
 ; CHECK-NEXT:    [[LSR_CAP_NEXT]] = getelementptr i8, ptr addrspace(200) [[LSR_CAP_IV]], i64 65536
 ; CHECK-NEXT:    br i1 [[DONE]], label %[[EXIT:.*]], label %[[LOOP]]
 ; CHECK:       [[EXIT]]:
@@ -1790,13 +1749,11 @@ define i16 @cmp_end_down_4k(ptr addrspace(200) nonnull %p, ptr addrspace(200) %e
 ; CHECK-NEXT:  [[ENTRY:.*]]:
 ; CHECK-NEXT:    br label %[[LOOP:.*]]
 ; CHECK:       [[LOOP]]:
-; CHECK-NEXT:    [[LSR_IV:%.*]] = phi i64 [ [[LSR_IV_NEXT:%.*]], %[[LOOP]] ], [ 0, %[[ENTRY]] ]
 ; CHECK-NEXT:    [[ACC:%.*]] = phi i16 [ 0, %[[ENTRY]] ], [ [[ACC_NEXT:%.*]], %[[LOOP]] ]
 ; CHECK-NEXT:    [[LSR_CAP_IV:%.*]] = phi ptr addrspace(200) [ [[P]], %[[ENTRY]] ], [ [[LSR_CAP_NEXT:%.*]], %[[LOOP]] ]
 ; CHECK-NEXT:    [[V:%.*]] = load i16, ptr addrspace(200) [[LSR_CAP_IV]], align 2
 ; CHECK-NEXT:    [[ACC_NEXT]] = add i16 [[ACC]], [[V]]
 ; CHECK-NEXT:    [[DONE:%.*]] = icmp eq ptr addrspace(200) [[LSR_CAP_IV]], [[END]]
-; CHECK-NEXT:    [[LSR_IV_NEXT]] = add i64 [[LSR_IV]], -4096
 ; CHECK-NEXT:    [[LSR_CAP_NEXT]] = getelementptr i8, ptr addrspace(200) [[LSR_CAP_IV]], i64 -4096
 ; CHECK-NEXT:    br i1 [[DONE]], label %[[EXIT:.*]], label %[[LOOP]]
 ; CHECK:       [[EXIT]]:
