@@ -39,3 +39,10 @@ in `../linux-6.1-unpinned.patch`. A clear must complete before any allocator
 reuse, including reuse for a kernel object. Anonymous-page initialization
 alone cannot provide that ordering. Ordinary scalar and DMA writes clear
 actual tags but do not clear the sticky CPTAG flag.
+
+`clear` zeroes all bytes. `release` guarantees absence of tags and invalidates
+the old handle; released data bytes are unspecified. The double happens to
+zero flagged pages, while the kernel's bulk-OFF free path may leave dead bytes.
+The tests also exercise mixed tag replacement, independent tag snapshots,
+malformed requests without partial writes, and broken publication, summary,
+DMA and unchecked-release implementations against the same external oracles.

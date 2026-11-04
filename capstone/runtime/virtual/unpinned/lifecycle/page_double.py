@@ -2,6 +2,7 @@
 """Executable physical-page lifecycle v1 double; no architectural authority."""
 import json
 import sys
+from copy import deepcopy
 from dataclasses import dataclass, field
 
 PAGE = 4096
@@ -34,11 +35,14 @@ class Lifecycle:
         self.scalar_copy = scalar_copy
 
     def page(self, handle):
-        if not isinstance(handle, (tuple, list)) or len(handle) != 2:
+        if (not isinstance(handle, (tuple, list)) or len(handle) != 2 or
+                any(type(x) is not int for x in handle)):
             raise Refused('invalid handle')
         p = self.pages.get(handle[0])
         if p is None or not p.owned or p.epoch != handle[1]:
             raise Refused('expired handle')
+        if p.tags and not p.sticky:
+            raise Refused('tag without sticky summary')
         return p
 
     @staticmethod
@@ -56,6 +60,8 @@ class Lifecycle:
         return [frame, p.epoch]
 
     def query(self, handle, ack=False):
+        if type(ack) is not bool:
+            raise Refused('invalid acknowledgement')
         p = self.page(handle)
         if ack:
             self.exclusive(p)
@@ -86,21 +92,27 @@ class Lifecycle:
         dst, src = self.page(to), self.page(source)
         self.exclusive(dst)
         self.exclusive(src)
-        if to == source:
+        if dst is src:
             raise Refused('overlapping pages')
         dst.data[:] = src.data
-        dst.tags = {} if self.scalar_copy else dict(src.tags)
+        dst.tags = {} if self.scalar_copy else deepcopy(src.tags)
         if dst.tags:
             dst.sticky = True
 
     def write(self, handle, offset, payload, tag=None):
         p = self.page(handle)
+        if not isinstance(payload, (bytes, bytearray)):
+            raise Refused('invalid payload')
         if type(offset) is not int or offset < 0 or offset + len(payload) > PAGE:
             raise Refused('out of bounds')
         if tag is not None:
             self.exclusive(p)
             if offset % GRANULE or len(payload) != GRANULE:
                 raise Refused('unaligned capability')
+            try:
+                tag = json.loads(json.dumps(tag, allow_nan=False))
+            except (TypeError, ValueError) as error:
+                raise Refused('invalid tag record') from error
         if not payload:
             return
         first, last = offset // GRANULE, (offset + len(payload) - 1) // GRANULE
@@ -109,10 +121,12 @@ class Lifecycle:
         p.data[offset:offset + len(payload)] = payload
         if tag is not None:
             # JSON round trip takes a snapshot independent of the caller.
-            p.tags[first] = json.loads(json.dumps(tag))
+            p.tags[first] = tag
             p.sticky = True
 
     def dma(self, handle, begin):
+        if type(begin) is not bool:
+            raise Refused('invalid DMA ownership')
         p = self.page(handle)
         if p.dma == begin:
             raise Refused('unbalanced DMA ownership')
@@ -120,7 +134,9 @@ class Lifecycle:
         p.dma = begin
 
     def dispatch(self, request):
-        if request.get('version') != 1:
+        if not isinstance(request, dict):
+            raise Refused('invalid request')
+        if type(request.get('version')) is not int or request['version'] != 1:
             raise Refused('unsupported version')
         op = request.get('op')
         if op == 'allocate':
