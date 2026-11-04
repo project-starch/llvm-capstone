@@ -74,26 +74,63 @@ takes a reference to a tagged private anonymous page before releasing that
 lock. Untagged pages need no GUP or access-bit update. The scan still covers
 the entire mm, retains mmap_lock through collection, refuses unsupported
 entries and releases every acquired reference on failure. It does not cache
-PFNs or skip retired mappings. Special/device PTEs and tagged compound pages
-are refused explicitly. This option needs its own qualification before use
-as a default; `unpinned=1` alone retains the original GUP scanner.
-Loading with fast sweep enabled but unpinned mode disabled returns `EINVAL`.
-The mapcount check under the PTE lock protects reference acquisition; the
-later caller check also enforces VMA ownership and is not a replacement.
+PFNs or skip retired mappings. Tagged compound pages are refused explicitly, and
+so is ANY special or device PTE, tagged or not: that is stricter than the old
+scanner, which only refused such a page if it was tagged. This option needs its
+own qualification before use as a default; `unpinned=1` alone retains the
+original GUP scanner. Loading with fast sweep enabled but unpinned mode
+disabled returns `EINVAL`. Once per module load the first sweep logs which
+scanner ran, and the load banner prints both options, so a guest log shows what
+was executed.
+
+The mapcount test exists twice in the fast path: in `next_tagged`, under the PTE
+lock and before `get_page`, and in `unpinned_hold_mm`, after the reference is
+held (the second also enforces `VM_SHARED`, and is the only one the old
+scanner has). Each is sufficient for the fast path; removing both is the
+failing mutant. `run-sweep.py` runs the single-site mutants in both modes to
+show exactly that: removing only one passes with the fast scanner, removing
+only `unpinned_hold_mm`'s fails with the old scanner.
+
+Lock hold. `next_tagged` holds a PTE spinlock (preemption off) across up to 512
+PTE reads and one tag-summary query per present non-zero page. The old scanner
+took the lock once per resident page for one PTE read. On the QEMU model a query
+is a host table lookup. On silicon each query may be an uncached tag-controller
+access, which would make the hold up to 512 of them per table; this has not been
+measured. Measure it before any default-on decision.
 
 `python3 sweep-double.py` checks the abstract sweep/hold/recycle contract and
-requires deliberately incomplete, tag-omitting and reference-omitting variants
-to fail. It is an executable interface double, not a Linux race test or a
-substitute for running the namespace and stale-capability fixtures.
+requires deliberately incomplete, tag-omitting, reference-omitting and
+foreign-namespace-clearing variants to fail. The mutants are branches inside the
+model: it is an executable interface double, not evidence about the kernel
+module, a Linux race test or a substitute for the fixtures below.
+
+`run-sweep-diff.py` is the completeness check. `sweep-span.c` (a native client
+for the namespace-probe fixture) seeds tags in four PTE tables of one mapping,
+the first holding only an untagged resident page, and in two VMAs separated by a
+third; the namespace scrub must clear them all. Two mutants, each applied only
+to the fast scanner, stop the scan early: one at the end of the first PTE table
+without a tagged page, one after the first VMA that yielded a page. Both must
+fail it (tags survive). A `CV_TEST_HOOKS=1` module also takes
+`unpinned_sweep_diff=1`: every sweep then runs the other scanner on the same mm
+under the same locks and compares the two held-page lists (count, position by
+position, and order-independent digests); the counters are the read-only
+parameters `diff_runs`, `diff_active_pages`, `diff_other_pages`, `diff_mismatch`,
+`diff_digest_mismatch`, `diff_other_errors`. The runner requires zero mismatches
+on the unmodified module in both directions and a nonzero count on both
+mutants in both directions. The same test module and parameters can be given
+to any guest workload; the counters are then read from sysfs or the log.
 
 `run-sweep.py` consumes the namespace probe fixture and a freshly built
 `node-contract.c` image. Build `sweep-shared.c` as a static native client with
 the fixture's `namespace-probe.h` in the include path. Pass its directory as
 `--probes` together with `namespace-check` and `namespace-probe.ko`. The runner
-requires a normal module and three separately built broken modules: `--mutant`
+requires a normal module and five separately built broken modules: `--mutant`
 replaces `if (!unpinned_page_summary(page)) continue;` in `next_tagged` with
-`if (unpinned_fast_sweep) continue;`; `--shared-mutant` replaces the module's
-`page_mapcount(page) != 1` predicates with `false`; `--config-mutant` removes
+`if (unpinned_fast_sweep) continue;`; `--shared-mutant` replaces the two sweep
+`page_mapcount(page) != 1` predicates (in `next_tagged` and `unpinned_hold_mm`,
+not the pinned-mode ones) with `false`; `--shared-next-mutant` and
+`--shared-hold-mutant` replace only the first and only the second;
+`--config-mutant` removes
 `if (unpinned_fast_sweep && !unpinned) return -EINVAL;` from initialization.
 These mutations never belong in a production binary. All modules must match
 the selected kernel.
