@@ -319,7 +319,10 @@ console pin to the core's debug UART (`uart_debug_takeover = sw[0] | ...`). That
   - Every one is in the predicted direction.
 - **The constant shift.**
   - Prediction: every arm moves by a constant few cycles.
-  - Silicon: s1 +30 over bitstream 3, and the hpm arms −20 to −24 under it, hpm-6 included, so it is not per access.
+  - Silicon: s1 +30 over bitstream 3.
+  - CORRECTED the same evening: the hpm arms are NOT uniformly shifted. hpm-5, -1, -2 and -6 run 21-24 under bitstream 3
+    (2.0-2.6 %, failing the kit's "equal within 1 %" clause), while the cold-miss hpm-7 is +2. That is a second open
+    deviation of this session, with the extra L1D miss.
   - The sizes are silicon's, not the simulator's.
 
 **What it establishes.**

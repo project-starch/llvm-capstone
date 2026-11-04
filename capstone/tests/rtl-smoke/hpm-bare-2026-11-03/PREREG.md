@@ -169,4 +169,12 @@ raw SV lines of the three runs.
 | bitstream 3 | 1,530 | 1,530 | 2,344 | 2,852 |
 
 - The cached verdict removes the query's stall as ObjBounds does.
-- Every image, hpm-6 included, also runs 20-24 cycles below bitstream 3. That is a constant shift, not a per-op cost.
+- **CORRECTED 2026-11-04 (the same evening):** this line said every image runs 20-24 cycles below bitstream 3, and that
+  is false for hpm-7.
+  - hpm-5, -1, -2 and -6 run 21-24 cycles faster: ratios 0.974, 0.978, 0.979 and 0.981. That fails the pre-registered
+    "equal within 1 %" clause.
+  - hpm-7, the cold-miss image, reads 11,084 against 11,082, which holds.
+  - So it is not a constant shift.
+  - The grader now prints the cost pattern on a FINDING (land/rtl-c5a-kits cd572819613f), and these lines come from
+    that output.
+  - It is a second deviation in this one session, beside the extra L1D miss; both wait for the repeat.
