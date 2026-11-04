@@ -1,0 +1,61 @@
+#!/usr/bin/env python3
+"""Mutation controls against real, passing ON gate transcripts."""
+import argparse
+import importlib.util
+from pathlib import Path
+import re
+import sys
+
+HERE = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(HERE))
+
+
+def load(name):
+    spec = importlib.util.spec_from_file_location(name, HERE / (name + '.py'))
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def main():
+    p = argparse.ArgumentParser(description=__doc__)
+    p.add_argument('--pin', type=Path, required=True)
+    p.add_argument('--hooks', type=Path, required=True)
+    a = p.parse_args()
+    pin, hooks = load('run-pin-ahead'), load('run-step-hooks')
+    names = [n for n in hooks.CONFIGS if hooks.app(n) == 'pin']
+    readers = [('pin', a.pin, lambda s: pin.evaluate(s, True, True, True)[0]),
+               ('hooks', a.hooks, lambda s: hooks.evaluate(s, names, True, True, True)[0])]
+    failed = []
+    for name, path, evaluate in readers:
+        text = path.read_text(errors='replace').replace('\r', '')
+        positive = evaluate(text)
+        if not all(positive.values()):
+            failed.append(name + ': positive transcript fails ' + ','.join(k for k, v in positive.items() if not v))
+            continue
+        mutations = {
+            'wrong_mode': re.sub(r'(MEMORY_MODE:)Y', r'\1N', text),
+            'zero_fault_totals': re.sub(r'(CAPSTONE_VM_STATS [^\n]*?faults=)\d+', r'\g<1>0', text),
+            'missing_events': re.sub(r'^.*unpinned fault arena.*\n', '', text, flags=re.M),
+            'missing_windows': re.sub(r'^.*unpinned window arena.*\n', '', text, flags=re.M),
+        }
+        if name == 'hooks':
+            mutations.update(
+                no_injection=re.sub(r'\binjections=\d+', 'injections=0', text),
+                bad_entry=re.sub(r'\bviolations=0', 'violations=1', text),
+                pending_fault=re.sub(r'\bfault_pending=0', 'fault_pending=1', text),
+                oversized_batch=re.sub(r'\bfault_max=\d+', 'fault_max=17', text),
+                no_deferral=re.sub(r'\bfault_deferred=\d+', 'fault_deferred=0', text),
+                no_partial=re.sub(r'\bfault_short=\d+', 'fault_short=0', text))
+        for label, changed in mutations.items():
+            rejected = changed != text and not all(evaluate(changed).values())
+            print(('PASS ' if rejected else 'FAIL ') + name + '_' + label)
+            if not rejected:
+                failed.append(name + '_' + label)
+    for failure in failed:
+        print('FAIL ' + failure)
+    return bool(failed)
+
+
+if __name__ == '__main__':
+    raise SystemExit(main())
