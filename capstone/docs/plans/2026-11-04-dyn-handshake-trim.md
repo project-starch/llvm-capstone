@@ -275,3 +275,32 @@ Either way the bare pair (1 − 9) is reported at both delays.
 pairs. devmk (+movc-keeps-integer-source) may change more than the pairs (register allocation, frame layout), and SL 18 vs
 17 isolates only the pair. Whether the denominator is a dynamic count, and what else differs between the two images in the
 hot functions, decides how much of the 27 belongs to the pair at all.
+
+**Resolved the same day: there was no gap to explain.** The runtime lane traced its own per-pair figure to the
+denominator, which is the "also open" question above. The 23-36 (and the ~27 on imagick) divided the cycle drop by half
+the instret drop, but devmk replaces each pair with ONE movc. Static census of imagick_r dev → devmk, recounted here from
+that lane's two disassemblies: stc −17,485, ldc −17,524, movc +17,514, mv/sd/ld within 6, net −17,756. So the dynamic
+pair count is the instret drop. The corrected saving on bitstream 3 is about 13.7 cycles per pair on imagick (the runtime
+lane's 42.0 M / 3.07 M), against this shape's 18.91 in simulation. The slot kit's dev claim of an excess was retracted at
+da0a2691bc9e. The paragraph above ("the SPEC lane's 23-36 per removed pair is not the pair's own cost") is withdrawn with
+it: the compiled pair costs about what the isolated pair costs.
+
+**The memory-latency run (pre-registered above), read anyway:** arms 1, 9, 17, 18 at S12_MEM_DELAY=40, both trees clean,
+all SUCCESS, values and instret as at delay 12:
+
+| per iteration | bs3 d12 | bs3 d40 | stage A d12 | stage A d40 |
+|---|---|---|---|---|
+| bare pair, 1 − 9 | 17.32 | 17.21 | 8.36 | 8.25 |
+| shape pair, 17 − 18 | 18.91 | 19.12 | 9.10 | 9.00 |
+| excess | 1.59 | 1.91 | 0.73 | 0.75 |
+
+H-drain FAILS and the null HOLDS (bs3 excess 1.91, within 1 of 1.59). This instrument cannot see store drain to memory: the
+delay is on the AXI delayer in front of memory (ariane_testharness.sv:456), and every slot loop is cache-resident with its
+stores absorbed by the D-cache's write buffer. The earlier delay-40 slot run moved SL 5-9 by under 2 % too. So the
+reading is that this shape's pair cost does not depend on memory latency in simulation, not that silicon's write path is
+fast.
+
+**For the levers:** with the corrected figure, the pair's cost in compiled code is its isolated cost. In simulation
+C.5a and stage A take the shape's pair from 18.9 to 8.9-9.1 cycles. Stage B's (a) and (b) act on what is left, the
+DYN unit's occupancy (LDC 4, STC 5-6). Sizing them against SPEC is now the corrected per-pair figure times the pair
+count, which is the runtime lane's to read on C.5a and stage A silicon.
