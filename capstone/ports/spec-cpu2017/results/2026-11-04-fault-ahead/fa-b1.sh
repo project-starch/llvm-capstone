@@ -2,6 +2,7 @@
 # fa-b1.sh: adaptive fault-ahead (wt-fa a6fba52f75c3) on board 1, bitstream 3, the 3 Nov stages and images (baselines in
 # spec/board/out). Pre-registration: spec-silicon results/2026-11-04-fault-ahead/PREREG.md, Addendum 4 (FA_PREREG).
 #  1. Wait until board 1's chain (FA_CHAINPID, default 3629844) has stopped at the sentinel STOP-for-c5a-flash.
+#  1b. The rtl lane's slot-bare kit on bitstream 3 (informational).
 #  2. OFF arm: imagick test (both arms) on kit bkit18-faoff-b3-b1 into out-fa-b1-off.
 #  3. Only if fa-grade-b1.py reads both OFF rows as the baseline (F1-F3): the six stages on bkit18-fa-b3-b1 into out-fa-b1.
 #  4. Always: launch perf/c5a-first/c5a-b1.sh (the C.5a session; it then restarts board 1's chain at the end).
@@ -37,6 +38,21 @@ main() {
   done
   tail -3 "$CHROOT/chain-b1.log" | grep -q "CB STOP after $SENT" || { log "STOP: board 1's chain ended, but not at the sentinel"; tail -5 "$CHROOT/chain-b1.log" >> "$L"; return 2; }
   log "chain stopped at the sentinel"
+
+  # The rtl lane's slot-bare kit (land/rtl-slot-kit e1a835aa466e) on bitstream 3 first: the DYN-unit decision waits on
+  # it. One boot per image, slot-9 first; informational, gates nothing. (c5a-b1.sh runs it again on bs3: N = 2.)
+  bid=; for i in $(seq 1 30); do bid=$($BOOK book 1 40 "vp2 slot-bare kit on bitstream 3 (board 1)") && break; bid=; sleep 60; done
+  mkdir -p "$O/slot-bs3-b1"
+  for i in slot-9 slot-6 slot-5 slot-7 slot-8 slot-1 slot-2 slot-3 slot-4; do
+    log "SLOT $i BEGIN"
+    ( export FPGA_URL; FPGA_URL=$(cat "$HOME/.claude-kisp/secrets/fpga-console-url")
+      FPGA_BOARD=1 FPGA_BITSTREAM=caplifive_vp2c_e7af48457.bit SUP_IMG=$SK/images/$i.bin SUP_REC_ADDR=0x$(sed "s/^0x//" "$SK/images/$i.rec") \
+        SUP_OUT=$O/slot-bs3-b1/$i SUP_TIMEOUT=90 timeout 900 $RUN > "$O/slot-bs3-b1/$i.stderr" 2>&1 ); src=$?
+    echo $src > "$O/slot-bs3-b1/$i.rc"; log "SLOT $i END rc=$src"
+    grep -q 'HARD STOP' "$O/slot-bs3-b1/$i.stderr" "$O/slot-bs3-b1/$i/run.log" 2>/dev/null && { log "SLOT HARD STOP at $i"; break; }
+  done
+  [ -n "$bid" ] && $BOOK unbook "$bid" >> "$L" 2>&1
+  python3 "$SK/grade/slot-grade.py" "$O/slot-bs3-b1" bs3 > "$O/slot-bs3-b1.grade.txt" 2>&1; log "SLOT GRADE bs3 rc=$?"; sed 's/^/  /' "$O/slot-bs3-b1.grade.txt" >> "$L"
 
   SB_KIT=$K/bkit18-faoff-b3-b1 SB_BITSTREAM=e7af48457 SB_MODULE=$MOD $CHAIN 1 "$O/fa-off-b1.list" "$OUTR/out-fa-b1-off" >> "$L" 2>&1; rc=$?
   log "OFF arm chain rc=$rc"

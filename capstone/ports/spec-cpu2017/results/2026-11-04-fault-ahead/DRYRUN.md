@@ -136,3 +136,17 @@ x
 1 CB STOP after /x/mcf-devmk
 calls: 0
 ```
+### D-b1slot (15:35)
+```
+START pid N
+preconditions ok; waiting for board 1's chain to stop at the sentinel
+chain stopped at the sentinel
+SLOT GRADE bs3 rc=2
+OFF arm chain rc=0
+OFF arm grade: off 538.imagick_r-test F1 holds | faults 815 vs 815 F2 holds | real 33.9 vs 33.9 s F3 holds
+off 538.imagick_r-test F1 holds | faults 815 vs 815 F2 holds | real 33.5 vs 33.5 s F3 holds
+ON arm chain rc=0
+GRADE rc=0
+launching the C.5a session (perf/c5a-first/c5a-b1.sh)
+DONE off 0 on 0
+```

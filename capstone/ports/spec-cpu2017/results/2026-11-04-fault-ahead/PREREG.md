@@ -114,3 +114,13 @@ Spatial arm, run commands, kit-faq-on against the census-q34 twin. In every row:
 - Board 1's outside times: lbm 631.7 / 630.6 s, xz 6,485 s, mcf 3,713 s.
 
 The Spatial queue that board 2 had left — the mcf compiler-evaluation pair in Spatial, and the Spatial train stages — is not run. It needs an ObjBounds board and will be re-queued.
+
+## Addendum 5 (4 Nov 15:35 real time, before any board call)
+
+The slot-bare kit (land/rtl-slot-kit e1a835aa466e, its own predictions and grader) now runs first on board 1, on bitstream 3, before the OFF arm.
+- **Why first.** The rtl lane's DYN-unit decision waits on its per-op costs, and the ObjBounds run on board 2 was lost.
+- **Gating.** It is informational and gates nothing.
+- **Repeat.** c5a-b1.sh repeats it on bitstream 3 later (N = 2).
+- **Runner.** fa-b1.sh was stopped while waiting and relaunched; dry run D-b1slot.
+
+Correction to Addenda 2 and 4: their clock labels ("13:40", "15:50") ran ahead of real time; both were written and pushed before any board call (real 13:16 and 15:29).
