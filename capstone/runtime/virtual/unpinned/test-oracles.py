@@ -96,7 +96,7 @@ def main():
             'balanced_pin_taken': pin_taken(text, tag),
             'dead_foll_pin_counters': dead_counters(text, tag),
             'refaulted_window_page': re.sub(r'^(.*unpinned window arena 0x[0-9a-f]+ address 0x[0-9a-f]+ pages [1-9]\d* limit \d+.*\n)',
-                                            r'\1\1', text, count=1, flags=re.M),
+                                            r'\1\1', text, flags=re.M),
             'wrong_mode': re.sub(r'(MEMORY_MODE:)Y', r'\1N', text),
             'zero_fault_totals': re.sub(r'(CAPSTONE_VM_STATS [^\n]*?faults=)\d+', r'\g<1>0', text),
             'missing_events': re.sub(r'^.*unpinned fault arena.*\n', '', text, flags=re.M),
@@ -110,9 +110,15 @@ def main():
                 oversized_batch=re.sub(r'\bfault_max=\d+', 'fault_max=17', text),
                 no_deferral=re.sub(r'\bfault_deferred=\d+', 'fault_deferred=0', text),
                 no_partial=re.sub(r'\bfault_short=\d+', 'fault_short=0', text))
+        # the check each mutation must be the one to break (any, for the older generic ones)
+        expect = {'balanced_pin_taken': 'no_payload_pins', 'dead_foll_pin_counters': 'foll_pin_counters_live',
+                  'refaulted_window_page': 'window_event_disjoint', 'wrong_mode': 'memory_mode_verified'}
         for label, changed in mutations.items():
-            rejected = changed != text and not all(evaluate(changed).values())
-            print(('PASS ' if rejected else 'FAIL ') + name + '_' + label)
+            broken = [k for k, v in evaluate(changed).items() if not v]
+            rejected = changed != text and bool(broken) and (
+                label not in expect or any(expect[label] in k for k in broken))
+            print(('PASS ' if rejected else 'FAIL ') + name + '_' + label +
+                  (' flips ' + expect[label] if label in expect else ''))
             if not rejected:
                 failed.append(name + '_' + label)
     for failure in failed:

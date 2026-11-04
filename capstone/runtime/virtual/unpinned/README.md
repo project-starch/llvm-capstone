@@ -134,9 +134,12 @@ Negative controls are broken modules, not edited transcripts. A CV_TEST_HOOKS mo
 that each remove one guard (`test_skip_vma_clip`, `test_skip_arena_clip`, `test_skip_stop_check`,
 `test_skip_resident_stop`, `test_skip_namespace_scrub`, `test_skip_scrub_after_pages`,
 `test_skip_scrub_after_granules`). `run-mutants.py` requires a named check to pass on the unbroken module
-and fail on the broken one; `run-mm.py` does the same for the scrub with a fixture that seeds 21
+and fail on the broken one for the VMA clip, the stop check and the stop at the first resident PTE; the
+arena clip is not isolated by any scenario a gate can build (the VMA clip or a resident guard page bounds
+the window at the same page), so `test_skip_arena_clip` exists but no check can see it. `run-mm.py` does the same for the scrub with a fixture that seeds 21
 granules (offsets 0, 16, 2048, 4080) on 10 pages of four mappings. `test-oracles.py` additionally
-corrupts real ON transcripts (it proves the parsers reject contradictory lines, nothing about a module).
+corrupts real ON transcripts and requires each corruption to break the named check (it proves the parsers
+reject contradictory lines, nothing about a module).
 The reclaim and tag-clear evidence for devices (DMA, fw_cfg, virtio) is model-side and not part of this
 tree.
 

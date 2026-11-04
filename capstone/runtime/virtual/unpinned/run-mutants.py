@@ -1,12 +1,18 @@
 #!/usr/bin/env python3
 """Negative controls for the unpinned fault-ahead: broken MODULES, not edited transcripts.
 
-The CV_TEST_HOOKS build has four parameters that each remove one guard of the unpinned window
-(module/capstone_vm.c, test_skip_*): the clip to the demand fault's VMA, the clip to the arena, the
-stop check between batches, and the stop at the first resident PTE. For each, this runs the
-step-hooks gate on the configurations that exercise that guard, once with the unbroken hooks module
-and once with the broken variant, and requires the named check to PASS on the unbroken module and
-FAIL on the broken one. A variant whose check does not flip means the oracle cannot see that guard.
+The CV_TEST_HOOKS build has parameters that each remove one guard of the unpinned window
+(module/capstone_vm.c, test_skip_*). Three are run here: the clip to the demand fault's VMA, the stop
+check between batches, and the stop at the first resident PTE. For each, this runs the step-hooks gate
+on the configurations that exercise that guard, once with the unbroken hooks module and once with the
+broken variant, and requires the named check to PASS on the unbroken module and FAIL on the broken
+one. A variant whose check does not flip means the oracle cannot see that guard.
+
+The fourth, test_skip_arena_clip, is not run: no scenario a gate can build isolates it. A domain
+mapping is a whole VMA (or the VMA clip bounds the window at the same page), and the image's NONLIN
+arena is the whole 4 MiB image data, so removing the arena clip changes no window. Run through the
+gate, adaptclip's planned limit stayed inside its arena with the clip gone, because the VMA clip
+bounded it at the same page. The guard is defence in depth that is untested.
 
   run-mutants.py --qemu Q --images I --adapter A --module HOOKS.ko --application pin.dom --work W
 """
@@ -21,7 +27,6 @@ STEP = HERE.parent / 'run-step-hooks.py'
 # variant: (module parameter, configurations that exercise the guard, checks that must flip)
 VARIANTS = {
     'vma_clip':      ('test_skip_vma_clip=1', 'adaptclip', ['adaptclip_clip_window_in_vma', 'adaptclip_clipx_window_in_vma']),
-    'arena_clip':    ('test_skip_arena_clip=1', 'adaptclip', ['adaptclip_clip_window_in_arena', 'adaptclip_clipx_window_in_arena']),
     'stop_check':    ('test_skip_stop_check=1', 'adaptres,resched1', ['adaptres_no_fault_while_pending', 'resched1_no_fault_while_pending']),
     'resident_stop': ('test_skip_resident_stop=1', 'adaptgaps', ['adaptgaps_window']),
 }
