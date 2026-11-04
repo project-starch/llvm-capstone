@@ -15,7 +15,7 @@ cp "$CAPSTONE_REPO_ROOT/capstone/capstone-qemu/target/riscv/cap_rev_table_abi.h"
 cp "$here/../include/capstone/representable.h" "$out/module/"
 make -C "$KERNEL_BUILD" ARCH=riscv CROSS_COMPILE="$CROSS_COMPILE" \
     M="$(cd "$out/module" && pwd)" -j"${CAPSTONE_BUILD_JOBS:-12}" modules
-"${CROSS_COMPILE}gcc" -O2 -static -pthread -Wall -Wextra -Werror \
+"${CROSS_COMPILE}gcc" -O2 -static -pthread -Wall -Wextra -Werror ${CAPSTONE_VEXEC_CFLAGS:-} \
     -I"$here/../include" "$here/exec.c" \
     "$here/../linux/"{application-image,image-hash,delegate-service,spawner,signals,park}.c \
     "$here/../linux/domain-fault.c" "$here/../linux/stub.S" "$here/../common/"{launch,delegate,spawn,msghdr}.c \
