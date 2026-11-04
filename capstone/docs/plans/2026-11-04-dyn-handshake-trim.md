@@ -228,3 +228,50 @@ point at STC density, (a) is the cheap lever and gets its own design note.
 
 **Also on record:** on 2026-11-04 the synth lane's user lifted that lane's "negative WNS = not flashable" rule, and its
 labels on C.5a and stage A were withdrawn.
+
+## The compiled-shape pair arms (simulation, memory delay 12, 2026-11-05)
+
+**The question (SPEC lane).** The imagick dev → devmk counter boots on bitstream 3 put the saving in issue stall (68-70 % of
+the cycle drop), not in fetch; the L1I counter was shown to fire (hpm-8). Per removed stack-copy pair that is ~27 cycles,
+against the bare slot-kit pair's 17 on the same bitstream. What does a compiled pair do that the bare pair does not?
+
+**The arms** (`stc-ldc-slot.S` SL 10-18, predictions committed before the run on capstone-ariane `paircost-b3` 63152ed82;
+the same test blob on C.5a 36a87ec91 and stage A 14f39f356, all three clean). Each candidate from source sits in one pair
+of arms that differs by one register: the LDC result used at once (10 vs 16); a plain read of the LDC's base right after
+it (11 vs 14, the same read through another base); a plain read of the STC's base right after it (12 vs 15); all three (13).
+SL 17 is the compiled shape itself, from the SPEC lane's disassembly of imagick's dev image
+(SetResampleFilterVirtualPixelMethod): a prologue of an sd and three stc through sp, fp = sp + 0x50, the pair through fp, a
+read through the stc's source, a mv, the copied capability as the next ldc's base, then the epilogue. SL 18 is SL 17 with
+the pair replaced by the movc that devmk emits. All 33 runs end SUCCESS with value 0x77, 0 traps, and instret equal across
+trees.
+
+| per iteration (cycles) | bs3 tokens | C.5a | stage A |
+|---|---|---|---|
+| bare pair, 1 − 9 | 17.32 | 8.37 | 8.36 |
+| LDC result used at once, 10 − 16 | −0.23 | 0.60 | 2.05 |
+| plain read of the LDC's base, 11 − 14 | 1.62 | 2.66 | 0.00 |
+| plain read of the STC's base, 12 − 15 | 0.19 | 0.18 | 0.18 |
+| all three, 13 − 1 | 4.16 | 4.16 | 3.16 |
+| **compiled-shape pair, 17 − 18** | **18.91** | **8.92** | **9.10** |
+| excess, (17 − 18) − (1 − 9) | 1.59 | 0.56 | 0.73 |
+
+**Graded against the predictions, most FAIL.** Rd use ≥ 2 held only on stage A. The LDC-base read ≥ 2 held on C.5a but not
+on bs3; it is 0.00 on stage A as predicted, which shows the trim removed the claim. The STC-base read ≥ 2 failed on every
+tree (0.18-0.19: the STC's rs1 claim is not a cost a plain read pays here). The excess ≥ 5 failed on bs3 (1.59). The source
+reading that each of these was expensive was wrong by measurement. **In simulation the compiled shape's pair costs what the
+bare pair costs, to within 1.6 cycles on every tree.** So the silicon gap (~27 against 17) is not reproduced by these
+issue-stage mechanisms at memory delay 12.
+
+**Next, pre-registered here before the run: memory latency.** The slot kit's pair has one store in flight when its ldc
+issues. SL 17's ldc follows the prologue's sd and three stc, and a load waits in WAIT_PAGE_OFFSET for every queued store at
+its page offset to leave a store buffer that drains in order (wt_dcache: write-through, no write-allocate). If silicon's
+per-store write is slower than the testbench's, the compiled pair pays the whole burst's drain, and the bare pair does not.
+Arms 1, 9, 17, 18 at S12_MEM_DELAY=40 on bs3 tokens (63152ed82) and stage A (14f39f356):
+- H-drain: the bs3 excess (17 − 18) − (1 − 9) is ≥ 4 per iteration at delay 40 (1.59 at 12);
+- null: it stays within 1 of 1.59, and the silicon gap is not memory latency of this shape.
+Either way the bare pair (1 − 9) is reported at both delays.
+
+**Also open, for the SPEC lane: the per-pair denominator.** 23-36 per pair divides the cycle drop by a count of removed
+pairs. devmk (+movc-keeps-integer-source) may change more than the pairs (register allocation, frame layout), and SL 18 vs
+17 isolates only the pair. Whether the denominator is a dynamic count, and what else differs between the two images in the
+hot functions, decides how much of the 27 belongs to the pair at all.
