@@ -230,6 +230,7 @@ def evaluate(log, completed, instrumented, unpinned=False):
                 r = runs.get((w, mode))
                 counts = unpinned_checks.region_counts(r) if r else None
                 checks.pop(f'w{w}_{mode}_region', None)
+                checks[f'w{w}_{mode}_window_event_disjoint'] = bool(r and unpinned_checks.disjoint(r) and r.get('raw_events'))
                 checks[f'w{w}_{mode}_resolved_region'] = bool(r and r['exit'] == 0 and r['ok'] and
                     counts == expect(w)[:2] and unpinned_checks.accounted(r))
                 if mode in ('vma', 'vmax'):

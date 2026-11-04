@@ -14,6 +14,7 @@ import tempfile
 import time
 from qemu_lock import qemu_lock
 import memory_mode
+import unpinned_checks
 
 HERE = Path(__file__).resolve().parent
 
@@ -46,7 +47,7 @@ __MODE_ECHO__
 dmesg | grep 'capstone_vm:' | sed 's/^/KMSG:/'
 dmesg | grep -q 'capstone_vm: loaded, diag' \
   || echo 'KMSG_CONTROL_FAILED: no load banner in the ring buffer -- module-line absences in this run are VOID'
-export CAPSTONE_VM_CONTRACT=environment CAPSTONE_VM_STATS=1 CAPSTONE_EXEC_DIAGNOSTICS=1
+export CAPSTONE_VM_CONTRACT=environment CAPSTONE_VM_STATS=1 CAPSTONE_VM_RSS=1 CAPSTONE_EXEC_DIAGNOSTICS=1
 # The three `ok argument` launches (normal, parallel_one, parallel_two) are the ones
 # linux_demand_faults counts, page at a time: the window is off around them only. Every
 # other row runs the module's shipped policy (or the explicit --module-args override).
@@ -350,11 +351,9 @@ def main():
     tests['shared_heap_pages_released'] = len(stats) >= 5 and stats[4]['peak'] - stats[4]['pages'] >= 768
     tests['memory_mode_verified'] = memory_mode.verified('\n'.join(lines), a.unpinned, 1)
     if a.unpinned:
-        del tests['linux_pages_released'], tests['shared_heap_pages_released']
-        tests['linux_payload_unpinned'] = (len(stats) == expected_stats and
-            len(demand_stats) == 3 and all(s['pages'] == s['peak'] == 0 for s in stats))
-        tests['shared_heap_unpinned'] = (len(stats) >= 5 and stats[4]['pages'] == stats[4]['peak'] == 0 and
-            stats[4]['faults'] > 0 and tests['heap_threads'])
+        for name in ('linux_pages_released', 'shared_heap_pages_released', 'unused_pages_not_populated'):
+            del tests[name]
+        tests.update(unpinned_checks.residency(lines, start, expected_stats))
     if not a.skip_recycling:
         sparse = stats[5] if len(stats) >= 6 else {}
         # The fixed table happened to collect ~195k IDs in three sweeps.

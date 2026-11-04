@@ -453,8 +453,15 @@ def evaluate(log, names, instrumented, completed, unpinned=False):
             checks[f'{name}_no_payload_pins'] = bool(end and live and end == live and
                 rep.get('unpinned') == 1 and rep.get('fault_requests', 0) > 0 and rep.get('entries', 0) > 0)
             checks.pop(f'{name}_gup_batch_bound', None)
+            # A configuration that opens windows and injects no stop of its own must have opened
+            # at least one batch (the OFF check required 0 < gup_max); one with an injected stop
+            # may have cut every window before its first batch, so only the bound holds for it.
+            params = CONFIGS[name][0]
+            windowed = 'test_inject=' not in params and (
+                name.startswith('adapt') or int(re.search(r'pin_ahead_pages=(\d+)', params + ' pin_ahead_pages=1')[1]) > 1)
             checks[f'{name}_fault_batch_bound'] = (rep.get('gup_requests') == 0 and
-                rep.get('fault_requests', 0) > 0 and 0 <= rep.get('fault_max', -1) <= 16)
+                rep.get('fault_requests', 0) > 0 and 0 <= rep.get('fault_max', -1) <= 16 and
+                (not windowed or rep.get('fault_max', 0) > 0))
             checks[f'{name}_no_fault_while_pending'] = rep.get('fault_pending') == 0
         for (name, mode), r in runs.items():
             if CONFIGS[name][2] == 0:
@@ -479,6 +486,11 @@ def evaluate(log, names, instrumented, completed, unpinned=False):
                 counts = unpinned_checks.region_counts(r)
                 arena = unpinned_checks.region_arena(r)
                 events = [e for e in r.get('raw_events', []) if e['arena'] == arena]
+                # The pinned oracle's reference comparison (pins >=, events <=, and the delta bounded by
+                # launcher_first * the extra window; exact when no fault was first resolved by the
+                # launcher), on the ON sources: pages are the distinct virtual pages resolved.
+                checks[f'{name}_{mode}_reference'] = checks.pop(f'{name}_{mode}_accounting')
+                checks[f'{name}_{mode}_window_event_disjoint'] = unpinned_checks.disjoint(r) and bool(r.get('raw_events'))
                 checks[f'{name}_{mode}_accounting'] = bool(counts and counts[0] == (32 if mode == 'walk' else 0) and
                     len({e['address'] // 4096 for e in events}) == len(events) and unpinned_checks.accounted(r))
     return checks, runs, reports, ends
