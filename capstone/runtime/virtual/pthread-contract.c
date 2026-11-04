@@ -15,6 +15,7 @@
 #include <stdint.h>
 #include <signal.h>
 #include <setjmp.h>
+#include <sys/syscall.h>
 
 extern int __clone(int (*)(void *), void *, int, void *, ...);
 
@@ -451,6 +452,14 @@ int main(int argc, char **argv)
                 CLONE_THREAD | CLONE_SETTLS | CLONE_PARENT_SETTID;
     assert(__clone(NULL, NULL, flags, NULL, &tid, NULL, &tid) == -ENOSYS);
     puts("VIRTUAL_PTHREAD_OK unsupported_clone_refused");
+    /* A new process cannot inherit this mm's lifetime namespace. Keep the
+     * libc entry and the raw syscall route fail-closed; pthreads below must
+     * still work after the refusal. No child may execute this image. */
+    errno = 0;
+    assert(fork() == -1 && errno == ENOSYS);
+    errno = 0;
+    assert(syscall(SYS_clone, SIGCHLD, 0, 0, 0, 0) == -1 && errno == ENOSYS);
+    puts("VIRTUAL_PTHREAD_OK protected_fork_refused");
     assert(!pthread_create(&a, NULL, worker, &values[0]));
     assert(!pthread_create(&b, NULL, worker, &values[1]));
     assert(!pthread_join(a, &result) && result == &values[0]);

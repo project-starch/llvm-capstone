@@ -21,6 +21,7 @@ def main():
     for name in ('adapter', 'application', 'qemu', 'images', 'work'):
         p.add_argument('--' + name, type=Path, required=True)
     p.add_argument('--timeout', type=int, default=180)
+    p.add_argument('--unpinned', action='store_true', help='require unpinned CV_TOUCH and cleanup witnesses')
     p.add_argument('--exact-bounds', action=argparse.BooleanOptionalAction, default=False,
                    help="Run QEMU's exact-bounds profile. Option (iii) does not need it; "
                         "it is kept so a suite can be run both ways as a two-sided control.")
@@ -50,7 +51,8 @@ cd /mnt/vm || exit 1
 pins() { echo 1 > /proc/sys/vm/stat_refresh; grep -E "^nr_foll_pin_(acquired|released) " /proc/vmstat | tr "\\n" " "; }
 dmesg -n 1
 echo "PTHREAD_PINS_BEFORE:$(pins)"
-insmod capstone_vm.ko ''' + ('diag_admit=1' if instrumented else '') + ''' || exit 1
+insmod capstone_vm.ko ''' + ('diag_admit=1' if instrumented else '') + (' unpinned=1' if a.unpinned else '') + ''' || exit 1
+echo "PTHREAD_MEMORY_MODE:$(cat /sys/module/capstone_vm/parameters/unpinned)"
 CAPSTONE_EXEC_DIAGNOSTICS=1 CAPSTONE_VM_STATS=1 CAPSTONE_VM_STATS_MARK=1 CAPSTONE_VM_GRANTS=1 ./capstone-vexec pthread.dom
 echo PTHREAD_EXIT:$?
 dmesg | grep -E "capstone_vm: |CAPSTONE_VM_STATS_MARK" | sed "s/^/PTHREAD_DIAG:/"
@@ -75,7 +77,7 @@ echo VIRTUAL_STAGED_DONE
     log = (a.work/'guest/serial.log').read_text(errors='replace').replace('\r', '')
     main_log, _, fallback_log = log.partition('PTHREAD_FALLBACK_BEGIN\n')
     checks = {name: log.count('VIRTUAL_PTHREAD_OK ' + name) == 1 for name in
-              ('unsupported_clone_refused', 'tls mutex cond tagged_join', 'timed_wait', 'independent_blocking_io', 'private_epoll_events', 'shared_tls_transport', '64_joined_lifetimes', 'concurrent_allocator_remap', 'transport_lifetime', 'transport_identity', 'exit_word_untouched_stack', 'context_identity')}
+              ('unsupported_clone_refused', 'protected_fork_refused', 'tls mutex cond tagged_join', 'timed_wait', 'independent_blocking_io', 'private_epoll_events', 'shared_tls_transport', '64_joined_lifetimes', 'concurrent_allocator_remap', 'transport_lifetime', 'transport_identity', 'exit_word_untouched_stack', 'context_identity')}
     # The exit word's page (VIRTUAL_PTHREAD_WORD, in the main stack: the reg 2 grant) must have
     # been admitted by the launcher's CV_TOUCH before its store: a `touch` line for that arena and
     # page index. Without CV_TOUCH (the commit before it) the line is absent and this fails.
@@ -84,6 +86,9 @@ echo VIRTUAL_STAGED_DONE
     touched = set()
     for m in re.finditer(r'capstone_vm: touch arena 0x([0-9a-f]+)\+0x([0-9a-f]+) page (\d+)', log):
         touched.add((int(m.group(1), 16), int(m.group(3))))
+    if a.unpinned:
+        touched = {(int(m[1], 16), int(m[3])) for m in re.finditer(
+            r'capstone_vm: unpinned touch arena 0x([0-9a-f]+)\+0x([0-9a-f]+) page (\d+)', main_log)}
     if not instrumented:
         checks['exit_word_admitted'] = 'uninstrumented'
     elif word and stack and int(word.group(1), 16) - int(stack.group(1), 16) < int(stack.group(2)):
@@ -120,6 +125,13 @@ echo VIRTUAL_STAGED_DONE
                 sweep_ok = (swept == held and touch >= 1)
         checks['stack_sweep_complete'] = bool(seen_stack and sweep_ok)
         checks['pages_match_census'] = bool(stats and after_mark and int(stats.group(1)) == alive)
+    if a.unpinned:
+        checks['unpinned_mode_verified'] = log.count('PTHREAD_MEMORY_MODE:Y') == 1
+        checks['exit_word_resolved'] = checks.pop('exit_word_admitted') is True
+        del checks['stack_sweep_complete']
+        raw = re.findall(r'unpinned retire arena 0x([0-9a-f]+) events=(\d+) resolves=(\d+) touch=(\d+)', main_log)
+        checks['stack_unpinned_retired'] = bool(stack and stats and int(stats[1]) == 0 and
+            any(int(base, 16) == int(stack[1], 16) and int(touch) > 0 for base, events, resolves, touch in raw))
     def pins(tag):
         m = re.search('^' + tag + r':(.*)$', log, re.M)
         v = dict(re.findall(r'nr_foll_pin_(acquired|released) (\d+)', m.group(1))) if m else {}
