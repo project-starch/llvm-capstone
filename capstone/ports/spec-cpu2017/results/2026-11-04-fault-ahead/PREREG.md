@@ -51,3 +51,18 @@ The baselines are out-objb's runs of the same stages.
 - N = 1.
 - Board 2 only. Spatial images only.
 - Test inputs, whose faults are mostly first touches.
+
+## Addendum 1 (4 Nov 13:20, before any board boot): the QEMU gate
+
+The run is lbm test, both arms of `stages-test-hfl/519.lbm_r-test`, on kit-hpmq-base with the QEMU build of the ported module (1d408b099741bab8).
+
+| | OFF (no params) | ON (`fault_ahead_max=64`, read back once) | census-q34 twin |
+|---|---|---|---|
+| faults | 104,719 | 1,646 | 104,719 |
+| CSRUNV entries | 106,839 | 3,766 | 106,840 |
+| in-context instret, Spatial arm | 7,278,940,280 | 7,277,599,059 (−0.018 %) | |
+| rc, specdiff | 0, PASS | 0, PASS | |
+
+- **Outputs.** The real outputs (`lbm.out`, `100_100_130_cf_a.of`) are hash-equal across OFF, ON and the twin. Only `lbm.err` differs, and it differs between OFF and the twin as well: it carries the module's stats line.
+- **What this means for the board.** OFF reproduces the twin's fault path exactly. ON cuts lbm's faults 63.6x and its entries 28x. F4's 10x for lbm stands.
+- The other five benchmarks' QEMU fault counts with fault-ahead on are running and will be reported in Addendum 2. They are not predictions.
