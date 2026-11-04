@@ -97,3 +97,22 @@ The reference for run time, launch, steps and faults is out-fa-b1 (board 1, bits
 - N = 1 per run.
 - Test inputs only, which overweight launch and teardown against train and ref.
 - `retire_exit_sweep=2` leaves tags in returned frames; it is a timing measurement only.
+
+## Addendum 1 (5 Nov, 02:10): the QEMU gate of this module
+
+The gate is kit spec/kit-rsq3. It runs QEMU module 4e6f76009598f053, the same tree 2188cab26d40, with every lever on:
+`fault_ahead_max=64`, `retire_exit_sweep=3`, `image_rootfs=1`, `step_budget_ns=80000000`. It covers the six SPEC test
+stages in their Spatial arm, in parallel slots.
+
+**Result: six of six PASS.**
+- Every command has rc 0 and specdiff PASS, and outputs are equal: gcc 1/1, imagick 2/2, nab 1/1, lbm 1/1,
+  xz 12/12, mcf 2/2.
+- Every kit parameter reads back as set (`image_rootfs=Y`).
+- The teardown line fires with `sweep=3 exiting=1` (xz: 130,704 pages per command).
+
+**What this shows, and what it does not.** Mode 3 zeroes one word of every 16-byte granule of every retired page,
+including the CV_RETIRE pages that lbm and mcf retire during the run. No benchmark output changed, so no program read
+a retired page after its retire. The rootfs lever cannot fire on the twin, which runs from ext2. Timings are not read
+on QEMU.
+
+The gate that xp-b2.sh checks (gcc, imagick, nab and lbm) is therefore met.
