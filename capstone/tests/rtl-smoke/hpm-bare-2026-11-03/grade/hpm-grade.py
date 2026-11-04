@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""hpm-grade.py <run dir> <bs3|objb|c5a> [<other arm's run dir>]: grade one arm of the hpm kit against
+"""hpm-grade.py <run dir> <bs3|objb|c5a|dyntrim> [<other arm's run dir>]: grade one arm of the hpm kit against
 hpm-bare-2026-11-03/PREREG.md. Reads <run dir>/<image>/uart.txt (SR/SV lines) and run.log (image path, resident
 bitstream) for each of hpm-1..7, and hashes the image that run loaded.
 
@@ -15,14 +15,21 @@ The resident bitstream name read back in run.log must name the arm (e7af48457 / 
 ARM c5a (added 2026-11-04, before any C.5a boot): the C.5a bitstream (capstone-ariane 1fc2cd5aa). Its vectors were
 simulated from these images on c5a-wt a642f4891 (core = 1fc2cd5aa, rtl_dirty=no); its exact fields equal ObjBounds'.
 Its cost pattern is graded against a bitstream 3 run, like ObjBounds'. Resident name must contain 1fc2cd5aa.
+ARM dyntrim (added 2026-11-04, before stage A's first boot): stage A, capstone-ariane c9c7952bd (C.5a + the DYN
+handshake trim). Its vectors were simulated from these images on vp9-wt c9c7952bd (rtl_dirty=no); its exact fields
+equal C.5a's. Its cost pattern is graded against a C.5a run (1fc2cd5aa): hpm-3 (LDC) keeps under 10 % of C.5a's stall
+and its cycles drop by 0.5-1.5 per LDC (sim: stall 511 -> 2, cycles -253 = 0.99 per LDC; the stall counter falls by
+twice the cycle saving in sim, so the bitstream 3 -> C.5a clause "within 15 %" does not apply); every other image,
+hpm-4 (STC) included, is equal within 1 %.
+The cost pattern is also printed when the verdict is FINDING (reported only; the exit code is unchanged).
 Exit 0 = AS EXPECTED; 1 = any other verdict; 2 = NO DATA."""
 import sys, re, hashlib, pathlib
 D = pathlib.Path(sys.argv[1]); ARM = sys.argv[2]; OTHER = pathlib.Path(sys.argv[3]) if len(sys.argv) > 3 else None
-if ARM == 'c5a' and OTHER is None:
+if ARM in ('c5a', 'dyntrim') and OTHER is None:
     # Every exact field reads the same on bitstream 3 and C.5a, so only the cost pattern against a bitstream 3 run
     # separates them: without that run the c5a arm has nothing to grade.
-    print('NO DATA: arm c5a needs the bitstream 3 run dir as the third argument'); sys.exit(2)
-if ARM not in ('bs3', 'objb', 'c5a'): sys.exit('arm must be bs3, objb or c5a')
+    print(f'NO DATA: arm {ARM} needs the ' + ('bitstream 3' if ARM == 'c5a' else 'C.5a') + ' run dir as the third argument'); sys.exit(2)
+if ARM not in ('bs3', 'objb', 'c5a', 'dyntrim'): sys.exit('arm must be bs3, objb, c5a or dyntrim')
 H = {'hpm-5': 'dcc339ee4c1940ff0ef58ef0b98ccc5be84011f01e232113f59e1c790b61a004',
      'hpm-1': '4a16a2203c8ba9c4547f2b1b6d66ad805cdef915c62fbc9fe4936bfc868d0b34',
      'hpm-2': '22b8c6bf2ae23af45ad8dfef77d11103790c394301fdbb5db15dec9fe2fc0ecc',
@@ -48,6 +55,8 @@ C5A = {'hpm-5': V('0x0 0x0 0x0 0x0 0x100 0x0 0x333 0x203 0x5 0x0 0x0'),
        'hpm-4': V('0x0 0x0 0x100 0x0 0x100 0x100 0x715 0x303 0x5 0x0 0x0'),
        'hpm-6': V('0x0 0x0 0x0 0x0 0x0 0x0 0x48c 0x303 0x5 0x0 0x0'),
        'hpm-7': V('0x100 0x0 0x100 0x100 0x100 0x0 0x514e 0x403 0x5 0x0 0x0')}
+DYNTRIM = dict(C5A)
+DYNTRIM['hpm-3'] = V('0x0 0x0 0x100 0x0 0x100 0x2 0x461 0x303 0x5 0x0 0x0')
 TIMING = {2, 5, 6}
 STALL, CYC = 5, 6
 def read(d, n):
@@ -60,9 +69,9 @@ def read(d, n):
     h = hashlib.sha256(img.read_bytes()).hexdigest() if img and img.exists() else None
     bs = re.findall(r"resident NV bitstream = '([^']+)'", lg)
     return dict(sr=sr, sv=sv, h=h, bs=bs)
-want = {'bs3': BS3, 'objb': OBJB, 'c5a': C5A}[ARM]
+want = {'bs3': BS3, 'objb': OBJB, 'c5a': C5A, 'dyntrim': DYNTRIM}[ARM]
 nodata, bad, wrongbs = [], [], []
-RES = {'bs3': 'e7af48457', 'objb': '603528b8b', 'c5a': '1fc2cd5aa'}
+RES = {'bs3': 'e7af48457', 'objb': '603528b8b', 'c5a': '1fc2cd5aa', 'dyntrim': 'c9c7952bd'}
 for n in H:
     g = read(D, n)
     if g is None: print(f'{n}: NO DATA'); nodata.append(n); continue
@@ -82,21 +91,26 @@ print(f'ARM {ARM}: {v}  (off {bad} wrong-bitstream {wrongbs} no-data {nodata})')
 patt_ok = True
 # comparison-dir bitstream check (2026-11-04): the other run dir must have run on the bitstream its pattern is graded
 # against, read back from its own run.log; without this a comparison against the wrong bitstream grades as a pattern.
-CMP = {'bs3': ('603528b8b',), 'objb': ('e7af48457',), 'c5a': ('e7af48457',)}
+CMP = {'bs3': ('603528b8b',), 'objb': ('e7af48457',), 'c5a': ('e7af48457',), 'dyntrim': ('1fc2cd5aa',)}
 if OTHER:
     seen = sorted({g['bs'][-1] for g in (read(OTHER, n) for n in H) if g and g['bs']})
     cmp_ok = bool(seen) and all(any(h in s for h in CMP[ARM]) for s in seen)
     print(f'COMPARISON DIR bitstream {seen}: ' + ('OK' if cmp_ok else 'WRONG COMPARISON BITSTREAM (must name ' + ' or '.join(CMP[ARM]) + ')'))
     patt_ok = cmp_ok
-if OTHER and v == 'AS EXPECTED':
+if OTHER and v in ('AS EXPECTED', 'FINDING'):
     a3, ao = (D, OTHER) if ARM == 'bs3' else (OTHER, D)
-    print(f'COST PATTERN (bitstream 3 -> {"C.5a" if ARM == "c5a" else "ObjBounds"}):')
+    LOWER = ('hpm-3',) if ARM == 'dyntrim' else ('hpm-3', 'hpm-4')
+    names = {'c5a': 'bitstream 3 -> C.5a', 'dyntrim': 'C.5a -> stage A'}.get(ARM, 'bitstream 3 -> ObjBounds')
+    print(f'COST PATTERN ({names})' + (' -- reported only, the verdict is FINDING:' if v == 'FINDING' else ':'))
     for n in H:
         x, y = read(a3, n), read(ao, n)
         if not x or not y or len(x['sv']) != 11 or len(y['sv']) != 11: print(f'  {n}: NO DATA'); patt_ok = False; continue
-        if n in ('hpm-3', 'hpm-4'):
+        if n in LOWER:
             ds, dc = x['sv'][STALL] - y['sv'][STALL], x['sv'][CYC] - y['sv'][CYC]
-            ok = ds > 0 and dc > 0 and abs(ds - dc) <= 0.15 * dc
+            if ARM == 'dyntrim':
+                ok = y['sv'][STALL] < 0.10 * x['sv'][STALL] and 0.5 <= dc / 256 <= 1.5
+            else:
+                ok = ds > 0 and dc > 0 and abs(ds - dc) <= 0.15 * dc
             print(f'  {n}: stall {x["sv"][STALL]} -> {y["sv"][STALL]} (-{ds}), cycles {x["sv"][CYC]} -> {y["sv"][CYC]} (-{dc}),'
                   f' per op {ds / 256:.2f} / {dc / 256:.2f}: {"HOLDS" if ok else "FAILS"}')
         else:

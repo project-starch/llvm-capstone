@@ -138,3 +138,46 @@ were simulated on c5a-wt a642f4891, whose core is identical to 1fc2cd5aa, with P
   - no bitstream 3 dir gives rc 2, and an empty dir gives rc 2.
   - The existing arms still read rc 0 on the real board 1 (bitstream 3) and board 2 (ObjBounds) runs.
 - **Prediction:** AS EXPECTED, with the cost pattern HOLDING against board 1's bitstream 3 run.
+
+## The stage-A arm (pre-registered 2026-11-04, before stage A's first boot)
+
+**The bitstream:** stage A, caplifive_vp2c_c9c7952bd: C.5a plus the DYN handshake trim, sealed with .bit sha256
+790ac2c096a0cd73...
+
+**Its vectors** were simulated from these images on vp9-wt c9c7952bd (PROVENANCE rtl_dirty=no, memory delay 12). The ELFs
+are byte-identical to the C.5a run's (sha256 checked).
+- Every image's vector equals C.5a's except hpm-3, where only the timing fields move:
+
+  | hpm-3 (LDC) | stall | cycles |
+  |---|---|---|
+  | C.5a | 511 | 1,374 |
+  | stage A | 2 | 1,121 |
+
+- 1,121 is hpm-1's plain-load cycles: with the handshake trimmed, an LDC through a resident node costs what a plain load
+  does in this loop.
+- hpm-4 (STC) is unchanged, as stage A predicts.
+
+**Grade:** `hpm-grade.py <run> dyntrim <a C.5a run dir>`. The resident name must contain c9c7952bd, and the comparison
+dir 1fc2cd5aa.
+- Exact fields are as for every arm.
+- **Cost pattern, C.5a → stage A:**
+  - hpm-3 keeps under 10 % of C.5a's stall, and its cycles drop by 0.5-1.5 per LDC (sim 0.99).
+  - Every other image, hpm-4 included, is equal within 1 %.
+- In the simulation the stall counter falls by twice the cycle saving (509 against 253). So the bitstream 3 → C.5a clause,
+  "cycle drop within 15 % of the stall drop", is not used for this arm.
+- **l1d_miss.** If it reads +1 against sim, as on C.5a's first session, that is the same open finding on the same core,
+  not a new one. The verdict is still FINDING.
+
+**Also from this commit:** on every arm, the cost pattern is printed when the verdict is FINDING. It is reported only,
+and the exit code is unchanged.
+
+**Controls** (fake run dirs derived from the real C.5a silicon run, relabelled c9c7952bd):
+- hpm-3 trimmed, compared with C.5a: AS EXPECTED and HOLDS, rc 0.
+- Untrimmed: the pattern FAILS, rc 1.
+- Comparison dir on bitstream 3: WRONG COMPARISON, rc 1.
+- l1d_miss left at +1: FINDING, with the pattern printed "reported only", rc 1.
+- No comparison dir: NO DATA, rc 2.
+- The real runs still grade as before:
+  - C.5a against bitstream 3: FINDING, rc 1;
+  - ObjBounds against bitstream 3: AS EXPECTED, HOLDS, rc 0;
+  - bitstream 3 against ObjBounds: AS EXPECTED, HOLDS, rc 0.
