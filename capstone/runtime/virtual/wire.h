@@ -89,4 +89,18 @@ struct cv_touch {
  * denies writers to it (ETXTBSY, as Linux does for a running executable) until
  * the context is released, so the bytes validated are the bytes loaded. */
 #define CV_IMAGE _IOW('V', 28, __s32)
+/* Register the launcher's private descriptors before any domain entry. Until
+ * registered, the module serves no delegated I/O. */
+#define CV_IO_PRIVATE_MAX 16
+struct cv_io_private {
+    __u64 count;
+    __s32 fds[CV_IO_PRIVATE_MAX];
+};
+/* Attest one thread's transport after launcher validation and signal attachment.
+ * Zero meta/exchange/bytes detach it. The domain cannot issue this ioctl. */
+struct cv_io_transport {
+    __u64 thread, meta, exchange, bytes;
+};
+#define CV_IO_TRANSPORT _IOW('V', 31, struct cv_io_transport)
+#define CV_IO_PRIVATE _IOW('V', 30, struct cv_io_private)
 #endif

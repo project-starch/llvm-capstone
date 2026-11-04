@@ -17,6 +17,7 @@
 #include <linux/rbtree.h>
 #include <linux/xarray.h>
 #include <linux/file.h>
+#include <linux/uio.h>
 #include <asm/csr.h>
 #include <asm/io.h>
 #include <asm/pgtable.h>
@@ -97,6 +98,10 @@ struct arena {
      * unreachable by the domain before its first entry. A second retire is not an error, but the
      * non-destroying path reports one, so it must be skipped rather than tolerated. */
     bool ancestor_retired;
+    /* in-module I/O calls in flight into or out of this arena.
+     * While nonzero, retire() and remap_begin() refuse it (EBUSY), so the range cannot be given
+     * back to Linux, and hence not recycled, under a kernel copy. */
+    unsigned holds;
 };
 struct context;
 struct cv_thread {
@@ -128,6 +133,14 @@ struct cv_thread {
         unsigned window;       /* pages requested ahead at its last fault, including empty cuts */
     } streams[4];
     unsigned long stream_clock;
+    /* a delegated call was served inside CV_STEP (inline_io) and its reply
+     * staged, but the step stopped before re-entering: the step was reported as a quantum, and
+     * the next CV_STEP must enter with action 2 (the QEMU call is still a service event). */
+    bool inline_reply, io_busy;
+    /* Only transport spans validated and attached by the launcher are eligible.
+     * Remember arena identities too: a recycled address is not a registration. */
+    unsigned long io_meta, io_exchange, io_bytes;
+    u64 io_meta_id, io_exchange_id;
 };
 struct context {
     struct list_head link;
@@ -171,6 +184,11 @@ struct context {
     struct page **remap_pages;
     u64 remap_thread;
     unsigned long remap_bytes;
+    /* the launcher's own descriptors (CV_IO_PRIVATE), which in-module I/O
+     * never serves. Until the launcher registers them, in-module I/O is off for the context. */
+    int io_private[CV_IO_PRIVATE_MAX];
+    unsigned io_private_count;
+    bool io_ready;
 };
 static DEFINE_MUTEX(vm_lock);
 /* Quotas are in base pages; zero means the 30-bit ISA limit. Parameters are
@@ -423,6 +441,28 @@ MODULE_PARM_DESC(lazy_grants, "admit NONLIN grants page by page at first access 
  * 0644 so a boot can turn it on for one run. */
 static bool diag_admit;
 module_param(diag_admit, bool, 0644);
+
+/* Only the unchanged libc's exchange-offset shape is served here. */
+static bool in_module_io = true;
+module_param(in_module_io, bool, 0644);
+MODULE_PARM_DESC(in_module_io, "serve exchange read/write/pread64/pwrite64 inside CV_STEP");
+#ifdef CV_TEST_HOOKS
+/* Negative control for the adversarial exchange-lifetime test. These switches
+ * do not exist in the production module. No direct-buffer request is supported. */
+static bool inline_hold = true, inline_test_transport;
+module_param(inline_hold, bool, 0644);
+module_param(inline_test_transport, bool, 0644);
+#else
+#define inline_hold true
+#define inline_test_transport false
+#endif
+static unsigned long inline_served, inline_fallback, inline_hold_refusals;
+static unsigned long inline_stopped, inline_interrupted;
+module_param(inline_served, ulong, 0444);
+module_param(inline_fallback, ulong, 0444);
+module_param(inline_hold_refusals, ulong, 0444);
+module_param(inline_stopped, ulong, 0444);
+module_param(inline_interrupted, ulong, 0444);
 
 /* The retired count, from wherever this format keeps it. */
 /* The CSMINT descriptor, v7 (Q-23's ruling). Six words, 8-aligned:
@@ -1470,6 +1510,11 @@ static int retire(struct context *c, struct arena *a, bool destroying)
     unsigned i, swept;
     if (!destroying && arena_has_thread_frame(c, a))
         return -EBUSY;
+    /* An ioctl in flight retains the device file, so destruction cannot race this hold. */
+    if (!destroying && a->holds) {
+        ++inline_hold_refusals;
+        return -EBUSY;
+    }
     if (!destroying && !unpinned) {
         int error = pin_remaining(c, a, FOLL_FORCE | FOLL_NOFAULT);
         if (error) return error;
@@ -1781,6 +1826,7 @@ static int remap_begin(struct context *c, const struct cv_remap *r)
         return -EINVAL;
     a = xa_load(&c->ids, r->id);
     if (!a || !a->linear || arena_has_thread_frame(c, a)) return -EINVAL;
+    if (a->holds) { ++inline_hold_refusals; return -EBUSY; }   /* see retire() */
     if (c->registered_bytes - a->bytes + r->bytes > CV_MAX_BYTES) return -ENOMEM;
     error = unpinned ? 0 : pin_remaining(c, a, FOLL_FORCE | FOLL_NOFAULT);
     if (error) return error;
@@ -2785,6 +2831,194 @@ static int touch(struct context *c, const struct cv_touch *r)
     return 0;
 }
 
+/* Serve the registered transport only. The kernel holds its arenas across
+ * the Linux copy, then the unchanged libc copies through the caller's capability.
+ * Thus revocation of a caller object is checked at copy-back, even if its arena
+ * remains live. S-mode cannot perform that check and must never copy to a caller
+ * address supplied in a request. All other requests return to the launcher.
+ *
+ * vm_lock protects admission, binding and holds, but is dropped across I/O.
+ * The entry is fetched once. A held arena cannot be retired, remapped or made
+ * into a thread frame; the thread cannot be stepped or removed during I/O.
+ * Linux RAM writes clear tags under the platform's ordinary-store rule. */
+struct cv_io_entry {
+    u32 version, count;
+    u64 nr, args[6], flags;
+    s64 result;
+    u64 pending, status;
+};
+_Static_assert(sizeof(struct cv_io_entry) == 96, "capstone/delegate.h entry");
+#define CV_IO_SIGNAL_OFFSET 4096UL      /* CAPSTONE_SIGNAL_OFFSET: recorded, published, count */
+#define CV_IO_BLOCK_SPAN (CV_IO_SIGNAL_OFFSET + 24)
+#define CV_IO_NR_READ 63
+#define CV_IO_NR_WRITE 64
+#define CV_IO_NR_PREAD 67
+#define CV_IO_NR_PWRITE 68
+
+/* The one registered arena holding all of [at, at + len), if the domain may have the kernel write
+ * it on its behalf; NULL otherwise. */
+static struct arena *io_arena(struct context *c, unsigned long at, unsigned long len)
+{
+    struct arena *a;
+    if (!len || at > ULONG_MAX - len) return NULL;
+    a = arena_at(c, at);
+    if (!a || at + len - a->address > a->bytes) return NULL;     /* one arena, never two */
+    if (at - a->address < a->rx_bytes) return NULL;              /* image text: never written */
+    if (a->ancestor_retired || arena_has_thread_frame(c, a) || c->remapping == a) return NULL;
+    return a;
+}
+static int io_admit(struct context *c, unsigned long at, unsigned long len)
+{
+    struct cv_touch r = {at, len};
+    return touch(c, &r);
+}
+static bool io_private_fd(struct context *c, unsigned long fd)
+{
+    for (unsigned i = 0; i < c->io_private_count; ++i)
+        if ((unsigned long)c->io_private[i] == fd) return true;
+    return false;
+}
+/* ksys_read/ksys_write/ksys_pread64/ksys_pwrite64 (fs/read_write.c) with the exported pieces:
+ * the f_pos lock and update as fdget_pos does them, file_start_write around a write. */
+static long io_rw(struct file *file, bool writing, bool positional, unsigned long buf,
+                  size_t len, loff_t pos)
+{
+    struct iovec iov;
+    struct iov_iter iter;
+    loff_t p = 0, *ppos = NULL;
+    bool locked = false;
+    long r = import_single_range(writing ? WRITE : READ, (void __user *)buf, len, &iov, &iter);
+    if (r) return r;
+    if (positional) {
+        if (pos < 0) return -EINVAL;
+        if (!(file->f_mode & (writing ? FMODE_PWRITE : FMODE_PREAD))) return -ESPIPE;
+        p = pos; ppos = &p;
+    } else {
+        if (file->f_mode & FMODE_ATOMIC_POS) { mutex_lock(&file->f_pos_lock); locked = true; }
+        if (!(file->f_mode & FMODE_STREAM)) { p = file->f_pos; ppos = &p; }
+    }
+    if (writing) {
+        file_start_write(file);
+        r = vfs_iter_write(file, &iter, ppos, 0);
+        file_end_write(file);
+    } else {
+        r = vfs_iter_read(file, &iter, ppos, 0);
+    }
+    if (!positional && ppos && r >= 0) file->f_pos = p;
+    if (locked) mutex_unlock(&file->f_pos_lock);
+    return r;
+}
+static void io_release(struct context *c, u64 id)
+{
+    struct arena *a = id ? xa_load(&c->ids, id) : NULL;
+    if (a && a->holds) --a->holds;
+}
+static int inline_io(struct context *c, struct cv_thread *t, struct file *device_file)
+{
+    unsigned long meta = t->frame[72], exch = t->frame[73], exch_bytes = t->frame[74];
+    struct cv_io_entry e;
+    struct cv_io_entry __user *ue;
+    struct arena *ma, *ba = NULL;
+    struct file *file = NULL;
+    u64 signals[2], mid = 0, bid = 0;
+    unsigned long buf = 0, len;
+    bool writing, positional;
+    long r;
+    if (!in_module_io || !c->io_ready ||
+        t->frame[79] != CV_SERVICE_THREAD_DELEGATE || (meta & 7)) return 0;
+    if (!inline_test_transport &&
+        (meta != t->io_meta || exch != t->io_exchange || exch_bytes != t->io_bytes)) return 0;
+    ma = io_arena(c, meta, CV_IO_BLOCK_SPAN);
+    if (!ma || (!inline_test_transport && ma->id != t->io_meta_id) ||
+        io_admit(c, meta, CV_IO_BLOCK_SPAN)) return 0;
+    ue = (struct cv_io_entry __user *)meta;
+    if (copy_from_user(&e, ue, sizeof e)) return 0;     /* the ONE fetch: e is all that is read */
+    if (e.version != 2) return 0;
+    switch (e.nr) {
+    case CV_IO_NR_READ: writing = false; positional = false; break;
+    case CV_IO_NR_WRITE: writing = true; positional = false; break;
+    case CV_IO_NR_PREAD: writing = false; positional = true; break;
+    case CV_IO_NR_PWRITE: writing = true; positional = true; break;
+    default: return 0;
+    }
+    if (e.flags != 2 || e.count != 1) return 0;
+    /* Match the launcher's validation of the complete declared range; clipping
+     * to MAX_RW_COUNT first would accept a request its validator refuses. */
+    len = e.args[2];
+    if (copy_from_user(signals, (void __user *)(meta + CV_IO_SIGNAL_OFFSET), sizeof signals))
+        return 0;
+    if (signals[0] != signals[1]) goto fallback;
+    ba = io_arena(c, exch, exch_bytes);
+    if (!ba || (!inline_test_transport && ba->id != t->io_exchange_id) ||
+        e.args[1] > exch_bytes || len > exch_bytes - e.args[1]) goto fallback;
+    buf = exch + e.args[1];
+    if (io_private_fd(c, e.args[0])) goto fallback;
+    if (len && io_admit(c, buf, len)) goto fallback;
+    file = e.args[0] > INT_MAX ? NULL : fget((unsigned)e.args[0]);
+    if (!file || file->f_op == device_file->f_op) goto fallback;
+    if (!(writing ? file->f_op->write_iter : file->f_op->read_iter)) goto fallback;
+    if (inline_hold) {
+        ++ma->holds; mid = ma->id;
+        if (ba) { ++ba->holds; bid = ba->id; }
+    }
+    t->io_busy = true;
+    mutex_unlock(&vm_lock);
+    r = io_rw(file, writing, positional, buf, len, (loff_t)e.args[3]);
+    fput(file); file = NULL;
+    mutex_lock(&vm_lock);
+    /* As at the ioctl's entry: no step runs while another thread's remap window is open. */
+    while (READ_ONCE(c->remapping)) {
+        mutex_unlock(&vm_lock);
+        wait_event(c->remap_wait, !READ_ONCE(c->remapping));
+        mutex_lock(&vm_lock);
+    }
+    /* By id: with the hold off (the negative control) the arena may be gone, or another at the
+     * same address. */
+    t->io_busy = false;
+    io_release(c, mid); io_release(c, bid);
+    if (r == -ERESTARTSYS || r == -ERESTARTNOINTR || r == -ERESTARTNOHAND ||
+        r == -ERESTART_RESTARTBLOCK || r == -EINTR) {
+        ++inline_interrupted;
+        goto fallback; /* nothing moved: let the launcher publish signals and RETRY */
+    }
+    if (put_user(r, &ue->result) || put_user(0ULL, &ue->pending) || put_user(0ULL, &ue->status) ||
+        put_user(0U, (u32 __user *)(meta + CV_IO_SIGNAL_OFFSET + 16))) {
+        /* Only when the block itself was unmapped under a hold-off call: end the context rather
+         * than let the launcher serve the call a second time. */
+        t->frame[2] = 2; t->frame[3] = CV_CAUSE_REFUSED; t->event = 2;
+        return 0;
+    }
+    ++inline_served;
+    t->frame[28] = 0; t->frame[29] = 0;          /* the reply a0, as the launcher's step->result = 0 */
+    return 1;
+fallback:
+    if (file) fput(file);
+    ++inline_fallback;
+    return 0;
+}
+
+/* The trusted launcher calls this after attaching signal state and validating
+ * the complete transport. Zero spans detach it before the mapping is released. */
+static int io_transport(struct context *c, const struct cv_io_transport *r)
+{
+    struct cv_thread *t = find_thread(c, r->thread);
+    struct arena *ma, *ba;
+    if (!t || t->terminal) return -ESRCH;
+    if (t->io_busy || t->inline_reply) return -EBUSY;
+    if (!r->meta && !r->exchange && !r->bytes) {
+        t->io_meta = t->io_exchange = t->io_bytes = 0;
+        t->io_meta_id = t->io_exchange_id = 0;
+        return 0;
+    }
+    if (!c->io_ready || (r->meta & 7) || r->bytes > (64UL << 20)) return -EINVAL;
+    ma = io_arena(c, r->meta, 16384);
+    ba = io_arena(c, r->exchange, r->bytes);
+    if (!ma || !ba) return -EFAULT;
+    t->io_meta = r->meta; t->io_exchange = r->exchange; t->io_bytes = r->bytes;
+    t->io_meta_id = ma->id; t->io_exchange_id = ba->id;
+    return 0;
+}
+
 static void node_stats(struct context *c)
 {
     c->stats.nodes = c->table[3];
@@ -2898,7 +3132,8 @@ retry:
         struct cv_thread *t;
         if (copy_from_user(&r, (void __user *)arg, sizeof(r))) { rc = -EFAULT; goto out; }
         if (!r.frame || !find_arena(c, r.frame, PAGE_SIZE)) { rc = -EINVAL; goto out; }
-        if (arena_has_thread_frame(c, find_arena(c, r.frame, PAGE_SIZE))) {
+        if (find_arena(c, r.frame, PAGE_SIZE)->holds ||
+            arena_has_thread_frame(c, find_arena(c, r.frame, PAGE_SIZE))) {
             if (++busy_frame_refusals <= CV_DIAG_BUDGET)
                 pr_emerg("capstone_vm: thread create refused: frame 0x%llx already backs a thread "
                          "(refusals %lu)\n", (unsigned long long)r.frame, busy_frame_refusals);
@@ -3011,6 +3246,7 @@ thread_unwind:
         if (copy_from_user(&r, (void __user *)arg, sizeof(r))) { rc = -EFAULT; goto out; }
         t = find_thread(c, r.thread);
         if (!t || t == c->main_thread) { rc = -EINVAL; goto out; }
+        if (t->io_busy) { rc = -EBUSY; goto out; }
         r.frame = t->frame_user;
         if (t->started) {
             preempt_disable(); local_irq_save(flags);
@@ -3031,6 +3267,7 @@ thread_unwind:
         if (copy_from_user(&r, (void __user *)arg, sizeof(r))) { rc = -EFAULT; goto out; }
         t = find_thread(c, r.thread);
         if (!t || t->terminal) { rc = -ESRCH; goto out; }
+        if (t->io_busy) { rc = -EBUSY; goto out; }
         if (r.reply > 1 || (r.reply != (t->started && t->event == 3))) goto out;
         if (!t->started && (!t->frame[8] || !t->frame[12])) goto out;
         /* A frame that has not started needs a free slot to enter. Waiting is safe ACROSS
@@ -3062,6 +3299,7 @@ thread_unwind:
         for (unsigned long action = r.reply ? 2 : 0, entries = 0;;
              action = 0, ++entries) {
             if (entries && !text) TEST_HOOK(2);  /* after a data fault only, see below */
+            if (t->inline_reply) action = 2;     /* a call served below, reply staged */
             preempt_disable(); local_irq_save(flags);
             /* Checked with interrupts and preemption off, immediately before
              * CSRUNV: no interrupt can set need_resched or a signal between
@@ -3115,7 +3353,7 @@ thread_unwind:
 #else
             t->event = run_event(t, action);
 #endif
-            t->started = true; t->reply_cap = false;
+            t->started = true; t->reply_cap = false; t->inline_reply = false;
             local_irq_restore(flags); preempt_enable();
             ++c->stats.steps;
             if (t->event == CV_EVENT_UNWRITTEN) {
@@ -3139,6 +3377,15 @@ thread_unwind:
                         "pc 0x%lx tval 0x%lx a0 0x%lx\n",
                         escape_prints, action, t->event,
                         t->frame[2], t->frame[3], t->frame[4], t->frame[5], t->frame[6]);
+            }
+            /* A delegated read/write the module can serve itself is served
+             * here and the domain re-entered with its reply (action 2), without the two system
+             * calls and the launcher's service a return costs. The I/O ran without vm_lock, so the
+             * quantum restarts. */
+            if (t->event == 3 && inline_io(c, t, f)) {
+                t->inline_reply = true;
+                budget_end = ktime_get_ns() + CV_STEP_BUDGET_NS;
+                continue;
             }
             if (t->event != 4)
                 break;
@@ -3174,6 +3421,13 @@ thread_unwind:
                 ++c->stats.faults;
                 unpinned_fault_event(c, t, "step");
             }
+        }
+        if (t->inline_reply) {
+            /* a served call whose re-entry a stop condition prevented. Reported as a
+             * quantum, so the launcher neither serves it again nor sends a reply; the next
+             * CV_STEP enters with action 2 (the flag above). */
+            t->frame[2] = 1; t->frame[3] = 0; t->event = 1;
+            ++inline_stopped;
         }
         if (t->event == 5) {
             int error = ensure_nodes(c, CAP_REV_TABLE_RESERVE + 1);
@@ -3218,6 +3472,20 @@ thread_unwind:
         if (copy_from_user(&id, (void __user *)arg, sizeof(id))) { rc = -EFAULT; goto out; }
         a = xa_load(&c->ids, id);
         if (a) rc = retire(c, a, false);
+    } else if (op == CV_IO_TRANSPORT) {
+        struct cv_io_transport r;
+        if (copy_from_user(&r, (void __user *)arg, sizeof(r))) { rc = -EFAULT; goto out; }
+        rc = io_transport(c, &r);
+    } else if (op == CV_IO_PRIVATE) {
+        /* once, before the first entry. Until then inline_io serves nothing. */
+        struct cv_io_private r;
+        if (copy_from_user(&r, (void __user *)arg, sizeof(r))) { rc = -EFAULT; goto out; }
+        if (c->io_ready || r.count > CV_IO_PRIVATE_MAX ||
+            (c->main_thread && c->main_thread->started)) { rc = -EINVAL; goto out; }
+        for (unsigned i = 0; i < r.count; ++i) c->io_private[i] = r.fds[i];
+        c->io_private_count = r.count;
+        c->io_ready = true;
+        rc = 0;
     } else if (op == CV_STATS) {
         node_stats(c);
         rc = copy_to_user((void __user *)arg, &c->stats, sizeof(c->stats)) ? -EFAULT : 0;

@@ -437,8 +437,11 @@ static struct mapping *transport_mapping(uint64_t tid, unsigned i)
 }
 /* Release the calling worker's holds and its host state: the worker's own detach service and
  * its exit, nothing else. After it this launcher writes nothing into the blocks. */
+static void io_transport_register(uint64_t tid, uintptr_t meta_at, uintptr_t exchange_at, size_t bytes);
+
 static void transport_detach(uint64_t tid)
 {
+    io_transport_register(tid, 0, 0, 0);
     for (unsigned i = 0; i < 2; ++i) {
         if (!transport_at[i].at) continue;
         struct mapping *m = transport_mapping(tid, i);
@@ -1104,6 +1107,7 @@ static int virtual_service(uint64_t tid, struct cv_step *step)
                     worker_host->signals.logical = inherited_mask;
                     block->initial_mask = inherited_mask;
                     capstone_signals_attach(&worker_host->signals);
+                    io_transport_register(tid, step->args[0], step->args[1], step->args[2]);
                 }
                 h = worker_host;
                 if (h->exchange != (void *)(uintptr_t)step->args[1] ||
@@ -1243,6 +1247,27 @@ static int virtual_service(uint64_t tid, struct cv_step *step)
         step->result = -ENOSYS;
     }
     return 0;
+}
+
+/* Older modules reject these optional registrations with ENOTTY and keep
+ * serving all requests through the launcher. An incomplete registration never
+ * enables the fast path. Private descriptor identity is fixed before entry. */
+static void io_private_register(void)
+{
+    struct cv_io_private r = {0};
+    if (host.private_count + (spawner.socket >= 0) > CV_IO_PRIVATE_MAX) return;
+    for (unsigned i = 0; i < host.private_count; ++i)
+        r.fds[r.count++] = host.private_fds[i];
+    if (spawner.socket >= 0 && r.count < CV_IO_PRIVATE_MAX) r.fds[r.count++] = spawner.socket;
+    if (ioctl(device, CV_IO_PRIVATE, &r) && trace)
+        fprintf(stderr, "CAPSTONE_VM_IO_PRIVATE errno=%d (in-module I/O off)\n", errno);
+}
+
+static void io_transport_register(uint64_t tid, uintptr_t meta_at, uintptr_t exchange_at, size_t bytes)
+{
+    struct cv_io_transport r = {tid, meta_at, exchange_at, bytes};
+    if (ioctl(device, CV_IO_TRANSPORT, &r) && trace)
+        fprintf(stderr, "CAPSTONE_VM_IO_TRANSPORT errno=%d (launcher fallback)\n", errno);
 }
 
 static int virtual_service_loop(uint64_t tid)
@@ -1401,8 +1426,10 @@ int main(int argc, char **argv)
     if (!exchange_admitted) return die("exchange admission cache");
     host.prepare_write = exchange_prepare_write;
     host.private_fds[host.private_count++] = device;
+    io_private_register();
     capstone_signals_settle_libc();
     capstone_signals_init(&host.signals, (void *)((char *)meta + CAPSTONE_SIGNAL_OFFSET));
+    io_transport_register(0, (uintptr_t)meta, (uintptr_t)exchange, exchange_bytes);
     if ((error = capstone_delegate_seccomp())) { errno = error; return die("seccomp"); }
     for (int fd = 0; fd < 3; ++fd) if (!(stdio_mask & (1u << fd))) close(fd);
     launch_ns = now_ns() - start_ns;
