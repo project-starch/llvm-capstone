@@ -3,7 +3,7 @@
 ;
 ; Compare-only endpoints may lose their tag. They never seed an accessed
 ; recurrence, and the post-increment cursor is only accessed on the backedge.
-; For the descending loop at b=2, n=1 under phys56, the load is at b and the
+; For the descending loop at b=0, n=1 under phys56, the load is at b and the
 ; endpoint is b-8: it is compared, never dereferenced or stepped back to b.
 
 target datalayout = "e-p:64:64-p200:128:128:128:64-i64:64-n32:64-ni:200"
@@ -219,3 +219,44 @@ latch:
 exit:
   ret void
 }
+
+; The signed exit predicate is not handled by the later loop-term fold.
+; The unconditional load still proves an accessed anchor around the call.
+; CHECK-LABEL: @descending_call(
+; CHECK: [[END:%.*]] = getelementptr ptr addrspace(200), ptr addrspace(200) %b, i64 -1
+; CHECK: loop:
+; CHECK-NOT: phi i64
+; CHECK: [[IV:%.*]] = phi ptr addrspace(200)
+; CHECK: load ptr addrspace(200), ptr addrspace(200) [[IV]]
+; CHECK: latch:
+; CHECK: [[NEXT:%.*]] = getelementptr i8, ptr addrspace(200) [[IV]], i64 -16
+; CHECK: icmp ne ptr addrspace(200) [[NEXT]], [[END]]
+; ASM-LABEL: descending_call:
+; ASM: cincoffsetimm [[CUR:s[0-9]+]], [[CUR]], -16
+; ASM-NEXT: beq [[CUR]], {{s[0-9]+}},
+define void @descending_call(ptr addrspace(200) %b, i32 %n) {
+entry:
+  %positive = icmp sgt i32 %n, 0
+  br i1 %positive, label %preheader, label %exit
+preheader:
+  %limit = zext i32 %n to i64
+  %start = add i64 %limit, -1
+  br label %loop
+loop:
+  %i = phi i64 [%start, %preheader], [%next, %latch]
+  %p = getelementptr inbounds ptr addrspace(200), ptr addrspace(200) %b, i64 %i
+  %v = load ptr addrspace(200), ptr addrspace(200) %p
+  %present = icmp ne ptr addrspace(200) %v, null
+  br i1 %present, label %call, label %latch
+call:
+  call void @consume(ptr addrspace(200) %v)
+  br label %latch
+latch:
+  %next = add nsw i64 %i, -1
+  %more = icmp sgt i64 %i, 0
+  br i1 %more, label %loop, label %exit
+exit:
+  ret void
+}
+
+declare void @consume(ptr addrspace(200))
