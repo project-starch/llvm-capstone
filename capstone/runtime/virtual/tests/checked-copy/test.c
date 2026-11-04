@@ -108,8 +108,10 @@ static void switch_thread(struct fixture *f)
 static cn_u32 hold(void *v, const struct cn_capref *ref)
 {
     struct fixture *f = v;
-    int rc = cn_authorize(f->context, &f->owner, ref, 0, 0, 0);
-    if (rc) return rc > 0 ? (cn_u32)rc : CU_REFUSED;
+    struct cn_capref current;
+    int rc = cn_get_capref(f->context, &f->owner, ref->frame_slot, &current);
+    if (rc || ref->reserved || ref->context_id != current.context_id ||
+        ref->context_epoch != current.context_epoch) return CU_REFUSED;
 #ifndef CU_MUTATE_NO_HOLD
     ++f->holds;
 #endif
@@ -143,7 +145,7 @@ static cn_u32 check(void *v, const struct cn_capref *ref, cn_u64 offset,
     assert(f->entered);
     int rc = cn_authorize(f->context, &f->owner, ref, offset, length, dir == CU_TO_DOMAIN);
 #ifdef CU_MUTATE_SKIP_CHECK
-    if (f->copies) rc = 0;
+    if (f->copies && f->mode >= OBJECT && f->mode <= COW_MAPPING) rc = 0;
 #endif
     if (rc) return rc > 0 ? (cn_u32)rc : rc == -EACCES ? CU_TAG : CU_REFUSED;
     assert(!cn_snapshot(f->context, &f->owner, &fr));
@@ -284,6 +286,11 @@ int main(void)
     CHECK(r.cause == CU_BOUNDS && !r.bytes_done);
     r = cu_copy(&ops, &f, &f.ref, SIZE, buffer, 1, CU_TO_DOMAIN, PAGE);
     CHECK(r.cause == CU_BOUNDS && !r.bytes_done);
+    f.rights = 2;
+    r = cu_copy(&ops, &f, &f.ref, 0, buffer, 1, CU_TO_DOMAIN, PAGE);
+    CHECK(!r.cause && r.bytes_done == 1);
+    r = cu_copy(&ops, &f, &f.ref, 0, buffer, 1, CU_FROM_DOMAIN, PAGE);
+    CHECK(r.cause == CU_RIGHTS && !r.bytes_done);
     f.rights = 4;
     r = cu_copy(&ops, &f, &f.ref, 0, buffer, 1, CU_TO_DOMAIN, PAGE);
     CHECK(r.cause == CU_RIGHTS && !r.bytes_done); f.rights = 6;
