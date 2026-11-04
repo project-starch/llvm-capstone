@@ -16,6 +16,7 @@ from pathlib import Path
 import re
 import shutil
 import subprocess
+import unpinned_checks
 
 HERE = Path(__file__).resolve().parent
 WINDOWS = (1, 16, 64)
@@ -38,6 +39,7 @@ dmesg -n 1
 dmesg -c > /dev/null
 for w in ''' + ' '.join(map(str, WINDOWS)) + '''; do
   insmod capstone_vm.ko pin_ahead_pages=$w fault_ahead_max=0 @DIAG_PARAM@ || exit 1
+  echo "PIN_MEMORY_MODE:$(cat /sys/module/capstone_vm/parameters/unpinned)"
   for mode in ''' + ' '.join(MODES) + '''; do
     ./capstone-vexec pin.dom "$mode" > /tmp/pin.out 2>&1
     echo PIN_EXIT:$w:$mode:$?
@@ -139,7 +141,7 @@ def parse(log):
     return runs
 
 
-def evaluate(log, completed, instrumented):
+def evaluate(log, completed, instrumented, unpinned=False):
     runs = parse(log)
     census = [json.loads(l) for l in log.splitlines() if l.startswith('{"version":1,')]
     checks = {'completed': completed,
@@ -192,6 +194,20 @@ def evaluate(log, completed, instrumented):
         r'^capstone-exec: domain fault cause=(\d+) ', log, re.M) == ['15'] * len(WINDOWS)
     checks['cleanup'] = len(census) == len(WINDOWS) and all(
         s['live_domains'] == s['live_regions'] == s['live_bytes'] == 0 for s in census)
+    if unpinned:
+        unpinned_checks.attach(log, runs)
+        checks['unpinned_mode_verified'] = re.findall(r'^PIN_MEMORY_MODE:(\w+)$', log, re.M) == ['Y'] * len(WINDOWS)
+        for w in WINDOWS:
+            for mode, expect in EXPECT_REGION.items():
+                r = runs.get((w, mode))
+                counts = unpinned_checks.region_counts(r) if r else None
+                checks.pop(f'w{w}_{mode}_region', None)
+                checks[f'w{w}_{mode}_resolved_region'] = bool(r and r['exit'] == 0 and r['ok'] and
+                    counts == expect(w)[:2] and unpinned_checks.accounted(r))
+                if mode in EXPECT:
+                    checks.pop(f'w{w}_{mode}')
+                    checks[f'w{w}_{mode}_unpinned_accounting'] = bool(r and
+                        unpinned_checks.counter_counts(r) == expect(w)[:2] and unpinned_checks.accounted(r))
     return checks, deltas, region, runs
 
 
@@ -199,16 +215,18 @@ def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('--evaluate', type=Path, help='a saved serial.log: run the checks on it, no guest')
     p.add_argument('--instrumented', action='store_true', help='with --evaluate: the module had diag_admit')
+    p.add_argument('--unpinned', action='store_true', help='require unpinned mode and its resolution oracle')
     p.add_argument('--qemu', type=Path)
     p.add_argument('--images', type=Path)
     p.add_argument('--adapter', type=Path)
+    p.add_argument('--module', type=Path, help='optional module override (ON policy gate uses test hooks)')
     p.add_argument('--application', type=Path)
     p.add_argument('--work', type=Path)
     p.add_argument('--timeout', type=int, default=600)
     a = p.parse_args()
     if a.evaluate:
         log = a.evaluate.read_text(errors='replace').replace('\r', '')
-        checks, deltas, region, _ = evaluate(log, True, a.instrumented)
+        checks, deltas, region, _ = evaluate(log, True, a.instrumented, a.unpinned)
         for name, ok in checks.items(): print(('PASS ' if ok else 'FAIL ') + name)
         print('deltas (pages, peak, faults):', json.dumps(deltas))
         print('region (pins, faults, swept):', json.dumps(region))
@@ -220,7 +238,7 @@ def main():
     stage = a.work / 'stage'; stage.mkdir()
     inputs = {'qemu': a.qemu, 'application': a.application,
               'launcher': a.adapter/'capstone-vexec',
-              'module': a.adapter/'module/capstone_vm.ko',
+              'module': a.module or a.adapter/'module/capstone_vm.ko',
               **{n: a.images/n for n in ('Image', 'fw_jump.elf', 'rootfs.ext2')}}
     hashes = {k: hashlib.sha256(v.read_bytes()).hexdigest() for k, v in inputs.items()}
     for src, name in ((inputs['application'], 'pin.dom'),
@@ -228,25 +246,31 @@ def main():
                       (inputs['module'], 'capstone_vm.ko')):
         shutil.copy2(src, stage/name)
     instrumented = b'diag_admit' in inputs['module'].read_bytes()
-    gate = SCRIPT.replace('@DIAG_PARAM@', 'diag_admit=1' if instrumented else '')
+    gate = SCRIPT.replace('@DIAG_PARAM@', ('diag_admit=1' if instrumented else '') + (' unpinned=1' if a.unpinned else ''))
+    if a.unpinned:
+        if b'test_full_window' not in inputs['module'].read_bytes():
+            p.error('--unpinned requires the hooks module for deterministic window policy')
+        gate = gate.replace('fault_ahead_max=0', 'fault_ahead_max=0 test_full_window=1')
     (stage/'gate.sh').write_text(gate)
     run = subprocess.run([os.environ.get('PYTHON', 'python3'),
         str(HERE/'run-staged.py'), '--qemu', str(a.qemu), '--images', str(a.images),
         '--stage', str(stage), '--work', str(a.work/'guest'), '--disk-mib', '64',
         '--timeout', str(a.timeout)])
     log = (a.work/'guest/serial.log').read_text(errors='replace').replace('\r', '')
-    checks, deltas, region, runs = evaluate(log, run.returncode == 0, instrumented)
+    checks, deltas, region, runs = evaluate(log, run.returncode == 0, instrumented, a.unpinned)
     checks['inputs_unchanged'] = hashes == {
         k: hashlib.sha256(v.read_bytes()).hexdigest() for k, v in inputs.items()}
     result = {'schema': 1, 'status': 'PASS' if all(checks.values()) else 'FAIL',
-              'checks': checks, 'instrumented': instrumented,
+              'checks': checks, 'instrumented': instrumented, 'unpinned': a.unpinned,
+              'resolved_pages_and_events': {f'{w}:{m}': unpinned_checks.region_counts(r)
+                                           for (w, m), r in runs.items()} if a.unpinned else None,
               'deltas_pages_peak_faults': deltas, 'region_pins_faults_swept': region,
               'runs': {f'{w}:{m}': {k: (sorted(v) if isinstance(v, set) else v) for k, v in r.items()}
                        for (w, m), r in runs.items()},
               'sha256': hashes,
               'source_sha256': {str(p.relative_to(HERE)): hashlib.sha256(p.read_bytes()).hexdigest()
                                 for p in [Path(__file__), HERE/'pin-ahead-contract.c',
-                                          HERE/'run-staged.py']},
+                                          HERE/'run-staged.py', HERE/'unpinned_checks.py']},
               'gate_sha256': hashlib.sha256(gate.encode()).hexdigest(),
               'scope': 'one hart, private anonymous arenas, windows ' + ', '.join(map(str, WINDOWS))}
     (a.work/'result.json').write_text(json.dumps(result, indent=2, default=str) + '\n')

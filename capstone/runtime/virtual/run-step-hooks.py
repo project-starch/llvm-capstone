@@ -26,6 +26,7 @@ from pathlib import Path
 import re
 import shutil
 import subprocess
+import unpinned_checks
 
 HERE = Path(__file__).resolve().parent
 # name: (insmod parameters, modes, expected exit status[, application])
@@ -93,12 +94,13 @@ def app(name):
 # comparison, and every run's counters are tied to the census (pages= is what the arenas
 # retired after the mark still held; faults= covers every page admitted at a fault; peak= is at
 # least pages=), so neither source can stand in for the other.
-def script(names, instrumented):
+def script(names, instrumented, unpinned=False):
     text = SCRIPT
     for name in names:
         params, modes = CONFIGS[name][:2]
         params += '' if name.startswith('adapt') else ' fault_ahead_max=0'
-        text += f'''insmod capstone_vm.ko {params} {'diag_admit=1' if instrumented else ''} || exit 1
+        text += f'''insmod capstone_vm.ko {params} {'diag_admit=1' if instrumented else ''} {'unpinned=1' if unpinned else ''} || exit 1
+echo "HOOK_MEMORY_MODE:$(cat /sys/module/capstone_vm/parameters/unpinned)"
 for mode in {modes}; do
   echo "HOOK_PINS_BEFORE:{name}:$mode:$(pins)"
   echo "HOOK_AHEAD_BEFORE:{name}:$mode:$(ahead | tr '\\n' ' ')"
@@ -231,8 +233,10 @@ def parse(log):
     return runs, reports, ends
 
 
-def evaluate(log, names, instrumented, completed):
+def evaluate(log, names, instrumented, completed, unpinned=False):
     runs, reports, ends = parse(log)
+    if unpinned:
+        unpinned_checks.attach(log, runs, hooks=True)
     census = [json.loads(l) for l in log.splitlines() if l.startswith('{"version":1,')]
     expected_runs = sum(len(CONFIGS[n][1].split()) for n in names)
     checks = {'completed': completed, 'all_runs': len(runs) == expected_runs,
@@ -248,6 +252,8 @@ def evaluate(log, names, instrumented, completed):
         r = runs.get((name, mode))
         if not r:
             return [None]
+        if unpinned:
+            return [unpinned_checks.counter_counts(r), unpinned_checks.region_counts(r)]
         return [counter_counts(r)] + ([region_counts(r)] if instrumented else [])
 
     for (name, mode), r in runs.items():
@@ -406,6 +412,43 @@ def evaluate(log, names, instrumented, completed):
         bool(got and low and full and got[0] >= low[0] and got[1] > full[1])
         for got, low, full in zip(sources('short64', 'walk'), sources('base1', 'walk'),
                                   sources('base64', 'walk')))
+    if unpinned:
+        checks['unpinned_mode_verified'] = re.findall(r'^HOOK_MEMORY_MODE:(\w+)$', log, re.M) == ['Y'] * len(names)
+        for name in names:
+            rep = reports.get(name, {})
+            end = ends.get(name)
+            checks.pop(f'{name}_pins_balanced', None)
+            checks[f'{name}_unpinned_balance'] = bool(end and end[0] == end[1] and
+                rep.get('unpinned') == 1 and rep.get('fault_requests', 0) > 0 and rep.get('entries', 0) > 0)
+            checks.pop(f'{name}_gup_batch_bound', None)
+            checks[f'{name}_fault_batch_bound'] = (rep.get('gup_requests') == 0 and
+                rep.get('fault_requests', 0) > 0 and 0 <= rep.get('fault_max', -1) <= 16)
+            checks[f'{name}_no_fault_while_pending'] = rep.get('fault_pending') == 0
+        for (name, mode), r in runs.items():
+            if CONFIGS[name][2] == 0:
+                checks[f'{name}_{mode}_faults_census'] = unpinned_checks.accounted(r)
+        checks.pop('base64_full_batches')
+        checks['base64_full_fault_batches'] = reports.get('base64', {}).get('fault_max') == 16
+        checks.pop('short64_partial_results')
+        checks['short64_deferred_and_partial_faults'] = all(
+            reports.get('short64', {}).get(k, 0) > 0 for k in ('fault_deferred', 'fault_short'))
+        # The same partial-window coverage, witnessed by Linux resolutions.
+        checks['adaptshort_walk_window'] = (all(got == (32, 9) for got in sources('adaptshort', 'walk')) and
+            adaptive_counts('adaptshort', 'walk', 7, 23) and reports.get('adaptshort', {}).get('fault_short', 0) > 0)
+        checks['short64_walk_resolutions'] = checks.pop('short64_walk_pins')
+        # A real quantum can cut any unpinned window, including CV_RESOLVE's.
+        # Require the walk's exact page coverage and one event per demand
+        # page, with public totals reconciled above. Each prefaulted page
+        # must be witnessed; no allowance for unexplained extra events.
+        for name in ('resched1', 'signal1', 'deadline1', 'resched2', 'signal2', 'deadline2',
+                     'resched3', 'signal3', 'resched4', 'signal4', 'deadline4'):
+            for mode in CONFIGS[name][1].split():
+                r = runs.get((name, mode), {})
+                counts = unpinned_checks.region_counts(r)
+                arena = unpinned_checks.region_arena(r)
+                events = [e for e in r.get('raw_events', []) if e['arena'] == arena]
+                checks[f'{name}_{mode}_accounting'] = bool(counts and counts[0] == (32 if mode == 'walk' else 0) and
+                    len({e['address'] // 4096 for e in events}) == len(events) and unpinned_checks.accounted(r))
     return checks, runs, reports, ends
 
 
@@ -413,6 +456,7 @@ def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('--evaluate', type=Path, help='a saved serial.log: run the checks on it, no guest')
     p.add_argument('--instrumented', action='store_true', help='with --evaluate: the module had diag_admit')
+    p.add_argument('--unpinned', action='store_true', help='require unpinned mode and its resolution oracle')
     p.add_argument('--qemu', type=Path)
     p.add_argument('--images', type=Path)
     p.add_argument('--adapter', type=Path, help='capstone-vexec from here')
@@ -426,7 +470,7 @@ def main():
         log = a.evaluate.read_text(errors='replace').replace('\r', '')
         with_malloc = 'HOOK_PINS_BEFORE:malloc16:' in log
         names = [n for n in CONFIGS if app(n) == 'pin' or with_malloc]
-        checks = evaluate(log, names, a.instrumented, True)[0]
+        checks = evaluate(log, names, a.instrumented, True, a.unpinned)[0]
         for name, ok in checks.items(): print(('PASS ' if ok else 'FAIL ') + name)
         return 0 if all(checks.values()) else 1
     for name in ('qemu', 'images', 'adapter', 'module', 'application', 'work'):
@@ -448,23 +492,25 @@ def main():
                       (inputs['module'], 'capstone_vm.ko')):
         shutil.copy2(src, stage/name)
     instrumented = b'diag_admit' in inputs['module'].read_bytes()
-    gate = script(names, instrumented)
+    gate = script(names, instrumented, a.unpinned)
     (stage/'gate.sh').write_text(gate)
     run = subprocess.run([os.environ.get('PYTHON', 'python3'),
         str(HERE/'run-staged.py'), '--qemu', str(a.qemu), '--images', str(a.images),
         '--stage', str(stage), '--work', str(a.work/'guest'), '--disk-mib', '64',
         '--timeout', str(a.timeout)])
     log = (a.work/'guest/serial.log').read_text(errors='replace').replace('\r', '')
-    checks, runs, reports, ends = evaluate(log, names, instrumented, run.returncode == 0)
+    checks, runs, reports, ends = evaluate(log, names, instrumented, run.returncode == 0, a.unpinned)
     checks['inputs_unchanged'] = hashes == {
         k: hashlib.sha256(v.read_bytes()).hexdigest() for k, v in inputs.items()}
     result = {'schema': 1, 'status': 'PASS' if all(checks.values()) else 'FAIL',
-              'checks': checks, 'instrumented': instrumented, 'reports': reports, 'pins_at_rmmod': ends,
+              'checks': checks, 'instrumented': instrumented, 'unpinned': a.unpinned,
+              'reports': reports, 'pins_at_rmmod': ends,
               'runs': {f'{n}:{m}': {k: (sorted(v) if isinstance(v, set) else v) for k, v in r.items()}
                        for (n, m), r in runs.items()}, 'sha256': hashes,
               'source_sha256': {str(p.relative_to(HERE)): hashlib.sha256(p.read_bytes()).hexdigest()
                                 for p in [Path(__file__), HERE/'pin-ahead-contract.c',
-                                          HERE/'run-staged.py', HERE/'module/capstone_vm.c']},
+                                          HERE/'run-staged.py', HERE/'module/capstone_vm.c',
+                                          HERE/'unpinned_checks.py']},
               'gate_sha256': hashlib.sha256(gate.encode()).hexdigest()}
     (a.work/'result.json').write_text(json.dumps(result, indent=2) + '\n')
     for name, ok in checks.items(): print(('PASS ' if ok else 'FAIL ') + name)
