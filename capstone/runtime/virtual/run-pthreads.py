@@ -79,7 +79,7 @@ echo VIRTUAL_STAGED_DONE
     log = (a.work/'guest/serial.log').read_text(errors='replace').replace('\r', '')
     main_log, _, fallback_log = log.partition('PTHREAD_FALLBACK_BEGIN\n')
     checks = {name: log.count('VIRTUAL_PTHREAD_OK ' + name) == 1 for name in
-              ('unsupported_clone_refused', 'protected_fork_refused', 'tls mutex cond tagged_join', 'timed_wait', 'independent_blocking_io', 'private_epoll_events', 'shared_tls_transport', '64_joined_lifetimes', 'concurrent_allocator_remap', 'transport_lifetime', 'transport_identity', 'exit_word_untouched_stack', 'context_identity')}
+              ('unsupported_clone_refused', 'protected_fork_refused', 'process_creation_refused_or_delegated', 'tls mutex cond tagged_join', 'timed_wait', 'independent_blocking_io', 'private_epoll_events', 'shared_tls_transport', '64_joined_lifetimes', 'concurrent_allocator_remap', 'transport_lifetime', 'transport_identity', 'exit_word_untouched_stack', 'context_identity')}
     checks['memory_mode_verified'] = memory_mode.verified(log, a.unpinned, 1)
     # The exit word's page (VIRTUAL_PTHREAD_WORD, in the main stack: the reg 2 grant) must have
     # been admitted by the launcher's CV_TOUCH before its store: a `touch` line for that arena and

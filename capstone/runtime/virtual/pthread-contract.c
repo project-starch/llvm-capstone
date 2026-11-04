@@ -16,6 +16,8 @@
 #include <signal.h>
 #include <setjmp.h>
 #include <sys/syscall.h>
+#include <spawn.h>
+#include <sys/wait.h>
 
 extern int __clone(int (*)(void *), void *, int, void *, ...);
 
@@ -460,6 +462,38 @@ int main(int argc, char **argv)
     errno = 0;
     assert(syscall(SYS_clone, SIGCHLD, 0, 0, 0, 0) == -1 && errno == ENOSYS);
     puts("VIRTUAL_PTHREAD_OK protected_fork_refused");
+    /* Every other way to ask for a second process is refused the same way, before anything is
+     * built: vfork and the raw vfork flags (what posix_spawn's musl implementation clones), clone3
+     * (musl has no wrapper: the raw syscall reaches the same default-deny), and a clone that asks
+     * for a thread without the full thread flag set. */
+    errno = 0;
+    assert(vfork() == -1 && errno == ENOSYS);
+    errno = 0;
+    assert(syscall(SYS_clone, CLONE_VM | CLONE_VFORK | SIGCHLD, 0, 0, 0, 0) == -1 && errno == ENOSYS);
+    struct { unsigned long long flags, pidfd, child_tid, parent_tid, exit_signal, stack, stack_size, tls; }
+        args = {.exit_signal = SIGCHLD};
+    errno = 0;
+    assert(syscall(SYS_clone3, &args, sizeof args) == -1 && errno == ENOSYS);
+    errno = 0;
+    assert(__clone(NULL, NULL, CLONE_VM | CLONE_THREAD, NULL, &tid, NULL, &tid) == -ENOSYS);
+    /* execve is a delegated operation, not a refusal: it replaces the whole launcher process (a
+     * new mm, so the namespace and every tag die with the old one) when the target is a Capstone
+     * image, and fails here, with this process intact, when it is not. A native program is not. */
+    char *const native[] = {"/bin/true", NULL};
+    errno = 0;
+    assert(execv("/bin/true", native) == -1 && errno != 0);
+    printf("VIRTUAL_PTHREAD_EXECV_NATIVE errno=%d\n", errno);
+    /* posix_spawn is delegated too: the child is forked by the spawner helper the launcher started
+     * before it granted any memory, so it never shares a tagged page of this namespace. A native
+     * child runs and is reaped, and the namespace is unaffected. */
+    {
+        pid_t child;
+        int status = -1;
+        char *const argv[] = {"/bin/true", NULL};
+        assert(!posix_spawn(&child, "/bin/true", NULL, NULL, argv, environ));
+        assert(waitpid(child, &status, 0) == child && WIFEXITED(status) && WEXITSTATUS(status) == 0);
+    }
+    puts("VIRTUAL_PTHREAD_OK process_creation_refused_or_delegated");
     assert(!pthread_create(&a, NULL, worker, &values[0]));
     assert(!pthread_create(&b, NULL, worker, &values[1]));
     assert(!pthread_join(a, &result) && result == &values[0]);
