@@ -360,7 +360,7 @@ fault:
     rc = 128 + SIGSEGV + 1;
 out:
     TEST_IOCTL_DONE();
-    wake_up_all(&slot_wait);
+    slot_changed();
     mutex_unlock(&vm_lock);
     return rc;
 }

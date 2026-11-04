@@ -589,9 +589,13 @@ MODULE_PARM_DESC(supervisor_slots,
     "saved-context slots the processor has (default 1, as vp2); the module never issues an entry "
     "beyond this many live frames");
 static DECLARE_WAIT_QUEUE_HEAD(slot_wait);
-/* The wait condition, evaluated WITHOUT vm_lock: it takes the lock itself, because the sleeper
- * released it. A false wake just re-checks. */
-static bool slot_free_now(void);
+/* Writers and admission hold vm_lock. A waiter snapshots this generation
+ * before dropping the lock, then checks it without sleeping in the wait
+ * predicate (prepare_to_wait_event has already changed its task state).
+ * Publish before waking, including releases before the waiter is enqueued.
+ * A changed generation is only a retry hint, never a slot reservation. */
+static unsigned long slot_generation;
+static void slot_changed(void);
 
 /* Live frames across EVERY context, and one of them if asked. vm_lock is held by every caller. */
 static unsigned slot_live(struct cv_thread **holder)
@@ -608,16 +612,17 @@ static unsigned slot_live(struct cv_thread **holder)
     return n;
 }
 
-/* Evaluated by wait_event_interruptible WITHOUT vm_lock held -- the sleeper released it -- so this
- * takes the lock itself. A spurious wake simply re-checks. */
-static bool slot_free_now(void)
+static void slot_changed(void)
 {
-    bool free;
-    if (mutex_lock_interruptible(&vm_lock)) return true;   /* let the sleeper return -EINTR */
-    free = slot_live(NULL) < supervisor_slots;
-    mutex_unlock(&vm_lock);
-    return free;
+    lockdep_assert_held(&vm_lock);
+    /* Waiters returning EAGAIN must not wake one another while all slots
+     * remain occupied. Only a possible admission publishes a new epoch. */
+    if (slot_live(NULL) < supervisor_slots) {
+        WRITE_ONCE(slot_generation, slot_generation + 1);
+        wake_up_all(&slot_wait);
+    }
 }
+
 static u64 allocated_total, high_water, collections_total, reclaimed_total;
 
 static unsigned long run(unsigned long frame, unsigned long action);
@@ -2469,9 +2474,11 @@ static long cv_step_locked(struct context *c, struct cv_step *request)
     if (!t->started) {
         struct cv_thread *holder = NULL;
         if (slot_live(&holder) >= supervisor_slots) {
+            unsigned long generation = slot_generation;
             if (holder && holder->context == c) { rc = -EBUSY; return rc; }
             mutex_unlock(&vm_lock);
-            rc = wait_event_interruptible(slot_wait, slot_free_now());
+            rc = wait_event_interruptible(slot_wait,
+                    READ_ONCE(slot_generation) != generation);
             mutex_lock(&vm_lock);
             return rc ? -EINTR : -EAGAIN;   /* the launcher's loop retries EAGAIN, as it does for the quantum */
         }
@@ -2861,7 +2868,7 @@ out:
     /* Q-26: one wake covers every way a frame can stop occupying the slot --
      * terminal exit, a discard, an error path -- instead of enumerating them and
      * missing one. A spurious wake costs a re-check. */
-    wake_up_all(&slot_wait);
+    slot_changed();
     mutex_unlock(&vm_lock);
     return rc;
 }
@@ -3052,7 +3059,7 @@ static int vm_release(struct inode *inode, struct file *f)
     node_free_table(c);
     if (c->image) { allow_write_access(c->image); fput(c->image); }
     mmdrop(c->mm); kvfree(c);
-    wake_up_all(&slot_wait);   /* the released context's frames are gone */
+    slot_changed();   /* the released context's frames are gone */
     mutex_unlock(&vm_lock);
     return 0;
 }
