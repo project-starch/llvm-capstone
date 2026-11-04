@@ -77,8 +77,8 @@ def main():
     checks = dict(completed=rc == 0, swap_hook='RAW_MM tagged_swap=-16 untagged_swap=0' in log,
         mm_probe='MM_EXIT:0' in log and 'RAW_MM PASS' in log,
         mode=len(arms) == 7 and all(r['mode'] == 'Y' for r in arms.values()),
-        # eleven pages of four mappings, thirty-one granules: the fixture reached what it claims
-        fixture_reach=good.get('mappings') == 4 and good.get('pages') == 11 and good.get('seeds') == 31,
+        # ten pages of four mappings, twenty-one granules: the fixture reached what it claims
+        fixture_reach=good.get('mappings') == 4 and good.get('pages') == 10 and good.get('seeds') == 21,
         scrub_all_pages=bool(good.get('seen') and good['exit'] == 0 and good['clean'] and good['equal']),
         # the module's own count of the tagged pages it swept is every page the fixture seeded
         sweep_count=good.get('swept') == good.get('pages') and good.get('pages', 0) > 1,

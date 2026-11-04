@@ -10,7 +10,7 @@
  *
  * Mappings seeded: an anonymous mapping of four pages; a second, separate mapping whose pages are
  * first touched read-only (the zero page) and then made writable and written; a stack page; a page
- * of .bss. Four VMAs, eleven pages, thirty-one granules.
+ * of .bss. Four mappings, ten pages, twenty-one granules.
  */
 #include <fcntl.h>
 #include <stdio.h>

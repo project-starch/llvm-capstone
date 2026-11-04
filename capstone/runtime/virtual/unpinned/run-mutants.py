@@ -30,7 +30,7 @@ VARIANTS = {
 def run(a, label, configs, args):
     work = a.work / label
     cmd = [sys.executable, str(STEP), '--unpinned', '--qemu', str(a.qemu), '--images', str(a.images),
-           '--adapter', str(a.adapter), '--module', str(a.module), '--application', str(a.application),
+           '--adapter', str(a.adapter), '--module', str(a.module), '--application', str(a.application), '--pthread-application', str(a.pthread_application),
            '--work', str(work), '--only', configs, '--module-args', args]
     subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     result = work / 'result.json'
@@ -41,6 +41,7 @@ def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     for name in ('qemu', 'images', 'adapter', 'module', 'application', 'work'):
         p.add_argument('--' + name, type=Path, required=True)
+    p.add_argument('--pthread-application', type=Path, required=True)
     a = p.parse_args()
     a.work.mkdir(parents=True, exist_ok=False)
     failed = []

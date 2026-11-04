@@ -229,7 +229,7 @@ gates_phase() {
     --application "$I/pin-ahead.dom" "${plat[@]}" "${memory[@]}" --pthread-application "$I/pthread.dom" --work "$G/step-hooks"
   if [[ " $GATES " == *" unpinned-mutants "* ]]; then
     gate unpinned-mutants python3 "$V/unpinned/run-mutants.py" --adapter "$P/adapter" --module "$HOOKS" \
-      --application "$I/pin-ahead.dom" --qemu "$P/qemu-system-riscv64" --images "$P/images" --work "$G/unpinned-mutants"
+      --application "$I/pin-ahead.dom" --pthread-application "$I/pthread.dom" --qemu "$P/qemu-system-riscv64" --images "$P/images" --work "$G/unpinned-mutants"
   fi
   if [[ -n ${UNPINNED_PROBES:-} ]]; then
     gate unpinned-mm python3 "$V/unpinned/run-mm.py" "${plat[@]}" --module "$HOOKS" \
