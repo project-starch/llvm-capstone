@@ -1154,6 +1154,22 @@ static int virtual_service(uint64_t tid, struct cv_step *step)
                     (unsigned long long)host.bytes_in, (unsigned long long)host.bytes_out,
                     stats.node_bytes, stats.node_capacity, stats.node_growths,
                     launch_ns, now_ns() - start_ns);
+                /* Linux's own residency of this process, an independent witness for gates that
+                 * must not rely on the module's counters (unpinned mode keeps none). Off unless
+                 * CAPSTONE_VM_RSS is set: reading /proc costs instructions a profile run counts. */
+                if (getenv("CAPSTONE_VM_RSS")) {
+                    FILE *status = fopen("/proc/self/status", "re");
+                    unsigned long rss = 0, hwm = 0, anon = 0;
+                    char text[256];
+                    while (status && fgets(text, sizeof text, status)) {
+                        sscanf(text, "VmRSS: %lu kB", &rss);
+                        sscanf(text, "VmHWM: %lu kB", &hwm);
+                        sscanf(text, "RssAnon: %lu kB", &anon);
+                    }
+                    if (status) fclose(status);
+                    fprintf(stderr, "CAPSTONE_VM_RSS rss_pages=%lu hwm_pages=%lu anon_pages=%lu\n",
+                            rss / 4, hwm / 4, anon / 4);
+                }
                 /* Its own line: the STATS line's fields are all integers, and its collectors
                  * int() every value. The service keys are vm-abi.h CV_SERVICE_* ids. */
                 fprintf(stderr, "CAPSTONE_VM_STEPS quantum=%lu service=%lu fault=%lu other=%lu"
