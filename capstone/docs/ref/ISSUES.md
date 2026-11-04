@@ -4033,7 +4033,7 @@ the operation.
 That guard arm also records a refuted prediction of mine. Reading the decoder alone, I predicted that fsqrt returns
 NaN whenever f0 holds a NaN. It does not, because fsqrt never reads f0.
 
-### R-67 — a jump through a code capability whose node has ENDED runs its target: commit's PC tracker adopts every new PC-capability id as live, and CJALR never queries the node `OPEN — DEMONSTRATED IN SIMULATION 2026-11-03 on e7af48457's RTL (found by the external collaborator, conformance rule T1; reproduced by the RTL lane); present in every sealed bitstream's tree; PRESENT ON SILICON on bitstream 3 (board 1, 2026-11-03) and ObjBounds (board 2, 2026-11-04), N = 1 each, as pre-registered (kit tests/fpga-repros/R67-pcc-adopts-dead-code-capability); fix in Verilator (capstone-ariane 1fc2cd5aa), batched with C.5a on the lead's ruling, passed its synthesis-only gate 2026-11-04 (llvm-capstone land/rtl-c5a 7b6100bce4d2); not yet on silicon`
+### R-67 — a jump through a code capability whose node has ENDED runs its target: commit's PC tracker adopts every new PC-capability id as live, and CJALR never queries the node `FIXED ON SILICON (C.5a, board 2, N = 1) — DEMONSTRATED IN SIMULATION 2026-11-03 on e7af48457's RTL (found by the external collaborator, conformance rule T1; reproduced by the RTL lane); present in every sealed bitstream's tree; PRESENT ON SILICON on bitstream 3 (board 1, 2026-11-03) and ObjBounds (board 2, 2026-11-04), N = 1 each, as pre-registered (kit tests/fpga-repros/R67-pcc-adopts-dead-code-capability); fix capstone-ariane 1fc2cd5aa, batched with C.5a on the lead's ruling; FIXED ON SILICON on the C.5a bitstream caplifive_vp2c_1fc2cd5aa (board 2, 2026-11-04), N = 1, as pre-registered`
 
 Siblings: R-44, the same adopt at the CPMP trackers, which recorded this one as "latent ... needs a stale CODE
 capability via CALL/RETURN, which has never been constructed"; R-35, the same adopt at the LSU, fixed; Q-29, the fetch
@@ -4069,7 +4069,15 @@ check's order and scope. Folder: `capstone/tests/fpga-repros/R67-pcc-adopts-dead
   - every new PCC id is refused under `R43_PROBE_TIEOFF`.
 - The lead ruled (2026-11-03) that it is synthesised with C.5a in one bitstream.
 
-**Silicon.** Not yet run. The folder's kit is pre-registered: HOLE on bitstream 3 and on ObjBounds.
+**Silicon.** The folder's kit was graded by value, every time against its pre-registered vectors.
+- **HOLE** on bitstream 3 (board 1, 2026-11-03) and ObjBounds (board 2, 2026-11-04), N = 1 each. Recorded at
+  57546f422e31.
+- **FIXED** on the C.5a bitstream caplifive_vp2c_1fc2cd5aa (board 2, 2026-11-04 17:34-17:38), N = 1.
+  - t1-fire takes 25 at the target, with no marker store, and reads the fixed-tree vector exactly.
+  - The three controls read their vectors exactly.
+  - Result lines: spec-silicon f45274ebafe0. The RTL lane re-graded the run with `r67-grade.py ... fixed --bitstream
+    1fc2cd5aa`.
+- A second board on C.5a has not been read.
 
 ### R-57 — a capability STORE whose translation faults retires WITHOUT its page fault and is committed to the store buffer, which copies an INVALID speculative entry into its commit queue (a ghost head that never drains) and underflows its speculative count: the vp2 wedges r8..r11 `OPEN ON SILICON (caplifive_vp2_bf3db3175); DEMONSTRATED in simulation 2026-10-18 by a matched pair; FIXED on virtual-profile-2-c 2114e11bd for the next bitstream; the store-side twin of R-56; software rule S-25 (no capability store as a page's first access) until then`
 
