@@ -202,3 +202,29 @@ build on that lane's host: new synthesis goes to the board lane on apollo.
   - the hpm and ObjBounds kits' stage-A arms, pre-registered before that boot.
 - **Placed density came down.** Slices fell from 95.57 % to 93.84 %, and congestion is a level below C.5a's. The change
   is −96 LUT, so this is placement variation within the floor, not an attributed saving.
+
+## After stage A: what is left, measured (simulation, c9c7952bd clean, ISSUE_HOLD_TRACE)
+
+The trace is from the slot kit's single-op loops (SL7 ldc alone, SL8 stc alone), read cycle by cycle in
+`.sup/ihold-stc` (vp9-wt). Cycles per op:
+- **LDC, 4 per op, with no issue hold at all.** The unit dispatches, the result comes back 2 cycles later, and rtr returns
+  the cycle after that. This is the DYN unit's own occupancy, its loop `send rtr >> recv req >> match >> cycle 1`.
+- **STC, 6 per op.** The unit is busy one cycle longer than for an LDC. Then, for 1 cycle, stall_waw_rs1 is the ONLY
+  hold on the next STC: the rs1-lane claim that stage A left in place.
+
+**The two levers, sized:**
+- **(a) STC's rs1 claim: −1 cycle per STC.** An STC writes rs1 only when rs1 is UNINIT, yet every STC in flight claims
+  rs1. Removing the claim takes one of two changes. Either needs the auditor and a synthesis-only gate.
+  - A per-entry "writes rs1" bit, set from the operand's type at issue. That would feed the forwarded operand (the
+    worst timing family, cpmp_q → fu_data_q) into the scoreboard write.
+  - A release of the rs1 lane in the commit cycle, the mirror of the rd clause's documented hole.
+- **(b) The DYN unit's occupancy, 4 per LDC and 5 per STC.** This is the bypass. Its blockers are recorded above
+  (XLEN-only write-back ports, the commit-side rs1 write, the LSU checks, the single-record syncers), and it takes
+  days.
+
+**Recommendation (sent to the SPEC lane): neither yet.** On silicon the isolated pair costs 8.0 cycles on C.5a. The
+SPEC lane's 23-36 per removed pair is not the pair's own cost, and its counter boots are what will locate it. If they
+point at STC density, (a) is the cheap lever and gets its own design note.
+
+**Also on record:** on 2026-11-04 the synth lane's user lifted that lane's "negative WNS = not flashable" rule, and its
+labels on C.5a and stage A were withdrawn.
