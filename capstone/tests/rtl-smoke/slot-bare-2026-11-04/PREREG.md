@@ -120,3 +120,23 @@ removed.
   loop (bitstream 3: 17.0), and stage A's other-doubleword pair at about 6.4.
 - **The reading that would matter most.** An OUT OF BAND result on C.5a's pair slots, near bitstream 3's 17, would mean
   the cached-LDC change does not reach silicon in this kit.
+
+## Silicon readings, continued (2026-11-04, graded by the RTL lane with the grader at 98ff08e6f3fb)
+
+| run | arm | verdict | band | ldc | stc | pair (same / other) | sd+ld | loop |
+|---|---|---|---|---|---|---|---|---|
+| board 1, perf/fa/slot-bs3-b1 | bs3 | AS EXPECTED | ALL IN BAND | 6.01 | 8.01 | 16.97 / 16.97 | 5.97 / 1.95 | 3.06 |
+| board 2, perf/c5a-b2/slot-bs3 | bs3 | AS EXPECTED | ALL IN BAND | 6.01 | 8.01 | 16.97 / 16.97 | 5.97 / 1.95 | 3.06 |
+| board 2, perf/c5a-b2/slot-c5a | c5a | AS EXPECTED | ALL IN BAND | 2.03 | 3.02 | 8.01 / 8.01 | 5.97 / 2.00 | 3.05 |
+
+Per op is cycles per iteration over the bare loop.
+
+- **Bitstream 3 at N=2 across boards.** Board 2 reads board 1's cycles to within 3 cycles in every slot (slot-3 10,261 against
+  10,258).
+- **C.5a halves the isolated pair on silicon.** It reads 8.01 against bitstream 3's 16.97; its simulation gives 8.42.
+- **Every slot of every run sits 1-9 % under its simulated cycles**, so simulation predicts this kit's silicon cost on
+  both bitstreams.
+- **On forwarding.** It could remove at most about 2 cycles per same-slot pair, on top of stage A, and about 0 on C.5a alone.
+  So it is not pursued on this evidence.
+- The board 2 slot-bs3 attempt marked `.noUART-switches` is VOID: odd switches left by a killed driver took the console.
+  It was not graded.
