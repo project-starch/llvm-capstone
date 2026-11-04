@@ -113,3 +113,33 @@ The reference for every key is C.5a's own synthesis-only checkpoint of `1fc2cd5a
 C.5a's WNS. The WNS is bitstream 3's own `cpmp_q` → `fu_data_q` family, so the lever cannot move it. The from-flops form
 costs a cycle per PC-capability change. The zero-cycle variant would take the hold off the type/perm/bounds priority
 chain; it buys margin only, and that is not worth a re-proof in this bitstream.
+
+## Synthesis-only gate: readings and grade (2026-11-04)
+
+**The run.**
+- The synth lane took c9c7952bd as a thin bundle on 1fc2cd5aa, which it verified by sha256 and `git bundle verify`.
+- Scope it checked:
+  - 1fc2cd5aa..08c9fbd22 touches only verif/ and capstone-docs/;
+  - 08c9fbd22..c9c7952bd touches exactly the three core files (+47/−6);
+  - 0 of 24 submodules and no build scripts changed.
+- It stopped after synthesis, as planned: 1h16m, run peak 21.80 GB, largest single process 4.48 GB.
+
+| Key | Reading (C.5a → stage A) | Grade |
+|---|---|---|
+| 1 | mapping peak 5,034.1 MB (C.5a 5,082.0) | PASS |
+| 2 | "Found timing loop" 0, Synth 8-326 0 (control vp3g 7 / 73); check_timing 0 loops (control 1); no headers or members on either tree | PASS |
+| 3 | marker present in synth's ex_stage.sv; `capstone_dyn_ready_q` flops 0 vs 1 on C.5a (readable); POS `pc_revnode_valid_q` 1 / 1 | PASS |
+| 4 | ex_stage 47,956 → 47,008 (−948); issue_read_operands 28,686 → 26,079 (−2,607) = own cells 19,086 → 20,189 (+1,103) + cap metadata regfile 3,848 → 1,854 (−1,994); scoreboard 12,831 → 14,333 (+1,502); commit_stage LUT 203 → 104, FF 243 → 243; ex+issue −2,053; core LUT 145,179 (−212); LUTRAM 870; core FF 41,423 (−3, reported) | PASS on the key as written (own cells); see below |
+| 5 | modules with \|ΔLUT\| > 500: dom_switcher 8,065 → 10,105 (+2,040, FF 1,157 = 1,157); csr_regfile_i 28,966 → 27,460 (−1,506); lsu_i 16,736 → 15,698 (−1,038; lsu_bypass −760); id_stage_i 958 → 1,521 (+563); issue_stage_i 41,517 → 40,412 (−1,105) | reported |
+| 6 | report_timing_summary NA on both trees (check_timing: 54,293 no_clock endpoints; the synth checkpoint carries no usable clock) | NO READING, as allowed |
+
+**Key 4, the one clause the synth lane read as failing.**
+- Synth graded issue_read_operands by its hierarchical total, −2,607, which is 107 outside ±2,500.
+- The key as written grades OWN cells, and issue_read_operands' own cells read +1,103. That is inside the band, so
+  this is a PASS as written, not a correction made after the reading.
+- The hierarchical drop sits in the capability-metadata regfile child (−1,994). That file is not in the change, so the
+  drop is re-homing, as are dom_switcher +2,040 and csr_regfile_i −1,506. Neither of those files is in the change
+  either. The core total moves −212.
+- The other three rows (ex_stage, scoreboard, commit_stage) were read as hierarchical totals and are inside the band.
+  Their own-cell rows were not read; a confirming reading is requested, and it does not gate.
+- Gate ruling: PASS. The full build stays HELD for the slot-kit silicon readings, per the SPEC lane's ruling.
