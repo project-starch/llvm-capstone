@@ -49,7 +49,7 @@ reported, not predicted.
 - The cause is memory. Peak pages fall from 6,209 to 2,245 on board 1 and to 2,227 on board 2.
 - The QEMU twin reads the same drop (census-eval-boarddev 6,209 → census-eval-boarddevmk 2,227). So the drop belongs to the images, not to the board.
 - gcc's test run spends 47 s of its 55 s outside the context, and the per-page cost dominates that time. The prediction did not foresee that the codegen flag would change the page count.
-- **Which allocation shrinks is not identified.** The hypothesis is the stack: deeper recursion through frames that the stack-copy rewrite enlarges. It is not checked.
+- **Which allocation shrinks is not identified.** The hypothesis is the stack: deeper recursion through frames that the stack-copy rewrite enlarges. It is not checked. **REFUTED 5 Nov, see Corrections.**
 
 **lbm Spatial, step 2.** In-context −1.2 s, outside −2.1 s. Both changes are about 0.1 % of a 2,034 s command, within the
 run-to-run spread. This reading fails the wording and is not read as an effect.
@@ -106,5 +106,20 @@ stall per op. The cost in cycles per LDC/STC op is 3.96 and 4.96. No prediction 
 ## Limits
 
 - N = 1 per arm.
-- The baseline ran on 1-3 Nov, these runs on 3-4 Nov.
+- The baseline ran on 28-29 Oct (corrected 5 Nov; xz and mcf on board 2), these runs on 3-4 Nov.
 - The control is the only check on drift between days.
+
+## Corrections, 5 November
+
+- **The baseline's date and board.** spec/board/out ran on 28-29 Oct (bookings 532-544), not on 1-3 Nov. Its xz and
+  mcf stages ran on board 2 (bkit12-perf-b3-b2), the rest on board 1. The xz rows under "board 1" therefore compare
+  board 1 against board 2.
+- **gcc's page drop is the image grant, not the stack.** exec.c's rounded() makes the image grant a power of two, and
+  the module pins all of it except the text.
+  - The dev image's text plus data is 16,906,432 bytes, so it gets a 32 MiB grant and 4,654 pinned pages.
+  - The devmk image's is 16,365,760 bytes, so it gets 16 MiB and 690 pages.
+  - The difference, 3,964 pages, is exactly the measured peak drop (6,179 → 2,215).
+  - So most of gcc's −22 % run time comes from the image crossing the 16 MiB boundary. A little more code would undo
+    it. The flag's own effect on gcc is the in-context −8.3 %.
+- **mcf.** The −10.0 % cycles and −9.1 % run time quoted on the deck come from out-hfl/...-lifetimes-dev, the dev step
+  only, against board 2's baseline.

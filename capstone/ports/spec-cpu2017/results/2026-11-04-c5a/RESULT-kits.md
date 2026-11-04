@@ -30,6 +30,6 @@
 
 ## The void first attempt
 
-The first relaunch of the session (16:44-16:56) read `UART begin=False` on every slot image. Board 2's virtual switches 0, 1, 2, 5, 6 and 7 had been left on by the x264 train driver killed at 16:42, and sw[0] hands the console TX to the tracer. The switches were parked at 0, that run's directory was kept apart as `perf/c5a-b2/slot-bs3.noUART-switches`, and none of it is graded.
+The first relaunch of the session (16:44-16:56) read `UART begin=False` on every slot image. Board 2's virtual switches 0, 1, 2, 5, 6 and 7 had been left on by the x264 train driver killed at 16:42, and sw[0] raises `uart_debug_takeover` (ariane_xilinx.sv:808), so the console pin carries the core's debug UART instead of the 16550. The switches were parked at 0, that run's directory was kept apart as `perf/c5a-b2/slot-bs3.noUART-switches`, and none of it is graded.
 
 SPEC test on C.5a runs next (Addendum 5, `c5a-spec-b2.sh`). Its grade, S1-S3, will be RESULT.md.
