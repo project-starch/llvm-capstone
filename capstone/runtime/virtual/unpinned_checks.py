@@ -120,7 +120,7 @@ def accounted(run):
         sum(v['ahead'] for v in retired.values()) == sum(w[2] for w in run['raw_windows']))
 
 
-# Pages of peak residency the 'vm' launch may add to the 'normal' launch's. The launch maps 64 MiB it
+# Pages of peak residency the 'vm' launch may add to the 'threads' launch's. The launch maps 64 MiB it
 # never touches (16384 pages); the bound is set from the measured difference of the two launches.
 UNUSED_PAGES_BOUND = 256
 
@@ -147,7 +147,8 @@ def residency(lines, start, expected_stats):
         # mapped pages given back during the run (munmap, free): the peak is above the end
         'linux_pages_released': witness and sum(r['hwm_pages'] > r['rss_pages'] + 300 for r in base) == 3,
         'shared_heap_pages_released': witness and rss[4]['hwm_pages'] - rss[4]['rss_pages'] >= 768,
-        # the 'vm' launch maps 64 MiB it never touches: its peak residency stays near a launch that
-        # maps nothing (a window that populated the unused region would add 16384 pages)
-        'unused_pages_not_populated': witness and rss[2]['hwm_pages'] - rss[0]['hwm_pages'] < UNUSED_PAGES_BOUND,
+        # the 'vm' launch (index 2) maps 64 MiB it never touches: its peak residency stays near the
+        # 'threads' launch's (index 1, which maps nothing large; the 'normal' launch's own peak
+        # carries a startup transient). A window that populated the unused region would add 16384.
+        'unused_pages_not_populated': witness and rss[2]['hwm_pages'] - rss[1]['hwm_pages'] < UNUSED_PAGES_BOUND,
     }

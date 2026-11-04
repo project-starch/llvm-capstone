@@ -87,7 +87,7 @@ echo VM_EXIT:vm-large:$?
 CAPSTONE_VM_TRACE=1 ./capstone-vexec contract.dom vm-mappings > /tmp/mappings.out 2>&1
 echo VM_EXIT:vm-mappings:$?
 echo VM_MAPPINGS_REMAPS:$(grep -c '^CAPSTONE_VM_REMAP_OK ' /tmp/mappings.out)
-grep -v -E '^CAPSTONE_VM_(BOUNDARY|SERVICE|REMAP_OK) ' /tmp/mappings.out | sed 's/^CAPSTONE_VM_STATS /VM_MAPPINGS_STATS /'
+grep -v -E '^CAPSTONE_VM_(BOUNDARY|SERVICE|REMAP_OK) ' /tmp/mappings.out | sed -e 's/^CAPSTONE_VM_STATS /VM_MAPPINGS_STATS /' -e 's/^CAPSTONE_VM_RSS /VM_MAPPINGS_RSS /'
 ./capstone-vexec contract.dom spin > /tmp/spin.out 2>&1 & spin=$!
 # QEMU startup includes Linux image loading and the first delegated rounds;
 # allow the child to publish its readiness before testing signal termination.
