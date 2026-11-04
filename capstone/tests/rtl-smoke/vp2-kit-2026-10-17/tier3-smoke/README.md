@@ -8137,8 +8137,14 @@ Record: `records/r61a-bare-batch.result-lines.txt`.
 - **Its contents, on top of c721c1a2a (the RTL lane's list):**
   1. the 18-bit virtual index, ids {gen[29:18], idx[17:0]};
   2. item 4's predicate on the source's six exponent bits, with no architectural change;
-  3. the debug tracer DROPPED: aperture 225 bit 7 reads a constant 1, and sw[0..2] do nothing. CSRs 0x800, 0x810 and
-     0x811 remain legal writes;
+  3. the debug tracer DROPPED: aperture 225 bit 7 reads a constant 1, and sw[1..2] do nothing beyond the aperture
+     select. CSRs 0x800, 0x810 and 0x811 remain legal writes. **RETRACTED 2026-11-04 (the RTL lane): this item also
+     said sw[0] does nothing, and that is false.** The FPGA top still has `uart_debug_takeover = sw[0] |
+     uart_debug_active` (`ariane_xilinx.sv:808`) and `tx_o = uart_debug_takeover_i ? uart_debug_tx_i : uart_tx_apb`
+     (`ariane_peripherals_xilinx.sv:316`), so with sw[0] high the console pin carries the core's debug printer, not the
+     16550, on every bitstream since. The claim came from reading only `cva6.sv`, whose own comment repeats it. Cost: on
+     2026-11-04 a C.5a session on board 2 read no UART on every image after a killed driver left the switches odd (VOID,
+     spec-silicon f45274ebafe0). Park every switch at 0, as before;
   4. the load unit's ring cut, which is R-61's fix.
   - This supersedes the 2026-10-23 section's "68d0ffaf8". The first-boot vectors are confirmed on dcc6daf6e by
     simulating the images themselves: s23 is the batch's 25 values, and va-alloc is the bitstream-2 vector already in
