@@ -173,6 +173,8 @@ struct context {
     bool dom_protect_pending;
     int dom_fd;
     struct dom_delegate *dom_delegate;
+    struct cn_context *native_context;
+    struct ns_session *native_session;
 };
 static DEFINE_MUTEX(vm_lock);
 /* Quotas are in base pages; zero means the 30-bit ISA limit. Parameters are
@@ -1733,7 +1735,8 @@ static int remap_end(struct context *c, const struct cv_remap *r)
  * entered while an injection was pending, and what GUP was asked for. */
 static unsigned long test_inject;       /* 1 resched, 2 signal, 3 deadline, 4 SIGKILL */
 static unsigned long test_inject_at;    /* 1 after a demand GUP, 2 before an entry, 3 before an ioctl's first entry,
-                                           4 after CSRUNV returns a fault, before resolve() */
+                                           4 after CSRUNV returns a fault, before resolve(),
+                                           5 before native syscall service */
 static unsigned long test_inject_every = 1;
 static unsigned long test_short_gup;    /* pin-ahead GUP pins only half of a batch */
 /* Policy-only tests need exact windows despite unrelated scheduling/deadline cuts. The

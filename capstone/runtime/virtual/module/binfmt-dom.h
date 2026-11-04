@@ -25,6 +25,7 @@ static bool dom_binfmt;
 module_param(dom_binfmt, bool, 0444);
 MODULE_PARM_DESC(dom_binfmt, "experimental root-only native .dom exec (default off)");
 #define DOM_STEP _IO('V', 31)
+#define CV_STEP_NATIVE _IO('V', 34)
 #define DOM_PROTECT_DONE _IO('V', 32)
 #define DOM_DO_PROTECT 257
 #define DOM_DO_SYSCALL 258
@@ -202,6 +203,7 @@ static long dom_unmap(struct context *c, unsigned long base, unsigned long bytes
 }
 
 #include "delegate-dom.h"
+#include "native-syscall-dom.h"
 
 /* The transport is fixed at exec, unretirable and only this task runs the
  * domain. Thus no in-flight service can race its reuse while vm_lock is down.
@@ -286,9 +288,17 @@ static long dom_service(struct context *c, struct cv_step *s)
     long rc;
     s->reply = 1;
     s->result = -ENOSYS;
+    if (native_dispatch && (s->args[7] == NS_SERVICE_NATIVE ||
+        s->args[7] == CV_SERVICE_DELEGATE || s->args[7] == CV_SERVICE_THREAD_DELEGATE))
+        return native_service(c, s);
     switch (s->args[7]) {
     case CV_SERVICE_THREAD_SELF: s->result = 1; break;
-    case CV_SERVICE_PROTECT: return dom_protect(c, s);
+    case CV_SERVICE_PROTECT: if (native_dispatch) {
+            rc = native_protect(c, s);
+            if (rc) s->result = rc;
+            return 0;
+        }
+        return dom_protect(c, s);
     case CV_SERVICE_MAP: s->result = dom_map(c, s); break;
     case CV_SERVICE_UNMAP: s->result = dom_unmap(c, s->args[0], s->args[1]); break;
     case CV_SERVICE_NODES:
@@ -325,6 +335,7 @@ static long dom_ioctl(struct file *f, unsigned int op, unsigned long arg)
     struct context *c = f->private_data;
     struct cv_step *s = &c->dom_step;
     long rc;
+    u64 deadline = ktime_get_ns() + CV_STEP_BUDGET_NS;
     if (current->mm != c->mm || task_pid_nr(current) != c->dom_pid) return -EPERM;
     if (op == DOM_PROTECT_DONE) {
         /* Only the scalar trampoline can issue this operation. Complete even
@@ -346,21 +357,29 @@ static long dom_ioctl(struct file *f, unsigned int op, unsigned long arg)
         if (rc) goto fault;
         goto out;
     }
-    if (op != DOM_STEP || arg || c->dom_protect_pending ||
+    if (op != (native_dispatch ? CV_STEP_NATIVE : DOM_STEP) || arg || c->dom_protect_pending ||
         (c->dom_delegate && c->dom_delegate->pending)) return -EINVAL;
     if (mutex_lock_interruptible(&vm_lock)) return -EINTR;
+native_again:
     rc = cv_step_locked(c, s);
     if (rc == -EINTR || rc == -EAGAIN) goto out;
     if (rc) goto fault;
     s->reply = 0;
     if (s->kind == 1) goto out;
     if (s->kind == 4) {
+        if (native_dispatch && cv_step_stop(deadline)) goto out;
         rc = resolve(c, c->main_thread, ktime_get_ns() + CV_STEP_BUDGET_NS);
-        if (!rc) { c->main_thread->sfence_pending = true; goto out; }
+        if (!rc) {
+            c->main_thread->sfence_pending = true;
+            if (native_dispatch && !cv_step_stop(deadline)) goto native_again;
+            goto out;
+        }
         goto fault;
     }
     if (s->kind != 3) { rc = -EFAULT; goto fault; }
+    if (native_dispatch) TEST_HOOK(5);
     rc = dom_service(c, s);
+    if (!rc && native_dispatch && !cv_step_stop(deadline)) goto native_again;
     if (rc >= 0) goto out;
 fault:
     pr_info("capstone_dom: fault rc=%ld kind=%llu cause=%llu pc=0x%llx address=0x%llx\n",
@@ -376,6 +395,11 @@ out:
 static int dom_release(struct inode *inode, struct file *f)
 {
     if (!f->private_data) return 0;
+    {
+        struct context *c = f->private_data;
+        ns_session_free(c->native_session);
+        kfree(c->native_context);
+    }
     dom_delegate_free(f->private_data);
     return vm_release(inode, f);
 }
@@ -457,6 +481,8 @@ static int dom_load_binary(struct linux_binprm *bprm)
     if (!one_inode_per_file(bprm->file) || !file_inode(bprm->file)->i_nlink) return -EOPNOTSUPP;
     if (bprm->argc < 1 || bprm->argc > DOM_MAX_STRINGS ||
         bprm->envc > DOM_MAX_STRINGS - bprm->argc) return -E2BIG;
+    if (native_dispatch && (!checked_copy || !native_slot_transport ||
+        current->seccomp.mode != SECCOMP_MODE_DISABLED)) return -EOPNOTSUPP;
     rc = dom_parse(bprm->file, &im);
     if (rc) return rc;
     block = kvzalloc(DOM_LAUNCH_BYTES, GFP_KERNEL);
@@ -554,7 +580,7 @@ static int dom_load_binary(struct linux_binprm *bprm)
     memset(regs, 0, sizeof(*regs));
     regs->status = SR_PIE | SR_UXL_64;
     regs->epc = tramp; regs->sp = (bprm->p - 16) & ~15UL;
-    regs->s0 = fd; regs->s1 = DOM_STEP; regs->s2 = DOM_PROTECT_DONE; regs->s3 = DOM_SYSCALL_DONE;
+    regs->s0 = fd; regs->s1 = native_dispatch ? CV_STEP_NATIVE : DOM_STEP; regs->s2 = DOM_PROTECT_DONE; regs->s3 = DOM_SYSCALL_DONE;
     fd_install(fd, ctxfile); ctxfile = NULL;
     rc = 0;
 out:

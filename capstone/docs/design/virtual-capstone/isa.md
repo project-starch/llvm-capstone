@@ -36,6 +36,8 @@ The following R-type encodings all use opcode `0x5b`, funct3 `1`.
 | Instruction | funct7 | Inputs | Result |
 |---|---|---|---|
 | `CSRUNV rd, rs1, rs2` | `0x24` | Physical frame address, action | Event kind or action result |
+| `CSCHECKR rd, rs1, rs2` | `0x25` | Paused physical frame, check descriptor | 0 and checked read address in descriptor, or cause 24..29 |
+| `CSCHECKW rd, rs1, rs2` | `0x26` | Paused physical frame, check descriptor | 0 and checked write address in descriptor, or cause 24..29 |
 | `CSMINT rd, rs1, rs2` | `0x50` | Destination slot VA, descriptor VA (v7: base, end, perms+type, cursor, second slot, 0) | Scalar private ancestor ID; the tagged child (LINEAR or NONLIN, at the cursor) in the slot, and in the second slot when given |
 | `CDERIVE rd, rs1, rs2` | `0x51` | Non-linear parent with cursor at child start, scalar size | Fresh non-linear child with inherited data rights and MANAGE |
 | `CREVOKE rs1, rs2` (rd=0) | `0x52` | Management-capable non-linear parent, non-linear child reference | Invalidate that direct child and its subtree |
@@ -65,8 +67,24 @@ The current `CSRETIRE` helper ignores rs2.
 when admitting a context, then restores them from saved state on resume.
 Virtual code may read `urevavail` but cannot replace the roots. Physical
 C/M retains the legacy host-tree backend; the virtual context uses its guest
-table. There are no implemented `CSCHECKR`/`CSCHECKW` instructions at this
-revision. Linux syscall and VM service numbers belong to software ABIs.
+table. The native integration experiment enables `CSCHECKR`/`CSCHECKW` only
+with `x-capstone-checked-copy=true` (default off). Their custom-2 (`0x5b`),
+funct3 1, funct7 `0x25`/`0x26` allocation is disjoint from every existing
+instruction, including all custom-0 funct3 6 CPTAG immediates. CPTAG retains
+its decoder and raw-moves property in every checked-copy setting.
+
+The check descriptor is six aligned u64 words: escape epoch, protected
+register slot (1..31), byte offset, length, output address, reserved zero.
+The first operand identifies a paused kernel-owned frame. Only the hidden
+escaped register snapshot supplies authority; the output address is written
+only on success. S/M checks require the caller privilege, namespace and satp
+to match; U/C requests return refusal. The kernel must hold mapping identity
+and exclude all revokers from each check through the scalar copy and drain.
+Epoch and tag/raw-tag classification are published at frame bytes 656/664.
+Transport version 2 preserves epoch and caller privilege at 1072/1080 while
+checked-copy is enabled; the disabled transport remains version 1. The bitmap
+classifies arguments but never grants authority. Linux syscall and VM service
+numbers belong to software ABIs.
 
 ### Minting and retiring an arena
 

@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
-/* Internal native-task adapter. The syscall/SDK consumer is not wired yet.
+/* Internal native-task adapter, consumed by native-syscall-dom.h.
  * Call with vm_lock held and a kernel-resident, prefaulted buffer. Neither the
  * context nor its thread may be destroyed until this synchronous call ends.
  * c->dom_pid admits only the owning native thread; shared-mm native threads
@@ -18,6 +18,7 @@ struct cv_copy_state {
     enum cu_direction direction;
     u64 length;
     unsigned long irq_flags, root;
+    cn_u32 admission_cause;
     /* kmalloc storage, never a VMAP_STACK physical-address conversion. */
     u64 descriptor[6] __aligned(16);
 };
@@ -25,6 +26,7 @@ struct cv_copy_state {
 static void cv_copy_enter(void *opaque)
 {
     struct cv_copy_state *s = opaque;
+    s->admission_cause = slot_acquire(s->t) ? CU_REFUSED : 0;
     mmap_read_lock(s->c->mm);
     preempt_disable();
     local_irq_save(s->irq_flags);
@@ -52,6 +54,7 @@ static cn_u32 cv_copy_check(void *opaque, const struct cn_capref *ref,
     struct cv_copy_state *s = opaque;
     unsigned long cause;
     u64 *d = s->descriptor;
+    if (s->admission_cause) return s->admission_cause;
     if (ref->reserved || ref->context_id != s->t->id ||
         !ref->context_epoch || ref->context_epoch != READ_ONCE(s->t->frame[82]) ||
         !ref->frame_slot || ref->frame_slot >= 32) return CU_REFUSED;
@@ -59,11 +62,18 @@ static cn_u32 cv_copy_check(void *opaque, const struct cn_capref *ref,
     d[0] = ref->context_epoch; d[1] = ref->frame_slot;
     d[2] = offset; d[3] = bytes; d[4] = 0; d[5] = 0;
     if (dir == CU_TO_DOMAIN)
-        asm volatile(".insn r 0x0b, 6, 1, %0, %1, %2"
+        asm volatile(".insn r 0x5b, 1, 0x26, %0, %1, %2"
                      : "=&r"(cause) : "r"(s->t->frame_pa), "r"(virt_to_phys(d)) : "memory");
     else
-        asm volatile(".insn r 0x0b, 6, 0, %0, %1, %2"
+        asm volatile(".insn r 0x5b, 1, 0x25, %0, %1, %2"
                      : "=&r"(cause) : "r"(s->t->frame_pa), "r"(virt_to_phys(d)) : "memory");
+#ifdef CV_NATIVE_UNSAFE_BOUNDS
+    /* Test-only broken variant: the guest sentinel oracle must reject it. */
+    if (cause == CU_BOUNDS) {
+        d[4] = s->t->frame[8 + 2 * ref->frame_slot] + offset;
+        cause = 0;
+    }
+#endif
     if (cause) return cause >= CU_TAG && cause <= CU_REFUSED ? cause : CU_REFUSED;
     *address = d[4];
     if (!access_ok((void __user *)*address, bytes)) return CU_BOUNDS;
@@ -156,11 +166,13 @@ static cn_u32 cv_copy_resolve(void *opaque, cn_u64 address, enum cu_direction di
     unsigned flags = FAULT_FLAG_USER | (dir == CU_TO_DOMAIN ? FAULT_FLAG_WRITE : 0);
     /* The held arena survives sleeping fault handling and concurrent logical
      * retirement. ALLOW_RETRY is intentionally absent: mmap_lock stays ours.
-     * File-backed / device mappings await the grant-aware fault adapter. */
+     * Only anonymous memory and this context's immutable image are admitted;
+     * arbitrary file/device mappings remain unsupported. */
     mutex_unlock(&vm_lock);
     mmap_read_lock(s->c->mm);
     vma = find_vma(s->c->mm, address);
-    if (!vma || address < vma->vm_start || !vma_is_anonymous(vma) ||
+    if (!vma || address < vma->vm_start ||
+        (!vma_is_anonymous(vma) && vma->vm_file != s->c->image) ||
         (vma->vm_flags & (VM_IO | VM_PFNMAP | VM_SHARED)) ||
         !(vma->vm_flags & (dir == CU_TO_DOMAIN ? VM_WRITE : VM_READ))) goto out;
     attempted = true;
@@ -174,8 +186,12 @@ out:
         struct arena *a = s->arena;
         unsigned long offset = address - a->address;
         unsigned index;
-        if (address < a->address || offset < a->rx_bytes || offset >= a->bytes)
+        if (address < a->address || offset >= a->bytes)
             return cv_copy_bad_mapping(s);
+        /* Sealed image text is read-only and cannot contain domain tags.
+         * It is excluded from pinned data-page accounting by add/resolve. */
+        if (offset < a->rx_bytes)
+            return dir == CU_FROM_DOMAIN ? 0 : cv_copy_bad_mapping(s);
         index = (offset - a->rx_bytes) / PAGE_SIZE;
         /* Normal pinned-mode resolve also records pages made resident by
          * the fault handler. Otherwise a later tagged domain store could
