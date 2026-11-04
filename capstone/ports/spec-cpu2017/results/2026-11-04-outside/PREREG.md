@@ -35,3 +35,15 @@ Readings between these thresholds are reported, and no reading is chosen.
 - Tick accounting has a resolution of about 10 ms per sample, which is fine over 33 s.
 - Linux may not see time spent in the monitor in M mode as either user or system. Such time would show up as neither, without being idle.
 - If I is small but real − (U + S) is large, that is the case: the reading does not separate it from another task, and it says so.
+
+## Addendum 1 (4 Nov 12:40, before the boot)
+
+**Two findings since the pre-registration.**
+- **Plain loses time outside its own process too.** On the Plain test `times` stages, real − (user + sys) is 9.1 % on nab, 9.1 % on lbm, 9.0 % on xz and 20 % on imagick.
+  - So part of the Capstone outside time is not Capstone's.
+  - Against Plain's real − user, the Spatial outside excess on test is +12 % (nab), +17 % (lbm), +27 % (mcf), +43 % (xz) and +57 % (imagick) of Plain's run time.
+- **The launcher calls `sched_yield()` at every supervisor-quantum exit** (`exec.c` virtual_service_loop, kind 1). If any other task is runnable on the one hart, the hart goes to it.
+
+**One added reading.** Beside each `times`, run.sh now prints every task's utime and stime (`/proc/<pid>/stat` fields 14 and 15) as `@@TASK <pid> <comm> <utime> <stime>`. The before/after delta names the task that takes the hart if O is read.
+
+The thresholds above are unchanged. A transcript with these lines injected still parses to the same result.json.
