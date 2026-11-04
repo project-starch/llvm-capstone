@@ -117,3 +117,7 @@ The runner was stopped by hand before any board call and relaunched with this st
 The fault-ahead run moved to board 1 (fault-ahead PREREG Addendum 4) and ranks above C.5a. `c5a-b1.sh` was stopped by hand while still waiting; it had made no board call.
 - `fa-b1.sh` launches it when the fault-ahead run ends, about 9 h after the mcf pair.
 - Its sentinel, its order and its predictions are unchanged. It finds the chain's pid gone and the sentinel stop in the chain log, and proceeds.
+
+## Addendum 3 (4 Nov, before any board call)
+
+After the bitstream 3 slot run and before the flash, c5a-b1.sh now runs the two counter boots of hpm PREREG Addendum 2 (imagick dev and devmk on bkit16-hpm-b3-b1). They are informational and gate nothing. Dry run S4-hpm.

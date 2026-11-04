@@ -5,6 +5,7 @@
 #  2. Flash caplifive_vp2c_1fc2cd5aa (sealed sha256 5b7b1edc...), read the resident name back.
 #  3. R-67 kit (graded `fixed --bitstream 1fc2cd5aa`). Only if FIXED (rc 0): the hpm kit, then the ObjBounds kit with the
 #     witness objb-stale-w, objb-pcc LAST (it does not return). Graded against bitstream 3's runs.
+#  1c. Then the counter kit on imagick dev/devmk (hpm PREREG Addendum 2).
 #  1b. Before the flash, on bitstream 3: the rtl lane's slot-bare kit (e1a835aa466e). After the C.5a kits: the same on C.5a.
 #     Informational: only a HARD STOP (resident mismatch) on C.5a blocks SPEC.
 #  4. Only if all three grade rc 0: SPEC test on C.5a (chain-board.sh over c5a-spec-b1.list into spec/board/out-c5a, kit
@@ -108,6 +109,12 @@ main() {
   bid=; for t0 in $(seq 1 30); do bid=$($BOOK book 1 40 "vp2 slot-bare kit on bitstream 3 (board 1)") && break; bid=; sleep 60; done
   slot "$O/slot-bs3" bs3 $B3 || log "the bitstream 3 slot run stopped early"
   [ -n "$bid" ] && $BOOK unbook "$bid" >> "$L" 2>&1
+
+  # --- 1c. counters on the compiler evaluation's imagick dev and devmk stages, bitstream 3, kit bkit16-hpm-b3-b1
+  #     (hpm PREREG Addendum 2): where devmk's 12 % of cycles go. Informational; gates nothing. ---
+  log "HPM eval imagick BEGIN"
+  ${C5_HPMCHAIN:-bash $P/hpm/sbhpm/chain-board.sh} 1 "$O/hpm-eval-b1.list" "$H/spec/board/out-hpm-eval" >> "$L" 2>&1
+  log "HPM eval imagick END rc=$?"
 
   # --- 2-4 ---
   r67=x; hpm=x; objb=x

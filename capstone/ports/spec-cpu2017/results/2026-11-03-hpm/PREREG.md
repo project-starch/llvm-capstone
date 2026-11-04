@@ -77,3 +77,24 @@ Predictions:
 - **P6 (repeat).** If the difference comes from the arm, the repeat again reads MapLife L1I > Full L1I and MapLife
   mispredicts > Full mispredicts. Each arm's L1D stays within 1 % of the first boot. If either ordering flips, the
   difference is run-to-run variation, and per-arm counter differences of that size are not read as arm effects.
+
+## Addendum 2 (4 Nov, before the boots): imagick dev and devmk with counters
+
+**The question.** The compiler evaluation's step 2 (+movc-keeps-integer-source) cuts imagick's cycles 12 % for 3 % of its instructions. Silicon saves 23-36 cycles per removed STC/LDC stack-copy pair. The sim reads about 8 cycles per pair, and that figure does not move with memory delay (the rtl lane, delay 12 against 40). Which counter carries the gap?
+
+**The boots.** Two boots on kit bkit16-hpm-b3-b1, bitstream 3, board 1, run by c5a-b1.sh before the C.5a flash through `sbhpm/chain-board.sh` into `spec/board/out-hpm-eval`:
+- `stages-eval-b1/538.imagick_r-test-dev`;
+- `stages-eval-b1/538.imagick_r-test-devmk`.
+
+Both are both-arm stages, with the twin census-q34.
+
+**Baselines** (out-hfl, run command, cycles / instret):
+
+| | MapLife | Full |
+|---|---|---|
+| dev | 350,906,604 / 100,882,666 | 353,505,467 / 100,905,319 |
+| devmk | 308,778,978 / 97,817,914 | 310,135,911 / 97,839,264 |
+
+**Predictions.**
+- P1-P5 as in the first counter boot, against these baselines: instret within 0.1 % and cycles within 2 %.
+- **H (reported, with one bound).** Between dev and devmk in each arm, the drop in issue-stall cycles (hpm7) is at least half the drop in cycles. If it is smaller, the saving is not in issue stalls, and the other counters' drops are compared by size.
