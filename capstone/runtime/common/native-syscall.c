@@ -333,7 +333,7 @@ int ns_dispatch_request(struct ns_session *s, cn_u64 epoch,
     if (acquired) s->ops.release(s->opaque, held);
     if (p->imported) s->ops.release_iov(s->opaque, s->context, p->iov, p->call.vector_count);
     for (unsigned i = 0; i < 6; ++i) free(p->call.buffer[i].data);
-    for (unsigned i = 0; i < NS_MAX_IOV; ++i) free(p->call.vector[i].data);
+    for (unsigned i = 0; i < p->call.vector_count; ++i) free(p->call.vector[i].data);
     free(p);
     return 0;
 }
