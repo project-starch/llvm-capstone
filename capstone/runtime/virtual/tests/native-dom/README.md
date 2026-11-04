@@ -21,8 +21,9 @@ operations use the private bounce path. Initial stdio may include the first
 serial terminal (device 4:64), as well as null/console, regular files and pipes;
 this does not permit opening device paths. The pipe contract fails on the
 prerequisite module and passes on the candidate. Hosted serial output is
-restored, but file access outside the initial cwd and full gate parity remain
-unresolved. Export `LANE_ROOT` to select a private artifact directory.
+restored. File access beyond cwd requires the opt-in widened grants described
+below; full gate parity remains unresolved. Export `LANE_ROOT` to select a
+private artifact directory.
 
 The 152-byte scalar trampoline forwards module-validated delegated calls through
 private bounce memory, in addition to the protection bridge. The module retains
@@ -202,7 +203,13 @@ cannot replace a full protected-state export.
 
 `measure.sh` accepts `NATIVE_MODULE_ARGS` for matched native-policy experiments.
 Keep plain/launcher/native child bytes identical and preserve all six profile
-windows per arm. Measurements do not establish compatibility.
+windows per arm. `entry-counts.py MEASURE_ROOT` verifies raw profile totals and
+counts module CSRUNV instructions with rd=x0, excluding discard and collection.
+It reports actual entries/process and the step function's self attempts/entry.
+Its module attempts/entry also include setup and teardown; neither number
+prices hardware-hidden state transfer or cycles. Measurements do not establish
+compatibility. The native contract runner now defaults to 32 slots and accepts
+`NATIVE_WIDE_GRANTS=1`; the widened policy passes all 26 native contracts.
 
 ## Round 3 final qualification (historical)
 
