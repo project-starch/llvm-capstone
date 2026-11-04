@@ -92,6 +92,14 @@ v = 'WRONG BITSTREAM' if wrongbs else 'VOID' if void else ('STOP' if stop else (
     ('AS EXPECTED' + (' on 9 of 10 (objb-pcc not run, so the fetch face is unread)' if 'objb-pcc' in nodata else '') if ARM in ('bs3', 'c5a') else 'CONFIRMED'))))
 print(f'ARM {ARM}: {v}  (wrong-bitstream {wrongbs} void {void} stop {stop} finding {bad} no-data {nodata})')
 patt_ok = True
+# comparison-dir bitstream check (2026-11-04): the other run dir must have run on the bitstream its pattern is graded
+# against, read back from its own run.log; without this a comparison against the wrong bitstream grades as a pattern.
+CMP = {'bs3': ('603528b8b',), 'objb': ('e7af48457',), 'c5a': ('e7af48457',)}
+if OTHER:
+    seen = sorted({g['bs'][-1] for g in (read(OTHER, n) for n in H) if g and g['bs']})
+    cmp_ok = bool(seen) and all(any(h in s for h in CMP[ARM]) for s in seen)
+    print(f'COMPARISON DIR bitstream {seen}: ' + ('OK' if cmp_ok else 'WRONG COMPARISON BITSTREAM (must name ' + ' or '.join(CMP[ARM]) + ')'))
+    patt_ok = cmp_ok
 if OTHER and ARM == 'c5a':
     print('COST PATTERN, C.5a against bitstream 3, cycles:')
     for (n, i), d in C5A_DIR.items():

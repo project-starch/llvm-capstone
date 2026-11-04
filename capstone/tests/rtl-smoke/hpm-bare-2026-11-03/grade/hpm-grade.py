@@ -80,6 +80,14 @@ for n in H:
 v = 'NO DATA' if nodata else ('WRONG BITSTREAM' if wrongbs else ('FINDING' if bad else 'AS EXPECTED'))
 print(f'ARM {ARM}: {v}  (off {bad} wrong-bitstream {wrongbs} no-data {nodata})')
 patt_ok = True
+# comparison-dir bitstream check (2026-11-04): the other run dir must have run on the bitstream its pattern is graded
+# against, read back from its own run.log; without this a comparison against the wrong bitstream grades as a pattern.
+CMP = {'bs3': ('603528b8b',), 'objb': ('e7af48457',), 'c5a': ('e7af48457',)}
+if OTHER:
+    seen = sorted({g['bs'][-1] for g in (read(OTHER, n) for n in H) if g and g['bs']})
+    cmp_ok = bool(seen) and all(any(h in s for h in CMP[ARM]) for s in seen)
+    print(f'COMPARISON DIR bitstream {seen}: ' + ('OK' if cmp_ok else 'WRONG COMPARISON BITSTREAM (must name ' + ' or '.join(CMP[ARM]) + ')'))
+    patt_ok = cmp_ok
 if OTHER and v == 'AS EXPECTED':
     a3, ao = (D, OTHER) if ARM == 'bs3' else (OTHER, D)
     print(f'COST PATTERN (bitstream 3 -> {"C.5a" if ARM == "c5a" else "ObjBounds"}):')
