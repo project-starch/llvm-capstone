@@ -31,9 +31,19 @@ void __capstone_application_transports(unsigned long *count, unsigned long *exch
   *exchange_bytes = descriptor.exchange_bytes;
 }
 
+#ifndef CAPSTONE_RUNTIME_COMPACT_LAUNCH
+#define CAPSTONE_RUNTIME_COMPACT_LAUNCH 0
+#endif
+#if CAPSTONE_RUNTIME_COMPACT_LAUNCH
+static char storage[CAPSTONE_LAUNCH_BYTES] __attribute__((aligned(4096)));
+/* The launch ABI bounds argc + envc, not each independently. Keep one NULL
+ * terminator for each vector without reserving two maximum-sized arrays. */
+static char *arguments[CAPSTONE_LAUNCH_STRINGS + 2] __attribute__((aligned(4096)));
+#else
 static char storage[CAPSTONE_LAUNCH_BYTES] __attribute__((aligned(16)));
 static char *arguments[CAPSTONE_LAUNCH_STRINGS + 1];
 static char *environment[CAPSTONE_LAUNCH_STRINGS + 1];
+#endif
 static struct capstone_launch_view launch;
 static int prepared;
 
@@ -44,9 +54,21 @@ int __capstone_application_prepare(const void *region, size_t bytes) {
   memcpy(&h, region, sizeof h);
   if (h.bytes > bytes || h.bytes > sizeof storage || h.bytes < sizeof h)
     return EINVAL;
+#if CAPSTONE_RUNTIME_COMPACT_LAUNCH
+  /* Validate counts before forming a capability cursor into the shared vector.
+   * unpack repeats this validation before publishing any pointers. */
+  if (!h.argc || h.argc > CAPSTONE_LAUNCH_STRINGS ||
+      h.envc > CAPSTONE_LAUNCH_STRINGS - h.argc)
+    return EINVAL;
+#endif
   memcpy(storage, region, h.bytes);
+#if CAPSTONE_RUNTIME_COMPACT_LAUNCH
+  int error = capstone_launch_unpack(storage, h.bytes, arguments, h.argc + 1,
+      arguments + h.argc + 1, CAPSTONE_LAUNCH_STRINGS - h.argc + 1, &launch);
+#else
   int error = capstone_launch_unpack(storage, h.bytes, arguments,
       CAPSTONE_LAUNCH_STRINGS + 1, environment, CAPSTONE_LAUNCH_STRINGS + 1, &launch);
+#endif
   if (error)
     return error;
   /* No chdir: the domain is the user half of the task that packed this block,
@@ -59,7 +81,13 @@ const struct capstone_launch_task *__capstone_launch_task(void) {
   return prepared ? &launch.task : NULL;
 }
 
-char **__capstone_domain_environ(void) { return environment; }
+char **__capstone_domain_environ(void) {
+#if CAPSTONE_RUNTIME_COMPACT_LAUNCH
+  return arguments + launch.argc + 1;
+#else
+  return environment;
+#endif
+}
 
 extern int main(int, char **);
 int capstone_main(void) { return main((int)launch.argc, arguments); }
