@@ -3489,7 +3489,9 @@ thread_unwind:
         if (copy_from_user(&active, (void __user *)arg, sizeof active)) { rc = -EFAULT; goto out; }
         if (!c->io_ready || active > 1) { rc = -EINVAL; goto out; }
         /* The launcher serializes these calls with host_lock. Never wait with
-         * vm_lock held: the blocked inline call must be able to finish. */
+         * vm_lock held: the blocked inline call must be able to finish. Claim
+         * before waiting so another main call cannot overtake this worker. */
+        if (active) c->io_host_active = true;
         while (active && c->main_thread->io_busy) {
             mutex_unlock(&vm_lock);
             wait_event(c->io_wait, !READ_ONCE(c->main_thread->io_busy));
