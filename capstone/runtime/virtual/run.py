@@ -33,6 +33,7 @@ PARALLEL_BLOCK = (
 SCRIPT = r'''#!/bin/sh
 cd /mnt/vm || exit 1
 insmod capstone_vm.ko __MODULE_ARGS__ || exit 1
+echo "VM_MEMORY_MODE:$(cat /sys/module/capstone_vm/parameters/unpinned)"
 # The module's own lines, read from the kernel RING BUFFER rather than relied on reaching the
 # console. The console level does not filter the buffer. run.py itself never lowers that level --
 # but six sibling runners do (`dmesg -n 1` in run-malloc/-hosted/-ports/-safety/-fp/-pthreads), and
@@ -157,6 +158,7 @@ def main():
     p.add_argument('--skip-recycling', action='store_true', help='Omit the two long recycling cases; recorded explicitly')
     p.add_argument('--module-args', default='',
                    help="Parameters appended to insmod (e.g. 'resolve_pte=1 fault_repeat_max=1')")
+    p.add_argument('--unpinned', action='store_true', help='require the unpinned payload oracle')
     p.add_argument('--exact-bounds', action=argparse.BooleanOptionalAction, default=False,
                    help="Run QEMU's exact-bounds profile. Option (iii) does not need it; it is kept "
                         'so the suite can be run both ways as a two-sided control.')
@@ -173,6 +175,8 @@ def main():
                    help='Run the parallel pair immediately before rmmod, not mid-suite '
                         '(one-slot machines: the pair can end the guest)')
     a = p.parse_args()
+    if a.unpinned:
+        a.module_args += ' unpinned=1'
     work = Path(tempfile.mkdtemp(prefix='virtual-app.', dir=os.environ['CAPSTONE_TMP_ROOT']))
     stage = work/'stage'; stage.mkdir()
     inputs = {'qemu': a.qemu, 'launcher': a.adapter/'capstone-vexec',
@@ -342,6 +346,13 @@ def main():
     tests['fault_ahead_policy_restored'] = len(policy) == 2 and policy == restored
     tests['unused_pages_not_populated'] = len(stats) >= 4 and stats[2]['peak'] - stats[2]['pages'] < 32
     tests['shared_heap_pages_released'] = len(stats) >= 5 and stats[4]['peak'] - stats[4]['pages'] >= 768
+    if a.unpinned:
+        tests['unpinned_mode_verified'] = lines.count('VM_MEMORY_MODE:Y') == 1
+        del tests['linux_pages_released'], tests['shared_heap_pages_released']
+        tests['linux_payload_unpinned'] = (len(stats) == expected_stats and
+            len(demand_stats) == 3 and all(s['pages'] == s['peak'] == 0 for s in stats))
+        tests['shared_heap_unpinned'] = (len(stats) >= 5 and stats[4]['pages'] == stats[4]['peak'] == 0 and
+            stats[4]['faults'] > 0 and tests['heap_threads'])
     if not a.skip_recycling:
         sparse = stats[5] if len(stats) >= 6 else {}
         # The fixed table happened to collect ~195k IDs in three sweeps.
