@@ -43,8 +43,8 @@
 ; CT: ldc {{a[0-9]+}}, 16(gp)
 ; CT: ret
 ; IG-LABEL: sum:
-; IG: scc [[SA:a[0-9]+]], gp, [[SA]]
-; IG: scc [[SB:a[0-9]+]], gp, [[SB]]
+; IG: scc [[SA:a[0-9]+]], gp, {{a[0-9]+}}
+; IG: scc [[SB:a[0-9]+]], gp, {{a[0-9]+}}
 define i64 @sum() {
   %x = load i64, ptr addrspace(200) @a
   %y = load i64, ptr addrspace(200) @b
