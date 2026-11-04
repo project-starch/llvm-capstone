@@ -107,6 +107,42 @@ passes on the normal module. Run with raw moves enabled, test CSRs disabled,
 and 32 QEMU supervisor slots; the runner sets and reads back the corresponding
 module options. Keep the normal nine runtime gates as a separate comparison.
 
+`run-sweep-refs.py` adds a real-page check without production counters. Build
+`sweep-ref-probe.c` as a test-only module and `sweep-refs.c` as a static native
+client with this directory and the namespace fixture header in its include
+path. From this directory, with a matching configured kernel and native Linux
+cross-compiler:
+
+```sh
+mkdir -p "$OUT"
+cp sweep-ref-probe.c sweep-ref-probe.h "$OUT/"
+printf 'obj-m += sweep-ref-probe.o\n' > "$OUT/Makefile"
+make -C "$KERNEL_BUILD" M="$(realpath "$OUT")" ARCH=riscv \
+  CROSS_COMPILE="$CROSS_COMPILE" modules
+"${CROSS_COMPILE}gcc" -static -O1 -I. -I"$NS_FIXTURE" sweep-refs.c -o "$OUT/sweep-refs"
+```
+
+The observer takes and releases one temporary page reference under the PTE lock; the client
+compares counts including that same temporary reference before and after each
+operation. Before sampling, it calls `MADV_COLD` on the untouched middle page:
+the matching Linux 6.1 path drains local LRU batches, and that empty range cannot
+queue a new deactivation reference. `mincore` verifies the range stays absent.
+The client also checks stable PFNs, mapcounts and absolute counts (one mapping plus
+one observer, or two mappings plus one observer). The observer avoids GUP's access/activation side effects and cross-checks its
+PFN against the namespace probe's independent GUP lookup. Together these checks
+prevent an LRU batch drain hiding a leak. It tests a successful scrub through a `PROT_NONE` PTE and reference cleanup
+when an exclusive tagged page precedes a shared tagged page in the VMA.
+
+Its `--stage` directory contains the normal module as `good.ko`, the namespace
+probe, `sweep-ref-probe.ko`, `sweep-refs`, and two broken modules. `leak.ko`
+replaces the `put_page` in `unpinned_release_mm` with a no-op; `omit.ko` is the
+tag-omission mutant above. The same client must reject both: a leak changes the
+real page's reference count on success and refusal, while omission leaves the
+inaccessible page tagged and incorrectly accepts the shared page. The runner
+requires those specific failures, not just an arbitrary nonzero exit. This
+checks reference balance on an isolated single-hart guest; it does not replace
+migration or sibling-thread stress.
+
 Before publishing a fresh namespace in an mm, the same scan removes old tags
 left by a prior close/open. A raw load followed by a scalar store rewrites the
 original low word, retaining bytes while clearing the storage tag under rule 1.
