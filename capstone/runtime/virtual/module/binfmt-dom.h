@@ -188,8 +188,16 @@ static long dom_unmap(struct context *c, unsigned long base, unsigned long bytes
 {
     struct arena *a = find_arena(c, base, bytes);
     int rc;
+    bool held;
     if (!a || !a->dom_dynamic || a->dom_metadata) return -EINVAL;
+    held = a->copy_holds != 0;
     rc = retire(c, a, false);
+    if (!rc && held) {
+        /* retire retained the held arena; keep its VMA as a VA reservation.
+         * Last release performs physical unmap after all checked windows. */
+        a->copy_unmap_pending = true;
+        return 0;
+    }
     return rc ? rc : vm_munmap(base, bytes);
 }
 
@@ -249,6 +257,7 @@ static long dom_protect(struct context *c, struct cv_step *s)
     struct pt_regs *regs = current_pt_regs();
     if (!bytes || ((base | bytes) & ~PAGE_MASK) ||
         (prot & ~(PROT_READ | PROT_WRITE | PROT_EXEC)) || !a || !a->dom_dynamic ||
+        a->copy_holds || a->copy_retired ||
         base < a->address || !dom_within(base - a->address, bytes, a->bytes)) {
         s->result = -EINVAL;
         return 0;

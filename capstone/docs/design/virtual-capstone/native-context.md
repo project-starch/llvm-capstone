@@ -159,3 +159,8 @@ child-only revocation, deliberate root/tag restoration failures, matched
 attempt/cycle costs, hosted/runtime parity, full census 14/14, all applicable
 gates on both hosts, and independent review. No production or landing claim
 may be derived from the reference tests alone.
+
+The [checked-copy prototype](checked-copy.md) consumes this context double
+and provides a shared chunk/retry engine plus a default-off kernel adapter.
+Its CSCHECK/CPTAG encoding conflict and native syscall integration remain
+unresolved; the hosted controls do not qualify guest kernel execution.

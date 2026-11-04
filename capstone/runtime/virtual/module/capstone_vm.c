@@ -87,6 +87,10 @@ struct arena {
     bool ancestor_retired;
     /* Native-task mappings only; initial transport cannot be retired. */
     bool dom_dynamic, dom_metadata;
+    /* Checked-copy holds retain both pages and the VA reservation after a
+     * logical native unmap. The node is retired immediately, under vm_lock. */
+    unsigned copy_holds;
+    bool copy_retired, copy_unmap_pending;
 };
 struct context;
 struct cv_thread {
@@ -1327,7 +1331,8 @@ static int retire(struct context *c, struct arena *a, bool destroying)
     unsigned i, swept;
     if (!destroying && arena_has_thread_frame(c, a))
         return -EBUSY;
-    if (!destroying && !unpinned) {
+    if (destroying && WARN_ON_ONCE(a->copy_holds)) return -EBUSY;
+    if (!destroying && !unpinned && !a->copy_holds) {
         int error = pin_remaining(c, a, FOLL_FORCE | FOLL_NOFAULT);
         if (error) return error;
     }
@@ -1353,6 +1358,11 @@ static int retire(struct context *c, struct arena *a, bool destroying)
             ++c->retired_flat;
             if (node_free_count(c) > free_before) ++c->pushed_flat;
         }
+    }
+    if (a->copy_holds) {
+        a->ancestor_retired = true;
+        a->copy_retired = true;
+        return 0;
     }
     /* Clear every tag before returning frames to Linux. Later collection can
      * reuse dead IDs only after sweeping all remaining namespace storage.
@@ -1632,7 +1642,8 @@ static int remap_begin(struct context *c, const struct cv_remap *r)
         !r->bytes || r->bytes > CV_MAX_REGION_BYTES || (r->bytes & ~PAGE_MASK))
         return -EINVAL;
     a = xa_load(&c->ids, r->id);
-    if (!a || !a->linear || arena_has_thread_frame(c, a)) return -EINVAL;
+    if (!a || !a->linear || a->copy_holds || a->copy_retired ||
+        arena_has_thread_frame(c, a)) return -EINVAL;
     if (c->registered_bytes - a->bytes + r->bytes > CV_MAX_BYTES) return -ENOMEM;
     error = unpinned ? 0 : pin_remaining(c, a, FOLL_FORCE | FOLL_NOFAULT);
     if (error) return error;
@@ -3117,6 +3128,7 @@ static int vm_release(struct inode *inode, struct file *f)
 static const struct file_operations ops = {
     .owner = THIS_MODULE, .open = vm_open, .release = vm_release, .unlocked_ioctl = vm_ioctl,
 };
+#include "checked-copy-dom.h"
 #include "binfmt-dom.h"
 
 static struct miscdevice device = {
