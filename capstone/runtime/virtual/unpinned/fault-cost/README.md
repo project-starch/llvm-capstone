@@ -151,5 +151,48 @@ live/stale/scalar/zero granules and pointer graph walks; it does not prove
 all writers or the whole architecture. Evidence: `tt/fast-cow`,
 `tt/fast-stale`, `check-torture.sh`, `logs/torture.log`.
 
-Runtime gate qualification is recorded separately after both queued arms
-finish. No landing is authorized by these micro and workload results.
+The final runtime gate comparison is recorded below. No landing is
+authorized by these micro and workload results.
+
+Using the original unpinned micro baseline instead of candidate OFF projects
+1.536484 busy boundary points for GCC (343.603168 attempts per eligible
+fault); the matched OFF/ON workload difference above remains 1.523485.
+This distinction accounts for the experiment's default-off dispatch cost.
+
+## Final qualification: unresolved
+
+Both complete gate arms ran sequentially through the shared p12 queue,
+using fresh applications, test CSRs enabled and verified 32-slot module/model
+configurations. All required rows executed; no stale-image or one-slot
+refusal occurred. The unchanged comparator returns **DIFFERENT**:
+
+```
+hosted     IDENTICAL  rows ran 3/3
+runtime    IDENTICAL  rows ran 25/25
+nodes      IDENTICAL  rows ran 4/4
+malloc     IDENTICAL  rows ran 39/39
+pin-ahead  IDENTICAL  rows ran 21/21
+fp         IDENTICAL  rows ran 1/1
+pthread    IDENTICAL  rows ran 1/1
+step-hooks DIFFERENT  rows ran 37/37  control FAIL=55 PASS=244  arm FAIL=57 PASS=242
+memcached  IDENTICAL  rows ran 29/29
+VERDICT: DIFFERENT
+```
+
+Twelve step-hook accounting checks differ. Five fail only in OFF:
+deadline2_walk, resched2_syscalls, resched4_walk, signal1_walk and
+signal2_syscalls. Seven fail only in ON: deadline1_walk, deadline2_syscalls,
+deadline4_walk, resched3_syscalls, signal3_syscalls, signal3_walk and
+signal4_walk. All names have the suffix `_accounting`.
+
+Each differing case compares walk fault counts 54/55 or syscall counts
+22/23 against its reference. All exit zero, have zero hook violations and
+stops equal to injections; region accounting is zero in the unpinned path.
+The source of the one-fault variation is unresolved. Existing pin-specific
+failures also remain, and point-1 injection is unreachable because this path
+bypasses demand GUP. Do not discard these failures or claim gate PASS.
+
+Evidence: `logs/gate-compare.{txt,json}`, `logs/gate-mode-audit.json`,
+`logs/hook-differences.jsonl`, `logs/gate-queue.txt` and `gate-{A0,B}/gates`
+under the lane's p12 directory. Qualification and direct-trap delivery both
+remain unresolved. This is an unlanded, default-off experiment.
