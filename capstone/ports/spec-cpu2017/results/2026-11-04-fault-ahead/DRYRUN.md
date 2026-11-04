@@ -65,3 +65,35 @@ START pid N
 STOP: pre-registration deadbeef0000 is not on origin/spec-silicon
 chain calls: 0
 ```
+
+## S1-slot (13:40, the slot kit added)
+```
+START pid N
+preconditions ok; waiting for board 2's chain to stop at the sentinel
+chain stopped at the sentinel
+SLOT slot-9 BEGIN
+SLOT slot-9 END rc=0
+SLOT slot-6 BEGIN
+SLOT slot-6 END rc=0
+SLOT slot-5 BEGIN
+SLOT slot-5 END rc=0
+SLOT slot-7 BEGIN
+SLOT slot-7 END rc=0
+SLOT slot-8 BEGIN
+SLOT slot-8 END rc=0
+SLOT slot-1 BEGIN
+SLOT slot-1 END rc=0
+SLOT slot-2 BEGIN
+SLOT slot-2 END rc=0
+SLOT slot-3 BEGIN
+SLOT slot-3 END rc=0
+SLOT slot-4 BEGIN
+SLOT slot-4 END rc=0
+SLOT GRADE objb rc=2
+OFF arm chain rc=0
+OFF arm grade: off 538.imagick_r F1 holds | faults 815 vs 815 F2 holds | real 33.1 vs 33.1 s F3 holds
+ON arm chain rc=0
+GRADE rc=0
+restarting board 2's chain on 2 lines of $CAPSTONE_WORK/perf/fa/dryrun/S1-slot/rest
+DONE off 0 on 0; chain pid N
+```

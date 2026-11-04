@@ -98,3 +98,16 @@ predicted values reads rc 0, no data reads rc 2):
 - S2 compares two boards.
 - lbm's gap today (0.6 %) is inside the band, so lbm cannot confirm or refute S2.
 - The MapLife arms run the Spatial images on a bitstream with the lifetime check; they are predicted like Full.
+
+## Addendum 1 (4 Nov 13:40, before any board call): the slot-bare kit on bitstream 3 and on C.5a
+
+The rtl lane's slot-bare kit is added: llvm-capstone land/rtl-slot-kit e1a835aa466e, `capstone/tests/rtl-smoke/slot-bare-2026-11-04`. It runs nine arms of the STC→LDC pair and its controls, slot-9 first.
+- **Its predictions are the rtl lane's** (that PREREG; grader `grade/slot-grade.py <run> <bs3|c5a>`):
+  - instret, value, traps and cause exact;
+  - P1: slot-1..4 equal within 2 %;
+  - P2: slot-5 > slot-6.
+- **Where it runs.** On board 1, once on bitstream 3 before the C.5a flash (the board is still bitstream 3 when the chain stops), and once on C.5a after the hpm and ObjBounds kits.
+- **What it gates.** Nothing, except that a HARD STOP (resident mismatch) on C.5a blocks SPEC.
+- **Why.** Its per-op costs on silicon (ldc, stc, the pair, sd+ld) are what the DYN-unit work chooses by. Simulation on C.5a: pair 8.42 cycles; silicon saves 23-36 per removed pair.
+
+The runner was stopped by hand before any board call and relaunched with this step. Its dry run (S1 success, S2 R-67 not FIXED, S3 HARD STOP in the slot kit) is in DRYRUN.md.

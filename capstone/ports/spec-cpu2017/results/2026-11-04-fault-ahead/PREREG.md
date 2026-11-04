@@ -66,3 +66,9 @@ The run is lbm test, both arms of `stages-test-hfl/519.lbm_r-test`, on kit-hpmq-
 - **Outputs.** The real outputs (`lbm.out`, `100_100_130_cf_a.of`) are hash-equal across OFF, ON and the twin. Only `lbm.err` differs, and it differs between OFF and the twin as well: it carries the module's stats line.
 - **What this means for the board.** OFF reproduces the twin's fault path exactly. ON cuts lbm's faults 63.6x and its entries 28x. F4's 10x for lbm stands.
 - The other five benchmarks' QEMU fault counts with fault-ahead on are running and will be reported in Addendum 2. They are not predictions.
+
+## Addendum 2 (4 Nov 13:40, before any board call): the slot-bare kit on ObjBounds
+
+The rtl lane's slot-bare kit (land/rtl-slot-kit e1a835aa466e, its own PREREG and `slot-grade.py <run> objb`) runs on board 2 first, before the OFF arm. It is one boot per image, slot-9 first. It is informational and gates nothing here.
+
+The runner was stopped by hand before any board call and relaunched with this step. Its dry run is in DRYRUN.md (S1).

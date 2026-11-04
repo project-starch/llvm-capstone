@@ -5,6 +5,8 @@
 #  2. Flash caplifive_vp2c_1fc2cd5aa (sealed sha256 5b7b1edc...), read the resident name back.
 #  3. R-67 kit (graded `fixed --bitstream 1fc2cd5aa`). Only if FIXED (rc 0): the hpm kit, then the ObjBounds kit with the
 #     witness objb-stale-w, objb-pcc LAST (it does not return). Graded against bitstream 3's runs.
+#  1b. Before the flash, on bitstream 3: the rtl lane's slot-bare kit (e1a835aa466e). After the C.5a kits: the same on C.5a.
+#     Informational: only a HARD STOP (resident mismatch) on C.5a blocks SPEC.
 #  4. Only if all three grade rc 0: SPEC test on C.5a (chain-board.sh over c5a-spec-b1.list into spec/board/out-c5a, kit
 #     bkit17-perf-c5a-b1), graded by c5a-spec-grade.py.
 #  5. Always (after any of the above, or a failure in it): flash bitstream 3 back, read it back, and restart the board 1
@@ -28,6 +30,7 @@ main() {
   local BUSY=${C5_BUSY:-python3 /tmp/capstone/wt-gate/capstone/tests/rtl-smoke/board-busy.py 1}
   local RUN=${C5_RUN:-python3 $RUNNER} CHAIN=${C5_CHAIN:-bash $SB/board/chain-board.sh}
   local HK=$P/hpm/kit-289ad4e5/images RK=$P/hpm/kit-r67-b1dfe406/images OK=$P/objb/bare-kit/images W=$P/objb/witness
+  local SK=${C5_SLOTKIT:-$P/slot/kit-e1a835aa}
   local G=$O/grade KIT=$H/t3-smoke/bkit17-perf-c5a-b1 rc r67 hpm objb spec=skipped bid t0 hard=0
   export FPGA_BOARD=1 CAPSTONE_FPGA_URL_FILE=$HOME/.claude-kisp/secrets/fpga-console-url
   log() { echo "C5 $(date '+%F %T') $*" >> "$L"; }
@@ -42,6 +45,7 @@ main() {
   [ "$(sha256sum "$W/objb-stale-w.bin" | cut -c1-16)" = ae0e1cb35dcc42d3 ] || { log "STOP: witness image"; return 2; }
   [ "$(sha256sum "$RUNNER" | cut -c1-16)" = 102ab84e762cba50 ] || { log "STOP: runner hash"; return 2; }
   ( cd "$KIT" && sha256sum -c --quiet SHA256SUMS ) && grep -q "^BOARD_BITSTREAM=$C5$" "$KIT/board.env" || { log "STOP: C.5a perf kit"; return 2; }
+  ( cd "$SK/images" && sha256sum -c --quiet SHA256SUMS ) && [ -f "$SK/grade/slot-grade.py" ] || { log "STOP: slot kit"; return 2; }
   for f in hpm-grade.py objb-grade.py r67-grade.py; do [ -f "$G/$f" ] || { log "STOP: grader $f"; return 2; }; done
   [ -n "${C5_PREREG:-}" ] && git -C "$H/wt-spec" branch -r --contains "$C5_PREREG" 2>/dev/null | grep -q origin/spec-silicon \
     || { log "STOP: pre-registration ${C5_PREREG:-unset} is not on origin/spec-silicon"; return 2; }
@@ -85,6 +89,26 @@ main() {
     done; return 0
   }
 
+  slot() {  # slot <out dir> <arm bs3|c5a> <resident name>: the rtl lane's slot-bare kit (land/rtl-slot-kit e1a835aa466e),
+            # one boot per image, slot-9 first, graded by its own slot-grade.py; it never gates anything here
+    local out=$1 arm=$2 bn=$3 i; mkdir -p "$out"
+    for i in slot-9 slot-6 slot-5 slot-7 slot-8 slot-1 slot-2 slot-3 slot-4; do
+      log "SLOT $arm $i BEGIN"
+      ( export FPGA_URL; FPGA_URL=$(cat "$CAPSTONE_FPGA_URL_FILE")
+        FPGA_BITSTREAM=$bn.bit SUP_IMG=$SK/images/$i.bin SUP_REC_ADDR=0x$(sed "s/^0x//" "$SK/images/$i.rec") SUP_OUT=$out/$i \
+          SUP_TIMEOUT=90 timeout 900 $RUN > "$out/$i.stderr" 2>&1 ); rc=$?
+      echo $rc > "$out/$i.rc"; log "SLOT $arm $i END rc=$rc"
+      grep -q 'HARD STOP' "$out/$i.stderr" "$out/$i/run.log" 2>/dev/null && { log "SLOT HARD STOP at $i: resident is not $bn"; return 1; }
+    done
+    python3 "$SK/grade/slot-grade.py" "$out" "$arm" > "$out.grade.txt" 2>&1; log "SLOT GRADE $arm rc=$?"; sed 's/^/  /' "$out.grade.txt" >> "$L"
+    return 0
+  }
+
+  # --- 1b. the slot kit on bitstream 3, before the flash (board 1 is still bitstream 3) ---
+  bid=; for t0 in $(seq 1 30); do bid=$($BOOK book 1 40 "vp2 slot-bare kit on bitstream 3 (board 1)") && break; bid=; sleep 60; done
+  slot "$O/slot-bs3" bs3 $B3 || log "the bitstream 3 slot run stopped early"
+  [ -n "$bid" ] && $BOOK unbook "$bid" >> "$L" 2>&1
+
   # --- 2-4 ---
   r67=x; hpm=x; objb=x
   if flash $C5 $C5SHA; then
@@ -101,6 +125,7 @@ main() {
         log "HPM GRADE rc=$hpm"; sed 's/^/  /' "$O/grade-hpm.txt" >> "$L"
         python3 "$G/objb-grade.py" "$O/objb" c5a "$P/objb/bare-bs3-b2" > "$O/grade-objb.txt" 2>&1; objb=$?
         log "OBJB GRADE rc=$objb"; sed 's/^/  /' "$O/grade-objb.txt" >> "$L"
+        [ $hard = 0 ] && { slot "$O/slot-c5a" c5a $C5 || hard=1; }
       else log "R-67 not FIXED: nothing else runs on C.5a (it goes to the lead)"; fi
     fi
     [ -n "$bid" ] && $BOOK unbook "$bid" >> "$L" 2>&1

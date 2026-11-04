@@ -368,3 +368,150 @@ restarting board 1's chain on 2 lines of $CAPSTONE_WORK/perf/c5a-first/dryrun/H-
 DONE r67 0 hpm 1 objb 0 spec skipped; chain pid N
 calls: 22 image runs; 2 flashes; 1 chain calls
 ```
+
+## Addendum: the slot kit added (13:40)
+### S1-slot-success
+```
+START pid N
+preconditions ok; waiting for board 1's chain to stop at the sentinel
+chain stopped at the sentinel
+SLOT bs3 slot-9 END rc=0
+SLOT bs3 slot-6 END rc=0
+SLOT bs3 slot-5 END rc=0
+SLOT bs3 slot-7 END rc=0
+SLOT bs3 slot-8 END rc=0
+SLOT bs3 slot-1 END rc=0
+SLOT bs3 slot-2 END rc=0
+SLOT bs3 slot-3 END rc=0
+SLOT bs3 slot-4 END rc=0
+SLOT GRADE bs3 rc=2
+FLASH BEGIN caplifive_vp2c_1fc2cd5aa booking 999
+FLASH END caplifive_vp2c_1fc2cd5aa rc=0
+READBACK caplifive_vp2c_1fc2cd5aa ok rc=3
+bare kits booking 999
+IMAGE t1-norevoke END rc=0
+IMAGE t1-untagged END rc=0
+IMAGE t1-oob END rc=0
+IMAGE t1-fire END rc=0
+R67 GRADE rc=0
+IMAGE hpm-5 END rc=0
+IMAGE hpm-3 END rc=0
+IMAGE hpm-4 END rc=0
+IMAGE hpm-6 END rc=0
+IMAGE hpm-1 END rc=0
+IMAGE hpm-2 END rc=0
+IMAGE hpm-7 END rc=0
+IMAGE objb-pcc-ctrl END rc=0
+IMAGE objb-stale END rc=0
+IMAGE objb-stale-w END rc=0
+IMAGE objb-perf-s1 END rc=0
+IMAGE objb-perf-s2 END rc=0
+IMAGE objb-perf-s3 END rc=0
+IMAGE objb-perf-s4 END rc=0
+IMAGE objb-perf-s5 END rc=0
+IMAGE objb-perf-s6 END rc=0
+IMAGE objb-perf-s7 END rc=0
+IMAGE objb-pcc END rc=0
+HPM GRADE rc=0
+OBJB GRADE rc=0
+SLOT c5a slot-9 END rc=0
+SLOT c5a slot-6 END rc=0
+SLOT c5a slot-5 END rc=0
+SLOT c5a slot-7 END rc=0
+SLOT c5a slot-8 END rc=0
+SLOT c5a slot-1 END rc=0
+SLOT c5a slot-2 END rc=0
+SLOT c5a slot-3 END rc=0
+SLOT c5a slot-4 END rc=0
+SLOT GRADE c5a rc=2
+SPEC on C.5a BEGIN
+SPEC on C.5a END chain rc=0
+SPEC GRADE rc=2
+FLASH BEGIN caplifive_vp2c_e7af48457 booking 999
+FLASH END caplifive_vp2c_e7af48457 rc=0
+READBACK caplifive_vp2c_e7af48457 ok rc=3
+restarting board 1's chain on 2 lines of $CAPSTONE_WORK/perf/c5a-first/dryrun/S1-slot-success/rest.list
+DONE r67 0 hpm 0 objb 0 spec 0; chain pid N
+```
+### S2-slot-r67hole
+```
+START pid N
+preconditions ok; waiting for board 1's chain to stop at the sentinel
+chain stopped at the sentinel
+SLOT bs3 slot-9 END rc=0
+SLOT bs3 slot-6 END rc=0
+SLOT bs3 slot-5 END rc=0
+SLOT bs3 slot-7 END rc=0
+SLOT bs3 slot-8 END rc=0
+SLOT bs3 slot-1 END rc=0
+SLOT bs3 slot-2 END rc=0
+SLOT bs3 slot-3 END rc=0
+SLOT bs3 slot-4 END rc=0
+SLOT GRADE bs3 rc=2
+FLASH BEGIN caplifive_vp2c_1fc2cd5aa booking 999
+FLASH END caplifive_vp2c_1fc2cd5aa rc=0
+READBACK caplifive_vp2c_1fc2cd5aa ok rc=3
+bare kits booking 999
+IMAGE t1-norevoke END rc=0
+IMAGE t1-untagged END rc=0
+IMAGE t1-oob END rc=0
+IMAGE t1-fire END rc=0
+R67 GRADE rc=1
+R-67 not FIXED: nothing else runs on C.5a (it goes to the lead)
+SPEC on C.5a skipped (r67 1 hpm x objb x hard-stop 0)
+FLASH BEGIN caplifive_vp2c_e7af48457 booking 999
+FLASH END caplifive_vp2c_e7af48457 rc=0
+READBACK caplifive_vp2c_e7af48457 ok rc=3
+restarting board 1's chain on 2 lines of $CAPSTONE_WORK/perf/c5a-first/dryrun/S2-slot-r67hole/rest.list
+DONE r67 1 hpm x objb x spec skipped; chain pid N
+```
+### S3-slot-hardc5
+```
+START pid N
+preconditions ok; waiting for board 1's chain to stop at the sentinel
+chain stopped at the sentinel
+SLOT bs3 slot-9 END rc=0
+SLOT bs3 slot-6 END rc=0
+SLOT bs3 slot-5 END rc=0
+SLOT HARD STOP at slot-5: resident is not caplifive_vp2c_e7af48457
+the bitstream 3 slot run stopped early
+FLASH BEGIN caplifive_vp2c_1fc2cd5aa booking 999
+FLASH END caplifive_vp2c_1fc2cd5aa rc=0
+READBACK caplifive_vp2c_1fc2cd5aa ok rc=3
+bare kits booking 999
+IMAGE t1-norevoke END rc=0
+IMAGE t1-untagged END rc=0
+IMAGE t1-oob END rc=0
+IMAGE t1-fire END rc=0
+R67 GRADE rc=0
+IMAGE hpm-5 END rc=0
+IMAGE hpm-3 END rc=0
+IMAGE hpm-4 END rc=0
+IMAGE hpm-6 END rc=0
+IMAGE hpm-1 END rc=0
+IMAGE hpm-2 END rc=0
+IMAGE hpm-7 END rc=0
+IMAGE objb-pcc-ctrl END rc=0
+IMAGE objb-stale END rc=0
+IMAGE objb-stale-w END rc=0
+IMAGE objb-perf-s1 END rc=0
+IMAGE objb-perf-s2 END rc=0
+IMAGE objb-perf-s3 END rc=0
+IMAGE objb-perf-s4 END rc=0
+IMAGE objb-perf-s5 END rc=0
+IMAGE objb-perf-s6 END rc=0
+IMAGE objb-perf-s7 END rc=0
+IMAGE objb-pcc END rc=0
+HPM GRADE rc=0
+OBJB GRADE rc=0
+SLOT c5a slot-9 END rc=0
+SLOT c5a slot-6 END rc=0
+SLOT c5a slot-5 END rc=0
+SLOT HARD STOP at slot-5: resident is not caplifive_vp2c_1fc2cd5aa
+SPEC on C.5a skipped (r67 0 hpm 0 objb 0 hard-stop 1)
+FLASH BEGIN caplifive_vp2c_e7af48457 booking 999
+FLASH END caplifive_vp2c_e7af48457 rc=0
+READBACK caplifive_vp2c_e7af48457 ok rc=3
+restarting board 1's chain on 2 lines of $CAPSTONE_WORK/perf/c5a-first/dryrun/S3-slot-hardc5/rest.list
+DONE r67 0 hpm 0 objb 0 spec skipped; chain pid N
+```
