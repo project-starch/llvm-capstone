@@ -144,8 +144,8 @@ during it. OpenSBI 1.3 serves that interrupt by clearing MTIE and setting STIP,
 so STIP clear before the pass and set after it identifies one; the source is
 unchanged (one hart, S interrupts masked across the flag query and the copy), so
 the redo is exact. STIP already set before the pass implies MTIE is clear, so
-none can arrive, and the second pass always ends the loop; a third pass stops
-the kernel. `copy_retries` counts redos.
+none can arrive, and the second pass always ends the loop; a second detected
+interrupt raises `BUG` before a third pass can start. `copy_retries` counts redos. The runner reports its change across the fixture.
 
 Claimed: the tested firmware and model, with Sstc off. Not claimed: any other
 firmware or silicon; any other asynchronous machine-level event (software or
@@ -155,11 +155,13 @@ platform that cannot give this contract must keep the raw transport off. A
 guest booted with `sstc=true` in this model did not finish booting within four
 minutes and was stopped; no Sstc statement is made.
 
-The copy's ownership contract is the one a data copy needs: callers keep other
-writers of the source out for its duration (migration and compaction lock and
-unmap the page, fork COW of private anonymous memory write-protects it); a page
-that is also writable through another mapping, such as a private mapping of a
-shared file page, is outside it. One hart is required.
+The supported stability assumption for the copy: nothing else writes the source
+while it is copied. On one hart with S interrupts masked, that excludes all other
+ordinary CPU execution; DMA never publishes tags. Linux itself does not give this
+for every source: a private mapping of a shared file page that is also writable
+through another mapping, for example, is outside what this patch supports. Migration
+and compaction lock and unmap the page, and fork COW of private anonymous memory
+write-protects it, which is the tested configuration. One hart is required.
 
 ## Ownership and lifetime recycling
 

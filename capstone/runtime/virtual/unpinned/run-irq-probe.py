@@ -35,6 +35,7 @@ def main():
     (stage / 'gate.sh').write_text('''#!/bin/sh
 cd /mnt/vm || exit 1
 echo BULK_ENABLED:$(cat /sys/module/captag/parameters/bulk_enabled)
+echo CAPTAG_retries_before:$(cat /sys/module/captag/parameters/copy_retries 2>/dev/null)
 insmod irq-window-probe.ko %s
 echo PROBE_INSMOD_RC:$?
 dmesg | grep IRQ_WINDOW
@@ -74,6 +75,7 @@ echo VIRTUAL_STAGED_DONE
     summary = re.search(r'IRQ_WINDOW iterations=(\d+) deadline_in_copy=(\d+) lost_iterations=(\d+) '
                         r'lost_in_copy=(\d+) lost_granules=(\d+)', serial)
     retries = re.search(r'CAPTAG_copy_retries:(\d+)', serial)
+    before = re.search(r'CAPTAG_retries_before:(\d+)', serial)
     copies = re.search(r'CAPTAG_copies:(\d+)', serial)
     cpu_txt = args.work / 'guest/cpu.txt'
     cpu = cpu_txt.read_text() if cpu_txt.exists() else ''
@@ -86,7 +88,7 @@ echo VIRTUAL_STAGED_DONE
     iterations = int(summary.group(1)) if summary else -1
     inside = int(summary.group(2)) if summary else -1
     lost = int(summary.group(3)) if summary else -1
-    redo = int(retries.group(1)) if retries else -1
+    redo = int(retries.group(1)) - (int(before.group(1)) if before else 0) if retries else -1
     if args.expect_lost != 'record':
         ok = ok and ((lost > 0) if args.expect_lost == 'any' else (lost == 0))
     if args.expect_retries != 'record':
