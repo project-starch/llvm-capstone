@@ -458,6 +458,7 @@ def evaluate(log, names, instrumented, completed, unpinned=False):
         if unpinned:
             checks[f'{name}_{mode}_window_in_vma'] = bool(r.get('region') is not None and
                 unpinned_checks.windows_stay_below(r, r['region'] + 8 * 4096))
+            checks[f'{name}_{mode}_window_in_arena'] = unpinned_checks.windows_in_arena(r)
         if name == 'adaptro':
             checks['adaptro_write_denied'] = r.get('rowrite', False) and r.get('exit') == 139
         else:

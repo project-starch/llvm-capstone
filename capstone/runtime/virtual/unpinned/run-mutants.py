@@ -21,7 +21,7 @@ STEP = HERE.parent / 'run-step-hooks.py'
 # variant: (module parameter, configurations that exercise the guard, checks that must flip)
 VARIANTS = {
     'vma_clip':      ('test_skip_vma_clip=1', 'adaptclip', ['adaptclip_clip_window_in_vma', 'adaptclip_clipx_window_in_vma']),
-    'arena_clip':    ('test_skip_arena_clip=1', 'adaptclip', ['adaptclip_clip_window']),
+    'arena_clip':    ('test_skip_arena_clip=1', 'adaptclip', ['adaptclip_clip_window_in_arena', 'adaptclip_clipx_window_in_arena']),
     'stop_check':    ('test_skip_stop_check=1', 'adaptres,resched1', ['adaptres_no_fault_while_pending', 'resched1_no_fault_while_pending']),
     'resident_stop': ('test_skip_resident_stop=1', 'adaptgaps', ['adaptgaps_window']),
 }

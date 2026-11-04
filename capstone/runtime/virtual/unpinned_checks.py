@@ -72,6 +72,16 @@ def windows_stay_below(run, bound):
     return bool(mine) and all(a + lim * 4096 <= bound for a, n, lim in mine)
 
 
+def windows_in_arena(run):
+    """No window PLANNED (limit, before any Linux refusal) to end beyond its arena. Past the arena's
+    last page the next mapping is another VMA or none, and Linux refuses the access, which hides a
+    missing arena clip exactly as a read-only neighbour hides a missing VMA clip."""
+    sizes = dict(run.get('arenas', []))
+    windows = run.get('raw_windows', [])
+    return bool(windows) and all(base in sizes and address + limit * 4096 <= base + sizes[base]
+                                 for base, address, count, limit in windows)
+
+
 def counter_counts(run):
     """Public fault total less explicitly attributed faults outside the region."""
     counts = region_counts(run)
