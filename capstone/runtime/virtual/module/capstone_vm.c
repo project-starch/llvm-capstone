@@ -335,6 +335,10 @@ module_param(arena_pin, bool, 0644);
 static bool unpinned;
 module_param(unpinned, bool, 0444);
 MODULE_PARM_DESC(unpinned, "Use the platform's raw tag-aware mm instead of payload pins");
+/* Experimental sweep optimization; independently opt in until qualified. */
+static bool unpinned_fast_sweep;
+module_param(unpinned_fast_sweep, bool, 0444);
+MODULE_PARM_DESC(unpinned_fast_sweep, "Hold tagged base pages directly under their PTE lock");
 static bool unpinned_exact_bounds;
 static unsigned long unpinned_faults, unpinned_sweep_pages;
 module_param(unpinned_faults, ulong, 0444);
@@ -916,6 +920,88 @@ static unsigned long unpinned_page_summary(struct page *page)
     return result;
 }
 
+/* Return one referenced tagged base page, or zero at the end. Unlike a fault or
+ * a data access this walk must neither populate memory nor mark it accessed.
+ * Inspect the sticky tag summary and take the reference under the PTE lock:
+ * retaining a PFN after dropping that lock would race migration/page reuse.
+ * vm_lock stops capability execution; mmap_lock excludes fork and unmap until
+ * the caller has swept the COMPLETE mm and recycled identities. This relies on
+ * every tag-publication route setting the sticky summary, and on payload grants
+ * excluding shared/device backing. vm_lock stops publication in this namespace;
+ * it does not stop a different mm from writing shared untagged backing.
+ * No allocation occurs under the PTE lock. At most one PTE table is scanned
+ * without releasing it, including when every resident page has no tags.
+ *
+ * Lock hold time. The PTE spinlock (preemption off) is held across up to
+ * PTRS_PER_PTE (512) PTE reads and, for each present non-zero page, one
+ * unpinned_page_summary() query. The old scanner took the lock once per
+ * resident page for one PTE read. On the QEMU model a query is a host table
+ * lookup, so this costs nothing measurable here. On silicon a query may be an
+ * uncached tag-controller access, which would make the hold up to 512 such
+ * accesses per table; that latency has not been measured. The option is
+ * therefore experimental and default OFF, and the hold must be measured on the
+ * target before any default-on decision. */
+static long next_tagged(struct mm_struct *mm, unsigned long address, unsigned long end,
+                        unsigned long *at, struct page **held)
+{
+    while (address < end) {
+        pgd_t *pgd = pgd_offset(mm, address);
+        p4d_t *p4d;
+        pud_t *pud;
+        pmd_t *pmd;
+        pte_t *pte;
+        spinlock_t *lock;
+        unsigned long stop;
+        long found = 0;
+        if (pgd_none(*pgd)) { address = pgd_addr_end(address, end); continue; }
+        if (pgd_bad(*pgd)) return -EFAULT;
+        p4d = p4d_offset(pgd, address);
+        if (p4d_none(*p4d)) { address = p4d_addr_end(address, end); continue; }
+        if (p4d_bad(*p4d)) return -EFAULT;
+        pud = pud_offset(p4d, address);
+        if (pud_none(*pud)) { address = pud_addr_end(address, end); continue; }
+        if (pud_leaf(*pud)) return -EOPNOTSUPP;
+        if (pud_bad(*pud)) return -EFAULT;
+        pmd = pmd_offset(pud, address);
+        if (pmd_none(*pmd)) { address = pmd_addr_end(address, end); continue; }
+        if (pmd_leaf(*pmd)) return -EOPNOTSUPP;
+        if (pmd_bad(*pmd)) return -EFAULT;
+        pte = pte_offset_map_lock(mm, pmd, address, &lock);
+        if (!pte) return -EFAULT;
+        stop = pmd_addr_end(address, end);
+        for (unsigned long i = 0; address < stop; address += PAGE_SIZE, ++i) {
+            pte_t value = READ_ONCE(pte[i]);
+            struct page *page;
+            unsigned long pfn;
+            if (pte_none(value)) continue;
+            if (!pte_present(value)) { found = -EOPNOTSUPP; break; }
+            pfn = pte_pfn(value);
+            if (is_zero_pfn(pfn)) continue;
+            /* Device/special PTEs are not ordinary RAM references. Refuse
+             * instead of treating their PFNs as struct page objects. */
+            if (pte_special(value) || pte_devmap(value) || !pfn_valid(pfn)) {
+                found = -EOPNOTSUPP; break;
+            }
+            page = pfn_to_page(pfn);
+            if (!unpinned_page_summary(page)) continue;
+            /* Only private anonymous base pages are supported. These checks
+             * precede get_page, so no device/compound reference is acquired. */
+            if (PageCompound(page) || !PageAnon(page) || page_mapcount(page) != 1) {
+                found = -EOPNOTSUPP; break;
+            }
+            get_page(page);
+            *at = address;
+            *held = page;
+            found = 1;
+            break;
+        }
+        pte_unmap_unlock(pte, lock);
+        if (found) return found;
+        cond_resched();
+    }
+    return 0;
+}
+
 /* vm_lock and mmap_lock are held. Temporary page references stabilize the sweep's physical
  * list, including pages outside currently registered arenas. Shared tagged
  * backing is refused: this namespace cannot sweep another process's copies.
@@ -923,7 +1009,7 @@ static unsigned long unpinned_page_summary(struct page *page)
  * FOLL_GET references prevent migration's expected-reference freeze. Unlike
  * FOLL_PIN they do not require unsharing clean launcher pages during a read;
  * the tagged pages we retain must already be private and exclusively mapped. */
-static int unpinned_hold_mm(struct mm_struct *mm, struct collect_list *held)
+static int unpinned_hold_mm_with(struct mm_struct *mm, struct collect_list *held, bool fast)
 {
     struct vm_area_struct *v;
     unsigned long cursor = 0;
@@ -939,22 +1025,28 @@ static int unpinned_hold_mm(struct mm_struct *mm, struct collect_list *held)
         while (address < end) {
             struct page *page;
             unsigned long at, pfn;
-            long found = next_resident(mm, address, end, &at, &pfn);
+            long found;
             int error;
+            if (fast)
+                found = next_tagged(mm, address, end, &at, &page);
+            else
+                found = next_resident(mm, address, end, &at, &pfn);
             if (found < 0) return found;
             if (!found) break;
             address = at + PAGE_SIZE;
-            if (is_zero_pfn(pfn)) continue;
-            found = get_user_pages_remote(mm, at, 1, FOLL_FORCE | FOLL_NOFAULT,
-                                          &page, NULL, NULL);
-            if (found != 1) {
-                pr_warn("capstone_vm: unpinned sweep cannot hold %lx flags %lx: %ld\n",
-                        at, v->vm_flags, found);
-                return found < 0 ? found : -EFAULT;
-            }
-            if (!unpinned_page_summary(page)) {
-                put_page(page);
-                continue;
+            if (!fast) {
+                if (is_zero_pfn(pfn)) continue;
+                found = get_user_pages_remote(mm, at, 1, FOLL_FORCE | FOLL_NOFAULT,
+                                              &page, NULL, NULL);
+                if (found != 1) {
+                    pr_warn("capstone_vm: unpinned sweep cannot hold %lx flags %lx: %ld\n",
+                            at, v->vm_flags, found);
+                    return found < 0 ? found : -EFAULT;
+                }
+                if (!unpinned_page_summary(page)) {
+                    put_page(page);
+                    continue;
+                }
             }
             if (!PageAnon(page) || page_mapcount(page) != 1 ||
                 (v->vm_flags & VM_SHARED)) {
@@ -969,6 +1061,103 @@ static int unpinned_hold_mm(struct mm_struct *mm, struct collect_list *held)
     }
     return 0;
 }
+
+/* The first sweep of a module load says which scanner ran, once, so a guest log shows what was
+ * executed and not only what the parameters asked for. */
+static int unpinned_hold_mm(struct mm_struct *mm, struct collect_list *held)
+{
+    static bool announced;
+    if (unlikely(!announced)) {
+        announced = true;
+        pr_emerg("capstone_vm: first unpinned sweep uses the %s scanner\n",
+                 unpinned_fast_sweep ? "fast" : "old");
+    }
+    return unpinned_hold_mm_with(mm, held, unpinned_fast_sweep);
+}
+
+static void unpinned_release_mm(struct collect_list *held);
+
+#ifdef CV_TEST_HOOKS
+/* Test build only (make CV_TEST_HOOKS=1). With unpinned_sweep_diff=1 every sweep runs the OTHER
+ * scanner as well, on the same mm under the same locks, and compares the two held-page lists:
+ * the old whole-mm GUP walk against the PTE-locked walk. Both traverse VMAs and addresses in
+ * the same order, so equal lists mean equal sequences; a count, a position-wise comparison and
+ * order-independent sum/xor digests of the physical addresses are all kept. The counters are
+ * read-only parameters, so a runner reads them from /sys/module/capstone_vm/parameters/. A
+ * scanner that omits a page, stops early at a PTE table or VMA boundary, or holds a different
+ * page shows up as a mismatch. The extra scan holds its own references and releases them. It
+ * changes no state the caller uses and does not alter unpinned_sweep_pages. */
+static bool unpinned_sweep_diff;
+module_param(unpinned_sweep_diff, bool, 0644);
+static unsigned long diff_runs, diff_active_pages, diff_other_pages, diff_mismatch, diff_other_errors,
+                     diff_digest_mismatch, diff_first_bad;
+module_param(diff_runs, ulong, 0444);
+module_param(diff_active_pages, ulong, 0444);
+module_param(diff_other_pages, ulong, 0444);
+module_param(diff_mismatch, ulong, 0444);
+module_param(diff_other_errors, ulong, 0444);
+module_param(diff_digest_mismatch, ulong, 0444);
+module_param(diff_first_bad, ulong, 0444);
+
+struct diff_cursor { unsigned long *page; unsigned long j; };
+
+static bool diff_next(struct diff_cursor *c, unsigned long *pa)
+{
+    while (c->page && c->j >= c->page[1]) {
+        c->page = c->page[0] ? phys_to_virt(c->page[0]) : NULL;
+        c->j = 0;
+    }
+    if (!c->page) return false;
+    *pa = c->page[2 + c->j++];
+    return true;
+}
+
+static void unpinned_sweep_diff_check(struct mm_struct *mm, struct collect_list *active)
+{
+    struct collect_list other = {0};
+    struct diff_cursor a = {active->head, 0}, b = {other.head, 0};
+    unsigned long saved = unpinned_sweep_pages, pa, pb, index = 0, bad = 0;
+    unsigned long sum_a = 0, sum_b = 0, xor_a = 0, xor_b = 0;
+    bool more_a, more_b;
+    int error;
+    if (!unpinned || !unpinned_sweep_diff) return;
+    error = unpinned_hold_mm_with(mm, &other, !unpinned_fast_sweep);
+    unpinned_sweep_pages = saved;
+    ++diff_runs;
+    if (error) {
+        ++diff_other_errors;
+        pr_emerg("capstone_vm: sweep diff: other scanner failed %d after %lu pages\n", error, other.count);
+        unpinned_release_mm(&other);
+        return;
+    }
+    b.page = other.head;
+    for (;;) {
+        more_a = diff_next(&a, &pa);
+        more_b = diff_next(&b, &pb);
+        if (more_a) { sum_a += pa; xor_a ^= pa * 0x9e3779b97f4a7c15UL; }
+        if (more_b) { sum_b += pb; xor_b ^= pb * 0x9e3779b97f4a7c15UL; }
+        if (!more_a && !more_b) break;
+        if (!bad && (!more_a || !more_b || pa != pb)) bad = index + 1;
+        ++index;
+    }
+    diff_active_pages += active->count;
+    diff_other_pages += other.count;
+    if (bad || active->count != other.count) {
+        if (!diff_mismatch) diff_first_bad = bad;
+        if (++diff_mismatch <= 16)
+            pr_emerg("capstone_vm: sweep diff MISMATCH run %lu: %s %lu pages, other %lu pages, first differing index %lu\n",
+                     diff_runs, unpinned_fast_sweep ? "fast" : "old", active->count, other.count, bad);
+    }
+    if (sum_a != sum_b || xor_a != xor_b) ++diff_digest_mismatch;
+    if (!(diff_runs & 63))
+        pr_emerg("capstone_vm: sweep diff: runs %lu pages %lu/%lu mismatches %lu digest %lu errors %lu\n",
+                 diff_runs, diff_active_pages, diff_other_pages, diff_mismatch, diff_digest_mismatch,
+                 diff_other_errors);
+    unpinned_release_mm(&other);
+}
+#else
+static inline void unpinned_sweep_diff_check(struct mm_struct *mm, struct collect_list *active) {}
+#endif
 
 static void unpinned_release_mm(struct collect_list *held)
 {
@@ -993,6 +1182,7 @@ static int unpinned_scrub_mm(struct mm_struct *mm, unsigned long only_pages, uns
     mmap_read_lock(mm);
     error = unpinned_hold_mm(mm, &held);
     if (error) goto out;
+    unpinned_sweep_diff_check(mm, &held);
     page = held.head;
     while (page) {
         for (unsigned long j = 0; j < page[1]; ++j) {
@@ -1054,6 +1244,7 @@ static int collect(struct context *c, struct cv_thread *owner)
         mmap_read_lock(c->mm);
         error = unpinned_hold_mm(c->mm, &held);
         if (error) goto out;
+        unpinned_sweep_diff_check(c->mm, &held);
     } else {
         for_each_arena(a, c) {
             error = pin_remaining(c, a, FOLL_FORCE | FOLL_NOFAULT);
@@ -3225,6 +3416,7 @@ static struct miscdevice device = {
 };
 static int __init init(void)
 {
+    if (unpinned_fast_sweep && !unpinned) return -EINVAL;
     if (unpinned) {
         typeof(capstone_unpinned_config) *config;
         int error;
@@ -3276,8 +3468,8 @@ static int __init init(void)
         /* Always KERN_EMERG, independent of diag_emerg: this is the line that tells a reader
          * whether the module loaded at all, so it must survive the quieted console even when the
          * rest are being read through dmesg. One line per insmod, before the rungs begin. */
-        pr_emerg("capstone_vm: loaded, diag %s, supervisor_slots=%lu, diag_emerg=%d\n",
-                 CV_DIAG_TAG, supervisor_slots, diag_emerg);
+        pr_emerg("capstone_vm: loaded, diag %s, supervisor_slots=%lu, diag_emerg=%d, unpinned=%d, fast_sweep=%d\n",
+                 CV_DIAG_TAG, supervisor_slots, diag_emerg, unpinned, unpinned_fast_sweep);
         return 0;
     }
 }
