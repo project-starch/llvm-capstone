@@ -102,10 +102,17 @@ The real bitstream 3 run below still grades AS EXPECTED with the edited grader.
   5.97 / 1.95; the loop is 3.06. The simulation of the same images gives ldc 6.06, stc 8.42, pair 17.38.
 
 **What it means.** On silicon the isolated pair costs what the simulation says, within a few percent: 17 cycles per
-iteration on bitstream 3. The SPEC lane's estimate of 23-36 silicon cycles per pair removed from a compiled program is
-larger than that. The excess is not the pair's own cost in isolation. This kit isolates the pair from everything around
-it, so it cannot say what the excess is: the surrounding code, cache or TLB state, or what else the compiler change
-removed.
+iteration on bitstream 3.
+
+**RETRACTED 2026-11-05:** "the SPEC lane's estimate of 23-36 silicon cycles per pair removed from a compiled program is
+larger than that; the excess is not the pair's own cost in isolation". There is no excess. The 23-36 divided the cycle drop
+by half the instret drop, assuming a removed pair removes two instructions; devmk replaces each pair with ONE movc. Static
+census of imagick_r dev → devmk, recounted here from the runtime lane's two disassemblies: stc −17,485, ldc −17,524, movc
++17,514; mv, sd and ld within 6; net −17,756 instructions. So the dynamic pair count is the instret drop, and the saving on
+bitstream 3 is about 13.7 cycles per pair on imagick (the runtime lane's 42.0 M / 3.07 M), 14-18 across the runtime lane's eval set (imagick, gcc, xz) on bitstream 3. The
+compiled shape measured against its movc twin in simulation (capstone-ariane stc-ldc-slot.S SL 17 − SL 18, imagick's
+SetResampleFilterVirtualPixelMethod prologue) costs 18.91 on bitstream 3's tokens, 8.92 on C.5a and 9.10 on stage A. What
+would have caught it: an opcode census of the two images before dividing by an instret delta.
 
 ## Cycle band (added 2026-11-04, after bitstream 3's reading and before the C.5a and stage-A runs)
 

@@ -1,8 +1,10 @@
 # slot-bare-2026-11-04
 
-What a capability copy through one stack slot costs on silicon. The SPEC lane measured that devmk, which removes the
-compiler's "stc then ldc of the same slot" pairs, saves 23-36 silicon cycles per removed pair. The simulator gives about
-8 cycles (dev bf2fc1c9d6bd, `capstone/docs/history/04-11-2026_03-13-48_stc-ldc-pair-cost.md`). This kit reads the
+What a capability copy through one stack slot costs on silicon. The SPEC lane estimated that devmk, which removes the
+compiler's "stc then ldc of the same slot" pairs, saves 23-36 silicon cycles per removed pair. RETRACTED 2026-11-05: that
+divided the cycle drop by half the instret drop, but devmk replaces each pair with one movc (net −1 instruction per pair);
+the corrected figure is about 13.7 cycles per pair on bitstream 3 (imagick), 14-18 across the runtime lane's eval set (imagick, gcc, xz) on bitstream 3. See PREREG.md. The
+simulator gives about 8 cycles (dev bf2fc1c9d6bd, `capstone/docs/history/04-11-2026_03-13-48_stc-ldc-pair-cost.md`). This kit reads the
 per-op costs on the board.
 
 The test is capstone-ariane `stc-ldc-slot.S`, the same blob (868111d4cd6e) on three trees:

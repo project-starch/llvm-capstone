@@ -7743,7 +7743,15 @@ Cycles per timed iteration, geomean of per-program ratios (two-level bootstrap i
   - plain loads and churn: equal within 0.3 %.
 - **Do not cite:**
   - **As program costs.** These are microbenchmark shapes; SPEC on C.5a is a separate, later reading.
-  - **As forwarding evidence.** The isolated pair's 17.0 cycles on bitstream 3 is smaller than the 23-36 cycles per pair
-    the runtime lane estimated from compiled programs. The excess is not the pair's own cost, and this kit cannot say what it is.
+  - **As forwarding evidence.** The kit's forwarding bound is slot-1 − slot-2 (at most 2 cycles per same-slot pair on stage
+    A, about 0 on C.5a), not the pair's total.
+  - **RETRACTED 2026-11-05: "the isolated pair's 17.0 cycles is smaller than the 23-36 per pair estimated from compiled
+    programs; the excess is not the pair's own cost".** The 23-36 divided the cycle drop by half the instret drop, which
+    assumes a removed pair removes two instructions. devmk replaces each pair with one movc: a static census of imagick_r
+    dev → devmk reads stc −17,485, ldc −17,524, movc +17,514, net −17,756 instructions (recounted in the RTL lane from the
+    runtime lane's two disassemblies). The corrected saving on bitstream 3 is about 13.7 cycles per pair on imagick
+    (the runtime lane's 42.0 M cycles / 3.07 M pairs) and 14-18 across the runtime lane's eval set (imagick, gcc, xz) on bitstream 3. In simulation the imagick prologue shape's
+    pair, measured against its movc twin, costs 18.91 on bitstream 3's tokens (stc-ldc-slot.S SL 17 − SL 18). **There is no
+    excess over the pair's own cost.**
   - **The hpm counters as exact on C.5a.** l1d_miss read one more than pre-registered on every image with a data access
     (N = 1, open, see the C.5a record).
