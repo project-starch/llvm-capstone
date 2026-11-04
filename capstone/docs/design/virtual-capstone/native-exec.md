@@ -6,6 +6,9 @@ This is not a qualified replacement for the launcher. See the
 [contracts and measurements](../../../runtime/virtual/tests/native-dom/README.md).
 Round 3 adds a module resource boundary. Keep the experiment off pending full
 compatibility and gate qualification; the original exploit remains a negative control.
+The `runtime/native-task` dev replay adds confined pipes and inherited serial
+I/O. Its separate [context/event proposal](native-context.md) supplies a
+linkable software double; it does not implement hardware slot eviction.
 
 ## Exec and transport
 
@@ -34,8 +37,9 @@ with bounded offsets. Output copies into the exchange and metadata go through
 
 The transport lifetime hold is structural: its grants cannot retire, only the
 owning Linux task may step the context, and a pending syscall must complete
-before domain re-entry. Read/write remain in the module and release the VM lock
-while sleeping. Other admitted I/O uses private bounce pages. The domain SDK
+before domain re-entry. Iterator read/write remain in the module and release
+the VM lock while sleeping. Legacy-only read/write and other admitted I/O use
+private bounce pages. The domain SDK
 still performs capability-checked copies between application objects and exchange.
 
 ## Resource boundary and design choice
@@ -75,7 +79,7 @@ explicitly restricted, including refusal of O_PATH and O_TMPFILE requests.
 
 A per-context bitmap grants at most 1,024 fd numbers. Only safe inherited stdio
 (ordinary files on the admitted filesystems, anonymous pipes, `/dev/null` or
-`/dev/console`) is
+`/dev/console`, or the first serial terminal at device 4:64) is
 initially granted. All other inherited fds, including directories, sockets,
 process-memory files and device handles, are inaccessible. New descriptors come
 only from the broker; close revokes the grant before scalar dispatch. Dispatch
@@ -97,7 +101,7 @@ trusted caller.
 return ENOSYS. All remaining ordinary rows are in the shared wire-shape table:
 
 ```
-getcwd fcntl ioctl unlinkat ftruncate sync_file_range flock openat close getdents64
+getcwd fcntl ioctl unlinkat ftruncate sync_file_range flock openat close getdents64 pipe2 read write
 lseek pread64 pwrite64 readv writev preadv pwritev newfstatat fstat fsync
 fdatasync clock_gettime gettimeofday times getpid getppid getuid geteuid getgid getegid
 gettid umask uname sysinfo prlimit64 getrandom sched_yield getpgid getsid fstatfs
@@ -105,8 +109,10 @@ statx fallocate sendfile copy_file_range readahead fadvise64 clock_getres getgro
 sched_getaffinity sched_get_priority_max sched_get_priority_min sched_rr_get_interval getresuid getresgid rt_sigprocmask
 ```
 
-Open and unlink execute entirely in the module. Read/write also stay in the
-module and check the same fd grants. FCNTL_LOCK admits only the shared lock
+Open and unlink execute entirely in the module. Read/write check the same fd
+grants; only legacy file operations use the scalar bounce bridge. Pipe2 accepts
+only CLOEXEC/NONBLOCK, grants both anonymous pipe ends before output publication,
+and closes both if either exceeds the grant table. FCNTL_LOCK admits only the shared lock
 commands. Ordinary fcntl permits GETFD, SETFD and GETFL; ioctl permits only FIOCLEX
 and FIONCLEX. Buffered ioctl is refused. Prlimit is query-only and self-only;
 scheduling/priority queries retain their existing self constraints. Umask only
