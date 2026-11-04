@@ -7,7 +7,7 @@
 #       CROSS_GCC=<riscv64 Linux gcc, for the native references> \
 #       [SDK=<an application SDK built from TREE>] [PHASE=all|build|gates] [GATES="hosted runtime ..."] \
 #       [CPU_EXTRA=<QEMU -cpu extras; default the 32-slot gate set of the mode>] [QEMU_LOCK=<lock file>] \
-#       [UNPINNED_PROBES=<built isolated mm fixtures>] \
+#       [UNPINNED_PROBES=<built isolated mm fixtures>] [GATES="... unpinned-mm unpinned-mutants" (--mode on)] \
 #       [APP_SQLITE=... APP_MRUBY=... APP_PERL=... APP_MEMCACHED=...] [JOBS=8] \
 #     bash run-arm.sh --mode on|off OUT
 #
@@ -52,6 +52,9 @@ GATES=${GATES:-hosted runtime nodes malloc pin-ahead fp pthread step-hooks memca
 JOBS=${JOBS:-8}
 memory=()
 [[ $MODE == off ]] || memory=(--unpinned)
+if [[ " $GATES " == *" unpinned-mutants "* && $MODE != on ]]; then
+  echo 'unpinned-mutants requires --mode on' >&2; exit 2
+fi
 if [[ " $GATES " == *" unpinned-mm "* ]]; then
   [[ $MODE == on && -n ${UNPINNED_PROBES:-} ]] || {
     echo 'unpinned-mm requires --mode on and UNPINNED_PROBES' >&2; exit 2;
@@ -194,6 +197,14 @@ gates_phase() {
     "$P/adapter/module/capstone_vm.ko" "$HOOKS" > "$OUT/platform.sha256"
   local plat=(--qemu "$P/qemu-system-riscv64" --images "$P/images") I=$B/img S=$G/SUMMARY.txt
   : > "$S"
+  # The module the gates load for production behaviour carries none of the test hooks, and the
+  # check can fire: the hooks module of the same arm does carry them (test_inject is in every
+  # CV_TEST_HOOKS build, test_skip_* in the ones that have the broken-variant controls).
+  local plain_hooks hooks_hooks
+  plain_hooks=$(grep -a -c -E 'test_skip|test_inject|test_full_window|test_scrub' "$P/adapter/module/capstone_vm.ko")
+  hooks_hooks=$(grep -a -c 'test_inject' "$HOOKS")
+  printf '%s\n' "module-strings production_hook_strings=$plain_hooks hooks_module_control=$hooks_hooks" >> "$S"
+  [[ $plain_hooks == 0 && $hooks_hooks -gt 0 ]] || echo "MODE_CHECK_FAILED module-strings: the production module carries test hooks, or the check cannot fire" >> "$S"
   gate() {
     local name=$1; shift
     [[ " $GATES " == *" $name "* ]] || return 0
@@ -216,6 +227,10 @@ gates_phase() {
   # The README's form: the pin-ahead image (contract.dom dies at VM_CONTRACT_FAIL:argv here).
   gate step-hooks python3 "$V/run-step-hooks.py" --adapter "$P/adapter" --module "$HOOKS" \
     --application "$I/pin-ahead.dom" "${plat[@]}" "${memory[@]}" --work "$G/step-hooks"
+  if [[ " $GATES " == *" unpinned-mutants "* ]]; then
+    gate unpinned-mutants python3 "$V/unpinned/run-mutants.py" --adapter "$P/adapter" --module "$HOOKS" \
+      --application "$I/pin-ahead.dom" --qemu "$P/qemu-system-riscv64" --images "$P/images" --work "$G/unpinned-mutants"
+  fi
   if [[ -n ${UNPINNED_PROBES:-} ]]; then
     gate unpinned-mm python3 "$V/unpinned/run-mm.py" "${plat[@]}" --module "$HOOKS" \
       --probes "$UNPINNED_PROBES" --work "$G/unpinned-mm"

@@ -985,10 +985,10 @@ static void unpinned_release_mm(struct collect_list *held)
  * bytes. A raw load supplies the original low word to a scalar store (rule 1).
  * This runs only before a fresh context is made visible, with mmap_lock held.
  * Interrupts cannot interpose while an opaque register is live. */
-static int unpinned_scrub_mm(struct mm_struct *mm)
+static int unpinned_scrub_mm(struct mm_struct *mm, unsigned long only_pages, unsigned long only_granules)
 {
     struct collect_list held = {0};
-    unsigned long *page;
+    unsigned long *page, scrubbed = 0;
     int error;
     mmap_read_lock(mm);
     error = unpinned_hold_mm(mm, &held);
@@ -998,6 +998,9 @@ static int unpinned_scrub_mm(struct mm_struct *mm)
         for (unsigned long j = 0; j < page[1]; ++j) {
             void *at = phys_to_virt(page[2 + j]);
             unsigned long flags, count = PAGE_SIZE / 16;
+            /* only_pages / only_granules are zero outside the test build's broken variants */
+            if (only_pages && scrubbed++ >= only_pages) continue;
+            if (only_granules) count = min(count, only_granules);
             local_irq_save(flags);
             asm volatile("1: .insn i 0x0b, 4, t0, %0, 0\n\t"
                          "sd t0, 0(%0)\n\taddi %0, %0, 16\n\t"
@@ -1674,12 +1677,27 @@ static unsigned long test_short_gup;    /* pin-ahead GUP pins only half of a bat
  * No page/VMA/backing check is bypassed, and the normal window cap still bounds the work. */
 static bool test_full_window;
 static bool test_skip_namespace_scrub;
+/* Deliberately broken variants for the negative controls (gates/README of unpinned/): each
+ * removes exactly one guard of the unpinned fault-ahead window, and the ON oracles must then fail
+ * a named check. They exist only in this build; a production module has none of these strings. */
+static bool test_skip_vma_clip;          /* the window may cross the demand fault's VMA end */
+static bool test_skip_arena_clip;        /* the window may cross the arena's last page */
+static bool test_skip_stop_check;        /* no cv_step_stop() between batches */
+static bool test_skip_resident_stop;     /* the window does not end at the first resident PTE */
+static unsigned long test_skip_scrub_after_pages;     /* the namespace scrub stops after N pages (0: all) */
+static unsigned long test_skip_scrub_after_granules;  /* ... and after N granules of each page (0: all) */
 module_param(test_inject, ulong, 0444);
 module_param(test_inject_at, ulong, 0444);
 module_param(test_inject_every, ulong, 0444);
 module_param(test_short_gup, ulong, 0444);
 module_param(test_full_window, bool, 0444);
 module_param(test_skip_namespace_scrub, bool, 0444);
+module_param(test_skip_vma_clip, bool, 0444);
+module_param(test_skip_arena_clip, bool, 0444);
+module_param(test_skip_stop_check, bool, 0444);
+module_param(test_skip_resident_stop, bool, 0444);
+module_param(test_skip_scrub_after_pages, ulong, 0444);
+module_param(test_skip_scrub_after_granules, ulong, 0444);
 static u64 test_events, test_injections, test_stops, test_initial_stops, test_violations;
 static u64 test_consumed, test_checks, test_checks_irqs_on, test_entries;
 static u64 test_gup_requests, test_gup_max, test_short_results, test_gup_pending;
@@ -1758,6 +1776,12 @@ static void test_report(const char *why)
 #define TEST_EXPIRED() test_expired
 #define TEST_FULL_WINDOW() test_full_window
 #define TEST_SKIP_NAMESPACE_SCRUB() test_skip_namespace_scrub
+#define TEST_SKIP_VMA_CLIP() test_skip_vma_clip
+#define TEST_SKIP_ARENA_CLIP() test_skip_arena_clip
+#define TEST_SKIP_STOP_CHECK() test_skip_stop_check
+#define TEST_SKIP_RESIDENT_STOP() test_skip_resident_stop
+#define TEST_SCRUB_PAGES() test_skip_scrub_after_pages
+#define TEST_SCRUB_GRANULES() test_skip_scrub_after_granules
 #define TEST_ENTRY() do { test_entry(); ++test_entries; } while (0)
 #define TEST_CHECK() do { ++test_checks; if (!irqs_disabled()) ++test_checks_irqs_on; } while (0)
 #define TEST_STOPPED(initial) do { if (test_pending) { ++test_stops; \
@@ -1772,6 +1796,12 @@ static void test_report(const char *why)
 #define TEST_EXPIRED() false
 #define TEST_FULL_WINDOW() false
 #define TEST_SKIP_NAMESPACE_SCRUB() false
+#define TEST_SKIP_VMA_CLIP() false
+#define TEST_SKIP_ARENA_CLIP() false
+#define TEST_SKIP_STOP_CHECK() false
+#define TEST_SKIP_RESIDENT_STOP() false
+#define TEST_SCRUB_PAGES() 0UL
+#define TEST_SCRUB_GRANULES() 0UL
 #define TEST_ENTRY() do { } while (0)
 #define TEST_CHECK() do { } while (0)
 #define TEST_STOPPED(initial) do { } while (0)
@@ -2107,9 +2137,11 @@ static int unpinned_resolve(struct context *c, struct cv_thread *t, struct arena
 #endif
     ahead = stream_window(t, a, index, &stream);
     limit = max(ahead, pin_ahead_pages ? pin_ahead_pages - 1 : 0);
-    limit = min_t(unsigned long, limit, a->count - index - 1);
+    if (!TEST_SKIP_ARENA_CLIP())
+        limit = min_t(unsigned long, limit, a->count - index - 1);
     address = (address & PAGE_MASK) + PAGE_SIZE;
-    limit = min(limit, (v->vm_end - address) / PAGE_SIZE);
+    if (!TEST_SKIP_VMA_CLIP())
+        limit = min(limit, (v->vm_end - address) / PAGE_SIZE);
     /* mmap_read_lock remains held. Every page is inside this same validated
      * VMA and arena; Linux applies its normal access/COW policy. No payload
      * reference or pin survives the call. A failed speculative resolution
@@ -2118,7 +2150,7 @@ static int unpinned_resolve(struct context *c, struct cv_thread *t, struct arena
     while (done < limit) {
         unsigned long batch = min_t(unsigned long, limit - done, PIN_AHEAD_BATCH);
         unsigned long target = batch;
-        if (cv_step_stop(deadline) && !TEST_FULL_WINDOW()) break;
+        if (!TEST_SKIP_STOP_CHECK() && cv_step_stop(deadline) && !TEST_FULL_WINDOW()) break;
 #ifdef CV_TEST_HOOKS
         if (test_pending && test_condition()) ++test_fault_pending;
         ++test_fault_batches;
@@ -2127,7 +2159,7 @@ static int unpinned_resolve(struct context *c, struct cv_thread *t, struct arena
         if (target != batch) ++test_fault_short;
 #endif
         for (unsigned long j = 0; j < target; ++j) {
-            if (unpinned_resident(c->mm, address + done * PAGE_SIZE))
+            if (!TEST_SKIP_RESIDENT_STOP() && unpinned_resident(c->mm, address + done * PAGE_SIZE))
                 goto finished;
             if (fixup_user_fault(c->mm, address + done * PAGE_SIZE, fault_flags, NULL))
                 goto finished;
@@ -2138,8 +2170,8 @@ static int unpinned_resolve(struct context *c, struct cv_thread *t, struct arena
 finished:
     if (diag_admit) {
         a->unpinned_ahead += done;
-        pr_info("capstone_vm: unpinned window arena 0x%lx address 0x%lx pages %lu\n",
-                a->address, address, done);
+        pr_info("capstone_vm: unpinned window arena 0x%lx address 0x%lx pages %lu limit %lu\n",
+                a->address, address, done, limit);
     }
     if (stream) {
         unsigned long skip_end;
@@ -3065,7 +3097,8 @@ static int vm_open(struct inode *inode, struct file *f)
             return -EBUSY;
         }
     if (unpinned) {
-        int error = TEST_SKIP_NAMESPACE_SCRUB() ? 0 : unpinned_scrub_mm(c->mm);
+        int error = TEST_SKIP_NAMESPACE_SCRUB() ? 0 :
+                    unpinned_scrub_mm(c->mm, TEST_SCRUB_PAGES(), TEST_SCRUB_GRANULES());
         if (error) {
             mutex_unlock(&vm_lock);
             mmdrop(c->mm);

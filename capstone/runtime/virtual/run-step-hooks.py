@@ -109,12 +109,12 @@ dmesg -c > /dev/null
 '''
 
 
-def script(names, instrumented, unpinned=False):
+def script(names, instrumented, unpinned=False, extra=''):
     text = SCRIPT + (LIVENESS % app('base1') if unpinned else '')
     for name in names:
         params, modes = CONFIGS[name][:2]
         params += '' if name.startswith('adapt') else ' fault_ahead_max=0'
-        text += f'''insmod capstone_vm.ko {params} {'diag_admit=1' if instrumented else ''} {'unpinned=1' if unpinned else ''} || exit 1
+        text += f'''insmod capstone_vm.ko {params} {'diag_admit=1' if instrumented else ''} {'unpinned=1' if unpinned else ''} {extra} || exit 1
 {memory_mode.echo('HOOK_')}
 for mode in {modes}; do
   echo "HOOK_PINS_BEFORE:{name}:$mode:$(pins)"
@@ -416,6 +416,11 @@ def evaluate(log, names, instrumented, completed, unpinned=False):
         checks[f'{name}_{mode}_window'] = (
             adaptive_counts(name, mode, 4, 26) and
             [e[1:4] for e in region_events(r)] == [(2, 4, 4), (7, 8, 0), (8, 16, 16), (25, 32, 6)])
+        # Beside the read-only neighbour of 'clip' Linux refuses the write fault of an unclipped
+        # window, which hides a missing VMA clip; the planned limit (not the resolved pages) shows it.
+        if unpinned:
+            checks[f'{name}_{mode}_window_in_vma'] = bool(r.get('region') is not None and
+                unpinned_checks.windows_stay_below(r, r['region'] + 8 * 4096))
         if name == 'adaptro':
             checks['adaptro_write_denied'] = r.get('rowrite', False) and r.get('exit') == 139
         else:
@@ -492,6 +497,9 @@ def main():
     p.add_argument('--malloc-application', type=Path, help='malloc.dom; without it the malloc configurations are skipped')
     p.add_argument('--work', type=Path)
     p.add_argument('--timeout', type=int, default=1800)
+    p.add_argument('--module-args', default='', help='parameters appended to every insmod (the broken-variant controls)')
+    p.add_argument('--only', default='', help='comma-separated configuration names; the others are not run '
+                   '(the checks of an unselected configuration then fail: read only the ones you name)')
     a = p.parse_args()
     if a.evaluate:
         log = a.evaluate.read_text(errors='replace').replace('\r', '')
@@ -506,6 +514,12 @@ def main():
     a.work.mkdir(parents=True, exist_ok=False)
     stage = a.work / 'stage'; stage.mkdir()
     names = [n for n in CONFIGS if app(n) == 'pin' or a.malloc_application]
+    if a.only:
+        wanted = a.only.split(',')
+        unknown = [n for n in wanted if n not in CONFIGS]
+        if unknown:
+            p.error('unknown configuration ' + ','.join(unknown))
+        names = [n for n in names if n in wanted]
     inputs = {'qemu': a.qemu, 'application': a.application,
               'launcher': a.adapter/'capstone-vexec', 'module': a.module,
               **{n: a.images/n for n in ('Image', 'fw_jump.elf', 'rootfs.ext2')}}
@@ -519,7 +533,7 @@ def main():
                       (inputs['module'], 'capstone_vm.ko')):
         shutil.copy2(src, stage/name)
     instrumented = b'diag_admit' in inputs['module'].read_bytes()
-    gate = script(names, instrumented, a.unpinned)
+    gate = script(names, instrumented, a.unpinned, a.module_args)
     (stage/'gate.sh').write_text(gate)
     run = subprocess.run([os.environ.get('PYTHON', 'python3'),
         str(HERE/'run-staged.py'), '--qemu', str(a.qemu), '--images', str(a.images),
@@ -530,7 +544,7 @@ def main():
     checks['inputs_unchanged'] = hashes == {
         k: hashlib.sha256(v.read_bytes()).hexdigest() for k, v in inputs.items()}
     result = {'schema': 1, 'status': 'PASS' if all(checks.values()) else 'FAIL',
-              'checks': checks, 'instrumented': instrumented, 'unpinned': a.unpinned,
+              'checks': checks, 'instrumented': instrumented, 'unpinned': a.unpinned, 'module_args': a.module_args,
               'reports': reports, 'pins_at_rmmod': ends,
               'runs': {f'{n}:{m}': {k: (sorted(v) if isinstance(v, set) else v) for k, v in r.items()}
                        for (n, m), r in runs.items()}, 'sha256': hashes,

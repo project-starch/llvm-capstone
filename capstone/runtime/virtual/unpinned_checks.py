@@ -19,9 +19,9 @@ def attach(log, runs, hooks=False):
         if event:
             current['raw_events'].append(dict(arena=int(event[1], 16), address=int(event[2], 16),
                 cause=int(event[3]), pc=int(event[4], 16), route=event[5], number=int(event[6])))
-        window = re.search(r'unpinned window arena 0x([0-9a-f]+) address 0x([0-9a-f]+) pages (\d+)', line)
+        window = re.search(r'unpinned window arena 0x([0-9a-f]+) address 0x([0-9a-f]+) pages (\d+) limit (\d+)', line)
         if window:
-            current['raw_windows'].append((int(window[1], 16), int(window[2], 16), int(window[3])))
+            current['raw_windows'].append((int(window[1], 16), int(window[2], 16), int(window[3]), int(window[4])))
         retire = re.search(r'unpinned retire arena 0x([0-9a-f]+) events=(\d+) resolves=(\d+) touch=(\d+) ahead=(\d+)', line)
         if retire:
             current['raw_retire'][int(retire[1], 16)] = dict(zip(
@@ -52,11 +52,24 @@ def region_counts(run):
     end = start + run.get('span', next(size for base, size in run['arenas'] if base == arena))
     events = [e for e in run['raw_events'] if e['arena'] == arena and start <= e['address'] < end]
     pages = {e['address'] // 4096 for e in events}
-    for base, address, count in run['raw_windows']:
+    for base, address, count, _ in run['raw_windows']:
         if base == arena:
             pages.update(p // 4096 for p in range(address, address + 4096 * count, 4096)
                          if start <= p < end)
     return len(pages), len(events)
+
+
+def windows_stay_below(run, bound):
+    """Every window the region's arena opened from an address up to `bound` (the window of the last page before it included) also PLANNED
+    (limit, before any Linux refusal) to end at or below it, and at least one such window exists.
+
+    The bound is a VMA end. Beside a read-only VMA a missing clip is hidden by Linux itself (the
+    write fault on the neighbour is refused, so the window resolves 0 pages either way); the
+    planned limit is what the missing clip changes, and this reads it.
+    """
+    arena = region_arena(run)
+    mine = [(a, n, lim) for base, a, n, lim in run.get('raw_windows', []) if base == arena and a <= bound]
+    return bool(mine) and all(a + lim * 4096 <= bound for a, n, lim in mine)
 
 
 def counter_counts(run):

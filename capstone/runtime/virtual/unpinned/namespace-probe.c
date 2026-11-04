@@ -19,12 +19,12 @@ static long probe_ioctl(struct file *f, unsigned int op, unsigned long arg)
     int error = -ENOMEM;
     if ((op != ONQ_NS_SEED && op != ONQ_NS_SAMPLE && op != ONQ_NS_CLEAR) ||
         copy_from_user(&s, (void __user *)arg, sizeof(s)) ||
-        (s.address & (PAGE_SIZE - 1))) return -EINVAL;
+        (s.address & (PAGE_SIZE - 1)) || (s.offset & 15) || s.offset >= PAGE_SIZE) return -EINVAL;
     if (pin_user_pages_fast(s.address, 1, FOLL_WRITE, &page) != 1) return -EFAULT;
     table = alloc_page(GFP_KERNEL | __GFP_ZERO);
     copy = alloc_page(GFP_KERNEL | __GFP_ZERO);
     if (!table || !copy) goto out;
-    data = page_address(page);
+    data = page_address(page) + s.offset;
     s.frame = page_to_phys(page);
     if (op == ONQ_NS_SEED) {
         unsigned long *header = page_address(table);

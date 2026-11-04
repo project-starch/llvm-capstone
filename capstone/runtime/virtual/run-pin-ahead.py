@@ -232,6 +232,10 @@ def evaluate(log, completed, instrumented, unpinned=False):
                 checks.pop(f'w{w}_{mode}_region', None)
                 checks[f'w{w}_{mode}_resolved_region'] = bool(r and r['exit'] == 0 and r['ok'] and
                     counts == expect(w)[:2] and unpinned_checks.accounted(r))
+                if mode in ('vma', 'vmax'):
+                    # pages 8.. are another VMA: no window planned from the first one may reach it
+                    checks[f'w{w}_{mode}_window_in_vma'] = bool(r and r['region'] is not None and
+                        unpinned_checks.windows_stay_below(r, r['region'] + 8 * 4096))
                 if mode in EXPECT:
                     checks.pop(f'w{w}_{mode}')
                     checks[f'w{w}_{mode}_unpinned_accounting'] = bool(r and
