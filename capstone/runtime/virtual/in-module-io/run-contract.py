@@ -60,12 +60,24 @@ try:
     r = vm('module', 'exec', '--', 'sh', '-c', 'rmmod capstone_vm && insmod /mnt/control/module ' + params)
     if r.returncode:
         raise RuntimeError('module reload failed')
-    for case in ('functional', 'signal', 'restart', 'heap-libc', 'stale-libc'):
+    def inline_served():
+        q = vm('served', 'exec', '--', 'sh', '-c',
+               'cat /sys/module/capstone_vm/parameters/inline_served 2>/dev/null || echo -1')
+        return int(q.stdout.strip() or -1)
+
+    for case in ('functional', 'signal', 'restart', 'sigpipe', 'partial', 'heap-libc', 'stale-libc'):
+        before = inline_served() if 'libc' in case else -1
         r = vm(case, 'run', '--cwd', '/tmp', '--', '/tmp/iov1.dom', case)
+        after = inline_served() if 'libc' in case else -1
         check(case, r, 139 if 'libc' in case else 0, 'cause=25' if 'libc' in case else 'PASS')
+        if before >= 0 and after - before < 2:
+            rows[-1]['passed'] = False
+            print(f'{case}: inline_served delta {after - before} < 2 FAIL', flush=True)
     for case in ('span', 'outside', 'text', 'retired') + (() if a.test_hooks else ('forged',)):
         r = vm(case, 'exec', '--', '/tmp/iov1-observe', '/tmp/iov1-launcher', '/tmp/iov1.dom', case)
         check(case, r, 0, 'pipe_bytes=256 PASS')
+    r = vm('remap-kill', 'exec', '--', '/tmp/iov1-observe', '/tmp/iov1-launcher', '/tmp/iov1.dom', 'remap-kill')
+    check('remap-kill', r, 0, 'pin_delta=0 PASS')
     if a.test_hooks:
         for hold in (1, 0):
             r = vm(f'hold{hold}', 'exec', '--', 'sh', '-c',

@@ -13,17 +13,27 @@
 #include <stdarg.h>
 #include <stdatomic.h>
 
-static atomic_int waiting, fed, owned, served, released;
+static atomic_int waiting, fed, owned, served, released, acq_eintr, rel_eintr;
 int contract_ioctl(int fd, unsigned long op, ...)
 {
     (void)fd;
     va_list ap; va_start(ap, op); void *arg = va_arg(ap, void *); va_end(ap);
     assert(op == CV_IO_HOST);
     if (*(uint32_t *)arg) {
+        if (!atomic_exchange(&acq_eintr, 1)) {
+            assert(!atomic_load(&owned));
+            errno = EINTR;
+            return -1;
+        }
         atomic_store(&waiting, 1);
         while (!atomic_load(&fed)) usleep(1000);
         assert(!atomic_exchange(&owned, 1));
     } else {
+        if (!atomic_exchange(&rel_eintr, 1)) {
+            assert(atomic_load(&owned) && atomic_load(&served));
+            errno = EINTR;
+            return -1;
+        }
         assert(atomic_exchange(&owned, 0) && atomic_load(&served));
         atomic_store(&released, 1);
     }
@@ -68,6 +78,7 @@ int main(void)
     pthread_mutex_unlock(&service_lock);
     assert(!pthread_join(thread, NULL));
     assert(atomic_load(&served) && atomic_load(&released) && !atomic_load(&owned));
-    puts("IOV1 host exclusion served=1 released=1 service_lock_free=1 PASS");
+    assert(atomic_load(&acq_eintr) == 1 && atomic_load(&rel_eintr) == 1);
+    puts("IOV1 host exclusion served=1 released=1 eintr_retried=1,1 service_lock_free=1 PASS");
     return 0;
 }

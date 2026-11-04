@@ -35,8 +35,16 @@ as a service-event cause. After the Linux signal trampoline records the event,
 the launcher publishes DONE/EINTR without SA_RESTART, or RETRY with it.
 Blindly returning to the syscall stub would misclassify an interrupted call as
 not yet submitted and restart it even without SA_RESTART. A completed
-call is marked for reply before any scheduling or signal stop, so it is not
-served twice. `in_module_io=0` restores the launcher path for comparison.
+call that stops before domain re-entry returns `CV_IO_DONE`, so the launcher
+publishes any signal accepted on or after the inner call (such as caught
+`SIGPIPE` or a signal interrupting a partial pipe write) without overwriting
+the completed result or repeating the I/O. Zero-length requests fall back to
+preserve scalar `eventfd` and datagram semantics, and `offset == exchange_bytes`
+is rejected with `EFAULT`. In-flight holds and `io_busy` are released before
+waiting interruptibly on another thread's `c->remapping` window, so a fatal
+signal while a remap is paused between `CV_REMAP_BEGIN` and `CV_REMAP_END`
+unwinds cleanly without resuming the domain during the live remap.
+`in_module_io=0` restores the launcher path for comparison.
 `CV_TEST_HOOKS=1` alone exposes `inline_hold=0` and
 `inline_test_transport=1`: the negative control can submit an arbitrary test
 exchange and deliberately allow it to be retired during a blocked kernel copy.
@@ -47,21 +55,26 @@ Neither switch exists in the production build.
 
 Build `contract.c` with the arm's virtual SDK at `-O2 -lpthread`, adding the
 runtime include directory. Build `observe.c` with the native RISC-V Linux
-compiler at `-O2 -static -Wall -Wextra -Werror`. Both binaries and OUT must be
-below SHARE, a private lane directory. Use a fresh OUT for each run:
+compiler at `-O2 -static -pthread -Wall -Wextra -Werror`. Both binaries and OUT
+must be below SHARE, a private lane directory. Use a fresh OUT for each run:
 
 ```
 python3 run-contract.py --platform PLATFORM --host TREE/capstone/runtime/host \
   --domain contract.dom --observer observe --share SHARE --out OUT
 ```
 
-The driver runs functional file/pipe/positional calls, interrupted reads with
-and without SA_RESTART, revocation during a blocked libc read and before
-submission, and invalid exchange claims. Each revoked-buffer process must
-terminate with cause 25. The native observer keeps a pipe endpoint across each
-refused domain process and verifies that all 256 input bytes remain. The span
-case crosses two adjacent grants; the other claims use an unmapped address,
-image text, a retired grant and an unregistered live transport.
+The driver runs functional file/pipe/positional calls, zero-length `eventfd`
+and datagram checks, registered-transport boundary and malformed-field checks,
+interrupted reads with and without SA_RESTART, caught `SIGPIPE`, interrupted
+positive partial pipe writes, revocation during a blocked libc read and before
+submission, invalid exchange claims, and the `remap-kill` observer case. Each
+revoked-buffer process must terminate with cause 25 after serving the target
+read inline. The native observer keeps a pipe endpoint across each refused
+domain process and verifies that all 256 input bytes remain, and drives
+`remap-kill` against `/dev/capstone-vm` to verify cold exchange admission,
+non-resumption during a live remap, and fatal-signal termination and pin/arena
+cleanup while an unrelated remap is paused between `CV_REMAP_BEGIN` and
+`CV_REMAP_END`.
 
 Run again with a `CV_TEST_HOOKS=1` module and `--test-hooks`. This explicitly
 enables arbitrary test exchanges to exercise the arena checks and holds.
@@ -76,6 +89,7 @@ mismatch prevents a passing result. No profiling window is required here.
 `host-contract.c` includes the real launcher and supplies a blocking module
 stand-in. Link it with the same native Linux/common sources as
 `test-transport-host.sh`, using `-O1 -pthread` and the virtual/runtime include
-paths. It verifies CV_IO_HOST acquisition, serve and release, and that a private
-service can make progress while acquisition waits. Also run
-`test-transport-host.sh` and `test-detach-deadlock.sh` after integration changes.
+paths. It verifies CV_IO_HOST acquisition, serve and release, `EINTR` retry on
+both acquisition and release, and that a private service can make progress
+while acquisition waits. Also run `test-transport-host.sh` and
+`test-detach-deadlock.sh` after integration changes.
