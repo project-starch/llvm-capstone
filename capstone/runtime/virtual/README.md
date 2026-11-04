@@ -589,10 +589,12 @@ an older `load()`.
 
 A runtime or SDK change lands when the nine gates (hosted, runtime, nodes, malloc,
 pin-ahead, fp, pthread, step-hooks, memcached) give the same FAIL sets on the change and on a
-same-time control. `gates/run-arm.sh` runs them for one arm and builds every image they run from
+same-time control. `gates/run-arm.sh --mode on|off OUT` runs them for one arm and builds every image they run from
 that arm's tree: the contract programs and the SDK, and the applications too (SQLite and mruby
-with the arm's SDK, Perl and memcached with the SDK their recipes build from the same tree).
-`gates/compare.py CONTROL ARM` gives the verdict. It splits each gate into the rows it executes
+with the arm's SDK, Perl and memcached with the SDK their recipes build from the same tree). The mode is the
+module's memory mode (`off`: the default, pinned; `on`: the experimental `unpinned=1`, see `unpinned/README.md`);
+every gate runs in it and logs the mode the loaded module reports, and the comparator refuses an arm whose logs
+disagree. `gates/compare.py CONTROL ARM` gives the verdict. It splits each gate into the rows it executes
 and calls a row NOT RUN when its launch exited 125 to 127 (the launcher's own setup failed, the
 image was refused, no program), the launcher refused the image, the image ran without its
 arguments, or the row left no marker; a NOT RUN row on either side makes the verdict
