@@ -7066,6 +7066,91 @@ static bool capabilityAnchorAccessedEveryIteration(
   return Covered.contains(L->getHeader());
 }
 
+// Capstone compares the address bits even when cursor arithmetic clears a tag.
+// An endpoint used only for equality therefore need not be representable. Never
+// use that endpoint as an address or as the seed of the accessed recurrence.
+static bool replaceCapabilityLatchTest(Loop *L, const SCEVAddRecExpr *Index,
+                                       Value *Base, Type *ElementTy,
+                                       const APInt &ByteStep, PHINode *IV,
+                                       ScalarEvolution &SE) {
+  if (!L->getHeader()->getModule()->getTargetTriple().isCapstone64() ||
+      ByteStep.isZero() || L->getExitingBlock() != L->getLoopLatch())
+    return false;
+  auto *Branch = dyn_cast<BranchInst>(L->getLoopLatch()->getTerminator());
+  if (!Branch || !Branch->isConditional())
+    return false;
+  auto *Compare = dyn_cast<ICmpInst>(Branch->getCondition());
+  if (!Compare || !Compare->hasOneUse() ||
+      !Compare->getOperand(0)->getType()->isIntegerTy())
+    return false;
+
+  // Only pay for an endpoint if the test is the last use of an integer
+  // recurrence. Run this after replacing all address groups, so copy loops
+  // with several bases can also discard their shared counter. A live-out or
+  // a value computed from the counter keeps the integer test instead.
+  SmallPtrSet<Instruction *, 16> TestSlice;
+  SmallVector<Instruction *, 16> Worklist{Compare};
+  bool HasCounter = false;
+  while (!Worklist.empty()) {
+    Instruction *I = Worklist.pop_back_val();
+    if (!TestSlice.insert(I).second)
+      continue;
+    if (TestSlice.size() > 32 || !I->getType()->isIntegerTy() ||
+        !isa<PHINode, BinaryOperator, CastInst, ICmpInst, SelectInst>(I))
+      return false;
+    HasCounter |= isa<PHINode>(I) && I->getParent() == L->getHeader();
+    for (Value *Operand : I->operands())
+      if (auto *Op = dyn_cast<Instruction>(Operand))
+        if (L->contains(Op))
+          Worklist.push_back(Op);
+  }
+  if (!HasCounter || any_of(TestSlice, [&](Instruction *I) {
+        return any_of(I->users(), [&](User *U) {
+          auto *Use = dyn_cast<Instruction>(U);
+          return Use != Branch && (!Use || !TestSlice.contains(Use));
+        });
+      }))
+    return false;
+
+  const SCEV *Count = SE.getBackedgeTakenCount(L);
+  if (isa<SCEVCouldNotCompute>(Count) || !SE.isLoopInvariant(Count, L))
+    return false;
+
+  // Addition by S modulo 2^64 repeats after 2^(64 - ctz(S)) steps.
+  // Bound the *backedge* count strictly below that period: the N compared
+  // post-increment cursors (N = Count + 1) then cannot hit the endpoint early.
+  // In particular, scaling an unrestricted i64 counter by eight is not enough
+  // to establish this; its addresses can repeat before its integer exit.
+  unsigned PeriodBits = 64 - ByteStep.countr_zero();
+  const auto *MaxCount =
+      dyn_cast<SCEVConstant>(SE.getConstantMaxBackedgeTakenCount(L));
+  if (!MaxCount || MaxCount->getAPInt().getActiveBits() > PeriodBits)
+    return false;
+
+  Type *IndexTy = Index->getType();
+  const SCEV *Iterations = SE.getAddExpr(
+      SE.getTruncateOrZeroExtend(Count, IndexTy), SE.getOne(IndexTy));
+  const SCEV *EndIndex = Index->evaluateAtIteration(Iterations, SE);
+  BasicBlock *Preheader = L->getLoopPreheader();
+  SCEVExpander Expander(SE, Preheader->getDataLayout(), "lsr.cap.exit");
+  if (!Expander.isSafeToExpandAt(EndIndex, Preheader->getTerminator()))
+    return false;
+  Value *Offset = Expander.expandCodeFor(EndIndex, IndexTy,
+                                        Preheader->getTerminator());
+  IRBuilder<> StartBuilder(Preheader->getTerminator());
+  Value *End = StartBuilder.CreateGEP(ElementTy, Base, Offset, "lsr.cap.end");
+  IRBuilder<> Builder(Branch);
+  Value *Next = IV->getIncomingValueForBlock(L->getLoopLatch());
+  Value *Done = Builder.CreateICmp(
+      Branch->getSuccessor(0) == L->getHeader() ? ICmpInst::ICMP_NE
+                                              : ICmpInst::ICMP_EQ,
+      Next, End, "lsr.cap.done");
+  Branch->setCondition(Done);
+  SE.forgetValue(Compare);
+  RecursivelyDeleteTriviallyDeadInstructions(Compare);
+  return true;
+}
+
 // Generic LSR may rebase pointers onto unaccessed cursors. Instead, recognize
 // affine integer indices after it runs and carry a cursor that the original
 // program accesses on every iteration. Start at the iteration-zero anchor,
@@ -7092,6 +7177,14 @@ static bool reduceCapabilityIndexGroups(Loop *L, ScalarEvolution &SE,
 
   bool Changed = false;
   DenseMap<const SCEV *, PHINode *> ByteIVs;
+  struct CursorExitCandidate {
+    const SCEVAddRecExpr *Index;
+    Value *Base;
+    Type *ElementTy;
+    APInt ByteStep;
+    PHINode *IV;
+  };
+  SmallVector<CursorExitCandidate, 4> ExitCandidates;
   for (WeakVH &Candidate : Candidates) {
     auto *Anchor = dyn_cast_or_null<GetElementPtrInst>(Candidate);
     if (!Anchor)
@@ -7161,9 +7254,9 @@ static bool reduceCapabilityIndexGroups(Loop *L, ScalarEvolution &SE,
       }
       IV = ByteIV;
     } else {
-      // Every consumed cursor equals an original inbounds accessed anchor,
-      // including the start. The final step may be refused, but has no use
-      // outside this PHI and is never used on the exiting edge.
+      // Every accessed cursor equals an original inbounds anchor, including
+      // the start. The final step may be refused; only the PHI and an optional
+      // address equality test may consume it, never an access or live-out.
       Value *First = Index->getStart()->isZero()
                          ? Base
                          : StartBuilder.CreateGEP(ElementTy, Base, Start,
@@ -7176,6 +7269,7 @@ static bool reduceCapabilityIndexGroups(Loop *L, ScalarEvolution &SE,
                                      ConstantInt::get(IndexTy, ByteStep),
                                      "lsr.cap.next");
       IV->addIncoming(Next, Latch);
+      ExitCandidates.push_back({Index, Base, ElementTy, ByteStep, IV});
     }
     for (auto [GEP, Offset] : Uses) {
       Value *Residual = Expander.expandCodeFor(Offset, IndexTy, GEP);
@@ -7192,13 +7286,25 @@ static bool reduceCapabilityIndexGroups(Loop *L, ScalarEvolution &SE,
                                   : Builder.CreateGEP(ElementTy, IV, Residual);
       }
       SE.forgetValue(GEP);
+      Value *OldIndex = GEP->getOperand(1);
       GEP->replaceAllUsesWith(Address);
       GEP->eraseFromParent();
+      if (auto *I = dyn_cast<Instruction>(OldIndex))
+        RecursivelyDeleteTriviallyDeadInstructions(I);
     }
     Changed = true;
   }
-  if (Changed)
+  if (Changed) {
+    // Drop dead index expressions before checking whether the exit counter
+    // can disappear. The new capability IVs are live through their accesses.
+    DeleteDeadPHIs(Header);
+    for (const CursorExitCandidate &C : ExitCandidates)
+      if (replaceCapabilityLatchTest(L, C.Index, C.Base, C.ElementTy, C.ByteStep,
+                                     C.IV, SE))
+        break;
+    DeleteDeadPHIs(Header);
     SE.forgetLoop(L);
+  }
   return Changed;
 }
 

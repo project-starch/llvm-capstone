@@ -80,6 +80,22 @@ Residual neighbor GEPs stay at their original instruction sites. In
 particular, the transformation retains a narrowed base produced by `shrink`;
 it never substitutes an earlier, wider base.
 
+On Capstone64, a single latch exit may compare the post-increment cursor with
+a separately formed endpoint instead of retaining an integer exit counter.
+The endpoint is a non-inbounds GEP from the original base, used only for address
+equality. It never seeds the accessed recurrence or feeds a memory operation.
+The final increment and endpoint may lose their tags: comparisons still use
+their integer address bits. The accessed-anchor proof remains required.
+
+ScalarEvolution must provide an exact loop-invariant backedge count and a
+constant maximum below the address recurrence's period. For a nonzero byte
+step S, that period is `2^(64 - ctz(S))`; bounding the backedge count strictly
+below it prevents an earlier address from comparing equal to the endpoint.
+An unrestricted 64-bit counter scaled by eight does not establish this bound.
+The integer recurrence's remaining uses must belong exclusively to the exit
+test, so computing the endpoint can remove that recurrence. Early exits,
+unknown counts and counters with other uses retain their integer tests.
+
 ## Selectable integer fallback
 
 `-mllvm -lsr-capability-byte-iv` selects a shared integer byte counter instead
@@ -107,6 +123,7 @@ The focused tests are:
 - `llvm/test/Transforms/LoopStrengthReduce/Capstone/capability-pointer-iv.ll`
 - `llvm/test/Transforms/LoopStrengthReduce/Capstone/cursor-boundaries.ll`
 - `llvm/test/Transforms/LoopStrengthReduce/Capstone/accessed-affine-cursor.ll`
+- `llvm/test/Transforms/LoopStrengthReduce/Capstone/cursor-exit.ll`
 - `llvm/test/Transforms/InstCombine/capstone-gep-cursors.ll`
 - `llvm/test/Transforms/LICM/capstone-gep-reassociate.ll`
 - `llvm/test/Transforms/IndVarSimplify/capstone-exit-cursor.ll`
