@@ -134,3 +134,29 @@ The lead ruled that optimisation ranks above the paper's train. Board 2's x264 t
 **Reference boards.** S2 (C.5a / Spatial ObjB) is now board 2 against board 2, the same board. S3 (C.5a / bs3 Full) is board 2 against board 1's 3 Nov run.
 
 Dry run B2-ok (40 image runs, all on board 2; bookings and SPEC chain on board 2): perf/c5a-b2/dryrun.
+
+## Addendum 5 (4 Nov 17:50, after the hpm kit ran and before its grade and the SPEC gate): SPEC is not blocked by the hpm kit's one-miss FINDING
+
+**Board 2 so far** (`c5a-b2.sh` relaunched 16:57):
+- The slot kit on bitstream 3 graded AS EXPECTED, with the same cycles as board 1.
+- C.5a was flashed and read back at 17:34.
+- **R-67 graded FIXED.**
+
+**The hpm kit.** The rtl lane graded it with 5b6fb6a4ec9b against run-b1-bs3 and read FINDING.
+- **What fails.** l1d_miss, an exact field, reads 1 where simulation says 0 on hpm-5, 1, 2, 3 and 4. On hpm-7 it reads 257 against 256.
+- **Everything else matches.** l1d_acc equals the simulation. Bitstream 3 and ObjBounds read the predicted value, so the extra miss is new on C.5a (N = 1).
+- **The predicted effect is there.** The lifetime query's stall reads 509 / 254 (ObjBounds 511 / 256, bitstream 3 1,530 / 1,530).
+- **So the session skips SPEC.** Under Part 1's rule, hpm must read rc 0, and this reading will make c5a-b2.sh skip SPEC.
+
+**The amendment, written before c5a-b2.sh grades hpm:**
+- **Why it is not a blocker.** One extra L1D miss per run is a counter discrepancy, not a correctness or cost failure. The SPEC gate exists to keep SPEC off a C.5a that misbehaves, and SPEC's own S1 (control, outputs, instret) guards correctness.
+- **The follow-up runner.** `c5a-spec-b2.sh` waits for c5a-b2.sh to end and runs SPEC on C.5a only if all of these hold:
+  - R-67 read FIXED;
+  - the ObjBounds kit graded rc 0;
+  - the hpm grade reads neither WRONG BITSTREAM nor NO DATA;
+  - no image hit a HARD STOP;
+  - c5a-b2.sh did not run SPEC itself.
+- **What it does.** It re-flashes C.5a (sealed sha, read back), runs the same stage list into out-c5a-b2, grades S1-S3 unchanged, and flashes bitstream 3 back.
+- **The FINDING stays a FINDING.** A second C.5a kit session on board 1 later is to separate the bitstream from this session's board state.
+
+Dry runs CS-ok, CS-noR67, CS-hard, CS-ok2, CS-objbfail and CS-ranspec are in perf/c5a-b2/dryrun.
