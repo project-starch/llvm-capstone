@@ -86,3 +86,31 @@ Spatial arm, run commands, kit-faq-on against the census-q34 twin. In every row:
 | mcf | 386,606 → 26,699 (14.5x) | 393,974 → 34,175 | 0.99987 |
 
 **F4 is tightened before the ON arm.** xz and mcf, like lbm, now take at least 10x fewer faults than their board baselines (xz 1,694,529; mcf 386,606). The grader's set `TEN` gains both stages. The other three still need only to take no more faults than their baselines.
+
+## Addendum 4 (4 Nov 15:50, before any fault-ahead boot): moved to board 1, bitstream 3
+
+**Board 2 was lost to this run.** Board 2's Spatial chain stopped at the sentinel at 15:21 as planned. That chain ran inside `spatial-b2.sh`, and the stop woke its after-chain steps:
+- it reflashed bitstream 3 (15:21-15:24, resident read back);
+- it started `after-train.sh 2`, which runs the ObjLife train stages and then Plain.
+
+`fa-b2.sh` was stopped by hand while it was still waiting for a booking. It made no board call. The running x264 train Full stage is not interrupted.
+
+**The new plan.** The same test runs on board 1, bitstream 3, after the compiler evaluation's mcf pair, and before the C.5a session.
+- **Images.** The 3 Nov images and stages:
+  - both arms of `stages/538.imagick_r-test`, `544.nab_r-test` and `519.lbm_r-test`;
+  - Full in `stages-board/502.gcc_r`, `557.xz_r` and `505.mcf_r-test-capstone-lifetimes`.
+- **Baselines.** spec/board/out, board 1, bitstream 3.
+- **Kits.** bkit18-faoff-b3-b1 and bkit18-fa-b3-b1: bkit12-perf-b3-b1 with the module 6e854c46c654c843 and, for ON, the params file.
+- **Grader.** `fa-grade-b1.py`, with every arm of each stage. Its controls:
+  - the baselines given as ON read rc 1;
+  - a mock (lbm faults /60, outside −500 s) reads rc 0;
+  - no data reads rc 2;
+  - a missing baseline reads NO BASELINE.
+- **Runner.** `fa-b1.sh`. It launches the C.5a runner when it ends. Dry run: DRYRUN.md, board 1 section.
+
+**Predictions.** F1-F6 are unchanged, with F4's tenfold drop on lbm, xz and mcf (Addenda 1 and 3).
+- The OFF gate needs both imagick arms to hold F1-F3.
+- The baseline faults are the same as board 2's: lbm 104,719, xz 1,694,529, mcf 386,606, imagick 815, gcc 1,746, nab 447.
+- Board 1's outside times: lbm 631.7 / 630.6 s, xz 6,485 s, mcf 3,713 s.
+
+The Spatial queue that board 2 had left — the mcf compiler-evaluation pair in Spatial, and the Spatial train stages — is not run. It needs an ObjBounds board and will be re-queued.

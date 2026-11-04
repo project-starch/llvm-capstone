@@ -97,3 +97,42 @@ GRADE rc=0
 restarting board 2's chain on 2 lines of $CAPSTONE_WORK/perf/fa/dryrun/S1-slot/rest
 DONE off 0 on 0; chain pid N
 ```
+
+## Board 1 (fa-b1.sh, 15:50)
+### A-b1ok
+```
+START pid N
+preconditions ok; waiting for board 1's chain to stop at the sentinel
+chain stopped at the sentinel
+OFF arm chain rc=0
+OFF arm grade: off 538.imagick_r-test F1 holds | faults 815 vs 815 F2 holds | real 33.9 vs 33.9 s F3 holds
+off 538.imagick_r-test F1 holds | faults 815 vs 815 F2 holds | real 33.5 vs 33.5 s F3 holds
+ON arm chain rc=0
+GRADE rc=0
+launching the C.5a session (perf/c5a-first/c5a-b1.sh)
+DONE off 0 on 0
+calls: 3
+```
+### B-b1offfail
+```
+START pid N
+preconditions ok; waiting for board 1's chain to stop at the sentinel
+chain stopped at the sentinel
+OFF arm chain rc=0
+OFF arm grade: off 538.imagick_r-test PENDING
+off 538.imagick_r-test PENDING
+OFF arm not clean (control, rc, outputs, faults or time differ from the baseline): the ON arm is not run
+GRADE rc=2
+launching the C.5a session (perf/c5a-first/c5a-b1.sh)
+DONE off 0 on skipped
+calls: 2
+```
+### C-b1notsent
+```
+START pid N
+preconditions ok; waiting for board 1's chain to stop at the sentinel
+STOP: board 1's chain ended, but not at the sentinel
+x
+1 CB STOP after /x/mcf-devmk
+calls: 0
+```

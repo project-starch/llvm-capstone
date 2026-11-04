@@ -111,3 +111,9 @@ The rtl lane's slot-bare kit is added: llvm-capstone land/rtl-slot-kit e1a835aa4
 - **Why.** Its per-op costs on silicon (ldc, stc, the pair, sd+ld) are what the DYN-unit work chooses by. Simulation on C.5a: pair 8.42 cycles; silicon saves 23-36 per removed pair.
 
 The runner was stopped by hand before any board call and relaunched with this step. Its dry run (S1 success, S2 R-67 not FIXED, S3 HARD STOP in the slot kit) is in DRYRUN.md.
+
+## Addendum 2 (4 Nov 15:50): the C.5a session waits for the fault-ahead run on board 1
+
+The fault-ahead run moved to board 1 (fault-ahead PREREG Addendum 4) and ranks above C.5a. `c5a-b1.sh` was stopped by hand while still waiting; it had made no board call.
+- `fa-b1.sh` launches it when the fault-ahead run ends, about 9 h after the mcf pair.
+- Its sentinel, its order and its predictions are unchanged. It finds the chain's pid gone and the sentinel stop in the chain log, and proceeds.
