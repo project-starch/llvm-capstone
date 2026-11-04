@@ -22,7 +22,8 @@ duplicates, misalignment, out-of-grant spans and unknown versions fail closed.
 Undefined weak symbols produce NULL before any rebasing or addend arithmetic.
 Undefined strong and unsized symbols are unsupported. Bounds must be exactly
 representable, and addends must retain the tag under the R-60 cursor window.
-This draft supports only low Sv39 userspace addresses.
+This draft supports only low Sv39 userspace addresses: each complete source
+and destination grant must lie below `2^38`, not just the relocation cursor.
 
 `touch(namespace, page, event, cause, classify=...)` accepts a validated data
 page fault. It uses the fault backend's classifier: tag, lifetime, bounds and
@@ -50,5 +51,5 @@ identify the consumed snapshot; the peer implementation is not vendored here.
 
 Each `--mutant` mode deliberately removes one protection. The ordinary test
 must pass, and writable-table, weak-rebase, cursor-window and destination-span
-and unlocked-publication must each exit nonzero. These controls qualify this reference contract only;
+and unlocked-publication and address-policy must each exit nonzero. These controls qualify this reference contract only;
 they do not qualify a compiler or runtime implementation.

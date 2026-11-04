@@ -9,6 +9,7 @@ VERSION = 1
 PAGE = 4096
 CAP_BYTES = 16
 U64 = 1 << 64
+USER_END = 1 << 38
 
 
 class Refused(ValueError):
@@ -58,6 +59,10 @@ def span(base, size):
             0 <= base < U64 and 0 < size <= U64 - base)
 
 
+def user_span(base, size):
+    return span(base, size) and base + size <= USER_END
+
+
 def representable(base, size):
     granule = 1 if size < PAGE else 1 << (size.bit_length() - 10)
     return base % granule == 0 and size % granule == 0
@@ -83,12 +88,15 @@ class Image:
                  admit, guard, mutant=None):
         self._mutant = mutant
         require(mutant in (None, 'writable-table', 'weak-rebase', 'cursor-window',
-                           'destination-span', 'unlocked-publication'), 'unsupported mutant')
+                           'destination-span', 'unlocked-publication',
+                           'address-policy'), 'unsupported mutant')
         require(type(version) is int and version == VERSION, 'unsupported version')
         require(not metadata_writable or mutant == 'writable-table', 'writable metadata')
         require(span(destination.base, destination.size) and
                 destination.base % PAGE == 0 and destination.size % PAGE == 0 and
                 'w' in destination.rights, 'destination grant')
+        require(mutant == 'address-policy' or
+                user_span(destination.base, destination.size), 'unsupported destination address policy')
         self._destination = destination
         self._symbols = tuple(symbols)
         self._records = tuple(records)
@@ -123,6 +131,8 @@ class Image:
         g = s.grant
         require(g.namespace == self._destination.namespace and span(g.base, g.size),
                 'source namespace or span')
+        require(self._mutant == 'address-policy' or user_span(g.base, g.size),
+                'unsupported source address policy')
         require(type(s.offset) is int and type(s.size) is int and
                 s.offset >= 0 and s.size > 0 and s.offset + s.size <= g.size,
                 'symbol outside grant or unsupported unsized symbol')
@@ -133,7 +143,7 @@ class Image:
         require(self._mutant == 'cursor-window' or in_window(base, s.size, cursor),
                 'cursor outside representable window')
         # This first draft supports only low Sv39 userspace addresses.
-        require(cursor < 1 << 38, 'unsupported address policy')
+        require(cursor < USER_END, 'unsupported address policy')
         return Capability(g, base, s.size, cursor)
 
     def touch(self, namespace, page, *, event, cause, classify):

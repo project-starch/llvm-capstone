@@ -7,7 +7,7 @@ from reference import Capability, Grant, Image, Refused, Relocation, Symbol
 
 p = argparse.ArgumentParser()
 p.add_argument('--mutant', choices=('writable-table', 'weak-rebase', 'cursor-window',
-                                  'destination-span', 'unlocked-publication'))
+                                  'destination-span', 'unlocked-publication', 'address-policy'))
 p.add_argument('--fault-peer', help='executable compiled against the fault lane header')
 a = p.parse_args()
 checks = 0
@@ -78,6 +78,14 @@ symbols[:] = [Symbol(source, 16, 16), Symbol(None, weak=True)]
 records[:] = [Relocation(0, 0), Relocation(4096, 1)]
 refused(lambda: image(version=2))
 refused(lambda: image(metadata_writable=True))
+refused(lambda: image(destination=Grant(7, 4, 1, 1 << 38, 8192, 'rw')))
+refused(lambda: image(destination=Grant(7, 4, 1, (1 << 38) - 4096, 8192, 'rw')))
+refused(lambda: image(ss=[Symbol(Grant(7, 5, 1, (1 << 38) - 4096, 8192, 'r'), 0, 16),
+                         symbols[1]]))
+boundary = Grant(7, 6, 1, (1 << 38) - 4096, 4096, 'r')
+live.add(boundary)
+check(touch(image(ss=[Symbol(boundary, 0, 16), symbols[1]])) == 1)
+live.remove(boundary)
 for rs in ([Relocation(0, 0), Relocation(0, 0)], [Relocation(4096, 0), Relocation(0, 0)],
            [Relocation(-16, 0)], [Relocation(1, 0)], [Relocation(8192, 0)],
            [Relocation(0, 2)], [Relocation(0, 0, 1 << 63)]):
