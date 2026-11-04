@@ -74,9 +74,9 @@ original low word, retaining bytes while clearing the storage tag under rule 1.
 This avoids scalar-load projection. The global context lock excludes a second
 active namespace in the same mm.
 
-These paths still require qualification; the accompanying lane report is the
-source of measured results and unresolved failures. No result is inferred from
-successful compilation.
+These paths still require qualification: "Tests and limits" below lists what each gate and
+control establishes, and what is not covered. No result is inferred from successful
+compilation.
 
 ## Tests and limits
 
@@ -117,10 +117,15 @@ What a gate arm runs, and in which mode:
   pin-ahead, fp, pthread, step-hooks, memcached) with `--unpinned` for `on` in EVERY runner. Each
   runner loads the module itself, echoes the mode the loaded module reports after each insmod
   (`<GATE>_MEMORY_MODE:Y|N|A`; `A` is a module without the parameter, a pinned-only build) and carries a `memory_mode_verified` check. `compare.py` refuses to compare an
-  output with no mode file, a gate with no mode line, or a line that is not the requested mode, and
-  `--control-mode` / `--arm-mode` pin the pair (an ON arm is compared with an OFF control).
+  output with no mode file, a gate with no mode line, fewer or more lines than module loads (`MODE_LOADS`),
+  a line that is not the requested mode, a `memory_mode_verified` that failed or is absent (whether or not
+  both sides fail alike), or a SUMMARY.txt carrying `MODE_CHECK_FAILED` / `OPTIONAL_GATE_FAILED`.
+  `--control-mode` / `--arm-mode` pin the pair (an ON arm is compared with an OFF control). The nine
+  ordinary gates may end non-zero (their FAIL sets are compared); the optional ones may not.
 - Optional gates for `on`: `unpinned-mm` (the isolated swap-hook and namespace fixtures, needs
-  `UNPINNED_PROBES`) and `unpinned-mutants` (broken modules, below). The arm also checks that the
+  `UNPINNED_PROBES`) and `unpinned-mutants` (broken modules, below). When selected they must succeed (otherwise the arm writes
+  `OPTIONAL_GATE_FAILED`, exits non-zero and `compare.py` refuses the output) and their own mode witnesses
+  are checked (the seven `MM_ARM` lines; every mutant run's memory mode). The arm also checks that the
   production module carries none of the test-hook strings.
 - ON has its own resolution oracles, because the pinned page counters read zero by construction. They
   read what Linux says: the kernel's FOLL_PIN counters (step-hooks and pin-ahead require them not to
@@ -133,8 +138,11 @@ Negative controls are broken modules, not edited transcripts. A CV_TEST_HOOKS mo
 that each remove one guard (`test_skip_vma_clip`, `test_skip_arena_clip`, `test_skip_stop_check`,
 `test_skip_resident_stop`, `test_skip_namespace_scrub`, `test_skip_scrub_after_pages`,
 `test_skip_scrub_after_granules`). `run-mutants.py` requires a named check to pass on the unbroken module
-and fail on the broken one for the VMA clip, the stop check and the stop at the first resident PTE; the
-arena clip is not isolated by any scenario a gate can build (the VMA clip or a resident guard page bounds
+and fail on the broken one for the VMA clip, the stop check and the stop at the first resident PTE, and only
+when both are complete runs of the selected configurations (completed, expected runs with their exit checks,
+verified mode, the observations the check reads); `test-mutants.py` plants each way a run can be incomplete,
+among them the evaluator's output on an empty transcript. The
+arena clip control is NOT achieved: it is not isolated by any scenario a gate can build (the VMA clip or a resident guard page bounds
 the window at the same page), so `test_skip_arena_clip` exists but no check can see it. `run-mm.py` does the same for the scrub with a fixture that seeds 21
 granules (offsets 0, 16, 2048, 4080) on 10 pages of four mappings. `test-oracles.py` additionally
 corrupts real ON transcripts and requires each corruption to break the named check (it proves the parsers
@@ -175,7 +183,10 @@ availability limit, not a safety one. Only the torture stimulus (`CAPSTONE_VM_TO
    (`fx24_prediction` when the header-only condition is created, `fx24_trigger` when it is not) names the
    failure depends on where the allocator places things: one build and platform gave both outcomes across
    repeated runs of the memcached gate. `gates/compare.py` folds that pair into one placement-dependent
-   entry; the fixture itself still needs fixing.
+   entry only when the case's job, output and fault files show the signature of the failed check (not
+   created: `header-only=0`, the known no-op mark `18e0018`, exit; created: `header-only=1`, then a
+   signal at a cause-24 fault at address 0); any other single failure makes the gate INCOMPLETE. The
+   fixture itself still needs fixing.
 4. Reclaim and swap pressure, page migration and compaction, shared tagged backing (refused), a native fork of
    the launcher, and a whole-system leak bound are untested or fail closed with unmeasured availability cost.
 5. Device-side rule 1 is a model property the OS cannot restore, and its arms are not in this tree.
