@@ -62,7 +62,7 @@ diff --git a/arch/riscv/mm/captag.c b/arch/riscv/mm/captag.c
 new file mode 100644
 --- /dev/null
 +++ b/arch/riscv/mm/captag.c
-@@ -0,0 +1,249 @@
+@@ -0,0 +1,285 @@
 +// SPDX-License-Identifier: GPL-2.0-only
 +/* EXPERIMENT: unpinned capability pages with raw granule transport.
 + * CLDRAW/CSTRAW replace copy_page, including its byte copy: scalar loads may
@@ -79,6 +79,7 @@ new file mode 100644
 +#include <linux/of.h>
 +#include <linux/export.h>
 +#include <linux/cpu.h>
++#include <asm/csr.h>
 +
 +/* Enabled only by a matching opt-in platform declaration. */
 +static DEFINE_STATIC_KEY_FALSE(captag_on);
@@ -116,8 +117,9 @@ new file mode 100644
 +static bool captag_disabled;
 +static unsigned int captag_ids;
 +static bool captag_exact;
-+static unsigned long copies, frees, freed_pages, swap_refused, cleared_pages;
++static unsigned long copies, copy_retries, frees, freed_pages, swap_refused, cleared_pages;
 +module_param(copies, ulong, 0444);
++module_param(copy_retries, ulong, 0444);
 +module_param(frees, ulong, 0444);
 +module_param(freed_pages, ulong, 0444);
 +module_param(swap_refused, ulong, 0444);
@@ -214,13 +216,11 @@ new file mode 100644
 +}
 +EXPORT_SYMBOL(capstone_clear_page);
 +
-+static void captag_copy_raw(void *to, const void *from)
++/* One pass of the raw transport. */
++static void captag_copy_pass(void *to, const void *from)
 +{
-+	unsigned long flags, count = PAGE_SIZE / 16;
++	unsigned long count = PAGE_SIZE / 16;
 +
-+	/* The ordinary integer interrupt frame cannot save opaque t0. No
-+	 * interrupt/preemption may interpose between its raw load and store. */
-+	local_irq_save(flags);
 +	if (static_branch_unlikely(&captag_bulk_on)) {
 +		count /= 8;
 +		asm volatile("1: .set off, 0\n\t.rept 8\n\t"
@@ -232,7 +232,6 @@ new file mode 100644
 +			     "li t0, 0"
 +			     : "+r" (to), "+r" (from), "+r" (count)
 +			     : : "t0", "memory");
-+		local_irq_restore(flags);
 +		return;
 +	}
 +	asm volatile("1: .insn i 0x0b, 4, t0, %1, 0\n\t"
@@ -242,6 +241,32 @@ new file mode 100644
 +		     "li t0, 0"
 +		     : "+r" (to), "+r" (from), "+r" (count)
 +		     : : "t0", "memory");
++}
++
++/* The opaque temporary (t0) survives neither an S-mode interrupt frame nor a
++ * firmware trap: both save integer registers only. Masking S interrupts does
++ * not stop the firmware's machine-timer interrupt. Measured: with it landing
++ * between a raw load and its store the copy loses a tag (irq-window-probe.c).
++ * The tested firmware (OpenSBI 1.3) serves that interrupt by clearing MTIE and
++ * setting STIP, so STIP clear before the pass and set after it means one was
++ * served inside the pass: redo it. The source is unchanged (one hart, no
++ * interrupts), so the redo is exact. STIP set before the pass means MTIE is
++ * already clear and none can arrive; the second pass therefore always ends the
++ * loop. With Sstc there is no firmware timer interrupt and STIP rising inside
++ * the window costs at most one redundant pass. This relies on that firmware
++ * contract; it is no claim about other firmware or silicon. */
++static void captag_copy_raw(void *to, const void *from)
++{
++	unsigned long flags, timer_before;
++
++	local_irq_save(flags);
++	for (;;) {
++		timer_before = csr_read(CSR_IP);
++		captag_copy_pass(to, from);
++		if ((timer_before & IE_TIE) || !(csr_read(CSR_IP) & IE_TIE))
++			break;
++		++copy_retries;
++	}
 +	local_irq_restore(flags);
 +}
 +
@@ -251,7 +276,15 @@ new file mode 100644
 +		copy_page(page_address(to), page_address(from));
 +		return;
 +	}
-+	captag_copy_raw(page_address(to), page_address(from));
++	/* The sticky flag over-approximates "may hold a tag": hardware sets it on
++	 * every capability publication. A clear flag proves the source holds none,
++	 * so an ordinary copy is exact and its stores clear any tag in the
++	 * destination (rule 1). Callers already exclude writers of the source for
++	 * the duration of a copy. Only flagged pages pay for the raw transport. */
++	if (captag_summary(from, false))
++		captag_copy_raw(page_address(to), page_address(from));
++	else
++		copy_page(page_address(to), page_address(from));
 +	++copies;
 +}
 +EXPORT_SYMBOL(copy_highpage);
@@ -284,8 +317,10 @@ new file mode 100644
 +
 +	if (!static_branch_unlikely(&captag_on))
 +		return;
-+	for (i = 0; i < n; ++i)
-+		if (captag_summary(page + i, false)) {
++	for (i = 0; i < n; ++i) {
++		/* Flagged: ask whether a tag is actually live. Scalar overwrites
++		 * leave the flag set, and a verified-empty answer resets it. */
++		if (captag_summary(page + i, false) && captag_summary(page + i, true)) {
 +			if (static_branch_unlikely(&captag_bulk_on))
 +				capstone_clear_page(page_address(page + i));
 +			else
@@ -294,6 +329,7 @@ new file mode 100644
 +			BUG_ON(captag_summary(page + i, true));
 +			++cleared_pages;
 +		}
++	}
 +	++frees;
 +	freed_pages += n;
 +}

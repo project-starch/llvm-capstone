@@ -56,13 +56,15 @@ static void stored_words(struct page *check, const void *src, unsigned long word
     scrub(check, 0);
 }
 
-static int check_copy(struct page *src, struct page *dst, struct page *check, bool mixed)
+enum { ALL_TAGGED, MIXED, NONE_TAGGED };
+
+static int check_copy(struct page *src, struct page *dst, struct page *check, int mode)
 {
     unsigned int i, missing = 0, extra = 0, bad_words = 0;
     unsigned long a_words[2], b_words[2], tagged;
     unsigned char *a = page_address(src), *b = page_address(dst);
     for (i = 0; i < PAGE_SIZE; i += 16) {
-        bool expected = !mixed || (i / 16) % 4 < 2;
+        bool expected = mode == ALL_TAGGED || (mode == MIXED && (i / 16) % 4 < 2);
         raw16(page_address(check), b + i);
         tagged = query(check, true);
         missing += expected && !tagged;
@@ -74,7 +76,8 @@ static int check_copy(struct page *src, struct page *dst, struct page *check, bo
         bad_words += a_words[1] != b_words[1];
     }
     pr_info("BULK_MM %s missing_tags=%u extra_tags=%u bad_words=%u granules=%lu\n",
-            mixed ? "mixed_copy" : "copy", missing, extra, bad_words, PAGE_SIZE / 16);
+            mode == MIXED ? "mixed_copy" : mode == NONE_TAGGED ? "plain_copy" : "copy",
+            missing, extra, bad_words, PAGE_SIZE / 16);
     return missing || extra || bad_words ? -EIO : 0;
 }
 
@@ -85,12 +88,13 @@ static int __init probe_init(void)
     /* Each CSMINT allocates a child and its trusted ancestor. */
     struct page *table = alloc_pages(GFP_KERNEL | __GFP_ZERO, 2);
     struct page *check = alloc_page(GFP_KERNEL | __GFP_ZERO);
+    struct page *plain = alloc_pages(GFP_KERNEL | __GFP_ZERO, 1);
     unsigned long desc[6] __aligned(16), flags, oldroot, id, stale_id, retired;
     unsigned long oldpa, *header, sticky, actual;
     unsigned int i;
     int error = -ENOMEM;
 
-    if (!src || !dst || !table || !check)
+    if (!src || !dst || !table || !check || !plain)
         goto out;
     header = page_address(table);
     header[0] = 1023;
@@ -118,7 +122,7 @@ static int __init probe_init(void)
         raw16(page_address(src) + i, page_address(src) + (i & 16));
     copy_highpage(dst, src);
     copy_user_highpage(dst + 1, src + 1, 0, NULL);
-    if (check_copy(src, dst, check, false) || check_copy(src + 1, dst + 1, check, false))
+    if (check_copy(src, dst, check, ALL_TAGGED) || check_copy(src + 1, dst + 1, check, ALL_TAGGED))
         goto out;
     for (i = 0; i < 2; i++) {
         clear_page(page_address(dst + i));
@@ -163,7 +167,21 @@ static int __init probe_init(void)
         goto out;
     copy_highpage(dst, src);
     copy_user_highpage(dst + 1, src + 1, 0, NULL);
-    if (check_copy(src, dst, check, true) || check_copy(src + 1, dst + 1, check, true))
+    if (check_copy(src, dst, check, MIXED) || check_copy(src + 1, dst + 1, check, MIXED))
+        goto out;
+    /* A source whose flag is clear is copied by ordinary stores. They must
+     * still leave a destination that held tags on every granule tag-free. */
+    scrub(plain, 1);
+    if (query(plain, false) || query(plain + 1, false)) {
+        pr_info("BULK_MM plain source is flagged\n");
+        goto out;
+    }
+    for (i = 0; i < 2 * PAGE_SIZE; i += 16)
+        raw16(page_address(dst) + i, page_address(src));
+    copy_highpage(dst, plain);
+    copy_user_highpage(dst + 1, plain + 1, 0, NULL);
+    if (check_copy(plain, dst, check, NONE_TAGGED) ||
+        check_copy(plain + 1, dst + 1, check, NONE_TAGGED))
         goto out;
     oldpa = page_to_phys(src);
     __free_pages(src, 1);
@@ -183,6 +201,7 @@ out:
     if (src) { scrub(src, 1); __free_pages(src, 1); }
     if (dst) { scrub(dst, 1); __free_pages(dst, 1); }
     if (check) { scrub(check, 0); __free_page(check); }
+    if (plain) { scrub(plain, 1); __free_pages(plain, 1); }
     if (table) __free_pages(table, 2);
     pr_info("BULK_MM %s\n", error ? "FAIL" : "PASS");
     return error;

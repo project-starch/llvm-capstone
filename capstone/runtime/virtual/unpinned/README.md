@@ -48,10 +48,16 @@ properties and the Capstone arm's `module_params` to `unpinned=1`.
 The patched kernel enables tag-aware mm only after discovering the opt-in node.
 It refuses activation with KSM or transparent huge pages configured; byte-only
 page merging is outside this contract.
-`copy_highpage` and `copy_user_highpage` use a raw granule loop, including bytes,
-instead of a scalar copy. Interrupts stay masked while the opaque temporary is
-live. `arch_free_page` queries each physical page's sticky flag, clears flagged
-pages with scalar stores, and verifies acknowledgement before allocator reuse.
+`copy_highpage` and `copy_user_highpage` query the source page's sticky flag. A
+clear flag means the page holds no tag, so an ordinary copy is exact and its
+stores clear any tag in the destination. A set flag selects a raw granule loop,
+including bytes, instead of a scalar copy; only flagged pages pay for it.
+Interrupts stay masked while the opaque temporary is live, and the pass is
+repeated after a firmware timer interrupt (see "What is and is not claimed about
+firmware traps"). `arch_free_page` queries each physical page's sticky flag. For
+a flagged page it asks whether a tag is live (an empty answer resets the flag),
+clears live pages, and verifies a second empty acknowledgement before allocator
+reuse.
 `arch_prepare_to_swap` refuses a folio if any constituent page may contain tags.
 `captag=off` disables these hooks for negative tests; an unpinned module then
 refuses to load. No test page CSR or software PTE tag flag is used.
@@ -83,7 +89,8 @@ It is an interface fixture, not a replacement for kernel qualification.
 Build it against the exact patched kernel. It checks every granule of two
 pages containing alternating live/stale tags through both highpage copy APIs,
 then checks mixed live/stale/scalar/zero cargo with unique cursors against a
-previously fully tagged destination. Representation checks sample both stored
+previously fully tagged destination and a clear-flag source over a fully tagged
+destination. Representation checks sample both stored
 words after invalidating a byte outside the sampled word. It checks zero
 contents and sticky-versus-actual tag state, and requires same-frame
 order-1 kernel reuse without `__GFP_ZERO`. Run each arm through the host gate
@@ -107,14 +114,34 @@ Also remove both the clear and its acknowledgement assertion and use
 tag. The runner disables allocation/free zeroing so these controls cannot be
 masked by generic allocator initialization.
 
+
 This experiment needs actual COW/compaction/fork/reuse torture, unchanged
 runtime gates, matched quick/full census and independent review before landing.
 The sleeping-child torture remains a COW stimulus, not protected fork support.
 Model instruction attempts do not establish hardware latency or bandwidth.
-Local IRQ masking does not establish preservation of opaque temporaries
-across M-mode traps. A firmware/platform proof or a lossless trap ABI remains
-required before claiming complete raw-transport qualification, including for
-the tested firmware.
+
+### What is and is not claimed about firmware traps
+
+Masking S-level interrupts does not stop a firmware-handled interrupt, and a
+firmware trap saves and restores integer registers only, so the opaque
+temporary between a raw load and its store does not survive one. Measured with
+`irq-window-probe.c` on the instruction-exact clock the census platforms use
+(`-icount shift=0`), firmware timer (no Sstc), the pre-redo kernel:
+a deadline placed inside the copy window lost one granule's tag in every
+such iteration that was hit between the load and the store, and the control with
+deadlines outside the window lost none (numbers in the lane report). The raw
+transport inherited from the raw-move model has the same exposure.
+
+The kernel therefore repeats a pass when a firmware timer interrupt was served
+during it. OpenSBI 1.3 serves that interrupt by clearing MTIE and setting STIP,
+so STIP clear before the pass and set after it identifies one; the source is
+unchanged (one hart, no S interrupts, callers exclude writers), so the redo is
+exact. STIP already set before the pass implies MTIE is clear, so none can
+arrive, and the second pass always ends the loop. `copy_retries` counts redos.
+Claimed: this holds on the tested firmware and model. Not claimed: any other
+firmware, any silicon, any other asynchronous machine-level source, or an
+interrupt-deferral guarantee in the ISA (none is added or assumed). A platform
+that cannot give this contract must keep the raw transport off.
 
 ## Ownership and lifetime recycling
 

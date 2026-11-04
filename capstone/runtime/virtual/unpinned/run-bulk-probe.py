@@ -62,6 +62,7 @@ echo VIRTUAL_STAGED_DONE
               'BULK_INSMOD_RC:0' in serial and
               serial.count('BULK_MM copy missing_tags=0 extra_tags=0 bad_words=0 granules=256') >= 2 and
               serial.count('BULK_MM mixed_copy missing_tags=0 extra_tags=0 bad_words=0 granules=256') >= 2 and
+              serial.count('BULK_MM plain_copy missing_tags=0 extra_tags=0 bad_words=0 granules=256') >= 2 and
               'zero page=0 sticky=1 actual_tags=0' in serial and
               'zero page=1 sticky=1 actual_tags=0' in serial and
               'kernel_reuse same_frame=1 actual_tags=0 pages=2' in serial)
