@@ -78,7 +78,7 @@ struct arena {
     unsigned admits, windows, scans, touches, eager, released;
     /* Separate from the pin census: successful raw-mm fault resolutions and
      * launcher writes do not acquire payload pins. Diagnostic only. */
-    unsigned unpinned_resolves, unpinned_touches, unpinned_events;
+    unsigned unpinned_resolves, unpinned_touches, unpinned_events, unpinned_ahead;
     /* Pages are admitted one by one at the domain's first access (resolve). */
     bool lazy;
     /* The grant was LINEAR: the heap's move-only shape, the one CV_REMAP may grow. lazy used
@@ -1323,8 +1323,9 @@ static int retire(struct context *c, struct arena *a, bool destroying)
                 "released=%u swept=%u\n", a->address, a->bytes, a->admits, a->windows, a->scans,
                 a->touches, a->eager, a->released, swept);
     if (unpinned && diag_admit)
-        pr_info("capstone_vm: unpinned retire arena 0x%lx events=%u resolves=%u touch=%u\n",
-                a->address, a->unpinned_events, a->unpinned_resolves, a->unpinned_touches);
+        pr_info("capstone_vm: unpinned retire arena 0x%lx events=%u resolves=%u touch=%u ahead=%u\n",
+                a->address, a->unpinned_events, a->unpinned_resolves, a->unpinned_touches,
+                a->unpinned_ahead);
     --c->stats.arenas;
     rb_erase(&a->node, &c->arenas);
     xa_erase(&c->ids, a->id);
@@ -1672,15 +1673,18 @@ static unsigned long test_short_gup;    /* pin-ahead GUP pins only half of a bat
  * ordinary and injected-stop configurations leave this off and qualify those cuts separately.
  * No page/VMA/backing check is bypassed, and the normal window cap still bounds the work. */
 static bool test_full_window;
+static bool test_skip_namespace_scrub;
 module_param(test_inject, ulong, 0444);
 module_param(test_inject_at, ulong, 0444);
 module_param(test_inject_every, ulong, 0444);
 module_param(test_short_gup, ulong, 0444);
 module_param(test_full_window, bool, 0444);
+module_param(test_skip_namespace_scrub, bool, 0444);
 static u64 test_events, test_injections, test_stops, test_initial_stops, test_violations;
 static u64 test_consumed, test_checks, test_checks_irqs_on, test_entries;
 static u64 test_gup_requests, test_gup_max, test_short_results, test_gup_pending;
 static u64 test_fault_requests, test_fault_deferred, test_fault_pending;
+static u64 test_fault_batches, test_fault_max, test_fault_short;
 static bool test_pending, test_expired, test_in_step;
 /* Faults whose first resolution came from the launcher's CV_RESOLVE: a stop
  * fell between the fault and its resolution in CV_STEP, so it got the full
@@ -1739,18 +1743,21 @@ static void test_report(const char *why)
             "violations=%llu consumed=%llu gup_requests=%llu gup_max=%llu short_results=%llu "
             "gup_pending=%llu checks=%llu checks_irqs_on=%llu entries=%llu "
             "launcher_first=%llu unpinned=%u fault_requests=%llu "
-            "fault_deferred=%llu fault_pending=%llu\n",
+            "fault_deferred=%llu fault_pending=%llu fault_batches=%llu "
+            "fault_max=%llu fault_short=%llu\n",
             why, test_injections, test_stops, test_initial_stops, test_violations,
             test_consumed, test_gup_requests, test_gup_max, test_short_results,
             test_gup_pending, test_checks, test_checks_irqs_on, test_entries,
             test_launcher_first, unpinned, test_fault_requests,
-            test_fault_deferred, test_fault_pending);
+            test_fault_deferred, test_fault_pending, test_fault_batches,
+            test_fault_max, test_fault_short);
 }
 #define TEST_HOOK(at) test_hook(at)
 #define TEST_GUP(pages) test_gup(pages)
 #define TEST_FAULT() test_fault()
 #define TEST_EXPIRED() test_expired
 #define TEST_FULL_WINDOW() test_full_window
+#define TEST_SKIP_NAMESPACE_SCRUB() test_skip_namespace_scrub
 #define TEST_ENTRY() do { test_entry(); ++test_entries; } while (0)
 #define TEST_CHECK() do { ++test_checks; if (!irqs_disabled()) ++test_checks_irqs_on; } while (0)
 #define TEST_STOPPED(initial) do { if (test_pending) { ++test_stops; \
@@ -1764,6 +1771,7 @@ static void test_report(const char *why)
 #define TEST_FAULT() false
 #define TEST_EXPIRED() false
 #define TEST_FULL_WINDOW() false
+#define TEST_SKIP_NAMESPACE_SCRUB() false
 #define TEST_ENTRY() do { } while (0)
 #define TEST_CHECK() do { } while (0)
 #define TEST_STOPPED(initial) do { } while (0)
@@ -2069,19 +2077,86 @@ static bool image_data_vma(const struct arena *a, const struct vm_area_struct *v
 /* Keep successful resolution and counted escape events distinct: a stop
  * after resolution can cause CV_RESOLVE to repeat it without a new escape.
  * Point 1 is the completed demand operation in either memory mode. */
-static int unpinned_resolve(struct context *c, struct arena *a,
-                            unsigned long address, unsigned long vmflags)
+static bool unpinned_resident(struct mm_struct *mm, unsigned long address)
 {
+    unsigned long at, pfn;
+    /* A residency hint only: migration or a later permission fault can
+     * invalidate it. It never replaces demand resolution or retains a PFN. */
+    return next_resident(mm, address, address + PAGE_SIZE, &at, &pfn) == 1;
+}
+
+static int unpinned_resolve(struct context *c, struct cv_thread *t, struct arena *a,
+                            struct vm_area_struct *v, unsigned long address, u64 deadline)
+{
+    struct cv_stream *stream;
+    unsigned index = (address - a->address - a->rx_bytes) / PAGE_SIZE;
+    unsigned long ahead, limit, done = 0;
+    unsigned fault_flags = (v->vm_flags & VM_WRITE) ? FAULT_FLAG_WRITE : 0;
     int rc;
     if (TEST_FAULT()) return -EAGAIN;
-    rc = fixup_user_fault(c->mm, address & PAGE_MASK,
-                         (vmflags & VM_WRITE) ? FAULT_FLAG_WRITE : 0, NULL);
-    if (!rc) {
-        ++unpinned_faults;
-        if (diag_admit) ++a->unpinned_resolves;
-        TEST_HOOK(1);
+    rc = fixup_user_fault(c->mm, address & PAGE_MASK, fault_flags, NULL);
+    if (rc) return rc;
+    ++unpinned_faults;
+    if (diag_admit) ++a->unpinned_resolves;
+    TEST_HOOK(1);
+    /* CV_RESOLVE may repeat a completed demand operation after a stop. It
+     * must not train a second stream or repeat the speculative work. */
+    if (t->sfence_pending) return 0;
+#ifdef CV_TEST_HOOKS
+    if (!test_in_step) ++test_launcher_first;
+#endif
+    ahead = stream_window(t, a, index, &stream);
+    limit = max(ahead, pin_ahead_pages ? pin_ahead_pages - 1 : 0);
+    limit = min_t(unsigned long, limit, a->count - index - 1);
+    address = (address & PAGE_MASK) + PAGE_SIZE;
+    limit = min(limit, (v->vm_end - address) / PAGE_SIZE);
+    /* mmap_read_lock remains held. Every page is inside this same validated
+     * VMA and arena; Linux applies its normal access/COW policy. No payload
+     * reference or pin survives the call. A failed speculative resolution
+     * leaves the remaining pages for demand faults and does not fail the
+     * already completed demand operation. Stop checks bound each batch. */
+    while (done < limit) {
+        unsigned long batch = min_t(unsigned long, limit - done, PIN_AHEAD_BATCH);
+        unsigned long target = batch;
+        if (cv_step_stop(deadline) && !TEST_FULL_WINDOW()) break;
+#ifdef CV_TEST_HOOKS
+        if (test_pending && test_condition()) ++test_fault_pending;
+        ++test_fault_batches;
+        test_fault_max = max_t(u64, test_fault_max, batch);
+        if (test_short_gup && batch > 1) target = batch / 2;
+        if (target != batch) ++test_fault_short;
+#endif
+        for (unsigned long j = 0; j < target; ++j) {
+            if (unpinned_resident(c->mm, address + done * PAGE_SIZE))
+                goto finished;
+            if (fixup_user_fault(c->mm, address + done * PAGE_SIZE, fault_flags, NULL))
+                goto finished;
+            ++done;
+        }
+        if (target != batch) break;
     }
-    return rc;
+finished:
+    if (diag_admit) {
+        a->unpinned_ahead += done;
+        pr_info("capstone_vm: unpinned window arena 0x%lx address 0x%lx pages %lu\n",
+                a->address, address, done);
+    }
+    if (stream) {
+        unsigned long skip_end;
+        stream->next = index + 1 + done;
+        skip_end = min_t(unsigned long, a->count, (unsigned long)stream->next + 64);
+        while (stream->next < skip_end && unpinned_resident(c->mm,
+                a->address + a->rx_bytes + (unsigned long)stream->next * PAGE_SIZE))
+            ++stream->next;
+        if (ahead) {
+            ++fault_ahead_windows;
+            fault_ahead_pages += done;
+            if (diag_admit)
+                pr_info("capstone_vm: unpinned ahead arena 0x%lx page %u want %lu resolved %lu fault 0x%lx\n",
+                        a->address, index, ahead, done, address - PAGE_SIZE);
+        }
+    }
+    return 0;
 }
 
 /* Exactly one diagnostic for each increment of stats.faults. Unlike the
@@ -2158,7 +2233,7 @@ static int resolve(struct context *c, struct cv_thread *t, u64 deadline)
             t->last_fault_cause = cause;
             t->fault_repeat = 0;
         }
-        rc = unpinned_resolve(c, a, address, vmflags);
+        rc = unpinned_resolve(c, t, a, v, address, deadline);
         mmap_read_unlock(c->mm);
         if (rc) CV_RESOLVE_FAIL("unpinned", "fixup_user_fault=%d vm_flags 0x%lx", rc, vmflags);
         return rc;
@@ -2197,7 +2272,7 @@ static int resolve(struct context *c, struct cv_thread *t, u64 deadline)
                 t->last_fault_cause = cause;
                 t->fault_repeat = 0;
             }
-            rc = unpinned_resolve(c, a, address, vmflags);
+            rc = unpinned_resolve(c, t, a, v, address, deadline);
             mmap_read_unlock(c->mm);
             if (rc) CV_RESOLVE_FAIL("unpinned", "fixup_user_fault=%d vm_flags 0x%lx", rc, vmflags);
             return rc;
@@ -2990,7 +3065,7 @@ static int vm_open(struct inode *inode, struct file *f)
             return -EBUSY;
         }
     if (unpinned) {
-        int error = unpinned_scrub_mm(c->mm);
+        int error = TEST_SKIP_NAMESPACE_SCRUB() ? 0 : unpinned_scrub_mm(c->mm);
         if (error) {
             mutex_unlock(&vm_lock);
             mmdrop(c->mm);
