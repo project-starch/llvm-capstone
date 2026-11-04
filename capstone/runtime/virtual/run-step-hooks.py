@@ -101,6 +101,7 @@ def script(names, instrumented):
         params, modes = CONFIGS[name][:2]
         params += '' if name.startswith('adapt') else ' fault_ahead_max=0'
         text += f'''insmod capstone_vm.ko {params} {'diag_admit=1' if instrumented else ''} || exit 1
+echo "HOOK_UNPINNED:{name}:$(cat /sys/module/capstone_vm/parameters/unpinned 2>/dev/null || echo unavailable)"
 for mode in {modes}; do
   echo "HOOK_PINS_BEFORE:{name}:$mode:$(pins)"
   echo "HOOK_AHEAD_BEFORE:{name}:$mode:$(ahead | tr '\\n' ' ')"
@@ -127,12 +128,22 @@ def pins(text):
 # The module's per-arena census: one `retire` line per arena (every arena is retired by the
 # process's exit at the latest) with the pages it admitted by each route and the pages swept.
 RETIRE = re.compile(r'capstone_vm: retire arena 0x([0-9a-f]+)\+0x[0-9a-f]+ admit=(\d+) window=(\d+) '
-                    r'scan=(\d+) touch=(\d+) eager=(\d+) released=(\d+) swept=(\d+)')
+                    r'scan=(\d+) touch=(\d+) eager=(\d+) released=(\d+) swept=(\d+)(?: faulted=(\d+))?')
 ADD_OK = re.compile(r'CAPSTONE_VM_ADD_OK slot=\d+ base=0x([0-9a-f]+) bytes=(\d+) ')
 
 
 def held(c):
     return c['admit'] + c['window'] + c['scan'] + c['touch'] + c['eager'] - c['released']
+
+
+def fault_events(run, c):
+    """The demand fault events one arena's retire line accounts for. A pinning module admits a page
+    at every fault, so admit= is the count. The unpinned mode (HOOK_UNPINNED: Y) pins and admits
+    nothing: its count is the line's faulted=, and a module that does not print it gives None, so
+    the comparisons that need it fail instead of falling back to the process total, which holds the
+    program's own pages (a lookup of the allocator's hashed .bss index that lands on the page of
+    the launch record faults once less than one that does not: -1 step and -1 fault, by placement)."""
+    return c['faulted'] if run.get('unpinned') else c['admit']
 
 
 def region_arena(run):
@@ -151,7 +162,8 @@ def region_counts(run):
     if arena is None or arena not in run['census']:
         return None
     c = run['census'][arena]
-    return c['admit'] + c['window'] + c['scan'] + c['touch'] + c['eager'], c['admit']
+    faults = fault_events(run, c)
+    return None if faults is None else (c['admit'] + c['window'] + c['scan'] + c['touch'] + c['eager'], faults)
 
 
 def counter_counts(run):
@@ -165,17 +177,25 @@ def counter_counts(run):
     arena = region_arena(run)
     pinned = sum(held(c) for base, c in run['census'].items()
                  if base != arena and base in run['after_mark'])
-    faults = sum(c['admit'] for base, c in run['census'].items() if base != arena)
-    return s['pages'] - pinned, s['faults'] - faults
+    events = [fault_events(run, c) for base, c in run['census'].items() if base != arena]
+    if None in events:
+        return None
+    return s['pages'] - pinned, s['faults'] - sum(events)
 
 
 def parse(log):
     runs, reports, ends, current = {}, {}, {}, None
+    unpinned = {}
     for line in log.splitlines():
+        m = re.match(r'HOOK_UNPINNED:(\w+):(\w+)$', line)
+        if m:
+            unpinned[m.group(1)] = m.group(2) == 'Y'
+            continue
         m = re.match(r'HOOK_PINS_BEFORE:(\w+):(\w+):(.*)$', line)
         if m:
             current = (m.group(1), m.group(2))
             runs[current] = {'before': pins(m.group(3)), 'stats': None, 'ok': False,
+                             'unpinned': unpinned.get(m.group(1), False),
                              'region': None, 'arenas': [], 'census': {}, 'after_mark': set(),
                              'marked': False, 'ahead': [], 'linear': {}}
             continue
@@ -212,6 +232,7 @@ def parse(log):
             runs[current]['census'][base] = dict(zip(
                 ('admit', 'window', 'scan', 'touch', 'eager', 'released', 'swept'),
                 (int(m.group(i)) for i in range(2, 9))))
+            runs[current]['census'][base]['faulted'] = int(m.group(9)) if m.group(9) else None
             if runs[current]['marked']:
                 runs[current]['after_mark'].add(base)
             continue
@@ -265,7 +286,8 @@ def evaluate(log, names, instrumented, completed):
                 s and r['marked'] and
                 s['pages'] == sum(held(c) for base, c in r['census'].items() if base in r['after_mark']))
             checks[f'{name}_{mode}_faults_census'] = bool(
-                s and r['census'] and s['faults'] >= sum(c['admit'] for c in r['census'].values()))
+                s and r['census'] and None not in [fault_events(r, c) for c in r['census'].values()] and
+                s['faults'] >= sum(fault_events(r, c) for c in r['census'].values()))
             checks[f'{name}_{mode}_peak'] = bool(s and s['peak'] >= s['pages'])
     # Releases can trail a process's exit (the adapter fd closes as it
     # dies), so the balance is taken after rmmod, when no context is left:

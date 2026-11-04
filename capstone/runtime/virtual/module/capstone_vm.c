@@ -76,6 +76,10 @@ struct arena {
      * touches + eager - released is what the retirement sweeps. Counted, not printed, inside a
      * window: a printk per page there added work before the next batch's deadline check. */
     unsigned admits, windows, scans, touches, eager, released;
+    /* Demand fault events on this arena's pages, the ones CAPSTONE_VM_STATS faults counts (a data
+     * fault, counted once whichever route resolved it), printed with the census. admits cannot
+     * stand for them in the unpinned mode, which pins and so admits nothing. */
+    unsigned faulted;
     /* Pages are admitted one by one at the domain's first access (resolve). */
     bool lazy;
     /* The grant was LINEAR: the heap's move-only shape, the one CV_REMAP may grow. lazy used
@@ -654,6 +658,19 @@ static bool text_fault(struct context *c, unsigned long address)
 {
     struct arena *a = arena_at(c, address);
     return a && address - a->address < a->rx_bytes;
+}
+/* One demand fault event, as CAPSTONE_VM_STATS counts it; under diag_admit the arena holding the
+ * address is charged with it as well (the retire line's faulted=). The step-hooks runner takes the
+ * program's own arenas off the process total with that census, since their faults depend on where
+ * the address-hashed .bss index of the allocator lands; in the unpinned mode admit= is always 0,
+ * so without faulted= the total would be compared as it is. */
+static void count_fault(struct context *c, unsigned long address)
+{
+    ++c->stats.faults;
+    if (diag_admit) {
+        struct arena *a = arena_at(c, address);
+        if (a) ++a->faulted;
+    }
 }
 /* Does [address, address + bytes) overlap an arena other than skip? */
 static bool arena_overlaps(struct context *c, unsigned long address,
@@ -1317,8 +1334,8 @@ static int retire(struct context *c, struct arena *a, bool destroying)
     }
     if (diag_admit)
         pr_info("capstone_vm: retire arena 0x%lx+0x%lx admit=%u window=%u scan=%u touch=%u eager=%u "
-                "released=%u swept=%u\n", a->address, a->bytes, a->admits, a->windows, a->scans,
-                a->touches, a->eager, a->released, swept);
+                "released=%u swept=%u faulted=%u\n", a->address, a->bytes, a->admits, a->windows,
+                a->scans, a->touches, a->eager, a->released, swept, a->faulted);
     --c->stats.arenas;
     rb_erase(&a->node, &c->arenas);
     xa_erase(&c->ids, a->id);
@@ -2788,7 +2805,7 @@ thread_unwind:
             if (resolve(c, t, budget_end))
                 break;
             t->sfence_pending = true;
-            if (!text) ++c->stats.faults;
+            if (!text) count_fault(c, t->frame[5]);
         }
         if (t->event == 5) {
             int error = ensure_nodes(c, CAP_REV_TABLE_RESERVE + 1);
@@ -2810,7 +2827,7 @@ thread_unwind:
         r.args[6] = t->frame[78]; r.args[7] = t->frame[79];
         r.thread = t->id;
         t->terminal = r.kind == 2;
-        if (r.kind == 4 && !resolved && !text_fault(c, r.address)) ++c->stats.faults;
+        if (r.kind == 4 && !resolved && !text_fault(c, r.address)) count_fault(c, r.address);
         rc = copy_to_user((void __user *)arg, &r, sizeof(r)) ? -EFAULT : 0;
         if (rc) t->terminal = true;
     } else if (op == CV_RESOLVE) {
