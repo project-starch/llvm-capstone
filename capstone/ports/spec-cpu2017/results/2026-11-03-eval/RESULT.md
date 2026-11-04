@@ -123,3 +123,11 @@ stall per op. The cost in cycles per LDC/STC op is 3.96 and 4.96. No prediction 
     it. The flag's own effect on gcc is the in-context −8.3 %.
 - **mcf.** The −10.0 % cycles and −9.1 % run time quoted on the deck come from out-hfl/...-lifetimes-dev, the dev step
   only, against board 2's baseline.
+- **RETRACTION: the cost per removed pair.** "23-36 cycles per removed pair" (above, and the gap paragraph) divided the
+  cycle drop by half the instruction drop. That assumes each pair removes two instructions, but devmk replaces each
+  STC/LDC pair with one movc.
+  - Static census of imagick_r, dev → devmk: stc −17,485, ldc −17,524, movc +17,514; mv, sd and ld unchanged within 5.
+  - So the dynamic pair count is about the instruction drop itself, and every per-pair figure halves: imagick
+    (ObjBounds) 11.5, nab (ObjBounds) 13.5, imagick, gcc and xz (bitstream 3) 14-18.
+  - The rtl lane's sim of the compiled shape (land/rtl-dyntrim ffb8b48a9f33) reads 18.9 cycles on bitstream 3 and
+    8.9 on C.5a for pair against movc. There is no unexplained excess of about two thirds.

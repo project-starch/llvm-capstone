@@ -96,7 +96,7 @@ Both boots pass P1 and P5: the control PASSED, specdiff PASS, outputs identical 
 - at the silicon cost of 22.1 cycles per L1I miss (hpm-8, below), the L1I drop is 0.3-1.1 M cycles of a 42-43 M drop;
 - the L1D drop is about 0.1 %.
 
-The movc flag's saving on imagick (about 1.5 M fewer stack-copy pairs, about 27 cycles each on bitstream 3) is therefore core time, mostly issue stalls. It is not instruction fetch. The code-size / L1I hypothesis for the 23-36 cycles per pair is **refuted** on imagick.
+The movc flag's saving on imagick (about 3.07 M fewer stack-copy pairs, each replaced by one movc: about 13.7 cycles each on bitstream 3; an earlier version of this line said 1.5 M and 27, from dividing by two instructions per pair, see the eval RESULT's retraction) is therefore core time, mostly issue stalls. It is not instruction fetch. The code-size / L1I hypothesis for the per-pair saving is **refuted** on imagick; the saving itself is 11.5-18 cycles per pair, not 23-36 (eval RESULT, retraction).
 
 ## hpm-8, the L1I counter's positive control (5 Nov 03:16, board 1, bitstream 3; Addendum 4)
 
