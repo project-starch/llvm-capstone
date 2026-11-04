@@ -42,6 +42,9 @@
 #ifndef CAPSTONE_HEAP_OBJECT_BOUNDS
 #define CAPSTONE_HEAP_OBJECT_BOUNDS 1
 #endif
+#ifndef CAPSTONE_HEAP_COARSE_PAGES
+#define CAPSTONE_HEAP_COARSE_PAGES 0
+#endif
 #if !CAPSTONE_HEAP_OBJECT_BOUNDS && CAPSTONE_HEAP_LIFETIMES
 #error "CAPSTONE_HEAP_OBJECT_BOUNDS=0 requires CAPSTONE_HEAP_LIFETIMES=0: a per-object lifetime is a CDERIVE child, which has bounds of its own"
 #endif
@@ -648,6 +651,13 @@ static void *coarse_take(size_t bytes, size_t stride, unsigned count, unsigned c
     if (bytes < hdr || !stride || count > (bytes - hdr) / stride) return NULL;
     size_t span = capstone_repr_round((hdr + stride * count + 15) & -16UL);
     if (span < 1024 || span > bytes) return NULL;
+#if CAPSTONE_HEAP_COARSE_PAGES
+    /* Merge nearby geometries into one region bin and keep extents on page
+     * boundaries. Each group still owns only its derived extent. A reused
+     * extent keeps its dirty bit even when the new stride/count differ. */
+    span = (span + 4095UL) & -4096UL;
+    if (span > bytes) return NULL;
+#endif
     unsigned b = coarse_bucket(span >> 4);
     struct coarse_region *r;
     for (r = coarse_avail[b]; r && r->span != span; r = r->avail_next) {}

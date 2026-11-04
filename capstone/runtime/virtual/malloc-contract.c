@@ -882,7 +882,7 @@ static int meta_reuse(void)
  * The same source on older heaps exercises dedicated mappings, with that geometry reported. */
 /* The shared heap supplies the strong counter. Older heaps have no regions to unmap. */
 unsigned long __capstone_malloc_coarse_unmapped __attribute__((weak));
-static int coarse_case(const char *mode)
+static int coarse_case(const char *mode, int page_extents)
 {
     enum { GROUPS = 20, SPAN = 3360 };
     static struct capstone_malloc_slot records[GROUPS][32];
@@ -899,19 +899,22 @@ static int coarse_case(const char *mode)
         if (!i) span = length;
         require(length == span && (span == SPAN || span == 4096), "coarse: group bounds");
     }
-    int shared = span == SPAN;
     unsigned long mapped = __capstone_malloc_map_calls - maps;
+    int shared = mapped == 2;
     require(mapped == (shared ? 2 : GROUPS), "coarse: backing map count");
+    require(span == (shared && !page_extents ? SPAN : 4096), "coarse: selected extent geometry");
     size_t a = __builtin_capstone_cap_get_cursor(groups[0]);
     size_t b = __builtin_capstone_cap_get_cursor(groups[1]);
     if (shared) {
         require(!(a & 65535), "coarse: aligned region");
-        for (unsigned i = 0; i < 19; ++i)
-            require(__builtin_capstone_cap_get_cursor(groups[i]) == a + i * SPAN,
-                    "coarse: nineteen compact extents in first region");
-        size_t last = __builtin_capstone_cap_get_cursor(groups[19]);
+        unsigned first = page_extents ? 16 : 19;
+        for (unsigned i = 0; i < first; ++i)
+            require(__builtin_capstone_cap_get_cursor(groups[i]) == a + i * span,
+                    "coarse: consecutive extents in first region");
+        size_t last = __builtin_capstone_cap_get_cursor(groups[first]);
         require(!(last & 65535) && last != a, "coarse: second region");
-        require((a + SPAN - 1) / 4096 == b / 4096, "coarse: siblings share a page");
+        require(((a + span - 1) / 4096 == b / 4096) == !page_extents,
+                "coarse: selected page sharing");
     }
     printf("MALLOC_COARSE_LAYOUT %s groups=20 maps=%lu span=%lu\n",
            shared ? "shared" : "dedicated", mapped, (unsigned long)span);
@@ -971,7 +974,8 @@ int main(int argc, char **argv)
     int may_survive = argc > 2 && !strcmp(argv[2], "may-survive");
 #ifdef __CAPSTONE_PURECAP__
     if (!strcmp(mode, "coarse-reuse") || !strcmp(mode, "coarse-stale") ||
-        !strcmp(mode, "coarse-bounds")) return coarse_case(mode);
+        !strcmp(mode, "coarse-bounds"))
+        return coarse_case(mode, argc > 2 && !strcmp(argv[2], "page-extents"));
     if (!strncmp(mode, "recycle-", 8)) return recycle_case(mode, may_survive);
     if (!strcmp(mode, "calloc-clean")) return calloc_clean();
     if (!strcmp(mode, "calloc-shrink")) return calloc_shrink();

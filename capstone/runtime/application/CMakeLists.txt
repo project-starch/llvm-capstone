@@ -34,13 +34,17 @@ option(CAPSTONE_HEAP_SCRUB_FREE "Virtual heap: zero a payload on free" OFF)
 # OBJECT_BOUNDS=OFF (the Caps arm): malloc returns the group's authority, cursor at the object, instead
 # of a capability over the object alone. It needs LIFETIMES=OFF (a lifetime per object is a bounded child).
 option(CAPSTONE_HEAP_OBJECT_BOUNDS "Virtual heap: a capability over each object's own bytes" ON)
+option(CAPSTONE_HEAP_COARSE_PAGES "Virtual heap: page-aligned shared group extents (experimental)" OFF)
 if(NOT CAPSTONE_APPLICATION_VIRTUAL AND (NOT CAPSTONE_HEAP_LIFETIMES OR CAPSTONE_HEAP_SCRUB_FREE OR NOT CAPSTONE_HEAP_OBJECT_BOUNDS))
   message(FATAL_ERROR "CAPSTONE_HEAP_LIFETIMES, CAPSTONE_HEAP_SCRUB_FREE and CAPSTONE_HEAP_OBJECT_BOUNDS are switches of the virtual heap")
+endif()
+if(CAPSTONE_HEAP_COARSE_PAGES AND NOT CAPSTONE_APPLICATION_VIRTUAL)
+  message(FATAL_ERROR "CAPSTONE_HEAP_COARSE_PAGES is a switch of the virtual heap")
 endif()
 if(NOT CAPSTONE_HEAP_OBJECT_BOUNDS AND CAPSTONE_HEAP_LIFETIMES)
   message(FATAL_ERROR "CAPSTONE_HEAP_OBJECT_BOUNDS=OFF requires CAPSTONE_HEAP_LIFETIMES=OFF")
 endif()
-foreach(switch IN ITEMS CAPSTONE_HEAP_LIFETIMES CAPSTONE_HEAP_SCRUB_FREE CAPSTONE_HEAP_OBJECT_BOUNDS)
+foreach(switch IN ITEMS CAPSTONE_HEAP_LIFETIMES CAPSTONE_HEAP_SCRUB_FREE CAPSTONE_HEAP_OBJECT_BOUNDS CAPSTONE_HEAP_COARSE_PAGES)
   if(${switch})
     set(sdk_${switch} true)
   else()
@@ -114,6 +118,7 @@ if(CAPSTONE_APPLICATION_SDK)
   \"heap_lifetimes\": ${sdk_CAPSTONE_HEAP_LIFETIMES},
   \"heap_scrub_free\": ${sdk_CAPSTONE_HEAP_SCRUB_FREE},
   \"heap_object_bounds\": ${sdk_CAPSTONE_HEAP_OBJECT_BOUNDS},
+  \"heap_coarse_pages\": ${sdk_CAPSTONE_HEAP_COARSE_PAGES},
   \"codegen\": ${sdk_codegen},
   \"cc\": \"${CMAKE_C_COMPILER}\",
   \"ld\": \"${CMAKE_LINKER}\",

@@ -222,6 +222,14 @@ child. Neither mallocng's meta nor a slot record receives the region root.
 The region lookup uses the group's address; available regions are indexed by
 extent size. No program-supplied pointer becomes allocator authority.
 
+`CAPSTONE_HEAP_COARSE_PAGES=ON` is an experimental, default-OFF SDK option.
+It rounds eligible extents up to 4 KiB before selecting a region bin. Nearby
+group geometries can then reuse the same page-aligned extent, and consecutive
+extents never share a page. The rounded extent must still fit the mapping
+length requested by mallocng. Eligibility, individual group lifetimes, dirty
+bits and scrubbing are unchanged. `sdk.json` records `heap_coarse_pages`; this
+is a placement experiment, not a change to the 128-bit capability ABI.
+
 Release revokes the group before making its extent available. A persistent
 dirty bit marks reuse even when the new group has different slot geometry.
 Each reused slot is scrubbed before its first take, using the existing slot
@@ -257,6 +265,11 @@ any slot is taken. Stale and out-of-bounds stores must fault with causes 25
 and 28 respectively at the labelled store, with exit 139. Missing or duplicate
 process records fail the oracle. Partial-region trim must release no region;
 final trim must release exactly two.
+
+With `heap_coarse_pages=true`, the same gate requires 4,096-byte extents and
+sixteen groups in the first region; it rejects the default compact geometry.
+Both modes still require two mappings for twenty groups. The test selects
+the expected geometry from the SDK, independently of the observed layout.
 
 The same contract on the dev control without coarse regions reports
 `coarse_backing=dedicated`: twenty 4 KiB mappings. It checks group revocation,

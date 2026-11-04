@@ -29,10 +29,10 @@ def image_abi(path):
     return found[0]
 
 
-def coarse_checks(log, symbols, image_base, bounds_off):
+def coarse_checks(log, symbols, image_base, bounds_off, page_extents=False):
     """Require complete, unique process records and exact geometry / fault-site oracles."""
     shared = '__capstone_malloc_coarse_regions' in symbols
-    layout = ('shared groups=20 maps=2 span=3360' if shared else
+    layout = (f'shared groups=20 maps=2 span={4096 if page_extents else 3360}' if shared else
               'dedicated groups=20 maps=20 span=4096')
     rows = re.findall(r'MALLOC_COARSE_CASE:(coarse-[a-z]+)\n(.*?)'
                       r'MALLOC_DENIAL_EXIT:\1:(\d+)\n', log, re.S)
@@ -84,10 +84,15 @@ def main():
     # was built with both ON.
     heap = dict(lifetimes=True, scrub_free=None)
     recycle_only = False
+    page_extents = False
     if a.sdk:
         config = json.loads((a.sdk / 'sdk.json').read_text())
         heap = dict(lifetimes=bool(config.get('heap_lifetimes', True)),
                     scrub_free=bool(config.get('heap_scrub_free', True)))
+        page_extents = config.get('heap_coarse_pages', False)
+        if type(page_extents) is not bool:
+            p.error('heap_coarse_pages must be a boolean')
+        heap['coarse_pages'] = page_extents
         # CAPSTONE_HEAP_OBJECT_BOUNDS=OFF (the Caps arm) hands out the group's authority, so the contract's
         # spatial-denial expectations do not hold and those cases are not run. The recycled-mapping cases
         # and coarse-group cases do have expectations there (the arm requires lifetimes off).
@@ -145,10 +150,11 @@ for case in ''' + recycle_loop + '''; do
 done
 for case in ''' + ' '.join(COARSE_CASES) + '''; do
   echo MALLOC_COARSE_CASE:$case
-  ./capstone-vexec malloc.dom "$case"
+  ./capstone-vexec malloc.dom "$case"__COARSE_ARGUMENT__
   echo MALLOC_DENIAL_EXIT:$case:$?
 done
 '''
+    recycle_gate = recycle_gate.replace('__COARSE_ARGUMENT__', ' page-extents' if page_extents else '')
     gate = '''#!/bin/sh
 cd /mnt/vm || exit 1
 dmesg -n 1
@@ -291,7 +297,7 @@ echo VIRTUAL_STAGED_DONE
     checks['recycle_outside_clean'] = (sorted(m[0] for m in outside) == ['recycle-header', 'recycle-slack'] and
                                        all(m[2] == '0' for m in outside) and
                                        all((m[1] != '0') == recycle_only for m in outside))
-    coarse, coarse_backing = coarse_checks(log, symbols, image_base, recycle_only)
+    coarse, coarse_backing = coarse_checks(log, symbols, image_base, recycle_only, page_extents)
     checks.update(coarse)
     record = dict(status='PASS' if all(checks.values()) else 'FAIL', tests=checks,
                   coarse_backing=coarse_backing,
