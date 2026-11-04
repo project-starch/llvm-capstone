@@ -52,6 +52,7 @@ NOT_CREATED = dict(job='{"version":1,"kind":"exit","value":24}', fault="",
 CREATED_CRASH = dict(job='{"version":1,"kind":"signal","value":11}',
                      fault="capstone-exec: domain fault cause=24 pc=0x3fad02b134 address=0x0 ra=0x3fad02b0c4 image=./safety.dom\n",
                      out="MCAPP-FIX 24 begin\nMCAPP-FIX 24 header-only=1\nMCAPP-FIX 24 target=3f9eafd73e\nMCAPP-FIX 24 touch\n")
+IA_NOT_LINKED = dict(NOT_CREATED, out="MCAPP-FIX 24 begin\nMCAPP-FIX 24 ia not linked\nMCAPP-FIX 24 mark=18e0018\n")
 # the reviewer's substitution: an unrelated crash, no fault record, no fixture path in the output
 OTHER_CRASH = dict(job='{"version":1,"kind":"signal","value":9}', fault="", out="")
 FX24_PREDICTION_FAILS, FX24_TRIGGER_FAILS = ("FAIL", "PASS"), ("PASS", "FAIL")
@@ -239,6 +240,12 @@ def main():
          (pred_fails, dict(CREATED_CRASH, out="MCAPP-FIX 24 touch\n")), 2),
         ("fx24 not-created outcome with another no-op mark", (trig_fails, None),
          (trig_fails, dict(NOT_CREATED, out=NOT_CREATED["out"].replace("18e0018", "18e0017"))), 2),
+        ("fx24 not-created outcome that bails at 'ia not linked' (seen in the merged-head OFF arm)",
+         (pred_fails, None), (trig_fails, IA_NOT_LINKED), 0),
+        ("fx24 'ia not linked' after a header-only line", (trig_fails, None),
+         (trig_fails, dict(IA_NOT_LINKED, out=IA_NOT_LINKED["out"] + "MCAPP-FIX 24 header-only=1\n")), 2),
+        ("fx24 'ia not linked' with another no-op mark", (trig_fails, None),
+         (trig_fails, dict(IA_NOT_LINKED, out=IA_NOT_LINKED["out"].replace("18e0018", "18e0012"))), 2),
         ("fx24 not-created outcome with a fault record", (trig_fails, None),
          (trig_fails, dict(NOT_CREATED, fault=CREATED_CRASH["fault"])), 2),
     ]

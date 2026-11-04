@@ -129,8 +129,10 @@ REQUIRED_ROWS = {
 # comparison; the memcached gate run alone on one build and one platform gave the second in some runs of
 # the OFF arm and the first in the others):
 #   not created   the header-only condition is not created: the fixture prints "header-only=0" and
-#                 "triggering condition not created", returns its known no-op mark 18e0018 and exits 24
-#                 with no fault. fx24_trigger FAILS (the no-op is self-reported), fx24_prediction holds.
+#                 "triggering condition not created" (or, before it gets that far, "ia not linked": the
+#                 expired item was never linked, seen in the first merged-head OFF arm), returns its known
+#                 no-op mark 18e0018 and exits 24 with no fault. fx24_trigger FAILS (the no-op is
+#                 self-reported), fx24_prediction holds.
 #   created+crash the condition is created ("header-only=1", then "touch") and the server dies with a
 #                 signal at a domain fault, cause 24 at address 0. fx24_prediction FAILS, fx24_trigger
 #                 holds (a non-RETURN outcome is not a self-reported no-op).
@@ -157,9 +159,11 @@ def fx24_signature(case):
         return None
     out, fault = read(case / "server.out"), read(case / "fault.txt").strip()
     kind = job.get("kind")
-    if (kind == "exit" and not fault and re.search(r"^MCAPP-FIX 24 header-only=0$", out, re.M)
-            and re.search(r"^MCAPP-FIX 24 triggering condition not created", out, re.M)
-            and re.search(r"^MCAPP-FIX 24 mark=18e0018$", out, re.M)):
+    noop = (re.search(r"^MCAPP-FIX 24 header-only=0$", out, re.M)
+            and re.search(r"^MCAPP-FIX 24 triggering condition not created", out, re.M)) or (
+            re.search(r"^MCAPP-FIX 24 ia not linked$", out, re.M)
+            and not re.search(r"^MCAPP-FIX 24 header-only=", out, re.M))
+    if kind == "exit" and not fault and noop and re.search(r"^MCAPP-FIX 24 mark=18e0018$", out, re.M):
         return "not_created"
     if (kind == "signal" and re.search(r"^MCAPP-FIX 24 header-only=1$", out, re.M)
             and re.search(r"^MCAPP-FIX 24 touch$", out, re.M)

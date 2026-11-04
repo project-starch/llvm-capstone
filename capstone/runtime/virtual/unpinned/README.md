@@ -300,7 +300,7 @@ availability limit, not a safety one. Only the torture stimulus (`CAPSTONE_VM_TO
    failure depends on where the allocator places things: one build and platform gave both outcomes across
    repeated runs of the memcached gate. `gates/compare.py` folds that pair into one placement-dependent
    entry only when the case's job, output and fault files show the signature of the failed check (not
-   created: `header-only=0`, the known no-op mark `18e0018`, exit; created: `header-only=1`, then a
+   created: `header-only=0`, or the earlier bail-out `ia not linked`, then the known no-op mark `18e0018` and exit; created: `header-only=1`, then a
    signal at a cause-24 fault at address 0); any other single failure makes the gate INCOMPLETE. The
    fixture itself still needs fixing.
 4. Reclaim and swap pressure, page migration and compaction, shared tagged backing (refused), a native fork of
