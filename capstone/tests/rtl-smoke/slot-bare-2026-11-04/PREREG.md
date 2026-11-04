@@ -106,3 +106,17 @@ iteration on bitstream 3. The SPEC lane's estimate of 23-36 silicon cycles per p
 larger than that. The excess is not the pair's own cost in isolation. This kit isolates the pair from everything around
 it, so it cannot say what the excess is: the surrounding code, cache or TLB state, or what else the compiler change
 removed.
+
+## Cycle band (added 2026-11-04, after bitstream 3's reading and before the C.5a and stage-A runs)
+
+- **The calibration.** Bitstream 3's silicon read every slot 0.4-9 % under its simulated cycles. From now on the grader
+  prints each slot IN BAND / OUT OF BAND against its own arm's sim cycles ±10 %, plus a CYCLE BAND summary line.
+- **The band is reported, not graded.** It never changes the verdict. It exists because without it, a bitstream whose
+  silicon does not track its sim passes silently: C.5a's run reading bitstream 3's cycles grades AS EXPECTED, with
+  exact fields equal and P1/P2 holding.
+- **Control.** Bitstream 3's real run, relabelled as C.5a: the verdict reads AS EXPECTED, and the band reads OUT OF BAND
+  on slot-1..4, slot-7 and slot-8. The real bitstream 3 run reads ALL IN BAND.
+- **Predicted:** C.5a and stage A read ALL IN BAND. That means the C.5a pair at about 8.4 cycles per iteration over the
+  loop (bitstream 3: 17.0), and stage A's other-doubleword pair at about 6.4.
+- **The reading that would matter most.** An OUT OF BAND result on C.5a's pair slots, near bitstream 3's 17, would mean
+  the cached-LDC change does not reach silicon in this kit.

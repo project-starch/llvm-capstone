@@ -5,7 +5,10 @@ the image that run loaded.
 
 Field order of every vector: cycles, instret, value, traps, cause.
 - EXACT fields must equal the pre-registered vector: instret, value, traps, cause (the same on every bitstream).
-- cycles is a TIMING field: reported beside the simulator's (memory delay 12), not required to match it.
+- cycles is a TIMING field: reported beside the simulator's (memory delay 12), not required to match it. Each slot is
+  also printed IN BAND / OUT OF BAND against its sim cycles +-10 % (CYCLE BAND, added 2026-11-04 from bitstream 3's
+  silicon run, where every slot read 0.4-9 % under sim), with a summary line; it never changes the verdict, but a
+  bitstream whose silicon does not track its own sim cannot pass silently.
 - The silicon PATTERN, pre-registered from the source and the simulation of these images (bs3, objb, c5a):
   P1  slot-1, -2, -3, -4 (the stc/ldc pair: same slot, other doubleword, other line, page alias) read the same cycles
       within 2 %: the DYN unit's one-op handshake orders the pair, so the ldc never meets the buffered stc;
@@ -55,7 +58,8 @@ for n in H:
     ok = hok and g['sr'] == [len(e)] and len(g['sv']) == len(e) and all(g['sv'][i] == e[i] for i in range(1, len(e)))
     if g['sv']: cyc[n] = g['sv'][0]
     print(f'{n}: img {"OK" if hok else "MISMATCH"} bs {g["bs"]} SR {g["sr"]} SV {" ".join(hex(x) for x in g["sv"])}'
-          f'  {"EXACT FIELDS OK" if ok else "OFF"}  cycles {g["sv"][0] if g["sv"] else None} (sim {e[0]})')
+          f'  {"EXACT FIELDS OK" if ok else "OFF"}  cycles {g["sv"][0] if g["sv"] else None} (sim {e[0]})'
+          + (f'  {"IN BAND" if abs(g["sv"][0] - e[0]) <= 0.10 * e[0] else "OUT OF BAND"} ({100 * (g["sv"][0] - e[0]) / e[0]:+.1f} %)' if g['sv'] else ''))
     if not ok: bad.append(n)
     if not g['bs'] or RES[ARM] not in g['bs'][-1]: wrongbs.append(n)
 v = 'NO DATA' if nodata else ('WRONG BITSTREAM' if wrongbs else ('FINDING' if bad else 'EXACT'))
@@ -78,5 +82,7 @@ if v == 'EXACT':
           f'stc+ldc same slot {per("slot-1", 1):.2f}  other slot {per("slot-2", 1):.2f}  '
           f'sd+ld same slot {per("slot-5", 1):.2f}  other slot {per("slot-6", 1):.2f}  (loop {L / N:.2f}/iter)')
     v = 'AS EXPECTED' if all(patt) else 'PATTERN FAILS'
+oob = [n for n in cyc if abs(cyc[n] - want[n][0]) > 0.10 * want[n][0]]
+print(f'CYCLE BAND (sim +-10 %, reported): {"ALL IN BAND" if not oob and cyc else ("NO CYCLES" if not cyc else "OUT OF BAND " + " ".join(oob))}')
 print(f'ARM {ARM}: {v}  (off {bad} wrong-bitstream {wrongbs} no-data {nodata})')
 sys.exit(2 if v == 'NO DATA' else (0 if v == 'AS EXPECTED' else 1))
