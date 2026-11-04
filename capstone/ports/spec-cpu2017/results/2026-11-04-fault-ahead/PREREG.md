@@ -124,3 +124,10 @@ The slot-bare kit (land/rtl-slot-kit e1a835aa466e, its own predictions and grade
 - **Runner.** fa-b1.sh was stopped while waiting and relaunched; dry run D-b1slot.
 
 Correction to Addenda 2 and 4: their clock labels ("13:40", "15:50") ran ahead of real time; both were written and pushed before any board call (real 13:16 and 15:29).
+
+## Addendum 6 (4 Nov 16:45, before any board call): the lead's priority
+
+The lead (4 Nov): performance optimisation ranks above the paper's SPEC train. Measuring train now is pointless while the numbers are still changing. Three changes follow:
+- **Board 1.** The compiler evaluation's last stage (mcf devmk, about 4 h, started 14:45) is stopped. The slot kit and this run start as soon as the chain reaches the sentinel.
+- **fa-b1.sh.** It no longer launches the C.5a session (`FA_C5=true`), because the C.5a session moves to board 2.
+- **Predictions.** Unchanged.
