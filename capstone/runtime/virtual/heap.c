@@ -45,6 +45,9 @@
 #ifndef CAPSTONE_HEAP_COARSE_PAGES
 #define CAPSTONE_HEAP_COARSE_PAGES 0
 #endif
+#ifndef CAPSTONE_HEAP_EXACT_SLOTS
+#define CAPSTONE_HEAP_EXACT_SLOTS 0
+#endif
 #if !CAPSTONE_HEAP_OBJECT_BOUNDS && CAPSTONE_HEAP_LIFETIMES
 #error "CAPSTONE_HEAP_OBJECT_BOUNDS=0 requires CAPSTONE_HEAP_LIFETIMES=0: a per-object lifetime is a CDERIVE child, which has bounds of its own"
 #endif
@@ -190,7 +193,7 @@ static inline void take_id(void)
  * array out. A group writes only its own count of records (bind_slots, alloc_group's loop), so
  * the records an array holds past that count stay zero for its next group. Every caller is under
  * the heap lock (mallocng runs only inside malloc, free, realloc and aligned_alloc below). */
-#define SLOT_CLASSES 6U   /* 1 << 0 .. 1 << 5 records */
+#define SLOT_CLASSES (CAPSTONE_HEAP_EXACT_SLOTS ? 32U : 6U)
 #define SLOT_CHUNK_MIN (16UL << 10)
 #define SLOT_CHUNK_MAX (256UL << 10)
 static struct capstone_malloc_slot *slots_free_heads[SLOT_CLASSES];
@@ -198,10 +201,14 @@ static char *slots_next;
 static size_t slots_left, slots_chunk;
 static unsigned slots_class(unsigned count)
 {
+    if (!count || count > 32) __builtin_trap();
+#if CAPSTONE_HEAP_EXACT_SLOTS
+    return count - 1;
+#else
     unsigned c = 0;
-    if (!count || count > 1U << (SLOT_CLASSES - 1)) __builtin_trap();
     while ((1U << c) < count) ++c;
     return c;
+#endif
 }
 struct capstone_malloc_slot *__capstone_malloc_slots_new(unsigned count)
 {
@@ -212,7 +219,8 @@ struct capstone_malloc_slot *__capstone_malloc_slots_new(unsigned count)
         s->next = NULL;
         return s;
     }
-    size_t bytes = ((size_t)1 << c) * sizeof *s;
+    size_t capacity = CAPSTONE_HEAP_EXACT_SLOTS ? count : (size_t)1 << c;
+    size_t bytes = capacity * sizeof *s;
     if (slots_left < bytes) {
         /* The rest of the old chunk (less than 3 KiB) is left unused. */
         size_t chunk = slots_chunk ? 2 * slots_chunk : SLOT_CHUNK_MIN;

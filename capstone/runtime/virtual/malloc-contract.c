@@ -815,8 +815,14 @@ static int calloc_geometry(void)
  * group with fewer (sizes of another class reuse them), then with more again; both transitions must
  * be observed on some array, and the invariant holds on every array scanned. */
 #define META_SEEN 512
-static struct { size_t array; unsigned bound, fewer, more; } seen[META_SEEN];
+static struct {
+    struct capstone_malloc_slot *array;
+    void *meta;
+    unsigned bound, fewer, more;
+} seen[META_SEEN];
 static unsigned nseen, transitions_few, transitions_many, scanned, bound_tags;
+static unsigned freed_arrays;
+static int exact_slots;
 static unsigned scan_meta(void *p, const char *what)
 {
     struct capstone_malloc_slot *r = __capstone_malloc_find(p);
@@ -825,6 +831,7 @@ static unsigned scan_meta(void *p, const char *what)
     size_t meta = __builtin_capstone_cap_get_cursor(r->group);
     unsigned bound = (meta_word(r, META_LAST_IDX) & 31) + 1, count = meta_word(r, META_CAP_COUNT), size = 1;
     while (size < count) size <<= 1;
+    if (exact_slots) size = count;
     require(r->index < bound, "meta-reuse: the record is inside its meta's bound");
     require(count == bound && size <= 32, "meta-reuse: the array was taken for the group's count");
     for (unsigned k = 0; k < size; ++k) {
@@ -845,13 +852,39 @@ static void note_meta(void *p)
 {
     unsigned bound = scan_meta(p, "meta-reuse: slot record");
     struct capstone_malloc_slot *r = __capstone_malloc_find(p);
-    size_t array = __builtin_capstone_cap_get_cursor(r - r->index);
+    struct capstone_malloc_slot *array = r - r->index;
     unsigned i = 0;
     while (i < nseen && seen[i].array != array) ++i;
-    if (i == nseen) { if (nseen == META_SEEN) return; seen[nseen].array = array; seen[nseen++].bound = bound; return; }
+    if (i == nseen) {
+        if (nseen == META_SEEN) return;
+        seen[nseen].array = array; seen[nseen].meta = r->group;
+        seen[nseen++].bound = bound; return;
+    }
+    seen[i].meta = r->group;
     if (bound < seen[i].bound && !seen[i].fewer) { seen[i].fewer = 1; ++transitions_few; }
     if (bound > seen[i].bound && seen[i].fewer && !seen[i].more) { seen[i].more = 1; ++transitions_many; }
     seen[i].bound = bound;
+}
+/* Inspect returned arrays before another allocation can bind them. A free meta
+ * has cap_count zero; the array's sole permitted residue is its first `next`
+ * free-list link. This detects omitted free_meta clearing even when all pools
+ * have exact counts and there are no spare records to inspect. */
+static void scan_freed_arrays(void)
+{
+    for (unsigned i = 0; i < nseen; ++i) {
+        const unsigned *count = (const unsigned *)((const char *)seen[i].meta + META_CAP_COUNT);
+        if (*count) continue;
+        const unsigned char *bytes = (const unsigned char *)seen[i].array;
+        size_t skip = offsetof(struct capstone_malloc_slot, next);
+        for (size_t j = 0; j < seen[i].bound * sizeof *seen[i].array; ++j)
+            if (j < skip || j >= skip + sizeof(void *))
+                require(bytes[j] == 0, "meta-reuse: freed record bytes clear");
+        for (size_t j = 0; j < seen[i].bound * sizeof *seen[i].array; j += 16)
+            if (j != skip)
+                require(!__builtin_capstone_cap_get_tag(*(void *const volatile *)(bytes + j)),
+                        "meta-reuse: freed record tags clear");
+        ++freed_arrays;
+    }
 }
 /* Three rounds of 600 small objects, freed after each round. 28 and 200 bytes, then 44 and 120,
  * then 28 and 200 again: mallocng's counts for these classes grow with the class's usage
@@ -868,11 +901,14 @@ static int meta_reuse(void)
             note_meta(small[i]);
         }
         for (unsigned i = 0; i < SMALL; ++i) free(small[i]);
+        scan_freed_arrays();
     }
     printf("MALLOC_META_REUSE arrays=%u scanned=%u many_to_few=%u few_to_many=%u bound_tags=%u\n", nseen, scanned,
            transitions_few, transitions_many, bound_tags);
     require(bound_tags > 0, "meta-reuse: the reader sees the bound records' tags");
-    require(transitions_few > 0 && transitions_many > 0, "meta-reuse: an array went many -> few -> many slots");
+    require(freed_arrays > 0, "meta-reuse: inspected returned arrays");
+    require(exact_slots ? !transitions_few && !transitions_many : transitions_few > 0 && transitions_many > 0,
+            "meta-reuse: selected pool reuse policy");
     puts("MALLOC_FAULT_READY:meta-reuse"); puts("MALLOC_SURVIVED:meta-reuse"); fflush(stdout);
     return 0;
 }
@@ -980,7 +1016,10 @@ int main(int argc, char **argv)
     if (!strcmp(mode, "calloc-clean")) return calloc_clean();
     if (!strcmp(mode, "calloc-shrink")) return calloc_shrink();
     if (!strcmp(mode, "calloc-geometry")) return calloc_geometry();
-    if (!strcmp(mode, "meta-reuse")) return meta_reuse();
+    if (!strcmp(mode, "meta-reuse")) {
+        exact_slots = argc > 2 && !strcmp(argv[2], "exact-slots");
+        return meta_reuse();
+    }
 #endif
     if (!strcmp(mode, "hot")) { hot(0); return 0; }
     if (!strcmp(mode, "hot-service-control")) { hot(1); return 0; }

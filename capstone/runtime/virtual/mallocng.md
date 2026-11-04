@@ -92,6 +92,15 @@ but unlimited linked entries within available metadata/resources. It does
 not choose allocation addresses. A shared lock covers publication and the
 metadata index across same-address-space threads.
 
+`CAPSTONE_HEAP_EXACT_SLOTS=ON` is a separate default-OFF experiment. It uses
+32 free lists, one for each valid count, and carves exactly that many records.
+musl already passes and clears the actual count, so its record layout and
+allocation policy do not change. The extra list heads occupy 416 bytes.
+`sdk.json` records `heap_exact_slots`. The meta-reuse contract inspects returned
+arrays for zero bytes and tags (except their free-list link) and rejects reuse
+across counts in this mode. The default pool retains its many-to-few-to-many
+transition requirement and receives the same returned-array check.
+
 The current process ABI does not expose the launcher's `brk` to application
 libc. mallocng therefore uses its own mmap fallback for metadata. Static
 images do not donate dynamic-loader tails. Neither restriction introduces a

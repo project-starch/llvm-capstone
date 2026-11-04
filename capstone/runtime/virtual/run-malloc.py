@@ -85,6 +85,7 @@ def main():
     heap = dict(lifetimes=True, scrub_free=None)
     recycle_only = False
     page_extents = False
+    exact_slots = False
     if a.sdk:
         config = json.loads((a.sdk / 'sdk.json').read_text())
         heap = dict(lifetimes=bool(config.get('heap_lifetimes', True)),
@@ -93,6 +94,10 @@ def main():
         if type(page_extents) is not bool:
             p.error('heap_coarse_pages must be a boolean')
         heap['coarse_pages'] = page_extents
+        exact_slots = config.get('heap_exact_slots', False)
+        if type(exact_slots) is not bool:
+            p.error('heap_exact_slots must be a boolean')
+        heap['exact_slots'] = exact_slots
         # CAPSTONE_HEAP_OBJECT_BOUNDS=OFF (the Caps arm) hands out the group's authority, so the contract's
         # spatial-denial expectations do not hold and those cases are not run. The recycled-mapping cases
         # and coarse-group cases do have expectations there (the arm requires lifetimes off).
@@ -145,7 +150,9 @@ def main():
     recycle_gate = '''CAPSTONE_VM_TRACE=1 ./capstone-vexec malloc.dom recycle-tags
 echo MALLOC_DENIAL_EXIT:recycle-tags:$?
 for case in ''' + recycle_loop + '''; do
-  ./capstone-vexec malloc.dom "$case"
+  extra=
+  if [ "$case" = meta-reuse ]; then extra=__META_ARGUMENT__; fi
+  ./capstone-vexec malloc.dom "$case" $extra
   echo MALLOC_DENIAL_EXIT:$case:$?
 done
 for case in ''' + ' '.join(COARSE_CASES) + '''; do
@@ -155,6 +162,7 @@ for case in ''' + ' '.join(COARSE_CASES) + '''; do
 done
 '''
     recycle_gate = recycle_gate.replace('__COARSE_ARGUMENT__', ' page-extents' if page_extents else '')
+    recycle_gate = recycle_gate.replace('__META_ARGUMENT__', 'exact-slots' if exact_slots else '')
     gate = '''#!/bin/sh
 cd /mnt/vm || exit 1
 dmesg -n 1
