@@ -121,3 +121,16 @@ The fault-ahead run moved to board 1 (fault-ahead PREREG Addendum 4) and ranks a
 ## Addendum 3 (4 Nov, before any board call)
 
 After the bitstream 3 slot run and before the flash, c5a-b1.sh now runs the two counter boots of hpm PREREG Addendum 2 (imagick dev and devmk on bkit16-hpm-b3-b1). They are informational and gate nothing. Dry run S4-hpm.
+
+## Addendum 4 (4 Nov 16:55, before any board call): the session moves to board 2
+
+The lead ruled that optimisation ranks above the paper's train. Board 2's x264 train Full was stopped, together with the wrappers that queue train. Board 2 is on bitstream 3, read back at 15:23. It runs this session now with `c5a-b2.sh`, which is `c5a-b1.sh` with these changes:
+- **Board.** Board 2's console, busy check and hub bookings.
+- **Kit.** `bkit17-perf-c5a-b2` is bkit12-perf-b3-b2 with `BOARD_BITSTREAM=caplifive_vp2c_1fc2cd5aa`; spec-board.sh checks its launcher and module by hash.
+- **Output.** perf/c5a-b2; SPEC into spec/board/out-c5a-b2.
+- **Dropped:** the chain wait and sentinel; the counter boots of Addendum 3, because no bitstream-3 counter kit exists for board 2; and the chain restart. Board 2 ends back on bitstream 3, idle.
+- **Unchanged:** the order (slot kit on bs3, flash, R-67 gate, hpm and ObjBounds kits, slot kit on C.5a, then SPEC only if all three read rc 0 and no HARD STOP), the graders and their reference dirs, and S1-S3.
+
+**Reference boards.** S2 (C.5a / Spatial ObjB) is now board 2 against board 2, the same board. S3 (C.5a / bs3 Full) is board 2 against board 1's 3 Nov run.
+
+Dry run B2-ok (40 image runs, all on board 2; bookings and SPEC chain on board 2): perf/c5a-b2/dryrun.
