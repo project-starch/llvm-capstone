@@ -42,9 +42,11 @@ def fp(g, serial="FP_EXIT:0\n"):
     (g / "fp/guest/serial.log").write_text(serial)
 
 
-def memcached(g, drop_job=None, skip=None, retry=None):
+def memcached(g, drop_job=None, skip=None, retry=None, fx24=None):
+    """fx24: (prediction, trigger) statuses of the fixture that cannot pass as written."""
     serial, log = [], []
-    for c in CASES:
+    cases = CASES + (["fx24"] if fx24 else [])
+    for c in cases:
         if c == skip:
             continue
         if c == retry:   # a first attempt the launcher refused, then one that ran
@@ -55,8 +57,11 @@ def memcached(g, drop_job=None, skip=None, retry=None):
             if c != drop_job:
                 (g / "memcached" / c / "job.json").write_text('{"version":1,"kind":"exit","value":0}')
             (g / "memcached" / c / "server.err").write_text("")
-    for c in CASES:   # the runner checks every case it planned, run or not
-        log += ["PASS pthread_timed_wait"] if c == "pthread" else [f"PASS {c}_harness", f"PASS {c}_protocol"]
+    for c in cases:   # the runner checks every case it planned, run or not
+        if c == "fx24":
+            log += ["PASS fx24_harness", f"{fx24[0]} fx24_prediction", f"{fx24[1]} fx24_trigger"]
+        else:
+            log += ["PASS pthread_timed_wait"] if c == "pthread" else [f"PASS {c}_harness", f"PASS {c}_protocol"]
     (g / "memcached/guest").mkdir(parents=True, exist_ok=True)
     (g / "memcached/guest/serial.log").write_text("\n".join(serial) + "\n")
     (g / "memcached.log").write_text("\n".join(log) + "\n")
@@ -150,6 +155,18 @@ def main():
         ("no mode file", dict(arm_mode=(None, "TEST_MEMORY_MODE:N")), 4),
         ("arm required ON but run OFF", dict(extra=("--arm-mode", "on")), 4),
     ]
+    pred_fails, trig_fails, both_pass, both_fail = (("FAIL", "PASS"), ("PASS", "FAIL"), ("PASS", "PASS"), ("FAIL", "FAIL"))
+    fx = [
+        ("fx24 fails its prediction on one side, its trigger on the other (placement)", pred_fails, trig_fails, 0),
+        ("fx24 fails its trigger on both sides", trig_fails, trig_fails, 0),
+        ("fx24 passes on one side and fails on the other", both_pass, trig_fails, 1),
+        ("fx24 fails both checks on one side and one on the other", both_fail, trig_fails, 1),
+    ]
+    for name, c, a, want in fx:
+        got = run("memcached", lambda g, c=c: memcached(g, fx24=c), lambda g, a=a: memcached(g, fx24=a))
+        ok = got == want
+        failed += not ok
+        print(f"{'PASS' if ok else 'FAIL'} {name}: exit {got}, want {want}")
     for name, kwargs, want in modes:
         got = run("fp", fp, fp, **kwargs)
         ok = got == want
@@ -160,7 +177,7 @@ def main():
         ok = got == want
         failed += not ok
         print(f"{'PASS' if ok else 'FAIL'} {name}: exit {got}, want {want}")
-    total = len(cases) + len(modes) + 1
+    total = len(cases) + len(modes) + len(fx) + 1
     print(f"{total - failed}/{total} passed")
     return 1 if failed else 0
 

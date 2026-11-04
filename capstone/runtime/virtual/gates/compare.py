@@ -105,6 +105,28 @@ REQUIRED_ROWS = {
         'adaptclip:clipx', 'adaptro:clipwrite', 'adaptnonlin:nonlin',
         'adaptgaps:gaps', 'adaptinterleave:interleave')],
 }
+# Memcached fixture 24 cannot pass as written, in either memory mode or in the dev head, and WHICH of its
+# two checks names the failure depends on where the allocator places things: when the header-only
+# condition is not created the trigger check fails (the prediction holds); when it is created the
+# fixture faults elsewhere (cause 24, address 0) and the prediction check fails (the trigger holds).
+# Evidence: the memcached gate run alone, repeatedly, on one build and one platform per arm, gave
+# the second outcome in some runs of the OFF arm and the first in the others (laneONQ fix round,
+# unpinned/README.md; gatefix saw both outcomes in both arms of an OFF-versus-OFF comparison). A FAIL
+# set holding exactly one of the pair is therefore folded into one placement-dependent entry: it still
+# counts as a FAIL (a side where fx24 passes both checks, or fails both, stays DIFFERENT), but it is no
+# difference between two sides that both fail it. Remove this when the fixture is fixed.
+PLACEMENT_DEPENDENT = {"memcached": ("fx24_prediction", "fx24_trigger")}
+PLACEMENT_FOLDED = "FAIL fx24 (one of prediction/trigger: placement dependent)"
+
+
+def fold_placement(gate, fails):
+    pair = {"FAIL " + n for n in PLACEMENT_DEPENDENT.get(gate, ())}
+    hit = [f for f in fails if f in pair]
+    if len(hit) != 1:
+        return fails
+    return sorted([f for f in fails if f not in pair] + [PLACEMENT_FOLDED])
+
+
 # The runtime gate's application rows and the runtime.json tests that judge each.
 RUNTIME_TESTS = {"VM_EXIT:sqlite_write": ("sqlite_write", "sqlite_results"),
                  "VM_EXIT:sqlite_read": ("sqlite_read", "sqlite_results"),
@@ -248,6 +270,7 @@ def side(out, gate, ctl):
     if gate == "runtime" and (g / "runtime.json").is_file():
         extra = json.loads((g / "runtime.json").read_text())
     fails, jf, recs, checks = failset(text, extra)
+    fails = fold_placement(gate, fails)
     summary = read(g / "SUMMARY.txt")
     rc = re.search(r"^" + re.escape(gate) + r"\s+(rc=\d+|NOT RUN[^\n]*)", summary, re.M)
     gate_why = []

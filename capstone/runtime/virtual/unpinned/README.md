@@ -172,7 +172,11 @@ availability limit, not a safety one. Only the torture stimulus (`CAPSTONE_VM_TO
    on a stock kernel and never falls back by itself; a default needs detection with a clean fallback to the
    pinned path, or every platform image carrying all of it.
 2. No RTL. At most this could be the default on the model; silicon stays pinned.
-3. Memcached fixture 24 fails in both modes and in the dev head.
+3. Memcached fixture 24 fails in the dev head, in OFF and in ON alike, and which of its two checks
+   (`fx24_prediction` when the header-only condition is created, `fx24_trigger` when it is not) names the
+   failure depends on where the allocator places things: one build and platform gave both outcomes across
+   repeated runs of the memcached gate. `gates/compare.py` folds that pair into one placement-dependent
+   entry; the fixture itself still needs fixing.
 4. Reclaim and swap pressure, page migration and compaction, shared tagged backing (refused), a native fork of
    the launcher, and a whole-system leak bound are untested or fail closed with unmeasured availability cost.
 5. Device-side rule 1 is a model property the OS cannot restore, and its arms are not in this tree.
