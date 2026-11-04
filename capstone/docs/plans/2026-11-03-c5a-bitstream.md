@@ -285,3 +285,64 @@ in the tarball is byte-identical. Tarball synth-1fc2cd5aa-exit0.tar.gz, sha256 8
   −7, s6 +7 over ObjBounds. The SPEC readings carry it as a per-context-entry cost, not a per-access one.
 - **SPEC.** The re-miss after every escape (about 11 cycles per node) and perlbench's 1,131-16,030 live nodes are what
   the runtime lane's lc-model hit rates measure. A perlbench regression there goes to the lead before the flash.
+
+## Silicon: the kit session (board 2, 2026-11-04)
+
+**The session.** The runtime lane ran it on board 2, with the sequence below. Result lines are in spec-silicon
+f45274ebafe0, `results/2026-11-04-c5a/RESULT-kits.md`. The RTL lane re-graded every row by script from the raw captures,
+and the verdicts agree.
+1. The slot kit on bitstream 3.
+2. The C.5a flash, caplifive_vp2c_1fc2cd5aa, 17:32-17:34. The sealed sha256 was checked locally, and the resident name
+   was read back.
+3. The R-67, hpm, ObjBounds and slot kits on C.5a.
+
+A first relaunch (16:44-16:56) read no UART on every image. Odd virtual switches left by a killed driver had handed the
+console pin to the core's debug UART (`uart_debug_takeover = sw[0] | ...`). That run is VOID and not graded.
+
+| kit | grader | verdict |
+|---|---|---|
+| R-67 | 63e60355c408, `fixed --bitstream 1fc2cd5aa` | **FIXED**: t1-fire takes 25 at the target, controls exact |
+| hpm | 5b6fb6a4ec9b, c5a against run-b1-bs3 | **FINDING**: l1d_miss +1 on every image with a data access (see below) |
+| ObjBounds | 5b6fb6a4ec9b, c5a against bare-bs3-b2 | **AS EXPECTED**, cost pattern 9 of 9 |
+| slot | 98ff08e6f3fb, c5a | **AS EXPECTED**, ALL IN BAND |
+| slot (bitstream 3, before the flash) | 98ff08e6f3fb, bs3 | AS EXPECTED, ALL IN BAND, equal to board 1 within 3 cycles |
+
+**Against the pre-registered predictions above:**
+- **hpm.** hpm-3 and hpm-4 read ObjBounds' pattern: stall 509 / 254 against ObjBounds' 511 / 256 and bitstream 3's
+  1,530 / 1,530. This holds.
+- **R-67.** FIXED, controls unchanged. This holds.
+- **ObjBounds kit.**
+  - stale-access and objb-stale-w read bitstream 3's vectors. This holds.
+  - s6 and s7 read ObjBounds' cycles plus a constant: +34 and +28 on silicon, where sim gave +7.
+  - s3 reads above bitstream 3: +5.2 per LDC, against about +3 predicted.
+  - s4 pass 1 reads above (1,275 against 622), and pass 2 reads ObjBounds' (389 against 391).
+  - Every one is in the predicted direction.
+- **The constant shift.**
+  - Prediction: every arm moves by a constant few cycles.
+  - Silicon: s1 +30 over bitstream 3.
+  - CORRECTED the same evening: the hpm arms are NOT uniformly shifted. hpm-5, -1, -2 and -6 run 21-24 under bitstream 3
+    (2.0-2.6 %, failing the kit's "equal within 1 %" clause), while the cold-miss hpm-7 is +2. That is a second open
+    deviation of this session, with the extra L1D miss.
+  - The sizes are silicon's, not the simulator's.
+
+**What it establishes.**
+- **The cached lifetime verdict reaches silicon.** Over the slot kit's bare loop, in cycles per iteration:
+
+  | | bitstream 3 | C.5a |
+  |---|---|---|
+  | isolated LDC | 6.01 | 2.03 |
+  | isolated STC | 8.01 | 3.02 |
+  | STC→LDC pair | 16.97 | 8.01 |
+
+  C.5a's simulation gives 2.08, 3.44 and 8.42.
+- **R-67 is fixed on silicon.**
+
+**Open.**
+- **The extra L1D miss.**
+  - It is new on C.5a: bitstream 3 and ObjBounds read the pre-registered l1d_miss on all 7 images.
+  - It is one miss per run, with no change in l1d_acc. hpm-6, which makes no data access, reads 0.
+  - It is N = 1 with no mechanism. The C.5a simulation of the same images reads 0.
+  - The repeat in a fresh C.5a flash and session (the runtime lane's Addendum 6, perf/c5a-b2/hpm-r2) decides between
+    the bitstream and the session.
+- **SPEC on C.5a** runs next, separately pre-registered by the runtime lane.
+- **Every reading is N = 1, board 2.**
