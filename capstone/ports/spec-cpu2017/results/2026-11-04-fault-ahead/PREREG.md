@@ -72,3 +72,17 @@ The run is lbm test, both arms of `stages-test-hfl/519.lbm_r-test`, on kit-hpmq-
 The rtl lane's slot-bare kit (land/rtl-slot-kit e1a835aa466e, its own PREREG and `slot-grade.py <run> objb`) runs on board 2 first, before the OFF arm. It is one boot per image, slot-9 first. It is informational and gates nothing here.
 
 The runner was stopped by hand before any board call and relaunched with this step. Its dry run is in DRYRUN.md (S1).
+
+## Addendum 3 (4 Nov 13:35, before the ON arm): QEMU with fault-ahead on, the other five benchmarks
+
+Spatial arm, run commands, kit-faq-on against the census-q34 twin. In every row: rc 0, specdiff PASS, outputs other than the `.err` stats equal to the twin's, and `fault_ahead_max=64` read back once.
+
+| benchmark | faults | CSRUNV entries | instret on / twin |
+|---|---|---|---|
+| imagick | 815 → 180 (4.5x) | 1,296 → 663 | 0.99992 |
+| gcc | 1,764 → 1,037 (1.7x) | 2,879 → 2,154 | 1.00005 |
+| nab | 447 → 335 (1.3x) | 2,314 → 2,202 | 1.00000 |
+| xz | 1,694,529 → 27,799 (61x) | 1,697,626 → 38,281 | 0.99957 |
+| mcf | 386,606 → 26,699 (14.5x) | 393,974 → 34,175 | 0.99987 |
+
+**F4 is tightened before the ON arm.** xz and mcf, like lbm, now take at least 10x fewer faults than their board baselines (xz 1,694,529; mcf 386,606). The grader's set `TEN` gains both stages. The other three still need only to take no more faults than their baselines.

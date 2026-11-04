@@ -12,7 +12,7 @@ STAGES = ["538.imagick_r-test-capstone-spatial", "502.gcc_r-test-capstone-spatia
           "519.lbm_r-test-capstone-spatial", "557.xz_r-test-capstone-spatial", "505.mcf_r-test-capstone-spatial"]
 # F4: lbm at least 10x fewer faults (its faults stream: the collaborator's QEMU reading 104,725 -> 1,660); every other
 # stage no more faults than its baseline. F5: outside time lower on the three fault-heavy stages.
-TEN = {"519.lbm_r-test-capstone-spatial"}
+TEN = {"519.lbm_r-test-capstone-spatial", "557.xz_r-test-capstone-spatial", "505.mcf_r-test-capstone-spatial"}  # xz, mcf: Addendum 3 (QEMU 61x, 14.5x)
 FAULTS10 = {"519.lbm_r-test-capstone-spatial", "505.mcf_r-test-capstone-spatial", "557.xz_r-test-capstone-spatial"}
 
 def read(d):
