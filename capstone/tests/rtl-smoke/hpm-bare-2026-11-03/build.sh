@@ -26,4 +26,5 @@ build hpm-3 hpm-probe.S 153 -DHPM=3   # ldc
 build hpm-4 hpm-probe.S 154 -DHPM=4   # stc
 build hpm-6 hpm-probe.S 156 -DHPM=6   # ld with mcountinhibit[8:3] set
 build hpm-7 hpm-probe.S 157 -DHPM=7   # ld, 16 B stride over a 4 KiB region
+build hpm-8 hpm-probe.S 158 -DHPM=8   # L1I-miss positive control (2026-11-04)
 (cd "$B/images" && sha256sum *.bin > SHA256SUMS)
