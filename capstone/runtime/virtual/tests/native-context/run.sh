@@ -15,7 +15,7 @@ flags=(-std=c11 -O1 -g -Wall -Wextra -Werror -I"$repo/capstone/runtime/include")
     "$here/reference.c" "$here/test.c" -o "$out/reference"
 ASAN_OPTIONS=detect_leaks=1 "$out/reference" > "$out/reference.log" 2>&1
 cat "$out/reference.log"
-for mutation in SKIP_NAMESPACE DROP_TAGS SCALAR_TAG REPLAY; do
+for mutation in SKIP_NAMESPACE SKIP_ROOT SKIP_FP DROP_TAGS SCALAR_TAG REPLAY; do
     "$cc" "${flags[@]}" -D"CN_MUTATE_$mutation" "$here/reference.c" "$here/test.c" -o "$out/$mutation"
     set +e
     "$out/$mutation" > "$out/$mutation.log" 2>&1

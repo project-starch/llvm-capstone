@@ -85,7 +85,7 @@ static int activate(struct cn_context *c)
     int rc = frame_valid(e, &c->owner, frame(c));
     if (rc) return rc;
     if (e->resident == c) return 0;
-#ifdef CN_MUTATE_SKIP_NAMESPACE
+#if defined(CN_MUTATE_SKIP_NAMESPACE) || defined(CN_MUTATE_SKIP_ROOT)
     struct cn_translation previous = e->slot.translation;
 #endif
     if (e->resident) {
@@ -96,6 +96,13 @@ static int activate(struct cn_context *c)
     move_frame(&e->slot, &c->saved);
 #ifdef CN_MUTATE_SKIP_NAMESPACE
     if (previous.namespace_id) e->slot.translation = previous;
+#endif
+#ifdef CN_MUTATE_SKIP_ROOT
+    if (previous.root_pa) e->slot.translation.root_pa = previous.root_pa;
+#endif
+#ifdef CN_MUTATE_SKIP_FP
+    memset(e->slot.f, 0, sizeof(e->slot.f));
+    e->slot.fcsr = 0;
 #endif
 #ifdef CN_MUTATE_DROP_TAGS
     for (unsigned i = 0; i < CN_REGISTER_COUNT; ++i) e->slot.x[i].flags &= ~CN_REG_TAG;
