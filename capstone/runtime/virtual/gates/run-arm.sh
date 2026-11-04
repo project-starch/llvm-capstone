@@ -6,9 +6,24 @@
 #       HOOKS=<the arm's CV_TEST_HOOKS module .ko> LLVM=<compiler build dir: bin/, lib/clang> \
 #       CROSS_GCC=<riscv64 Linux gcc, for the native references> \
 #       [SDK=<an application SDK built from TREE>] [PHASE=all|build|gates] [GATES="hosted runtime ..."] \
-#       [CPU_EXTRA=<QEMU -cpu extras; default the 32-slot gate set>] [QEMU_LOCK=<lock file>] \
+#       [CPU_EXTRA=<QEMU -cpu extras; default the 32-slot gate set of the mode>] [QEMU_LOCK=<lock file>] \
+#       [UNPINNED_PROBES=<built isolated mm fixtures>] [GATES="... unpinned-mm unpinned-mutants" (--mode on)] \
 #       [APP_SQLITE=... APP_MRUBY=... APP_PERL=... APP_MEMCACHED=...] [JOBS=8] \
-#     bash run-arm.sh OUT
+#     bash run-arm.sh --mode on|off OUT
+#
+# --mode off|on is the memory mode of the module under test, required, and it reaches ALL nine gates:
+# every runner gets --unpinned for `on` (it loads the module with unpinned=1), and every runner
+# echoes the mode the loaded module reports after each insmod (<GATE>_MEMORY_MODE:Y|N|A; A is a
+# module without the parameter, which is pinned) and fails its own memory_mode_verified check when
+# that is not the requested mode. The mode is recorded in OUT/mode, and at the end of the gates
+# phase `compare.py --check-mode OUT` reads every gate's log back against it (a gate with no mode
+# line, fewer lines than module loads, a line of the other mode, or a failed memory_mode_verified
+# fails the arm). The nine gates may end with a non-zero rc, since compare.py compares their FAIL
+# sets; the optional qualification gates (GATES=... unpinned-mm unpinned-mutants) may not: one that
+# fails, or leaves no line, writes OPTIONAL_GATE_FAILED into SUMMARY.txt, the arm exits non-zero, and
+# compare.py refuses any output whose SUMMARY.txt carries that or MODE_CHECK_FAILED. `on` needs the platform of
+# unpinned/README.md: the patched kernel, the model with raw moves, and (default CPU_EXTRA)
+# x-capstone-test-csrs=false,x-capstone-raw-moves=true.
 #
 # WHY THE APPLICATIONS ARE BUILT HERE. The runtime gate's sqlite/mruby/perl rows and the memcached
 # gate used to take images prebuilt in a kit. Once the image ABI moved on, the launcher refused all
@@ -31,12 +46,24 @@
 # Compare two arms with compare.py CONTROL_OUT ARM_OUT. Gate arms share host ports (memcached's
 # native reference): run them one after another, never two at once.
 set -uo pipefail
-OUT=${1:?usage: run-arm.sh OUT (see the header)}
+[[ ${1:-} == --mode && ${2:-} =~ ^(on|off)$ ]] || { echo 'usage: run-arm.sh --mode on|off OUT (see the header)' >&2; exit 2; }
+MODE=$2; shift 2
+OUT=${1:?usage: run-arm.sh --mode on|off OUT (see the header)}
 : "${TREE:?TREE=<the arm tree>}" "${PLATFORM:?PLATFORM=<platform dir>}" "${HOOKS:?HOOKS=<hooks .ko>}"
 : "${LLVM:?LLVM=<compiler build dir>}" "${CROSS_GCC:?CROSS_GCC=<riscv64 linux gcc>}"
 PHASE=${PHASE:-all}
 GATES=${GATES:-hosted runtime nodes malloc pin-ahead fp pthread step-hooks memcached}
 JOBS=${JOBS:-8}
+memory=()
+[[ $MODE == off ]] || memory=(--unpinned)
+if [[ " $GATES " == *" unpinned-mutants "* && $MODE != on ]]; then
+  echo 'unpinned-mutants requires --mode on' >&2; exit 2
+fi
+if [[ " $GATES " == *" unpinned-mm "* ]]; then
+  [[ $MODE == on && -n ${UNPINNED_PROBES:-} ]] || {
+    echo 'unpinned-mm requires --mode on and UNPINNED_PROBES' >&2; exit 2;
+  }
+fi
 HERE=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 TREE=$(realpath "$TREE"); PLATFORM=$(realpath "$PLATFORM"); LLVM=$(realpath "$LLVM")
 OUT=$(realpath -m "$OUT")
@@ -165,40 +192,76 @@ gates_phase() {
   [[ ! -e $G ]] || { echo "$G exists: use a fresh OUT" >&2; exit 2; }
   mkdir -p "$G/tmp"
   export CAPSTONE_QEMU_LOCK=${QEMU_LOCK:-$OUT/qemu.lock} CAPSTONE_TMP_ROOT=$G/tmp
-  export CAPSTONE_QEMU_CPU_EXTRA=${CPU_EXTRA:-x-capstone-test-csrs=true,x-capstone-supervisor-slots=32}
+  local cpu_default=x-capstone-test-csrs=true,x-capstone-supervisor-slots=32
+  [[ $MODE == off ]] || cpu_default=x-capstone-test-csrs=false,x-capstone-supervisor-slots=32,x-capstone-raw-moves=true
+  export CAPSTONE_QEMU_CPU_EXTRA=${CPU_EXTRA:-$cpu_default}
+  printf '%s\n' "$MODE" > "$OUT/mode"
+  printf '%s\n' "$CAPSTONE_QEMU_CPU_EXTRA" > "$OUT/cpu-extra"
   sha256sum "$P/qemu-system-riscv64" "$P"/images/* "$P/adapter/capstone-vexec" "$P/adapter/capstone-job" \
     "$P/adapter/module/capstone_vm.ko" "$HOOKS" > "$OUT/platform.sha256"
   local plat=(--qemu "$P/qemu-system-riscv64" --images "$P/images") I=$B/img S=$G/SUMMARY.txt
   : > "$S"
+  # The module the gates load for production behaviour carries none of the test hooks, and the
+  # check can fire: the hooks module of the same arm does carry them (test_inject is in every
+  # CV_TEST_HOOKS build, test_skip_* in the ones that have the broken-variant controls).
+  local plain_hooks hooks_hooks
+  plain_hooks=$(grep -a -c -E 'test_skip|test_inject|test_full_window|test_scrub' "$P/adapter/module/capstone_vm.ko")
+  hooks_hooks=$(grep -a -c 'test_inject' "$HOOKS")
+  printf '%s\n' "module-strings production_hook_strings=$plain_hooks hooks_module_control=$hooks_hooks" >> "$S"
+  [[ $plain_hooks == 0 && $hooks_hooks -gt 0 ]] || echo "MODE_CHECK_FAILED module-strings: the production module carries test hooks, or the check cannot fire" >> "$S"
   gate() {
     local name=$1; shift
     [[ " $GATES " == *" $name "* ]] || return 0
-    local s; s=$(date +%s); "$@" > "$G/$name.log" 2>&1
-    printf '%-10s rc=%s %6ss\n' "$name" $? $(( $(date +%s) - s )) >> "$S"
+    local s rc; s=$(date +%s); "$@" > "$G/$name.log" 2>&1; rc=$?
+    printf '%-10s rc=%s %6ss\n' "$name" "$rc" $(( $(date +%s) - s )) >> "$S"
+    # The nine ordinary gates may fail the way the control does (compare.py compares their FAIL sets);
+    # a qualification gate that was asked for is a prerequisite and must succeed.
+    case $name in
+      unpinned-mm|unpinned-mutants) [[ $rc == 0 ]] || echo "OPTIONAL_GATE_FAILED $name rc=$rc" >> "$S" ;;
+    esac
   }
   gate hosted python3 "$V/run-hosted.py" --adapter "$P/adapter" --application "$I/hosted.dom" \
-    --noreturn "$I/noreturn.dom" --native "$I/native-hosted" "${plat[@]}" --work "$G/hosted"
+    --noreturn "$I/noreturn.dom" --native "$I/native-hosted" "${plat[@]}" "${memory[@]}" --work "$G/hosted"
   gate runtime python3 "$V/run.py" --adapter "$P/adapter" --application "$I/contract.dom" \
     --sqlite "$(cat "$B/apps/sqlite.image")" --mruby "$(cat "$B/apps/mruby.image")" \
-    --perl "$(cat "$B/apps/perl.image")" --record "$G/runtime.json" --timeout 900 "${plat[@]}"
-  gate nodes python3 "$V/run-nodes.py" --adapter "$P/adapter" --application "$I/node.dom" "${plat[@]}" --work "$G/nodes"
+    --perl "$(cat "$B/apps/perl.image")" --record "$G/runtime.json" --timeout 900 "${plat[@]}" "${memory[@]}"
+  gate nodes python3 "$V/run-nodes.py" --adapter "$P/adapter" --application "$I/node.dom" "${plat[@]}" "${memory[@]}" --work "$G/nodes"
   gate malloc python3 "$V/run-malloc.py" --adapter "$P/adapter" --application "$I/malloc.dom" \
-    --native "$I/native-malloc" --sdk "$(cat "$B/SDK")" "${plat[@]}" --work "$G/malloc"
-  gate pin-ahead python3 "$V/run-pin-ahead.py" --adapter "$P/adapter" --application "$I/pin-ahead.dom" "${plat[@]}" --work "$G/pin-ahead"
-  gate fp python3 "$V/run-fp.py" --adapter "$P/adapter" --application "$I/fp.dom" "${plat[@]}" --work "$G/fp"
-  gate pthread python3 "$V/run-pthreads.py" --adapter "$P/adapter" --application "$I/pthread.dom" "${plat[@]}" --work "$G/pthread"
+    --native "$I/native-malloc" --sdk "$(cat "$B/SDK")" "${plat[@]}" "${memory[@]}" --work "$G/malloc"
+  local pin_module=()
+  [[ $MODE == off ]] || pin_module=(--module "$HOOKS")
+  gate pin-ahead python3 "$V/run-pin-ahead.py" --adapter "$P/adapter" --application "$I/pin-ahead.dom" "${plat[@]}" "${memory[@]}" "${pin_module[@]}" --pthread-application "$I/pthread.dom" --work "$G/pin-ahead"
+  gate fp python3 "$V/run-fp.py" --adapter "$P/adapter" --application "$I/fp.dom" "${plat[@]}" "${memory[@]}" --work "$G/fp"
+  gate pthread python3 "$V/run-pthreads.py" --adapter "$P/adapter" --application "$I/pthread.dom" "${plat[@]}" "${memory[@]}" --work "$G/pthread"
   # The README's form: the pin-ahead image (contract.dom dies at VM_CONTRACT_FAIL:argv here).
   gate step-hooks python3 "$V/run-step-hooks.py" --adapter "$P/adapter" --module "$HOOKS" \
-    --application "$I/pin-ahead.dom" "${plat[@]}" --work "$G/step-hooks"
+    --application "$I/pin-ahead.dom" "${plat[@]}" "${memory[@]}" --pthread-application "$I/pthread.dom" --work "$G/step-hooks"
+  if [[ " $GATES " == *" unpinned-mutants "* ]]; then
+    gate unpinned-mutants python3 "$V/unpinned/run-mutants.py" --adapter "$P/adapter" --module "$HOOKS" \
+      --application "$I/pin-ahead.dom" --pthread-application "$I/pthread.dom" --qemu "$P/qemu-system-riscv64" --images "$P/images" --work "$G/unpinned-mutants"
+  fi
+  if [[ -n ${UNPINNED_PROBES:-} ]]; then
+    gate unpinned-mm python3 "$V/unpinned/run-mm.py" "${plat[@]}" --module "$HOOKS" \
+      --probes "$UNPINNED_PROBES" --work "$G/unpinned-mm"
+  fi
   if [[ -f $B/apps/memcached.image ]]; then
     local m; m=$(cat "$B/apps/memcached.image")
     gate memcached python3 "$TREE/capstone/ports/memcached/app/host/run-virtual.py" --build "$m" \
-      --adapter "$P/adapter" "${plat[@]}" --cross-cc "$CROSS_GCC" --pthread "$m/pthread.dom" --work "$G/memcached"
+      --adapter "$P/adapter" "${plat[@]}" --cross-cc "$CROSS_GCC" --pthread "$m/pthread.dom" "${memory[@]}" --work "$G/memcached"
   elif [[ " $GATES " == *" memcached "* ]]; then
     printf '%-10s NOT RUN (no memcached build)\n' memcached >> "$S"
   fi
+  # A qualification gate that was asked for and left no line did not run.
+  local opt
+  for opt in unpinned-mm unpinned-mutants; do
+    [[ " $GATES " == *" $opt "* ]] && ! grep -q "^$opt  *rc=" "$S" && echo "OPTIONAL_GATE_FAILED $opt did not run" >> "$S"
+  done
+  # The mode every gate's own log reports, read back against the requested one (a gate that
+  # printed no mode line, or the other mode's, is a failed arm, not a comparable one).
+  python3 "$HERE/compare.py" --check-mode "$OUT" >> "$S" 2>&1 || echo "MODE_CHECK_FAILED" >> "$S"
   echo "ARM_DONE $(date -u +%FT%TZ)" >> "$S"
   cat "$S"
+  ! grep -q -E '^(MODE_CHECK_FAILED|OPTIONAL_GATE_FAILED)' "$S"
 }
 
 case "$PHASE" in

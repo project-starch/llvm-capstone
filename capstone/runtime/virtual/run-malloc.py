@@ -11,6 +11,8 @@ import subprocess
 import struct
 import sys
 
+import memory_mode
+
 HERE = Path(__file__).resolve().parent
 COARSE_CASES = ('coarse-reuse', 'coarse-stale', 'coarse-bounds')
 
@@ -74,6 +76,7 @@ def main():
     p.add_argument('--exact-bounds', action=argparse.BooleanOptionalAction, default=False,
                    help="Run QEMU's exact-bounds profile. Option (iii) does not need it; "
                         "it is kept so a suite can be run both ways as a two-sided control.")
+    p.add_argument('--unpinned', action='store_true', help='load the module with unpinned=1 and require it to report so')
     p.add_argument('--sdk', type=Path, help='the SDK the application was built with: its sdk.json '
                    '(heap_lifetimes, heap_scrub_free) selects the denial expectations and is recorded')
     a = p.parse_args()
@@ -155,7 +158,8 @@ dmesg -n 1
 export CAPSTONE_MALLOC_COUNT=__MALLOC_COUNT__
 ./native-malloc ok
 echo MALLOC_NATIVE_EXIT:$?
-insmod capstone_vm.ko || exit 1
+insmod capstone_vm.ko__MODULE_ARGS__ || exit 1
+__MODE_ECHO__
 CAPSTONE_VM_STATS=1 CAPSTONE_VM_TRACE=1 ./capstone-vexec malloc.dom ok
 echo MALLOC_BASIC_EXIT:$?
 CAPSTONE_VM_STATS=1 ./capstone-vexec malloc.dom population
@@ -184,9 +188,10 @@ echo MALLOC_CLEANUP:$?
 echo VIRTUAL_STAGED_DONE
 '''
     if recycle_only:
-        gate = ('#!/bin/sh\ncd /mnt/vm || exit 1\ndmesg -n 1\ninsmod capstone_vm.ko || exit 1\n' + recycle_gate +
+        gate = ('#!/bin/sh\ncd /mnt/vm || exit 1\ndmesg -n 1\ninsmod capstone_vm.ko__MODULE_ARGS__ || exit 1\n__MODE_ECHO__\n' + recycle_gate +
                 'rmmod capstone_vm\necho MALLOC_CLEANUP:$?\necho VIRTUAL_STAGED_DONE\n')
     gate = gate.replace('__MALLOC_COUNT__', str(a.malloc_count))
+    gate = gate.replace('__MODULE_ARGS__', memory_mode.args(a.unpinned)).replace('__MODE_ECHO__', memory_mode.echo('MALLOC_'))
     assert '__MALLOC_COUNT__' not in gate, 'malloc count not substituted'
     (stage / 'gate.sh').write_text(gate)
     run = subprocess.run([sys.executable, str(HERE / 'run-staged.py'), '--qemu', str(a.qemu.resolve()),
@@ -203,6 +208,7 @@ echo VIRTUAL_STAGED_DONE
         # the domain prints the count it used; a missing line means the run is not comparable
         'malloc_count_reported': ('MALLOC_COUNT_USED %d' % a.malloc_count) in log,
         'cleanup': run.returncode == 0 and 'MALLOC_CLEANUP:0\n' in log,
+        'memory_mode_verified': memory_mode.verified(log, a.unpinned, 1),
         'no_kernel_fault': 'Kernel panic' not in log and 'Oops' not in log,
         # Option (iii): a grow across the 4 MiB granule boundary keeps its contents whichever path
         # it took, and the count of remaps refused for misalignment is RECORDED rather than
@@ -247,7 +253,7 @@ echo VIRTUAL_STAGED_DONE
     sites.update(recycle_sites)
     if recycle_only:
         sites = dict(recycle_sites)
-        checks = {k: checks[k] for k in ('cleanup', 'no_kernel_fault')}
+        checks = {k: checks[k] for k in ('cleanup', 'no_kernel_fault', 'memory_mode_verified')}
     for name, site in sites.items():
         if site is None:
             match = re.search(r'MALLOC_FAULT_READY:' + re.escape(name) + r'\n(.*?)MALLOC_DENIAL_EXIT:' +
@@ -293,7 +299,7 @@ echo VIRTUAL_STAGED_DONE
                                        all((m[1] != '0') == recycle_only for m in outside))
     coarse, coarse_backing = coarse_checks(log, symbols, image_base, recycle_only)
     checks.update(coarse)
-    record = dict(status='PASS' if all(checks.values()) else 'FAIL', tests=checks,
+    record = dict(status='PASS' if all(checks.values()) else 'FAIL', tests=checks, unpinned=a.unpinned,
                   coarse_backing=coarse_backing,
                   virtual_vm_abi=image_abi(a.application), harts=1, allocator='Capstone-compiled musl 1.2.5 mallocng; upstream allocation policy',
                   heap=heap, denial_expectations='per-object lifetimes' if heap['lifetimes'] else 'bounds only',

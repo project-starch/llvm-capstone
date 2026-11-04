@@ -8,6 +8,8 @@ import shutil
 import subprocess
 import sys
 
+import memory_mode
+
 HERE = Path(__file__).resolve().parent
 
 
@@ -23,6 +25,7 @@ def main():
     p.add_argument('--exact-bounds', action=argparse.BooleanOptionalAction, default=False,
                    help="Run QEMU's exact-bounds profile. Option (iii) does not need it; "
                         "it is kept so a suite can be run both ways as a two-sided control.")
+    p.add_argument('--unpinned', action='store_true', help='load the module with unpinned=1 and require it to report so')
     a = p.parse_args()
     a.work.mkdir(parents=True, exist_ok=False)
     stage = a.work/'stage'
@@ -35,7 +38,8 @@ def main():
     gate = '''#!/bin/sh
 cd /mnt/vm || exit 1
 dmesg -n 1
-insmod capstone_vm.ko || exit 1
+insmod capstone_vm.ko''' + memory_mode.args(a.unpinned) + ''' || exit 1
+''' + memory_mode.echo('FP_') + '''
 CAPSTONE_EXEC_DIAGNOSTICS=1 ./capstone-vexec fp.dom
 echo FP_EXIT:$?
 rmmod capstone_vm
@@ -53,8 +57,9 @@ echo VIRTUAL_STAGED_DONE
                'signal_handler_leaves_environment', 'split_results_through_pointers')}
     checks['no_failure'] = 'VIRTUAL_FP_FAIL' not in log and log.count('VIRTUAL_FP_DONE failures=0') == 1
     checks['exit'] = log.count('FP_EXIT:0') == 1
+    checks['memory_mode_verified'] = memory_mode.verified(log, a.unpinned, 1)
     checks['cleanup'] = run.returncode == 0 and log.count('FP_CLEANUP:0') == 1
-    record = dict(status='PASS' if all(checks.values()) else 'FAIL', tests=checks,
+    record = dict(status='PASS' if all(checks.values()) else 'FAIL', tests=checks, unpinned=a.unpinned,
                   harts=1, virtual_vm_abi=5 if a.exact_bounds else 3, input_sha256={name: sha(path) for name, path in paths.items()},
                   gate_sha256=hashlib.sha256(gate.encode()).hexdigest(), runner_sha256=sha(Path(__file__)))
     (a.work/'result.json').write_text(json.dumps(record, indent=2) + '\n')

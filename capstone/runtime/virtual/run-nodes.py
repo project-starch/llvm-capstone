@@ -9,12 +9,15 @@ import re
 import shutil
 import subprocess
 
+import memory_mode
+
 HERE = Path(__file__).resolve().parent
 SCRIPT = r'''#!/bin/sh
 cd /mnt/vm || exit 1
 export CAPSTONE_VM_STATS=1 CAPSTONE_EXEC_DIAGNOSTICS=1
 export CAPSTONE_NODE_COUNT=__NODE_COUNT__
-insmod capstone_vm.ko node_initial_pages=4 node_batch_pages=16 || exit 1
+insmod capstone_vm.ko node_initial_pages=4 node_batch_pages=16__MODULE_ARGS__ || exit 1
+__MODE_ECHO__
 for mode in growth stale; do
   ./capstone-vexec node.dom "$mode" > /tmp/node.out 2>&1
   echo NODE_EXIT:$mode:$?
@@ -22,7 +25,8 @@ for mode in growth stale; do
 done
 ./capstone-vexec --stats
 rmmod capstone_vm || exit 1
-insmod capstone_vm.ko node_initial_pages=4 node_batch_pages=16 node_max_pages=6 || exit 1
+insmod capstone_vm.ko node_initial_pages=4 node_batch_pages=16 node_max_pages=6__MODULE_ARGS__ || exit 1
+__MODE_ECHO__
 ./capstone-vexec node.dom budget > /tmp/node.out 2>&1
 echo NODE_EXIT:budget:$?
 cat /tmp/node.out
@@ -48,6 +52,7 @@ def main():
     # The value is substituted into the gate script AND recorded, and the live-population check
     # below is built from it -- a hardcoded 70000 there would silently pass or fail on a different
     # count rather than comparing like with like.
+    p.add_argument('--unpinned', action='store_true', help='load the module with unpinned=1 and require it to report so')
     p.add_argument('--node-count', type=int, default=70000)
     a = p.parse_args()
     a.work.mkdir(parents=True, exist_ok=False)
@@ -61,7 +66,9 @@ def main():
                       (inputs['launcher'], 'capstone-vexec'),
                       (inputs['module'], 'capstone_vm.ko')):
         shutil.copy2(src, stage/name)
-    gate_text = SCRIPT.replace('__NODE_COUNT__', str(a.node_count))
+    gate_text = (SCRIPT.replace('__NODE_COUNT__', str(a.node_count))
+                 .replace('__MODULE_ARGS__', memory_mode.args(a.unpinned))
+                 .replace('__MODE_ECHO__', memory_mode.echo('NODE_')))
     assert '__NODE_COUNT__' not in gate_text, 'node count not substituted'
     (stage/'gate.sh').write_text(gate_text)
     run = subprocess.run([os.environ.get('PYTHON', 'python3'),
@@ -105,6 +112,7 @@ def main():
                   s['nodes_live'] == s['nodes_retired'] == 0 and
                   s['node_capacity'] == 1024 and s['node_bytes'] == 7 * 4096
                   for s in census),
+              'memory_mode_verified': memory_mode.verified(log, a.unpinned, 2),
               'no_contract_failure': 'NODE_FAIL:' not in log}
     if stats:
         s = stats[0]
@@ -124,6 +132,7 @@ def main():
                                           HERE/'run-staged.py']},
               'gate_sha256': hashlib.sha256(gate_text.encode()).hexdigest(),
               'node_count': a.node_count,
+              'unpinned': a.unpinned,
               'scope': 'one hart, trusted Linux, process-local paged node store'}
     (a.work/'result.json').write_text(json.dumps(result, indent=2) + '\n')
     for name, ok in checks.items(): print(('PASS ' if ok else 'FAIL ') + name)

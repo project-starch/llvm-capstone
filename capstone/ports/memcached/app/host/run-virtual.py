@@ -15,6 +15,8 @@ import sys
 APP = Path(__file__).resolve().parents[1]
 REPO = APP.parents[3]
 VIRTUAL = REPO / 'capstone/runtime/virtual'
+sys.path.insert(0, str(VIRTUAL))
+import memory_mode
 spec = importlib.util.spec_from_file_location('judge', APP.parents[1] / 'common/application/check-safety.py')
 judge = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(judge)
@@ -59,6 +61,7 @@ def main():
     p.add_argument('--arm', choices=('virtual', 'sublet'), default='virtual')
     p.add_argument('--port', type=int, default=21299)
     p.add_argument('--timeout', type=int, default=1200)
+    p.add_argument('--unpinned', action='store_true', help='load the module with unpinned=1 and require it to report so')
     p.add_argument('--native-reference', type=Path,
                    help='Reuse native transcripts from a passing gate with identical native binaries and harness source')
     a = p.parse_args()
@@ -118,7 +121,7 @@ def main():
     for label in ('value', 'cas'):
         check('oracle_detects_' + label, reference != native[label]['transcript.norm'])
     script = ['#!/bin/sh', 'cd /mnt/vm || exit 1', 'dmesg -n 1',
-              'insmod capstone_vm.ko || exit 1', 'chmod 666 /dev/capstone-vm',
+              'insmod capstone_vm.ko' + memory_mode.args(a.unpinned) + ' || exit 1', memory_mode.echo('MC_'), 'chmod 666 /dev/capstone-vm',
               'export CAPSTONE_EXEC_DIAGNOSTICS=1',
               'echo MC_BEGIN:pthread', './capstone-vexec ./pthread.dom', 'echo MC_END:pthread:$?']
     predicted_arm = 'lifetimes' if a.arm == 'sublet' else 'sublet'
@@ -156,6 +159,7 @@ def main():
     parts = {label: (text, int(status)) for label, text, status in
              re.findall(r'^MC_BEGIN:([^\n]+)\n(.*?)^MC_END:\1:(\d+)\n', log, re.M | re.S)}
     pthread_text, pthread_status = parts.get('pthread', ('', -1))
+    check('memory_mode_verified', memory_mode.verified(log, a.unpinned, 1))
     for mark in ('unsupported_clone_refused', 'tls mutex cond tagged_join', 'timed_wait', 'independent_blocking_io', 'private_epoll_events', 'shared_tls_transport', '64_joined_lifetimes'):
         check('pthread_' + mark.replace(' ', '_'), pthread_status == 0 and 'VIRTUAL_PTHREAD_OK ' + mark in pthread_text)
     fixtures = []
@@ -208,7 +212,7 @@ def main():
             check(label + '_trigger',
                   got != 'RETURN' or registered or not self_reported_noop(detail))
     check('adapter_cleanup', run.returncode == 0 and '\nMC_CLEANUP:0\n' in log)
-    record = dict(status='PASS' if all(c['passed'] for c in checks) else 'FAIL', arm=a.arm,
+    record = dict(status='PASS' if all(c['passed'] for c in checks) else 'FAIL', arm=a.arm, unpinned=a.unpinned,
                   checks=checks, fixtures=fixtures, workers=4, harts=1, virtual_vm_abi=5,
                   native_reference_sha256=sha(reference_record) if reference_record else None,
                   native_transcript_sha256={label: hashlib.sha256(files['transcript.norm']).hexdigest()

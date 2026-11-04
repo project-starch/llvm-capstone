@@ -190,9 +190,9 @@ original low word, retaining bytes while clearing the storage tag under rule 1.
 This avoids scalar-load projection. The global context lock excludes a second
 active namespace in the same mm.
 
-These paths still require qualification; the accompanying lane report is the
-source of measured results and unresolved failures. No result is inferred from
-successful compilation.
+These paths still require qualification: "Tests and limits" below lists what each gate and
+control establishes, and what is not covered. No result is inferred from successful
+compilation.
 
 ## Tests and limits
 
@@ -214,49 +214,96 @@ the tag, and the production module must refuse `unpinned=1`. The fixture
 scrubs all of its pages before freeing them, including in this negative mode.
 It uses only the proposed raw instructions and architectural mint/root setup.
 
-The model refuses more than one hart in the virtual profile. Protected fork
-requires a separate namespace/context-cloning contract. Tagged pages shared
-with an ordinary sleeping child can make a collection refuse until exclusive
-ownership returns. General DMA ownership and register preservation across traps
+The model refuses more than one hart in the virtual profile. General DMA ownership and register preservation across traps
 remain OS responsibilities; the model rejects tagged raw publication into a
 writable DMA mapping. Tagged swap has no save/restore format. KSM and huge pages
 are outside this configuration. Instruction-attempt counts do not measure tag
 cache latency, coherence, bandwidth or interrupt latency.
 
-## Experimental qualification status
+## Status: EXPERIMENTAL, default OFF
 
-The module parameter defaults to `unpinned=0`; the matching QEMU property
-`x-capstone-raw-moves` also defaults off. Leave both off for landing. The
-Linux patch is an explicit opt-in platform component, not applied by this tree.
+`unpinned=0` is the module default and `x-capstone-raw-moves` defaults off in the model; leave both
+off. The Linux patch is an explicit platform component this tree does not apply. Nothing here is a
+claim about silicon: raw tag moves are an ISA proposal with no RTL, the boards cannot run this mode,
+and the flat node table never collects there (Q-27). The pinned path stays fully supported.
 
-The completed earlier three-arm qualification found default-OFF identical to
-dev across all nine runtime gates. ON differed in runtime, pin-ahead, pthread
-and step-hooks: 87 additional named failed checks. Pin-specific predicates
-need mode-specific replacements with positive execution witnesses. Four
-point-1 fault/stop stimuli did not inject, and five extra-fault attributions
-remain unresolved. No gate predicate has been relaxed.
+What a gate arm runs, and in which mode:
 
-The earlier instruction-attempt census measured gcc boundary overhead
-48.3 -> 37.2 percent and lbm 3.69 -> 0.70 percent. These are EXPERIMENTAL
-ON results, not default-OFF improvements, cycle counts or elapsed-time claims.
-They do not establish complete ON qualification. One-hart private-anonymous
-lifetime recycling and tested process exits passed; protected fork, SMP,
-shared tagged backing, tagged swap and a whole-system leak bound remain outside
-that evidence.
+- `gates/run-arm.sh --mode on|off OUT` runs the nine landing gates (hosted, runtime, nodes, malloc,
+  pin-ahead, fp, pthread, step-hooks, memcached) with `--unpinned` for `on` in EVERY runner. Each
+  runner loads the module itself, echoes the mode the loaded module reports after each insmod
+  (`<GATE>_MEMORY_MODE:Y|N|A`; `A` is a module without the parameter, a pinned-only build) and carries a `memory_mode_verified` check. `compare.py` refuses to compare an
+  output with no mode file, a gate with no mode line, fewer or more lines than module loads (`MODE_LOADS`),
+  a line that is not the requested mode, a `memory_mode_verified` that failed or is absent (whether or not
+  both sides fail alike), or a SUMMARY.txt carrying `MODE_CHECK_FAILED` / `OPTIONAL_GATE_FAILED`.
+  `--control-mode` / `--arm-mode` pin the pair (an ON arm is compared with an OFF control). The nine
+  ordinary gates may end non-zero (their FAIL sets are compared); the optional ones may not.
+- Optional gates for `on`: `unpinned-mm` (the isolated swap-hook and namespace fixtures, needs
+  `UNPINNED_PROBES`) and `unpinned-mutants` (broken modules, below). When selected they must succeed (otherwise the arm writes
+  `OPTIONAL_GATE_FAILED`, exits non-zero and `compare.py` refuses the output) and their own mode witnesses
+  are checked (the seven `MM_ARM` lines; every mutant run's memory mode). The arm also checks that the
+  production module carries none of the test-hook strings.
+- ON has its own resolution oracles, because the pinned page counters read zero by construction. They
+  read what Linux says: the kernel's FOLL_PIN counters (step-hooks and pin-ahead require them not to
+  move during the unpinned run, after a launch in the same guest has shown that they do move: the
+  pthread contract's supervisor frames); the launcher's VmRSS/VmHWM (`CAPSTONE_VM_RSS=1`) for pages given
+  back and for the 64 MiB the `vm` launch never touches; per-fault event records against the public
+  fault counter; window and event pages that never meet. Every OFF oracle is unchanged.
 
-## Current-dev integration
+Negative controls are broken modules, not edited transcripts. A CV_TEST_HOOKS module has parameters
+that each remove one guard (`test_skip_vma_clip`, `test_skip_arena_clip`, `test_skip_stop_check`,
+`test_skip_resident_stop`, `test_skip_namespace_scrub`, `test_skip_scrub_after_pages`,
+`test_skip_scrub_after_granules`). `run-mutants.py` requires a named check to pass on the unbroken module
+and fail on the broken one for the VMA clip, the stop check and the stop at the first resident PTE, and only
+when both are complete runs of the selected configurations (completed, expected runs with their exit checks,
+verified mode, the observations the check reads); `test-mutants.py` plants each way a run can be incomplete,
+among them the evaluator's output on an empty transcript. The
+arena clip control is NOT achieved: it is not isolated by any scenario a gate can build (the VMA clip or a resident guard page bounds
+the window at the same page), so `test_skip_arena_clip` exists but no check can see it. `run-mm.py` does the same for the scrub with a fixture that seeds 21
+granules (offsets 0, 16, 2048, 4080) on 10 pages of four mappings. `test-oracles.py` additionally
+corrupts real ON transcripts and requires each corruption to break the named check (it proves the parsers
+reject contradictory lines, nothing about a module).
+The reclaim and tag-clear evidence for devices (DMA, fw_cfg, virtio) is model-side and not part of this
+tree.
 
-The default remains OFF. The branch includes dev `6ae238ca3022` without
-rewriting its previously published history. The main exchange (register 11)
-is lazy and uses `prepare_write` / `CV_TOUCH`; only the metadata grant
-(register 10) stays eager. In unpinned mode admission faults a page in without
-pinning it. The launcher's successful-admission cache is valid for the fixed
-main-exchange mapping: later backing changes are covered by the experimental
-kernel copy/free hooks, rather than by continued residency. Retirable worker
-transports continue to touch each attachment.
+Not covered by an ON test and rested on the kernel hook tests alone: that a retired thread stack's tags do
+not survive its reuse (ON clears at `arch_free_page`, not at retire; the pthread check is an accounting
+check), reclaim and swap under memory pressure (only the hook is tested; tagged backing is refused),
+page migration and compaction (non-present PTEs make collection and open fail closed and the node table
+then grows without recycling unswept IDs), and a huge-page madvise on an arena VMA (the module re-checks
+`VM_NOHUGEPAGE` on the faulting VMA when the kernel has THP, which neither platform kernel does).
 
-If an unpinned collection refuses a non-present or shared tagged page, node
-allocation now tries fresh-record growth while keeping unswept IDs retired.
-Collection and open still fail closed on unsupported mappings; this does not
-qualify swap/migration pressure or make ON production-ready. All ON results
-remain **EXPERIMENTAL** and the qualification gaps above still apply.
+## Process creation
+
+The refusal is the libc's, not the module's. `__clone` answers `-ENOSYS` for flags that are not a full
+thread, and the delegate answers `-ENOSYS` for every syscall it does not serve, so `fork`, `vfork`, raw
+`clone` with fork or vfork flags and `clone3` fail before anything is built; `pthread-contract.c` tests all of
+them, in both modes, with the thread tests running afterwards. `execve` and `posix_spawn` are delegated: a
+Capstone image replaces the whole launcher process (a new mm, so no tag outlives the old namespace), a native
+program is refused with the caller intact, and a spawn is forked by the spawner helper that the launcher starts
+before it grants any memory, so a child never shares a tagged page.
+
+A native fork of the launcher itself is not refused by the module or the kernel. The child shares the launcher's
+tagged anonymous pages copy-on-write; `unpinned_hold_mm` meets a tagged page with `mapcount != 1` and returns
+`-EOPNOTSUPP`, so collection and namespace open fail closed until the child exits or execs. That is an
+availability limit, not a safety one. Only the torture stimulus (`CAPSTONE_VM_TORTURE`) exercises it.
+
+## Why it is not the default, and what is missing
+
+1. It is a platform, not a flag: the patched Linux, the model with `x-capstone-raw-moves=true`, the
+   `capstone,unpinned-v1` device-tree node and `x-capstone-test-csrs=false`. The module refuses `unpinned=1`
+   on a stock kernel and never falls back by itself; a default needs detection with a clean fallback to the
+   pinned path, or every platform image carrying all of it.
+2. No RTL. At most this could be the default on the model; silicon stays pinned.
+3. Memcached fixture 24 fails in the dev head, in OFF and in ON alike, and which of its two checks
+   (`fx24_prediction` when the header-only condition is created, `fx24_trigger` when it is not) names the
+   failure depends on where the allocator places things: one build and platform gave both outcomes across
+   repeated runs of the memcached gate. `gates/compare.py` folds that pair into one placement-dependent
+   entry only when the case's job, output and fault files show the signature of the failed check (not
+   created: `header-only=0`, or the earlier bail-out `ia not linked`, then the known no-op mark `18e0018` and exit; created: `header-only=1`, then a
+   signal at a cause-24 fault at address 0); any other single failure makes the gate INCOMPLETE. The
+   fixture itself still needs fixing.
+4. Reclaim and swap pressure, page migration and compaction, shared tagged backing (refused), a native fork of
+   the launcher, and a whole-system leak bound are untested or fail closed with unmeasured availability cost.
+5. Device-side rule 1 is a model property the OS cannot restore, and its arms are not in this tree.
+6. Single hart, no KSM, no huge pages: the module refuses `num_online_cpus() != 1`; THP is refused at `add`.
