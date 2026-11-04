@@ -17,7 +17,11 @@
 # module without the parameter, which is pinned) and fails its own memory_mode_verified check when
 # that is not the requested mode. The mode is recorded in OUT/mode, and at the end of the gates
 # phase `compare.py --check-mode OUT` reads every gate's log back against it (a gate with no mode
-# line, or with a line of the other mode, fails the arm). `on` needs the platform of
+# line, fewer lines than module loads, a line of the other mode, or a failed memory_mode_verified
+# fails the arm). The nine gates may end with a non-zero rc, since compare.py compares their FAIL
+# sets; the optional qualification gates (GATES=... unpinned-mm unpinned-mutants) may not: one that
+# fails, or leaves no line, writes OPTIONAL_GATE_FAILED into SUMMARY.txt, the arm exits non-zero, and
+# compare.py refuses any output whose SUMMARY.txt carries that or MODE_CHECK_FAILED. `on` needs the platform of
 # unpinned/README.md: the patched kernel, the model with raw moves, and (default CPU_EXTRA)
 # x-capstone-test-csrs=false,x-capstone-raw-moves=true.
 #
@@ -208,8 +212,13 @@ gates_phase() {
   gate() {
     local name=$1; shift
     [[ " $GATES " == *" $name "* ]] || return 0
-    local s; s=$(date +%s); "$@" > "$G/$name.log" 2>&1
-    printf '%-10s rc=%s %6ss\n' "$name" $? $(( $(date +%s) - s )) >> "$S"
+    local s rc; s=$(date +%s); "$@" > "$G/$name.log" 2>&1; rc=$?
+    printf '%-10s rc=%s %6ss\n' "$name" "$rc" $(( $(date +%s) - s )) >> "$S"
+    # The nine ordinary gates may fail the way the control does (compare.py compares their FAIL sets);
+    # a qualification gate that was asked for is a prerequisite and must succeed.
+    case $name in
+      unpinned-mm|unpinned-mutants) [[ $rc == 0 ]] || echo "OPTIONAL_GATE_FAILED $name rc=$rc" >> "$S" ;;
+    esac
   }
   gate hosted python3 "$V/run-hosted.py" --adapter "$P/adapter" --application "$I/hosted.dom" \
     --noreturn "$I/noreturn.dom" --native "$I/native-hosted" "${plat[@]}" "${memory[@]}" --work "$G/hosted"
@@ -242,12 +251,17 @@ gates_phase() {
   elif [[ " $GATES " == *" memcached "* ]]; then
     printf '%-10s NOT RUN (no memcached build)\n' memcached >> "$S"
   fi
+  # A qualification gate that was asked for and left no line did not run.
+  local opt
+  for opt in unpinned-mm unpinned-mutants; do
+    [[ " $GATES " == *" $opt "* ]] && ! grep -q "^$opt  *rc=" "$S" && echo "OPTIONAL_GATE_FAILED $opt did not run" >> "$S"
+  done
   # The mode every gate's own log reports, read back against the requested one (a gate that
   # printed no mode line, or the other mode's, is a failed arm, not a comparable one).
   python3 "$HERE/compare.py" --check-mode "$OUT" >> "$S" 2>&1 || echo "MODE_CHECK_FAILED" >> "$S"
   echo "ARM_DONE $(date -u +%FT%TZ)" >> "$S"
   cat "$S"
-  ! grep -q MODE_CHECK_FAILED "$S"
+  ! grep -q -E '^(MODE_CHECK_FAILED|OPTIONAL_GATE_FAILED)' "$S"
 }
 
 case "$PHASE" in
