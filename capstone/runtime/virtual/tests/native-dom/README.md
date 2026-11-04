@@ -13,6 +13,17 @@ traverse parents or cross mounts. Non-stdio inherited fds are inaccessible.
 Inherited filters still apply. It refuses setuid/setgid and mutable remote
 filesystem images. Stage binaries on guest tmpfs before executing them.
 
+The dev replay also supports anonymous `pipe2` with `O_CLOEXEC` and
+`O_NONBLOCK`. Both returned descriptors become grants before domain re-entry;
+unsupported flags and results beyond the descriptor table are refused. Scalar
+output clears tags, including the returned fd pair. Legacy read/write file
+operations use the private bounce path. Initial stdio may include the first
+serial terminal (device 4:64), as well as null/console, regular files and pipes;
+this does not permit opening device paths. The pipe contract fails on the
+prerequisite module and passes on the candidate. Hosted serial output is
+restored, but file access outside the initial cwd and full gate parity remain
+unresolved. Export `LANE_ROOT` to select a private artifact directory.
+
 The 152-byte scalar trampoline forwards module-validated delegated calls through
 private bounce memory, in addition to the protection bridge. The module retains
 thread-self, anonymous mapping and whole-grant retirement, node reservation,

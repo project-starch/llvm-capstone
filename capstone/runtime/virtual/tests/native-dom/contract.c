@@ -1,4 +1,5 @@
-/* Native binfmt day-one contract; uses the existing SDK without ABI changes. */
+/* Native binfmt contract; uses the existing SDK without ABI changes. */
+#define _GNU_SOURCE
 #include <errno.h>
 #include <fcntl.h>
 #include <stdlib.h>
@@ -99,6 +100,23 @@ int main(int argc, char **argv)
         char b[4];
         ssize_t n = read(0, b, sizeof b);
         return n != 4 || memcmp(b, "test", 4) || output(b, 4);
+    }
+    if (!strcmp(argv[1], "pipe")) {
+        union { void *cap; int fd[2]; } ends;
+        char buffer[64];
+        ends.cap = buffer;
+        if (pipe2(ends.fd, O_CLOEXEC | O_NONBLOCK)) return 40;
+        if (__builtin_capstone_cap_get_tag(ends.cap)) return 41;
+        if (!(fcntl(ends.fd[0], F_GETFD) & FD_CLOEXEC)) return 42;
+        if (write(ends.fd[1], "pipe", 4) != 4 ||
+            read(ends.fd[0], buffer, sizeof buffer) != 4 ||
+            memcmp(buffer, "pipe", 4)) return 43;
+        if (close(ends.fd[1]) || read(ends.fd[0], buffer, sizeof buffer) ||
+            close(ends.fd[0])) return 44;
+        errno = 0;
+        if (read(ends.fd[0], buffer, 1) != -1 || errno != EBADF) return 45;
+        errno = 0;
+        return pipe2(ends.fd, -1) != -1 || errno != EINVAL;
     }
     if (!strcmp(argv[1], "protect-refuse")) {
         extern long __capstone_vm_protect(uintptr_t, size_t, int);

@@ -40,7 +40,8 @@ static bool dom_forwarded(u64 nr)
     CALL(getcwd) CALL(fcntl) CALL(ioctl)
     CALL(unlinkat) CALL(ftruncate)
     CALL(sync_file_range) CALL(flock)
-    CALL(openat) CALL(close) CALL(getdents64)
+    CALL(openat) CALL(close) CALL(getdents64) CALL(pipe2)
+    CALL(read) CALL(write)
     CALL(lseek) CALL(pread64) CALL(pwrite64)
     CALL(readv) CALL(writev) CALL(preadv) CALL(pwritev)
     CALL(newfstatat) CALL(fstat) CALL(fsync) CALL(fdatasync)
@@ -181,6 +182,8 @@ static long dom_prepare(struct context *c, const struct capstone_delegate_entry 
         (e->args[0] != 0 /* PRIO_PROCESS */ ||
          ((pid_t)e->args[1] != 0 && (pid_t)e->args[1] != task_tgid_vnr(current)))) return -EPERM;
     if (e->nr == CAPSTONE_SYS_rt_sigprocmask && e->args[3] != 8) return -EINVAL;
+    if (e->nr == CAPSTONE_SYS_pipe2 && (e->args[1] & ~(u64)(O_CLOEXEC | O_NONBLOCK)))
+        return -EINVAL;
     if (e->nr == CAPSTONE_NR_SIGACTION) {
         if (e->args[0] < 1 || e->args[0] > 64 || e->args[0] == SIGKILL ||
             e->args[0] == SIGSTOP || e->args[1] > CAPSTONE_SIGNAL_CAUGHT) return -EINVAL;
@@ -252,13 +255,37 @@ static long dom_prepare(struct context *c, const struct capstone_delegate_entry 
     return dom_issue(c, e->nr == CAPSTONE_NR_FCNTL_LOCK ? CAPSTONE_SYS_fcntl :
                          e->nr == CAPSTONE_NR_IOCTL_BUF ? CAPSTONE_SYS_ioctl : e->nr, a);
 }
-static long dom_complete(struct context *c, long result)
+static long dom_complete(struct context *c, long *resultp)
 {
     struct dom_delegate *d = c->dom_delegate;
     const struct capstone_delegate_entry *e = &d->request;
     unsigned i;
     int rc;
+    long result = *resultp;
     if (d->path_fd >= 0) { close_fd(d->path_fd); d->path_fd = -1; }
+    if (e->nr == CAPSTONE_SYS_pipe2 && !result) {
+        int ends[2];
+        /* Only the trusted trampoline writes bounce memory. Publication of
+         * both descriptor grants is atomic with respect to domain re-entry.
+         * Native clone/dup/descriptor passing remain refused. */
+        if (copy_from_user(ends, (void __user *)(d->bounce + e->args[0]), sizeof(ends)))
+            return -EFAULT;
+        if (ends[0] < 0 || ends[1] < 0 || ends[0] == ends[1] ||
+            ends[0] == c->dom_fd || ends[1] == c->dom_fd) return -EIO;
+        if (ends[0] >= DOM_FDS || ends[1] >= DOM_FDS) {
+            close_fd(ends[0]); close_fd(ends[1]);
+            *resultp = -EMFILE;
+            return 0;
+        }
+        for (i = 0; i < 2; ++i) {
+            struct file *f = fget(ends[i]);
+            bool pipe = f && file_inode(f)->i_sb->s_magic == PIPEFS_MAGIC &&
+                        S_ISFIFO(file_inode(f)->i_mode);
+            if (f) fput(f);
+            if (!pipe || test_bit(ends[i], d->fds)) return -EIO;
+        }
+        set_bit(ends[0], d->fds); set_bit(ends[1], d->fds);
+    }
     if (dom_vector(e->nr)) {
         bool writing = e->nr == CAPSTONE_SYS_writev || e->nr == CAPSTONE_SYS_pwritev;
         size_t left = result < 0 ? 0 : result;

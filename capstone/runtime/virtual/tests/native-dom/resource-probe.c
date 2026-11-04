@@ -119,7 +119,7 @@ int main(int argc, char **argv)
         {36,"symlinkat"}, {37,"linkat"}, {33,"mknodat"}, {49,"chdir"},
         {50,"fchdir"}, {276,"renameat2"}, {134,"raw sigaction"},
         {139,"rt_sigreturn"}, {132,"sigaltstack"}, {103,"setitimer"},
-        {23,"dup"}, {24,"dup3"}, {59,"pipe2"}, {279,"memfd_create"},
+        {23,"dup"}, {24,"dup3"}, {279,"memfd_create"},
         {265,"open_by_handle_at"}, {438,"pidfd_getfd"}, {40,"mount"},
         {97,"unshare"}, {268,"setns"}
     };
@@ -129,6 +129,20 @@ int main(int argc, char **argv)
         if (result != -ENOSYS) printf("nr=%u result=%ld\n", calls[i].nr, result);
         check(calls[i].name, result == -ENOSYS);
     }
+    uint64_t pipe_args[6] = {64, 0};
+    int pipe_fds[2] = {-1, -1};
+    long pipe_result = raw(CAPSTONE_SYS_pipe2, pipe_args);
+    if (!pipe_result) memcpy(pipe_fds, exchange + 64, sizeof pipe_fds);
+    check("pipe descriptor grants", !pipe_result && pipe_fds[0] >= 3 && pipe_fds[1] >= 3 &&
+          fcntl(pipe_fds[0], F_GETFD) >= 0 && fcntl(pipe_fds[1], F_GETFD) >= 0);
+    if (!pipe_result) {
+        check("pipe grants close", !close(pipe_fds[0]) && !close(pipe_fds[1]));
+        check("closed pipe grant revoked", read(pipe_fds[0], b, 1) == -1 && errno == EBADF);
+    }
+    pipe_args[0] = exchange_bytes - 4;
+    check("pipe output bounds", raw(CAPSTONE_SYS_pipe2, pipe_args) == -EFAULT);
+    pipe_args[0] = 64; pipe_args[1] = UINT64_MAX;
+    check("pipe flags refused", raw(CAPSTONE_SYS_pipe2, pipe_args) == -EINVAL);
     uint64_t a[6] = {1, 0x5412, 128}; /* TIOCSTI */
     check("arbitrary ioctl", raw(CAPSTONE_SYS_ioctl, a) == -ENOSYS);
     check("buffer ioctl", raw(CAPSTONE_NR_IOCTL_BUF, a) == -ENOSYS);

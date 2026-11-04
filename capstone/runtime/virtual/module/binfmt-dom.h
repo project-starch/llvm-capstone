@@ -214,8 +214,14 @@ static long dom_rw(struct context *c, const struct capstone_delegate_entry *e)
     file = fget(e->args[0]);
     if (!file) return -EBADF;
     /* The private context descriptor is never an application I/O target. */
-    if (file->private_data == c || !file->f_op ||
-        !(write ? file->f_op->write_iter : file->f_op->read_iter)) { rc = -EBADF; goto put; }
+    if (file->private_data == c || !file->f_op) { rc = -EBADF; goto put; }
+    if (!(write ? file->f_op->write_iter : file->f_op->read_iter)) {
+        /* Console descriptors can have only the legacy .read/.write API.
+         * Use the existing private bounce path and Linux syscall checks;
+         * never invoke a file operation with a kernel or domain pointer. */
+        fput(file);
+        return dom_prepare(c, e);
+    }
     buf = c->dom_exchange + e->args[1];
     if (!write && (rc = dom_touch(c, buf, e->args[2]))) goto put;
     rc = import_single_range(write ? WRITE : READ, (void __user *)buf, e->args[2], &iov, &iter);
@@ -291,10 +297,9 @@ static long dom_service(struct context *c, struct cv_step *s)
         if (rc) return dom_reply(c, -rc);
         if (e.nr == CAPSTONE_SYS_exit_group) return (e.args[0] & 255) + 1;
         if (e.nr == DOM_HELLO || e.nr == CAPSTONE_NR_SIGPOLL) e.result = 0;
-        else if (e.nr == CAPSTONE_SYS_read || e.nr == CAPSTONE_SYS_write)
-            e.result = dom_rw(c, &e);
         else {
-            rc = dom_prepare(c, &e);
+            rc = (e.nr == CAPSTONE_SYS_read || e.nr == CAPSTONE_SYS_write) ?
+                 dom_rw(c, &e) : dom_prepare(c, &e);
             /* A brokered open may legitimately return fd 258. Only an
              * actual prepared request authorizes scalar syscall dispatch. */
             if (rc == DOM_DO_SYSCALL && c->dom_delegate->pending) return rc;
@@ -321,12 +326,13 @@ static long dom_ioctl(struct file *f, unsigned int op, unsigned long arg)
         return 0;
     }
     if (op == DOM_SYSCALL_DONE) {
+        long result = (long)arg;
         /* Finish under a noninterruptible lock. A signal must not lose the
          * result of an already executed syscall or run it twice. */
         if (!c->dom_delegate || !c->dom_delegate->pending) return -EINVAL;
         mutex_lock(&vm_lock);
-        rc = dom_complete(c, (long)arg);
-        if (!rc) rc = dom_reply(c, (long)arg);
+        rc = dom_complete(c, &result);
+        if (!rc) rc = dom_reply(c, result);
         c->dom_delegate->pending = false;
         if (rc) goto fault;
         goto out;

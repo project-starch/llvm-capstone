@@ -19,7 +19,8 @@ static bool dom_stdio_file(const struct file *f)
     return (dom_disk_inode(inode) && S_ISREG(inode->i_mode)) ||
            (inode->i_sb->s_magic == PIPEFS_MAGIC && S_ISFIFO(inode->i_mode)) ||
            (S_ISCHR(inode->i_mode) &&
-            (inode->i_rdev == MKDEV(1, 3) || inode->i_rdev == MKDEV(5, 1))); /* null/console */
+            (inode->i_rdev == MKDEV(1, 3) || inode->i_rdev == MKDEV(5, 1) ||
+             inode->i_rdev == MKDEV(4, 64))); /* null/console/first serial terminal */
 }
 
 static bool dom_fd_allowed(struct context *c, u64 fd)
