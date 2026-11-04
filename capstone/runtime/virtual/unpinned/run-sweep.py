@@ -6,6 +6,7 @@ namespace-probe.ko from the namespace fixture; --application is node-contract.c
 built with the matching SDK. --mutant is a separately built module that skips
 tagged pages in next_tagged; --shared-mutant omits the mapcount checks. The
 probes directory also supplies sweep-shared built against namespace-probe.h.
+--config-mutant removes the module's fast-without-unpinned initialization guard.
 Production and mutants use identical assertions.
 """
 import argparse
@@ -20,6 +21,11 @@ HERE = Path(__file__).resolve().parent
 SCRIPT = '''#!/bin/sh
 cd /mnt/vm || exit 1
 dmesg -n 1
+for module in good config; do
+  insmod $module.ko unpinned=0 unpinned_fast_sweep=1 supervisor_slots=32
+  echo CONFIG_RC:$module:$?
+  [ ! -d /sys/module/capstone_vm ] || rmmod capstone_vm || exit 1
+done
 insmod namespace-probe.ko || exit 1
 for module in good omit; do
   insmod $module.ko unpinned=1 unpinned_fast_sweep=1 supervisor_slots=32 || exit 1
@@ -49,7 +55,7 @@ echo VIRTUAL_STAGED_DONE
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    for name in ('qemu', 'images', 'module', 'mutant', 'shared-mutant', 'launcher', 'probes',
+    for name in ('qemu', 'images', 'module', 'mutant', 'shared-mutant', 'config-mutant', 'launcher', 'probes',
                  'application', 'work'):
         parser.add_argument('--' + name, type=Path, required=True)
     args = parser.parse_args()
@@ -57,6 +63,7 @@ def main():
     stage = args.work / 'stage'
     stage.mkdir()
     inputs = {'good.ko': args.module, 'omit.ko': args.mutant, 'shared.ko': args.shared_mutant,
+              'config.ko': args.config_mutant,
               'capstone-vexec': args.launcher, 'node.dom': args.application,
               **{n: args.probes / n for n in ('namespace-check', 'namespace-probe.ko', 'sweep-shared')}}
     for name, path in inputs.items():
@@ -68,6 +75,8 @@ def main():
     log = (args.work / 'guest/serial.log').read_text(errors='replace').replace('\r', '')
     checks = {
         'complete': rc == 0 and 'VIRTUAL_STAGED_DONE' in log,
+        'config_refusal': 'CONFIG_RC:good:22' in log,
+        'config_control': 'CONFIG_RC:config:0' in log,
         'mode': log.count('SWEEP_MODE:Y:Y:32') == 2,
         'namespace': 'NAMESPACE_RC:good:0' in log,
         'namespace_omission_control': 'NAMESPACE_RC:omit:1' in log,

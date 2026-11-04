@@ -922,8 +922,10 @@ static unsigned long unpinned_page_summary(struct page *page)
  * Inspect the sticky tag summary and take the reference under the PTE lock:
  * retaining a PFN after dropping that lock would race migration/page reuse.
  * vm_lock stops capability execution; mmap_lock excludes fork and unmap until
- * the caller has swept the COMPLETE mm and recycled identities. A zero summary
- * therefore cannot acquire a new capability tag while this walk is in flight.
+ * the caller has swept the COMPLETE mm and recycled identities. This relies on
+ * every tag-publication route setting the sticky summary, and on payload grants
+ * excluding shared/device backing. vm_lock stops publication in this namespace;
+ * it does not stop a different mm from writing shared untagged backing.
  * No allocation occurs under the PTE lock. At most one PTE table is scanned
  * without releasing it, including when every resident page has no tags. */
 static long next_tagged(struct mm_struct *mm, unsigned long address, unsigned long end,
@@ -3122,6 +3124,7 @@ static struct miscdevice device = {
 };
 static int __init init(void)
 {
+    if (unpinned_fast_sweep && !unpinned) return -EINVAL;
     if (unpinned) {
         typeof(capstone_unpinned_config) *config;
         int error;

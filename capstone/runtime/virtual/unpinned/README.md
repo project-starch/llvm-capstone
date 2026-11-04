@@ -77,6 +77,9 @@ entries and releases every acquired reference on failure. It does not cache
 PFNs or skip retired mappings. Special/device PTEs and tagged compound pages
 are refused explicitly. This option needs its own qualification before use
 as a default; `unpinned=1` alone retains the original GUP scanner.
+Loading with fast sweep enabled but unpinned mode disabled returns `EINVAL`.
+The mapcount check under the PTE lock protects reference acquisition; the
+later caller check also enforces VMA ownership and is not a replacement.
 
 `python3 sweep-double.py` checks the abstract sweep/hold/recycle contract and
 requires deliberately incomplete, tag-omitting and reference-omitting variants
@@ -87,16 +90,19 @@ substitute for running the namespace and stale-capability fixtures.
 `node-contract.c` image. Build `sweep-shared.c` as a static native client with
 the fixture's `namespace-probe.h` in the include path. Pass its directory as
 `--probes` together with `namespace-check` and `namespace-probe.ko`. The runner
-requires a normal module and two separately built broken modules: `--mutant`
+requires a normal module and three separately built broken modules: `--mutant`
 replaces `if (!unpinned_page_summary(page)) continue;` in `next_tagged` with
 `if (unpinned_fast_sweep) continue;`; `--shared-mutant` replaces the module's
-`page_mapcount(page) != 1` predicates with `false`. Neither mutation belongs
-in a production binary. All modules must match the selected kernel.
+`page_mapcount(page) != 1` predicates with `false`; `--config-mutant` removes
+`if (unpinned_fast_sweep && !unpinned) return -EINVAL;` from initialization.
+These mutations never belong in a production binary. All modules must match
+the selected kernel.
 
 The queued run verifies multi-page namespace scrubbing, byte preservation,
 refusal to scrub a tagged page shared with a native child, recovery after
 the child exits, two 70,000-live-node populations, stale-access denial and
-namespace cleanup. Both broken modules must fail the same native client that
+namespace cleanup, and rejection of inconsistent module options. Both page
+mutants must fail the same native client that
 passes on the normal module. Run with raw moves enabled, test CSRs disabled,
 and 32 QEMU supervisor slots; the runner sets and reads back the corresponding
 module options. Keep the normal nine runtime gates as a separate comparison.
