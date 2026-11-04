@@ -98,117 +98,79 @@ the tag, and the production module must refuse `unpinned=1`. The fixture
 scrubs all of its pages before freeing them, including in this negative mode.
 It uses only the proposed raw instructions and architectural mint/root setup.
 
-The model refuses more than one hart in the virtual profile. Protected fork
-requires a separate namespace/context-cloning contract. Tagged pages shared
-with an ordinary sleeping child can make a collection refuse until exclusive
-ownership returns. General DMA ownership and register preservation across traps
+The model refuses more than one hart in the virtual profile. General DMA ownership and register preservation across traps
 remain OS responsibilities; the model rejects tagged raw publication into a
 writable DMA mapping. Tagged swap has no save/restore format. KSM and huge pages
 are outside this configuration. Instruction-attempt counts do not measure tag
 cache latency, coherence, bandwidth or interrupt latency.
 
-## Experimental qualification status
+## Status: EXPERIMENTAL, default OFF
 
-The module parameter defaults to `unpinned=0`; the matching QEMU property
-`x-capstone-raw-moves` also defaults off. Leave both off for landing. The
-Linux patch is an explicit opt-in platform component, not applied by this tree.
+`unpinned=0` is the module default and `x-capstone-raw-moves` defaults off in the model; leave both
+off. The Linux patch is an explicit platform component this tree does not apply. Nothing here is a
+claim about silicon: raw tag moves are an ISA proposal with no RTL, the boards cannot run this mode,
+and the flat node table never collects there (Q-27). The pinned path stays fully supported.
 
-The completed earlier three-arm qualification found default-OFF identical to
-dev across all nine runtime gates. ON differed in runtime, pin-ahead, pthread
-and step-hooks: 87 additional named failed checks. Pin-specific predicates
-need mode-specific replacements with positive execution witnesses. Four
-point-1 fault/stop stimuli did not inject, and five extra-fault attributions
-were unresolved in that earlier qualification. The controls below address
-those execution/accounting gaps without relaxing pinned predicates. The
-historical five fault addresses cannot be reconstructed from the old logs.
+What a gate arm runs, and in which mode:
 
-The earlier instruction-attempt census measured gcc boundary overhead
-48.3 -> 37.2 percent and lbm 3.69 -> 0.70 percent. These are EXPERIMENTAL
-ON results, not default-OFF improvements, cycle counts or elapsed-time claims.
-They do not establish complete ON qualification. One-hart private-anonymous
-lifetime recycling and tested process exits passed; protected fork, SMP,
-shared tagged backing, tagged swap and a whole-system leak bound remain outside
-that evidence.
+- `gates/run-arm.sh --mode on|off OUT` runs the nine landing gates (hosted, runtime, nodes, malloc,
+  pin-ahead, fp, pthread, step-hooks, memcached) with `--unpinned` for `on` in EVERY runner. Each
+  runner loads the module itself, echoes the mode the loaded module reports after each insmod
+  (`<GATE>_MEMORY_MODE:Y|N|A`; `A` is a module without the parameter, i.e. dev before this change,
+  which is pinned) and carries a `memory_mode_verified` check. `compare.py` refuses to compare an
+  output with no mode file, a gate with no mode line, or a line that is not the requested mode, and
+  `--control-mode` / `--arm-mode` pin the pair (an ON arm is compared with an OFF control).
+- Optional gates for `on`: `unpinned-mm` (the isolated swap-hook and namespace fixtures, needs
+  `UNPINNED_PROBES`) and `unpinned-mutants` (broken modules, below). The arm also checks that the
+  production module carries none of the test-hook strings.
+- ON has its own resolution oracles, because the pinned page counters read zero by construction. They
+  read what Linux says: the kernel's FOLL_PIN counters (step-hooks and pin-ahead require them not to
+  move during the unpinned run, after a launch in the same guest has shown that they do move: the
+  pthread contract's supervisor frames); the launcher's VmRSS/VmHWM (`CAPSTONE_VM_RSS=1`) for pages given
+  back and for the 64 MiB the `vm` launch never touches; per-fault event records against the public
+  fault counter; window and event pages that never meet. Every OFF oracle is unchanged.
 
-## Current-dev integration
+Negative controls are broken modules, not edited transcripts. A CV_TEST_HOOKS module has parameters
+that each remove one guard (`test_skip_vma_clip`, `test_skip_arena_clip`, `test_skip_stop_check`,
+`test_skip_resident_stop`, `test_skip_namespace_scrub`, `test_skip_scrub_after_pages`,
+`test_skip_scrub_after_granules`). `run-mutants.py` requires a named check to pass on the unbroken module
+and fail on the broken one; `run-mm.py` does the same for the scrub with a fixture that seeds 21
+granules (offsets 0, 16, 2048, 4080) on 10 pages of four mappings. `test-oracles.py` additionally
+corrupts real ON transcripts (it proves the parsers reject contradictory lines, nothing about a module).
+The reclaim and tag-clear evidence for devices (DMA, fw_cfg, virtio) is model-side and not part of this
+tree.
 
-The default remains OFF. The branch includes dev `6ae238ca3022` without
-rewriting its previously published history. The main exchange (register 11)
-is lazy and uses `prepare_write` / `CV_TOUCH`; only the metadata grant
-(register 10) stays eager. In unpinned mode admission faults a page in without
-pinning it. The launcher's successful-admission cache is valid for the fixed
-main-exchange mapping: later backing changes are covered by the experimental
-kernel copy/free hooks, rather than by continued residency. Retirable worker
-transports continue to touch each attachment.
+Not covered by an ON test and rested on the kernel hook tests alone: that a retired thread stack's tags do
+not survive its reuse (ON clears at `arch_free_page`, not at retire; the pthread check is an accounting
+check), reclaim and swap under memory pressure (only the hook is tested; tagged backing is refused),
+page migration and compaction (non-present PTEs make collection and open fail closed and the node table
+then grows without recycling unswept IDs), and a huge-page madvise on an arena VMA (the module re-checks
+`VM_NOHUGEPAGE` on the faulting VMA when the kernel has THP, which neither platform kernel does).
 
-If an unpinned collection refuses a non-present or shared tagged page, node
-allocation now tries fresh-record growth while keeping unswept IDs retired.
-Collection and open still fail closed on unsupported mappings; this does not
-qualify swap/migration pressure or make ON production-ready. All ON results
-remain **EXPERIMENTAL**; the controls below and the lane report describe
-which gaps have been exercised and which remain open.
+## Process creation
 
-## Single-hart fault-ahead and qualification controls
+The refusal is the libc's, not the module's. `__clone` answers `-ENOSYS` for flags that are not a full
+thread, and the delegate answers `-ENOSYS` for every syscall it does not serve, so `fork`, `vfork`, raw
+`clone` with fork or vfork flags and `clone3` fail before anything is built; `pthread-contract.c` tests all of
+them, in both modes, with the thread tests running afterwards. `execve` and `posix_spawn` are delegated: a
+Capstone image replaces the whole launcher process (a new mm, so no tag outlives the old namespace), a native
+program is refused with the caller intact, and a spawn is forked by the spawner helper that the launcher starts
+before it grants any memory, so a child never shares a tagged page.
 
-Unpinned data faults now use the same stream detector, training threshold,
-doubling policy and maximum window as pinned faults. Linux faults in each
-prefetched page without retaining a payload pin. Each window stays inside
-the arena and the validated VMA; stop checks run between batches of at most
-16 pages. Resident PTEs are prediction hints only. They cannot authorize an
-access or replace demand resolution, including a later write/COW fault.
-Only a successfully resolved escape suppresses repeat stream training.
-The repeat-fault bound and all demand-access checks remain active.
+A native fork of the launcher itself is not refused by the module or the kernel. The child shares the launcher's
+tagged anonymous pages copy-on-write; `unpinned_hold_mm` meets a tagged page with `mapcount != 1` and returns
+`-EOPNOTSUPP`, so collection and namespace open fail closed until the child exits or execs. That is an
+availability limit, not a safety one. Only the torture stimulus (`CAPSTONE_VM_TORTURE`) exercises it.
 
-`MEMORY_MODE=unpinned` selects separate resolution oracles in
-`../gates/run-arm.sh`. It does not change the pinned oracles. The guest must
-read back unpinned mode; public fault counts must match complete per-address
-event records, and no persistent payload pins may be reported. The fixed
-window policy gate uses the test module with `test_full_window=1`; direct
-and injected stop tests retain real scheduling/deadline checks. Point 1 is
-after the completed demand operation in both modes. A short-fault fixture
-defers an in-step demand attempt and separately truncates prefault batches,
-requiring later demand recovery. `unpinned_checks.py` records resolved
-virtual pages separately from the pin census.
+## Why it is not the default, and what is missing
 
-The supported single-hart process contract is refusal: protected `fork()`
-and raw process-clone requests return ENOSYS. The pthread contract exercises
-both routes and then runs the ordinary thread tests. No child namespace,
-independent child free or protected process-COW behavior is claimed. A native
-trusted launcher's test-only sleeping child remains a different stimulus;
-its inherited namespace fd is unusable from the child's different mm.
-
-Additional isolated fixtures:
-
-- Build `mm-probe.c` and `namespace-probe.c` as kernel modules against the
-  exact patched kernel, and `namespace-check.c` with the native RISC-V Linux
-  compiler. Keep the shared `namespace-probe.h` beside both source files. Supply their directory as `UNPINNED_PROBES` and include
-  `unpinned-mm` in `GATES` for the queued driver.
-- The mm fixture invokes this guest's `arch_prepare_to_swap` entry from
-  `/proc/kallsyms`. Tagged backing must return EBUSY and an independently
-  scrubbed/acknowledged page must be accepted. This tests the actual hook;
-  it does not simulate swap pressure or prove a reclaim/OOM bound.
-- The namespace fixture seeds a storage tag while a namespace is open,
-  closes it, verifies the tag survives, then opens a fresh namespace. The
-  tag must disappear while both representation words remain unchanged.
-  The paired negative arm enables `test_skip_namespace_scrub` in the hooks
-  module and must fail that same oracle. It enters no protected domain.
-  Production modules contain no scrub-bypass parameter.
-- `unpinned/test-oracles.py --pin <serial.log> --hooks <serial.log>` requires
-  passing real ON transcripts, then corrupts mode readbacks, fault totals,
-  events, windows, injection counts and batch bounds. Each corruption must
-  be rejected.
-
-These fixtures are trusted test modules for a private guest, not a userspace
-tag-manipulation API. Keep the default OFF until the lane's full qualification
-report, including unresolved cases, has been reviewed. Non-present PTEs and
-shared tagged backing still refuse collection/open; unswept IDs are never
-recycled. SMP, huge pages and KSM remain outside this contract.
-
-
-The ONQ run on the current base executes all 176 full-gate rows and meets the
-lbm/xz quick-census target. The corrected namespace positive/bypass controls
-and actual tagged-swap-hook check pass. OFF's failure sets match its control;
-ON still differs on memcached fixture 24 (an unexpected null-access fault
-where OFF fails to create the trigger). Keep this failure and the default-OFF
-recommendation until it is resolved. See [the ONQ report](../../../../lanes/laneONQ-report.md) for exact
-inputs, results, historical fixture failures and remaining pressure tests.
+1. It is a platform, not a flag: the patched Linux, the model with `x-capstone-raw-moves=true`, the
+   `capstone,unpinned-v1` device-tree node and `x-capstone-test-csrs=false`. The module refuses `unpinned=1`
+   on a stock kernel and never falls back by itself; a default needs detection with a clean fallback to the
+   pinned path, or every platform image carrying all of it.
+2. No RTL. At most this could be the default on the model; silicon stays pinned.
+3. Memcached fixture 24 fails in both modes and in the dev head.
+4. Reclaim and swap pressure, page migration and compaction, shared tagged backing (refused), a native fork of
+   the launcher, and a whole-system leak bound are untested or fail closed with unmeasured availability cost.
+5. Device-side rule 1 is a model property the OS cannot restore, and its arms are not in this tree.
+6. Single hart, no KSM, no huge pages: the module refuses `num_online_cpus() != 1`; THP is refused at `add`.

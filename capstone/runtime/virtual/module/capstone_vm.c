@@ -2123,6 +2123,12 @@ static int unpinned_resolve(struct context *c, struct cv_thread *t, struct arena
     unsigned long ahead, limit, done = 0;
     unsigned fault_flags = (v->vm_flags & VM_WRITE) ? FAULT_FLAG_WRITE : 0;
     int rc;
+#ifdef CONFIG_TRANSPARENT_HUGEPAGE
+    /* add() required VM_NOHUGEPAGE on every VMA it admitted, but a later madvise(MADV_HUGEPAGE)
+     * clears it. A huge page would then be faulted in as one PMD that next_resident() cannot
+     * describe (-EOPNOTSUPP): refuse the fault instead of widening a window over it. */
+    if (!(v->vm_flags & VM_NOHUGEPAGE)) return -EOPNOTSUPP;
+#endif
     if (TEST_FAULT()) return -EAGAIN;
     rc = fixup_user_fault(c->mm, address & PAGE_MASK, fault_flags, NULL);
     if (rc) return rc;
