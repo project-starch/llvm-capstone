@@ -124,24 +124,42 @@ Model instruction attempts do not establish hardware latency or bandwidth.
 
 Masking S-level interrupts does not stop a firmware-handled interrupt, and a
 firmware trap saves and restores integer registers only, so the opaque
-temporary between a raw load and its store does not survive one. Measured with
-`irq-window-probe.c` on the instruction-exact clock the census platforms use
-(`-icount shift=0`), firmware timer (no Sstc), the pre-redo kernel:
-a deadline placed inside the copy window lost one granule's tag in every
-such iteration that was hit between the load and the store, and the control with
-deadlines outside the window lost none (numbers in the lane report). The raw
-transport inherited from the raw-move model has the same exposure.
+temporary between a raw load and its store does not survive one. On the
+instruction-exact clock the census platforms use (`-icount shift=0`) and the
+firmware timer (no Sstc), `irq-window-probe.c` places a firmware timer deadline
+1 to 24 ticks after an arming call and runs the kernel's own `copy_highpage`
+over a page tagged on every granule. A kernel with one raw pass and no redo
+lost exactly one granule's tag in 552 of 3000 iterations (bulk off) and 676 of
+3000 (bulk on); the final kernel lost none in 3000 and 3000 and redid 1809 and
+680 passes; 300 iterations with deadlines outside the copy lost none. The raw
+transport inherited from the raw-move model has the same exposure. The loss
+depends on where the interrupt falls in the loop, so a kernel layout without
+the redo can show no loss in this probe (one with an extra CSR read ahead of the
+pass did): absence of loss without the redo proves nothing. Without `-icount`
+interrupts are taken at translation-block boundaries and no tag was lost
+(3000 iterations; 47 redos).
 
 The kernel therefore repeats a pass when a firmware timer interrupt was served
 during it. OpenSBI 1.3 serves that interrupt by clearing MTIE and setting STIP,
 so STIP clear before the pass and set after it identifies one; the source is
-unchanged (one hart, no S interrupts, callers exclude writers), so the redo is
-exact. STIP already set before the pass implies MTIE is clear, so none can
-arrive, and the second pass always ends the loop. `copy_retries` counts redos.
-Claimed: this holds on the tested firmware and model. Not claimed: any other
-firmware, any silicon, any other asynchronous machine-level source, or an
-interrupt-deferral guarantee in the ISA (none is added or assumed). A platform
-that cannot give this contract must keep the raw transport off.
+unchanged (one hart, S interrupts masked across the flag query and the copy), so
+the redo is exact. STIP already set before the pass implies MTIE is clear, so
+none can arrive, and the second pass always ends the loop; a third pass stops
+the kernel. `copy_retries` counts redos.
+
+Claimed: the tested firmware and model, with Sstc off. Not claimed: any other
+firmware or silicon; any other asynchronous machine-level event (software or
+external interrupts, a firmware-owned timer under Sstc, which sets no STIP);
+an interrupt-deferral guarantee in the ISA (none is added or assumed). A
+platform that cannot give this contract must keep the raw transport off. A
+guest booted with `sstc=true` in this model did not finish booting within four
+minutes and was stopped; no Sstc statement is made.
+
+The copy's ownership contract is the one a data copy needs: callers keep other
+writers of the source out for its duration (migration and compaction lock and
+unmap the page, fork COW of private anonymous memory write-protects it); a page
+that is also writable through another mapping, such as a private mapping of a
+shared file page, is outside it. One hart is required.
 
 ## Ownership and lifetime recycling
 

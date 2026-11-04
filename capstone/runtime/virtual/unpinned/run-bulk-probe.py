@@ -19,7 +19,7 @@ def main():
     parser.add_argument('--work', type=Path, required=True)
     parser.add_argument('--bulk', choices=['on', 'off'], default='on')
     parser.add_argument('--kernel-arg', action='append', default=[])
-    parser.add_argument('--expect', choices=['pass', 'lost-copy', 'stale-free', 'leaked-tag', 'plain-leak'], default='pass')
+    parser.add_argument('--expect', choices=['pass', 'lost-copy', 'stale-free', 'leaked-tag', 'plain-leak', 'plain-corrupt'], default='pass')
     args = parser.parse_args()
     args.work.mkdir(parents=True, exist_ok=False)
     stage = args.work / 'stage'
@@ -80,6 +80,11 @@ echo VIRTUAL_STAGED_DONE
         # The clear-flag copy path leaves the destination's old tags in place.
         ok = (result.returncode == 0 and 'BULK_MM FAIL' in serial and
               bool(re.search(r'plain_copy missing_tags=0 extra_tags=[1-9][0-9]* ', serial)) and
+              bool(re.search(r'BULK_INSMOD_RC:[1-9]', serial)))
+    elif args.expect == 'plain-corrupt':
+        # The clear-flag copy path stores wrong bytes; tags alone would not show it.
+        ok = (result.returncode == 0 and 'BULK_MM FAIL' in serial and
+              bool(re.search(r'plain_copy missing_tags=0 extra_tags=0 bad_words=[1-9][0-9]* ', serial)) and
               bool(re.search(r'BULK_INSMOD_RC:[1-9]', serial)))
     else:
         ok = (result.returncode == 0 and 'BULK_MM FAIL' in serial and
