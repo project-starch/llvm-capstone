@@ -13,6 +13,8 @@
 #include <linux/fdtable.h>
 
 #define DOM_FDS 1024
+#define DOM_EXTRA_DIRS 2
+#define DOM_DEVICES 3
 
 struct dom_delegate {
     struct capstone_delegate_entry request;
@@ -23,6 +25,7 @@ struct dom_delegate {
     char *scratch;
     bool pending;
     struct path root;
+    struct path dirs[DOM_EXTRA_DIRS], devices[DOM_DEVICES];
     char *cwd;
     DECLARE_BITMAP(fds, DOM_FDS);
     int path_fd;
@@ -318,6 +321,10 @@ static void dom_delegate_free(struct context *c)
     kfree(d->wire);
     if (d->scratch) free_page((unsigned long)d->scratch);
     path_put(&d->root);
+    for (unsigned i = 0; i < DOM_EXTRA_DIRS; ++i)
+        if (d->dirs[i].dentry) path_put(&d->dirs[i]);
+    for (unsigned i = 0; i < DOM_DEVICES; ++i)
+        if (d->devices[i].dentry) path_put(&d->devices[i]);
     kfree(d->cwd);
     kfree(d); c->dom_delegate = NULL;
 }

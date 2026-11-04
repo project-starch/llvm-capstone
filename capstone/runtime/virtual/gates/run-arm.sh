@@ -189,7 +189,8 @@ gates_phase() {
   local native_exec=()
   [[ ${NATIVE_EXEC:-0} != 1 ]] || native_exec+=(--native-exec)
   gate hosted python3 "$V/run-hosted.py" --adapter "$P/adapter" --application "$I/hosted.dom" \
-    "${native_exec[@]}" --noreturn "$I/noreturn.dom" --native "$I/native-hosted" "${plat[@]}" --work "$G/hosted"
+    "${native_exec[@]}" --module-args "${MODULE_ARGS:-}" \
+    --noreturn "$I/noreturn.dom" --native "$I/native-hosted" "${plat[@]}" --work "$G/hosted"
   gate runtime python3 "$V/run.py" --adapter "$P/adapter" --application "$I/contract.dom" \
     "${native_exec[@]}" --sqlite "$(cat "$B/apps/sqlite.image")" --mruby "$(cat "$B/apps/mruby.image")" \
     --perl "$(cat "$B/apps/perl.image")" --record "$G/runtime.json" --timeout 900 \

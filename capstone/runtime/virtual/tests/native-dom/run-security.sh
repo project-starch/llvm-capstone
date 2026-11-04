@@ -6,20 +6,24 @@ export CAPSTONE_TOOLCHAIN_CHECKED=1 CAPSTONE_TMP_ROOT=$W/tmp CAPSTONE_QEMU_LOCK=
 source capstone/tests/capstone-test-env.sh
 export PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=$W/src/capstone/runtime/host
 PL=${NATIVE_PLATFORM:-$W/platform-native}
+MODULE=${NATIVE_MODULE:-$PL/adapter/module/capstone_vm.ko}
 OUT=${SECURITY_OUT:-$W/security}; mkdir -p "$OUT"
-sha256sum "$PL/adapter/module/capstone_vm.ko" "$PL/qemu-system-riscv64" \
+slots=${NATIVE_SLOTS:-32}
+wide=${NATIVE_WIDE_GRANTS:-0}
+[[ $slots =~ ^[0-9]+$ && $wide =~ ^[01]$ ]] || exit 2
+sha256sum "$MODULE" "$PL/qemu-system-riscv64" \
  "$PL/images/Image" "$W/contracts/scalar-memory.dom" "$W/contracts/resource-probe.dom" \
  "$W/contracts/dac-driver" > "$OUT/inputs.sha256"
 vm() { python3 -m capstone_vm --state "$OUT/vm" "$@"; }
 vm up --profile virtual --memory 8G --share-model mapped-xattr --share "$W" --no-pcrel \
- --cpu-prop x-capstone-supervisor-slots=2 --cpu-prop x-capstone-test-csrs=true \
+ --cpu-prop x-capstone-supervisor-slots="$slots" --cpu-prop x-capstone-test-csrs=true \
  --qemu "$PL/qemu-system-riscv64" --kernel "$PL/images/Image" --firmware "$PL/images/fw_jump.elf" \
  --rootfs "$PL/images/rootfs.ext2" --launcher "$PL/adapter/capstone-vexec" --job-helper "$PL/adapter/capstone-job" \
- --module "$PL/adapter/module/capstone_vm.ko" --ssh-server "$PL/ssh-server/dropbearmulti" > "$OUT/up.log" 2>&1
+ --module "$MODULE" --ssh-server "$PL/ssh-server/dropbearmulti" > "$OUT/up.log" 2>&1
 trap 'vm down >/dev/null 2>&1 || true' EXIT
 vm exec -- sh -c 'set -e
 rmmod capstone_vm
-insmod /mnt/control/module dom_binfmt=1 supervisor_slots=2
+insmod /mnt/control/module dom_binfmt=1 supervisor_slots="$1" dom_wide_grants="$2"
 echo 0 >/proc/sys/fs/binfmt_misc/status
 echo 0 >/proc/sys/kernel/randomize_va_space
 cp /mnt/host/contracts/scalar-memory.dom /mnt/host/contracts/resource-probe.dom /mnt/host/contracts/dac-driver /tmp/
@@ -35,7 +39,20 @@ mknod /tmp/resource-root/null-device c 1 3
 : >/tmp/resource-outside
 echo private >/tmp/resource-root/no-permission
 echo file >/tmp/resource-root/fd-input
-chmod 000 /tmp/resource-root/no-permission' > "$OUT/setup.log" 2>&1
+chmod 000 /tmp/resource-root/no-permission' sh "$slots" "$wide" > "$OUT/setup.log" 2>&1
+if [[ ${TEST_WIDE_GRANTS:-0} == 1 ]]; then
+ vm exec -- sh -c 'set -e
+cp /mnt/host/contracts/wide-grants.dom /tmp/
+chmod +x /tmp/wide-grants.dom
+printf granted >/usr/n2-wide-input
+mkdir /tmp/n2-proc
+mount -t proc proc /tmp/n2-proc
+mknod /tmp/n2-null-alias c 1 3
+mknod /tmp/n2-memory c 1 1
+ln -s /dev/null /tmp/n2-null-link
+cd /tmp/resource-root
+/tmp/wide-grants.dom; echo wide_rc=$?' > "$OUT/wide.log" 2>&1 || true
+fi
 vm exec -- sh -c 'cd /tmp; ./scalar-memory.dom; echo scalar_rc=$?' > "$OUT/scalar.log" 2>&1
 # Two identical resource-probe execs with ASLR disabled: the first records the
 # image placement; the second probes the scalar trampoline's actual address.
@@ -55,6 +72,9 @@ python3 - "$OUT" <<'CHECK'
 from pathlib import Path
 import re, sys
 p = Path(sys.argv[1])
+if (p / 'wide.log').exists():
+    text = (p / 'wide.log').read_text()
+    assert 'FAIL' not in text and 'wide_rc=0' in text, text
 for name, key in [('scalar','scalar'), ('resource','resource'), ('stdio','stdio'), ('dac','dac'), ('fds','fds')]:
     text = (p / (name + '.log')).read_text()
     assert 'FAIL' not in text and key + '_rc=0' in text, text

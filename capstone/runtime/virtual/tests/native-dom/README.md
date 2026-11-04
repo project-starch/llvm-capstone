@@ -175,7 +175,36 @@ The [authority audit](../../../../docs/design/virtual-capstone/native-exec.md)
 lists the complete syscall and resource boundary, deliberate incompatibilities,
 trust assumptions and vectors tested. The launcher file policy is unchanged.
 
-## Round 3 final qualification
+## Native task follow-up probes
+
+`slot-wait.c` starts real native children from a plain parent on one physical
+slot. Eight rounds cover exclusion, release followed by admission, interruption
+of a waiter and child reaping. Queue `run-slot-wait.sh` with `LANE_ROOT`,
+`NATIVE_PLATFORM` and fresh `CONTRACT_OUT`. The runner rejects kernel warnings
+and failed module unload, so the old blocking wait predicate fails its oracle.
+This is a wait-path regression, not a state-conservation or virtualization test.
+
+`wide-grants.c` checks `/tmp` and `/usr`, the exact null/zero/urandom devices,
+and refusal of proc-memory, device aliases, nested proc mounts, symlinks,
+parent traversal and malformed prefix/trailing-slash paths. Set
+`TEST_WIDE_GRANTS=1 NATIVE_WIDE_GRANTS=1` for `run-security.sh`; set only
+`NATIVE_WIDE_GRANTS=0` for its admission negative control. `NATIVE_MODULE`
+selects a separate mutant module without changing the platform. Allowing
+character devices in directory grants must fail the device-alias assertions.
+The security runner defaults to 32 CPU/module slots.
+
+The widened policy reaches hosted 93/93, identical to the launcher. Runtime
+still differs: threads, vm and heap-threads exit rows and fault/page/recycling
+diagnostics remain blockers, although SQLite, mruby and Perl now pass. Native
+execution and widened grants remain default off. The separate QEMU
+`frame-spill.sh` risk probe exercises why raw-copying the first 80 frame words
+cannot replace a full protected-state export.
+
+`measure.sh` accepts `NATIVE_MODULE_ARGS` for matched native-policy experiments.
+Keep plain/launcher/native child bytes identical and preserve all six profile
+windows per arm. Measurements do not establish compatibility.
+
+## Round 3 final qualification (historical)
 
 The final implementation is commit `26e5a1c13341`. The p12 module SHA-256 is
 `73458974f707ef39dd2647d9364fa9ee4fba2afc7ebca9b8103a039fccd001a9`;

@@ -9,6 +9,13 @@ compatibility and gate qualification; the original exploit remains a negative co
 The `runtime/native-task` dev replay adds confined pipes and inherited serial
 I/O. Its separate [context/event proposal](native-context.md) supplies a
 linkable software double; it does not implement hardware slot eviction.
+The optional `dom_wide_grants=1` policy pins `/tmp`, `/usr`, and the exact
+`/dev/null`, `/dev/zero`, `/dev/urandom` objects at exec. It remains off by
+default. With identical application images, widened native execution passes
+hosted 93/93 and the SQLite, mruby and Perl runtime rows. Runtime parity still
+fails for threads, VM services and required diagnostic assertions. This does
+not qualify the frozen native-task contract's physical slot virtualization,
+in-kernel syscall loop, signals or fork.
 
 ## Exec and transport
 
@@ -54,7 +61,9 @@ This is a narrower ABI, not equivalence with the launcher's complete API.
 
 The initial cwd is an explicit directory grant. It must be a directory on tmpfs,
 ext4 or 9p and cannot be `/`. Relative paths start there or at a directory opened
-through that grant. Absolute paths must have that initial cwd prefix. Each
+through that grant. Absolute paths select the initial cwd or, with widened
+grants enabled, `/tmp` or `/usr`, at a complete pathname-component boundary.
+The longest matching directory grant wins. Each
 component is opened as `O_PATH|O_NOFOLLOW`; intermediates also require
 `O_DIRECTORY`. `..`, symlinks, magic links, mount transitions and all final types
 except ordinary files/directories are refused. Linux 6.1 does not export an
@@ -62,6 +71,12 @@ in-kernel `openat2` entry point to modules. This stricter component walk supplie
 the intended beneath/no-magic-link/no-mount-crossing constraints without checking
 one name and later reopening the original pathname. Symlinks within the root are
 also unsupported. A renamed pinned directory remains the same granted object.
+Widening pins the three device objects individually after checking their exact
+character-device major/minor numbers; it does not grant the `/dev` directory.
+Device aliases within directory grants remain refused, as do proc mounts,
+symlinks and prefix impersonations. Existing device opens use the pinned
+object and the same inode-permission and file-security checks. All additional
+path references are released with the context, including partial exec failure.
 The Linux kernel, VFS and filesystem server are trusted; a hostile host process
 already able to ptrace this task is outside this boundary.
 

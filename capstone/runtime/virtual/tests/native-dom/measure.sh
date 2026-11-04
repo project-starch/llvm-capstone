@@ -23,7 +23,7 @@ for DOM_ARM in plain launcher native; do
  export DOM_ARM
  child=/tmp/child-cap; mod=dom_binfmt=0
  [ "$DOM_ARM" != plain ] || child=/tmp/lqmicro
- [ "$DOM_ARM" != native ] || mod=dom_binfmt=1
+ [ "$DOM_ARM" != native ] || mod="dom_binfmt=1 ${NATIVE_MODULE_ARGS:-}"
  list=$W/micro/exec-$DOM_ARM.list
  for n in 10 100 10 100 10 100; do echo "-- exec $n $child"; done > "$list"
  df -h "$W"

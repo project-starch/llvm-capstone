@@ -9,6 +9,7 @@ import hashlib
 import json
 from pathlib import Path
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -30,7 +31,11 @@ def main():
                         "it is kept so a suite can be run both ways as a two-sided control.")
     p.add_argument("--native-exec", action="store_true",
                    help="Execute .dom directly through the opt-in module binfmt")
+    p.add_argument("--module-args", default="", help="Additional insmod parameters")
     a = p.parse_args()
+    module_args = shlex.split(a.module_args)
+    if a.native_exec and any(arg.startswith('dom_binfmt=') for arg in module_args):
+        p.error('--native-exec sets dom_binfmt; omit it from --module-args')
     a.work.mkdir(parents=True, exist_ok=False)
     stage = a.work / 'stage'
     stage.mkdir()
@@ -58,12 +63,16 @@ rmmod capstone_vm
 echo HOSTED_CLEANUP:$?
 echo VIRTUAL_STAGED_DONE
 ''')
+    script = (stage / 'gate.sh').read_text()
+    script = script.replace('insmod capstone_vm.ko ||',
+                            'insmod capstone_vm.ko ' + shlex.join(module_args) + ' ||')
+    (stage / 'gate.sh').write_text(script)
     if a.native_exec:
         for dom in stage.glob('*.dom'):
             dom.chmod(0o755)
         script = (stage / 'gate.sh').read_text()
-        script = script.replace('insmod capstone_vm.ko ||',
-                                'insmod capstone_vm.ko dom_binfmt=1 ||')
+        script = script.replace('insmod capstone_vm.ko ',
+                                'insmod capstone_vm.ko dom_binfmt=1 ', 1)
         script = script.replace('echo HOSTED_ARM:virtual',
                                 'if [ -e /proc/sys/fs/binfmt_misc/status ]; then\n'
                                 '  echo 0 > /proc/sys/fs/binfmt_misc/status || exit 1\n'

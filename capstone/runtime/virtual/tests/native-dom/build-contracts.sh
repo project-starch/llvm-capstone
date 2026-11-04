@@ -10,6 +10,7 @@ df -h "$W"
 "${NATIVE_CC:-$HOME/prof-dev/rv/rv-cc}" -O2 "$W/contracts/driver.c" -o "$W/contracts/driver"
 "${NATIVE_CC:-$HOME/prof-dev/rv/rv-cc}" -O2 "$W/contracts/slot-wait.c" -o "$W/contracts/slot-wait"
 "${CAPSTONE_CC:-$HOME/prof-dev/cap4/sdk/capstone-cc}" -O2 "$W/contracts/scalar-memory.c" -o "$W/contracts/scalar-memory.dom"
+"${CAPSTONE_CC:-$HOME/prof-dev/cap4/sdk/capstone-cc}" -O2 "$W/contracts/wide-grants.c" -o "$W/contracts/wide-grants.dom"
 "${CAPSTONE_CC:-$HOME/prof-dev/cap4/sdk/capstone-cc}" -O2 -I"$W/src/capstone/runtime/include" \
  "$W/contracts/resource-probe.c" -Wl,--wrap=__capstone_vm_delegate_transport -o "$W/contracts/resource-probe.dom"
 # This helper needs Linux UAPI capability/securebits headers as well as libc.
