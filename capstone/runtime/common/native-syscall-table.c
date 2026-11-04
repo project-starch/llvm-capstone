@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: MIT */
 /* Historical 96 ordinary AG2 rows, plus read/write and native services.
- * Membership is inventory, never permission. The executable double refuses
- * resource/grant operations until their specialized backends exist. */
+ * Membership is inventory, never permission. Resources require a policy
+ * provider; grant operations need a separate protected completion backend. */
 #include <capstone/native-syscall.h>
 static const struct ns_descriptor table[] = {
     {CAPSTONE_SYS_getcwd, "getcwd", NS_RESOURCE, 0},
