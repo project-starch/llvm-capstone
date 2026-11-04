@@ -1,7 +1,7 @@
 ; RUN: llc -mtriple=capstone64 -mattr=+m -capstone-gp-free -capstone-image-gp -verify-machineinstrs -O2 < %s | FileCheck %s --check-prefix=ABS --implicit-check-not="mv "
 ; RUN: llc -mtriple=capstone64 -mattr=+m -capstone-gp-free -capstone-image-gp -relocation-model=pic -verify-machineinstrs -O2 < %s | FileCheck %s --check-prefix=ABS --implicit-check-not="mv "
 ; RUN: llc -mtriple=capstone64 -mattr=+m -verify-machineinstrs -O2 < %s | FileCheck %s --check-prefix=REL
-; RUN: llc -mtriple=capstone64 -mattr=+m -capstone-gp-free -capstone-image-gp -verify-machineinstrs -O0 < %s -o /dev/null
+; RUN: llc -mtriple=capstone64 -mattr=+m -capstone-gp-free -capstone-image-gp -verify-machineinstrs -O0 < %s | FileCheck %s --check-prefix=O0
 ;
 ; SCC sets the cursor to its already untagged PC-relative integer operand.
 ; Reuse that integer for SHRINK's base and end without changing either
@@ -24,6 +24,13 @@ target datalayout = "e-m:e-p:64:128-p200:128:128:128:64-i64:64-i128:128-n32:64-S
 ; REL: delin [[CAP]]
 ; REL: mv [[ADDR:a[0-9]+]], [[CAP]]
 ; REL: shrink [[CAP]], [[ADDR]],
+; O0-LABEL: global_load:
+; O0: auipc [[ADDR:a[0-9]+]], %pcrel_hi(g)
+; O0-NEXT: addi [[ADDR]], [[ADDR]], %pcrel_lo(
+; O0-DAG: scc [[CAP:a[0-9]+]], gp, [[ADDR]]
+; O0-DAG: add [[END:a[0-9]+]], [[ADDR]], {{a[0-9]+}}
+; O0: shrink [[CAP]], [[ADDR]], [[END]]
+; O0: ld a0, 0([[CAP]])
 define i64 @global_load() addrspace(200) {
   %v = load i64, ptr addrspace(200) @g
   ret i64 %v
@@ -35,6 +42,13 @@ define i64 @global_load() addrspace(200) {
 ; ABS: shrink [[CAP:a[0-9]+]],
 ; ABS: cincoffset [[PTR:a[0-9]+]], [[CAP]],
 ; ABS: ld a0, 0([[PTR]])
+; O0-LABEL: global_index:
+; O0: auipc [[ADDR:a[0-9]+]], %pcrel_hi(g)
+; O0-NEXT: addi [[ADDR]], [[ADDR]], %pcrel_lo(
+; O0-DAG: scc [[CAP:a[0-9]+]], gp, [[ADDR]]
+; O0-DAG: add [[END:a[0-9]+]], [[ADDR]], {{a[0-9]+}}
+; O0: shrink [[CAP]], [[ADDR]], [[END]]
+; O0: cincoffset
 define i64 @global_index(i64 %i) addrspace(200) {
   %p = getelementptr [4 x i64], ptr addrspace(200) @g, i64 0, i64 %i
   %v = load i64, ptr addrspace(200) %p
@@ -46,6 +60,13 @@ define i64 @global_index(i64 %i) addrspace(200) {
 ; ABS: scc
 ; ABS: shrink a0,
 ; ABS: ret
+; O0-LABEL: global_address:
+; O0: auipc [[ADDR:a[0-9]+]], %pcrel_hi(g)
+; O0-NEXT: addi [[ADDR]], [[ADDR]], %pcrel_lo(
+; O0-DAG: scc [[CAP:a[0-9]+]], gp, [[ADDR]]
+; O0-DAG: add [[END:a[0-9]+]], [[ADDR]], {{a[0-9]+}}
+; O0: shrink [[CAP]], [[ADDR]], [[END]]
+; O0: ret
 define ptr addrspace(200) @global_address() addrspace(200) {
   ret ptr addrspace(200) @g
 }

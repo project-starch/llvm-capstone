@@ -220,6 +220,128 @@ exit:
   ret void
 }
 
+; A 2^40-byte element repeats its address after 2^24 steps. Exactly 2^24
+; iterations (a backedge count of 2^24 - 1) stay below that period.
+; CHECK-LABEL: @bound_ok(
+; CHECK: [[END:%.*]] = getelementptr [1099511627776 x i8], ptr addrspace(200) %b, i64 16777216
+; CHECK: loop:
+; CHECK-NOT: phi i64
+; CHECK: [[IV:%.*]] = phi ptr addrspace(200)
+; CHECK: [[NEXT:%.*]] = getelementptr i8, ptr addrspace(200) [[IV]], i64 1099511627776
+; CHECK: icmp eq ptr addrspace(200) [[NEXT]], [[END]]
+define void @bound_ok(ptr addrspace(200) %b) {
+entry:
+  br label %loop
+loop:
+  %i = phi i64 [0, %entry], [%next, %loop]
+  %p = getelementptr inbounds [1099511627776 x i8], ptr addrspace(200) %b, i64 %i
+  %v = load volatile i8, ptr addrspace(200) %p
+  %next = add nuw nsw i64 %i, 1
+  %done = icmp eq i64 %next, 16777216
+  br i1 %done, label %exit, label %loop
+exit:
+  ret void
+}
+
+; One more iteration reaches the period: the cursor after 2^24 steps equals
+; the first one, so a cursor compare could exit one iteration early.
+; CHECK-LABEL: @bound_bad(
+; CHECK-NOT: lsr.cap.end
+; CHECK: icmp {{eq|ne}} i64
+; CHECK-NOT: lsr.cap.end
+; CHECK: ret void
+define void @bound_bad(ptr addrspace(200) %b) {
+entry:
+  br label %loop
+loop:
+  %i = phi i64 [0, %entry], [%next, %loop]
+  %p = getelementptr inbounds [1099511627776 x i8], ptr addrspace(200) %b, i64 %i
+  %v = load volatile i8, ptr addrspace(200) %p
+  %next = add nuw nsw i64 %i, 1
+  %done = icmp eq i64 %next, 16777217
+  br i1 %done, label %exit, label %loop
+exit:
+  ret void
+}
+
+; CHECK-LABEL: @bound_edge_bad(
+; CHECK-NOT: lsr.cap.end
+; CHECK: icmp {{eq|ne}} i64
+; CHECK-NOT: lsr.cap.end
+; CHECK: ret void
+define void @bound_edge_bad(ptr addrspace(200) %b) {
+entry:
+  br label %loop
+loop:
+  %i = phi i64 [0, %entry], [%next, %loop]
+  %p = getelementptr inbounds [1099511627776 x i8], ptr addrspace(200) %b, i64 %i
+  %v = load volatile i8, ptr addrspace(200) %p
+  %next = add nuw nsw i64 %i, 1
+  %done = icmp eq i64 %next, 16777218
+  br i1 %done, label %exit, label %loop
+exit:
+  ret void
+}
+
+; The counter returned after the loop is a live-out of the exit test's slice
+; (an LCSSA phi, not a stored value), so the integer test stays.
+; CHECK-LABEL: @liveout(
+; CHECK-NOT: lsr.cap.end
+; CHECK: phi i64
+; CHECK: icmp eq i64
+; CHECK-NOT: lsr.cap.end
+; CHECK: ret i64
+define i64 @liveout(ptr addrspace(200) %b, i32 %n) {
+entry:
+  %positive = icmp sgt i32 %n, 0
+  br i1 %positive, label %preheader, label %exit
+preheader:
+  %limit = zext i32 %n to i64
+  br label %loop
+loop:
+  %i = phi i64 [0, %preheader], [%next, %loop]
+  %p = getelementptr inbounds i64, ptr addrspace(200) %b, i64 %i
+  %v = load volatile i64, ptr addrspace(200) %p
+  %next = add nuw nsw i64 %i, 1
+  %done = icmp eq i64 %next, %limit
+  br i1 %done, label %exit.loop, label %loop
+exit.loop:
+  ret i64 %next
+exit:
+  ret i64 0
+}
+
+; The first candidate (a 2^40-byte element, rejected by the period guard) must
+; not stop the search: the byte-stride second candidate supplies the endpoint,
+; derived from its own base. The i32 count bounds the byte-stride loop only.
+; CHECK-LABEL: @two(
+; CHECK: [[END:%.*]] = getelementptr i8, ptr addrspace(200) %b, i64
+; CHECK: loop:
+; CHECK-NOT: phi i64
+; CHECK: [[A:%.*]] = phi ptr addrspace(200)
+; CHECK: [[B:%.*]] = phi ptr addrspace(200)
+; CHECK: [[NEXTB:%.*]] = getelementptr i8, ptr addrspace(200) [[B]], i64 1
+; CHECK: icmp eq ptr addrspace(200) [[NEXTB]], [[END]]
+define void @two(ptr addrspace(200) %a, ptr addrspace(200) %b, i32 %n) {
+entry:
+  %positive = icmp sgt i32 %n, 0
+  br i1 %positive, label %preheader, label %exit
+preheader:
+  %limit = zext i32 %n to i64
+  br label %loop
+loop:
+  %i = phi i64 [0, %preheader], [%next, %loop]
+  %p = getelementptr inbounds [1099511627776 x i8], ptr addrspace(200) %a, i64 %i
+  %v = load volatile i8, ptr addrspace(200) %p
+  %q = getelementptr inbounds i8, ptr addrspace(200) %b, i64 %i
+  %w = load volatile i8, ptr addrspace(200) %q
+  %next = add nuw nsw i64 %i, 1
+  %done = icmp eq i64 %next, %limit
+  br i1 %done, label %exit, label %loop
+exit:
+  ret void
+}
+
 ; The signed exit predicate is not handled by the later loop-term fold.
 ; The unconditional load still proves an accessed anchor around the call.
 ; CHECK-LABEL: @descending_call(

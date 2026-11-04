@@ -7297,7 +7297,10 @@ static bool reduceCapabilityIndexGroups(Loop *L, ScalarEvolution &SE,
   if (Changed) {
     // Drop dead index expressions before checking whether the exit counter
     // can disappear. The new capability IVs are live through their accesses.
+    // Forget the loop first: the exit proof queries the backedge-taken count
+    // and must not see a cache entry computed before the rewrite.
     DeleteDeadPHIs(Header);
+    SE.forgetLoop(L);
     for (const CursorExitCandidate &C : ExitCandidates)
       if (replaceCapabilityLatchTest(L, C.Index, C.Base, C.ElementTy, C.ByteStep,
                                      C.IV, SE))
