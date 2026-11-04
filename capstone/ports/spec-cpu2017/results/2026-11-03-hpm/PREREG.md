@@ -98,3 +98,11 @@ Both are both-arm stages, with the twin census-q34.
 **Predictions.**
 - P1-P5 as in the first counter boot, against these baselines: instret within 0.1 % and cycles within 2 %.
 - **H (reported, with one bound).** Between dev and devmk in each arm, the drop in issue-stall cycles (hpm7) is at least half the drop in cycles. If it is smaller, the saving is not in issue stalls, and the other counters' drops are compared by size.
+
+## Addendum 3 (4 Nov 16:56, before the boots): where Addendum 2's boots run
+
+The C.5a session moved to board 2, and its board 2 runner has no bitstream-3 counter kit. Addendum 2's two boots therefore run on board 1 after its fault-ahead run ends, with `perf/fa/hpm-after-fa.sh`. That script waits for fa-b1.sh, requires its DONE line, then runs `sbhpm/chain-board.sh 1` over the imagick dev and devmk stages.
+
+**What makes them matter more now.** On board 1, bitstream 3, the slot-bare kit graded AS EXPECTED. An isolated STC→LDC pair costs 16.97 cycles on silicon (sim 17.38), yet removing one pair from compiled code saves 23-36 cycles. The excess lies in the code around the pair, and these counters are the instrument for it.
+
+Predictions are unchanged.
