@@ -287,7 +287,7 @@ def main():
                       (inputs['module'], 'capstone_vm.ko')):
         shutil.copy2(src, stage/name)
     instrumented = b'diag_admit' in inputs['module'].read_bytes()
-    gate = SCRIPT.replace('@LIVENESS@', LIVENESS if a.unpinned else '').replace('@MODE_ECHO@', memory_mode.echo('PIN_')).replace('@DIAG_PARAM@', ('diag_admit=1' if instrumented else '') + (' unpinned=1' if a.unpinned else ''))
+    gate = SCRIPT.replace('@LIVENESS@', LIVENESS if a.unpinned else '').replace('@MODE_ECHO@', memory_mode.echo('PIN_')).replace('@DIAG_PARAM@', ('diag_admit=1' if instrumented else '') + memory_mode.args(a.unpinned))
     if a.unpinned:
         if b'test_full_window' not in inputs['module'].read_bytes():
             p.error('--unpinned requires the hooks module for deterministic window policy')
