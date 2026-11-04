@@ -3,12 +3,11 @@
 #define CAPSTONE_NATIVE_SYSCALL_H
 #include <capstone/native-context.h>
 #include <capstone/delegate.h>
+#include <capstone/native-syscall-abi.h>
 
 /* Experimental register ABI; not installed in the module or default SDK.
  * a7 selects this service, a6 is the number, a0..a5 retain capability tags.
  * Only a protected backend frame may be captured by the dispatcher. */
-#define NS_SERVICE_NATIVE 0x43534e31
-#define NS_ABI_VERSION 1U
 #define NS_MAP     UINT64_C(0xc0de1001)
 #define NS_UNMAP   UINT64_C(0xc0de1002)
 #define NS_PROTECT UINT64_C(0xc0de1003)

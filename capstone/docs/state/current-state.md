@@ -1,5 +1,14 @@
 # Current Capstone state
 
+Native syscall experiment (`native/syscalls`, 2026-11-04): the
+[descriptor and copy contract](../design/virtual-capstone/native-syscall.md)
+has an executable double linked to the protected context reference. The p12
+sanitizer run passes 196 checks and detects nine deliberate guard failures.
+The musl entry stub is explicitly opt-in and compile-checked; the default
+transport is unchanged. No production native dispatch, real VFS/LSM/seccomp,
+application compatibility or performance qualification follows from these
+software fixtures. Integration remains NO-GO and native execution default off.
+
 ## Read this first (2026-10-13)
 
 This file was 2,030 lines and its companion 1,560, most of it instructions and

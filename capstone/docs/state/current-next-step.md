@@ -1,3 +1,12 @@
+Native syscall experiment (2026-11-04): integrate the
+[protected syscall/copy interface](../design/virtual-capstone/native-syscall.md)
+with authenticated N/U backends, F's capability-returning transactions and L's
+restart/lifecycle handling before enabling its SDK selector. The nested-iovec
+import, descriptor publication rollback and inherited-filter semantics need
+explicit production implementations. Then qualify real resource controls,
+widened grants, original application oracles, attempts/event and the full
+native census/gates. The executable double is a default-off checkpoint.
+
 **2026-10-21, the cross-lane plan to the next bitstream (runtime/semantics lane, coordinating on the lead's word).**
 Goal: the six-item batch bitstream, then the WHOLE corpus on vp2, including the two arms the current bitstreams
 cannot run (cpython lt1 and postgres pg-pools, both "needs collection", which item 6's hardware recycling provides).

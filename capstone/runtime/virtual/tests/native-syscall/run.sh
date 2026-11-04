@@ -39,4 +39,5 @@ done
 ar rcs "$out/build/libnative-syscall-reference.a" "$out/build/native-syscall-reference.o" "$out/build/native-syscall-table.o"
 sha256sum "${source_files[@]}" "$here/table-test.c" "$here/run.sh" \
     "$repo/capstone/runtime/include/capstone/native-syscall.h" \
+    "$repo/capstone/runtime/include/capstone/native-syscall-abi.h" \
     "$repo/capstone/runtime/include/capstone/native-context.h" > "$out/sources.sha256"
