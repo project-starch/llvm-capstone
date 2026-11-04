@@ -7,6 +7,7 @@
  * "LQ" result line with the unit counts, so attempts per unit = window attempts / units.
  * Everything in the window is counted system-wide (program, launcher, module, kernel).
  *
+ *   fault MIB WARM         one store/page; map/verify/unmap outside, WARM=0|1  unit: page
  *   touch MIB              map MIB MiB, store one word per 4 KiB page, unmap      unit: page
  *   heap ROUNDS BATCH      ROUNDS x (BATCH mallocs of a fixed gcc-like size mix, first and
  *                          last byte written, all freed)                          unit: allocation
@@ -237,7 +238,7 @@ int main(int argc, char **argv) {
     if (!strcmp(m, "fork") && argc == 4) return mode_fork(a, b);
     if (!strcmp(m, "exec") && argc == 4) return mode_exec(a, argv[3]);
     if (!strcmp(m, "compact") && argc == 4) return mode_compact(a, b);
-    fprintf(stderr, "usage: lqmicro touch MIB | heap ROUNDS BATCH | fork K ROUNDS | exec N PATH | "
+    fprintf(stderr, "usage: lqmicro fault MIB WARM | touch MIB | heap ROUNDS BATCH | fork K ROUNDS | exec N PATH | "
                     "compact CHUNKS DO | noop\n");
     return 125;
 }

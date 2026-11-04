@@ -1,7 +1,7 @@
 #!/bin/bash
 # run-micro.sh OUT PLATFORM KIND MEMORY LIST [MODPARAMS] [ENV...]
 #   One guest booted the way tools/profile.sh boots it (capprof plugin, -icount 0, no-pcrel,
-#   x-capstone-test-csrs=true, ASLR off, syslogd/klogd stopped), then every line of LIST run in it
+#   x-capstone-test-csrs=false, x-capstone-raw-moves=true, ASLR off, syslogd/klogd stopped), then every line of LIST run in it
 #   in order, each a process that opens exactly one capprof window around its measured phase
 #   (lqmicro.c). Afterwards tools/prof-report.py attributes every window to program / launcher /
 #   module / kernel, as for a SPEC run.
@@ -14,7 +14,7 @@
 #   LIST       lines "[NAME=value ...] -- lqmicro arguments"; NAME=value words are the
 #              invocation's guest environment (capstone: the launcher's), except HOG=MB, which
 #              starts lq-hog MB in the background first and waits for its READY
-#   MODPARAMS  if not empty, the module is reloaded with these insmod parameters first
+#   MODPARAMS  module parameters supplied both at initial load and explicit reload
 #   ENV        NAME=value words added to every invocation (e.g. CAPSTONE_VM_HUGE=1)
 #
 # Environment: MICRO (directory holding lqmicro-cap, lqmicro-plain, lq-hog; default: this
