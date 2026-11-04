@@ -1708,6 +1708,23 @@ static bool test_pending, test_expired, test_in_step;
  * fell between the fault and its resolution in CV_STEP, so it got the full
  * pin-ahead window. Real quantum ends and signals cause these too. */
 static u64 test_launcher_first;
+/* Stops nobody injected: a stop acted on while no injection is pending is a real quantum end, a
+ * real signal or a real reschedule. real_resolve counts those that fall between a fault and its
+ * resolution in CV_STEP (the fault then goes to the launcher, whose CV_RESOLVE pins the FULL
+ * window: more pins, fewer faults than the injected run implies); real_window counts those that
+ * cut a pin-ahead window before a batch (fewer pins, more faults). The kinds say which
+ * condition was set at that moment. Accounting checks may allow for exactly these events. */
+static u64 test_real_resolve, test_real_window;
+static u64 test_real_resched, test_real_signal, test_real_deadline;
+static void test_real_stop(bool window, u64 deadline)
+{
+    if (test_pending)
+        return;
+    if (window) ++test_real_window; else ++test_real_resolve;
+    if (need_resched()) ++test_real_resched;
+    if (signal_pending(current)) ++test_real_signal;
+    if (ktime_get_ns() >= deadline) ++test_real_deadline;
+}
 
 static void test_hook(unsigned long at)
 {
@@ -1762,13 +1779,15 @@ static void test_report(const char *why)
             "gup_pending=%llu checks=%llu checks_irqs_on=%llu entries=%llu "
             "launcher_first=%llu unpinned=%u fault_requests=%llu "
             "fault_deferred=%llu fault_pending=%llu fault_batches=%llu "
-            "fault_max=%llu fault_short=%llu\n",
+            "fault_max=%llu fault_short=%llu real_resolve=%llu real_window=%llu real_resched=%llu "
+            "real_signal=%llu real_deadline=%llu\n",
             why, test_injections, test_stops, test_initial_stops, test_violations,
             test_consumed, test_gup_requests, test_gup_max, test_short_results,
             test_gup_pending, test_checks, test_checks_irqs_on, test_entries,
             test_launcher_first, unpinned, test_fault_requests,
             test_fault_deferred, test_fault_pending, test_fault_batches,
-            test_fault_max, test_fault_short);
+            test_fault_max, test_fault_short, test_real_resolve, test_real_window,
+            test_real_resched, test_real_signal, test_real_deadline);
 }
 #define TEST_HOOK(at) test_hook(at)
 #define TEST_GUP(pages) test_gup(pages)
@@ -1789,6 +1808,9 @@ static void test_report(const char *why)
 #define TEST_STEP_BEGIN() do { test_in_step = true; } while (0)
 #define TEST_IOCTL_DONE() do { test_pending = test_expired = test_in_step = false; } while (0)
 #define TEST_RESOLVE(a, i) do { if (!test_in_step && !(a)->pages[i]) ++test_launcher_first; } while (0)
+#define TEST_REAL_STOP(window, deadline) test_real_stop(window, deadline)
+/* Which route resolved the fault: CV_STEP's own loop or the launcher's CV_RESOLVE. */
+#define TEST_BY() (test_in_step ? " by=step" : " by=resolve")
 #else
 #define TEST_HOOK(at) do { } while (0)
 #define TEST_GUP(pages) do { } while (0)
@@ -1808,6 +1830,8 @@ static void test_report(const char *why)
 #define TEST_STEP_BEGIN() do { } while (0)
 #define TEST_IOCTL_DONE() do { } while (0)
 #define TEST_RESOLVE(a, i) do { } while (0)
+#define TEST_REAL_STOP(window, deadline) do { } while (0)
+#define TEST_BY() ""
 #endif
 
 /* Pending work for this task, or the end of its budget: return to the
@@ -1844,8 +1868,10 @@ static unsigned long pin_ahead(struct context *c, struct arena *a,
         unsigned long batch = min(count - done, (unsigned long)PIN_AHEAD_BATCH);
         struct page **pages = a->pages + first + done;
         long n;
-        if (cv_step_stop(deadline) && !TEST_FULL_WINDOW())
+        if (cv_step_stop(deadline) && !TEST_FULL_WINDOW()) {
+            TEST_REAL_STOP(true, deadline);
             return done;
+        }
         TEST_GUP(batch);
 #ifdef CV_TEST_HOOKS
         /* A short result, as when GUP stops at a page it cannot fault in:
@@ -2156,7 +2182,10 @@ static int unpinned_resolve(struct context *c, struct cv_thread *t, struct arena
     while (done < limit) {
         unsigned long batch = min_t(unsigned long, limit - done, PIN_AHEAD_BATCH);
         unsigned long target = batch;
-        if (!TEST_SKIP_STOP_CHECK() && cv_step_stop(deadline) && !TEST_FULL_WINDOW()) break;
+        if (!TEST_SKIP_STOP_CHECK() && cv_step_stop(deadline) && !TEST_FULL_WINDOW()) {
+            TEST_REAL_STOP(true, deadline);
+            break;
+        }
 #ifdef CV_TEST_HOOKS
         if (test_pending && test_condition()) ++test_fault_pending;
         ++test_fault_batches;
@@ -2361,9 +2390,10 @@ static int resolve(struct context *c, struct cv_thread *t, u64 deadline)
                     ++fault_ahead_windows;
                     fault_ahead_pages += pinned;
                     if (diag_admit)
-                        pr_info("capstone_vm: fault-ahead arena 0x%lx page %u want %lu pinned %lu fault 0x%lx\n",
+                        pr_info("capstone_vm: fault-ahead arena 0x%lx page %u want %lu pinned %lu fault 0x%lx%s\n",
                                 a->address, index, ahead, pinned,
-                                a->address + a->rx_bytes + (unsigned long)index * PAGE_SIZE);
+                                a->address + a->rx_bytes + (unsigned long)index * PAGE_SIZE,
+                                TEST_BY());
                 }
             }
         }
@@ -2928,6 +2958,7 @@ thread_unwind:
                 TEST_HOOK(4);
             if (cv_step_stop(budget_end)) {
                 TEST_STOPPED(false);
+                TEST_REAL_STOP(false, budget_end);
                 break;
             }
             if (resolve(c, t, budget_end))
