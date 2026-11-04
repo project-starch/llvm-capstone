@@ -474,8 +474,24 @@ production builds. Separate `adaptdirect` cases and every stop-injection case
 keep the real stop checks: cuts between batches are allowed, but each
 requested window must double up to 64, its next fault must follow the pages
 actually retained, at least one page must be pinned ahead, and both sysfs
-counters must equal the event census exactly. `adaptres` (a reschedule before
-every window) must admit all 32 pages by demand faults with 30 empty attempts.
+counters must equal the event census exactly. `adaptres` (a reschedule after
+every demand GUP) stops each window the step opens before its first batch, so
+the walk takes a fault per page and every window attempt pins nothing, 30 of
+them. A real stop (a quantum end, a signal or a reschedule nobody injected) can
+land between a fault and its resolution in CV_STEP. The launcher's CV_RESOLVE
+then resolves that fault first and pins the full window ahead, and the walk
+takes that many faults fewer. The module prints the route of every window
+(`by=step` or `by=resolve`), and the check allows pages pinned ahead only for
+`by=resolve` windows, at most `launcher_first` of them. It keeps what must hold
+whatever the timing: windows of 4, 8, 16, 32, 64 pages in stream order, each
+next fault at the first page not retained, all 32 pages pinned, and faults plus
+pages pinned ahead equal to 32. The injected-stop pairs (`resched4` against
+`base16` and the like) are exact unless the test build's counters show a real
+stop: `launcher_first` allows pins up and faults down by the window difference
+per fault, `real_window` (a real stop that cut a window before a batch,
+counted only while no injection is pending, in either run) allows pins down and
+faults up by at most window - 1 per cut. The report also splits the real stops
+by kind (`real_resched`, `real_signal`, `real_deadline`).
 
 The pthread gate has a separate `fallback` launch: 63 raw exits retain all
 identity slots, then four raw contexts on the main TLS and the default
