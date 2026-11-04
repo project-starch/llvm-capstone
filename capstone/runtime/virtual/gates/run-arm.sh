@@ -7,6 +7,7 @@
 #       CROSS_GCC=<riscv64 Linux gcc, for the native references> \
 #       [SDK=<an application SDK built from TREE>] [PHASE=all|build|gates] [GATES="hosted runtime ..."] \
 #       [CPU_EXTRA=<QEMU -cpu extras; default the 32-slot gate set>] [QEMU_LOCK=<lock file>] \
+#       [MEMORY_MODE=pinned|unpinned] [UNPINNED_PROBES=<built isolated mm fixtures>] \
 #       [APP_SQLITE=... APP_MRUBY=... APP_PERL=... APP_MEMCACHED=...] [JOBS=8] \
 #     bash run-arm.sh OUT
 #
@@ -37,6 +38,17 @@ OUT=${1:?usage: run-arm.sh OUT (see the header)}
 PHASE=${PHASE:-all}
 GATES=${GATES:-hosted runtime nodes malloc pin-ahead fp pthread step-hooks memcached}
 JOBS=${JOBS:-8}
+memory=()
+case ${MEMORY_MODE:-pinned} in
+  pinned) ;;
+  unpinned) memory=(--unpinned) ;;
+  *) echo 'MEMORY_MODE must be pinned or unpinned' >&2; exit 2 ;;
+esac
+if [[ " $GATES " == *" unpinned-mm "* ]]; then
+  [[ ${MEMORY_MODE:-pinned} == unpinned && -n ${UNPINNED_PROBES:-} ]] || {
+    echo 'unpinned-mm requires MEMORY_MODE=unpinned and UNPINNED_PROBES' >&2; exit 2;
+  }
+fi
 HERE=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 TREE=$(realpath "$TREE"); PLATFORM=$(realpath "$PLATFORM"); LLVM=$(realpath "$LLVM")
 OUT=$(realpath -m "$OUT")
@@ -180,16 +192,22 @@ gates_phase() {
     --noreturn "$I/noreturn.dom" --native "$I/native-hosted" "${plat[@]}" --work "$G/hosted"
   gate runtime python3 "$V/run.py" --adapter "$P/adapter" --application "$I/contract.dom" \
     --sqlite "$(cat "$B/apps/sqlite.image")" --mruby "$(cat "$B/apps/mruby.image")" \
-    --perl "$(cat "$B/apps/perl.image")" --record "$G/runtime.json" --timeout 900 "${plat[@]}"
+    --perl "$(cat "$B/apps/perl.image")" --record "$G/runtime.json" --timeout 900 "${plat[@]}" "${memory[@]}"
   gate nodes python3 "$V/run-nodes.py" --adapter "$P/adapter" --application "$I/node.dom" "${plat[@]}" --work "$G/nodes"
   gate malloc python3 "$V/run-malloc.py" --adapter "$P/adapter" --application "$I/malloc.dom" \
     --native "$I/native-malloc" --sdk "$(cat "$B/SDK")" "${plat[@]}" --work "$G/malloc"
-  gate pin-ahead python3 "$V/run-pin-ahead.py" --adapter "$P/adapter" --application "$I/pin-ahead.dom" "${plat[@]}" --work "$G/pin-ahead"
+  local pin_module=()
+  [[ ${MEMORY_MODE:-pinned} != unpinned ]] || pin_module=(--module "$HOOKS")
+  gate pin-ahead python3 "$V/run-pin-ahead.py" --adapter "$P/adapter" --application "$I/pin-ahead.dom" "${plat[@]}" "${memory[@]}" "${pin_module[@]}" --work "$G/pin-ahead"
   gate fp python3 "$V/run-fp.py" --adapter "$P/adapter" --application "$I/fp.dom" "${plat[@]}" --work "$G/fp"
-  gate pthread python3 "$V/run-pthreads.py" --adapter "$P/adapter" --application "$I/pthread.dom" "${plat[@]}" --work "$G/pthread"
+  gate pthread python3 "$V/run-pthreads.py" --adapter "$P/adapter" --application "$I/pthread.dom" "${plat[@]}" "${memory[@]}" --work "$G/pthread"
   # The README's form: the pin-ahead image (contract.dom dies at VM_CONTRACT_FAIL:argv here).
   gate step-hooks python3 "$V/run-step-hooks.py" --adapter "$P/adapter" --module "$HOOKS" \
-    --application "$I/pin-ahead.dom" "${plat[@]}" --work "$G/step-hooks"
+    --application "$I/pin-ahead.dom" "${plat[@]}" "${memory[@]}" --work "$G/step-hooks"
+  if [[ -n ${UNPINNED_PROBES:-} ]]; then
+    gate unpinned-mm python3 "$V/unpinned/run-mm.py" "${plat[@]}" --module "$HOOKS" \
+      --probes "$UNPINNED_PROBES" --work "$G/unpinned-mm"
+  fi
   if [[ -f $B/apps/memcached.image ]]; then
     local m; m=$(cat "$B/apps/memcached.image")
     gate memcached python3 "$TREE/capstone/ports/memcached/app/host/run-virtual.py" --build "$m" \
