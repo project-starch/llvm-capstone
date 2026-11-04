@@ -1,9 +1,11 @@
 # Native syscall executable contract
 
-This directory provides a default-off syscall dispatcher double. See the
+This directory exercises the shared syscall dispatcher with a context double. See the
 [interface and limitations](../../../../docs/design/virtual-capstone/native-syscall.md).
 It links N's protected context implementation directly. U is represented by
 the required checked-copy callback; absence returns ENOSYS before issue.
+The default-off [native integration](../native-integration/README.md) uses
+the same dispatcher with actual ISA checked copies and a limited Linux backend.
 
 On a build host, in a lane-owned source export:
 

@@ -79,8 +79,9 @@ struct ns_request {
     unsigned tagged, nulls;
 };
 struct ns_session;
-/* Linkable executable double, not a production kernel dispatcher. Serialized
- * calls only; one session per protected context for its entire lifetime. */
+/* Shared dispatcher for the executable double and experimental kernel adapter.
+ * Providers supply the authority checks and OS operations. Serialized calls
+ * only; one session per protected context for its entire lifetime. */
 int ns_session_create(struct cn_context *, const struct cn_owner *, const struct ns_ops *,
                       void *, struct ns_session **);
 void ns_session_free(struct ns_session *);

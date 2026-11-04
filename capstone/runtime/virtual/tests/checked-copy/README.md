@@ -32,6 +32,7 @@ same sentinel oracle. Disabled exclusion is injected on the second chunk so
 that the first chunk cannot mask the missing guard.
 
 The kernel adapter and CSCHECK ISA remain experimental and default off.
-Actual native-task plumbing, single-hart guest retries, attempt budgets and
-both-host nine-gate / quick / full census qualification are required before
-integration. The existing held-exchange bridge remains the production path.
+The [native integration experiment](../native-integration/README.md) supplies
+an actual module consumer. Forced guest scheduling/reuse/COW controls, attempt
+budgets and both-host nine-gate / quick / full census qualification remain
+required before landing. The existing bridge remains the default path.

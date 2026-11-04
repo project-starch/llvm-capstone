@@ -222,6 +222,16 @@ keeps an untagged source (Q-04, decided 2026-10-14), so the compiler copies a
 live-source capability register with one MOVC instead of the C-32 STC+LDC
 pair. The physical profile keeps the pair until its bitstream has Q-04 (b).
 
+## Native dispatcher experiment
+
+The default-off `native_dispatch` module option connects the shared syscall
+dispatcher to ISA checked copies and serves faults and syscalls inside
+`CV_STEP_NATIVE`. Its small supported syscall set and actual guest controls
+are documented in [native integration](tests/native-integration/README.md).
+Threads, signal restart, forced concurrent copy/reuse controls, complete gate
+parity and performance qualification remain unresolved. The ordinary launcher
+profile retains its existing behavior.
+
 ## VM service contract
 
 `vm-abi.h` is shared by startup assembly, libc and the trusted launcher;
