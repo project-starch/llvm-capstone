@@ -160,3 +160,13 @@ Dry run B2-ok (40 image runs, all on board 2; bookings and SPEC chain on board 2
 - **The FINDING stays a FINDING.** A second C.5a kit session on board 1 later is to separate the bitstream from this session's board state.
 
 Dry runs CS-ok, CS-noR67, CS-hard, CS-ok2, CS-objbfail and CS-ranspec are in perf/c5a-b2/dryrun.
+
+## Addendum 6 (4 Nov 17:55, before the follow-up's boots): the hpm kit is repeated on C.5a
+
+After SPEC and before the flash back, c5a-spec-b2.sh runs the seven hpm images again on C.5a. This is a fresh flash and a fresh session on the same board.
+- **Grade.** The output in perf/c5a-b2/hpm-r2 is graded by hpm-grade.py 5b6fb6a4ec9b, c5a arm, against run-b1-bs3.
+- **What it separates.**
+  - If l1d_miss again reads 1 / 257, the extra miss belongs to the bitstream.
+  - If it reads the simulated 0 / 256, the first session's board state caused it. That session followed a killed driver and odd switches.
+- **Gating.** It gates nothing.
+- **Dry run.** CS-r2.

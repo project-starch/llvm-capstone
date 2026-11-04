@@ -45,6 +45,19 @@ main() {
     SB_KIT=$KIT SB_BITSTREAM=1fc2cd5aa $CHAIN 2 "$O/c5a-spec-b1.list" "$SPEC" >> "$L" 2>&1; spec=$?
     log "SPEC on C.5a END chain rc=$spec"
     CAPSTONE_WORK=$H C5_OUT=$SPEC python3 "$O/c5a-spec-grade.py" > "$O/grade-spec.txt" 2>&1; log "SPEC GRADE rc=$?"; sed 's/^/  /' "$O/grade-spec.txt" >> "$L"
+    # The hpm kit again on C.5a, a fresh flash and session (Addendum 6): is the extra L1D miss the bitstream or the
+    # first session's board state? Graded by 5b6fb6a4ec9b's hpm-grade.py against run-b1-bs3.
+    local HK=$H/perf/hpm/kit-289ad4e5/images RUNNER=/tmp/capstone/wt-b2/capstone/tests/rtl-smoke/sup-bare-2026-10-03-ladder/run_sup_bare.py i r
+    local bid2; bid2=$($BOOK book 2 30 "vp2 hpm kit repeat on C.5a (board 2)") || bid2=
+    mkdir -p "$O/hpm-r2"
+    for i in hpm-5 hpm-3 hpm-4 hpm-6 hpm-1 hpm-2 hpm-7; do
+      ( export FPGA_URL; FPGA_URL=$(cat "$CAPSTONE_FPGA_URL_FILE")
+        FPGA_BITSTREAM=$C5.bit SUP_IMG=$HK/$i.bin SUP_REC_ADDR=0x$(sed "s/^0x//" "$HK/$i.rec") SUP_OUT=$O/hpm-r2/$i \
+          SUP_TIMEOUT=90 timeout 900 ${C5_RUN:-python3 $RUNNER} > "$O/hpm-r2/$i.stderr" 2>&1 ); r=$?
+      echo $r > "$O/hpm-r2/$i.rc"; log "HPM R2 $i rc=$r"
+    done
+    [ -n "$bid2" ] && $BOOK unbook "$bid2" >> "$L" 2>&1
+    python3 "$H/perf/c5a-kits-5b6fb6a4/grade/hpm-grade.py" "$O/hpm-r2" c5a "$H/perf/hpm/run-b1-bs3" > "$O/grade-hpm-r2.txt" 2>&1; log "HPM R2 GRADE rc=$?"; sed 's/^/  /' "$O/grade-hpm-r2.txt" >> "$L"
   else log "C.5a flash failed"; fi
   flash $B3 $B3SHA || { log "STOP: the flash back to bitstream 3 failed"; return 1; }
   log "DONE spec $spec; board 2 back on bitstream 3"
