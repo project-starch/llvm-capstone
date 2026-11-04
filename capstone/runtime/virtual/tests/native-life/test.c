@@ -39,7 +39,7 @@ static struct nl_task *task(struct nl_world *w, struct nl_ns *ns, cn_u64 tid, co
 static void cleanup(struct nl_world *w) { cn_engine_free(w->engine); nl_world_free(w); }
 
 /* ===== fork (I6) ===== */
-struct sib { struct nl_ns *ns; struct nl_cap *victim; int mint_rc, retire_rc, retire_rc2; };
+struct sib { struct nl_ns *ns; struct nl_cap *bystander; int mint_rc, retire_rc, retire_rc2; };
 static void sib_after_mm(void *o, struct nl_ns *p)
 {
     struct sib *s = o; struct nl_cap c;
@@ -48,7 +48,7 @@ static void sib_after_mm(void *o, struct nl_ns *p)
 static void sib_mid_table(void *o, struct nl_ns *p)
 {
     struct sib *s = o;
-    s->retire_rc = nl_retire(p, s->victim);   /* a record in the half already copied */
+    s->retire_rc = nl_retire(p, s->bystander);   /* a record in the half already copied */
 }
 
 static void test_fork(void)
@@ -118,14 +118,14 @@ static void test_fork(void)
     w = world();
     A = nl_ns_new(w, 1, 4096, 8);
     {
-        struct nl_cap caps[8], victim;
+        struct nl_cap caps[8], bystander;
         struct nl_ns *Ch;
         struct sib s = {0};
         struct nl_fork_hooks hk = {sib_after_mm, sib_mid_table, &s};
         int valid_at_fork[8], any_alias = 0;
         for (unsigned i = 0; i < 8; ++i) { caps[i] = mint(A, i % 6, 1, 7); }
         CHECK(nl_retire(A, &caps[1]) == 0);              /* a free-list entry exists */
-        victim = caps[0]; s.victim = &victim;      /* slot 2: a record the first half-copy has already taken */
+        bystander = caps[0]; s.bystander = &bystander;      /* slot 2: a record the first half-copy has already taken */
         for (unsigned i = 0; i < 8; ++i) valid_at_fork[i] = nl_valid(A, &caps[i]);
         CHECK(nl_ns_fork(A, 2, &hk, &Ch) == 0);
         /* with the gate the sibling is held out (EAGAIN) and replays afterwards */
@@ -138,7 +138,7 @@ static void test_fork(void)
           CHECK(!any_alias); }                         /* no two live objects share (slot, generation) */
         CHECK(s.mint_rc == -EAGAIN && s.retire_rc == -EAGAIN);   /* the sibling was held out */
         /* the deferred sibling operations now apply to the parent only */
-        CHECK(nl_retire(A, &victim) == 0 && nl_valid(Ch, &victim) && !nl_valid(A, &victim));
+        CHECK(nl_retire(A, &bystander) == 0 && nl_valid(Ch, &bystander) && !nl_valid(A, &bystander));
         CHECK(nl_ns_audit(A) == 0);
         nl_ns_abort_fork(Ch);
     }
@@ -187,11 +187,11 @@ static void test_fork(void)
     w = world();
     A = nl_ns_new(w, 1, 4096, 8);
     {
-        struct nl_cap d = mint(A, 0, 1, 7), forged, out;
+        struct nl_cap d = mint(A, 0, 1, 7), fabricated, out;
         CHECK(nl_mint(A, ~0ULL - 7, 16, 7, &out) == -EINVAL);
         CHECK(nl_mint(A, A->base_va + 7 * PG, 2 * PG, 7, &out) == -EINVAL);
-        forged = d; forged.w[0] = ~0ULL - 7;
-        CHECK(nl_check(A, &forged, 0, 16, 0) == -EFAULT);
+        fabricated = d; fabricated.w[0] = ~0ULL - 7;
+        CHECK(nl_check(A, &fabricated, 0, 16, 0) == -EFAULT);
         CHECK(nl_check(A, &d, ~0ULL - 3, 16, 0) == -EFAULT);
         CHECK(nl_ns_new(w, 9, 1U << 21, 1) == NULL);       /* capacity beyond the slot field */
     }
@@ -409,7 +409,7 @@ static void test_signals(void)
     nl_task_frame(T, &f2);
     CHECK(!memcmp(&f1, &f2, sizeof(f1)));
 
-    /* user sigcontext mutation cannot forge the kernel frame */
+    /* user sigcontext mutation cannot fabricate the kernel frame */
     CHECK(nl_sig_deliver(T, 10, &u, &tk) == 0);
     u.x[10] = 0x4141414141414141ULL; u.tag_hint[10] = 1;           /* try to retarget a capability register */
     u.x[11] ^= 0xffff; u.x[12] = 0; u.tag_hint[12] = 1;
@@ -660,7 +660,7 @@ static void test_futex(void)
     }
     cleanup(w);
 
-    /* robust list: forged and hostile lists */
+    /* robust list: fabricated and malformed lists */
     w = world();
     A = nl_ns_new(w, 1, 4096, 8);
     {
@@ -671,7 +671,7 @@ static void test_futex(void)
         const cn_u64 off = 64;
         nl_frame_init(&f, A, 0x8000); set_cap(&f, 10, &head); set_cap(&f, 11, &stk); set_cap(&f, 13, &head);
         P = task(w, A, 10, &f);
-        /* (a) the list's next pointer is a forged, untagged copy of the address of a lock word
+        /* (a) the list's next pointer is a fabricated, untagged copy of the address of a lock word
          * that names this very thread, in a page the thread has no capability over */
         CHECK(nl_thread_create(P, 0, 11, 0, 0, 0, &T) == 0);
         CHECK(nl_store_u64(A, va(A, 6, off), T->tid) == 0);
@@ -681,7 +681,7 @@ static void test_futex(void)
         CHECK(nl_store_u64(A, va(A, 1, off), T->tid) == 0);
         CHECK(nl_set_robust_list(T, 13, off) == 0);
         CHECK(nl_task_exit(T) == 0);
-        CHECK(nl_load_u64(A, va(A, 6, off), &v) == 0 && v == T->tid);       /* the victim is untouched */
+        CHECK(nl_load_u64(A, va(A, 6, off), &v) == 0 && v == T->tid);       /* the bystander is untouched */
         /* (b) a tagged entry whose bounds do not reach the lock word */
         CHECK(nl_thread_create(P, 0, 11, 0, 0, 0, &T) == 0);
         CHECK(nl_store_u64(A, va(A, 5, off), T->tid) == 0);

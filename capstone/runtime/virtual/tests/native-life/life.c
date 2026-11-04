@@ -623,7 +623,7 @@ int nl_thread_create(struct nl_task *p, unsigned flags, unsigned stack_slot, uns
     if (flags & NL_CLONE_SETTLS) {
         if (!tls_slot) {
 #ifdef NL_MUTATE_TLS_SCALAR
-            struct nl_cap amb;   /* forges authority from a scalar address */
+            struct nl_cap amb;   /* fabricates authority from a scalar address */
             if ((rc = nl_mint(p->ns, p->ns->base_va, (cn_u64)p->ns->npages * NL_PAGE_BYTES,
                               NL_RIGHT_R | NL_RIGHT_W, &amb))) return rc;
             amb.w[0] = tls_scalar;

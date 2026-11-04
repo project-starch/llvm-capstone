@@ -22,6 +22,9 @@
  *   libfutexwake R         R x nl_futex_wake with no waiter
  *   libfutexwait R         R x nl_futex_wait with a mismatched value
  *   libthread R            R x (nl_thread_create, nl_task_exit)
+ *   libauth R              R x (cn_get_capref, cn_authorize): the context double's per-call frame validation
+ *   libsnap R              R x cn_snapshot (a 2.3 KB frame copy)
+ *   libcheck R             R x nl_check alone (tag, lifetime via the cache, rights, bounds)
  *   noop | close           exit at once | the stop marker alone */
 #define _GNU_SOURCE
 #include <capstone/native-life.h>
@@ -290,6 +293,28 @@ static int libthread(long rounds)
     return 0;
 }
 
+static int libprim(long rounds, int which)
+{
+    struct nl_world *w = world();
+    struct nl_ns *A = nl_ns_new(w, 1, 4096, 8);
+    struct nl_cap word = mint_cap(A, 0, 1, 7);
+    struct cn_frame f;
+    struct nl_task *T;
+    struct cn_capref ref;
+    long ok = 0;
+    nl_frame_init(&f, A, 0x8000); nl_reg_from_cap(&f.x[10], &word);
+    T = mk(w, A, 10, &f);
+    START();
+    for (long r = 0; r < rounds; r++) {
+        if (which == 0) ok += cn_get_capref(T->ctx, &T->owner, 10, &ref) == 0 && cn_authorize(T->ctx, &T->owner, &ref, 0, 8, 0) == 0;
+        else if (which == 1) ok += cn_snapshot(T->ctx, &T->owner, &f) == 0;
+        else ok += nl_check(A, &word, 0, 8, 0) == 0;
+    }
+    STOP();
+    report(which == 0 ? "libauth" : which == 1 ? "libsnap" : "libcheck", 0, 0, rounds, ok);
+    return 0;
+}
+
 int main(int argc, char **argv)
 {
     const char *m = argc > 1 ? argv[1] : "";
@@ -310,6 +335,9 @@ int main(int argc, char **argv)
     if (!strcmp(m, "libfutexwake")) return libfutex(a, 1);
     if (!strcmp(m, "libfutexwait")) return libfutex(a, 0);
     if (!strcmp(m, "libthread")) return libthread(a);
+    if (!strcmp(m, "libauth")) return libprim(a, 0);
+    if (!strcmp(m, "libsnap")) return libprim(a, 1);
+    if (!strcmp(m, "libcheck")) return libprim(a, 2);
     fprintf(stderr, "unknown mode\n");
     return 2;
 }
