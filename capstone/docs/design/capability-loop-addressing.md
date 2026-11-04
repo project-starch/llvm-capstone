@@ -9,7 +9,12 @@ far neighbor capabilities in a loop preheader.
 A capability can lose its tag at either the representable-window boundary or
 the machine's address-policy boundary. Returning to a valid address does not
 restore the tag. Offset rewrites must preserve the value of each surviving
-cursor, remove intermediate cursors, or reuse an original accessed cursor.
+cursor, remove intermediate cursors, reuse an original accessed cursor, or form
+a cursor the program did not form when that cursor is used only as an operand of
+an address-bits compare (`icmp eq`/`ne`), never as an access operand, an IV seed
+or a live-out, and the period guard below holds. Such a cursor may be refused
+(its tag cleared); the compare reads the integer address bits, which the
+refusal preserves.
 Distance from an access alone is insufficient: even `p - 1` can be refused
 under phys56 when `p` is zero.
 
@@ -91,6 +96,15 @@ ScalarEvolution must provide an exact loop-invariant backedge count and a
 constant maximum below the address recurrence's period. For a nonzero byte
 step S, that period is `2^(64 - ctz(S))`; bounding the backedge count strictly
 below it prevents an earlier address from comparing equal to the endpoint.
+This is the period guard. Besides the other conditions below, the transform
+requires that the constant maximum backedge count M satisfies
+`M < 2^(64 - ctz(S))` (in the code, `getActiveBits(M) <= 64 - ctz(S)`). The
+loop then compares at most M + 1 post-increment cursors, and none of the first
+M can equal the endpoint, so the exit fires on the iteration the integer test
+would have fired. An exhaustive check of a 10-bit ring over every step and
+every count found no unsound accept and no needless reject of this predicate.
+For a byte step of one the period is 2^64 and an unbounded 64-bit count
+passes; for a step that is a multiple of eight it does not.
 An unrestricted 64-bit counter scaled by eight does not establish this bound.
 The integer recurrence's remaining uses must belong exclusively to the exit
 test, so computing the endpoint can remove that recurrence. Early exits,
