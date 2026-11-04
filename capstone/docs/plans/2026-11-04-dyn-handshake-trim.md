@@ -174,3 +174,31 @@ slot run:
 
 The sim deltas, ldc −1.0 and pair −2.0 per iteration, are the PATTERN being tested. They are not a silicon
 prediction: sim cannot reproduce the silicon pair cost.
+
+## Full build: the seal and the grade (2026-11-04)
+
+**The run.** The synth lane's run of c9c7952bd exited 0 in about 1h52m, and write_bitstream completed. It was the last
+build on that lane's host: new synthesis goes to the board lane on apollo.
+- Peaks: run 21.94 GB, largest single process 5.90 GB, collector 14.04 GB.
+- **.bit:** sha256 790ac2c096a0cd7361129572713333410745a4bc3158c581d7a9c25a5c1e97f2, 11,443,722 B. The tarball copy is
+  byte-identical.
+- **Tarball:** synth-c9c7952bd-exit0.tar.gz, sha256 ed7f5ddbbe51cc73f45cad16df9feb77cede12ffa81ab0f47389a96caca81588;
+  its PROVENANCE reads c9c7952bd800.
+
+| Key (written before the run) | Reading (C.5a's seal in brackets) | Grade |
+|---|---|---|
+| placed LUT 169,738 ± 2,000 | 169,642 (−96); FF 63,646 (+4); slices 47,812, 93.84 % (95.57 %) | PASS |
+| no placer or router window above level 5 | placer max East 16×16, level 4 (32×32, level 5); router effective max 4 (5); Route 35-447 0 (1) | PASS |
+| 0 failed, unrouted or partially routed nets | 0; overlaps 106,753 → 19,688 → 5,941 → … → 0 | PASS |
+| check_timing 0 loops, TIMING-23 0, LUTLP-1 0 | 0 loops (control 1); TIMING-23 0; LUTLP-1 0 | PASS |
+| WNS reported against −13.758 | −13.869 (Δ −0.111, inside the null band); TNS −218,510 (−218,814); failing endpoints 40,619 / 188,595 (38,719); WHS +0.049 | reported |
+| .bit sha256 | as above | PASS |
+
+**Grade: a flash candidate on every graded key.**
+- The synth lane rules any negative WNS not flashable. That is its standing rule; C.5a is in service at −13.758.
+- Flashing is decided in the owning lanes.
+- The first boot is pre-registered:
+  - the slot kit's stage-A arm (land/rtl-slot-kit e006a45efd88 / 98ff08e6f3fb: P1d, cycle band);
+  - the hpm and ObjBounds kits' stage-A arms, pre-registered before that boot.
+- **Placed density came down.** Slices fell from 95.57 % to 93.84 %, and congestion is a level below C.5a's. The change
+  is −96 LUT, so this is placement variation within the floor, not an attributed saving.
