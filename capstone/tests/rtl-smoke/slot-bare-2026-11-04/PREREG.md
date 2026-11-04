@@ -67,3 +67,42 @@ The controls were run on fake run dirs built from these vectors:
 - slot-1 doubled reads PATTERN FAILS;
 - slot-5 halved reads PATTERN FAILS;
 - a missing image reads NO DATA.
+
+## Stage-A arm (added 2026-11-04, before stage A's first boot)
+
+Bitstream: capstone-ariane c9c7952bd, the DYN handshake trim (record: capstone/docs/plans/2026-11-04-dyn-handshake-trim.md).
+Vectors come from simulating these same images (ELF sha256 equal to the other trees' runs) on c9c7952bd, clean, and are in
+vectors.txt's fourth column. The exact fields are those of every other arm.
+
+- **P1d replaces P1 on this arm.** slot-1 and slot-4 (same doubleword, page alias) read within 2 % of each other; slot-2
+  and slot-3 (other doubleword, other line) read within 2 % of each other; and slot-2 reads more than 5 % below slot-1.
+  - Sim: 0x170a against 0x1310, 17 % apart.
+  - The reason: with the handshake trimmed, the ldc dispatches while the stc is still buffered. To another doubleword it
+    no longer waits. To the same doubleword, or its page alias (the offset compare is bits [11:3]), it waits on the
+    store's page offset.
+- **P2 is unchanged.**
+- **Predicted against C.5a's run:** ldc alone and the pair to another doubleword are lower; slot-1, slot-4, slot-5,
+  slot-6, slot-8 and slot-9 are unchanged.
+
+Grader controls (fake run dirs built from these vectors):
+- the stage-A arm on its own vectors: AS EXPECTED;
+- resident name 1fc2cd5aa: WRONG BITSTREAM;
+- slot-2 and slot-3 set to slot-1's cycles: PATTERN FAILS;
+- C.5a's flat pair on the stage-A arm: PATTERN FAILS.
+
+The real bitstream 3 run below still grades AS EXPECTED with the edited grader.
+
+## Silicon readings
+
+**bitstream 3, board 1, 2026-11-04 16:46-16:49** (the SPEC lane's run, perf/fa/slot-bs3-b1).
+- `slot-grade.py <run> bs3`: **AS EXPECTED**. All 9 image hashes match, the resident name is caplifive_vp2c_e7af48457.bit,
+  and every exact field is equal. P1 holds (slot-1..4 all 0x2812 = 10,258); P2 holds (4,624 > 2,567).
+- Cycles sit 0.4-9 % under the simulation's (slot-1 10,258 against 10,493; slot-9 1,568 against 1,593).
+- Per op over the bare loop (cycles per iteration): ldc 6.01, stc 8.01, stc+ldc 16.97 (same and other slot), sd+ld
+  5.97 / 1.95; the loop is 3.06. The simulation of the same images gives ldc 6.06, stc 8.42, pair 17.38.
+
+**What it means.** On silicon the isolated pair costs what the simulation says, within a few percent: 17 cycles per
+iteration on bitstream 3. The SPEC lane's estimate of 23-36 silicon cycles per pair removed from a compiled program is
+larger than that. The excess is not the pair's own cost in isolation. This kit isolates the pair from everything around
+it, so it cannot say what the excess is: the surrounding code, cache or TLB state, or what else the compiler change
+removed.
