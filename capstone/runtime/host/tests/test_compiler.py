@@ -225,6 +225,24 @@ class CompileOnlyTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 compile_only(bad)
 
+    def test_compile_driver_preserves_jump_table_policy(self):
+        import json
+        from capstone_vm.compiler import main
+        with tempfile.TemporaryDirectory() as directory:
+            config = {**VIRTUAL, "version": 1, "application_abi": 2,
+                      "cc": "/bin/clang", "musl": "/musl"}
+            (Path(directory) / "sdk.json").write_text(json.dumps(config))
+            for policy in ([], ["-fno-jump-tables"], ["-fjump-tables"]):
+                with self.subTest(policy=policy), \
+                     patch.dict(os.environ, {"CAPSTONE_SDK": directory}), \
+                     patch("capstone_vm.compiler.runs_only_clang") as check_plan, \
+                     patch("capstone_vm.compiler.subprocess.call", return_value=0) as call:
+                    self.assertEqual(main(["-O2", "-c", "a.c", "-o", "a.o", *policy]), 0)
+                    planned = [*check_plan.call_args.args[0], *check_plan.call_args.args[1]]
+                    for target in (planned, call.call_args.args[0]):
+                        self.assertEqual([word for word in target if word in
+                                          ("-fno-jump-tables", "-fjump-tables")], policy)
+
 
 class PlannedJobTests(unittest.TestCase):
     """clang's -### plan, whatever route its arguments took (-Wp, -Xpreprocessor ...)."""
