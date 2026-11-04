@@ -3,6 +3,7 @@
 # the compiler evaluation's devmk images (dev compiler + movc flag) on C.5a (1fc2cd5aa) with the fault-ahead module
 # (kit bkit20-all-b1: bkit17-perf-c5a-b1 + module 6e854c46c654c843 + fault_ahead_max=64).
 #  1. Wait for board 1's counter boots (hpm-after-fa.sh, AL_WAITPID) to end with "HA END".
+#  1b. hpm-8, the L1I counter's positive control, on bitstream 3 (informational).
 #  2. Flash C.5a (sealed sha256), read it back.
 #  3. SPEC test, all-b1.list, into out-all-b1 (perf/fa/board copies: spec-board.sh with SB_MODULE), graded by all-grade.py.
 #  4. Flash bitstream 3 back.
@@ -37,6 +38,17 @@ main() {
     [ $t -ge 129600 ] && { log "STOP: the counter boots still run"; return 2; }; sleep "${AL_POLL_S:-60}"; t=$((t + ${AL_POLL_S:-60})); done
   grep -q "^HA END" "${AL_WAITLOG:-$H/perf/fa/hpm-after-fa.log}" || { log "STOP: the counter boots did not end"; return 2; }
   $BUSY > /dev/null 2>&1 || { log "STOP: board 1 busy"; return 2; }
+  # hpm-8 (land/rtl-c5a-kits c950068d8373): the L1I-miss counter's positive control on bitstream 3, the bitstream of the
+  # imagick counter boots just before; informational, gates nothing (hpm PREREG Addendum 4).
+  local K8=$H/perf/hpm/kit-c950068d RUNNER=/tmp/capstone/wt-b2/capstone/tests/rtl-smoke/sup-bare-2026-10-03-ladder/run_sup_bare.py b8 r
+  [ "$(sha256sum "$RUNNER" | cut -c1-16)" = 102ab84e762cba50 ] || log "hpm-8 skipped: runner hash"
+  b8=$($BOOK book 1 20 "vp2 hpm-8 L1I control on bitstream 3 (board 1)") || b8=
+  mkdir -p "$O/hpm8"
+  ( export FPGA_URL; FPGA_URL=$(cat "$CAPSTONE_FPGA_URL_FILE")
+    FPGA_BITSTREAM=$B3.bit SUP_IMG=$K8/images/hpm-8.bin SUP_REC_ADDR=0x$(sed "s/^0x//" "$K8/images/hpm-8.rec") SUP_OUT=$O/hpm8/hpm-8 \
+      SUP_TIMEOUT=90 timeout 900 ${AL_RUN:-python3 $RUNNER} > "$O/hpm8/hpm-8.stderr" 2>&1 ); r=$?
+  [ -n "$b8" ] && $BOOK unbook "$b8" >> "$L" 2>&1
+  python3 "$K8/grade/hpm8-grade.py" "$O/hpm8" > "$O/hpm8.grade.txt" 2>&1; log "HPM8 run rc=$r GRADE rc=$?"; sed 's/^/  /' "$O/hpm8.grade.txt" >> "$L"
   flash() {
     local n=$1 s=$2 b r
     $STORE no-such-bitstream-$$.bit >> "$L" 2>&1; r=$?; [ $r = 1 ] || { log "flash $n: store-has control rc=$r"; return 1; }

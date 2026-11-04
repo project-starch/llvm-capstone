@@ -106,3 +106,14 @@ The C.5a session moved to board 2, and its board 2 runner has no bitstream-3 cou
 **What makes them matter more now.** On board 1, bitstream 3, the slot-bare kit graded AS EXPECTED. An isolated STC→LDC pair costs 16.97 cycles on silicon (sim 17.38), yet removing one pair from compiled code saves 23-36 cycles. The excess lies in the code around the pair, and these counters are the instrument for it.
 
 Predictions are unchanged.
+
+## Addendum 4 (4 Nov 19:25, before the boots): the L1I-miss counter's positive control
+
+**Why it is needed.** Event 1 (L1I miss, hpm3 in the SPEC kit) has never been shown to fire on silicon; hpm-1 to hpm-7 do not exercise it. The rtl lane's hpm-8 (land/rtl-c5a-kits c950068d8373, images/hpm-8.bin sha256 0094235951c3e398..., grade/hpm8-grade.py) is its control.
+- **The test.** Counter 6 is set to event 1, then an 8 KiB block of 2,048 nops is called twice.
+- **AS EXPECTED** is a first pass of 480-560 misses and a second pass of at most 8. The simulation reads 515 and 1.
+- **The cost per miss.** The first pass's extra cycles over the second give silicon's cost per I-miss (sim 46.8).
+
+**Where it runs.** hpm-8 runs on board 1, on bitstream 3, right after Addendum 2's imagick boots and before the all-optimisations run flashes C.5a. It is a step of `all-b1.sh`.
+
+**What it decides.** Unless it reads AS EXPECTED, the imagick boots' L1I-miss delta is reported as unverified and not read as an L1I effect.

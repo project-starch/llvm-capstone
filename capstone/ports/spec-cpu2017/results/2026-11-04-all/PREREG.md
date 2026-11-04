@@ -39,3 +39,7 @@ On the devmk images alone, the slowdown already falls: gcc 6.82x → 5.32x, imag
 - D-defaults: the real paths' preconditions.
 
 spec-board.sh (the perf/fa copy, with SB_MODULE) accepts kit bkit20-all-b1.
+
+## Addendum 1 (4 Nov 19:25, before any board call)
+
+all-b1.sh now runs hpm-8, the L1I counter control of hpm PREREG Addendum 4, on bitstream 3 before the C.5a flash. It is informational. The runner was stopped by hand while still waiting and relaunched. Dry run E-hpm8.
