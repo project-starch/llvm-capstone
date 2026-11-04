@@ -142,4 +142,35 @@ chain; it buys margin only, and that is not worth a re-proof in this bitstream.
   either. The core total moves −212.
 - The other three rows (ex_stage, scoreboard, commit_stage) were read as hierarchical totals and are inside the band.
   Their own-cell rows were not read; a confirming reading is requested, and it does not gate.
+  **Confirming reading (synth, own cells, C.5a → A, LUT / FF):** ex_stage_i 2,255 → 1,912 (−343) / 836 → 832;
+  scoreboard 12,831 → 14,333 (+1,502) / 7,080 → 7,097 (no child rows); commit_stage_i 197 → 98 (−99) / 236 → 236;
+  issue_read_operands 19,086 → 20,189 (+1,103) / 658 → 674. Every own-cell row is inside ±2,500: key 4 CONFIRMED.
 - Gate ruling: PASS. The full build stays HELD for the slot-kit silicon readings, per the SPEC lane's ruling.
+
+## Full build: released alone (2026-11-04)
+
+**The decision.** The SPEC lane released the hold: stage A builds alone, and is not batched with forwarding.
+- Forwarding still needs a design note, sim, lint, an auditor and its own synthesis-only gate, a day or more.
+- Stage A is gated and small (core −212 LUT).
+- So it is built now, to be ready to flash. If forwarding goes ahead, it becomes its own bitstream on top of stage A.
+- This departs from the batching default deliberately, and the cost is written here: a second build cycle if
+  forwarding follows.
+
+**Keys.** The full-build keys above stand as written. They are graded against C.5a's seal of 1fc2cd5aa:
+- placed LUT within 169,738 ± 2,000;
+- no placer or router window above level 5;
+- 0 failed, unrouted or partially routed nets;
+- check_timing 0 loops, TIMING-23 0, LUTLP-1 0, each with its control;
+- WNS reported against −13.758;
+- .bit sha256.
+
+A routing failure gives the placed area and a congestion census, and NO WNS.
+
+**Predicted first-boot reading** (silicon; the sim figures are at memory delay 12). On the slot kit, against C.5a's
+slot run:
+- ldc alone, and stc/ldc to another doubleword: lower;
+- the same-doubleword pair, stc alone and sd/ld: unchanged;
+- exact fields (instret, value, traps, cause): equal to every other bitstream's.
+
+The sim deltas, ldc −1.0 and pair −2.0 per iteration, are the PATTERN being tested. They are not a silicon
+prediction: sim cannot reproduce the silicon pair cost.
