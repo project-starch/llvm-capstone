@@ -54,6 +54,15 @@ insmod capstone_vm.ko ''' + ('diag_admit=1' if instrumented else '') + ''' || ex
 CAPSTONE_EXEC_DIAGNOSTICS=1 CAPSTONE_VM_STATS=1 CAPSTONE_VM_STATS_MARK=1 CAPSTONE_VM_GRANTS=1 ./capstone-vexec pthread.dom
 echo PTHREAD_EXIT:$?
 dmesg | grep -E "capstone_vm: |CAPSTONE_VM_STATS_MARK" | sed "s/^/PTHREAD_DIAG:/"
+echo PTHREAD_FALLBACK_BEGIN
+echo 0 > /sys/module/capstone_vm/parameters/diag_admit 2>/dev/null || true
+CAPSTONE_EXEC_DIAGNOSTICS=1 CAPSTONE_VM_STATS=1 ./capstone-vexec pthread.dom fallback
+echo PTHREAD_FALLBACK_EXIT:$?
+for mode in identity-exit identity-jump private-tls; do
+  echo PTHREAD_IDENTITY_BEGIN:$mode
+  ./capstone-vexec pthread.dom "$mode"
+  echo PTHREAD_IDENTITY_EXIT:$mode:$?
+done
 rmmod capstone_vm
 echo PTHREAD_CLEANUP:$?
 echo "PTHREAD_PINS_END:$(pins)"
@@ -64,8 +73,9 @@ echo VIRTUAL_STAGED_DONE
                           '--images', str(a.images.resolve()), '--stage', str(stage),
                           '--work', str(a.work/'guest'), '--timeout', str(a.timeout)] + (['--exact-bounds'] if a.exact_bounds else ['--no-exact-bounds']))
     log = (a.work/'guest/serial.log').read_text(errors='replace').replace('\r', '')
+    main_log, _, fallback_log = log.partition('PTHREAD_FALLBACK_BEGIN\n')
     checks = {name: log.count('VIRTUAL_PTHREAD_OK ' + name) == 1 for name in
-              ('unsupported_clone_refused', 'tls mutex cond tagged_join', 'timed_wait', 'independent_blocking_io', 'private_epoll_events', 'shared_tls_transport', '64_joined_lifetimes', 'concurrent_allocator_remap', 'transport_lifetime', 'transport_identity', 'exit_word_untouched_stack')}
+              ('unsupported_clone_refused', 'tls mutex cond tagged_join', 'timed_wait', 'independent_blocking_io', 'private_epoll_events', 'shared_tls_transport', '64_joined_lifetimes', 'concurrent_allocator_remap', 'transport_lifetime', 'transport_identity', 'exit_word_untouched_stack', 'context_identity')}
     # The exit word's page (VIRTUAL_PTHREAD_WORD, in the main stack: the reg 2 grant) must have
     # been admitted by the launcher's CV_TOUCH before its store: a `touch` line for that arena and
     # page index. Without CV_TOUCH (the commit before it) the line is absent and this fails.
@@ -117,6 +127,27 @@ echo VIRTUAL_STAGED_DONE
     before, end = pins('PTHREAD_PINS_BEFORE'), pins('PTHREAD_PINS_END')
     checks['pins_balanced'] = bool(before and end and end[0] - before[0] == end[1] - before[1]
                                    and end[0] > before[0])
+    # The transport lock reads each context's identity from its gp (delegate.c dl_wire_identity):
+    # every context of the contract has an identity slot, so none asks the launcher for one.
+    # The launcher counts the service per run (CAPSTONE_VM_STEPS, CV_SERVICE_THREAD_SELF = 11).
+    steps = re.findall(r'^CAPSTONE_VM_STEPS .*\bservice11_thread_self=(\d+)', main_log, re.M)
+    checks['no_thread_self_exits'] = len(steps) == 1 and steps[0] == '0'
+    fallback_steps = re.findall(r'^CAPSTONE_VM_STEPS .*\bservice11_thread_self=(\d+)', fallback_log, re.M)
+    checks['fallback_identity'] = (
+        fallback_log.count('VIRTUAL_PTHREAD_OK fallback_identity') == 1 and
+        fallback_log.count('PTHREAD_FALLBACK_EXIT:0') == 1 and
+        len(fallback_steps) == 1 and int(fallback_steps[0]) >= 256)
+    checks['fallback_pthread'] = (
+        fallback_log.count('VIRTUAL_PTHREAD_OK fallback_pthread') == 1 and
+        fallback_log.count('VIRTUAL_FALLBACK_PTHREAD:slots=4 records=128 bad=0') == 1 and
+        fallback_log.count('PTHREAD_FALLBACK_EXIT:0') == 1)
+    for mode in ('identity-exit', 'identity-jump'):
+        part = re.search(r'PTHREAD_IDENTITY_BEGIN:' + mode + r'\n(.*?)PTHREAD_IDENTITY_EXIT:' +
+                         mode + r':0\n', log, re.S)
+        checks[mode] = bool(part and 'VIRTUAL_PTHREAD_OK abandoned_identity\n' in part[1])
+    part = re.search(r'PTHREAD_IDENTITY_BEGIN:private-tls\n(.*?)PTHREAD_IDENTITY_EXIT:private-tls:0\n', log, re.S)
+    checks['private_tls_refused'] = bool(part and 'VIRTUAL_PTHREAD_OK private_tls_refused\n' in part[1])
+    checks['private_tls_other_refused'] = bool(part and 'VIRTUAL_PTHREAD_OK private_tls_other_refused\n' in part[1])
     checks['exit'] = log.count('PTHREAD_EXIT:0') == 1
     checks['cleanup'] = run.returncode == 0 and log.count('PTHREAD_CLEANUP:0') == 1
     record = dict(status='PASS' if all(v is True or v == 'uninstrumented' for v in checks.values()) else 'FAIL',

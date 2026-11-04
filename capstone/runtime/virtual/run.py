@@ -45,8 +45,28 @@ dmesg | grep 'capstone_vm:' | sed 's/^/KMSG:/'
 dmesg | grep -q 'capstone_vm: loaded, diag' \
   || echo 'KMSG_CONTROL_FAILED: no load banner in the ring buffer -- module-line absences in this run are VOID'
 export CAPSTONE_VM_CONTRACT=environment CAPSTONE_VM_STATS=1 CAPSTONE_EXEC_DIAGNOSTICS=1
+# The three `ok argument` launches (normal, parallel_one, parallel_two) are the ones
+# linux_demand_faults counts, page at a time: the window is off around them only. Every
+# other row runs the module's shipped policy (or the explicit --module-args override).
+ahead=/sys/module/capstone_vm/parameters/fault_ahead_max
+saved_ahead=unavailable
+[ -r "$ahead" ] && saved_ahead=$(cat "$ahead")
+demand_off() {
+  [ "$saved_ahead" = unavailable ] || echo 0 > "$ahead" || exit 1
+  echo VM_DEMAND_POLICY:$saved_ahead
+}
+demand_on() {
+  if [ "$saved_ahead" != unavailable ]; then
+    echo "$saved_ahead" > "$ahead" || exit 1
+    echo VM_RESTORED_POLICY:$(cat "$ahead")
+  else
+    echo VM_RESTORED_POLICY:unavailable
+  fi
+}
+demand_off
 ./capstone-vexec contract.dom ok argument > /tmp/ok.out 2>&1
 echo VM_EXIT:normal:$?
+demand_on
 cat /tmp/ok.out
 ./capstone-vexec contract.dom threads > /tmp/threads.out 2>&1
 echo VM_EXIT:threads:$?
@@ -72,10 +92,12 @@ sleep 5
 kill -TERM "$spin" 2>/dev/null
 wait "$spin"; echo VM_EXIT:preempt:$?
 cat /tmp/spin.out
+demand_off
 ./capstone-vexec contract.dom ok argument > /tmp/one.out 2>&1 & one=$!
 ./capstone-vexec contract.dom ok argument > /tmp/two.out 2>&1 & two=$!
 wait "$one"; echo VM_EXIT:parallel_one:$?
 wait "$two"; echo VM_EXIT:parallel_two:$?
+demand_on
 cat /tmp/one.out /tmp/two.out
 ./capstone-vexec sqlite3.dom /tmp/virtual.db "CREATE TABLE t(n); WITH RECURSIVE x(n) AS (VALUES(1) UNION ALL SELECT n+1 FROM x WHERE n<100) INSERT INTO t SELECT n FROM x; SELECT 'SQLITE_SUM='||sum(n) FROM t;" > /tmp/sqlite.out 2>&1
 echo VM_EXIT:sqlite_write:$?
@@ -133,9 +155,6 @@ def main():
     p.add_argument('--perl-smoke', type=Path)
     p.add_argument('--legacy-application', type=Path)
     p.add_argument('--skip-recycling', action='store_true', help='Omit the two long recycling cases; recorded explicitly')
-    # Module parameters at insmod, so a two-sided module experiment is one run rather than a
-    # rebuild. Empty by default and the substitution then leaves the insmod line exactly as it
-    # was, so an unused option cannot change a recorded run.
     p.add_argument('--module-args', default='',
                    help="Parameters appended to insmod (e.g. 'resolve_pte=1 fault_repeat_max=1')")
     p.add_argument('--exact-bounds', action=argparse.BooleanOptionalAction, default=False,
@@ -318,6 +337,9 @@ def main():
     expected_stats = (10 if a.skip_recycling else 11) + (1 if a.perl else 0) + (1 if a.perl_smoke else 0) + (1 if a.php else 0)
     tests['linux_pages_released'] = len(stats) == expected_stats and len(release_stats) == 3
     tests['linux_demand_faults'] = len(stats) == expected_stats and len(demand_stats) == 3
+    policy = [s.split(':', 1)[1] for s in lines if s.startswith('VM_DEMAND_POLICY:')]
+    restored = [s.split(':', 1)[1] for s in lines if s.startswith('VM_RESTORED_POLICY:')]
+    tests['fault_ahead_policy_restored'] = len(policy) == 2 and policy == restored
     tests['unused_pages_not_populated'] = len(stats) >= 4 and stats[2]['peak'] - stats[2]['pages'] < 32
     tests['shared_heap_pages_released'] = len(stats) >= 5 and stats[4]['peak'] - stats[4]['pages'] >= 768
     if not a.skip_recycling:

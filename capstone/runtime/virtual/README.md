@@ -57,7 +57,12 @@ discards only the calling slot and returns its frame mapping to the trusted
 launcher. `capstone_virtual_thread_join` waits for that exit protocol before
 the caller retires the child stack or TLS mapping. The workers share
 the process transport under a wire lock; fork, shared tagged pages and SMP
-remain out of scope.
+remain out of scope. The lock's owner is the calling context's identity, which
+the context reads from the cursor of its own gp with no service exit: gp's
+bounds and permissions are the image's in every context, its cursor is free
+under the gp-free codegen, and the creator gives each child a distinct one
+(`delegate.c` `dl_wire_identity`). `CV_SERVICE_THREAD_SELF` remains for a context
+created when all 63 identity slots are held.
 
 The virtual musl bridge also supplies `pthread_create`, join, TLS, mutexes and
 condition variables. musl owns thread objects, stack layout and join protocol;
@@ -441,6 +446,70 @@ holds the program's own pages, which vary with placement (the allocator's
 address-hashed index in `.bss`) and with windows the quantum cuts. Both
 runners' `--evaluate` re-runs the checks on a saved transcript.
 
+The adaptive window is enabled by default (`fault_ahead_max=64`,
+`fault_ahead_after=2`); `fault_ahead_max=0` disables it. This policy applies to
+the default pinned path (`unpinned=0`). With experimental `unpinned=1`,
+`resolve()` returns through dev's fault-fixup path before stream training or
+pin-ahead, so these windows neither train nor pin pages there. Three consecutive
+faults in a stream start a four-page window, doubled at each continuation
+up to 64 pages. Step-hooks reads `fault_ahead_windows` and
+`fault_ahead_pages` from sysfs before and after each launch and reconciles
+their deltas with `diag_admit` window events. After subtracting other arenas,
+the 32-page walk requires exactly 3 windows / 27 pages and the 512-page
+stream 11 / 499. It also checks continuation after partial GUP and VMA
+clipping, read-only prefetched pages refusing stores, and a NONLIN image
+grant's window and frame accounting. `gaps` crosses pages admitted before the
+walk, before training and inside a window: a stream's next page is the first
+unpinned one after its window (at most 64 pages on), so the walk keeps its
+window. `interleave` trains two streams in one arena; when two streams reach
+the same next page, the more recently used one continues. Every configuration
+must balance Linux's FOLL_PIN counters after module unload. The fixed-window
+checks select the kill switch explicitly. `fault_ahead_windows` counts window
+attempts, including empty ones at a VMA end or a budget cut.
+
+The exact-count cases select the test build's `test_full_window=1`, which
+suppresses scheduling and budget cuts inside the window while retaining all
+page, VMA and backing checks and the window cap. This hook is absent from
+production builds. Separate `adaptdirect` cases and every stop-injection case
+keep the real stop checks: cuts between batches are allowed, but each
+requested window must double up to 64, its next fault must follow the pages
+actually retained, at least one page must be pinned ahead, and both sysfs
+counters must equal the event census exactly. `adaptres` (a reschedule before
+every window) must admit all 32 pages by demand faults with 30 empty attempts.
+
+The pthread gate has a separate `fallback` launch: 63 raw exits retain all
+identity slots, then four raw contexts on the main TLS and the default
+transport write 128 checked records to one pipe, read after they are joined.
+Then four pthreads created after exhaustion write another 128 records on
+private transports and return through normal pthread teardown. Both groups
+must use fallback slot 64. A control SDK that makes the identity service call
+but returns a constant instead corrupts the shared-wire records (three runs,
+`bad=4`, exit 1); the normal SDK has `bad=0`, exit 0. The ordinary pthread
+launch must still make zero `THREAD_SELF` service exits.
+Nonlocal exits from handlers delivered inside delegated calls remain
+unsupported: `__capstone_longjmp_reap` acknowledges the signal but does not
+unwind transport lock depth or copy-back state. A context that ends that way
+while it owns the process transport keeps its identity slot (quarantined), so
+no later context inherits the stranded owner; the transport's other users
+wait, as they did with launcher identities. `identity-exit` and
+`identity-jump` require a replacement context to receive a different slot.
+A raw context may not share a pthread's TLS (it would inherit the pthread's
+private transport and held mappings): creation fails with ENOTSUP
+(`private-tls`, from the owning pthread, main and another pthread). The check
+reads the target TLS block's transport slot; a valid live TLS capability is
+still the caller's responsibility.
+
+The launcher never trusts the domain's transport lock for its own state:
+every serve on the process transport's host object (bounce buffer, signal
+ring) holds the launcher's `host_lock`. `test-transport-host.sh` (native)
+drives two workers through the same process transport with no domain lock
+and requires that no host object is served twice at once. Signal detach only
+changes the calling worker's mask and TLS attachment and takes no host lock:
+waiting for a blocking serve while holding `service_lock` would stop the
+independent service that can unblock it. `test-detach-deadlock.sh` forces that
+ordering with a blocking serve and an independent writer. Both native tests
+run under CTest.
+
 A write the launcher makes into domain memory on the domain's behalf -- a
 thread's exit word, a worker's meta block and exchange region -- is preceded by
 `CV_TOUCH` over the span, which admits every page of it a lazily admitted arena
@@ -516,7 +585,53 @@ the launcher in both arms, and their rows used to compare as a match while neith
 `gates/test_compare.py` is the comparator's host test: it plants each such omission and requires
 INCOMPLETE.
 
+The runtime gate runs with the module's shipped defaults, adaptive window on,
+except for the three `contract.dom ok argument` launches (normal, parallel_one,
+parallel_two). `linux_demand_faults` requires exactly three of seven sampled
+launches to resolve at least 384 demand faults; it does not identify them by
+name. Those three launches supply the positive cases, so the gate script sets
+`fault_ahead_max=0` around them and restores it
+(`fault_ahead_policy_restored`). Adding prefetched pages to this oracle would
+conceal missing demand resolutions; with the window on those launches resolve
+about a quarter as many faults (102 against 425 on 2026-11-03). The other four
+samples remain windowed, so the oracle's upper bound of three qualifying
+launches is not a page-at-a-time measurement of those samples.
+
 ## Qualification and limits
+
+The 2026-11-04 detached landing on dev `c866e1d2fe76` was qualified against
+that dev runtime and SDK, using the same repaired harness and freshly built
+applications in both arms. A ran on p13 and B on p12, through their separate
+gate queues, with 32-slot modules and `unpinned=0`. All 176 required rows ran.
+The 24 added or tightened checks fail on A and pass on B: malloc 2, pthread 8,
+step-hooks 14. Existing failures agree subject to memcached fixture 24's
+placement-dependent trigger/prediction outcome. This is a comparison against
+known failures, not an all-green gate claim. Native validation on p12 passes
+91 CTest cases, registry stress, touch/EINTR, 52 host Python tests and 33
+comparator checks. The committed blocking-serve regression fails against
+`00a2ac6bdc15` and passes on the landing tree. The constant fallback identity
+control fails three shared-wire launches while the normal SDK passes; both
+also run pthreads created after the identity slots are exhausted. No unpinned
+execution or new performance measurement is claimed by this landing.
+
+On 2026-11-03 (fix round 2), `runtime/fewer-exits` was qualified in QEMU against dev
+`114b90b7be2e`. Each arm built its own SDK, contracts and applications with the
+same harness; the arms ran one after the other through the p13 gate queue. All
+required rows ran in both arms. Seven gates were compared from full runs.
+Runtime and memcached were compared from a rerun with the corrected demand-fault
+scope: runtime and memcached IDENTICAL, as are hosted, nodes, pin-ahead and fp.
+malloc, pthread and step-hooks differ only in checks the round added or
+tightened, all of which fail on dev and pass on the branch (malloc 2, pthread 6,
+step-hooks 14). The branch passed pthread 23/23 and step-hooks 398/398. The
+memcached fixture 24 is placement-dependent: whether its triggering condition
+is created varies between runs of one arm, and it reads differently from run to
+run in either arm. Negative controls: the previous SDK aliases an abandoned
+identity slot (`old=32 new=32`) and lets a raw context share a pthread's TLS;
+dev's launcher serves the process host twice at once (native contract);
+modules without the skip, or with no speculative pins, fail `adaptgaps_window`
+or `adaptdirect_*_growth`. This is QEMU qualification, not silicon or the
+physical profile. The gates ran on dev `114b90b7be2e`; the branch was then
+rebased without conflicts onto a later dev and is not re-gated there.
 
 The growing-table [qualification manifest](results/node-growth/qualification.json)
 records 15/15 node-growth checks, 9/9 pthread checks, 46/46 runtime/application

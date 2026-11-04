@@ -106,6 +106,16 @@ struct cv_thread {
     /* A fault was resolved and the context has not been resumed since: the resume flushes the
      * resolved address on the resuming hart first (resume_sfences). */
     bool sfence_pending;
+    /* Adaptive fault-ahead (fault_ahead_max): the context's recent sequential fault streams. */
+    struct cv_stream {
+        u64 arena;             /* the arena's mapping ID: never reused, so a stream cannot outlive
+                                * its arena into a new one at the same address */
+        unsigned long used;    /* stream_clock at its last fault: the least recent is replaced */
+        unsigned next;         /* the page index a sequential next fault lands on */
+        unsigned run;          /* faults in the stream so far, each at the previous one's next */
+        unsigned window;       /* pages requested ahead at its last fault, including empty cuts */
+    } streams[4];
+    unsigned long stream_clock;
 };
 struct context {
     struct list_head link;
@@ -332,6 +342,44 @@ extern int capstone_unpinned_config(unsigned int ids, bool *exact);
  * arena, the VMA and the first page already pinned. 1 pins only the page. */
 static unsigned long pin_ahead_pages = 1;
 module_param(pin_ahead_pages, ulong, 0444);
+
+/* ADAPTIVE FAULT-AHEAD: a context whose faults stream through an arena gets the next pages pinned
+ * in the same CV_STEP, a window that grows while the stream lasts.
+ *
+ * A fault continues a stream when it lands on the first unpinned page after the stream's previous
+ * fault and window, skipping pages admitted earlier, in the same arena (by its
+ * mapping ID, which no later arena reuses, even at the same address), for the same context. Once a stream has fault_ahead_after such faults in a row, each further one
+ * pins a window ahead of it: FAULT_AHEAD_FIRST pages, then twice the previous window, up to
+ * fault_ahead_max. A fault that continues no stream replaces the least recently used slot
+ * with an untrained stream. Other slots survive, including streams in the same arena:
+ * a loop interleaving two arrays in one mapping can train both. When two streams converge
+ * on the same unpinned page, the most recently used stream continues. Four slots per context.
+ *
+ * The window is pin_ahead()'s, unchanged: clipped to the arena and to the faulting VMA, ended
+ * by the first page already pinned, each page pinned exactly as a fault on it would be, 16 at a
+ * time with cv_step_stop() before each batch. So it never takes a page outside the arena or
+ * outside the VMA, and a page it cannot take faults later as before.
+ *
+ * Why not a fixed window (pin_ahead_pages): that pins ahead of EVERY fault, and a program
+ * whose faults scatter (502.gcc_r) then pins pages it never touches: pin_ahead_pages=16/64 was
+ * measured 1.5-3 M instruction attempts worse on gcc. A window here needs fault_ahead_after
+ * consecutive sequential faults first, and a stream's overshoot past its last touched page is
+ * at most its last window.
+ *
+ * pin_ahead_pages > 1 or arena_pin selects the fixed window and turns this off: those are the
+ * configurations the pin-ahead and step-hooks gates qualify, page for page. fault_ahead_max=0
+ * turns it off as well. */
+#define FAULT_AHEAD_FIRST 4UL
+static unsigned long fault_ahead_max = 64;
+module_param(fault_ahead_max, ulong, 0644);
+static unsigned long fault_ahead_after = 2;
+module_param(fault_ahead_after, ulong, 0644);
+/* Pages pinned and window attempts since load (read-only counters). An attempt can pin zero
+ * pages at a VMA boundary or budget cut. Growth follows sequential demand evidence, so an
+ * empty attempt does not reset training. */
+static unsigned long fault_ahead_pages, fault_ahead_windows;
+module_param(fault_ahead_pages, ulong, 0444);
+module_param(fault_ahead_windows, ulong, 0444);
 
 /* Lazy NONLIN grants (2026-11-03). A non-linear grant used to be pinned WHOLE at mint:
  * pin_user_pages_fast(FOLL_WRITE) over the arena materialised every page of the stack (1 MiB),
@@ -1614,10 +1662,15 @@ static unsigned long test_inject_at;    /* 1 after a demand GUP, 2 before an ent
                                            4 after CSRUNV returns a fault, before resolve() */
 static unsigned long test_inject_every = 1;
 static unsigned long test_short_gup;    /* pin-ahead GUP pins only half of a batch */
+/* Policy-only tests need exact windows despite unrelated scheduling/deadline cuts. The
+ * ordinary and injected-stop configurations leave this off and qualify those cuts separately.
+ * No page/VMA/backing check is bypassed, and the normal window cap still bounds the work. */
+static bool test_full_window;
 module_param(test_inject, ulong, 0444);
 module_param(test_inject_at, ulong, 0444);
 module_param(test_inject_every, ulong, 0444);
 module_param(test_short_gup, ulong, 0444);
+module_param(test_full_window, bool, 0444);
 static u64 test_events, test_injections, test_stops, test_initial_stops, test_violations;
 static u64 test_consumed, test_checks, test_checks_irqs_on, test_entries;
 static u64 test_gup_requests, test_gup_max, test_short_results, test_gup_pending;
@@ -1674,6 +1727,7 @@ static void test_report(const char *why)
 #define TEST_HOOK(at) test_hook(at)
 #define TEST_GUP(pages) test_gup(pages)
 #define TEST_EXPIRED() test_expired
+#define TEST_FULL_WINDOW() test_full_window
 #define TEST_ENTRY() do { test_entry(); ++test_entries; } while (0)
 #define TEST_CHECK() do { ++test_checks; if (!irqs_disabled()) ++test_checks_irqs_on; } while (0)
 #define TEST_STOPPED(initial) do { if (test_pending) { ++test_stops; \
@@ -1685,6 +1739,7 @@ static void test_report(const char *why)
 #define TEST_HOOK(at) do { } while (0)
 #define TEST_GUP(pages) do { } while (0)
 #define TEST_EXPIRED() false
+#define TEST_FULL_WINDOW() false
 #define TEST_ENTRY() do { } while (0)
 #define TEST_CHECK() do { } while (0)
 #define TEST_STOPPED(initial) do { } while (0)
@@ -1710,20 +1765,25 @@ static bool cv_step_stop(u64 deadline)
  * checks in VMA v. Each further page is pinned exactly as a fault on it
  * would pin it, in the same VMA, so it gets the same policy; one that fails
  * a check ends the window unpinned and faults later as it does today. */
-static void pin_ahead(struct context *c, struct arena *a,
-                      struct vm_area_struct *v, unsigned first, u64 deadline)
+/* Returns the pages it pinned from `first` on. `extra` is the adaptive window (stream_window):
+ * the window is the larger of it and pin_ahead_pages - 1. */
+static unsigned long pin_ahead(struct context *c, struct arena *a,
+                               struct vm_area_struct *v, unsigned first, unsigned long extra,
+                               u64 deadline)
 {
     unsigned long start = a->address + a->rx_bytes + (unsigned long)first * PAGE_SIZE;
     unsigned long count = 0, done;
-    while ((arena_pin || count + 1 < pin_ahead_pages) && first + count < a->count &&
+    unsigned long fixed = pin_ahead_pages ? pin_ahead_pages - 1 : 0;
+    unsigned long limit = max(fixed, extra);
+    while ((arena_pin || count < limit) && first + count < a->count &&
            start + count * PAGE_SIZE < v->vm_end && !a->pages[first + count])
         ++count;
     for (done = 0; done < count;) {
         unsigned long batch = min(count - done, (unsigned long)PIN_AHEAD_BATCH);
         struct page **pages = a->pages + first + done;
         long n;
-        if (cv_step_stop(deadline))
-            return;
+        if (cv_step_stop(deadline) && !TEST_FULL_WINDOW())
+            return done;
         TEST_GUP(batch);
 #ifdef CV_TEST_HOOKS
         /* A short result, as when GUP stops at a page it cannot fault in:
@@ -1747,15 +1807,50 @@ static void pin_ahead(struct context *c, struct arena *a,
                     unpin_user_page(pages[k]);
                     pages[k] = NULL;
                 }
-                return;
+                return done + j;
             }
             ++a->windows;
             ++c->stats.pinned_pages;
         }
         if (n != batch)
-            return;
+            return done + max(n, 0L);
         done += batch;
     }
+    return done;
+}
+
+/* The adaptive window for a fresh fault at page `index` of arena a by context t (see
+ * fault_ahead_max), and the stream it belongs to, whose `next` the caller sets once it knows
+ * how many pages the window took. 0 while the stream is too short, or when it is off. */
+static unsigned long stream_window(struct cv_thread *t, const struct arena *a, unsigned index,
+                                   struct cv_stream **out)
+{
+    struct cv_stream *s, *match = NULL, *victim = t->streams;
+    unsigned long maximum = min_t(unsigned long, READ_ONCE(fault_ahead_max), UINT_MAX);
+    *out = NULL;
+    if (!maximum || arena_pin || pin_ahead_pages > 1)
+        return 0;
+    for (s = t->streams; s < t->streams + ARRAY_SIZE(t->streams); ++s) {
+        if (s->run && s->arena == a->id && s->next == index) {
+            if (!match || s->used > match->used)
+                match = s;
+        }
+        if (s->used < victim->used)
+            victim = s;
+    }
+    s = match ? match : victim;
+    if (match) {
+        if (s->run < UINT_MAX) ++s->run;
+    } else {
+        s->arena = a->id;
+        s->run = 1;
+        s->window = 0;
+    }
+    s->used = ++t->stream_clock;
+    if (s->run > fault_ahead_after)
+        s->window = (unsigned)min(s->window ? 2UL * s->window : FAULT_AHEAD_FIRST, maximum);
+    *out = s;
+    return s->window;
 }
 
 /* r8's terminal store reads as a bare 139 in the suite: the signal cannot say WHICH of
@@ -2081,8 +2176,29 @@ static int resolve(struct context *c, struct cv_thread *t, u64 deadline)
                             page_mapcount(page), page_ref_count(page), vmflags);
             mmap_read_unlock(c->mm); unpin_user_page(page); return -EACCES;
         }
-        if (!a->pages[index])
-            pin_ahead(c, a, v, index + 1, deadline);
+        if (!a->pages[index]) {
+            struct cv_stream *stream;
+            unsigned long ahead = stream_window(t, a, index, &stream);
+            unsigned long pinned = pin_ahead(c, a, v, index + 1, ahead, deadline);
+            if (stream) {
+                /* The next demand fault lands past pages admitted earlier (a stream crosses
+                 * them without faulting). Scan at most 64 pages, independently of
+                 * fault_ahead_max: a longer pinned run ends the stream rather
+                 * than costing an unbounded scan inside the step. */
+                unsigned skip_end = stream->next = index + 1 + pinned;
+                skip_end = min_t(unsigned long, a->count, (unsigned long)skip_end + 64);
+                while (stream->next < skip_end && a->pages[stream->next])
+                    ++stream->next;
+                if (ahead) {
+                    ++fault_ahead_windows;
+                    fault_ahead_pages += pinned;
+                    if (diag_admit)
+                        pr_info("capstone_vm: fault-ahead arena 0x%lx page %u want %lu pinned %lu fault 0x%lx\n",
+                                a->address, index, ahead, pinned,
+                                a->address + a->rx_bytes + (unsigned long)index * PAGE_SIZE);
+                }
+            }
+        }
         mmap_read_unlock(c->mm);
         if (a->pages[index]) {
             /* mprotect may leave a write fault for Linux to resolve. It must

@@ -265,23 +265,25 @@ echo VIRTUAL_STAGED_DONE
     hot = re.search(r'MALLOC_HOT_BEGIN\n(.*?)MALLOC_HOT_END\n', log, re.S)
     hot_checks = {}
     kinds = re.findall(r'CAPSTONE_VM_BOUNDARY kind=(\d+)', hot[1]) if hot else []
-    # The end marker asks for the thread identity (11) and delegates its write
-    # through the thread transport (10). No allocator service is permitted.
-    hot_checks['local_allocation_fast_path'] = bool(hot and kinds and kinds == ['11', '10'] and
+    # The end marker delegates its write through the thread transport (10). Its transport lock
+    # reads the context's identity from gp (delegate.c dl_wire_identity).
+    # Neither allocator services nor identity lookups may appear on this path.
+    marker_write = ['10']
+    hot_checks['local_allocation_fast_path'] = bool(hot and kinds == marker_write and
                                                'MALLOC_HOT_EXIT:0\n' in log)
     controls = list(re.finditer(r'MALLOC_HOT_BEGIN\n(.*?)MALLOC_HOT_END\n', log, re.S))
     control_kinds = re.findall(r'CAPSTONE_VM_BOUNDARY kind=(\d+)', controls[1][1]) if len(controls) == 2 else []
-    hot_checks['fast_path_control_detects_service'] = ('7' in control_kinds and control_kinds != ['11', '10'] and
+    hot_checks['fast_path_control_detects_service'] = ('7' in control_kinds and control_kinds != marker_write and
                                                 'MALLOC_HOT_CONTROL_EXIT:0\n' in log)
     if not recycle_only:
         checks.update(hot_checks)
     if not recycle_only:
         checks['real_linux_mremap_growth_and_shrink'] = log.count('CAPSTONE_VM_REMAP_OK') >= 2
     # Releasing a group into the kept mappings and taking it back costs no service: between the
-    # markers only the END marker's own write (thread identity 11, delegated write 10) may appear.
+    # markers only the END marker's own write (marker_write above) may appear.
     recycle = re.search(r'MALLOC_RECYCLE_BEGIN\n(.*?)MALLOC_RECYCLE_END\n', log, re.S)
     recycle_kinds = re.findall(r'CAPSTONE_VM_BOUNDARY kind=(\d+)', recycle[1]) if recycle else []
-    checks['recycle_without_service'] = bool(recycle and recycle_kinds == ['11', '10'])
+    checks['recycle_without_service'] = bool(recycle and recycle_kinds == marker_write)
     checks['recycle_tags_clean'] = 'MALLOC_RECYCLE_TAGS tagged=0 of ' in log
     outside = re.findall(r'MALLOC_RECYCLE_OUTSIDE (\S+) outside=(\d+) tagged=(\d+)', log)
     # with object bounds off the program reached the header, the untaken slots and the slack, and

@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """The adapter's pin-ahead window: forward clip to the arena, stop at a pinned
 page and at the VMA end, read-only (FOLL_FORCE) backing stays read-only, and
-retirement releases every prefetched pin. Window 1 is the control.
+retirement releases every prefetched pin. Window 1 is the control. The module's adaptive window (fault_ahead_max) is turned off here: this
+gate qualifies the fixed window page for page; run-step-hooks.py's 'adapt' configurations test
+the adaptive one.
 
 --evaluate <serial.log> re-runs the checks on a saved transcript (no guest),
 for checking the checks: a transcript whose CAPSTONE_VM_STATS counters are
@@ -35,7 +37,7 @@ export CAPSTONE_VM_STATS=1 CAPSTONE_VM_STATS_MARK=1 CAPSTONE_VM_GRANTS=1 CAPSTON
 dmesg -n 1
 dmesg -c > /dev/null
 for w in ''' + ' '.join(map(str, WINDOWS)) + '''; do
-  insmod capstone_vm.ko pin_ahead_pages=$w @DIAG_PARAM@ || exit 1
+  insmod capstone_vm.ko pin_ahead_pages=$w fault_ahead_max=0 @DIAG_PARAM@ || exit 1
   for mode in ''' + ' '.join(MODES) + '''; do
     ./capstone-vexec pin.dom "$mode" > /tmp/pin.out 2>&1
     echo PIN_EXIT:$w:$mode:$?

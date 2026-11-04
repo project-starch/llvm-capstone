@@ -19,6 +19,8 @@
 #define CV_SERVICE_FUTEX 8
 #define CV_SERVICE_PTHREAD_EXIT 9
 #define CV_SERVICE_THREAD_DELEGATE 10
+/* The calling context's launcher id + 1. Since the transport lock reads its identity from gp's
+ * cursor (delegate.c dl_wire_identity), only a context created with no identity slot free asks. */
 #define CV_SERVICE_THREAD_SELF 11
 #define CV_SERVICE_NODES 12
 #define CV_SERVICE_REMAP 13
