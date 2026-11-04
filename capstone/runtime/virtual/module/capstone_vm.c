@@ -189,6 +189,10 @@ struct context {
     int io_private[CV_IO_PRIVATE_MAX];
     unsigned io_private_count;
     bool io_ready;
+    /* A worker serving on the process transport owns the launcher's host_lock.
+     * Exclude the main context's inline call for the same interval. */
+    bool io_host_active;
+    wait_queue_head_t io_wait;
 };
 static DEFINE_MUTEX(vm_lock);
 /* Quotas are in base pages; zero means the 30-bit ISA limit. Parameters are
@@ -2926,6 +2930,7 @@ static int inline_io(struct context *c, struct cv_thread *t, struct file *device
     long r;
     if (!in_module_io || !c->io_ready ||
         t->frame[79] != CV_SERVICE_THREAD_DELEGATE || (meta & 7)) return 0;
+    if (t == c->main_thread && c->io_host_active) return 0;
     if (!inline_test_transport &&
         (meta != t->io_meta || exch != t->io_exchange || exch_bytes != t->io_bytes)) return 0;
     ma = io_arena(c, meta, CV_IO_BLOCK_SPAN);
@@ -2975,6 +2980,7 @@ static int inline_io(struct context *c, struct cv_thread *t, struct file *device
     /* By id: with the hold off (the negative control) the arena may be gone, or another at the
      * same address. */
     t->io_busy = false;
+    wake_up_all(&c->io_wait);
     io_release(c, mid); io_release(c, bid);
     if (r == -ERESTARTSYS || r == -ERESTARTNOINTR || r == -ERESTARTNOHAND ||
         r == -ERESTART_RESTARTBLOCK || r == -EINTR) {
@@ -3478,6 +3484,19 @@ thread_unwind:
         if (copy_from_user(&id, (void __user *)arg, sizeof(id))) { rc = -EFAULT; goto out; }
         a = xa_load(&c->ids, id);
         if (a) rc = retire(c, a, false);
+    } else if (op == CV_IO_HOST) {
+        __u32 active;
+        if (copy_from_user(&active, (void __user *)arg, sizeof active)) { rc = -EFAULT; goto out; }
+        if (!c->io_ready || active > 1) { rc = -EINVAL; goto out; }
+        /* The launcher serializes these calls with host_lock. Never wait with
+         * vm_lock held: the blocked inline call must be able to finish. */
+        while (active && c->main_thread->io_busy) {
+            mutex_unlock(&vm_lock);
+            wait_event(c->io_wait, !READ_ONCE(c->main_thread->io_busy));
+            mutex_lock(&vm_lock);
+        }
+        c->io_host_active = active;
+        rc = 0;
     } else if (op == CV_IO_TRANSPORT) {
         struct cv_io_transport r;
         if (copy_from_user(&r, (void __user *)arg, sizeof(r))) { rc = -EFAULT; goto out; }
@@ -3521,6 +3540,7 @@ static int vm_open(struct inode *inode, struct file *f)
     if (!c) return -ENOMEM;
     INIT_LIST_HEAD(&c->threads);
     init_waitqueue_head(&c->remap_wait);
+    init_waitqueue_head(&c->io_wait);
     c->arenas = RB_ROOT;
     xa_init_flags(&c->ids, XA_FLAGS_ACCOUNT);
     c->next_thread = 0;

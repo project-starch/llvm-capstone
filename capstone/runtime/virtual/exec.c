@@ -70,6 +70,7 @@ static const char *image_path;
 static struct capstone_spawner spawner = {.socket = -1};
 static struct capstone_delegate_host host;
 static __thread struct capstone_delegate_host *worker_host;
+static int io_registered;
 /* The process transport's host state (host: its bounce buffer, its signal ring) is shared by every
  * context that names the process transport. The domain serializes those contexts with its own
  * transport lock, but that lock is the domain's: a context that skips it (a forged gp identity, or
@@ -1144,6 +1145,10 @@ static int virtual_service(uint64_t tid, struct cv_step *step)
         if (separate) pthread_mutex_unlock(&service_lock);
         if (h == &host) {
             pthread_mutex_lock(&host_lock);
+            if (tid && io_registered) {
+                uint32_t active = 1;
+                if (ioctl(device, CV_IO_HOST, &active)) _exit(125);
+            }
             /* A worker on the process transport records its signals into the process ring
              * (it shares the domain's signal state with every context on that transport). */
             if (tid && separate) {
@@ -1153,7 +1158,13 @@ static int virtual_service(uint64_t tid, struct cv_step *step)
         }
         if (!io_publish_interrupted(h, request, step->cause))
             capstone_delegate_serve(h, request);
-        if (h == &host) pthread_mutex_unlock(&host_lock);
+        if (h == &host) {
+            if (tid && io_registered) {
+                uint32_t active = 0;
+                if (ioctl(device, CV_IO_HOST, &active)) _exit(125);
+            }
+            pthread_mutex_unlock(&host_lock);
+        }
         if (separate) pthread_mutex_lock(&service_lock);
         if (trace) fprintf(stderr, "CAPSTONE_VM_SERVICE tid=%llu nr=%llu result=%lld\n",
                            (unsigned long long)tid, (unsigned long long)request->nr,
@@ -1282,7 +1293,8 @@ static void io_private_register(void)
     for (unsigned i = 0; i < host.private_count; ++i)
         r.fds[r.count++] = host.private_fds[i];
     if (spawner.socket >= 0 && r.count < CV_IO_PRIVATE_MAX) r.fds[r.count++] = spawner.socket;
-    if (ioctl(device, CV_IO_PRIVATE, &r) && trace)
+    io_registered = ioctl(device, CV_IO_PRIVATE, &r) == 0;
+    if (!io_registered && trace)
         fprintf(stderr, "CAPSTONE_VM_IO_PRIVATE errno=%d (in-module I/O off)\n", errno);
 }
 

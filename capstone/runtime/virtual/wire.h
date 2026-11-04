@@ -110,4 +110,8 @@ struct cv_io_transport {
 };
 #define CV_IO_TRANSPORT _IOW('V', 31, struct cv_io_transport)
 #define CV_IO_PRIVATE _IOW('V', 30, struct cv_io_private)
+/* A launcher worker serving the shared process transport brackets its serve
+ * under host_lock with 1/0. Acquisition waits for a main inline call to finish;
+ * while owned, main requests fall back to the same launcher lock. */
+#define CV_IO_HOST _IOW('V', 32, __u32)
 #endif

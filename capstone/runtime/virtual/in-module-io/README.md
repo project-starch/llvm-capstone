@@ -17,6 +17,11 @@ signal attachment and remembers the metadata and exchange arena identities;
 a forged exchange or an address recycled into another arena cannot opt in.
 All other requests use the launcher. The launcher registers its private
 file descriptors first; those and the module device remain inaccessible.
+Workers using the shared process transport bracket their launcher serve with
+`CV_IO_HOST` while owning `host_lock`. This waits for an in-flight main inline
+call and makes later main requests use the launcher lock until the serve ends.
+Private worker transports remain independent. This extends the shared-host
+serialization to cover the module as well as native workers.
 
 The metadata and exchange arenas are held while the kernel copies and the
 VM lock is dropped. Retire, remap and conversion into a thread frame refuse
@@ -67,3 +72,10 @@ The negative control must print LANDED; its absence is a failure. The normal
 module must not expose either test parameter. `result.json` records every
 expected exit and marker; a missing case, assertion, timeout or observer
 mismatch prevents a passing result. No profiling window is required here.
+
+`host-contract.c` includes the real launcher and supplies a blocking module
+stand-in. Link it with the same native Linux/common sources as
+`test-transport-host.sh`, using `-O1 -pthread` and the virtual/runtime include
+paths. It verifies CV_IO_HOST acquisition, serve and release, and that a private
+service can make progress while acquisition waits. Also run
+`test-transport-host.sh` and `test-detach-deadlock.sh` after integration changes.
