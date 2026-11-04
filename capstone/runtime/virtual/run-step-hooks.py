@@ -139,7 +139,8 @@ def held(c):
 def fault_events(run, c):
     """The demand fault events one arena's retire line accounts for. A pinning module admits a page
     at every fault, so admit= is the count. The unpinned mode (HOOK_UNPINNED: Y) pins and admits
-    nothing: its count is the line's faulted=, and a module that does not print it gives None, so
+    nothing: its count is the line's faulted= (the events CV_STEP received on the arena, counted
+    apart from the process total they are subtracted from), and a module that prints none gives None, so
     the comparisons that need it fail instead of falling back to the process total, which holds the
     program's own pages (a lookup of the allocator's hashed .bss index that lands on the page of
     the launch record faults once less than one that does not: -1 step and -1 fault, by placement)."""
@@ -285,9 +286,14 @@ def evaluate(log, names, instrumented, completed):
             checks[f'{name}_{mode}_pages_census'] = bool(
                 s and r['marked'] and
                 s['pages'] == sum(held(c) for base, c in r['census'].items() if base in r['after_mark']))
+            # faulted= is counted where CV_STEP receives a fault event and the process total
+            # where it is resolved or returned, two sites that must agree: in the unpinned
+            # mode the sum equals the total (a miss at either site shows), with a pinning module
+            # the census covers every page admitted at a fault and the total may exceed it.
+            events = [fault_events(r, c) for c in r['census'].values()]
             checks[f'{name}_{mode}_faults_census'] = bool(
-                s and r['census'] and None not in [fault_events(r, c) for c in r['census'].values()] and
-                s['faults'] >= sum(fault_events(r, c) for c in r['census'].values()))
+                s and r['census'] and None not in events and
+                (s['faults'] == sum(events) if r.get('unpinned') else s['faults'] >= sum(events)))
             checks[f'{name}_{mode}_peak'] = bool(s and s['peak'] >= s['pages'])
     # Releases can trail a process's exit (the adapter fd closes as it
     # dies), so the balance is taken after rmmod, when no context is left:
