@@ -384,3 +384,59 @@ and `watchdog.json` retain the original failure. `postprocess.json` records the
 successful reporting command and recovery. `qc2-final-summary.py` verifies
 all seven pairs and both quick repeats. The four existing run-copy `pack.t`
 adaptations remain in the full perlbench oracle's scope.
+
+### Explicit OFF and experimental ON platforms
+
+`milestone-census.sh COMMIT TAG --mode off|on [--quick]` selects the
+platform independently of the quick/full work boundary. OFF is the default.
+Use `CENSUS_ARMS_OFF` and `CENSUS_ARMS_ON` for the two arms templates and
+`KERNEL_BUILD_OFF` / `KERNEL_BUILD_ON` for their prepared kernel trees.
+`CENSUS_ARMS` and `KERNEL_BUILD` remain fallbacks. Both platforms must attest
+the requested commit's QEMU pin and pass all recorded file hashes.
+
+OFF uses the stock kernel, explicitly disables raw moves, and uses production
+module defaults. ON requires the patched kernel described in
+`runtime/virtual/unpinned/README.md`, enables `x-capstone-raw-moves=true`, and
+loads both guests with `unpinned=1` on their first module load. Both modes
+use U-mode. ON disables test CSRs; OFF retains the profiling platform's
+`x-capstone-test-csrs=true`, required by pinned discovery's read of CSR 0x5c0.
+The plain benchmark still executes as ordinary Linux. Perlbench adds
+two supervisor slots to both arms after selecting the mode. `profile.sh` passes
+parameters through `vm up --module-param`, before the startup stats query,
+and checks their guest readback before profiling. Loading defaults and then
+reloading ON is too late: pinned discovery has already run. Conflicting
+mode properties and inherited module parameters are removed from templates.
+ON's platform manifest must include `unpinned.kernel_contract` equal to
+`capstone,unpinned-v1` and `unpinned.patch_sha256` matching the exact patch in
+the requested commit. Its module build tree's Image must match the platform.
+The patch is an explicit platform component; selecting ON does not patch or
+build a Linux tree automatically. ON remains experimental.
+
+Every prepared run saves `census-mode.json` with the commit, host, mode,
+quick/full boundary, QEMU pin, effective base settings, and binary hashes.
+Per-benchmark arms files also record the perl exception. `platform-record.json`
+retains the complete manifest independently of later scratch cleanup. Mode and
+host appear in both north-star outputs. Automatic previous-run selection stays
+within the same mode; cross-mode comparisons must be made explicitly on matching
+commits and work boundaries. A failed row still prevents a completed census.
+
+`--prepare-only` builds and verifies inputs without executing benchmarks.
+`CENSUS_USE_PLATFORM_ADAPTER=1` permits a measurement host to reuse the
+hash-verified template adapter instead of requiring a local kernel build;
+the manifest's `adapter_commit` must exactly equal the requested commit.
+A stale adapter is refused. This supports building once on p12 and transferring
+real-file platform copies to p13. Run through `ssh p12` or `ssh p13`; no implicit
+remote execution or environment forwarding is performed by the census driver.
+
+`CENSUS_CAP` adds an explicitly supplied compiler/SDK candidate to the existing
+source-identity and binary-hash checks; it does not bypass them.
+`CENSUS_REQUIRE_REUSE=1` refuses a new compiler build when no matching candidate
+exists. `CENSUS_REQUIRE_CACHE=1` requires an already prepared executable cache,
+for a measurement host that must not build.
+`CENSUS_SPEC_ROOT` reuses an explicitly supplied, lane-owned writable SPEC
+installation for a new executable label, avoiding another suite copy.
+Do not point it at another lane's writable state. `CENSUS_SHARE` sets a common
+share root when that installation and the output directory are siblings.
+Use one census at a time per host/root; OFF and ON may run on separate hosts.
+Keep the patched kernel/build inputs and both requested platform copies while
+they remain prerequisites for the next census; remove superseded scratch only.

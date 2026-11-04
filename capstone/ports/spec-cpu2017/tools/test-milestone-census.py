@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Source reuse and disk refusal regressions (no compiler or benchmark builds)."""
 import importlib.util
+import hashlib
 import os
 from pathlib import Path
 import subprocess
@@ -49,6 +50,42 @@ class CensusTest(unittest.TestCase):
         self.assertEqual(arms['platform']['cpu_props'], ['x-capstone-supervisor-slots=1'])
         self.assertEqual(census.benchmark_arms(arms, '557.xz_r'), arms)
         self.assertEqual(set(census.SLICES), set(census.BENCHES))
+
+    def test_modes_override_conflicts_and_keep_perl_capacity(self):
+        arms = {'platform': {'cpu_props': ['x-capstone-raw-moves=true']},
+                'arms': {'cap': {'kind': 'capstone', 'module_params': 'debug=1 unpinned=1',
+                                 'cpu_props': ['x-capstone-raw-moves=false']},
+                         'rv64': {'kind': 'plain'}}}
+        for mode in ('off', 'on'):
+            settings = census.mode_arms(arms, mode)
+            self.assertIn('x-capstone-raw-moves=' + ('true' if mode == 'on' else 'false'),
+                          settings['platform']['cpu_props'])
+            self.assertIn('x-capstone-test-csrs=' + ('false' if mode == 'on' else 'true'),
+                          settings['platform']['cpu_props'])
+            self.assertEqual(settings['arms']['cap']['cpu_props'], [])
+            expected = 'unpinned=1' if mode == 'on' else ''
+            self.assertEqual(settings['arms']['cap']['module_params'], expected)
+            self.assertEqual(settings['arms']['rv64']['module_params'], expected)
+            perl = census.benchmark_arms(settings, '500.perlbench_r')
+            self.assertEqual(perl['arms']['cap']['module_params'],
+                             (expected + ' supervisor_slots=2').strip())
+            self.assertEqual(perl['arms']['rv64']['module_params'],
+                             (expected + ' supervisor_slots=2').strip())
+        self.assertEqual(arms['arms']['cap']['module_params'], 'debug=1 unpinned=1')
+
+    def test_on_requires_matching_kernel_patch_and_off_rejects_on(self):
+        with self.assertRaisesRegex(ValueError, 'patched unpinned'):
+            census.check_mode_platform({}, 'on', self.root, 'fixture')
+        manifest = {'unpinned': {'kernel_contract': 'capstone,unpinned-v1',
+                                 'patch_sha256': 'incorrect'}}
+        with patch.object(census, 'git', return_value='patch'):
+            with self.assertRaisesRegex(ValueError, 'patch does not match'):
+                census.check_mode_platform(manifest, 'on', self.root, 'fixture')
+            manifest['unpinned']['patch_sha256'] = hashlib.sha256(b'patch\n').hexdigest()
+            census.check_mode_platform(manifest, 'on', self.root, 'fixture')
+        with self.assertRaisesRegex(ValueError, 'stock kernel'):
+            census.check_mode_platform(manifest, 'off', self.root, 'fixture')
+        census.check_mode_platform({}, 'off', self.root, 'fixture')
 
     def test_staged_perl_path_survives_child_prefix(self):
         wrapper = Path(__file__).with_name('capstone-run.sh').read_text()

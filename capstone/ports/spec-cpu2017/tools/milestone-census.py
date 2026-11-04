@@ -11,6 +11,7 @@ import os
 from pathlib import Path
 import re
 import shutil
+import socket
 import subprocess
 import sys
 import time
@@ -165,11 +166,44 @@ def benchmark_arms(arms, bench):
     return settings
 
 
+def mode_arms(arms, mode):
+    """Select explicit platform settings, removing conflicting arm overrides."""
+    settings = copy.deepcopy(arms)
+    keys = ('x-capstone-raw-moves=', 'x-capstone-test-csrs=', 'x-capstone-u-mode=',
+            'x-capstone-supervisor-slots=')
+    settings['platform']['cpu_props'] = [p for p in settings['platform'].get('cpu_props', [])
+        if not p.startswith(keys)] + [f'x-capstone-raw-moves={"true" if mode == "on" else "false"}',
+                                     f'x-capstone-test-csrs={"false" if mode == "on" else "true"}',
+                                     'x-capstone-u-mode=true']
+    for arm in settings['arms'].values():
+        arm['cpu_props'] = [p for p in arm.get('cpu_props', []) if not p.startswith(keys)]
+        # Production defaults, except the explicit experiment and perl's two
+        # slots, which benchmark_arms adds after selecting the mode.
+        arm['module_params'] = 'unpinned=1' if mode == 'on' else ''
+    return settings
+
+
+def check_mode_platform(manifest, mode, repo, commit):
+    if mode == 'on':
+        record = manifest.get('unpinned', {})
+        if record.get('kernel_contract') != 'capstone,unpinned-v1':
+            raise ValueError('ON requires the patched unpinned kernel platform')
+        patch = git(repo, 'show', f'{commit}:{VIRTUAL}/unpinned/linux-6.1-unpinned.patch') + '\n'
+        if record.get('patch_sha256') != hashlib.sha256(patch.encode()).hexdigest():
+            raise ValueError('ON kernel patch does not match the requested commit')
+    elif manifest.get('unpinned'):
+        raise ValueError('OFF requires the stock kernel platform, not an ON platform')
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument('commit')
     ap.add_argument('tag')
     ap.add_argument('--quick', action='store_true')
+    ap.add_argument('--prepare-only', action='store_true',
+                    help='prepare and hash inputs without running benchmarks')
+    ap.add_argument('--mode', choices=('on', 'off'), default='off',
+                    help='platform mode (default: off); ON is experimental')
     args = ap.parse_args()
     if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_-]*', args.tag):
         raise ValueError('tag must contain only letters, digits, underscores and hyphens')
@@ -190,20 +224,34 @@ def main():
     key = hashlib.sha256((json.dumps(hashes, sort_keys=True) +
                           git(repo, 'rev-parse', f'{commit}:capstone/ports/spec-cpu2017')).encode()).hexdigest()[:20]
     cache = root / 'census-cache' / key
-    template = envpath('CENSUS_ARMS', base / 'arms-census4.json')
+    template = envpath('CENSUS_ARMS_' + args.mode.upper(),
+                       envpath('CENSUS_ARMS', base / ('arms-' + args.mode + '.json')
+                               if args.mode == 'on' else base / 'arms-census4.json'))
     arms = json.loads(template.read_text())
     source_platform = Path(arms['platform']['dir']).expanduser()
     platform_manifest = verify_platform(source_platform)
+    check_mode_platform(platform_manifest, args.mode, repo, commit)
+    arms = mode_arms(arms, args.mode)
     pin = git(repo, 'rev-parse', f'{commit}:capstone/capstone-qemu')
     provenance = platform_manifest['provenance'].get('qemu-system-riscv64', '')
     if pin[:12] not in provenance:
         raise ValueError(f'UNRESOLVED: platform provenance does not attest QEMU pin {pin}; supply CENSUS_ARMS with a matching platform')
-    kernel = envpath('KERNEL_BUILD', '~/llvm-capstone/capstone/caplifive-buildroot/build-qemu/build/linux-custom')
+    kernel = envpath('KERNEL_BUILD_' + args.mode.upper(),
+                     envpath('KERNEL_BUILD', '~/llvm-capstone/capstone/caplifive-buildroot/build-qemu/build/linux-custom'))
+    prebuilt = os.environ.get('CENSUS_USE_PLATFORM_ADAPTER') == '1'
+    if prebuilt and platform_manifest.get('adapter_commit') != commit:
+        raise ValueError('prebuilt adapter does not match the requested commit')
+    if not prebuilt and args.mode == 'on' and sha(kernel / 'arch/riscv/boot/Image') != platform_manifest['files']['images/Image']:
+        raise ValueError('ON module build kernel differs from selected platform Image')
     cross = os.path.expanduser(os.environ.get('CROSS_COMPILE', '~/llvm-capstone/capstone/caplifive-buildroot/build-qemu/host/bin/riscv64-buildroot-linux-gnu-'))
-    if not (kernel / 'Module.symvers').is_file() or not Path(cross + 'gcc').is_file():
+    if not prebuilt and (not (kernel / 'Module.symvers').is_file() or not Path(cross + 'gcc').is_file()):
         raise ValueError('UNRESOLVED: set KERNEL_BUILD and CROSS_COMPILE to a prepared matching kernel and compiler')
     cache_ready = (cache / 'ready.json').exists()
+    if os.environ.get('CENSUS_REQUIRE_CACHE') == '1' and not cache_ready:
+        raise ValueError(f'no prepared cache for {commit}; prepare inputs on the build host first')
     candidates = [] if cache_ready else sorted(base.glob('cap[0-9]*'), reverse=True)
+    if not cache_ready and os.environ.get('CENSUS_CAP'):
+        candidates.insert(0, envpath('CENSUS_CAP', ''))
     reuse = None
     for candidate in candidates:
         record = candidate / 'toolchain-record.txt'
@@ -227,11 +275,22 @@ def main():
             sdk_identity(candidate)
             reuse = candidate
             break
+    if not cache_ready and reuse is None and os.environ.get('CENSUS_REQUIRE_REUSE') == '1':
+        raise ValueError('no source-matched compiler/SDK; supply CENSUS_CAP before preparing this commit')
     if cache.exists() and not cache_ready:
         raise ValueError(f'UNRESOLVED: incomplete cache {cache}; inspect it before retrying')
     out.mkdir(parents=True)
     started = time.monotonic()
     dump(out / 'source-hashes.json', hashes)
+    mode_record = dict(mode=args.mode, experimental=args.mode == 'on',
+                       work='quick' if args.quick else 'full', host=socket.gethostname(),
+                       commit=commit, qemu_pin=pin, template=str(template),
+                       kernel_build=str(kernel), platform=str(source_platform),
+                       cpu_props=arms['platform']['cpu_props'],
+                       module_params={k: a['module_params'] for k, a in arms['arms'].items()},
+                       platform_files=platform_manifest['files'])
+    dump(out / 'census-mode.json', mode_record)
+    print(f'platform mode {args.mode.upper()}; host {mode_record["host"]}; commit {commit}', flush=True)
     print('compiler/SDK input hashes:', json.dumps(hashes, sort_keys=True), flush=True)
     if not cache_ready:
         disk(root)
@@ -264,7 +323,11 @@ bash "$T/capstone/ports/common/application/build-sdk.sh" "$W/sdk" "$MUSLDIR" "$W
 ''', out / 'toolchain-build.log', dict(env, MUSL_ARCHIVE=str(envpath('MUSL_ARCHIVE', '~/spec-cap/kit2/kit5/artifacts/sources/musl-1.2.5.tar.gz'))))
         disk(root)
         specroot = cache / 'SPEC17'
-        copy_spec(Path(arms['spec_root']).expanduser(), specroot)
+        if os.environ.get('CENSUS_SPEC_ROOT'):
+            # Explicitly reuse an owned writable suite; no second suite copy.
+            specroot.symlink_to(envpath('CENSUS_SPEC_ROOT', ''), target_is_directory=True)
+        else:
+            copy_spec(Path(arms['spec_root']).expanduser(), specroot)
         kit = src / 'capstone/ports/spec-cpu2017'
         # Always rebuild our own label: sources, flags and SDK are from this commit.
         label = 'qc' + key
@@ -328,7 +391,7 @@ runcpu --config=capstone-virtual --action=build --tune=base --define sdk="$SDK" 
     kit = out / 'kit'
     shutil.copytree(src / 'capstone/ports/spec-cpu2017', kit)
     for name in ('prof-northstar.py', 'prof-buckets.py', 'milestone-census.py', 'milestone-census.sh',
-                 'profile-watchdog.py', 'capstone-run.sh', 'prof-report.py', 'prof_images.py'):
+                 'profile-watchdog.py', 'profile.sh', 'capstone-run.sh', 'prof-report.py', 'prof_images.py'):
         shutil.copy2(HERE / name, kit / 'tools' / name)
     header = source_platform / 'adapter/module/cap_rev_table_abi.h'
     target = src / 'capstone/capstone-qemu/target/riscv/cap_rev_table_abi.h'
@@ -339,8 +402,12 @@ runcpu --config=capstone-virtual --action=build --tune=base --define sdk="$SDK" 
                CAPSTONE_LLVM_BUILD_DIR=str(cap / 'build'), CAPSTONE_LLVM_BIN=str(cap / 'build/bin'),
                KERNEL_BUILD=str(kernel), CROSS_COMPILE=cross)
     disk(root)
-    shell('source "$CAPSTONE_REPO_ROOT/capstone/tests/capstone-test-env.sh"\nbash "$CAPSTONE_REPO_ROOT/capstone/runtime/virtual/build-adapter.sh" "$ADAPTER"',
-          out / 'adapter-build.log', dict(env, ADAPTER=str(out / 'adapter')))
+    if prebuilt:
+        shutil.copytree(source_platform / 'adapter', out / 'adapter')
+        (out / 'adapter-build.log').write_text('Reused hash-verified platform adapter for ' + commit + '\n')
+    else:
+        shell('source "$CAPSTONE_REPO_ROOT/capstone/tests/capstone-test-env.sh"\nbash "$CAPSTONE_REPO_ROOT/capstone/runtime/virtual/build-adapter.sh" "$ADAPTER"',
+              out / 'adapter-build.log', dict(env, ADAPTER=str(out / 'adapter')))
     disk(root)
     platform = out / 'platform'
     # Zero-filled image extents need not consume physical disk blocks. These
@@ -355,12 +422,17 @@ runcpu --config=capstone-virtual --action=build --tune=base --define sdk="$SDK" 
     if any(p.is_symlink() for p in platform.rglob('*')):
         raise ValueError('platform contains symlinks')
     platform_manifest['files'] = files
+    platform_manifest['adapter_commit'] = commit
     for name in list(platform_manifest['provenance']):
         if name.startswith('adapter/'):
             del platform_manifest['provenance'][name]
     platform_manifest['provenance']['adapter/*'] = f'build-adapter.sh at {commit}; see adapter-build.log'
     dump(platform / 'platform.json', platform_manifest)
-    arms['share'] = str(root)
+    dump(out / 'platform-record.json', platform_manifest)
+    mode_record['platform_files'] = files
+    mode_record['platform'] = str(platform)
+    dump(out / 'census-mode.json', mode_record)
+    arms['share'] = str(envpath('CENSUS_SHARE', root))
     arms['spec_root'] = str(cache / 'SPEC17')
     arms['vm_host'] = str(src / 'capstone/runtime/host')
     arms['nm'] = str(cap / 'build/bin/llvm-nm')
@@ -374,6 +446,11 @@ runcpu --config=capstone-virtual --action=build --tune=base --define sdk="$SDK" 
     for a in arms['arms'].values():
         a.pop('stop_at', None)
     dump(out / 'arms.json', arms)
+    mode_record['module_params'] = {k: a['module_params'] for k, a in arms['arms'].items()}
+    dump(out / 'census-mode.json', mode_record)
+    if args.prepare_only:
+        print(f'PREPARED {args.mode.upper()} {commit}: {out}', flush=True)
+        return
     env.update(CAPSTONE_SPEC_VM_STATES=str(root / 'vm-states'))
     env.pop('PROFILE_STOP_AT', None)
     disk(root)
@@ -426,23 +503,29 @@ runcpu --config=capstone-virtual --action=build --tune=base --define sdk="$SDK" 
     previous_arm = os.environ.get('CENSUS_PREVIOUS_ARM', 'cap')
     if os.environ.get('CENSUS_PREVIOUS'):
         previous = envpath('CENSUS_PREVIOUS', '')
+        previous_record = previous / 'census-mode.json'
+        previous_mode = json.loads(previous_record.read_text())['mode'] if previous_record.exists() else 'off'
+        if previous_mode != args.mode:
+            raise ValueError('previous milestone uses a different platform mode')
         oldmetrics = {b: ns.compare(previous / 'rv64' / b, previous / previous_arm / b)
                           for b in BENCHES if (previous / previous_arm / b).is_dir()}
     else:
         for candidate in sorted((root / 'runs').glob('*/northstar.json'), key=lambda p: p.stat().st_mtime, reverse=True):
             data = json.loads(candidate.read_text())
-            if all(b in data['metrics'] and data['metrics'][b]['work'] == metrics[b]['work'] for b in BENCHES):
+            if data.get('mode', 'off') == args.mode and all(b in data['metrics'] and data['metrics'][b]['work'] == metrics[b]['work'] for b in BENCHES):
                 previous, oldmetrics = candidate.parent, data['metrics']
                 break
-        if previous is None and not args.quick:
+        if (previous is None and not args.quick and args.mode == 'off'
+                and (base / 'runs/census4').is_dir()):
             previous = base / 'runs/census4'
             previous_arm = 'cap-dev4'
             oldmetrics = {b: ns.compare(previous / 'rv64' / b, previous / previous_arm / b)
                           for b in BENCHES if (previous / previous_arm / b).is_dir()}
     if oldmetrics and any(oldmetrics[b]['work'] != metrics[b]['work'] for b in oldmetrics):
         raise ValueError('refusing previous milestone with different work slices')
-    lines = [f'commit {commit}; mode {"quick (SLICE, prefix only)" if args.quick else "full (PASS)"}',
-             f'previous {previous or "none; establishing quick baseline"}',
+    lines = [f'platform {args.mode.upper()}; host {mode_record["host"]}; QEMU {pin}',
+             f'commit {commit}; mode {"quick (SLICE, prefix only)" if args.quick else "full (PASS)"}',
+             f'previous {previous or "none; establishing baseline"}',
              'benchmark program% boundary% delta-program-pp delta-boundary-pp H_A H_B']
     for b, r in metrics.items():
         delta = (f"{r['program_pct']-oldmetrics[b]['program_pct']:+.4f} {r['boundary_pct']-oldmetrics[b]['boundary_pct']:+.4f}"
@@ -457,7 +540,8 @@ runcpu --config=capstone-virtual --action=build --tune=base --define sdk="$SDK" 
     lines.append(f'elapsed_seconds {elapsed:.3f} (includes preparation/builds)')
     text = '\n'.join(lines) + '\n'
     (out / 'northstar.txt').write_text(text)
-    dump(out / 'northstar.json', dict(commit=commit, metrics=metrics, elapsed_seconds=elapsed,
+    dump(out / 'northstar.json', dict(commit=commit, mode=args.mode, host=mode_record['host'],
+                                     metrics=metrics, elapsed_seconds=elapsed,
                                      previous=str(previous) if previous else None))
     print(text, flush=True)
 

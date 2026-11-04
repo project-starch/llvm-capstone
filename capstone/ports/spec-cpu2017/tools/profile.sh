@@ -105,6 +105,11 @@ fi
 mkdir -m 700 "$VMSTATE"; ln -s "$VMSTATE" "$OUT/vm"
 vm() { env PYTHONPATH="$VMHOST" python3 -m capstone_vm --state "$OUT/vm" "$@"; }
 mkdir -p "$OUT/capprof"
+# Apply the contract on the FIRST module load: vm up opens the device for
+# --stats before returning. ON must bypass pinned discovery at that point.
+MODPARAMS=$(jopt "arms.$ARM.module_params" ""); note "module_params ${MODPARAMS:-none}"
+read -r -a MODULE_ARGS <<< "$MODPARAMS"
+for param in "${MODULE_ARGS[@]}"; do UP_EXTRA+=(--module-param "$param"); done
 vm up --profile virtual --memory "$MEM" --share-model "$SHARE_MODEL" --share "$SHARE" \
   --plugin "$PL/plugins/libcapprof.so" --plugin-arg out="$OUT/capprof" "${STOP_ARGS[@]}" --no-pcrel --icount "$ICOUNT" "${UP_EXTRA[@]}" \
   --qemu "$PL/qemu-system-riscv64" --kernel "$PL/images/Image" --firmware "$PL/images/fw_jump.elf" \
@@ -120,14 +125,22 @@ python3 -c "import json,sys;print(json.dumps(json.load(open(sys.argv[1]))['comma
 # 365k attempts in one run and 999k in the next with it on).
 cp "$PL/profrun" "$OUT/profrun"
 vm exec -- sh -c "echo 0 > /proc/sys/kernel/randomize_va_space && cp /mnt/host/${OUT#"$SHARE"/}/profrun /tmp/profrun && chmod 0755 /tmp/profrun && cd /sys/module/capstone_vm/sections && for f in .* *; do [ -f \"\$f\" ] && echo \"\$f \$(cat \"\$f\")\"; done; killall syslogd klogd 2>/dev/null; echo randomize_va_space=\$(cat /proc/sys/kernel/randomize_va_space); uname -a; cat /proc/cmdline; for p in /sys/module/capstone_vm/parameters/*; do echo \"param \$(basename \$p)=\$(cat \$p)\"; done" > "$OUT/module-sections.txt"
-# Module parameters under test (arm "module_params", insmod syntax): the module is reloaded with
-# them before anything runs; the parameters file records what the guest then reads back.
-MODPARAMS=$(jopt "arms.$ARM.module_params" ""); note "module_params ${MODPARAMS:-none}"
+# Read back the selected parameters before profiling. The plain arm boots the
+# same module contract even though its benchmark executes as ordinary Linux.
 if [ -n "$MODPARAMS" ]; then
-  vm exec -- sh -c "rmmod capstone_vm && insmod /mnt/control/module $MODPARAMS && for p in /sys/module/capstone_vm/parameters/*; do echo \"param \$(basename \$p)=\$(cat \$p)\"; done" > "$OUT/module-params.txt" 2>&1 \
-    || { echo "profile: reloading the module with $MODPARAMS failed" >&2; cat "$OUT/module-params.txt" >&2; exit 1; }
-  # the reloaded module's section addresses, for the attribution (the ones above are the first load's)
-  vm exec -- sh -c "cd /sys/module/capstone_vm/sections && for f in .* *; do [ -f \"\$f\" ] && echo \"\$f \$(cat \"\$f\")\"; done; cat /proc/cmdline; for p in /sys/module/capstone_vm/parameters/*; do echo \"param \$(basename \$p)=\$(cat \$p)\"; done" > "$OUT/module-sections.txt"
+  vm exec -- sh -c 'for p in /sys/module/capstone_vm/parameters/*; do echo "param $(basename "$p")=$(cat "$p")"; done' > "$OUT/module-params.txt" 2>&1
+  python3 - "$OUT/module-params.txt" "${MODULE_ARGS[@]}" <<'PY_PARAMS'
+from pathlib import Path
+import sys
+actual = dict(line.removeprefix('param ').split('=', 1)
+              for line in Path(sys.argv[1]).read_text().splitlines() if line.startswith('param '))
+def norm(value):
+    return {'Y': '1', 'N': '0', 'true': '1', 'false': '0'}.get(value, value)
+for item in sys.argv[2:]:
+    key, value = item.split('=', 1)
+    if norm(actual.get(key, 'missing')) != norm(value):
+        sys.exit(f'profile: module parameter mismatch: {key}')
+PY_PARAMS
 fi
 export CAPSTONE_SPEC_PROFRUN=/tmp/profrun
 STAGE=$(jopt "arms.$ARM.stage_image" share); note "stage_image $STAGE"
