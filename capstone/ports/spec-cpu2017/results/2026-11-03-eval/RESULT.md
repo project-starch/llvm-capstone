@@ -68,9 +68,23 @@ run-to-run spread. This reading fails the wording and is not read as an effect.
 
 - Step 2 removes STC/LDC pairs that copy a capability through a stack slot.
 - On imagick, 3 % fewer instructions take 10.5-12.3 % fewer cycles.
-- On ObjBounds, an LDC or STC costs no extra cycles. That is the bare kit's cost pattern, which HOLDS on board 2. So the saving there is not the lifetime check.
-- **What this suggests (not measured):** a store followed by a load from the same slot stalls in CVA6's LSU, and the stall is far longer than the two instructions.
-- **What would settle it:** the counter kit on the dev and devmk imagick stages (issue stall, scoreboard full), or a bare-kit STC→LDC same-address rung.
+- On ObjBounds the lifetime check costs nothing: that is the bare kit's cost pattern, which HOLDS on board 2. So the saving there
+  is not the lifetime check.
+- Per removed pair, taking two removed instructions per pair (an assumption: the flag may change other code as well), silicon
+  saves 23 cycles on imagick and 27 on nab (ObjBounds), and 28-36 on imagick, gcc and xz (bitstream 3).
+
+**The store-to-load hypothesis is refuted.** The first version of this file (dd8bfa5e08cb) suggested a same-slot
+store-to-load stall in the LSU: a load matching a buffered store waits in WAIT_PAGE_OFFSET. The rtl lane tested it in simulation
+(dev bf2fc1c9d6bd, docs/history/04-11-2026_03-13-48_stc-ldc-pair-cost.md; pre-registered on capstone-ariane d463206ac).
+- **The pair cost does not depend on the slot.** `stc A; ldc A` costs exactly what `ldc A+0x10`, `A+0x40` and `A+0x1000` cost.
+  Per iteration: 20.44 / 11.48 / 11.46 cycles on b3 / ObjBounds / C.5a, with 0 WAIT_PAGE_OFFSET entries. Plain sd/ld pairs do
+  pay the wait.
+- **What the simulation reads instead:** LDC and STC go through the DYN unit, which takes one op at a time. The next DYN op is
+  dispatched 3 cycles after the previous one's result. So the store has drained before the load reaches the load unit.
+- **The cost of a pair** over the loop on ObjBounds/C.5a: a capability pair 8.4 cycles, a plain pair to different slots 2.4.
+  These are simulation patterns (memory delay 12), not silicon costs.
+- **The gap.** The sim pair cost is about a third of the 23-36 cycles silicon saves per removed pair. The rest is not explained.
+  A counter boot on the dev and devmk imagick stages, with issue stall and scoreboard full, is the next reading.
 
 **Totals, steps 1 and 2 together** (devmk against the 3 Nov baseline, in-context cycles of run commands):
 
