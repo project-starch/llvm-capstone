@@ -49,6 +49,7 @@ _Static_assert(sizeof(struct cv_step) == 136, "cv_step is two user-copy chunks a
 /* One rule, shared with the launcher and the allocator. No #include of its own and only
  * __builtin_clzl and unsigned long, so it is valid kernel C. */
 #include "representable.h"
+#include "native-grant.h"
 _Static_assert(CV_NODE_RESERVE == CAP_REV_TABLE_RESERVE, "processor reserve ABI");
 
 /* One registered mapping. Arenas are allocated one by one and never move, so
@@ -1332,6 +1333,47 @@ static int retire(struct context *c, struct arena *a, bool destroying)
     return 0;
 }
 
+#ifdef CV_GRANT_TXN
+struct grant_unmap_commit {
+    struct context *context;
+    struct arena *arena;
+    unsigned int inject;
+};
+static int grant_unmap_retire(void *opaque)
+{
+    struct grant_unmap_commit *tx = opaque;
+    if (tx->inject == CV_GRANT_INJECT_RETIRE) return -EIO;
+    return retire(tx->context, tx->arena, false);
+}
+static int grant_transaction(struct context *c,
+                             const struct cv_grant_transaction *r)
+{
+    typeof(capstone_grant_unmap) *unmap;
+    struct cv_thread *t;
+    struct arena *a;
+    struct grant_unmap_commit tx;
+    int error;
+
+    if (r->version != CV_GRANT_ABI_VERSION || r->flags || r->reserved ||
+        r->inject > CV_GRANT_INJECT_RETIRE) return -EINVAL;
+    if (!unpinned || r->operation != CV_GRANT_UNMAP) return -EOPNOTSUPP;
+    /* Running launchers own transport holds and an independent map registry.
+     * Until these migrate, only bootstrap test contexts may use this ioctl. */
+    list_for_each_entry(t, &c->threads, link)
+        if (t->started) return -EOPNOTSUPP;
+    a = xa_load(&c->ids, r->id);
+    if (!a || a->address != r->address || a->bytes != r->bytes ||
+        a->rx_bytes || a->ancestor_retired) return -EINVAL;
+    if (arena_has_thread_frame(c, a)) return -EBUSY;
+    unmap = symbol_get(capstone_grant_unmap);
+    if (!unmap) return -EOPNOTSUPP;
+    tx = (struct grant_unmap_commit){c, a, r->inject};
+    error = unmap(c->mm, a->address, a->bytes, grant_unmap_retire, &tx, r->inject);
+    symbol_put(capstone_grant_unmap);
+    return error;
+}
+#endif
+
 /* The meta block (reg 10 before the start) stays eager: asynchronous signal publication writes
  * it and cannot issue a sleeping CV_TOUCH. The main exchange (reg 11) is admitted through the
  * delegate dispatcher's prepare_write callback before every possible output span; worker
@@ -2107,7 +2149,7 @@ static int resolve(struct context *c, struct cv_thread *t, u64 deadline)
     unsigned long vmflags = 0;   /* snapshot under the mmap lock; v is unsafe to read after unlock */
     unsigned long required = cause == 15 ? VM_WRITE : cause == 12 ? VM_EXEC : VM_READ;
     struct arena *a;
-    if (!t->started || t->event != 4 || (cause != 12 && cause != 13 && cause != 15))
+    if (!t->started || cv_fault_classify(t->event, cause) == CV_FAULT_DENIED)
         return -EINVAL;
     a = arena_at(c, address);
     if (a && address - a->address < a->rx_bytes) {
@@ -2478,6 +2520,14 @@ retry:
         if (wait_event_interruptible(c->remap_wait, !READ_ONCE(c->remapping))) return -EINTR;
         goto retry;
     }
+#ifdef CV_GRANT_TXN
+    if (op == CV_GRANT_TRANSACTION) {
+        struct cv_grant_transaction r;
+        if (copy_from_user(&r, (void __user *)arg, sizeof(r))) rc = -EFAULT;
+        else rc = grant_transaction(c, &r);
+        goto out;
+    }
+#endif
     if (op == CV_GLOBAL) {
         struct context *other;
         struct cv_global stats = {.nodes_allocated = allocated_total,
