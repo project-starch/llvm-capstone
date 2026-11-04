@@ -17,11 +17,15 @@ struct cv_map {
 };
 /* Service-event causes for I/O interrupted inside CV_STEP, before any bytes
  * moved. Linux has not applied SA_RESTART to this inner call: the launcher
- * publishes its newly accepted signals and decides DONE/EINTR versus RETRY. */
+ * publishes its newly accepted signals and decides DONE/EINTR versus RETRY.
+ * CV_IO_DONE is an inner call that already wrote its result to the transport
+ * and then stopped before re-entry: publish any accepted signals without
+ * repeating the I/O or overwriting that result. */
 #define CV_IO_EINTR 0x100000001ULL
 #define CV_IO_RESTARTSYS 0x100000002ULL
 #define CV_IO_RESTARTNOINTR 0x100000003ULL
 #define CV_IO_RESTARTNOHAND 0x100000004ULL
+#define CV_IO_DONE 0x100000005ULL
 struct cv_step {
     /* Zero is the original process thread. Other IDs are allocated by
      * CV_THREAD_CREATE and name a paused CSRUNV context. */

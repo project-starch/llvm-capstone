@@ -982,11 +982,18 @@ static int reserve_stdio(unsigned *mask) {
 /* Linux delivered the signal on return from CV_STEP. Complete the already
  * interrupted inner I/O without issuing a new syscall, which would mistake
  * this for a signal accepted before submission and restart even without
- * SA_RESTART. An ignored/stopped signal leaves no domain handler to publish. */
+ * SA_RESTART. An ignored/stopped signal leaves no domain handler to publish.
+ * CV_IO_DONE is an inner call that already wrote its result to request->result
+ * and then stopped before re-entry: publish any accepted signals and keep that
+ * result. */
 static int io_publish_interrupted(struct capstone_delegate_host *h,
                                   struct capstone_delegate_entry *request, uint64_t cause)
 {
     int retry;
+    if (cause == CV_IO_DONE) {
+        capstone_signals_publish(&h->signals, request, 0);
+        return 1;
+    }
     switch (cause) {
     case CV_IO_EINTR: retry = 0; break;
     case CV_IO_RESTARTSYS:
@@ -1147,7 +1154,9 @@ static int virtual_service(uint64_t tid, struct cv_step *step)
             pthread_mutex_lock(&host_lock);
             if (tid && io_registered) {
                 uint32_t active = 1;
-                if (ioctl(device, CV_IO_HOST, &active)) _exit(125);
+                int rc;
+                do { rc = ioctl(device, CV_IO_HOST, &active); } while (rc < 0 && errno == EINTR);
+                if (rc) _exit(125);
             }
             /* A worker on the process transport records its signals into the process ring
              * (it shares the domain's signal state with every context on that transport). */
@@ -1161,7 +1170,9 @@ static int virtual_service(uint64_t tid, struct cv_step *step)
         if (h == &host) {
             if (tid && io_registered) {
                 uint32_t active = 0;
-                if (ioctl(device, CV_IO_HOST, &active)) _exit(125);
+                int rc;
+                do { rc = ioctl(device, CV_IO_HOST, &active); } while (rc < 0 && errno == EINTR);
+                if (rc) _exit(125);
             }
             pthread_mutex_unlock(&host_lock);
         }
@@ -1289,11 +1300,13 @@ static int virtual_service(uint64_t tid, struct cv_step *step)
 static void io_private_register(void)
 {
     struct cv_io_private r = {0};
+    int rc;
     if (host.private_count + (spawner.socket >= 0) > CV_IO_PRIVATE_MAX) return;
     for (unsigned i = 0; i < host.private_count; ++i)
         r.fds[r.count++] = host.private_fds[i];
     if (spawner.socket >= 0 && r.count < CV_IO_PRIVATE_MAX) r.fds[r.count++] = spawner.socket;
-    io_registered = ioctl(device, CV_IO_PRIVATE, &r) == 0;
+    do { rc = ioctl(device, CV_IO_PRIVATE, &r); } while (rc < 0 && errno == EINTR);
+    io_registered = rc == 0;
     if (!io_registered && trace)
         fprintf(stderr, "CAPSTONE_VM_IO_PRIVATE errno=%d (in-module I/O off)\n", errno);
 }
@@ -1301,7 +1314,9 @@ static void io_private_register(void)
 static void io_transport_register(uint64_t tid, uintptr_t meta_at, uintptr_t exchange_at, size_t bytes)
 {
     struct cv_io_transport r = {tid, meta_at, exchange_at, bytes};
-    if (ioctl(device, CV_IO_TRANSPORT, &r) && trace)
+    int rc;
+    do { rc = ioctl(device, CV_IO_TRANSPORT, &r); } while (rc < 0 && errno == EINTR);
+    if (rc && trace)
         fprintf(stderr, "CAPSTONE_VM_IO_TRANSPORT errno=%d (launcher fallback)\n", errno);
 }
 

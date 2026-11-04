@@ -2948,17 +2948,18 @@ static int inline_io(struct context *c, struct cv_thread *t, struct file *device
     }
     if (e.flags != 2 || e.count != 1) return 0;
     /* Match the launcher's validation of the complete declared range; clipping
-     * to MAX_RW_COUNT first would accept a request its validator refuses. */
+     * to MAX_RW_COUNT first would accept a request its validator refuses.
+     * Zero-length calls stay on the scalar launcher path (eventfd, datagrams). */
     len = e.args[2];
     if (copy_from_user(signals, (void __user *)(meta + CV_IO_SIGNAL_OFFSET), sizeof signals))
         return 0;
     if (signals[0] != signals[1]) goto fallback;
     ba = io_arena(c, exch, exch_bytes);
     if (!ba || (!inline_test_transport && ba->id != t->io_exchange_id) ||
-        e.args[1] > exch_bytes || len > exch_bytes - e.args[1]) goto fallback;
+        !len || e.args[1] >= exch_bytes || len > exch_bytes - e.args[1]) goto fallback;
     buf = exch + e.args[1];
     if (io_private_fd(c, e.args[0])) goto fallback;
-    if (len && io_admit(c, buf, len)) goto fallback;
+    if (io_admit(c, buf, len)) goto fallback;
     file = e.args[0] > INT_MAX ? NULL : fget((unsigned)e.args[0]);
     if (!file || file->f_op == device_file->f_op) goto fallback;
     if (!(writing ? file->f_op->write_iter : file->f_op->read_iter)) goto fallback;
@@ -2971,14 +2972,25 @@ static int inline_io(struct context *c, struct cv_thread *t, struct file *device
     r = io_rw(file, writing, positional, buf, len, (loff_t)e.args[3]);
     fput(file); file = NULL;
     mutex_lock(&vm_lock);
-    /* As at the ioctl's entry: no step runs while another thread's remap window is open. */
-    while (READ_ONCE(c->remapping)) {
-        mutex_unlock(&vm_lock);
-        wait_event(c->remap_wait, !READ_ONCE(c->remapping));
-        mutex_lock(&vm_lock);
+    if (r != -ERESTARTSYS && r != -ERESTARTNOINTR && r != -ERESTARTNOHAND &&
+        r != -ERESTART_RESTARTBLOCK && r != -EINTR) {
+        if (put_user(r, &ue->result) || put_user(0ULL, &ue->pending) ||
+            put_user(0ULL, &ue->status) ||
+            put_user(0U, (u32 __user *)(meta + CV_IO_SIGNAL_OFFSET + 16))) {
+            t->io_busy = false;
+            wake_up_all(&c->io_wait);
+            io_release(c, mid); io_release(c, bid);
+            /* Only when the block itself was unmapped under a hold-off call: end the context rather
+             * than let the launcher serve the call a second time. */
+            t->frame[2] = 2; t->frame[3] = CV_CAUSE_REFUSED; t->event = 2;
+            return 0;
+        }
+        if (copy_from_user(signals, (void __user *)(meta + CV_IO_SIGNAL_OFFSET), sizeof signals))
+            signals[0] = ~signals[1];
     }
     /* By id: with the hold off (the negative control) the arena may be gone, or another at the
-     * same address. */
+     * same address. Release before waiting on c->remapping so a fatal signal during another
+     * thread's remap never strands io_busy or either arena hold. */
     t->io_busy = false;
     wake_up_all(&c->io_wait);
     io_release(c, mid); io_release(c, bid);
@@ -2993,15 +3005,22 @@ static int inline_io(struct context *c, struct cv_thread *t, struct file *device
                       r == -ERESTARTNOHAND ? CV_IO_RESTARTNOHAND : CV_IO_EINTR;
         goto fallback;
     }
-    if (put_user(r, &ue->result) || put_user(0ULL, &ue->pending) || put_user(0ULL, &ue->status) ||
-        put_user(0U, (u32 __user *)(meta + CV_IO_SIGNAL_OFFSET + 16))) {
-        /* Only when the block itself was unmapped under a hold-off call: end the context rather
-         * than let the launcher serve the call a second time. */
-        t->frame[2] = 2; t->frame[3] = CV_CAUSE_REFUSED; t->event = 2;
+    ++inline_served;
+    /* As at the ioctl's entry: no step runs while another thread's remap window is open. */
+    while (READ_ONCE(c->remapping) && !signal_pending(current) && signals[0] == signals[1]) {
+        mutex_unlock(&vm_lock);
+        if (wait_event_interruptible(c->remap_wait, !READ_ONCE(c->remapping))) {
+            mutex_lock(&vm_lock);
+            break;
+        }
+        mutex_lock(&vm_lock);
+    }
+    t->frame[28] = 0; t->frame[29] = 0;          /* the reply a0, as the launcher's step->result = 0 */
+    if (READ_ONCE(c->remapping) || signal_pending(current) || signals[0] != signals[1]) {
+        t->frame[3] = CV_IO_DONE;
+        ++inline_stopped;
         return 0;
     }
-    ++inline_served;
-    t->frame[28] = 0; t->frame[29] = 0;          /* the reply a0, as the launcher's step->result = 0 */
     return 1;
 fallback:
     if (file) fput(file);
@@ -3435,10 +3454,11 @@ thread_unwind:
             }
         }
         if (t->inline_reply) {
-            /* a served call whose re-entry a stop condition prevented. Reported as a
-             * quantum, so the launcher neither serves it again nor sends a reply; the next
-             * CV_STEP enters with action 2 (the flag above). */
-            t->frame[2] = 1; t->frame[3] = 0; t->event = 1;
+            /* a served call whose re-entry a stop condition prevented. Return it
+             * with CV_IO_DONE so the launcher publishes any signal accepted on or
+             * after this return without serving the call a second time. */
+            t->inline_reply = false;
+            t->frame[2] = 3; t->frame[3] = CV_IO_DONE; t->event = 3;
             ++inline_stopped;
         }
         if (t->event == 5) {
