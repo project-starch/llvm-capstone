@@ -118,7 +118,9 @@ dev across all nine runtime gates. ON differed in runtime, pin-ahead, pthread
 and step-hooks: 87 additional named failed checks. Pin-specific predicates
 need mode-specific replacements with positive execution witnesses. Four
 point-1 fault/stop stimuli did not inject, and five extra-fault attributions
-remain unresolved. No gate predicate has been relaxed.
+were unresolved in that earlier qualification. The controls below address
+those execution/accounting gaps without relaxing pinned predicates. The
+historical five fault addresses cannot be reconstructed from the old logs.
 
 The earlier instruction-attempt census measured gcc boundary overhead
 48.3 -> 37.2 percent and lbm 3.69 -> 0.70 percent. These are EXPERIMENTAL
@@ -143,4 +145,70 @@ If an unpinned collection refuses a non-present or shared tagged page, node
 allocation now tries fresh-record growth while keeping unswept IDs retired.
 Collection and open still fail closed on unsupported mappings; this does not
 qualify swap/migration pressure or make ON production-ready. All ON results
-remain **EXPERIMENTAL** and the qualification gaps above still apply.
+remain **EXPERIMENTAL**; the controls below and the lane report describe
+which gaps have been exercised and which remain open.
+
+## Single-hart fault-ahead and qualification controls
+
+Unpinned data faults now use the same stream detector, training threshold,
+doubling policy and maximum window as pinned faults. Linux faults in each
+prefetched page without retaining a payload pin. Each window stays inside
+the arena and the validated VMA; stop checks run between batches of at most
+16 pages. Resident PTEs are prediction hints only. They cannot authorize an
+access or replace demand resolution, including a later write/COW fault.
+Only a successfully resolved escape suppresses repeat stream training.
+The repeat-fault bound and all demand-access checks remain active.
+
+`MEMORY_MODE=unpinned` selects separate resolution oracles in
+`../gates/run-arm.sh`. It does not change the pinned oracles. The guest must
+read back unpinned mode; public fault counts must match complete per-address
+event records, and no persistent payload pins may be reported. The fixed
+window policy gate uses the test module with `test_full_window=1`; direct
+and injected stop tests retain real scheduling/deadline checks. Point 1 is
+after the completed demand operation in both modes. A short-fault fixture
+defers an in-step demand attempt and separately truncates prefault batches,
+requiring later demand recovery. `unpinned_checks.py` records resolved
+virtual pages separately from the pin census.
+
+The supported single-hart process contract is refusal: protected `fork()`
+and raw process-clone requests return ENOSYS. The pthread contract exercises
+both routes and then runs the ordinary thread tests. No child namespace,
+independent child free or protected process-COW behavior is claimed. A native
+trusted launcher's test-only sleeping child remains a different stimulus;
+its inherited namespace fd is unusable from the child's different mm.
+
+Additional isolated fixtures:
+
+- Build `mm-probe.c` and `namespace-probe.c` as kernel modules against the
+  exact patched kernel, and `namespace-check.c` with the native RISC-V Linux
+  compiler. Keep the shared `namespace-probe.h` beside both source files. Supply their directory as `UNPINNED_PROBES` and include
+  `unpinned-mm` in `GATES` for the queued driver.
+- The mm fixture invokes this guest's `arch_prepare_to_swap` entry from
+  `/proc/kallsyms`. Tagged backing must return EBUSY and an independently
+  scrubbed/acknowledged page must be accepted. This tests the actual hook;
+  it does not simulate swap pressure or prove a reclaim/OOM bound.
+- The namespace fixture seeds a storage tag while a namespace is open,
+  closes it, verifies the tag survives, then opens a fresh namespace. The
+  tag must disappear while both representation words remain unchanged.
+  The paired negative arm enables `test_skip_namespace_scrub` in the hooks
+  module and must fail that same oracle. It enters no protected domain.
+  Production modules contain no scrub-bypass parameter.
+- `unpinned/test-oracles.py --pin <serial.log> --hooks <serial.log>` requires
+  passing real ON transcripts, then corrupts mode readbacks, fault totals,
+  events, windows, injection counts and batch bounds. Each corruption must
+  be rejected.
+
+These fixtures are trusted test modules for a private guest, not a userspace
+tag-manipulation API. Keep the default OFF until the lane's full qualification
+report, including unresolved cases, has been reviewed. Non-present PTEs and
+shared tagged backing still refuse collection/open; unswept IDs are never
+recycled. SMP, huge pages and KSM remain outside this contract.
+
+
+The ONQ run on the current base executes all 176 full-gate rows and meets the
+lbm/xz quick-census target. The corrected namespace positive/bypass controls
+and actual tagged-swap-hook check pass. OFF's failure sets match its control;
+ON still differs on memcached fixture 24 (an unexpected null-access fault
+where OFF fails to create the trigger). Keep this failure and the default-OFF
+recommendation until it is resolved. See [the ONQ report](../../../../lanes/laneONQ-report.md) for exact
+inputs, results, historical fixture failures and remaining pressure tests.
