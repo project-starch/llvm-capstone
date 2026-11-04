@@ -3,8 +3,8 @@
 Every gate runner loads capstone_vm.ko itself. It passes `unpinned=1` exactly when its
 `--unpinned` flag is given, and echoes the mode the loaded module reports right after each
 insmod, as a `<PREFIX>MEMORY_MODE:<Y|N|A>` line in the guest console. `A` is a module that has no
-`unpinned` parameter (dev before the option existed, a pinned-only build): it is pinned, and the
-only value the pinned mode accepts besides `N`. gates/compare.py reads the same lines back, so a
+`unpinned` parameter (a pinned-only build): it is pinned, and the only value the pinned mode
+accepts besides `N`. gates/compare.py reads the same lines back, so a
 run whose log disagrees with the mode it was asked for is refused rather than compared.
 """
 import re

@@ -116,8 +116,7 @@ What a gate arm runs, and in which mode:
 - `gates/run-arm.sh --mode on|off OUT` runs the nine landing gates (hosted, runtime, nodes, malloc,
   pin-ahead, fp, pthread, step-hooks, memcached) with `--unpinned` for `on` in EVERY runner. Each
   runner loads the module itself, echoes the mode the loaded module reports after each insmod
-  (`<GATE>_MEMORY_MODE:Y|N|A`; `A` is a module without the parameter, i.e. dev before this change,
-  which is pinned) and carries a `memory_mode_verified` check. `compare.py` refuses to compare an
+  (`<GATE>_MEMORY_MODE:Y|N|A`; `A` is a module without the parameter, a pinned-only build) and carries a `memory_mode_verified` check. `compare.py` refuses to compare an
   output with no mode file, a gate with no mode line, or a line that is not the requested mode, and
   `--control-mode` / `--arm-mode` pin the pair (an ON arm is compared with an OFF control).
 - Optional gates for `on`: `unpinned-mm` (the isolated swap-hook and namespace fixtures, needs
