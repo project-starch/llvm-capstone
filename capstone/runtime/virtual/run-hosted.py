@@ -13,6 +13,8 @@ import shutil
 import subprocess
 import sys
 
+import memory_mode
+
 HERE = Path(__file__).resolve().parent
 
 
@@ -28,6 +30,7 @@ def main():
     p.add_argument('--exact-bounds', action=argparse.BooleanOptionalAction, default=False,
                    help="Run QEMU's exact-bounds profile. Option (iii) does not need it; "
                         "it is kept so a suite can be run both ways as a two-sided control.")
+    p.add_argument('--unpinned', action='store_true', help='load the module with unpinned=1 and require it to report so')
     a = p.parse_args()
     a.work.mkdir(parents=True, exist_ok=False)
     stage = a.work / 'stage'
@@ -46,7 +49,8 @@ dmesg -n 1
 echo HOSTED_ARM:native
 ./native-hosted
 echo HOSTED_EXIT:native:$?
-insmod capstone_vm.ko || exit 1
+insmod capstone_vm.ko__MODULE_ARGS__ || exit 1
+__MODE_ECHO__
 echo HOSTED_ARM:virtual
 ./capstone-vexec hosted.dom
 echo HOSTED_EXIT:virtual:$?
@@ -55,7 +59,8 @@ echo HOSTED_EXIT:noreturn:$?
 rmmod capstone_vm
 echo HOSTED_CLEANUP:$?
 echo VIRTUAL_STAGED_DONE
-''')
+'''.replace('__MODULE_ARGS__', memory_mode.args(a.unpinned))
+                              .replace('__MODE_ECHO__', memory_mode.echo('HOSTED_')))
     subprocess.run([sys.executable, str(HERE / 'run-staged.py'), '--qemu', str(a.qemu.resolve()),
                     '--images', str(a.images.resolve()), '--stage', str(stage.resolve()),
                     '--work', str((a.work / 'guest').resolve()), '--timeout', str(a.timeout)
@@ -75,6 +80,7 @@ echo VIRTUAL_STAGED_DONE
     tests['noreturn:exit_zero'] = exits.get('noreturn') == '0'
     tests['noreturn:ran'] = 'HOSTED_NORETURN:41' in log
     tests['module_unloaded'] = 'HOSTED_CLEANUP:0' in log
+    tests['memory_mode_verified'] = memory_mode.verified(log, a.unpinned, 1)
     # The zero-size alloca checks, by name: an image built before them would
     # otherwise pass on the remaining checks.
     tests['virtual_alloca_checks_parsed'] = {
@@ -93,7 +99,7 @@ echo VIRTUAL_STAGED_DONE
     # No checks parsed is a failed run, never an empty pass.
     tests['virtual_checks_parsed'] = len(arms['virtual']) >= 27
     tests['native_checks_parsed'] = len(arms['native']) >= 24
-    result = dict(status='PASS' if all(tests.values()) else 'FAIL',
+    result = dict(status='PASS' if all(tests.values()) else 'FAIL', unpinned=a.unpinned,
                   passed=sum(tests.values()), total=len(tests), tests=tests,
                   exits=exits, sha256={k: sha(v) for k, v in inputs.items()})
     (a.work / 'result.json').write_text(json.dumps(result, indent=2) + '\n')

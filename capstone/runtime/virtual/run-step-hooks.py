@@ -26,6 +26,7 @@ from pathlib import Path
 import re
 import shutil
 import subprocess
+import memory_mode
 import unpinned_checks
 
 HERE = Path(__file__).resolve().parent
@@ -100,7 +101,7 @@ def script(names, instrumented, unpinned=False):
         params, modes = CONFIGS[name][:2]
         params += '' if name.startswith('adapt') else ' fault_ahead_max=0'
         text += f'''insmod capstone_vm.ko {params} {'diag_admit=1' if instrumented else ''} {'unpinned=1' if unpinned else ''} || exit 1
-echo "HOOK_MEMORY_MODE:$(cat /sys/module/capstone_vm/parameters/unpinned)"
+{memory_mode.echo('HOOK_')}
 for mode in {modes}; do
   echo "HOOK_PINS_BEFORE:{name}:$mode:$(pins)"
   echo "HOOK_AHEAD_BEFORE:{name}:$mode:$(ahead | tr '\\n' ' ')"
@@ -241,6 +242,7 @@ def evaluate(log, names, instrumented, completed, unpinned=False):
     expected_runs = sum(len(CONFIGS[n][1].split()) for n in names)
     checks = {'completed': completed, 'all_runs': len(runs) == expected_runs,
               'all_reports': sorted(reports) == sorted(names),
+              'memory_mode_verified': memory_mode.verified(log, unpinned, len(names)),
               'no_contract_failure': 'PIN_FAIL:' not in log and 'MALLOC_FAIL:' not in log,
               'cleanup': len(census) == len(names) and all(
                   s['live_domains'] == s['live_regions'] == s['live_bytes'] == 0 for s in census)}
@@ -413,7 +415,6 @@ def evaluate(log, names, instrumented, completed, unpinned=False):
         for got, low, full in zip(sources('short64', 'walk'), sources('base1', 'walk'),
                                   sources('base64', 'walk')))
     if unpinned:
-        checks['unpinned_mode_verified'] = re.findall(r'^HOOK_MEMORY_MODE:(\w+)$', log, re.M) == ['Y'] * len(names)
         for name in names:
             rep = reports.get(name, {})
             end = ends.get(name)

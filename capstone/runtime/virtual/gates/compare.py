@@ -25,7 +25,15 @@ So every gate is first split into ROWS, the launches it makes, and each row is R
   a server that exited 125-127, or no check line for the case. Every attempt of a case is judged.
 
 A gate with a NOT RUN row on either side is INCOMPLETE, never IDENTICAL; one INCOMPLETE gate makes
-the whole verdict INCOMPLETE. Exit status: 0 IDENTICAL, 1 DIFFERENT, 2 INCOMPLETE, 3 usage.
+the whole verdict INCOMPLETE. Exit status: 0 IDENTICAL, 1 DIFFERENT, 2 INCOMPLETE, 3 usage, 4 REFUSED (a run's memory mode).
+
+MEMORY MODE. run-arm.sh --mode on|off records the requested mode in OUT/mode, and every gate runner
+logs the mode the loaded module reports after each insmod (<GATE>_MEMORY_MODE:Y|N|A, see
+memory_mode.py). compare.py refuses (exit 4, nothing compared) an output that has no mode file, a gate
+that logged no mode line, or a mode line of the other mode than OUT/mode asked for: ON = Y only,
+OFF = N or A (a module without the unpinned parameter). --control-mode / --arm-mode additionally pin
+the pair being compared (a control that is not the OFF arm it should be is as wrong as a log that
+disagrees). `compare.py --check-mode OUT` runs that check on one output (run-arm.sh does, last).
 The logs are read, never the binaries: libc's strerror table contains "Exec format error".
 A row's PASS/FAIL is reported where the runner gives it per row (runtime.json, memcached's checks);
 elsewhere a row that ran is RAN and its outcome is in the gate's FAIL set.
@@ -41,6 +49,9 @@ import json
 import re
 import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+import memory_mode  # noqa: E402
 
 GATES = ["hosted", "runtime", "nodes", "malloc", "pin-ahead", "fp", "pthread", "step-hooks", "memcached"]
 # The rows the runners at dev 976df58996f3 make (compare.py --rows on that commit's gate run; the
@@ -261,6 +272,46 @@ def side(out, gate, ctl):
                 npass=sum(1 for v in checks.values() if v), rows=rows)
 
 
+def mode_lines(out, gate):
+    """The memory-mode values the gate's guest console logged (every insmod prints one)."""
+    g = out / "gates" if (out / "gates").is_dir() else out
+    if gate == "memcached":
+        texts = [read(g / "memcached/guest/serial.log")]
+    elif gate == "runtime":
+        texts = [read(g / "runtime.log")]
+    else:
+        serials = sorted((g / gate).glob("**/serial.log")) if (g / gate).is_dir() else []
+        texts = [read(p) for p in serials] or [read(g / f"{gate}.log")]
+    return [m for text in texts for m in memory_mode.modes(text)]
+
+
+def requested_mode(out):
+    f = out / "mode"
+    word = read(f).strip() if f.is_file() else ""
+    return word if word in ("on", "off") else None
+
+
+def check_mode(out, gates=None):
+    """Problems (a list of strings) between OUT's requested mode and what its gates logged."""
+    want = requested_mode(out)
+    if want is None:
+        return [f"{out}: no mode file (written by run-arm.sh --mode on|off)"]
+    g = out / "gates" if (out / "gates").is_dir() else out
+    summary = read(g / "SUMMARY.txt")
+    ran = [x for x in GATES if re.search(r"^" + x + r"\s+rc=", summary, re.M)]
+    problems = []
+    for gate in (gates or ran):
+        found = mode_lines(out, gate)
+        ok = ("Y",) if want == "on" else ("N", "A")
+        if not found:
+            problems.append(f"{gate}: logged no memory-mode line (mode {want} requested)")
+        elif any(m not in ok for m in found):
+            problems.append(f"{gate}: logged mode {sorted(set(found))} but {want} was requested")
+    if not (gates or ran):
+        problems.append(f"{out}: SUMMARY.txt lists no finished gate")
+    return problems
+
+
 def compare_gate(gate, c, r):
     # A row one side makes is required on the other, and so is every REQUIRED_ROWS row.
     for row in dict.fromkeys(REQUIRED_ROWS.get(gate, []) + list(c["rows"]) + list(r["rows"])):
@@ -283,16 +334,39 @@ def print_rows(out):
 def main():
     if len(sys.argv) == 3 and sys.argv[1] == "--rows":
         print_rows(Path(sys.argv[2])); return 0
+    if len(sys.argv) == 3 and sys.argv[1] == "--check-mode":
+        out = Path(sys.argv[2])
+        problems = check_mode(out)
+        want = requested_mode(out)
+        for gate in GATES:
+            found = mode_lines(out, gate)
+            if found:
+                print(f"MODE {gate}: {len(found)} line(s) {sorted(set(found))} (requested {want})")
+        for x in problems:
+            print("MODE_MISMATCH " + x)
+        return 1 if problems else 0
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("control", type=Path)
     ap.add_argument("arm", type=Path)
     ap.add_argument("--gates", default=" ".join(GATES), help="gates to compare (default: all nine)")
     ap.add_argument("--json", type=Path)
     ap.add_argument("--all-rows", action="store_true", help="print every row, not only the NOT RUN and application rows")
+    ap.add_argument("--control-mode", choices=("on", "off"), help="the memory mode the control must have been run in")
+    ap.add_argument("--arm-mode", choices=("on", "off"), help="the memory mode the arm must have been run in")
     a = ap.parse_args()
     for d in (a.control, a.arm):
         if not d.is_dir():
             print(f"compare.py: no directory {d}", file=sys.stderr); return 3
+    refused = []
+    for label, d, pinned in (("control", a.control, a.control_mode), ("arm", a.arm, a.arm_mode)):
+        refused += [f"{label}: {x}" for x in check_mode(d, a.gates.split() or None)]
+        if pinned and requested_mode(d) != pinned:
+            refused.append(f"{label}: run in mode {requested_mode(d)}, {pinned} required")
+    if refused and a.gates.split():
+        for x in refused:
+            print("REFUSED " + x)
+        print("VERDICT: REFUSED (memory mode)")
+        return 4
     verdicts = {}; record = {}
     if not a.gates.split():
         print("compare.py: no gates selected", file=sys.stderr); return 3

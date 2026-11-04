@@ -9,6 +9,8 @@ import shutil
 import subprocess
 import sys
 
+import memory_mode
+
 HERE = Path(__file__).resolve().parent
 
 
@@ -52,7 +54,7 @@ pins() { echo 1 > /proc/sys/vm/stat_refresh; grep -E "^nr_foll_pin_(acquired|rel
 dmesg -n 1
 echo "PTHREAD_PINS_BEFORE:$(pins)"
 insmod capstone_vm.ko ''' + ('diag_admit=1' if instrumented else '') + (' unpinned=1' if a.unpinned else '') + ''' || exit 1
-echo "PTHREAD_MEMORY_MODE:$(cat /sys/module/capstone_vm/parameters/unpinned)"
+''' + memory_mode.echo('PTHREAD_') + '''
 CAPSTONE_EXEC_DIAGNOSTICS=1 CAPSTONE_VM_STATS=1 CAPSTONE_VM_STATS_MARK=1 CAPSTONE_VM_GRANTS=1 ./capstone-vexec pthread.dom
 echo PTHREAD_EXIT:$?
 dmesg | grep -E "capstone_vm: |CAPSTONE_VM_STATS_MARK" | sed "s/^/PTHREAD_DIAG:/"
@@ -78,6 +80,7 @@ echo VIRTUAL_STAGED_DONE
     main_log, _, fallback_log = log.partition('PTHREAD_FALLBACK_BEGIN\n')
     checks = {name: log.count('VIRTUAL_PTHREAD_OK ' + name) == 1 for name in
               ('unsupported_clone_refused', 'protected_fork_refused', 'tls mutex cond tagged_join', 'timed_wait', 'independent_blocking_io', 'private_epoll_events', 'shared_tls_transport', '64_joined_lifetimes', 'concurrent_allocator_remap', 'transport_lifetime', 'transport_identity', 'exit_word_untouched_stack', 'context_identity')}
+    checks['memory_mode_verified'] = memory_mode.verified(log, a.unpinned, 1)
     # The exit word's page (VIRTUAL_PTHREAD_WORD, in the main stack: the reg 2 grant) must have
     # been admitted by the launcher's CV_TOUCH before its store: a `touch` line for that arena and
     # page index. Without CV_TOUCH (the commit before it) the line is absent and this fails.
@@ -126,7 +129,6 @@ echo VIRTUAL_STAGED_DONE
         checks['stack_sweep_complete'] = bool(seen_stack and sweep_ok)
         checks['pages_match_census'] = bool(stats and after_mark and int(stats.group(1)) == alive)
     if a.unpinned:
-        checks['unpinned_mode_verified'] = log.count('PTHREAD_MEMORY_MODE:Y') == 1
         checks['exit_word_resolved'] = checks.pop('exit_word_admitted') is True
         del checks['stack_sweep_complete']
         raw = re.findall(r'unpinned retire arena 0x([0-9a-f]+) events=(\d+) resolves=(\d+) touch=(\d+)', main_log)

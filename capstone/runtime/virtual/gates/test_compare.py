@@ -62,13 +62,24 @@ def memcached(g, drop_job=None, skip=None, retry=None):
     (g / "memcached.log").write_text("\n".join(log) + "\n")
 
 
-def run(gate, make_ctl, make_arm):
+def stamp(out, mode, line):
+    """What run-arm.sh and the runners leave: OUT/mode, and a memory-mode line in each guest log."""
+    if mode:
+        (out / "mode").write_text(mode + "\n")
+    if line:
+        for f in list((out / "gates").glob("*.log")) + list((out / "gates").glob("**/serial.log")):
+            f.write_text(f.read_text() + line + "\n")
+
+
+def run(gate, make_ctl, make_arm, ctl_mode=("off", "TEST_MEMORY_MODE:N"), arm_mode=("off", "TEST_MEMORY_MODE:N"),
+        extra=()):
     with tempfile.TemporaryDirectory() as t:
-        for name, make in (("ctl", make_ctl), ("arm", make_arm)):
+        for name, make, mode in (("ctl", make_ctl, ctl_mode), ("arm", make_arm, arm_mode)):
             g = Path(t) / name / "gates"
             g.mkdir(parents=True)
             make(g)
-        return subprocess.run([sys.executable, str(COMPARE), f"{t}/ctl", f"{t}/arm", "--gates", gate],
+            stamp(Path(t) / name, *mode)
+        return subprocess.run([sys.executable, str(COMPARE), f"{t}/ctl", f"{t}/arm", "--gates", gate, *extra],
                               capture_output=True, text=True).returncode
 
 
@@ -126,12 +137,31 @@ def main():
                                capture_output=True).returncode
     failed = int(empty != 3)
     print(f"{'PASS' if empty == 3 else 'FAIL'} no gates selected: exit {empty}, want 3")
+    # The memory mode: an arm run ON is compared with an OFF control (exit 0 when its logs say Y),
+    # and a log that disagrees with the requested mode, no mode line, or no mode file is refused.
+    on, off = ("on", "TEST_MEMORY_MODE:Y"), ("off", "TEST_MEMORY_MODE:N")
+    modes = [
+        ("ON arm, logs say Y", dict(arm_mode=on, extra=("--arm-mode", "on")), 0),
+        ("OFF control without the parameter (A)", dict(ctl_mode=("off", "TEST_MEMORY_MODE:A")), 0),
+        ("ON requested, log says N", dict(arm_mode=("on", "TEST_MEMORY_MODE:N")), 4),
+        ("OFF requested, log says Y", dict(arm_mode=("off", "TEST_MEMORY_MODE:Y")), 4),
+        ("ON requested, one line of two says N", dict(arm_mode=("on", "TEST_MEMORY_MODE:Y\nTEST_MEMORY_MODE:N")), 4),
+        ("no mode line", dict(arm_mode=("off", None)), 4),
+        ("no mode file", dict(arm_mode=(None, "TEST_MEMORY_MODE:N")), 4),
+        ("arm required ON but run OFF", dict(extra=("--arm-mode", "on")), 4),
+    ]
+    for name, kwargs, want in modes:
+        got = run("fp", fp, fp, **kwargs)
+        ok = got == want
+        failed += not ok
+        print(f"{'PASS' if ok else 'FAIL'} memory mode: {name}: exit {got}, want {want}")
     for name, gate, c, a, want in cases:
         got = run(gate, c, a)
         ok = got == want
         failed += not ok
         print(f"{'PASS' if ok else 'FAIL'} {name}: exit {got}, want {want}")
-    print(f"{len(cases) + 1 - failed}/{len(cases) + 1} passed")
+    total = len(cases) + len(modes) + 1
+    print(f"{total - failed}/{total} passed")
     return 1 if failed else 0
 
 

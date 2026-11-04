@@ -13,6 +13,7 @@ import subprocess
 import tempfile
 import time
 from qemu_lock import qemu_lock
+import memory_mode
 
 HERE = Path(__file__).resolve().parent
 
@@ -33,7 +34,7 @@ PARALLEL_BLOCK = (
 SCRIPT = r'''#!/bin/sh
 cd /mnt/vm || exit 1
 insmod capstone_vm.ko __MODULE_ARGS__ || exit 1
-echo "VM_MEMORY_MODE:$(cat /sys/module/capstone_vm/parameters/unpinned)"
+__MODE_ECHO__
 # The module's own lines, read from the kernel RING BUFFER rather than relied on reaching the
 # console. The console level does not filter the buffer. run.py itself never lowers that level --
 # but six sibling runners do (`dmesg -n 1` in run-malloc/-hosted/-ports/-safety/-fp/-pthreads), and
@@ -202,6 +203,7 @@ def main():
     # collapses with its leading space, so no trailing whitespace is introduced either.
     script = SCRIPT.replace(' __MODULE_ARGS__',
                             (' ' + a.module_args.strip()) if a.module_args.strip() else '')
+    script = script.replace('__MODE_ECHO__', memory_mode.echo('VM_'))
     if a.skip_recycling:
         script = script.replace(' sparse-churn', '').replace(' sparse-stale', '')
     if a.parallel_last:
@@ -346,8 +348,8 @@ def main():
     tests['fault_ahead_policy_restored'] = len(policy) == 2 and policy == restored
     tests['unused_pages_not_populated'] = len(stats) >= 4 and stats[2]['peak'] - stats[2]['pages'] < 32
     tests['shared_heap_pages_released'] = len(stats) >= 5 and stats[4]['peak'] - stats[4]['pages'] >= 768
+    tests['memory_mode_verified'] = memory_mode.verified('\n'.join(lines), a.unpinned, 1)
     if a.unpinned:
-        tests['unpinned_mode_verified'] = lines.count('VM_MEMORY_MODE:Y') == 1
         del tests['linux_pages_released'], tests['shared_heap_pages_released']
         tests['linux_payload_unpinned'] = (len(stats) == expected_stats and
             len(demand_stats) == 3 and all(s['pages'] == s['peak'] == 0 for s in stats))

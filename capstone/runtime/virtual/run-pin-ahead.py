@@ -16,6 +16,7 @@ from pathlib import Path
 import re
 import shutil
 import subprocess
+import memory_mode
 import unpinned_checks
 
 HERE = Path(__file__).resolve().parent
@@ -39,7 +40,7 @@ dmesg -n 1
 dmesg -c > /dev/null
 for w in ''' + ' '.join(map(str, WINDOWS)) + '''; do
   insmod capstone_vm.ko pin_ahead_pages=$w fault_ahead_max=0 @DIAG_PARAM@ || exit 1
-  echo "PIN_MEMORY_MODE:$(cat /sys/module/capstone_vm/parameters/unpinned)"
+  @MODE_ECHO@
   for mode in ''' + ' '.join(MODES) + '''; do
     ./capstone-vexec pin.dom "$mode" > /tmp/pin.out 2>&1
     echo PIN_EXIT:$w:$mode:$?
@@ -146,6 +147,7 @@ def evaluate(log, completed, instrumented, unpinned=False):
     census = [json.loads(l) for l in log.splitlines() if l.startswith('{"version":1,')]
     checks = {'completed': completed,
               'all_runs': len(runs) == len(WINDOWS) * len(MODES),
+              'memory_mode_verified': memory_mode.verified(log, unpinned, len(WINDOWS)),
               'no_contract_failure': 'PIN_FAIL:' not in log}
     region, deltas = {}, {}
     for w in WINDOWS:
@@ -196,7 +198,6 @@ def evaluate(log, completed, instrumented, unpinned=False):
         s['live_domains'] == s['live_regions'] == s['live_bytes'] == 0 for s in census)
     if unpinned:
         unpinned_checks.attach(log, runs)
-        checks['unpinned_mode_verified'] = re.findall(r'^PIN_MEMORY_MODE:(\w+)$', log, re.M) == ['Y'] * len(WINDOWS)
         for w in WINDOWS:
             for mode, expect in EXPECT_REGION.items():
                 r = runs.get((w, mode))
@@ -246,7 +247,7 @@ def main():
                       (inputs['module'], 'capstone_vm.ko')):
         shutil.copy2(src, stage/name)
     instrumented = b'diag_admit' in inputs['module'].read_bytes()
-    gate = SCRIPT.replace('@DIAG_PARAM@', ('diag_admit=1' if instrumented else '') + (' unpinned=1' if a.unpinned else ''))
+    gate = SCRIPT.replace('@MODE_ECHO@', memory_mode.echo('PIN_')).replace('@DIAG_PARAM@', ('diag_admit=1' if instrumented else '') + (' unpinned=1' if a.unpinned else ''))
     if a.unpinned:
         if b'test_full_window' not in inputs['module'].read_bytes():
             p.error('--unpinned requires the hooks module for deterministic window policy')
