@@ -6,7 +6,8 @@
 # NO DATA (the one-L1D-miss FINDING is not a blocker, Addendum 5), no HARD STOP, and it did not run SPEC itself.
 main() {
   set -u
-  local H=${CAPSTONE_WORK:-/mnt/hdd/$USER/capstone} O=${C5_O:-$H/perf/c5a-b2} L
+  local H=${CAPSTONE_WORK:-/mnt/hdd/$USER/capstone}
+  local O=${C5_O:-$H/perf/c5a-b2} L
   L=$O/c5a-spec-b2.log
   local C5=caplifive_vp2c_1fc2cd5aa C5SHA=5b7b1edcd9bcd2521bd4bd59107747e268487056f1bfcd96403fd612eeb6d764
   local B3=caplifive_vp2c_e7af48457 B3SHA=d6ed97b6d341ea058d497838e43558900823c36591c44046d3cfc0b7f55b423b
