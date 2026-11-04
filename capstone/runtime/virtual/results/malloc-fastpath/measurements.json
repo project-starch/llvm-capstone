@@ -1,0 +1,2514 @@
+{
+  "control": "a476237c079ba48931eb1def25a1e8ffd474fff8",
+  "candidate": "7c5163dab67c8fd4f68535c32b97ccfaa02fb0a2",
+  "budget_method": "exclusive instruction attempts / first-instruction attempts; matched slices; not full SPEC passes",
+  "deeper_budgets": {
+    "control-cap": {
+      "exe": "perlbench_r_base.qcade29616a7d8ec3127d0",
+      "program": 4539092756,
+      "api": {
+        "malloc": 3304,
+        "calloc": 1384,
+        "realloc": 991,
+        "free": 1634,
+        "aligned_alloc": 0,
+        "posix_memalign": 0,
+        "malloc_usable_size": 0
+      },
+      "heap": 3961602,
+      "primitives": {
+        "allocate": {
+          "atomic": 4692,
+          "fence": 4690
+        },
+        "publish": {
+          "CDERIVE": 4690
+        },
+        "realloc": {
+          "atomic": 989,
+          "CDERIVE": 989,
+          "fence": 989,
+          "CREVOKE": 226
+        },
+        "free": {
+          "atomic": 1634,
+          "CREVOKE": 1634,
+          "fence": 1634
+        },
+        "checked": {
+          "validation_load": 2623
+        },
+        "alloc_slot": {
+          "atomic": 1484
+        },
+        "nontrivial_free": {
+          "atomic": 1494
+        },
+        "__capstone_malloc_prepare_free": {
+          "CREVOKE": 763
+        },
+        "__capstone_malloc_nested_release": {
+          "CREVOKE": 77
+        },
+        "__capstone_malloc_group_nested": {
+          "CDERIVE": 369
+        },
+        "__capstone_malloc_group_map": {
+          "CDERIVE": 286
+        },
+        "__capstone_malloc_group_unmap": {
+          "CREVOKE": 42
+        }
+      },
+      "functions": {
+        "malloc": [
+          16520,
+          3304
+        ],
+        "allocate": [
+          319575,
+          4690
+        ],
+        "publish": [
+          265178,
+          4690
+        ],
+        "calloc": [
+          46608,
+          1384
+        ],
+        "realloc": [
+          145675,
+          991
+        ],
+        "free": [
+          119282,
+          1634
+        ],
+        "checked": [
+          99918,
+          2623
+        ],
+        "__capstone_mallocng_malloc": [
+          587172,
+          5453
+        ],
+        "enframe": [
+          799788,
+          5822
+        ],
+        "alloc_slot": [
+          348382,
+          1510
+        ],
+        "__capstone_mallocng_free_slot": [
+          287162,
+          2397
+        ],
+        "__capstone_mallocng_free": [
+          15260,
+          763
+        ],
+        "__capstone_mallocng_realloc": [
+          119395,
+          989
+        ],
+        "nontrivial_free": [
+          62234,
+          848
+        ],
+        "__capstone_malloc_prepare_free": [
+          26765,
+          763
+        ],
+        "__capstone_malloc_slot_take": [
+          123402,
+          5822
+        ],
+        "__capstone_malloc_slot_key": [
+          224180,
+          6048
+        ],
+        "__capstone_malloc_slot_release": [
+          79427,
+          2397
+        ],
+        "__capstone_malloc_slot_start": [
+          6772,
+          3386
+        ],
+        "__capstone_malloc_nested_release": [
+          2875,
+          77
+        ],
+        "__capstone_malloc_group_nested": [
+          97560,
+          369
+        ],
+        "__capstone_malloc_group_map": [
+          80695,
+          189
+        ],
+        "__capstone_malloc_group_unmap": [
+          7780,
+          42
+        ],
+        "__capstone_malloc_slots_new": [
+          35736,
+          558
+        ],
+        "__capstone_malloc_slots_free": [
+          3706,
+          119
+        ],
+        "__malloc_alloc_meta": [
+          40555,
+          558
+        ],
+        "memset": [
+          257450,
+          5317
+        ],
+        "memcpy": [
+          479160,
+          4564
+        ]
+      }
+    },
+    "control-rv64": {
+      "exe": "perlbench_r_base.rv64",
+      "program": 2996561975,
+      "api": {
+        "malloc": 4586,
+        "calloc": 1374,
+        "realloc": 988,
+        "free": 1622,
+        "aligned_alloc": 0,
+        "posix_memalign": 0,
+        "malloc_usable_size": 0
+      },
+      "heap": 1606290,
+      "functions": {
+        "malloc": [
+          4586,
+          4586
+        ],
+        "calloc": [
+          128528,
+          1374
+        ],
+        "realloc": [
+          988,
+          988
+        ],
+        "free": [
+          1622,
+          1622
+        ],
+        "__libc_malloc_impl": [
+          355625,
+          5308
+        ],
+        "__libc_free": [
+          164077,
+          2342
+        ],
+        "__libc_realloc": [
+          117671,
+          988
+        ],
+        "enframe": [
+          362101,
+          5698
+        ],
+        "alloc_slot": [
+          209998,
+          1466
+        ],
+        "get_meta": [
+          118983,
+          2460
+        ],
+        "nontrivial_free": [
+          48856,
+          854
+        ],
+        "__malloc_alloc_meta": [
+          18611,
+          528
+        ],
+        "__malloc_allzerop": [
+          74644,
+          1374
+        ],
+        "memset": [
+          337784,
+          5850
+        ],
+        "memcpy": [
+          812129,
+          20756
+        ]
+      }
+    },
+    "step1-cap": {
+      "exe": "perlbench_r_base.qc856a7631e0c032476fba",
+      "program": 4539043843,
+      "api": {
+        "malloc": 3304,
+        "calloc": 1384,
+        "realloc": 991,
+        "free": 1634,
+        "aligned_alloc": 0,
+        "posix_memalign": 0,
+        "malloc_usable_size": 0
+      },
+      "heap": 3912792,
+      "primitives": {
+        "allocate": {
+          "atomic": 4692,
+          "fence": 4690
+        },
+        "publish": {
+          "CDERIVE": 4690
+        },
+        "realloc": {
+          "atomic": 989,
+          "CDERIVE": 989,
+          "fence": 989,
+          "CREVOKE": 226
+        },
+        "free": {
+          "atomic": 1634,
+          "CREVOKE": 1634,
+          "fence": 1634
+        },
+        "checked": {
+          "validation_load": 2623
+        },
+        "alloc_slot": {
+          "atomic": 1484
+        },
+        "nontrivial_free": {
+          "atomic": 1494
+        },
+        "__capstone_malloc_prepare_free": {
+          "CREVOKE": 763
+        },
+        "__capstone_malloc_nested_release": {
+          "CREVOKE": 77
+        },
+        "__capstone_malloc_group_nested": {
+          "CDERIVE": 369
+        },
+        "__capstone_malloc_group_map": {
+          "CDERIVE": 286
+        },
+        "__capstone_malloc_group_unmap": {
+          "CREVOKE": 42
+        }
+      },
+      "functions": {
+        "malloc": [
+          16520,
+          3304
+        ],
+        "allocate": [
+          319575,
+          4690
+        ],
+        "publish": [
+          265178,
+          4690
+        ],
+        "calloc": [
+          46608,
+          1384
+        ],
+        "realloc": [
+          145675,
+          991
+        ],
+        "free": [
+          119282,
+          1634
+        ],
+        "checked": [
+          99918,
+          2623
+        ],
+        "__capstone_mallocng_malloc": [
+          587172,
+          5453
+        ],
+        "enframe": [
+          750978,
+          5822
+        ],
+        "alloc_slot": [
+          348382,
+          1510
+        ],
+        "__capstone_mallocng_free_slot": [
+          287162,
+          2397
+        ],
+        "__capstone_mallocng_free": [
+          15260,
+          763
+        ],
+        "__capstone_mallocng_realloc": [
+          119395,
+          989
+        ],
+        "nontrivial_free": [
+          62234,
+          848
+        ],
+        "__capstone_malloc_prepare_free": [
+          26765,
+          763
+        ],
+        "__capstone_malloc_slot_take": [
+          123402,
+          5822
+        ],
+        "__capstone_malloc_slot_key": [
+          224180,
+          6048
+        ],
+        "__capstone_malloc_slot_release": [
+          79427,
+          2397
+        ],
+        "__capstone_malloc_slot_start": [
+          6772,
+          3386
+        ],
+        "__capstone_malloc_nested_release": [
+          2875,
+          77
+        ],
+        "__capstone_malloc_group_nested": [
+          97560,
+          369
+        ],
+        "__capstone_malloc_group_map": [
+          80695,
+          189
+        ],
+        "__capstone_malloc_group_unmap": [
+          7780,
+          42
+        ],
+        "__capstone_malloc_slots_new": [
+          35736,
+          558
+        ],
+        "__capstone_malloc_slots_free": [
+          3706,
+          119
+        ],
+        "__malloc_alloc_meta": [
+          40555,
+          558
+        ],
+        "memset": [
+          257450,
+          5317
+        ],
+        "memcpy": [
+          479155,
+          4564
+        ]
+      }
+    },
+    "step1-rv64": {
+      "exe": "perlbench_r_base.rv64",
+      "program": 2996561975,
+      "api": {
+        "malloc": 4586,
+        "calloc": 1374,
+        "realloc": 988,
+        "free": 1622,
+        "aligned_alloc": 0,
+        "posix_memalign": 0,
+        "malloc_usable_size": 0
+      },
+      "heap": 1606290,
+      "primitives": {
+        "alloc_slot": {
+          "atomic": 1432
+        },
+        "nontrivial_free": {
+          "atomic": 1440
+        }
+      },
+      "functions": {
+        "malloc": [
+          4586,
+          4586
+        ],
+        "calloc": [
+          128528,
+          1374
+        ],
+        "realloc": [
+          988,
+          988
+        ],
+        "free": [
+          1622,
+          1622
+        ],
+        "__libc_malloc_impl": [
+          355625,
+          5308
+        ],
+        "__libc_free": [
+          164077,
+          2342
+        ],
+        "__libc_realloc": [
+          117671,
+          988
+        ],
+        "enframe": [
+          362101,
+          5698
+        ],
+        "alloc_slot": [
+          209998,
+          1466
+        ],
+        "get_meta": [
+          118983,
+          2460
+        ],
+        "nontrivial_free": [
+          48856,
+          854
+        ],
+        "__malloc_alloc_meta": [
+          18611,
+          528
+        ],
+        "__malloc_allzerop": [
+          74644,
+          1374
+        ],
+        "memset": [
+          337784,
+          5850
+        ],
+        "memcpy": [
+          812129,
+          20756
+        ]
+      }
+    }
+  },
+  "stages": {
+    "control": {
+      "__capstone_malloc_slot_take": {
+        "attempts": 123402,
+        "entries": 5822,
+        "stages": [
+          {
+            "stage": "entry and clean flags",
+            "attempts": 81508,
+            "per_entry": 14.0,
+            "offset_start": 0,
+            "offset_end": 56
+          },
+          {
+            "stage": "reuse scrub handoff and flag clear",
+            "attempts": 1140,
+            "per_entry": 0.19580900034352455,
+            "offset_start": 56,
+            "offset_end": 96
+          },
+          {
+            "stage": "return parent",
+            "attempts": 40754,
+            "per_entry": 7.0,
+            "offset_start": 96,
+            "offset_end": 124
+          }
+        ]
+      },
+      "__capstone_malloc_slot_key": {
+        "attempts": 224180,
+        "entries": 6048,
+        "stages": [
+          {
+            "stage": "last result, nominal size and key check",
+            "attempts": 72576,
+            "per_entry": 12.0,
+            "offset_start": 0,
+            "offset_end": 48
+          },
+          {
+            "stage": "hash constant and old-key check",
+            "attempts": 64042,
+            "per_entry": 10.588955026455027,
+            "offset_start": 48,
+            "offset_end": 92
+          },
+          {
+            "stage": "unlink old key",
+            "attempts": 0,
+            "per_entry": 0.0,
+            "offset_start": 92,
+            "offset_end": 192
+          },
+          {
+            "stage": "index insert",
+            "attempts": 81514,
+            "per_entry": 13.477843915343914,
+            "offset_start": 192,
+            "offset_end": 248
+          },
+          {
+            "stage": "return and failure",
+            "attempts": 6048,
+            "per_entry": 1.0,
+            "offset_start": 248,
+            "offset_end": 256
+          }
+        ]
+      },
+      "__capstone_malloc_slot_release": {
+        "attempts": 79427,
+        "entries": 2397,
+        "stages": [
+          {
+            "stage": "key check and hash bucket",
+            "attempts": 52734,
+            "per_entry": 22.0,
+            "offset_start": 0,
+            "offset_end": 88
+          },
+          {
+            "stage": "find record in chain",
+            "attempts": 12311,
+            "per_entry": 5.1360033375052145,
+            "offset_start": 88,
+            "offset_end": 132
+          },
+          {
+            "stage": "unlink and clear key",
+            "attempts": 9588,
+            "per_entry": 4.0,
+            "offset_start": 132,
+            "offset_end": 148
+          },
+          {
+            "stage": "clear kind and return",
+            "attempts": 4794,
+            "per_entry": 2.0,
+            "offset_start": 148,
+            "offset_end": 160
+          }
+        ]
+      },
+      "free": {
+        "attempts": 119282,
+        "entries": 1634,
+        "stages": [
+          {
+            "stage": "entry and errno save",
+            "attempts": 29412,
+            "per_entry": 18.0,
+            "offset_start": 0,
+            "offset_end": 72
+          },
+          {
+            "stage": "heap lock",
+            "attempts": 24510,
+            "per_entry": 15.0,
+            "offset_start": 72,
+            "offset_end": 144
+          },
+          {
+            "stage": "checked handoff",
+            "attempts": 8170,
+            "per_entry": 5.0,
+            "offset_start": 144,
+            "offset_end": 164
+          },
+          {
+            "stage": "kind check, CREVOKE and child clear",
+            "attempts": 14706,
+            "per_entry": 9.0,
+            "offset_start": 164,
+            "offset_end": 212
+          },
+          {
+            "stage": "recover slot cursor and free_slot handoff",
+            "attempts": 13072,
+            "per_entry": 8.0,
+            "offset_start": 212,
+            "offset_end": 244
+          },
+          {
+            "stage": "unlock and errno restore",
+            "attempts": 11438,
+            "per_entry": 7.0,
+            "offset_start": 244,
+            "offset_end": 272
+          },
+          {
+            "stage": "return",
+            "attempts": 17974,
+            "per_entry": 11.0,
+            "offset_start": 272,
+            "offset_end": 316
+          }
+        ]
+      },
+      "__capstone_mallocng_malloc": {
+        "attempts": 587172,
+        "entries": 5453,
+        "stages": [
+          {
+            "stage": "entry, request checks and large path",
+            "attempts": 114513,
+            "per_entry": 21.0,
+            "offset_start": 0,
+            "offset_end": 920
+          },
+          {
+            "stage": "size class",
+            "attempts": 96072,
+            "per_entry": 17.618191821015955,
+            "offset_start": 920,
+            "offset_end": 1140
+          },
+          {
+            "stage": "backend lock check",
+            "attempts": 49077,
+            "per_entry": 9.0,
+            "offset_start": 1140,
+            "offset_end": 1208
+          },
+          {
+            "stage": "active group selection",
+            "attempts": 91507,
+            "per_entry": 16.781037960755548,
+            "offset_start": 1208,
+            "offset_end": 1644
+          },
+          {
+            "stage": "available slot and alloc_slot handoff",
+            "attempts": 88772,
+            "per_entry": 16.2794791857693,
+            "offset_start": 1644,
+            "offset_end": 1780
+          },
+          {
+            "stage": "failure path",
+            "attempts": 0,
+            "per_entry": 0.0,
+            "offset_start": 1780,
+            "offset_end": 1968
+          },
+          {
+            "stage": "unlock, enframe handoff and return",
+            "attempts": 147231,
+            "per_entry": 27.0,
+            "offset_start": 1968,
+            "offset_end": 2076
+          }
+        ]
+      },
+      "__capstone_mallocng_free_slot": {
+        "attempts": 287162,
+        "entries": 2397,
+        "stages": [
+          {
+            "stage": "entry and stride",
+            "attempts": 58146,
+            "per_entry": 24.25782227784731,
+            "offset_start": 0,
+            "offset_end": 324
+          },
+          {
+            "stage": "slot index and slot_start handoff",
+            "attempts": 14382,
+            "per_entry": 6.0,
+            "offset_start": 324,
+            "offset_end": 348
+          },
+          {
+            "stage": "prefix and footer validation",
+            "attempts": 58272,
+            "per_entry": 24.310387984981226,
+            "offset_start": 348,
+            "offset_end": 484
+          },
+          {
+            "stage": "prefix invalidation and slot_release handoff",
+            "attempts": 47520,
+            "per_entry": 19.824780976220275,
+            "offset_start": 484,
+            "offset_end": 572
+          },
+          {
+            "stage": "free mask and group-release path",
+            "attempts": 84872,
+            "per_entry": 35.40759282436379,
+            "offset_start": 572,
+            "offset_end": 940
+          },
+          {
+            "stage": "return",
+            "attempts": 23970,
+            "per_entry": 10.0,
+            "offset_start": 940,
+            "offset_end": 980
+          }
+        ]
+      },
+      "publish": {
+        "attempts": 265178,
+        "entries": 4690,
+        "stages": [
+          {
+            "stage": "result record binding and clean flag",
+            "attempts": 96338,
+            "per_entry": 20.541151385927506,
+            "offset_start": 0,
+            "offset_end": 240
+          },
+          {
+            "stage": "replace old child if present",
+            "attempts": 9380,
+            "per_entry": 2.0,
+            "offset_start": 240,
+            "offset_end": 256
+          },
+          {
+            "stage": "record fields and node budget",
+            "attempts": 98490,
+            "per_entry": 21.0,
+            "offset_start": 256,
+            "offset_end": 340
+          },
+          {
+            "stage": "derive checks, CDERIVE and return",
+            "attempts": 60970,
+            "per_entry": 13.0,
+            "offset_start": 340,
+            "offset_end": 400
+          }
+        ]
+      },
+      "checked": {
+        "attempts": 99918,
+        "entries": 2623,
+        "stages": [
+          {
+            "stage": "entry",
+            "attempts": 10492,
+            "per_entry": 4.0,
+            "offset_start": 0,
+            "offset_end": 16
+          },
+          {
+            "stage": "caller capability validation load",
+            "attempts": 2623,
+            "per_entry": 1.0,
+            "offset_start": 16,
+            "offset_end": 20
+          },
+          {
+            "stage": "address lookup and public record check",
+            "attempts": 76311,
+            "per_entry": 29.093023255813954,
+            "offset_start": 20,
+            "offset_end": 148
+          },
+          {
+            "stage": "return and failure path",
+            "attempts": 10492,
+            "per_entry": 4.0,
+            "offset_start": 148,
+            "offset_end": 176
+          }
+        ]
+      },
+      "enframe": {
+        "attempts": 799788,
+        "entries": 5822,
+        "stages": [
+          {
+            "stage": "entry and slot record",
+            "attempts": 122262,
+            "per_entry": 21.0,
+            "offset_start": 0,
+            "offset_end": 84
+          },
+          {
+            "stage": "stride",
+            "attempts": 78616,
+            "per_entry": 13.503263483339058,
+            "offset_start": 84,
+            "offset_end": 380
+          },
+          {
+            "stage": "slot_take handoff",
+            "attempts": 29110,
+            "per_entry": 5.0,
+            "offset_start": 380,
+            "offset_end": 400
+          },
+          {
+            "stage": "initial prefix and slack",
+            "attempts": 104012,
+            "per_entry": 17.865338371693575,
+            "offset_start": 400,
+            "offset_end": 500
+          },
+          {
+            "stage": "offset cycle",
+            "attempts": 79038,
+            "per_entry": 13.575747165922364,
+            "offset_start": 500,
+            "offset_end": 560
+          },
+          {
+            "stage": "representable offset",
+            "attempts": 44367,
+            "per_entry": 7.62057712126417,
+            "offset_start": 560,
+            "offset_end": 820
+          },
+          {
+            "stage": "offset prefix",
+            "attempts": 21068,
+            "per_entry": 3.618687736173136,
+            "offset_start": 820,
+            "offset_end": 912
+          },
+          {
+            "stage": "final prefix and footer",
+            "attempts": 216519,
+            "per_entry": 37.18979732050842,
+            "offset_start": 912,
+            "offset_end": 1100
+          },
+          {
+            "stage": "slot_key handoff",
+            "attempts": 40754,
+            "per_entry": 7.0,
+            "offset_start": 1100,
+            "offset_end": 1128
+          },
+          {
+            "stage": "return",
+            "attempts": 64042,
+            "per_entry": 11.0,
+            "offset_start": 1128,
+            "offset_end": 1172
+          }
+        ]
+      }
+    },
+    "step1": {
+      "__capstone_malloc_slot_take": {
+        "attempts": 123402,
+        "entries": 5822,
+        "stages": [
+          {
+            "stage": "entry and clean flags",
+            "attempts": 81508,
+            "per_entry": 14.0,
+            "offset_start": 0,
+            "offset_end": 56
+          },
+          {
+            "stage": "reuse scrub handoff and flag clear",
+            "attempts": 1140,
+            "per_entry": 0.19580900034352455,
+            "offset_start": 56,
+            "offset_end": 96
+          },
+          {
+            "stage": "return parent",
+            "attempts": 40754,
+            "per_entry": 7.0,
+            "offset_start": 96,
+            "offset_end": 124
+          }
+        ]
+      },
+      "__capstone_malloc_slot_key": {
+        "attempts": 224180,
+        "entries": 6048,
+        "stages": [
+          {
+            "stage": "last result, nominal size and key check",
+            "attempts": 72576,
+            "per_entry": 12.0,
+            "offset_start": 0,
+            "offset_end": 48
+          },
+          {
+            "stage": "hash constant and old-key check",
+            "attempts": 64042,
+            "per_entry": 10.588955026455027,
+            "offset_start": 48,
+            "offset_end": 92
+          },
+          {
+            "stage": "unlink old key",
+            "attempts": 0,
+            "per_entry": 0.0,
+            "offset_start": 92,
+            "offset_end": 192
+          },
+          {
+            "stage": "index insert",
+            "attempts": 81514,
+            "per_entry": 13.477843915343914,
+            "offset_start": 192,
+            "offset_end": 248
+          },
+          {
+            "stage": "return and failure",
+            "attempts": 6048,
+            "per_entry": 1.0,
+            "offset_start": 248,
+            "offset_end": 256
+          }
+        ]
+      },
+      "__capstone_malloc_slot_release": {
+        "attempts": 79427,
+        "entries": 2397,
+        "stages": [
+          {
+            "stage": "key check and hash bucket",
+            "attempts": 52734,
+            "per_entry": 22.0,
+            "offset_start": 0,
+            "offset_end": 88
+          },
+          {
+            "stage": "find record in chain",
+            "attempts": 12311,
+            "per_entry": 5.1360033375052145,
+            "offset_start": 88,
+            "offset_end": 132
+          },
+          {
+            "stage": "unlink and clear key",
+            "attempts": 9588,
+            "per_entry": 4.0,
+            "offset_start": 132,
+            "offset_end": 148
+          },
+          {
+            "stage": "clear kind and return",
+            "attempts": 4794,
+            "per_entry": 2.0,
+            "offset_start": 148,
+            "offset_end": 160
+          }
+        ]
+      },
+      "free": {
+        "attempts": 119282,
+        "entries": 1634,
+        "stages": [
+          {
+            "stage": "entry and errno save",
+            "attempts": 29412,
+            "per_entry": 18.0,
+            "offset_start": 0,
+            "offset_end": 72
+          },
+          {
+            "stage": "heap lock",
+            "attempts": 24510,
+            "per_entry": 15.0,
+            "offset_start": 72,
+            "offset_end": 144
+          },
+          {
+            "stage": "checked handoff",
+            "attempts": 8170,
+            "per_entry": 5.0,
+            "offset_start": 144,
+            "offset_end": 164
+          },
+          {
+            "stage": "kind check, CREVOKE and child clear",
+            "attempts": 14706,
+            "per_entry": 9.0,
+            "offset_start": 164,
+            "offset_end": 212
+          },
+          {
+            "stage": "recover slot cursor and free_slot handoff",
+            "attempts": 13072,
+            "per_entry": 8.0,
+            "offset_start": 212,
+            "offset_end": 244
+          },
+          {
+            "stage": "unlock and errno restore",
+            "attempts": 11438,
+            "per_entry": 7.0,
+            "offset_start": 244,
+            "offset_end": 272
+          },
+          {
+            "stage": "return",
+            "attempts": 17974,
+            "per_entry": 11.0,
+            "offset_start": 272,
+            "offset_end": 316
+          }
+        ]
+      },
+      "__capstone_mallocng_malloc": {
+        "attempts": 587172,
+        "entries": 5453,
+        "stages": [
+          {
+            "stage": "entry, request checks and large path",
+            "attempts": 114513,
+            "per_entry": 21.0,
+            "offset_start": 0,
+            "offset_end": 920
+          },
+          {
+            "stage": "size class",
+            "attempts": 96072,
+            "per_entry": 17.618191821015955,
+            "offset_start": 920,
+            "offset_end": 1140
+          },
+          {
+            "stage": "backend lock check",
+            "attempts": 49077,
+            "per_entry": 9.0,
+            "offset_start": 1140,
+            "offset_end": 1208
+          },
+          {
+            "stage": "active group selection",
+            "attempts": 91507,
+            "per_entry": 16.781037960755548,
+            "offset_start": 1208,
+            "offset_end": 1644
+          },
+          {
+            "stage": "available slot and alloc_slot handoff",
+            "attempts": 88772,
+            "per_entry": 16.2794791857693,
+            "offset_start": 1644,
+            "offset_end": 1780
+          },
+          {
+            "stage": "failure path",
+            "attempts": 0,
+            "per_entry": 0.0,
+            "offset_start": 1780,
+            "offset_end": 1968
+          },
+          {
+            "stage": "unlock, enframe handoff and return",
+            "attempts": 147231,
+            "per_entry": 27.0,
+            "offset_start": 1968,
+            "offset_end": 2076
+          }
+        ]
+      },
+      "__capstone_mallocng_free_slot": {
+        "attempts": 287162,
+        "entries": 2397,
+        "stages": [
+          {
+            "stage": "entry and stride",
+            "attempts": 58146,
+            "per_entry": 24.25782227784731,
+            "offset_start": 0,
+            "offset_end": 324
+          },
+          {
+            "stage": "slot index and slot_start handoff",
+            "attempts": 14382,
+            "per_entry": 6.0,
+            "offset_start": 324,
+            "offset_end": 348
+          },
+          {
+            "stage": "prefix and footer validation",
+            "attempts": 58272,
+            "per_entry": 24.310387984981226,
+            "offset_start": 348,
+            "offset_end": 484
+          },
+          {
+            "stage": "prefix invalidation and slot_release handoff",
+            "attempts": 47520,
+            "per_entry": 19.824780976220275,
+            "offset_start": 484,
+            "offset_end": 572
+          },
+          {
+            "stage": "free mask and group-release path",
+            "attempts": 84872,
+            "per_entry": 35.40759282436379,
+            "offset_start": 572,
+            "offset_end": 940
+          },
+          {
+            "stage": "return",
+            "attempts": 23970,
+            "per_entry": 10.0,
+            "offset_start": 940,
+            "offset_end": 980
+          }
+        ]
+      },
+      "publish": {
+        "attempts": 265178,
+        "entries": 4690,
+        "stages": [
+          {
+            "stage": "result record binding and clean flag",
+            "attempts": 96338,
+            "per_entry": 20.541151385927506,
+            "offset_start": 0,
+            "offset_end": 240
+          },
+          {
+            "stage": "replace old child if present",
+            "attempts": 9380,
+            "per_entry": 2.0,
+            "offset_start": 240,
+            "offset_end": 256
+          },
+          {
+            "stage": "record fields and node budget",
+            "attempts": 98490,
+            "per_entry": 21.0,
+            "offset_start": 256,
+            "offset_end": 340
+          },
+          {
+            "stage": "derive checks, CDERIVE and return",
+            "attempts": 60970,
+            "per_entry": 13.0,
+            "offset_start": 340,
+            "offset_end": 400
+          }
+        ]
+      },
+      "checked": {
+        "attempts": 99918,
+        "entries": 2623,
+        "stages": [
+          {
+            "stage": "entry",
+            "attempts": 10492,
+            "per_entry": 4.0,
+            "offset_start": 0,
+            "offset_end": 16
+          },
+          {
+            "stage": "caller capability validation load",
+            "attempts": 2623,
+            "per_entry": 1.0,
+            "offset_start": 16,
+            "offset_end": 20
+          },
+          {
+            "stage": "address lookup and public record check",
+            "attempts": 76311,
+            "per_entry": 29.093023255813954,
+            "offset_start": 20,
+            "offset_end": 148
+          },
+          {
+            "stage": "return and failure path",
+            "attempts": 10492,
+            "per_entry": 4.0,
+            "offset_start": 148,
+            "offset_end": 176
+          }
+        ]
+      },
+      "enframe": {
+        "attempts": 750978,
+        "entries": 5822,
+        "stages": [
+          {
+            "stage": "entry and slot record",
+            "attempts": 128084,
+            "per_entry": 22.0,
+            "offset_start": 0,
+            "offset_end": 88
+          },
+          {
+            "stage": "stride and slack",
+            "attempts": 90260,
+            "per_entry": 15.503263483339058,
+            "offset_start": 88,
+            "offset_end": 392
+          },
+          {
+            "stage": "slot_take handoff",
+            "attempts": 29110,
+            "per_entry": 5.0,
+            "offset_start": 392,
+            "offset_end": 412
+          },
+          {
+            "stage": "initial prefix",
+            "attempts": 45098,
+            "per_entry": 7.746135348677431,
+            "offset_start": 412,
+            "offset_end": 452
+          },
+          {
+            "stage": "offset cycle",
+            "attempts": 79038,
+            "per_entry": 13.575747165922364,
+            "offset_start": 452,
+            "offset_end": 512
+          },
+          {
+            "stage": "representable offset",
+            "attempts": 44367,
+            "per_entry": 7.62057712126417,
+            "offset_start": 512,
+            "offset_end": 772
+          },
+          {
+            "stage": "offset prefix",
+            "attempts": 19052,
+            "per_entry": 3.2724149776709033,
+            "offset_start": 772,
+            "offset_end": 824
+          },
+          {
+            "stage": "final prefix and footer",
+            "attempts": 205351,
+            "per_entry": 35.27155616626589,
+            "offset_start": 824,
+            "offset_end": 996
+          },
+          {
+            "stage": "slot_key handoff",
+            "attempts": 40754,
+            "per_entry": 7.0,
+            "offset_start": 996,
+            "offset_end": 1024
+          },
+          {
+            "stage": "return",
+            "attempts": 69864,
+            "per_entry": 12.0,
+            "offset_start": 1024,
+            "offset_end": 1072
+          }
+        ]
+      }
+    },
+    "plain": {
+      "__libc_malloc_impl": {
+        "attempts": 355625,
+        "entries": 5308,
+        "stages": [
+          {
+            "stage": "entry, request checks and large path",
+            "attempts": 90236,
+            "per_entry": 17.0,
+            "offset_start": 0,
+            "offset_end": 220
+          },
+          {
+            "stage": "size class",
+            "attempts": 50355,
+            "per_entry": 9.486623963828183,
+            "offset_start": 220,
+            "offset_end": 488
+          },
+          {
+            "stage": "backend lock check",
+            "attempts": 15924,
+            "per_entry": 3.0,
+            "offset_start": 488,
+            "offset_end": 512
+          },
+          {
+            "stage": "active group selection",
+            "attempts": 47176,
+            "per_entry": 8.887716654107008,
+            "offset_start": 512,
+            "offset_end": 696
+          },
+          {
+            "stage": "available slot and alloc_slot handoff",
+            "attempts": 72314,
+            "per_entry": 13.623587038432555,
+            "offset_start": 696,
+            "offset_end": 792
+          },
+          {
+            "stage": "unlock, enframe handoff and return",
+            "attempts": 79620,
+            "per_entry": 15.0,
+            "offset_start": 792,
+            "offset_end": 868
+          }
+        ]
+      },
+      "__libc_free": {
+        "attempts": 164077,
+        "entries": 2342,
+        "stages": [
+          {
+            "stage": "entry and get_meta handoff",
+            "attempts": 21078,
+            "per_entry": 9.0,
+            "offset_start": 0,
+            "offset_end": 36
+          },
+          {
+            "stage": "stride and prefix",
+            "attempts": 28481,
+            "per_entry": 12.160973526900085,
+            "offset_start": 36,
+            "offset_end": 108
+          },
+          {
+            "stage": "slot end and footer validation",
+            "attempts": 43348,
+            "per_entry": 18.508966695132365,
+            "offset_start": 108,
+            "offset_end": 220
+          },
+          {
+            "stage": "prefix invalidation and masks",
+            "attempts": 21078,
+            "per_entry": 9.0,
+            "offset_start": 220,
+            "offset_end": 256
+          },
+          {
+            "stage": "free mask and group-release path",
+            "attempts": 33698,
+            "per_entry": 14.388556789069172,
+            "offset_start": 256,
+            "offset_end": 432
+          },
+          {
+            "stage": "return",
+            "attempts": 16394,
+            "per_entry": 7.0,
+            "offset_start": 432,
+            "offset_end": 460
+          }
+        ]
+      }
+    }
+  },
+  "quick": [
+    {
+      "benchmark": "500.perlbench_r",
+      "delta_program": -6804,
+      "delta_total": -233905,
+      "top_program": [
+        [
+          "enframe",
+          -6842
+        ],
+        [
+          "memcpy",
+          14
+        ],
+        [
+          "strlen",
+          8
+        ],
+        [
+          "memmove",
+          7
+        ],
+        [
+          "memchr",
+          5
+        ],
+        [
+          "perl_parse",
+          4
+        ],
+        [
+          "S_init_postdump_symbols",
+          0
+        ],
+        [
+          "S_lop",
+          0
+        ],
+        [
+          "Perl_newOP",
+          0
+        ],
+        [
+          "Perl_form",
+          0
+        ],
+        [
+          "Perl_sv_setpv",
+          0
+        ],
+        [
+          "PerlIOBase_pushed",
+          0
+        ]
+      ],
+      "control": {
+        "cap": {
+          "program": 9498399,
+          "total": 15250097,
+          "classes": {
+            "program": 9498399,
+            "kernel": 4806476,
+            "kernel idle": 398400,
+            "launcher": 260312,
+            "firmware": 145917,
+            "module": 138785,
+            "profrun": 1424,
+            "other": 245,
+            "ambiguous launcher/job-helper": 139
+          },
+          "verdict": "SLICE",
+          "watchdog": {
+            "returncode": 0,
+            "signals": [],
+            "remaining": []
+          }
+        },
+        "rv64": {
+          "program": 6165833,
+          "total": 8344806,
+          "classes": {
+            "program": 6165833,
+            "kernel": 1772662,
+            "kernel idle": 337958,
+            "firmware": 67739,
+            "profrun": 614
+          },
+          "verdict": "SLICE",
+          "watchdog": {
+            "returncode": 0,
+            "signals": [],
+            "remaining": []
+          }
+        }
+      },
+      "candidate": {
+        "cap": {
+          "program": 9491595,
+          "total": 15016192,
+          "classes": {
+            "program": 9491595,
+            "kernel": 4724048,
+            "launcher": 260493,
+            "kernel idle": 252863,
+            "firmware": 145917,
+            "module": 139534,
+            "profrun": 1358,
+            "other": 245,
+            "ambiguous launcher/job-helper": 139
+          },
+          "verdict": "SLICE",
+          "watchdog": {
+            "returncode": 0,
+            "signals": [],
+            "remaining": []
+          }
+        },
+        "rv64": {
+          "program": 6165833,
+          "total": 8400537,
+          "classes": {
+            "program": 6165833,
+            "kernel": 1779907,
+            "kernel idle": 386788,
+            "firmware": 67395,
+            "profrun": 614
+          },
+          "verdict": "SLICE",
+          "watchdog": {
+            "returncode": 0,
+            "signals": [],
+            "remaining": []
+          }
+        }
+      }
+    },
+    {
+      "benchmark": "502.gcc_r",
+      "delta_program": -37251,
+      "delta_total": 153305,
+      "top_program": [
+        [
+          "enframe",
+          -37263
+        ],
+        [
+          "memcpy",
+          7
+        ],
+        [
+          "memchr",
+          5
+        ],
+        [
+          "may_trap_p_1",
+          0
+        ],
+        [
+          "ix86_delegitimize_address",
+          0
+        ],
+        [
+          "ira_sort_regnos_for_alter_reg",
+          0
+        ],
+        [
+          "declspecs_add_type",
+          0
+        ],
+        [
+          "gate_ch",
+          0
+        ],
+        [
+          "gimple_seq_alloc",
+          0
+        ],
+        [
+          "execute_fre",
+          0
+        ],
+        [
+          "cselib_clear_table",
+          0
+        ],
+        [
+          "gate_uncprop",
+          0
+        ]
+      ],
+      "control": {
+        "cap": {
+          "program": 25974945,
+          "total": 43931132,
+          "classes": {
+            "program": 25974945,
+            "kernel": 15894612,
+            "module": 802489,
+            "firmware": 699615,
+            "launcher": 335850,
+            "kernel idle": 221688,
+            "profrun": 1442,
+            "ambiguous launcher/job-helper": 246,
+            "other": 245
+          },
+          "verdict": "SLICE",
+          "watchdog": {
+            "returncode": 0,
+            "signals": [],
+            "remaining": []
+          }
+        },
+        "rv64": {
+          "program": 18003429,
+          "total": 27425668,
+          "classes": {
+            "program": 18003429,
+            "kernel": 8896855,
+            "firmware": 386269,
+            "kernel idle": 138486,
+            "profrun": 629
+          },
+          "verdict": "SLICE",
+          "watchdog": {
+            "returncode": 0,
+            "signals": [],
+            "remaining": []
+          }
+        }
+      },
+      "candidate": {
+        "cap": {
+          "program": 25937694,
+          "total": 44084437,
+          "classes": {
+            "program": 25937694,
+            "kernel": 15976141,
+            "module": 802343,
+            "firmware": 699615,
+            "launcher": 335815,
+            "kernel idle": 330871,
+            "profrun": 1467,
+            "ambiguous launcher/job-helper": 246,
+            "other": 245
+          },
+          "verdict": "SLICE",
+          "watchdog": {
+            "returncode": 0,
+            "signals": [],
+            "remaining": []
+          }
+        },
+        "rv64": {
+          "program": 18003429,
+          "total": 27681936,
+          "classes": {
+            "program": 18003429,
+            "kernel": 8988278,
+            "firmware": 386269,
+            "kernel idle": 303331,
+            "profrun": 629
+          },
+          "verdict": "SLICE",
+          "watchdog": {
+            "returncode": 0,
+            "signals": [],
+            "remaining": []
+          }
+        }
+      }
+    },
+    {
+      "benchmark": "505.mcf_r",
+      "delta_program": -96,
+      "delta_total": 426695,
+      "top_program": [
+        [
+          "enframe",
+          -108
+        ],
+        [
+          "memcpy",
+          7
+        ],
+        [
+          "memchr",
+          5
+        ],
+        [
+          "read_min",
+          0
+        ],
+        [
+          "__capstone_malloc_group_map",
+          0
+        ],
+        [
+          "__capstone_malloc_slot_take",
+          0
+        ],
+        [
+          "capstone_main",
+          0
+        ],
+        [
+          "__capstone_vm_protect",
+          0
+        ],
+        [
+          "fopen",
+          0
+        ],
+        [
+          "malloc_map_aligned",
+          0
+        ],
+        [
+          "spec_qsort",
+          0
+        ],
+        [
+          "mmap",
+          0
+        ]
+      ],
+      "control": {
+        "cap": {
+          "program": 969605332,
+          "total": 1000214866,
+          "classes": {
+            "program": 969605332,
+            "kernel": 27212114,
+            "module": 1750854,
+            "launcher": 1166614,
+            "kernel idle": 382793,
+            "firmware": 92232,
+            "other": 3043,
+            "profrun": 1421,
+            "ambiguous launcher/job-helper": 463
+          },
+          "verdict": "SLICE",
+          "watchdog": {
+            "returncode": 0,
+            "signals": [],
+            "remaining": []
+          }
+        },
+        "rv64": {
+          "program": 943593732,
+          "total": 977272664,
+          "classes": {
+            "program": 943593732,
+            "kernel": 30528653,
+            "kernel idle": 2990164,
+            "firmware": 159291,
+            "profrun": 633,
+            "other": 191
+          },
+          "verdict": "SLICE",
+          "watchdog": {
+            "returncode": 0,
+            "signals": [],
+            "remaining": []
+          }
+        }
+      },
+      "candidate": {
+        "cap": {
+          "program": 969605236,
+          "total": 1000641561,
+          "classes": {
+            "program": 969605236,
+            "kernel": 27250700,
+            "module": 1749960,
+            "launcher": 1166477,
+            "kernel idle": 772799,
+            "firmware": 91395,
+            "other": 3043,
+            "profrun": 1488,
+            "ambiguous launcher/job-helper": 463
+          },
+          "verdict": "SLICE",
+          "watchdog": {
+            "returncode": 0,
+            "signals": [],
+            "remaining": []
+          }
+        },
+        "rv64": {
+          "program": 943593732,
+          "total": 973243907,
+          "classes": {
+            "program": 943593732,
+            "kernel": 29088187,
+            "kernel idle": 400447,
+            "firmware": 158110,
+            "other": 2798,
+            "profrun": 633
+          },
+          "verdict": "SLICE",
+          "watchdog": {
+            "returncode": 0,
+            "signals": [],
+            "remaining": []
+          }
+        }
+      }
+    },
+    {
+      "benchmark": "519.lbm_r",
+      "delta_program": -27,
+      "delta_total": 1264638,
+      "top_program": [
+        [
+          "enframe",
+          -39
+        ],
+        [
+          "memcpy",
+          7
+        ],
+        [
+          "memchr",
+          5
+        ],
+        [
+          "__capstone_malloc_group_map",
+          0
+        ],
+        [
+          "__capstone_malloc_slot_take",
+          0
+        ],
+        [
+          "capstone_main",
+          0
+        ],
+        [
+          "__capstone_vm_protect",
+          0
+        ],
+        [
+          "LBM_loadObstacleFile",
+          0
+        ],
+        [
+          "__signbitl",
+          0
+        ],
+        [
+          "fopen",
+          0
+        ],
+        [
+          "malloc_map_aligned",
+          0
+        ],
+        [
+          "mmap",
+          0
+        ]
+      ],
+      "control": {
+        "cap": {
+          "program": 811601323,
+          "total": 1304480236,
+          "classes": {
+            "program": 811601323,
+            "kernel": 483650808,
+            "module": 6306415,
+            "launcher": 2405956,
+            "kernel idle": 381349,
+            "firmware": 131445,
+            "profrun": 1490,
+            "ambiguous launcher/job-helper": 1014,
+            "other": 436
+          },
+          "verdict": "SLICE",
+          "watchdog": {
+            "returncode": 0,
+            "signals": [],
+            "remaining": []
+          }
+        },
+        "rv64": {
+          "program": 795022810,
+          "total": 1279820277,
+          "classes": {
+            "program": 795022810,
+            "kernel": 476426070,
+            "kernel idle": 8097598,
+            "firmware": 272994,
+            "profrun": 614,
+            "other": 191
+          },
+          "verdict": "SLICE",
+          "watchdog": {
+            "returncode": 0,
+            "signals": [],
+            "remaining": []
+          }
+        }
+      },
+      "candidate": {
+        "cap": {
+          "program": 811601296,
+          "total": 1305744874,
+          "classes": {
+            "program": 811601296,
+            "kernel": 484070375,
+            "module": 6306113,
+            "launcher": 2406007,
+            "kernel idle": 1223973,
+            "firmware": 131296,
+            "other": 3234,
+            "profrun": 1566,
+            "ambiguous launcher/job-helper": 1014
+          },
+          "verdict": "SLICE",
+          "watchdog": {
+            "returncode": 0,
+            "signals": [],
+            "remaining": []
+          }
+        },
+        "rv64": {
+          "program": 795022810,
+          "total": 1274003477,
+          "classes": {
+            "program": 795022810,
+            "kernel": 474481003,
+            "kernel idle": 4223240,
+            "firmware": 272821,
+            "other": 2989,
+            "profrun": 614
+          },
+          "verdict": "SLICE",
+          "watchdog": {
+            "returncode": 0,
+            "signals": [],
+            "remaining": []
+          }
+        }
+      }
+    },
+    {
+      "benchmark": "538.imagick_r",
+      "delta_program": -6081,
+      "delta_total": -777724,
+      "top_program": [
+        [
+          "enframe",
+          -6087
+        ],
+        [
+          "memcpy",
+          7
+        ],
+        [
+          "IsGlob",
+          -6
+        ],
+        [
+          "memchr",
+          5
+        ],
+        [
+          "ParseAbsoluteGeometry",
+          0
+        ],
+        [
+          "RandomComponentGenesis",
+          0
+        ],
+        [
+          "AcquirePixelCache",
+          0
+        ],
+        [
+          "__map_file",
+          0
+        ],
+        [
+          "__capstone_malloc_group_nested",
+          0
+        ],
+        [
+          "MogrifyImageInfo",
+          0
+        ],
+        [
+          "CropImage",
+          0
+        ],
+        [
+          "ConstantString",
+          0
+        ]
+      ],
+      "control": {
+        "cap": {
+          "program": 2727958,
+          "total": 9371499,
+          "classes": {
+            "kernel": 5263581,
+            "program": 2727958,
+            "kernel idle": 796800,
+            "launcher": 318125,
+            "module": 140192,
+            "firmware": 122965,
+            "profrun": 1442,
+            "other": 245,
+            "ambiguous launcher/job-helper": 191
+          },
+          "verdict": "SLICE",
+          "watchdog": {
+            "returncode": 0,
+            "signals": [],
+            "remaining": []
+          }
+        },
+        "rv64": {
+          "program": 1713421,
+          "total": 5126718,
+          "classes": {
+            "kernel": 2762088,
+            "program": 1713421,
+            "kernel idle": 584696,
+            "firmware": 65899,
+            "profrun": 614
+          },
+          "verdict": "SLICE",
+          "watchdog": {
+            "returncode": 0,
+            "signals": [],
+            "remaining": []
+          }
+        }
+      },
+      "candidate": {
+        "cap": {
+          "program": 2721877,
+          "total": 8593775,
+          "classes": {
+            "kernel": 4973224,
+            "program": 2721877,
+            "launcher": 318308,
+            "kernel idle": 315141,
+            "module": 140701,
+            "firmware": 122621,
+            "profrun": 1467,
+            "other": 245,
+            "ambiguous launcher/job-helper": 191
+          },
+          "verdict": "SLICE",
+          "watchdog": {
+            "returncode": 0,
+            "signals": [],
+            "remaining": []
+          }
+        },
+        "rv64": {
+          "program": 1713421,
+          "total": 4814413,
+          "classes": {
+            "kernel": 2647449,
+            "program": 1713421,
+            "kernel idle": 387030,
+            "firmware": 65899,
+            "profrun": 614
+          },
+          "verdict": "SLICE",
+          "watchdog": {
+            "returncode": 0,
+            "signals": [],
+            "remaining": []
+          }
+        }
+      }
+    },
+    {
+      "benchmark": "544.nab_r",
+      "delta_program": -12970,
+      "delta_total": 133002,
+      "top_program": [
+        [
+          "enframe",
+          -12982
+        ],
+        [
+          "memcpy",
+          7
+        ],
+        [
+          "memchr",
+          5
+        ],
+        [
+          "__capstone_malloc_slot_take",
+          0
+        ],
+        [
+          "__capstone_malloc_group_map",
+          0
+        ],
+        [
+          "capstone_main",
+          0
+        ],
+        [
+          "buildkdtree",
+          0
+        ],
+        [
+          "__capstone_vm_protect",
+          0
+        ],
+        [
+          "mpierror",
+          0
+        ],
+        [
+          "p_bre",
+          0
+        ],
+        [
+          "__capstone_malloc_group_unmap",
+          0
+        ],
+        [
+          "__capstone_malloc_group_nested",
+          0
+        ]
+      ],
+      "control": {
+        "cap": {
+          "program": 32536296,
+          "total": 37471018,
+          "classes": {
+            "program": 32536296,
+            "kernel": 4384327,
+            "launcher": 287410,
+            "module": 131850,
+            "kernel idle": 99572,
+            "firmware": 29751,
+            "profrun": 1442,
+            "other": 245,
+            "ambiguous launcher/job-helper": 125
+          },
+          "verdict": "SLICE",
+          "watchdog": {
+            "returncode": 0,
+            "signals": [],
+            "remaining": []
+          }
+        },
+        "rv64": {
+          "program": 29038774,
+          "total": 32130785,
+          "classes": {
+            "program": 29038774,
+            "kernel": 2744867,
+            "kernel idle": 325526,
+            "firmware": 20982,
+            "profrun": 636
+          },
+          "verdict": "SLICE",
+          "watchdog": {
+            "returncode": 0,
+            "signals": [],
+            "remaining": []
+          }
+        }
+      },
+      "candidate": {
+        "cap": {
+          "program": 32523326,
+          "total": 37604020,
+          "classes": {
+            "program": 32523326,
+            "kernel": 4434894,
+            "launcher": 287485,
+            "kernel idle": 194444,
+            "module": 132214,
+            "firmware": 29751,
+            "profrun": 1536,
+            "other": 245,
+            "ambiguous launcher/job-helper": 125
+          },
+          "verdict": "SLICE",
+          "watchdog": {
+            "returncode": 0,
+            "signals": [],
+            "remaining": []
+          }
+        },
+        "rv64": {
+          "program": 29038774,
+          "total": 33679762,
+          "classes": {
+            "program": 29038774,
+            "kernel": 3264623,
+            "kernel idle": 1354403,
+            "firmware": 21326,
+            "profrun": 636
+          },
+          "verdict": "SLICE",
+          "watchdog": {
+            "returncode": 0,
+            "signals": [],
+            "remaining": []
+          }
+        }
+      }
+    },
+    {
+      "benchmark": "557.xz_r",
+      "delta_program": -175,
+      "delta_total": -115840,
+      "top_program": [
+        [
+          "enframe",
+          -189
+        ],
+        [
+          "memcpy",
+          7
+        ],
+        [
+          "memchr",
+          5
+        ],
+        [
+          "spec_mem_init",
+          2
+        ],
+        [
+          "spec_mem_fread",
+          0
+        ],
+        [
+          "__capstone_malloc_group_map",
+          0
+        ],
+        [
+          "__capstone_malloc_slot_take",
+          0
+        ],
+        [
+          "capstone_main",
+          0
+        ],
+        [
+          "__capstone_vm_protect",
+          0
+        ],
+        [
+          "lzma_stream_decoder",
+          0
+        ],
+        [
+          "sha_compress",
+          0
+        ],
+        [
+          "lzma_code",
+          0
+        ]
+      ],
+      "control": {
+        "cap": {
+          "program": 454670514,
+          "total": 1081313678,
+          "classes": {
+            "kernel": 616103879,
+            "program": 454670514,
+            "module": 9093362,
+            "launcher": 1024779,
+            "kernel idle": 313080,
+            "firmware": 106212,
+            "profrun": 1359,
+            "other": 436,
+            "ambiguous launcher/job-helper": 57
+          },
+          "verdict": "SLICE",
+          "watchdog": {
+            "returncode": 0,
+            "signals": [],
+            "remaining": []
+          }
+        },
+        "rv64": {
+          "program": 441607039,
+          "total": 1001307591,
+          "classes": {
+            "kernel": 559391562,
+            "program": 441607039,
+            "kernel idle": 210379,
+            "firmware": 97791,
+            "profrun": 629,
+            "other": 191
+          },
+          "verdict": "SLICE",
+          "watchdog": {
+            "returncode": 0,
+            "signals": [],
+            "remaining": []
+          }
+        }
+      },
+      "candidate": {
+        "cap": {
+          "program": 454670339,
+          "total": 1081197838,
+          "classes": {
+            "kernel": 615962938,
+            "program": 454670339,
+            "module": 9094061,
+            "launcher": 1024718,
+            "kernel idle": 334849,
+            "firmware": 106212,
+            "other": 3234,
+            "profrun": 1430,
+            "ambiguous launcher/job-helper": 57
+          },
+          "verdict": "SLICE",
+          "watchdog": {
+            "returncode": 0,
+            "signals": [],
+            "remaining": []
+          }
+        },
+        "rv64": {
+          "program": 441607039,
+          "total": 1001274408,
+          "classes": {
+            "kernel": 559394182,
+            "program": 441607039,
+            "kernel idle": 172684,
+            "firmware": 97076,
+            "other": 2798,
+            "profrun": 629
+          },
+          "verdict": "SLICE",
+          "watchdog": {
+            "returncode": 0,
+            "signals": [],
+            "remaining": []
+          }
+        }
+      }
+    }
+  ],
+  "deeper": [
+    {
+      "benchmark": "500.perlbench_r",
+      "delta_program": -48913,
+      "delta_total": 235428,
+      "top_program": [
+        [
+          "enframe",
+          -48810
+        ],
+        [
+          "strlen",
+          -32
+        ],
+        [
+          "memmove",
+          -28
+        ],
+        [
+          "memchr",
+          -20
+        ],
+        [
+          "perl_parse",
+          -16
+        ],
+        [
+          "memcpy",
+          -5
+        ],
+        [
+          "Perl_sv_grow",
+          -2
+        ],
+        [
+          "Perl_pad_findmy_pvn",
+          0
+        ],
+        [
+          "Perl_fbm_compile",
+          0
+        ],
+        [
+          "capstone_delegate_group_of",
+          0
+        ],
+        [
+          "__restore_sigs",
+          0
+        ],
+        [
+          "Perl_my_attrs",
+          0
+        ]
+      ],
+      "control": {
+        "cap": {
+          "program": 4539092756,
+          "total": 4566931818,
+          "classes": {
+            "program": 4539092756,
+            "kernel": 24789385,
+            "kernel idle": 843243,
+            "module": 818222,
+            "launcher": 769084,
+            "firmware": 612257,
+            "other": 3349,
+            "profrun": 2973,
+            "ambiguous launcher/job-helper": 549
+          },
+          "verdict": "SLICE",
+          "watchdog": {
+            "returncode": 0,
+            "signals": [],
+            "remaining": []
+          }
+        },
+        "rv64": {
+          "program": 2996561975,
+          "total": 3011794106,
+          "classes": {
+            "program": 2996561975,
+            "kernel": 13534224,
+            "kernel idle": 1295333,
+            "firmware": 401313,
+            "profrun": 1261
+          },
+          "verdict": "SLICE",
+          "watchdog": {
+            "returncode": 0,
+            "signals": [],
+            "remaining": []
+          }
+        }
+      },
+      "candidate": {
+        "cap": {
+          "program": 4539043843,
+          "total": 4567167246,
+          "classes": {
+            "program": 4539043843,
+            "kernel": 24929973,
+            "kernel idle": 986714,
+            "module": 818619,
+            "launcher": 769330,
+            "firmware": 612304,
+            "other": 3158,
+            "profrun": 2756,
+            "ambiguous launcher/job-helper": 549
+          },
+          "verdict": "SLICE",
+          "watchdog": {
+            "returncode": 0,
+            "signals": [],
+            "remaining": []
+          }
+        },
+        "rv64": {
+          "program": 2996561975,
+          "total": 3011578448,
+          "classes": {
+            "program": 2996561975,
+            "kernel": 13384665,
+            "kernel idle": 1228982,
+            "firmware": 401374,
+            "profrun": 1261,
+            "other": 191
+          },
+          "verdict": "SLICE",
+          "watchdog": {
+            "returncode": 0,
+            "signals": [],
+            "remaining": []
+          }
+        }
+      }
+    }
+  ]
+}

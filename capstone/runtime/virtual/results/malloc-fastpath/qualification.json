@@ -1,0 +1,941 @@
+{
+  "gates_verdict": "IDENTICAL",
+  "gates": {
+    "hosted": {
+      "verdict": "IDENTICAL",
+      "rows": 3,
+      "fail_lines": [],
+      "json_status_and_false_tests": [
+        "status=PASS"
+      ]
+    },
+    "runtime": {
+      "verdict": "IDENTICAL",
+      "rows": 25,
+      "fail_lines": [],
+      "json_status_and_false_tests": [
+        "status=PASS"
+      ]
+    },
+    "nodes": {
+      "verdict": "IDENTICAL",
+      "rows": 4,
+      "fail_lines": [
+        "FAIL node_count_reported"
+      ],
+      "json_status_and_false_tests": []
+    },
+    "malloc": {
+      "verdict": "IDENTICAL",
+      "rows": 39,
+      "fail_lines": [],
+      "json_status_and_false_tests": [
+        "status=FAIL",
+        "test real_linux_mremap_growth_and_shrink=False"
+      ]
+    },
+    "pin-ahead": {
+      "verdict": "IDENTICAL",
+      "rows": 21,
+      "fail_lines": [],
+      "json_status_and_false_tests": []
+    },
+    "fp": {
+      "verdict": "IDENTICAL",
+      "rows": 1,
+      "fail_lines": [],
+      "json_status_and_false_tests": [
+        "status=PASS"
+      ]
+    },
+    "pthread": {
+      "verdict": "IDENTICAL",
+      "rows": 5,
+      "fail_lines": [],
+      "json_status_and_false_tests": [
+        "status=PASS"
+      ]
+    },
+    "step-hooks": {
+      "verdict": "IDENTICAL",
+      "rows": 49,
+      "fail_lines": [],
+      "json_status_and_false_tests": []
+    },
+    "memcached": {
+      "verdict": "IDENTICAL",
+      "rows": 29,
+      "fail_lines": [
+        "FAIL fx24_trigger",
+        "FAIL marker_stderr",
+        "FAIL normal1_stderr",
+        "FAIL normal2_stderr",
+        "FAIL usr1_stderr"
+      ],
+      "json_status_and_false_tests": []
+    }
+  },
+  "gate_platform_audit": {
+    "platform_identical": true,
+    "one_slot_refusals": []
+  },
+  "matrix_proof": "PASS",
+  "matrix": {
+    "control-boff": {
+      "status": "PASS",
+      "checks": 24,
+      "false_tests": [],
+      "input_sha256": {
+        "launcher": "15063761e5deae14ed172f57c7eb6662c51761d9d3b64723b3c38727bd3163b8",
+        "module": "fcb499961ff7c5d366b19ce502a1bf90c795154bc199c4b29889afb5eeead022",
+        "application": "356b832b411d3e681225911b552f0ebdb9a5710897ee9f5a428131df9fa85478",
+        "native": "27ebd93d5295e3e48bde0e4b0b6c203e3bc5950b254d756567f4c62e9ad514d0",
+        "qemu": "2bfb442a4e3d986625783aa6a419356d582a478ce15644563a08f493af74b199",
+        "source": "36ebb9f3e2b6c8b732b6baeb67516727f87a3f881ef6dc9fdb959e32d2379a0d",
+        "Image": "e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b",
+        "fw_jump.elf": "5b5c047a00306f35c99bc4b506ec840c784fe1b73dd13ea6ecb4cf793fece9af",
+        "rootfs.ext2": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845",
+        "sdk_json": "27568b1d6afee69a140f7f9b71da7e39629df0f42c85f6c1c58a3e80d9734a1c"
+      },
+      "host": "p12"
+    },
+    "control-default": {
+      "status": "FAIL",
+      "checks": 49,
+      "false_tests": [
+        "real_linux_mremap_growth_and_shrink"
+      ],
+      "input_sha256": {
+        "launcher": "15063761e5deae14ed172f57c7eb6662c51761d9d3b64723b3c38727bd3163b8",
+        "module": "fcb499961ff7c5d366b19ce502a1bf90c795154bc199c4b29889afb5eeead022",
+        "application": "c16a873acdce56a801c4ab4a68e82b263a974da1556c2b9986284716656498e9",
+        "native": "27ebd93d5295e3e48bde0e4b0b6c203e3bc5950b254d756567f4c62e9ad514d0",
+        "qemu": "2bfb442a4e3d986625783aa6a419356d582a478ce15644563a08f493af74b199",
+        "source": "36ebb9f3e2b6c8b732b6baeb67516727f87a3f881ef6dc9fdb959e32d2379a0d",
+        "Image": "e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b",
+        "fw_jump.elf": "5b5c047a00306f35c99bc4b506ec840c784fe1b73dd13ea6ecb4cf793fece9af",
+        "rootfs.ext2": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845",
+        "sdk_json": "28b661bfdbb31e57aec6d7e13b16413e4541467a02ce2f73601e856ddfe1c82e"
+      },
+      "host": "p13"
+    },
+    "control-spatial": {
+      "status": "FAIL",
+      "checks": 48,
+      "false_tests": [
+        "real_linux_mremap_growth_and_shrink"
+      ],
+      "input_sha256": {
+        "launcher": "15063761e5deae14ed172f57c7eb6662c51761d9d3b64723b3c38727bd3163b8",
+        "module": "fcb499961ff7c5d366b19ce502a1bf90c795154bc199c4b29889afb5eeead022",
+        "application": "3c843e3d4c61bd1147c924b80075762355f10c54e8efd433856c3006dc35fca6",
+        "native": "27ebd93d5295e3e48bde0e4b0b6c203e3bc5950b254d756567f4c62e9ad514d0",
+        "qemu": "2bfb442a4e3d986625783aa6a419356d582a478ce15644563a08f493af74b199",
+        "source": "36ebb9f3e2b6c8b732b6baeb67516727f87a3f881ef6dc9fdb959e32d2379a0d",
+        "Image": "e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b",
+        "fw_jump.elf": "5b5c047a00306f35c99bc4b506ec840c784fe1b73dd13ea6ecb4cf793fece9af",
+        "rootfs.ext2": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845",
+        "sdk_json": "cebe4c8a575962f30ae2b51afd6031227ee8e1d5799d3820e16035793269a36e"
+      },
+      "host": "p13"
+    },
+    "no-group-revoke-boff": {
+      "status": "FAIL",
+      "checks": 24,
+      "false_tests": [
+        "recycle-stale",
+        "recycle-free",
+        "recycle-root",
+        "recycle-geometry",
+        "recycle-nested",
+        "recycle-aligned",
+        "recycle-realloc",
+        "coarse-stale"
+      ],
+      "input_sha256": {
+        "launcher": "15063761e5deae14ed172f57c7eb6662c51761d9d3b64723b3c38727bd3163b8",
+        "module": "fcb499961ff7c5d366b19ce502a1bf90c795154bc199c4b29889afb5eeead022",
+        "application": "1482abd2112fc951a30541f839802477f62693b555b593cbc5ba4598693040da",
+        "native": "27ebd93d5295e3e48bde0e4b0b6c203e3bc5950b254d756567f4c62e9ad514d0",
+        "qemu": "2bfb442a4e3d986625783aa6a419356d582a478ce15644563a08f493af74b199",
+        "source": "36ebb9f3e2b6c8b732b6baeb67516727f87a3f881ef6dc9fdb959e32d2379a0d",
+        "Image": "e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b",
+        "fw_jump.elf": "5b5c047a00306f35c99bc4b506ec840c784fe1b73dd13ea6ecb4cf793fece9af",
+        "rootfs.ext2": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845",
+        "sdk_json": "a09f77af03c39927f1349fd9104061d7ce58a2cb104a0b0ee4e779189c4fb507"
+      },
+      "host": "p12"
+    },
+    "no-group-revoke-default": {
+      "status": "FAIL",
+      "checks": 49,
+      "false_tests": [
+        "recycle-root",
+        "real_linux_mremap_growth_and_shrink",
+        "coarse-stale"
+      ],
+      "input_sha256": {
+        "launcher": "15063761e5deae14ed172f57c7eb6662c51761d9d3b64723b3c38727bd3163b8",
+        "module": "fcb499961ff7c5d366b19ce502a1bf90c795154bc199c4b29889afb5eeead022",
+        "application": "6d0846aa373e66e878fed01f02420d55ddcfdb2bd97916648da66ca5667d8ba5",
+        "native": "27ebd93d5295e3e48bde0e4b0b6c203e3bc5950b254d756567f4c62e9ad514d0",
+        "qemu": "2bfb442a4e3d986625783aa6a419356d582a478ce15644563a08f493af74b199",
+        "source": "36ebb9f3e2b6c8b732b6baeb67516727f87a3f881ef6dc9fdb959e32d2379a0d",
+        "Image": "e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b",
+        "fw_jump.elf": "5b5c047a00306f35c99bc4b506ec840c784fe1b73dd13ea6ecb4cf793fece9af",
+        "rootfs.ext2": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845",
+        "sdk_json": "a70a7234a5f16758df1649dbb2584b6196ab32e35c48afb459d516641e05341b"
+      },
+      "host": "p12"
+    },
+    "no-group-revoke-spatial": {
+      "status": "FAIL",
+      "checks": 48,
+      "false_tests": [
+        "recycle-stale",
+        "recycle-free",
+        "recycle-root",
+        "recycle-geometry",
+        "recycle-nested",
+        "recycle-aligned",
+        "recycle-realloc",
+        "real_linux_mremap_growth_and_shrink",
+        "coarse-stale"
+      ],
+      "input_sha256": {
+        "launcher": "15063761e5deae14ed172f57c7eb6662c51761d9d3b64723b3c38727bd3163b8",
+        "module": "fcb499961ff7c5d366b19ce502a1bf90c795154bc199c4b29889afb5eeead022",
+        "application": "b154acac3674e558968c5ecf9d7072026fe1726dcd70ffa911cf4b34af923772",
+        "native": "27ebd93d5295e3e48bde0e4b0b6c203e3bc5950b254d756567f4c62e9ad514d0",
+        "qemu": "2bfb442a4e3d986625783aa6a419356d582a478ce15644563a08f493af74b199",
+        "source": "36ebb9f3e2b6c8b732b6baeb67516727f87a3f881ef6dc9fdb959e32d2379a0d",
+        "Image": "e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b",
+        "fw_jump.elf": "5b5c047a00306f35c99bc4b506ec840c784fe1b73dd13ea6ecb4cf793fece9af",
+        "rootfs.ext2": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845",
+        "sdk_json": "1bd3f39d89efd87f89f91c3ef0574549bcd16cd6a5613b4a407708b01081a65c"
+      },
+      "host": "p12"
+    },
+    "no-object-revoke-default": {
+      "status": "FAIL",
+      "checks": 49,
+      "false_tests": [
+        "collection_exercised",
+        "reuse-stale",
+        "reuse-free",
+        "stale",
+        "inplace-stale",
+        "stale-free",
+        "real_linux_mremap_growth_and_shrink"
+      ],
+      "input_sha256": {
+        "launcher": "15063761e5deae14ed172f57c7eb6662c51761d9d3b64723b3c38727bd3163b8",
+        "module": "fcb499961ff7c5d366b19ce502a1bf90c795154bc199c4b29889afb5eeead022",
+        "application": "dee2d4c677cc86f6455a956469a24707c02d08748f12936814f9828513a6aabc",
+        "native": "27ebd93d5295e3e48bde0e4b0b6c203e3bc5950b254d756567f4c62e9ad514d0",
+        "qemu": "2bfb442a4e3d986625783aa6a419356d582a478ce15644563a08f493af74b199",
+        "source": "36ebb9f3e2b6c8b732b6baeb67516727f87a3f881ef6dc9fdb959e32d2379a0d",
+        "Image": "e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b",
+        "fw_jump.elf": "5b5c047a00306f35c99bc4b506ec840c784fe1b73dd13ea6ecb4cf793fece9af",
+        "rootfs.ext2": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845",
+        "sdk_json": "ae3aded7a0d9d4f26b31aac7cbeaa4e18953eebb91166cf818db7cac6658568e"
+      },
+      "host": "p12"
+    },
+    "no-reuse-scrub-boff": {
+      "status": "FAIL",
+      "checks": 24,
+      "false_tests": [
+        "recycle-tags",
+        "recycle-header",
+        "recycle-slack",
+        "recycle-geometry",
+        "recycle_tags_clean",
+        "recycle_outside_clean",
+        "coarse-reuse",
+        "coarse-stale",
+        "coarse-bounds"
+      ],
+      "input_sha256": {
+        "launcher": "15063761e5deae14ed172f57c7eb6662c51761d9d3b64723b3c38727bd3163b8",
+        "module": "fcb499961ff7c5d366b19ce502a1bf90c795154bc199c4b29889afb5eeead022",
+        "application": "55e323093b0cfcc4801a667ce38743112d25f30b04835ed05fcd74aa03beecbf",
+        "native": "27ebd93d5295e3e48bde0e4b0b6c203e3bc5950b254d756567f4c62e9ad514d0",
+        "qemu": "2bfb442a4e3d986625783aa6a419356d582a478ce15644563a08f493af74b199",
+        "source": "36ebb9f3e2b6c8b732b6baeb67516727f87a3f881ef6dc9fdb959e32d2379a0d",
+        "Image": "e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b",
+        "fw_jump.elf": "5b5c047a00306f35c99bc4b506ec840c784fe1b73dd13ea6ecb4cf793fece9af",
+        "rootfs.ext2": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845",
+        "sdk_json": "cd1ca7880d4dc093698893a68b247fe64170928f1fc20c855a47fe38409d6245"
+      },
+      "host": "p12"
+    },
+    "no-reuse-scrub-default": {
+      "status": "FAIL",
+      "checks": 49,
+      "false_tests": [
+        "recycle-tags",
+        "recycle-geometry",
+        "calloc-clean",
+        "calloc-geometry",
+        "real_linux_mremap_growth_and_shrink",
+        "recycle_tags_clean",
+        "coarse-reuse"
+      ],
+      "input_sha256": {
+        "launcher": "15063761e5deae14ed172f57c7eb6662c51761d9d3b64723b3c38727bd3163b8",
+        "module": "fcb499961ff7c5d366b19ce502a1bf90c795154bc199c4b29889afb5eeead022",
+        "application": "106b93b616a69ac382419260288457df8ea5a3a5c62c4b7e807efb33d5e829b6",
+        "native": "27ebd93d5295e3e48bde0e4b0b6c203e3bc5950b254d756567f4c62e9ad514d0",
+        "qemu": "2bfb442a4e3d986625783aa6a419356d582a478ce15644563a08f493af74b199",
+        "source": "36ebb9f3e2b6c8b732b6baeb67516727f87a3f881ef6dc9fdb959e32d2379a0d",
+        "Image": "e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b",
+        "fw_jump.elf": "5b5c047a00306f35c99bc4b506ec840c784fe1b73dd13ea6ecb4cf793fece9af",
+        "rootfs.ext2": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845",
+        "sdk_json": "4d634c4c3f6f14c439e5205f7ccc23b3714523eaab695e316547884c85fd68a7"
+      },
+      "host": "p12"
+    },
+    "no-reuse-scrub-spatial": {
+      "status": "FAIL",
+      "checks": 48,
+      "false_tests": [
+        "recycle-tags",
+        "recycle-geometry",
+        "calloc-clean",
+        "calloc-geometry",
+        "real_linux_mremap_growth_and_shrink",
+        "recycle_tags_clean",
+        "coarse-reuse"
+      ],
+      "input_sha256": {
+        "launcher": "15063761e5deae14ed172f57c7eb6662c51761d9d3b64723b3c38727bd3163b8",
+        "module": "fcb499961ff7c5d366b19ce502a1bf90c795154bc199c4b29889afb5eeead022",
+        "application": "5ddba749906e8d5aa10ffd529d35c51dec166df6169ba4d83dcf0ba5f90c6a53",
+        "native": "27ebd93d5295e3e48bde0e4b0b6c203e3bc5950b254d756567f4c62e9ad514d0",
+        "qemu": "2bfb442a4e3d986625783aa6a419356d582a478ce15644563a08f493af74b199",
+        "source": "36ebb9f3e2b6c8b732b6baeb67516727f87a3f881ef6dc9fdb959e32d2379a0d",
+        "Image": "e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b",
+        "fw_jump.elf": "5b5c047a00306f35c99bc4b506ec840c784fe1b73dd13ea6ecb4cf793fece9af",
+        "rootfs.ext2": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845",
+        "sdk_json": "b6210d36cbcc9dc4fbef768f9ecb3c210594c191ae8f38da7042ea3f02dc22cf"
+      },
+      "host": "p12"
+    },
+    "no-validate-default": {
+      "status": "FAIL",
+      "checks": 49,
+      "false_tests": [
+        "reuse-free",
+        "stale-free",
+        "recycle-free",
+        "real_linux_mremap_growth_and_shrink"
+      ],
+      "input_sha256": {
+        "launcher": "15063761e5deae14ed172f57c7eb6662c51761d9d3b64723b3c38727bd3163b8",
+        "module": "fcb499961ff7c5d366b19ce502a1bf90c795154bc199c4b29889afb5eeead022",
+        "application": "78e15e9719513cf8adeeecd0b34223c50197cfccd4603756ce32718978cab5ff",
+        "native": "27ebd93d5295e3e48bde0e4b0b6c203e3bc5950b254d756567f4c62e9ad514d0",
+        "qemu": "2bfb442a4e3d986625783aa6a419356d582a478ce15644563a08f493af74b199",
+        "source": "36ebb9f3e2b6c8b732b6baeb67516727f87a3f881ef6dc9fdb959e32d2379a0d",
+        "Image": "e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b",
+        "fw_jump.elf": "5b5c047a00306f35c99bc4b506ec840c784fe1b73dd13ea6ecb4cf793fece9af",
+        "rootfs.ext2": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845",
+        "sdk_json": "3cbca07005aea1fbbb3651b5680299f3c55da8c001a7f2027fd144898c9b1d60"
+      },
+      "host": "p12"
+    },
+    "step1-boff": {
+      "status": "PASS",
+      "checks": 24,
+      "false_tests": [],
+      "input_sha256": {
+        "launcher": "15063761e5deae14ed172f57c7eb6662c51761d9d3b64723b3c38727bd3163b8",
+        "module": "fcb499961ff7c5d366b19ce502a1bf90c795154bc199c4b29889afb5eeead022",
+        "application": "7914a9b0f2c84656957cf4b392bbb05e97d0f18713d08a31123bf3fc40fc7a14",
+        "native": "27ebd93d5295e3e48bde0e4b0b6c203e3bc5950b254d756567f4c62e9ad514d0",
+        "qemu": "2bfb442a4e3d986625783aa6a419356d582a478ce15644563a08f493af74b199",
+        "source": "36ebb9f3e2b6c8b732b6baeb67516727f87a3f881ef6dc9fdb959e32d2379a0d",
+        "Image": "e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b",
+        "fw_jump.elf": "5b5c047a00306f35c99bc4b506ec840c784fe1b73dd13ea6ecb4cf793fece9af",
+        "rootfs.ext2": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845",
+        "sdk_json": "5788b5ab89366614d3c5fecd32fa39c2fb00a5be882b78e42653079e18b78bf2"
+      },
+      "host": "p12"
+    },
+    "step1-default": {
+      "status": "FAIL",
+      "checks": 49,
+      "false_tests": [
+        "real_linux_mremap_growth_and_shrink"
+      ],
+      "input_sha256": {
+        "launcher": "15063761e5deae14ed172f57c7eb6662c51761d9d3b64723b3c38727bd3163b8",
+        "module": "fcb499961ff7c5d366b19ce502a1bf90c795154bc199c4b29889afb5eeead022",
+        "application": "4ba7e3bd3ecd732b678e41f70084dfec1b6e0fc0463ffd2d03c5e8dae54d7f3b",
+        "native": "27ebd93d5295e3e48bde0e4b0b6c203e3bc5950b254d756567f4c62e9ad514d0",
+        "qemu": "2bfb442a4e3d986625783aa6a419356d582a478ce15644563a08f493af74b199",
+        "source": "36ebb9f3e2b6c8b732b6baeb67516727f87a3f881ef6dc9fdb959e32d2379a0d",
+        "Image": "e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b",
+        "fw_jump.elf": "5b5c047a00306f35c99bc4b506ec840c784fe1b73dd13ea6ecb4cf793fece9af",
+        "rootfs.ext2": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845",
+        "sdk_json": "640ad8c98ecfa48a23f77ab72494920ad1f5a8f11a0eae08ed9af60dbfae4652"
+      },
+      "host": "p13"
+    },
+    "step1-spatial": {
+      "status": "FAIL",
+      "checks": 48,
+      "false_tests": [
+        "real_linux_mremap_growth_and_shrink"
+      ],
+      "input_sha256": {
+        "launcher": "15063761e5deae14ed172f57c7eb6662c51761d9d3b64723b3c38727bd3163b8",
+        "module": "fcb499961ff7c5d366b19ce502a1bf90c795154bc199c4b29889afb5eeead022",
+        "application": "10f651f8711c8f0076477c427fa8e53991595312c801079733266834b5cd594a",
+        "native": "27ebd93d5295e3e48bde0e4b0b6c203e3bc5950b254d756567f4c62e9ad514d0",
+        "qemu": "2bfb442a4e3d986625783aa6a419356d582a478ce15644563a08f493af74b199",
+        "source": "36ebb9f3e2b6c8b732b6baeb67516727f87a3f881ef6dc9fdb959e32d2379a0d",
+        "Image": "e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b",
+        "fw_jump.elf": "5b5c047a00306f35c99bc4b506ec840c784fe1b73dd13ea6ecb4cf793fece9af",
+        "rootfs.ext2": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845",
+        "sdk_json": "acca3409957a933e12c5b23939677001c921f0a54cdc8e82846ccfb896a6ea2a"
+      },
+      "host": "p13"
+    }
+  },
+  "negative_detection": {
+    "no-validate-default": [
+      "stale-free",
+      "reuse-free"
+    ],
+    "no-object-revoke-default": [
+      "stale",
+      "reuse-stale"
+    ],
+    "no-group-revoke-default": [
+      "coarse-stale"
+    ],
+    "no-reuse-scrub-default": [
+      "coarse-reuse"
+    ],
+    "no-group-revoke-spatial": [
+      "coarse-stale"
+    ],
+    "no-reuse-scrub-spatial": [
+      "coarse-reuse"
+    ],
+    "no-group-revoke-boff": [
+      "coarse-stale"
+    ],
+    "no-reuse-scrub-boff": [
+      "coarse-reuse"
+    ]
+  },
+  "temporal": {
+    "ffmpeg": {
+      "identical": true,
+      "count": 13,
+      "cases": [
+        {
+          "case": "00_716d2a47c565_ops_dispatch_interior_alias_after_free",
+          "verdict": "CAUGHT",
+          "attribution": "probe",
+          "cause": 25,
+          "symbol": "fft_read_probe",
+          "infra": null,
+          "controls": [
+            {
+              "name": "bounds-malloc",
+              "observed": "fault"
+            },
+            {
+              "name": "uaf-malloc",
+              "observed": "fault"
+            }
+          ]
+        },
+        {
+          "case": "01_c98810ab47fa_hw_base_encode_list_walk_reads_freed_link",
+          "verdict": "CAUGHT",
+          "attribution": "probe",
+          "cause": 25,
+          "symbol": "fft_read_probe",
+          "infra": null,
+          "controls": [
+            {
+              "name": "bounds-malloc",
+              "observed": "fault"
+            },
+            {
+              "name": "uaf-malloc",
+              "observed": "fault"
+            }
+          ]
+        },
+        {
+          "case": "02_43de8b328b62_lzf_write_cursor_stale_after_realloc",
+          "verdict": "CAUGHT",
+          "attribution": "probe",
+          "cause": 25,
+          "symbol": "fft_write_probe",
+          "infra": null,
+          "controls": [
+            {
+              "name": "bounds-malloc",
+              "observed": "fault"
+            },
+            {
+              "name": "uaf-malloc",
+              "observed": "fault"
+            }
+          ]
+        },
+        {
+          "case": "03_dc87758775e2_aviobuf_checksum_ptr_stale_after_realloc",
+          "verdict": "CAUGHT",
+          "attribution": "probe",
+          "cause": 25,
+          "symbol": "fft_read_probe",
+          "infra": null,
+          "controls": [
+            {
+              "name": "bounds-malloc",
+              "observed": "fault"
+            },
+            {
+              "name": "uaf-malloc",
+              "observed": "fault"
+            }
+          ]
+        },
+        {
+          "case": "04_4b2248594c7f_jpeg2000_packed_headers_stream_stale_base",
+          "verdict": "CAUGHT",
+          "attribution": "probe",
+          "cause": 25,
+          "symbol": "fft_read_probe",
+          "infra": null,
+          "controls": [
+            {
+              "name": "bounds-malloc",
+              "observed": "fault"
+            },
+            {
+              "name": "uaf-malloc",
+              "observed": "fault"
+            }
+          ]
+        },
+        {
+          "case": "05_d6458f6a8bf1_aacdec_tag_che_map_keeps_freed_element",
+          "verdict": "CAUGHT",
+          "attribution": "probe",
+          "cause": 25,
+          "symbol": "fft_read_probe",
+          "infra": null,
+          "controls": [
+            {
+              "name": "bounds-malloc",
+              "observed": "fault"
+            },
+            {
+              "name": "uaf-malloc",
+              "observed": "fault"
+            }
+          ]
+        },
+        {
+          "case": "06_e8714f6f93d1_h264_delayed_pic_holds_interior_pointers",
+          "verdict": "CAUGHT",
+          "attribution": "probe",
+          "cause": 25,
+          "symbol": "fft_write_probe",
+          "infra": null,
+          "controls": [
+            {
+              "name": "bounds-malloc",
+              "observed": "fault"
+            },
+            {
+              "name": "uaf-malloc",
+              "observed": "fault"
+            }
+          ]
+        },
+        {
+          "case": "07_a43e9cdd442b_isom_extradata_freed_before_callee_frees_it",
+          "verdict": "CAUGHT",
+          "attribution": "probe",
+          "cause": 25,
+          "symbol": "fft_read_probe",
+          "infra": null,
+          "controls": [
+            {
+              "name": "bounds-malloc",
+              "observed": "fault"
+            },
+            {
+              "name": "uaf-malloc",
+              "observed": "fault"
+            }
+          ]
+        },
+        {
+          "case": "08_8a4ea9644833_diracdec_realloc_on_the_wrong_field",
+          "verdict": "CAUGHT",
+          "attribution": "probe",
+          "cause": 25,
+          "symbol": "fft_read_probe",
+          "infra": null,
+          "controls": [
+            {
+              "name": "bounds-malloc",
+              "observed": "fault"
+            },
+            {
+              "name": "uaf-malloc",
+              "observed": "fault"
+            }
+          ]
+        },
+        {
+          "case": "09_265731f201f1_tx_subcontext_field_left_dangling_on_failure",
+          "verdict": "CAUGHT",
+          "attribution": "probe",
+          "cause": 25,
+          "symbol": "fft_read_probe",
+          "infra": null,
+          "controls": [
+            {
+              "name": "bounds-malloc",
+              "observed": "fault"
+            },
+            {
+              "name": "uaf-malloc",
+              "observed": "fault"
+            }
+          ]
+        },
+        {
+          "case": "10_e7a65142b972_aacpsy_clears_the_local_not_the_field",
+          "verdict": "CAUGHT",
+          "attribution": "probe",
+          "cause": 25,
+          "symbol": "fft_read_probe",
+          "infra": null,
+          "controls": [
+            {
+              "name": "bounds-malloc",
+              "observed": "fault"
+            },
+            {
+              "name": "uaf-malloc",
+              "observed": "fault"
+            }
+          ]
+        },
+        {
+          "case": "11_ba28222a14ab_ratecontrol_expr_field_not_cleared",
+          "verdict": "CAUGHT",
+          "attribution": "probe",
+          "cause": 25,
+          "symbol": "fft_read_probe",
+          "infra": null,
+          "controls": [
+            {
+              "name": "bounds-malloc",
+              "observed": "fault"
+            },
+            {
+              "name": "uaf-malloc",
+              "observed": "fault"
+            }
+          ]
+        },
+        {
+          "case": "12_2e04d35c69e6_vlc_buf_freed_by_callee_then_read",
+          "verdict": "CAUGHT",
+          "attribution": "probe",
+          "cause": 25,
+          "symbol": "fft_read_probe",
+          "infra": null,
+          "controls": [
+            {
+              "name": "bounds-malloc",
+              "observed": "fault"
+            },
+            {
+              "name": "uaf-malloc",
+              "observed": "fault"
+            }
+          ]
+        }
+      ]
+    },
+    "wireshark": {
+      "identical": true,
+      "count": 10,
+      "cases": [
+        {
+          "case": "00_f3c2e6087e7b_k12_callee_frees_its_own_argument",
+          "verdict": "CAUGHT",
+          "attribution": "probe",
+          "cause": 25,
+          "symbol": "wst_read_probe",
+          "infra": null,
+          "controls": [
+            {
+              "name": "bounds-malloc",
+              "observed": "fault"
+            },
+            {
+              "name": "uaf-malloc",
+              "observed": "fault"
+            }
+          ]
+        },
+        {
+          "case": "01_7dcf69480de8_peak_trc_callee_frees_state_struct",
+          "verdict": "CAUGHT",
+          "attribution": "probe",
+          "cause": 25,
+          "symbol": "wst_read_probe",
+          "infra": null,
+          "controls": [
+            {
+              "name": "bounds-malloc",
+              "observed": "fault"
+            },
+            {
+              "name": "uaf-malloc",
+              "observed": "fault"
+            }
+          ]
+        },
+        {
+          "case": "02_0fc7f3781351_wspstat_container_freed_before_its_contents",
+          "verdict": "CAUGHT",
+          "attribution": "probe",
+          "cause": 25,
+          "symbol": "wst_read_probe",
+          "infra": null,
+          "controls": [
+            {
+              "name": "bounds-malloc",
+              "observed": "fault"
+            },
+            {
+              "name": "uaf-malloc",
+              "observed": "fault"
+            }
+          ]
+        },
+        {
+          "case": "03_012a179785ab_filesystem_alias_named_copy_is_not_a_copy",
+          "verdict": "CAUGHT",
+          "attribution": "probe",
+          "cause": 25,
+          "symbol": "wst_read_probe",
+          "infra": null,
+          "controls": [
+            {
+              "name": "bounds-malloc",
+              "observed": "fault"
+            },
+            {
+              "name": "uaf-malloc",
+              "observed": "fault"
+            }
+          ]
+        },
+        {
+          "case": "04_07ffcf90426b_extcap_one_help_string_stored_in_many_owners",
+          "verdict": "CAUGHT",
+          "attribution": "probe",
+          "cause": 25,
+          "symbol": "wst_read_probe",
+          "infra": null,
+          "controls": [
+            {
+              "name": "bounds-malloc",
+              "observed": "fault"
+            },
+            {
+              "name": "uaf-malloc",
+              "observed": "fault"
+            }
+          ]
+        },
+        {
+          "case": "05_fb46cda19602_wtap_close_inner_loop_rewinds_outer_cursor",
+          "verdict": "CAUGHT",
+          "attribution": "probe",
+          "cause": 25,
+          "symbol": "wst_read_probe",
+          "infra": null,
+          "controls": [
+            {
+              "name": "bounds-malloc",
+              "observed": "fault"
+            },
+            {
+              "name": "uaf-malloc",
+              "observed": "fault"
+            }
+          ]
+        },
+        {
+          "case": "06_d3e3c00fbbe2_prefs_static_filter_label_not_cleared",
+          "verdict": "CAUGHT",
+          "attribution": "probe",
+          "cause": 25,
+          "symbol": "wst_read_probe",
+          "infra": null,
+          "controls": [
+            {
+              "name": "bounds-malloc",
+              "observed": "fault"
+            },
+            {
+              "name": "uaf-malloc",
+              "observed": "fault"
+            }
+          ]
+        },
+        {
+          "case": "07_8dc7d164dcdb_prefs_reset_not_idempotent",
+          "verdict": "CAUGHT",
+          "attribution": "probe",
+          "cause": 25,
+          "symbol": "wst_read_probe",
+          "infra": null,
+          "controls": [
+            {
+              "name": "bounds-malloc",
+              "observed": "fault"
+            },
+            {
+              "name": "uaf-malloc",
+              "observed": "fault"
+            }
+          ]
+        },
+        {
+          "case": "08_48a00fd55671_ftype_string_freed_twice_by_caller_and_callee",
+          "verdict": "CAUGHT",
+          "attribution": "probe",
+          "cause": 25,
+          "symbol": "wst_read_probe",
+          "infra": null,
+          "controls": [
+            {
+              "name": "bounds-malloc",
+              "observed": "fault"
+            },
+            {
+              "name": "uaf-malloc",
+              "observed": "fault"
+            }
+          ]
+        },
+        {
+          "case": "09_cfc15838bdec_capture_ifinfo_out_parameter_left_unassigned",
+          "verdict": "CAUGHT",
+          "attribution": "probe",
+          "cause": 25,
+          "symbol": "wst_read_probe",
+          "infra": null,
+          "controls": [
+            {
+              "name": "bounds-malloc",
+              "observed": "fault"
+            },
+            {
+              "name": "uaf-malloc",
+              "observed": "fault"
+            }
+          ]
+        }
+      ]
+    },
+    "memcached": {
+      "identical": true,
+      "count": 3,
+      "cases": [
+        {
+          "case": "00_0d4901071c74_restart_line_freed_at_entry_but_not_cleared",
+          "verdict": "CAUGHT",
+          "attribution": "probe",
+          "cause": 25,
+          "symbol": "mct_read_probe",
+          "infra": null,
+          "controls": [
+            {
+              "name": "bounds-malloc",
+              "observed": "fault"
+            },
+            {
+              "name": "uaf-malloc",
+              "observed": "fault"
+            }
+          ]
+        },
+        {
+          "case": "01_e7793811f8c8_logger_write_to_watcher_freed_by_the_poll",
+          "verdict": "CAUGHT",
+          "attribution": "probe",
+          "cause": 25,
+          "symbol": "mct_write_probe",
+          "infra": null,
+          "controls": [
+            {
+              "name": "bounds-malloc",
+              "observed": "fault"
+            },
+            {
+              "name": "uaf-malloc",
+              "observed": "fault"
+            }
+          ]
+        },
+        {
+          "case": "02_3bc58f6ea55a_logger_loop_condition_still_reads_the_freed_watcher",
+          "verdict": "CAUGHT",
+          "attribution": "probe",
+          "cause": 25,
+          "symbol": "mct_read_probe",
+          "infra": null,
+          "controls": [
+            {
+              "name": "bounds-malloc",
+              "observed": "fault"
+            },
+            {
+              "name": "uaf-malloc",
+              "observed": "fault"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "sdk": {
+    "compiled": 1349,
+    "failed": 0,
+    "mallocng_policy": "PASS"
+  },
+  "lit": {
+    "passed": 149,
+    "unsupported": 1,
+    "failed": [
+      "shared-patches-present.test"
+    ]
+  },
+  "retained_inputs": 184,
+  "quick_executable_hashes_matched": 28,
+  "retained_budget_replay": [
+    "control",
+    "step1"
+  ]
+}

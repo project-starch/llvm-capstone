@@ -1,0 +1,52 @@
+[
+  [
+    "entry and slot record",
+    2846364,
+    2846448
+  ],
+  [
+    "stride",
+    2846448,
+    2846744
+  ],
+  [
+    "slot_take handoff",
+    2846744,
+    2846764
+  ],
+  [
+    "initial prefix and slack",
+    2846764,
+    2846864
+  ],
+  [
+    "offset cycle",
+    2846864,
+    2846924
+  ],
+  [
+    "representable offset",
+    2846924,
+    2847184
+  ],
+  [
+    "offset prefix",
+    2847184,
+    2847276
+  ],
+  [
+    "final prefix and footer",
+    2847276,
+    2847464
+  ],
+  [
+    "slot_key handoff",
+    2847464,
+    2847492
+  ],
+  [
+    "return",
+    2847492,
+    2847536
+  ]
+]

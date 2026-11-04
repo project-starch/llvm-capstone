@@ -327,3 +327,8 @@ Build the same contract with a native RV64 musl toolchain for the reference
 argument. The native allocator is used only as a test control. Runtime test
 records identify the exact application, launcher, module, emulator and images;
 old native-heap or buddy-allocator results are not qualification of this port.
+
+The [initial-prefix experiment](results/malloc-fastpath/README.md) records
+exclusive malloc/free instruction budgets and qualification for selecting the
+slot record's prefix directly before `enframe` applies its offset. Its matched
+slices show a small local saving; the full allocator overhead remains unresolved.
