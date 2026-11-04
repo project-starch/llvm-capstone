@@ -280,3 +280,29 @@ and the negative-control logs. Retained p13 evidence:
 `~/lanes/laneAG2/round3-gates-{launcher,final-native}` and
 `logs/round3/gate-comparison.{txt,json}`. VM disks, copied inputs, build trees and
 platform copies are scratch; result logs, hashes and profiles are retained.
+
+## Experimental physical-slot transport
+
+`native_slot_transport=1` selects the opt-in VM export/import backend and
+requires QEMU `x-capstone-context-transport=true`. It is default off. The
+module serializes ownership under `vm_lock`, exports a stopped kernel-owned
+frame when another needs the physical slot, and imports it before resume or
+collection. Terminal slots are reclaimed before admission. Exported frames
+are cleared with their tags before release. User-backed thread-start frames
+are unsupported by this backend; native fork and nested signal handlers
+remain unimplemented. This does not qualify the frozen I1/I9 contract.
+
+`build-contracts.sh` builds `slot-progress`. Queue `run-slot-progress.sh` with
+`LANE_ROOT`, `NATIVE_PLATFORM` and a fresh `CONTRACT_OUT`. It requires both
+native children to produce output, stops the first, drains old output, resumes
+it and requires new output after FP work while the second remains alive. Both
+are reaped and module unload and kernel diagnostics are checked. With
+`SLOT_TRANSPORT=0`, the same oracle must fail because the second child cannot
+progress while the first owns the sole slot. This is a deliberate one-slot
+risk probe; ordinary contract/gate runs retain 32 slots.
+
+The contract runner accepts `NATIVE_CONTEXT_TRANSPORT=1`. For matched exec
+measurements, the same setting adds the model property and `NATIVE_SLOTS`
+selects the physical slot count (default 2); select the module backend through
+`NATIVE_MODULE_ARGS`. Preserve plain/launcher/native identities and original
+oracles. Attempt counts do not price QEMU's hidden state-copy work as cycles.

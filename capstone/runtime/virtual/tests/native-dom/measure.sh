@@ -9,7 +9,7 @@ cd "$W/src"
 export CAPSTONE_TOOLCHAIN_CHECKED=1 CAPSTONE_TMP_ROOT=$W/tmp CAPSTONE_QEMU_LOCK=$W/measure.lock
 source capstone/tests/capstone-test-env.sh
 export PYTHONDONTWRITEBYTECODE=1 CAPSTONE_SPEC_VM_STATES=$W/states SHARE=$W
-export MICRO=$W/micro KIT=$HOME/prof-dev/kit4 VMHOST=$W/src/capstone/runtime/host SLOTS=2
+export MICRO=$W/micro KIT=$HOME/prof-dev/kit4 VMHOST=$W/src/capstone/runtime/host SLOTS=${NATIVE_SLOTS:-2}
 export DOM_TRAMPOLINE=$W/trampoline.bin
 export DOM_CHILD=$W/micro/lqmicro-cap DOM_PROFILER=$W/contracts/profile.py
 export ORIGINAL_PROF_REPORT=$KIT/tools/prof-report.py NM=$HOME/prof-dev/cap4/build/bin/llvm-nm

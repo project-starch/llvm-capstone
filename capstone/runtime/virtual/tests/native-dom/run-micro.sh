@@ -61,7 +61,9 @@ VMSTATE=$STATES/lq-$(printf '%s' "$OUT" | sha256sum | cut -c1-12); rm -rf "$VMST
 ln -s "$VMSTATE" "$OUT/vm"
 export CAPSTONE_QEMU_LOCK=$OUT/qemu.lock
 vm() { env PYTHONPATH="$VMHOST" python3 -m capstone_vm --state "$OUT/vm" "$@"; }
-UP=(--cpu-prop x-capstone-test-csrs=true); [ "$KIND" = capstone ] && UP+=(--exact-bounds)
+UP=(--cpu-prop x-capstone-test-csrs=true)
+[[ ${NATIVE_CONTEXT_TRANSPORT:-0} != 1 ]] || UP+=(--cpu-prop x-capstone-context-transport=true)
+[ "$KIND" = capstone ] && UP+=(--exact-bounds)
 # SLOTS=N: N saved-context slots (QEMU property and module parameter). With the default 1 a domain
 # that spawns a domain and waits for it deadlocks: the child waits in vm_ioctl for the slot its
 # waiting parent holds (the exec mode, and perlbench's test.pl)

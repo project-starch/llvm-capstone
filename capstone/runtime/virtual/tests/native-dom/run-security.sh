@@ -10,20 +10,23 @@ MODULE=${NATIVE_MODULE:-$PL/adapter/module/capstone_vm.ko}
 OUT=${SECURITY_OUT:-$W/security}; mkdir -p "$OUT"
 slots=${NATIVE_SLOTS:-32}
 wide=${NATIVE_WIDE_GRANTS:-0}
-[[ $slots =~ ^[0-9]+$ && $wide =~ ^[01]$ ]] || exit 2
+transport=${NATIVE_CONTEXT_TRANSPORT:-0}
+extra=()
+[[ $transport != 1 ]] || extra+=(--cpu-prop x-capstone-context-transport=true)
+[[ $slots =~ ^[0-9]+$ && $wide =~ ^[01]$ && $transport =~ ^[01]$ ]] || exit 2
 sha256sum "$MODULE" "$PL/qemu-system-riscv64" \
  "$PL/images/Image" "$W/contracts/scalar-memory.dom" "$W/contracts/resource-probe.dom" \
  "$W/contracts/dac-driver" > "$OUT/inputs.sha256"
 vm() { python3 -m capstone_vm --state "$OUT/vm" "$@"; }
 vm up --profile virtual --memory 8G --share-model mapped-xattr --share "$W" --no-pcrel \
- --cpu-prop x-capstone-supervisor-slots="$slots" --cpu-prop x-capstone-test-csrs=true \
+ "${extra[@]}" --cpu-prop x-capstone-supervisor-slots="$slots" --cpu-prop x-capstone-test-csrs=true \
  --qemu "$PL/qemu-system-riscv64" --kernel "$PL/images/Image" --firmware "$PL/images/fw_jump.elf" \
  --rootfs "$PL/images/rootfs.ext2" --launcher "$PL/adapter/capstone-vexec" --job-helper "$PL/adapter/capstone-job" \
  --module "$MODULE" --ssh-server "$PL/ssh-server/dropbearmulti" > "$OUT/up.log" 2>&1
 trap 'vm down >/dev/null 2>&1 || true' EXIT
 vm exec -- sh -c 'set -e
 rmmod capstone_vm
-insmod /mnt/control/module dom_binfmt=1 supervisor_slots="$1" dom_wide_grants="$2"
+insmod /mnt/control/module dom_binfmt=1 supervisor_slots="$1" dom_wide_grants="$2" native_slot_transport="$3"
 echo 0 >/proc/sys/fs/binfmt_misc/status
 echo 0 >/proc/sys/kernel/randomize_va_space
 cp /mnt/host/contracts/scalar-memory.dom /mnt/host/contracts/resource-probe.dom /mnt/host/contracts/dac-driver /tmp/
@@ -39,7 +42,7 @@ mknod /tmp/resource-root/null-device c 1 3
 : >/tmp/resource-outside
 echo private >/tmp/resource-root/no-permission
 echo file >/tmp/resource-root/fd-input
-chmod 000 /tmp/resource-root/no-permission' sh "$slots" "$wide" > "$OUT/setup.log" 2>&1
+chmod 000 /tmp/resource-root/no-permission' sh "$slots" "$wide" "$transport" > "$OUT/setup.log" 2>&1
 if [[ ${TEST_WIDE_GRANTS:-0} == 1 ]]; then
  vm exec -- sh -c 'set -e
 cp /mnt/host/contracts/wide-grants.dom /tmp/

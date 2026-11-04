@@ -99,6 +99,7 @@ struct cv_thread {
     struct page *frame_page;
     bool user_frame;
     bool started, reply_cap, terminal;
+    bool slot_exported; /* VM transport image in the kernel-owned frame */
     unsigned long event;
     /* S-24: the same kind-4 fault resolved repeatedly without changing anything. The RTL's walker
      * faults on a clear A bit and never sets it, so a PTE this module leaves untouched can re-fault
@@ -588,6 +589,12 @@ module_param(supervisor_slots, ulong, 0444);
 MODULE_PARM_DESC(supervisor_slots,
     "saved-context slots the processor has (default 1, as vp2); the module never issues an entry "
     "beyond this many live frames");
+/* Experimental VM backend: requires x-capstone-context-transport. Never
+ * enable on the legacy RTL ABI, which uses the extension area differently. */
+static bool native_slot_transport;
+module_param(native_slot_transport, bool, 0444);
+MODULE_PARM_DESC(native_slot_transport,
+    "experimental VM protected-frame slot export/import (default off)");
 static DECLARE_WAIT_QUEUE_HEAD(slot_wait);
 /* Writers and admission hold vm_lock. A waiter snapshots this generation
  * before dropping the lock, then checks it without sleeping in the wait
@@ -605,7 +612,7 @@ static unsigned slot_live(struct cv_thread **holder)
     unsigned n = 0;
     list_for_each_entry(c, &contexts, link)
         list_for_each_entry(t, &c->threads, link)
-            if (t->started && !t->terminal) {
+            if (t->started && !t->terminal && !t->slot_exported) {
                 if (holder && !n) *holder = t;
                 ++n;
             }
@@ -626,6 +633,46 @@ static void slot_changed(void)
 static u64 allocated_total, high_water, collections_total, reclaimed_total;
 
 static unsigned long run(unsigned long frame, unsigned long action);
+
+/* vm_lock serializes physical-slot ownership and protected-frame lifetime.
+ * Only kernel pages can hold an importable transport image. User start frames
+ * remain on the legacy admission path until they have a protected copy. */
+static int slot_acquire(struct cv_thread *t)
+{
+    struct cv_thread *holder = NULL, *dead;
+    struct context *c;
+    unsigned long flags, result;
+    lockdep_assert_held(&vm_lock);
+    if (!native_slot_transport || (t->started && !t->slot_exported))
+        return 0;
+    if (t->user_frame) return -EOPNOTSUPP;
+    /* A terminal event can precede close(). Reclaim its occupied slot before
+     * admitting another frame, even when the exiting task has not run yet. */
+    list_for_each_entry(c, &contexts, link)
+        list_for_each_entry(dead, &c->threads, link)
+            if (dead->started && dead->terminal && !dead->slot_exported) {
+                preempt_disable(); local_irq_save(flags);
+                run(dead->frame_pa, 1);
+                local_irq_restore(flags); preempt_enable();
+                dead->started = false;
+            }
+    if (slot_live(&holder) >= supervisor_slots) {
+        if (!holder || holder->user_frame) return -EOPNOTSUPP;
+        preempt_disable(); local_irq_save(flags);
+        result = run(holder->frame_pa, 4);
+        local_irq_restore(flags); preempt_enable();
+        if (result) return -EIO;
+        holder->slot_exported = true;
+    }
+    if (t->slot_exported) {
+        preempt_disable(); local_irq_save(flags);
+        result = run(t->frame_pa, 5);
+        local_irq_restore(flags); preempt_enable();
+        if (result) return -EIO;
+        t->slot_exported = false;
+    }
+    return 0;
+}
 
 static struct cv_thread *find_thread(struct context *c, u64 id)
 {
@@ -1054,6 +1101,8 @@ static int collect(struct context *c, struct cv_thread *owner)
                  node_retired(c), node_available(c), collect_skips);
     return -ENOMEM;
 #endif
+    error = slot_acquire(owner);
+    if (error) return error;
     /* The unpinned sweep covers the whole mm, including retired arenas that
      * are still mapped. Pinning only current arenas could resurrect stale IDs.
      * Hold mmap_lock through the sweep/recycle so fork and unmap cannot copy or
@@ -2471,7 +2520,7 @@ static long cv_step_locked(struct context *c, struct cv_step *request)
      * the same-context case cannot normally arise; it is rejected here too rather than
      * deadlocking if it ever does. vm_lock must be dropped while waiting, so the wait is
      * outside it and the ioctl restarts. */
-    if (!t->started) {
+    if (!native_slot_transport && !t->started) {
         struct cv_thread *holder = NULL;
         if (slot_live(&holder) >= supervisor_slots) {
             unsigned long generation = slot_generation;
@@ -2483,6 +2532,8 @@ static long cv_step_locked(struct context *c, struct cv_step *request)
             return rc ? -EINTR : -EAGAIN;   /* the launcher's loop retries EAGAIN, as it does for the quantum */
         }
     }
+    rc = slot_acquire(t);
+    if (rc) return rc;
     if (r.reply && !t->reply_cap) {
         t->frame[28] = r.result; t->frame[29] = 0;
     }
@@ -2825,7 +2876,7 @@ thread_unwind:
         t = find_thread(c, r.thread);
         if (!t || t == c->main_thread) { rc = -EINVAL; goto out; }
         r.frame = t->frame_user;
-        if (t->started) {
+        if (t->started && !t->slot_exported) {
             preempt_disable(); local_irq_save(flags);
             run(t->frame_pa, 1);
             local_irq_restore(flags); preempt_enable();
@@ -3010,7 +3061,7 @@ static int vm_release(struct inode *inode, struct file *f)
     reclaimed_total += c->stats.reclaimed;
     /* Stop every supervisor slot while its frame pages are still pinned. */
     list_for_each_entry(t, &c->threads, link) {
-        if (t->started) {
+        if (t->started && !t->slot_exported) {
             preempt_disable(); local_irq_save(flags);
             run(t->frame_pa, 1);
             local_irq_restore(flags); preempt_enable();

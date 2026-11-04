@@ -181,6 +181,13 @@ int main(int argc, char **argv)
         sa.sa_handler = SIG_DFL;
         return sigaction(SIGUSR1, &sa, 0) != 0;
     }
+    if (!strcmp(argv[1], "spin-progress")) {
+        for (;;) {
+            volatile double sum = 0;
+            for (unsigned i = 0; i < 200000; ++i) sum += 0.5;
+            if (sum != 100000.0 || output("ready\n", 6)) return 46;
+        }
+    }
     if (!strcmp(argv[1], "spin")) {
         if (output("ready\n", 6)) return 7;
         for (;;) __asm__ volatile ("" ::: "memory");
