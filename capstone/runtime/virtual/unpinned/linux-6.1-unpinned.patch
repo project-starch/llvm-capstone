@@ -62,7 +62,7 @@ diff --git a/arch/riscv/mm/captag.c b/arch/riscv/mm/captag.c
 new file mode 100644
 --- /dev/null
 +++ b/arch/riscv/mm/captag.c
-@@ -0,0 +1,285 @@
+@@ -0,0 +1,301 @@
 +// SPDX-License-Identifier: GPL-2.0-only
 +/* EXPERIMENT: unpinned capability pages with raw granule transport.
 + * CLDRAW/CSTRAW replace copy_page, including its byte copy: scalar loads may
@@ -245,46 +245,62 @@ new file mode 100644
 +
 +/* The opaque temporary (t0) survives neither an S-mode interrupt frame nor a
 + * firmware trap: both save integer registers only. Masking S interrupts does
-+ * not stop the firmware's machine-timer interrupt. Measured: with it landing
-+ * between a raw load and its store the copy loses a tag (irq-window-probe.c).
++ * not stop the firmware's machine-timer interrupt, and on an instruction-exact
++ * clock it can land between a raw load and its store, which then stores the
++ * granule without its tag (irq-window-probe.c reproduces this).
 + * The tested firmware (OpenSBI 1.3) serves that interrupt by clearing MTIE and
-+ * setting STIP, so STIP clear before the pass and set after it means one was
-+ * served inside the pass: redo it. The source is unchanged (one hart, no
-+ * interrupts), so the redo is exact. STIP set before the pass means MTIE is
-+ * already clear and none can arrive; the second pass therefore always ends the
-+ * loop. With Sstc there is no firmware timer interrupt and STIP rising inside
-+ * the window costs at most one redundant pass. This relies on that firmware
-+ * contract; it is no claim about other firmware or silicon. */
++ * setting STIP, so STIP clear before a pass and set after it means one was
++ * served inside it: redo the pass. The source is unchanged (one hart, S
++ * interrupts masked), so the redo is exact. STIP set before the pass means
++ * MTIE is already clear and none can arrive, so a second pass always ends the
++ * loop; a third would mean the firmware contract does not hold, and stopping
++ * is the only safe answer. With Sstc a supervisor deadline never enters
++ * firmware and STIP rising inside the pass costs one redundant pass; a
++ * firmware-owned machine timer would NOT be detected, nor would any other
++ * machine-level asynchronous event. This relies on that firmware contract and
++
++ * is no claim about other firmware or silicon. The caller masks interrupts. */
 +static void captag_copy_raw(void *to, const void *from)
 +{
-+	unsigned long flags, timer_before;
++	unsigned long timer_before;
++	unsigned int pass = 0;
 +
-+	local_irq_save(flags);
 +	for (;;) {
 +		timer_before = csr_read(CSR_IP);
 +		captag_copy_pass(to, from);
 +		if ((timer_before & IE_TIE) || !(csr_read(CSR_IP) & IE_TIE))
 +			break;
 +		++copy_retries;
++		BUG_ON(++pass > 1);
 +	}
-+	local_irq_restore(flags);
 +}
 +
 +void copy_highpage(struct page *to, struct page *from)
 +{
++	unsigned long flags;
++
 +	if (!static_branch_unlikely(&captag_on)) {
 +		copy_page(page_address(to), page_address(from));
 +		return;
 +	}
 +	/* The sticky flag over-approximates "may hold a tag": hardware sets it on
-+	 * every capability publication. A clear flag proves the source holds none,
-+	 * so an ordinary copy is exact and its stores clear any tag in the
-+	 * destination (rule 1). Callers already exclude writers of the source for
-+	 * the duration of a copy. Only flagged pages pay for the raw transport. */
++	 * every capability publication. A clear flag proves the source holds none
++	 * at this instant, so an ordinary copy is exact and its stores clear any
++	 * tag in the destination (rule 1). The query and the copy run with S
++	 * interrupts masked, so no other code on this hart can publish a tag in
++	 * between; a writer on another hart would, and one hart is required.
++	 * The contract is the one a data copy needs anyway: the caller keeps
++	 * other writers of the source out for the duration (migration and
++	 * compaction lock and unmap the page, fork COW of private anonymous
++	 * memory write-protects it). A page also writable through another
++	 * mapping, such as a private mapping of a shared file page, is outside
++	 * it. Only flagged pages pay for the raw transport. */
++	local_irq_save(flags);
 +	if (captag_summary(from, false))
 +		captag_copy_raw(page_address(to), page_address(from));
 +	else
 +		copy_page(page_address(to), page_address(from));
++	local_irq_restore(flags);
 +	++copies;
 +}
 +EXPORT_SYMBOL(copy_highpage);

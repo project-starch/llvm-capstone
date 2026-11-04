@@ -19,7 +19,7 @@ def main():
     parser.add_argument('--work', type=Path, required=True)
     parser.add_argument('--bulk', choices=['on', 'off'], default='on')
     parser.add_argument('--kernel-arg', action='append', default=[])
-    parser.add_argument('--expect', choices=['pass', 'lost-copy', 'stale-free', 'leaked-tag'], default='pass')
+    parser.add_argument('--expect', choices=['pass', 'lost-copy', 'stale-free', 'leaked-tag', 'plain-leak'], default='pass')
     args = parser.parse_args()
     args.work.mkdir(parents=True, exist_ok=False)
     stage = args.work / 'stage'
@@ -76,6 +76,11 @@ echo VIRTUAL_STAGED_DONE
               'kernel BUG at' in serial and
               'arch_free_page' in serial and
               'zero page=1 sticky=1 actual_tags=0' in serial)
+    elif args.expect == 'plain-leak':
+        # The clear-flag copy path leaves the destination's old tags in place.
+        ok = (result.returncode == 0 and 'BULK_MM FAIL' in serial and
+              bool(re.search(r'plain_copy missing_tags=0 extra_tags=[1-9][0-9]* ', serial)) and
+              bool(re.search(r'BULK_INSMOD_RC:[1-9]', serial)))
     else:
         ok = (result.returncode == 0 and 'BULK_MM FAIL' in serial and
               bool(re.search(r'kernel_reuse same_frame=1 actual_tags=[1-9]', serial)) and

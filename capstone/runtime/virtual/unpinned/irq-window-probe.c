@@ -38,11 +38,18 @@ static unsigned long query(struct page *page, bool ack)
     return result;
 }
 
+/* Setup and checking transfers use the kernel's protection against a firmware
+ * timer interrupt between the raw load and store. The copy under test does not
+ * depend on this helper. */
 static void raw16(void *dst, const void *src)
 {
-    asm volatile(".insn i 0x0b, 4, t0, %1, 0\n\t"
-                 ".insn s 0x0b, 5, t0, 0(%0)\n\tli t0, 0"
-                 : : "r"(dst), "r"(src) : "t0", "memory");
+    unsigned long before;
+    do {
+        before = csr_read(CSR_IP);
+        asm volatile(".insn i 0x0b, 4, t0, %1, 0\n\t"
+                     ".insn s 0x0b, 5, t0, 0(%0)\n\tli t0, 0"
+                     : : "r"(dst), "r"(src) : "t0", "memory");
+    } while (!(before & IE_TIE) && (csr_read(CSR_IP) & IE_TIE));
 }
 
 static void scrub(struct page *page)
@@ -74,7 +81,7 @@ static int __init probe_init(void)
     struct page *check = alloc_page(GFP_KERNEL | __GFP_ZERO);
     struct page *table = alloc_pages(GFP_KERNEL | __GFP_ZERO, 2);
     unsigned long desc[6] __aligned(16), flags, oldroot, id, deadline, t0, t1, calib = 0;
-    unsigned int i, k, n, hit = 0, lost_iter = 0, lost_hit = 0, lost_total = 0,
+    unsigned int i, k, hit = 0, lost_iter = 0, lost_hit = 0, lost_total = 0,
                  first_k = 0, first_d = 0, first_j = 0, setup_bad;
     unsigned long *header;
     int error = -ENOMEM;
@@ -113,8 +120,13 @@ static int __init probe_init(void)
     pr_info("IRQ_WINDOW arm_call_ticks=%lu\n", calib);
     for (k = 0; k < iters; k++) {
         unsigned int d = dmin + k % (dmax - dmin + 1), j = (k * 37) % 101, lost;
-        for (n = 0; n < j; n++)
-            asm volatile("nop");
+        /* Deadlines fall on multiples of a timer tick, so the position of the
+         * interrupt inside the six-instruction loop depends on how many
+         * instructions precede the copy. Pad with three- and two-instruction
+         * loops so every phase modulo six is reached, not a few. */
+        unsigned long pad3 = j + 1, pad2 = k % 5 + (k / 5) % 3;
+        asm volatile("1: nop\n\taddi %0, %0, -1\n\tbnez %0, 1b" : "+r"(pad3) : : "memory");
+        asm volatile("beqz %0, 2f\n1: addi %0, %0, -1\n\tbnez %0, 1b\n2:" : "+r"(pad2) : : "memory");
         deadline = get_cycles64() + calib + d;
         arm_timer(deadline);
         t0 = get_cycles64();

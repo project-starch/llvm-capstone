@@ -20,13 +20,19 @@ static unsigned long query(struct page *page, bool ack)
     return result;
 }
 
+/* Same protection as the kernel's raw copy: a firmware timer interrupt served
+ * between the load and the store loses the opaque temporary, so repeat the
+ * pair when STIP rose during it (see the README on firmware traps). */
 static void raw16(void *dst, const void *src)
 {
-    unsigned long flags;
+    unsigned long flags, before;
     local_irq_save(flags);
-    asm volatile(".insn i 0x0b, 4, t0, %1, 0\n\t"
-                 ".insn s 0x0b, 5, t0, 0(%0)\n\tli t0, 0"
-                 : : "r"(dst), "r"(src) : "t0", "memory");
+    do {
+        before = csr_read(CSR_IP);
+        asm volatile(".insn i 0x0b, 4, t0, %1, 0\n\t"
+                     ".insn s 0x0b, 5, t0, 0(%0)\n\tli t0, 0"
+                     : : "r"(dst), "r"(src) : "t0", "memory");
+    } while (!(before & IE_TIE) && (csr_read(CSR_IP) & IE_TIE));
     local_irq_restore(flags);
 }
 
@@ -172,6 +178,9 @@ static int __init probe_init(void)
     /* A source whose flag is clear is copied by ordinary stores. They must
      * still leave a destination that held tags on every granule tag-free. */
     scrub(plain, 1);
+    /* Distinct nonzero contents, written by ordinary stores: flags stay clear. */
+    for (i = 0; i < 2 * PAGE_SIZE / sizeof(unsigned long); i++)
+        WRITE_ONCE(((unsigned long *)page_address(plain))[i], 0x5a00000000000000UL + 0x10001UL * i);
     if (query(plain, false) || query(plain + 1, false)) {
         pr_info("BULK_MM plain source is flagged\n");
         goto out;

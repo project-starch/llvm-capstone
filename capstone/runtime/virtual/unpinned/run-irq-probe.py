@@ -24,6 +24,9 @@ def main():
                         help='instruction-exact virtual time (-icount shift=0), as the census platforms run')
     parser.add_argument('--params', default='iters=4000 dmin=1 dmax=24')
     parser.add_argument('--expect-lost', choices=['any', 'none', 'record'], default='record')
+    parser.add_argument('--expect-retries', choices=['any', 'none', 'record'], default='record')
+    parser.add_argument('--expect-window', choices=['inside', 'outside', 'record'], default='record',
+                        help='whether firmware timer deadlines fall inside the copy call')
     args = parser.parse_args()
     args.work.mkdir(parents=True, exist_ok=False)
     stage = args.work / 'stage'
@@ -70,15 +73,32 @@ echo VIRTUAL_STAGED_DONE
     serial = serial_path.read_text(errors='replace') if serial_path.exists() else ''
     summary = re.search(r'IRQ_WINDOW iterations=(\d+) deadline_in_copy=(\d+) lost_iterations=(\d+) '
                         r'lost_in_copy=(\d+) lost_granules=(\d+)', serial)
-    ok = (result.returncode == 0 and bool(summary) and 'IRQ_WINDOW DONE' in serial and
-          'VIRTUAL_STAGED_DONE' in serial and 'thread create refused' not in serial)
+    retries = re.search(r'CAPTAG_copy_retries:(\d+)', serial)
+    copies = re.search(r'CAPTAG_copies:(\d+)', serial)
+    cpu_txt = args.work / 'guest/cpu.txt'
+    cpu = cpu_txt.read_text() if cpu_txt.exists() else ''
+    # The requested configuration must be visible in the artifacts, or the run says nothing.
+    config_ok = ('BULK_ENABLED:' + ('Y' if args.bulk == 'on' else 'N') in serial and
+                 all(prop in cpu for prop in extra.split(',')))
+    ok = (result.returncode == 0 and 'IRQ_WINDOW DONE' in serial and
+          'VIRTUAL_STAGED_DONE' in serial and 'thread create refused' not in serial and
+          config_ok and bool(summary) and int(summary.group(1)) > 0)
+    iterations = int(summary.group(1)) if summary else -1
+    inside = int(summary.group(2)) if summary else -1
     lost = int(summary.group(3)) if summary else -1
-    if args.expect_lost == 'any':
-        ok = ok and lost > 0
-    elif args.expect_lost == 'none':
-        ok = ok and lost == 0
-    answer = {'pass': ok, 'runner_rc': result.returncode, 'expect_lost': args.expect_lost,
-              'lost_iterations': lost}
+    redo = int(retries.group(1)) if retries else -1
+    if args.expect_lost != 'record':
+        ok = ok and ((lost > 0) if args.expect_lost == 'any' else (lost == 0))
+    if args.expect_retries != 'record':
+        ok = ok and ((redo > 0) if args.expect_retries == 'any' else (redo == 0))
+    if args.expect_window != 'record':
+        ok = ok and ((inside > 0) if args.expect_window == 'inside' else (inside == 0))
+    answer = {'pass': ok, 'runner_rc': result.returncode, 'config_ok': config_ok,
+              'bulk': args.bulk, 'cpu_extra': extra, 'iterations': iterations,
+              'deadline_in_copy': inside, 'lost_iterations': lost, 'copy_retries': redo,
+              'copies': int(copies.group(1)) if copies else -1,
+              'expect': {'lost': args.expect_lost, 'retries': args.expect_retries,
+                         'window': args.expect_window}}
     (args.work / 'result.json').write_text(json.dumps(answer, indent=2) + '\n')
     print(json.dumps(answer))
     for line in serial.splitlines():
