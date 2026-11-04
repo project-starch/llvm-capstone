@@ -22,13 +22,15 @@
  *    `#ifndef __scc`, so defining __scc here suppresses both the macro and the
  *    `typedef long syscall_arg_t`, and pointers reach the boundary intact.
  *
- * 2. No `ecall`.
+ * 2. No `ecall` in the default delegated transport.
  *
  *    A domain cannot trap to Linux: its caller is a user process, not a kernel,
  *    and the trap vector belongs to the monitor. So the boundary is an ordinary
  *    call to __capstone_hostcall(), which the hostcall implementation provides.
  *    Keeping it an extern call (rather than inline asm) is what lets the whole
  *    libc compile before any hostcall transport exists.
+ *    The experimental native-task opt-in below instead calls a distinct
+ *    tag-preserving stub; it requires a matching protected kernel backend.
  *
  * NOTE for whoever writes __capstone_hostcall: `a`..`f` arrive as capabilities
  * for pointer arguments and as integers widened to capability width otherwise.
@@ -69,32 +71,47 @@ long __capstone_hostcall(long n, syscall_arg_t a, syscall_arg_t b,
                          syscall_arg_t c, syscall_arg_t d,
                          syscall_arg_t e, syscall_arg_t f);
 
+/* Experimental opt-in only. The default SDK keeps the delegated transport.
+ * The selected runtime must explicitly link native-syscall.S; there is no
+ * fallback that could issue this ABI through an ordinary Linux syscall. */
+#ifdef CAPSTONE_NATIVE_SYSCALL_ABI
+#ifndef CAPSTONE_RUNTIME_VIRTUAL
+#error "native syscall ABI requires the virtual profile"
+#endif
+long __capstone_native_syscall(long n, syscall_arg_t a, syscall_arg_t b,
+                              syscall_arg_t c, syscall_arg_t d,
+                              syscall_arg_t e, syscall_arg_t f);
+#define __capstone_syscall_entry __capstone_native_syscall
+#else
+#define __capstone_syscall_entry __capstone_hostcall
+#endif
+
 static inline long __syscall0(long n)
-{ return __capstone_hostcall(n, 0, 0, 0, 0, 0, 0); }
+{ return __capstone_syscall_entry(n, 0, 0, 0, 0, 0, 0); }
 
 static inline long __syscall1(long n, syscall_arg_t a)
-{ return __capstone_hostcall(n, a, 0, 0, 0, 0, 0); }
+{ return __capstone_syscall_entry(n, a, 0, 0, 0, 0, 0); }
 
 static inline long __syscall2(long n, syscall_arg_t a, syscall_arg_t b)
-{ return __capstone_hostcall(n, a, b, 0, 0, 0, 0); }
+{ return __capstone_syscall_entry(n, a, b, 0, 0, 0, 0); }
 
 static inline long __syscall3(long n, syscall_arg_t a, syscall_arg_t b,
                               syscall_arg_t c)
-{ return __capstone_hostcall(n, a, b, c, 0, 0, 0); }
+{ return __capstone_syscall_entry(n, a, b, c, 0, 0, 0); }
 
 static inline long __syscall4(long n, syscall_arg_t a, syscall_arg_t b,
                               syscall_arg_t c, syscall_arg_t d)
-{ return __capstone_hostcall(n, a, b, c, d, 0, 0); }
+{ return __capstone_syscall_entry(n, a, b, c, d, 0, 0); }
 
 static inline long __syscall5(long n, syscall_arg_t a, syscall_arg_t b,
                               syscall_arg_t c, syscall_arg_t d,
                               syscall_arg_t e)
-{ return __capstone_hostcall(n, a, b, c, d, e, 0); }
+{ return __capstone_syscall_entry(n, a, b, c, d, e, 0); }
 
 static inline long __syscall6(long n, syscall_arg_t a, syscall_arg_t b,
                               syscall_arg_t c, syscall_arg_t d,
                               syscall_arg_t e, syscall_arg_t f)
-{ return __capstone_hostcall(n, a, b, c, d, e, f); }
+{ return __capstone_syscall_entry(n, a, b, c, d, e, f); }
 
 /* No vDSO: there is no kernel-provided page in a domain's address space. */
 
