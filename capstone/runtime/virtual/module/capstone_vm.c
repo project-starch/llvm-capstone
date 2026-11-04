@@ -1512,7 +1512,10 @@ static void clear_page_tags(struct page *page)
  * Only for a teardown run while the owning task is exiting (PF_EXITING): its pages are dead, so their
  * bytes need not be kept, only their tags cleared. 1: store zero into one word of each granule (no load:
  * a scalar store clears its granule's tag, as clear_page_tags relies on). 2: MEASUREMENT ONLY, no sweep
- * at all -- leaves tags in frames returned to Linux; never set outside a timing boot. Measured cost of
+ * at all -- leaves tags in frames returned to Linux; never set outside a timing boot. 3: mode 1 for EVERY
+ * retire, CV_RETIRE included: the vp2 launcher's unmap_arena munmaps the whole mapping right after its
+ * CV_RETIRE (exec.c), so those bytes are dead too; a launcher that kept using a retired range would read
+ * zeros, never a tag. Measured cost of
  * mode 0 on silicon: about 0.77 ms per page (557.xz_r test, 130,628 pages, ~100 s per command). */
 static unsigned int retire_exit_sweep;
 module_param(retire_exit_sweep, uint, 0644);
@@ -1525,7 +1528,8 @@ static void zero_page_tags(struct page *page)
 
 static int retire(struct context *c, struct arena *a, bool destroying)
 {
-    unsigned int sweep = destroying && (current->flags & PF_EXITING) ? READ_ONCE(retire_exit_sweep) : 0;
+    unsigned int mode = READ_ONCE(retire_exit_sweep);
+    unsigned int sweep = mode == 3 ? 1 : destroying && (current->flags & PF_EXITING) ? mode : 0;
     unsigned long flags, old, status;
     unsigned i, swept;
     if (!destroying && arena_has_thread_frame(c, a))
