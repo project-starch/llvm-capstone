@@ -30,12 +30,19 @@ def runs(rundir):
 
 
 def main(argv):
+    if not argv:
+        print("usage: micro-table.py ARM=RUNDIR ...", file=sys.stderr)
+        return 2
     bad = 0
     print("| arm | mode | N | direct | program | launcher | module | kernel | busy total | idle |")
     print("|---|---|---:|---|---:|---:|---:|---:|---:|---:|")
     for spec in argv:
         arm, rundir = spec.split("=", 1)
-        for key, byr in sorted(runs(rundir).items()):
+        rows = runs(os.path.expanduser(rundir))
+        if not rows:
+            print(f"ERROR {arm}: no I/O invocations in {rundir}")
+            bad = 1
+        for key, byr in sorted(rows.items()):
             rs = sorted(byr)
             if len(rs) < 2 or byr[rs[0]] is None or byr[rs[-1]] is None:
                 print(f"ERROR {arm} {key}: rounds {rs}, a window missing or a program failed")
