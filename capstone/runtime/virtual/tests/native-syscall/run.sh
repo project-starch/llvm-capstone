@@ -19,11 +19,11 @@ source_files=("${common[@]}" "$here/../native-context/reference.c" "$here/refere
     "${source_files[@]}" -o "$out/build/reference"
 ASAN_OPTIONS=detect_leaks=1 "$out/build/reference" > "$out/reference.log" 2>&1
 cat "$out/reference.log"
-mutants=(PROC INHERITED REPLACEMENT OVERLAP HIDDEN RECHECK TAGS IOV RESTART)
+mutants=(PROC INHERITED REPLACEMENT OVERLAP HIDDEN RECHECK TAGS IOV RESTART OFFSET)
 labels=('proc-memory and alias open refused' 'inherited fd refused' 'descriptor replacement refused'
         'overlapping argument snapshot' 'hidden pointer command refused'
         'recycled sentinel unchanged' 'scalar output clears tags'
-        'iovec snapshot used for copyout' 'never restart after effects')
+        'iovec snapshot used for copyout' 'never restart after effects' 'exchange offset retained')
 for i in "${!mutants[@]}"; do
     mutation=${mutants[i]}
     "$cc" "${flags[@]}" -D"NS_MUTATE_$mutation" "${source_files[@]}" -o "$out/build/$mutation"
@@ -37,7 +37,7 @@ done
 "$cc" "${flags[@]}" -c "$here/reference.c" -o "$out/build/native-syscall-reference.o"
 "$cc" "${flags[@]}" -c "${common[0]}" -o "$out/build/native-syscall-table.o"
 ar rcs "$out/build/libnative-syscall-reference.a" "$out/build/native-syscall-reference.o" "$out/build/native-syscall-table.o"
-sha256sum "${source_files[@]}" "$here/table-test.c" "$here/run.sh" \
+sha256sum "$repo/capstone/runtime/common/native-syscall.c" "${source_files[@]}" "$here/table-test.c" "$here/run.sh" \
     "$repo/capstone/runtime/include/capstone/native-syscall.h" \
     "$repo/capstone/runtime/include/capstone/native-syscall-abi.h" \
     "$repo/capstone/runtime/include/capstone/native-context.h" > "$out/sources.sha256"

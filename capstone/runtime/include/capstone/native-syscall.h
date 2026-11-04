@@ -71,6 +71,13 @@ struct ns_ops {
     struct ns_completion (*issue)(void *, const struct ns_invocation *, void *held);
     void (*release)(void *, void *held);
 };
+/* Trusted exchange adapter: offsets refer to actual protected register refs.
+ * This structure is never accepted from an ioctl or copied from userspace. */
+struct ns_request {
+    cn_u64 nr, scalar[6], offsets[6];
+    struct cn_capref refs[6];
+    unsigned tagged, nulls;
+};
 struct ns_session;
 /* Linkable executable double, not a production kernel dispatcher. Serialized
  * calls only; one session per protected context for its entire lifetime. */
@@ -78,5 +85,7 @@ int ns_session_create(struct cn_context *, const struct cn_owner *, const struct
                       void *, struct ns_session **);
 void ns_session_free(struct ns_session *);
 int ns_dispatch(struct ns_session *, cn_u64 epoch, struct ns_result *);
+int ns_dispatch_request(struct ns_session *, cn_u64 epoch,
+                        const struct ns_request *, struct ns_result *);
 void ns_get_counters(const struct ns_session *, struct ns_counters *);
 #endif

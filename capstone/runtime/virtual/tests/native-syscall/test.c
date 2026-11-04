@@ -414,9 +414,33 @@ static void vectors_and_missing_helpers(void)
     CHECK("missing copy fails closed", dispatch(f).value == -ENOSYS);
     destroy(f);
 }
+static void exchange_adapter(void)
+{
+    struct fixture *f = create();
+    struct ns_request r = {.nr = CAPSTONE_SYS_read, .tagged = 2};
+    struct ns_result out;
+    r.scalar[0] = 3; r.scalar[1] = 64; r.scalar[2] = 16;
+    r.offsets[1] = 64;
+    read_request(f, CAPSTONE_SYS_read, 3, 16);
+    CHECK("exchange reference", !cn_get_capref(f->context, &f->owner, 11, &r.refs[1]));
+    CHECK("exchange dispatch", !ns_dispatch_request(f->session, f->epoch, &r, &out));
+    CHECK("exchange offset retained", out.value == 16 && f->objects[1].data[0] == 0x5a &&
+          f->objects[1].data[63] == 0x5a && f->objects[1].data[64] == 0x42 &&
+          f->objects[1].data[79] == 0x42 && f->objects[1].data[80] == 0x5a);
+    CHECK("exchange replay", !ns_dispatch_request(f->session, f->epoch, &r, &out) && out.value == -ESTALE);
+    enter(f);
+    CHECK("exchange stale reference", !ns_dispatch_request(f->session, f->epoch, &r, &out) && out.value < 0);
+    enter(f);
+    CHECK("exchange fresh reference", !cn_get_capref(f->context, &f->owner, 11, &r.refs[1]));
+    r.offsets[1] = UINT64_MAX;
+    unsigned before = f->issue_count;
+    CHECK("exchange offset overflow", !ns_dispatch_request(f->session, f->epoch, &r, &out) &&
+          out.value == -EOVERFLOW && f->issue_count == before);
+    destroy(f);
+}
 int main(void)
 {
-    scalar_and_buffers(); lifetimes_and_restart(); resources(); vectors_and_missing_helpers();
+    scalar_and_buffers(); lifetimes_and_restart(); resources(); vectors_and_missing_helpers(); exchange_adapter();
     printf("native syscall checks=%u failures=%u\n", checks, failures);
     return failures ? 1 : 0;
 }
