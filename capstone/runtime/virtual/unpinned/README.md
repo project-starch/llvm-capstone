@@ -68,6 +68,21 @@ Every temporary reference is released on success and failure. Shared tagged back
 unsupported large-page mappings, migration entries and swapped PTEs refuse the
 sweep; an incomplete sweep never permits recycling.
 
+`unpinned_fast_sweep=1` is a separate experimental option, default OFF. It
+queries each ordinary base page's sticky tag summary under the PTE lock and
+takes a reference to a tagged private anonymous page before releasing that
+lock. Untagged pages need no GUP or access-bit update. The scan still covers
+the entire mm, retains mmap_lock through collection, refuses unsupported
+entries and releases every acquired reference on failure. It does not cache
+PFNs or skip retired mappings. Special/device PTEs and tagged compound pages
+are refused explicitly. This option needs its own qualification before use
+as a default; `unpinned=1` alone retains the original GUP scanner.
+
+`python3 sweep-double.py` checks the abstract sweep/hold/recycle contract and
+requires deliberately incomplete, tag-omitting and reference-omitting variants
+to fail. It is an executable interface double, not a Linux race test or a
+substitute for running the namespace and stale-capability fixtures.
+
 Before publishing a fresh namespace in an mm, the same scan removes old tags
 left by a prior close/open. A raw load followed by a scalar store rewrites the
 original low word, retaining bytes while clearing the storage tag under rule 1.

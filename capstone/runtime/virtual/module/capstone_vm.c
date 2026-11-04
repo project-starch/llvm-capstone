@@ -332,6 +332,10 @@ module_param(arena_pin, bool, 0644);
 static bool unpinned;
 module_param(unpinned, bool, 0444);
 MODULE_PARM_DESC(unpinned, "Use the platform's raw tag-aware mm instead of payload pins");
+/* Experimental sweep optimization; independently opt in until qualified. */
+static bool unpinned_fast_sweep;
+module_param(unpinned_fast_sweep, bool, 0444);
+MODULE_PARM_DESC(unpinned_fast_sweep, "Hold tagged base pages directly under their PTE lock");
 static bool unpinned_exact_bounds;
 static unsigned long unpinned_faults, unpinned_sweep_pages;
 module_param(unpinned_faults, ulong, 0444);
@@ -913,6 +917,76 @@ static unsigned long unpinned_page_summary(struct page *page)
     return result;
 }
 
+/* Return one referenced tagged base page, or zero at the end. Unlike a fault or
+ * a data access this walk must neither populate memory nor mark it accessed.
+ * Inspect the sticky tag summary and take the reference under the PTE lock:
+ * retaining a PFN after dropping that lock would race migration/page reuse.
+ * vm_lock stops capability execution; mmap_lock excludes fork and unmap until
+ * the caller has swept the COMPLETE mm and recycled identities. A zero summary
+ * therefore cannot acquire a new capability tag while this walk is in flight.
+ * No allocation occurs under the PTE lock. At most one PTE table is scanned
+ * without releasing it, including when every resident page has no tags. */
+static long next_tagged(struct mm_struct *mm, unsigned long address, unsigned long end,
+                        unsigned long *at, struct page **held)
+{
+    while (address < end) {
+        pgd_t *pgd = pgd_offset(mm, address);
+        p4d_t *p4d;
+        pud_t *pud;
+        pmd_t *pmd;
+        pte_t *pte;
+        spinlock_t *lock;
+        unsigned long stop;
+        long found = 0;
+        if (pgd_none(*pgd)) { address = pgd_addr_end(address, end); continue; }
+        if (pgd_bad(*pgd)) return -EFAULT;
+        p4d = p4d_offset(pgd, address);
+        if (p4d_none(*p4d)) { address = p4d_addr_end(address, end); continue; }
+        if (p4d_bad(*p4d)) return -EFAULT;
+        pud = pud_offset(p4d, address);
+        if (pud_none(*pud)) { address = pud_addr_end(address, end); continue; }
+        if (pud_leaf(*pud)) return -EOPNOTSUPP;
+        if (pud_bad(*pud)) return -EFAULT;
+        pmd = pmd_offset(pud, address);
+        if (pmd_none(*pmd)) { address = pmd_addr_end(address, end); continue; }
+        if (pmd_leaf(*pmd)) return -EOPNOTSUPP;
+        if (pmd_bad(*pmd)) return -EFAULT;
+        pte = pte_offset_map_lock(mm, pmd, address, &lock);
+        if (!pte) return -EFAULT;
+        stop = pmd_addr_end(address, end);
+        for (unsigned long i = 0; address < stop; address += PAGE_SIZE, ++i) {
+            pte_t value = READ_ONCE(pte[i]);
+            struct page *page;
+            unsigned long pfn;
+            if (pte_none(value)) continue;
+            if (!pte_present(value)) { found = -EOPNOTSUPP; break; }
+            pfn = pte_pfn(value);
+            if (is_zero_pfn(pfn)) continue;
+            /* Device/special PTEs are not ordinary RAM references. Refuse
+             * instead of treating their PFNs as struct page objects. */
+            if (pte_special(value) || pte_devmap(value) || !pfn_valid(pfn)) {
+                found = -EOPNOTSUPP; break;
+            }
+            page = pfn_to_page(pfn);
+            if (!unpinned_page_summary(page)) continue;
+            /* Only private anonymous base pages are supported. These checks
+             * precede get_page, so no device/compound reference is acquired. */
+            if (PageCompound(page) || !PageAnon(page) || page_mapcount(page) != 1) {
+                found = -EOPNOTSUPP; break;
+            }
+            get_page(page);
+            *at = address;
+            *held = page;
+            found = 1;
+            break;
+        }
+        pte_unmap_unlock(pte, lock);
+        if (found) return found;
+        cond_resched();
+    }
+    return 0;
+}
+
 /* vm_lock and mmap_lock are held. Temporary page references stabilize the sweep's physical
  * list, including pages outside currently registered arenas. Shared tagged
  * backing is refused: this namespace cannot sweep another process's copies.
@@ -936,22 +1010,28 @@ static int unpinned_hold_mm(struct mm_struct *mm, struct collect_list *held)
         while (address < end) {
             struct page *page;
             unsigned long at, pfn;
-            long found = next_resident(mm, address, end, &at, &pfn);
+            long found;
             int error;
+            if (unpinned_fast_sweep)
+                found = next_tagged(mm, address, end, &at, &page);
+            else
+                found = next_resident(mm, address, end, &at, &pfn);
             if (found < 0) return found;
             if (!found) break;
             address = at + PAGE_SIZE;
-            if (is_zero_pfn(pfn)) continue;
-            found = get_user_pages_remote(mm, at, 1, FOLL_FORCE | FOLL_NOFAULT,
-                                          &page, NULL, NULL);
-            if (found != 1) {
-                pr_warn("capstone_vm: unpinned sweep cannot hold %lx flags %lx: %ld\n",
-                        at, v->vm_flags, found);
-                return found < 0 ? found : -EFAULT;
-            }
-            if (!unpinned_page_summary(page)) {
-                put_page(page);
-                continue;
+            if (!unpinned_fast_sweep) {
+                if (is_zero_pfn(pfn)) continue;
+                found = get_user_pages_remote(mm, at, 1, FOLL_FORCE | FOLL_NOFAULT,
+                                              &page, NULL, NULL);
+                if (found != 1) {
+                    pr_warn("capstone_vm: unpinned sweep cannot hold %lx flags %lx: %ld\n",
+                            at, v->vm_flags, found);
+                    return found < 0 ? found : -EFAULT;
+                }
+                if (!unpinned_page_summary(page)) {
+                    put_page(page);
+                    continue;
+                }
             }
             if (!PageAnon(page) || page_mapcount(page) != 1 ||
                 (v->vm_flags & VM_SHARED)) {
