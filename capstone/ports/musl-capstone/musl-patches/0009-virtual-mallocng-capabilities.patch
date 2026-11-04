@@ -549,7 +549,7 @@ access. No decision code changes.
  static inline uint32_t activate_group(struct meta *m)
  {
  	assert(!m->avail_mask);
-@@ -121,17 +172,51 @@
+@@ -121,17 +172,55 @@
  	return m->avail_mask = mask & act;
  }
  
@@ -569,6 +569,9 @@ access. No decision code changes.
 +		return s->prefix;
 +	return (unsigned char *)p - 4;
 +}
++/* slot_take returns the parent at its base. Before enframe applies its offset,
++ * the prefix is therefore the record's, without a cursor/base selection. */
++#define cap_start_prefix(p, s) ((s)->prefix)
 +#define CAP_SLOT , struct capstone_malloc_slot *cap_s
 +#define CAP_S , cap_s
 +/* The record of a pointer mallocng did not receive with one: aligned_alloc's own malloc result,
@@ -581,6 +584,7 @@ access. No decision code changes.
 +}
 +#else
 +#define cap_prefix(p, s) ((unsigned char *)(p) - 4)
++#define cap_start_prefix(p, s) cap_prefix(p, s)
 +#define CAP_SLOT
 +#define CAP_S
 +#endif
@@ -606,7 +610,7 @@ access. No decision code changes.
  		assert(!offset);
  		offset = *(uint32_t *)(p - 8);
  		assert(offset > 0xffff);
-@@ -154,11 +239,12 @@
+@@ -154,11 +243,12 @@
  		assert(offset <= meta->maplen*4096UL/UNIT - 1);
  	}
  	return (struct meta *)meta;
@@ -621,7 +625,7 @@ access. No decision code changes.
  	if (reserved >= 5) {
  		assert(reserved == 5);
  		reserved = *(const uint32_t *)(end-4);
-@@ -172,16 +258,34 @@
+@@ -172,16 +262,34 @@
  	return end-reserved-p;
  }
  
@@ -657,7 +661,7 @@ access. No decision code changes.
  {
  	int reserved = end-p-n;
  	if (reserved) end[-reserved] = 0;
-@@ -190,19 +294,104 @@
+@@ -190,19 +298,104 @@
  		end[-5] = 0;
  		reserved = 5;
  	}
@@ -761,12 +765,12 @@ access. No decision code changes.
  	// reuse, facilitate trapping double-free.
 -	int off = (p[-3] ? *(uint16_t *)(p-2) + 1 : ctr) & 255;
 -	assert(!p[-4]);
-+	int off = (cap_prefix(p, cap_s)[1] ? *(uint16_t *)(cap_prefix(p, cap_s)+2) + 1 : ctr) & 255;
-+	assert(!cap_prefix(p, cap_s)[0]);
++	int off = (cap_start_prefix(p, cap_s)[1] ? *(uint16_t *)(cap_start_prefix(p, cap_s)+2) + 1 : ctr) & 255;
++	assert(!cap_start_prefix(p, cap_s)[0]);
  	if (off > slack) {
  		size_t m = slack;
  		m |= m>>1; m |= m>>2; m |= m>>4;
-@@ -210,19 +399,43 @@
+@@ -210,19 +403,43 @@
  		if (off > slack) off -= slack+1;
  		assert(off <= slack);
  	}
@@ -796,8 +800,8 @@ access. No decision code changes.
  		// if enframing at non-zero offset.
 -		*(uint16_t *)(p-2) = off;
 -		p[-3] = 7<<5;
-+		*(uint16_t *)(cap_prefix(p, cap_s)+2) = off;
-+		cap_prefix(p, cap_s)[1] = 7<<5;
++		*(uint16_t *)(cap_start_prefix(p, cap_s)+2) = off;
++		cap_start_prefix(p, cap_s)[1] = 7<<5;
  		p += UNIT*off;
  		// for nonzero offset there is no permanent check
  		// byte, so make one.
