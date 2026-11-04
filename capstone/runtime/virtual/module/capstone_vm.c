@@ -2219,8 +2219,8 @@ finished:
             ++fault_ahead_windows;
             fault_ahead_pages += done;
             if (diag_admit)
-                pr_info("capstone_vm: unpinned ahead arena 0x%lx page %u want %lu resolved %lu fault 0x%lx\n",
-                        a->address, index, ahead, done, address - PAGE_SIZE);
+                pr_info("capstone_vm: unpinned ahead arena 0x%lx page %u want %lu resolved %lu fault 0x%lx%s\n",
+                        a->address, index, ahead, done, address - PAGE_SIZE, TEST_BY());
         }
     }
     return 0;

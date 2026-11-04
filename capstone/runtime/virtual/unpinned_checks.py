@@ -26,9 +26,9 @@ def attach(log, runs, hooks=False):
         if retire:
             current['raw_retire'][int(retire[1], 16)] = dict(zip(
                 ('events', 'resolves', 'touch', 'ahead'), map(int, retire.group(2, 3, 4, 5))))
-        ahead = re.search(r'unpinned ahead arena 0x([0-9a-f]+) page (\d+) want (\d+) resolved (\d+) fault 0x([0-9a-f]+)', line)
+        ahead = re.search(r'unpinned ahead arena 0x([0-9a-f]+) page (\d+) want (\d+) resolved (\d+) fault 0x([0-9a-f]+) by=(\w+)', line)
         if ahead and hooks:
-            current['ahead'].append((int(ahead[1], 16), *map(int, ahead.group(2, 3, 4)), int(ahead[5], 16)))
+            current['ahead'].append((int(ahead[1], 16), *map(int, ahead.group(2, 3, 4)), int(ahead[5], 16), ahead[6]))
 
 
 def region_arena(run):
