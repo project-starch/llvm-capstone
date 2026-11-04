@@ -10,7 +10,9 @@ CSRUNV of an ioctl (3), or after CSRUNV returns a fault, before it is
 resolved (4). The module counts injections, the stops they caused, any CSRUNV
 entered and any GUP requested while one was pending (violations), plus every
 GUP request and its size, every stop check made with interrupts on, and every
-CSRUNV entry, and prints them at rmmod. /proc/vmstat's FOLL_PIN counters show
+CSRUNV entry, and prints them at rmmod. It also counts the stops nobody injected (a real
+quantum end, signal or reschedule) where they change what a fault pins, and tags every
+fault-ahead window with the route that resolved its fault (by=step or by=resolve). /proc/vmstat's FOLL_PIN counters show
 that every pin taken was released, including over the pin-ahead modes,
 retirement, a dying domain and, with --malloc-application (malloc.dom from
 malloc-contract.c), mremap growth, shrinking and failure.
@@ -183,9 +185,12 @@ def parse(log):
                 (k, int(v)) for k, v in re.findall(r'(fault_ahead_\w+)=(\d+)', m.group(4)))
             continue
         if current and line.startswith('HOOK_DIAG:') and (m := re.search(
-                r'capstone_vm: fault-ahead arena 0x([0-9a-f]+) page (\d+) want (\d+) pinned (\d+) fault 0x([0-9a-f]+)', line)):
+                r'capstone_vm: fault-ahead arena 0x([0-9a-f]+) page (\d+) want (\d+) pinned (\d+) fault 0x([0-9a-f]+) by=(\w+)', line)):
+            # (arena, page, want, pinned, fault address, route): the route is 'step' when CV_STEP's
+            # own loop resolved the fault (where an injected condition stops the window) and
+            # 'resolve' when the launcher's CV_RESOLVE did.
             runs[current]['ahead'].append((int(m.group(1), 16), *(int(m.group(i)) for i in (2, 3, 4)),
-                                           int(m.group(5), 16)))
+                                           int(m.group(5), 16), m.group(6)))
             continue
         if current and line.startswith('PIN_REGION:0x'):
             runs[current]['region'] = int(line[len('PIN_REGION:'):], 16); continue
@@ -296,14 +301,20 @@ def evaluate(log, names, instrumented, completed):
     # uninjected run with the same effective window. A condition raised
     # after a demand GUP stops the pin-ahead window (window 1); one raised
     # before resolution leaves the fault to the launcher's CV_RESOLVE, whose
-    # window is the full one. A real quantum end or signal can also fall
-    # between a fault and its resolution in CV_STEP, whatever was injected:
-    # the module counts those faults (launcher_first). Each pins up to
-    # window - reference window pages more than the reference would have at
-    # that fault. Each such page is either one the walk never touches (one
-    # more pin) or one whose own fault never happens (one fewer fault event),
-    # never both: the two deltas share that budget. Without such a fault pins
-    # and fault events must match exactly. Every source must hold it.
+    # window is the full one. A real quantum end, signal or reschedule that
+    # nobody injected can also land in two places, whatever was injected, and the
+    # module counts both (only stops with no injection pending):
+    #  - between a fault and its resolution in CV_STEP (launcher_first): the launcher's
+    #    CV_RESOLVE then pins the full window. Each such fault pins up to window -
+    #    reference window pages more than the reference would have. Each such page is
+    #    either one the walk never touches (one more pin) or one whose own fault never
+    #    happens (one fewer fault event), never both: the two deltas share that budget.
+    #  - before a batch of a pin-ahead window (real_window): the window is cut, and its
+    #    pages are pinned by a later fault or fault themselves: fewer pins or more fault
+    #    events, at most window - 1 pages per cut. The reference run is exposed to the
+    #    same cut, which shows as the opposite delta.
+    # Each delta must be explained by counted events and by nothing else: without them
+    # pins and fault events must match exactly. Every source must hold it.
     for name, ref in (('resched2', 'base1'), ('signal2', 'base1'), ('deadline2', 'base1'),
                       ('resched3', 'base1'), ('signal3', 'base1'),
                       ('resched1', 'base1'), ('signal1', 'base1'), ('deadline1', 'base1'),
@@ -311,10 +322,14 @@ def evaluate(log, names, instrumented, completed):
         window, ref_window = (int(re.search(r'pin_ahead_pages=(\d+)', CONFIGS[n][0] +
                                             ' pin_ahead_pages=1').group(1)) for n in (name, ref))
         late = reports.get(name, {}).get('launcher_first', 0) if window > ref_window else 0
+        cut, ref_cut = (reports.get(n, {}).get('real_window', 0) for n in (name, ref))
+        more = late * (window - ref_window) + ref_cut * (ref_window - 1)   # pins up, fault events down
+        less = cut * (window - 1)                                          # pins down, fault events up
         for mode in CONFIGS[name][1].split():
             checks[f'{name}_{mode}_accounting'] = all(
-                bool(got and want and got[0] >= want[0] and got[1] <= want[1] and
-                     (got[0] - want[0]) + (want[1] - got[1]) <= late * (window - ref_window))
+                bool(got and want and
+                     max(got[0] - want[0], 0) + max(want[1] - got[1], 0) <= more and
+                     max(want[0] - got[0], 0) + max(got[1] - want[1], 0) <= less)
                 for got, want in zip(sources(name, mode), sources(ref, mode)))
     # Exact default-policy census: windows 4, 8, 16, 32, then 64, clipped at the arena's end.
     # The sysfs counters include startup arenas. Subtract their diagnostic events, but also
@@ -361,9 +376,28 @@ def evaluate(log, names, instrumented, completed):
             growth and expected_index == size and sum(e[3] for e in events) > 0 and
             all(got == (size, len(events) + 2) for got in sources('adaptdirect', mode)) and
             adaptive_counts('adaptdirect', mode, len(events), size - len(events) - 2))
-    checks['adaptres_walk_accounting'] = (
-        all(got == (32, 32) for got in sources('adaptres', 'walk')) and
-        adaptive_counts('adaptres', 'walk', 30, 0))
+    # A reschedule is raised after every demand GUP, so a window the step opens finds the stop
+    # before its first batch: it pins nothing. The window still grows, one attempt per fault
+    # (4, 8, 16, 32, 64) and the stream continues at the first page not retained. A fault the
+    # launcher's CV_RESOLVE resolved first (a real stop landed between the fault and its
+    # resolution in CV_STEP, by=resolve) gets the full window instead and pins up to want
+    # pages: the walk then takes that many faults fewer. The route is read from the module's
+    # own line for each window, so only those windows may pin, and never more than the
+    # module's count of faults the launcher resolved first (launcher_first).
+    r = runs.get(('adaptres', 'walk'), {})
+    events = region_events(r)
+    expected_index, growth = 2, bool(events)
+    for i, e in enumerate(events):
+        want = min(4 << min(i, 4), 64)
+        growth &= (e[1] == expected_index and e[2] == want and 0 <= e[3] <= min(want, 31 - e[1]) and
+                   (e[3] == 0 or e[5] == 'resolve'))
+        expected_index = e[1] + 1 + e[3]
+    pinned = sum(e[3] for e in events)
+    checks['adaptres_walk_accounting'] = bool(
+        growth and expected_index == 32 and
+        sum(e[5] == 'resolve' for e in events) <= reports.get('adaptres', {}).get('launcher_first', 0) and
+        all(got == (32, len(events) + 2) for got in sources('adaptres', 'walk')) and
+        adaptive_counts('adaptres', 'walk', len(events), pinned))
     for name, mode, accounting, events in (
             ('adaptgaps', 'gaps', (32, 7), [(3, 4, 3), (8, 8, 8), (17, 16, 14)]),
             ('adaptinterleave', 'interleave', (64, 10),
