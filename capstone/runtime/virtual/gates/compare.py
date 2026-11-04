@@ -298,7 +298,8 @@ def check_mode(out, gates=None):
         return [f"{out}: no mode file (written by run-arm.sh --mode on|off)"]
     g = out / "gates" if (out / "gates").is_dir() else out
     summary = read(g / "SUMMARY.txt")
-    ran = [x for x in GATES if re.search(r"^" + x + r"\s+rc=", summary, re.M)]
+    finished = re.findall(r"^(\S+)\s+rc=", summary, re.M)
+    ran = [x for x in GATES if x in finished]
     problems = []
     for gate in (gates or ran):
         found = mode_lines(out, gate)
@@ -307,7 +308,7 @@ def check_mode(out, gates=None):
             problems.append(f"{gate}: logged no memory-mode line (mode {want} requested)")
         elif any(m not in ok for m in found):
             problems.append(f"{gate}: logged mode {sorted(set(found))} but {want} was requested")
-    if not (gates or ran):
+    if not (gates or finished):
         problems.append(f"{out}: SUMMARY.txt lists no finished gate")
     return problems
 
