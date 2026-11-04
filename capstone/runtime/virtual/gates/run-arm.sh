@@ -221,12 +221,12 @@ gates_phase() {
     --native "$I/native-malloc" --sdk "$(cat "$B/SDK")" "${plat[@]}" "${memory[@]}" --work "$G/malloc"
   local pin_module=()
   [[ $MODE == off ]] || pin_module=(--module "$HOOKS")
-  gate pin-ahead python3 "$V/run-pin-ahead.py" --adapter "$P/adapter" --application "$I/pin-ahead.dom" "${plat[@]}" "${memory[@]}" "${pin_module[@]}" --work "$G/pin-ahead"
+  gate pin-ahead python3 "$V/run-pin-ahead.py" --adapter "$P/adapter" --application "$I/pin-ahead.dom" "${plat[@]}" "${memory[@]}" "${pin_module[@]}" --pthread-application "$I/pthread.dom" --work "$G/pin-ahead"
   gate fp python3 "$V/run-fp.py" --adapter "$P/adapter" --application "$I/fp.dom" "${plat[@]}" "${memory[@]}" --work "$G/fp"
   gate pthread python3 "$V/run-pthreads.py" --adapter "$P/adapter" --application "$I/pthread.dom" "${plat[@]}" "${memory[@]}" --work "$G/pthread"
   # The README's form: the pin-ahead image (contract.dom dies at VM_CONTRACT_FAIL:argv here).
   gate step-hooks python3 "$V/run-step-hooks.py" --adapter "$P/adapter" --module "$HOOKS" \
-    --application "$I/pin-ahead.dom" "${plat[@]}" "${memory[@]}" --work "$G/step-hooks"
+    --application "$I/pin-ahead.dom" "${plat[@]}" "${memory[@]}" --pthread-application "$I/pthread.dom" --work "$G/step-hooks"
   if [[ " $GATES " == *" unpinned-mutants "* ]]; then
     gate unpinned-mutants python3 "$V/unpinned/run-mutants.py" --adapter "$P/adapter" --module "$HOOKS" \
       --application "$I/pin-ahead.dom" --qemu "$P/qemu-system-riscv64" --images "$P/images" --work "$G/unpinned-mutants"

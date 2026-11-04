@@ -146,10 +146,12 @@ def parse(log):
 
 # An unpinned run's independent pin witness is the kernel's FOLL_PIN counter, which must not move
 # during the whole run. It is worth that zero only if the counters count, so the ON script first
-# runs one pinned-mode window in the same guest (its mode line is PIN_LIVE_MODE, not *MEMORY_MODE).
-LIVENESS = '''insmod capstone_vm.ko pin_ahead_pages=4 fault_ahead_max=0 || exit 1
+# runs the pthread contract in the same guest with the same module: a thread's supervisor frame is
+# pinned even in unpinned mode, so that launch must acquire and release pins. (Pinned mode cannot
+# supply the control on the ON platform, which has no test CSRs.)
+LIVENESS = '''insmod capstone_vm.ko unpinned=1 || exit 1
 echo "PIN_LIVE_MODE:$(cat /sys/module/capstone_vm/parameters/unpinned 2>/dev/null || echo A)"
-./capstone-vexec pin.dom seq > /tmp/pin.out 2>&1
+./capstone-vexec pthread.dom > /tmp/live.out 2>&1
 echo "PIN_LIVE_STATUS:$?"
 rmmod capstone_vm || exit 1
 echo "PIN_PINS_LIVE:$(pins)"
@@ -222,7 +224,7 @@ def evaluate(log, completed, instrumented, unpinned=False):
         live = foll_pins(live[0]) if len(live) == 1 else None
         ends = {int(w): foll_pins(t) for w, t in re.findall(r'^PIN_PINS_END:(\d+):(.*)$', log, re.M)}
         checks['foll_pin_counters_live'] = bool(live and live[0] == live[1] > 0 and
-            'PIN_LIVE_STATUS:0' in log and 'PIN_LIVE_MODE:N' in log)
+            'PIN_LIVE_STATUS:0' in log and 'PIN_LIVE_MODE:Y' in log)
         checks['no_payload_pins'] = bool(live and sorted(ends) == sorted(WINDOWS) and
             all(e == live for e in ends.values()))
         for w in WINDOWS:
@@ -254,6 +256,7 @@ def main():
     p.add_argument('--adapter', type=Path)
     p.add_argument('--module', type=Path, help='optional module override (ON policy gate uses test hooks)')
     p.add_argument('--application', type=Path)
+    p.add_argument('--pthread-application', type=Path, help='pthread.dom; the ON liveness launch of the FOLL_PIN counters')
     p.add_argument('--work', type=Path)
     p.add_argument('--timeout', type=int, default=600)
     a = p.parse_args()
@@ -267,12 +270,17 @@ def main():
     for name in ('qemu', 'images', 'adapter', 'application', 'work'):
         if getattr(a, name) is None:
             p.error(f'--{name} is required')
+    if a.unpinned and not a.pthread_application:
+        p.error('--unpinned requires --pthread-application')
     a.work.mkdir(parents=True, exist_ok=False)
     stage = a.work / 'stage'; stage.mkdir()
     inputs = {'qemu': a.qemu, 'application': a.application,
               'launcher': a.adapter/'capstone-vexec',
               'module': a.module or a.adapter/'module/capstone_vm.ko',
               **{n: a.images/n for n in ('Image', 'fw_jump.elf', 'rootfs.ext2')}}
+    if a.unpinned:
+        inputs['pthread'] = a.pthread_application
+        shutil.copy2(a.pthread_application, stage/'pthread.dom')
     hashes = {k: hashlib.sha256(v.read_bytes()).hexdigest() for k, v in inputs.items()}
     for src, name in ((inputs['application'], 'pin.dom'),
                       (inputs['launcher'], 'capstone-vexec'),

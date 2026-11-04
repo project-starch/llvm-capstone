@@ -96,12 +96,15 @@ def app(name):
 # retired after the mark still held; faults= covers every page admitted at a fault; peak= is at
 # least pages=), so neither source can stand in for the other.
 # The kernel's FOLL_PIN counters (nr_foll_pin_acquired / _released) are the independent witness that
-# an unpinned run takes no payload pin, so the ON arm first proves, in the same guest, that the
-# counters are live: one pinned-mode launch (insmod WITHOUT unpinned=1) must acquire and release
-# pins. Its mode line is HOOK_LIVE_MODE, not a *MEMORY_MODE line: the arm's own mode lines all say Y.
-LIVENESS = '''insmod capstone_vm.ko pin_ahead_pages=1 fault_ahead_max=0 || exit 1
+# an unpinned run takes no payload pin, so the ON arm first proves, in the same guest and with the
+# same module, that the counters are live: the pthread contract creates threads, and a thread's
+# supervisor frame is pinned even in unpinned mode (CSRUNV names it physically), so that launch
+# must acquire and release pins. (The pinned memory mode cannot supply the control: the ON
+# platform has no test CSRs, which pinned discovery reads.) Its lines are HOOK_LIVE_*, not a
+# *MEMORY_MODE line: the arm's own mode lines all say Y, and this one does too.
+LIVENESS = '''insmod capstone_vm.ko unpinned=1 || exit 1
 echo "HOOK_LIVE_MODE:$(cat /sys/module/capstone_vm/parameters/unpinned 2>/dev/null || echo A)"
-./capstone-vexec %s.dom walk > /tmp/pin.out 2>&1
+./capstone-vexec pthread.dom > /tmp/live.out 2>&1
 echo "HOOK_LIVE_STATUS:$?"
 rmmod capstone_vm || exit 1
 echo "HOOK_PINS_LIVE:$(pins)"
@@ -110,7 +113,7 @@ dmesg -c > /dev/null
 
 
 def script(names, instrumented, unpinned=False, extra=''):
-    text = SCRIPT + (LIVENESS % app('base1') if unpinned else '')
+    text = SCRIPT + (LIVENESS if unpinned else '')
     for name in names:
         params, modes = CONFIGS[name][:2]
         params += '' if name.startswith('adapt') else ' fault_ahead_max=0'
@@ -443,7 +446,7 @@ def evaluate(log, names, instrumented, completed, unpinned=False):
         # in this guest, acquired pins and released every one of them.
         live = ends.get('@live')
         checks['foll_pin_counters_live'] = bool(live and live[0] == live[1] > 0 and
-            'HOOK_LIVE_STATUS:0' in log and 'HOOK_LIVE_MODE:N' in log)
+            'HOOK_LIVE_STATUS:0' in log and 'HOOK_LIVE_MODE:Y' in log)
         for name in names:
             rep = reports.get(name, {})
             end = ends.get(name)
@@ -506,6 +509,7 @@ def main():
     p.add_argument('--adapter', type=Path, help='capstone-vexec from here')
     p.add_argument('--module', type=Path, help='the CV_TEST_HOOKS build')
     p.add_argument('--application', type=Path, help='pin.dom')
+    p.add_argument('--pthread-application', type=Path, help='pthread.dom; the ON liveness launch of the FOLL_PIN counters')
     p.add_argument('--malloc-application', type=Path, help='malloc.dom; without it the malloc configurations are skipped')
     p.add_argument('--work', type=Path)
     p.add_argument('--timeout', type=int, default=1800)
@@ -523,6 +527,8 @@ def main():
     for name in ('qemu', 'images', 'adapter', 'module', 'application', 'work'):
         if getattr(a, name) is None:
             p.error(f'--{name} is required')
+    if a.unpinned and not a.pthread_application:
+        p.error('--unpinned requires --pthread-application')
     a.work.mkdir(parents=True, exist_ok=False)
     stage = a.work / 'stage'; stage.mkdir()
     names = [n for n in CONFIGS if app(n) == 'pin' or a.malloc_application]
@@ -537,9 +543,13 @@ def main():
               **{n: a.images/n for n in ('Image', 'fw_jump.elf', 'rootfs.ext2')}}
     if a.malloc_application:
         inputs['malloc'] = a.malloc_application
+    if a.unpinned:
+        inputs['pthread'] = a.pthread_application
     hashes = {k: hashlib.sha256(v.read_bytes()).hexdigest() for k, v in inputs.items()}
     if a.malloc_application:
         shutil.copy2(a.malloc_application, stage/'malloc.dom')
+    if a.unpinned:
+        shutil.copy2(a.pthread_application, stage/'pthread.dom')
     for src, name in ((inputs['application'], 'pin.dom'),
                       (inputs['launcher'], 'capstone-vexec'),
                       (inputs['module'], 'capstone_vm.ko')):
