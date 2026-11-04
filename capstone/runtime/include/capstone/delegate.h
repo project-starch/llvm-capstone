@@ -10,8 +10,16 @@
 #ifndef CAPSTONE_DELEGATE_H
 #define CAPSTONE_DELEGATE_H
 
+#ifdef __KERNEL__
+#include <linux/types.h>
+#include <linux/stddef.h>
+#ifndef UINT64_C
+#define UINT64_C(x) x##ULL
+#endif
+#else
 #include <stddef.h>
 #include <stdint.h>
+#endif
 
 #define CAPSTONE_DELEGATE_VERSION 2u
 #define CAPSTONE_DELEGATE_ARGS 6u

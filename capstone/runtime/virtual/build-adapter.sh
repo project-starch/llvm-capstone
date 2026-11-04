@@ -5,14 +5,18 @@ source "$here/../../tests/capstone-test-env.sh"
 : "${KERNEL_BUILD:?Prepared kernel tree matching the booted Image}"
 : "${CROSS_COMPILE:?RISC-V Linux compiler prefix}"
 out=${1:?Output directory}
-mkdir -p "$out/module"
-cp "$here/module/Makefile" "$here/module/capstone_vm.c" "$here/wire.h" "$here/vm-abi.h" "$out/module/"
+mkdir -p "$out/module/capstone"
+cp "$here/module/Makefile" "$here/module/capstone_vm.c" "$here/module/binfmt-dom.h" "$here/module/delegate-dom.h" "$here/wire.h" "$here/vm-abi.h" "$out/module/"
 cp "$CAPSTONE_REPO_ROOT/capstone/capstone-qemu/target/riscv/cap_rev_table_abi.h" "$out/module/"
 # The representability predicate, SHARED rather than copied: the module's arena test, grant() in
 # the launcher and the allocator must agree on one rule, and that rule is cross-checked against
 # the bounds encoder by tests/exact-bounds-iii/repr-cross-check.py. Copied from the tree being
 # built, like the ABI header above, so a kit cannot pair a module and an SDK across revisions.
 cp "$here/../include/capstone/representable.h" "$out/module/"
+cp "$here/../include/capstone/delegate.h" "$out/module/capstone/"
+cp "$here/../linux/delegate-policy.h" "$out/module/"
+cp "$here/module/resource-dom.h" "$out/module/"
+cp "$here/../common/delegate.c" "$out/module/delegate-wire.c"
 make -C "$KERNEL_BUILD" ARCH=riscv CROSS_COMPILE="$CROSS_COMPILE" \
     M="$(cd "$out/module" && pwd)" -j"${CAPSTONE_BUILD_JOBS:-12}" modules
 torture_flags=()

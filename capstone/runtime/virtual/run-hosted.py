@@ -28,6 +28,8 @@ def main():
     p.add_argument('--exact-bounds', action=argparse.BooleanOptionalAction, default=False,
                    help="Run QEMU's exact-bounds profile. Option (iii) does not need it; "
                         "it is kept so a suite can be run both ways as a two-sided control.")
+    p.add_argument("--native-exec", action="store_true",
+                   help="Execute .dom directly through the opt-in module binfmt")
     a = p.parse_args()
     a.work.mkdir(parents=True, exist_ok=False)
     stage = a.work / 'stage'
@@ -56,6 +58,18 @@ rmmod capstone_vm
 echo HOSTED_CLEANUP:$?
 echo VIRTUAL_STAGED_DONE
 ''')
+    if a.native_exec:
+        for dom in stage.glob('*.dom'):
+            dom.chmod(0o755)
+        script = (stage / 'gate.sh').read_text()
+        script = script.replace('insmod capstone_vm.ko ||',
+                                'insmod capstone_vm.ko dom_binfmt=1 ||')
+        script = script.replace('echo HOSTED_ARM:virtual',
+                                'if [ -e /proc/sys/fs/binfmt_misc/status ]; then\n'
+                                '  echo 0 > /proc/sys/fs/binfmt_misc/status || exit 1\n'
+                                'fi\necho HOSTED_ARM:virtual', 1)
+        script = script.replace('./capstone-vexec ', './')
+        (stage / 'gate.sh').write_text(script)
     subprocess.run([sys.executable, str(HERE / 'run-staged.py'), '--qemu', str(a.qemu.resolve()),
                     '--images', str(a.images.resolve()), '--stage', str(stage.resolve()),
                     '--work', str((a.work / 'guest').resolve()), '--timeout', str(a.timeout)
@@ -93,7 +107,8 @@ echo VIRTUAL_STAGED_DONE
     # No checks parsed is a failed run, never an empty pass.
     tests['virtual_checks_parsed'] = len(arms['virtual']) >= 27
     tests['native_checks_parsed'] = len(arms['native']) >= 24
-    result = dict(status='PASS' if all(tests.values()) else 'FAIL',
+    result = dict(execution_path='native' if a.native_exec else 'launcher',
+                  status='PASS' if all(tests.values()) else 'FAIL',
                   passed=sum(tests.values()), total=len(tests), tests=tests,
                   exits=exits, sha256={k: sha(v) for k, v in inputs.items()})
     (a.work / 'result.json').write_text(json.dumps(result, indent=2) + '\n')

@@ -6,6 +6,7 @@
 #       HOOKS=<the arm's CV_TEST_HOOKS module .ko> LLVM=<compiler build dir: bin/, lib/clang> \
 #       CROSS_GCC=<riscv64 Linux gcc, for the native references> \
 #       [SDK=<an application SDK built from TREE>] [PHASE=all|build|gates] [GATES="hosted runtime ..."] \
+#       [NATIVE_EXEC=1 (hosted/runtime only)] [MODULE_ARGS=<runtime module parameters>] \
 #       [CPU_EXTRA=<QEMU -cpu extras; default the 32-slot gate set>] [QEMU_LOCK=<lock file>] \
 #       [APP_SQLITE=... APP_MRUBY=... APP_PERL=... APP_MEMCACHED=...] [JOBS=8] \
 #     bash run-arm.sh OUT
@@ -35,7 +36,16 @@ OUT=${1:?usage: run-arm.sh OUT (see the header)}
 : "${TREE:?TREE=<the arm tree>}" "${PLATFORM:?PLATFORM=<platform dir>}" "${HOOKS:?HOOKS=<hooks .ko>}"
 : "${LLVM:?LLVM=<compiler build dir>}" "${CROSS_GCC:?CROSS_GCC=<riscv64 linux gcc>}"
 PHASE=${PHASE:-all}
-GATES=${GATES:-hosted runtime nodes malloc pin-ahead fp pthread step-hooks memcached}
+if [[ ${NATIVE_EXEC:-0} == 1 ]]; then
+  GATES=${GATES:-hosted runtime}
+  for gate in $GATES; do
+    [[ $gate == hosted || $gate == runtime ]] || {
+      echo "NATIVE_EXEC supports only hosted and runtime; unsupported gate: $gate" >&2; exit 2;
+    }
+  done
+else
+  GATES=${GATES:-hosted runtime nodes malloc pin-ahead fp pthread step-hooks memcached}
+fi
 JOBS=${JOBS:-8}
 HERE=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 TREE=$(realpath "$TREE"); PLATFORM=$(realpath "$PLATFORM"); LLVM=$(realpath "$LLVM")
@@ -176,11 +186,14 @@ gates_phase() {
     local s; s=$(date +%s); "$@" > "$G/$name.log" 2>&1
     printf '%-10s rc=%s %6ss\n' "$name" $? $(( $(date +%s) - s )) >> "$S"
   }
+  local native_exec=()
+  [[ ${NATIVE_EXEC:-0} != 1 ]] || native_exec+=(--native-exec)
   gate hosted python3 "$V/run-hosted.py" --adapter "$P/adapter" --application "$I/hosted.dom" \
-    --noreturn "$I/noreturn.dom" --native "$I/native-hosted" "${plat[@]}" --work "$G/hosted"
+    "${native_exec[@]}" --noreturn "$I/noreturn.dom" --native "$I/native-hosted" "${plat[@]}" --work "$G/hosted"
   gate runtime python3 "$V/run.py" --adapter "$P/adapter" --application "$I/contract.dom" \
-    --sqlite "$(cat "$B/apps/sqlite.image")" --mruby "$(cat "$B/apps/mruby.image")" \
-    --perl "$(cat "$B/apps/perl.image")" --record "$G/runtime.json" --timeout 900 "${plat[@]}"
+    "${native_exec[@]}" --sqlite "$(cat "$B/apps/sqlite.image")" --mruby "$(cat "$B/apps/mruby.image")" \
+    --perl "$(cat "$B/apps/perl.image")" --record "$G/runtime.json" --timeout 900 \
+    --module-args "${MODULE_ARGS:-}" "${plat[@]}"
   gate nodes python3 "$V/run-nodes.py" --adapter "$P/adapter" --application "$I/node.dom" "${plat[@]}" --work "$G/nodes"
   gate malloc python3 "$V/run-malloc.py" --adapter "$P/adapter" --application "$I/malloc.dom" \
     --native "$I/native-malloc" --sdk "$(cat "$B/SDK")" "${plat[@]}" --work "$G/malloc"

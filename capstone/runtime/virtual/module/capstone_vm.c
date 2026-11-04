@@ -85,6 +85,8 @@ struct arena {
      * unreachable by the domain before its first entry. A second retire is not an error, but the
      * non-destroying path reports one, so it must be skipped rather than tolerated. */
     bool ancestor_retired;
+    /* Native-task mappings only; initial transport cannot be retired. */
+    bool dom_dynamic, dom_metadata;
 };
 struct context;
 struct cv_thread {
@@ -159,6 +161,13 @@ struct context {
     struct page **remap_pages;
     u64 remap_thread;
     unsigned long remap_bytes;
+    /* Private native-task driver state; never copied from the trampoline. */
+    unsigned long dom_meta, dom_exchange, dom_exchange_bytes;
+    struct cv_step dom_step;
+    pid_t dom_pid;
+    bool dom_protect_pending;
+    int dom_fd;
+    struct dom_delegate *dom_delegate;
 };
 static DEFINE_MUTEX(vm_lock);
 /* Quotas are in base pages; zero means the 30-bit ISA limit. Parameters are
@@ -2435,6 +2444,180 @@ static bool one_inode_per_file(struct file *file)
     return false;
 }
 
+/* vm_lock is held on entry and return, including a supervisor-slot wait.
+ * Both the launcher ioctl and the experimental native-task driver use this
+ * operation; request/result storage belongs to the trusted caller. */
+static long cv_step_locked(struct context *c, struct cv_step *request)
+{
+    struct cv_step r = *request;
+    long rc = -EINVAL;
+    unsigned long flags;
+    struct cv_thread *t;
+    u64 budget_end;
+    bool resolved = false, text = false;
+    t = find_thread(c, r.thread);
+    if (!t || t->terminal) { rc = -ESRCH; return rc; }
+    if (r.reply > 1 || (r.reply != (t->started && t->event == 3))) return rc;
+    if (!t->started && (!t->frame[8] || !t->frame[12])) return rc;
+    /* A frame that has not started needs a free slot to enter. Waiting is safe ACROSS
+     * contexts -- two vexec processes never join each other, so run.py's parallel pair simply
+     * serialises and still prints both results -- and is NOT safe within one context, where a
+     * live sibling is the thing that would have to finish first. The create refusal above means
+     * the same-context case cannot normally arise; it is rejected here too rather than
+     * deadlocking if it ever does. vm_lock must be dropped while waiting, so the wait is
+     * outside it and the ioctl restarts. */
+    if (!t->started) {
+        struct cv_thread *holder = NULL;
+        if (slot_live(&holder) >= supervisor_slots) {
+            if (holder && holder->context == c) { rc = -EBUSY; return rc; }
+            mutex_unlock(&vm_lock);
+            rc = wait_event_interruptible(slot_wait, slot_free_now());
+            mutex_lock(&vm_lock);
+            return rc ? -EINTR : -EAGAIN;   /* the launcher's loop retries EAGAIN, as it does for the quantum */
+        }
+    }
+    if (r.reply && !t->reply_cap) {
+        t->frame[28] = r.result; t->frame[29] = 0;
+    }
+    /* Each CSRUNV restarts the 5 ms quantum, so a domain that keeps
+     * faulting would never be preempted: bound the resolved faults by
+     * one quantum of this ioctl, then return and release vm_lock. */
+    budget_end = ktime_get_ns() + CV_STEP_BUDGET_NS;
+    TEST_STEP_BEGIN();
+    TEST_HOOK(3);
+    for (unsigned long action = r.reply ? 2 : 0, entries = 0;;
+         action = 0, ++entries) {
+        if (entries && !text) TEST_HOOK(2);  /* after a data fault only, see below */
+        preempt_disable(); local_irq_save(flags);
+        /* Checked with interrupts and preemption off, immediately before
+         * CSRUNV: no interrupt can set need_resched or a signal between
+         * this check and the entry. Before the first entry nothing has
+         * changed, so the launcher simply repeats the same CV_STEP (its
+         * loop retries EINTR and EAGAIN; the reply above is rewritten
+         * identically). Before a later one the fault just resolved goes
+         * back as it was, already counted. */
+        TEST_CHECK();
+        if (cv_step_stop(budget_end)) {
+            local_irq_restore(flags); preempt_enable();
+            TEST_STOPPED(!entries);
+            if (!entries) {
+                rc = signal_pending(current) ? -EINTR : -EAGAIN;
+                return rc;
+            }
+            resolved = true;
+            break;
+        }
+        TEST_ENTRY();
+        if (!t->started) {
+            t->frame[0] = csr_read(CSR_SATP);
+            t->frame[1] = c->table_pa;
+            t->frame[7] = 3;
+        }
+        if (t->sfence_pending) {
+            asm volatile("sfence.vma %0, zero" : : "r"(t->last_fault_addr) : "memory");
+            t->sfence_pending = false;
+            ++resume_sfences;
+        }
+        if (t->started) {
+            /* run_event's fence orders this store before the CSRUNV, with the sentinel's. */
+            unsigned long satp = csr_read(CSR_SATP), saved = t->frame[CV_FRAME_SAVED_SATP];
+            if (saved && saved != satp) ++resume_satp_changed;
+            WRITE_ONCE(t->frame[CV_FRAME_SAVED_SATP], satp);
+            ++resume_satp_refreshes;
+        }
+#ifdef CAPSTONE_VM_BENCH_COUNTERS
+        {
+            /* Interrupts are off: both reads bracket the CSRUNV alone. */
+            unsigned long cy0 = csr_read(CSR_CYCLE), in0 = csr_read(CSR_INSTRET);
+            t->event = run_event(t, action);
+            unsigned long dcy = csr_read(CSR_CYCLE) - cy0, din = csr_read(CSR_INSTRET) - in0;
+            atomic64_add(dcy, &c->bench_cycles);
+            atomic64_add(din, &c->bench_instret);
+            WRITE_ONCE(bench_cycles, bench_cycles + dcy);
+            WRITE_ONCE(bench_instret, bench_instret + din);
+            WRITE_ONCE(bench_entries, bench_entries + 1);
+            atomic64_inc(&c->bench_entries);
+        }
+#else
+        t->event = run_event(t, action);
+#endif
+        t->started = true; t->reply_cap = false;
+        local_irq_restore(flags); preempt_enable();
+        ++c->stats.steps;
+        if (t->event == CV_EVENT_UNWRITTEN) {
+            /* REFUSED: the CSRUNV wrote no event record. End the context, never loop. The
+             * report below reads frame[2..5], so set them to a terminal kind and a cause no
+             * real fault carries. Must-fire, budgeted, at KERN_EMERG: the board console shows
+             * nothing lower. */
+            if (refused_prints < CV_DIAG_BUDGET) {
+                ++refused_prints;
+                pr_emerg("capstone_vm: CSRUNV action %lu wrote no event record (refused), "
+                         "thread %llu entries %lu: context ended\n",
+                         action, (unsigned long long)t->id, entries);
+            }
+            t->frame[2] = 2; t->frame[3] = CV_CAUSE_REFUSED;
+            t->frame[4] = t->frame[5] = 0;
+            t->event = 2;
+        }
+        if (diag_escapes && escape_prints < CV_ESCAPE_BUDGET) {
+            ++escape_prints;
+            CV_EMIT("capstone_vm: escape %u action %lu event %lu frame kind 0x%lx cause 0x%lx "
+                    "pc 0x%lx tval 0x%lx a0 0x%lx\n",
+                    escape_prints, action, t->event,
+                    t->frame[2], t->frame[3], t->frame[4], t->frame[5], t->frame[6]);
+        }
+        if (t->event != 4)
+            break;
+        /* Resolve a page fault here, as CV_RESOLVE would, and resume
+         * without the two system calls a return through the launcher
+         * costs. resolve() can sleep in mmap_lock and GUP while vm_lock
+         * is held, so a stop condition already raised (or a quantum
+         * already spent) returns the fault unresolved, as without this
+         * loop. A fault resolve() refuses goes back to the launcher,
+         * whose own CV_RESOLVE fails the same way and delivers it. A
+         * fault resolved here but stopped before the next entry is
+         * resolved again, idempotently, by the launcher's CV_RESOLVE. */
+        /* A text fault is not a fault event (text_fault), nor an
+         * injection point of the test build's stop hooks: neither this
+         * one nor the re-entry hook above. */
+        text = text_fault(c, t->frame[5]);
+        if (!text)
+            TEST_HOOK(4);
+        if (cv_step_stop(budget_end)) {
+            TEST_STOPPED(false);
+            TEST_REAL_STOP(false, budget_end);
+            break;
+        }
+        if (resolve(c, t, budget_end))
+            break;
+        t->sfence_pending = true;
+        if (!text) ++c->stats.faults;
+    }
+    if (t->event == 5) {
+        int error = ensure_nodes(c, CAP_REV_TABLE_RESERVE + 1);
+        /* Return through Linux between retries. Refuse endless retries
+         * when the namespace consists of live or pinned identities. */
+        t->frame[2] = error ? 2 : 1;
+    }
+    r.kind = t->frame[2]; r.cause = t->frame[3];
+    r.pc = t->frame[4]; r.address = t->frame[5];
+    /* The low word of register slots 1 and 8 (byte 80 and 192: x1 = ra,
+     * x8 = fp; see wire.h cv_step). The escape writes them on a terminal
+     * step; otherwise they hold what ENTRY left, zero. */
+    r.ra = t->frame[10]; r.fp = t->frame[24];
+    /* Eight loads and stores: for 64 aligned bytes the kernel's memcpy is
+     * a call around a four-byte loop. */
+    r.args[0] = t->frame[72]; r.args[1] = t->frame[73];
+    r.args[2] = t->frame[74]; r.args[3] = t->frame[75];
+    r.args[4] = t->frame[76]; r.args[5] = t->frame[77];
+    r.args[6] = t->frame[78]; r.args[7] = t->frame[79];
+    r.thread = t->id;
+    t->terminal = r.kind == 2;
+    if (r.kind == 4 && !resolved && !text_fault(c, r.address)) ++c->stats.faults;
+    *request = r;
+    return 0;
+}
+
 static long vm_ioctl(struct file *f, unsigned int op, unsigned long arg)
 {
     struct context *c = f->private_data;
@@ -2644,175 +2827,14 @@ thread_unwind:
         kvfree(t);
         rc = copy_to_user((void __user *)arg, &r, sizeof(r)) ? -EFAULT : 0;
     } else if (op == CV_STEP) {
-        /* Exempt from the kernel's stack zeroing (a memset call at this size):
-         * copy_from_user fills every byte or the ioctl fails, and every output
-         * member is assigned before the copy back. */
         struct cv_step r __uninitialized;
-        struct cv_thread *t;
-        u64 budget_end;
-        bool resolved = false, text = false;
         if (copy_from_user(&r, (void __user *)arg, sizeof(r))) { rc = -EFAULT; goto out; }
-        t = find_thread(c, r.thread);
-        if (!t || t->terminal) { rc = -ESRCH; goto out; }
-        if (r.reply > 1 || (r.reply != (t->started && t->event == 3))) goto out;
-        if (!t->started && (!t->frame[8] || !t->frame[12])) goto out;
-        /* A frame that has not started needs a free slot to enter. Waiting is safe ACROSS
-         * contexts -- two vexec processes never join each other, so run.py's parallel pair simply
-         * serialises and still prints both results -- and is NOT safe within one context, where a
-         * live sibling is the thing that would have to finish first. The create refusal above means
-         * the same-context case cannot normally arise; it is rejected here too rather than
-         * deadlocking if it ever does. vm_lock must be dropped while waiting, so the wait is
-         * outside it and the ioctl restarts. */
-        if (!t->started) {
-            struct cv_thread *holder = NULL;
-            if (slot_live(&holder) >= supervisor_slots) {
-                if (holder && holder->context == c) { rc = -EBUSY; goto out; }
-                mutex_unlock(&vm_lock);
-                if (wait_event_interruptible(slot_wait, slot_free_now()))
-                    return -EINTR;
-                return -EAGAIN;   /* the launcher's loop retries EAGAIN, as it does for the quantum */
-            }
+        rc = cv_step_locked(c, &r);
+        if (!rc && copy_to_user((void __user *)arg, &r, sizeof(r))) {
+            struct cv_thread *t = find_thread(c, r.thread);
+            if (t) t->terminal = true;
+            rc = -EFAULT;
         }
-        if (r.reply && !t->reply_cap) {
-            t->frame[28] = r.result; t->frame[29] = 0;
-        }
-        /* Each CSRUNV restarts the 5 ms quantum, so a domain that keeps
-         * faulting would never be preempted: bound the resolved faults by
-         * one quantum of this ioctl, then return and release vm_lock. */
-        budget_end = ktime_get_ns() + CV_STEP_BUDGET_NS;
-        TEST_STEP_BEGIN();
-        TEST_HOOK(3);
-        for (unsigned long action = r.reply ? 2 : 0, entries = 0;;
-             action = 0, ++entries) {
-            if (entries && !text) TEST_HOOK(2);  /* after a data fault only, see below */
-            preempt_disable(); local_irq_save(flags);
-            /* Checked with interrupts and preemption off, immediately before
-             * CSRUNV: no interrupt can set need_resched or a signal between
-             * this check and the entry. Before the first entry nothing has
-             * changed, so the launcher simply repeats the same CV_STEP (its
-             * loop retries EINTR and EAGAIN; the reply above is rewritten
-             * identically). Before a later one the fault just resolved goes
-             * back as it was, already counted. */
-            TEST_CHECK();
-            if (cv_step_stop(budget_end)) {
-                local_irq_restore(flags); preempt_enable();
-                TEST_STOPPED(!entries);
-                if (!entries) {
-                    rc = signal_pending(current) ? -EINTR : -EAGAIN;
-                    goto out;
-                }
-                resolved = true;
-                break;
-            }
-            TEST_ENTRY();
-            if (!t->started) {
-                t->frame[0] = csr_read(CSR_SATP);
-                t->frame[1] = c->table_pa;
-                t->frame[7] = 3;
-            }
-            if (t->sfence_pending) {
-                asm volatile("sfence.vma %0, zero" : : "r"(t->last_fault_addr) : "memory");
-                t->sfence_pending = false;
-                ++resume_sfences;
-            }
-            if (t->started) {
-                /* run_event's fence orders this store before the CSRUNV, with the sentinel's. */
-                unsigned long satp = csr_read(CSR_SATP), saved = t->frame[CV_FRAME_SAVED_SATP];
-                if (saved && saved != satp) ++resume_satp_changed;
-                WRITE_ONCE(t->frame[CV_FRAME_SAVED_SATP], satp);
-                ++resume_satp_refreshes;
-            }
-#ifdef CAPSTONE_VM_BENCH_COUNTERS
-            {
-                /* Interrupts are off: both reads bracket the CSRUNV alone. */
-                unsigned long cy0 = csr_read(CSR_CYCLE), in0 = csr_read(CSR_INSTRET);
-                t->event = run_event(t, action);
-                unsigned long dcy = csr_read(CSR_CYCLE) - cy0, din = csr_read(CSR_INSTRET) - in0;
-                atomic64_add(dcy, &c->bench_cycles);
-                atomic64_add(din, &c->bench_instret);
-                WRITE_ONCE(bench_cycles, bench_cycles + dcy);
-                WRITE_ONCE(bench_instret, bench_instret + din);
-                WRITE_ONCE(bench_entries, bench_entries + 1);
-                atomic64_inc(&c->bench_entries);
-            }
-#else
-            t->event = run_event(t, action);
-#endif
-            t->started = true; t->reply_cap = false;
-            local_irq_restore(flags); preempt_enable();
-            ++c->stats.steps;
-            if (t->event == CV_EVENT_UNWRITTEN) {
-                /* REFUSED: the CSRUNV wrote no event record. End the context, never loop. The
-                 * report below reads frame[2..5], so set them to a terminal kind and a cause no
-                 * real fault carries. Must-fire, budgeted, at KERN_EMERG: the board console shows
-                 * nothing lower. */
-                if (refused_prints < CV_DIAG_BUDGET) {
-                    ++refused_prints;
-                    pr_emerg("capstone_vm: CSRUNV action %lu wrote no event record (refused), "
-                             "thread %llu entries %lu: context ended\n",
-                             action, (unsigned long long)t->id, entries);
-                }
-                t->frame[2] = 2; t->frame[3] = CV_CAUSE_REFUSED;
-                t->frame[4] = t->frame[5] = 0;
-                t->event = 2;
-            }
-            if (diag_escapes && escape_prints < CV_ESCAPE_BUDGET) {
-                ++escape_prints;
-                CV_EMIT("capstone_vm: escape %u action %lu event %lu frame kind 0x%lx cause 0x%lx "
-                        "pc 0x%lx tval 0x%lx a0 0x%lx\n",
-                        escape_prints, action, t->event,
-                        t->frame[2], t->frame[3], t->frame[4], t->frame[5], t->frame[6]);
-            }
-            if (t->event != 4)
-                break;
-            /* Resolve a page fault here, as CV_RESOLVE would, and resume
-             * without the two system calls a return through the launcher
-             * costs. resolve() can sleep in mmap_lock and GUP while vm_lock
-             * is held, so a stop condition already raised (or a quantum
-             * already spent) returns the fault unresolved, as without this
-             * loop. A fault resolve() refuses goes back to the launcher,
-             * whose own CV_RESOLVE fails the same way and delivers it. A
-             * fault resolved here but stopped before the next entry is
-             * resolved again, idempotently, by the launcher's CV_RESOLVE. */
-            /* A text fault is not a fault event (text_fault), nor an
-             * injection point of the test build's stop hooks: neither this
-             * one nor the re-entry hook above. */
-            text = text_fault(c, t->frame[5]);
-            if (!text)
-                TEST_HOOK(4);
-            if (cv_step_stop(budget_end)) {
-                TEST_STOPPED(false);
-                TEST_REAL_STOP(false, budget_end);
-                break;
-            }
-            if (resolve(c, t, budget_end))
-                break;
-            t->sfence_pending = true;
-            if (!text) ++c->stats.faults;
-        }
-        if (t->event == 5) {
-            int error = ensure_nodes(c, CAP_REV_TABLE_RESERVE + 1);
-            /* Return through Linux between retries. Refuse endless retries
-             * when the namespace consists of live or pinned identities. */
-            t->frame[2] = error ? 2 : 1;
-        }
-        r.kind = t->frame[2]; r.cause = t->frame[3];
-        r.pc = t->frame[4]; r.address = t->frame[5];
-        /* The low word of register slots 1 and 8 (byte 80 and 192: x1 = ra,
-         * x8 = fp; see wire.h cv_step). The escape writes them on a terminal
-         * step; otherwise they hold what ENTRY left, zero. */
-        r.ra = t->frame[10]; r.fp = t->frame[24];
-        /* Eight loads and stores: for 64 aligned bytes the kernel's memcpy is
-         * a call around a four-byte loop. */
-        r.args[0] = t->frame[72]; r.args[1] = t->frame[73];
-        r.args[2] = t->frame[74]; r.args[3] = t->frame[75];
-        r.args[4] = t->frame[76]; r.args[5] = t->frame[77];
-        r.args[6] = t->frame[78]; r.args[7] = t->frame[79];
-        r.thread = t->id;
-        t->terminal = r.kind == 2;
-        if (r.kind == 4 && !resolved && !text_fault(c, r.address)) ++c->stats.faults;
-        rc = copy_to_user((void __user *)arg, &r, sizeof(r)) ? -EFAULT : 0;
-        if (rc) t->terminal = true;
     } else if (op == CV_RESOLVE) {
         struct cv_thread_control r;
         struct cv_thread *t;
@@ -3037,6 +3059,8 @@ static int vm_release(struct inode *inode, struct file *f)
 static const struct file_operations ops = {
     .owner = THIS_MODULE, .open = vm_open, .release = vm_release, .unlocked_ioctl = vm_ioctl,
 };
+#include "binfmt-dom.h"
+
 static struct miscdevice device = {
     .minor = MISC_DYNAMIC_MINOR, .name = "capstone-vm", .fops = &ops, .mode = 0600,
 };
@@ -3052,6 +3076,9 @@ static int __init init(void)
         symbol_put(capstone_unpinned_config);
         if (error) return error;
     }
+#ifdef CONFIG_TRANSPARENT_HUGEPAGE
+    if (dom_binfmt) return -EOPNOTSUPP;
+#endif
 #ifdef CAPSTONE_VM_FLAT_TABLE
     /* Refuse the LOAD, so a bad value cannot reach a run. 2 because ids 0 and 1 are the header;
      * the maximum because silicon saturates capacity there; whole pages because the table is one
@@ -3095,14 +3122,18 @@ static int __init init(void)
          * rest are being read through dmesg. One line per insmod, before the rungs begin. */
         pr_emerg("capstone_vm: loaded, diag %s, supervisor_slots=%lu, diag_emerg=%d\n",
                  CV_DIAG_TAG, supervisor_slots, diag_emerg);
+        if (dom_binfmt) insert_binfmt(&capstone_dom);
         return 0;
     }
 }
+static void __exit done(void)
+{
+    if (dom_binfmt) unregister_binfmt(&capstone_dom);
 #ifdef CV_TEST_HOOKS
-static void __exit done(void) { test_report("unload"); misc_deregister(&device); }
-#else
-static void __exit done(void) { misc_deregister(&device); }
+    test_report("unload");
 #endif
+    misc_deregister(&device);
+}
 module_init(init); module_exit(done);
 MODULE_LICENSE("GPL");
 MODULE_DESCRIPTION("Private virtual Capstone execution adapter");
