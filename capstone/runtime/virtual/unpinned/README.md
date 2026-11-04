@@ -83,6 +83,24 @@ requires deliberately incomplete, tag-omitting and reference-omitting variants
 to fail. It is an executable interface double, not a Linux race test or a
 substitute for running the namespace and stale-capability fixtures.
 
+`run-sweep.py` consumes the namespace probe fixture and a freshly built
+`node-contract.c` image. Build `sweep-shared.c` as a static native client with
+the fixture's `namespace-probe.h` in the include path. Pass its directory as
+`--probes` together with `namespace-check` and `namespace-probe.ko`. The runner
+requires a normal module and two separately built broken modules: `--mutant`
+replaces `if (!unpinned_page_summary(page)) continue;` in `next_tagged` with
+`if (unpinned_fast_sweep) continue;`; `--shared-mutant` replaces the module's
+`page_mapcount(page) != 1` predicates with `false`. Neither mutation belongs
+in a production binary. All modules must match the selected kernel.
+
+The queued run verifies multi-page namespace scrubbing, byte preservation,
+refusal to scrub a tagged page shared with a native child, recovery after
+the child exits, two 70,000-live-node populations, stale-access denial and
+namespace cleanup. Both broken modules must fail the same native client that
+passes on the normal module. Run with raw moves enabled, test CSRs disabled,
+and 32 QEMU supervisor slots; the runner sets and reads back the corresponding
+module options. Keep the normal nine runtime gates as a separate comparison.
+
 Before publishing a fresh namespace in an mm, the same scan removes old tags
 left by a prior close/open. A raw load followed by a scalar store rewrites the
 original low word, retaining bytes while clearing the storage tag under rule 1.
