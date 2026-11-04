@@ -1,0 +1,5 @@
+XP 2026-11-05 01:30:20 START pid 117113
+XP 2026-11-05 01:30:20 preconditions ok; waiting for the C.5a session (pid none)
+Traceback (most recent call last):
+KeyError: 'capstone-spatial'
+XP 2026-11-05 01:30:20 STOP: the QEMU gate (modrs/q3-*) has not passed

@@ -1,0 +1,8 @@
+XP 2026-11-05 01:29:17 START pid 116060
+XP 2026-11-05 01:29:17 preconditions ok; waiting for the C.5a session (pid none)
+XP 2026-11-05 01:29:17 READBACK caplifive_vp2c_e7af48457 ok rc=0
+XP 2026-11-05 01:29:17 CHAIN ctl gcc BEGIN
+XP 2026-11-05 01:29:17 CHAIN ctl gcc END rc=1
+XP 2026-11-05 01:29:17 STOP: chain ctl gcc stopped (board busy)
+XP 2026-11-05 01:29:17 GRADE rc=2
+XP 2026-11-05 01:29:17 DONE chains 1; board 2 on bitstream 3
