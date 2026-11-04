@@ -5,6 +5,14 @@
 must return zero; every named mutant must return exactly one. Log files retain
 each failed assertion. This models authority and ordering, not instruction cost.
 
+`bash test-context-peer.sh PEER_TREE OUT` consumes the native context header
+and reference backend, checking authenticated fault kinds, namespace exclusion
+and restart PCs. Its cause-only adapter must abort. `bash test-tag-peer.sh
+PEER_TREE OUT` consumes the page lifecycle double, checking exact live/stale
+record transport, scalar/DMA invalidation and cleared page reuse. It detects
+the peer's omitted-clear and scalar-copy variants. Both record peer hashes;
+neither is evidence of integrated hardware behavior.
+
 `linux-6.1-grant-unmap.patch` applies after the existing unpinned Linux 6.1
 patch to `mm/mmap.c`. It exports a strict whole-VMA helper. Build the kernel
 with the existing RISC-V configuration and matching cross compiler, then build
