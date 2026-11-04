@@ -330,6 +330,36 @@ unchanged.
 
 ## Reproduce
 
+Two experimental SDK switches leave the default allocator unchanged:
+
+* `CAPSTONE_HEAP_COARSE_PAGES=ON` rounds eligible shared group extents to a
+  page before bin selection. Each group still receives a derived lifetime;
+  releasing it revokes that lifetime, and reused storage is scrubbed before
+  issuing a new object. It changes extent placement, not object bounds.
+* `CAPSTONE_HEAP_EXACT_SLOTS=ON` carves arrays of the actual slot count, using
+  32 free lists instead of six power-of-two classes. Slot records remain
+  96 bytes. The musl layout and patches 0009/0010 are unchanged. `free_meta`
+  still clears all returned records; only the first record's `next` field
+  holds the free-list link while the array is free.
+
+Both options default to OFF and require the virtual profile. `sdk.json`
+records `heap_coarse_pages` and `heap_exact_slots`; use that same SDK with
+`run-malloc.py` so the oracle requires the selected geometry and reuse rule.
+The exact-count pool cannot exercise a many-to-few transition in one array.
+Its meta-reuse check instead inspects retired arrays directly, requiring zero
+bytes and cleared tags outside the free-list link. A libc variant that omits
+the record clearing must fail that check. Coarse-reuse, stale and bounds
+checks must likewise reject heaps with broken scrubbing, revocation or extent
+authority. Passing ordinary allocations alone does not qualify either option.
+
+These experiments do not implement 64-byte records. Requested size cannot be
+recovered from rounded issued bounds: `nominal` is required for usable-size,
+reallocation and optional free-time scrubbing. Moving the common group pointer
+to an array header would also require coordinated musl accessors, recovery of
+the array header from each record, and new bounds/retirement controls. Reducing
+record size requires that separate representation change; an exit-RSS saving
+or a static byte count is not evidence of avoided faults.
+
 Build the virtual SDK and adapter using the main runtime README. Preparation
 applies the representation patch; the virtual survey requires all 1,361 C
 translation units to compile, including the six mallocng files. The physical
