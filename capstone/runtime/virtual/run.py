@@ -13,6 +13,8 @@ import subprocess
 import tempfile
 import time
 from qemu_lock import qemu_lock
+import memory_mode
+import unpinned_checks
 
 HERE = Path(__file__).resolve().parent
 
@@ -33,6 +35,7 @@ PARALLEL_BLOCK = (
 SCRIPT = r'''#!/bin/sh
 cd /mnt/vm || exit 1
 insmod capstone_vm.ko __MODULE_ARGS__ || exit 1
+__MODE_ECHO__
 # The module's own lines, read from the kernel RING BUFFER rather than relied on reaching the
 # console. The console level does not filter the buffer. run.py itself never lowers that level --
 # but six sibling runners do (`dmesg -n 1` in run-malloc/-hosted/-ports/-safety/-fp/-pthreads), and
@@ -44,7 +47,7 @@ insmod capstone_vm.ko __MODULE_ARGS__ || exit 1
 dmesg | grep 'capstone_vm:' | sed 's/^/KMSG:/'
 dmesg | grep -q 'capstone_vm: loaded, diag' \
   || echo 'KMSG_CONTROL_FAILED: no load banner in the ring buffer -- module-line absences in this run are VOID'
-export CAPSTONE_VM_CONTRACT=environment CAPSTONE_VM_STATS=1 CAPSTONE_EXEC_DIAGNOSTICS=1
+export CAPSTONE_VM_CONTRACT=environment CAPSTONE_VM_STATS=1 CAPSTONE_VM_RSS=1 CAPSTONE_EXEC_DIAGNOSTICS=1
 # The three `ok argument` launches (normal, parallel_one, parallel_two) are the ones
 # linux_demand_faults counts, page at a time: the window is off around them only. Every
 # other row runs the module's shipped policy (or the explicit --module-args override).
@@ -84,7 +87,7 @@ echo VM_EXIT:vm-large:$?
 CAPSTONE_VM_TRACE=1 ./capstone-vexec contract.dom vm-mappings > /tmp/mappings.out 2>&1
 echo VM_EXIT:vm-mappings:$?
 echo VM_MAPPINGS_REMAPS:$(grep -c '^CAPSTONE_VM_REMAP_OK ' /tmp/mappings.out)
-grep -v -E '^CAPSTONE_VM_(BOUNDARY|SERVICE|REMAP_OK) ' /tmp/mappings.out | sed 's/^CAPSTONE_VM_STATS /VM_MAPPINGS_STATS /'
+grep -v -E '^CAPSTONE_VM_(BOUNDARY|SERVICE|REMAP_OK) ' /tmp/mappings.out | sed -e 's/^CAPSTONE_VM_STATS /VM_MAPPINGS_STATS /' -e 's/^CAPSTONE_VM_RSS /VM_MAPPINGS_RSS /'
 ./capstone-vexec contract.dom spin > /tmp/spin.out 2>&1 & spin=$!
 # QEMU startup includes Linux image loading and the first delegated rounds;
 # allow the child to publish its readiness before testing signal termination.
@@ -157,6 +160,7 @@ def main():
     p.add_argument('--skip-recycling', action='store_true', help='Omit the two long recycling cases; recorded explicitly')
     p.add_argument('--module-args', default='',
                    help="Parameters appended to insmod (e.g. 'resolve_pte=1 fault_repeat_max=1')")
+    p.add_argument('--unpinned', action='store_true', help='require the unpinned payload oracle')
     p.add_argument('--exact-bounds', action=argparse.BooleanOptionalAction, default=False,
                    help="Run QEMU's exact-bounds profile. Option (iii) does not need it; it is kept "
                         'so the suite can be run both ways as a two-sided control.')
@@ -173,6 +177,8 @@ def main():
                    help='Run the parallel pair immediately before rmmod, not mid-suite '
                         '(one-slot machines: the pair can end the guest)')
     a = p.parse_args()
+    if a.unpinned:
+        a.module_args += ' unpinned=1'
     work = Path(tempfile.mkdtemp(prefix='virtual-app.', dir=os.environ['CAPSTONE_TMP_ROOT']))
     stage = work/'stage'; stage.mkdir()
     inputs = {'qemu': a.qemu, 'launcher': a.adapter/'capstone-vexec',
@@ -198,6 +204,7 @@ def main():
     # collapses with its leading space, so no trailing whitespace is introduced either.
     script = SCRIPT.replace(' __MODULE_ARGS__',
                             (' ' + a.module_args.strip()) if a.module_args.strip() else '')
+    script = script.replace('__MODE_ECHO__', memory_mode.echo('VM_'))
     if a.skip_recycling:
         script = script.replace(' sparse-churn', '').replace(' sparse-stale', '')
     if a.parallel_last:
@@ -342,6 +349,11 @@ def main():
     tests['fault_ahead_policy_restored'] = len(policy) == 2 and policy == restored
     tests['unused_pages_not_populated'] = len(stats) >= 4 and stats[2]['peak'] - stats[2]['pages'] < 32
     tests['shared_heap_pages_released'] = len(stats) >= 5 and stats[4]['peak'] - stats[4]['pages'] >= 768
+    tests['memory_mode_verified'] = memory_mode.verified('\n'.join(lines), a.unpinned, 1)
+    if a.unpinned:
+        for name in ('linux_pages_released', 'shared_heap_pages_released', 'unused_pages_not_populated'):
+            del tests[name]
+        tests.update(unpinned_checks.residency(lines, start, expected_stats))
     if not a.skip_recycling:
         sparse = stats[5] if len(stats) >= 6 else {}
         # The fixed table happened to collect ~195k IDs in three sweeps.
@@ -380,7 +392,7 @@ def main():
     a.record.write_text(json.dumps(result, indent=2) + '\n')
     print(f'{result["status"]}: {work / "serial.log"}')
     for s in lines:
-        if s.startswith(('VM_EXIT:', 'VIRTUAL_', 'CAPSTONE_VM_', 'capstone-vexec:', 'VM_CONTRACT_', 'SQLITE_', 'MRUBY_')): print(s)
+        if s.startswith(('VM_EXIT:', 'VM_MEMORY_MODE:', 'VIRTUAL_', 'CAPSTONE_VM_', 'capstone-vexec:', 'VM_CONTRACT_', 'SQLITE_', 'MRUBY_')): print(s)
     return 0 if result['status'] == 'PASS' else 1
 
 if __name__ == '__main__': raise SystemExit(main())

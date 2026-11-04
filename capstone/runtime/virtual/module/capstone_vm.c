@@ -77,6 +77,9 @@ struct arena {
      * touches + eager - released is what the retirement sweeps. Counted, not printed, inside a
      * window: a printk per page there added work before the next batch's deadline check. */
     unsigned admits, windows, scans, touches, eager, released;
+    /* Separate from the pin census: successful raw-mm fault resolutions and
+     * launcher writes do not acquire payload pins. Diagnostic only. */
+    unsigned unpinned_resolves, unpinned_touches, unpinned_events, unpinned_ahead;
     /* Pages are admitted one by one at the domain's first access (resolve). */
     bool lazy;
     /* The grant was LINEAR: the heap's move-only shape, the one CV_REMAP may grow. lazy used
@@ -333,9 +336,15 @@ module_param(arena_pin, bool, 0644);
 static bool unpinned;
 module_param(unpinned, bool, 0444);
 MODULE_PARM_DESC(unpinned, "Use the platform's raw tag-aware mm instead of payload pins");
+/* EXPERIMENTAL, default OFF, read-only, and only with unpinned=1 (load refuses otherwise): resolve an unpinned
+ * fault with handle_mm_fault on the VMA resolve() has already found, instead of fixup_user_fault's second
+ * VMA lookup. The counter below is the proof, read back from sysfs, that a run took the path. */
 static bool unpinned_fast_fault;
 module_param(unpinned_fast_fault, bool, 0444);
 MODULE_PARM_DESC(unpinned_fast_fault, "Experiment: reuse the validated anonymous VMA on unpinned faults");
+static unsigned long unpinned_fast_faults;
+module_param(unpinned_fast_faults, ulong, 0444);
+MODULE_PARM_DESC(unpinned_fast_faults, "Faults resolved by the direct path since load (read-only)");
 static bool unpinned_exact_bounds;
 static unsigned long unpinned_faults, unpinned_sweep_pages;
 module_param(unpinned_faults, ulong, 0444);
@@ -986,10 +995,10 @@ static void unpinned_release_mm(struct collect_list *held)
  * bytes. A raw load supplies the original low word to a scalar store (rule 1).
  * This runs only before a fresh context is made visible, with mmap_lock held.
  * Interrupts cannot interpose while an opaque register is live. */
-static int unpinned_scrub_mm(struct mm_struct *mm)
+static int unpinned_scrub_mm(struct mm_struct *mm, unsigned long only_pages, unsigned long only_granules)
 {
     struct collect_list held = {0};
-    unsigned long *page;
+    unsigned long *page, scrubbed = 0;
     int error;
     mmap_read_lock(mm);
     error = unpinned_hold_mm(mm, &held);
@@ -999,6 +1008,9 @@ static int unpinned_scrub_mm(struct mm_struct *mm)
         for (unsigned long j = 0; j < page[1]; ++j) {
             void *at = phys_to_virt(page[2 + j]);
             unsigned long flags, count = PAGE_SIZE / 16;
+            /* only_pages / only_granules are zero outside the test build's broken variants */
+            if (only_pages && scrubbed++ >= only_pages) continue;
+            if (only_granules) count = min(count, only_granules);
             local_irq_save(flags);
             asm volatile("1: .insn i 0x0b, 4, t0, %0, 0\n\t"
                          "sd t0, 0(%0)\n\taddi %0, %0, 16\n\t"
@@ -1323,6 +1335,10 @@ static int retire(struct context *c, struct arena *a, bool destroying)
         pr_info("capstone_vm: retire arena 0x%lx+0x%lx admit=%u window=%u scan=%u touch=%u eager=%u "
                 "released=%u swept=%u\n", a->address, a->bytes, a->admits, a->windows, a->scans,
                 a->touches, a->eager, a->released, swept);
+    if (unpinned && diag_admit)
+        pr_info("capstone_vm: unpinned retire arena 0x%lx events=%u resolves=%u touch=%u ahead=%u\n",
+                a->address, a->unpinned_events, a->unpinned_resolves, a->unpinned_touches,
+                a->unpinned_ahead);
     --c->stats.arenas;
     rb_erase(&a->node, &c->arenas);
     xa_erase(&c->ids, a->id);
@@ -1703,7 +1719,7 @@ static int remap_end(struct context *c, const struct cv_remap *r)
  * must catch, at a chosen point of CV_STEP; counters say whether CSRUNV was
  * entered while an injection was pending, and what GUP was asked for. */
 static unsigned long test_inject;       /* 1 resched, 2 signal, 3 deadline, 4 SIGKILL */
-static unsigned long test_inject_at;    /* 1 after a demand GUP, 2 before an entry, 3 before an ioctl's first entry,
+static unsigned long test_inject_at;    /* 1 after a demand GUP/fixup, 2 before an entry, 3 before an ioctl's first entry,
                                            4 after CSRUNV returns a fault, before resolve() */
 static unsigned long test_inject_every = 1;
 static unsigned long test_short_gup;    /* pin-ahead GUP pins only half of a batch */
@@ -1711,14 +1727,33 @@ static unsigned long test_short_gup;    /* pin-ahead GUP pins only half of a bat
  * ordinary and injected-stop configurations leave this off and qualify those cuts separately.
  * No page/VMA/backing check is bypassed, and the normal window cap still bounds the work. */
 static bool test_full_window;
+static bool test_skip_namespace_scrub;
+/* Deliberately broken variants for the negative controls (gates/README of unpinned/): each
+ * removes exactly one guard of the unpinned fault-ahead window, and the ON oracles must then fail
+ * a named check. They exist only in this build; a production module has none of these strings. */
+static bool test_skip_vma_clip;          /* the window may cross the demand fault's VMA end */
+static bool test_skip_arena_clip;        /* the window may cross the arena's last page */
+static bool test_skip_stop_check;        /* no cv_step_stop() between batches */
+static bool test_skip_resident_stop;     /* the window does not end at the first resident PTE */
+static unsigned long test_skip_scrub_after_pages;     /* the namespace scrub stops after N pages (0: all) */
+static unsigned long test_skip_scrub_after_granules;  /* ... and after N granules of each page (0: all) */
 module_param(test_inject, ulong, 0444);
 module_param(test_inject_at, ulong, 0444);
 module_param(test_inject_every, ulong, 0444);
 module_param(test_short_gup, ulong, 0444);
 module_param(test_full_window, bool, 0444);
+module_param(test_skip_namespace_scrub, bool, 0444);
+module_param(test_skip_vma_clip, bool, 0444);
+module_param(test_skip_arena_clip, bool, 0444);
+module_param(test_skip_stop_check, bool, 0444);
+module_param(test_skip_resident_stop, bool, 0444);
+module_param(test_skip_scrub_after_pages, ulong, 0444);
+module_param(test_skip_scrub_after_granules, ulong, 0444);
 static u64 test_events, test_injections, test_stops, test_initial_stops, test_violations;
 static u64 test_consumed, test_checks, test_checks_irqs_on, test_entries;
 static u64 test_gup_requests, test_gup_max, test_short_results, test_gup_pending;
+static u64 test_fault_requests, test_fault_deferred, test_fault_pending;
+static u64 test_fault_batches, test_fault_max, test_fault_short;
 static bool test_pending, test_expired, test_in_step;
 /* Faults whose first resolution came from the launcher's CV_RESOLVE: a stop
  * fell between the fault and its resolution in CV_STEP, so it got the full
@@ -1775,23 +1810,48 @@ static void test_gup(unsigned long pages)
     ++test_gup_requests;
     test_gup_max = max(test_gup_max, (u64)pages);
 }
+/* Unpinned counterpart of short GUP: refuse the in-step attempt before
+ * changing a PTE. CV_RESOLVE must then complete the same fault. This does
+ * not turn a failed Linux resolution into success. */
+static bool test_fault(void)
+{
+    if (test_pending && test_condition()) ++test_fault_pending;
+    ++test_fault_requests;
+    if (test_short_gup && test_in_step) {
+        ++test_fault_deferred;
+        return true;
+    }
+    return false;
+}
 static void test_report(const char *why)
 {
     pr_info("capstone_vm test %s: injections=%llu stops=%llu initial_stops=%llu "
             "violations=%llu consumed=%llu gup_requests=%llu gup_max=%llu short_results=%llu "
             "gup_pending=%llu checks=%llu checks_irqs_on=%llu entries=%llu "
-            "launcher_first=%llu real_resolve=%llu real_window=%llu real_resched=%llu "
-            "real_signal=%llu real_deadline=%llu\n",
+            "launcher_first=%llu unpinned=%u fault_requests=%llu "
+            "fault_deferred=%llu fault_pending=%llu fault_batches=%llu "
+            "fault_max=%llu fault_short=%llu real_resolve=%llu real_window=%llu real_resched=%llu "
+            "real_signal=%llu real_deadline=%llu unpinned_fast_faults=%lu\n",
             why, test_injections, test_stops, test_initial_stops, test_violations,
             test_consumed, test_gup_requests, test_gup_max, test_short_results,
             test_gup_pending, test_checks, test_checks_irqs_on, test_entries,
-            test_launcher_first, test_real_resolve, test_real_window, test_real_resched,
-            test_real_signal, test_real_deadline);
+            test_launcher_first, unpinned, test_fault_requests,
+            test_fault_deferred, test_fault_pending, test_fault_batches,
+            test_fault_max, test_fault_short, test_real_resolve, test_real_window,
+            test_real_resched, test_real_signal, test_real_deadline, unpinned_fast_faults);
 }
 #define TEST_HOOK(at) test_hook(at)
 #define TEST_GUP(pages) test_gup(pages)
+#define TEST_FAULT() test_fault()
 #define TEST_EXPIRED() test_expired
 #define TEST_FULL_WINDOW() test_full_window
+#define TEST_SKIP_NAMESPACE_SCRUB() test_skip_namespace_scrub
+#define TEST_SKIP_VMA_CLIP() test_skip_vma_clip
+#define TEST_SKIP_ARENA_CLIP() test_skip_arena_clip
+#define TEST_SKIP_STOP_CHECK() test_skip_stop_check
+#define TEST_SKIP_RESIDENT_STOP() test_skip_resident_stop
+#define TEST_SCRUB_PAGES() test_skip_scrub_after_pages
+#define TEST_SCRUB_GRANULES() test_skip_scrub_after_granules
 #define TEST_ENTRY() do { test_entry(); ++test_entries; } while (0)
 #define TEST_CHECK() do { ++test_checks; if (!irqs_disabled()) ++test_checks_irqs_on; } while (0)
 #define TEST_STOPPED(initial) do { if (test_pending) { ++test_stops; \
@@ -1805,8 +1865,16 @@ static void test_report(const char *why)
 #else
 #define TEST_HOOK(at) do { } while (0)
 #define TEST_GUP(pages) do { } while (0)
+#define TEST_FAULT() false
 #define TEST_EXPIRED() false
 #define TEST_FULL_WINDOW() false
+#define TEST_SKIP_NAMESPACE_SCRUB() false
+#define TEST_SKIP_VMA_CLIP() false
+#define TEST_SKIP_ARENA_CLIP() false
+#define TEST_SKIP_STOP_CHECK() false
+#define TEST_SKIP_RESIDENT_STOP() false
+#define TEST_SCRUB_PAGES() 0UL
+#define TEST_SCRUB_GRANULES() 0UL
 #define TEST_ENTRY() do { } while (0)
 #define TEST_CHECK() do { } while (0)
 #define TEST_STOPPED(initial) do { } while (0)
@@ -2119,6 +2187,8 @@ static bool image_data_vma(const struct arena *a, const struct vm_area_struct *v
  * As with fixup_user_fault(..., NULL), do not set ALLOW_RETRY or KILLABLE:
  * the anonymous handler retains mmap_lock, including while waiting for a
  * migration entry. The caller still performs the bounded repeat and stop checks.
+ * The caller holds mmap_read_lock and v is the VMA it found (or, for a
+ * fault-ahead page, the same VMA); an address outside v takes the old call.
  */
 static inline int unpinned_fault_vma(struct vm_area_struct *v, unsigned long address)
 {
@@ -2126,6 +2196,7 @@ static inline int unpinned_fault_vma(struct vm_area_struct *v, unsigned long add
     vm_fault_t fault;
 
     if (!unpinned_fast_fault || !vma_is_anonymous(v) ||
+        address < v->vm_start || address >= v->vm_end ||
         (v->vm_flags & (VM_SHARED | VM_IO | VM_PFNMAP | VM_MIXEDMAP | VM_HUGETLB)))
         return fixup_user_fault(v->vm_mm, address & PAGE_MASK, flags, NULL);
 
@@ -2133,12 +2204,126 @@ static inline int unpinned_fault_vma(struct vm_area_struct *v, unsigned long add
      * fault. handle_mm_fault also performs arch_vma_access_permitted. */
     if (!(v->vm_flags & ((flags & FAULT_FLAG_WRITE) ? VM_WRITE : VM_READ)))
         return -EFAULT;
+    ++unpinned_fast_faults;
+    pr_info_once("capstone_vm: unpinned fault path: direct handle_mm_fault (unpinned_fast_fault=1), first at 0x%lx\n",
+                 address);
     fault = handle_mm_fault(v, address & PAGE_MASK, flags, NULL);
     if (fault & VM_FAULT_ERROR) {
         int error = vm_fault_to_errno(fault, 0);
         return error ? error : -EFAULT;
     }
     return 0;
+}
+
+/* Keep successful resolution and counted escape events distinct: a stop
+ * after resolution can cause CV_RESOLVE to repeat it without a new escape.
+ * Point 1 is the completed demand operation in either memory mode. */
+static bool unpinned_resident(struct mm_struct *mm, unsigned long address)
+{
+    unsigned long at, pfn;
+    /* A residency hint only: migration or a later permission fault can
+     * invalidate it. It never replaces demand resolution or retains a PFN. */
+    return next_resident(mm, address, address + PAGE_SIZE, &at, &pfn) == 1;
+}
+
+static int unpinned_resolve(struct context *c, struct cv_thread *t, struct arena *a,
+                            struct vm_area_struct *v, unsigned long address, u64 deadline)
+{
+    struct cv_stream *stream;
+    unsigned index = (address - a->address - a->rx_bytes) / PAGE_SIZE;
+    unsigned long ahead, limit, done = 0;
+    int rc;
+#ifdef CONFIG_TRANSPARENT_HUGEPAGE
+    /* add() required VM_NOHUGEPAGE on every VMA it admitted, but a later madvise(MADV_HUGEPAGE)
+     * clears it. A huge page would then be faulted in as one PMD that next_resident() cannot
+     * describe (-EOPNOTSUPP): refuse the fault instead of widening a window over it. */
+    if (!(v->vm_flags & VM_NOHUGEPAGE)) return -EOPNOTSUPP;
+#endif
+    if (TEST_FAULT()) return -EAGAIN;
+    rc = unpinned_fault_vma(v, address);
+    if (rc) return rc;
+    ++unpinned_faults;
+    if (diag_admit) ++a->unpinned_resolves;
+    TEST_HOOK(1);
+    /* CV_RESOLVE may repeat a completed demand operation after a stop. It
+     * must not train a second stream or repeat the speculative work. */
+    if (t->sfence_pending) return 0;
+#ifdef CV_TEST_HOOKS
+    if (!test_in_step) ++test_launcher_first;
+#endif
+    ahead = stream_window(t, a, index, &stream);
+    limit = max(ahead, pin_ahead_pages ? pin_ahead_pages - 1 : 0);
+    if (!TEST_SKIP_ARENA_CLIP())
+        limit = min_t(unsigned long, limit, a->count - index - 1);
+    address = (address & PAGE_MASK) + PAGE_SIZE;
+    if (!TEST_SKIP_VMA_CLIP())
+        limit = min(limit, (v->vm_end - address) / PAGE_SIZE);
+    /* mmap_read_lock remains held. Every page is inside this same validated
+     * VMA and arena; Linux applies its normal access/COW policy. No payload
+     * reference or pin survives the call. A failed speculative resolution
+     * leaves the remaining pages for demand faults and does not fail the
+     * already completed demand operation. Stop checks bound each batch. */
+    while (done < limit) {
+        unsigned long batch = min_t(unsigned long, limit - done, PIN_AHEAD_BATCH);
+        unsigned long target = batch;
+        if (!TEST_SKIP_STOP_CHECK() && cv_step_stop(deadline) && !TEST_FULL_WINDOW()) {
+            TEST_REAL_STOP(true, deadline);
+            break;
+        }
+#ifdef CV_TEST_HOOKS
+        if (test_pending && test_condition()) ++test_fault_pending;
+        ++test_fault_batches;
+        test_fault_max = max_t(u64, test_fault_max, batch);
+        if (test_short_gup && batch > 1) target = batch / 2;
+        if (target != batch) ++test_fault_short;
+#endif
+        for (unsigned long j = 0; j < target; ++j) {
+            if (!TEST_SKIP_RESIDENT_STOP() && unpinned_resident(c->mm, address + done * PAGE_SIZE))
+                goto finished;
+            if (unpinned_fault_vma(v, address + done * PAGE_SIZE))
+                goto finished;
+            ++done;
+        }
+        if (target != batch) break;
+    }
+finished:
+    if (diag_admit) {
+        a->unpinned_ahead += done;
+        pr_info("capstone_vm: unpinned window arena 0x%lx address 0x%lx pages %lu limit %lu\n",
+                a->address, address, done, limit);
+    }
+    if (stream) {
+        unsigned long skip_end;
+        stream->next = index + 1 + done;
+        skip_end = min_t(unsigned long, a->count, (unsigned long)stream->next + 64);
+        while (stream->next < skip_end && unpinned_resident(c->mm,
+                a->address + a->rx_bytes + (unsigned long)stream->next * PAGE_SIZE))
+            ++stream->next;
+        if (ahead) {
+            ++fault_ahead_windows;
+            fault_ahead_pages += done;
+            if (diag_admit)
+                pr_info("capstone_vm: unpinned ahead arena 0x%lx page %u want %lu resolved %lu fault 0x%lx%s\n",
+                        a->address, index, ahead, done, address - PAGE_SIZE, TEST_BY());
+        }
+    }
+    return 0;
+}
+
+/* Exactly one diagnostic for each increment of stats.faults. Unlike the
+ * pinned admission census, this also records repeated faults and faults
+ * returned to the launcher before resolution. No timing allowance is used
+ * to reconcile it with the public counter. */
+static void unpinned_fault_event(struct context *c, struct cv_thread *t,
+                                 const char *route)
+{
+    struct arena *a;
+    if (!unpinned || !diag_admit) return;
+    a = arena_at(c, t->frame[5]);
+    if (a) ++a->unpinned_events;
+    pr_info("capstone_vm: unpinned fault arena 0x%lx address 0x%lx cause %lu pc 0x%lx route %s number %llu\n",
+            a ? a->address : 0, t->frame[5], t->frame[3], t->frame[4], route,
+            (unsigned long long)c->stats.faults);
 }
 
 static int resolve(struct context *c, struct cv_thread *t, u64 deadline)
@@ -2199,10 +2384,9 @@ static int resolve(struct context *c, struct cv_thread *t, u64 deadline)
             t->last_fault_cause = cause;
             t->fault_repeat = 0;
         }
-        rc = unpinned_fault_vma(v, address);
+        rc = unpinned_resolve(c, t, a, v, address, deadline);
         mmap_read_unlock(c->mm);
         if (rc) CV_RESOLVE_FAIL("unpinned", "fixup_user_fault=%d vm_flags 0x%lx", rc, vmflags);
-        ++unpinned_faults;
         return rc;
     }
     if (a && a->lazy) {
@@ -2239,7 +2423,7 @@ static int resolve(struct context *c, struct cv_thread *t, u64 deadline)
                 t->last_fault_cause = cause;
                 t->fault_repeat = 0;
             }
-            rc = unpinned_fault_vma(v, address);
+            rc = unpinned_resolve(c, t, a, v, address, deadline);
             mmap_read_unlock(c->mm);
             if (rc) CV_RESOLVE_FAIL("unpinned", "fixup_user_fault=%d vm_flags 0x%lx", rc, vmflags);
             return rc;
@@ -2432,6 +2616,11 @@ static int admit_page(struct context *c, struct arena *a, unsigned index)
         int rc = fixup_user_fault(c->mm, address,
                       (v->vm_flags & VM_WRITE) ? FAULT_FLAG_WRITE : 0, NULL);
         mmap_read_unlock(c->mm);
+        if (!rc && diag_admit) {
+            ++a->unpinned_touches;
+            pr_info("capstone_vm: unpinned touch arena 0x%lx+0x%lx page %u\n",
+                    a->address, a->bytes, index);
+        }
         return rc;
     }
     if (pin_user_pages_remote(c->mm, address, 1,
@@ -2867,7 +3056,10 @@ thread_unwind:
             if (resolve(c, t, budget_end))
                 break;
             t->sfence_pending = true;
-            if (!text) ++c->stats.faults;
+            if (!text) {
+                ++c->stats.faults;
+                unpinned_fault_event(c, t, "step");
+            }
         }
         if (t->event == 5) {
             int error = ensure_nodes(c, CAP_REV_TABLE_RESERVE + 1);
@@ -2889,7 +3081,10 @@ thread_unwind:
         r.args[6] = t->frame[78]; r.args[7] = t->frame[79];
         r.thread = t->id;
         t->terminal = r.kind == 2;
-        if (r.kind == 4 && !resolved && !text_fault(c, r.address)) ++c->stats.faults;
+        if (r.kind == 4 && !resolved && !text_fault(c, r.address)) {
+            ++c->stats.faults;
+            unpinned_fault_event(c, t, "return");
+        }
         rc = copy_to_user((void __user *)arg, &r, sizeof(r)) ? -EFAULT : 0;
         if (rc) t->terminal = true;
     } else if (op == CV_RESOLVE) {
@@ -3031,7 +3226,8 @@ static int vm_open(struct inode *inode, struct file *f)
             return -EBUSY;
         }
     if (unpinned) {
-        int error = unpinned_scrub_mm(c->mm);
+        int error = TEST_SKIP_NAMESPACE_SCRUB() ? 0 :
+                    unpinned_scrub_mm(c->mm, TEST_SCRUB_PAGES(), TEST_SCRUB_GRANULES());
         if (error) {
             mutex_unlock(&vm_lock);
             mmdrop(c->mm);
@@ -3121,6 +3317,10 @@ static struct miscdevice device = {
 };
 static int __init init(void)
 {
+    if (unpinned_fast_fault && !unpinned) {
+        pr_emerg("capstone_vm: unpinned_fast_fault requires unpinned=1\n");
+        return -EINVAL;
+    }
     if (unpinned) {
         typeof(capstone_unpinned_config) *config;
         int error;
@@ -3172,8 +3372,8 @@ static int __init init(void)
         /* Always KERN_EMERG, independent of diag_emerg: this is the line that tells a reader
          * whether the module loaded at all, so it must survive the quieted console even when the
          * rest are being read through dmesg. One line per insmod, before the rungs begin. */
-        pr_emerg("capstone_vm: loaded, diag %s, supervisor_slots=%lu, diag_emerg=%d\n",
-                 CV_DIAG_TAG, supervisor_slots, diag_emerg);
+        pr_emerg("capstone_vm: loaded, diag %s, supervisor_slots=%lu, diag_emerg=%d, unpinned=%d, unpinned_fast_fault=%d\n",
+                 CV_DIAG_TAG, supervisor_slots, diag_emerg, unpinned, unpinned_fast_fault);
         return 0;
     }
 }

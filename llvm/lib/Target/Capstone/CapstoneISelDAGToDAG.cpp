@@ -1678,8 +1678,12 @@ void CapstoneDAGToDAGISel::selectLGA(SDNode *Node) {
   // The result will be in a GPR register (i128).
   // Important: although PseudoLLA returns an "address", in the Capstone context
   // it is just a "number" (Data), since it is derived from the PC.
-  SDNode *Offset = CurDAG->getMachineNode(Capstone::PseudoLLA, DL, PtrVT,
-                                          Symbol);
+  // Under the image-gp ABI this scalar is also the exact cursor of the
+  // derived capability. Keep its integer type so bounds construction can use
+  // the already untagged address without reading it back out of the capability.
+  MVT AddrVT = capstoneImageGpAbiActive() ? Subtarget->getXLenVT() : PtrVT;
+  SDNode *Offset =
+      CurDAG->getMachineNode(Capstone::PseudoLLA, DL, AddrVT, Symbol);
 
   // 3+4. Ptr = delin(GP + Offset), as ONE instruction.
   //
@@ -1727,16 +1731,19 @@ void CapstoneDAGToDAGISel::selectLGA(SDNode *Node) {
             CurDAG->getDataLayout().getTypeAllocSize(GVar->getValueType());
         if (Size > 0) {
           MVT XLenVT = Subtarget->getXLenVT();
-          // base = cursor of the materialized capability (= &g), read with the
-          // plain integer write every cursor read uses (PseudoTRUNC_CAP), not
-          // `lcc rd, rs, 2`, which is not total (Tier 4.2: no selector-2 query
-          // is emitted anywhere).
-          SDValue Cursor(
-              CurDAG->getMachineNode(
-                  Capstone::PseudoTRUNC_CAP, DL, XLenVT,
-                  CurDAG->getTargetExtractSubreg(Capstone::sub_cap_addr, DL,
-                                                 XLenVT, SDValue(Delined, 0))),
-              0);
+          // Image-gp uses SCC, so its cursor equals Offset, whose PC-relative
+          // integer producer already clears the tag. Reuse that scalar for
+          // both bounds while retaining SCC and SHRINK unchanged. Other ABIs
+          // still extract the resulting cursor with a tag-clearing integer
+          // write; a bare subregister copy of a capability is not sufficient.
+          SDValue Cursor = SDValue(Offset, 0);
+          if (!capstoneImageGpAbiActive())
+            Cursor = SDValue(
+                CurDAG->getMachineNode(
+                    Capstone::PseudoTRUNC_CAP, DL, XLenVT,
+                    CurDAG->getTargetExtractSubreg(Capstone::sub_cap_addr, DL,
+                                                  XLenVT, SDValue(Delined, 0))),
+                0);
           // end = base + sizeof(g) (size may exceed a 12-bit immediate).
           SDValue SizeReg =
               selectImm(CurDAG, DL, XLenVT, (int64_t)Size, *Subtarget);

@@ -286,9 +286,9 @@ Setting the virtual switches to read a debug register also drives three control 
 
 | bit | effect |
 |---|---|
-| `sw[0]` | hands the **console TX pin** to the tracer (`uart_debug_takeover = sw[0] \| …`, and `uart_debug_tx_o = switches_i[0] ? tracer_uart_tx : uart_debug_tx`). Shell output is not lost — it is never transmitted. |
-| `sw[1]` | **arms a one-shot trace dump** over that same pin. Edge-triggered, streams the whole buffer, and **outlives the switch value that armed it**. |
-| `sw[2]` | tracer ring-buffer mode. Harmless. |
+| `sw[0]` | takes the **console TX pin** away from the 16550 on EVERY bitstream: the FPGA top has `uart_debug_takeover = sw[0] \| uart_debug_active` and `tx_o = takeover ? uart_debug_tx_i : uart_tx_apb`. On tracer bitstreams (vp2 and earlier) the pin then carries the tracer; from bitstream 2 on (no tracer) it carries the core's debug printer. Either way shell output is not lost — it is never transmitted. (A 2026-10-24 note that sw[0] "does nothing" without the tracer was wrong and is retracted.) |
+| `sw[1]` | tracer bitstreams only: **arms a one-shot trace dump** over that same pin. Edge-triggered, streams the whole buffer, and **outlives the switch value that armed it**. From bitstream 2 on it does nothing beyond the aperture select. |
+| `sw[2]` | tracer bitstreams only: ring-buffer mode. Harmless. |
 
 Cost of learning this the hard way: **one boot read as a kernel hang** (switches left at 255 —
 odd — so the next domain's shell line was never echoed; the core was fine), and two more killed
@@ -302,7 +302,7 @@ Rules that follow:
   `196`, `200`, `204`, `224` are safe.
 * **The trap summary (`255`) has no safe aperture.** It exists only at bank `3'b111` reg
   `5'b11111`; `254` is a different field. Do not sample it mid-run.
-* **Beware the armed dump.** `191` sets `sw[1]`, so every trap-log clear arms a dump. Holding any
+* **Beware the armed dump** (tracer bitstreams, vp2 and earlier). `191` sets `sw[1]`, so every trap-log clear arms a dump. Holding any
   odd value later reconnects the tracer **mid-stream** and injects binary into the console.
 * **Post-run odd reads are safe by construction**: `debug_led_o` goes to the LEDs, a different pin
   from the console TX, so an odd aperture cannot corrupt the reading itself — it can only steal
@@ -444,8 +444,8 @@ booting!`. Only JTAG is unavailable.
 
 **RECOVERY, and run it in this order:**
 
-1. **Clear every switch to 0**, bit 7 first. `sw[0]` muxes the console TX to the tracer and
-   `sw[1]` triggers a dump, so an aperture walk can leave the console owned by the tracer.
+1. **Clear every switch to 0**, bit 7 first. `sw[0]` takes the console TX away from the 16550 on every
+   bitstream (and `sw[1]` triggers a dump on tracer bitstreams), so an aperture walk can leave the console taken.
 2. `gdb_stop()` — documented to terminate OpenOCD on the host.
 3. **A real power cycle**: off, settle ~6 s, on, settle ~12 s. Not `POST /api/reset-board`,
    which succeeded and changed nothing.

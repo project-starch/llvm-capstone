@@ -106,3 +106,136 @@ the same.
 
 **Limits.** N = 1 per bitstream, and the two bitstreams ran on different boards. Cycles are not the simulator's on
 either board: hpm-7 reads 11,081 against the simulator's 20,821.
+
+## The C.5a arm (pre-registered 2026-11-04, before any C.5a boot)
+
+The C.5a bitstream is capstone-ariane 1fc2cd5aa (record: `docs/plans/2026-11-03-c5a-bitstream.md`). These seven images
+were simulated on c5a-wt a642f4891, whose core is identical to 1fc2cd5aa, with PROVENANCE `rtl_dirty=no`, memory delay
+12 and time_out 3,000,000. The ELFs reproduce `images/SHA256SUMS` byte for byte, and retired counts differ per image.
+
+| image | C.5a vector |
+|---|---|
+| hpm-5 | 0x0 0x0 0x0 0x0 0x100 0x0 0x333 0x203 0x5 0x0 0x0 |
+| hpm-1 | 0x100 0x0 0x100 0x0 0x100 0x0 0x461 0x303 0x5 0x0 0x0 |
+| hpm-2 | 0x0 0x100 0x100 0x0 0x100 0x0 0x4fd 0x303 0x5 0x0 0x0 |
+| hpm-3 | 0x0 0x0 0x100 0x0 0x100 0x1ff 0x55e 0x303 0x5 0x0 0x0 |
+| hpm-4 | 0x0 0x0 0x100 0x0 0x100 0x100 0x715 0x303 0x5 0x0 0x0 |
+| hpm-6 | 0x0 0x0 0x0 0x0 0x0 0x0 0x48c 0x303 0x5 0x0 0x0 |
+| hpm-7 | 0x100 0x0 0x100 0x100 0x100 0x0 0x514e 0x403 0x5 0x0 0x0 |
+
+- Every counter field equals ObjBounds'. hpm-3's stall is 511 and hpm-4's is 256. Cycles are exactly 7 below
+  ObjBounds' on all seven images, which is the PC tracker's constant shift in the C.5a record.
+- **What this kit can and cannot see.** Every EXACT field reads the same on bitstream 3, ObjBounds and C.5a. Only stall
+  and cycles separate them, and those are timing fields. So the kit identifies C.5a only through the resident name and
+  the cost pattern against a bitstream 3 run. It cannot tell C.5a from ObjBounds: both remove the query's stall.
+- **The grade:** `grade/hpm-grade.py <run> c5a <bitstream 3 run>`. AS EXPECTED with the pattern HOLDING is rc 0. The
+  arm REQUIRES the bitstream 3 dir; without it the grader gives NO DATA (rc 2).
+- **Controls, run before any C.5a boot**, on mock dirs built from each tree's simulated vectors, with the committed
+  images for the hash:
+  - C.5a's vectors give rc 0;
+  - bitstream 3's vectors under the C.5a name give COST PATTERN FAILS, rc 1;
+  - the wrong resident name gives WRONG BITSTREAM, rc 1;
+  - no bitstream 3 dir gives rc 2, and an empty dir gives rc 2.
+  - The existing arms still read rc 0 on the real board 1 (bitstream 3) and board 2 (ObjBounds) runs.
+- **Prediction:** AS EXPECTED, with the cost pattern HOLDING against board 1's bitstream 3 run.
+
+## The C.5a reading (2026-11-04, caplifive_vp2c_1fc2cd5aa, board 2, the runtime lane's run 17:38-17:44)
+
+**Grade.** `hpm-grade.py <run> c5a perf/hpm/run-b1-bs3` (land/rtl-c5a-kits 5b6fb6a4ec9b) gives **FINDING**, rc 1. The
+comparison dir reads e7af48457, OK. Result lines: spec-silicon f45274ebafe0.
+
+**The finding.** l1d_miss, an EXACT field, reads one more than the pre-registered value on every image that makes a data
+access. With N = 1 it cannot yet be separated from the session's board state. It is a counter difference, not a cost.
+
+| image | l1d_miss (pre-reg) | l1d_acc |
+|---|---|---|
+| hpm-1 .. hpm-5 | 1 (0) | equal to sim |
+| hpm-7 | 257 (256) | equal to sim |
+| hpm-6 (no data access) | 0 (0) | 0 |
+
+- On bitstream 3 (board 1) and on ObjBounds (board 2), every image read l1d_miss as pre-registered.
+- Simulating the same images on 1fc2cd5aa reads 0, so this is silicon against sim.
+- No mechanism is known.
+- A repeat in a fresh C.5a flash and session (perf/c5a-b2/hpm-r2, the runtime lane's Addendum 6) decides between the
+  bitstream and the session.
+
+**The lifetime query's cost on silicon.** The grader prints no cost pattern on a FINDING, so these figures come from the
+raw SV lines of the three runs.
+
+| | hpm-3 stall | hpm-4 stall | hpm-3 cycles | hpm-4 cycles |
+|---|---|---|---|---|
+| C.5a | 509 | 254 | 1,306 | 1,562 |
+| ObjBounds | 511 | 256 | 1,331 | 1,583 |
+| bitstream 3 | 1,530 | 1,530 | 2,344 | 2,852 |
+
+- The cached verdict removes the query's stall as ObjBounds does.
+- **CORRECTED 2026-11-04 (the same evening):** this line said every image runs 20-24 cycles below bitstream 3, and that
+  is false for hpm-7.
+  - hpm-5, -1, -2 and -6 run 21-24 cycles faster: ratios 0.974, 0.978, 0.979 and 0.981. That fails the pre-registered
+    "equal within 1 %" clause.
+  - hpm-7, the cold-miss image, reads 11,084 against 11,082, which holds.
+  - So it is not a constant shift.
+  - The grader now prints the cost pattern on a FINDING (land/rtl-c5a-kits cd572819613f), and these lines come from
+    that output.
+  - It is a second deviation in this one session, beside the extra L1D miss; both wait for the repeat.
+
+## hpm-8: the L1I-miss event's positive control (added 2026-11-04, before any board run of it)
+
+**Why.** Event 1 (L1I miss) was never exercised by hpm-1..7. The SPEC lane now wants to read it: is the excess per removed
+STC/LDC pair in compiled code fetch? A reading from a counter that has never been shown to fire is not evidence.
+
+**The source.** Event 1 is `l1_icache_miss_i` (`perf_counters.sv:108`), fed by `cva6_icache.sv` `miss_o`. That pulses
+once per cacheable refill request (`:347`).
+
+**The image.** hpm-8 is built from the same `tests/hpm-probe.S` with `-DHPM=8`:
+- size 69,544 B, sha256 0094235951c3e398...;
+- board_rec 0x80010000.
+
+**Rebuild check.** Rebuilding hpm-1..7 from the edited source gives byte-identical images to the committed SHA256SUMS.
+
+**The arm.**
+- Counter 6 is reprogrammed to event 1.
+- An 8 KiB block of 2,048 four-byte NOPs at 0x80000880..0x80002880 (`norvc`, checked in the disassembly) is called twice.
+  That is 512 lines of 16 B, half the 16 KiB 4-way I-cache.
+- It prints seven values: pass 1 misses, pass 2 misses, pass 1 cycles, pass 2 cycles, the mhpmevent6 readback, traps,
+  and the trap cause.
+
+**The vector.** Simulated from this image on bitstream 3's tokens (rtl-ids20-wt c3f5102f1, rtl_dirty=no, memory delay 12):
+`0x203 0x1 0x6636 0x834 0x1 0x0 0x0`.
+- 515 cold misses: 512 for the block, plus its call and loop lines.
+- 1 warm miss.
+- 26,166 against 2,100 cycles, which is 46.8 sim cycles per I-miss.
+
+**Graded by `grade/hpm8-grade.py <run dir>`. Any bitstream may run it.**
+- EXACT: SR 7, readback 1, traps 0, cause 0.
+- COUNTS: pass 1 misses in 480..560, and pass 2 misses at most 8.
+- Cycles are reported, with the per-miss cost. That cost is silicon's I-miss penalty, which the SPEC lane needs to turn an
+  L1I-miss delta into cycles.
+- AS EXPECTED (rc 0) means the event counts on that bitstream. FINDING (rc 1) means it does not, or an exact field is
+  off. NO DATA is rc 2.
+
+**Controls** (fake run dirs):
+
+| case | result |
+|---|---|
+| the simulated vector | AS EXPECTED |
+| pass 1 at 0 | FINDING |
+| the warm pass not warm | FINDING |
+| readback 2 | FINDING |
+| a different image | FINDING |
+| no data | NO DATA |
+
+### hpm-8 on silicon (2026-11-05 03:16, board 1, caplifive_vp2c_e7af48457.bit, the runtime lane's run)
+
+The run dir is `$CAPSTONE_WORK/perf/all-b1/hpm8`. It ran after the imagick dev/devmk counter boots in the same session, on
+the same bitstream. `hpm8-grade.py` on it, run in the RTL lane and in the runtime lane, gives the same lines, rc 0:
+
+- image OK (sha256 = SHA256SUMS), resident `caplifive_vp2c_e7af48457.bit`, SR 7;
+- vector `0x203 0x1 0x3486 0x81b 0x1 0x0 0x0`: exact fields OK (readback 1, traps 0, cause 0);
+- L1I misses: pass 1 515 (band 480..560), pass 2 1 (at most 8): COUNTS;
+- cycles: pass 1 13,446, pass 2 2,075, so **22.1 cycles per L1I miss on silicon** (sim 46.8, memory delay 12).
+
+**Verdict: AS EXPECTED.** The miss counts equal the simulation's exactly (515 / 1). Event 1 counts on bitstream 3, so an
+L1I-miss delta read on bitstream 3 is a reading from a counter shown to fire. The runtime lane's use of it, the imagick
+dev → devmk counter boots in which L1I barely moves and the cycle drop is 68-70 % issue stall, is recorded in that lane's
+RESULT (`spec-silicon` 889e0ee98aad), not here.

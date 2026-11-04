@@ -25,7 +25,21 @@ So every gate is first split into ROWS, the launches it makes, and each row is R
   a server that exited 125-127, or no check line for the case. Every attempt of a case is judged.
 
 A gate with a NOT RUN row on either side is INCOMPLETE, never IDENTICAL; one INCOMPLETE gate makes
-the whole verdict INCOMPLETE. Exit status: 0 IDENTICAL, 1 DIFFERENT, 2 INCOMPLETE, 3 usage.
+the whole verdict INCOMPLETE. Exit status: 0 IDENTICAL, 1 DIFFERENT, 2 INCOMPLETE, 3 usage, 4 REFUSED (a run's memory mode).
+
+MEMORY MODE. run-arm.sh --mode on|off records the requested mode in OUT/mode, and every gate runner
+logs the mode the loaded module reports after each insmod (<GATE>_MEMORY_MODE:Y|N|A, see
+memory_mode.py). compare.py refuses (exit 4, nothing compared) an output that has no mode file, a gate
+that logged no mode line, fewer or more lines than it makes module loads (MODE_LOADS), or a mode line of
+the other mode than OUT/mode asked for: ON = Y only, OFF = N or A (a module without the unpinned
+parameter). The refusal does not depend on parity: a gate whose runner reports memory_mode_verified
+failed or reports nothing is refused even when both sides fail it the same way. Also refused, for the
+same reason: a SUMMARY.txt carrying MODE_CHECK_FAILED or OPTIONAL_GATE_FAILED (run-arm.sh's own
+rejection of the arm), an optional qualification gate (unpinned-mm, unpinned-mutants) with a non-zero
+rc, and one whose own mode witnesses are missing or not Y. The nine ordinary gates may end non-zero:
+their FAIL sets are what is compared. --control-mode / --arm-mode additionally pin
+the pair being compared (a control that is not the OFF arm it should be is as wrong as a log that
+disagrees). `compare.py --check-mode OUT` runs that check on one output (run-arm.sh does, last).
 The logs are read, never the binaries: libc's strerror table contains "Exec format error".
 A row's PASS/FAIL is reported where the runner gives it per row (runtime.json, memcached's checks);
 elsewhere a row that ran is RAN and its outcome is in the gate's FAIL set.
@@ -42,7 +56,22 @@ import re
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+import memory_mode  # noqa: E402
+
 GATES = ["hosted", "runtime", "nodes", "malloc", "pin-ahead", "fp", "pthread", "step-hooks", "memcached"]
+# Optional qualification gates (run-arm.sh GATES=..., ON only). Unlike the nine they are not compared
+# row by row: each must succeed when it ran, and its own mode witnesses are checked.
+OPTIONAL_GATES = ["unpinned-mm", "unpinned-mutants"]
+# Module loads (insmod) per gate in a full run, hence the memory-mode lines it must log, one each:
+# the runners' memory_mode.verified(log, unpinned, N) counts (nodes: 2; pin-ahead: its three windows;
+# step-hooks: one per configuration, 30 with the malloc configurations skipped). A runner that changes
+# its number of loads fails closed here until this table is updated. unpinned-mm loads seven.
+MODE_LOADS = {"hosted": 1, "runtime": 1, "nodes": 2, "malloc": 1, "pin-ahead": 3, "fp": 1,
+              "pthread": 1, "step-hooks": 30, "memcached": 1}
+MM_LOADS = 7
+# An arm-level rejection run-arm.sh wrote into SUMMARY.txt: no comparison may use that output.
+ARM_REJECTION = re.compile(r"^(MODE_CHECK_FAILED|OPTIONAL_GATE_FAILED)\b.*$", re.M)
 # The rows the runners at dev 976df58996f3 make (compare.py --rows on that commit's gate run; the
 # same rows on 724bf0bea11e). A runner that adds a row needs no change here (a row on one side is
 # required on the other); one that drops a row makes this table fail closed until it is updated.
@@ -94,6 +123,67 @@ REQUIRED_ROWS = {
         'adaptclip:clipx', 'adaptro:clipwrite', 'adaptnonlin:nonlin',
         'adaptgaps:gaps', 'adaptinterleave:interleave')],
 }
+# Memcached fixture 24 cannot pass as written, in either memory mode or in the dev head, and WHICH of its
+# two checks names the failure depends on where the allocator places things. Two outcomes are recorded
+# (laneONQ fix rounds, unpinned/README.md; the gatefix lane saw both in both arms of an OFF-versus-OFF
+# comparison; the memcached gate run alone on one build and one platform gave the second in some runs of
+# the OFF arm and the first in the others):
+#   not created   the header-only condition is not created: the fixture prints "header-only=0" and
+#                 "triggering condition not created" (or, before it gets that far, "ia not linked": the
+#                 expired item was never linked, seen in the first merged-head OFF arm), returns its known
+#                 no-op mark 18e0018 and exits 24 with no fault. fx24_trigger FAILS (the no-op is
+#                 self-reported), fx24_prediction holds.
+#   created+crash the condition is created ("header-only=1", then "touch") and the server dies with a
+#                 signal at a domain fault, cause 24 at address 0. fx24_prediction FAILS, fx24_trigger
+#                 holds (a non-RETURN outcome is not a self-reported no-op).
+# A FAIL set holding exactly one of the pair is folded into one placement-dependent entry ONLY when the
+# case's own job/output/fault files show the signature that belongs to the failed check. A single
+# failure with any other evidence (an unrelated crash, a different no-op, no fixture output) is not
+# folded and makes the fx24 row NOT RUN: the gate is INCOMPLETE, never IDENTICAL. A side where fx24
+# passes both checks or fails both is not folded either (it stays DIFFERENT from a folded side). The
+# fold still counts as a FAIL; it only removes the placement difference between two sides that both
+# fail one of the recorded ways. Remove this when the fixture is fixed.
+PLACEMENT_DEPENDENT = {"memcached": ("fx24_prediction", "fx24_trigger")}
+PLACEMENT_FOLDED = "FAIL fx24 (one of prediction/trigger: placement dependent)"
+# the failed check each recorded signature belongs to
+PLACEMENT_SIGNATURES = {"not_created": "FAIL fx24_trigger", "created_crash": "FAIL fx24_prediction"}
+
+
+def fx24_signature(case):
+    """'not_created', 'created_crash' or None from the fx24 case directory's job, output and fault."""
+    try:
+        job = json.loads(read(case / "job.json"))
+    except ValueError:
+        return None
+    if not isinstance(job, dict):
+        return None
+    out, fault = read(case / "server.out"), read(case / "fault.txt").strip()
+    kind = job.get("kind")
+    noop = (re.search(r"^MCAPP-FIX 24 header-only=0$", out, re.M)
+            and re.search(r"^MCAPP-FIX 24 triggering condition not created", out, re.M)) or (
+            re.search(r"^MCAPP-FIX 24 ia not linked$", out, re.M)
+            and not re.search(r"^MCAPP-FIX 24 header-only=", out, re.M))
+    if kind == "exit" and not fault and noop and re.search(r"^MCAPP-FIX 24 mark=18e0018$", out, re.M):
+        return "not_created"
+    if (kind == "signal" and re.search(r"^MCAPP-FIX 24 header-only=1$", out, re.M)
+            and re.search(r"^MCAPP-FIX 24 touch$", out, re.M)
+            and re.search(r"domain fault cause=24 .*address=0x0(\s|$)", fault)):
+        return "created_crash"
+    return None
+
+
+def fold_placement(gate, fails, signature=None):
+    """(fails, unclassified): the FAIL set with a recorded fx24 placement outcome folded into one entry.
+    `unclassified` names a single fx24 failure whose evidence is not one of the recorded signatures."""
+    pair = {"FAIL " + n for n in PLACEMENT_DEPENDENT.get(gate, ())}
+    hit = [f for f in fails if f in pair]
+    if len(hit) != 1:
+        return fails, None
+    if PLACEMENT_SIGNATURES.get(signature) != hit[0]:
+        return fails, f"{hit[0][5:]} failed alone, evidence is not a recorded fx24 signature ({signature or 'none'})"
+    return sorted([f for f in fails if f not in pair] + [PLACEMENT_FOLDED]), None
+
+
 # The runtime gate's application rows and the runtime.json tests that judge each.
 RUNTIME_TESTS = {"VM_EXIT:sqlite_write": ("sqlite_write", "sqlite_results"),
                  "VM_EXIT:sqlite_read": ("sqlite_read", "sqlite_results"),
@@ -237,6 +327,8 @@ def side(out, gate, ctl):
     if gate == "runtime" and (g / "runtime.json").is_file():
         extra = json.loads((g / "runtime.json").read_text())
     fails, jf, recs, checks = failset(text, extra)
+    fails, unclassified = fold_placement(
+        gate, fails, fx24_signature(g / "memcached" / "fx24") if gate == "memcached" else None)
     summary = read(g / "SUMMARY.txt")
     rc = re.search(r"^" + re.escape(gate) + r"\s+(rc=\d+|NOT RUN[^\n]*)", summary, re.M)
     gate_why = []
@@ -246,6 +338,8 @@ def side(out, gate, ctl):
         gate_why.append("no result (no PASS/FAIL line, no JSON status)")
     if gate == "memcached":
         rows = memcached_rows(g / "memcached", checks)
+        if unclassified:
+            rows["fx24"] = ("NOT RUN", unclassified)
     else:
         if gate == "runtime":
             texts = [text]
@@ -259,6 +353,135 @@ def side(out, gate, ctl):
         rows = dict(rows, **{f"[{gate}]": ("NOT RUN", "; ".join(gate_why))})
     return dict(log=log.name, rc=rc[1] if rc else "?", fails=fails, json=jf,
                 npass=sum(1 for v in checks.values() if v), rows=rows)
+
+
+def gate_dir(out):
+    return out / "gates" if (out / "gates").is_dir() else out
+
+
+def mode_lines(out, gate):
+    """The memory-mode values the gate's guest console logged (every insmod prints one)."""
+    g = gate_dir(out)
+    if gate == "memcached":
+        texts = [read(g / "memcached/guest/serial.log")]
+    elif gate == "runtime":
+        texts = [read(g / "runtime.log")]
+    else:
+        serials = sorted((g / gate).glob("**/serial.log")) if (g / gate).is_dir() else []
+        texts = [read(p) for p in serials] or [read(g / f"{gate}.log")]
+    return [m for text in texts for m in memory_mode.modes(text)]
+
+
+def verified_results(out, gate, ctl=False):
+    """Every memory_mode_verified result the gate's runner reported: its PASS/FAIL line, and the value in
+    each JSON record (the log's, runtime.json, the gate's own result.json), as booleans."""
+    g = gate_dir(out)
+    log = g / f"{gate}.log"
+    if ctl and gate == "step-hooks" and (g / "step-hooks2.log").exists():
+        log = g / "step-hooks2.log"
+    text = read(log)
+    found = [m[1] == "PASS" for m in re.finditer(r"^(PASS|FAIL) memory_mode_verified\s*$", text, re.M)]
+    recs = records(text)
+    for path in (g / "runtime.json" if gate == "runtime" else None, g / gate / "result.json"):
+        if path is not None and path.is_file():
+            try:
+                recs.append(json.loads(path.read_text()))
+            except ValueError:
+                found.append(False)      # a result file that cannot be read is not a pass
+    for rec in recs:
+        if not isinstance(rec, dict):
+            continue
+        tests = rec.get("tests")
+        if isinstance(tests, dict) and "memory_mode_verified" in tests:
+            found.append(tests["memory_mode_verified"] is True)
+        checks = rec.get("checks")
+        if isinstance(checks, dict) and "memory_mode_verified" in checks:
+            found.append(checks["memory_mode_verified"] is True)
+        elif isinstance(checks, list):
+            found += [c.get("passed") is True for c in checks
+                      if isinstance(c, dict) and c.get("name") == "memory_mode_verified"]
+    return found
+
+
+def requested_mode(out):
+    f = out / "mode"
+    word = read(f).strip() if f.is_file() else ""
+    return word if word in ("on", "off") else None
+
+
+def optional_problems(out, name):
+    """Problems with the mode witnesses of an optional qualification gate that ran (ON only)."""
+    g = gate_dir(out)
+    problems = []
+    if name == "unpinned-mm":
+        # run-mm.py logs the mode of every one of its seven module loads: MM_ARM:<arm>:<fixture>:<Y|N>
+        arms = re.findall(r"^MM_ARM:\w+:\w+:(\w)\s*$", read(g / name / "guest/serial.log"), re.M)
+        if len(arms) != MM_LOADS or any(m != "Y" for m in arms):
+            problems.append(f"{name}: {len(arms)} MM_ARM line(s) {sorted(set(arms))}, want {MM_LOADS} of Y")
+        try:
+            record = json.loads(read(g / name / "result.json"))
+        except ValueError:
+            record = {}
+        checks = record.get("checks") if isinstance(record, dict) else None
+        if not isinstance(checks, dict) or checks.get("mode") is not True or checks.get("completed") is not True:
+            problems.append(f"{name}: result.json lacks passing completed/mode checks")
+    elif name == "unpinned-mutants":
+        # every step-hooks run of the negative controls: its own result.json, and the console's mode lines
+        runs = sorted(p.parent for p in (g / name).glob("*/result.json")) if (g / name).is_dir() else []
+        if not runs:
+            problems.append(f"{name}: no run record under {name}/")
+        for d in runs:
+            lines = [m for p in sorted(d.glob("**/serial.log")) for m in memory_mode.modes(read(p))]
+            try:
+                checks = json.loads(read(d / "result.json")).get("checks", {})
+            except (ValueError, AttributeError):
+                checks = {}
+            if not lines or any(m != "Y" for m in lines):
+                problems.append(f"{name}/{d.name}: mode line(s) {sorted(set(lines))}, want only Y")
+            if checks.get("memory_mode_verified") is not True or checks.get("completed") is not True:
+                problems.append(f"{name}/{d.name}: memory_mode_verified/completed not true")
+    return problems
+
+
+def check_mode(out, gates=None, ctl=False):
+    """Problems (a list of strings) with OUT as evidence of the mode it was asked to run in:
+    the mode file; the arm's own rejection lines; a failed optional qualification gate; and per gate
+    the number of mode lines (one per module load), their value and the runner's memory_mode_verified."""
+    want = requested_mode(out)
+    if want is None:
+        return [f"{out}: no mode file (written by run-arm.sh --mode on|off)"]
+    summary = read(gate_dir(out) / "SUMMARY.txt")
+    finished = re.findall(r"^(\S+)\s+rc=(\d+)", summary, re.M)
+    names = [n for n, _ in finished]
+    ran = [x for x in GATES if x in names]
+    problems = [f"arm rejected itself: {m[0].strip()}" for m in ARM_REJECTION.finditer(summary)]
+    for n, rc in finished:
+        # The nine ordinary gates fail the same way in the control (their FAIL sets are compared); a
+        # selected qualification gate is a prerequisite, not a baseline.
+        if n in OPTIONAL_GATES and rc != "0":
+            problems.append(f"{n}: optional qualification gate failed (rc={rc})")
+    ok = ("Y",) if want == "on" else ("N", "A")
+    for gate in (gates or ran):
+        found = mode_lines(out, gate)
+        if not found:
+            problems.append(f"{gate}: logged no memory-mode line (mode {want} requested)")
+        elif any(m not in ok for m in found):
+            problems.append(f"{gate}: logged mode {sorted(set(found))} but {want} was requested")
+        elif gate in MODE_LOADS and len(found) != MODE_LOADS[gate]:
+            problems.append(f"{gate}: {len(found)} memory-mode line(s) for {MODE_LOADS[gate]} module load(s)")
+        verified = verified_results(out, gate, ctl)
+        if not verified:
+            problems.append(f"{gate}: no memory_mode_verified result")
+        elif not all(verified):
+            problems.append(f"{gate}: memory_mode_verified failed")
+    for n in OPTIONAL_GATES:
+        if n in names:
+            if want != "on":
+                problems.append(f"{n}: ran in mode {want} (needs on)")
+            problems += optional_problems(out, n)
+    if not (gates or finished):
+        problems.append(f"{out}: SUMMARY.txt lists no finished gate")
+    return problems
 
 
 def compare_gate(gate, c, r):
@@ -283,16 +506,40 @@ def print_rows(out):
 def main():
     if len(sys.argv) == 3 and sys.argv[1] == "--rows":
         print_rows(Path(sys.argv[2])); return 0
+    if len(sys.argv) == 3 and sys.argv[1] == "--check-mode":
+        out = Path(sys.argv[2])
+        problems = check_mode(out)
+        want = requested_mode(out)
+        for gate in GATES:
+            found = mode_lines(out, gate)
+            if found:
+                print(f"MODE {gate}: {len(found)} line(s) {sorted(set(found))} (requested {want}), "
+                      f"memory_mode_verified {verified_results(out, gate)}")
+        for x in problems:
+            print("MODE_MISMATCH " + x)
+        return 1 if problems else 0
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("control", type=Path)
     ap.add_argument("arm", type=Path)
     ap.add_argument("--gates", default=" ".join(GATES), help="gates to compare (default: all nine)")
     ap.add_argument("--json", type=Path)
     ap.add_argument("--all-rows", action="store_true", help="print every row, not only the NOT RUN and application rows")
+    ap.add_argument("--control-mode", choices=("on", "off"), help="the memory mode the control must have been run in")
+    ap.add_argument("--arm-mode", choices=("on", "off"), help="the memory mode the arm must have been run in")
     a = ap.parse_args()
     for d in (a.control, a.arm):
         if not d.is_dir():
             print(f"compare.py: no directory {d}", file=sys.stderr); return 3
+    refused = []
+    for label, d, pinned in (("control", a.control, a.control_mode), ("arm", a.arm, a.arm_mode)):
+        refused += [f"{label}: {x}" for x in check_mode(d, a.gates.split() or None, label == "control")]
+        if pinned and requested_mode(d) != pinned:
+            refused.append(f"{label}: run in mode {requested_mode(d)}, {pinned} required")
+    if refused and a.gates.split():
+        for x in refused:
+            print("REFUSED " + x)
+        print("VERDICT: REFUSED (memory mode)")
+        return 4
     verdicts = {}; record = {}
     if not a.gates.split():
         print("compare.py: no gates selected", file=sys.stderr); return 3

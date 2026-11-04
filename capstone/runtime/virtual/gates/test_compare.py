@@ -42,9 +42,28 @@ def fp(g, serial="FP_EXIT:0\n"):
     (g / "fp/guest/serial.log").write_text(serial)
 
 
-def memcached(g, drop_job=None, skip=None, retry=None):
+# What the fixture-24 case directory holds in each recorded outcome (memcached rerun evidence): the header-only
+# condition not created (known no-op mark 18e0018, exit 24, no fault) and created followed by the server's
+# death at cause 24, address 0.
+NOT_CREATED = dict(job='{"version":1,"kind":"exit","value":24}', fault="",
+                   out="MCAPP-FIX 24 begin\nMCAPP-FIX 24 header-only=0\n"
+                       "MCAPP-FIX 24 triggering condition not created (header-only branch not observed)\n"
+                       "MCAPP-FIX 24 mark=18e0018\n")
+CREATED_CRASH = dict(job='{"version":1,"kind":"signal","value":11}',
+                     fault="capstone-exec: domain fault cause=24 pc=0x3fad02b134 address=0x0 ra=0x3fad02b0c4 image=./safety.dom\n",
+                     out="MCAPP-FIX 24 begin\nMCAPP-FIX 24 header-only=1\nMCAPP-FIX 24 target=3f9eafd73e\nMCAPP-FIX 24 touch\n")
+IA_NOT_LINKED = dict(NOT_CREATED, out="MCAPP-FIX 24 begin\nMCAPP-FIX 24 ia not linked\nMCAPP-FIX 24 mark=18e0018\n")
+# the reviewer's substitution: an unrelated crash, no fault record, no fixture path in the output
+OTHER_CRASH = dict(job='{"version":1,"kind":"signal","value":9}', fault="", out="")
+FX24_PREDICTION_FAILS, FX24_TRIGGER_FAILS = ("FAIL", "PASS"), ("PASS", "FAIL")
+
+
+def memcached(g, drop_job=None, skip=None, retry=None, fx24=None, fx24_case=None):
+    """fx24: (prediction, trigger) statuses of the fixture that cannot pass as written; fx24_case: the
+    files of its case directory (default: the recorded outcome that belongs to the failed check)."""
     serial, log = [], []
-    for c in CASES:
+    cases = CASES + (["fx24"] if fx24 else [])
+    for c in cases:
         if c == skip:
             continue
         if c == retry:   # a first attempt the launcher refused, then one that ran
@@ -55,21 +74,82 @@ def memcached(g, drop_job=None, skip=None, retry=None):
             if c != drop_job:
                 (g / "memcached" / c / "job.json").write_text('{"version":1,"kind":"exit","value":0}')
             (g / "memcached" / c / "server.err").write_text("")
-    for c in CASES:   # the runner checks every case it planned, run or not
-        log += ["PASS pthread_timed_wait"] if c == "pthread" else [f"PASS {c}_harness", f"PASS {c}_protocol"]
+    for c in cases:   # the runner checks every case it planned, run or not
+        if c == "fx24":
+            log += ["PASS fx24_harness", f"{fx24[0]} fx24_prediction", f"{fx24[1]} fx24_trigger"]
+        else:
+            log += ["PASS pthread_timed_wait"] if c == "pthread" else [f"PASS {c}_harness", f"PASS {c}_protocol"]
+    if fx24:
+        case = fx24_case or (CREATED_CRASH if fx24[0] == "FAIL" else NOT_CREATED)
+        (g / "memcached/fx24/job.json").write_text(case["job"])
+        (g / "memcached/fx24/server.out").write_text(case["out"])
+        if case["fault"]:
+            (g / "memcached/fx24/fault.txt").write_text(case["fault"])
     (g / "memcached/guest").mkdir(parents=True, exist_ok=True)
     (g / "memcached/guest/serial.log").write_text("\n".join(serial) + "\n")
     (g / "memcached.log").write_text("\n".join(log) + "\n")
 
 
-def run(gate, make_ctl, make_arm):
+def stamp(out, gate, mode, line, count=None, verified=True, summary=None):
+    """What run-arm.sh and the runners leave: OUT/mode, `count` memory-mode lines (default: one per module load
+    of the gate) in the gate's guest console, the runner's memory_mode_verified line (True: PASS, False: FAIL,
+    None: absent) and, when given, SUMMARY.txt."""
+    g = out / "gates"
+    if mode:
+        (out / "mode").write_text(mode + "\n")
+    if summary is not None:
+        (g / "SUMMARY.txt").write_text(summary)
+    if line:
+        n = compare.MODE_LOADS[gate] if count is None else count
+        serials = sorted(g.glob(f"{gate}/**/serial.log"))
+        target = g / "runtime.log" if gate == "runtime" else serials[0] if serials else g / f"{gate}.log"
+        target.write_text(target.read_text() + (line + "\n") * n)
+    if verified is not None:
+        log = g / f"{gate}.log"
+        log.write_text(log.read_text() + ("PASS" if verified else "FAIL") + " memory_mode_verified\n")
+
+
+def run(gate, make_ctl, make_arm, ctl_mode=("off", "TEST_MEMORY_MODE:N"), arm_mode=("off", "TEST_MEMORY_MODE:N"),
+        extra=()):
+    """The exit status of compare.py on a synthetic pair; a mode is (mode, line[, count[, verified[, summary]]])."""
     with tempfile.TemporaryDirectory() as t:
-        for name, make in (("ctl", make_ctl), ("arm", make_arm)):
+        for name, make, mode in (("ctl", make_ctl, ctl_mode), ("arm", make_arm, arm_mode)):
             g = Path(t) / name / "gates"
             g.mkdir(parents=True)
             make(g)
-        return subprocess.run([sys.executable, str(COMPARE), f"{t}/ctl", f"{t}/arm", "--gates", gate],
+            stamp(Path(t) / name, gate, *mode)
+        return subprocess.run([sys.executable, str(COMPARE), f"{t}/ctl", f"{t}/arm", "--gates", gate, *extra],
                               capture_output=True, text=True).returncode
+
+
+def check_cli(make):
+    """The exit status of `compare.py --check-mode` on one synthetic output."""
+    with tempfile.TemporaryDirectory() as t:
+        g = Path(t) / "gates"
+        g.mkdir()
+        make(Path(t))
+        return subprocess.run([sys.executable, str(COMPARE), "--check-mode", t], capture_output=True, text=True).returncode
+
+
+def optional_gates(out, mm=True, mutants=True, mm_modes="Y" * 7, mutant_mode="Y", mutant_verified=True,
+                   rc_mm=0, rc_mutants=0):
+    """SUMMARY.txt and the mode witnesses of the two optional gates, ON."""
+    g = out / "gates"
+    (out / "mode").write_text("on\n")
+    summary = ""
+    if mm:
+        summary += f"unpinned-mm rc={rc_mm}   5s\n"
+        (g / "unpinned-mm/guest").mkdir(parents=True)
+        (g / "unpinned-mm/guest/serial.log").write_text("".join(f"MM_ARM:good:multi:{m}\n" for m in mm_modes))
+        (g / "unpinned-mm/result.json").write_text(json.dumps({"checks": {"completed": True, "mode": True}}))
+    if mutants:
+        summary += f"unpinned-mutants rc={rc_mutants}   9s\n"
+        for variant in ("unbroken-adaptclip", "vma_clip"):
+            (g / "unpinned-mutants" / variant / "guest").mkdir(parents=True)
+            (g / "unpinned-mutants" / variant / "guest/serial.log").write_text(f"HOOK_MEMORY_MODE:{mutant_mode}\n")
+            (g / "unpinned-mutants" / variant / "result.json").write_text(json.dumps(
+                {"checks": {"completed": True, "memory_mode_verified": mutant_verified}}))
+    (g / "SUMMARY.txt").write_text(summary)
 
 
 def main():
@@ -126,12 +206,124 @@ def main():
                                capture_output=True).returncode
     failed = int(empty != 3)
     print(f"{'PASS' if empty == 3 else 'FAIL'} no gates selected: exit {empty}, want 3")
+    # The memory mode: an arm run ON is compared with an OFF control (exit 0 when its logs say Y),
+    # and a log that disagrees with the requested mode, no mode line, or no mode file is refused.
+    on, off = ("on", "TEST_MEMORY_MODE:Y"), ("off", "TEST_MEMORY_MODE:N")
+    modes = [
+        ("ON arm, logs say Y", dict(arm_mode=on, extra=("--arm-mode", "on")), 0),
+        ("OFF control without the parameter (A)", dict(ctl_mode=("off", "TEST_MEMORY_MODE:A")), 0),
+        ("ON requested, log says N", dict(arm_mode=("on", "TEST_MEMORY_MODE:N")), 4),
+        ("OFF requested, log says Y", dict(arm_mode=("off", "TEST_MEMORY_MODE:Y")), 4),
+        ("ON requested, one line of two says N", dict(arm_mode=("on", "TEST_MEMORY_MODE:Y\nTEST_MEMORY_MODE:N")), 4),
+        ("no mode line", dict(arm_mode=("off", None)), 4),
+        ("no mode file", dict(arm_mode=(None, "TEST_MEMORY_MODE:N")), 4),
+        ("arm required ON but run OFF", dict(extra=("--arm-mode", "on")), 4),
+    ]
+    pred_fails, trig_fails, both_pass, both_fail = (("FAIL", "PASS"), ("PASS", "FAIL"), ("PASS", "PASS"), ("FAIL", "FAIL"))
+    # (name, control (checks, case files or None), arm (checks, case files or None), want)
+    fx = [
+        ("fx24 fails its prediction on one side, its trigger on the other (the two recorded outcomes)",
+         (pred_fails, None), (trig_fails, None), 0),
+        ("fx24 fails its trigger on both sides (not created)", (trig_fails, None), (trig_fails, None), 0),
+        ("fx24 fails its prediction on both sides (created, then the cause-24 fault)", (pred_fails, None), (pred_fails, None), 0),
+        ("fx24 passes on one side and fails on the other", (both_pass, None), (trig_fails, None), 1),
+        ("fx24 fails both checks on one side and one on the other", (both_fail, None), (trig_fails, None), 1),
+        # P2-ONQ2-4: a single failure that is not one of the two recorded outcomes is never folded
+        ("fx24 prediction fails on an unrelated crash (signal 9, no fault, no fixture output)",
+         (trig_fails, None), (pred_fails, OTHER_CRASH), 2),
+        ("fx24 unrelated crash on both sides", (pred_fails, OTHER_CRASH), (pred_fails, OTHER_CRASH), 2),
+        ("fx24 trigger fails but the case shows the created-then-crash outcome", (trig_fails, None), (trig_fails, CREATED_CRASH), 2),
+        ("fx24 prediction fails but the case shows the not-created outcome", (pred_fails, NOT_CREATED), (trig_fails, None), 2),
+        ("fx24 created-then-crash outcome with a fault at another address", (pred_fails, None),
+         (pred_fails, dict(CREATED_CRASH, fault=CREATED_CRASH["fault"].replace("address=0x0 ", "address=0x10 "))), 2),
+        ("fx24 created-then-crash outcome without the header-only line", (pred_fails, None),
+         (pred_fails, dict(CREATED_CRASH, out="MCAPP-FIX 24 touch\n")), 2),
+        ("fx24 not-created outcome with another no-op mark", (trig_fails, None),
+         (trig_fails, dict(NOT_CREATED, out=NOT_CREATED["out"].replace("18e0018", "18e0017"))), 2),
+        ("fx24 not-created outcome that bails at 'ia not linked' (seen in the merged-head OFF arm)",
+         (pred_fails, None), (trig_fails, IA_NOT_LINKED), 0),
+        ("fx24 'ia not linked' after a header-only line", (trig_fails, None),
+         (trig_fails, dict(IA_NOT_LINKED, out=IA_NOT_LINKED["out"] + "MCAPP-FIX 24 header-only=1\n")), 2),
+        ("fx24 'ia not linked' with another no-op mark", (trig_fails, None),
+         (trig_fails, dict(IA_NOT_LINKED, out=IA_NOT_LINKED["out"].replace("18e0018", "18e0012"))), 2),
+        ("fx24 not-created outcome with a fault record", (trig_fails, None),
+         (trig_fails, dict(NOT_CREATED, fault=CREATED_CRASH["fault"])), 2),
+    ]
+    for name, (c, c_case), (a, a_case), want in fx:
+        got = run("memcached", lambda g, c=c, k=c_case: memcached(g, fx24=c, fx24_case=k),
+                  lambda g, a=a, k=a_case: memcached(g, fx24=a, fx24_case=k))
+        ok = got == want
+        failed += not ok
+        print(f"{'PASS' if ok else 'FAIL'} {name}: exit {got}, want {want}")
+    for name, kwargs, want in modes:
+        got = run("fp", fp, fp, **kwargs)
+        ok = got == want
+        failed += not ok
+        print(f"{'PASS' if ok else 'FAIL'} memory mode: {name}: exit {got}, want {want}")
+    # P2-ONQ2-1: evidence for every module load, and a failed runner verdict is fatal on its own.
+    # nodes loads the module twice. The reviewer's reproduction: the second record gone from both
+    # sides and the runner's own count check failing on both, which compared IDENTICAL.
+    N, N_FULL = "TEST_MEMORY_MODE:N", ("off", "TEST_MEMORY_MODE:N")
+    Y = "TEST_MEMORY_MODE:Y"
+    complete = [
+        ("nodes, two loads, two Y lines", "nodes", dict(ctl_mode=N_FULL, arm_mode=("on", Y), extra=("--arm-mode", "on")), 0),
+        ("nodes, second load's record missing on both sides, runner says FAIL",
+         "nodes", dict(ctl_mode=("off", N, 1, False), arm_mode=("off", N, 1, False)), 4),
+        ("nodes, second load's record missing on both sides, runner says PASS (count alone)",
+         "nodes", dict(ctl_mode=("off", N, 1), arm_mode=("off", N, 1)), 4),
+        ("nodes, second load's record missing on one side", "nodes", dict(arm_mode=("off", N, 1)), 4),
+        ("nodes, a third record", "nodes", dict(arm_mode=("off", N, 3)), 4),
+        ("fp, runner memory_mode_verified FAIL on both sides, all lines present",
+         "fp", dict(ctl_mode=("off", N, None, False), arm_mode=("off", N, None, False)), 4),
+        ("fp, runner memory_mode_verified FAIL on the arm only", "fp", dict(arm_mode=("off", N, None, False)), 4),
+        ("fp, no memory_mode_verified result on either side",
+         "fp", dict(ctl_mode=("off", N, None, None), arm_mode=("off", N, None, None)), 4),
+        ("step-hooks, 29 of 30 records", "step-hooks", dict(arm_mode=("off", N, 29)), 4),
+        ("memcached, mode lines and verdict", "memcached", dict(ctl_mode=N_FULL), 0),
+        ("runtime, mode line and verdict", "runtime", dict(ctl_mode=N_FULL), 0),
+        ("runtime, runner says FAIL", "runtime", dict(arm_mode=("off", N, None, False)), 4),
+        # P2-ONQ2-2: an arm's own rejection travels with its summary
+        ("summary carries MODE_CHECK_FAILED (production module carries test hooks)", "fp",
+         dict(arm_mode=("off", N, None, True, "MODE_CHECK_FAILED module-strings: production module carries test hooks\n")), 4),
+        ("summary carries OPTIONAL_GATE_FAILED", "fp",
+         dict(arm_mode=("off", N, None, True, "OPTIONAL_GATE_FAILED unpinned-mm rc=1\n")), 4),
+        ("an ordinary gate ends rc=1 on both sides (compared, not refused)", "fp",
+         dict(ctl_mode=("off", N, None, True, "fp         rc=1     5s\n"), arm_mode=("off", N, None, True, "fp         rc=1     5s\n")), 0),
+        ("an optional gate rc=1 in the summary", "fp",
+         dict(arm_mode=("on", Y, None, True, "unpinned-mm rc=1      5s\n")), 4),
+    ]
+    for name, gate, kwargs, want in complete:
+        make = {"nodes": required("nodes"),
+                "fp": fp, "memcached": memcached, "runtime": runtime,
+                "step-hooks": required("step-hooks")}[gate]
+        got = run(gate, make, make, **kwargs)
+        ok = got == want
+        failed += not ok
+        print(f"{'PASS' if ok else 'FAIL'} memory mode evidence: {name}: exit {got}, want {want}")
+    cli = [
+        ("optional-only summary, both gates succeeded with Y witnesses", lambda o: optional_gates(o), 0),
+        ("unpinned-mm rc=1 and no witnesses", lambda o: optional_gates(o, mutants=False, rc_mm=1, mm_modes=""), 1),
+        ("unpinned-mm rc=1 with Y witnesses", lambda o: optional_gates(o, mutants=False, rc_mm=1), 1),
+        ("unpinned-mutants rc=1", lambda o: optional_gates(o, mm=False, rc_mutants=1), 1),
+        ("unpinned-mm rc=0, six of seven loads", lambda o: optional_gates(o, mutants=False, mm_modes="Y" * 6), 1),
+        ("unpinned-mm rc=0, one load says N", lambda o: optional_gates(o, mutants=False, mm_modes="Y" * 6 + "N"), 1),
+        ("unpinned-mutants rc=0, a run says N", lambda o: optional_gates(o, mm=False, mutant_mode="N"), 1),
+        ("unpinned-mutants rc=0, a run's memory_mode_verified false", lambda o: optional_gates(o, mm=False, mutant_verified=False), 1),
+        ("unpinned-mutants rc=0 without run records", lambda o: (optional_gates(o, mm=False, mutants=False),
+            (o / "gates/SUMMARY.txt").write_text("unpinned-mutants rc=0   1s\n")), 1),
+    ]
+    for name, make, want in cli:
+        got = check_cli(make)
+        ok = got == want
+        failed += not ok
+        print(f"{'PASS' if ok else 'FAIL'} --check-mode: {name}: exit {got}, want {want}")
     for name, gate, c, a, want in cases:
         got = run(gate, c, a)
         ok = got == want
         failed += not ok
         print(f"{'PASS' if ok else 'FAIL'} {name}: exit {got}, want {want}")
-    print(f"{len(cases) + 1 - failed}/{len(cases) + 1} passed")
+    total = len(cases) + len(modes) + len(fx) + len(complete) + len(cli) + 1
+    print(f"{total - failed}/{total} passed")
     return 1 if failed else 0
 
 

@@ -28,6 +28,8 @@ from pathlib import Path
 import re
 import shutil
 import subprocess
+import memory_mode
+import unpinned_checks
 
 HERE = Path(__file__).resolve().parent
 # name: (insmod parameters, modes, expected exit status[, application])
@@ -95,12 +97,30 @@ def app(name):
 # comparison, and every run's counters are tied to the census (pages= is what the arenas
 # retired after the mark still held; faults= covers every page admitted at a fault; peak= is at
 # least pages=), so neither source can stand in for the other.
-def script(names, instrumented):
-    text = SCRIPT
+# The kernel's FOLL_PIN counters (nr_foll_pin_acquired / _released) are the independent witness that
+# an unpinned run takes no payload pin, so the ON arm first proves, in the same guest and with the
+# same module, that the counters are live: the pthread contract creates threads, and a thread's
+# supervisor frame is pinned even in unpinned mode (CSRUNV names it physically), so that launch
+# must acquire and release pins. (The pinned memory mode cannot supply the control: the ON
+# platform has no test CSRs, which pinned discovery reads.) Its lines are HOOK_LIVE_*, not a
+# *MEMORY_MODE line: the arm's own mode lines all say Y, and this one does too.
+LIVENESS = '''insmod capstone_vm.ko unpinned=1 || exit 1
+echo "HOOK_LIVE_MODE:$(cat /sys/module/capstone_vm/parameters/unpinned 2>/dev/null || echo A)"
+./capstone-vexec pthread.dom > /tmp/live.out 2>&1
+echo "HOOK_LIVE_STATUS:$?"
+rmmod capstone_vm || exit 1
+echo "HOOK_PINS_LIVE:$(pins)"
+dmesg -c > /dev/null
+'''
+
+
+def script(names, instrumented, unpinned=False, extra=''):
+    text = SCRIPT + (LIVENESS if unpinned else '')
     for name in names:
         params, modes = CONFIGS[name][:2]
         params += '' if name.startswith('adapt') else ' fault_ahead_max=0'
-        text += f'''insmod capstone_vm.ko {params} {'diag_admit=1' if instrumented else ''} || exit 1
+        text += f'''insmod capstone_vm.ko {params} {'diag_admit=1' if instrumented else ''} {'unpinned=1' if unpinned else ''} {extra} || exit 1
+{memory_mode.echo('HOOK_')}
 for mode in {modes}; do
   echo "HOOK_PINS_BEFORE:{name}:$mode:$(pins)"
   echo "HOOK_AHEAD_BEFORE:{name}:$mode:$(ahead | tr '\\n' ' ')"
@@ -171,6 +191,11 @@ def counter_counts(run):
 
 def parse(log):
     runs, reports, ends, current = {}, {}, {}, None
+    live = re.findall(r'^HOOK_PINS_LIVE:(.*)$', log, re.M)
+    try:
+        ends['@live'] = pins(live[0]) if len(live) == 1 else None
+    except KeyError:
+        ends['@live'] = None
     for line in log.splitlines():
         m = re.match(r'HOOK_PINS_BEFORE:(\w+):(\w+):(.*)$', line)
         if m:
@@ -236,12 +261,15 @@ def parse(log):
     return runs, reports, ends
 
 
-def evaluate(log, names, instrumented, completed):
+def evaluate(log, names, instrumented, completed, unpinned=False):
     runs, reports, ends = parse(log)
+    if unpinned:
+        unpinned_checks.attach(log, runs, hooks=True)
     census = [json.loads(l) for l in log.splitlines() if l.startswith('{"version":1,')]
     expected_runs = sum(len(CONFIGS[n][1].split()) for n in names)
     checks = {'completed': completed, 'all_runs': len(runs) == expected_runs,
               'all_reports': sorted(reports) == sorted(names),
+              'memory_mode_verified': memory_mode.verified(log, unpinned, len(names)),
               'no_contract_failure': 'PIN_FAIL:' not in log and 'MALLOC_FAIL:' not in log,
               'cleanup': len(census) == len(names) and all(
                   s['live_domains'] == s['live_regions'] == s['live_bytes'] == 0 for s in census)}
@@ -253,6 +281,8 @@ def evaluate(log, names, instrumented, completed):
         r = runs.get((name, mode))
         if not r:
             return [None]
+        if unpinned:
+            return [unpinned_checks.counter_counts(r), unpinned_checks.region_counts(r)]
         return [counter_counts(r)] + ([region_counts(r)] if instrumented else [])
 
     for (name, mode), r in runs.items():
@@ -423,6 +453,12 @@ def evaluate(log, names, instrumented, completed):
         checks[f'{name}_{mode}_window'] = (
             adaptive_counts(name, mode, 4, 26) and
             [e[1:4] for e in region_events(r)] == [(2, 4, 4), (7, 8, 0), (8, 16, 16), (25, 32, 6)])
+        # Beside the read-only neighbour of 'clip' Linux refuses the write fault of an unclipped
+        # window, which hides a missing VMA clip; the planned limit (not the resolved pages) shows it.
+        if unpinned:
+            checks[f'{name}_{mode}_window_in_vma'] = bool(r.get('region') is not None and
+                unpinned_checks.windows_stay_below(r, r['region'] + 8 * 4096))
+            checks[f'{name}_{mode}_window_in_arena'] = unpinned_checks.windows_in_arena(r)
         if name == 'adaptro':
             checks['adaptro_write_denied'] = r.get('rowrite', False) and r.get('exit') == 139
         else:
@@ -440,6 +476,61 @@ def evaluate(log, names, instrumented, completed):
         bool(got and low and full and got[0] >= low[0] and got[1] > full[1])
         for got, low, full in zip(sources('short64', 'walk'), sources('base1', 'walk'),
                                   sources('base64', 'walk')))
+    if unpinned:
+        # The witness is only worth its zero if the counters count: the pinned liveness launch,
+        # in this guest, acquired pins and released every one of them.
+        live = ends.get('@live')
+        checks['foll_pin_counters_live'] = bool(live and live[0] == live[1] > 0 and
+            'HOOK_LIVE_STATUS:0' in log and 'HOOK_LIVE_MODE:Y' in log)
+        for name in names:
+            rep = reports.get(name, {})
+            end = ends.get(name)
+            checks.pop(f'{name}_pins_balanced', None)
+            # The kernel's own FOLL_PIN counters, as read at this module's rmmod, equal the reading
+            # after the pinned liveness launch: this run acquired and released not one pin.
+            checks[f'{name}_no_payload_pins'] = bool(end and live and end == live and
+                rep.get('unpinned') == 1 and rep.get('fault_requests', 0) > 0 and rep.get('entries', 0) > 0)
+            checks.pop(f'{name}_gup_batch_bound', None)
+            # A configuration that opens windows and injects no stop of its own must have opened
+            # at least one batch (the OFF check required 0 < gup_max); one with an injected stop
+            # may have cut every window before its first batch, so only the bound holds for it.
+            params = CONFIGS[name][0]
+            windowed = 'test_inject=' not in params and (
+                name.startswith('adapt') or int(re.search(r'pin_ahead_pages=(\d+)', params + ' pin_ahead_pages=1')[1]) > 1)
+            checks[f'{name}_fault_batch_bound'] = (rep.get('gup_requests') == 0 and
+                rep.get('fault_requests', 0) > 0 and 0 <= rep.get('fault_max', -1) <= 16 and
+                (not windowed or rep.get('fault_max', 0) > 0))
+            checks[f'{name}_no_fault_while_pending'] = rep.get('fault_pending') == 0
+        for (name, mode), r in runs.items():
+            if CONFIGS[name][2] == 0:
+                checks[f'{name}_{mode}_faults_census'] = unpinned_checks.accounted(r)
+        checks.pop('base64_full_batches')
+        checks['base64_full_fault_batches'] = reports.get('base64', {}).get('fault_max') == 16
+        checks.pop('short64_partial_results')
+        checks['short64_deferred_and_partial_faults'] = all(
+            reports.get('short64', {}).get(k, 0) > 0 for k in ('fault_deferred', 'fault_short'))
+        # The same partial-window coverage, witnessed by Linux resolutions.
+        checks['adaptshort_walk_window'] = (all(got == (32, 9) for got in sources('adaptshort', 'walk')) and
+            adaptive_counts('adaptshort', 'walk', 7, 23) and reports.get('adaptshort', {}).get('fault_short', 0) > 0)
+        checks['short64_walk_resolutions'] = checks.pop('short64_walk_pins')
+        # A real quantum can cut any unpinned window, including CV_RESOLVE's.
+        # Require the walk's exact page coverage and one event per demand
+        # page, with public totals reconciled above. Each prefaulted page
+        # must be witnessed; no allowance for unexplained extra events.
+        for name in ('resched1', 'signal1', 'deadline1', 'resched2', 'signal2', 'deadline2',
+                     'resched3', 'signal3', 'resched4', 'signal4', 'deadline4'):
+            for mode in CONFIGS[name][1].split():
+                r = runs.get((name, mode), {})
+                counts = unpinned_checks.region_counts(r)
+                arena = unpinned_checks.region_arena(r)
+                events = [e for e in r.get('raw_events', []) if e['arena'] == arena]
+                # The pinned oracle's reference comparison (pins >=, events <=, and the delta bounded by
+                # launcher_first * the extra window; exact when no fault was first resolved by the
+                # launcher), on the ON sources: pages are the distinct virtual pages resolved.
+                checks[f'{name}_{mode}_reference'] = checks.pop(f'{name}_{mode}_accounting')
+                checks[f'{name}_{mode}_window_event_disjoint'] = unpinned_checks.disjoint(r) and bool(r.get('raw_events'))
+                checks[f'{name}_{mode}_accounting'] = bool(counts and counts[0] == (32 if mode == 'walk' else 0) and
+                    len({e['address'] // 4096 for e in events}) == len(events) and unpinned_checks.accounted(r))
     return checks, runs, reports, ends
 
 
@@ -447,58 +538,77 @@ def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('--evaluate', type=Path, help='a saved serial.log: run the checks on it, no guest')
     p.add_argument('--instrumented', action='store_true', help='with --evaluate: the module had diag_admit')
+    p.add_argument('--unpinned', action='store_true', help='require unpinned mode and its resolution oracle')
     p.add_argument('--qemu', type=Path)
     p.add_argument('--images', type=Path)
     p.add_argument('--adapter', type=Path, help='capstone-vexec from here')
     p.add_argument('--module', type=Path, help='the CV_TEST_HOOKS build')
     p.add_argument('--application', type=Path, help='pin.dom')
+    p.add_argument('--pthread-application', type=Path, help='pthread.dom; the ON liveness launch of the FOLL_PIN counters')
     p.add_argument('--malloc-application', type=Path, help='malloc.dom; without it the malloc configurations are skipped')
     p.add_argument('--work', type=Path)
     p.add_argument('--timeout', type=int, default=1800)
+    p.add_argument('--module-args', default='', help='parameters appended to every insmod (the broken-variant controls)')
+    p.add_argument('--only', default='', help='comma-separated configuration names; the others are not run '
+                   '(the checks of an unselected configuration then fail: read only the ones you name)')
     a = p.parse_args()
     if a.evaluate:
         log = a.evaluate.read_text(errors='replace').replace('\r', '')
         with_malloc = 'HOOK_PINS_BEFORE:malloc16:' in log
         names = [n for n in CONFIGS if app(n) == 'pin' or with_malloc]
-        checks = evaluate(log, names, a.instrumented, True)[0]
+        checks = evaluate(log, names, a.instrumented, True, a.unpinned)[0]
         for name, ok in checks.items(): print(('PASS ' if ok else 'FAIL ') + name)
         return 0 if all(checks.values()) else 1
     for name in ('qemu', 'images', 'adapter', 'module', 'application', 'work'):
         if getattr(a, name) is None:
             p.error(f'--{name} is required')
+    if a.unpinned and not a.pthread_application:
+        p.error('--unpinned requires --pthread-application')
     a.work.mkdir(parents=True, exist_ok=False)
     stage = a.work / 'stage'; stage.mkdir()
     names = [n for n in CONFIGS if app(n) == 'pin' or a.malloc_application]
+    if a.only:
+        wanted = a.only.split(',')
+        unknown = [n for n in wanted if n not in CONFIGS]
+        if unknown:
+            p.error('unknown configuration ' + ','.join(unknown))
+        names = [n for n in names if n in wanted]
     inputs = {'qemu': a.qemu, 'application': a.application,
               'launcher': a.adapter/'capstone-vexec', 'module': a.module,
               **{n: a.images/n for n in ('Image', 'fw_jump.elf', 'rootfs.ext2')}}
     if a.malloc_application:
         inputs['malloc'] = a.malloc_application
+    if a.unpinned:
+        inputs['pthread'] = a.pthread_application
     hashes = {k: hashlib.sha256(v.read_bytes()).hexdigest() for k, v in inputs.items()}
     if a.malloc_application:
         shutil.copy2(a.malloc_application, stage/'malloc.dom')
+    if a.unpinned:
+        shutil.copy2(a.pthread_application, stage/'pthread.dom')
     for src, name in ((inputs['application'], 'pin.dom'),
                       (inputs['launcher'], 'capstone-vexec'),
                       (inputs['module'], 'capstone_vm.ko')):
         shutil.copy2(src, stage/name)
     instrumented = b'diag_admit' in inputs['module'].read_bytes()
-    gate = script(names, instrumented)
+    gate = script(names, instrumented, a.unpinned, a.module_args)
     (stage/'gate.sh').write_text(gate)
     run = subprocess.run([os.environ.get('PYTHON', 'python3'),
         str(HERE/'run-staged.py'), '--qemu', str(a.qemu), '--images', str(a.images),
         '--stage', str(stage), '--work', str(a.work/'guest'), '--disk-mib', '64',
         '--timeout', str(a.timeout)])
     log = (a.work/'guest/serial.log').read_text(errors='replace').replace('\r', '')
-    checks, runs, reports, ends = evaluate(log, names, instrumented, run.returncode == 0)
+    checks, runs, reports, ends = evaluate(log, names, instrumented, run.returncode == 0, a.unpinned)
     checks['inputs_unchanged'] = hashes == {
         k: hashlib.sha256(v.read_bytes()).hexdigest() for k, v in inputs.items()}
     result = {'schema': 1, 'status': 'PASS' if all(checks.values()) else 'FAIL',
-              'checks': checks, 'instrumented': instrumented, 'reports': reports, 'pins_at_rmmod': ends,
+              'checks': checks, 'instrumented': instrumented, 'unpinned': a.unpinned, 'module_args': a.module_args,
+              'reports': reports, 'pins_at_rmmod': ends,
               'runs': {f'{n}:{m}': {k: (sorted(v) if isinstance(v, set) else v) for k, v in r.items()}
                        for (n, m), r in runs.items()}, 'sha256': hashes,
               'source_sha256': {str(p.relative_to(HERE)): hashlib.sha256(p.read_bytes()).hexdigest()
                                 for p in [Path(__file__), HERE/'pin-ahead-contract.c',
-                                          HERE/'run-staged.py', HERE/'module/capstone_vm.c']},
+                                          HERE/'run-staged.py', HERE/'module/capstone_vm.c',
+                                          HERE/'unpinned_checks.py']},
               'gate_sha256': hashlib.sha256(gate.encode()).hexdigest()}
     (a.work/'result.json').write_text(json.dumps(result, indent=2) + '\n')
     for name, ok in checks.items(): print(('PASS ' if ok else 'FAIL ') + name)

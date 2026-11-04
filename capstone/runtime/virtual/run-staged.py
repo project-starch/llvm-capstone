@@ -18,6 +18,8 @@ def main():
     p.add_argument('--timeout', type=int, default=600)
     p.add_argument('--disk-mib', type=int, default=1024)
     p.add_argument('--memory', default='2G', help="Guest RAM, as QEMU's -m takes it")
+    p.add_argument('--kernel-arg', action='append', default=[],
+                   help='Additional kernel command-line argument (repeatable)')
     p.add_argument('--work', type=Path, required=True, help='New output directory')
     p.add_argument("--exact-bounds", action=argparse.BooleanOptionalAction, default=False,
                    help="Run QEMU's exact-bounds profile. Option (iii) does not need it; it is kept so a suite can be run both ways as a two-sided control.")
@@ -32,7 +34,7 @@ def main():
     cmd = [str(a.qemu), '-M', 'virt-capstone', '-m', a.memory, '-smp', '1',
            '-nographic', '-monitor', 'none', '-serial', 'stdio', '-snapshot',
            '-bios', str(a.images/'fw_jump.elf'), '-kernel', str(a.images/'Image'),
-           '-append', 'root=/dev/vda ro',
+           '-append', ' '.join(['root=/dev/vda ro', *a.kernel_arg]),
            '-drive', f'file={a.images/"rootfs.ext2"},format=raw,id=hd0',
            '-device', 'virtio-blk-device,drive=hd0',
            '-drive', f'file={disk},format=raw,id=gate,readonly=on',

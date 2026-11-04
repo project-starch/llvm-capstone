@@ -10,6 +10,11 @@
 
 static bool expect_copy_tags = true;
 module_param(expect_copy_tags, bool, 0444);
+/* Qualification-only entry from this guest's /proc/kallsyms. The kernel
+ * hook is not exported to modules. Root already controls this standalone
+ * fixture; never load it alongside protected applications. */
+static unsigned long swap_prepare_address;
+module_param(swap_prepare_address, ulong, 0400);
 
 static unsigned long query(struct page *page, bool ack)
 {
@@ -66,6 +71,15 @@ static int __init probe_init(void)
     tagged = query(dst, true);
     pr_info("RAW_MM copied_tag=%lu expected=%u\n", tagged, expect_copy_tags);
     if (tagged != expect_copy_tags) goto clean;
+    if (swap_prepare_address) {
+        int (*prepare_swap)(struct page *) = (void *)swap_prepare_address;
+        int tagged_rc = prepare_swap(src), clean_rc;
+        scrub(dst);
+        clean_rc = prepare_swap(dst);
+        pr_info("RAW_MM tagged_swap=%d untagged_swap=%d\n", tagged_rc, clean_rc);
+        if (tagged_rc != (expect_copy_tags ? -EBUSY : 0) || clean_rc)
+            goto clean;
+    }
     if (expect_copy_tags) {
         oldpa = page_to_phys(src);
         __free_page(src);
