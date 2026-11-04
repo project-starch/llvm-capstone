@@ -181,3 +181,49 @@ and the exit code is unchanged.
   - C.5a against bitstream 3: FINDING, rc 1;
   - ObjBounds against bitstream 3: AS EXPECTED, HOLDS, rc 0;
   - bitstream 3 against ObjBounds: AS EXPECTED, HOLDS, rc 0.
+
+## hpm-8: the L1I-miss event's positive control (added 2026-11-04, before any board run of it)
+
+**Why.** Event 1 (L1I miss) was never exercised by hpm-1..7. The SPEC lane now wants to read it: is the excess per removed
+STC/LDC pair in compiled code fetch? A reading from a counter that has never been shown to fire is not evidence.
+
+**The source.** Event 1 is `l1_icache_miss_i` (`perf_counters.sv:108`), fed by `cva6_icache.sv` `miss_o`. That pulses
+once per cacheable refill request (`:347`).
+
+**The image.** hpm-8 is built from the same `tests/hpm-probe.S` with `-DHPM=8`:
+- size 69,544 B, sha256 0094235951c3e398...;
+- board_rec 0x80010000.
+
+**Rebuild check.** Rebuilding hpm-1..7 from the edited source gives byte-identical images to the committed SHA256SUMS.
+
+**The arm.**
+- Counter 6 is reprogrammed to event 1.
+- An 8 KiB block of 2,048 four-byte NOPs at 0x80000880..0x80002880 (`norvc`, checked in the disassembly) is called twice.
+  That is 512 lines of 16 B, half the 16 KiB 4-way I-cache.
+- It prints seven values: pass 1 misses, pass 2 misses, pass 1 cycles, pass 2 cycles, the mhpmevent6 readback, traps,
+  and the trap cause.
+
+**The vector.** Simulated from this image on bitstream 3's tokens (rtl-ids20-wt c3f5102f1, rtl_dirty=no, memory delay 12):
+`0x203 0x1 0x6636 0x834 0x1 0x0 0x0`.
+- 515 cold misses: 512 for the block, plus its call and loop lines.
+- 1 warm miss.
+- 26,166 against 2,100 cycles, which is 46.8 sim cycles per I-miss.
+
+**Graded by `grade/hpm8-grade.py <run dir>`. Any bitstream may run it.**
+- EXACT: SR 7, readback 1, traps 0, cause 0.
+- COUNTS: pass 1 misses in 480..560, and pass 2 misses at most 8.
+- Cycles are reported, with the per-miss cost. That cost is silicon's I-miss penalty, which the SPEC lane needs to turn an
+  L1I-miss delta into cycles.
+- AS EXPECTED (rc 0) means the event counts on that bitstream. FINDING (rc 1) means it does not, or an exact field is
+  off. NO DATA is rc 2.
+
+**Controls** (fake run dirs):
+
+| case | result |
+|---|---|
+| the simulated vector | AS EXPECTED |
+| pass 1 at 0 | FINDING |
+| the warm pass not warm | FINDING |
+| readback 2 | FINDING |
+| a different image | FINDING |
+| no data | NO DATA |

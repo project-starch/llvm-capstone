@@ -21,6 +21,11 @@
 #   HPM 5  empty loop                     predict: load 0, store 0, L1D access 0, miss 0, branch N
 #   HPM 6  HPM 1 with mcountinhibit[8:3] set   predict: every counter 0; mhpmevent3 reads back 5
 #   HPM 7  ld striding 16 B (one line each) over 4 KiB at 0x80100000, outside the image   predict: load N, miss N
+#   HPM 8  (added 2026-11-04) the L1I-miss event's positive control: counter 6 programmed to event 1 (L1I miss,
+#          perf_counters.sv :108, driven by cva6_icache.sv miss_o on each cacheable refill request), then an 8 KiB
+#          straight-line block of 4-byte nops (512 I-cache lines, half the 16 KiB cache) called twice. Prints: pass 1
+#          misses, pass 2 misses, pass 1 cycles, pass 2 cycles, mhpmevent6 readback (1), traps, cause.
+#          predict: pass 1 ~512 (cold), pass 2 ~0 (resident); the cycle difference is 512 I-misses' cost.
 # Each arm prints the six counter deltas in order 3..8, the mcycle and minstret deltas, mhpmevent3's readback, then
 # the trap count and cause (0, 0).
 
@@ -92,6 +97,10 @@ _start:
   li   t1, 0x1f8
   csrs 0x320, t1                 # mcountinhibit[8:3]
 #endif
+#if HPM == 8
+  li   t1, 1
+  csrw 0x326, t1                 # mhpmevent6 = L1I miss (event 1), for HPM 8 only
+#endif
   csrw 0xb03, x0
   csrw 0xb04, x0
   csrw 0xb05, x0
@@ -99,6 +108,29 @@ _start:
   csrw 0xb07, x0
   csrw 0xb08, x0
   fence
+#if HPM == 8
+  csrw 0xb06, x0
+  fence
+  csrr s5, mcycle
+  jal  x1, iblock                # pass 1: cold
+  csrr a4, 0xb06
+  csrr s7, mcycle
+  jal  x1, iblock                # pass 2: resident
+  csrr a5, 0xb06
+  csrr s8, mcycle
+  sub  a5, a5, a4
+  sub  s8, s8, s7
+  sub  s7, s7, s5
+  CAPPRINT(a4)                   # pass 1 L1I misses
+  CAPPRINT(a5)                   # pass 2 L1I misses
+  CAPPRINT(s7)                   # pass 1 cycles
+  CAPPRINT(s8)                   # pass 2 cycles
+  csrr t1, 0x326
+  CAPPRINT(t1)                   # mhpmevent6 readback: 1
+  CAPPRINT(s10)                  # trap count: 0
+  CAPPRINT(s4)                   # last cause: 0
+  CAP_PASS(t5)
+#else
   csrr s5, mcycle
   csrr s6, minstret
   li   t2, N
@@ -142,6 +174,7 @@ _start:
   CAPPRINT(s10)                  # trap count: 0
   CAPPRINT(s4)                   # last cause: 0
   CAP_PASS(t5)
+#endif
 
 .align 4
 trap_handler:
@@ -151,6 +184,18 @@ trap_handler:
   addi t0, t0, 4
   csrw mepc, t0
   mret
+
+#if HPM == 8
+.align 6
+iblock:                          # 2048 x 4-byte nop = 8 KiB = 512 lines of 16 B, then return
+  .option push
+  .option norvc
+  .rept 2048
+  addi x0, x0, 0
+  .endr
+  .option pop
+  jalr x0, 0(x1)
+#endif
 
 .align 4
 _end_of_text:
