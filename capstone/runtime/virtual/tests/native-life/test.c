@@ -125,7 +125,7 @@ static void test_fork(void)
         int valid_at_fork[8], any_alias = 0;
         for (unsigned i = 0; i < 8; ++i) { caps[i] = mint(A, i % 6, 1, 7); }
         CHECK(nl_retire(A, &caps[1]) == 0);              /* a free-list entry exists */
-        victim = caps[3]; s.victim = &victim;
+        victim = caps[0]; s.victim = &victim;      /* slot 2: a record the first half-copy has already taken */
         for (unsigned i = 0; i < 8; ++i) valid_at_fork[i] = nl_valid(A, &caps[i]);
         CHECK(nl_ns_fork(A, 2, &hk, &Ch) == 0);
         /* with the gate the sibling is held out (EAGAIN) and replays afterwards */
@@ -141,6 +141,59 @@ static void test_fork(void)
         CHECK(nl_retire(A, &victim) == 0 && nl_valid(Ch, &victim) && !nl_valid(A, &victim));
         CHECK(nl_ns_audit(A) == 0);
         nl_ns_abort_fork(Ch);
+    }
+    cleanup(w);
+
+    /* ---- fork while a checked write chunk is in flight ---- */
+    w = world();
+    A = nl_ns_new(w, 1, 4096, 8);
+    {
+        struct nl_cap d = mint(A, 0, 1, 7);
+        struct nl_hold h;
+        struct nl_ns *Ch = NULL;
+        cn_u64 v, junk = 0xbad;
+        CHECK(nl_store_u64(A, va(A, 0, 0), 0x600d) == 0);
+        CHECK(nl_hold_begin(A, &d, 0, 8, 1, &h) == 0);
+        { int rc = nl_ns_fork(A, 2, NULL, &Ch);
+          if (rc == 0) {     /* the chunk now writes through a page it shares with the child */
+              nl_hold_do(&h, &junk, NULL); nl_hold_end(&h);
+              CHECK(nl_load_u64(Ch, va(Ch, 0, 0), &v) == 0 && v == 0x600d);
+          }
+          CHECK(rc == -EAGAIN && !Ch); }
+        nl_hold_do(&h, &junk, NULL); nl_hold_end(&h);
+        CHECK(nl_ns_fork(A, 2, NULL, &Ch) == 0);
+        CHECK(nl_load_u64(Ch, va(Ch, 0, 0), &v) == 0 && v == 0xbad);   /* the finished write is in the snapshot */
+    }
+    cleanup(w);
+
+    /* ---- an aborted clone leaves no cached authority behind ---- */
+    w = world();
+    A = nl_ns_new(w, 1, 4096, 8);
+    {
+        struct nl_cap d = mint(A, 0, 1, 7);
+        struct nl_ns *C1 = NULL, *C2 = NULL;
+        CHECK(nl_ns_fork(A, 2, NULL, &C1) == 0);
+        cn_u64 root1 = nl_ns_root(C1);
+        CHECK(nl_valid(C1, &d));                      /* warms the cache for C1's table root */
+        CHECK(nl_retire(A, &d) == 0);
+        nl_ns_abort_fork(C1);
+        CHECK(nl_ns_fork(A, 3, NULL, &C2) == 0);
+        CHECK(nl_ns_root(C2) == root1);               /* the root was handed out again: the control is live */
+        CHECK(!nl_valid(C2, &d) && nl_world_audit_hw(w) == 0);
+    }
+    cleanup(w);
+
+    /* ---- bounds arithmetic does not wrap ---- */
+    w = world();
+    A = nl_ns_new(w, 1, 4096, 8);
+    {
+        struct nl_cap d = mint(A, 0, 1, 7), forged, out;
+        CHECK(nl_mint(A, ~0ULL - 7, 16, 7, &out) == -EINVAL);
+        CHECK(nl_mint(A, A->base_va + 7 * PG, 2 * PG, 7, &out) == -EINVAL);
+        forged = d; forged.w[0] = ~0ULL - 7;
+        CHECK(nl_check(A, &forged, 0, 16, 0) == -EFAULT);
+        CHECK(nl_check(A, &d, ~0ULL - 3, 16, 0) == -EFAULT);
+        CHECK(nl_ns_new(w, 9, 1U << 21, 1) == NULL);       /* capacity beyond the slot field */
     }
     cleanup(w);
 
@@ -236,7 +289,7 @@ static void exit_hold_scenario(void)
     }
     CHECK(rc == -EAGAIN && !A->freed);                       /* exit waits for the access to drain */
     nl_hold_do(&h, &junk, NULL); nl_hold_end(&h);
-    CHECK(A->inflight == 0 && nl_ns_put(A) == 0 && A->freed);
+    CHECK(A->inflight == 0 && nl_task_exit(T) == 0 && A->freed);   /* the exit that was told to wait finishes */
     cleanup(w);
 }
 static void test_exit(void)
@@ -286,6 +339,21 @@ static void test_exit(void)
       for (unsigned i = 0; i < 3; ++i) { cn_u64 e; CHECK(cn_get_epoch(T[i]->ctx, &T[i]->owner, &e) == -ESTALE); }
     }
     cleanup(w);
+    w = world();
+    A = nl_ns_new(w, 1, 4096, 4);
+    { struct nl_cap st = mint(A, 0, 1, 7);
+      struct cn_frame f;
+      struct nl_task *T[2];
+      struct nl_hold h;
+      nl_frame_init(&f, A, 0x8000); set_cap(&f, 10, &st);
+      T[0] = task(w, A, 10, &f);
+      CHECK(nl_thread_create(T[0], 0, 10, 0, 0, 0, &T[1]) == 0);
+      CHECK(nl_hold_begin(A, &st, 0, 8, 0, &h) == 0);
+      CHECK(nl_process_kill(A, T, 2) == -EAGAIN && !A->freed);     /* waits for the access */
+      nl_hold_end(&h);
+      CHECK(nl_process_kill(A, T, 2) == 0 && A->freed);            /* and the retry completes */
+    }
+    cleanup(w);
 
     /* rule 1: pages leave the pool without tags */
     w = world();
@@ -322,6 +390,15 @@ static void test_signals(void)
     CHECK(nl_sigaction(T, 9, 12, 0) == -EINVAL);                 /* SIGKILL cannot be caught */
     CHECK(nl_sigaction_scalar(T, 10, va(A, 2, 0), 0) == -EINVAL); /* a number is not a handler */
     CHECK(T->handler[10].flags & CN_REG_TAG);
+    { struct nl_cap hc2 = mint(A, 5, 1, NL_RIGHT_X | NL_RIGHT_R);
+      struct cn_frame hf;
+      struct nl_task *H;
+      nl_frame_init(&hf, A, 0x8000); set_cap(&hf, 12, &hc2);
+      H = task(w, A, 40, &hf);
+      CHECK(nl_sigaction(H, 12, 12, 0) == 0);
+      CHECK(nl_retire(A, &hc2) == 0);                      /* the handler's lifetime ended */
+      CHECK(nl_sig_deliver(H, 12, &u, &tk) == -ESTALE);    /* never installed as PCC */
+      nl_task_exit(H); }
 
     /* a plain delivery and an honest return restore the whole frame */
     nl_task_frame(T, &f1);
@@ -414,9 +491,16 @@ static void test_signals(void)
         nl_task_frame(T, &g);
         CHECK(!memcmp(&g.x[11], &f1.x[11], sizeof(g.x[11])));         /* the buffer argument is still the kernel's */
         CHECK(g.x[13].payload[0] == 8192);                            /* the scalar edit applies, as in Linux */
-        /* the pending service survives the signal, so EINTR can still be delivered */
-        CHECK(cn_get_epoch(T->ctx, &T->owner, &ep) == 0);
-        CHECK(cn_run(T->ctx, &T->owner, ep, CN_RESUME_REPLY, (cn_u64)-4, &ev) == 0);
+        /* the pending service survives the signal: ERESTARTSYS with SA_RESTART reissues from the
+         * protected frame, without it the same event is answered with -EINTR */
+        { struct nl_service_args sa;
+          CHECK(nl_sig_finish_service(T, NL_ERESTARTSYS, NL_SA_RESTART, 1, &sa) == 0 && !sa.restart_block);
+          CHECK((sa.a[1].flags & CN_REG_TAG) && sa.a[1].payload[1] == d1.w[1] && sa.a[3].payload[0] == 8192);
+          CHECK(nl_sig_finish_service(T, NL_ERESTART_RESTARTBLOCK, 0, 0, &sa) == 0 && sa.restart_block); }
+        CHECK(nl_sig_finish_service(T, NL_ERESTARTSYS, 0, 1, NULL) == 0);       /* EINTR reply */
+        nl_task_frame(T, &g);
+        CHECK(g.x[10].payload[0] == (cn_u64)-4 && g.pc == f1.pc + 4);
+        (void)ep;
     }
     cleanup(w);
 }
@@ -504,8 +588,25 @@ static void test_futex(void)
     CHECK(nl_futex_wake(C, 13, 0, 1) == 0);
     CHECK(nl_futex_wake(T2, 13, 0, 1) == 1);
     CHECK(nl_retire(A, &word) == 0 && nl_futex_wake(T2, 13, 0, 1) == -ESTALE);  /* a dead capability wakes nothing */
+    CHECK(nl_futex_collect(T1) == 1 && nl_futex_collect(T1) == 0);
     nl_task_exit(C); (void)B;
     nl_task_exit(T2); nl_task_exit(T1);
+    cleanup(w);
+
+    /* completed waits do not accumulate */
+    w = world();
+    A = nl_ns_new(w, 1, 4096, 8);
+    { struct nl_cap word = mint(A, 0, 1, 7);
+      struct cn_frame f;
+      struct nl_task *T;
+      int bl;
+      nl_frame_init(&f, A, 0x8000); set_cap(&f, 10, &word);
+      T = task(w, A, 10, &f);
+      for (unsigned i = 0; i < 200; ++i) {
+          CHECK(nl_futex_wait(T, 10, 0, 0, &bl) == 0 && bl);
+          CHECK(nl_futex_wake(T, 10, 0, 1) == 1 && nl_futex_collect(T) == 1);
+      }
+      nl_task_exit(T); }
     cleanup(w);
 
     /* clear_child_tid: the thread's own word is cleared and woken at exit; a dead

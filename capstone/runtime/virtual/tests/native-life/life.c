@@ -45,7 +45,13 @@ static void page_put(struct nl_ns *ns, struct nl_page *p)
         memset(p->tag, 0, sizeof(p->tag));
         p->may_hold_tags = 0; ++ns->stats.free_tag_clears; ++w->tag_clear_on_free;
     }
-    w->pool[w->pool_n++] = p; /* kept alive: a stale raw pointer must not fault the model */
+    if (w->pool_n == w->pool_cap) {   /* kept alive: a stale raw pointer must not fault the model */
+        unsigned cap = w->pool_cap ? w->pool_cap * 2 : 1024;
+        struct nl_page **np = realloc(w->pool, cap * sizeof(*np));
+        if (!np) { free(p); return; }
+        w->pool = np; w->pool_cap = cap;
+    }
+    w->pool[w->pool_n++] = p;
 }
 void nl_world_free(struct nl_world *w)
 {
@@ -58,6 +64,7 @@ void nl_world_free(struct nl_world *w)
         free(ns->arenas); free(ns);
     }
     while (w->pool_n) free(w->pool[--w->pool_n]);
+    free(w->pool);
     while (w->all_tasks) { struct nl_task *t = w->all_tasks; w->all_tasks = t->next_alloc; free(t); }
     free(w);
 }
@@ -76,7 +83,9 @@ static struct nl_table *table_new(struct nl_world *w, unsigned capacity)
 static void table_release(struct nl_ns *ns, struct nl_table *t)
 {
     struct nl_world *w = ns->world;
-    memset(t->rec, 0xAA, t->capacity * sizeof(*t->rec)); /* poison: a use after free reads garbage */
+#ifdef NL_POISON_TABLE
+    memset(t->rec, 0xAA, t->capacity * sizeof(*t->rec)); /* debug only: the free itself is O(1) */
+#endif
     if (w->nfree_roots < 16) w->free_roots[w->nfree_roots++] = t->root_id;
     free(t->rec); free(t);
     ++ns->stats.table_frees;
@@ -85,7 +94,7 @@ struct nl_ns *nl_ns_new(struct nl_world *w, cn_u64 id, unsigned capacity, unsign
 {
     struct nl_ns *ns;
     unsigned slot = 0;
-    if (npages > NL_MAX_PAGES || capacity <= FLOOR) return NULL;
+    if (npages > NL_MAX_PAGES || capacity <= FLOOR || capacity > SLOT_MASK) return NULL;
     while (slot < NL_MAX_SPACES && w->spaces[slot]) ++slot;
     if (slot == NL_MAX_SPACES) return NULL;
     ns = calloc(1, sizeof(*ns));
@@ -93,10 +102,16 @@ struct nl_ns *nl_ns_new(struct nl_world *w, cn_u64 id, unsigned capacity, unsign
     ns->world = w; ns->id = id; ns->epoch = 1; ns->npages = npages;
     ns->base_va = 0x10000000ULL + id * 0x10000000ULL;
     ns->table = table_new(w, capacity);
-    for (unsigned i = 0; ns->table && i < npages; ++i) ns->map[i] = page_get(w);
+    for (unsigned i = 0; ns->table && i < npages; ++i)
+        if (!(ns->map[i] = page_get(w))) { ns->npages = i; goto fail; }
     if (!ns->table) { free(ns); return NULL; }
     w->spaces[slot] = ns;
     return ns;
+fail:
+    for (unsigned i = 0; i < ns->npages; ++i) page_put(ns, ns->map[i]);
+    table_release(ns, ns->table);
+    free(ns);
+    return NULL;
 }
 struct nl_ns *nl_ns_find(struct nl_world *w, cn_u64 id)
 {
@@ -111,8 +126,14 @@ int nl_mint(struct nl_ns *ns, cn_u64 base, cn_u64 len, unsigned rights, struct n
     unsigned slot;
     if (ns->gate) return -EAGAIN;       /* a sibling blocks on the fork's exclusion */
     if (ns->dying || ns->freed) return -ESTALE;
+#ifdef NL_MUTATE_BOUNDS_WRAP
     if (base < ns->base_va || len > (SLOT_MASK << 4) || !len ||
         base + len > ns->base_va + (cn_u64)ns->npages * NL_PAGE_BYTES) return -EINVAL;
+#else
+    if (base < ns->base_va || len > (SLOT_MASK << 4) || !len ||
+        base - ns->base_va > (cn_u64)ns->npages * NL_PAGE_BYTES ||
+        len > (cn_u64)ns->npages * NL_PAGE_BYTES - (base - ns->base_va)) return -EINVAL;
+#endif
     if (t->free_head) { slot = t->free_head; t->free_head = t->rec[slot].next; --t->free_count; }
     else if (t->next_unused < t->capacity) { slot = t->next_unused++; t->rec[slot].gen = 1; }
     else return -ENOMEM;
@@ -261,8 +282,17 @@ int nl_check(struct nl_ns *ns, const struct nl_cap *c, cn_u64 off, cn_u64 len, i
     if (!nl_valid(ns, c)) return -ESTALE;
     if (!(nl_cap_rights(c) & (write ? NL_RIGHT_W : NL_RIGHT_R))) return -EACCES;
     if (off > l || len > l - off) return -EFAULT;
+#ifdef NL_MUTATE_BOUNDS_WRAP
     if (c->w[0] < ns->base_va || c->w[0] + off + len > ns->base_va + (cn_u64)ns->npages * NL_PAGE_BYTES)
         return -EFAULT;
+#else
+    {
+        cn_u64 span = (cn_u64)ns->npages * NL_PAGE_BYTES, at;
+        if (c->w[0] < ns->base_va) return -EFAULT;
+        at = c->w[0] - ns->base_va;
+        if (at > span || off > span - at || len > span - at - off) return -EFAULT;
+    }
+#endif
     return 0;
 }
 int nl_hold_begin(struct nl_ns *ns, const struct nl_cap *c, cn_u64 off, cn_u64 len, int write,
@@ -275,6 +305,7 @@ int nl_hold_begin(struct nl_ns *ns, const struct nl_cap *c, cn_u64 off, cn_u64 l
     if ((rc = locate(ns, c->w[0] + off, 1, &idx, &o))) return rc;
     if (o + len > NL_PAGE_BYTES) return -EINVAL;   /* one chunk stays inside one page */
     h->page = write ? page_for_write(ns, idx) : ns->map[idx];
+    if (!h->page) return -ENOMEM;
     h->ns = ns; h->off = o; h->len = len; h->write = write; h->active = 1;
     ++ns->inflight;
     return 0;
@@ -305,6 +336,9 @@ int nl_ns_fork(struct nl_ns *p, cn_u64 child_id, const struct nl_fork_hooks *hk,
     *out = NULL;
     if (p->dying || p->freed) return -ESTALE;
     if (p->gate) return -EBUSY;
+#ifndef NL_MUTATE_FORK_INFLIGHT
+    if (p->inflight) return -EAGAIN;   /* a chunk holds a raw page pointer: sharing it would bypass COW */
+#endif
     if (nl_ns_find(w, child_id)) return -EEXIST;
     while (slot < NL_MAX_SPACES && w->spaces[slot]) ++slot;
     if (slot == NL_MAX_SPACES) return -ENOMEM;
@@ -354,7 +388,8 @@ fail:
 #ifndef NL_MUTATE_NO_GATE
     --p->gate;
 #endif
-    for (unsigned i = 0; i < p->npages; ++i) if (c->map[i]) { --c->map[i]->refs; }
+    for (unsigned i = 0; i < c->npages; ++i) if (c->map[i]) page_put(c, c->map[i]);
+    if (c->table) { nl_csfence_rev(c); if (!--c->table->refs) table_release(c, c->table); }
     free(c->arenas); free(c);
     return -ENOMEM;
 }
@@ -362,7 +397,10 @@ void nl_ns_abort_fork(struct nl_ns *c)
 {
     if (!c) return;
     for (unsigned i = 0; i < NL_MAX_SPACES; ++i) if (c->world->spaces[i] == c) c->world->spaces[i] = NULL;
-    for (unsigned i = 0; i < c->npages; ++i) if (c->map[i] && c->map[i]->refs > 1) --c->map[i]->refs;
+    for (unsigned i = 0; i < c->npages; ++i) if (c->map[i]) page_put(c, c->map[i]);
+#ifndef NL_MUTATE_ABORT_NO_INVALIDATE
+    if (c->table) nl_csfence_rev(c);   /* the root goes back to the allocator */
+#endif
     if (c->table && !--c->table->refs) table_release(c, c->table);
     free(c->arenas); free(c);
 }
@@ -683,6 +721,14 @@ static int wake_va(struct nl_task *t, cn_u64 va, unsigned count)
     }
     return woken;
 }
+int nl_futex_collect(struct nl_task *t)
+{
+    for (unsigned i = 0; i < 64; ++i) {
+        struct nl_futex_waiter *x = &t->world->futex[i];
+        if (x->used && x->task == t->tid && x->woken) { x->used = 0; return 1; }
+    }
+    return 0;
+}
 int nl_futex_wake(struct nl_task *t, unsigned slot, cn_u64 off, unsigned count)
 {
     cn_u64 va;
@@ -756,6 +802,12 @@ static void robust_walk(struct nl_task *t)
 int nl_task_exit(struct nl_task *t)
 {
     struct nl_cap c;
+    int rc;
+    if (t->exited && t->exit_pending) {      /* the namespace was still draining: finish the put */
+        rc = nl_ns_put(t->ns);
+        t->exit_pending = rc == -EAGAIN;
+        return rc;
+    }
     if (t->exited) return -ESTALE;
     /* Order: robust list, clear_child_tid + wake, waiters, context, namespace. */
     if (t->has_robust) robust_walk(t);
@@ -772,7 +824,9 @@ int nl_task_exit(struct nl_task *t)
         if (t->world->futex[i].used && t->world->futex[i].task == t->tid) t->world->futex[i].used = 0;
     cn_destroy(t->ctx, &t->owner);
     t->exited = 1;
-    return nl_ns_put(t->ns);
+    rc = nl_ns_put(t->ns);
+    t->exit_pending = rc == -EAGAIN;
+    return rc;
 }
 int nl_process_kill(struct nl_ns *ns, struct nl_task **tasks, unsigned n)
 {
@@ -785,7 +839,10 @@ int nl_process_kill(struct nl_ns *ns, struct nl_task **tasks, unsigned n)
     ns->refs = 0;
     return ns_teardown(ns);                   /* threads never stopped */
 #else
-    for (unsigned i = 0; i < n; ++i) if (!tasks[i]->exited) rc = nl_task_exit(tasks[i]);
+    for (unsigned i = 0; i < n; ++i) {
+        int r = nl_task_exit(tasks[i]);
+        if (r != -ESTALE) rc = r;
+    }
     return rc;
 #endif
 }
@@ -827,6 +884,13 @@ int nl_sig_deliver(struct nl_task *t, unsigned signo, struct nl_sigctx *out, str
     cn_u64 epoch;
     int rc;
     if (!signo || signo >= NL_NSIG || !(t->handler[signo].flags & CN_REG_TAG)) return -ENOENT;
+#ifndef NL_MUTATE_SIG_STALE_HANDLER
+    {   /* the registered capability is revalidated at every use */
+        struct nl_cap hc;
+        nl_cap_from_reg(&hc, &t->handler[signo]);
+        if (!nl_valid(t->ns, &hc) || !(nl_cap_rights(&hc) & NL_RIGHT_X)) return -ESTALE;
+    }
+#endif
     nl_task_frame(t, &f);
     h = f;
     memset(&h.x[10], 0, sizeof(h.x[10])); h.x[10].payload[0] = signo;
@@ -857,19 +921,19 @@ int nl_sig_return(struct nl_task *t, const struct nl_sigctx *u)
     depth = (unsigned)u->depth;
     if ((rc = cn_get_epoch(t->ctx, &t->owner, &epoch))) return rc;
 #ifdef NL_MUTATE_SIG_TRUST_USER
-    /* Rebuilds the resumed frame from the user-writable sigcontext. */
+    /* Restores honestly, then rebuilds the resumed frame from the user-writable sigcontext. */
     {
         struct cn_frame g;
+        if ((rc = cn_signal_return(t->ctx, &t->owner, epoch, &tok))) return rc;
         nl_task_frame(t, &g);
-        (void)tok; (void)depth;
         for (unsigned i = 1; i < CN_REGISTER_COUNT; ++i) {
             g.x[i].payload[0] = u->x[i];
-            g.x[i].flags = u->tag_hint[i] ? CN_REG_TAG : 0;
+            if (u->tag_hint[i]) g.x[i].flags |= CN_REG_TAG;
         }
         g.pc = u->pc; g.ccsr[0].payload[0] = u->pc;
-        g.ccsr[0].flags = CN_REG_TAG;
         cn_destroy(t->ctx, &t->owner);
         if ((rc = cn_create(t->world->engine, &t->owner, &g, &t->ctx))) return rc;
+        (void)depth;
         return 0;
     }
 #else
@@ -900,6 +964,24 @@ enum nl_sig_policy nl_sig_restart_policy(long err, unsigned flags, int handler_r
     case NL_ERESTART_RESTARTBLOCK: return handler_ran ? NL_SIG_EINTR : NL_SIG_BLOCK;
     default: return NL_SIG_EINTR;
     }
+}
+
+int nl_sig_finish_service(struct nl_task *t, long err, unsigned sa_flags, int handler_ran,
+                          struct nl_service_args *out)
+{
+    enum nl_sig_policy p = nl_sig_restart_policy(err, sa_flags, handler_ran);
+    struct cn_frame f;
+    cn_u64 epoch;
+    int rc;
+    if (p == NL_SIG_EINTR) {
+        struct cn_event ev;
+        if ((rc = cn_get_epoch(t->ctx, &t->owner, &epoch))) return rc;
+        return cn_run(t->ctx, &t->owner, epoch, CN_RESUME_REPLY, (cn_u64)-4, &ev);
+    }
+    nl_task_frame(t, &f);
+    for (unsigned i = 0; i < 6; ++i) out->a[i] = f.x[10 + i];   /* a0..a5 of the protected frame */
+    out->restart_block = p == NL_SIG_BLOCK;
+    return 0;
 }
 
 /* ---- ptrace and /proc/PID/mem ---- */

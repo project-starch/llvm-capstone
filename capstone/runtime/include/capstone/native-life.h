@@ -93,9 +93,10 @@ struct nl_ns {
  * entry outlives its table unless it is invalidated before the free. */
 struct nl_hwentry { cn_u64 root, slot, gen; int valid; };
 struct nl_futex_waiter { cn_u64 ns, va, task; int woken, used; };
+
 struct nl_world {
-    struct nl_page *pool[NL_MAX_PAGES * 4]; /* freed pages, reused LIFO */
-    unsigned pool_n;
+    struct nl_page **pool;      /* freed pages, reused LIFO */
+    unsigned pool_n, pool_cap;
     struct nl_hwentry hw[NL_CACHE_WAYS];
     struct nl_futex_waiter futex[64];
     cn_u64 next_root;
@@ -176,7 +177,7 @@ struct nl_task {
     cn_u64 tid;
     cn_u64 mask, mask_saved[CN_MAX_SIGNAL_DEPTH];
     struct cn_signal_token tokens[CN_MAX_SIGNAL_DEPTH];
-    int stopped, exited, domain;
+    int stopped, exited, exit_pending, domain;
     int uid;
     struct nl_task *next_alloc;
 };
@@ -206,6 +207,8 @@ int nl_process_kill(struct nl_ns *, struct nl_task **tasks, unsigned n);
 /* futex (private only; shared futexes fail closed) */
 int nl_futex_wait(struct nl_task *, unsigned slot, cn_u64 off, cn_u64 expected, int *blocked);
 int nl_futex_wake(struct nl_task *, unsigned slot, cn_u64 off, unsigned count);
+/* The woken waiter collects its slot when it runs again; returns 1 if it had been woken. */
+int nl_futex_collect(struct nl_task *);
 int nl_set_robust_list(struct nl_task *, unsigned slot, cn_u64 futex_offset);
 int nl_set_clear_tid(struct nl_task *, unsigned slot);
 /* signals */
@@ -219,6 +222,14 @@ int nl_sig_return(struct nl_task *, const struct nl_sigctx *user_in);
 #define NL_ERESTARTNOHAND 514
 #define NL_ERESTART_RESTARTBLOCK 516
 enum nl_sig_policy nl_sig_restart_policy(long err, unsigned sa_flags, int handler_ran);
+/* A service interrupted by a signal, after the handler returned: apply the policy.
+ * EINTR replies -EINTR to the pending event; REISSUE/BLOCK hand the dispatcher
+ * the six argument registers from the PROTECTED frame (capabilities stay tagged
+ * records, scalars follow the handler's edits as in Linux) and leave the event
+ * pending. */
+struct nl_service_args { struct cn_register a[6]; int restart_block; };
+int nl_sig_finish_service(struct nl_task *, long err, unsigned sa_flags, int handler_ran,
+                          struct nl_service_args *reissue);
 /* ptrace and /proc/PID/mem */
 int nl_ptrace_may_attach(const struct nl_actor *, const struct nl_task *tracee);
 int nl_ptrace_peek(const struct nl_actor *, struct nl_task *tracee, cn_u64 va, cn_u64 *out);

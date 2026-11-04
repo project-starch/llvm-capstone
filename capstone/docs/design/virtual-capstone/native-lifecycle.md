@@ -29,6 +29,9 @@ supply something the model cannot, the section says so.
 
 ## fork (I6)
 
+0. A fork waits (`-EAGAIN`) while a checked-copy chunk is in flight: the chunk
+   holds a raw page pointer, and sharing that page would let it write into the
+   child's snapshot.
 1. Siblings are held out: the namespace gate is raised before the first step
    and dropped after the last. A sibling's mint or retire sees `-EAGAIN`
    (a production sibling sleeps on the context lock; single hart does not make
@@ -46,7 +49,9 @@ supply something the model cannot, the section says so.
    list that names a live record, and the child's next mint reuses a
    (slot, generation) that an existing capability still names.
 5. The child context is created last. A failure after the namespace was cloned
-   rolls the clone back (page references restored, table released).
+   rolls the clone back: every page reference is dropped, the child table's
+   cached authority is invalidated and the table released (its root can be
+   handed to the next namespace, so a stale cache entry would be honoured).
 
 Threads (clone with CLONE_VM) do not clone anything: they take a reference on
 the namespace and get their own context. The child's stack and thread pointer
@@ -74,6 +79,8 @@ allocator hands to the next namespace.
 ## signals (I5)
 
 * A handler is registered from a code capability in a register slot.
+* The registered handler is revalidated (tag, lifetime, execute right) at
+  every delivery; a dead handler is never installed as PCC.
 * Delivery pushes the full interrupted frame (all capability registers with
   tags, FP, PCC, PC, pending service event) onto the kernel-held stack of the
   context double (`cn_signal_push`, eight levels) and builds the handler frame
@@ -87,11 +94,13 @@ allocator hands to the next namespace.
   handler's edits (Linux lets a handler change them, so does this). Capability
   registers, PCC and PC are not editable in v1: a handler that wants to resume
   elsewhere is not supported (UNRESOLVED, needs a PCC-bounded set-PC).
-* Restart: `nl_sig_restart_policy` is the Linux riscv table. A service that was
-  pending when the signal arrived stays pending across the handler (the
-  context double saves and restores the event), so the reissue reads its
-  arguments from the protected frame, never from the sigcontext, and EINTR is a
-  reply to the same event.
+* Restart: `nl_sig_restart_policy` is the Linux riscv table and
+  `nl_sig_finish_service` applies it. A service that was pending when the
+  signal arrived stays pending across the handler (the context double saves and
+  restores the event). EINTR is a reply to that same event. A reissue hands the
+  dispatcher the six argument registers of the PROTECTED frame: capability
+  arguments are the kernel's records (a handler cannot retarget a buffer),
+  scalar arguments carry the handler's edits as in Linux.
 
 ## ptrace and /proc/PID/mem (I5)
 
