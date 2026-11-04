@@ -1280,6 +1280,12 @@ static int remap_end(struct context *c, const struct cv_remap *r)
 /* CV_STEP resolves faults and resumes for at most one supervisor quantum;
  * CV_RESOLVE gives its pin-ahead window the same bound. */
 #define CV_STEP_BUDGET_NS (5 * NSEC_PER_MSEC)
+/* step_budget_ns (perf/retire-sweep-vp2): the budget above as a 0644 parameter, default unchanged. On the
+ * 25 MHz board a pin costs about 1.2 ms, so 5 ms stops a pin-ahead window after its first 16-page batch
+ * (board faults ~ pages/17 on 557.xz_r and 519.lbm_r) and sends the fault back to the launcher; the
+ * hardware quantum there is 80 ms. */
+static unsigned long step_budget_ns = CV_STEP_BUDGET_NS;
+module_param(step_budget_ns, ulong, 0644);
 
 #ifdef CV_TEST_HOOKS
 /* Test build only (make CV_TEST_HOOKS=1; run-step-hooks.py). The production
@@ -1852,11 +1858,19 @@ static void node_stats(struct context *c)
  * inode at each lookup, so a writer through a hard link is counted elsewhere;
  * NFS, FUSE and overlayfs make no such promise either. tmpfs covers memfds,
  * whose own descriptor is not counted: the launcher requires their seals. */
+/* image_rootfs (perf/retire-sweep-vp2), default off: also accept the initramfs ("rootfs", tmpfs- or
+ * ramfs-backed) and ramfs, which keep one in-memory inode per file like tmpfs. Off, an image on the
+ * board's initramfs takes the launcher's sealed-copy fallback: launch_ns grows with the file size
+ * (502.gcc_r 21.9 s for 15.6 MB, 519.lbm_r 1.3 s for 0.27 MB). */
+static bool image_rootfs;
+module_param(image_rootfs, bool, 0644);
 static bool one_inode_per_file(struct file *file)
 {
     static const char *const fs[] = {"tmpfs", "ext2", "ext3", "ext4", "btrfs",
                                      "xfs", "erofs", "squashfs"};
     const char *name = file_inode(file)->i_sb->s_type->name;
+    if (READ_ONCE(image_rootfs) && (!strcmp(name, "rootfs") || !strcmp(name, "ramfs")))
+        return true;
     for (unsigned i = 0; i < ARRAY_SIZE(fs); ++i)
         if (!strcmp(name, fs[i])) return true;
     return false;
@@ -2106,7 +2120,7 @@ thread_unwind:
         /* Each CSRUNV restarts the 5 ms quantum, so a domain that keeps
          * faulting would never be preempted: bound the resolved faults by
          * one quantum of this ioctl, then return and release vm_lock. */
-        budget_end = ktime_get_ns() + CV_STEP_BUDGET_NS;
+        budget_end = ktime_get_ns() + READ_ONCE(step_budget_ns);
         TEST_STEP_BEGIN();
         TEST_HOOK(3);
         for (unsigned long action = r.reply ? 2 : 0, entries = 0;;
@@ -2250,7 +2264,7 @@ thread_unwind:
         struct cv_thread *t;
         if (copy_from_user(&r, (void __user *)arg, sizeof(r))) { rc = -EFAULT; goto out; }
         t = find_thread(c, r.thread);
-        rc = t ? resolve(c, t, ktime_get_ns() + CV_STEP_BUDGET_NS) : -ESRCH;
+        rc = t ? resolve(c, t, ktime_get_ns() + READ_ONCE(step_budget_ns)) : -ESRCH;
         if (!rc) t->sfence_pending = true;
     } else if (op == CV_RETIRE) {
         u64 id;
