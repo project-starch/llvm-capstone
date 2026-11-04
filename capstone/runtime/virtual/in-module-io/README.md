@@ -25,11 +25,45 @@ The unchanged libc still copies back through the caller's capability, so an
 object revoked while the read blocks faults at copy-back. No direct-buffer
 request or libc shortcut is implemented.
 
-A read interrupted before transferring bytes falls back to the launcher,
-which publishes signals and retries under the existing signal ABI. A completed
+A read interrupted before transferring bytes reports its Linux restart reason
+as a service-event cause. After the Linux signal trampoline records the event,
+the launcher publishes DONE/EINTR without SA_RESTART, or RETRY with it.
+Blindly returning to the syscall stub would misclassify an interrupted call as
+not yet submitted and restart it even without SA_RESTART. A completed
 call is marked for reply before any scheduling or signal stop, so it is not
 served twice. `in_module_io=0` restores the launcher path for comparison.
 `CV_TEST_HOOKS=1` alone exposes `inline_hold=0` and
 `inline_test_transport=1`: the negative control can submit an arbitrary test
 exchange and deliberately allow it to be retired during a blocked kernel copy.
 Neither switch exists in the production build.
+
+
+## Directed contract
+
+Build `contract.c` with the arm's virtual SDK at `-O2 -lpthread`, adding the
+runtime include directory. Build `observe.c` with the native RISC-V Linux
+compiler at `-O2 -static -Wall -Wextra -Werror`. Both binaries and OUT must be
+below SHARE, a private lane directory. Use a fresh OUT for each run:
+
+```
+python3 run-contract.py --platform PLATFORM --host TREE/capstone/runtime/host \
+  --domain contract.dom --observer observe --share SHARE --out OUT
+```
+
+The driver runs functional file/pipe/positional calls, interrupted reads with
+and without SA_RESTART, revocation during a blocked libc read and before
+submission, and invalid exchange claims. Each revoked-buffer process must
+terminate with cause 25. The native observer keeps a pipe endpoint across each
+refused domain process and verifies that all 256 input bytes remain. The span
+case crosses two adjacent grants; the other claims use an unmapped address,
+image text, a retired grant and an unregistered live transport.
+
+Run again with a `CV_TEST_HOOKS=1` module and `--test-hooks`. This explicitly
+enables arbitrary test exchanges to exercise the arena checks and holds.
+With the hold on, a blocked exchange read prevents unmap (EBUSY), changes no
+replacement arena and releases the hold after completion. With the hold off,
+the same test must recycle the address and land all 256 bytes in its replacement.
+The negative control must print LANDED; its absence is a failure. The normal
+module must not expose either test parameter. `result.json` records every
+expected exit and marker; a missing case, assertion, timeout or observer
+mismatch prevents a passing result. No profiling window is required here.

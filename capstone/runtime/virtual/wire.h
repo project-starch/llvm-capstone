@@ -15,6 +15,13 @@ struct cv_map {
      * touch, as any grant. */
     __u64 rx_bytes;
 };
+/* Service-event causes for I/O interrupted inside CV_STEP, before any bytes
+ * moved. Linux has not applied SA_RESTART to this inner call: the launcher
+ * publishes its newly accepted signals and decides DONE/EINTR versus RETRY. */
+#define CV_IO_EINTR 0x100000001ULL
+#define CV_IO_RESTARTSYS 0x100000002ULL
+#define CV_IO_RESTARTNOINTR 0x100000003ULL
+#define CV_IO_RESTARTNOHAND 0x100000004ULL
 struct cv_step {
     /* Zero is the original process thread. Other IDs are allocated by
      * CV_THREAD_CREATE and name a paused CSRUNV context. */

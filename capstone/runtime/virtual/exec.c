@@ -978,6 +978,28 @@ static int reserve_stdio(unsigned *mask) {
   return 0;
 }
 
+/* Linux delivered the signal on return from CV_STEP. Complete the already
+ * interrupted inner I/O without issuing a new syscall, which would mistake
+ * this for a signal accepted before submission and restart even without
+ * SA_RESTART. An ignored/stopped signal leaves no domain handler to publish. */
+static int io_publish_interrupted(struct capstone_delegate_host *h,
+                                  struct capstone_delegate_entry *request, uint64_t cause)
+{
+    int retry;
+    switch (cause) {
+    case CV_IO_EINTR: retry = 0; break;
+    case CV_IO_RESTARTSYS:
+        retry = !capstone_signals_waiting(&h->signals) || capstone_signals_restartable(&h->signals);
+        break;
+    case CV_IO_RESTARTNOINTR: retry = 1; break;
+    case CV_IO_RESTARTNOHAND: retry = !capstone_signals_waiting(&h->signals); break;
+    default: return 0;
+    }
+    request->result = retry ? 0 : -EINTR;
+    capstone_signals_publish(&h->signals, request, retry);
+    return 1;
+}
+
 static int virtual_service(uint64_t tid, struct cv_step *step)
 {
     if (trace) fprintf(stderr, "CAPSTONE_VM_BOUNDARY kind=%llu\n",
@@ -1129,7 +1151,8 @@ static int virtual_service(uint64_t tid, struct cv_step *step)
                 host_signals_attached = 1;
             }
         }
-        capstone_delegate_serve(h, request);
+        if (!io_publish_interrupted(h, request, step->cause))
+            capstone_delegate_serve(h, request);
         if (h == &host) pthread_mutex_unlock(&host_lock);
         if (separate) pthread_mutex_lock(&service_lock);
         if (trace) fprintf(stderr, "CAPSTONE_VM_SERVICE tid=%llu nr=%llu result=%lld\n",

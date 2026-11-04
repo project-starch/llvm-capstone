@@ -2979,7 +2979,13 @@ static int inline_io(struct context *c, struct cv_thread *t, struct file *device
     if (r == -ERESTARTSYS || r == -ERESTARTNOINTR || r == -ERESTARTNOHAND ||
         r == -ERESTART_RESTARTBLOCK || r == -EINTR) {
         ++inline_interrupted;
-        goto fallback; /* nothing moved: let the launcher publish signals and RETRY */
+        /* The outer ioctl returns success, so Linux cannot apply its syscall
+         * restart rules to this inner read/write. Tell the launcher which rule
+         * to apply after the signal trampoline has recorded the event. */
+        t->frame[3] = r == -ERESTARTSYS ? CV_IO_RESTARTSYS :
+                      r == -ERESTARTNOINTR ? CV_IO_RESTARTNOINTR :
+                      r == -ERESTARTNOHAND ? CV_IO_RESTARTNOHAND : CV_IO_EINTR;
+        goto fallback;
     }
     if (put_user(r, &ue->result) || put_user(0ULL, &ue->pending) || put_user(0ULL, &ue->status) ||
         put_user(0U, (u32 __user *)(meta + CV_IO_SIGNAL_OFFSET + 16))) {
