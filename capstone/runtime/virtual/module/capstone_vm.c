@@ -322,6 +322,9 @@ module_param(arena_pin, bool, 0644);
 static bool unpinned;
 module_param(unpinned, bool, 0444);
 MODULE_PARM_DESC(unpinned, "Use the platform's raw tag-aware mm instead of payload pins");
+static bool unpinned_fast_fault;
+module_param(unpinned_fast_fault, bool, 0444);
+MODULE_PARM_DESC(unpinned_fast_fault, "Experiment: reuse the validated anonymous VMA on unpinned faults");
 static bool unpinned_exact_bounds;
 static unsigned long unpinned_faults, unpinned_sweep_pages;
 module_param(unpinned_faults, ulong, 0444);
@@ -1947,6 +1950,34 @@ static bool image_data_vma(const struct arena *a, const struct vm_area_struct *v
            (v->vm_flags & (VM_READ | VM_WRITE)) == (VM_READ | VM_WRITE);
 }
 
+/* vm_lock keeps the grant alive; mmap_lock keeps this already-validated VMA
+ * stable. Only anonymous faults take the direct path: file faults retain
+ * fixup_user_fault's lookup and filesystem-specific completion semantics.
+ * As with fixup_user_fault(..., NULL), do not set ALLOW_RETRY or KILLABLE:
+ * the anonymous handler retains mmap_lock, including while waiting for a
+ * migration entry. The caller still performs the bounded repeat and stop checks.
+ */
+static int unpinned_fault_vma(struct vm_area_struct *v, unsigned long address)
+{
+    unsigned int flags = (v->vm_flags & VM_WRITE) ? FAULT_FLAG_WRITE : 0;
+    vm_fault_t fault;
+
+    if (!unpinned_fast_fault || !vma_is_anonymous(v) ||
+        (v->vm_flags & (VM_SHARED | VM_IO | VM_PFNMAP | VM_MIXEDMAP | VM_HUGETLB)))
+        return fixup_user_fault(v->vm_mm, address & PAGE_MASK, flags, NULL);
+
+    /* Preserve fixup_user_fault's read/write admission even for an execute
+     * fault. handle_mm_fault also performs arch_vma_access_permitted. */
+    if (!(v->vm_flags & ((flags & FAULT_FLAG_WRITE) ? VM_WRITE : VM_READ)))
+        return -EFAULT;
+    fault = handle_mm_fault(v, address & PAGE_MASK, flags, NULL);
+    if (fault & VM_FAULT_ERROR) {
+        int error = vm_fault_to_errno(fault, 0);
+        return error ? error : -EFAULT;
+    }
+    return 0;
+}
+
 static int resolve(struct context *c, struct cv_thread *t, u64 deadline)
 {
     unsigned long address = t->frame[5], cause = t->frame[3];
@@ -2005,8 +2036,7 @@ static int resolve(struct context *c, struct cv_thread *t, u64 deadline)
             t->last_fault_cause = cause;
             t->fault_repeat = 0;
         }
-        rc = fixup_user_fault(c->mm, address & PAGE_MASK,
-                              (vmflags & VM_WRITE) ? FAULT_FLAG_WRITE : 0, NULL);
+        rc = unpinned_fault_vma(v, address);
         mmap_read_unlock(c->mm);
         if (rc) CV_RESOLVE_FAIL("unpinned", "fixup_user_fault=%d vm_flags 0x%lx", rc, vmflags);
         ++unpinned_faults;
@@ -2046,8 +2076,7 @@ static int resolve(struct context *c, struct cv_thread *t, u64 deadline)
                 t->last_fault_cause = cause;
                 t->fault_repeat = 0;
             }
-            rc = fixup_user_fault(c->mm, address & PAGE_MASK,
-                                  (vmflags & VM_WRITE) ? FAULT_FLAG_WRITE : 0, NULL);
+            rc = unpinned_fault_vma(v, address);
             mmap_read_unlock(c->mm);
             if (rc) CV_RESOLVE_FAIL("unpinned", "fixup_user_fault=%d vm_flags 0x%lx", rc, vmflags);
             return rc;

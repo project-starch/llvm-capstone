@@ -6,6 +6,15 @@ ISA ruling or provide an RTL implementation. `unpinned=0` is the module default.
 Set `unpinned=1` at module load; the parameter cannot change while loaded.
 The module refuses that option on a stock kernel or a mismatched ID-width build.
 
+On the `experiment/native-faults` branch, `unpinned_fast_fault=1` additionally
+reuses the already-validated VMA for private anonymous faults. This parameter
+defaults off and has no effect on the pinned path. It calls `handle_mm_fault`
+with the same write-fault policy and without retry/killable flags, under the
+existing mmap read lock and grant lifetime lock. File-backed and special VMAs
+retain `fixup_user_fault`; image-text handling is unchanged. Grant bounds,
+VMA permissions, repeat bounds, stop checks, tag-preserving mm and retirement
+rules remain in force. See [the fault-cost experiment](fault-cost/README.md).
+
 The QEMU option is `x-capstone-raw-moves=true`, with `x-capstone-u-mode=true`.
 The runtime platform uses `x-capstone-test-csrs=false`. The model supplies a
 `capstone,unpinned-v1` device-tree node reporting its ID width, exact-bounds
