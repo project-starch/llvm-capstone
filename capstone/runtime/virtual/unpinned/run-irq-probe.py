@@ -25,6 +25,8 @@ def main():
     parser.add_argument('--params', default='iters=4000 dmin=1 dmax=24')
     parser.add_argument('--expect-lost', choices=['any', 'none', 'record'], default='record')
     parser.add_argument('--expect-retries', choices=['any', 'none', 'record'], default='record')
+    parser.add_argument('--expect-taken', choices=['any', 'none', 'record'], default='record',
+                        help='whether an S timer interrupt was taken inside the copy (unmasked runs)')
     parser.add_argument('--expect-window', choices=['inside', 'outside', 'record'], default='record',
                         help='whether firmware timer deadlines fall inside the copy call')
     args = parser.parse_args()
@@ -74,6 +76,7 @@ echo VIRTUAL_STAGED_DONE
     serial = serial_path.read_text(errors='replace') if serial_path.exists() else ''
     summary = re.search(r'IRQ_WINDOW iterations=(\d+) deadline_in_copy=(\d+) lost_iterations=(\d+) '
                         r'lost_in_copy=(\d+) lost_granules=(\d+)', serial)
+    taken = re.search(r's_interrupt_taken_in_copy=(\d+)', serial)
     retries = re.search(r'CAPTAG_copy_retries:(\d+)', serial)
     before = re.search(r'CAPTAG_retries_before:(\d+)', serial)
     copies = re.search(r'CAPTAG_copies:(\d+)', serial)
@@ -93,11 +96,15 @@ echo VIRTUAL_STAGED_DONE
         ok = ok and ((lost > 0) if args.expect_lost == 'any' else (lost == 0))
     if args.expect_retries != 'record':
         ok = ok and ((redo > 0) if args.expect_retries == 'any' else (redo == 0))
+    if args.expect_taken != 'record':
+        took = int(taken.group(1)) if taken else -1
+        ok = ok and ((took > 0) if args.expect_taken == 'any' else (took == 0))
     if args.expect_window != 'record':
         ok = ok and ((inside > 0) if args.expect_window == 'inside' else (inside == 0))
     answer = {'pass': ok, 'runner_rc': result.returncode, 'config_ok': config_ok,
               'bulk': args.bulk, 'cpu_extra': extra, 'iterations': iterations,
-              'deadline_in_copy': inside, 'lost_iterations': lost, 'copy_retries': redo,
+              'deadline_in_copy': inside, 'lost_iterations': lost,
+              's_interrupt_taken_in_copy': int(taken.group(1)) if taken else -1, 'copy_retries': redo,
               'copies': int(copies.group(1)) if copies else -1,
               'expect': {'lost': args.expect_lost, 'retries': args.expect_retries,
                          'window': args.expect_window}}

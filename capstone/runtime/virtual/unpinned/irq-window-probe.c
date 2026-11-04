@@ -23,10 +23,13 @@ static void arm_timer(u64 deadline)
     sbi_ecall(SBI_EXT_TIME, SBI_EXT_TIME_SET_TIMER, deadline, 0, 0, 0, 0, 0);
 }
 
-static unsigned int iters = 4000, dmin = 1, dmax = 24;
+static unsigned int iters = 4000, dmin = 1, dmax = 24, unmasked;
 module_param(iters, uint, 0444);
 module_param(dmin, uint, 0444);
 module_param(dmax, uint, 0444);
+/* Run the copy with S interrupts enabled, as a real caller does, so the kernel's
+ * own mask is what keeps a timer interrupt out of the pass. */
+module_param(unmasked, uint, 0444);
 
 static unsigned long query(struct page *page, bool ack)
 {
@@ -82,7 +85,7 @@ static int __init probe_init(void)
     struct page *table = alloc_pages(GFP_KERNEL | __GFP_ZERO, 2);
     unsigned long desc[6] __aligned(16), flags, oldroot, id, deadline, t0, t1, calib = 0;
     unsigned int i, k, hit = 0, lost_iter = 0, lost_hit = 0, lost_total = 0,
-                 first_k = 0, first_d = 0, first_j = 0, setup_bad;
+                 first_k = 0, first_d = 0, first_j = 0, setup_bad, taken = 0;
     unsigned long *header;
     int error = -ENOMEM;
 
@@ -120,20 +123,31 @@ static int __init probe_init(void)
     pr_info("IRQ_WINDOW arm_call_ticks=%lu\n", calib);
     for (k = 0; k < iters; k++) {
         unsigned int d = dmin + k % (dmax - dmin + 1), j = (k * 37) % 101, lost;
-        /* Deadlines fall on multiples of a timer tick, so the position of the
-         * interrupt inside the six-instruction loop depends on how many
-         * instructions precede the copy. Pad with three- and two-instruction
-         * loops so every phase modulo six is reached, not a few. */
-        unsigned long pad3 = j + 1, pad2 = k % 5 + (k / 5) % 3;
-        asm volatile("1: nop\n\taddi %0, %0, -1\n\tbnez %0, 1b" : "+r"(pad3) : : "memory");
-        asm volatile("beqz %0, 2f\n1: addi %0, %0, -1\n\tbnez %0, 1b\n2:" : "+r"(pad2) : : "memory");
+        unsigned long pad3, pad2;
         deadline = get_cycles64() + calib + d;
         arm_timer(deadline);
+        /* Arming the timer re-aligns the instruction count to the tick grid
+         * (traces show only three of the loop's six boundaries are ever hit
+         * when the padding comes before it), so the padding that moves the
+         * deadline across the loop's boundaries must follow the arming call.
+         * Three- and two-instruction loops reach every phase modulo six. */
+        pad3 = j % 33 + 1;
+        pad2 = k % 5 + (k / 5) % 3;
+        asm volatile("1: nop\n\taddi %0, %0, -1\n\tbnez %0, 1b" : "+r"(pad3) : : "memory");
+        asm volatile("beqz %0, 2f\n1: addi %0, %0, -1\n\tbnez %0, 1b\n2:" : "+r"(pad2) : : "memory");
         t0 = get_cycles64();
+        if (unmasked)
+            local_irq_enable();
         copy_highpage(dst, src);
+        if (unmasked)
+            local_irq_disable();
         t1 = get_cycles64();
         while (get_cycles64() < deadline + 3)
             cpu_relax();
+        /* Unmasked runs: the S timer handler re-arms the timer, which clears STIP;
+         * STIP still set means the interrupt was deferred past the copy. */
+        if (unmasked && t0 <= deadline && deadline <= t1 && !(csr_read(CSR_IP) & IE_TIE))
+            taken++;
         lost = missing(dst, check);
         if (t0 <= deadline && deadline <= t1)
             hit++;
@@ -151,6 +165,7 @@ out_irq:
     local_irq_restore(flags);
     pr_info("IRQ_WINDOW iterations=%u deadline_in_copy=%u lost_iterations=%u lost_in_copy=%u lost_granules=%u first_k=%u first_d=%u first_j=%u\n",
             iters, hit, lost_iter, lost_hit, lost_total, first_k, first_d, first_j);
+    pr_info("IRQ_WINDOW s_interrupt_taken_in_copy=%u\n", taken);
 out:
     if (src) { scrub(src); __free_page(src); }
     if (dst) { scrub(dst); __free_page(dst); }

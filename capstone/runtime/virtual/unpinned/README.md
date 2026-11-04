@@ -128,16 +128,23 @@ temporary between a raw load and its store does not survive one. On the
 instruction-exact clock the census platforms use (`-icount shift=0`) and the
 firmware timer (no Sstc), `irq-window-probe.c` places a firmware timer deadline
 1 to 24 ticks after an arming call and runs the kernel's own `copy_highpage`
-over a page tagged on every granule. A kernel with one raw pass and no redo
-lost exactly one granule's tag in 551 of 3000 iterations (bulk off) and 677 of
-3000 (bulk on); the final kernel lost none in 3000 and 3000 and redid 1809 and
-681 passes; 300 iterations with deadlines outside the copy lost none. The raw
-transport inherited from the raw-move model has the same exposure. The loss
-depends on where the interrupt falls in the loop, so a kernel layout without
-the redo can show no loss in this probe (one with an extra CSR read ahead of the
-pass did): absence of loss without the redo proves nothing. Without `-icount`
-interrupts are taken at translation-block boundaries and no tag was lost
-(3000 iterations; 2 redos).
+over a page tagged on every granule. A kernel with one raw pass and no redo lost exactly one granule's tag in 372 of
+3000 iterations (bulk off; 1990 had the deadline inside the copy call) and 281
+(bulk on; 865 inside); the final kernel lost none in 3000 and 3000 and redid 1859
+and 753 passes; 300 iterations with deadlines outside the copy lost none. The raw
+transport inherited from the raw-move model has the same exposure. Without
+`-icount` interrupts are taken at translation-block boundaries and no tag was
+lost (3000 iterations; 2 redos). The probe pads after the arming call: arming
+re-aligns the instruction count to the timer grid, and with the padding before
+it only three of the loop's six instruction boundaries were ever hit (traced with
+`-d int`), which made one no-redo layout look safe by accident. With the padding
+after it, both of the layouts without a guard (no redo, no mask) lose tags.
+
+The kernel's own interrupt mask is covered separately: with `unmasked=1` the
+probe enables S interrupts around the copy, as a real caller does. The final
+kernel lost none (3000 bulk-off iterations with 1864 redos, 3000 bulk-on with
+759); a kernel without the `local_irq_save`/`restore` around the query and copy
+lost the tag in 408 of 3000.
 
 The kernel therefore repeats a pass when a firmware timer interrupt was served
 during it. OpenSBI 1.3 serves that interrupt by clearing MTIE and setting STIP,
