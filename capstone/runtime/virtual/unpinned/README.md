@@ -129,15 +129,15 @@ instruction-exact clock the census platforms use (`-icount shift=0`) and the
 firmware timer (no Sstc), `irq-window-probe.c` places a firmware timer deadline
 1 to 24 ticks after an arming call and runs the kernel's own `copy_highpage`
 over a page tagged on every granule. A kernel with one raw pass and no redo
-lost exactly one granule's tag in 552 of 3000 iterations (bulk off) and 676 of
+lost exactly one granule's tag in 551 of 3000 iterations (bulk off) and 677 of
 3000 (bulk on); the final kernel lost none in 3000 and 3000 and redid 1809 and
-680 passes; 300 iterations with deadlines outside the copy lost none. The raw
+681 passes; 300 iterations with deadlines outside the copy lost none. The raw
 transport inherited from the raw-move model has the same exposure. The loss
 depends on where the interrupt falls in the loop, so a kernel layout without
 the redo can show no loss in this probe (one with an extra CSR read ahead of the
 pass did): absence of loss without the redo proves nothing. Without `-icount`
 interrupts are taken at translation-block boundaries and no tag was lost
-(3000 iterations; 47 redos).
+(3000 iterations; 2 redos).
 
 The kernel therefore repeats a pass when a firmware timer interrupt was served
 during it. OpenSBI 1.3 serves that interrupt by clearing MTIE and setting STIP,
