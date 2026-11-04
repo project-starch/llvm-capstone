@@ -17,6 +17,22 @@ def load(name):
     return module
 
 
+PINS = r'nr_foll_pin_acquired (\d+) nr_foll_pin_released (\d+)'
+
+
+def pin_taken(text, tag):
+    """One more pin acquired AND released at the first rmmod reading: balanced, but not zero."""
+    return re.sub(r'^(' + tag + r'_PINS_END:[^\n]*?)' + PINS,
+                  lambda m: f'{m[1]}nr_foll_pin_acquired {int(m[2]) + 1} nr_foll_pin_released {int(m[3]) + 1}',
+                  text, count=1, flags=re.M)
+
+
+def dead_counters(text, tag):
+    """The counters never move, including in the pinned liveness launch: zero everywhere."""
+    return re.sub(r'^(' + tag + r'_PINS_(?:LIVE|END)[^\n]*?)' + PINS,
+                  lambda m: f'{m[1]}nr_foll_pin_acquired 0 nr_foll_pin_released 0', text, flags=re.M)
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('--pin', type=Path, required=True)
@@ -33,7 +49,10 @@ def main():
         if not all(positive.values()):
             failed.append(name + ': positive transcript fails ' + ','.join(k for k, v in positive.items() if not v))
             continue
+        tag = 'PIN' if name == 'pin' else 'HOOK'
         mutations = {
+            'balanced_pin_taken': pin_taken(text, tag),
+            'dead_foll_pin_counters': dead_counters(text, tag),
             'wrong_mode': re.sub(r'(MEMORY_MODE:)Y', r'\1N', text),
             'zero_fault_totals': re.sub(r'(CAPSTONE_VM_STATS [^\n]*?faults=)\d+', r'\g<1>0', text),
             'missing_events': re.sub(r'^.*unpinned fault arena.*\n', '', text, flags=re.M),

@@ -95,8 +95,22 @@ def app(name):
 # comparison, and every run's counters are tied to the census (pages= is what the arenas
 # retired after the mark still held; faults= covers every page admitted at a fault; peak= is at
 # least pages=), so neither source can stand in for the other.
+# The kernel's FOLL_PIN counters (nr_foll_pin_acquired / _released) are the independent witness that
+# an unpinned run takes no payload pin, so the ON arm first proves, in the same guest, that the
+# counters are live: one pinned-mode launch (insmod WITHOUT unpinned=1) must acquire and release
+# pins. Its mode line is HOOK_LIVE_MODE, not a *MEMORY_MODE line: the arm's own mode lines all say Y.
+LIVENESS = '''insmod capstone_vm.ko pin_ahead_pages=1 fault_ahead_max=0 || exit 1
+echo "HOOK_LIVE_MODE:$(cat /sys/module/capstone_vm/parameters/unpinned 2>/dev/null || echo A)"
+./capstone-vexec %s.dom walk > /tmp/pin.out 2>&1
+echo "HOOK_LIVE_STATUS:$?"
+rmmod capstone_vm || exit 1
+echo "HOOK_PINS_LIVE:$(pins)"
+dmesg -c > /dev/null
+'''
+
+
 def script(names, instrumented, unpinned=False):
-    text = SCRIPT
+    text = SCRIPT + (LIVENESS % app('base1') if unpinned else '')
     for name in names:
         params, modes = CONFIGS[name][:2]
         params += '' if name.startswith('adapt') else ' fault_ahead_max=0'
@@ -172,6 +186,11 @@ def counter_counts(run):
 
 def parse(log):
     runs, reports, ends, current = {}, {}, {}, None
+    live = re.findall(r'^HOOK_PINS_LIVE:(.*)$', log, re.M)
+    try:
+        ends['@live'] = pins(live[0]) if len(live) == 1 else None
+    except KeyError:
+        ends['@live'] = None
     for line in log.splitlines():
         m = re.match(r'HOOK_PINS_BEFORE:(\w+):(\w+):(.*)$', line)
         if m:
@@ -415,11 +434,18 @@ def evaluate(log, names, instrumented, completed, unpinned=False):
         for got, low, full in zip(sources('short64', 'walk'), sources('base1', 'walk'),
                                   sources('base64', 'walk')))
     if unpinned:
+        # The witness is only worth its zero if the counters count: the pinned liveness launch,
+        # in this guest, acquired pins and released every one of them.
+        live = ends.get('@live')
+        checks['foll_pin_counters_live'] = bool(live and live[0] == live[1] > 0 and
+            'HOOK_LIVE_STATUS:0' in log and 'HOOK_LIVE_MODE:N' in log)
         for name in names:
             rep = reports.get(name, {})
             end = ends.get(name)
             checks.pop(f'{name}_pins_balanced', None)
-            checks[f'{name}_unpinned_balance'] = bool(end and end[0] == end[1] and
+            # The kernel's own FOLL_PIN counters, as read at this module's rmmod, equal the reading
+            # after the pinned liveness launch: this run acquired and released not one pin.
+            checks[f'{name}_no_payload_pins'] = bool(end and live and end == live and
                 rep.get('unpinned') == 1 and rep.get('fault_requests', 0) > 0 and rep.get('entries', 0) > 0)
             checks.pop(f'{name}_gup_batch_bound', None)
             checks[f'{name}_fault_batch_bound'] = (rep.get('gup_requests') == 0 and

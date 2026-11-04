@@ -36,9 +36,10 @@ MODES = ('base', 'seq', 'stop', 'vma', 'vmax', 'rowrite', 'retire')
 SCRIPT = '''#!/bin/sh
 cd /mnt/vm || exit 1
 export CAPSTONE_VM_STATS=1 CAPSTONE_VM_STATS_MARK=1 CAPSTONE_VM_GRANTS=1 CAPSTONE_EXEC_DIAGNOSTICS=1
+pins() { echo 1 > /proc/sys/vm/stat_refresh; grep -E "^nr_foll_pin_(acquired|released) " /proc/vmstat | tr "\\n" " "; }
 dmesg -n 1
 dmesg -c > /dev/null
-for w in ''' + ' '.join(map(str, WINDOWS)) + '''; do
+@LIVENESS@for w in ''' + ' '.join(map(str, WINDOWS)) + '''; do
   insmod capstone_vm.ko pin_ahead_pages=$w fault_ahead_max=0 @DIAG_PARAM@ || exit 1
   @MODE_ECHO@
   for mode in ''' + ' '.join(MODES) + '''; do
@@ -49,6 +50,7 @@ for w in ''' + ' '.join(map(str, WINDOWS)) + '''; do
   done
   ./capstone-vexec --stats
   rmmod capstone_vm || exit 1
+  echo "PIN_PINS_END:$w:$(pins)"
 done
 echo VIRTUAL_STAGED_DONE
 '''
@@ -142,6 +144,24 @@ def parse(log):
     return runs
 
 
+# An unpinned run's independent pin witness is the kernel's FOLL_PIN counter, which must not move
+# during the whole run. It is worth that zero only if the counters count, so the ON script first
+# runs one pinned-mode window in the same guest (its mode line is PIN_LIVE_MODE, not *MEMORY_MODE).
+LIVENESS = '''insmod capstone_vm.ko pin_ahead_pages=4 fault_ahead_max=0 || exit 1
+echo "PIN_LIVE_MODE:$(cat /sys/module/capstone_vm/parameters/unpinned 2>/dev/null || echo A)"
+./capstone-vexec pin.dom seq > /tmp/pin.out 2>&1
+echo "PIN_LIVE_STATUS:$?"
+rmmod capstone_vm || exit 1
+echo "PIN_PINS_LIVE:$(pins)"
+dmesg -c > /dev/null
+'''
+
+
+def foll_pins(text):
+    v = dict(re.findall(r'nr_foll_pin_(acquired|released) (\d+)', text))
+    return (int(v['acquired']), int(v['released'])) if len(v) == 2 else None
+
+
 def evaluate(log, completed, instrumented, unpinned=False):
     runs = parse(log)
     census = [json.loads(l) for l in log.splitlines() if l.startswith('{"version":1,')]
@@ -198,6 +218,13 @@ def evaluate(log, completed, instrumented, unpinned=False):
         s['live_domains'] == s['live_regions'] == s['live_bytes'] == 0 for s in census)
     if unpinned:
         unpinned_checks.attach(log, runs)
+        live = re.findall(r'^PIN_PINS_LIVE:(.*)$', log, re.M)
+        live = foll_pins(live[0]) if len(live) == 1 else None
+        ends = {int(w): foll_pins(t) for w, t in re.findall(r'^PIN_PINS_END:(\d+):(.*)$', log, re.M)}
+        checks['foll_pin_counters_live'] = bool(live and live[0] == live[1] > 0 and
+            'PIN_LIVE_STATUS:0' in log and 'PIN_LIVE_MODE:N' in log)
+        checks['no_payload_pins'] = bool(live and sorted(ends) == sorted(WINDOWS) and
+            all(e == live for e in ends.values()))
         for w in WINDOWS:
             for mode, expect in EXPECT_REGION.items():
                 r = runs.get((w, mode))
@@ -247,7 +274,7 @@ def main():
                       (inputs['module'], 'capstone_vm.ko')):
         shutil.copy2(src, stage/name)
     instrumented = b'diag_admit' in inputs['module'].read_bytes()
-    gate = SCRIPT.replace('@MODE_ECHO@', memory_mode.echo('PIN_')).replace('@DIAG_PARAM@', ('diag_admit=1' if instrumented else '') + (' unpinned=1' if a.unpinned else ''))
+    gate = SCRIPT.replace('@LIVENESS@', LIVENESS if a.unpinned else '').replace('@MODE_ECHO@', memory_mode.echo('PIN_')).replace('@DIAG_PARAM@', ('diag_admit=1' if instrumented else '') + (' unpinned=1' if a.unpinned else ''))
     if a.unpinned:
         if b'test_full_window' not in inputs['module'].read_bytes():
             p.error('--unpinned requires the hooks module for deterministic window policy')
