@@ -562,11 +562,27 @@ static int load(int fd, struct capstone_application_descriptor_v2 *desc, void **
     if (image_fd_layout(fd, desc, &l)) return -1;
     /* The grant's size, rounded as every grant is. The tail past the data's own pages stays
      * anonymous and zero, like bss. */
+#ifdef CAPSTONE_VEXEC_EXACT_IMAGE
+    /* perf/exact-image-grant, a build option (default off): the smallest exactly representable
+     * length, page-rounded, at a base aligned to its granule, instead of the next power of two.
+     * The module pins the whole non-text span, so the power-of-two padding cost every page of it:
+     * 502.gcc_r's 16.9 MB image got a 32 MiB grant, 3,964 pinned pages of nothing, about 10 s of
+     * launch and teardown on the board. */
+    size_t exact = l.text_bytes + l.data_bytes, granule;
+    *bytes = exact && exact <= CV_MAX_REGION_BYTES ? capstone_repr_round((exact + 4095) & ~(size_t)4095) : 0;
+    granule = *bytes ? capstone_repr_granule(*bytes) : 0;
+    if (granule < 4096) granule = 4096;
+    *rx_bytes = l.text_bytes;
+    *stack = l.stack;
+    if (!*bytes || *bytes > CV_MAX_EAGER_BYTES || *bytes % granule) { errno = ENOEXEC; return -1; }
+    char *base = reserve_aligned(*bytes, granule);
+#else
     *bytes = rounded(l.text_bytes + l.data_bytes);
     *rx_bytes = l.text_bytes;
     *stack = l.stack;
     if (!*bytes || *bytes > CV_MAX_EAGER_BYTES) { errno = ENOEXEC; return -1; }
     char *base = reserve(*bytes);
+#endif
     if (!base) return -1;
     char *data = base + l.text_bytes;
     size_t whole = l.data_file & ~(uint64_t)4095, part = l.data_file - whole;
