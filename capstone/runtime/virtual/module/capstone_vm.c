@@ -76,6 +76,9 @@ struct arena {
      * touches + eager - released is what the retirement sweeps. Counted, not printed, inside a
      * window: a printk per page there added work before the next batch's deadline check. */
     unsigned admits, windows, scans, touches, eager, released;
+    /* Separate from the pin census: successful raw-mm fault resolutions and
+     * launcher writes do not acquire payload pins. Diagnostic only. */
+    unsigned unpinned_resolves, unpinned_touches, unpinned_events;
     /* Pages are admitted one by one at the domain's first access (resolve). */
     bool lazy;
     /* The grant was LINEAR: the heap's move-only shape, the one CV_REMAP may grow. lazy used
@@ -1319,6 +1322,9 @@ static int retire(struct context *c, struct arena *a, bool destroying)
         pr_info("capstone_vm: retire arena 0x%lx+0x%lx admit=%u window=%u scan=%u touch=%u eager=%u "
                 "released=%u swept=%u\n", a->address, a->bytes, a->admits, a->windows, a->scans,
                 a->touches, a->eager, a->released, swept);
+    if (unpinned && diag_admit)
+        pr_info("capstone_vm: unpinned retire arena 0x%lx events=%u resolves=%u touch=%u\n",
+                a->address, a->unpinned_events, a->unpinned_resolves, a->unpinned_touches);
     --c->stats.arenas;
     rb_erase(&a->node, &c->arenas);
     xa_erase(&c->ids, a->id);
@@ -1658,7 +1664,7 @@ static int remap_end(struct context *c, const struct cv_remap *r)
  * must catch, at a chosen point of CV_STEP; counters say whether CSRUNV was
  * entered while an injection was pending, and what GUP was asked for. */
 static unsigned long test_inject;       /* 1 resched, 2 signal, 3 deadline, 4 SIGKILL */
-static unsigned long test_inject_at;    /* 1 after a demand GUP, 2 before an entry, 3 before an ioctl's first entry,
+static unsigned long test_inject_at;    /* 1 after a demand GUP/fixup, 2 before an entry, 3 before an ioctl's first entry,
                                            4 after CSRUNV returns a fault, before resolve() */
 static unsigned long test_inject_every = 1;
 static unsigned long test_short_gup;    /* pin-ahead GUP pins only half of a batch */
@@ -1674,6 +1680,7 @@ module_param(test_full_window, bool, 0444);
 static u64 test_events, test_injections, test_stops, test_initial_stops, test_violations;
 static u64 test_consumed, test_checks, test_checks_irqs_on, test_entries;
 static u64 test_gup_requests, test_gup_max, test_short_results, test_gup_pending;
+static u64 test_fault_requests, test_fault_deferred, test_fault_pending;
 static bool test_pending, test_expired, test_in_step;
 /* Faults whose first resolution came from the launcher's CV_RESOLVE: a stop
  * fell between the fault and its resolution in CV_STEP, so it got the full
@@ -1713,19 +1720,35 @@ static void test_gup(unsigned long pages)
     ++test_gup_requests;
     test_gup_max = max(test_gup_max, (u64)pages);
 }
+/* Unpinned counterpart of short GUP: refuse the in-step attempt before
+ * changing a PTE. CV_RESOLVE must then complete the same fault. This does
+ * not turn a failed Linux resolution into success. */
+static bool test_fault(void)
+{
+    if (test_pending && test_condition()) ++test_fault_pending;
+    ++test_fault_requests;
+    if (test_short_gup && test_in_step) {
+        ++test_fault_deferred;
+        return true;
+    }
+    return false;
+}
 static void test_report(const char *why)
 {
     pr_info("capstone_vm test %s: injections=%llu stops=%llu initial_stops=%llu "
             "violations=%llu consumed=%llu gup_requests=%llu gup_max=%llu short_results=%llu "
             "gup_pending=%llu checks=%llu checks_irqs_on=%llu entries=%llu "
-            "launcher_first=%llu\n",
+            "launcher_first=%llu unpinned=%u fault_requests=%llu "
+            "fault_deferred=%llu fault_pending=%llu\n",
             why, test_injections, test_stops, test_initial_stops, test_violations,
             test_consumed, test_gup_requests, test_gup_max, test_short_results,
             test_gup_pending, test_checks, test_checks_irqs_on, test_entries,
-            test_launcher_first);
+            test_launcher_first, unpinned, test_fault_requests,
+            test_fault_deferred, test_fault_pending);
 }
 #define TEST_HOOK(at) test_hook(at)
 #define TEST_GUP(pages) test_gup(pages)
+#define TEST_FAULT() test_fault()
 #define TEST_EXPIRED() test_expired
 #define TEST_FULL_WINDOW() test_full_window
 #define TEST_ENTRY() do { test_entry(); ++test_entries; } while (0)
@@ -1738,6 +1761,7 @@ static void test_report(const char *why)
 #else
 #define TEST_HOOK(at) do { } while (0)
 #define TEST_GUP(pages) do { } while (0)
+#define TEST_FAULT() false
 #define TEST_EXPIRED() false
 #define TEST_FULL_WINDOW() false
 #define TEST_ENTRY() do { } while (0)
@@ -2042,6 +2066,40 @@ static bool image_data_vma(const struct arena *a, const struct vm_area_struct *v
            (v->vm_flags & (VM_READ | VM_WRITE)) == (VM_READ | VM_WRITE);
 }
 
+/* Keep successful resolution and counted escape events distinct: a stop
+ * after resolution can cause CV_RESOLVE to repeat it without a new escape.
+ * Point 1 is the completed demand operation in either memory mode. */
+static int unpinned_resolve(struct context *c, struct arena *a,
+                            unsigned long address, unsigned long vmflags)
+{
+    int rc;
+    if (TEST_FAULT()) return -EAGAIN;
+    rc = fixup_user_fault(c->mm, address & PAGE_MASK,
+                         (vmflags & VM_WRITE) ? FAULT_FLAG_WRITE : 0, NULL);
+    if (!rc) {
+        ++unpinned_faults;
+        if (diag_admit) ++a->unpinned_resolves;
+        TEST_HOOK(1);
+    }
+    return rc;
+}
+
+/* Exactly one diagnostic for each increment of stats.faults. Unlike the
+ * pinned admission census, this also records repeated faults and faults
+ * returned to the launcher before resolution. No timing allowance is used
+ * to reconcile it with the public counter. */
+static void unpinned_fault_event(struct context *c, struct cv_thread *t,
+                                 const char *route)
+{
+    struct arena *a;
+    if (!unpinned || !diag_admit) return;
+    a = arena_at(c, t->frame[5]);
+    if (a) ++a->unpinned_events;
+    pr_info("capstone_vm: unpinned fault arena 0x%lx address 0x%lx cause %lu pc 0x%lx route %s number %llu\n",
+            a ? a->address : 0, t->frame[5], t->frame[3], t->frame[4], route,
+            (unsigned long long)c->stats.faults);
+}
+
 static int resolve(struct context *c, struct cv_thread *t, u64 deadline)
 {
     unsigned long address = t->frame[5], cause = t->frame[3];
@@ -2100,11 +2158,9 @@ static int resolve(struct context *c, struct cv_thread *t, u64 deadline)
             t->last_fault_cause = cause;
             t->fault_repeat = 0;
         }
-        rc = fixup_user_fault(c->mm, address & PAGE_MASK,
-                              (vmflags & VM_WRITE) ? FAULT_FLAG_WRITE : 0, NULL);
+        rc = unpinned_resolve(c, a, address, vmflags);
         mmap_read_unlock(c->mm);
         if (rc) CV_RESOLVE_FAIL("unpinned", "fixup_user_fault=%d vm_flags 0x%lx", rc, vmflags);
-        ++unpinned_faults;
         return rc;
     }
     if (a && a->lazy) {
@@ -2141,8 +2197,7 @@ static int resolve(struct context *c, struct cv_thread *t, u64 deadline)
                 t->last_fault_cause = cause;
                 t->fault_repeat = 0;
             }
-            rc = fixup_user_fault(c->mm, address & PAGE_MASK,
-                                  (vmflags & VM_WRITE) ? FAULT_FLAG_WRITE : 0, NULL);
+            rc = unpinned_resolve(c, a, address, vmflags);
             mmap_read_unlock(c->mm);
             if (rc) CV_RESOLVE_FAIL("unpinned", "fixup_user_fault=%d vm_flags 0x%lx", rc, vmflags);
             return rc;
@@ -2334,6 +2389,11 @@ static int admit_page(struct context *c, struct arena *a, unsigned index)
         int rc = fixup_user_fault(c->mm, address,
                       (v->vm_flags & VM_WRITE) ? FAULT_FLAG_WRITE : 0, NULL);
         mmap_read_unlock(c->mm);
+        if (!rc && diag_admit) {
+            ++a->unpinned_touches;
+            pr_info("capstone_vm: unpinned touch arena 0x%lx+0x%lx page %u\n",
+                    a->address, a->bytes, index);
+        }
         return rc;
     }
     if (pin_user_pages_remote(c->mm, address, 1,
@@ -2760,7 +2820,10 @@ thread_unwind:
             if (resolve(c, t, budget_end))
                 break;
             t->sfence_pending = true;
-            if (!text) ++c->stats.faults;
+            if (!text) {
+                ++c->stats.faults;
+                unpinned_fault_event(c, t, "step");
+            }
         }
         if (t->event == 5) {
             int error = ensure_nodes(c, CAP_REV_TABLE_RESERVE + 1);
@@ -2782,7 +2845,10 @@ thread_unwind:
         r.args[6] = t->frame[78]; r.args[7] = t->frame[79];
         r.thread = t->id;
         t->terminal = r.kind == 2;
-        if (r.kind == 4 && !resolved && !text_fault(c, r.address)) ++c->stats.faults;
+        if (r.kind == 4 && !resolved && !text_fault(c, r.address)) {
+            ++c->stats.faults;
+            unpinned_fault_event(c, t, "return");
+        }
         rc = copy_to_user((void __user *)arg, &r, sizeof(r)) ? -EFAULT : 0;
         if (rc) t->terminal = true;
     } else if (op == CV_RESOLVE) {
