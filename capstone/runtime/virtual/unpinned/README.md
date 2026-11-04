@@ -54,6 +54,55 @@ pages with scalar stores, and verifies acknowledgement before allocator reuse.
 `captag=off` disables these hooks for negative tests; an unpinned module then
 refuses to load. No test page CSR or software PTE tag flag is used.
 
+### Optional bulk page operations
+
+`captag_bulk=on` independently opts into bulk page zeroing and an eight-granule
+raw copy loop. It defaults off, including on an otherwise valid unpinned
+platform. Activation requires one possible CPU, the device-tree Zicboz ISA
+extension and a declared 64-byte zero block. The firmware must permit S-mode
+`cbo.zero`; this patch does not configure firmware permissions. Inspect
+`/sys/module/captag/parameters/bulk_enabled` rather than inferring activation
+from a successful boot. Unsupported declarations leave the original path active.
+
+Both `clear_page` and `clear_user_page` use the zero primitive. On the bulk
+path, each ordinary `cbo.zero` clears the actual storage tags by the model's
+non-capability writer rule. The physical summary remains sticky. The free
+hook still queries every page, skips unflagged pages, zeroes flagged pages,
+and verifies empty acknowledgement before the allocator can reuse them for
+either userspace or the kernel. No separate per-granule sweep follows bulk
+zeroing. Raw copying preserves bytes and live or stale tags; IRQ masking and
+clearing the opaque temporary before restoring IRQs remain required.
+
+The executable [physical-page lifecycle double](lifecycle/README.md) specifies
+the versioned copy/clear/query contract and rejects unsupported operations.
+It is an interface fixture, not a replacement for kernel qualification.
+
+`bulk-probe.c` is a trusted private-guest module (`obj-m += bulk-probe.o`).
+Build it against the exact patched kernel. It checks every granule of two
+pages containing alternating live/stale tags through both highpage copy APIs,
+checks zero contents and sticky-versus-actual tag state, and requires same-frame
+order-1 kernel reuse without `__GFP_ZERO`. Run each arm through the host gate
+queue:
+
+```sh
+python3 capstone/runtime/virtual/unpinned/run-bulk-probe.py \
+  --qemu "$PLATFORM/qemu-system-riscv64" --images "$PLATFORM/images" \
+  --module "$PROBE/bulk-probe.ko" --work "$RESULT" --bulk on
+```
+
+Repeat with `--bulk off`. For negative controls, separately build a kernel
+substituting scalar `copy_page` for the raw copy and use `--expect lost-copy`;
+then build a kernel omitting only the bulk free-hook clear and use
+`--expect stale-free`. The latter must hit the existing nonempty-acknowledgement
+BUG after the fixture's successful zero tests. Neither an early boot failure
+nor a generic crash counts. Keep these broken kernels out of production.
+The probe's independent scalar cleanup makes the lost-copy case safe to free.
+
+This experiment needs actual COW/compaction/fork/reuse torture, unchanged
+runtime gates, matched quick/full census and independent review before landing.
+The sleeping-child torture remains a COW stimulus, not protected fork support.
+Model instruction attempts do not establish hardware latency or bandwidth.
+
 ## Ownership and lifetime recycling
 
 Payload faults use Linux's fault handler without persistent GUP pins. Supervisor
