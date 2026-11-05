@@ -5,7 +5,9 @@
 # self-made tag as the positive control). The mode is restored afterwards.
 S=$(cd "$(dirname "$0")" && pwd)
 V=${SPEC_VEXEC:?set SPEC_VEXEC to the batch launcher}
-MB=${TAGLEAK_MB:-128}
+# 60 % of MemFree: fill + scan exceed what is free, so at least fill + scan - free of the scan's frames were the fill's
+MB=${TAGLEAK_MB:-$(( $(grep MemFree /proc/meminfo | tr -s " " | cut -d" " -f2) * 6 / 10 / 1024 ))}
+PM=${TAGLEAK_PM:-}
 P=/sys/module/capstone_vm/parameters/retire_exit_sweep
 old=$(cat $P)
 echo "@@SPEC-STAGE 999.tagleak test arms=capstone-lifetimes commands=0 validations=0"
@@ -14,7 +16,7 @@ for mode in 3 2; do
   echo $mode > $P
   echo "TAGLEAK-MODE sweep=$(cat $P) mb=$MB free_kb=$(grep MemFree /proc/meminfo | tr -s ' ' | cut -d' ' -f2)"
   rm -f /tmp/fill.pfn
-  "$V" "$S/bin/tagleak" fill $MB > /tmp/tl.out 2> /tmp/tl.err &
+  "$V" "$S/bin/tagleak" fill $MB $PM > /tmp/tl.out 2> /tmp/tl.err &
   pid=$!
   # ETXTBSY probe (image_rootfs): while the image runs, an open for writing must fail; it writes nothing either way
   sleep ${TAGLEAK_ETX_S:-8}
@@ -25,7 +27,7 @@ for mode in 3 2; do
   echo "TAGLEAK-RC fill $frc $(cat /tmp/tl.out) $(grep -a -v CAPSTONE_VM_STATS /tmp/tl.err | head -3)"
   # its control: the same open on the image that no longer runs succeeds
   if ( : >> "$S/bin/tagleak" ) 2> /tmp/etx.err; then echo "ETXPROBE idle=WRITABLE"; else echo "ETXPROBE idle=DENIED $(cat /tmp/etx.err)"; fi
-  "$V" "$S/bin/tagleak" scan $MB > /tmp/tl.out 2> /tmp/tl.err; echo "TAGLEAK-RC scan $? $(cat /tmp/tl.out) $(grep -a -v CAPSTONE_VM_STATS /tmp/tl.err | head -3)"
+  echo "TAGLEAK-FREE before-scan free_kb=$(grep MemFree /proc/meminfo | tr -s ' ' | cut -d' ' -f2)"; "$V" "$S/bin/tagleak" scan $MB $PM > /tmp/tl.out 2> /tmp/tl.err; echo "TAGLEAK-RC scan $? $(cat /tmp/tl.out) $(grep -a -v CAPSTONE_VM_STATS /tmp/tl.err | head -3)"
 done
 echo $old > $P
 echo "TAGLEAK-RESTORED sweep=$(cat $P)"

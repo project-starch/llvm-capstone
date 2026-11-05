@@ -70,6 +70,8 @@ def chk(k, ok):
 for b, st in ST:
     for arm in ("capstone-spatial", "capstone-lifetimes"):
         ref = read(os.path.join(REF, st), arm)
+        if ref is None and b == "xz":  # Addendum 3: all2's xz has no data; xz is read against all-b1
+            ref = read(os.path.join(B, "out-all-b1", st), arm)
         if ref is None: continue
         lab = f"{b:8s} {'MapLife' if arm == 'capstone-spatial' else 'Full':8s}"
         x = next((v for v in (read(os.path.join(r, st), arm, kit=True) for r in ROOTS) if v), None)

@@ -181,3 +181,28 @@ relaunched to wait on gcc train's drivers (gt-run.sh), one per board.
 - The reference for every stage stays out-all2-b1. all2's xz has no data (Addendum 2), so Z2 compares xz against
   all-b1 (out-all-b1, the same images on C.5a without the five switches). The switches are then a second difference
   on xz, so Z2 reads as "no sweep plus the switches against neither".
+
+## Addendum 4 (5 Nov 19:05, after the probe's first board run)
+
+**The probe's first run on board 1 (18:18-18:33, kit bkit25-nset, 18-bit module) gave N2 and no N1.**
+Transcript lines in `tagleak/board1-1831.txt`.
+- **N2 holds on silicon.** While the image ran, the open for writing failed ("Text file busy"); after it exited, the
+  same open succeeded. That was so in both pairs. `image_rootfs` keeps Linux's write denial on this board.
+- **N1 read NO DATA** (verdict rc 2), so both boards' no-sweep stages stopped, as designed. The board kernel has no
+  `/proc/self/pagemap` (`# CONFIG_PROC_PAGE_MONITOR is not set`), while the QEMU kernel has it. The probe then exited
+  before printing its tag count.
+  - This was a probe design slip. Its QEMU check ran on a kernel configured differently from the board's.
+- **The probe is reworked.** It always prints the tag count.
+  - Without pagemap, the loading proof is by counting. The block is 60 % of MemFree, so the fill and the scan
+    together exceed the free memory. That forces at least fill + scan − MemFree before the scan of the scan's frames
+    to have been the fill's.
+  - `tl-verdict.py` takes that bound as the load, and requires it to be at least a quarter of the scan's pages.
+  - The PFN check stays where pagemap exists.
+- **QEMU in the forced counting mode** (`tagleak/qemu-q4-nopm.txt`): 529 MB blocks, forced reuse ≥ 45,317 of 135,424
+  pages, 0 tags in the scan, ctl 1, the fill tagged in every sampled granule, both pairs: N1 HOLDS.
+
+**The boards.**
+- **Board 2** runs the probe first, then xz, after its gcc train Temporal run (`NS_PROBE_BOARD=2`).
+- **Board 1** runs mcf on the counter kit (results/2026-11-05-gcctrain Addendum 4), then lbm, imagick, nab, nab-rq
+  and gcc once the verdict holds.
+- The failed run's verdict file and output are kept, with a `.nopagemap-1833` suffix.

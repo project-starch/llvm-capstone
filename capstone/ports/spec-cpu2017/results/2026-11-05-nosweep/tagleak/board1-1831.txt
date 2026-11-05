@@ -1,0 +1,11 @@
+TAGLEAK-MODE sweep=3 mb=128 free_kb=939284
+ETXPROBE running=DENIED /test-domains/vbatch/spec/run.sh: line 22: can't create /test-domains/vbatch/spec/bin/tagleak: Text file busy
+TAGLEAK-RC fill 4 TAGLEAK fill no-pagemap CAPSTONE_VM_ADD_OK slot=0 base=0x3fa9731000 bytes=409600 reg=3 perms=7 linear=0
+ETXPROBE idle=WRITABLE
+TAGLEAK-RC scan 4 TAGLEAK scan no-pagemap CAPSTONE_VM_ADD_OK slot=0 base=0x3faf747000 bytes=409600 reg=3 perms=7 linear=0
+TAGLEAK-MODE sweep=2 mb=128 free_kb=941008
+ETXPROBE running=DENIED /test-domains/vbatch/spec/run.sh: line 22: can't create /test-domains/vbatch/spec/bin/tagleak: Text file busy
+TAGLEAK-RC fill 4 TAGLEAK fill no-pagemap CAPSTONE_VM_ADD_OK slot=0 base=0x3fb4085000 bytes=409600 reg=3 perms=7 linear=0
+ETXPROBE idle=WRITABLE
+TAGLEAK-RC scan 4 TAGLEAK scan no-pagemap CAPSTONE_VM_ADD_OK slot=0 base=0x3f85e59000 bytes=409600 reg=3 perms=7 linear=0
+TAGLEAK-RESTORED sweep=2

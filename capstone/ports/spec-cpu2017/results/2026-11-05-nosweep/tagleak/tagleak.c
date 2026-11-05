@@ -36,8 +36,21 @@ int main(int argc, char **argv) {
             tagged += t; tagged_pages += t != 0; pt[pg] = t != 0;
         }
     }
-    int fd = open("/proc/self/pagemap", O_RDONLY);
-    if (fd < 0) { printf("TAGLEAK %s no-pagemap\n", argv[1]); return 4; }
+    /* the board kernel has no /proc/self/pagemap (CONFIG_PROC_PAGE_MONITOR off): without it the PFNs are -1 and
+     * the loading proof is by counting (run.sh: fill + scan above MemFree forces reuse); the tag count still prints */
+    int fd = argc > 3 && argv[3][0] == 'n' ? -1 : open("/proc/self/pagemap", O_RDONLY);  /* "nopm": force the counting proof */
+    if (fill && fd < 0) {
+        for (size_t i = 0; i < pages * gpp; i += 97) tagged += __builtin_capstone_cap_get_tag(((void *volatile *)p)[i]) != 0;
+        printf("TAGLEAK fill mb=%zu pages=%zu sampled_tagged=%lu of %zu nopfn=-1\n", mb, pages, tagged, (pages * gpp + 96) / 97);
+        return 0;
+    }
+    if (fd < 0) {
+        ((void *volatile *)p)[5] = (void *)p;
+        unsigned long ctl = __builtin_capstone_cap_get_tag(((void *volatile *)p)[5]) != 0;
+        printf("TAGLEAK scan mb=%zu pages=%zu tagged=%lu tagged_pages=%lu fill_pfns=-1 recycled=-1 tagged_recycled=-1 nopfn=-1 ctl=%lu\n",
+               mb, pages, tagged, tagged_pages, ctl);
+        return 0;
+    }
     if (fill) {
         FILE *f = fopen("/tmp/fill.pfn", "w");
         for (size_t pg = 0; pg < pages; pg++) { uint64_t x = pfn_of(fd, (uintptr_t)p + pg * 4096); nopfn += !x; fprintf(f, "%llu\n", (unsigned long long)x); }
