@@ -43,3 +43,22 @@ x264's board stage has no imagevalidate step (by design, since 30 Oct), so specd
 chain stub checks every list path. `board-env-check.py` passes for both boards' lists.
 
 **Limits.** N = 1. Plain and Temporal of x264 run on different boards and days.
+
+## Addendum 1 (6 Nov 01:35, before either board call)
+
+**The images change to the arena-cache runtime, and the kit to bkit27-gtq.**
+- Both programs are relinked with the arena-cache SDK (results/2026-11-06-arena): perlbench bd186c2bd219b194 (stripped
+  as make-stage does), x264 00565bd74f342fc4.
+- A relink of the same recompiled objects with the production SDK reproduces the tree's exes byte for byte: perl
+  1c3a6f43, x264 1c57ad01.
+- bkit27-gtq is bkit26-gt with the quiet launcher.
+- **Reason:** gcc's exits were allocator map/unmap, and perlbench's 1.37 M exits on 30 Oct are likely the same.
+  Measuring the old images first would cost a second 10-hour run.
+
+**The QEMU gates are now `q-perl-ac` and `q-x264-ac`** (kit-profq). The old-image gates keep running as twins.
+
+**The order changes:**
+- Board 1, after perf/mx's mcf (driver pid 1521568): perlbench-ac, then x264-ac Temporal, as one list.
+- Board 2, after perf/ga's gcc runs: x264 Plain.
+
+**R1 is unchanged.** Its point estimate is now open: the cache's effect on perl has not been measured, even on QEMU.
