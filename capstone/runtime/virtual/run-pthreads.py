@@ -165,6 +165,7 @@ echo VIRTUAL_STAGED_DONE
                          mode + r':0\n', log, re.S)
         checks[mode] = bool(part and 'VIRTUAL_PTHREAD_OK abandoned_identity\n' in part[1])
     part = re.search(r'PTHREAD_IDENTITY_BEGIN:private-tls\n(.*?)PTHREAD_IDENTITY_EXIT:private-tls:0\n', log, re.S)
+    checks['raw_create_refused'] = 'VIRTUAL_PTHREAD_OK raw_create_refused\n' in main_log
     checks['private_tls_refused'] = bool(part and 'VIRTUAL_PTHREAD_OK private_tls_refused\n' in part[1])
     checks['private_tls_other_refused'] = bool(part and 'VIRTUAL_PTHREAD_OK private_tls_other_refused\n' in part[1])
     checks['exit'] = log.count('PTHREAD_EXIT:0') == 1

@@ -24,6 +24,18 @@ static void *thread_exit_entry(void *unused)
 long capstone_virtual_thread_create(void *(*entry)(void *), void *argument,
                                     void *stack_top, void *thread_pointer)
 {
+    (void)argument;
+    (void)thread_pointer;
+    /* Only musl's pthread path initializes TLS, allocator locks and lifecycle
+     * bookkeeping. A raw context cannot be made libc-safe by sharing TLS or
+     * supplying a new TLS pointer. Reject before allocating any resources. */
+    errno = (!entry || !stack_top) ? EINVAL : ENOTSUP;
+    return -1;
+}
+
+long __capstone_virtual_context_create(void *(*entry)(void *), void *argument,
+                                       void *stack_top, void *thread_pointer)
+{
     unsigned char *frame;
     long id;
 
