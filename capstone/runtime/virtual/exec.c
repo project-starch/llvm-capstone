@@ -267,6 +267,13 @@ static int grant(void *base, size_t bytes, unsigned reg, unsigned perms,
      * first differs, only that something did. */
     /* slot= is the number of mappings registered before this one: the old array slot until the
      * first unmap, so the image's grant still reads slot=0 for the board lane's parsers. */
+#ifdef CAPSTONE_VEXEC_QUIET_GRANTS
+    /* Benchmark build option, default off: only the first admitted grant (the image, slot=0, which
+     * the board lane's parsers read) is printed, unless CAPSTONE_VM_TRACE is set. gcc train admits
+     * 26,297 grants; each line is an fprintf and an unbuffered write(2) of stderr, about 2,000
+     * instructions plus a system call on the QEMU twin (perf/xprof, 5 Nov). */
+    if (map_count == 0 || trace)
+#endif
     fprintf(stderr, "CAPSTONE_VM_ADD_OK slot=%zu base=0x%lx bytes=%zu reg=%u perms=%u linear=%d\n",
             map_count, (unsigned long)(uintptr_t)base, bytes, reg, perms, linear);
     map_insert((struct mapping){.address = base, .bytes = bytes, .visible = bytes,
