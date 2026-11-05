@@ -1682,6 +1682,16 @@ module_param_cb(hpm_snapshot, &cv_hpm_snapshot_ops, NULL, 0444);
             t->last_fault_addr, t->last_fault_cause, t->fault_repeat,               \
             ##__VA_ARGS__)
 
+/* zero_read (perf/zero-read), default off, 0644: a LOAD fault on an untouched private anonymous page of a lazy
+ * arena is resolved by Linux's own read fault, which maps the shared zero page read-only, and nothing is pinned --
+ * as the image-text path already does for file pages. Plain programs get exactly this from Linux, so their pages
+ * touched only by reads cost no allocation, zeroing or pin. The zero page holds no tag and is never writable; the
+ * first store to the page faults (cause 15) and takes the pinning path below, which breaks CoW to a fresh page.
+ * pin_remaining already skips a zero-pfn PTE at retire (is_zero_pfn). zero_reads counts the faults resolved so. */
+static bool zero_read;
+module_param(zero_read, bool, 0644);
+static unsigned long zero_reads;
+module_param(zero_reads, ulong, 0444);
 static int resolve(struct context *c, struct cv_thread *t, u64 deadline)
 {
     unsigned long address = t->frame[5], cause = t->frame[3];
@@ -1727,6 +1737,14 @@ static int resolve(struct context *c, struct cv_thread *t, u64 deadline)
             return -EACCES;
         }
         vmflags = v->vm_flags;
+        index = (address - a->address) / PAGE_SIZE;
+        if (READ_ONCE(zero_read) && cause == 13 && !a->pages[index] &&
+            resident_page(c->mm, address & PAGE_MASK) == 0) {
+            int zrc = fixup_user_fault(c->mm, address & PAGE_MASK, 0, NULL);
+            mmap_read_unlock(c->mm);
+            if (!zrc) ++zero_reads;
+            return zrc;
+        }
         /* Check actual PTE policy first. FORCE then materializes private
          * anonymous backing even for a read-only zero-page first touch. The
          * application still sees its original VMA/PTE protection. */
