@@ -1,0 +1,11 @@
+A-ok: DONE spec 0; board 1 back on bitstream 3
+B-canary: DONE spec canary; board 1 back on bitstream 3
+C-notdone: STOP: all-b1.sh (pid none) did not end with DONE
+C2-olddone: STOP: all-b1.sh (pid none) did not end with DONE
+D-qgate: STOP: the QEMU gate (modrs/qeg-*) has not passed
+E-flashfail: STOP: the flash back to bitstream 3 failed; board 1 left as is
+F-defaults: DONE spec canary; board 1 back on bitstream 3
+G-noprereg: STOP: pre-registration deadbeef0000 is not on origin/spec-silicon
+H-busy: STOP: board 1 busy
+I-wait: STOP: all-b1.sh (pid 546448) did not end with DONE
+I2-wait: DONE spec 0; board 1 back on bitstream 3

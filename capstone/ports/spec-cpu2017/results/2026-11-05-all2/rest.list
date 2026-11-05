@@ -1,0 +1,5 @@
+$CAPSTONE_WORK/spec/stages-eval-b1/538.imagick_r-test-devmk 1200 45 $CAPSTONE_WORK/spec/census-q34/538.imagick_r-test
+$CAPSTONE_WORK/spec/stages-eval-b1/544.nab_r-test-devmk 6000 130 $CAPSTONE_WORK/spec/census-q34/544.nab_r-test
+$CAPSTONE_WORK/spec/stages-eval-b1/519.lbm_r-test-devmk 5400 120 $CAPSTONE_WORK/spec/census-q34/519.lbm_r-test
+$CAPSTONE_WORK/spec/stages-eval-b1/557.xz_r-test-capstone-lifetimes-devmk 16200 310 $CAPSTONE_WORK/spec/census-q34/557.xz_r-test
+$CAPSTONE_WORK/spec/stages-eval-b1/505.mcf_r-test-capstone-lifetimes-devmk 30000 540 $CAPSTONE_WORK/spec/census-q34/505.mcf_r-test

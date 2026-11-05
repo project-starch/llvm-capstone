@@ -1,0 +1,15 @@
+START pid 546158
+preconditions ok; waiting for all-b1.sh (pid none)
+QEMU gate passed
+FLASH BEGIN caplifive_vp2c_1fc2cd5aa booking 999
+FLASH END caplifive_vp2c_1fc2cd5aa rc=0
+READBACK caplifive_vp2c_1fc2cd5aa ok rc=3
+CHAIN gcc BEGIN
+CHAIN gcc END rc=0
+GRADE gcc rc=1
+STOP after gcc: the canary did not pass (grade rc=1)
+GRADE rc=1
+FLASH BEGIN caplifive_vp2c_e7af48457 booking 999
+FLASH END caplifive_vp2c_e7af48457 rc=0
+READBACK caplifive_vp2c_e7af48457 ok rc=3
+DONE spec canary; board 1 back on bitstream 3
