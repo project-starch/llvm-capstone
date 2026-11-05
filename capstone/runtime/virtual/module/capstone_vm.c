@@ -1641,6 +1641,19 @@ module_param(bench_instret, ullong, 0444);
 /* CSRUNV entries: each one after the first in a timed region is an escape whose resume (switcher walk,
  * the satp write's TLB flush, the refill) lands inside the next window, so a reading carries its count. */
 module_param(bench_entries, ullong, 0444);
+#ifdef CAPSTONE_VM_BENCH_HPM
+/* hpm_snapshot (perf/exit-timing-vp2), read-only: "cycle instret hpm3 .. hpm8" read at the moment of the read. A stage
+ * reads it before and after a command, so a process that runs no context (Plain) gets the same machine-wide counts as
+ * one that does: the program, the kernel and everything else on the hart in that window. */
+static int cv_hpm_snapshot_get(char *buf, const struct kernel_param *kp)
+{
+    unsigned long v[CV_BENCH_HPM_N], cy = csr_read(CSR_CYCLE), in = csr_read(CSR_INSTRET);
+    cv_read_hpm(v);
+    return sysfs_emit(buf, "%lu %lu %lu %lu %lu %lu %lu %lu\n", cy, in, v[0], v[1], v[2], v[3], v[4], v[5]);
+}
+static const struct kernel_param_ops cv_hpm_snapshot_ops = {.get = cv_hpm_snapshot_get};
+module_param_cb(hpm_snapshot, &cv_hpm_snapshot_ops, NULL, 0444);
+#endif
 #endif
 
 #define CV_EMIT(fmt, ...) do {                      \
