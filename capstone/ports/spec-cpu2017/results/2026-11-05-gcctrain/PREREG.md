@@ -127,3 +127,12 @@ The rerun Temporal gate passed at 17:31: rc 0, specdiff 1/1 PASS, `node_capacity
 - Both drivers (gt-run.sh, ns-run.sh) now export `BOARD_URL_FILE` with the board's own file. boardvm runs board-run.sh
   with the driver's environment, and sourcing board.env does not unset it.
 - Board 2 is relaunched at once.
+
+## Addendum 4 (5 Nov 18:55): board 1 runs mcf on the same kit
+
+Board 1 has been free since 18:33, when the no-sweep probe read no data (results/2026-11-05-nosweep: the board kernel
+has no /proc/self/pagemap). It now runs the mcf test stage preempted at 17:02 (stages-eval-b1/505.mcf_r-test-capstone-lifetimes-devmk)
+on this run's kit, bkit26-gt: the all2 configuration, the 18-bit module and every counter. Output goes to out-gtm-b1,
+driven by perf/gtm/gt-run.sh 1.
+- Its readings are reported, not graded: run time against the baseline and Plain, and the same counter set.
+- That gives mcf's final-configuration ratio for slide 11, which until now came from all-b1.
