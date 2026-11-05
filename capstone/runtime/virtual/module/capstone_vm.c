@@ -1295,6 +1295,12 @@ static int remap_end(struct context *c, const struct cv_remap *r)
  * hardware quantum there is 80 ms. */
 static unsigned long step_budget_ns = CV_STEP_BUDGET_NS;
 module_param(step_budget_ns, ulong, 0644);
+/* resume_quantum (perf/exit-timing-vp2), default off: a quantum exit (event 1) resumes inside CV_STEP, as a resolved
+ * fault does, instead of returning to the launcher. The launcher's own answer to event 1 is only sched_yield() and the
+ * next CV_STEP (exec.c virtual_service_loop); the stop check before every entry (cv_step_stop: resched, signals, the
+ * step budget) still returns it there whenever a yield could matter. Useful only with a step budget above the quantum. */
+static bool resume_quantum;
+module_param(resume_quantum, bool, 0644);
 
 #ifdef CV_TEST_HOOKS
 /* Test build only (make CV_TEST_HOOKS=1; run-step-hooks.py). The production
@@ -2230,6 +2236,8 @@ thread_unwind:
                         escape_prints, action, t->event,
                         t->frame[2], t->frame[3], t->frame[4], t->frame[5], t->frame[6]);
             }
+            if (t->event == 1 && READ_ONCE(resume_quantum))
+                continue;   /* the stop check before the next entry hands it to the launcher when it must yield */
             if (t->event != 4)
                 break;
             /* Resolve a page fault here, as CV_RESOLVE would, and resume
