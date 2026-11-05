@@ -50,10 +50,13 @@ Quanta return to Linux even if the application never calls the runtime.
 
 Virtual threads use the same Linux `mm`, page tables and lifetime table. Each
 thread has its own QEMU supervisor slot, PCC, registers, stack and optional TLS
-pointer. Concurrent libc users must use `pthread_create`, which initializes
-musl thread state, enables its allocator locks and provides private TLS. Raw
-contexts sharing the caller's TLS are not libc threads.
-`capstone_virtual_thread_create` supplies an explicit start frame;
+pointer. Applications use `pthread_create`, which initializes musl thread state,
+enables allocator locks and provides private TLS. The public raw creation API
+`capstone_virtual_thread_create` returns `-1`/`ENOTSUP`, including calls with
+shared, fresh or absent TLS. The internal `__capstone_virtual_context_create`
+primitive supplies the start frame for musl's clone backend and directed
+runtime tests; it is not an application threading API. The rest of this
+paragraph describes that internal context mechanism:
 the trusted module supplies `satp` and `srevroot`, forces protected-U options,
 and one Linux worker task drives each slot. `capstone_virtual_thread_exit`
 discards only the calling slot and returns its frame mapping to the trusted

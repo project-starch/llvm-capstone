@@ -86,7 +86,8 @@ comparison switches. PHP cache retirement uses them directly, but final block
 release and moving realloc rely on the default outer malloc lifetime. Those
 operations lose their temporal guarantee when outer lifetimes are disabled.
 
-Concurrent libc callers must use pthreads. Raw virtual contexts sharing TLS do
+Concurrent libc callers must use pthreads. Public raw context creation is
+rejected with ENOTSUP before allocating a frame or starting a worker. Raw virtual contexts sharing TLS do
 not initialize musl's thread bookkeeping or turn on its allocator locks. The
 heap concurrency contract therefore uses pthread_create/join; the raw-context
 transport tests remain separate. The old heap's unconditional private locks

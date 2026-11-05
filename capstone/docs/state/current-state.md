@@ -4,6 +4,10 @@
 
 The minimal port replaces `runtime/virtual/heap.c` and its object registry with
 musl mallocng plus mapping-level authority and direct derive/revoke hooks.
+Public raw context creation now rejects calls with ENOTSUP. Application
+threads use pthread_create; the private context primitive is retained for
+musl's clone backend and directed runtime tests. See the
+[guard qualification](../../runtime/virtual/results/raw-thread-guard/qualification.json).
 No freed-payload scrubbing. PHP retains its malloc parent in a prefix before
 the unchanged Zend header. See the
 [implementation contract](../../runtime/virtual/mallocng.md) and

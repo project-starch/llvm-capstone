@@ -92,7 +92,7 @@ static void vm_contract(void)
     char *stack = mmap(NULL, 65536, PROT_READ | PROT_WRITE, flags, -1, 0);
     require(stack != MAP_FAILED, "executable context stack");
     virtual_thread_value = 0;
-    long tid = capstone_virtual_thread_create((void *(*)(void *))q,
+    long tid = __capstone_virtual_context_create((void *(*)(void *))q,
                         (void *)&virtual_thread_value, stack + 65536,
                         current_thread_pointer());
     require(tid > 0 && !capstone_virtual_thread_join(tid) && virtual_thread_value == 42,
@@ -332,7 +332,7 @@ int main(int argc, char **argv)
         void *stack = mmap(NULL, bytes, PROT_READ | PROT_WRITE,
                            MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
         require(stack != MAP_FAILED, "thread stack");
-        long tid = capstone_virtual_thread_create(virtual_thread_entry,
+        long tid = __capstone_virtual_context_create(virtual_thread_entry,
                                                    (void *)&virtual_thread_value,
                                                    (char *)stack + bytes,
                                                    current_thread_pointer());
