@@ -110,7 +110,11 @@ void __capstone_malloc_slot_key(struct capstone_malloc_slot *r, void *p, size_t 
 #define IDS_ASK (CV_NODE_RESERVE + 256)
 /* The most records one heap call takes before its next ensure_ids: a mapping group, a nested group
  * and the object's own child. */
+#if CAPSTONE_HEAP_ARENA_CACHE
+#define IDS_PER_CALL 4   /* + the mapping holder */
+#else
 #define IDS_PER_CALL 3
+#endif
 static size_t ids_budget;   /* records the heap may still take before asking; under the heap lock */
 static int ensure_ids(size_t need)
 {
@@ -318,15 +322,19 @@ static int ac_take(unsigned long bytes, unsigned long align)
     }
     return 0;
 }
+/* The delinearised grant has no MANAGE, so CREVOKE refuses it as a parent (cause 27 on the twin).
+ * A cached mapping therefore holds one more lifetime: a holder derived from the grant (a derived child
+ * carries MANAGE), and the group is the holder's child. The holder stays live while the mapping is
+ * kept; the kernel's retirement of the mapping ends it with everything else. */
 static void *mapping_group(sublet_cap *grant, size_t bytes)
 {
-    void *parent;
-    if (ac_reuse_parent) { parent = ac_reuse_parent; ac_reuse_parent = NULL; }
-    else parent = cap_vm_copyable(grant);
+    void *holder;
+    if (ac_reuse_parent) { holder = ac_reuse_parent; ac_reuse_parent = NULL; }
+    else { void *copy = cap_vm_copyable(grant); take_id(); holder = capstone_cap_derive(copy, 0, bytes); }
     ac_hit = 0;
     take_id();
-    void *group = capstone_cap_derive(parent, 0, bytes);
-    ac_record(__builtin_capstone_cap_get_base(parent), bytes, parent, group);
+    void *group = capstone_cap_derive(holder, 0, bytes);
+    ac_record(__builtin_capstone_cap_get_base(holder), bytes, holder, group);
     return group;
 }
 #else
