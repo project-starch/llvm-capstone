@@ -21,6 +21,12 @@ extern long __capstone_vm_protect(unsigned long, unsigned long, int);
 extern long __capstone_vm_wait(void);
 extern long __capstone_vm_nodes(unsigned long);
 
+/* Internal context primitive for musl's __clone and directed runtime tests.
+ * It does not initialize libc thread state and is not an application API. */
+__attribute__((visibility("hidden")))
+long __capstone_virtual_context_create(void *(*entry)(void *), void *argument,
+                                       void *stack_top, void *thread_pointer);
+
 static inline int cap_vm_acquire(sublet_cap *slot, size_t bytes,
                                  size_t alignment, int prot,
                                  unsigned rights, unsigned kind)

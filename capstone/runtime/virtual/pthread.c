@@ -12,6 +12,7 @@
 #include <time.h>
 #include <sys/mman.h>
 #include "capstone/delegate.h"
+#include "vm.h"
 
 extern _Noreturn void __capstone_vm_thread_exit_clear(uintptr_t, uintptr_t, size_t, long);
 extern long __capstone_vm_futex(void *, int, int, long, long, int);
@@ -127,7 +128,7 @@ int __clone(int (*entry)(void *), void *stack, int flags, void *arg, ...)
     }
     ((struct capstone_signal_block *)((char *)r->meta + CAPSTONE_SIGNAL_OFFSET))->initial_mask =
         __capstone_sigmask_current();
-    long id = capstone_virtual_thread_create(clone_entry, r, stack, tls);
+    long id = __capstone_virtual_context_create(clone_entry, r, stack, tls);
     if (id < 0) {
         int error = errno;
         free(r->signals); free(r->transport);

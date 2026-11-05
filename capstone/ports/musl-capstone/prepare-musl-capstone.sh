@@ -27,10 +27,10 @@ ARCH_DIR="$MUSL_SRC_DIR/arch/capstone64"
 # Patches apply once: a patch that is already in (reverse applies cleanly) is
 # skipped, one that fits neither way is an error, not a silent partial tree.
 for patch in "$SCRIPT_DIR"/musl-patches/*.patch; do
-  if patch -d "$MUSL_SRC_DIR" -p1 -R --dry-run -s -f < "$patch" > /dev/null 2>&1; then
+  if patch --no-backup-if-mismatch -d "$MUSL_SRC_DIR" -p1 -R --dry-run -s -f < "$patch" > /dev/null 2>&1; then
     continue
   fi
-  patch -d "$MUSL_SRC_DIR" -p1 -N -s -f < "$patch" || {
+  patch --no-backup-if-mismatch -d "$MUSL_SRC_DIR" -p1 -N -s -f < "$patch" || {
     echo "prepare failed: $patch does not apply to $MUSL_SRC_DIR" >&2
     exit 1
   }

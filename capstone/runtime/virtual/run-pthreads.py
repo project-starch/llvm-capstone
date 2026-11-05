@@ -23,11 +23,16 @@ def main():
     for name in ('adapter', 'application', 'qemu', 'images', 'work'):
         p.add_argument('--' + name, type=Path, required=True)
     p.add_argument('--timeout', type=int, default=180)
+    p.add_argument('--supervisor-slots', type=int, help='explicit module context capacity for multi-thread tests')
     p.add_argument('--unpinned', action='store_true', help='require unpinned CV_TOUCH and cleanup witnesses')
     p.add_argument('--exact-bounds', action=argparse.BooleanOptionalAction, default=False,
                    help="Run QEMU's exact-bounds profile. Option (iii) does not need it; "
                         "it is kept so a suite can be run both ways as a two-sided control.")
     a = p.parse_args()
+    if a.supervisor_slots is not None and a.supervisor_slots < 1:
+        p.error('--supervisor-slots must be positive')
+    if a.application.read_bytes().count(b'CPONVVM7') != 1:
+        p.error('application has missing or ambiguous virtual ABI 7 magic')
     a.work.mkdir(parents=True, exist_ok=False)
     stage = a.work/'stage'
     stage.mkdir()
@@ -53,7 +58,7 @@ cd /mnt/vm || exit 1
 pins() { echo 1 > /proc/sys/vm/stat_refresh; grep -E "^nr_foll_pin_(acquired|released) " /proc/vmstat | tr "\\n" " "; }
 dmesg -n 1
 echo "PTHREAD_PINS_BEFORE:$(pins)"
-insmod capstone_vm.ko ''' + ('diag_admit=1' if instrumented else '') + memory_mode.args(a.unpinned) + ''' || exit 1
+insmod capstone_vm.ko ''' + ('diag_admit=1' if instrumented else '') + memory_mode.args(a.unpinned) + (f' supervisor_slots={a.supervisor_slots}' if a.supervisor_slots is not None else '') + ''' || exit 1
 ''' + memory_mode.echo('PTHREAD_') + '''
 CAPSTONE_EXEC_DIAGNOSTICS=1 CAPSTONE_VM_STATS=1 CAPSTONE_VM_STATS_MARK=1 CAPSTONE_VM_GRANTS=1 ./capstone-vexec pthread.dom
 echo PTHREAD_EXIT:$?
@@ -160,13 +165,14 @@ echo VIRTUAL_STAGED_DONE
                          mode + r':0\n', log, re.S)
         checks[mode] = bool(part and 'VIRTUAL_PTHREAD_OK abandoned_identity\n' in part[1])
     part = re.search(r'PTHREAD_IDENTITY_BEGIN:private-tls\n(.*?)PTHREAD_IDENTITY_EXIT:private-tls:0\n', log, re.S)
+    checks['raw_create_refused'] = 'VIRTUAL_PTHREAD_OK raw_create_refused\n' in main_log
     checks['private_tls_refused'] = bool(part and 'VIRTUAL_PTHREAD_OK private_tls_refused\n' in part[1])
     checks['private_tls_other_refused'] = bool(part and 'VIRTUAL_PTHREAD_OK private_tls_other_refused\n' in part[1])
     checks['exit'] = log.count('PTHREAD_EXIT:0') == 1
     checks['cleanup'] = run.returncode == 0 and log.count('PTHREAD_CLEANUP:0') == 1
     record = dict(status='PASS' if all(v is True or v == 'uninstrumented' for v in checks.values()) else 'FAIL',
                   tests=checks, instrumented=instrumented,
-                  harts=1, virtual_vm_abi=5 if a.exact_bounds else 3, input_sha256={name: sha(path) for name, path in paths.items()},
+                  harts=1, virtual_vm_abi=7, exact_bounds=a.exact_bounds, supervisor_slots=a.supervisor_slots, input_sha256={name: sha(path) for name, path in paths.items()},
                   gate_sha256=hashlib.sha256(gate.encode()).hexdigest(), runner_sha256=sha(Path(__file__)))
     (a.work/'result.json').write_text(json.dumps(record, indent=2) + '\n')
     print(json.dumps(record, indent=2))

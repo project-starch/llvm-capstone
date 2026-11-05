@@ -7,6 +7,7 @@
 #include <unistd.h>
 #include <sched.h>
 #include <capstone/virtual.h>
+#include "vm.h"
 #include <fcntl.h>
 #include <stdlib.h>
 #include <string.h>
@@ -269,14 +270,14 @@ static int fallback_contract(void)
     void *tp;
     __asm__ volatile("movc %0, tp" : "=r"(tp));
     for (unsigned i = 0; i < 63; ++i) {
-        long id = capstone_virtual_thread_create(keep_slot, NULL, stacks + 65536, tp);
+        long id = __capstone_virtual_context_create(keep_slot, NULL, stacks + 65536, tp);
         assert(id > 0 && !capstone_virtual_thread_join(id));
     }
     long threads[FALLBACK_THREADS];
     assert(!pipe(pipefd));
     for (unsigned t = 0; t < FALLBACK_THREADS; ++t) {
         fallback_ids[t] = t;
-        threads[t] = capstone_virtual_thread_create(fallback_writer, &fallback_ids[t],
+        threads[t] = __capstone_virtual_context_create(fallback_writer, &fallback_ids[t],
                                                     stacks + (t + 1) * 65536, tp);
         assert(threads[t] > 0);
     }
@@ -363,9 +364,9 @@ static void *observe_abandoned(void *arg)
     char *stack = mmap(NULL, 65536, PROT_READ | PROT_WRITE,
                        MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     assert(stack != MAP_FAILED);
-    long id = capstone_virtual_thread_create(abandon_owner, NULL, stack + 65536, abandoned_tp);
+    long id = __capstone_virtual_context_create(abandon_owner, NULL, stack + 65536, abandoned_tp);
     assert(id > 0 && !capstone_virtual_thread_join(id));
-    id = capstone_virtual_thread_create(replacement_owner, NULL, stack + 65536, abandoned_tp);
+    id = __capstone_virtual_context_create(replacement_owner, NULL, stack + 65536, abandoned_tp);
     assert(id > 0 && !capstone_virtual_thread_join(id));
     printf("VIRTUAL_ABANDONED:old=%lu new=%lu jump=%d\n",
            abandoned_slot, replacement_slot, abandon_jump);
@@ -446,6 +447,20 @@ int main(int argc, char **argv)
         puts("VIRTUAL_PTHREAD_OK private_tls_other_refused");
         return 0;
     }
+    /* Before any pthread enables musl's locks: shared main TLS, absent TLS,
+     * and a fresh caller-supplied TLS area must all be refused. The child is
+     * harmless if the control accidentally creates it; join before failing. */
+    void *main_tp;
+    __asm__ volatile("movc %0, tp" : "=r"(main_tp));
+    private_tls_refuse(main_tp);
+    private_tls_refuse(NULL);
+    void *raw_tls = mmap(NULL, 65536, PROT_READ | PROT_WRITE,
+                         MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    assert(raw_tls != MAP_FAILED);
+    private_tls_refuse((char *)raw_tls + 32768);
+    assert(!munmap(raw_tls, 65536));
+    puts("VIRTUAL_PTHREAD_OK raw_create_refused");
+
     pthread_t a, b;
     unsigned values[2] = {51, 61};
     void *result;
@@ -535,7 +550,7 @@ int main(int argc, char **argv)
     void *tp;
     __asm__ volatile("movc %0, tp" : "=r"(tp));
     struct shared_writer w = {fb, right};
-    long shared = capstone_virtual_thread_create(shared_write, &w, stack + 65536, tp);
+    long shared = __capstone_virtual_context_create(shared_write, &w, stack + 65536, tp);
     assert(shared > 0);
     for (unsigned i = 0; i < 4; ++i) assert(write(fa, left, 65536) == 65536);
     assert(!capstone_virtual_thread_join(shared));
@@ -618,7 +633,7 @@ int main(int argc, char **argv)
         assert(rstack != MAP_FAILED);
         void *rtp;
         __asm__ volatile("movc %0, tp" : "=r"(rtp));
-        long rid = capstone_virtual_thread_create(raw_slot_worker, NULL, rstack + 65536, rtp);
+        long rid = __capstone_virtual_context_create(raw_slot_worker, NULL, rstack + 65536, rtp);
         assert(rid > 0 && !capstone_virtual_thread_join(rid));
         assert(!munmap(rstack, 65536));
         unsigned long reused_max = 0;
@@ -659,7 +674,7 @@ int main(int argc, char **argv)
         assert(wstack != MAP_FAILED);
         void *wtp;
         __asm__ volatile("movc %0, tp" : "=r"(wtp));
-        long wid = capstone_virtual_thread_create(exit_word_worker, NULL, wstack + 65536, wtp);
+        long wid = __capstone_virtual_context_create(exit_word_worker, NULL, wstack + 65536, wtp);
         assert(wid > 0);
         assert(!capstone_virtual_thread_join(wid));
         struct timespec pause = {0, 50000000};

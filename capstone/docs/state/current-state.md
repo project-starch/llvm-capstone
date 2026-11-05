@@ -1,5 +1,22 @@
 # Current Capstone state
 
+## 2026-11-05 — Minimal protected mallocng
+
+The minimal port replaces `runtime/virtual/heap.c` and its object registry with
+musl mallocng plus mapping-level authority and direct derive/revoke hooks.
+Public raw context creation now rejects calls with ENOTSUP. Application
+threads use pthread_create; the private context primitive is retained for
+musl's clone backend and directed runtime tests. See the
+[guard qualification](../../runtime/virtual/results/raw-thread-guard/qualification.json).
+No freed-payload scrubbing. PHP retains its malloc parent in a prefix before
+the unchanged Zend header. See the
+[implementation contract](../../runtime/virtual/mallocng.md) and
+[qualification](../../runtime/virtual/results/minimal-mallocng/qualification.json).
+The qualification covers allocator denial/positive controls in both bounds
+profiles, regular pthreads, PHP and fresh GCC/ImageMagick SPEC test workloads.
+It does not requalify every application port or RTL. Existing SPEC sources and
+inputs remain unchanged apart from the previously frozen GCC src.alt.
+
 ## Read this first (2026-10-13)
 
 This file was 2,030 lines and its companion 1,560, most of it instructions and

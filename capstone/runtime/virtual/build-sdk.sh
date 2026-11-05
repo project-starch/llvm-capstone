@@ -12,6 +12,22 @@ for patchfile in "$here/../../ports/musl-capstone/musl-patches/"*.patch; do
         exit 2
     fi
 done
+# These options affect libc now, as well as the runtime. The policy symbol in
+# malloc-mapping.c makes mixing differently configured archives a link error.
+heap_flags=()
+for setting in "$@"; do
+    case "$setting" in
+      -DCAPSTONE_HEAP_LIFETIMES=*|-DCAPSTONE_HEAP_OBJECT_BOUNDS=*|-DCAPSTONE_HEAP_SCRUB_FREE=*)
+        key=${setting%%=*}; value=${setting#*=}
+        case "${value^^}" in
+          ON|TRUE|YES|1) value=1 ;;
+          OFF|FALSE|NO|0) value=0 ;;
+          *) echo "invalid heap option: $setting" >&2; exit 2 ;;
+        esac
+        heap_flags+=("$key=$value") ;;
+    esac
+done
+export MUSL_CAPSTONE_EXTRA_CFLAGS="${MUSL_CAPSTONE_EXTRA_CFLAGS:-} ${heap_flags[*]}"
 mkdir -p "$out/libc"
 mkdir -p "$out/libc/obj"
 rm -f "$out/libc/obj/"*.o "$out/libc/libc-capstone-virtual.a"

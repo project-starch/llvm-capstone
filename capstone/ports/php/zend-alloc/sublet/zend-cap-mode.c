@@ -1,7 +1,7 @@
 /* The arm, the counters and the nested layer calls. Built only in nested mode (-DZEND_CAP_SUBLET); see
  * zend-cap-mode.h for what the nested layer is and why the three arms differ. */
 #include "zend-cap-mode.h"
-#include <malloc_capstone.h>
+#include <heap_sublet.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -21,7 +21,6 @@ static unsigned long st_blocks, st_frees, st_issues, st_retires, st_reallocs;
  * emalloc(): Unable to allocate" and exit(1), which in a results table reads as the trigger
  * failing rather than as the instrument running out. */
 #define ZEND_CAP_FAIL_MODE      1   /* no arm named */
-#define ZEND_CAP_FAIL_NODES     2   /* the heap could not grow its node table for a child */
 #define ZEND_CAP_FAIL_UNKNOWN   3   /* a pointer PHP frees or reallocs that is in no block of this heap */
 #define ZEND_CAP_FAIL_INTERIOR  4   /* a pointer whose cursor is not at its payload's start */
 #define ZEND_CAP_FAIL_GEOMETRY  5   /* a request or bound that does not fit the block (an overflowing size) */
@@ -97,12 +96,25 @@ void *zend_cap_block(size_t bytes)
 {
     unsigned long want;
     void *p;
-    if (bytes > ~0UL - ZEND_CAP_GRAIN) { return (void *)0; }   /* the rounding would wrap */
+    /* Match malloc's ptrdiff-sized object limit before representable rounding. */
+    if (bytes > (size_t)-1 / 2) { return (void *)0; }
     want = ZEND_CAP_ROUND(bytes);
     if (want < 48UL + ZEND_CAP_GRAIN) { want = 48UL + ZEND_CAP_GRAIN; }
-    p = malloc((size_t)want);
-    if (p) { ++st_blocks; }
-    return p;
+    if (want > (size_t)-1 - sizeof(void *)) { return (void *)0; }
+    /* Keep the payload aligned when compressed bounds need a larger grain.
+     * The saved-parent slot remains immediately before the PHP header. */
+    size_t payload = heap_round(want - 48UL);
+    size_t align = heap_granule(payload);
+    size_t extra = align > sizeof(void *) ? align - sizeof(void *) : 0;
+    if (payload > (size_t)-1 - 48UL - sizeof(void *) - extra) { return (void *)0; }
+    p = malloc(48UL + payload + sizeof(void *) + extra);
+    if (!p) { return (void *)0; }
+    void *block = (char *)p + sizeof(void *);
+    size_t cursor = __builtin_capstone_cap_get_cursor(block) + 48UL;
+    block = (char *)block + (-cursor & (align - 1));
+    *(void **)((char *)block - sizeof(void *)) = p;
+    ++st_blocks;
+    return block;
 }
 
 /* The bound handed to the caller: stock PHP's REAL_SIZE rounding, or the request itself; never
@@ -110,7 +122,7 @@ void *zend_cap_block(size_t bytes)
 static size_t cap_bound(unsigned int mode, size_t size)
 {
     size_t b = (mode & ZEND_CAP_MODE_EXACT) ? size : ((size + 7UL) & ~7UL);
-    return b ? b : 1UL;
+    return heap_round(b);
 }
 
 /* ZEND_CAP_PAYLOAD(p, size). The caller's pointer over [p + hdr, p + hdr + bound): in the
@@ -126,39 +138,44 @@ void *zend_cap_issue(void *p, size_t hdr, size_t size)
     unsigned int mode = zend_cap_mode();
     size_t bound = cap_bound(mode, size);
     unsigned long start, extent;
-    void *child;
     if (!p) { return (void *)0; }
     /* The request and the bound must fit the block. PHP's REAL_SIZE wraps on a request near
      * SIZE_MAX and its size field is 31 bits, so a hostile request can reach here with a block
      * that is the minimum and a size that is not; refused by name rather than derived past the
      * block (cause 29) or copied past it later by reblock. */
-    extent = __builtin_capstone_cap_get_end(p) - __builtin_capstone_cap_get_base(p);
+    extent = __builtin_capstone_cap_get_end(p) - __builtin_capstone_cap_get_cursor(p);
     if (hdr > extent || size > extent - hdr || bound > extent - hdr) {
         cap_fail(ZEND_CAP_FAIL_GEOMETRY, "request does not fit the block", size, extent);
     }
     ++st_issues;
     if (mode & ZEND_CAP_MODE_REVOKE) {
-        child = __capstone_malloc_derive(p, hdr, bound);
-        if (!child) { cap_fail(ZEND_CAP_FAIL_NODES, "the heap could not grow its node table for a child", bound, 0); }
-        return child;
+        return heap_issue((char *)p + hdr, bound);
     }
-    start = __builtin_capstone_cap_get_base(p) + hdr;
+    start = __builtin_capstone_cap_get_cursor(p) + hdr;
     return __builtin_capstone_cap_shrink((char *)p + hdr, start, start + bound);
 }
 
-/* The block that holds ptr, by the libc's slot record: ptr's base minus the header, the same
- * offset issue derived at. A pointer whose cursor is not at its payload's start is refused by
- * name (PHP freeing an interior pointer), and one that is in no block of this heap too (PHP
- * freeing what it did not emalloc): both are the instrument refusing, never a reading. */
+/* The prefix holds the original malloc capability. heap_access first probes
+ * the supplied child for liveness, then uses the existing mapping page index
+ * to reach allocator metadata. Address arithmetic alone grants no authority.
+ * CREVOKE below checks that the recovered parent really issued this child. */
 static void *cap_block_of(void *ptr, size_t hdr, const char *who)
 {
     unsigned long cur = __builtin_capstone_cap_get_cursor(ptr);
     unsigned long base = __builtin_capstone_cap_get_base(ptr);
-    void *block;
+    void *at, *parent;
     if (cur != base) { cap_fail(ZEND_CAP_FAIL_INTERIOR, who, cur, base); }
-    block = __capstone_malloc_object(ptr, hdr);
-    if (!block) { cap_fail(ZEND_CAP_FAIL_UNKNOWN, who, cur, 0); }
-    return block;
+    if (hdr > cur || cur - hdr < sizeof(void *)) {
+        cap_fail(ZEND_CAP_FAIL_UNKNOWN, who, cur, hdr);
+    }
+    at = heap_access(ptr);
+    parent = *(void **)((char *)at - hdr - sizeof(void *));
+    if (!__builtin_capstone_cap_get_tag(parent) ||
+        __builtin_capstone_cap_get_cursor(parent) > cur - hdr - sizeof(void *) ||
+        __builtin_capstone_cap_get_end(parent) <= cur) {
+        cap_fail(ZEND_CAP_FAIL_UNKNOWN, who, cur, hdr);
+    }
+    return (char *)parent + (cur - hdr - __builtin_capstone_cap_get_cursor(parent));
 }
 
 /* ZEND_CAP_HEADER(ptr): _erealloc's and _mem_block_check's derivation. Nothing ends here. */
@@ -169,15 +186,15 @@ void *zend_cap_header(void *ptr, size_t hdr)
 }
 
 /* ZEND_CAP_RECLAIM(ptr): _efree's derivation. In the revoking arms the caller's child ends in
- * the same call, inside the libc, through the block's own authority: a grandchild the caller
- * derived is cause 29 at cap_malloc_reclaim, a child already ended (a double efree) cause 25. */
+ * the same call through the block's own authority: a grandchild the caller
+ * derived is cause 29 at CREVOKE, a child already ended (a double efree) cause 25. */
 void *zend_cap_reclaim(void *ptr, size_t hdr)
 {
     void *block;
     if (!ptr) { return (void *)0; }
     block = cap_block_of(ptr, hdr, "free of a pointer this heap did not issue, or not at its start");
     if (zend_cap_mode() & ZEND_CAP_MODE_REVOKE) {
-        __capstone_malloc_reclaim(ptr, hdr);
+        heap_end(block, ptr);
         ++st_retires;
     }
     return block;
@@ -187,8 +204,9 @@ void *zend_cap_reclaim(void *ptr, size_t hdr)
  * control that revokes is not a control. */
 void zend_cap_release(void *p)
 {
+    if (!p) { return; }
     ++st_frees;
-    if (zend_cap_mode() & ZEND_CAP_MODE_RETURN) { free(p); }
+    if (zend_cap_mode() & ZEND_CAP_MODE_RETURN) { free(*(void **)((char *)p - sizeof(void *))); }
 }
 
 /* ZEND_DO_REALLOC(p, bytes). A FRESH BLOCK ALWAYS, never in place: PHP's _erealloc is entitled
@@ -202,7 +220,7 @@ void *zend_cap_reblock(void *p, size_t bytes, size_t oldbytes)
     unsigned int mode = zend_cap_mode();
     void *fresh;
     if (!p) { return zend_cap_block(bytes); }
-    unsigned long extent = __builtin_capstone_cap_get_end(p) - __builtin_capstone_cap_get_base(p);
+    unsigned long extent = __builtin_capstone_cap_get_end(p) - __builtin_capstone_cap_get_cursor(p);
     fresh = zend_cap_block(bytes);
     if (!fresh) { return (void *)0; }
     if (oldbytes > extent) { oldbytes = extent; }   /* never past the old block, whatever p->size says */

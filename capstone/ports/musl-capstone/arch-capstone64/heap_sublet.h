@@ -1,0 +1,103 @@
+#ifndef MALLOC_HEAP_SUBLET_H
+#define MALLOC_HEAP_SUBLET_H
+#include <stddef.h>
+#include <stdint.h>
+
+#ifndef CAPSTONE_HEAP_LIFETIMES
+#define CAPSTONE_HEAP_LIFETIMES 1
+#endif
+#ifndef CAPSTONE_HEAP_OBJECT_BOUNDS
+#define CAPSTONE_HEAP_OBJECT_BOUNDS 1
+#endif
+#if CAPSTONE_HEAP_LIFETIMES && !CAPSTONE_HEAP_OBJECT_BOUNDS
+#error "object lifetimes require object bounds"
+#endif
+#if CAPSTONE_HEAP_SCRUB_FREE
+#error "the minimal allocator does not scrub freed payloads"
+#endif
+#define HEAP_POLICY_NAME_(l,b) __malloc_policy_##l##b
+#define HEAP_POLICY_NAME(l,b) HEAP_POLICY_NAME_(l,b)
+#define HEAP_POLICY_SYMBOL HEAP_POLICY_NAME(CAPSTONE_HEAP_LIFETIMES,CAPSTONE_HEAP_OBJECT_BOUNDS)
+__attribute__((visibility("hidden"))) void HEAP_POLICY_SYMBOL(void);
+
+/* Same compressed-bounds rule as runtime/include/capstone/representable.h.
+ * Requests are checked for overflow before this helper is called. */
+static inline size_t heap_granule(size_t n)
+{
+    return n < 4096 ? 1 : (size_t)1 << (63-__builtin_clzl(n)-9);
+}
+static inline size_t heap_round(size_t n)
+{
+    if (!n) return 1;
+    size_t g = heap_granule(n), r = (n+g-1) & -g;
+    g = heap_granule(r);
+    return (r+g-1) & -g;
+}
+
+
+/* Mapping index for the Sv39 virtual profile. No object or group records. */
+struct heap_leaf { void *owner[512]; };
+struct heap_mid { struct heap_leaf *leaf[512]; };
+__attribute__((visibility("hidden"))) extern struct heap_mid *__malloc_page_root[512];
+__attribute__((visibility("hidden"))) void *__heap_mapping(size_t);
+__attribute__((visibility("hidden"))) int __heap_unmapping(void *, size_t);
+__attribute__((visibility("hidden"))) void *__heap_remapping(void *, size_t, size_t);
+
+static inline void *heap_issue(void *at, size_t n)
+{
+    void *child;
+    /* at already has the parent's identity and the desired cursor. Hardware
+     * validates tag, liveness, bounds, size and node availability. */
+    __asm__ volatile(".insn r 0x5b, 0x1, 0x51, %0, %1, %2"
+                     : "=r"(child) : "r"(at), "r"(n ? n : 1) : "memory");
+    return child;
+}
+static inline void heap_end(void *parent, void *child)
+{
+    __asm__ volatile(".insn r 0x5b, 0x1, 0x52, x0, %0, %1"
+                     : : "r"(parent), "r"(child) : "memory");
+}
+/* malloc/free's compile-time controls; nested allocators always use the direct
+ * primitives above, independently of the outer heap's measurement arm. */
+static inline void *heap_alloc_issue(void *p, size_t n)
+{
+    if (!p) return p;
+#if CAPSTONE_HEAP_LIFETIMES
+    return heap_issue(p, n);
+#elif CAPSTONE_HEAP_OBJECT_BOUNDS
+    size_t base = __builtin_capstone_cap_get_cursor(p);
+    return __builtin_capstone_cap_shrink(p, base, base+(n ? n : 1));
+#else
+    return p;
+#endif
+}
+static inline void heap_alloc_end(void *parent, void *child)
+{
+#if CAPSTONE_HEAP_LIFETIMES
+    heap_end(parent, child);
+#else
+    (void)parent; (void)child;
+#endif
+}
+static inline void *heap_access(void *p)
+{
+    /* Keep the supplied capability live and at its allocation start. An
+     * integer address alone must never let a stale free affect a new object. */
+    __asm__ volatile("lbu zero, 0(%0)" : : "r"(p) : "memory");
+    size_t a = __builtin_capstone_cap_get_cursor(p);
+    if (a >> 39) __builtin_trap();
+#if CAPSTONE_HEAP_OBJECT_BOUNDS
+    if (a != __builtin_capstone_cap_get_base(p)) __builtin_trap();
+#endif
+    struct heap_mid *mid = __malloc_page_root[a >> 30];
+    if (!mid) __builtin_trap();
+    struct heap_leaf *leaf = mid->leaf[(a >> 21) & 511];
+    if (!leaf) __builtin_trap();
+    void *parent = leaf->owner[(a >> 12) & 511];
+    if (!parent) __builtin_trap();
+    void *at;
+    __asm__(".insn r 0x5b, 0x1, 0x05, %0, %1, %2"
+            : "=r"(at) : "r"(parent), "r"(a));
+    return at;
+}
+#endif

@@ -1,23 +1,24 @@
-/* The PHP nested allocator layer: the arm, the counters, and the calls the patched zend_alloc.c makes.
- * There is no state per block: the block's authority lives in the libc's slot record, and
- * __capstone_malloc_{derive,object,reclaim} are the libc using it (runtime/virtual/heap.c). The
- * previous layer rebuilt that record for itself -- a hash index, a record heap and six failure
- * codes, 886 lines -- which the measurement of 2026-10-27 (520 cells, three runs, identical) was
- * taken on; this is the same shape with the index gone.
+/* The PHP nested allocator layer. The original malloc capability is stored
+ * in one pointer-sized prefix before PHP's unchanged header. The minimal musl
+ * mapping accessor reaches that prefix; direct CDERIVE/CREVOKE manage payload
+ * lifetimes. No per-object registry, additional parent lifetime or scrubbing.
+ * This adapter targets the minimal mallocng SDK providing heap_sublet.h.
  *
  * WHAT THE NESTED LAYER IS. PHP 5.0.0 is not a chunk allocator -- Zend/zend_mm.h unconditionally
  * undefines ZEND_MM -- so ZEND_DO_MALLOC is plain malloc and the structure is flat: one malloc
- * per emalloc, a 48-byte zend_mem_header in front of the payload. The block is rounded up to a
+ * per emalloc, a 48-byte zend_mem_header in front of the payload. The PHP block is rounded up to a
  * 16-byte grain, at least 64 bytes, as the previous layer did, so that a payload bounded to
  * REAL_SIZE(n) -- or to n -- always lies inside it, emalloc(0) included. The caller's pointer is
+ * rounded/aligned further when compressed bounds require it. It is
  * bounded to the payload in EVERY arm, so no capability the caller holds spans the header:
  *
- *     B                 B+48                                   B+48+bound(n)
- *     |<-- 48 header -->|<------------- payload ---------------->|
- *        PHP's own          the caller's pointer: a child with a lifetime of its own in the
- *                           revoking arms, a narrowed copy of the block otherwise
+ *     malloc base                         PHP block B      payload B+48
+ *     [optional alignment][saved parent] [48-byte header] [bound(n) bytes]
+ *     <---------------- malloc parent ---------------->
+ *                                                         <--- child -->
  *
- * At _efree the caller's child ends through the libc's reclaim, which hands back the block at
+
+ * At _efree the caller's child ends through its saved parent, which hands back the PHP header at
  * B, so everything below the first line of _efree -- p->size, p->cached, the AG(cache) park,
  * REMOVE_POINTER_FROM_LIST -- runs on live memory exactly as upstream. _erealloc recovers the
  * block WITHOUT ending anything (zend_cap_header), allocates a fresh block, copies, and only
