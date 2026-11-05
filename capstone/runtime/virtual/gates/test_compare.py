@@ -351,7 +351,21 @@ def main():
         ok = got == want
         failed += not ok
         print(f"{'PASS' if ok else 'FAIL'} {name}: exit {got}, want {want}")
-    total = len(cases) + len(modes) + len(fx) + len(complete) + len(paths) + len(cli) + 1
+    # The malloc runner's check is named memory_mode (run-malloc.py): accepted for that gate only.
+    alias = []
+    for gate, key, value, want in (("malloc", "memory_mode", True, [True, True, True]), ("malloc", "memory_mode", False, [False, False, False]),
+                                   ("fp", "memory_mode", True, [])):
+        with tempfile.TemporaryDirectory() as t:
+            g = Path(t) / "gates"
+            (g / gate).mkdir(parents=True)
+            (g / f"{gate}.log").write_text(("PASS" if value else "FAIL") + f" {key}\n")
+            (g / gate / "result.json").write_text(json.dumps({"tests": {key: value}, "checks": {key: value}}))
+            got = compare.verified_results(Path(t), gate)
+        ok = got == want
+        failed += not ok
+        alias.append(ok)
+        print(f"{'PASS' if ok else 'FAIL'} memory_mode alias: {gate} {key}={value}: {got}, want {want}")
+    total = len(cases) + len(modes) + len(fx) + len(complete) + len(paths) + len(cli) + len(alias) + 1
     print(f"{total - failed}/{total} passed")
     return 1 if failed else 0
 

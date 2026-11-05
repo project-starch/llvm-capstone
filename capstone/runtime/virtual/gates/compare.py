@@ -392,7 +392,10 @@ def verified_results(out, gate, ctl=False):
     if ctl and gate == "step-hooks" and (g / "step-hooks2.log").exists():
         log = g / "step-hooks2.log"
     text = read(log)
-    found = [m[1] == "PASS" for m in re.finditer(r"^(PASS|FAIL) memory_mode_verified\s*$", text, re.M)]
+    # The malloc runner (run-malloc.py since the protected-mallocng rewrite) names its check `memory_mode`; every
+    # other runner says memory_mode_verified. The alias is accepted for the malloc gate only.
+    names = ("memory_mode_verified", "memory_mode") if gate == "malloc" else ("memory_mode_verified",)
+    found = [m[1] == "PASS" for m in re.finditer(r"^(PASS|FAIL) (?:%s)\s*$" % "|".join(names), text, re.M)]
     recs = records(text)
     for path in (g / "runtime.json" if gate == "runtime" else None, g / gate / "result.json"):
         if path is not None and path.is_file():
@@ -404,14 +407,16 @@ def verified_results(out, gate, ctl=False):
         if not isinstance(rec, dict):
             continue
         tests = rec.get("tests")
-        if isinstance(tests, dict) and "memory_mode_verified" in tests:
-            found.append(tests["memory_mode_verified"] is True)
+        for name in names:
+            if isinstance(tests, dict) and name in tests:
+                found.append(tests[name] is True)
         checks = rec.get("checks")
-        if isinstance(checks, dict) and "memory_mode_verified" in checks:
-            found.append(checks["memory_mode_verified"] is True)
-        elif isinstance(checks, list):
-            found += [c.get("passed") is True for c in checks
-                      if isinstance(c, dict) and c.get("name") == "memory_mode_verified"]
+        for name in names:
+            if isinstance(checks, dict) and name in checks:
+                found.append(checks[name] is True)
+            elif isinstance(checks, list):
+                found += [c.get("passed") is True for c in checks
+                          if isinstance(c, dict) and c.get("name") == name]
     return found
 
 
