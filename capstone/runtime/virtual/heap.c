@@ -300,7 +300,9 @@ int __capstone_malloc_cache_unmap(unsigned long base, unsigned long bytes)
     if (r->bytes != bytes || ac_nfree == AC_FREE || ac_free_bytes + bytes > AC_FREE_BYTES) {
         ac_remove(r); ++__capstone_malloc_cache_spills; return 0;
     }
+#ifndef CAPSTONE_HEAP_ARENA_CACHE_TEST_NO_REVOKE   /* positive control of the safety probe ONLY */
     capstone_cap_revoke_child(r->parent, r->group);
+#endif
     ac_free[ac_nfree++] = (struct ac_rec){base, bytes, r->parent, NULL};
     ac_free_bytes += bytes;
     ac_remove(r);
