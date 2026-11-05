@@ -110,6 +110,18 @@ Each of these has cost real board time when skipped.
    board was waiting. The same night, a chain's dry run passed with its board-free wait stubbed. That wait matched the
    chain's own parent and had no bound, so it would never have returned.
 
+9. **Check the run against the board it goes to, not against its rehearsal.** A stubbed dry run replaces every board
+   call and a QEMU gate runs another kernel, so neither sees what differs on the real board. Before arming, run
+   `python3 capstone/tests/board-env-check.py <board> <kit> <stage dirs>` (exit 1 = STOP). It checks three things:
+   - the board's own console URL file, and that the kit's board-run.sh will read it;
+   - that the kit module is the 18-bit build on bitstream 3 and C.5a;
+   - that every /proc, /sys and capstone_vm parameter the stages read exists on the board kernel (its .config) and in
+     the kit module.
+   On 2026-11-05 four defects of this class passed the dry runs and the QEMU gates: board 2's console URL in a driver
+   and in a board-1-derived kit, a 16-bit module that gcc train01 overflowed, and a probe that read
+   /proc/self/pagemap, which the board kernel lacks. Two cost boots. A new kind of check belongs in the script, not in
+   this list.
+
 ## 1. Bake it in — never UART
 
 UART delivery is 16 chars per HTTPS round trip: minutes per ~10 KB domain. Baked, ten
