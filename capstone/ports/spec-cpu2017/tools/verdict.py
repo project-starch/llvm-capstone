@@ -3,7 +3,7 @@
 
 PASS needs all of: runcpu exited 0; SPEC's log reports "Success: 1x<bench>" and no error for it;
 the invocation records exist and none was refused; the benchmark's own executable ran in the
-guest (route "guest") and every guest invocation exited 0 without a domain fault; at least one SPEC
+guest (route "guest" or "guest-plain") and every guest invocation exited 0 without a domain fault; at least one SPEC
 tool (specdiff) ran on the host and every host tool exited 0.
 usage: verdict.py OUT BENCH SIZE RUNCPU_RC START END [LABEL]
 Also records, without judging them: SPEC's reported seconds, the launcher's CAPSTONE_VM_STATS counters
@@ -39,13 +39,15 @@ EXE = {"500.perlbench_r": "perlbench_r", "502.gcc_r": "cpugcc_r", "505.mcf_r": "
        "519.lbm_r": "lbm_r", "525.x264_r": "x264_r", "538.imagick_r": "imagick_r",
        "544.nab_r": "nab_r", "557.xz_r": "xz_r", "997.specrand_fr": "specrand_fr",
        "999.specrand_ir": "specrand_ir"}
-guest = [r for r in records if r["route"] == "guest"]
+guest = [r for r in records if r["route"] in ("guest", "guest-plain")]
 mine = f"{EXE[bench]}_base.{label}"
 if not any(os.path.basename(r["exe"]) == mine for r in guest):
     reasons.append(f"{mine} never ran in the guest")
 for r in guest:
     g = (r.get("detail") or {}).get("guest") or {}
-    if r["status"] != 0 or g.get("kind") != "exit" or g.get("value") != 0 or g.get("fault"):
+    clean_exit = (g.get("exit") == 0 if r["route"] == "guest-plain"
+                  else g.get("kind") == "exit" and g.get("value") == 0)
+    if r["status"] != 0 or not clean_exit or g.get("fault"):
         reasons.append(f"guest invocation {os.path.basename(r['exe'])} ended {g or r['status']}")
 # SPEC's own validation ran (specdiff, or imagevalidate, through the wrapper's host route) and every
 # host tool exited 0; the success banner alone is not taken as evidence.
@@ -56,6 +58,9 @@ for r in tools:
     if r["status"] != 0:
         reasons.append(f"host tool {os.path.basename(r['exe'])} exited {r['status']}")
 stub = os.path.join(out, "perl-pack-stub.jsonl")
+stub_records = [json.loads(l) for l in open(stub)] if os.path.exists(stub) else []
+if stub_records or any((r.get("detail") or {}).get("perl_pack_stub") for r in guest):
+    reasons.append("benchmark test inputs were stubbed; original inputs required")
 # Measurements, recorded as read.
 reported = None
 for rsf in glob.glob(os.path.join(out, "spec", "CPU2017.*.rsf")):
@@ -85,6 +90,6 @@ result = {
     "reasons": reasons, "start": start, "end": end, "routes": routes,
     "guest_invocations": len(guest),
     "spec_reports": sorted(os.path.basename(p) for p in glob.glob(os.path.join(out, "spec", "CPU2017.*"))),
-    "perl_pack_stub": [json.loads(l) for l in open(stub)] if os.path.exists(stub) else [],
+    "perl_pack_stub": stub_records,
 }
 print(json.dumps(result, indent=2))

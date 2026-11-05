@@ -52,6 +52,16 @@ software stack of the virtual profile against a plain static Linux program, not 
 ISA alone. A function present in one arm only (an SDK routine, a libc replacement) appears in
 the comparison as unmatched, not hidden.
 
+Record the actual compiler revisions and binary hashes. Reusing compilers from
+different revisions is an additional comparison limitation, even with matching
+optimization flags and libc versions.
+
+An arm may set `output_root` to the output directory in its SPEC configuration;
+it defaults to `spec_root`. Reports and work-bounded slice binaries are read
+there. Keep executable/run directories below the guest share. With
+`stage_image: "tmpfs"`, relative executable invocations remain relative so Perl's
+unchanged subprocess harness can reuse them after changing directories.
+
 The window is system-wide: everything the guest executes between the markers counts, including
 the kernel's work for other processes. The guest is quiesced (one vCPU, no daemons but dropbear),
 and the report's `kernel` and `other` classes are read with that in mind.
