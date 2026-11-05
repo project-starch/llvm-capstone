@@ -157,3 +157,27 @@ Three changes, to get results sooner. The claim, the probe and Z0-Z4 are unchang
 - Cause not yet read. N = 1.
 - This run's xz, on board 2 with the same switches and no sweep, is a second sample of the same configuration. If it
   wedges too, that is reported as a finding about the switches together on C.5a, not as a Z2 reading.
+
+## Addendum 3 (5 Nov 17:50, before any board call of this run)
+
+**The drivers were stopped and the run follows gcc train.** The lead made gcc train (results/2026-11-05-gcctrain)
+the top priority. The waiting drivers had already stopped when the sessions they waited on were killed. They are
+relaunched to wait on gcc train's drivers (gt-run.sh), one per board.
+
+**The module is 18-bit.**
+- Lead rule: no 16-bit module on bitstream 3 or C.5a. Module 645749816c02751e is the exit-timing and resume_quantum
+  source (perf/exit-timing-vp2 3fbed8df1fb8; hpm_snapshot compiled out) built with `-DCAPSTONE_VM_INDEX_BITS=18`.
+  That is a 262,144-record flat table, against the 16-bit 65,536 of every reference run here.
+- QEMU (kit-etq2b18, 10672b9695c39db9):
+  - gcc test: rc 0, specdiff PASS, `node_capacity=262144`;
+  - the rq stage: both arms PASS, CV_STEPs 588 and 617 against nab's 1,746 and 1,762.
+- The 4 MiB table is zeroed at each context's creation. Against the 16-bit reference that is a launch-time
+  difference, read from `launch_ns`.
+- Z0's instret check still holds the program identical.
+
+**The probe board is board 1** (`NS_PROBE_BOARD=1`). Board 1 frees first: its gcc train run is Plain, about 0.5 h.
+- Board 1: the probe, then xz. xz is the large predicted effect, about 2.5 h.
+- Board 2, after its gcc train run (about 19:15): lbm, imagick, nab, nab-rq, gcc.
+- The reference for every stage stays out-all2-b1. all2's xz has no data (Addendum 2), so Z2 compares xz against
+  all-b1 (out-all-b1, the same images on C.5a without the five switches). The switches are then a second difference
+  on xz, so Z2 reads as "no sweep plus the switches against neither".
