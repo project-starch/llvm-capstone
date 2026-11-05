@@ -88,3 +88,29 @@ The lead asked for a gcc train row on slide 11, the final configuration only, wi
   have stopped at its first board call.
 - Both drivers now take `fpga-console-url-board2` on board 2.
 - The stubbed dry runs could not see it, because they replace every board call.
+
+## Addendum 2 (5 Nov 17:15, before board 2's run; board 1's Plain boot started 17:06)
+
+**The Temporal QEMU gate failed, and the cause is the node table size.**
+- The Temporal run stopped with `cpugcc_r_base.capstone-lifetimes: out of memory allocating 4064 bytes` at 9.8 G
+  instructions, rc 1. The launcher read `node_capacity=65536 node_growths=0`. The run's directory is kept as
+  perf/gt/q-T.16bit-oom.
+- The all2 and evaluation modules are built with the default 16-bit index, a 65,536-record flat table. That fits
+  every test input. train01 needs more: census-fix2-3g ran it on an 18-bit module (262,144 records, 4 MiB table).
+- Bitstream 3 and C.5a carry the 18-bit table. A board train run already used it: mcf train on bitstream 3 read
+  `node_bytes=4194304 node_capacity=262144`.
+- A capacity stop, not a fault: the malloc failure is the ENOMEM of the flat table's ceiling.
+- No board call was made. The gate wrapper did not start board 2.
+
+**Fix.**
+- Module 65ede944a87ea742: the same source (3fbed8df1fb8) built with `-DCAPSTONE_VM_BENCH_HPM
+  -DCAPSTONE_VM_INDEX_BITS=18`, 0 two-byte instructions.
+- Its QEMU build 1c29ae65c8d3c57b is in kit-etq3h18, and the Temporal gate reruns on it (q-T).
+- bkit26-gt now carries the 18-bit module, and gt-run.sh checks its hash.
+
+**The Plain arm was not affected.**
+- Board 1's Plain boot baked bkit26-gt at 17:06, before this change, with module b5ea7d846154fa47 (16-bit). Its
+  hash checks passed against that module.
+- Plain never opens a context, so the table width does not touch it. It still loads the module for
+  `hpm_snapshot`, which is identical in both builds.
+- The two arms therefore ran different module builds, differing only in the index width.

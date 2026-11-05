@@ -14,7 +14,7 @@ main() {
   L=$O/gt-b$BRD.log
   local C5=caplifive_vp2c_1fc2cd5aa C5SHA=5b7b1edcd9bcd2521bd4bd59107747e268487056f1bfcd96403fd612eeb6d764
   local B3=caplifive_vp2c_e7af48457 B3SHA=d6ed97b6d341ea058d497838e43558900823c36591c44046d3cfc0b7f55b423b
-  local T=$H/wt-spec/capstone/tests/rtl-smoke SB=$H/wt-spec/capstone/ports/spec-cpu2017 MOD=b5ea7d846154fa47 EGV=0bde5fd8e0c9c374
+  local T=$H/wt-spec/capstone/tests/rtl-smoke SB=$H/wt-spec/capstone/ports/spec-cpu2017 MOD=65ede944a87ea742 EGV=0bde5fd8e0c9c374
   local BOOK=${GT_BOOK:-python3 /tmp/capstone/lab-hub/lab-book.py} FLASH=${GT_FLASH:-python3 $T/drivers/flash-bitstream.py}
   local RB=${GT_READBACK:-python3 $SB/results/2026-10-28-board-test/b4/nv-readback.py}
   local STORE=${GT_STOREHAS:-python3 $T/vp2-kit-2026-10-17/board-tier12/batch/store-has.py}
@@ -49,7 +49,8 @@ main() {
   log "preconditions ok; waiting for pid ${GT_WAITPID:-none}"
   t=0; while [ -n "${GT_WAITPID:-}" ] && kill -0 "$GT_WAITPID" 2>/dev/null; do
     [ $t -ge 172800 ] && { log "STOP: pid $GT_WAITPID still runs"; return 2; }; sleep "${GT_POLL_S:-60}"; t=$((t + ${GT_POLL_S:-60})); done
-  sed -n "/START pid ${GT_WAITPID:-none}\$/,\$p;/START pid ${GT_WAITPID:-none} /,\$p" "${GT_WAITLOG:-/dev/null}" | grep -q "^${GT_WAITPFX:-XX} .* DONE" \
+  # only when there was a session to wait for (Addendum 1: the runs start at once, GT_WAITPID unset)
+  [ -z "${GT_WAITPID:-}" ] || sed -n "/START pid ${GT_WAITPID:-none}\$/,\$p;/START pid ${GT_WAITPID:-none} /,\$p" "${GT_WAITLOG:-/dev/null}" | grep -q "^${GT_WAITPFX:-XX} .* DONE" \
     || { log "STOP: pid ${GT_WAITPID:-none} did not end with DONE"; return 2; }
   $BUSY > /dev/null 2>&1 || { log "STOP: board $BRD busy"; return 2; }
   flash() {
