@@ -1,25 +1,6 @@
-/* Does the nested layer's design still work after its old ABI was removed?
- *
- * WHY THIS EXISTS, AND WHY IT COMES BEFORE TOUCHING zend-cap-blocks.c. The 2026-10-25 merge
- * deleted __capstone_sublet_malloc_linear/_free_linear from runtime/virtual/heap.c -- the
- * Sublet loan this nested layer borrowed every PHP block through, and which this port was the only
- * consumer of. sublet.h itself survives, so the nested layer's SHAPE is unaffected: split at the
- * 48-byte header, retire the payload per _efree, never revoke the header. Only the block
- * PROVIDER is gone.
- *
- * The replacement is a different model, and a simpler one. capability.h's CDERIVE/CREVOKE take
- * a NON-LINEAR parent and cut children out of it directly:
- *   - capstone_cap_derive(parent, offset, size) -- offset from the parent's BASE, child inherits
- *     data rights and gains MANAGE; the parent is unchanged.
- *   - capstone_cap_revoke_child(parent, child) -- ends that subtree WITHOUT touching payload
- *     bytes, which is exactly what _efree needs while PHP still reads p->size and writes
- *     p->cached afterwards.
- * mallocng's block capability is non-linear and carries MANAGE -- heap.c revokes its own child
- * through it (heap.c:240) -- so __capstone_malloc_slot_start() should be a usable parent.
- *
- * SHOULD BE. Every sentence above is read off a header, and a header is not a machine. What this
- * probe settles, in ~200 lines rather than from a 5 MB PHP image whose fault lands somewhere in
- * Zend:
+/* Probe direct nested lifetimes under an explicitly retained malloc parent.
+ * Header and payload children are independent; retiring a payload leaves the
+ * header usable and a replacement receives a fresh lifetime.
  *   stage 0  the positive control: carve a block, derive header and payload, write both, free.
  *            If this does not COMPLETE, nothing the other stages report means anything.
  *   stage 1  the geometry: are the two children bounded exactly where the nested layer assumes, with the
@@ -43,7 +24,7 @@
  * "reached S, then faulted" instead of inferring it.
  */
 #include <capstone/capability.h>
-#include <malloc_capstone.h>
+#include <heap_sublet.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -69,17 +50,10 @@ struct carved {
 
 static int carve(struct carved *c)
 {
-    struct capstone_malloc_slot *r;
     c->object = malloc(BLOCK);
     if (!c->object) { say("PROBE_FAIL:malloc returned NULL"); return -1; }
-    r = __capstone_malloc_find(c->object);
-    if (!r) { say("PROBE_FAIL:the heap does not know the block it just returned"); return -1; }
-    c->parent = __capstone_malloc_slot_start(r);
-    if (!c->parent) { say("PROBE_FAIL:no block capability on the slot"); return -1; }
-    /* From the parent's BASE, as CDERIVE requires -- and the object is NOT at the base:
-     * mallocng's slot prefix lies below it. Taking the offset from the object's cursor is the
-     * whole reason this is computed rather than assumed to be zero. */
-    c->offset = cur_of(c->object) - base_of(c->parent);
+    c->parent = c->object;
+    c->offset = 0;
     c->header  = capstone_cap_derive(c->parent, c->offset, HDR);
     c->payload = capstone_cap_derive(c->parent, c->offset + HDR, BLOCK - HDR);
     if (!c->header)  { say("PROBE_FAIL:header derive returned nothing"); return -1; }

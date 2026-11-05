@@ -1,4 +1,22 @@
+## 2026-11-05 — Minimal protected mallocng
+
+The minimal port replaces `runtime/virtual/heap.c` and its object registry with
+musl mallocng plus mapping-level authority and direct derive/revoke hooks.
+No freed-payload scrubbing. PHP retains its malloc parent in a prefix before
+the unchanged Zend header. See the
+[implementation contract](../../runtime/virtual/mallocng.md) and
+[qualification](../../runtime/virtual/results/minimal-mallocng/qualification.json).
+The qualification covers allocator denial/positive controls in both bounds
+profiles, regular pthreads, PHP and fresh GCC/ImageMagick SPEC test workloads.
+It does not requalify every application port or RTL. Existing SPEC sources and
+inputs remain unchanged apart from the previously frozen GCC src.alt.
+
+Next allocator work: extend the fresh application/SPEC sweep and attribute the
+remaining program overhead, using the same static-musl plain baseline. Raw
+virtual contexts sharing TLS must not be used as libc threads.
+
 **2026-10-21, the cross-lane plan to the next bitstream (runtime/semantics lane, coordinating on the lead's word).**
+
 Goal: the six-item batch bitstream, then the WHOLE corpus on vp2, including the two arms the current bitstreams
 cannot run (cpython lt1 and postgres pg-pools, both "needs collection", which item 6's hardware recycling provides).
 The critical path is the RTL lane; everything else is arranged so that nothing waits on it unnecessarily.

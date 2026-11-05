@@ -9,12 +9,13 @@
  * per emalloc, a 48-byte zend_mem_header in front of the payload. The PHP block is rounded up to a
  * 16-byte grain, at least 64 bytes, as the previous layer did, so that a payload bounded to
  * REAL_SIZE(n) -- or to n -- always lies inside it, emalloc(0) included. The caller's pointer is
+ * rounded/aligned further when compressed bounds require it. It is
  * bounded to the payload in EVERY arm, so no capability the caller holds spans the header:
  *
- *     malloc base      PHP block B       payload B+48
- *     [saved parent]   [48-byte header]  [bound(n) bytes]
+ *     malloc base                         PHP block B      payload B+48
+ *     [optional alignment][saved parent] [48-byte header] [bound(n) bytes]
  *     <---------------- malloc parent ---------------->
- *                                        <--- child -->
+ *                                                         <--- child -->
  *
 
  * At _efree the caller's child ends through its saved parent, which hands back the PHP header at

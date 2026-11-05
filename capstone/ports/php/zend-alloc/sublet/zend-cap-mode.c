@@ -96,17 +96,25 @@ void *zend_cap_block(size_t bytes)
 {
     unsigned long want;
     void *p;
-    if (bytes > ~0UL - ZEND_CAP_GRAIN) { return (void *)0; }   /* the rounding would wrap */
+    /* Match malloc's ptrdiff-sized object limit before representable rounding. */
+    if (bytes > (size_t)-1 / 2) { return (void *)0; }
     want = ZEND_CAP_ROUND(bytes);
     if (want < 48UL + ZEND_CAP_GRAIN) { want = 48UL + ZEND_CAP_GRAIN; }
     if (want > (size_t)-1 - sizeof(void *)) { return (void *)0; }
-    p = malloc((size_t)want + sizeof(void *));
+    /* Keep the payload aligned when compressed bounds need a larger grain.
+     * The saved-parent slot remains immediately before the PHP header. */
+    size_t payload = heap_round(want - 48UL);
+    size_t align = heap_granule(payload);
+    size_t extra = align > sizeof(void *) ? align - sizeof(void *) : 0;
+    if (payload > (size_t)-1 - 48UL - sizeof(void *) - extra) { return (void *)0; }
+    p = malloc(48UL + payload + sizeof(void *) + extra);
     if (!p) { return (void *)0; }
-    /* Keep the malloc parent in a capability-aligned prefix outside PHP's
-     * header and the caller's bounds. No object index or additional lifetime. */
-    *(void **)p = p;
+    void *block = (char *)p + sizeof(void *);
+    size_t cursor = __builtin_capstone_cap_get_cursor(block) + 48UL;
+    block = (char *)block + (-cursor & (align - 1));
+    *(void **)((char *)block - sizeof(void *)) = p;
     ++st_blocks;
-    return (char *)p + sizeof(void *);
+    return block;
 }
 
 /* The bound handed to the caller: stock PHP's REAL_SIZE rounding, or the request itself; never
@@ -114,7 +122,7 @@ void *zend_cap_block(size_t bytes)
 static size_t cap_bound(unsigned int mode, size_t size)
 {
     size_t b = (mode & ZEND_CAP_MODE_EXACT) ? size : ((size + 7UL) & ~7UL);
-    return b ? b : 1UL;
+    return heap_round(b);
 }
 
 /* ZEND_CAP_PAYLOAD(p, size). The caller's pointer over [p + hdr, p + hdr + bound): in the
@@ -163,11 +171,11 @@ static void *cap_block_of(void *ptr, size_t hdr, const char *who)
     at = heap_access(ptr);
     parent = *(void **)((char *)at - hdr - sizeof(void *));
     if (!__builtin_capstone_cap_get_tag(parent) ||
-        __builtin_capstone_cap_get_cursor(parent) != cur - hdr - sizeof(void *) ||
+        __builtin_capstone_cap_get_cursor(parent) > cur - hdr - sizeof(void *) ||
         __builtin_capstone_cap_get_end(parent) <= cur) {
         cap_fail(ZEND_CAP_FAIL_UNKNOWN, who, cur, hdr);
     }
-    return (char *)parent + sizeof(void *);
+    return (char *)parent + (cur - hdr - __builtin_capstone_cap_get_cursor(parent));
 }
 
 /* ZEND_CAP_HEADER(ptr): _erealloc's and _mem_block_check's derivation. Nothing ends here. */
@@ -198,7 +206,7 @@ void zend_cap_release(void *p)
 {
     if (!p) { return; }
     ++st_frees;
-    if (zend_cap_mode() & ZEND_CAP_MODE_RETURN) { free((char *)p - sizeof(void *)); }
+    if (zend_cap_mode() & ZEND_CAP_MODE_RETURN) { free(*(void **)((char *)p - sizeof(void *))); }
 }
 
 /* ZEND_DO_REALLOC(p, bytes). A FRESH BLOCK ALWAYS, never in place: PHP's _erealloc is entitled

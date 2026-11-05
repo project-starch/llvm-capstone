@@ -24,14 +24,14 @@ else()
   set(sdk_allocator level0)
   set(sdk_codegen "[]")
 endif()
-# The virtual heap's measurement switches (runtime/virtual/heap.c). The defaults, LIFETIMES=ON
+# The virtual heap's measurement switches (runtime/virtual/malloc-mapping.c). The defaults, LIFETIMES=ON
 # and SCRUB_FREE=OFF, are the profile; the other settings build the arms of the
 # spatial-versus-temporal comparison: LIFETIMES=OFF gives every object exact bounds but no
-# lifetime of its own, SCRUB_FREE=ON zeroes a freed payload before its lifetime ends. The
+# lifetime of its own. SCRUB_FREE=ON is rejected by the minimal port. The
 # physical profile's level0 has its own switches and takes these only at their defaults.
 option(CAPSTONE_HEAP_LIFETIMES "Virtual heap: a lifetime per object, CDERIVE on malloc and CREVOKE on free" ON)
 option(CAPSTONE_HEAP_SCRUB_FREE "Virtual heap: zero a payload on free" OFF)
-# OBJECT_BOUNDS=OFF (the Caps arm): malloc returns the group's authority, cursor at the object, instead
+# OBJECT_BOUNDS=OFF (the Caps arm): malloc returns mapping authority, cursor at the object, instead
 # of a capability over the object alone. It needs LIFETIMES=OFF (a lifetime per object is a bounded child).
 option(CAPSTONE_HEAP_OBJECT_BOUNDS "Virtual heap: a capability over each object's own bytes" ON)
 if(NOT CAPSTONE_APPLICATION_VIRTUAL AND (NOT CAPSTONE_HEAP_LIFETIMES OR CAPSTONE_HEAP_SCRUB_FREE OR NOT CAPSTONE_HEAP_OBJECT_BOUNDS))
@@ -39,6 +39,9 @@ if(NOT CAPSTONE_APPLICATION_VIRTUAL AND (NOT CAPSTONE_HEAP_LIFETIMES OR CAPSTONE
 endif()
 if(NOT CAPSTONE_HEAP_OBJECT_BOUNDS AND CAPSTONE_HEAP_LIFETIMES)
   message(FATAL_ERROR "CAPSTONE_HEAP_OBJECT_BOUNDS=OFF requires CAPSTONE_HEAP_LIFETIMES=OFF")
+endif()
+if(CAPSTONE_APPLICATION_VIRTUAL AND CAPSTONE_HEAP_SCRUB_FREE)
+  message(FATAL_ERROR "The minimal mallocng port does not scrub freed payloads")
 endif()
 foreach(switch IN ITEMS CAPSTONE_HEAP_LIFETIMES CAPSTONE_HEAP_SCRUB_FREE CAPSTONE_HEAP_OBJECT_BOUNDS)
   if(${switch})

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Prepare a CPython 3.13.7 tree configured for a musl capstone64 application on
 # the virtual Capstone profile. There is one heap: musl's mallocng, compiled for
-# Capstone (runtime/virtual/heap.c), which bounds every object exactly and
+# Capstone (musl-patches/0009), which bounds each object and
 # retires its lifetime on free. The physical domain's level0 and Sublet heaps
 # are not built for CPython.
 #

@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""Qualify local Capstone mallocng, its VM slow paths and object lifetimes."""
+"""Qualify mallocng's public behavior, tag preservation and object lifetimes.
+
+The former slot-registry/recycled-mapping implementation tests are retired with
+that implementation. These tests exercise the allocator's externally visible
+contract and retain the same-address reuse and service-boundary controls.
+"""
 import argparse
 import hashlib
 import json
@@ -8,312 +13,94 @@ from pathlib import Path
 import re
 import shutil
 import subprocess
-import struct
 import sys
-
 import memory_mode
-
-HERE = Path(__file__).resolve().parent
-COARSE_CASES = ('coarse-reuse', 'coarse-stale', 'coarse-bounds')
-
-
-def sha(path):
-    return hashlib.sha256(path.read_bytes()).hexdigest()
-
+HERE=Path(__file__).resolve().parent
 
 def image_abi(path):
-    """Read the ABI off the image instead of asserting it. A hard-coded 5 here reported "ABI 5"
-    for every v6 run -- a printed constant that reads exactly like a measurement."""
-    data = open(path, 'rb').read()
-    found = [v for v, m in ((7, b'CPONVVM7'),) if data.count(m) == 1]
-    if len(found) != 1:
-        raise SystemExit(f'{path}: cannot identify the VM ABI magic (matched {found})')
-    return found[0]
+    data = path.read_bytes()
+    if data.count(b'CPONVVM7') != 1:
+        raise ValueError(f'{path}: missing or ambiguous virtual image ABI magic')
+    return 7
 
+def fault_offset(application, config):
+    bindir = Path(config['cc']).parent
+    symbols = subprocess.check_output([str(bindir/'llvm-nm'), str(application)], text=True)
+    symbol = re.search(r'^([0-9a-fA-F]+) [A-Za-z] cap_malloc_fault_store$', symbols, re.M)
+    headers = subprocess.check_output([str(bindir/'llvm-readelf'), '-l', str(application)], text=True)
+    loads = [int(line.split()[2], 16) for line in headers.splitlines() if line.strip().startswith('LOAD ')]
+    if not symbol or not loads:
+        raise ValueError('cannot identify the denial instruction and image load base')
+    return int(symbol[1], 16) - min(loads)
 
-def coarse_checks(log, symbols, image_base, bounds_off):
-    """Require complete, unique process records and exact geometry / fault-site oracles."""
-    shared = '__capstone_malloc_coarse_regions' in symbols
-    layout = ('shared groups=20 maps=2 span=3360' if shared else
-              'dedicated groups=20 maps=20 span=4096')
-    rows = re.findall(r'MALLOC_COARSE_CASE:(coarse-[a-z]+)\n(.*?)'
-                      r'MALLOC_DENIAL_EXIT:\1:(\d+)\n', log, re.S)
-    checks = {'coarse_cases_ran': [name for name, _, _ in rows] == list(COARSE_CASES)}
-    for name in COARSE_CASES:
-        matches = [(body, rc) for case, body, rc in rows if case == name]
-        ok = len(matches) == 1
-        body, rc = matches[0] if ok else ('', '')
-        ok = ok and body.count('MALLOC_COARSE_LAYOUT ' + layout + '\n') == 1 and 'MALLOC_FAIL' not in body
-        whole = re.findall(r'MALLOC_COARSE_WHOLE tags=(\d+) bytes=(\d+)\n', body)
-        ok = ok and whole == ([('0', '0')] if bounds_off else [])
-        if name == 'coarse-reuse':
-            ok = (ok and rc == '0' and 'domain fault' not in body and
-                  body.count('MALLOC_COARSE_SCRUB tags=0 bytes=0 slots=11 stride=304\n') == 1 and
-                  body.count('MALLOC_COARSE_TRIM empty_backing_returned=1 regions=' +
-                             ('2' if shared else '0') + '\n') == 1 and
-                  body.count('MALLOC_SURVIVED:coarse-reuse\n') == 1)
-        else:
-            probe = re.search(r'MALLOC_FAULT_READY:' + name + r'\n(.*)', body, re.S)
-            faults = re.findall(r'domain fault cause=(\d+) pc=0x([0-9a-f]+).*?code=0x([0-9a-f]+)-',
-                                probe[1]) if probe else []
-            ok = (ok and rc == '139' and 'MALLOC_SURVIVED' not in body and len(faults) == 1 and
-                  int(faults[0][0]) == (25 if name == 'coarse-stale' else 28) and
-                  int(faults[0][1], 16) - int(faults[0][2], 16) ==
-                  symbols['cap_malloc_fault_store'] - image_base)
-        checks[name] = bool(ok)
-    return checks, 'shared' if shared else 'dedicated'
-
+def grade(log, cases, lifetimes, store_offset=None):
+    results={}
+    for name in cases:
+        rows=re.findall(r'MALLOC_CASE:'+re.escape(name)+r'\n(.*?)MALLOC_EXIT:'+re.escape(name)+r':(\d+)\n',log,re.S)
+        if len(rows)!=1: results[name]=False; continue
+        body,rc=rows[0]; rc=int(rc)
+        if name in ('ok','population','churn','hot','hot-service-control','nested-ok','native'):
+            marker={'ok':'MALLOC_TAG_COPY_OK','population':'MALLOC_POPULATION_OK','churn':'MALLOC_CHURN_OK','nested-ok':'MALLOC_SURVIVED:nested-ok','native':'MALLOC_TAG_COPY_OK'}.get(name,'MALLOC_HOT_END')
+            results[name]=rc==0 and marker in body and 'MALLOC_FAIL' not in body and 'domain fault' not in body
+            continue
+        expected=28 if name=='bounds' else 2 if name=='interior-free' else 29 if name=='nested-grandchild' else 25
+        if not lifetimes:
+            if name in ('stale','inplace-stale','reuse-stale','reuse-free'):
+                results[name]=rc==0 and 'MALLOC_SURVIVED:'+name in body and 'domain fault' not in body
+                continue
+            # mallocng invalidates the freed slot header; its second metadata
+            # lookup dereferences an untagged pointer (not a lifetime denial).
+            if name=='stale-free': expected=24
+        # The intended action must be reached; an allocation/setup fault is not a catch.
+        ready='MALLOC_FAULT_READY:'+name+'\n'
+        after=body.split(ready,1)[1] if ready in body else ''
+        causes=[int(n) for n in re.findall(r'domain fault cause=(\d+)',after)]
+        results[name]=rc==139 and causes==[expected] and 'MALLOC_FAIL' not in body
+        if store_offset is not None and name in ('stale','inplace-stale','remap-stale','bounds','reuse-stale','nested-stale'):
+            sites = re.findall(r'domain fault cause=\d+ pc=0x([0-9a-f]+).*?code=0x([0-9a-f]+)-', after)
+            results[name] = results[name] and len(sites)==1 and int(sites[0][0],16)-int(sites[0][1],16)==store_offset
+    return results
 
 def main():
-    p = argparse.ArgumentParser(description=__doc__)
-    for name in ('adapter', 'application', 'native', 'qemu', 'images', 'work'):
-        p.add_argument('--' + name, type=Path, required=True)
-    p.add_argument('--timeout', type=int, default=1800)
-    p.add_argument('--skip-churn', action='store_true')
-    # vp2 caps the flat lifetime table at 65536 records (a 16-bit node index), so 70000 cannot be
-    # the count everywhere. Default unchanged for QEMU; silicon and its QEMU prediction run 60000.
-    p.add_argument('--malloc-count', type=int, default=70000)
-    p.add_argument('--exact-bounds', action=argparse.BooleanOptionalAction, default=False,
-                   help="Run QEMU's exact-bounds profile. Option (iii) does not need it; "
-                        "it is kept so a suite can be run both ways as a two-sided control.")
-    p.add_argument('--unpinned', action='store_true', help='load the module with unpinned=1 and require it to report so')
-    p.add_argument('--sdk', type=Path, help='the SDK the application was built with: its sdk.json '
-                   '(heap_lifetimes, heap_scrub_free) selects the denial expectations and is recorded')
-    a = p.parse_args()
-    # The default heap gives every object a lifetime; an SDK built with
-    # CAPSTONE_HEAP_LIFETIMES=OFF cannot deny a stale object, and its expectations say so.
-    # The scrub does not change an expectation and is only recorded: without --sdk it is
-    # unknown (null), never assumed. An SDK from before the switches has neither field and
-    # was built with both ON.
-    heap = dict(lifetimes=True, scrub_free=None)
-    recycle_only = False
-    if a.sdk:
-        config = json.loads((a.sdk / 'sdk.json').read_text())
-        heap = dict(lifetimes=bool(config.get('heap_lifetimes', True)),
-                    scrub_free=bool(config.get('heap_scrub_free', True)))
-        # CAPSTONE_HEAP_OBJECT_BOUNDS=OFF (the Caps arm) hands out the group's authority, so the contract's
-        # spatial-denial expectations do not hold and those cases are not run. The recycled-mapping cases
-        # and coarse-group cases do have expectations there (the arm requires lifetimes off).
-        if config.get('heap_object_bounds', True) is False:
-            recycle_only = True
-            heap['object_bounds'] = False
-    # The recycled group mapping cases (heap.c "Recycled group mappings"), one process each.
-    # Survivors print MALLOC_SURVIVED; the others must fault with cause 25 at the labelled store
-    # (or free validation), under every heap configuration: releasing a group revokes the group
-    # lifetime every object of it descends from.
-    recycle_sites = {'recycle-stale': (25, 'cap_malloc_fault_store'), 'recycle-free': (25, 'cap_malloc_validate'),
-                     'recycle-tags': None, 'recycle-header': None, 'recycle-slack': None, 'recycle-limits': None,
-                     'recycle-root': (25, 'cap_malloc_fault_store'), 'recycle-geometry': (25, 'cap_malloc_fault_store'),
-                     'recycle-nested': (25, 'cap_malloc_fault_store'), 'recycle-aligned': (25, 'cap_malloc_fault_store'),
-                     'recycle-realloc': (25, 'cap_malloc_fault_store'),
-                     # calloc's skipped memset (heap.c calloc): zero and untagged on a fresh, a dirty and a
-                     # recycled slot, under every heap configuration.
-                     'calloc-clean': None,
-                     # the review's directed cases: calloc after an in-place shrink, calloc across a recycled
-                     # mapping's geometry change, and a slot-record array reused many -> few -> many slots (records past
-                     # the bound all zero).
-                     'calloc-shrink': None, 'calloc-geometry': None, 'meta-reuse': None}
-    recycle_loop = ' '.join(c for c in recycle_sites if c != 'recycle-tags')
-    nm = Path(os.environ.get('CAPSTONE_LLVM_BIN', '')) / 'llvm-nm'
-    symbols = {name: int(value, 16) for value, _, name in
-               (line.split() for line in subprocess.check_output([str(nm), str(a.application)],
-                                                                text=True).splitlines() if len(line.split()) == 3)}
-    required = {'cap_malloc_fault_store', 'cap_malloc_validate', 'cap_malloc_invalid_free', 'cap_malloc_reclaim'}
-    if recycle_only:   # the bounds-off heap refuses the nested-allocator trio, so its reclaim site is gone
-        required.discard('cap_malloc_reclaim')
-    if not required <= symbols.keys():
-        p.error('application lacks current safety sites; rebuild its SDK and relink')
-    elf = a.application.read_bytes()
-    phoff = struct.unpack_from('<Q', elf, 32)[0]
-    phsize, phnum = struct.unpack_from('<HH', elf, 54)
-    image_base = min(struct.unpack_from('<Q', elf, phoff + i * phsize + 16)[0]
-                     for i in range(phnum) if struct.unpack_from('<I', elf, phoff + i * phsize)[0] == 1)
-    a.work.mkdir(parents=True, exist_ok=False)
-    stage = a.work / 'stage'
-    stage.mkdir()
-    inputs = dict(launcher=a.adapter / 'capstone-vexec', module=a.adapter / 'module/capstone_vm.ko',
-                  application=a.application, native=a.native, qemu=a.qemu,
-                  source=HERE / 'malloc-contract.c')
-    inputs.update({name: a.images / name for name in ('Image', 'fw_jump.elf', 'rootfs.ext2')})
-    if a.sdk:
-        inputs['sdk_json'] = a.sdk / 'sdk.json'
-    for key, name in [('launcher', 'capstone-vexec'), ('module', 'capstone_vm.ko'),
-                      ('application', 'malloc.dom'), ('native', 'native-malloc')]:
-        shutil.copy2(inputs[key], stage / name)
-    recycle_gate = '''CAPSTONE_VM_TRACE=1 ./capstone-vexec malloc.dom recycle-tags
-echo MALLOC_DENIAL_EXIT:recycle-tags:$?
-for case in ''' + recycle_loop + '''; do
-  ./capstone-vexec malloc.dom "$case"
-  echo MALLOC_DENIAL_EXIT:$case:$?
-done
-for case in ''' + ' '.join(COARSE_CASES) + '''; do
-  echo MALLOC_COARSE_CASE:$case
-  ./capstone-vexec malloc.dom "$case"
-  echo MALLOC_DENIAL_EXIT:$case:$?
-done
-'''
-    gate = '''#!/bin/sh
-cd /mnt/vm || exit 1
-dmesg -n 1
-export CAPSTONE_MALLOC_COUNT=__MALLOC_COUNT__
-./native-malloc ok
-echo MALLOC_NATIVE_EXIT:$?
-insmod capstone_vm.ko__MODULE_ARGS__ || exit 1
-__MODE_ECHO__
-CAPSTONE_VM_STATS=1 CAPSTONE_VM_TRACE=1 ./capstone-vexec malloc.dom ok
-echo MALLOC_BASIC_EXIT:$?
-CAPSTONE_VM_STATS=1 ./capstone-vexec malloc.dom population
-echo MALLOC_POPULATION_EXIT:$?
-'''
-    if not a.skip_churn:
-        gate += 'CAPSTONE_VM_STATS=1 ./capstone-vexec malloc.dom churn\necho MALLOC_CHURN_EXIT:$?\n'
-    # Without lifetimes the program may survive a stale probe; it then says so and exits 0.
-    survive = '' if heap['lifetimes'] else ' may-survive'
-    gate += '''CAPSTONE_VM_STATS=1 CAPSTONE_VM_TRACE=1 ./capstone-vexec malloc.dom align-probe
-echo MALLOC_ALIGN_PROBE_EXIT:$?
-CAPSTONE_VM_STATS=1 CAPSTONE_VM_TRACE=1 ./capstone-vexec malloc.dom predicate
-echo MALLOC_PREDICATE_EXIT:$?
-CAPSTONE_VM_STATS=1 ./capstone-vexec malloc.dom remap-align
-echo MALLOC_REMAP_ALIGN_EXIT:$?
-CAPSTONE_VM_TRACE=1 ./capstone-vexec malloc.dom hot
-echo MALLOC_HOT_EXIT:$?
-CAPSTONE_VM_TRACE=1 ./capstone-vexec malloc.dom hot-service-control
-echo MALLOC_HOT_CONTROL_EXIT:$?
-for case in stale inplace-stale remap-stale bounds stale-free reuse-stale reuse-free interior-free nested-ok nested-stale nested-grandchild nested-double; do
-  ./capstone-vexec malloc.dom "$case"''' + survive + '''
-  echo MALLOC_DENIAL_EXIT:$case:$?
-done
-''' + recycle_gate + '''rmmod capstone_vm
-echo MALLOC_CLEANUP:$?
-echo VIRTUAL_STAGED_DONE
-'''
-    if recycle_only:
-        gate = ('#!/bin/sh\ncd /mnt/vm || exit 1\ndmesg -n 1\ninsmod capstone_vm.ko__MODULE_ARGS__ || exit 1\n__MODE_ECHO__\n' + recycle_gate +
-                'rmmod capstone_vm\necho MALLOC_CLEANUP:$?\necho VIRTUAL_STAGED_DONE\n')
-    gate = gate.replace('__MALLOC_COUNT__', str(a.malloc_count))
-    gate = gate.replace('__MODULE_ARGS__', memory_mode.args(a.unpinned)).replace('__MODE_ECHO__', memory_mode.echo('MALLOC_'))
-    assert '__MALLOC_COUNT__' not in gate, 'malloc count not substituted'
-    (stage / 'gate.sh').write_text(gate)
-    run = subprocess.run([sys.executable, str(HERE / 'run-staged.py'), '--qemu', str(a.qemu.resolve()),
-                          '--images', str(a.images.resolve()), '--stage', str(stage.resolve()),
-                          '--work', str((a.work / 'guest').resolve()), '--timeout', str(a.timeout)
-                          ] + (['--exact-bounds'] if a.exact_bounds else ['--no-exact-bounds']))
-    log = (a.work / 'guest/serial.log').read_text(errors='replace').replace('\r', '')
-    checks = {
-        'native_reference': 'MALLOC_NATIVE_EXIT:0\n' in log,
-        'basic_inplace_mremap_failure': 'MALLOC_BASIC_EXIT:0\n' in log,
-        'nonlinear_and_linear_tag_transfer': log.count('MALLOC_TAG_COPY_OK\n') == 2,
-        'simultaneously_live_objects': ('MALLOC_POPULATION_OK\n' in log and
-                                        'MALLOC_POPULATION_EXIT:0\n' in log),
-        # the domain prints the count it used; a missing line means the run is not comparable
-        'malloc_count_reported': ('MALLOC_COUNT_USED %d' % a.malloc_count) in log,
-        'cleanup': run.returncode == 0 and 'MALLOC_CLEANUP:0\n' in log,
-        'memory_mode_verified': memory_mode.verified(log, a.unpinned, 1),
-        'no_kernel_fault': 'Kernel panic' not in log and 'Oops' not in log,
-        # Option (iii): a grow across the 4 MiB granule boundary keeps its contents whichever path
-        # it took, and the count of remaps refused for misalignment is RECORDED rather than
-        # asserted -- mremap returns page-aligned addresses, so the copy is the expected path and
-        # the number is the input to whether an aligned-remap ABI change is worth making.
-        'remap_align_contents_survive': 'MALLOC_REMAP_ALIGN_EXIT:0\n' in log,
-        # A READING, not a pass/fail: both outcomes are informative, so the check only asserts
-        # that the arm reported at all. Reading it as a verdict would be the error it exists to fix.
-        'predicate_arms_reported': (log.count('MALLOC_PRED pow2_above=') == 1 and
-                                    log.count('MALLOC_PRED nonpow2_below=') == 1),
-    }
-    remap_counts = [int(n) for n in re.findall(r'MALLOC_REMAP_UNALIGNED (\d+)', log)]
-    checks['remap_align_reported'] = len(remap_counts) == 1
-    if not a.skip_churn:
-        checks['200000_lifetimes'] = 'MALLOC_CHURN_OK\n' in log and 'MALLOC_CHURN_EXIT:0\n' in log
-        # Only per-object lifetimes put the node table under pressure.
-        if heap['lifetimes']:
-            checks['collection_exercised'] = any(int(n) > 0 for n in re.findall(r'collections=(\d+)', log))
-    # Match only after the setup marker, up to this process's exit marker.
-    # Each case: (cause, faulting site), or None when the probe must survive. The denial
-    # cases anchor their size class, so a freed object never empties its group: what the
-    # probe reads is the object's own lifetime. Without lifetimes, a stale object survives;
-    # a mapping that mremap retired still faults (remap-stale); a second free finds no slot
-    # record (stale-free) and an interior pointer none either (interior-free).
-    if heap['lifetimes']:
-        sites = {'reuse-stale': (25, 'cap_malloc_fault_store'), 'reuse-free': (25, 'cap_malloc_validate'),
-                 'stale': (25, 'cap_malloc_fault_store'), 'remap-stale': (25, 'cap_malloc_fault_store'),
-                 'inplace-stale': (25, 'cap_malloc_fault_store'), 'bounds': (28, 'cap_malloc_fault_store'),
-                 'stale-free': (25, 'cap_malloc_validate'), 'interior-free': (2, 'cap_malloc_invalid_free')}
-    else:
-        sites = {'reuse-stale': None, 'reuse-free': None, 'stale': None, 'inplace-stale': None,
-                 'remap-stale': (25, 'cap_malloc_fault_store'), 'bounds': (28, 'cap_malloc_fault_store'),
-                 'stale-free': (2, 'cap_malloc_invalid_free'), 'interior-free': (2, 'cap_malloc_invalid_free')}
-    # The nested-allocator trio (heap.c derive/object/reclaim, the shape PHP's emalloc uses) is
-    # explicit CDERIVE/CREVOKE and so is judged under BOTH heap configurations: the control
-    # completes; a reclaimed child faults when used; a grandchild the caller derived is not the
-    # heap's child (29 at the CREVOKE); a child reclaimed twice is dead the second time (25 there).
-    sites.update({'nested-ok': None, 'nested-stale': (25, 'cap_malloc_fault_store'),
-                  'nested-grandchild': (29, 'cap_malloc_reclaim'), 'nested-double': (25, 'cap_malloc_reclaim')})
-    # A RECYCLED group mapping (recycle_sites above), judged under every heap configuration. Each
-    # case fails, rather than passes, if the mapping was not reused.
-    sites.update(recycle_sites)
-    if recycle_only:
-        sites = dict(recycle_sites)
-        checks = {k: checks[k] for k in ('cleanup', 'no_kernel_fault', 'memory_mode_verified')}
-    for name, site in sites.items():
-        if site is None:
-            match = re.search(r'MALLOC_FAULT_READY:' + re.escape(name) + r'\n(.*?)MALLOC_DENIAL_EXIT:' +
-                              re.escape(name) + r':0\n', log, re.S)
-            checks[name] = bool(match and 'MALLOC_SURVIVED:' + name + '\n' in match[1] and
-                                'domain fault' not in match[1] and 'MALLOC_FAIL' not in match[1])
-            continue
-        cause, symbol = site
-        match = re.search(r'MALLOC_FAULT_READY:' + re.escape(name) + r'\n(.*?)MALLOC_DENIAL_EXIT:' +
-                          re.escape(name) + r':139\n', log, re.S)
-        fault = re.search(r'domain fault cause=(\d+) pc=0x([0-9a-f]+).*?code=0x([0-9a-f]+)-',
-                          match[1]) if match else None
-        checks[name] = bool(fault and int(fault[1]) == cause and
-                            int(fault[2], 16) - int(fault[3], 16) == symbols[symbol] - image_base)
-    hot = re.search(r'MALLOC_HOT_BEGIN\n(.*?)MALLOC_HOT_END\n', log, re.S)
-    hot_checks = {}
-    kinds = re.findall(r'CAPSTONE_VM_BOUNDARY kind=(\d+)', hot[1]) if hot else []
-    # The end marker delegates its write through the thread transport (10). Its transport lock
-    # reads the context's identity from gp (delegate.c dl_wire_identity).
-    # Neither allocator services nor identity lookups may appear on this path.
-    marker_write = ['10']
-    hot_checks['local_allocation_fast_path'] = bool(hot and kinds == marker_write and
-                                               'MALLOC_HOT_EXIT:0\n' in log)
-    controls = list(re.finditer(r'MALLOC_HOT_BEGIN\n(.*?)MALLOC_HOT_END\n', log, re.S))
-    control_kinds = re.findall(r'CAPSTONE_VM_BOUNDARY kind=(\d+)', controls[1][1]) if len(controls) == 2 else []
-    hot_checks['fast_path_control_detects_service'] = ('7' in control_kinds and control_kinds != marker_write and
-                                                'MALLOC_HOT_CONTROL_EXIT:0\n' in log)
-    if not recycle_only:
-        checks.update(hot_checks)
-    if not recycle_only:
-        checks['real_linux_mremap_growth_and_shrink'] = log.count('CAPSTONE_VM_REMAP_OK') >= 2
-    # Releasing a group into the kept mappings and taking it back costs no service: between the
-    # markers only the END marker's own write (marker_write above) may appear.
-    recycle = re.search(r'MALLOC_RECYCLE_BEGIN\n(.*?)MALLOC_RECYCLE_END\n', log, re.S)
-    recycle_kinds = re.findall(r'CAPSTONE_VM_BOUNDARY kind=(\d+)', recycle[1]) if recycle else []
-    checks['recycle_without_service'] = bool(recycle and recycle_kinds == marker_write)
-    checks['recycle_tags_clean'] = 'MALLOC_RECYCLE_TAGS tagged=0 of ' in log
-    outside = re.findall(r'MALLOC_RECYCLE_OUTSIDE (\S+) outside=(\d+) tagged=(\d+)', log)
-    # with object bounds off the program reached the header, the untaken slots and the slack, and
-    # stored tags there; with them on it could not (outside=0). Either way none may survive reuse.
-    checks['recycle_outside_clean'] = (sorted(m[0] for m in outside) == ['recycle-header', 'recycle-slack'] and
-                                       all(m[2] == '0' for m in outside) and
-                                       all((m[1] != '0') == recycle_only for m in outside))
-    coarse, coarse_backing = coarse_checks(log, symbols, image_base, recycle_only)
-    checks.update(coarse)
-    record = dict(status='PASS' if all(checks.values()) else 'FAIL', tests=checks, unpinned=a.unpinned,
-                  coarse_backing=coarse_backing,
-                  virtual_vm_abi=image_abi(a.application), harts=1, allocator='Capstone-compiled musl 1.2.5 mallocng; upstream allocation policy',
-                  heap=heap, denial_expectations='per-object lifetimes' if heap['lifetimes'] else 'bounds only',
-                  # The REQUESTED count is not a result. Report it only when the domain
-                  # echoed it back, so a collapsed run cannot publish a figure it never reached.
-                  malloc_count=(a.malloc_count if checks.get('malloc_count_reported') else None),
-                  remap_unaligned_fallbacks=(remap_counts[0] if remap_counts else None),
-                  exact_bounds='physical shadow metadata; QEMU prototype', skipped=['churn'] if a.skip_churn else [],
-                  input_sha256={name: sha(path) for name, path in inputs.items()},
-                  gate_sha256=hashlib.sha256(gate.encode()).hexdigest(), runner_sha256=sha(Path(__file__)))
-    (a.work / 'result.json').write_text(json.dumps(record, indent=2) + '\n')
-    print(json.dumps(record, indent=2))
-    return 0 if record['status'] == 'PASS' else 1
-
-
-if __name__ == '__main__':
-    raise SystemExit(main())
+    p=argparse.ArgumentParser(description=__doc__)
+    for name in ('adapter','application','native','qemu','images','work'): p.add_argument('--'+name,type=Path,required=True)
+    p.add_argument('--sdk',type=Path,required=True)
+    p.add_argument('--timeout',type=int,default=1800)
+    p.add_argument('--skip-churn',action='store_true')
+    p.add_argument('--malloc-count',type=int,default=70000)
+    p.add_argument('--exact-bounds',action=argparse.BooleanOptionalAction,default=False)
+    p.add_argument('--unpinned',action='store_true')
+    a=p.parse_args()
+    if a.malloc_count<1:p.error('--malloc-count must be positive')
+    config=json.loads((a.sdk/'sdk.json').read_text())
+    lifetimes=config['heap_lifetimes']
+    abi=image_abi(a.application)
+    offset=fault_offset(a.application,config)
+    if not config['heap_object_bounds']:
+        p.error('this denial suite requires object bounds; use public/nested controls for the mapping-authority arm')
+    cases=['native','ok','population','hot','hot-service-control']+([] if a.skip_churn else ['churn'])
+    cases+=['stale','stale-free','inplace-stale','remap-stale','bounds','interior-free','reuse-stale','reuse-free','nested-ok','nested-stale','nested-grandchild','nested-double']
+    a.work.mkdir(parents=True,exist_ok=False); stage=a.work/'stage';stage.mkdir()
+    inputs={'capstone-vexec':a.adapter/'capstone-vexec','capstone_vm.ko':a.adapter/'module/capstone_vm.ko','malloc.dom':a.application,'native':a.native}
+    for name,path in inputs.items():shutil.copy2(path,stage/name)
+    gate=['#!/bin/sh','cd /mnt/vm || exit 1','dmesg -n 1',f'insmod capstone_vm.ko {memory_mode.args(a.unpinned)} || exit 1',memory_mode.echo('MALLOC_'),f'export CAPSTONE_MALLOC_COUNT={a.malloc_count}']
+    for name in cases:
+        gate+=['echo MALLOC_CASE:'+name, './native ok' if name=='native' else ('CAPSTONE_VM_TRACE=1 ' if name in ('hot','hot-service-control') else '')+'./capstone-vexec malloc.dom '+name+(' may-survive' if not lifetimes else ''),'echo MALLOC_EXIT:'+name+':$?']
+    gate+=['rmmod capstone_vm','echo MALLOC_CLEANUP:$?','echo VIRTUAL_STAGED_DONE']
+    (stage/'gate.sh').write_text('\n'.join(gate)+'\n')
+    run=subprocess.run([sys.executable,str(HERE/'run-staged.py'),'--qemu',str(a.qemu.resolve()),'--images',str(a.images.resolve()),'--stage',str(stage.resolve()),'--work',str((a.work/'guest').resolve()),'--timeout',str(a.timeout),'--exact-bounds' if a.exact_bounds else '--no-exact-bounds'])
+    log=(a.work/'guest/serial.log').read_text(errors='replace').replace('\r','')
+    checks=grade(log,cases,lifetimes,offset)
+    checks['cleanup']=run.returncode==0 and 'MALLOC_CLEANUP:0\n' in log
+    checks['memory_mode']=memory_mode.verified(log,a.unpinned,1)
+    checks['no_kernel_fault']='Kernel panic' not in log and 'Oops' not in log
+    checks['population_count']=f'MALLOC_COUNT_USED {a.malloc_count}\n' in log
+    intervals=re.findall(r'MALLOC_HOT_BEGIN\n(.*?)MALLOC_HOT_END\n',log,re.S)
+    kinds=[re.findall(r'CAPSTONE_VM_BOUNDARY kind=(\d+)',x) for x in intervals]
+    checks['local_fast_path']=len(kinds)==2 and kinds[0]==['10']
+    checks['service_control']=len(kinds)==2 and '7' in kinds[1]
+    result={'status':'PASS' if all(checks.values()) else 'FAIL','tests':checks,'checks':checks,'pass':all(checks.values()),'sdk':config,'virtual_vm_abi':abi,'fault_store_offset':offset,'exact_bounds':a.exact_bounds,'inputs':{name:hashlib.sha256(path.read_bytes()).hexdigest() for name,path in inputs.items()}}
+    (a.work/'result.json').write_text(json.dumps(result,indent=2)+'\n')
+    for name,ok in checks.items():print(('PASS ' if ok else 'FAIL ')+name)
+    return 0 if result['pass'] else 1
+if __name__=='__main__':raise SystemExit(main())

@@ -4,7 +4,7 @@
 Archives are compared member by member, sdk.json key by key. Text files (build.ninja, CMakeCache.txt,
 cmake_install.cmake, ...) are compared after replacing each arm's own root with a placeholder, so a
 difference that is only the output path is reported as such and not hidden. Exit 0 only when the
-differing content is exactly the expected set: the heap.c object in libapplication-runtime.a and the
+differing content is exactly the expected set: the allocator objects in runtime/libc and the
 sdk.json heap switches (plus root-path substitutions, which are listed)."""
 import hashlib, json, os, subprocess, sys, tempfile
 from pathlib import Path
@@ -31,6 +31,15 @@ def members(path, llvm_ar=None):
         out[f"{name}#{seen[name]}" if seen[name] > 1 else name] = body
     return out
 
+ALLOCATOR_MEMBERS = {'heap.c.obj', 'malloc-mapping.c.obj'} | {
+    'src_malloc_mallocng_'+name+'.o' for name in
+    ('malloc', 'free', 'realloc', 'aligned_alloc', 'malloc_usable_size')}
+
+def allowed(archive, member):
+    return (archive.endswith('libapplication-runtime.a') and member in
+            {'heap.c.obj', 'malloc-mapping.c.obj'}) or (
+            Path(archive).name.startswith('libc-') and member in ALLOCATOR_MEMBERS)
+
 def main():
     r1, r2 = Path(sys.argv[1]).resolve(), Path(sys.argv[2]).resolve()
     llvm_ar = os.path.join(os.environ.get('CAPSTONE_LLVM_BIN', ''), 'llvm-ar')
@@ -47,7 +56,7 @@ def main():
         if f.endswith(('.ninja_log', '.ninja_deps', 'CMakeConfigureLog.yaml')):
             report.append(f"BUILD-LOG {f} (timestamps, try-compile scratch names)")
             continue
-        if f.endswith('/heap.c.obj'):
+        if Path(f).name in ALLOCATOR_MEMBERS:
             report.append(f"HEAP-OBJECT {f} {sha(a)} {sha(b)}")
             continue
         if f.endswith('.a'):
@@ -55,7 +64,7 @@ def main():
             diff = sorted(k for k in set(m1) | set(m2) if m1.get(k) != m2.get(k))
             for k in diff:
                 report.append(f"ARCHIVE-MEMBER {f}:{k} {sha(m1.get(k, b''))} {sha(m2.get(k, b''))}")
-                if not (f.endswith('libapplication-runtime.a') and k == 'heap.c.obj'):
+                if not allowed(f, k):
                     unexpected.append(f"{f}:{k}")
             if not diff:
                 report.append(f"ARCHIVE-HEADER-ONLY {f}"); unexpected.append(f)
@@ -93,7 +102,7 @@ def main():
     if unexpected:
         print("UNEXPECTED:", *unexpected, sep="\n  ")
         return 1
-    print("INTEGRITY OK: the content differs only in heap.c.obj and the sdk.json heap switches"
+    print("INTEGRITY OK: the content differs only in allocator objects and the sdk.json heap switches"
           " (every other listed difference is the output path or a build log)")
     return 0
 

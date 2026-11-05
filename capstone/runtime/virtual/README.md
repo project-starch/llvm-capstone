@@ -50,7 +50,10 @@ Quanta return to Linux even if the application never calls the runtime.
 
 Virtual threads use the same Linux `mm`, page tables and lifetime table. Each
 thread has its own QEMU supervisor slot, PCC, registers, stack and optional TLS
-pointer. `capstone_virtual_thread_create` supplies an explicit start frame;
+pointer. Concurrent libc users must use `pthread_create`, which initializes
+musl thread state, enables its allocator locks and provides private TLS. Raw
+contexts sharing the caller's TLS are not libc threads.
+`capstone_virtual_thread_create` supplies an explicit start frame;
 the trusted module supplies `satp` and `srevroot`, forces protected-U options,
 and one Linux worker task drives each slot. `capstone_virtual_thread_exit`
 discards only the calling slot and returns its frame mapping to the trusted
@@ -376,10 +379,11 @@ Inside that guest, load `capstone_vm.ko` and invoke
 The launcher reports node use, pinned pages, service/copy counters, and guest
 monotonic launch/elapsed times. These QEMU times are not processor benchmarks.
 
-The heap's two measurement switches, `CAPSTONE_HEAP_LIFETIMES` and
-`CAPSTONE_HEAP_SCRUB_FREE` (lifetimes ON and scrub OFF by default;
-`-DCAPSTONE_HEAP_LIFETIMES=OFF` or `-DCAPSTONE_HEAP_SCRUB_FREE=ON` as a further argument builds
-the bounds-only or the scrubbing arm, recorded in `sdk.json`), are described in
+The default heap uses object bounds and lifetimes without payload scrubbing.
+`build-sdk.sh ... -DCAPSTONE_HEAP_LIFETIMES=OFF` builds the bounds-only arm;
+also passing `-DCAPSTONE_HEAP_OBJECT_BOUNDS=OFF` builds the mapping-authority
+arm. These options rebuild both libc and runtime and are recorded in `sdk.json`.
+`CAPSTONE_HEAP_SCRUB_FREE=ON` is rejected. See
 [mallocng.md](mallocng.md#measurement-switches).
 
 To exercise node growth and reuse, build `node-contract.c` with this SDK:

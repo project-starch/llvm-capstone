@@ -7,13 +7,13 @@
    the link only). Any difference fails.
 2. Per image pair (same image name, so the same K): the section headers (`llvm-readelf -S`) must be
    identical, and in the linker maps every input section and every symbol must sit at the same
-   address with the same size -- except heap.c's own (`libapplication-runtime.a(heap.c.obj)`),
+   address with the same size -- except the allocator text/bss regions,
    which necessarily differ. Paths are compared with each arm's SDK root and build directory
    replaced by placeholders. A pair that differs anywhere else FAILS and the program is blocked.
 
 --negative-control shows the gate can fire: T1 against a T2 build linked with the SDK's default
-link.ld (heap.c first, so everything after it moves) must FAIL for every pair. --k-check requires
-every K>0 variant to equal K0 outside heap.c.
+link.ld (allocator ungrouped, so everything after it moves) must FAIL for every pair. --k-check requires
+every K>0 variant to equal K0 outside allocator regions.
 """
 import argparse
 import os
@@ -71,7 +71,9 @@ def read_map(path, subst):
         # (the K shift, the region's end markers), are the allocator's; everything else is compared
         if out_sec in SYMBOL_TABLES:
             continue  # unallocated; T2's heap.c has one local more than T1's
-        in_heap = HEAP in in_sec or 'bench_heap' in name.lower()
+        in_allocator = ('libapplication-runtime.a(malloc-mapping.c.obj)' in in_sec or
+                        re.search(r'lib[^/()]*\.a\(src_malloc_[^()]+\.o\)', in_sec))
+        in_heap = HEAP in in_sec or (in_allocator and out_sec in ('.text', '.bss')) or 'bench_heap' in name.lower()
         (heap if in_heap else entries)[key].append((vma, size))
     return entries, heap
 
@@ -88,7 +90,7 @@ def compare(img1, img2, subst1, subst2):
     bad = [k for k in keys if sorted(e1.get(k, [])) != sorted(e2.get(k, []))]
     if bad:
         bad.sort()
-        problems.append(f'{len(bad)} map entries differ outside heap.c, first: {bad[0]} '
+        problems.append(f'{len(bad)} map entries differ outside allocator regions, first: {bad[0]} '
                         f'{e1.get(bad[0])} | {e2.get(bad[0])}')
     inputs = sum(1 for k in keys if k[0] == 1)
     heap_inputs = sum(1 for k in set(heap1) | set(heap2) if k[0] == 1)
@@ -109,7 +111,7 @@ def main():
     p.add_argument('t2', type=Path)
     p.add_argument('--tsv', type=Path)
     p.add_argument('--k-check', action='store_true',
-                   help='also require, within T1, that every K variant equals K0 outside heap.c')
+                   help='also require, within T1, that every K variant equals K0 outside allocator regions')
     p.add_argument('--negative-control', type=Path,
                    help='a T2 build linked with the SDK default link.ld (build.py --layout default): '
                         'every pair against T1 must FAIL, or the gate cannot fire')
@@ -144,7 +146,7 @@ def main():
             problems, _, _ = compare(a.t1 / f'{prog}.K0.dom', a.t1 / f'{i}.dom', s1, s1)
             if problems:
                 kbad.append(f'{i}: {problems[0][:160]}')
-        print(f'K check: {len(kimgs) - len(kbad)} of {len(kimgs)} K>0 images equal K0 outside heap.c')
+        print(f'K check: {len(kimgs) - len(kbad)} of {len(kimgs)} K>0 images equal K0 outside allocator regions')
         for b in kbad:
             print('  FAIL', b)
         selftest_ok = selftest_ok and not kbad

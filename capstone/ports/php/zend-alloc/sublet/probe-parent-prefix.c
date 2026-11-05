@@ -36,6 +36,7 @@ int main(int argc, char **argv)
     }
     /* Allocation failure must leave both the old child and its parent usable. */
     CHECK(zend_cap_reblock(block, (size_t)-1, HDR + 55) == NULL);
+    CHECK(zend_cap_reblock(block, (size_t)-129, HDR + 55) == NULL);
     CHECK(((unsigned char *)p)[54] == 0x6b);
     CHECK(zend_cap_header(p, HDR) == block);
     fresh = zend_cap_reblock(block, HDR + 200000, HDR + 55);
