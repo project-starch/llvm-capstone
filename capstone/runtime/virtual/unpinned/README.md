@@ -268,6 +268,11 @@ carries it as `unpinned_fast_faults=`). `gates/run-arm.sh` takes `FAST_FAULT=on|
 runner passes the parameter and logs `<GATE>_FAST_FAULT:Y|N|A` after each insmod, and `compare.py` refuses an
 output whose lines are not the recorded request (`--control-fast` / `--arm-fast` pin a pair).
 
+Negative control: the CV_TEST_HOOKS build has `test_fast_noflags`, which drops `FAULT_FLAG_WRITE` in the direct path
+only. `run-fast-control.py` runs step-hooks `base1` and `adapt` with it three ways (fast on and unbroken, fast on
+and broken, fast off and broken) and requires the exit checks of all four runs to flip on the broken direct path
+and the fast-off broken module to equal the unbroken one. It is not part of `run-arm.sh`.
+
 Not covered: no gate scenario separates the replicated permission test from the caller's own VMA test, since
 the window is clipped to the VMA that already passed it; file and text VMAs are not measured; and what the path
 saves is instruction attempts in the QEMU model, not cycles on any core.

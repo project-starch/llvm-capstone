@@ -1735,6 +1735,7 @@ static bool test_skip_vma_clip;          /* the window may cross the demand faul
 static bool test_skip_arena_clip;        /* the window may cross the arena's last page */
 static bool test_skip_stop_check;        /* no cv_step_stop() between batches */
 static bool test_skip_resident_stop;     /* the window does not end at the first resident PTE */
+static bool test_fast_noflags;           /* the direct fault path (unpinned_fast_fault) drops FAULT_FLAG_WRITE */
 static unsigned long test_skip_scrub_after_pages;     /* the namespace scrub stops after N pages (0: all) */
 static unsigned long test_skip_scrub_after_granules;  /* ... and after N granules of each page (0: all) */
 module_param(test_inject, ulong, 0444);
@@ -1747,6 +1748,7 @@ module_param(test_skip_vma_clip, bool, 0444);
 module_param(test_skip_arena_clip, bool, 0444);
 module_param(test_skip_stop_check, bool, 0444);
 module_param(test_skip_resident_stop, bool, 0444);
+module_param(test_fast_noflags, bool, 0444);
 module_param(test_skip_scrub_after_pages, ulong, 0444);
 module_param(test_skip_scrub_after_granules, ulong, 0444);
 static u64 test_events, test_injections, test_stops, test_initial_stops, test_violations;
@@ -1850,6 +1852,7 @@ static void test_report(const char *why)
 #define TEST_SKIP_ARENA_CLIP() test_skip_arena_clip
 #define TEST_SKIP_STOP_CHECK() test_skip_stop_check
 #define TEST_SKIP_RESIDENT_STOP() test_skip_resident_stop
+#define TEST_FAST_NOFLAGS() test_fast_noflags
 #define TEST_SCRUB_PAGES() test_skip_scrub_after_pages
 #define TEST_SCRUB_GRANULES() test_skip_scrub_after_granules
 #define TEST_ENTRY() do { test_entry(); ++test_entries; } while (0)
@@ -1873,6 +1876,7 @@ static void test_report(const char *why)
 #define TEST_SKIP_ARENA_CLIP() false
 #define TEST_SKIP_STOP_CHECK() false
 #define TEST_SKIP_RESIDENT_STOP() false
+#define TEST_FAST_NOFLAGS() false
 #define TEST_SCRUB_PAGES() 0UL
 #define TEST_SCRUB_GRANULES() 0UL
 #define TEST_ENTRY() do { } while (0)
@@ -2205,6 +2209,7 @@ static inline int unpinned_fault_vma(struct vm_area_struct *v, unsigned long add
     if (!(v->vm_flags & ((flags & FAULT_FLAG_WRITE) ? VM_WRITE : VM_READ)))
         return -EFAULT;
     ++unpinned_fast_faults;
+    if (TEST_FAST_NOFLAGS()) flags = 0;   /* broken variant: a store is resolved as a read */
     pr_info_once("capstone_vm: unpinned fault path: direct handle_mm_fault (unpinned_fast_fault=1), first at 0x%lx\n",
                  address);
     fault = handle_mm_fault(v, address & PAGE_MASK, flags, NULL);
