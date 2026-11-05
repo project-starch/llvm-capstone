@@ -206,3 +206,27 @@ Transcript lines in `tagleak/board1-1831.txt`.
 - **Board 1** runs mcf on the counter kit (results/2026-11-05-gcctrain Addendum 4), then lbm, imagick, nab, nab-rq
   and gcc once the verdict holds.
 - The failed run's verdict file and output are kept, with a `.nopagemap-1833` suffix.
+
+## Addendum 5 (5 Nov 20:10): N1 holds on silicon
+
+**The probe on board 2** (19:37-20:06, kit bkit25-nset, 18-bit module, C.5a). Transcript lines in
+`tagleak/board2-2006.txt`, verdict in `tagleak/verdict-board2-2006.txt`.
+
+| Pair | Fill | Forced reuse in the scan | Tags in the scan | ctl | N2 |
+|---|---|---|---|---|---|
+| sweep 3 | 371,596 / 371,596 sampled granules tagged | ≥ 47,231 of 140,800 pages | 0 | 1 | DENIED / WRITABLE |
+| sweep 2 | 371,596 / 371,596 | ≥ 47,129 of 140,800 pages | 0 | 1 | DENIED / WRITABLE |
+
+**N1 HOLDS and N2 HOLDS.**
+- With no exit sweep, a context that takes at least 47 k frames which a previous context left full of capabilities
+  reads not one tagged granule in them.
+- The kernel's next-use overwrite clears the tags on silicon, as the RTL and source reading said.
+
+**Two driver defects, fixed.**
+- The driver read the verdict from `999.tagleak-test`, the first probe's name, and so wrote `N1 FAILS rc=1` before
+  stopping board 2. The verdict now names the stage from probe.list. The real verdict, read from the probe's own
+  transcript, is the one in `verdict-N1.txt`; the wrong file is kept as `.wrongpath-2006`.
+- Earlier at 19:29-19:34, a console-lock timeout on the C.5a flash stopped the first try. The drivers now retry a
+  failed flash once; the retry was dry-run. The same no-wait DONE check as gt-run's was also fixed in ns-run.
+
+**Board 2 now runs xz** behind the verdict, with output in out-ns-b2x. Board 1 runs its list after its mcf.

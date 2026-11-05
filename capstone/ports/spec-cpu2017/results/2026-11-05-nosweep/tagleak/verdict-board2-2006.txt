@@ -1,0 +1,3 @@
+sweep=3: fill tagged 371596/371596 | scan pages 140800 forced reuse >= 47231 pages by counting tagged 0 ctl 1 -> N1 holds | ETX running=DENIED idle=WRITABLE -> N2 holds
+sweep=2: fill tagged 371596/371596 | scan pages 140800 forced reuse >= 47129 pages by counting tagged 0 ctl 1 -> N1 holds | ETX running=DENIED idle=WRITABLE -> N2 holds
+N1 HOLDS

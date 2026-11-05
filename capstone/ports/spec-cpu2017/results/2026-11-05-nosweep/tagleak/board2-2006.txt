@@ -1,0 +1,13 @@
+TAGLEAK-MODE sweep=3 mb=550 free_kb=939256
+ETXPROBE running=DENIED /test-domains/vbatch/spec/run.sh: line 25: can't create /test-domains/vbatch/spec/bin/tagleak: Text file busy
+TAGLEAK-RC fill 0 TAGLEAK fill mb=550 pages=140800 sampled_tagged=371596 of 371596 nopfn=-1 CAPSTONE_VM_ADD_OK slot=0 base=0x3fa4721000 bytes=409600 reg=3 perms=7 linear=0
+ETXPROBE idle=WRITABLE
+TAGLEAK-FREE before-scan free_kb=937476
+TAGLEAK-RC scan 0 TAGLEAK scan mb=550 pages=140800 tagged=0 tagged_pages=0 fill_pfns=-1 recycled=-1 tagged_recycled=-1 nopfn=-1 ctl=1 CAPSTONE_VM_ADD_OK slot=0 base=0x3fbcbd4000 bytes=409600 reg=3 perms=7 linear=0
+TAGLEAK-MODE sweep=2 mb=550 free_kb=938688
+ETXPROBE running=DENIED /test-domains/vbatch/spec/run.sh: line 25: can't create /test-domains/vbatch/spec/bin/tagleak: Text file busy
+TAGLEAK-RC fill 0 TAGLEAK fill mb=550 pages=140800 sampled_tagged=371596 of 371596 nopfn=-1 CAPSTONE_VM_ADD_OK slot=0 base=0x3f84ec7000 bytes=409600 reg=3 perms=7 linear=0
+ETXPROBE idle=WRITABLE
+TAGLEAK-FREE before-scan free_kb=937884
+TAGLEAK-RC scan 0 TAGLEAK scan mb=550 pages=140800 tagged=0 tagged_pages=0 fill_pfns=-1 recycled=-1 tagged_recycled=-1 nopfn=-1 ctl=1 CAPSTONE_VM_ADD_OK slot=0 base=0x3fb70bb000 bytes=409600 reg=3 perms=7 linear=0
+TAGLEAK-RESTORED sweep=2

@@ -57,7 +57,7 @@ main() {
   log "preconditions ok; waiting for pid ${NS_WAITPID:-none}"
   t=0; while [ -n "${NS_WAITPID:-}" ] && kill -0 "$NS_WAITPID" 2>/dev/null; do
     [ $t -ge 172800 ] && { log "STOP: pid $NS_WAITPID still runs"; return 2; }; sleep "${NS_POLL_S:-60}"; t=$((t + ${NS_POLL_S:-60})); done
-  sed -n "/START pid ${NS_WAITPID:-none}\$/,\$p;/START pid ${NS_WAITPID:-none} /,\$p" "${NS_WAITLOG:-/dev/null}" | grep -q "^${NS_WAITPFX:-XX} .* DONE" \
+  [ -z "${NS_WAITPID:-}" ] || sed -n "/START pid ${NS_WAITPID:-none}\$/,\$p;/START pid ${NS_WAITPID:-none} /,\$p" "${NS_WAITLOG:-/dev/null}" | grep -q "^${NS_WAITPFX:-XX} .* DONE" \
     || { log "STOP: pid ${NS_WAITPID:-none} did not end with DONE"; return 2; }
   if [ $BRD != $PB ]; then
     t=0; until [ -s "$VERDICT" ]; do
@@ -71,6 +71,8 @@ main() {
     $STORE no-such-bitstream-$$.bit >> "$L" 2>&1; r=$?; [ $r = 1 ] || { log "flash $n: store-has control rc=$r"; return 1; }
     b=$($BOOK book $BRD 30 "vp2 $n REFLASH (board $BRD)") || b=
     log "FLASH BEGIN $n booking ${b:-none}"; $FLASH "$n.bit" "$H/bitstreams/$n.bit" "$s" >> "$L" 2>&1; r=$?
+    # one retry: the console lock can time out right after another session's flash (5 Nov 19:29, board 2)
+    [ $r = 0 ] || { log "FLASH $n rc=$r, retrying once in 60 s"; sleep "${FLASH_RETRY_S:-60}"; $FLASH "$n.bit" "$H/bitstreams/$n.bit" "$s" >> "$L" 2>&1; r=$?; }
     [ -n "$b" ] && $BOOK unbook "$b" >> "$L" 2>&1; log "FLASH END $n rc=$r"; [ $r = 0 ] || return 1
     $RB "$n.bit" "$s" >> "$L" 2>&1; r=$?; case $r in 0|3) log "READBACK $n ok rc=$r";; *) log "READBACK $n rc=$r"; return 1;; esac
   }
@@ -80,7 +82,7 @@ main() {
       log "CHAIN probe BEGIN"
       SB_KIT=$KIT SB_BITSTREAM=1fc2cd5aa SB_MODULE=$MOD SB_VEXEC=$EGV $CHAIN $BRD "$O/probe.list" "$OUT" >> "$L" 2>&1
       log "CHAIN probe END rc=$?"
-      $TLV "$OUT/999.tagleak-test/guest/board-raw.txt" > "$O/verdict-detail.txt" 2>&1; r=$?
+      $TLV "$OUT/$(basename "$(awk '!/^#/ && NF {print $1; exit}' "$O/probe.list")")/guest/board-raw.txt" > "$O/verdict-detail.txt" 2>&1; r=$?
       sed 's/^/  /' "$O/verdict-detail.txt" >> "$L"; log "PROBE verdict rc=$r"
       # the other board waits on this file: only the summary line, written once, after the read
       tail -1 "$O/verdict-detail.txt" > "$VERDICT.tmp"; [ $r = 0 ] || echo "N1 FAILS rc=$r" > "$VERDICT.tmp"; mv "$VERDICT.tmp" "$VERDICT"
