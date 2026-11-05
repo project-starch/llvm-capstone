@@ -1,0 +1,13 @@
+GT QEMU gate read: READ 500.perlbench_r test capstone-lifetimes: 2/2 commands ended, rc!=0: 0, hashes 5, in-band 3, specdiff 2/2 PASS
+GT START pid 1484366 board 1
+GT preconditions ok; waiting for pid none
+GT FLASH BEGIN caplifive_vp2c_1fc2cd5aa booking STUB book 1 30 vp2 caplifive_vp2c_1fc2cd5aa REFLASH (board 1)
+GT FLASH END caplifive_vp2c_1fc2cd5aa rc=0
+GT READBACK caplifive_vp2c_1fc2cd5aa ok rc=0
+GT CHAIN rest BEGIN
+  stage $CAPSTONE_WORK/perf/rest/stages/500.perlbench_r-test-capstone-lifetimes-devmk
+GT CHAIN rest END rc=0
+GT FLASH BEGIN caplifive_vp2c_e7af48457 booking STUB book 1 30 vp2 caplifive_vp2c_e7af48457 REFLASH (board 1)
+GT FLASH END caplifive_vp2c_e7af48457 rc=0
+GT READBACK caplifive_vp2c_e7af48457 ok rc=0
+GT DONE spec 0; board 1 back on bitstream 3
