@@ -1,3 +1,14 @@
+## 2026-11-05 — Continue with matched work slices
+
+For overhead work, use matched logical start/stop points instead of waiting
+for complete multi-hour workloads or comparing equal wall time. Full
+qualification is a separate task. The [Perl slices](../../ports/spec-cpu2017/results/2026-11-05-perl-slices/README.md)
+now cover 10,000/20,000 random draws, with a reference-output-checked completed
+makerand sub-workload as a consistency check. Next inspect compiler output
+for Perl_pp_nextstate, Perl_pp_padsv and Perl_pp_unstack alongside the GCC
+cursor/bounds/move findings. Preserve the frozen SPEC source packages and
+original inputs; no further heap changes are motivated by the Perl delta.
+
 ## 2026-11-05 — Optimize the measured residual
 
 Use the [fresh SPEC/PHP instruction baseline](../../ports/spec-cpu2017/results/2026-11-05-minimal-mallocng/README.md).
