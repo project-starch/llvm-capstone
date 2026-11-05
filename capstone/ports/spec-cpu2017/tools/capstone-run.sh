@@ -11,8 +11,7 @@
 #
 # ldecod reads past one of its own tables (tools/build-host-ldecod.sh says where); it only
 # decodes the reference .264 into the .yuv that x264 encodes, and x264 itself runs on Capstone.
-# For 500.perlbench_r's test workload the run directory's t/op/pack.t gets the four stubs of
-# tools/perl-pack-stub.py first.
+# Benchmark source and input files are never patched by this wrapper.
 #
 # Every invocation is recorded in $CAPSTONE_SPEC_RECORD/invocations/NNNN.json: route, argv,
 # cwd, the executable's sha256, the guest VM's identity and the guest's exit or fault record.
@@ -82,13 +81,7 @@ case "$here" in
   *) refuse "run directory $here is not below the share $share" "$@" ;;
 esac
 stub=null
-case "$(basename "$exe")" in
-  perlbench_r_*)
-    if [ -f t/op/pack.t ]; then
-      stub=$(python3 "$CAPSTONE_SPEC_KIT/tools/perl-pack-stub.py" t/op/pack.t) || refuse "pack.t stub" "$@"
-      echo "$stub" >> "$CAPSTONE_SPEC_RECORD/perl-pack-stub.jsonl"
-    fi ;;
-esac
+# Benchmark test inputs must remain unchanged; no runtime test stubbing.
 # The guest runs the same file: the image lies below the share, and the guest's cwd is the same
 # directory, so a relative program path (runcpu's form, which perl's t/TEST reuses as $^X) means
 # the same file there. A host path below the share, as the program or as an argument (validation
@@ -112,7 +105,14 @@ if [ "${CAPSTONE_SPEC_STAGE:-}" = tmpfs ]; then
   staged=/tmp/stage-$id-$(basename "$exe")
   env PYTHONPATH="$CAPSTONE_VM_HOST" python3 -m capstone_vm --state "$CAPSTONE_VM_STATE" exec -- sh -c "cp $(printf %q "/mnt/host/${exe#"$share"/}") $(printf %q "$staged") && chmod 0755 $(printf %q "$staged")" \
     || refuse "staging the image to the guest's tmpfs failed" "$@"
-  words[0]=$staged
+  # Perl's harness prepends ../ to a relative $^X after changing directory.
+  # Keep a relative invocation relative when staging the same binary; do not
+  # patch the harness or any input file. Repeated .. resolves to the root.
+  case "${words[0]}" in
+    /*) words[0]=$staged ;;
+    *) IFS=/ read -r -a guest_components <<< "${guest#/}"
+       words[0]=$(printf '../%.0s' "${guest_components[@]}")${staged#/} ;;
+  esac
   staged=$(printf '"%s"' "$staged")
 fi
 rc=0

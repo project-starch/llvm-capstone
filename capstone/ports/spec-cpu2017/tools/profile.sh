@@ -29,6 +29,7 @@ KIT=$(cd "$(dirname "$0")/.." && pwd -P)
 j() { python3 -c "import json,os,sys;d=json.load(open(sys.argv[1]));[d:=d[k] for k in sys.argv[2].split('.')];print(os.path.expanduser(d) if isinstance(d,str) else d if not isinstance(d,(list,dict)) else json.dumps(d))" "$ARMS" "$1"; }
 jopt() { python3 -c "import json,os,sys;d=json.load(open(sys.argv[1]));[d:=d.get(k,{}) for k in sys.argv[2].split('.')];print(os.path.expanduser(d) if isinstance(d,str) else d if d!={} else sys.argv[3])" "$ARMS" "$1" "$2"; }
 SHARE=$(cd "$(j share)" && pwd -P); SPEC_ROOT=$(cd "$(j spec_root)" && pwd -P); VMHOST=$(j vm_host); PL=$(cd "$(j platform.dir)" && pwd -P)
+OUTPUT_ROOT=$(jopt "arms.$ARM.output_root" "$SPEC_ROOT")
 KIND=$(j "arms.$ARM.kind"); CFG=$(j "arms.$ARM.config"); LABEL=$(j "arms.$ARM.label"); SHARE_MODEL=$(jopt "arms.$ARM.share_model" mapped-xattr)
 case "$OUT" in "$SHARE"/*) ;; *) echo "profile: $OUT is not below the share $SHARE" >&2; exit 2 ;; esac
 case "$SPEC_ROOT" in "$SHARE"/*) ;; *) echo "profile: the SPEC tree is not below the share $SHARE" >&2; exit 2 ;; esac
@@ -72,10 +73,10 @@ if [ -n "$STOP_JSON" ]; then
   stop_sym=$(python3 -c "import json,sys;print(json.loads(sys.argv[1])['symbol'])" "$STOP_JSON")
   # the arm's build of this benchmark that defines the symbol; with several, the benchmark's own
   cands=()
-  for e in "$SPEC_ROOT/benchspec/CPU/$BENCH/exe/"*"_base.$LABEL"; do
+  for e in "$OUTPUT_ROOT/benchspec/CPU/$BENCH/exe/"*"_base.$LABEL"; do
     [ -f "$e" ] && "$(jopt nm llvm-nm)" --defined-only "$e" 2>/dev/null | awk -v s="$stop_sym" '$3 == s && $2 ~ /^[TtWw]$/ {f=1} END {exit !f}' && cands+=("$e")
   done
-  [ ${#cands[@]} = 1 ] && STOP_EXE=${cands[0]} || STOP_EXE=$SPEC_ROOT/benchspec/CPU/$BENCH/exe/${BENCH#*.}_base.$LABEL
+  [ ${#cands[@]} = 1 ] && STOP_EXE=${cands[0]} || STOP_EXE=$OUTPUT_ROOT/benchspec/CPU/$BENCH/exe/${BENCH#*.}_base.$LABEL
   [ ${#cands[@]} -ge 1 ] || { echo "profile: no $BENCH binary of label $LABEL defines $stop_sym" >&2; exit 2; }
   printf '%s\n' "${cands[@]}" | grep -qxF "$STOP_EXE" || { echo "profile: $stop_sym is in ${cands[*]}, not one binary" >&2; exit 2; }
   python3 "$KIT/tools/stop-at.py" resolve --nm "$(jopt nm llvm-nm)" --kind "$KIND" --exe "$STOP_EXE" \
@@ -153,7 +154,7 @@ vm exec -- sh -c "dmesg | tail -n 400; echo ---; dmesg | wc -l; cat /proc/sys/ke
 vm down > /dev/null 2>&1 || true
 trap - EXIT
 mkdir -p "$OUT/spec"
-for f in $(grep -o "result/CPU2017\.[0-9]*\.[A-Za-z0-9._-]*" "$OUT/runcpu.log" | sort -u); do [ -f "$f" ] && cp "$f" "$OUT/spec/"; done
+for f in $(grep -o "result/CPU2017\.[0-9]*\.[A-Za-z0-9._-]*" "$OUT/runcpu.log" | sort -u); do [ ! -f "$OUTPUT_ROOT/$f" ] || cp "$OUTPUT_ROOT/$f" "$OUT/spec/"; done
 rundir=$(python3 - "$OUT" <<'PY'
 import glob, json, os, sys
 for f in sorted(glob.glob(os.path.join(sys.argv[1], "invocations", "[0-9][0-9][0-9][0-9].json"))):
@@ -169,17 +170,13 @@ if [ -n "$rundir" ] && [ -d "$rundir" ]; then
   ( cd "$rundir" && find . -type f -print0 | LC_ALL=C sort -z | xargs -0 sha256sum ) > "$OUT/rundir.sha256"
 fi
 python3 "$KIT/tools/verdict.py" "$OUT" "$BENCH" "$SIZE" "$rc" "$start" "$end" "$LABEL" > "$OUT/result.json"
-# verdict.py's route check: a plain arm's invocations are "guest-plain"
+# verdict.py checks both guest routes, including every plain process exit.
 python3 - "$OUT" "$KIND" <<'PY'
 import json, sys
 out, kind = sys.argv[1:3]
 r = json.load(open(f"{out}/result.json"))
 if kind == "plain":
-    routes = r.get("routes", {})
     r["routes_note"] = "plain arm: guest-plain invocations stand for guest ones"
-    if routes.get("guest-plain") and not routes.get("guest"):
-        r["reasons"] = [x for x in r.get("reasons", []) if "guest" not in x]
-        r["verdict"] = "PASS" if not r["reasons"] else "FAIL"
     json.dump(r, open(f"{out}/result.json", "w"), indent=1)
 print(r["verdict"], r.get("reasons"))
 PY

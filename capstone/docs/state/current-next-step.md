@@ -1,3 +1,22 @@
+## 2026-11-05 — Optimize the measured residual
+
+Use the [fresh SPEC/PHP instruction baseline](../../ports/spec-cpu2017/results/2026-11-05-minimal-mallocng/README.md).
+Preserve original SPEC inputs and the existing frozen src.alt packages.
+Prioritize compiler capability cursor/bounds/move code and stack traffic;
+these account for 82.2% of GCC's application-function delta. mcf's main
+positive delta is in spec_qsort; xz's mapping-index publication and memcpy,
+and nab's exp/log, are distinct library targets. Keep direct lifetime
+instructions separate from surrounding metadata and generated code.
+
+For PHP, test an ABI-aware cache policy with explicit retention accounting,
+and specialize/inline nested helper paths while retaining stale/interior/parent
+checks and compressed-bounds rules. The current measurements do not change
+that policy. A libc-only -O2 build saves about 0.5–0.6% on GCC/PHP churn;
+qualify it beyond these workloads before changing the default. Match compiler
+revisions for a stricter future ISA comparison. Perl/x264 still need complete
+unmodified-input runs beyond the bounded diagnostics. Other ports and RTL
+were explicitly excluded from this measurement task.
+
 ## 2026-11-05 — Minimal protected mallocng
 
 The minimal port replaces `runtime/virtual/heap.c` and its object registry with

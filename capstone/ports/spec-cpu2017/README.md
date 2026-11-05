@@ -13,6 +13,12 @@ research results and never reportable.
 The measurement plan, with the pre-registered readings of its controls, is
 `capstone/docs/plans/spec-spatial-vs-temporal.md`; the heap switches it measures are PR #279.
 
+The [2026-11-05 minimal-mallocng measurements](results/2026-11-05-minimal-mallocng/README.md)
+use a fresh SDK at `ae47030ceeb6`, six complete paired SPEC test workloads,
+bounded x264 diagnostics and a PHP comparison. They record the current
+allocator, source-integrity checks and compiler/optimization-level limits;
+the older pinned campaigns below retain their original scope.
+
 ## What is pinned
 
 `manifest.lock.json` names every input by hash. The scripts check it before they use anything.
@@ -38,12 +44,14 @@ the manifest names every file in it by hash.
 | 500.perlbench_r | 13 files (src.alt) | pointer provenance and alignment on 128-bit pointers, musl differences; `srcalt-notes/500.perlbench_r.md` |
 | 502.gcc_r | 9 files (src.alt) | 7 for 128-bit pointers (qsort swap unit, page-group, obstack, pool and bitmap alignment, splay-tree keys), 2 out-of-bounds reads in GCC 4.5 itself that later GCC releases fixed; `srcalt-notes/502.gcc_r.md` |
 | 505.mcf_r | 1 file (src.alt) | spec_qsort swaps `long` words and drops pointer tags |
-| 500.perlbench_r test input | 4 of pack.t's checks stubbed, in the run directory only | each rebuilds a pointer from bytes, which carries no tag; `tools/perl-pack-stub.py`, applied and recorded by `tools/capstone-run.sh` |
 | 525.x264_r input generator | ldecod runs on the host | it reads past its own table; it only produces x264's input. x264 runs on Capstone |
 | all | `-DSPEC_LP64`, per-benchmark portability flags | `config/capstone-virtual.cfg` says why for each |
 
-The installed SPEC sources and inputs are never changed; `tools/build.sh` checks the tree against
-SPEC's MANIFEST after the build.
+SPEC sources change only through the frozen `src.alt` packages. Inputs, including
+staged run-directory copies, must remain unchanged. The former Perl `pack.t`
+stubbing helper is removed; historical runs that used it do not qualify as
+unchanged-input results. The verdict rejects records of that intervention.
+`tools/build.sh` checks the installed tree against SPEC's MANIFEST after the build.
 
 ## From the archive to results
 
