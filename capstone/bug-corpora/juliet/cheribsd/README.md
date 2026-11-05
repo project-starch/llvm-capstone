@@ -64,7 +64,11 @@ read from the tools rather than from this paragraph.
 - **rand-dependent cases** (flow variant 12) take their verdict from the seeded run, as in `../judge.py`, with the
   seeds the guest's own `rand()` gives: the census run's seed finder reports the first seed for each pattern of the
   first two `rand()%2` results under this libc, `build.py --seeded` builds with those, and every batch of every run
-  must read the same four.
+  must read the same four. CAUGHT if any seed is caught; STOPPED if no seed is caught and the seeds that ran the
+  defect were all stopped the same way (the others MISSED); MISSED only if all four completed. The off and
+  every-free columns of such a case are marked `:unseeded`, since those configurations run the census image only.
+  The STOPPED clause was added after the temporal run: its six CWE-415 rand cases read SIGABRT on the one seed
+  pattern that takes the double free and MISSED on the three that do not, which the first rule left NO-READING.
 - **MISSED cases are relabelled only on evidence from this platform**: `NOT-TRIGGERED:sizeof-ptr` from the type-size
   probe read in the guest (a capability is 16 bytes, so `malloc(sizeof(T*))` holds one `double`, `int64_t` or
   two-int struct); `NOT-TRIGGERED:wide-snprintf` from the case's own twin printing `wcslen=1` after the copy on this

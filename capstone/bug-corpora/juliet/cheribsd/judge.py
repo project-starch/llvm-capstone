@@ -38,7 +38,11 @@ virtual harness's strict check, which reads the faulting capability's bounds fro
 bounds, so a size-based attribution is not available here, and the column says so.
 
 A rand_flow case takes its verdict from the seeded run, as in ../judge.py: CAUGHT if any seed's image, in a batch
-that counts, is CAUGHT; MISSED only if exactly one image per pattern was read and all four are MISSED. A MISSED case
+that counts, is CAUGHT; STOPPED:<what> if no seed is CAUGHT, every seed is MISSED or STOPPED and at least one is
+STOPPED (the seeds that ran the defect were all stopped the same way; added after the temporal run, whose six
+CWE-415 rand_flow cases read SIGABRT on the one seed pattern that takes the double free and MISSED on the three
+that do not); MISSED only if exactly one image per pattern was read and all four are MISSED. The off and every-free
+columns of a rand_flow case are marked `:unseeded`: those configurations run the census image only. A MISSED case
 is relabelled NOT-TRIGGERED only on evidence from the measured platform: wide-snprintf by its own twin's wcslen=1
 reading (what this libc's swprintf writes is deterministic), sizeof-ptr by the probe's sizeof(T*) >= sizeof(T) read
 in the guest. CWE-170 twin readings are reported only. Intra-object cases are reported apart.
@@ -233,6 +237,14 @@ def per_image(s):
     return reading(s, "Finished bad()", s["cwe"])
 
 
+def column(other, cfg, case, c):
+    """The off / every-free reading of the census bad image. A rand_flow case's census image ran the defect only if
+    rand() chose to, and those configurations are not seeded, so the reading is marked as unseeded."""
+    if cfg not in other or case not in other[cfg]:
+        return ""
+    return other[cfg][case]["verdict"] + (":unseeded" if c["rand_flow"] else "")
+
+
 def judge_images(run, sites):
     out = []
     for s in run.images():
@@ -323,8 +335,11 @@ def main():
             rs = seeded.get(k, [])
             hit = [r for r in rs if r["batch_valid"] and r["verdict"] == "CAUGHT"]
             complete = sorted(r["seed_pattern"] for r in rs) == sorted(PATTERNS) and all(r["batch_valid"] for r in rs)
+            stopped = [r for r in rs if r["batch_valid"] and r["verdict"].startswith("STOPPED:")]
             if hit:
                 v, detail = "CAUGHT", hit[0]
+            elif stopped and complete and all(r["verdict"] == "MISSED" or r["verdict"].startswith("STOPPED:") for r in rs):
+                v, detail = stopped[0]["verdict"], stopped[0]   # the seeds that ran the defect were all stopped the same way
             elif complete and all(r["verdict"] == "MISSED" for r in rs):
                 v, detail = "MISSED", rs[0]
             else:
@@ -342,8 +357,7 @@ def main():
                      "rand_flow": c["rand_flow"], "verdict": v, "good": g["verdict"] if g else "NO-READING:not-built",
                      "sicode": detail["sicode"] if detail else None, "site": detail["site"] if detail else None,
                      "ra_site": detail["ra_site"] if detail else None,
-                     "off": other["off"][k]["verdict"] if "off" in other and k in other["off"] else "",
-                     "every_free": other["every-free"][k]["verdict"] if "every-free" in other and k in other["every-free"] else "",
+                     "off": column(other, "off", k, c), "every_free": column(other, "every-free", k, c),
                      "twin": twin_reading(k) if v == "MISSED" or v.startswith("NOT-TRIGGERED") else ""})
 
     a.out.mkdir(parents=True, exist_ok=True)
