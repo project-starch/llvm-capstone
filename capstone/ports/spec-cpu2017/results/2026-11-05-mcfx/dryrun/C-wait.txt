@@ -1,0 +1,11 @@
+GT START pid 1364110 board 1
+GT preconditions ok; waiting for pid 1364106
+GT FLASH BEGIN caplifive_vp2c_1fc2cd5aa booking STUB book 1 30 vp2 caplifive_vp2c_1fc2cd5aa REFLASH (board 1)
+GT FLASH END caplifive_vp2c_1fc2cd5aa rc=0
+GT READBACK caplifive_vp2c_1fc2cd5aa ok rc=0
+GT CHAIN rest BEGIN
+GT CHAIN rest END rc=0
+GT FLASH BEGIN caplifive_vp2c_e7af48457 booking STUB book 1 30 vp2 caplifive_vp2c_e7af48457 REFLASH (board 1)
+GT FLASH END caplifive_vp2c_e7af48457 rc=0
+GT READBACK caplifive_vp2c_e7af48457 ok rc=0
+GT DONE spec 0; board 1 back on bitstream 3

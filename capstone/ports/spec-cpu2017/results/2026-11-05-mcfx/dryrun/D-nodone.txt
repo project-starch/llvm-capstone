@@ -1,0 +1,3 @@
+GT START pid 1364187 board 1
+GT preconditions ok; waiting for pid 1364184
+GT STOP: pid 1364184 did not end with DONE

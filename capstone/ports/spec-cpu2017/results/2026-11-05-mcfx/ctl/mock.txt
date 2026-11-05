@@ -1,0 +1,12 @@
+== capstone-lifetimes: run 11450.0 s | M0 holds
+   machine-wide: 12000.0 s of cycles, 30.000 G instructions, IPC 0.100
+   machine-wide per 1k instructions: L1I miss 0.00, L1D miss 0.00, DTLB miss 0.00, mispredict 0.00, issue stall 0.00, scoreboard full 0.00
+   vmstat: pgfault 1 | /proc/stat: ctxt 1
+   inside 9315.8 s (27.044 G instructions, IPC 0.116), outside 2134.2 s; launch 1.49 s; faults 28162, peak pages 174293, steps 56746
+   in-context per 1k instructions: L1I miss 0.67, L1D miss 140.35, DTLB miss 17.12, mispredict 32.26, issue stall 5807.10, scoreboard full 99.11
+   M1 holds (in-context hpm3-7 in (0, cycles), machine-wide > 0)
+   exits 56746 (by kind [0, 27481, 0, 1099, 28166, 0, 0, 0]), CV_STEPs 11000; per exit ms: CV_STEP 15.781 (resolve 6.269), between 23.952, other ioctls 5.167; outside per exit 37.61 ms
+   teardown 797 pages, 0.41 s, sweep 3
+   reference 11573.8 s, CV_STEPs 37266; bundle - reference -123.8 s (0.9893x); inside cycles 1.0000x
+   M3 holds (run <= 0.995 x reference, CV_STEPs 11000 <= 15,000)
+plain-rv64           PENDING

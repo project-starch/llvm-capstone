@@ -1,0 +1,3 @@
+GT START pid 1364378 board 2
+GT preconditions ok; waiting for pid none
+GT STOP: board 2 busy

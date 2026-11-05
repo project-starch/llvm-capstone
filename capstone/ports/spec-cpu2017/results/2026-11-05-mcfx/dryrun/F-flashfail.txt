@@ -1,0 +1,10 @@
+GT START pid 1364300 board 2
+GT preconditions ok; waiting for pid none
+GT FLASH BEGIN caplifive_vp2c_1fc2cd5aa booking none
+GT FLASH caplifive_vp2c_1fc2cd5aa rc=1, retrying once in 60 s
+GT FLASH END caplifive_vp2c_1fc2cd5aa rc=1
+GT C.5a flash failed
+GT FLASH BEGIN caplifive_vp2c_e7af48457 booking none
+GT FLASH caplifive_vp2c_e7af48457 rc=1, retrying once in 60 s
+GT FLASH END caplifive_vp2c_e7af48457 rc=1
+GT STOP: the flash back to bitstream 3 failed; board 2 left as is

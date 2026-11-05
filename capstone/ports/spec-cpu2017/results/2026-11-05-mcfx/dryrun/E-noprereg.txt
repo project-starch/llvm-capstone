@@ -1,0 +1,2 @@
+GT START pid 1364255 board 2
+GT STOP: pre-registration 0000000000aa is not on origin/spec-silicon

@@ -1,0 +1,8 @@
+capstone-lifetimes   PENDING
+== plain-rv64: run 3515.5 s | M0 holds
+   machine-wide: 3507.8 s of cycles, 14.173 G instructions, IPC 0.162
+   machine-wide per 1k instructions: L1I miss 52.53, L1D miss 24.98, DTLB miss 1.53, mispredict 36.70, issue stall 1794.46, scoreboard full 366.05
+   vmstat: pgalloc_normal 0, pgfree 121104, pgactivate 1988, pgfault 144803, pgmajfault 0 | /proc/stat: intr 352962, ctxt 135442, processes 621
+   rusage: maxrss 98868 kB, minflt 89080, majflt 0, user 2865.293003 s, sys 265.761874 s
+   M1 holds (machine-wide hpm3-7 > 0)
+   M2 FAILS (8,900-9,270 s)
