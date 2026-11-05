@@ -63,3 +63,36 @@ is then the cost per remaining exit, or the 30 % more pages.
 
 **Grader controls** (perf/ga/ctl): out-gt-b2 as the run reads rc 1; a mock at 4,300 s and 9,000 steps reads rc 0; empty
 reads rc 2. The dry-run chain stub checks the list paths; board-env-check passes.
+
+## Addendum 1 (6 Nov 02:00): the safety probe, and the first silicon reading
+
+**The claim-auditor review** (02:00) holds the claim with conditions, on QEMU's revocation-tree semantics:
+- Slot parents are SHRINK copies that carry the group node.
+- Objects and nested groups are CDERIVE descendants, and CREVOKE retires the whole run under the group.
+- Nothing the allocator hands out descends from the holder.
+
+It also found two things:
+- The earlier probe could not test the claim: the object's own lifetime was already revoked at free.
+- The munmap hook is reachable from any munmap, not only the allocator's. It must become an allocator-only release
+  entry before landing. Its data race with other threads' munmaps is formal only.
+
+**Experiment A, as the auditor specified it** (`uaf2.c`, transcript `uaf2-qemu.txt`).
+- SDKs with heap lifetimes OFF: there a freed object's capability carries the group's lifetime, so only the group
+  revoke (or the kernel's retirement) can stop a stale read.
+- Two stale pointers: one in a 200-byte class (mapped groups) and one in a 16-byte class (nested groups, whose address
+  is reused).
+
+| arm | cache counters | stale 200 B | stale 16 B |
+|---|---|---|---|
+| L0C0: no cache | 0 | fault, cause 25 | fault, cause 25 |
+| L0C1NR: cache with the revoke compiled out (positive control) | puts 148, hits 148 | **read returns 0x00** | **read returns 0x34, the new owner's data** |
+| L0C1: cache | puts 148, hits 148 | fault, cause 25 | fault, cause 25 |
+
+So the probe can fire, the cache engaged, and the group revoke ends every stale capability into a reused mapping,
+nested groups included. **Limit:** QEMU semantics only. A silicon run of `uaf2` is owed.
+
+**First silicon reading (board 2, 01:40-01:50).**
+- gcc test with the cache: **20.86 s**, against 26.15 s and 26.41 s for the same configuration without it on board 1
+  (out-all2-b1, out-ns-b1).
+- Exits 1,042 against 1,981; rc 0, specdiff PASS, control passed.
+- gcc train is running.
