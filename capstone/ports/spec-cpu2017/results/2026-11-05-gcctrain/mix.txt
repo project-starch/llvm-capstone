@@ -1,0 +1,13 @@
+gcc train01: program instr Temporal 14.971e9 (instret 14.974e9)  Plain 10.889e9  ratio 1.375
+   kernel Temporal 2.446e9 Plain 0.822e9 | firmware 144.5M/78.6M | other 198.9M/12.0M
+   class      Plain/1k  Temporal/1k(of Plain)
+   alu           394.6      474.4
+   branch        195.9      227.7
+   load          267.3      110.4
+   store         142.2       51.7
+   fp              0.0        0.0
+   capload         0.0      179.2
+   capstore        0.0      123.6
+   caparith        0.0      160.0
+   capbounds       0.0       47.5
+   system          0.1        0.5
