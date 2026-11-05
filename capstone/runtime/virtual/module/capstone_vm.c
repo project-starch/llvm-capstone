@@ -69,6 +69,15 @@ struct arena {
      * is held to the same rule as one pinned at mint. NULL for a linear arena, which was never
      * frame-checked and still is not. */
     unsigned long *frames;
+    /* Data fault events received on this arena's pages, counted under diag_admit where CV_STEP
+     * receives the event (not where CAPSTONE_VM_STATS faults is advanced, at the resolution or
+     * the return to the launcher), so the two audit each other: an event whose count the
+     * process total misses shows as total < sum(faulted). It is printed with the census and
+     * stands in for admits in the unpinned mode, which pins and so admits nothing. u64 like the
+     * process counter; the census is meaningful only if diag_admit is on for the whole life of
+     * the arena (the parameter is writable). Placed before count so the structure grows by 8
+     * bytes (112 to 120 on RV64) and not by the padding of a 32-bit field. */
+    u64 faulted;
     unsigned count;
     /* The arena's page census, printed once at its retirement under diag_admit: pages admitted
      * at a fault, by a pin-ahead window, by the resident scan, by CV_TOUCH, or pinned whole at
@@ -1514,8 +1523,9 @@ static int retire(struct context *c, struct arena *a, bool destroying)
     }
     if (diag_admit)
         pr_info("capstone_vm: retire arena 0x%lx+0x%lx admit=%u window=%u scan=%u touch=%u eager=%u "
-                "released=%u swept=%u\n", a->address, a->bytes, a->admits, a->windows, a->scans,
-                a->touches, a->eager, a->released, swept);
+                "released=%u swept=%u faulted=%llu\n", a->address, a->bytes, a->admits, a->windows,
+                a->scans, a->touches, a->eager, a->released, swept,
+                (unsigned long long)a->faulted);
     if (unpinned && diag_admit)
         pr_info("capstone_vm: unpinned retire arena 0x%lx events=%u resolves=%u touch=%u ahead=%u\n",
                 a->address, a->unpinned_events, a->unpinned_resolves, a->unpinned_touches,
@@ -3145,6 +3155,11 @@ thread_unwind:
              * injection point of the test build's stop hooks: neither this
              * one nor the re-entry hook above. */
             text = text_fault(c, t->frame[5]);
+            if (!text && diag_admit) {
+                /* The census of fault events, at their receipt: see struct arena faulted. */
+                struct arena *fa = arena_at(c, t->frame[5]);
+                if (fa) ++fa->faulted;
+            }
             if (!text)
                 TEST_HOOK(4);
             if (cv_step_stop(budget_end)) {
