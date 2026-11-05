@@ -1,4 +1,5 @@
 #!/bin/sh
+# board-env-check: optional /proc/self/pagemap (tagleak falls back to the counting proof without it)
 # 999.tagleak: does a frame a context returned without an exit sweep reach the next context still tagged?
 # Per sweep mode (3 = the all2 kit's store sweep, 2 = no exit sweep): fill <MB> (a capability in every granule,
 # its PFNs to /tmp/fill.pfn), then scan <MB> (tags in a fresh block, how many of its frames the fill held, and a

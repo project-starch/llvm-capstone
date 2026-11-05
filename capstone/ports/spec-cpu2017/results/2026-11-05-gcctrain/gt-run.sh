@@ -45,6 +45,10 @@ main() {
     || { log "STOP: kit bkit26-gt"; return 2; }
   [ -s "$LIST" ] || { log "STOP: list"; return 2; }
   [ -e "$OUT" ] && { log "STOP: $OUT exists"; return 2; }
+  # what a stubbed dry run and a QEMU gate cannot see, against THIS board: its console URL file, the kit module's table
+  # width, every /proc, /sys and module parameter the stages read (board-env-check.py; 5 Nov, four defects of this class)
+  python3 $H/wt-spec/capstone/tests/board-env-check.py $BRD "$KIT" $(awk '!/^#/ && NF {print $1}' "$LIST" | sed "s|\$CAPSTONE_WORK|$H|") >> "$L" 2>&1 \
+    || { log "STOP: board-env-check failed (its lines are above)"; return 2; }
   [ -n "${GT_PREREG:-}" ] && git -C "$H/wt-spec" branch -r --contains "$GT_PREREG" 2>/dev/null | grep -q origin/spec-silicon \
     || { log "STOP: pre-registration ${GT_PREREG:-unset} is not on origin/spec-silicon"; return 2; }
   log "preconditions ok; waiting for pid ${GT_WAITPID:-none}"
