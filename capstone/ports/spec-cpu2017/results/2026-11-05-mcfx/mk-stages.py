@@ -16,11 +16,11 @@ t = sub(t, "rc=$?\n", "rc=$?\ngtsnap 1 $n\necho \"@@GT-RU $n $(cat /tmp/ru.log 2
 open(f"{M}/505.mcf_r-test-plain-rv64-hpm/stage/run.sh", "w").write(t)
 # Temporal bundle: resume_quantum 1, step budget 10 s, exit sweep 2 (none), snapshots; all restored at the end
 t = open(f"{H}/spec/stages-eval-b1/505.mcf_r-test-capstone-lifetimes-devmk/stage/run.sh").read()
-SET = """# perf/mx bundle: resume_quantum on, step budget 10 s, no exit sweep (retire_exit_sweep 2), for this stage only;
+SET = """# perf/mx bundle (Addendum 1): resume_quantum on, step budget 10 s, the kit's retire_exit_sweep 3 kept, for this stage only;
 # every value read back and restored at the end
 PD=/sys/module/capstone_vm/parameters
 sb_old=$(cat /sys/module/capstone_vm/parameters/step_budget_ns); rq_old=$(cat /sys/module/capstone_vm/parameters/resume_quantum); sw_old=$(cat /sys/module/capstone_vm/parameters/retire_exit_sweep)
-echo 10000000000 > /sys/module/capstone_vm/parameters/step_budget_ns; echo 1 > /sys/module/capstone_vm/parameters/resume_quantum; echo 2 > /sys/module/capstone_vm/parameters/retire_exit_sweep
+echo 10000000000 > /sys/module/capstone_vm/parameters/step_budget_ns; echo 1 > /sys/module/capstone_vm/parameters/resume_quantum
 echo "@@MX-SET step_budget_ns=$(cat /sys/module/capstone_vm/parameters/step_budget_ns) resume_quantum=$(cat /sys/module/capstone_vm/parameters/resume_quantum) retire_exit_sweep=$(cat /sys/module/capstone_vm/parameters/retire_exit_sweep) was $sb_old,$rq_old,$sw_old"
 """
 t = sub(t, "\nbench() {", "\n" + GTSNAP + "\n" + SET + "bench() {")

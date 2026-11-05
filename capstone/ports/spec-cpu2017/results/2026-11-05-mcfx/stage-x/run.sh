@@ -6,11 +6,11 @@ V=${SPEC_VEXEC:?set SPEC_VEXEC to the batch launcher}
 export CAPSTONE_VM_STATS=1
 n=0
 gtsnap() { echo "@@GT-SNAP$1 $2 hpm=$(cat /sys/module/capstone_vm/parameters/hpm_snapshot 2>/dev/null || echo NA) vm=$(grep -E '^(pgfault|pgmajfault|pgalloc_normal|pgfree|pgactivate|nr_free_pages) ' /proc/vmstat | tr ' \n' ':,') st=$(grep -E '^(ctxt|processes|intr) ' /proc/stat | cut -d' ' -f1-2 | tr ' \n' ':,') mem=$(grep -E '^(MemFree|MemAvailable):' /proc/meminfo | tr -s ' ' | tr ' \n' ':,')"; }
-# perf/mx bundle: resume_quantum on, step budget 10 s, no exit sweep (retire_exit_sweep 2), for this stage only;
+# perf/mx bundle (Addendum 1): resume_quantum on, step budget 10 s, the kit's retire_exit_sweep 3 kept, for this stage only;
 # every value read back and restored at the end
 PD=/sys/module/capstone_vm/parameters
 sb_old=$(cat /sys/module/capstone_vm/parameters/step_budget_ns); rq_old=$(cat /sys/module/capstone_vm/parameters/resume_quantum); sw_old=$(cat /sys/module/capstone_vm/parameters/retire_exit_sweep)
-echo 10000000000 > /sys/module/capstone_vm/parameters/step_budget_ns; echo 1 > /sys/module/capstone_vm/parameters/resume_quantum; echo 2 > /sys/module/capstone_vm/parameters/retire_exit_sweep
+echo 10000000000 > /sys/module/capstone_vm/parameters/step_budget_ns; echo 1 > /sys/module/capstone_vm/parameters/resume_quantum
 echo "@@MX-SET step_budget_ns=$(cat /sys/module/capstone_vm/parameters/step_budget_ns) resume_quantum=$(cat /sys/module/capstone_vm/parameters/resume_quantum) retire_exit_sweep=$(cat /sys/module/capstone_vm/parameters/retire_exit_sweep) was $sb_old,$rq_old,$sw_old"
 bench() { dmesg | grep 'capstone_vm: bench' | tail -1 | sed 's/.*capstone_vm: //'; }
 nbench() { dmesg | grep -c 'capstone_vm: bench'; }

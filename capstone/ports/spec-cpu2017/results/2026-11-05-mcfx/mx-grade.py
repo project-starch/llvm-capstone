@@ -4,7 +4,7 @@ Runs: $MX_ROOTS (default $CAPSTONE_WORK/spec/board/out-mx-b1 (bundle) and out-mx
 bundle: $MX_REF (default out-gtm-b1: board 1, the same kit with its own parameters). Exit 0 if every graded check holds,
 1 otherwise, 2 if no data.
 M0  rc 0, specdiff PASS, control passes, bench line fresh (Temporal); the four kit params read back; QNT0 007A1200;
-    Temporal: @@MX-SET reads step_budget_ns=10000000000 resume_quantum=Y retire_exit_sweep=2, @@MX-RESTORED the kit's.
+    Temporal: @@MX-SET reads step_budget_ns=10000000000 resume_quantum=Y retire_exit_sweep=3 (Addendum 1), @@MX-RESTORED the kit's.
 M1  counters programmed: in-context hpm3-7 in (0, cycles) (Temporal), machine-wide hpm3-7 deltas > 0 (both).
 M2  Plain run 8,900-9,270 s (the 3 Nov Plain 9,082.86 s, +-2 %).
 M3  bundle run <= 0.995 x the reference (11,573.79 s), and CV_STEPs <= 15,000 (reference 37,266).
@@ -46,7 +46,7 @@ for arm, st in ARMS:
     qnt = re.findall(r"QNT0:([0-9A-F]{8})", raw[raw.rfind("OpenSBI"):])[-1:] if "OpenSBI" in raw else []
     if arm != "plain-rv64":
         ms = re.findall(r"@@MX-SET (step_budget_ns=\S+ resume_quantum=\S+ retire_exit_sweep=\S+)", T); mr = re.findall(r"@@MX-RESTORED (.*)", T)
-        if ms != ["step_budget_ns=10000000000 resume_quantum=Y retire_exit_sweep=2"]: why.append(f"MX-SET {ms}")
+        if ms != ["step_budget_ns=10000000000 resume_quantum=Y retire_exit_sweep=3"]: why.append(f"MX-SET {ms}")
         if [x.strip() for x in mr] != ["step_budget_ns=80000000 resume_quantum=N retire_exit_sweep=3"]: why.append(f"MX-RESTORED {mr}")
     g0 = not why and params == WANT and qnt == ["007A1200"]
     sec = sum(c["seconds"] for c in runs)

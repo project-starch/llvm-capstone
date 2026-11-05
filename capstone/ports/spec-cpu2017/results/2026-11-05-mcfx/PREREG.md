@@ -61,3 +61,21 @@ the failed flash back.
 
 **Limits.** N = 1 per arm. Test input. Plain and the bundle run on different boards; the bundle's reference is on its
 own board.
+
+## Addendum 1 (5 Nov 23:25, board 1 not started; board 2's Plain arm unaffected)
+
+**The time above is wrong:** the pre-registration was pushed at 22:47, not 23:10. The first board-2 attempt (22:49)
+stopped before any boot: the live list held a literal `$CAPSTONE_WORK`, which chain-board does not expand, and the dry
+run's chain stub never checked the stage path. Its log is kept as perf/mx/gt-b2.log.badlist-2249.
+
+**The bundle no longer changes the sweep.** Reading `retire()` (capstone_vm.c, perf/exit-timing-vp2): mode 2 skips the
+sweep only on a destroying retire of an exiting task. Every in-run CV_RETIRE then takes mode 0, `clear_page_tags`, a
+load and a store per granule (0.77 ms per page on xz), where the kit's mode 3 stores only (0.178 ms). mcf unmaps its
+arrays before it exits: on the QEMU twin, peak 174,291 pages and 797 left at teardown. With mode 2 the bundle would
+be about 100 s slower than with mode 3, against M3's direction. The QEMU profile also shows it: gcc train's `retire` runs
+150 M instructions with mode 2, as many as with mode 3 (perf/xprof gtrX against gtrT).
+- The stage now sets only `resume_quantum=1` and `step_budget_ns=10000000000`. MX-SET must read
+  `retire_exit_sweep=3`. Grader and controls are regenerated: neg rc 1, mock rc 0.
+- **M3 is unchanged.** The point estimate is now −55 to −110 s, the resume_quantum part alone.
+- The no-sweep run (results/2026-11-05-nosweep) set mode 2. Its stages with in-run retires (gcc above all) measured
+  mode 0 on those retires, not "no sweep". This goes into its RESULT.
