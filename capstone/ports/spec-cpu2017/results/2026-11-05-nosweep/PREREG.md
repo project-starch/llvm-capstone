@@ -94,3 +94,66 @@ QEMU (kit-egq, this stage, 5 Nov 13:58, `tagleak/qemu-q3.txt`):
 
 **Limits.** N = 1. Test inputs. The probe exercises the anonymous-fault route only: the one the module's arenas use,
 and the one 1.63 M pages a run take on xz.
+
+## Addendum 1 (5 Nov 16:30, before any board call; both drivers stopped while still waiting, relaunched after this push)
+
+Three changes, to get results sooner. The claim, the probe and Z0-Z4 are unchanged except where named.
+1. **The probe runs on board 2.** Board 2 frees first: stage A's last stage, mcf, ends about 18:35. all2's mcf on
+   board 1 ends about 19:25. Board 2 runs the probe, xz and gcc. Board 1 waits for the verdict, then runs lbm, imagick,
+   nab and nab-b10s.
+   - The roles are a parameter, `NS_PROBE_BOARD`, default 2.
+   - xz now compares on the same board as its reference, which is better. lbm stays on board 1.
+2. **mcf is dropped.** Its predicted −56 s sits inside its ±36 s board noise, for 3 h of board time. Z3 now covers lbm
+   only.
+3. **Kit bkit25-nset = bkit24-ns with the exit-timing module.**
+   - Module 1ae19c5e337fbeb2 = wt-et perf/exit-timing-vp2 68373bbdbcc2 (0 two-byte instructions). It is 2188cab26d40
+     plus two commits:
+     - 0a7f0e8aecaa: counters in the BENCH_COUNTERS block, measurement only;
+     - 68373bbdbcc2: `resume_quantum`, a 0644 parameter, default off. Off, the step loop is unchanged.
+   - The control build from 2188cab26d40 by the same recipe has a `.text` byte-identical to 2f81e8a5842010b3's; only
+     the source-path string differs.
+   - QEMU gate of 0a7f0e8aecaa, kit-etq (kit-egq with its QEMU build 3eb6f86f37a5a1ed): gcc, imagick, lbm, nab, xz and
+     mcf all rc 0 and specdiff PASS, with one `capstone_vm: exits` line per context.
+   - QEMU gate of 68373bbdbcc2, kit-etq2 (66ef877000d232db): see Addendum 2.
+   - The counters add about ten CSR reads per exit, against an exit of about 5 ms. Z0's instret check still holds the
+     program identical.
+   - The probe stage runs first on this module, so it is also the module's first silicon contexts. A module that broke
+     contexts would fail N1, and nothing else would run.
+   - **Reported per arm:** cycles per CSRUNV exit outside the context, split into the CV_STEP kernel time (fault
+     resolution part of it), the time between CV_STEPs (launcher, its calls for the context, interrupts, other tasks)
+     and other ioctls.
+
+**A second hypothesis in the same session: B1, quantum exits that do not return to the launcher.**
+- Today a quantum exit (event kind 1) always returns to the launcher, and the launcher answers it with `sched_yield()`
+  and the next CV_STEP (exec.c virtual_service_loop).
+- A 10 s step budget alone does not change that. Under QEMU, nab took 1,746 CV_STEPs with and without it (perf/ns/q-b10s),
+  because the loop resumes only fault events (capstone_vm.c `if (t->event != 4) break;`). This was found before any
+  board call, and that variant is withdrawn.
+- `resume_quantum=1` resumes event 1 inside CV_STEP. The stop check before every entry still returns it to the
+  launcher on a resched, a signal or the budget.
+- The stage: 544.nab_r-test-devmk-rq, the same images. Its run.sh sets `resume_quantum=1` and
+  `step_budget_ns=10000000000` through sysfs and restores both at the end. It runs on board 1 right after nab.
+- B1: CV_STEP ioctls ≤ 0.6 × nab's, and quantum exits within 10 % of nab's. The run-time difference is reported, not
+  graded.
+- What B1 decides: whether the return to the launcher, per quantum exit, is worth removing by default.
+
+## Addendum 2 (5 Nov 16:45, before any board call)
+
+**QEMU gate of module 68373bbdbcc2** (kit-etq2, 66ef877000d232db):
+- **resume_quantum on** (the rq stage): CV_STEPs 589 against 1,746 for nab in the same kit with it off (0.34 ×),
+  1,369 against 1,762 in the Temporal arm. The quantum exits are the same (1,380 and 1,369). rc 0 and specdiff PASS
+  in both arms, and the outputs match across the arms. The sysfs values read back and are restored.
+- **resume_quantum off:** gcc and lbm read the same exit counts as module 0a7f0e8aecaa, with specdiff PASS.
+- **B1 grader:**
+  - on these QEMU runs: B1 holds 2/2;
+  - given nab as its own rq run: B1 FAILS 2/2.
+
+**Seen on board 1 since the pre-registration, and relevant to the xz stage here.**
+- all2's xz (results/2026-11-05-all2, kit bkit23) stopped after 9 of its 12 commands.
+  - The console went quiet after heartbeat 182, and the driver dumped the vbatch wedge apertures (sw=225 0x80,
+    sw=228 0x80). The stage read NO DATA (completed=False).
+  - The same images on C.5a without the five switches (all-b1) finished all 12 commands.
+  - Nine teardowns read 0.497 ms per page, sweep 3.
+- Cause not yet read. N = 1.
+- This run's xz, on board 2 with the same switches and no sweep, is a second sample of the same configuration. If it
+  wedges too, that is reported as a finding about the switches together on C.5a, not as a Z2 reading.

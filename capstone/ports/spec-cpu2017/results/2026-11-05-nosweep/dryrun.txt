@@ -16,3 +16,14 @@ out-all2-b1 given as the run: SUMMARY Z0 0/5 Z4 5/5, rc 1
 empty folder: rc 2
 mock with xz only -200 s: Z2 FAILS, rc 1
 tl-verdict.py: QEMU q3 transcript rc 0; tagged_recycled=7 FAILS; ctl=0 rc 1; empty rc 2
+
+# Addendum 1 dry run (probe on board 2), 5 Nov 16:35
+a1-A-b2probe-ok: PROBE verdict rc=0|DONE spec 0; board 2 back on bitstream 3| verdict=N1 HOLDS
+a1-B-b2probe-leak: PROBE verdict rc=1|STOP after the probe (verdict rc=1)|DONE spec probe; board 2 back on bitstream 3| verdict=N1 FAILS rc=1
+a1-C-b1-ok: probe verdict N1 HOLDS|DONE spec 0; board 1 back on bitstream 3| verdict=N1 HOLDS
+a1-D-b1-fail: STOP: probe verdict is not N1 HOLDS| verdict=N1 FAILS rc=1
+a1-E-b2-flashfail: STOP: the flash back to bitstream 3 failed; board 2 left as is| verdict=N1 FAILS flash
+a1-F-b2-notdone: STOP: pid 999999 did not end with DONE| verdict=N1 FAILS no probe
+a1-G-noprereg: STOP: pre-registration deadbeef0000 is not on origin/spec-silicon| verdict=N1 FAILS no probe
+a1-H-b2-nodata: PROBE verdict rc=2|STOP after the probe (verdict rc=2)|DONE spec probe; board 2 back on bitstream 3| verdict=N1 FAILS rc=2
+B1 grader: QEMU rq vs nab B1 2/2 holds; nab given as its own rq FAILS 2/2

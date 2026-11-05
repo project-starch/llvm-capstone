@@ -1,10 +1,11 @@
 #!/bin/bash
 # ns-run.sh <board 1|2>: all2 with no exit sweep (retire_exit_sweep=2), results/2026-11-05-nosweep/PREREG.md (NS_PREREG).
-# Kit bkit24-ns = bkit23-all2-b1 with the params line retire_exit_sweep=2 (module, launcher, firmware, images unchanged).
+# Kit bkit25-nset = bkit23-all2-b1 with the params line retire_exit_sweep=2 and the exit-timing module (Addendum 1).
+# The board that runs the probe is NS_PROBE_BOARD (default 2); the other waits for its verdict.
 #  1. Wait for the board's previous session (NS_WAITPID) to end with DONE in its own run (NS_WAITLOG, prefix NS_WAITPFX).
-#  2. Board 2 only: wait for board 1's probe verdict (NS_VERDICT, written by the board 1 run): N1 HOLDS, or stop.
+#  2. The other board only: wait for the probe verdict (NS_VERDICT, written by the probe board's run): N1 HOLDS, or stop.
 #  3. Flash C.5a (sealed sha256), read it back.
-#  4. Board 1 only: the tag-leak probe stage (probe.list), its verdict to NS_VERDICT; stop unless N1 holds.
+#  4. The probe board only: the tag-leak probe stage (probe.list), its verdict to NS_VERDICT; stop unless N1 holds.
 #  5. The board's stages (b<board>-rest.list), then flash bitstream 3 back.
 # Stubs: NS_BUSY NS_BOOK NS_FLASH NS_READBACK NS_STOREHAS NS_CHAIN NS_O NS_OUT NS_POLL_S NS_VERDICT NS_TLV.
 main() {
@@ -14,7 +15,7 @@ main() {
   L=$O/ns-b$BRD.log
   local C5=caplifive_vp2c_1fc2cd5aa C5SHA=5b7b1edcd9bcd2521bd4bd59107747e268487056f1bfcd96403fd612eeb6d764
   local B3=caplifive_vp2c_e7af48457 B3SHA=d6ed97b6d341ea058d497838e43558900823c36591c44046d3cfc0b7f55b423b
-  local T=$H/wt-spec/capstone/tests/rtl-smoke SB=$H/wt-spec/capstone/ports/spec-cpu2017 MOD=2f81e8a5842010b3 EGV=0bde5fd8e0c9c374
+  local T=$H/wt-spec/capstone/tests/rtl-smoke SB=$H/wt-spec/capstone/ports/spec-cpu2017 MOD=1ae19c5e337fbeb2 EGV=0bde5fd8e0c9c374
   local BOOK=${NS_BOOK:-python3 /tmp/capstone/lab-hub/lab-book.py} FLASH=${NS_FLASH:-python3 $T/drivers/flash-bitstream.py}
   local RB=${NS_READBACK:-python3 $SB/results/2026-10-28-board-test/b4/nv-readback.py}
   local STORE=${NS_STOREHAS:-python3 $T/vp2-kit-2026-10-17/board-tier12/batch/store-has.py}
@@ -24,15 +25,15 @@ main() {
     2) BUSY=${NS_BUSY:-python3 /tmp/capstone/wt-b2/capstone/tests/rtl-smoke/board-busy.py 2};;
     *) echo "board $BRD"; return 2;;
   esac
-  local CHAIN=${NS_CHAIN:-bash $H/perf/xp-b2/board/chain-board.sh} KIT=$H/t3-smoke/bkit24-ns
+  local CHAIN=${NS_CHAIN:-bash $H/perf/xp-b2/board/chain-board.sh} KIT=$H/t3-smoke/bkit25-nset
   local OUT=${NS_OUT:-$H/spec/board/out-ns-b$BRD} TLV=${NS_TLV:-python3 $O/tl-verdict.py} VERDICT=${NS_VERDICT:-$O/verdict-N1.txt}
-  local spec=skipped t r LIST
+  local spec=skipped t r LIST PB=${NS_PROBE_BOARD:-2}
   LIST=$O/b$BRD-rest.list
   export FPGA_BOARD=$BRD CAPSTONE_FPGA_URL_FILE=$HOME/.claude-kisp/secrets/fpga-console-url
   log() { echo "NS $(date '+%F %T') $*" >> "$L"; }
   mkdir -p "$O"; log "START pid $$ board $BRD"
-  # board 1 owes board 2 a verdict on every way out, or board 2 waits a day for nothing
-  [ $BRD = 1 ] && trap '[ -s "$VERDICT" ] || echo "N1 FAILS no probe" > "$VERDICT"' RETURN
+  # the probe board owes the other a verdict on every way out, or the other waits a day for nothing
+  [ $BRD = $PB ] && trap '[ -s "$VERDICT" ] || echo "N1 FAILS no probe" > "$VERDICT"' RETURN
   [ "$(sha256sum "$H/bitstreams/$C5.bit" | cut -d' ' -f1)" = $C5SHA ] || { log "STOP: C.5a .bit hash"; return 2; }
   [ "$(sha256sum "$H/bitstreams/$B3.bit" | cut -d' ' -f1)" = $B3SHA ] || { log "STOP: bitstream 3 .bit hash"; return 2; }
   ( cd "$KIT" && sha256sum -c --quiet SHA256SUMS ) && grep -q "^BOARD_BITSTREAM=$C5$" "$KIT/board.env" \
@@ -40,7 +41,7 @@ main() {
     && [ "$(sha256sum "$KIT/adapter/capstone-vexec" | cut -c1-16)" = $EGV ] \
     && grep -q "CAPSTONE_BOOT_QUANTUM=8000000 -DCAPSTONE_SUPERVISOR_QUANTUM=8000000" "$KIT/board.env" \
     && [ "$(grep -v '^#' "$KIT/adapter/module/params" | sort | tr '\n' ' ')" = "fault_ahead_max=64 image_rootfs=1 retire_exit_sweep=2 step_budget_ns=80000000 " ] \
-    || { log "STOP: kit bkit24-ns"; return 2; }
+    || { log "STOP: kit bkit25-nset"; return 2; }
   [ -s "$LIST" ] && [ -s "$O/probe.list" ] && [ -f "$O/tl-verdict.py" ] || { log "STOP: lists or verdict script"; return 2; }
   [ -e "$OUT" ] && { log "STOP: $OUT exists"; return 2; }
   [ -n "${NS_PREREG:-}" ] && git -C "$H/wt-spec" branch -r --contains "$NS_PREREG" 2>/dev/null | grep -q origin/spec-silicon \
@@ -50,7 +51,7 @@ main() {
     [ $t -ge 172800 ] && { log "STOP: pid $NS_WAITPID still runs"; return 2; }; sleep "${NS_POLL_S:-60}"; t=$((t + ${NS_POLL_S:-60})); done
   sed -n "/START pid ${NS_WAITPID:-none}\$/,\$p;/START pid ${NS_WAITPID:-none} /,\$p" "${NS_WAITLOG:-/dev/null}" | grep -q "^${NS_WAITPFX:-XX} .* DONE" \
     || { log "STOP: pid ${NS_WAITPID:-none} did not end with DONE"; return 2; }
-  if [ $BRD = 2 ]; then
+  if [ $BRD != $PB ]; then
     t=0; until [ -s "$VERDICT" ]; do
       [ $t -ge 86400 ] && { log "STOP: no probe verdict"; return 2; }; sleep "${NS_POLL_S:-60}"; t=$((t + ${NS_POLL_S:-60})); done
     grep -q "^N1 HOLDS$" "$VERDICT" || { log "STOP: probe verdict is not N1 HOLDS"; return 2; }
@@ -67,13 +68,13 @@ main() {
   }
   if flash $C5 $C5SHA; then
     r=0
-    if [ $BRD = 1 ]; then
+    if [ $BRD = $PB ]; then
       log "CHAIN probe BEGIN"
       SB_KIT=$KIT SB_BITSTREAM=1fc2cd5aa SB_MODULE=$MOD SB_VEXEC=$EGV $CHAIN $BRD "$O/probe.list" "$OUT" >> "$L" 2>&1
       log "CHAIN probe END rc=$?"
       $TLV "$OUT/999.tagleak-test/guest/board-raw.txt" > "$O/verdict-detail.txt" 2>&1; r=$?
       sed 's/^/  /' "$O/verdict-detail.txt" >> "$L"; log "PROBE verdict rc=$r"
-      # board 2 waits on this file: only the summary line, written once, after the read
+      # the other board waits on this file: only the summary line, written once, after the read
       tail -1 "$O/verdict-detail.txt" > "$VERDICT.tmp"; [ $r = 0 ] || echo "N1 FAILS rc=$r" > "$VERDICT.tmp"; mv "$VERDICT.tmp" "$VERDICT"
     fi
     if [ $r = 0 ] && [ ! -e "$OUT/.chain-b$BRD-stopped" ]; then
@@ -81,7 +82,7 @@ main() {
       SB_KIT=$KIT SB_BITSTREAM=1fc2cd5aa SB_MODULE=$MOD SB_VEXEC=$EGV $CHAIN $BRD "$LIST" "$OUT" >> "$L" 2>&1; spec=$?
       log "CHAIN rest END rc=$spec"
     else log "STOP after the probe (verdict rc=$r)"; spec=probe; fi
-  else log "C.5a flash failed"; [ $BRD = 1 ] && echo "N1 FAILS flash" > "$VERDICT"; fi
+  else log "C.5a flash failed"; [ $BRD = $PB ] && echo "N1 FAILS flash" > "$VERDICT"; fi
   flash $B3 $B3SHA || { log "STOP: the flash back to bitstream 3 failed; board $BRD left as is"; return 1; }
   log "DONE spec $spec; board $BRD back on bitstream 3"
 }

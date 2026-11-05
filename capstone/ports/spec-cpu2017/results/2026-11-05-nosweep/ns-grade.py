@@ -11,6 +11,10 @@ Z1  teardown <= 0.25 ms per page, every arm with >= 10,000 pages torn down (refe
 Z2  xz: run >= 300 s below the reference (predicted about -528 s).
 Z3  lbm: run >= 15 s below (about -34 s); mcf: run >= 25 s below (about -56 s).
 Z4  gcc, imagick, nab: run within 2 % of the reference (predicted about 0).
+B1  (Addendum 1) nab with resume_quantum=1 and step_budget_ns = 10 s (stage 544.nab_r-test-devmk-rq, after nab on the same board): CV_STEP
+    ioctls <= 0.6 x nab's, quantum exits (event kind 1) within 10 % of nab's. Run time against nab: reported.
+Reported per arm (exit-timing module, Addendum 1): cycles per CSRUNV exit outside the context, split into CV_STEP
+kernel time (of it fault resolution), time between CV_STEPs, and other ioctls.
 Reported: share of the gap to Plain closed (baseline 28-29 Oct, Plain test), beside the reference's."""
 import json, os, re, sys
 
@@ -46,6 +50,9 @@ def read(d, arm, kit=False):
         win = [(float(u0), float(u1)) for a_, u0, u1 in re.findall(r"^@@SPEC-END \d+ \w+ (\S+) \d+ rc=\d+ up0=([\d.]+) up1=([\d.]+)", S, re.M) if a_ == arm]
         td = [(int(p_), int(n_), int(s_)) for ts, p_, n_, s_ in re.findall(r"\[\s*([\d.]+)\] capstone_vm: teardown pages=(\d+) ns=(\d+) sweep=(\d+)", S)
               if any(u0 <= float(ts) <= u1 + 5 for u0, u1 in win)]
+        ex = [tuple(map(int, m)) for ts, *m in re.findall(r"\[\s*([\d.]+)\] capstone_vm: exits steps=(\d+) kcyc=(\d+) rcyc=(\d+) ucyc=(\d+) ocyc=(\d+) ev=(\d+),(\d+),(\d+),(\d+),(\d+),(\d+),(\d+),(\d+)", S)
+              if any(u0 <= float(ts) <= u1 + 5 for u0, u1 in win)]
+        x["ex"] = [sum(e[i] for e in ex) for i in range(13)] if ex else None
         x.update(params=dict(re.findall(r"^@@PARAM (\w+)=(\S+)$", T, re.M)), td=td,
                  tdpages=sum(t[0] for t in td), tdns=sum(t[1] for t in td))
     if kit:
@@ -81,9 +88,23 @@ for b, st in ST:
         if b == "lbm": ln += f" Z3 {chk('Z3', d >= 15)}"
         if b == "mcf": ln += f" Z3 {chk('Z3', d >= 25)}"
         if b in ("gcc", "imagick", "nab"): ln += f" Z4 {chk('Z4', abs(d) <= 0.02 * ref['sec'])}"
+        if x.get("ex"):
+            e = x["ex"]; n = max(sum(e[5:13]), 1)
+            ln += (f" | per exit ms: CV_STEP {e[1] / n / 25e3:.2f} (resolve {e[2] / n / 25e3:.2f}), between {e[3] / n / 25e3:.2f},"
+                   f" other ioctls {e[4] / n / 25e3:.2f}; exits {n} (kinds {e[5:13]}), CV_STEPs {e[0]}")
         if arm == "capstone-lifetimes":
             g = BL[b] - P[b]; ln += f" | gap closed {100 * (BL[b] - x['sec']) / g:.0f} % (reference {100 * (BL[b] - ref['sec']) / g:.0f} %)"
         print(ln)
+# B1: resume_quantum with a 10 s step budget, against nab of the same board session
+for arm in ("capstone-spatial", "capstone-lifetimes"):
+    base = next((v for v in (read(os.path.join(r, "544.nab_r-test-devmk"), arm) for r in ROOTS) if v), None)
+    x = next((v for v in (read(os.path.join(r, "544.nab_r-test-devmk-rq"), arm, kit=True) for r in ROOTS) if v), None)
+    if not (base and x): print(f"nab-rq {arm} PENDING"); continue
+    seen += 1
+    eb, ex = base.get("ex"), x.get("ex")
+    ok = bool(eb and ex and ex[0] <= 0.6 * eb[0] and abs(ex[6] - eb[6]) <= 0.1 * max(eb[6], 1) and not x["why"])
+    print(f"nab-rq {arm} B1 {chk('B1', ok)} CV_STEPs {ex and ex[0]} vs {eb and eb[0]}, quantum exits {ex and ex[6]} vs {eb and eb[6]}"
+          f" | run {x['sec']:.1f} vs {base['sec']:.1f} s ({x['sec'] - base['sec']:+.1f})")
 if not seen: print(f"NO DATA: no finished stage under {ROOTS}"); sys.exit(2)
 print("SUMMARY " + " ".join(f"{k} {sum(v)}/{len(v)}" for k, v in sorted(Y.items())))
 sys.exit(fail)
