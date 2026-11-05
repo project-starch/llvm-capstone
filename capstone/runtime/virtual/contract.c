@@ -288,6 +288,26 @@ int main(int argc, char **argv)
         }
         fail("dense churn derived 1000000 children without running out");
     }
+    if (!strcmp(mode, "map-churn")) {
+        /* One page mapped, touched and unmapped again and again: Linux hands back the same address, so every
+         * round takes its first fault at the same (address, cause). mallocng does this whenever its only group
+         * is freed and the next allocation opens one (sparse-churn). None of these faults is a resolution that
+         * changed nothing, and the unpinned mode must not count them as one (fault_repeat_max, 64). */
+        enum { ROUNDS = 300 };
+        unsigned same = 0;
+        void *first = NULL;
+        for (unsigned i = 0; i < ROUNDS; ++i) {
+            unsigned char *page = mmap(NULL, 4096, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+            require(page != MAP_FAILED, "map-churn mapping");
+            if (!first) first = page;
+            same += page == first;
+            page[16] = (unsigned char)i;
+            require(page[16] == (unsigned char)i, "map-churn contents");
+            require(!munmap(page, 4096), "map-churn unmap");
+        }
+        printf("VIRTUAL_MAP_CHURN_OK rounds=%u same_address=%u\n", (unsigned)ROUNDS, same);
+        return 0;
+    }
     if (!strcmp(mode, "sparse-churn") || !strcmp(mode, "sparse-stale")) {
         void *reserved = mmap(NULL, 64UL << 20, PROT_NONE,
                               MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);

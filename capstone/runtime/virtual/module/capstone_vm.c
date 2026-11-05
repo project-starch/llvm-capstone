@@ -115,6 +115,11 @@ struct cv_thread {
      * faults on a clear A bit and never sets it, so a PTE this module leaves untouched can re-fault
      * for ever while resolve() keeps reporting success. Bounded and reported rather than spun. */
     unsigned long last_fault_addr, last_fault_cause;
+    /* The unpinned paths count a repeat only within one mapping: a program that maps, touches and
+     * unmaps a page at the same address over and over (mallocng's group churn) takes a first fault
+     * at the same (address, cause) each time, and none of those is a resolve that changed nothing.
+     * The arena's id is never reused, so a new mapping at the old address starts a new count. */
+    u64 last_fault_arena;
     unsigned fault_repeat;
     /* A fault was resolved and the context has not been resumed since: the resume flushes the
      * resolved address on the resuming hart first (resume_sfences). */
@@ -1937,6 +1942,7 @@ static bool test_skip_arena_clip;        /* the window may cross the arena's las
 static bool test_skip_stop_check;        /* no cv_step_stop() between batches */
 static bool test_skip_resident_stop;     /* the window does not end at the first resident PTE */
 static bool test_fast_noflags;           /* the direct fault path (unpinned_fast_fault) drops FAULT_FLAG_WRITE */
+static bool test_skip_repeat_arena;      /* the unpinned no-change bound counts repeats across mappings, by (address, cause) alone */
 static unsigned long test_skip_scrub_after_pages;     /* the namespace scrub stops after N pages (0: all) */
 static unsigned long test_skip_scrub_after_granules;  /* ... and after N granules of each page (0: all) */
 module_param(test_inject, ulong, 0444);
@@ -1950,6 +1956,7 @@ module_param(test_skip_arena_clip, bool, 0444);
 module_param(test_skip_stop_check, bool, 0444);
 module_param(test_skip_resident_stop, bool, 0444);
 module_param(test_fast_noflags, bool, 0444);
+module_param(test_skip_repeat_arena, bool, 0444);
 module_param(test_skip_scrub_after_pages, ulong, 0444);
 module_param(test_skip_scrub_after_granules, ulong, 0444);
 static u64 test_events, test_injections, test_stops, test_initial_stops, test_violations;
@@ -2054,6 +2061,7 @@ static void test_report(const char *why)
 #define TEST_SKIP_STOP_CHECK() test_skip_stop_check
 #define TEST_SKIP_RESIDENT_STOP() test_skip_resident_stop
 #define TEST_FAST_NOFLAGS() test_fast_noflags
+#define TEST_SKIP_REPEAT_ARENA() test_skip_repeat_arena
 #define TEST_SCRUB_PAGES() test_skip_scrub_after_pages
 #define TEST_SCRUB_GRANULES() test_skip_scrub_after_granules
 #define TEST_ENTRY() do { test_entry(); ++test_entries; } while (0)
@@ -2078,6 +2086,7 @@ static void test_report(const char *why)
 #define TEST_SKIP_STOP_CHECK() false
 #define TEST_SKIP_RESIDENT_STOP() false
 #define TEST_FAST_NOFLAGS() false
+#define TEST_SKIP_REPEAT_ARENA() false
 #define TEST_SCRUB_PAGES() 0UL
 #define TEST_SCRUB_GRANULES() 0UL
 #define TEST_ENTRY() do { } while (0)
@@ -2432,6 +2441,15 @@ static bool unpinned_resident(struct mm_struct *mm, unsigned long address)
     return next_resident(mm, address, address + PAGE_SIZE, &at, &pfn) == 1;
 }
 
+/* Whether this unpinned fault repeats the thread's previous one with nothing changed: the same address
+ * and cause in the same mapping. A new mapping at the old address is not a repeat. */
+static inline bool unpinned_fault_repeats(struct cv_thread *t, struct arena *a, unsigned long address,
+                                          unsigned long cause)
+{
+    return address == t->last_fault_addr && cause == t->last_fault_cause &&
+           (TEST_SKIP_REPEAT_ARENA() || a->id == t->last_fault_arena);
+}
+
 static int unpinned_resolve(struct context *c, struct cv_thread *t, struct arena *a,
                             struct vm_area_struct *v, unsigned long address, u64 deadline)
 {
@@ -2579,7 +2597,7 @@ static int resolve(struct context *c, struct cv_thread *t, u64 deadline)
             return -EACCES;
         }
         vmflags = v->vm_flags;
-        if (address == t->last_fault_addr && cause == t->last_fault_cause) {
+        if (unpinned_fault_repeats(t, a, address, cause)) {
             if (++t->fault_repeat > fault_repeat_max) {
                 mmap_read_unlock(c->mm);
                 CV_RESOLVE_FAIL("unpinned-loop", "resolved %u times with no change", t->fault_repeat);
@@ -2588,6 +2606,7 @@ static int resolve(struct context *c, struct cv_thread *t, u64 deadline)
         } else {
             t->last_fault_addr = address;
             t->last_fault_cause = cause;
+            t->last_fault_arena = a->id;
             t->fault_repeat = 0;
         }
         rc = unpinned_resolve(c, t, a, v, address, deadline);
@@ -2618,7 +2637,7 @@ static int resolve(struct context *c, struct cv_thread *t, u64 deadline)
              * dirty backing rather than the zero page. The repeat bound stays: a resolve that
              * changes nothing must not report success for ever. */
             int rc;
-            if (address == t->last_fault_addr && cause == t->last_fault_cause) {
+            if (unpinned_fault_repeats(t, a, address, cause)) {
                 if (++t->fault_repeat > fault_repeat_max) {
                     mmap_read_unlock(c->mm);
                     CV_RESOLVE_FAIL("unpinned-loop", "resolved %u times with no change", t->fault_repeat);
@@ -2627,6 +2646,7 @@ static int resolve(struct context *c, struct cv_thread *t, u64 deadline)
             } else {
                 t->last_fault_addr = address;
                 t->last_fault_cause = cause;
+                t->last_fault_arena = a->id;
                 t->fault_repeat = 0;
             }
             rc = unpinned_resolve(c, t, a, v, address, deadline);

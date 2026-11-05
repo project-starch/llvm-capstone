@@ -402,6 +402,16 @@ the window at the same page), so `test_skip_arena_clip` exists but no check can 
 granules (offsets 0, 16, 2048, 4080) on 10 pages of four mappings. `test-oracles.py` additionally
 corrupts real ON transcripts and requires each corruption to break the named check (it proves the parsers
 reject contradictory lines, nothing about a module).
+Repeated first faults at one address: the no-change bound (`fault_repeat_max`, 64) counts a fault only against the
+previous fault in the SAME mapping (the arena id, which is never reused). A program that maps a page, touches it and
+unmaps it again and again gets the same address back; each round's first fault has the same address and cause in a new
+mapping and is not a resolution that changed nothing. Counted by (address, cause) alone, as it was, the 65th round
+ended the domain with a segmentation fault: mallocng does this when its only group is freed and the next allocation
+opens one, so the runtime gate's `sparse-churn` and `sparse-stale` cases died in ON mode (and nine more of its checks with
+them) once mallocng replaced the registry heap. Negative control: `run-repeat-control.py` boots the contract image's
+`map-churn` mode (300 rounds of map, touch, unmap, reusing the address in more rounds than the bound) with the hooks
+module twice and requires exit 0 and no refusal on the unbroken module, and exit 139 with the `unpinned-loop` refusal
+on `test_skip_repeat_arena=1`, which restores the old key. It is not part of `run-arm.sh`.
 The reclaim and tag-clear evidence for devices (DMA, fw_cfg, virtio) is model-side and not part of this
 tree.
 
