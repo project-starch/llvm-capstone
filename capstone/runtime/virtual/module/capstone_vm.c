@@ -198,6 +198,11 @@ struct context {
 #ifdef CAPSTONE_VM_BENCH_HPM
     atomic64_t bench_hpm[CV_BENCH_HPM_N];
 #endif
+    /* perf/exit-timing-vp2: where the time between two CSRUNVs goes, in cycles, all under vm_lock.
+     * et_kcyc: CV_STEP ioctls minus their CSRUNV windows, of which et_rcyc is the in-loop fault resolution;
+     * et_ucyc: from one CV_STEP's return to the next CV_STEP's start (the launcher, the calls it makes for the
+     * context, interrupts, other tasks); et_ocyc: every other ioctl; et_ev[k]: CSRUNV exits by event kind. */
+    unsigned long long et_kcyc, et_rcyc, et_ucyc, et_ocyc, et_steps, et_last, et_ev[8];
 #endif
     /* The image file, writers denied from CV_IMAGE until release. */
     struct file *image;
@@ -3136,8 +3141,15 @@ static long vm_ioctl(struct file *f, unsigned int op, unsigned long arg)
     unsigned long flags;
     if (current->mm != c->mm)
         return -EPERM;
+#ifdef CAPSTONE_VM_BENCH_COUNTERS
+    unsigned long et_t0, et_in = 0;
+#endif
 retry:
     if (mutex_lock_interruptible(&vm_lock)) return -EINTR;
+#ifdef CAPSTONE_VM_BENCH_COUNTERS
+    et_t0 = csr_read(CSR_CYCLE);
+    if (op == CV_STEP && c->et_last) c->et_ucyc += et_t0 - c->et_last;
+#endif
     if (c->remapping && op != CV_REMAP_END) {
         mutex_unlock(&vm_lock);
         if (wait_event_interruptible(c->remap_wait, !READ_ONCE(c->remapping))) return -EINTR;
@@ -3441,6 +3453,7 @@ thread_unwind:
 #endif
                 atomic64_add(dcy, &c->bench_cycles);
                 atomic64_add(din, &c->bench_instret);
+                et_in += dcy; ++c->et_ev[t->event < 7 ? t->event : 7];
                 WRITE_ONCE(bench_cycles, bench_cycles + dcy);
                 WRITE_ONCE(bench_instret, bench_instret + din);
                 WRITE_ONCE(bench_entries, bench_entries + 1);
@@ -3501,8 +3514,17 @@ thread_unwind:
                 TEST_REAL_STOP(false, budget_end);
                 break;
             }
+#ifdef CAPSTONE_VM_BENCH_COUNTERS
+            {
+                unsigned long et_r0 = csr_read(CSR_CYCLE);
+                int et_rc = resolve(c, t, budget_end);
+                c->et_rcyc += csr_read(CSR_CYCLE) - et_r0;
+                if (et_rc) break;
+            }
+#else
             if (resolve(c, t, budget_end))
                 break;
+#endif
             t->sfence_pending = true;
             if (!text) {
                 ++c->stats.faults;
@@ -3579,6 +3601,13 @@ out:
      * terminal exit, a discard, an error path -- instead of enumerating them and
      * missing one. A spurious wake costs a re-check. */
     wake_up_all(&slot_wait);
+#ifdef CAPSTONE_VM_BENCH_COUNTERS
+    {
+        unsigned long et_t1 = csr_read(CSR_CYCLE);
+        if (op == CV_STEP) { c->et_kcyc += et_t1 - et_t0 - et_in; ++c->et_steps; c->et_last = et_t1; }
+        else c->et_ocyc += et_t1 - et_t0;
+    }
+#endif
     mutex_unlock(&vm_lock);
     return rc;
 }
@@ -3765,6 +3794,10 @@ static int vm_release(struct inode *inode, struct file *f)
     pr_emerg("capstone_vm: bench cycles=%lld instret=%lld entries=%lld\n",
              (long long)atomic64_read(&c->bench_cycles), (long long)atomic64_read(&c->bench_instret),
              (long long)atomic64_read(&c->bench_entries));
+    /* Must-fire, its own prefix (never "capstone_vm: bench"), one per context: perf/exit-timing-vp2. */
+    pr_emerg("capstone_vm: exits steps=%llu kcyc=%llu rcyc=%llu ucyc=%llu ocyc=%llu ev=%llu,%llu,%llu,%llu,%llu,%llu,%llu,%llu\n",
+             c->et_steps, c->et_kcyc, c->et_rcyc, c->et_ucyc, c->et_ocyc, c->et_ev[0], c->et_ev[1], c->et_ev[2],
+             c->et_ev[3], c->et_ev[4], c->et_ev[5], c->et_ev[6], c->et_ev[7]);
 #ifdef CAPSTONE_VM_BENCH_HPM
     /* Its own prefix, never "capstone_vm: bench": a stage's run.sh takes the LAST dmesg line matching that and counts
      * them to check freshness, so a second bench line per context broke both (QEMU gate, 3 Nov). */
