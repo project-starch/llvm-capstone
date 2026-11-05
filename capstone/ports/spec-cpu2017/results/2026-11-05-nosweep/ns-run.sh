@@ -15,7 +15,7 @@ main() {
   L=$O/ns-b$BRD.log
   local C5=caplifive_vp2c_1fc2cd5aa C5SHA=5b7b1edcd9bcd2521bd4bd59107747e268487056f1bfcd96403fd612eeb6d764
   local B3=caplifive_vp2c_e7af48457 B3SHA=d6ed97b6d341ea058d497838e43558900823c36591c44046d3cfc0b7f55b423b
-  local T=$H/wt-spec/capstone/tests/rtl-smoke SB=$H/wt-spec/capstone/ports/spec-cpu2017 MOD=1ae19c5e337fbeb2 EGV=0bde5fd8e0c9c374
+  local T=$H/wt-spec/capstone/tests/rtl-smoke SB=$H/wt-spec/capstone/ports/spec-cpu2017 MOD=645749816c02751e EGV=0bde5fd8e0c9c374
   local BOOK=${NS_BOOK:-python3 /tmp/capstone/lab-hub/lab-book.py} FLASH=${NS_FLASH:-python3 $T/drivers/flash-bitstream.py}
   local RB=${NS_READBACK:-python3 $SB/results/2026-10-28-board-test/b4/nv-readback.py}
   local STORE=${NS_STOREHAS:-python3 $T/vp2-kit-2026-10-17/board-tier12/batch/store-has.py}
@@ -31,7 +31,8 @@ main() {
   LIST=$O/b$BRD-rest.list
   # each board has its own console URL file (board 2: -board2); the board 1 file refuses board 2 (fpga_console.py)
   local UF=$HOME/.claude-kisp/secrets/fpga-console-url; [ $BRD = 2 ] && UF=$UF-board2
-  export FPGA_BOARD=$BRD CAPSTONE_FPGA_URL_FILE=$UF
+  # BOARD_URL_FILE: the kit's board-run.sh reads it (default board 1's); a board-1-derived kit has no line for it
+  export FPGA_BOARD=$BRD CAPSTONE_FPGA_URL_FILE=$UF BOARD_URL_FILE=$UF
   [ -s "$CAPSTONE_FPGA_URL_FILE" ] || { echo "no console URL file for board $BRD"; return 2; }
   log() { echo "NS $(date '+%F %T') $*" >> "$L"; }
   mkdir -p "$O"; log "START pid $$ board $BRD"

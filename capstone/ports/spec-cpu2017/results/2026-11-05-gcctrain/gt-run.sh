@@ -30,7 +30,8 @@ main() {
   LIST=$O/b$BRD.list
   # each board has its own console URL file (board 2: -board2); the board 1 file refuses board 2 (fpga_console.py)
   local UF=$HOME/.claude-kisp/secrets/fpga-console-url; [ $BRD = 2 ] && UF=$UF-board2
-  export FPGA_BOARD=$BRD CAPSTONE_FPGA_URL_FILE=$UF
+  # BOARD_URL_FILE: the kit's board-run.sh reads it (default board 1's); a board-1-derived kit has no line for it
+  export FPGA_BOARD=$BRD CAPSTONE_FPGA_URL_FILE=$UF BOARD_URL_FILE=$UF
   [ -s "$CAPSTONE_FPGA_URL_FILE" ] || { echo "no console URL file for board $BRD"; return 2; }
   log() { echo "GT $(date '+%F %T') $*" >> "$L"; }
   mkdir -p "$O"; log "START pid $$ board $BRD"
