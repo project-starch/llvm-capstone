@@ -1,0 +1,11 @@
+TAGLEAK-MODE sweep=3 mb=128 free_kb=903884
+ETXPROBE running=ENDED-EARLY
+TAGLEAK-RC fill 0 TAGLEAK fill mb=128 pages=32768 sampled_tagged=86481 of 86481 nopfn=0 CAPSTONE_VM_ADD_OK slot=0 base=0x3fa46e2000 bytes=409600 reg=3 perms=7 linear=0
+ETXPROBE idle=DENIED /mnt/vm/spec/run.sh: line 27: can't create /mnt/vm/spec/bin/tagleak: Read-only file system
+TAGLEAK-RC scan 0 TAGLEAK scan mb=128 pages=32768 tagged=0 tagged_pages=0 fill_pfns=32768 recycled=32421 tagged_recycled=0 nopfn=0 ctl=1 CAPSTONE_VM_ADD_OK slot=0 base=0x3f9c50f000 bytes=409600 reg=3 perms=7 linear=0
+TAGLEAK-MODE sweep=2 mb=128 free_kb=900368
+ETXPROBE running=ENDED-EARLY
+TAGLEAK-RC fill 0 TAGLEAK fill mb=128 pages=32768 sampled_tagged=86481 of 86481 nopfn=0 CAPSTONE_VM_ADD_OK slot=0 base=0x3f9d32b000 bytes=409600 reg=3 perms=7 linear=0
+ETXPROBE idle=DENIED /mnt/vm/spec/run.sh: line 27: can't create /mnt/vm/spec/bin/tagleak: Read-only file system
+TAGLEAK-RC scan 0 TAGLEAK scan mb=128 pages=32768 tagged=0 tagged_pages=0 fill_pfns=32768 recycled=32422 tagged_recycled=0 nopfn=0 ctl=1 CAPSTONE_VM_ADD_OK slot=0 base=0x3f829ac000 bytes=409600 reg=3 perms=7 linear=0
+TAGLEAK-RESTORED sweep=3

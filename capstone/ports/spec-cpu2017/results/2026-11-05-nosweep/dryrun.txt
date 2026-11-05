@@ -1,0 +1,18 @@
+# ns-run.sh dry run, every board call stubbed (perf/ns/dryrun), 5 Nov 14:00
+A2-b1-ok-trap: PROBE verdict rc=0|DONE spec 0; board 1 back on bitstream 3| verdict=N1 HOLDS
+A-b1-ok: PROBE verdict rc=0|DONE spec 0; board 1 back on bitstream 3| verdict=N1 HOLDS
+B-b1-leak: PROBE verdict rc=1|STOP after the probe (verdict rc=1)|DONE spec probe; board 1 back on bitstream 3| verdict=N1 FAILS rc=1
+C-b2-ok: probe verdict N1 HOLDS|DONE spec 0; board 2 back on bitstream 3| verdict=N1 HOLDS
+D-b2-fail: STOP: probe verdict is not N1 HOLDS| verdict=N1 FAILS rc=1
+E-b1-flashfail: STOP: the flash back to bitstream 3 failed; board 1 left as is| verdict=N1 FAILS flash
+F2-notdone-trap: STOP: pid 999999 did not end with DONE| verdict=N1 FAILS no probe
+F-notdone: STOP: pid 999999 did not end with DONE| verdict=
+G-noprereg: STOP: pre-registration deadbeef0000 is not on origin/spec-silicon| verdict=
+H-b1-nodata: PROBE verdict rc=2|STOP after the probe (verdict rc=2)|DONE spec probe; board 1 back on bitstream 3| verdict=N1 FAILS rc=2
+
+# grader controls
+mock (out-all-b1 with the predictions): SUMMARY Z0 9/9 Z1 4/4 Z2 1/1 Z3 3/3 Z4 5/5, rc 0
+out-all2-b1 given as the run: SUMMARY Z0 0/5 Z4 5/5, rc 1
+empty folder: rc 2
+mock with xz only -200 s: Z2 FAILS, rc 1
+tl-verdict.py: QEMU q3 transcript rc 0; tagged_recycled=7 FAILS; ctl=0 rc 1; empty rc 2
