@@ -42,10 +42,10 @@ Lane C's measurement: the seam on the libc's reclaim; against run7 no CAUGHT cel
 
 **CWE-416 catches by native population** (temporal-asan-visible / asan-blind):
 
-- stock: 1 of 19 / 0 of 30
-- system allocator: 2 of 19 / 8 of 30
-- nested: 2 of 19 / 21 of 30
-- nested exact: 2 of 19 / 21 of 30
+- stock: 1 of 26 / 0 of 23
+- system allocator: 3 of 26 / 7 of 23
+- nested: 3 of 26 / 20 of 23
+- nested exact: 3 of 26 / 20 of 23
 
 ### Sensitivity scoring (every case scored by fault site)
 
@@ -80,7 +80,7 @@ Lane C's measurement: the seam on the libc's reclaim; against run7 no CAUGHT cel
 
 **CWE-416 catches by native population** (temporal-asan-visible / asan-blind):
 
-- stock: 2 of 19 / 0 of 30
-- system allocator: 10 of 19 / 12 of 30
-- nested: 19 of 19 / 25 of 30
-- nested exact: 19 of 19 / 25 of 30
+- stock: 2 of 26 / 0 of 23
+- system allocator: 15 of 26 / 7 of 23
+- nested: 24 of 26 / 20 of 23
+- nested exact: 24 of 26 / 20 of 23

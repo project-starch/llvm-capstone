@@ -40,10 +40,10 @@ The merged corpus measured whole, 70 cases, and the current record. The first 65
 
 **CWE-416 catches by native population** (temporal-asan-visible / asan-blind):
 
-- stock: 1 of 19 / 0 of 32
-- system allocator: 2 of 19 / 10 of 32
-- nested: 2 of 19 / 23 of 32
-- nested exact: 2 of 19 / 23 of 32
+- stock: 1 of 28 / 0 of 23
+- system allocator: 5 of 28 / 7 of 23
+- nested: 5 of 28 / 20 of 23
+- nested exact: 5 of 28 / 20 of 23
 
 ### Sensitivity scoring (every case scored by fault site)
 
@@ -76,7 +76,7 @@ The merged corpus measured whole, 70 cases, and the current record. The first 65
 
 **CWE-416 catches by native population** (temporal-asan-visible / asan-blind):
 
-- stock: 2 of 19 / 0 of 32
-- system allocator: 10 of 19 / 15 of 32
-- nested: 19 of 19 / 29 of 32
-- nested exact: 19 of 19 / 29 of 32
+- stock: 2 of 28 / 0 of 23
+- system allocator: 18 of 28 / 7 of 23
+- nested: 27 of 28 / 21 of 23
+- nested exact: 27 of 28 / 21 of 23

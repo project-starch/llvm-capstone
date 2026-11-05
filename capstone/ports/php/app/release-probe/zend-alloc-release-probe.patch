@@ -1,0 +1,93 @@
+--- a/Zend/zend_alloc.c
++++ b/Zend/zend_alloc.c
+@@ -36,6 +36,43 @@
+ ZEND_API zend_alloc_globals alloc_globals;
+ #endif
+ 
++/* ---- ZPROBE: does a Zend release reach libc, or stop in AG(cache)? ------
++ * Writes one unbuffered line per release to $ZPROBE_OUT, or nothing at all
++ * when that variable is unset, so the build is the stock allocator unless a
++ * run asks for the probe. Unbuffered on purpose: these cases crash, and a
++ * buffered tail is exactly the evidence that would be lost. */
++#include <stdio.h>
++#include <stdlib.h>
++#include <unistd.h>
++#include <fcntl.h>
++static int zprobe_fd = -2;              /* -2 not set up yet, -1 off */
++static void zprobe_setup(void) {
++	const char *zp = getenv("ZPROBE_OUT");
++	zprobe_fd = -1;
++	if (zp && *zp) {
++		zprobe_fd = open(zp, O_WRONLY | O_CREAT | O_APPEND, 0644);
++		if (zprobe_fd >= 0) {
++			/* This build is a PIE, so a logged return address is load base plus
++			 * offset. Emit the runtime address of a function in this very file;
++			 * the base is that minus the same symbol's address in the binary,
++			 * and every other address resolves after subtracting it. */
++			char hb[96];
++			int hn = snprintf(hb, sizeof(hb), "ZPBASE\t%p\n", (void *) &zprobe_setup);
++			if (hn > 0) { ssize_t hw = write(zprobe_fd, hb, (size_t) hn); (void) hw; }
++		}
++	}
++}
++#define ZPROBE_EMIT(kind, sz, idx, cnt, ptr, ra) do {                     \
++	if (zprobe_fd == -2) zprobe_setup();                                  \
++	if (zprobe_fd >= 0) {                                                 \
++		char zb[192];                                                     \
++		int zn = snprintf(zb, sizeof(zb), "ZP\t%s\t%u\t%d\t%d\t%p\t%p\n", \
++		                  (kind), (unsigned)(sz), (int)(idx),             \
++		                  (int)(cnt), (void *)(ptr), (void *)(ra));       \
++		if (zn > 0) { ssize_t zw = write(zprobe_fd, zb, (size_t)zn); (void)zw; } \
++	}                                                                     \
++} while (0)
++
+ 
+ #ifdef ZEND_MM
+ #define ZEND_DISABLE_MEMORY_CACHE 0
+@@ -269,6 +306,8 @@
+ #endif
+ #if !ZEND_DISABLE_MEMORY_CACHE
+ 	if ((CACHE_INDEX < MAX_CACHED_MEMORY) && (AG(cache_count)[CACHE_INDEX] < MAX_CACHED_ENTRIES)) {
++		ZPROBE_EMIT("CACHED", p->size, CACHE_INDEX, AG(cache_count)[CACHE_INDEX],
++		            ptr, __builtin_return_address(0));
+ 		AG(cache)[CACHE_INDEX][AG(cache_count)[CACHE_INDEX]++] = p;
+ 		p->cached = 1;
+ #if ZEND_DEBUG
+@@ -277,6 +316,9 @@
+ 		return;
+ 	}
+ #endif
++	ZPROBE_EMIT("FREED", p->size, CACHE_INDEX,
++	            (CACHE_INDEX < MAX_CACHED_MEMORY) ? (int) AG(cache_count)[CACHE_INDEX] : -1,
++	            ptr, __builtin_return_address(0));
+ 	HANDLE_BLOCK_INTERRUPTIONS();
+ 	REMOVE_POINTER_FROM_LIST(p);
+ 
+@@ -342,6 +384,7 @@
+ 	}
+ #endif
+ 	REMOVE_POINTER_FROM_LIST(p);
++	ZPROBE_EMIT("REALLOC", size, CACHE_INDEX, -1, ptr, __builtin_return_address(0));
+ 	p = (zend_mem_header *) ZEND_DO_REALLOC(p, sizeof(zend_mem_header)+MEM_HEADER_PADDING+SIZE+END_MAGIC_SIZE);
+ 	if (!p) {
+ 		if (!allow_failure) {
+@@ -488,6 +531,9 @@
+ 				AG(allocated_memory) -= REAL_SIZE(ptr->size);
+ #  endif
+ 				REMOVE_POINTER_FROM_LIST(ptr);
++				ZPROBE_EMIT("DRAINED", ptr->size, i, (int) AG(cache_count)[i],
++				            ((char *) ptr) + sizeof(zend_mem_header) + MEM_HEADER_PADDING,
++				            __builtin_return_address(0));
+ 				ZEND_DO_FREE(ptr);
+ 			}
+ 			AG(cache_count)[i] = 0;
+@@ -561,6 +607,9 @@
+ #endif
+ 			p = t->pNext;
+ 			REMOVE_POINTER_FROM_LIST(t);
++			ZPROBE_EMIT("SWEPT", t->size, -1, -1,
++			            ((char *) t) + sizeof(zend_mem_header) + MEM_HEADER_PADDING,
++			            __builtin_return_address(0));
+ 			ZEND_DO_FREE(t);
+ 			t = p;
+ 		} else {

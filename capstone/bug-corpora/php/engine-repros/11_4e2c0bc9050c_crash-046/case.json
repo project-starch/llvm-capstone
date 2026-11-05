@@ -33,10 +33,17 @@
    "verdict_note": "the corpus's pristine record for this case is 'SIGNAL:11': native PHP dies on a signal, so there is no pair to read",
    "verdict_from": "results/2026-10-28-run18/bundle-virtual-nested-exact",
    "verdict_reason": "out-of-denominator"
+  },
+  "cheribsd-revocation": {
+   "oracle": "the same trigger on stock CheriBSD purecap -- no nested layer at all, the real interpreter cross-built by ports/php/cheribsd/build.sh -- in the boot at the platform default (security.cheri.runtime_revocation_default=1, every_free=0): a SIGPROT at the ASan site with the bounds-malloc control faulting in the same boot, the same binary run with revocation off as the pair that attributes the fault, or the trigger ends and this arm did not see it (tools/arms.json cheribsd-default)",
+   "verdict": "NO-READING",
+   "verdict_note": "NOT-REISSUED: no capability fault at the platform default, but the eager configuration (runtime_revocation_every_free_default=1) faults on this case, so the stale pointer IS followed. The eager fault lands inside the script body, which is what tells a revoked object apart from the allocator's cache being drained back to libc at shutdown. Context, not a verdict: every-free also faults on accesses nothing is meant to catch; out-of-denominator under the default scoring: the corpus's pristine record for this case is SIGNAL:11, so the unprotected program dies anyway and there is no pair to read. Run again with --score-oracle-crashes for the reading by fault site",
+   "verdict_from": "results/2026-10-30-cheribsd/bundle-cheribsd-revocation",
+   "verdict_reason": "out-of-denominator"
   }
  },
  "status": "built 2026-10-27 from the corpus and our native oracle; what has run is in this record's arms (verdict, verdict_from) and under results/",
- "note": "population: asan-blind -- ASan reports it only with PHP's allocator patched (cache off, no 8-byte rounding); with zend_alloc.c as shipped the run reads OK. That is the selection, by measurement; which mechanism hides it, and which arm sees it, is what the arms record. Collected by the corpus as history-5.x (historical-known, confidence high).",
+ "note": "population: temporal-asan-visible -- a temporal defect (CWE-416) whose released block was MEASURED reaching libc free() inside the allocator (results/2026-11-02-release-destination), and that the patched build reports as ASAN:heap-use-after-free: a detector at the libc boundary sees it. The stockalloc run read OK and reported nothing, so this case is placed by the measurement and not by that run -- see population_decided_by in oracle.json. Collected by the corpus as history-5.x (historical-known, confidence high).",
  "fault_site_files": {
   "zend_objects_store_del_ref": "Zend/zend_objects_API.c"
  }

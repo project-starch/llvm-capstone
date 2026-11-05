@@ -1,0 +1,20 @@
+{
+ "what": "the qualification run of ports/php/cheribsd: does the purecap interpreter start and run a script at all",
+ "pin": "php 5.0.0, museum tarball sha256 5783e0c0ba94f165633a565fe73a83e59cf17b6880ef95fa8f936dc6301d6919, tree patches 0001 and 0002 (the same two the virtual port applies; 0003, the Capstone seam, is not applied here)",
+ "binary_sha256": "b389e2399540f5e5449bff7c58c8112f73cba65be7639db941791dd1ad86f442",
+ "control_sha256": "9794786d5555ba70919c6d1bf68eb680c21b6de06032818b47f6f6d7a44706d5",
+ "platform": {
+  "compiler": "CheriBSD SDK clang-17, --target=riscv64-unknown-freebsd13 -march=rv64imafdcxcheri -mabi=l64pc128d -mno-relax -cheri-tgot-tls",
+  "elf_flags": "0x30005, RVC, double-float ABI, cheriabi, capability mode -- asserted by build.sh, not assumed",
+  "qemu": "qemu-system-riscv64xcheri 7.1.0 from the SDK; no -cpu sstc=false, which this QEMU has no property for",
+  "guest": "CheriBSD purecap, cheribsd-riscv64-purecap.img; motd reports INVARIANTS WITNESS CHERI_CAPREVOKE",
+  "disk": "a qcow2 overlay over OUR OWN copy of the image: the shared one is held open by a peer lane's guest and an overlay over it fails to take even a shared write lock",
+  "transfer": "virtio-9p (kldload virtio_p9fs; mount -t p9fs -o trans=virtio phpcorpus /mnt/php)"
+ },
+ "result": {
+  "php -n -v": "PHP 5.0.0 (cli) banner printed, rc=1 -- native PHP 5.0.0 exits 1 for -v as well",
+  "a script with sort()": "SMOKE 3 / 1,2,3 / rc=0",
+  "reading": "the interpreter starts, compiles and executes under purecap, and its sort path survives. That is the gate the Perl purecap port did not pass (SIGPROT inside perl_construct on every invocation), so this port CAN host a corpus arm"
+ },
+ "not_committed": "the serial transcript stays out of the repo; this file is its summary"
+}

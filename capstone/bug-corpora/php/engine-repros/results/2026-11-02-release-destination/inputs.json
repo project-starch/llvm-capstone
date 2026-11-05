@@ -1,0 +1,42 @@
+{
+ "measurement": "where a defect's released block actually goes: parked in Zend's per-size-class cache, or passed to libc free(). A property of the defect's release, measured in the allocator, not read off a sanitizer's output",
+ "not_an_arm": "this record gives no case a verdict and declares no arm. It is a side measurement in the sense of SCHEMA.md rule 6: matrix.tsv, inputs.json and a README, no captures",
+ "pin": "php 5.0.0, museum tarball sha256 5783e0c0ba94f165633a565fe73a83e59cf17b6880ef95fa8f936dc6301d6919, configured --disable-all",
+ "population": "all 70 cases of this corpus",
+ "platform": {
+  "compiler": "gcc (Ubuntu 7.5.0-3ubuntu1~18.04) 7.5.0, libasan.so.4",
+  "host": "x86_64 Linux, the project's own machine; not the machine this corpus's own populations were measured on (that one is gcc 15.2 / libasan 15)"
+ },
+ "builds": {
+  "probe": {
+   "what": "stock allocator (cache ON, REAL_SIZE unpatched) with the release probe",
+   "cflags": "-std=gnu89 -g",
+   "binary_sha256": "28c03426d1d86b64c45b319f7c290e53e47aec1f71aedbe3271d949a7c2879a4"
+  },
+  "locator": {
+   "what": "the source corpus's detector patches (ZEND_DISABLE_MEMORY_CACHE 1, REAL_SIZE unrounded) under ASan; used ONLY to name the block and to prove the trigger reaches the use",
+   "cflags": "-O0 -g -fno-omit-frame-pointer -std=gnu89 -fcommon -DZEND_ENABLE_FAST_CACHE=0 -fsanitize=address -fno-sanitize-address-use-after-scope",
+   "binary_sha256": "61e94e1f247814ad3d4180ee379268f6e76a01f966361906461b9282eef75254"
+  },
+  "decisive": {
+   "what": "stock cache ON, probe in, ASan on, in ONE binary: ASan can only report a use-after-free on a block that reached libc, and the probe says at the same address in the same run what happened to it",
+   "cflags": "same as locator, without the detector patches",
+   "binary_sha256": "5cfd1a30301693b86449d06bc8cb17cf68656cdfd85b331c0229d818e0ca34d2"
+  }
+ },
+ "probe": "four emit points in Zend/zend_alloc.c: the cache branch of _efree (CACHED), its fall-through to ZEND_DO_FREE (FREED), _erealloc (REALLOC, which never consults the cache), the cache drain at request shutdown (DRAINED) and the shutdown leak sweep (SWEPT). ZEND_DO_FREE is plain free() on this build: ZEND_MM is not defined",
+ "controls": {
+  "size_ceiling": "a payload of 81 bytes or more is never cached: 0 of 170 in the control run, which is what cache_index = ((size+7)&~7)>>3 < MAX_CACHED_MEMORY (11) predicts from the source",
+  "cache_fills": "a payload of 80 or less goes both ways, 2729 cached against 790 passed through, which is the 256-entry per-class cache filling and falling back to free()",
+  "survives_a_crash": "the probe writes unbuffered; a run that dies with a signal still leaves its log (814 lines on the crashing control)",
+  "silent_when_off": "with ZPROBE_OUT unset the build writes nothing and is the stock allocator",
+  "untested_branch": "SWEPT, the shutdown leak sweep, did not fire in any control and is reported as unproven. The three nested-until-teardown cases rest on DRAINED, which does fire"
+ },
+ "cross_check": "the two instruments agree on every case they both see: 17 of 17 where ASan named a block and the probe had a record for it, 0 disagreements. The 2 they do not are the answer for those 2, the blocks that never passed through Zend's allocator at all, and they are exactly the 2 cases plain-temporal-repros independently records as its only nested=false entries",
+ "found_by_the_cross_check": "three cases first read as parked while ASan reported a use-after-free on them. The probe was missing the cache drain at request shutdown; instrumenting it brought the disagreements to zero and separated nested-until-teardown as its own class",
+ "build_deviations": [
+  "configure's AC_PROG_LEX probe needs a lex this host does not have; the cached config from the corpus's own configured tree carries the answer and PHP 5.0.0 ships its generated scanners",
+  "the generated Makefile's EXTRA_LIBS omits -ldl for the sanitised link; it is supplied on the make command line"
+ ],
+ "not_committed": "the per-case probe logs and ASan reports are captures and stay out of the repo (SCHEMA.md rule 6). matrix.tsv is the summary"
+}

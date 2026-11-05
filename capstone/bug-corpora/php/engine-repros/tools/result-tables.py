@@ -1,22 +1,74 @@
 #!/usr/bin/env python3
 """The tables a results record's README carries, computed from its bundles and nothing else.
     result-tables.py <results dir>          # bundle-<arm>/ (default scoring), sensitivity/bundle-<arm>/
+    result-tables.py --across <dir> <dir>   # one table over arms measured in SEPARATE records
+    result-tables.py --by-release <matrix.tsv> <dir> [...]   # rows are the MEASURED destination
 Per scoring and arm: CAUGHT, MISSED and every NO-READING reason, over every case the record
 measured, over its temporal cases (CWE-416/415/590) and over its CWE-416 cases (the CWE from
 each case's oracle.json), then the CWE-416 catches split by native population. Every case one
 arm measured must have a row in every arm's bundle, or the run exits 1 and prints which are
 missing: a table with a hole in it is not printed as if it were complete. The stock
 configuration is the judge's control and is tabulated like the arms so the record is whole.
+
+`--across` puts arms measured in different records in one table, which is the only way to read a
+corpus whose arms were not all run at once. It is NOT a merge: each row names the record it was
+computed from, because those rows are separate boots and may be separate vehicles, and two records
+claiming the same arm is refused rather than resolved.
+
+`--by-release` makes the rows the place a defect's released block was MEASURED to go -- the
+release-destination record's `matrix.tsv` -- instead of the ASan-derived `population`. The two are
+different statements and on this corpus they disagree on nine cases, which is why the split is read
+from a measurement and not from the oracle files. A case the bundles hold and the matrix does not is
+refused, and so is a class the matrix names and this tool does not know.
 """
-import collections, json, sys
+import collections, csv, json, sys
 from pathlib import Path
 
 TEMPORAL = ("CWE-416", "CWE-415", "CWE-590")
 HERE = Path(__file__).resolve().parent
 CORPUS = HERE.parent
-ARMS = ("php-real-stock", "virtual-malloc", "virtual-nested-pools", "virtual-nested-exact")
 LABEL = {"php-real-stock": "stock", "virtual-malloc": "system allocator",
-         "virtual-nested-pools": "nested", "virtual-nested-exact": "nested exact"}
+         "virtual-nested-pools": "nested", "virtual-nested-exact": "nested exact",
+         "cheribsd-revocation": "CheriBSD revocation"}
+# ORDER, for the tables; a record is tabulated over the arms IT HOLDS, not over this list.
+ARM_ORDER = ("php-real-stock", "virtual-malloc", "virtual-nested-pools", "virtual-nested-exact",
+             "cheribsd-revocation")
+# the release-destination record's classes, in the order a table reads best. The class names are
+# mechanical; the labels say what each one means, because "nested" alone invites the reader to
+# think of the allocation and this axis is about the release.
+RELEASE_ORDER = (("non-nested", "reaches libc `free()`"),
+                 ("nested", "stays in `AG(cache)`"),
+                 ("nested-until-teardown", "in `AG(cache)`, drained at shutdown"),
+                 ("not-Zend", "never Zend's to allocate"),
+                 ("no-release-observed", "no release observed"))
+
+
+def bundles_of(scoring_dir):
+    """{arm: bundle dir} for one record, and the refusals a half-written record earns.
+
+    A HARDCODED ARM LIST IS THE SUBSET FAILURE. This list was the four virtual arms, so the
+    CheriBSD record added on 2026-10-30 could not be tabulated at all, and adding a fifth name to
+    the tuple would instead have made every earlier record fail for lacking it. Neither is a
+    reading. So the arm set is the record's own, and the three ways that could go quiet are each
+    refused rather than tabulated: a bundle directory with no verdicts.jsonl is HALF WRITTEN, not
+    absent; an arm this corpus does not declare is a typo, not a new arm; and a record with no
+    bundle at all is not an empty table. What a record does NOT hold is named in the output, so a
+    short table reads as short instead of looking complete.
+    """
+    found, problems = {}, []
+    for b in sorted(scoring_dir.glob("bundle-*")):
+        if not b.is_dir():
+            continue
+        arm = b.name[len("bundle-"):]
+        if arm not in LABEL:
+            problems.append(f"{b}: {arm!r} is not an arm this corpus declares (known: {sorted(LABEL)})")
+        elif not (b / "verdicts.jsonl").is_file():
+            problems.append(f"{b}: a bundle directory with no verdicts.jsonl -- half written, not absent")
+        else:
+            found[arm] = b
+    if not found and not problems:
+        problems.append(f"{scoring_dir}: no bundle-<arm>/ at all; a record with no bundles is not an empty table")
+    return {a: found[a] for a in ARM_ORDER if a in found}, problems
 
 
 def cases():
@@ -28,18 +80,55 @@ def cases():
     return out
 
 
+def case_ids():
+    """{case directory: the source corpus's id}, so a bundle row can be found in a matrix."""
+    return {d.name: json.loads((d / "oracle.json").read_text())["id"]
+            for d in sorted(CORPUS.iterdir()) if (d / "oracle.json").is_file()}
+
+
+def release_classes(path):
+    """{source id: class} from a release-destination record's matrix.tsv, and its refusals."""
+    out, problems = {}, []
+    try:
+        fh = open(path, newline="")
+    except OSError as e:
+        return {}, [f"{path}: {e.strerror}"]
+    with fh:
+        rd = csv.DictReader(fh, delimiter="\t")
+        if not rd.fieldnames or not {"source_id", "release_destination"} <= set(rd.fieldnames):
+            return {}, [f"{path}: not a release-destination matrix (needs source_id and "
+                        f"release_destination columns; has {rd.fieldnames})"]
+        known = dict(RELEASE_ORDER)
+        for r in rd:
+            if r["release_destination"] not in known:
+                problems.append(f"{path}: {r['release_destination']!r} is not a class this tool "
+                                f"knows (known: {sorted(known)})")
+            out[r["source_id"]] = r["release_destination"]
+    if not out:
+        problems.append(f"{path}: no rows; an empty matrix is not an empty split")
+    return out, problems
+
+
 def rows(bundle):
     return [json.loads(l) for l in (bundle / "verdicts.jsonl").read_text().splitlines() if l.strip()]
 
 
-def tables(scoring_dir, known, title):
+def tables(bundles, known, title, provenance=None):
+    """`bundles` is {arm: bundle dir}; `provenance` is {arm: record} when the rows come from
+    different records, which is then stated in the table rather than left for the reader."""
     missing, lines = [], [f"### {title}", ""]
+    arms = list(bundles)
+    absent = [LABEL[a] for a in ARM_ORDER if a not in arms]
+    if provenance:
+        lines += ["Each row is computed from its own record, and they are separate boots: "
+                  + "; ".join(f"**{LABEL[a]}** from `{provenance[a]}`" for a in arms) + "."
+                  + (f" Not measured: {', '.join(absent)}." if absent else ""), ""]
+    else:
+        lines += [f"Arms in this record: {', '.join(LABEL[a] for a in arms)}."
+                  + (f" Not measured here: {', '.join(absent)}." if absent else ""), ""]
     tallies = {}
-    for arm in ARMS:
-        b = scoring_dir / f"bundle-{arm}"
-        if not (b / "verdicts.jsonl").is_file():
-            missing.append(f"{b}: no bundle")
-            continue
+    for arm in arms:
+        b = bundles[arm]
         seen = {}
         for r in rows(b):
             c = r["observation"]["case"]
@@ -57,7 +146,7 @@ def tables(scoring_dir, known, title):
     # five, 2026-10-28) is complete over the cases it measured, and says how many; a hole
     # between arms is still refused.
     measured = set().union(*(set(s) for s in tallies.values()))
-    for arm in ARMS:
+    for arm in arms:
         for c in sorted(measured - set(tallies[arm])):
             missing.append(f"{arm}: no row for {c}")
     if missing:
@@ -67,10 +156,27 @@ def tables(scoring_dir, known, title):
     # column reading 0 there would be false; it reads "not classified" instead. The judge marks
     # its scoring since the class exists; a record without the mark and without a chain row is
     # unclassified (fifth review, 2026-10-28).
-    classified = any("chain" in str(json.loads((scoring_dir / f"bundle-{arm}" / "inputs.json").read_text())
-                                    .get("scoring", {}).get("attribution", ""))
-                     or any(r["observation"].get("attribution") == "chain" for r in tallies[arm].values())
-                     for arm in ARMS)
+    # inputs.scoring is an OBJECT. A bundle whose `scoring` is prose is refused by name rather than
+    # raising AttributeError here: on 2026-10-30 the CheriBSD runner wrote a sentence, and a reader
+    # of someone else's corpus gets a traceback instead of a sentence saying which file is wrong.
+    def attribution_of(arm):
+        s = json.loads((bundles[arm] / "inputs.json").read_text()).get("scoring", {})
+        if not isinstance(s, dict):
+            missing.append(f"bundle-{arm}/inputs.json: scoring is {type(s).__name__}, not an object "
+                           f"with an `attribution` key; this tool cannot read it")
+            return ""
+        return str(s.get("attribution", ""))
+    # PER ARM, because a 0 in the chain column is not the same statement for every arm. An arm
+    # that does not attribute by call path AT ALL -- the CheriBSD arm attributes by a paired
+    # revocation-off boot -- has no chain catch by construction, and printing 0 beside an arm whose
+    # 0 would have been a measurement reads as a comparison that was never made. It reads n/a.
+    chain_arm = {arm: ("chain" in attribution_of(arm)
+                       or any(r["observation"].get("attribution") == "chain"
+                              for r in tallies[arm].values()))
+                 for arm in arms}
+    classified = any(chain_arm.values())
+    if missing:
+        return lines, missing
     def tally(arm, pick):
         t = collections.Counter()
         for c, r in tallies[arm].items():
@@ -87,17 +193,31 @@ def tables(scoring_dir, known, title):
                        ("the CWE-416 cases", lambda c: known[c][0] == "CWE-416")):
         n = sum(1 for c in present if pick(c))
         lines += [f"**{name}** ({n}):", "", "| arm | CAUGHT | of which by chain | MISSED | NO-READING |", "|---|--:|--:|--:|---|"]
-        for arm in ARMS:
+        for arm in arms:
             t = tally(arm, pick)
             nr = ", ".join(f"{k.split('/', 1)[1]} {v}" for k, v in sorted(t.items()) if k.startswith("NO-READING/"))
-            chain = t["CAUGHT/chain"] if classified else "not classified"
+            chain = (t["CAUGHT/chain"] if chain_arm[arm] else "n/a") if classified else "not classified"
             lines.append(f"| {LABEL[arm]} | {t['CAUGHT']} | {chain} | {t['MISSED']} | {nr or '0'} |")
         lines.append("")
+    if classified and not all(chain_arm.values()):
+        lines += ["(\"n/a\" in the chain column: "
+                  + ", ".join(LABEL[a] for a in arms if not chain_arm[a])
+                  + " does not attribute a catch by call path, so it has no chain catch to count. "
+                    "That is a property of the arm, not a reading of it)", ""]
     if not classified:
-        lines += ["(\"not classified\": this record was judged before the `chain` attribution class existed, "
-                  "2026-10-28; its chain catches are carried as `function` and are not re-labelled)", ""]
+        # DO NOT ASSERT A REASON THE BUNDLE DOES NOT CARRY. This used to say the record was judged
+        # before the `chain` class existed, which is false for a record whose arm does not
+        # attribute by call path at all -- the CheriBSD arm attributes by a paired boot, and the
+        # sentence appeared in its generated README as a statement about a date (2026-10-30). The
+        # two causes are not distinguishable from a bundle: run7 predates the class and its
+        # attribution string is non-empty too. So the fact is stated and the reason is left open.
+        lines += ["(\"not classified\": no catch in this record carries the `chain` attribution "
+                  "class. Either the record was judged before the class existed (2026-10-28), in "
+                  "which case its chain catches are carried as `function` and are not re-labelled, "
+                  "or its arms do not attribute by call path at all. The bundles do not say which, "
+                  "so neither is claimed here)", ""]
     lines += ["**CWE-416 catches by native population** (temporal-asan-visible / asan-blind):", ""]
-    for arm in ARMS:
+    for arm in arms:
         parts = []
         for pop in ("temporal-asan-visible", "asan-blind"):
             sel = [c for c in present if known[c][0] == "CWE-416" and known[c][1] == pop]
@@ -108,21 +228,122 @@ def tables(scoring_dir, known, title):
     return lines, []
 
 
+def collect(roots, sub):
+    """{arm: bundle} over several records for one scoring, with the record each arm came from.
+    An arm claimed by two records is REFUSED: picking one silently would make the table say a
+    thing no record says."""
+    bundles, prov, problems = {}, {}, []
+    for root in roots:
+        d = root / sub if sub else root
+        if not d.is_dir():
+            if not sub:
+                problems.append(f"{d}: no such results directory")
+            continue  # a record without a sensitivity re-scoring says so in its README
+        found, probs = bundles_of(d)
+        problems += probs
+        where = str(root.relative_to(CORPUS)) if CORPUS in root.parents else str(root)
+        for arm, b in found.items():
+            if arm in bundles:
+                problems.append(f"{arm!r} is in two records ({prov[arm]} and {where}); "
+                                f"name one of them, this tool will not choose")
+            bundles[arm], prov[arm] = b, where
+    return ({a: bundles[a] for a in ARM_ORDER if a in bundles},
+            {a: prov[a] for a in ARM_ORDER if a in bundles}, problems)
+
+
+def release_tables(bundles, known, ids, classes, title, provenance):
+    """Rows are the measured release destination, columns the arms. CAUGHT over the cases of that
+    class, because a reader comparing arms wants the catch rate and the denominator together."""
+    missing, lines = [], [f"### {title}", ""]
+    arms = list(bundles)
+    if provenance:
+        lines += ["Each column is computed from its own record, and they are separate boots: "
+                  + "; ".join(f"**{LABEL[a]}** from `{provenance[a]}`" for a in arms) + ".", ""]
+    tallies = {}
+    for arm in arms:
+        seen = {}
+        for r in rows(bundles[arm]):
+            seen[r["observation"]["case"]] = r
+        tallies[arm] = seen
+    measured = set().union(*(set(s) for s in tallies.values()))
+    for arm in arms:
+        for c in sorted(measured - set(tallies[arm])):
+            missing.append(f"{arm}: no row for {c}")
+    for c in sorted(measured):
+        if c not in ids:
+            missing.append(f"{c}: measured but not a case of this corpus")
+        elif ids[c] not in classes:
+            missing.append(f"{c} ({ids.get(c)}): the release-destination matrix has no row for it; "
+                           f"a case with no measured destination is not silently grouped")
+    if missing:
+        return lines, missing
+
+    def block(name, pick):
+        sel = [c for c in sorted(measured) if pick(c)]
+        out = [f"**{name}** ({len(sel)}), by measured release destination:", "",
+               "| release destination | cases | " + " | ".join(LABEL[a] for a in arms) + " |",
+               "|---|--:|" + "--:|" * len(arms)]
+        for cls, label in RELEASE_ORDER:
+            grp = [c for c in sel if classes[ids[c]] == cls]
+            if not grp:
+                continue
+            cells = [f"{sum(1 for c in grp if tallies[a][c]['verdict'] == 'CAUGHT')} of {len(grp)}"
+                     for a in arms]
+            out.append(f"| {label} | {len(grp)} | " + " | ".join(cells) + " |")
+        cells = [f"{sum(1 for c in sel if tallies[a][c]['verdict'] == 'CAUGHT')} of {len(sel)}"
+                 for a in arms]
+        out.append(f"| **total** | **{len(sel)}** | " + " | ".join(f"**{x}**" for x in cells) + " |")
+        return out + [""]
+
+    lines += block(f"all {len(measured)} cases", lambda c: True)
+    lines += block("the temporal cases (CWE-416, CWE-415, CWE-590)",
+                   lambda c: known[c][0] in TEMPORAL)
+    return lines, []
+
+
 def main():
-    if len(sys.argv) != 2:
+    argv = sys.argv[1:]
+    by_release = None
+    if argv[:1] == ["--by-release"]:
+        if len(argv) < 3:
+            sys.exit(__doc__)
+        by_release, argv = argv[1], argv[2:]
+    across = argv[:1] == ["--across"]
+    if across:
+        argv = argv[1:]
+        if len(argv) < 2:
+            sys.exit(__doc__)
+    elif by_release:
+        if not argv:
+            sys.exit(__doc__)
+        across = len(argv) > 1          # several records still have to name themselves
+    elif len(argv) != 1:
         sys.exit(__doc__)
-    root = Path(sys.argv[1]).resolve()
-    if not root.is_dir():
-        print(f"{root}: no such results directory", file=sys.stderr)
-        return 1
+    roots = [Path(a).resolve() for a in argv]
+    for r in roots:
+        if not r.is_dir():
+            print(f"{r}: no such results directory", file=sys.stderr)
+            return 1
     known = cases()
     out, problems = [], []
     for sub, title in (("", "Default scoring (native crashers out of the denominator)"),
                        ("sensitivity", "Sensitivity scoring (every case scored by fault site)")):
-        d = root / sub if sub else root
-        if sub and not d.is_dir():
-            continue  # a record without a sensitivity re-scoring says so in its README
-        lines, missing = tables(d, known, title)
+        bundles, prov, probs = collect(roots, sub)
+        problems += probs
+        if not bundles:
+            if not sub:
+                problems.append(f"{roots[0]}: no bundle-<arm>/ at all; a record with no bundles "
+                                f"is not an empty table")
+            continue
+        if by_release:
+            classes, probs = release_classes(by_release)
+            problems += probs
+            if probs:
+                continue
+            lines, missing = release_tables(bundles, known, case_ids(), classes, title,
+                                            prov if across else None)
+        else:
+            lines, missing = tables(bundles, known, title, prov if across else None)
         out += lines
         problems += missing
     if problems:
