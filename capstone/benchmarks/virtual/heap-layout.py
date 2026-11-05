@@ -1,17 +1,9 @@
 #!/usr/bin/env python3
-"""Record the allocator's layout region for the two arms' SDKs (the layout control).
+"""Record fixed allocator text/bss regions for benchmark layout controls.
 
-  heap-layout.py --sdk <sdk-T1/sdk> --sdk <sdk-T2/sdk> --out heap-layout.json
-
-Every image links heap.c's object LAST in .text and in .bss, inside a region of fixed size that is
-the same in both arms (build.py's layout-K<k>.ld): so every other input section, the benchmark's,
-libc's and all of .rodata, sits at the same address in both arms, and only heap.c's own code moves.
-The text region also holds the K = 0..3 allocator-alignment shifts (K x 64 bytes).
-
-This script reads heap.c's object out of each SDK's libapplication-runtime.a, checks that its only
-allocated sections are .text.* and .bss.* (any other would sit outside the region and move what
-follows it), and writes the region sizes and the objects' hashes. build.py refuses an SDK whose
-heap.c object is not one of the recorded ones, so a stale record cannot be used silently.
+Minimal mallocng includes malloc-mapping.c and libc's malloc archive members.
+Other allocated constants must be relocation-free and identical in both arms.
+Historical heap.c SDKs remain readable, but cannot be mixed with the new port.
 """
 import argparse
 import hashlib
@@ -26,10 +18,10 @@ K_STEP = 64
 K_MAX = 3
 
 
-def archive_member(path, member):
+def archive_members(path):
     data = Path(path).read_bytes()
     assert data[:8] == b'!<arch>\n', path
-    pos, names, found = 8, b'', []
+    pos, names, found = 8, b'', {}
     while pos + 60 <= len(data):
         hdr = data[pos:pos + 60]
         size = int(hdr[48:58].decode().strip())
@@ -44,11 +36,27 @@ def archive_member(path, member):
         if name.startswith('/') and name[1:].isdigit():
             off = int(name[1:])
             name = names[off:names.index(b'\n', off)].decode()
-        if name.rstrip('/') == member:
-            found.append(body)
-    if len(found) != 1:
-        sys.exit(f'{path}: {len(found)} members named {member}, expected exactly one')
-    return found[0]
+        found[name.rstrip('/')] = body
+    return found
+
+def archive_member(path, member):
+    members = archive_members(path)
+    if member not in members: sys.exit(f'{path}: no member named {member}')
+    return members[member]
+
+def allocator_members(cfg):
+    runtime = archive_members(cfg['runtime'])
+    if 'heap.c.obj' in runtime:
+        return {'heap.c.obj': runtime['heap.c.obj']}
+    members = {'malloc-mapping.c.obj': runtime['malloc-mapping.c.obj']}
+    members.update({n:b for n,b in archive_members(cfg['libc']).items() if n.startswith('src_malloc_') and not n.startswith(('src_malloc_lite_malloc.', 'src_malloc_oldmalloc_'))})
+    return members
+
+def allocator_digest(cfg):
+    members = allocator_members(cfg)
+    if list(members) == ['heap.c.obj']:
+        return hashlib.sha256(members['heap.c.obj']).hexdigest()
+    return hashlib.sha256(b''.join(n.encode()+b'\0'+b for n,b in sorted(members.items()))).hexdigest()
 
 
 def sections(obj_bytes, readelf):
@@ -67,7 +75,7 @@ def sections(obj_bytes, readelf):
         name, typ, size = rest[0], rest[1], int(rest[4], 16)
         flags = rest[6] if len(rest) >= 10 else ''
         align = int(rest[-1])
-        rows.append(dict(name=name, type=typ, size=size, flags=flags, align=align))
+        rows.append(dict(name=name, type=typ, size=size, flags=flags, align=align, offset=int(rest[3],16)))
     return rows
 
 
@@ -90,24 +98,44 @@ def main():
     readelf = os.path.join(os.environ.get('CAPSTONE_LLVM_BIN', ''), 'llvm-readelf')
     rec = dict(k_step=K_STEP, k_max=K_MAX, objects={})
     texts, bsses = [], []
+    common_other = None
     for sdk in a.sdk:
         cfg = json.loads((sdk / 'sdk.json').read_text())
-        obj = archive_member(cfg['runtime'], 'heap.c.obj')
-        secs = sections(obj, readelf)
-        alloc = [s for s in secs if 'A' in s['flags']]
-        istext = lambda n: n == '.text' or n.startswith('.text.')
-        isbss = lambda n: n == '.bss' or n.startswith('.bss.')
-        other = [s['name'] for s in alloc if not (istext(s['name']) or isbss(s['name']))]
-        if other:
-            sys.exit(f'{sdk}: heap.c.obj has allocated sections outside .text.*/.bss.*: {other}')
-        text = packed([s for s in alloc if istext(s['name'])])
-        bss = packed([s for s in alloc if isbss(s['name'])])
-        rec['objects'][hashlib.sha256(obj).hexdigest()] = dict(
-            sdk=str(sdk.resolve()), heap_lifetimes=cfg.get('heap_lifetimes'), heap_scrub_free=cfg.get('heap_scrub_free'),
-            heap_object_bounds=cfg.get('heap_object_bounds', True),
+        members = allocator_members(cfg)
+        patterns = ['*libapplication-runtime.a:heap.c.obj'] if list(members)==['heap.c.obj'] else [
+            '*libapplication-runtime.a:malloc-mapping.c.obj'] + [
+                '*lib*.a:'+n for n in sorted(members) if n.startswith('src_malloc_')]
+        if 'members' in rec and rec['members'] != patterns:
+            sys.exit('Do not mix the retired heap and minimal mallocng in one layout control')
+        rec['members'] = patterns
+        alloc = []
+        other = {}
+        for name,obj in sorted(members.items()):
+            for sec in sections(obj,readelf):
+                if 'A' not in sec['flags']: continue
+                if sec['name'].startswith(('.text','.bss')): alloc.append(sec)
+                else:
+                    # Constants outside the shifted regions must be byte-identical
+                    # in both arms. No address-bearing data is admitted here.
+                    if sec['name'] not in ('.rodata',) and not sec['name'].startswith('.rodata.'):
+                        if sec['size']: sys.exit(f'{sdk}: {name}: unexpected allocated {sec["name"]}')
+                    if any(x['name'] in ('.rela'+sec['name'], '.rel'+sec['name']) for x in sections(obj,readelf)):
+                        sys.exit(f'{sdk}: relocated allocator constants need a separate layout region')
+                    other[name+':'+sec['name']] = hashlib.sha256(obj[sec['offset']:sec['offset']+sec['size']]).hexdigest()
+        if common_other is not None and other != common_other:
+            sys.exit('Allocator constants outside the layout regions differ between SDKs')
+        common_other = other
+        # Include an alignment allowance for each section; archive extraction
+        # order need not be the same as input object order at the final link.
+        text = sum(x['size']+x['align']-1 for x in alloc if x['name'].startswith('.text'))
+        bss = sum(x['size']+x['align']-1 for x in alloc if x['name'].startswith('.bss'))
+        rec['objects'][allocator_digest(cfg)] = dict(
+            sdk=str(sdk.resolve()), heap_lifetimes=cfg.get('heap_lifetimes'),
+            heap_scrub_free=cfg.get('heap_scrub_free'), heap_object_bounds=cfg.get('heap_object_bounds',True),
             text_bytes=text, bss_bytes=bss)
         texts.append(text)
         bsses.append(bss)
+    rec['shared_allocator_constants'] = common_other
     rec['text_region'] = ceil(max(texts), K_STEP) + K_MAX * K_STEP
     rec['bss_region'] = ceil(max(bsses), K_STEP)
     a.out.write_text(json.dumps(rec, indent=1) + '\n')

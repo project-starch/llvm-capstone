@@ -9,6 +9,7 @@
 #include <fcntl.h>
 #include <setjmp.h>
 #include <errno.h>
+#include <pthread.h>
 #include <capstone/virtual.h>
 #include "vm.h"
 #include <capstone/capability.h>
@@ -29,7 +30,6 @@ static void (*volatile contract_free)(void *) = free;
 #define realloc(p, n) contract_realloc(p, n)
 #define free(p) contract_free(p)
 
-extern int malloc_trim(size_t);
 static void *volatile stale;
 static jmp_buf jump;
 static __thread unsigned thread_value = 41;
@@ -60,8 +60,8 @@ static void *heap_thread_entry(void *unused)
         memset(child_objects[i], 0x5a, 4096);
     }
     virtual_thread_value = 42;
-    /* The parent owns these objects after join, in the same namespace. */
-    capstone_virtual_thread_exit(NULL);
+    /* The parent owns these objects after pthread_join, in the same namespace. */
+    return NULL;
 }
 static void vm_contract(void)
 {
@@ -239,20 +239,18 @@ int main(int argc, char **argv)
         return 0;
     }
     if (!strcmp(mode, "heap-threads")) {
-        size_t bytes = 65536;
-        void *stack = mmap(NULL, bytes, PROT_READ | PROT_WRITE,
-                           MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-        require(stack != MAP_FAILED, "heap thread stack");
-        long tid = capstone_virtual_thread_create(heap_thread_entry, NULL,
-                      (char *)stack + bytes, current_thread_pointer());
-        require(tid > 0, "heap thread create");
+        /* mallocng uses musl's thread state to enable its locks. Raw virtual
+         * contexts sharing TLS are not libc threads; use the public API. */
+        pthread_t thread;
+        require(!pthread_create(&thread, NULL, heap_thread_entry, NULL),
+                "heap thread create");
         void *parent_objects[THREAD_OBJECTS];
         for (unsigned i = 0; i < THREAD_OBJECTS; ++i) {
             parent_objects[i] = malloc(4096);
             require(parent_objects[i] != NULL, "parent malloc");
             memset(parent_objects[i], 0xa5, 4096);
         }
-        require(!capstone_virtual_thread_join(tid), "heap thread join");
+        require(!pthread_join(thread, NULL), "heap thread join");
         require(virtual_thread_value == 42, "child published objects");
         for (unsigned i = 0; i < THREAD_OBJECTS; ++i) {
             require(((unsigned char *)parent_objects[i])[4095] == 0xa5 &&
@@ -262,8 +260,7 @@ int main(int argc, char **argv)
             /* Ownership and revocation are shared by the mm, not the thread. */
             free(child_objects[i]);
         }
-        (void)malloc_trim(0); /* musl selects group release during free. */
-        require(!munmap(stack, bytes), "heap thread stack retire");
+        /* mallocng selects group release during free. */
         puts("VIRTUAL_HEAP_THREADS_OK shared_ownership metadata_growth arena_growth");
         return 0;
     }
@@ -413,7 +410,7 @@ int main(int argc, char **argv)
         require(p[i][0] == i + 1 && p[i][131071] == i + 1, "heap preserved");
         free(p[i]);
     }
-    (void)malloc_trim(0); /* musl selects group release during free. */
+    /* mallocng selects group release during free. */
     char *m = mmap(NULL, 8192, PROT_READ | PROT_WRITE,
                    MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     require(m != MAP_FAILED && !m[4096], "demand mapping");

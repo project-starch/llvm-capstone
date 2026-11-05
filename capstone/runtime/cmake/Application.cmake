@@ -104,7 +104,7 @@ function(capstone_configure_application target)
   # The heap: musl mallocng on the virtual profile, level0 on the physical one.
   set(heap_bytes 0)
   if(CAPSTONE_APPLICATION_VIRTUAL)
-    set(heap "${capstone}/runtime/virtual/heap.c")
+    set(heap "${capstone}/runtime/virtual/malloc-mapping.c")
     target_include_directories(${target} PRIVATE "${capstone}/sublet" "${PORT_MUSL_ROOT}/arch/capstone64")
     # heap.c's measurement switches: a caller that never set them gets the default heap,
     # lifetimes on, no scrub on free and per-object bounds (runtime/application/CMakeLists.txt).

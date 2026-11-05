@@ -111,16 +111,8 @@ case "$WHAT" in
       | awk '$2==".text"||$2==".data"||$2==".bss"{printf "    %-10s %d\n",$2,strtonum("0x" $3)}'
     ;;
   hier-probe)
-    # Does the HIERARCHICAL wrapper still need zend_cap_widen here? Phase A reuses
-    # libc/php_capstone_zend_hier.c unchanged, and that file's widen reads the PHYSICAL
-    # arena's slot table, which does not exist on this profile. See the probe's own header.
-    IMG="$OUT/probe-hier-widen.dom"
-    echo "  compiling the hier-widen probe ..."
-    # php_virtual_lower.c is linked in, not re-implemented: stages 3 and 4 test the PORT's own
-    # zend_cap_widen, so a probe with its own copy would pass while the engine still broke.
-    "$CC" -O1 "$HERE/probe-hier-widen.c" "$HERE/php_virtual_lower.c" -o "$IMG" \
-      || { echo "hier probe build FAILED" >&2; exit 1; }
-    echo "  built $IMG"
+    echo "The virtual hierarchical adapter is retired; use nested-probe." >&2
+    exit 2
     ;;
   atexit-probe)
     # Does an exit hook run here, and on which stream? The nested layer's revoke counters have no other
@@ -231,10 +223,10 @@ case "$WHAT" in
     [ -d "$P/Zend" ] || { echo "PHP source not at $P -- run prepare-sources.sh <root> (or set PHP_SRC)" >&2; exit 2; }
     assert_tree_patches "$P"
     E="$R/capstone/ports/php/engine"
-    MODE=${PHP_CAP_ALLOC_MODE:-hier}
+    MODE=${PHP_CAP_ALLOC_MODE:-nested}
     case "$MODE" in
-      hier|nested) ;;
-      *) echo "  PHP_CAP_ALLOC_MODE=$MODE? (hier|nested)" >&2; exit 2 ;;
+      nested) ;;
+      *) echo "  PHP_CAP_ALLOC_MODE=$MODE? (nested)" >&2; exit 2 ;;
     esac
     NESTED="$R/capstone/ports/php/zend-alloc/sublet"
 
@@ -348,28 +340,10 @@ case "$WHAT" in
       *)    for e in ${PHP_CAP_EXT//,/ }; do EXT="$EXT $P/ext/standard/$e.c"; done ;;
     esac
 
-    # The support layer, down from eight files to three plus two of our own. php_capstone_
-    # {libc,stdio,os,malloc,depth}.c are NOT ported: musl supplies real string, stdio, signals,
-    # dlopen and a growing heap, and runtime/virtual/heap.c's mallocng already gives
-    # per-object bounds and revoke-before-reuse underneath. What stays is PHP-level rather
-    # than OS-level, and therefore has no musl counterpart:
-    #   php_capstone_zend_hier.c  the bounds wrapper -- this IS the experiment, reused unchanged
-    #   php_capstone_php_stubs.c  main/'s globals (PG/SG/BG, sapi_module) and php_printf et al,
-    #                             which exist because main/ is not linked until Phase B
-    #   php_capstone_ext_stubs.c  the three externs ext/standard/url.c needs from streams
-    # and ours:
-    #   php_virtual_lower.c       zend_cap_widen, the identity here -- see that file
-    #   php_virtual_main.c        a real main(), the trigger on stdin
+    # musl supplies the C library and the outer malloc lifetimes. The engine
+    # harness retains its PHP globals/extension stubs and the nested adapter.
     SUP=("$E/libc/php_capstone_php_stubs.c" "$E/libc/php_capstone_ext_stubs.c"
-         "$HERE/php_virtual_lower.c" "$HERE/php_virtual_main.c")
-    if [ "$MODE" = nested ]; then
-      # The nested layer serves PHP's allocator from below instead of wrapping it from above, so the
-      # re-bounding wrapper is not linked at all: there is nothing to re-bound, because
-      # ZEND_CAP_PAYLOAD already hands out a capability bounded to the caller's object.
-      SUP+=("$NESTED/zend-cap-mode.c")
-    else
-      SUP+=("$E/libc/php_capstone_zend_hier.c")
-    fi
+         "$HERE/php_virtual_main.c" "$NESTED/zend-cap-mode.c")
 
     OBJS=()
     fails=0
@@ -529,7 +503,7 @@ case "$WHAT" in
       cp "$P/Zend/zend_alloc.c" "$T/Zend/zend_alloc.c"
       patch -s -p1 -d "$T" < "$NESTED_PATCH" \
         || { echo "  the sublet patch does not apply to this tree" >&2; exit 1; }
-      # The nested layer alone. php_virtual_lower.c (zend_cap_widen, php_fault_report) was linked here
+      # The nested layer alone. The retired hierarchical lower adapter was linked here
       # too until 2026-10-28; nothing in the real-PHP image calls it -- only the Phase A SAPI's
       # hierarchical wrapper and probe-hier-widen.c do.
       SUP=("$NESTED/zend-cap-mode.c")

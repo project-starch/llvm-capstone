@@ -61,7 +61,7 @@ NESTED_FAIL = re.compile(r"ZEND_CAP_FAIL code=(\d+) ([^\n]*)")
 # fault in the program when all you have is a pc. heap.c is on the list since the nested layer's reclaim
 # moved into the libc: a refusal at cap_malloc_reclaim (a double efree, a pointer that is not the
 # issued child) is the allocator refusing, which this runner does not credit as a catch.
-NESTED_OWN_FILES = ("zend-cap-mode.c", "zend_alloc.c", "runtime/virtual/heap.c")
+NESTED_OWN_FILES = ("zend-cap-mode.c", "zend_alloc.c", "runtime/virtual/malloc-mapping.c", "heap_sublet.h")
 
 
 def suite_text():

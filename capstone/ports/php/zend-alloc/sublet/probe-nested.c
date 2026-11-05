@@ -24,7 +24,7 @@
  *   7  the bound: one byte past the request, exact vs stock rounding
  *   8  the SYSTEM-ALLOCATOR arm on a CACHE-ABSORBED free: must NOT fault
  *   9  the SYSTEM-ALLOCATOR arm on a REAL free: must fault
- *  10  a double efree: the second reclaim faults INSIDE the libc, at cap_malloc_reclaim
+ *  10  a double efree: the second reclaim faults at the liveness probe
  *  11  a grandchild the caller derived for itself is refused by the reclaim (cause 29)
  *  12  an interior pointer handed to efree is refused by name (ZEND_CAP_FAIL code=4)
  *
@@ -39,10 +39,10 @@
  * catch here would be unattributable between the two layers.
  *
  * Stages 10 and 11 are the identity checks the previous nested did in software (its issued flag
- * and its index) and that the libc's CREVOKE now does in hardware: the fault is in the
+ * and its index) and that the liveness probe and CREVOKE now do in hardware: the fault is in the
  * allocator, at a named site, which the judge attributes through the record's return address. */
 #include "zend-cap-mode.h"
-#include <malloc_capstone.h>
+#include <heap_sublet.h>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -312,16 +312,16 @@ int main(int argc, char **argv)
 
     if (stage == 10) {
         efree_like(pay, 0);
-        say("S10 payload reclaimed once; reclaiming it AGAIN (expect a fault at cap_malloc_reclaim)");
+        say("S10 payload reclaimed once; reclaiming it AGAIN (expect a fault at the liveness probe)");
         efree_like(pay, 0);
         say("S10 RESULT: NO FAULT -- a double efree was not refused. IDENTITY CHECK BROKEN.");
         return 1;
     }
 
     if (stage == 11) {
-        void *grand = __capstone_malloc_derive(pay, 0, 16);   /* what a client could do itself */
+        void *grand = heap_issue(pay, 16);   /* what a client could do itself */
         if (!grand) { say("S11 FAIL: the grandchild derive returned NULL"); return 1; }
-        say("S11 handing a GRANDCHILD to efree (expect a fault at cap_malloc_reclaim, cause 29)");
+        say("S11 handing a GRANDCHILD to efree (expect a fault at CREVOKE, cause 29)");
         efree_like(grand, 0);
         say("S11 RESULT: NO FAULT -- a grandchild was accepted as the issued child. IDENTITY CHECK BROKEN.");
         return 1;
