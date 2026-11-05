@@ -29,7 +29,10 @@ main() {
   local OUT=${NS_OUT:-$H/spec/board/out-ns-b$BRD} TLV=${NS_TLV:-python3 $O/tl-verdict.py} VERDICT=${NS_VERDICT:-$O/verdict-N1.txt}
   local spec=skipped t r LIST PB=${NS_PROBE_BOARD:-2}
   LIST=$O/b$BRD-rest.list
-  export FPGA_BOARD=$BRD CAPSTONE_FPGA_URL_FILE=$HOME/.claude-kisp/secrets/fpga-console-url
+  # each board has its own console URL file (board 2: -board2); the board 1 file refuses board 2 (fpga_console.py)
+  local UF=$HOME/.claude-kisp/secrets/fpga-console-url; [ $BRD = 2 ] && UF=$UF-board2
+  export FPGA_BOARD=$BRD CAPSTONE_FPGA_URL_FILE=$UF
+  [ -s "$CAPSTONE_FPGA_URL_FILE" ] || { echo "no console URL file for board $BRD"; return 2; }
   log() { echo "NS $(date '+%F %T') $*" >> "$L"; }
   mkdir -p "$O"; log "START pid $$ board $BRD"
   # the probe board owes the other a verdict on every way out, or the other waits a day for nothing
