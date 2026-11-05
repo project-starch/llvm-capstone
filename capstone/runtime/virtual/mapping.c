@@ -7,6 +7,9 @@
 #include <sys/ipc.h>
 #include "vm.h"
 __attribute__((__weak__)) void __vm_wait(void) {}
+#if CAPSTONE_HEAP_ARENA_CACHE
+extern int __capstone_malloc_cache_unmap(unsigned long, unsigned long);
+#endif
 static int mapping_length(size_t n, unsigned long *bytes)
 {
     if (!n || n > CV_MAX_REGION_BYTES) { errno = EINVAL; return -1; }
@@ -41,6 +44,11 @@ int munmap(void *p, size_t n)
     if ((address & 4095) || mapping_length(n, &bytes)) {
         errno = EINVAL; return -1;
     }
+    /* A heap group mapping the allocator keeps (CAPSTONE_HEAP_ARENA_CACHE in heap.c): its lifetime is
+     * revoked there and the mapping stays. */
+#if CAPSTONE_HEAP_ARENA_CACHE
+    if (__capstone_malloc_cache_unmap(address, bytes)) return 0;
+#endif
     /* VM operations must work on PROT_NONE, without probing its contents.
      * The trusted service resolves the range against its mapping registry. */
     long rc = __capstone_vm_unmap(address, bytes);

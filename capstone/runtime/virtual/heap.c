@@ -24,6 +24,16 @@
 #ifndef CAPSTONE_HEAP_SCRUB_FREE
 #define CAPSTONE_HEAP_SCRUB_FREE 1
 #endif
+/* CAPSTONE_HEAP_ARENA_CACHE (perf/arena-cache, default 0): keep a released group mapping in the
+ * context instead of returning it to the kernel. Every mapping a group uses gets one managed child
+ * lifetime (mapping_group); every slot copy and every object capability descends from it. Releasing
+ * a cached group revokes that child here, which ends every capability into the group exactly as the
+ * kernel's retirement of the mapping would, and keeps the mapping and its delinearised grant. A later
+ * request of the same size takes it back, zeroed, under a fresh child: no exit to the kernel, no fresh
+ * pages to fault in. The cache is bounded; past the bound the release goes to the kernel as before. */
+#ifndef CAPSTONE_HEAP_ARENA_CACHE
+#define CAPSTONE_HEAP_ARENA_CACHE 0
+#endif
 
 #define INDEX_BUCKETS 4096U
 static struct capstone_malloc_slot *index_heads[INDEX_BUCKETS];
@@ -218,11 +228,116 @@ static void end_child(void *parent, void *child)
     (void)parent; (void)child;
 #endif
 }
+#if CAPSTONE_HEAP_ARENA_CACHE
+#define AC_LIVE 16384U            /* live group mappings tracked, a power of two */
+#define AC_FREE 512U              /* released mappings kept */
+#define AC_FREE_BYTES (64UL << 20)
+struct ac_rec { unsigned long base, bytes; void *parent, *group; };
+static struct ac_rec ac_live[AC_LIVE];
+static struct ac_rec ac_free[AC_FREE];
+static unsigned ac_nfree;
+static unsigned long ac_free_bytes;
+static void *ac_reuse_parent;     /* set by a cache hit, consumed by the next mapping_group */
+static unsigned long ac_hit_base, ac_hit_end;
+static int ac_hit;                /* the pending mapping is a cache hit, not pending_mapping */
+unsigned long __capstone_malloc_cache_hits, __capstone_malloc_cache_puts, __capstone_malloc_cache_spills,
+              __capstone_malloc_cache_untracked;
+static unsigned ac_slot(unsigned long base) { return (unsigned)((base >> 12) * 2654435761UL) & (AC_LIVE - 1); }
+static struct ac_rec *ac_find(unsigned long base)
+{
+    for (unsigned i = ac_slot(base), n = 0; n < AC_LIVE; i = (i + 1) & (AC_LIVE - 1), ++n) {
+        if (ac_live[i].base == base) return &ac_live[i];
+        if (!ac_live[i].base) return NULL;
+    }
+    return NULL;
+}
+static void ac_remove(struct ac_rec *r)
+{   /* backward-shift deletion keeps every probe chain unbroken */
+    unsigned i = (unsigned)(r - ac_live), j = i;
+    ac_live[i].base = 0; ac_live[i].parent = ac_live[i].group = NULL;
+    for (;;) {
+        j = (j + 1) & (AC_LIVE - 1);
+        if (!ac_live[j].base) return;
+        unsigned k = ac_slot(ac_live[j].base);
+        if ((j > i && (k <= i || k > j)) || (j < i && (k <= i && k > j))) {
+            ac_live[i] = ac_live[j]; ac_live[j].base = 0; ac_live[j].parent = ac_live[j].group = NULL; i = j;
+        }
+    }
+}
+static void ac_record(unsigned long base, unsigned long bytes, void *parent, void *group)
+{
+    struct ac_rec *r = ac_find(base);
+    if (!r) {
+        unsigned i = ac_slot(base), n = 0;
+        while (ac_live[i].base && n++ < AC_LIVE) i = (i + 1) & (AC_LIVE - 1);
+        if (ac_live[i].base) { ++__capstone_malloc_cache_untracked; return; }
+        r = &ac_live[i];
+    }
+    r->base = base; r->bytes = bytes; r->parent = parent; r->group = group;
+}
+/* The pending mapping's base and end: a cache hit's, else the grant in pending_mapping's. */
+static unsigned long pend_base(void) { return ac_hit ? ac_hit_base : sublet_base(&pending_mapping); }
+static unsigned long pend_end(void) { return ac_hit ? ac_hit_end : sublet_end(&pending_mapping); }
+/* Called by munmap before the unmap service: 1 when the release was kept here. */
+int __capstone_malloc_cache_unmap(unsigned long base, unsigned long bytes)
+{
+    if (ac_hit && base == ac_hit_base) {
+        /* A hit its caller abandoned before binding it (alloc_group's failure path unmaps the fresh
+         * mapping): it has no child yet, so it goes back as it was. */
+        void *parent = ac_reuse_parent;
+        ac_reuse_parent = NULL; ac_hit = 0;
+        if (ac_nfree == AC_FREE) return 0;   /* full: the kernel retires it */
+        ac_free[ac_nfree++] = (struct ac_rec){base, ac_hit_end - ac_hit_base, parent, NULL};
+        ac_free_bytes += ac_hit_end - ac_hit_base;
+        return 1;
+    }
+    struct ac_rec *r = ac_find(base);
+    if (!r) return 0;
+    if (r->bytes != bytes || ac_nfree == AC_FREE || ac_free_bytes + bytes > AC_FREE_BYTES) {
+        ac_remove(r); ++__capstone_malloc_cache_spills; return 0;
+    }
+    capstone_cap_revoke_child(r->parent, r->group);
+    ac_free[ac_nfree++] = (struct ac_rec){base, bytes, r->parent, NULL};
+    ac_free_bytes += bytes;
+    ac_remove(r);
+    ++__capstone_malloc_cache_puts;
+    return 1;
+}
+static int ac_take(unsigned long bytes, unsigned long align)
+{
+    for (unsigned i = ac_nfree; i-- > 0;) {
+        if (ac_free[i].bytes != bytes || (ac_free[i].base & (align - 1))) continue;
+        struct ac_rec e = ac_free[i];
+        ac_free[i] = ac_free[--ac_nfree]; ac_free_bytes -= bytes;
+        /* mallocng treats a fresh mapping as zero, and a kept one holds the last group's bytes and
+         * tags: scalar stores clear both. */
+        memset(e.parent, 0, bytes);
+        ac_reuse_parent = e.parent; ac_hit_base = e.base; ac_hit_end = e.base + bytes; ac_hit = 1;
+        ++__capstone_malloc_cache_hits;
+        return 1;
+    }
+    return 0;
+}
+static void *mapping_group(sublet_cap *grant, size_t bytes)
+{
+    void *parent;
+    if (ac_reuse_parent) { parent = ac_reuse_parent; ac_reuse_parent = NULL; }
+    else parent = cap_vm_copyable(grant);
+    ac_hit = 0;
+    take_id();
+    void *group = capstone_cap_derive(parent, 0, bytes);
+    ac_record(__builtin_capstone_cap_get_base(parent), bytes, parent, group);
+    return group;
+}
+#else
+static unsigned long pend_base(void) { return sublet_base(&pending_mapping); }
+static unsigned long pend_end(void) { return sublet_end(&pending_mapping); }
 static void *mapping_group(sublet_cap *grant, size_t bytes)
 {
     take_id();
     return capstone_cap_derive(cap_vm_copyable(grant), 0, bytes);
 }
+#endif
 void *__capstone_malloc_map(size_t bytes)
 {
     __capstone_malloc_map_calls++;
@@ -241,6 +356,9 @@ void *__capstone_malloc_map(size_t bytes)
     bytes = capstone_repr_round(bytes);
     size_t align = capstone_repr_granule(bytes);
     if (align < 4096UL) align = 4096UL;
+#if CAPSTONE_HEAP_ARENA_CACHE
+    if (ac_take(bytes, align)) { __capstone_malloc_map_admitted++; return (void *)ac_hit_base; }
+#endif
     if (cap_vm_acquire(&pending_mapping, bytes, align,
                        PROT_READ | PROT_WRITE, 6, CAP_VM_HEAP)) {
         __capstone_malloc_map_refused_acquire++;
@@ -264,7 +382,7 @@ void *__capstone_malloc_map(size_t bytes)
 void *__capstone_malloc_group_attach(struct capstone_malloc_slot *slots,
                                     void *p, size_t bytes)
 {
-    size_t base = sublet_base(&pending_mapping);
+    size_t base = pend_base();
     if (base != (size_t)p) __builtin_trap();
     /* stride = bytes - header, NOT bytes - 16. The single slot starts after the granule-sized
      * header, so a stride measured from a 16-byte one ran past the end of the mapping and the
@@ -278,7 +396,7 @@ void *__capstone_malloc_group_map(struct capstone_malloc_slot *slots,
 {
     void *p = __capstone_malloc_map(bytes);
     if (p == MAP_FAILED) return p;
-    size_t mapped = sublet_end(&pending_mapping) - sublet_base(&pending_mapping);
+    size_t mapped = pend_end() - pend_base();
     return bind_slots(slots, mapping_group(&pending_mapping, mapped), stride, count);
 }
 void *__capstone_malloc_group_nested(struct capstone_malloc_slot *slots,
@@ -354,6 +472,11 @@ void *__capstone_malloc_group_remap(struct capstone_malloc_slot *slots,
     struct capstone_malloc_slot *r = slots;
     size_t offset = r->key - __builtin_capstone_cap_get_base(r->parent);
     sublet_cap root;
+#if CAPSTONE_HEAP_ARENA_CACHE
+    /* The remap retires the old mapping in the kernel: forget its record, mapping_group below
+     * records the new one. */
+    { struct ac_rec *ar = ac_find((size_t)p); if (ar) ac_remove(ar); }
+#endif
     sublet_store(&root, __capstone_vm_remap((size_t)p, old, bytes));
     unsigned long result;
     __asm__ volatile("ld %0, 0(%1)" : "=r"(result) : "r"(&root) : "memory");
