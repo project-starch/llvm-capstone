@@ -178,7 +178,7 @@ def main():
                         '(one-slot machines: the pair can end the guest)')
     a = p.parse_args()
     if a.unpinned:
-        a.module_args += ' unpinned=1'
+        a.module_args += memory_mode.args(True)
     work = Path(tempfile.mkdtemp(prefix='virtual-app.', dir=os.environ['CAPSTONE_TMP_ROOT']))
     stage = work/'stage'; stage.mkdir()
     inputs = {'qemu': a.qemu, 'launcher': a.adapter/'capstone-vexec',
@@ -392,7 +392,7 @@ def main():
     a.record.write_text(json.dumps(result, indent=2) + '\n')
     print(f'{result["status"]}: {work / "serial.log"}')
     for s in lines:
-        if s.startswith(('VM_EXIT:', 'VM_MEMORY_MODE:', 'VIRTUAL_', 'CAPSTONE_VM_', 'capstone-vexec:', 'VM_CONTRACT_', 'SQLITE_', 'MRUBY_')): print(s)
+        if s.startswith(('VM_EXIT:', 'VM_MEMORY_MODE:', 'VM_FAST_FAULT:', 'VIRTUAL_', 'CAPSTONE_VM_', 'capstone-vexec:', 'VM_CONTRACT_', 'SQLITE_', 'MRUBY_')): print(s)
     return 0 if result['status'] == 'PASS' else 1
 
 if __name__ == '__main__': raise SystemExit(main())

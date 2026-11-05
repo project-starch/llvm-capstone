@@ -23,6 +23,8 @@ zstd -dc "$SRC" | tar -C "$W" -xf - llvm-capstone/capstone/runtime
 zstd -dc "$QSRC" | tar -C "$W" -xf - capstone-qemu/target/riscv/cap_rev_table_abi.h
 V=$W/llvm-capstone/capstone/runtime/virtual
 cp "$V/module/Makefile" "$V/module/capstone_vm.c" "$V/wire.h" "$V/vm-abi.h" "$OUT/module/"
+# a source archive taken after the transaction ABI header exists needs it beside the module
+[ ! -f "$V/native-grant.h" ] || cp "$V/native-grant.h" "$OUT/module/"
 cp "$W/capstone-qemu/target/riscv/cap_rev_table_abi.h" "$OUT/module/"
 # Build paths are mapped away and every object gets a fixed name, so the same inputs give the
 # same bytes wherever this runs.

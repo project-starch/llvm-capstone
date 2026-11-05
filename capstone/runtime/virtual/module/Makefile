@@ -3,3 +3,7 @@ obj-m += capstone_vm.o
 ifdef CV_TEST_HOOKS
 ccflags-y += -DCV_TEST_HOOKS
 endif
+# Experimental transaction prototype; absent from ordinary adapter builds.
+ifdef CV_GRANT_TXN
+ccflags-y += -DCV_GRANT_TXN
+endif

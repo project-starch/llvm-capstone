@@ -119,7 +119,7 @@ def script(names, instrumented, unpinned=False, extra=''):
     for name in names:
         params, modes = CONFIGS[name][:2]
         params += '' if name.startswith('adapt') else ' fault_ahead_max=0'
-        text += f'''insmod capstone_vm.ko {params} {'diag_admit=1' if instrumented else ''} {'unpinned=1' if unpinned else ''} {extra} || exit 1
+        text += f'''insmod capstone_vm.ko {params} {'diag_admit=1' if instrumented else ''} {memory_mode.args(unpinned).strip()} {extra} || exit 1
 {memory_mode.echo('HOOK_')}
 echo "HOOK_UNPINNED:{name}:$(cat /sys/module/capstone_vm/parameters/unpinned 2>/dev/null || echo unavailable)"
 for mode in {modes}; do

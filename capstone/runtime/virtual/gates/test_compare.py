@@ -90,10 +90,10 @@ def memcached(g, drop_job=None, skip=None, retry=None, fx24=None, fx24_case=None
     (g / "memcached.log").write_text("\n".join(log) + "\n")
 
 
-def stamp(out, gate, mode, line, count=None, verified=True, summary=None):
+def stamp(out, gate, mode, line, count=None, verified=True, summary=None, fast=None):
     """What run-arm.sh and the runners leave: OUT/mode, `count` memory-mode lines (default: one per module load
     of the gate) in the gate's guest console, the runner's memory_mode_verified line (True: PASS, False: FAIL,
-    None: absent) and, when given, SUMMARY.txt."""
+    None: absent) and, when given, SUMMARY.txt. fast = (word, line[, count]) is OUT/fast-fault and `count` fault-path lines."""
     g = out / "gates"
     if mode:
         (out / "mode").write_text(mode + "\n")
@@ -104,6 +104,12 @@ def stamp(out, gate, mode, line, count=None, verified=True, summary=None):
         serials = sorted(g.glob(f"{gate}/**/serial.log"))
         target = g / "runtime.log" if gate == "runtime" else serials[0] if serials else g / f"{gate}.log"
         target.write_text(target.read_text() + (line + "\n") * n)
+    if fast:
+        (out / "fast-fault").write_text(fast[0] + "\n")
+        n = compare.MODE_LOADS[gate] if len(fast) < 3 else fast[2]
+        serials = sorted(g.glob(f"{gate}/**/serial.log"))
+        target = g / "runtime.log" if gate == "runtime" else serials[0] if serials else g / f"{gate}.log"
+        target.write_text(target.read_text() + (fast[1] + "\n") * n)
     if verified is not None:
         log = g / f"{gate}.log"
         log.write_text(log.read_text() + ("PASS" if verified else "FAIL") + " memory_mode_verified\n")
@@ -300,6 +306,29 @@ def main():
         ok = got == want
         failed += not ok
         print(f"{'PASS' if ok else 'FAIL'} memory mode evidence: {name}: exit {got}, want {want}")
+    # The fault path (unpinned_fast_fault) is its own recorded and read-back fact, like the memory mode.
+    FY, FN = "TEST_FAST_FAULT:Y", "TEST_FAST_FAULT:N"
+    on_arm = lambda fast: ("on", Y, None, True, None, fast)
+    off_arm = lambda fast: ("off", N, None, True, None, fast)
+    paths = [
+        ("fast on, Y lines, mode on, OFF control without the file", dict(arm_mode=on_arm(("on", FY)), extra=("--arm-mode", "on", "--arm-fast", "on", "--control-fast", "off")), 0),
+        ("fast on, Y lines, control pinned fast on but run without the file", dict(arm_mode=on_arm(("on", FY)), extra=("--control-fast", "on")), 4),
+        ("fast on but the log says N", dict(arm_mode=on_arm(("on", FN))), 4),
+        ("fast on but no fault-path line", dict(arm_mode=on_arm(("on", FY, 0))), 4),
+        ("fast on with an extra fault-path line", dict(arm_mode=on_arm(("on", FY, 2))), 4),
+        ("fast on requested in mode off", dict(arm_mode=off_arm(("on", FY))), 4),
+        ("fast off recorded but the log says Y", dict(arm_mode=on_arm(("off", FY))), 4),
+        ("fast off, N lines (positive OFF evidence)", dict(arm_mode=on_arm(("off", FN))), 0),
+        ("fast off, A lines (module without the parameter)", dict(arm_mode=on_arm(("off", "TEST_FAST_FAULT:A"))), 0),
+        ("fast off recorded and no lines", dict(arm_mode=on_arm(("off", FN, 0))), 4),
+        ("arm pinned fast on but recorded off", dict(arm_mode=on_arm(("off", FN)), extra=("--arm-fast", "on")), 4),
+    ]
+    for name, kwargs, want in paths:
+        kwargs.setdefault("ctl_mode", ("off", N))
+        got = run("fp", fp, fp, **kwargs)
+        ok = got == want
+        failed += not ok
+        print(f"{'PASS' if ok else 'FAIL'} fault path evidence: {name}: exit {got}, want {want}")
     cli = [
         ("optional-only summary, both gates succeeded with Y witnesses", lambda o: optional_gates(o), 0),
         ("unpinned-mm rc=1 and no witnesses", lambda o: optional_gates(o, mutants=False, rc_mm=1, mm_modes=""), 1),
@@ -322,7 +351,21 @@ def main():
         ok = got == want
         failed += not ok
         print(f"{'PASS' if ok else 'FAIL'} {name}: exit {got}, want {want}")
-    total = len(cases) + len(modes) + len(fx) + len(complete) + len(cli) + 1
+    # The malloc runner's check is named memory_mode (run-malloc.py): accepted for that gate only.
+    alias = []
+    for gate, key, value, want in (("malloc", "memory_mode", True, [True, True, True]), ("malloc", "memory_mode", False, [False, False, False]),
+                                   ("fp", "memory_mode", True, [])):
+        with tempfile.TemporaryDirectory() as t:
+            g = Path(t) / "gates"
+            (g / gate).mkdir(parents=True)
+            (g / f"{gate}.log").write_text(("PASS" if value else "FAIL") + f" {key}\n")
+            (g / gate / "result.json").write_text(json.dumps({"tests": {key: value}, "checks": {key: value}}))
+            got = compare.verified_results(Path(t), gate)
+        ok = got == want
+        failed += not ok
+        alias.append(ok)
+        print(f"{'PASS' if ok else 'FAIL'} memory_mode alias: {gate} {key}={value}: {got}, want {want}")
+    total = len(cases) + len(modes) + len(fx) + len(complete) + len(paths) + len(cli) + len(alias) + 1
     print(f"{total - failed}/{total} passed")
     return 1 if failed else 0
 

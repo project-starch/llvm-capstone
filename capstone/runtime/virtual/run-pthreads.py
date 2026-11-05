@@ -58,7 +58,7 @@ cd /mnt/vm || exit 1
 pins() { echo 1 > /proc/sys/vm/stat_refresh; grep -E "^nr_foll_pin_(acquired|released) " /proc/vmstat | tr "\\n" " "; }
 dmesg -n 1
 echo "PTHREAD_PINS_BEFORE:$(pins)"
-insmod capstone_vm.ko ''' + ('diag_admit=1' if instrumented else '') + (' unpinned=1' if a.unpinned else '') + (f' supervisor_slots={a.supervisor_slots}' if a.supervisor_slots is not None else '') + ''' || exit 1
+insmod capstone_vm.ko ''' + ('diag_admit=1' if instrumented else '') + memory_mode.args(a.unpinned) + (f' supervisor_slots={a.supervisor_slots}' if a.supervisor_slots is not None else '') + ''' || exit 1
 ''' + memory_mode.echo('PTHREAD_') + '''
 CAPSTONE_EXEC_DIAGNOSTICS=1 CAPSTONE_VM_STATS=1 CAPSTONE_VM_STATS_MARK=1 CAPSTONE_VM_GRANTS=1 ./capstone-vexec pthread.dom
 echo PTHREAD_EXIT:$?

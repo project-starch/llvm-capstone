@@ -9,6 +9,8 @@
 #       [CPU_EXTRA=<QEMU -cpu extras; default the 32-slot gate set of the mode>] [QEMU_LOCK=<lock file>] \
 #       [UNPINNED_PROBES=<built isolated mm fixtures>] [GATES="... unpinned-mm unpinned-mutants" (--mode on)] \
 #       [APP_SQLITE=... APP_MRUBY=... APP_PERL=... APP_MEMCACHED=...] [JOBS=8] \
+#       [FAST_FAULT=on|off (default off; needs --mode on): the module's unpinned_fast_fault parameter, the direct
+#        handle_mm_fault path. Recorded in OUT/fast-fault and read back from every insmod's FAST_FAULT line.]
 #     bash run-arm.sh --mode on|off OUT
 #
 # --mode off|on is the memory mode of the module under test, required, and it reaches ALL nine gates:
@@ -56,6 +58,9 @@ GATES=${GATES:-hosted runtime nodes malloc pin-ahead fp pthread step-hooks memca
 JOBS=${JOBS:-8}
 memory=()
 [[ $MODE == off ]] || memory=(--unpinned)
+FAST_FAULT=${FAST_FAULT:-off}
+[[ $FAST_FAULT =~ ^(on|off)$ ]] || { echo 'FAST_FAULT must be on or off' >&2; exit 2; }
+[[ $FAST_FAULT == off || $MODE == on ]] || { echo 'FAST_FAULT=on requires --mode on' >&2; exit 2; }
 if [[ " $GATES " == *" unpinned-mutants "* && $MODE != on ]]; then
   echo 'unpinned-mutants requires --mode on' >&2; exit 2
 fi
@@ -196,6 +201,9 @@ gates_phase() {
   [[ $MODE == off ]] || cpu_default=x-capstone-test-csrs=false,x-capstone-supervisor-slots=32,x-capstone-raw-moves=true
   export CAPSTONE_QEMU_CPU_EXTRA=${CPU_EXTRA:-$cpu_default}
   printf '%s\n' "$MODE" > "$OUT/mode"
+  printf '%s\n' "$FAST_FAULT" > "$OUT/fast-fault"
+  # The runners read the request from the environment (memory_mode.py); run-arm.sh sets it, never the caller.
+  if [[ $FAST_FAULT == on ]]; then export GATE_UNPINNED_FAST_FAULT=1; else unset GATE_UNPINNED_FAST_FAULT; fi
   printf '%s\n' "$CAPSTONE_QEMU_CPU_EXTRA" > "$OUT/cpu-extra"
   sha256sum "$P/qemu-system-riscv64" "$P"/images/* "$P/adapter/capstone-vexec" "$P/adapter/capstone-job" \
     "$P/adapter/module/capstone_vm.ko" "$HOOKS" > "$OUT/platform.sha256"

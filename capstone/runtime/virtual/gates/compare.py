@@ -40,6 +40,11 @@ rc, and one whose own mode witnesses are missing or not Y. The nine ordinary gat
 their FAIL sets are what is compared. --control-mode / --arm-mode additionally pin
 the pair being compared (a control that is not the OFF arm it should be is as wrong as a log that
 disagrees). `compare.py --check-mode OUT` runs that check on one output (run-arm.sh does, last).
+FAULT PATH. run-arm.sh's FAST_FAULT=on|off (default off) records the unpinned fault path in OUT/fast-fault
+and exports it to the runners, which pass unpinned_fast_fault=1 for `on` and log <PREFIX>FAST_FAULT:Y|N|A after
+every insmod. An output with the file must log one such line per module load, Y for `on` and N or A for `off`
+(otherwise REFUSED); `on` needs mode on. --control-fast / --arm-fast pin the pair (a control without the file
+counts as off).
 The logs are read, never the binaries: libc's strerror table contains "Exec format error".
 A row's PASS/FAIL is reported where the runner gives it per row (runtime.json, memcached's checks);
 elsewhere a row that ran is RAN and its outcome is in the gate's FAIL set.
@@ -85,23 +90,11 @@ REQUIRED_ROWS = {
         "mruby", "cleanup", "perl")],
     "hosted": ["HOSTED_EXIT:" + n for n in ('native', 'virtual', 'noreturn')],
     "nodes": ["NODE_EXIT:" + n for n in ('growth', 'stale', 'budget', 'quota')],
-    "malloc": [
-        'MALLOC_NATIVE_EXIT', 'MALLOC_BASIC_EXIT', 'MALLOC_POPULATION_EXIT', 'MALLOC_CHURN_EXIT',
-        'MALLOC_ALIGN_PROBE_EXIT', 'MALLOC_PREDICATE_EXIT', 'MALLOC_REMAP_ALIGN_EXIT',
-        'MALLOC_HOT_EXIT', 'MALLOC_HOT_CONTROL_EXIT', 'MALLOC_DENIAL_EXIT:stale',
-        'MALLOC_DENIAL_EXIT:inplace-stale', 'MALLOC_DENIAL_EXIT:remap-stale',
-        'MALLOC_DENIAL_EXIT:bounds', 'MALLOC_DENIAL_EXIT:stale-free',
-        'MALLOC_DENIAL_EXIT:reuse-stale', 'MALLOC_DENIAL_EXIT:reuse-free',
-        'MALLOC_DENIAL_EXIT:interior-free', 'MALLOC_DENIAL_EXIT:nested-ok',
-        'MALLOC_DENIAL_EXIT:nested-stale', 'MALLOC_DENIAL_EXIT:nested-grandchild',
-        'MALLOC_DENIAL_EXIT:nested-double', 'MALLOC_DENIAL_EXIT:recycle-tags',
-        'MALLOC_DENIAL_EXIT:recycle-stale', 'MALLOC_DENIAL_EXIT:recycle-free',
-        'MALLOC_DENIAL_EXIT:recycle-header', 'MALLOC_DENIAL_EXIT:recycle-slack',
-        'MALLOC_DENIAL_EXIT:recycle-limits', 'MALLOC_DENIAL_EXIT:recycle-root',
-        'MALLOC_DENIAL_EXIT:recycle-geometry', 'MALLOC_DENIAL_EXIT:recycle-nested',
-        'MALLOC_DENIAL_EXIT:recycle-aligned', 'MALLOC_DENIAL_EXIT:recycle-realloc',
-        'MALLOC_DENIAL_EXIT:calloc-clean', 'MALLOC_DENIAL_EXIT:calloc-shrink',
-        'MALLOC_DENIAL_EXIT:calloc-geometry', 'MALLOC_DENIAL_EXIT:meta-reuse'],
+    # run-malloc.py at dev ae47030ceeb6 (compare.py --rows on a dev OFF arm): one MALLOC_EXIT:<case> row per case.
+    "malloc": ["MALLOC_EXIT:" + n for n in (
+        "native", "ok", "population", "hot", "hot-service-control", "churn", "stale", "stale-free",
+        "inplace-stale", "remap-stale", "bounds", "interior-free", "reuse-stale", "reuse-free",
+        "nested-ok", "nested-stale", "nested-grandchild", "nested-double")],
     "pin-ahead": ["PIN_EXIT:" + n for n in (
         '1:base', '1:seq', '1:stop', '1:vma', '1:vmax', '1:rowrite', '1:retire', '16:base',
         '16:seq', '16:stop', '16:vma', '16:vmax', '16:rowrite', '16:retire', '64:base', '64:seq',
@@ -359,17 +352,24 @@ def gate_dir(out):
     return out / "gates" if (out / "gates").is_dir() else out
 
 
-def mode_lines(out, gate):
-    """The memory-mode values the gate's guest console logged (every insmod prints one)."""
+def gate_texts(out, gate):
     g = gate_dir(out)
     if gate == "memcached":
-        texts = [read(g / "memcached/guest/serial.log")]
-    elif gate == "runtime":
-        texts = [read(g / "runtime.log")]
-    else:
-        serials = sorted((g / gate).glob("**/serial.log")) if (g / gate).is_dir() else []
-        texts = [read(p) for p in serials] or [read(g / f"{gate}.log")]
-    return [m for text in texts for m in memory_mode.modes(text)]
+        return [read(g / "memcached/guest/serial.log")]
+    if gate == "runtime":
+        return [read(g / "runtime.log")]
+    serials = sorted((g / gate).glob("**/serial.log")) if (g / gate).is_dir() else []
+    return [read(p) for p in serials] or [read(g / f"{gate}.log")]
+
+
+def mode_lines(out, gate):
+    """The memory-mode values the gate's guest console logged (every insmod prints one)."""
+    return [m for text in gate_texts(out, gate) for m in memory_mode.modes(text)]
+
+
+def fast_lines(out, gate):
+    """The fault-path values (<PREFIX>FAST_FAULT:Y|N|A) the gate's guest console logged, one per insmod."""
+    return [m for text in gate_texts(out, gate) for m in memory_mode.fast_modes(text)]
 
 
 def verified_results(out, gate, ctl=False):
@@ -380,7 +380,10 @@ def verified_results(out, gate, ctl=False):
     if ctl and gate == "step-hooks" and (g / "step-hooks2.log").exists():
         log = g / "step-hooks2.log"
     text = read(log)
-    found = [m[1] == "PASS" for m in re.finditer(r"^(PASS|FAIL) memory_mode_verified\s*$", text, re.M)]
+    # The malloc runner (run-malloc.py since the protected-mallocng rewrite) names its check `memory_mode`; every
+    # other runner says memory_mode_verified. The alias is accepted for the malloc gate only.
+    names = ("memory_mode_verified", "memory_mode") if gate == "malloc" else ("memory_mode_verified",)
+    found = [m[1] == "PASS" for m in re.finditer(r"^(PASS|FAIL) (?:%s)\s*$" % "|".join(names), text, re.M)]
     recs = records(text)
     for path in (g / "runtime.json" if gate == "runtime" else None, g / gate / "result.json"):
         if path is not None and path.is_file():
@@ -392,15 +395,25 @@ def verified_results(out, gate, ctl=False):
         if not isinstance(rec, dict):
             continue
         tests = rec.get("tests")
-        if isinstance(tests, dict) and "memory_mode_verified" in tests:
-            found.append(tests["memory_mode_verified"] is True)
+        for name in names:
+            if isinstance(tests, dict) and name in tests:
+                found.append(tests[name] is True)
         checks = rec.get("checks")
-        if isinstance(checks, dict) and "memory_mode_verified" in checks:
-            found.append(checks["memory_mode_verified"] is True)
-        elif isinstance(checks, list):
-            found += [c.get("passed") is True for c in checks
-                      if isinstance(c, dict) and c.get("name") == "memory_mode_verified"]
+        for name in names:
+            if isinstance(checks, dict) and name in checks:
+                found.append(checks[name] is True)
+            elif isinstance(checks, list):
+                found += [c.get("passed") is True for c in checks
+                          if isinstance(c, dict) and c.get("name") == name]
     return found
+
+
+def requested_fast(out):
+    """The fault path run-arm.sh was asked for (OUT/fast-fault: on|off), or None for an output without the file
+    (a control from a tree that predates the option)."""
+    f = out / "fast-fault"
+    word = read(f).strip() if f.is_file() else ""
+    return word if word in ("on", "off") else None
 
 
 def requested_mode(out):
@@ -461,6 +474,9 @@ def check_mode(out, gates=None, ctl=False):
         if n in OPTIONAL_GATES and rc != "0":
             problems.append(f"{n}: optional qualification gate failed (rc={rc})")
     ok = ("Y",) if want == "on" else ("N", "A")
+    fast = requested_fast(out)
+    if fast == "on" and want != "on":
+        problems.append(f"fast fault path requested in mode {want} (needs on)")
     for gate in (gates or ran):
         found = mode_lines(out, gate)
         if not found:
@@ -469,6 +485,15 @@ def check_mode(out, gates=None, ctl=False):
             problems.append(f"{gate}: logged mode {sorted(set(found))} but {want} was requested")
         elif gate in MODE_LOADS and len(found) != MODE_LOADS[gate]:
             problems.append(f"{gate}: {len(found)} memory-mode line(s) for {MODE_LOADS[gate]} module load(s)")
+        if fast is not None and found:
+            # one fault-path line per module load, all of the requested path: Y only for ON; N (or A: a
+            # module without the parameter) for OFF -- an output that asked for a path must prove it ran.
+            paths = fast_lines(out, gate)
+            fok = ("Y",) if fast == "on" else ("N", "A")
+            if len(paths) != len(found):
+                problems.append(f"{gate}: {len(paths)} fault-path line(s) for {len(found)} module load(s) (fast {fast} requested)")
+            elif any(m not in fok for m in paths):
+                problems.append(f"{gate}: logged fault path {sorted(set(paths))} but fast {fast} was requested")
         verified = verified_results(out, gate, ctl)
         if not verified:
             problems.append(f"{gate}: no memory_mode_verified result")
@@ -514,6 +539,7 @@ def main():
             found = mode_lines(out, gate)
             if found:
                 print(f"MODE {gate}: {len(found)} line(s) {sorted(set(found))} (requested {want}), "
+                      f"fault path {sorted(set(fast_lines(out, gate)))} (requested {requested_fast(out) or 'unrecorded'}), "
                       f"memory_mode_verified {verified_results(out, gate)}")
         for x in problems:
             print("MODE_MISMATCH " + x)
@@ -526,15 +552,19 @@ def main():
     ap.add_argument("--all-rows", action="store_true", help="print every row, not only the NOT RUN and application rows")
     ap.add_argument("--control-mode", choices=("on", "off"), help="the memory mode the control must have been run in")
     ap.add_argument("--arm-mode", choices=("on", "off"), help="the memory mode the arm must have been run in")
+    ap.add_argument("--control-fast", choices=("on", "off"), help="the fault path (OUT/fast-fault) the control must have been run with; off also accepts a control without the file")
+    ap.add_argument("--arm-fast", choices=("on", "off"), help="the fault path the arm must have been run with; off also accepts an arm without the file")
     a = ap.parse_args()
     for d in (a.control, a.arm):
         if not d.is_dir():
             print(f"compare.py: no directory {d}", file=sys.stderr); return 3
     refused = []
-    for label, d, pinned in (("control", a.control, a.control_mode), ("arm", a.arm, a.arm_mode)):
+    for label, d, pinned, path in (("control", a.control, a.control_mode, a.control_fast), ("arm", a.arm, a.arm_mode, a.arm_fast)):
         refused += [f"{label}: {x}" for x in check_mode(d, a.gates.split() or None, label == "control")]
         if pinned and requested_mode(d) != pinned:
             refused.append(f"{label}: run in mode {requested_mode(d)}, {pinned} required")
+        if path and (requested_fast(d) or "off") != path:
+            refused.append(f"{label}: run with fast fault path {requested_fast(d) or 'unrecorded'}, {path} required")
     if refused and a.gates.split():
         for x in refused:
             print("REFUSED " + x)
