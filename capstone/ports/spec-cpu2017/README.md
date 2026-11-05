@@ -13,6 +13,12 @@ research results and never reportable.
 The measurement plan, with the pre-registered readings of its controls, is
 `capstone/docs/plans/spec-spatial-vs-temporal.md`; the heap switches it measures are PR #279.
 
+The [2026-11-05 minimal-mallocng measurements](results/2026-11-05-minimal-mallocng/README.md)
+use a fresh SDK at `ae47030ceeb6`, six complete paired SPEC test workloads,
+bounded x264 diagnostics and a PHP comparison. They record the current
+allocator, source-integrity checks and compiler/optimization-level limits;
+the older pinned campaigns below retain their original scope.
+
 ## What is pinned
 
 `manifest.lock.json` names every input by hash. The scripts check it before they use anything.

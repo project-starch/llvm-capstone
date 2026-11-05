@@ -1,5 +1,26 @@
 # Current Capstone state
 
+## 2026-11-05 — Fresh SPEC/PHP instruction baseline
+
+The SDK at `ae47030ceeb6` was rebuilt and all eight SPEC C applications plus
+PHP 5.0.0 relinked. Six SPEC test workloads validate in both static-musl arms:
+GCC +32.77%, mcf +3.48%, lbm +1.62%, ImageMagick +2.39%, nab +5.32%, xz +2.02%
+in program instruction attempts. Perl/x264 time out at 600 seconds; the matched
+100-call x264 slice is -1.04%, not a complete validated workload.
+The compiler revisions differ; default Capstone libc uses -O1 versus plain
+musl -O2. A libc-only -O2 diagnostic reduces GCC counts by 0.50%.
+
+PHP's unchanged cache threshold excludes its widened Bucket/HashTable objects,
+raising outer malloc calls. Its churn workload measures +38.94% for protected
+musl/stock Zend and +73.89% with nested Zend protection versus plain; three
+repeats per arm agree exactly. Direct derive/revoke attempts explain only a
+small part of both the GCC allocator delta and PHP's nested delta.
+SPEC originals (3,399 files) and frozen source packages pass integrity checks;
+no input stubs, source edits, or free-payload scrubbing. The obsolete Perl
+input-mutation helper is removed from the measurement tools. See the
+[measurements and attribution](../../ports/spec-cpu2017/results/2026-11-05-minimal-mallocng/README.md)
+for full counts, failed/replayed attempts, compiler limits and evidence hashes.
+
 ## 2026-11-05 — Minimal protected mallocng
 
 The minimal port replaces `runtime/virtual/heap.c` and its object registry with
