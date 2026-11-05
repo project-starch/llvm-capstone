@@ -81,6 +81,8 @@ and the platform is what differs (`SCHEMA.md`, the `vp2-malloc` row).
 
 ## Pre-registered readings
 
+**Read the runtime warning below before using any of these numbers.**
+
 Over the **27 counted** cases -- 19 temporal and 8 spatial, each measured in both
 configurations, not 27 per configuration. Each arm's 33-row bundle also carries the six
 out-of-denominator cases; score cell by cell against the QEMU bundle named above, as the q15 runs
@@ -115,6 +117,34 @@ Sublet or from mallocng directly, and the cursor goes the same 50,976 bytes past
 31 ought to read MISSED on this arm too, which is why spatial is predicted 5 / 8. It has never been
 measured there -- the non-nested arm has never run on the board -- so a CAUGHT is informative rather
 than a contradiction, and would say the window depends on something the two arms do not share.
+
+### The predictions are for the runtime the bundles record, and `dev` has since replaced it
+
+The QEMU bundles these predictions come from were built with the corpus SDK from dev
+**`92ebd4a62542`** (`/tmp/capstone/sq-sdk-vm5-20261029/sdk`). On **2026-11-05** dev
+**`a486f0ccbbd1`**, "Runtime: replace heap registry with minimal protected mallocng", replaced
+`runtime/virtual/heap.c` and its object registry with musl mallocng plus mapping-level authority
+and direct derive/revoke hooks; it rewrote `musl-patches/0009-virtual-mallocng-capabilities.patch`
+and `arch-capstone64/malloc_capstone.h`, and its own state entry says **"No freed-payload
+scrubbing"** and **"It does not requalify every application port or RTL"**.
+
+- **The bundles are unaffected.** Each pins what ran by platform hash, and a later runtime change
+  cannot reach back into a recorded Observation.
+- **A kit built from today's dev measures a different allocator.** How exposed each arm is differs,
+  and it is worth being exact rather than cautious everywhere:
+  - **arm 3, `vp2-platform`, is the exposed one.** Its configuration IS `virtual-mallocng`: every
+    SQLite object is one of mallocng's, so every cell of its 17 / 17 and 5 / 8 is a reading of
+    mallocng's own per-object bounds and revocation. A change to either moves this arm directly.
+  - **arms 1 and 2 use mallocng only as the arena supplier.** memsys5 takes one object from it and
+    sub-allocates inside it, so what a mallocng change can alter there is that arena's bounds and
+    lifetime, not the per-block capabilities arm 1 catches with or the absence of a mechanism that
+    makes arm 2 zero. Less exposed, but not pinned.
+
+**So pick one deliberately before the boot.** Either build the kit from the runtime the bundles
+record, which keeps every prediction above exactly as written; or build from current dev and treat
+the run as a NEW measurement whose predictions are re-derived on QEMU first. Running a
+current-dev kit against the numbers above would read a runtime replacement as a corpus
+discrepancy, which is the one reading this hand-off exists to prevent.
 
 ### The two readings that must NOT move
 
