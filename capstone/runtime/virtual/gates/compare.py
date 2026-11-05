@@ -90,23 +90,11 @@ REQUIRED_ROWS = {
         "mruby", "cleanup", "perl")],
     "hosted": ["HOSTED_EXIT:" + n for n in ('native', 'virtual', 'noreturn')],
     "nodes": ["NODE_EXIT:" + n for n in ('growth', 'stale', 'budget', 'quota')],
-    "malloc": [
-        'MALLOC_NATIVE_EXIT', 'MALLOC_BASIC_EXIT', 'MALLOC_POPULATION_EXIT', 'MALLOC_CHURN_EXIT',
-        'MALLOC_ALIGN_PROBE_EXIT', 'MALLOC_PREDICATE_EXIT', 'MALLOC_REMAP_ALIGN_EXIT',
-        'MALLOC_HOT_EXIT', 'MALLOC_HOT_CONTROL_EXIT', 'MALLOC_DENIAL_EXIT:stale',
-        'MALLOC_DENIAL_EXIT:inplace-stale', 'MALLOC_DENIAL_EXIT:remap-stale',
-        'MALLOC_DENIAL_EXIT:bounds', 'MALLOC_DENIAL_EXIT:stale-free',
-        'MALLOC_DENIAL_EXIT:reuse-stale', 'MALLOC_DENIAL_EXIT:reuse-free',
-        'MALLOC_DENIAL_EXIT:interior-free', 'MALLOC_DENIAL_EXIT:nested-ok',
-        'MALLOC_DENIAL_EXIT:nested-stale', 'MALLOC_DENIAL_EXIT:nested-grandchild',
-        'MALLOC_DENIAL_EXIT:nested-double', 'MALLOC_DENIAL_EXIT:recycle-tags',
-        'MALLOC_DENIAL_EXIT:recycle-stale', 'MALLOC_DENIAL_EXIT:recycle-free',
-        'MALLOC_DENIAL_EXIT:recycle-header', 'MALLOC_DENIAL_EXIT:recycle-slack',
-        'MALLOC_DENIAL_EXIT:recycle-limits', 'MALLOC_DENIAL_EXIT:recycle-root',
-        'MALLOC_DENIAL_EXIT:recycle-geometry', 'MALLOC_DENIAL_EXIT:recycle-nested',
-        'MALLOC_DENIAL_EXIT:recycle-aligned', 'MALLOC_DENIAL_EXIT:recycle-realloc',
-        'MALLOC_DENIAL_EXIT:calloc-clean', 'MALLOC_DENIAL_EXIT:calloc-shrink',
-        'MALLOC_DENIAL_EXIT:calloc-geometry', 'MALLOC_DENIAL_EXIT:meta-reuse'],
+    # run-malloc.py at dev ae47030ceeb6 (compare.py --rows on a dev OFF arm): one MALLOC_EXIT:<case> row per case.
+    "malloc": ["MALLOC_EXIT:" + n for n in (
+        "native", "ok", "population", "hot", "hot-service-control", "churn", "stale", "stale-free",
+        "inplace-stale", "remap-stale", "bounds", "interior-free", "reuse-stale", "reuse-free",
+        "nested-ok", "nested-stale", "nested-grandchild", "nested-double")],
     "pin-ahead": ["PIN_EXIT:" + n for n in (
         '1:base', '1:seq', '1:stop', '1:vma', '1:vmax', '1:rowrite', '1:retire', '16:base',
         '16:seq', '16:stop', '16:vma', '16:vmax', '16:rowrite', '16:retire', '64:base', '64:seq',
