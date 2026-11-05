@@ -40,6 +40,10 @@ or binaries are included here.
   against SPEC's MANIFEST, with zero mismatches. Fresh build source/package
   checks also pass. The relocated replay tree independently checks 1,817 files.
 
+The [Perl follow-up](../2026-11-05-perl-slices/README.md) adds matched short
+slices and a checked completed makerand sub-workload; it does not upgrade
+the full Perl test harness to PASS.
+
 ## Complete SPEC test workloads
 
 | Benchmark | Plain instructions | Capstone instructions | Extra | Validation |

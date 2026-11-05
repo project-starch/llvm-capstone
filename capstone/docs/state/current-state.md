@@ -1,5 +1,17 @@
 # Current Capstone state
 
+## 2026-11-05 — Perl work-bounded comparison
+
+On the same `ae47030ceeb6` SDK baseline, unchanged Perl makerand slices of
+10,000/20,000 fixed-seed random draws measure +50.57%/+50.59% program attempts.
+The completed makerand sub-workload from the subsequently cancelled longer
+run matches SPEC's expected output in both arms and measures +50.60%.
+This is not complete Perl harness validation. Over 99.9% of the short-slice
+delta is in interpreter functions, not allocation. See the
+[Perl evidence and attribution](../../ports/spec-cpu2017/results/2026-11-05-perl-slices/README.md).
+Further instruction comparisons use matched work slices; full-run correctness
+qualification stays separate. No source/input or allocator-policy changes.
+
 ## 2026-11-05 — Fresh SPEC/PHP instruction baseline
 
 The SDK at `ae47030ceeb6` was rebuilt and all eight SPEC C applications plus

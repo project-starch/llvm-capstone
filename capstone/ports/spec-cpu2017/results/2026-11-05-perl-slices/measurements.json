@@ -1,0 +1,1137 @@
+{
+  "scope": "Perl makerand workload and matched slices; not a complete SPEC Perl validation",
+  "baseline_report": "2026-11-05-minimal-mallocng",
+  "sdk_source": "ae47030ceeb6371835e90f474bb18cbed1165c23",
+  "tool_source": "f95a9395b08d",
+  "compiler_and_libc_caveat": "Same pinned compilers/static musl as baseline: compiler revisions differ, Capstone libc -O1 vs plain -O2. Applications -O2. No new runtime/benchmark changes.",
+  "audit_before": {
+    "original_files_checked": 1704,
+    "mismatches": []
+  },
+  "audit_after": {
+    "original_files_checked": 1704,
+    "mismatches": []
+  },
+  "completed_makerand": {
+    "scope": "Complete makerand.pl invocation only; full Perl test harness was cancelled and remains unvalidated",
+    "expected_output_sha256": "539d02dc10fabf7096fdc8331ec144d1e42f813913ec48e4f611bce3f840950e",
+    "arms": {
+      "cap": {
+        "run": "/var/tmp/capstone-spec-php-20261105/share/perl-slices/completed-makerand/cap",
+        "program": 4494385318,
+        "raw_window_sha256": "b6ee16a443e811e2b8f880e2d30e44a381fde9cca44aa73223b64ff085f79d4a",
+        "output_sha256": "539d02dc10fabf7096fdc8331ec144d1e42f813913ec48e4f611bce3f840950e",
+        "exit": 0,
+        "exe_sha256": "3f239e4bdfaa4c9b54c78cc2dfc03a81811dcf7cb0692da5c9e0cc66a5257183",
+        "window_complete": true
+      },
+      "rv": {
+        "run": "/var/tmp/capstone-spec-php-20261105/share/perl-slices/completed-makerand/rv",
+        "program": 2984247290,
+        "raw_window_sha256": "fe061c44d7d6e8d2c8c9b467c7146dea224243f2625f49d15389ab73244a6602",
+        "output_sha256": "539d02dc10fabf7096fdc8331ec144d1e42f813913ec48e4f611bce3f840950e",
+        "exit": 0,
+        "exe_sha256": "840e515f3ab8b8d5b87c2b4c9a4414e9bbb46f2b76d6e1bcfb02f73d64fd91c5",
+        "window_complete": true
+      }
+    },
+    "overhead_percent": 50.60364913659685
+  },
+  "measurements": {
+    "10000": {
+      "scope": "10000",
+      "arms": {
+        "cap": {
+          "run": "/var/tmp/capstone-spec-php-20261105/share/perl-slices/10000/cap",
+          "program": 23664008,
+          "group_counts": {
+            "application": 23651171,
+            "other_libc_runtime": 8052,
+            "allocator": 4785
+          },
+          "measurement": {
+            "run": "/var/tmp/capstone-spec-php-20261105/share/perl-slices/10000/cap",
+            "random_draws": 10000,
+            "symbol": "Perl_pp_rand",
+            "start_count": 1,
+            "stop_count": 10001,
+            "timeout_seconds": 180,
+            "scope": "unchanged SPEC makerand.pl, fixed seed, first N random draws; not full Perl workload validation",
+            "returncode": 0,
+            "elapsed_seconds": 61.10873527894728,
+            "result": {
+              "benchmark": "500.perlbench_r",
+              "size": "test",
+              "label": "current_cap32",
+              "verdict": "SLICE",
+              "reported_seconds": null,
+              "qemu_cpu_seconds": null,
+              "qemu_vmhwm_kb": null,
+              "vm_stats": [],
+              "reasons": [],
+              "start": "2026-11-05T04:04:12Z",
+              "end": "2026-11-05T04:04:22Z",
+              "routes": {
+                "guest": 1
+              },
+              "guest_invocations": 1,
+              "spec_reports": [
+                "CPU2017.001.log",
+                "CPU2017.001.log.debug"
+              ],
+              "perl_pack_stub": [],
+              "runcpu_reasons": [
+                "runcpu exited 1",
+                "SPEC reports no success",
+                "guest invocation perlbench_r_base.current_cap32 ended 1",
+                "no SPEC tool ran on the host: nothing was validated"
+              ],
+              "slice": {
+                "symbol": "Perl_pp_rand",
+                "count": 10001,
+                "len": 4,
+                "bytes": 4144046427,
+                "size": 548,
+                "next_len": 4,
+                "base": 274735300608,
+                "start": {
+                  "symbol": "Perl_pp_rand",
+                  "count": 1
+                },
+                "stopped_at": 274736031100,
+                "window": 0,
+                "arrivals": 10001,
+                "image_record": "capprof-slice: domain image entry=0x3ff7800844 code=0x3ff7800000-0x3ff7c00000 (derived from stopped_at; the launcher never exited)",
+                "stopped": true
+              }
+            },
+            "windows": {
+              "windows_ok": true,
+              "problems": [],
+              "guest_invocations": 1
+            },
+            "slice": {
+              "symbol": "Perl_pp_rand",
+              "count": 10001,
+              "len": 4,
+              "bytes": 4144046427,
+              "size": 548,
+              "next_len": 4,
+              "base": 274735300608,
+              "start": {
+                "symbol": "Perl_pp_rand",
+                "count": 1
+              },
+              "stopped_at": 274736031100,
+              "window": 0,
+              "arrivals": 10001,
+              "image_record": "capprof-slice: domain image entry=0x3ff7800844 code=0x3ff7800000-0x3ff7c00000 (derived from stopped_at; the launcher never exited)",
+              "stopped": true
+            },
+            "program": 23664008
+          }
+        },
+        "rv": {
+          "run": "/var/tmp/capstone-spec-php-20261105/share/perl-slices/10000/rv",
+          "program": 15716538,
+          "group_counts": {
+            "application": 15707333,
+            "other_libc_runtime": 5691,
+            "allocator": 3514
+          },
+          "measurement": {
+            "run": "/var/tmp/capstone-spec-php-20261105/share/perl-slices/10000/rv",
+            "random_draws": 10000,
+            "symbol": "Perl_pp_rand",
+            "start_count": 1,
+            "stop_count": 10001,
+            "timeout_seconds": 180,
+            "scope": "unchanged SPEC makerand.pl, fixed seed, first N random draws; not full Perl workload validation",
+            "returncode": 0,
+            "elapsed_seconds": 59.99863221310079,
+            "result": {
+              "benchmark": "500.perlbench_r",
+              "size": "test",
+              "label": "current_rv",
+              "verdict": "SLICE",
+              "reported_seconds": null,
+              "qemu_cpu_seconds": null,
+              "qemu_vmhwm_kb": null,
+              "vm_stats": [],
+              "reasons": [],
+              "start": "2026-11-05T04:04:14Z",
+              "end": "2026-11-05T04:04:21Z",
+              "routes": {
+                "guest-plain": 1
+              },
+              "guest_invocations": 1,
+              "spec_reports": [
+                "CPU2017.002.log",
+                "CPU2017.002.log.debug"
+              ],
+              "perl_pack_stub": [],
+              "routes_note": "plain arm: guest-plain invocations stand for guest ones",
+              "runcpu_reasons": [
+                "runcpu exited 1",
+                "SPEC reports no success",
+                "guest invocation perlbench_r_base.current_rv ended {'exit': 255}",
+                "no SPEC tool ran on the host: nothing was validated"
+              ],
+              "slice": {
+                "symbol": "Perl_pp_rand",
+                "count": 10001,
+                "len": 4,
+                "bytes": 4244701459,
+                "size": 372,
+                "next_len": 4,
+                "base": 0,
+                "start": {
+                  "symbol": "Perl_pp_rand",
+                  "count": 1
+                },
+                "stopped_at": 1019300,
+                "window": 0,
+                "arrivals": 10001,
+                "image_record": null,
+                "stopped": true
+              }
+            },
+            "windows": {
+              "windows_ok": true,
+              "problems": [],
+              "guest_invocations": 1
+            },
+            "slice": {
+              "symbol": "Perl_pp_rand",
+              "count": 10001,
+              "len": 4,
+              "bytes": 4244701459,
+              "size": 372,
+              "next_len": 4,
+              "base": 0,
+              "start": {
+                "symbol": "Perl_pp_rand",
+                "count": 1
+              },
+              "stopped_at": 1019300,
+              "window": 0,
+              "arrivals": 10001,
+              "image_record": null,
+              "stopped": true
+            },
+            "program": 15716538
+          }
+        }
+      },
+      "overhead_percent": 50.56756138024798,
+      "group_deltas": {
+        "allocator": 1271,
+        "application": 7943838,
+        "other_libc_runtime": 2361
+      },
+      "top_function_deltas": [
+        {
+          "function": "Perl_pp_nextstate",
+          "cap": 3091030,
+          "rv": 1470490,
+          "delta": 1620540
+        },
+        {
+          "function": "Perl_pp_padsv",
+          "cap": 2301121,
+          "rv": 1540740,
+          "delta": 760381
+        },
+        {
+          "function": "Perl_pp_unstack",
+          "cap": 1170000,
+          "rv": 570000,
+          "delta": 600000
+        },
+        {
+          "function": "Perl_pp_next",
+          "cap": 1118880,
+          "rv": 599400,
+          "delta": 519480
+        },
+        {
+          "function": "Perl_pp_and",
+          "cap": 1469910,
+          "rv": 1009930,
+          "delta": 459980
+        },
+        {
+          "function": "S_unwind_loop",
+          "cap": 1118880,
+          "rv": 719280,
+          "delta": 399600
+        },
+        {
+          "function": "Perl_pp_rand",
+          "cap": 1000003,
+          "rv": 640001,
+          "delta": 360002
+        },
+        {
+          "function": "Perl_pp_const",
+          "cap": 841260,
+          "rv": 500750,
+          "delta": 340510
+        },
+        {
+          "function": "Perl_sv_setiv",
+          "cap": 1280012,
+          "rv": 940010,
+          "delta": 340002
+        },
+        {
+          "function": "Perl_pp_sassign",
+          "cap": 920000,
+          "rv": 590000,
+          "delta": 330000
+        },
+        {
+          "function": "Perl_pp_gvsv",
+          "cap": 700700,
+          "rv": 410410,
+          "delta": 290290
+        },
+        {
+          "function": "Perl_pp_int",
+          "cap": 1080001,
+          "rv": 800000,
+          "delta": 280001
+        },
+        {
+          "function": "Perl_pp_modulo",
+          "cap": 1290001,
+          "rv": 1010000,
+          "delta": 280001
+        },
+        {
+          "function": "Perl_pp_gt",
+          "cap": 690000,
+          "rv": 450000,
+          "delta": 240000
+        },
+        {
+          "function": "Perl_sv_setsv_flags",
+          "cap": 920003,
+          "rv": 730003,
+          "delta": 190000
+        },
+        {
+          "function": "spec_genrand_int32",
+          "cap": 625028,
+          "rv": 437178,
+          "delta": 187850
+        },
+        {
+          "function": "Perl_pp_preinc",
+          "cap": 759880,
+          "rv": 579870,
+          "delta": 180010
+        },
+        {
+          "function": "Perl_sv_setnv",
+          "cap": 640007,
+          "rv": 470006,
+          "delta": 170001
+        },
+        {
+          "function": "Perl_sv_2iv_flags",
+          "cap": 570000,
+          "rv": 450000,
+          "delta": 120000
+        },
+        {
+          "function": "S_sv_2iuv_common",
+          "cap": 510005,
+          "rv": 430004,
+          "delta": 80001
+        }
+      ]
+    },
+    "20000": {
+      "scope": "20000",
+      "arms": {
+        "cap": {
+          "run": "/var/tmp/capstone-spec-php-20261105/share/perl-slices/20000/cap",
+          "program": 47308616,
+          "group_counts": {
+            "application": 47289668,
+            "other_libc_runtime": 14163,
+            "allocator": 4785
+          },
+          "measurement": {
+            "run": "/var/tmp/capstone-spec-php-20261105/share/perl-slices/20000/cap",
+            "random_draws": 20000,
+            "symbol": "Perl_pp_rand",
+            "start_count": 1,
+            "stop_count": 20001,
+            "timeout_seconds": 180,
+            "scope": "unchanged SPEC makerand.pl, fixed seed, first N random draws; not full Perl workload validation",
+            "returncode": 0,
+            "elapsed_seconds": 64.91191857191734,
+            "result": {
+              "benchmark": "500.perlbench_r",
+              "size": "test",
+              "label": "current_cap32",
+              "verdict": "SLICE",
+              "reported_seconds": null,
+              "qemu_cpu_seconds": null,
+              "qemu_vmhwm_kb": null,
+              "vm_stats": [],
+              "reasons": [],
+              "start": "2026-11-05T04:04:15Z",
+              "end": "2026-11-05T04:04:26Z",
+              "routes": {
+                "guest": 1
+              },
+              "guest_invocations": 1,
+              "spec_reports": [
+                "CPU2017.002.log",
+                "CPU2017.002.log.debug"
+              ],
+              "perl_pack_stub": [],
+              "runcpu_reasons": [
+                "runcpu exited 1",
+                "SPEC reports no success",
+                "guest invocation perlbench_r_base.current_cap32 ended 1",
+                "no SPEC tool ran on the host: nothing was validated"
+              ],
+              "slice": {
+                "symbol": "Perl_pp_rand",
+                "count": 20001,
+                "len": 4,
+                "bytes": 4144046427,
+                "size": 548,
+                "next_len": 4,
+                "base": 274735300608,
+                "start": {
+                  "symbol": "Perl_pp_rand",
+                  "count": 1
+                },
+                "stopped_at": 274736031100,
+                "window": 0,
+                "arrivals": 20001,
+                "image_record": "capprof-slice: domain image entry=0x3ff7800844 code=0x3ff7800000-0x3ff7c00000 (derived from stopped_at; the launcher never exited)",
+                "stopped": true
+              }
+            },
+            "windows": {
+              "windows_ok": true,
+              "problems": [],
+              "guest_invocations": 1
+            },
+            "slice": {
+              "symbol": "Perl_pp_rand",
+              "count": 20001,
+              "len": 4,
+              "bytes": 4144046427,
+              "size": 548,
+              "next_len": 4,
+              "base": 274735300608,
+              "start": {
+                "symbol": "Perl_pp_rand",
+                "count": 1
+              },
+              "stopped_at": 274736031100,
+              "window": 0,
+              "arrivals": 20001,
+              "image_record": "capprof-slice: domain image entry=0x3ff7800844 code=0x3ff7800000-0x3ff7c00000 (derived from stopped_at; the launcher never exited)",
+              "stopped": true
+            },
+            "program": 47308616
+          }
+        },
+        "rv": {
+          "run": "/var/tmp/capstone-spec-php-20261105/share/perl-slices/20000/rv",
+          "program": 31416547,
+          "group_counts": {
+            "application": 31403256,
+            "other_libc_runtime": 9777,
+            "allocator": 3514
+          },
+          "measurement": {
+            "run": "/var/tmp/capstone-spec-php-20261105/share/perl-slices/20000/rv",
+            "random_draws": 20000,
+            "symbol": "Perl_pp_rand",
+            "start_count": 1,
+            "stop_count": 20001,
+            "timeout_seconds": 180,
+            "scope": "unchanged SPEC makerand.pl, fixed seed, first N random draws; not full Perl workload validation",
+            "returncode": 0,
+            "elapsed_seconds": 59.514814916066825,
+            "result": {
+              "benchmark": "500.perlbench_r",
+              "size": "test",
+              "label": "current_rv",
+              "verdict": "SLICE",
+              "reported_seconds": null,
+              "qemu_cpu_seconds": null,
+              "qemu_vmhwm_kb": null,
+              "vm_stats": [],
+              "reasons": [],
+              "start": "2026-11-05T04:04:13Z",
+              "end": "2026-11-05T04:04:21Z",
+              "routes": {
+                "guest-plain": 1
+              },
+              "guest_invocations": 1,
+              "spec_reports": [
+                "CPU2017.001.log",
+                "CPU2017.001.log.debug"
+              ],
+              "perl_pack_stub": [],
+              "routes_note": "plain arm: guest-plain invocations stand for guest ones",
+              "runcpu_reasons": [
+                "runcpu exited 1",
+                "SPEC reports no success",
+                "guest invocation perlbench_r_base.current_rv ended {'exit': 255}",
+                "no SPEC tool ran on the host: nothing was validated"
+              ],
+              "slice": {
+                "symbol": "Perl_pp_rand",
+                "count": 20001,
+                "len": 4,
+                "bytes": 4244701459,
+                "size": 372,
+                "next_len": 4,
+                "base": 0,
+                "start": {
+                  "symbol": "Perl_pp_rand",
+                  "count": 1
+                },
+                "stopped_at": 1019300,
+                "window": 0,
+                "arrivals": 20001,
+                "image_record": null,
+                "stopped": true
+              }
+            },
+            "windows": {
+              "windows_ok": true,
+              "problems": [],
+              "guest_invocations": 1
+            },
+            "slice": {
+              "symbol": "Perl_pp_rand",
+              "count": 20001,
+              "len": 4,
+              "bytes": 4244701459,
+              "size": 372,
+              "next_len": 4,
+              "base": 0,
+              "start": {
+                "symbol": "Perl_pp_rand",
+                "count": 1
+              },
+              "stopped_at": 1019300,
+              "window": 0,
+              "arrivals": 20001,
+              "image_record": null,
+              "stopped": true
+            },
+            "program": 31416547
+          }
+        }
+      },
+      "overhead_percent": 50.58502769257232,
+      "group_deltas": {
+        "allocator": 1271,
+        "application": 15886412,
+        "other_libc_runtime": 4386
+      },
+      "top_function_deltas": [
+        {
+          "function": "Perl_pp_nextstate",
+          "cap": 6182060,
+          "rv": 2940980,
+          "delta": 3241080
+        },
+        {
+          "function": "Perl_pp_padsv",
+          "cap": 4602241,
+          "rv": 3081480,
+          "delta": 1520761
+        },
+        {
+          "function": "Perl_pp_unstack",
+          "cap": 2340000,
+          "rv": 1140000,
+          "delta": 1200000
+        },
+        {
+          "function": "Perl_pp_next",
+          "cap": 2237760,
+          "rv": 1198800,
+          "delta": 1038960
+        },
+        {
+          "function": "Perl_pp_and",
+          "cap": 2939820,
+          "rv": 2019860,
+          "delta": 919960
+        },
+        {
+          "function": "S_unwind_loop",
+          "cap": 2237760,
+          "rv": 1438560,
+          "delta": 799200
+        },
+        {
+          "function": "Perl_pp_rand",
+          "cap": 2000003,
+          "rv": 1280001,
+          "delta": 720002
+        },
+        {
+          "function": "Perl_pp_const",
+          "cap": 1682520,
+          "rv": 1001500,
+          "delta": 681020
+        },
+        {
+          "function": "Perl_sv_setiv",
+          "cap": 2560015,
+          "rv": 1880010,
+          "delta": 680005
+        },
+        {
+          "function": "Perl_pp_sassign",
+          "cap": 1840000,
+          "rv": 1180000,
+          "delta": 660000
+        },
+        {
+          "function": "Perl_pp_gvsv",
+          "cap": 1401400,
+          "rv": 820820,
+          "delta": 580580
+        },
+        {
+          "function": "Perl_pp_modulo",
+          "cap": 2580002,
+          "rv": 2020000,
+          "delta": 560002
+        },
+        {
+          "function": "Perl_pp_int",
+          "cap": 2160001,
+          "rv": 1600000,
+          "delta": 560001
+        },
+        {
+          "function": "Perl_pp_gt",
+          "cap": 1380000,
+          "rv": 900000,
+          "delta": 480000
+        },
+        {
+          "function": "Perl_sv_setsv_flags",
+          "cap": 1840003,
+          "rv": 1460003,
+          "delta": 380000
+        },
+        {
+          "function": "spec_genrand_int32",
+          "cap": 1239172,
+          "rv": 864522,
+          "delta": 374650
+        },
+        {
+          "function": "Perl_pp_preinc",
+          "cap": 1519760,
+          "rv": 1159740,
+          "delta": 360020
+        },
+        {
+          "function": "Perl_sv_setnv",
+          "cap": 1280008,
+          "rv": 940006,
+          "delta": 340002
+        },
+        {
+          "function": "Perl_sv_2iv_flags",
+          "cap": 1140000,
+          "rv": 900000,
+          "delta": 240000
+        },
+        {
+          "function": "S_sv_2iuv_common",
+          "cap": 1020005,
+          "rv": 860004,
+          "delta": 160001
+        }
+      ]
+    },
+    "completed-makerand": {
+      "scope": "completed-makerand",
+      "arms": {
+        "cap": {
+          "run": "/var/tmp/capstone-spec-php-20261105/share/perl-slices/completed-makerand/cap",
+          "program": 4494385318,
+          "group_counts": {
+            "application": 4492606744,
+            "other_libc_runtime": 1347624,
+            "allocator": 402654,
+            "compiler_capability_initialization": 28296
+          }
+        },
+        "rv": {
+          "run": "/var/tmp/capstone-spec-php-20261105/share/perl-slices/completed-makerand/rv",
+          "program": 2984247290,
+          "group_counts": {
+            "application": 2983180272,
+            "other_libc_runtime": 850603,
+            "allocator": 216395,
+            "unresolved": 20
+          }
+        }
+      },
+      "overhead_percent": 50.60364913659685,
+      "group_deltas": {
+        "allocator": 186259,
+        "application": 1509426472,
+        "compiler_capability_initialization": 28296,
+        "other_libc_runtime": 497021,
+        "unresolved": -20
+      },
+      "top_function_deltas": [
+        {
+          "function": "Perl_pp_nextstate",
+          "cap": 587367301,
+          "rv": 279427106,
+          "delta": 307940195
+        },
+        {
+          "function": "Perl_pp_padsv",
+          "cap": 437266906,
+          "rv": 292776779,
+          "delta": 144490127
+        },
+        {
+          "function": "Perl_pp_unstack",
+          "cap": 222327280,
+          "rv": 108313268,
+          "delta": 114014012
+        },
+        {
+          "function": "Perl_pp_next",
+          "cap": 212611881,
+          "rv": 113899200,
+          "delta": 98712681
+        },
+        {
+          "function": "Perl_pp_and",
+          "cap": 279316995,
+          "rv": 191910063,
+          "delta": 87406932
+        },
+        {
+          "function": "S_unwind_loop",
+          "cap": 212611879,
+          "rv": 136679040,
+          "delta": 75932839
+        },
+        {
+          "function": "Perl_pp_rand",
+          "cap": 190022445,
+          "rv": 121614344,
+          "delta": 68408101
+        },
+        {
+          "function": "Perl_pp_const",
+          "cap": 159860228,
+          "rv": 95154875,
+          "delta": 64705353
+        },
+        {
+          "function": "Perl_sv_setiv",
+          "cap": 243229304,
+          "rv": 178621494,
+          "delta": 64607810
+        },
+        {
+          "function": "Perl_pp_sassign",
+          "cap": 174821466,
+          "rv": 112113747,
+          "delta": 62707719
+        },
+        {
+          "function": "Perl_pp_gvsv",
+          "cap": 133148976,
+          "rv": 77987248,
+          "delta": 55161728
+        },
+        {
+          "function": "Perl_pp_modulo",
+          "cap": 245128942,
+          "rv": 191922624,
+          "delta": 53206318
+        },
+        {
+          "function": "Perl_pp_int",
+          "cap": 205224232,
+          "rv": 152017920,
+          "delta": 53206312
+        },
+        {
+          "function": "Perl_pp_gt",
+          "cap": 131116682,
+          "rv": 85510836,
+          "delta": 45605846
+        },
+        {
+          "function": "Perl_sv_setsv_flags",
+          "cap": 174821804,
+          "rv": 138717290,
+          "delta": 36104514
+        },
+        {
+          "function": "spec_genrand_int32",
+          "cap": 116762537,
+          "rv": 81260412,
+          "delta": 35502125
+        },
+        {
+          "function": "Perl_pp_preinc",
+          "cap": 144394298,
+          "rv": 110188344,
+          "delta": 34205954
+        },
+        {
+          "function": "Perl_sv_setnv",
+          "cap": 121614371,
+          "rv": 89310534,
+          "delta": 32303837
+        },
+        {
+          "function": "Perl_sv_2iv_flags",
+          "cap": 108312796,
+          "rv": 85510080,
+          "delta": 22802716
+        },
+        {
+          "function": "S_sv_2iuv_common",
+          "cap": 96911453,
+          "rv": 81709636,
+          "delta": 15201817
+        }
+      ]
+    }
+  },
+  "isa_10000": {
+    "rv": {
+      "program": 15716538,
+      "classes": {
+        "control flow": 2446457,
+        "integer/FP other load/store": 4839532,
+        "integer/FP arithmetic": 5906633,
+        "integer/FP stack load/store": 2523916
+      },
+      "mnemonics": {
+        "beqz": 491233,
+        "sb": 70896,
+        "add": 311221,
+        "li": 471119,
+        "bltu": 90633,
+        "neg": 104,
+        "slli": 421478,
+        "lui": 340584,
+        "andi": 311762,
+        "sub": 100647,
+        "addi": 1237489,
+        "mulhu": 176,
+        "sw": 120288,
+        "addiw": 25,
+        "srli": 60990,
+        "or": 81142,
+        "sd": 1863574,
+        "ret": 330425,
+        "mv": 305458,
+        "bnez": 441247,
+        "lw": 470456,
+        "j": 120539,
+        "auipc": 1260617,
+        "lbu": 190800,
+        "sext.w": 20050,
+        "ld": 4297102,
+        "beq": 80272,
+        "negw": 13,
+        "and": 351830,
+        "jal": 130264,
+        "lhu": 30048,
+        "bgeu": 10293,
+        "ecall": 1,
+        "not": 9,
+        "blt": 80089,
+        "bne": 160857,
+        "mul": 60022,
+        "slliw": 9,
+        "srliw": 41,
+        "sltiu": 19997,
+        "xori": 10013,
+        "sltu": 33,
+        "seqz": 106,
+        "divu": 1,
+        "sllw": 11,
+        "zext.b": 90089,
+        "addw": 10,
+        "subw": 13,
+        "sh": 10,
+        "bltz": 110193,
+        "bge": 80000,
+        "lwu": 110270,
+        "bgez": 80233,
+        "srl": 19993,
+        "jr": 40018,
+        "snez": 10056,
+        "jalr": 200161,
+        "srai": 20021,
+        "xor": 91337,
+        "ori": 10158,
+        "lb": 50000,
+        "slt": 10000,
+        "fcvt.d.l": 10001,
+        "fsd": 40001,
+        "fld": 120003,
+        "fmv.d.x": 80002,
+        "flt.d": 50001,
+        "fle.d": 20001,
+        "fmv.d": 10001,
+        "fcvt.l.d": 10001,
+        "fmv.x.d": 40001,
+        "feq.d": 20000,
+        "fcvt.d.lu": 10000,
+        "fmul.d": 20000,
+        "fcvt.lu.d": 10000,
+        "remu": 10000
+      },
+      "by_group": {
+        "other_libc_runtime": {
+          "control flow": 1435,
+          "integer/FP other load/store": 1873,
+          "integer/FP arithmetic": 2369,
+          "integer/FP stack load/store": 14
+        },
+        "allocator": {
+          "control flow": 845,
+          "integer/FP arithmetic": 1729,
+          "integer/FP stack load/store": 172,
+          "integer/FP other load/store": 768
+        },
+        "application": {
+          "integer/FP arithmetic": 5902535,
+          "integer/FP stack load/store": 2523730,
+          "control flow": 2444177,
+          "integer/FP other load/store": 4836891
+        }
+      },
+      "hot_handlers": {
+        "Perl_pp_nextstate": {
+          "integer/FP arithmetic": 510170,
+          "integer/FP stack load/store": 120040,
+          "integer/FP other load/store": 750250,
+          "control flow": 90030
+        },
+        "Perl_pp_padsv": {
+          "integer/FP arithmetic": 510240,
+          "integer/FP stack load/store": 320160,
+          "integer/FP other load/store": 570280,
+          "control flow": 140060
+        },
+        "Perl_pp_unstack": {
+          "integer/FP arithmetic": 200000,
+          "integer/FP stack load/store": 40000,
+          "integer/FP other load/store": 280000,
+          "control flow": 50000
+        },
+        "Perl_runops_standard": {
+          "integer/FP other load/store": 400260,
+          "control flow": 400260
+        }
+      }
+    },
+    "cap": {
+      "program": 23664008,
+      "classes": {
+        "cap cursor arithmetic": 2559601,
+        "integer/FP stack load/store": 580604,
+        "cap stack load/store": 3103975,
+        "control flow": 2456882,
+        "integer/FP arithmetic": 9298849,
+        "cap bounds": 1301123,
+        "integer/FP other load/store": 1697406,
+        "cap other": 413327,
+        "cap other load/store": 2252230,
+        "lifetime derive/revoke": 9,
+        "<unknown>": 2
+      },
+      "mnemonics": {
+        "cincoffsetimm": 1044042,
+        "sd": 401772,
+        "stc": 2162428,
+        "beqz": 491468,
+        "mulhu": 169,
+        "mul": 47,
+        "mv": 1341967,
+        "auipc": 1410930,
+        "jalr": 330431,
+        "addi": 1662496,
+        "jr": 60044,
+        "lui": 350629,
+        "srli": 61092,
+        "bgeu": 10191,
+        "li": 1041548,
+        "or": 81134,
+        "slli": 541364,
+        "add": 1441316,
+        "not": 14,
+        "and": 351879,
+        "sub": 100627,
+        "sll": 6,
+        "neg": 42,
+        "ld": 673401,
+        "ldc": 3193777,
+        "bnez": 440962,
+        "bltu": 90684,
+        "scc": 1250638,
+        "shrink": 1301123,
+        "lw": 470380,
+        "srliw": 11,
+        "cincoffset": 264921,
+        "lb": 50008,
+        "lhu": 30062,
+        "j": 110402,
+        "sltu": 12,
+        "lbu": 190976,
+        "sext.w": 20051,
+        "movc": 413322,
+        "negw": 16,
+        "ret": 330430,
+        "bltz": 110206,
+        "bgez": 80220,
+        "andi": 311455,
+        "zext.b": 90097,
+        "slliw": 7,
+        "sb": 70995,
+        "sh": 10,
+        "subw": 16,
+        "blt": 10018,
+        "sw": 120132,
+        "beq": 80274,
+        "sllw": 13,
+        "bge": 150072,
+        "seqz": 10162,
+        "cderive": 7,
+        "lcc": 5,
+        "bne": 161480,
+        "addiw": 23,
+        "xor": 91484,
+        "addw": 10,
+        "<unknown>": 2,
+        "lwu": 110270,
+        "srl": 19993,
+        "snez": 10056,
+        "sltiu": 19996,
+        "crevoke": 2,
+        "srai": 20021,
+        "ori": 10158,
+        "slt": 10000,
+        "fcvt.d.l": 10001,
+        "fsd": 40001,
+        "fld": 120003,
+        "fmv.d.x": 80002,
+        "flt.d": 50001,
+        "fle.d": 20001,
+        "fmv.d": 10001,
+        "fcvt.l.d": 10001,
+        "fmv.x.d": 40001,
+        "feq.d": 20000,
+        "fcvt.d.lu": 10000,
+        "fmul.d": 20000,
+        "xori": 10000,
+        "fcvt.lu.d": 10000,
+        "remu": 10000
+      },
+      "by_group": {
+        "allocator": {
+          "cap cursor arithmetic": 532,
+          "integer/FP stack load/store": 42,
+          "cap stack load/store": 266,
+          "control flow": 933,
+          "integer/FP arithmetic": 2063,
+          "cap bounds": 58,
+          "integer/FP other load/store": 770,
+          "cap other": 57,
+          "cap other load/store": 53,
+          "lifetime derive/revoke": 9,
+          "<unknown>": 2
+        },
+        "other_libc_runtime": {
+          "cap cursor arithmetic": 1688,
+          "integer/FP stack load/store": 14,
+          "cap stack load/store": 28,
+          "cap other": 1510,
+          "integer/FP other load/store": 1983,
+          "control flow": 1863,
+          "integer/FP arithmetic": 962,
+          "cap other load/store": 4
+        },
+        "application": {
+          "cap cursor arithmetic": 2557381,
+          "integer/FP stack load/store": 580548,
+          "cap stack load/store": 3103681,
+          "integer/FP arithmetic": 9295824,
+          "control flow": 2454086,
+          "cap other": 411760,
+          "integer/FP other load/store": 1694653,
+          "cap bounds": 1301065,
+          "cap other load/store": 2252173
+        }
+      },
+      "hot_handlers": {
+        "Perl_pp_nextstate": {
+          "cap cursor arithmetic": 450150,
+          "integer/FP stack load/store": 60020,
+          "cap stack load/store": 180060,
+          "integer/FP arithmetic": 1500500,
+          "cap bounds": 330110,
+          "cap other": 30010,
+          "cap other load/store": 240080,
+          "integer/FP other load/store": 210070,
+          "control flow": 90030
+        },
+        "Perl_pp_padsv": {
+          "cap cursor arithmetic": 360180,
+          "integer/FP stack load/store": 80040,
+          "cap stack load/store": 320160,
+          "integer/FP arithmetic": 830401,
+          "cap bounds": 160080,
+          "cap other load/store": 280140,
+          "integer/FP other load/store": 130060,
+          "control flow": 140060
+        },
+        "Perl_pp_unstack": {
+          "cap cursor arithmetic": 170000,
+          "integer/FP stack load/store": 20000,
+          "cap stack load/store": 80000,
+          "integer/FP arithmetic": 560000,
+          "cap bounds": 110000,
+          "integer/FP other load/store": 100000,
+          "control flow": 50000,
+          "cap other load/store": 70000,
+          "cap other": 10000
+        },
+        "Perl_runops_standard": {
+          "cap other load/store": 400260,
+          "control flow": 400260
+        }
+      }
+    }
+  },
+  "sdk_unchanged": true,
+  "active_task_qemu": []
+}
