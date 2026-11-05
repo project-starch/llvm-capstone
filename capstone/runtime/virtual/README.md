@@ -443,8 +443,19 @@ arenas retired after the launcher's `CAPSTONE_VM_STATS_MARK` still held, and
 in step-hooks `faults=` must cover every page admitted at a fault. The process
 total alone would not do: since grants are admitted at first touch it also
 holds the program's own pages, which vary with placement (the allocator's
-address-hashed index in `.bss`) and with windows the quantum cuts. Both
-runners' `--evaluate` re-runs the checks on a saved transcript.
+address-hashed index in `.bss`) and with windows the quantum cuts. The unpinned
+mode pins and so admits nothing (`admit=` is always 0), so its census counts the
+data fault events received on each arena in `faulted=`, which `run-step-hooks.py`
+takes in place of `admit=` (`HOOK_UNPINNED`) and requires to sum to the process
+total (`faulted=` is counted where CV_STEP receives the event, the total where it
+is resolved or returned, so a site that misses an event fails the check); a
+module that prints none fails those comparisons rather than falling back to the
+total. On the unmodified gate (this workload and platform) 21 of 96 runs showed
+an extra accounting FAIL: the process total was one step and one fault short when
+the allocator's index lands on the page of the launch record. The census needs
+`diag_admit` on for the whole life of the arenas it counts (the parameter is
+writable). Both runners' `--evaluate` re-runs the checks on
+a saved transcript.
 
 The adaptive window is enabled by default (`fault_ahead_max=64`,
 `fault_ahead_after=2`); `fault_ahead_max=0` disables it. This policy applies to

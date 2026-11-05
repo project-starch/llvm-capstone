@@ -1,0 +1,135 @@
+#!/usr/bin/env python3
+"""Check a fast-sweep module against a real tagged-page omission control.
+
+Run through the host's gate queue. --probes supplies namespace-check and
+namespace-probe.ko from the namespace fixture; --application is node-contract.c
+built with the matching SDK. --mutant is a separately built module that skips
+tagged pages in next_tagged; --shared-mutant omits BOTH sweep mapcount checks
+(next_tagged's, before the reference is taken, and unpinned_hold_mm's, after it);
+--shared-next-mutant omits only next_tagged's and --shared-hold-mutant only
+unpinned_hold_mm's. The two single-site mutants are sufficient controls for
+each other in fast mode (the checks are redundant there) and --shared-hold-mutant
+must FAIL with the old scanner, which has no other check; both are run in both
+modes. The probes directory also supplies sweep-shared built against namespace-probe.h.
+--config-mutant removes the module's fast-without-unpinned initialization guard.
+Production and mutants use identical assertions.
+"""
+import argparse
+import hashlib
+import json
+import re
+from pathlib import Path
+import shutil
+import subprocess
+
+
+HERE = Path(__file__).resolve().parent
+SCRIPT = '''#!/bin/sh
+cd /mnt/vm || exit 1
+dmesg -n 1
+for module in good config; do
+  insmod $module.ko unpinned=0 unpinned_fast_sweep=1 supervisor_slots=32
+  echo CONFIG_RC:$module:$?
+  [ ! -d /sys/module/capstone_vm ] || rmmod capstone_vm || exit 1
+done
+insmod namespace-probe.ko || exit 1
+for module in good omit; do
+  insmod $module.ko unpinned=1 unpinned_fast_sweep=1 supervisor_slots=32 || exit 1
+  echo SWEEP_MODULE:$module
+  echo SWEEP_MODE:$(cat /sys/module/capstone_vm/parameters/unpinned):$(cat /sys/module/capstone_vm/parameters/unpinned_fast_sweep):$(cat /sys/module/capstone_vm/parameters/supervisor_slots)
+  ./namespace-check
+  echo NAMESPACE_RC:$module:$?
+  rmmod capstone_vm || exit 1
+done
+for spec in good:1 shared:1 shared_next:1 shared_hold:1 shared_hold:0 shared_next:0 good:0; do
+  module=${spec%:*}; fast=${spec#*:}
+  insmod $module.ko unpinned=1 unpinned_fast_sweep=$fast supervisor_slots=32 || exit 1
+  echo SHARED_BEGIN:$module:$fast
+  ./sweep-shared
+  echo SHARED_RC:$module:$fast:$?
+  rmmod capstone_vm || exit 1
+done
+rmmod namespace-probe || exit 1
+insmod good.ko unpinned=1 unpinned_fast_sweep=1 supervisor_slots=32 || exit 1
+for mode in growth stale; do
+  CAPSTONE_VM_STATS=1 ./capstone-vexec node.dom $mode
+  echo NODE_RC:$mode:$?
+done
+./capstone-vexec --stats
+rmmod capstone_vm || exit 1
+echo VIRTUAL_STAGED_DONE
+'''
+
+
+def shared_block(log, module, fast):
+    """(exit status, refused, child_tag, exclusive_clean) of one sweep-shared run, or None."""
+    part = re.search(r'^SHARED_BEGIN:%s:%s\n(.*?)^SHARED_RC:%s:%s:(\d+)\n' % (module, fast, module, fast), log, re.M | re.S)
+    if not part:
+        return None
+    seen = re.search(r'SWEEP_SHARED refused=(\d+) child_tag=(\d+)', part[1])
+    clean = re.search(r'SWEEP_SHARED exclusive_clean=(\d+)', part[1])
+    return (int(part[2]), int(seen[1]) if seen else None, int(seen[2]) if seen else None,
+            int(clean[1]) if clean else None)
+
+
+def shared_checks(log):
+    # (module, fast flag, expected): the fast scanner has two mapcount checks, so removing either
+    # alone leaves it correct and removing both does not; the old scanner has only the second.
+    expected = {('good', 1): (0, 1, 1, 1), ('shared', 1): (1, 0, 0, 1), ('shared_next', 1): (0, 1, 1, 1),
+                ('shared_hold', 1): (0, 1, 1, 1), ('shared_hold', 0): (1, 0, 0, 1),
+                ('shared_next', 0): (0, 1, 1, 1), ('good', 0): (0, 1, 1, 1)}
+    return {'shared_%s_fast%d' % (module, fast): shared_block(log, module, fast) == want
+            for (module, fast), want in expected.items()}
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    for name in ('qemu', 'images', 'module', 'mutant', 'shared-mutant', 'shared-next-mutant', 'shared-hold-mutant', 'config-mutant', 'launcher', 'probes',
+                 'application', 'work'):
+        parser.add_argument('--' + name, type=Path, required=True)
+    args = parser.parse_args()
+    args.work.mkdir(parents=True, exist_ok=False)
+    stage = args.work / 'stage'
+    stage.mkdir()
+    inputs = {'good.ko': args.module, 'omit.ko': args.mutant, 'shared.ko': args.shared_mutant,
+              'config.ko': args.config_mutant,
+              'shared_next.ko': args.shared_next_mutant, 'shared_hold.ko': args.shared_hold_mutant,
+              'capstone-vexec': args.launcher, 'node.dom': args.application,
+              **{n: args.probes / n for n in ('namespace-check', 'namespace-probe.ko', 'sweep-shared')}}
+    for name, path in inputs.items():
+        shutil.copy2(path, stage / name)
+    (stage / 'gate.sh').write_text(SCRIPT)
+    rc = subprocess.run(['python3', str(HERE.parent / 'run-staged.py'),
+        '--qemu', str(args.qemu), '--images', str(args.images), '--stage', str(stage),
+        '--work', str(args.work / 'guest'), '--disk-mib', '64', '--timeout', '600']).returncode
+    log = (args.work / 'guest/serial.log').read_text(errors='replace').replace('\r', '')
+    checks = {
+        'complete': rc == 0 and 'VIRTUAL_STAGED_DONE' in log,
+        'config_refusal': 'CONFIG_RC:good:22' in log,
+        'config_control': 'CONFIG_RC:config:0' in log,
+        'mode': log.count('SWEEP_MODE:Y:Y:32') == 2,
+        'namespace': 'NAMESPACE_RC:good:0' in log,
+        'namespace_omission_control': 'NAMESPACE_RC:omit:1' in log,
+        'multiple_mappings': 'NAMESPACE mappings=4 pages=10 seeds=21 tag_after_clean=1 bytes_equal=1' in log,
+        'scalar_clear': log.count('NAMESPACE direct_scalar_clear=1 bytes_equal=1') == 2,
+        **shared_checks(log),
+        'growth': 'NODE_RC:growth:0' in log and 'NODE_GROWTH_OK' in log,
+        'live_populations': log.count('NODE_LIVE:0:70000') == 2 and log.count('NODE_LIVE:1:70000') == 2,
+        'stale': 'NODE_RC:stale:139' in log and 'domain fault cause=24' in log,
+        'no_setup_refusal': 'thread create refused' not in log and 'Exec format error' not in log,
+    }
+    census = [json.loads(line) for line in log.splitlines() if line.startswith('{"version":1,')]
+    checks['cleanup'] = len(census) == 1 and all(census[0][key] == 0 for key in
+        ('live_domains', 'live_regions', 'live_bytes', 'nodes_live', 'nodes_retired'))
+    checks['recycled'] = len(census) == 1 and census[0]['collections'] >= 4 and census[0]['nodes_reclaimed'] >= 280008
+    inputs.update(qemu=args.qemu, **{n: args.images / n for n in ('Image', 'fw_jump.elf', 'rootfs.ext2')})
+    record = {'checks': checks, 'sha256': {n: hashlib.sha256(p.read_bytes()).hexdigest()
+                                         for n, p in inputs.items()}}
+    (args.work / 'result.json').write_text(json.dumps(record, indent=2) + '\n')
+    for name, ok in checks.items():
+        print(('PASS ' if ok else 'FAIL ') + name)
+    return 0 if all(checks.values()) else 1
+
+
+if __name__ == '__main__':
+    raise SystemExit(main())
