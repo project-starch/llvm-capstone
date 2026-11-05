@@ -116,6 +116,17 @@ class CatchCauses(unittest.TestCase):
         self.assertEqual((verdict, reason), (v.NO_READING, "control-failed"))
         self.assertIn("uaf-malloc", evidence)
 
+    def test_an_empty_set_means_no_fault_on_this_arm_can_be_a_catch(self):
+        # cheribsd-sqlite-memsys5 declares []: revocation acts on a libc free and under
+        # SQLITE_CONFIG_HEAP there is none, so every cause it can report is a consequence.
+        spec = {**SPEC, "catch_causes": []}
+        for cause in (1, 2, 25, 28):
+            verdict, reason, evidence = v.judge(
+                obs(fault=self.fault(cause), reached=True, attribution="probe"), spec)
+            self.assertEqual((verdict, reason), (v.MISSED, None), cause)
+            self.assertIn("no cause at all", evidence)
+            self.assertNotIn("causes []", evidence)
+
     def test_a_configuration_without_the_key_behaves_as_before(self):
         verdict, reason, _ = v.judge(
             obs(fault=self.fault(24), reached=True, attribution="probe"), SPEC)

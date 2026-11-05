@@ -1,0 +1,88 @@
+{
+  "amalgamation_sha256": "7fc92e19a3af61f3961b83447a91f1e1dec06646e343037dfd96a397167700b2",
+  "arm": "virtual-platform",
+  "build": {
+    "arm": "platform",
+    "groups": {
+      "core": [
+        "-USQLITE_OMIT_INCRBLOB",
+        "-DSQLITE_ENABLE_PREUPDATE_HOOK",
+        "-DSQLITE_COUNTOFVIEW_OPTIMIZATION"
+      ],
+      "coreT": [
+        "-USQLITE_OMIT_INCRBLOB",
+        "-USQLITE_OMIT_TEMPDB"
+      ],
+      "ext": [
+        "-USQLITE_OMIT_INCRBLOB"
+      ],
+      "fts3": [
+        "-USQLITE_OMIT_INCRBLOB",
+        "-DSQLITE_ENABLE_FTS3",
+        "-DSQLITE_ENABLE_FTS4"
+      ],
+      "fts3P": [
+        "-USQLITE_OMIT_INCRBLOB",
+        "-DSQLITE_ENABLE_FTS3",
+        "-DSQLITE_ENABLE_FTS4",
+        "-DSQLITE_ENABLE_FTS3_PARENTHESIS"
+      ],
+      "fts5": [
+        "-USQLITE_OMIT_INCRBLOB",
+        "-DSQLITE_ENABLE_FTS5"
+      ],
+      "json": [
+        "-USQLITE_OMIT_INCRBLOB",
+        "-DSQLITE_ENABLE_JSON1"
+      ],
+      "memfs3": [
+        "-USQLITE_OMIT_INCRBLOB",
+        "-DSQLITE_ENABLE_FTS3",
+        "-DSQLITE_ENABLE_FTS4"
+      ],
+      "memfs5": [
+        "-USQLITE_OMIT_INCRBLOB",
+        "-DSQLITE_ENABLE_FTS5"
+      ],
+      "memfsdb": [
+        "-USQLITE_OMIT_INCRBLOB",
+        "-DSQLITE_ENABLE_DBSTAT_VTAB"
+      ],
+      "memfsp": [
+        "-USQLITE_OMIT_INCRBLOB"
+      ],
+      "rtree": [
+        "-USQLITE_OMIT_INCRBLOB",
+        "-DSQLITE_ENABLE_RTREE",
+        "-DSQLITE_RTREE_INT_ONLY",
+        "-USQLITE_OMIT_SHARED_CACHE"
+      ]
+    },
+    "opt": "-O0",
+    "sdk": "/tmp/capstone/sq-sdk-vm5-20261029/sdk"
+  },
+  "cases": 33,
+  "configuration": "virtual-mallocng",
+  "contract": "verdicts-v1",
+  "corpus": "sqlite/engine-repros",
+  "platform": {
+    "compiler": "030a1621fff40fb0f7e3878e383be8fd7159a4ef3fbf380c4f71fa5f23c363ed",
+    "exact_bounds": true,
+    "firmware": "fd91a75afa9b6805f58602a17afee8eaa3d18b6dd5731546b62c34461f8a7f33",
+    "job_helper": "344155db29fdb989f54e74685914c9a3c7906e5c867d786f0899f80cfe682445",
+    "judge": "789a92a8628a0d199e6fbb3faabeff26aa4a29e589bca9950e8c57faa97b7981",
+    "kernel": "25c53048d89b27cbe72e8eeb12c42a57ea77bf3bc071a87639856da1ef97b7cd",
+    "launcher": "008e038bae446b06bb8eb95e9c5de5c68c18a9fa2a391b187112d4808265f1c6",
+    "module": "967f17f01882980f41e132280fe5a3a66d448c9c3657f0ea513810fe9bae9f96",
+    "profile": "virtual",
+    "qemu": "ff8eb8242d0cdaa92d83cd0676012fb11e21060c07d78a8a46fd1c61dbbb38fe",
+    "rootfs": "1c1c034c00970d1e24e121e255d2acde497f334e3f3229ef677f0ba0a7c6a1eb",
+    "runner": "933632f966eed596da1c14c8e94aa28346f50a9a401e12298a56fe0bbb8e1ac2"
+  },
+  "predicted": "CAUGHT",
+  "tally": {
+    "CAUGHT": 25,
+    "MISSED": 6,
+    "NO-READING:out-of-denominator": 2
+  }
+}

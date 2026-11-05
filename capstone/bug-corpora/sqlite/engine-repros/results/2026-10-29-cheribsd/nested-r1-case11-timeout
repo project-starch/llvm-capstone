@@ -1,0 +1,443 @@
+{
+  "arm": "cheribsd-revocation",
+  "mode": "nested",
+  "revocation_default": "1",
+  "poscontrol_exit": "162",
+  "skipped": {},
+  "tally": {
+    "PASS": 27,
+    "FAULT": 5,
+    "TIMEOUT": 1
+  },
+  "cases": {
+    "00_adfb203a7d_fts5_getvarint_stale_read": {
+      "tag": "adfb203a7d_0",
+      "mode": "nested",
+      "exit": 0,
+      "verdict": "PASS",
+      "si_code": null,
+      "si_meaning": null,
+      "allocator": null,
+      "revoke": null,
+      "last": [
+        "adfb203a7d_0 RETURNED rc=0"
+      ]
+    },
+    "01_5e4233a9e4_agginfo_stale_after_realloc": {
+      "tag": "agginfo",
+      "mode": "nested",
+      "exit": 0,
+      "verdict": "PASS",
+      "si_code": null,
+      "si_meaning": null,
+      "allocator": null,
+      "revoke": null,
+      "last": [
+        "agginfo RETURNED rc=0"
+      ]
+    },
+    "02_b9e0f62c3a_backup_pager_after_detach": {
+      "tag": "backupattach",
+      "mode": "nested",
+      "exit": 162,
+      "verdict": "FAULT",
+      "si_code": "2",
+      "si_meaning": "PROT_CHERI_TAG/untagged-deref",
+      "allocator": null,
+      "revoke": null,
+      "last": [
+        "<<FAULT>> signal=34 si_code=2 (PROT_CHERI_TAG/untagged-deref) pc=0x142c5a capreg=28"
+      ]
+    },
+    "03_e464802d49_blob_close_after_db_close": {
+      "tag": "blobclose",
+      "mode": "nested",
+      "exit": 0,
+      "verdict": "PASS",
+      "si_code": null,
+      "si_meaning": null,
+      "allocator": null,
+      "revoke": null,
+      "last": [
+        "blobclose RETURNED rc=0"
+      ]
+    },
+    "04_8504d37b99_blob_write_after_reopen": {
+      "tag": "blobwrite",
+      "mode": "nested",
+      "exit": 0,
+      "verdict": "PASS",
+      "si_code": null,
+      "si_meaning": null,
+      "allocator": null,
+      "revoke": null,
+      "last": [
+        "blobwrite RETURNED rc=0"
+      ]
+    },
+    "05_6397a78b2b_detach_with_pending_trigger": {
+      "tag": "detachtrig",
+      "mode": "nested",
+      "exit": 162,
+      "verdict": "FAULT",
+      "si_code": "2",
+      "si_meaning": "PROT_CHERI_TAG/untagged-deref",
+      "allocator": null,
+      "revoke": null,
+      "last": [
+        "<<FAULT>> signal=34 si_code=2 (PROT_CHERI_TAG/untagged-deref) pc=0x19f46e capreg=28"
+      ]
+    },
+    "06_0c8c9a64b3_expert_rem_ctx_freed": {
+      "tag": "expertrem",
+      "mode": "nested",
+      "exit": 0,
+      "verdict": "PASS",
+      "si_code": null,
+      "si_meaning": null,
+      "allocator": null,
+      "revoke": null,
+      "last": [
+        "expertrem RETURNED rc=0"
+      ]
+    },
+    "07_129371553c_fts3_destroy_oom_stale_table": {
+      "tag": "fts3destroyoom",
+      "mode": "nested",
+      "exit": 0,
+      "verdict": "PASS",
+      "si_code": null,
+      "si_meaning": null,
+      "allocator": null,
+      "revoke": null,
+      "last": [
+        "fts3destroyoom RETURNED rc=0"
+      ]
+    },
+    "08_51dd67080a_fts3_offsets_stale_buffer": {
+      "tag": "fts3offsets",
+      "mode": "nested",
+      "exit": 0,
+      "verdict": "PASS",
+      "si_code": null,
+      "si_meaning": null,
+      "allocator": null,
+      "revoke": null,
+      "last": [
+        "fts3offsets RETURNED rc=0"
+      ]
+    },
+    "09_fix-2026-08-17_fts3_snippet_stale_buffer": {
+      "tag": "fts3snip",
+      "mode": "nested",
+      "exit": 0,
+      "verdict": "PASS",
+      "si_code": null,
+      "si_meaning": null,
+      "allocator": null,
+      "revoke": null,
+      "last": [
+        "fts3snip RETURNED rc=0"
+      ]
+    },
+    "10_becd68ba0d_fts3_snippet_or_stale_iter": {
+      "tag": "fts3snipor",
+      "mode": "nested",
+      "exit": 0,
+      "verdict": "PASS",
+      "si_code": null,
+      "si_meaning": null,
+      "allocator": null,
+      "revoke": null,
+      "last": [
+        "fts3snipor RETURNED rc=0"
+      ]
+    },
+    "11_dee0359ddb_fts3_zterm_stale_buffer": {
+      "tag": "fts3zterm",
+      "mode": "nested",
+      "exit": 124,
+      "verdict": "TIMEOUT",
+      "si_code": null,
+      "si_meaning": null,
+      "allocator": null,
+      "revoke": null,
+      "last": [
+        "fts3zterm BEGIN"
+      ]
+    },
+    "12_fb8ca7de0c_fts5_inplace_stale_leaf": {
+      "tag": "fts5inplace",
+      "mode": "nested",
+      "exit": 0,
+      "verdict": "PASS",
+      "si_code": null,
+      "si_meaning": null,
+      "allocator": null,
+      "revoke": null,
+      "last": [
+        "fts5inplace RETURNED rc=0"
+      ]
+    },
+    "13_fix-2026-06-08_fts5_near_stale_phrase": {
+      "tag": "fts5near",
+      "mode": "nested",
+      "exit": 0,
+      "verdict": "PASS",
+      "si_code": null,
+      "si_meaning": null,
+      "allocator": null,
+      "revoke": null,
+      "last": [
+        "fts5near RETURNED rc=0"
+      ]
+    },
+    "14_25e3073741_fts5_structure_release_refcount": {
+      "tag": "fts5structwrite",
+      "mode": "nested",
+      "exit": 0,
+      "verdict": "PASS",
+      "si_code": null,
+      "si_meaning": null,
+      "allocator": null,
+      "revoke": null,
+      "last": [
+        "fts5structwrite RETURNED rc=0"
+      ]
+    },
+    "15_2639ddc474_fts5_vocab_eof_stale_poslist": {
+      "tag": "fts5vocabeof",
+      "mode": "nested",
+      "exit": 0,
+      "verdict": "PASS",
+      "si_code": null,
+      "si_meaning": null,
+      "allocator": null,
+      "revoke": null,
+      "last": [
+        "fts5vocabeof RETURNED rc=0"
+      ]
+    },
+    "16_unfixed_json_each_root_stale_key": {
+      "tag": "jsoneachroot",
+      "mode": "nested",
+      "exit": 0,
+      "verdict": "PASS",
+      "si_code": null,
+      "si_meaning": null,
+      "allocator": null,
+      "revoke": null,
+      "last": [
+        "jsoneachroot RETURNED rc=0"
+      ]
+    },
+    "17_28001204f4_json_each_static_stale_key": {
+      "tag": "jsoneachstatic",
+      "mode": "nested",
+      "exit": 0,
+      "verdict": "PASS",
+      "si_code": null,
+      "si_meaning": null,
+      "allocator": null,
+      "revoke": null,
+      "last": [
+        "jsoneachstatic RETURNED rc=0"
+      ]
+    },
+    "18_mem5-design_memsys5_inband_freelist_overwrite": {
+      "tag": "mem5design",
+      "mode": "nested",
+      "exit": 0,
+      "verdict": "PASS",
+      "si_code": null,
+      "si_meaning": null,
+      "allocator": null,
+      "revoke": null,
+      "last": [
+        "mem5design RETURNED rc=0"
+      ]
+    },
+    "19_c8c9cdd9dd_rtree_cursor_stale_node": {
+      "tag": "rtreecursor",
+      "mode": "nested",
+      "exit": 162,
+      "verdict": "FAULT",
+      "si_code": "2",
+      "si_meaning": "PROT_CHERI_TAG/untagged-deref",
+      "allocator": null,
+      "revoke": null,
+      "last": [
+        "<<FAULT>> signal=34 si_code=2 (PROT_CHERI_TAG/untagged-deref) pc=0x1d066a capreg=28"
+      ]
+    },
+    "20_d21bd37c7c_rtree_inode0_stale_node": {
+      "tag": "rtreeinode0",
+      "mode": "nested",
+      "exit": 162,
+      "verdict": "FAULT",
+      "si_code": "2",
+      "si_meaning": "PROT_CHERI_TAG/untagged-deref",
+      "allocator": null,
+      "revoke": null,
+      "last": [
+        "<<FAULT>> signal=34 si_code=2 (PROT_CHERI_TAG/untagged-deref) pc=0x1d09a4 capreg=28"
+      ]
+    },
+    "21_eab0e10304_rtree_static_bind_stale_text": {
+      "tag": "rtreestatic",
+      "mode": "nested",
+      "exit": 0,
+      "verdict": "PASS",
+      "si_code": null,
+      "si_meaning": null,
+      "allocator": null,
+      "revoke": null,
+      "last": [
+        "rtreestatic RETURNED rc=0"
+      ]
+    },
+    "22_fix-2026-07-26_spellfix_oom_stale_vtab": {
+      "tag": "spellfixoom",
+      "mode": "nested",
+      "exit": 162,
+      "verdict": "FAULT",
+      "si_code": "2",
+      "si_meaning": "PROT_CHERI_TAG/untagged-deref",
+      "allocator": null,
+      "revoke": null,
+      "last": [
+        "<<FAULT>> signal=34 si_code=2 (PROT_CHERI_TAG/untagged-deref) pc=0x69ffc capreg=28"
+      ]
+    },
+    "23_eab0e10304_fts3_static_bind_stale_text": {
+      "tag": "staticbind",
+      "mode": "nested",
+      "exit": 0,
+      "verdict": "PASS",
+      "si_code": null,
+      "si_meaning": null,
+      "allocator": null,
+      "revoke": null,
+      "last": [
+        "staticbind RETURNED rc=0"
+      ]
+    },
+    "24_d4b646997a_writable_schema_stale_table": {
+      "tag": "wschema",
+      "mode": "nested",
+      "exit": 0,
+      "verdict": "PASS",
+      "si_code": null,
+      "si_meaning": null,
+      "allocator": null,
+      "revoke": null,
+      "last": [
+        "wschema RETURNED rc=0"
+      ]
+    },
+    "25_415540ddaa_fts5_getvarint_overread": {
+      "tag": "415540ddaa_0",
+      "mode": "nested",
+      "exit": 0,
+      "verdict": "PASS",
+      "si_code": null,
+      "si_meaning": null,
+      "allocator": null,
+      "revoke": null,
+      "last": [
+        "415540ddaa_0 RETURNED rc=0"
+      ]
+    },
+    "26_8f5b14a5c2_fts5_decode_getvarint32_overread": {
+      "tag": "8f5b14a5c2_0",
+      "mode": "nested",
+      "exit": 0,
+      "verdict": "PASS",
+      "si_code": null,
+      "si_meaning": null,
+      "allocator": null,
+      "revoke": null,
+      "last": [
+        "8f5b14a5c2_0 RETURNED rc=0"
+      ]
+    },
+    "27_a783931794_fts3_getvarint_overread": {
+      "tag": "a783931794_0",
+      "mode": "nested",
+      "exit": 0,
+      "verdict": "PASS",
+      "si_code": null,
+      "si_meaning": null,
+      "allocator": null,
+      "revoke": null,
+      "last": [
+        "a783931794_0 RETURNED rc=0"
+      ]
+    },
+    "28_c7def600bd_fts3_matchinfo_overread": {
+      "tag": "c7def600bd_0",
+      "mode": "nested",
+      "exit": 0,
+      "verdict": "PASS",
+      "si_code": null,
+      "si_meaning": null,
+      "allocator": null,
+      "revoke": null,
+      "last": [
+        "c7def600bd_0 RETURNED rc=0"
+      ]
+    },
+    "29_fz02_btree_get4byte_page_overread": {
+      "tag": "fz02_r2",
+      "mode": "nested",
+      "exit": 0,
+      "verdict": "PASS",
+      "si_code": null,
+      "si_meaning": null,
+      "allocator": null,
+      "revoke": null,
+      "last": [
+        "fz02 RETURNED rc=0"
+      ]
+    },
+    "30_fz06_recordcompareint_overread": {
+      "tag": "fz06_r2",
+      "mode": "nested",
+      "exit": 0,
+      "verdict": "PASS",
+      "si_code": null,
+      "si_meaning": null,
+      "allocator": null,
+      "revoke": null,
+      "last": [
+        "fz06 RETURNED rc=0"
+      ]
+    },
+    "31_fz10_dbstat_decodepage_overflow": {
+      "tag": "fz10_r2",
+      "mode": "nested",
+      "exit": 0,
+      "verdict": "PASS",
+      "si_code": null,
+      "si_meaning": null,
+      "allocator": null,
+      "revoke": null,
+      "last": [
+        "fz10 RETURNED rc=0"
+      ]
+    },
+    "32_fz11_dbstat_freechain_overflow": {
+      "tag": "fz11_r2",
+      "mode": "nested",
+      "exit": 0,
+      "verdict": "PASS",
+      "si_code": null,
+      "si_meaning": null,
+      "allocator": null,
+      "revoke": null,
+      "last": [
+        "fz11 RETURNED rc=0"
+      ]
+    }
+  }
+}

@@ -81,6 +81,11 @@
       "target": "capstone-virtual",
       "summary": "SQLite 3.22.0 built for the virtual profile with memsys5 stock over one static array (ports/sqlite/repro322/build-virtual.py --memsys5): every SQLite allocation is an offset inside that arena, so the system allocator -- virtual mallocng -- sees one object and no frees",
       "mechanism": "none below the arena",
+      "catch_causes": [
+        25,
+        28
+      ],
+      "catch_causes_why": "25 INVALID_CAP and 28 CAP_OOB are the only causes a Capstone mechanism reports. This arm has no mechanism below the arena, so a fault it does raise is the baseline tag check firing on the CONSEQUENCE of an access already allowed -- cause 24 UNEXP_OP_TYPE on the virtual twin, and 4 or 13 on silicon, where the same event at the same pc is reported as a load access or page fault. Declared 2026-10-30 with the bundles re-folded (derive-verdicts.py --refold)",
       "controls": {
         "uaf-mem5": "complete",
         "bounds-mem5": "complete"
@@ -94,6 +99,11 @@
       "target": "capstone-virtual",
       "summary": "the same static arena with memsys5 on its Sublet port (build-virtual.py --sublet, ports/sqlite/sublet/sublet-3220000-memsys5.patch): every block goes out as a child lifetime of the pool (CDERIVE), bounded to its request rounded to 8 bytes, and sqlite3_free revokes it (CREVOKE); the lookaside's slots the same, revoked by sqlite3DbFree. The page cache is not covered",
       "mechanism": "per-block bounds and revocation in memsys5 (CDERIVE/CREVOKE)",
+      "catch_causes": [
+        25,
+        28
+      ],
+      "catch_causes_why": "the same set, declared so the protected arm is judged by the rule the base arm is judged by. It costs this arm nothing -- every catch it records is already 25 or 28 -- and that is the point: the difference between the two columns is the mechanism, not the scoring",
       "controls": {
         "uaf-mem5": "fault",
         "bounds-mem5": "fault"
@@ -552,6 +562,11 @@
       "target": "capstone-silicon",
       "summary": "SQLite 3.22.0 on silicon, classic line: one translation unit per case, the engine-repros case.c through ports/sqlite/build-sqlite-silicon.sh (gp-captable, interp glue, -O0) from the virtual arms' adapted input 7fc92e19..., with the corpus group defines, run in a domain by sqlite_host.user. memsys5 stock over its static arena (SQLITE_HEAP_SIZE 262144) and lookaside 0,0, both measured in the images: every SQLite allocation is an offset inside that arena. It differs from virtual-sqlite-memsys5 in lookaside (on there) and in the build (build-virtual.py, with its FTS source patches). The controls are cells of the same set, on the same bitstream, input and flags, and may run in another boot of it",
       "mechanism": "none below the arena, on silicon",
+      "catch_causes": [
+        25,
+        28
+      ],
+      "catch_causes_why": "the same set as its virtual twin virtual-sqlite-memsys5, for the same reason; on silicon the consequence fault is reported as cause 4 or 13 as often as 24",
       "controls": {
         "uaf-mem5": "complete",
         "bounds-mem5": "complete"
@@ -803,6 +818,37 @@
         "revocation-sanity",
         "nested-bound-probe"
       ]
+    },
+    "cheribsd-sqlite-memsys5": {
+      "target": "cheribsd-purecap",
+      "summary": "the pinned CheriBSD riscv64-purecap guest running SQLite 3.22.0 over memsys5 on one static array (SQLITE_CONFIG_HEAP, ports/sqlite/cheribsd/build-corpus-cheri.sh): libc malloc bounds that array once, and every SQLite object is an offset inside it, so the quarantine sees one live object and no frees",
+      "mechanism": "none below the arena: revocation acts on a libc free, and a sqlite3_free is not one",
+      "catch_causes": [],
+      "catch_causes_why": "The numbers in this key are FreeBSD SIGPROT si_codes -- 1 PROT_CHERI_BOUNDS, 2 PROT_CHERI_TAG -- and NOT Capstone fault causes. The two namespaces are unrelated and nothing but this key reads the number, so a cause here must never be compared with the 25/28 of a capstone-* configuration. EMPTY, and the empty set is the measurement rather than a gap in it: under SQLITE_CONFIG_HEAP revocation has nothing to act on, so no si_code this arm can report is its mechanism rejecting an access. What clears the tag of a capability stored in a freed block is memsys5 writing its own Mem5Link free-list words over it, which is a later consequence of an access this arm had already allowed. A fault at a declared fault_sites function therefore scores MISSED, and the two faults that land outside one stay NO-READING:unattributed. Declared 2026-10-31 with this arm's first bundle",
+      "controls": {
+        "poscontrol": "fault"
+      },
+      "controls_for_missed": [
+        "poscontrol"
+      ],
+      "controls_owed": "poscontrol (ports/sqlite/cheribsd/poscontrol.c) is a use-after-free through the SYSTEM allocator, so it controls the TEMPORAL operand only. A dedicated bounds control in the same boot is owed; until it exists the positive evidence that a bounds fault is visible to this harness at all is this arm's sibling cheribsd-sqlite-sysalloc reporting si_code=1 PROT_CHERI_BOUNDS on FOUR of its six spatial catches in the same run (the other two are si_code=2), which is a demonstration and not a control"
+    },
+    "cheribsd-sqlite-sysalloc": {
+      "target": "cheribsd-purecap",
+      "summary": "the same pinned guest with SQLite's memsys5 arena REMOVED (built SYSALLOC=1, run NOMEM5=1), so every SQLite object is a libc malloc object: bounded when it is allocated, quarantined when it is freed, and revoked by a sweep that NOMEM5=1 forces on every free. The CHERI counterpart of virtual-platform, and the only one of the two CheriBSD arms where revocation can act at all",
+      "mechanism": "per-object bounds in malloc; revocation on every free (forced quarantine flush)",
+      "catch_causes": [
+        1,
+        2
+      ],
+      "catch_causes_why": "The numbers in this key are FreeBSD SIGPROT si_codes -- 1 PROT_CHERI_BOUNDS, 2 PROT_CHERI_TAG -- and NOT Capstone fault causes. The two namespaces are unrelated and nothing but this key reads the number, so a cause here must never be compared with the 25/28 of a capstone-* configuration. Both are this arm's mechanism: 1 is the bounds check on a capability malloc narrowed to the object, and 2 is a dereference of a capability revocation has untagged. The key is declared rather than left out so that a future fault with any other si_code, or a SIGSEGV, scores MISSED instead of being read as a catch because it happened to land in a declared function. Declared 2026-10-31 with this arm's first bundle",
+      "controls": {
+        "poscontrol": "fault"
+      },
+      "controls_for_missed": [
+        "poscontrol"
+      ],
+      "controls_owed": "poscontrol controls the TEMPORAL operand only (a use-after-free through the system allocator). The two spatial cells this arm scores MISSED therefore rest on a control for the other operand of the conjunction; a bounds control in the same boot is owed. FOUR of the same run's six spatial catches are si_code=1 PROT_CHERI_BOUNDS (the other two are si_code=2), which shows the harness can see a bounds fault and is why those cells are MISSED and not NO-READING, but a demonstration is not a control"
     }
   }
 }

@@ -279,6 +279,7 @@ run to come.
 | `sublet-carve` | Capstone domain | **Retired 2026-10-11** with the Sublet heap: recorded verdicts kept, no new runs. The carved corpus: `-DFFC_SUBLET_CARVE` takes the block LINEAR from the Sublet heap and splits it into one region per carve, each issued as a bounded alias (a re-carve revokes the old aliases); a temporal carve control must fault in the same boot. Column 3 for carved cases |
 | `sublet-svheads` | Capstone domain | **Retired 2026-10-11** with the Sublet heap: recorded verdicts kept, no new runs. `sysalloc-sublet` plus Perl's SV head arena through its Sublet port |
 | `virtual-malloc` | virtual Capstone (`capstone/runtime/virtual`) | the case on the virtual profile, its nested allocator stock: the application runs under `capstone-vexec` with musl mallocng compiled for Capstone and run locally, which bounds each object exactly and retires its lifetime on free. Configuration `virtual-mallocng` in `tools/arms.json`; not the physical Sublet heap |
+| `virtual-platform` | virtual Capstone (`capstone/runtime/virtual`) | the case with its nested allocator REMOVED, so the program allocates straight through the platform: `ports/sqlite/repro322/build-virtual.py` without `--memsys5`, whose `build.json` arm is `platform`. Configuration `virtual-mallocng`, the same one `virtual-malloc` names -- what differs is that there is no inner allocator left to blind the bounds, so the two arms are one defect measured with and without the arena. A case that configures the nested allocator's heap itself has no non-nested form, and the builder reports it not applicable (07 and 22 of `sqlite/engine-repros`), which the run scores `NO-READING:out-of-denominator` |
 | `virtual-pg-pools` | virtual Capstone | `virtual-malloc` with PostgreSQL's memory contexts protected by the memory-context port's patch 0003: every chunk a child lifetime of its block (`CDERIVE`), revoked by `pfree`/`repalloc` (`CREVOKE`). The server is built with `build-virtual.sh postgres`, `PGSU_NESTED=sublet` (configuration `virtual-mallocng-pg-pools`); the replay with `PG_SUBLET=ON` (`virtual-mallocng-replay-pools`) |
 | `virtual-nested-pools` | virtual Capstone | `virtual-malloc` with the program's nested allocator on its own pool port (SQLite: memsys5 on `sublet-3220000-memsys5.patch`, every block a child lifetime of the pool over the same static arena, revoked by `sqlite3_free`, and the lookaside's slots likewise; wmem: the wmem port's patch 0001, every `block` and `block_fast` object a child lifetime of its block). The configuration in `tools/arms.json` names which |
 | `virtual-nested-exact` | virtual Capstone | `virtual-nested-pools` with each object bounded to the caller's request instead of the nested allocator's rounding (PHP: `REAL_SIZE(n)` rounds every `emalloc` to 8; `tools/arms.json` `php-real-exact`). The arm that can see a defect inside the allocator's own slack |
@@ -303,6 +304,7 @@ run to come.
 | `silicon-pym-sublet` | silicon (FPGA) | the same with patch 0003: every pymalloc block a CDERIVE child of its arena, CREVOKEd when pymalloc takes it back. Corpus control 00 faults at read_probe (configuration `silicon-pymalloc-sublet`) |
 | `silicon-mruby-bounds` | silicon (FPGA) | mruby's release-differential: B5's mruby.dom (4.0.0-rc2, silicon delegated ABI) over its size-class allocator, every object narrowed to its request, nothing revoked; one run per case on its trigger.rb. A spatial row is CAUGHT on a capability fault; a temporal row is MISSED as a detection whatever it reads (the reading is in the note); `both` is CAUGHT only with cause 28; other classes use the corpus's own rule and count in neither total. Gate: smoke.rb's SMOKE_DONE and the tool's four controls (not on verdicts-v1: matrix.tsv, written by probe/fold-silicon.py) |
 | `cheribsd-revocation` | stock CheriBSD purecap | the case under CheriBSD's malloc with heap revocation on (the platform default, or forced per process where the corpus says so), a revocation control faulting at its labelled load in the same boot. `NOT-REISSUED` is the plain-temporal reading for a freed chunk HELD in quarantine (the stale pointer followed, the chunk never reissued); column 1 of `tools/catch-tables.py --board` counts it as caught and shows it apart |
+| `cheribsd-platform` | CheriBSD purecap | `cheribsd-revocation` with the program's nested allocator REMOVED, so every object is one of the guest malloc's and its end is a free the quarantine sees: `sqlite/engine-repros/shared/run-cheribsd.py --mode non-nested`, the `_sys` binaries built `SYSALLOC=1` and run `NOMEM5=1` (which also forces a revoke at SQLite's allocator boundary, without which the quarantine has not swept when the stale load happens). The CHERI counterpart of `virtual-platform`, and the only CheriBSD arm where revocation can act on a sub-allocation at all. Its `poscontrol` gate must FAULT in the same session or the run is void |
 | `native-fix-differential` | host | the buggy and the fixed build of the same reduction, run plainly: `TWO-SIDED` means the buggy run reproduces the defect and the fixed run does not. It shows the reduction is about the fix; it is not a protection mechanism and no table counts it as one |
 | `backing` | Capstone domain | FFmpeg pool corpora: revocation only at the pool's BACKING allocation (mode 1), so a buffer the pool never frees is never revoked. `n/a` where there is no block distinct from the object |
 | `host-asan` | host | the upstream function built with ASan at the pin: the oracle is the report (kind, access, region) it must produce. Liveness evidence and the row corpora's only arm, not a protection column |
@@ -392,15 +394,31 @@ its results under one contract, implemented in `tools/verdicts.py` and tested in
   mechanism are `25` `INVALID_CAP` (a lifetime ended) and `28` `CAP_OOB` (a bounds check); `24`
   `UNEXP_OP_TYPE` is an untagged value used where a capability was required, which is a
   consequence on either axis. Declaring it RE-JUDGES every stored Observation, so it must land
-  together with a re-fold of each affected corpus's bundle. What "re-fold" means concretely, and
-  why a declaration cannot land on its own: `tools/derive-verdicts.py` compares each bundle's
-  RECORDED verdict against the current judge, reports a problem for every cell where they differ,
-  and writes the recorded verdict into `case.json` regardless -- so declaring the key alone makes
-  the gate fail and changes no cell. Measured on sqlite/engine-repros, 2026-10-28: declaring
-  `[25, 28]` on the three sqlite configurations fails 13 cells across the four bundles. The
-  bundle's verdict field has to be re-derived from its Observations first, and no tool does that
-  today. Implemented in `tools/verdicts.py`, tested in `tools/test_verdicts.py`; as of 2026-10-28 no
-  configuration in `tools/arms.json` declares it.
+  together with a **re-fold** of each affected corpus's bundle, in one change. Without one the
+  declaration only breaks the gate: `tools/derive-verdicts.py` compares each bundle's RECORDED
+  verdict against the current judge, reports a problem for every cell where they differ, and writes
+  the recorded verdict into `case.json` regardless. The re-fold is
+  `tools/derive-verdicts.py --refold --why <reason> <corpus>`: it re-judges each stored Observation,
+  writes the new verdict beside it, **refuses to alter the Observation** (a row whose observation
+  would change aborts the whole re-fold), and appends to the bundle's `inputs.json` a `refolds`
+  entry naming every cell it re-scored and why. Nothing is re-measured and nothing needs re-running;
+  a board bundle is re-folded exactly like a QEMU one. Implemented in `tools/verdicts.py`, tested in
+  `tools/test_verdicts.py`. Declared as of 2026-10-30 by `virtual-sqlite-memsys5`,
+  `virtual-sqlite-memsys5-pools` and `silicon-sqlite-memsys5`, all three `[25, 28]`, which re-scored
+  10 cells across four bundles of `sqlite/engine-repros` and 0 on the protected arm; and as of
+  2026-10-31 by `cheribsd-sqlite-memsys5` (`[]`) and `cheribsd-sqlite-sysalloc` (`[1, 2]`).
+  **The number's NAMESPACE is the configuration's, not the schema's.** Those last two hold FreeBSD
+  SIGPROT si_codes (`1` `PROT_CHERI_BOUNDS`, `2` `PROT_CHERI_TAG`); nothing but this key reads the
+  number, so a cause in a `cheribsd-*` configuration must never be compared or summed with the
+  `25`/`28` of a `capstone-*` one, and a configuration whose causes are not Capstone's says so in
+  `catch_causes_why`. An EMPTY set is a configuration stating that its mechanism can report no
+  cause at all -- CheriBSD's revocation has no `free` to act on under `SQLITE_CONFIG_HEAP` -- which
+  is a measurement and not a missing declaration, and the judge words it that way.
+* **`controls_owed`, optional per configuration, names a control the arm does NOT have.** A
+  configuration whose `controls_for_missed` covers one operand of a conjunction -- a use-after-free
+  control on an arm whose mechanism is bounds AND revocation -- leaves every MISSED on the other
+  operand resting on nothing, and the gap belongs beside the declaration rather than in a corpus
+  README. It is prose, read by people; the judge still requires only `controls_for_missed`.
 * **The bundle is the only original.** `results/<stamp>/<arm>/` holds `verdicts.jsonl` (each
   Observation with its verdict) and `inputs.json` (configuration, and the compiler, QEMU, firmware,
   kernel and runner hashes, each said or said to be `unrecorded`). **`platform.compiler` is the sha256 of

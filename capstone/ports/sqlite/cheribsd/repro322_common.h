@@ -56,53 +56,7 @@ static void out_text(const char *text) { fputs(text, stdout); fflush(stdout); }
 static void out_uint(unsigned long v)  { printf("%lu", v); fflush(stdout); }
 
 
-/* Diagnostic fault handler. Purely additive: it runs only AFTER a fault that would
- * have killed the process anyway, and it re-exits with 128+signal so the runner's
- * verdict mapping is unchanged. Its job is to print the CHERI si_code, which is the
- * only way to tell the fault MECHANISMS apart:
- *   PROT_CHERI_TAG    -> an untagged value was dereferenced. On this corpus that is
- *                        memsys5 clearing granule 0 of a freed block with its in-band
- *                        Mem5Link freelist ints (handoff mechanism M1).
- *   PROT_CHERI_BOUNDS -> a still-valid capability was walked past its bounds, e.g. a
- *                        COUNT read out of a freed block is now a freelist int (M2).
- * Without this the two are indistinguishable: both arrive as bare signal 34.
- */
-static const char *repro_prot_code(int c) {
-  switch (c) {
-    case PROT_CHERI_BOUNDS: return "PROT_CHERI_BOUNDS/valid-cap-out-of-bounds";
-    case PROT_CHERI_TAG:    return "PROT_CHERI_TAG/untagged-deref";
-    case PROT_CHERI_SEALED: return "PROT_CHERI_SEALED";
-    case PROT_CHERI_TYPE:   return "PROT_CHERI_TYPE";
-    case PROT_CHERI_PERM:   return "PROT_CHERI_PERM";
-    case PROT_CHERI_IMPRECISE: return "PROT_CHERI_IMPRECISE";
-    case PROT_CHERI_UNALIGNED_BASE: return "PROT_CHERI_UNALIGNED_BASE";
-    default: return "other";
-  }
-}
-static void repro_fault_handler(int sig, siginfo_t *si, void *uc) {
-  (void)uc;
-  char buf[200];
-  int n = snprintf(buf, sizeof buf,
-                   "\n<<FAULT>> signal=%d si_code=%d (%s) pc=%p capreg=%d\n",
-                   sig, si->si_code,
-                   sig == SIGPROT ? repro_prot_code(si->si_code) : "not-SIGPROT",
-                   (void *)si->si_addr, si->si_trapno);
-  if (n > 0) (void)write(2, buf, (size_t)n);
-#ifdef LB_PROBE_BUILD
-  lb_report();   /* before _exit: a faulting run would otherwise report no hit count,
-                  * and the hit count is what says the fault was at the probed site */
-#endif
-  _exit(128 + sig);
-}
-static void repro_install_fault_handler(void) {
-  struct sigaction sa;
-  memset(&sa, 0, sizeof sa);
-  sa.sa_sigaction = repro_fault_handler;
-  sa.sa_flags = SA_SIGINFO | SA_NODEFER;
-  (void)sigaction(SIGPROT, &sa, 0);
-  (void)sigaction(SIGSEGV, &sa, 0);
-  (void)sigaction(SIGBUS,  &sa, 0);
-}
+#include "repro322_fault.h"
 
 /* Forced-revocation shim for the system-allocator arm. See repro_init(). */
 static sqlite3_mem_methods repro_base_mem;

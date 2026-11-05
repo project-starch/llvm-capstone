@@ -44,8 +44,23 @@ neither settles anything on its own -- what settles it is WHERE the fault is.
 
 So the runner records the si_code and the pc, and attribution is a separate step: the binaries
 are PIE, so subtract the load base (0x100000 on this guest) before symbolizing.
+
+That works for a pc in the case image and NOT for one in a shared object, which is where five
+cells of the 2026-10-29 non-nested run came to rest: `kern.elf64.aslr.enable=1`, the record
+carried no load base for libc, and a fault in `memcmp` or `memcpy` could not be tied to the
+defect afterwards from the pc alone. Since 2026-10-30 the handler resolves it where it can be
+resolved -- inside the faulting process, with `dladdr` -- and prints a second line:
+
+    <<FAULT-WHERE>> obj=<path> base=<p> sym=<name> symaddr=<p> image=<path> imagebase=<p>
+
+which this runner records per case as fault_object / fault_object_base / fault_symbol /
+fault_symbol_addr / image / image_base. The gate faults before every run, so the gate's own
+FAULT-WHERE is the resolver's positive control and is recorded as `resolver`: a run whose gate
+faults and prints no FAULT-WHERE has a broken resolver, and its unattributed cells stay
+NO-READING rather than becoming misses.
 """
 import argparse
+import hashlib
 import json
 import os
 import pathlib
@@ -62,6 +77,17 @@ SSH = ["-i", str(pathlib.Path.home() / ".ssh/id_ed25519"), "-o", "BatchMode=yes"
        "-o", "StrictHostKeyChecking=no", "-o", "UserKnownHostsFile=/dev/null",
        "-o", "ConnectTimeout=20"]
 PORT_NO = "10086"
+# The arm each mode measures. It used to be the nested arm's name in both, so the non-nested
+# record named an arm it was not a reading of; tools/arms.json says what each configuration is.
+ARM_OF_MODE = {"nested": "cheribsd-revocation", "non-nested": "cheribsd-platform"}
+
+
+def sha256(path):
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for block in iter(lambda: f.read(1 << 20), b""):
+            h.update(block)
+    return h.hexdigest()
 
 
 def guest(cmd, timeout=400):
@@ -111,6 +137,12 @@ def main():
     p.add_argument("--mode", required=True, choices=["nested", "non-nested"])
     p.add_argument("--only", help="comma-separated case number prefixes")
     p.add_argument("--no-build", action="store_true", help="use what is already in WORK/out")
+    p.add_argument("--case-timeout", type=int, default=300,
+                   help="seconds per case in the guest (default 300). NOMEM5=1 forces a full "
+                        "revocation sweep on EVERY free, so a case whose trigger frees in a loop "
+                        "is slow by construction and can sit at the bound: raising it buys a "
+                        "reading where the default buys a TIMEOUT, and a TIMEOUT is a "
+                        "non-reading, not a miss. Recorded in the run record.")
     p.add_argument("--work", type=pathlib.Path,
                    default=pathlib.Path.home() / "arms/sqlite/cheribsd")
     a = p.parse_args()
@@ -130,7 +162,14 @@ def main():
 
     # ---- build, through the port's driver ----
     if not a.no_build:
-        need = sorted({groups[tags[d.name]] for d in want if tags[d.name] in groups})
+        # poscontrol FIRST and every run. It is the gate, and since it carries the same
+        # repro322_fault.h handler the cases do, it is also the positive control for that
+        # handler's resolver -- which it can only be if it is built from the same source in
+        # the same run. Until 2026-10-30 the driver built it only under its `all` target,
+        # which this runner never calls, so the gate binary was whatever it last had: on this
+        # host, 2026-10-17. That is the 2026-10-05 stale-binary defect the driver's own
+        # comment records, in a different place.
+        need = ["poscontrol"] + sorted({groups[tags[d.name]] for d in want if tags[d.name] in groups})
         for g in need:
             env = {"SYSALLOC": "1"} if sysalloc else {}
             r = subprocess.run(["bash", "./build-corpus-cheri.sh", g], cwd=PORT,
@@ -166,6 +205,15 @@ def main():
         if src is None:
             skipped.append((d.name, "not in the build's sources.tsv -- rebuild"))
             continue
+        # The binary must carry the resolver, or its fault is recorded with a bare pc and
+        # the cell cannot be attributed. A stale image is silent about being stale: it runs,
+        # it faults, it reports, and only the missing WHERE line says anything is wrong.
+        # Checked here rather than inferred from the build, because "the build ran" and
+        # "this file is what the build produced" are different claims.
+        if b"<<FAULT-WHERE>>" not in binary.read_bytes():
+            skipped.append((d.name, f"{binary.name} predates repro322_fault.h's resolver "
+                                    f"-- rebuild without --no-build"))
+            continue
         if not src.startswith(str(CORPUS)):
             skipped.append((d.name, f"built from {src}, not the corpus case.c"))
             continue
@@ -174,28 +222,65 @@ def main():
         print(f"  SKIP {name}: {why}", flush=True)
 
     # ---- ship ----
-    if rows:
-        subprocess.run(["scp", *SSH, "-P", PORT_NO, *[str(b) for _, _, b in rows],
+    # The gate ships with the cases, for the same reason it is rebuilt with them.
+    gate = a.work / "out" / "poscontrol"
+    ship = [str(b) for _, _, b in rows] + ([str(gate)] if gate.is_file() else [])
+    if not gate.is_file() or b"<<FAULT-WHERE>>" not in gate.read_bytes():
+        sys.exit(f"{gate}: missing, or built before repro322_fault.h's resolver. The gate is "
+                 f"the run's positive control FOR that resolver, so a run with an older gate "
+                 f"cannot say whether an unattributed fault is unattributable or just "
+                 f"unresolved. Rebuild: bash build-corpus-cheri.sh poscontrol")
+    if ship:
+        subprocess.run(["scp", *SSH, "-P", PORT_NO, *ship,
                         "root@localhost:/root/corpus/"], capture_output=True, check=False)
 
     # ---- gate ----
     rev, _ = guest("sysctl -n security.cheri.runtime_revocation_default")
-    pc_out, _ = guest("cd /root/corpus && ./poscontrol >/dev/null 2>&1; echo $?")
+    # 2>&1, not >/dev/null: the gate's own fault is the positive control for the
+    # handler's dladdr resolver, so what it printed has to be read, not discarded.
+    pc_out, _ = guest("cd /root/corpus && ./poscontrol 2>&1; echo $?")
     pc_code = pc_out.strip().splitlines()[-1] if pc_out.strip() else "?"
-    print(f"  gate poscontrol exit={pc_code}  revocation={rev.strip()}", flush=True)
+    pc_where = re.search(r"<<FAULT-WHERE>> obj=(\S+) base=(\S+) sym=(\S+)", pc_out)
+    # The OBJECT and its BASE are what the resolver has to produce; the symbol is a bonus
+    # it cannot always give. SQLite's amalgamation makes every function static, so nothing
+    # in a case image reaches .dynsym and dladdr answers sym=? for a fault in the program's
+    # own code -- correctly. A pc in the C library does resolve by name. So a run is judged
+    # on obj/base: `sym=?` beside a real base is a working resolver, and recording only the
+    # symbol made that indistinguishable from a resolver that did not run at all.
+    pc_ok = bool(pc_where and pc_where.group(2) not in ("0x0", "(nil)"))
+    shown = f"fired: {pc_where.group(1)} @ {pc_where.group(2)}" if pc_ok else "SILENT"
+    print(f"  gate poscontrol exit={pc_code}  revocation={rev.strip()}  resolver={shown}",
+          flush=True)
     if pc_code != "162":
         sys.exit("GATE FAILED: the positive control did not fault; the run is void")
+    if not pc_ok:
+        print("  WARNING: the gate faulted and resolved no object; this build's resolver is "
+              "not working, so every unattributed cell stays NO-READING and must not be "
+              "read as a miss", file=sys.stderr, flush=True)
 
     # ---- run ----
     results = {}
     for d, tag, binary in rows:
         out, _ = guest(f"cd /root/corpus && chmod +x {tag}{suffix} && "
-                       f"env {envp}timeout 300 ./{tag}{suffix} 2>&1; echo __EXIT=$?")
+                       f"env {envp}timeout {a.case_timeout} ./{tag}{suffix} 2>&1; echo __EXIT=$?",
+                       timeout=a.case_timeout + 100)
         code = re.search(r"__EXIT=(\d+)", out)
         code = int(code.group(1)) if code else -1
         si = re.search(r"si_code=(\d+) \(([^)]*)\)", out)
+        # The pc, as its own field. It used to survive only inside `last`, and when the
+        # handler gained a second line `last` started carrying that one instead and the pc
+        # left the record entirely. A derived field cannot be allowed to depend on which
+        # line happens to be printed last.
+        pc = re.search(r"<<FAULT>>[^\n]*\bpc=(0x[0-9a-f]+)", out)
         alloc = re.search(r"allocator=(\S+)", out)
         revoke = re.search(r"revoke=(\S+)", out)
+        # Where the fault was, as the faulting process itself resolved it (dladdr in
+        # repro322_common.h's handler). The guest runs with ASLR on, so a pc in a shared
+        # object is unattributable from the record afterwards; this is what makes it a
+        # reading. The gate faults before every run, so a run with no WHERE line at all
+        # has a broken resolver and its unattributed cells must not be read as misses.
+        where = re.search(r"<<FAULT-WHERE>> obj=(\S+) base=(\S+) sym=(\S+) symaddr=(\S+) "
+                          r"image=(\S+) imagebase=(\S+)", out)
         verdict = ("FAULT" if code == 162 else "TIMEOUT" if code == 124 else
                    "PASS" if code == 0 and "RETURNED" in out else "ERR")
         results[d.name] = {
@@ -204,20 +289,36 @@ def main():
             "si_meaning": si.group(2) if si else None,
             "allocator": alloc.group(1) if alloc else None,
             "revoke": revoke.group(1) if revoke else None,
-            "last": [l for l in out.splitlines() if l.strip() and "__EXIT" not in l][-1:],
+            "fault_pc": pc.group(1) if pc else None,
+            "fault_object": where.group(1) if where else None,
+            "fault_object_base": where.group(2) if where else None,
+            "fault_symbol": where.group(3) if where else None,
+            "fault_symbol_addr": where.group(4) if where else None,
+            "image": where.group(5) if where else None,
+            "image_base": where.group(6) if where else None,
+            # Both fault lines, not just the last one, for the same reason.
+            "last": [l for l in out.splitlines() if l.strip() and "__EXIT" not in l][-2:],
+            # The image this row is a reading OF. Without it a bundle can only hash the binary
+            # afterwards and argue from its mtime that nothing rebuilt it, which is what the
+            # 2026-10-30 bundles had to do.
+            "image_sha256": sha256(binary),
         }
         print(f"  {d.name[:48]:<48} {verdict:<8} exit={code:<4} "
-              f"{('si_code=' + si.group(1) + ' ' + si.group(2)) if si else ''}")
+              f"{('si_code=' + si.group(1) + ' ' + si.group(2)) if si else ''}"
+              f"{(' at ' + where.group(3) + ' in ' + where.group(1)) if where else ''}")
 
     tally = {}
     for r in results.values():
         tally[r["verdict"]] = tally.get(r["verdict"], 0) + 1
     a.output.parent.mkdir(parents=True, exist_ok=True)
     a.output.write_text(json.dumps({
-        "arm": "cheribsd-revocation", "mode": a.mode,
+        "arm": ARM_OF_MODE[a.mode], "mode": a.mode,
         "revocation_default": rev.strip(), "poscontrol_exit": pc_code,
+        "case_timeout_s": a.case_timeout,
+        "resolver": ({"object": pc_where.group(1), "base": pc_where.group(2),
+                      "symbol": pc_where.group(3)} if pc_ok else None),
         "skipped": dict(skipped), "tally": tally, "cases": results}, indent=2) + "\n")
-    print(f"--- cheribsd-revocation ({a.mode}): {tally}   -> {a.output}", flush=True)
+    print(f"--- {ARM_OF_MODE[a.mode]} ({a.mode}): {tally}   -> {a.output}", flush=True)
     return 0
 
 

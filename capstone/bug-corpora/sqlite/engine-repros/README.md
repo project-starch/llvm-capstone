@@ -29,32 +29,48 @@ Every case declares one of these, and the table partitions the corpus.
 | `spatial` | Capstone domain, base | does the unprotected machine notice? |
 | `sublet` | Capstone domain, nested-allocator discipline | does per-sub-allocation revocation notice? |
 | `cheribsd-revocation` | CheriBSD riscv64-purecap, revocation on | does CHERI plus revocation notice? |
+| `virtual-platform` | virtual Capstone, memsys5 OUT of the build | with no inner allocator at all, does the platform notice? |
+| `cheribsd-platform` | CheriBSD riscv64-purecap, memsys5 OUT of the build | the same question on the CHERI side -- the arm where revocation can act |
 
-## On virtual Capstone (2026-10-11), under the shared judge
+## On virtual Capstone (2026-10-29), under the shared judge
 
 | arm | configuration (`tools/arms.json`) | caught | missed | no reading |
 |---|---|---:|---:|---:|
-| `virtual-malloc` | `virtual-sqlite-memsys5`: memsys5 stock over its static arena; virtual mallocng below sees one object | 5 | 25 | 3 |
-| `virtual-nested-pools` | `virtual-sqlite-memsys5-pools`: memsys5 on its Sublet port, the pool lent linear by the virtual heap | 27 | 6 | 0 |
+| `virtual-malloc` | `virtual-sqlite-memsys5`: memsys5 stock over its static arena; virtual mallocng below sees one object | 0 | 29 | 4 |
+| `virtual-nested-pools` | `virtual-sqlite-memsys5-pools`: memsys5 on its Sublet port, the pool lent linear by the virtual heap | 29 | 4 | 0 |
+| `virtual-platform` | `virtual-mallocng`: no memsys5 at all, so every SQLite object is one of mallocng's | 25 | 6 | 2 |
 
-Those four counts are **transcribed from the bundle `corpus.json` declares**, not measured afresh:
-`verdict_bundles` names `results/2026-10-11-virtual-request-bounds/<arm>`, and this table now
-agrees with the derived record taken from it -- `results/verdicts.tsv`, written by
-`tools/derive-verdicts.py`, and the `arms` block of every `case.json`. Until 2026-10-20 it carried
-the superseded 2026-10-10 bundle's figures, 4 and 18, which contradicted every `case.json` beside
-them. The bundle is the only original (`../../SCHEMA.md`, "Verdicts: one judge, one original"), so
-the figures here follow it.
+Those counts are **transcribed from the bundles `corpus.json` declares**, not measured afresh:
+`verdict_bundles` names `results/2026-10-29-virtual/<arm>`, and this table agrees with the derived
+record taken from them -- `results/verdicts.tsv`, written by `tools/derive-verdicts.py`, and the
+`arms` block of every `case.json`. The bundle is the only original (`../../SCHEMA.md`, "Verdicts:
+one judge, one original"), so the figures here follow it. The superseded
+`results/2026-10-11-virtual-request-bounds/<arm>` bundles stay in the tree as the record of what
+the pre-review triggers measured; they are no longer what any table reads.
 
-Built by `ports/sqlite/repro322/build-virtual.py` (`--memsys5`, `--sublet`) from the adapted 3.22.0
-amalgamation plus `fts5-azarg-patch.py`, run by `shared/run-virtual.py` on a persistent virtual VM,
-judged by `tools/verdicts.py`; the current bundles are `results/2026-10-11-virtual-request-bounds/<arm>`
-(memsys5 and the lookaside on CDERIVE/CREVOKE, each memsys5 block bounded to its request), verdicts
-derived into each `case.json`. Before any case each arm runs `controls/` -- a memsys5 block used after free and
-written 1 KiB past its start -- which complete on the stock arm and fault on the port, as declared.
+Built by `ports/sqlite/repro322/build-virtual.py` (`--memsys5`, `--sublet`, and with neither for
+`virtual-platform`) from the adapted 3.22.0 amalgamation plus `fts5-azarg-patch.py` and
+`fts3-doclist-null-patch.py`, run by `shared/run-virtual.py` on a persistent virtual VM, judged by
+`tools/verdicts.py`. Before any case each arm runs the controls its configuration declares --
+`controls/control_*_mem5.c` for the two memsys5 arms, `controls/control_*_malloc.c` for
+`virtual-platform` -- a block used after free and written 1 KiB past its start, which must behave as
+`tools/arms.json` says or the run is void. In the 2026-10-29 run every control behaved as declared.
 The adapted amalgamation the bundles record (`amalgamation_sha256` 7fc92e19…) is stock 3.22.0
-(sha256 7991acd0…) through `ports/sqlite/adapt-sqlite-322.sh` as of 423d13f5b81f. Before that commit
-the script lacked the sorter's 16-byte alignment line and produced b446615b…, so the bundles' input is
-reproducible only from that commit on.
+(sha256 7991acd0…) through `ports/sqlite/adapt-sqlite-322.sh` as of 423d13f5b81f; regenerating it
+from that script on 2026-10-29 reproduced 7fc92e19… exactly, so the engine source is the same bytes
+the 2026-10-11 arms ran. Before that commit the script lacked the sorter's 16-byte alignment line
+and produced b446615b…, so the bundles' input is reproducible only from that commit on.
+
+On CheriBSD the two arms are run by `shared/run-cheribsd.py` (`--mode nested`, `--mode
+non-nested`), which writes one JSON record per run rather than a verdicts-v1 bundle:
+`results/2026-10-30-cheribsd/{nested,non-nested}`, both at `--case-timeout 1200`. Each run's
+`poscontrol` gate -- a plain system-allocator use-after-free -- FAULTed before any case ran, so both
+are readings, and the gate's own fault is also the positive control for the handler's `dladdr`
+resolver, which the record carries as `resolver`. `shared/fold-cheribsd.py` writes every cell of
+both arms from those records. A fault is placed by the object and base `dladdr` reported: by name
+for a pc in a shared library, and for a pc in a case image by symbolising `pc - image_base` against
+that image. The superseded `results/2026-10-29-cheribsd/` records stay as what the run before the
+resolver measured; both of today's reproduce their PASS/FAULT verdict for all 33 cases.
 
 A fault counts only in a function the case justifies (`fault_sites`): where host ASan reported it,
 or what the source and `PROVENANCE.md` name as the stale access.
@@ -96,72 +112,251 @@ configuration and the bundle it comes from, so a reader can check each figure ag
 instead of taking it on trust. The tables used to be in the pull request body, where a reviewer
 without `gh` cannot read them; they belong in the tree.
 
-**The denominator is the 28 defects the review leaves counted.** Five of the 33 cases are out of it:
-01, 04, 09 and 18 carry `withdrawn` with its reason, 25 carries `duplicate_of` 00, and catch-tables
-leaves all five out of every table and lists them by name. Of the 28, **20 are temporal and 8
-spatial** -- case 00 among the spatial, which is what its `class` now says and what upstream's own
-"BUFFER OVERREAD" and the measured `cause=28` always said.
+**The denominator is the 27 defects the review leaves counted.** Six of the 33 cases are out of it:
+01, 04, 08, 09 and 18 carry `withdrawn` with its reason, 25 carries `duplicate_of` 00, and
+catch-tables leaves all six out of every table and lists them by name. Of the 27, **19 are temporal
+and 8 spatial** -- case 00 among the spatial, which is what its `class` now says and what upstream's
+own "BUFFER OVERREAD" and the measured `cause=28` always said. It was 28 and 20 until 2026-10-30,
+when 08 was withdrawn for the reason 01 and 09 already carried.
+
+**Two configurations, and `tools/catch-tables.py --all --board` prints the nested one.** The
+non-nested table is recomputed the same way, from the same cells, by the arms named under it.
+**The two tables are the same defects measured twice, so their counts are not additive**: 19
+temporal nested and 17 temporal non-nested is 19 defects, 17 of which also have a non-nested form,
+not 36 bugs. Each case is built twice from one `case.c` -- with `SQLITE_CONFIG_HEAP` over a static
+array, and with memsys5 left out of the build so every object comes from the platform's own
+allocator -- and the difference between a defect's two columns is what the nested allocator costs.
+
+### Nested: memsys5 over the case's static arena
 
 | axis | cases | (1) base | (2) Sublet | (3) CheriBSD |
 |---|---:|---:|---:|---:|
-| temporal | 20 | 5 / 17 (+3 no reading) | 17 / 20 | 5 / 20 |
-| spatial | 8 | 0 / 8 | 8 / 8 | 0 / 8 |
+| temporal | 19 | **0** / 15 (+4 no reading) | **19 / 19** | **0** / 16 (+3 no reading) |
+| spatial | 8 | **0 / 8** | **8 / 8** | **0 / 8** |
 
-* **(1) base** is the arm `virtual-malloc`, configuration `virtual-sqlite-memsys5`, bundle
-  `results/2026-10-11-virtual-request-bounds/virtual-malloc`. The three cells with no reading are
-  06, 12 and 20; catch-tables prints them as `(+3 ?)`.
+### Non-nested: the same defects with memsys5 left out of the build
+
+Without an arena there is no inner allocator, so base and Sublet are one measurement: every SQLite
+object is its own object of the platform allocator, bounded to its request and retired on free.
+
+| axis | cases | (1) = (2) base = Sublet | (3) CheriBSD |
+|---|---:|---:|---:|
+| temporal | 19 | **17 / 17** (+2 out of denominator) | **17 / 17** (+2 out of denominator) |
+| spatial | 8 | **6 / 8** | **6 / 8** |
+
+* **(1) base** is `virtual-malloc`, configuration `virtual-sqlite-memsys5`, bundle
+  `results/2026-10-29-virtual/virtual-malloc`. It catches nothing on either axis, and so does its
+  silicon twin: `vp2-malloc` and `silicon-sqlite-stock` read 0 as well, over the same configuration
+  and the mechanism rule below. The four cells with no reading are 02 and 20 (a fault, unattributed),
+  06 (reached, then neither completed nor faulted) and 11 (the runner's bound; see below).
 * **(2) Sublet** is `virtual-nested-pools`, configuration `virtual-sqlite-memsys5-pools`, bundle
-  `results/2026-10-11-virtual-request-bounds/virtual-nested-pools`. The three temporal misses are
-  08, 11 and 13. Each one's `note` records that the trigger does not reach the defect it names; the
-  replaced triggers the review wrote are not in this tree, so this column is 17 and not 20.
-* **(3) CheriBSD** is `cheribsd-revocation`, hand-written from `results/matrix.tsv` and measured
-  2026-10-06 in one boot whose positive-control gate was satisfied before any case ran. It is the
-  one column with no bundle.
+  `results/2026-10-29-virtual/virtual-nested-pools`. It has no temporal miss and no cell without a
+  reading.
+* **(3) CheriBSD** is `cheribsd-revocation`, configuration `cheribsd-sqlite-memsys5`, bundle
+  `results/2026-10-30-cheribsd/cheribsd-revocation` (folded from the run record
+  `results/2026-10-30-cheribsd/nested`, `shared/run-cheribsd.py --mode nested`, poscontrol gate
+  FAULTed before any case ran). The three cells with no reading are 02, 20 and 22: all three
+  faulted, none of them at a function this corpus can place (see the retraction below).
+* **The non-nested columns** are `virtual-platform` (configuration `virtual-mallocng`, bundle
+  `results/2026-10-29-virtual/virtual-platform`) and `cheribsd-platform`
+  (`run-cheribsd.py --mode non-nested`, `results/2026-10-30-cheribsd/non-nested`, same gate). The
+  two cases out of the non-nested denominator are 07 and 22: both reach for `sqlite_heap` to
+  engineer the OOM their trigger needs, and that array exists only when memsys5 is configured.
 
-**The temporal row depends on which cases the "trigger does not reach" rule withdraws, and the rule
-is not applied uniformly yet.** 01 and 09 are withdrawn for it; 08 and 11 carry the same 2026-10-11
-gdb finding and stay counted, and 02 is counted although its trigger did not reach its defect
-either (see "Case 02's cells are under correction" below). 09's defect is real (upstream
-a87bd2471a9c fixes a use-after-free in fts3 snippet()), so "the defect is real" does not separate
-them. Recomputed with `catch-tables.py --all --board` under each reading:
+**A catch is the mechanism rejecting the access, and since 2026-10-30 that is a declaration and not
+a paragraph.** `tools/arms.json` gives `virtual-sqlite-memsys5`, `virtual-sqlite-memsys5-pools` and
+`silicon-sqlite-memsys5` a `catch_causes` of `[25, 28]`: `25` INVALID_CAP is the lifetime check
+refusing the access and `28` CAP_OOB is the bounds check, and those two are the only causes a
+Capstone mechanism reports. A fault with any other cause means the access was allowed and the
+program crashed later on what it read, so the judge scores it MISSED and keeps the fault in the
+cell's `verdict_note`. What that costs each column is the measurement:
 
-| rule | cases | (1) base | (2) Sublet | (3) CheriBSD |
-|---|---:|---:|---:|---:|
-| as declared (01, 09 withdrawn) | 20 | 5 / 17 (+3) | 17 / 20 | 5 / 20 |
-| also 02, 08, 11 withdrawn | 17 | 4 / 14 (+3) | 16 / 17 | 4 / 17 |
-| 01 and 09 counted | 22 | 5 / 19 (+3) | 17 / 22 | 5 / 22 |
+| arm | bundle | cells re-scored |
+|---|---|---:|
+| `virtual-nested-pools` (Sublet) | `results/2026-10-29-virtual/virtual-nested-pools` | **0** |
+| `virtual-platform` (non-nested) | `results/2026-10-29-virtual/virtual-platform` | **0** |
+| `virtual-malloc` (base) | `results/2026-10-29-virtual/virtual-malloc` | 3 -- 05, 19, 22, all `cause=24` |
+| `vp2-malloc` (base, silicon) | `results/2026-10-18-vp2-rdx0/vp2-malloc` | 5 -- 02, 05, 24 `cause=24`; 19 `cause=4`; 22 `cause=13` |
+| `silicon-sqlite-stock` (stock, silicon) | `results/2026-10-16-silicon/silicon-sqlite-stock` | 2 -- 02, 05, both `cause=24` |
 
-Quote the row together with the rule it uses. Settling it needs the replaced triggers for 02, 08, 09
-and 11 re-run, not a different reading of these bundles.
+Sublet loses nothing, because every catch it records was already `25` or `28`. The base arm loses
+all of them, because not one of its was. That is the whole distance between the two columns, and it
+is in the cells rather than in prose: every catch's `verdict_note` carries its cause and pc.
 
-The retired physical arms `spatial` and `sublet` read differently over the same 28 -- 6/20 and 2/8,
-19/20 and 7/8 -- and are superseded (see the note above). A column that mixes them with the virtual
-arms is not a measurement of anything.
+The declaration re-judges each stored Observation, so it landed with a **re-fold** of the four
+bundles: `tools/derive-verdicts.py --refold --why ...` re-scores the stored observations under the
+current judge, writes the new verdict beside each one, and refuses to touch the Observation itself,
+so what was measured is byte-identical before and after. Each bundle's `inputs.json` carries a
+`refolds` entry naming every cell and why. Nothing was re-run and nothing needs re-running: the
+board's own `cause=4` and `cause=13` readings are the same consequence faults its QEMU twin reports
+as `24` (silicon raises a load access or page fault where QEMU raises an untagged dereference, at
+the same pc), and neither is a mechanism. An earlier revision of this file said the key had to wait
+for a board re-run. That was wrong -- the obstacle was a missing tool, not a missing measurement --
+and it is withdrawn. **The silicon lane's two arms are re-scored by this, and they are told in
+`docs/ref/sqlite-engine-repros-catch-causes-rescore.md`** -- which also says that no board time is owed for it.
 
-**Every one of (1)'s five temporal catches is `cause=24`**: an untagged value used where a
-capability was required, which is the architecture's baseline tag check firing on the CONSEQUENCE of
-an access it had already allowed, not a rejection of it. Scored by mechanism they are not
-detections, and `catch_causes` is the key that says so. It is implemented and tested here and
-declared by no configuration, because declaring it re-judges every stored Observation while
-`derive-verdicts.py` refuses a bundle whose recorded verdict the current judge disagrees with (13
-cells, measured 2026-10-28) and writes the recorded verdict into the cell regardless. So this column
-reads 5; the mechanism-scored 0 lands with the declaration and a re-fold of the four bundles, not
-before. (2) has one such cell, case 02; its other 16 temporal catches are `cause=25` or `28`.
+**CheriBSD's nested column is 0 by the same rule.** Revocation acts on a guest `malloc` free, and
+under memsys5 there is none: `SQLITE_CONFIG_HEAP` puts every SQLite allocation inside `sqlite_heap[]`,
+`sqlite3_free` returns the block to memsys5's own pool, and nothing ever reaches the guest allocator
+for a sweep to act on. The arm faults on five cases (02, 05, 19, 20, 22) and two of those are at
+the function host ASan reported; until 2026-10-30 those two, and 22, were recorded CAUGHT. 05 and 19
+are now MISSED, with the fault kept in the note, because what cleared the tag is memsys5 writing its
+`Mem5Link` free-list words over the block and not revocation. Two things make that a reading rather
+than an assumption. Both are **cases the base Capstone arm also fails on** as `cause=24` -- one
+event, two architectures' names for it. And the revoking path is demonstrably live where it exists:
+the same harness under `SYSALLOC=1 NOMEM5=1` records `allocator=system revoke=on-every-free` on 31
+of the 33 cases, and that arm catches 17 of the 17 it can read. The three unattributed cells
+(02, 20, 22) stay `NO-READING`, as 02 and 20 do on the base arm: attribution comes before the
+mechanism rule, there as here.
 
-**What this table does not carry: the non-nested configuration.** The same 28 defects with memsys5
-out of the build, so SQLite allocates through the platform's `malloc`, is a second configuration of
-this corpus and is not in it. The controls are here -- `controls/control_uaf_malloc.c` and
-`control_bounds_malloc.c`, which the configuration `virtual-mallocng` requires to FAULT -- and
-`build-virtual.py` builds it when `--memsys5` is left off, but no arm declares it, no case carries a
-cell for it, and there is no bundle. No figure for it is recomputable from this tree, so none is
-quoted here; it lands as its own arm with its own run. Two of the 28 will have no non-nested row:
-both configure memsys5's heap themselves to force the OOM path their trigger needs, so without an
-arena there is nothing to trigger.
+**RETRACTED (2026-10-31): case 22's nested cell was MISSED on a fault that nothing places.**
+When `dladdr` resolves nothing it prints its failure sentinel -- `obj=? base=0x0 image=?
+imagebase=0x0` -- and `fold-cheribsd.py` took that `0x0` for a load base, subtracted it, and
+symbolised the raw pc as a file offset into the case image. For case 22 that landed on
+`editDist3FindLang`, which genuinely IS one of its declared `fault_sites`, so the cell scored
+MISSED: on this arm a MISSED is a measurement, and this one rested on a sentinel read as data. The
+pc is not even inside the image -- `0x6a2ba`, below the `0x100000` base every other image reports.
+It is now `NO-READING:unattributed` on both records, which is the only honest reading of a fault the
+record cannot place, and the fold refuses the whole class: a `?` object, a `?` image or a zero base
+is a resolution failure, and a pc below the image base is not an offset into it. **The run's gate
+cannot catch this**, which is why it survived a session spent building that gate -- poscontrol
+proves `dladdr` works in the GATE's process, not that it resolved inside each case's. Exactly one
+cell of the 66 moved; the other 65 reproduce the hand-written verdict through the shared judge, and
+all four figures the paper quotes are unchanged.
 
-**Case 02's cells are under correction.** The review found that its trigger never ended the cached
-Btree's lifetime, so the temporal row above counts it on a reading of a trigger that did not reach
-the defect. The corrected trigger needs a port fix and a re-run of all four bundle-derived arms, and
-lands with them in a separate change.
+**The five `cheribsd-platform` cells that had no reading are CLOSED, and the prediction held.**
+11, 16, 17, 21 and 23 each declare a C library primitive as their access, and on 2026-10-29 each
+faulted at a pc in a shared object with no load base recorded and ASLR on, so none could be tied to
+its defect. Recording the base afterwards was the wrong fix -- under ASLR there is nothing to record
+it from. The handler resolves the site where it CAN be resolved, inside the faulting process, with
+`dladdr`, and prints `<<FAULT-WHERE>> obj= base= sym= symaddr= image= imagebase=`. All five now
+resolve by name: 11, 16 and 17 to `memcmp` and 21 and 23 to `memcpy`, in `/lib/libc.so.7`, which is
+what each one's `fault_sites` names. **Those `fault_sites` were written on 2026-10-10**, twenty days
+before the resolver existed, so the attribution is not fitted to the reading. The column goes from
+12 / 12 to **17 / 17**.
+
+The prediction was pushed at `18d692d16529` before the run and every line of it held, including the
+arms that had to NOT move: both records reproduce 2026-10-29's PASS/FAULT verdict for all 33 cases,
+and `cheribsd-revocation` read 0 / 17 (+2) in that run, exactly as pre-registered -- what makes
+that column 0 is the mechanism rule, not the attribution, and a better resolver must not move it.
+It reads 0 / 16 (+3) today, and that is not the run disagreeing with its prediction: one of its 17
+cells was moved on 2026-10-31 by the retraction below, which is a defect in how the record was
+read and not a change in what the record says.
+
+**`sym=?` on a fault in a case image is the resolver working, not failing.** SQLite's amalgamation
+makes every function `static`, so nothing in a case image reaches `.dynsym` and `dladdr` can give
+only the object and its base. That is enough: `pc - image_base` is symbolised against the image,
+which carries `-g`. A pc in the C library resolves by name. The run record therefore stores the
+object, the base AND the symbol -- recording only the symbol made a working resolver and an absent
+one look identical, which is how this paragraph came to be needed.
+
+**The gate is the resolver's positive control, and making that true took three fixes.** As written
+on 2026-10-29 it was false: `poscontrol.c` had no fault handler at all, so the gate could never have
+printed a `<<FAULT-WHERE>>` line, and a resolver that silently did nothing would have read exactly
+like a fault that genuinely could not be placed. The handler is now its own header,
+`ports/sqlite/cheribsd/repro322_fault.h`, with no SQLite dependency, included by both
+`repro322_common.h` and `poscontrol.c`. The driver built `poscontrol` only under its `all` target,
+which this runner never calls, so the gate binary on this host was dated 2026-10-17 -- the same
+stale-binary defect the driver's own comment records from 2026-10-05, in another place; the runner
+now builds and ships it every run and refuses to start if it predates the resolver. And every case
+binary is checked for the resolver before its reading is believed, because a stale image runs,
+faults and reports perfectly well and only the missing line says otherwise.
+
+**Case 23's TIMEOUT was the harness's bound, not the arm's silence, and the difference was
+measured.** At the runner's default 300 s it timed out whenever another case ran first (3 of 3) and
+faulted when run alone (2 of 2) -- `results/2026-10-30-cheribsd/non-nested-r2-case23`. That pattern
+is not a reason to quote the run that faults: a `TIMEOUT` is `NO-READING` by this corpus's own
+contract, and picking among runs for the one that reads the way the table wants is the failure the
+contract exists to prevent. The cell sat at `NO-READING:inconclusive`, and the column at 16 / 16,
+until the bound itself was tested. `run-cheribsd.py` now takes `--case-timeout` and records it: at
+1200 s case 23 faults **in sequence**, at `memcpy`+0xb6 in `/lib/libc.so.7`. The reason it is slow
+is in the configuration -- `NOMEM5=1` forces a full revocation sweep on every `free`, so a trigger
+that frees in a loop is slow by construction -- and both records of 2026-10-30 are therefore runs at
+1200 s, with no timeout in either.
+
+**Two `cheribsd-platform` cells were not measurements of that arm, and are withdrawn (2026-10-30).**
+07 and 22 ran under `--mode non-nested` and produced a silence and a fault, scored MISSED and CAUGHT.
+Neither is a reading: `repro_init()`'s `NOMEM5` branch is what puts the case on the system allocator,
+and both cases install memsys5 over `sqlite_heap` from their own `run_case()` without ever calling
+`repro_init()`. What ran was the nested configuration under the stock quarantine. The run record
+says so directly -- it carries `allocator=system` and `revoke=on-every-free` for 31 of the 33 cases
+and for neither of these two -- and they are the same two the Capstone builder already reports not
+applicable. Both are now `NO-READING:out-of-denominator`, which is what the Capstone side says, so
+the two non-nested columns now count the same 17 cases.
+
+**Case 08 is WITHDRAWN (2026-10-30), by the rule 01 and 09 were already withdrawn under.** Its
+trigger does not reach the defect it names: `sqlite3Fts3Offsets` runs twice and all three
+`fts3EvalRestart` calls come after both of them, so no saved poslist pointer is read across a
+restart (gdb on the host -O0 build, 2026-10-11), host ASan is SILENT on it and it returns
+(`results/2026-10-11-host-asan`), and in the 2026-10-29 run every one of the five arms reports
+MISSED with its controls behaving -- including the two arms that catch 19 of 19 and 12 of 12 of the
+cases around it. 02, 11 and 13 carried the same 2026-10-11 finding and were CORRECTED instead, each
+with a replaced trigger that reaches its defect and a reading to show it; 08 is the one where no
+correction was found, and the structural reason is that phrases in a NEAR group advance together, so
+whenever a sibling restarts the earlier phrase's saved pointer is already nil. Upstream `51dd67080a`
+ships no test and calls it a potential use-after-free, so there is no upstream shape to copy. The
+defect is not disputed and the directory stays; a trigger that reaches it would bring the case back.
+**With this the withdrawal rule is applied uniformly across the corpus** -- which is what an earlier
+revision of this file recorded as the open question, with 01 and 09 withdrawn for the reason 08 and
+11 were kept under.
+
+**Case 11 has no reading on the base arm.** Its trigger reads the freed pending-terms hash key and
+then `fts3EvalGatherStats` rebuilds a doclist from it; on an arm that does not stop the read, what
+that walk does next depends on what overwrote the freed bytes. It returns on the host, on CheriBSD
+nested and on the non-nested arms, and on `virtual-malloc` -- memsys5 recycling inside a 1 MiB arena
+-- it does not, so the runner's bound ends it. That is a property of the defect on an unprotected
+allocator, not of the harness, and it costs one cell in a column that reads 0 either way.
+
+**Both CheriBSD arms are bundles now (2026-10-31), so all seven arms have one writer and one
+gate.** `run-cheribsd.py` writes a plain JSON run record per mode, not a bundle, so until today
+these two arms' cells were the only ones in the corpus no verdicts-v1 bundle backed: first typed by
+hand from the record, then written straight into `case.json` by `fold-cheribsd.py`. Both are the
+same defect one layer apart -- a second writer of cells, outside the contract every other arm is
+held to, and the writer that got case 22 wrong. `fold-cheribsd.py` now folds each record into
+`results/2026-10-30-cheribsd/<arm>/` and `derive-verdicts.py` writes the cells from there, as it
+does for the other five. The fold reimplements no judgement: it turns each recorded case into an
+Observation and hands it to `tools/verdicts.py`.
+
+Two configurations carry it, SQLite's own, so the twelve other corpora that name a CheriBSD arm are
+untouched and the encoding question stays open for whoever answers it for the study:
+
+| configuration | arm | `catch_causes` | why |
+|---|---|---|---|
+| `cheribsd-sqlite-memsys5` | `cheribsd-revocation` | `[]` | revocation acts on a libc `free` and under `SQLITE_CONFIG_HEAP` there is none, so no si_code this arm reports is its mechanism |
+| `cheribsd-sqlite-sysalloc` | `cheribsd-platform` | `[1, 2]` | 1 `PROT_CHERI_BOUNDS` is malloc's per-object bounds, 2 `PROT_CHERI_TAG` is a revoked capability |
+
+**Those numbers are FreeBSD SIGPROT si_codes, not Capstone fault causes.** Nothing but
+`catch_causes` reads the number, and a `1` here must never be compared with the `25`/`28` of a
+`capstone-*` configuration; both configurations say so in `catch_causes_why`. The empty set is the
+point of the nested arm rather than a gap in it: the judge now says "this arm's mechanism can report
+no cause at all" instead of "not one of this arm's mechanism causes `[]`", which reads like a defect
+in the table.
+
+**What these two bundles still owe.** `poscontrol.c` is a use-after-free through the system
+allocator, so it controls the TEMPORAL operand only, and both configurations declare
+`controls_for_missed: [poscontrol]`. The two spatial cells `cheribsd-platform` scores MISSED
+therefore rest on a control for the other operand of the conjunction. A bounds control in the same
+boot is owed; until it exists the positive evidence that a bounds fault is visible to this harness
+at all is that FOUR of the same run's six spatial catches are `si_code=1` PROT_CHERI_BOUNDS --
+the other two are `si_code=2` -- which is a demonstration and not a control. An earlier revision of
+this paragraph said all six were `si_code=1`; that overstated the bounds evidence and is corrected
+here. Both configurations carry that in a `controls_owed` key rather than in this file alone.
+The bundles' rows also carry no `image_sha256`: the 2026-10-30 runner recorded none, so the hashes
+sit in each `inputs.json` under `images`, taken on 2026-10-31 with the basis stated (every binary's
+mtime precedes the run's first record, and the fold refuses to write the block otherwise). The
+runner records them per case from now on, and it no longer writes the nested arm's name into the
+non-nested record -- a field nothing read, and so a field that stayed wrong.
+
+**Provenance of the 2026-10-29 bundles.** The adapted amalgamation is stock 3.22.0 through
+`ports/sqlite/adapt-sqlite-322.sh`, which reproduces the `amalgamation_sha256` 7fc92e19... the
+2026-10-11 bundles record, so the engine source is byte-identical to that run and the only variables
+are the corrected triggers and the new arm. The SDK is a corpus SDK with an effective
+`-fno-builtin` (C-81), built from dev `92ebd4a62542`: that is the last revision whose runtime emits
+a `.capstone_virtual` image the pinned platform kit's launcher accepts (`CPONVVM5`; dev
+`13719fd944b2` moved it to `CPONVVM7`, which the kit's 2026-10-16 launcher rejects with
+`ENOEXEC`), and the first that honours `CAPSTONE_SDK_EXTRA_CODEGEN`. The platform is the pinned kit
+`kit-pinned` of 2026-10-17 -- its own QEMU, Image, firmware, rootfs, launcher and module together,
+as `tools/virtualvm.py` requires. Every bundle's `inputs.json` records all of it.
 
 ## The case-by-case review of 2026-10-15/17
 
@@ -188,17 +383,26 @@ differing only in load base), but neither
 fix's corrupt image has been run against the other fix. (09 was earlier declared a duplicate of 10;
 that is withdrawn, and 09 now carries `withdrawn` instead.)
 
-**`catch_causes` exists but is NOT declared for these two configurations, deliberately.**
-`tools/verdicts.py` now takes an optional `catch_causes` on a configuration and refuses to call
-a fault outside that set a catch; it is documented in `../../SCHEMA.md` and covered by tests in
-`../../tools/test_verdicts.py`. Declaring `[25, 28]` on `virtual-sqlite-memsys5` and
-`virtual-sqlite-memsys5-pools` would re-score every `cause=24` catch as MISSED, which is the
-reading the review argues for: a `cause=24` fault is the architecture's tag check firing on a
-value the program had already read out of the dead object, one or two frames past an access
-the mechanism allowed. It is not declared here because `tools/derive-verdicts.py` re-judges
-every stored observation against the current `arms.json`, and a bundle is only ever written by
-a runner: declaring the key without re-running the two arms would leave the gate failing on
-every cell it re-scores. The mechanism lands first; the declaration waits on a run.
+**`catch_causes` is DECLARED (2026-10-30), and what the review argued for is now measured.**
+`tools/verdicts.py` takes an optional `catch_causes` on a configuration and refuses to call a fault
+outside that set a catch; it is documented in `../../SCHEMA.md` and covered by
+`../../tools/test_verdicts.py`. The three memsys5 configurations now declare `[25, 28]`, which is
+what makes column (1) read 0 by measurement instead of by a paragraph. The table of what it
+re-scores, arm by arm, is under "The result this tree can recompute" above.
+
+**RETRACTED: that the declaration needed a board re-run.** This file argued, on 2026-10-29, that
+because `virtual-sqlite-memsys5` is named by two arms -- `virtual-malloc` on QEMU and `vp2-malloc`
+on the board -- and `derive-verdicts.py` re-judges every stored observation, the key had to wait for
+the board to be re-run. The premise was right and the conclusion was wrong: re-judging a stored
+observation is not re-measuring it, and the gate failed for want of a tool rather than for want of
+data. `derive-verdicts.py --refold` is that tool. It re-scores the stored observations, writes the
+new verdict beside each one, refuses to alter any Observation, and records in the bundle what it
+did and why. The board bundle is re-folded, its five cells are MISSED, and nothing was re-run.
+
+`virtual-mallocng`, which `virtual-platform` names, is still NOT declared: it is shared with twelve
+other corpora (`ffmpeg`, `memcached`, `postgres`, `wireshark`, `sqlite/capi-repros`), so declaring
+it is their decision as much as this corpus's. It would change nothing here -- every catch on that
+arm is already `cause=25` or `28`, which the re-fold confirms by re-scoring none of them.
 
 **The arena is part of the configuration, so a case that depends on it declares `arena_bytes`.**
 3.22.0's `memsys5Init` does not require a power of two, and the two builders default

@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Run the SQLite engine corpus on the virtual Capstone profile, and record what each case showed.
 
-    run-virtual.py OUT --state <virtual VM> --arm virtual-malloc|virtual-nested-pools
+    run-virtual.py OUT --state <virtual VM>
+                   --arm virtual-malloc|virtual-nested-pools|virtual-platform
                    --build <build-virtual.py output for that arm> --llvm-bin <dir> --raw <dir>
 
 This runner REPORTS; tools/verdicts.py decides. Each case is its program from
@@ -17,9 +18,12 @@ ports/sqlite/repro322/build-virtual.py, run as a process on a persistent VM star
               function host ASan reported the defect in. A fault anywhere else is not a catch
 
 WHAT THE ARM IS, read from the build and the VM, not the label: build.json's arm (memsys5 for
-virtual-malloc, memsys5-sublet for virtual-nested-pools), the SDK being a virtual one, and the VM
-being a virtual-profile VM. Before any case the configuration's controls run
-(controls/control_*_mem5.c, built into the same tree with --observe).
+virtual-malloc, memsys5-sublet for virtual-nested-pools, platform for virtual-platform -- the
+non-nested arm, memsys5 left out of the build so every SQLite object comes from mallocng
+itself), the SDK being a virtual one, and the VM being a virtual-profile VM. Before any case the
+configuration's controls run, built into the same tree with --observe:
+controls/control_*_mem5.c for the two memsys5 arms, controls/control_*_malloc.c for
+virtual-platform, as tools/arms.json declares for each configuration.
 """
 import argparse
 import json
@@ -35,8 +39,13 @@ import sdk_builtins  # noqa: E402  (C-81: refuse a builtins build before anythin
 import appvm  # noqa: E402
 import verdicts as v  # noqa: E402
 
-BUILD_ARM = {"virtual-malloc": "memsys5", "virtual-nested-pools": "memsys5-sublet"}
-PREDICTED = {"virtual-malloc": v.MISSED, "virtual-nested-pools": v.CAUGHT}
+BUILD_ARM = {"virtual-malloc": "memsys5", "virtual-nested-pools": "memsys5-sublet",
+             "virtual-platform": "platform"}
+# virtual-platform is predicted CAUGHT for the same reason virtual-malloc is predicted MISSED:
+# with memsys5 out of the build there is no arena to hide the object inside, so mallocng bounds
+# it exactly and retires it on free.
+PREDICTED = {"virtual-malloc": v.MISSED, "virtual-nested-pools": v.CAUGHT,
+             "virtual-platform": v.CAUGHT}
 
 
 def observe(tag, text, result, symbols, sites):

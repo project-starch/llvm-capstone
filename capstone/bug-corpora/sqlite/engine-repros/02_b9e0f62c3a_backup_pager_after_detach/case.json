@@ -4,12 +4,12 @@
   "title": "row15",
   "consumer": "sqlite3.c",
   "live_in_pin": true,
-  "live_proof": "inspection with line numbers in the 3.22.0 tree: sqlite3_backup caches raw Btree* at backup.c:23 and :29, resolved by findBtree at :82, and ATTACH reallocates db->aDb at attach.c:113. Fixed upstream in 3.53.3 by storing db indices and re-deriving the Btree each step",
+  "live_proof": "host ASan on 2026-10-26: heap-use-after-free, an 8-byte READ 8 bytes inside a freed 72-byte region, access sqlite3BtreePager <- sqlite3_backup_step, freed by sqlite3BtreeClose <- detachFunc. Fixed upstream in 3.53.3 by storing db indices and re-deriving the Btree each step.",
   "allocator_layer": "memsys5",
   "object": "the Btree the backup cached for its source or destination database",
-  "lifetime_ender": "ATTACH on the same connection reallocates db->aDb, moving or freeing the cached Btree",
+  "lifetime_ender": "DETACH on the destination connection closes that database's Btree (attach.c detachFunc -> sqlite3BtreeClose, sqlite3.c:101061), freeing the 72-byte object the backup cached. detachFunc's two guards are sqlite3BtreeIsInReadTrans and sqlite3BtreeIsInBackup; the second reads nBackup, which backup.c increments on p->pSrc ONLY (sqlite3.c:70592), so a backup's DESTINATION is unguarded.",
   "shape": "free / stale read",
-  "fidelity": "real consumer, real allocator: the public backup API driven against a connection that ATTACHes mid-backup",
+  "fidelity": "real consumer, real allocator: the public backup API driven against a connection that DETACHes the backup's destination database mid-backup. Nothing may step the backup before the DETACH -- the first step opens a write transaction on the destination and detachFunc then refuses on sqlite3BtreeIsInReadTrans -- and backup_init has already cached both Btree* through findBtree, which is all the defect needs.",
   "arms": {
     "spatial": {
       "oracle": "capability fault delivered, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x10280b794"
@@ -20,38 +20,53 @@
       "verdict_from": "results/matrix.tsv case 2 sublet: detected"
     },
     "cheribsd-revocation": {
-      "oracle": "SIGPROT(34) -- CHERI-DETECTED. 2026-10-06, CheriBSD 15.0-CURRENT riscv64-purecap, memsys5, one boot; the run's positive control gate was satisfied before any case ran",
-      "verdict": "CAUGHT",
-      "verdict_from": "results/matrix.tsv case 2 cheribsd-revocation: detected"
+      "oracle": "CheriBSD 15.0-CURRENT riscv64-purecap, memsys5 over the case's static arena (shared/run-cheribsd.py --mode nested). Revocation acts on a guest malloc free, and under memsys5 there is none: sqlite3_free returns the block to memsys5's own pool inside one array the guest allocator sees as a single live object. So a tag fault here is NOT revocation reporting, and since 2026-10-30 it is not scored as a catch either: this arm is judged by the mechanism rule the virtual arms carry in tools/arms.json (catch_causes), under which an access the mechanism did not reject is MISSED however the program then crashes. A SIGPROT(34) si_code=2 at the function host ASan reported (fault_sites) is MISSED with the fault kept in its note; a fault anywhere else is not tied to the defect and stays NO-READING:unattributed. What the rule rests on is the configuration and not a silence: SQLITE_CONFIG_HEAP puts every SQLite allocation inside sqlite_heap[], sqlite3_free returns the block to memsys5's own pool, and no free() ever reaches the guest allocator for a sweep to act on. The same harness with SYSALLOC=1 does emit allocator=system revoke=on-every-free on 31 of 33 cases (results/2026-10-29-cheribsd/non-nested), so the revoking path is live where it exists",
+      "verdict": "NO-READING",
+      "verdict_note": "cause=2 pc=0x142f78 in sqlite3PagerSetPagesize; sqlite3PagerSetPagesize at backupattach+0x42f78 (pc 0x142f78 less the image base 0x100000 dladdr reported, symbolised against the image's own -g); it is not one of this case's declared fault_sites ['sqlite3BtreePager']",
+      "verdict_from": "results/2026-10-30-cheribsd/cheribsd-revocation",
+      "verdict_reason": "unattributed"
     },
     "virtual-malloc": {
       "oracle": "virtual profile, memsys5 stock over its static arena (tools/arms.json virtual-sqlite-memsys5): a fault in the function host ASan reported (fault_sites), or the case returns and this arm did not see it",
-      "verdict": "CAUGHT",
-      "verdict_note": "cause=24 pc=0x3fa5026cd4 in sqlite3BtreeUpdateMeta; by function: sqlite3BtreeUpdateMeta is where host ASan reported it",
-      "verdict_from": "results/2026-10-11-virtual-request-bounds/virtual-malloc"
+      "verdict": "NO-READING",
+      "verdict_note": "cause=24 pc=0x3f9546985c in sqlite3PagerSetPagesize; in sqlite3PagerSetPagesize; ASan site ['sqlite3BtreePager']",
+      "verdict_from": "results/2026-10-29-virtual/virtual-malloc",
+      "verdict_reason": "unattributed"
     },
     "virtual-nested-pools": {
       "oracle": "virtual profile, memsys5 on its Sublet port (tools/arms.json virtual-sqlite-memsys5-pools): as virtual-malloc",
       "verdict": "CAUGHT",
-      "verdict_note": "cause=24 pc=0x3fa7426cd4 in sqlite3BtreeUpdateMeta; by function: sqlite3BtreeUpdateMeta is where host ASan reported it",
-      "verdict_from": "results/2026-10-11-virtual-request-bounds/virtual-nested-pools"
+      "verdict_note": "cause=25 pc=0x3fa48140e8 in sqlite3BtreePager; by function: sqlite3BtreePager is where host ASan reported it",
+      "verdict_from": "results/2026-10-29-virtual/virtual-nested-pools"
     },
     "silicon-sqlite-stock": {
       "oracle": "silicon, classic line, memsys5 stock over its static arena, lookaside 0,0 (tools/arms.json silicon-sqlite-memsys5): a trap in the function host ASan reported (fault_sites), or the case returns and this arm did not see it",
-      "verdict": "CAUGHT",
-      "verdict_note": "cause=24 pc=0x84806c64 in sqlite3BtreeUpdateMeta; by function: sqlite3BtreeUpdateMeta is where host ASan reported it; the trapping instruction is `ldc a1, 0x80(a1)` at sqlite3BtreeUpdateMeta+0x48, trap tval 0x0",
+      "verdict": "MISSED",
+      "verdict_note": "reached, and faulted with cause=24 in sqlite3BtreeUpdateMeta -- not one of this arm's mechanism causes [25, 28], so the defective access was allowed and this is a later consequence of it, not a catch",
       "verdict_from": "results/2026-10-16-silicon/silicon-sqlite-stock"
     },
     "vp2-malloc": {
+      "oracle": "virtual profile, memsys5 stock over its static arena (tools/arms.json virtual-sqlite-memsys5): a fault in the function host ASan reported (fault_sites), or the case returns and this arm did not see it",
+      "verdict": "MISSED",
+      "verdict_note": "reached, and faulted with cause=24 in sqlite3BtreeUpdateMeta -- not one of this arm's mechanism causes [25, 28], so the defective access was allowed and this is a later consequence of it, not a catch",
+      "verdict_from": "results/2026-10-18-vp2-rdx0/vp2-malloc"
+    },
+    "virtual-platform": {
+      "oracle": "virtual profile with memsys5 left OUT of the build (tools/arms.json virtual-mallocng, ports/sqlite/repro322/build-virtual.py without --memsys5, build.json arm 'platform'): every SQLite object is its own mallocng object, bounded to its request and retired on free, so there is no arena to hide it inside. A fault in the function host ASan reported (fault_sites), or the case returns and this arm did not see it",
       "verdict": "CAUGHT",
-      "verdict_note": "cause=24 pc=0x3f9c826bc4 in sqlite3BtreeUpdateMeta; by function: sqlite3BtreeUpdateMeta is where host ASan reported it",
-      "verdict_from": "results/2026-10-18-vp2-rdx0/vp2-malloc",
-      "oracle": "virtual profile, memsys5 stock over its static arena (tools/arms.json virtual-sqlite-memsys5): a fault in the function host ASan reported (fault_sites), or the case returns and this arm did not see it"
+      "verdict_note": "cause=25 pc=0x3f8c813f04 in sqlite3BtreePager; by function: sqlite3BtreePager is where host ASan reported it",
+      "verdict_from": "results/2026-10-29-virtual/virtual-platform"
+    },
+    "cheribsd-platform": {
+      "oracle": "the same guest with memsys5 left OUT (shared/run-cheribsd.py --mode non-nested: the _sys binaries, SYSALLOC=1, run NOMEM5=1, which also forces a revoke at SQLite's allocator boundary). Every SQLite object is one of the guest malloc's, so its end IS a free the quarantine sees and revocation can act. SIGPROT(34) at the function host ASan reported (fault_sites), or the case returns and this arm did not see it. The cell is a reading of this arm only if the run records allocator=system and revoke=on-every-free for the case, which is repro_init()'s NOMEM5 branch saying it ran: a case whose run_case() does its own sqlite3_config(SQLITE_CONFIG_HEAP) never calls repro_init() at all, so NOMEM5 does nothing to it and what ran was the nested configuration under the stock quarantine. 31 of the 33 record the marker; the two that do not are 07 and 22, the same two the Capstone builder reports not applicable, and both are NO-READING:out-of-denominator here for the same reason",
+      "verdict": "CAUGHT",
+      "verdict_note": "cause=2 pc=0x1298ba in sqlite3BtreePager; by function: sqlite3BtreePager at backupattach_sys+0x298ba (pc 0x1298ba less the image base 0x100000 dladdr reported, symbolised against the image's own -g), one of this case's declared fault_sites",
+      "verdict_from": "results/2026-10-30-cheribsd/cheribsd-platform"
     }
   },
-  "status": "spatial run 2026-10-04/05: capability fault delivered, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x10280b794; sublet run 2026-10-04/05: capability fault delivered, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x10200b994; cheribsd-revocation run 2026-10-04/05: no verdict: backup step1 rc=0",
+  "status": "TRIGGER CORRECTED 2026-10-26; EVERY ARM READING BELOW PREDATES IT AND IS VOID. The trigger up to that date did a single ATTACH, which frees nothing in 3.22.0 (attach.c takes sqlite3DbMallocRawNN plus memcpy while db->aDb is still db->aDbStatic), and reallocating db->aDb would not free the cached Btree in any case. Host ASan scored the old trigger SEGV -- the corpus's only SEGV, with no freed-by and no allocated-by chain -- while case.c claimed it reported heap-use-after-free. The arms were scoring a NULL dereference. Re-measurement on every arm is required before any cell here is read again.",
   "fault_sites": [
-    "sqlite3BtreeUpdateMeta"
+    "sqlite3BtreePager"
   ],
-  "fault_sites_why": "The stale access is the backup step's use of the cached destination Btree: sqlite3_backup_step calls sqlite3BtreeUpdateMeta(p->pDest, 1, ...) (sqlite3.c:70842, 3.22.0) on the Btree* ATTACH has moved or freed (PROVENANCE.md). Declared 2026-10-10 after the virtual runs resolved faults there; the reason is the source and PROVENANCE.md cited, which predate those runs."
+  "fault_sites_why": "Host ASan on the corrected trigger reports the stale read in sqlite3BtreePager (sqlite3.c:69480) under sqlite3_backup_step (:70753), an 8-byte read 8 bytes into the freed 72-byte Btree, freed by sqlite3BtreeClose under detachFunc. The former declaration, sqlite3BtreeUpdateMeta, belonged to the broken trigger: nothing was freed there and the fault was a NULL dereference of pBt->pPage1."
 }
