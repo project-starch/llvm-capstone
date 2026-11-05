@@ -1,0 +1,2 @@
+$CAPSTONE_WORK/perf/ga/stages/502.gcc_r-test-capstone-lifetimes-devmk-ac 900 40 -
+$CAPSTONE_WORK/perf/ga/stages/502.gcc_r-train01-capstone-lifetimes-devmk-ac 14400 150 -
