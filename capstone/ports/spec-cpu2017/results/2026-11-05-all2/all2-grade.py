@@ -5,7 +5,7 @@ Reference, same board, bitstream (C.5a) and images: out-all-b1/<stage>. Also rep
 and Plain test (out-hfl/<bench>-test-plain-rv64). Run time = the run commands' elapsed seconds; inside = cycles / 25 MHz.
 --canary: gcc's Y0 only. A stage not finished prints PENDING. Exit 0 if every graded check holds, 1 otherwise, 2 if no data.
 Y0  rc 0, specdiff PASS, outputs = twin, control passes, bench line fresh; every kit parameter read back; QNT0 007A1200
-    (reassembled console, last occurrence); instret within 0.1 % of the reference arm.
+    (reassembled console, after the boot's own OpenSBI banner); instret within 0.1 % of the reference arm.
 Y1  run time below the reference arm's, every arm.
 Y2  gcc: launch <= 4 s and run <= 30 s (reference 16.83 s and 41.1 s).
 Y3  imagick: launch <= 4.7 s over both commands, run >= 2 s lower, each arm.
@@ -48,7 +48,9 @@ def read(d, arm, kit=False):
                  params=dict(re.findall(r"^@@PARAM (\w+)=(\S+)$", T, re.M)))
     if kit:
         raw = os.path.join(d, "guest", "board-raw.txt")
-        x["qnt"] = re.findall(r"QNT0:([0-9A-F]{8})", open(raw, errors="replace").read())[-1:] if os.path.exists(raw) else []
+        t = open(raw, errors="replace").read() if os.path.exists(raw) else ""
+        # this boot's own QNT0: after the last OpenSBI banner, never a line the previous boot's replay carries (audit)
+        x["qnt"] = re.findall(r"QNT0:([0-9A-F]{8})", t[t.rfind("OpenSBI"):])[-1:] if "OpenSBI" in t else []
     return x
 
 fail = 0; seen = 0; Y = {}

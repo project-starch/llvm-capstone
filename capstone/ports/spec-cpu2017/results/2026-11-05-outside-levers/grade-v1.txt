@@ -1,0 +1,18 @@
+ctl      502.gcc_r-test-c X0 holds | run 53.5 s vs ref 53.3 (1.004) | launch 21.88 vs 21.86 s | steps 2034 vs 2027 faults 1068 vs 1061 | teardown 0.722 ms/page [(450, 309747440, 0, 1), (6118, 4434994880, 0, 1)]
+eg       502.gcc_r-test-c X0 holds | run 42.8 s vs ref 53.3 (0.802) | launch 17.43 vs 21.86 s | steps 2022 vs 2027 faults 1054 vs 1061 | teardown 0.738 ms/page [(421, 290429280, 0, 1), (2125, 1589606320, 0, 1)]
+sweep    502.gcc_r-test-c X0 FAILS {'fault_ahead_max': '64', 'retire_exit_sweep': '3'}[] | run 52.1 s vs ref 53.3 (0.978) | launch 21.88 vs 21.86 s | steps 2022 vs 2027 faults 1056 vs 1061 | teardown 0.502 ms/page [(450, 210987520, 3, 1), (6123, 3087853120, 3, 1)]
+nosweep  502.gcc_r-test-c X0 holds | run 48.0 s vs ref 53.3 (0.900) | launch 21.83 vs 21.86 s | steps 2017 vs 2027 faults 1052 vs 1061 | teardown 0.178 ms/page [(450, 64512880, 2, 1), (6100, 1099758320, 2, 1)]
+root     502.gcc_r-test-c X0 holds | run 36.7 s vs ref 53.3 (0.687) | launch 6.18 vs 21.86 s | steps 2018 vs 2027 faults 1052 vs 1061 | teardown 0.723 ms/page [(450, 309390320, 0, 1), (6118, 4440248160, 0, 1)]
+root     538.imagick_r-te X0 holds | run 26.3 s vs ref 32.2 (0.817) | launch 4.60 vs 6.71 s | steps 1650 vs 1653 faults 435 vs 437 | teardown 0.729 ms/page [(450, 310542640, 0, 1), (715, 533792880, 0, 1), (1149, 830293440, 0, 1), (715, 537830880, 0, 1), (1149, 834850240, 0, 1)]
+q8       544.nab_r-test   X0 holds | run 1138.8 s vs ref 1183.8 (0.962) | launch 2.01 vs 2.00 s | steps 3692 vs 12826 faults 339 vs 339 | teardown 0.715 ms/page [(450, 309886720, 0, 1), (952, 682573200, 0, 1), (950, 689339760, 0, 1)]
+allmod   519.lbm_r-test   X0 holds | run 1934.6 s vs ref 1963.0 (0.986) | launch 1.01 vs 1.28 s | steps 20005 vs 24000 faults 2206 vs 6211 | teardown 0.515 ms/page [(450, 210975280, 3, 1), (446, 231126320, 3, 1), (446, 249103680, 3, 1)]
+X1 ctl teardown 0.4-1.2 ms/page holds: 0.722 ms/page (no teardown line reads 0)
+X2 sweep <= 0.35 x ctl FAILS: 0.695 x
+X3 nosweep <= 0.15 x ctl (report) FAILS: 0.246 x
+X4 rootfs gcc launch <= 5 s FAILS: 6.18 s (ctl 21.88)
+X4b rootfs imagick launch <= 1.5 s (first command) FAILS: 4.60 s over both commands
+X5 q8 nab outside 165.9 s vs ref 198.4 s, steps 3692 vs 12826: partial (report)
+X6 allmod lbm run <= 0.985 x ref FAILS: 0.9855
+X6b allmod lbm faults <= 2,500 holds: 2206
+X7 eg gcc: peak <= 2,700 pages, launch >= 3 s and run >= 5 s below ctl holds: peak 2155 vs 6148, launch 17.43 vs 21.88 s, run 42.8 vs 53.5 s
+

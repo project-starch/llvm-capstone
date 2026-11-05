@@ -72,3 +72,18 @@ check):
 - The outside-levers RESULT's safety notes apply. The quantum masks interrupts for 320 ms, against 80 ms today.
   `image_rootfs` is safe by the module's own one-inode-per-file criterion. A claim-auditor run on 5 Nov tests that
   claim. If it refutes it, the run is stopped before the flash, and an addendum records why.
+
+## Addendum 1 (5 Nov 08:50, while all2-b1.sh waits, before any board call)
+
+**The audit of the outside-levers RESULT.**
+- It refuted no verdict, and it recomputed every number.
+- It found `image_rootfs` consistent with the module's one-inode-per-file criterion, from the source. On this board
+  rootfs is tmpfs code: hard links share the inode, there is no overlayfs, and every path to a write needs write access.
+- No negative test has run, so the claim stays untested, not refuted. The run goes ahead.
+
+**Grader change.** Y0's QNT0 is now read after the last OpenSBI banner of the reassembled console, never earlier. The
+audit noted that a dropped QNT0 could otherwise be filled by the previous boot's replay. No threshold changed.
+Controls:
+- the mock reads rc 0;
+- out-all-b1 reads rc 1, with QNT0 read as 001E8480 on all seven arms;
+- a log whose only 007A1200 precedes the banner reads Y0 FAILS.
