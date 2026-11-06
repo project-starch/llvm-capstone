@@ -99,3 +99,34 @@ the compiler swapped (perf/best/build-best-c3s1.sh).
 
 **Dry run** (perf/best/dryrun/A-ok, every board call stubbed): the sequencer waits for the pid, runs R32, THP and
 BEST, and every list path passes the chain stub. board-env-check passes for the perl stage.
+
+## Addendum 3 (6 Nov 15:24): perlbench-ac read on silicon; the images move to the fixed heap base (c3f)
+
+**perlbench-ac on board 1** (out-rest-b1, image bd186c2bd219b194):
+- run0 760.41 s, run1 34,126.44 s, 34,886.9 s in all: **1.50×** Plain's 23,311 s;
+- inside 25,364 s of cycles over 318 contexts, 108.6 G instructions;
+- outside about 9,500 s over 699,817 entries. CV_STEP 2,878 s, of which resolve 855; between steps 5,014 s; other
+  ioctls 571 s; teardown 377 s;
+- exits by kind: 361,658 calls, 317,411 faults, 20,745 quantum;
+- **specdiff 1/2, outputs differ from the twin:** . R1 is therefore
+  VOID: a failed sub-test is not a valid run.
+
+**Cause, reproduced on the twin** (perf/regemail/sweep2, kit-profq, re/reg_email.t alone):
+- the -ac image ends with  at realloc+0x5b4 after 0.741e9 instructions, under 7 of 8
+  environments (board-path mimic, PAD 0..2048; only PAD=1024 passes);
+- this is the October defect (perl-regemail/FINDINGS.md). Its fixes, dev 348d9cf2c29c and de7cdacda737, are not
+  ancestors of this branch's base 86f638759ecf.
+- The full-suite QEMU gate had passed only because of its own allocation history.
+
+**The fix.** Both commits are cherry-picked (perf/arena-cache e53540bb84de, 0ee4200bfc0d) and SDK ac15 is built
+(runtime 8bbbb79615f95b91). The c3s1 objects are relinked as **c3f**: perl e42f4649eccf10c0, x264 a52c991174079595,
+gcc 5642377943d724c6. On the twin, perl c3f passes re/reg_email alone, 13 of 13, in all 3 environments run
+(board mimic, PAD 0, PAD 512); AC fails 2 of those 3.
+
+**What changes:**
+- perl and x264 go to the board as c3f, not c3s1. The c3s1 images lack the fix and are withdrawn.
+- perl's stage in perf/best/b2.list becomes the c3f stage. Its full-suite QEMU gate (q-perl-c3f) is running and
+  must pass before the board reads the list.
+- x264 c3f replaces the running x264-ac on board 1 once its QEMU gate passes. x264-ac is preempted then; it is not
+  the best configuration, and it lacks the fix.
+- B1 now reads against Plain directly: perl c3f run ≤ 0.85 × 34,886.9 s.

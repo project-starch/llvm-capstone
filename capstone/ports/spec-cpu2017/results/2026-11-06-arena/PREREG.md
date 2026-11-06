@@ -243,3 +243,27 @@ and pass silently.
 
 Correction to Addendum 7: its "14:40" heading is wrong. It was written and pushed at 14:18 (b71e64845128), before
 the boot, as the commit time shows.
+
+## Addendum 8 (6 Nov 15:24, before the boot): the image changes to c3f, the same build on a fixed heap base
+
+**Why.** perlbench-ac failed re/reg_email on silicon today (rest Addendum 3). That is the October realloc exactness
+defect: cause 29 at realloc+0x5b4, in the CDERIVE of publish(). This branch's base (86f638759ecf, 26 Oct) lacks
+dev's two fixes for it:
+- 348d9cf2c29c: a realloc that would keep an unpublishable offset moves the object;
+- de7cdacda737: a slot's header is the granule of its whole stride (heap.c and musl patch 0009).
+
+Both are cherry-picked onto perf/arena-cache as e53540bb84de and 0ee4200bfc0d (clean). SDK **ac15** is built from
+that head with ac12's switches, and its private musl is re-prepared with the new 0009.
+
+**The image is cpugcc_r.c3f** (5642377943d724c6): c3s1's objects relinked with ac15, nothing recompiled.
+- QEMU gcc train (perf/best gtr-c3f): 13.735 G instructions (c3s1: 13.737 G), specdiff PASS.
+- The gp-window edge check holds: last object end 0xf99920, window end 0x1010000.
+- The exe in the stage is byte-identical to the QEMU-passed one.
+
+**M3 and the point estimate are unchanged** (≤ 0.93 × 4,656.1 s; about 4,225 s).
+
+**Correction to Addendum 4's estimate.** The board's exit counters for gcc train (out-ga-b2) put the outside cost at
+about 23 ms per exit: CV_STEP 9.3, between steps 12.9, other ioctls 0.7. The ~17 K fault exits that arena_pin
+removes on QEMU may therefore be worth up to −390 s, not −30…−60 s, if fault exits cost as much as the average.
+Their split by exit kind was not measured. The pre-registered M3 bound stands; this widens the point estimate
+downward, to 3,850…4,225 s.
