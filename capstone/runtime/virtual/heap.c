@@ -34,6 +34,11 @@
 #ifndef CAPSTONE_HEAP_ARENA_CACHE
 #define CAPSTONE_HEAP_ARENA_CACHE 0
 #endif
+/* CAPSTONE_HEAP_ARENA_CACHE_NOZERO (measurement): a reused mapping is not zeroed when SCRUB_FREE is off, the
+ * configuration in which freed slots are already reused inside a group with their bytes and tags in place. */
+#ifndef CAPSTONE_HEAP_ARENA_CACHE_NOZERO
+#define CAPSTONE_HEAP_ARENA_CACHE_NOZERO 0
+#endif
 
 /* CAPSTONE_HEAP_INDEX_BITS (perf/arena-cache, default 12 = the qualified 4,096 buckets): the slot index's width.
  * Chains grow with the live population; gcc train spends 272 M instructions in __capstone_malloc_find at 12. */
@@ -356,7 +361,9 @@ static int ac_take(unsigned long bytes, unsigned long align)
         ac_free[i] = ac_free[--ac_nfree]; ac_free_bytes -= bytes;
         /* mallocng treats a fresh mapping as zero, and a kept one holds the last group's bytes and
          * tags: scalar stores clear both. */
+#if CAPSTONE_HEAP_SCRUB_FREE || !CAPSTONE_HEAP_ARENA_CACHE_NOZERO
         memset(e.parent, 0, bytes);
+#endif
         ac_reuse_parent = e.parent; ac_hit_base = e.base; ac_hit_end = e.base + bytes; ac_hit = 1;
         ++__capstone_malloc_cache_hits;
         return 1;
