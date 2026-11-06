@@ -4079,7 +4079,7 @@ check's order and scope. Folder: `capstone/tests/fpga-repros/R67-pcc-adopts-dead
     1fc2cd5aa`.
 - A second board on C.5a has not been read.
 
-### R-68 — the MMU's non-idempotent probe splices a superpage's offset bits into the PPN at PADDR indices, so on the FPGA a load in the first 512 KiB of every 2 MiB page (vaddr[20:19] = 00) waits as if it were I/O; the same splice lets a device address mapped through a superpage escape the check `DEMONSTRATED IN SIMULATION 2026-11-06 with the FPGA's NI rule supplied to the simulation (capstone-ariane ni-superpage, pre-registered at ca49a9c22 and 874d2928a / 4eb9c0c43 before their runs); PRESENT in every sealed bitstream's tree by source (read at 1fc2cd5aa; cva6_mmu.sv and load_unit.sv identical at e7af48457 and c9c7952bd; the form is upstream CVA6's, back to 3ddf797e9); NOT MEASURED ON SILICON; FIX IN RTL, simulation only: capstone-ariane ni-superpage 0f0905194, lint PASS at baseline, for the stage-B batch. Found 2026-11-06 by the runtime lane's rtl-oracle read for mcf on transparent huge pages`
+### R-68 — the MMU's non-idempotent probe splices a superpage's offset bits into the PPN at PADDR indices, so on the FPGA a load in the first 512 KiB of every 2 MiB page (vaddr[20:19] = 00) waits as if it were I/O; the same splice lets a device address mapped through a superpage escape the check `DEMONSTRATED IN SIMULATION 2026-11-06 with the FPGA's NI rule supplied to the simulation (capstone-ariane ni-superpage, pre-registered at ca49a9c22 and 874d2928a / 4eb9c0c43 before their runs); PRESENT in every sealed bitstream's tree by source (read at 1fc2cd5aa; cva6_mmu.sv and load_unit.sv identical at e7af48457 and c9c7952bd; the form is upstream CVA6's, back to 3ddf797e9); NOT MEASURED ON SILICON; FIX IN RTL, simulation only: capstone-ariane ni-superpage 0f0905194, lint PASS at baseline; carried onto stage A as stage-b-batch fe4810dd1 (213378a11), two-sided there; NI-rule 95-sweep identical; not synthesised. Found 2026-11-06 by the runtime lane's rtl-oracle read for mcf on transparent huge pages`
 
 Siblings: none on this path. The load unit's own comment at `load_unit.sv:382` reads `TODO: dtlb_ppn_i is not reliable`.
 
@@ -4143,6 +4143,18 @@ cycle's `dtlb_is_page`. `lsu_paddr_o` is unchanged.
   TLB lookup branch as `dtlb_content` (`cva6_tlb.sv:190-193`). Under the FPGA rule it expects the NI cone to shrink.
 - The test cannot tell the fix from deleting the splice. Both classify alike while every rule boundary is 1 GiB-aligned,
   as the FPGA's is.
+- The 95-sweep WITH the FPGA rule (+CAPSTONE_FPGA_NI), base 4eb9c0c43 against fix 874d2928a: 92 of 92 identical in
+  exceptions, readings and retired count, 92 of 92 identical RVFI traces (26 parked on both sides), 0 of 92 differ in cycles;
+  `rand` and the two `perf_*_random` are missing on both sides, as on every sweep. The rule was live: 16 NI-ABORT trace lines
+  in 2 tests (`data-transfer` 1, `r20-stc-ld-x10` 15) on both sides. None has a DRAM PPN, so no sweep test loads
+  through a superpage. The sweep says the fix moves nothing else, and nothing about the fix itself; that rests on the arms above.
+- Carried onto stage A for the stage-B batch: capstone-ariane stage-b-batch fe4810dd1 (local; stage A's lineage is not on
+  origin) = stage A 14f39f356 + the R-32 fix + 213378a11 (this fix, the same core diff as 0f0905194). Its control is
+  stage-b-base 687849ee0 = 14f39f356 + the sim instrument and arms, no fix. With the FPGA rule, the control reads the "rule" column's
+  values exactly (2M-00 524 cycles / 66 aborts, 1G-low 565 / 66, S2M-00 940 / 74, ROM 1398 / 132, CLINT 1362 / 131,
+  CLINT-1G 817 / 1; every other arm 0) and the batch reads the "rule + fix" column on all 17 arms (2M-00 278 / 0, CLINT-1G 1362 / 131).
+  So the defect is present on stage A's core and the fix holds there. Lint on fe4810dd1: PASS, every counter identical to
+  14f39f356 (UNOPTFLAT 39, UNUSEDSIGNAL 1430, LATCH 44), the 39 loop names identical. Not synthesised.
 
 **Reach.**
 - Performance: every load through a 2 MiB page with vaddr[20:19] = 00, a quarter of addresses mapped by transparent
