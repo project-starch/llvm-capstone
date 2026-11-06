@@ -7,6 +7,13 @@ order-balanced runs. Mean total QEMU attempts decrease 7.499% (58.461M to
 54.077M), kernel plus module 10.855% (32.541M to 29.008M). Both modes pass 20
 new coverage checks and 51 authority/ABI/protection checks.
 
+Plain follow-up: all six orders of plain/launcher/native pass exact output
+validation (18 runs). Mean total attempts are 32.893M / 58.402M / 54.029M.
+Native saves 7.488% versus launcher and remains 1.643x plain. This compares the
+existing RV64/musl and Capstone builds on the same patched measurement kernel;
+compiler revisions are not matched for an isolated ISA-cost claim.
+[Three-arm record](../../runtime/virtual/tests/copyable-only/results/gcc-three-arm.json).
+
 This is a bounded experiment, not completion of native Linux compatibility.
 Five SIGACTION and one IOCTL_BUF request are still refused in this unsignalled
 run; GCC tolerates them. The exchange ABI and ioctl entry remain. Next qualify
