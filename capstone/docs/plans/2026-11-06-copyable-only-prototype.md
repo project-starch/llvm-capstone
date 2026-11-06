@@ -72,8 +72,24 @@ to linearity, and do not publish performance numbers before safety gates pass.
 
 ## Current qualification boundary
 
-Only gate 1 is complete. The strict QEMU builds and its instruction tests pass;
-the Linux/module/runtime stack has not yet been migrated or boot-qualified.
-No performance improvement is claimed. Build/test artifacts stay beneath
-`$CAPSTONE_TMP_ROOT/copyable-only`; the reusable fixtures are in
-`capstone/capstone-qemu/tests/copyable-only`.
+The pinned and unpinned Linux prototypes now run with ordinary OpenSBI. The
+module discovers a versioned copyable profile through the device tree, creates
+only copyable grants, and rejects the old grant ioctl. Legacy ownership/control
+encodings have no decoder entries at any privilege. The old remap transaction is
+refused; public remapping uses allocate/copy/retire. CSRUNV rejects non-copyable
+tagged register state on entry/restore. Device interrupts use ordinary MIP;
+pending interrupts are not overwritten by context restoration.
+
+Both modes pass 22 runtime checks on the same patched kernel, including expected
+fault causes, ABI refusal, timer wakeup and module unload. Additional tag-copy,
+physical reuse, tagged-swap refusal, firmware-interrupted-copy and COW movement
+checks pass. Complete deletion of unreachable legacy helper/type code and broader
+ISA/OS qualification remain work; there is no legacy instruction fallback.
+
+Three matched allocation runs per mode give 226,118,941 -> 198,791,518 median
+instruction attempts (-12.085%). Page-pin entry attempts fall from 14,515 to zero.
+This measures unpinning inside the new copyable-only stack, not the independent
+benefit of removing linearity. See the [build/run instructions and qualification](../../runtime/virtual/tests/copyable-only/README.md)
+and machine-readable results there. Single-hart QEMU only; supervisor-frame pins,
+tagged-swap refusal and KSM/THP restrictions remain. No RTL or hardware-cycle
+performance claim follows from these results.

@@ -7,9 +7,7 @@
 #include "../../sublet/sublet.h"
 #include "vm-abi.h"
 
-/* Internal libc interface. Grants are linear and must immediately be moved
- * into a slot. Public mmap explicitly delinearises its grant; heap allocators
- * retain ownership and derive separate object lifetimes. All grants belong to
+/* Internal libc interface. Grants are copyable from creation and belong to
  * the owning virtual address space, including its other threads. */
 #define CAP_VM_HEAP CV_MAP_HEAP
 #define CAP_VM_MAPPING CV_MAP_APPLICATION
@@ -44,7 +42,7 @@ static inline int cap_vm_acquire(sublet_cap *slot, size_t bytes,
 static inline void *cap_vm_copyable(sublet_cap *slot)
 {
     void *p;
-    __asm__ volatile("ldc %0, 0(%1)\ndelin %0"
+    __asm__ volatile("ldc %0, 0(%1)"
                      : "=&r"(p) : "r"(slot) : "memory");
     return p;
 }

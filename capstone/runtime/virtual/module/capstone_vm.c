@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /* Trusted OS adapter: one shared-mm namespace and explicit C contexts. */
 #include <linux/module.h>
+#include <linux/of.h>
+
+static bool copyable_exact_bounds;
 #include <linux/miscdevice.h>
 #include <linux/dma-mapping.h>
 #include <linux/fs.h>
@@ -52,8 +55,7 @@ _Static_assert(sizeof(struct cv_step) == 136, "cv_step is two user-copy chunks a
 #include "native-grant.h"
 _Static_assert(CV_NODE_RESERVE == CAP_REV_TABLE_RESERVE, "processor reserve ABI");
 
-/* One registered mapping. Arenas are allocated one by one and never move, so
- * the remap window may hold a pointer across its unlocked mremap. */
+/* One registered mapping, with its own revocable ancestor. */
 struct arena {
     struct rb_node node;
     u64 id;
@@ -67,8 +69,7 @@ struct arena {
      * open-addressing table of frame_slots(count) entries. It is the whole-arena duplicate
      * check (frames_distinct, commit 35fee9127ec2) kept for the arena's lifetime, so a page
      * admitted after the mint -- at a fault, in a pin-ahead window or by the resident scan --
-     * is held to the same rule as one pinned at mint. NULL for a linear arena, which was never
-     * frame-checked and still is not. */
+     * is held to the same rule as one pinned at mint. Every arena has a frame set. */
     unsigned long *frames;
     /* Data fault events received on this arena's pages, counted under diag_admit where CV_STEP
      * receives the event (not where CAPSTONE_VM_STATS faults is advanced, at the resolution or
@@ -91,9 +92,6 @@ struct arena {
     unsigned unpinned_resolves, unpinned_touches, unpinned_events, unpinned_ahead;
     /* Pages are admitted one by one at the domain's first access (resolve). */
     bool lazy;
-    /* The grant was LINEAR: the heap's move-only shape, the one CV_REMAP may grow. lazy used
-     * to imply this; since lazy_grants it does not. */
-    bool linear;
     /* S-21: the ancestor was already CSRETIREd at CV_THREAD_CREATE, to make a child's frame
      * unreachable by the domain before its first entry. A second retire is not an error, but the
      * non-destroying path reports one, so it must be skipped rather than tolerated. */
@@ -180,11 +178,6 @@ struct context {
 #endif
     /* The image file, writers denied from CV_IMAGE until release. */
     struct file *image;
-    wait_queue_head_t remap_wait;
-    struct arena *remapping;
-    struct page **remap_pages;
-    u64 remap_thread;
-    unsigned long remap_bytes;
 };
 static DEFINE_MUTEX(vm_lock);
 /* Quotas are in base pages; zero means the 30-bit ISA limit. Parameters are
@@ -451,10 +444,9 @@ module_param(diag_admit, bool, 0644);
 /* The CSMINT descriptor, v7 (Q-23's ruling). Six words, 8-aligned:
  *   w0 base
  *   w1 end
- *   w2 perms in bits 0-3, bit 8 set = NONLIN, clear = LINEAR
+ *   w2 perms in bits 0-3; bit 8 must be set (copyable)
  *   w3 cursor, base <= cursor <= end or the mint refuses with 29
- *   w4 a SECOND slot address, 0 for none; same checks as the first, and non-zero
- *      together with LINEAR refuses with 29
+ *   w4 a SECOND slot address, 0 for none; same checks as the first
  *   w5 reserved, must be 0
  * One rev node however many slots are written, which is why this replaces the old
  * load/delin/scc/store round trip rather than a second mint: two mints would make two
@@ -846,7 +838,7 @@ static unsigned long frame_slots(long n)
 
 /* Record a page's frame in the arena's frame set: false if the frame is there already, i.e.
  * another page of the arena holds it. Expected O(1): the set is at most half full, since no
- * index of pages[] is filled twice. A linear arena has no set and is never refused here. */
+ * index of pages[] is filled twice. */
 static bool frame_insert(struct arena *a, struct page *page)
 {
     unsigned long mask, key, at;
@@ -1760,7 +1752,7 @@ static int grant_transaction(struct context *c,
  * are written by the launcher only BEFORE their grant, and those pages are pinned at the mint
  * by the resident scan; after it, only the domain's own accesses populate them, every one of
  * which faults into resolve(). The launcher reads the stack after a fault (its frame chain),
- * which maps the zero page at most. Reply grants (a started context, reg 10) are linear. */
+ * which maps the zero page at most. Reply grants are copyable and use lazy admission. */
 static bool eager_grant(const struct cv_thread *t, const struct cv_map *r)
 {
     return !t->started && r->reg == 10;
@@ -1773,8 +1765,11 @@ static int add(struct context *c, struct cv_thread *t, struct cv_map *r)
     unsigned long flags, old, desc[CV_DESC_WORDS], ancestor, *slot;
     struct page **pages;
     long n;
+    /* Runtime-created mappings may reserve inaccessible pages and later change
+     * their PTE permissions. Capability rights remain a ceiling on access. */
+    bool mapping_reply = t->started && r->reg == 10;
     if (!r->bytes || r->bytes > CV_MAX_REGION_BYTES ||
-        (!r->linear && r->bytes > CV_MAX_EAGER_BYTES) ||
+        (!mapping_reply && r->bytes > CV_MAX_EAGER_BYTES) ||
         ((r->address | r->bytes) & (PAGE_SIZE - 1)) ||
         /* With exact bounds off the encoder quantises both edges, so an arena must be exactly
          * REPRESENTABLE. This used to demand a naturally aligned power of two, which is a much
@@ -1794,13 +1789,12 @@ static int add(struct context *c, struct cv_thread *t, struct cv_map *r)
         (!c->exact_bounds && !capstone_repr_ok(r->address, r->bytes)) ||
         r->address > ULONG_MAX - r->bytes ||
         !access_ok((void __user *)r->address, r->bytes) ||
-        r->permissions > 7 || r->linear > 1 || r->reg > 31 ||
+        r->permissions > 7 || r->reg > 31 ||
         r->cursor < r->address || r->cursor > r->address + r->bytes ||
-        (r->linear && r->cursor != r->address) ||
         (t->started && (t->event != 3 || r->reg != 10 || t->reply_cap)) ||
         (!t->started && r->reg != 2 && r->reg != 3 &&
          r->reg != 10 && r->reg != 11 && r->reg != 12 && r->reg != 13) ||
-        (r->reg == 3 && (!(r->permissions & 1) || r->linear)) ||
+        (r->reg == 3 && !(r->permissions & 1)) ||
         /* Only the initial image grant has a read+execute prefix, a whole
          * number of pages strictly inside it, and it starts there. */
         (r->rx_bytes && (r->reg != 3 || t->started || (r->rx_bytes & (PAGE_SIZE - 1)) ||
@@ -1833,16 +1827,16 @@ static int add(struct context *c, struct cv_thread *t, struct cv_map *r)
                   (v->vm_flags & VM_EXEC);
         else
             bad = v->vm_file ||
-                  ((r->permissions & 4) && !(v->vm_flags & (r->linear ? VM_MAYREAD : VM_READ))) ||
-                  ((r->permissions & 2) && !(v->vm_flags & (r->linear ? VM_MAYWRITE : VM_WRITE))) ||
-                  ((r->permissions & 1) && !(v->vm_flags & (r->linear ? VM_MAYEXEC : VM_EXEC)));
+                  ((r->permissions & 4) && !(v->vm_flags & (mapping_reply ? VM_MAYREAD : VM_READ))) ||
+                  ((r->permissions & 2) && !(v->vm_flags & (mapping_reply ? VM_MAYWRITE : VM_WRITE))) ||
+                  ((r->permissions & 1) && !(v->vm_flags & (mapping_reply ? VM_MAYEXEC : VM_EXEC)));
         if (bad) { mmap_read_unlock(c->mm); return -EACCES; }
 #ifdef CONFIG_TRANSPARENT_HUGEPAGE
         if (!(v->vm_flags & VM_NOHUGEPAGE)) {
             mmap_read_unlock(c->mm); return -EOPNOTSUPP;
         }
 #endif
-        if (unpinned && !r->linear && !rx && (!lazy_grants || eager_grant(t, r))) {
+        if (unpinned && !mapping_reply && !rx && (!lazy_grants || eager_grant(t, r))) {
             /* Unpinned: populate every page of a NONLIN grant through the kernel's own
              * fault path, as pin_user_pages_fast(FOLL_WRITE) below would, but take no pin. Write
              * access where the VMA grants it, so the PTE comes out writable and dirty as GUP's did. */
@@ -1877,9 +1871,9 @@ static int add(struct context *c, struct cv_thread *t, struct cv_map *r)
      * as the arena (a page admitted at any later fault is checked against it), so it is
      * accounted like the page array. */
     a->address = r->address; a->bytes = r->bytes; a->rx_bytes = r->rx_bytes;
-    a->pages = pages; a->count = count; a->linear = r->linear;
-    a->lazy = r->linear || (lazy_grants && !eager_grant(t, r));
-    if (!r->linear) {
+    a->pages = pages; a->count = count;
+    a->lazy = mapping_reply || (lazy_grants && !eager_grant(t, r));
+    {
         a->frames = kvcalloc(frame_slots(count), sizeof(*a->frames), GFP_KERNEL_ACCOUNT);
         if (!a->frames) { kvfree(pages); xa_erase(&c->ids, a->id); kfree(a); return -ENOMEM; }
     }
@@ -1895,7 +1889,7 @@ static int add(struct context *c, struct cv_thread *t, struct cv_map *r)
         for (i = 0; i < n; ++i)
             if (!PageAnon(pages[i]) || page_mapcount(pages[i]) != 1 || !frame_insert(a, pages[i]))
                 goto unpin;
-    } else if (!unpinned && !r->linear) {
+    } else if (!unpinned && !mapping_reply) {
         /* Lazy: the pages already resident -- what the launcher wrote before the grant -- are
          * pinned and checked now, exactly as the whole-arena pin would have (FOLL_WRITE breaks
          * a private file page's copy-on-write); every absent page is admitted at the domain's
@@ -1931,10 +1925,9 @@ static int add(struct context *c, struct cv_thread *t, struct cv_map *r)
     } else if (slot[0] || slot[1]) goto unpin;
     desc[0] = r->address;
     desc[1] = r->address + r->bytes;
-    /* C pointers are copyable, so a non-linear grant is minted NONLIN directly. A linear
-     * mapping grant stays move-only until the allocator derives a non-linear object. */
-    desc[2] = r->permissions | (r->linear ? 0 : CV_DESC_NONLIN);
-    /* The cursor the caller asked for. For a LINEAR grant this equals the base in every
+    /* Every application grant is copyable from creation. */
+    desc[2] = r->permissions | CV_DESC_NONLIN;
+    /* The cursor the caller asked for. For a mapping reply this equals the base in every
      * caller (exec.c:292 and :844 both pass the region's own address), so naming it here
      * is what the old path produced by letting the mint default to base. */
     desc[3] = r->cursor;
@@ -1973,99 +1966,6 @@ unpin:
     xa_erase(&c->ids, a->id); kfree(a);
     return -EFAULT;
 }
-/* Linux performs mremap; the adapter only updates lifetime and physical-tag
- * ownership. Pinned frames retained by mremap keep their tags. Truncated frames
- * are cleared before their pins are released. The syscall may fail without
- * changing any capability lifetime. */
-static int remap_begin(struct context *c, const struct cv_remap *r)
-{
-    struct cv_thread *t = find_thread(c, r->thread);
-    struct arena *a;
-    int error;
-    if (!c->exact_bounds || c->remapping || !t || t->terminal ||
-        !t->started || t->event != 3 || t->reply_cap ||
-        !r->bytes || r->bytes > CV_MAX_REGION_BYTES || (r->bytes & ~PAGE_MASK))
-        return -EINVAL;
-    a = xa_load(&c->ids, r->id);
-    if (!a || a->parked || !a->linear || arena_has_thread_frame(c, a)) return -EINVAL;
-    if (c->registered_bytes - a->bytes + r->bytes > CV_MAX_BYTES) return -ENOMEM;
-    error = unpinned ? 0 : pin_remaining(c, a, FOLL_FORCE | FOLL_NOFAULT);
-    if (error) return error;
-    error = ensure_nodes(c, 2 + CAP_REV_TABLE_RESERVE);
-    if (error) return error;
-    c->remap_pages = kvcalloc(r->bytes / PAGE_SIZE, sizeof(struct page *), GFP_KERNEL_ACCOUNT);
-    if (!c->remap_pages) return -ENOMEM;
-    c->remapping = a; c->remap_thread = r->thread; c->remap_bytes = r->bytes;
-    return 0;
-}
-static int remap_end(struct context *c, const struct cv_remap *r)
-{
-    struct arena *a = c->remapping;
-    struct cv_thread *t = find_thread(c, r->thread);
-    unsigned long flags, root, result, desc[CV_DESC_WORDS], *slot;
-    unsigned count;
-    struct vm_area_struct *v;
-    bool valid;
-    if (!a || !t || c->remap_thread != r->thread || c->remap_bytes != r->bytes)
-        return -EINVAL;
-    if (!r->address) {
-        kvfree(c->remap_pages); c->remap_pages = NULL; c->remapping = NULL; wake_up_all(&c->remap_wait);
-        return 0;
-    }
-    if ((r->address & ~PAGE_MASK) || r->address > ULONG_MAX-r->bytes ||
-        !access_ok((void __user *)r->address, r->bytes)) return -EINVAL;
-    /* The launcher is trusted, but reject overlap with another registered
-     * arena and malformed VM state before retiring the old ancestor. */
-    if (arena_overlaps(c, r->address, r->bytes, a)) return -EINVAL;
-    mmap_read_lock(c->mm);
-    v = find_vma(c->mm, r->address);
-    valid = v && v->vm_start <= r->address && v->vm_end >= r->address+r->bytes &&
-                 !v->vm_file && !(v->vm_flags & VM_SHARED) &&
-                 (v->vm_flags & (VM_READ|VM_WRITE)) == (VM_READ|VM_WRITE);
-    mmap_read_unlock(c->mm);
-    if (!valid) return -EACCES;
-    slot = t->frame + 28;
-    /* Q-30, the same shape as add(). Unreachable in the FLAT build -- remap_begin returns -EINVAL
-     * when exact_bounds is false -- so this is for the paged build and is written to match rather
-     * than to be exercised here. remap_end only runs on a started context at its heap-grow reply,
-     * so there is no pre-start case to preserve. */
-    slot[0] = 0;
-    slot[1] = 0;
-    count = r->bytes / PAGE_SIZE;
-    for (unsigned i=0; i<min(count, a->count); ++i) c->remap_pages[i] = a->pages[i];
-    /* v7, behaviour-preserving: this slot is the heap's, which is LINEAR, and the old
-     * path let the mint default the cursor to the base. No second slot. */
-    desc[0] = r->address; desc[1] = r->address+r->bytes; desc[2] = 6;
-    desc[3] = r->address; desc[4] = 0; desc[5] = 0;
-    preempt_disable(); local_irq_save(flags); root = select_root(c);
-    asm volatile(".insn r 0x5b, 1, 0x53, %0, %1, zero"
-                 : "=&r"(result) : "r"(a->ancestor) : "memory");
-    if (!result) {
-        asm volatile(".insn r 0x5b, 1, 0x50, %0, %1, %2"
-                     : "=&r"(result) : "r"(slot), "r"(desc) : "memory");
-        a->ancestor = result;
-    } else {
-        restore_root(root); local_irq_restore(flags); preempt_enable();
-        return -EIO;
-    }
-    restore_root(root); local_irq_restore(flags); preempt_enable();
-    for (unsigned i=count; i<a->count; ++i) {
-        if (!a->pages[i]) continue;
-        clear_page_tags(a->pages[i]);
-        set_page_dirty_lock(a->pages[i]); unpin_user_page(a->pages[i]);
-        --c->stats.pinned_pages;
-        ++a->released;
-    }
-    kvfree(a->pages); a->pages = c->remap_pages; c->remap_pages = NULL;
-    /* Rekeying the tree allocates nothing: no new failure after the commit. */
-    rb_erase(&a->node, &c->arenas);
-    c->registered_bytes += r->bytes - a->bytes;
-    a->address = r->address; a->bytes = r->bytes; a->count = count;
-    arena_insert(c, a);
-    c->remapping = NULL; wake_up_all(&c->remap_wait); t->reply_cap = true;
-    return 0;
-}
-
 /* CV_STEP resolves faults and resumes for at most one supervisor quantum;
  * CV_RESOLVE gives its pin-ahead window the same bound. */
 #define CV_STEP_BUDGET_NS (5 * NSEC_PER_MSEC)
@@ -3079,13 +2979,7 @@ static long vm_ioctl(struct file *f, unsigned int op, unsigned long arg)
     unsigned long flags;
     if (current->mm != c->mm)
         return -EPERM;
-retry:
     if (mutex_lock_interruptible(&vm_lock)) return -EINTR;
-    if (c->remapping && op != CV_REMAP_END) {
-        mutex_unlock(&vm_lock);
-        if (wait_event_interruptible(c->remap_wait, !READ_ONCE(c->remapping))) return -EINTR;
-        goto retry;
-    }
 #ifdef CV_GRANT_TXN
     if (op == CV_GRANT_TRANSACTION) {
         struct cv_grant_transaction r;
@@ -3136,9 +3030,8 @@ retry:
         else if ((rc = deny_write_access(file))) fput(file);
         else c->image = file;
     } else if (op == CV_REMAP_BEGIN || op == CV_REMAP_END) {
-        struct cv_remap r;
-        if (copy_from_user(&r, (void __user *)arg, sizeof(r))) { rc = -EFAULT; goto out; }
-        rc = op == CV_REMAP_BEGIN ? remap_begin(c, &r) : remap_end(c, &r);
+        /* Never enter the old linear ownership-transfer transaction. */
+        rc = -EOPNOTSUPP;
     } else if (op == CV_NODES) {
         struct cv_nodes r;
         struct cv_thread *t;
@@ -3531,7 +3424,6 @@ static int vm_open(struct inode *inode, struct file *f)
     c = kvzalloc(sizeof(*c), GFP_KERNEL);
     if (!c) return -ENOMEM;
     INIT_LIST_HEAD(&c->threads);
-    init_waitqueue_head(&c->remap_wait);
     c->arenas = RB_ROOT;
     xa_init_flags(&c->ids, XA_FLAGS_ACCOUNT);
     c->next_thread = 0;
@@ -3565,48 +3457,14 @@ static int vm_open(struct inode *inode, struct file *f)
             }
         }
     }
-    /* An older processor rejects the versioned format through urevavail.
-     * Detect that before CSMINT could fault in the kernel context.
-     *
-     * NOT IN FLAT MODE. urevavail (0xcc0) does not exist on vp2 -- csr_regfile.sv falls through
-     * to its default and a csrr is an ILLEGAL INSTRUCTION, so this probe would trap in S the
-     * first time a context is created. QEMU implements 0xcc0 as capacity - next + free_count
-     * read live, which is exactly node_available(), so in flat mode the header answers it
-     * without touching the CSR. Saturated at CV_FLAT_RECORDS as the hardware saturates. The
-     * probe's purpose -- detecting a processor too old for the versioned format -- does not
-     * apply to vp2, which is the newer part. Recorded in inputs.json as a computed count. */
-#if node_table_flat
-    available = min(node_available(c), CV_FLAT_RECORDS);
-#else
-    /* Braced so the declarations stay at the head of a block: the kernel builds with
-     * -Wdeclaration-after-statement, and scoping them here keeps the flat build free of
-     * -Wunused-variable, which is how the need for this was caught. */
-    if (unpinned) {
-        available = node_available(c);
-    } else {
-        unsigned long flags, previous_root;
-        preempt_disable(); local_irq_save(flags);
-        previous_root = select_root(c);
-        asm volatile("csrr %0, 0xcc0" : "=r"(available));
-        restore_root(previous_root);
-        local_irq_restore(flags); preempt_enable();
-    }
-#endif
+    /* Profile discovery happened at module load, without executing optional
+     * CSRs. Capacity is authoritative in the table we have just allocated. */
+    available = node_available(c);
     if (available != node_capacity(c) - CV_NODE_FIRST) {
         node_free_table(c); free_page((unsigned long)c->frame);
         kvfree(t); kvfree(c); return -EOPNOTSUPP;
     }
-#if node_table_flat
-    /* scapctl (0x5c0) does not exist on vp2 either -- any access, any mode, is illegal. The only
-     * thing this read produced was the exact-bounds property, which under option (iii) is false.
-     * The module never WROTE 0x5c0 (one access in the file, a read), so nothing else is lost. */
-    c->exact_bounds = false;
-#else
-    if (unpinned) c->exact_bounds = unpinned_exact_bounds;
-    else { unsigned long profile;
-      asm volatile("csrr %0, 0x5c0" : "=r"(profile));
-      c->exact_bounds = !!(profile & 0x100); }
-#endif
+    c->exact_bounds = copyable_exact_bounds;
     c->frame[1] = c->table_pa;
     t->context = c; t->id = 0; t->frame = c->frame;
     t->frame_pa = virt_to_phys(c->frame); t->user_frame = false;
@@ -3647,7 +3505,6 @@ static int vm_release(struct inode *inode, struct file *f)
     unsigned long flags;
     struct cv_thread *t, *tmp;
     mutex_lock(&vm_lock);
-    kvfree(c->remap_pages);
     list_del(&c->link);
     node_stats(c);
     allocated_total += c->stats.nodes;
@@ -3716,6 +3573,21 @@ static struct miscdevice device = {
 };
 static int __init init(void)
 {
+    struct device_node *profile;
+    u32 id_bits, exact, page_size, granule_size;
+    int error;
+    profile = of_find_compatible_node(NULL, NULL, "capstone,copyable-v1");
+    if (!profile) return -EOPNOTSUPP;
+    error = of_property_read_u32(profile, "id-bits", &id_bits) ||
+            of_property_read_u32(profile, "exact-bounds", &exact) ||
+            of_property_read_u32(profile, "page-size", &page_size) ||
+            of_property_read_u32(profile, "granule-size", &granule_size);
+    of_node_put(profile);
+    if (error || id_bits != CAPSTONE_VM_IDS || exact > 1 ||
+        page_size != PAGE_SIZE || granule_size != 16 || node_table_flat)
+        return -EOPNOTSUPP;
+    copyable_exact_bounds = exact;
+
     if (unpinned_fast_sweep && !unpinned) return -EINVAL;
     if (unpinned_fast_fault && !unpinned) {
         pr_emerg("capstone_vm: unpinned_fast_fault requires unpinned=1\n");
@@ -3730,6 +3602,7 @@ static int __init init(void)
         error = config(CAPSTONE_VM_IDS, &unpinned_exact_bounds);
         symbol_put(capstone_unpinned_config);
         if (error) return error;
+        if (unpinned_exact_bounds != copyable_exact_bounds) return -EOPNOTSUPP;
     }
 #ifdef CAPSTONE_VM_FLAT_TABLE
     /* Refuse the LOAD, so a bad value cannot reach a run. 2 because ids 0 and 1 are the header;
