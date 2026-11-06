@@ -1,0 +1,12 @@
+== capstone-lifetimes: run 4656.1 s | M0 FAILS (MX-SET ['step_budget_ns=10000000000 resume_quantum=Y retire_exit_sweep=3'] params={'fault_ahead_max': '64', 'retire_exit_sweep': '3', 'image_rootfs': 'Y', 'step_budget_ns': '80000000'} qnt=['007A1200'])
+   machine-wide: 4649.4 s of cycles, 18.257 G instructions, IPC 0.157
+   machine-wide per 1k instructions: L1I miss 55.98, L1D miss 24.63, DTLB miss 1.13, mispredict 39.22, issue stall 1977.11, scoreboard full 296.62
+   vmstat: pgalloc_normal 0, pgfree 110789, pgactivate 3238, pgfault 140293, pgmajfault 0 | /proc/stat: intr 86644, ctxt 66991, processes 814
+   inside 3829.1 s (15.152 G instructions, IPC 0.158), outside 826.9 s; launch 4.75 s; faults 19367, peak pages 63621, steps 34563
+   in-context per 1k instructions: L1I miss 54.28, L1D miss 25.87, DTLB miss 1.30, mispredict 40.70, issue stall 2131.39, scoreboard full 311.33
+   M1 holds (in-context hpm3-7 in (0, cycles), machine-wide > 0)
+   exits 34563 (by kind [0, 7857, 0, 7142, 19564, 0, 0, 0]), CV_STEPs 12191; per exit ms: CV_STEP 9.323 (resolve 2.418), between 12.915, other ioctls 0.720; outside per exit 23.93 ms
+   teardown 59189 pages, 30.36 s, sweep 3
+   reference 4656.1 s, CV_STEPs 12191; bundle - reference +0.0 s (1.0000x); inside cycles 1.0000x
+   X2 holds (ADD_OK lines 1 in 1 .err file(s))
+   M3 FAILS (run <= 0.985 x reference, CV_STEPs 12191 <= 20,000)

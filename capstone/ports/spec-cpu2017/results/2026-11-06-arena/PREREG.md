@@ -123,3 +123,37 @@ nested groups included. **Limit:** QEMU semantics only. A silicon run of `uaf2` 
 **Before landing:**
 - the virtual-runtime QEMU suites, since patch 0011 changes every image's libc call;
 - the uaf2 probe on silicon.
+
+## Addendum 3 (6 Nov 12:05): gcc train, arena cache + llvm-c2 + the simple slot hash + no exit sweep
+
+Lead: gcc train is the target, test can go; reach 1.20x if possible (−437 s from 4,656.1 s).
+
+**Image `cpugcc_r.c2ac7`** (a0 sha cc02847a10691ef3, stripped as make-stage does). It is built from:
+- gcc's objects compiled with llvm-c2, origin/dev 3d2ba7d7176b (the compiler lane's c1-gate/gcc-jt/c2, -fno-jump-tables);
+- linked against SDK ac7: wt-arena b3457ffce661, arena cache, slot index of 16 bits, and the index hash the masked
+  granule number. The 64-bit multiply cost 8 instructions per call, with about 3 calls per object.
+
+**QEMU gcc train**, all specdiff PASS except where noted:
+
+| variant | instructions |
+|---|---|
+| arena cache alone (the silicon image's runtime) | 15.150 G |
+| + llvm-c2 | 14.973 G |
+| + simple hash, 16 bits: **this image** | **14.799 G** (−2.3 %) |
+| + a one-record find cache | 14.814 G: no gain, dropped |
+| + no zeroing of reused mappings | crashes at 0.9 M instructions: mallocng needs them zero; dropped |
+
+**The run.** Board 2, kit bkit27-gtq, ahead of the THP mcf runs.
+- The stage is the ga stage (resume_quantum, 10 s budget) with `retire_exit_sweep=2`, so the exit teardown sweeps
+  nothing. That is safe by results/2026-11-05-nosweep N1.
+- With the cache, in-run retires are rare: they are spills only, and those take mode 0.
+
+**Reference:** out-ga-b2, 4,656.1 s (same board, kit and stage, except image and sweep).
+
+**Prediction (`ga2-grade.py`):**
+- M0/M1/X2 as before, with MX-SET reading sweep 2;
+- **M3: run ≤ 0.985 × 4,656.1 s**, point −90…−130 s: inside −2.3 % ≈ −88 s, teardown −30 s.
+- Grader control: out-ga-b2 given as the run reads rc 1.
+
+That lands near 1.29×. 1.20× needs the allocator path and the globals' bounds construction (about 1 G instructions
+each); neither is ready today.
