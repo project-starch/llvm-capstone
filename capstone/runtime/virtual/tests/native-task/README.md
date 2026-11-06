@@ -1,5 +1,9 @@
 # Experimental Linux task-return backend
 
+For the cumulative diff against dev and the hardware work, start with the
+[RTL handoff](../../../../docs/plans/native-task-rtl-handoff.md). Its SPEC gate
+is separate from the earlier short performance comparisons.
+
 Branch `native/linux-task-integration`. This is a working first implementation,
 not completion of the full [acceptance plan](../../../../docs/plans/native-linux-task-integration.md).
 The [transition contract](../../../../docs/design/virtual-capstone/native-linux-tasks.md#linux-61-first-backend-transition-contract)
@@ -12,6 +16,70 @@ exchange ABI, confinement and providers remain. No linear ownership instructions
 are introduced. The model's 5 ms quantum supplies escape opportunities; this is
 not direct hardware timer delivery. Caught handlers, full restart semantics,
 clone/exec services, SMP and native audit/seccomp/tracing remain outside this slice.
+
+## Full SPEC test-input qualification
+
+This gate covers the ten entries in the existing C port, with every original
+`test` invocation and official output comparator. It is not a CPU2017 reportable
+run, a whole-suite port, or a performance measurement. Exit status alone does
+not qualify a benchmark. In particular, the Perl test harness can exit zero
+with incomplete output.
+
+Four helpers keep licensed sources and generated artifacts outside Git:
+
+1. `prepare-spec-tests.py` verifies original input checksums and frozen adapted
+   sources, hashes existing application objects, and relinks with the selected
+   SDK. Specrand is compiled from its original sources. This is not a fresh
+   compiler or complete application rebuild.
+2. `setup-spec-validation.py` asks the original SPEC harness for fresh commands
+   and comparators, verifies the invocation arguments, and regenerates x264's
+   input with the supplied host decoder. Its `no_md5` control is not a checksum;
+   byte identity with that fresh generated input is checked separately.
+3. `run-spec-tests.py` runs the applications and image validators in QEMU with
+   one hardware slot, the native task/checked-copy backend and narrow grants.
+   It retains indexed exit receipts, serial logs, image data and comparator
+   output files. It fails on missing cases or nonzero results.
+4. `validate-spec-tests.py` independently checks execution evidence and runs
+   every official host `specdiff`. It fails on missing benchmarks, images,
+   references or output mismatches, even when the application exited zero.
+
+Source `capstone/tests/capstone-test-env.sh` before these commands. Select fresh
+scratch directories for each attempt; the preparation, setup and runner refuse
+to overwrite existing results. The build host needs licensed CPU2017 1.0.2,
+the existing port's build directories and `frozen.json`, the matching SDK and
+the ordinary host x264 input decoder. Original SPEC setup roots must identify
+one run per benchmark; provide narrower roots first if multiple variants exist.
+
+```sh
+helpers="$PWD/capstone/runtime/virtual/tests/native-task"
+python3 "$helpers/prepare-spec-tests.py" \
+  --spec "$SPEC_ROOT" --builds "$SPEC_BUILDS" --sdk "$NATIVE_CC" \
+  --frozen "$FROZEN_SOURCES" --run-roots "$ORIGINAL_RUN_ROOT" \
+  --out "$CAPSTONE_TMP_ROOT/spec-native/prepared"
+
+# On the licensed host, after sourcing that SPEC installation's shrc:
+python3 "$helpers/setup-spec-validation.py" \
+  --spec "$SPEC_ROOT" --prepared "$CAPSTONE_TMP_ROOT/spec-native/prepared" \
+  --cc "$NATIVE_CC" --ldecod "$HOST_LDECOD" \
+  --out "$CAPSTONE_TMP_ROOT/spec-native/official"
+
+python3 "$helpers/run-spec-tests.py" \
+  --prepared "$CAPSTONE_TMP_ROOT/spec-native/prepared" \
+  --comparators "$CAPSTONE_TMP_ROOT/spec-native/official/comparators.json" \
+  --qemu "$QEMU" --images "$NATIVE_IMAGES" --firmware "$FIRMWARE" \
+  --out "$CAPSTONE_TMP_ROOT/spec-native/execution" --timeout 7200
+
+python3 "$helpers/validate-spec-tests.py" --spec "$SPEC_ROOT" \
+  --results "$CAPSTONE_TMP_ROOT/spec-native/execution/runs" \
+  --comparators "$CAPSTONE_TMP_ROOT/spec-native/official/comparators.json" \
+  --out "$CAPSTONE_TMP_ROOT/spec-native/validation.json"
+```
+
+For split build/QEMU hosts, transfer the prepared tree and comparator manifest
+unchanged to the QEMU host, then return `execution/runs` to the licensed host
+for validation. Comparator reference paths refer to that licensed host. Keep
+both inventories and all serial/receipt files, not just stdout. Host elapsed
+times include scheduling and the shared QEMU lock; they are not speed results.
 
 ## Build and activation
 

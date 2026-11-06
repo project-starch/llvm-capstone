@@ -208,6 +208,11 @@ table is for is the **role** of each directory.
 
 ## Current verified baseline
 
+For the cumulative native-branch delta and FPGA implementation requirements,
+start with the [RTL handoff](plans/native-task-rtl-handoff.md). Its full SPEC
+test-input acceptance gate is separate from the short performance comparisons;
+an application exit code alone does not establish output correctness.
+
 The opt-in native Linux task branch now runs file-backed SQLite speedtest1 with
 real Linux file/lock services. All 32 SQL phases match its host reference; four
 matched runs show 4.16% fewer total attempted instructions with direct small
