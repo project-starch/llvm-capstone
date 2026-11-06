@@ -1,0 +1,7 @@
+llvm-capstone ad8d0502b189 (branch juliet-cheribsd: the harness and its pre-registration, committed before the run)
+CheriBSD vehicle, built 2026-10-01 from pinned sources (cheribuild, riscv64-purecap):
+ 9224aad4dd4dc88c42814ffd693549d24b42d5a8 CTSRD-CHERI/cheribuild
+ 7e122876ee01a7a82585f7674c94f12fc1cc7689 CTSRD-CHERI/llvm-project (clang 17.0.0)
+ 88f39900c32928d807dba245fba138808c666f34 CTSRD-CHERI/cheribsd
+ d0bb921cd6d34d1f8f4b3dafd279aa571795c938 CTSRD-CHERI/qemu (QEMU 7.1.0)
+Compiler, configuration, libc, firmware, kernel and image identities: each set's <set>-summary.json (toolchain, platform).

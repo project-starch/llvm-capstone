@@ -7,6 +7,9 @@ under the launcher, and each run judged from the fault the launcher and QEMU rep
 Juliet is public domain and is not committed: `fetch-juliet.sh` downloads it, checks a pinned sha256 and always
 extracts the tree afresh from the verified archive.
 
+The same cases on stock CheriBSD purecap, for comparison, are `cheribsd/` (its own build, runner, judge and
+results; the manifests are shared).
+
 ## What is measured
 
 Two sets (`select.py`):
