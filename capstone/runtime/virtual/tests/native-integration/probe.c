@@ -63,8 +63,7 @@ int main(void)
     }
     CHECK("private descriptor", call(63, 3, buffer, 1) == -EBADF);
     CHECK("unsupported syscall", call(9999, 0, 0, 0) == -ENOSYS);
-    CHECK("unsupported path", __capstone_native_syscall(56, (void *)-100L,
-        (void *)"/proc/self/mem", 0, 0, 0, 0) == -ENOSYS);
+    CHECK("confined path", call(56, -100L, (void *)"/proc/self/mem", 0) == -EACCES);
     CHECK("clock output", call(113, CLOCK_MONOTONIC, &ts, 0) == 0 && ts.tv_sec >= 0);
     {
         char *large = malloc(65536);

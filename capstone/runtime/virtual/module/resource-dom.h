@@ -112,19 +112,24 @@ static int dom_resources_init(struct context *c)
  * this is an authority prefix, not a blacklist or a security canonicalizer.
  * The subsequent component walk supplies the actual resolution guarantee. */
 static int dom_parent(struct context *c, const struct capstone_delegate_entry *e,
-                      struct path *parent, char **storage, char **leaf)
+                      struct path *parent, char **storage, char **leaf, const char *snapshot)
 {
     struct dom_delegate *d = c->dom_delegate;
     struct file *f;
     char *name, *at, *part;
     long bytes;
     int rc = 0;
+    if (snapshot) {
+        name = kstrdup(snapshot, GFP_KERNEL);
+        if (!name) return -ENOMEM;
+    } else {
     bytes = strnlen_user((char __user *)(c->dom_exchange + e->args[1]),
                          min_t(u64, PATH_MAX, c->dom_exchange_bytes - e->args[1]));
     if (bytes <= 0 || bytes > PATH_MAX || bytes > c->dom_exchange_bytes - e->args[1])
         return -EFAULT;
     name = memdup_user((void __user *)(c->dom_exchange + e->args[1]), bytes);
     if (IS_ERR(name)) return PTR_ERR(name);
+    }
     at = name;
     if (!*at) { rc = -ENOENT; goto out; }
     if (*at == '/') {
@@ -204,19 +209,19 @@ static struct file *dom_lookup(struct context *c, const struct path *parent, con
     return f;
 }
 
-static struct file *dom_path_file(struct context *c, const struct capstone_delegate_entry *e)
+static struct file *dom_path_file_name(struct context *c, const struct capstone_delegate_entry *e, const char *snapshot)
 {
     struct path parent;
     struct file *f;
     char *storage, *leaf;
-    int rc = dom_parent(c, e, &parent, &storage, &leaf);
+    int rc = dom_parent(c, e, &parent, &storage, &leaf, snapshot);
     if (rc) return ERR_PTR(rc);
     f = dom_lookup(c, &parent, leaf);
     path_put(&parent); kfree(storage);
     return f;
 }
 
-static long dom_path_operation(struct context *c, const struct capstone_delegate_entry *e)
+static long dom_path_operation_name(struct context *c, const struct capstone_delegate_entry *e, const char *snapshot)
 {
     struct path parent;
     struct file *pin, *f;
@@ -229,7 +234,7 @@ static long dom_path_operation(struct context *c, const struct capstone_delegate
     if (e->nr == CAPSTONE_SYS_openat && (e->args[2] & ~((u64)allowed))) return -EINVAL;
     if (e->nr == CAPSTONE_SYS_openat && (flags & O_ACCMODE) == O_ACCMODE) return -EINVAL;
     if (e->nr == CAPSTONE_SYS_unlinkat && flags) return -ENOSYS;
-    rc = dom_parent(c, e, &parent, &storage, &leaf);
+    rc = dom_parent(c, e, &parent, &storage, &leaf, snapshot);
     if (rc) return rc;
     if (e->nr == CAPSTONE_SYS_unlinkat) {
         struct dentry *victim;
@@ -291,3 +296,8 @@ out:
     path_put(&parent); kfree(storage);
     return rc;
 }
+
+static struct file *dom_path_file(struct context *c, const struct capstone_delegate_entry *e)
+{ return dom_path_file_name(c, e, NULL); }
+static long dom_path_operation(struct context *c, const struct capstone_delegate_entry *e)
+{ return dom_path_operation_name(c, e, NULL); }

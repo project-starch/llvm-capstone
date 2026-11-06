@@ -1,3 +1,19 @@
+## 2026-11-06 — Preliminary native GCC measurement
+
+`experiment/native-gcc-preliminary` extends frozen `ea6464a9b2a5` with native
+file/status/vector/system syscall coverage and kernel-buffer Linux helpers.
+The unchanged GCC SPEC test input now produces the exact reference in all four
+order-balanced runs. Mean total QEMU attempts decrease 7.499% (58.461M to
+54.077M), kernel plus module 10.855% (32.541M to 29.008M). Both modes pass 20
+new coverage checks and 51 authority/ABI/protection checks.
+
+This is a bounded experiment, not completion of native Linux compatibility.
+Five SIGACTION and one IOCTL_BUF request are still refused in this unsignalled
+run; GCC tolerates them. The exchange ABI and ioctl entry remain. Next qualify
+native caught-signal/ioctl behavior and larger workloads before extrapolating
+this startup-inclusive small-input result or undertaking the full task rewrite.
+See [scope and reproduction](../../runtime/virtual/tests/native-integration/README.md#preliminary-native-gcc-result).
+
 ## 2026-11-06 — Qualified kernel syscall prototype
 
 On `prototype/copyable-only`, the narrow Point 2 kernel consumer is implemented

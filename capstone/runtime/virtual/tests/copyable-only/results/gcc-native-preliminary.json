@@ -1,0 +1,157 @@
+{
+  "benchmark": "502.gcc_r",
+  "input": "test/t1.c",
+  "argv": [
+    "t1.c",
+    "-O3",
+    "-finline-limit=50000",
+    "-o",
+    "output.s"
+  ],
+  "inputs_sha256": {
+    "qemu": "c6681ec8a8ff704b297ec3eafceb13b2fe9c1c61c7a65ed95304bd5dbe5183eb",
+    "firmware": "2335a28682ddf65e46c1f492632c2cb026efcb2271caf544a3f7ddc858b03e02",
+    "module": "5d335fed248e0399b4cb955f6aece9ef4f61f9b83593caddefc0ccf7771368f5",
+    "launcher": "8110b7b1adcd80c8f667d38d67e00ef583761670bfdc01ba0e8ed48e6834e0e9",
+    "gcc": "e3e535b50e069550908154e3d43a3ebad9da6502b055d2dcdfe8865a49633297",
+    "profrun": "1d13d4912794855ae9c3c3fe69c89ca55434c2dd02b836053ad18f7913b7904f",
+    "input": "de7b86d79a68965adb62e750101d9211224884b2236053d906d1e23057bb6ad1",
+    "reference": "58111208509dd871223ae195a33304bd6b24afd29458f37c976556cbad506324",
+    "plugin": "a1883e39c6a1d4b1529081fda06ae7c7bba217a61e134041f9ef14ecf04f6ebc",
+    "Image": "c969cf2e7ffdbed18e86820d766990c377eafd5b42b994711bc7046a4e052e50",
+    "System.map": "46fd2e008f62cf409f68ec309ed98fd27a44facdcd830cf37e5fe08de7b6f165"
+  },
+  "rows": [
+    {
+      "order": "forward",
+      "arm": "launcher",
+      "total_attempts": 61545408,
+      "classes": {
+        "kernel": 32680969,
+        "module": 1850169,
+        "other": 27014270
+      },
+      "reference_match": true,
+      "counted_refusals": 0
+    },
+    {
+      "order": "forward",
+      "arm": "native",
+      "total_attempts": 50963590,
+      "classes": {
+        "kernel": 24925153,
+        "module": 2063466,
+        "other": 23974971
+      },
+      "reference_match": true,
+      "counted_refusals": 6
+    },
+    {
+      "order": "reverse",
+      "arm": "native",
+      "total_attempts": 57190823,
+      "classes": {
+        "kernel": 28964673,
+        "module": 2063312,
+        "other": 26162838
+      },
+      "reference_match": true,
+      "counted_refusals": 6
+    },
+    {
+      "order": "reverse",
+      "arm": "launcher",
+      "total_attempts": 55377568,
+      "classes": {
+        "kernel": 28700966,
+        "module": 1850190,
+        "other": 24826412
+      },
+      "reference_match": true,
+      "counted_refusals": 0
+    }
+  ],
+  "means": {
+    "launcher": 58461488.0,
+    "native": 54077206.5
+  },
+  "reduction_percent": 7.499435354775786,
+  "scope": "QEMU attempted instructions, profrun fork through child exit; two fresh guests, reversed arm order; boot/module load outside windows",
+  "limitations": [
+    "existing exchange ABI and ioctl entry, not final native task integration",
+    "unsignalled test; caught SIGACTION and some ioctl requests still refused",
+    "refusal counter is not a complete syscall inventory",
+    "other PCs include application, runtime, launcher and firmware",
+    "two repetitions per arm, preliminary only; no hardware timing claim"
+  ],
+  "base_commit": "ea6464a9b2a5",
+  "branch": "experiment/native-gcc-preliminary",
+  "qemu_commit": "dd041bac5ad9c145c3872a50804ca714a26b1c88",
+  "kernel_module_means": {
+    "launcher": 32541147.0,
+    "native": 29008302.0
+  },
+  "kernel_module_reduction_percent": 10.856547250777604,
+  "checks": {
+    "gcc_exact_reference": 4,
+    "new_coverage_per_dispatcher": 20,
+    "existing_probe_per_dispatcher": 51,
+    "dispatchers": [
+      "generic",
+      "fast"
+    ],
+    "all_pass": true,
+    "test_note": "Path refusal oracle changes from ENOSYS to EACCES because openat is now implemented; unknown syscall refusal retained."
+  },
+  "observed_refusals_per_gcc_run": [
+    {
+      "nr": 3235774469,
+      "name": "CAPSTONE_NR_SIGACTION",
+      "count": 5
+    },
+    {
+      "nr": 3235774468,
+      "name": "CAPSTONE_NR_IOCTL_BUF",
+      "count": 1
+    }
+  ],
+  "source_sha256": {
+    "capstone/runtime/virtual/module/native-gcc-dom.h": "fe54a12ee83f1cf2f7a8d7c7e6b6504af5e0f7db983037cc14fccea5bae9d721",
+    "capstone/runtime/virtual/module/native-syscall-dom.h": "33ef7a25d74430265a2952c3eed337144c0bfd9222c56e5df29a7a293c80df2a",
+    "capstone/runtime/virtual/module/resource-dom.h": "05850d37c1573c7b61bb37ad7e030541490c0bdf9fd50927bb4d09a3fbcbacb1",
+    "capstone/runtime/virtual/kernel-native-gcc.patch": "7bb3d3ba4fe66f186b7e2590cda3642734eb7165ee7eb49fe78359256ad88803",
+    "capstone/runtime/virtual/tests/native-integration/gcc-coverage.c": "031e0619b625f6e193f6aa4029fc8747368174423e772930f7a70335d89b24ac",
+    "capstone/runtime/virtual/tests/native-integration/gcc-preliminary.py": "ae3e75a495ce5bd4da36b6ed454e8d7df1a68a30455f424fa9bbba360aa0b95e",
+    "capstone/runtime/virtual/tests/native-integration/probe.c": "8e5696283284ed4980b9a3cf48c308811634ed14e1ee7493a61d9ba50b836d77"
+  },
+  "probe_sha256": {
+    "capstone_vm.ko": "5d335fed248e0399b4cb955f6aece9ef4f61f9b83593caddefc0ccf7771368f5",
+    "coverage.dom": "ab4744c636ea44e33a7befb00b34013b6343020aa28863b92b2e6f406f205d77",
+    "probe.dom": "b39a82452df583a89db636be7b93da36916b8429c7768195d1e932e602cfe330",
+    "gcc-test.dom": "e3e535b50e069550908154e3d43a3ebad9da6502b055d2dcdfe8865a49633297"
+  },
+  "review": {
+    "reviewer": "Astra xhigh",
+    "conclusion": "No identified authority bypass within one-main-thread exchange scope; not a security proof.",
+    "fixes_before_final_measurement": [
+      "normalize vector internal restart errors to EINTR",
+      "retain successfully published output prefix on vector copy-out fault"
+    ],
+    "unqualified_fault_cases": "New vector fault/revoke interleavings and signal delivery have not received full RT qualification."
+  },
+  "excluded_attempts": {
+    "run1": "Kernel stat wrapper refactor touched an earlier return site; init failed. Fixed to factor only cp_new_stat, then rebooted and validated.",
+    "coverage-run": "Old openat oracle expected ENOSYS; updated to require policy EACCES for forbidden path.",
+    "run2,pair-forward,pair-reverse": "Discovery runs before vector restart/prefix fix; not the final reported measurement."
+  },
+  "artifacts": {
+    "local": "$CAPSTONE_TMP_ROOT/native-gcc-preliminary",
+    "remote_kernel": "p12:/var/tmp/capstone-copyable-only/kernel-gcc-preliminary",
+    "remote_module": "p12:/var/tmp/capstone-copyable-only/adapter-gcc-preliminary"
+  },
+  "evidence": {
+    "path": "$CAPSTONE_TMP_ROOT/native-gcc-preliminary/gcc-native-preliminary-evidence.tar.gz",
+    "sha256": "9a9bfecdc66abbc106215cedf1abcd0545c68ca3809986a2768f1a1c5206839e",
+    "mirror": "p12:/var/tmp/capstone-copyable-only/gcc-native-preliminary-evidence.tar.gz"
+  }
+}
