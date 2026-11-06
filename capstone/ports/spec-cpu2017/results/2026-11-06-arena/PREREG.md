@@ -215,3 +215,28 @@ image's 15.150 G; specdiff PASS.
 - An stc of x0 has not been read back on silicon outside memcpy's granule path; specdiff and twin equality decide.
 
 **M3 unchanged** (≤ 0.95 × 4,656.1 s). The point estimate is now −260…−320 s, about 4,370 s, 1.24×.
+
+## Addendum 7 (6 Nov 14:40, before the boot): the image changes to c3s1, SHRINKTO for small globals
+
+The image is **cpugcc_r.c3s1** (016dce8d0ad5ee56). It is gcc recompiled from the same replayed compile list with
+llvm-c3, which is llvm-c2 plus llvm-capstone perf/shrinkto d06490ba9d30, flags `-capstone-shrinkto-globals
+-capstone-shrinkto-end-adjust=1`, and linked with SDK ac12 as c2ac12 was. Workload sources are unchanged.
+- **What changes:** a data global up to 2,046 bytes is narrowed with one `shrinkto cap, cap, size+1` instead of
+  `li; add; shrink`.
+- **Static count:** 78,910 shrinkto and 26,427 shrink, against 135,543 shrink in c2ac12.
+- **Why +1:** R-32. The C.5a RTL ends SHRINKTO at cursor + imm - 1. The fix, capstone-ariane a3b7a22c0, is
+  cherry-picked onto the next RTL batch, not onto C.5a. With +1 the silicon bounds equal SHRINK's exactly, and on
+  QEMU they are one byte wider. **This image is for C.5a only**; the driver flashes C.5a (1fc2cd5aa).
+- **The edge case:** with +1, a global ending exactly at the end of gp's region would trap. The image window is
+  rounded up to a power of two (runtime/virtual/exec.c `rounded()`), 16 MiB here. The last object
+  (.L_MergedGlobals.6) ends at 0xf99930, and the window at 0x1010000.
+
+**QEMU gcc train** (perf/best gtr-c3s1 against xprof gtrAC-c2ac12, kit-profq): program instructions 14.302 →
+**13.737 G** (−3.95 %; −9.3 % against the silicon image's 15.150 G); specdiff PASS.
+
+**On silicon:** SHRINKTO has run on silicon only in the R-21/R-42 type probes (it returns), never in compiled code.
+If its end differs from R-32's reading, the run faults with rc != 0 or reads one byte wider. It cannot read narrower
+and pass silently.
+
+**M3 tightens to run ≤ 0.93 × 4,656.1 s (4,330 s).** Point estimate −400…−470 s, about 4,225 s, **1.20×** Plain's
+3,515.5 s. This adds about −140 s to Addendum 6's estimate: −3.95 % of c2ac12's ~3,610 s inside.
