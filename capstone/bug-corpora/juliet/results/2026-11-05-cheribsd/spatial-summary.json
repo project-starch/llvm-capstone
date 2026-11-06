@@ -1,0 +1,246 @@
+{
+ "set": "spatial",
+ "suite": "NIST SARD Juliet C/C++ 1.3",
+ "language": "C",
+ "cases": 9138,
+ "left_out": {
+  "CWE-121 fgets": 38,
+  "CWE-121 fscanf": 38,
+  "CWE-121 rand": 38,
+  "CWE-121 socket": 76,
+  "CWE-122 fgets": 38,
+  "CWE-122 fscanf": 38,
+  "CWE-122 rand": 38,
+  "CWE-122 socket": 76,
+  "CWE-124 fgets": 38,
+  "CWE-124 fscanf": 38,
+  "CWE-124 rand": 38,
+  "CWE-124 socket": 76,
+  "CWE-126 fgets": 38,
+  "CWE-126 fscanf": 38,
+  "CWE-126 rand": 38,
+  "CWE-126 socket": 76,
+  "CWE-127 fgets": 38,
+  "CWE-127 fscanf": 38,
+  "CWE-127 rand": 38,
+  "CWE-127 socket": 76
+ },
+ "judge_sha256": "80ef239a57b81cb55fddf031809c99c3ae7cb441388bceedb207ea43181ab724",
+ "shared_sha256": "72ccf26938442bdafce9fd79d04e93f6703464601fd9735c37303e0736de6d6e",
+ "manifest_sha256": "e736c457921b3809491378e5155b7434594b974d9afdc525ca33868e869f418d",
+ "attribution": "site: the function holding the fault pc, and the return address's; no capability bounds are reported by CheriBSD's kernel, so no size-based strict check",
+ "runs": {
+  "census": {
+   "revocation": "default",
+   "batches": 143,
+   "batches_counted": 143,
+   "batches_void": {},
+   "wall_s": 8481.7,
+   "guests": 8,
+   "runner_sha256": "4258d840ae4b187222db4cd074dc648c179cc8ac9417b695cd4a5ad7779e302a",
+   "sysctl_expected": {
+    "security.cheri.runtime_revocation_default": "1",
+    "security.cheri.runtime_revocation_every_free_default": "0"
+   },
+   "uaf_control": {
+    "completed": 286
+   }
+  },
+  "seeded": {
+   "revocation": "default",
+   "batches": 9,
+   "batches_counted": 9,
+   "batches_void": {},
+   "wall_s": 658.2,
+   "guests": 8,
+   "runner_sha256": "4258d840ae4b187222db4cd074dc648c179cc8ac9417b695cd4a5ad7779e302a",
+   "sysctl_expected": {
+    "security.cheri.runtime_revocation_default": "1",
+    "security.cheri.runtime_revocation_every_free_default": "0"
+   },
+   "uaf_control": {
+    "completed": 18
+   }
+  },
+  "twins": {
+   "revocation": "default",
+   "batches": 3,
+   "batches_counted": 3,
+   "batches_void": {},
+   "wall_s": 363.8,
+   "guests": 8,
+   "runner_sha256": "4258d840ae4b187222db4cd074dc648c179cc8ac9417b695cd4a5ad7779e302a",
+   "sysctl_expected": {
+    "security.cheri.runtime_revocation_default": "1",
+    "security.cheri.runtime_revocation_every_free_default": "0"
+   },
+   "uaf_control": {
+    "completed": 6
+   }
+  }
+ },
+ "seeds": {
+  "10": 1,
+  "00": 2,
+  "01": 7,
+  "11": 18
+ },
+ "mechanism_probe": {
+  "sizeof-ptr": {
+   "double*": "16",
+   "double": "8",
+   "int64_t*": "16",
+   "int64_t": "8",
+   "struct*": "16",
+   "struct": "8"
+  },
+  "holds_one_element": true
+ },
+ "malloc_bounds": [
+  "4          16         12       +n=1 +len=1 +0=1 +4096=1 +8192=1 +16384=0 +32768=0 +65536=0 +131072=0 +262144=0 +1048576=0",
+  "16         16         0        +n=1 +len=1 +0=1 +4096=1 +8192=1 +16384=0 +32768=0 +65536=0 +131072=0 +262144=0 +1048576=0",
+  "24         32         8        +n=1 +len=1 +0=1 +4096=1 +8192=1 +16384=0 +32768=0 +65536=0 +131072=0 +262144=0 +1048576=0",
+  "48         48         0        +n=1 +len=1 +0=1 +4096=1 +8192=1 +16384=0 +32768=0 +65536=0 +131072=0 +262144=0 +1048576=0",
+  "97         112        15       +n=1 +len=1 +0=1 +4096=1 +8192=1 +16384=0 +32768=0 +65536=0 +131072=0 +262144=0 +1048576=0",
+  "100        112        12       +n=1 +len=1 +0=1 +4096=1 +8192=1 +16384=0 +32768=0 +65536=0 +131072=0 +262144=0 +1048576=0",
+  "184        192        8        +n=1 +len=1 +0=1 +4096=1 +8192=1 +16384=0 +32768=0 +65536=0 +131072=0 +262144=0 +1048576=0",
+  "200        224        24       +n=1 +len=1 +0=1 +4096=1 +8192=1 +16384=0 +32768=0 +65536=0 +131072=0 +262144=0 +1048576=0",
+  "216        224        8        +n=1 +len=1 +0=1 +4096=1 +8192=1 +16384=0 +32768=0 +65536=0 +131072=0 +262144=0 +1048576=0",
+  "400        448        48       +n=1 +len=1 +0=1 +4096=1 +8192=1 +16384=0 +32768=0 +65536=0 +131072=0 +262144=0 +1048576=0",
+  "512        512        0        +n=1 +len=1 +0=1 +4096=1 +8192=1 +16384=0 +32768=0 +65536=0 +131072=0 +262144=0 +1048576=0",
+  "513        640        127      +n=1 +len=1 +0=1 +4096=1 +8192=1 +16384=0 +32768=0 +65536=0 +131072=0 +262144=0 +1048576=0",
+  "8192       8192       0        +n=1 +len=1 +0=1 +4096=1 +8192=1 +16384=1 +32768=0 +65536=0 +131072=0 +262144=0 +1048576=0",
+  "8193       10240      2047     +n=1 +len=1 +0=1 +4096=1 +8192=1 +16384=1 +32768=0 +65536=0 +131072=0 +262144=0 +1048576=0",
+  "524321     655360     131039   +n=1 +len=1 +0=1 +4096=1 +8192=1 +16384=1 +32768=1 +65536=1 +131072=1 +262144=1 +1048576=1"
+ ],
+ "platform": {
+  "qemu": "QEMU emulator version 7.1.0",
+  "qemu_sha256": "6f240b6d777e99bca4ee7df35913c4aaa668ff0a84792f71ce1c289098d4e1a3",
+  "firmware": {
+   "file": "bbl-riscv64cheri-virt-fw_jump.bin",
+   "bytes": 37520,
+   "sha256": "864ccbe6379f1e13c387dda8dd0a69b7918a1697a2b068e610d47cdf0dac15d7"
+  },
+  "kernel_sha256": "b1fa154e9ae1423937e6956da701541f11cce9931f5550df1ffdb09a1a2e6270",
+  "rootfs_libc_sha256": "557ab2cb269a8e4ac181190cb7bda03aea2375d10408ea8a209433cfb0013792",
+  "image": {
+   "file": "cheribsd-riscv64-purecap.img",
+   "bytes": 9519007232,
+   "mtime": "2026-10-30T12:18:07Z"
+  },
+  "machine": "virt, 1 hart, the machine's default cpu"
+ },
+ "toolchain": {
+  "clang": "clang version 17.0.0 (https://github.com/CTSRD-CHERI/llvm-project.git 7e122876ee01a7a82585f7674c94f12fc1cc7689)",
+  "clang_sha256": "588c608e5e21259eba3017c92b4e5ea7c15762d74854ea4b9ece515071e67f6e",
+  "config": "cheribsd-riscv64-purecap.cfg",
+  "config_sha256": "23ca25a333f8423540f36f9d7abd64b319bbfa1974ca98a5775aa52b38be576e",
+  "config_lines": [
+   "-target",
+   "riscv64-unknown-freebsd13",
+   "--sysroot=<CFGDIR>/../../rootfs-riscv64-purecap",
+   "-B<CFGDIR>/.",
+   "-march=rv64imafdcxcheri",
+   "-mabi=l64pc128d",
+   "-mno-relax",
+   "-cheri-tgot-tls"
+  ],
+  "sysroot_libc_sha256": "557ab2cb269a8e4ac181190cb7bda03aea2375d10408ea8a209433cfb0013792",
+  "flags": [
+   "--config",
+   "cheribsd-riscv64-purecap.cfg",
+   "-std=gnu11",
+   "-O0",
+   "-fuse-ld=lld"
+  ]
+ },
+ "support_sources": {
+  "ok": "e1bcde1fa344c787e18ce0b5df1102728b3fa3dfba84c34c5cf5d2198cd28255",
+  "uaf-control": "4db0c80ca8124f952fff2cd724f109f700a55dd999692bcfa8312bcc4d2f5446",
+  "randseed": "2597c32ca9ddc39b72a0fc4654ac2e0c9659597a3be361cf754a3a562a7f7479",
+  "probe": "0defd0ddc38d4b7e2297dace8fb0974a16d1a36fe5408814dd83fadc957a4336",
+  "capbounds": "c976901482d9a0634d43bcf7d46278d713554b9b4b2ba33f1d1676f88a1fe063",
+  "sicode-selftest": "a748129ba35562b5dd3cf204d74c4e3e9be59232f7ff18f4357be987fc08186c",
+  "abi-probe": "10d000a32069f6b3bd3f72d37a48ae1e7664f52c4a708f70f440ce5052933b39",
+  "supervise": "adf2e149853bf516165b6881e67060f205bd9904b99959349524cb44aca482c9"
+ },
+ "per_cwe": {
+  "121": {
+   "bad": {
+    "CAUGHT": 3630,
+    "NOT-TRIGGERED:wide-snprintf": 144,
+    "INTRA-OBJECT:CAUGHT": 72
+   },
+   "good": {
+    "CORRECT": 3846
+   },
+   "sicode": {
+    "PROT_CHERI_BOUNDS": 3630
+   },
+   "caught": 3630,
+   "missed": 0,
+   "stopped": 0
+  },
+  "122": {
+   "bad": {
+    "CAUGHT": 1634,
+    "MISSED": 418,
+    "NOT-TRIGGERED:wide-snprintf": 76,
+    "INTRA-OBJECT:CAUGHT": 72,
+    "NOT-TRIGGERED:sizeof-ptr": 114
+   },
+   "good": {
+    "CORRECT": 2314
+   },
+   "sicode": {
+    "PROT_CHERI_BOUNDS": 1634
+   },
+   "caught": 1634,
+   "missed": 418,
+   "stopped": 0
+  },
+  "124": {
+   "bad": {
+    "CAUGHT": 1098
+   },
+   "good": {
+    "CORRECT": 1098
+   },
+   "sicode": {
+    "PROT_CHERI_BOUNDS": 1098
+   },
+   "caught": 1098,
+   "missed": 0,
+   "stopped": 0
+  },
+  "126": {
+   "bad": {
+    "CAUGHT": 725,
+    "MISSED": 57
+   },
+   "good": {
+    "CORRECT": 782
+   },
+   "sicode": {
+    "PROT_CHERI_BOUNDS": 725
+   },
+   "caught": 725,
+   "missed": 57,
+   "stopped": 0
+  },
+  "127": {
+   "bad": {
+    "CAUGHT": 1098
+   },
+   "good": {
+    "CORRECT": 1098
+   },
+   "sicode": {
+    "PROT_CHERI_BOUNDS": 1098
+   },
+   "caught": 1098,
+   "missed": 0,
+   "stopped": 0
+  }
+ }
+}

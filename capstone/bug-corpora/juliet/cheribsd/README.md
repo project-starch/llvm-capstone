@@ -95,10 +95,72 @@ which pexpect imports (`shared.py` loads `../common.py` by path for that reason)
 
 ## Results
 
-`results/<date>-cheribsd/` will hold, per set, `<set>-verdicts.tsv` (one row per case: flags, the verdict, the good
+`results/<date>-cheribsd/` holds, per set, `<set>-verdicts.tsv` (one row per case: flags, the verdict, the good
 image's verdict, the fault's `si_code`, site and return-address site, the off and every-free readings, the twin
 reading) and `<set>-summary.json` (counts per class and configuration, each run's batches counted and why any was
-void, the controls' readings, the seeds, the probes' readings, the toolchain and the vehicle). No raw logs.
+void, the controls' readings, the seeds, the probes' readings, the toolchain and the vehicle), plus `PROVENANCE`
+(the vehicle's source pins and the harness commit). No raw logs.
+
+`results/2026-11-05-cheribsd/`, harness commit `ad8d0502b189` on the vehicle above (clang 17.0.0 `7e122876`,
+QEMU 7.1.0), every batch of every run counted (temporal: 6 default + 6 off + 6 every-free + 1 seeded; spatial: 143
+default + 9 seeded + 3 twin), every good image CORRECT (no false positive in 9,504 good images). Verdicts are at the
+platform default; the temporal rows carry the off and every-free readings beside them.
+
+| CWE | cases | CAUGHT | MISSED | STOPPED | not triggered | intra-object | virtual profile (2026-10-19) |
+|---|---|---|---|---|---|---|---|
+| 415 double free | 228 | 0 | 0 | 228 SIGABRT | | | 228 caught |
+| 416 use after free | 138 | 0 | 138 | 0 | | | 138 caught |
+| 121 stack overflow | 3,846 | 3,630 | 0 | 0 | 144 wide-snprintf | 72 | 3,630 caught |
+| 122 heap overflow | 2,314 | 1,634 | 418 | 0 | 76 wide-snprintf, 114 sizeof-ptr | 72 | 2,052 caught |
+| 124 buffer underwrite | 1,098 | 1,098 | 0 | 0 | | | 1,098 caught |
+| 126 buffer over-read | 782 | 725 | 57 | 0 | | | 722 caught |
+| 127 buffer under-read | 1,098 | 1,098 | 0 | 0 | | | 1,098 caught |
+
+The temporal set under its three configurations (the off and every-free columns are the census image's reading;
+the 7 + 6 rand-dependent cases are seeded at the default only, so there they are marked `:unseeded` and counted
+apart):
+
+| CWE | cases | default | every-free | off | virtual profile |
+|---|---|---|---|---|---|
+| 415 double free | 228 | 0 caught, 228 STOPPED:SIGABRT | 222 STOPPED:SIGABRT, 6 unseeded | 228 MISSED | 228 caught |
+| 416 use after free | 138 | 0 caught, 138 MISSED | 131 CAUGHT + 3 unseeded caught, 4 unseeded missed | 138 MISSED | 138 caught |
+
+**Temporal.** At the platform default nothing is caught. Every CWE-416 case completes: it frees one or a few
+blocks, far below the quarantine's flush threshold, and uses the block before any sweep, so the capability is still
+tagged -- the uaf control (free, no forced sweep, read) completed in 12 of 12 batches while the forced-sweep control
+faulted `PROT_CHERI_TAG` in 12 of 12. Every CWE-415 case is `STOPPED:SIGABRT`: `mrs_free` refuses the second free
+and aborts, which is the allocator's consistency check and not a capability fault. With **every-free** revocation
+134 of 138 CWE-416 cases are CAUGHT `PROT_CHERI_TAG` (57 inside libc's `strlen`/`wcslen` under `printf`, 77 in the
+case's own code; the 4 others are rand-dependent cases whose unseeded image took the defect-free branch) and
+CWE-415 is unchanged. With revocation **off** there is no `PROT_CHERI_TAG` fault anywhere: CWE-416 138 MISSED, and
+CWE-415 228 MISSED because the underlying allocator accepts the second free. The virtual profile's 366 of 366 and
+CheriBSD's 0 of 366 differ in the mechanism's timing, not its coverage: the virtual profile ends a lifetime at
+`free`, CheriBSD's sweep is batched and asynchronous.
+
+**Spatial.** 8,185 CAUGHT, all `PROT_CHERI_BOUNDS` (no spatial pointer lost its tag first), at the copying function
+(`memcpy` 1,822, `memmove` 1,602, `wcscpy` 575, `strcpy`/`strncpy`/`wcsncpy` 500 each, the `cat` variants 220 each)
+or in the case's own `badSink` (106). The 418 CWE-122 MISSED are exactly the eleven families whose access stays
+inside `malloc`'s rounding slack, 38 flows each: `CWE129_large` writes `buffer[10]` of `malloc(10 * sizeof(int))`,
+40 bytes into a 48-byte capability, and the ten `CWE193` off-by-one families write the eleventh byte of
+`malloc(10)`, a 16-byte capability (`capbounds`: 4 -> 16, 24 -> 32, 100 -> 112). No CAUGHT family has a MISSED
+member. The 57 CWE-126 MISSED are CWE-170 cases (unterminated copy, then printed): all 54 `wchar_t` ones and the 3
+rand-dependent `char` ones, whose twins read `dest[99] = 0` -- the copy happened to be terminated. The other 51
+`char` CWE-170 cases are CAUGHT at `strlen`: on this ABI the stack word after `dest` was not zero, so the print read
+past the buffer. The 220 wide-snprintf cases are NOT-TRIGGERED here too: FreeBSD's `swprintf` also writes one
+character for a narrow `%s` (twins `wcslen=1`), and the 114 sizeof-ptr cases hold their one element in a 16-byte
+capability.
+
+**Intra-object: the pre-registration predicted MISSED and was wrong.** All 144 `type_overrun` cases fault
+`PROT_CHERI_BOUNDS`, reported as `INTRA-OBJECT:CAUGHT`; the fault is not on the write inside the struct. The 72
+`char` cases fault inside `memcpy` reading the SOURCE: `sizeof(struct)` is 48 bytes with two 16-byte pointer
+fields and `SRC_STR` is a 32-byte literal. The 72 `wchar_t` cases complete the copy (96 bytes from a 128-byte
+literal), which leaves no terminator inside the struct, and fault at `wcslen` under `printf` reading past the
+struct. Both are real out-of-bounds accesses the case makes under this ABI, caught by allocation bounds; neither is
+sub-object protection, which the SDK's default bounds do not provide.
+
+What these numbers are not: a measurement on hardware (QEMU, TCG), of C++ cases, of other optimisation levels than
+-O0, of a CheriBSD configured with sub-object bounds or with every-free revocation as its default, or of attribution
+by the faulting capability's bounds (site-level only, see above).
 
 ## Pre-registration, before the first run (2026-11-05)
 
