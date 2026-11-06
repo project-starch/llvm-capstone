@@ -169,3 +169,21 @@ Arena Addendum 9 and rest Addendum 5 are withdrawn before any board call.
   1655525. b2-seq.sh waits on it again, then R-32, THP mcf and perlbench c3f.
 - **Board 1:** as rest Addendum 3. Line 3 of b1.list is x264 c3f again, and x264-preempt.sh is relaunched to stop
   x264-ac once x264 c3f's QEMU gate passes.
+
+## Addendum 6 (6 Nov 17:14, before perlbench's boot): perlbench goes as c3g, one exit fewer per delegated call
+
+- **What c3g is.** c3f's objects relinked with SDK ac16, which is ac15 plus `CAPSTONE_DELEGATE_SELF_CACHE`
+  (perf/arena-cache 46d67471e727). Image 32397dcf75222a64.
+- **What it changes.** The delegate wire lock asked the module for the context's identity (CV_SERVICE_THREAD_SELF,
+  one exit) on every delegated call. With the switch, an image that has started no second context asks once.
+  capstone_virtual_thread_create sets a flag before its THREAD_CREATE call, and from then on every acquisition asks.
+  - dev solved the same exit differently on 4 Nov (a476237c079b: the identity rides in gp's cursor). The two
+    variants are equivalent for a single-context program.
+  - This branch's base predates that.
+- **Twin trace** (perf/perlx trace1 against trace2): THREAD_SELF exits per process 51/186/119 → 1/1/1, and all
+  boundary exits 165/682/676 → 115/497/558 (perl -e 1, op/array.t, re/reg_email.t).
+- **Full QEMU gate** (q-perl-c3g): specdiff 2/2 PASS; run1 96.74 G instructions; entries 353,780 against c3f's
+  458,733 (−23 %).
+- **Not qualified.** Threads were not tested: the pthread contract cannot run on kit-profq, whose one-slot module
+  answers pthread_create EBUSY, and its control (ac15) fails the same way. perlbench starts no second context.
+- **perf/best/b2.list** now names the c3g stage. **B1** is unchanged.
