@@ -357,7 +357,9 @@ static const struct cu_ops cv_copy_ops = {
     cv_copy_hold, cv_copy_release, cv_copy_enter, cv_copy_check,
     cv_copy_inatomic, cv_copy_drain, cv_copy_leave, cv_copy_resolve, cv_copy_between
 };
-/* The native syscall loop's copy. Runs inside the context's own CV_STEP_NATIVE ioctl, whose
+/* The native syscall loop's copy. The synchronous task backend owns its context
+ * until step returns (callbacks cannot destroy/transfer/retain it). Otherwise
+ * this runs inside the context's own CV_STEP_NATIVE ioctl, whose
  * file reference outlives it (the control descriptor is never an application descriptor), and
  * reuses the context's state object: the protocol (hold, per-chunk check inside the exclusion
  * window, non-destructive fault retry, recheck, release) is the same cu_copy. */
@@ -388,23 +390,30 @@ struct cu_result cv_checked_copy(struct context *c, struct cv_thread *t,
                                 void *buffer, u64 length, enum cu_direction dir)
 {
     struct cv_copy_state *s;
-    struct file *owner;
+    struct file *owner = NULL;
     struct cu_result result = {0, CU_REFUSED};
     lockdep_assert_held(&vm_lock);
     if (!cv_copy_admitted(c, t)) return result;
     /* Keep the backing context alive across both lock-dropping callbacks.
      * The caller also owns its invocation reference until it handles result. */
-    owner = fget(c->dom_fd);
-    if (!owner) return result;
-    if (owner->private_data != c) { fput(owner); return result; }
+#ifdef CV_TASK_BACKEND
+    /* The synchronous task step owns c across sleeping callbacks. No callback
+     * may destroy/transfer it or retain it beyond the current step. */
+    if (!riscv_capstone_owns(c))
+#endif
+    {
+        owner = fget(c->dom_fd);
+        if (!owner) return result;
+        if (owner->private_data != c) { fput(owner); return result; }
+    }
     s = kzalloc(sizeof(*s), GFP_KERNEL);
-    if (!s) { fput(owner); return result; }
+    if (!s) { if (owner) fput(owner); return result; }
     cv_copy_state_init(s, c, t, dir, length);
     result = cu_copy(&cv_copy_ops, s, ref, offset, buffer, length, dir, PAGE_SIZE);
 #ifdef CV_RACE_TEST
     rt_record(c, &result, length);
 #endif
     kfree(s);
-    fput(owner);
+    if (owner) fput(owner);
     return result;
 }

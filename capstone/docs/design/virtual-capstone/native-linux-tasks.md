@@ -244,3 +244,37 @@ Architecture review: Astra (xhigh) and Gemini Argon both recommend this endpoint
 and staged task-return milestone. Their review is design input, not execution or
 security qualification. Exact Linux hooks, trap/frame adaptation and invalidation
 APIs remain subject to implementation evidence as stated above.
+
+
+## Linux 6.1 first-backend transition contract
+
+The default-off `RISCV_CAPSTONE_TASK` patch hooks `resume_userspace` after
+Linux's pending-work test and before context tracking/scalar register restore.
+It requires `!SMP`, generic virtual CPU accounting and forced user context
+tracking. `pt_regs` is a diagnostic projection, with user SPP and `cause=-1`;
+it never supplies capability authority or a scalar syscall restart PC.
+
+| Transition | State and next action |
+| --- | --- |
+| Native exec succeeds | Publish task context and mm namespace under `cred_guard_mutex`, rejecting ptrace. No trampoline mapping/control FD. |
+| Exec fails before point of no return | Normal Linux exec error; old image remains. |
+| Native exec fails after point of no return | Free unpublished context, force immutable exit signal; a tracer cannot suppress it into scalar execution. |
+| Architecture return | Enter IRQ-off, enable IRQs for kernel providers, disable IRQs before returning to Linux return-work checks. Keep TIF_CAPSTONE set. |
+| Protected execution | Minimal `noinstr` wrapper enters CT_USER with IRQs off, runs CSRUNV, then restores CT_KERNEL. Kernel housekeeping stays outside CT_USER. |
+| CSRUNV admission exception | Early S-trap hook restores CT_KERNEL before tracing; extable fixes up the instruction; wrapper does not perform a second user-exit. |
+| Model quantum/fault | Save protected state and return through Linux work checks. Resolve admitted page faults before retry. |
+| Blocking provider | Drop global VM lock; hardware slot remains evictable. The synchronous task invocation owns context lifetime across sleep. |
+| Service completion | Keep reply in protected kernel state; pending signals/quantum cannot silently discard it or repeat committed I/O. |
+| Default stop/continue/fatal signal | Linux return-work path handles it. Caught handlers/sigreturn and full restart semantics remain unsupported. |
+| Exit or replacement exec | Release protected context before exit_mm/old-mm replacement; mmgrab/mmdrop owns mm_count, never an mm_users cycle. |
+
+This model is **quantum-assisted**: the pinned emulator's 5 ms domain quantum
+provides escape opportunities. It is not direct Linux timer delivery inside the
+domain. Kernel save buffers remain nonpageable; user payload pages are not pinned.
+Current-task ownership is sufficient only for synchronous, non-transferring
+callbacks. Async providers and shared-mm tasks need independent references.
+
+The first backend rejects inherited seccomp, ptrace and syscall-work flags;
+it does not yet implement Linux audit/seccomp/tracing for capability syscalls.
+This leaves that acceptance gate open. It also retains existing exchange
+marshalling and provider restrictions. Neither change implies allocator savings.

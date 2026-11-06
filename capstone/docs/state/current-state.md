@@ -7,13 +7,21 @@ access, and Linux signal/restart/scheduling integration. CSRUNV remains the
 initial privileged entry primitive; direct hardware traps are separately gated.
 A new syscall that only wraps dom_ioctl and a vDSO are not substitutes.
 
-This branch currently contains design and implementation gates only; runtime
-behavior and all measurements remain those of the parent prototype. The first
-code milestone is a default-off task/architecture-return backend without a
-scalar trampoline or context-owning control FD, reusing checked-copy/providers
-and preserving confinement. Freeze the concrete kernel hook and signal/restart
-state contract before coding entry. Do not claim native compatibility from
-compilation or a header refactor.
+A default-off in-tree task/architecture-return prototype now runs without a
+scalar trampoline or context-owning control FD. It passes GCC exact output,
+51 authority/ABI checks, one-slot blocking transport, compute STOP/CONT/KILL,
+user-time accounting, admission-exception recovery and 41 copy-race scenarios.
+The concrete Linux 6.1 transition contract and reproducible installer are present.
+A matched four-run GCC comparison shows 0.2125% more total attempted instructions
+(0.4019% more kernel work), so this first implementation is not a speedup.
+
+Next close the remaining policy and qualification gates: native syscall
+audit/seccomp/tracing (currently rejected), full register/FP/bounds and raw-platform
+negative matrices, exhaustive lifetime/failed-exec race tests, then capability
+signal/restart semantics and direct register ABI. Current repeated start/kill
+checks do not prove absence of all leaks. This is quantum-assisted, single-hart,
+root-only work, not complete Linux compatibility.
+[Implementation and verified evidence](../../runtime/virtual/tests/native-task/README.md).
 
 [Architecture](../design/virtual-capstone/native-linux-tasks.md) ·
 [Milestones and acceptance gates](../plans/native-linux-task-integration.md).
