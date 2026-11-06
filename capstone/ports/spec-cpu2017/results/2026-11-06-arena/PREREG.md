@@ -200,3 +200,18 @@ c2ac7 build plus `CAPSTONE_HEAP_SLOT_CACHE`, wt-arena 56bc6010ab17 / a98781264eb
 - arena_pin −30…−60 s.
 
 That lands around 4,400 s, about 1.25×.
+
+## Addendum 6 (6 Nov 13:10, before the boot): the image changes to c2ac12, which adds the null-capability memset(0)
+
+The image is **cpugcc_r.c2ac12** (fbea9ed0b8aa7f45): c2ac11 plus `CAPSTONE_MEMSET_CAP_ZERO` (wt-arena 01967cfb14b9).
+memset with c = 0 over whole aligned 16-byte granules stores 16-byte null capabilities, which zeroes the bytes and
+clears the tag. That is half the stores of 8-byte words.
+
+**QEMU gcc train:** memset 348 → 229 M; program instructions 14.422 → **14.302 G**, −5.6 % against the silicon
+image's 15.150 G; specdiff PASS.
+
+**On silicon:**
+- R-29 concerns 128-bit loads that follow plain stores. A null stc does not make that shape.
+- An stc of x0 has not been read back on silicon outside memcpy's granule path; specdiff and twin equality decide.
+
+**M3 unchanged** (≤ 0.95 × 4,656.1 s). The point estimate is now −260…−320 s, about 4,370 s, 1.24×.
