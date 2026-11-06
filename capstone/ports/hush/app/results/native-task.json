@@ -1,0 +1,236 @@
+{
+  "schemaVersion": 1,
+  "scope": "BusyBox hush 1.37.0 native capability spawn shell; independent shell service qualification",
+  "status": "PASS",
+  "source": {
+    "url": "https://busybox.net/downloads/busybox-1.37.0.tar.bz2",
+    "archiveSha256": "3311dff32e746499f4df0d5df04d7eb396382d7e108bb9250e7b519b837043a4",
+    "patches": {
+      "0001-hush-native-spawn.patch": "3f6de97e3a2e3014675f47de31ceaf6459075a39ce9bad6489a44bad40ac21b6"
+    },
+    "recipes": {
+      "capstone/ports/hush/app/build.py": "e2d219a3749560829ed2d2605f31d209a5a46dcfb67bc7dd48f72d6f77a8065a",
+      "capstone/ports/hush/app/prepare-sources.sh": "de558461e510ea1b2198e5fec65df4543cd7d1de437376b72a60b4cddada8f56",
+      "capstone/ports/hush/app/sdk-cc.py": "a13f9e2fa348a9e33675631ca8e630f0a718e1ce72b410df2e090ed3d986400f"
+    },
+    "fixtures": {
+      "capstone/ports/hush/app/tests/child.c": "7abff60dbbae6ebc5485524b4a91e64c87557fdab702607a71413243183b2ce7",
+      "capstone/ports/hush/app/tests/driver.c": "f9ddb5623815d74763fb4e4bd5ec35120db69c2317f95354fffd4d7818e1d989",
+      "capstone/ports/hush/app/tests/host-check.py": "8bc00b82516c483b47beae4ab002c6a6b6504e223dc1c77e4507007d761e1a02",
+      "capstone/ports/hush/app/tests/run-native.py": "33d07fde77bd2059adc3026e20a300c0643bd2a49d13d642097dc77a4a2068ed",
+      "capstone/ports/hush/app/tests/semantics.sh": "28ef9d5e488c7b9c4314e249d327c1d61fcc89db87a1db0174909358ebfe5ef4"
+    }
+  },
+  "host": {
+    "status": "PASS",
+    "checks": [
+      "shell semantics including saved background statuses",
+      "100001-byte heredoc",
+      "100 redirection-error iterations with descriptor cleanup"
+    ],
+    "logSha256": "ab4f9840009828c3fbcb48497efd3adc4025235da5f5884435bb19b2aa2060ff",
+    "rawLog": "/tmp/capstone/native-task/shell/evidence/host-tests.log"
+  },
+  "nativeExchangeMain": {
+    "status": "PASS",
+    "shellSha256": "93faa86c0ea9d103cb382b24d800e8f733d1a34c4f5579a6d70f02c7e74309e3",
+    "configSha256": "95d4dfe1977478d4268b18ed1cbf922e7caab6b42f06ed830cb134651387483a",
+    "checks": [
+      "builtin echo",
+      "external capability child with original argv",
+      "100000-byte blocking pipeline",
+      "subshell variable isolation",
+      "serialized function",
+      "command substitution",
+      "environment restore",
+      "exit status17 and missing-command127",
+      "pipeline status",
+      "redirection restore",
+      "no leaked script or pipe descriptors",
+      "expanded and quoted heredocs",
+      "loop and case",
+      "background child statuses23 and24 after foreground reaping"
+    ],
+    "oracle": "HUSH PASS: shell semantics; HUSH_GATE_EXIT:0",
+    "serialSha256": "4a2f42489a86131e416508d74afd06d52b6a101bcb6f08b4066e462289697b88",
+    "rawLog": "/tmp/capstone/native-task/shell/evidence/exchange/serial.log",
+    "kernelSha256": "7a4437bd76da66bcb76127f4b246f37e512d67f88eeb104e213809b2efe2cc3b",
+    "rootfsSha256": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845",
+    "qemuSha256": "c6681ec8a8ff704b297ec3eafceb13b2fe9c1c61c7a65ed95304bd5dbe5183eb",
+    "firmwareSha256": "2335a28682ddf65e46c1f492632c2cb026efcb2271caf544a3f7ddc858b03e02",
+    "cpu": "rv64,sstc=false,h=false,sv48=false,sv57=false,x-capstone-u-mode=true,x-capstone-supervisor-slots=1,x-pcrel=false,x-capstone-raw-moves=true,x-capstone-test-csrs=false,x-capstone-checked-copy=true,x-capstone-context-transport=true",
+    "grants": {
+      "cwd": "/tmp/hush-test",
+      "shellExactFile": "/tmp/native-shell/hush.dom (exec alias /bin/sh)",
+      "nullDevice": "/dev/null via dom_null=1",
+      "wideGrants": false
+    }
+  },
+  "nativeExtended": {
+    "exchange": {
+      "status": "PASS",
+      "identities": {
+        "shell": {
+          "path": "/var/tmp/capstone-native-task-scratch/hush-exchange-08/hush.dom",
+          "sha256": "93faa86c0ea9d103cb382b24d800e8f733d1a34c4f5579a6d70f02c7e74309e3"
+        },
+        "child": {
+          "path": "/var/tmp/capstone-native-task-scratch/hush-exchange-05/child.dom",
+          "sha256": "e0becdbf6d680f64ed98eb98449e01e1475ddd28b2369bbfdb33a7c48d84c54d"
+        },
+        "driver": {
+          "path": "/var/tmp/capstone-native-task-scratch/hush-exchange-05/driver",
+          "sha256": "c7e4d13a88f6da4844d1ab45b471085e9cbe1f5a4e25b20e4b67c057a1f2998d"
+        },
+        "kernel": {
+          "path": "/var/tmp/capstone-native-task-scratch/spawn-shell-images/Image",
+          "sha256": "7a4437bd76da66bcb76127f4b246f37e512d67f88eeb104e213809b2efe2cc3b"
+        },
+        "rootfs": {
+          "path": "/var/tmp/capstone-native-task-scratch/diagnostic-platform/images/rootfs.ext2",
+          "sha256": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845"
+        },
+        "qemu": {
+          "path": "/var/tmp/capstone-native-task-scratch/diagnostic-platform/qemu-system-riscv64",
+          "sha256": "c6681ec8a8ff704b297ec3eafceb13b2fe9c1c61c7a65ed95304bd5dbe5183eb"
+        },
+        "firmware": {
+          "path": "/var/tmp/capstone-native-task-scratch/diagnostic-platform/opensbi-riscv64-generic-fw_dynamic.bin",
+          "sha256": "2335a28682ddf65e46c1f492632c2cb026efcb2271caf544a3f7ddc858b03e02"
+        },
+        "semantics": {
+          "path": "/var/tmp/capstone-copyable-only/src/capstone/ports/hush/app/tests/semantics.sh",
+          "sha256": "28ef9d5e488c7b9c4314e249d327c1d61fcc89db87a1db0174909358ebfe5ef4"
+        },
+        "testRunner": {
+          "path": "/var/tmp/capstone-copyable-only/src/capstone/ports/hush/app/tests/run-native.py",
+          "sha256": "33d07fde77bd2059adc3026e20a300c0643bd2a49d13d642097dc77a4a2068ed"
+        },
+        "sharedRunner": {
+          "path": "/var/tmp/capstone-native-task-scratch/diagnostic-platform/tools/run-staged.py",
+          "sha256": "70f391080fb90cb88be8396498a9e03e158b5fd9fcdc173ef5801a4543ffabe5"
+        }
+      },
+      "kernelArgs": "capstone_vm.native_task=1 capstone_vm.native_io=1 capstone_vm.dom_binfmt=1 capstone_vm.native_dispatch=1 capstone_vm.checked_copy=1 capstone_vm.native_slot_transport=1 capstone_vm.unpinned=1 capstone_vm.supervisor_slots=1 capstone_vm.native_refused_trace=1 capstone_vm.dom_null=1 capstone_vm.dom_shell=/tmp/native-shell/hush.dom",
+      "cpuExtra": "x-capstone-supervisor-slots=1,x-pcrel=false,x-capstone-raw-moves=true,x-capstone-test-csrs=false,x-capstone-checked-copy=true,x-capstone-context-transport=true",
+      "serialSha256": "9bb780936882587633340568089bc202b116a0e2b77566ee822ec7f82c08c3ab",
+      "expected": [
+        "HUSH_SIMPLE_PASS",
+        "[one]",
+        "[two three]",
+        "HUSH PASS: shell semantics",
+        "HUSH_LARGE_HEREDOC_PASS",
+        "HUSH_REDIRECTION_ROLLBACK_PASS",
+        "HUSH_GATE_EXIT:0"
+      ],
+      "scope": "native shell service tests; not SPEC qualification",
+      "rawLog": "/tmp/capstone/native-task/shell/evidence/exchange-extended/serial.log",
+      "checks": [
+        "main shell semantics fixture",
+        "100001-byte streamed heredoc",
+        "100 failed redirections with clean inherited fd set"
+      ],
+      "configSha256": "95d4dfe1977478d4268b18ed1cbf922e7caab6b42f06ed830cb134651387483a"
+    },
+    "direct": {
+      "status": "PASS",
+      "identities": {
+        "shell": {
+          "path": "/var/tmp/capstone-native-task-scratch/hush-direct-01/hush.dom",
+          "sha256": "c6a2d990c239106fd52f285d27cf0e05f9f9436620609b2a7b061048fecfa23e"
+        },
+        "child": {
+          "path": "/var/tmp/capstone-native-task-scratch/hush-direct-01/child.dom",
+          "sha256": "aee49e7679f660b206c7c363cd158454eaf8ae9039f897c20831d09199190445"
+        },
+        "driver": {
+          "path": "/var/tmp/capstone-native-task-scratch/hush-exchange-05/driver",
+          "sha256": "c7e4d13a88f6da4844d1ab45b471085e9cbe1f5a4e25b20e4b67c057a1f2998d"
+        },
+        "kernel": {
+          "path": "/var/tmp/capstone-native-task-scratch/spawn-shell-images/Image",
+          "sha256": "7a4437bd76da66bcb76127f4b246f37e512d67f88eeb104e213809b2efe2cc3b"
+        },
+        "rootfs": {
+          "path": "/var/tmp/capstone-native-task-scratch/diagnostic-platform/images/rootfs.ext2",
+          "sha256": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845"
+        },
+        "qemu": {
+          "path": "/var/tmp/capstone-native-task-scratch/diagnostic-platform/qemu-system-riscv64",
+          "sha256": "c6681ec8a8ff704b297ec3eafceb13b2fe9c1c61c7a65ed95304bd5dbe5183eb"
+        },
+        "firmware": {
+          "path": "/var/tmp/capstone-native-task-scratch/diagnostic-platform/opensbi-riscv64-generic-fw_dynamic.bin",
+          "sha256": "2335a28682ddf65e46c1f492632c2cb026efcb2271caf544a3f7ddc858b03e02"
+        },
+        "semantics": {
+          "path": "/var/tmp/capstone-copyable-only/src/capstone/ports/hush/app/tests/semantics.sh",
+          "sha256": "28ef9d5e488c7b9c4314e249d327c1d61fcc89db87a1db0174909358ebfe5ef4"
+        },
+        "testRunner": {
+          "path": "/var/tmp/capstone-copyable-only/src/capstone/ports/hush/app/tests/run-native.py",
+          "sha256": "33d07fde77bd2059adc3026e20a300c0643bd2a49d13d642097dc77a4a2068ed"
+        },
+        "sharedRunner": {
+          "path": "/var/tmp/capstone-native-task-scratch/diagnostic-platform/tools/run-staged.py",
+          "sha256": "70f391080fb90cb88be8396498a9e03e158b5fd9fcdc173ef5801a4543ffabe5"
+        }
+      },
+      "kernelArgs": "capstone_vm.native_task=1 capstone_vm.native_io=1 capstone_vm.dom_binfmt=1 capstone_vm.native_dispatch=1 capstone_vm.checked_copy=1 capstone_vm.native_slot_transport=1 capstone_vm.unpinned=1 capstone_vm.supervisor_slots=1 capstone_vm.native_refused_trace=1 capstone_vm.dom_null=1 capstone_vm.dom_shell=/tmp/native-shell/hush.dom",
+      "cpuExtra": "x-capstone-supervisor-slots=1,x-pcrel=false,x-capstone-raw-moves=true,x-capstone-test-csrs=false,x-capstone-checked-copy=true,x-capstone-context-transport=true",
+      "serialSha256": "b377973d23dc7c635dae98d78fd5923e7c12b65591671b444662034f83304901",
+      "expected": [
+        "HUSH_SIMPLE_PASS",
+        "[one]",
+        "[two three]",
+        "HUSH PASS: shell semantics",
+        "HUSH_LARGE_HEREDOC_PASS",
+        "HUSH_REDIRECTION_ROLLBACK_PASS",
+        "HUSH_GATE_EXIT:0"
+      ],
+      "scope": "native shell service tests; not SPEC qualification",
+      "rawLog": "/tmp/capstone/native-task/shell/evidence/direct/serial.log",
+      "checks": [
+        "main shell semantics fixture",
+        "100001-byte streamed heredoc",
+        "100 failed redirections with clean inherited fd set"
+      ],
+      "configSha256": "542f07107f935e9ea9ca7aa5b9bd44ea38d8dcc85de33f9b5e134b740af72b54"
+    }
+  },
+  "limitations": [
+    "Noninteractive build; no caught signal traps or job control",
+    "In-place exec remains unsupported",
+    "Configured optional builtin omissions are listed in README.md",
+    "General script-as-executable fallback is not added",
+    "This record does not establish full SPEC Perl completion",
+    "Serialized subshell state, command substitution text, argv and environment must fit the native 65536-byte spawn request; larger requests fail E2BIG.",
+    "These fixtures identify the immutable kernel by full hash above; subsequent directory/time services and dup3 grant fixes are separately qualified by their runtime gates."
+  ],
+  "findings": [
+    "BB_GLOBAL_CONST= disables upstream mutable-const global-pointer optimization; native startup otherwise used a preinitialization null capability",
+    "Only nonfatal ioctl-buffer setup queries were refused in the passing main fixture"
+  ],
+  "registryCheck": {
+    "status": "BLOCKED_BY_UNRELATED_EXISTING_PATHS",
+    "failures": [
+      "capstone/ports/mruby/app related xlang/repro does not exist",
+      "capstone/ports/sqlite related xlang/reuse-not-free does not exist"
+    ]
+  },
+  "priorOversizedFixture": {
+    "description": "Initial native large-heredoc fixture embedded its entire 100KB body in command substitution; serialization correctly failed E2BIG before heredoc handling because the spawn wire budget is 65536 bytes.",
+    "correction": "Run the same 100001-byte heredoc pipeline directly from the script into a count file, then read the small count separately. No shell source or image change.",
+    "runs": {
+      "exchange": {
+        "rawLog": "/tmp/capstone/native-task/shell/evidence/oversized-exchange/serial.log",
+        "serialSha256": "69a88ca50edd918db66e300dd013ba79cad2fc1d26d08fc395a5eaa9a8104bc8"
+      },
+      "direct": {
+        "rawLog": "/tmp/capstone/native-task/shell/evidence/oversized-direct/serial.log",
+        "serialSha256": "edede39f6e85f8a40dbd789bec1815529877cd448a0e8e5c599c063c3e8e6c4b"
+      }
+    }
+  },
+  "recordedAtUtc": "2026-11-06T18:58:37+00:00"
+}

@@ -15,6 +15,7 @@
 #define DOM_FDS 1024
 #define DOM_EXTRA_DIRS 2
 #define DOM_DEVICES 3
+#define DOM_CHILDREN 64
 
 struct dom_delegate {
     struct capstone_delegate_entry request;
@@ -29,8 +30,11 @@ struct dom_delegate {
     char *root_name; /* admission name only; live names come from pinned paths */
     DECLARE_BITMAP(fds, DOM_FDS);
     int path_fd;
+    struct file *shell; /* explicitly provisioned executable, no directory authority */
+    struct pid *children[DOM_CHILDREN];
 };
 
+static int dom_spawn_resources(struct context *c);
 #include "resource-dom.h"
 
 /* Closed day-one set: all have existing delegated shapes and belong to the
@@ -326,6 +330,9 @@ static void dom_delegate_free(struct context *c)
         if (d->dirs[i].dentry) path_put(&d->dirs[i]);
     for (unsigned i = 0; i < DOM_DEVICES; ++i)
         if (d->devices[i].dentry) path_put(&d->devices[i]);
+    if (d->shell) fput(d->shell);
+    for (unsigned i = 0; i < DOM_CHILDREN; ++i)
+        if (d->children[i]) put_pid(d->children[i]);
     kfree(d->root_name);
     kfree(d); c->dom_delegate = NULL;
 }

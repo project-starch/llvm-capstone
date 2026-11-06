@@ -1,0 +1,1170 @@
+--- a/shell/hush.c
++++ b/shell/hush.c
+@@ -349,6 +349,7 @@
+ # include <malloc.h>   /* for malloc_trim */
+ #endif
+ #include <glob.h>
++#include <spawn.h>
+ /* #include <dmalloc.h> */
+ #if ENABLE_HUSH_CASE
+ # include <fnmatch.h>
+@@ -393,7 +394,7 @@
+ 
+ /* Build knobs */
+ #define LEAK_HUNTING 0
+-#define BUILD_AS_NOMMU 0
++#define BUILD_AS_NOMMU 1
+ /* Enable/disable sanity checks. Ok to enable in production,
+  * only adds a bit of bloat. Set to >1 to get non-production level verbosity.
+  * Keeping 1 for now even in released versions.
+@@ -7424,12 +7425,11 @@
+ 
+ #else /* !BB_MMU */
+ 
+-static void re_execute_shell(char ***to_free, const char *s,
+-		char *g_argv0, char **g_argv,
+-		char **builtin_argv) NORETURN;
+-static void re_execute_shell(char ***to_free, const char *s,
+-		char *g_argv0, char **g_argv,
+-		char **builtin_argv)
++/* The native backend starts a fresh capability image. Hush's existing NOMMU
++ * serializer preserves variables, functions, positional arguments and status. */
++static pid_t spawn_shell(char ***to_free, const char *s,
++		char *g_argv0, char **g_argv, char **builtin_argv,
++		const posix_spawn_file_actions_t *actions)
+ {
+ # define NOMMU_HACK_FMT ("-$%x:%x:%x:%x:%x:%llx" IF_HUSH_LOOPS(":%x"))
+ 	/* delims + 2 * (number of bytes in printed hex numbers) */
+@@ -7552,19 +7552,116 @@
+ 	pp = environ;
+ 
+  do_exec:
+-	debug_printf_exec("re_execute_shell pid:%d cmd:'%s'\n", getpid(), s);
+-	/* Don't propagate SIG_IGN to the child */
+-	if (SPECIAL_JOBSTOP_SIGS != 0)
+-		switch_off_special_sigs(G.special_sig_mask & SPECIAL_JOBSTOP_SIGS);
+-	execve(bb_busybox_exec_path, argv, pp);
+-	/* Fallback. Useful for init=/bin/hush usage etc */
+-	if (argv[0][0] == '/')
+-		execve(argv[0], argv, pp);
+-	xfunc_error_retval = 127;
+-	bb_simple_error_msg_and_die("can't re-execute the shell");
++	{
++		pid_t pid;
++		int error = posix_spawn(&pid, bb_busybox_exec_path, actions, NULL, argv, pp);
++		if (error) {
++			errno = error;
++			return -1;
++		}
++		return pid;
++	}
+ }
+ #endif  /* !BB_MMU */
+ 
++
++/* Unlike a fork child, the spawning shell retains its descriptors. Normalize
++ * pipe descriptors before temporarily redirecting this single-threaded shell. */
++static void spawn_pipe(int fds[2])
++{
++	int i;
++	xpipe(fds);
++	for (i = 0; i < 2; i++) {
++		if (fds[i] < 3) {
++			int n = fcntl(fds[i], F_DUPFD_CLOEXEC, 3);
++			if (n < 0)
++				bb_simple_perror_msg_and_die("pipe descriptor");
++			close(fds[i]);
++			fds[i] = n;
++		} else {
++			close_on_exec_on(fds[i]);
++		}
++	}
++}
++
++static void spawn_pair(struct fd_pair *pair)
++{
++	int fds[2];
++	spawn_pipe(fds);
++	pair->rd = fds[0];
++	pair->wr = fds[1];
++}
++
++static void spawn_action(int error)
++{
++	if (error) {
++		errno = error;
++		bb_simple_perror_msg_and_die("spawn file action");
++	}
++}
++
++/* Noninteractive background children need status storage even without the
++ * interactive job-control table. Foreground wait-any may reap them first. */
++struct spawn_background {
++	struct spawn_background *next;
++	pid_t pid;
++	int done, status;
++};
++static struct spawn_background *spawn_backgrounds;
++
++static void spawn_register_background(pid_t pid)
++{
++	struct spawn_background *child = xzalloc(sizeof(*child));
++	child->pid = pid;
++	child->next = spawn_backgrounds;
++	spawn_backgrounds = child;
++}
++
++static void spawn_remember_wait(pid_t pid, int status)
++{
++	struct spawn_background *child;
++	for (child = spawn_backgrounds; child; child = child->next) {
++		if (child->pid == pid) {
++			child->status = status;
++			child->done = 1;
++			return;
++		}
++	}
++}
++
++static int spawn_wait_background(pid_t wanted)
++{
++	struct spawn_background **link = &spawn_backgrounds;
++	struct spawn_background *child;
++	int status;
++	pid_t result;
++	while ((child = *link) != NULL) {
++		if (child->pid == wanted) {
++			if (child->done) {
++				status = child->status;
++				goto collected;
++			}
++			break;
++		}
++		link = &child->next;
++	}
++	do {
++		result = waitpid(wanted, &status, 0);
++	} while (result < 0 && errno == EINTR);
++	if (result < 0) {
++		if (child) {
++			*link = child->next;
++			free(child);
++		}
++		return 127;
++	}
++ collected:
++	if (child) {
++		*link = child->next;
++		free(child);
++	}
++	return WIFSIGNALED(status) ? 128 | WTERMSIG(status) : WEXITSTATUS(status);
++}
+ 
+ static int run_and_free_list(struct pipe *pi);
+ 
+@@ -7661,87 +7758,16 @@
+ 	char **to_free = NULL;
+ # endif
+ 
+-	xpipe(channel);
+-	pid = BB_MMU ? xfork() : xvfork();
+-	if (pid == 0) { /* child */
+-		disable_restore_tty_pgrp_on_exit();
+-		/* Process substitution is not considered to be usual
+-		 * 'command execution'.
+-		 * SUSv3 says ctrl-Z should be ignored, ctrl-C should not.
+-		 */
+-		bb_signals(0
+-			+ (1 << SIGTSTP)
+-			+ (1 << SIGTTIN)
+-			+ (1 << SIGTTOU)
+-			, SIG_IGN);
+-		close(channel[0]); /* NB: close _first_, then move fd! */
+-		xmove_fd(channel[1], 1);
+-# if ENABLE_HUSH_TRAP
+-		/* Awful hack for `trap` or $(trap).
+-		 *
+-		 * http://www.opengroup.org/onlinepubs/009695399/utilities/trap.html
+-		 * contains an example where "trap" is executed in a subshell:
+-		 *
+-		 * save_traps=$(trap)
+-		 * ...
+-		 * eval "$save_traps"
+-		 *
+-		 * Standard does not say that "trap" in subshell shall print
+-		 * parent shell's traps. It only says that its output
+-		 * must have suitable form, but then, in the above example
+-		 * (which is not supposed to be normative), it implies that.
+-		 *
+-		 * bash (and probably other shell) does implement it
+-		 * (traps are reset to defaults, but "trap" still shows them),
+-		 * but as a result, "trap" logic is hopelessly messed up:
+-		 *
+-		 * # trap
+-		 * trap -- 'echo Ho' SIGWINCH  <--- we have a handler
+-		 * # (trap)        <--- trap is in subshell - no output (correct, traps are reset)
+-		 * # true | trap   <--- trap is in subshell - no output (ditto)
+-		 * # echo `true | trap`    <--- in subshell - output (but traps are reset!)
+-		 * trap -- 'echo Ho' SIGWINCH
+-		 * # echo `(trap)`         <--- in subshell in subshell - output
+-		 * trap -- 'echo Ho' SIGWINCH
+-		 * # echo `true | (trap)`  <--- in subshell in subshell in subshell - output!
+-		 * trap -- 'echo Ho' SIGWINCH
+-		 *
+-		 * The rules when to forget and when to not forget traps
+-		 * get really complex and nonsensical.
+-		 *
+-		 * Our solution: ONLY bare $(trap) or `trap` is special.
+-		 */
+-		s = skip_whitespace(s);
+-		if (is_prefixed_with(s, "trap")
+-		 && skip_whitespace(s + 4)[0] == '\0'
+-		) {
+-			static const char *const argv[] ALIGN_PTR = { NULL, NULL };
+-			builtin_trap((char**)argv);
+-			fflush_all(); /* important */
+-			_exit(0);
+-		}
+-# endif
+-# if BB_MMU
+-		/* Prevent it from trying to handle ctrl-z etc */
+-		IF_HUSH_JOB(G.run_list_level = 1;)
+-		CLEAR_RANDOM_T(&G.random_gen); /* or else $RANDOM repeats in child */
+-		reset_traps_to_defaults();
+-		IF_HUSH_MODE_X(G.x_mode_depth++;)
+-		//bb_error_msg("%s: ++x_mode_depth=%d", __func__, G.x_mode_depth);
+-		parse_and_run_string(s);
+-		_exit(G.last_exitcode);
+-# else
+-	/* We re-execute after vfork on NOMMU. This makes this script safe:
+-	 * yes "0123456789012345678901234567890" | dd bs=32 count=64k >BIG
+-	 * huge=`cat BIG` # was blocking here forever
+-	 * echo OK
+-	 */
+-		re_execute_shell(&to_free,
+-				s,
+-				G.global_argv[0],
+-				G.global_argv + 1,
+-				NULL);
+-# endif
++	{
++		posix_spawn_file_actions_t actions;
++		spawn_pipe(channel);
++		spawn_action(posix_spawn_file_actions_init(&actions));
++		spawn_action(posix_spawn_file_actions_adddup2(&actions, channel[1], 1));
++		pid = spawn_shell(&to_free, s, G.global_argv[0],
++			G.global_argv + 1, NULL, &actions);
++		posix_spawn_file_actions_destroy(&actions);
++		if (pid < 0)
++			bb_simple_perror_msg_and_die("command substitution spawn");
+ 	}
+ 
+ 	/* parent */
+@@ -7818,7 +7844,7 @@
+ 	len = strlen(heredoc);
+ 
+ 	close(redir->rd_fd); /* often saves dup2+close in xmove_fd */
+-	xpiped_pair(pair);
++	spawn_pair(&pair);
+ 	xmove_fd(pair.rd, redir->rd_fd);
+ 
+ 	/* Try writing without forking. Newer kernels have
+@@ -7838,47 +7864,26 @@
+ 	}
+ 	ndelay_off(pair.wr);
+ 
+-	/* Okay, pipe buffer was not big enough */
+-	/* Note: we must not create a stray child (bastard? :)
+-	 * for the unsuspecting parent process. Child creates a grandchild
+-	 * and exits before parent execs the process which consumes heredoc
+-	 * (that exec happens after we return from this function) */
+-#if !BB_MMU
+-	to_free = NULL;
+-#endif
+-	pid = xvfork();
+-	if (pid == 0) {
+-		/* child */
+-		disable_restore_tty_pgrp_on_exit();
+-		pid = BB_MMU ? xfork() : xvfork();
+-		if (pid != 0)
+-			_exit(0);
+-		/* grandchild */
+-		close(redir->rd_fd); /* read side of the pipe */
+-#if BB_MMU
+-		full_write(pair.wr, heredoc, len); /* may loop or block */
+-		_exit(0);
+-#else
+-		/* Delegate blocking writes to another process */
+-		xmove_fd(pair.wr, STDOUT_FILENO);
+-		re_execute_shell(&to_free, heredoc, NULL, NULL, NULL);
+-#endif
+-	}
+-	/* parent */
+-#if ENABLE_HUSH_FAST
+-	G.count_SIGCHLD++;
+-//bb_error_msg("[%d] fork in setup_heredoc: G.count_SIGCHLD:%d G.handled_SIGCHLD:%d", getpid(), G.count_SIGCHLD, G.handled_SIGCHLD);
+-#endif
+-	enable_restore_tty_pgrp_on_exit();
+-#if !BB_MMU
++	/* Keep pipe semantics for large heredocs. The writer is a direct child
++	 * of the resident shell and checkjobs() reaps it, including SIGPIPE. */
++	{
++		posix_spawn_file_actions_t actions;
++		to_free = NULL;
++		spawn_action(posix_spawn_file_actions_init(&actions));
++		spawn_action(posix_spawn_file_actions_addclose(&actions, redir->rd_fd));
++		spawn_action(posix_spawn_file_actions_adddup2(&actions, pair.wr, 1));
++		pid = spawn_shell(&to_free, heredoc, NULL, NULL, NULL, &actions);
++		posix_spawn_file_actions_destroy(&actions);
++		if (pid < 0)
++			bb_simple_perror_msg_and_die("heredoc spawn");
++	}
++	close(pair.wr);
+ 	free(to_free);
+-#endif
+-	close(pair.wr);
+ 	free(expanded);
+-	wait(NULL); /* wait till child has died */
+ }
+ 
+ struct squirrel {
++	int orig_flags;
+ 	int orig_fd;
+ 	int moved_to;
+ 	/* moved_to = n: fd was moved to n; restore back to orig_fd after redir */
+@@ -7888,6 +7893,7 @@
+ static struct squirrel *append_squirrel(struct squirrel *sq, int i, int orig, int moved)
+ {
+ 	sq = xrealloc(sq, (i + 2) * sizeof(sq[0]));
++	sq[i].orig_flags = moved >= 0 ? fcntl(orig, F_GETFD) : 0;
+ 	sq[i].orig_fd = orig;
+ 	sq[i].moved_to = moved;
+ 	sq[i+1].orig_fd = -1; /* end marker */
+@@ -7993,8 +7999,13 @@
+ 	}
+ 
+ 	/* If this one of script's fds? */
+-	if (move_HFILEs_on_redirect(fd, avoid_fd))
+-		return 1; /* yes. "we closed fd" (actually moved it) */
++	if (move_HFILEs_on_redirect(fd, avoid_fd)) {
++		/* The script keeps its relocated descriptor. The user redirection
++		 * occupying its old number must still be closed on restoration. */
++		if (sqp != ERR_PTR)
++			*sqp = add_squirrel_closed(*sqp, fd);
++		return 1;
++	}
+ 
+ 	/* Are we called for "exec 3>FILE"? Came through
+ 	 * redirect_and_varexp_helper(squirrel=ERR_PTR) -> setup_redirects(ERR_PTR)
+@@ -8040,6 +8051,8 @@
+ 				/* We simply die on error */
+ 				debug_printf_redir("restoring redirected fd from %d to %d\n", sq[i].moved_to, sq[i].orig_fd);
+ 				xmove_fd(sq[i].moved_to, sq[i].orig_fd);
++			if (sq[i].orig_flags & FD_CLOEXEC)
++				close_on_exec_on(sq[i].orig_fd);
+ 			} else {
+ 				/* cmd1 9>FILE; cmd2_should_see_fd9_closed */
+ 				debug_printf_redir("restoring redirected fd %d: closing it\n", sq[i].orig_fd);
+@@ -8428,59 +8441,6 @@
+ }
+ # endif
+ 
+-# if BB_MMU
+-#define exec_function(to_free, funcp, argv) \
+-	exec_function(funcp, argv)
+-# endif
+-static void exec_function(char ***to_free,
+-		const struct function *funcp,
+-		char **argv) NORETURN;
+-static void exec_function(char ***to_free,
+-		const struct function *funcp,
+-		char **argv)
+-{
+-# if BB_MMU
+-	int n;
+-
+-	argv[0] = G.global_argv[0];
+-	G.global_argv = argv;
+-	G.global_argc = n = 1 + string_array_len(argv + 1);
+-
+-// Example when we are here: "cmd | func"
+-// func will run with saved-redirect fds open.
+-// $ f() { echo /proc/self/fd/*; }
+-// $ true | f
+-// /proc/self/fd/0 /proc/self/fd/1 /proc/self/fd/2 /proc/self/fd/255 /proc/self/fd/3
+-// stdio^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ G_interactive_fd^ DIR fd for glob
+-// Same in script:
+-// $ . ./SCRIPT
+-// /proc/self/fd/0 /proc/self/fd/1 /proc/self/fd/2 /proc/self/fd/255 /proc/self/fd/3 /proc/self/fd/4
+-// stdio^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ G_interactive_fd^ opened ./SCRIPT DIR fd for glob
+-// They are CLOEXEC so external programs won't see them, but
+-// for "more correctness" we might want to close those extra fds here:
+-//?	close_saved_fds_and_FILE_fds();
+-
+-	/* "we are in a function, ok to use return" */
+-	G_flag_return_in_progress = -1;
+-	enter_var_nest_level();
+-	IF_HUSH_LOCAL(G.func_nest_level++;)
+-
+-	/* On MMU, funcp->body is always non-NULL */
+-	n = run_list(funcp->body);
+-	_exit(n);
+-# else
+-//?	close_saved_fds_and_FILE_fds();
+-
+-//TODO: check whether "true | func_with_return" works
+-
+-	re_execute_shell(to_free,
+-			funcp->body_as_string,
+-			G.global_argv[0],
+-			argv + 1,
+-			NULL);
+-# endif
+-}
+-
+ static int run_function(const struct function *funcp, char **argv)
+ {
+ 	int rc;
+@@ -8523,40 +8483,6 @@
+ 	return rc;
+ }
+ #endif /* ENABLE_HUSH_FUNCTIONS */
+-
+-
+-#if BB_MMU
+-#define exec_builtin(to_free, x, argv) \
+-	exec_builtin(x, argv)
+-#else
+-#define exec_builtin(to_free, x, argv) \
+-	exec_builtin(to_free, argv)
+-#endif
+-static void exec_builtin(char ***to_free,
+-		const struct built_in_command *x,
+-		char **argv) NORETURN;
+-static void exec_builtin(char ***to_free,
+-		const struct built_in_command *x,
+-		char **argv)
+-{
+-#if BB_MMU
+-	int rcode;
+-//?	close_saved_fds_and_FILE_fds();
+-	rcode = x->b_function(argv);
+-	fflush_all();
+-	_exit(rcode);
+-#else
+-	fflush_all();
+-	/* On NOMMU, we must never block!
+-	 * Example: { sleep 99 | read line; } & echo Ok
+-	 */
+-	re_execute_shell(to_free,
+-			argv[0],
+-			G.global_argv[0],
+-			G.global_argv + 1,
+-			argv);
+-#endif
+-}
+ 
+ 
+ static void execvp_or_die(char **argv) NORETURN;
+@@ -8667,223 +8593,122 @@
+ # define if_command_vV_print_and_exit(a,b,c) ((void)0)
+ #endif
+ 
+-#if BB_MMU
+-#define pseudo_exec_argv(nommu_save, argv, assignment_cnt, argv_expanded) \
+-	pseudo_exec_argv(argv, assignment_cnt, argv_expanded)
+-#define pseudo_exec(nommu_save, command, argv_expanded) \
+-	pseudo_exec(command, argv_expanded)
+-#endif
+-
+-/* Called after [v]fork() in run_pipe, or from builtin_exec.
+- * Never returns.
+- * Don't exit() here.  If you don't exec, use _exit instead.
+- * The at_exit handlers apparently confuse the calling process,
+- * in particular stdin handling. Not sure why? -- because of vfork! (vda)
+- */
+-static void pseudo_exec_argv(nommu_save_t *nommu_save,
+-		char **argv, int assignment_cnt,
+-		char **argv_expanded) NORETURN;
+-static NOINLINE void pseudo_exec_argv(nommu_save_t *nommu_save,
+-		char **argv, int assignment_cnt,
+-		char **argv_expanded)
+-{
+-	const struct built_in_command *x;
+-	struct variable **sv_shadowed;
++/* Prepare one parsed pipeline member. Expansion and redirection still use
++ * hush's own implementation; only the process-creation boundary is replaced.
++ * Saved descriptors are CLOEXEC and every parent mutation is restored before
++ * the next pipeline member is started. */
++static pid_t spawn_command(nommu_save_t *save, struct command *command,
++		char **expanded, int input, int output, int background)
++{
++	struct squirrel *squirrel = NULL;
++	struct variable **shadowed;
++	char **argv = command->argv;
+ 	char **new_env;
+-	IF_HUSH_COMMAND(char opt_vV = 0;)
+-	IF_HUSH_FUNCTIONS(const struct function *funcp;)
+-
+-	new_env = expand_assignments(argv, assignment_cnt);
++	pid_t pid = -1;
++	int error;
++#if ENABLE_HUSH_FUNCTIONS
++	const struct function *function;
++#endif
++
++	command->cmd_exitcode = 1;
++	fflush_all();
++	if (input != 0 || background) {
++		if (save_fd_on_redirect(0, input, &squirrel) < 0)
++			goto out;
++		if (background) {
++			int fd = open(bb_dev_null, O_RDONLY | O_CLOEXEC);
++			if (fd < 0) {
++				bb_simple_perror_msg("background stdin");
++				goto out;
++			}
++			xmove_fd(fd, 0);
++		} else if (dup2(input, 0) < 0) {
++			goto out;
++		}
++	}
++	if (output != 1) {
++		if (save_fd_on_redirect(1, output, &squirrel) < 0
++		 || dup2(output, 1) < 0)
++			goto out;
++	}
++	if (setup_redirects(command, &squirrel))
++		goto out;
++
++#if ENABLE_HUSH_FUNCTIONS
++	if (command->cmd_type == CMD_FUNCDEF)
++		goto null_command;
++#endif
++	if (!argv) {
++		if (command->group) {
++			pid = spawn_shell(&save->argv_from_re_execing,
++				command->group_as_string, G.global_argv[0],
++				G.global_argv + 1, NULL, NULL);
++			goto spawned;
++		}
++		goto null_command;
++	}
++
++	new_env = expand_assignments(argv, command->assignment_cnt);
+ 	dump_cmd_in_x_mode(new_env);
+-
+-	if (!argv[assignment_cnt]) {
+-		/* Case when we are here: ... | var=val | ...
+-		 * (note that we do not exit early, i.e., do not optimize out
+-		 * expand_assignments(): think about ... | var=`sleep 1` | ...
+-		 */
++	if (!argv[command->assignment_cnt]) {
+ 		free_strings(new_env);
+-		_exit_SUCCESS();
+-	}
+-
+-	sv_shadowed = G.shadowed_vars_pp;
+-#if BB_MMU
+-	G.shadowed_vars_pp = NULL; /* "don't save, free them instead" */
+-#else
+-	G.shadowed_vars_pp = &nommu_save->old_vars;
++		goto null_command;
++	}
++	shadowed = G.shadowed_vars_pp;
++	G.shadowed_vars_pp = &save->old_vars;
+ 	G.var_nest_level++;
+-#endif
+ 	set_vars_and_save_old(new_env);
+-	G.shadowed_vars_pp = sv_shadowed;
+-
+-	if (argv_expanded) {
+-		argv = argv_expanded;
+-	} else {
+-		argv = expand_strvec_to_strvec(argv + assignment_cnt);
+-#if !BB_MMU
+-		nommu_save->argv = argv;
+-#endif
+-	}
++	G.shadowed_vars_pp = shadowed;
++	argv = expanded;
++	if (!argv)
++		argv = save->argv = expand_strvec_to_strvec(command->argv + command->assignment_cnt);
+ 	dump_cmd_in_x_mode(argv);
+-
+-#if ENABLE_FEATURE_SH_STANDALONE || BB_MMU
+-	if (strchr(argv[0], '/') != NULL)
+-		goto skip;
+-#endif
+-
++	if (!argv[0])
++		goto null_command;
++	if (!strchr(argv[0], '/')) {
+ #if ENABLE_HUSH_FUNCTIONS
+-	/* Check if the command matches any functions (this goes before bltins) */
+-	funcp = find_function(argv[0]);
+-	if (funcp)
+-		exec_function(&nommu_save->argv_from_re_execing, funcp, argv);
+-#endif
+-
+-#if ENABLE_HUSH_COMMAND
+-	/* "command BAR": run BAR without looking it up among functions
+-	 * "command -v BAR": print "BAR" or "/path/to/BAR"; or exit 1
+-	 * "command -V BAR": print "BAR is {a function,a shell builtin,/path/to/BAR}"
+-	 */
+-	while (strcmp(argv[0], "command") == 0 && argv[1]) {
+-		char *p;
+-
+-		argv++;
+-		p = *argv;
+-		if (p[0] != '-' || !p[1])
+-			continue; /* bash allows "command command command [-OPT] BAR" */
+-
+-		for (;;) {
+-			p++;
+-			switch (*p) {
+-			case '\0':
+-				argv++;
+-				p = *argv;
+-				if (p[0] != '-' || !p[1])
+-					goto after_opts;
+-				continue; /* next arg is also -opts, process it too */
+-			case 'v':
+-			case 'V':
+-				opt_vV = *p;
+-				continue;
+-			default:
+-				bb_error_msg_and_die("%s: %s: invalid option", "command", argv[0]);
+-			}
+-		}
+-	}
+- after_opts:
+-# if ENABLE_HUSH_FUNCTIONS
+-	if (opt_vV && find_function(argv[0]))
+-		if_command_vV_print_and_exit(opt_vV, argv[0], "a function");
+-# endif
+-#endif
+-
+-	/* Check if the command matches any of the builtins.
+-	 * Depending on context, this might be redundant.  But it's
+-	 * easier to waste a few CPU cycles than it is to figure out
+-	 * if this is one of those cases.
+-	 */
+-	/* Why "BB_MMU ? :" difference in logic? -
+-	 * On NOMMU, it is more expensive to re-execute shell
+-	 * just in order to run echo or test builtin.
+-	 * It's better to skip it here and run corresponding
+-	 * non-builtin later. */
+-	x = BB_MMU ? find_builtin(argv[0]) : find_builtin1(argv[0]);
+-	if (x) {
+-		if_command_vV_print_and_exit(opt_vV, argv[0], "a shell builtin");
+-		exec_builtin(&nommu_save->argv_from_re_execing, x, argv);
+-	}
+-
++		function = find_function(argv[0]);
++		if (function) {
++			pid = spawn_shell(&save->argv_from_re_execing,
++				function->body_as_string, G.global_argv[0],
++				argv + 1, NULL, NULL);
++			goto spawned;
++		}
++#endif
++		if (find_builtin(argv[0])) {
++			pid = spawn_shell(&save->argv_from_re_execing, argv[0],
++				G.global_argv[0], G.global_argv + 1, argv, NULL);
++			goto spawned;
++		}
+ #if ENABLE_FEATURE_SH_STANDALONE
+-	/* Check if the command matches any busybox applets */
+-	{
+-		int a = find_applet_by_name(argv[0]);
+-		if (a >= 0) {
+-			if_command_vV_print_and_exit(opt_vV, argv[0], "an applet");
+-# if BB_MMU /* see above why on NOMMU it is not allowed */
+-			if (APPLET_IS_NOEXEC(a)) {
+-				/* Do not leak open fds from opened script files etc.
+-				 * Testcase: interactive "ls -l /proc/self/fd"
+-				 * should not show tty fd open.
+-				 */
+-				close_saved_fds_and_FILE_fds();
+-//FIXME: should also close saved redir fds
+-//This casuses test failures in
+-//redir_children_should_not_see_saved_fd_2.tests
+-//redir_children_should_not_see_saved_fd_3.tests
+-//if you replace "busybox find" with just "find" in them
+-				/* Without this, "rm -i FILE" can't be ^C'ed: */
+-				switch_off_special_sigs(G.special_sig_mask);
+-				debug_printf_exec("running applet '%s'\n", argv[0]);
+-				run_noexec_applet_and_exit(a, argv[0], argv);
+-			}
+-# endif
+-			/* Re-exec ourselves */
+-			debug_printf_exec("re-execing applet '%s'\n", argv[0]);
+-			/* Don't propagate SIG_IGN to the child */
+-			if (SPECIAL_JOBSTOP_SIGS != 0)
+-				switch_off_special_sigs(G.special_sig_mask & SPECIAL_JOBSTOP_SIGS);
+-			execv(bb_busybox_exec_path, argv);
+-			/* If they called chroot or otherwise made the binary no longer
+-			 * executable, fall through */
+-		}
+-	}
+-#endif
+-
+-#if ENABLE_FEATURE_SH_STANDALONE || BB_MMU
+- skip:
+-#endif
+-	if_command_vV_print_and_exit(opt_vV, argv[0], NULL);
+-	execvp_or_die(argv);
+-}
+-
+-/* Called after [v]fork() in run_pipe
+- */
+-static void pseudo_exec(nommu_save_t *nommu_save,
+-		struct command *command,
+-		char **argv_expanded) NORETURN;
+-static void pseudo_exec(nommu_save_t *nommu_save,
+-		struct command *command,
+-		char **argv_expanded)
+-{
+-#if ENABLE_HUSH_FUNCTIONS
+-	if (command->cmd_type == CMD_FUNCDEF) {
+-		/* Ignore funcdefs in pipes:
+-		 * true | f() { cmd }
+-		 */
+-		_exit(0);
+-	}
+-#endif
+-
+-	if (command->argv) {
+-		pseudo_exec_argv(nommu_save, command->argv,
+-				command->assignment_cnt, argv_expanded);
+-	}
+-
+-	if (command->group) {
+-		/* Cases when we are here:
+-		 * ( list )
+-		 * { list } &
+-		 * ... | ( list ) | ...
+-		 * ... | { list } | ...
+-		 */
+-#if BB_MMU
+-		int rcode;
+-		debug_printf_exec("pseudo_exec: run_list\n");
+-		reset_traps_to_defaults();
+-		rcode = run_list(command->group);
+-		/* OK to leak memory by not calling free_pipe_list,
+-		 * since this process is about to exit */
+-		_exit(rcode);
+-#else
+-		re_execute_shell(&nommu_save->argv_from_re_execing,
+-				command->group_as_string,
+-				G.global_argv[0],
+-				G.global_argv + 1,
+-				NULL);
+-#endif
+-	}
+-
+-	/* Case when we are here: ... | >file */
+-	debug_printf_exec("pseudo_exec'ed null command\n");
+-	_exit_SUCCESS();
++		if (find_applet_by_name(argv[0]) >= 0) {
++			error = posix_spawn(&pid, bb_busybox_exec_path, NULL, NULL, argv, environ);
++			goto spawn_result;
++		}
++#endif
++	}
++	error = posix_spawnp(&pid, argv[0], NULL, NULL, argv, environ);
++ spawn_result:
++	if (error) {
++		errno = error;
++		pid = -1;
++	}
++ spawned:
++	if (pid < 0) {
++		int e = errno;
++		bb_perror_msg("%s", argv && argv[0] ? argv[0] : "shell spawn");
++		command->cmd_exitcode = (e == ENOENT ? 127 : 126);
++	}
++	goto out;
++ null_command:
++	/* No executable image is needed for a pipeline's empty member. Its
++	 * redirections and expansions above still occur, exactly once. */
++	command->cmd_exitcode = 0;
++	pid = 0;
++ out:
++	fflush_all();
++	restore_redirects(squirrel);
++	return pid;
+ }
+ 
+ #if ENABLE_HUSH_JOB
+@@ -9099,6 +8924,7 @@
+ 	}
+ 	/* Happens when shell is used as init process (init=/bin/sh) */
+ 	debug_printf("checkjobs: pid %d was not in our list!\n", childpid);
++	spawn_remember_wait(childpid, status);
+ 	return -1; /* this wasn't a process from fg_pipe */
+ 
+  found_pi_and_prognum:
+@@ -9139,6 +8965,7 @@
+ 		pi->stopped_cmds++;
+ 	}
+ #endif
++	spawn_remember_wait(childpid, status);
+ 	return -1; /* this wasn't a process from fg_pipe */
+ }
+ 
+@@ -9165,7 +8992,7 @@
+ 
+ 	debug_printf_jobs("checkjobs %p\n", fg_pipe);
+ 
+-	attributes = WUNTRACED;
++	attributes = 0; /* This port has no job-control stop/continue ABI. */
+ 	if (fg_pipe == NULL)
+ 		attributes |= WNOHANG;
+ 
+@@ -9665,69 +9492,15 @@
+ 		pipefds.rd = 0;
+ 		pipefds.wr = 1;
+ 		if (cmd_no < pi->num_cmds)
+-			xpiped_pair(pipefds);
++			spawn_pair(&pipefds);
+ 
+ #if ENABLE_HUSH_LINENO_VAR
+ 		G.execute_lineno = command->lineno;
+ #endif
+ 
+-		command->pid = BB_MMU ? fork() : vfork();
+-		if (!command->pid) { /* child */
+-#if ENABLE_HUSH_JOB
+-			disable_restore_tty_pgrp_on_exit();
+-			CLEAR_RANDOM_T(&G.random_gen); /* or else $RANDOM repeats in child */
+-
+-			/* Every child adds itself to new process group
+-			 * with pgid == pid_of_first_child_in_pipe */
+-			if (G.run_list_level == 1 && G_interactive_fd) {
+-				pid_t pgrp;
+-				pgrp = pi->pgrp;
+-				if (pgrp < 0) /* true for 1st process only */
+-					pgrp = getpid();
+-				if (setpgid(0, pgrp) == 0
+-				 && pi->followup != PIPE_BG
+-				 && G_saved_tty_pgrp /* we have ctty */
+-				) {
+-					/* We do it in *every* child, not just first,
+-					 * to avoid races */
+-					tcsetpgrp(G_interactive_fd, pgrp);
+-				}
+-			}
+-#endif
+-			if (pi->alive_cmds == 0 && pi->followup == PIPE_BG) {
+-				/* 1st cmd in backgrounded pipe
+-				 * should have its stdin /dev/null'ed */
+-				close(0);
+-				if (open(bb_dev_null, O_RDONLY))
+-					xopen("/", O_RDONLY);
+-			} else {
+-				xmove_fd(next_infd, 0);
+-			}
+-			xmove_fd(pipefds.wr, 1);
+-			if (pipefds.rd > 1)
+-				close(pipefds.rd);
+-			/* Like bash, explicit redirects override pipes,
+-			 * and the pipe fd (fd#1) is available for dup'ing:
+-			 * "cmd1 2>&1 | cmd2": fd#1 is duped to fd#2, thus stderr
+-			 * of cmd1 goes into pipe.
+-			 */
+-			if (setup_redirects(command, NULL)) {
+-				/* Happens when redir file can't be opened:
+-				 * $ hush -c 'echo FOO >&2 | echo BAR 3>/qwe/rty; echo BAZ'
+-				 * FOO
+-				 * hush: can't open '/qwe/rty': No such file or directory
+-				 * BAZ
+-				 * (echo BAR is not executed, it hits _exit(1) below)
+-				 */
+-				_exit(1);
+-			}
+-
+-			/* Stores to nommu_save list of env vars putenv'ed
+-			 * (NOMMU, on MMU we don't need that) */
+-			/* cast away volatility... */
+-			pseudo_exec((nommu_save_t*) &nommu_save, command, argv_expanded);
+-			/* pseudo_exec() does not return */
+-		}
++		command->pid = spawn_command((nommu_save_t *)&nommu_save, command,
++			argv_expanded, next_infd, pipefds.wr,
++			pi->alive_cmds == 0 && pi->followup == PIPE_BG);
+ 
+ 		/* parent or error */
+ #if ENABLE_HUSH_FAST
+@@ -9745,11 +9518,12 @@
+ #endif
+ 		free(argv_expanded);
+ 		argv_expanded = NULL;
+-		if (command->pid < 0) { /* [v]fork failed */
+-			/* Clearly indicate, was it fork or vfork */
+-			bb_simple_perror_msg(BB_MMU ? "vfork"+1 : "vfork");
+-		} else {
++		if (command->pid < 0) {
++			command->pid = 0; /* cmd_exitcode was set by spawn_command */
++		} else if (command->pid > 0) {
+ 			pi->alive_cmds++;
++			if (pi->followup == PIPE_BG)
++				spawn_register_background(command->pid);
+ #if ENABLE_HUSH_JOB
+ 			/* Second and next children need to know pid of first one */
+ 			if (pi->pgrp < 0)
+@@ -9767,8 +9541,7 @@
+ 
+ 	if (!pi->alive_cmds) {
+ 		debug_leave();
+-		debug_printf_exec("run_pipe return 1 (all forks failed, no children)\n");
+-		return 1;
++		return job_exited_or_stopped(pi);
+ 	}
+ 
+ 	debug_leave();
+@@ -10224,21 +9997,14 @@
+ /* Called a few times only (or even once if "sh -c") */
+ static void install_special_sighandlers(void)
+ {
+-	unsigned mask;
+-
+-	/* Which signals are shell-special? */
+-	mask = (1 << SIGQUIT) | (1 << SIGCHLD);
+-	if (G_interactive_fd) {
+-		mask |= SPECIAL_INTERACTIVE_SIGS;
+-		if (G_saved_tty_pgrp) /* we have ctty, job control sigs work */
+-			mask |= SPECIAL_JOBSTOP_SIGS;
+-	}
+-	/* Careful, do not re-install handlers we already installed */
+-	if (G.special_sig_mask != mask) {
+-		unsigned diff = mask & ~G.special_sig_mask;
+-		G.special_sig_mask = mask;
+-		install_sighandlers(diff);
+-	}
++	struct sigaction action;
++	/* POSIX shells must be able to reap children even when SIGCHLD was
++	 * ignored on entry. No caught handler or asynchronous trampoline. */
++	memset(&action, 0, sizeof(action));
++	action.sa_handler = SIG_DFL;
++	sigemptyset(&action.sa_mask);
++	if (sigaction(SIGCHLD, &action, NULL) < 0)
++		bb_simple_perror_msg_and_die("SIGCHLD disposition");
+ }
+ 
+ #if ENABLE_HUSH_JOB
+@@ -12023,194 +11789,32 @@
+ #endif
+ 
+ #if ENABLE_HUSH_WAIT
+-/* http://www.opengroup.org/onlinepubs/9699919799/utilities/wait.html */
+-# if !ENABLE_HUSH_JOB
+-#  define wait_for_child_or_signal(pipe,pid) wait_for_child_or_signal(pid)
+-# endif
+-static int wait_for_child_or_signal(struct pipe *waitfor_pipe, pid_t waitfor_pid)
+-{
+-	int ret = 0;
+-	for (;;) {
+-		int sig;
+-		sigset_t oldset;
+-
+-		if (!sigisemptyset(&G.pending_set))
+-			goto check_sig;
+-
+-		/* waitpid is not interruptible by SA_RESTARTed
+-		 * signals which we use. Thus, this ugly dance:
+-		 */
+-
+-		/* Make sure possible SIGCHLD is stored in kernel's
+-		 * pending signal mask before we call waitpid.
+-		 * Or else we may race with SIGCHLD, lose it,
+-		 * and get stuck in sigsuspend...
+-		 */
+-		sigfillset(&oldset); /* block all signals, remember old set */
+-		sigprocmask2(SIG_SETMASK, &oldset);
+-
+-		if (!sigisemptyset(&G.pending_set)) {
+-			/* Crap! we raced with some signal! */
+-			goto restore;
+-		}
+-
+-		/*errno = 0; - checkjobs does this */
+-/* Can't pass waitfor_pipe into checkjobs(): it won't be interruptible */
+-		ret = checkjobs(NULL, waitfor_pid); /* waitpid(WNOHANG) inside */
+-		debug_printf_exec("checkjobs:%d\n", ret);
+-# if ENABLE_HUSH_JOB
+-		if (waitfor_pipe) {
+-			int rcode = job_exited_or_stopped(waitfor_pipe);
+-			debug_printf_exec("job_exited_or_stopped:%d\n", rcode);
+-			if (rcode >= 0) {
+-				ret = rcode;
+-				sigprocmask(SIG_SETMASK, &oldset, NULL);
++static int FAST_FUNC builtin_wait(char **argv)
++{
++	int result = 0;
++	argv = skip_dash_dash(argv);
++	if (!*argv) {
++		while (spawn_backgrounds)
++			spawn_wait_background(spawn_backgrounds->pid);
++		/* Also collect any remaining heredoc writers. */
++		for (;;) {
++			if (waitpid(-1, NULL, 0) >= 0)
++				continue;
++			if (errno != EINTR)
+ 				break;
+-			}
+-		}
+-# endif
+-		/* if ECHILD, there are no children (ret is -1 or 0) */
+-		/* if ret == 0, no children changed state */
+-		/* if ret != 0, it's exitcode+1 of exited waitfor_pid child */
+-		if (errno == ECHILD || ret) {
+-			ret--;
+-			if (ret < 0) /* if ECHILD, may need to fix "ret" */
+-				ret = 0;
+-# if ENABLE_HUSH_BASH_COMPAT
+-			if (waitfor_pid == -1 && errno == ECHILD) {
+-				/* exitcode of "wait -n" with no children is 127, not 0 */
+-				ret = 127;
+-			}
+-# endif
+-			sigprocmask(SIG_SETMASK, &oldset, NULL);
+-			break;
+-		}
+-		/* Wait for SIGCHLD or any other signal */
+-		/* It is vitally important for sigsuspend that SIGCHLD has non-DFL handler! */
+-		/* Note: sigsuspend invokes signal handler */
+-		sigsuspend(&oldset);
+-		/* ^^^ add "sigdelset(&oldset, SIGCHLD)" before sigsuspend
+-		 * to make sure SIGCHLD is not masked off?
+-		 * It was reported that this:
+-		 *	fn() { : | return; }
+-		 *	shopt -s lastpipe
+-		 *	fn
+-		 *	exec hush SCRIPT
+-		 * under bash 4.4.23 runs SCRIPT with SIGCHLD masked,
+-		 * making "wait" commands in SCRIPT block forever.
+-		 */
+- restore:
+-		sigprocmask(SIG_SETMASK, &oldset, NULL);
+- check_sig:
+-		/* So, did we get a signal? */
+-		sig = check_and_run_traps();
+-		if (sig /*&& sig != SIGCHLD - always true */) {
+-			/* Do this for any (non-ignored) signal, not only for ^C */
+-			ret = 128 | sig;
+-			break;
+-		}
+-		/* SIGCHLD, or no signal, or ignored one, such as SIGQUIT. Repeat */
+-	}
+-	return ret;
+-}
+-
+-static int FAST_FUNC builtin_wait(char **argv)
+-{
+-	int ret;
+-	int status;
+-
+-	argv = skip_dash_dash(argv);
+-# if ENABLE_HUSH_BASH_COMPAT
+-	if (argv[0] && strcmp(argv[0], "-n") == 0) {
+-		/* wait -n */
+-		/* (bash accepts "wait -n PID" too and ignores PID) */
+-		G.dead_job_exitcode = -1;
+-		return wait_for_child_or_signal(NULL, -1 /*no job, wait for one job*/);
+-	}
+-# endif
+-	if (argv[0] == NULL) {
+-		/* Don't care about wait results */
+-		/* Note 1: must wait until there are no more children */
+-		/* Note 2: must be interruptible */
+-		/* Examples:
+-		 * $ sleep 3 & sleep 6 & wait
+-		 * [1] 30934 sleep 3
+-		 * [2] 30935 sleep 6
+-		 * [1] Done                   sleep 3
+-		 * [2] Done                   sleep 6
+-		 * $ sleep 3 & sleep 6 & wait
+-		 * [1] 30936 sleep 3
+-		 * [2] 30937 sleep 6
+-		 * [1] Done                   sleep 3
+-		 * ^C <-- after ~4 sec from keyboard
+-		 * $
+-		 */
+-		return wait_for_child_or_signal(NULL, 0 /*no job and no pid to wait for*/);
+-	}
+-
++		}
++		return 0;
++	}
+ 	do {
+ 		pid_t pid = bb_strtou(*argv, NULL, 10);
+ 		if (errno || pid <= 0) {
+-# if ENABLE_HUSH_JOB
+-			if (argv[0][0] == '%') {
+-				struct pipe *wait_pipe;
+-				ret = 127; /* bash compat for bad jobspecs */
+-				wait_pipe = parse_jobspec(*argv);
+-				if (wait_pipe) {
+-					ret = job_exited_or_stopped(wait_pipe);
+-					if (ret < 0) {
+-						ret = wait_for_child_or_signal(wait_pipe, 0);
+-					} else {
+-						/* waiting on "last dead job" removes it */
+-						clean_up_last_dead_job();
+-					}
+-				}
+-				/* else: parse_jobspec() already emitted error msg */
+-				continue;
+-			}
+-# endif
+-			/* mimic bash message */
+-			bb_error_msg("wait: '%s': not a pid or valid job spec", *argv);
+-			ret = EXIT_FAILURE;
+-			continue; /* bash checks all argv[] */
+-		}
+-
+-		/* Do we have such child? */
+-		ret = waitpid(pid, &status, WNOHANG);
+-		if (ret < 0) {
+-			/* No */
+-			ret = 127;
+-			if (errno == ECHILD) {
+-				if (pid == G.last_bg_pid) {
+-					/* "wait $!" but last bg task has already exited. Try:
+-					 * (sleep 1; exit 3) & sleep 2; echo $?; wait $!; echo $?
+-					 * In bash it prints exitcode 0, then 3.
+-					 * In dash, it is 127.
+-					 */
+-					ret = G.last_bg_pid_exitcode;
+-				} else {
+-					/* Example: "wait 1". mimic bash message */
+-					bb_error_msg("wait: pid %u is not a child of this shell", (unsigned)pid);
+-				}
+-			} else {
+-				/* ??? */
+-				bb_perror_msg("wait %s", *argv);
+-			}
+-			continue; /* bash checks all argv[] */
+-		}
+-		if (ret == 0) {
+-			/* Yes, and it still runs */
+-			ret = wait_for_child_or_signal(NULL, pid);
++			bb_error_msg("wait: invalid pid: %s", *argv);
++			result = 127;
+ 		} else {
+-			/* Yes, and it just exited */
+-			process_wait_result(NULL, pid, status);
+-			ret = WEXITSTATUS(status);
+-			if (WIFSIGNALED(status))
+-				ret = 128 | WTERMSIG(status);
++			result = spawn_wait_background(pid);
+ 		}
+ 	} while (*++argv);
+-
+-	return ret;
++	return result;
+ }
+ #endif
+ 

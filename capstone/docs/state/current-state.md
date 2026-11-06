@@ -1,3 +1,32 @@
+## 2026-11-07 — Native subprocess and shell closure in progress
+
+Native capability-image spawn and admitted-child wait now pass focused QEMU
+lifecycle gates in both exchange and direct SDK modes. These cover ordered
+file actions, inherited grants, failed exec cleanup, reply-publication failure,
+autoreaping, parent death and ambient-child exclusion. Bootstrap-only ptrace
+races and cancellation during blocked bootstrap I/O remain unqualified.
+[Exact scope and artifact hashes](../../runtime/virtual/tests/native-task/spawn-qualification.json).
+
+A real BusyBox hush port uses native posix_spawn and passes exchange/direct
+QEMU gates including large pipes, substitutions, functions, redirection,
+background waits, a 100 KB heredoc and repeated descriptor rollback. It receives
+an exact pinned shell image and optional exact `/dev/null` grant. General fork,
+caller-replacing exec and caught signal handlers remain unsupported.
+[Shell qualification](../../ports/hush/app/results/native-task.json).
+
+The next kernel adds confined mkdir/rmdir, path chmod/truncate, hardlinks,
+symlink inspection, directory iteration, correct destination handling for dup3,
+and native nanosleep/clock_nanosleep/pselect. Each SDK passes 94 directory,
+36 duplication and 33 time/select checks. The dispatcher passes 299 host checks
+and ten negative controls; all six Linux patches install on a fresh fixture.
+[Service qualification](../../runtime/virtual/tests/native-task/directory-time-qualification.json).
+
+The original Perl test is being rerun with this shell and kernel. The obsolete
+partial diagnostic was stopped after confirming the missing services, not
+reported as a full execution. No official Perl comparison pass or new full-SPEC
+baseline is claimed yet. These service additions require no ISA/QEMU/compiler
+change; hush is a newly built native application.
+
 ## 2026-11-07 — Native cwd, pipe and simple signal repair
 
 The native task branch now implements capability-confined cwd changes and

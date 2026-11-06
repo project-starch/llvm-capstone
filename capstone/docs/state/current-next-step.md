@@ -2,9 +2,11 @@
 
 The last full native C-port test gate is **9 PASS, 1 FAIL**. Cwd, bounded parent
 traversal, pipe creation and default/ignore signals now pass focused QEMU gates.
-Close native subprocess support next: direct capability-image spawn, ordered
-file actions, inherited grants and wait, followed by a confined shell/process
-model for musl popen. [Required process gates](../plans/native-linux-task-integration.md#native-subprocess-closure).
+Native spawn/wait lifecycle gates, both confined hush ABI modes and the new
+time/directory/duplication services now pass their focused gates. Complete the
+original Perl invocations and official comparator on the matched frozen kernel. Requalify the
+full ten-entry C-port gate on the final frozen kernel before FPGA acceptance.
+[Required process gates](../plans/native-linux-task-integration.md#native-subprocess-closure).
 The outer SPEC wrapper hides test exceptions, so exit zero is insufficient:
 retain every original invocation and official comparator. Do not claim the
 full gate passed or reuse the old kernel's nine passes as new-kernel evidence.

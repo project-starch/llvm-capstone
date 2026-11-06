@@ -13,8 +13,8 @@ int main(void)
         if (d->route != NS_GRANT && !capstone_delegate_shape(d->nr)) return 1;
         ++count;
     }
-    if (count != 106 || ns_descriptor(UINT64_MAX) ||
-        ns_descriptor(CAPSTONE_SYS_dup3)->route != NS_REFUSE ||
+    if (count != 109 || ns_descriptor(UINT64_MAX) ||
+        ns_descriptor(CAPSTONE_SYS_dup3)->route != NS_RESOURCE ||
         ns_descriptor(CAPSTONE_NR_IOCTL_BUF)->route != NS_REFUSE ||
         ns_descriptor(NS_MAP)->route != NS_GRANT ||
         ns_descriptor(CAPSTONE_SYS_readv)->route != NS_VECTOR) return 1;

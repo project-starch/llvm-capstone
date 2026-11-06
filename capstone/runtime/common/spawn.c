@@ -1,6 +1,11 @@
 #include "capstone/spawn.h"
+#ifdef __KERNEL__
+#include <linux/errno.h>
+#include <linux/string.h>
+#else
 #include <errno.h>
 #include <string.h>
+#endif
 
 #if __BYTE_ORDER__ != __ORDER_LITTLE_ENDIAN__
 #error "Capstone spawn v1 requires little-endian scalar encoding"

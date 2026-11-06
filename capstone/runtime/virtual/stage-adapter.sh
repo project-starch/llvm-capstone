@@ -24,3 +24,9 @@ cp "$here/../include/capstone/"{native-syscall,native-syscall-abi}.h "$out/capst
 cp "$here/checked-copy.c" "$out/checked-copy-core.c"
 cp "$here/../include/capstone/"{checked-copy,native-context}.h "$out/capstone/"
 cp "$here/../common/delegate.c" "$out/delegate-wire.c"
+
+cp "$here/module/native-spawn-dom.h" "$out/"
+cp "$here/../include/capstone/spawn.h" "$out/capstone/"
+cp "$here/../common/spawn.c" "$out/spawn-wire.c"
+
+cp "$here/module/native-directory-dom.h" "$here/module/native-time-dom.h" "$out/"

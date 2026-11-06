@@ -31,6 +31,14 @@ records/documentation, and records all five QEMU commits. The initial handoff
 commits add tools/evidence; the subsequent cwd/pipe/signal repair changes Linux
 helpers and the native frontend, with no further ISA or QEMU requirement.
 [Repair scope and qualification](../../runtime/virtual/tests/native-task/README.md#native-cwd-pipe-and-signal-repair).
+Native subprocess work additionally introduces an authenticated kernel child
+bootstrap, capability-image exec, inherited resource grants and admitted-child
+wait. The [hush port](../../ports/hush/app/README.md) is a native application
+using those services. Directory/time helpers and descriptor duplication extend
+Linux service coverage; none changes the ISA, request register layout or QEMU
+model. [Subprocess qualification](../../runtime/virtual/tests/native-task/spawn-qualification.json)
+and [shell qualification](../../ports/hush/app/results/native-task.json) are
+separate from the original SPEC comparator gate.
 The frozen inventory and source archive describe their pinned snapshot, not
 these later production fixes; use the branch HEAD for the current source.
 Git's configured submodule-ignore behavior can hide the
@@ -257,8 +265,8 @@ that the RTL must implement additional application-specific instructions.
 ## 6. Reproduction and remaining software scope
 
 Start with [native build/activation](../../runtime/virtual/tests/native-task/README.md#build-and-activation).
-The installer stages the runtime into Linux and applies the native task/files
-patches; prepared Linux also needs the documented unpinned, mprotect and GCC
+The installer stages the runtime into Linux and applies the native task, files,
+process, spawn, directory and time patches; prepared Linux also needs the documented unpinned, mprotect and GCC
 helper patches. `capstone/tests/capstone-test-env.sh` must be sourced before
 build/test commands. Keep licensed benchmark sources and artifacts out of Git.
 
