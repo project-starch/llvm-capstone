@@ -312,3 +312,48 @@ and the linking/running/validation scripts are in
 Scripts record the external artifact paths used for this run; the QEMU, kernel,
 SDK and GCC artifacts are the same as the preceding musl migration record.
 No benchmark sources or data files are committed to the repository.
+
+### Syscall-heavy workload through real musl
+
+`musl-copy.c` copies the same resident 1 MiB file using ordinary musl `read` and
+`write`, with 64-byte, 4-KiB and 64-KiB buffers. One application object is linked
+against the exchange and direct-I/O SDKs. File creation/population, buffer setup,
+full output comparison, final offset/length checks and diagnostics are outside
+the measured loop. Both files are populated before measurement, so this measures
+CPU work in the cached I/O path, not disk latency. Loop/return-count checks remain
+inside the window; capability checking and kernel copy rules are unchanged.
+
+[Four-guest record](musl-copy-comparison.json): exchange/direct/direct/exchange,
+reversed case order in the second pair, twelve valid windows, every return count
+and full copied output verified. Means of two observations per cell:
+
+| Buffer | read/write calls | Exchange total attempts | Direct total attempts | Total reduction | Kernel reduction |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 64 bytes | 32,768 | 555,982,127 | 189,516,342 | 65.91% | 64.96% |
+| 4 KiB | 512 | 12,367,353.5 | 4,813,633.5 | 61.08% | 53.62% |
+| 64 KiB | 32 | 4,989,767.5 | 2,670,841 | 46.47% | 20.85% |
+
+This confirms that the libc integration retains a substantial saving when the
+workload spends its time on eligible I/O. The 64-byte loop uses about 2.93 times
+fewer instruction attempts, not a measured 2.93x hardware speedup. Buffering also
+matters: either 64-KiB variant performs much less total work than either 64-byte
+variant. These results explain why the limited call mix in the short SPEC tests
+does not show a comparable whole-program gain.
+
+Reproduction, with the same SDK and external platform artifacts as above:
+
+```bash
+source capstone/tests/capstone-test-env.sh
+# CAPSTONE_EXCHANGE_CC / CAPSTONE_NATIVE_CC name the matching SDK wrappers.
+bash capstone/runtime/virtual/tests/native-task/build-musl-copy.sh "$PROBES"
+python3 capstone/runtime/virtual/tests/native-task/measure-musl-copy.py \
+  --qemu "$QEMU" --images "$IMAGES" --firmware "$FIRMWARE" \
+  --plugin "$CAPPROF" --probes "$PROBES" --out "$OUT"
+```
+
+Raw profiles, serial logs, binaries, common object and source scripts:
+`$CAPSTONE_TMP_ROOT/native-task/musl-copy-evidence.tar.gz`
+(mirror `p12:/var/tmp/capstone-native-task/musl-copy-evidence.tar.gz`), SHA-256
+`8b502739784acb0c673d413673782c5129dc4c6194039d18392a23fa260f3e32`.
+Platform artifacts are identified by hashes and are unchanged from the musl
+migration record. No wall-clock or hardware-latency claim is made.
