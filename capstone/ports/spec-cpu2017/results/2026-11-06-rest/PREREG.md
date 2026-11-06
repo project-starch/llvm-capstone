@@ -130,3 +130,24 @@ gcc 5642377943d724c6. On the twin, perl c3f passes re/reg_email alone, 13 of 13,
 - x264 c3f replaces the running x264-ac on board 1 once its QEMU gate passes. x264-ac is preempted then; it is not
   the best configuration, and it lacks the fix.
 - B1 now reads against Plain directly: perl c3f run ≤ 0.85 × 34,886.9 s.
+
+## Addendum 4 (6 Nov 16:03, before perlbench c3f's boot): the gate for c3f, and the production control
+
+**perlbench c3f, full-suite QEMU gate** (q-perl-c3f): 2/2 commands rc 0, **specdiff 2/2 PASS**. It is the first
+Capstone perlbench arm to pass both. Every earlier arm (production, -ac, c2ac12, c3s1) read 1/2. run1 is 96.74 G
+instructions (-ac 109.51 G).
+
+**re/reg_email alone, 8 environments per image** (board-path mimic and PAD 0, 8, 64, 256, 512, 1024, 2048;
+perf/regemail sweep2-4):
+
+| image | fails | at |
+|---|---|---|
+| HF: the production devmk image (sdks-dev2mk), no arena cache | 7 of 8 | cause 29, 0.7405e9 |
+| -ac (the board's) | 7 of 8 | cause 29, 0.7408e9 |
+| c3s1 | 1 of 8 (PAD 256) | 0.7279e9 |
+| **c3f** | **0 of 8** | all `1..13`, 5.6997e9 |
+
+**Correction to Addendum 3:**
+- The defect is not new on this branch. The production SDK used by every earlier Capstone perlbench and gcc
+  measurement lacks the two fixes as well, and fails the same way.
+- Earlier perlbench results whose re/reg_email passed passed by allocation history.
