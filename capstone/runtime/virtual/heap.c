@@ -282,8 +282,10 @@ static void ac_record(unsigned long base, unsigned long bytes, void *parent, voi
 /* The pending mapping's base and end: a cache hit's, else the grant in pending_mapping's. */
 static unsigned long pend_base(void) { return ac_hit ? ac_hit_base : sublet_base(&pending_mapping); }
 static unsigned long pend_end(void) { return ac_hit ? ac_hit_end : sublet_end(&pending_mapping); }
-/* Called by munmap before the unmap service: 1 when the release was kept here. */
-int __capstone_malloc_cache_unmap(unsigned long base, unsigned long bytes)
+/* Called by __capstone_malloc_munmap, mallocng's only way to release a mapping (musl patch 0011): 1 when the
+ * release was kept here. Every caller holds the heap lock (free, and alloc_group's failure path), so the ac_*
+ * tables need no other lock; public munmap never reaches them. */
+static int __capstone_malloc_cache_unmap(unsigned long base, unsigned long bytes)
 {
     if (ac_hit && base == ac_hit_base) {
         /* A hit its caller abandoned before binding it (alloc_group's failure path unmaps the fresh
@@ -339,7 +341,17 @@ static void *mapping_group(sublet_cap *grant, size_t bytes)
     ac_record(__builtin_capstone_cap_get_base(holder), bytes, holder, group);
     return group;
 }
-#else
+#endif
+/* mallocng's munmap (glue.h, musl patch 0011): through the arena cache when it is built in. */
+int __capstone_malloc_munmap(void *p, size_t n)
+{
+#if CAPSTONE_HEAP_ARENA_CACHE
+    unsigned long base = __builtin_capstone_cap_get_cursor(p), bytes = (n + 4095) & ~4095UL;
+    if (n && !(base & 4095) && __capstone_malloc_cache_unmap(base, bytes)) return 0;
+#endif
+    return munmap(p, n);
+}
+#if !CAPSTONE_HEAP_ARENA_CACHE
 static unsigned long pend_base(void) { return sublet_base(&pending_mapping); }
 static unsigned long pend_end(void) { return sublet_end(&pending_mapping); }
 static void *mapping_group(sublet_cap *grant, size_t bytes)
