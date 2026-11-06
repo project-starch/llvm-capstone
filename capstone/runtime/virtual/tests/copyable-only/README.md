@@ -19,6 +19,10 @@ real failure with ordinary OpenSBI: legacy CIS routing lost timer wakeups after
 CSRUNV, leaving module unload waiting forever. The gate checks sleep/wakeup and
 unload, not just successful program output.
 
+The [raw transport and page-lifecycle contract](raw-transport.md) specifies the
+M/S privilege boundary, Linux/module responsibilities, fail-closed admission,
+firmware assumptions and executable acceptance checks.
+
 ## Build
 
 Source `capstone/tests/capstone-test-env.sh` before builds. Keep output beneath
@@ -149,6 +153,28 @@ Raw evidence, validator commands/results, relink/run scripts and object hashes:
 `p12:/var/tmp/capstone-copyable-only/spec-quick-results/`; local scratch:
 `$CAPSTONE_TMP_ROOT/copyable-only/spec-quick/`. SPEC sources/inputs remain outside
 the repository. The prototype implementation and safety limits are unchanged.
+
+## Admission and privilege qualification (2026-11-06)
+
+Linux and the module independently refuse unpinned backing unless exactly one
+CPU is possible. Read-only `captag/enabled` reports actual kernel activation;
+boot parameters cannot spoof it. QEMU already refuses multiple harts in the
+virtual profile; the Linux guard also protects independent platform producers.
+
+The rebuilt kernel/module pass 22 runtime checks in each backing mode,
+page-copy/reuse and swap-refusal checks, and 4,000 firmware-timer copy iterations
+without lost tags. Twelve bare-metal raw-privilege configurations and five Linux
+platform cases pass. Protected application tests require the exact faulting
+instruction word and symbol-relative PC; six adversarial oracle tests reject
+unrelated faults, wrong PCs/causes, missing and duplicate cases. The platform
+suite tests both QEMU's two-hart refusal and Linux's independent refusal under a
+synthetic unsupported device tree. Two review findings were fixed and re-reviewed.
+
+[Qualification and hashes](results/hardening.json); [contract and commands](raw-transport.md).
+Raw evidence is at `p12:/var/tmp/capstone-copyable-only/hardening-evidence.tar.gz`
+and locally under `$CAPSTONE_TMP_ROOT/copyable-only/`. This hardening changes
+activation checks, not the measured workload paths; the earlier performance
+records retain their original binary hashes.
 
 ## Limits
 

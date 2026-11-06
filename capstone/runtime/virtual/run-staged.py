@@ -15,10 +15,12 @@ def main():
     p.add_argument('--qemu', type=Path, required=True)
     p.add_argument('--images', type=Path, required=True)
     p.add_argument('--firmware', type=Path, help='Override images/fw_jump.elf')
+    p.add_argument('--dtb', type=Path, help='Override platform device tree (qualification fixtures)')
     p.add_argument('--stage', type=Path, required=True, help='Contains executable gate.sh and application resources')
     p.add_argument('--timeout', type=int, default=600)
     p.add_argument('--disk-mib', type=int, default=1024)
     p.add_argument('--memory', default='2G', help="Guest RAM, as QEMU's -m takes it")
+    p.add_argument('--cpus', type=int, default=1, help='Guest CPUs (default: 1)')
     p.add_argument('--kernel-arg', action='append', default=[],
                    help='Additional kernel command-line argument (repeatable)')
     p.add_argument('--work', type=Path, required=True, help='New output directory')
@@ -30,6 +32,8 @@ def main():
     p.add_argument('--plugin-arg', action='append', default=[])
     p.add_argument('--icount', type=int, choices=range(11))
     a = p.parse_args()
+    if a.cpus < 1:
+        p.error('--cpus must be positive')
     if a.plugin_arg and not a.plugin:
         p.error('--plugin-arg needs --plugin')
     if any(',' in arg or '=' not in arg for arg in a.plugin_arg):
@@ -39,7 +43,7 @@ def main():
     with disk.open('wb') as f:
         f.truncate(a.disk_mib << 20)
     subprocess.run(['/sbin/mkfs.ext4', '-F', '-q', '-d', str(a.stage), str(disk)], check=True)
-    cmd = [str(a.qemu), '-M', 'virt-capstone', '-m', a.memory, '-smp', '1',
+    cmd = [str(a.qemu), '-M', 'virt-capstone', '-m', a.memory, '-smp', str(a.cpus),
            '-nographic', '-monitor', 'none', '-serial', 'stdio', '-snapshot',
            '-bios', str(a.firmware if a.firmware else a.images/'fw_jump.elf'), '-kernel', str(a.images/'Image'),
            '-append', ' '.join(['root=/dev/vda ro', *a.kernel_arg]),
@@ -68,6 +72,8 @@ def main():
     print(f"run-staged: -cpu {cmd[-1]}", flush=True)
     if a.plugin:
         cmd += ['-plugin', ','.join([str(a.plugin), *a.plugin_arg])]
+    if a.dtb:
+        cmd += ['-dtb', str(a.dtb)]
     if a.icount is not None:
         cmd += ['-icount', f'shift={a.icount}']
     if a.share:

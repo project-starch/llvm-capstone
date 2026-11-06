@@ -1,7 +1,10 @@
 # Optional unpinned domains
 
-This branch is a proposal and qualification candidate. It requires the matching
-`isa/raw-tag-moves-2` QEMU branch and the Linux patch here. It does not change an
+The current `prototype/copyable-only` profile requires the superproject-pinned
+QEMU and the Linux patch here. Use its [build and qualification instructions](../tests/copyable-only/README.md)
+and [privileged transport contract](../tests/copyable-only/raw-transport.md).
+The platform-dev4 recipes and historical results below predate this profile;
+the copyable-only build requires ordinary OpenSBI and its matching adapter. It does not change an
 ISA ruling or provide an RTL implementation. `unpinned=0` is the module default.
 Set `unpinned=1` at module load; the parameter cannot change while loaded.
 The module refuses that option on a stock kernel or a mismatched ID-width build.
@@ -46,7 +49,8 @@ activation. For a SPEC arms file, set `platform.cpu_props` to the recorded CPU
 properties and the Capstone arm's `module_params` to `unpinned=1`.
 
 The patched kernel enables tag-aware mm only after discovering the opt-in node.
-It refuses activation with KSM or transparent huge pages configured; byte-only
+It refuses activation unless exactly one CPU is possible (including offline
+CPUs), and with KSM or transparent huge pages configured; byte-only
 page merging is outside this contract.
 `copy_highpage` and `copy_user_highpage` query the source page's sticky flag. A
 clear flag means the page holds no tag, so an ordinary copy is exact and its
@@ -59,7 +63,8 @@ a flagged page it asks whether a tag is live (an empty answer resets the flag),
 clears live pages, and verifies a second empty acknowledgement before allocator
 reuse.
 `arch_prepare_to_swap` refuses a folio if any constituent page may contain tags.
-`captag=off` disables these hooks for negative tests; an unpinned module then
+`/sys/module/captag/parameters/enabled` reports actual activation and cannot be
+spoofed by a boot parameter. `captag=off` disables these hooks for negative tests; an unpinned module then
 refuses to load. No test page CSR or software PTE tag flag is used.
 
 ### Optional bulk page operations
