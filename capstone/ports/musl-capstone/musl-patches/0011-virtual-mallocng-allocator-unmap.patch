@@ -1,15 +1,14 @@
 --- a/src/malloc/mallocng/glue.h	2026-11-06 10:47:42.674551681 +0800
-+++ b/src/malloc/mallocng/glue.h	2026-11-06 10:47:42.674551681 +0800
-@@ -51,6 +51,12 @@
- #define mmap __mmap
- #define madvise __madvise
- #define mremap __mremap
++++ b/src/malloc/mallocng/glue.h	2026-11-06 10:48:45.251551033 +0800
+@@ -109,4 +109,11 @@
+ 	else unlock();
+ }
+ 
 +#ifdef CAPSTONE_MUSL_MALLOC
 +/* The allocator's own releases go to the runtime heap (heap.c), which may keep the mapping in its arena cache;
 + * public munmap stays a plain kernel unmap. */
 +int __capstone_malloc_munmap(void *, size_t);
 +#define munmap __capstone_malloc_munmap
 +#endif
- 
- #ifdef CAPSTONE_MUSL_MALLOC
- #define DISABLE_ALIGNED_ALLOC 0
++
+ #endif
