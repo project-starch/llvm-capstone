@@ -357,3 +357,48 @@ Raw profiles, serial logs, binaries, common object and source scripts:
 `8b502739784acb0c673d413673782c5129dc4c6194039d18392a23fa260f3e32`.
 Platform artifacts are identified by hashes and are unchanged from the musl
 migration record. No wall-clock or hardware-latency claim is made.
+
+### SQLite speedtest1 admission: file workload blocked
+
+The existing ordinary-program SQLite 3.22.0 port was built with its Unix VFS,
+normal allocator, original defaults and existing 32-phase result oracle.
+One engine object and one speedtest object were linked with the two SDKs.
+No journal, locking or sync option was changed to make the test pass.
+
+[Admission record](sqlite-admission.json), diagnostic tracing enabled:
+
+| Workload | Exchange | Direct small I/O |
+| --- | --- | --- |
+| `speedtest1 --size 1 st.db` | Exit 1, first CREATE TABLE, zero completed oracle phases | Same failure |
+| `speedtest1 --size 1 :memory:` | All 32 phases match native oracle | All 32 phases match native oracle |
+
+The file run reaches open/stat/read successfully, including one direct-register
+read in the direct SDK. Its first POSIX lock request uses the existing
+`CAPSTONE_NR_FCNTL_LOCK` wire service (`0xc0de0003`); native dispatch returns
+`-ENOSYS`, and SQLite reports `disk I/O error` for the first CREATE TABLE.
+`unlinkat` is also refused at startup. The buffered ioctl query used to configure
+diagnostic output is refused but nonfatal. Source inspection additionally finds
+no native providers for scalar fcntl, fsync/fdatasync or ftruncate. These latter
+calls are prerequisites to audit, not a claim that this early failed run reached
+them or discovered every remaining dependency.
+
+The older delegated runtime's SQLite qualification does not establish coverage
+on this task backend. The memory controls establish that this build and both
+SDKs can execute the complete SQL workload; they do not validate file locking,
+journaling, crash durability or a file-backed speedup. No performance number is
+reported for these diagnostic runs. A successful diagnostic gate exit is not a
+successful benchmark exit; the admission record checks each program separately.
+
+Before comparing the file workload, add real native file services with descriptor
+confinement and checked flock marshalling, including competing-writer lock tests
+and correct release/error behavior. Preserve journal and sync semantics. Then
+repeat file-backed admission against all 32 oracle phases before collecting
+untraced performance windows and separate route diagnostics.
+
+Raw traces, binaries, common objects, build command, host reference outputs and
+analysis script are archived at
+`$CAPSTONE_TMP_ROOT/native-task/sqlite-admission-evidence.tar.gz`
+(mirror `p12:/var/tmp/capstone-native-task/sqlite-admission-evidence.tar.gz`), SHA-256
+`ac9d7fed30701ba8d4728c5faf9545340b29b94ac962a5b7370412557f133484`.
+Source hashes identify the existing prepared SQLite app port. Platform artifacts
+are unchanged from the musl migration record. The source archives are external.
