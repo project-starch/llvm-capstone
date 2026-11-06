@@ -194,3 +194,33 @@ windows/nonzero exits/kernel diagnostics, validates exact output, and writes
 binaries/inputs outside the repository under `$CAPSTONE_TMP_ROOT`.
 
 [Final measured inputs and qualification](../copyable-only/results/gcc-native-preliminary.json).
+
+
+## Plain / launcher / native GCC comparison
+
+The follow-up runs the cached ordinary RV64/musl GCC alongside both Capstone
+variants on the same Image, QEMU, firmware and measurement plugin. Six fresh
+guests cover all six arm permutations, so every arm runs first, second and third
+twice. All 18 outputs match the exact same reference. Mean attempted instructions:
+
+| Arm | Total | Relative to plain | Kernel + module |
+|---|---:|---:|---:|
+| Plain RV64/musl | 32,892,670.3 | 1.000x | 13,510,592.3 |
+| Capstone launcher | 58,402,387.2 | 1.776x | 32,481,869.8 |
+| Capstone native prototype | 54,029,147.0 | 1.643x | 28,960,167.8 |
+
+Native saves 7.488% versus launcher but still uses 64.259% more instructions than
+plain. These are startup-inclusive small-input results, not hardware timings.
+The cached plain binary uses the previously recorded RV64 compiler and pristine
+musl 1.2.5; compiler revisions/libc configurations are not matched to Capstone.
+This is a comparison of the existing stacks, not an isolated ISA-cost experiment.
+Plain uses the same patched measurement kernel, not a separately built stock
+Linux kernel. The native signal/ioctl and ABI limitations above still apply.
+
+To reproduce, supply `--plain PATH_TO_PLAIN_GCC` to `gcc-preliminary.py` in
+addition to the existing arguments. This runs three cyclic orders. Repeat into
+a fresh output with `--reverse-rotations` to run the other three orders; combine
+the six samples per arm from both `summary.json` files. Input hashes must match
+between batches. Benchmark sources/binaries remain outside the repository.
+
+[All runs, ratios, provenance and evidence](../copyable-only/results/gcc-three-arm.json).
