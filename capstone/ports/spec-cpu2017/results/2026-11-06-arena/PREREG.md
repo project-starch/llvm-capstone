@@ -157,3 +157,19 @@ Lead: gcc train is the target, test can go; reach 1.20x if possible (−437 s fr
 
 That lands near 1.29×. 1.20× needs the allocator path and the globals' bounds construction (about 1 G instructions
 each); neither is ready today.
+
+## Addendum 4 (6 Nov 12:25, before the c2ac7 boot): arena_pin added
+
+The c2ac7 stage also sets `arena_pin=1` for this stage only, and restores it at the end. `arena_pin` is an existing
+module parameter, default off, that has never been switched on on silicon. On a fault in a lazy arena it pins the rest
+of the arena from the faulting page, not one page.
+
+**QEMU gcc train** (perf/xprof gtrAC-c2ac7-ap against gtrAC-c2ac7):
+- fault exits 19,720 → 2,486; entries 27,988 → 11,099;
+- peak pinned pages 63,813 → 67,045;
+- program instructions unchanged; specdiff PASS.
+
+**M3 tightens:** run ≤ 0.975 × 4,656.1 s, point −130…−180 s. The extra part is about 17 K fewer fault exits at
+the ~2.5 ms of non-resolve CV_STEP cost each.
+
+**New risk:** this boot is arena_pin's first on silicon. The control rungs run before it, without it.
