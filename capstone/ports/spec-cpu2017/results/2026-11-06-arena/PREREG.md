@@ -173,3 +173,30 @@ of the arena from the faulting page, not one page.
 the ~2.5 ms of non-resolve CV_STEP cost each.
 
 **New risk:** this boot is arena_pin's first on silicon. The control rungs run before it, without it.
+
+## Addendum 5 (6 Nov 12:50, before the boot): the image changes to c2ac11, which adds the slot cache
+
+The stage directory keeps its name (devmk-c2ac7), but its gcc is now **cpugcc_r.c2ac11** (f2a5a63135f1f2e5). It is the
+c2ac7 build plus `CAPSTONE_HEAP_SLOT_CACHE`, wt-arena 56bc6010ab17 / a98781264eb8, bound 65,536:
+- a freed slot of nominal size ≤ 4 KiB stays allocated in mallocng, after free has validated the pointer and revoked
+  the object's lifetime;
+- malloc of exactly that size issues a fresh child over it.
+
+**QEMU gcc train**, with arena_pin:
+
+| variant | instructions |
+|---|---|
+| c2ac7 | 14.799 G |
+| slot cache, bound 8,192 | 14.614 G |
+| **slot cache, bound 65,536** | **14.422 G** (−4.8 % against the silicon image's 15.150 G) |
+
+- Peak pinned pages 73,792; specdiff PASS.
+- **Probe** (uafSC-qemu.txt, lifetimes on): the stale slot is reused at the same address (same-address=1), and the
+  stale read faults with cause 25.
+
+**M3 tightens to run ≤ 0.95 × 4,656.1 s.** Point estimate −230…−290 s:
+- inside −4.8 % ≈ −184 s;
+- teardown −30 s;
+- arena_pin −30…−60 s.
+
+That lands around 4,400 s, about 1.25×.

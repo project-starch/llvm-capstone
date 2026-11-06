@@ -7,7 +7,7 @@ M0  rc 0, specdiff PASS, control passes, bench line fresh (Temporal); the four k
     Temporal: @@MX-SET reads step_budget_ns=10000000000 resume_quantum=Y retire_exit_sweep=3, @@MX-RESTORED the kit's.
 M1  counters programmed: in-context hpm3-7 in (0, cycles) (Temporal), machine-wide hpm3-7 deltas > 0 (both).
 X2  the .err file holds exactly one CAPSTONE_VM_ADD_OK line (slot=0); the reference holds 26,297.
-M3  run <= 0.975 x the reference (out-ga-b2, 4,656.1 s), and CV_STEPs <= 20,000 (reference 77,246).
+M3  run <= 0.95 x the reference (out-ga-b2, 4,656.1 s), and CV_STEPs <= 20,000 (reference 77,246).
 Reported: as gt-grade.py, plus the bundle against the reference: run, CV_STEPs, inside cycles."""
 import json, os, re, sys
 W = os.environ["CAPSTONE_WORK"]; B = os.path.join(W, "spec", "board")
@@ -96,7 +96,7 @@ for arm, st in ARMS:
     import glob
     ef = glob.glob(os.path.join(d, "files", "capstone-lifetimes", "*.err")); n_ok = sum(l.startswith("CAPSTONE_VM_ADD_OK") for f in ef for l in open(f, errors="replace"))
     x2 = bool(ef) and n_ok == 1; print(f"   X2 {chk(x2)} (ADD_OK lines {n_ok} in {len(ef)} .err file(s))")
-    g2 = sec <= 0.975 * rsec and steps <= 20000; print(f"   M3 {chk(g2)} (run <= 0.975 x reference, CV_STEPs {steps} <= 20,000)")
+    g2 = sec <= 0.95 * rsec and steps <= 20000; print(f"   M3 {chk(g2)} (run <= 0.95 x reference, CV_STEPs {steps} <= 20,000)")
 if len(res) == 2:
     t, p = res["capstone-lifetimes"], res["plain-rv64"]
     print(f"Capstone / Plain run time {t['sec'] / p['sec']:.3f}x" + (f"; machine-wide instructions {t['mw'][1] / p['mw'][1]:.3f}x, cycles {t['mw'][0] / p['mw'][0]:.3f}x" if t["mw"] and p["mw"] else ""))

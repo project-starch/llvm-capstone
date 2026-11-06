@@ -1,0 +1,33 @@
+@@UAF-BEGIN uaf2.ac11 control
+UAF-COUNTERS hits=0 puts=0 spills=0 untracked=0 same200=1 same16=1
+UAF-END
+@@UAF-BEGIN uaf2.ac11 stale200
+UAF-COUNTERS hits=0 puts=0 spills=0 untracked=0 same200=1 same16=1
+UAF-STALE-READ-BEGIN stale200
+capstone-exec: domain fault cause=25
+@@UAF-BEGIN uaf2.ac11 stale16
+UAF-COUNTERS hits=0 puts=0 spills=0 untracked=0 same200=1 same16=1
+UAF-STALE-READ-BEGIN stale16
+capstone-exec: domain fault cause=25
+@@UAF-BEGIN uaf2.ac11 stale
+UAF-COUNTERS hits=0 puts=0 spills=0 untracked=0 same200=1 same16=1
+UAF-END
+@@UAF-BEGIN uaf.ac11 control
+UAF-FILLED 0x3fb7400010
+UAF-REFILLED same-address=1
+UAF-END
+@@UAF-BEGIN uaf.ac11 stale200
+UAF-FILLED 0x3f99f47010
+UAF-REFILLED same-address=1
+UAF-STALE-READ-BEGIN
+capstone-exec: domain fault cause=25
+@@UAF-BEGIN uaf.ac11 stale16
+UAF-FILLED 0x3f8be82010
+UAF-REFILLED same-address=1
+UAF-STALE-READ-BEGIN
+capstone-exec: domain fault cause=25
+@@UAF-BEGIN uaf.ac11 stale
+UAF-FILLED 0x3f97132010
+UAF-REFILLED same-address=1
+UAF-STALE-READ-BEGIN
+capstone-exec: domain fault cause=25
