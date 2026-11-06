@@ -1,10 +1,13 @@
 ## 2026-11-07 — Close the full SPEC gate before FPGA acceptance
 
-The full native C-port test gate is **9 PASS, 1 FAIL**. Close the confirmed
-Perl cwd failure with capability-confined native chdir semantics, then qualify
-the required pipe, subprocess/spawn/wait and signal behavior. The outer SPEC
-wrapper hides a test exception, so exit zero is insufficient: retain every
-original invocation and official comparator. A cwd-only fix is not full closure.
+The last full native C-port test gate is **9 PASS, 1 FAIL**. Cwd, bounded parent
+traversal, pipe creation and default/ignore signals now pass focused QEMU gates.
+Close native subprocess support next: direct capability-image spawn, ordered
+file actions, inherited grants and wait, followed by a confined shell/process
+model for musl popen. [Required process gates](../plans/native-linux-task-integration.md#native-subprocess-closure).
+The outer SPEC wrapper hides test exceptions, so exit zero is insufficient:
+retain every original invocation and official comparator. Do not claim the
+full gate passed or reuse the old kernel's nine passes as new-kernel evidence.
 [Failure evidence and reproduction](../../runtime/virtual/tests/native-task/spec-perl-blocker.json).
 
 The [organized RTL handoff](../plans/native-task-rtl-handoff.md) is ready for

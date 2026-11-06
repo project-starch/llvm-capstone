@@ -217,3 +217,57 @@ Fast/generic/v2 fallback gates and both pipe/regular-file directed race suites p
 Four matched GCC runs show +0.0411% total attempts, not a speedup; only one 69-byte
 read in the separate route trace reaches the slice. This does not close the broader
 Linux policy, signal/cancellation, SMP or all-native syscall milestones.
+
+
+## Native subprocess closure
+
+The unchanged SPEC Perl test driver uses musl `popen`, which requests
+`posix_spawn("/bin/sh", ["sh", "-c", command], actions)` and then waits. The
+existing spawn wire format already carries argv/envp, ordered file actions,
+cwd actions and signal attributes. No new wire ABI is required to start this
+work. Cwd, pipes and default/ignore signals are independently qualified; they
+are not full process support. There is no capability-built shell in this tree.
+A conventional shell also needs fork/vfork or an explicitly ported spawn model.
+
+The first process slice should execute a capability image directly, inherit
+its original authority root separately from cwd, apply file actions in order,
+and wait for the exact child. A tiny capability child must qualify this before
+a shell is admitted. Required implementation and acceptance gates:
+
+- Add an explicit authenticated kernel child bootstrap. Do not exempt arbitrary
+  `kernel_clone_args.fn` calls from the existing protected-task clone refusal.
+  The child must exec into a fresh mm and protected context before any user
+  instruction; failure must terminate without resuming copied protected state.
+- Carry a refcounted heap request/completion across parent interruption. Keep
+  child PID references, handle exec failure and reaping, and release `vm_lock`
+  during child exec and waits. A completion on the parent's stack is unsafe.
+- Open and authorize the executable once and execute that pinned file through
+  the normal bprm lifecycle, including LSM, noexec and set-id checks. Calling
+  `kernel_execve` on a previously checked pathname reopens a rename/symlink race.
+- Inherit only admitted descriptors and their CLOEXEC state. The current loader
+  admits only stdio and derives a new root from cwd; neither behavior is correct
+  for an inherited child. Evaluate each open/dup/close/chdir action against the
+  evolving child state, not all paths against the parent's initial cwd.
+- Keep in-place exec separate until the architecture return contract explicitly
+  supports context replacement. Its current synchronous callback forbids
+  releasing the old state; a successful exec cannot return to freed context
+  memory or bypass the `riscv_capstone_return` state-identity check.
+- Qualify parent death during bootstrap, all failed-exec stages, descriptor and
+  PID reuse, ordered actions, wait/status behavior, and authority escape attempts.
+  Then supply a capability-built shell with a supported process model, or a
+  separately reviewed Linux confinement mechanism covering scalar descendants.
+  An ambient root shell, launcher fallback, or broader filesystem grants do
+  not satisfy the native authority contract.
+
+For Linux 6.1, `user_mode_thread()` is a possible non-PF_KTHREAD bootstrap
+primitive, but needs the dedicated admission check above. Pinned-file execution
+requires factoring `kernel_execve` into an internal execveat-style entry with
+kernel argv/envp and `AT_EMPTY_PATH`; its existing pathname-only interface is
+insufficient. `kernel_wait4` takes a userspace status pointer. A narrow exact-PID
+wait may use `kernel_wait` with initialized kernel status storage; general
+wait/options/rusage need a kernel-buffer helper and checked result publication.
+These APIs do not by themselves establish the lifecycle or authority guarantees.
+
+Astra xhigh and Gemini Argon reviewed these boundaries. Direct-image spawn
+alone does not qualify `popen`, shell pipelines/substitutions, or the full Perl
+test. Preserve original workloads and require official output comparison.

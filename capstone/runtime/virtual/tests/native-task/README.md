@@ -17,6 +17,70 @@ are introduced. The model's 5 ms quantum supplies escape opportunities; this is
 not direct hardware timer delivery. Caught handlers, full restart semantics,
 clone/exec services, SMP and native audit/seccomp/tracing remain outside this slice.
 
+## Native cwd, pipe and signal repair
+
+The first repair after the full SPEC gate adds `chdir`, live `getcwd`, bounded
+parent traversal, transactional `pipe2`, and default/ignore signal dispositions.
+The [qualification record](cwd-process-qualification.json) records the new
+kernel, source hashes and QEMU checks. It does **not** qualify subprocesses or
+turn the historical 9/10 SPEC result into a full pass.
+
+The launch directory stays an immutable authority root; changing cwd does not
+change that grant. Relative paths and directory FDs resolve against pinned
+objects. Parent traversal rejects grant escapes, symlinks and mount crossings;
+ambiguous concurrent renames can return `EAGAIN`. `getcwd` follows trusted
+renames, rejects a cwd moved outside its grant, and never returns an unchecked
+outside pathname. Linux's cwd is kept synchronized after successful changes.
+
+`pipe2` reserves both descriptor numbers within RLIMIT_NOFILE and the frontend's
+1024-FD bound before creating files. It copies the result through checked access
+and, for exchange calls, publishes the reply before installing either file.
+Copy failures release both reservations and file references. This avoids
+accidentally closing an existing descriptor or releasing unrelated POSIX locks.
+The direct ABI retains its exact capability/scalar register shape and epoch
+validation. Both paths support only `O_CLOEXEC | O_NONBLOCK` flags.
+
+The SIGACTION service accepts default/ignore dispositions through Linux's
+`do_sigaction`; handler capabilities remain in the SDK and caught handlers
+return `EOPNOTSUPP`. SIGKILL/SIGSTOP cannot be changed. Only the child-disposition
+flags affect default/ignore actions; handler-only flags have no effect. This is
+not protected caught-signal delivery, cancellation, or full restart support.
+
+Install with `install-native-task.sh`, which now also applies
+`kernel-native-process.patch`. No QEMU/ISA, compiler, SDK, or benchmark changes
+are required for this repair. Build the probes after sourcing the test environment:
+
+```sh
+source capstone/tests/capstone-test-env.sh
+# Set CAPSTONE_EXCHANGE_CC, CAPSTONE_NATIVE_CC and CROSS_COMPILE to built SDKs/tools.
+bash capstone/runtime/virtual/tests/native-task/build-cwd.sh "$CAPSTONE_TMP_ROOT/cwd-probes"
+bash capstone/runtime/virtual/tests/native-task/build-process.sh "$CAPSTONE_TMP_ROOT/process-probes"
+```
+
+Run `cwd-driver ./cwd-exchange.dom` and `cwd-driver ./cwd-direct.dom`, then
+`process-driver ./process-exchange.dom` and its direct counterpart in the native
+QEMU guest with narrow grants and one hardware slot (the same platform flags as
+the full SPEC helper). The cwd driver creates and concurrently renames its own
+temporary grant. The process driver exercises real signals, both descriptor
+limits, 128 partial payload failures per path, and 64 fatal metadata-publication
+failures per path. It checks descriptor reuse and Linux file-count growth.
+Expected metadata failures kill the protected child with SIGSEGV before resume;
+they are deliberately negative cases, not benchmark failures.
+
+The [focused original SPEC rerun](spec-process-repair.json) passes GCC's exact
+reference and Perl makerand. Perl test.pl now finds the tests and reports all
+317 as unable to start (`SPAWN -> ENOSYS`); it still exits zero, and the official
+output comparison correctly fails. This confirms repair of the cwd blocker
+while exposing the subprocess blocker. The other eight entries were not rerun
+on this repaired kernel, and the original full-campaign record stays unchanged.
+
+Native subprocess support remains a separate milestone. Musl `popen` starts
+`/bin/sh -c`, while this branch has neither a capability-built shell nor native
+clone/exec/wait closure. See the
+[process implementation requirements](../../../../docs/plans/native-linux-task-integration.md#native-subprocess-closure)
+before adding a spawn implementation. The original SPEC inputs and comparator
+remain the acceptance criterion.
+
 ## Full SPEC test-input qualification
 
 This gate covers the ten entries in the existing C port, with every original
