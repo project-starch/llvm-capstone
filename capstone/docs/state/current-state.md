@@ -1,3 +1,25 @@
+## 2026-11-07 — Native cwd, pipe and simple signal repair
+
+The native task branch now implements capability-confined cwd changes and
+bounded parent traversal, transactional pipe creation, and default/ignore
+signal dispositions. Both exchange and direct QEMU fixtures pass, including
+concurrent renames, authority escapes, 128 partial payload failures and 64
+fatal metadata-publication failures per path, descriptor exhaustion/recovery,
+and real signal delivery. The host dispatcher passes 275 checks plus ten
+negative controls; the installer applies the new Linux helper patch cleanly.
+[Implementation and qualification](../../runtime/virtual/tests/native-task/README.md#native-cwd-pipe-and-signal-repair).
+
+A focused original SPEC rerun passes GCC's exact reference and Perl makerand.
+Perl test.pl now finds all 317 tests but cannot start their child processes
+(SPAWN returns ENOSYS); its official output comparison still fails despite
+exit zero. [Focused evidence](../../runtime/virtual/tests/native-task/spec-process-repair.json).
+
+These changes add no ISA/QEMU/compiler/SDK requirement. Full native Perl is
+still not qualified: `popen` needs a confined shell and native subprocess
+support. Caught signals and clone/exec/wait remain unsupported. The older full
+SPEC campaign below belongs to its frozen kernel; its nine passing benchmarks
+must not be silently attributed to the repaired kernel.
+
 ## 2026-11-07 — Full native SPEC test gate and RTL handoff
 
 The implementation snapshot `09b90be908e6` on `native/linux-task-integration`

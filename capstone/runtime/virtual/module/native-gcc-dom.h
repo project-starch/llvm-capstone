@@ -88,9 +88,14 @@ static bool native_gcc_issue(struct context *c, const struct ns_invocation *call
         if (!rc && call->buffer[2].data) memcpy(call->buffer[2].data, &old, sizeof(old));
         break;
     case CAPSTONE_SYS_getcwd:
-        rc = strlen(c->dom_delegate->cwd) + 1;
-        if ((u64)rc > a[1]) rc = -ERANGE;
-        else memcpy(call->buffer[0].data, c->dom_delegate->cwd, rc);
+        mutex_unlock(&vm_lock);
+        rc = dom_getcwd(c, call->buffer[0].data, a[1]);
+        mutex_lock(&vm_lock);
+        break;
+    case CAPSTONE_SYS_chdir:
+        mutex_unlock(&vm_lock);
+        rc = dom_chdir_name(c, call->buffer[0].data);
+        mutex_lock(&vm_lock);
         break;
     default: return false;
     }

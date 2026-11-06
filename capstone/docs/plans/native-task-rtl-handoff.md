@@ -27,9 +27,13 @@ binary is still a separate, hash-pinned build dependency.
 
 The [machine-readable inventory](../../runtime/virtual/tests/native-task/rtl-handoff-inventory.json)
 lists every changed file at that implementation snapshot, groups code/tests/
-records/documentation, and records all five QEMU commits. Later handoff commits
-add qualification tools, evidence and documentation, with no further production
-code changes. Git's configured submodule-ignore behavior can hide the
+records/documentation, and records all five QEMU commits. The initial handoff
+commits add tools/evidence; the subsequent cwd/pipe/signal repair changes Linux
+helpers and the native frontend, with no further ISA or QEMU requirement.
+[Repair scope and qualification](../../runtime/virtual/tests/native-task/README.md#native-cwd-pipe-and-signal-repair).
+The frozen inventory and source archive describe their pinned snapshot, not
+these later production fixes; use the branch HEAD for the current source.
+Git's configured submodule-ignore behavior can hide the
 most important hardware change: use `--ignore-submodules=none` when reviewing.
 
 ```sh

@@ -126,7 +126,8 @@ static bool native_supported(u64 nr)
     case CAPSTONE_SYS_sched_yield:
     case CAPSTONE_SYS_openat: case CAPSTONE_SYS_newfstatat: case CAPSTONE_SYS_fstat:
     case CAPSTONE_SYS_sysinfo: case CAPSTONE_SYS_prlimit64:
-    case CAPSTONE_SYS_rt_sigprocmask: case CAPSTONE_SYS_getcwd:
+    case CAPSTONE_NR_SIGACTION:
+    case CAPSTONE_SYS_rt_sigprocmask: case CAPSTONE_SYS_getcwd: case CAPSTONE_SYS_chdir:
         return true;
     default: return false;
     }
@@ -206,10 +207,23 @@ static struct ns_completion native_issue(void *opaque, const struct ns_invocatio
     u64 nr = call->descriptor->nr;
     long rc = -ENOSYS;
     struct timespec64 ts;
+    extern int capstone_native_signal_action(unsigned, unsigned, unsigned);
+    typeof(&capstone_native_signal_action) signal_action;
     if (native_task_value(nr, &rc)) goto done;
     if (native_gcc_issue(c, call, file, &rc)) goto done;
     if (native_files_issue(c, call, file, &rc)) goto done;
     switch (nr) {
+    case CAPSTONE_NR_SIGACTION:
+        if (!a[0] || a[0] > 64 || a[1] > CAPSTONE_SIGNAL_CAUGHT || a[2] > UINT_MAX) {
+            rc = -EINVAL; break;
+        }
+        signal_action = symbol_get(capstone_native_signal_action);
+        if (!signal_action) { rc = -EOPNOTSUPP; break; }
+        mutex_unlock(&vm_lock);
+        rc = signal_action(a[0], a[1], a[2]);
+        mutex_lock(&vm_lock);
+        symbol_put(capstone_native_signal_action);
+        break;
     case CAPSTONE_SYS_sched_yield:
         mutex_unlock(&vm_lock); yield(); mutex_lock(&vm_lock); rc = 0; break;
     case CAPSTONE_SYS_clock_gettime:
@@ -291,6 +305,8 @@ static __always_inline bool nf_regs_plain(struct cv_thread *t, u64 kinds, u64 po
 #undef NF_HI
     return !hi;
 }
+#include "native-process-dom.h"
+
 static int nf_authorize(struct cn_context *n, const struct cn_capref *ref, u64 bytes, bool write)
 {
     struct cv_copy_state *s = &n->copy;
@@ -380,6 +396,7 @@ static long native_service_direct_impl(struct context *c, struct cv_step *step)
         rc = native_session(c);
         if (rc) return rc;
     }
+    if (step->args[6] == CAPSTONE_SYS_pipe2) return native_pipe_direct(c, step);
     if (!native_supported(step->args[6])) { step->result = native_refused(step->args[6]); return 0; }
     if (native_fast_try(c, step)) return 0;
     rc = ns_dispatch(c->native_session, READ_ONCE(c->main_thread->frame[82]), &result);
@@ -422,6 +439,7 @@ static long native_service(struct context *c, struct cv_step *step)
     if (e.nr == CAPSTONE_SYS_exit_group) return (e.args[0] & 255) + 1;
     if (e.nr == DOM_HELLO || e.nr == CAPSTONE_NR_SIGPOLL)
         return native_exchange_reply(c, &meta, &e, 0);
+    if (e.nr == CAPSTONE_SYS_pipe2) return native_pipe_exchange(c, &meta, &exchange, &e);
     if (dom_vector(e.nr)) {
         rc = native_gcc_vector(c, &e, &exchange);
         return native_exchange_reply(c, &meta, &e, rc);

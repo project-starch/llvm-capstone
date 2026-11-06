@@ -3,8 +3,10 @@
 /* Native exec's resource boundary. This is an intentionally smaller ABI than
  * the launcher: the initial cwd is a directory grant, not ambient path access.
  * Linux 6.1 exports no in-kernel openat2 entry point to modules. Walk one pinned
- * O_PATH component at a time instead: no '..', symlinks (including magic links)
- * or mount transitions. Never open a device before checking its inode. */
+ * O_PATH component at a time instead: '..' stays inside its original grant,
+ * with no symlinks (including magic links) or mount transitions. Never open a
+ * device before checking its inode. */
+#include <linux/fs_struct.h>
 static bool dom_wide_grants;
 module_param(dom_wide_grants, bool, 0444);
 MODULE_PARM_DESC(dom_wide_grants,
@@ -88,16 +90,18 @@ static int dom_resources_init(struct context *c)
     c->dom_delegate = d;
     d->path_fd = -1;
     get_fs_pwd(current->fs, &d->root);
+    d->cwd_path = d->root;
+    path_get(&d->cwd_path);
     if (!dom_disk_inode(d_inode(d->root.dentry))) return -EACCES;
     buf = kmalloc(PATH_MAX, GFP_KERNEL);
     if (!buf) return -ENOMEM;
     name = d_path(&d->root, buf, PATH_MAX);
-    if (!IS_ERR(name)) d->cwd = kstrdup(name, GFP_KERNEL);
+    if (!IS_ERR(name)) d->root_name = kstrdup(name, GFP_KERNEL);
     kfree(buf);
     if (IS_ERR(name)) return PTR_ERR(name);
-    if (!d->cwd) return -ENOMEM;
+    if (!d->root_name) return -ENOMEM;
     /* A whole-filesystem cwd is not a useful confinement grant. */
-    if (!strcmp(d->cwd, "/")) return -EACCES;
+    if (!strcmp(d->root_name, "/")) return -EACCES;
     for (i = 0; i < 3; ++i) {
         struct file *f = fget(i);
         if (f) {
@@ -108,16 +112,35 @@ static int dom_resources_init(struct context *c)
     return dom_extra_resources(d);
 }
 
+static bool dom_beneath(const struct path *path, const struct path *root)
+{
+    return path->mnt == root->mnt && is_subdir(path->dentry, root->dentry);
+}
+
+static const struct path *dom_directory_grant(struct dom_delegate *d,
+                                              const struct path *path)
+{
+    if (dom_beneath(path, &d->root)) return &d->root;
+    for (unsigned i = 0; i < DOM_EXTRA_DIRS; ++i)
+        if (d->dirs[i].dentry && dom_beneath(path, &d->dirs[i]))
+            return &d->dirs[i];
+    return NULL;
+}
+
 /* Return a held parent and a single final component in an owned string.
  * Absolute names select an explicit pinned grant by component boundary;
  * this is an authority prefix, not a blacklist or a security canonicalizer.
  * The subsequent component walk supplies the actual resolution guarantee. */
 static int dom_parent(struct context *c, const struct capstone_delegate_entry *e,
-                      struct path *parent, char **storage, char **leaf, const char *snapshot)
+                      struct path *parent, char **storage, char **leaf,
+                      const struct path **grant, const char *snapshot)
 {
     struct dom_delegate *d = c->dom_delegate;
+    const struct path *root = NULL;
     struct file *f;
     char *name, *at, *part;
+    unsigned rename_seq = read_seqbegin(&rename_lock);
+    bool dotdot = false;
     long bytes;
     int rc = 0;
     if (snapshot) {
@@ -134,9 +157,17 @@ static int dom_parent(struct context *c, const struct capstone_delegate_entry *e
     at = name;
     if (!*at) { rc = -ENOENT; goto out; }
     if (*at == '/') {
-        size_t n = strlen(d->cwd);
-        const struct path *root = NULL;
-        if (!strncmp(at, d->cwd, n) && (!at[n] || at[n] == '/')) root = &d->root;
+        char *root_buf = kmalloc(PATH_MAX, GFP_KERNEL), *root_name;
+        size_t n;
+        if (!root_buf) { rc = -ENOMEM; goto out; }
+        /* The pinned object is immutable authority; its pathname is not.
+         * Resolve absolute names under its current name so getcwd remains
+         * usable after a trusted rename of the launch directory. */
+        root_name = d_path(&d->root, root_buf, PATH_MAX);
+        if (IS_ERR(root_name)) { rc = PTR_ERR(root_name); kfree(root_buf); goto out; }
+        n = strlen(root_name);
+        if (!strncmp(at, root_name, n) && (!at[n] || at[n] == '/')) root = &d->root;
+        kfree(root_buf);
         for (unsigned i = 0; i < DOM_EXTRA_DIRS; ++i) {
             size_t len = strlen(dom_dir_names[i]);
             if (d->dirs[i].dentry && (!root || len > n) &&
@@ -162,7 +193,7 @@ static int dom_parent(struct context *c, const struct capstone_delegate_entry *e
         while (*at == '/') ++at;
         *parent = *root; path_get(parent);
     } else if ((int)e->args[0] == AT_FDCWD) {
-        *parent = d->root; path_get(parent);
+        *parent = d->cwd_path; path_get(parent);
     } else {
         if (!dom_fd_allowed(c, e->args[0])) { rc = -EBADF; goto out; }
         f = fget(e->args[0]);
@@ -170,11 +201,33 @@ static int dom_parent(struct context *c, const struct capstone_delegate_entry *e
         *parent = f->f_path; path_get(parent); fput(f);
         if (!S_ISDIR(d_inode(parent->dentry)->i_mode)) { rc = -ENOTDIR; goto put; }
     }
+    if (!root) root = dom_directory_grant(d, parent);
+    if (!root || !dom_beneath(parent, root)) { rc = -EACCES; goto put; }
     while ((part = strsep(&at, "/")) != NULL) {
-        if (!strcmp(part, "..")) { rc = -EACCES; goto put; }
+        if (!strcmp(part, "..")) {
+            struct path up = {.mnt = parent->mnt};
+            dotdot = true;
+            if (path_equal(parent, root) || parent->dentry == parent->mnt->mnt_root ||
+                !dom_beneath(parent, root)) { rc = -EACCES; goto put; }
+            rc = inode_permission(mnt_user_ns(parent->mnt), d_inode(parent->dentry), MAY_EXEC);
+            if (rc) goto put;
+            up.dentry = dget_parent(parent->dentry);
+            /* As in namei's scoped handle_dots(), a rename anywhere since
+             * this walk began makes parent traversal ambiguous. Never use
+             * a lexical prefix or a check made before dget_parent(). */
+            if (read_seqretry(&rename_lock, rename_seq)) rc = -EAGAIN;
+            else if (!dom_beneath(&up, root)) rc = -EACCES;
+            if (rc) { dput(up.dentry); goto put; }
+            dput(parent->dentry);
+            parent->dentry = up.dentry;
+            part = ".";
+        }
         if (!at) {
+            if (dotdot && read_seqretry(&rename_lock, rename_seq)) { rc = -EAGAIN; goto put; }
+            if (!dom_beneath(parent, root)) { rc = -EACCES; goto put; }
             *leaf = *part ? part : ".";
             *storage = name;
+            *grant = root;
             return 0;
         }
         if (!*part || !strcmp(part, ".")) continue;
@@ -193,7 +246,8 @@ out:
     return rc;
 }
 
-static struct file *dom_lookup(struct context *c, const struct path *parent, const char *leaf)
+static struct file *dom_lookup(struct context *c, const struct path *parent,
+                               const char *leaf, const struct path *grant)
 {
     struct file *f;
     /* A direct device grant has no pathname traversal and no aliases. */
@@ -203,7 +257,7 @@ static struct file *dom_lookup(struct context *c, const struct path *parent, con
             return dentry_open(p, O_PATH, current_cred());
     }
     f = file_open_root(parent, leaf, O_PATH | O_NOFOLLOW, 0);
-    if (!IS_ERR(f) && (f->f_path.mnt != parent->mnt ||
+    if (!IS_ERR(f) && (!dom_beneath(&f->f_path, grant) ||
                       !dom_disk_inode(file_inode(f)))) {
         fput(f); return ERR_PTR(-EACCES);
     }
@@ -213,11 +267,12 @@ static struct file *dom_lookup(struct context *c, const struct path *parent, con
 static struct file *dom_path_file_name(struct context *c, const struct capstone_delegate_entry *e, const char *snapshot)
 {
     struct path parent;
+    const struct path *grant;
     struct file *f;
     char *storage, *leaf;
-    int rc = dom_parent(c, e, &parent, &storage, &leaf, snapshot);
+    int rc = dom_parent(c, e, &parent, &storage, &leaf, &grant, snapshot);
     if (rc) return ERR_PTR(rc);
-    f = dom_lookup(c, &parent, leaf);
+    f = dom_lookup(c, &parent, leaf, grant);
     path_put(&parent); kfree(storage);
     return f;
 }
@@ -225,6 +280,7 @@ static struct file *dom_path_file_name(struct context *c, const struct capstone_
 static long dom_path_operation_name(struct context *c, const struct capstone_delegate_entry *e, const char *snapshot)
 {
     struct path parent;
+    const struct path *grant;
     struct file *pin, *f;
     char *storage, *leaf;
     long rc;
@@ -235,7 +291,7 @@ static long dom_path_operation_name(struct context *c, const struct capstone_del
     if (e->nr == CAPSTONE_SYS_openat && (e->args[2] & ~((u64)allowed))) return -EINVAL;
     if (e->nr == CAPSTONE_SYS_openat && (flags & O_ACCMODE) == O_ACCMODE) return -EINVAL;
     if (e->nr == CAPSTONE_SYS_unlinkat && flags) return -ENOSYS;
-    rc = dom_parent(c, e, &parent, &storage, &leaf, snapshot);
+    rc = dom_parent(c, e, &parent, &storage, &leaf, &grant, snapshot);
     if (rc) return rc;
     if (e->nr == CAPSTONE_SYS_unlinkat) {
         struct dentry *victim;
@@ -255,7 +311,7 @@ static long dom_path_operation_name(struct context *c, const struct capstone_del
         mnt_drop_write(parent.mnt);
         goto out;
     }
-    pin = dom_lookup(c, &parent, leaf);
+    pin = dom_lookup(c, &parent, leaf, grant);
     if (IS_ERR(pin)) {
         rc = PTR_ERR(pin);
         if (rc != -ENOENT || !(flags & O_CREAT)) goto out;
@@ -297,6 +353,62 @@ static long dom_path_operation_name(struct context *c, const struct capstone_del
     else { set_bit(rc, c->dom_delegate->fds); fd_install(rc, f); }
 out:
     path_put(&parent); kfree(storage);
+    return rc;
+}
+
+static long dom_chdir_name(struct context *c, const char *name)
+{
+    struct capstone_delegate_entry e = {.nr = CAPSTONE_SYS_chdir};
+    struct dom_delegate *d = c->dom_delegate;
+    struct path old;
+    struct file *f;
+    int rc;
+    e.args[0] = (u64)(s64)AT_FDCWD;
+    f = dom_path_file_name(c, &e, name);
+    if (IS_ERR(f)) return PTR_ERR(f);
+    rc = -ENOTDIR;
+    if (!S_ISDIR(file_inode(f)->i_mode)) goto out;
+    rc = inode_permission(mnt_user_ns(f->f_path.mnt), file_inode(f), MAY_EXEC | MAY_CHDIR);
+    if (rc) goto out;
+    /* Nothing fallible follows publication. Linux's fs cwd is kept in sync
+     * so a future native spawn inherits the same directory. The immutable
+     * root grant never changes here. */
+    old = d->cwd_path;
+    d->cwd_path = f->f_path;
+    path_get(&d->cwd_path);
+    set_fs_pwd(current->fs, &d->cwd_path);
+    path_put(&old);
+out:
+    fput(f);
+    return rc;
+}
+
+static long dom_getcwd(struct context *c, void *buffer, size_t bytes)
+{
+    char *storage, *name;
+    unsigned rename_seq;
+    long rc;
+    if (!bytes) return -ERANGE;
+    if (d_unlinked(c->dom_delegate->cwd_path.dentry)) return -ENOENT;
+    storage = kmalloc(PATH_MAX, GFP_KERNEL);
+    if (!storage) return -ENOMEM;
+    rename_seq = read_seqbegin(&rename_lock);
+    /* A trusted process may have moved cwd outside its grant. Do not expose
+     * the external pathname, including a move racing the rendering below. */
+    if (!dom_directory_grant(c->dom_delegate, &c->dom_delegate->cwd_path)) {
+        rc = -ENOENT;
+        goto out;
+    }
+    name = d_path(&c->dom_delegate->cwd_path, storage, PATH_MAX);
+    if (IS_ERR(name)) rc = PTR_ERR(name);
+    else if (read_seqretry(&rename_lock, rename_seq)) rc = -EAGAIN;
+    else {
+        rc = strlen(name) + 1;
+        if (rc > bytes) rc = -ERANGE;
+        else memcpy(buffer, name, rc);
+    }
+out:
+    kfree(storage);
     return rc;
 }
 
