@@ -1,0 +1,42 @@
+@@UAF-BEGIN L0C0 control
+UAF-COUNTERS hits=0 puts=0 spills=0 untracked=0 same200=1 same16=1
+UAF-END
+@@UAF-END L0C0 control
+@@UAF-BEGIN L0C0 stale200
+UAF-COUNTERS hits=0 puts=0 spills=0 untracked=0 same200=1 same16=1
+UAF-STALE-READ-BEGIN stale200
+capstone-exec: domain fault cause=25
+@@UAF-END L0C0 stale200
+@@UAF-BEGIN L0C0 stale16
+UAF-COUNTERS hits=0 puts=0 spills=0 untracked=0 same200=1 same16=1
+UAF-STALE-READ-BEGIN stale16
+capstone-exec: domain fault cause=25
+@@UAF-END L0C0 stale16
+@@UAF-BEGIN L0C1NR control
+UAF-COUNTERS hits=148 puts=148 spills=0 untracked=0 same200=0 same16=1
+UAF-END
+@@UAF-END L0C1NR control
+@@UAF-BEGIN L0C1NR stale200
+UAF-COUNTERS hits=148 puts=148 spills=0 untracked=0 same200=0 same16=1
+UAF-STALE-READ-BEGIN stale200
+UAF-STALE-READ-RETURNED stale200 0x00
+@@UAF-END L0C1NR stale200
+@@UAF-BEGIN L0C1NR stale16
+UAF-COUNTERS hits=148 puts=148 spills=0 untracked=0 same200=0 same16=1
+UAF-STALE-READ-BEGIN stale16
+UAF-STALE-READ-RETURNED stale16 0x34
+@@UAF-END L0C1NR stale16
+@@UAF-BEGIN L0C1 control
+UAF-COUNTERS hits=148 puts=148 spills=0 untracked=0 same200=0 same16=1
+UAF-END
+@@UAF-END L0C1 control
+@@UAF-BEGIN L0C1 stale200
+UAF-COUNTERS hits=148 puts=148 spills=0 untracked=0 same200=0 same16=1
+UAF-STALE-READ-BEGIN stale200
+capstone-exec: domain fault cause=25
+@@UAF-END L0C1 stale200
+@@UAF-BEGIN L0C1 stale16
+UAF-COUNTERS hits=148 puts=148 spills=0 untracked=0 same200=0 same16=1
+UAF-STALE-READ-BEGIN stale16
+capstone-exec: domain fault cause=25
+@@UAF-END L0C1 stale16

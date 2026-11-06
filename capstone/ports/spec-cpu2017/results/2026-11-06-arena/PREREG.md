@@ -96,3 +96,30 @@ nested groups included. **Limit:** QEMU semantics only. A silicon run of `uaf2` 
   (out-all2-b1, out-ns-b1).
 - Exits 1,042 against 1,981; rc 0, specdiff PASS, control passed.
 - gcc train is running.
+
+## Addendum 2 (6 Nov 11:00): the gcc train reading, and the audit's fix B
+
+**gcc train on board 2: 4,656.1 s against 5,562.1 s** (0.837×, M3 holds; M0, M1, X2 hold).
+- That is 1.32× Plain's 3,515.5 s, down from 1.58×, and closes 44 % of the gap.
+- Exits 155,699 → 34,563, CV_STEPs 77,246 → 12,191.
+- Outside 1,752 → 827 s, against Plain's 650 s.
+- Inside 3,829 s (1.005× the reference), so the remaining gap is inside: 15.15 G instructions against Plain's
+  10.89 G at the same IPC.
+- The point estimate (4,000-4,500 s) was too optimistic. Per remaining exit the outside time is 23.9 ms, against 11.3 ms
+  before: the per-second background stays while the exits go.
+
+**Fix B (claim-auditor).** The cache is no longer reached from public munmap.
+- musl patch 0011 maps mallocng's munmap to `__capstone_malloc_munmap` (heap.c). That is the only caller of the cache,
+  and it always runs under the heap lock.
+- mapping.c is back to its base version.
+- Built on a private prepared musl tree, perf/arena/musl-ac: the shared musl-cache does not carry 0011. Commits
+  perf/arena-cache 848df5e23e18 and a932ff62511d. SDK ac4.
+- QEMU after the fix (`uaf2c-qemu.txt`): the same table as Addendum 1.
+  - Positive control: reads stale data, 0x00 and 0x34.
+  - Cache arm: both stale reads fault, cause 25.
+  - Counters: puts 148, hits 148.
+- gcc train: specdiff PASS, exits 27,887.
+
+**Before landing:**
+- the virtual-runtime QEMU suites, since patch 0011 changes every image's libc call;
+- the uaf2 probe on silicon.
