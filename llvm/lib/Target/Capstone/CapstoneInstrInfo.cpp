@@ -2071,6 +2071,7 @@ static bool trapsOnUntaggedOperand(unsigned Opcode) {
   case Capstone::CIncOffsetImm:
   case Capstone::LCC:
   case Capstone::SHRINK:
+  case Capstone::SHRINKTO:
   case Capstone::SCC:
   case Capstone::TIGHTEN:
   case Capstone::SEAL:
