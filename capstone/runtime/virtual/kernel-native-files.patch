@@ -1,0 +1,181 @@
+--- a/fs/fcntl.c
++++ b/fs/fcntl.c
+@@ -436,6 +436,46 @@
+ 	return 0;
+ }
+ 
++/* Native capability frontend: callers hold the authorized file and supply a
++ * checked kernel-buffer flock. Reuse Linux's security, lock ownership, wait,
++ * deadlock and close-race behavior, without a user-pointer syscall trampoline. */
++extern int capstone_native_dupfd(unsigned long, struct file *, unsigned, unsigned);
++long capstone_native_fcntl(unsigned int fd, struct file *file, unsigned int cmd,
++                          unsigned long arg, struct flock *lock, unsigned limit)
++{
++	long error;
++	if (file->f_mode & FMODE_PATH && !check_fcntl_cmd(cmd))
++		return -EBADF;
++	switch (cmd) {
++	case F_GETLK: case F_SETLK: case F_SETLKW:
++		if (!lock)
++			return -EFAULT;
++		break;
++	case F_GETFD: case F_SETFD: case F_GETFL: case F_SETFL:
++	case F_DUPFD: case F_DUPFD_CLOEXEC:
++		if (lock)
++			return -EINVAL;
++		break;
++	default:
++		return -EINVAL;
++	}
++	error = security_file_fcntl(file, cmd, arg);
++	if (error)
++		return error;
++	switch (cmd) {
++	case F_GETLK:
++		return fcntl_getlk(file, cmd, lock);
++	case F_SETLK: case F_SETLKW:
++		return fcntl_setlk(fd, file, cmd, lock);
++	case F_DUPFD: case F_DUPFD_CLOEXEC:
++		return capstone_native_dupfd(arg, file,
++			cmd == F_DUPFD_CLOEXEC ? O_CLOEXEC : 0, limit);
++	default:
++		return do_fcntl(fd, cmd, arg, file);
++	}
++}
++EXPORT_SYMBOL_GPL(capstone_native_fcntl);
++
+ SYSCALL_DEFINE3(fcntl, unsigned int, fd, unsigned int, cmd, unsigned long, arg)
+ {	
+ 	struct fd f = fdget_raw(fd);
+--- a/fs/file.c
++++ b/fs/file.c
+@@ -1295,6 +1295,27 @@
+ 	return err;
+ }
+ 
++/* Reserve within the capability frontend's fd namespace before installing.
++ * Allocating an out-of-range duplicate and closing it on failure would release
++ * all of this process's POSIX locks on the inode. */
++int capstone_native_dupfd(unsigned long from, struct file *file,
++                         unsigned flags, unsigned limit)
++{
++	unsigned long nofile = rlimit(RLIMIT_NOFILE);
++	int fd;
++	if (from >= nofile)
++		return -EINVAL;
++	nofile = min_t(unsigned long, nofile, limit);
++	if (from >= nofile)
++		return -EMFILE;
++	fd = alloc_fd(from, nofile, flags);
++	if (fd >= 0) {
++		get_file(file);
++		fd_install(fd, file);
++	}
++	return fd;
++}
++
+ int iterate_fd(struct files_struct *files, unsigned n,
+ 		int (*f)(const void *, struct file *, unsigned),
+ 		const void *p)
+--- a/fs/open.c
++++ b/fs/open.c
+@@ -153,49 +153,57 @@
+ }
+ #endif
+ 
+-long do_sys_ftruncate(unsigned int fd, loff_t length, int small)
++/* Held-file variant for the native capability ABI. */
++long capstone_native_ftruncate(struct file *file, loff_t length, int small)
+ {
+ 	struct inode *inode;
+ 	struct dentry *dentry;
+-	struct fd f;
+-	int error;
+-
+-	error = -EINVAL;
++	int error = -EINVAL;
+ 	if (length < 0)
+-		goto out;
+-	error = -EBADF;
+-	f = fdget(fd);
+-	if (!f.file)
+-		goto out;
+-
++		return error;
++	if (file->f_mode & FMODE_PATH)
++		return -EBADF;
+ 	/* explicitly opened as large or we are on 64-bit box */
+-	if (f.file->f_flags & O_LARGEFILE)
++	if (file->f_flags & O_LARGEFILE)
+ 		small = 0;
+ 
+-	dentry = f.file->f_path.dentry;
++	dentry = file->f_path.dentry;
+ 	inode = dentry->d_inode;
+ 	error = -EINVAL;
+-	if (!S_ISREG(inode->i_mode) || !(f.file->f_mode & FMODE_WRITE))
+-		goto out_putf;
++	if (!S_ISREG(inode->i_mode) || !(file->f_mode & FMODE_WRITE))
++		goto out;
+ 
+ 	error = -EINVAL;
+ 	/* Cannot ftruncate over 2^31 bytes without large file support */
+ 	if (small && length > MAX_NON_LFS)
+-		goto out_putf;
++		goto out;
+ 
+ 	error = -EPERM;
+ 	/* Check IS_APPEND on real upper inode */
+-	if (IS_APPEND(file_inode(f.file)))
+-		goto out_putf;
++	if (IS_APPEND(file_inode(file)))
++		goto out;
+ 	sb_start_write(inode->i_sb);
+-	error = security_path_truncate(&f.file->f_path);
++	error = security_path_truncate(&file->f_path);
+ 	if (!error)
+-		error = do_truncate(file_mnt_user_ns(f.file), dentry, length,
+-				    ATTR_MTIME | ATTR_CTIME, f.file);
++		error = do_truncate(file_mnt_user_ns(file), dentry, length,
++				    ATTR_MTIME | ATTR_CTIME, file);
+ 	sb_end_write(inode->i_sb);
+-out_putf:
++out:
++	return error;
++}
++EXPORT_SYMBOL_GPL(capstone_native_ftruncate);
++
++long do_sys_ftruncate(unsigned int fd, loff_t length, int small)
++{
++	struct fd f;
++	long error;
++	if (length < 0)
++		return -EINVAL;
++	f = fdget(fd);
++	if (!f.file)
++		return -EBADF;
++	error = capstone_native_ftruncate(f.file, length, small);
+ 	fdput(f);
+-out:
+ 	return error;
+ }
+ 
+@@ -1525,3 +1533,18 @@
+ }
+ 
+ EXPORT_SYMBOL(stream_open);
++
++/* Kernel-buffer frontend for fd-bound metadata changes; normal VFS and LSM
++ * checks remain in the same helpers used by Linux syscalls. */
++int capstone_native_fmetadata(struct file *file, unsigned int op,
++                             unsigned int first, unsigned int second)
++{
++	if (file->f_mode & FMODE_PATH)
++		return -EBADF;
++	switch (op) {
++	case 0: return vfs_fchmod(file, first);
++	case 1: return vfs_fchown(file, first, second);
++	default: return -EINVAL;
++	}
++}
++EXPORT_SYMBOL_GPL(capstone_native_fmetadata);

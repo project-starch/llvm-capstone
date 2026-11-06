@@ -10,12 +10,14 @@ kernel=${1:?Prepared Linux source/build tree}
     exit 1
 }
 patch --dry-run -d "$kernel" -p1 < "$here/kernel-native-task.patch"
+patch --dry-run -d "$kernel" -p1 < "$here/kernel-native-files.patch"
 # Stage before patching so missing source inputs fail without changing Linux.
 stage=$(mktemp -d "${CAPSTONE_TMP_ROOT:-/tmp/capstone}/native-task-source.XXXXXX")
 trap 'rm -rf -- "$stage"' EXIT
 bash "$here/stage-adapter.sh" "$stage"
 sed -i 's/^obj-m += capstone_vm.o$/obj-y += capstone_vm.o/' "$stage/Makefile"
 patch -d "$kernel" -p1 < "$here/kernel-native-task.patch"
+patch -d "$kernel" -p1 < "$here/kernel-native-files.patch"
 mv "$stage" "$kernel/drivers/misc/capstone"
 printf '\nobj-$(CONFIG_RISCV_CAPSTONE_TASK) += capstone/\n' >> "$kernel/drivers/misc/Makefile"
 "$kernel/scripts/config" --file "$kernel/.config" --disable SMP \

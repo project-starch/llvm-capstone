@@ -167,6 +167,9 @@ static int prepare(struct ns_session *s, struct snapshot *p, struct ns_result *r
     if (d->route == NS_REFUSE || d->route == NS_GRANT || d->nr == CAPSTONE_SYS_pipe2)
         return -ENOSYS;
     if (!shape) return -ENOSYS;
+    if (d->nr == CAPSTONE_NR_FCNTL_LOCK && p->call.scalar[1] != NS_F_GETLK &&
+        p->call.scalar[1] != NS_F_SETLK && p->call.scalar[1] != NS_F_SETLKW)
+        return -EINVAL;
     /* No tagged values silently treated as scalars, including ignored args. */
     for (unsigned i = 0; i < 6; ++i) {
         if ((i >= shape->argc || shape->args[i].kind == CAPSTONE_ARG_INT) &&
@@ -178,7 +181,12 @@ static int prepare(struct ns_session *s, struct snapshot *p, struct ns_result *r
     cn_u64 scalars[6];
     memcpy(scalars, p->call.scalar, sizeof(scalars));
     for (unsigned i = 0; i < shape->argc; ++i) {
-        const struct capstone_delegate_arg *a = &shape->args[i];
+        struct capstone_delegate_arg effective = shape->args[i];
+        /* SETLK/W only consume flock. Never require write authority or publish
+         * a buffer after a successful side effect for these commands. */
+        if (d->nr == CAPSTONE_NR_FCNTL_LOCK && i == 2 && scalars[1] != NS_F_GETLK)
+            effective.kind = CAPSTONE_ARG_IN;
+        const struct capstone_delegate_arg *a = &effective;
         cn_u64 length = 0;
         if (a->kind == CAPSTONE_ARG_INT) continue;
         if (p->offsets[i] > UINT64_MAX - NS_MAX_BYTES) return -EOVERFLOW;
@@ -278,6 +286,7 @@ static int output(struct ns_session *s, struct snapshot *p, struct ns_result *re
         if ((cn_u64)result->value > total) return -EPROTO;
     }
     for (unsigned i = 0; i < shape->argc; ++i) {
+        if (d->nr == CAPSTONE_NR_FCNTL_LOCK && p->call.scalar[1] != NS_F_GETLK) continue;
         if (!writes(shape->args[i].kind) || !p->call.buffer[i].data) continue;
         size_t n = capstone_delegate_result_bytes(d->nr, i, p->call.buffer[i].length, result->value);
         if (n && (rc = copy(s, &p->refs[i], p->offsets[i], p->call.buffer[i].data, n,

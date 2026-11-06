@@ -52,15 +52,27 @@ total attempts. All twelve measured windows pass byte-for-byte output checks.
 These CPU-work savings are workload-dependent and are not hardware speedups.
 [Reproducible workload](../../runtime/virtual/tests/native-task/README.md#syscall-heavy-workload-through-real-musl).
 
-SQLite speedtest1 now has a concrete native-task admission result: file-backed
-size 1 fails in both SDK variants on the first POSIX lock request (fcntl-lock
-returns ENOSYS), before any oracle phase completes. unlinkat is also refused;
-fsync/fdatasync/ftruncate/scalar-fcntl coverage remains to add and qualify.
-Both in-memory controls match all 32 native-oracle phases. Thus the existing
-older-runtime SQLite port cannot yet supply a native-task file performance
-comparison. Next establish real file-service/locking semantics, then repeat
-file admission before measuring; do not disable locks or durability to obtain
-numbers. [Diagnostic evidence](../../runtime/virtual/tests/native-task/README.md#sqlite-speedtest1-admission-file-workload-blocked).
+SQLite file-backed speedtest1 now completes in both SDK variants after adding
+real native POSIX locks, bounded fcntl duplication, sync, truncate, unlink and
+fd metadata services. All 32 host-reference SQL phases match in each of four
+ABBA measurement runs and two separate route-diagnostic runs. Direct small I/O
+reduces mean total attempts from 657.856M to 630.508M (4.1571%), kernel attempts
+from 433.044M to 410.436M (5.2207%). The same two application objects and unchanged
+SQLite defaults are used. This is a tmpfs CPU-work measurement, not disk latency
+or crash-durability evidence. The earlier failed admission remains historical.
+
+Real Linux/domain contention, blocking wakeup, killed waiters, duplicate-limit
+failure without lost locks, close-release semantics, confined unlink and raw
+flock capability checks pass in both modes. Host dispatcher checks pass 275/275
+under ASan/UBSan plus ten existing negative controls. Existing I/O, authority,
+entry and lifecycle regressions pass. Review also corrected shared-position
+locking around native lseek. [Implementation, reproduction and records](../../runtime/virtual/tests/native-task/README.md#native-file-services-and-sqlite-comparison).
+
+The measured direct arm migrates 1,460 reads and 823 writes. Its 5,862 POSIX lock
+requests, 2,283 seeks and metadata requests still use the exchange argument ABI,
+though Linux services them inside the native task backend. Next attribute those
+costs and qualify further ABI migration; do not infer savings for those services
+from the small-I/O result or label this complete Linux syscall coverage.
 
 Next close the remaining policy and qualification gates: native syscall
 audit/seccomp/tracing (currently rejected), full register/FP/bounds and raw-platform
