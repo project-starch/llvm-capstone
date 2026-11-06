@@ -42,6 +42,16 @@ reuse for these cohorts while preserving object bounds/lifetimes; do not assign
 this mapping delta to brk or native task entry.
 [Allocator diagnosis](../../runtime/virtual/tests/native-integration/README.md#why-the-gcc-heap-creates-more-mappings).
 
+Ordinary-musl replay now isolates request-size effects: plain and Capstone
+allocation/free histories produce 118 and 296 mappings in normal RV64 Linux
+processes. Doubling only the two plain cohorts raises 118 to 245; halving them
+in the Capstone history only lowers 296 to 277. Thus request growth is causal,
+but allocator history/other sizes interact: the earlier 124/163 localization is
+not an independently removable fraction. Eight fresh-guest replay runs pass;
+plain reproduces GCC's original 118 mappings / 94 unmaps. This uses the same
+patched kernel and is not a full computation/access-pattern replay. No production
+defaults changed. [Replay evidence](../../runtime/virtual/tests/native-integration/README.md#ordinary-linux-allocator-replay).
+
 This is a bounded experiment, not completion of native Linux compatibility.
 Five SIGACTION and one IOCTL_BUF request are still refused in this unsignalled
 run; GCC tolerates them. The exchange ABI and ioctl entry remain. Next qualify
