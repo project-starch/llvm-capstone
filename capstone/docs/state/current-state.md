@@ -14,6 +14,15 @@ existing RV64/musl and Capstone builds on the same patched measurement kernel;
 compiler revisions are not matched for an isolated ISA-cost claim.
 [Three-arm record](../../runtime/virtual/tests/copyable-only/results/gcc-three-arm.json).
 
+Phase follow-up (fresh guest per invocation): native compilation/output itself
+costs 24.205M attempts versus plain 13.186M. About 55% of the native-minus-plain
+excess occurs in startup/initialization and finalization/exit, 45% during
+compilation/output. Kernel+module accounts for about 74% of the latter excess.
+Next inspect allocation/mapping/fault work inside compilation; the native task
+entry alone cannot be assumed to remove it. All six outputs and phase-count
+conservation pass, including a wrong-boundary negative control.
+[Phase evidence](../../runtime/virtual/tests/copyable-only/results/gcc-phases.json).
+
 This is a bounded experiment, not completion of native Linux compatibility.
 Five SIGACTION and one IOCTL_BUF request are still refused in this unsignalled
 run; GCC tolerates them. The exchange ABI and ioctl entry remain. Next qualify

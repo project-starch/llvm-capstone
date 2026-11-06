@@ -1,0 +1,130 @@
+--- a/contrib/plugins/capprof.c
++++ b/contrib/plugins/capprof.c
+@@ -123,6 +123,7 @@
+     uint64_t vaddr;
+     uint64_t count;
+     uint64_t snap;
++    uint64_t phase_outer_snap;
+     uint64_t trans;     /* translations that included this instruction */
+     uint64_t tsnap;
+     uint32_t len;
+@@ -178,6 +179,8 @@
+ static uint64_t text_vaddr, text_size;
+ static GPtrArray *arms;
+ static unsigned armed_count(void);
++static gboolean phases;
++static unsigned phase_cuts;
+ static gboolean stopped;          /* the stop site fired: nothing counts any more */
+ static GString *footer;           /* extra footer lines of the next window file */
+ 
+@@ -271,7 +274,7 @@
+     fprintf(f, "# capprof window %u: vaddr len bytes attempts translations\n", window);
+     fprintf(f, "# retried marker attempts %" PRIu64 "\n", repeats);
+     repeats = 0;
+-    if (start_site.on && !start_site.fired) {
++    if (!phases && start_site.on && !start_site.fired) {
+         fprintf(f, "# before start_at: no records\n");
+     } else FOR_EACH_REC(r) {
+         uint64_t d = r->count - r->snap, t = r->trans - r->tsnap;
+@@ -327,8 +330,24 @@
+         fprintf(stderr, "capprof: marker %08x at %" PRIx64 "\n", w, m->vaddr);
+     }
+     if (w == MARK_START) {
++        if (phases) {
++            FOR_EACH_REC(r) { r->phase_outer_snap = r->count; }
++        }
+         start();
+     } else {
++        if (phases) {
++            uint64_t outer = 0;
++            FOR_EACH_REC(r) { outer += r->count - r->phase_outer_snap; }
++            g_autofree char *path = g_strdup_printf("%s/phase-total.txt", out_dir);
++            FILE *f = fopen(path, "w");
++            if (!f) invalid("cannot write phase total");
++            else {
++                fprintf(f, "%" PRIu64 "\n", outer);
++                bool ok = fflush(f) == 0 && !ferror(f);
++                ok = (fclose(f) == 0) && ok;
++                if (!ok) invalid("phase total write error");
++            }
++        }
+         stop();
+     }
+ }
+@@ -409,11 +428,22 @@
+ 
+ static void fire_start(Cand *c)
+ {
++    if (phases && (phase_cuts != 0 || stop_site.fired)) {
++        invalid("phase start out of order");
++        return;
++    }
+     start_site.fired = c;
+     if (!footer) {
+         footer = g_string_new(NULL);
+     }
+     site_line(footer, "started_at", &start_site);
++    if (phases) {
++        stop();
++        g_string_truncate(footer, 0);
++        start();
++        phase_cuts++;
++        return;
++    }
+     /* The open window's counts restart here, at the successor of the site's K-th execution. */
+     FOR_EACH_REC(r) {
+         r->snap = r->count;
+@@ -426,6 +456,10 @@
+ 
+ static void fire_stop(Cand *c)
+ {
++    if (phases && (phase_cuts != 1 || !start_site.fired)) {
++        invalid("phase stop before start");
++        return;
++    }
+     stop_site.fired = c;
+     if (!footer) {
+         footer = g_string_new(NULL);
+@@ -433,6 +467,12 @@
+     site_line(footer, "stopped_at", &stop_site);
+     unsigned closed = window;
+     stop();
++    if (phases) {
++        g_string_truncate(footer, 0);
++        start();
++        phase_cuts++;
++        return;
++    }
+     stopped = TRUE;
+     g_autofree char *path = g_strdup_printf("%s/stopped", out_dir);
+     g_autofree char *tmp = g_strdup_printf("%s/stopped.part.%d", out_dir, (int)getpid());
+@@ -647,6 +687,9 @@
+ {
+     if (active) {
+         invalid("window still open at exit");
++    }
++    if (phases && (phase_cuts != 2 || window != 3)) {
++        invalid("phase mode requires two boundaries within exactly one outer window");
+     }
+ }
+ 
+@@ -722,6 +765,8 @@
+     for (int i = 0; i < argc; i++) {
+         if (g_str_has_prefix(argv[i], "out=")) {
+             out_dir = g_strdup(argv[i] + 4);
++        } else if (!strcmp(argv[i], "phases=1")) {
++            phases = TRUE;
+         } else if (!strcmp(argv[i], "debug=1")) {
+             debug = TRUE;
+         } else {
+@@ -775,6 +820,10 @@
+                     st->name, st->bytes);
+             return -1;
+         }
++    }
++    if (phases && (!start_site.on || !stop_site.on)) {
++        fprintf(stderr, "capprof: phases=1 requires both start and stop sites\n");
++        return -1;
+     }
+     if (start_site.on && !stop_site.on) {
+         fprintf(stderr, "capprof: start_vaddr without stop_vaddr\n");
