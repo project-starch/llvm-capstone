@@ -1,3 +1,23 @@
+## 2026-11-06 — Native Linux task architecture
+
+`native/linux-task-integration` starts from measured `a13e2ffaa9a2` in a separate
+worktree. The selected endpoint is a Linux-owned Capstone task with protected
+context/mm namespace state, architecture entry/return, capability-aware syscall
+access, and Linux signal/restart/scheduling integration. CSRUNV remains the
+initial privileged entry primitive; direct hardware traps are separately gated.
+A new syscall that only wraps dom_ioctl and a vDSO are not substitutes.
+
+This branch currently contains design and implementation gates only; runtime
+behavior and all measurements remain those of the parent prototype. The first
+code milestone is a default-off task/architecture-return backend without a
+scalar trampoline or context-owning control FD, reusing checked-copy/providers
+and preserving confinement. Freeze the concrete kernel hook and signal/restart
+state contract before coding entry. Do not claim native compatibility from
+compilation or a header refactor.
+
+[Architecture](../design/virtual-capstone/native-linux-tasks.md) ·
+[Milestones and acceptance gates](../plans/native-linux-task-integration.md).
+
 ## 2026-11-06 — Preliminary native GCC measurement
 
 `experiment/native-gcc-preliminary` extends frozen `ea6464a9b2a5` with native

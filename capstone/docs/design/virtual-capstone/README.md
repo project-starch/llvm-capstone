@@ -13,6 +13,12 @@ launcher and its worker threads, and a loadable module connects them to the
 processor. The recorded platform needs no additional Linux-core or firmware
 patch. This is a QEMU implementation, not a released RTL interface.
 
+The experimental `native/linux-task-integration` workstream defines the
+[native Linux task architecture](native-linux-tasks.md) and its
+[implementation gates](../../plans/native-linux-task-integration.md). This is a
+reviewed design, not an implemented replacement for the supervised runtime
+described below.
+
 ## Read in this order
 
 | Question | Chapter |
