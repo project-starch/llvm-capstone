@@ -15,6 +15,13 @@ writes increase kernel/module work despite reducing total work. See the
 [qualified integration and reproduction](../../runtime/virtual/tests/native-integration/README.md)
 and [source import boundary](../design/virtual-capstone/syscall-import.md).
 
+GCC follow-up: the existing launcher passes the unchanged SPEC test input twice,
+but both native dispatch modes exit before producing output. Diagnostics expose
+missing openat/newfstatat/writev plus signal, sysinfo and prlimit64 requests.
+These syscall families need safe support and a reference-validated GCC rerun;
+there is currently no GCC speedup measurement for Point 2. See the
+[GCC attempt record](../../runtime/virtual/tests/copyable-only/results/gcc-native-check.json).
+
 Next milestone is Point 3: native Linux task/architecture-return integration,
 with explicit signal/restart/process semantics. The current ioctl trampoline
 is only a prototype entry mechanism. Before broad workloads, extend unsupported

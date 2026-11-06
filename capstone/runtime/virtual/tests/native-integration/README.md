@@ -103,3 +103,23 @@ SMP interleavings. No claim covers DMA, new-generation identity reuse, full
 fork/exec/signals, transparent syscall restart, RTL or a native full SPEC run.
 Interrupted restartable operations return EINTR. Bounce buffers remain. This
 branch is a reproducible prototype, not a production-security certification.
+
+
+## GCC SPEC test-input follow-up
+
+The unchanged `502.gcc_r` test invocation (`t1.c -O3 -finline-limit=50000 -o
+output.s`) was attempted on the qualified binaries. Both launcher runs completed
+and matched the reference byte-for-byte: 61,561,685 and 54,997,297 total QEMU
+attempts. Both native modes exited 1 without producing the assembly output;
+their aborted windows are explicitly invalid as performance results.
+
+A separate diagnostic module (excluded from measurements) logged refused
+`openat`, `newfstatat`, `writev`, `rt_sigprocmask`, SDK `SIGACTION`, `sysinfo` and
+`prlimit64`. The existing GCC binary uses the SDK exchange ABI, so this tests
+the kernel consumer's compatibility path, not a newly relinked register-ABI GCC.
+The observed calls are the current failure frontier, not a complete requirement
+inventory. Supporting these calls safely and rerunning the reference validator
+is required before quoting any GCC speedup for Point 2. The microbenchmark
+reductions above do not establish a GCC improvement.
+
+[Exact outcomes, attribution and hashes](../copyable-only/results/gcc-native-check.json).
