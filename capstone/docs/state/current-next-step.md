@@ -38,6 +38,13 @@ kernel work by service/phase before broadening the migration. Global v3 activati
 requires rebuilt SDKs; full signal/cancellation and Linux policy gates remain open.
 [Implementation, reproduction and evidence](../../runtime/virtual/tests/native-task/README.md#opt-in-musl-small-io-migration).
 
+The short SPEC follow-up adds two runs per SDK variant for ImageMagick, lbm
+and nab. All twelve runs pass original SPEC comparisons; input hashes match
+original test data. Mean total attempts decrease 0.0375%, 0.0900% and 0.0035%
+respectively (kernel decreases 0.2332%, 0.6355% and 1.3880%). This reinforces
+that the small-I/O migration is functional but not a large total-work saving
+for these inputs. [Results and raw evidence](../../runtime/virtual/tests/native-task/README.md#short-spec-test-input-comparison).
+
 Next close the remaining policy and qualification gates: native syscall
 audit/seccomp/tracing (currently rejected), full register/FP/bounds and raw-platform
 negative matrices, exhaustive lifetime/failed-exec race tests, then capability

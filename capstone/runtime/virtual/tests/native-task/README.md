@@ -271,3 +271,44 @@ Argon reviews are archived at
 `08df4188697990d7f14556c04e1ba61bf606267aeb9be8f6014ff186beccdac1`.
 The root filesystem and firmware are external artifacts identified by hashes;
 the archive does not vendor SPEC sources or duplicate the base root filesystem.
+
+### Short SPEC test-input comparison
+
+[Matched four-program record](musl-spec-short-comparison.json) extends the same
+SDK comparison to ImageMagick, lbm and nab, selected from workloads previously
+estimated to take at most five minutes. Each new benchmark has two complete
+fresh-guest runs per variant, with order reversed for the second pair. GCC reuses
+its unchanged four-run record above. All three new programs were relinked from
+identical objects with the two existing SDKs; no runtime change was made.
+
+| Test input | Exchange total attempts | Direct total attempts | Total change | Kernel change |
+| --- | ---: | ---: | ---: | ---: |
+| GCC | 51,037,402.5 | 51,058,377 | +0.0411% | +0.0833% |
+| ImageMagick | 112,356,920 | 112,314,757.5 | −0.0375% | −0.2332% |
+| lbm | 6,657,715,796 | 6,651,726,854.5 | −0.0900% | −0.6355% |
+| nab | 7,242,697,263.5 | 7,242,441,522.5 | −0.0035% | −1.3880% |
+
+Values are means, with kernel including the built-in adapter. All twelve new
+runs pass the original SPEC comparators: lbm absolute tolerance `1e-7`, nab
+relative tolerance `0.01`/`skipreltol=2`, and ImageMagick's image validator plus
+its `0.01` relative-tolerance output comparison. Image validation is outside the
+profile window. GCC retains its exact-output oracle. All eight staged data files
+for the three new programs match the original SPEC input/compare files by hash.
+
+The initial nab staging omitted its nested input directory and failed before
+completing the benchmark; those attempts are retained in the raw archive and
+excluded from the table. Corrected runs copy the complete directory tree.
+Elapsed host durations include shared-runner lock waits and must not be used
+as benchmark timings. These remain preliminary instruction measurements, not
+hardware speedups or reportable SPEC scores. The largest observed reduction in
+total work is only 0.09%; this slice works but does not materially reduce total
+work for these test inputs.
+
+Raw profiles, serial logs, output validation, input audits, object/binary hashes
+and the linking/running/validation scripts are in
+`$CAPSTONE_TMP_ROOT/native-task/spec-short-evidence.tar.gz`
+(mirror `p12:/var/tmp/capstone-native-task/spec-short-evidence.tar.gz`), SHA-256
+`dacb6be869ac79b416a8557e37faa3b6dfc9ad5ca39f01015677f289f53f8be6`.
+Scripts record the external artifact paths used for this run; the QEMU, kernel,
+SDK and GCC artifacts are the same as the preceding musl migration record.
+No benchmark sources or data files are committed to the repository.
