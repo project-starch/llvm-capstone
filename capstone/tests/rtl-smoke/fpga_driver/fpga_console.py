@@ -435,7 +435,8 @@ class FpgaConsole:
             nv = data.get("nv_bitstream_name")
             if self._last_nv is not None and nv is not None and nv != self._last_nv and now > self._own_until:
                 self._foreign(f"nv_bitstream_name {self._last_nv} -> {nv}")
-            if data.get("state") not in (None, "done", "idle") and now > self._own_until:
+            # "error" is a finished state (board 3 kept its first, failed flash's), not someone else's flash in progress
+            if data.get("state") not in (None, "done", "idle", "error") and now > self._own_until:
                 self._foreign(f"flash_state {data.get('state')}")
             if nv is not None:
                 self._last_nv = nv
