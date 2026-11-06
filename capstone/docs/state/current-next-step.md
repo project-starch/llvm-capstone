@@ -1,3 +1,20 @@
+## 2026-11-07 — Close the full SPEC gate before FPGA acceptance
+
+The full native C-port test gate is **9 PASS, 1 FAIL**. Close the confirmed
+Perl cwd failure with capability-confined native chdir semantics, then qualify
+the required pipe, subprocess/spawn/wait and signal behavior. The outer SPEC
+wrapper hides a test exception, so exit zero is insufficient: retain every
+original invocation and official comparator. A cwd-only fix is not full closure.
+[Failure evidence and reproduction](../../runtime/virtual/tests/native-task/spec-perl-blocker.json).
+
+The [organized RTL handoff](../plans/native-task-rtl-handoff.md) is ready for
+implementation assessment with that named software blocker. Select an explicit
+RTL/board base and assess checked access, protected context transport, paged
+lifetime collection and interrupt-safe raw tag transport against the executable
+gates. Keep the tested implementation/QEMU pins separate from the newer remote
+dev changes. A complete QEMU test pass and hardware qualification remain distinct
+milestones.
+
 ## 2026-11-06 — Native Linux task architecture
 
 `native/linux-task-integration` starts from measured `a13e2ffaa9a2` in a separate

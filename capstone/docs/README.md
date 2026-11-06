@@ -213,6 +213,11 @@ start with the [RTL handoff](plans/native-task-rtl-handoff.md). Its full SPEC
 test-input acceptance gate is separate from the short performance comparisons;
 an application exit code alone does not establish output correctness.
 
+The full native test gate now reports **9 of 10 existing C-port entries PASS**,
+including complete x264 and its image comparisons. Perl remains a confirmed
+software blocker: a refused chdir causes an exception that its test wrapper
+hides behind exit zero. [Full results and reproduction](../runtime/virtual/tests/native-task/README.md#full-spec-test-input-qualification).
+
 The opt-in native Linux task branch now runs file-backed SQLite speedtest1 with
 real Linux file/lock services. All 32 SQL phases match its host reference; four
 matched runs show 4.16% fewer total attempted instructions with direct small
