@@ -51,9 +51,10 @@ NS's kernel fast paths (`ef5f84db9f94`, subsequently tested in `73730ea7b273`)
 require its native binfmt/resource broker, kernel-owned register frame and escape
 epoch, protected slot transport, `CSCHECKR`/`CSCHECKW`, checked-copy module glue,
 and mprotect wrapper. Its QEMU pin is `ede5e467462f258775f1d1f2fb989eab3665e73f`;
-our copyable-only model lacks those checked-access instructions and deliberately
-rejects legacy ownership/control instructions. Replacing our QEMU pin or grant
-ABI with the lane's would discard the milestone just qualified here.
+the initial copyable-only import lacked checked-access instructions and
+deliberately rejected legacy ownership/control instructions. The model checkpoint
+below ports checked access separately. Replacing the QEMU pin or grant ABI with
+the lane's would discard the copyable-only milestone.
 
 The source lane's measurements are useful motivation, not results on this
 branch. Its own integration documentation still identifies partial-protection
@@ -65,11 +66,37 @@ pool to unpinned backing needs a separate resident-page stabilization/clearing
 protocol, fresh ancestor identities, revocation-before-reuse and futex/reuse
 semantics; changing its admission test to accept copyable grants is insufficient.
 
+## Copyable model checkpoint
+
+The copyable-only model now has default-off `CSCHECKR/W` and protected context
+transport. This is the processor-side prerequisite, not an active kernel
+syscall path. The shared dispatcher still has no production kernel providers.
+The port preserves the removed decoder entries, NONLIN-only restoration and
+ordinary MIP device handling; it does not import the NS QEMU pin wholesale.
+
+Transport versions 5/6 deliberately differ from NS versions 1/2. Besides
+omitting MIP, they save the immutable escaped GPRs separately from mutable
+resume/reply slots. Gemini Argon identified the latter distinction during
+review: after export/import a prepared reply must not become authority under
+the original request epoch. The regression now rejects that substitution.
+Import also validates capabilities without trapping or consuming a rejected
+image, and both transport variants check the exported epoch/caller privilege.
+See the [model contract and commands](../../../capstone-qemu/tests/capstone-checked-copy/README.md)
+and [qualification record](../../../runtime/virtual/tests/copyable-only/results/checked-model.json).
+
+The current launcher calls `capstone_delegate_seccomp()` and excludes its own
+private descriptors in the delegated service. A new in-kernel call must retain
+these policies: `fget(domain_scalar_fd)` alone is insufficient. NS's native
+resource broker and its refusal of inherited Seccomp are dependencies to adapt,
+not optional performance cleanup. Do not disable the existing launcher filter
+to make a microbenchmark pass. Kernel transport integration must also include
+all newly tagged snapshot slots in lifetime-root accounting and sweeps.
+
 ## Next integration gate
 
-1. Port and qualify the authenticated checked-access/slot protocol against this
-   branch's copyable-only frame and lifetime rules. Keep removed instructions
-   illegal and preserve the qualified Linux tag-aware page lifecycle.
+1. Processor-side checked-access/transport is qualified as above. Connect its
+   versioned ABI to kernel-owned contexts, including frame-root accounting;
+   retain the removed-instruction and Linux page-lifecycle regression gates.
 2. Connect the shared dispatcher to kernel-owned contexts and held file
    identities. Start with the source lane's narrow scalar and flat read/write
    set. Handle partial mprotect, signals/restart and unsupported pointer graphs

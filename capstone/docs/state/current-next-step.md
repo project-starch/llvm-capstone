@@ -8,9 +8,11 @@ in the one-hart QEMU configuration. The matched allocation sample measures
 and raw privilege boundary are now hardened and independently reviewed within
 the one-hart scope; short SPEC test inputs also validate. The provider-independent
 NS syscall dispatcher and checked-copy contracts are imported and hosted-tested.
-Next port the authenticated checked-access/slot protocol to the copyable model,
-then connect the kernel providers and qualify the RT guest race controls before
-activating a native syscall path. The pinned-only mapping pool is deferred. See
+The authenticated checked-access/slot protocol is now ported and model-tested,
+including immutable escape registers across transport (versions 5/6). Next
+connect kernel providers and the file/Seccomp policy, then qualify RT guest
+races before activating a native syscall path. No native syscall speedup is
+measured by this model-only checkpoint. The pinned-only mapping pool is deferred. See
 [the selective import boundary](../design/virtual-capstone/syscall-import.md).
 Complete legacy helper/type-source deletion is separate
 from the already enforced instruction boundary. See the
