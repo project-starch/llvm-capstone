@@ -108,6 +108,11 @@ capstone_configure_application(${CAPSTONE_APPLICATION_NAME}
   CONTEXT_BYTES ${CAPSTONE_APPLICATION_CONTEXT_BYTES})
 if(CAPSTONE_APPLICATION_SDK)
   get_filename_component(capstone "${CMAKE_CURRENT_LIST_DIR}/../.." ABSOLUTE)
+  if(CAPSTONE_MUSL_NATIVE_IO)
+    set(sdk_native_io true)
+  else()
+    set(sdk_native_io false)
+  endif()
   file(GENERATE OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/sdk.json" CONTENT
 "{
   \"version\": 1,
@@ -117,6 +122,7 @@ if(CAPSTONE_APPLICATION_SDK)
   \"heap_lifetimes\": ${sdk_CAPSTONE_HEAP_LIFETIMES},
   \"heap_scrub_free\": ${sdk_CAPSTONE_HEAP_SCRUB_FREE},
   \"heap_object_bounds\": ${sdk_CAPSTONE_HEAP_OBJECT_BOUNDS},
+  \"native_io\": ${sdk_native_io},
   \"codegen\": ${sdk_codegen},
   \"cc\": \"${CMAKE_C_COMPILER}\",
   \"ld\": \"${CMAKE_LINKER}\",

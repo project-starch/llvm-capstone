@@ -206,3 +206,14 @@ This is an implementation plan; no musl routing change is included yet.
 Review evidence: `$CAPSTONE_TMP_ROOT/native-task/musl-review/musl-register-review.tar.gz`
 (mirror `p12:/var/tmp/capstone-native-task/musl-register-review.tar.gz`), SHA-256
 `de4f52af498f6feaffffa9f37a021331cb2a29e78dcc26c86aca2570f58e3d32`.
+
+### First musl slice: verified implementation
+
+The opt-in small-I/O slice is implemented and qualified in the
+[runtime record](../../runtime/virtual/tests/native-task/README.md#opt-in-musl-small-io-migration).
+Launch v3 announces support, scalar arguments are explicitly canonicalized without
+laundering tagged capabilities, and direct short/error completions are final.
+Fast/generic/v2 fallback gates and both pipe/regular-file directed race suites pass.
+Four matched GCC runs show +0.0411% total attempts, not a speedup; only one 69-byte
+read in the separate route trace reaches the slice. This does not close the broader
+Linux policy, signal/cancellation, SMP or all-native syscall milestones.

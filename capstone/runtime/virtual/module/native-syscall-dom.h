@@ -17,6 +17,14 @@ struct cn_context {
     struct cv_copy_state copy;
 };
 static bool native_dispatch;
+/* Diagnostic-only inventory; disabled in measured runs. */
+static bool native_route_trace;
+module_param(native_route_trace, bool, 0644);
+static void native_route_record(const char *route, u64 nr, u64 count, long result)
+{
+    if (native_route_trace)
+        pr_info("native_route route=%s nr=%llu count=%llu result=%ld\n", route, nr, count, result);
+}
 module_param(native_dispatch, bool, 0444);
 MODULE_PARM_DESC(native_dispatch, "checked in-kernel native syscall loop (default off)");
 static bool native_fast = true;
@@ -349,7 +357,7 @@ out:
     return true;
 }
 /* The register-ABI service: a6 is the call, a0..a5 keep their tags. */
-static long native_service_direct(struct context *c, struct cv_step *step)
+static long native_service_direct_impl(struct context *c, struct cv_step *step)
 {
     struct ns_result result = {0};
     long rc;
@@ -364,6 +372,18 @@ static long native_service_direct(struct context *c, struct cv_step *step)
     rc = ns_dispatch(c->native_session, READ_ONCE(c->main_thread->frame[82]), &result);
     step->result = rc ? rc : result.value;
     return 0;
+}
+static long native_service_direct(struct context *c, struct cv_step *step)
+{
+    long rc = native_service_direct_impl(c, step);
+    native_route_record("register", step->args[6], step->args[2], rc ? rc : step->result);
+    return rc;
+}
+static int native_exchange_reply(struct context *c, const struct cn_capref *meta,
+                                 const struct capstone_delegate_entry *e, long value)
+{
+    native_route_record("exchange", e->nr, e->args[2], value);
+    return native_meta_reply(c, meta, value);
 }
 /* The exchange-buffer service of the SDK's delegate calls. */
 static long native_service(struct context *c, struct cv_step *step)
@@ -385,15 +405,15 @@ static long native_service(struct context *c, struct cv_step *step)
     copied = cv_checked_copy(c, c->main_thread, &meta, 0, &e, sizeof(e), CU_FROM_DOMAIN);
     if (copied.cause) return -EFAULT;
     rc = capstone_delegate_validate(&e, NULL, c->dom_exchange_bytes, lengths);
-    if (rc) return native_meta_reply(c, &meta, -rc);
+    if (rc) return native_exchange_reply(c, &meta, &e, -rc);
     if (e.nr == CAPSTONE_SYS_exit_group) return (e.args[0] & 255) + 1;
     if (e.nr == DOM_HELLO || e.nr == CAPSTONE_NR_SIGPOLL)
-        return native_meta_reply(c, &meta, 0);
+        return native_exchange_reply(c, &meta, &e, 0);
     if (dom_vector(e.nr)) {
         rc = native_gcc_vector(c, &e, &exchange);
-        return native_meta_reply(c, &meta, rc);
+        return native_exchange_reply(c, &meta, &e, rc);
     }
-    if (!native_supported(e.nr)) return native_meta_reply(c, &meta, native_refused(e.nr));
+    if (!native_supported(e.nr)) return native_exchange_reply(c, &meta, &e, native_refused(e.nr));
     request.nr = e.nr;
     for (i = 0; i < 6; ++i) {
         request.scalar[i] = e.args[i];
@@ -404,7 +424,7 @@ static long native_service(struct context *c, struct cv_step *step)
         } else if (!e.args[i]) request.nulls |= 1U << i;
     }
     rc = ns_dispatch_request(c->native_session, meta.context_epoch, &request, &result);
-    return native_meta_reply(c, &meta, rc ? rc : result.value);
+    return native_exchange_reply(c, &meta, &e, rc ? rc : result.value);
 }
 
 /* Optional kernel extension; a stock kernel still loads the default-off module. */

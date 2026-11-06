@@ -5,6 +5,7 @@
 #if __BYTE_ORDER__ != __ORDER_LITTLE_ENDIAN__
 #error "Capstone launch requires little-endian scalar encoding"
 #endif
+_Static_assert(sizeof(struct capstone_launch_native) == 16, "native launch extension ABI");
 _Static_assert(sizeof(struct capstone_launch_header) == 88, "launch header ABI");
 static const unsigned char magic[8] = {'C', 'P', 'L', 'A', 'U', 'N', 'C', 'H'};
 
@@ -88,14 +89,25 @@ int capstone_launch_unpack(void *buffer, size_t capacity,
     return EINVAL;
   memcpy(&h, buffer, sizeof h);
   if (memcmp(h.magic, magic, sizeof magic) ||
-      h.version != CAPSTONE_LAUNCH_VERSION ||
+      (h.version != CAPSTONE_LAUNCH_VERSION && h.version != CAPSTONE_LAUNCH_NATIVE_VERSION) ||
       (h.stdio_mask & ~7u) || !h.argc ||
       h.argc > CAPSTONE_LAUNCH_STRINGS ||
       h.envc > CAPSTONE_LAUNCH_STRINGS - h.argc ||
       h.argc >= argv_slots || h.envc >= env_slots ||
       h.bytes > CAPSTONE_LAUNCH_BYTES || h.bytes > capacity)
     return EINVAL;
-  size_t first = sizeof h + (h.argc + h.envc) * sizeof(uint32_t);
+  size_t header_bytes = sizeof h;
+  struct capstone_launch_native native = {0};
+  if (h.version == CAPSTONE_LAUNCH_NATIVE_VERSION) {
+    header_bytes += sizeof native;
+    if (h.bytes < header_bytes) return EINVAL;
+    memcpy(&native, (char *)buffer + sizeof h, sizeof native);
+    /* Unknown feature contracts disable routing, without guessing support. */
+    if (native.abi != 1 || native.features != CAPSTONE_LAUNCH_NATIVE_IO ||
+        native.max_io != 65536 || native.reserved)
+      memset(&native, 0, sizeof native);
+  }
+  size_t first = header_bytes + (h.argc + h.envc) * sizeof(uint32_t);
   if (first >= h.bytes)
     return EINVAL;
   char *cwd = string_at(buffer, h.bytes, first, h.cwd);
@@ -104,14 +116,14 @@ int capstone_launch_unpack(void *buffer, size_t capacity,
   /* Validate the whole block before publishing any pointers. */
   for (unsigned i = 0; i < h.argc + h.envc; ++i) {
     uint32_t off;
-    memcpy(&off, (char *)buffer + sizeof h + i * sizeof off, sizeof off);
+    memcpy(&off, (char *)buffer + header_bytes + i * sizeof off, sizeof off);
     char *s = string_at(buffer, h.bytes, first, off);
     if (!s || (i >= h.argc && (!strchr(s, '=') || s[0] == '=')))
       return EINVAL;
   }
   for (unsigned i = 0; i < h.argc + h.envc; ++i) {
     uint32_t off;
-    memcpy(&off, (char *)buffer + sizeof h + i * sizeof off, sizeof off);
+    memcpy(&off, (char *)buffer + header_bytes + i * sizeof off, sizeof off);
     char *s = (char *)buffer + off;
     if (i < h.argc)
       argv[i] = s;
@@ -122,6 +134,6 @@ int capstone_launch_unpack(void *buffer, size_t capacity,
   envp[h.envc] = NULL;
   *view = (struct capstone_launch_view){h.argc, h.envc, h.stdio_mask, cwd,
       {h.pid, h.ppid, h.uid, h.euid, h.gid, h.egid,
-       h.realtime_ns, h.monotonic_ns, h.ticks, h.ticks_per_second}};
+       h.realtime_ns, h.monotonic_ns, h.ticks, h.ticks_per_second, native}};
   return 0;
 }

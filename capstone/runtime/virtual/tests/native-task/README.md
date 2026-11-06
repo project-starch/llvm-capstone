@@ -177,3 +177,97 @@ Syscall logs, profiles, input hashes and probes:
 `$CAPSTONE_TMP_ROOT/native-task/syscall-evidence.tar.gz`
 (mirror `p12:/var/tmp/capstone-native-task/syscall-evidence.tar.gz`), SHA-256
 `91b3e92a7fb0eeec926ba9c04fadba93cb34d3e432cf87211565b315e18ac00f`. The kernel/model artifacts are the same as the task GCC record.
+
+## Opt-in musl small-I/O migration
+
+`CAPSTONE_MUSL_NATIVE_IO=ON` now routes `read`, `write`, `pread64` and `pwrite64`
+through the direct-register ABI **only for original requests of 1–65536 bytes**.
+Selection happens once before effects. A direct short count/error is final:
+no refill, fallback or replay. Zero and oversized original requests, including
+small trailing chunks, retain exchange semantics. Checked copies, bounce buffers,
+buffer capability authority, identity/time caches and the existing completion
+lifecycle remain. This is still a limited prototype, not all-native libc.
+
+The SDK option defaults off and is rejected for physical applications. Build
+both comparison SDKs from this source with identical options and libc archive,
+changing only this option. The SDK manifest reports `native_io`. Reinstall this
+branch's built-in adapter and boot with `capstone_vm.native_io=1` in addition to
+the task flags above. It requires `native_task=1` and advertises launch wire v3:
+a 16-byte `{abi=1, features=1, max_io=65536, reserved=0}` extension after the
+88-byte header. The application image stamp remains v2. New SDKs accept launch
+v2 without direct routing; unsupported v3 feature contracts disable routing.
+No speculative ecall probes are used. **The global v3 boot option requires rebuilt
+applications**; old startup decoders reject v3 and can fail after exec's point
+of no return. Keep it off for mixed old/new SDK deployments.
+
+Integration exposed an ABI detail: scalar operations in the pinned model write
+the low 64 bits but can leave stale upper payload. A computed `strlen` count
+therefore failed strict native shape checks despite constant-count probes passing.
+The libc bridge now canonicalizes actual scalar fd/count/offset values in an
+explicitly cleared register. LCC type checks preserve malformed capability
+arguments for rejection. The assembly stub also clears the number and selector
+registers. Kernel upper-word, raw-tag and buffer authority checks are unchanged.
+Tagged fd/offset regressions pass; this fixture does not exercise a tagged count
+with an admitted low cursor. Moving its bounded capability to such a cursor
+clears the tag under compressed-bounds rules, so that is not a valid negative test.
+
+[Qualification](musl-qualification.json) covers v3 specialised/generic dispatch
+and v2 fallback. Each includes file/boundary/dirty-scalar tests, short pipe/EAGAIN,
+51 authority checks, 20 syscall-coverage checks, blocking and task lifecycle.
+Both 41-scenario pipe and regular-file race suites pass the unchanged oracle,
+including all 17 deliberately broken controls. Regular-file short results remain
+short; libc does not refill after the injected copy fault. Host ASan/UBSan launch
+tests cover extension/table truncation, offset boundaries and unknown features.
+Astra xhigh and Gemini Argon reviewed the implementation and scalar correction;
+findings were checked against pinned model code and generated assembly.
+
+Reproduce fixtures and gates (set external artifact/compiler paths):
+
+```bash
+source capstone/tests/capstone-test-env.sh
+# CAPSTONE_EXCHANGE_CC and CAPSTONE_NATIVE_CC: matching SDK capstone-cc wrappers.
+# CROSS_COMPILE: ordinary Linux compiler prefix.
+bash capstone/runtime/virtual/tests/native-task/build-musl-io.sh "$PROBES"
+python3 capstone/runtime/virtual/tests/native-task/run-musl-io.py io \
+  --qemu "$QEMU" --images "$IMAGES" --firmware "$FIRMWARE" \
+  --probes "$PROBES" --out "$OUT"
+# Repeat into fresh output directories with --fast 0 and with --feature 0.
+# Modes race and race-file require the CV_RACE_TEST/CV_TEST_HOOKS kernel.
+# The runner selects one slot for IO/lifecycle, 32 for the injected racers.
+```
+
+### GCC result and route attribution
+
+Relink the **same GCC object files and final link arguments** with each SDK.
+`measure-musl-gcc.py --help` lists the required external artifacts; the two GCC
+arguments are `--gcc` (exchange) and `--gcc-direct`. It runs four fresh guests in
+exchange/direct/direct/exchange order with the same task kernel and feature
+announcement. Profiling has route tracing disabled. All four exact-output checks
+pass. [Measured record](musl-gcc-comparison.json), mean attempted instructions:
+
+| Musl routing | Total | Kernel including adapter |
+| --- | ---: | ---: |
+| Exchange | 51,037,402.5 | 27,063,328 |
+| Small direct I/O | 51,058,377 | 27,085,867.5 |
+
+That is **+0.0411% total, +0.0833% kernel**: no observed GCC speedup in this small
+preliminary sample. Userspace/firmware other work decreases 1,565 attempts. Do not
+interpret interrupt-sensitive totals or two repetitions as a latency result.
+
+Repeat the command with `--routes` and a new output directory for two separate
+**diagnostic** guests. [Route record](musl-gcc-routes.json): each arm records 31
+service completions; only one 69-byte `read` moves to registers. Three `writev`
+requests, pathname/status/limit/signal and other recorded services stay exchange.
+The trace is not an exhaustive accounting of allocator/mapping/lifetime work;
+`count` is the transport's third argument, not always bytes (for writev it is the
+vector count). The direct-I/O probe savings therefore do not predict a speedup
+for this GCC test. Further work should attribute the remaining kernel work by
+service and phase before expanding the ABI solely on these microbenchmarks.
+
+Raw final logs, profiles, binaries, kernel images, input hashes, source diff and
+Argon reviews are archived at
+`$CAPSTONE_TMP_ROOT/native-task/musl-io-evidence.tar.gz`
+(mirror `p12:/var/tmp/capstone-native-task/musl-io-evidence.tar.gz`), SHA-256
+`08df4188697990d7f14556c04e1ba61bf606267aeb9be8f6014ff186beccdac1`.
+The root filesystem and firmware are external artifacts identified by hashes;
+the archive does not vendor SPEC sources or duplicate the base root filesystem.
