@@ -20,7 +20,10 @@ p.add_argument('--plain', type=Path, required=True)
 p.add_argument('--repetitions', type=int, default=2)
 p.add_argument('--arms', nargs='+', choices=['plain', 'launcher', 'native'], default=['plain', 'launcher', 'native'])
 p.add_argument('--negative-boundary', action='store_true', help='Corrupt start-site fingerprint; validation must reject the run')
+p.add_argument('--module-param', action='append', default=[], help='Additional numeric module parameter for a controlled experiment (NAME=NUMBER)')
 a = p.parse_args()
+if any(not re.fullmatch(r'[a-z_][a-z_0-9]*=[0-9]+', v) for v in a.module_param):
+    p.error('--module-param requires NAME=NUMBER')
 if a.repetitions < 1: p.error('positive repetitions required')
 a.out.mkdir(parents=True, exist_ok=False)
 virtual = Path(__file__).resolve().parents[2]
@@ -57,6 +60,7 @@ for order, arms in orders:
     for index, arm in enumerate(arms):
         flags = 'supervisor_slots=32 unpinned=1'
         if arm == 'native': flags += ' dom_binfmt=1 native_dispatch=1 checked_copy=1 native_slot_transport=1 native_fast=1'
+        flags += ''.join(' '+v for v in a.module_param)
         command = {'native': './gcc-test.dom', 'launcher': './capstone-vexec gcc-test.dom', 'plain': './gcc-plain'}[arm]
         lines += [f'echo GCC_BEGIN:{index}:{arm}', f'insmod capstone_vm.ko {flags}',
                   'for f in /sys/module/capstone_vm/sections/.*; do [ ! -f "$f" ] || echo SECTION ${f##*/} $(cat "$f"); done',
@@ -65,6 +69,7 @@ for order, arms in orders:
                   'echo GCC_RC:$rc', 'cat stderr.txt', 'echo REFUSED:$(cat /sys/module/capstone_vm/parameters/native_refused_calls)',
                   f'echo "$rc" > /mnt/results/rc-{index}.txt', f'cp stdout.txt /mnt/results/stdout-{index}.txt', f'cp stderr.txt /mnt/results/stderr-{index}.txt',
                   f'[ ! -f output.s ] || cp output.s /mnt/results/output-{index}.s',
+                  f'for n in unpinned_faults unpinned_fast_faults unpinned_sweep_pages fault_ahead_pages fault_ahead_windows resume_sfences resume_satp_refreshes resume_satp_changed; do echo "$n $(cat /sys/module/capstone_vm/parameters/$n)"; done > /mnt/results/counters-{index}.txt',
                   'rmmod capstone_vm', f'echo GCC_END:{index}']
     lines += ['dmesg']
     (stage/'gate.sh').write_text('\n'.join(lines)+'\n')
@@ -129,7 +134,7 @@ for order, arms in orders:
 
 means={arm:{phase:sum(r['total_attempts'] for r in rows if r['arm']==arm and r['phase']==phase)/a.repetitions
             for phase in ['startup_and_initialization','compilation_and_output','finalization_and_exit']} for arm in a.arms}
-result=dict(inputs_sha256=inputs,rows=rows,means=means,repetitions=a.repetitions,
+result=dict(inputs_sha256=inputs,rows=rows,means=means,repetitions=a.repetitions,module_params=a.module_param,
     boundaries=['after first init_cgraph instruction','after first statistics_fini instruction'],
     scope='One GCC invocation per fresh guest; all runs cold; full reference validation; phases sum to independently snapshotted outer total',
     limitations=['compilation includes compile_file initialization and output-file close; startup includes GCC backend/language initialization',
