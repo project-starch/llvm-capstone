@@ -22,11 +22,13 @@ vm up --profile virtual --memory 8G --share-model mapped-xattr --share "$W" --no
  --rootfs "$P/images/rootfs.ext2" --launcher "$P/adapter/capstone-vexec" --job-helper "$P/adapter/capstone-job" \
  --module "$MODULE" --ssh-server "$P/ssh-server/dropbearmulti" > "$O/up.log" 2>&1
 trap 'vm down >"$O/down.log" 2>&1 || true' EXIT
-vm exec -- sh -c 'set -e; rmmod capstone_vm; insmod /mnt/control/module dom_binfmt=1 dom_wide_grants=1 native_slot_transport=1 checked_copy=1 native_dispatch=1 supervisor_slots=32 unpinned=1; echo 0 >/proc/sys/fs/binfmt_misc/status; echo 0 >/proc/sys/kernel/randomize_va_space; killall syslogd klogd 2>/dev/null || true; cp /mnt/host/probes/* /tmp/; cp /mnt/control/launcher /tmp/launcher; chmod +x /tmp/launcher; chmod +x /tmp/budget-* /tmp/pipe-exec' > "$O/setup.log" 2>&1
+vm exec -- sh -c 'set -e; rmmod capstone_vm; insmod /mnt/control/module dom_binfmt=1 dom_wide_grants=1 native_slot_transport=1 checked_copy=1 native_dispatch=1 supervisor_slots=32 unpinned=1 '"${MODULE_ARGS:-}"'; echo 0 >/proc/sys/fs/binfmt_misc/status; echo 0 >/proc/sys/kernel/randomize_va_space; killall syslogd klogd 2>/dev/null || true; cp /mnt/host/probes/* /tmp/; cp /mnt/control/launcher /tmp/launcher; chmod +x /tmp/launcher; chmod +x /tmp/budget-* /tmp/pipe-exec' > "$O/setup.log" 2>&1
+# Load addresses of the module's sections, for per-function attribution of the windows.
+vm exec -- sh -c 'cd /sys/module/capstone_vm/sections && for f in .[a-z]* ; do echo "$f $(cat $f)"; done' > "$O/sections.txt" 2>&1
 index=0
-for arm in plain launcher native; do
- for bytes in 1 65536 0; do
-  for rep in 1 2 3; do
+for arm in ${BUDGET_ARMS:-plain launcher native}; do
+ for bytes in ${BUDGET_BYTES:-1 65536 0}; do
+  for rep in ${BUDGET_REPS:-1 2 3}; do
    cmd=/tmp/budget-plain
    [[ $arm != launcher ]] || cmd='/tmp/launcher /tmp/budget-legacy.dom'
    [[ $arm != native ]] || cmd=/tmp/budget-native.dom

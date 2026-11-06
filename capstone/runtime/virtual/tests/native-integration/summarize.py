@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 """Raw system-wide attempts, without attributing unknown PCs to the domain."""
+import os
 import pathlib
 import sys
 
 root = pathlib.Path(sys.argv[1])
 arms = [line.split() for line in (root / "arms.tsv").read_text().splitlines()]
 windows = list((root / "capprof").glob("window-*.tsv"))
-assert len(windows) == len(arms) == 27, "incomplete or unexpected windows"
+assert len(windows) == len(arms), "incomplete or unexpected windows"
+assert len(arms) == 27 or "BUDGET_PARTIAL" in os.environ, "unexpected window count"
 assert not list((root / "capprof").glob("*.invalid")), "invalid profiling window"
 print("arm\tbytes\trep\tattempts\tcalls\tattempts_per_call")
 for index, arm, size, rep in arms:

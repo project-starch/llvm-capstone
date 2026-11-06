@@ -74,6 +74,53 @@ int main(void)
             free(large);
         }
     }
+    /* Specialised-path equivalence: each of these must give the same answer whether the module
+     * takes its fast route or the shared dispatcher (native_fast=0 gives the same list). */
+    {
+        static char tail[4096];
+        char *big = malloc(70000);
+        char *two = malloc(4096);
+        long i, bad = 0;
+        long n;
+        CHECK("tagged scalar argument refused", __capstone_native_syscall(172, buffer, 0, 0, 0, 0, 0) == -EINVAL);
+        CHECK("tagged unused argument refused", __capstone_native_syscall(63, 0, buffer, (void *)1, buffer, 0, 0) == -EINVAL);
+        CHECK("descriptor out of range", call(63, 1000, buffer, 1) == -EBADF);
+        CHECK("descriptor beyond int", call(63, 1L << 40, buffer, 1) == -EBADF);
+        CHECK("write on read-only descriptor", __capstone_native_syscall(68, 0, buffer, (void *)1, (void *)0, 0, 0) == -EBADF);
+        CHECK("negative offset", __capstone_native_syscall(67, 0, buffer, (void *)1, (void *)-1L, 0, 0) == -EINVAL);
+        CHECK("zero length", call(63, 0, buffer, 0) == 0);
+        CHECK("large allocations", big && two);
+        if (big && two) {
+            n = __capstone_native_syscall(67, 0, big, (void *)70000, (void *)1, 0, 0);
+            CHECK("pread beyond the fast size", n == 70000);
+            for (i = 0, bad = 0; i < 70000; ++i) bad += big[i] != (((i + 1) & 1) ? '\n' : 'Q');
+            CHECK("pread beyond the fast size contents", bad == 0);
+            memset(two, 'S', 4096);
+            n = __capstone_native_syscall(67, 0, two, (void *)4096, (void *)(131072L - 100), 0, 0);
+            CHECK("short read at end of file", n == 100);
+            CHECK("short read copies only what was read", two[99] != 'S' && two[100] == 'S' && two[4095] == 'S');
+            memset(two, 'S', 4096);
+            n = __capstone_native_syscall(67, 0, two, (void *)4096, (void *)131072L, 0, 0);
+            CHECK("read at end of file", n == 0 && two[0] == 'S');
+            n = __capstone_native_syscall(67, 0, two, (void *)4096, (void *)3L, 0, 0);
+            CHECK("pread one page", n == 4096);
+            for (i = 0, bad = 0; i < 4096; ++i) bad += two[i] != (((i + 3) & 1) ? '\n' : 'Q');
+            CHECK("pread one page contents", bad == 0);
+        }
+        memset(tail, 'S', sizeof(tail));
+        {
+            unsigned long tbase = __builtin_capstone_cap_get_cursor(tail);
+            char *small = __builtin_capstone_cap_shrink(tail, tbase, tbase + 100);
+            CHECK("tight capability refused for a page", small &&
+                  __capstone_native_syscall(67, 0, small, (void *)4096, (void *)3L, 0, 0) == -EFAULT);
+            CHECK("tight capability leaves memory alone", tail[0] == 'S' && tail[99] == 'S' && tail[100] == 'S');
+            CHECK("tight capability accepts its own size", small &&
+                  __capstone_native_syscall(67, 0, small, (void *)100, (void *)3L, 0, 0) == 100 &&
+                  tail[0] == '\n' && tail[100] == 'S');
+        }
+        free(big);
+        free(two);
+    }
     CHECK("legacy checked write", write(1, "legacy\n", 7) == 7);
     CHECK("direct checked write", call(64, 1, "direct\n", 7) == 7);
     char summary[96];

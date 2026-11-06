@@ -20,7 +20,7 @@ vm up --profile virtual --memory 8G --share-model mapped-xattr --share "$W" --no
  --rootfs "$P/images/rootfs.ext2" --launcher "$P/adapter/capstone-vexec" --job-helper "$P/adapter/capstone-job" \
  --module "$MODULE" --ssh-server "$P/ssh-server/dropbearmulti" > "$O/up.log" 2>&1
 trap 'vm down >"$O/down.log" 2>&1 || true' EXIT
-vm exec -- sh -c 'set -e; rmmod capstone_vm; insmod /mnt/control/module dom_binfmt=1 dom_wide_grants=1 native_slot_transport=1 checked_copy=1 native_dispatch=1 supervisor_slots=32 unpinned=1; echo 0 >/proc/sys/fs/binfmt_misc/status; cp /mnt/host/probes/probe.dom /tmp/; chmod +x /tmp/probe.dom; yes Q | head -c 131072 >/tmp/input' > "$O/setup.log" 2>&1
+vm exec -- sh -c 'set -e; rmmod capstone_vm; insmod /mnt/control/module dom_binfmt=1 dom_wide_grants=1 native_slot_transport=1 checked_copy=1 native_dispatch=1 supervisor_slots=32 unpinned=1 '"${MODULE_ARGS:-}"'; echo 0 >/proc/sys/fs/binfmt_misc/status; cp /mnt/host/probes/probe.dom /tmp/; chmod +x /tmp/probe.dom; yes Q | head -c 131072 >/tmp/input' > "$O/setup.log" 2>&1
 rc=0
 vm exec -- sh -c 'cd /tmp; ./probe.dom <input >output; r=$?; cat output; exit $r' > "$O/result.log" 2>&1 || rc=$?
 vm exec -- sh -c 'rmmod capstone_vm; echo unload_rc=$?; dmesg' > "$O/after.log" 2>&1
@@ -35,6 +35,6 @@ if [[ ${EXPECT_BOUNDS_FAILURE:-0} == 1 ]]; then
     grep -aq '^PASS revoked input refused' "$O/result.log"
     echo 'unsafe bounds control detected sentinel corruption'
 else
-    grep -aq 'native integration checks=24 failures=0' "$O/result.log" || rc=1
+    grep -aq "native integration checks=${EXPECT_CHECKS:-42} failures=0" "$O/result.log" || rc=1
     exit "$rc"
 fi
