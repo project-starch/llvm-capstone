@@ -1,8 +1,8 @@
 """Twin (kit-profq) sweep for re/reg_email under the arena cache: perl-ac failed it on silicon on 6 Nov (test.out:
 "re/reg_email ... FAILED--no leader found"), while its QEMU gate passed. The October defect of the same test was an
 allocation-history-dependent realloc exactness trap, which env-size pads reproduced on the twin (perl-regemail/
-FINDINGS.md). Images: HF = the heapfix production image (perf/rest -devmk, control), AC = the board's perl-ac image,
-BEST = c3s1. Steps per image: harness invocation with PAD of 0..2048 bytes, and the board-path mimic."""
+FINDINGS.md). Images: HF = the heapfix production image (perf/rest -devmk, the production image: not heapfix), AC = the board's perl-ac image,
+BEST = c3s1 (HF is NOT the heapfix build: it is the production devmk image, built from sdks-dev2mk = c1-gate/sdk-dev-T3-mk, runtime wt-perf 86f638759ecf, which predates the fixes). Steps per image: harness invocation with PAD of 0..2048 bytes, and the board-path mimic."""
 import os, sys
 W = os.environ["CAPSTONE_WORK"]
 sys.path.insert(0, W + "/wt-spec/capstone/bug-corpora/tools")

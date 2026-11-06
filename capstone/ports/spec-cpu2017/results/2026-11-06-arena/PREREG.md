@@ -293,3 +293,44 @@ Arena Addendum 9 and rest Addendum 5 are withdrawn before any board call.
   1655525. b2-seq.sh waits on it again, then R-32, THP mcf and perlbench c3f.
 - **Board 1:** as rest Addendum 3. Line 3 of b1.list is x264 c3f again, and x264-preempt.sh is relaunched to stop
   x264-ac once x264 c3f's QEMU gate passes.
+
+## RETRACTION and corrections (6 Nov 17:40), from a claim-auditor pass over today's claims
+
+**RETRACTED: the SHRINKTO edge-trap argument.** Arena Addendum 7 and the dev landing message 0001a099efa3 say the
+virtual image window is rounded up to a power of two (runtime/virtual/exec.c `rounded()`), so a global ending at the
+end of gp's region cannot occur. That is false for the kits used here:
+- kit-profq's and the board kits' launcher is built `-DCAPSTONE_VEXEC_EXACT_IMAGE` and grants the exact image. The
+  gtr-c3s1 grant reads `bytes=16302080`, and the board control reads `bytes=405504`.
+- Only dev's launcher rounds (kit-devq: `bytes=16777216`). `rounded()` in the old exec.c belongs to the nested spawner.
+- The images on the board are safe by MARGIN only, by `shrinkto-edge-check.py` (this folder; negative-tested with a
+  stub where the last object ends at the window: TRAPS, rc 1):
+
+  | image | last SHRINKTO-sized object | slack to the window's end |
+  |---|---|---|
+  | gcc c3f | ends 0xf99920 | 1,760 B |
+  | perlbench c3g | ends 0x51fdd0 | 560 B |
+  | x264 c3f | ends 0x2dc6a4 | 2,396 B |
+
+- "A QEMU pass rules it out" holds only for the SHRINKTOs that executed.
+- Rule from here: every adjust-1 image is checked with shrinkto-edge-check.py before its boot.
+
+**Corrections to the reg_email account** (rest Addenda 3-4):
+- The board's own failure cause was NOT observed. The board run has no test.err and no fault line, and its twin of the
+  same full suite passes reg_email. What is established is the twin reproduction on reg_email alone: cause 29 in
+  realloc's publish derive, 7/8 for the production image and -ac. It is consistent with October's defect, not proven
+  to be the board's cause.
+- The fix control is not one variable. c3s1 → c3f (same objects) moves the runtime 01967cf → 0ee4200, which carries
+  c7d7ca0 besides the two cherry-picks, and its musl differs only in meta.h. AC → c3f also changes compiler and musl.
+  1/8 against 0/8 cannot attribute it.
+- "HF" is the production devmk image (sdks-dev2mk: wt-perf 86f638759ecf runtime), not the heapfix build. The sweep
+  script's docstring is corrected.
+
+**Corrections to the dev comparison:**
+- dev's runtime against this branch's is a stack comparison, not one variable. The kits' launchers, modules and
+  parameters differ, and so do the SDK configs.
+- Its instruction figures count in-context instructions only. Under icount dev's run took 16.41 s against c3f's 14.57 s.
+- The one-variable result is PR #306 (dev with and without in-domain reuse, same kit, same objects): entries
+  50,991 → 7,698.
+
+**CAPSTONE_DELEGATE_SELF_CACHE:** correct only for contexts created through capstone_virtual_thread_create; a raw
+service-3 ecall bypasses the flag. Its threaded path has executed zero times.
