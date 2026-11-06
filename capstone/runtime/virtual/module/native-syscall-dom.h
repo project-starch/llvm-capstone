@@ -115,6 +115,10 @@ static bool native_supported(u64 nr)
     case CAPSTONE_SYS_read: case CAPSTONE_SYS_write:
     case CAPSTONE_SYS_pread64: case CAPSTONE_SYS_pwrite64:
     case CAPSTONE_SYS_close: case CAPSTONE_SYS_lseek:
+    case CAPSTONE_NR_FCNTL_LOCK: case CAPSTONE_SYS_fcntl:
+    case CAPSTONE_SYS_fsync: case CAPSTONE_SYS_fdatasync:
+    case CAPSTONE_SYS_ftruncate: case CAPSTONE_SYS_unlinkat:
+    case CAPSTONE_SYS_fchmod: case CAPSTONE_SYS_fchown:
     case CAPSTONE_SYS_getpid: case CAPSTONE_SYS_getppid: case CAPSTONE_SYS_gettid:
     case CAPSTONE_SYS_getuid: case CAPSTONE_SYS_geteuid:
     case CAPSTONE_SYS_getgid: case CAPSTONE_SYS_getegid:
@@ -136,7 +140,7 @@ static int native_acquire(void *opaque, const struct ns_invocation *call, void *
      * register ABI. Refuse filtered tasks rather than skip their policy. */
     if (current->seccomp.mode != SECCOMP_MODE_DISABLED) return -EOPNOTSUPP;
     if (!native_supported(nr)) return -ENOSYS;
-    if (nr == CAPSTONE_SYS_openat || nr == CAPSTONE_SYS_newfstatat) return 0;
+    if (nr == CAPSTONE_SYS_openat || nr == CAPSTONE_SYS_newfstatat || nr == CAPSTONE_SYS_unlinkat) return 0;
     if (!call->descriptor->fd_mask) return 0;
     if (call->scalar[0] > INT_MAX || !dom_fd_allowed(c, call->scalar[0])) return -EBADF;
     file = fget(call->scalar[0]);
@@ -191,6 +195,7 @@ static long native_rw(struct file *file, u64 nr, u64 offset, void *data, size_t 
     return rc;
 }
 #include "native-gcc-dom.h"
+#include "native-files-dom.h"
 
 static struct ns_completion native_issue(void *opaque, const struct ns_invocation *call,
                                           void *held)
@@ -203,6 +208,7 @@ static struct ns_completion native_issue(void *opaque, const struct ns_invocatio
     struct timespec64 ts;
     if (native_task_value(nr, &rc)) goto done;
     if (native_gcc_issue(c, call, file, &rc)) goto done;
+    if (native_files_issue(c, call, file, &rc)) goto done;
     switch (nr) {
     case CAPSTONE_SYS_sched_yield:
         mutex_unlock(&vm_lock); yield(); mutex_lock(&vm_lock); rc = 0; break;
@@ -216,7 +222,14 @@ static struct ns_completion native_issue(void *opaque, const struct ns_invocatio
         clear_bit(a[0], c->dom_delegate->fds);
         mutex_unlock(&vm_lock); rc = close_fd(a[0]); mutex_lock(&vm_lock); break;
     case CAPSTONE_SYS_lseek:
-        mutex_unlock(&vm_lock); rc = vfs_llseek(file, a[1], a[2]); mutex_lock(&vm_lock); break;
+        mutex_unlock(&vm_lock);
+        /* Match fdget_pos: duplicated/inherited descriptions share f_pos
+         * with ordinary Linux readers and writers outside vm_lock. */
+        if (file->f_mode & FMODE_ATOMIC_POS) mutex_lock(&file->f_pos_lock);
+        rc = vfs_llseek(file, a[1], a[2]);
+        if (file->f_mode & FMODE_ATOMIC_POS) mutex_unlock(&file->f_pos_lock);
+        mutex_lock(&vm_lock);
+        break;
     case CAPSTONE_SYS_read: case CAPSTONE_SYS_write:
     case CAPSTONE_SYS_pread64: case CAPSTONE_SYS_pwrite64:
         rc = native_rw(file, nr, a[3], call->buffer[1].data, call->buffer[1].length);

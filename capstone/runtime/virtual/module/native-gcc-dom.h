@@ -34,6 +34,7 @@ static bool native_gcc_issue(struct context *c, const struct ns_invocation *call
     sigset_t old, set;
     switch (nr) {
     case CAPSTONE_SYS_openat:
+    case CAPSTONE_SYS_unlinkat:
         e.nr = nr; memcpy(e.args, a, sizeof(e.args));
         mutex_unlock(&vm_lock);
         rc = dom_path_operation_name(c, &e, call->buffer[1].data);

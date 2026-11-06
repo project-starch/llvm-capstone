@@ -208,6 +208,11 @@ table is for is the **role** of each directory.
 
 ## Current verified baseline
 
+The opt-in native Linux task branch now runs file-backed SQLite speedtest1 with
+real Linux file/lock services. All 32 SQL phases match its host reference; four
+matched runs show 4.16% fewer total attempted instructions with direct small
+musl I/O. [Qualification, scope and reproduction](../runtime/virtual/tests/native-task/README.md#native-file-services-and-sqlite-comparison).
+
 The `domain-process-runtime` application stack supports a persistent Linux guest,
 ordinary application arguments/streams, trusted fault/preemption return and owned
 resource reuse. The installed QEMU guest passes exhaustion/recovery followed by

@@ -29,7 +29,8 @@ make -C "$KERNEL_BUILD" ARCH=riscv CROSS_COMPILE="$CROSS_COMPILE" olddefconfig
 make -C "$KERNEL_BUILD" ARCH=riscv CROSS_COMPILE="$CROSS_COMPILE" -j12 Image
 ```
 
-The installer applies the architecture patch and stages matching runtime sources
+The installer applies the architecture and `kernel-native-files.patch` patches,
+then stages matching runtime sources
 as a built-in driver. It enables `RISCV_CAPSTONE_TASK`, disables SMP and selects
 generic virtual CPU accounting with forced user context tracking. The Kconfig
 option defaults off and execution additionally requires `capstone_vm.native_task=1`.
@@ -402,3 +403,100 @@ analysis script are archived at
 `ac9d7fed30701ba8d4728c5faf9545340b29b94ac962a5b7370412557f133484`.
 Source hashes identify the existing prepared SQLite app port. Platform artifacts
 are unchanged from the musl migration record. The source archives are external.
+
+
+### Native file services and SQLite comparison
+
+The earlier admission failure is now closed for the size-1 file workload. The
+[Linux patch](../../kernel-native-files.patch) exports narrow held-file helpers
+for real Linux POSIX locking, bounded descriptor duplication, truncate and fd
+metadata. The [provider](../../module/native-files-dom.h) adds fcntl scalar and
+32-byte flock operations, fsync/fdatasync, ftruncate, fchmod/fchown; unlinkat uses
+the existing pinned directory grant and component walk, now with the path LSM
+hook. These are kernel changes plus the built-in runtime provider, not a new
+userspace trampoline or a replacement syscall calling into ioctl.
+
+GETLK requires a readable and writable flock buffer; SETLK/W only read the
+snapshot and never copy it back after changing locks. Linux retains ownership,
+conflict reporting, interruptible waiting, deadlock detection and close-release
+semantics. vm_lock is released across blocking Linux operations. F_DUPFD and
+F_DUPFD_CLOEXEC reserve below the 1,024-descriptor grant limit before installing
+anything: allocating an out-of-range duplicate and closing it would release all
+of the caller's locks on that inode. Native lseek now takes f_pos_lock, matching
+read/write on shared open-file descriptions. Existing Linux VFS and LSM checks
+remain; unsupported fcntl commands fail. Caught signals, automatic restarts, OFD
+locks and arbitrary device ioctls are not newly supported.
+
+[File-service qualification](files-qualification.json):
+
+- Two real domain/Linux contention runs check conflicting and shared locks,
+  GETLK ownership/ranges, blocking wakeup, SIGKILL of a blocked waiter (confirmed in /proc/locks), duplicate
+  exhaustion retaining locks, and closing another same-inode fd releasing them.
+- Exchange/direct domain fixtures pass 69/77 checks, with 56 Linux supervisor
+  checks each. They also check shared offsets/flags, CLOEXEC, truncate zero-fill,
+  sync failures, metadata updates, inherited-fd refusal, and unlink confinement
+  including a symlink escape and unchanged outside sentinel. The direct fixture
+  checks read-only, undersized, null and invalid-command raw flock requests.
+- The production dispatcher passes 275 ASan/UBSan host checks and all ten
+  existing negative-control mutants. SETLK/W tests revoke input authority after
+  snapshot and deliberately mutate the backend buffer, detecting any copyout.
+- Existing musl I/O (170/176 regular-file checks and four pipe checks per SDK),
+  51 authority/ABI checks, 20 GCC-service checks, entry and task lifecycle gates
+  pass with the final production kernel. The new installer also passes on a
+  fresh prepared source fixture. Astra and Gemini Argon reviewed the changes;
+  findings were checked against Linux sources and the actual tests.
+
+[SQLite result](musl-sqlite-comparison.json): same SQLite 3.22.0 engine and
+speedtest objects as the original admission, two SDK variants, size 1, default
+main testset, file database and unchanged journaling/sync/locking options. Four
+fresh guests run exchange/direct/direct/exchange. Every run matches all 32
+stock-host-reference SQL phase outputs; two additional diagnostic guests also
+match. No diagnostic tracing is enabled in the measured guests.
+
+| Mean attempted instructions | Exchange | Direct small I/O | Reduction |
+| --- | ---: | ---: | ---: |
+| Whole process window | 657,856,152.5 | 630,508,392.5 | 4.1571% |
+| Kernel, including built-in adapter | 433,043,686.5 | 410,435,927 | 5.2207% |
+| Other: userspace and firmware | 224,812,466 | 220,072,465.5 | 2.1084% |
+
+The window includes process startup, application work, file operations and SQL
+oracle calculations. Database/journal files live on guest tmpfs: this establishes
+CPU-work savings, not storage latency, hardware speedup or crash durability.
+Only two repeats per arm were taken. This is exchange versus direct **within the
+same native-task kernel**, not a stock Linux processor baseline.
+
+Diagnostic routes show exactly 1,460 reads and 823 writes moving from exchange
+to registers. The 5,862 lock requests, 2,922 newfstatat calls, 2,283 seeks,
+1,463 fstat calls, 88 fsync calls and other services still use exchange arguments.
+All lock and sync calls return success. Normal absent-path probes return ENOENT;
+one open is denied by confinement and one buffered diagnostic ioctl remains
+ENOSYS in each arm. Both are nonfatal and are recorded, not silently called full
+Linux coverage. The remaining service/argument costs are the next attribution
+target before broadening the direct-musl migration.
+
+Reproduction uses external prepared sources, the two existing SDKs and platform
+arguments documented above. Nothing from the benchmark suite is vendored.
+
+```bash
+source capstone/tests/capstone-test-env.sh
+# Set CAPSTONE_EXCHANGE_CC, CAPSTONE_NATIVE_CC and CROSS_COMPILE as above.
+bash capstone/runtime/virtual/tests/native-task/build-files.sh "$PROBES"
+python3 capstone/runtime/virtual/tests/native-task/run-files.py \
+  --qemu "$QEMU" --images "$IMAGES" --firmware "$FIRMWARE" \
+  --probes "$PROBES" --out "$FILES_QUALIFICATION"
+bash capstone/runtime/virtual/tests/native-task/build-sqlite.sh "$SQLITE_SOURCE" "$SQLITE_BUILD"
+python3 capstone/runtime/virtual/tests/native-task/measure-musl-sqlite.py \
+  --qemu "$QEMU" --images "$IMAGES" --firmware "$FIRMWARE" --plugin "$PLUGIN" \
+  --profrun "$PROFRUN" --build "$SQLITE_BUILD" --reference "$HOST_REFERENCE" \
+  --out "$SQLITE_COMPARISON"
+# Repeat the last command with --routes and a fresh output directory.
+```
+
+Raw final profiles, serial logs, test fixtures, new kernel image/configuration,
+source snapshots, prepared SQLite sources/objects, host reference and review
+outputs are archived at
+`$CAPSTONE_TMP_ROOT/native-task/native-files-sqlite-evidence.tar.gz`
+(mirror `p12:/var/tmp/capstone-native-task/native-files-sqlite-evidence.tar.gz`),
+SHA-256 `b60fadc864d0d0165f1181f8b6615e663332d0b7e0dfee29544f457beff49aac`.
+Unchanged QEMU, firmware, rootfs and SDK provenance are those of the preceding
+musl migration/admission records; the comparison records their hashes.

@@ -1,4 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
+#include <linux/security.h>
 /* Native exec's resource boundary. This is an intentionally smaller ABI than
  * the launcher: the initial cwd is a directory grant, not ambient path access.
  * Linux 6.1 exports no in-kernel openat2 entry point to modules. Walk one pinned
@@ -245,7 +246,9 @@ static long dom_path_operation_name(struct context *c, const struct capstone_del
         victim = lookup_one_len(leaf, parent.dentry, strlen(leaf));
         if (IS_ERR(victim)) rc = PTR_ERR(victim);
         else {
-            rc = vfs_unlink(mnt_user_ns(parent.mnt), d_inode(parent.dentry), victim, NULL);
+            if (d_is_negative(victim)) rc = -ENOENT;
+            else rc = security_path_unlink(&parent, victim);
+            if (!rc) rc = vfs_unlink(mnt_user_ns(parent.mnt), d_inode(parent.dentry), victim, NULL);
             dput(victim);
         }
         inode_unlock(d_inode(parent.dentry));

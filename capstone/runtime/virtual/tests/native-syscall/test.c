@@ -184,6 +184,15 @@ static struct ns_completion issue(void *opaque, const struct ns_invocation *call
     if (nr == CAPSTONE_SYS_close) { f->fd[call->scalar[0]] = f->grant[call->scalar[0]] = NULL; return (struct ns_completion){0, 1, 0}; }
     if (nr == CAPSTONE_SYS_newfstatat) { memset(call->buffer[2].data, 0x33, 128); return (struct ns_completion){0, 0, 0}; }
     if (nr == CAPSTONE_SYS_clock_gettime) { cn_u64 ts[2] = {7, 9}; memcpy(call->buffer[1].data, ts, sizeof(ts)); return (struct ns_completion){0, 0, 0}; }
+    if (nr == CAPSTONE_NR_FCNTL_LOCK) {
+        /* Observe the immutable input and deliberately alter the backend's
+         * buffer for every command. Only GETLK may publish those changes. */
+        f->written_bytes = call->buffer[2].length;
+        CHECK("flock backend receives fixed wire buffer", f->written_bytes == 32);
+        memcpy(f->written, call->buffer[2].data, f->written_bytes);
+        memset(call->buffer[2].data, 0x3c, f->written_bytes);
+        return (struct ns_completion){0, call->scalar[1] != NS_F_GETLK, 0};
+    }
     if (nr == CAPSTONE_SYS_read || nr == CAPSTONE_SYS_pread64) {
         size_t n = call->buffer[1].length;
         if (n > 64) n = 64;
@@ -438,9 +447,108 @@ static void exchange_adapter(void)
           out.value == -EOVERFLOW && f->issue_count == before);
     destroy(f);
 }
+static void flock_request(struct fixture *f, cn_u64 cmd)
+{
+    request(f, CAPSTONE_NR_FCNTL_LOCK);
+    scalar(f, 0, 3); scalar(f, 1, cmd); capability(f, 12, 1);
+}
+static void flock_directions(void)
+{
+    struct fixture *f = create();
+    unsigned char input[32];
+    for (unsigned i = 0; i < sizeof(input); ++i) input[i] = i + 1;
+    memcpy(f->objects[1].data, input, sizeof(input));
+    f->objects[1].rights = 1;
+    const unsigned setters[] = {NS_F_SETLK, NS_F_SETLKW};
+    for (unsigned i = 0; i < sizeof(setters)/sizeof(setters[0]); ++i) {
+        flock_request(f, setters[i]); enter(f);
+        unsigned copies = f->copies, issued = f->issue_count;
+        /* Revocation after the input snapshot must not create a copyout
+         * failure after the lock has already been changed. */
+        f->revoke_issue = 1;
+        struct ns_result r = dispatch(f);
+        CHECK("SETLK/W accepts read-only input", r.value == 0 && r.effects == 1 &&
+              !r.restart && f->issue_count == issued + 1);
+        CHECK("SETLK/W snapshots full flock", f->written_bytes == sizeof(input) &&
+              !memcmp(f->written, input, sizeof(input)));
+        CHECK("SETLK/W never copies out", !r.bytes_out && f->copies == copies + 1 &&
+              !memcmp(f->objects[1].data, input, sizeof(input)) &&
+              f->objects[1].tags[0] == 1 && f->objects[1].tags[1] == 1);
+        f->revoke_issue = 0;
+    }
+    flock_request(f, NS_F_GETLK); enter(f);
+    unsigned before = f->issue_count, held = f->held_count, copies = f->copies;
+    CHECK("GETLK requires write authority before issue", dispatch(f).value == -EACCES &&
+          f->issue_count == before && f->held_count == held && f->copies == copies);
+    f->objects[1].rights = 2;
+    flock_request(f, NS_F_GETLK); enter(f);
+    CHECK("GETLK also requires read authority", dispatch(f).value == -EACCES && f->issue_count == before);
+    f->objects[1].rights = 3;
+    flock_request(f, NS_F_GETLK); enter(f);
+    struct ns_result r = dispatch(f);
+    CHECK("GETLK snapshots input and publishes output", r.value == 0 && !r.effects &&
+          r.bytes_out == 32 && f->issue_count == before + 1 && f->copies == copies + 2 &&
+          !memcmp(f->written, input, sizeof(input)) && f->objects[1].data[0] == 0x3c &&
+          f->objects[1].data[31] == 0x3c && f->objects[1].data[32] == 0x5a);
+    CHECK("GETLK output clears only written tags", !f->objects[1].tags[0] &&
+          !f->objects[1].tags[1] && f->objects[1].tags[2] == 1);
+    before = f->issue_count; held = f->held_count;
+    flock_request(f, NS_F_SETLKW + 1); enter(f);
+    CHECK("unknown flock command rejected before issue", dispatch(f).value == -EINVAL &&
+          f->issue_count == before && f->held_count == held);
+    flock_request(f, NS_F_SETLK); scalar(f, 2, 1); enter(f);
+    CHECK("scalar flock address rejected before issue", dispatch(f).value == -EFAULT && f->issue_count == before);
+    flock_request(f, NS_F_SETLK); scalar(f, 2, 0); enter(f);
+    CHECK("null flock rejected before issue", dispatch(f).value == -EFAULT && f->issue_count == before);
+    flock_request(f, NS_F_SETLK); f->next.x[12].flags = CN_REG_RAW_TAG; enter(f);
+    CHECK("raw-tag flock rejected before issue", dispatch(f).value == -EFAULT && f->issue_count == before);
+    flock_request(f, NS_F_SETLK); capability(f, 10, 1); enter(f);
+    CHECK("tagged flock fd rejected before issue", dispatch(f).value == -EINVAL && f->issue_count == before);
+    flock_request(f, NS_F_SETLK); enter(f); ++f->objects[1].generation;
+    CHECK("stale flock rejected before issue", dispatch(f).value == -ESTALE && f->issue_count == before);
+
+    /* Exercise the actual exchange adapter too: the wire pointer is an offset
+     * under a protected reference, not reconstructed scalar authority. */
+    struct ns_request request = {.nr = CAPSTONE_NR_FCNTL_LOCK, .tagged = 4};
+    request.scalar[0] = 3; request.scalar[1] = NS_F_SETLK;
+    request.scalar[2] = request.offsets[2] = 481;
+    flock_request(f, NS_F_SETLK); enter(f);
+    CHECK("exchange flock reference", !cn_get_capref(f->context, &f->owner, 12, &request.refs[2]));
+    CHECK("short exchange flock rejected before issue",
+          !ns_dispatch_request(f->session, f->epoch, &request, &r) && r.value == -EFAULT &&
+          f->issue_count == before && f->held_count == held);
+    request.scalar[2] = request.offsets[2] = 64;
+    memcpy(f->objects[1].data + 64, input, sizeof(input));
+    f->objects[1].rights = 1;
+    flock_request(f, NS_F_SETLK); enter(f);
+    CHECK("exchange setter fresh reference", !cn_get_capref(f->context, &f->owner, 12, &request.refs[2]));
+    copies = f->copies;
+    CHECK("exchange SETLK read-only snapshot without copyout",
+          !ns_dispatch_request(f->session, f->epoch, &request, &r) && r.value == 0 &&
+          !r.bytes_out && f->issue_count == before + 1 && f->copies == copies + 1 &&
+          !memcmp(f->written, input, sizeof(input)) &&
+          !memcmp(f->objects[1].data + 64, input, sizeof(input)));
+    before = f->issue_count; copies = f->copies;
+    request.scalar[1] = NS_F_GETLK;
+    flock_request(f, NS_F_GETLK); enter(f);
+    CHECK("exchange query fresh reference", !cn_get_capref(f->context, &f->owner, 12, &request.refs[2]));
+    CHECK("exchange GETLK requires write authority before issue",
+          !ns_dispatch_request(f->session, f->epoch, &request, &r) && r.value == -EACCES &&
+          f->issue_count == before && f->copies == copies);
+    f->objects[1].rights = 3;
+    flock_request(f, NS_F_GETLK); enter(f);
+    CHECK("exchange writable query reference", !cn_get_capref(f->context, &f->owner, 12, &request.refs[2]));
+    CHECK("exchange GETLK publishes only the checked flock range",
+          !ns_dispatch_request(f->session, f->epoch, &request, &r) && r.value == 0 &&
+          r.bytes_out == 32 && f->issue_count == before + 1 && f->copies == copies + 2 &&
+          !memcmp(f->written, input, sizeof(input)) && f->objects[1].data[63] == 0x5a &&
+          f->objects[1].data[64] == 0x3c && f->objects[1].data[95] == 0x3c &&
+          f->objects[1].data[96] == 0x5a);
+    destroy(f);
+}
 int main(void)
 {
-    scalar_and_buffers(); lifetimes_and_restart(); resources(); vectors_and_missing_helpers(); exchange_adapter();
+    scalar_and_buffers(); lifetimes_and_restart(); resources(); vectors_and_missing_helpers(); exchange_adapter(); flock_directions();
     printf("native syscall checks=%u failures=%u\n", checks, failures);
     return failures ? 1 : 0;
 }
