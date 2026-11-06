@@ -79,3 +79,35 @@ sub-tests, but a valid time measurement of that image):
 - **run 27,000–30,000 s (1.16–1.29× Plain's 23,311 s); bound ≤ 32,000 s;**
 - rc 0, specdiff 2/2, and test.out with 0 FAILED. A FAILED sub-test voids the run.
 - perlbench c3g's board run (board 2) is read beside it when it ends.
+
+## Result, gcc train (7 Nov 03:38): 4,611.0 s, U0 holds, U1 FAILS; the tick probe is VOID
+
+The stage ran on board 3 02:07-03:38 on C.5a (1fc2cd5aa), kit bkit30-unify. Graded with `un-grade.py` (this folder)
+against c3f (out-ga2-b3, the same board and bitstream).
+
+| | c3f (bkit27-gtq) | unified (bkit30-unify) | change |
+|---|---|---|---|
+| run | 4,253.3 s | 4,611.0 s | +357.7 s |
+| inside | 3,513.8 s, 13.737 G instructions, IPC 0.156 | 3,432.1 s, 13.422 G, IPC 0.156 | −81.7 s |
+| outside | 739.5 s | 1,179.0 s | +439.5 s |
+| steps (CAPSTONE_VM_STATS); exits by kind [1, 3, 4] | 18,730; 8,327 / 7,528 / 2,875 | 11,772; 10,487 / 527 / 758 | |
+| module time per CV_STEP: kcyc / rcyc / ucyc / ocyc (G cycles) | 7.65 / 2.42 / 9.84 / 0.35 | 6.68 / 1.77 / 19.26 / 0.53 | ucyc +9.42 G |
+| machine-wide instructions (hpm snapshots) | 16.53 G | 22.92 G | +6.39 G |
+| /proc/stat intr, ctxt | 71,561, 60,960 | 111,868, 61,163 | |
+
+- **U0 holds:** rc 0, specdiff 1/1 PASS, outputs equal the twin's, control passes, @@BP reads back every parameter.
+- **The inside reading is the one predicted:** −0.315 G instructions at an unchanged IPC, −82 s.
+- **U1 FAILS:** 4,611.0 s against ≤ 4,253.3 s; 1.312× Plain. The outside time rose 440 s while exits fell.
+- **Where the 440 s is:** in ucyc, the module's time from one CV_STEP's return to the next CV_STEP's start: the launcher
+  and every call it makes there, plus whatever the kernel runs meanwhile. It is 3.24 M cycles per step against 0.87 M.
+  The machine executed 6.39 G more instructions over the run while the context executed 0.32 G fewer, so the time is
+  executed work, about 1.1 M instructions per step, not stalls. Kernel time inside CV_STEP (kcyc) fell.
+- **What it is not:** the grant lines c3f's quiet launcher removed (the .err holds no CAPSTONE_VM_ADD_OK line). The QEMU
+  twin does not show it: there ucyc is 0.09 M cycles per step over 623 steps.
+- **What it is:** UNRESOLVED. The unified kit changes the launcher, runtime and module together: dev's launcher with
+  CAPSTONE_VM_MAPCACHE=64M (235 misses, 0 hits), against c3f's quiet-grant launcher. A per-step cost of that size scales
+  like a walk over the 65,065 pinned pages or the mapping registry, which is a hypothesis to test, not a finding.
+- **The tick probe is VOID (T0 FAILS):** 54 gaps/s, outside the 90-110 control band; the gap share read 32.4 %. The
+  console was still draining the stage's kallsyms dump (20,000 lines, printed just before) while it ran: the driver
+  received `@@KSYMS-END`, `@@TICKPROBE-BEGIN` and the probe's RESULT line, printed 30 s later, in one chunk. T1 is not
+  read.
