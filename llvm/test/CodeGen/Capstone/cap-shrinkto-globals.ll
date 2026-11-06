@@ -14,6 +14,10 @@
 ; RUN: llc -mtriple=capstone64 -mattr=+m -capstone-shrinkto-globals \
 ; RUN:   -capstone-shrinkto-end-adjust=1 -filetype=obj < %s -o %t.o
 ; RUN: llvm-objdump -d --triple=capstone64 %t.o | FileCheck %s --check-prefix=OBJ
+; The board images' ABI: the base is `scc A, gp, A` and SHRINKTO narrows it in place.
+; RUN: llc -mtriple=capstone64 -mattr=+m -capstone-gp-free -capstone-image-gp \
+; RUN:   -capstone-shrinkto-globals -capstone-shrinkto-end-adjust=1 < %s \
+; RUN:   | FileCheck %s --check-prefix=IMG
 
 target datalayout = "e-m:e-p:64:128-p200:128:128:128:64-i64:64-i128:128-n32:64-S128-ni:200-A200-P200-G200"
 
@@ -22,13 +26,17 @@ target datalayout = "e-m:e-p:64:128-p200:128:128:128:64-i64:64-i128:128-n32:64-S
 @big = addrspace(200) global [2047 x i8] zeroinitializer, align 1
 
 ; CHECK-LABEL: load_small:
-; OFF: shrink
 ; OFF-NOT: shrinkto
+; OFF: {{^[[:space:]]+shrink[[:space:]]}}
 ; ON0: shrinkto {{a[0-9]+}}, {{a[0-9]+}}, 16
 ; ON1: shrinkto {{a[0-9]+}}, {{a[0-9]+}}, 17
 ; ON0-NOT: {{^[[:space:]]+shrink[[:space:]]}}
 ; OBJ-LABEL: <load_small>:
 ; OBJ: shrinkto {{a[0-9]+}}, {{a[0-9]+}}, 0x11
+; IMG-LABEL: load_small:
+; IMG-NOT: {{^[[:space:]]+(shrink|add)[[:space:]]}}
+; IMG: scc [[R:a[0-9]+]], gp, [[R]]
+; IMG-NEXT: shrinkto [[R]], [[R]], 17
 define i8 @load_small() addrspace(200) {
   %p = getelementptr [16 x i8], ptr addrspace(200) @g, i64 0, i64 3
   %v = load i8, ptr addrspace(200) %p

@@ -1746,6 +1746,17 @@ void CapstoneDAGToDAGISel::selectLGA(SDNode *Node) {
             CurDAG->getDataLayout().getTypeAllocSize(GVar->getValueType());
         if (Size > 0) {
           MVT XLenVT = Subtarget->getXLenVT();
+          if (CapstoneShrinkToGlobals &&
+              Size + CapstoneShrinkToEndAdjust <= 2047) {
+            // The cursor of Delined is &g under every ABI, so SHRINKTO's
+            // [cursor, cursor + imm) is SHRINK's [&g, &g + sizeof(g)).
+            Final = CurDAG->getMachineNode(
+                Capstone::SHRINKTO, DL, PtrVT, SDValue(Delined, 0),
+                CurDAG->getSignedTargetConstant(
+                    (int64_t)(Size + CapstoneShrinkToEndAdjust), DL, XLenVT));
+            ReplaceNode(Node, Final);
+            return;
+          }
           // Image-gp uses SCC, so its cursor equals Offset, whose PC-relative
           // integer producer already clears the tag. Reuse that scalar for
           // both bounds while retaining SCC and SHRINK unchanged. Other ABIs
@@ -1759,17 +1770,6 @@ void CapstoneDAGToDAGISel::selectLGA(SDNode *Node) {
                     CurDAG->getTargetExtractSubreg(Capstone::sub_cap_addr, DL,
                                                   XLenVT, SDValue(Delined, 0))),
                 0);
-          if (CapstoneShrinkToGlobals &&
-              Size + CapstoneShrinkToEndAdjust <= 2047) {
-            // The cursor of Delined is &g under every ABI, so SHRINKTO's
-            // [cursor, cursor + imm) is SHRINK's [&g, &g + sizeof(g)).
-            Final = CurDAG->getMachineNode(
-                Capstone::SHRINKTO, DL, PtrVT, SDValue(Delined, 0),
-                CurDAG->getSignedTargetConstant(
-                    (int64_t)(Size + CapstoneShrinkToEndAdjust), DL, XLenVT));
-            ReplaceNode(Node, Final);
-            return;
-          }
           // end = base + sizeof(g) (size may exceed a 12-bit immediate).
           SDValue SizeReg =
               selectImm(CurDAG, DL, XLenVT, (int64_t)Size, *Subtarget);
