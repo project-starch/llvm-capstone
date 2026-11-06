@@ -75,3 +75,31 @@ the control rungs run first in the boot.
   lane's R-32 SHRINKTO bare boot (one short boot on C.5a), then these runs, then perlbench in the best
   configuration (rest Addendum 2).
 - **The predictions are unchanged.**
+
+## Result, Temporal (6 Nov 23:24): 11,230.8 s, H0 holds; H1, H2 and H3 FAIL
+
+The run moved to board 3 before its boot (arena Addendum 10); it ran there 20:04-23:22 on C.5a, kit bkit29-thp.
+Graded with `thp-grade.py` (this folder). The reference out-gtm-b1 is board 1's: **this is a cross-board comparison**,
+and Plain on the THP kernel (H4) runs next on board 3, which gives the same-board ratio.
+
+| | 4 KiB (out-gtm-b1) | THP (out-thp-b3) | change |
+|---|---|---|---|
+| run | 11,573.8 s | 11,230.8 s | −343.0 s (−3.0 %) |
+| inside | 9,315.8 s, 27.044 G instructions | 9,171.1 s, 27.042 G | −144.8 s |
+| outside | 2,258.0 s | 2,059.7 s | −198.2 s |
+| exits by kind [1, 3, 4] | 27,481 / 1,099 / 28,166 | 27,686 / 1,099 / 1,683 | fault exits −94 % |
+| faults; peak pinned pages | 28,162; 174,293 | 1,679; 59,530 | |
+| in-context DTLB / L1D misses per 1k | 17.12 / 140.35 | 16.71 / 138.60 | −2.4 % / −1.2 % |
+
+- **H0 holds:** rc 0, specdiff 2/2 PASS, control passes, outputs equal the twin's; `@@THP always [madvise] never thp=Y`,
+  thp_fault_alloc 742 (QEMU 743).
+- **H1 FAILS:** faults 1,679 hold (≤ 5,000), but exits are 30,468. The bound left out the quantum exits (kind 1), 27,686,
+  which this configuration's 80 ms step budget sets by run time; QEMU's 7,716 counts them in instructions.
+- **H2 FAILS:** outside 2,059.7 s. Removing 26,483 fault exits saved 198 s, 7.5 ms each; per remaining exit the outside
+  time rose from 39.8 to 67.6 ms. As with arena_pin on gcc (arena Result), outside time follows run time, not exits.
+- **H3 FAILS:** 11,230.8 s = 1.235× Plain's 9,094.9 s (board 2), against the 1.20× bound of 10,900 s.
+- **Inside fell 145 s, not the 400-650 s the plan expected.** The in-context DTLB miss count fell only 2.4 %: on this
+  core 2 MiB pages barely change the L1 DTLB miss count, so the inside saving is not a DTLB walk saving at the
+  predicted scale. Issue stalls per 1k fell 0.7 %. What the 145 s is made of is UNRESOLVED; the NI-splice stall the
+  pre-registration names was not separated.
+- Gap closed against the 4 KiB reference: 343 of 2,478.9 s, 14 %.
