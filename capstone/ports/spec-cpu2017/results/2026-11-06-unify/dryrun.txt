@@ -1,0 +1,13 @@
+un-run.sh 3 with every board call stubbed (GT_BUSY, GT_BOOK, GT_FLASH, GT_READBACK, GT_STOREHAS, GT_CHAIN), 6 Nov 20:32.
+Arm A, preconditions pass and the run reaches its end:
+  START board 3
+  PASS C1 board 3's console URL file exists; the kit's board-run.sh reads it
+  PASS C2 caplifive_vp2c_1fc2cd5aa has the 18-bit table: the kit module exports index_bits
+  PASS C3 the stage's arena_pin and hpm_snapshot are parameters of the kit module
+  preconditions ok; waiting for pid none
+  FLASH caplifive_vp2c_1fc2cd5aa rc=0; READBACK ok
+  CHAIN rest BEGIN -> stub called with board 3, un-b3.list -> END rc=0
+  FLASH caplifive_vp2c_e7af48457 rc=0; READBACK ok
+  DONE spec 0; board 3 back on bitstream 3
+Arm B, GT_PREREG an unpushed hash: STOP: pre-registration ... is not on origin/spec-silicon (rc 2).
+Arm C, GT_WAITPID a session whose log has no DONE: STOP: pid ... did not end with DONE (rc 2).
