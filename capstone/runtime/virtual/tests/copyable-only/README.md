@@ -169,6 +169,10 @@ instruction word and symbol-relative PC; six adversarial oracle tests reject
 unrelated faults, wrong PCs/causes, missing and duplicate cases. The platform
 suite tests both QEMU's two-hart refusal and Linux's independent refusal under a
 synthetic unsupported device tree. Two review findings were fixed and re-reviewed.
+Gemini 4 Argon subsequently reviewed the implementation and qualification, with
+no remaining blocker within this scope. Its review record and dispositions are
+linked from the qualification JSON; binary build and test-tree revisions are
+recorded separately.
 
 [Qualification and hashes](results/hardening.json); [contract and commands](raw-transport.md).
 Raw evidence is at `p12:/var/tmp/capstone-copyable-only/hardening-evidence.tar.gz`
