@@ -63,7 +63,10 @@ enum { SLOT_INTERNAL, SLOT_PUBLIC, SLOT_NESTED, SLOT_CACHED };
 #define CAPSTONE_HEAP_SLOT_CACHE 0
 #endif
 #define SC_MAX_BYTES 4096U
-#define SC_LIMIT 8192U
+#ifndef CAPSTONE_HEAP_SLOT_CACHE_LIMIT
+#define CAPSTONE_HEAP_SLOT_CACHE_LIMIT 8192
+#endif
+#define SC_LIMIT ((unsigned)CAPSTONE_HEAP_SLOT_CACHE_LIMIT)
 #if CAPSTONE_HEAP_SLOT_CACHE
 static struct capstone_malloc_slot *sc_head[SC_MAX_BYTES / 16 + 1];
 static unsigned sc_count;
