@@ -335,6 +335,12 @@ static long acquire_mapping(uint64_t tid, struct cv_step *step)
         p = reserve_aligned(bytes, alignment);
     } else p = reserve(bytes);
     if (!p) return -errno;
+#ifdef CAPSTONE_VEXEC_HUGE_HEAP
+    /* Benchmark build option (perf/huge-heap), default off: ask for transparent huge pages on a large heap arena.
+     * A kernel built with THP in madvise mode backs each 2 MiB-aligned stretch inside it with one PMD on its first
+     * touch, so the module pins (and the TLB maps) 512 pages at once. Advice only: a refusal changes nothing. */
+    if (kind == CV_MAP_HEAP && bytes >= (4UL << 20)) (void)madvise(p, bytes, MADV_HUGEPAGE);
+#endif
     /* Padding remains inaccessible, including after later mprotect calls.
      * No capability reply exists until registration has succeeded. The range
      * is mapped readable and writable, so that protection needs no call. */
