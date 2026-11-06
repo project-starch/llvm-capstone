@@ -8,6 +8,10 @@ movement checks with this model. Three matched allocation pairs show a 12.085%
 reduction in instruction attempts with unpinned payload backing; no hardware
 speedup is claimed. This is a one-hart QEMU branch qualification, not a landed
 production or RTL baseline. [Evidence and commands](../../runtime/virtual/tests/copyable-only/README.md).
+Full SPEC test inputs now pass four runs each for lbm, ImageMagick and nab.
+Order-balanced mean instruction reductions from unpinning are 1.7905%, 0.7220%
+and 0.0069%; mcf was stopped and excluded. This is a quick application check,
+not a hardware timing result.
 
 # Current Capstone state
 
