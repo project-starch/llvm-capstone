@@ -180,6 +180,20 @@ and locally under `$CAPSTONE_TMP_ROOT/copyable-only/`. This hardening changes
 activation checks, not the measured workload paths; the earlier performance
 records retain their original binary hashes.
 
+## Reusable syscall groundwork (2026-11-06)
+
+A selective import from the fixed NS revision adds the shared syscall dispatcher,
+checked-copy loop and hosted context reference. It passes 2,056 context checks,
+16,410 copy checks, 211 dispatcher checks, the 106-entry descriptor inventory,
+and all 20 required negative controls under fatal ASan/UBSan. The context/mapping/
+tag-page peer fixtures also pass. Argon approved the hosted-only selection;
+two low-priority runner issues were addressed.
+
+[Selection and integration prerequisites](../../../../docs/design/virtual-capstone/syscall-import.md);
+[provenance and qualification](results/syscall-import.json). No native syscall
+entry or kernel fast path is enabled, and no new performance result is claimed.
+The pinned-only MC mapping pool and old native model/adapter are not imported.
+
 ## Limits
 
 QEMU prototype only; no RTL implementation. One hart; tagged swap refused;

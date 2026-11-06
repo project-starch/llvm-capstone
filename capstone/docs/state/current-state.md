@@ -18,6 +18,12 @@ activation readback. Raw-operation privilege/precise-fault, platform-refusal,
 runtime and page-lifecycle checks pass on the rebuilt kernel/module; see the
 [hardening qualification](../../runtime/virtual/tests/copyable-only/results/hardening.json).
 
+The fixed NS dispatcher, checked-copy loop and hosted context reference are now
+imported as a provider-independent foundation for the syscall milestone. Their
+hosted suites and 20 negative controls pass; the existing mapping/tag peer
+fixtures compose successfully. No native kernel path or new application ABI is
+activated. See [selection and prerequisites](../design/virtual-capstone/syscall-import.md).
+
 # Current Capstone state
 
 ## 2026-11-05 — Perl work-bounded comparison
