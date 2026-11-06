@@ -52,6 +52,16 @@ total attempts. All twelve measured windows pass byte-for-byte output checks.
 These CPU-work savings are workload-dependent and are not hardware speedups.
 [Reproducible workload](../../runtime/virtual/tests/native-task/README.md#syscall-heavy-workload-through-real-musl).
 
+SQLite speedtest1 now has a concrete native-task admission result: file-backed
+size 1 fails in both SDK variants on the first POSIX lock request (fcntl-lock
+returns ENOSYS), before any oracle phase completes. unlinkat is also refused;
+fsync/fdatasync/ftruncate/scalar-fcntl coverage remains to add and qualify.
+Both in-memory controls match all 32 native-oracle phases. Thus the existing
+older-runtime SQLite port cannot yet supply a native-task file performance
+comparison. Next establish real file-service/locking semantics, then repeat
+file admission before measuring; do not disable locks or durability to obtain
+numbers. [Diagnostic evidence](../../runtime/virtual/tests/native-task/README.md#sqlite-speedtest1-admission-file-workload-blocked).
+
 Next close the remaining policy and qualification gates: native syscall
 audit/seccomp/tracing (currently rejected), full register/FP/bounds and raw-platform
 negative matrices, exhaustive lifetime/failed-exec race tests, then capability
