@@ -52,7 +52,23 @@
 static struct capstone_malloc_slot *index_heads[INDEX_BUCKETS];
 static sublet_cap pending_mapping;
 static unsigned heap_mutex;
-enum { SLOT_INTERNAL, SLOT_PUBLIC, SLOT_NESTED };
+enum { SLOT_INTERNAL, SLOT_PUBLIC, SLOT_NESTED, SLOT_CACHED };
+/* CAPSTONE_HEAP_SLOT_CACHE (perf/arena-cache, default off): a freed slot of a small nominal size stays allocated in
+ * mallocng and goes on a per-size LIFO; malloc of exactly that size takes it back. free still validates the pointer and
+ * revokes the object's own lifetime, so every capability to the freed object dies exactly as before; the reuse issues a
+ * fresh child over the same bytes, as mallocng's own slot reuse would. Exact size only: mallocng's in-band nominal size
+ * for the slot stays right. A cached record keeps its index key with kind SLOT_CACHED (a second free of the stale
+ * pointer is refused by checked()), and its `issued` field links the LIFO. Bounded by count. */
+#ifndef CAPSTONE_HEAP_SLOT_CACHE
+#define CAPSTONE_HEAP_SLOT_CACHE 0
+#endif
+#define SC_MAX_BYTES 4096U
+#define SC_LIMIT 8192U
+#if CAPSTONE_HEAP_SLOT_CACHE
+static struct capstone_malloc_slot *sc_head[SC_MAX_BYTES / 16 + 1];
+static unsigned sc_count;
+unsigned long __capstone_malloc_slot_cache_hits, __capstone_malloc_slot_cache_puts;
+#endif
 static void lock_heap(void)
 {
     while (__atomic_exchange_n(&heap_mutex, 1, __ATOMIC_ACQUIRE))
@@ -600,6 +616,17 @@ void *malloc(size_t n)
     size_t want = capstone_repr_round(n ? n : 1);
     if (want < n) { errno = ENOMEM; return NULL; }   /* overflow on a hostile size */
     lock_heap();
+#if CAPSTONE_HEAP_SLOT_CACHE
+    if (want <= SC_MAX_BYTES && sc_head[want / 16] && sc_head[want / 16]->nominal == want && !ensure_ids(IDS_PER_CALL)) {
+        struct capstone_malloc_slot *r = sc_head[want / 16];
+        sc_head[want / 16] = (struct capstone_malloc_slot *)r->issued;
+        --sc_count; ++__capstone_malloc_slot_cache_hits;
+        r->kind = SLOT_PUBLIC;
+        r->issued = issue_child(r->parent, r->key - __builtin_capstone_cap_get_base(r->parent), want);
+        void *q = r->issued;
+        unlock_heap(); return q;
+    }
+#endif
     void *raw;
     if (ensure_ids(IDS_PER_CALL)) { __capstone_malloc_ids_failed++; raw = NULL; }
     else { raw = __capstone_mallocng_malloc(want); if (!raw) __capstone_malloc_ng_null++; }
@@ -625,7 +652,18 @@ void free(void *p)
 {
     if (!p) return;
     int e = errno;
-    lock_heap(); __capstone_mallocng_free(backend_pointer(checked(p))); unlock_heap();
+    lock_heap();
+    struct capstone_malloc_slot *r = checked(p);
+#if CAPSTONE_HEAP_SLOT_CACHE
+    if (r->nominal <= SC_MAX_BYTES && r->nominal && sc_count < SC_LIMIT) {
+        end_child(r->parent, r->issued);
+        r->kind = SLOT_CACHED;
+        r->issued = (void *)sc_head[r->nominal / 16]; sc_head[r->nominal / 16] = r;
+        ++sc_count; ++__capstone_malloc_slot_cache_puts;
+        unlock_heap(); errno = e; return;
+    }
+#endif
+    __capstone_mallocng_free(backend_pointer(r)); unlock_heap();
     errno = e;
 }
 void __libc_free(void *p) { free(p); }
