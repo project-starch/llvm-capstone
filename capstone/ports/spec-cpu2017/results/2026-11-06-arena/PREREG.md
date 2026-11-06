@@ -377,3 +377,30 @@ applies again once board 3 flashes.
 - **The plan:** board 2's ga2 driver and b2-seq are stopped while waiting, before any board call. Then:
   - perf/b3/b3-seq.sh runs again on board 3: bitstream 3 first, then gcc train c3f, then THP mcf;
   - board 2 after x264 Plain: R-32, then perlbench c3g.
+
+## Result (6 Nov 20:01): gcc train c3f on board 3, 4,253.3 s, 1.210× Plain
+
+Graded with `MX_ROOTS=$CAPSTONE_WORK/spec/board/out-ga2-b3 ga2-grade.py` (image c3f 5642377943d724c6, kit bkit27-gtq,
+C.5a, ga2's parameter block). The stage ran 18:39-20:00.
+- **M0 holds:** rc 0, specdiff 1/1 PASS, control PASSED.
+- **M3 holds:** run 4,253.3 s ≤ 0.93 × 4,656.1 s (0.9135×); CV_STEPs 11,253 ≤ 20,000.
+- **The point estimate (3,850-4,225 s) is missed** by 28 s.
+- **Against Plain** (3,515.5 s, train01 on C.5a, board 1): **1.210×**. The 1.20× target is 4,218.6 s: 35 s short.
+  The comparison crosses boards (board 3 against Plain on board 1); board-to-board spread is unmeasured for gcc train.
+
+| | out-ga-b2 (reference) | out-ga2-b3 (c3f) |
+|---|---|---|
+| run | 4,656.1 s | 4,253.3 s |
+| inside | 3,829.1 s, 15.152 G instructions | 3,513.8 s, 13.737 G (−9.3 %) |
+| outside | 826.9 s | 739.5 s |
+| machine-wide instructions | 18.257 G | 16.529 G |
+| outside instructions (machine-wide − inside) | 3.11 G | 2.79 G |
+| exits by kind [1, 3, 4] | 7,857 / 7,142 / 19,564 | 8,327 / 7,528 / 2,875 |
+| faults | 19,367 | 2,701 |
+| outside per exit | 23.9 ms | 39.5 ms |
+
+- arena_pin removed 85 % of the fault exits (19,564 → 2,875). Outside time fell only 87 s (−11 %).
+- So outside time is **not** proportional to the exit count: per exit it rose from 23.9 to 39.5 ms. What it scales with is
+  UNRESOLVED; an analysis of every graded run is under way.
+- Inside fell 315 s (−8.2 %) for 9.3 % fewer in-context instructions. Which of the image's changes against the reference
+  image account for it is not separated here.
