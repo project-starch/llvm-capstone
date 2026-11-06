@@ -2479,6 +2479,17 @@ def SHRINK : RVInstR<0b0000001, 0b001, OPC_CAP_OP, (outs GPCR:$rd),
                      (ins GPCR:$cap_in, GPR:$rs1, GPR:$rs2),
                      "shrink", "$rd, $rs1, $rs2">;
 
+// SHRINKTO: narrow a capability's bounds to [cursor, cursor + imm) (QEMU's
+// helper_csshrinkto and the RTL decoder: OpcodeCustom2, funct3 000, I-type).
+// The source must lie within its own bounds and cursor + imm must not pass
+// its end, or it traps (ILLEGAL_OPERAND_VALUE). Bitstreams up to C.5a end the
+// result one byte short (capstone_flu_unit.anvil SHRINKTO: rd_end = inc - 1),
+// which -capstone-shrinkto-end-adjust compensates.
+let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in
+def SHRINKTO : RVInstI<0b000, OPC_CAP_OP, (outs GPCR:$rd),
+                       (ins GPCR:$rs1, simm12_i64_op:$imm12),
+                       "shrinkto", "$rd, $rs1, $imm12">;
+
 // MOVC: Move Capability.
 // Used to copy capabilities between GPRs preserving the Tag bit.
 // Format: R-type, but rs2 is unused (must be 0).

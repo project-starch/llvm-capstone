@@ -52,6 +52,21 @@ cl::opt<bool> CapstoneShrinkGlobals(
              "(emit SHRINK at materialization)"),
     cl::init(true));
 
+// Narrow a data global with one SHRINKTO (cursor = &g, length an immediate)
+// instead of li + add + SHRINK, when sizeof(g) plus the end adjustment fits a
+// 12-bit immediate. Default off. The adjustment is 1 for bitstreams up to C.5a,
+// whose SHRINKTO ends the capability at cursor + imm - 1, so the silicon bounds
+// equal SHRINK's; QEMU then ends it one byte later.
+static cl::opt<bool> CapstoneShrinkToGlobals(
+    "capstone-shrinkto-globals", cl::Hidden,
+    cl::desc("Narrow small data globals with SHRINKTO instead of SHRINK"),
+    cl::init(false));
+static cl::opt<unsigned> CapstoneShrinkToEndAdjust(
+    "capstone-shrinkto-end-adjust", cl::Hidden,
+    cl::desc("Added to the SHRINKTO length of a global (1 on bitstreams whose "
+             "SHRINKTO ends at cursor + imm - 1)"),
+    cl::init(0));
+
 // Granularity (C1), stack slice. When on, an address-taken stack object (a bare
 // FrameIndex, an interior pointer / load-store base through it, the varargs save
 // area, and dynamic runtime-sized allocas) is narrowed to its object size with
@@ -1744,6 +1759,17 @@ void CapstoneDAGToDAGISel::selectLGA(SDNode *Node) {
                     CurDAG->getTargetExtractSubreg(Capstone::sub_cap_addr, DL,
                                                   XLenVT, SDValue(Delined, 0))),
                 0);
+          if (CapstoneShrinkToGlobals &&
+              Size + CapstoneShrinkToEndAdjust <= 2047) {
+            // The cursor of Delined is &g under every ABI, so SHRINKTO's
+            // [cursor, cursor + imm) is SHRINK's [&g, &g + sizeof(g)).
+            Final = CurDAG->getMachineNode(
+                Capstone::SHRINKTO, DL, PtrVT, SDValue(Delined, 0),
+                CurDAG->getSignedTargetConstant(
+                    (int64_t)(Size + CapstoneShrinkToEndAdjust), DL, XLenVT));
+            ReplaceNode(Node, Final);
+            return;
+          }
           // end = base + sizeof(g) (size may exceed a 12-bit immediate).
           SDValue SizeReg =
               selectImm(CurDAG, DL, XLenVT, (int64_t)Size, *Subtarget);
