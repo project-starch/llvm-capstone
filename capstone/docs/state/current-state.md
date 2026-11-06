@@ -1,3 +1,14 @@
+## 2026-11-06 — Copyable checked-access model
+
+`prototype/copyable-only` now includes default-off `CSCHECKR/W` and protected
+context transport v5/v6. Immutable escape-register authority survives transport
+independently of mutable reply slots; legacy instructions remain removed and
+MIP remains device state. Model tests and the Linux regression are recorded in
+[the syscall integration checkpoint](../design/virtual-capstone/syscall-import.md#copyable-model-checkpoint).
+The kernel syscall consumer, resource/Seccomp integration, RT guest races and
+paired syscall measurements remain outstanding; this is not completion of
+point 2.
+
 ## 2026-11-06 — Copyable-only prototype branch
 
 `prototype/copyable-only` boots ordinary OpenSBI/Linux and runs copyable capability
