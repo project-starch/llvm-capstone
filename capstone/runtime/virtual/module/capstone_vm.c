@@ -617,6 +617,11 @@ static void clear_thread_frame(struct cv_thread *t)
     memset(t->frame, 0, 656);
 }
 
+/* thp (perf/thp), default off, 0644: a page under a PMD-mapped transparent huge page counts as resident, so a
+ * retire pins, sweeps and unpins each of its 4 KiB pages like any other. The launcher asks for huge pages on large
+ * heap arenas only (MADV_HUGEPAGE, a kernel built with THP in madvise mode). Off, a huge mapping fails closed as before. */
+static bool thp;
+module_param(thp, bool, 0644);
 /* Called with mmap_read_lock held. Missing PTEs contain no application tags;
  * swapped/huge mappings are outside this profile and fail closed. */
 static int resident_page(struct mm_struct *mm, unsigned long address)
@@ -638,7 +643,7 @@ static int resident_page(struct mm_struct *mm, unsigned long address)
     if (pud_bad(*pud)) return -EFAULT;
     pmd = pmd_offset(pud, address);
     if (pmd_none(*pmd)) return 0;
-    if (pmd_leaf(*pmd)) return -EOPNOTSUPP;
+    if (pmd_leaf(*pmd)) return READ_ONCE(thp) && pmd_present(*pmd) ? 1 : -EOPNOTSUPP;
     if (pmd_bad(*pmd)) return -EFAULT;
     pte = pte_offset_map_lock(mm, pmd, address, &lock);
     if (!pte) return -EFAULT;
