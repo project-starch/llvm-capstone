@@ -1,23 +1,26 @@
-## 2026-11-06 — Runnable copyable-only prototype
+## 2026-11-06 — Qualified kernel syscall prototype
 
-On `prototype/copyable-only`, both pinned and unpinned Linux application gates
-pass (22 checks each), with no legacy instruction fallback and ordinary OpenSBI.
-Tag-copy, physical reuse, firmware-timer windows and COW movement are qualified
-in the one-hart QEMU configuration. The matched allocation sample measures
-12.085% fewer total instruction attempts unpinned. The page-lifecycle admission
-and raw privilege boundary are now hardened and independently reviewed within
-the one-hart scope; short SPEC test inputs also validate. The provider-independent
-NS syscall dispatcher and checked-copy contracts are imported and hosted-tested.
-The authenticated checked-access/slot protocol is now ported and model-tested,
-including immutable escape registers across transport (versions 5/6). Next
-connect kernel providers and the file/Seccomp policy, then qualify RT guest
-races before activating a native syscall path. No native syscall speedup is
-measured by this model-only checkpoint. The pinned-only mapping pool is deferred. See
-[the selective import boundary](../design/virtual-capstone/syscall-import.md).
-Complete legacy helper/type-source deletion is separate
-from the already enforced instruction boundary. See the
-[implementation gates](../plans/2026-11-06-copyable-only-prototype.md) and
-[reproduction instructions](../../runtime/virtual/tests/copyable-only/README.md).
+On `prototype/copyable-only`, the narrow Point 2 kernel consumer is implemented
+and measured. Both dispatchers pass 51 ABI/authority/protection checks plus 10
+entry checks, including two blocked processes sharing one hardware slot; both
+pass all 41 deterministic RT cases (17 negative controls). Launcher regressions
+still pass 22 checks each pinned/unpinned, and raw platform admission passes.
+The default-off native path requires matching checked-copy/transport features,
+a private FD broker and the normal-Linux mprotect wrapper. No legacy ownership
+instructions return. Gemini Argon assisted review.
+
+Median total QEMU attempts versus launcher: read 1 byte -54%, read 64 KiB -74%,
+write 1 byte -40%, write 64 KiB -68%. Cached launcher getpid is faster; small
+writes increase kernel/module work despite reducing total work. See the
+[qualified integration and reproduction](../../runtime/virtual/tests/native-integration/README.md)
+and [source import boundary](../design/virtual-capstone/syscall-import.md).
+
+Next milestone is Point 3: native Linux task/architecture-return integration,
+with explicit signal/restart/process semantics. The current ioctl trampoline
+is only a prototype entry mechanism. Before broad workloads, extend unsupported
+syscalls and requalify their authority/FD policies; measure remaining bounce
+copies separately. MC's pinned mapping pool remains deferred. No full native
+SPEC, SMP, DMA or RTL qualification is claimed.
 
 ## 2026-11-05 — Continue with matched work slices
 

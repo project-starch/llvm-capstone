@@ -1,0 +1,26 @@
+diff --git a/mm/mprotect.c b/mm/mprotect.c
+--- a/mm/mprotect.c
++++ b/mm/mprotect.c
+@@ -13,6 +13,7 @@
+ #include <linux/pagewalk.h>
+ #include <linux/hugetlb.h>
+ #include <linux/shm.h>
++#include <linux/export.h>
+ #include <linux/mman.h>
+ #include <linux/fs.h>
+ #include <linux/highmem.h>
+@@ -819,6 +819,14 @@ SYSCALL_DEFINE3(mprotect, unsigned long, start, size_t, len,
+ 	return do_mprotect_pkey(start, len, prot, -1);
+ }
+ 
++/* Trusted native-task adapters retain grants while using the normal VMA,
++ * permission and security-hook implementation. No domain pointer is read. */
++int capstone_native_mprotect(unsigned long start, size_t len, unsigned long prot)
++{
++	return do_mprotect_pkey(start, len, prot, -1);
++}
++EXPORT_SYMBOL_GPL(capstone_native_mprotect);
++
+ #ifdef CONFIG_ARCH_HAS_PKEYS
+ 
+ SYSCALL_DEFINE4(pkey_mprotect, unsigned long, start, size_t, len,

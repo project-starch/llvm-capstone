@@ -1,7 +1,12 @@
 #include "capstone/delegate.h"
-#include "capstone/spawn.h"
+#ifdef __KERNEL__
+#include <linux/errno.h>
+#include <linux/string.h>
+#include <linux/limits.h>
+#else
 #include <errno.h>
 #include <string.h>
+#endif
 
 #if __BYTE_ORDER__ != __ORDER_LITTLE_ENDIAN__
 #error "Delegated syscall ABI v2 requires little-endian scalar encoding"
