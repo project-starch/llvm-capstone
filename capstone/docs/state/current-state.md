@@ -1,3 +1,14 @@
+## 2026-11-06 — Copyable-only prototype branch
+
+`prototype/copyable-only` boots ordinary OpenSBI/Linux and runs copyable capability
+applications with legacy ownership/control instructions rejected in M/S/U. Both
+pinned and unpinned modes pass the directed runtime, fault, ABI and shutdown gates.
+The existing tag-aware Linux patch also passes physical reuse, timer-copy and COW
+movement checks with this model. Three matched allocation pairs show a 12.085%
+reduction in instruction attempts with unpinned payload backing; no hardware
+speedup is claimed. This is a one-hart QEMU branch qualification, not a landed
+production or RTL baseline. [Evidence and commands](../../runtime/virtual/tests/copyable-only/README.md).
+
 # Current Capstone state
 
 ## 2026-11-05 — Perl work-bounded comparison

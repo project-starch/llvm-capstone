@@ -1,10 +1,15 @@
-## 2026-11-06 — Copyable-only prototype branch
+## 2026-11-06 — Runnable copyable-only prototype
 
-On `prototype/copyable-only`, the strict instruction rejection gate builds and
-passes its M/S/U and mint tests. Next audit bootstrap/state ingress, then migrate
-the module and runtime grant ABI before Linux qualification. There is no legacy
-instruction fallback. The verified baseline is unchanged; see the
-[implementation gates](../plans/2026-11-06-copyable-only-prototype.md).
+On `prototype/copyable-only`, both pinned and unpinned Linux application gates
+pass (22 checks each), with no legacy instruction fallback and ordinary OpenSBI.
+Tag-copy, physical reuse, firmware-timer windows and COW movement are qualified
+in the one-hart QEMU configuration. The matched allocation sample measures
+12.085% fewer total instruction attempts unpinned. Next inspect the residual
+kernel/launcher boundary and extend lifecycle/recycling coverage before wider
+workloads or landing. Complete legacy helper/type-source deletion is separate
+from the already enforced instruction boundary. See the
+[implementation gates](../plans/2026-11-06-copyable-only-prototype.md) and
+[reproduction instructions](../../runtime/virtual/tests/copyable-only/README.md).
 
 ## 2026-11-05 — Continue with matched work slices
 

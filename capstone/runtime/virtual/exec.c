@@ -355,11 +355,11 @@ static void map_remove(struct mapping *m)
     struct map_node *gone = (struct map_node *)((char *)m - offsetof(struct map_node, m));
     map_root = map_unlink(map_root, m);
     --map_count;
-    /* Kept for the next registration (remap_mapping removes, then inserts). */
+    /* Kept for the next registration. */
     gone->child[0] = map_free; map_free = gone;
 }
 static int grant(void *base, size_t bytes, unsigned reg, unsigned perms,
-                 uintptr_t cursor, int linear, uint64_t thread, size_t rx_bytes)
+                 uintptr_t cursor, uint64_t thread, size_t rx_bytes)
 {
     if (map_reserve()) return -1;
     /* Option (iii): refuse to mint an arena whose bounds the encoder cannot represent, rather
@@ -373,12 +373,9 @@ static int grant(void *base, size_t bytes, unsigned reg, unsigned perms,
      * it is COUPLED to the alignment heap.c requests: it passes only because acquire_mapping()
      * now aligns that mapping to the granule. The two must land together.
      *
-     * It is also not true that every arena passes through this function: remap_mapping() grows
-     * a heap through CV_REMAP_BEGIN/END and never calls grant(), which is why that function
-     * carries its own alignment guarantee. Negative-tested in
-     * tests/exact-bounds-iii/grant-repr-test.c. */
+     * Every grant is checked before its lifetime is published. */
     if (!capstone_repr_ok((uintptr_t)base, bytes)) { errno = ERANGE; return -1; }
-    struct cv_map r = {thread, (uintptr_t)base, bytes, perms, reg, cursor, linear, 0, rx_bytes};
+    struct cv_map r = {thread, (uintptr_t)base, bytes, perms, reg, cursor, 0, rx_bytes};
     if (ioctl(device, CV_ADD, &r)) {
         /* Evaluate add()'s two disjuncts on the REAL values the module saw. The domain cannot do
          * this: cap_vm_acquire clears its slot on failure, so the base never reaches it, and a
@@ -407,11 +404,11 @@ static int grant(void *base, size_t bytes, unsigned reg, unsigned perms,
     /* slot= is the number of mappings registered before this one: the old array slot until the
      * first unmap, so the image's grant still reads slot=0 for the board lane's parsers. */
     if (grants)
-        fprintf(stderr, "CAPSTONE_VM_ADD_OK slot=%zu base=0x%lx bytes=%zu reg=%u perms=%u linear=%d\n",
-                map_count, (unsigned long)(uintptr_t)base, bytes, reg, perms, linear);
+        fprintf(stderr, "CAPSTONE_VM_ADD_OK slot=%zu base=0x%lx bytes=%zu reg=%u perms=%u copyable=1\n",
+                map_count, (unsigned long)(uintptr_t)base, bytes, reg, perms);
     map_insert((struct mapping){.address = base, .bytes = bytes, .visible = bytes,
-                                .id = r.id, .heap = linear,
-                                .kind = linear ? CV_MAP_HEAP : -1});
+                                .id = r.id, .heap = reg == 13,
+                                .kind = reg == 13 ? CV_MAP_HEAP : -1});
     return 0;
 }
 /* The calling worker's attachment: its meta block and exchange region, the two spans this
@@ -549,7 +546,7 @@ static long acquire_mapping(uint64_t tid, struct cv_step *step)
      * No capability reply exists until registration has succeeded. The range
      * is mapped readable and writable, so that protection needs no call. */
     if ((visible < bytes && mprotect((char *)p + visible, bytes - visible, PROT_NONE)) ||
-        (prot != (PROT_READ | PROT_WRITE) && mprotect(p, visible, prot)) || grant(p, bytes, 10, rights, (uintptr_t)p, 1, tid, 0)) {
+        (prot != (PROT_READ | PROT_WRITE) && mprotect(p, visible, prot)) || grant(p, bytes, 10, rights, (uintptr_t)p, tid, 0)) {
         int error = errno;
         munmap(p, bytes);
         return -error;
@@ -558,88 +555,15 @@ static long acquire_mapping(uint64_t tid, struct cv_step *step)
      * and the launcher has nothing to answer with. */
     struct mapping *m = map_find((uintptr_t)p);
     if (!m) abort();
-    m->visible = visible; m->kind = kind;
+    m->visible = visible; m->kind = kind; m->heap = true;
     return 0;
 }
 static long remap_mapping(uint64_t tid, struct cv_step *step)
 {
-    uintptr_t base = step->args[0];
-    size_t old = step->args[1], bytes = step->args[2];
-    /* Unconditional, for the same reason the CV_ADD refusal is: heap growth has never been
-     * observed to COMPLETE in any arm of any profile -- CAPSTONE_VM_REMAP_OK reads 0 everywhere,
-     * including with exact bounds on -- and remap_begin's own gate is not shown to fire. So the
-     * question is which of these refusals happens, and a trace-gated print cannot answer it in the
-     * stages that run without the trace. */
-    if (!bytes || bytes > CV_MAX_REGION_BYTES ||
-        ((base | old | bytes) & 4095)) {
-        fprintf(stderr, "CAPSTONE_VM_REMAP_REFUSED stage=args base=0x%lx"
-                        " old=%zu bytes=%zu page_ok=%d\n",
-                (unsigned long)base, old, bytes,
-                ((base | old | bytes) & 4095) == 0);
-        return -EINVAL;
-    }
-    struct mapping *m = map_find(base);
-    if (m && m->holder) return -EBUSY;
-    if (m && m->visible == old && m->bytes == old && m->heap && m->kind == CV_MAP_HEAP) {
-        /* Option (iii): the GROWN mapping's base must still be a granule multiple, and mremap()
-         * promises only page alignment. Above 4 MiB the granule exceeds a page, so even an
-         * in-place growth can leave the base unrepresentable (2 MiB -> 4 MiB keeps the base and
-         * moves the granule from 4096 to 8192).
-         *
-         * This has to be guaranteed HERE and not refused in the domain. The domain's
-         * __capstone_malloc_group_remap() checks representability only after this ioctl pair
-         * has already moved the memory and re-registered it, so refusing there is a
-         * use-after-move, not a fallback -- realloc's malloc-plus-copy path would read from an
-         * address that no longer maps. A nonzero __capstone_malloc_remap_unaligned therefore
-         * means a bug in this function, not a measurement.
-         *
-         * Everything that can fail is done BEFORE the source is touched: mremap() fails
-         * atomically, so an error leaves the old mapping intact and only the reservation to
-         * release. */
-        size_t align = capstone_repr_granule(bytes);
-        if (align < 4096) align = 4096;
-        if (bytes % align) {
-            fprintf(stderr, "CAPSTONE_VM_REMAP_REFUSED stage=granule bytes=%zu align=%zu\n",
-                    bytes, align);
-            return -ERANGE;
-        }
-        void *dest = NULL;
-        if (align > 4096) {
-            dest = reserve_aligned(bytes, align);
-            if (!dest) return -errno;
-        }
-        struct cv_remap r = {tid, m->id, bytes, 0};
-        if (ioctl(device, CV_REMAP_BEGIN, &r)) {
-            int e = errno;
-            if (dest) munmap(dest, bytes);
-            return -e;
-        }
-        void *p = dest ? mremap(m->address, old, bytes, MREMAP_MAYMOVE | MREMAP_FIXED, dest)
-                       : mremap(m->address, old, bytes, MREMAP_MAYMOVE);
-        if (p == MAP_FAILED) {
-            int e = errno;
-            if (ioctl(device, CV_REMAP_END, &r)) abort();
-            if (dest) munmap(dest, bytes);
-            return -e;
-        }
-        r.address = (uintptr_t)p;
-        if (ioctl(device, CV_REMAP_END, &r)) abort();
-        /* A moved mapping is re-sorted; removing it first leaves room. */
-        struct mapping moved = *m;
-        moved.address = p; moved.bytes = moved.visible = bytes;
-        map_remove(m); map_insert(moved);
-        if (trace) fprintf(stderr, "CAPSTONE_VM_REMAP_OK old=%zu bytes=%zu\n", old, bytes);
-        return 0;
-    }
-    /* No arena matched. Report what the candidates looked like, because the match is on four
-     * fields at once and "no match" alone cannot say which one differed. */
-    fprintf(stderr, "CAPSTONE_VM_REMAP_REFUSED stage=nomatch base=0x%lx old=%zu bytes=%zu\n",
-            (unsigned long)base, old, bytes);
-    if (m) {   /* only the arena at this base matters */
-        fprintf(stderr, "CAPSTONE_VM_REMAP_CAND base=0x%lx visible=%zu bytes=%zu heap=%d kind=%d\n",
-                (unsigned long)(uintptr_t)m->address, m->visible, m->bytes, m->heap, m->kind);
-    }
-    return -EINVAL;
+    /* Copyable grants cannot be grown by the old ownership-transfer ABI.
+     * Public mremap and heap remapping use allocate/copy/retire instead. */
+    (void)tid; (void)step;
+    return -EOPNOTSUPP;
 }
 /* The error exit's cleanup. It does not unmap the registered mappings: die() runs on any worker
  * while the others may still be inside a delegated service that writes into their transport,
@@ -1367,7 +1291,7 @@ int main(int argc, char **argv)
     /* Option (iii): no exact-bounds profile bit is required. Bounds are representable by
      * construction -- the allocator's geometry keeps every rounded bound inside its own slot --
      * so the launcher runs on the default profile. The bit may still be set; it is not read. */
-    if (grant(image, image_bytes, 3, 7, entry, 0, 0, image_rx)) { munmap(image, image_bytes); return die("image grant"); }
+    if (grant(image, image_bytes, 3, 7, entry, 0, image_rx)) { munmap(image, image_bytes); return die("image grant"); }
     void *stack = reserve(stack_bytes);
     domain_stack = stack; domain_stack_bytes = stack_bytes;
     meta = reserve(CAPSTONE_DELEGATE_META_BYTES);
@@ -1386,14 +1310,14 @@ int main(int argc, char **argv)
         argc - (app_args ? 4 : binfmt ? 2 : 1), argv + (app_args ? 4 : binfmt ? 2 : 1), environ, cwd, stdio_mask, &task) : ENOMEM;
     free(cwd);
     if (error) { errno = error; return die("startup"); }
-    if (grant(stack, stack_bytes, 2, 6, (uintptr_t)stack + stack_bytes, 0, 0, 0) ||
-        grant(meta, CAPSTONE_DELEGATE_META_BYTES, 10, 6, (uintptr_t)meta, 0, 0, 0) ||
-        grant(exchange, exchange_bytes, 11, 6, (uintptr_t)exchange, 0, 0, 0) ||
-        grant(startup, CAPSTONE_LAUNCH_BYTES, 12, 4, (uintptr_t)startup, 0, 0, 0)) return die("grant");
+    if (grant(stack, stack_bytes, 2, 6, (uintptr_t)stack + stack_bytes, 0, 0) ||
+        grant(meta, CAPSTONE_DELEGATE_META_BYTES, 10, 6, (uintptr_t)meta, 0, 0) ||
+        grant(exchange, exchange_bytes, 11, 6, (uintptr_t)exchange, 0, 0) ||
+        grant(startup, CAPSTONE_LAUNCH_BYTES, 12, 4, (uintptr_t)startup, 0, 0)) return die("grant");
     if (desc.v1.heap_bytes) {
         size_t bytes = rounded(desc.v1.heap_bytes);
         void *region = bytes ? reserve(bytes) : NULL;
-        if (!region || grant(region, bytes, 13, 6, (uintptr_t)region, 1, 0, 0))
+        if (!region || grant(region, bytes, 13, 6, (uintptr_t)region, 0, 0))
             return die("nested allocator grant");
     }
     host.exchange = exchange; host.exchange_bytes = exchange_bytes;
