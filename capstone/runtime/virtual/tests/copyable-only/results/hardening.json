@@ -126,11 +126,25 @@
     "findings_fixed": [
       "boot-parameter spoof of activation readback",
       "raw-operation oracle accepted unrelated illegal instructions"
-    ]
+    ],
+    "gemini_argon": {
+      "model": "gemini-4-argon",
+      "reviewed_superproject_commit": "ff5bea584d80c3ceebce9c95a8e00eeaa2ac38aa",
+      "remaining_blockers": 0,
+      "verdict": "Adequately qualified within the restricted single-hart QEMU/OpenSBI/Linux 6.1 prototype scope",
+      "dispositions": {
+        "binary_build_vs_test_revision": "provenance clarity improvement resolved by separate commit fields; no build mismatch",
+        "mm_probe_destination_cleanup": "withdrawn: initial allocation failure skips clean; dst is non-NULL on every path to clean"
+      },
+      "evidence": "p12:/var/tmp/capstone-copyable-only/argon-review.tar.gz",
+      "evidence_sha256": "511e5989f92d2ea9dad7b63f12db0216aa19248b27b3cd7517abf05b88c3d1b1"
+    }
   },
   "linux_patch_sha256": "ddee3722344c880e4bb86931edfc010ed440453650c82944965d21561c7c731b",
   "kernel_config_sha256": "caf22cfddf3630683ffb3483d8d691f73165065969ab5501e9804a1538270df7",
   "qemu_binary_source_commit": "316c44ae56c6df16656a44407560db5855085b33",
   "evidence": "p12:/var/tmp/capstone-copyable-only/hardening-evidence.tar.gz",
-  "evidence_sha256": "dcb515ed961b85e46c97d57c6fcbe84d73f71e8fa9c3fbdb6d056c99a8099817"
+  "evidence_sha256": "dcb515ed961b85e46c97d57c6fcbe84d73f71e8fa9c3fbdb6d056c99a8099817",
+  "qemu_test_source_commit": "2b87cc1fb961cee6a663f7aa57ec2c3595ccc846",
+  "qemu_build_provenance": "The binary was built at qemu_binary_source_commit. qemu_test_source_commit adds only tests/copyable-only/README.md, raw-boundary.S and raw-boundary.sh; no emulator source changed and no rebuild is claimed."
 }
