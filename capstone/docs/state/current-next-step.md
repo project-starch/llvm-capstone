@@ -4,9 +4,11 @@ On `prototype/copyable-only`, both pinned and unpinned Linux application gates
 pass (22 checks each), with no legacy instruction fallback and ordinary OpenSBI.
 Tag-copy, physical reuse, firmware-timer windows and COW movement are qualified
 in the one-hart QEMU configuration. The matched allocation sample measures
-12.085% fewer total instruction attempts unpinned. Next inspect the residual
-kernel/launcher boundary and extend lifecycle/recycling coverage before wider
-workloads or landing. Complete legacy helper/type-source deletion is separate
+12.085% fewer total instruction attempts unpinned. The page-lifecycle admission
+and raw privilege boundary are now hardened and independently reviewed within
+the one-hart scope; short SPEC test inputs also validate. Next inspect the
+residual kernel/launcher boundary and extend lifecycle/recycling coverage
+before landing. Complete legacy helper/type-source deletion is separate
 from the already enforced instruction boundary. See the
 [implementation gates](../plans/2026-11-06-copyable-only-prototype.md) and
 [reproduction instructions](../../runtime/virtual/tests/copyable-only/README.md).

@@ -62,7 +62,7 @@ diff --git a/arch/riscv/mm/captag.c b/arch/riscv/mm/captag.c
 new file mode 100644
 --- /dev/null
 +++ b/arch/riscv/mm/captag.c
-@@ -0,0 +1,301 @@
+@@ -0,0 +1,311 @@
 +// SPDX-License-Identifier: GPL-2.0-only
 +/* EXPERIMENT: unpinned capability pages with raw granule transport.
 + * CLDRAW/CSTRAW replace copy_page, including its byte copy: scalar loads may
@@ -83,6 +83,8 @@ new file mode 100644
 +
 +/* Enabled only by a matching opt-in platform declaration. */
 +static DEFINE_STATIC_KEY_FALSE(captag_on);
++static bool enabled;
++module_param(enabled, bool, 0444);
 +/* A separate default-off experiment; the raw-move platform is not enough. */
 +static DEFINE_STATIC_KEY_FALSE(captag_bulk_on);
 +static bool captag_bulk_requested;
@@ -140,7 +142,14 @@ new file mode 100644
 +	bool valid;
 +
 +	/* Readback describes the static key, never a boot-time parameter value. */
++	enabled = false;
 +	bulk_enabled = false;
++	/* IRQ exclusion and the firmware retry protocol are single-hart.
++	 * Check possible CPUs, not online CPUs: hotplug cannot make this safe. */
++	if (num_possible_cpus() != 1) {
++		pr_warn("captag: disabled: requires one possible CPU\n");
++		return 0;
++	}
 +	/* Byte-only merging and huge anonymous pages are outside this contract. */
 +	if (IS_ENABLED(CONFIG_KSM) || IS_ENABLED(CONFIG_TRANSPARENT_HUGEPAGE))
 +		return 0;
@@ -159,6 +168,7 @@ new file mode 100644
 +	captag_ids = ids;
 +	captag_exact = exact;
 +	static_branch_enable(&captag_on);
++	enabled = true;
 +	if (captag_bulk_requested && captag_bulk_platform()) {
 +		bulk_enabled = true;
 +		static_branch_enable(&captag_bulk_on);

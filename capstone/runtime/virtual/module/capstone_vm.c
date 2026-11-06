@@ -2,6 +2,7 @@
 /* Trusted OS adapter: one shared-mm namespace and explicit C contexts. */
 #include <linux/module.h>
 #include <linux/of.h>
+#include <linux/cpu.h>
 
 static bool copyable_exact_bounds;
 #include <linux/miscdevice.h>
@@ -3596,6 +3597,13 @@ static int __init init(void)
     if (unpinned) {
         typeof(capstone_unpinned_config) *config;
         int error;
+        /* Tag-copy interrupt exclusion and namespace sweeps are currently
+         * single-hart protocols. Offline-but-possible CPUs are not safe:
+         * hotplug must not silently invalidate the load-time contract. */
+        if (num_possible_cpus() != 1) {
+            pr_err("capstone_vm: unpinned backing requires one possible CPU\n");
+            return -EOPNOTSUPP;
+        }
         if (node_table_flat) return -EOPNOTSUPP;
         config = symbol_get(capstone_unpinned_config);
         if (!config) return -EOPNOTSUPP;

@@ -12,6 +12,11 @@ Full SPEC test inputs now pass four runs each for lbm, ImageMagick and nab.
 Order-balanced mean instruction reductions from unpinning are 1.7905%, 0.7220%
 and 0.0069%; mcf was stopped and excluded. This is a quick application check,
 not a hardware timing result.
+The page-lifecycle admission boundary is now independently enforced in Linux
+and the module: one possible CPU, matching platform/kernel support, no spoofable
+activation readback. Raw-operation privilege/precise-fault, platform-refusal,
+runtime and page-lifecycle checks pass on the rebuilt kernel/module; see the
+[hardening qualification](../../runtime/virtual/tests/copyable-only/results/hardening.json).
 
 # Current Capstone state
 
