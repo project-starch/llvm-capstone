@@ -1,3 +1,11 @@
+## 2026-11-06 — Copyable-only prototype branch
+
+On `prototype/copyable-only`, the strict instruction rejection gate builds and
+passes its M/S/U and mint tests. Next audit bootstrap/state ingress, then migrate
+the module and runtime grant ABI before Linux qualification. There is no legacy
+instruction fallback. The verified baseline is unchanged; see the
+[implementation gates](../plans/2026-11-06-copyable-only-prototype.md).
+
 ## 2026-11-05 — Continue with matched work slices
 
 For overhead work, use matched logical start/stop points instead of waiting
