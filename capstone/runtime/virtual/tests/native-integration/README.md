@@ -224,3 +224,58 @@ the six samples per arm from both `summary.json` files. Input hashes must match
 between batches. Benchmark sources/binaries remain outside the repository.
 
 [All runs, ratios, provenance and evidence](../copyable-only/results/gcc-three-arm.json).
+
+
+## GCC startup / compilation / teardown partition
+
+`gcc-phases.py` uses the same binaries and input with a host-only capprof extension.
+No guest instruction, GCC source or input is changed. The first boundary is after
+the first instruction of `init_cgraph`, the first call in `compile_file`; the
+second is after the first instruction of `statistics_fini`, reached in `finalize`
+after the assembly output file is closed. Startup therefore includes GCC option,
+backend and language initialization, not only OS loading. Compilation includes
+compile_file initialization, translation, output and output-file close. Teardown
+includes the remaining GCC finalization, libc exit and Linux/module cleanup.
+One instruction at each boundary belongs to the preceding phase.
+
+Two complete cold invocations per arm, each in its own fresh guest, give mean
+system-wide instruction attempts:
+
+| Phase | Plain | Launcher | Native prototype |
+|---|---:|---:|---:|
+| Startup and initialization | 14,845,056.0 | 26,659,188.0 | 24,268,340.5 |
+| Compilation and output | 13,186,188.0 | 25,836,295.0 | 24,205,330.0 |
+| Finalization and exit | 4,860,032.5 | 9,064,907.5 | 8,718,852.5 |
+
+All six full outputs match the reference. Every run has exactly three phases,
+two authenticated boundary entries at one image base, and phase counts summing
+to an independently snapshotted outer-window total. A wrong instruction
+fingerprint is rejected even though GCC still produces the correct output.
+Repeated anchor arrivals from faults are permitted; multiple completed boundary
+candidates, missing boundaries or out-of-order boundaries are rejected.
+
+Of the native-minus-plain excess in these cold runs, 54.656% occurs outside the
+compilation phase and 45.344% inside it. This does not mean the outside portion
+is removable: it includes necessary GCC initialization and process cleanup.
+Within compilation, kernel+module work is 12.619M native versus 4.447M plain,
+accounting for about 74% of that phase's extra work. Flat PC attribution shows
+additional memset, mapping lookup, kernel allocation/free, module page-table
+scans and fault resolution. It does not identify the caller responsible for
+every allocation or copy. The remaining PC bucket must not be labelled pure ISA
+or compiler overhead; compiler/libc differences and firmware remain included.
+
+These all-cold totals should not be substituted for the mixed warm/cold means
+from the six-order experiment. The same prototype signal/ioctl limitations
+remain. The result motivates inspecting memory-management work during compilation,
+rather than assuming that a native task entry alone removes the measured delta.
+
+To reproduce, apply `capprof-phases.patch` to `contrib/plugins/capprof.c` from QEMU
+commit `dd041bac5ad9c145c3872a50804ca714a26b1c88` in a scratch copy. Build that file
+as a shared plugin with `cc -fPIC -Wall -O2`, glib-2.0 pkg-config CFLAGS, and the
+matching QEMU `include/qemu` headers. Supply the resulting `.so` through
+`--plugin` to `gcc-phases.py`, with the same required input paths as
+`gcc-preliminary.py`, including `--plain`. The default is two runs per arm;
+`--arms plain --repetitions 1 --negative-boundary` must fail the boundary oracle.
+The profiler's normal start/stop behavior is unchanged unless `phases=1` is set.
+
+[Phase samples, boundaries, checks and evidence](../copyable-only/results/gcc-phases.json).
