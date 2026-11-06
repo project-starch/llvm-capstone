@@ -114,15 +114,34 @@ static void mr_evict_all(void)
     }
 }
 #endif
+#if CAPSTONE_HEAP_MAPPING_REUSE
+/* The cursor of the owner published for page a, or 0 for a page of no live mapping. */
+static size_t page_owner(size_t a)
+{
+    struct heap_leaf *leaf = leaf_for(a, 0);
+    void *o = leaf ? leaf->owner[(a >> 12) & 511] : 0;
+    return o ? __builtin_capstone_cap_get_cursor(o) : 0;
+}
+#endif
 /* mprotect (mapping.c) reports every range it was asked to change, whether or not the service changed it. A tracked
  * mapping it overlaps is marked noreuse; a cached one it overlaps is unmapped at once. */
 void __heap_protected(size_t address, size_t bytes)
 {
 #if CAPSTONE_HEAP_MAPPING_REUSE && !defined(CAPSTONE_HEAP_MAPPING_REUSE_TEST_KEEP_PROTECTED)
+    /* The live mappings the range overlaps come from the page index, page by page over the range only. A scan of the
+     * whole table made all of it resident: about 200 pinned pages in every process, each one a fault exit. */
+    size_t end = address + bytes < address ? (size_t)-1 : address + bytes;
+    if (end > (1UL << 39)) end = 1UL << 39;
     index_lock();
-    for (unsigned i = 0; i < MR_LIVE; ++i)
-        if (mr_live[i].base && mr_live[i].base < address + bytes && address < mr_live[i].base + mr_live[i].bytes)
-            mr_live[i].noreuse = 1;
+    for (size_t a = address & -4096UL; a < end;) {
+        size_t o = page_owner(a);
+        if (!o) { a = leaf_for(a, 0) ? a + 4096 : (a | ((1UL << 21) - 1)) + 1; continue; }
+        size_t b = a;
+        while (b >= 4096 && page_owner(b - 4096) == o) b -= 4096;   /* the mapping's first page */
+        struct mr_rec *r = mr_find(b);
+        if (r) r->noreuse = 1;
+        while (a < end && page_owner(a) == o) a += 4096;
+    }
     for (unsigned i = mr_nfree; i-- > 0;)
         if (mr_free[i].base < address + bytes && address < mr_free[i].base + mr_free[i].bytes) {
             struct mr_rec e = mr_free[i];
