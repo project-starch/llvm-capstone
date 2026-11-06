@@ -41,6 +41,9 @@
 #define CAPSTONE_HEAP_INDEX_BITS 12
 #endif
 #define INDEX_BUCKETS (1U << CAPSTONE_HEAP_INDEX_BITS)
+#ifndef CAPSTONE_HEAP_INDEX_SIMPLE
+#define CAPSTONE_HEAP_INDEX_SIMPLE 0
+#endif
 static struct capstone_malloc_slot *index_heads[INDEX_BUCKETS];
 static sublet_cap pending_mapping;
 static unsigned heap_mutex;
@@ -53,7 +56,15 @@ static void lock_heap(void)
 static void unlock_heap(void)
 { __atomic_store_n(&heap_mutex, 0, __ATOMIC_RELEASE); }
 static unsigned bucket(size_t key)
-{ return ((key >> 4) * 11400714819323198485UL) >> (64 - CAPSTONE_HEAP_INDEX_BITS); }
+{
+#if CAPSTONE_HEAP_INDEX_SIMPLE
+    /* perf/arena-cache: the granule number masked, no multiply. Slot cursors are 16-byte granules, dense inside
+     * groups, so the low bits spread them; building the 64-bit constant cost 8 instructions per call. */
+    return (unsigned)(key >> 4) & (INDEX_BUCKETS - 1);
+#else
+    return ((key >> 4) * 11400714819323198485UL) >> (64 - CAPSTONE_HEAP_INDEX_BITS);
+#endif
+}
 static void unindex(struct capstone_malloc_slot *r)
 {
     if (!r->key) return;
