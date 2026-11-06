@@ -62,9 +62,9 @@ static struct heap_leaf *leaf_for(size_t a, int create)
  * The cache is bounded by entries and bytes. Past either bound, or for a mapping it does not know, the path is
  * the original munmap. The kernel's retirement of a mapping ends the holder with everything else. */
 #define MR_LIVE 16384U          /* live mappings tracked (holders), a power of two */
-#define MR_FREE 512U            /* cached mappings */
+#define MR_FREE 4096U           /* cached mappings (region pieces are not counted against MR_FREE_BYTES) */
 #define MR_FREE_BYTES (64UL << 20)
-struct mr_rec { size_t base, bytes; void *holder; };
+struct mr_rec { size_t base, bytes; void *holder; unsigned piece; };
 static struct mr_rec mr_live[MR_LIVE], mr_free[MR_FREE];
 static unsigned mr_nfree; static size_t mr_free_bytes;
 unsigned long __heap_reuse_hits, __heap_reuse_puts, __heap_reuse_spills;
@@ -88,11 +88,46 @@ static void mr_remove(struct mr_rec *r)
     }
     mr_live[i] = (struct mr_rec){0, 0, 0};
 }
-static int mr_record(size_t base, size_t bytes, void *holder)
+static int mr_record(size_t base, size_t bytes, void *holder, unsigned piece)
 {
     for (unsigned i = mr_slot(base), k = 0; k < MR_LIVE; i = (i + 1) & (MR_LIVE - 1), ++k)
-        if (!mr_live[i].base) { mr_live[i] = (struct mr_rec){base, bytes, holder}; return 0; }
+        if (!mr_live[i].base) { mr_live[i] = (struct mr_rec){base, bytes, holder, piece}; return 0; }
     return -1;   /* table full: this mapping is released by munmap, as without the switch */
+}
+#endif
+
+#if CAPSTONE_HEAP_MAPPING_REGION
+#if !CAPSTONE_HEAP_MAPPING_REUSE
+#error "CAPSTONE_HEAP_MAPPING_REGION needs CAPSTONE_HEAP_MAPPING_REUSE"
+#endif
+/* Group mappings of up to RG_PIECE_MAX are cut from 4 MiB heap regions instead of being mapped one by one (default
+ * off). A fresh process otherwise pays one MAP exit per group mapping before the reuse cache has anything: perl -e 1
+ * pays 51, op/array.t 214. A piece is a mapping in every other respect: its own holder (a child of the region
+ * grant at the piece's offset) and owner, its own index entries, and the reuse cache's revocation on release. A
+ * piece is never unmapped on its own: released pieces stay in the cache, whose byte bound does not count them. The
+ * rest of a region that cannot fit the next piece is not used. The kernel retires a region with the process. */
+#define RG_BYTES (4UL << 20)
+#define RG_PIECE_MAX (256UL << 10)
+static void *rg_raw; static size_t rg_next, rg_end;
+unsigned long __heap_region_maps, __heap_region_pieces, __heap_piece_drops;
+static void *rg_take(size_t bytes, size_t align)
+{
+    index_lock();
+    size_t off = (rg_next + align - 1) & -align;
+    if (!rg_raw || off + bytes > rg_end) {
+        sublet_cap g;
+        size_t ra = heap_granule(RG_BYTES); if (ra < 4096) ra = 4096;
+        if (cap_vm_acquire(&g, RG_BYTES, ra, PROT_READ|PROT_WRITE, 6, CAP_VM_HEAP)) { index_unlock(); return 0; }
+        rg_raw = cap_vm_copyable(&g);
+        rg_next = __builtin_capstone_cap_get_cursor(rg_raw); rg_end = rg_next + RG_BYTES;
+        ++__heap_region_maps;
+        off = (rg_next + align - 1) & -align;
+        if (off + bytes > rg_end) { index_unlock(); return 0; }
+    }
+    void *at = (char *)rg_raw + (ptrdiff_t)(off - __builtin_capstone_cap_get_cursor(rg_raw));
+    rg_next = off + bytes; ++__heap_region_pieces;
+    index_unlock();
+    return at;
 }
 #endif
 
@@ -109,8 +144,8 @@ void *__heap_mapping(size_t n)
     for (unsigned i = mr_nfree; i-- > 0;) {
         if (mr_free[i].bytes != bytes || (mr_free[i].base & (align - 1))) continue;
         struct mr_rec e = mr_free[i];
-        mr_free[i] = mr_free[--mr_nfree]; mr_free_bytes -= bytes;
-        if (mr_record(e.base, e.bytes, e.holder)) { /* untracked from here: released by munmap */ }
+        mr_free[i] = mr_free[--mr_nfree]; if (!e.piece) mr_free_bytes -= bytes;
+        if (mr_record(e.base, e.bytes, e.holder, e.piece)) { /* untracked from here: released by munmap */ }
         memset(e.holder, 0, bytes);
         void *owner = heap_issue(e.holder, bytes);
         for (size_t a = e.base; a < e.base + bytes; a += 4096) {
@@ -124,26 +159,33 @@ void *__heap_mapping(size_t n)
     }
     index_unlock();
 #endif
-    if (cap_vm_acquire(&grant,bytes,align,PROT_READ|PROT_WRITE,6,CAP_VM_HEAP))
-        return MAP_FAILED;
-    void *raw=cap_vm_copyable(&grant);
+    void *raw=0; unsigned piece=0;
+#if CAPSTONE_HEAP_MAPPING_REGION
+    if (bytes <= RG_PIECE_MAX && (raw=rg_take(bytes,align))) piece=1;
+#endif
+    if (!piece) {
+        if (cap_vm_acquire(&grant,bytes,align,PROT_READ|PROT_WRITE,6,CAP_VM_HEAP))
+            return MAP_FAILED;
+        raw=cap_vm_copyable(&grant);
+    }
     size_t base=__builtin_capstone_cap_get_cursor(raw);
     if (base >= (1UL<<39) || bytes > (1UL<<39)-base) {
-        munmap(raw,bytes); errno=ENOMEM; return MAP_FAILED;
+        if (!piece) munmap(raw,bytes);
+        errno=ENOMEM; return MAP_FAILED;
     }
     index_lock();
     /* Provision the entire index before publishing any owner entries. */
     for (size_t a=base; a<base+bytes; a+=4096) {
         if (!leaf_for(a,1)) {
             int e=errno;
-            index_unlock(); munmap(raw,bytes); errno=e; return MAP_FAILED;
+            index_unlock(); if (!piece) munmap(raw,bytes); errno=e; return MAP_FAILED;
         }
     }
     /* mmap's returned capability need not carry MANAGE. This one mapping-wide
      * child does, and becomes the parent of all objects within the mapping. */
 #if CAPSTONE_HEAP_MAPPING_REUSE
     void *holder=heap_issue(raw,bytes), *owner=heap_issue(holder,bytes);
-    if (mr_record(base,bytes,holder)) { /* untracked: released by munmap */ }
+    if (mr_record(base,bytes,holder,piece)) { /* untracked: released by munmap (a piece: dropped) */ }
 #else
     void *owner=heap_issue(raw,bytes);
 #endif
@@ -164,7 +206,7 @@ int __heap_unmapping(void *owner,size_t n)
 #if CAPSTONE_HEAP_MAPPING_REUSE
     {
         struct mr_rec *r = mr_find(base);
-        if (r && r->bytes == bytes && mr_nfree < MR_FREE && mr_free_bytes + bytes <= MR_FREE_BYTES) {
+        if (r && r->bytes == bytes && mr_nfree < MR_FREE && (r->piece || mr_free_bytes + bytes <= MR_FREE_BYTES)) {
 #ifndef CAPSTONE_HEAP_MAPPING_REUSE_TEST_NO_REVOKE   /* positive control of the safety probe ONLY */
             heap_end(r->holder, owner);   /* every object, nested group and derivative of this mapping */
 #endif
@@ -173,12 +215,21 @@ int __heap_unmapping(void *owner,size_t n)
                 if (!leaf) __builtin_trap();
                 leaf->owner[(a>>12)&511]=0;
             }
-            mr_free[mr_nfree++] = *r; mr_free_bytes += bytes; mr_remove(r);
+            mr_free[mr_nfree++] = *r; if (!r->piece) mr_free_bytes += bytes; mr_remove(r);
             ++__heap_reuse_puts;
             index_unlock();
             return 0;
         }
-        if (r) { mr_remove(r); ++__heap_reuse_spills; }
+        if (r) {
+#if CAPSTONE_HEAP_MAPPING_REGION
+            if (r->piece) {   /* never unmapped alone: revoke, clear the index, drop it */
+                heap_end(r->holder, owner);
+                for (size_t a=base; a<base+bytes; a+=4096) leaf_for(a,0)->owner[(a>>12)&511]=0;
+                mr_remove(r); ++__heap_piece_drops; index_unlock(); return 0;
+            }
+#endif
+            mr_remove(r); ++__heap_reuse_spills;
+        }
     }
 #endif
     int rc=munmap(owner,bytes);
