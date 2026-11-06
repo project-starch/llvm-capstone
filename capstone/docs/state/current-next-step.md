@@ -4,7 +4,12 @@ The last full native C-port test gate is **9 PASS, 1 FAIL**. Cwd, bounded parent
 traversal, pipe creation and default/ignore signals now pass focused QEMU gates.
 Native spawn/wait lifecycle gates, both confined hush ABI modes and the new
 time/directory/duplication services now pass their focused gates. Complete the
-original Perl invocations and official comparator on the matched frozen kernel. Requalify the
+original Perl invocations and official comparator on the matched frozen kernel.
+The private temporary-directory alias and focused original perlio test now
+pass. Resolve the separate
+[Perl pointer-serialization blocker](../../runtime/virtual/tests/native-task/spec-perl-pack-blocker.json).
+A genuine interpreter repair needs a new versioned src.alt package; the old
+frozen package, original test inputs and comparator must remain intact. Requalify the
 full ten-entry C-port gate on the final frozen kernel before FPGA acceptance.
 [Required process gates](../plans/native-linux-task-integration.md#native-subprocess-closure).
 The outer SPEC wrapper hides test exceptions, so exit zero is insufficient:

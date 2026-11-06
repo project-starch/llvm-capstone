@@ -281,3 +281,29 @@ These APIs do not by themselves establish the lifecycle or authority guarantees.
 Astra xhigh and Gemini Argon reviewed these boundaries. Direct-image spawn
 alone does not qualify `popen`, shell pipelines/substitutions, or the full Perl
 test. Preserve original workloads and require official output comparison.
+
+## Remaining Perl pointer serialization boundary
+
+The original native `pack.t` now runs through assertion 242 and faults on its
+first big-endian pointer round trip (assertion 243). Separate probes confirm
+that native aligned `p`/`p<` work while byte-reversed, unaligned and UTF-8-expanded
+pointer fields lose their tags. This is an application representation problem,
+not evidence that the kernel should reconstruct authority from scalar bytes.
+[Reproduction and pinned inputs](../../runtime/virtual/tests/native-task/spec-perl-pack-blocker.json).
+
+A candidate general Perl port would retain exact tagged pointer provenance in
+per-string metadata while preserving upstream encoded bytes. It would need
+explicit propagation through assignment/COW, complete-field substrings,
+concatenation/join and UTF-8 transformations, with invalidation on unsupported
+mutations and cleanup on string destruction. Unpack must validate the annotated
+range and representation before copying the retained capability. It must not
+look up arbitrary addresses or mint capabilities from serialized integers.
+This is a proposal, not an implemented or qualified feature.
+
+Such a port requires a new, explicitly selected src.alt package and fresh
+application objects. Keep the existing frozen source package intact; the
+`.cpu2017.v1.0` suffix denotes SPEC compatibility, not a port revision. Test
+inputs and official comparators stay unchanged. Qualify forged/damaged bytes,
+partial fields, stale metadata, encoding/copy aliases and cleanup before the
+unchanged 14,708-assertion pack test and the complete Perl test workload. A
+kernel-only repair cannot establish that application-port result.

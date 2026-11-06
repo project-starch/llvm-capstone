@@ -104,7 +104,7 @@ native_spec_live_stop() {
 """
 
 
-def gate_script(commands, images, compares, shell=False, live_output=False):
+def gate_script(commands, images, compares, shell=False, live_output=False, local_tmp=False):
     lines = [
         "#!/bin/sh", "set -eu",
         "trap 'echo SPEC_ALL_GATE_EXIT:$?; dmesg; echo VIRTUAL_STAGED_DONE' EXIT",
@@ -134,6 +134,9 @@ def gate_script(commands, images, compares, shell=False, live_output=False):
             "chmod +x /tmp/native-shell/hush.dom",
             "rm /tmp/spec-native/.native-shell",
         ])
+
+    if local_tmp:
+        lines.append("mkdir -m 0700 .capstone-tmp")
 
     def retain(name, required=True):
         path = relative_path(name)
@@ -205,6 +208,7 @@ def main():
     parser.add_argument("--null-device", action="store_true", help="Explicit pinned /dev/null grant")
     parser.add_argument("--live-output", action="store_true",
                         help="Diagnostic scalar watcher mirrors current stdout/stderr every guest second; not for performance measurements")
+    parser.add_argument("--local-tmp", action="store_true", help="Map /tmp to a fresh private directory inside the existing workload grant")
     args = parser.parse_args()
     if args.timeout <= 0:
         parser.error("--timeout must be positive")
@@ -229,6 +233,7 @@ def main():
     if args.shell:
         platform["shell"] = digest(args.shell)
     platform["null_device_grant"] = args.null_device
+    platform["local_tmp_grant"] = args.local_tmp
     platform["live_output"] = args.live_output
     if args.live_output:
         platform["timing_note"] = "Live output observer enabled; elapsed times are diagnostic, not performance measurements."
@@ -281,6 +286,8 @@ def main():
         for name in expected_outputs:
             if (stage / relative_path(name)).exists():
                 raise ValueError(f"Output already exists in prepared stage: {bench}/{name}")
+        if args.local_tmp and ((stage / ".capstone-tmp").exists() or (stage / ".capstone-tmp").is_symlink()):
+            raise ValueError("Reserved private temporary directory is already in the workload")
         if args.shell:
             if (stage / ".native-shell").exists():
                 raise ValueError("Reserved shell staging filename is already in the workload")
@@ -290,7 +297,7 @@ def main():
             for path in sorted(stage.rglob("*")) if path.is_file()
         })
         (stage / "gate.sh").write_text(gate_script(
-            commands, images, compares, shell=bool(args.shell), live_output=args.live_output,
+            commands, images, compares, shell=bool(args.shell), live_output=args.live_output, local_tmp=args.local_tmp,
         ))
         flags = (
             "capstone_vm.native_task=1 capstone_vm.native_io=1 capstone_vm.dom_binfmt=1 "
@@ -302,6 +309,8 @@ def main():
             flags += " capstone_vm.dom_shell=/tmp/native-shell/hush.dom"
         if args.null_device:
             flags += " capstone_vm.dom_null=1"
+        if args.local_tmp:
+            flags += " capstone_vm.dom_local_tmp=1"
         command = [
             "python3", str(repository / "capstone/runtime/virtual/run-staged.py"),
             "--qemu", str(args.qemu.resolve()), "--images", str(args.images.resolve()),
