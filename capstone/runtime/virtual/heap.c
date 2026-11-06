@@ -49,9 +49,27 @@
 #ifndef CAPSTONE_HEAP_INDEX_SIMPLE
 #define CAPSTONE_HEAP_INDEX_SIMPLE 0
 #endif
+#ifdef CAPSTONE_HEAP_GLOBALS_STRUCT
+/* perf/arena-cache: the heap's hot scalars in one object, so a function derives one global capability for all of
+ * them instead of one per variable (about seven instructions each on this ABI). */
+static struct {
+    unsigned mutex, sc_count;
+    size_t ids_budget;
+    struct capstone_malloc_slot *sc_head[4096U / 16 + 1];
+    struct capstone_malloc_slot *index_heads[INDEX_BUCKETS];
+} heap_state;
+#define index_heads (heap_state.index_heads)
+#define heap_mutex (heap_state.mutex)
+#define sc_head (heap_state.sc_head)
+#define sc_count (heap_state.sc_count)
+#define ids_budget (heap_state.ids_budget)
+#else
 static struct capstone_malloc_slot *index_heads[INDEX_BUCKETS];
+#endif
 static sublet_cap pending_mapping;
+#ifndef CAPSTONE_HEAP_GLOBALS_STRUCT
 static unsigned heap_mutex;
+#endif
 enum { SLOT_INTERNAL, SLOT_PUBLIC, SLOT_NESTED, SLOT_CACHED };
 /* CAPSTONE_HEAP_SLOT_CACHE (perf/arena-cache, default off): a freed slot of a small nominal size stays allocated in
  * mallocng and goes on a per-size LIFO; malloc of exactly that size takes it back. free still validates the pointer and
@@ -68,9 +86,17 @@ enum { SLOT_INTERNAL, SLOT_PUBLIC, SLOT_NESTED, SLOT_CACHED };
 #endif
 #define SC_LIMIT ((unsigned)CAPSTONE_HEAP_SLOT_CACHE_LIMIT)
 #if CAPSTONE_HEAP_SLOT_CACHE
+#ifndef CAPSTONE_HEAP_GLOBALS_STRUCT
 static struct capstone_malloc_slot *sc_head[SC_MAX_BYTES / 16 + 1];
 static unsigned sc_count;
+#endif
 unsigned long __capstone_malloc_slot_cache_hits, __capstone_malloc_slot_cache_puts;
+#endif
+/* A global's capability costs about seven instructions per use here; the counters are diagnostics only. */
+#ifdef CAPSTONE_HEAP_STATS
+#define SC_STAT(x) (x)
+#else
+#define SC_STAT(x) ((void)0)
 #endif
 static void lock_heap(void)
 {
@@ -176,7 +202,9 @@ void __capstone_malloc_slot_key(struct capstone_malloc_slot *r, void *p, size_t 
 #else
 #define IDS_PER_CALL 3
 #endif
+#ifndef CAPSTONE_HEAP_GLOBALS_STRUCT
 static size_t ids_budget;   /* records the heap may still take before asking; under the heap lock */
+#endif
 static int ensure_ids(size_t need)
 {
     if (ids_budget >= need) return 0;
@@ -623,7 +651,7 @@ void *malloc(size_t n)
     if (want <= SC_MAX_BYTES && sc_head[want / 16] && sc_head[want / 16]->nominal == want && !ensure_ids(IDS_PER_CALL)) {
         struct capstone_malloc_slot *r = sc_head[want / 16];
         sc_head[want / 16] = (struct capstone_malloc_slot *)r->issued;
-        --sc_count; ++__capstone_malloc_slot_cache_hits;
+        --sc_count; SC_STAT(++__capstone_malloc_slot_cache_hits);
         r->kind = SLOT_PUBLIC;
         r->issued = issue_child(r->parent, r->key - __builtin_capstone_cap_get_base(r->parent), want);
         void *q = r->issued;
@@ -662,7 +690,7 @@ void free(void *p)
         end_child(r->parent, r->issued);
         r->kind = SLOT_CACHED;
         r->issued = (void *)sc_head[r->nominal / 16]; sc_head[r->nominal / 16] = r;
-        ++sc_count; ++__capstone_malloc_slot_cache_puts;
+        ++sc_count; SC_STAT(++__capstone_malloc_slot_cache_puts);
         unlock_heap(); errno = e; return;
     }
 #endif
