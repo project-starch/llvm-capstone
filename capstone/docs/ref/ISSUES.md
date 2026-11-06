@@ -4146,8 +4146,13 @@ cycle's `dtlb_is_page`. `lsu_paddr_o` is unchanged.
 
 **Reach.**
 - Performance: every load through a 2 MiB page with vaddr[20:19] = 00, a quarter of addresses mapped by transparent
-  huge pages. The same holds for kernel loads in the first 512 KiB of a 2 MiB kernel mapping, THP or not; which page
-  sizes the board kernel uses has not been checked.
+  huge pages.
+- The kernel, THP or not, by source and not measured. The board's memory node is 0x3C2D2000 bytes at 0x8000_0000
+  (`caplifive-system/sw/buildroot/configs/caplifive.dts`), under 1 GiB. Linux 6.4.14's `best_map_size`
+  (`arch/riscv/mm/init.c:668-683`) takes 1 GiB only for a region at least 1 GiB long and 1 GiB-aligned, so the linear
+  map is built from 2 MiB pages. The linear map's virtual offset within a 2 MiB page equals the physical one, so every
+  kernel load from the linear map to a physical address with bits [20:19] = 00 is held: a quarter of physical memory
+  (page cache, slab, the source side of `copy_to_user`). The same applies to the kernel image's own 2 MiB mappings.
 - Correctness: only where software maps a device through a superpage. No image has been checked for that.
 - The board's THP mcf run (runtime lane) is the cheap silicon reading of the performance half.
 
