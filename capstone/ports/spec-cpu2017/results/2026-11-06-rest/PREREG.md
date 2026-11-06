@@ -62,3 +62,40 @@ chain stub checks every list path. `board-env-check.py` passes for both boards' 
 - Board 2, after perf/ga's gcc runs: x264 Plain.
 
 **R1 is unchanged.** Its point estimate is now open: the cache's effect on perl has not been measured, even on QEMU.
+
+## Addendum 2 (6 Nov 15:15, before either board call): both programs in gcc train's best configuration
+
+The lead asked for the two remaining tests to run in the best configuration. That is now gcc train's queued one
+(results/2026-11-06-arena Addenda 3-7):
+- **compiler:** llvm-c3 (llvm-c2 + llvm-capstone perf/shrinkto 1836a2142f7d), `-capstone-shrinkto-globals
+  -capstone-shrinkto-end-adjust=1` (C.5a only, R-32);
+- **runtime:** SDK ac12 (arena cache, slot cache 65,536, simple 16-bit hash, null-capability memset);
+- **module parameters, per stage:** step budget 10 s, resume_quantum 1, retire_exit_sweep 2, arena_pin 1 (ga2's
+  block, each read back and restored).
+
+Workload sources are unchanged. The objects are recompiled from each program's production compile list with only
+the compiler swapped (perf/best/build-best-c3s1.sh).
+
+| program | image (stripped) | QEMU instructions (kit-profq) | outputs |
+|---|---|---|---|
+| perlbench | 95f4bbb17e74c543 | run1 96.13 G, against 109.51 G for -ac (−12.2 %); c2ac12 alone 100.45 G | test.out, makerand.out = -ac's byte for byte; specdiff 1/2 as every arm (japh/abigail.t) |
+| x264 | d003385b71056a8a | gate running at the time of writing | |
+
+**Order:**
+- **Board 1:** perlbench-ac continues. x264-ac is replaced in `perf/rest/b1.list` by
+  `perf/best/stages/525.x264_r-test-capstone-lifetimes-devmk-c3s1`. The edit is in place: same inode, line 1
+  unchanged, so the running chain reads it. If x264's QEMU gate fails before the boot, the line goes back to -ac, and
+  that is recorded here.
+- **Board 2** (`perf/best/b2-seq.sh`, one task): gcc train (ga2) → the rtl lane's R-32 SHRINKTO readback bare boot
+  (land/rtl-r32-kit 624924575c53, graded by its own PREREG) → the THP mcf runs (results/2026-11-06-thp, unchanged) →
+  perlbench in the best configuration (`perf/best/b2.list`). The waiting THP driver (pid 2024109) is killed before
+  any board call and runs again inside the sequence, unchanged.
+
+**Predictions:**
+- **B1 (perlbench best):** run ≤ 0.92 × perlbench-ac's board run. Point −10…−15 %: inside −12 % of instructions, plus
+  arena_pin and the 10 s step budget outside. perl's 318 contexts make the exit-sweep and launch costs uncertain.
+- **B2 (x264 best):** run ≤ x264's 30 Oct Temporal 51,855.95 s. A point estimate follows with the QEMU gate.
+- Reported: both against Plain (perl 23,311 s; x264 from out-rest-b2).
+
+**Dry run** (perf/best/dryrun/A-ok, every board call stubbed): the sequencer waits for the pid, runs R32, THP and
+BEST, and every list path passes the chain stub. board-env-check passes for the perl stage.

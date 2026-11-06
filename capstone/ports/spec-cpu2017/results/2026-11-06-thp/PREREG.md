@@ -64,3 +64,14 @@ the quiet launcher 1d8b4f08.
 
 **Limits.** N = 1. A private kernel; Plain is re-measured on it. The board's huge-page path has not booted before:
 the control rungs run first in the boot.
+
+## Addendum 1 (6 Nov 15:15, before any board call of these runs): the order
+
+- **What came first.** The driver (perf/thp/gt-run.sh, pid 2024109) was queued behind gcc train's
+  arena-cache run, perf/ga2. That run, and the images it carries, changed after this pre-registration (arena
+  Addenda 3-7). Nothing here depends on them.
+- **What changes.** The waiting driver is killed before any board call. It now runs, unchanged and with the same
+  stages, kit and grader, inside `perf/best/b2-seq.sh`. The new order on board 2: gcc train (ga2), then the rtl
+  lane's R-32 SHRINKTO bare boot (one short boot on C.5a), then these runs, then perlbench in the best
+  configuration (rest Addendum 2).
+- **The predictions are unchanged.**

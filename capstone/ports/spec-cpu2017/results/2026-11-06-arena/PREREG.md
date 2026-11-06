@@ -240,3 +240,6 @@ and pass silently.
 
 **M3 tightens to run ≤ 0.93 × 4,656.1 s (4,330 s).** Point estimate −400…−470 s, about 4,225 s, **1.20×** Plain's
 3,515.5 s. This adds about −140 s to Addendum 6's estimate: −3.95 % of c2ac12's ~3,610 s inside.
+
+Correction to Addendum 7: its "14:40" heading is wrong. It was written and pushed at 14:18 (b71e64845128), before
+the boot, as the commit time shows.
