@@ -74,11 +74,29 @@ static void unindex(struct capstone_malloc_slot *r)
     *p = r->next;
     r->next = NULL; r->key = 0;
 }
+#ifndef CAPSTONE_HEAP_FIND_CACHE
+#define CAPSTONE_HEAP_FIND_CACHE 0
+#endif
+#if CAPSTONE_HEAP_FIND_CACHE
+/* perf/arena-cache, default off: the record last indexed or found. One malloc/free pair looks the same slot up three
+ * to five times (publish, free's check, prepare_free, mallocng's get_meta and get_slot_index); after the first, a key
+ * compare answers. Valid because a record's key is its index key: unindex zeroes it, slot_key rewrites it, and only
+ * indexed records carry a non-zero key. Every caller holds the heap lock. */
+static struct capstone_malloc_slot *find_last;
+#endif
 struct capstone_malloc_slot *__capstone_malloc_find(const void *p)
 {
     size_t key = __builtin_capstone_cap_get_cursor((void *)p);
+#if CAPSTONE_HEAP_FIND_CACHE
+    if (find_last && find_last->key == key && key) return find_last;
+#endif
     for (struct capstone_malloc_slot *r = index_heads[bucket(key)]; r; r = r->next)
-        if (r->key == key) return r;
+        if (r->key == key) {
+#if CAPSTONE_HEAP_FIND_CACHE
+            find_last = r;
+#endif
+            return r;
+        }
     return NULL;
 }
 void __capstone_malloc_slot_key(struct capstone_malloc_slot *r, void *p, size_t n)
@@ -87,6 +105,9 @@ void __capstone_malloc_slot_key(struct capstone_malloc_slot *r, void *p, size_t 
     r->key = __builtin_capstone_cap_get_cursor(p); r->nominal = n;
     unsigned b = bucket(r->key);
     r->next = index_heads[b]; index_heads[b] = r;
+#if CAPSTONE_HEAP_FIND_CACHE
+    find_last = r;
+#endif
 }
 /* Q-21: THE APPLICATION RUNTIME NEVER READS A CSR FOR AVAILABILITY.
  *
