@@ -35,7 +35,12 @@
 #define CAPSTONE_HEAP_ARENA_CACHE 0
 #endif
 
-#define INDEX_BUCKETS 4096U
+/* CAPSTONE_HEAP_INDEX_BITS (perf/arena-cache, default 12 = the qualified 4,096 buckets): the slot index's width.
+ * Chains grow with the live population; gcc train spends 272 M instructions in __capstone_malloc_find at 12. */
+#ifndef CAPSTONE_HEAP_INDEX_BITS
+#define CAPSTONE_HEAP_INDEX_BITS 12
+#endif
+#define INDEX_BUCKETS (1U << CAPSTONE_HEAP_INDEX_BITS)
 static struct capstone_malloc_slot *index_heads[INDEX_BUCKETS];
 static sublet_cap pending_mapping;
 static unsigned heap_mutex;
@@ -48,7 +53,7 @@ static void lock_heap(void)
 static void unlock_heap(void)
 { __atomic_store_n(&heap_mutex, 0, __ATOMIC_RELEASE); }
 static unsigned bucket(size_t key)
-{ return ((key >> 4) * 11400714819323198485UL) >> 52; }
+{ return ((key >> 4) * 11400714819323198485UL) >> (64 - CAPSTONE_HEAP_INDEX_BITS); }
 static void unindex(struct capstone_malloc_slot *r)
 {
     if (!r->key) return;
