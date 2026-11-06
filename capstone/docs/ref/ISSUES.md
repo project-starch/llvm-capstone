@@ -4079,6 +4079,78 @@ check's order and scope. Folder: `capstone/tests/fpga-repros/R67-pcc-adopts-dead
     1fc2cd5aa`.
 - A second board on C.5a has not been read.
 
+### R-68 — the MMU's non-idempotent probe splices a superpage's offset bits into the PPN at PADDR indices, so on the FPGA a load in the first 512 KiB of every 2 MiB page (vaddr[20:19] = 00) waits as if it were I/O; the same splice lets a device address mapped through a superpage escape the check `DEMONSTRATED IN SIMULATION 2026-11-06 with the FPGA's NI rule supplied to the simulation (capstone-ariane ni-superpage, pre-registered at ca49a9c22 and 874d2928a / 4eb9c0c43 before their runs); PRESENT in every sealed bitstream's tree by source (read at 1fc2cd5aa; cva6_mmu.sv and load_unit.sv identical at e7af48457 and c9c7952bd; the form is upstream CVA6's, back to 3ddf797e9); NOT MEASURED ON SILICON; FIX IN RTL, simulation only: capstone-ariane ni-superpage 0f0905194, lint PASS at baseline, for the stage-B batch. Found 2026-11-06 by the runtime lane's rtl-oracle read for mcf on transparent huge pages`
+
+Siblings: none on this path. The load unit's own comment at `load_unit.sv:382` reads `TODO: dtlb_ppn_i is not reliable`.
+
+**Mechanism** (1fc2cd5aa, read; claim-audited):
+- `lsu_dtlb_ppn_o` is a PPN vector: bit i is paddr bit i+12 (`cva6_mmu.sv:557`; PPNWMin = 29). Its only consumer is the
+  load unit's `paddr_ni = is_inside_nonidempotent_regions({dtlb_ppn_i, 12'd0})` feeding `stall_ni`
+  (`load_unit.sv:389-395`). The store path and the I-cache check the correctly spliced paddr.
+- On a superpage hit the MMU overwrites `ppn[20:12]` (2 MiB, `:571`) or `ppn[29:12]` (1 GiB, `:575`) with
+  `vaddr[20:12]` / `vaddr[29:12]`: paddr index ranges applied to a PPN vector. The right targets are `ppn[8:0]` and
+  `ppn[17:0]`, as the TLB's own G-stage splice writes them (`cva6_tlb.sv:199-200`).
+- The splice is selected by the registered `dtlb_is_page_q` (the previous lookup), while the PPN comes from this
+  cycle's lookup.
+- The FPGA's rule is one region, [0, 0x8000_0000) (`ariane_xilinx.sv` build_fpga_config). With DRAM below 4 GiB the
+  checked address falls below 2^31 iff vaddr[20:19] = 00 in a 2 MiB page, or vaddr[29:19] = 0 in a 1 GiB page. Such a
+  load is held until it is the oldest instruction with the store buffer and the write buffer empty.
+- Reverse direction: a device address whose own bits [29:19] (1 GiB page) or [20:19] (2 MiB page) are not all zero,
+  mapped through a superpage, reads as at or above 2^31 and is not held, so it may execute speculatively.
+- The default simulation config has no NI rule (`NonIdemPotenceEn = 0`), so `stall_ni` is constant 0 in every
+  simulation before this one, and the default 95-sweep cannot see the change either way.
+
+**Reading** (simulation, memory delay 12; `niss-superpage.S`, MPRV with MPP = S; sim-only define `CAPSTONE_FPGA_NI`
+supplies the FPGA's rule; one `SUP NI-ABORT` trace line per entry into ABORT_TRANSACTION_NI; cycles over 32 iterations
+of four independent loads):
+
+| arm | no rule | rule | rule + fix |
+|---|---|---|---|
+| 2 MiB, vaddr[20:19] = 00 | 278, 0 aborts | 524, 66 | 278, 0 |
+| 2 MiB, 01 / 10 / 11 | 324 / 369 / 279, 0 | identical, 0 | identical, 0 |
+| 4 KiB twins, the same paddrs | 325 / 325 / 369 / 326, 0 | identical, 0 | identical, 0 |
+| 1 GiB, vaddr[29:19] = 4 / = 0 | 324 / 324, 0 | 324, 0 / 565, 66 | 324 / 324, 0 |
+| bare, untranslated | 324, 0 | 324, 0 | 324, 0 |
+| store in the loop, 2 MiB 00 / 01 / 4 KiB 00 | 666 / 666 / 667, 0 | 940, 74 / 666, 0 / 667, 0 | 666 / 666 / 667, 0 |
+| bootrom, untranslated (genuine I/O, positive control) | 897, 0 | 1398, 132 | 1398, 132 |
+| CLINT, untranslated (genuine I/O) | 857, 0 | 1362, 131 | 1362, 131 |
+| CLINT through a 1 GiB page | 813, 0 | 817, 1 | 1362, 131 |
+
+- The trace shows the spliced value: `ppn=0x40200` for VA 0xC0240008 in the 2 MiB page at PA 0x8020_0000 (0x80200 with
+  ppn[20:12] replaced by 0x040), and `ppn=0x6000` for the 1 GiB low arm.
+- The CLINT-through-1-GiB arm's one abort is its first access: it traced `ppn=0`, the page base unspliced, because
+  `dtlb_is_page_q` still held the previous, non-superpage lookup. That is the stale select, observed directly. After it,
+  the splice reads `0x2004` with bit 28 set, so the remaining loads escaped. With the fix every access traces
+  `ppn=0x2004`, the correct frame, and is held like the untranslated arm.
+- With the fix every arm except the two I/O arms reads the no-rule cycles exactly. The I/O controls read the same as
+  with the rule alone. Every arm read its own paddr; traps 0.
+- Cost, same arm with and without the rule: +7.7 cycles per iteration of four loads (about +1.9 per load; roughly half
+  the loads abort, at about 3.7 cycles each), and +8.6 with a store in the loop. These are cache hits in a simulation
+  with memory delay 12. A load in a dependent chain is usually closer to commit and costs less. With a store in flight
+  on silicon, the drain goes to DRAM and can cost more.
+
+**Pre-registered predictions that FAILED** (the abort-count clauses all held):
+- "No rule: arms 1-8 within 10 %" and "fixed: arm 1 within 10 % of arm 5". These arms' cycles depend on the arm's own
+  code, not on the page size: 2M-00 and 2M-11 read 278 against about 325 in all three models alike. The binding
+  comparison is the same arm across models.
+- "Rule: store arm at least 1.5 x its 4 KiB twin". It read 1.41.
+- "Rule: CLINT through 1 GiB reads 0 aborts". It read 1, the stale-select first access explained above.
+
+**Fix** (0f0905194): `ppn[8:0] = vaddr_n[20:12]` (2 MiB) and `ppn[17:0] = vaddr_n[29:12]` (1 GiB), selected by this
+cycle's `dtlb_is_page`. `lsu_paddr_o` is unchanged.
+- Lint PASS with every counter at baseline (UNOPTFLAT 39, UNUSEDSIGNAL 1431), and no MMU or NI name on the loop list.
+- The claim-auditor (read only, not synthesised) found no new combinational source: `dtlb_is_page` comes from the same
+  TLB lookup branch as `dtlb_content` (`cva6_tlb.sv:190-193`). Under the FPGA rule it expects the NI cone to shrink.
+- The test cannot tell the fix from deleting the splice. Both classify alike while every rule boundary is 1 GiB-aligned,
+  as the FPGA's is.
+
+**Reach.**
+- Performance: every load through a 2 MiB page with vaddr[20:19] = 00, a quarter of addresses mapped by transparent
+  huge pages. The same holds for kernel loads in the first 512 KiB of a 2 MiB kernel mapping, THP or not; which page
+  sizes the board kernel uses has not been checked.
+- Correctness: only where software maps a device through a superpage. No image has been checked for that.
+- The board's THP mcf run (runtime lane) is the cheap silicon reading of the performance half.
+
 ### R-57 — a capability STORE whose translation faults retires WITHOUT its page fault and is committed to the store buffer, which copies an INVALID speculative entry into its commit queue (a ghost head that never drains) and underflows its speculative count: the vp2 wedges r8..r11 `OPEN ON SILICON (caplifive_vp2_bf3db3175); DEMONSTRATED in simulation 2026-10-18 by a matched pair; FIXED on virtual-profile-2-c 2114e11bd for the next bitstream; the store-side twin of R-56; software rule S-25 (no capability store as a page's first access) until then`
 
 **What happens** (bf3db3175, read by the RTL lane and audited by a claim-auditor against the trace). The store syncer
