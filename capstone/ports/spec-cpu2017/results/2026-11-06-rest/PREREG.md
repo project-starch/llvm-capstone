@@ -151,3 +151,12 @@ perf/regemail sweep2-4):
 - The defect is not new on this branch. The production SDK used by every earlier Capstone perlbench and gcc
   measurement lacks the two fixes as well, and fails the same way.
 - Earlier perlbench results whose re/reg_email passed passed by allocation history.
+
+## Addendum 5 (6 Nov 16:10, before the boots): order, after the lead's "focus on gcc train"
+
+- **Board 1:** x264-ac is stopped now (its run-stage process group, checked by cmdline). Next comes gcc train
+  (arena Addendum 9), then x264 c3f, which is appended as line 4 only after its QEMU gate passes, by the rule of
+  x264-preempt.sh. The x264-preempt watcher is stopped before it acts.
+- **Board 2:** x264 Plain continues. `b2-seq.sh` is relaunched to wait on x264 Plain's driver (pid 1655525,
+  perf/rest/gt-b2.log), then runs R-32, THP mcf and perlbench c3f, as in Addendum 2. The ga2 step is gone from
+  board 2.

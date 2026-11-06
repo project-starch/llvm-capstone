@@ -267,3 +267,20 @@ about 23 ms per exit: CV_STEP 9.3, between steps 12.9, other ioctls 0.7. The ~17
 removes on QEMU may therefore be worth up to −390 s, not −30…−60 s, if fault exits cost as much as the average.
 Their split by exit kind was not measured. The pre-registered M3 bound stands; this widens the point estimate
 downward, to 3,850…4,225 s.
+
+## Addendum 9 (6 Nov 16:10, before the boot): gcc train moves to board 1
+
+The lead asked to focus on gcc train rather than wait for board 2. Board 2 is still in x264 Plain, whose end cannot be
+read from its console.
+- **The run.** The same stage (perf/ga2/stages/...-devmk-c2ac7, image c3f 5642377943d724c6, ga2's parameter
+  block) now runs on **board 1** as line 3 of perf/rest/b1.list. It runs through that board's running chain: kit
+  bkit27-gtq, C.5a, the module and launcher hashes of the ga2 driver.
+- **What is preempted.** Board 1's x264-ac boot is stopped mid-run for it. That boot is the old configuration
+  without the heap fix (rest Addendum 3).
+- **Board 2's ga2 driver** (pid 2024017, waiting, no board call made) is killed. Board 2's sequence now starts from
+  x264 Plain's driver.
+- **Grading:** `MX_ROOTS=$CAPSTONE_WORK/spec/board/out-rest-b1 ga2-grade.py`. The reference out-ga-b2 is on board 2,
+  so M3 becomes a cross-board comparison. Two notes on that:
+  - the 5 Nov gcc train pair (gcc train Plain on board 1, Temporal on board 2) took the same step;
+  - board-to-board run-time spread has not been measured for gcc train. It is reported beside M3.
+- M0-M3 are otherwise unchanged.
