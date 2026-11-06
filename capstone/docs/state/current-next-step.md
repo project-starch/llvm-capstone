@@ -20,8 +20,11 @@ show direct-register specialised read/write saving 61–74% versus exchange on
 the task backend. A generic-dispatch control also improves, while task entry
 alone remains more expensive. Cached musl getpid never enters Linux and is
 kept distinct from a forced scalar request. These probes do not migrate GCC;
-next performance work is the admitted scalar/flat-buffer musl ABI, preserving
-identity caching and checked-copy rules.
+the reviewed first slice is opt-in read/write/pread64/pwrite64 with nonzero
+requests up to 64 KiB, preserving caches and checked-copy rules. Select once
+before effects, return direct short results without refill, and require a
+validated loader feature announcement. Larger calls and vectors keep their
+existing paths. See the [reviewed migration plan](../plans/native-linux-task-integration.md#reviewed-first-musl-register-abi-slice).
 [Syscall measurement](../../runtime/virtual/tests/native-task/README.md#syscall-path-and-direct-register-measurement).
 
 Next close the remaining policy and qualification gates: native syscall
