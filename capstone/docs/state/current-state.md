@@ -31,6 +31,17 @@ malloc implementation entries differ only 3.16%. Next isolate allocator
 layout/alignment/group mapping amplification, preserving bounds and lifetimes.
 No runtime defaults changed. [Memory diagnosis](../../runtime/virtual/tests/native-integration/README.md#gcc-memory-work-diagnosis).
 
+Allocator attribution clarifies the cause: wider GCC pointers/records double
+195 line-note allocations (3200->6400 bytes) and 65 pointer arrays (2048->4096).
+Those two cohorts localize 124/163 extra mapping creations. Their raw allocator
+requests have no extra alignment padding. Total malloc request volume is 1.87x,
+not nearly equal despite the similar call count. Built mallocng matches pristine
+1.2.5 plus patches 0009/0010; group release-policy functions are unchanged.
+Four exact-output argument traces and repeated-sequence checks pass. Next isolate
+reuse for these cohorts while preserving object bounds/lifetimes; do not assign
+this mapping delta to brk or native task entry.
+[Allocator diagnosis](../../runtime/virtual/tests/native-integration/README.md#why-the-gcc-heap-creates-more-mappings).
+
 This is a bounded experiment, not completion of native Linux compatibility.
 Five SIGACTION and one IOCTL_BUF request are still refused in this unsignalled
 run; GCC tolerates them. The exchange ABI and ioctl entry remain. Next qualify

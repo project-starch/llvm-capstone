@@ -344,3 +344,73 @@ addresses account for the ELF text origin, and reported memory-function entry
 bytes were checked against the ELF. Aliased symbols must not be summed.
 
 [Samples, counts, provenance and evidence](../copyable-only/results/gcc-memory.json).
+
+
+## Why the GCC heap creates more mappings
+
+Argument tracing now separates larger application objects from allocator policy.
+Four complete debugger-assisted runs of the unchanged binaries pass exact output
+validation. A second run per arm adds caller probes and preserves the original
+probe sequence and arguments exactly. These traces are for attribution, not
+instruction-cost measurements: debugger stops perturb timing. Function-entry
+counts agree with the earlier uninstrumented compilation profiles.
+
+| Compilation-phase cohort | Plain | Capstone |
+|---|---:|---:|
+| Preprocessor line-note array, 195 allocations | 3,200 bytes | 6,400 bytes |
+| New mappings while allocating those arrays | 0 | 102 |
+| Pointer tables, 65 allocations | 2,048 bytes | 4,096 bytes |
+| New mappings while allocating those tables | 2 | 24 |
+
+The first caller is `_cpp_clean_line`, with inlined `add_line_note` growing a
+null array to 200 `_cpp_line_note` records. A record contains a pointer and an
+unsigned integer: its size increases from 16 to 32 bytes with the capability
+pointer and its alignment. The second cohort is pointer_map_create (two arrays,
+28 instances) and pointer_set_create (one array, nine instances). Each array
+holds 256 pointers; traced xcalloc operands are 256*8 plain and 256*16 Capstone.
+Thus these differences are directly visible in the application request sizes.
+
+For these two cohorts, Capstone's raw allocator sees exactly 6,400 and 4,096
+bytes: no alignment-padding amplification. Together their mapping-count deltas
+are 124 of the total 163 extra creations (76.1%). This localizes mapping churn;
+it is not 76.1% of instruction overhead, nor a controlled estimate of the request
+size's effect independent of all allocator state. Plain's 3,200-byte requests
+reuse existing groups during the measured phase. Different size classes and
+occupancy/retention history produce many fresh groups for the larger requests.
+
+Across all malloc-implementation entries, requested bytes total 2,639,513 plain
+versus 4,937,792 Capstone (1.87x), despite only 3.16% more calls. This is cumulative
+request volume, not live heap or RSS. It corrects the earlier emphasis on nearly
+equal call counts: the allocator receives substantially different-sized work.
+
+The allocator built for this GCC was checked file-for-file: every mallocng C
+file/header equals pristine musl 1.2.5 plus patches 0009 and 0010. Differences:
+
+- Group header 16 -> 32 bytes; selected edge size classes and size-to-class
+  accounting accommodate the larger header. Metadata structures also grow
+  because pointers are wider.
+- Allocations >=4096 use aligned_alloc with capability representability rounding;
+  this can add padding, but does not add bytes in the two dominant cohorts above.
+- Each object receives a bounded lifetime; free revokes it. Realloc checks
+  alignment and replaces lifetimes, potentially copying when an in-place resize
+  cannot satisfy the constraints. Free does not clear the payload.
+- Heap mappings go through __heap_mapping / __heap_unmapping and a mapping index.
+  Metadata uses mmap instead of brk; patch 0010 opens a metadata reservation's
+  accessible pages with one mprotect while retaining the guard.
+- The bodies of okay_to_free, free_group and nontrivial_free are byte-identical
+  to pristine musl. We have not introduced an aggressive replacement release
+  policy; altered sizes and group state change the outcomes of existing rules.
+
+Every plain mmap in this phase comes from alloc_slot (118). Native's 281 heap
+mappings come from alloc_slot (279) and the large-allocation path (two); there
+are no metadata mmap entries. Therefore the removed brk metadata path does not
+explain this phase's extra mapping count. No heap_remapping entry was observed
+in the baseline profile either.
+
+Next isolate group reuse for the identified 6,400-byte and 4,096-byte cohorts
+using matched request/free traces, including initial allocator state. Any reuse
+experiment must still revoke old object lifetimes and bound new objects. The
+trace does not justify narrowing capability pointers, disabling security checks,
+or globally changing mallocng retention without broader validation.
+
+[Allocator samples, source audit, callers and evidence](../copyable-only/results/gcc-allocator.json).
