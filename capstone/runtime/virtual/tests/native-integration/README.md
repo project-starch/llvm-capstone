@@ -1,3 +1,8 @@
+> On `experiment/native-gcc-preliminary`, the bounded GCC coverage extension
+> below now completes the unchanged test input. The original qualification
+> sections describe `prototype/copyable-only`; they are not a claim that all
+> syscalls or native process/signal semantics are implemented.
+
 # Copyable-only kernel syscall prototype
 
 Default off, single hart, root-only experimental `.dom` loader. This is the
@@ -123,3 +128,69 @@ is required before quoting any GCC speedup for Point 2. The microbenchmark
 reductions above do not establish a GCC improvement.
 
 [Exact outcomes, attribution and hashes](../copyable-only/results/gcc-native-check.json).
+
+
+## Preliminary native GCC result
+
+The experimental branch adds checked kernel handling for open/stat, sysinfo,
+read-only resource limits, signal masks and exchange-ABI vector I/O. Paths use
+private checked snapshots with the existing confinement policy. Vectors retain
+exchange capability authority, snapshot the offset array once and issue one
+Linux vector operation. Interrupted vector operations normalize internal restart
+codes to EINTR; failed output copying accounts for the published prefix.
+The extra `../../kernel-native-gcc.patch` factors/export kernel-buffer interfaces
+from Linux's actual stat/sysinfo/prlimit implementations. Apply it after the
+existing unpinned and native mprotect patches and rebuild Image plus module.
+Missing optional helper symbols return ENOSYS at use; this is not blanket
+module-load qualification of the extension on older kernels.
+
+Two fresh QEMU guests run launcher/native and native/launcher on the same
+kernel, module, GCC binary, input and reference. All four assembly outputs match
+the reference byte-for-byte. Means of two runs per arm:
+
+| Scope | Launcher | Native | Reduction |
+|---|---:|---:|---:|
+| Total instruction attempts | 58,461,488 | 54,077,206.5 | 7.499% |
+| Kernel + module | 32,541,147 | 29,008,302 | 10.855% |
+
+The kernel part decreases while module work increases. Startup and termination
+are included (profrun fork through child exit); guest boot and module loading
+are outside the windows. This is a small SPEC test input, not a large-compilation
+speedup or hardware timing result. Order effects are substantial: do not compare
+only the warm native run to the cold launcher. The generic discovery run also
+matched the reference; the final paired record uses native_fast=1, but this GCC
+binary still uses the exchange ABI, not the direct-register fast ABI.
+
+Five SDK SIGACTION requests and one IOCTL_BUF request remain explicitly refused
+in each native GCC run. GCC tolerates these on this unsignalled test; no fake
+success or launcher fallback is used. Therefore this result is a preliminary
+engineering signal, not full GCC/Linux syscall compatibility or a security
+qualification. Native entry still uses the ioctl trampoline. Caught signals,
+transparent restart, positional exchange vectors, arbitrary ioctl commands,
+process creation and direct-register nested capabilities remain outside scope.
+The refusal counter is not a complete inventory of every possible refusal.
+
+Astra reviewed the extension; the restart/prefix findings were corrected before
+the final measurements. Both dispatch modes pass 20 added file/vector/system
+checks and the 51 existing authority/ABI/protection checks. The latter's former
+openat-unsupported check now requires EACCES for a forbidden `/proc/self/mem`
+path; the unknown syscall must still return ENOSYS. This is not a rerun of the
+full RT matrix for the new vector operation.
+
+### Reproduce
+
+Source `capstone/tests/capstone-test-env.sh`; build the adapter against the new
+kernel and run `build.sh OUTPUT` with the existing copyable SDK. This additionally
+builds `gcc-coverage.dom`. Run it and `probe.dom` with native_fast=0 and 1 using
+the profile above. The coverage probe needs a writable granted working directory
+and creates `coverage.bin`.
+
+`gcc-preliminary.py` requires explicit paths via `--qemu`, `--images` (Image,
+rootfs.ext2, System.map), `--firmware`, `--module`, `--launcher`, `--gcc`,
+`--profrun`, `--input` (unchanged SPEC test t1.c), `--reference`, `--plugin` and
+`--out` (fresh directory). It creates both guests, rejects invalid profiling
+windows/nonzero exits/kernel diagnostics, validates exact output, and writes
+`summary.json` with per-run totals, attribution and input hashes. Keep benchmark
+binaries/inputs outside the repository under `$CAPSTONE_TMP_ROOT`.
+
+[Final measured inputs and qualification](../copyable-only/results/gcc-native-preliminary.json).

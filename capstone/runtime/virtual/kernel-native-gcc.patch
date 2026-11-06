@@ -1,0 +1,48 @@
+--- a/kernel/sys.c
++++ b/kernel/sys.c
+@@ -2791,3 +2791,15 @@
+ 	return 0;
+ }
+ #endif /* CONFIG_COMPAT */
++
++/* Native Capstone ABI frontend: kernel buffers, same Linux implementation. */
++int capstone_native_sysinfo(struct sysinfo *info)
++{
++    return do_sysinfo(info);
++}
++EXPORT_SYMBOL_GPL(capstone_native_sysinfo);
++int capstone_native_getrlimit(unsigned int resource, struct rlimit *limit)
++{
++    return do_prlimit(current, resource, NULL, limit);
++}
++EXPORT_SYMBOL_GPL(capstone_native_getrlimit);
+--- a/fs/stat.c
++++ b/fs/stat.c
+@@ -364,7 +364,7 @@
+ #  define INIT_STRUCT_STAT_PADDING(st) memset(&st, 0, sizeof(st))
+ #endif
+ 
+-static int cp_new_stat(struct kstat *stat, struct stat __user *statbuf)
++int capstone_native_stat(struct kstat *stat, struct stat *statbuf)
+ {
+ 	struct stat tmp;
+ 
+@@ -400,7 +400,17 @@
+ #endif
+ 	tmp.st_blocks = stat->blocks;
+ 	tmp.st_blksize = stat->blksize;
+-	return copy_to_user(statbuf,&tmp,sizeof(tmp)) ? -EFAULT : 0;
++	memcpy(statbuf, &tmp, sizeof(tmp));
++	return 0;
++}
++
++EXPORT_SYMBOL_GPL(capstone_native_stat);
++static int cp_new_stat(struct kstat *stat, struct stat __user *statbuf)
++{
++    struct stat tmp;
++    int rc = capstone_native_stat(stat, &tmp);
++    if (rc) return rc;
++    return copy_to_user(statbuf, &tmp, sizeof(tmp)) ? -EFAULT : 0;
+ }
+ 
+ SYSCALL_DEFINE2(newstat, const char __user *, filename,
