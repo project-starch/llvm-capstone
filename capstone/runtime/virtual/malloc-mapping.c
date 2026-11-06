@@ -61,13 +61,22 @@ static struct heap_leaf *leaf_for(size_t a, int create)
  *   - a fresh owner is issued from the same holder and published in the index.
  * The cache is bounded by entries and bytes. Past either bound, or for a mapping it does not know, the path is
  * the original munmap. The kernel's retirement of a mapping ends the holder with everything else. */
+#ifdef CAPSTONE_HEAP_MAPPING_REUSE_TEST_LIVE   /* saturation tests only: a small table, a power of two */
+#define MR_LIVE ((unsigned)CAPSTONE_HEAP_MAPPING_REUSE_TEST_LIVE)
+#else
 #define MR_LIVE 16384U          /* live mappings tracked (holders), a power of two */
+#endif
 #define MR_FREE 4096U           /* cached mappings (region pieces are not counted against MR_FREE_BYTES) */
 #define MR_FREE_BYTES (64UL << 20)
-struct mr_rec { size_t base, bytes; void *holder; unsigned piece; };
+/* piece: cut from a heap region, never unmapped on its own.
+ * noreuse: an mprotect touched the mapping, so its pages may no longer be PROT_READ|PROT_WRITE. It is never cached:
+ * the reuse path's memset would fault on a page it cannot write (review of #306, P2). A whole mapping is released by
+ * munmap, a piece is dropped. */
+struct mr_rec { size_t base, bytes; void *holder; unsigned piece, noreuse; };
 static struct mr_rec mr_live[MR_LIVE], mr_free[MR_FREE];
-static unsigned mr_nfree; static size_t mr_free_bytes;
-unsigned long __heap_reuse_hits, __heap_reuse_puts, __heap_reuse_spills;
+static unsigned mr_nfree, mr_nlive; static size_t mr_free_bytes;
+unsigned long __heap_reuse_hits, __heap_reuse_puts, __heap_reuse_spills, __heap_reuse_untracked,
+              __heap_reuse_protected, __heap_reuse_evicted;
 static unsigned mr_slot(size_t base) { return (unsigned)((base >> 12) * 2654435761UL) & (MR_LIVE - 1); }
 static struct mr_rec *mr_find(size_t base)
 {
@@ -80,21 +89,60 @@ static struct mr_rec *mr_find(size_t base)
 static void mr_remove(struct mr_rec *r)
 {   /* Backward-shift deletion keeps every probe chain intact. */
     unsigned i = (unsigned)(r - mr_live), j = i;
-    for (;;) {
+    /* At most MR_LIVE - 1 other slots: with every slot occupied there is no empty one to stop at (P1). */
+    for (unsigned n = 1; n < MR_LIVE; ++n) {
         j = (j + 1) & (MR_LIVE - 1);
         if (!mr_live[j].base) break;
         unsigned k = mr_slot(mr_live[j].base);
         if ((j > i && (k <= i || k > j)) || (j < i && k <= i && k > j)) { mr_live[i] = mr_live[j]; i = j; }
     }
-    mr_live[i] = (struct mr_rec){0, 0, 0};
+    mr_live[i] = (struct mr_rec){0, 0, 0, 0, 0};
+    --mr_nlive;
 }
 static int mr_record(size_t base, size_t bytes, void *holder, unsigned piece)
 {
     for (unsigned i = mr_slot(base), k = 0; k < MR_LIVE; i = (i + 1) & (MR_LIVE - 1), ++k)
-        if (!mr_live[i].base) { mr_live[i] = (struct mr_rec){base, bytes, holder, piece}; return 0; }
+        if (!mr_live[i].base) { mr_live[i] = (struct mr_rec){base, bytes, holder, piece, 0}; ++mr_nlive; return 0; }
+    ++__heap_reuse_untracked;
     return -1;   /* table full: this mapping is released by munmap, as without the switch */
 }
+/* Give every cached whole mapping back to the kernel; cached pieces stay (a piece is never unmapped alone). Returns
+ * how many it gave back. Called with index_mutex held. */
+static unsigned mr_evict_all(void)
+{
+    unsigned gave = 0;
+    for (unsigned i = mr_nfree; i-- > 0;) {
+        if (mr_free[i].piece) continue;
+        struct mr_rec e = mr_free[i];
+        mr_free[i] = mr_free[--mr_nfree]; mr_free_bytes -= e.bytes;
+        munmap(e.holder, e.bytes);
+        ++__heap_reuse_evicted; ++gave;
+    }
+    return gave;
+}
 #endif
+/* mprotect (mapping.c) reports every range it was asked to change, whether or not the service changed it. A tracked
+ * mapping it overlaps is marked noreuse; a cached one it overlaps leaves the cache at once: a whole mapping is
+ * unmapped, a piece is dropped (its bytes stay in the region, unused). */
+void __heap_protected(size_t address, size_t bytes)
+{
+#if CAPSTONE_HEAP_MAPPING_REUSE && !defined(CAPSTONE_HEAP_MAPPING_REUSE_TEST_KEEP_PROTECTED)
+    index_lock();
+    for (unsigned i = 0; i < MR_LIVE; ++i)
+        if (mr_live[i].base && mr_live[i].base < address + bytes && address < mr_live[i].base + mr_live[i].bytes)
+            mr_live[i].noreuse = 1;
+    for (unsigned i = mr_nfree; i-- > 0;)
+        if (mr_free[i].base < address + bytes && address < mr_free[i].base + mr_free[i].bytes) {
+            struct mr_rec e = mr_free[i];
+            mr_free[i] = mr_free[--mr_nfree];
+            if (!e.piece) { mr_free_bytes -= e.bytes; munmap(e.holder, e.bytes); }
+            ++__heap_reuse_protected;
+        }
+    index_unlock();
+#else
+    (void)address; (void)bytes;
+#endif
+}
 
 #if CAPSTONE_HEAP_MAPPING_REGION
 #if !CAPSTONE_HEAP_MAPPING_REUSE
@@ -144,9 +192,13 @@ void *__heap_mapping(size_t n)
     for (unsigned i = mr_nfree; i-- > 0;) {
         if (mr_free[i].bytes != bytes || (mr_free[i].base & (align - 1))) continue;
         struct mr_rec e = mr_free[i];
+        /* A piece is handed out only while tracked: an untracked one would be released by munmap, which would cut
+         * a hole in its region. With the table full it stays cached and a whole mapping is used instead. */
+        if (mr_record(e.base, e.bytes, e.holder, e.piece) && e.piece) continue;
         mr_free[i] = mr_free[--mr_nfree]; if (!e.piece) mr_free_bytes -= bytes;
-        if (mr_record(e.base, e.bytes, e.holder, e.piece)) { /* untracked from here: released by munmap */ }
+#ifndef CAPSTONE_HEAP_MAPPING_REUSE_TEST_NO_ZERO   /* negative control of the reuse checks ONLY */
         memset(e.holder, 0, bytes);
+#endif
         void *owner = heap_issue(e.holder, bytes);
         for (size_t a = e.base; a < e.base + bytes; a += 4096) {
             struct heap_leaf *leaf = leaf_for(a, 0);
@@ -161,11 +213,20 @@ void *__heap_mapping(size_t n)
 #endif
     void *raw=0; unsigned piece=0;
 #if CAPSTONE_HEAP_MAPPING_REGION
-    if (bytes <= RG_PIECE_MAX && (raw=rg_take(bytes,align))) piece=1;
+    if (bytes <= RG_PIECE_MAX && mr_nlive < MR_LIVE && (raw=rg_take(bytes,align))) piece=1;
+whole:
 #endif
     if (!piece) {
-        if (cap_vm_acquire(&grant,bytes,align,PROT_READ|PROT_WRITE,6,CAP_VM_HEAP))
+        if (cap_vm_acquire(&grant,bytes,align,PROT_READ|PROT_WRITE,6,CAP_VM_HEAP)) {
+#if CAPSTONE_HEAP_MAPPING_REUSE
+            /* Out of memory with whole mappings of other sizes cached: give them back and try once more (P3). */
+            index_lock();
+            unsigned gave = mr_evict_all();
+            index_unlock();
+            if (!gave || cap_vm_acquire(&grant,bytes,align,PROT_READ|PROT_WRITE,6,CAP_VM_HEAP))
+#endif
             return MAP_FAILED;
+        }
         raw=cap_vm_copyable(&grant);
     }
     size_t base=__builtin_capstone_cap_get_cursor(raw);
@@ -185,7 +246,14 @@ void *__heap_mapping(size_t n)
      * child does, and becomes the parent of all objects within the mapping. */
 #if CAPSTONE_HEAP_MAPPING_REUSE
     void *holder=heap_issue(raw,bytes), *owner=heap_issue(holder,bytes);
-    if (mr_record(base,bytes,holder,piece)) { /* untracked: released by munmap (a piece: dropped) */ }
+    if (mr_record(base,bytes,holder,piece)) {   /* untracked: released by munmap */
+#if CAPSTONE_HEAP_MAPPING_REGION
+        if (piece) {   /* never untracked (see the reuse path): end its lifetimes, leave it unused, map whole */
+            heap_end(holder, owner);
+            index_unlock(); ++__heap_piece_drops; piece=0; goto whole;
+        }
+#endif
+    }
 #else
     void *owner=heap_issue(raw,bytes);
 #endif
@@ -206,7 +274,7 @@ int __heap_unmapping(void *owner,size_t n)
 #if CAPSTONE_HEAP_MAPPING_REUSE
     {
         struct mr_rec *r = mr_find(base);
-        if (r && r->bytes == bytes && mr_nfree < MR_FREE && (r->piece || mr_free_bytes + bytes <= MR_FREE_BYTES)) {
+        if (r && !r->noreuse && r->bytes == bytes && mr_nfree < MR_FREE && (r->piece || mr_free_bytes + bytes <= MR_FREE_BYTES)) {
 #ifndef CAPSTONE_HEAP_MAPPING_REUSE_TEST_NO_REVOKE   /* positive control of the safety probe ONLY */
             heap_end(r->holder, owner);   /* every object, nested group and derivative of this mapping */
 #endif
