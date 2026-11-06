@@ -24,10 +24,14 @@ def main(argv):
     path = argv[1]
     expect = "prefix"
     if "--expect" in argv:
-        expect = argv[argv.index("--expect") + 1]
+        i = argv.index("--expect") + 1
+        expect = argv[i] if i < len(argv) else ""
     if expect not in ("prefix", "fixed"):
         print(f"--expect must be prefix or fixed, not {expect}"); return 2
-    text = open(path, errors="replace").read().replace("\r", "")
+    try:
+        text = open(path, errors="replace").read().replace("\r", "")
+    except OSError as e:
+        print(f"VOID: cannot read the capture {path}: {e}"); return 2
     begins = [m.start() for m in re.finditer(r"SUPTEST BEGIN R\b", text)]
     if not begins:
         print(f"VOID: no 'SUPTEST BEGIN R' in {path}"); return 2
