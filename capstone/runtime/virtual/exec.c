@@ -44,6 +44,9 @@ struct mapping {
      * copy-back would create backing the module never admitted. On dev since linear arenas
      * became lazy: the transport blocks were heap blocks. */
     uint64_t holder;
+    /* mprotect was applied inside this mapping: its page protections are no longer the ones a fresh
+     * grant has, so the mapping is never pooled (see the mapping pool below). */
+    int protected_range;
 };
 /* Registered mappings, one node each, in an AVL tree keyed by address. Registrations never
  * overlap, so the highest mapping starting at or below an address is the only one that can
@@ -458,18 +461,155 @@ static void transport_detach(uint64_t tid)
     }
     host_signals_attached = 0;
 }
-static long unmap_arena(uintptr_t base, size_t bytes)
+/* ---- Mapping pool (EXPERIMENTAL, default off: CAPSTONE_VM_MAPCACHE=<bytes>, K and M suffixes) ----
+ *
+ * Mallocng gives every group above half a page its own mapping and gives it back as soon as the
+ * group is empty, so a program that grows and shrinks a few groups maps and unmaps over and over:
+ * each pair is an mmap, a CV_ADD, a CV_RETIRE and a munmap, and every page touched in between is
+ * faulted, pinned, zeroed, unpinned and freed again. The pool keeps such a mapping instead and
+ * gives it to the next grant of the same size.
+ *
+ * What is pooled: a whole heap mapping (kind CV_MAP_HEAP) whose domain unmap asked for exactly its
+ * range, that nobody holds, whose protections were never changed. Anything else (application
+ * mmaps with their PROT_NONE padding, metadata, thread frames and stacks, the unmaps this launcher
+ * does itself) takes the ordinary path.
+ *
+ * The safe sequence is the module's (CV_PARK, CV_REVIVE; capstone_vm.c): the domain's access ends at
+ * the park (the arena's lifetime is retired, so a pointer from before it faults with a lifetime
+ * cause for ever), a pooled mapping is not in the registry (no service sees it: not unmap, not
+ * protect, not futex, not a delegated copy), and the revive overwrites the pinned pages with zeros
+ * (data and tags) before it mints a new lifetime and a new arena id. Bounded by bytes and by
+ * entries, oldest first; emptied at the first ENOMEM of a new mapping. Nothing is done at exit: the
+ * module retires every arena it still holds and Linux unmaps the rest. Pinned mode only: when the
+ * module refuses a park with EOPNOTSUPP (unpinned) the pool turns itself off. */
+#define MC_MAX_ENTRIES 256
+#define MC_BUCKETS 64
+struct mc_entry {
+    struct mapping m;
+    struct mc_entry *older, *newer;   /* parked order: oldest is evicted first */
+    struct mc_entry *chain;           /* same size bucket; also the free list */
+};
+static struct {
+    size_t cap, bytes;
+    unsigned entries;
+    struct mc_entry *oldest, *newest, *bucket[MC_BUCKETS], *spare;
+    struct mc_entry pool[MC_MAX_ENTRIES];
+    unsigned long parks, hits, misses, evictions, flushes, refused;
+} mc;
+static void mc_init(const char *text)
+{
+    char *end;
+#ifdef CAPSTONE_MAPCACHE_DEFAULT_BYTES
+    /* Test builds only (the gates run every runner unchanged, so the pool is switched on in the binary):
+     * the variable still wins, and CAPSTONE_VM_MAPCACHE=0 turns it off. */
+    if (!text) text = CAPSTONE_MAPCACHE_DEFAULT_BYTES;
+    else if (!strcmp(text, "0")) return;
+#endif
+    if (!text || !*text) return;
+    unsigned long long n = strtoull(text, &end, 10);
+    if (*end == 'k' || *end == 'K') { n <<= 10; ++end; }
+    else if (*end == 'm' || *end == 'M') { n <<= 20; ++end; }
+    if (*end || n < 8192 || n > CV_MAX_BYTES) {
+        fprintf(stderr, "capstone-vexec: CAPSTONE_VM_MAPCACHE=%s ignored (bytes, 8192 .. %lu, K or M suffix)\n",
+                text, (unsigned long)CV_MAX_BYTES);
+        return;
+    }
+    mc.cap = n;
+    for (unsigned i = 0; i < MC_MAX_ENTRIES; ++i) { mc.pool[i].chain = mc.spare; mc.spare = &mc.pool[i]; }
+}
+static unsigned mc_slot(size_t bytes) { return (bytes >> 12) % MC_BUCKETS; }
+static void mc_unlink(struct mc_entry *e)
+{
+    if (e->older) e->older->newer = e->newer; else mc.oldest = e->newer;
+    if (e->newer) e->newer->older = e->older; else mc.newest = e->older;
+    for (struct mc_entry **at = &mc.bucket[mc_slot(e->m.bytes)]; *at; at = &(*at)->chain)
+        if (*at == e) { *at = e->chain; break; }
+    mc.bytes -= e->m.bytes; --mc.entries;
+}
+static void mc_release(struct mc_entry *e) { e->chain = mc.spare; mc.spare = e; }
+/* Give a pooled mapping back to Linux, as unmap_arena does for an ordinary one. */
+static void mc_evict(struct mc_entry *e)
+{
+    mc_unlink(e);
+    if (!ioctl(device, CV_RETIRE, &e->m.id)) {
+        if (!munmap(e->m.address, e->m.bytes)) { reuse_address = e->m.address; reuse_bytes = e->m.bytes; }
+    }
+    ++mc.evictions;
+    mc_release(e);
+}
+static unsigned mc_flush(void)
+{
+    unsigned n = 0;
+#ifdef CAPSTONE_MAPCACHE_MUTANT_NOFLUSH
+    return 0;   /* Negative control: the pool is never given back under pressure. */
+#endif
+    while (mc.oldest) { mc_evict(mc.oldest); ++n; }
+    if (n) ++mc.flushes;
+    return n;
+}
+static void mc_trim(void)
+{
+#ifndef CAPSTONE_MAPCACHE_MUTANT_UNBOUNDED
+    while (mc.oldest && (mc.bytes > mc.cap || mc.entries > MC_MAX_ENTRIES)) mc_evict(mc.oldest);
+#else
+    /* Negative control: no bound. */
+#endif
+}
+/* Try to pool m (a registered, unheld mapping the domain asked to unmap). 1: pooled and removed
+ * from the registry; 0: take the ordinary path. */
+static int mc_park(struct mapping *m)
+{
+#ifdef CAPSTONE_MAPCACHE_MUTANT_PROT
+    /* Negative control: pool a mapping whose protections were changed. */
+#define MC_PROTECTED 0
+#else
+#define MC_PROTECTED m->protected_range
+#endif
+    if (!mc.cap || m->kind != CV_MAP_HEAP || MC_PROTECTED || m->bytes != m->visible ||
+        m->bytes > mc.cap / 2 || !mc.spare)
+        return 0;
+    if (ioctl(device, CV_PARK, &m->id)) {
+        if (errno == EOPNOTSUPP) { mc_flush(); mc.cap = 0; }
+        ++mc.refused;
+        return 0;
+    }
+    struct mc_entry *e = mc.spare;
+    mc.spare = e->chain;
+    e->m = *m;
+    map_remove(m);
+    e->older = mc.newest; e->newer = NULL;
+    if (mc.newest) mc.newest->newer = e; else mc.oldest = e;
+    mc.newest = e;
+    unsigned slot = mc_slot(e->m.bytes);
+    e->chain = mc.bucket[slot]; mc.bucket[slot] = e;
+    mc.bytes += e->m.bytes; ++mc.entries; ++mc.parks;
+    if (trace) fprintf(stderr, "CAPSTONE_VM_MAPCACHE_PARK base=0x%lx bytes=%zu id=%llu\n",
+                       (unsigned long)(uintptr_t)e->m.address, e->m.bytes, (unsigned long long)e->m.id);
+    mc_trim();
+    return 1;
+}
+/* A pooled mapping of exactly this size and an address that satisfies the alignment, newest first. */
+static struct mc_entry *mc_find(size_t bytes, size_t alignment)
+{
+    for (struct mc_entry *e = mc.bucket[mc_slot(bytes)]; e; e = e->chain)
+        if (e->m.bytes == bytes && !((uintptr_t)e->m.address & (alignment - 1))) return e;
+    return NULL;
+}
+static long unmap_arena_for(uintptr_t base, size_t bytes, int domain)
 {
     struct mapping *m = map_find(base);
     if (!m || m->visible != bytes || !m->heap || m->kind == CV_MAP_METADATA)
         return -EINVAL;
     if (m->holder) return -EBUSY;
+    if (domain && mc_park(m)) return 0;
     if (ioctl(device, CV_RETIRE, &m->id)) return -errno;
     if (munmap(m->address, m->bytes)) return -errno;
     reuse_address = m->address; reuse_bytes = m->bytes;
     map_remove(m);
     return 0;
 }
+/* The launcher's own unmaps (a thread's frame and stack) never enter the pool. */
+static long unmap_arena(uintptr_t base, size_t bytes) { return unmap_arena_for(base, bytes, 0); }
 static long protect_range(uintptr_t base, size_t bytes, int prot)
 {
     if (!bytes || (base & 4095) || (bytes & 4095) ||
@@ -478,6 +618,7 @@ static long protect_range(uintptr_t base, size_t bytes, int prot)
     uintptr_t at = m ? (uintptr_t)m->address : 0;
     if (!m || !m->heap || m->kind == CV_MAP_METADATA ||
         base - at > m->visible || bytes > m->visible - (base - at)) return -EINVAL;
+    m->protected_range = 1;
     return mprotect((void *)base, bytes, prot) ? -errno : 0;
 }
 
@@ -534,6 +675,30 @@ static long acquire_mapping(uint64_t tid, struct cv_step *step)
         (kind == CV_MAP_APPLICATION && rights != 7)) return -EINVAL;
     if (bytes < alignment) bytes = alignment;
     void *p;
+    if (kind == CV_MAP_HEAP && mc.cap) {
+        struct mc_entry *e = mc_find(visible, alignment);
+        if (e && !map_reserve()) {
+            struct cv_map r = {tid, (uintptr_t)e->m.address, visible, 6, 10, (uintptr_t)e->m.address, 1, e->m.id, 0};
+            if (!ioctl(device, CV_REVIVE, &r)) {
+                mc_unlink(e);
+                if (grants)
+                    fprintf(stderr, "CAPSTONE_VM_ADD_OK slot=%zu base=0x%lx bytes=%zu reg=%u perms=%u linear=%d\n",
+                            map_count, (unsigned long)(uintptr_t)e->m.address, visible, 10u, 6u, 1);
+                map_insert((struct mapping){.address = e->m.address, .bytes = visible, .visible = visible,
+                                            .id = r.id, .heap = 1, .kind = CV_MAP_HEAP});
+                if (trace) fprintf(stderr, "CAPSTONE_VM_MAPCACHE_HIT base=0x%lx bytes=%zu id=%llu\n",
+                                   (unsigned long)(uintptr_t)e->m.address, visible, (unsigned long long)r.id);
+                mc_release(e);
+                ++mc.hits;
+                return 0;
+            }
+            /* The module refused: nothing was handed out. Give the mapping back and map afresh. */
+            ++mc.refused;
+            mc_evict(e);
+        }
+        ++mc.misses;
+    }
+    for (int retried = 0;; retried = 1) {
     if (kind == CV_MAP_HEAP) {
         /* Keyed on the HEAP, not on the alignment value. What requires bytes == visible is the
          * heap's growth contract -- remap_mapping() matches on m->bytes == m->visible == old --
@@ -544,6 +709,7 @@ static long acquire_mapping(uint64_t tid, struct cv_step *step)
         bytes = visible;
         p = reserve_aligned(bytes, alignment);
     } else p = reserve(bytes);
+    if (!p && errno == ENOMEM && !retried && mc_flush()) continue;
     if (!p) return -errno;
     /* Padding remains inaccessible, including after later mprotect calls.
      * No capability reply exists until registration has succeeded. The range
@@ -552,7 +718,10 @@ static long acquire_mapping(uint64_t tid, struct cv_step *step)
         (prot != (PROT_READ | PROT_WRITE) && mprotect(p, visible, prot)) || grant(p, bytes, 10, rights, (uintptr_t)p, 1, tid, 0)) {
         int error = errno;
         munmap(p, bytes);
+        if (error == ENOMEM && !retried && mc_flush()) continue;
         return -error;
+    }
+    break;
     }
     /* grant() registered p under this address; a miss is a registry defect,
      * and the launcher has nothing to answer with. */
@@ -1192,6 +1361,11 @@ static int virtual_service(uint64_t tid, struct cv_step *step)
                     step_count(&step_services[12]), step_count(&step_services[13]),
                     step_count(&step_services[14]), step_count(&step_services[STEP_SERVICE_COUNT]));
             }
+            if (tid == 0 && mc.cap && (getenv("CAPSTONE_VM_STATS") || getenv("CAPSTONE_DELEGATE_STATS")))
+                fprintf(stderr, "CAPSTONE_VM_MAPCACHE cap=%zu parks=%lu hits=%lu misses=%lu evictions=%lu"
+                                " flushes=%lu refused=%lu pooled_entries=%u pooled_bytes=%zu\n",
+                        mc.cap, mc.parks, mc.hits, mc.misses, mc.evictions, mc.flushes, mc.refused,
+                        mc.entries, mc.bytes);
             /* The image's identity on a run that ENDS, not only on one that faults: a
              * transcript that carries no digest cannot be tied to the image it claims to be
              * from, and a judge that reads a probe's successful run (the putenv probe) has
@@ -1224,7 +1398,7 @@ static int virtual_service(uint64_t tid, struct cv_step *step)
     } else if (step->args[7] == CV_SERVICE_REMAP) {
         step->result = remap_mapping(tid, step);
     } else if (step->args[7] == CV_SERVICE_UNMAP) {
-        step->result = unmap_arena(step->args[0], step->args[1]);
+        step->result = unmap_arena_for(step->args[0], step->args[1], 1);
     } else if (step->args[7] == CV_SERVICE_TRANSPORT_DETACH) {
         /* The worker gives its transport back (pthread.c, before it unmaps the blocks). */
         transport_detach(tid);
@@ -1337,6 +1511,7 @@ int main(int argc, char **argv)
     start_ns = now_ns();
     trace = getenv("CAPSTONE_VM_TRACE") != NULL;
     grants = trace || getenv("CAPSTONE_VM_GRANTS") != NULL;
+    mc_init(getenv("CAPSTONE_VM_MAPCACHE"));
     struct capstone_application_descriptor_v2 desc;
     char resumed_path[64];
     if (resumed.magic) snprintf(resumed_path, sizeof resumed_path, "/proc/self/fd/%d", resumed.image);
