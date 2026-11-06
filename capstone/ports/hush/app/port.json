@@ -1,0 +1,26 @@
+{
+  "program": "busybox-hush",
+  "role": "full-application",
+  "title": "BusyBox hush noninteractive shell with a native capability spawn process backend",
+  "upstream": {
+    "version": "1.37.0",
+    "pin_source": {
+      "file": "capstone/ports/hush/app/prepare-sources.sh",
+      "grep": "VERSION=1.37.0"
+    }
+  },
+  "targets": [
+    "capstone-virtual"
+  ],
+  "workload": "General shell parsing and execution through native spawn: commands, pipelines, substitutions, functions, heredocs and control flow; tests/semantics.sh and tests/child.c are independent shell fixtures.",
+  "evidence": [
+    "capstone/ports/hush/app/results/native-task.json"
+  ],
+  "related": [
+    "capstone/ports/musl-capstone",
+    "capstone/runtime/virtual/tests/native-task"
+  ],
+  "status": "Host clean build and native exchange/direct shell fixtures PASS, including 100001-byte heredoc streaming and 100 redirection-error cleanup iterations. Exact source/image/platform hashes and limits are recorded in results/native-task.json.",
+  "note": "No fork/vfork backend or scalar shell fallback. Exact pinned /bin/sh file grant is supplied by the native loader. No interactive job control, caught traps, or in-place exec support; see README.md for the configured subset.",
+  "corpora": []
+}

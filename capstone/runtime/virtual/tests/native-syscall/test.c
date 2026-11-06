@@ -124,6 +124,9 @@ static int acquire(void *opaque, const struct ns_invocation *call, void **held)
     struct fixture *f = opaque;
     cn_u64 nr = call->descriptor->nr;
     if (f->shared_fs || f->inherited_filter) return -EPERM;
+    /* This reference provider has no descriptor-install transaction. Table
+     * membership alone must not authorize a newly implemented native service. */
+    if (nr == CAPSTONE_SYS_dup || nr == CAPSTONE_SYS_dup3) return -ENOSYS;
     if (nr == CAPSTONE_SYS_ioctl) {
 #ifndef NS_MUTATE_HIDDEN
         if (call->scalar[1] != 0x5450 && call->scalar[1] != 0x5451) return -ENOSYS;
@@ -175,7 +178,12 @@ static struct ns_completion issue(void *opaque, const struct ns_invocation *call
     if (f->replace_fd) f->fd[3] = &f->private_memory;
     if (f->revoke_issue) ++f->objects[1].generation;
     if (f->mutate_vectors) f->vectors[0].base = f->vectors[1].base;
-    if (f->force_completion) return f->completion;
+    if (f->force_completion) {
+        if (nr == CAPSTONE_SYS_nanosleep) memset(call->buffer[1].data, 0x37, 16);
+        if (nr == CAPSTONE_SYS_clock_nanosleep && call->buffer[3].data) memset(call->buffer[3].data, 0x37, 16);
+        if (nr == CAPSTONE_SYS_pselect6) memset(call->buffer[4].data, 0x37, 16);
+        return f->completion;
+    }
     if (nr == CAPSTONE_SYS_getpid) return (struct ns_completion){123, 0, 0};
     if (nr == CAPSTONE_SYS_openat) {
         f->fd[5] = f->grant[5] = held;
@@ -546,9 +554,33 @@ static void flock_directions(void)
           f->objects[1].data[96] == 0x5a);
     destroy(f);
 }
+static void interrupted_time_output(void)
+{
+    struct fixture *f = create();
+    f->force_completion = 1;
+    f->completion = (struct ns_completion){-EINTR, 0, 0};
+    request(f, CAPSTONE_SYS_nanosleep); capability(f, 10, 0); capability(f, 11, 1); enter(f);
+    struct ns_result r = dispatch(f);
+    CHECK("interrupted sleep returns checked remaining", r.value == -EINTR && r.bytes_out == 16 && f->objects[1].data[0] == 0x37);
+    request(f, CAPSTONE_SYS_clock_nanosleep); scalar(f, 0, 1); capability(f, 12, 0); capability(f, 13, 1); enter(f);
+    r = dispatch(f);
+    CHECK("relative clock sleep returns remaining", r.value == -EINTR && r.bytes_out == 16);
+    memset(f->objects[1].data, 0x5a, 16);
+    request(f, CAPSTONE_SYS_clock_nanosleep); scalar(f, 0, 1); scalar(f, 1, 1); capability(f, 12, 0); capability(f, 13, 1); enter(f);
+    r = dispatch(f);
+    CHECK("absolute sleep leaves remaining untouched", r.value == -EINTR && !r.bytes_out && f->objects[1].data[0] == 0x5a);
+    request(f, CAPSTONE_SYS_pselect6); capability(f, 14, 1); enter(f);
+    r = dispatch(f);
+    CHECK("interrupted select returns timeout", r.value == -EINTR && r.bytes_out == 16 && f->objects[1].data[0] == 0x37);
+    f->completion.value = -EINVAL; memset(f->objects[1].data, 0x5a, 16);
+    request(f, CAPSTONE_SYS_nanosleep); capability(f, 10, 0); capability(f, 11, 1); enter(f);
+    r = dispatch(f);
+    CHECK("invalid sleep leaves remaining untouched", r.value == -EINVAL && !r.bytes_out && f->objects[1].data[0] == 0x5a);
+    destroy(f);
+}
 int main(void)
 {
-    scalar_and_buffers(); lifetimes_and_restart(); resources(); vectors_and_missing_helpers(); exchange_adapter(); flock_directions();
+    interrupted_time_output(); scalar_and_buffers(); lifetimes_and_restart(); resources(); vectors_and_missing_helpers(); exchange_adapter(); flock_directions();
     printf("native syscall checks=%u failures=%u\n", checks, failures);
     return failures ? 1 : 0;
 }

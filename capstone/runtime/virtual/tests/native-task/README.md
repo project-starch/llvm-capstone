@@ -15,7 +15,106 @@ and loops through Linux return work after each transition. Existing checked-copy
 exchange ABI, confinement and providers remain. No linear ownership instructions
 are introduced. The model's 5 ms quantum supplies escape opportunities; this is
 not direct hardware timer delivery. Caught handlers, full restart semantics,
-clone/exec services, SMP and native audit/seccomp/tracing remain outside this slice.
+general clone, caller-replacing exec, SMP and native audit/seccomp/tracing remain outside this slice.
+
+## Native child processes
+
+The native task backend now accepts the existing packed `SPAWN` ABI for
+capability images and supports exact-child/any-admitted-child `wait4` with
+options zero or `WNOHANG`. The [process qualification](spawn-qualification.json)
+records independent parent/child tests in both SDK profiles. This does not
+implement general fork/vfork, caller-replacing exec, job control, or caught
+signal handlers.
+
+`kernel-native-spawn.patch` adds a dedicated bootstrap whose exact entrypoint,
+request ownership and clone flags are checked by `copy_thread`. The temporary
+shared mm is never exposed to scalar userspace: successful bootstrap must have
+a fresh mm and an attached native context. The request/completion is refcounted;
+exit inside exec also completes it. Parent interruption cancels and reaps the
+exact child before returning. This can wait for uninterruptible filesystem I/O.
+
+The frontend snapshots the complete bounded spawn block through checked
+access. A child gets private Linux files/fs/sighand, the original immutable
+directory grants, its current cwd, and only admitted descriptors. File actions
+run in order against that evolving child state. CLOEXEC is applied by real exec
+and reconciled with the admitted descriptor set. `dup`/`dup3` also preserve the
+FD boundary; replacing an unadmitted descriptor is refused.
+
+Execution uses a pinned file through Linux's `AT_EMPTY_PATH` bprm lifecycle,
+retaining execute permission, noexec, write exclusion and LSM checks. Native-only
+format dispatch refuses ordinary scalar ELF images, scripts and interpreter
+chains. No path is checked and then reopened by name. In-place exec remains
+refused because the architecture callback still owns the caller's context.
+
+Child bookkeeping holds PID objects, not just numeric IDs. Wait-any scans only
+those admitted children, so a Linux child inherited across initial exec is not
+implicitly granted. Autoreaped/detached PID entries are collected before new
+spawns; zombies retain their status until wait. Like Linux wait4, reaping occurs
+before checked status copy-out. Failed spawn reply publication cancels and
+reaps the newly created child before the caller can resume.
+
+A shell is an explicit optional executable grant: `capstone_vm.dom_shell=PATH`
+pins that file at initial admission and maps `/bin/sh` execution to it. Descendants
+inherit the same pinned grant. `capstone_vm.dom_null=1` separately grants the
+exact `/dev/null` device; neither option grants a directory. Both default off.
+The [hush port](../../../../ports/hush/app/README.md) supplies a noninteractive
+capability shell using native spawn and existing NOMMU state serialization.
+Its own qualification and the original SPEC comparisons are separate gates.
+
+Build the fixtures with `build-spawn.sh` and `build-spawn-lifecycle.sh` after
+sourcing the test environment. The latter needs both SDK compiler paths and
+`CROSS_COMPILE`; run `spawn-driver` on each resulting `.dom` image in the native
+QEMU guest. The scalar driver is a test supervisor, not an application syscall
+or spawn fallback. Raw artifacts remain external. Bootstrap-only ptrace races
+and cancellation during blocked bootstrap filesystem I/O are explicitly
+**not** established by the post-exec parent-death and ptrace tests.
+
+## Native directory, duplication and timer services
+
+The [service qualification](directory-time-qualification.json) records 94 directory,
+36 descriptor-duplication and 33 timer/select checks in each SDK profile, all
+passing on the same frozen kernel. These services close observed syscall gaps;
+they do not establish a passing SPEC Perl comparison.
+
+`native-directory-dom.h` resolves checked pathname snapshots under the existing
+pinned grants. It supplies mkdirat, directory removal, path chmod/truncate,
+symlink creation, final-link metadata/readlink, regular-file linkat with flags
+zero, and getdents64 on admitted descriptors. Opening or traversing a symlink
+remains refused. Hard links retain Linux's protected-hardlink, mount and LSM
+checks; path chmod refuses device pins. Directory iteration preserves Linux's
+record layout, continuation offsets, shared file position and partial results.
+The duplication tests verify the requested destination return value, descriptor
+authority, replacement, CLOEXEC and same-descriptor behavior.
+
+`kernel-native-time.patch` and `native-time-dom.h` use Linux timers and readiness
+polling with checked kernel buffers. The guest tests cover relative/absolute
+expiry, invalid timeouts, pipe readiness, descriptor refusal and temporary mask
+restoration. Interrupted output marshalling has separate host tests; caught
+signals and automatic restart remain outside this qualification. The dispatcher
+passes 299 sanitizer checks and ten negative controls. Fresh installation of all
+six kernel patches and 20 qualification-helper tests also pass.
+
+Build and run all three fixtures with explicit SDK and platform paths:
+
+```sh
+source capstone/tests/capstone-test-env.sh
+# Set CAPSTONE_EXCHANGE_CC, CAPSTONE_NATIVE_CC, PROBES, QEMU, IMAGES and FIRMWARE.
+bash capstone/runtime/virtual/tests/native-task/build-directory.sh "$PROBES"
+bash capstone/runtime/virtual/tests/native-task/build-dup.sh "$PROBES"
+bash capstone/runtime/virtual/tests/native-task/build-time.sh "$PROBES"
+python3 capstone/runtime/virtual/tests/native-task/run-directory.py \
+  --qemu "$QEMU" --images "$IMAGES" --firmware "$FIRMWARE" \
+  --probes "$PROBES" --dup-probes "$PROBES" --time-probes "$PROBES" \
+  --out "$CAPSTONE_TMP_ROOT/native-task/directory-services-run"
+```
+
+The runner uses the shared QEMU lock and refuses a missing test environment.
+`--runner PATH` selects another current `run-staged.py` when the build host has
+separate tool copies. The qualification retains prior harness failures and the
+corrected zero-size readlink fixture expectation: musl returns zero through its
+private one-byte probe, while the raw syscall returns EINVAL. Raw logs, binaries
+and source snapshots remain outside Git under
+`$CAPSTONE_TMP_ROOT/native-task/directory-time-qualification-final`.
 
 ## Native cwd, pipe and signal repair
 
@@ -74,12 +173,10 @@ output comparison correctly fails. This confirms repair of the cwd blocker
 while exposing the subprocess blocker. The other eight entries were not rerun
 on this repaired kernel, and the original full-campaign record stays unchanged.
 
-Native subprocess support remains a separate milestone. Musl `popen` starts
-`/bin/sh -c`, while this branch has neither a capability-built shell nor native
-clone/exec/wait closure. See the
-[process implementation requirements](../../../../docs/plans/native-linux-task-integration.md#native-subprocess-closure)
-before adding a spawn implementation. The original SPEC inputs and comparator
-remain the acceptance criterion.
+That repair did not yet supply subprocesses. The subsequent native child
+process implementation above closes the spawn/wait slice; general clone and
+caller-replacing exec remain separate work. The original SPEC inputs and
+comparator remain the application acceptance criterion.
 
 ## Full SPEC test-input qualification
 

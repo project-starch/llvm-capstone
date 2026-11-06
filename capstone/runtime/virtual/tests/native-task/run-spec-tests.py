@@ -15,6 +15,7 @@ import re
 import shlex
 import shutil
 import subprocess
+import sys
 import time
 
 
@@ -73,7 +74,37 @@ def receipt_errors(output, stem, statuses, expected):
     return errors
 
 
-def gate_script(commands, images, compares):
+def live_output_functions():
+    # This observer runs in the scalar guest shell. It receives only the two
+    # current output filenames; it never executes inside the native task.
+    return """native_spec_live_pid=
+native_spec_live_copy() {
+    [ ! -f "$1" ] || cp -- "$1" "$3" 2>/dev/null || :
+    [ ! -f "$2" ] || cp -- "$2" "$4" 2>/dev/null || :
+}
+native_spec_live_watch() {
+    trap - EXIT
+    native_spec_live_sleep_pid=
+    trap 'trap - TERM INT HUP; if [ -n "$native_spec_live_sleep_pid" ]; then kill "$native_spec_live_sleep_pid" 2>/dev/null || :; fi; wait 2>/dev/null || :; exit 0' TERM INT HUP
+    while :; do
+        native_spec_live_copy "$@"
+        sleep 1 &
+        native_spec_live_sleep_pid=$!
+        wait "$native_spec_live_sleep_pid" || :
+        native_spec_live_sleep_pid=
+    done
+}
+native_spec_live_stop() {
+    if [ -n "$native_spec_live_pid" ]; then
+        kill "$native_spec_live_pid" 2>/dev/null || :
+        wait "$native_spec_live_pid" 2>/dev/null || :
+        native_spec_live_pid=
+    fi
+}
+"""
+
+
+def gate_script(commands, images, compares, shell=False, live_output=False):
     lines = [
         "#!/bin/sh", "set -eu",
         "trap 'echo SPEC_ALL_GATE_EXIT:$?; dmesg; echo VIRTUAL_STAGED_DONE' EXIT",
@@ -84,6 +115,25 @@ def gate_script(commands, images, compares):
         "[ ! -w /proc/sys/fs/binfmt_misc/status ] || echo 0 > /proc/sys/fs/binfmt_misc/status",
         "echo 0 > /proc/sys/kernel/randomize_va_space",
     ]
+    if live_output:
+        lines[2] = (
+            "trap 'gate_rc=$?; native_spec_live_stop; "
+            "echo SPEC_ALL_GATE_EXIT:$gate_rc; dmesg; echo VIRTUAL_STAGED_DONE' EXIT"
+        )
+        # Define cleanup before installing the EXIT trap, including early setup
+        # failures. The background observer explicitly clears that parent trap.
+        lines.insert(2, live_output_functions().rstrip())
+        lines.append("mkdir -p /mnt/results/live")
+
+    if shell:
+        # Provision only the selected executable outside the benchmark's cwd
+        # grant; no additional directory authority is implied by /bin/sh.
+        lines.extend([
+            "mkdir -p /tmp/native-shell",
+            "cp /mnt/vm/.native-shell /tmp/native-shell/hush.dom",
+            "chmod +x /tmp/native-shell/hush.dom",
+            "rm /tmp/spec-native/.native-shell",
+        ])
 
     def retain(name, required=True):
         path = relative_path(name)
@@ -96,10 +146,27 @@ def gate_script(commands, images, compares):
         for stream in ("stdout", "stderr"):
             parent = relative_path(command[stream]).parent
             lines.append("mkdir -p " + shlex.quote(str(parent)))
+        live_arguments = shlex.join([
+            command["stdout"], command["stderr"],
+            f"/mnt/results/live/{stem}-{index}-stdout",
+            f"/mnt/results/live/{stem}-{index}-stderr",
+        ])
+        if live_output:
+            lines.extend([
+                "native_spec_live_watch " + live_arguments + " &",
+                "native_spec_live_pid=$!",
+            ])
         lines.extend([
             "rc=0",
             shlex.join(command["argv"]) + " >" + shlex.quote(command["stdout"])
             + " 2>" + shlex.quote(command["stderr"]) + " || rc=$?",
+        ])
+        if live_output:
+            lines.extend([
+                "native_spec_live_stop",
+                "native_spec_live_copy " + live_arguments,
+            ])
+        lines.extend([
             f"echo {marker}:{index}:$rc",
             f'echo "$rc" > /mnt/results/{stem}-{index}.rc',
         ])
@@ -134,6 +201,10 @@ def main():
     parser.add_argument("--slots", type=int, default=1, choices=range(1, 33))
     parser.add_argument("--memory", default="8G")
     parser.add_argument("--comparators", type=Path, help="Official setup comparator manifest")
+    parser.add_argument("--shell", type=Path, help="Explicit capability shell executable grant for native spawn")
+    parser.add_argument("--null-device", action="store_true", help="Explicit pinned /dev/null grant")
+    parser.add_argument("--live-output", action="store_true",
+                        help="Diagnostic scalar watcher mirrors current stdout/stderr every guest second; not for performance measurements")
     args = parser.parse_args()
     if args.timeout <= 0:
         parser.error("--timeout must be positive")
@@ -155,6 +226,13 @@ def main():
             ("rootfs", args.images / "rootfs.ext2"), ("firmware", args.firmware),
         )
     }
+    if args.shell:
+        platform["shell"] = digest(args.shell)
+    platform["null_device_grant"] = args.null_device
+    platform["live_output"] = args.live_output
+    if args.live_output:
+        platform["timing_note"] = "Live output observer enabled; elapsed times are diagnostic, not performance measurements."
+        print("run-spec-tests: --live-output is diagnostic; elapsed times are not performance measurements", file=sys.stderr)
     write_json(output / "platform.json", platform)
     rows = []
     for bench in benchmarks:
@@ -203,17 +281,27 @@ def main():
         for name in expected_outputs:
             if (stage / relative_path(name)).exists():
                 raise ValueError(f"Output already exists in prepared stage: {bench}/{name}")
+        if args.shell:
+            if (stage / ".native-shell").exists():
+                raise ValueError("Reserved shell staging filename is already in the workload")
+            shutil.copy2(args.shell, stage / ".native-shell")
         write_json(directory / "inputs.json", {
             str(path.relative_to(stage)): digest(path)
             for path in sorted(stage.rglob("*")) if path.is_file()
         })
-        (stage / "gate.sh").write_text(gate_script(commands, images, compares))
+        (stage / "gate.sh").write_text(gate_script(
+            commands, images, compares, shell=bool(args.shell), live_output=args.live_output,
+        ))
         flags = (
             "capstone_vm.native_task=1 capstone_vm.native_io=1 capstone_vm.dom_binfmt=1 "
             "capstone_vm.native_dispatch=1 capstone_vm.checked_copy=1 "
             "capstone_vm.native_slot_transport=1 capstone_vm.unpinned=1 "
             f"capstone_vm.supervisor_slots={args.slots} capstone_vm.native_refused_trace=1"
         )
+        if args.shell:
+            flags += " capstone_vm.dom_shell=/tmp/native-shell/hush.dom"
+        if args.null_device:
+            flags += " capstone_vm.dom_null=1"
         command = [
             "python3", str(repository / "capstone/runtime/virtual/run-staged.py"),
             "--qemu", str(args.qemu.resolve()), "--images", str(args.images.resolve()),

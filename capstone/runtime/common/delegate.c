@@ -395,7 +395,8 @@ size_t capstone_delegate_result_bytes(uint64_t nr, unsigned index, size_t bytes,
                                       int64_t result) {
   if (result < 0) {
     if (result == -EINTR && ((nr == CAPSTONE_SYS_nanosleep && index == 1) ||
-                             (nr == CAPSTONE_SYS_clock_nanosleep && index == 3)))
+                             (nr == CAPSTONE_SYS_clock_nanosleep && index == 3) ||
+                             (nr == CAPSTONE_SYS_pselect6 && index == 4)))
       return bytes;
     return 0;
   }

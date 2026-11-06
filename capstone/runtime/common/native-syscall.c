@@ -184,6 +184,10 @@ static int prepare(struct ns_session *s, struct snapshot *p, struct ns_result *r
         struct capstone_delegate_arg effective = shape->args[i];
         /* SETLK/W only consume flock. Never require write authority or publish
          * a buffer after a successful side effect for these commands. */
+        if (d->nr == CAPSTONE_SYS_clock_nanosleep && i == 3 && (p->call.scalar[1] & 1)) {
+            p->call.scalar[i] = 0; /* Absolute sleeps ignore the remaining pointer. */
+            continue;
+        }
         if (d->nr == CAPSTONE_NR_FCNTL_LOCK && i == 2 && scalars[1] != NS_F_GETLK)
             effective.kind = CAPSTONE_ARG_IN;
         const struct capstone_delegate_arg *a = &effective;
@@ -255,7 +259,9 @@ static int output(struct ns_session *s, struct snapshot *p, struct ns_result *re
     const struct ns_descriptor *d = p->call.descriptor;
     size_t done;
     int rc;
-    if (result->value < 0) return 0;
+    if (result->value < 0 && result->value != -EINTR) return 0;
+    if (result->value < 0 && d->nr != CAPSTONE_SYS_nanosleep &&
+        d->nr != CAPSTONE_SYS_clock_nanosleep && d->nr != CAPSTONE_SYS_pselect6) return 0;
     if (d->route == NS_VECTOR) {
 #ifdef NS_MUTATE_IOV
         if (s->ops.snapshot_iov(s->opaque, s->context, &s->owner, &p->refs[1],
@@ -286,6 +292,7 @@ static int output(struct ns_session *s, struct snapshot *p, struct ns_result *re
         if ((cn_u64)result->value > total) return -EPROTO;
     }
     for (unsigned i = 0; i < shape->argc; ++i) {
+        if (d->nr == CAPSTONE_SYS_clock_nanosleep && i == 3 && (p->call.scalar[1] & 1)) continue;
         if (d->nr == CAPSTONE_NR_FCNTL_LOCK && p->call.scalar[1] != NS_F_GETLK) continue;
         if (!writes(shape->args[i].kind) || !p->call.buffer[i].data) continue;
         size_t n = capstone_delegate_result_bytes(d->nr, i, p->call.buffer[i].length, result->value);

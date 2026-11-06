@@ -114,7 +114,9 @@ static bool native_supported(u64 nr)
     switch (nr) {
     case CAPSTONE_SYS_read: case CAPSTONE_SYS_write:
     case CAPSTONE_SYS_pread64: case CAPSTONE_SYS_pwrite64:
+    case CAPSTONE_SYS_getdents64:
     case CAPSTONE_SYS_close: case CAPSTONE_SYS_lseek:
+    case CAPSTONE_SYS_dup: case CAPSTONE_SYS_dup3:
     case CAPSTONE_NR_FCNTL_LOCK: case CAPSTONE_SYS_fcntl:
     case CAPSTONE_SYS_fsync: case CAPSTONE_SYS_fdatasync:
     case CAPSTONE_SYS_ftruncate: case CAPSTONE_SYS_unlinkat:
@@ -124,6 +126,9 @@ static bool native_supported(u64 nr)
     case CAPSTONE_SYS_getgid: case CAPSTONE_SYS_getegid:
     case CAPSTONE_SYS_clock_gettime:
     case CAPSTONE_SYS_sched_yield:
+    case CAPSTONE_SYS_nanosleep: case CAPSTONE_SYS_clock_nanosleep: case CAPSTONE_SYS_pselect6:
+    case CAPSTONE_SYS_mkdirat: case CAPSTONE_SYS_fchmodat: case CAPSTONE_SYS_symlinkat:
+    case CAPSTONE_SYS_readlinkat: case CAPSTONE_SYS_truncate: case CAPSTONE_SYS_linkat:
     case CAPSTONE_SYS_openat: case CAPSTONE_SYS_newfstatat: case CAPSTONE_SYS_fstat:
     case CAPSTONE_SYS_sysinfo: case CAPSTONE_SYS_prlimit64:
     case CAPSTONE_NR_SIGACTION:
@@ -141,7 +146,9 @@ static int native_acquire(void *opaque, const struct ns_invocation *call, void *
      * register ABI. Refuse filtered tasks rather than skip their policy. */
     if (current->seccomp.mode != SECCOMP_MODE_DISABLED) return -EOPNOTSUPP;
     if (!native_supported(nr)) return -ENOSYS;
-    if (nr == CAPSTONE_SYS_openat || nr == CAPSTONE_SYS_newfstatat || nr == CAPSTONE_SYS_unlinkat) return 0;
+    if (nr == CAPSTONE_SYS_openat || nr == CAPSTONE_SYS_newfstatat || nr == CAPSTONE_SYS_unlinkat ||
+        nr == CAPSTONE_SYS_mkdirat || nr == CAPSTONE_SYS_fchmodat || nr == CAPSTONE_SYS_symlinkat ||
+        nr == CAPSTONE_SYS_readlinkat || nr == CAPSTONE_SYS_truncate || nr == CAPSTONE_SYS_linkat) return 0;
     if (!call->descriptor->fd_mask) return 0;
     if (call->scalar[0] > INT_MAX || !dom_fd_allowed(c, call->scalar[0])) return -EBADF;
     file = fget(call->scalar[0]);
@@ -197,6 +204,8 @@ static long native_rw(struct file *file, u64 nr, u64 offset, void *data, size_t 
 }
 #include "native-gcc-dom.h"
 #include "native-files-dom.h"
+#include "native-directory-dom.h"
+#include "native-time-dom.h"
 
 static struct ns_completion native_issue(void *opaque, const struct ns_invocation *call,
                                           void *held)
@@ -210,9 +219,39 @@ static struct ns_completion native_issue(void *opaque, const struct ns_invocatio
     extern int capstone_native_signal_action(unsigned, unsigned, unsigned);
     typeof(&capstone_native_signal_action) signal_action;
     if (native_task_value(nr, &rc)) goto done;
+    if (native_directory_issue(c, call, file, &rc)) goto done;
+    if (native_time_issue(c, call, &rc)) goto done;
     if (native_gcc_issue(c, call, file, &rc)) goto done;
     if (native_files_issue(c, call, file, &rc)) goto done;
     switch (nr) {
+#ifdef CV_TASK_BACKEND
+    case CAPSTONE_SYS_dup: {
+        extern int capstone_native_dupfd(unsigned long, struct file *, unsigned, unsigned);
+        mutex_unlock(&vm_lock);
+        rc = capstone_native_dupfd(0, file, 0, DOM_FDS);
+        mutex_lock(&vm_lock);
+        if (rc >= 0) set_bit(rc, c->dom_delegate->fds);
+        break;
+    }
+    case CAPSTONE_SYS_dup3: {
+        struct file *dst;
+        if (a[0] == a[1] || (a[2] & ~(u64)O_CLOEXEC)) { rc = -EINVAL; break; }
+        if (a[1] >= DOM_FDS) { rc = -EBADF; break; }
+        dst = fget(a[1]);
+        if (dst) {
+            fput(dst);
+            if (!dom_fd_allowed(c, a[1])) { rc = -EBADF; break; }
+        }
+        mutex_unlock(&vm_lock);
+        rc = replace_fd(a[1], file, a[2]);
+        mutex_lock(&vm_lock);
+        if (rc >= 0) {
+            set_bit(a[1], c->dom_delegate->fds);
+            rc = a[1];
+        }
+        break;
+    }
+#endif
     case CAPSTONE_NR_SIGACTION:
         if (!a[0] || a[0] > 64 || a[1] > CAPSTONE_SIGNAL_CAUGHT || a[2] > UINT_MAX) {
             rc = -EINVAL; break;
@@ -306,6 +345,7 @@ static __always_inline bool nf_regs_plain(struct cv_thread *t, u64 kinds, u64 po
     return !hi;
 }
 #include "native-process-dom.h"
+#include "native-spawn-dom.h"
 
 static int nf_authorize(struct cn_context *n, const struct cn_capref *ref, u64 bytes, bool write)
 {
@@ -397,6 +437,29 @@ static long native_service_direct_impl(struct context *c, struct cv_step *step)
         if (rc) return rc;
     }
     if (step->args[6] == CAPSTONE_SYS_pipe2) return native_pipe_direct(c, step);
+#ifdef CV_TASK_BACKEND
+    if (step->args[6] == CAPSTONE_NR_SPAWN || step->args[6] == CAPSTONE_SYS_wait4) {
+        struct cv_thread *t = c->main_thread;
+        struct cn_capref ref = {t->id, READ_ONCE(t->frame[82]), 10, 0}, status = ref, usage = ref;
+        u64 tags = READ_ONCE(t->frame[83]);
+        rc = ns_session_admit(c->native_session, ref.context_epoch);
+        if (!rc && step->args[6] == CAPSTONE_NR_SPAWN) {
+            if (!nf_regs_plain(t, tags, 1ULL << 10)) rc = -EINVAL;
+            else rc = native_spawn_call(c, &ref, 0, step->args[1]);
+        } else if (!rc) {
+            u64 expected = tags & ((1ULL << 11) | (1ULL << 13));
+            status.frame_slot = 11; usage.frame_slot = 13;
+            if (!nf_regs_plain(t, tags, expected) ||
+                (!(expected & (1ULL << 11)) && step->args[1]) ||
+                (!(expected & (1ULL << 13)) && step->args[3])) rc = -EINVAL;
+            else rc = native_wait_call(c, step->args[0], step->args[2],
+                expected & (1ULL << 11) ? &status : NULL, 0,
+                expected & (1ULL << 13) ? &usage : NULL, 0);
+        }
+        step->result = rc;
+        return 0;
+    }
+#endif
     if (!native_supported(step->args[6])) { step->result = native_refused(step->args[6]); return 0; }
     if (native_fast_try(c, step)) return 0;
     rc = ns_dispatch(c->native_session, READ_ONCE(c->main_thread->frame[82]), &result);
@@ -440,6 +503,21 @@ static long native_service(struct context *c, struct cv_step *step)
     if (e.nr == DOM_HELLO || e.nr == CAPSTONE_NR_SIGPOLL)
         return native_exchange_reply(c, &meta, &e, 0);
     if (e.nr == CAPSTONE_SYS_pipe2) return native_pipe_exchange(c, &meta, &exchange, &e);
+#ifdef CV_TASK_BACKEND
+    if (e.nr == CAPSTONE_NR_SPAWN || e.nr == CAPSTONE_SYS_wait4) {
+        long reply;
+        rc = ns_session_admit(c->native_session, meta.context_epoch);
+        if (!rc && e.nr == CAPSTONE_NR_SPAWN)
+            rc = native_spawn_call(c, &exchange, e.args[0], e.args[1]);
+        else if (!rc)
+            rc = native_wait_call(c, e.args[0], e.args[2],
+                e.args[1] ? &exchange : NULL, e.args[1],
+                e.args[3] ? &exchange : NULL, e.args[3]);
+        reply = native_exchange_reply(c, &meta, &e, rc);
+        if (reply && e.nr == CAPSTONE_NR_SPAWN && rc > 0) native_spawn_cancel(c, rc);
+        return reply;
+    }
+#endif
     if (dom_vector(e.nr)) {
         rc = native_gcc_vector(c, &e, &exchange);
         return native_exchange_reply(c, &meta, &e, rc);

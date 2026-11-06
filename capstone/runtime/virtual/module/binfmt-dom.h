@@ -719,4 +719,7 @@ out:
 }
 static struct linux_binfmt capstone_dom = {
     .module = THIS_MODULE, .load_binary = dom_load_binary,
+#ifdef CV_TASK_BACKEND
+    .capstone_native = true,
+#endif
 };

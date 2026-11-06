@@ -7,6 +7,12 @@
  * with no symlinks (including magic links) or mount transitions. Never open a
  * device before checking its inode. */
 #include <linux/fs_struct.h>
+static char *dom_shell;
+module_param(dom_shell, charp, 0400);
+MODULE_PARM_DESC(dom_shell, "trusted pinned native shell executable for /bin/sh (unset by default)");
+static bool dom_null;
+module_param(dom_null, bool, 0400);
+MODULE_PARM_DESC(dom_null, "explicit pinned /dev/null grant (default off)");
 static bool dom_wide_grants;
 module_param(dom_wide_grants, bool, 0444);
 MODULE_PARM_DESC(dom_wide_grants,
@@ -48,8 +54,8 @@ static int dom_extra_resources(struct dom_delegate *d)
 {
     struct file *f, *dev;
     int rc = 0;
-    if (!dom_wide_grants) return 0;
-    for (unsigned i = 0; i < DOM_EXTRA_DIRS; ++i) {
+    if (!dom_wide_grants && !dom_null) return 0;
+    for (unsigned i = 0; dom_wide_grants && i < DOM_EXTRA_DIRS; ++i) {
         f = filp_open(dom_dir_names[i], O_PATH | O_NOFOLLOW | O_DIRECTORY, 0);
         if (IS_ERR(f)) return PTR_ERR(f);
         if (!dom_disk_inode(file_inode(f))) rc = -EACCES;
@@ -59,7 +65,7 @@ static int dom_extra_resources(struct dom_delegate *d)
     }
     dev = filp_open("/dev", O_PATH | O_NOFOLLOW | O_DIRECTORY, 0);
     if (IS_ERR(dev)) return PTR_ERR(dev);
-    for (unsigned i = 0; i < DOM_DEVICES; ++i) {
+    for (unsigned i = 0; i < (dom_wide_grants ? DOM_DEVICES : 1); ++i) {
         f = file_open_root(&dev->f_path, dom_device_names[i] + 5, O_PATH | O_NOFOLLOW, 0);
         if (IS_ERR(f)) { rc = PTR_ERR(f); break; }
         if (f->f_path.mnt != dev->f_path.mnt || !S_ISCHR(file_inode(f)->i_mode) ||
@@ -85,6 +91,8 @@ static int dom_resources_init(struct context *c)
     struct dom_delegate *d;
     char *buf, *name;
     unsigned i;
+    int inherited = dom_spawn_resources(c);
+    if (inherited) return inherited < 0 ? inherited : 0;
     d = kzalloc(sizeof(*d), GFP_KERNEL);
     if (!d) return -ENOMEM;
     c->dom_delegate = d;
@@ -108,6 +116,16 @@ static int dom_resources_init(struct context *c)
             if (dom_stdio_file(f)) set_bit(i, d->fds);
             fput(f);
         }
+    }
+    if (dom_shell && *dom_shell) {
+        d->shell = filp_open(dom_shell, O_RDONLY | O_NOFOLLOW | O_CLOEXEC, 0);
+        if (IS_ERR(d->shell)) {
+            int rc = PTR_ERR(d->shell);
+            d->shell = NULL;
+            return rc;
+        }
+        if (!dom_disk_inode(file_inode(d->shell)) || !S_ISREG(file_inode(d->shell)->i_mode))
+            return -EACCES;
     }
     return dom_extra_resources(d);
 }

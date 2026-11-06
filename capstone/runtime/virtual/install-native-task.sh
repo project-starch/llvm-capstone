@@ -9,18 +9,39 @@ kernel=${1:?Prepared Linux source/build tree}
     echo 'Use a fresh disposable kernel tree; capstone driver already exists.' >&2
     exit 1
 }
-patch --dry-run -d "$kernel" -p1 < "$here/kernel-native-task.patch"
-patch --dry-run -d "$kernel" -p1 < "$here/kernel-native-files.patch"
-patch --dry-run -d "$kernel" -p1 < "$here/kernel-native-process.patch"
-# Stage before patching so missing source inputs fail without changing Linux.
+# The spawn patch builds on the task patch. Preflight the complete sequence on
+# disposable copies, rather than testing dependent patches against old files.
 stage=$(mktemp -d "${CAPSTONE_TMP_ROOT:-/tmp/capstone}/native-task-source.XXXXXX")
 trap 'rm -rf -- "$stage"' EXIT
-bash "$here/stage-adapter.sh" "$stage"
-sed -i 's/^obj-m += capstone_vm.o$/obj-y += capstone_vm.o/' "$stage/Makefile"
-patch -d "$kernel" -p1 < "$here/kernel-native-task.patch"
-patch -d "$kernel" -p1 < "$here/kernel-native-files.patch"
-patch -d "$kernel" -p1 < "$here/kernel-native-process.patch"
-mv "$stage" "$kernel/drivers/misc/capstone"
+patches=("$here/kernel-native-task.patch" "$here/kernel-native-files.patch"
+         "$here/kernel-native-process.patch" "$here/kernel-native-spawn.patch"
+         "$here/kernel-native-directory.patch" "$here/kernel-native-time.patch")
+python3 - "$kernel" "$stage/preflight" "${patches[@]}" <<'PYTHON'
+from pathlib import Path
+import shutil, sys
+source, target = map(Path, sys.argv[1:3])
+target.mkdir()
+for name in sys.argv[3:]:
+    for line in Path(name).read_text().splitlines():
+        if not line.startswith('--- a/'):
+            continue
+        relative = Path(line[6:])
+        original, copy = source / relative, target / relative
+        if original.is_file() and not copy.exists():
+            copy.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(original, copy)
+PYTHON
+for change in "${patches[@]}"; do
+    patch --dry-run -d "$stage/preflight" -p1 < "$change"
+    patch -d "$stage/preflight" -p1 < "$change"
+done
+# Stage before mutating Linux so missing frontend inputs also fail atomically.
+bash "$here/stage-adapter.sh" "$stage/adapter"
+sed -i 's/^obj-m += capstone_vm.o$/obj-y += capstone_vm.o/' "$stage/adapter/Makefile"
+for change in "${patches[@]}"; do
+    patch -d "$kernel" -p1 < "$change"
+done
+mv "$stage/adapter" "$kernel/drivers/misc/capstone"
 printf '\nobj-$(CONFIG_RISCV_CAPSTONE_TASK) += capstone/\n' >> "$kernel/drivers/misc/Makefile"
 "$kernel/scripts/config" --file "$kernel/.config" --disable SMP \
     --disable VIRT_CPU_ACCOUNTING_NATIVE --disable TICK_CPU_ACCOUNTING \

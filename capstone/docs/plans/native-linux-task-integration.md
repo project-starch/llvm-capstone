@@ -221,12 +221,22 @@ Linux policy, signal/cancellation, SMP or all-native syscall milestones.
 
 ## Native subprocess closure
 
+The direct capability-image spawn/wait slice is now implemented and passes the
+[QEMU process gates](../../runtime/virtual/tests/native-task/README.md#native-child-processes).
+The implementation uses a dedicated authenticated `kernel_clone` bootstrap,
+pinned native-only exec, inherited resource capsules and stable-PID waits.
+The original design requirements below remain the review checklist. A separate
+hush port replaces its NOMMU vfork/reexec boundaries with posix_spawn; shell and
+full Perl output qualification are distinct from the process fixture gate.
+Caller-replacing exec, general fork and caught handlers remain unsupported.
+
+
 The unchanged SPEC Perl test driver uses musl `popen`, which requests
 `posix_spawn("/bin/sh", ["sh", "-c", command], actions)` and then waits. The
 existing spawn wire format already carries argv/envp, ordered file actions,
 cwd actions and signal attributes. No new wire ABI is required to start this
 work. Cwd, pipes and default/ignore signals are independently qualified; they
-are not full process support. There is no capability-built shell in this tree.
+are not full process support. The new hush shell port is qualified separately from the kernel service.
 A conventional shell also needs fork/vfork or an explicitly ported spawn model.
 
 The first process slice should execute a capability image directly, inherit

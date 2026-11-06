@@ -201,7 +201,8 @@ class QualificationTests(unittest.TestCase):
         elif failure:
             self.fail(f"Unknown evidence mutation: {failure}")
 
-    def execute(self, failure=None, returncode=0, must_refuse=False):
+    def execute(self, failure=None, returncode=0, must_refuse=False, shell=None, null_device=False,
+                live_output=False):
         output = self.fresh_path("execution")
 
         def guest(command, **kwargs):
@@ -225,6 +226,9 @@ class QualificationTests(unittest.TestCase):
             "--prepared", str(self.prepared), "--qemu", str(self.qemu),
             "--images", str(self.images), "--firmware", str(self.firmware),
             "--comparators", str(self.official), "--out", str(output),
+            *(["--shell", str(shell)] if shell else []),
+            *(["--null-device"] if null_device else []),
+            *(["--live-output"] if live_output else []),
         ], guest)
         return result, output / "runs" / BENCHMARK
 
@@ -263,6 +267,97 @@ class QualificationTests(unittest.TestCase):
         execution = read_json(directory / "execution.json")
         self.assertEqual(execution["commands"], self.comparators[BENCHMARK]["commands"])
         self.assertEqual(execution["commands"][0]["stdout"], "new-0.out")
+
+    def test_explicit_shell_preserves_workload_and_records_grants(self):
+        shell = self.root / "shell.dom"
+        shell.write_bytes(b"synthetic capability shell fixture")
+        result, directory = self.execute(shell=shell, null_device=True)
+        self.assertEqual(result, 0)
+        self.assertEqual((directory / "stage/.native-shell").read_bytes(), shell.read_bytes())
+        self.assertEqual(read_json(directory / "inputs.json")[".native-shell"], digest(shell))
+        platform = read_json(directory.parent.parent / "platform.json")
+        self.assertEqual(platform["shell"], digest(shell))
+        self.assertTrue(platform["null_device_grant"])
+        commands = read_json(directory / "execution.json")["commands"]
+        self.assertEqual(commands, self.comparators[BENCHMARK]["commands"])
+        launch = read_json(directory / "command.json")
+        flags = launch[launch.index("--kernel-arg") + 1]
+        self.assertIn("capstone_vm.dom_shell=/tmp/native-shell/hush.dom", flags)
+        self.assertIn("capstone_vm.dom_null=1", flags)
+        gate = (directory / "stage/gate.sh").read_text()
+        self.assertLess(gate.index("rm /tmp/spec-native/.native-shell"), gate.index("CASE_BEGIN:0"))
+        self.assertEqual(self.validate(directory)[0], 0)
+
+    def test_live_output_is_optional_and_preserves_workload(self):
+        result, ordinary = self.execute()
+        self.assertEqual(result, 0)
+        platform = read_json(ordinary.parent.parent / "platform.json")
+        self.assertFalse(platform["live_output"])
+        self.assertNotIn("native_spec_live_watch", (ordinary / "stage/gate.sh").read_text())
+
+        result, observed = self.execute(live_output=True)
+        self.assertEqual(result, 0)
+        platform = read_json(observed.parent.parent / "platform.json")
+        self.assertTrue(platform["live_output"])
+        self.assertIn("not performance measurements", platform["timing_note"])
+        self.assertEqual(read_json(ordinary / "execution.json")["commands"],
+                         read_json(observed / "execution.json")["commands"])
+        self.assertEqual(read_json(ordinary / "execution.json")["image_commands"],
+                         read_json(observed / "execution.json")["image_commands"])
+        gate = (observed / "stage/gate.sh").read_text()
+        for marker in ("case-0", "case-1", "image-0"):
+            for stream in ("stdout", "stderr"):
+                self.assertIn(f"/mnt/results/live/{marker}-{stream}", gate)
+        self.assertEqual(self.validate(observed)[0], 0)
+
+    def test_live_watcher_copies_only_outputs_and_reaps(self):
+        # Run the actual generated observer in the host shell, using synthetic
+        # files. Poll for its first snapshot, then ensure periodic updates occur
+        # before stopping it. Its child must not inherit the gate's EXIT trap.
+        source_out, source_err = self.root / "out space", self.root / "err'quote"
+        source_out.write_text("first\n")
+        source_err.write_text("error\n")
+        unrelated = self.root / "private-input"
+        unrelated.write_text("must not be copied\n")
+        live = self.root / "live"
+        live.mkdir()
+        args = shlex.join([str(source_out), str(source_err),
+                           str(live / "stdout"), str(live / "stderr")])
+        script = "set -eu\ntrap 'echo PARENT_EXIT' EXIT\n" + self.runner.live_output_functions()
+        script += (
+            f"native_spec_live_watch {args} &\nnative_spec_live_pid=$!\n"
+            "observed_pid=$native_spec_live_pid\n"
+            f"while [ ! -f {shlex.quote(str(live / 'stdout'))} ]; do sleep 0.01; done\n"
+            f"printf 'second\\n' >> {shlex.quote(str(source_out))}\n"
+            f"while [ \"$(wc -l < {shlex.quote(str(live / 'stdout'))})\" -lt 2 ]; do sleep 0.01; done\n"
+            "native_spec_live_stop\n"
+            "if kill -0 \"$observed_pid\" 2>/dev/null; then exit 91; fi\n"
+            "test -z \"$native_spec_live_pid\"\n"
+        )
+        process = subprocess.Popen(["sh", "-c", script], text=True,
+                                   stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                   start_new_session=True)
+        try:
+            stdout, stderr = process.communicate(timeout=10)
+        except subprocess.TimeoutExpired:
+            # A broken watcher must not escape the test process tree.
+            import signal
+            os.killpg(process.pid, signal.SIGKILL)
+            process.communicate()
+            self.fail("live watcher did not stop")
+        self.assertEqual(process.returncode, 0, stderr)
+        self.assertEqual(stdout, "PARENT_EXIT\n")
+        self.assertEqual((live / "stdout").read_bytes(), source_out.read_bytes())
+        self.assertEqual((live / "stderr").read_bytes(), source_err.read_bytes())
+        self.assertEqual(sorted(p.name for p in live.iterdir()), ["stderr", "stdout"])
+        self.assertEqual(unrelated.read_text(), "must not be copied\n")
+
+    def test_shell_reserved_filename_cannot_replace_workload_input(self):
+        shell = self.root / "shell.dom"
+        shell.write_bytes(b"synthetic shell")
+        (self.prepared / BENCHMARK / "stage/.native-shell").write_bytes(b"original input")
+        with self.assertRaisesRegex(ValueError, "Reserved shell"):
+            self.execute(must_refuse=True, shell=shell)
 
     def test_generated_input_and_checksum_policies(self):
         record = read_json(self.prepared / "manifest.json")[BENCHMARK]
