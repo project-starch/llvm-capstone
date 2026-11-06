@@ -280,6 +280,18 @@ void *memset(void *dst, int c, size_t n)
 	unsigned char *d = dst;
 	unsigned long w = (unsigned char)c * 0x0101010101010101ul;
 	while (n && ((__UINTPTR_TYPE__)d & 7)) { *d++ = (unsigned char)c; n--; }
+#ifdef CAPSTONE_MEMSET_CAP_ZERO
+	/* perf/arena-cache, default off: zero through 16-byte null-capability stores, which write the granule's bytes as
+	   zero and its tag as clear, half the stores of 8-byte words. Only for c == 0 on whole aligned granules. */
+	if (!c && n >= 16) {
+		if (((__UINTPTR_TYPE__)d & 15) && n >= 8) { *(word_t *)d = 0; d += 8; n -= 8; }
+		for (; n >= 64; d += 64, n -= 64) {
+			cap_t *q = (cap_t *)d;
+			q[0] = 0; q[1] = 0; q[2] = 0; q[3] = 0;
+		}
+		for (; n >= 16; d += 16, n -= 16) *(cap_t *)d = 0;
+	}
+#endif
 	for (; n >= 32; d += 32, n -= 32) {
 		word_t *p = (word_t *)d;
 		p[0] = w; p[1] = w; p[2] = w; p[3] = w;
