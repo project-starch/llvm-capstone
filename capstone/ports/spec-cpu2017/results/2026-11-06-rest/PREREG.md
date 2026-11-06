@@ -160,3 +160,12 @@ perf/regemail sweep2-4):
 - **Board 2:** x264 Plain continues. `b2-seq.sh` is relaunched to wait on x264 Plain's driver (pid 1655525,
   perf/rest/gt-b2.log), then runs R-32, THP mcf and perlbench c3f, as in Addendum 2. The ga2 step is gone from
   board 2.
+
+## Addendum (6 Nov 16:11, before any board call): the board move is reverted
+
+The lead's correction: x264 Plain has at most about 2 h left on board 2, so gcc train waits for it there.
+Arena Addendum 9 and rest Addendum 5 are withdrawn before any board call.
+- **Board 2:** the ga2 driver is relaunched unchanged (perf/ga2/gt-run.sh 2) behind x264 Plain's driver, pid
+  1655525. b2-seq.sh waits on it again, then R-32, THP mcf and perlbench c3f.
+- **Board 1:** as rest Addendum 3. Line 3 of b1.list is x264 c3f again, and x264-preempt.sh is relaunched to stop
+  x264-ac once x264 c3f's QEMU gate passes.
