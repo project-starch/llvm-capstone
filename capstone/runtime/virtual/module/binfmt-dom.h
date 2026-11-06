@@ -21,6 +21,13 @@
 static unsigned long dom_last_base, dom_last_trampoline;
 module_param(dom_last_base, ulong, 0400);
 module_param(dom_last_trampoline, ulong, 0400);
+#ifdef CV_TASK_BACKEND
+static bool native_task;
+module_param(native_task, bool, 0444);
+MODULE_PARM_DESC(native_task, "task-owned architecture entry, built-in only, default off");
+#else
+#define native_task false
+#endif
 static bool dom_binfmt;
 module_param(dom_binfmt, bool, 0444);
 MODULE_PARM_DESC(dom_binfmt, "experimental root-only native .dom exec (default off)");
@@ -414,22 +421,74 @@ out:
     mutex_unlock(&vm_lock);
     return rc;
 }
+static void dom_context_destroy(void *private)
+{
+    struct context *c = private;
+#ifdef CV_RACE_TEST
+    if (rt.b && rt.b->context == c) { rt.b = NULL; rt.armed = false; rt.c = NULL; }
+#endif
+    ns_session_free(c->native_session);
+    if (c->native_context) kfree(c->native_context->bounce);
+    kfree(c->native_context);
+    dom_delegate_free(c);
+    context_destroy(c);
+}
 static int dom_release(struct inode *inode, struct file *f)
 {
-    if (!f->private_data) return 0;
-    {
-        struct context *c = f->private_data;
-#ifdef CV_RACE_TEST
-        /* The racer thread dies with its context. */
-        if (rt.b && rt.b->context == c) { rt.b = NULL; rt.armed = false; rt.c = NULL; }
-#endif
-        ns_session_free(c->native_session);
-        if (c->native_context) kfree(c->native_context->bounce);
-        kfree(c->native_context);
-    }
-    dom_delegate_free(f->private_data);
-    return vm_release(inode, f);
+    if (f->private_data) dom_context_destroy(f->private_data);
+    return 0;
 }
+#ifdef CV_TASK_BACKEND
+/* One transition per architecture-return iteration. Linux handles return work
+ * between transitions. Requests/replies remain in protected kernel state. */
+static void dom_task_step(void *private, struct pt_regs *regs)
+{
+    struct context *c = private;
+    struct cv_step *s = &c->dom_step;
+    unsigned long deadline = jiffies + CV_STEP_BUDGET_J;
+    long rc;
+    if (current->mm != c->mm || task_pid_nr(current) != c->dom_pid ||
+        current->ptrace || (read_thread_flags() & _TIF_SYSCALL_WORK)) {
+        force_exit_sig(SIGSYS);
+        return;
+    }
+    if (mutex_lock_interruptible(&vm_lock)) return;
+    rc = cv_step_locked(c, s, &deadline);
+    if (rc == -EINTR || rc == -EAGAIN) goto out;
+    if (rc) goto fault;
+    /* Diagnostic projection only; never restored as capability authority. */
+    regs->epc = s->pc;
+    regs->badaddr = s->address;
+    regs->cause = -1UL; /* no scalar Linux syscall restart of domain state */
+    s->reply = 0;
+    if (s->kind == 1) goto out;
+    if (s->kind == 4) {
+        rc = resolve(c, c->main_thread, ktime_get_ns() + CV_STEP_BUDGET_NS);
+        if (!rc) { c->main_thread->sfence_pending = true; goto out; }
+        goto fault;
+    }
+    if (s->kind != 3) { rc = -EFAULT; goto fault; }
+    rc = dom_service(c, s);
+    if (rc < 0 || c->main_thread->terminal) goto fault;
+    if (rc > 256) goto fault; /* never dispatch a scalar trampoline request */
+    if (rc > 0) {
+        slot_changed();
+        mutex_unlock(&vm_lock);
+        do_exit(((rc - 1) & 255) << 8);
+    }
+    goto out;
+fault:
+    pr_info("capstone_task: fault rc=%ld kind=%llu cause=%llu pc=0x%llx\n",
+            rc, s->kind, s->cause, s->pc);
+    force_exit_sig(SIGSEGV);
+out:
+    slot_changed();
+    mutex_unlock(&vm_lock);
+}
+static const struct riscv_capstone_ops dom_task_ops = {
+    .step = dom_task_step, .release = dom_context_destroy,
+};
+#endif
 static const struct file_operations dom_ops = {
     .owner = THIS_MODULE, .release = dom_release, .unlocked_ioctl = dom_ioctl,
 };
@@ -494,7 +553,8 @@ static int dom_load_binary(struct linux_binprm *bprm)
 {
     struct dom_image im = {0};
     struct file *ctxfile = NULL, *trampfile = NULL;
-    struct context *c;
+    struct context *c = NULL;
+    bool task_published = false;
     struct pt_regs *regs = current_pt_regs();
     unsigned long base, stack, startup, tramp, whole, part;
     void *block = NULL, *tail = NULL;
@@ -510,6 +570,8 @@ static int dom_load_binary(struct linux_binprm *bprm)
         bprm->envc > DOM_MAX_STRINGS - bprm->argc) return -E2BIG;
     if (native_dispatch && (!checked_copy || !native_slot_transport ||
         current->seccomp.mode != SECCOMP_MODE_DISABLED)) return -EOPNOTSUPP;
+    if (native_task && (current->ptrace || (read_thread_flags() & _TIF_SYSCALL_WORK)))
+        return -EOPNOTSUPP;
     rc = dom_parse(bprm->file, &im);
     if (rc) return rc;
     block = kvzalloc(DOM_LAUNCH_BYTES, GFP_KERNEL);
@@ -518,10 +580,12 @@ static int dom_load_binary(struct linux_binprm *bprm)
     /* Read the partial data page before the point of no return. */
     whole = im.data.p_filesz & PAGE_MASK; part = im.data.p_filesz - whole;
     if (part && (rc = dom_read(bprm->file, tail, part, im.data.p_offset + whole))) goto out;
-    trampfile = shmem_file_setup("capstone-trampoline", PAGE_SIZE, VM_NORESERVE);
-    if (IS_ERR(trampfile)) { rc = PTR_ERR(trampfile); trampfile = NULL; goto out; }
-    rc = kernel_write(trampfile, dom_trampoline, sizeof(dom_trampoline), &pos);
-    if (rc != sizeof(dom_trampoline)) { rc = rc < 0 ? rc : -EIO; goto out; }
+    if (!native_task) {
+        trampfile = shmem_file_setup("capstone-trampoline", PAGE_SIZE, VM_NORESERVE);
+        if (IS_ERR(trampfile)) { rc = PTR_ERR(trampfile); trampfile = NULL; goto out; }
+        rc = kernel_write(trampfile, dom_trampoline, sizeof(dom_trampoline), &pos);
+        if (rc != sizeof(dom_trampoline)) { rc = rc < 0 ? rc : -EIO; goto out; }
+    }
     rc = begin_new_exec(bprm);
     if (rc) goto out;
     setup_new_exec(bprm);
@@ -529,11 +593,16 @@ static int dom_load_binary(struct linux_binprm *bprm)
     if (rc) goto out;
     rc = dom_startup(bprm, block);
     if (rc) goto out;
-    ctxfile = anon_inode_getfile("capstone-dom", &dom_ops, NULL, O_RDWR);
-    if (IS_ERR(ctxfile)) { rc = PTR_ERR(ctxfile); ctxfile = NULL; goto out; }
-    rc = vm_open(NULL, ctxfile);
-    if (rc) goto out;
-    c = ctxfile->private_data;
+    if (native_task) {
+        rc = context_create(&c);
+        if (rc) goto out;
+    } else {
+        ctxfile = anon_inode_getfile("capstone-dom", &dom_ops, NULL, O_RDWR);
+        if (IS_ERR(ctxfile)) { rc = PTR_ERR(ctxfile); ctxfile = NULL; goto out; }
+        rc = vm_open(NULL, ctxfile);
+        if (rc) goto out;
+        c = ctxfile->private_data;
+    }
     c->dom_fd = -1;
     rc = dom_resources_init(c);
     if (rc) goto out;
@@ -587,10 +656,13 @@ static int dom_load_binary(struct linux_binprm *bprm)
     }
     mutex_unlock(&vm_lock);
     if (rc) goto out;
-    tramp = vm_mmap(trampfile, 0, PAGE_SIZE, PROT_READ | PROT_EXEC, MAP_PRIVATE, 0);
-    if (IS_ERR_VALUE(tramp)) { rc = tramp; goto out; }
-    fd = get_unused_fd_flags(O_CLOEXEC);
-    if (fd < 0) { rc = fd; goto out; }
+    tramp = 0;
+    if (!native_task) {
+        tramp = vm_mmap(trampfile, 0, PAGE_SIZE, PROT_READ | PROT_EXEC, MAP_PRIVATE, 0);
+        if (IS_ERR_VALUE(tramp)) { rc = tramp; goto out; }
+        fd = get_unused_fd_flags(O_CLOEXEC);
+        if (fd < 0) { rc = fd; goto out; }
+    }
     c->dom_pid = task_pid_nr(current);
     c->dom_fd = fd;
     WRITE_ONCE(dom_last_base, base);
@@ -606,14 +678,33 @@ static int dom_load_binary(struct linux_binprm *bprm)
      * uses no FP; begin_new_exec already reset thread/FPU state. */
     memset(regs, 0, sizeof(*regs));
     regs->status = SR_PIE | SR_UXL_64;
-    regs->epc = tramp; regs->sp = (bprm->p - 16) & ~15UL;
-    regs->s0 = fd; regs->s1 = native_dispatch ? CV_STEP_NATIVE : DOM_STEP; regs->s2 = DOM_PROTECT_DONE; regs->s3 = DOM_SYSCALL_DONE;
-    fd_install(fd, ctxfile); ctxfile = NULL;
+#ifdef CV_TASK_BACKEND
+    if (native_task) {
+        rc = riscv_capstone_attach(c, &dom_task_ops);
+        if (rc) goto out;
+        task_published = true;
+        regs->epc = base + im.entry;
+        regs->sp = stack + im.stack;
+        regs->cause = -1UL;
+    } else
+#endif
+    {
+        regs->epc = tramp; regs->sp = (bprm->p - 16) & ~15UL;
+        regs->s0 = fd; regs->s1 = native_dispatch ? CV_STEP_NATIVE : DOM_STEP; regs->s2 = DOM_PROTECT_DONE; regs->s3 = DOM_SYSCALL_DONE;
+        fd_install(fd, ctxfile); ctxfile = NULL;
+    }
     rc = 0;
 out:
+    if (native_task && c && !task_published) dom_context_destroy(c);
     if (ctxfile) fput(ctxfile);
     if (trampfile) fput(trampfile);
     kvfree(block); kfree(tail);
+#ifdef CV_TASK_BACKEND
+    /* Linux 6.1's ordinary post-PONR SIGSEGV is ptrace-suppressible. Never
+     * allow an attach during loader preparation to recover scalar execution. */
+    if (rc && native_task && bprm->point_of_no_return)
+        force_exit_sig(SIGSEGV);
+#endif
     return rc;
 }
 static struct linux_binfmt capstone_dom = {

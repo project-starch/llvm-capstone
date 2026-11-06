@@ -3,6 +3,10 @@
 #include <linux/module.h>
 #include <linux/of.h>
 #include <linux/cpu.h>
+#if defined(CONFIG_RISCV_CAPSTONE_TASK) && !defined(MODULE)
+#define CV_TASK_BACKEND 1
+#include <asm/capstone_task.h>
+#endif
 
 static bool copyable_exact_bounds;
 #include <linux/miscdevice.h>
@@ -1517,13 +1521,30 @@ static void run_x0(unsigned long frame, unsigned long action)
 /* The cause reported to the launcher for a refused CSRUNV: outside every RISC-V cause, so a judge
  * reading the fault line can tell it from any real one. */
 #define CV_CAUSE_REFUSED 0xcafe0001UL
+#if defined(CV_TASK_BACKEND) && defined(CV_TEST_HOOKS)
+/* Deliberate S-origin admission exception, once, to exercise CT + extable. */
+static bool task_refuse_once;
+module_param(task_refuse_once, bool, 0600);
+#endif
 static unsigned long run_event(struct cv_thread *t, unsigned long action)
 {
     WRITE_ONCE(t->frame[2], CV_EVENT_UNWRITTEN);
     /* The sentinel must reach memory before the switcher can write the record over it; a kernel
      * store still draining after the escape's write would turn a real event into a refusal. */
     asm volatile("fence rw,rw" ::: "memory");
-    run_x0(t->frame_pa, action);
+#ifdef CV_TASK_BACKEND
+    if (current->thread.capstone) {
+#ifdef CV_TEST_HOOKS
+        if (task_refuse_once) {
+            task_refuse_once = false;
+            action = ~0UL;
+        }
+#endif
+        if (riscv_capstone_run_user(t->frame_pa, action))
+            return CV_EVENT_UNWRITTEN;
+    } else
+#endif
+        run_x0(t->frame_pa, action);
     return READ_ONCE(t->frame[2]);
 }
 static unsigned long select_root(struct context *c)
@@ -3369,7 +3390,7 @@ out:
     mutex_unlock(&vm_lock);
     return rc;
 }
-static int vm_open(struct inode *inode, struct file *f)
+static int context_create(struct context **out)
 {
     struct context *c;
     struct context *existing;
@@ -3454,14 +3475,20 @@ static int vm_open(struct inode *inode, struct file *f)
             return error;
         }
     }
-    f->private_data = c;
+    *out = c;
     list_add(&c->link, &contexts);
     mutex_unlock(&vm_lock);
     return 0;
 }
-static int vm_release(struct inode *inode, struct file *f)
+static int vm_open(struct inode *inode, struct file *f)
 {
-    struct context *c = f->private_data;
+    struct context *c;
+    int rc = context_create(&c);
+    if (!rc) f->private_data = c;
+    return rc;
+}
+static int context_destroy(struct context *c)
+{
     unsigned long flags;
     struct cv_thread *t, *tmp;
     mutex_lock(&vm_lock);
@@ -3525,6 +3552,10 @@ static int vm_release(struct inode *inode, struct file *f)
     mutex_unlock(&vm_lock);
     return 0;
 }
+static int vm_release(struct inode *inode, struct file *f)
+{
+    return context_destroy(f->private_data);
+}
 static const struct file_operations ops = {
     .owner = THIS_MODULE, .open = vm_open, .release = vm_release, .unlocked_ioctl = vm_ioctl,
 };
@@ -3567,6 +3598,9 @@ static int __init init(void)
         symbol_put(capstone_native_mprotect);
     }
 
+#ifdef CV_TASK_BACKEND
+    if (native_task && (!native_dispatch || !unpinned)) return -EOPNOTSUPP;
+#endif
     if (unpinned_fast_sweep && !unpinned) return -EINVAL;
     if (unpinned_fast_fault && !unpinned) {
         pr_emerg("capstone_vm: unpinned_fast_fault requires unpinned=1\n");

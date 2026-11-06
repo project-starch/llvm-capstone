@@ -1,9 +1,12 @@
 # Native Linux task integration
 
-Status: design stage on `native/linux-task-integration`, based on the measured
-`experiment/native-gcc-preliminary` at `a13e2ffaa9a2`. No runtime behavior change
-or new native-task qualification is claimed. See the
-[architecture decision](../design/virtual-capstone/native-linux-tasks.md).
+Status: first task-return prototype implemented on `native/linux-task-integration`,
+based on measured `experiment/native-gcc-preliminary` at `a13e2ffaa9a2`.
+[Verified tests and matched GCC comparison](../../runtime/virtual/tests/native-task/README.md)
+cover core entry, default signals, blocking, accounting, copy races and output.
+The full first-milestone acceptance list remains open: policy integration,
+exhaustive lifetime and full state/raw-platform qualification are not complete.
+See the [architecture decision](../design/virtual-capstone/native-linux-tasks.md).
 
 ## Prerequisite: verify the entry/escape contract
 
