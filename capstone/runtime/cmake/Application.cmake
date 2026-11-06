@@ -1,6 +1,7 @@
 include_guard(GLOBAL)
 # The profile every application of the project is built for: virtual unless
 # the project or its cache says OFF (the physical profile).
+option(CAPSTONE_MUSL_NATIVE_IO "Opt-in loader-negotiated direct small I/O" OFF)
 option(CAPSTONE_APPLICATION_VIRTUAL "Use the virtual C runtime adapter (OFF: the physical profile)" ON)
 
 # A normal main(argc, argv), linked against the shared musl application ABI:
@@ -8,6 +9,9 @@ option(CAPSTONE_APPLICATION_VIRTUAL "Use the virtual C runtime adapter (OFF: the
 # capstone-domain toolchain and musl headers.
 
 function(capstone_configure_application target)
+  if(CAPSTONE_MUSL_NATIVE_IO AND NOT CAPSTONE_APPLICATION_VIRTUAL)
+    message(FATAL_ERROR "CAPSTONE_MUSL_NATIVE_IO requires the virtual task profile")
+  endif()
   cmake_parse_arguments(PARSE_ARGV 1 app "" "DATA_BYTES;STACK_BYTES;ARENA_BYTES;EXCHANGE_BYTES;GRANT_BYTES;CONTEXT_BYTES;CONTEXTS" "")
   if(app_UNPARSED_ARGUMENTS OR app_KEYWORDS_MISSING_VALUES)
     message(FATAL_ERROR "Invalid capstone_configure_application arguments")
@@ -61,6 +65,11 @@ function(capstone_configure_application target)
         "${capstone}/runtime/virtual/pthread.c"
         "${capstone}/runtime/virtual/fenv.c")
       target_compile_definitions(capstone-application-core PRIVATE CAPSTONE_RUNTIME_VIRTUAL=1)
+      if(CAPSTONE_MUSL_NATIVE_IO)
+        target_sources(capstone-application-core PRIVATE "${musl}/native-syscall.S")
+        target_compile_definitions(capstone-application-core PRIVATE
+          CAPSTONE_MUSL_NATIVE_IO=1 CAPSTONE_NATIVE_SYSCALL_ABI=1)
+      endif()
       target_compile_options(capstone-application-core PRIVATE
         "$<$<COMPILE_LANGUAGE:C>:SHELL:${virtual_codegen}>")
     else()

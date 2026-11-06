@@ -42,8 +42,14 @@ struct ctl {
 
 static long call(long nr, long fd, void *buf, long bytes)
 {
+#ifdef MUSL_IO_ROUTE
+    if (nr != 63) return -ENOSYS;
+    long result = read(fd, buf, bytes);
+    return result < 0 ? -errno : result;
+#else
     return __capstone_native_syscall(nr, (void *)(__uintcap_t)(unsigned long)fd, buf,
                                      (void *)(__uintcap_t)(unsigned long)bytes, 0, 0, 0);
+#endif
 }
 
 /* Thread B: domain code only. Registers and the stack are its own. */

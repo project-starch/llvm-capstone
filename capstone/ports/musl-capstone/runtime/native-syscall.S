@@ -19,7 +19,9 @@ __capstone_native_syscall:
     movc a3, a4
     movc a4, a5
     movc a5, a6
+    movc a6, zero
     mv a6, t0
+    movc a7, zero
     li a7, NS_SERVICE_NATIVE
     ecall
     ret

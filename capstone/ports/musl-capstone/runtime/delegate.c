@@ -1339,7 +1339,53 @@ long __capstone_delegate_hello(unsigned long entry_address, unsigned long code_b
  * failure after progress reports the bytes moved, as an interrupted transfer
  * does. Pipes, sockets and terminals keep the single round: there a short
  * count is the kernel's own answer, and another round could block. */
+#if defined(CAPSTONE_RUNTIME_VIRTUAL) && defined(CAPSTONE_MUSL_NATIVE_IO)
+#include <capstone/native-syscall-abi.h>
+extern long __capstone_native_syscall(long, void *, void *, void *, void *, void *, void *);
+static int dl_direct_io_ready(syscall_arg_t raw[CAPSTONE_DELEGATE_ARGS]) {
+  const struct capstone_launch_task *t = __capstone_launch_task();
+  size_t count = (size_t)(unsigned long)raw[2];
+  return t && t->native.abi == NS_ABI_VERSION &&
+         t->native.features == CAPSTONE_LAUNCH_NATIVE_IO &&
+         t->native.max_io == 65536 && !t->native.reserved && count && count <= 65536;
+}
+/* Scalar arithmetic defines the low 64 bits, not the upper payload. Build
+ * the strict wire representation without turning a malformed capability into
+ * an integer. Keep tagged inputs intact for the backend's shape rejection. */
+static syscall_arg_t dl_direct_scalar(syscall_arg_t input) {
+  unsigned long type;
+  syscall_arg_t output;
+  __asm__ volatile(".insn r 0x5b, 0x1, 0x04, %0, %1, x1"
+                   : "=r"(type) : "r"(input));
+  if (type != 7) return input;
+  __asm__ volatile("movc %0, zero\n\tmv %0, %1"
+                   : "=&r"(output) : "r"(input));
+  return output;
+}
+static long dl_direct_io(uint64_t nr, syscall_arg_t raw[CAPSTONE_DELEGATE_ARGS]) {
+  long result;
+  int positioned = nr == CAPSTONE_SYS_pread64 || nr == CAPSTONE_SYS_pwrite64;
+  dl_wire_acquire();
+  dl_reset();
+  /* Preserve the buffer and malformed scalar tags; canonicalize only actual
+   * scalar payloads. Unused arguments are explicit scalar zero. */
+  result = __capstone_native_syscall(nr, dl_direct_scalar(raw[0]), raw[1],
+                                    dl_direct_scalar(raw[2]),
+                                    positioned ? dl_direct_scalar(raw[3]) : 0, 0, 0);
+  dl_status = CAPSTONE_ROUND_DONE;
+  /* No fresh exchange signal block is published by direct completion. Never
+   * import the previous block again. Settle completed cancellation state and
+   * already queued events, but never replay the operation or refill a short IO. */
+  (void)dl_settle();
+  dl_wire_release();
+  return result;
+}
+#endif
+
 static long dl_transfer(uint64_t nr, syscall_arg_t raw[CAPSTONE_DELEGATE_ARGS]) {
+#if defined(CAPSTONE_RUNTIME_VIRTUAL) && defined(CAPSTONE_MUSL_NATIVE_IO)
+  if (dl_direct_io_ready(raw)) return dl_direct_io(nr, raw);
+#endif
   long first = dl_call(nr, raw);
   size_t want = (size_t)(unsigned long)raw[2];
   if (first <= 0 || (size_t)first >= want)

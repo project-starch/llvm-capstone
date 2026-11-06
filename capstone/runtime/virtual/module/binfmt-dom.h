@@ -23,10 +23,14 @@ module_param(dom_last_base, ulong, 0400);
 module_param(dom_last_trampoline, ulong, 0400);
 #ifdef CV_TASK_BACKEND
 static bool native_task;
+static bool native_io;
+module_param(native_io, bool, 0444);
+MODULE_PARM_DESC(native_io, "announce launch v3 direct small I/O ABI, rebuilt SDK required");
 module_param(native_task, bool, 0444);
 MODULE_PARM_DESC(native_task, "task-owned architecture entry, built-in only, default off");
 #else
 #define native_task false
+#define native_io false
 #endif
 static bool dom_binfmt;
 module_param(dom_binfmt, bool, 0444);
@@ -496,13 +500,19 @@ static const struct file_operations dom_ops = {
 static int dom_startup(struct linux_binprm *bprm, void *block)
 {
     struct dom_launch_header *h = block;
-    u32 *offsets = block + sizeof(*h);
-    unsigned long at = bprm->p, used = sizeof(*h) + (bprm->argc + bprm->envc) * sizeof(u32);
+    unsigned long header_bytes = sizeof(*h) + (native_io ? 16 : 0);
+    u32 *offsets = block + header_bytes;
+    unsigned long at = bprm->p, used = header_bytes + (bprm->argc + bprm->envc) * sizeof(u32);
     struct path pwd;
     char *cwd, *tmp;
     unsigned i;
     memcpy(h->magic, "CPLAUNCH", 8);
-    h->version = 2; h->argc = bprm->argc; h->envc = bprm->envc;
+    h->version = native_io ? 3 : 2;
+    if (native_io) {
+        u32 feature[4] = {1, 1, 65536, 0}; /* ABI, small IO, max bytes, reserved */
+        memcpy(block + sizeof(*h), feature, sizeof feature);
+    }
+    h->argc = bprm->argc; h->envc = bprm->envc;
     h->pid = task_tgid_vnr(current); h->ppid = task_ppid_nr_ns(current, task_active_pid_ns(current));
     h->uid = from_kuid_munged(current_user_ns(), current_uid());
     h->euid = from_kuid_munged(current_user_ns(), current_euid());

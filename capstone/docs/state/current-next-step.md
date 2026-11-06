@@ -19,13 +19,24 @@ Syscall microbenchmarks now isolate entry and argument ABI: 128 valid windows
 show direct-register specialised read/write saving 61–74% versus exchange on
 the task backend. A generic-dispatch control also improves, while task entry
 alone remains more expensive. Cached musl getpid never enters Linux and is
-kept distinct from a forced scalar request. These probes do not migrate GCC;
-the reviewed first slice is opt-in read/write/pread64/pwrite64 with nonzero
+kept distinct from a forced scalar request. These probe results are separate
+from the implemented first slice: opt-in read/write/pread64/pwrite64 with nonzero
 requests up to 64 KiB, preserving caches and checked-copy rules. Select once
 before effects, return direct short results without refill, and require a
 validated loader feature announcement. Larger calls and vectors keep their
 existing paths. See the [reviewed migration plan](../plans/native-linux-task-integration.md#reviewed-first-musl-register-abi-slice).
 [Syscall measurement](../../runtime/virtual/tests/native-task/README.md#syscall-path-and-direct-register-measurement).
+
+The first opt-in musl migration now implements that reviewed slice, with a
+validated launch-v3 feature announcement and strict scalar canonicalization.
+Fast/generic and feature-absent tests pass, as do 41 pipe and 41 regular-file
+race scenarios. Matched GCC objects produce exact output in four ABBA runs;
+total attempts change +0.0411%, kernel +0.0833%: no observed speedup. Separate
+route tracing finds only one 69-byte read eligible in this GCC input; its three
+writev calls and other recorded services remain exchange. Attribute remaining
+kernel work by service/phase before broadening the migration. Global v3 activation
+requires rebuilt SDKs; full signal/cancellation and Linux policy gates remain open.
+[Implementation, reproduction and evidence](../../runtime/virtual/tests/native-task/README.md#opt-in-musl-small-io-migration).
 
 Next close the remaining policy and qualification gates: native syscall
 audit/seccomp/tracing (currently rejected), full register/FP/bounds and raw-platform

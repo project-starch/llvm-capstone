@@ -3600,6 +3600,7 @@ static int __init init(void)
 
 #ifdef CV_TASK_BACKEND
     if (native_task && (!native_dispatch || !unpinned)) return -EOPNOTSUPP;
+    if (native_io && !native_task) return -EOPNOTSUPP;
 #endif
     if (unpinned_fast_sweep && !unpinned) return -EINVAL;
     if (unpinned_fast_fault && !unpinned) {
