@@ -85,6 +85,17 @@ struct cv_touch {
     __u64 address, bytes;
 };
 #define CV_TOUCH _IOW('V', 29, struct cv_touch)
+/* Mapping cache (exec.c, CAPSTONE_VM_MAPCACHE; EXPERIMENTAL, default off). The launcher keeps the
+ * Linux mapping of a heap arena the domain unmapped and hands the same backing to a later grant:
+ *   CV_PARK    the arena id. Ends the domain's access now (the arena's ancestor lifetime is retired,
+ *              so every capability to it is dead) but keeps the registration and the pages it
+ *              holds pinned. Pinned mode only (EOPNOTSUPP otherwise); the launcher then unmaps as
+ *              before. A parked arena is retired like any other by CV_RETIRE.
+ *   CV_REVIVE  a struct cv_map shaped as the reply grant CV_ADD would mint, with .id the parked
+ *              arena's id and address/bytes its range. Overwrites every pinned page with zeros (data
+ *              and tags), mints a new ancestor and gives the arena a new id, returned in .id. */
+#define CV_PARK _IOW('V', 30, __u64)
+#define CV_REVIVE _IOWR('V', 31, struct cv_map)
 /* The image file, by descriptor, before the launcher validates it: the module
  * denies writers to it (ETXTBSY, as Linux does for a running executable) until
  * the context is released, so the bytes validated are the bytes loaded. */

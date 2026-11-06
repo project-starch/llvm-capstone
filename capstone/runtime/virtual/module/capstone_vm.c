@@ -98,6 +98,14 @@ struct arena {
      * unreachable by the domain before its first entry. A second retire is not an error, but the
      * non-destroying path reports one, so it must be skipped rather than tolerated. */
     bool ancestor_retired;
+    /* Mapping cache (CV_PARK/CV_REVIVE). The launcher gave the domain's access up (the ancestor is
+     * retired, so every capability to the arena is dead) but keeps the Linux mapping and this
+     * registration, with the pages it already holds pinned, to hand the same backing to a later
+     * grant of the same size. A parked arena is invisible to every domain-facing lookup
+     * (arena_at): no fault resolves in it, no touch or thread frame names it. It still occupies its
+     * range (arena_overlaps), is swept by every collection like any pinned page, and is retired
+     * like any other arena at CV_RETIRE (the launcher's eviction) or at the context's release. */
+    bool parked;
 };
 struct context;
 struct cv_thread {
@@ -673,10 +681,10 @@ static struct arena *arena_below(struct context *c, unsigned long end)
     return best;
 }
 /* The arena containing address, or NULL. */
-static struct arena *arena_at(struct context *c, unsigned long address)
+static __always_inline struct arena *arena_at(struct context *c, unsigned long address)
 {
     struct arena *a = address == ULONG_MAX ? NULL : arena_below(c, address + 1);
-    return a && address - a->address < a->bytes ? a : NULL;
+    return a && !a->parked && address - a->address < a->bytes ? a : NULL;
 }
 /* A fault in the image's read+execute prefix. Linux resolves it from the
  * file, with fault-around and no pin, so it is not one of the adapter's fault
@@ -1555,6 +1563,149 @@ static int retire(struct context *c, struct arena *a, bool destroying)
     return 0;
 }
 
+/* ---- Mapping cache: CV_PARK and CV_REVIVE ----
+ *
+ * The launcher's mapping pool (exec.c) keeps the Linux mapping and this registration of a heap
+ * arena the domain has unmapped, and hands the same backing to a later grant of the same size.
+ * It saves the mmap and munmap, the arena record, and above all the page lifecycle (fault, pin,
+ * zero, tag clear, unpin, free) of every page the arena already holds. What it must not change is
+ * what the domain can observe:
+ *   - PARK ends the domain's access NOW: the arena's ancestor lifetime is retired, so every
+ *     capability derived from it (the grant, the allocator's mapping-wide owner, every object)
+ *     is dead, exactly as at CV_RETIRE. The arena then stops being visible to every
+ *     domain-facing lookup (arena_at).
+ *   - REVIVE hands the backing out again only after every pinned page has been overwritten with
+ *     zeros (a store clears the tags of the granules it writes, rule 1: data and tags go
+ *     together), under a NEW ancestor and a NEW arena id. A pointer from before the park names the
+ *     retired ancestor, so it still faults with a lifetime cause after the reuse, at the same
+ *     address.
+ *   - Pages not pinned are not resident (PARK and REVIVE both pin every resident page first, as
+ *     CV_RETIRE does; a native writer can populate a page of a parked VMA in between), so the new
+ *     grant reads zeros from them as from any fresh mapping.
+ * Pinned mode only: in unpinned mode the pages are not held, so there is nothing to clear in
+ * place and the launcher takes the ordinary path (EOPNOTSUPP). */
+#ifdef CV_TEST_HOOKS
+/* Negative controls, test build only: each removes exactly one guard and a gate must then fail. */
+static bool test_revive_skip_clear;     /* REVIVE leaves the previous contents (data and tags) in the pages */
+static bool test_revive_keep_ancestor;  /* PARK retires nothing: the old ancestor stays alive, so a stale pointer keeps working after the reuse */
+static bool test_revive_skip_pin;       /* REVIVE does not pin pages that became resident while parked: they are handed out uncleared */
+module_param(test_revive_skip_clear, bool, 0444);
+module_param(test_revive_keep_ancestor, bool, 0444);
+module_param(test_revive_skip_pin, bool, 0444);
+#define CV_MUTANT(flag) (flag)
+#else
+#define CV_MUTANT(flag) false
+#endif
+static unsigned long map_parks, map_revives, map_revive_pages;
+module_param(map_parks, ulong, 0444);
+module_param(map_revives, ulong, 0444);
+module_param(map_revive_pages, ulong, 0444);
+
+/* Overwrite a whole page: every granule is stored to twice, so the data is zero and no tag is left. */
+static void clear_page_full(struct page *page)
+{
+    unsigned long *p = page_address(page);
+    for (unsigned j = 0; j < PAGE_SIZE / sizeof(*p); j += 8) {
+        WRITE_ONCE(p[j], 0UL);     WRITE_ONCE(p[j + 1], 0UL);
+        WRITE_ONCE(p[j + 2], 0UL); WRITE_ONCE(p[j + 3], 0UL);
+        WRITE_ONCE(p[j + 4], 0UL); WRITE_ONCE(p[j + 5], 0UL);
+        WRITE_ONCE(p[j + 6], 0UL); WRITE_ONCE(p[j + 7], 0UL);
+    }
+}
+
+static int park(struct context *c, struct arena *a)
+{
+    unsigned long flags, old, status;
+    unsigned long free_before;
+    int error;
+    if (unpinned) return -EOPNOTSUPP;
+    if (a->parked || a->ancestor_retired || !a->linear || !a->lazy || a->rx_bytes || a->frames)
+        return -EINVAL;
+    if (arena_has_thread_frame(c, a)) return -EBUSY;
+    if (c->remapping) return -EBUSY;
+    /* Everything that can fail comes before the retire. */
+    error = pin_remaining(c, a, FOLL_FORCE | FOLL_NOFAULT);
+    if (error) return error;
+    if (!CV_MUTANT(test_revive_keep_ancestor)) {
+        free_before = node_free_count(c);
+        preempt_disable(); local_irq_save(flags);
+        old = select_root(c);
+        asm volatile(".insn r 0x5b, 1, 0x53, %0, %1, zero"
+                     : "=&r"(status) : "r"(a->ancestor) : "memory");
+        restore_root(old);
+        local_irq_restore(flags); preempt_enable();
+        if (status) return -EIO;
+        ++c->retired_flat;
+        if (node_free_count(c) > free_before) ++c->pushed_flat;
+        a->ancestor_retired = true;
+    }
+    a->parked = true;
+    ++map_parks;
+    return 0;
+}
+
+static int revive(struct context *c, struct cv_thread *t, struct cv_map *r)
+{
+    unsigned long flags, old, desc[CV_DESC_WORDS], ancestor, *slot, cleared = 0;
+    struct arena *a;
+    u64 id;
+    unsigned i;
+    if (unpinned) return -EOPNOTSUPP;
+    a = xa_load(&c->ids, r->id);
+    /* The same conditions as a reply grant at add(): a started context paused at a service, the
+     * heap's move-only shape (reg 10, read+write, cursor at the base) and exactly the range that was parked. */
+    if (!a || !a->parked || a->address != r->address || a->bytes != r->bytes ||
+        r->permissions != 6 || r->linear != 1 || r->reg != 10 || r->cursor != r->address ||
+        !t->started || t->event != 3 || t->reply_cap)
+        return -EINVAL;
+    if (c->next_id == U64_MAX) return -ENOSPC;
+    /* A page can have become resident since PARK without a fault this module saw (a native writer
+     * such as /proc/self/mem, which Linux serves through get_user_pages_remote). Pin it now, as
+     * PARK did, so the clearing below reaches every resident page of the arena. */
+    if (!CV_MUTANT(test_revive_skip_pin)) {
+        int error = pin_remaining(c, a, FOLL_FORCE | FOLL_NOFAULT);
+        if (error) return error;
+    }
+    if (ensure_nodes(c, 2 + CAP_REV_TABLE_RESERVE)) return -ENOMEM;
+    id = c->next_id + 1;
+    /* The new identity is published before the old one goes, so a failure leaves the arena parked. */
+    if (xa_err(xa_store(&c->ids, id, a, GFP_KERNEL_ACCOUNT))) return -ENOMEM;
+    /* Clear first: no capability to the arena exists (PARK retired the ancestor), so the pages are
+     * still the module's alone, and nothing can be minted over contents that were not cleared. */
+    if (!CV_MUTANT(test_revive_skip_clear)) {
+        for (i = 0; i < a->count; ++i) {
+            if (!a->pages[i]) continue;
+            clear_page_full(a->pages[i]);
+            ++cleared;
+        }
+    }
+    map_revive_pages += cleared;
+    xa_erase(&c->ids, a->id);
+    slot = t->frame + 8 + r->reg * 2;
+    slot[0] = 0;
+    slot[1] = 0;
+    desc[0] = r->address;
+    desc[1] = r->address + r->bytes;
+    desc[2] = r->permissions;     /* linear: move-only until the allocator derives a non-linear object */
+    desc[3] = r->cursor;
+    desc[4] = 0;
+    desc[5] = 0;
+    preempt_disable(); local_irq_save(flags);
+    old = select_root(c);
+    asm volatile(".insn r 0x5b, 1, 0x50, %0, %1, %2"
+                 : "=&r"(ancestor) : "r"(slot), "r"(desc) : "memory");
+    restore_root(old);
+    local_irq_restore(flags); preempt_enable();
+    a->ancestor = ancestor;
+    a->ancestor_retired = false;
+    a->parked = false;
+    a->id = id;
+    r->id = c->next_id = id;
+    t->reply_cap = true;
+    ++map_revives;
+    return 0;
+}
+
 #ifdef CV_GRANT_TXN
 struct grant_unmap_commit {
     struct context *context;
@@ -1584,7 +1735,7 @@ static int grant_transaction(struct context *c,
     list_for_each_entry(t, &c->threads, link)
         if (t->started) return -EOPNOTSUPP;
     a = xa_load(&c->ids, r->id);
-    if (!a || a->address != r->address || a->bytes != r->bytes ||
+    if (!a || a->parked || a->address != r->address || a->bytes != r->bytes ||
         a->rx_bytes || a->ancestor_retired) return -EINVAL;
     if (arena_has_thread_frame(c, a)) return -EBUSY;
     unmap = symbol_get(capstone_grant_unmap);
@@ -1836,7 +1987,7 @@ static int remap_begin(struct context *c, const struct cv_remap *r)
         !r->bytes || r->bytes > CV_MAX_REGION_BYTES || (r->bytes & ~PAGE_MASK))
         return -EINVAL;
     a = xa_load(&c->ids, r->id);
-    if (!a || !a->linear || arena_has_thread_frame(c, a)) return -EINVAL;
+    if (!a || a->parked || !a->linear || arena_has_thread_frame(c, a)) return -EINVAL;
     if (c->registered_bytes - a->bytes + r->bytes > CV_MAX_BYTES) return -ENOMEM;
     error = unpinned ? 0 : pin_remaining(c, a, FOLL_FORCE | FOLL_NOFAULT);
     if (error) return error;
@@ -3335,6 +3486,23 @@ thread_unwind:
         if (copy_from_user(&id, (void __user *)arg, sizeof(id))) { rc = -EFAULT; goto out; }
         a = xa_load(&c->ids, id);
         if (a) rc = retire(c, a, false);
+    } else if (op == CV_PARK) {
+        u64 id;
+        struct arena *a;
+        if (copy_from_user(&id, (void __user *)arg, sizeof(id))) { rc = -EFAULT; goto out; }
+        a = xa_load(&c->ids, id);
+        if (a) rc = park(c, a);
+    } else if (op == CV_REVIVE) {
+        struct cv_map r;
+        struct cv_thread *t;
+        if (copy_from_user(&r, (void __user *)arg, sizeof(r))) { rc = -EFAULT; goto out; }
+        t = find_thread(c, r.thread);
+        if (!t || t->terminal) { rc = -ESRCH; goto out; }
+        rc = revive(c, t, &r);
+        if (!rc && copy_to_user((void __user *)arg, &r, sizeof(r))) {
+            /* As CV_ADD: the grant was minted and its handle not delivered. */
+            t->terminal = true; rc = -EFAULT;
+        }
     } else if (op == CV_STATS) {
         node_stats(c);
         rc = copy_to_user((void __user *)arg, &c->stats, sizeof(c->stats)) ? -EFAULT : 0;

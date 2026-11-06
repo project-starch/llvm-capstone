@@ -260,6 +260,45 @@ The gp-free application's ordinary scalar-return call convention retains its
 image PCC. General JIT calls between separately bounded code mappings need a
 capability call/return ABI and are not claimed by the executable-context test.
 
+## Mapping pool (experimental, default off)
+
+mallocng gives every group above half a page its own mapping and gives it back as soon as the group is
+empty, so a program that grows and shrinks a few groups maps and unmaps over and over. Each pair is an
+mmap, a CV_ADD, a CV_RETIRE and a munmap, and every page touched in between is faulted, pinned, zeroed,
+unpinned and freed again. `CAPSTONE_VM_MAPCACHE=<bytes>` (K and M suffixes; read by the launcher, unset
+means off, nothing changes) makes the launcher keep such a mapping and give it to the next grant of
+exactly the same size. musl and the allocator's policy are untouched: the pool sits below them, at the
+MAP and UNMAP services.
+
+What is pooled: a whole heap mapping (kind heap) that the domain unmapped as a whole, that no worker
+holds as transport and whose protections were never changed. Application mmaps, metadata, thread frames
+and stacks, and the launcher's own unmaps take the ordinary path. The pool is bounded by bytes (the
+variable; no entry above half of it) and by 256 entries, oldest evicted first, and emptied at the first
+ENOMEM of a new mapping. Nothing is done at exit: the module retires every arena it still holds.
+
+The sequence is the module's, in two ioctls (`wire.h`). `CV_PARK` retires the arena's ancestor lifetime
+(every capability to it, the allocator's owner and every object, is dead from that moment, exactly as at
+CV_RETIRE), after pinning any resident page not yet pinned, and keeps the registration and the pinned
+pages. A parked arena is invisible to the domain (`arena_at`: no fault resolves, no touch or thread frame
+names it) and to the launcher's registry (no service sees it), but is swept by every collection like any
+pinned page. `CV_REVIVE` first pins any page that became resident since the park (a native writer such as the
+domain's own delegated pwrite to `/proc/self/mem` can populate one without a fault the module sees), then
+overwrites every pinned page with zeros (a store clears the tags of the granules it writes, so data and
+tags go together, rule 1), mints a new ancestor and gives the arena a new id. A
+pointer from before the park names the retired ancestor and still faults with cause 25 after the reuse.
+Pages that were never pinned are not resident and read zero as in any fresh mapping. Pinned mode only:
+`unpinned=1` answers EOPNOTSUPP, the launcher unmaps as before and switches the pool off.
+
+`run-mapcache.py` with `mapcache-contract.c` is the qualification (the gates run unchanged beside it).
+Its negative controls are the module's `test_revive_skip_clear`, `test_revive_keep_ancestor` and
+`test_revive_skip_pin` (hooks build) and a launcher built with `-DCAPSTONE_MAPCACHE_MUTANT_UNBOUNDED`, `_PROT` or `_NOFLUSH`;
+`-DCAPSTONE_MAPCACHE_DEFAULT_BYTES='"1M"'` builds a launcher with the pool on for the gates. Each
+control must fail the check it names. The pinned pages of pooled arenas stay resident until eviction
+or exit: peak pinned pages rise by the pool's resident part, and the runtime gate's `linux_pages_released`
+oracle (peak minus final pinned pages above 300) tolerates a cap of about 256K but not 1M. Known limit: a
+futex word is validated and then used after the service lock is dropped, as before the pool, so a waiter
+started on a mapping can outlive its park and see the address reused.
+
 ## Floating point
 
 Virtual-C applications run the F and D extensions in hardware. The compiler
