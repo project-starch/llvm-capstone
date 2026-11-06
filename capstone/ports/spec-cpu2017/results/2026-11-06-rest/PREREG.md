@@ -108,11 +108,11 @@ BEST, and every list path passes the chain stub. board-env-check passes for the 
 - outside about 9,500 s over 699,817 entries. CV_STEP 2,878 s, of which resolve 855; between steps 5,014 s; other
   ioctls 571 s; teardown 377 s;
 - exits by kind: 361,658 calls, 317,411 faults, 20,745 quantum;
-- **specdiff 1/2, outputs differ from the twin:** . R1 is therefore
+- **specdiff 1/2, outputs differ from the twin:** `t/re/reg_email ... FAILED--no leader found`. R1 is therefore
   VOID: a failed sub-test is not a valid run.
 
 **Cause, reproduced on the twin** (perf/regemail/sweep2, kit-profq, re/reg_email.t alone):
-- the -ac image ends with  at realloc+0x5b4 after 0.741e9 instructions, under 7 of 8
+- the -ac image ends with `domain fault cause=29` at realloc+0x5b4 after 0.741e9 instructions, under 7 of 8
   environments (board-path mimic, PAD 0..2048; only PAD=1024 passes);
 - this is the October defect (perl-regemail/FINDINGS.md). Its fixes, dev 348d9cf2c29c and de7cdacda737, are not
   ancestors of this branch's base 86f638759ecf.
