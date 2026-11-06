@@ -368,3 +368,12 @@ Its resident is None and its store is empty.
 **gcc train goes back to board 2** behind x264 Plain (driver pid 1655525), unchanged: perf/ga2/gt-run.sh 2.
 b2-seq.sh waits on it, then runs R-32, THP mcf and perlbench c3g, as in Addendum 9's revert. Addendum 10's move
 applies again once board 3 flashes.
+
+## Addendum 12 (6 Nov 18:23, before any board-3 call): board 3 repaired; Addendum 10's plan is rerun
+
+- **The cause** (board lane): openFPGALoader was never installed on board 3. Its app.log read
+  `Flash error: [Errno 2] No such file or directory: 'openFPGALoader'`.
+- **The fix:** it is now copied from board 2, sha256 equal, `--detect` rc 0, xc7k325t. The resident is still None.
+- **The plan:** board 2's ga2 driver and b2-seq are stopped while waiting, before any board call. Then:
+  - perf/b3/b3-seq.sh runs again on board 3: bitstream 3 first, then gcc train c3f, then THP mcf;
+  - board 2 after x264 Plain: R-32, then perlbench c3g.
