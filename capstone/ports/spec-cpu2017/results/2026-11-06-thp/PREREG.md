@@ -103,3 +103,15 @@ and Plain on the THP kernel (H4) runs next on board 3, which gives the same-boar
   predicted scale. Issue stalls per 1k fell 0.7 %. What the 145 s is made of is UNRESOLVED; the NI-splice stall the
   pre-registration names was not separated.
 - Gap closed against the 4 KiB reference: 343 of 2,478.9 s, 14 %.
+
+## Result, Plain (7 Nov 02:03): 9,150.5 s, H4 holds; the same-board ratio is 1.227×
+
+Plain on the THP kernel ran on board 3 23:22-02:03, the same board, bitstream (1fc2cd5aa) and kit (bkit29-thp) as the
+Temporal run: rc 0, specdiff 2/2 PASS, control passes.
+
+- **H4 holds:** 9,150.5 s = 1.0061× board 2's 9,094.9 s. The THP kernel does not move Plain beyond the ±1.5 % band;
+  board 3 reads 0.6 % slower than board 2.
+- **Same-board ratio:** Temporal THP 11,230.8 s / Plain 9,150.5 s = **1.227×**. The 1.20× bound on this board is
+  10,980.6 s; the remaining gap is 250.2 s. Against board 2's Plain the ratio stays 1.235× (H3 above).
+- The 4 KiB reference (out-gtm-b1) is still board 1's, so the −343 s THP saving remains a cross-board reading; a 4 KiB
+  Temporal run on board 3 would make it same-board.
