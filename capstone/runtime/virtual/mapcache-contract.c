@@ -15,6 +15,7 @@
  *   protect  a block with a PROT_NONE page is never pooled: the next block of its size is whole
  *   threads  four threads churn; join; the totals match
  *   nodes    many reissues of one mapping: lifetime records are recycled, the run does not run out
+ *   procmem  a page populated by a native writer while the mapping is parked is zero in the next grant
  *   pressure the pool is given back at the first ENOMEM instead of failing an allocation
  */
 #define _GNU_SOURCE
@@ -24,6 +25,8 @@
 #include <stdint.h>
 #include <sys/mman.h>
 #include <unistd.h>
+#include <fcntl.h>
+#include <errno.h>
 #include <pthread.h>
 #include <capstone/virtual.h>
 #include <capstone/capability.h>
@@ -108,13 +111,13 @@ static int mode_stale(int reuse)
  * retirement of the mapping's lifetime can make it fault. (A freed malloc block faults on its own object
  * lifetime whether or not the pool retired the mapping, so mode stale cannot tell the two apart.) */
 #define GRANT_BYTES 20480UL
-static int mode_stale_grant(int reuse)
+static int mode_stale_grant(int reuse, int hole)
 {
     sublet_cap slot, again;
     require(!cap_vm_acquire(&slot, GRANT_BYTES, 4096, PROT_READ | PROT_WRITE, 6, CAP_VM_HEAP), "grant");
     char *p = cap_vm_copyable(&slot);
     require(p != NULL, "copy of the grant");
-    memset(p, 0x5c, GRANT_BYTES);
+    memset(p, 0x5c, hole ? 4096 : GRANT_BYTES);   /* hole: only the first page is ever resident */
     stale = p;
     unsigned long address = cursor(p);
     require(!munmap(p, GRANT_BYTES), "unmap of the grant");
@@ -122,16 +125,45 @@ static int mode_stale_grant(int reuse)
         require(!cap_vm_acquire(&again, GRANT_BYTES, 4096, PROT_READ | PROT_WRITE, 6, CAP_VM_HEAP), "second grant");
         char *q = cap_vm_copyable(&again);
         require(q != NULL, "copy of the second grant");
-        for (size_t i = 0; i < GRANT_BYTES; ++i) if (q[i]) fail("data of the previous grant is visible");
-        memset(q, 0x3d, GRANT_BYTES);
+        for (size_t i = 0; i < (hole ? 4096 : GRANT_BYTES); ++i) if (q[i]) fail("data of the previous grant is visible");
+        memset(q, 0x3d, hole ? 4096 : GRANT_BYTES);
         printf("MAPCACHE_STALE_GRANT_REUSED same_address=%d\n", cursor(q) == address);
     } else {
         printf("MAPCACHE_STALE_GRANT_FREED\n");
     }
     fflush(stdout);
-    (void)*(volatile char *)((char *)stale + 4096);
+    (void)*(volatile char *)((char *)stale + (hole ? 3 * 4096 : 4096));
     fail("stale grant access survived");
     return 1;
+}
+
+/* A page populated while its mapping is parked, by a native writer that no capability and no module pin
+ * stands in front of: the domain's own delegated pwrite to /proc/self/mem, at the address of a page of the
+ * parked mapping that was never resident. The next grant of the mapping must read zero there. Where the
+ * guest does not allow the write the mode says so, and the control is then not exercised. */
+static int mode_procmem(void)
+{
+    sublet_cap slot, again;
+    require(!cap_vm_acquire(&slot, GRANT_BYTES, 4096, PROT_READ | PROT_WRITE, 6, CAP_VM_HEAP), "grant");
+    char *p = cap_vm_copyable(&slot);
+    require(p != NULL, "copy of the grant");
+    p[0] = 1;                                  /* page 0 only is resident */
+    unsigned long address = cursor(p);
+    require(!munmap(p, GRANT_BYTES), "unmap of the grant");
+    int fd = open("/proc/self/mem", O_RDWR);
+    if (fd < 0) { printf("MAPCACHE_PROCMEM_UNAVAILABLE open errno=%d\n", errno); return 0; }
+    char marker[16];
+    memset(marker, 0xa7, sizeof marker);
+    ssize_t n = pwrite(fd, marker, sizeof marker, (off_t)(address + 2 * 4096));
+    if (n != (ssize_t)sizeof marker) { printf("MAPCACHE_PROCMEM_UNAVAILABLE write=%zd errno=%d\n", n, errno); return 0; }
+    close(fd);
+    require(!cap_vm_acquire(&again, GRANT_BYTES, 4096, PROT_READ | PROT_WRITE, 6, CAP_VM_HEAP), "second grant");
+    char *q = cap_vm_copyable(&again);
+    require(q != NULL, "copy of the second grant");
+    int same = cursor(q) == address;
+    for (size_t i = 0; i < GRANT_BYTES; ++i) if (q[i]) fail("a byte written while the mapping was parked is visible");
+    printf("MAPCACHE_PROCMEM_OK reused=%d\n", same);
+    return 0;
 }
 
 #define LIVE 48
@@ -283,8 +315,11 @@ int main(int argc, char **argv)
     if (!strcmp(m, "reuse")) return mode_reuse();
     if (!strcmp(m, "stale")) return mode_stale(1);
     if (!strcmp(m, "stale-pooled")) return mode_stale(0);
-    if (!strcmp(m, "stale-grant")) return mode_stale_grant(1);
-    if (!strcmp(m, "stale-grant-pooled")) return mode_stale_grant(0);
+    if (!strcmp(m, "stale-grant")) return mode_stale_grant(1, 0);
+    if (!strcmp(m, "stale-grant-pooled")) return mode_stale_grant(0, 0);
+    if (!strcmp(m, "procmem")) return mode_procmem();
+    if (!strcmp(m, "stale-grant-hole")) return mode_stale_grant(1, 1);
+    if (!strcmp(m, "stale-grant-hole-pooled")) return mode_stale_grant(0, 1);
     if (!strcmp(m, "churn")) return mode_churn();
     if (!strcmp(m, "bounded")) return mode_bounded();
     if (!strcmp(m, "protect")) return mode_protect();

@@ -1579,16 +1579,19 @@ static int retire(struct context *c, struct arena *a, bool destroying)
  *     together), under a NEW ancestor and a NEW arena id. A pointer from before the park names the
  *     retired ancestor, so it still faults with a lifetime cause after the reuse, at the same
  *     address.
- *   - Pages not pinned are not resident (PARK pins every resident page first, as CV_RETIRE does),
- *     so the new grant reads zeros from them as from any fresh mapping.
+ *   - Pages not pinned are not resident (PARK and REVIVE both pin every resident page first, as
+ *     CV_RETIRE does; a native writer can populate a page of a parked VMA in between), so the new
+ *     grant reads zeros from them as from any fresh mapping.
  * Pinned mode only: in unpinned mode the pages are not held, so there is nothing to clear in
  * place and the launcher takes the ordinary path (EOPNOTSUPP). */
 #ifdef CV_TEST_HOOKS
 /* Negative controls, test build only: each removes exactly one guard and a gate must then fail. */
 static bool test_revive_skip_clear;     /* REVIVE leaves the previous contents (data and tags) in the pages */
 static bool test_revive_keep_ancestor;  /* PARK retires nothing: the old ancestor stays alive, so a stale pointer keeps working after the reuse */
+static bool test_revive_skip_pin;       /* REVIVE does not pin pages that became resident while parked: they are handed out uncleared */
 module_param(test_revive_skip_clear, bool, 0444);
 module_param(test_revive_keep_ancestor, bool, 0444);
+module_param(test_revive_skip_pin, bool, 0444);
 #define CV_MUTANT(flag) (flag)
 #else
 #define CV_MUTANT(flag) false
@@ -1656,6 +1659,13 @@ static int revive(struct context *c, struct cv_thread *t, struct cv_map *r)
         !t->started || t->event != 3 || t->reply_cap)
         return -EINVAL;
     if (c->next_id == U64_MAX) return -ENOSPC;
+    /* A page can have become resident since PARK without a fault this module saw (a native writer
+     * such as /proc/self/mem, which Linux serves through get_user_pages_remote). Pin it now, as
+     * PARK did, so the clearing below reaches every resident page of the arena. */
+    if (!CV_MUTANT(test_revive_skip_pin)) {
+        int error = pin_remaining(c, a, FOLL_FORCE | FOLL_NOFAULT);
+        if (error) return error;
+    }
     if (ensure_nodes(c, 2 + CAP_REV_TABLE_RESERVE)) return -ENOMEM;
     id = c->next_id + 1;
     /* The new identity is published before the old one goes, so a failure leaves the arena parked. */

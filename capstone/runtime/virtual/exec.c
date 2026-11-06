@@ -494,7 +494,8 @@ static struct {
     unsigned entries;
     struct mc_entry *oldest, *newest, *bucket[MC_BUCKETS], *spare;
     struct mc_entry pool[MC_MAX_ENTRIES];
-    unsigned long parks, hits, misses, evictions, flushes, refused;
+    unsigned long parks, hits, misses, evictions, flushes, refused, lost;
+    int broken;   /* a retirement failed for good: no new mapping enters the pool */
 } mc;
 static void mc_init(const char *text)
 {
@@ -527,13 +528,19 @@ static void mc_unlink(struct mc_entry *e)
     mc.bytes -= e->m.bytes; --mc.entries;
 }
 static void mc_release(struct mc_entry *e) { e->chain = mc.spare; mc.spare = e; }
-/* Give a pooled mapping back to Linux, as unmap_arena does for an ordinary one. */
+/* Give a pooled mapping back to Linux, as unmap_arena does for an ordinary one. A retirement that
+ * fails for good (not an interrupted ioctl, which is repeated) leaves the arena registered in the
+ * module and mapped here with nobody remembering it: counted as lost, and the pool stops taking new
+ * mappings, so a defect shows in the statistics and cannot grow without bound. */
 static void mc_evict(struct mc_entry *e)
 {
+    int rc;
     mc_unlink(e);
-    if (!ioctl(device, CV_RETIRE, &e->m.id)) {
+    do { rc = ioctl(device, CV_RETIRE, &e->m.id); } while (rc && errno == EINTR);
+    if (!rc) {
         if (!munmap(e->m.address, e->m.bytes)) { reuse_address = e->m.address; reuse_bytes = e->m.bytes; }
-    }
+        else { ++mc.lost; mc.broken = 1; }
+    } else { ++mc.lost; mc.broken = 1; }
     ++mc.evictions;
     mc_release(e);
 }
@@ -565,7 +572,7 @@ static int mc_park(struct mapping *m)
 #else
 #define MC_PROTECTED m->protected_range
 #endif
-    if (!mc.cap || m->kind != CV_MAP_HEAP || MC_PROTECTED || m->bytes != m->visible ||
+    if (!mc.cap || mc.broken || m->kind != CV_MAP_HEAP || MC_PROTECTED || m->bytes != m->visible ||
         m->bytes > mc.cap / 2 || !mc.spare)
         return 0;
     if (ioctl(device, CV_PARK, &m->id)) {
@@ -1363,9 +1370,9 @@ static int virtual_service(uint64_t tid, struct cv_step *step)
             }
             if (tid == 0 && mc.cap && (getenv("CAPSTONE_VM_STATS") || getenv("CAPSTONE_DELEGATE_STATS")))
                 fprintf(stderr, "CAPSTONE_VM_MAPCACHE cap=%zu parks=%lu hits=%lu misses=%lu evictions=%lu"
-                                " flushes=%lu refused=%lu pooled_entries=%u pooled_bytes=%zu\n",
+                                " flushes=%lu refused=%lu lost=%lu pooled_entries=%u pooled_bytes=%zu\n",
                         mc.cap, mc.parks, mc.hits, mc.misses, mc.evictions, mc.flushes, mc.refused,
-                        mc.entries, mc.bytes);
+                        mc.lost, mc.entries, mc.bytes);
             /* The image's identity on a run that ENDS, not only on one that faults: a
              * transcript that carries no digest cannot be tied to the image it claims to be
              * from, and a judge that reads a probe's successful run (the putenv probe) has

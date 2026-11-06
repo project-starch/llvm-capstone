@@ -69,7 +69,9 @@ def grade(log, nodes_cycles):
                                 ('stale-pooled-on', 'MAPCACHE_STALE_FREED', 'park'),
                                 ('stale-grant-off', 'MAPCACHE_STALE_GRANT_REUSED', None),
                                 ('stale-grant-on', 'MAPCACHE_STALE_GRANT_REUSED same_address=1', 'hit'),
-                                ('stale-grant-pooled-on', 'MAPCACHE_STALE_GRANT_FREED', 'park')):
+                                ('stale-grant-pooled-on', 'MAPCACHE_STALE_GRANT_FREED', 'park'),
+                                ('stale-grant-hole-off', 'MAPCACHE_STALE_GRANT_REUSED', None),
+                                ('stale-grant-hole-on', 'MAPCACHE_STALE_GRANT_REUSED same_address=1', 'hit')):
         body, rc = b[name]
         good = body is not None and rc == 139 and marker in body and causes(body) == [25] and 'MAPCACHE_FAIL' not in body
         if trace == 'hit':
@@ -96,13 +98,18 @@ def grade(log, nodes_cycles):
     s, v = stats(body), vmstats(body)
     t['nodes_recycled'] = ok('nodes-on', 'MAPCACHE_NODES_OK cycles=%d ' % nodes_cycles) and s is not None and v is not None \
         and s['hits'] >= nodes_cycles - 8 and v['collections'] >= 1
+    body = b['procmem-on'][0] or ''
+    t['procmem_zero'] = ok('procmem-on', 'MAPCACHE_PROCMEM_OK reused=1') and 'CAPSTONE_VM_MAPCACHE_HIT ' in body
+    t['procmem_reachable'] = 'MAPCACHE_PROCMEM_UNAVAILABLE' not in body
+    lost = [stats(b[n][0] or '') for n in CASES if b[n][0] and stats(b[n][0])]
+    t['no_arena_lost'] = bool(lost) and all(x['lost'] == 0 for x in lost)
     s = stats(b['pressure-on'][0] or '')
     t['pressure_flush'] = ok('pressure-on', 'MAPCACHE_PRESSURE_OK') and s is not None and s['flushes'] >= 1 and s['evictions'] >= 1
     return t
 
 
 CASES = ['reuse-off', 'reuse-on', 'stale-off', 'stale-on', 'stale-pooled-on', 'stale-grant-off', 'stale-grant-on',
-         'stale-grant-pooled-on', 'churn-off', 'churn-on', 'bounded-on',
+         'stale-grant-pooled-on', 'stale-grant-hole-off', 'stale-grant-hole-on', 'procmem-on', 'churn-off', 'churn-on', 'bounded-on',
          'protect-off', 'protect-on', 'threads-off', 'threads-on', 'nodes-on', 'pressure-on']
 # case -> (mode, environment)
 SPEC = {
@@ -114,6 +121,9 @@ SPEC = {
     'stale-grant-off': ('stale-grant', 'CAPSTONE_EXEC_DIAGNOSTICS=1'),
     'stale-grant-on': ('stale-grant', f'CAPSTONE_VM_TRACE=1 CAPSTONE_EXEC_DIAGNOSTICS=1 CAPSTONE_VM_MAPCACHE={POOL}'),
     'stale-grant-pooled-on': ('stale-grant-pooled', f'CAPSTONE_VM_TRACE=1 CAPSTONE_EXEC_DIAGNOSTICS=1 CAPSTONE_VM_MAPCACHE={POOL}'),
+    'stale-grant-hole-off': ('stale-grant-hole', 'CAPSTONE_EXEC_DIAGNOSTICS=1'),
+    'stale-grant-hole-on': ('stale-grant-hole', f'CAPSTONE_VM_TRACE=1 CAPSTONE_EXEC_DIAGNOSTICS=1 CAPSTONE_VM_MAPCACHE={POOL}'),
+    'procmem-on': ('procmem', f'CAPSTONE_VM_STATS=1 CAPSTONE_VM_TRACE=1 CAPSTONE_VM_MAPCACHE={POOL}'),
     'churn-off': ('churn', 'CAPSTONE_VM_STATS=1'),
     'churn-on': ('churn', f'CAPSTONE_VM_STATS=1 CAPSTONE_VM_MAPCACHE={POOL}'),
     'bounded-on': ('bounded', f'CAPSTONE_VM_STATS=1 CAPSTONE_VM_MAPCACHE={CAP}'),

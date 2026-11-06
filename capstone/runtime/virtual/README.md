@@ -281,18 +281,23 @@ The sequence is the module's, in two ioctls (`wire.h`). `CV_PARK` retires the ar
 CV_RETIRE), after pinning any resident page not yet pinned, and keeps the registration and the pinned
 pages. A parked arena is invisible to the domain (`arena_at`: no fault resolves, no touch or thread frame
 names it) and to the launcher's registry (no service sees it), but is swept by every collection like any
-pinned page. `CV_REVIVE` overwrites every pinned page with zeros (a store clears the tags of the granules
-it writes, so data and tags go together, rule 1), mints a new ancestor and gives the arena a new id. A
+pinned page. `CV_REVIVE` first pins any page that became resident since the park (a native writer such as the
+domain's own delegated pwrite to `/proc/self/mem` can populate one without a fault the module sees), then
+overwrites every pinned page with zeros (a store clears the tags of the granules it writes, so data and
+tags go together, rule 1), mints a new ancestor and gives the arena a new id. A
 pointer from before the park names the retired ancestor and still faults with cause 25 after the reuse.
 Pages that were never pinned are not resident and read zero as in any fresh mapping. Pinned mode only:
 `unpinned=1` answers EOPNOTSUPP, the launcher unmaps as before and switches the pool off.
 
 `run-mapcache.py` with `mapcache-contract.c` is the qualification (the gates run unchanged beside it).
-Its negative controls are the module's `test_revive_skip_clear` and `test_revive_keep_ancestor`
-(hooks build) and a launcher built with `-DCAPSTONE_MAPCACHE_MUTANT_UNBOUNDED`, `_PROT` or `_NOFLUSH`;
+Its negative controls are the module's `test_revive_skip_clear`, `test_revive_keep_ancestor` and
+`test_revive_skip_pin` (hooks build) and a launcher built with `-DCAPSTONE_MAPCACHE_MUTANT_UNBOUNDED`, `_PROT` or `_NOFLUSH`;
 `-DCAPSTONE_MAPCACHE_DEFAULT_BYTES='"1M"'` builds a launcher with the pool on for the gates. Each
 control must fail the check it names. The pinned pages of pooled arenas stay resident until eviction
-or exit: peak pinned pages rise by the pool's resident part.
+or exit: peak pinned pages rise by the pool's resident part, and the runtime gate's `linux_pages_released`
+oracle (peak minus final pinned pages above 300) tolerates a cap of about 256K but not 1M. Known limit: a
+futex word is validated and then used after the service lock is dropped, as before the pool, so a waiter
+started on a mapping can outlive its park and see the address reused.
 
 ## Floating point
 
