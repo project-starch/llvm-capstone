@@ -1,3 +1,23 @@
+## 2026-11-07 — Full native SPEC test gate and RTL handoff
+
+The implementation snapshot `09b90be908e6` on `native/linux-task-integration`
+now has a complete functional check of the ten existing C-port entries: **9
+PASS, 1 FAIL**. All 22 original test invocations completed; 24 of 25 official
+output comparisons pass. x264's full 156-frame encode and three image checks
+pass. This does not qualify unported C++/Fortran entries or FPGA performance.
+
+Perl makerand passes, but test.pl exits zero with incomplete output. A separate
+QEMU diagnosis confirms native chdir returns ENOSYS; the test wrapper hides the
+subsequent file-open exception. Pipe/popen and signal service gaps also remain.
+No production code or benchmark source was changed during this qualification.
+[Results and reproduction](../../runtime/virtual/tests/native-task/README.md#full-spec-test-input-qualification).
+
+The [RTL handoff](../plans/native-task-rtl-handoff.md) inventories the cumulative
+change, separates new interfaces from inherited hardware requirements, and
+records the unmatched origin/dev commits. Its software acceptance gate remains
+failed until Perl is closed; hardware implementation and synthesis are not
+claimed.
+
 ## 2026-11-06 — Native Linux task architecture
 
 `native/linux-task-integration` starts from measured `a13e2ffaa9a2` in a separate

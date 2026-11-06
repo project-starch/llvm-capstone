@@ -25,6 +25,46 @@ run, a whole-suite port, or a performance measurement. Exit status alone does
 not qualify a benchmark. In particular, the Perl test harness can exit zero
 with incomplete output.
 
+The [full qualification record](spec-test-qualification.json) reports **9 PASS,
+1 FAIL** across 22 completed invocations and 25 official output comparisons
+(24 pass, one fails). GCC, lbm, ImageMagick, nab, both specrand entries, mcf,
+all twelve xz inputs and the complete 156-frame x264 test pass. ImageMagick and
+x264 include their guest image validators and official host comparisons.
+The x264 encoder took about 65 minutes on the test host; this is not a hardware
+performance estimate.
+
+Perl's makerand output passes, but test.pl produces incomplete output despite
+exit zero. The [confirmed diagnosis](spec-perl-blocker.json) is a refused native
+`chdir` followed by an exception hidden by the outer test wrapper. Pipe/popen
+and signal services also remain incomplete; a cwd-only patch is not sufficient
+to declare this benchmark supported. No production code or benchmark sources
+were changed to obtain these results.
+
+The initial GCC attempt omitted assembly from the exported artifacts; that
+harness failure is retained, followed by a passing retry. The final GCC,
+ImageMagick and integer specrand rows select fresh runs through the repository
+helpers on a separate host with identical QEMU/kernel/firmware/rootfs hashes.
+The other rows use the original campaign; x264's three image checks run in a
+separate fresh guest against the encoder's exact output hashes. An interrupted
+remote transfer caused by scratch inode exhaustion was corrected before the
+official comparisons. These infrastructure issues are separate from Perl's
+reproducible application failure.
+
+Raw evidence is kept outside Git as
+`$CAPSTONE_TMP_ROOT/native-task/spec-test-qualification-evidence.tar.gz`, with
+a copy in the build host's task scratch directory. SHA-256:
+
+```
+ec686cf64691a6c76ee721db01c2bed068c18746f76b5c42444cd7c05c959da1
+```
+
+It contains original preparation inventories, binaries/inputs, invocation and
+comparator records, serial logs, outputs, the separate x264 image run, Perl
+diagnosis and tool snapshots. Duplicate staged trees, sparse stage disks and
+original command files containing environment snapshots are omitted. Parsed
+commands and their source-file hashes are retained. This licensed evidence
+archive is separate from the source-only RTL handoff bundles.
+
 Four helpers keep licensed sources and generated artifacts outside Git:
 
 1. `prepare-spec-tests.py` verifies original input checksums and frozen adapted
@@ -80,6 +120,17 @@ unchanged to the QEMU host, then return `execution/runs` to the licensed host
 for validation. Comparator reference paths refer to that licensed host. Keep
 both inventories and all serial/receipt files, not just stdout. Host elapsed
 times include scheduling and the shared QEMU lock; they are not speed results.
+
+The qualification tools have a self-contained regression suite:
+
+```sh
+python3 "$helpers/test-spec-qualification.py" -v
+```
+
+Its synthetic fixtures test missing/duplicate/nonzero completion evidence,
+wrong commands, stale or missing outputs, generated-input checks and image
+reference provenance. Compiler, SPEC setup and QEMU execution are mocked; it
+does not replace the real application/output gate.
 
 ## Build and activation
 

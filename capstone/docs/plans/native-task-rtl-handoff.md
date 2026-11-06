@@ -3,9 +3,9 @@
 This is the developer entry point for `native/linux-task-integration`. It
 organizes the cumulative platform change, not just the final SQLite patch.
 The implementation snapshot is `09b90be908e6`; subsequent qualification changes
-are recorded separately. **QEMU qualification is in progress. Do not treat the
+are recorded separately. **The full SPEC gate is not passed. Do not treat the
 branch as a fully SPEC-qualified QEMU baseline ready for RTL implementation
-until the acceptance gate below has a final result.** No FPGA synthesis or
+unless the acceptance gate below passes.** No FPGA synthesis or
 hardware qualification is claimed.
 
 ## 1. Baselines and scope
@@ -26,8 +26,10 @@ compiler source changes in this branch's cumulative delta. A working compiler
 binary is still a separate, hash-pinned build dependency.
 
 The [machine-readable inventory](../../runtime/virtual/tests/native-task/rtl-handoff-inventory.json)
-lists every changed file, groups code/tests/records/documentation, and records
-all five QEMU commits. Git's configured submodule-ignore behavior can hide the
+lists every changed file at that implementation snapshot, groups code/tests/
+records/documentation, and records all five QEMU commits. Later handoff commits
+add qualification tools, evidence and documentation, with no further production
+code changes. Git's configured submodule-ignore behavior can hide the
 most important hardware change: use `--ignore-submodules=none` when reviewing.
 
 ```sh
@@ -186,9 +188,46 @@ unported C++/Fortran or speed variants of the whole CPU2017 suite work. Sources
 and inputs stay external under scratch storage; existing source adaptations
 remain frozen. Test means original full `test` inputs, not train/reference data.
 
-**Acceptance status: pending complete QEMU execution and official SPEC output
-validation.** The final machine-readable result and any blocker reproduction
-will be linked here before this document is considered ready for handoff.
+**Acceptance status: 9 PASS, 1 FAIL (Perl).** All 22 original test invocations
+completed. Of 25 official output comparisons, 24 pass; Perl's test.pl comparison
+fails despite exit zero. All four guest image-validation invocations completed, covering one
+ImageMagick image and three x264 images. The branch is suitable for an RTL
+implementation assessment with a named software blocker, not a claim that all
+ten applications are already qualified.
+
+The [machine-readable qualification](../../runtime/virtual/tests/native-task/spec-test-qualification.json)
+records platform/SDK/input/object hashes, selected execution evidence and every
+comparator result. The [reproduction guide](../../runtime/virtual/tests/native-task/README.md#full-spec-test-input-qualification)
+includes the four helpers and their synthetic regression suite. This is
+functional qualification; no instruction-count or FPGA speed result is claimed.
+
+| Existing C-port entry | Full test result |
+| --- | --- |
+| 502.gcc_r | PASS, including generated assembly comparison |
+| 519.lbm_r | PASS |
+| 538.imagick_r | PASS, including guest image validation |
+| 544.nab_r | PASS |
+| 997.specrand_fr | PASS |
+| 999.specrand_ir | PASS |
+| 505.mcf_r | PASS, both output comparators |
+| 557.xz_r | PASS, all 12 invocations and comparators |
+| 500.perlbench_r | FAIL: makerand passes; test.pl output is incomplete |
+| 525.x264_r | PASS, complete 156-frame encode and all three image comparisons |
+
+The [Perl diagnosis](../../runtime/virtual/tests/native-task/spec-perl-blocker.json)
+confirms a missing native `chdir` service (`ENOSYS`). `t/TEST` ignores that
+failure, then cannot open relative `base/cond.t`. Its outer `test.pl` uses
+`do 't/TEST'` without checking the exception, so the official invocation exits
+zero despite incomplete output. Running `./perlbench_r -I. -I./lib t/TEST`
+directly in the staged directory exposes the error and exits 2. This diagnostic
+does not change the official workload or its failed qualification status.
+
+Fixing cwd handling alone is not full closure: the native C probe also observes
+`ENOSYS` for pipe/popen and signal disposition, and the subprocess path needs
+spawn/wait support. Those services need their own confinement/lifecycle design
+and tests. Signal refusals alone do not explain this failure: the successful
+makerand case also encounters them. These are software scope gaps, not evidence
+that the RTL must implement additional application-specific instructions.
 
 ## 5. Suggested FPGA implementation/measurement ladder
 
