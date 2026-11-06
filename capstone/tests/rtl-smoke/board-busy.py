@@ -10,7 +10,7 @@ Two independent signs, either one is enough (2026-10-19, phase 1 of board #2):
   wait), which holds no lock yet. The caller's own ancestors are excluded, so a chain never sees itself.
 BOARD_LOCK_DIR replaces /tmp/capstone for the lock files, for the guard's own fire/quiet test."""
 import os, re, sys
-LOCKS = {"1": ".board.lock", "2": ".board2.lock"}
+LOCKS = {"1": ".board.lock", "2": ".board2.lock", "3": ".board3.lock"}
 USER = re.compile(r"python3? (-u )?(-m fpga_driver\S*|\S*run_sup_bare\S*\.py|\S*infra-retry\.py|\S*flash-bit\.py|\S*diag_noboot_fpga\S*)")
 def ancestors():
     a, p = set(), os.getpid()

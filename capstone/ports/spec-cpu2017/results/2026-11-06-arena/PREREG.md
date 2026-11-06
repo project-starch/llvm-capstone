@@ -334,3 +334,23 @@ end of gp's region cannot occur. That is false for the kits used here:
 
 **CAPSTONE_DELEGATE_SELF_CACHE:** correct only for contexts created through capstone_virtual_thread_create; a raw
 service-3 ecall bypasses the flag. Its threaded path has executed zero times.
+
+## Addendum 10 (6 Nov 18:11, before any board-3 call): gcc train moves to the new board 3
+
+**Board 3** was installed today by the board lane: an RPi 5 host, the same console build and supervision as board 2.
+Its resident is None and its store is empty.
+- **Tooling.** The driver trees (wt-gate, wt-spec, wt-b2 fpga_console.py; the three board-busy.py) gain board "3":
+  its console URL file, the lock /tmp/capstone/.board3.lock, and board 2's shared-board watch. board-env-check.py
+  takes the board's URL file by number. Board-3 copies of the drivers live in perf/b3: gt-run-ga2.sh, gt-run-thp.sh,
+  board/chain-board.sh and board/spec-board.sh, each identical to the board-2 one except the board-3 case.
+- **First flash** (perf/b3/b3-seq.sh):
+  - **bitstream 3** (caplifive_vp2c_e7af48457, sha256 d6ed97b6…) non-volatile, then its name read back;
+  - this makes the known-good fallback resident and stored before anything new;
+  - then perf/b3/gt-run-ga2.sh 3 flashes C.5a (sha256 5b7b1edc…), runs this stage and flashes bitstream 3 back.
+- **The run is unchanged:** the c2ac7-named stage with image c3f 5642377943d724c6 (Addendum 8) and the ga2 grader,
+  with `MX_ROOTS` set to board 3's out dir.
+- **Board-to-board.** The reference is still out-ga-b2. M3 is now a board 3 against board 2 comparison, on the same
+  bitstream, kit and design. Their speed difference is unmeasured, so the grader's run-time ratio is reported beside
+  it.
+- **After gcc** on board 3: the THP mcf runs (thp Addendum 1), moved from board 2.
+- **Board 2,** after x264 Plain: R-32, then perlbench c3g. Its ga2 and THP steps are removed.

@@ -1,0 +1,12 @@
+B3 2026-11-06 18:12:00 START pid 2406612
+B3 2026-11-06 18:12:00 FLASH BEGIN caplifive_vp2c_e7af48457 booking STUB book 3 30 vp2 caplifive_vp2c_e7af48457 first flash (board 3, fallback)
+STUB caplifive_vp2c_e7af48457.bit $CAPSTONE_WORK/bitstreams/caplifive_vp2c_e7af48457.bit d6ed97b6d341ea058d497838e43558900823c36591c44046d3cfc0b7f55b423b
+STUB unbook STUB book 3 30 vp2 caplifive_vp2c_e7af48457 first flash (board 3, fallback)
+B3 2026-11-06 18:12:00 FLASH END rc=0
+STUB caplifive_vp2c_e7af48457.bit d6ed97b6d341ea058d497838e43558900823c36591c44046d3cfc0b7f55b423b
+B3 2026-11-06 18:12:00 READBACK caplifive_vp2c_e7af48457 ok rc=0
+B3 2026-11-06 18:12:00 GA2 BEGIN
+B3 2026-11-06 18:12:00 GA2 END rc=0
+B3 2026-11-06 18:12:00 THP BEGIN
+B3 2026-11-06 18:12:01 THP END rc=0
+B3 2026-11-06 18:12:01 DONE

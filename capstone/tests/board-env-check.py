@@ -57,7 +57,7 @@ def main():
         if not os.path.exists(p): print(f"BROKEN: {p} is missing"); return 2
     env = env_file(envp)
     # C1
-    want = os.path.join(HOME, ".claude-kisp/secrets/fpga-console-url" + ("-board2" if brd == "2" else ""))
+    want = os.path.join(HOME, ".claude-kisp/secrets/fpga-console-url" + ("" if brd == "1" else f"-board{brd}"))
     say(os.path.isfile(want) and os.path.getsize(want) > 0, f"C1 board {brd}'s console URL file {want} exists")
     got = env.get("BOARD_URL_FILE") or os.environ.get("BOARD_URL_FILE") or os.path.join(HOME, ".claude-kisp/secrets/fpga-console-url")
     say(os.path.realpath(got) == os.path.realpath(want), f"C1 the kit's board-run.sh reads {got}"
