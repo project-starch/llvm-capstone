@@ -45,6 +45,13 @@ respectively (kernel decreases 0.2332%, 0.6355% and 1.3880%). This reinforces
 that the small-I/O migration is functional but not a large total-work saving
 for these inputs. [Results and raw evidence](../../runtime/virtual/tests/native-task/README.md#short-spec-test-input-comparison).
 
+A syscall-heavy resident-file copy now tests the actual musl integration:
+1 MiB in 64-byte blocks makes 32,768 read/write calls and saves 65.91% total
+attempts, 64.96% kernel attempts. Larger 4-KiB/64-KiB buffers save 61.08%/46.47%
+total attempts. All twelve measured windows pass byte-for-byte output checks.
+These CPU-work savings are workload-dependent and are not hardware speedups.
+[Reproducible workload](../../runtime/virtual/tests/native-task/README.md#syscall-heavy-workload-through-real-musl).
+
 Next close the remaining policy and qualification gates: native syscall
 audit/seccomp/tracing (currently rejected), full register/FP/bounds and raw-platform
 negative matrices, exhaustive lifetime/failed-exec race tests, then capability
