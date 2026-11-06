@@ -197,8 +197,22 @@ static unsigned dl_rights(unsigned kind) {
 /* Serialize each transport through copy-back and signal delivery. POSIX
  * children install private transports; explicit contexts sharing TLS keep
  * their creator's transport. Nested signal handlers may enter recursively. */
+#ifdef CAPSTONE_DELEGATE_SELF_CACHE
+/* Set by capstone_virtual_thread_create before its THREAD_CREATE call, the only way a second context of
+ * this image can start. Until then every wire acquisition is by the one context, whose identity cannot
+ * change, so it is asked once and reused. That saves one THREAD_SELF exit per delegated call (perlbench
+ * test: one per call, 105 K). Once set, the identity is asked on every acquisition, as without the switch. */
+volatile int __capstone_vm_contexts_shared;
+static uintptr_t dl_self_cached;
+#endif
 static uintptr_t dl_wire_identity(void) {
   extern long __capstone_vm_thread_self(void);
+#ifdef CAPSTONE_DELEGATE_SELF_CACHE
+  if (!__atomic_load_n(&__capstone_vm_contexts_shared, __ATOMIC_ACQUIRE)) {
+    if (!dl_self_cached) dl_self_cached = (uintptr_t)__capstone_vm_thread_self();
+    return dl_self_cached;
+  }
+#endif
   /* Context identity survives shared TLS and alternate signal stacks. */
   return (uintptr_t)__capstone_vm_thread_self();
 }

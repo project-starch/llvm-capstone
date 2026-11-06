@@ -58,6 +58,12 @@ long capstone_virtual_thread_create(void *(*entry)(void *), void *argument,
     capstone_cap_store((capstone_cap_slot *)(frame + 64 + 10 * 16), argument);
     capstone_cap_store((capstone_cap_slot *)(frame + 64), (void *)entry);
 
+#ifdef CAPSTONE_DELEGATE_SELF_CACHE
+    {   /* delegate.c: the wire identity is cached only while this image has one context. */
+        extern volatile int __capstone_vm_contexts_shared;
+        __atomic_store_n(&__capstone_vm_contexts_shared, 1, __ATOMIC_SEQ_CST);
+    }
+#endif
     id = __capstone_vm_thread_create_frame(frame);
     if (id < 0) {
         int error = (int)-id;
