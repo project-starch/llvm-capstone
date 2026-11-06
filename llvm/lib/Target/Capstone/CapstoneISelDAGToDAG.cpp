@@ -57,6 +57,12 @@ cl::opt<bool> CapstoneShrinkGlobals(
 // 12-bit immediate. Default off. The adjustment is 1 for bitstreams up to C.5a,
 // whose SHRINKTO ends the capability at cursor + imm - 1, so the silicon bounds
 // equal SHRINK's; QEMU then ends it one byte later.
+// With the adjustment, SHRINKTO traps (cursor + size + 1 > end) for a global
+// that ends exactly at the end of gp's grant. Launchers built with
+// CAPSTONE_VEXEC_EXACT_IMAGE grant exactly the page-rounded image, so this is a
+// property of each image, not ruled out by construction (the landing message of
+// this flag said otherwise; that was wrong). Check an adjust-1 image with
+// spec-cpu2017 results/2026-11-06-rest/shrinkto-edge-check.py before running it.
 static cl::opt<bool> CapstoneShrinkToGlobals(
     "capstone-shrinkto-globals", cl::Hidden,
     cl::desc("Narrow small data globals with SHRINKTO instead of SHRINK"),
