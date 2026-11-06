@@ -61,13 +61,20 @@ static struct heap_leaf *leaf_for(size_t a, int create)
  *   - a fresh owner is issued from the same holder and published in the index.
  * The cache is bounded by entries and bytes. Past either bound, or for a mapping it does not know, the path is
  * the original munmap. The kernel's retirement of a mapping ends the holder with everything else. */
+#ifdef CAPSTONE_HEAP_MAPPING_REUSE_TEST_LIVE   /* saturation tests only: a small table, a power of two */
+#define MR_LIVE ((unsigned)CAPSTONE_HEAP_MAPPING_REUSE_TEST_LIVE)
+#else
 #define MR_LIVE 16384U          /* live mappings tracked (holders), a power of two */
+#endif
 #define MR_FREE 512U            /* cached mappings */
 #define MR_FREE_BYTES (64UL << 20)
-struct mr_rec { size_t base, bytes; void *holder; };
+/* noreuse: an mprotect touched the mapping, so its pages may no longer be PROT_READ|PROT_WRITE. It is released by
+ * munmap, never cached: the reuse path's memset would fault on a page it cannot write (review of #306, P2). */
+struct mr_rec { size_t base, bytes; void *holder; unsigned noreuse; };
 static struct mr_rec mr_live[MR_LIVE], mr_free[MR_FREE];
 static unsigned mr_nfree; static size_t mr_free_bytes;
-unsigned long __heap_reuse_hits, __heap_reuse_puts, __heap_reuse_spills;
+unsigned long __heap_reuse_hits, __heap_reuse_puts, __heap_reuse_spills, __heap_reuse_untracked,
+              __heap_reuse_protected, __heap_reuse_evicted;
 static unsigned mr_slot(size_t base) { return (unsigned)((base >> 12) * 2654435761UL) & (MR_LIVE - 1); }
 static struct mr_rec *mr_find(size_t base)
 {
@@ -80,21 +87,54 @@ static struct mr_rec *mr_find(size_t base)
 static void mr_remove(struct mr_rec *r)
 {   /* Backward-shift deletion keeps every probe chain intact. */
     unsigned i = (unsigned)(r - mr_live), j = i;
-    for (;;) {
+    /* At most MR_LIVE - 1 other slots: with every slot occupied there is no empty one to stop at (P1). */
+    for (unsigned n = 1; n < MR_LIVE; ++n) {
         j = (j + 1) & (MR_LIVE - 1);
         if (!mr_live[j].base) break;
         unsigned k = mr_slot(mr_live[j].base);
         if ((j > i && (k <= i || k > j)) || (j < i && k <= i && k > j)) { mr_live[i] = mr_live[j]; i = j; }
     }
-    mr_live[i] = (struct mr_rec){0, 0, 0};
+    mr_live[i] = (struct mr_rec){0, 0, 0, 0};
 }
 static int mr_record(size_t base, size_t bytes, void *holder)
 {
     for (unsigned i = mr_slot(base), k = 0; k < MR_LIVE; i = (i + 1) & (MR_LIVE - 1), ++k)
-        if (!mr_live[i].base) { mr_live[i] = (struct mr_rec){base, bytes, holder}; return 0; }
+        if (!mr_live[i].base) { mr_live[i] = (struct mr_rec){base, bytes, holder, 0}; return 0; }
+    ++__heap_reuse_untracked;
     return -1;   /* table full: this mapping is released by munmap, as without the switch */
 }
+/* Give every cached mapping back to the kernel. Called with index_mutex held. */
+static void mr_evict_all(void)
+{
+    while (mr_nfree) {
+        struct mr_rec e = mr_free[--mr_nfree];
+        mr_free_bytes -= e.bytes;
+        munmap(e.holder, e.bytes);
+        ++__heap_reuse_evicted;
+    }
+}
 #endif
+/* mprotect (mapping.c) reports every range it was asked to change, whether or not the service changed it. A tracked
+ * mapping it overlaps is marked noreuse; a cached one it overlaps is unmapped at once. */
+void __heap_protected(size_t address, size_t bytes)
+{
+#if CAPSTONE_HEAP_MAPPING_REUSE && !defined(CAPSTONE_HEAP_MAPPING_REUSE_TEST_KEEP_PROTECTED)
+    index_lock();
+    for (unsigned i = 0; i < MR_LIVE; ++i)
+        if (mr_live[i].base && mr_live[i].base < address + bytes && address < mr_live[i].base + mr_live[i].bytes)
+            mr_live[i].noreuse = 1;
+    for (unsigned i = mr_nfree; i-- > 0;)
+        if (mr_free[i].base < address + bytes && address < mr_free[i].base + mr_free[i].bytes) {
+            struct mr_rec e = mr_free[i];
+            mr_free[i] = mr_free[--mr_nfree]; mr_free_bytes -= e.bytes;
+            munmap(e.holder, e.bytes);
+            ++__heap_reuse_protected;
+        }
+    index_unlock();
+#else
+    (void)address; (void)bytes;
+#endif
+}
 
 void *__heap_mapping(size_t n)
 {
@@ -111,7 +151,9 @@ void *__heap_mapping(size_t n)
         struct mr_rec e = mr_free[i];
         mr_free[i] = mr_free[--mr_nfree]; mr_free_bytes -= bytes;
         if (mr_record(e.base, e.bytes, e.holder)) { /* untracked from here: released by munmap */ }
+#ifndef CAPSTONE_HEAP_MAPPING_REUSE_TEST_NO_ZERO   /* negative control of the reuse checks ONLY */
         memset(e.holder, 0, bytes);
+#endif
         void *owner = heap_issue(e.holder, bytes);
         for (size_t a = e.base; a < e.base + bytes; a += 4096) {
             struct heap_leaf *leaf = leaf_for(a, 0);
@@ -124,8 +166,17 @@ void *__heap_mapping(size_t n)
     }
     index_unlock();
 #endif
-    if (cap_vm_acquire(&grant,bytes,align,PROT_READ|PROT_WRITE,6,CAP_VM_HEAP))
+    if (cap_vm_acquire(&grant,bytes,align,PROT_READ|PROT_WRITE,6,CAP_VM_HEAP)) {
+#if CAPSTONE_HEAP_MAPPING_REUSE
+        /* Out of memory with mappings of other sizes cached: give them back and try once more (P3). */
+        index_lock();
+        unsigned had = mr_nfree;
+        mr_evict_all();
+        index_unlock();
+        if (!had || cap_vm_acquire(&grant,bytes,align,PROT_READ|PROT_WRITE,6,CAP_VM_HEAP))
+#endif
         return MAP_FAILED;
+    }
     void *raw=cap_vm_copyable(&grant);
     size_t base=__builtin_capstone_cap_get_cursor(raw);
     if (base >= (1UL<<39) || bytes > (1UL<<39)-base) {
@@ -164,7 +215,7 @@ int __heap_unmapping(void *owner,size_t n)
 #if CAPSTONE_HEAP_MAPPING_REUSE
     {
         struct mr_rec *r = mr_find(base);
-        if (r && r->bytes == bytes && mr_nfree < MR_FREE && mr_free_bytes + bytes <= MR_FREE_BYTES) {
+        if (r && !r->noreuse && r->bytes == bytes && mr_nfree < MR_FREE && mr_free_bytes + bytes <= MR_FREE_BYTES) {
 #ifndef CAPSTONE_HEAP_MAPPING_REUSE_TEST_NO_REVOKE   /* positive control of the safety probe ONLY */
             heap_end(r->holder, owner);   /* every object, nested group and derivative of this mapping */
 #endif
