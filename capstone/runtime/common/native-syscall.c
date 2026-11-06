@@ -77,6 +77,12 @@ static int authorize(struct ns_session *s, const struct cn_capref *ref, cn_u64 o
     /* Preflight bounds before issue; never a permit to copy after blocking. */
     return cn_authorize(s->context, &s->owner, ref, offset, length, write);
 }
+int ns_session_admit(struct ns_session *s, cn_u64 epoch)
+{
+    if (!s || !epoch || epoch <= s->last_epoch) return -ESTALE;
+    s->last_epoch = epoch; /* Includes errors: no replay of a side effect. */
+    return 0;
+}
 static int capture(struct ns_session *s, cn_u64 epoch, struct snapshot *p,
                    const struct ns_request *request)
 {
@@ -84,8 +90,8 @@ static int capture(struct ns_session *s, cn_u64 epoch, struct snapshot *p,
     cn_u64 current_epoch;
     int rc = cn_get_epoch(s->context, &s->owner, &current_epoch);
     if (rc) return rc;
-    if (current_epoch != epoch || epoch <= s->last_epoch) return -ESTALE;
-    s->last_epoch = epoch; /* Includes errors: no replay of a side effect. */
+    if (current_epoch != epoch) return -ESTALE;
+    if ((rc = ns_session_admit(s, epoch))) return rc;
     if (request) {
         p->call.descriptor = ns_descriptor(request->nr);
         if (!p->call.descriptor) return -ENOSYS;

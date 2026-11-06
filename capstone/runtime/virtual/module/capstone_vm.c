@@ -2515,17 +2515,28 @@ static bool one_inode_per_file(struct file *file)
 /* vm_lock is held on entry and return, including a supervisor-slot wait.
  * Both the launcher ioctl and the experimental native-task driver use this
  * operation; request/result storage belongs to the trusted caller. */
-static long cv_step_locked(struct context *c, struct cv_step *request)
+/* `jdl` non-NULL selects the native loop's coarse bound: a jiffies deadline, one load per
+ * check instead of a clock read. It bounds how long vm_lock is held exactly as the
+ * nanosecond budget does, to within one tick. The test-hook build keeps nanoseconds. */
+static bool cv_step_stop_j(unsigned long jdl)
 {
-    struct cv_step r = *request;
+    return signal_pending(current) || need_resched() ||
+           time_after_eq(jiffies, jdl) || TEST_EXPIRED();
+}
+#define CV_STEP_BUDGET_J (msecs_to_jiffies(CV_STEP_BUDGET_NS / NSEC_PER_MSEC) + 1)
+static long cv_step_locked(struct context *c, struct cv_step *request, const unsigned long *jdl)
+{
+    /* Edited in place: nothing is stored before the last line, so a refusal leaves the
+     * request as it came. */
+    struct cv_step *const r = request;
     long rc = -EINVAL;
     unsigned long flags;
     struct cv_thread *t;
     u64 budget_end;
     bool resolved = false, text = false;
-    t = find_thread(c, r.thread);
+    t = c->main_thread && c->main_thread->id == r->thread ? c->main_thread : find_thread(c, r->thread);
     if (!t || t->terminal) { rc = -ESRCH; return rc; }
-    if (r.reply > 1 || (r.reply != (t->started && t->event == 3))) return rc;
+    if (r->reply > 1 || (r->reply != (t->started && t->event == 3))) return rc;
     if (!t->started && (!t->frame[8] || !t->frame[12])) return rc;
     /* A frame that has not started needs a free slot to enter. Waiting is safe ACROSS
      * contexts -- two vexec processes never join each other, so run.py's parallel pair simply
@@ -2546,18 +2557,20 @@ static long cv_step_locked(struct context *c, struct cv_step *request)
             return rc ? -EINTR : -EAGAIN;   /* the launcher's loop retries EAGAIN, as it does for the quantum */
         }
     }
-    rc = slot_acquire(t);
-    if (rc) return rc;
-    if (r.reply && !t->reply_cap) {
-        t->frame[28] = r.result; t->frame[29] = 0;
+    if (native_slot_transport && (!t->started || t->slot_exported)) {
+        rc = slot_acquire(t);
+        if (rc) return rc;
+    }
+    if (r->reply && !t->reply_cap) {
+        t->frame[28] = r->result; t->frame[29] = 0;
     }
     /* Each CSRUNV restarts the 5 ms quantum, so a domain that keeps
      * faulting would never be preempted: bound the resolved faults by
      * one quantum of this ioctl, then return and release vm_lock. */
-    budget_end = ktime_get_ns() + CV_STEP_BUDGET_NS;
+    budget_end = jdl ? 0 : ktime_get_ns() + CV_STEP_BUDGET_NS;
     TEST_STEP_BEGIN();
     TEST_HOOK(3);
-    for (unsigned long action = r.reply ? 2 : 0, entries = 0;;
+    for (unsigned long action = r->reply ? 2 : 0, entries = 0;;
          action = 0, ++entries) {
         if (entries && !text) TEST_HOOK(2);  /* after a data fault only, see below */
         preempt_disable(); local_irq_save(flags);
@@ -2569,7 +2582,7 @@ static long cv_step_locked(struct context *c, struct cv_step *request)
          * identically). Before a later one the fault just resolved goes
          * back as it was, already counted. */
         TEST_CHECK();
-        if (cv_step_stop(budget_end)) {
+        if (jdl ? cv_step_stop_j(*jdl) : cv_step_stop(budget_end)) {
             local_irq_restore(flags); preempt_enable();
             TEST_STOPPED(!entries);
             if (!entries) {
@@ -2655,12 +2668,12 @@ static long cv_step_locked(struct context *c, struct cv_step *request)
         text = text_fault(c, t->frame[5]);
         if (!text)
             TEST_HOOK(4);
-        if (cv_step_stop(budget_end)) {
+        if (jdl ? cv_step_stop_j(*jdl) : cv_step_stop(budget_end)) {
             TEST_STOPPED(false);
             TEST_REAL_STOP(false, budget_end);
             break;
         }
-        if (resolve(c, t, budget_end))
+        if (resolve(c, t, jdl ? ktime_get_ns() + CV_STEP_BUDGET_NS : budget_end))
             break;
         t->sfence_pending = true;
         if (!text) ++c->stats.faults;
@@ -2671,22 +2684,21 @@ static long cv_step_locked(struct context *c, struct cv_step *request)
          * when the namespace consists of live or pinned identities. */
         t->frame[2] = error ? 2 : 1;
     }
-    r.kind = t->frame[2]; r.cause = t->frame[3];
-    r.pc = t->frame[4]; r.address = t->frame[5];
+    r->kind = t->frame[2]; r->cause = t->frame[3];
+    r->pc = t->frame[4]; r->address = t->frame[5];
     /* The low word of register slots 1 and 8 (byte 80 and 192: x1 = ra,
      * x8 = fp; see wire.h cv_step). The escape writes them on a terminal
      * step; otherwise they hold what ENTRY left, zero. */
-    r.ra = t->frame[10]; r.fp = t->frame[24];
+    r->ra = t->frame[10]; r->fp = t->frame[24];
     /* Eight loads and stores: for 64 aligned bytes the kernel's memcpy is
      * a call around a four-byte loop. */
-    r.args[0] = t->frame[72]; r.args[1] = t->frame[73];
-    r.args[2] = t->frame[74]; r.args[3] = t->frame[75];
-    r.args[4] = t->frame[76]; r.args[5] = t->frame[77];
-    r.args[6] = t->frame[78]; r.args[7] = t->frame[79];
-    r.thread = t->id;
-    t->terminal = r.kind == 2;
-    if (r.kind == 4 && !resolved && !text_fault(c, r.address)) ++c->stats.faults;
-    *request = r;
+    r->args[0] = t->frame[72]; r->args[1] = t->frame[73];
+    r->args[2] = t->frame[74]; r->args[3] = t->frame[75];
+    r->args[4] = t->frame[76]; r->args[5] = t->frame[77];
+    r->args[6] = t->frame[78]; r->args[7] = t->frame[79];
+    r->thread = t->id;
+    t->terminal = r->kind == 2;
+    if (r->kind == 4 && !resolved && !text_fault(c, r->address)) ++c->stats.faults;
     return 0;
 }
 
@@ -2901,7 +2913,7 @@ thread_unwind:
     } else if (op == CV_STEP) {
         struct cv_step r __uninitialized;
         if (copy_from_user(&r, (void __user *)arg, sizeof(r))) { rc = -EFAULT; goto out; }
-        rc = cv_step_locked(c, &r);
+        rc = cv_step_locked(c, &r, NULL);
         if (!rc && copy_to_user((void __user *)arg, &r, sizeof(r))) {
             struct cv_thread *t = find_thread(c, r.thread);
             if (t) t->terminal = true;

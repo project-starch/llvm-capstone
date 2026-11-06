@@ -26,7 +26,9 @@ struct cv_copy_state {
 static void cv_copy_enter(void *opaque)
 {
     struct cv_copy_state *s = opaque;
-    s->admission_cause = slot_acquire(s->t) ? CU_REFUSED : 0;
+    /* slot_acquire() returns 0 at once for a started, resident frame: skip the call. */
+    s->admission_cause = (!native_slot_transport || (s->t->started && !s->t->slot_exported)) ? 0 :
+                         slot_acquire(s->t) ? CU_REFUSED : 0;
     mmap_read_lock(s->c->mm);
     preempt_disable();
     local_irq_save(s->irq_flags);
@@ -219,9 +221,48 @@ out:
 static void cv_copy_between(void *opaque)
 {
     (void)opaque;
+    /* Hand vm_lock over only when the scheduler wants this CPU (single hart): with nothing
+     * else runnable no other task can take it, and the unlock/lock pair costs more than a
+     * page of copying. A pending signal or the end of the quantum also yields. */
+    if (!need_resched() && !signal_pending(current)) return;
     mutex_unlock(&vm_lock);
     cond_resched();
     mutex_lock(&vm_lock);
+}
+
+/* The admission rule of every checked copy; the caller holds vm_lock. */
+static bool cv_copy_admitted(struct context *c, struct cv_thread *t)
+{
+    return checked_copy && c && t && t->context == c && c->mm == current->mm &&
+        c->dom_pid == task_pid_nr(current) && t == c->main_thread && !t->user_frame &&
+        t->started && !t->terminal && t->event == 3 &&
+        thread_count(c) == 1 && num_possible_cpus() == 1;
+}
+static void cv_copy_state_init(struct cv_copy_state *s, struct context *c, struct cv_thread *t,
+                               enum cu_direction dir, u64 length)
+{
+    s->c = c; s->t = t; s->arena = NULL; s->direction = dir; s->length = length;
+    s->irq_flags = 0; s->root = 0; s->admission_cause = 0;
+}
+static const struct cu_ops cv_copy_ops = {
+    cv_copy_hold, cv_copy_release, cv_copy_enter, cv_copy_check,
+    cv_copy_inatomic, cv_copy_drain, cv_copy_leave, cv_copy_resolve, cv_copy_between
+};
+/* The native syscall loop's copy. Runs inside the context's own CV_STEP_NATIVE ioctl, whose
+ * file reference outlives it (the control descriptor is never an application descriptor), and
+ * reuses the context's state object: the protocol (hold, per-chunk check inside the exclusion
+ * window, non-destructive fault retry, recheck, release) is the same cu_copy. */
+struct cu_result cv_checked_copy_reuse(struct cv_copy_state *, struct context *, struct cv_thread *,
+                                       const struct cn_capref *, u64, void *, u64, enum cu_direction);
+struct cu_result cv_checked_copy_reuse(struct cv_copy_state *s, struct context *c, struct cv_thread *t,
+                                       const struct cn_capref *ref, u64 offset,
+                                       void *buffer, u64 length, enum cu_direction dir)
+{
+    lockdep_assert_held(&vm_lock);
+    if (!cv_copy_admitted(c, t) || !IS_ALIGNED((unsigned long)s->descriptor, 16))
+        return (struct cu_result){0, CU_REFUSED};
+    cv_copy_state_init(s, c, t, dir, length);
+    return cu_copy(&cv_copy_ops, s, ref, offset, buffer, length, dir, PAGE_SIZE);
 }
 
 struct cu_result cv_checked_copy(struct context *, struct cv_thread *,
@@ -231,18 +272,11 @@ struct cu_result cv_checked_copy(struct context *c, struct cv_thread *t,
                                 const struct cn_capref *ref, u64 offset,
                                 void *buffer, u64 length, enum cu_direction dir)
 {
-    static const struct cu_ops ops = {
-        cv_copy_hold, cv_copy_release, cv_copy_enter, cv_copy_check,
-        cv_copy_inatomic, cv_copy_drain, cv_copy_leave, cv_copy_resolve, cv_copy_between
-    };
     struct cv_copy_state *s;
     struct file *owner;
     struct cu_result result = {0, CU_REFUSED};
     lockdep_assert_held(&vm_lock);
-    if (!checked_copy || !c || !t || t->context != c || c->mm != current->mm ||
-        c->dom_pid != task_pid_nr(current) || t != c->main_thread || t->user_frame ||
-        !t->started || t->terminal || t->event != 3 ||
-        thread_count(c) != 1 || num_possible_cpus() != 1) return result;
+    if (!cv_copy_admitted(c, t)) return result;
     /* Keep the backing context alive across both lock-dropping callbacks.
      * The caller also owns its invocation reference until it handles result. */
     owner = fget(c->dom_fd);
@@ -250,8 +284,8 @@ struct cu_result cv_checked_copy(struct context *c, struct cv_thread *t,
     if (owner->private_data != c) { fput(owner); return result; }
     s = kzalloc(sizeof(*s), GFP_KERNEL);
     if (!s) { fput(owner); return result; }
-    s->c = c; s->t = t; s->direction = dir; s->length = length;
-    result = cu_copy(&ops, s, ref, offset, buffer, length, dir, PAGE_SIZE);
+    cv_copy_state_init(s, c, t, dir, length);
+    result = cu_copy(&cv_copy_ops, s, ref, offset, buffer, length, dir, PAGE_SIZE);
     kfree(s);
     fput(owner);
     return result;

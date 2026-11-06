@@ -288,8 +288,10 @@ static long dom_service(struct context *c, struct cv_step *s)
     long rc;
     s->reply = 1;
     s->result = -ENOSYS;
-    if (native_dispatch && (s->args[7] == NS_SERVICE_NATIVE ||
-        s->args[7] == CV_SERVICE_DELEGATE || s->args[7] == CV_SERVICE_THREAD_DELEGATE))
+    if (native_dispatch && s->args[7] == NS_SERVICE_NATIVE)
+        return native_service_direct(c, s);
+    if (native_dispatch && (s->args[7] == CV_SERVICE_DELEGATE ||
+        s->args[7] == CV_SERVICE_THREAD_DELEGATE))
         return native_service(c, s);
     switch (s->args[7]) {
     case CV_SERVICE_THREAD_SELF: s->result = 1; break;
@@ -330,12 +332,21 @@ static long dom_service(struct context *c, struct cv_step *s)
     }
     return 0;
 }
+#define NATIVE_STOP(jdl, ns) ((jdl) ? cv_step_stop_j(*(jdl)) : cv_step_stop(ns))
 static long dom_ioctl(struct file *f, unsigned int op, unsigned long arg)
 {
     struct context *c = f->private_data;
     struct cv_step *s = &c->dom_step;
     long rc;
+#ifdef CV_TEST_HOOKS
+    /* The step-hook build keeps nanosecond deadlines so its stop classes stay exact. */
     u64 deadline = ktime_get_ns() + CV_STEP_BUDGET_NS;
+    const unsigned long *jdl = NULL;
+#else
+    unsigned long jdeadline = jiffies + CV_STEP_BUDGET_J;
+    const unsigned long *jdl = native_dispatch ? &jdeadline : NULL;
+    u64 deadline = native_dispatch ? 0 : ktime_get_ns() + CV_STEP_BUDGET_NS;
+#endif
     if (current->mm != c->mm || task_pid_nr(current) != c->dom_pid) return -EPERM;
     if (op == DOM_PROTECT_DONE) {
         /* Only the scalar trampoline can issue this operation. Complete even
@@ -361,17 +372,17 @@ static long dom_ioctl(struct file *f, unsigned int op, unsigned long arg)
         (c->dom_delegate && c->dom_delegate->pending)) return -EINVAL;
     if (mutex_lock_interruptible(&vm_lock)) return -EINTR;
 native_again:
-    rc = cv_step_locked(c, s);
+    rc = cv_step_locked(c, s, jdl);
     if (rc == -EINTR || rc == -EAGAIN) goto out;
     if (rc) goto fault;
     s->reply = 0;
     if (s->kind == 1) goto out;
     if (s->kind == 4) {
-        if (native_dispatch && cv_step_stop(deadline)) goto out;
+        if (native_dispatch && NATIVE_STOP(jdl, deadline)) goto out;
         rc = resolve(c, c->main_thread, ktime_get_ns() + CV_STEP_BUDGET_NS);
         if (!rc) {
             c->main_thread->sfence_pending = true;
-            if (native_dispatch && !cv_step_stop(deadline)) goto native_again;
+            if (native_dispatch && !NATIVE_STOP(jdl, deadline)) goto native_again;
             goto out;
         }
         goto fault;
@@ -379,7 +390,7 @@ native_again:
     if (s->kind != 3) { rc = -EFAULT; goto fault; }
     if (native_dispatch) TEST_HOOK(5);
     rc = dom_service(c, s);
-    if (!rc && native_dispatch && !cv_step_stop(deadline)) goto native_again;
+    if (!rc && native_dispatch && !NATIVE_STOP(jdl, deadline)) goto native_again;
     if (rc >= 0) goto out;
 fault:
     pr_info("capstone_dom: fault rc=%ld kind=%llu cause=%llu pc=0x%llx address=0x%llx\n",
@@ -398,6 +409,7 @@ static int dom_release(struct inode *inode, struct file *f)
     {
         struct context *c = f->private_data;
         ns_session_free(c->native_session);
+        if (c->native_context) kfree(c->native_context->bounce);
         kfree(c->native_context);
     }
     dom_delegate_free(f->private_data);

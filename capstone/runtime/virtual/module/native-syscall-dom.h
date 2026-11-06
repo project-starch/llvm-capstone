@@ -6,10 +6,22 @@
 #include "native-syscall-table.c"
 #include "native-syscall-core.c"
 
-struct cn_context { struct context *c; struct cv_thread *t; };
+/* Per native context, allocated once with its session: the owner it was created for, the
+ * bounce buffer and the copy state of the specialised calls. Nothing is allocated per call. */
+#define NATIVE_FAST_MAX 65536U
+struct cn_context {
+    struct context *c;
+    struct cv_thread *t;
+    struct cn_owner owner;
+    void *bounce;
+    struct cv_copy_state copy;
+};
 static bool native_dispatch;
 module_param(native_dispatch, bool, 0444);
 MODULE_PARM_DESC(native_dispatch, "checked in-kernel native syscall loop (default off)");
+static bool native_fast = true;
+module_param(native_fast, bool, 0444);
+MODULE_PARM_DESC(native_fast, "specialised paths for scalar, read and write calls inside native_dispatch (default on)");
 
 static int native_owner(struct cn_context *n, const struct cn_owner *owner)
 {
@@ -118,6 +130,51 @@ static int native_acquire(void *opaque, const struct ns_invocation *call, void *
     *held = file;
     return 0;
 }
+/* Value of a call without arguments that Linux answers from the task alone, or false. */
+static bool native_task_value(u64 nr, long *value)
+{
+    switch (nr) {
+    case CAPSTONE_SYS_getpid: *value = task_tgid_vnr(current); return true;
+    case CAPSTONE_SYS_getppid: *value = task_ppid_nr_ns(current, task_active_pid_ns(current)); return true;
+    case CAPSTONE_SYS_gettid: *value = task_pid_vnr(current); return true;
+    case CAPSTONE_SYS_getuid: *value = from_kuid_munged(current_user_ns(), current_uid()); return true;
+    case CAPSTONE_SYS_geteuid: *value = from_kuid_munged(current_user_ns(), current_euid()); return true;
+    case CAPSTONE_SYS_getgid: *value = from_kgid_munged(current_user_ns(), current_gid()); return true;
+    case CAPSTONE_SYS_getegid: *value = from_kgid_munged(current_user_ns(), current_egid()); return true;
+    default: return false;
+    }
+}
+/* read, write, pread64, pwrite64 on a held file and a kernel buffer; vm_lock is dropped. */
+static long native_rw(struct file *file, u64 nr, u64 offset, void *data, size_t length)
+{
+    bool positional = nr == CAPSTONE_SYS_pread64 || nr == CAPSTONE_SYS_pwrite64, locked = false;
+    bool read = nr == CAPSTONE_SYS_read || nr == CAPSTONE_SYS_pread64;
+    loff_t pos, *ppos;
+    long rc;
+    if (positional && (s64)offset < 0) return -EINVAL;
+    if (positional && !(file->f_mode & (nr == CAPSTONE_SYS_pread64 ? FMODE_PREAD : FMODE_PWRITE)))
+        return -ESPIPE;
+    /* The descriptor's own open mode decides, as in Linux: kernel_write() warns (and a
+     * panic_on_warn kernel stops) when it is handed a file that was not opened for writing. */
+    if (!(file->f_mode & (read ? FMODE_READ : FMODE_WRITE))) return -EBADF;
+    if (!(file->f_mode & (read ? FMODE_CAN_READ : FMODE_CAN_WRITE))) return -EINVAL;
+    mutex_unlock(&vm_lock);
+    if (!positional && (file->f_mode & FMODE_ATOMIC_POS)) {
+        mutex_lock(&file->f_pos_lock); locked = true;
+    }
+    pos = positional ? offset : file->f_pos;
+    ppos = !positional && (file->f_mode & FMODE_STREAM) ? NULL : &pos;
+    if (read) rc = kernel_read(file, data, length, ppos);
+    else {
+        file_start_write(file);
+        rc = kernel_write(file, data, length, ppos);
+        file_end_write(file);
+    }
+    if (!positional && ppos && rc >= 0) file->f_pos = pos;
+    if (locked) mutex_unlock(&file->f_pos_lock);
+    mutex_lock(&vm_lock);
+    return rc;
+}
 static struct ns_completion native_issue(void *opaque, const struct ns_invocation *call,
                                           void *held)
 {
@@ -126,17 +183,9 @@ static struct ns_completion native_issue(void *opaque, const struct ns_invocatio
     const u64 *a = call->scalar;
     u64 nr = call->descriptor->nr;
     long rc = -ENOSYS;
-    bool positional, locked = false;
-    loff_t pos, *ppos;
     struct timespec64 ts;
+    if (native_task_value(nr, &rc)) goto done;
     switch (nr) {
-    case CAPSTONE_SYS_getpid: rc = task_tgid_vnr(current); break;
-    case CAPSTONE_SYS_getppid: rc = task_ppid_nr_ns(current, task_active_pid_ns(current)); break;
-    case CAPSTONE_SYS_gettid: rc = task_pid_vnr(current); break;
-    case CAPSTONE_SYS_getuid: rc = from_kuid_munged(current_user_ns(), current_uid()); break;
-    case CAPSTONE_SYS_geteuid: rc = from_kuid_munged(current_user_ns(), current_euid()); break;
-    case CAPSTONE_SYS_getgid: rc = from_kgid_munged(current_user_ns(), current_gid()); break;
-    case CAPSTONE_SYS_getegid: rc = from_kgid_munged(current_user_ns(), current_egid()); break;
     case CAPSTONE_SYS_sched_yield:
         mutex_unlock(&vm_lock); yield(); mutex_lock(&vm_lock); rc = 0; break;
     case CAPSTONE_SYS_clock_gettime:
@@ -152,25 +201,10 @@ static struct ns_completion native_issue(void *opaque, const struct ns_invocatio
         mutex_unlock(&vm_lock); rc = vfs_llseek(file, a[1], a[2]); mutex_lock(&vm_lock); break;
     case CAPSTONE_SYS_read: case CAPSTONE_SYS_write:
     case CAPSTONE_SYS_pread64: case CAPSTONE_SYS_pwrite64:
-        positional = nr == CAPSTONE_SYS_pread64 || nr == CAPSTONE_SYS_pwrite64;
-        if (positional && (s64)a[3] < 0) { rc = -EINVAL; break; }
-        if (positional && !(file->f_mode & (nr == CAPSTONE_SYS_pread64 ? FMODE_PREAD : FMODE_PWRITE))) {
-            rc = -ESPIPE; break;
-        }
-        mutex_unlock(&vm_lock);
-        if (!positional && (file->f_mode & FMODE_ATOMIC_POS)) {
-            mutex_lock(&file->f_pos_lock); locked = true;
-        }
-        pos = positional ? a[3] : file->f_pos;
-        ppos = !positional && (file->f_mode & FMODE_STREAM) ? NULL : &pos;
-        if (nr == CAPSTONE_SYS_read || nr == CAPSTONE_SYS_pread64)
-            rc = kernel_read(file, call->buffer[1].data, call->buffer[1].length, ppos);
-        else rc = kernel_write(file, call->buffer[1].data, call->buffer[1].length, ppos);
-        if (!positional && ppos && rc >= 0) file->f_pos = pos;
-        if (locked) mutex_unlock(&file->f_pos_lock);
-        mutex_lock(&vm_lock);
+        rc = native_rw(file, nr, a[3], call->buffer[1].data, call->buffer[1].length);
         break;
     }
+done:
     if (rc <= -ERESTARTSYS && rc >= -ERESTART_RESTARTBLOCK) rc = -EINTR;
     /* No automatic replay: Linux may already have consumed input. */
     return (struct ns_completion){rc, 1, 0};
@@ -189,7 +223,7 @@ static int native_session(struct context *c)
     if (c->native_session) return 0;
     c->native_context = kzalloc(sizeof(*c->native_context), GFP_KERNEL);
     if (!c->native_context) return -ENOMEM;
-    *c->native_context = (struct cn_context){c, c->main_thread};
+    c->native_context->c = c; c->native_context->t = c->main_thread; c->native_context->owner = owner;
     rc = ns_session_create(c->native_context, &owner, &ops, c, &c->native_session);
     if (rc) { kfree(c->native_context); c->native_context = NULL; }
     return rc;
@@ -206,6 +240,120 @@ static int native_meta_reply(struct context *c, const struct cn_capref *meta, lo
     c->dom_step.result = 0;
     return r.cause ? -EFAULT : 0;
 }
+
+/* ---- Specialised paths: the same calls, the same checks and the same results as the shared
+ * dispatcher, without its per-call snapshot. They take effect only when every register of the
+ * escape has the plain shape of that call; anything else (extra tags, nonzero upper words,
+ * unusual sizes, a descriptor that would be refused) returns false BEFORE the epoch is
+ * admitted or any effect happens, and the shared dispatcher then decides and reports. ---- */
+#define NF_ARGS 0x3fc00ULL  /* x10..x17: a0..a5, the call number, the selector */
+
+static __always_inline bool nf_regs_plain(struct cv_thread *t, u64 kinds, u64 pointer_regs)
+{
+    const unsigned long *f = t->frame;
+    u64 hi = 0;
+    if ((kinds >> 32) & NF_ARGS) return false;               /* raw-move cargo */
+    if ((kinds & NF_ARGS) != pointer_regs) return false;     /* exactly the expected tags */
+    /* Untagged upper words are zero: x10..x17 live at frame[8 + 2 * reg + 1]. */
+#define NF_HI(reg) (((pointer_regs >> (reg)) & 1) ? 0 : READ_ONCE(f[8 + 2 * (reg) + 1]))
+    hi = NF_HI(10) | NF_HI(11) | NF_HI(12) | NF_HI(13) | NF_HI(14) | NF_HI(15) | NF_HI(16) | NF_HI(17);
+#undef NF_HI
+    return !hi;
+}
+static int nf_authorize(struct cn_context *n, const struct cn_capref *ref, u64 bytes, bool write)
+{
+    struct cv_copy_state *s = &n->copy;
+    u64 address;
+    u32 cause;
+    cv_copy_state_init(s, n->c, n->t, write ? CU_TO_DOMAIN : CU_FROM_DOMAIN, bytes);
+    cv_copy_enter(s);
+    cause = cv_copy_check(s, ref, 0, bytes, write ? CU_TO_DOMAIN : CU_FROM_DOMAIN, &address);
+    cv_copy_drain(s);
+    cv_copy_leave(s);
+    return cause ? -EFAULT : 0;
+}
+/* Returns true when the call was completed (step->result set). */
+static bool native_fast_try(struct context *c, struct cv_step *step)
+{
+    struct cn_context *n = c->native_context;
+    struct cv_thread *t = c->main_thread;
+    u64 nr = step->args[6], kinds, epoch;
+    struct cn_capref ref;
+    struct cu_result r;
+    struct file *file;
+    size_t length;
+    long rc, value;
+    bool write;
+
+    if (!native_fast || !n || native_owner(n, &n->owner) ||
+        current->seccomp.mode != SECCOMP_MODE_DISABLED) return false;
+    kinds = READ_ONCE(t->frame[83]);
+    if (native_task_value(nr, &value)) {
+        if (!nf_regs_plain(t, kinds, 0)) return false;
+        if (ns_session_admit(c->native_session, READ_ONCE(t->frame[82]))) value = -ESTALE;
+        step->result = value;
+        return true;
+    }
+    switch (nr) {
+    case CAPSTONE_SYS_read: case CAPSTONE_SYS_pread64: write = false; break;
+    case CAPSTONE_SYS_write: case CAPSTONE_SYS_pwrite64: write = true; break;
+    default: return false;
+    }
+    length = step->args[2];
+    if (!length || length > NATIVE_FAST_MAX || step->args[0] > INT_MAX ||
+        !nf_regs_plain(t, kinds, 1ULL << 11) || !dom_fd_allowed(c, step->args[0]) ||
+        ((nr == CAPSTONE_SYS_pread64 || nr == CAPSTONE_SYS_pwrite64) && (s64)step->args[3] < 0))
+        return false;
+    file = fget(step->args[0]);
+    if (!file) return false;
+    if (file->private_data == c || !file->f_op ||
+        ((nr == CAPSTONE_SYS_pread64 || nr == CAPSTONE_SYS_pwrite64) &&
+         !(file->f_mode & (write ? FMODE_PWRITE : FMODE_PREAD)))) { fput(file); return false; }
+    if (!n->bounce) {
+        n->bounce = kmalloc(NATIVE_FAST_MAX, GFP_KERNEL);
+        if (!n->bounce) { fput(file); return false; }
+    }
+    epoch = READ_ONCE(t->frame[82]);
+    if (ns_session_admit(c->native_session, epoch)) { fput(file); step->result = -ESTALE; return true; }
+    ref = (struct cn_capref){t->id, epoch, 11, 0};
+    /* Preflight only: the copy below re-authenticates every chunk. */
+    if (nf_authorize(n, &ref, length, !write)) { value = -EFAULT; goto out; }
+    if (write) {
+        r = cv_checked_copy_reuse(&n->copy, c, t, &ref, 0, n->bounce, length, CU_FROM_DOMAIN);
+        if (r.cause || r.bytes_done != length) { value = -EFAULT; goto out; }
+    }
+    rc = native_rw(file, nr, step->args[3], n->bounce, length);
+    if (rc <= -ERESTARTSYS && rc >= -ERESTART_RESTARTBLOCK) rc = -EINTR;
+    value = rc;
+    if (rc > 0 && (size_t)rc > length) value = -EPROTO;
+    else if (rc > 0 && !write) {
+        r = cv_checked_copy_reuse(&n->copy, c, t, &ref, 0, n->bounce, rc, CU_TO_DOMAIN);
+        if (r.bytes_done > (size_t)rc || (!r.cause && r.bytes_done != (size_t)rc)) value = -EPROTO;
+        else if (r.cause) value = r.bytes_done ? (long)r.bytes_done : -EFAULT;
+    }
+out:
+    fput(file);
+    step->result = value;
+    return true;
+}
+/* The register-ABI service: a6 is the call, a0..a5 keep their tags. */
+static long native_service_direct(struct context *c, struct cv_step *step)
+{
+    struct ns_result result = {0};
+    long rc;
+    step->reply = 1;
+    if (!checked_copy) return -EOPNOTSUPP;
+    if (!c->native_session) {
+        rc = native_session(c);
+        if (rc) return rc;
+    }
+    if (!native_supported(step->args[6])) { step->result = -ENOSYS; return 0; }
+    if (native_fast_try(c, step)) return 0;
+    rc = ns_dispatch(c->native_session, READ_ONCE(c->main_thread->frame[82]), &result);
+    step->result = rc ? rc : result.value;
+    return 0;
+}
+/* The exchange-buffer service of the SDK's delegate calls. */
 static long native_service(struct context *c, struct cv_step *step)
 {
     struct ns_result result = {0};
@@ -217,17 +365,10 @@ static long native_service(struct context *c, struct cv_step *step)
     size_t lengths[6];
     unsigned i;
     long rc;
-    bool direct = step->args[7] == NS_SERVICE_NATIVE;
     step->reply = 1;
     if (!checked_copy) return -EOPNOTSUPP;
     rc = native_session(c);
     if (rc) return rc;
-    if (direct) {
-        if (!native_supported(step->args[6])) { step->result = -ENOSYS; return 0; }
-        rc = ns_dispatch(c->native_session, meta.context_epoch, &result);
-        step->result = rc ? rc : result.value;
-        return 0;
-    }
     exchange.frame_slot = 11;
     copied = cv_checked_copy(c, c->main_thread, &meta, 0, &e, sizeof(e), CU_FROM_DOMAIN);
     if (copied.cause) return -EFAULT;

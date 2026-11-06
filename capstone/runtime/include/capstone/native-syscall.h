@@ -89,4 +89,7 @@ int ns_dispatch(struct ns_session *, cn_u64 epoch, struct ns_result *);
 int ns_dispatch_request(struct ns_session *, cn_u64 epoch,
                         const struct ns_request *, struct ns_result *);
 void ns_get_counters(const struct ns_session *, struct ns_counters *);
+/* The replay rule of every dispatch, for a provider's own fast path: an epoch is admitted
+ * once, strictly increasing, and consumed even when the call then fails. */
+int ns_session_admit(struct ns_session *, cn_u64 epoch);
 #endif
