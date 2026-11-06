@@ -38,6 +38,6 @@ for arm in ${BUDGET_ARMS:-plain launcher native}; do
   done
  done
 done
-vm exec -- sh -c 'rmmod capstone_vm; echo unload_rc=$?; dmesg' >"$O/after.log" 2>&1
+vm exec -- sh -c 'echo native_fast_hits=$(cat /sys/module/capstone_vm/parameters/native_fast_hits 2>/dev/null); rmmod capstone_vm; echo unload_rc=$?; dmesg' >"$O/after.log" 2>&1
 ! grep -aEq 'WARNING:|BUG:|thread create refused|Exec format error' "$O/after.log"
 grep -aq 'unload_rc=0' "$O/after.log"

@@ -23,7 +23,7 @@ trap 'vm down >"$O/down.log" 2>&1 || true' EXIT
 vm exec -- sh -c 'set -e; rmmod capstone_vm; insmod /mnt/control/module dom_binfmt=1 dom_wide_grants=1 native_slot_transport=1 checked_copy=1 native_dispatch=1 supervisor_slots=32 unpinned=1 '"${MODULE_ARGS:-}"'; echo 0 >/proc/sys/fs/binfmt_misc/status; cp /mnt/host/probes/probe.dom /tmp/; chmod +x /tmp/probe.dom; yes Q | head -c 131072 >/tmp/input' > "$O/setup.log" 2>&1
 rc=0
 vm exec -- sh -c 'cd /tmp; ./probe.dom <input >output; r=$?; cat output; exit $r' > "$O/result.log" 2>&1 || rc=$?
-vm exec -- sh -c 'rmmod capstone_vm; echo unload_rc=$?; dmesg' > "$O/after.log" 2>&1
+vm exec -- sh -c 'echo native_fast_hits=$(cat /sys/module/capstone_vm/parameters/native_fast_hits); rmmod capstone_vm; echo unload_rc=$?; dmesg' > "$O/after.log" 2>&1
 cat "$O/result.log"
 if grep -aEq 'WARNING:|BUG:|thread create refused|Exec format error' "$O/after.log"; then rc=1; fi
 grep -aq 'unload_rc=0' "$O/after.log" || rc=1

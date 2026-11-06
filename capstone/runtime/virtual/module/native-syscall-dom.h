@@ -20,6 +20,9 @@ static bool native_dispatch;
 module_param(native_dispatch, bool, 0444);
 MODULE_PARM_DESC(native_dispatch, "checked in-kernel native syscall loop (default off)");
 static bool native_fast = true;
+static unsigned long native_fast_hits;
+module_param(native_fast_hits, ulong, 0444);
+MODULE_PARM_DESC(native_fast_hits, "calls completed by the specialised paths (evidence for the test drivers)");
 module_param(native_fast, bool, 0444);
 MODULE_PARM_DESC(native_fast, "specialised paths for scalar, read and write calls inside native_dispatch (default on)");
 
@@ -292,6 +295,7 @@ static bool native_fast_try(struct context *c, struct cv_step *step)
         if (!nf_regs_plain(t, kinds, 0)) return false;
         if (ns_session_admit(c->native_session, READ_ONCE(t->frame[82]))) value = -ESTALE;
         step->result = value;
+        ++native_fast_hits;
         return true;
     }
     switch (nr) {
@@ -334,6 +338,7 @@ static bool native_fast_try(struct context *c, struct cv_step *step)
 out:
     fput(file);
     step->result = value;
+    ++native_fast_hits;
     return true;
 }
 /* The register-ABI service: a6 is the call, a0..a5 keep their tags. */

@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
+#include <sys/mman.h>
 #ifdef NATIVE_DIRECT
 extern long __capstone_native_syscall(long, void *, void *, void *, void *, void *, void *);
 static long input(void *p, unsigned long n)
@@ -27,6 +28,20 @@ int main(int argc, char **argv)
     ((volatile char *)buffer)[65535] = 0;
     long expected = bytes ? bytes : pid();
     int failures = 0;
+    if (bytes == 4097) {
+        /* One page mapped and unmapped, never touched: the map service pair. */
+        __asm__ volatile(".insn i 0x13, 2, x0, x0, 0x7a1" ::: "memory");
+        for (unsigned i = 0; i < calls; ++i) {
+            void *p = mmap(0, 4096, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+            failures += p == MAP_FAILED;
+            if (p != MAP_FAILED) failures += munmap(p, 4096) != 0;
+        }
+        __asm__ volatile(".insn i 0x13, 2, x0, x0, 0x7a2" ::: "memory");
+        char text[128];
+        int n = snprintf(text, sizeof(text), "BUDGET bytes=%u calls=%u failures=%d\n", bytes, calls, failures);
+        write(1, text, n);
+        return failures != 0;
+    }
     __asm__ volatile(".insn i 0x13, 2, x0, x0, 0x7a1" ::: "memory");
     for (unsigned i = 0; i < calls; ++i)
         failures += (bytes ? input(buffer, bytes) : pid()) != expected;
