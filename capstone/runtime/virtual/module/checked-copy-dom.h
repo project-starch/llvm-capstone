@@ -11,6 +11,53 @@ static bool checked_copy;
 module_param(checked_copy, bool, 0444);
 MODULE_PARM_DESC(checked_copy, "Experimental CSCHECK helper (matching QEMU required; default off)");
 
+#ifdef CV_RACE_TEST
+/* Test-only build (make CV_RACE_TEST=1; tests/native-race). The production
+ * module compiles none of this. A racer thread B, a real second domain thread
+ * of the same context, is run deterministically by the kernel at a chosen
+ * point of a checked copy: the points where the copy leaves its exclusion
+ * window and another thread could run on the single hart. The four switches
+ * are deliberately broken variants (negative controls) of the safe protocol. */
+enum { RT_SITE_NONE, RT_SITE_HOLD, RT_SITE_BETWEEN, RT_SITE_FAULT_PRE,
+       RT_SITE_FAULT_POST, RT_SITE_WINDOW };
+static bool rt_norecheck, rt_noexcl, rt_dummy, rt_nohold;
+module_param(rt_norecheck, bool, 0644);
+MODULE_PARM_DESC(rt_norecheck, "CONTROL: authenticate only the first chunk of a copy");
+module_param(rt_noexcl, bool, 0644);
+MODULE_PARM_DESC(rt_noexcl, "CONTROL: no irq/preempt/pagefault exclusion around check+copy");
+module_param(rt_dummy, bool, 0644);
+MODULE_PARM_DESC(rt_dummy, "CONTROL: prefault by a dummy store instead of handle_mm_fault");
+module_param(rt_nohold, bool, 0644);
+MODULE_PARM_DESC(rt_nohold, "CONTROL: no hold on the mapping across the copy");
+struct rt_state {
+    struct context *c;
+    struct cv_thread *b;
+    bool armed, fired, pending, b_parked, map_for_b;
+    int site;
+    u64 b_runs, copies, copy_done, hold_seen, unmap_held, quarantine_ok;
+    u32 copy_cause;
+    long b_result;
+};
+static struct rt_state rt;
+static void rt_site(struct context *, int);
+static void rt_pending(struct context *);
+static void rt_record(struct context *, const struct cu_result *, u64);
+static void rt_probe(struct context *, unsigned long, int);
+#define RT_SITE(c, where) rt_site(c, where)
+#define RT_SITE_UNLOCKED(c, where) do { \
+        if (rt.armed && !rt.fired && rt.site == (where)) { \
+            mutex_lock(&vm_lock); rt_site(c, where); mutex_unlock(&vm_lock); } } while (0)
+#define RT_PENDING(c) rt_pending(c)
+#define RT_PROBE(c, addr, which) rt_probe(c, addr, which)
+#define RT_NOEXCL() (rt_noexcl)
+#else
+#define RT_SITE(c, site) do { } while (0)
+#define RT_SITE_UNLOCKED(c, site) do { } while (0)
+#define RT_PENDING(c) do { } while (0)
+#define RT_PROBE(c, addr, which) do { } while (0)
+#define RT_NOEXCL() false
+#endif
+
 struct cv_copy_state {
     struct context *c;
     struct cv_thread *t;
@@ -21,6 +68,10 @@ struct cv_copy_state {
     cn_u32 admission_cause;
     /* kmalloc storage, never a VMAP_STACK physical-address conversion. */
     u64 descriptor[6] __aligned(16);
+#ifdef CV_RACE_TEST
+    bool rt_have;
+    u64 rt_off0, rt_addr0;
+#endif
 };
 
 static void cv_copy_enter(void *opaque)
@@ -28,9 +79,11 @@ static void cv_copy_enter(void *opaque)
     struct cv_copy_state *s = opaque;
     s->admission_cause = slot_acquire(s->t) ? CU_REFUSED : 0;
     mmap_read_lock(s->c->mm);
-    preempt_disable();
-    local_irq_save(s->irq_flags);
-    pagefault_disable();
+    if (!RT_NOEXCL()) {
+        preempt_disable();
+        local_irq_save(s->irq_flags);
+        pagefault_disable();
+    }
     s->root = select_root(s->c);
 }
 static void cv_copy_drain(void *opaque)
@@ -42,10 +95,14 @@ static void cv_copy_leave(void *opaque)
 {
     struct cv_copy_state *s = opaque;
     restore_root(s->root);
-    pagefault_enable();
-    local_irq_restore(s->irq_flags);
-    preempt_enable();
+    if (!RT_NOEXCL()) {
+        pagefault_enable();
+        local_irq_restore(s->irq_flags);
+        preempt_enable();
+    }
     mmap_read_unlock(s->c->mm);
+    /* A reschedule that became pending inside the window runs here. */
+    RT_PENDING(s->c);
 }
 static cn_u32 cv_copy_check(void *opaque, const struct cn_capref *ref,
                             cn_u64 offset, cn_u64 bytes,
@@ -55,6 +112,13 @@ static cn_u32 cv_copy_check(void *opaque, const struct cn_capref *ref,
     unsigned long cause;
     u64 *d = s->descriptor;
     if (s->admission_cause) return s->admission_cause;
+#ifdef CV_RACE_TEST
+    if (rt_norecheck && s->rt_have) {
+        /* CONTROL: trust the first authentication for the rest of the call. */
+        *address = s->rt_addr0 + (offset - s->rt_off0);
+        return 0;
+    }
+#endif
     if (ref->reserved || ref->context_id != s->t->id ||
         !ref->context_epoch || ref->context_epoch != READ_ONCE(s->t->frame[82]) ||
         !ref->frame_slot || ref->frame_slot >= 32) return CU_REFUSED;
@@ -80,6 +144,9 @@ static cn_u32 cv_copy_check(void *opaque, const struct cn_capref *ref,
     if (s->arena && (*address < s->arena->address ||
         *address - s->arena->address > s->arena->bytes ||
         bytes > s->arena->bytes - (*address - s->arena->address))) return CU_BOUNDS;
+#ifdef CV_RACE_TEST
+    if (!s->rt_have) { s->rt_have = true; s->rt_off0 = offset; s->rt_addr0 = *address; }
+#endif
     return 0;
 }
 static cn_u32 cv_copy_hold(void *opaque, const struct cn_capref *ref)
@@ -87,6 +154,7 @@ static cn_u32 cv_copy_hold(void *opaque, const struct cn_capref *ref)
     struct cv_copy_state *s = opaque;
     cn_u64 address = 0;
     cn_u32 cause;
+    RT_SITE(s->c, RT_SITE_HOLD);
     /* The engine still authenticates the zero-length access inside its
      * checked window. No byte is accessed, so no arena hold is necessary;
      * in particular a one-past cursor must not depend on its neighbor. */
@@ -98,6 +166,9 @@ static cn_u32 cv_copy_hold(void *opaque, const struct cn_capref *ref)
     cv_copy_drain(s);
     cv_copy_leave(s);
     if (cause) return cause;
+#ifdef CV_RACE_TEST
+    if (rt_nohold) return 0;    /* CONTROL: the mapping is not held */
+#endif
     s->arena = arena_at(s->c, address);
     if (!s->arena || s->arena->copy_retired || s->c->remapping == s->arena ||
         s->arena->copy_holds == UINT_MAX) return CU_REFUSED;
@@ -129,7 +200,11 @@ static void cv_copy_release(void *opaque)
 static cn_u64 cv_copy_inatomic(void *opaque, cn_u64 address, void *buffer,
                               cn_u64 bytes, enum cu_direction dir)
 {
-    (void)opaque;
+    struct cv_copy_state *s = opaque;
+    (void)s;
+    /* The point between the authentication and the access: only a
+     * preemption or interrupt can place another thread here. */
+    RT_SITE(s->c, RT_SITE_WINDOW);
     if (dir == CU_TO_DOMAIN)
         return __copy_to_user_inatomic((void __user *)address, buffer, bytes);
     return __copy_from_user_inatomic(buffer, (void __user *)address, bytes);
@@ -169,6 +244,18 @@ static cn_u32 cv_copy_resolve(void *opaque, cn_u64 address, enum cu_direction di
      * Only anonymous memory and this context's immutable image are admitted;
      * arbitrary file/device mappings remain unsupported. */
     mutex_unlock(&vm_lock);
+    RT_PROBE(s->c, address, 1);
+    RT_SITE_UNLOCKED(s->c, RT_SITE_FAULT_PRE);
+    RT_PROBE(s->c, address, 2);
+#ifdef CV_RACE_TEST
+    if (rt_dummy && dir == CU_TO_DOMAIN) {
+        /* CONTROL: the destructive prefault the contract forbids. */
+        char zero = 0;
+        cause = copy_to_user((void __user *)address, &zero, 1) ? CU_REFUSED : 0;
+        mutex_lock(&vm_lock);
+        return cause;
+    }
+#endif
     mmap_read_lock(s->c->mm);
     vma = find_vma(s->c->mm, address);
     if (!vma || address < vma->vm_start ||
@@ -180,6 +267,7 @@ static cn_u32 cv_copy_resolve(void *opaque, cn_u64 address, enum cu_direction di
     if (!(fault & (VM_FAULT_ERROR | VM_FAULT_RETRY))) cause = 0;
 out:
     mmap_read_unlock(s->c->mm);
+    RT_SITE_UNLOCKED(s->c, RT_SITE_FAULT_POST);
     mutex_lock(&vm_lock);
     if (cause && attempted) return cv_copy_bad_mapping(s);
     if (!cause && !unpinned) {
@@ -218,10 +306,10 @@ out:
 }
 static void cv_copy_between(void *opaque)
 {
-    (void)opaque;
     mutex_unlock(&vm_lock);
     cond_resched();
     mutex_lock(&vm_lock);
+    RT_SITE(((struct cv_copy_state *)opaque)->c, RT_SITE_BETWEEN);
 }
 
 struct cu_result cv_checked_copy(struct context *, struct cv_thread *,
@@ -242,7 +330,12 @@ struct cu_result cv_checked_copy(struct context *c, struct cv_thread *t,
     if (!checked_copy || !c || !t || t->context != c || c->mm != current->mm ||
         c->dom_pid != task_pid_nr(current) || t != c->main_thread || t->user_frame ||
         !t->started || t->terminal || t->event != 3 ||
-        thread_count(c) != 1 || num_possible_cpus() != 1) return result;
+#ifdef CV_RACE_TEST
+        thread_count(c) != (rt.b ? 2 : 1) ||
+#else
+        thread_count(c) != 1 ||
+#endif
+        num_possible_cpus() != 1) return result;
     /* Keep the backing context alive across both lock-dropping callbacks.
      * The caller also owns its invocation reference until it handles result. */
     owner = fget(c->dom_fd);
@@ -252,6 +345,9 @@ struct cu_result cv_checked_copy(struct context *c, struct cv_thread *t,
     if (!s) { fput(owner); return result; }
     s->c = c; s->t = t; s->direction = dir; s->length = length;
     result = cu_copy(&ops, s, ref, offset, buffer, length, dir, PAGE_SIZE);
+#ifdef CV_RACE_TEST
+    rt_record(c, &result, length);
+#endif
     kfree(s);
     fput(owner);
     return result;

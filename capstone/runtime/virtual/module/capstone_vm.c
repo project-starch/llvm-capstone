@@ -651,7 +651,14 @@ static int slot_acquire(struct cv_thread *t)
     lockdep_assert_held(&vm_lock);
     if (!native_slot_transport || (t->started && !t->slot_exported))
         return 0;
+#ifdef CV_RACE_TEST
+    /* Test build: the racer's start frame is a user page. It may enter while a
+     * slot is free (the legacy admission), never by evicting another frame. */
+    if (t->user_frame)
+        return !t->started && slot_live(NULL) < supervisor_slots ? 0 : -EOPNOTSUPP;
+#else
     if (t->user_frame) return -EOPNOTSUPP;
+#endif
     /* A terminal event can precede close(). Reclaim its occupied slot before
      * admitting another frame, even when the exiting task has not run yet. */
     list_for_each_entry(c, &contexts, link)

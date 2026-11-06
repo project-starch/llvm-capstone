@@ -160,6 +160,10 @@ static int dom_grant(struct context *c, unsigned long base, unsigned long bytes,
 {
     struct cv_map m = {.address = base, .bytes = bytes, .reg = reg,
                       .permissions = perms, .cursor = cursor, .linear = linear, .rx_bytes = rx};
+#ifdef CV_RACE_TEST
+    /* The racer's MAP service grants into the racer's own frame. */
+    if (rt.map_for_b && rt.b) return add(c, rt.b, &m);
+#endif
     return add(c, c->main_thread, &m);
 }
 static long dom_map(struct context *c, struct cv_step *s)
@@ -202,6 +206,9 @@ static long dom_unmap(struct context *c, unsigned long base, unsigned long bytes
     return rc ? rc : vm_munmap(base, bytes);
 }
 
+#ifdef CV_RACE_TEST
+#include "rt-dom.h"
+#endif
 #include "delegate-dom.h"
 #include "native-syscall-dom.h"
 
@@ -291,6 +298,9 @@ static long dom_service(struct context *c, struct cv_step *s)
     if (native_dispatch && (s->args[7] == NS_SERVICE_NATIVE ||
         s->args[7] == CV_SERVICE_DELEGATE || s->args[7] == CV_SERVICE_THREAD_DELEGATE))
         return native_service(c, s);
+#ifdef CV_RACE_TEST
+    if (rt_service(c, s)) return 0;
+#endif
     switch (s->args[7]) {
     case CV_SERVICE_THREAD_SELF: s->result = 1; break;
     case CV_SERVICE_PROTECT: if (native_dispatch) {
@@ -397,6 +407,10 @@ static int dom_release(struct inode *inode, struct file *f)
     if (!f->private_data) return 0;
     {
         struct context *c = f->private_data;
+#ifdef CV_RACE_TEST
+        /* The racer thread dies with its context. */
+        if (rt.b && rt.b->context == c) { rt.b = NULL; rt.armed = false; rt.c = NULL; }
+#endif
         ns_session_free(c->native_session);
         kfree(c->native_context);
     }
