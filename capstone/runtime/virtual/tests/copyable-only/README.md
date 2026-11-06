@@ -122,6 +122,34 @@ speedup from deleting linearity alone, and it is not directly comparable to the
 older firmware/kernel configuration's totals. These are QEMU instruction attempts,
 not hardware cycles, tag-cache costs, or elapsed-time measurements.
 
+## Short SPEC test-input comparison (2026-11-06)
+
+The copyable-only SDK relinks the existing frozen SPEC application objects.
+Full unchanged test inputs pass SPEC's validators in all four runs of each
+benchmark (two per mode, pinned/unpinned then unpinned/pinned in fresh guests).
+Only the module's `unpinned` parameter changes between modes. Measurement covers
+`profrun` fork through launcher exit; guest boot, module load/unload and the
+ImageMagick validator are outside the profiling windows.
+
+| Benchmark | Pinned mean attempts | Unpinned mean attempts | Reduction |
+|---|---:|---:|---:|
+| 519.lbm_r | 6,888,041,713 | 6,764,714,249.5 | 1.7905% |
+| 538.imagick_r | 111,789,410.5 | 110,982,334.5 | 0.7220% |
+| 544.nab_r | 7,252,074,179.5 | 7,251,576,766.5 | 0.0069% |
+
+These are QEMU instruction attempts, not hardware speedups or an official SPEC
+score. Two runs per mode are a quick comparison, not a statistical performance
+qualification. Startup/order effects matter for the small ImageMagick delta;
+nab's total change is negligible. mcf's first invocation was stopped after
+roughly three minutes: its incomplete window is invalid and excluded. Perl,
+x264 and xz were not included in this quick batch.
+
+[Per-run counts, scope and input hashes](results/spec-test-comparison.json).
+Raw evidence, validator commands/results, relink/run scripts and object hashes:
+`p12:/var/tmp/capstone-copyable-only/spec-quick-results/`; local scratch:
+`$CAPSTONE_TMP_ROOT/copyable-only/spec-quick/`. SPEC sources/inputs remain outside
+the repository. The prototype implementation and safety limits are unchanged.
+
 ## Limits
 
 QEMU prototype only; no RTL implementation. One hart; tagged swap refused;
