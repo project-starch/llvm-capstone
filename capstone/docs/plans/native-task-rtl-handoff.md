@@ -35,10 +35,14 @@ Native subprocess work additionally introduces an authenticated kernel child
 bootstrap, capability-image exec, inherited resource grants and admitted-child
 wait. The [hush port](../../ports/hush/app/README.md) is a native application
 using those services. Directory/time helpers and descriptor duplication extend
-Linux service coverage; none changes the ISA, request register layout or QEMU
-model. [Subprocess qualification](../../runtime/virtual/tests/native-task/spawn-qualification.json)
+Linux service coverage. The optional private `/tmp` alias stays within the
+original launch-directory grant and is separately qualified with original
+`perlio.t`. None changes the ISA, request register layout or QEMU model. [Subprocess qualification](../../runtime/virtual/tests/native-task/spawn-qualification.json)
 and [shell qualification](../../ports/hush/app/results/native-task.json) are
 separate from the original SPEC comparator gate.
+The remaining observed Perl pointer-packing fault is an application provenance
+boundary, not an additional RTL opcode requirement. Do not add integer-to-tagged
+pointer reconstruction to make it pass. [Diagnosis and proposed interpreter port](native-linux-task-integration.md#remaining-perl-pointer-serialization-boundary).
 The frozen inventory and source archive describe their pinned snapshot, not
 these later production fixes; use the branch HEAD for the current source.
 Git's configured submodule-ignore behavior can hide the

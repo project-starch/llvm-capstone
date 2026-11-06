@@ -21,7 +21,19 @@ and native nanosleep/clock_nanosleep/pselect. Each SDK passes 94 directory,
 and ten negative controls; all six Linux patches install on a fresh fixture.
 [Service qualification](../../runtime/virtual/tests/native-task/directory-time-qualification.json).
 
-The original Perl test is being rerun with this shell and kernel. The obsolete
+The original Perl test now reaches its child tests. Musl's hard-coded `/tmp`
+is supported through a default-off alias to a private directory inside the
+original launch grant. Four policy modes pass in both SDK profiles; unchanged
+`perlio.t` completes all 48 results with zero unexpected failures, including
+actual passes for the previously failing temp-file assertions 23–29.
+[Private storage qualification](../../runtime/virtual/tests/native-task/local-tmp-qualification.json).
+
+Perl pointer packing separately loses tags during endian reversal, unaligned
+storage and UTF-8 conversion. Isolated tests confirm that
+ordinary `p` and `p<` work; the original `pack.t` faults at assertion 243 after
+242 successful assertions. This needs an interpreter provenance port, not a
+weaker ISA or a syscall fallback. [Exact diagnosis](../../runtime/virtual/tests/native-task/spec-perl-pack-blocker.json).
+The full original Perl test continues to collect remaining failures. The obsolete
 partial diagnostic was stopped after confirming the missing services, not
 reported as a full execution. No official Perl comparison pass or new full-SPEC
 baseline is claimed yet. These service additions require no ISA/QEMU/compiler
@@ -43,10 +55,10 @@ Perl test.pl now finds all 317 tests but cannot start their child processes
 (SPAWN returns ENOSYS); its official output comparison still fails despite
 exit zero. [Focused evidence](../../runtime/virtual/tests/native-task/spec-process-repair.json).
 
-These changes add no ISA/QEMU/compiler/SDK requirement. Full native Perl is
-still not qualified: `popen` needs a confined shell and native subprocess
-support. Caught signals and clone/exec/wait remain unsupported. The older full
-SPEC campaign below belongs to its frozen kernel; its nine passing benchmarks
+That repair added no ISA/QEMU/compiler/SDK requirement. At that snapshot,
+`popen` still needed a confined shell and native subprocess support; wait was
+not yet implemented. The subsequent subprocess qualification is recorded
+above. The older full SPEC campaign below belongs to its frozen kernel; its nine passing benchmarks
 must not be silently attributed to the repaired kernel.
 
 ## 2026-11-07 — Full native SPEC test gate and RTL handoff

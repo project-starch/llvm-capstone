@@ -202,7 +202,7 @@ class QualificationTests(unittest.TestCase):
             self.fail(f"Unknown evidence mutation: {failure}")
 
     def execute(self, failure=None, returncode=0, must_refuse=False, shell=None, null_device=False,
-                live_output=False):
+                live_output=False, local_tmp=False):
         output = self.fresh_path("execution")
 
         def guest(command, **kwargs):
@@ -229,6 +229,7 @@ class QualificationTests(unittest.TestCase):
             *(["--shell", str(shell)] if shell else []),
             *(["--null-device"] if null_device else []),
             *(["--live-output"] if live_output else []),
+            *(["--local-tmp"] if local_tmp else []),
         ], guest)
         return result, output / "runs" / BENCHMARK
 
@@ -309,6 +310,25 @@ class QualificationTests(unittest.TestCase):
             for stream in ("stdout", "stderr"):
                 self.assertIn(f"/mnt/results/live/{marker}-{stream}", gate)
         self.assertEqual(self.validate(observed)[0], 0)
+
+    def test_private_tmp_is_explicit_and_preserves_workload(self):
+        _, ordinary = self.execute()
+        _, granted = self.execute(local_tmp=True)
+        self.assertFalse(read_json(ordinary.parent.parent / "platform.json")["local_tmp_grant"])
+        self.assertTrue(read_json(granted.parent.parent / "platform.json")["local_tmp_grant"])
+        self.assertEqual(read_json(ordinary / "execution.json")["commands"],
+                         read_json(granted / "execution.json")["commands"])
+        gate = (granted / "stage/gate.sh").read_text()
+        self.assertLess(gate.index("mkdir -m 0700 .capstone-tmp"), gate.index("CASE_BEGIN:0"))
+        self.assertNotIn(".capstone-tmp", (ordinary / "stage/gate.sh").read_text())
+        command = read_json(granted / "command.json")
+        self.assertIn("capstone_vm.dom_local_tmp=1", command[command.index("--kernel-arg") + 1])
+        self.assertEqual(self.validate(granted)[0], 0)
+
+    def test_private_tmp_cannot_replace_workload_input(self):
+        (self.prepared / BENCHMARK / "stage/.capstone-tmp").mkdir()
+        with self.assertRaisesRegex(ValueError, "Reserved private temporary"):
+            self.execute(must_refuse=True, local_tmp=True)
 
     def test_live_watcher_copies_only_outputs_and_reaps(self):
         # Run the actual generated observer in the host shell, using synthetic

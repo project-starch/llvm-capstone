@@ -13,6 +13,10 @@ MODULE_PARM_DESC(dom_shell, "trusted pinned native shell executable for /bin/sh 
 static bool dom_null;
 module_param(dom_null, bool, 0400);
 MODULE_PARM_DESC(dom_null, "explicit pinned /dev/null grant (default off)");
+static bool dom_local_tmp;
+module_param(dom_local_tmp, bool, 0400);
+MODULE_PARM_DESC(dom_local_tmp,
+    "alias /tmp to private .capstone-tmp inside the initial cwd grant (default off)");
 static bool dom_wide_grants;
 module_param(dom_wide_grants, bool, 0444);
 MODULE_PARM_DESC(dom_wide_grants,
@@ -54,6 +58,28 @@ static int dom_extra_resources(struct dom_delegate *d)
 {
     struct file *f, *dev;
     int rc = 0;
+    /* /tmp cannot simultaneously name the entire launch grant and its
+     * private child. Preserve physical-root pathname round trips elsewhere. */
+    if (dom_local_tmp && (dom_wide_grants || !strcmp(d->root_name, "/tmp"))) return -EINVAL;
+    if (dom_local_tmp) {
+        struct inode *inode;
+        /* Trusted launch policy creates this reserved child before exec.
+         * Pin the object once; an application rename or replacement must
+         * never redirect the logical /tmp prefix into ambient storage. */
+        f = file_open_root(&d->root, ".capstone-tmp",
+                           O_PATH | O_NOFOLLOW | O_DIRECTORY, 0);
+        if (IS_ERR(f)) return PTR_ERR(f);
+        inode = file_inode(f);
+        if (f->f_path.mnt != d->root.mnt ||
+            !is_subdir(f->f_path.dentry, d->root.dentry) ||
+            !dom_disk_inode(inode) || !S_ISDIR(inode->i_mode) ||
+            (inode->i_mode & (S_IRWXUGO | S_ISUID | S_ISGID | S_ISVTX)) != 0700 ||
+            !uid_eq(i_uid_into_mnt(mnt_user_ns(f->f_path.mnt), inode), current_fsuid()))
+            rc = -EACCES;
+        if (!rc) { d->dirs[0] = f->f_path; path_get(&d->dirs[0]); }
+        fput(f);
+        if (rc) return rc;
+    }
     if (!dom_wide_grants && !dom_null) return 0;
     for (unsigned i = 0; dom_wide_grants && i < DOM_EXTRA_DIRS; ++i) {
         f = filp_open(dom_dir_names[i], O_PATH | O_NOFOLLOW | O_DIRECTORY, 0);
@@ -140,7 +166,10 @@ static const struct path *dom_directory_grant(struct dom_delegate *d,
 {
     if (dom_beneath(path, &d->root)) return &d->root;
     for (unsigned i = 0; i < DOM_EXTRA_DIRS; ++i)
-        if (d->dirs[i].dentry && dom_beneath(path, &d->dirs[i]))
+        /* The local alias remains a descendant of the original grant,
+         * unlike independent explicitly granted directories. */
+        if (!(dom_local_tmp && i == 0) &&
+            d->dirs[i].dentry && dom_beneath(path, &d->dirs[i]))
             return &d->dirs[i];
     return NULL;
 }
@@ -189,6 +218,7 @@ static int dom_parent(struct context *c, const struct capstone_delegate_entry *e
         for (unsigned i = 0; i < DOM_EXTRA_DIRS; ++i) {
             size_t len = strlen(dom_dir_names[i]);
             if (d->dirs[i].dentry && (!root || len > n) &&
+                (!(dom_local_tmp && i == 0) || dom_beneath(&d->dirs[i], &d->root)) &&
                 !strncmp(at, dom_dir_names[i], len) && (!at[len] || at[len] == '/')) {
                 root = &d->dirs[i]; n = len;
             }
@@ -220,7 +250,10 @@ static int dom_parent(struct context *c, const struct capstone_delegate_entry *e
         if (!S_ISDIR(d_inode(parent->dentry)->i_mode)) { rc = -ENOTDIR; goto put; }
     }
     if (!root) root = dom_directory_grant(d, parent);
-    if (!root || !dom_beneath(parent, root)) { rc = -EACCES; goto put; }
+    if (!root || !dom_beneath(parent, root) ||
+        (dom_local_tmp && root == &d->dirs[0] && !dom_beneath(parent, &d->root))) {
+        rc = -EACCES; goto put;
+    }
     while ((part = strsep(&at, "/")) != NULL) {
         if (!strcmp(part, "..")) {
             struct path up = {.mnt = parent->mnt};
@@ -242,7 +275,10 @@ static int dom_parent(struct context *c, const struct capstone_delegate_entry *e
         }
         if (!at) {
             if (dotdot && read_seqretry(&rename_lock, rename_seq)) { rc = -EAGAIN; goto put; }
-            if (!dom_beneath(parent, root)) { rc = -EACCES; goto put; }
+            if (!dom_beneath(parent, root) ||
+                (dom_local_tmp && root == &d->dirs[0] && !dom_beneath(parent, &d->root))) {
+                rc = -EACCES; goto put;
+            }
             *leaf = *part ? part : ".";
             *storage = name;
             *grant = root;

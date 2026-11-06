@@ -69,6 +69,52 @@ or spawn fallback. Raw artifacts remain external. Bootstrap-only ptrace races
 and cancellation during blocked bootstrap filesystem I/O are explicitly
 **not** established by the post-exec parent-death and ptrace tests.
 
+## Private temporary files
+
+`capstone_vm.dom_local_tmp=1` maps logical `/tmp` to a pinned `.capstone-tmp`
+child of the original launch directory. Trusted launch setup must create that
+directory with mode 0700 and matching ownership before native exec. Admission
+rejects symlinks, mount crossings, unsuitable filesystems, an initial root of
+exactly `/tmp`, and simultaneous `dom_wide_grants`. The option defaults off;
+`run-spec-tests.py --local-tmp` creates the reserved directory and refuses a
+pre-existing entry. No ambient `/tmp` or device authority is added.
+
+Children inherit the pin even after a cwd change. The original directory grant
+remains the authority boundary: moving the scratch directory outside it refuses
+subsequent alias, relative and directory-FD lookups and `getcwd`. Existing regular
+file descriptors retain their object authority. This does not provide atomic
+revocation during racing renames. `getcwd` reports the physical directory name;
+the alias does not create a chroot namespace. The separate `/dev/null` grant
+remains available when explicitly enabled.
+
+The [local temporary-file qualification](local-tmp-qualification.json) records
+four modes in both SDK profiles: disabled, enabled, enabled with `/dev/null`, and
+conflicting wide grants. The enabled modes verify actual `tmpfile` I/O,
+unlink-while-open, child inheritance, host sentinel preservation, escape
+refusals, pinned-object replacement and move-out behavior. This supports libc
+implementations whose `tmpfile` uses a fixed `/tmp` pathname without changing
+libc or application sources. On the same kernel, a focused run of the unchanged
+original `t/io/perlio.t` and Perl binary completes all 48 TAP results: 38 passes,
+seven original skips and three original TODO failures, with no unexpected
+failures. The previously failing temporary-file assertions 23–29 all pass
+without skip or TODO annotations. This direct focused invocation does not
+establish a passing full SPEC workload or resolve the separate pack-serialization
+failure.
+
+```sh
+source capstone/tests/capstone-test-env.sh
+# Set CAPSTONE_EXCHANGE_CC, CAPSTONE_NATIVE_CC, CROSS_COMPILE and platform paths.
+bash capstone/runtime/virtual/tests/native-task/build-local-tmp.sh "$PROBES"
+python3 capstone/runtime/virtual/tests/native-task/run-local-tmp.py \
+  --qemu "$QEMU" --images "$IMAGES" --firmware "$FIRMWARE" \
+  --probes "$PROBES" --out "$CAPSTONE_TMP_ROOT/native-task/local-tmp-run"
+```
+
+The scalar fixture is a trusted test supervisor that prepares and moves the
+directories; native application requests still use the confined frontend. The
+runner requires the common QEMU lock and preserves the complete serial logs,
+positive assertion counts, command lines and artifact hashes.
+
 ## Native directory, duplication and timer services
 
 The [service qualification](directory-time-qualification.json) records 94 directory,
