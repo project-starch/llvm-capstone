@@ -1,0 +1,714 @@
+{
+  "base_commit": "d147f80ddfd6",
+  "scope": "Two fresh guests per configuration, unchanged GCC/input/runtime binaries; host profiler plus existing module parameters only",
+  "experiments": {
+    "default": {
+      "summary": {
+        "inputs_sha256": {
+          "qemu": "c6681ec8a8ff704b297ec3eafceb13b2fe9c1c61c7a65ed95304bd5dbe5183eb",
+          "firmware": "2335a28682ddf65e46c1f492632c2cb026efcb2271caf544a3f7ddc858b03e02",
+          "module": "5d335fed248e0399b4cb955f6aece9ef4f61f9b83593caddefc0ccf7771368f5",
+          "launcher": "8110b7b1adcd80c8f667d38d67e00ef583761670bfdc01ba0e8ed48e6834e0e9",
+          "gcc": "e3e535b50e069550908154e3d43a3ebad9da6502b055d2dcdfe8865a49633297",
+          "profrun": "1d13d4912794855ae9c3c3fe69c89ca55434c2dd02b836053ad18f7913b7904f",
+          "input": "de7b86d79a68965adb62e750101d9211224884b2236053d906d1e23057bb6ad1",
+          "reference": "58111208509dd871223ae195a33304bd6b24afd29458f37c976556cbad506324",
+          "plugin": "b42832d44980e01ae4e758e0a754d54c0cda759e7846fc9d6647d3a5b271bf32",
+          "plain": "ebeca8e920328b5c893fc9ee910851cceabee2bebc00320322b2b77b75def4a0",
+          "Image": "c969cf2e7ffdbed18e86820d766990c377eafd5b42b994711bc7046a4e052e50",
+          "System.map": "46fd2e008f62cf409f68ec309ed98fd27a44facdcd830cf37e5fe08de7b6f165"
+        },
+        "rows": [
+          {
+            "run": "0-native",
+            "arm": "native",
+            "phase": "startup_and_initialization",
+            "total_attempts": 24274445,
+            "classes": {
+              "kernel": 8858365,
+              "module": 861797,
+              "other": 14554283
+            },
+            "reference_match": true
+          },
+          {
+            "run": "0-native",
+            "arm": "native",
+            "phase": "compilation_and_output",
+            "total_attempts": 24208090,
+            "classes": {
+              "kernel": 11440356,
+              "module": 1180921,
+              "other": 11586813
+            },
+            "reference_match": true
+          },
+          {
+            "run": "0-native",
+            "arm": "native",
+            "phase": "finalization_and_exit",
+            "total_attempts": 8718392,
+            "classes": {
+              "kernel": 8676465,
+              "module": 20195,
+              "other": 21732
+            },
+            "reference_match": true
+          },
+          {
+            "run": "1-native",
+            "arm": "native",
+            "phase": "startup_and_initialization",
+            "total_attempts": 24270271,
+            "classes": {
+              "kernel": 8853544,
+              "module": 862442,
+              "other": 14554285
+            },
+            "reference_match": true
+          },
+          {
+            "run": "1-native",
+            "arm": "native",
+            "phase": "compilation_and_output",
+            "total_attempts": 24200481,
+            "classes": {
+              "kernel": 11434057,
+              "module": 1179613,
+              "other": 11586811
+            },
+            "reference_match": true
+          },
+          {
+            "run": "1-native",
+            "arm": "native",
+            "phase": "finalization_and_exit",
+            "total_attempts": 8718782,
+            "classes": {
+              "kernel": 8676855,
+              "module": 20195,
+              "other": 21732
+            },
+            "reference_match": true
+          }
+        ],
+        "means": {
+          "native": {
+            "startup_and_initialization": 24272358.0,
+            "compilation_and_output": 24204285.5,
+            "finalization_and_exit": 8718587.0
+          }
+        },
+        "repetitions": 2,
+        "module_params": [],
+        "boundaries": [
+          "after first init_cgraph instruction",
+          "after first statistics_fini instruction"
+        ],
+        "scope": "One GCC invocation per fresh guest; all runs cold; full reference validation; phases sum to independently snapshotted outer total",
+        "limitations": [
+          "compilation includes compile_file initialization and output-file close; startup includes GCC backend/language initialization",
+          "same cached binaries and native syscall limitations as three-arm comparison",
+          "cold totals are not directly comparable with mixed warm/cold three-arm means",
+          "QEMU attempts, not hardware timing"
+        ]
+      },
+      "whole_process_module_counters": [
+        {
+          "unpinned_faults": "1227",
+          "unpinned_fast_faults": "0",
+          "unpinned_sweep_pages": "0",
+          "fault_ahead_pages": "855",
+          "fault_ahead_windows": "158",
+          "resume_sfences": "1413",
+          "resume_satp_refreshes": "2071",
+          "resume_satp_changed": "0"
+        },
+        {
+          "unpinned_faults": "1228",
+          "unpinned_fast_faults": "0",
+          "unpinned_sweep_pages": "0",
+          "fault_ahead_pages": "854",
+          "fault_ahead_windows": "159",
+          "resume_sfences": "1414",
+          "resume_satp_refreshes": "2069",
+          "resume_satp_changed": "0"
+        }
+      ],
+      "total_mean": 57195230.5,
+      "saved_percent_vs_default": 0.0
+    },
+    "no-ahead": {
+      "summary": {
+        "inputs_sha256": {
+          "qemu": "c6681ec8a8ff704b297ec3eafceb13b2fe9c1c61c7a65ed95304bd5dbe5183eb",
+          "firmware": "2335a28682ddf65e46c1f492632c2cb026efcb2271caf544a3f7ddc858b03e02",
+          "module": "5d335fed248e0399b4cb955f6aece9ef4f61f9b83593caddefc0ccf7771368f5",
+          "launcher": "8110b7b1adcd80c8f667d38d67e00ef583761670bfdc01ba0e8ed48e6834e0e9",
+          "gcc": "e3e535b50e069550908154e3d43a3ebad9da6502b055d2dcdfe8865a49633297",
+          "profrun": "1d13d4912794855ae9c3c3fe69c89ca55434c2dd02b836053ad18f7913b7904f",
+          "input": "de7b86d79a68965adb62e750101d9211224884b2236053d906d1e23057bb6ad1",
+          "reference": "58111208509dd871223ae195a33304bd6b24afd29458f37c976556cbad506324",
+          "plugin": "b42832d44980e01ae4e758e0a754d54c0cda759e7846fc9d6647d3a5b271bf32",
+          "plain": "ebeca8e920328b5c893fc9ee910851cceabee2bebc00320322b2b77b75def4a0",
+          "Image": "c969cf2e7ffdbed18e86820d766990c377eafd5b42b994711bc7046a4e052e50",
+          "System.map": "46fd2e008f62cf409f68ec309ed98fd27a44facdcd830cf37e5fe08de7b6f165"
+        },
+        "rows": [
+          {
+            "run": "0-native",
+            "arm": "native",
+            "phase": "startup_and_initialization",
+            "total_attempts": 24365783,
+            "classes": {
+              "kernel": 8920255,
+              "module": 890604,
+              "other": 14554924
+            },
+            "reference_match": true
+          },
+          {
+            "run": "0-native",
+            "arm": "native",
+            "phase": "compilation_and_output",
+            "total_attempts": 23498292,
+            "classes": {
+              "kernel": 10969024,
+              "module": 942322,
+              "other": 11586946
+            },
+            "reference_match": true
+          },
+          {
+            "run": "0-native",
+            "arm": "native",
+            "phase": "finalization_and_exit",
+            "total_attempts": 8711052,
+            "classes": {
+              "kernel": 8669125,
+              "module": 20195,
+              "other": 21732
+            },
+            "reference_match": true
+          },
+          {
+            "run": "1-native",
+            "arm": "native",
+            "phase": "startup_and_initialization",
+            "total_attempts": 24373923,
+            "classes": {
+              "kernel": 8928316,
+              "module": 890683,
+              "other": 14554924
+            },
+            "reference_match": true
+          },
+          {
+            "run": "1-native",
+            "arm": "native",
+            "phase": "compilation_and_output",
+            "total_attempts": 23497064,
+            "classes": {
+              "kernel": 10968021,
+              "module": 942107,
+              "other": 11586936
+            },
+            "reference_match": true
+          },
+          {
+            "run": "1-native",
+            "arm": "native",
+            "phase": "finalization_and_exit",
+            "total_attempts": 8710169,
+            "classes": {
+              "kernel": 8668242,
+              "module": 20195,
+              "other": 21732
+            },
+            "reference_match": true
+          }
+        ],
+        "means": {
+          "native": {
+            "startup_and_initialization": 24369853.0,
+            "compilation_and_output": 23497678.0,
+            "finalization_and_exit": 8710610.5
+          }
+        },
+        "repetitions": 2,
+        "module_params": [
+          "fault_ahead_max=0"
+        ],
+        "boundaries": [
+          "after first init_cgraph instruction",
+          "after first statistics_fini instruction"
+        ],
+        "scope": "One GCC invocation per fresh guest; all runs cold; full reference validation; phases sum to independently snapshotted outer total",
+        "limitations": [
+          "compilation includes compile_file initialization and output-file close; startup includes GCC backend/language initialization",
+          "same cached binaries and native syscall limitations as three-arm comparison",
+          "cold totals are not directly comparable with mixed warm/cold three-arm means",
+          "QEMU attempts, not hardware timing"
+        ]
+      },
+      "whole_process_module_counters": [
+        {
+          "unpinned_faults": "2001",
+          "unpinned_fast_faults": "0",
+          "unpinned_sweep_pages": "0",
+          "fault_ahead_pages": "0",
+          "fault_ahead_windows": "0",
+          "resume_sfences": "2187",
+          "resume_satp_refreshes": "2843",
+          "resume_satp_changed": "0"
+        },
+        {
+          "unpinned_faults": "2001",
+          "unpinned_fast_faults": "0",
+          "unpinned_sweep_pages": "0",
+          "fault_ahead_pages": "0",
+          "fault_ahead_windows": "0",
+          "resume_sfences": "2187",
+          "resume_satp_refreshes": "2844",
+          "resume_satp_changed": "0"
+        }
+      ],
+      "total_mean": 56578141.5,
+      "saved_percent_vs_default": 1.0789168862602976
+    },
+    "fast-fault": {
+      "summary": {
+        "inputs_sha256": {
+          "qemu": "c6681ec8a8ff704b297ec3eafceb13b2fe9c1c61c7a65ed95304bd5dbe5183eb",
+          "firmware": "2335a28682ddf65e46c1f492632c2cb026efcb2271caf544a3f7ddc858b03e02",
+          "module": "5d335fed248e0399b4cb955f6aece9ef4f61f9b83593caddefc0ccf7771368f5",
+          "launcher": "8110b7b1adcd80c8f667d38d67e00ef583761670bfdc01ba0e8ed48e6834e0e9",
+          "gcc": "e3e535b50e069550908154e3d43a3ebad9da6502b055d2dcdfe8865a49633297",
+          "profrun": "1d13d4912794855ae9c3c3fe69c89ca55434c2dd02b836053ad18f7913b7904f",
+          "input": "de7b86d79a68965adb62e750101d9211224884b2236053d906d1e23057bb6ad1",
+          "reference": "58111208509dd871223ae195a33304bd6b24afd29458f37c976556cbad506324",
+          "plugin": "b42832d44980e01ae4e758e0a754d54c0cda759e7846fc9d6647d3a5b271bf32",
+          "plain": "ebeca8e920328b5c893fc9ee910851cceabee2bebc00320322b2b77b75def4a0",
+          "Image": "c969cf2e7ffdbed18e86820d766990c377eafd5b42b994711bc7046a4e052e50",
+          "System.map": "46fd2e008f62cf409f68ec309ed98fd27a44facdcd830cf37e5fe08de7b6f165"
+        },
+        "rows": [
+          {
+            "run": "0-native",
+            "arm": "native",
+            "phase": "startup_and_initialization",
+            "total_attempts": 23985064,
+            "classes": {
+              "kernel": 8544635,
+              "module": 886146,
+              "other": 14554283
+            },
+            "reference_match": true
+          },
+          {
+            "run": "0-native",
+            "arm": "native",
+            "phase": "compilation_and_output",
+            "total_attempts": 23934196,
+            "classes": {
+              "kernel": 11142512,
+              "module": 1204861,
+              "other": 11586823
+            },
+            "reference_match": true
+          },
+          {
+            "run": "0-native",
+            "arm": "native",
+            "phase": "finalization_and_exit",
+            "total_attempts": 8719758,
+            "classes": {
+              "kernel": 8677831,
+              "module": 20195,
+              "other": 21732
+            },
+            "reference_match": true
+          },
+          {
+            "run": "1-native",
+            "arm": "native",
+            "phase": "startup_and_initialization",
+            "total_attempts": 23995863,
+            "classes": {
+              "kernel": 8555191,
+              "module": 886389,
+              "other": 14554283
+            },
+            "reference_match": true
+          },
+          {
+            "run": "1-native",
+            "arm": "native",
+            "phase": "compilation_and_output",
+            "total_attempts": 23933359,
+            "classes": {
+              "kernel": 11142578,
+              "module": 1203959,
+              "other": 11586822
+            },
+            "reference_match": true
+          },
+          {
+            "run": "1-native",
+            "arm": "native",
+            "phase": "finalization_and_exit",
+            "total_attempts": 8719206,
+            "classes": {
+              "kernel": 8677279,
+              "module": 20195,
+              "other": 21732
+            },
+            "reference_match": true
+          }
+        ],
+        "means": {
+          "native": {
+            "startup_and_initialization": 23990463.5,
+            "compilation_and_output": 23933777.5,
+            "finalization_and_exit": 8719482.0
+          }
+        },
+        "repetitions": 2,
+        "module_params": [
+          "unpinned_fast_fault=1"
+        ],
+        "boundaries": [
+          "after first init_cgraph instruction",
+          "after first statistics_fini instruction"
+        ],
+        "scope": "One GCC invocation per fresh guest; all runs cold; full reference validation; phases sum to independently snapshotted outer total",
+        "limitations": [
+          "compilation includes compile_file initialization and output-file close; startup includes GCC backend/language initialization",
+          "same cached binaries and native syscall limitations as three-arm comparison",
+          "cold totals are not directly comparable with mixed warm/cold three-arm means",
+          "QEMU attempts, not hardware timing"
+        ]
+      },
+      "whole_process_module_counters": [
+        {
+          "unpinned_faults": "1227",
+          "unpinned_fast_faults": "1875",
+          "unpinned_sweep_pages": "0",
+          "fault_ahead_pages": "855",
+          "fault_ahead_windows": "158",
+          "resume_sfences": "1413",
+          "resume_satp_refreshes": "2069",
+          "resume_satp_changed": "0"
+        },
+        {
+          "unpinned_faults": "1227",
+          "unpinned_fast_faults": "1875",
+          "unpinned_sweep_pages": "0",
+          "fault_ahead_pages": "855",
+          "fault_ahead_windows": "158",
+          "resume_sfences": "1413",
+          "resume_satp_refreshes": "2068",
+          "resume_satp_changed": "0"
+        }
+      ],
+      "total_mean": 56643723.0,
+      "saved_percent_vs_default": 0.964254353341578
+    },
+    "both": {
+      "summary": {
+        "inputs_sha256": {
+          "qemu": "c6681ec8a8ff704b297ec3eafceb13b2fe9c1c61c7a65ed95304bd5dbe5183eb",
+          "firmware": "2335a28682ddf65e46c1f492632c2cb026efcb2271caf544a3f7ddc858b03e02",
+          "module": "5d335fed248e0399b4cb955f6aece9ef4f61f9b83593caddefc0ccf7771368f5",
+          "launcher": "8110b7b1adcd80c8f667d38d67e00ef583761670bfdc01ba0e8ed48e6834e0e9",
+          "gcc": "e3e535b50e069550908154e3d43a3ebad9da6502b055d2dcdfe8865a49633297",
+          "profrun": "1d13d4912794855ae9c3c3fe69c89ca55434c2dd02b836053ad18f7913b7904f",
+          "input": "de7b86d79a68965adb62e750101d9211224884b2236053d906d1e23057bb6ad1",
+          "reference": "58111208509dd871223ae195a33304bd6b24afd29458f37c976556cbad506324",
+          "plugin": "b42832d44980e01ae4e758e0a754d54c0cda759e7846fc9d6647d3a5b271bf32",
+          "plain": "ebeca8e920328b5c893fc9ee910851cceabee2bebc00320322b2b77b75def4a0",
+          "Image": "c969cf2e7ffdbed18e86820d766990c377eafd5b42b994711bc7046a4e052e50",
+          "System.map": "46fd2e008f62cf409f68ec309ed98fd27a44facdcd830cf37e5fe08de7b6f165"
+        },
+        "rows": [
+          {
+            "run": "0-native",
+            "arm": "native",
+            "phase": "startup_and_initialization",
+            "total_attempts": 24087023,
+            "classes": {
+              "kernel": 8617044,
+              "module": 915065,
+              "other": 14554914
+            },
+            "reference_match": true
+          },
+          {
+            "run": "0-native",
+            "arm": "native",
+            "phase": "compilation_and_output",
+            "total_attempts": 23242854,
+            "classes": {
+              "kernel": 10691729,
+              "module": 964179,
+              "other": 11586946
+            },
+            "reference_match": true
+          },
+          {
+            "run": "0-native",
+            "arm": "native",
+            "phase": "finalization_and_exit",
+            "total_attempts": 8707273,
+            "classes": {
+              "kernel": 8665346,
+              "module": 20195,
+              "other": 21732
+            },
+            "reference_match": true
+          },
+          {
+            "run": "1-native",
+            "arm": "native",
+            "phase": "startup_and_initialization",
+            "total_attempts": 24087260,
+            "classes": {
+              "kernel": 8616695,
+              "module": 915641,
+              "other": 14554924
+            },
+            "reference_match": true
+          },
+          {
+            "run": "1-native",
+            "arm": "native",
+            "phase": "compilation_and_output",
+            "total_attempts": 23244098,
+            "classes": {
+              "kernel": 10692973,
+              "module": 964179,
+              "other": 11586946
+            },
+            "reference_match": true
+          },
+          {
+            "run": "1-native",
+            "arm": "native",
+            "phase": "finalization_and_exit",
+            "total_attempts": 8709342,
+            "classes": {
+              "kernel": 8667415,
+              "module": 20195,
+              "other": 21732
+            },
+            "reference_match": true
+          }
+        ],
+        "means": {
+          "native": {
+            "startup_and_initialization": 24087141.5,
+            "compilation_and_output": 23243476.0,
+            "finalization_and_exit": 8708307.5
+          }
+        },
+        "repetitions": 2,
+        "module_params": [
+          "fault_ahead_max=0",
+          "unpinned_fast_fault=1"
+        ],
+        "boundaries": [
+          "after first init_cgraph instruction",
+          "after first statistics_fini instruction"
+        ],
+        "scope": "One GCC invocation per fresh guest; all runs cold; full reference validation; phases sum to independently snapshotted outer total",
+        "limitations": [
+          "compilation includes compile_file initialization and output-file close; startup includes GCC backend/language initialization",
+          "same cached binaries and native syscall limitations as three-arm comparison",
+          "cold totals are not directly comparable with mixed warm/cold three-arm means",
+          "QEMU attempts, not hardware timing"
+        ]
+      },
+      "whole_process_module_counters": [
+        {
+          "unpinned_faults": "2001",
+          "unpinned_fast_faults": "1794",
+          "unpinned_sweep_pages": "0",
+          "fault_ahead_pages": "0",
+          "fault_ahead_windows": "0",
+          "resume_sfences": "2187",
+          "resume_satp_refreshes": "2843",
+          "resume_satp_changed": "0"
+        },
+        {
+          "unpinned_faults": "2001",
+          "unpinned_fast_faults": "1794",
+          "unpinned_sweep_pages": "0",
+          "fault_ahead_pages": "0",
+          "fault_ahead_windows": "0",
+          "resume_sfences": "2187",
+          "resume_satp_refreshes": "2843",
+          "resume_satp_changed": "0"
+        }
+      ],
+      "total_mean": 56038925.0,
+      "saved_percent_vs_default": 2.0216816855034794
+    }
+  },
+  "compilation_entry_attempts": {
+    "plain": {
+      "kernel:do_mmap": 118.0,
+      "kernel:__vm_munmap": 94.0,
+      "kernel:capstone_clear_page": 316.0,
+      "kernel:handle_mm_fault": 418.0,
+      "kernel:find_vma": 524.0,
+      "module:next_resident": 0.0,
+      "module:unpinned_resolve": 0.0,
+      "kernel:mas_alloc_nodes": 413.0
+    },
+    "native": {
+      "kernel:do_mmap": 281.0,
+      "kernel:__vm_munmap": 239.0,
+      "kernel:capstone_clear_page": 938.0,
+      "kernel:handle_mm_fault": 961.0,
+      "kernel:find_vma": 2309.0,
+      "module:next_resident": 1696.0,
+      "module:unpinned_resolve": 716.0,
+      "kernel:mas_alloc_nodes": 1071.0
+    },
+    "default": {
+      "kernel:do_mmap": 281.0,
+      "kernel:__vm_munmap": 239.0,
+      "kernel:capstone_clear_page": 938.0,
+      "kernel:handle_mm_fault": 961.0,
+      "kernel:find_vma": 2309.0,
+      "module:next_resident": 1696.0,
+      "module:unpinned_resolve": 716.0,
+      "kernel:mas_alloc_nodes": 1071.0
+    },
+    "no-ahead": {
+      "kernel:do_mmap": 281.0,
+      "kernel:__vm_munmap": 239.0,
+      "kernel:capstone_clear_page": 866.0,
+      "kernel:handle_mm_fault": 889.0,
+      "kernel:find_vma": 2371.0,
+      "module:next_resident": 0.0,
+      "module:unpinned_resolve": 850.0,
+      "kernel:mas_alloc_nodes": 1071.0
+    },
+    "fast-fault": {
+      "kernel:do_mmap": 281.0,
+      "kernel:__vm_munmap": 239.0,
+      "kernel:capstone_clear_page": 938.0,
+      "kernel:handle_mm_fault": 961.0,
+      "kernel:find_vma": 1387.0,
+      "module:next_resident": 1696.0,
+      "module:unpinned_resolve": 716.0,
+      "kernel:mas_alloc_nodes": 1071.0
+    },
+    "both": {
+      "kernel:do_mmap": 281.0,
+      "kernel:__vm_munmap": 239.0,
+      "kernel:capstone_clear_page": 866.0,
+      "kernel:handle_mm_fault": 889.0,
+      "kernel:find_vma": 1521.0,
+      "module:next_resident": 0.0,
+      "module:unpinned_resolve": 850.0,
+      "kernel:mas_alloc_nodes": 1071.0
+    }
+  },
+  "guest_entry_attempts": {
+    "plain": {
+      "__libc_malloc_impl": 2626.0,
+      "__libc_realloc": 188.0,
+      "aligned_alloc": 0.0,
+      "__heap_mapping": 0.0,
+      "__heap_unmapping": 0.0,
+      "mmap": 118.0,
+      "munmap": 94.0
+    },
+    "native": {
+      "__libc_malloc_impl": 2709.0,
+      "__libc_realloc": 188.0,
+      "aligned_alloc": 346.0,
+      "__heap_mapping": 281.0,
+      "__heap_unmapping": 239.0,
+      "mmap": 0.0,
+      "munmap": 239.0
+    }
+  },
+  "findings": [
+    "All 281 native compilation mapping creations match __heap_mapping entries; all 239 unmaps match __heap_unmapping entries. No public mmap entry in that phase.",
+    "Native malloc implementation entries rise only 3.16% (2626 to 2709) while mapping creation rises 138.14% (118 to 281).",
+    "Disabling fault-ahead removes 72 page-clear entries in compilation and 1696 next_resident entries; demand resolve entries rise 716 to 850.",
+    "Direct anonymous fault path removes 922 find_vma entries in compilation with unchanged page-clear/mapping counts.",
+    "Combined switches save about 2.02% total; mapping frequency remains unchanged."
+  ],
+  "limitations": [
+    "Instruction attempts at function entries, not retired instructions or hardware time; repeated attempts can overcount.",
+    "Symbol aliases are not additive; guest entry bytes for reported memory functions checked against ELF.",
+    "Direct-transfer reconstruction covers JAL and adjacent AUIPC/JALR (including C.JALR) only; excludes general indirect calls, compressed tail jumps and inlined work; no inclusive stacks.",
+    "Counters read from sysfs are whole-process totals, not compilation-only counts.",
+    "Same historical compiler/libc mismatch and native signal/ioctl limitations as prior records.",
+    "Aligned allocation, changed layout and representability are plausible allocator causes, not individually isolated by this experiment.",
+    "These small-input experiments do not qualify changing production defaults."
+  ],
+  "compilation_direct_transfers": {
+    "plain": {
+      "kernel:__memset <- kernel:__do_sys_newfstatat": 2.0,
+      "kernel:__memset <- kernel:__handle_mm_fault": 418.0,
+      "kernel:__memset <- kernel:capstone_clear_page": 316.0,
+      "kernel:__memset <- kernel:cp_new_stat": 2.0,
+      "kernel:__memset <- kernel:filename_lookup": 2.0,
+      "kernel:__memset <- kernel:kmem_cache_alloc": 413.0,
+      "kernel:__memset <- kernel:kmem_cache_alloc_bulk": 1413.0,
+      "kernel:__memset <- kernel:locks_remove_posix": 1.0,
+      "kernel:__memset <- kernel:mas_descend_adopt": 40.0,
+      "kernel:__memset <- kernel:mas_spanning_rebalance.isra.0": 19.0,
+      "kernel:__memset <- kernel:mas_wmb_replace": 67.0,
+      "kernel:__memset <- kernel:mas_wr_bnode": 246.0,
+      "kernel:__memset <- kernel:mas_wr_node_store": 91.0,
+      "kernel:__memset <- kernel:mas_wr_spanning_store.isra.0": 38.0,
+      "kernel:__memset <- kernel:mast_fill_bnode": 30.0,
+      "kernel:__memset <- kernel:vfs_getattr_nosec": 2.0,
+      "kernel:__memset <- kernel:vfs_writev": 3.0,
+      "kernel:__memset <- kernel:zero_user_segments.constprop.0": 2.0,
+      "kernel:find_vma <- kernel:__vma_adjust": 106.0,
+      "kernel:find_vma <- kernel:do_page_fault": 418.0,
+      "kernel:handle_mm_fault <- kernel:do_page_fault": 418.0
+    },
+    "native": {
+      "kernel:__memset <- kernel:__handle_mm_fault": 961.0,
+      "kernel:__memset <- kernel:__kmem_cache_alloc_node": 912.0,
+      "kernel:__memset <- kernel:capstone_clear_page": 938.0,
+      "kernel:__memset <- kernel:do_file_open_root": 2.0,
+      "kernel:__memset <- kernel:kmem_cache_alloc": 1073.0,
+      "kernel:__memset <- kernel:kmem_cache_alloc_bulk": 4974.0,
+      "kernel:__memset <- kernel:locks_remove_posix": 1.0,
+      "kernel:__memset <- kernel:mas_descend_adopt": 10.0,
+      "kernel:__memset <- kernel:mas_spanning_rebalance.isra.0": 2.0,
+      "kernel:__memset <- kernel:mas_wmb_replace": 16.0,
+      "kernel:__memset <- kernel:mas_wr_bnode": 385.0,
+      "kernel:__memset <- kernel:mas_wr_node_store": 910.0,
+      "kernel:__memset <- kernel:mas_wr_spanning_store.isra.0": 2.0,
+      "kernel:__memset <- kernel:mast_fill_bnode": 12.0,
+      "kernel:__memset <- kernel:radix_tree_node_ctor": 42.0,
+      "kernel:__memset <- kernel:radix_tree_node_rcu_free": 82.0,
+      "kernel:__memset <- kernel:vfs_getattr_nosec": 2.0,
+      "kernel:__memset <- kernel:zero_user_segments.constprop.0": 2.0,
+      "kernel:__memset <- module:native_gcc_issue": 3.0,
+      "kernel:__memset <- module:native_service.constprop.0": 6.0,
+      "kernel:find_vma <- kernel:__vma_adjust": 312.0,
+      "kernel:find_vma <- kernel:find_extend_vma": 961.0,
+      "kernel:find_vma <- module:add": 281.0,
+      "kernel:find_vma <- module:resolve": 755.0,
+      "kernel:handle_mm_fault <- kernel:fixup_user_fault": 961.0,
+      "module:next_resident <- module:unpinned_resolve": 1696.0
+    }
+  },
+  "evidence": {
+    "path": "$CAPSTONE_TMP_ROOT/native-gcc-preliminary/memory/gcc-memory-evidence.tar.gz",
+    "mirror": "p12:/var/tmp/capstone-copyable-only/gcc-memory-evidence.tar.gz",
+    "sha256": "1d1fbc3a423560cb1d5a4cd4646c475e060a980c4d22d15777f2f7bfcbb55b96",
+    "baseline_phase_evidence_sha256": "b57e975ce10955fb01e7d4e947879c75937f7b9bfacc334929a0a26c0b359cbe"
+  }
+}

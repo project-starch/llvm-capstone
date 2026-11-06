@@ -23,6 +23,14 @@ entry alone cannot be assumed to remove it. All six outputs and phase-count
 conservation pass, including a wrong-boundary negative control.
 [Phase evidence](../../runtime/virtual/tests/copyable-only/results/gcc-phases.json).
 
+Memory follow-up: eight reference-exact fresh-guest runs isolate two existing
+fault switches. Direct anonymous fault resolution plus disabled fault-ahead
+saves 2.02% total, 3.97% in compilation. Mapping creation remains 281 native
+versus 118 plain, all 281 native creations matching heap-mapping entries;
+malloc implementation entries differ only 3.16%. Next isolate allocator
+layout/alignment/group mapping amplification, preserving bounds and lifetimes.
+No runtime defaults changed. [Memory diagnosis](../../runtime/virtual/tests/native-integration/README.md#gcc-memory-work-diagnosis).
+
 This is a bounded experiment, not completion of native Linux compatibility.
 Five SIGACTION and one IOCTL_BUF request are still refused in this unsignalled
 run; GCC tolerates them. The exchange ABI and ioctl entry remain. Next qualify

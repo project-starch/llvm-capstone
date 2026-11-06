@@ -279,3 +279,68 @@ matching QEMU `include/qemu` headers. Supply the resulting `.so` through
 The profiler's normal start/stop behavior is unchanged unless `phases=1` is set.
 
 [Phase samples, boundaries, checks and evidence](../copyable-only/results/gcc-phases.json).
+
+
+## GCC memory-work diagnosis
+
+The follow-up uses unchanged input and binaries, two fresh guests per
+configuration, and the existing `unpinned_fast_fault=1` / `fault_ahead_max=0`
+module parameters. No runtime default or protection check is changed. All eight
+full outputs match, phase boundaries validate, and phase sums equal the outer
+counter. System-wide mean instruction attempts, millions:
+
+| Native configuration | Initialization | Compilation/output | Exit | Total |
+|---|---:|---:|---:|---:|
+| Default | 24.272 | 24.204 | 8.719 | 57.195 |
+| No fault-ahead | 24.370 | 23.498 | 8.711 | 56.578 |
+| Direct anonymous fault resolution | 23.990 | 23.934 | 8.719 | 56.644 |
+| Both | 24.087 | 23.243 | 8.708 | 56.039 |
+
+Both switches save 2.02% of total attempts, or 3.97% inside compilation. The
+fast path reuses the validated anonymous VMA under mmap_lock, retaining rights,
+range and fault handling checks; other mappings retain fixup_user_fault. In the
+compilation phase it removes 922 find_vma entries, without changing page-clear
+or mapping counts. Disabling ahead removes 1,696 next_resident entries and
+reduces page-clear entries from 938 to 866, but demand resolutions rise from
+716 to 850. Fewer faults is therefore not by itself a lower-work criterion.
+
+The larger remaining difference is mapping and backing churn during compilation:
+
+| Function-entry attempts | Plain | Native default | Native both |
+|---|---:|---:|---:|
+| do_mmap | 118 | 281 | 281 |
+| __vm_munmap | 94 | 239 | 239 |
+| capstone_clear_page | 316 | 938 | 866 |
+| handle_mm_fault | 418 | 961 | 889 |
+| find_vma | 524 | 2,309 | 1,521 |
+
+These are dynamic attempts at symbol entries, not hardware-retired calls. Counts
+agree across both repeats. Kernel call-site reconstruction attributes mapping
+lookup to resolve/add, fixup's find_extend_vma, and normal VMA adjustment.
+Native __heap_mapping and __heap_unmapping entries are exactly 281 and 239;
+public mmap has no entry during this phase. The extra mapping creation is in
+the heap path, not additional application mmap requests or alignment trimming
+(which unmaps rather than creates mappings).
+
+The malloc implementation has 2,709 entries native versus 2,626 plain, only
+3.16% more, while mapping creation is 2.38x. Native also enters aligned_alloc
+346 times. The mallocng port routes allocations >=4096 through aligned_alloc,
+changes header/layout sizes and must respect representable bounds. These are
+specific candidates for mapping amplification, not individually established
+causes. The historical compiler/libc differences remain a confounder. The next
+experiment should record allocation sizes, group creation/release and mapping
+sizes, then isolate layout/alignment effects while retaining bounds and lifetime
+checks. A full native task rewrite does not address this demonstrated heap path
+by itself.
+
+Reproduce with the phase runner's default, `--module-param fault_ahead_max=0`,
+`--module-param unpinned_fast_fault=1`, and both parameters, using `--arms native`
+and `--repetitions 2`. The output includes whole-process module counters, read
+outside the profile window; these are distinct from compilation-only PC counts.
+The evidence archive includes the analysis scripts, all profiles and verdicts.
+Direct transfer decoding covers JAL and adjacent AUIPC/JALR or C.JALR only,
+not general indirect calls, inlining or inclusive call stacks. Guest symbol
+addresses account for the ELF text origin, and reported memory-function entry
+bytes were checked against the ELF. Aliased symbols must not be summed.
+
+[Samples, counts, provenance and evidence](../copyable-only/results/gcc-memory.json).
