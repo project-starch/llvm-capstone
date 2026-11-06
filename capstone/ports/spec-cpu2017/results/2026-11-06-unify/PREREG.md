@@ -60,3 +60,22 @@ prediction is written then, against perlbench c3g's board run (board 2), whose o
 - N = 1.
 - Plain gcc train is on board 1, this run is on board 3.
 - The module, launcher and runtime change together: this is a stack comparison against c3f, not one variable.
+
+## Addendum 1 (6 Nov 21:14, before any board call): perlbench joins board 3's list after gcc train
+
+**QEMU gate on kit-unq** (perlbench c3devrg 89398ba2be3127ab, the stage's parameter block read back as @@MX-SET):
+- 2/2 commands rc 0, **specdiff 2/2 PASS**;
+- run1 89,859,365,946 instructions, 146,026 entries;
+- test.out holds 317 "ok" lines and 0 "FAILED". The FAILED count fires: it reads 3 on the VOID -ac board run.
+- The three sub-tests that failed there pass: t/japh/abigail, t/re/pat_rt_report, t/re/reg_email.
+
+The board stage `500.perlbench_r-test-capstone-lifetimes-unify-rg` is that stage, with plan.json's executable hash
+corrected. The copied plan named c3f's e42f4649eccf10c0; the runner does not read that field.
+
+**Prediction (U2)**, against the -ac board run (inside 25,364 s, outside ~9,500 s, 34,887 s; VOID for its failed
+sub-tests, but a valid time measurement of that image):
+- inside ×0.826 (in-context instructions 93.55 G against -ac's 113.2 G on the twin) ≈ 20,950 s at the same CPI;
+- outside 6,500–8,000 s: entries −68 % on the twin, while launch and teardown per context and the rate components stay;
+- **run 27,000–30,000 s (1.16–1.29× Plain's 23,311 s); bound ≤ 32,000 s;**
+- rc 0, specdiff 2/2, and test.out with 0 FAILED. A FAILED sub-test voids the run.
+- perlbench c3g's board run (board 2) is read beside it when it ends.
