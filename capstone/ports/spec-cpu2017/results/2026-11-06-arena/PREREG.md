@@ -354,3 +354,17 @@ Its resident is None and its store is empty.
   it.
 - **After gcc** on board 3: the THP mcf runs (thp Addendum 1), moved from board 2.
 - **Board 2,** after x264 Plain: R-32, then perlbench c3g. Its ga2 and THP steps are removed.
+
+## Addendum 11 (6 Nov 18:15, before any further board call): board 3's first flash failed; gcc train returns to board 2
+
+**What happened.** perf/b3/b3-seq.sh tried board 3's first flash, bitstream 3:
+- the upload was accepted (HTTP 201) and the file was present in the store;
+- after power-on and lock, the console's flash_bitstream answered `flash_state: board reported 'error'` at once;
+- the first attempt died earlier, in flash-bitstream.py itself: board 3 reports flash_state as a string when nothing
+  is resident. The tool now reads that as no name.
+- The board is powered off. Nothing ran on it, and its resident and NV state are as before (None).
+- This is handed to the board lane.
+
+**gcc train goes back to board 2** behind x264 Plain (driver pid 1655525), unchanged: perf/ga2/gt-run.sh 2.
+b2-seq.sh waits on it, then runs R-32, THP mcf and perlbench c3g, as in Addendum 9's revert. Addendum 10's move
+applies again once board 3 flashes.

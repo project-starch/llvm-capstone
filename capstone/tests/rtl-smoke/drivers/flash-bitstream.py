@@ -22,10 +22,13 @@ def nvbit(c, poll=20.0):
     end = time.time() + poll
     while True:
         with c._cond:
-            v = (c._state.get("flash_state") or {}).get("nv_bitstream_name")
+            fs0 = c._state.get("flash_state") or {}
+            v = fs0.get("nv_bitstream_name") if isinstance(fs0, dict) else None
         if v is None:
             st = c.get_state() if hasattr(c, "get_state") else {}
-            v = ((st or {}).get("flash_state") or {}).get("nv_bitstream_name")
+            fs = (st or {}).get("flash_state") or {}
+        # a board with nothing resident (board 3 before its first flash) reports flash_state as a string
+        v = fs.get("nv_bitstream_name") if isinstance(fs, dict) else None
         if v is not None or time.time() >= end:
             return v
         time.sleep(1.0)
