@@ -15,6 +15,15 @@ The concrete Linux 6.1 transition contract and reproducible installer are presen
 A matched four-run GCC comparison shows 0.2125% more total attempted instructions
 (0.4019% more kernel work), so this first implementation is not a speedup.
 
+Syscall microbenchmarks now isolate entry and argument ABI: 128 valid windows
+show direct-register specialised read/write saving 61–74% versus exchange on
+the task backend. A generic-dispatch control also improves, while task entry
+alone remains more expensive. Cached musl getpid never enters Linux and is
+kept distinct from a forced scalar request. These probes do not migrate GCC;
+next performance work is the admitted scalar/flat-buffer musl ABI, preserving
+identity caching and checked-copy rules.
+[Syscall measurement](../../runtime/virtual/tests/native-task/README.md#syscall-path-and-direct-register-measurement).
+
 Next close the remaining policy and qualification gates: native syscall
 audit/seccomp/tracing (currently rejected), full register/FP/bounds and raw-platform
 negative matrices, exhaustive lifetime/failed-exec race tests, then capability

@@ -119,3 +119,61 @@ SHA-256: `b8286ed6a5252441d0589fa1a9631fc20b468d508a7e064a797cbd19047008fd`.
 Astra xhigh reviewed entry/context tracking, task lifetime and ptrace/exec races;
 Argon independently reviewed the patch. Review findings were checked against
 Linux 6.1 source; neither review substitutes for the runtime gates.
+
+
+## Syscall path and direct-register measurement
+
+[Full factorial record](syscall-comparison.json): 128 valid profile windows across
+eight fresh guests, two observations per entry/ABI/case/fast-path setting.
+All return-count checks and output-byte checks pass, with no kernel diagnostics.
+`build-syscalls.sh OUTPUT` builds the existing budget fixture for ordinary RV64,
+Capstone exchange, forced scalar exchange and direct register calls.
+`measure-syscalls.py --help` lists external artifacts; run with `--fast 1` and
+`--fast 0` to separate specialised dispatch from the direct argument ABI.
+The latter still changes parsing/copy/provider paths, so it is not a pure cost
+measurement of register moves alone.
+
+Mean system-wide attempted instructions **per call**, new task backend:
+
+| Operation | Ordinary Linux | Exchange | Registers, generic dispatcher | Registers, specialised paths |
+| --- | ---: | ---: | ---: | ---: |
+| getpid, forced kernel request | 601 | 10,715 | 5,264 | 1,345 |
+| read, 1 byte | 1,697 | 15,908 | 9,603 | 4,205 |
+| write, 1 byte | 2,667 | 16,929 | 10,560 | 5,194 |
+| read, 64 KiB | 39,996 | 215,131 | 86,462 | 69,969 |
+| write, 64 KiB | 80,050 | 293,606 | 126,287 | 113,427 |
+
+The existing direct-register specialised path saves 73.56% for 1-byte read,
+69.32% for 1-byte write, 67.48% for 64 KiB read and 61.37% for 64 KiB write
+against exchange on this backend. Kernel work for 1-byte read falls from
+13,845 to 4,175 attempts (about 70%); most of the reduction is kernel work,
+with application marshalling also disappearing. Checked copies and bounds/
+permission enforcement remain. This is a probe ABI comparison; GCC/musl has
+**not** been switched wholesale to that ABI.
+
+Important scalar control: ordinary Capstone musl `getpid()` uses launch metadata,
+measuring 255 instructions and **zero kernel instructions** here. Calling
+`syscall(SYS_getpid)` would still meet that SDK shortcut. The forced-exchange
+probe calls `__capstone_delegate_ints` to bypass the shortcut deliberately.
+The 10,715-to-1,345 comparison is therefore a transport comparison, not an
+argument to replace cached getpid: preserving that cache is cheaper still.
+
+The task-entry change by itself remains a cost: the direct getpid path takes
+609 attempts through the old ioctl service loop versus 1,345 through task return
+with userspace accounting. The cheap repeated service loop need not exit its
+ioctl on every request. These are separate effects: direct argument dispatch
+helps substantially; changing ownership/return integration alone does not.
+
+Small cases use 100 calls per window; 64 KiB cases use one call. Buffer pages
+are touched before profiling, stdin is a prefilled pipe, writes target a tmp
+file, and setup/diagnostic output are outside the window. Counts include loop
+and wrappers, plus system-wide interrupt work. Only two repeats per cell were
+run; they are preliminary instruction counts, not latency/cycle estimates.
+The ordinary static RV64 reference uses the same patched kernel, not stock
+Linux with a separately matched libc/compiler. Preserve those distinctions
+when using the table to choose the next optimisation.
+
+Syscall logs, profiles, input hashes and probes:
+`$CAPSTONE_TMP_ROOT/native-task/syscall-evidence.tar.gz`
+(mirror `p12:/var/tmp/capstone-native-task/syscall-evidence.tar.gz`), SHA-256
+`91b3e92a7fb0eeec926ba9c04fadba93cb34d3e432cf87211565b315e18ac00f`. The kernel/model artifacts are the same as the task GCC record.

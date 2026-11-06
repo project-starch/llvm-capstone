@@ -2,6 +2,7 @@
 /* A fully prefetched pipe is supplied by pipe-exec. Each process opens one
  * system-wide capprof window; its setup and diagnostic output are excluded. */
 #include <stdlib.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
@@ -17,7 +18,14 @@ static long pid(void)
 #else
 static long input(void *p, unsigned long n) { return read(0, p, n); }
 static long output(void *p, unsigned long n) { return write(1, p, n); }
+#ifdef FORCE_EXCHANGE_PID
+/* getpid() is normally answered from the SDK launch metadata. Force a real
+ * exchange request only for the scalar transport microbenchmark. */
+extern long __capstone_delegate_ints(uint64_t, uint64_t, uint64_t, uint64_t);
+static long pid(void) { return __capstone_delegate_ints(172, 0, 0, 0); }
+#else
 static long pid(void) { return getpid(); }
+#endif
 #endif
 int main(int argc, char **argv)
 {
