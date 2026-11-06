@@ -1,0 +1,3 @@
+@@THP always [madvise] never thp=Y
+thp_migration_success 0 thp_migration_fail 0 thp_migration_split 0 thp_fault_alloc 743 thp_fault_fallback 0 thp_fault_fallback_charge 0 
+capstone_vm: exits steps=6064 kcyc=320044255 rcyc=288551683 ucyc=1054536428 ocyc=1000800190 ev=0,4954,0,1099,1663,0,0,0

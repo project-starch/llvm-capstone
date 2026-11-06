@@ -1,0 +1,2 @@
+$CAPSTONE_WORK/perf/thp/stages/505.mcf_r-test-capstone-lifetimes-devmk-thp 30000 540 $CAPSTONE_WORK/perf/xprof/out/mcfH
+$CAPSTONE_WORK/perf/thp/stages/505.mcf_r-test-plain-rv64-hpm-thpk 14400 260 -
