@@ -1099,7 +1099,10 @@ static int add(struct context *c, struct cv_thread *t, struct cv_map *r)
                   ((r->permissions & 1) && !(v->vm_flags & (r->linear ? VM_MAYEXEC : VM_EXEC)));
         if (bad) { mmap_read_unlock(c->mm); return -EACCES; }
 #ifdef CONFIG_TRANSPARENT_HUGEPAGE
-        if (!(v->vm_flags & VM_NOHUGEPAGE)) {
+        /* thp (perf/thp): a huge-page arena is allowed. Pinning one 4 KiB page of a PMD-mapped folio holds the whole
+         * folio in place (split and collapse both refuse a pinned folio), and retire pins and sweeps every resident
+         * 4 KiB page through resident_page's PMD case. */
+        if (!(v->vm_flags & VM_NOHUGEPAGE) && !READ_ONCE(thp)) {
             mmap_read_unlock(c->mm); return -EOPNOTSUPP;
         }
 #endif
