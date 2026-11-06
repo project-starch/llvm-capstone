@@ -1,12 +1,13 @@
 # Syscall work imported into the copyable-only prototype
 
-The first import is a hosted, provider-independent foundation for the in-kernel
-syscall milestone. It supplies the actual shared dispatcher and checked-copy
-algorithm plus their executable contracts. It does not activate a native syscall
-ABI or change the current module, launcher, SDK or QEMU execution paths. A faster
-application syscall path is not claimed from these tests.
+The narrow Point 2 prototype is now implemented and qualified on
+`prototype/copyable-only`: kernel syscall providers, checked copies, private FD
+policy, deterministic guest races and paired instruction measurements. It remains
+default off, root-only, single hart and unpinned. Full native Linux task
+integration (Point 3) is separate. The sections below preserve the sequence and
+boundaries of the hosted/model imports; the final section records integration.
 
-## Frozen source and selection
+## Initial frozen source and selection
 
 The source snapshots were clean when inspected. No active lane checkout was
 modified. Selected files were read from Git objects, not from mutable worktrees.
@@ -92,7 +93,7 @@ not optional performance cleanup. Do not disable the existing launcher filter
 to make a microbenchmark pass. Kernel transport integration must also include
 all newly tagged snapshot slots in lifetime-root accounting and sweeps.
 
-## Next integration gate
+## Integration gates (completed for the narrow prototype)
 
 1. Processor-side checked-access/transport is qualified as above. Connect its
    versioned ABI to kernel-owned contexts, including frame-root accounting;
@@ -107,6 +108,36 @@ all newly tagged snapshot slots in lifetime-root accounting and sweeps.
 4. Only then enable the specialized NS paths and compare them with the generic
    path, including authority refusals and completed-call counters.
 
-Point 1 (tag-aware page maintenance without persistent application-page pins)
-remains independently qualified. This import starts Point 2; it does not mark it
-complete and does not implement Point 3 (native Linux task integration).
+## Kernel consumer qualification — 2026-11-06
+
+The later integration completes the narrow Point 2 prototype on this branch.
+The descriptions above retain the boundaries of the earlier hosted/model
+checkpoints. Selected NS kernel providers, binfmt, resource policy, explicit SDK
+stub and Linux mprotect wrapper are now adapted from the same frozen revision;
+RT hooks and its frozen 41-case oracle are adapted from the RT revision above.
+MC remains deferred. No active lane checkout was modified and no legacy
+ownership ABI was restored.
+
+Admission now checks the model ABI/transport version and required kernel export.
+Private file references, inherited-Seccomp refusal, immutable authority snapshots,
+epoch accounting, mapping retirement/holds and fault rechecks are connected.
+Metadata protection changes are refused; page-subrange mprotect semantics of
+this branch are retained and covered. Both generic and specialized paths pass
+51 functional checks and 10 entry/slot-eviction checks each; both pass all 41
+RT cases, including 17 negative controls. Pinned/unpinned launcher regressions
+pass 22 checks each, and all five raw platform admission cases pass.
+
+Matched measurements show 54%/74% fewer system-wide attempts for 1-byte/64-KiB
+reads and 40%/68% for writes versus the launcher. Cached launcher getpid remains
+faster. Kernel/module work decreases for large buffers but increases for small
+writes; the result is not simply fewer kernel instructions in every case.
+See [reproduction, scope and measurements](../../../runtime/virtual/tests/native-integration/README.md)
+and [binary qualification](../../../runtime/virtual/tests/copyable-only/results/native-integration.json).
+Gemini Argon reviewed the integration; admission, snapshot restoration and
+terminal cleanup findings were addressed and guest-tested.
+
+Point 1 remains independently qualified. Point 2 is complete at the explicitly
+narrow, default-off single-hart prototype scope. Point 3 remains: the current
+same-task ioctl trampoline is not a complete native architecture return path or
+Linux process/signal/restart integration. Bounce copies and unsupported syscall
+families remain measured follow-up work; no native full SPEC result is claimed.

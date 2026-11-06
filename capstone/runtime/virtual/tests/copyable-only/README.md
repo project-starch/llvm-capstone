@@ -208,3 +208,12 @@ archived locally at `$CAPSTONE_TMP_ROOT/copyable-only/evidence.tar.gz`, SHA-256
 `223049dab82760bef85c8f249a6ea5a77a39194642dd5eb3ab7e63de37763b68`.
 The compact [qualification](results/qualification.json) and
 [comparison](results/comparison.json) records include hashes and per-run counts.
+
+
+## Native syscall consumer (Point 2)
+
+The default-off narrow kernel consumer is now qualified with both generic and
+specialized dispatchers, single-slot blocked-process transport, deterministic
+RT races and paired read/write instruction budgets. See
+[build/run instructions and limits](../native-integration/README.md) and
+[the qualification record](results/native-integration.json).

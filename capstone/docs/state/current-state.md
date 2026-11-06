@@ -1,13 +1,26 @@
-## 2026-11-06 — Copyable checked-access model
+## 2026-11-06 — Qualified kernel syscall prototype
 
-`prototype/copyable-only` now includes default-off `CSCHECKR/W` and protected
-context transport v5/v6. Immutable escape-register authority survives transport
-independently of mutable reply slots; legacy instructions remain removed and
-MIP remains device state. Model tests and the Linux regression are recorded in
-[the syscall integration checkpoint](../design/virtual-capstone/syscall-import.md#copyable-model-checkpoint).
-The kernel syscall consumer, resource/Seccomp integration, RT guest races and
-paired syscall measurements remain outstanding; this is not completion of
-point 2.
+On `prototype/copyable-only`, the narrow Point 2 kernel consumer is implemented
+and measured. Both dispatchers pass 51 ABI/authority/protection checks plus 10
+entry checks, including two blocked processes sharing one hardware slot; both
+pass all 41 deterministic RT cases (17 negative controls). Launcher regressions
+still pass 22 checks each pinned/unpinned, and raw platform admission passes.
+The default-off native path requires matching checked-copy/transport features,
+a private FD broker and the normal-Linux mprotect wrapper. No legacy ownership
+instructions return. Gemini Argon assisted review.
+
+Median total QEMU attempts versus launcher: read 1 byte -54%, read 64 KiB -74%,
+write 1 byte -40%, write 64 KiB -68%. Cached launcher getpid is faster; small
+writes increase kernel/module work despite reducing total work. See the
+[qualified integration and reproduction](../../runtime/virtual/tests/native-integration/README.md)
+and [source import boundary](../design/virtual-capstone/syscall-import.md).
+
+Next milestone is Point 3: native Linux task/architecture-return integration,
+with explicit signal/restart/process semantics. The current ioctl trampoline
+is only a prototype entry mechanism. Before broad workloads, extend unsupported
+syscalls and requalify their authority/FD policies; measure remaining bounce
+copies separately. MC's pinned mapping pool remains deferred. No full native
+SPEC, SMP, DMA or RTL qualification is claimed.
 
 ## 2026-11-06 — Copyable-only prototype branch
 

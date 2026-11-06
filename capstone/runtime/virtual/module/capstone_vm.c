@@ -105,6 +105,12 @@ struct arena {
      * range (arena_overlaps), is swept by every collection like any pinned page, and is retired
      * like any other arena at CV_RETIRE (the launcher's eviction) or at the context's release. */
     bool parked;
+    /* Native-task mappings only; initial transport cannot be retired. */
+    bool dom_dynamic, dom_metadata;
+    /* Checked-copy holds retain both pages and the VA reservation after a
+     * logical native unmap. The node is retired immediately, under vm_lock. */
+    unsigned copy_holds;
+    bool copy_retired, copy_unmap_pending;
 };
 struct context;
 struct cv_thread {
@@ -117,6 +123,8 @@ struct cv_thread {
     struct page *frame_page;
     bool user_frame;
     bool started, reply_cap, terminal;
+    bool slot_exported; /* VM transport image in the kernel-owned frame */
+    unsigned long native_satp; /* translation identity of the paused snapshot */
     unsigned long event;
     /* S-24: the same kind-4 fault resolved repeatedly without changing anything. The RTL's walker
      * faults on a clear A bit and never sets it, so a PTE this module leaves untouched can re-fault
@@ -179,6 +187,15 @@ struct context {
 #endif
     /* The image file, writers denied from CV_IMAGE until release. */
     struct file *image;
+    /* Private native-task driver state; never copied from the trampoline. */
+    unsigned long dom_meta, dom_exchange, dom_exchange_bytes;
+    struct cv_step dom_step;
+    pid_t dom_pid;
+    bool dom_protect_pending;
+    int dom_fd;
+    struct dom_delegate *dom_delegate;
+    struct cn_context *native_context;
+    struct ns_session *native_session;
 };
 static DEFINE_MUTEX(vm_lock);
 /* Quotas are in base pages; zero means the 30-bit ISA limit. Parameters are
@@ -611,10 +628,20 @@ module_param(supervisor_slots, ulong, 0444);
 MODULE_PARM_DESC(supervisor_slots,
     "saved-context slots the processor has (default 1, as vp2); the module never issues an entry "
     "beyond this many live frames");
+/* Experimental VM backend: requires x-capstone-context-transport. Never
+ * enable on the legacy RTL ABI, which uses the extension area differently. */
+static bool native_slot_transport;
+module_param(native_slot_transport, bool, 0444);
+MODULE_PARM_DESC(native_slot_transport,
+    "experimental VM protected-frame slot export/import (default off)");
 static DECLARE_WAIT_QUEUE_HEAD(slot_wait);
-/* The wait condition, evaluated WITHOUT vm_lock: it takes the lock itself, because the sleeper
- * released it. A false wake just re-checks. */
-static bool slot_free_now(void);
+/* Writers and admission hold vm_lock. A waiter snapshots this generation
+ * before dropping the lock, then checks it without sleeping in the wait
+ * predicate (prepare_to_wait_event has already changed its task state).
+ * Publish before waking, including releases before the waiter is enqueued.
+ * A changed generation is only a retry hint, never a slot reservation. */
+static unsigned long slot_generation;
+static void slot_changed(void);
 
 /* Live frames across EVERY context, and one of them if asked. vm_lock is held by every caller. */
 static unsigned slot_live(struct cv_thread **holder)
@@ -624,26 +651,88 @@ static unsigned slot_live(struct cv_thread **holder)
     unsigned n = 0;
     list_for_each_entry(c, &contexts, link)
         list_for_each_entry(t, &c->threads, link)
-            if (t->started && !t->terminal) {
+            if (t->started && !t->terminal && !t->slot_exported) {
                 if (holder && !n) *holder = t;
                 ++n;
             }
     return n;
 }
 
-/* Evaluated by wait_event_interruptible WITHOUT vm_lock held -- the sleeper released it -- so this
- * takes the lock itself. A spurious wake simply re-checks. */
-static bool slot_free_now(void)
+static void slot_changed(void)
 {
-    bool free;
-    if (mutex_lock_interruptible(&vm_lock)) return true;   /* let the sleeper return -EINTR */
-    free = slot_live(NULL) < supervisor_slots;
-    mutex_unlock(&vm_lock);
-    return free;
+    lockdep_assert_held(&vm_lock);
+    /* Waiters returning EAGAIN must not wake one another while all slots
+     * remain occupied. Only a possible admission publishes a new epoch. */
+    if (slot_live(NULL) < supervisor_slots) {
+        WRITE_ONCE(slot_generation, slot_generation + 1);
+        wake_up_all(&slot_wait);
+    }
 }
+
 static u64 allocated_total, high_water, collections_total, reclaimed_total;
 
 static unsigned long run(unsigned long frame, unsigned long action);
+
+/* vm_lock serializes physical-slot ownership and protected-frame lifetime.
+ * Only kernel pages can hold an importable transport image. User start frames
+ * remain on the legacy admission path until they have a protected copy. */
+static int slot_acquire(struct cv_thread *t)
+{
+    struct cv_thread *holder = NULL, *dead;
+    struct context *c;
+    unsigned long flags, result;
+    lockdep_assert_held(&vm_lock);
+    if (!native_slot_transport || (t->started && !t->slot_exported &&
+        t->native_satp == csr_read(CSR_SATP))) return 0;
+#ifdef CV_RACE_TEST
+    /* Test build: the racer's start frame is a user page. It may enter while a
+     * slot is free (the legacy admission), never by evicting another frame. */
+    if (t->user_frame)
+        return !t->started && slot_live(NULL) < supervisor_slots ? 0 : -EOPNOTSUPP;
+#else
+    if (t->user_frame) return -EOPNOTSUPP;
+#endif
+    /* Linux can change the ASID while a native I/O sleeps. Rebind the
+     * trusted snapshot to this mm's current translation identity through
+     * export/import, preserving its immutable register epoch. */
+    if (t->started && !t->slot_exported) {
+        preempt_disable(); local_irq_save(flags);
+        result = run(t->frame_pa, 4);
+        local_irq_restore(flags); preempt_enable();
+        if (result) return -EIO;
+        t->slot_exported = true;
+    }
+    /* A terminal event can precede close(). Reclaim its occupied slot before
+     * admitting another frame, even when the exiting task has not run yet. */
+    list_for_each_entry(c, &contexts, link)
+        list_for_each_entry(dead, &c->threads, link)
+            if (dead->started && dead->terminal && !dead->slot_exported) {
+                preempt_disable(); local_irq_save(flags);
+                run(dead->frame_pa, 1);
+                local_irq_restore(flags); preempt_enable();
+                dead->started = false;
+            }
+    if (slot_live(&holder) >= supervisor_slots) {
+        if (!holder || holder->user_frame) return -EOPNOTSUPP;
+        preempt_disable(); local_irq_save(flags);
+        result = run(holder->frame_pa, 4);
+        local_irq_restore(flags); preempt_enable();
+        if (result) return -EIO;
+        holder->slot_exported = true;
+    }
+    if (t->slot_exported) {
+        preempt_disable(); local_irq_save(flags);
+        /* Transport v5/v6: SCALAR_STATE.satp is at byte 1192. This
+         * kernel-owned field is not an application authority import. */
+        WRITE_ONCE(t->frame[1192 / 8], csr_read(CSR_SATP));
+        result = run(t->frame_pa, 5);
+        if (!result) t->native_satp = csr_read(CSR_SATP);
+        local_irq_restore(flags); preempt_enable();
+        if (result) return -EIO;
+        t->slot_exported = false;
+    }
+    return 0;
+}
 
 static struct cv_thread *find_thread(struct context *c, u64 id)
 {
@@ -1261,6 +1350,8 @@ static int collect(struct context *c, struct cv_thread *owner)
                  node_retired(c), node_available(c), collect_skips);
     return -ENOMEM;
 #endif
+    error = slot_acquire(owner);
+    if (error) return error;
     /* The unpinned sweep covers the whole mm, including retired arenas that
      * are still mapped. Pinning only current arenas could resurrect stale IDs.
      * Hold mmap_lock through the sweep/recycle so fork and unmap cannot copy or
@@ -1486,7 +1577,8 @@ static int retire(struct context *c, struct arena *a, bool destroying)
     unsigned i, swept;
     if (!destroying && arena_has_thread_frame(c, a))
         return -EBUSY;
-    if (!destroying && !unpinned) {
+    if (destroying && WARN_ON_ONCE(a->copy_holds)) return -EBUSY;
+    if (!destroying && !unpinned && !a->copy_holds) {
         int error = pin_remaining(c, a, FOLL_FORCE | FOLL_NOFAULT);
         if (error) return error;
     }
@@ -1512,6 +1604,11 @@ static int retire(struct context *c, struct arena *a, bool destroying)
             ++c->retired_flat;
             if (node_free_count(c) > free_before) ++c->pushed_flat;
         }
+    }
+    if (a->copy_holds) {
+        a->ancestor_retired = true;
+        a->copy_retired = true;
+        return 0;
     }
     /* Clear every tag before returning frames to Linux. Later collection can
      * reuse dead IDs only after sweeping all remaining namespace storage.
@@ -1977,8 +2074,9 @@ unpin:
  * must catch, at a chosen point of CV_STEP; counters say whether CSRUNV was
  * entered while an injection was pending, and what GUP was asked for. */
 static unsigned long test_inject;       /* 1 resched, 2 signal, 3 deadline, 4 SIGKILL */
-static unsigned long test_inject_at;    /* 1 after a demand GUP/fixup, 2 before an entry, 3 before an ioctl's first entry,
-                                           4 after CSRUNV returns a fault, before resolve() */
+static unsigned long test_inject_at;    /* 1 after a demand GUP, 2 before an entry, 3 before an ioctl's first entry,
+                                           4 after CSRUNV returns a fault, before resolve(),
+                                           5 before native syscall service */
 static unsigned long test_inject_every = 1;
 static unsigned long test_short_gup;    /* pin-ahead GUP pins only half of a batch */
 /* Policy-only tests need exact windows despite unrelated scheduling/deadline cuts. The
@@ -2973,6 +3071,207 @@ static bool one_inode_per_file(struct file *file)
     return false;
 }
 
+/* vm_lock is held on entry and return, including a supervisor-slot wait.
+ * Both the launcher ioctl and the experimental native-task driver use this
+ * operation; request/result storage belongs to the trusted caller. */
+/* `jdl` non-NULL selects the native loop's coarse bound: a jiffies deadline, one load per
+ * check instead of a clock read. It bounds how long vm_lock is held exactly as the
+ * nanosecond budget does, to within one tick. The test-hook build keeps nanoseconds. */
+static bool cv_step_stop_j(unsigned long jdl)
+{
+    return signal_pending(current) || need_resched() ||
+           time_after_eq(jiffies, jdl) || TEST_EXPIRED();
+}
+#define CV_STEP_BUDGET_J (msecs_to_jiffies(CV_STEP_BUDGET_NS / NSEC_PER_MSEC) + 1)
+static long cv_step_locked(struct context *c, struct cv_step *request, const unsigned long *jdl)
+{
+    /* Edited in place: nothing is stored before the last line, so a refusal leaves the
+     * request as it came. */
+    struct cv_step *const r = request;
+    long rc = -EINVAL;
+    unsigned long flags;
+    struct cv_thread *t;
+    u64 budget_end;
+    bool resolved = false, text = false;
+    t = c->main_thread && c->main_thread->id == r->thread ? c->main_thread : find_thread(c, r->thread);
+    if (!t || t->terminal) { rc = -ESRCH; return rc; }
+    if (r->reply > 1 || (r->reply != (t->started && t->event == 3))) return rc;
+    if (!t->started && (!t->frame[8] || !t->frame[12])) return rc;
+    /* A frame that has not started needs a free slot to enter. Waiting is safe ACROSS
+     * contexts -- two vexec processes never join each other, so run.py's parallel pair simply
+     * serialises and still prints both results -- and is NOT safe within one context, where a
+     * live sibling is the thing that would have to finish first. The create refusal above means
+     * the same-context case cannot normally arise; it is rejected here too rather than
+     * deadlocking if it ever does. vm_lock must be dropped while waiting, so the wait is
+     * outside it and the ioctl restarts. */
+    if (!native_slot_transport && !t->started) {
+        struct cv_thread *holder = NULL;
+        if (slot_live(&holder) >= supervisor_slots) {
+            unsigned long generation = slot_generation;
+            if (holder && holder->context == c) { rc = -EBUSY; return rc; }
+            mutex_unlock(&vm_lock);
+            rc = wait_event_interruptible(slot_wait,
+                    READ_ONCE(slot_generation) != generation);
+            mutex_lock(&vm_lock);
+            return rc ? -EINTR : -EAGAIN;   /* the launcher's loop retries EAGAIN, as it does for the quantum */
+        }
+    }
+    if (native_slot_transport) {
+        rc = slot_acquire(t);
+        if (rc) return rc;
+    }
+    if (r->reply && !t->reply_cap) {
+        t->frame[28] = r->result; t->frame[29] = 0;
+    }
+    /* Each CSRUNV restarts the 5 ms quantum, so a domain that keeps
+     * faulting would never be preempted: bound the resolved faults by
+     * one quantum of this ioctl, then return and release vm_lock. */
+    budget_end = jdl ? 0 : ktime_get_ns() + CV_STEP_BUDGET_NS;
+    TEST_STEP_BEGIN();
+    TEST_HOOK(3);
+    for (unsigned long action = r->reply ? 2 : 0, entries = 0;;
+         action = 0, ++entries) {
+        if (entries && !text) TEST_HOOK(2);  /* after a data fault only, see below */
+        preempt_disable(); local_irq_save(flags);
+        /* Checked with interrupts and preemption off, immediately before
+         * CSRUNV: no interrupt can set need_resched or a signal between
+         * this check and the entry. Before the first entry nothing has
+         * changed, so the launcher simply repeats the same CV_STEP (its
+         * loop retries EINTR and EAGAIN; the reply above is rewritten
+         * identically). Before a later one the fault just resolved goes
+         * back as it was, already counted. */
+        TEST_CHECK();
+        if (jdl ? cv_step_stop_j(*jdl) : cv_step_stop(budget_end)) {
+            local_irq_restore(flags); preempt_enable();
+            TEST_STOPPED(!entries);
+            if (!entries) {
+                rc = signal_pending(current) ? -EINTR : -EAGAIN;
+                return rc;
+            }
+            resolved = true;
+            break;
+        }
+        TEST_ENTRY();
+        if (!t->started) {
+            t->frame[0] = csr_read(CSR_SATP);
+            t->frame[1] = c->table_pa;
+            t->frame[7] = 3;
+        }
+        if (t->sfence_pending) {
+            asm volatile("sfence.vma %0, zero" : : "r"(t->last_fault_addr) : "memory");
+            t->sfence_pending = false;
+            ++resume_sfences;
+        }
+        if (t->started) {
+            /* run_event's fence orders this store before the CSRUNV, with the sentinel's. */
+            unsigned long satp = csr_read(CSR_SATP), saved = t->frame[CV_FRAME_SAVED_SATP];
+            if (saved && saved != satp) ++resume_satp_changed;
+            WRITE_ONCE(t->frame[CV_FRAME_SAVED_SATP], satp);
+            ++resume_satp_refreshes;
+        }
+#ifdef CAPSTONE_VM_BENCH_COUNTERS
+        {
+            /* Interrupts are off: both reads bracket the CSRUNV alone. */
+            unsigned long cy0 = csr_read(CSR_CYCLE), in0 = csr_read(CSR_INSTRET);
+            t->event = run_event(t, action);
+            unsigned long dcy = csr_read(CSR_CYCLE) - cy0, din = csr_read(CSR_INSTRET) - in0;
+            atomic64_add(dcy, &c->bench_cycles);
+            atomic64_add(din, &c->bench_instret);
+            WRITE_ONCE(bench_cycles, bench_cycles + dcy);
+            WRITE_ONCE(bench_instret, bench_instret + din);
+            WRITE_ONCE(bench_entries, bench_entries + 1);
+            atomic64_inc(&c->bench_entries);
+        }
+#else
+        t->event = run_event(t, action);
+#endif
+        if (!t->started) t->native_satp = csr_read(CSR_SATP);
+        t->started = true; t->reply_cap = false;
+        local_irq_restore(flags); preempt_enable();
+        ++c->stats.steps;
+        if (t->event == CV_EVENT_UNWRITTEN) {
+            /* REFUSED: the CSRUNV wrote no event record. End the context, never loop. The
+             * report below reads frame[2..5], so set them to a terminal kind and a cause no
+             * real fault carries. Must-fire, budgeted, at KERN_EMERG: the board console shows
+             * nothing lower. */
+            if (refused_prints < CV_DIAG_BUDGET) {
+                ++refused_prints;
+                pr_emerg("capstone_vm: CSRUNV action %lu wrote no event record (refused), "
+                         "thread %llu entries %lu: context ended\n",
+                         action, (unsigned long long)t->id, entries);
+            }
+            t->frame[2] = 2; t->frame[3] = CV_CAUSE_REFUSED;
+            t->frame[4] = t->frame[5] = 0;
+            t->event = 2;
+        }
+        if (diag_escapes && escape_prints < CV_ESCAPE_BUDGET) {
+            ++escape_prints;
+            CV_EMIT("capstone_vm: escape %u action %lu event %lu frame kind 0x%lx cause 0x%lx "
+                    "pc 0x%lx tval 0x%lx a0 0x%lx\n",
+                    escape_prints, action, t->event,
+                    t->frame[2], t->frame[3], t->frame[4], t->frame[5], t->frame[6]);
+        }
+        if (t->event != 4)
+            break;
+        /* Resolve a page fault here, as CV_RESOLVE would, and resume
+         * without the two system calls a return through the launcher
+         * costs. resolve() can sleep in mmap_lock and GUP while vm_lock
+         * is held, so a stop condition already raised (or a quantum
+         * already spent) returns the fault unresolved, as without this
+         * loop. A fault resolve() refuses goes back to the launcher,
+         * whose own CV_RESOLVE fails the same way and delivers it. A
+         * fault resolved here but stopped before the next entry is
+         * resolved again, idempotently, by the launcher's CV_RESOLVE. */
+        /* A text fault is not a fault event (text_fault), nor an
+         * injection point of the test build's stop hooks: neither this
+         * one nor the re-entry hook above. */
+        text = text_fault(c, t->frame[5]);
+        if (!text && diag_admit) {
+            struct arena *fa = arena_at(c, t->frame[5]);
+            if (fa) ++fa->faulted;
+        }
+        if (!text)
+            TEST_HOOK(4);
+        if (jdl ? cv_step_stop_j(*jdl) : cv_step_stop(budget_end)) {
+            TEST_STOPPED(false);
+            TEST_REAL_STOP(false, budget_end);
+            break;
+        }
+        if (resolve(c, t, jdl ? ktime_get_ns() + CV_STEP_BUDGET_NS : budget_end))
+            break;
+        t->sfence_pending = true;
+        if (!text) {
+            ++c->stats.faults;
+            unpinned_fault_event(c, t, "step");
+        }
+    }
+    if (t->event == 5) {
+        int error = ensure_nodes(c, CAP_REV_TABLE_RESERVE + 1);
+        /* Return through Linux between retries. Refuse endless retries
+         * when the namespace consists of live or pinned identities. */
+        t->frame[2] = error ? 2 : 1;
+    }
+    r->kind = t->frame[2]; r->cause = t->frame[3];
+    r->pc = t->frame[4]; r->address = t->frame[5];
+    /* The low word of register slots 1 and 8 (byte 80 and 192: x1 = ra,
+     * x8 = fp; see wire.h cv_step). The escape writes them on a terminal
+     * step; otherwise they hold what ENTRY left, zero. */
+    r->ra = t->frame[10]; r->fp = t->frame[24];
+    /* Eight loads and stores: for 64 aligned bytes the kernel's memcpy is
+     * a call around a four-byte loop. */
+    r->args[0] = t->frame[72]; r->args[1] = t->frame[73];
+    r->args[2] = t->frame[74]; r->args[3] = t->frame[75];
+    r->args[4] = t->frame[76]; r->args[5] = t->frame[77];
+    r->args[6] = t->frame[78]; r->args[7] = t->frame[79];
+    r->thread = t->id;
+    t->terminal = r->kind == 2;
+    if (r->kind == 4 && !resolved && !text_fault(c, r->address)) {
+        ++c->stats.faults;
+        unpinned_fault_event(c, t, "return");
+    }
+    return 0;
+}
+
 static long vm_ioctl(struct file *f, unsigned int op, unsigned long arg)
 {
     struct context *c = f->private_data;
@@ -3174,7 +3473,7 @@ thread_unwind:
         t = find_thread(c, r.thread);
         if (!t || t == c->main_thread) { rc = -EINVAL; goto out; }
         r.frame = t->frame_user;
-        if (t->started) {
+        if (t->started && !t->slot_exported) {
             preempt_disable(); local_irq_save(flags);
             run(t->frame_pa, 1);
             local_irq_restore(flags); preempt_enable();
@@ -3183,186 +3482,14 @@ thread_unwind:
         kvfree(t);
         rc = copy_to_user((void __user *)arg, &r, sizeof(r)) ? -EFAULT : 0;
     } else if (op == CV_STEP) {
-        /* Exempt from the kernel's stack zeroing (a memset call at this size):
-         * copy_from_user fills every byte or the ioctl fails, and every output
-         * member is assigned before the copy back. */
         struct cv_step r __uninitialized;
-        struct cv_thread *t;
-        u64 budget_end;
-        bool resolved = false, text = false;
         if (copy_from_user(&r, (void __user *)arg, sizeof(r))) { rc = -EFAULT; goto out; }
-        t = find_thread(c, r.thread);
-        if (!t || t->terminal) { rc = -ESRCH; goto out; }
-        if (r.reply > 1 || (r.reply != (t->started && t->event == 3))) goto out;
-        if (!t->started && (!t->frame[8] || !t->frame[12])) goto out;
-        /* A frame that has not started needs a free slot to enter. Waiting is safe ACROSS
-         * contexts -- two vexec processes never join each other, so run.py's parallel pair simply
-         * serialises and still prints both results -- and is NOT safe within one context, where a
-         * live sibling is the thing that would have to finish first. The create refusal above means
-         * the same-context case cannot normally arise; it is rejected here too rather than
-         * deadlocking if it ever does. vm_lock must be dropped while waiting, so the wait is
-         * outside it and the ioctl restarts. */
-        if (!t->started) {
-            struct cv_thread *holder = NULL;
-            if (slot_live(&holder) >= supervisor_slots) {
-                if (holder && holder->context == c) { rc = -EBUSY; goto out; }
-                mutex_unlock(&vm_lock);
-                if (wait_event_interruptible(slot_wait, slot_free_now()))
-                    return -EINTR;
-                return -EAGAIN;   /* the launcher's loop retries EAGAIN, as it does for the quantum */
-            }
+        rc = cv_step_locked(c, &r, NULL);
+        if (!rc && copy_to_user((void __user *)arg, &r, sizeof(r))) {
+            struct cv_thread *t = find_thread(c, r.thread);
+            if (t) t->terminal = true;
+            rc = -EFAULT;
         }
-        if (r.reply && !t->reply_cap) {
-            t->frame[28] = r.result; t->frame[29] = 0;
-        }
-        /* Each CSRUNV restarts the 5 ms quantum, so a domain that keeps
-         * faulting would never be preempted: bound the resolved faults by
-         * one quantum of this ioctl, then return and release vm_lock. */
-        budget_end = ktime_get_ns() + CV_STEP_BUDGET_NS;
-        TEST_STEP_BEGIN();
-        TEST_HOOK(3);
-        for (unsigned long action = r.reply ? 2 : 0, entries = 0;;
-             action = 0, ++entries) {
-            if (entries && !text) TEST_HOOK(2);  /* after a data fault only, see below */
-            preempt_disable(); local_irq_save(flags);
-            /* Checked with interrupts and preemption off, immediately before
-             * CSRUNV: no interrupt can set need_resched or a signal between
-             * this check and the entry. Before the first entry nothing has
-             * changed, so the launcher simply repeats the same CV_STEP (its
-             * loop retries EINTR and EAGAIN; the reply above is rewritten
-             * identically). Before a later one the fault just resolved goes
-             * back as it was, already counted. */
-            TEST_CHECK();
-            if (cv_step_stop(budget_end)) {
-                local_irq_restore(flags); preempt_enable();
-                TEST_STOPPED(!entries);
-                if (!entries) {
-                    rc = signal_pending(current) ? -EINTR : -EAGAIN;
-                    goto out;
-                }
-                resolved = true;
-                break;
-            }
-            TEST_ENTRY();
-            if (!t->started) {
-                t->frame[0] = csr_read(CSR_SATP);
-                t->frame[1] = c->table_pa;
-                t->frame[7] = 3;
-            }
-            if (t->sfence_pending) {
-                asm volatile("sfence.vma %0, zero" : : "r"(t->last_fault_addr) : "memory");
-                t->sfence_pending = false;
-                ++resume_sfences;
-            }
-            if (t->started) {
-                /* run_event's fence orders this store before the CSRUNV, with the sentinel's. */
-                unsigned long satp = csr_read(CSR_SATP), saved = t->frame[CV_FRAME_SAVED_SATP];
-                if (saved && saved != satp) ++resume_satp_changed;
-                WRITE_ONCE(t->frame[CV_FRAME_SAVED_SATP], satp);
-                ++resume_satp_refreshes;
-            }
-#ifdef CAPSTONE_VM_BENCH_COUNTERS
-            {
-                /* Interrupts are off: both reads bracket the CSRUNV alone. */
-                unsigned long cy0 = csr_read(CSR_CYCLE), in0 = csr_read(CSR_INSTRET);
-                t->event = run_event(t, action);
-                unsigned long dcy = csr_read(CSR_CYCLE) - cy0, din = csr_read(CSR_INSTRET) - in0;
-                atomic64_add(dcy, &c->bench_cycles);
-                atomic64_add(din, &c->bench_instret);
-                WRITE_ONCE(bench_cycles, bench_cycles + dcy);
-                WRITE_ONCE(bench_instret, bench_instret + din);
-                WRITE_ONCE(bench_entries, bench_entries + 1);
-                atomic64_inc(&c->bench_entries);
-            }
-#else
-            t->event = run_event(t, action);
-#endif
-            t->started = true; t->reply_cap = false;
-            local_irq_restore(flags); preempt_enable();
-            ++c->stats.steps;
-            if (t->event == CV_EVENT_UNWRITTEN) {
-                /* REFUSED: the CSRUNV wrote no event record. End the context, never loop. The
-                 * report below reads frame[2..5], so set them to a terminal kind and a cause no
-                 * real fault carries. Must-fire, budgeted, at KERN_EMERG: the board console shows
-                 * nothing lower. */
-                if (refused_prints < CV_DIAG_BUDGET) {
-                    ++refused_prints;
-                    pr_emerg("capstone_vm: CSRUNV action %lu wrote no event record (refused), "
-                             "thread %llu entries %lu: context ended\n",
-                             action, (unsigned long long)t->id, entries);
-                }
-                t->frame[2] = 2; t->frame[3] = CV_CAUSE_REFUSED;
-                t->frame[4] = t->frame[5] = 0;
-                t->event = 2;
-            }
-            if (diag_escapes && escape_prints < CV_ESCAPE_BUDGET) {
-                ++escape_prints;
-                CV_EMIT("capstone_vm: escape %u action %lu event %lu frame kind 0x%lx cause 0x%lx "
-                        "pc 0x%lx tval 0x%lx a0 0x%lx\n",
-                        escape_prints, action, t->event,
-                        t->frame[2], t->frame[3], t->frame[4], t->frame[5], t->frame[6]);
-            }
-            if (t->event != 4)
-                break;
-            /* Resolve a page fault here, as CV_RESOLVE would, and resume
-             * without the two system calls a return through the launcher
-             * costs. resolve() can sleep in mmap_lock and GUP while vm_lock
-             * is held, so a stop condition already raised (or a quantum
-             * already spent) returns the fault unresolved, as without this
-             * loop. A fault resolve() refuses goes back to the launcher,
-             * whose own CV_RESOLVE fails the same way and delivers it. A
-             * fault resolved here but stopped before the next entry is
-             * resolved again, idempotently, by the launcher's CV_RESOLVE. */
-            /* A text fault is not a fault event (text_fault), nor an
-             * injection point of the test build's stop hooks: neither this
-             * one nor the re-entry hook above. */
-            text = text_fault(c, t->frame[5]);
-            if (!text && diag_admit) {
-                /* The census of fault events, at their receipt: see struct arena faulted. */
-                struct arena *fa = arena_at(c, t->frame[5]);
-                if (fa) ++fa->faulted;
-            }
-            if (!text)
-                TEST_HOOK(4);
-            if (cv_step_stop(budget_end)) {
-                TEST_STOPPED(false);
-                TEST_REAL_STOP(false, budget_end);
-                break;
-            }
-            if (resolve(c, t, budget_end))
-                break;
-            t->sfence_pending = true;
-            if (!text) {
-                ++c->stats.faults;
-                unpinned_fault_event(c, t, "step");
-            }
-        }
-        if (t->event == 5) {
-            int error = ensure_nodes(c, CAP_REV_TABLE_RESERVE + 1);
-            /* Return through Linux between retries. Refuse endless retries
-             * when the namespace consists of live or pinned identities. */
-            t->frame[2] = error ? 2 : 1;
-        }
-        r.kind = t->frame[2]; r.cause = t->frame[3];
-        r.pc = t->frame[4]; r.address = t->frame[5];
-        /* The low word of register slots 1 and 8 (byte 80 and 192: x1 = ra,
-         * x8 = fp; see wire.h cv_step). The escape writes them on a terminal
-         * step; otherwise they hold what ENTRY left, zero. */
-        r.ra = t->frame[10]; r.fp = t->frame[24];
-        /* Eight loads and stores: for 64 aligned bytes the kernel's memcpy is
-         * a call around a four-byte loop. */
-        r.args[0] = t->frame[72]; r.args[1] = t->frame[73];
-        r.args[2] = t->frame[74]; r.args[3] = t->frame[75];
-        r.args[4] = t->frame[76]; r.args[5] = t->frame[77];
-        r.args[6] = t->frame[78]; r.args[7] = t->frame[79];
-        r.thread = t->id;
-        t->terminal = r.kind == 2;
-        if (r.kind == 4 && !resolved && !text_fault(c, r.address)) {
-            ++c->stats.faults;
-            unpinned_fault_event(c, t, "return");
-        }
-        rc = copy_to_user((void __user *)arg, &r, sizeof(r)) ? -EFAULT : 0;
-        if (rc) t->terminal = true;
     } else if (op == CV_RESOLVE) {
         struct cv_thread_control r;
         struct cv_thread *t;
@@ -3406,7 +3533,7 @@ out:
     /* Q-26: one wake covers every way a frame can stop occupying the slot --
      * terminal exit, a discard, an error path -- instead of enumerating them and
      * missing one. A spurious wake costs a re-check. */
-    wake_up_all(&slot_wait);
+    slot_changed();
     mutex_unlock(&vm_lock);
     return rc;
 }
@@ -3513,7 +3640,7 @@ static int vm_release(struct inode *inode, struct file *f)
     reclaimed_total += c->stats.reclaimed;
     /* Stop every supervisor slot while its frame pages are still pinned. */
     list_for_each_entry(t, &c->threads, link) {
-        if (t->started) {
+        if (t->started && !t->slot_exported) {
             preempt_disable(); local_irq_save(flags);
             run(t->frame_pa, 1);
             local_irq_restore(flags); preempt_enable();
@@ -3562,20 +3689,23 @@ static int vm_release(struct inode *inode, struct file *f)
     node_free_table(c);
     if (c->image) { allow_write_access(c->image); fput(c->image); }
     mmdrop(c->mm); kvfree(c);
-    wake_up_all(&slot_wait);   /* the released context's frames are gone */
+    slot_changed();   /* the released context's frames are gone */
     mutex_unlock(&vm_lock);
     return 0;
 }
 static const struct file_operations ops = {
     .owner = THIS_MODULE, .open = vm_open, .release = vm_release, .unlocked_ioctl = vm_ioctl,
 };
+#include "checked-copy-dom.h"
+#include "binfmt-dom.h"
+
 static struct miscdevice device = {
     .minor = MISC_DYNAMIC_MINOR, .name = "capstone-vm", .fops = &ops, .mode = 0600,
 };
 static int __init init(void)
 {
     struct device_node *profile;
-    u32 id_bits, exact, page_size, granule_size;
+    u32 id_bits, exact, page_size, granule_size, checked_abi = 0, transport_version = 0;
     int error;
     profile = of_find_compatible_node(NULL, NULL, "capstone,copyable-v1");
     if (!profile) return -EOPNOTSUPP;
@@ -3583,11 +3713,27 @@ static int __init init(void)
             of_property_read_u32(profile, "exact-bounds", &exact) ||
             of_property_read_u32(profile, "page-size", &page_size) ||
             of_property_read_u32(profile, "granule-size", &granule_size);
+    of_property_read_u32(profile, "checked-copy-abi", &checked_abi);
+    of_property_read_u32(profile, "context-transport-version", &transport_version);
     of_node_put(profile);
     if (error || id_bits != CAPSTONE_VM_IDS || exact > 1 ||
         page_size != PAGE_SIZE || granule_size != 16 || node_table_flat)
         return -EOPNOTSUPP;
     copyable_exact_bounds = exact;
+    /* Refuse mismatched models at load, before an experimental instruction
+     * can trap in S mode. No test-only CSR probing or legacy ABI fallback. */
+    if ((checked_copy && (checked_abi != 1 || !native_slot_transport)) ||
+        (native_slot_transport && transport_version != (checked_copy ? 6 : 5)) ||
+        (native_dispatch && (!dom_binfmt || !checked_copy || !native_slot_transport)) ||
+        ((native_slot_transport || checked_copy || dom_binfmt) && num_possible_cpus() != 1))
+        return -EOPNOTSUPP;
+
+
+    if (native_dispatch) {
+        typeof(&capstone_native_mprotect) protect = symbol_get(capstone_native_mprotect);
+        if (!protect) return -EOPNOTSUPP;
+        symbol_put(capstone_native_mprotect);
+    }
 
     if (unpinned_fast_sweep && !unpinned) return -EINVAL;
     if (unpinned_fast_fault && !unpinned) {
@@ -3612,6 +3758,9 @@ static int __init init(void)
         if (error) return error;
         if (unpinned_exact_bounds != copyable_exact_bounds) return -EOPNOTSUPP;
     }
+#ifdef CONFIG_TRANSPARENT_HUGEPAGE
+    if (dom_binfmt) return -EOPNOTSUPP;
+#endif
 #ifdef CAPSTONE_VM_FLAT_TABLE
     /* Refuse the LOAD, so a bad value cannot reach a run. 2 because ids 0 and 1 are the header;
      * the maximum because silicon saturates capacity there; whole pages because the table is one
@@ -3655,14 +3804,18 @@ static int __init init(void)
          * rest are being read through dmesg. One line per insmod, before the rungs begin. */
         pr_emerg("capstone_vm: loaded, diag %s, supervisor_slots=%lu, diag_emerg=%d, unpinned=%d, fast_sweep=%d, unpinned_fast_fault=%d\n",
                  CV_DIAG_TAG, supervisor_slots, diag_emerg, unpinned, unpinned_fast_sweep, unpinned_fast_fault);
+        if (dom_binfmt) insert_binfmt(&capstone_dom);
         return 0;
     }
 }
+static void __exit done(void)
+{
+    if (dom_binfmt) unregister_binfmt(&capstone_dom);
 #ifdef CV_TEST_HOOKS
-static void __exit done(void) { test_report("unload"); misc_deregister(&device); }
-#else
-static void __exit done(void) { misc_deregister(&device); }
+    test_report("unload");
 #endif
+    misc_deregister(&device);
+}
 module_init(init); module_exit(done);
 MODULE_LICENSE("GPL");
 MODULE_DESCRIPTION("Private virtual Capstone execution adapter");
