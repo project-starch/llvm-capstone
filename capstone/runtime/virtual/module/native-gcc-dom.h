@@ -4,9 +4,6 @@
 #include <linux/resource.h>
 #include <linux/sysinfo.h>
 #include <asm/stat.h>
-extern int capstone_native_sysinfo(struct sysinfo *);
-extern int capstone_native_getrlimit(unsigned int, struct rlimit *);
-extern int capstone_native_stat(struct kstat *, struct stat *);
 
 static unsigned long native_refused_calls;
 static bool native_refused_trace;
@@ -28,9 +25,6 @@ static bool native_gcc_issue(struct context *c, const struct ns_invocation *call
     struct capstone_delegate_entry e = {0};
     struct file *f;
     struct kstat st;
-    typeof(&capstone_native_stat) statfn;
-    typeof(&capstone_native_sysinfo) infofn;
-    typeof(&capstone_native_getrlimit) limitfn;
     sigset_t old, set;
     switch (nr) {
     case CAPSTONE_SYS_openat:
@@ -44,8 +38,6 @@ static bool native_gcc_issue(struct context *c, const struct ns_invocation *call
     case CAPSTONE_SYS_fstat:
         if (nr == CAPSTONE_SYS_newfstatat &&
             (a[3] & ~(u64)(AT_SYMLINK_NOFOLLOW | AT_NO_AUTOMOUNT))) { rc = -EINVAL; break; }
-        statfn = symbol_get(capstone_native_stat);
-        if (!statfn) break;
         mutex_unlock(&vm_lock);
         if (nr == CAPSTONE_SYS_newfstatat) {
             e.nr = nr; memcpy(e.args, a, sizeof(e.args));
@@ -54,26 +46,22 @@ static bool native_gcc_issue(struct context *c, const struct ns_invocation *call
         if (IS_ERR(f)) rc = PTR_ERR(f);
         else {
             rc = vfs_getattr(&f->f_path, &st, STATX_BASIC_STATS, AT_STATX_SYNC_AS_STAT);
-            if (!rc) rc = statfn(&st, call->buffer[nr == CAPSTONE_SYS_fstat ? 1 : 2].data);
+            if (!rc) rc = capstone_native_stat(&st, call->buffer[nr == CAPSTONE_SYS_fstat ? 1 : 2].data);
             fput(f);
         }
         mutex_lock(&vm_lock);
-        symbol_put(capstone_native_stat);
         break;
     case CAPSTONE_SYS_sysinfo:
-        infofn = symbol_get(capstone_native_sysinfo);
-        if (infofn) { rc = infofn(call->buffer[0].data); symbol_put(capstone_native_sysinfo); }
+        rc = capstone_native_sysinfo(call->buffer[0].data);
         break;
     case CAPSTONE_SYS_prlimit64:
         if ((pid_t)a[0] != 0 && (pid_t)a[0] != task_tgid_vnr(current)) { rc = -EPERM; break; }
         /* Same read-only limit policy as the existing launcher/broker. */
         if (call->buffer[2].data) { rc = -EPERM; break; }
-        limitfn = symbol_get(capstone_native_getrlimit);
-        if (limitfn) {
+        {
             struct rlimit limit;
-            rc = limitfn(a[1], &limit);
+            rc = capstone_native_getrlimit(a[1], &limit);
             if (!rc && call->buffer[3].data) memcpy(call->buffer[3].data, &limit, sizeof(limit));
-            symbol_put(capstone_native_getrlimit);
         }
         break;
     case CAPSTONE_SYS_rt_sigprocmask:

@@ -2,7 +2,6 @@
 /* pipe2 is a resource transaction: reserve, checked publication, then install.
  * No descriptor is installed if either the payload or exchange reply fails.
  * The protected task cannot resume until the infallible install has finished. */
-extern int capstone_native_pipe_prepare(int [2], struct file *[2], unsigned, unsigned);
 static int native_exchange_reply(struct context *, const struct cn_capref *,
                                  const struct capstone_delegate_entry *, long);
 
@@ -21,19 +20,15 @@ static long native_pipe_stage(struct context *c, const struct cn_capref *out,
                               u64 offset, u64 flags, int fd[2], struct file *files[2])
 {
     struct cu_result copied;
-    typeof(&capstone_native_pipe_prepare) prepare;
     long rc;
     if (current->seccomp.mode != SECCOMP_MODE_DISABLED) return -EOPNOTSUPP;
     if (flags & ~(u64)(O_CLOEXEC | O_NONBLOCK)) return -EINVAL;
     rc = cn_authorize(c->native_context, &c->native_context->owner,
                        out, offset, 2 * sizeof(int), 1);
     if (rc) return rc;
-    prepare = symbol_get(capstone_native_pipe_prepare);
-    if (!prepare) return -EOPNOTSUPP;
     mutex_unlock(&vm_lock);
-    rc = prepare(fd, files, flags, DOM_FDS);
+    rc = capstone_native_pipe_prepare(fd, files, flags, DOM_FDS);
     mutex_lock(&vm_lock);
-    symbol_put(capstone_native_pipe_prepare);
     if (rc) return rc;
     copied = cv_checked_copy(c, c->main_thread, out, offset, fd,
                              2 * sizeof(int), CU_TO_DOMAIN);

@@ -6,7 +6,9 @@ Linux tree and the [native task guide](tests/native-task/README.md). The device
 ioctl entry, control descriptor and scalar userspace trampoline have been removed.
 An external module build is rejected. Required native admission options must all
 be enabled; disabling one cannot select an older execution path. Native exchange
-and direct-I/O ABIs remain supported.
+and direct-I/O ABIs remain supported. Required Linux helpers now use direct,
+typed internal calls; the installer installs their common header and applies
+the final helper-internalization patch.
 
 The loadable-module, ownership and pthread descriptions below document the
 historical dev profile and its archived evidence. They are not build or execution

@@ -1,5 +1,25 @@
 # Experimental Linux task-return backend
 
+## Direct internal Linux helper interface
+
+The built-in adapter calls its required Linux helpers directly. The shared
+`kernel-capstone-helpers.h` is installed as
+`include/linux/capstone_native_helpers.h` and included by both callers and
+helper definitions. Spawn/time retain their existing typed headers. Missing
+helpers now fail compilation/linking rather than returning a missing-symbol
+fallback at runtime; syscall authority, lock placement and resource cleanup
+are unchanged.
+
+`install-native-task.sh` applies `kernel-native-helpers.patch` **after** the
+existing native task/service patches and installs the staged header. This final
+patch removes twelve obsolete module exports; the remaining export APIs and
+flat-table support are outside this change. Use the installer on a fresh,
+prepared tree. For an incremental tree already containing the earlier patches,
+apply the final helper patch once, refresh the staged adapter and install its
+`capstone_native_helpers.h` into Linux `include/linux/` before building.
+The earlier prerequisite memory/mprotect/GCC patches remain unchanged so their
+historical standalone profiles remain reproducible.
+
 ## Iterative feedback: at most five minutes
 
 Use `run-quick-gate.py` to supervise a configured build and regression plan.

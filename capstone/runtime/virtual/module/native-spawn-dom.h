@@ -97,7 +97,6 @@ static int native_spawn_exec(void *data)
         if (!test_bit(i, d->fds)) close_fd(i);
     set_fs_pwd(current->fs, &d->cwd_path);
     if (r->view.flags & CAPSTONE_SPAWN_SETSIGDEF) {
-        extern int capstone_native_signal_action(unsigned, unsigned, unsigned);
         for (unsigned sig = 1; sig <= 64; ++sig) {
             if (sig == SIGKILL || sig == SIGSTOP || !(r->view.sigdefault & (1ULL << (sig - 1)))) continue;
             rc = capstone_native_signal_action(sig, 0, 0);

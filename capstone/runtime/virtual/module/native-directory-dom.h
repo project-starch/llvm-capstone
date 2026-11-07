@@ -7,9 +7,6 @@
 #include <linux/stat.h>
 #include <asm/stat.h>
 
-extern int capstone_native_stat(struct kstat *, struct stat *);
-extern int capstone_native_path_chmod(const struct path *, umode_t);
-extern int capstone_native_path_link(const struct path *, const struct path *, struct dentry *);
 
 struct native_directory_entries {
     struct dir_context ctx;
@@ -199,14 +196,11 @@ static long native_directory_link(struct context *c, const struct ns_invocation 
     const struct path *grant;
     struct dentry *entry;
     char *storage, *leaf;
-    typeof(&capstone_native_path_link) linkfn;
     long rc = -ENOSYS;
     if (call->scalar[4]) return -EINVAL; /* No FOLLOW or EMPTY_PATH authority. */
-    linkfn = symbol_get(capstone_native_path_link);
-    if (!linkfn) return rc;
     e.args[0] = call->scalar[0];
     source = dom_path_file_name(c, &e, call->buffer[1].data);
-    if (IS_ERR(source)) { rc = PTR_ERR(source); goto put_symbol; }
+    if (IS_ERR(source)) return PTR_ERR(source);
     if (!dom_disk_inode(file_inode(source)) || !S_ISREG(file_inode(source)->i_mode)) {
         rc = -EPERM;
         goto put_source;
@@ -226,7 +220,7 @@ static long native_directory_link(struct context *c, const struct ns_invocation 
     entry = lookup_one(mnt_user_ns(parent.mnt), leaf, parent.dentry, strlen(leaf));
     if (IS_ERR(entry)) rc = PTR_ERR(entry);
     else {
-        rc = d_is_positive(entry) ? -EEXIST : linkfn(&source->f_path, &parent, entry);
+        rc = d_is_positive(entry) ? -EEXIST : capstone_native_path_link(&source->f_path, &parent, entry);
         dput(entry);
     }
     inode_unlock(d_inode(parent.dentry));
@@ -236,8 +230,6 @@ put_parent:
     kfree(storage);
 put_source:
     fput(source);
-put_symbol:
-    symbol_put(capstone_native_path_link);
     return rc;
 }
 
@@ -249,8 +241,6 @@ static bool native_directory_issue(struct context *c,
     struct capstone_delegate_entry e = {.nr = nr};
     struct file *file;
     struct kstat stat;
-    typeof(&capstone_native_stat) statfn;
-    typeof(&capstone_native_path_chmod) chmodfn;
     long rc = -ENOSYS;
 
     memcpy(e.args, a, sizeof(e.args));
@@ -284,17 +274,14 @@ static bool native_directory_issue(struct context *c,
         mutex_lock(&vm_lock);
         break;
     case CAPSTONE_SYS_fchmodat:
-        chmodfn = symbol_get(capstone_native_path_chmod);
-        if (!chmodfn) break;
         mutex_unlock(&vm_lock);
         file = dom_path_file_name(c, &e, call->buffer[1].data);
         if (IS_ERR(file)) rc = PTR_ERR(file);
         else {
-            rc = dom_disk_inode(file_inode(file)) ? chmodfn(&file->f_path, a[2]) : -EACCES;
+            rc = dom_disk_inode(file_inode(file)) ? capstone_native_path_chmod(&file->f_path, a[2]) : -EACCES;
             fput(file);
         }
         mutex_lock(&vm_lock);
-        symbol_put(capstone_native_path_chmod);
         break;
     case CAPSTONE_SYS_truncate:
         if ((s64)a[1] < 0) { rc = -EINVAL; break; }
@@ -314,18 +301,15 @@ static bool native_directory_issue(struct context *c,
             rc = -EINVAL;
             break;
         }
-        statfn = symbol_get(capstone_native_stat);
-        if (!statfn) break;
         mutex_unlock(&vm_lock);
         file = native_directory_metadata_file(c, &e, call->buffer[1].data);
         if (IS_ERR(file)) rc = PTR_ERR(file);
         else {
             rc = vfs_getattr(&file->f_path, &stat, STATX_BASIC_STATS, AT_STATX_SYNC_AS_STAT);
-            if (!rc) rc = statfn(&stat, call->buffer[2].data);
+            if (!rc) rc = capstone_native_stat(&stat, call->buffer[2].data);
             fput(file);
         }
         mutex_lock(&vm_lock);
-        symbol_put(capstone_native_stat);
         break;
     case CAPSTONE_SYS_readlinkat:
         if (!a[3] || a[3] > INT_MAX) { rc = -EINVAL; break; }

@@ -216,8 +216,6 @@ static struct ns_completion native_issue(void *opaque, const struct ns_invocatio
     u64 nr = call->descriptor->nr;
     long rc = -ENOSYS;
     struct timespec64 ts;
-    extern int capstone_native_signal_action(unsigned, unsigned, unsigned);
-    typeof(&capstone_native_signal_action) signal_action;
     if (native_task_value(nr, &rc)) goto done;
     if (native_directory_issue(c, call, file, &rc)) goto done;
     if (native_time_issue(c, call, &rc)) goto done;
@@ -226,7 +224,6 @@ static struct ns_completion native_issue(void *opaque, const struct ns_invocatio
     switch (nr) {
 #ifdef CV_TASK_BACKEND
     case CAPSTONE_SYS_dup: {
-        extern int capstone_native_dupfd(unsigned long, struct file *, unsigned, unsigned);
         mutex_unlock(&vm_lock);
         rc = capstone_native_dupfd(0, file, 0, DOM_FDS);
         mutex_lock(&vm_lock);
@@ -256,12 +253,9 @@ static struct ns_completion native_issue(void *opaque, const struct ns_invocatio
         if (!a[0] || a[0] > 64 || a[1] > CAPSTONE_SIGNAL_CAUGHT || a[2] > UINT_MAX) {
             rc = -EINVAL; break;
         }
-        signal_action = symbol_get(capstone_native_signal_action);
-        if (!signal_action) { rc = -EOPNOTSUPP; break; }
         mutex_unlock(&vm_lock);
-        rc = signal_action(a[0], a[1], a[2]);
+        rc = capstone_native_signal_action(a[0], a[1], a[2]);
         mutex_lock(&vm_lock);
-        symbol_put(capstone_native_signal_action);
         break;
     case CAPSTONE_SYS_sched_yield:
         mutex_unlock(&vm_lock); yield(); mutex_lock(&vm_lock); rc = 0; break;
@@ -536,11 +530,9 @@ static long native_service(struct context *c, struct cv_step *step)
     return native_exchange_reply(c, &meta, &e, rc ? rc : result.value);
 }
 
-/* Optional kernel extension; a stock kernel still loads the default-off module. */
-extern int capstone_native_mprotect(unsigned long, size_t, unsigned long);
+/* Built-in kernel helper; its typed definition is required at link time. */
 static long native_protect(struct context *c, struct cv_step *s)
 {
-    typeof(&capstone_native_mprotect) protect;
     unsigned long base = s->args[0], bytes = s->args[1], prot = s->args[2];
     struct arena *a = arena_at(c, base);
     if (!bytes || ((base | bytes) & ~PAGE_MASK) ||
@@ -550,9 +542,6 @@ static long native_protect(struct context *c, struct cv_step *s)
     /* Permission changes preserve the grant, object identity and mapping.
      * Linux performs aligned subrange splitting and checks VM_MAY* plus LSM.
      * No mapping is removed or replaced, and vm_lock excludes grant retirement. */
-    protect = symbol_get(capstone_native_mprotect);
-    if (!protect) return -EOPNOTSUPP;
-    s->result = protect(base, bytes, prot);
-    symbol_put(capstone_native_mprotect);
+    s->result = capstone_native_mprotect(base, bytes, prot);
     return 0;
 }
