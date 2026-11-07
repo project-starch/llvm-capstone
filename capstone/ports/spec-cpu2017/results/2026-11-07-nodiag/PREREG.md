@@ -69,3 +69,17 @@ specdiff PASS, 43 processes per snapshot, the context's time reads as system tim
   context's last step, outside every window, as the RETRACTION above says for gcc, where one context paid 92 s.
 - **perlbench is 1.294× Plain's 23,277.1 s** (c3g: 1.446×). Plain with the mapping cache (results/2026-11-07-plainreuse)
   is the fair denominator for a stack that caches mappings; its perlbench run is on board 1 now.
+
+## Result, gcc -ndcpu on board 3 (8 Nov 07:5x): D1 holds; the snapshots cannot answer D2
+
+- 4,529.6 s (+0.24 % on board 2's 4,518.6 s), inside 3,432.1 s, outside 1,097.5 s; specdiff 1/1 PASS, outputs equal the
+  twin's. **D1's run clause holds.**
+- /proc/stat over the command: user 467.4 s, system 4,025.7 s, softirq 11.8 s, idle 0. Processes alive at both
+  snapshots: rcu_sched 29.9 s, the batch shell 20.0 s, kworker mm_percpu_wq 9.3 s; the launcher is born and dies
+  between the snapshots and is not in them.
+- **D1's attribution clause FAILS and D2 is not read:** the user/system split is not trustworthy here. QEMU puts the
+  launcher at about 15 M instructions for this run without the digest, which 467 s of user time cannot be. The
+  ticks a context misses while interrupts are masked are accounted at once, in the mode the interrupt is finally
+  taken in; when that is the launcher's user mode after the ioctl returns, context time reads as user time.
+- The same bias applies to cvprof's samples: deferred ticks land at the first point interrupts are taken, which
+  must be separated when its perlbench dump is read (results/2026-11-08-exitprof).
