@@ -1,5 +1,34 @@
 # Experimental Linux task-return backend
 
+## Native POSIX lock path qualified
+
+Musl now sends F_GETLK/F_SETLK/F_SETLKW directly through the register ABI
+when launch advertises `CAPSTONE_LAUNCH_NATIVE_LOCKS`. The specialised service
+uses the existing checked-copy/owner helper and Linux POSIX lock helper,
+without an exchange round or generic request snapshot. Input/output authority,
+fd grants, epoch admission and Linux contention semantics remain enforced.
+Enable `capstone_vm.native_locks=1` together with `capstone_vm.native_io=1`;
+the new switch is default off. The specialised path uses `native_fast=1`
+(the existing default); with it disabled, the checked generic register path
+remains available. Rebuild the native-I/O SDK and relink applications to use it.
+
+SQLite speedtest1 size 1 moves all 5,862 lock calls from exchange to register
+routing. Two samples per arm, using the same binary and kernel in A-B-B-A
+order, reduce mean kernel instruction attempts by 18.12% and total
+attempts by 12.39%; every run matches all 32 reference phases.
+The combined build, lock tests, SQLite, regressions and original GCC comparator
+gate passes in 210.8s. The new-I/O-feature test and reverse-order
+measurement repeat pass in 92.2s, each gate under 300 seconds.
+[Exact inputs, counts and limitations](native-locks-qualification.json).
+
+This is a QEMU instruction result, not hardware timing or a full-SPEC verdict.
+No ISA or QEMU changes are required. Exchange compatibility remains; next
+consider metadata calls (`newfstatat`/`fstat`) using the same bounded workflow.
+Older launch decoders disable direct routing on unknown feature bits; they
+do not reject the whole program. Keep the new feature off for pinned older
+SDKs when preserving their direct-I/O performance matters.
+
+
 ## Session teardown ownership
 
 `native_session_destroy(c)` lives next to `native_session(c)` and owns the
