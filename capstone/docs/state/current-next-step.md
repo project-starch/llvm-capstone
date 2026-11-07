@@ -1,3 +1,21 @@
+## Native generic copy workspace reuse qualified
+
+`native_copy()` now reuses its session's existing kmalloc-backed copy workspace,
+retaining both native-owner and Linux task-ownership checks. The checked-copy
+engine, fault handling, mapping holds and other copy callers are unchanged.
+Build, both ABI/fast settings, resource/spawn gates, original GCC comparison
+and matched instruction measurements pass in 163.4s under one 300-second
+budget. A separate 52.2s race gate passes 164 scenarios: pipe and file,
+both fast settings, with safe and deliberately broken controls.
+[Qualification](../../runtime/virtual/tests/native-task/copy-reuse-qualification.json).
+
+Against the preceding authorization-reuse kernel, the fixed 1 MiB/4 KiB copy
+loop uses 1.97% fewer kernel attempts in exchange and
+2.53% fewer in generic direct mode. Fast direct remains a control.
+These are workload-specific QEMU counts, not a GCC or FPGA speedup.
+Keep any session teardown encapsulation or broader scratch reuse as a separate
+change with its own ownership proof and bounded gate. Flat tables remain intact.
+
 ## Native authorization scratch reuse qualified
 
 The generic capability preflight now reuses the existing kzalloc-backed native
