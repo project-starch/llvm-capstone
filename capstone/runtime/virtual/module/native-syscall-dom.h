@@ -79,24 +79,31 @@ int cn_snapshot(struct cn_context *n, const struct cn_owner *owner, struct cn_fr
     }
     return 0;
 }
+/* Authorization finishes before copy/issue. The owning native task cannot
+ * re-enter this session while scheduled out; slot transport does not dispatch
+ * services, and the test racer handles only WAIT/MAP/UNMAP/COLLECT.
+ * Keep scratch in the kzalloc-backed cn_context: its descriptor is consumed
+ * through virt_to_phys, so neither a VMAP_STACK nor kvzalloc context suffices. */
+static int native_authorize_reuse(struct cn_context *n, const struct cn_capref *ref,
+                                  u64 offset, u64 bytes, bool write)
+{
+    struct cv_copy_state *s = &n->copy;
+    u64 address;
+    u32 cause;
+    cv_copy_state_init(s, n->c, n->t, write ? CU_TO_DOMAIN : CU_FROM_DOMAIN, bytes);
+    cv_copy_enter(s);
+    cause = cv_copy_check(s, ref, offset, bytes,
+                          write ? CU_TO_DOMAIN : CU_FROM_DOMAIN, &address);
+    cv_copy_drain(s);
+    cv_copy_leave(s);
+    return cause ? -EFAULT : 0;
+}
 int cn_authorize(struct cn_context *n, const struct cn_owner *owner,
                   const struct cn_capref *ref, cn_u64 offset, cn_u64 bytes, int write)
 {
-    struct cv_copy_state *state;
-    cn_u64 address;
-    cn_u32 cause;
     int rc = native_owner(n, owner);
     if (rc) return rc;
-    state = kzalloc(sizeof(*state), GFP_KERNEL);
-    if (!state) return -ENOMEM;
-    state->c = n->c; state->t = n->t;
-    cv_copy_enter(state);
-    cause = cv_copy_check(state, ref, offset, bytes,
-                          write ? CU_TO_DOMAIN : CU_FROM_DOMAIN, &address);
-    cv_copy_drain(state);
-    cv_copy_leave(state);
-    kfree(state);
-    return cause ? -EFAULT : 0;
+    return native_authorize_reuse(n, ref, offset, bytes, write != 0);
 }
 static struct ns_copy_result native_copy(void *opaque, struct cn_context *n,
         const struct cn_owner *owner, const struct cn_capref *ref, cn_u64 offset,
@@ -341,18 +348,6 @@ static __always_inline bool nf_regs_plain(struct cv_thread *t, u64 kinds, u64 po
 #include "native-process-dom.h"
 #include "native-spawn-dom.h"
 
-static int nf_authorize(struct cn_context *n, const struct cn_capref *ref, u64 bytes, bool write)
-{
-    struct cv_copy_state *s = &n->copy;
-    u64 address;
-    u32 cause;
-    cv_copy_state_init(s, n->c, n->t, write ? CU_TO_DOMAIN : CU_FROM_DOMAIN, bytes);
-    cv_copy_enter(s);
-    cause = cv_copy_check(s, ref, 0, bytes, write ? CU_TO_DOMAIN : CU_FROM_DOMAIN, &address);
-    cv_copy_drain(s);
-    cv_copy_leave(s);
-    return cause ? -EFAULT : 0;
-}
 /* Returns true when the call was completed (step->result set). */
 static bool native_fast_try(struct context *c, struct cv_step *step)
 {
@@ -399,7 +394,7 @@ static bool native_fast_try(struct context *c, struct cv_step *step)
     if (ns_session_admit(c->native_session, epoch)) { fput(file); step->result = -ESTALE; return true; }
     ref = (struct cn_capref){t->id, epoch, 11, 0};
     /* Preflight only: the copy below re-authenticates every chunk. */
-    if (nf_authorize(n, &ref, length, !write)) { value = -EFAULT; goto out; }
+    if (native_authorize_reuse(n, &ref, 0, length, !write)) { value = -EFAULT; goto out; }
     if (write) {
         r = cv_checked_copy_reuse(&n->copy, c, t, &ref, 0, n->bounce, length, CU_FROM_DOMAIN);
         if (r.cause || r.bytes_done != length) { value = -EFAULT; goto out; }
