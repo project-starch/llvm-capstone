@@ -16,6 +16,7 @@
 #define CAPSTONE_LAUNCH_NATIVE_FD 16u
 #define CAPSTONE_LAUNCH_NATIVE_CLOSE 64u
 #define CAPSTONE_LAUNCH_NATIVE_PATH 128u
+#define CAPSTONE_LAUNCH_NATIVE_CLOCK 256u
 struct capstone_launch_native {
   uint32_t abi, features, max_io, reserved;
 };

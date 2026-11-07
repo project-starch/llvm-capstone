@@ -283,6 +283,9 @@ static struct ns_completion native_issue(void *opaque, const struct ns_invocatio
     case CAPSTONE_SYS_sched_yield:
         mutex_unlock(&vm_lock); yield(); mutex_lock(&vm_lock); rc = 0; break;
     case CAPSTONE_SYS_clock_gettime:
+        BUILD_BUG_ON(sizeof(struct timespec64) != 16);
+        BUILD_BUG_ON(offsetof(struct timespec64, tv_sec) != 0);
+        BUILD_BUG_ON(offsetof(struct timespec64, tv_nsec) != 8);
         if (a[0] != CLOCK_REALTIME && a[0] != CLOCK_MONOTONIC) { rc = -EINVAL; break; }
         if (a[0] == CLOCK_REALTIME) ktime_get_real_ts64(&ts);
         else ktime_get_ts64(&ts);

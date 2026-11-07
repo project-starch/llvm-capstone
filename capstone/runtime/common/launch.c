@@ -104,7 +104,7 @@ int capstone_launch_unpack(void *buffer, size_t capacity,
     memcpy(&native, (char *)buffer + sizeof h, sizeof native);
     /* Unknown feature contracts disable routing, without guessing support. */
     if (native.abi != 1 || !(native.features & CAPSTONE_LAUNCH_NATIVE_IO) ||
-        (native.features & ~(CAPSTONE_LAUNCH_NATIVE_IO | CAPSTONE_LAUNCH_NATIVE_LOCKS | CAPSTONE_LAUNCH_NATIVE_STAT | CAPSTONE_LAUNCH_NATIVE_SEEK | CAPSTONE_LAUNCH_NATIVE_FD | CAPSTONE_LAUNCH_NATIVE_CLOSE | CAPSTONE_LAUNCH_NATIVE_PATH)) ||
+        (native.features & ~(CAPSTONE_LAUNCH_NATIVE_IO | CAPSTONE_LAUNCH_NATIVE_LOCKS | CAPSTONE_LAUNCH_NATIVE_STAT | CAPSTONE_LAUNCH_NATIVE_SEEK | CAPSTONE_LAUNCH_NATIVE_FD | CAPSTONE_LAUNCH_NATIVE_CLOSE | CAPSTONE_LAUNCH_NATIVE_PATH | CAPSTONE_LAUNCH_NATIVE_CLOCK)) ||
         native.max_io != 65536 || native.reserved)
       memset(&native, 0, sizeof native);
   }
