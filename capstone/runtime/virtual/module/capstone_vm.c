@@ -136,6 +136,13 @@ struct context {
      * et_ucyc: from one CV_STEP's return to the next CV_STEP's start (the launcher, the calls it makes for the
      * context, interrupts, other tasks); et_ocyc: every other ioctl; et_ev[k]: CSRUNV exits by event kind. */
     unsigned long long et_kcyc, et_rcyc, et_ucyc, et_ocyc, et_steps, et_last, et_ev[8];
+#ifdef CAPSTONE_VM_BENCH_HPM
+    /* perf/exit-hpm: hpm3..8 and instret over the same two windows as et_kcyc (CV_STEP minus its CSRUNVs) and
+     * et_ucyc (one CV_STEP's return to the next one's start). Machine-wide counters: the ucyc window counts the
+     * launcher and whatever else runs on the hart meanwhile. */
+    unsigned long long et_khpm[CV_BENCH_HPM_N], et_uhpm[CV_BENCH_HPM_N], et_kin, et_uin;
+    unsigned long et_lasthp[CV_BENCH_HPM_N], et_lastin;
+#endif
 #endif
     /* The image file, writers denied from CV_IMAGE until release. */
     struct file *image;
@@ -1939,12 +1946,22 @@ static long vm_ioctl(struct file *f, unsigned int op, unsigned long arg)
         return -EPERM;
 #ifdef CAPSTONE_VM_BENCH_COUNTERS
     unsigned long et_t0, et_in = 0;
+#ifdef CAPSTONE_VM_BENCH_HPM
+    unsigned long et_hp0[CV_BENCH_HPM_N], et_inhp[CV_BENCH_HPM_N] = {0}, et_i0, et_inin = 0;
+#endif
 #endif
 retry:
     if (mutex_lock_interruptible(&vm_lock)) return -EINTR;
 #ifdef CAPSTONE_VM_BENCH_COUNTERS
     et_t0 = csr_read(CSR_CYCLE);
     if (op == CV_STEP && c->et_last) c->et_ucyc += et_t0 - c->et_last;
+#ifdef CAPSTONE_VM_BENCH_HPM
+    cv_read_hpm(et_hp0); et_i0 = csr_read(CSR_INSTRET);
+    if (op == CV_STEP && c->et_last) {
+        for (int k = 0; k < CV_BENCH_HPM_N; k++) c->et_uhpm[k] += et_hp0[k] - c->et_lasthp[k];
+        c->et_uin += et_i0 - c->et_lastin;
+    }
+#endif
 #endif
     if (c->remapping && op != CV_REMAP_END) {
         mutex_unlock(&vm_lock);
@@ -2236,8 +2253,11 @@ thread_unwind:
                 unsigned long dcy = csr_read(CSR_CYCLE) - cy0, din = csr_read(CSR_INSTRET) - in0;
 #ifdef CAPSTONE_VM_BENCH_HPM
                 cv_read_hpm(hp1);
-                for (int k = 0; k < CV_BENCH_HPM_N; k++)
+                for (int k = 0; k < CV_BENCH_HPM_N; k++) {
                     atomic64_add(hp1[k] - hp0[k], &c->bench_hpm[k]);
+                    et_inhp[k] += hp1[k] - hp0[k];
+                }
+                et_inin += din;
 #endif
                 atomic64_add(dcy, &c->bench_cycles);
                 atomic64_add(din, &c->bench_instret);
@@ -2360,6 +2380,18 @@ out:
         unsigned long et_t1 = csr_read(CSR_CYCLE);
         if (op == CV_STEP) { c->et_kcyc += et_t1 - et_t0 - et_in; ++c->et_steps; c->et_last = et_t1; }
         else c->et_ocyc += et_t1 - et_t0;
+#ifdef CAPSTONE_VM_BENCH_HPM
+        if (op == CV_STEP) {
+            unsigned long hp1[CV_BENCH_HPM_N], i1;
+            cv_read_hpm(hp1); i1 = csr_read(CSR_INSTRET);
+            for (int k = 0; k < CV_BENCH_HPM_N; k++) {
+                c->et_khpm[k] += hp1[k] - et_hp0[k] - et_inhp[k];
+                c->et_lasthp[k] = hp1[k];
+            }
+            c->et_kin += i1 - et_i0 - et_inin;
+            c->et_lastin = i1;
+        }
+#endif
     }
 #endif
     mutex_unlock(&vm_lock);
@@ -2543,6 +2575,10 @@ static int vm_release(struct inode *inode, struct file *f)
              (long long)atomic64_read(&c->bench_hpm[0]), (long long)atomic64_read(&c->bench_hpm[1]),
              (long long)atomic64_read(&c->bench_hpm[2]), (long long)atomic64_read(&c->bench_hpm[3]),
              (long long)atomic64_read(&c->bench_hpm[4]), (long long)atomic64_read(&c->bench_hpm[5]));
+    /* Must-fire, its own prefix, one per context: perf/exit-hpm. k = the CV_STEP kernel window, u = between steps. */
+    pr_emerg("capstone_vm: exhpm k_in=%llu k=%llu,%llu,%llu,%llu,%llu,%llu u_in=%llu u=%llu,%llu,%llu,%llu,%llu,%llu\n",
+             c->et_kin, c->et_khpm[0], c->et_khpm[1], c->et_khpm[2], c->et_khpm[3], c->et_khpm[4], c->et_khpm[5],
+             c->et_uin, c->et_uhpm[0], c->et_uhpm[1], c->et_uhpm[2], c->et_uhpm[3], c->et_uhpm[4], c->et_uhpm[5]);
 #endif
 #endif
     list_for_each_entry_safe(t, tmp, &c->threads, link) {
