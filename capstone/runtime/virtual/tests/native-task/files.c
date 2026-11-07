@@ -43,6 +43,34 @@ static void raw_seek_checks(int fd) {
     CHECK(__capstone_native_syscall(62,scalar(fd),scalar(-1),scalar(SEEK_END),0,0,0)==11);
     CHECK(__capstone_native_syscall(62,scalar(fd),scalar(6),scalar(SEEK_SET),0,0,0)==6);
 }
+/* Raw entry must reject malformed scalar arguments before any file effect. */
+static void raw_fd_checks(int fd) {
+    char tag;
+    struct stat before, after;
+    const unsigned long calls[] = {82, 83, 46, 52, 55}; /* sync, truncate, metadata */
+    _Alignas(16) unsigned long words[2] = {(unsigned long)fd, 1};
+    void *dirty;
+    __asm__ volatile("ldc %0, 0(%1)" : "=r"(dirty) : "r"(words) : "memory");
+    CHECK(fstat(fd,&before)==0);
+    for (unsigned i=0; i<sizeof(calls)/sizeof(calls[0]); ++i) {
+        unsigned long nr=calls[i];
+        CHECK(__capstone_native_syscall(nr,&tag,0,0,0,0,0)==-EINVAL);
+        CHECK(__capstone_native_syscall(nr,scalar((1UL<<32)|(unsigned)fd),0,0,0,0,0)==-EBADF);
+        CHECK(__capstone_native_syscall(nr,dirty,0,0,0,0,0)==-EINVAL);
+        CHECK(__capstone_native_syscall(nr,scalar(100),0,0,0,0,0)==-EBADF);
+        CHECK(__capstone_native_syscall(nr,scalar(fd),0,0,0,0,&tag)==-EINVAL);
+    }
+    CHECK(__capstone_native_syscall(46,scalar(fd),&tag,0,0,0,0)==-EINVAL);
+    CHECK(__capstone_native_syscall(52,scalar(fd),&tag,0,0,0,0)==-EINVAL);
+    CHECK(__capstone_native_syscall(55,scalar(fd),&tag,scalar(-1),0,0,0)==-EINVAL);
+    CHECK(__capstone_native_syscall(55,scalar(fd),scalar(-1),&tag,0,0,0)==-EINVAL);
+    CHECK(__capstone_native_syscall(46,scalar(fd),dirty,0,0,0,0)==-EINVAL);
+    CHECK(__capstone_native_syscall(46,scalar(fd),scalar(-1),0,0,0,0)==-EINVAL);
+    CHECK(__capstone_native_syscall(55,scalar(fd),scalar(-1),scalar(-1),0,0,0)==0);
+    CHECK(fstat(fd,&after)==0 && after.st_size==before.st_size &&
+          after.st_mode==before.st_mode && after.st_uid==before.st_uid && after.st_gid==before.st_gid);
+    CHECK(lseek(fd,0,SEEK_CUR)==6);
+}
 static void raw_stat_checks(int fd) {
     struct stat st;
     char name[] = "file-data";
@@ -147,6 +175,7 @@ int main(int argc, char **argv) {
 #ifdef FILES_RAW
         raw_stat_checks(fd);
         raw_seek_checks(fd);
+        raw_fd_checks(fd);
 #endif
         CHECK(fsync(fd)==0 && fdatasync(fd)==0);
         int ro=open("file-data",O_RDONLY);

@@ -16,6 +16,7 @@ p.add_argument('--locks', type=int, choices=[0, 1], default=0)
 p.add_argument('--fast', type=int, choices=[0, 1], default=1)
 p.add_argument('--stat', type=int, choices=[0, 1], default=0)
 p.add_argument('--seek', type=int, choices=[0, 1], default=0)
+p.add_argument('--fd', type=int, choices=[0, 1], default=0)
 a = p.parse_args()
 a.out.mkdir(parents=True, exist_ok=False)
 stage = a.out/'stage'
@@ -44,7 +45,7 @@ for arm in exchange direct native; do
 done
 ''')
 flags = 'capstone_vm.native_task=1 capstone_vm.native_io=1 capstone_vm.dom_binfmt=1 capstone_vm.native_dispatch=1 capstone_vm.checked_copy=1 capstone_vm.native_slot_transport=1 capstone_vm.unpinned=1 capstone_vm.supervisor_slots=32'
-flags += f' capstone_vm.native_locks={a.locks} capstone_vm.native_stat={a.stat} capstone_vm.native_seek={a.seek} capstone_vm.native_fast={a.fast}'
+flags += f' capstone_vm.native_locks={a.locks} capstone_vm.native_stat={a.stat} capstone_vm.native_seek={a.seek} capstone_vm.native_fd={a.fd} capstone_vm.native_fast={a.fast}'
 cmd = ['python3', str(Path(__file__).resolve().parents[2]/'run-staged.py'),
        '--qemu', str(a.qemu.resolve()), '--images', str(a.images.resolve()),
        '--firmware', str(a.firmware.resolve()), '--stage', str(stage.resolve()),
@@ -59,12 +60,12 @@ assert 'FILES_GATE_EXIT:0\n' in log and not re.search(r'WARNING:|BUG:|Oops|Kerne
 rows = []
 for arm in ['exchange', 'direct', 'native']:
     body = log.split('FILES_BEGIN:'+arm+'\n')[1].split('FILES_END:'+arm+'\n')[0]
-    expected = {'contend': 30 if arm == 'direct' else 22, 'wait': 7, 'basic': 76 if arm == 'direct' else 58}
+    expected = {'contend': 30 if arm == 'direct' else 22, 'wait': 7, 'basic': 111 if arm == 'direct' else 58}
     for mode, checks in expected.items():
         assert f'NATIVE_FILES mode={mode} checks={checks} failures=0\n' in body
     assert 'NATIVE_FILES_DRIVER checks=56 failures=0\n' in body
     rows.append(dict(arm=arm, domain_checks=expected, linux_checks=56, passed=True))
-result = dict(inputs=inputs, configuration=dict(native_locks=a.locks, native_stat=a.stat, native_seek=a.seek, native_fast=a.fast), rows=rows, limitations=[
+result = dict(inputs=inputs, configuration=dict(native_locks=a.locks, native_stat=a.stat, native_seek=a.seek, native_fd=a.fd, native_fast=a.fast), rows=rows, limitations=[
     'Single-hart root-only prototype, default-off task backend; not all Linux syscalls.',
     'Real Linux POSIX locks and process lifecycle; no caught-signal/restart or multithreaded-domain claim.',
     'tmpfs file correctness and sync error checks, not a crash-durability test.'])

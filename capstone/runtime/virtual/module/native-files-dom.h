@@ -8,6 +8,39 @@ struct native_wire_flock {
     s32 pid;
     u32 pad2;
 };
+/* The exchange and register transports share these held-file operations. */
+static bool native_fd_supported(u64 nr)
+{
+    return nr == CAPSTONE_SYS_fsync || nr == CAPSTONE_SYS_fdatasync ||
+           nr == CAPSTONE_SYS_ftruncate || nr == CAPSTONE_SYS_fchmod ||
+           nr == CAPSTONE_SYS_fchown;
+}
+
+static long native_fd_issue(struct file *file, u64 nr, u64 first, u64 second)
+{
+    long rc;
+    mutex_unlock(&vm_lock);
+    switch (nr) {
+    case CAPSTONE_SYS_fsync: case CAPSTONE_SYS_fdatasync:
+        rc = vfs_fsync(file, nr == CAPSTONE_SYS_fdatasync);
+        break;
+    case CAPSTONE_SYS_ftruncate:
+        rc = capstone_native_ftruncate(file, (s64)first, 0);
+        break;
+    case CAPSTONE_SYS_fchmod: case CAPSTONE_SYS_fchown:
+        /* Match the existing Linux helper's narrowing, including uid/gid -1. */
+        rc = capstone_native_fmetadata(file, nr == CAPSTONE_SYS_fchmod ? 0 : 1,
+                                      (u32)first, (u32)second);
+        break;
+    default:
+        rc = -ENOSYS;
+        break;
+    }
+    mutex_lock(&vm_lock);
+    if (rc <= -ERESTARTSYS && rc >= -ERESTART_RESTARTBLOCK) rc = -EINTR;
+    return rc;
+}
+
 static bool native_files_issue(struct context *c, const struct ns_invocation *call,
                                struct file *file, long *result)
 {
@@ -48,19 +81,9 @@ static bool native_files_issue(struct context *c, const struct ns_invocation *ca
         }
         break;
     case CAPSTONE_SYS_fsync: case CAPSTONE_SYS_fdatasync:
-        mutex_unlock(&vm_lock);
-        rc = vfs_fsync(file, nr == CAPSTONE_SYS_fdatasync);
-        mutex_lock(&vm_lock);
-        break;
     case CAPSTONE_SYS_ftruncate:
-        mutex_unlock(&vm_lock);
-        rc = capstone_native_ftruncate(file, (s64)a[1], 0);
-        mutex_lock(&vm_lock);
-        break;
     case CAPSTONE_SYS_fchmod: case CAPSTONE_SYS_fchown:
-        mutex_unlock(&vm_lock);
-        rc = capstone_native_fmetadata(file, nr == CAPSTONE_SYS_fchmod ? 0 : 1, a[1], a[2]);
-        mutex_lock(&vm_lock);
+        rc = native_fd_issue(file, nr, a[1], a[2]);
         break;
     default: return false;
     }

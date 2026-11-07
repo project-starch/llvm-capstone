@@ -366,6 +366,26 @@ static __always_inline bool nf_regs_plain(struct cv_thread *t, u64 kinds, u64 po
 #include "native-process-dom.h"
 #include "native-spawn-dom.h"
 
+/* Scalar fd operations retain the same authority and once-only admission. */
+static bool native_fd_fast(struct context *c, struct cv_step *step, u64 kinds)
+{
+    struct cv_thread *t = c->main_thread;
+    struct file *file;
+    long rc;
+    if (!native_fd_supported(step->args[6]) || !nf_regs_plain(t, kinds, 0) ||
+        step->args[0] > INT_MAX || !dom_fd_allowed(c, step->args[0])) return false;
+    file = fget(step->args[0]);
+    if (!file) return false;
+    if (file->private_data == c || !file->f_op) { fput(file); return false; }
+    rc = ns_session_admit(c->native_session, READ_ONCE(t->frame[82]));
+    if (rc) rc = -ESTALE;
+    else rc = native_fd_issue(file, step->args[6], step->args[1], step->args[2]);
+    fput(file);
+    step->result = rc;
+    ++native_fast_hits;
+    return true;
+}
+
 /* Scalar-only service: no capability buffer or request snapshot is needed. */
 static bool native_seek_fast(struct context *c, struct cv_step *step, u64 kinds)
 {
@@ -503,6 +523,7 @@ static bool native_fast_try(struct context *c, struct cv_step *step)
     if (!native_fast || !n || native_owner(n, &n->owner) ||
         current->seccomp.mode != SECCOMP_MODE_DISABLED) return false;
     kinds = READ_ONCE(t->frame[83]);
+    if (native_fd_fast(c, step, kinds)) return true;
     if (native_seek_fast(c, step, kinds)) return true;
     if (native_stat_fast(c, step, kinds)) return true;
     if (native_lock_fast(c, step, kinds)) return true;
