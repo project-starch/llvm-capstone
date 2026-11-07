@@ -1,3 +1,22 @@
+## Native authorization scratch reuse qualified
+
+The generic capability preflight now reuses the existing kzalloc-backed native
+context workspace through one offset-aware helper shared with the fast path.
+Ownership checks and the checked-access protocol remain unchanged. The final
+kernel's incremental build, both fast settings and ABIs, resource/spawn gates,
+original GCC comparator and matched instruction measurements pass together in
+160.6 seconds under one 300-second deadline. A separate 25.2-second
+race gate passes 41 pipe and 41 regular-file scenarios, including negative controls.
+[Qualification and measurements](../../runtime/virtual/tests/native-task/authorization-reuse-qualification.json).
+
+For the fixed 1 MiB copy in 4 KiB chunks, generic direct requests use
+2.42% fewer kernel instruction attempts; exchange requests use
+1.90% fewer with fast dispatch disabled. Fast direct requests are effectively
+unchanged. These are QEMU instruction counts, not GCC or FPGA speedups.
+Next keep session teardown encapsulation separate; broader copy-state reuse
+and slot accounting require their own proof and bounded tests. No new task
+ownership mechanism is needed, and flat-table support remains untouched.
+
 ## Native helper calls: direct and typed
 
 The built-in adapter now calls required Linux helpers directly through one
