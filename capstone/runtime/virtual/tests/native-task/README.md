@@ -1,5 +1,9 @@
 # Experimental Linux task-return backend
 
+[Direct-helper qualification](direct-helper-qualification.json): the build and
+focused gate, including original GCC and its official comparator, pass in 93.1
+seconds. This is not a full SPEC rerun or a measured runtime speedup.
+
 ## Direct internal Linux helper interface
 
 The built-in adapter calls its required Linux helpers directly. The shared
