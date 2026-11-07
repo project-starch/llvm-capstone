@@ -284,24 +284,30 @@ test. Preserve original workloads and require official output comparison.
 
 ## Remaining Perl pointer serialization boundary
 
-The original native `pack.t` now runs through assertion 242 and faults on its
+The old native `pack.t` ran through assertion 242 and faulted on its
 first big-endian pointer round trip (assertion 243). Separate probes confirm
 that native aligned `p`/`p<` work while byte-reversed, unaligned and UTF-8-expanded
 pointer fields lose their tags. This is an application representation problem,
 not evidence that the kernel should reconstruct authority from scalar bytes.
 [Reproduction and pinned inputs](../../runtime/virtual/tests/native-task/spec-perl-pack-blocker.json).
 
-A candidate general Perl port would retain exact tagged pointer provenance in
-per-string metadata while preserving upstream encoded bytes. It would need
-explicit propagation through assignment/COW, complete-field substrings,
-concatenation/join and UTF-8 transformations, with invalidation on unsupported
-mutations and cleanup on string destruction. Unpack must validate the annotated
-range and representation before copying the retained capability. It must not
-look up arbitrary addresses or mint capabilities from serialized integers.
-This is a proposal, not an implemented or qualified feature.
+The implemented [Perl port](../../ports/perl/provenance/README.md) retains exact
+tagged capabilities in private per-scalar metadata while preserving upstream
+encoded bytes. It explicitly propagates supported value operations and invalidates
+metadata before raw mutation or untrusted callbacks. Unpack validates the complete
+field and representation before copying retained authority. It does not reconstruct
+capabilities from addresses or serialized integers. Native XS aliases and interpreter
+thread cloning are outside its supported configuration.
 
-Such a port requires a new, explicitly selected src.alt package and fresh
-application objects. Keep the existing frozen source package intact; the
+Frozen revision 06 passes 89 pointer and 101 independent controls in both native
+ABI modes, the unchanged 14,708-assertion pack test in direct mode, and host
+sanitizer/allocation-failure gates. A review-found dangling metadata head on
+allocation failure was reproduced against revision 05 and fixed before freezing
+06. The complete original Perl benchmark and official comparison remain pending;
+focused correctness is not a full SPEC pass or a performance comparison.
+
+The port uses the new `capstone_provenance_v2` src.alt package and 69 freshly
+compiled application objects per ABI. Keep the existing frozen source package intact; the
 `.cpu2017.v1.0` suffix denotes SPEC compatibility, not a port revision. Test
 inputs and official comparators stay unchanged. Qualify forged/damaged bytes,
 partial fields, stale metadata, encoding/copy aliases and cleanup before the

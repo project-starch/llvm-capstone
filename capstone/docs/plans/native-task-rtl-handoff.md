@@ -40,9 +40,11 @@ original launch-directory grant and is separately qualified with original
 `perlio.t`. None changes the ISA, request register layout or QEMU model. [Subprocess qualification](../../runtime/virtual/tests/native-task/spawn-qualification.json)
 and [shell qualification](../../ports/hush/app/results/native-task.json) are
 separate from the original SPEC comparator gate.
-The remaining observed Perl pointer-packing fault is an application provenance
-boundary, not an additional RTL opcode requirement. Do not add integer-to-tagged
-pointer reconstruction to make it pass. [Diagnosis and proposed interpreter port](native-linux-task-integration.md#remaining-perl-pointer-serialization-boundary).
+The observed Perl pointer-packing fault is repaired by the separately versioned
+`capstone_provenance_v2` application port. Its original pack test and focused
+native/host/error-path gates pass; the full original Perl workload remains under
+qualification. This adds no RTL opcode requirement. Do not add integer-to-tagged
+pointer reconstruction. [Implementation and scope](native-linux-task-integration.md#remaining-perl-pointer-serialization-boundary).
 The frozen inventory and source archive describe their pinned snapshot, not
 these later production fixes; use the branch HEAD for the current source.
 Git's configured submodule-ignore behavior can hide the
@@ -204,7 +206,13 @@ unported C++/Fortran or speed variants of the whole CPU2017 suite work. Sources
 and inputs stay external under scratch storage; existing source adaptations
 remain frozen. Test means original full `test` inputs, not train/reference data.
 
-**Acceptance status: 9 PASS, 1 FAIL (Perl).** All 22 original test invocations
+The latest kernel `1bd9b8ecf702` independently passes all nine non-Perl entries,
+including full x264. The versioned Perl repair passes its focused gates; its
+complete original workload and official comparison are running. See
+[current non-Perl evidence](../../runtime/virtual/tests/native-task/spec-nonperl-services-qualification.json)
+and [Perl port qualification](../../ports/perl/provenance/qualification.json).
+
+**Historical snapshot `09b90be908e6`: 9 PASS, 1 FAIL (Perl).** All 22 original test invocations
 completed. Of 25 official output comparisons, 24 pass; Perl's test.pl comparison
 fails despite exit zero. All four guest image-validation invocations completed, covering one
 ImageMagick image and three x264 images. The branch is suitable for an RTL

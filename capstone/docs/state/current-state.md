@@ -28,18 +28,25 @@ original launch grant. Four policy modes pass in both SDK profiles; unchanged
 actual passes for the previously failing temp-file assertions 23–29.
 [Private storage qualification](../../runtime/virtual/tests/native-task/local-tmp-qualification.json).
 
-Perl pointer packing separately loses tags during endian reversal, unaligned
-storage and UTF-8 conversion. Isolated tests confirm that
-ordinary `p` and `p<` work; the original `pack.t` faults at assertion 243 after
-242 successful assertions. This needs an interpreter provenance port, not a
-weaker ISA or a syscall fallback. [Exact diagnosis](../../runtime/virtual/tests/native-task/spec-perl-pack-blocker.json).
+The old Perl build lost pointer tags during endian reversal, unaligned storage
+and UTF-8 conversion, faulting at assertion 243 of `pack.t`.
+[Original diagnosis](../../runtime/virtual/tests/native-task/spec-perl-pack-blocker.json).
+The new `capstone_provenance_v2` interpreter port retains exact capabilities in
+private scalar metadata and explicitly propagates or invalidates that metadata.
+Frozen revision 06 passes the unchanged 14,708-assertion pack test, 89 pointer
+checks and 101 independent controls in native direct mode; exchange mode passes
+the same 89+101 controls. Host sanitizer and allocation-failure probes pass too.
+It changes no ISA, kernel, SDK, benchmark input or comparator.
+[Port and focused qualification](../../ports/perl/provenance/README.md).
 All nine non-Perl C-port benchmarks now pass their original complete test
 invocations and official comparisons on the final private-tmp kernel
 `1bd9b8ecf702`, including all 156 x264 frames.
 [Current non-Perl qualification](../../runtime/virtual/tests/native-task/spec-nonperl-services-qualification.json).
 The full original Perl diagnostic on the preceding services kernel finished
 with two failing test files: perlio (fixed and separately qualified above) and
-pack (still open). A new versioned interpreter port is now being implemented. The obsolete
+pack (now repaired in the separately qualified interpreter). The complete original
+Perl workload on the final kernel and revision-06 interpreter is running; its
+official comparison remains required. The obsolete
 partial diagnostic was stopped after confirming the missing services, not
 reported as a full execution. No official Perl comparison pass or new full-SPEC
 baseline is claimed yet. These service additions require no ISA/QEMU/compiler
