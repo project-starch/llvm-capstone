@@ -16,6 +16,12 @@ was cancelled to free the host for bounded five-minute feedback gates. See
 Do not transfer the old kernel verdict to the new image. The cleanup adds no ISA requirement. No FPGA synthesis or
 hardware qualification is claimed.
 
+The [current GCC route comparison](../../runtime/virtual/tests/native-task/gcc-current-routes-comparison.json)
+uses this same native-clock kernel and one rebuilt GCC binary with all native
+routes off/on. All six reference checks pass; the mean reduction is 0.229% total
+and 0.371% kernel instruction attempts. This is not cumulative branch-versus-dev
+or hardware timing. The runtime source snapshot below is unchanged.
+
 ## 1. Baselines and scope
 
 | Item | Frozen revision |

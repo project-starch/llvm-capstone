@@ -1,3 +1,18 @@
+## GCC follow-up: attribute memory and lifecycle work
+
+The matched current-kernel native-route toggle saves only 0.229% total and
+0.371% kernel instruction attempts on GCC test input. Only 11 of 31 diagnostic
+service calls change transport. Before another GCC-directed optimization,
+separate startup, compilation and teardown work and compare page/fault/mapping
+costs against a matched ordinary-Linux workload. Flat profile hotspots include
+memset, page accounting, folio activation, faults and unmapping; these names do
+not by themselves establish avoidable Capstone overhead or inclusive costs.
+
+[Current GCC evidence](../../runtime/virtual/tests/native-task/gcc-current-routes-comparison.json).
+The checked-string milestone below remains a candidate for metadata-heavy
+workloads such as SQLite, not a demonstrated major GCC win. Keep each feedback
+gate within 300 seconds.
+
 ## Native basic clock transport qualified
 
 Feature 256 routes clock_gettime through the existing generic checked register
