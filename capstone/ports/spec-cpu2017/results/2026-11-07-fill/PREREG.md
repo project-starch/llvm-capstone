@@ -32,3 +32,10 @@ back. Kit bkit27-gtq (c3f's: module 65ede944a87ea742, quiet-grant launcher 1d8b4
 - **gcc train c3f is 1.212× Plain on the same board** (4,253.3 / 3,510.0), and 1.211× across boards 2 and 1. The 1.20×
   bound on board 3 is 4,212.0 s: 41 s short.
 - F3 (Plain perlbench, board 1) is still running.
+
+## Result, Plain perlbench (7 Nov 23:14): 23,277.1 s, F3 holds
+
+- Board 1, C.5a: 500.1 + 22,777.0 s = 23,277.1 s; rc 0, specdiff 2/2 PASS, test.out 317 ok, 0 FAILED.
+- **F3 holds:** 0.9985× the 3 Nov reading (23,311 s, the old bitstream and kit). The perlbench denominator stands.
+- perlbench c3g (board 2, 33,667.7 s) is 1.446× this reading; the unified stack's 37,131.8 s is 1.595×.
+- Machine-wide over the test command: 98.68 G instructions in 569.4 G cycles.
