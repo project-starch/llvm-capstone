@@ -102,6 +102,14 @@ int main(void) {
   assert(!unpack(sizeof data) && view.task.native.features == 129);
   native->features = 223;
   assert(!unpack(sizeof data) && view.task.native.features == 223);
+  native->features = 257;
+  assert(!unpack(sizeof data) && view.task.native.features == 257);
+  native->features = 479;
+  assert(!unpack(sizeof data) && view.task.native.features == 479);
+  native->features = 256;
+  assert(!unpack(sizeof data) && !view.task.native.abi);
+  native->features = 513;
+  assert(!unpack(sizeof data) && !view.task.native.abi);
   native->features = 33;
   assert(!unpack(sizeof data) && !view.task.native.abi);
   native->features = 1; native->max_io = 1;

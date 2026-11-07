@@ -666,12 +666,12 @@ static long dl_call_once(const struct capstone_delegate_shape *s, uint64_t nr,
 }
 
 #if defined(CAPSTONE_RUNTIME_VIRTUAL) && defined(CAPSTONE_MUSL_NATIVE_IO)
-static int dl_direct_file_ready(uint64_t nr);
-static long dl_direct_file(uint64_t nr, syscall_arg_t raw[CAPSTONE_DELEGATE_ARGS]);
+static int dl_direct_service_ready(uint64_t nr);
+static long dl_direct_service(uint64_t nr, syscall_arg_t raw[CAPSTONE_DELEGATE_ARGS]);
 #endif
 static long dl_call(uint64_t nr, syscall_arg_t raw[CAPSTONE_DELEGATE_ARGS]) {
 #if defined(CAPSTONE_RUNTIME_VIRTUAL) && defined(CAPSTONE_MUSL_NATIVE_IO)
-  if (dl_direct_file_ready(nr)) return dl_direct_file(nr, raw);
+  if (dl_direct_service_ready(nr)) return dl_direct_service(nr, raw);
 #endif
   const struct capstone_delegate_shape *s = capstone_delegate_shape(nr);
   long result;
@@ -1376,8 +1376,9 @@ static syscall_arg_t dl_direct_scalar(syscall_arg_t input) {
                    : "=&r"(output) : "r"(input));
   return output;
 }
-static int dl_direct_file_ready(uint64_t nr) {
-  unsigned feature = (nr == CAPSTONE_SYS_openat || nr == CAPSTONE_SYS_unlinkat) ? CAPSTONE_LAUNCH_NATIVE_PATH :
+static int dl_direct_service_ready(uint64_t nr) {
+  unsigned feature = nr == CAPSTONE_SYS_clock_gettime ? CAPSTONE_LAUNCH_NATIVE_CLOCK :
+      (nr == CAPSTONE_SYS_openat || nr == CAPSTONE_SYS_unlinkat) ? CAPSTONE_LAUNCH_NATIVE_PATH :
       nr == CAPSTONE_SYS_close ? CAPSTONE_LAUNCH_NATIVE_CLOSE :
       nr == CAPSTONE_SYS_lseek ? CAPSTONE_LAUNCH_NATIVE_SEEK :
       (nr == CAPSTONE_SYS_fstat || nr == CAPSTONE_SYS_newfstatat) ? CAPSTONE_LAUNCH_NATIVE_STAT :
@@ -1389,7 +1390,7 @@ static int dl_direct_file_ready(uint64_t nr) {
   return t && t->native.abi == NS_ABI_VERSION &&
          (t->native.features & feature) && !t->native.reserved;
 }
-static long dl_direct_file(uint64_t nr, syscall_arg_t raw[CAPSTONE_DELEGATE_ARGS]) {
+static long dl_direct_service(uint64_t nr, syscall_arg_t raw[CAPSTONE_DELEGATE_ARGS]) {
   long result;
   int at = nr == CAPSTONE_SYS_newfstatat;
   dl_wire_acquire();
