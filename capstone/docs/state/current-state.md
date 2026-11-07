@@ -1,3 +1,12 @@
+## Native iterative feedback: bounded five-minute gate
+
+The quick gate passes in 83.6 seconds on the cleanup kernel: incremental build,
+native I/O/task, directory/dup/time, private-tmp policy, spawn lifecycle, and
+original GCC test input with its official comparator. Its one 300-second budget
+includes all configured work and lock waits; a timeout is never a pass. Seven
+process-level supervisor tests pass. Full SPEC remains a separate qualification.
+[Quick-gate evidence](../../runtime/virtual/tests/native-task/quick-gate-qualification.json).
+
 ## Native-only adapter cleanup: focused qualification passed
 
 The legacy device/ioctl entry and scalar userspace trampoline are removed from
@@ -6,8 +15,8 @@ grants and native direct/exchange service dispatch remain. The adapter now
 requires an in-tree `CONFIG_RISCV_CAPSTONE_TASK=y` build; external-module builds
 and legacy fallback admission are refused. New kernel `e2dca4c948f5` passes native I/O/task, directory/time/duplication,
 private-tmp and spawn gates. The task gate explicitly proves no old device,
-misc registration, trampoline mapping or control FD. The full ten-entry SPEC
-rerun is in progress. [Focused evidence](../../runtime/virtual/tests/native-task/native-only-cleanup-qualification.json). The complete ten-entry result below still
+misc registration, trampoline mapping or control FD. The long remote SPEC rerun was cancelled to provide a five-minute feedback
+loop; it is not a full-pass result. Local x264 continues independently. [Focused evidence](../../runtime/virtual/tests/native-task/native-only-cleanup-qualification.json). The complete ten-entry result below still
 identifies the pre-cleanup kernel and must not be relabeled as a new-kernel pass.
 
 ## 2026-11-07 — Native C-port SPEC qualification complete
