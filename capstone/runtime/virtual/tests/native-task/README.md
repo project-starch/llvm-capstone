@@ -1,5 +1,37 @@
 # Experimental Linux task-return backend
 
+## Native scalar file services qualified
+
+Feature `CAPSTONE_LAUNCH_NATIVE_FD` (16) routes exactly `fsync`, `fdatasync`,
+`ftruncate`, `fchmod` and `fchown` through the register ABI. Both transports
+share one held-file Linux provider, preserving VFS/LSM checks, signed truncate
+lengths, uid/gid -1 sentinels and restart normalization. Scalar shape, fd grants
+and once-only epoch admission precede effects. Close/fcntl/dup are separate.
+Enable `capstone_vm.native_fd=1` with `capstone_vm.native_io=1` and a rebuilt
+SDK/application. It defaults off; old SDKs disable direct routes for unknown
+feature bits. Full measured configuration also enables locks/stat/seek.
+
+SQLite moves 88 fsync and 22 fchown calls out of exchange. Two samples per arm
+in A-B-B-A order reduce kernel instruction attempts by 0.39% and total
+attempts by 0.23%, with all 32 reference phases matching in each run.
+This is a small incremental gain with the other native features already on.
+Build, expanded file tests, SQLite, regressions and original GCC comparison pass
+in 211.4s; combined-feature IO and reversed measurements pass in
+87.7s, each under one 300-second deadline.
+[Exact evidence and limitations](native-fd-qualification.json).
+
+Runtime implementation and negative tests were developed independently in an
+isolated worktree, then reviewed and integrated; QEMU runs remained serial.
+The 35 new raw checks include rejected mutation preservation. No ISA change,
+new full-SPEC verdict, crash-durability or non-root permission claim is made.
+
+There are 216 remaining exchange calls in this SQLite census: clock_gettime 65,
+openat 46, close 45, writev 34, unlinkat 23 and three single calls. Next candidates
+are close and confined pathname services. Keep vector work independent: the
+virtual provider lacks production nested-capability import for arbitrary iovecs;
+a bounded register-vector ABI is a proposal, not implemented support.
+
+
 ## Native seek qualified
 
 Musl routes `lseek` directly when launch advertises `CAPSTONE_LAUNCH_NATIVE_SEEK`.
