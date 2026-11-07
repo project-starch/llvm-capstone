@@ -264,6 +264,11 @@ implementation of this proposal.
 
 ### Small cleanup: remove an unread production lookup index
 
+Implemented after this study as `af6893dc17a8`: GCC total attempts -0.757%,
+kernel -1.435%, unchanged program binary, four exact outputs and both race suites
+pass. [Qualification](../../runtime/virtual/tests/native-task/arena-index-qualification.json).
+The description below records the pre-change finding.
+
 The arena `c->ids` xarray is inserted/erased/initialized/destroyed but has no
 production lookup at this revision. The only `xa_load` is in the `CV_RACE_TEST`
 fixture (`rt-dom.h`). Production range lookup uses the arena RB tree. Remove the

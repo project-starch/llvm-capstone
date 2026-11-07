@@ -1,3 +1,24 @@
+## Native arena index removal qualified
+
+The production runtime no longer maintains the unread arena-ID xarray.
+Monotonic registration IDs, the address tree, grant retirement and checked-copy
+holds are unchanged. The race fixture finds its newly created arena through a
+test-only scan of the surviving tree. Runtime source: `af6893dc17a8`.
+
+With unchanged GCC/musl/application binaries, baseline/candidate/candidate/baseline
+fresh guests reduce mean total instruction attempts from 50,728,469.5 to
+50,344,376.5 (**0.757%**) and kernel attempts from 26,770,595.5 to
+26,386,502.5 (**1.435%**). Program attempts are identical at 23,946,835.
+The flat reductions primarily involve xarray operations and their locking.
+This is a general kernel-runtime saving, not an allocator or GCC modification.
+
+Both kernel builds, four byte-exact GCC runs, and two 41-scenario copy/unmap/reuse
+race groups pass in one **134.2-second** gate. Each race group also observes all
+17 deliberate negative controls firing. Astra xhigh independently reviewed the
+source diff. No new full-SPEC, multi-hart or FPGA qualification is claimed.
+The page/frame arrays and fault-access policy remain separate, unimplemented
+experiments. [Hashes, samples, checks and limitations](../../runtime/virtual/tests/native-task/arena-index-qualification.json).
+
 ## GCC memory amplification and fault-path controls
 
 Follow-up diagnostics tie part of the larger memory demand to concrete GCC ABI
