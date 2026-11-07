@@ -18,3 +18,17 @@ back. Kit bkit27-gtq (c3f's: module 65ede944a87ea742, quiet-grant launcher 1d8b4
 | F3 | Plain perlbench within ±2 % of 23,311 s |
 
 **Limits.** N = 1 per arm; board-to-board spread is the open variable, which is why F1 and F2 are read together.
+
+## Result, the two gcc runs (7 Nov 17:52)
+
+| run | board | time | reading |
+|---|---|---|---|
+| Plain gcc train | 3 | 3,510.0 s (rc 0, specdiff 1/1) | 0.9984× board 1's 3,515.5 s |
+| gcc train c3f, N = 2 | 2 | 4,255.8 s (inside 3,515.4 s, outside 740.4 s; rc 0, specdiff 1/1) | 1.0006× board 3's 4,253.3 s |
+
+- **F1 FAILS by 0.16 %:** board 3 reads Plain gcc 0.16 % faster than board 1, below the band's lower edge (it assumed
+  board 3 is the slower board, from Plain mcf). The board-to-board spread on Plain gcc is 0.16 %.
+- **F2 holds:** c3f reproduces within 0.06 % on another board.
+- **gcc train c3f is 1.212× Plain on the same board** (4,253.3 / 3,510.0), and 1.211× across boards 2 and 1. The 1.20×
+  bound on board 3 is 4,212.0 s: 41 s short.
+- F3 (Plain perlbench, board 1) is still running.
