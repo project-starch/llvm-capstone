@@ -111,3 +111,19 @@ against c3f (out-ga2-b3, the same board and bitstream).
   console was still draining the stage's kallsyms dump (20,000 lines, printed just before) while it ran: the driver
   received `@@KSYMS-END`, `@@TICKPROBE-BEGIN` and the probe's RESULT line, printed 30 s later, in one chunk. T1 is not
   read.
+
+## The 440 s is found (7 Nov, 17:5x): a SHA-256 of the whole image at every context's exit
+
+- **Where.** A QEMU capmix profile of the same stage (kit-unq, gcc train) at block resolution: in the run window the
+  launcher executes 1.352 G instructions, 1,336.9 M of them in `capstone_application_hash`. c3f's launcher executes
+  about 0.29 G.
+- **Why.** The batch harness exports `CAPSTONE_EXEC_DIAGNOSTICS=1` for every step (bug-corpora/tools/virtualvm.py:130,
+  boardvm.py:193), so that a fault prints its cause line. dev's launcher (exec.c:1380) also prints the image's digest
+  when a context exits under that switch, and computes it there: SHA-256 of the 12.9 MB gcc image, about 104
+  instructions per byte. c3f's quiet launcher predates the exit digest: its .err holds no `exit image` line.
+- **Check.** The stage with `unset CAPSTONE_EXEC_DIAGNOSTICS` before the arm (perf/nodiag, one line, `@@NODIAG unset`):
+  launcher instructions in the run window 1.352 G → 0.002 G; rc 0, specdiff 1/1 PASS, every output hash equal to the
+  earlier twin's.
+- **The earlier reading is withdrawn:** "a per-step cost … like a walk over the pinned pages" (the Result above) was a
+  hypothesis, and it is wrong: the cost is per context exit, not per step. perlbench runs 318 contexts with a 3.2 MB
+  image each, which is the shape of its +5,431 s.
