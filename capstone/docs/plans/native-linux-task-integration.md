@@ -303,8 +303,12 @@ Frozen revision 06 passes 89 pointer and 101 independent controls in both native
 ABI modes, the unchanged 14,708-assertion pack test in direct mode, and host
 sanitizer/allocation-failure gates. A review-found dangling metadata head on
 allocation failure was reproduced against revision 05 and fixed before freezing
-06. The complete original Perl benchmark and official comparison remain pending;
-focused correctness is not a full SPEC pass or a performance comparison.
+06. The full revision-06 run then exposed a retained freed-scalar lookup in
+`sort.t`; revision 07 preserves the original core exception path. Revision 07
+passes both ABI focused gates and the complete original Perl benchmark with
+both official comparisons. The [final ten-entry record](../../runtime/virtual/tests/native-task/spec-final-qualification.json)
+includes all nine other entries on the same final kernel. This establishes
+functional correctness for those inputs, not a performance comparison.
 
 The port uses the new `capstone_provenance_v2` src.alt package and 69 freshly
 compiled application objects per ABI. Keep the existing frozen source package intact; the

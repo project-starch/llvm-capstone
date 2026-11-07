@@ -232,7 +232,14 @@ run, a whole-suite port, or a performance measurement. Exit status alone does
 not qualify a benchmark. In particular, the Perl test harness can exit zero
 with incomplete output.
 
-The [full qualification record](spec-test-qualification.json) reports **9 PASS,
+The [current final qualification](spec-final-qualification.json) reports
+**10 PASS, 0 FAIL** on kernel `1bd9b8ecf702`, using all 22 original benchmark
+invocations, four guest image validators and all 25 official comparisons.
+Perl revision 07 uses the pinned [source-selection recipe](../../../../ports/perl/provenance/README.md#build-and-run-the-explicit-v2-package).
+The final Perl run completed in 4,831.9 host seconds; this is not a hardware
+performance estimate. The preceding failures below are preserved history.
+
+The [historical qualification record](spec-test-qualification.json) reports **9 PASS,
 1 FAIL** across 22 completed invocations and 25 official output comparisons
 (24 pass, one fails). GCC, lbm, ImageMagick, nab, both specrand entries, mcf,
 all twelve xz inputs and the complete 156-frame x264 test pass. ImageMagick and

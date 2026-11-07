@@ -2,11 +2,11 @@
 
 This is the developer entry point for `native/linux-task-integration`. It
 organizes the cumulative platform change, not just the final SQLite patch.
-The current source snapshot is `fce47a4a8005`, including the subprocess services
+The current source snapshot is `9698c75f8e7b`, including the subprocess services
 and Perl provenance repair; subsequent qualification changes are recorded
-separately. **The full SPEC gate is not passed. Do not treat the
-branch as a fully SPEC-qualified QEMU baseline ready for RTL implementation
-unless the acceptance gate below passes.** No FPGA synthesis or
+separately. **All ten existing C-port SPEC entries now pass their original
+complete test inputs and official comparisons on the frozen QEMU/Linux platform.**
+The branch is ready for RTL implementation assessment. No FPGA synthesis or
 hardware qualification is claimed.
 
 ## 1. Baselines and scope
@@ -14,12 +14,12 @@ hardware qualification is claimed.
 | Item | Frozen revision |
 | --- | --- |
 | Comparison base | `aeabf009128746d332741dd1e33fbe5b2bca3754` |
-| Current source snapshot | `fce47a4a8005ba1b001dbdd056c84b31098b73b9` |
+| Current source snapshot | `9698c75f8e7b2eb1224285e98716c9ea7a7245df` |
 | Historical remote `origin/dev` observation, not refreshed | `c9611344eeb75ed628d488202a9394a6e44f3db5` |
 | QEMU at common ancestor | `0542c5556c2d` |
 | Required QEMU | `dd041bac5ad9c145c3872a50804ca714a26b1c88` |
 
-The snapshot contains 32 commits after the comparison base, 223 ordinary changed
+The snapshot contains 37 commits after the comparison base, 230 ordinary changed
 files and one changed QEMU gitlink. The recorded remote dev had nine separate
 commits after that base; this branch has not merged them. In particular, dev's mapping-cache
 and compiler changes must not silently enter the baseline. There are no LLVM
@@ -44,8 +44,7 @@ and [shell qualification](../../ports/hush/app/results/native-task.json) are
 separate from the original SPEC comparator gate.
 The observed Perl pointer-packing fault is repaired by the separately versioned
 `capstone_provenance_v2` application port. Its original pack test and focused
-native/host/error-path gates pass; the full original Perl workload remains under
-qualification. This adds no RTL opcode requirement. Do not add integer-to-tagged
+native/host/error-path gates and the full original Perl workload now pass. This adds no RTL opcode requirement. Do not add integer-to-tagged
 pointer reconstruction. [Implementation and scope](native-linux-task-integration.md#remaining-perl-pointer-serialization-boundary).
 Each source archive describes its own pinned snapshot. Select the latest
 manifest containing this source snapshot and its qualification records.
@@ -53,8 +52,8 @@ Git's configured submodule-ignore behavior can hide the
 most important hardware change: use `--ignore-submodules=none` when reviewing.
 
 ```sh
-git diff --stat --ignore-submodules=none aeabf0091287 fce47a4a8005
-git log --oneline aeabf0091287..fce47a4a8005
+git diff --stat --ignore-submodules=none aeabf0091287 9698c75f8e7b
+git log --oneline aeabf0091287..9698c75f8e7b
 git -C capstone/capstone-qemu log --oneline 0542c5556c2d..dd041bac5ad9
 ```
 
@@ -213,17 +212,22 @@ and inputs stay external under scratch storage; existing source adaptations
 remain frozen. Test means original full `test` inputs, not train/reference data.
 
 The latest kernel `1bd9b8ecf702` independently passes all nine non-Perl entries,
-including full x264. The versioned Perl repair passes its focused gates; its
-complete original workload and official comparison are running. See
+including full x264. Revision 06 of the Perl repair passed focused gates but
+failed the complete original workload in `t/op/sort.t` (315/316 files passed).
+Revision 07 repairs the freed-scalar metadata lookup and passes the full original
+workload and both official comparisons. This is an application-port change,
+with no additional kernel or RTL requirement. See
 [current non-Perl evidence](../../runtime/virtual/tests/native-task/spec-nonperl-services-qualification.json)
-and [Perl port qualification](../../ports/perl/provenance/qualification.json).
+and [Perl port qualification](../../ports/perl/provenance/qualification-07.json).
+The [final ten-entry record](../../runtime/virtual/tests/native-task/spec-final-qualification.json)
+records 22 benchmark invocations, four guest image validators and all 25 official
+comparisons passing. Original inputs and comparators are unchanged.
 
 **Historical snapshot `09b90be908e6`: 9 PASS, 1 FAIL (Perl).** All 22 original test invocations
 completed. Of 25 official output comparisons, 24 pass; Perl's test.pl comparison
 fails despite exit zero. All four guest image-validation invocations completed, covering one
-ImageMagick image and three x264 images. The branch is suitable for an RTL
-implementation assessment with a named software blocker, not a claim that all
-ten applications are already qualified.
+ImageMagick image and three x264 images. That historical snapshot still had
+a named software blocker; the final revision-07 qualification above closes it.
 
 The [machine-readable qualification](../../runtime/virtual/tests/native-task/spec-test-qualification.json)
 records platform/SDK/input/object hashes, selected execution evidence and every
