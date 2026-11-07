@@ -76,3 +76,9 @@ replaced. Board 2 (perf/b3/gt-run-ga2.sh 2, C.5a), after perlbench c3g-thp there
 - **Restated against it:** perlbench on the unified stack without the exit digest 30,120.3 s = **1.376×**; c3g
   33,667.7 s = 1.539×. gcc train c3f 1.296× (above). These are the fair readings for every configuration that keeps
   mappings in the context (ARENA_CACHE or MAPPING_REUSE).
+
+## Addendum 2 (8 Nov 08:0x, before their board calls): mcf and x264 move to board 3
+
+Board 3 freed first. Addendum 1's mcf and x264 runs move there (perf/b3q), unchanged otherwise; mcf first, x264
+last, with gcc's split exitprof rerun between them (results/2026-11-08-exitprof Addendum 2). mcf's reference
+9,094.9 s is board 2's; board 3 read Plain mcf 0.6 % slower (9,150.5 s on the THP kernel), so R3 is read against both.

@@ -51,3 +51,12 @@ an hour earlier.
 - The wedge is not explained. It came at about the time gcc's command ends (4,253 s on c3f). Two variables changed
   at once (the module and cvprof). Board 2's perlbench run with both instruments has passed many context exits with
   cvprof enabled (exhpm lines at 2,621 s), so neither is shown to break a context exit; a split rerun is owed.
+
+## Addendum 2 (8 Nov 08:0x, before its board call): gcc with the module only, board 3
+
+The split rerun the VOID result owes: c3f's unchanged gcc stage (perf/ga2) on kit bkit31-exhpm, no cvprof. It reads
+gcc's exhpm windows and tests the module alone across gcc's run. Board 3, after Plain-reuse mcf.
+| # | Prediction |
+|---|---|
+| Z0 | rc 0, specdiff 1/1, one exhpm line for gcc's context; no wedge |
+| Z1 | run within ±1.5 % of 4,253.3 s; kernel-window IPC < 0.2 (as perlbench's 0.13 and the control's 0.17) |
