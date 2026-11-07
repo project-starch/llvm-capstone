@@ -34,3 +34,22 @@ was not the whole of gcc's 440 s.
 - Removing the digest saved 92 s of unify's 4,611.0 s. ucyc is unchanged (19.18 G against 19.26 G cycles; c3f 9.84 G),
   so the digest was not the per-step excess (results/2026-11-06-unify, RETRACTION).
 - perlbench -rg-nd runs next on board 2. There the digest ran at each of 318 context exits; N2 is still open.
+
+## Addendum 1 (7 Nov, 21:1x, before its board call): gcc -nd again, with CPU-time snapshots, on board 3
+
+The per-step excess of the unified stack (ucyc 19.2 G against c3f's 9.8 G cycles) is board-only: on the board the
+machine executes 6.7 G more instructions outside the context, on QEMU fewer. Ruled out from source: the quantum
+sched_yield (c3f's launcher has it too) and module timers or workers (neither module has any). Work that grows with
+wall time fits; who does it is unknown.
+
+**Stage** `perf/nodiag/bstages/502.gcc_r-train01-capstone-lifetimes-unify-rgz-ndcpu`: the -nd stage plus `cpusnap`
+before mark1 and after mark2: the `cpu` line of /proc/stat and `/proc/<pid>/stat` of every process. QEMU: rc 0,
+specdiff PASS, 43 processes per snapshot, the context's time reads as system time (30 → 1,178 ticks).
+
+**Run:** board 3, after gcc c3f-thp (results/2026-11-07-thp2, G1), which runs after perlbench c3g-thp there.
+
+| # | Prediction |
+|---|---|
+| D0 | as N0, plus both snapshots present |
+| D1 | run within ±1 % of 4,518.6 s (board 2); the snapshots attribute ≥ 80 % of the outside time (≈ 1,080 s) to named processes and /proc/stat states |
+| D2 | which one carries the ~380 s excess over c3f is not predicted: the run exists to name it |
