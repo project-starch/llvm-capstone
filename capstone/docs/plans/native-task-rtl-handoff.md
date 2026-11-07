@@ -6,7 +6,8 @@ The current source snapshot is `6090350d1cd0`, including native-only adapter cle
 and Perl provenance repair; subsequent qualification changes are recorded
 separately. **The pre-cleanup kernel passed all ten existing C-port SPEC entries.**
 The current native-only cleanup passes focused task/I/O/resource/spawn gates;
-its full ten-entry rerun on the new kernel is in progress. See
+its full ten-entry rerun on the new kernel is incomplete. The remote long run
+was cancelled to free the host for bounded five-minute feedback gates. See
 [cleanup qualification](../../runtime/virtual/tests/native-task/native-only-cleanup-qualification.json).
 Do not transfer the old kernel verdict to the new image. The cleanup adds no ISA requirement. No FPGA synthesis or
 hardware qualification is claimed.

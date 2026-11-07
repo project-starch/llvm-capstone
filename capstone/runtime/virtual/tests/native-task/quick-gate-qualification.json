@@ -1,0 +1,147 @@
+{
+  "schema_version": 1,
+  "status": "PASS",
+  "scope": "Configured incremental build and focused native regression gate with original GCC test input and its official output comparator. Not full SPEC qualification or a performance comparison.",
+  "kernel_source_snapshot": "6090350d1cd0cbf77355d610e3d9758dd9fa33fe",
+  "platform": {
+    "qemu": "c6681ec8a8ff704b297ec3eafceb13b2fe9c1c61c7a65ed95304bd5dbe5183eb",
+    "Image": "e2dca4c948f5d8a1445db57744a024b4be129e0c584cb4ae4ddff670becd835d",
+    "rootfs": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845",
+    "firmware": "2335a28682ddf65e46c1f492632c2cb026efcb2271caf544a3f7ddc858b03e02",
+    "null_device_grant": false,
+    "local_tmp_grant": false,
+    "live_output": false
+  },
+  "budget_seconds": 300,
+  "elapsed_seconds": 83.58411296992563,
+  "steps": [
+    {
+      "name": "kernel-build",
+      "status": "PASS",
+      "elapsed_seconds": 5.933661293936893
+    },
+    {
+      "name": "io-and-task",
+      "status": "PASS",
+      "elapsed_seconds": 18.129305872134864
+    },
+    {
+      "name": "directory-dup-time",
+      "status": "PASS",
+      "elapsed_seconds": 10.251102868001908
+    },
+    {
+      "name": "private-tmp",
+      "status": "PASS",
+      "elapsed_seconds": 20.58778107096441
+    },
+    {
+      "name": "spawn-lifecycle",
+      "status": "PASS",
+      "elapsed_seconds": 12.458450538106263
+    },
+    {
+      "name": "spawn-verdict",
+      "status": "PASS",
+      "elapsed_seconds": 0.06558210286311805
+    },
+    {
+      "name": "gcc-original-test",
+      "status": "PASS",
+      "elapsed_seconds": 15.869928574888036
+    },
+    {
+      "name": "gcc-official-comparison",
+      "status": "PASS",
+      "elapsed_seconds": 0.2657326478511095
+    }
+  ],
+  "build_scope": "Incremental build of the already prepared kernel tree. A cold build is not claimed to finish in this time; all configured work shares the deadline.",
+  "supervisor": {
+    "runner_sha256": "a77e16905bc26ffca6aff2a2e47d19b4817202993e2725bef848a28a931e5a2e",
+    "test_sha256": "b6e6bbecb7e2c1465ee99623adc54bd40c619584e6dec39d2b6a2c5f57f5a076",
+    "process_level_tests_passed": 7,
+    "tested_behaviors": [
+      "successful steps and literal argv",
+      "early failure skips later work",
+      "one shared deadline",
+      "TERM-ignoring descendant cleanup",
+      "lock wait consumes deadline",
+      "invalid plan refuses all execution",
+      "invalid budget and existing outputs refused"
+    ]
+  },
+  "manifest_scope": {
+    "scope": "Bounded build, native IO/task, directory/dup/time, four private-tmp policy modes, native spawn lifecycle, original full GCC test input and its original official comparator. Not full SPEC, no performance claim.",
+    "original_comparators_sha256": "13ba9380010ef541a242ff3fbab4d7d5ce8439a7dea4ba96f0ff3b8b542c8bcf",
+    "subset_comparators_sha256": "347fdb43ab34ff6f81a90f58021c48fdbc27901011fe365441130412885b827d",
+    "subset_commands_unchanged": true
+  },
+  "gcc_comparison": {
+    "benchmark": "502.gcc_r",
+    "execution": {
+      "benchmark": "502.gcc_r",
+      "runner_rc": 0,
+      "host_elapsed_seconds": 10.59316857601516,
+      "commands": [
+        {
+          "argv": [
+            "./cpugcc_r",
+            "t1.c",
+            "-O3",
+            "-finline-limit=50000",
+            "-o",
+            "t1.opts-O3_-finline-limit_50000.s"
+          ],
+          "stdout": "t1.opts-O3_-finline-limit_50000.out",
+          "stderr": "t1.opts-O3_-finline-limit_50000.err"
+        }
+      ],
+      "expected_commands": 1,
+      "exit_statuses": [
+        0
+      ],
+      "image_commands": [],
+      "expected_image_commands": 0,
+      "image_exit_statuses": [],
+      "execution_errors": [],
+      "execution_ok": true,
+      "spec_validation": "PENDING",
+      "comparator_manifest_sha256": "347fdb43ab34ff6f81a90f58021c48fdbc27901011fe365441130412885b827d"
+    },
+    "command_match": true,
+    "execution_errors": [],
+    "image_comparators": [],
+    "comparators": [
+      {
+        "command": [
+          "/var/tmp/capstone-spec-php-20261105/share/SPEC17/bin/specperl",
+          "/var/tmp/capstone-spec-php-20261105/share/SPEC17/bin/harness/specdiff",
+          "-m",
+          "-l",
+          "10",
+          "--floatcompare",
+          "--nonansupport",
+          "/var/tmp/capstone-spec-php-20261105/share/SPEC17/benchspec/CPU/502.gcc_r/data/test/output/t1.opts-O3_-finline-limit_50000.s",
+          "t1.opts-O3_-finline-limit_50000.s"
+        ],
+        "passed": true,
+        "output_sha256": "58111208509dd871223ae195a33304bd6b24afd29458f37c976556cbad506324",
+        "reference_sha256": "58111208509dd871223ae195a33304bd6b24afd29458f37c976556cbad506324",
+        "returncode": 0,
+        "output": "specdiff run completed\n"
+      }
+    ],
+    "passed": true
+  },
+  "evidence_sha256": {
+    "plan": "029b547a05ee5aa3bb78c394db26bab0c9ed859e1c8d0c41f1ce8d9f56f8dc4f",
+    "summary": "25ceccca5eb4240892375da86834e97268a0fca52e47bd38e103bce160c05038",
+    "gcc_validation": "b6d63b2e8fb87ea7f723dc37766bbfbba13ca17f8b4f583b4f6ffcfd18d06b40"
+  },
+  "raw_evidence": {
+    "local": "/tmp/capstone/native-task/native-only-quick-02/evidence",
+    "remote": "p12:/var/tmp/capstone-native-task-scratch/native-only-quick-02"
+  },
+  "full_spec_replaces": false
+}

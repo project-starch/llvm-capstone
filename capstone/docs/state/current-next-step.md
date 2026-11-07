@@ -1,10 +1,17 @@
-## Qualify native-only adapter cleanup
+## Native changes: feedback within five minutes
 
-The native-only cleanup is committed and its focused gates pass, including
-absent device/misc registration and no trampoline/control FD. Complete the
-running ten-entry original SPEC C-port qualification on kernel `e2dca4c948f5`. Preserve the earlier
-full-pass kernel and evidence. Refresh the RTL handoff only with the new
-implementation snapshot and accurately scoped qualification.
+Use the bounded quick-gate runner with a total budget no greater than 300 seconds,
+covering build, selected regression tests and lock waits. A deadline is TIMEOUT,
+never PASS. Select the native task/I/O, resource and spawn gates relevant to the
+change and the original GCC test with its official comparator. Full SPEC is a
+separate release/background qualification and must not block iterative work.
+
+The native-only cleanup's focused gates pass on kernel `e2dca4c948f5`. Its long
+remote SPEC rerun was intentionally cancelled to release the test host for fast
+feedback; five entries completed execution, but no full official verdict exists.
+Local x264 continues independently. Preserve all earlier complete qualification
+records and the cancelled attempt. Do not delete flat-table support: the FPGA
+profile still uses it; any further change needs an explicit RTL/runtime decision.
 
 ## 2026-11-07 — Full native C-port SPEC gate passed; RTL assessment next
 

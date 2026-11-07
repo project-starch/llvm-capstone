@@ -1,5 +1,44 @@
 # Experimental Linux task-return backend
 
+## Iterative feedback: at most five minutes
+
+Use `run-quick-gate.py` to supervise a configured build and regression plan.
+The single monotonic budget includes build time, QEMU lock waits and all test
+steps; it defaults to 300 seconds and refuses larger values. A timeout stops
+the owned process group, preserves logs and returns 124 with `TIMEOUT`, never
+`PASS`. A failed command stops later steps. Remaining steps are `NOT_RUN`.
+Commands must not daemonize or escape their process group.
+The [qualified example](quick-gate-qualification.json) completes the incremental
+build, native regression gates and original GCC comparison in 83.6 seconds.
+
+Source the environment, then run a fresh plan/output pair:
+
+```sh
+source capstone/tests/capstone-test-env.sh
+python3 capstone/runtime/virtual/tests/native-task/run-quick-gate.py \
+  --plan "$CAPSTONE_TMP_ROOT/native-quick/plan.json" \
+  --out "$CAPSTONE_TMP_ROOT/native-quick/result" --budget-seconds 300
+```
+
+The plan is a JSON list of objects with a unique `name`, an `argv` string list
+and optional `cwd`. Commands execute directly; there is no implicit shell or
+environment-variable expansion. Put the actual build command in the plan so it
+shares the deadline. Use fresh output paths for all constituent gates.
+
+Choose tests for the change: native task/I/O, directory/dup/time, private-tmp
+policy and spawn lifecycle gates, plus the unchanged original GCC test and its
+official output comparator. Selecting GCC alone means copying that entry from
+the original comparator manifest into a separate subset manifest, preserving
+all commands and references, and using that same subset for execution and
+validation. Record both original and subset manifest hashes. Do not report
+other benchmarks as tested. Full Perl/x264/SPEC qualification is a separate
+release/background campaign and does not block iterative feedback.
+
+`test-quick-gate.py` exercises deadline, process-group cleanup, early failure
+and invalid-plan behavior with real short-lived subprocesses. A configured
+quick-gate PASS is not a full SPEC or hardware qualification.
+
+
 The current branch removes the legacy device ioctls, control FD and scalar
 trampoline. [Native-only cleanup qualification](native-only-cleanup-qualification.json)
 records the new built-in kernel and passing task/I/O/resource/spawn gates.

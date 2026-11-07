@@ -205,6 +205,9 @@
   "full_spec_rerun": {
     "status_at_recording": "RUNNING",
     "kernel_sha256": "e2dca4c948f5d8a1445db57744a024b4be129e0c584cb4ae4ddff670becd835d",
-    "new_evidence_required": true
+    "new_evidence_required": true,
+    "current_status": "INCOMPLETE_CANCELLED_FOR_FAST_FEEDBACK",
+    "cancellation_evidence": "p12:/var/tmp/capstone-native-task-scratch/native-only-cleanup-01/spec-cancellation.json",
+    "note": "Five remote entries completed execution before cancellation; no full official result. Local x264 continues independently."
   }
 }
