@@ -15,7 +15,8 @@ stage=$(mktemp -d "${CAPSTONE_TMP_ROOT:-/tmp/capstone}/native-task-source.XXXXXX
 trap 'rm -rf -- "$stage"' EXIT
 patches=("$here/kernel-native-task.patch" "$here/kernel-native-files.patch"
          "$here/kernel-native-process.patch" "$here/kernel-native-spawn.patch"
-         "$here/kernel-native-directory.patch" "$here/kernel-native-time.patch")
+         "$here/kernel-native-directory.patch" "$here/kernel-native-time.patch"
+         "$here/kernel-native-helpers.patch")
 python3 - "$kernel" "$stage/preflight" "${patches[@]}" <<'PYTHON'
 from pathlib import Path
 import shutil, sys
@@ -40,6 +41,8 @@ bash "$here/stage-adapter.sh" "$stage/adapter"
 for change in "${patches[@]}"; do
     patch -d "$kernel" -p1 < "$change"
 done
+install -m 0644 "$stage/adapter/capstone_native_helpers.h" \
+    "$kernel/include/linux/capstone_native_helpers.h"
 mv "$stage/adapter" "$kernel/drivers/misc/capstone"
 printf '\nobj-$(CONFIG_RISCV_CAPSTONE_TASK) += capstone/\n' >> "$kernel/drivers/misc/Makefile"
 "$kernel/scripts/config" --file "$kernel/.config" --disable SMP \

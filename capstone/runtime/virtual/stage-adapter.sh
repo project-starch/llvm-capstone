@@ -7,6 +7,8 @@ out=${1:?Output directory}
 mkdir -p "$out/capstone"
 cp "$here/module/Makefile" "$here/module/capstone_vm.c" "$here/module/binfmt-dom.h" "$here/module/delegate-dom.h" "$here/wire.h" "$here/vm-abi.h" "$out/"
 cp "$here/native-grant.h" "$out/"
+# install-native-task also installs this exact interface into include/linux.
+cp "$here/kernel-capstone-helpers.h" "$out/capstone_native_helpers.h"
 cp "${CAPSTONE_QEMU_SOURCE:-$CAPSTONE_REPO_ROOT/capstone/capstone-qemu}/target/riscv/cap_rev_table_abi.h" "$out/"
 # The representability predicate, SHARED rather than copied: the module's arena test, grant() in
 # the launcher and the allocator must agree on one rule, and that rule is cross-checked against

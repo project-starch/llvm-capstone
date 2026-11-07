@@ -1,10 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /* Native fd services: authority is checked by native_acquire before issue. */
 #include <linux/fcntl.h>
-extern long capstone_native_fcntl(unsigned int, struct file *, unsigned int,
-                                  unsigned long, struct flock *, unsigned int);
-extern long capstone_native_ftruncate(struct file *, loff_t, int);
-extern int capstone_native_fmetadata(struct file *, unsigned int, unsigned int, unsigned int);
 struct native_wire_flock {
     s16 type, whence;
     u32 pad;
@@ -17,9 +13,6 @@ static bool native_files_issue(struct context *c, const struct ns_invocation *ca
 {
     const u64 *a = call->scalar;
     u64 nr = call->descriptor->nr;
-    typeof(&capstone_native_fcntl) fcntlfn;
-    typeof(&capstone_native_ftruncate) truncatefn;
-    typeof(&capstone_native_fmetadata) metadatafn;
     struct native_wire_flock wire;
     struct flock lock = {0};
     long rc = -ENOSYS;
@@ -41,12 +34,9 @@ static bool native_files_issue(struct context *c, const struct ns_invocation *ca
             rc = -EINVAL; break; /* pointer commands require the checked wire service */
         }
         duplicate = a[1] == F_DUPFD || a[1] == F_DUPFD_CLOEXEC;
-        fcntlfn = symbol_get(capstone_native_fcntl);
-        if (!fcntlfn) break;
         mutex_unlock(&vm_lock);
-        rc = fcntlfn(a[0], file, a[1], a[2], nr == CAPSTONE_NR_FCNTL_LOCK ? &lock : NULL, DOM_FDS);
+        rc = capstone_native_fcntl(a[0], file, a[1], a[2], nr == CAPSTONE_NR_FCNTL_LOCK ? &lock : NULL, DOM_FDS);
         mutex_lock(&vm_lock);
-        symbol_put(capstone_native_fcntl);
         /* The helper reserves below DOM_FDS; no close-on-failure rollback that
          * would accidentally release the caller's existing POSIX locks. */
         if (rc >= 0 && duplicate) set_bit(rc, c->dom_delegate->fds);
@@ -63,20 +53,14 @@ static bool native_files_issue(struct context *c, const struct ns_invocation *ca
         mutex_lock(&vm_lock);
         break;
     case CAPSTONE_SYS_ftruncate:
-        truncatefn = symbol_get(capstone_native_ftruncate);
-        if (!truncatefn) break;
         mutex_unlock(&vm_lock);
-        rc = truncatefn(file, (s64)a[1], 0);
+        rc = capstone_native_ftruncate(file, (s64)a[1], 0);
         mutex_lock(&vm_lock);
-        symbol_put(capstone_native_ftruncate);
         break;
     case CAPSTONE_SYS_fchmod: case CAPSTONE_SYS_fchown:
-        metadatafn = symbol_get(capstone_native_fmetadata);
-        if (!metadatafn) break;
         mutex_unlock(&vm_lock);
-        rc = metadatafn(file, nr == CAPSTONE_SYS_fchmod ? 0 : 1, a[1], a[2]);
+        rc = capstone_native_fmetadata(file, nr == CAPSTONE_SYS_fchmod ? 0 : 1, a[1], a[2]);
         mutex_lock(&vm_lock);
-        symbol_put(capstone_native_fmetadata);
         break;
     default: return false;
     }

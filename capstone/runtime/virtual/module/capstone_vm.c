@@ -8,6 +8,7 @@
 #endif
 #define CV_TASK_BACKEND 1
 #include <asm/capstone_task.h>
+#include <linux/capstone_native_helpers.h>
 
 static bool copyable_exact_bounds;
 #include <linux/fs.h>
@@ -378,7 +379,6 @@ static bool unpinned_exact_bounds;
 static unsigned long unpinned_faults, unpinned_sweep_pages;
 module_param(unpinned_faults, ulong, 0444);
 module_param(unpinned_sweep_pages, ulong, 0444);
-extern int capstone_unpinned_config(unsigned int ids, bool *exact);
 
 /* Pages a lazy-arena fault pins, from the faulting page on, clipped to the
  * arena, the VMA and the first page already pinned. 1 pins only the page. */
@@ -3240,12 +3240,6 @@ static int __init init(void)
         return -EOPNOTSUPP;
 
 
-    if (native_dispatch) {
-        typeof(&capstone_native_mprotect) protect = symbol_get(capstone_native_mprotect);
-        if (!protect) return -EOPNOTSUPP;
-        symbol_put(capstone_native_mprotect);
-    }
-
 #ifdef CV_TASK_BACKEND
     if (native_task && (!native_dispatch || !unpinned)) return -EOPNOTSUPP;
     if (native_io && !native_task) return -EOPNOTSUPP;
@@ -3256,7 +3250,6 @@ static int __init init(void)
         return -EINVAL;
     }
     if (unpinned) {
-        typeof(capstone_unpinned_config) *config;
         int error;
         /* Tag-copy interrupt exclusion and namespace sweeps are currently
          * single-hart protocols. Offline-but-possible CPUs are not safe:
@@ -3266,10 +3259,7 @@ static int __init init(void)
             return -EOPNOTSUPP;
         }
         if (node_table_flat) return -EOPNOTSUPP;
-        config = symbol_get(capstone_unpinned_config);
-        if (!config) return -EOPNOTSUPP;
-        error = config(CAPSTONE_VM_IDS, &unpinned_exact_bounds);
-        symbol_put(capstone_unpinned_config);
+        error = capstone_unpinned_config(CAPSTONE_VM_IDS, &unpinned_exact_bounds);
         if (error) return error;
         if (unpinned_exact_bounds != copyable_exact_bounds) return -EOPNOTSUPP;
     }
