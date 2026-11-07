@@ -2,8 +2,9 @@
 
 This is the developer entry point for `native/linux-task-integration`. It
 organizes the cumulative platform change, not just the final SQLite patch.
-The implementation snapshot is `09b90be908e6`; subsequent qualification changes
-are recorded separately. **The full SPEC gate is not passed. Do not treat the
+The current source snapshot is `fce47a4a8005`, including the subprocess services
+and Perl provenance repair; subsequent qualification changes are recorded
+separately. **The full SPEC gate is not passed. Do not treat the
 branch as a fully SPEC-qualified QEMU baseline ready for RTL implementation
 unless the acceptance gate below passes.** No FPGA synthesis or
 hardware qualification is claimed.
@@ -12,22 +13,23 @@ hardware qualification is claimed.
 
 | Item | Frozen revision |
 | --- | --- |
-| Common ancestor and local `dev` | `aeabf009128746d332741dd1e33fbe5b2bca3754` |
-| Native implementation snapshot | `09b90be908e6` |
-| Observed remote `origin/dev` | `c9611344eeb75ed628d488202a9394a6e44f3db5` |
+| Comparison base | `aeabf009128746d332741dd1e33fbe5b2bca3754` |
+| Current source snapshot | `fce47a4a8005ba1b001dbdd056c84b31098b73b9` |
+| Historical remote `origin/dev` observation, not refreshed | `c9611344eeb75ed628d488202a9394a6e44f3db5` |
 | QEMU at common ancestor | `0542c5556c2d` |
 | Required QEMU | `dd041bac5ad9c145c3872a50804ca714a26b1c88` |
 
-The snapshot contains 24 branch-only commits, 148 ordinary changed files and
-one changed QEMU gitlink. Remote dev has nine separate commits after the common
-ancestor; this branch has not merged them. In particular, dev's mapping-cache
+The snapshot contains 32 commits after the comparison base, 223 ordinary changed
+files and one changed QEMU gitlink. The recorded remote dev had nine separate
+commits after that base; this branch has not merged them. In particular, dev's mapping-cache
 and compiler changes must not silently enter the baseline. There are no LLVM
 compiler source changes in this branch's cumulative delta. A working compiler
 binary is still a separate, hash-pinned build dependency.
 
-The [machine-readable inventory](../../runtime/virtual/tests/native-task/rtl-handoff-inventory.json)
-lists every changed file at that implementation snapshot, groups code/tests/
-records/documentation, and records all five QEMU commits. The initial handoff
+The [current machine-readable inventory](../../runtime/virtual/tests/native-task/rtl-handoff-current-inventory.json)
+lists every changed path at the source snapshot, groups it by responsibility,
+and records all five QEMU commits. The [historical inventory](../../runtime/virtual/tests/native-task/rtl-handoff-inventory.json)
+remains pinned to `09b90be908e6`. The initial handoff
 commits add tools/evidence; the subsequent cwd/pipe/signal repair changes Linux
 helpers and the native frontend, with no further ISA or QEMU requirement.
 [Repair scope and qualification](../../runtime/virtual/tests/native-task/README.md#native-cwd-pipe-and-signal-repair).
@@ -45,14 +47,14 @@ The observed Perl pointer-packing fault is repaired by the separately versioned
 native/host/error-path gates pass; the full original Perl workload remains under
 qualification. This adds no RTL opcode requirement. Do not add integer-to-tagged
 pointer reconstruction. [Implementation and scope](native-linux-task-integration.md#remaining-perl-pointer-serialization-boundary).
-The frozen inventory and source archive describe their pinned snapshot, not
-these later production fixes; use the branch HEAD for the current source.
+Each source archive describes its own pinned snapshot. Select the latest
+manifest containing this source snapshot and its qualification records.
 Git's configured submodule-ignore behavior can hide the
 most important hardware change: use `--ignore-submodules=none` when reviewing.
 
 ```sh
-git diff --stat --ignore-submodules=none aeabf0091287 09b90be908e6
-git log --oneline aeabf0091287..09b90be908e6
+git diff --stat --ignore-submodules=none aeabf0091287 fce47a4a8005
+git log --oneline aeabf0091287..fce47a4a8005
 git -C capstone/capstone-qemu log --oneline 0542c5556c2d..dd041bac5ad9
 ```
 
@@ -72,10 +74,10 @@ The large source diff includes imported dispatcher/test foundations and raw
 measurement records. Its line count is not an estimate of RTL work. Native
 task integration and the latest file services add no new processor opcode.
 
-At the frozen implementation snapshot, the ordinary-file inventory contains
-40 implementation files (+4,966/-501 lines), 66 test tools/fixtures, 25
-qualification records and 17 documentation files. The QEMU implementation
-itself is behind the additional changed gitlink, not included in those counts.
+The current inventory contains 48 Linux/runtime paths, 14 application ABI/port
+paths, 140 verification/evidence paths and 21 documentation paths. The additional
+QEMU gitlink contains the processor-model delta; its source-file count is not
+included in those totals.
 
 ## 3. Hardware contract to implement or demonstrate already present
 
