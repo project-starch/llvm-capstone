@@ -15,6 +15,22 @@ static void exchange(char c) {
     CHECK(write(1, &c, 1) == 1);
     CHECK(read(0, &answer, 1) == 1 && answer == c);
 }
+/* Exercise libc's new register routing for AT_REMOVEDIR as well as errors. */
+static void remove_directory_checks(void) {
+    struct stat st;
+    CHECK(mkdir("remove-dir",0700)==0);
+    CHECK(unlinkat(AT_FDCWD,"remove-dir",AT_REMOVEDIR)==0);
+    errno=0; CHECK(stat("remove-dir",&st)==-1 && errno==ENOENT);
+    CHECK(mkdir("remove-dir",0700)==0);
+    int child=open("remove-dir/child",O_CREAT|O_EXCL|O_WRONLY,0600);
+    CHECK(child>=0);
+    CHECK(close(child)==0);
+    errno=0; CHECK(unlinkat(AT_FDCWD,"remove-dir",AT_REMOVEDIR)==-1 && errno==ENOTEMPTY);
+    CHECK(stat("remove-dir/child",&st)==0 && S_ISREG(st.st_mode));
+    CHECK(unlink("remove-dir/child")==0);
+    CHECK(unlinkat(AT_FDCWD,"remove-dir",AT_REMOVEDIR)==0);
+    errno=0; CHECK(stat("remove-dir",&st)==-1 && errno==ENOENT);
+}
 static int lock(int fd, int cmd, int type) {
     struct flock f = {.l_type=type, .l_whence=SEEK_SET, .l_start=100, .l_len=10};
     return fcntl(fd, cmd, &f);
@@ -95,6 +111,58 @@ static void raw_close_checks(int fd) {
     CHECK(__capstone_native_syscall(57,scalar(reused),0,0,0,0,0)==0);
     CHECK(__capstone_native_syscall(57,scalar(reused),0,0,0,0,0)==-EBADF);
     CHECK(fstat(fd,&st)==0 && st.st_size==12);
+}
+static void raw_remove_directory_checks(void) {
+    char name[]="raw-remove-dir";
+    struct stat st;
+    CHECK(mkdir(name,0700)==0);
+    CHECK(__capstone_native_syscall(35,scalar(AT_FDCWD),name,scalar(AT_REMOVEDIR),0,0,0)==0);
+    errno=0; CHECK(stat(name,&st)==-1 && errno==ENOENT);
+    CHECK(mkdir(name,0700)==0);
+    int child=open("raw-remove-dir/child",O_CREAT|O_EXCL|O_WRONLY,0600);
+    CHECK(child>=0);
+    CHECK(close(child)==0);
+    CHECK(__capstone_native_syscall(35,scalar(AT_FDCWD),name,scalar(AT_REMOVEDIR),0,0,0)==-ENOTEMPTY);
+    CHECK(stat("raw-remove-dir/child",&st)==0 && S_ISREG(st.st_mode));
+    CHECK(unlink("raw-remove-dir/child")==0);
+    CHECK(__capstone_native_syscall(35,scalar(AT_FDCWD),name,scalar(AT_REMOVEDIR),0,0,0)==0);
+    errno=0; CHECK(stat(name,&st)==-1 && errno==ENOENT);
+}
+static void raw_path_checks(int fd) {
+    char name[]="file-data", fresh[]="raw-path-data", tag;
+    struct stat st;
+    unsigned long base=__builtin_capstone_cap_get_cursor(name);
+    void *tight=__builtin_capstone_cap_shrink(name,base,base+sizeof(name));
+    void *unterminated=__builtin_capstone_cap_shrink(name,base,base+sizeof(name)-1);
+    _Alignas(16) unsigned long words[2] = {(unsigned long)AT_FDCWD, 1};
+    void *dirty;
+    __asm__ volatile("ldc %0, 0(%1)" : "=r"(dirty) : "r"(words) : "memory");
+    long opened=__capstone_native_syscall(56,scalar(AT_FDCWD),tight,scalar(O_RDONLY),0,0,0);
+    CHECK(opened>=0);
+    CHECK(close(opened)==0);
+    CHECK(__capstone_native_syscall(56,scalar(AT_FDCWD),unterminated,scalar(O_RDWR|O_TRUNC),0,0,0)==-EFAULT);
+    CHECK(__capstone_native_syscall(35,scalar(AT_FDCWD),unterminated,0,0,0,0)==-EFAULT);
+    CHECK(__capstone_native_syscall(56,scalar(AT_FDCWD),0,0,0,0,0)==-EFAULT);
+    CHECK(__capstone_native_syscall(35,scalar(AT_FDCWD),0,0,0,0,0)==-EFAULT);
+    CHECK(__capstone_native_syscall(56,scalar(AT_FDCWD),scalar(base),0,0,0,0)==-EFAULT);
+    CHECK(__capstone_native_syscall(56,&tag,name,scalar(O_RDWR|O_TRUNC),0,0,0)==-EINVAL);
+    CHECK(__capstone_native_syscall(35,scalar(AT_FDCWD),name,&tag,0,0,0)==-EINVAL);
+    CHECK(__capstone_native_syscall(56,scalar(AT_FDCWD),name,&tag,0,0,0)==-EINVAL);
+    CHECK(__capstone_native_syscall(56,dirty,name,scalar(O_RDWR|O_TRUNC),0,0,0)==-EINVAL);
+    CHECK(__capstone_native_syscall(56,scalar(100),name,scalar(O_RDWR|O_TRUNC),0,0,0)==-EBADF);
+    CHECK(__capstone_native_syscall(35,scalar(100),name,0,0,0,0)==-EBADF);
+    CHECK(__capstone_native_syscall(35,scalar(AT_FDCWD),name,scalar(1UL<<32),0,0,0)==-EINVAL);
+    CHECK(__capstone_native_syscall(56,scalar(AT_FDCWD),name,scalar((1UL<<32)|O_RDWR|O_TRUNC),0,0,0)==-EINVAL);
+    CHECK(__capstone_native_syscall(56,scalar(AT_FDCWD),name,scalar(O_RDWR|O_TRUNC),0,0,&tag)==-EINVAL);
+    CHECK(__capstone_native_syscall(35,scalar(AT_FDCWD),name,0,0,0,&tag)==-EINVAL);
+    CHECK(fstat(fd,&st)==0 && st.st_size==12 && (st.st_mode&0777)==0600 && st.st_nlink==1);
+    CHECK(fstatat(AT_FDCWD,name,&st,0)==0 && st.st_size==12);
+    opened=__capstone_native_syscall(56,scalar(AT_FDCWD),fresh,scalar(O_CREAT|O_EXCL|O_RDWR),scalar(0600),0,0);
+    CHECK(opened>=0);
+    CHECK(fstat(opened,&st)==0 && st.st_size==0);
+    CHECK(close(opened)==0);
+    CHECK(__capstone_native_syscall(35,scalar(AT_FDCWD),fresh,0,0,0,0)==0);
+    errno=0; CHECK(fstatat(AT_FDCWD,fresh,&st,0)==-1 && errno==ENOENT);
 }
 static void raw_stat_checks(int fd) {
     struct stat st;
@@ -202,7 +270,10 @@ int main(int argc, char **argv) {
         raw_seek_checks(fd);
         raw_fd_checks(fd);
         raw_close_checks(fd);
+        raw_path_checks(fd);
+        raw_remove_directory_checks();
 #endif
+        remove_directory_checks();
         CHECK(fsync(fd)==0 && fdatasync(fd)==0);
         int ro=open("file-data",O_RDONLY);
         CHECK(ro>=0);

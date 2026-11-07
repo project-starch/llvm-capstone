@@ -41,21 +41,32 @@ static long native_stat_issue(struct context *c, u64 nr, const u64 *args,
     return rc;
 }
 
+/* Ordinary unlink and open share the confined resolver and fd publication.
+ * vm_lock held; a failed open can already have created or truncated a file. */
+static long native_path_issue(struct context *c, u64 nr, const u64 *args,
+                              const char *name)
+{
+    struct capstone_delegate_entry e = {0};
+    long rc;
+    e.nr = nr; memcpy(e.args, args, sizeof(e.args));
+    mutex_unlock(&vm_lock);
+    rc = dom_path_operation_name(c, &e, name);
+    mutex_lock(&vm_lock);
+    if (rc <= -ERESTARTSYS && rc >= -ERESTART_RESTARTBLOCK) rc = -EINTR;
+    return rc;
+}
+
 static bool native_gcc_issue(struct context *c, const struct ns_invocation *call,
                              struct file *held, long *result)
 {
     const u64 *a = call->scalar;
     u64 nr = call->descriptor->nr;
     long rc = -ENOSYS;
-    struct capstone_delegate_entry e = {0};
     sigset_t old, set;
     switch (nr) {
     case CAPSTONE_SYS_openat:
     case CAPSTONE_SYS_unlinkat:
-        e.nr = nr; memcpy(e.args, a, sizeof(e.args));
-        mutex_unlock(&vm_lock);
-        rc = dom_path_operation_name(c, &e, call->buffer[1].data);
-        mutex_lock(&vm_lock);
+        rc = native_path_issue(c, nr, a, call->buffer[1].data);
         break;
     case CAPSTONE_SYS_newfstatat:
     case CAPSTONE_SYS_fstat:
