@@ -22,10 +22,18 @@
     "documentation": 21,
     "application_abi_and_ports": 17,
     "verification": 145,
-    "linux_and_runtime": 48
+    "linux_and_runtime": 48,
+    "processor_model_gitlink": 1
   },
-  "changed_paths": 231,
+  "changed_paths": 232,
   "files": [
+    {
+      "path": "capstone/capstone-qemu",
+      "added": 1,
+      "removed": 1,
+      "layer": "processor_model_gitlink",
+      "role": "implementation"
+    },
     {
       "path": "capstone/docs/README.md",
       "added": 15,
