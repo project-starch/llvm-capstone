@@ -11,10 +11,12 @@ pointer tables doubled from 2,048 to 4,096 bytes. Separate fault-ahead and
 validated-VMA controls save only 0.269% and 0.984% total attempts respectively.
 [Mechanism evidence](../../runtime/virtual/tests/native-task/gcc-memory-mechanisms.json).
 
-The next implementation must be general kernel-runtime work with unchanged GCC,
-musl and application binaries. The source study finds an unread production arena
-ID xarray (test-only lookup) and unnecessary unpinned page/frame storage; preserve
-registration IDs and adapt touch/error-unwind consumers before removing storage.
+The unread production arena-ID xarray has now been removed and qualified with
+unchanged GCC/musl binaries: total attempts -0.757%, kernel -1.435%, all 82 race
+scenarios and their negative controls pass. [Evidence](../../runtime/virtual/tests/native-task/arena-index-qualification.json).
+Continue with general kernel-runtime work: unnecessary unpinned page/frame
+storage remains. Preserve registration IDs and adapt touch/error-unwind consumers
+before removing storage.
 More substantially, current unpinned read faults on writable VMAs request WRITE,
 materializing private dirty pages. Study actual-access demand faults without
 changing eager bootstrap or weakening grants, COW, copy holds or revocation.
@@ -22,10 +24,10 @@ changing eager bootstrap or weakening grants, COW, copy holds or revocation.
 First compare identical map/touch/unmap event streams to distinguish greater
 application memory volume from higher runtime cost per event. Read-first and
 read-then-write workloads are both necessary: shared-zero-page reads may save
-allocation but introduce later COW faults. Keep xarray removal, array removal
-and access-direction changes separate; never add their estimated gains.
+allocation but introduce later COW faults. Keep array removal and access-direction changes separate from the qualified
+index removal; measure incremental effects rather than adding estimated gains.
 [Source audit, invariants and experimental order](../plans/2026-11-03-boundary-north-star.md#7-current-kernel-runtime-study-2026-11-08).
-No runtime change is qualified by this study. Keep the first feedback gate within
+The array and fault-policy proposals remain unqualified. Keep the first feedback gate within
 300 seconds, then require relevant fault/lifetime/race failures and exact GCC
 output before enabling a candidate. Full direct-trap integration and dead-namespace
 teardown require separate architectural proofs; neither is a free cleanup.
