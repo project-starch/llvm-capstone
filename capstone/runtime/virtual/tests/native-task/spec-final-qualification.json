@@ -1,0 +1,1247 @@
+{
+  "schema_version": 1,
+  "status": "PASS",
+  "scope": "All ten existing C-port entries, original complete CPU2017 1.0.2 test invocations. Includes two specrand entries; not unported C++/Fortran or a reportable SPEC result.",
+  "source_snapshot": "9698c75f8e7b2eb1224285e98716c9ea7a7245df",
+  "kernel_runtime_source_snapshot": "b4687e44cce8",
+  "passed": 10,
+  "failed": 0,
+  "all_passed": true,
+  "original_benchmark_invocations": 22,
+  "guest_image_validation_invocations": 4,
+  "official_output_comparisons": 25,
+  "performance_comparison": false,
+  "fpga_qualified": false,
+  "platform": {
+    "qemu": "c6681ec8a8ff704b297ec3eafceb13b2fe9c1c61c7a65ed95304bd5dbe5183eb",
+    "Image": "1bd9b8ecf702ee023bff0088cacb646182ce04666ccbc34d4879e39f98bf9ba8",
+    "rootfs": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845",
+    "firmware": "2335a28682ddf65e46c1f492632c2cb026efcb2271caf544a3f7ddc858b03e02",
+    "shell": "93faa86c0ea9d103cb382b24d800e8f733d1a34c4f5579a6d70f02c7e74309e3",
+    "null_device_grant": true,
+    "local_tmp_grant": true,
+    "live_output": false
+  },
+  "non_perl_platform": {
+    "qemu": "c6681ec8a8ff704b297ec3eafceb13b2fe9c1c61c7a65ed95304bd5dbe5183eb",
+    "Image": "1bd9b8ecf702ee023bff0088cacb646182ce04666ccbc34d4879e39f98bf9ba8",
+    "rootfs": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845",
+    "firmware": "2335a28682ddf65e46c1f492632c2cb026efcb2271caf544a3f7ddc858b03e02",
+    "null_device_grant": false,
+    "local_tmp_grant": false,
+    "live_output": false
+  },
+  "configuration_note": "Same frozen kernel/QEMU/firmware/rootfs, 8G, one hart, one supervisor slot, icount0. Perl additionally receives exact shell/null grants and confined private temporary storage. Nine non-Perl runs and the final Perl run are separate executions; no live output observer.",
+  "non_perl_record": "spec-nonperl-services-qualification.json",
+  "perl_focused_record": "../../../../ports/perl/provenance/qualification-07.json",
+  "perl_build": {
+    "binaries": {
+      "perlbench_r": "024ee60b24ba4dd6926066fe69a2884874797d3240a11771581d3d93fecbb8d6"
+    },
+    "fresh_objects": 69,
+    "source_audit": {
+      "files_checked": 188,
+      "mismatches": [],
+      "objects_checked": 69
+    },
+    "source_alternative": {
+      "name": "capstone_provenance_v2",
+      "package": "/var/tmp/capstone-native-task-scratch/perl-provenance-v2/package-07/500.perlbench_r.capstone_provenance_v2.cpu2017.v1.0.tar.xz",
+      "sha256": "c2a7e9b6e347025503a6223602ce94138a3564f860a38c7c5a4855e3693742ce"
+    },
+    "original_input_files": 1335,
+    "prepared_manifest_sha256": "203032a3098e9667c7f435db7ed81ddc60acf763e9d546749ebd3f5fabaea10f"
+  },
+  "comparator_manifest_sha256": "13ba9380010ef541a242ff3fbab4d7d5ce8439a7dea4ba96f0ff3b8b542c8bcf",
+  "validation_sha256": "5aa60e8946eae91ec4a64f7ff3629fb65a6b69ff32f3b067a81c804939b02d4a",
+  "raw_evidence": {
+    "local": "/tmp/capstone/native-task/perl-provenance-final-07-evidence",
+    "remote": "p12:/var/tmp/capstone-native-task-scratch/perl-provenance-final-07",
+    "non_perl": "/tmp/capstone/native-task/final-spec-nonperl-2"
+  },
+  "preserved_cancellation": "p12:/var/tmp/capstone-native-task-scratch/perl-provenance-final/cancellation.json (unqualified revision05 run stopped for the reviewed allocation cleanup bug)",
+  "benchmarks": [
+    {
+      "benchmark": "502.gcc_r",
+      "execution": {
+        "benchmark": "502.gcc_r",
+        "runner_rc": 0,
+        "host_elapsed_seconds": 6.039085058495402,
+        "commands": [
+          {
+            "argv": [
+              "./cpugcc_r",
+              "t1.c",
+              "-O3",
+              "-finline-limit=50000",
+              "-o",
+              "t1.opts-O3_-finline-limit_50000.s"
+            ],
+            "stdout": "t1.opts-O3_-finline-limit_50000.out",
+            "stderr": "t1.opts-O3_-finline-limit_50000.err"
+          }
+        ],
+        "expected_commands": 1,
+        "exit_statuses": [
+          0
+        ],
+        "image_commands": [],
+        "expected_image_commands": 0,
+        "image_exit_statuses": [],
+        "execution_errors": [],
+        "execution_ok": true,
+        "spec_validation": "PENDING",
+        "comparator_manifest_sha256": "13ba9380010ef541a242ff3fbab4d7d5ce8439a7dea4ba96f0ff3b8b542c8bcf"
+      },
+      "command_match": true,
+      "execution_errors": [],
+      "image_comparators": [],
+      "comparators": [
+        {
+          "command": [
+            "/var/tmp/capstone-spec-php-20261105/share/SPEC17/bin/specperl",
+            "/var/tmp/capstone-spec-php-20261105/share/SPEC17/bin/harness/specdiff",
+            "-m",
+            "-l",
+            "10",
+            "--floatcompare",
+            "--nonansupport",
+            "/var/tmp/capstone-spec-php-20261105/share/SPEC17/benchspec/CPU/502.gcc_r/data/test/output/t1.opts-O3_-finline-limit_50000.s",
+            "t1.opts-O3_-finline-limit_50000.s"
+          ],
+          "passed": true,
+          "output_sha256": "58111208509dd871223ae195a33304bd6b24afd29458f37c976556cbad506324",
+          "reference_sha256": "58111208509dd871223ae195a33304bd6b24afd29458f37c976556cbad506324",
+          "returncode": 0,
+          "output": "specdiff run completed\n"
+        }
+      ],
+      "passed": true
+    },
+    {
+      "benchmark": "519.lbm_r",
+      "execution": {
+        "benchmark": "519.lbm_r",
+        "runner_rc": 0,
+        "host_elapsed_seconds": 52.245515703223646,
+        "commands": [
+          {
+            "argv": [
+              "./lbm_r",
+              "20",
+              "reference.dat",
+              "0",
+              "1",
+              "100_100_130_cf_a.of"
+            ],
+            "stdout": "lbm.out",
+            "stderr": "lbm.err"
+          }
+        ],
+        "expected_commands": 1,
+        "exit_statuses": [
+          0
+        ],
+        "image_commands": [],
+        "expected_image_commands": 0,
+        "image_exit_statuses": [],
+        "execution_errors": [],
+        "execution_ok": true,
+        "spec_validation": "PENDING",
+        "comparator_manifest_sha256": "13ba9380010ef541a242ff3fbab4d7d5ce8439a7dea4ba96f0ff3b8b542c8bcf"
+      },
+      "command_match": true,
+      "execution_errors": [],
+      "image_comparators": [],
+      "comparators": [
+        {
+          "command": [
+            "/var/tmp/capstone-spec-php-20261105/share/SPEC17/bin/specperl",
+            "/var/tmp/capstone-spec-php-20261105/share/SPEC17/bin/harness/specdiff",
+            "-m",
+            "-l",
+            "10",
+            "--abstol",
+            "1e-07",
+            "/var/tmp/capstone-spec-php-20261105/share/SPEC17/benchspec/CPU/519.lbm_r/data/test/output/lbm.out",
+            "lbm.out"
+          ],
+          "passed": true,
+          "output_sha256": "7ab5463219d503a3cb54d5bd75b69c6620109b560058de7a20a719796433cdc5",
+          "reference_sha256": "7591f665b2d9b635750b3c9454468788341080bc7c94e801b2c93abb432290ff",
+          "returncode": 0,
+          "output": "specdiff run completed\n"
+        }
+      ],
+      "passed": true
+    },
+    {
+      "benchmark": "538.imagick_r",
+      "execution": {
+        "benchmark": "538.imagick_r",
+        "runner_rc": 0,
+        "host_elapsed_seconds": 6.59271483309567,
+        "commands": [
+          {
+            "argv": [
+              "./imagick_r",
+              "-limit",
+              "disk",
+              "0",
+              "test_input.tga",
+              "-shear",
+              "25",
+              "-resize",
+              "640x480",
+              "-negate",
+              "-alpha",
+              "Off",
+              "test_output.tga"
+            ],
+            "stdout": "test_convert.out",
+            "stderr": "test_convert.err"
+          }
+        ],
+        "expected_commands": 1,
+        "exit_statuses": [
+          0
+        ],
+        "image_commands": [
+          {
+            "argv": [
+              "../run_base_test_native_qemu.0000/imagevalidate_538_base.native_qemu",
+              "-avg",
+              "-threshold",
+              "0.95",
+              "-maxthreshold",
+              "0.001",
+              "test_output.tga",
+              "/var/tmp/capstone-spec-php-20261105/share/SPEC17/benchspec/CPU/538.imagick_r/data/test/compare/test_expected.tga"
+            ],
+            "stdout": "test_validate.out",
+            "stderr": "test_validate.err",
+            "reference_sha256": "d7e4e331655a156377e3837cbdae3cb0f4e696032d37cc4f8ff33660b95c5c72"
+          }
+        ],
+        "expected_image_commands": 1,
+        "image_exit_statuses": [
+          0
+        ],
+        "execution_errors": [],
+        "execution_ok": true,
+        "spec_validation": "PENDING",
+        "comparator_manifest_sha256": "13ba9380010ef541a242ff3fbab4d7d5ce8439a7dea4ba96f0ff3b8b542c8bcf"
+      },
+      "command_match": true,
+      "execution_errors": [],
+      "image_comparators": [
+        {
+          "command": {
+            "argv": [
+              "../run_base_test_native_qemu.0000/imagevalidate_538_base.native_qemu",
+              "-avg",
+              "-threshold",
+              "0.95",
+              "-maxthreshold",
+              "0.001",
+              "test_output.tga",
+              "/var/tmp/capstone-spec-php-20261105/share/SPEC17/benchspec/CPU/538.imagick_r/data/test/compare/test_expected.tga"
+            ],
+            "stdout": "test_validate.out",
+            "stderr": "test_validate.err",
+            "reference_sha256": "d7e4e331655a156377e3837cbdae3cb0f4e696032d37cc4f8ff33660b95c5c72"
+          },
+          "index": 0,
+          "passed": true,
+          "returncode": 0,
+          "stdout": {
+            "path": "test_validate.out",
+            "sha256": "c3bfd816afd261fd4a1d4b6c8a4ed639f0872229ea26cbcaed127b04a5425a1a",
+            "text": "test_output.tga: AVG SSIM = 0.999999795\n"
+          },
+          "stderr": {
+            "path": "test_validate.err",
+            "sha256": "66f98fde21c3b57a17cf26a0a2f676251d58fc4fc2dffa57f4a6e9a44c9efb44",
+            "text": "ImageValidator r4696\nINFO: threshold set to 0.950000\nINFO: max threshold set to 0 absolute, 0.001000 relative\ntest_output.tga: INFO:\n  Blocks below threshold: 0 blocks of 4 allowed (4500 total)\n                AVG SSIM: 0.999999795\n                MIN SSIM: 0.999778452\n       SSIM distribution:\n         [         1.000]: 4358\n         [ 0.900,  1.000): 142\n         [ 0.800,  0.900): 0\n         [ 0.700,  0.800): 0\n         [ 0.600,  0.700): 0\n         [ 0.500,  0.600): 0\n         [ 0.400,  0.500): 0\n         [ 0.300,  0.400): 0\n         [ 0.200,  0.300): 0\n         [ 0.100,  0.200): 0\n         [ 0.000,  0.100): 0\n         [-0.100,  0.000): 0\n         [-0.200, -0.100): 0\n         [-0.300, -0.200): 0\n         [-0.400, -0.300): 0\n         [-0.500, -0.400): 0\n         [-0.600, -0.500): 0\n         [-0.700, -0.600): 0\n         [-0.800, -0.700): 0\n         [-0.900, -0.800): 0\n         [-1.000, -0.900): 0\n"
+          },
+          "image_sha256": "3f70992184b213de3b457de27312f52f1222877fd5bb17eeb8e1e9c67a1b0deb",
+          "reference_sha256": "d7e4e331655a156377e3837cbdae3cb0f4e696032d37cc4f8ff33660b95c5c72",
+          "staged_reference": "test_expected.tga",
+          "staged_reference_sha256": "d7e4e331655a156377e3837cbdae3cb0f4e696032d37cc4f8ff33660b95c5c72"
+        }
+      ],
+      "comparators": [
+        {
+          "command": [
+            "/var/tmp/capstone-spec-php-20261105/share/SPEC17/bin/specperl",
+            "/var/tmp/capstone-spec-php-20261105/share/SPEC17/bin/harness/specdiff",
+            "-m",
+            "-l",
+            "10",
+            "--reltol",
+            "0.01",
+            "/var/tmp/capstone-spec-php-20261105/share/SPEC17/benchspec/CPU/538.imagick_r/data/test/output/test_validate.out",
+            "test_validate.out"
+          ],
+          "passed": true,
+          "output_sha256": "c3bfd816afd261fd4a1d4b6c8a4ed639f0872229ea26cbcaed127b04a5425a1a",
+          "reference_sha256": "1eaafa4d728d58c45c247aa26a7b5a74bc9cf4d1ef59063d5c62d3c7c8c38063",
+          "returncode": 0,
+          "output": "specdiff run completed\n"
+        }
+      ],
+      "passed": true
+    },
+    {
+      "benchmark": "544.nab_r",
+      "execution": {
+        "benchmark": "544.nab_r",
+        "runner_rc": 0,
+        "host_elapsed_seconds": 62.125767852179706,
+        "commands": [
+          {
+            "argv": [
+              "./nab_r",
+              "hkrdenq",
+              "1930344093",
+              "1000"
+            ],
+            "stdout": "hkrdenq.out",
+            "stderr": "hkrdenq.err"
+          }
+        ],
+        "expected_commands": 1,
+        "exit_statuses": [
+          0
+        ],
+        "image_commands": [],
+        "expected_image_commands": 0,
+        "image_exit_statuses": [],
+        "execution_errors": [],
+        "execution_ok": true,
+        "spec_validation": "PENDING",
+        "comparator_manifest_sha256": "13ba9380010ef541a242ff3fbab4d7d5ce8439a7dea4ba96f0ff3b8b542c8bcf"
+      },
+      "command_match": true,
+      "execution_errors": [],
+      "image_comparators": [],
+      "comparators": [
+        {
+          "command": [
+            "/var/tmp/capstone-spec-php-20261105/share/SPEC17/bin/specperl",
+            "/var/tmp/capstone-spec-php-20261105/share/SPEC17/bin/harness/specdiff",
+            "-m",
+            "-l",
+            "10",
+            "--reltol",
+            "0.01",
+            "--skipreltol",
+            "2",
+            "/var/tmp/capstone-spec-php-20261105/share/SPEC17/benchspec/CPU/544.nab_r/data/test/output/hkrdenq.out",
+            "hkrdenq.out"
+          ],
+          "passed": true,
+          "output_sha256": "2d580a95e2e596f2e06485149e9d91880bf47ded5a5495a366a80d4cea2a9afd",
+          "reference_sha256": "2d580a95e2e596f2e06485149e9d91880bf47ded5a5495a366a80d4cea2a9afd",
+          "returncode": 0,
+          "output": "specdiff run completed\n"
+        }
+      ],
+      "passed": true
+    },
+    {
+      "benchmark": "997.specrand_fr",
+      "execution": {
+        "benchmark": "997.specrand_fr",
+        "runner_rc": 0,
+        "host_elapsed_seconds": 8.328157753683627,
+        "commands": [
+          {
+            "argv": [
+              "./specrand_fr",
+              "324342",
+              "24239"
+            ],
+            "stdout": "rand.24239.out",
+            "stderr": "rand.24239.err"
+          }
+        ],
+        "expected_commands": 1,
+        "exit_statuses": [
+          0
+        ],
+        "image_commands": [],
+        "expected_image_commands": 0,
+        "image_exit_statuses": [],
+        "execution_errors": [],
+        "execution_ok": true,
+        "spec_validation": "PENDING",
+        "comparator_manifest_sha256": "13ba9380010ef541a242ff3fbab4d7d5ce8439a7dea4ba96f0ff3b8b542c8bcf"
+      },
+      "command_match": true,
+      "execution_errors": [],
+      "image_comparators": [],
+      "comparators": [
+        {
+          "command": [
+            "/var/tmp/capstone-spec-php-20261105/share/SPEC17/bin/specperl",
+            "/var/tmp/capstone-spec-php-20261105/share/SPEC17/bin/harness/specdiff",
+            "-m",
+            "-l",
+            "10",
+            "--floatcompare",
+            "--nonansupport",
+            "/var/tmp/capstone-spec-php-20261105/share/SPEC17/benchspec/CPU/999.specrand_ir/data/test/output/rand.24239.out",
+            "rand.24239.out"
+          ],
+          "passed": true,
+          "output_sha256": "15e5b13042aa23597530688bfbcdfdfa83c55308372db51abeb73475af4dc72a",
+          "reference_sha256": "15e5b13042aa23597530688bfbcdfdfa83c55308372db51abeb73475af4dc72a",
+          "returncode": 0,
+          "output": "specdiff run completed\n"
+        }
+      ],
+      "passed": true
+    },
+    {
+      "benchmark": "999.specrand_ir",
+      "execution": {
+        "benchmark": "999.specrand_ir",
+        "runner_rc": 0,
+        "host_elapsed_seconds": 3.0563261825591326,
+        "commands": [
+          {
+            "argv": [
+              "./specrand_ir",
+              "324342",
+              "24239"
+            ],
+            "stdout": "rand.24239.out",
+            "stderr": "rand.24239.err"
+          }
+        ],
+        "expected_commands": 1,
+        "exit_statuses": [
+          0
+        ],
+        "image_commands": [],
+        "expected_image_commands": 0,
+        "image_exit_statuses": [],
+        "execution_errors": [],
+        "execution_ok": true,
+        "spec_validation": "PENDING",
+        "comparator_manifest_sha256": "13ba9380010ef541a242ff3fbab4d7d5ce8439a7dea4ba96f0ff3b8b542c8bcf"
+      },
+      "command_match": true,
+      "execution_errors": [],
+      "image_comparators": [],
+      "comparators": [
+        {
+          "command": [
+            "/var/tmp/capstone-spec-php-20261105/share/SPEC17/bin/specperl",
+            "/var/tmp/capstone-spec-php-20261105/share/SPEC17/bin/harness/specdiff",
+            "-m",
+            "-l",
+            "10",
+            "--floatcompare",
+            "--nonansupport",
+            "/var/tmp/capstone-spec-php-20261105/share/SPEC17/benchspec/CPU/999.specrand_ir/data/test/output/rand.24239.out",
+            "rand.24239.out"
+          ],
+          "passed": true,
+          "output_sha256": "15e5b13042aa23597530688bfbcdfdfa83c55308372db51abeb73475af4dc72a",
+          "reference_sha256": "15e5b13042aa23597530688bfbcdfdfa83c55308372db51abeb73475af4dc72a",
+          "returncode": 0,
+          "output": "specdiff run completed\n"
+        }
+      ],
+      "passed": true
+    },
+    {
+      "benchmark": "505.mcf_r",
+      "execution": {
+        "benchmark": "505.mcf_r",
+        "runner_rc": 0,
+        "host_elapsed_seconds": 308.2589978259057,
+        "commands": [
+          {
+            "argv": [
+              "./mcf_r",
+              "inp.in"
+            ],
+            "stdout": "inp.out",
+            "stderr": "inp.err"
+          }
+        ],
+        "expected_commands": 1,
+        "exit_statuses": [
+          0
+        ],
+        "image_commands": [],
+        "expected_image_commands": 0,
+        "image_exit_statuses": [],
+        "execution_errors": [],
+        "execution_ok": true,
+        "spec_validation": "PENDING",
+        "comparator_manifest_sha256": "13ba9380010ef541a242ff3fbab4d7d5ce8439a7dea4ba96f0ff3b8b542c8bcf"
+      },
+      "command_match": true,
+      "execution_errors": [],
+      "image_comparators": [],
+      "comparators": [
+        {
+          "command": [
+            "/var/tmp/capstone-spec-php-20261105/share/SPEC17/bin/specperl",
+            "/var/tmp/capstone-spec-php-20261105/share/SPEC17/bin/harness/specdiff",
+            "-m",
+            "-l",
+            "10",
+            "/var/tmp/capstone-spec-php-20261105/share/SPEC17/benchspec/CPU/505.mcf_r/data/test/output/inp.out",
+            "inp.out"
+          ],
+          "passed": true,
+          "output_sha256": "b8a0d3ecba350c7f07063bb58799fa579fe46a2e5911b12fdfffdbf7f1895a6c",
+          "reference_sha256": "b8a0d3ecba350c7f07063bb58799fa579fe46a2e5911b12fdfffdbf7f1895a6c",
+          "returncode": 0,
+          "output": "specdiff run completed\n"
+        },
+        {
+          "command": [
+            "/var/tmp/capstone-spec-php-20261105/share/SPEC17/bin/specperl",
+            "/var/tmp/capstone-spec-php-20261105/share/SPEC17/bin/harness/specdiff",
+            "-m",
+            "-l",
+            "10",
+            "/var/tmp/capstone-spec-php-20261105/share/SPEC17/benchspec/CPU/505.mcf_r/data/test/output/mcf.out",
+            "mcf.out"
+          ],
+          "passed": true,
+          "output_sha256": "b272028fe374deea3865a5d29e71762a6c974558e97606b40292ed9744010530",
+          "reference_sha256": "b272028fe374deea3865a5d29e71762a6c974558e97606b40292ed9744010530",
+          "returncode": 0,
+          "output": "specdiff run completed\n"
+        }
+      ],
+      "passed": true
+    },
+    {
+      "benchmark": "557.xz_r",
+      "execution": {
+        "benchmark": "557.xz_r",
+        "runner_rc": 0,
+        "host_elapsed_seconds": 369.3962277499959,
+        "commands": [
+          {
+            "argv": [
+              "./xz_r",
+              "cpu2006docs.tar.xz",
+              "4",
+              "055ce243071129412e9dd0b3b69a21654033a9b723d874b2015c774fac1553d9713be561ca86f74e4f16f22e664fc17a79f30caa5ad2c04fbc447549c2810fae",
+              "1548636",
+              "1555348",
+              "0"
+            ],
+            "stdout": "cpu2006docs.tar-4-0.out",
+            "stderr": "cpu2006docs.tar-4-0.err"
+          },
+          {
+            "argv": [
+              "./xz_r",
+              "cpu2006docs.tar.xz",
+              "4",
+              "055ce243071129412e9dd0b3b69a21654033a9b723d874b2015c774fac1553d9713be561ca86f74e4f16f22e664fc17a79f30caa5ad2c04fbc447549c2810fae",
+              "1462248",
+              "-1",
+              "1"
+            ],
+            "stdout": "cpu2006docs.tar-4-1.out",
+            "stderr": "cpu2006docs.tar-4-1.err"
+          },
+          {
+            "argv": [
+              "./xz_r",
+              "cpu2006docs.tar.xz",
+              "4",
+              "055ce243071129412e9dd0b3b69a21654033a9b723d874b2015c774fac1553d9713be561ca86f74e4f16f22e664fc17a79f30caa5ad2c04fbc447549c2810fae",
+              "1428548",
+              "-1",
+              "2"
+            ],
+            "stdout": "cpu2006docs.tar-4-2.out",
+            "stderr": "cpu2006docs.tar-4-2.err"
+          },
+          {
+            "argv": [
+              "./xz_r",
+              "cpu2006docs.tar.xz",
+              "4",
+              "055ce243071129412e9dd0b3b69a21654033a9b723d874b2015c774fac1553d9713be561ca86f74e4f16f22e664fc17a79f30caa5ad2c04fbc447549c2810fae",
+              "1034828",
+              "-1",
+              "3e"
+            ],
+            "stdout": "cpu2006docs.tar-4-3e.out",
+            "stderr": "cpu2006docs.tar-4-3e.err"
+          },
+          {
+            "argv": [
+              "./xz_r",
+              "cpu2006docs.tar.xz",
+              "4",
+              "055ce243071129412e9dd0b3b69a21654033a9b723d874b2015c774fac1553d9713be561ca86f74e4f16f22e664fc17a79f30caa5ad2c04fbc447549c2810fae",
+              "1061968",
+              "-1",
+              "4"
+            ],
+            "stdout": "cpu2006docs.tar-4-4.out",
+            "stderr": "cpu2006docs.tar-4-4.err"
+          },
+          {
+            "argv": [
+              "./xz_r",
+              "cpu2006docs.tar.xz",
+              "4",
+              "055ce243071129412e9dd0b3b69a21654033a9b723d874b2015c774fac1553d9713be561ca86f74e4f16f22e664fc17a79f30caa5ad2c04fbc447549c2810fae",
+              "1034588",
+              "-1",
+              "4e"
+            ],
+            "stdout": "cpu2006docs.tar-4-4e.out",
+            "stderr": "cpu2006docs.tar-4-4e.err"
+          },
+          {
+            "argv": [
+              "./xz_r",
+              "cpu2006docs.tar.xz",
+              "1",
+              "055ce243071129412e9dd0b3b69a21654033a9b723d874b2015c774fac1553d9713be561ca86f74e4f16f22e664fc17a79f30caa5ad2c04fbc447549c2810fae",
+              "650156",
+              "-1",
+              "0"
+            ],
+            "stdout": "cpu2006docs.tar-1-0.out",
+            "stderr": "cpu2006docs.tar-1-0.err"
+          },
+          {
+            "argv": [
+              "./xz_r",
+              "cpu2006docs.tar.xz",
+              "1",
+              "055ce243071129412e9dd0b3b69a21654033a9b723d874b2015c774fac1553d9713be561ca86f74e4f16f22e664fc17a79f30caa5ad2c04fbc447549c2810fae",
+              "639996",
+              "-1",
+              "1"
+            ],
+            "stdout": "cpu2006docs.tar-1-1.out",
+            "stderr": "cpu2006docs.tar-1-1.err"
+          },
+          {
+            "argv": [
+              "./xz_r",
+              "cpu2006docs.tar.xz",
+              "1",
+              "055ce243071129412e9dd0b3b69a21654033a9b723d874b2015c774fac1553d9713be561ca86f74e4f16f22e664fc17a79f30caa5ad2c04fbc447549c2810fae",
+              "637616",
+              "-1",
+              "2"
+            ],
+            "stdout": "cpu2006docs.tar-1-2.out",
+            "stderr": "cpu2006docs.tar-1-2.err"
+          },
+          {
+            "argv": [
+              "./xz_r",
+              "cpu2006docs.tar.xz",
+              "1",
+              "055ce243071129412e9dd0b3b69a21654033a9b723d874b2015c774fac1553d9713be561ca86f74e4f16f22e664fc17a79f30caa5ad2c04fbc447549c2810fae",
+              "628996",
+              "-1",
+              "3e"
+            ],
+            "stdout": "cpu2006docs.tar-1-3e.out",
+            "stderr": "cpu2006docs.tar-1-3e.err"
+          },
+          {
+            "argv": [
+              "./xz_r",
+              "cpu2006docs.tar.xz",
+              "1",
+              "055ce243071129412e9dd0b3b69a21654033a9b723d874b2015c774fac1553d9713be561ca86f74e4f16f22e664fc17a79f30caa5ad2c04fbc447549c2810fae",
+              "631912",
+              "-1",
+              "4"
+            ],
+            "stdout": "cpu2006docs.tar-1-4.out",
+            "stderr": "cpu2006docs.tar-1-4.err"
+          },
+          {
+            "argv": [
+              "./xz_r",
+              "cpu2006docs.tar.xz",
+              "1",
+              "055ce243071129412e9dd0b3b69a21654033a9b723d874b2015c774fac1553d9713be561ca86f74e4f16f22e664fc17a79f30caa5ad2c04fbc447549c2810fae",
+              "629064",
+              "-1",
+              "4e"
+            ],
+            "stdout": "cpu2006docs.tar-1-4e.out",
+            "stderr": "cpu2006docs.tar-1-4e.err"
+          }
+        ],
+        "expected_commands": 12,
+        "exit_statuses": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "image_commands": [],
+        "expected_image_commands": 0,
+        "image_exit_statuses": [],
+        "execution_errors": [],
+        "execution_ok": true,
+        "spec_validation": "PENDING",
+        "comparator_manifest_sha256": "13ba9380010ef541a242ff3fbab4d7d5ce8439a7dea4ba96f0ff3b8b542c8bcf"
+      },
+      "command_match": true,
+      "execution_errors": [],
+      "image_comparators": [],
+      "comparators": [
+        {
+          "command": [
+            "/var/tmp/capstone-spec-php-20261105/share/SPEC17/bin/specperl",
+            "/var/tmp/capstone-spec-php-20261105/share/SPEC17/bin/harness/specdiff",
+            "-m",
+            "-l",
+            "10",
+            "/var/tmp/capstone-spec-php-20261105/share/SPEC17/benchspec/CPU/557.xz_r/data/test/output/cpu2006docs.tar-1-0.out",
+            "cpu2006docs.tar-1-0.out"
+          ],
+          "passed": true,
+          "output_sha256": "211f54ac64f8a7efe5a61f1a476363c64e6eb7493cb917353b144a9df5982e5b",
+          "reference_sha256": "211f54ac64f8a7efe5a61f1a476363c64e6eb7493cb917353b144a9df5982e5b",
+          "returncode": 0,
+          "output": "specdiff run completed\n"
+        },
+        {
+          "command": [
+            "/var/tmp/capstone-spec-php-20261105/share/SPEC17/bin/specperl",
+            "/var/tmp/capstone-spec-php-20261105/share/SPEC17/bin/harness/specdiff",
+            "-m",
+            "-l",
+            "10",
+            "/var/tmp/capstone-spec-php-20261105/share/SPEC17/benchspec/CPU/557.xz_r/data/test/output/cpu2006docs.tar-1-1.out",
+            "cpu2006docs.tar-1-1.out"
+          ],
+          "passed": true,
+          "output_sha256": "c74343902f42ca10bf9569e9a6a65968aff0867f12cb4b732a69ffc63b5a420d",
+          "reference_sha256": "c74343902f42ca10bf9569e9a6a65968aff0867f12cb4b732a69ffc63b5a420d",
+          "returncode": 0,
+          "output": "specdiff run completed\n"
+        },
+        {
+          "command": [
+            "/var/tmp/capstone-spec-php-20261105/share/SPEC17/bin/specperl",
+            "/var/tmp/capstone-spec-php-20261105/share/SPEC17/bin/harness/specdiff",
+            "-m",
+            "-l",
+            "10",
+            "/var/tmp/capstone-spec-php-20261105/share/SPEC17/benchspec/CPU/557.xz_r/data/test/output/cpu2006docs.tar-1-2.out",
+            "cpu2006docs.tar-1-2.out"
+          ],
+          "passed": true,
+          "output_sha256": "10ae9343a2dd8d81da44d44e737fc2940af0349ad89e0de7a86f65ea240c3a58",
+          "reference_sha256": "10ae9343a2dd8d81da44d44e737fc2940af0349ad89e0de7a86f65ea240c3a58",
+          "returncode": 0,
+          "output": "specdiff run completed\n"
+        },
+        {
+          "command": [
+            "/var/tmp/capstone-spec-php-20261105/share/SPEC17/bin/specperl",
+            "/var/tmp/capstone-spec-php-20261105/share/SPEC17/bin/harness/specdiff",
+            "-m",
+            "-l",
+            "10",
+            "/var/tmp/capstone-spec-php-20261105/share/SPEC17/benchspec/CPU/557.xz_r/data/test/output/cpu2006docs.tar-1-3e.out",
+            "cpu2006docs.tar-1-3e.out"
+          ],
+          "passed": true,
+          "output_sha256": "8d5b873c430087cb3f0d13e20075b6521f939926ed69c09cfcd7aeb4be922ca3",
+          "reference_sha256": "8d5b873c430087cb3f0d13e20075b6521f939926ed69c09cfcd7aeb4be922ca3",
+          "returncode": 0,
+          "output": "specdiff run completed\n"
+        },
+        {
+          "command": [
+            "/var/tmp/capstone-spec-php-20261105/share/SPEC17/bin/specperl",
+            "/var/tmp/capstone-spec-php-20261105/share/SPEC17/bin/harness/specdiff",
+            "-m",
+            "-l",
+            "10",
+            "/var/tmp/capstone-spec-php-20261105/share/SPEC17/benchspec/CPU/557.xz_r/data/test/output/cpu2006docs.tar-1-4.out",
+            "cpu2006docs.tar-1-4.out"
+          ],
+          "passed": true,
+          "output_sha256": "02f8d81e89fa6b1add13f9305a0b79d3d31c4587a267037483b77ba290c423ef",
+          "reference_sha256": "02f8d81e89fa6b1add13f9305a0b79d3d31c4587a267037483b77ba290c423ef",
+          "returncode": 0,
+          "output": "specdiff run completed\n"
+        },
+        {
+          "command": [
+            "/var/tmp/capstone-spec-php-20261105/share/SPEC17/bin/specperl",
+            "/var/tmp/capstone-spec-php-20261105/share/SPEC17/bin/harness/specdiff",
+            "-m",
+            "-l",
+            "10",
+            "/var/tmp/capstone-spec-php-20261105/share/SPEC17/benchspec/CPU/557.xz_r/data/test/output/cpu2006docs.tar-1-4e.out",
+            "cpu2006docs.tar-1-4e.out"
+          ],
+          "passed": true,
+          "output_sha256": "c43cf718699a474ba763d32930ee9daacbe488ed3c70bedeaa4ea19e44776102",
+          "reference_sha256": "c43cf718699a474ba763d32930ee9daacbe488ed3c70bedeaa4ea19e44776102",
+          "returncode": 0,
+          "output": "specdiff run completed\n"
+        },
+        {
+          "command": [
+            "/var/tmp/capstone-spec-php-20261105/share/SPEC17/bin/specperl",
+            "/var/tmp/capstone-spec-php-20261105/share/SPEC17/bin/harness/specdiff",
+            "-m",
+            "-l",
+            "10",
+            "/var/tmp/capstone-spec-php-20261105/share/SPEC17/benchspec/CPU/557.xz_r/data/test/output/cpu2006docs.tar-4-0.out",
+            "cpu2006docs.tar-4-0.out"
+          ],
+          "passed": true,
+          "output_sha256": "80b9e98184e536eafd18ad059278c304f3f59b3673e4c71203a305441740e264",
+          "reference_sha256": "80b9e98184e536eafd18ad059278c304f3f59b3673e4c71203a305441740e264",
+          "returncode": 0,
+          "output": "specdiff run completed\n"
+        },
+        {
+          "command": [
+            "/var/tmp/capstone-spec-php-20261105/share/SPEC17/bin/specperl",
+            "/var/tmp/capstone-spec-php-20261105/share/SPEC17/bin/harness/specdiff",
+            "-m",
+            "-l",
+            "10",
+            "/var/tmp/capstone-spec-php-20261105/share/SPEC17/benchspec/CPU/557.xz_r/data/test/output/cpu2006docs.tar-4-1.out",
+            "cpu2006docs.tar-4-1.out"
+          ],
+          "passed": true,
+          "output_sha256": "d57fb0b14ee67557acea66f34a1a73ef0c7c55dbaf4c1f8d46ff14a1885cf7bf",
+          "reference_sha256": "d57fb0b14ee67557acea66f34a1a73ef0c7c55dbaf4c1f8d46ff14a1885cf7bf",
+          "returncode": 0,
+          "output": "specdiff run completed\n"
+        },
+        {
+          "command": [
+            "/var/tmp/capstone-spec-php-20261105/share/SPEC17/bin/specperl",
+            "/var/tmp/capstone-spec-php-20261105/share/SPEC17/bin/harness/specdiff",
+            "-m",
+            "-l",
+            "10",
+            "/var/tmp/capstone-spec-php-20261105/share/SPEC17/benchspec/CPU/557.xz_r/data/test/output/cpu2006docs.tar-4-2.out",
+            "cpu2006docs.tar-4-2.out"
+          ],
+          "passed": true,
+          "output_sha256": "5225a92bffeaa6e61e86a136f92bcff31b03a2ab1c71f76cec6d365a99940327",
+          "reference_sha256": "5225a92bffeaa6e61e86a136f92bcff31b03a2ab1c71f76cec6d365a99940327",
+          "returncode": 0,
+          "output": "specdiff run completed\n"
+        },
+        {
+          "command": [
+            "/var/tmp/capstone-spec-php-20261105/share/SPEC17/bin/specperl",
+            "/var/tmp/capstone-spec-php-20261105/share/SPEC17/bin/harness/specdiff",
+            "-m",
+            "-l",
+            "10",
+            "/var/tmp/capstone-spec-php-20261105/share/SPEC17/benchspec/CPU/557.xz_r/data/test/output/cpu2006docs.tar-4-3e.out",
+            "cpu2006docs.tar-4-3e.out"
+          ],
+          "passed": true,
+          "output_sha256": "3522866056b5ae84c19cae75e2bce8bfd9b5d055b86ccf7a3c7847f9a696189d",
+          "reference_sha256": "3522866056b5ae84c19cae75e2bce8bfd9b5d055b86ccf7a3c7847f9a696189d",
+          "returncode": 0,
+          "output": "specdiff run completed\n"
+        },
+        {
+          "command": [
+            "/var/tmp/capstone-spec-php-20261105/share/SPEC17/bin/specperl",
+            "/var/tmp/capstone-spec-php-20261105/share/SPEC17/bin/harness/specdiff",
+            "-m",
+            "-l",
+            "10",
+            "/var/tmp/capstone-spec-php-20261105/share/SPEC17/benchspec/CPU/557.xz_r/data/test/output/cpu2006docs.tar-4-4.out",
+            "cpu2006docs.tar-4-4.out"
+          ],
+          "passed": true,
+          "output_sha256": "a854805559ca63152d290f3953664818b86e84e05dca29e9b09646f1c9e04cb1",
+          "reference_sha256": "a854805559ca63152d290f3953664818b86e84e05dca29e9b09646f1c9e04cb1",
+          "returncode": 0,
+          "output": "specdiff run completed\n"
+        },
+        {
+          "command": [
+            "/var/tmp/capstone-spec-php-20261105/share/SPEC17/bin/specperl",
+            "/var/tmp/capstone-spec-php-20261105/share/SPEC17/bin/harness/specdiff",
+            "-m",
+            "-l",
+            "10",
+            "/var/tmp/capstone-spec-php-20261105/share/SPEC17/benchspec/CPU/557.xz_r/data/test/output/cpu2006docs.tar-4-4e.out",
+            "cpu2006docs.tar-4-4e.out"
+          ],
+          "passed": true,
+          "output_sha256": "2a5b52fd57239898203d16a3c8f0e7346f0d12124cfbb95d9a9971b72c647579",
+          "reference_sha256": "2a5b52fd57239898203d16a3c8f0e7346f0d12124cfbb95d9a9971b72c647579",
+          "returncode": 0,
+          "output": "specdiff run completed\n"
+        }
+      ],
+      "passed": true
+    },
+    {
+      "benchmark": "500.perlbench_r",
+      "execution": {
+        "benchmark": "500.perlbench_r",
+        "runner_rc": 0,
+        "host_elapsed_seconds": 4831.94415630796,
+        "commands": [
+          {
+            "argv": [
+              "./perlbench_r",
+              "-I.",
+              "-I./lib",
+              "makerand.pl"
+            ],
+            "stdout": "makerand.out",
+            "stderr": "makerand.err"
+          },
+          {
+            "argv": [
+              "./perlbench_r",
+              "-I.",
+              "-I./lib",
+              "test.pl"
+            ],
+            "stdout": "test.out",
+            "stderr": "test.err"
+          }
+        ],
+        "expected_commands": 2,
+        "exit_statuses": [
+          0,
+          0
+        ],
+        "image_commands": [],
+        "expected_image_commands": 0,
+        "image_exit_statuses": [],
+        "execution_errors": [],
+        "execution_ok": true,
+        "spec_validation": "PENDING",
+        "comparator_manifest_sha256": "13ba9380010ef541a242ff3fbab4d7d5ce8439a7dea4ba96f0ff3b8b542c8bcf"
+      },
+      "command_match": true,
+      "execution_errors": [],
+      "image_comparators": [],
+      "comparators": [
+        {
+          "command": [
+            "/var/tmp/capstone-spec-php-20261105/share/SPEC17/bin/specperl",
+            "/var/tmp/capstone-spec-php-20261105/share/SPEC17/bin/harness/specdiff",
+            "-m",
+            "-l",
+            "10",
+            "--floatcompare",
+            "--nonansupport",
+            "/var/tmp/capstone-spec-php-20261105/share/SPEC17/benchspec/CPU/500.perlbench_r/data/test/output/makerand.out",
+            "makerand.out"
+          ],
+          "passed": true,
+          "output_sha256": "539d02dc10fabf7096fdc8331ec144d1e42f813913ec48e4f611bce3f840950e",
+          "reference_sha256": "539d02dc10fabf7096fdc8331ec144d1e42f813913ec48e4f611bce3f840950e",
+          "returncode": 0,
+          "output": "specdiff run completed\n"
+        },
+        {
+          "command": [
+            "/var/tmp/capstone-spec-php-20261105/share/SPEC17/bin/specperl",
+            "/var/tmp/capstone-spec-php-20261105/share/SPEC17/bin/harness/specdiff",
+            "-m",
+            "-l",
+            "10",
+            "--floatcompare",
+            "--nonansupport",
+            "/var/tmp/capstone-spec-php-20261105/share/SPEC17/benchspec/CPU/500.perlbench_r/data/test/output/test.out",
+            "test.out"
+          ],
+          "passed": true,
+          "output_sha256": "b41ee90a9ea042419027290477917941e279b3c818ae6e8d7a32f0c7a14ec47b",
+          "reference_sha256": "b41ee90a9ea042419027290477917941e279b3c818ae6e8d7a32f0c7a14ec47b",
+          "returncode": 0,
+          "output": "specdiff run completed\n"
+        }
+      ],
+      "passed": true
+    },
+    {
+      "benchmark": "525.x264_r",
+      "execution": {
+        "benchmark": "525.x264_r",
+        "runner_rc": 0,
+        "host_elapsed_seconds": 3885.979586805217,
+        "commands": [
+          {
+            "argv": [
+              "./x264_r",
+              "--dumpyuv",
+              "50",
+              "--frames",
+              "156",
+              "-o",
+              "BuckBunny_New.264",
+              "BuckBunny.yuv",
+              "1280x720"
+            ],
+            "stdout": "run_000-156_x264_r_base.native_qemu_x264.out",
+            "stderr": "run_000-156_x264_r_base.native_qemu_x264.err"
+          }
+        ],
+        "expected_commands": 1,
+        "exit_statuses": [
+          0
+        ],
+        "image_commands": [
+          {
+            "argv": [
+              "../run_base_test_native_qemu.0000/imagevalidate_525_base.native_qemu",
+              "-avg",
+              "-threshold",
+              "0.5",
+              "-maxthreshold",
+              "20",
+              "frame_50.yuv",
+              "/var/tmp/capstone-spec-php-20261105/share/SPEC17/benchspec/CPU/525.x264_r/data/test/compare/frame_50.org.tga"
+            ],
+            "stdout": "imagevalidate_frame_50.out",
+            "stderr": "imagevalidate_frame_50.err",
+            "reference_sha256": "bfd114fffe4408aa525837d63b286db769225ccbac7b88610e7dfeed2e0c903c"
+          },
+          {
+            "argv": [
+              "../run_base_test_native_qemu.0000/imagevalidate_525_base.native_qemu",
+              "-avg",
+              "-threshold",
+              "0.5",
+              "-maxthreshold",
+              "20",
+              "frame_100.yuv",
+              "/var/tmp/capstone-spec-php-20261105/share/SPEC17/benchspec/CPU/525.x264_r/data/test/compare/frame_100.org.tga"
+            ],
+            "stdout": "imagevalidate_frame_100.out",
+            "stderr": "imagevalidate_frame_100.err",
+            "reference_sha256": "f828a49d65172218fa581ffdb7059cfef21791dd47868f06018e93c4f32335de"
+          },
+          {
+            "argv": [
+              "../run_base_test_native_qemu.0000/imagevalidate_525_base.native_qemu",
+              "-avg",
+              "-threshold",
+              "0.5",
+              "-maxthreshold",
+              "20",
+              "frame_155.yuv",
+              "/var/tmp/capstone-spec-php-20261105/share/SPEC17/benchspec/CPU/525.x264_r/data/test/compare/frame_155.org.tga"
+            ],
+            "stdout": "imagevalidate_frame_155.out",
+            "stderr": "imagevalidate_frame_155.err",
+            "reference_sha256": "736312c519287bd17dfcb133ae563c77de000826053655d6ce5198c4baa4a7ed"
+          }
+        ],
+        "expected_image_commands": 3,
+        "image_exit_statuses": [
+          0,
+          0,
+          0
+        ],
+        "execution_errors": [],
+        "execution_ok": true,
+        "spec_validation": "PENDING",
+        "comparator_manifest_sha256": "13ba9380010ef541a242ff3fbab4d7d5ce8439a7dea4ba96f0ff3b8b542c8bcf"
+      },
+      "command_match": true,
+      "execution_errors": [],
+      "image_comparators": [
+        {
+          "command": {
+            "argv": [
+              "../run_base_test_native_qemu.0000/imagevalidate_525_base.native_qemu",
+              "-avg",
+              "-threshold",
+              "0.5",
+              "-maxthreshold",
+              "20",
+              "frame_50.yuv",
+              "/var/tmp/capstone-spec-php-20261105/share/SPEC17/benchspec/CPU/525.x264_r/data/test/compare/frame_50.org.tga"
+            ],
+            "stdout": "imagevalidate_frame_50.out",
+            "stderr": "imagevalidate_frame_50.err",
+            "reference_sha256": "bfd114fffe4408aa525837d63b286db769225ccbac7b88610e7dfeed2e0c903c"
+          },
+          "index": 0,
+          "passed": true,
+          "returncode": 0,
+          "stdout": {
+            "path": "imagevalidate_frame_50.out",
+            "sha256": "1c7fedcf715f76721507933049e9a2121b81fcc3597e178467d87dd4a417c5a6",
+            "text": "frame_50.yuv: AVG SSIM = 0.999999255\n"
+          },
+          "stderr": {
+            "path": "imagevalidate_frame_50.err",
+            "sha256": "8b43fa0c9fd0202600d167d17a590162c52fb6e436e1415bc1d4e2509724394f",
+            "text": "ImageValidator r4696\nINFO: threshold set to 0.500000\nINFO: max threshold set to 20 absolute, 0.000000 relative\nframe_50.yuv: INFO:\n  Blocks below threshold: 0 blocks of 20 allowed (14400 total)\n                AVG SSIM: 0.999999255\n                MIN SSIM: 0.999754477\n       SSIM distribution:\n         [         1.000]: 11977\n         [ 0.900,  1.000): 2423\n         [ 0.800,  0.900): 0\n         [ 0.700,  0.800): 0\n         [ 0.600,  0.700): 0\n         [ 0.500,  0.600): 0\n         [ 0.400,  0.500): 0\n         [ 0.300,  0.400): 0\n         [ 0.200,  0.300): 0\n         [ 0.100,  0.200): 0\n         [ 0.000,  0.100): 0\n         [-0.100,  0.000): 0\n         [-0.200, -0.100): 0\n         [-0.300, -0.200): 0\n         [-0.400, -0.300): 0\n         [-0.500, -0.400): 0\n         [-0.600, -0.500): 0\n         [-0.700, -0.600): 0\n         [-0.800, -0.700): 0\n         [-0.900, -0.800): 0\n         [-1.000, -0.900): 0\n"
+          },
+          "image_sha256": "bdf3b9ea5f28d7ec6055120196217205a1cdd51f38a4a36060b0347c84e91b21",
+          "reference_sha256": "bfd114fffe4408aa525837d63b286db769225ccbac7b88610e7dfeed2e0c903c",
+          "staged_reference": "frame_50.org.tga",
+          "staged_reference_sha256": "bfd114fffe4408aa525837d63b286db769225ccbac7b88610e7dfeed2e0c903c"
+        },
+        {
+          "command": {
+            "argv": [
+              "../run_base_test_native_qemu.0000/imagevalidate_525_base.native_qemu",
+              "-avg",
+              "-threshold",
+              "0.5",
+              "-maxthreshold",
+              "20",
+              "frame_100.yuv",
+              "/var/tmp/capstone-spec-php-20261105/share/SPEC17/benchspec/CPU/525.x264_r/data/test/compare/frame_100.org.tga"
+            ],
+            "stdout": "imagevalidate_frame_100.out",
+            "stderr": "imagevalidate_frame_100.err",
+            "reference_sha256": "f828a49d65172218fa581ffdb7059cfef21791dd47868f06018e93c4f32335de"
+          },
+          "index": 1,
+          "passed": true,
+          "returncode": 0,
+          "stdout": {
+            "path": "imagevalidate_frame_100.out",
+            "sha256": "18becbed0f32c42d434198638fa23757be12f1f68952749289446f6cdcb6ec9d",
+            "text": "frame_100.yuv: AVG SSIM = 0.999999105\n"
+          },
+          "stderr": {
+            "path": "imagevalidate_frame_100.err",
+            "sha256": "dee6c80e97e77e4ac2e64c80fe1cfa6423c5f31f1aa5a9fefda8dafc416f7c52",
+            "text": "ImageValidator r4696\nINFO: threshold set to 0.500000\nINFO: max threshold set to 20 absolute, 0.000000 relative\nframe_100.yuv: INFO:\n  Blocks below threshold: 0 blocks of 20 allowed (14400 total)\n                AVG SSIM: 0.999999105\n                MIN SSIM: 0.998867427\n       SSIM distribution:\n         [         1.000]: 12099\n         [ 0.900,  1.000): 2301\n         [ 0.800,  0.900): 0\n         [ 0.700,  0.800): 0\n         [ 0.600,  0.700): 0\n         [ 0.500,  0.600): 0\n         [ 0.400,  0.500): 0\n         [ 0.300,  0.400): 0\n         [ 0.200,  0.300): 0\n         [ 0.100,  0.200): 0\n         [ 0.000,  0.100): 0\n         [-0.100,  0.000): 0\n         [-0.200, -0.100): 0\n         [-0.300, -0.200): 0\n         [-0.400, -0.300): 0\n         [-0.500, -0.400): 0\n         [-0.600, -0.500): 0\n         [-0.700, -0.600): 0\n         [-0.800, -0.700): 0\n         [-0.900, -0.800): 0\n         [-1.000, -0.900): 0\n"
+          },
+          "image_sha256": "7fc792cf69a27155462dec8e8778b9ec4406cdee9ff0457f40da4b42dfe13150",
+          "reference_sha256": "f828a49d65172218fa581ffdb7059cfef21791dd47868f06018e93c4f32335de",
+          "staged_reference": "frame_100.org.tga",
+          "staged_reference_sha256": "f828a49d65172218fa581ffdb7059cfef21791dd47868f06018e93c4f32335de"
+        },
+        {
+          "command": {
+            "argv": [
+              "../run_base_test_native_qemu.0000/imagevalidate_525_base.native_qemu",
+              "-avg",
+              "-threshold",
+              "0.5",
+              "-maxthreshold",
+              "20",
+              "frame_155.yuv",
+              "/var/tmp/capstone-spec-php-20261105/share/SPEC17/benchspec/CPU/525.x264_r/data/test/compare/frame_155.org.tga"
+            ],
+            "stdout": "imagevalidate_frame_155.out",
+            "stderr": "imagevalidate_frame_155.err",
+            "reference_sha256": "736312c519287bd17dfcb133ae563c77de000826053655d6ce5198c4baa4a7ed"
+          },
+          "index": 2,
+          "passed": true,
+          "returncode": 0,
+          "stdout": {
+            "path": "imagevalidate_frame_155.out",
+            "sha256": "9bd07ce8334e58bbb516449c054de128069ef6d30e99361cfa96da8297fddcbd",
+            "text": "frame_155.yuv: AVG SSIM = 0.999999307\n"
+          },
+          "stderr": {
+            "path": "imagevalidate_frame_155.err",
+            "sha256": "6458daada21c3e0f1854239bc8883882b6cf7c1c57bdde8cc47000f597a7153c",
+            "text": "ImageValidator r4696\nINFO: threshold set to 0.500000\nINFO: max threshold set to 20 absolute, 0.000000 relative\nframe_155.yuv: INFO:\n  Blocks below threshold: 0 blocks of 20 allowed (14400 total)\n                AVG SSIM: 0.999999307\n                MIN SSIM: 0.999509187\n       SSIM distribution:\n         [         1.000]: 11932\n         [ 0.900,  1.000): 2468\n         [ 0.800,  0.900): 0\n         [ 0.700,  0.800): 0\n         [ 0.600,  0.700): 0\n         [ 0.500,  0.600): 0\n         [ 0.400,  0.500): 0\n         [ 0.300,  0.400): 0\n         [ 0.200,  0.300): 0\n         [ 0.100,  0.200): 0\n         [ 0.000,  0.100): 0\n         [-0.100,  0.000): 0\n         [-0.200, -0.100): 0\n         [-0.300, -0.200): 0\n         [-0.400, -0.300): 0\n         [-0.500, -0.400): 0\n         [-0.600, -0.500): 0\n         [-0.700, -0.600): 0\n         [-0.800, -0.700): 0\n         [-0.900, -0.800): 0\n         [-1.000, -0.900): 0\n"
+          },
+          "image_sha256": "f1352e842177ffea4580565949c4e38741c57e0c1901877aa43263911a49be95",
+          "reference_sha256": "736312c519287bd17dfcb133ae563c77de000826053655d6ce5198c4baa4a7ed",
+          "staged_reference": "frame_155.org.tga",
+          "staged_reference_sha256": "736312c519287bd17dfcb133ae563c77de000826053655d6ce5198c4baa4a7ed"
+        }
+      ],
+      "comparators": [
+        {
+          "command": [
+            "/var/tmp/capstone-spec-php-20261105/share/SPEC17/bin/specperl",
+            "/var/tmp/capstone-spec-php-20261105/share/SPEC17/bin/harness/specdiff",
+            "-m",
+            "-l",
+            "10",
+            "--reltol",
+            "0.085",
+            "/var/tmp/capstone-spec-php-20261105/share/SPEC17/benchspec/CPU/525.x264_r/data/test/output/imagevalidate_frame_100.out",
+            "imagevalidate_frame_100.out"
+          ],
+          "passed": true,
+          "output_sha256": "18becbed0f32c42d434198638fa23757be12f1f68952749289446f6cdcb6ec9d",
+          "reference_sha256": "1e2adfbd937c3b9dd21f5b04cc8e38386cd0ddd84135876b9dad8a8e47676f47",
+          "returncode": 0,
+          "output": "specdiff run completed\n"
+        },
+        {
+          "command": [
+            "/var/tmp/capstone-spec-php-20261105/share/SPEC17/bin/specperl",
+            "/var/tmp/capstone-spec-php-20261105/share/SPEC17/bin/harness/specdiff",
+            "-m",
+            "-l",
+            "10",
+            "--reltol",
+            "0.085",
+            "/var/tmp/capstone-spec-php-20261105/share/SPEC17/benchspec/CPU/525.x264_r/data/test/output/imagevalidate_frame_155.out",
+            "imagevalidate_frame_155.out"
+          ],
+          "passed": true,
+          "output_sha256": "9bd07ce8334e58bbb516449c054de128069ef6d30e99361cfa96da8297fddcbd",
+          "reference_sha256": "f027ea33f79c37aecdebc941f460891fcece6049d1c1e7dacbaa4869124682a0",
+          "returncode": 0,
+          "output": "specdiff run completed\n"
+        },
+        {
+          "command": [
+            "/var/tmp/capstone-spec-php-20261105/share/SPEC17/bin/specperl",
+            "/var/tmp/capstone-spec-php-20261105/share/SPEC17/bin/harness/specdiff",
+            "-m",
+            "-l",
+            "10",
+            "--reltol",
+            "0.085",
+            "/var/tmp/capstone-spec-php-20261105/share/SPEC17/benchspec/CPU/525.x264_r/data/test/output/imagevalidate_frame_50.out",
+            "imagevalidate_frame_50.out"
+          ],
+          "passed": true,
+          "output_sha256": "1c7fedcf715f76721507933049e9a2121b81fcc3597e178467d87dd4a417c5a6",
+          "reference_sha256": "466f982479c68cf4703b69ce4aabd8fcbe69382f1861f261ff2c1f9e9d88f879",
+          "returncode": 0,
+          "output": "specdiff run completed\n"
+        }
+      ],
+      "passed": true
+    }
+  ]
+}

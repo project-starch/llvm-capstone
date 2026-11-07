@@ -1,35 +1,25 @@
-## 2026-11-07 — Close the full SPEC gate before FPGA acceptance
+## 2026-11-07 — Full native C-port SPEC gate passed; RTL assessment next
 
-The historical full native C-port test gate is **9 PASS, 1 FAIL**.
-A fresh complete non-Perl campaign on final kernel `1bd9b8ecf702` now independently
-passes all nine entries, including the full x264 test and official comparisons.
-[Current evidence](../../runtime/virtual/tests/native-task/spec-nonperl-services-qualification.json).
-The remaining acceptance gate is the repaired Perl build on that kernel. Cwd, bounded parent
-traversal, pipe creation and default/ignore signals now pass focused QEMU gates.
-Native spawn/wait lifecycle gates, both confined hush ABI modes and the new
-time/directory/duplication services now pass their focused gates. Complete the
-original Perl invocations and official comparator on the matched frozen kernel.
-The private temporary-directory alias and focused original perlio test now
-pass. The new [Perl provenance port](../../ports/perl/provenance/README.md) now
-passes the unchanged pack test and focused native/sanitizer/error-path checks.
-Complete its running original SPEC workload and official comparison, then combine
-that result with the nine verified non-Perl entries on the same final kernel.
-Keep the old frozen package, original inputs and comparators intact. The new
-versioned src.alt and fresh objects have separate identities. Require the full
-ten-entry C-port gate before FPGA acceptance.
-[Required process gates](../plans/native-linux-task-integration.md#native-subprocess-closure).
-The outer SPEC wrapper hides test exceptions, so exit zero is insufficient:
-retain every original invocation and official comparator. Do not claim the
-full gate passed or reuse the old kernel's nine passes as new-kernel evidence.
-[Failure evidence and reproduction](../../runtime/virtual/tests/native-task/spec-perl-blocker.json).
+All ten existing C-port entries now pass their original complete test inputs
+and official comparisons on final kernel `1bd9b8ecf702`: 22 benchmark invocations,
+four guest image validators and 25 official output comparisons. The final Perl
+revision 07 completed in 4,831.9 host seconds with both comparisons passing.
+[Final qualification](../../runtime/virtual/tests/native-task/spec-final-qualification.json).
+This is functional QEMU qualification, not hardware performance or a port of
+CPU2017's unported C++/Fortran/speed workloads.
 
 The [organized RTL handoff](../plans/native-task-rtl-handoff.md) is ready for
-implementation assessment with that named software blocker. Select an explicit
-RTL/board base and assess checked access, protected context transport, paged
-lifetime collection and interrupt-safe raw tag transport against the executable
-gates. Keep the tested implementation/QEMU pins separate from the newer remote
-dev changes. A complete QEMU test pass and hardware qualification remain distinct
-milestones.
+implementation assessment. Select an explicit RTL/board base and assess checked
+access, protected context transport, paged lifetime collection and interrupt-safe
+raw tag transport against the executable gates. Keep the tested implementation
+and QEMU pins separate from newer remote dev changes. FPGA implementation,
+synthesis and hardware qualification remain the next separate milestone.
+
+Keep historical failures and frozen packages intact. Perl revision 06 failed
+only the original sort test; revision 07 preserves the core freed-scalar error
+path and now passes the full benchmark. The application repair changes no ISA,
+kernel or SDK. Use the pinned source-selection recipe and fresh objects when
+reproducing this result; inputs and official comparators remain unchanged.
 
 ## 2026-11-06 — Native Linux task architecture
 

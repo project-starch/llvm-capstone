@@ -1,13 +1,13 @@
 {
   "schema_version": 1,
   "branch": "native/linux-task-integration",
-  "source_head": "fce47a4a8005ba1b001dbdd056c84b31098b73b9",
+  "source_head": "9698c75f8e7b2eb1224285e98716c9ea7a7245df",
   "scope": "Cumulative source snapshot including final Perl provenance repair. Subsequent evidence/handoff-only commits are not included in this file inventory.",
   "comparison_base": "aeabf009128746d332741dd1e33fbe5b2bca3754",
   "runtime_source_head": "b4687e44cce8",
   "historical_observed_origin_dev": "c9611344eeb75ed628d488202a9394a6e44f3db5",
   "origin_dev_fetched_for_this_inventory": false,
-  "branch_commits_since_base": 32,
+  "branch_commits_since_base": 37,
   "qemu_base": "0542c5556c2daddf71795f3d48eec1fb8ae137b3",
   "qemu_head": "dd041bac5ad9c145c3872a50804ca714a26b1c88",
   "qemu_commits": [
@@ -19,21 +19,13 @@
   ],
   "llvm_compiler_source_changes": false,
   "files_by_layer": {
-    "processor_model_gitlink": 1,
     "documentation": 21,
-    "application_abi_and_ports": 14,
-    "verification": 140,
+    "application_abi_and_ports": 17,
+    "verification": 145,
     "linux_and_runtime": 48
   },
-  "changed_paths": 224,
+  "changed_paths": 231,
   "files": [
-    {
-      "path": "capstone/capstone-qemu",
-      "added": 1,
-      "removed": 1,
-      "layer": "processor_model_gitlink",
-      "role": "implementation"
-    },
     {
       "path": "capstone/docs/README.md",
       "added": 15,
@@ -78,7 +70,7 @@
     },
     {
       "path": "capstone/docs/plans/native-task-rtl-handoff.md",
-      "added": 310,
+      "added": 324,
       "removed": 0,
       "layer": "documentation",
       "role": "documentation"
@@ -204,7 +196,7 @@
     },
     {
       "path": "capstone/ports/perl/provenance/README.md",
-      "added": 92,
+      "added": 175,
       "removed": 0,
       "layer": "documentation",
       "role": "documentation"
@@ -260,7 +252,7 @@
     },
     {
       "path": "capstone/ports/perl/provenance/capstone-provenance.inc",
-      "added": 280,
+      "added": 282,
       "removed": 0,
       "layer": "application_abi_and_ports",
       "role": "implementation_or_recipe"
@@ -271,6 +263,13 @@
       "removed": 0,
       "layer": "verification",
       "role": "test_or_tool"
+    },
+    {
+      "path": "capstone/ports/perl/provenance/qualification-07.json",
+      "layer": "verification",
+      "role": "verification",
+      "added": 721,
+      "removed": 0
     },
     {
       "path": "capstone/ports/perl/provenance/qualification.json",
@@ -287,11 +286,46 @@
       "role": "test_or_tool"
     },
     {
+      "path": "capstone/ports/perl/provenance/scalar-lifetime.pl",
+      "layer": "verification",
+      "role": "verification",
+      "added": 39,
+      "removed": 0
+    },
+    {
+      "path": "capstone/ports/perl/provenance/srcalt-selection.json",
+      "layer": "verification",
+      "role": "verification",
+      "added": 34,
+      "removed": 0
+    },
+    {
       "path": "capstone/ports/spec-cpu2017/README.md",
-      "added": 8,
+      "added": 38,
       "removed": 0,
       "layer": "documentation",
       "role": "documentation"
+    },
+    {
+      "path": "capstone/ports/spec-cpu2017/config/capstone-virtual.cfg",
+      "layer": "application_abi_and_ports",
+      "role": "implementation",
+      "added": 5,
+      "removed": 1
+    },
+    {
+      "path": "capstone/ports/spec-cpu2017/tools/build-record.py",
+      "layer": "application_abi_and_ports",
+      "role": "implementation",
+      "added": 195,
+      "removed": 0
+    },
+    {
+      "path": "capstone/ports/spec-cpu2017/tools/build.sh",
+      "layer": "application_abi_and_ports",
+      "role": "implementation",
+      "added": 46,
+      "removed": 6
     },
     {
       "path": "capstone/ports/spec-cpu2017/tools/make-srcalt.sh",
@@ -299,6 +333,13 @@
       "removed": 2,
       "layer": "application_abi_and_ports",
       "role": "implementation_or_recipe"
+    },
+    {
+      "path": "capstone/ports/spec-cpu2017/tools/test-build-record.py",
+      "layer": "verification",
+      "role": "verification",
+      "added": 217,
+      "removed": 0
     },
     {
       "path": "capstone/runtime/application/CMakeLists.txt",
@@ -1380,7 +1421,7 @@
     },
     {
       "path": "capstone/runtime/virtual/tests/native-task/prepare-spec-tests.py",
-      "added": 216,
+      "added": 266,
       "removed": 0,
       "layer": "verification",
       "role": "test_or_tool"
@@ -1405,6 +1446,13 @@
       "removed": 0,
       "layer": "verification",
       "role": "qualification_record"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-task/rtl-handoff-current-inventory.json",
+      "layer": "verification",
+      "role": "verification",
+      "added": 1773,
+      "removed": 0
     },
     {
       "path": "capstone/runtime/virtual/tests/native-task/rtl-handoff-inventory.json",
@@ -1541,7 +1589,7 @@
     },
     {
       "path": "capstone/runtime/virtual/tests/native-task/test-spec-qualification.py",
-      "added": 527,
+      "added": 614,
       "removed": 0,
       "layer": "verification",
       "role": "test_or_tool"
@@ -1599,9 +1647,10 @@
   "qualification": {
     "kernel_sha256": "1bd9b8ecf702ee023bff0088cacb646182ce04666ccbc34d4879e39f98bf9ba8",
     "non_perl": "spec-nonperl-services-qualification.json",
-    "perl_focused": "../../../../ports/perl/provenance/qualification.json",
-    "full_ten_entry_gate": "PENDING",
-    "fpga_qualified": false
+    "perl_focused": "../../../../ports/perl/provenance/qualification-07.json",
+    "full_ten_entry_gate": "PASS",
+    "fpga_qualified": false,
+    "full_ten_entry_record": "spec-final-qualification.json"
   },
   "qemu_files": [
     {

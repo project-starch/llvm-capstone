@@ -80,8 +80,8 @@ publish the surviving list before allocation, so cleanup never sees freed nodes.
 The latter probe also checks that surviving fields retain authority while the
 failed replacement loses it. See [revision07 focused qualification](qualification-07.json)
 for the frozen source, package, object inventories, native gates, and host
-diagnostic evidence. The complete original revision07 workload and official
-comparison are still pending. The preserved [revision06 record](qualification.json)
+diagnostic evidence. Revision 07 now also passes the complete original workload
+and both official comparisons; see the [final ten-entry qualification](../../../runtime/virtual/tests/native-task/spec-final-qualification.json). The preserved [revision06 record](qualification.json)
 covers its earlier focused checks; its subsequent complete original workload
 failed only `t/op/sort.t` (315 of 316 test files passed).
 

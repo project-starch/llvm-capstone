@@ -1,4 +1,15 @@
-## 2026-11-07 — Native subprocess and shell closure in progress
+## 2026-11-07 — Native C-port SPEC qualification complete
+
+All ten existing C-port entries pass on the frozen final QEMU/Linux platform:
+22 original benchmark invocations, four guest image validators and all 25
+official output comparisons. Perl revision 07 completed in 4,831.9 host seconds,
+with empty stderr and no logged kernel fault. The nine other entries use their
+independently verified runs on the same final kernel.
+[Final qualification](../../runtime/virtual/tests/native-task/spec-final-qualification.json).
+The [RTL handoff](../plans/native-task-rtl-handoff.md) is ready for implementation
+assessment; this result establishes neither FPGA operation nor performance.
+
+## Native subprocess and shell qualification
 
 Native capability-image spawn and admitted-child wait now pass focused QEMU
 lifecycle gates in both exchange and direct SDK modes. These cover ordered
@@ -45,12 +56,16 @@ invocations and official comparisons on the final private-tmp kernel
 The full original Perl diagnostic on the preceding services kernel finished
 with two failing test files: perlio (fixed and separately qualified above) and
 pack (now repaired in the separately qualified interpreter). The complete original
-Perl workload on the final kernel and revision-06 interpreter is running; its
-official comparison remains required. The obsolete
-partial diagnostic was stopped after confirming the missing services, not
-reported as a full execution. No official Perl comparison pass or new full-SPEC
-baseline is claimed yet. These service additions require no ISA/QEMU/compiler
-change; hush is a newly built native application.
+Perl workload on the final kernel and revision-06 interpreter completed in
+4,380.8 seconds: 315 of 316 test files passed, but `t/op/sort.t` failed and the
+official comparison rejected the output. The provenance adapter inspected the
+body of a scalar marked freed before Perl could raise its normal exception.
+Revision 07 guards that marker and preserves the original error path; its
+unchanged sort test matches all 183 baseline results on the host and passes
+the focused native direct gate. Revision 07 subsequently passed both original
+invocations and official comparisons. The obsolete partial diagnostic was stopped after confirming the missing services, not
+reported as a full execution. The final record above supersedes this failed
+revision-06 attempt. These service additions require no ISA/QEMU/compiler change; hush is a newly built native application.
 
 ## 2026-11-07 — Native cwd, pipe and simple signal repair
 
