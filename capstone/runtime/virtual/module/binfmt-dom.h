@@ -1,12 +1,9 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
-/* Experimental native exec driver. Included after the ordinary device ops so
- * the existing arena/context lifecycle stays the single implementation. */
+/* Native exec driver, using the shared arena/context lifecycle. */
 #include <linux/binfmts.h>
 #include <linux/elf.h>
-#include <linux/anon_inodes.h>
 #include <linux/mman.h>
 #include <linux/uio.h>
-#include <linux/shmem_fs.h>
 #include <linux/fs_struct.h>
 #include <linux/path.h>
 #include <linux/cred.h>
@@ -27,20 +24,11 @@ static bool native_io;
 module_param(native_io, bool, 0444);
 MODULE_PARM_DESC(native_io, "announce launch v3 direct small I/O ABI, rebuilt SDK required");
 module_param(native_task, bool, 0444);
-MODULE_PARM_DESC(native_task, "task-owned architecture entry, built-in only, default off");
-#else
-#define native_task false
-#define native_io false
+MODULE_PARM_DESC(native_task, "required task-owned architecture entry; false refuses initialization");
 #endif
 static bool dom_binfmt;
 module_param(dom_binfmt, bool, 0444);
-MODULE_PARM_DESC(dom_binfmt, "experimental root-only native .dom exec (default off)");
-#define DOM_STEP _IO('V', 31)
-#define CV_STEP_NATIVE _IO('V', 34)
-#define DOM_PROTECT_DONE _IO('V', 32)
-#define DOM_DO_PROTECT 257
-#define DOM_DO_SYSCALL 258
-#define DOM_SYSCALL_DONE _IO('V', 33)
+MODULE_PARM_DESC(dom_binfmt, "required root-only native .dom exec admission");
 #define DOM_LAUNCH_BYTES 65536UL
 #define DOM_META_BYTES 16384UL
 #define DOM_MAX_STRINGS 1024
@@ -223,105 +211,25 @@ static long dom_unmap(struct context *c, unsigned long base, unsigned long bytes
 #include "delegate-dom.h"
 #include "native-syscall-dom.h"
 
-/* The transport is fixed at exec, unretirable and only this task runs the
- * domain. Thus no in-flight service can race its reuse while vm_lock is down.
- * Copies into the caller's object remain capability accesses in the SDK. */
-static long dom_rw(struct context *c, const struct capstone_delegate_entry *e)
-{
-    struct file *file;
-    struct iovec iov;
-    struct iov_iter iter;
-    loff_t pos = 0, *ppos = NULL;
-    bool write = e->nr == 64, locked = false;
-    unsigned long buf;
-    long rc;
-    if (e->count != 1 || e->flags != 2 ||
-        !dom_within(e->args[1], e->args[2], c->dom_exchange_bytes)) return -EFAULT;
-    if (e->args[0] > INT_MAX) return -EBADF;
-    if (!dom_fd_allowed(c, e->args[0])) return -EBADF;
-    file = fget(e->args[0]);
-    if (!file) return -EBADF;
-    /* The private context descriptor is never an application I/O target. */
-    if (file->private_data == c || !file->f_op) { rc = -EBADF; goto put; }
-    if (!(write ? file->f_op->write_iter : file->f_op->read_iter)) {
-        /* Console descriptors can have only the legacy .read/.write API.
-         * Use the existing private bounce path and Linux syscall checks;
-         * never invoke a file operation with a kernel or domain pointer. */
-        fput(file);
-        return dom_prepare(c, e);
-    }
-    buf = c->dom_exchange + e->args[1];
-    if (!write && (rc = dom_touch(c, buf, e->args[2]))) goto put;
-    rc = import_single_range(write ? WRITE : READ, (void __user *)buf, e->args[2], &iov, &iter);
-    if (rc) goto put;
-    mutex_unlock(&vm_lock);
-    if (file->f_mode & FMODE_ATOMIC_POS) { mutex_lock(&file->f_pos_lock); locked = true; }
-    if (!(file->f_mode & FMODE_STREAM)) { pos = file->f_pos; ppos = &pos; }
-    if (write) {
-        file_start_write(file);
-        rc = vfs_iter_write(file, &iter, ppos, 0);
-        file_end_write(file);
-    } else rc = vfs_iter_read(file, &iter, ppos, 0);
-    if (ppos && rc >= 0) file->f_pos = pos;
-    if (locked) mutex_unlock(&file->f_pos_lock);
-    mutex_lock(&vm_lock);
-    if (rc <= -ERESTARTSYS && rc >= -ERESTART_RESTARTBLOCK) rc = -EINTR;
-put:
-    fput(file);
-    return rc;
-}
-static long dom_protect(struct context *c, struct cv_step *s)
-{
-    unsigned long base = s->args[0], bytes = s->args[1], prot = s->args[2];
-    struct arena *a = arena_at(c, base);
-    struct pt_regs *regs = current_pt_regs();
-    if (!bytes || ((base | bytes) & ~PAGE_MASK) ||
-        (prot & ~(PROT_READ | PROT_WRITE | PROT_EXEC)) || !a || !a->dom_dynamic || a->dom_metadata ||
-        a->copy_holds || a->copy_retired ||
-        base < a->address || !dom_within(base - a->address, bytes, a->bytes)) {
-        s->result = -EINVAL;
-        return 0;
-    }
-    regs->a1 = base; regs->a2 = bytes; regs->a3 = prot;
-    c->dom_protect_pending = true;
-    return DOM_DO_PROTECT;
-}
-
-static int dom_reply(struct context *c, long result)
-{
-    u64 words[3] = {result, 0, CAPSTONE_ROUND_DONE};
-    u32 zero = 0;
-    int rc = dom_store(c, c->dom_meta + offsetof(struct capstone_delegate_entry, result),
-                       words, sizeof(words));
-    if (!rc) rc = dom_store(c, c->dom_meta + CAPSTONE_SIGNAL_OFFSET +
-                            offsetof(struct capstone_signal_block, count), &zero, sizeof(zero));
-    c->dom_step.result = 0;
-    return rc;
-}
-
 static long dom_service(struct context *c, struct cv_step *s)
 {
-    struct capstone_delegate_entry e;
-    size_t lengths[CAPSTONE_DELEGATE_ARGS];
     long rc;
     s->reply = 1;
     s->result = -ENOSYS;
-    if (native_dispatch && s->args[7] == NS_SERVICE_NATIVE)
+    if (s->args[7] == NS_SERVICE_NATIVE)
         return native_service_direct(c, s);
-    if (native_dispatch && (s->args[7] == CV_SERVICE_DELEGATE ||
-        s->args[7] == CV_SERVICE_THREAD_DELEGATE))
+    if (s->args[7] == CV_SERVICE_DELEGATE ||
+        s->args[7] == CV_SERVICE_THREAD_DELEGATE)
         return native_service(c, s);
 #ifdef CV_RACE_TEST
     if (rt_service(c, s)) return 0;
 #endif
     switch (s->args[7]) {
     case CV_SERVICE_THREAD_SELF: s->result = 1; break;
-    case CV_SERVICE_PROTECT: if (native_dispatch) {
-            rc = native_protect(c, s);
-            if (rc) s->result = rc;
-            return 0;
-        }
-        return dom_protect(c, s);
+    case CV_SERVICE_PROTECT:
+        rc = native_protect(c, s);
+        if (rc) s->result = rc;
+        return 0;
     case CV_SERVICE_MAP: s->result = dom_map(c, s); break;
     case CV_SERVICE_UNMAP: s->result = dom_unmap(c, s->args[0], s->args[1]); break;
     case CV_SERVICE_NODES:
@@ -329,101 +237,8 @@ static long dom_service(struct context *c, struct cv_step *s)
                     ensure_nodes(c, s->args[0] + CV_NODE_RESERVE);
         break;
     case CV_SERVICE_WAIT: s->result = 0; break;
-    case CV_SERVICE_DELEGATE:
-    case CV_SERVICE_THREAD_DELEGATE:
-        if (s->args[7] == CV_SERVICE_THREAD_DELEGATE &&
-            (s->args[0] != c->dom_meta || s->args[1] != c->dom_exchange ||
-             s->args[2] != c->dom_exchange_bytes)) return -EFAULT;
-        if (copy_from_user(&e, (void __user *)c->dom_meta, sizeof(e))) return -EFAULT;
-        rc = capstone_delegate_validate(&e, NULL, c->dom_exchange_bytes, lengths);
-        if (rc) return dom_reply(c, -rc);
-        if (e.nr == CAPSTONE_SYS_exit_group) return (e.args[0] & 255) + 1;
-        if (e.nr == DOM_HELLO || e.nr == CAPSTONE_NR_SIGPOLL) e.result = 0;
-        else {
-            rc = (e.nr == CAPSTONE_SYS_read || e.nr == CAPSTONE_SYS_write) ?
-                 dom_rw(c, &e) : dom_prepare(c, &e);
-            /* A brokered open may legitimately return fd 258. Only an
-             * actual prepared request authorizes scalar syscall dispatch. */
-            if (rc == DOM_DO_SYSCALL && c->dom_delegate->pending) return rc;
-            e.result = rc;
-        }
-        rc = dom_reply(c, e.result);
-        if (rc) return rc;
-        break;
     }
     return 0;
-}
-#define NATIVE_STOP(jdl, ns) ((jdl) ? cv_step_stop_j(*(jdl)) : cv_step_stop(ns))
-static long dom_ioctl(struct file *f, unsigned int op, unsigned long arg)
-{
-    struct context *c = f->private_data;
-    struct cv_step *s = &c->dom_step;
-    long rc;
-#ifdef CV_TEST_HOOKS
-    /* The step-hook build keeps nanosecond deadlines so its stop classes stay exact. */
-    u64 deadline = ktime_get_ns() + CV_STEP_BUDGET_NS;
-    const unsigned long *jdl = NULL;
-#else
-    unsigned long jdeadline = jiffies + CV_STEP_BUDGET_J;
-    const unsigned long *jdl = native_dispatch ? &jdeadline : NULL;
-    u64 deadline = native_dispatch ? 0 : ktime_get_ns() + CV_STEP_BUDGET_NS;
-#endif
-    if (current->mm != c->mm || task_pid_nr(current) != c->dom_pid) return -EPERM;
-    if (op == DOM_PROTECT_DONE) {
-        /* Only the scalar trampoline can issue this operation. Complete even
-         * with a pending signal: otherwise an interrupted ioctl loses result. */
-        if (!c->dom_protect_pending || (long)arg > 0 || (long)arg < -4095) return -EINVAL;
-        c->dom_protect_pending = false;
-        s->result = (long)arg;
-        return 0;
-    }
-    if (op == DOM_SYSCALL_DONE) {
-        long result = (long)arg;
-        /* Finish under a noninterruptible lock. A signal must not lose the
-         * result of an already executed syscall or run it twice. */
-        if (!c->dom_delegate || !c->dom_delegate->pending) return -EINVAL;
-        mutex_lock(&vm_lock);
-        rc = dom_complete(c, &result);
-        if (!rc) rc = dom_reply(c, result);
-        c->dom_delegate->pending = false;
-        if (rc) goto fault;
-        goto out;
-    }
-    if (op != (native_dispatch ? CV_STEP_NATIVE : DOM_STEP) || arg || c->dom_protect_pending ||
-        (c->dom_delegate && c->dom_delegate->pending)) return -EINVAL;
-    if (mutex_lock_interruptible(&vm_lock)) return -EINTR;
-native_again:
-    rc = cv_step_locked(c, s, jdl);
-    if (rc == -EINTR || rc == -EAGAIN) goto out;
-    if (rc) goto fault;
-    s->reply = 0;
-    if (s->kind == 1) goto out;
-    if (s->kind == 4) {
-        if (native_dispatch && NATIVE_STOP(jdl, deadline)) goto out;
-        rc = resolve(c, c->main_thread, ktime_get_ns() + CV_STEP_BUDGET_NS);
-        if (!rc) {
-            c->main_thread->sfence_pending = true;
-            if (native_dispatch && !NATIVE_STOP(jdl, deadline)) goto native_again;
-            goto out;
-        }
-        goto fault;
-    }
-    if (s->kind != 3) { rc = -EFAULT; goto fault; }
-    if (native_dispatch) TEST_HOOK(5);
-    rc = dom_service(c, s);
-    if (c->main_thread->terminal) { rc = -EFAULT; goto fault; }
-    if (!rc && native_dispatch && !NATIVE_STOP(jdl, deadline)) goto native_again;
-    if (rc >= 0) goto out;
-fault:
-    pr_info("capstone_dom: fault rc=%ld kind=%llu cause=%llu pc=0x%llx address=0x%llx\n",
-            rc, s->kind, s->cause, s->pc, s->address);
-    send_sig(SIGSEGV, current, 1);
-    rc = 128 + SIGSEGV + 1;
-out:
-    TEST_IOCTL_DONE();
-    slot_changed();
-    mutex_unlock(&vm_lock);
-    return rc;
 }
 static void dom_context_destroy(void *private)
 {
@@ -436,11 +251,6 @@ static void dom_context_destroy(void *private)
     kfree(c->native_context);
     dom_delegate_free(c);
     context_destroy(c);
-}
-static int dom_release(struct inode *inode, struct file *f)
-{
-    if (f->private_data) dom_context_destroy(f->private_data);
-    return 0;
 }
 #ifdef CV_TASK_BACKEND
 /* One transition per architecture-return iteration. Linux handles return work
@@ -474,7 +284,7 @@ static void dom_task_step(void *private, struct pt_regs *regs)
     if (s->kind != 3) { rc = -EFAULT; goto fault; }
     rc = dom_service(c, s);
     if (rc < 0 || c->main_thread->terminal) goto fault;
-    if (rc > 256) goto fault; /* never dispatch a scalar trampoline request */
+    if (rc > 256) goto fault; /* only encoded exit statuses may be positive */
     if (rc > 0) {
         slot_changed();
         mutex_unlock(&vm_lock);
@@ -493,10 +303,6 @@ static const struct riscv_capstone_ops dom_task_ops = {
     .step = dom_task_step, .release = dom_context_destroy,
 };
 #endif
-static const struct file_operations dom_ops = {
-    .owner = THIS_MODULE, .release = dom_release, .unlocked_ioctl = dom_ioctl,
-};
-
 static int dom_startup(struct linux_binprm *bprm, void *block)
 {
     struct dom_launch_header *h = block;
@@ -547,29 +353,16 @@ static int dom_startup(struct linux_binprm *bprm, void *block)
     return 0;
 }
 
-/* Pure RV64I, no libc, stack access or capability authority; s0 is the descriptor and s1 the ioctl number from load_binary. */
-static const u32 dom_trampoline[] = {
-    0x00040513, 0x00048593, 0x00000613, 0x01d00893, 0x00000073,
-    0x10100293, 0x02550063, 0x10200293, 0x04550263, 0xfca05ee3,
-    0xfff50513, 0x05e00893, 0x00000073, 0x0000006f, 0x00058513,
-    0x00060593, 0x00068613, 0x0e200893, 0x00000073, 0x00050613,
-    0x00040513, 0x00090593, 0x01d00893, 0x00000073, 0xfa1ff06f,
-    0x00058513, 0x00060593, 0x00068613, 0x00070693, 0x00078713,
-    0x00080793, 0x00000073, 0x00050613, 0x00040513, 0x00098593,
-    0x01d00893, 0x00000073, 0xf6dff06f,
-};
 static struct linux_binfmt capstone_dom;
 static int dom_load_binary(struct linux_binprm *bprm)
 {
     struct dom_image im = {0};
-    struct file *ctxfile = NULL, *trampfile = NULL;
     struct context *c = NULL;
     bool task_published = false;
     struct pt_regs *regs = current_pt_regs();
-    unsigned long base, stack, startup, tramp, whole, part;
+    unsigned long base, stack, startup, whole, part;
     void *block = NULL, *tail = NULL;
-    int rc, fd = -1;
-    loff_t pos = 0;
+    int rc;
     Elf64_Ehdr *h = (void *)bprm->buf;
     if (memcmp(h->e_ident, ELFMAG, SELFMAG) || h->e_machine != 259) return -ENOEXEC;
     if (!uid_eq(current_euid(), GLOBAL_ROOT_UID) || bprm->secureexec ||
@@ -578,9 +371,8 @@ static int dom_load_binary(struct linux_binprm *bprm)
     if (!one_inode_per_file(bprm->file) || !file_inode(bprm->file)->i_nlink) return -EOPNOTSUPP;
     if (bprm->argc < 1 || bprm->argc > DOM_MAX_STRINGS ||
         bprm->envc > DOM_MAX_STRINGS - bprm->argc) return -E2BIG;
-    if (native_dispatch && (!checked_copy || !native_slot_transport ||
-        current->seccomp.mode != SECCOMP_MODE_DISABLED)) return -EOPNOTSUPP;
-    if (native_task && (current->ptrace || (read_thread_flags() & _TIF_SYSCALL_WORK)))
+    if (current->seccomp.mode != SECCOMP_MODE_DISABLED) return -EOPNOTSUPP;
+    if (current->ptrace || (read_thread_flags() & _TIF_SYSCALL_WORK))
         return -EOPNOTSUPP;
     rc = dom_parse(bprm->file, &im);
     if (rc) return rc;
@@ -590,12 +382,6 @@ static int dom_load_binary(struct linux_binprm *bprm)
     /* Read the partial data page before the point of no return. */
     whole = im.data.p_filesz & PAGE_MASK; part = im.data.p_filesz - whole;
     if (part && (rc = dom_read(bprm->file, tail, part, im.data.p_offset + whole))) goto out;
-    if (!native_task) {
-        trampfile = shmem_file_setup("capstone-trampoline", PAGE_SIZE, VM_NORESERVE);
-        if (IS_ERR(trampfile)) { rc = PTR_ERR(trampfile); trampfile = NULL; goto out; }
-        rc = kernel_write(trampfile, dom_trampoline, sizeof(dom_trampoline), &pos);
-        if (rc != sizeof(dom_trampoline)) { rc = rc < 0 ? rc : -EIO; goto out; }
-    }
     rc = begin_new_exec(bprm);
     if (rc) goto out;
     setup_new_exec(bprm);
@@ -603,17 +389,8 @@ static int dom_load_binary(struct linux_binprm *bprm)
     if (rc) goto out;
     rc = dom_startup(bprm, block);
     if (rc) goto out;
-    if (native_task) {
-        rc = context_create(&c);
-        if (rc) goto out;
-    } else {
-        ctxfile = anon_inode_getfile("capstone-dom", &dom_ops, NULL, O_RDWR);
-        if (IS_ERR(ctxfile)) { rc = PTR_ERR(ctxfile); ctxfile = NULL; goto out; }
-        rc = vm_open(NULL, ctxfile);
-        if (rc) goto out;
-        c = ctxfile->private_data;
-    }
-    c->dom_fd = -1;
+    rc = context_create(&c);
+    if (rc) goto out;
     rc = dom_resources_init(c);
     if (rc) goto out;
     rc = deny_write_access(bprm->file);
@@ -666,17 +443,8 @@ static int dom_load_binary(struct linux_binprm *bprm)
     }
     mutex_unlock(&vm_lock);
     if (rc) goto out;
-    tramp = 0;
-    if (!native_task) {
-        tramp = vm_mmap(trampfile, 0, PAGE_SIZE, PROT_READ | PROT_EXEC, MAP_PRIVATE, 0);
-        if (IS_ERR_VALUE(tramp)) { rc = tramp; goto out; }
-        fd = get_unused_fd_flags(O_CLOEXEC);
-        if (fd < 0) { rc = fd; goto out; }
-    }
     c->dom_pid = task_pid_nr(current);
-    c->dom_fd = fd;
     WRITE_ONCE(dom_last_base, base);
-    WRITE_ONCE(dom_last_trampoline, tramp);
     current->mm->start_code = base;
     current->mm->end_code = base + im.text.p_memsz;
     current->mm->start_data = base + im.text.p_memsz;
@@ -684,35 +452,24 @@ static int dom_load_binary(struct linux_binprm *bprm)
     current->mm->start_stack = bprm->p;
     set_binfmt(&capstone_dom);
     finalize_exec(bprm);
-    /* start_thread is not exported on this kernel. The scalar trampoline
-     * uses no FP; begin_new_exec already reset thread/FPU state. */
+    /* begin_new_exec reset thread/FPU state. Architecture return enters the
+     * attached protected context; these scalar registers are diagnostic only. */
     memset(regs, 0, sizeof(*regs));
     regs->status = SR_PIE | SR_UXL_64;
-#ifdef CV_TASK_BACKEND
-    if (native_task) {
-        rc = riscv_capstone_attach(c, &dom_task_ops);
-        if (rc) goto out;
-        task_published = true;
-        regs->epc = base + im.entry;
-        regs->sp = stack + im.stack;
-        regs->cause = -1UL;
-    } else
-#endif
-    {
-        regs->epc = tramp; regs->sp = (bprm->p - 16) & ~15UL;
-        regs->s0 = fd; regs->s1 = native_dispatch ? CV_STEP_NATIVE : DOM_STEP; regs->s2 = DOM_PROTECT_DONE; regs->s3 = DOM_SYSCALL_DONE;
-        fd_install(fd, ctxfile); ctxfile = NULL;
-    }
+    rc = riscv_capstone_attach(c, &dom_task_ops);
+    if (rc) goto out;
+    task_published = true;
+    regs->epc = base + im.entry;
+    regs->sp = stack + im.stack;
+    regs->cause = -1UL;
     rc = 0;
 out:
-    if (native_task && c && !task_published) dom_context_destroy(c);
-    if (ctxfile) fput(ctxfile);
-    if (trampfile) fput(trampfile);
+    if (c && !task_published) dom_context_destroy(c);
     kvfree(block); kfree(tail);
 #ifdef CV_TASK_BACKEND
     /* Linux 6.1's ordinary post-PONR SIGSEGV is ptrace-suppressible. Never
      * allow an attach during loader preparation to recover scalar execution. */
-    if (rc && native_task && bprm->point_of_no_return)
+    if (rc && bprm->point_of_no_return)
         force_exit_sig(SIGSEGV);
 #endif
     return rc;

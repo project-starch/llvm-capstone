@@ -37,7 +37,6 @@ for change in "${patches[@]}"; do
 done
 # Stage before mutating Linux so missing frontend inputs also fail atomically.
 bash "$here/stage-adapter.sh" "$stage/adapter"
-sed -i 's/^obj-m += capstone_vm.o$/obj-y += capstone_vm.o/' "$stage/adapter/Makefile"
 for change in "${patches[@]}"; do
     patch -d "$kernel" -p1 < "$change"
 done

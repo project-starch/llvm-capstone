@@ -42,6 +42,11 @@ int main(int argc, char **argv)
 {
     if (argc != 3) return 2;
     alarm(30);
+    errno = 0;
+    CHECK("legacy device absent", access("/dev/capstone-vm", F_OK) == -1 && errno == ENOENT);
+    errno = 0;
+    CHECK("legacy misc registration absent",
+          access("/sys/class/misc/capstone-vm", F_OK) == -1 && errno == ENOENT);
     int input, st;
     struct rusage usage;
     pid_t pid = launch(argv[1], &input);

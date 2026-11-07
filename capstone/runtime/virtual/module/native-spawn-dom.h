@@ -32,11 +32,9 @@ static int native_spawn_clone_resources(struct native_spawn_request *r, struct c
     struct dom_delegate *src = c->dom_delegate, *d;
     r->shadow = kzalloc(sizeof(*r->shadow), GFP_KERNEL);
     if (!r->shadow) return -ENOMEM;
-    r->shadow->dom_fd = -1;
     d = kzalloc(sizeof(*d), GFP_KERNEL);
     if (!d) return -ENOMEM;
     r->shadow->dom_delegate = d;
-    d->path_fd = -1;
     d->root = src->root; path_get(&d->root);
     d->cwd_path = src->cwd_path; path_get(&d->cwd_path);
     for (unsigned i = 0; i < DOM_EXTRA_DIRS; ++i)

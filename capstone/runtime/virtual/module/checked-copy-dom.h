@@ -390,30 +390,19 @@ struct cu_result cv_checked_copy(struct context *c, struct cv_thread *t,
                                 void *buffer, u64 length, enum cu_direction dir)
 {
     struct cv_copy_state *s;
-    struct file *owner = NULL;
     struct cu_result result = {0, CU_REFUSED};
     lockdep_assert_held(&vm_lock);
     if (!cv_copy_admitted(c, t)) return result;
-    /* Keep the backing context alive across both lock-dropping callbacks.
-     * The caller also owns its invocation reference until it handles result. */
-#ifdef CV_TASK_BACKEND
-    /* The synchronous task step owns c across sleeping callbacks. No callback
-     * may destroy/transfer it or retain it beyond the current step. */
-    if (!riscv_capstone_owns(c))
-#endif
-    {
-        owner = fget(c->dom_fd);
-        if (!owner) return result;
-        if (owner->private_data != c) { fput(owner); return result; }
-    }
+    /* The current native step owns c across sleeping callbacks. There is
+     * no control-FD reference or scalar entry path that can substitute for it. */
+    if (!riscv_capstone_owns(c)) return result;
     s = kzalloc(sizeof(*s), GFP_KERNEL);
-    if (!s) { if (owner) fput(owner); return result; }
+    if (!s) return result;
     cv_copy_state_init(s, c, t, dir, length);
     result = cu_copy(&cv_copy_ops, s, ref, offset, buffer, length, dir, PAGE_SIZE);
 #ifdef CV_RACE_TEST
     rt_record(c, &result, length);
 #endif
     kfree(s);
-    if (owner) fput(owner);
     return result;
 }
