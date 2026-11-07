@@ -1,5 +1,27 @@
 # Experimental Linux task-return backend
 
+## Current GCC native-route comparison
+
+SPEC 502.gcc_r test/t1.c with `-O3 -finline-limit=50000` now has a matched
+current-kernel comparison. The original GCC object hashes are unchanged; one
+binary relinked with the native-clock SDK runs with all native feature flags
+off/on (masks 0/479), in A-B-B-A order. Two separate guests collect routes.
+All six runs match the official assembly reference byte for byte. Relink,
+measurement and diagnostics pass in 102.7 seconds.
+
+| Native routes | Total instruction attempts | Kernel attempts |
+| --- | ---: | ---: |
+| Off | 50,944,339.5 | 26,969,674.0 |
+| On | 50,827,707.0 | 26,869,673.5 |
+
+The mean reduction is **0.229% total, 0.371% kernel**: a small
+incremental gain, not measured elapsed-time speedup. There are 31 service
+completions in each diagnostic run; 11 move to registers and 20 remain exchange.
+This isolates current routing options, not cumulative branch-vs-dev changes
+or overhead against plain Linux. The kernel remains the native-clock baseline.
+[Exact inputs, routes and profiles](gcc-current-routes-comparison.json).
+
+
 ## Native basic clock transport qualified
 
 Feature 256 routes clock_gettime through the existing generic checked register
