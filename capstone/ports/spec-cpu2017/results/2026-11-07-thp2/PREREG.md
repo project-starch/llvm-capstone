@@ -31,3 +31,9 @@ gcc c3f (board 3): 4,253.3 s; outside 739.5 s; fault exits 2,875.
 the fault saving, and huge pages do not suit short contexts. P1 failing: perlbench's faults are not in 4 MiB+ arenas.
 
 **Limits.** N = 2 for perlbench on two boards, N = 1 for gcc; cross-board against c3g (board 2) for board 3's run.
+
+## Addendum 1 (7 Nov, 21:2x, before its board call): board 2's perlbench run returns, after perlbench -rg-nd there
+
+Board 2's perlbench c3g-thp was withdrawn before any board call for perlbench -rg-nd (results/2026-11-07-nodiag). It is
+queued again on board 2 behind that run (perf/thp4, the same stage and kit), for N = 2 with board 3's. Predictions
+unchanged (P0-P2).
