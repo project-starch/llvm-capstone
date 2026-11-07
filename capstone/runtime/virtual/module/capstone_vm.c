@@ -23,7 +23,6 @@ static bool copyable_exact_bounds;
 #include <linux/ktime.h>
 #include <linux/log2.h>
 #include <linux/rbtree.h>
-#include <linux/xarray.h>
 #include <linux/file.h>
 #include <asm/csr.h>
 #include <asm/io.h>
@@ -154,11 +153,10 @@ struct context {
     struct cv_thread *main_thread;
     struct list_head threads;
     u64 next_thread;
-    /* Registered arenas by address and by mapping ID, both under vm_lock.
+    /* Registered arenas by address, under vm_lock.
      * Arenas never overlap, so the address tree answers containment with
      * one predecessor lookup. registered_bytes is the sum of their sizes. */
     struct rb_root arenas;
-    struct xarray ids;
     unsigned long registered_bytes;
     struct cv_stats stats;
     u64 next_id;
@@ -1605,7 +1603,6 @@ static int retire(struct context *c, struct arena *a, bool destroying)
                 a->unpinned_ahead);
     --c->stats.arenas;
     rb_erase(&a->node, &c->arenas);
-    xa_erase(&c->ids, a->id);
     c->registered_bytes -= a->bytes;
     kvfree(a->pages);
     kvfree(a->frames);
@@ -1728,7 +1725,7 @@ static int add(struct context *c, struct cv_thread *t, struct cv_map *r)
     }
     mmap_read_unlock(c->mm);
     /* Everything that can fail is prepared before the grant is minted. The
-     * record, its ID slot and its page array are charged to the process's
+     * record and its page array are charged to the process's
      * memory cgroup: there is no count limit, only the registered-bytes one,
      * and a million single-page arenas fit under it. */
     /* An arena id names one registration for the context's whole life: the launcher releases
@@ -1739,10 +1736,9 @@ static int add(struct context *c, struct cv_thread *t, struct cv_map *r)
     a = kzalloc(sizeof(*a), GFP_KERNEL_ACCOUNT);
     if (!a) return -ENOMEM;
     a->id = c->next_id + 1;
-    if (xa_insert(&c->ids, a->id, a, GFP_KERNEL_ACCOUNT)) { kfree(a); return -ENOMEM; }
     count = (r->bytes - r->rx_bytes) / PAGE_SIZE;
     pages = kvcalloc(count, sizeof(*pages), GFP_KERNEL_ACCOUNT);
-    if (!pages) { xa_erase(&c->ids, a->id); kfree(a); return -ENOMEM; }
+    if (!pages) { kfree(a); return -ENOMEM; }
     /* The arena's geometry, before anything is pinned against it. The frame set lives as long
      * as the arena (a page admitted at any later fault is checked against it), so it is
      * accounted like the page array. */
@@ -1751,7 +1747,7 @@ static int add(struct context *c, struct cv_thread *t, struct cv_map *r)
     a->lazy = mapping_reply || (lazy_grants && !eager_grant(t, r));
     {
         a->frames = kvcalloc(frame_slots(count), sizeof(*a->frames), GFP_KERNEL_ACCOUNT);
-        if (!a->frames) { kvfree(pages); xa_erase(&c->ids, a->id); kfree(a); return -ENOMEM; }
+        if (!a->frames) { kvfree(pages); kfree(a); return -ENOMEM; }
     }
     n = 0;
     if (!unpinned && !a->lazy) {
@@ -1839,7 +1835,7 @@ unpin:
         pr_info("capstone_vm: unwind arena 0x%lx+0x%lx scan=%u\n", a->address, a->bytes, a->scans);
     kvfree(a->frames);
     kvfree(pages);
-    xa_erase(&c->ids, a->id); kfree(a);
+    kfree(a);
     return -EFAULT;
 }
 /* CV_STEP resolves faults and resumes for at most one supervisor quantum;
@@ -3066,7 +3062,6 @@ static int context_create(struct context **out)
     if (!c) return -ENOMEM;
     INIT_LIST_HEAD(&c->threads);
     c->arenas = RB_ROOT;
-    xa_init_flags(&c->ids, XA_FLAGS_ACCOUNT);
     c->next_thread = 0;
     t = kvzalloc(sizeof(*t), GFP_KERNEL);
     if (!t) { kvfree(c); return -ENOMEM; }
@@ -3181,7 +3176,6 @@ static int context_destroy(struct context *c)
             retire(c, a, true);
         }
         WARN_ON(!RB_EMPTY_ROOT(&c->arenas));
-        xa_destroy(&c->ids);
         if (node_table_flat)
             pr_emerg("capstone_vm: release retires attempted=%lu succeeded=%lu pushed=%lu first_id=%lu\n",
                      attempted, c->retired_flat - before, c->pushed_flat - pushed_before,

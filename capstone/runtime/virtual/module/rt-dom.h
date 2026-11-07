@@ -136,11 +136,18 @@ static int rt_run_b(struct context *c)
             break;
         }
         case CV_SERVICE_MAP: {
-            struct arena *a;
+            struct arena *a = NULL, *candidate;
             rt.map_for_b = true;
             rt_mmap_rc = q.result = dom_map(c, &q);
             rt.map_for_b = false;
-            a = q.result ? NULL : xa_load(&c->ids, c->next_id);
+            /* Only the race oracle needs lookup by registration ID. Keep
+             * this test-only scan out of production mapping bookkeeping. */
+            if (!q.result)
+                for_each_arena(candidate, c)
+                    if (candidate->id == c->next_id) {
+                        a = candidate;
+                        break;
+                    }
             rt_new_base = a ? a->address : 0;
             break;
         }
