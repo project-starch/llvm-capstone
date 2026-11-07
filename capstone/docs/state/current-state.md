@@ -1,3 +1,28 @@
+## Unpinned arena arrays removed and qualified
+
+Unpinned grants no longer allocate the per-page pin array or duplicate-frame
+hash array. Range geometry, IDs, revocation and copy holds are retained; touch
+and registration unwind avoid array reads in this mode. All other consumers
+remain behind pinned branches. Runtime source: `205b53613621`.
+
+Against the already-qualified index-removal kernel, unchanged GCC/musl binaries
+in baseline/candidate/candidate/baseline fresh guests reduce mean total attempts
+from 50,348,695.5 to 49,954,678.5 (**0.783%**) and kernel attempts from
+26,390,323.5 to 25,996,306.0 (**1.493%**). Program counts differ by only 0.5
+attempt on average. Flat savings are concentrated in kernel allocation/free,
+zeroing and frame-array sizing. These are incremental measurements, not an
+additive estimate of cumulative speedup or hardware time.
+
+Production and race kernel builds, four byte-exact GCC outputs, IO/authority/
+entry/task integration, and both 41-case race groups pass within **156.6s**.
+Each race group observes all 17 deliberate controls firing, including stale
+copies and missing holds. Astra xhigh reviewed all consumers and the immutable
+memory-mode contract. The occupied pre-start register-slot unwind was reviewed
+statically, not dynamically injected. No new full-SPEC/multi-hart/FPGA claim.
+[Exact artifacts, samples and limits](../../runtime/virtual/tests/native-task/arena-arrays-qualification.json).
+The actual-access fault-policy experiment is still pending; read faults and
+fault-ahead behavior have not changed.
+
 ## Native arena index removal qualified
 
 The production runtime no longer maintains the unread arena-ID xarray.
