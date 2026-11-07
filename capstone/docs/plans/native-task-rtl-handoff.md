@@ -34,7 +34,7 @@ commits add tools/evidence; the subsequent cwd/pipe/signal repair changes Linux
 helpers and the native frontend, with no further ISA or QEMU requirement.
 [Repair scope and qualification](../../runtime/virtual/tests/native-task/README.md#native-cwd-pipe-and-signal-repair).
 Native subprocess work additionally introduces an authenticated kernel child
-bootstrap, capability-image exec, inherited resource grants and admitted-child
+bootstrap, capability-image exec within that child bootstrap, inherited resource grants and admitted-child
 wait. The [hush port](../../ports/hush/app/README.md) is a native application
 using those services. Directory/time helpers and descriptor duplication extend
 Linux service coverage. The optional private `/tmp` alias stays within the
@@ -67,7 +67,10 @@ git -C capstone/capstone-qemu log --oneline 0542c5556c2d..dd041bac5ad9
 | Linux architecture/task | Task/mm-owned context; exec admission, accounting, return work, cleanup; no context-owning userspace FD | [task transition contract](../design/virtual-capstone/native-linux-tasks.md#linux-61-first-backend-transition-contract), `kernel-native-task.patch` |
 | Kernel runtime | Capability-aware copy protocol, syscall dispatch, descriptor/path grants, ordinary Linux file/status/vector services | `runtime/virtual/module/checked-copy-dom.h`, `native-syscall-dom.h`, `resource-dom.h`, `native-gcc-dom.h`, `native-files-dom.h` |
 | Linux helper patches | Held-file and kernel-buffer helpers preserving Linux policy, POSIX locks and errors | `kernel-native-mprotect.patch`, `kernel-native-gcc.patch`, `kernel-native-files.patch` |
+| Process, directory and time services | Confined cwd, pipes, default/ignore signals, directory operations and kernel-buffer timers/select | `native-process-dom.h`, `native-directory-dom.h`, `native-time-dom.h`; `kernel-native-process.patch`, `kernel-native-directory.patch`, `kernel-native-time.patch` |
+| Native subprocesses | Authenticated child bootstrap, pinned-image exec, ordered file actions and admitted-child wait | `kernel-native-spawn.patch`, `native-spawn-dom.h`, `runtime/common/spawn.c`, `runtime/include/capstone/spawn.h`, inherited `posix_spawn_delegate.c` |
 | Application ABI/libc | Launch-v3 feature negotiation; opt-in direct read/write/pread/pwrite up to 64 KiB; scalar canonicalization | `runtime/common/launch.c`, `ports/musl-capstone/runtime/native-syscall.S`, `delegate.c` |
+| Application portability | Native hush shell and versioned Perl pointer-provenance repair; no new hardware instructions | [hush](../../ports/hush/app/README.md), [Perl provenance](../../ports/perl/provenance/README.md) |
 | Evidence | QEMU boundary tests, hostile inputs, lifecycle/race tests, SPEC and SQLite results | [native task qualification](../../runtime/virtual/tests/native-task/README.md), [copyable qualification](../../runtime/virtual/tests/copyable-only/README.md) |
 
 The large source diff includes imported dispatcher/test foundations and raw
@@ -227,7 +230,9 @@ comparator result. The [reproduction guide](../../runtime/virtual/tests/native-t
 includes the four helpers and their synthetic regression suite. This is
 functional qualification; no instruction-count or FPGA speed result is claimed.
 
-| Existing C-port entry | Full test result |
+### Historical results and diagnosis at `09b90be908e6`
+
+| Existing C-port entry | Historical full test result |
 | --- | --- |
 | 502.gcc_r | PASS, including generated assembly comparison |
 | 519.lbm_r | PASS |
@@ -241,19 +246,19 @@ functional qualification; no instruction-count or FPGA speed result is claimed.
 | 525.x264_r | PASS, complete 156-frame encode and all three image comparisons |
 
 The [Perl diagnosis](../../runtime/virtual/tests/native-task/spec-perl-blocker.json)
-confirms a missing native `chdir` service (`ENOSYS`). `t/TEST` ignores that
-failure, then cannot open relative `base/cond.t`. Its outer `test.pl` uses
+confirmed a missing native `chdir` service (`ENOSYS`). `t/TEST` ignored that
+failure, then could not open relative `base/cond.t`. Its outer `test.pl` used
 `do 't/TEST'` without checking the exception, so the official invocation exits
 zero despite incomplete output. Running `./perlbench_r -I. -I./lib t/TEST`
 directly in the staged directory exposes the error and exits 2. This diagnostic
 does not change the official workload or its failed qualification status.
 
-Fixing cwd handling alone is not full closure: the native C probe also observes
-`ENOSYS` for pipe/popen and signal disposition, and the subprocess path needs
-spawn/wait support. Those services need their own confinement/lifecycle design
-and tests. Signal refusals alone do not explain this failure: the successful
-makerand case also encounters them. These are software scope gaps, not evidence
-that the RTL must implement additional application-specific instructions.
+The historical native C probe also observed missing pipe/popen, signal disposition
+and spawn/wait services. Subsequent commits implement and qualify confined pipes,
+default/ignore signals, native subprocesses and hush, as linked above. Signal
+refusals alone did not explain the original failure: the successful makerand
+case encountered them too. These software repairs add no application-specific
+RTL instructions.
 
 ## 5. Suggested FPGA implementation/measurement ladder
 
@@ -284,8 +289,14 @@ process, spawn, directory and time patches; prepared Linux also needs the docume
 helper patches. `capstone/tests/capstone-test-env.sh` must be sourced before
 build/test commands. Keep licensed benchmark sources and artifacts out of Git.
 
+Perl's full workload additionally needs the exact pinned shell executable grant
+`capstone_vm.dom_shell=PATH`, exact device grant `capstone_vm.dom_null=1`, and
+confined temporary-directory alias `capstone_vm.dom_local_tmp=1`. These default
+off and do not enable broad filesystem grants. See [child-process setup](../../runtime/virtual/tests/native-task/README.md#native-child-processes)
+and [private temporary files](../../runtime/virtual/tests/native-task/README.md#private-temporary-files).
+
 The current backend is default-off, root-only and single-hart. Caught signals,
-automatic restarts, protected fork/clone, SMP, native audit/seccomp/tracing and
+automatic restarts, protected fork/clone, caller-replacing exec, SMP, native audit/seccomp/tracing and
 complete arbitrary Linux syscall coverage remain outside the qualified scope.
 Unsupported policy configurations are refused. Full native FP/register/raw
 platform matrices remain separate gates. Neither SPEC success nor this handoff
