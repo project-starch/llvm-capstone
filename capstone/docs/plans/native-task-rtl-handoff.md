@@ -80,7 +80,8 @@ task integration and the latest file services add no new processor opcode.
 The current inventory contains 48 Linux/runtime paths, 14 application ABI/port
 paths, 140 verification/evidence paths and 21 documentation paths. The additional
 QEMU gitlink contains the processor-model delta; its source-file count is not
-included in those totals.
+included in those totals. That delta separately contains 13 implementation paths
+and 14 test/documentation paths, also enumerated in the current inventory.
 
 ## 3. Hardware contract to implement or demonstrate already present
 

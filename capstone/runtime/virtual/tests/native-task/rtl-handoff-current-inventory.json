@@ -1602,5 +1602,172 @@
     "perl_focused": "../../../../ports/perl/provenance/qualification.json",
     "full_ten_entry_gate": "PENDING",
     "fpga_qualified": false
-  }
+  },
+  "qemu_files": [
+    {
+      "path": "hw/riscv/virt.c",
+      "added": 18,
+      "removed": 0,
+      "role": "implementation"
+    },
+    {
+      "path": "hw/riscv/virt_capstone.c",
+      "added": 18,
+      "removed": 0,
+      "role": "implementation"
+    },
+    {
+      "path": "target/riscv/capstone_supervisor.c",
+      "added": 347,
+      "removed": 5,
+      "role": "implementation"
+    },
+    {
+      "path": "target/riscv/capstone_table.c",
+      "added": 34,
+      "removed": 2,
+      "role": "implementation"
+    },
+    {
+      "path": "target/riscv/capstone_table.h",
+      "added": 3,
+      "removed": 0,
+      "role": "implementation"
+    },
+    {
+      "path": "target/riscv/cpu.c",
+      "added": 6,
+      "removed": 36,
+      "role": "implementation"
+    },
+    {
+      "path": "target/riscv/cpu.h",
+      "added": 0,
+      "removed": 1,
+      "role": "implementation"
+    },
+    {
+      "path": "target/riscv/cpu_cfg.h",
+      "added": 3,
+      "removed": 0,
+      "role": "implementation"
+    },
+    {
+      "path": "target/riscv/cpu_helper.c",
+      "added": 2,
+      "removed": 99,
+      "role": "implementation"
+    },
+    {
+      "path": "target/riscv/helper.h",
+      "added": 1,
+      "removed": 0,
+      "role": "implementation"
+    },
+    {
+      "path": "target/riscv/insn32.decode",
+      "added": 5,
+      "removed": 15,
+      "role": "implementation"
+    },
+    {
+      "path": "target/riscv/insn_trans/trans_capstone.c.inc",
+      "added": 25,
+      "removed": 154,
+      "role": "implementation"
+    },
+    {
+      "path": "target/riscv/translate.c",
+      "added": 3,
+      "removed": 2,
+      "role": "implementation"
+    },
+    {
+      "path": "tests/capstone-checked-copy/README.md",
+      "added": 88,
+      "removed": 0,
+      "role": "verification_or_documentation"
+    },
+    {
+      "path": "tests/capstone-checked-copy/atomic.py",
+      "added": 76,
+      "removed": 0,
+      "role": "verification_or_documentation"
+    },
+    {
+      "path": "tests/capstone-checked-copy/run.py",
+      "added": 204,
+      "removed": 0,
+      "role": "verification_or_documentation"
+    },
+    {
+      "path": "tests/copyable-only/README.md",
+      "added": 47,
+      "removed": 0,
+      "role": "verification_or_documentation"
+    },
+    {
+      "path": "tests/copyable-only/mint.S",
+      "added": 73,
+      "removed": 0,
+      "role": "verification_or_documentation"
+    },
+    {
+      "path": "tests/copyable-only/raw-boundary.S",
+      "added": 121,
+      "removed": 0,
+      "role": "verification_or_documentation"
+    },
+    {
+      "path": "tests/copyable-only/raw-boundary.sh",
+      "added": 27,
+      "removed": 0,
+      "role": "verification_or_documentation"
+    },
+    {
+      "path": "tests/copyable-only/removed.S",
+      "added": 72,
+      "removed": 0,
+      "role": "verification_or_documentation"
+    },
+    {
+      "path": "tests/copyable-only/run.sh",
+      "added": 24,
+      "removed": 0,
+      "role": "verification_or_documentation"
+    },
+    {
+      "path": "tests/virtual-capstone-runtime/context-transport.sh",
+      "added": 41,
+      "removed": 0,
+      "role": "verification_or_documentation"
+    },
+    {
+      "path": "tests/virtual-capstone-runtime/copyable-finish.inc",
+      "added": 30,
+      "removed": 0,
+      "role": "verification_or_documentation"
+    },
+    {
+      "path": "tests/virtual-capstone-runtime/fp.S",
+      "added": 182,
+      "removed": 9,
+      "role": "verification_or_documentation"
+    },
+    {
+      "path": "tests/virtual-capstone-runtime/namespace-transport.inc",
+      "added": 102,
+      "removed": 0,
+      "role": "verification_or_documentation"
+    },
+    {
+      "path": "tests/virtual-capstone-runtime/refuse-transport.inc",
+      "added": 50,
+      "removed": 0,
+      "role": "verification_or_documentation"
+    }
+  ],
+  "qemu_changed_paths": 27,
+  "qemu_implementation_paths": 13,
+  "qemu_verification_paths": 14
 }
