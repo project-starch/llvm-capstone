@@ -73,7 +73,8 @@ struct arena {
      * open-addressing table of frame_slots(count) entries. It is the whole-arena duplicate
      * check (frames_distinct, commit 35fee9127ec2) kept for the arena's lifetime, so a page
      * admitted after the mint -- at a fault, in a pin-ahead window or by the resident scan --
-     * is held to the same rule as one pinned at mint. Every arena has a frame set. */
+     * is held to the same rule as one pinned at mint. Unpinned arenas have
+     * neither pages nor frames; their count still describes range geometry. */
     unsigned long *frames;
     /* Data fault events received on this arena's pages, counted under diag_admit where CV_STEP
      * receives the event (not where CAPSTONE_VM_STATS faults is advanced, at the resolution or
@@ -1737,15 +1738,18 @@ static int add(struct context *c, struct cv_thread *t, struct cv_map *r)
     if (!a) return -ENOMEM;
     a->id = c->next_id + 1;
     count = (r->bytes - r->rx_bytes) / PAGE_SIZE;
-    pages = kvcalloc(count, sizeof(*pages), GFP_KERNEL_ACCOUNT);
-    if (!pages) { kfree(a); return -ENOMEM; }
+    pages = NULL;
+    if (!unpinned) {
+        pages = kvcalloc(count, sizeof(*pages), GFP_KERNEL_ACCOUNT);
+        if (!pages) { kfree(a); return -ENOMEM; }
+    }
     /* The arena's geometry, before anything is pinned against it. The frame set lives as long
      * as the arena (a page admitted at any later fault is checked against it), so it is
      * accounted like the page array. */
     a->address = r->address; a->bytes = r->bytes; a->rx_bytes = r->rx_bytes;
     a->pages = pages; a->count = count;
     a->lazy = mapping_reply || (lazy_grants && !eager_grant(t, r));
-    {
+    if (!unpinned) {
         a->frames = kvcalloc(frame_slots(count), sizeof(*a->frames), GFP_KERNEL_ACCOUNT);
         if (!a->frames) { kvfree(pages); kfree(a); return -ENOMEM; }
     }
@@ -1825,7 +1829,7 @@ static int add(struct context *c, struct cv_thread *t, struct cv_map *r)
     if (t->started) t->reply_cap = true;
     return 0;
 unpin:
-    for (i = 0; i < count; ++i) {
+    for (i = 0; !unpinned && i < count; ++i) {
         if (!pages[i]) continue;
         unpin_user_page(pages[i]);
         if (a->lazy) --c->stats.pinned_pages;
@@ -2811,7 +2815,7 @@ static int touch(struct context *c, const struct cv_touch *r)
         if (at - a->address < a->rx_bytes) return -EACCES;
         if (!a->lazy) continue;
         index = (at - a->address - a->rx_bytes) / PAGE_SIZE;
-        if (a->pages[index]) continue;
+        if (!unpinned && a->pages[index]) continue;
         error = admit_page(c, a, index);
         if (error) return error;
     }
