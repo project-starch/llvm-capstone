@@ -17,6 +17,7 @@ for name in ['qemu', 'images', 'firmware', 'probes', 'out']:
     p.add_argument('--'+name, type=Path, required=True)
 p.add_argument('--feature', type=int, choices=[0, 1], default=1)
 p.add_argument('--fast', type=int, choices=[0, 1], default=1)
+p.add_argument('--locks', type=int, choices=[0, 1], default=0)
 a = p.parse_args()
 a.out.mkdir(parents=True, exist_ok=False)
 stage = a.out/'stage'
@@ -60,7 +61,7 @@ else:
 (stage/'gate.sh').write_text('\n'.join(lines)+'\n')
 (a.out/'inputs.json').write_text(json.dumps(inputs, indent=2)+'\n')
 slots = 1 if a.mode == 'io' else 32
-flags = f'capstone_vm.native_task=1 capstone_vm.native_io={a.feature} capstone_vm.native_fast={a.fast} capstone_vm.native_route_trace={int(a.mode == "io")} capstone_vm.dom_binfmt=1 capstone_vm.native_dispatch=1 capstone_vm.checked_copy=1 capstone_vm.native_slot_transport=1 capstone_vm.unpinned=1 capstone_vm.supervisor_slots={slots}'
+flags = f'capstone_vm.native_task=1 capstone_vm.native_io={a.feature} capstone_vm.native_locks={a.locks} capstone_vm.native_fast={a.fast} capstone_vm.native_route_trace={int(a.mode == "io")} capstone_vm.dom_binfmt=1 capstone_vm.native_dispatch=1 capstone_vm.checked_copy=1 capstone_vm.native_slot_transport=1 capstone_vm.unpinned=1 capstone_vm.supervisor_slots={slots}'
 cmd = ['python3', str(here.parents[1]/'run-staged.py'), '--qemu', str(a.qemu.resolve()), '--images', str(a.images.resolve()), '--firmware', str(a.firmware.resolve()), '--stage', str(stage.resolve()), '--work', str((a.out/'vm').resolve()), '--disk-mib', '64', '--memory', '4G', '--timeout', '360', '--icount', '0', '--kernel-arg', flags]
 (a.out/'command.json').write_text(json.dumps(cmd, indent=2)+'\n')
 env = dict(os.environ, CAPSTONE_QEMU_CPU_EXTRA=f'x-capstone-supervisor-slots={slots},x-pcrel=false,x-capstone-raw-moves=true,x-capstone-test-csrs=false,x-capstone-checked-copy=true,x-capstone-context-transport=true')

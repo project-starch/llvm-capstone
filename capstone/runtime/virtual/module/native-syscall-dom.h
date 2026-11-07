@@ -358,6 +358,54 @@ static __always_inline bool nf_regs_plain(struct cv_thread *t, u64 kinds, u64 po
 #include "native-process-dom.h"
 #include "native-spawn-dom.h"
 
+/* A fixed-size lock request needs no generic request snapshot or bounce allocation.
+ * Shape/policy rejection precedes epoch admission; after admission no fallback. */
+static bool native_lock_fast(struct context *c, struct cv_step *step, u64 kinds)
+{
+    struct cn_context *n = c->native_context;
+    struct cv_thread *t = c->main_thread;
+    struct native_wire_flock wire;
+    struct flock lock = {0};
+    struct cn_capref ref;
+    struct ns_copy_result copied;
+    struct file *file;
+    u64 cmd = step->args[1], epoch = READ_ONCE(t->frame[82]);
+    long rc;
+    if (step->args[6] != CAPSTONE_NR_FCNTL_LOCK ||
+        (cmd != F_GETLK && cmd != F_SETLK && cmd != F_SETLKW) ||
+        !nf_regs_plain(t, kinds, 1ULL << 12) || step->args[0] > INT_MAX ||
+        !dom_fd_allowed(c, step->args[0])) return false;
+    file = fget(step->args[0]);
+    if (!file) return false;
+    if (file->private_data == c || !file->f_op) { fput(file); return false; }
+    rc = ns_session_admit(c->native_session, epoch);
+    if (rc) { rc = -ESTALE; goto done; }
+    ref = (struct cn_capref){t->id, epoch, 12, 0};
+    if (native_authorize_reuse(n, &ref, 0, sizeof(wire), false) ||
+        (cmd == F_GETLK && native_authorize_reuse(n, &ref, 0, sizeof(wire), true))) {
+        rc = -EFAULT; goto done;
+    }
+    copied = native_copy(c, n, &n->owner, &ref, 0, &wire, sizeof(wire), NS_FROM_DOMAIN);
+    if (copied.cause || copied.bytes_done != sizeof(wire)) { rc = -EFAULT; goto done; }
+    lock.l_type = wire.type; lock.l_whence = wire.whence;
+    lock.l_start = wire.start; lock.l_len = wire.length; lock.l_pid = wire.pid;
+    mutex_unlock(&vm_lock);
+    rc = capstone_native_fcntl(step->args[0], file, cmd, 0, &lock, DOM_FDS);
+    mutex_lock(&vm_lock);
+    if (rc <= -ERESTARTSYS && rc >= -ERESTART_RESTARTBLOCK) rc = -EINTR;
+    if (!rc && cmd == F_GETLK) {
+        memset(&wire, 0, sizeof(wire));
+        wire.type = lock.l_type; wire.whence = lock.l_whence;
+        wire.start = lock.l_start; wire.length = lock.l_len; wire.pid = lock.l_pid;
+        copied = native_copy(c, n, &n->owner, &ref, 0, &wire, sizeof(wire), NS_TO_DOMAIN);
+        if (copied.cause || copied.bytes_done != sizeof(wire)) rc = -EFAULT;
+    }
+done:
+    fput(file);
+    step->result = rc;
+    ++native_fast_hits;
+    return true;
+}
 /* Returns true when the call was completed (step->result set). */
 static bool native_fast_try(struct context *c, struct cv_step *step)
 {
@@ -374,6 +422,7 @@ static bool native_fast_try(struct context *c, struct cv_step *step)
     if (!native_fast || !n || native_owner(n, &n->owner) ||
         current->seccomp.mode != SECCOMP_MODE_DISABLED) return false;
     kinds = READ_ONCE(t->frame[83]);
+    if (native_lock_fast(c, step, kinds)) return true;
     if (native_task_value(nr, &value)) {
         if (!nf_regs_plain(t, kinds, 0)) return false;
         if (ns_session_admit(c->native_session, READ_ONCE(t->frame[82]))) value = -ESTALE;

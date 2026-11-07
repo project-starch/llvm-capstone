@@ -103,7 +103,8 @@ int capstone_launch_unpack(void *buffer, size_t capacity,
     if (h.bytes < header_bytes) return EINVAL;
     memcpy(&native, (char *)buffer + sizeof h, sizeof native);
     /* Unknown feature contracts disable routing, without guessing support. */
-    if (native.abi != 1 || native.features != CAPSTONE_LAUNCH_NATIVE_IO ||
+    if (native.abi != 1 || !(native.features & CAPSTONE_LAUNCH_NATIVE_IO) ||
+        (native.features & ~(CAPSTONE_LAUNCH_NATIVE_IO | CAPSTONE_LAUNCH_NATIVE_LOCKS)) ||
         native.max_io != 65536 || native.reserved)
       memset(&native, 0, sizeof native);
   }
