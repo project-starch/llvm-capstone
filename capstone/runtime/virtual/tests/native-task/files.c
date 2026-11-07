@@ -29,6 +29,26 @@ static void *scalar(unsigned long n) {
 static long raw_lock(int fd, unsigned long cmd, void *p) {
     return __capstone_native_syscall(0xc0de0003UL,scalar(fd),scalar(cmd),p,0,0,0);
 }
+static void raw_stat_checks(int fd) {
+    struct stat st;
+    char name[] = "file-data";
+    unsigned long base = __builtin_capstone_cap_get_cursor(&st);
+    void *tiny = __builtin_capstone_cap_shrink(&st,base,base+127);
+    void *ro = __builtin_capstone_cap_tighten(&st,4);
+    CHECK(sizeof(st)==128);
+    CHECK(__capstone_native_syscall(80,scalar(fd),tiny,0,0,0,0)==-EFAULT);
+    CHECK(__capstone_native_syscall(80,scalar(fd),ro,0,0,0,0)==-EFAULT);
+    CHECK(__capstone_native_syscall(80,scalar(100),&st,0,0,0,0)==-EBADF);
+    base = __builtin_capstone_cap_get_cursor(name);
+    void *tight = __builtin_capstone_cap_shrink(name,base,base+sizeof(name));
+    void *unterminated = __builtin_capstone_cap_shrink(name,base,base+sizeof(name)-1);
+    CHECK(__capstone_native_syscall(79,scalar(AT_FDCWD),tight,&st,0,0,0)==0 && st.st_size==12);
+    CHECK(__capstone_native_syscall(79,scalar(AT_FDCWD),unterminated,&st,0,0,0)==-EFAULT);
+    CHECK(__capstone_native_syscall(79,scalar(AT_FDCWD),name,ro,0,0,0)==-EFAULT);
+    CHECK(__capstone_native_syscall(79,scalar(AT_FDCWD),name,&st,scalar(1UL<<32),0,0)==-EINVAL);
+    CHECK(__capstone_native_syscall(79,scalar(AT_FDCWD),0,&st,0,0,0)==-EFAULT);
+    CHECK(__capstone_native_syscall(79,scalar(AT_FDCWD),name,&st,0,name,0)==-EINVAL);
+}
 static void raw_checks(int fd) {
     struct flock f={.l_type=F_UNLCK,.l_whence=SEEK_SET,.l_start=100,.l_len=10};
     CHECK(sizeof(f)==32);
@@ -88,6 +108,21 @@ int main(int argc, char **argv) {
         for(int i=3;i<12;i++) CHECK(buf[i]==0);
         errno=0; CHECK(ftruncate(fd,-1)==-1 && errno==EINVAL);
         CHECK(fstat(fd,&st)==0 && st.st_size==12);
+        {
+            struct stat byname;
+            CHECK(fstatat(AT_FDCWD,"file-data",&byname,0)==0 && !memcmp(&st,&byname,sizeof(st)));
+            errno=0; CHECK(stat("missing-file",&byname)==-1 && errno==ENOENT);
+            errno=0; CHECK(stat("../outside-sentinel",&byname)==-1 && errno==EACCES);
+            errno=0; CHECK(stat("/tmp/outside-sentinel",&byname)==-1 && errno==ENOENT);
+            errno=0; CHECK(stat("escape/outside-sentinel",&byname)==-1 && errno==ENOTDIR);
+            int directory=open(".",O_RDONLY|O_DIRECTORY);
+            CHECK(directory>=0);
+            CHECK(fstatat(directory,"file-data",&byname,AT_SYMLINK_NOFOLLOW)==0 && byname.st_size==12);
+            CHECK(close(directory)==0);
+        }
+#ifdef FILES_RAW
+        raw_stat_checks(fd);
+#endif
         CHECK(fsync(fd)==0 && fdatasync(fd)==0);
         int ro=open("file-data",O_RDONLY);
         CHECK(ro>=0);

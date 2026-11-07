@@ -83,6 +83,10 @@ int main(void) {
   native->features = CAPSTONE_LAUNCH_NATIVE_LOCKS;
   assert(!unpack(sizeof data) && !view.task.native.abi);
   native->features = 5;
+  assert(!unpack(sizeof data) && view.task.native.features == 5);
+  native->features = 7;
+  assert(!unpack(sizeof data) && view.task.native.features == 7);
+  native->features = 9;
   assert(!unpack(sizeof data) && !view.task.native.abi);
   native->features = 1; native->max_io = 1;
   assert(!unpack(sizeof data) && !view.task.native.abi);
