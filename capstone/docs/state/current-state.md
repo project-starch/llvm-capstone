@@ -1,3 +1,34 @@
+## Current GCC overhead against ordinary RV64
+
+Matched current Linux/QEMU, plain/native/native/plain fresh guests, all native
+routes enabled in both arms: 30.166M plain versus 50.730M Capstone instruction
+attempts (+68.17%). Four exact reference matches; authenticated phase boundaries,
+phase conservation and a corrupt-fingerprint rejection control pass in 69.4s.
+Kernel accounts for 14.698M of the 20.563M extra attempts (71.47%); program and
+runtime account for 5.859M. Startup/initialization adds 7.328M, compilation/output
+10.290M, finalization/exit 2.946M.
+
+During compilation, first-instruction attempts at Linux do_mmap rise from 118
+to 281 and handle_mm_fault from 418 to 959. Capstone heap mappings also number
+281, with 239 heap unmaps. This establishes amplified memory-management traffic;
+flat deltas include memset, mapping-tree lookup, domain stepping and faults.
+At exit, arch_free_page alone adds 428,228 flat attempts. Whole-invocation sysfs
+counters observe 1,396 cleared tagged pages versus zero, and about 2,591 freed
+pages versus 1,307 (these counters also include measurement shell activity).
+The old pinned-page retirement sweep remains zero. No heap-remapping entry was
+observed; map-copy-unmap is not an established cause in this workload.
+
+Source mechanisms include mallocng capability layout/alignment, page-owner index
+mappings, per-arena bookkeeping arrays allocated even unpinned, and domain fault
+handling including 855 fault-ahead pages. Their individual causal contributions
+are not yet isolated. Plain and Capstone compiler/libc provenance differs, so
+this is an end-to-end comparison on the same patched kernel, not isolated ISA
+cost or a stock-kernel result. Counts are attempts, not hardware cycles.
+
+[Inputs, phase means, symbol deltas, counters and limitations](../../runtime/virtual/tests/native-task/gcc-current-plain-attribution.json).
+The reproducible runner is `measure-gcc-phases.py` beside that record; raw evidence
+is archived under `/tmp/capstone/native-task/gcc-attribution-01/evidence`.
+
 ## Current GCC native-route comparison
 
 SPEC 502.gcc_r test/t1.c with `-O3 -finline-limit=50000` now has a matched
