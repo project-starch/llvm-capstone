@@ -12,6 +12,7 @@
 #define CAPSTONE_LAUNCH_NATIVE_IO 1u
 #define CAPSTONE_LAUNCH_NATIVE_LOCKS 2u
 #define CAPSTONE_LAUNCH_NATIVE_STAT 4u
+#define CAPSTONE_LAUNCH_NATIVE_SEEK 8u
 struct capstone_launch_native {
   uint32_t abi, features, max_io, reserved;
 };

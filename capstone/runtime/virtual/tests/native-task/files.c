@@ -29,6 +29,20 @@ static void *scalar(unsigned long n) {
 static long raw_lock(int fd, unsigned long cmd, void *p) {
     return __capstone_native_syscall(0xc0de0003UL,scalar(fd),scalar(cmd),p,0,0,0);
 }
+static void raw_seek_checks(int fd) {
+    char tag;
+    _Alignas(16) unsigned long words[2] = {(unsigned long)fd, 1};
+    void *dirty;
+    __asm__ volatile("ldc %0, 0(%1)" : "=r"(dirty) : "r"(words) : "memory");
+    CHECK(__capstone_native_syscall(62,scalar(fd),scalar(-1),scalar(SEEK_SET),0,0,0)==-EINVAL);
+    CHECK(__capstone_native_syscall(62,scalar(fd),0,scalar((1UL<<32)|SEEK_SET),0,0,0)==-EINVAL);
+    CHECK(__capstone_native_syscall(62,&tag,0,0,0,0,0)==-EINVAL);
+    CHECK(__capstone_native_syscall(62,scalar(fd),&tag,0,0,0,0)==-EINVAL);
+    CHECK(__capstone_native_syscall(62,scalar(fd),0,0,&tag,0,0)==-EINVAL);
+    CHECK(__capstone_native_syscall(62,dirty,0,0,0,0,0)==-EINVAL);
+    CHECK(__capstone_native_syscall(62,scalar(fd),scalar(-1),scalar(SEEK_END),0,0,0)==11);
+    CHECK(__capstone_native_syscall(62,scalar(fd),scalar(6),scalar(SEEK_SET),0,0,0)==6);
+}
 static void raw_stat_checks(int fd) {
     struct stat st;
     char name[] = "file-data";
@@ -120,8 +134,19 @@ int main(int argc, char **argv) {
             CHECK(fstatat(directory,"file-data",&byname,AT_SYMLINK_NOFOLLOW)==0 && byname.st_size==12);
             CHECK(close(directory)==0);
         }
+        errno=0; CHECK(lseek(fd,-1,SEEK_SET)==-1 && errno==EINVAL);
+        CHECK(lseek(fd,0,SEEK_CUR)==6);
+        CHECK(lseek(fd,-1,SEEK_END)==11);
+        CHECK(lseek(fd,1,SEEK_CUR)==12);
+        errno=0; CHECK(lseek(fd,-20,SEEK_CUR)==-1 && errno==EINVAL);
+        CHECK(lseek(fd,0,SEEK_CUR)==12);
+        errno=0; CHECK(lseek(fd,0,777)==-1 && errno==EINVAL);
+        errno=0; CHECK(lseek(0,0,SEEK_SET)==-1 && errno==ESPIPE);
+        errno=0; CHECK(lseek(100,0,SEEK_SET)==-1 && errno==EBADF);
+        CHECK(lseek(fd,6,SEEK_SET)==6);
 #ifdef FILES_RAW
         raw_stat_checks(fd);
+        raw_seek_checks(fd);
 #endif
         CHECK(fsync(fd)==0 && fdatasync(fd)==0);
         int ro=open("file-data",O_RDONLY);

@@ -118,6 +118,20 @@ static struct ns_copy_result native_copy(void *opaque, struct cn_context *n,
                                   direction == NS_TO_DOMAIN ? CU_TO_DOMAIN : CU_FROM_DOMAIN);
     return (struct ns_copy_result){r.bytes_done, r.cause};
 }
+/* vm_lock held; preserve Linux's shared open-file-description position lock. */
+static long native_seek_issue(struct file *file, u64 offset, u64 whence)
+{
+    long rc;
+    /* Reject malformed 64-bit selectors before narrowing to Linux's type. */
+    if (whence > SEEK_MAX) return -EINVAL;
+    mutex_unlock(&vm_lock);
+    if (file->f_mode & FMODE_ATOMIC_POS) mutex_lock(&file->f_pos_lock);
+    rc = vfs_llseek(file, (s64)offset, whence);
+    if (rc <= -ERESTARTSYS && rc >= -ERESTART_RESTARTBLOCK) rc = -EINTR;
+    if (file->f_mode & FMODE_ATOMIC_POS) mutex_unlock(&file->f_pos_lock);
+    mutex_lock(&vm_lock);
+    return rc;
+}
 static bool native_supported(u64 nr)
 {
     switch (nr) {
@@ -278,13 +292,7 @@ static struct ns_completion native_issue(void *opaque, const struct ns_invocatio
         clear_bit(a[0], c->dom_delegate->fds);
         mutex_unlock(&vm_lock); rc = close_fd(a[0]); mutex_lock(&vm_lock); break;
     case CAPSTONE_SYS_lseek:
-        mutex_unlock(&vm_lock);
-        /* Match fdget_pos: duplicated/inherited descriptions share f_pos
-         * with ordinary Linux readers and writers outside vm_lock. */
-        if (file->f_mode & FMODE_ATOMIC_POS) mutex_lock(&file->f_pos_lock);
-        rc = vfs_llseek(file, a[1], a[2]);
-        if (file->f_mode & FMODE_ATOMIC_POS) mutex_unlock(&file->f_pos_lock);
-        mutex_lock(&vm_lock);
+        rc = native_seek_issue(file, a[1], a[2]);
         break;
     case CAPSTONE_SYS_read: case CAPSTONE_SYS_write:
     case CAPSTONE_SYS_pread64: case CAPSTONE_SYS_pwrite64:
@@ -357,6 +365,26 @@ static __always_inline bool nf_regs_plain(struct cv_thread *t, u64 kinds, u64 po
 }
 #include "native-process-dom.h"
 #include "native-spawn-dom.h"
+
+/* Scalar-only service: no capability buffer or request snapshot is needed. */
+static bool native_seek_fast(struct context *c, struct cv_step *step, u64 kinds)
+{
+    struct cv_thread *t = c->main_thread;
+    struct file *file;
+    long rc;
+    if (step->args[6] != CAPSTONE_SYS_lseek || !nf_regs_plain(t, kinds, 0) ||
+        step->args[0] > INT_MAX || !dom_fd_allowed(c, step->args[0])) return false;
+    file = fget(step->args[0]);
+    if (!file) return false;
+    if (file->private_data == c || !file->f_op) { fput(file); return false; }
+    rc = ns_session_admit(c->native_session, READ_ONCE(t->frame[82]));
+    if (rc) rc = -ESTALE;
+    else rc = native_seek_issue(file, step->args[1], step->args[2]);
+    fput(file);
+    step->result = rc;
+    ++native_fast_hits;
+    return true;
+}
 
 /* Fixed stat output and a bounded, checked pathname snapshot. Never read past
  * the first NUL: a valid string may end exactly at a capability/page boundary. */
@@ -475,6 +503,7 @@ static bool native_fast_try(struct context *c, struct cv_step *step)
     if (!native_fast || !n || native_owner(n, &n->owner) ||
         current->seccomp.mode != SECCOMP_MODE_DISABLED) return false;
     kinds = READ_ONCE(t->frame[83]);
+    if (native_seek_fast(c, step, kinds)) return true;
     if (native_stat_fast(c, step, kinds)) return true;
     if (native_lock_fast(c, step, kinds)) return true;
     if (native_task_value(nr, &value)) {
