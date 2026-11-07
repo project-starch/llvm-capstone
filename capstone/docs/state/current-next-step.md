@@ -5,13 +5,19 @@ kernel, with do_mmap entries 118 versus 281 during compilation and materially
 more fault and page-release work. The phase attribution milestone is complete.
 [Evidence](../../runtime/virtual/tests/native-task/gcc-current-plain-attribution.json).
 
-Next perform a controlled memory-path experiment, preserving capability lifetime
-and authority checks: first audit every unpinned use of arena pages/frame arrays
-before omitting their allocation; separately measure mapping sizes/request
-callers and allocator representability inflation. Keep these interventions
-separate from fault-ahead tuning to isolate each effect. No runtime optimization
-or deletion is included in the attribution change. Require exact GCC output,
-existing safety checks and a <=300s feedback gate for each candidate.
+Mapping-size and request-caller diagnostics now show 2.69x cumulative mapping
+bytes, including 195 line-note arrays doubled from 3,200 to 6,400 bytes and 65
+pointer tables doubled from 2,048 to 4,096 bytes. Separate fault-ahead and
+validated-VMA controls save only 0.269% and 0.984% total attempts respectively.
+[Mechanism evidence](../../runtime/virtual/tests/native-task/gcc-memory-mechanisms.json).
+
+Next correlate these allocation sites with mapping creation/release, then test
+one allocator grouping/retention change with capability bounds/revocation intact.
+Do not infer all extra mappings come from those two sites. In parallel only if
+authorized, audit every unpinned use of arena pages/frame arrays before omitting
+their allocation. Keep each intervention separate and require exact GCC output,
+existing safety checks and a <=300s feedback gate. The fault options are not
+new defaults; their broader safety/workload qualification remains separate.
 Do not infer that all 14.698M extra kernel attempts are removable. Tag clearing
 and ordinary Linux page accounting are distinct from obsolete pinning work.
 The checked-string candidate below remains relevant to metadata-heavy workloads,

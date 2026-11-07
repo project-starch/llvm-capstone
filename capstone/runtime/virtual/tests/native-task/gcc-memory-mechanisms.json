@@ -1,0 +1,368 @@
+{
+  "status": "PASS",
+  "scope": "SPEC 502.gcc_r test t1.c; same recorded binaries and Linux/QEMU as gcc-current-plain-attribution.json",
+  "archive": "/tmp/capstone/native-task/gcc-attribution-01/evidence",
+  "mapping_trace": {
+    "plain": {
+      "counts": {
+        "__mmap": 118,
+        "__munmap": 94
+      },
+      "requested_mapping_bytes": 1912832,
+      "page_rounded_mapping_bytes": 1912832,
+      "mapping_size_histogram": [
+        [
+          4096,
+          22
+        ],
+        [
+          8192,
+          33
+        ],
+        [
+          12288,
+          2
+        ],
+        [
+          16384,
+          32
+        ],
+        [
+          20480,
+          16
+        ],
+        [
+          28672,
+          2
+        ],
+        [
+          32768,
+          4
+        ],
+        [
+          69632,
+          7
+        ]
+      ],
+      "scope": "Compilation/output; cumulative mapping requests, not peak memory or physical residency"
+    },
+    "native": {
+      "counts": {
+        "aligned_alloc": 346,
+        "__heap_mapping": 281,
+        "__heap_unmapping": 239
+      },
+      "requested_mapping_bytes": 5132840,
+      "page_rounded_mapping_bytes": 5140480,
+      "mapping_size_histogram": [
+        [
+          4096,
+          43
+        ],
+        [
+          8192,
+          121
+        ],
+        [
+          12288,
+          2
+        ],
+        [
+          16384,
+          16
+        ],
+        [
+          20480,
+          4
+        ],
+        [
+          24576,
+          40
+        ],
+        [
+          32768,
+          20
+        ],
+        [
+          40960,
+          17
+        ],
+        [
+          45056,
+          2
+        ],
+        [
+          53248,
+          4
+        ],
+        [
+          69632,
+          10
+        ],
+        [
+          131348,
+          2
+        ]
+      ],
+      "scope": "Compilation/output; cumulative mapping requests, not peak memory or physical residency"
+    }
+  },
+  "request_trace": {
+    "plain": [
+      {
+        "function": "xrealloc",
+        "caller": "_cpp_clean_line",
+        "arg0": 0,
+        "arg1": 3200,
+        "count": 195
+      },
+      {
+        "function": "xcalloc",
+        "caller": "pointer_set_create",
+        "arg0": 256,
+        "arg1": 8,
+        "count": 9
+      },
+      {
+        "function": "xcalloc",
+        "caller": "pointer_map_create",
+        "arg0": 256,
+        "arg1": 8,
+        "count": 56
+      }
+    ],
+    "native": [
+      {
+        "function": "xrealloc",
+        "caller": "_cpp_clean_line",
+        "arg0": 0,
+        "arg1": 6400,
+        "count": 195
+      },
+      {
+        "function": "xcalloc",
+        "caller": "pointer_set_create",
+        "arg0": 256,
+        "arg1": 16,
+        "count": 9
+      },
+      {
+        "function": "xcalloc",
+        "caller": "pointer_map_create",
+        "arg0": 256,
+        "arg1": 16,
+        "count": 56
+      }
+    ]
+  },
+  "fault_experiments": {
+    "fault-baseline": {
+      "additional_kernel_args": [],
+      "inputs": {
+        "qemu": "c6681ec8a8ff704b297ec3eafceb13b2fe9c1c61c7a65ed95304bd5dbe5183eb",
+        "firmware": "2335a28682ddf65e46c1f492632c2cb026efcb2271caf544a3f7ddc858b03e02",
+        "plugin": "b42832d44980e01ae4e758e0a754d54c0cda759e7846fc9d6647d3a5b271bf32",
+        "profrun": "1d13d4912794855ae9c3c3fe69c89ca55434c2dd02b836053ad18f7913b7904f",
+        "gcc": "a1509c81444586031c74c5752f72ec90dc6c7ab57635fff37ffa431c11663a9f",
+        "plain": "ebeca8e920328b5c893fc9ee910851cceabee2bebc00320322b2b77b75def4a0",
+        "input": "de7b86d79a68965adb62e750101d9211224884b2236053d906d1e23057bb6ad1",
+        "reference": "58111208509dd871223ae195a33304bd6b24afd29458f37c976556cbad506324",
+        "resolver": "09892db220a9b8f3c6b49022448ae1b155decea87d7929fb4e53e2e37548196d",
+        "Image": "33347599d611172636de3562ecd2f3c1194ce5e8aa7d1e718dd62147ffc86d21",
+        "System.map": "dec30d446d1a316c2dd6c8f60e870374c6dd99ba5e7a62f7f9813cf2e2b974ae",
+        "rootfs.ext2": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845"
+      },
+      "means": {
+        "plain": {
+          "total": 30162212.0,
+          "kernel": 12070203.0,
+          "program": 18087885.0
+        },
+        "native": {
+          "total": 50726001.0,
+          "kernel": 26768127.0,
+          "program": 23946835.0
+        }
+      },
+      "native_samples": [
+        50725811,
+        50726191
+      ],
+      "native_counters": [
+        {
+          "/sys/module/capstone_vm/parameters/unpinned_faults": 1228,
+          "/sys/module/capstone_vm/parameters/unpinned_fast_faults": 0,
+          "/sys/module/capstone_vm/parameters/unpinned_sweep_pages": 0,
+          "/sys/module/capstone_vm/parameters/fault_ahead_pages": 855,
+          "/sys/module/capstone_vm/parameters/fault_ahead_windows": 158,
+          "/sys/module/captag/parameters/cleared_pages": 1396,
+          "/sys/module/captag/parameters/freed_pages": 2644,
+          "/sys/module/captag/parameters/copies": 413
+        },
+        {
+          "/sys/module/capstone_vm/parameters/unpinned_faults": 1227,
+          "/sys/module/capstone_vm/parameters/unpinned_fast_faults": 0,
+          "/sys/module/capstone_vm/parameters/unpinned_sweep_pages": 0,
+          "/sys/module/capstone_vm/parameters/fault_ahead_pages": 855,
+          "/sys/module/capstone_vm/parameters/fault_ahead_windows": 158,
+          "/sys/module/captag/parameters/cleared_pages": 1396,
+          "/sys/module/captag/parameters/freed_pages": 2657,
+          "/sys/module/captag/parameters/copies": 413
+        }
+      ]
+    },
+    "no-ahead": {
+      "additional_kernel_args": [
+        "capstone_vm.fault_ahead_max=0"
+      ],
+      "inputs": {
+        "qemu": "c6681ec8a8ff704b297ec3eafceb13b2fe9c1c61c7a65ed95304bd5dbe5183eb",
+        "firmware": "2335a28682ddf65e46c1f492632c2cb026efcb2271caf544a3f7ddc858b03e02",
+        "plugin": "b42832d44980e01ae4e758e0a754d54c0cda759e7846fc9d6647d3a5b271bf32",
+        "profrun": "1d13d4912794855ae9c3c3fe69c89ca55434c2dd02b836053ad18f7913b7904f",
+        "gcc": "a1509c81444586031c74c5752f72ec90dc6c7ab57635fff37ffa431c11663a9f",
+        "plain": "ebeca8e920328b5c893fc9ee910851cceabee2bebc00320322b2b77b75def4a0",
+        "input": "de7b86d79a68965adb62e750101d9211224884b2236053d906d1e23057bb6ad1",
+        "reference": "58111208509dd871223ae195a33304bd6b24afd29458f37c976556cbad506324",
+        "resolver": "09892db220a9b8f3c6b49022448ae1b155decea87d7929fb4e53e2e37548196d",
+        "Image": "33347599d611172636de3562ecd2f3c1194ce5e8aa7d1e718dd62147ffc86d21",
+        "System.map": "dec30d446d1a316c2dd6c8f60e870374c6dd99ba5e7a62f7f9813cf2e2b974ae",
+        "rootfs.ext2": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845"
+      },
+      "means": {
+        "plain": {
+          "total": 30165375.0,
+          "kernel": 12073117.0,
+          "program": 18087885.0
+        },
+        "native": {
+          "total": 50589757.0,
+          "kernel": 26630860.0,
+          "program": 23947609.0
+        }
+      },
+      "native_samples": [
+        50592758,
+        50586756
+      ],
+      "native_counters": [
+        {
+          "/sys/module/capstone_vm/parameters/unpinned_faults": 2003,
+          "/sys/module/capstone_vm/parameters/unpinned_fast_faults": 0,
+          "/sys/module/capstone_vm/parameters/unpinned_sweep_pages": 0,
+          "/sys/module/capstone_vm/parameters/fault_ahead_pages": 0,
+          "/sys/module/capstone_vm/parameters/fault_ahead_windows": 0,
+          "/sys/module/captag/parameters/cleared_pages": 1396,
+          "/sys/module/captag/parameters/freed_pages": 2566,
+          "/sys/module/captag/parameters/copies": 413
+        },
+        {
+          "/sys/module/capstone_vm/parameters/unpinned_faults": 2001,
+          "/sys/module/capstone_vm/parameters/unpinned_fast_faults": 0,
+          "/sys/module/capstone_vm/parameters/unpinned_sweep_pages": 0,
+          "/sys/module/capstone_vm/parameters/fault_ahead_pages": 0,
+          "/sys/module/capstone_vm/parameters/fault_ahead_windows": 0,
+          "/sys/module/captag/parameters/cleared_pages": 1396,
+          "/sys/module/captag/parameters/freed_pages": 2562,
+          "/sys/module/captag/parameters/copies": 413
+        }
+      ],
+      "reduction_percent": {
+        "total": 0.26858809548184176,
+        "kernel": 0.5128001671540187
+      }
+    },
+    "fast-fault": {
+      "additional_kernel_args": [
+        "capstone_vm.unpinned_fast_fault=1"
+      ],
+      "inputs": {
+        "qemu": "c6681ec8a8ff704b297ec3eafceb13b2fe9c1c61c7a65ed95304bd5dbe5183eb",
+        "firmware": "2335a28682ddf65e46c1f492632c2cb026efcb2271caf544a3f7ddc858b03e02",
+        "plugin": "b42832d44980e01ae4e758e0a754d54c0cda759e7846fc9d6647d3a5b271bf32",
+        "profrun": "1d13d4912794855ae9c3c3fe69c89ca55434c2dd02b836053ad18f7913b7904f",
+        "gcc": "a1509c81444586031c74c5752f72ec90dc6c7ab57635fff37ffa431c11663a9f",
+        "plain": "ebeca8e920328b5c893fc9ee910851cceabee2bebc00320322b2b77b75def4a0",
+        "input": "de7b86d79a68965adb62e750101d9211224884b2236053d906d1e23057bb6ad1",
+        "reference": "58111208509dd871223ae195a33304bd6b24afd29458f37c976556cbad506324",
+        "resolver": "09892db220a9b8f3c6b49022448ae1b155decea87d7929fb4e53e2e37548196d",
+        "Image": "33347599d611172636de3562ecd2f3c1194ce5e8aa7d1e718dd62147ffc86d21",
+        "System.map": "dec30d446d1a316c2dd6c8f60e870374c6dd99ba5e7a62f7f9813cf2e2b974ae",
+        "rootfs.ext2": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845"
+      },
+      "means": {
+        "plain": {
+          "total": 30167072.5,
+          "kernel": 12074565.5,
+          "program": 18087885.0
+        },
+        "native": {
+          "total": 50226927.5,
+          "kernel": 26268554.5,
+          "program": 23946836.0
+        }
+      },
+      "native_samples": [
+        50231506,
+        50222349
+      ],
+      "native_counters": [
+        {
+          "/sys/module/capstone_vm/parameters/unpinned_faults": 1228,
+          "/sys/module/capstone_vm/parameters/unpinned_fast_faults": 1876,
+          "/sys/module/capstone_vm/parameters/unpinned_sweep_pages": 0,
+          "/sys/module/capstone_vm/parameters/fault_ahead_pages": 855,
+          "/sys/module/capstone_vm/parameters/fault_ahead_windows": 158,
+          "/sys/module/captag/parameters/cleared_pages": 1396,
+          "/sys/module/captag/parameters/freed_pages": 2644,
+          "/sys/module/captag/parameters/copies": 413
+        },
+        {
+          "/sys/module/capstone_vm/parameters/unpinned_faults": 1230,
+          "/sys/module/capstone_vm/parameters/unpinned_fast_faults": 1873,
+          "/sys/module/capstone_vm/parameters/unpinned_sweep_pages": 0,
+          "/sys/module/capstone_vm/parameters/fault_ahead_pages": 850,
+          "/sys/module/capstone_vm/parameters/fault_ahead_windows": 160,
+          "/sys/module/captag/parameters/cleared_pages": 1396,
+          "/sys/module/captag/parameters/freed_pages": 2654,
+          "/sys/module/captag/parameters/copies": 413
+        }
+      ],
+      "reduction_percent": {
+        "total": 0.9838613140428712,
+        "kernel": 1.8662960617304303
+      }
+    }
+  },
+  "gate_seconds": {
+    "mapping-result": 68.47502779518254,
+    "request-result": 110.26038465718739,
+    "fault-result": 128.66605214285664,
+    "fault-baseline-result": 78.86911240988411
+  },
+  "source_mechanisms": [
+    {
+      "source": "SPEC 502.gcc_r src/cpp_lex.c:86 and src/internal.h:236 (external licensed suite)",
+      "finding": "First line-note allocation grows capacity from 0 to 200. Each entry has a pointer plus unsigned type. Observed calls are realloc(NULL,3200) versus realloc(NULL,6400), 195 in each arm; these are fresh allocations, not copying old realloc buffers."
+    },
+    {
+      "source": "SPEC 502.gcc_r src/pointer-set.c:72 and :203 (external licensed suite)",
+      "finding": "Initial sets/maps allocate 256 pointers: 9 set tables plus 56 map key/value tables. Calls request elements of 8 versus 16 bytes."
+    },
+    {
+      "source": "capstone/ports/musl-capstone/musl-patches/0009-virtual-mallocng-capabilities.patch",
+      "finding": "Malloc uses aligned_alloc for n>=4096, a 32-byte instead of 16-byte group header, and modified edge size classes. Larger GCC objects cross these boundaries; attributing a precise fraction of excess mappings requires per-request mapping lifetime correlation or controlled allocator change."
+    }
+  ],
+  "limitations": [
+    "Diagnostic GDB runs are used for argument/caller counts only, never performance numbers.",
+    "Fault experiments change one existing option at a time; each uses plain/native/native/plain; baseline rerun uses the same counter-reading harness.",
+    "QEMU instruction attempts, not elapsed-time speedup; two samples per arm.",
+    "Exact output and phase validation do not qualify concurrency, security or all SPEC; no runtime defaults changed.",
+    "Plain/native compiler and libc provenance differs; concrete observed layout examples do not isolate the entire ABI effect.",
+    "Mapping bytes are cumulative and page-rounded, not RSS. Sysfs counters include measurement shell activity.",
+    "Do not add separate fault-option savings; combined interaction is not measured.",
+    "Measured fault options each explain a small fraction of the ~20.56M excess attempts; allocator amplification remains the larger investigative target."
+  ],
+  "trace_script_sha256": "9924e23c72b9de5f8b647dccd6a5da7928095b9fb28a2a242a118a824557bf9b"
+}

@@ -16,6 +16,7 @@ for name in ['qemu', 'images', 'firmware', 'plugin', 'profrun', 'gcc', 'plain', 
     p.add_argument('--'+name, type=Path, required=True)
 p.add_argument('--resolver', type=Path, default=Path(__file__).resolve().parents[4]/'ports/spec-cpu2017/tools/stop-at.py')
 p.add_argument('--negative-boundary', action='store_true')
+p.add_argument('--kernel-arg', action='append', default=[], help='Additional kernel argument applied to both arms (diagnostic experiments).')
 a = p.parse_args()
 a.out.mkdir(parents=True, exist_ok=False)
 sha = lambda f: hashlib.sha256(f.read_bytes()).hexdigest()
@@ -43,7 +44,7 @@ echo 0 > /proc/sys/kernel/randomize_va_space
 killall syslogd klogd 2>/dev/null || true
 chmod +x profrun gcc.bin
 counters() {
- for f in /sys/module/capstone_vm/parameters/unpinned_faults /sys/module/capstone_vm/parameters/unpinned_sweep_pages /sys/module/capstone_vm/parameters/fault_ahead_pages /sys/module/capstone_vm/parameters/fault_ahead_windows /sys/module/*/parameters/cleared_pages /sys/module/*/parameters/freed_pages /sys/module/*/parameters/copies; do
+ for f in /sys/module/capstone_vm/parameters/unpinned_faults /sys/module/capstone_vm/parameters/unpinned_fast_faults /sys/module/capstone_vm/parameters/unpinned_sweep_pages /sys/module/capstone_vm/parameters/fault_ahead_pages /sys/module/capstone_vm/parameters/fault_ahead_windows /sys/module/*/parameters/cleared_pages /sys/module/*/parameters/freed_pages /sys/module/*/parameters/copies; do
   [ ! -f "$f" ] || echo COUNTER "$1" "$f" "$(cat "$f")"
  done
 }
@@ -60,6 +61,7 @@ dmesg
     (d/'sites.json').write_text(json.dumps(sites, indent=2)+'\n')
     flags = ' '.join('capstone_vm.'+s for s in ['native_task=1', 'native_io=1', 'native_locks=1', 'native_stat=1', 'native_seek=1', 'native_fd=1', 'native_close=1', 'native_path=1', 'native_clock=1', 'native_fast=1', 'dom_binfmt=1', 'native_dispatch=1', 'checked_copy=1', 'native_slot_transport=1', 'unpinned=1', 'supervisor_slots=32'])
     cmd = ['python3', str(Path(__file__).resolve().parents[2]/'run-staged.py'), '--qemu', str(a.qemu), '--images', str(a.images), '--firmware', str(a.firmware), '--stage', str(stage), '--work', str(d/'vm'), '--memory', '4G', '--disk-mib', '128', '--timeout', '180', '--icount', '0', '--kernel-arg', flags, '--plugin', str(a.plugin), '--plugin-arg', 'out='+str(d/'profile')]
+    for arg in a.kernel_arg: cmd += ['--kernel-arg', arg]
     for arg in ['phases=1']+sites['plugin_args']: cmd += ['--plugin-arg', arg]
     (d/'command.json').write_text(json.dumps(cmd, indent=2)+'\n')
     env = dict(os.environ, CAPSTONE_QEMU_CPU_EXTRA='x-capstone-supervisor-slots=32,x-pcrel=false,x-capstone-raw-moves=true,x-capstone-test-csrs=false,x-capstone-checked-copy=true,x-capstone-context-transport=true')
@@ -71,7 +73,7 @@ dmesg
     invalid = list((d/'profile').glob('*.invalid'))
     if a.negative_boundary:
         assert invalid, 'corrupt boundary was not rejected'
-        (a.out/'summary.json').write_text(json.dumps(dict(status='PASS', negative_control=True, inputs=inputs, invalid=[x.read_text() for x in invalid]), indent=2)+'\n')
+        (a.out/'summary.json').write_text(json.dumps(dict(status='PASS', negative_control=True, kernel_args=a.kernel_arg, inputs=inputs, invalid=[x.read_text() for x in invalid]), indent=2)+'\n')
         print('PASS corrupted boundary rejected; output still correct', flush=True)
         break
     assert not invalid and len(list((d/'profile').glob('window-*.tsv'))) == 3
@@ -116,5 +118,5 @@ dmesg
     delta = {k:v-counters['before'][k] for k,v in counters['after'].items() if k in counters['before']}
     (d/'verdict.json').write_text(json.dumps(dict(status='PASS', phase_sum=sum(totals), outer_attempts=outer, counter_deltas=delta, reference_match=True), indent=2)+'\n')
 if not a.negative_boundary:
-    (a.out/'summary.json').write_text(json.dumps(dict(status='PASS', inputs=inputs, rows=rows, boundaries=['first init_cgraph entry', 'first statistics_fini entry'], limitations=['QEMU attempted instructions, not hardware cycles or elapsed time.', 'Ordinary RV64 and Capstone builds have different recorded compiler/libc provenance; not pure ISA isolation.', 'Same patched Linux/model, not stock-kernel comparison.', 'Startup includes GCC backend initialization; compilation includes output close; finalization includes process exit.', 'Flat symbols and first-instruction attempts are not inclusive costs or guaranteed invocation counts.', 'Sysfs counter deltas cover invocation plus measurement shell activity; compare with the plain arm.']), indent=2)+'\n')
+    (a.out/'summary.json').write_text(json.dumps(dict(status='PASS', kernel_args=a.kernel_arg, inputs=inputs, rows=rows, boundaries=['first init_cgraph entry', 'first statistics_fini entry'], limitations=['QEMU attempted instructions, not hardware cycles or elapsed time.', 'Ordinary RV64 and Capstone builds have different recorded compiler/libc provenance; not pure ISA isolation.', 'Same patched Linux/model, not stock-kernel comparison.', 'Startup includes GCC backend initialization; compilation includes output close; finalization includes process exit.', 'Flat symbols and first-instruction attempts are not inclusive costs or guaranteed invocation counts.', 'Sysfs counter deltas cover invocation plus measurement shell activity; compare with the plain arm.']), indent=2)+'\n')
     print('PASS exact outputs, authenticated boundaries and phase conservation', flush=True)
