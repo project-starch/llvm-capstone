@@ -1,0 +1,317 @@
+{
+  "schema_version": 1,
+  "status": "PASS",
+  "source_snapshot": "0d16ecf3312d0dbddb333e7bbb057eca99e14f1d",
+  "previous_source_snapshot": "df3cdec82c4149b683bedaf251c6d3872f0a8f85",
+  "scope": "Mechanical extraction of the three final session cleanup statements from dom_context_destroy into native_session_destroy beside its creator. Exact free order, NULL handling and constructor failure unwind preserved. No allocation, task ownership, copy protocol, lock, ISA or flat-table change.",
+  "artifact_hashes": {
+    "Image": "257b6cc6cfdc6ecb30f9914a59cc1595251a0c565168a4d90a16edebef69cacb",
+    "System.map": "31e8d157348525e6e86be4b72504867397a687a616a416cf6a7114c67325a288",
+    "config": "f51113c4c6a15f41d5802c254596704e2ced36f292b5056bde39e8506f604e3c",
+    "native-syscall-dom.h": "50589f019a42108eae0133dbde1b080d3c0cdfc00791dce9381adce173923fe1",
+    "binfmt-dom.h": "bee77bde977aec18770fd52c0d26b39cdef960e736349e16b473714092e5a9f9"
+  },
+  "gate": {
+    "scope": "Configured quick gate only; not full SPEC qualification",
+    "status": "PASS",
+    "reason": null,
+    "budget_seconds": 300.0,
+    "cleanup_reserve_seconds": 2.0,
+    "elapsed_seconds": 103.95290187490173,
+    "steps": [
+      {
+        "name": "kernel-build",
+        "argv": [
+          "bash",
+          "/var/tmp/capstone-native-task-scratch/native-session-teardown-01/build.sh"
+        ],
+        "status": "PASS",
+        "elapsed_seconds": 13.209836638066918,
+        "returncode": 0,
+        "pid": 341308,
+        "cleanup": {
+          "term_sent": false,
+          "kill_sent": false,
+          "leader_reaped": true
+        }
+      },
+      {
+        "name": "io-and-task",
+        "argv": [
+          "python3",
+          "/var/tmp/capstone-native-task-scratch/native-only-cleanup-01/tools/capstone/runtime/virtual/tests/native-task/run-musl-io.py",
+          "io",
+          "--qemu",
+          "/var/tmp/capstone-native-task-scratch/diagnostic-platform/qemu-system-riscv64",
+          "--images",
+          "/var/tmp/capstone-native-task-scratch/native-session-teardown-01/images",
+          "--firmware",
+          "/var/tmp/capstone-native-task-scratch/diagnostic-platform/opensbi-riscv64-generic-fw_dynamic.bin",
+          "--probes",
+          "/var/tmp/capstone-native-task-scratch/native-only-cleanup-01/io-probes",
+          "--out",
+          "/var/tmp/capstone-native-task-scratch/native-session-teardown-01/io"
+        ],
+        "status": "PASS",
+        "elapsed_seconds": 17.071758690057322,
+        "returncode": 0,
+        "pid": 344901,
+        "cleanup": {
+          "term_sent": false,
+          "kill_sent": false,
+          "leader_reaped": true
+        }
+      },
+      {
+        "name": "io-and-task-generic",
+        "argv": [
+          "python3",
+          "/var/tmp/capstone-native-task-scratch/native-only-cleanup-01/tools/capstone/runtime/virtual/tests/native-task/run-musl-io.py",
+          "io",
+          "--qemu",
+          "/var/tmp/capstone-native-task-scratch/diagnostic-platform/qemu-system-riscv64",
+          "--images",
+          "/var/tmp/capstone-native-task-scratch/native-session-teardown-01/images",
+          "--firmware",
+          "/var/tmp/capstone-native-task-scratch/diagnostic-platform/opensbi-riscv64-generic-fw_dynamic.bin",
+          "--probes",
+          "/var/tmp/capstone-native-task-scratch/native-only-cleanup-01/io-probes",
+          "--out",
+          "/var/tmp/capstone-native-task-scratch/native-session-teardown-01/io-generic",
+          "--fast",
+          "0"
+        ],
+        "status": "PASS",
+        "elapsed_seconds": 17.72215227317065,
+        "returncode": 0,
+        "pid": 345005,
+        "cleanup": {
+          "term_sent": false,
+          "kill_sent": false,
+          "leader_reaped": true
+        }
+      },
+      {
+        "name": "directory-dup-time",
+        "argv": [
+          "python3",
+          "/var/tmp/capstone-native-task-scratch/native-only-cleanup-01/tools/capstone/runtime/virtual/tests/native-task/run-directory.py",
+          "--qemu",
+          "/var/tmp/capstone-native-task-scratch/diagnostic-platform/qemu-system-riscv64",
+          "--images",
+          "/var/tmp/capstone-native-task-scratch/native-session-teardown-01/images",
+          "--firmware",
+          "/var/tmp/capstone-native-task-scratch/diagnostic-platform/opensbi-riscv64-generic-fw_dynamic.bin",
+          "--probes",
+          "/var/tmp/capstone-native-task-scratch/directory-services-probes",
+          "--dup-probes",
+          "/var/tmp/capstone-native-task-scratch/directory-services-probes",
+          "--time-probes",
+          "/var/tmp/capstone-native-task-scratch/directory-services-probes",
+          "--out",
+          "/var/tmp/capstone-native-task-scratch/native-session-teardown-01/directory"
+        ],
+        "status": "PASS",
+        "elapsed_seconds": 9.597337256884202,
+        "returncode": 0,
+        "pid": 345084,
+        "cleanup": {
+          "term_sent": false,
+          "kill_sent": false,
+          "leader_reaped": true
+        }
+      },
+      {
+        "name": "private-tmp",
+        "argv": [
+          "python3",
+          "/var/tmp/capstone-native-task-scratch/native-only-cleanup-01/tools/capstone/runtime/virtual/tests/native-task/run-local-tmp.py",
+          "--qemu",
+          "/var/tmp/capstone-native-task-scratch/diagnostic-platform/qemu-system-riscv64",
+          "--images",
+          "/var/tmp/capstone-native-task-scratch/native-session-teardown-01/images",
+          "--firmware",
+          "/var/tmp/capstone-native-task-scratch/diagnostic-platform/opensbi-riscv64-generic-fw_dynamic.bin",
+          "--probes",
+          "/var/tmp/capstone-native-task-scratch/local-tmp-probes",
+          "--out",
+          "/var/tmp/capstone-native-task-scratch/native-session-teardown-01/local-tmp"
+        ],
+        "status": "PASS",
+        "elapsed_seconds": 19.430269640870392,
+        "returncode": 0,
+        "pid": 345095,
+        "cleanup": {
+          "term_sent": false,
+          "kill_sent": false,
+          "leader_reaped": true
+        }
+      },
+      {
+        "name": "spawn-lifecycle",
+        "argv": [
+          "env",
+          "CAPSTONE_QEMU_CPU_EXTRA=x-capstone-supervisor-slots=1,x-pcrel=false,x-capstone-raw-moves=true,x-capstone-test-csrs=false,x-capstone-checked-copy=true,x-capstone-context-transport=true",
+          "python3",
+          "/var/tmp/capstone-native-task-scratch/native-only-cleanup-01/tools/capstone/runtime/virtual/run-staged.py",
+          "--qemu",
+          "/var/tmp/capstone-native-task-scratch/diagnostic-platform/qemu-system-riscv64",
+          "--images",
+          "/var/tmp/capstone-native-task-scratch/native-session-teardown-01/images",
+          "--firmware",
+          "/var/tmp/capstone-native-task-scratch/diagnostic-platform/opensbi-riscv64-generic-fw_dynamic.bin",
+          "--stage",
+          "/var/tmp/capstone-native-task-scratch/spawn-services-probes",
+          "--work",
+          "/var/tmp/capstone-native-task-scratch/native-session-teardown-01/spawn",
+          "--memory",
+          "8G",
+          "--disk-mib",
+          "64",
+          "--timeout",
+          "240",
+          "--icount",
+          "0",
+          "--kernel-arg",
+          "capstone_vm.native_task=1 capstone_vm.native_io=1 capstone_vm.dom_binfmt=1 capstone_vm.native_dispatch=1 capstone_vm.checked_copy=1 capstone_vm.native_slot_transport=1 capstone_vm.unpinned=1 capstone_vm.supervisor_slots=1 capstone_vm.dom_shell=/tmp/native-shell/hush.dom capstone_vm.dom_null=1"
+        ],
+        "status": "PASS",
+        "elapsed_seconds": 11.301603236002848,
+        "returncode": 0,
+        "pid": 345150,
+        "cleanup": {
+          "term_sent": false,
+          "kill_sent": false,
+          "leader_reaped": true
+        }
+      },
+      {
+        "name": "spawn-verdict",
+        "argv": [
+          "python3",
+          "-c",
+          "from pathlib import Path; import re,sys; s=Path(sys.argv[1]).read_text(errors='replace'); assert 'SPAWN_SHELL_GATE_EXIT:0' in s and 'VIRTUAL_STAGED_DONE' in s; assert not re.search(r'WARNING:|BUG:|Oops|Kernel panic|_FAIL|FAIL line|^FAIL ',s,re.M); print('SPAWN_PASS')",
+          "/var/tmp/capstone-native-task-scratch/native-session-teardown-01/spawn/serial.log"
+        ],
+        "status": "PASS",
+        "elapsed_seconds": 0.06572148785926402,
+        "returncode": 0,
+        "pid": 345160,
+        "cleanup": {
+          "term_sent": false,
+          "kill_sent": false,
+          "leader_reaped": true
+        }
+      },
+      {
+        "name": "gcc-original-test",
+        "argv": [
+          "python3",
+          "/var/tmp/capstone-native-task-scratch/native-only-cleanup-01/tools/capstone/runtime/virtual/tests/native-task/run-spec-tests.py",
+          "--qemu",
+          "/var/tmp/capstone-native-task-scratch/diagnostic-platform/qemu-system-riscv64",
+          "--images",
+          "/var/tmp/capstone-native-task-scratch/native-session-teardown-01/images",
+          "--firmware",
+          "/var/tmp/capstone-native-task-scratch/diagnostic-platform/opensbi-riscv64-generic-fw_dynamic.bin",
+          "--prepared",
+          "/var/tmp/capstone-native-task-scratch/native-only-cleanup-01/prepared",
+          "--out",
+          "/var/tmp/capstone-native-task-scratch/native-session-teardown-01/gcc",
+          "--benchmarks",
+          "502.gcc_r",
+          "--timeout",
+          "240",
+          "--comparators",
+          "/var/tmp/capstone-native-task-scratch/native-session-teardown-01/gcc-comparators.json"
+        ],
+        "status": "PASS",
+        "elapsed_seconds": 15.313584805000573,
+        "returncode": 0,
+        "pid": 345161,
+        "cleanup": {
+          "term_sent": false,
+          "kill_sent": false,
+          "leader_reaped": true
+        }
+      },
+      {
+        "name": "gcc-official-comparison",
+        "argv": [
+          "python3",
+          "/var/tmp/capstone-native-task-scratch/native-only-cleanup-01/tools/capstone/runtime/virtual/tests/native-task/validate-spec-tests.py",
+          "--results",
+          "/var/tmp/capstone-native-task-scratch/native-session-teardown-01/gcc/runs",
+          "--comparators",
+          "/var/tmp/capstone-native-task-scratch/native-session-teardown-01/gcc-comparators.json",
+          "--spec",
+          "/var/tmp/capstone-spec-php-20261105/share/SPEC17",
+          "--out",
+          "/var/tmp/capstone-native-task-scratch/native-session-teardown-01/gcc-validation.json",
+          "--timeout",
+          "30"
+        ],
+        "status": "PASS",
+        "elapsed_seconds": 0.21629979484714568,
+        "returncode": 0,
+        "pid": 345222,
+        "cleanup": {
+          "term_sent": false,
+          "kill_sent": false,
+          "leader_reaped": true
+        }
+      }
+    ]
+  },
+  "adapter_size_bytes": {
+    "before": {
+      "text": 87805,
+      "data": 405,
+      "bss": 249
+    },
+    "after": {
+      "text": 87805,
+      "data": 405,
+      "bss": 249
+    }
+  },
+  "review": "Astra xhigh and Gemini Argon independently reviewed the minimal design; root inspected the resulting two-file diff.",
+  "teardown_contract": [
+    "Final destruction of a valid enclosing context after provider/copy use has ended; no future access to the dying context.",
+    "May be reached by nonreturning do_exit while dom_task_step remains on the stack.",
+    "Preserve race disarming, then session/bounce/native-context frees, then delegate release and context destruction.",
+    "No reset or idempotency guarantee; constructor failure unwind remains local and clears native_context as before."
+  ],
+  "coverage": [
+    "I/O and task lifecycle with native_fast=0 and 1, both exchange/direct ABI fixtures.",
+    "Existing private-tmp negative admission cases exercise policy rejection on the inspected context_create -> dom_resources_init -> loader unwind path before session construction. Oracle is not an allocator-stage instrumentation proof.",
+    "Directory/dup/time and resource policy gates; exchange/direct spawn lifecycle and output-publication cases.",
+    "Original GCC test input with its official output comparator."
+  ],
+  "limitations": [
+    "No performance claim or new instruction-count measurement for this structural extraction.",
+    "No targeted session/bounce allocation-failure injection or exhaustive leak proof.",
+    "No new race-profile or full-SPEC qualification on this image; previous records remain pinned."
+  ],
+  "evidence_root_remote": "p12:/var/tmp/capstone-native-task-scratch/native-session-teardown-01",
+  "evidence_root_local": "/tmp/capstone/native-task/native-session-teardown-01/evidence",
+  "evidence_sha256": {
+    "plan.json": "6545028af087d6cda538c4a9ee77fda2d8097a67b58d4c88f76fd65b98274efb",
+    "result/summary.json": "47d6f0d2502e977c848af323e254d4ba0b7a5a788ae6b96e6774380889e4bc2f",
+    "gcc-validation.json": "87d342bc0a28f9c2b5c76b596bfcf96c9803f1153e65a310e14fe01cea01925c",
+    "artifact-hashes.json": "6fb7cb939171810bc7d4a4fa1acfcb3f1574567caa566fbc513f8ebaeafcbe18"
+  },
+  "platform": {
+    "qemu": "c6681ec8a8ff704b297ec3eafceb13b2fe9c1c61c7a65ed95304bd5dbe5183eb",
+    "Image": "257b6cc6cfdc6ecb30f9914a59cc1595251a0c565168a4d90a16edebef69cacb",
+    "firmware": "2335a28682ddf65e46c1f492632c2cb026efcb2271caf544a3f7ddc858b03e02",
+    "rootfs": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845"
+  },
+  "test_inputs_sha256": {
+    "directory/inputs.json": "8d2b2f417c9982a938ccb179325375de1ce173a73e44688e5ff79721a43fb5c6",
+    "gcc/runs/502.gcc_r/inputs.json": "2326ac1ba5dfc27d5e940b0c78b7c46d3e5232fdbec555c9bff4966a7ad20d3c",
+    "io/inputs.json": "56754d21ac62fb038c0d0e5ce20406638b63f1166c6099f524b55295f0c929b0",
+    "io-generic/inputs.json": "56754d21ac62fb038c0d0e5ce20406638b63f1166c6099f524b55295f0c929b0",
+    "local-tmp/inputs.json": "65bd12bfa3f3bc6eada780a31d4720b4d0d4c37e34295cd75d5efba93f9f0c1c"
+  }
+}

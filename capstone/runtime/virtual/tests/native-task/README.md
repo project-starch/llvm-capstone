@@ -1,5 +1,21 @@
 # Experimental Linux task-return backend
 
+## Session teardown ownership
+
+`native_session_destroy(c)` lives next to `native_session(c)` and owns the
+existing session, bounce-buffer and native-context frees. `dom_context_destroy`
+invokes it after race-fixture disarming and before delegated-resource and VM
+context cleanup. The function is for final teardown only; it adds no reset,
+idempotency, lock or reference-count semantics. Constructor failure unwind
+remains local and unchanged. [Qualification](session-teardown-qualification.json).
+
+The incremental build, both fast settings/ABIs, task exit/kill, private-tmp
+policy errors, directory/dup/time, spawn and official GCC comparison pass in
+104.0s under one 300-second deadline. Code/data/BSS sizes are unchanged;
+no performance claim or new profiling/race campaign is made. Existing policy
+admission failures are not targeted allocator-failure injection or a leak proof.
+
+
 ## Generic copy workspace reuse
 
 `native_copy()` calls `cv_checked_copy_reuse()` with `n->copy` after both
