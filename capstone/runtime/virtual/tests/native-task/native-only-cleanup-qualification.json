@@ -1,0 +1,210 @@
+{
+  "schema_version": 1,
+  "status": "PASS",
+  "scope": "Focused native-only adapter cleanup qualification. Full ten-entry SPEC rerun on this new kernel is separate and pending. Not an FPGA or performance result.",
+  "source_snapshot": "6090350d1cd0cbf77355d610e3d9758dd9fa33fe",
+  "pre_cleanup_source_snapshot": "df03c9be2a41127499b2bcfa4de49feb718a1c4f",
+  "previous_full_spec_record": "spec-final-qualification.json",
+  "platform": {
+    "qemu": "c6681ec8a8ff704b297ec3eafceb13b2fe9c1c61c7a65ed95304bd5dbe5183eb",
+    "Image": "e2dca4c948f5d8a1445db57744a024b4be129e0c584cb4ae4ddff670becd835d",
+    "rootfs": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845",
+    "firmware": "2335a28682ddf65e46c1f492632c2cb026efcb2271caf544a3f7ddc858b03e02"
+  },
+  "source_files_sha256": {
+    "capstone/runtime/virtual/install-native-task.sh": "7f55c82313d0da17457bb05bce37c062482e88408cf98e7aee12fa738321d0c1",
+    "capstone/runtime/virtual/module/Makefile": "e9ea7f7d05503b47eb23e010644740f7dc5455600fc054e6573df4d3758118e0",
+    "capstone/runtime/virtual/module/binfmt-dom.h": "b4498a9be1bf461274923609ab653a2263767ab3945bbce89547057f8c361c0b",
+    "capstone/runtime/virtual/module/capstone_vm.c": "68ff16dcaf347c4d42b8298bc13babc540905120b60d89608ad1563d3d36495c",
+    "capstone/runtime/virtual/module/checked-copy-dom.h": "3c6a3ee6ef440b7dd924eb66fd617203794beae0058e89d5ba7f0449dbe3ecb2",
+    "capstone/runtime/virtual/module/delegate-dom.h": "cb91ce9f6505b5978564a08792cede777e2c9064e8ec8c35b53e4bf05a306883",
+    "capstone/runtime/virtual/module/native-spawn-dom.h": "7bd0aafd8b42ad643adec01e9a78c2f25ce9f3945f41fb4f233bb132c6f6eaac",
+    "capstone/runtime/virtual/module/resource-dom.h": "52a2c7ecdefa5ebb277b58fa573f24624268cc3f72793d1d85ff750fdf0b309c",
+    "capstone/runtime/virtual/stage-adapter.sh": "2f70785dc22d44a64f4e94a207b6b4565232e84d7571f06a043b96ecee6db02b",
+    "capstone/runtime/virtual/tests/native-task/task-driver.c": "474660969738b3d9af146a4c2ad53c1634ca64a71849e40861cfbe40ee77a8c6"
+  },
+  "removed": [
+    "Device misc registration and ioctl/open/release entry points",
+    "Anonymous control FD and scalar userspace trampoline",
+    "Scalar syscall/protect broker and completion protocol",
+    "FD ownership fallback for checked copy",
+    "Misc-device flat/CMA allocation and retired ioctl transaction helper"
+  ],
+  "retained": [
+    "Task-owned context execution and teardown",
+    "Checked capability access and resource/path/descriptor confinement",
+    "Native direct and exchange syscall ABIs",
+    "Mapped grants, page/lifetime management and native spawn",
+    "Race fixture frame pinning under CV_RACE_TEST"
+  ],
+  "build": {
+    "status": "PASS",
+    "new_unused_code_warnings": 0,
+    "pre_existing_warning": "Kernel C90 mixed declaration warnings remain.",
+    "external_module_and_invalid_configuration_rejections": [
+      {
+        "name": "no task support",
+        "returncode": 2,
+        "diagnostic": "capstone/runtime/virtual/module/Makefile:2: *** Capstone requires built-in CONFIG_RISCV_CAPSTONE_TASK=y.  Stop.",
+        "passed": true
+      },
+      {
+        "name": "external module",
+        "returncode": 2,
+        "diagnostic": "capstone/runtime/virtual/module/Makefile:5: *** Capstone is native-only; use install-native-task.sh for an in-tree build.  Stop.",
+        "passed": true
+      },
+      {
+        "name": "retired transaction",
+        "returncode": 2,
+        "diagnostic": "capstone/runtime/virtual/module/Makefile:14: *** CV_GRANT_TXN requires the historical ioctl adapter.  Stop.",
+        "passed": true
+      }
+    ]
+  },
+  "size": {
+    "unit": "bytes for object sections; physical source lines include comments",
+    "before": {
+      "adapter_c_h_lines": 7554,
+      "shared_implementation_lines": 1136,
+      "object_text": 100889,
+      "object_data": 485,
+      "object_bss": 257
+    },
+    "after": {
+      "adapter_c_h_lines": 6649,
+      "shared_implementation_lines": 1136,
+      "object_text": 88793,
+      "object_data": 405,
+      "object_bss": 249
+    },
+    "dynamic_allocations_included": false,
+    "whole_kernel_size_claim": false
+  },
+  "gates": {
+    "io_task": {
+      "sha256": "f5506d76b50472c92f4eec429377e776edf2ba0742bcdf83914884729a9cae8e",
+      "gate": "PASS"
+    },
+    "spawn": {
+      "sha256": "d303463e2348fd07f19a670fde40dd2567c594ea915859926d1ea6dd887a4cb7",
+      "gate": "PASS",
+      "driver_checks": [
+        436,
+        436
+      ]
+    },
+    "directory": [
+      {
+        "arm": "exchange",
+        "checks": 94,
+        "failures": 0
+      },
+      {
+        "arm": "direct",
+        "checks": 94,
+        "failures": 0
+      }
+    ],
+    "dup": [
+      {
+        "arm": "exchange",
+        "checks": 36,
+        "failures": 0
+      },
+      {
+        "arm": "direct",
+        "checks": 36,
+        "failures": 0
+      }
+    ],
+    "time": [
+      {
+        "arm": "exchange",
+        "checks": 33,
+        "failures": 0
+      },
+      {
+        "arm": "direct",
+        "checks": 33,
+        "failures": 0
+      }
+    ],
+    "local_tmp": [
+      {
+        "mode": "off",
+        "sdk": "exchange",
+        "driver_checks": 20,
+        "failures": 0,
+        "native_checks": 10
+      },
+      {
+        "mode": "off",
+        "sdk": "direct",
+        "driver_checks": 20,
+        "failures": 0,
+        "native_checks": 10
+      },
+      {
+        "mode": "on",
+        "sdk": "exchange",
+        "driver_checks": 57,
+        "failures": 0,
+        "native_checks": 63,
+        "child_checks": 3
+      },
+      {
+        "mode": "on",
+        "sdk": "direct",
+        "driver_checks": 57,
+        "failures": 0,
+        "native_checks": 63,
+        "child_checks": 3
+      },
+      {
+        "mode": "on-null",
+        "sdk": "exchange",
+        "driver_checks": 57,
+        "failures": 0,
+        "native_checks": 64,
+        "child_checks": 3
+      },
+      {
+        "mode": "on-null",
+        "sdk": "direct",
+        "driver_checks": 57,
+        "failures": 0,
+        "native_checks": 64,
+        "child_checks": 3
+      },
+      {
+        "mode": "conflict",
+        "sdk": "exchange",
+        "driver_checks": 5,
+        "failures": 0
+      },
+      {
+        "mode": "conflict",
+        "sdk": "direct",
+        "driver_checks": 5,
+        "failures": 0
+      }
+    ]
+  },
+  "limitations": [
+    "Single-hart root-only native profile remains.",
+    "Bootstrap-only ptrace races and cancellation during blocked spawn bootstrap I/O remain unqualified.",
+    "Pinned/flat internal representations have not been comprehensively deleted; native admission requires unpinned paged backing.",
+    "Historical ioctl-based launchers/measurement controls require their historical revision.",
+    "Module parameter names and zero-valued dom_last_trampoline diagnostic are retained for existing native tooling."
+  ],
+  "raw_evidence": {
+    "local": "/tmp/capstone/native-task/native-only-cleanup-01",
+    "remote": "p12:/var/tmp/capstone-native-task-scratch/native-only-cleanup-01"
+  },
+  "full_spec_rerun": {
+    "status_at_recording": "RUNNING",
+    "kernel_sha256": "e2dca4c948f5d8a1445db57744a024b4be129e0c584cb4ae4ddff670becd835d",
+    "new_evidence_required": true
+  }
+}

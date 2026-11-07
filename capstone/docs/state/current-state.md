@@ -1,3 +1,15 @@
+## Native-only adapter cleanup: focused qualification passed
+
+The legacy device/ioctl entry and scalar userspace trampoline are removed from
+the committed native-task adapter. Context execution, checked copying, resource
+grants and native direct/exchange service dispatch remain. The adapter now
+requires an in-tree `CONFIG_RISCV_CAPSTONE_TASK=y` build; external-module builds
+and legacy fallback admission are refused. New kernel `e2dca4c948f5` passes native I/O/task, directory/time/duplication,
+private-tmp and spawn gates. The task gate explicitly proves no old device,
+misc registration, trampoline mapping or control FD. The full ten-entry SPEC
+rerun is in progress. [Focused evidence](../../runtime/virtual/tests/native-task/native-only-cleanup-qualification.json). The complete ten-entry result below still
+identifies the pre-cleanup kernel and must not be relabeled as a new-kernel pass.
+
 ## 2026-11-07 — Native C-port SPEC qualification complete
 
 All ten existing C-port entries pass on the frozen final QEMU/Linux platform:
