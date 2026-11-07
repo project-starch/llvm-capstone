@@ -53,6 +53,14 @@ stubbing helper is removed; historical runs that used it do not qualify as
 unchanged-input results. The verdict rejects records of that intervention.
 `tools/build.sh` checks the installed tree against SPEC's MANIFEST after the build.
 
+New portability revisions must use a distinct source-alternative identity and
+fresh objects. `tools/make-srcalt.sh SPEC_ROOT KIT_DIR BENCH OUTDIR NAME` accepts
+an optional explicit name, for example `capstone_provenance_v2`; omitting it
+retains `capstone`. Keep the old package and pinned manifest intact, use a fresh
+output directory, and record the new package hash and build configuration
+separately. The helper refuses to replace an existing package or checksum.
+Creating a package does not select it in the build configuration or qualify it.
+
 ## From the archive to results
 
 The compare driver needs bash 5.1 or later (`wait -n -p`).
