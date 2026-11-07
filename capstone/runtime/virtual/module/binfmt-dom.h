@@ -246,9 +246,7 @@ static void dom_context_destroy(void *private)
 #ifdef CV_RACE_TEST
     if (rt.b && rt.b->context == c) { rt.b = NULL; rt.armed = false; rt.c = NULL; }
 #endif
-    ns_session_free(c->native_session);
-    if (c->native_context) kfree(c->native_context->bounce);
-    kfree(c->native_context);
+    native_session_destroy(c);
     dom_delegate_free(c);
     context_destroy(c);
 }

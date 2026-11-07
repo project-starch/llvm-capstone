@@ -315,6 +315,14 @@ static int native_session(struct context *c)
     if (rc) { kfree(c->native_context); c->native_context = NULL; }
     return rc;
 }
+/* Final context teardown, after synchronous service/copy use has ended.
+ * The enclosing context is destroyed next; this is not a reset operation. */
+static void native_session_destroy(struct context *c)
+{
+    ns_session_free(c->native_session);
+    if (c->native_context) kfree(c->native_context->bounce);
+    kfree(c->native_context);
+}
 static int native_meta_reply(struct context *c, const struct cn_capref *meta, long value)
 {
     u64 words[3] = {value, 0, CAPSTONE_ROUND_DONE};
