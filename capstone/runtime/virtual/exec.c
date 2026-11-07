@@ -1378,7 +1378,13 @@ static int virtual_service(uint64_t tid, struct cv_step *step)
              * from, and a judge that reads a probe's successful run (the putenv probe) has
              * nothing else to check it against. Same gate as the fault record. */
             if (tid == 0 && (isatty(2) || getenv("CAPSTONE_EXEC_DIAGNOSTICS"))) {
-                if (!host.image_sha256[0] && image_fd >= 0)
+                /* CAPSTONE_EXEC_DIGEST=0 keeps the line but skips the hash: it is a SHA-256 of the whole image at
+                 * every exit (12.9 MB gcc: 1.35 G instructions; perlbench on silicon: 22 s at each of 318 context
+                 * exits), which a timed run must not pay. The digest then reads "unhashed". */
+                const char *digest = getenv("CAPSTONE_EXEC_DIGEST");
+                if (digest && !strcmp(digest, "0")) {
+                    if (!host.image_sha256[0]) snprintf(host.image_sha256, sizeof host.image_sha256, "unhashed");
+                } else if (!host.image_sha256[0] && image_fd >= 0)
                     capstone_application_hash(image_fd, host.image_sha256);
                 fprintf(stderr, "capstone-exec: exit image=%s sha256=%s\n",
                         image_path ? image_path : "?", host.image_sha256);
