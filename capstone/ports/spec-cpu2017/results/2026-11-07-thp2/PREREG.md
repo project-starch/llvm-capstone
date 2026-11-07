@@ -37,3 +37,13 @@ the fault saving, and huge pages do not suit short contexts. P1 failing: perlben
 Board 2's perlbench c3g-thp was withdrawn before any board call for perlbench -rg-nd (results/2026-11-07-nodiag). It is
 queued again on board 2 behind that run (perf/thp4, the same stage and kit), for N = 2 with board 3's. Predictions
 unchanged (P0-P2).
+
+## Result, perlbench on board 3 (8 Nov 03:32): THP never engaged; P1 and P2 FAIL. Board 2's run is withdrawn
+
+- 34,340.7 s (1.020× c3g's 33,667.7 s; 1.475× Plain's 23,277.1 s); inside 23,889.9 s (100.53 G), outside 10,450.7 s;
+  rc 0, specdiff 2/2, test.out 317 ok / 0 FAILED, outputs equal the twin's. **P0 holds** except its last clause.
+- **thp_fault_alloc stayed 0** over the arm (@@THP-VMSTAT before and after), with `[madvise] thp=Y`: no huge page was
+  ever allocated. The launcher advises heap arenas of 4 MiB or more; perlbench's are smaller.
+- **P1 FAILS:** fault exits 86,610 (c3g 84,937). **P2 FAILS:** slower, not faster. The +2.0 % is board 3 against board 2
+  and the THP kernel together; not separated.
+- Board 2's perlbench c3g-thp (Addendum 1) is withdrawn before its board call: it would read the same zero.

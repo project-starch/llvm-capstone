@@ -27,3 +27,16 @@ c3g-thp there; gcc c3f-thp and gcc -ndcpu move behind it.
 
 X2 is the hypothesis behind "700 k cycles a call": that the exit path stalls rather than computes. Its failure would
 point at instruction count, i.e. code to remove.
+
+## Addendum 1 (8 Nov 03:4x, before its board call): perlbench c3g with the same two instruments, board 2
+
+Stage `perf/exhpm/stages/500.perlbench_r-test-capstone-lifetimes-devmk-c3g-prof`: c3g's stage, cvprof enabled around
+the test command only (the 22,777 s part; makerand runs unsampled). Kit bkit31-exhpm. Board 2, after perlbench
+-rg-nd there; it replaces the withdrawn perlbench c3g-thp. The first board use of cvprof is gcc's run on board 3,
+an hour earlier.
+
+| # | Prediction |
+|---|---|
+| Y0 | as X0, for perlbench (specdiff 2/2, 0 FAILED); exhpm lines for all 318 contexts |
+| Y1 | run within ±2 % of 33,667.7 s |
+| Y2 | ≥ 30 % of the off-CSRUNV samples in the launcher's user code or the delegated system calls' kernel paths |
