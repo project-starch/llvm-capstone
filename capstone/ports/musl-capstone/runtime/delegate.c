@@ -1378,7 +1378,10 @@ static syscall_arg_t dl_direct_scalar(syscall_arg_t input) {
 }
 static int dl_direct_file_ready(uint64_t nr) {
   unsigned feature = nr == CAPSTONE_SYS_lseek ? CAPSTONE_LAUNCH_NATIVE_SEEK :
-      (nr == CAPSTONE_SYS_fstat || nr == CAPSTONE_SYS_newfstatat) ? CAPSTONE_LAUNCH_NATIVE_STAT : 0;
+      (nr == CAPSTONE_SYS_fstat || nr == CAPSTONE_SYS_newfstatat) ? CAPSTONE_LAUNCH_NATIVE_STAT :
+      (nr == CAPSTONE_SYS_fsync || nr == CAPSTONE_SYS_fdatasync ||
+       nr == CAPSTONE_SYS_ftruncate || nr == CAPSTONE_SYS_fchmod ||
+       nr == CAPSTONE_SYS_fchown) ? CAPSTONE_LAUNCH_NATIVE_FD : 0;
   if (!feature) return 0;
   const struct capstone_launch_task *t = __capstone_launch_task();
   return t && t->native.abi == NS_ABI_VERSION &&
@@ -1389,7 +1392,12 @@ static long dl_direct_file(uint64_t nr, syscall_arg_t raw[CAPSTONE_DELEGATE_ARGS
   int at = nr == CAPSTONE_SYS_newfstatat;
   dl_wire_acquire();
   dl_reset();
-  if (nr == CAPSTONE_SYS_lseek)
+  if (nr == CAPSTONE_SYS_fsync || nr == CAPSTONE_SYS_fdatasync)
+    result = __capstone_native_syscall(nr, dl_direct_scalar(raw[0]), 0, 0, 0, 0, 0);
+  else if (nr == CAPSTONE_SYS_ftruncate || nr == CAPSTONE_SYS_fchmod)
+    result = __capstone_native_syscall(nr, dl_direct_scalar(raw[0]),
+        dl_direct_scalar(raw[1]), 0, 0, 0, 0);
+  else if (nr == CAPSTONE_SYS_lseek || nr == CAPSTONE_SYS_fchown)
     result = __capstone_native_syscall(nr, dl_direct_scalar(raw[0]),
         dl_direct_scalar(raw[1]), dl_direct_scalar(raw[2]), 0, 0, 0);
   else
