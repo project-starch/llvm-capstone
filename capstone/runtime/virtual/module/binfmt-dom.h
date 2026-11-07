@@ -20,6 +20,9 @@ module_param(dom_last_base, ulong, 0400);
 module_param(dom_last_trampoline, ulong, 0400);
 #ifdef CV_TASK_BACKEND
 static bool native_task;
+static bool native_stat;
+module_param(native_stat, bool, 0444);
+MODULE_PARM_DESC(native_stat, "announce direct metadata service with native_io");
 static bool native_locks;
 module_param(native_locks, bool, 0444);
 MODULE_PARM_DESC(native_locks, "announce direct POSIX lock service with native_io");
@@ -316,7 +319,7 @@ static int dom_startup(struct linux_binprm *bprm, void *block)
     memcpy(h->magic, "CPLAUNCH", 8);
     h->version = native_io ? 3 : 2;
     if (native_io) {
-        u32 feature[4] = {1, 1 | (native_locks ? 2 : 0), 65536, 0}; /* ABI, small IO, max bytes, reserved */
+        u32 feature[4] = {1, 1 | (native_locks ? 2 : 0) | (native_stat ? 4 : 0), 65536, 0}; /* ABI, small IO, max bytes, reserved */
         memcpy(block + sizeof(*h), feature, sizeof feature);
     }
     h->argc = bprm->argc; h->envc = bprm->envc;

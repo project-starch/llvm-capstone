@@ -665,7 +665,14 @@ static long dl_call_once(const struct capstone_delegate_shape *s, uint64_t nr,
   return result;
 }
 
+#if defined(CAPSTONE_RUNTIME_VIRTUAL) && defined(CAPSTONE_MUSL_NATIVE_IO)
+static int dl_direct_stat_ready(uint64_t nr);
+static long dl_direct_stat(uint64_t nr, syscall_arg_t raw[CAPSTONE_DELEGATE_ARGS]);
+#endif
 static long dl_call(uint64_t nr, syscall_arg_t raw[CAPSTONE_DELEGATE_ARGS]) {
+#if defined(CAPSTONE_RUNTIME_VIRTUAL) && defined(CAPSTONE_MUSL_NATIVE_IO)
+  if (dl_direct_stat_ready(nr)) return dl_direct_stat(nr, raw);
+#endif
   const struct capstone_delegate_shape *s = capstone_delegate_shape(nr);
   long result;
   if (!s)
@@ -1368,6 +1375,24 @@ static syscall_arg_t dl_direct_scalar(syscall_arg_t input) {
   __asm__ volatile("movc %0, zero\n\tmv %0, %1"
                    : "=&r"(output) : "r"(input));
   return output;
+}
+static int dl_direct_stat_ready(uint64_t nr) {
+  if (nr != CAPSTONE_SYS_fstat && nr != CAPSTONE_SYS_newfstatat) return 0;
+  const struct capstone_launch_task *t = __capstone_launch_task();
+  return t && t->native.abi == NS_ABI_VERSION &&
+         (t->native.features & CAPSTONE_LAUNCH_NATIVE_STAT) && !t->native.reserved;
+}
+static long dl_direct_stat(uint64_t nr, syscall_arg_t raw[CAPSTONE_DELEGATE_ARGS]) {
+  long result;
+  int at = nr == CAPSTONE_SYS_newfstatat;
+  dl_wire_acquire();
+  dl_reset();
+  result = __capstone_native_syscall(nr, dl_direct_scalar(raw[0]), raw[1],
+      at ? raw[2] : 0, at ? dl_direct_scalar(raw[3]) : 0, 0, 0);
+  dl_status = CAPSTONE_ROUND_DONE;
+  (void)dl_settle();
+  dl_wire_release();
+  return result;
 }
 static int dl_direct_locks_ready(void) {
   const struct capstone_launch_task *t = __capstone_launch_task();

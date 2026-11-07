@@ -16,6 +16,31 @@ static long native_refused(u64 nr)
     return -ENOSYS;
 }
 
+/* Both transports use one path-policy and stat-layout provider. vm_lock held. */
+static long native_stat_issue(struct context *c, u64 nr, const u64 *args,
+                              struct file *held, const char *name, struct stat *out)
+{
+    struct capstone_delegate_entry e = {0};
+    struct kstat st;
+    struct file *file;
+    long rc;
+    if (nr == CAPSTONE_SYS_newfstatat &&
+        (args[3] & ~(u64)(AT_SYMLINK_NOFOLLOW | AT_NO_AUTOMOUNT))) return -EINVAL;
+    mutex_unlock(&vm_lock);
+    if (nr == CAPSTONE_SYS_newfstatat) {
+        e.nr = nr; memcpy(e.args, args, sizeof(e.args));
+        file = dom_path_file_name(c, &e, name);
+    } else { file = held; get_file(file); }
+    if (IS_ERR(file)) rc = PTR_ERR(file);
+    else {
+        rc = vfs_getattr(&file->f_path, &st, STATX_BASIC_STATS, AT_STATX_SYNC_AS_STAT);
+        if (!rc) rc = capstone_native_stat(&st, out);
+        fput(file);
+    }
+    mutex_lock(&vm_lock);
+    return rc;
+}
+
 static bool native_gcc_issue(struct context *c, const struct ns_invocation *call,
                              struct file *held, long *result)
 {
@@ -23,8 +48,6 @@ static bool native_gcc_issue(struct context *c, const struct ns_invocation *call
     u64 nr = call->descriptor->nr;
     long rc = -ENOSYS;
     struct capstone_delegate_entry e = {0};
-    struct file *f;
-    struct kstat st;
     sigset_t old, set;
     switch (nr) {
     case CAPSTONE_SYS_openat:
@@ -36,20 +59,8 @@ static bool native_gcc_issue(struct context *c, const struct ns_invocation *call
         break;
     case CAPSTONE_SYS_newfstatat:
     case CAPSTONE_SYS_fstat:
-        if (nr == CAPSTONE_SYS_newfstatat &&
-            (a[3] & ~(u64)(AT_SYMLINK_NOFOLLOW | AT_NO_AUTOMOUNT))) { rc = -EINVAL; break; }
-        mutex_unlock(&vm_lock);
-        if (nr == CAPSTONE_SYS_newfstatat) {
-            e.nr = nr; memcpy(e.args, a, sizeof(e.args));
-            f = dom_path_file_name(c, &e, call->buffer[1].data);
-        } else { f = held; get_file(f); }
-        if (IS_ERR(f)) rc = PTR_ERR(f);
-        else {
-            rc = vfs_getattr(&f->f_path, &st, STATX_BASIC_STATS, AT_STATX_SYNC_AS_STAT);
-            if (!rc) rc = capstone_native_stat(&st, call->buffer[nr == CAPSTONE_SYS_fstat ? 1 : 2].data);
-            fput(f);
-        }
-        mutex_lock(&vm_lock);
+        rc = native_stat_issue(c, nr, a, held, call->buffer[1].data,
+                               call->buffer[nr == CAPSTONE_SYS_fstat ? 1 : 2].data);
         break;
     case CAPSTONE_SYS_sysinfo:
         rc = capstone_native_sysinfo(call->buffer[0].data);
