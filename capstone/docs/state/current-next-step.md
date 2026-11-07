@@ -1,6 +1,10 @@
 ## 2026-11-07 — Close the full SPEC gate before FPGA acceptance
 
-The last full native C-port test gate is **9 PASS, 1 FAIL**. Cwd, bounded parent
+The historical full native C-port test gate is **9 PASS, 1 FAIL**.
+A fresh complete non-Perl campaign on final kernel `1bd9b8ecf702` now independently
+passes all nine entries, including the full x264 test and official comparisons.
+[Current evidence](../../runtime/virtual/tests/native-task/spec-nonperl-services-qualification.json).
+The remaining acceptance gate is the repaired Perl build on that kernel. Cwd, bounded parent
 traversal, pipe creation and default/ignore signals now pass focused QEMU gates.
 Native spawn/wait lifecycle gates, both confined hush ABI modes and the new
 time/directory/duplication services now pass their focused gates. Complete the
