@@ -54,3 +54,16 @@ Board 1, C.5a (the list moved to perf/b1q, results/2026-11-07-plainnc), rc 0, sp
   (CAPSTONE_HEAP_ARENA_CACHE, the same bounds). Against it **gcc train c3f is 1.296× Plain** (4,253.3 / 3,280.9),
   not 1.212×. The reviewer's point holds, and it costs 8.4 points on gcc.
 - perlbench plain-rv64r is running on board 1 now; its result restates perlbench the same way.
+
+## Addendum 1 (8 Nov 02:3x, before their board calls): mcf and x264 with the cache, board 2
+
+After gcc's −6.7 %, every Plain denominator is restated against the cache. mcf (mcf_r_base.plain-rv64r 4857348eb693)
+and x264 (x264_r_base.plain-rv64r 2d8170fd12b5, imagevalidate 52b5c9539774) are built as gcc's; against their
+plain-rv64 tree builds (the stage binaries, hash-equal) `llvm-nm` differs only in the cache's symbols. Stages: the
+Plain mcf stage of results/2026-11-05-mcfx (perf/mx, 9,094.9 s on board 2) and the 3 Nov x264 Plain stage, binaries
+replaced. Board 2 (perf/b3/gt-run-ga2.sh 2, C.5a), after perlbench c3g-thp there: mcf, then x264.
+
+| # | Prediction |
+|---|---|
+| R3 | mcf plain-rv64r within −3 %…+1 % of 9,094.9 s (mcf allocates its arrays once; little churn) |
+| R4 | x264 plain-rv64r within −8 %…+1 % of 50,320.6 s |
