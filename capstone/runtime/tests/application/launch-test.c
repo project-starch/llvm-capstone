@@ -78,7 +78,11 @@ int main(void) {
   memcpy(data + sizeof h + 16, &into_extension, 4); assert(unpack(sizeof data));
   memcpy(data + sizeof h + 16, &first_arg, 4);
   native->abi = 99; assert(!unpack(sizeof data) && !view.task.native.abi);
-  native->abi = 1; native->features = 3;
+  native->abi = 1; native->features = CAPSTONE_LAUNCH_NATIVE_IO | CAPSTONE_LAUNCH_NATIVE_LOCKS;
+  assert(!unpack(sizeof data) && view.task.native.features == 3);
+  native->features = CAPSTONE_LAUNCH_NATIVE_LOCKS;
+  assert(!unpack(sizeof data) && !view.task.native.abi);
+  native->features = 5;
   assert(!unpack(sizeof data) && !view.task.native.abi);
   native->features = 1; native->max_io = 1;
   assert(!unpack(sizeof data) && !view.task.native.abi);

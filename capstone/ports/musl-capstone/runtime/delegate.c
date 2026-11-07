@@ -1287,6 +1287,10 @@ static long dl_epoll_pwait(long epfd, struct epoll_event *ev, long count, long t
   return r;
 }
 
+#if defined(CAPSTONE_RUNTIME_VIRTUAL) && defined(CAPSTONE_MUSL_NATIVE_IO)
+static int dl_direct_locks_ready(void);
+static long dl_direct_lock(long fd, long cmd, void *arg);
+#endif
 static long dl_fcntl(long fd, long cmd, void *arg) {
   if (cmd == F_GETLK || cmd == F_SETLK || cmd == F_SETLKW) {
     uint64_t args[CAPSTONE_DELEGATE_ARGS] = {(uint64_t)fd, (uint64_t)cmd, 0, 0, 0, 0};
@@ -1295,6 +1299,9 @@ static long dl_fcntl(long fd, long cmd, void *arg) {
       return -EFAULT;
     if (!dl_buffer_ok(arg, 32, cmd == F_GETLK ? 6 : 4))
       return -EFAULT;
+#if defined(CAPSTONE_RUNTIME_VIRTUAL) && defined(CAPSTONE_MUSL_NATIVE_IO)
+    if (dl_direct_locks_ready()) return dl_direct_lock(fd, cmd, arg);
+#endif
     dl_wire_acquire();
     do {
       dl_reset();
@@ -1346,7 +1353,7 @@ static int dl_direct_io_ready(syscall_arg_t raw[CAPSTONE_DELEGATE_ARGS]) {
   const struct capstone_launch_task *t = __capstone_launch_task();
   size_t count = (size_t)(unsigned long)raw[2];
   return t && t->native.abi == NS_ABI_VERSION &&
-         t->native.features == CAPSTONE_LAUNCH_NATIVE_IO &&
+         (t->native.features & CAPSTONE_LAUNCH_NATIVE_IO) &&
          t->native.max_io == 65536 && !t->native.reserved && count && count <= 65536;
 }
 /* Scalar arithmetic defines the low 64 bits, not the upper payload. Build
@@ -1361,6 +1368,23 @@ static syscall_arg_t dl_direct_scalar(syscall_arg_t input) {
   __asm__ volatile("movc %0, zero\n\tmv %0, %1"
                    : "=&r"(output) : "r"(input));
   return output;
+}
+static int dl_direct_locks_ready(void) {
+  const struct capstone_launch_task *t = __capstone_launch_task();
+  return t && t->native.abi == NS_ABI_VERSION &&
+         (t->native.features & CAPSTONE_LAUNCH_NATIVE_LOCKS) && !t->native.reserved;
+}
+static long dl_direct_lock(long fd, long cmd, void *arg) {
+  long result;
+  dl_wire_acquire();
+  dl_reset();
+  result = __capstone_native_syscall(CAPSTONE_NR_FCNTL_LOCK,
+      dl_direct_scalar((syscall_arg_t)fd), dl_direct_scalar((syscall_arg_t)cmd), arg, 0, 0, 0);
+  dl_status = CAPSTONE_ROUND_DONE;
+  /* A completed lock operation must never be replayed through exchange. */
+  (void)dl_settle();
+  dl_wire_release();
+  return result;
 }
 static long dl_direct_io(uint64_t nr, syscall_arg_t raw[CAPSTONE_DELEGATE_ARGS]) {
   long result;

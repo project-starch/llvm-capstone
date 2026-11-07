@@ -33,7 +33,7 @@ static void scalar_regression(void) {
     CHECK(__syscall_cp((void *)SYS_pwrite64, dirty(fd), data, dirty(n), dirty(1), 0, 0) == (long)n);
     CHECK(lseek(fd, 0, SEEK_CUR) == (off_t)n);
 #ifdef MUSL_IO_DIRECT_TEST
-    if (__capstone_launch_task()->native.features == CAPSTONE_LAUNCH_NATIVE_IO) {
+    if (__capstone_launch_task()->native.features & CAPSTONE_LAUNCH_NATIVE_IO) {
         CHECK(__capstone_native_syscall(SYS_write, dirty(fd), data, dirty(n), 0, 0, 0) == -EINVAL);
         CHECK(__builtin_capstone_cap_get_tag(data));
         CHECK(__syscall_cp((void *)SYS_write, data, data, dirty(n), 0, 0, 0) == -EINVAL);
