@@ -1,3 +1,16 @@
+## Native helper calls: direct and typed
+
+The built-in adapter now calls required Linux helpers directly through one
+shared internal header. Twelve obsolete module exports are removed. Build,
+native task/I/O, directory/dup/time, private-tmp, spawn lifecycle and original
+GCC with its official comparator pass together in 93.1 seconds (300-second
+budget). Adapter text shrinks by 986 bytes; no runtime speedup is claimed.
+ISA, QEMU and flat-table support are unchanged. Full SPEC remains separately
+qualified on its older frozen kernel; do not transfer that verdict.
+[Direct-helper evidence](../../runtime/virtual/tests/native-task/direct-helper-qualification.json).
+Continue in small changes using the bounded quick gate; a further migration
+should select one remaining adapter responsibility and its regression scope.
+
 ## Native iterative feedback: bounded five-minute gate
 
 The quick gate passes in 83.6 seconds on the cleanup kernel: incremental build,

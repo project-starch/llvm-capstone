@@ -1,13 +1,13 @@
 {
   "schema_version": 1,
   "branch": "native/linux-task-integration",
-  "source_head": "6090350d1cd0cbf77355d610e3d9758dd9fa33fe",
+  "source_head": "11880d0839f556e72712c25e570b6fc01b77882e",
   "scope": "Cumulative native-only adapter source snapshot. Subsequent evidence/documentation commits are excluded from this inventory.",
   "comparison_base": "aeabf009128746d332741dd1e33fbe5b2bca3754",
-  "runtime_source_head": "6090350d1cd0cbf77355d610e3d9758dd9fa33fe",
+  "runtime_source_head": "11880d0839f556e72712c25e570b6fc01b77882e",
   "historical_observed_origin_dev": "c9611344eeb75ed628d488202a9394a6e44f3db5",
   "origin_dev_fetched_for_this_inventory": false,
-  "branch_commits_since_base": 40,
+  "branch_commits_since_base": 43,
   "qemu_base": "0542c5556c2daddf71795f3d48eec1fb8ae137b3",
   "qemu_head": "dd041bac5ad9c145c3872a50804ca714a26b1c88",
   "qemu_commits": [
@@ -22,10 +22,10 @@
     "processor_model_gitlink": 1,
     "documentation": 21,
     "application_abi_and_ports": 17,
-    "verification": 146,
-    "linux_and_runtime": 48
+    "verification": 150,
+    "linux_and_runtime": 51
   },
-  "changed_paths": 233,
+  "changed_paths": 240,
   "files": [
     {
       "path": "capstone/capstone-qemu",
@@ -78,21 +78,21 @@
     },
     {
       "path": "capstone/docs/plans/native-task-rtl-handoff.md",
-      "added": 328,
+      "added": 331,
       "removed": 0,
       "layer": "documentation",
       "role": "documentation"
     },
     {
       "path": "capstone/docs/state/current-next-step.md",
-      "added": 202,
+      "added": 217,
       "removed": 0,
       "layer": "documentation",
       "role": "documentation"
     },
     {
       "path": "capstone/docs/state/current-state.md",
-      "added": 316,
+      "added": 337,
       "removed": 0,
       "layer": "documentation",
       "role": "documentation"
@@ -462,6 +462,13 @@
       "role": "test_or_tool"
     },
     {
+      "path": "capstone/runtime/virtual/README.md",
+      "layer": "linux_and_runtime",
+      "role": "implementation_or_recipe",
+      "added": 16,
+      "removed": 0
+    },
+    {
       "path": "capstone/runtime/virtual/build-adapter.sh",
       "added": 1,
       "removed": 9,
@@ -484,10 +491,17 @@
     },
     {
       "path": "capstone/runtime/virtual/install-native-task.sh",
-      "added": 49,
+      "added": 52,
       "removed": 0,
       "layer": "linux_and_runtime",
       "role": "implementation_or_recipe"
+    },
+    {
+      "path": "capstone/runtime/virtual/kernel-capstone-helpers.h",
+      "layer": "linux_and_runtime",
+      "role": "implementation_or_recipe",
+      "added": 45,
+      "removed": 0
     },
     {
       "path": "capstone/runtime/virtual/kernel-native-directory.patch",
@@ -509,6 +523,13 @@
       "removed": 0,
       "layer": "linux_and_runtime",
       "role": "implementation_or_recipe"
+    },
+    {
+      "path": "capstone/runtime/virtual/kernel-native-helpers.patch",
+      "layer": "linux_and_runtime",
+      "role": "implementation_or_recipe",
+      "added": 200,
+      "removed": 0
     },
     {
       "path": "capstone/runtime/virtual/kernel-native-mprotect.patch",
@@ -561,8 +582,8 @@
     },
     {
       "path": "capstone/runtime/virtual/module/capstone_vm.c",
-      "added": 422,
-      "removed": 715,
+      "added": 418,
+      "removed": 721,
       "layer": "linux_and_runtime",
       "role": "implementation_or_recipe"
     },
@@ -582,42 +603,42 @@
     },
     {
       "path": "capstone/runtime/virtual/module/native-directory-dom.h",
-      "added": 354,
+      "added": 338,
       "removed": 0,
       "layer": "linux_and_runtime",
       "role": "implementation_or_recipe"
     },
     {
       "path": "capstone/runtime/virtual/module/native-files-dom.h",
-      "added": 85,
+      "added": 69,
       "removed": 0,
       "layer": "linux_and_runtime",
       "role": "implementation_or_recipe"
     },
     {
       "path": "capstone/runtime/virtual/module/native-gcc-dom.h",
-      "added": 190,
+      "added": 178,
       "removed": 0,
       "layer": "linux_and_runtime",
       "role": "implementation_or_recipe"
     },
     {
       "path": "capstone/runtime/virtual/module/native-process-dom.h",
-      "added": 75,
+      "added": 70,
       "removed": 0,
       "layer": "linux_and_runtime",
       "role": "implementation_or_recipe"
     },
     {
       "path": "capstone/runtime/virtual/module/native-spawn-dom.h",
-      "added": 314,
+      "added": 313,
       "removed": 0,
       "layer": "linux_and_runtime",
       "role": "implementation_or_recipe"
     },
     {
       "path": "capstone/runtime/virtual/module/native-syscall-dom.h",
-      "added": 558,
+      "added": 547,
       "removed": 0,
       "layer": "linux_and_runtime",
       "role": "implementation_or_recipe"
@@ -659,7 +680,7 @@
     },
     {
       "path": "capstone/runtime/virtual/stage-adapter.sh",
-      "added": 31,
+      "added": 33,
       "removed": 0,
       "layer": "linux_and_runtime",
       "role": "implementation_or_recipe"
@@ -1121,7 +1142,7 @@
     },
     {
       "path": "capstone/runtime/virtual/tests/native-task/README.md",
-      "added": 835,
+      "added": 902,
       "removed": 0,
       "layer": "documentation",
       "role": "documentation"
@@ -1428,6 +1449,13 @@
       "role": "qualification_record"
     },
     {
+      "path": "capstone/runtime/virtual/tests/native-task/native-only-cleanup-qualification.json",
+      "layer": "verification",
+      "role": "verification",
+      "added": 213,
+      "removed": 0
+    },
+    {
       "path": "capstone/runtime/virtual/tests/native-task/prepare-spec-tests.py",
       "added": 266,
       "removed": 0,
@@ -1456,10 +1484,17 @@
       "role": "qualification_record"
     },
     {
+      "path": "capstone/runtime/virtual/tests/native-task/quick-gate-qualification.json",
+      "layer": "verification",
+      "role": "verification",
+      "added": 147,
+      "removed": 0
+    },
+    {
       "path": "capstone/runtime/virtual/tests/native-task/rtl-handoff-current-inventory.json",
       "layer": "verification",
       "role": "verification",
-      "added": 1830,
+      "added": 1838,
       "removed": 0
     },
     {
@@ -1496,6 +1531,13 @@
       "removed": 0,
       "layer": "verification",
       "role": "test_or_tool"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-task/run-quick-gate.py",
+      "layer": "verification",
+      "role": "verification",
+      "added": 186,
+      "removed": 0
     },
     {
       "path": "capstone/runtime/virtual/tests/native-task/run-spec-tests.py",
@@ -1603,6 +1645,13 @@
       "role": "test_or_tool"
     },
     {
+      "path": "capstone/runtime/virtual/tests/native-task/test-quick-gate.py",
+      "layer": "verification",
+      "role": "verification",
+      "added": 145,
+      "removed": 0
+    },
+    {
       "path": "capstone/runtime/virtual/tests/native-task/test-spec-qualification.py",
       "added": 614,
       "removed": 0,
@@ -1660,13 +1709,14 @@
     }
   ],
   "qualification": {
-    "kernel_sha256": "e2dca4c948f5d8a1445db57744a024b4be129e0c584cb4ae4ddff670becd835d",
+    "kernel_sha256": "574f873ce2084606a2ac6e849c9cd50a04e21ce949ed1d7bad692647eba20be0",
     "non_perl": "spec-nonperl-services-qualification.json (historical pre-cleanup kernel)",
     "perl_focused": "../../../../ports/perl/provenance/qualification-07.json",
-    "full_ten_entry_gate": "PENDING",
+    "full_ten_entry_gate": "NOT_RUN_ON_THIS_KERNEL",
     "fpga_qualified": false,
-    "native_only_focused": "native-only-cleanup-qualification.json",
-    "previous_full_ten_entry_record": "spec-final-qualification.json"
+    "native_only_focused": "native-only-cleanup-qualification.json (previous cleanup kernel)",
+    "previous_full_ten_entry_record": "spec-final-qualification.json",
+    "direct_helper_focused": "direct-helper-qualification.json"
   },
   "qemu_files": [
     {

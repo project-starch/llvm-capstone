@@ -1,0 +1,119 @@
+{
+  "schema_version": 1,
+  "status": "PASS",
+  "source_snapshot": "11880d0839f556e72712c25e570b6fc01b77882e",
+  "scope": "Direct internal helper calls: incremental kernel build, focused native regression and original GCC test with official comparison. Not full SPEC qualification or a performance comparison.",
+  "platform": {
+    "qemu": "c6681ec8a8ff704b297ec3eafceb13b2fe9c1c61c7a65ed95304bd5dbe5183eb",
+    "Image": "574f873ce2084606a2ac6e849c9cd50a04e21ce949ed1d7bad692647eba20be0",
+    "rootfs": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845",
+    "firmware": "2335a28682ddf65e46c1f492632c2cb026efcb2271caf544a3f7ddc858b03e02"
+  },
+  "budget_seconds": 300,
+  "elapsed_seconds": 93.06707692192867,
+  "steps": [
+    {
+      "name": "kernel-build",
+      "status": "PASS",
+      "elapsed_seconds": 13.311124621890485
+    },
+    {
+      "name": "io-and-task",
+      "status": "PASS",
+      "elapsed_seconds": 19.18279423005879
+    },
+    {
+      "name": "directory-dup-time",
+      "status": "PASS",
+      "elapsed_seconds": 10.70264058909379
+    },
+    {
+      "name": "private-tmp",
+      "status": "PASS",
+      "elapsed_seconds": 20.88740688096732
+    },
+    {
+      "name": "spawn-lifecycle",
+      "status": "PASS",
+      "elapsed_seconds": 12.356523784110323
+    },
+    {
+      "name": "spawn-verdict",
+      "status": "PASS",
+      "elapsed_seconds": 0.06546997302211821
+    },
+    {
+      "name": "gcc-original-test",
+      "status": "PASS",
+      "elapsed_seconds": 16.271513953106478
+    },
+    {
+      "name": "gcc-official-comparison",
+      "status": "PASS",
+      "elapsed_seconds": 0.2662383059505373
+    }
+  ],
+  "adapter_text_bytes": {
+    "before": 88793,
+    "after": 87807,
+    "reduction": 986
+  },
+  "link_audit": {
+    "status": "PASS",
+    "removed_exports": [
+      "capstone_native_mprotect",
+      "capstone_native_sysinfo",
+      "capstone_native_getrlimit",
+      "capstone_native_signal_action",
+      "capstone_native_fcntl",
+      "capstone_native_ftruncate",
+      "capstone_native_path_chmod",
+      "capstone_native_fmetadata",
+      "capstone_native_path_link",
+      "capstone_native_pipe_prepare",
+      "capstone_native_stat",
+      "capstone_unpinned_config"
+    ],
+    "adapter_has_dynamic_symbol_references": false,
+    "verification": "Linked vmlinux symbols, not the inherited Module.symvers (Image build does not refresh that file). All 12 helpers remain direct global text symbols; their export tables are absent.",
+    "helper_source_sha256": {
+      "mm/mprotect.c": "d33add82fa82b7629455fd2b2574779193e443d88c73e5c8ee3efda7dd481169",
+      "kernel/sys.c": "40e5d258a792e76e44df450db5bf91f4ee83df6a2359f9176313c2b5b2938d87",
+      "kernel/signal.c": "94c5f6cfeb8f5cfd774ba15a611471b5e48398cf201ecc5920a399b4b99f7974",
+      "fs/file.c": "e29aba8e5cf8caa432340a8c1857ae41a358caffc0c0d1986969de3be8477449",
+      "fs/fcntl.c": "0ac2d5056086eb69798c287077482ae086d0c4721497ce698c17f89d46d26507",
+      "fs/open.c": "f6544418afd3a5fc2e1f78aae65b06acebc17ba6342ad882531151620eb4f425",
+      "fs/namei.c": "d867da716d8a742424b8e230441e5f86e6cf69259af328c627970b32fa6d1343",
+      "fs/pipe.c": "e8cd58d5e1a13a2c971b3453879829cf5307d9f6f7de50eae44ce362b05dfdfb",
+      "fs/stat.c": "1c60b2a4372524cf7924a03c15d221f827d03b7ebc2d9984c2e96227fe94ea80",
+      "arch/riscv/mm/captag.c": "eac26a40f08b7e809f39d2049077559f13c9785a59c5e9180a215ad82f13c9ee"
+    },
+    "header_sha256": "8ae7484d5e7f24e49e991212bd8f63d740af1877a65d7c2ac9ccc348b083cb82"
+  },
+  "adapter_staged_source_matches_built_source": true,
+  "installer_patch_sequence": "PASS: reversed previous task/service patches on disposable copies, then applied complete seven-patch installer sequence, including dry runs.",
+  "first_attempt": {
+    "status": "FAIL",
+    "elapsed_seconds": 6.756820110836998,
+    "reason": "Missing linux/linkage.h prerequisite in new shared header; fixed before second attempt. No guest tests ran."
+  },
+  "evidence_root_remote": "p12:/var/tmp/capstone-native-task-scratch/native-direct-calls-01",
+  "evidence_root_local": "/tmp/capstone/native-task/native-direct-calls-01/evidence",
+  "evidence_sha256": {
+    "result/summary.json": "a6f5e0131ad9ccede7ddf5872ac3449060e3ecf8e94e056e3b68027fdd380b36",
+    "result-02/summary.json": "6fc680531649e20c65296d426b20b457d3e0c0950c83987489fe56c06afe51c5",
+    "plan.json": "abb4d57515fccafbf0d01842ba73c9e044cbcce4280c7a9d63f8651a7dec5cd3",
+    "gcc-validation.json": "827ceda3c454e7dd63df00d0f4a371f12a99b61776e6627705c0504813a42b14",
+    "patch-preflight.log": "0a8b073a72f3cdccb7b33db5b9939ece6535c4479ce024b2dd2ac186c2483a0e",
+    "link-audit.json": "2d55a7dbf6e575a9a12d751b6c4e76eab3cfb4d16d35c267ac76ca96b60113b7",
+    "adapter-source-hashes.json": "4374f5d77049ac8879385f590d8c335c0ba132b6cb43a7c14af0d3dd9dc31f4b"
+  },
+  "unchanged_scope": [
+    "ISA and QEMU",
+    "flat lifetime-table support",
+    "syscall authority and argument validation",
+    "lock ordering and resource cleanup"
+  ],
+  "remaining_exports": "Spawn/time and unrelated memory exports are unchanged; only the twelve audited obsolete dynamic-helper exports were removed.",
+  "test_configuration": "Per-step argv are preserved in the hashed plan.json; private-tmp modes and the spawn null-device grant vary by test."
+}
