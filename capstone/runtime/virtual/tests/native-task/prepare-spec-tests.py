@@ -8,6 +8,7 @@ and the fresh output directory outside the repository.
 import argparse
 import hashlib
 import json
+import os
 from pathlib import Path
 import re
 import shlex
@@ -41,21 +42,28 @@ def stage_path(stage, name):
     return stage / path
 
 
-def parse_commands(path):
+def parse_commands(path, label=None):
     commands = []
     for line in path.read_text().splitlines():
-        if not line.startswith("-o "):
+        if not line.lstrip().startswith("-o "):
             continue
-        if "capstone-run.sh " not in line:
+        tokens = shlex.split(line)
+        if (len(tokens) < 9 or tokens[0] != "-o" or tokens[2] != "-e"
+                or tokens[-4:] not in ([">", tokens[1], "2>>", tokens[3]],
+                                      [">", tokens[1], "2>", tokens[3]])):
             raise ValueError(f"Unexpected SPEC invocation in {path}: {line}")
-        before, after = line.split("capstone-run.sh ", 1)
-        prefix, argv = shlex.split(before), shlex.split(after)
-        argv = argv[:argv.index(">")]
-        argv[0] = "./" + Path(argv[0]).name.split("_base.")[0]
+        argv = tokens[4:-4]
+        if argv and Path(argv[0]).name == "capstone-run.sh":
+            argv = argv[1:]
+        if not argv:
+            raise ValueError(f"Missing SPEC executable in {path}")
+        executable = re.fullmatch(r"([A-Za-z0-9_+-]+)_base\.([A-Za-z0-9_-]+)", Path(argv[0]).name)
+        if not executable or (label is not None and executable[2] != label):
+            raise ValueError(f"Unexpected SPEC executable in {path}: {argv[0]}")
+        argv[0] = "./" + executable[1]
         commands.append({
             "argv": argv,
-            "stdout": prefix[prefix.index("-o") + 1],
-            "stderr": prefix[prefix.index("-e") + 1],
+            "stdout": tokens[1], "stderr": tokens[3],
         })
     if not commands:
         raise ValueError(f"No benchmark invocations found in {path}")
@@ -71,8 +79,19 @@ def main():
         help="Existing official SPEC setup roots, searched in order",
     )
     parser.add_argument("--label", default="current_cap32")
+    parser.add_argument("--benchmarks", nargs="+", choices=BENCHMARKS,
+                        help="Explicit subset; the default remains all ten entries")
+    parser.add_argument("--require-frozen-objects", action="store_true",
+                        help="Require and verify fresh object inventories before relinking")
     args = parser.parse_args()
+    benchmarks = args.benchmarks if args.benchmarks is not None else BENCHMARKS
+    if len(set(benchmarks)) != len(benchmarks):
+        raise ValueError("Duplicate benchmark selection")
     spec, sdk, builds = args.spec.resolve(), args.sdk.resolve(), args.builds.resolve()
+    compiler_environment = dict(os.environ)
+    # The explicitly selected compiler driver must use its adjacent SDK;
+    # an inherited override must not silently select another runtime.
+    compiler_environment.pop("CAPSTONE_SDK", None)
     output = args.out.resolve()
     output.mkdir(parents=True, exist_ok=False)
     manifest = {}
@@ -101,7 +120,7 @@ def main():
 
     frozen = json.loads(args.frozen.read_text())
     records = {}
-    for bench in BENCHMARKS:
+    for bench in benchmarks:
         directory = output / bench
         stage = directory / "stage"
         stage.mkdir(parents=True, exist_ok=False)
@@ -122,7 +141,7 @@ def main():
                 "-I" + str(source / "specrand-common"), str(source / "main.c"),
                 str(source / "specrand-common/specrand.c"), "-o", str(stage / executable),
             ]
-            subprocess.run(command, check=True)
+            subprocess.run(command, check=True, env=compiler_environment)
             links.append(command)
             binaries[executable] = digest(stage / executable)
             for line in (stage / "control").read_text().splitlines():
@@ -133,35 +152,63 @@ def main():
                         "stdout": f"rand.{count}.out", "stderr": f"rand.{count}.err",
                     })
         else:
-            candidates = sorted((builds / bench).glob(f"build_base_{args.label}.*"))
+            candidates = sorted([*(builds / bench).glob(f"build_base_{args.label}.*"),
+                                 *(builds / bench / "build").glob(f"build_base_{args.label}.*")])
             if len(candidates) != 1:
                 raise ValueError(f"Expected one build directory for {bench}: {candidates}")
             build = candidates[0]
-            sources = frozen[bench]["sources"]
+            entry = frozen[bench]
+            if entry.get("label", args.label) != args.label:
+                raise ValueError(f"Frozen build label mismatch: {bench}")
+            sources = entry["sources"]
             if not sources:
                 raise ValueError(f"Missing frozen source inventory: {bench}")
             for name, expected in sources.items():
-                if digest(build / name, "sha512") != expected:
+                if digest(stage_path(build, name), "sha512") != expected:
                     raise ValueError(f"Frozen source mismatch: {bench}/{name}")
             source_audit = {"files_checked": len(sources), "mismatches": []}
-            for log in sorted(build.glob("make*.out")):
-                for line in log.read_text().splitlines():
-                    if "capstone-cc" not in line or " -o " not in line or " -c " in line:
-                        continue
-                    tokens = shlex.split(line)
-                    executable = tokens[tokens.index("-o") + 1]
-                    if executable.endswith(".o") or executable == "ldecod_r":
-                        continue
-                    destination = stage_path(stage, executable)
-                    destination.parent.mkdir(parents=True, exist_ok=True)
-                    command = [str(sdk), *tokens[1:]]
-                    command[command.index("-o") + 1] = str(destination)
-                    subprocess.run(command, cwd=build, check=True)
-                    links.append(command)
-                    binaries[executable] = digest(destination)
-                    for name in tokens:
-                        if name.endswith(".o"):
-                            objects[name] = digest(build / name)
+            expected_objects = entry.get("objects")
+            if args.require_frozen_objects and not expected_objects:
+                raise ValueError(f"Missing frozen object inventory: {bench}")
+            if expected_objects is not None:
+                if not expected_objects:
+                    raise ValueError(f"Empty frozen object inventory: {bench}")
+                for name, expected in expected_objects.items():
+                    if digest(stage_path(build, name)) != expected:
+                        raise ValueError(f"Frozen object mismatch: {bench}/{name}")
+                source_audit["objects_checked"] = len(expected_objects)
+            recorded_links = entry.get("link_commands")
+            if recorded_links is None:
+                recorded_links = []
+                for log in sorted(build.glob("make*.out")):
+                    for line in log.read_text().splitlines():
+                        if "capstone-cc" in line and " -o " in line and " -c " not in line:
+                            recorded_links.append(shlex.split(line))
+            # Validate every recorded link's object set before any compiler call.
+            for tokens in recorded_links:
+                if (not tokens or not all(isinstance(t, str) for t in tokens)
+                        or Path(tokens[0]).name != "capstone-cc" or "-o" not in tokens
+                        or tokens.index("-o") + 1 >= len(tokens) or "-c" in tokens):
+                    raise ValueError(f"Malformed frozen link command: {bench}")
+                for name in tokens:
+                    if name.endswith(".o"):
+                        stage_path(build, name)
+                        if expected_objects is not None and name not in expected_objects:
+                            raise ValueError(f"Linked object missing from frozen inventory: {bench}/{name}")
+            for tokens in recorded_links:
+                executable = tokens[tokens.index("-o") + 1]
+                if executable.endswith(".o") or executable == "ldecod_r":
+                    continue
+                destination = stage_path(stage, executable)
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                command = [str(sdk), *tokens[1:]]
+                command[command.index("-o") + 1] = str(destination)
+                subprocess.run(command, cwd=build, check=True, env=compiler_environment)
+                links.append(command)
+                binaries[executable] = digest(destination)
+                for name in tokens:
+                    if name.endswith(".o"):
+                        objects[name] = digest(build / name)
             if not links:
                 raise ValueError(f"No link commands found: {bench}")
             runs = []
@@ -173,7 +220,7 @@ def main():
                     break
             if len(runs) != 1:
                 raise ValueError(f"Expected one official run setup for {bench}: {runs}")
-            commands = parse_commands(runs[0])
+            commands = parse_commands(runs[0], args.label)
             shutil.copy2(runs[0], directory / "speccmds.original")
             if bench == "525.x264_r":
                 generated = runs[0].parent / "BuckBunny.yuv"
@@ -206,6 +253,9 @@ def main():
             "objects": objects, "source_audit": source_audit, "inputs": inputs,
             "references": references, "binaries": binaries,
         }
+        if not bench.startswith(("997.", "999.")) and entry.get("source_alternative"):
+            record["source_alternative"] = entry["source_alternative"]
+            record["frozen_inventory_sha256"] = digest(args.frozen)
         write_json(directory / "manifest.json", record)
         records[bench] = record
         print("PREPARED", bench, len(commands), flush=True)

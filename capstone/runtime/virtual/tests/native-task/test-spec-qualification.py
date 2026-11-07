@@ -131,11 +131,14 @@ class QualificationTests(unittest.TestCase):
             for path in sorted(self.data.rglob("*")) if path.is_file()
         ))
 
-    def prepare_fixture(self):
+    def prepare_fixture(self, extra=(), must_refuse=False):
         output = self.fresh_path("prepared")
 
         def compile_fixture(command, **kwargs):
+            if must_refuse:
+                self.fail("Invalid frozen build reached the compiler")
             self.assertEqual(command[0], str(self.sdk))
+            self.assertNotIn("CAPSTONE_SDK", kwargs["env"])
             Path(command[command.index("-o") + 1]).write_bytes(b"synthetic native binary")
             return subprocess.CompletedProcess(command, 0)
 
@@ -143,7 +146,7 @@ class QualificationTests(unittest.TestCase):
             self.invoke(self.prepare, [
                 "--spec", str(self.spec), "--builds", str(self.builds),
                 "--sdk", str(self.sdk), "--frozen", str(self.frozen),
-                "--out", str(output), "--run-roots", str(self.existing),
+                "--out", str(output), "--run-roots", str(self.existing), *extra,
             ], compile_fixture)
         return output
 
@@ -269,6 +272,90 @@ class QualificationTests(unittest.TestCase):
         self.assertEqual(execution["commands"], self.comparators[BENCHMARK]["commands"])
         self.assertEqual(execution["commands"][0]["stdout"], "new-0.out")
 
+    def test_frozen_objects_and_source_identity_are_retained(self):
+        build = self.builds / BENCHMARK / "build_base_current_cap32.0000"
+        entry = read_json(self.frozen)
+        entry[BENCHMARK]["objects"] = {"fixture.o": digest(build / "fixture.o")}
+        entry[BENCHMARK]["link_commands"] = [shlex.split(line) for line in (build / "make.out").read_text().splitlines()]
+        entry[BENCHMARK]["label"] = "current_cap32"
+        entry[BENCHMARK]["source_alternative"] = {"name": "synthetic_v2", "sha256": "1" * 64}
+        write_json(self.frozen, entry)
+        prepared = self.prepare_fixture(("--require-frozen-objects",))
+        result = read_json(prepared / "manifest.json")[BENCHMARK]
+        self.assertEqual(result["source_audit"]["objects_checked"], 1)
+        self.assertEqual(result["source_alternative"], entry[BENCHMARK]["source_alternative"])
+        self.assertEqual(result["frozen_inventory_sha256"], digest(self.frozen))
+        # Recorded links are authoritative; an unrelated later make log cannot
+        # substitute another object into this frozen build.
+        (build / "make.out").write_text("capstone-cc rogue.o -o x264_r\n")
+        self.prepare_fixture(("--require-frozen-objects",))
+
+    def test_frozen_object_failures_precede_any_link(self):
+        build = self.builds / BENCHMARK / "build_base_current_cap32.0000"
+        entry = read_json(self.frozen)
+        with self.assertRaisesRegex(ValueError, "Missing frozen object"):
+            self.prepare_fixture(("--require-frozen-objects",), must_refuse=True)
+        entry[BENCHMARK]["objects"] = {"fixture.o": "0" * 64}
+        write_json(self.frozen, entry)
+        with self.assertRaisesRegex(ValueError, "Frozen object mismatch"):
+            self.prepare_fixture(must_refuse=True)
+        entry[BENCHMARK]["objects"] = {"fixture.o": digest(build / "fixture.o")}
+        entry[BENCHMARK]["link_commands"] = [["capstone-cc", "untracked.o", "-o", "x264_r"]]
+        write_json(self.frozen, entry)
+        with self.assertRaisesRegex(ValueError, "missing from frozen inventory"):
+            self.prepare_fixture(must_refuse=True)
+        del entry[BENCHMARK]["link_commands"]
+        write_json(self.frozen, entry)
+        (build / "fixture.o").unlink()
+        with self.assertRaises(FileNotFoundError):
+            self.prepare_fixture(must_refuse=True)
+
+    def test_normal_spec_layout_and_ambiguity(self):
+        import shutil
+        old = self.builds / BENCHMARK / "build_base_current_cap32.0000"
+        normal = old.parent / "build" / old.name
+        normal.parent.mkdir()
+        shutil.copytree(old, normal)
+        with self.assertRaisesRegex(ValueError, "Expected one build directory"):
+            self.prepare_fixture(must_refuse=True)
+        shutil.rmtree(old)
+        self.prepare_fixture(("--benchmarks", BENCHMARK))
+
+    def test_explicit_subset_does_not_require_other_builds(self):
+        output = self.fresh_path("subset")
+        def link(command, **kwargs):
+            Path(command[command.index("-o") + 1]).write_bytes(b"synthetic native binary")
+            return subprocess.CompletedProcess(command, 0)
+        self.invoke(self.prepare, [
+            "--spec", str(self.spec), "--builds", str(self.builds), "--sdk", str(self.sdk),
+            "--frozen", str(self.frozen), "--out", str(output), "--run-roots", str(self.existing),
+            "--benchmarks", BENCHMARK,
+        ], link)
+        self.assertEqual(list(read_json(output / "manifest.json")), [BENCHMARK])
+        with self.assertRaisesRegex(ValueError, "Duplicate benchmark"):
+            self.prepare_fixture(("--benchmarks", BENCHMARK, BENCHMARK), must_refuse=True)
+
+    def test_explicit_sdk_is_not_replaced_by_inherited_override(self):
+        with patch.dict(os.environ, {"CAPSTONE_SDK": "/unselected/sdk"}):
+            self.prepare_fixture()
+
+    def test_plain_official_commands_preserve_argv_and_reject_other_wrappers(self):
+        path = self.existing / BENCHMARK / "run/run_base_test_current_cap32.0000/speccmds.cmd"
+        expected = self.prepare.parse_commands(path, "current_cap32")
+        path.write_text(path.read_text().replace("/synthetic/capstone-run.sh ", ""))
+        self.assertEqual(self.prepare.parse_commands(path, "current_cap32"), expected)
+        self.prepare_fixture()
+        path.write_text("-o out -e err ../x264_r_base.current_cap32 'quoted value' '>' > out 2>> err\n")
+        self.assertEqual(self.prepare.parse_commands(path)[0]["argv"], ["./x264_r", "quoted value", ">"])
+        for text in (
+            "-o out -e err env ../x264_r_base.current_cap32 > out 2>> err\n",
+            "-o out -e err /bin/true > out 2>> err\n",
+            "-o out -e err ../x264_r_base.other > out 2>> err\n",
+            "-o out -e err ../x264_r_base.current_cap32 > other 2>> err\n",
+        ):
+            path.write_text(text)
+            with self.assertRaises(ValueError):
+                self.prepare.parse_commands(path, "current_cap32")
     def test_explicit_shell_preserves_workload_and_records_grants(self):
         shell = self.root / "shell.dom"
         shell.write_bytes(b"synthetic capability shell fixture")
