@@ -1,3 +1,26 @@
+## Native broker census: next migration candidate
+
+On the session-teardown kernel, SQLite speedtest1 size 1 passes all 32
+reference phases in each of two fresh guests: a route census and a separate
+untraced instruction profile. The combined gate takes 37.7 seconds under a
+300-second deadline. No runtime or ABI changes are included.
+[Measured inputs and results](../../runtime/virtual/tests/native-task/native-broker-census.json).
+
+Remaining exchange calls include 5,862 POSIX file-lock requests, 2,922
+newfstatat calls, 2,283 lseek calls and 1,463 fstat calls. The untraced profile
+counts 352,883,780 kernel instruction attempts; cv_copy_check accounts for
+10.25%, cu_copy for 6.26%, and ns_dispatch_request for 6.17% of those attempts.
+These are flat symbol costs, not inclusive costs per syscall family or FPGA
+cycles. A single run is a baseline, not a speedup result.
+
+Next migrate POSIX file locking end to end: musl marshalling and the native
+kernel service, preserving capability permissions, fd policy and Linux lock
+semantics. Compare matched old/new SQLite binaries and negative lock tests
+within bounded gates. Resolve feature negotiation first: current launch
+parsing accepts exactly feature mask 1, so adding a bit unconditionally would
+reject existing binaries. Remove exchange handlers only after callers have
+migrated; the broker has not yet been removed.
+
 ## Native session teardown encapsulated
 
 Final session cleanup now lives beside session creation in
