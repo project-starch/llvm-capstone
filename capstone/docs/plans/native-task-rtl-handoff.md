@@ -19,7 +19,7 @@ hardware qualification is claimed.
 | QEMU at common ancestor | `0542c5556c2d` |
 | Required QEMU | `dd041bac5ad9c145c3872a50804ca714a26b1c88` |
 
-The snapshot contains 37 commits after the comparison base, 230 ordinary changed
+The snapshot contains 37 commits after the comparison base, 231 ordinary changed
 files and one changed QEMU gitlink. The recorded remote dev had nine separate
 commits after that base; this branch has not merged them. In particular, dev's mapping-cache
 and compiler changes must not silently enter the baseline. There are no LLVM
@@ -76,8 +76,8 @@ The large source diff includes imported dispatcher/test foundations and raw
 measurement records. Its line count is not an estimate of RTL work. Native
 task integration and the latest file services add no new processor opcode.
 
-The current inventory contains 48 Linux/runtime paths, 14 application ABI/port
-paths, 140 verification/evidence paths and 21 documentation paths. The additional
+The current inventory contains 48 Linux/runtime paths, 17 application ABI/port
+paths, 145 verification/evidence paths and 21 documentation paths. The additional
 QEMU gitlink contains the processor-model delta; its source-file count is not
 included in those totals. That delta separately contains 13 implementation paths
 and 14 test/documentation paths, also enumerated in the current inventory.
