@@ -14,20 +14,23 @@ validated-VMA controls save only 0.269% and 0.984% total attempts respectively.
 The unread production arena-ID xarray has now been removed and qualified with
 unchanged GCC/musl binaries: total attempts -0.757%, kernel -1.435%, all 82 race
 scenarios and their negative controls pass. [Evidence](../../runtime/virtual/tests/native-task/arena-index-qualification.json).
-Continue with general kernel-runtime work: unnecessary unpinned page/frame
-storage remains. Preserve registration IDs and adapt touch/error-unwind consumers
-before removing storage.
-More substantially, current unpinned read faults on writable VMAs request WRITE,
+Unpinned page/frame storage has now also been removed, with mode-correct touch
+and unwind paths: incremental total attempts -0.783%, kernel -1.493%. Four GCC
+outputs, integration and both race groups pass in 156.6s.
+[Evidence](../../runtime/virtual/tests/native-task/arena-arrays-qualification.json).
+The next general runtime experiment concerns unpinned read faults on writable VMAs,
+which currently request WRITE,
 materializing private dirty pages. Study actual-access demand faults without
 changing eager bootstrap or weakening grants, COW, copy holds or revocation.
 
 First compare identical map/touch/unmap event streams to distinguish greater
 application memory volume from higher runtime cost per event. Read-first and
 read-then-write workloads are both necessary: shared-zero-page reads may save
-allocation but introduce later COW faults. Keep array removal and access-direction changes separate from the qualified
-index removal; measure incremental effects rather than adding estimated gains.
+allocation but introduce later COW faults. Keep access-direction changes separate
+from the qualified index and array removals; measure incremental effects rather
+than adding estimated gains.
 [Source audit, invariants and experimental order](../plans/2026-11-03-boundary-north-star.md#7-current-kernel-runtime-study-2026-11-08).
-The array and fault-policy proposals remain unqualified. Keep the first feedback gate within
+The fault-policy proposal remains unqualified. Keep the first feedback gate within
 300 seconds, then require relevant fault/lifetime/race failures and exact GCC
 output before enabling a candidate. Full direct-trap integration and dead-namespace
 teardown require separate architectural proofs; neither is a free cleanup.

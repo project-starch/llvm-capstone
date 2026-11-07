@@ -279,6 +279,12 @@ capability authority or lifetime checks. Its cost is not yet measured.
 
 ### Small cleanup: remove obsolete per-page pinning storage
 
+Implemented after this study as `205b53613621`, independently of index removal:
+GCC total attempts -0.783%, kernel -1.493%, unchanged application binary.
+Integration and both race suites pass. [Qualification](../../runtime/virtual/tests/native-task/arena-arrays-qualification.json).
+The occupied-slot unwind was statically audited, not dynamically injected.
+The following describes the pre-change audit and sizing estimate.
+
 `add` allocates `pages` and `frames` arrays even though native adapter admission
 requires unpinned mode. From the measured 281 compilation heap mappings, the
 array formulas request 10,040 + 26,960 = 37,000 bytes in 562 allocation calls.
