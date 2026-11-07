@@ -1,17 +1,21 @@
-## GCC follow-up: attribute memory and lifecycle work
+## GCC follow-up: reduce memory-management amplification
 
-The matched current-kernel native-route toggle saves only 0.229% total and
-0.371% kernel instruction attempts on GCC test input. Only 11 of 31 diagnostic
-service calls change transport. Before another GCC-directed optimization,
-separate startup, compilation and teardown work and compare page/fault/mapping
-costs against a matched ordinary-Linux workload. Flat profile hotspots include
-memset, page accounting, folio activation, faults and unmapping; these names do
-not by themselves establish avoidable Capstone overhead or inclusive costs.
+The current matched phase comparison locates 71.47% of extra GCC attempts in the
+kernel, with do_mmap entries 118 versus 281 during compilation and materially
+more fault and page-release work. The phase attribution milestone is complete.
+[Evidence](../../runtime/virtual/tests/native-task/gcc-current-plain-attribution.json).
 
-[Current GCC evidence](../../runtime/virtual/tests/native-task/gcc-current-routes-comparison.json).
-The checked-string milestone below remains a candidate for metadata-heavy
-workloads such as SQLite, not a demonstrated major GCC win. Keep each feedback
-gate within 300 seconds.
+Next perform a controlled memory-path experiment, preserving capability lifetime
+and authority checks: first audit every unpinned use of arena pages/frame arrays
+before omitting their allocation; separately measure mapping sizes/request
+callers and allocator representability inflation. Keep these interventions
+separate from fault-ahead tuning to isolate each effect. No runtime optimization
+or deletion is included in the attribution change. Require exact GCC output,
+existing safety checks and a <=300s feedback gate for each candidate.
+Do not infer that all 14.698M extra kernel attempts are removable. Tag clearing
+and ordinary Linux page accounting are distinct from obsolete pinning work.
+The checked-string candidate below remains relevant to metadata-heavy workloads,
+not a demonstrated major GCC win.
 
 ## Native basic clock transport qualified
 
