@@ -2,11 +2,11 @@
 
 This is the developer entry point for `native/linux-task-integration`. It
 organizes the cumulative platform change, not just the final SQLite patch.
-The current source snapshot is `11880d0839f5`, including direct typed Linux helpers, native-only adapter cleanup, subprocess services
+The current source snapshot is `036ee6176a8a`, including authorization workspace reuse, direct typed Linux helpers, native-only adapter cleanup, subprocess services
 and Perl provenance repair; subsequent qualification changes are recorded
 separately. **The pre-cleanup kernel passed all ten existing C-port SPEC entries.**
-The current direct-helper kernel passes the 93.1-second build/task/I/O/resource/
-spawn/GCC gate; see [direct-helper qualification](../../runtime/virtual/tests/native-task/direct-helper-qualification.json). The earlier cleanup also passed focused gates;
+The current authorization-reuse kernel passes the 160.6-second combined build,
+regression, GCC and matched measurement gate; see [qualification](../../runtime/virtual/tests/native-task/authorization-reuse-qualification.json). The earlier cleanup also passed focused gates;
 its full ten-entry rerun on the new kernel is incomplete. The remote long run
 was cancelled to free the host for bounded five-minute feedback gates. See
 [cleanup qualification](../../runtime/virtual/tests/native-task/native-only-cleanup-qualification.json).
@@ -18,12 +18,12 @@ hardware qualification is claimed.
 | Item | Frozen revision |
 | --- | --- |
 | Comparison base | `aeabf009128746d332741dd1e33fbe5b2bca3754` |
-| Current source snapshot | `11880d0839f556e72712c25e570b6fc01b77882e` |
+| Current source snapshot | `036ee6176a8ae8fe32169cbf00c77abb296e1f45` |
 | Historical remote `origin/dev` observation, not refreshed | `c9611344eeb75ed628d488202a9394a6e44f3db5` |
 | QEMU at common ancestor | `0542c5556c2d` |
 | Required QEMU | `dd041bac5ad9c145c3872a50804ca714a26b1c88` |
 
-The snapshot contains 43 commits after the comparison base, 239 ordinary changed
+The snapshot contains 45 commits after the comparison base, 241 ordinary changed
 files and one changed QEMU gitlink. The recorded remote dev had nine separate
 commits after that base; this branch has not merged them. In particular, dev's mapping-cache
 and compiler changes must not silently enter the baseline. There are no LLVM
@@ -56,8 +56,8 @@ Git's configured submodule-ignore behavior can hide the
 most important hardware change: use `--ignore-submodules=none` when reviewing.
 
 ```sh
-git diff --stat --ignore-submodules=none aeabf0091287 11880d0839f5
-git log --oneline aeabf0091287..11880d0839f5
+git diff --stat --ignore-submodules=none aeabf0091287 036ee6176a8a
+git log --oneline aeabf0091287..036ee6176a8a
 git -C capstone/capstone-qemu log --oneline 0542c5556c2d..dd041bac5ad9
 ```
 

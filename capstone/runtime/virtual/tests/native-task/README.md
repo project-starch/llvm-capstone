@@ -1,5 +1,40 @@
 # Experimental Linux task-return backend
 
+## Shared authorization workspace
+
+`cn_authorize()` and the direct fast path share `native_authorize_reuse()`.
+Every invocation resets the existing kmalloc-backed workspace, preserving its
+physical descriptor alignment and all offset, ownership and access checks.
+This removes one allocation/free pair per generic authorization. It does not
+merge task/context identities, change the general checked-copy wrapper or
+change the ISA. [Final qualification](authorization-reuse-qualification.json).
+
+The final combined build/regression/GCC/measurement gate passes in 160.6s;
+the separate race profile passes all 82 scenarios in 25.2s. Each gate has
+one 300-second deadline. The earlier race script path error and superseded
+production artifact are recorded; the final Image is independently qualified.
+
+Matched old/new kernels in ABBA order, two repeats per kernel/setting, resident 1 MiB copy,
+4 KiB requests (512 read/write calls per window), tracing disabled:
+
+| ABI / dispatch | Before: kernel attempts/call | After | Reduction |
+| --- | ---: | ---: | ---: |
+| exchange / generic | 19042.4 | 18680.3 | 1.90% |
+| direct / generic | 14859.0 | 14500.0 | 2.42% |
+| exchange / fast enabled | 19038.1 | 18678.9 | 1.89% |
+| direct / fast enabled | 8589.8 | 8594.0 | -0.05% |
+
+Exchange uses the generic dispatcher in both settings.
+Fast direct already reused scratch; its near-zero change is a control, not a
+meaningful speedup. These counts include kernel work inside the marked loop,
+not setup/output validation; they are not hardware timing or a GCC speedup.
+`measure-helper-reuse.py` accepts `--qemu`, `--baseline` and `--candidate` image
+directories (each with Image, System.map and rootfs.ext2), `--firmware`,
+`--plugin`, `--probes` (copy-exchange.dom/copy-direct.dom) and fresh `--out`.
+Use absolute paths and run it inside `run-quick-gate.py`; the hashed final plan
+in the qualification record provides the exact commands.
+
+
 [Direct-helper qualification](direct-helper-qualification.json): the build and
 focused gate, including original GCC and its official comparator, pass in 93.1
 seconds. This is not a full SPEC rerun or a measured runtime speedup.
