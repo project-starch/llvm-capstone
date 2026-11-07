@@ -29,5 +29,12 @@ plain-rv64r, then gcc train plain-rv64r (perf/b3/gt-run-ga2.sh 1, C.5a).
 | R1 | Plain perlbench reuse vs the Plain run before it on board 1: change within −3 %…+1 % |
 | R2 | Plain gcc reuse vs Plain gcc (3,515.5 s board 1; board 3's same-board reading from the fill run): change within −4 %…+1 %. Plain gcc's 266 s of system time and 89,080 minor faults bound the saving from above |
 
-**What it decides.** If the cache makes Plain faster, the reported ratios of any configuration that uses
-CAPSTONE_HEAP_MAPPING_REUSE must use these Plain readings. c3f and c3g do not use it; the unified stack does.
+**What it decides.** If the cache makes Plain faster, the reported ratios of every configuration that keeps released
+mappings in the context must use these Plain readings. That is the unified stack (CAPSTONE_HEAP_MAPPING_REUSE) **and
+c3f and c3g**: their SDK (perf/arena/sdkdir-ac12) is built with CAPSTONE_HEAP_ARENA_CACHE=ON (wt-arena heap.c), the
+same optimization in the older heap: a released group mapping is kept, its lifetime child revoked, and a later
+same-size request takes it back zeroed; 512 entries.
+
+Correction (7 Nov, before any board call of these runs): the first version of this paragraph, pushed in c349058d7fd8,
+said c3f and c3g do not use such a cache. They do (CAPSTONE_HEAP_ARENA_CACHE); the claim was written from the
+switch's name without reading the SDK's build flags.
