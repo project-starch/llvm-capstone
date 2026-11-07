@@ -1,5 +1,27 @@
 # Experimental Linux task-return backend
 
+## Native descriptor close qualified
+
+Feature64 routes close directly. Both transports share close_fd with grant revocation, POSIX lock cleanup and restart-to-EINTR normalization. An authorized held-file reference survives through close; descriptor reuse receives a fresh grant.
+Every admitted direct operation completes once; errors never trigger replay.
+Enable `capstone_vm.native_close=1` together with `native_io=1` and a rebuilt
+SDK/application. The new feature defaults off; old SDKs disable direct routing
+on unknown feature bits. No ISA change is required.
+
+SQLite moves 45 calls from exchange to registers. With previous native
+features enabled in both arms, two samples per arm in A-B-B-A order reduce
+kernel instruction attempts by 0.164% and total attempts by
+0.096%. All 32 reference phases match in every run.
+The build/file/SQLite/regression/GCC gate passes in 212.1s;
+combined-feature IO and reversed measurements pass in 88.0s.
+Each gate has one 300-second deadline.
+[Exact evidence and limitations](native-close-qualification.json).
+
+Runtime and negative tests were implemented in parallel and independently reviewed.
+This is not a new full-SPEC or FPGA qualification. 171 exchange calls remain
+in this SQLite census. Next qualify confined openat/unlinkat migration.
+
+
 ## Native scalar file services qualified
 
 Feature `CAPSTONE_LAUNCH_NATIVE_FD` (16) routes exactly `fsync`, `fdatasync`,
