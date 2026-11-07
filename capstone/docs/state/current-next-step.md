@@ -1,3 +1,20 @@
+## Native session teardown encapsulated
+
+Final session cleanup now lives beside session creation in
+`native_session_destroy()`. The loader delegates the same three frees in the
+same order; constructor failure unwind and task ownership are unchanged.
+The incremental build, both I/O dispatch settings, task/kill, resource policy,
+directory/dup/time, spawn and original GCC comparator gate passes in 104.0s
+under one 300-second deadline. Adapter text/data/BSS sizes are unchanged.
+[Qualification](../../runtime/virtual/tests/native-task/session-teardown-qualification.json).
+
+This is a responsibility cleanup, not a performance optimization. Existing
+negative admission tests cover policy failure on a partially initialized
+context; they do not inject session allocation failures or prove leak absence.
+No new full-SPEC or race-profile verdict is transferred from earlier kernels.
+Keep future lifecycle or allocation-policy changes separate and use bounded
+gates; the final-only destructor is not a reusable session reset API.
+
 ## Native generic copy workspace reuse qualified
 
 `native_copy()` now reuses its session's existing kmalloc-backed copy workspace,
