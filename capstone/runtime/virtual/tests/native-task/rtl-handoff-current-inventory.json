@@ -1,13 +1,13 @@
 {
   "schema_version": 1,
   "branch": "native/linux-task-integration",
-  "source_head": "83a5a92f910962642da7398cbdd8e24bf30b1d8f",
+  "source_head": "481cae9fde245eacea502fd9f8db4b266f7e618d",
   "scope": "Cumulative native-only adapter source snapshot. Subsequent evidence/documentation commits are excluded from this inventory.",
   "comparison_base": "aeabf009128746d332741dd1e33fbe5b2bca3754",
-  "runtime_source_head": "83a5a92f910962642da7398cbdd8e24bf30b1d8f",
+  "runtime_source_head": "481cae9fde245eacea502fd9f8db4b266f7e618d",
   "historical_observed_origin_dev": "c9611344eeb75ed628d488202a9394a6e44f3db5",
   "origin_dev_fetched_for_this_inventory": false,
-  "branch_commits_since_base": 56,
+  "branch_commits_since_base": 58,
   "qemu_base": "0542c5556c2daddf71795f3d48eec1fb8ae137b3",
   "qemu_head": "dd041bac5ad9c145c3872a50804ca714a26b1c88",
   "qemu_commits": [
@@ -22,10 +22,10 @@
     "processor_model_gitlink": 1,
     "documentation": 21,
     "application_abi_and_ports": 17,
-    "verification": 159,
+    "verification": 160,
     "linux_and_runtime": 51
   },
-  "changed_paths": 249,
+  "changed_paths": 250,
   "files": [
     {
       "path": "capstone/capstone-qemu",
@@ -85,14 +85,14 @@
     },
     {
       "path": "capstone/docs/state/current-next-step.md",
-      "added": 365,
+      "added": 391,
       "removed": 0,
       "layer": "documentation",
       "role": "documentation"
     },
     {
       "path": "capstone/docs/state/current-state.md",
-      "added": 485,
+      "added": 511,
       "removed": 0,
       "layer": "documentation",
       "role": "documentation"
@@ -190,7 +190,7 @@
     },
     {
       "path": "capstone/ports/musl-capstone/runtime/delegate.c",
-      "added": 101,
+      "added": 109,
       "removed": 0,
       "layer": "application_abi_and_ports",
       "role": "implementation_or_recipe"
@@ -414,7 +414,7 @@
     },
     {
       "path": "capstone/runtime/include/capstone/launch.h",
-      "added": 10,
+      "added": 11,
       "removed": 0,
       "layer": "linux_and_runtime",
       "role": "implementation_or_recipe"
@@ -456,7 +456,7 @@
     },
     {
       "path": "capstone/runtime/tests/application/launch-test.c",
-      "added": 49,
+      "added": 53,
       "removed": 1,
       "layer": "verification",
       "role": "test_or_tool"
@@ -575,7 +575,7 @@
     },
     {
       "path": "capstone/runtime/virtual/module/binfmt-dom.h",
-      "added": 489,
+      "added": 492,
       "removed": 0,
       "layer": "linux_and_runtime",
       "role": "implementation_or_recipe"
@@ -610,7 +610,7 @@
     },
     {
       "path": "capstone/runtime/virtual/module/native-files-dom.h",
-      "added": 69,
+      "added": 92,
       "removed": 0,
       "layer": "linux_and_runtime",
       "role": "implementation_or_recipe"
@@ -638,7 +638,7 @@
     },
     {
       "path": "capstone/runtime/virtual/module/native-syscall-dom.h",
-      "added": 684,
+      "added": 705,
       "removed": 0,
       "layer": "linux_and_runtime",
       "role": "implementation_or_recipe"
@@ -1142,7 +1142,7 @@
     },
     {
       "path": "capstone/runtime/virtual/tests/native-task/README.md",
-      "added": 1051,
+      "added": 1078,
       "removed": 0,
       "layer": "documentation",
       "role": "documentation"
@@ -1331,7 +1331,7 @@
     },
     {
       "path": "capstone/runtime/virtual/tests/native-task/files.c",
-      "added": 180,
+      "added": 209,
       "removed": 0,
       "layer": "verification",
       "role": "test_or_tool"
@@ -1498,6 +1498,13 @@
       "removed": 0
     },
     {
+      "path": "capstone/runtime/virtual/tests/native-task/native-seek-qualification.json",
+      "layer": "verification",
+      "role": "verification",
+      "added": 1280,
+      "removed": 0
+    },
+    {
       "path": "capstone/runtime/virtual/tests/native-task/native-stat-qualification.json",
       "layer": "verification",
       "role": "verification",
@@ -1529,7 +1536,7 @@
       "path": "capstone/runtime/virtual/tests/native-task/profile-native-broker.py",
       "layer": "verification",
       "role": "verification",
-      "added": 105,
+      "added": 106,
       "removed": 0
     },
     {
@@ -1550,7 +1557,7 @@
       "path": "capstone/runtime/virtual/tests/native-task/rtl-handoff-current-inventory.json",
       "layer": "verification",
       "role": "verification",
-      "added": 1949,
+      "added": 1957,
       "removed": 0
     },
     {
@@ -1569,7 +1576,7 @@
     },
     {
       "path": "capstone/runtime/virtual/tests/native-task/run-files.py",
-      "added": 72,
+      "added": 73,
       "removed": 0,
       "layer": "verification",
       "role": "test_or_tool"
@@ -1583,7 +1590,7 @@
     },
     {
       "path": "capstone/runtime/virtual/tests/native-task/run-musl-io.py",
-      "added": 99,
+      "added": 100,
       "removed": 0,
       "layer": "verification",
       "role": "test_or_tool"
@@ -1772,7 +1779,7 @@
     }
   ],
   "qualification": {
-    "kernel_sha256": "3594861ffa0476712a480e1044ec08a965b93a6b13a80aad8fd33a400c8f7da4",
+    "kernel_sha256": "ce460d4c9a79ad9abf229d9c097029e2bb7d2e09f46bda72fac039e49ff09c86",
     "non_perl": "spec-nonperl-services-qualification.json (historical pre-cleanup kernel)",
     "perl_focused": "../../../../ports/perl/provenance/qualification-07.json",
     "full_ten_entry_gate": "NOT_RUN_ON_THIS_KERNEL",
@@ -1785,7 +1792,8 @@
     "session_teardown": "session-teardown-qualification.json (previous kernel)",
     "native_locks": "native-locks-qualification.json (previous kernel)",
     "native_stat": "native-stat-qualification.json (previous kernel)",
-    "native_seek": "native-seek-qualification.json"
+    "native_seek": "native-seek-qualification.json (previous kernel)",
+    "native_fd": "native-fd-qualification.json"
   },
   "qemu_files": [
     {
