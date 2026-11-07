@@ -20,6 +20,7 @@ for key in ['qemu', 'images', 'firmware', 'plugin', 'binary', 'profrun', 'refere
 p.add_argument('--locks', type=int, choices=[0, 1], default=0)
 p.add_argument('--fast', type=int, choices=[0, 1], default=1)
 p.add_argument('--stat', type=int, choices=[0, 1], default=0)
+p.add_argument('--seek', type=int, choices=[0, 1], default=0)
 a = p.parse_args()
 a.out.mkdir(parents=True, exist_ok=False)
 virtual = Path(__file__).resolve().parents[2]
@@ -33,7 +34,7 @@ assert len(reference) == 32
 flags = ('capstone_vm.native_task=1 capstone_vm.native_io=1 capstone_vm.native_fast=1 '
          'capstone_vm.dom_binfmt=1 capstone_vm.native_dispatch=1 capstone_vm.checked_copy=1 '
          'capstone_vm.native_slot_transport=1 capstone_vm.unpinned=1 capstone_vm.supervisor_slots=32')
-flags += f' capstone_vm.native_locks={a.locks} capstone_vm.native_stat={a.stat} capstone_vm.native_fast={a.fast}'
+flags += f' capstone_vm.native_locks={a.locks} capstone_vm.native_stat={a.stat} capstone_vm.native_seek={a.seek} capstone_vm.native_fast={a.fast}'
 results = {}
 for mode in ['routes', 'profile']:
     d = a.out/mode; stage = d/'stage'; stage.mkdir(parents=True)
@@ -95,7 +96,7 @@ dmesg
             total_attempts=kernel+other, symbols=[dict(symbol=name, attempts=n,
             kernel_percent=100*n/kernel) for name,n in counts.most_common()])
     print('PASS', mode, flush=True)
-result = dict(status='PASS', inputs=inputs, configuration=dict(native_locks=a.locks, native_stat=a.stat, native_fast=a.fast), oracle_phases_per_run=32, **results,
+result = dict(status='PASS', inputs=inputs, configuration=dict(native_locks=a.locks, native_stat=a.stat, native_seek=a.seek, native_fast=a.fast), oracle_phases_per_run=32, **results,
     limitations=['One separate diagnostic route run and one untraced instruction-profile run.',
                  'Flat PC attribution, not call stacks or inclusive cost per syscall family; inlining may merge costs.',
                  'Route frequency alone does not establish which family consumes the most kernel work.',
