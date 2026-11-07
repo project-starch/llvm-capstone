@@ -1,0 +1,33 @@
+# perlbench c3g and gcc train c3f on 2 MiB pages (kit bkit29-thp): pre-registration
+
+Written and pushed before the board calls (7 Nov, 16:4x). The lead's focus: perlbench (1.444×) and c3f + THP.
+
+**Kit.** bkit29-thp is c3f's stack with THP: the module is c3f's source (3fbed8df1fb8) plus the THP commits
+(b23b38ce15b4, 37806776d76b), 5973baaff48a17db, param thp=1; the launcher is the quiet launcher with
+CAPSTONE_VEXEC_HUGE_HEAP (959892e722a73f21: MADV_HUGEPAGE on heap arenas of 4 MiB or more); the board kernel has THP in
+madvise mode (results/2026-11-06-thp). On mcf it removed 94 % of the fault exits and 343 s.
+
+**Stages.** Copies of the two c3f/c3g stages that ran on bkit27-gtq, changed only by three readback lines: `@@THP`
+(enabled mode, the module's thp) before the arm and `@@THP-VMSTAT` before and after (thp_fault_alloc, fallback,
+split, collapse). Images, commands and parameters are byte-identical.
+
+**Runs** (perf/b3/gt-run-thp.sh: flash C.5a, the list, flash bitstream 3 back), each after the fill run on its board
+(results/2026-11-07-fill) ends with DONE:
+- board 3: perlbench c3g-thp;
+- board 2: gcc train c3f-thp, then perlbench c3g-thp (N = 2 for perlbench).
+
+**References.** perlbench c3g (board 2): 33,667.7 s; inside 23,867.9 s; outside 9,799.8 s; 318 contexts, 282,236
+steps; exits [quantum, service, fault] 19,264 / 265,988 / 84,937; rcyc 1,562 s, kcyc 3,263 s, ucyc 5,026 s.
+gcc c3f (board 3): 4,253.3 s; outside 739.5 s; fault exits 2,875.
+
+| # | Prediction |
+|---|---|
+| P0 | rc 0, specdiff PASS (perlbench 2/2 with test.out holding 0 FAILED; gcc 1/1), control passes, outputs equal the twin's; @@THP reads `[madvise]` thp=Y; thp_fault_alloc rises over the arm |
+| P1 | perlbench fault exits ≤ 42,000 (half of 84,937) |
+| P2 | perlbench run < 33,667.7 s; point 32,300-33,200 s: most of rcyc's 1,562 s goes, part comes back as 2 MiB zeroing on 318 short contexts |
+| G1 | gcc fault exits ≤ 1,000; run ≤ 4,253.3 s; point 4,200-4,245 s (1.20× Plain is 4,218.6 s) |
+
+**What would refute what.** P1 holding with P2 failing: the per-context cost of huge pages (zeroing, sweep) exceeds
+the fault saving, and huge pages do not suit short contexts. P1 failing: perlbench's faults are not in 4 MiB+ arenas.
+
+**Limits.** N = 2 for perlbench on two boards, N = 1 for gcc; cross-board against c3g (board 2) for board 3's run.
