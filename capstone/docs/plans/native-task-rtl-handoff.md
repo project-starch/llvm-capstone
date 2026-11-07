@@ -2,11 +2,13 @@
 
 This is the developer entry point for `native/linux-task-integration`. It
 organizes the cumulative platform change, not just the final SQLite patch.
-The current source snapshot is `9698c75f8e7b`, including the subprocess services
+The current source snapshot is `6090350d1cd0`, including native-only adapter cleanup, subprocess services
 and Perl provenance repair; subsequent qualification changes are recorded
-separately. **All ten existing C-port SPEC entries now pass their original
-complete test inputs and official comparisons on the frozen QEMU/Linux platform.**
-The branch is ready for RTL implementation assessment. No FPGA synthesis or
+separately. **The pre-cleanup kernel passed all ten existing C-port SPEC entries.**
+The current native-only cleanup passes focused task/I/O/resource/spawn gates;
+its full ten-entry rerun on the new kernel is in progress. See
+[cleanup qualification](../../runtime/virtual/tests/native-task/native-only-cleanup-qualification.json).
+Do not transfer the old kernel verdict to the new image. The cleanup adds no ISA requirement. No FPGA synthesis or
 hardware qualification is claimed.
 
 ## 1. Baselines and scope
@@ -14,12 +16,12 @@ hardware qualification is claimed.
 | Item | Frozen revision |
 | --- | --- |
 | Comparison base | `aeabf009128746d332741dd1e33fbe5b2bca3754` |
-| Current source snapshot | `9698c75f8e7b2eb1224285e98716c9ea7a7245df` |
+| Current source snapshot | `6090350d1cd0cbf77355d610e3d9758dd9fa33fe` |
 | Historical remote `origin/dev` observation, not refreshed | `c9611344eeb75ed628d488202a9394a6e44f3db5` |
 | QEMU at common ancestor | `0542c5556c2d` |
 | Required QEMU | `dd041bac5ad9c145c3872a50804ca714a26b1c88` |
 
-The snapshot contains 37 commits after the comparison base, 231 ordinary changed
+The snapshot contains 40 commits after the comparison base, 232 ordinary changed
 files and one changed QEMU gitlink. The recorded remote dev had nine separate
 commits after that base; this branch has not merged them. In particular, dev's mapping-cache
 and compiler changes must not silently enter the baseline. There are no LLVM
@@ -52,8 +54,8 @@ Git's configured submodule-ignore behavior can hide the
 most important hardware change: use `--ignore-submodules=none` when reviewing.
 
 ```sh
-git diff --stat --ignore-submodules=none aeabf0091287 9698c75f8e7b
-git log --oneline aeabf0091287..9698c75f8e7b
+git diff --stat --ignore-submodules=none aeabf0091287 6090350d1cd0
+git log --oneline aeabf0091287..6090350d1cd0
 git -C capstone/capstone-qemu log --oneline 0542c5556c2d..dd041bac5ad9
 ```
 
@@ -76,11 +78,11 @@ The large source diff includes imported dispatcher/test foundations and raw
 measurement records. Its line count is not an estimate of RTL work. Native
 task integration and the latest file services add no new processor opcode.
 
-The current inventory contains 48 Linux/runtime paths, 17 application ABI/port
-paths, 145 verification/evidence paths and 21 documentation paths. The additional
-QEMU gitlink contains the processor-model delta; its source-file count is not
-included in those totals. That delta separately contains 13 implementation paths
-and 14 test/documentation paths, also enumerated in the current inventory.
+The machine-readable inventory groups every changed path and separately lists
+all QEMU implementation and verification changes. The native-only adapter has
+no misc device, device ioctl handlers, control FD or scalar trampoline. Build it
+in-tree with `CONFIG_RISCV_CAPSTONE_TASK=y`; old external-module recipes are
+historical. Native exchange/direct ABIs and shared capability checks remain.
 
 ## 3. Hardware contract to implement or demonstrate already present
 
@@ -211,7 +213,7 @@ unported C++/Fortran or speed variants of the whole CPU2017 suite work. Sources
 and inputs stay external under scratch storage; existing source adaptations
 remain frozen. Test means original full `test` inputs, not train/reference data.
 
-The latest kernel `1bd9b8ecf702` independently passes all nine non-Perl entries,
+The pre-cleanup kernel `1bd9b8ecf702` independently passes all nine non-Perl entries,
 including full x264. Revision 06 of the Perl repair passed focused gates but
 failed the complete original workload in `t/op/sort.t` (315/316 files passed).
 Revision 07 repairs the freed-scalar metadata lookup and passes the full original

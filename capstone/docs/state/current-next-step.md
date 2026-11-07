@@ -1,3 +1,11 @@
+## Qualify native-only adapter cleanup
+
+The native-only cleanup is committed and its focused gates pass, including
+absent device/misc registration and no trampoline/control FD. Complete the
+running ten-entry original SPEC C-port qualification on kernel `e2dca4c948f5`. Preserve the earlier
+full-pass kernel and evidence. Refresh the RTL handoff only with the new
+implementation snapshot and accurately scoped qualification.
+
 ## 2026-11-07 — Full native C-port SPEC gate passed; RTL assessment next
 
 All ten existing C-port entries now pass their original complete test inputs

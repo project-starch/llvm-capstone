@@ -1,5 +1,13 @@
 # Experimental Linux task-return backend
 
+The current branch removes the legacy device ioctls, control FD and scalar
+trampoline. [Native-only cleanup qualification](native-only-cleanup-qualification.json)
+records the new built-in kernel and passing task/I/O/resource/spawn gates.
+Its full ten-entry SPEC rerun is pending; `spec-final-qualification.json` remains
+the complete pre-cleanup result on its original kernel. Historical ioctl-based
+measurements and launchers below require their pinned historical revision.
+
+
 For the cumulative diff against dev and the hardware work, start with the
 [RTL handoff](../../../../docs/plans/native-task-rtl-handoff.md). Its SPEC gate
 is separate from the earlier short performance comparisons.
