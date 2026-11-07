@@ -16,6 +16,7 @@ for name in ['qemu', 'images', 'firmware', 'plugin', 'profrun', 'gcc', 'plain', 
     p.add_argument('--'+name, type=Path, required=True)
 p.add_argument('--resolver', type=Path, default=Path(__file__).resolve().parents[4]/'ports/spec-cpu2017/tools/stop-at.py')
 p.add_argument('--negative-boundary', action='store_true')
+p.add_argument('--arm', action='append', choices=['plain', 'native'], help='Override run order; repeat to specify multiple runs.')
 p.add_argument('--kernel-arg', action='append', default=[], help='Additional kernel argument applied to both arms (diagnostic experiments).')
 a = p.parse_args()
 a.out.mkdir(parents=True, exist_ok=False)
@@ -27,7 +28,7 @@ ks = sorted((address, name) for name, address in syms.items() if syms['_stext'] 
 ka = [x[0] for x in ks]
 rows = []
 phases = ['startup_and_initialization', 'compilation_and_output', 'finalization_and_exit']
-for index, arm in enumerate(['native'] if a.negative_boundary else ['plain', 'native', 'native', 'plain']):
+for index, arm in enumerate(['native'] if a.negative_boundary else (a.arm or ['plain', 'native', 'native', 'plain'])):
     d = a.out/f'{index}-{arm}'
     stage = d/'stage'; stage.mkdir(parents=True)
     (d/'profile').mkdir()
