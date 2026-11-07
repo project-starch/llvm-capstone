@@ -426,6 +426,47 @@ static bool native_seek_fast(struct context *c, struct cv_step *step, u64 kinds)
     return true;
 }
 
+/* Snapshot through the first NUL only, including tightly bounded strings.
+ * The caller owns *name on every return and has already admitted this epoch. */
+static int native_snapshot_name(struct context *c, u64 epoch, char **name)
+{
+    struct cn_context *n = c->native_context;
+    struct cn_capref path = {c->main_thread->id, epoch, 11, 0};
+    size_t i;
+    *name = kmalloc(NS_MAX_PATH, GFP_KERNEL);
+    if (!*name) return -ENOMEM;
+    for (i = 0; i < NS_MAX_PATH; ++i) {
+        struct ns_copy_result copied = native_copy(c, n, &n->owner, &path,
+                                                   i, *name + i, 1, NS_FROM_DOMAIN);
+        if (copied.cause || copied.bytes_done != 1) return -EFAULT;
+        if (!(*name)[i]) return 0;
+    }
+    return -ENAMETOOLONG;
+}
+
+/* Nonzero unlink flags retain the generic directory-service dispatch. */
+static bool native_path_fast(struct context *c, struct cv_step *step, u64 kinds)
+{
+    struct cv_thread *t = c->main_thread;
+    u64 nr = step->args[6], epoch = READ_ONCE(t->frame[82]);
+    char *name = NULL;
+    long rc;
+    if (nr != CAPSTONE_SYS_openat && nr != CAPSTONE_SYS_unlinkat) return false;
+    if (nr == CAPSTONE_SYS_unlinkat && step->args[2]) return false;
+    if (!nf_regs_plain(t, kinds, 1ULL << 11)) return false;
+    rc = ns_session_admit(c->native_session, epoch);
+    if (rc) rc = -ESTALE;
+    else {
+        rc = native_snapshot_name(c, epoch, &name);
+        if (!rc) rc = native_path_issue(c, nr, step->args, name);
+    }
+    /* Even an error can follow creation/truncation: never replay or fall back. */
+    kfree(name);
+    step->result = rc;
+    ++native_fast_hits;
+    return true;
+}
+
 /* Fixed stat output and a bounded, checked pathname snapshot. Never read past
  * the first NUL: a valid string may end exactly at a capability/page boundary. */
 static bool native_stat_fast(struct context *c, struct cv_step *step, u64 kinds)
@@ -434,12 +475,11 @@ static bool native_stat_fast(struct context *c, struct cv_step *step, u64 kinds)
     struct cv_thread *t = c->main_thread;
     u64 nr = step->args[6], epoch = READ_ONCE(t->frame[82]);
     bool at = nr == CAPSTONE_SYS_newfstatat;
-    struct cn_capref path, output;
+    struct cn_capref output;
     struct ns_copy_result copied;
     struct stat wire;
     struct file *file = NULL;
     char *name = NULL;
-    size_t i;
     long rc;
     BUILD_BUG_ON(sizeof(wire) != 128);
     if (nr != CAPSTONE_SYS_fstat && !at) return false;
@@ -455,15 +495,8 @@ static bool native_stat_fast(struct context *c, struct cv_step *step, u64 kinds)
     if (rc) { rc = -ESTALE; goto done; }
     output = (struct cn_capref){t->id, epoch, at ? 12 : 11, 0};
     if (at) {
-        name = kmalloc(NS_MAX_PATH, GFP_KERNEL);
-        if (!name) { rc = -ENOMEM; goto done; }
-        path = (struct cn_capref){t->id, epoch, 11, 0};
-        for (i = 0; i < NS_MAX_PATH; ++i) {
-            copied = native_copy(c, n, &n->owner, &path, i, name + i, 1, NS_FROM_DOMAIN);
-            if (copied.cause || copied.bytes_done != 1) { rc = -EFAULT; goto done; }
-            if (!name[i]) break;
-        }
-        if (i == NS_MAX_PATH) { rc = -ENAMETOOLONG; goto done; }
+        rc = native_snapshot_name(c, epoch, &name);
+        if (rc) goto done;
     }
     if (native_authorize_reuse(n, &output, 0, sizeof(wire), true)) { rc = -EFAULT; goto done; }
     rc = native_stat_issue(c, nr, step->args, file, name, &wire);
@@ -546,6 +579,7 @@ static bool native_fast_try(struct context *c, struct cv_step *step)
     if (native_close_fast(c, step, kinds)) return true;
     if (native_fd_fast(c, step, kinds)) return true;
     if (native_seek_fast(c, step, kinds)) return true;
+    if (native_path_fast(c, step, kinds)) return true;
     if (native_stat_fast(c, step, kinds)) return true;
     if (native_lock_fast(c, step, kinds)) return true;
     if (native_task_value(nr, &value)) {

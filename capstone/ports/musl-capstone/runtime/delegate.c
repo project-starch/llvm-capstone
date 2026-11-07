@@ -1377,7 +1377,8 @@ static syscall_arg_t dl_direct_scalar(syscall_arg_t input) {
   return output;
 }
 static int dl_direct_file_ready(uint64_t nr) {
-  unsigned feature = nr == CAPSTONE_SYS_close ? CAPSTONE_LAUNCH_NATIVE_CLOSE :
+  unsigned feature = (nr == CAPSTONE_SYS_openat || nr == CAPSTONE_SYS_unlinkat) ? CAPSTONE_LAUNCH_NATIVE_PATH :
+      nr == CAPSTONE_SYS_close ? CAPSTONE_LAUNCH_NATIVE_CLOSE :
       nr == CAPSTONE_SYS_lseek ? CAPSTONE_LAUNCH_NATIVE_SEEK :
       (nr == CAPSTONE_SYS_fstat || nr == CAPSTONE_SYS_newfstatat) ? CAPSTONE_LAUNCH_NATIVE_STAT :
       (nr == CAPSTONE_SYS_fsync || nr == CAPSTONE_SYS_fdatasync ||
@@ -1401,6 +1402,9 @@ static long dl_direct_file(uint64_t nr, syscall_arg_t raw[CAPSTONE_DELEGATE_ARGS
   else if (nr == CAPSTONE_SYS_lseek || nr == CAPSTONE_SYS_fchown)
     result = __capstone_native_syscall(nr, dl_direct_scalar(raw[0]),
         dl_direct_scalar(raw[1]), dl_direct_scalar(raw[2]), 0, 0, 0);
+  else if (nr == CAPSTONE_SYS_openat || nr == CAPSTONE_SYS_unlinkat)
+    result = __capstone_native_syscall(nr, dl_direct_scalar(raw[0]), raw[1],
+        dl_direct_scalar(raw[2]), nr == CAPSTONE_SYS_openat ? dl_direct_scalar(raw[3]) : 0, 0, 0);
   else
     result = __capstone_native_syscall(nr, dl_direct_scalar(raw[0]), raw[1],
         at ? raw[2] : 0, at ? dl_direct_scalar(raw[3]) : 0, 0, 0);
