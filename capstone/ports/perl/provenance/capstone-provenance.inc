@@ -32,7 +32,9 @@ static MGVTBL cap_prov_vtable = { 0, 0, 0, 0, cap_prov_free, 0, 0, 0 };
 
 static MAGIC *cap_prov_magic(SV *sv)
 {
-    return sv && SvTYPE(sv) >= SVt_PVMG
+    /* Core error paths may retain an arena head marked SVTYPEMASK (0xff).
+     * Its former body is no longer an XPVMG, despite the high type value. */
+    return sv && !SvIS_FREED(sv) && SvTYPE(sv) >= SVt_PVMG
         ? mg_findext(sv, PERL_MAGIC_ext, &cap_prov_vtable) : NULL;
 }
 

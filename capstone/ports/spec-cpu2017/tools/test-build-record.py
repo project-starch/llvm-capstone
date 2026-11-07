@@ -172,7 +172,7 @@ exe=base/'exe'; exe.mkdir(); (exe/('perlbench_r_base.'+label)).write_bytes((buil
         port = HERE.parent.parent / "perl/provenance"
         manifest = HERE.parent / "manifest.lock.json"
         selected = record.select(manifest, port / "srcalt-selection.json", [BENCH])
-        qualified = json.loads((port / "qualification.json").read_text())["source"]
+        qualified = json.loads((port / "qualification-07.json").read_text())["source"]
         item = selected["source_alternatives"][BENCH]
         self.assertEqual(item["sha256"], qualified["package_sha256"])
         self.assertEqual(item["replacement_sha256"], qualified["replacement_after_sha256"])
