@@ -1,6 +1,59 @@
+## Native confined pathname services qualified
+
+Feature 128 routes openat/unlinkat directly. Both transports retain the confined
+resolver, Linux permission checks and fd publication. Checked bytewise snapshots stop at
+the first NUL. Nonzero unlink flags use generic register dispatch before admission,
+retaining AT_REMOVEDIR behavior.
+Every admitted direct operation completes once; errors never trigger replay.
+Enable `capstone_vm.native_path=1` together with `native_io=1` and a rebuilt
+SDK/application. The new feature defaults off; old SDKs disable direct routing
+on unknown feature bits. No ISA change is required.
+
+SQLite moves 69 calls from exchange to registers. With previous native
+features enabled in both arms, two samples per arm in A-B-B-A order reduce
+kernel instruction attempts by 0.351% and total attempts by
+0.207%. All 32 reference phases match in every run.
+The build/file/SQLite/regression/GCC gate passes in 212.9s;
+combined-feature IO and reversed measurements pass in 88.3s.
+Each gate has one 300-second deadline.
+[Exact evidence and limitations](../../runtime/virtual/tests/native-task/native-path-qualification.json).
+
+Runtime and negative tests were implemented in parallel and independently reviewed.
+This is not a new full-SPEC or FPGA qualification. 102 exchange calls remain
+in this SQLite census. Next measure pathname byte counts and repeated checked-copy
+setup, then prototype a bounded checked-string operation. Clock_gettime and bounded
+vectors remain separate candidates; arbitrary iovec import remains unresolved.
+
+## Next milestone: bounded checked-string snapshots
+
+Measure pathname byte counts and checked-copy setup separately before claiming
+that the aggregate copy/lock profile belongs to strings. Then add a conservative
+string operation to the checked-copy engine using the existing callbacks: one mapping
+hold per snapshot, bounded exclusion windows (initial candidate: 64 bytes),
+exact one-byte authorization immediately before each load, and immediate stop
+at NUL. Keep drain/leave on every exit and release the hold on all paths.
+Fault resolution must happen outside exclusion and reauthenticate the original
+capref before retry; preserve the non-progress retry limit. Never infer rights
+from the scalar address or require authority beyond the terminating NUL.
+
+Use the shared native stat/PATH snapshot helper first. This requires no new ISA;
+it is not implemented or qualified yet. Keep generic-dispatch adoption separate.
+Focused tests must cover exact bounds, page-edge NUL with inaccessible next byte,
+missing NUL, read rights, forged/stale references, retirement and unmapping during
+fault resolution/between windows. Existing negative race controls must still
+catch missing rechecks, exclusion, holds and destructive prefaulting. Counter
+assertions should prove bounded windows and one hold/release; matched SQLite
+runs establish savings. Keep each build/test feedback gate below 300 seconds.
+
+Clock_gettime's 65 remaining exchange calls are a lower-risk independent
+migration. Bounded register vectors remain a separate design; arbitrary nested
+iovec capability import is not provided by byte-copying the array.
+
 ## Native descriptor close qualified
 
-Feature64 routes close directly. Both transports share close_fd with grant revocation, POSIX lock cleanup and restart-to-EINTR normalization. An authorized held-file reference survives through close; descriptor reuse receives a fresh grant.
+Feature 64 routes close directly. Both transports share close_fd with grant revocation,
+POSIX lock cleanup and restart-to-EINTR normalization. An authorized held-file reference
+survives through close; descriptor reuse receives a fresh grant.
 Every admitted direct operation completes once; errors never trigger replay.
 Enable `capstone_vm.native_close=1` together with `native_io=1` and a rebuilt
 SDK/application. The new feature defaults off; old SDKs disable direct routing

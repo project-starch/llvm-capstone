@@ -1,8 +1,37 @@
 # Experimental Linux task-return backend
 
+## Native confined pathname services qualified
+
+Feature 128 routes openat/unlinkat directly. Both transports retain the confined
+resolver, Linux permission checks and fd publication. Checked bytewise snapshots stop at
+the first NUL. Nonzero unlink flags use generic register dispatch before admission,
+retaining AT_REMOVEDIR behavior.
+Every admitted direct operation completes once; errors never trigger replay.
+Enable `capstone_vm.native_path=1` together with `native_io=1` and a rebuilt
+SDK/application. The new feature defaults off; old SDKs disable direct routing
+on unknown feature bits. No ISA change is required.
+
+SQLite moves 69 calls from exchange to registers. With previous native
+features enabled in both arms, two samples per arm in A-B-B-A order reduce
+kernel instruction attempts by 0.351% and total attempts by
+0.207%. All 32 reference phases match in every run.
+The build/file/SQLite/regression/GCC gate passes in 212.9s;
+combined-feature IO and reversed measurements pass in 88.3s.
+Each gate has one 300-second deadline.
+[Exact evidence and limitations](native-path-qualification.json).
+
+Runtime and negative tests were implemented in parallel and independently reviewed.
+This is not a new full-SPEC or FPGA qualification. 102 exchange calls remain
+in this SQLite census. Next measure pathname byte counts and repeated checked-copy
+setup, then prototype a bounded checked-string operation. Clock_gettime and bounded
+vectors remain separate candidates; arbitrary iovec import remains unresolved.
+
+
 ## Native descriptor close qualified
 
-Feature64 routes close directly. Both transports share close_fd with grant revocation, POSIX lock cleanup and restart-to-EINTR normalization. An authorized held-file reference survives through close; descriptor reuse receives a fresh grant.
+Feature 64 routes close directly. Both transports share close_fd with grant revocation,
+POSIX lock cleanup and restart-to-EINTR normalization. An authorized held-file reference
+survives through close; descriptor reuse receives a fresh grant.
 Every admitted direct operation completes once; errors never trigger replay.
 Enable `capstone_vm.native_close=1` together with `native_io=1` and a rebuilt
 SDK/application. The new feature defaults off; old SDKs disable direct routing
