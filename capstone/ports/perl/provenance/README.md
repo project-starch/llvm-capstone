@@ -78,8 +78,18 @@ It checks both real allocator failure through Perl's fatal OOM cleanup and a
 test-only recoverable exception at the same boundary. Metadata replacement must
 publish the surviving list before allocation, so cleanup never sees freed nodes.
 The latter probe also checks that surviving fields retain authority while the
-failed replacement loses it. See `qualification.json` for the frozen source,
-package, object inventories, native gates, and host diagnostic evidence.
+failed replacement loses it. See [revision07 focused qualification](qualification-07.json)
+for the frozen source, package, object inventories, native gates, and host
+diagnostic evidence. The complete original revision07 workload and official
+comparison are still pending. The preserved [revision06 record](qualification.json)
+covers its earlier focused checks; its subsequent complete original workload
+failed only `t/op/sort.t` (315 of 316 test files passed).
+
+`scalar-lifetime.pl` checks the core error path for sort callbacks that free
+their input elements. Perl 5.22 retains marked scalar headers for that error
+path; metadata lookup must reject the freed marker before reading a scalar
+body. The fixture also checks recovery and live packed values after sorting.
+Run it with the same interpreter and library path as `callback-controls.pl`.
 
 For packaging, copy the twenty final replacement files listed in `baseline.json`
 to an external kit's `srcalt/500.perlbench_r/files`, add an external package
@@ -90,3 +100,76 @@ object inventory together; never relabel the old frozen objects. Qualification
 uses the focused fixtures in both direct and exchange modes and the unchanged
 original `t/op/pack.t`, followed by the original full benchmark commands and
 comparators.
+
+## Build and run the explicit v2 package
+
+This recipe starts from a licensed SPEC archive and the frozen source package;
+it does not need the qualification machine's build directories or `make.out`.
+The authoring commands above remain useful when creating a new package.
+`srcalt-selection.json` pins the revision07 v2 archive with the focused checks
+above and leaves the historical
+kit manifest intact. Supply a private package directory containing `packages/`
+with that archive. Only selected benchmarks' packages are required; the default
+full benchmark selection still installs all three source alternatives.
+
+Use an explicit native SDK whose artifacts match the desired qualification arm.
+The new label below avoids the historical heap-comparison arms; the source-only
+overlay does not select a compiler, kernel, launcher, or runtime policy.
+
+```sh
+source capstone/tests/capstone-test-env.sh
+KIT="$PWD/capstone/ports/spec-cpu2017"
+PORT="$PWD/capstone/ports/perl/provenance"
+HELPERS="$PWD/capstone/runtime/virtual/tests/native-task"
+WORK="$CAPSTONE_TMP_ROOT/perl-v2-reproduction"
+mkdir "$WORK"                         # must be a fresh directory
+# Set absolute paths: SPEC_ARCHIVE, PRIVATE_PACKAGES, SDK.
+python3 "$KIT/tools/spec-extract.py" "$SPEC_ARCHIVE" "$WORK/tree" ALL
+SPEC_ROOT="$WORK/tree/SPEC17"
+CAPSTONE_SPEC_PACKAGES="$PRIVATE_PACKAGES" \
+CAPSTONE_SPEC_SOURCE_SELECTION="$PORT/srcalt-selection.json" \
+BENCHMARKS=500.perlbench_r \
+bash "$KIT/tools/build.sh" "$KIT" "$SPEC_ROOT" "$SDK" "$WORK/build" native_provenance_v2
+
+(
+  cd "$SPEC_ROOT"
+  source ./shrc
+  runcpu --config=capstone-virtual --action=setup --nobuild --size=test --tune=base \
+    --define sdk="$SDK" --define kit="$KIT" \
+    --define arm_label=native_provenance_v2 \
+    --define perl_srcalt=capstone_provenance_v2 500.perlbench_r
+  python3 "$HELPERS/prepare-spec-tests.py" \
+    --spec "$SPEC_ROOT" --builds "$SPEC_ROOT/benchspec/CPU" --sdk "$SDK/capstone-cc" \
+    --frozen "$WORK/build/frozen-native_provenance_v2.json" --require-frozen-objects \
+    --label native_provenance_v2 --benchmarks 500.perlbench_r \
+    --run-roots "$SPEC_ROOT/benchspec/CPU" --out "$WORK/prepared"
+  python3 "$HELPERS/setup-spec-validation.py" --spec "$SPEC_ROOT" \
+    --prepared "$WORK/prepared" --cc "$SDK/capstone-cc" \
+    --ldecod "$WORK/build/ldecod-host" --out "$WORK/official"
+)
+
+# Set QEMU, NATIVE_IMAGES, FIRMWARE, and HUSH to the qualified native platform
+# and pinned capability shell. This uses the shared QEMU lock.
+python3 "$HELPERS/run-spec-tests.py" --prepared "$WORK/prepared" \
+  --comparators "$WORK/official/comparators.json" --benchmarks 500.perlbench_r \
+  --qemu "$QEMU" --images "$NATIVE_IMAGES" --firmware "$FIRMWARE" \
+  --shell "$HUSH" --null-device --local-tmp --timeout 10800 --out "$WORK/execution"
+python3 "$HELPERS/validate-spec-tests.py" --spec "$SPEC_ROOT" \
+  --results "$WORK/execution/runs" --comparators "$WORK/official/comparators.json" \
+  --out "$WORK/validation.json"
+```
+
+The build refuses existing build directories, verifies the twenty selected
+source replacements and 69 fresh objects, and records SDK inputs before and
+after compilation. Preparation validates source and object hashes before linking;
+the following official setup independently compares the original argument lists.
+Inputs and comparators are unchanged. This is a complete Perl-only reproduction,
+not a new ten-entry or performance claim. The existing full-set preparation still
+requires the official generated x264 input and its host-decoder provenance, as
+described in the [native qualification guide](../../../runtime/virtual/tests/native-task/README.md#full-spec-test-input-qualification).
+
+If regenerating the source archive, its packaging metadata can change its hash.
+Keep the qualified overlay unchanged: make a separate external overlay for the
+new archive path/hash while retaining the replacement-file hashes and base-lock
+pin. The build records that distinct package identity; prior qualification does
+not automatically transfer to it.

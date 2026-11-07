@@ -116,7 +116,7 @@ restore = '    if (cap_old) Perl_cap_prov_copy(aTHX_ sv, cap_old, 0, SvCUR(cap_o
 
 wrap('sv.c','Perl_sv_setsv_flags','void', 'pTHX_ SV *dstr, SV *sstr, const I32 flags',
      'aTHX_ dstr, sstr, flags',
-     '    SV *cap_source;\n    if (dstr == sstr) return;\n    SV_CHECK_THINKFIRST_COW_DROP(dstr);\n    if (sstr && (flags & SV_GMAGIC)) SvGETMAGIC(sstr);\n    cap_source = Perl_cap_prov_observed(aTHX_ sstr);\n    Perl_cap_prov_clear(aTHX_ dstr);',
+     '    SV *cap_source;\n    if (dstr == sstr) return;\n    if (SvIS_FREED(dstr) || (sstr && SvIS_FREED(sstr))) {\n        capstone_original_Perl_sv_setsv_flags(aTHX_ dstr, sstr, flags);\n        return;\n    }\n    SV_CHECK_THINKFIRST_COW_DROP(dstr);\n    if (sstr && (flags & SV_GMAGIC)) SvGETMAGIC(sstr);\n    cap_source = Perl_cap_prov_observed(aTHX_ sstr);\n    Perl_cap_prov_clear(aTHX_ dstr);',
      '    if (cap_source) Perl_cap_prov_copy(aTHX_ dstr, cap_source, 0, SvCUR(cap_source), 0, 0);',False,
      'aTHX_ dstr, sstr, flags & ~SV_GMAGIC')
 wrap('sv.c','Perl_sv_setsv_cow','SV *','pTHX_ SV *dstr, SV *sstr','aTHX_ dstr, sstr',
