@@ -1,3 +1,32 @@
+## GCC memory amplification and fault-path controls
+
+Follow-up diagnostics tie part of the larger memory demand to concrete GCC ABI
+layouts. During compilation `_cpp_clean_line` makes 195 fresh line-note array
+allocations in both arms: 200 entries require 3,200 bytes on plain RV64 and
+6,400 bytes on Capstone. Another 65 pointer tables request 256 x 8 versus
+256 x 16 bytes. Those requests cross the Capstone allocator's 4KiB aligned
+allocation threshold. This is actual argument/caller evidence, not an estimate
+from binary sizes. It does not yet assign a precise number of extra mappings
+to those individual allocation sites.
+
+The mapping trace confirms 118 versus 281 calls, requesting cumulatively
+1,912,832 versus 5,140,480 page-rounded bytes during compilation/output (not RSS).
+Both mapping and caller diagnostics produce exact reference output. The
+allocator's group layout, representability alignment and size classes amplify
+larger application objects into different mapping behavior.
+
+Independent existing-option experiments use the same binaries and four fresh
+guests per configuration, plus a new same-harness baseline. Disabling adaptive
+fault-ahead reduces native total attempts by 0.269% (kernel 0.513%); demand
+resolutions rise from roughly 1,227 to 2,002. Reusing the validated VMA via
+`unpinned_fast_fault=1` reduces total by 0.984% (kernel 1.866%). These are separate
+experiments, not additive savings. All twelve performance guests and four
+argument-trace guests match the official output. Every gate finishes below
+129 seconds, including lock waits. No runtime default is changed and these
+GCC diagnostics are not safety/full-SPEC qualification of either option.
+
+[Exact input hashes, caller arguments, histograms and controls](../../runtime/virtual/tests/native-task/gcc-memory-mechanisms.json).
+
 ## Current GCC overhead against ordinary RV64
 
 Matched current Linux/QEMU, plain/native/native/plain fresh guests, all native
