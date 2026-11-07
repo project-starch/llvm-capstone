@@ -357,12 +357,11 @@ static const struct cu_ops cv_copy_ops = {
     cv_copy_hold, cv_copy_release, cv_copy_enter, cv_copy_check,
     cv_copy_inatomic, cv_copy_drain, cv_copy_leave, cv_copy_resolve, cv_copy_between
 };
-/* The native syscall loop's copy. The synchronous task backend owns its context
- * until step returns (callbacks cannot destroy/transfer/retain it). Otherwise
- * this runs inside the context's own CV_STEP_NATIVE ioctl, whose
- * file reference outlives it (the control descriptor is never an application descriptor), and
- * reuses the context's state object: the protocol (hold, per-chunk check inside the exclusion
- * window, non-destructive fault retry, recheck, release) is the same cu_copy. */
+/* Reuse caller-owned, kmalloc-backed scratch for one synchronous copy.
+ * The native task owns its context across sleeping callbacks; callers must
+ * establish that ownership and exclude nested use of the same scratch.
+ * The protocol remains hold, per-chunk check/access inside the exclusion
+ * window, non-destructive fault retry, recheck and release. */
 struct cu_result cv_checked_copy_reuse(struct cv_copy_state *, struct context *, struct cv_thread *,
                                        const struct cn_capref *, u64, void *, u64, enum cu_direction);
 struct cu_result cv_checked_copy_reuse(struct cv_copy_state *s, struct context *c, struct cv_thread *t,

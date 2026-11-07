@@ -111,9 +111,11 @@ static struct ns_copy_result native_copy(void *opaque, struct cn_context *n,
 {
     struct cu_result r = {0, CU_REFUSED};
     (void)opaque;
-    if (!native_owner(n, owner))
-        r = cv_checked_copy(n->c, n->t, ref, offset, buffer, bytes,
-                            direction == NS_TO_DOMAIN ? CU_TO_DOMAIN : CU_FROM_DOMAIN);
+    /* Preserve the allocating wrapper's task-lifetime check across sleeping
+     * copies. This session's synchronous calls cannot overlap n->copy. */
+    if (!native_owner(n, owner) && riscv_capstone_owns(n->c))
+        r = cv_checked_copy_reuse(&n->copy, n->c, n->t, ref, offset, buffer, bytes,
+                                  direction == NS_TO_DOMAIN ? CU_TO_DOMAIN : CU_FROM_DOMAIN);
     return (struct ns_copy_result){r.bytes_done, r.cause};
 }
 static bool native_supported(u64 nr)
