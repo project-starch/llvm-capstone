@@ -8,6 +8,20 @@ struct native_wire_flock {
     s32 pid;
     u32 pad2;
 };
+/* The caller holds an authorized file reference until after this operation.
+ * close_fd removes the descriptor and performs flush/POSIX lock cleanup; fput
+ * alone cannot replace it. The grant stays cleared even if close reports error. */
+static long native_close_issue(struct context *c, unsigned int fd)
+{
+    long rc;
+    clear_bit(fd, c->dom_delegate->fds);
+    mutex_unlock(&vm_lock);
+    rc = close_fd(fd);
+    mutex_lock(&vm_lock);
+    if (rc <= -ERESTARTSYS && rc >= -ERESTART_RESTARTBLOCK) rc = -EINTR;
+    return rc;
+}
+
 /* The exchange and register transports share these held-file operations. */
 static bool native_fd_supported(u64 nr)
 {

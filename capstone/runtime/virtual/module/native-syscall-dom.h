@@ -289,8 +289,8 @@ static struct ns_completion native_issue(void *opaque, const struct ns_invocatio
         if (call->buffer[1].data) memcpy(call->buffer[1].data, &ts, sizeof(ts));
         rc = 0; break;
     case CAPSTONE_SYS_close:
-        clear_bit(a[0], c->dom_delegate->fds);
-        mutex_unlock(&vm_lock); rc = close_fd(a[0]); mutex_lock(&vm_lock); break;
+        rc = native_close_issue(c, a[0]);
+        break;
     case CAPSTONE_SYS_lseek:
         rc = native_seek_issue(file, a[1], a[2]);
         break;
@@ -365,6 +365,26 @@ static __always_inline bool nf_regs_plain(struct cv_thread *t, u64 kinds, u64 po
 }
 #include "native-process-dom.h"
 #include "native-spawn-dom.h"
+
+/* Closing is a single admitted operation; even an error must never replay it. */
+static bool native_close_fast(struct context *c, struct cv_step *step, u64 kinds)
+{
+    struct cv_thread *t = c->main_thread;
+    struct file *file;
+    long rc;
+    if (step->args[6] != CAPSTONE_SYS_close || !nf_regs_plain(t, kinds, 0) ||
+        step->args[0] > INT_MAX || !dom_fd_allowed(c, step->args[0])) return false;
+    file = fget(step->args[0]);
+    if (!file) return false;
+    if (file->private_data == c || !file->f_op) { fput(file); return false; }
+    rc = ns_session_admit(c->native_session, READ_ONCE(t->frame[82]));
+    if (rc) rc = -ESTALE;
+    else rc = native_close_issue(c, step->args[0]);
+    fput(file);
+    step->result = rc;
+    ++native_fast_hits;
+    return true;
+}
 
 /* Scalar fd operations retain the same authority and once-only admission. */
 static bool native_fd_fast(struct context *c, struct cv_step *step, u64 kinds)
@@ -523,6 +543,7 @@ static bool native_fast_try(struct context *c, struct cv_step *step)
     if (!native_fast || !n || native_owner(n, &n->owner) ||
         current->seccomp.mode != SECCOMP_MODE_DISABLED) return false;
     kinds = READ_ONCE(t->frame[83]);
+    if (native_close_fast(c, step, kinds)) return true;
     if (native_fd_fast(c, step, kinds)) return true;
     if (native_seek_fast(c, step, kinds)) return true;
     if (native_stat_fast(c, step, kinds)) return true;

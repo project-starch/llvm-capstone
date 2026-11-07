@@ -71,6 +71,31 @@ static void raw_fd_checks(int fd) {
           after.st_mode==before.st_mode && after.st_uid==before.st_uid && after.st_gid==before.st_gid);
     CHECK(lseek(fd,0,SEEK_CUR)==6);
 }
+static void raw_close_checks(int fd) {
+    char tag;
+    struct stat st;
+    int du=fcntl(fd,F_DUPFD_CLOEXEC,40);
+    CHECK(du>=40);
+    _Alignas(16) unsigned long words[2] = {(unsigned long)du, 1};
+    void *dirty;
+    __asm__ volatile("ldc %0, 0(%1)" : "=r"(dirty) : "r"(words) : "memory");
+    CHECK(__capstone_native_syscall(57,scalar(-1),0,0,0,0,0)==-EBADF);
+    CHECK(__capstone_native_syscall(57,&tag,0,0,0,0,0)==-EINVAL);
+    CHECK(__capstone_native_syscall(57,dirty,0,0,0,0,0)==-EINVAL);
+    CHECK(__capstone_native_syscall(57,scalar((1UL<<32)|(unsigned)du),0,0,0,0,0)==-EBADF);
+    CHECK(__capstone_native_syscall(57,scalar(100),0,0,0,0,0)==-EBADF);
+    CHECK(__capstone_native_syscall(57,scalar(du),0,0,0,0,&tag)==-EINVAL);
+    CHECK(fstat(du,&st)==0 && st.st_size==12); /* rejected closes preserve the grant */
+    CHECK(__capstone_native_syscall(57,scalar(du),0,0,0,0,0)==0);
+    CHECK(__capstone_native_syscall(57,scalar(du),0,0,0,0,0)==-EBADF);
+    errno=0; CHECK(fstat(du,&st)==-1 && errno==EBADF);
+    int reused=fcntl(fd,F_DUPFD_CLOEXEC,40);
+    CHECK(reused==du); /* the freed number receives a fresh grant */
+    CHECK(fstat(reused,&st)==0 && st.st_size==12);
+    CHECK(__capstone_native_syscall(57,scalar(reused),0,0,0,0,0)==0);
+    CHECK(__capstone_native_syscall(57,scalar(reused),0,0,0,0,0)==-EBADF);
+    CHECK(fstat(fd,&st)==0 && st.st_size==12);
+}
 static void raw_stat_checks(int fd) {
     struct stat st;
     char name[] = "file-data";
@@ -176,6 +201,7 @@ int main(int argc, char **argv) {
         raw_stat_checks(fd);
         raw_seek_checks(fd);
         raw_fd_checks(fd);
+        raw_close_checks(fd);
 #endif
         CHECK(fsync(fd)==0 && fdatasync(fd)==0);
         int ro=open("file-data",O_RDONLY);
