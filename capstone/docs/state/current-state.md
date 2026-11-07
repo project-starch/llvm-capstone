@@ -1,3 +1,20 @@
+## No external Capstone module in the native deployment
+
+The native kernel contains the Capstone adapter built in. A QEMU boot audit
+confirmed no `capstone_vm.ko*` in the root filesystem or staged resources,
+no loaded Capstone module in `/proc/modules`, and no Capstone insmod/modprobe
+startup in `/etc/init.d` or `/etc/inittab`. The native task/dispatch parameters
+are enabled. The audit passes in 3.4 seconds on the qualified native-path kernel.
+The rootfs already lacked this artifact; it was not modified.
+
+The obsolete `build-adapter.sh` external-module/launcher recipe is retired;
+its old entry point now directs callers to `install-native-task.sh` and an
+in-tree `Image` build. Historical module runners remain for old platforms.
+The built-in adapter, capability checks and remaining exchange services are
+still required. Module-free deployment does not mean all syscalls are direct
+or that all Linux semantics have been qualified.
+[Boot evidence](../../runtime/virtual/tests/native-task/module-free-qualification.json).
+
 ## Native confined pathname services qualified
 
 Feature 128 routes openat/unlinkat directly. Both transports retain the confined
