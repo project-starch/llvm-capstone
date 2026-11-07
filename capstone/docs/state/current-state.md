@@ -1,3 +1,34 @@
+## Native basic clock transport qualified
+
+Feature 256 routes clock_gettime through the existing generic checked register
+dispatcher. Only CLOCK_REALTIME and CLOCK_MONOTONIC are supported; provider semantics,
+launch tick rate and owner/epoch/output-authority checks are unchanged. No
+clock-specific fast handler was added.
+Every admitted direct operation completes once; errors never trigger replay.
+Enable `capstone_vm.native_clock=1` together with `native_io=1` and a rebuilt
+SDK/application. The new feature defaults off; old SDKs disable direct routing
+on unknown feature bits. No ISA change is required.
+
+Qualification is restricted to the initial time namespace: the inherited provider
+lacks the monotonic namespace offset. Output authority is checked before clock ID,
+so a bad ID combined with bad output yields EFAULT. These differences from Linux
+are not changed by this transport migration. Actual copy faults need not be atomic.
+
+SQLite moves 65 calls from exchange to registers. With previous native
+features enabled in both arms, two samples per arm in A-B-B-A order reduce
+kernel instruction attempts by 0.117% and total attempts by
+0.089%. All 32 reference phases match in every run.
+The build/file/SQLite/regression/GCC gate passes in 258.0s;
+combined-feature IO and reversed measurements pass in 105.0s.
+Each gate has one 300-second deadline.
+[Exact evidence and limitations](../../runtime/virtual/tests/native-task/native-clock-qualification.json).
+
+Runtime and negative tests were implemented in parallel and independently reviewed.
+This is not a new full-SPEC or FPGA qualification. 37 exchange calls remain
+in this SQLite census. Next measure pathname byte counts and repeated checked-copy
+setup, then prototype a bounded checked-string operation. Clock namespace/error-order
+corrections and bounded vectors remain separate work.
+
 ## No external Capstone module in the native deployment
 
 The native kernel contains the Capstone adapter built in. A QEMU boot audit

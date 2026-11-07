@@ -1,3 +1,34 @@
+## Native basic clock transport qualified
+
+Feature 256 routes clock_gettime through the existing generic checked register
+dispatcher. Only CLOCK_REALTIME and CLOCK_MONOTONIC are supported; provider semantics,
+launch tick rate and owner/epoch/output-authority checks are unchanged. No
+clock-specific fast handler was added.
+Every admitted direct operation completes once; errors never trigger replay.
+Enable `capstone_vm.native_clock=1` together with `native_io=1` and a rebuilt
+SDK/application. The new feature defaults off; old SDKs disable direct routing
+on unknown feature bits. No ISA change is required.
+
+Qualification is restricted to the initial time namespace: the inherited provider
+lacks the monotonic namespace offset. Output authority is checked before clock ID,
+so a bad ID combined with bad output yields EFAULT. These differences from Linux
+are not changed by this transport migration. Actual copy faults need not be atomic.
+
+SQLite moves 65 calls from exchange to registers. With previous native
+features enabled in both arms, two samples per arm in A-B-B-A order reduce
+kernel instruction attempts by 0.117% and total attempts by
+0.089%. All 32 reference phases match in every run.
+The build/file/SQLite/regression/GCC gate passes in 258.0s;
+combined-feature IO and reversed measurements pass in 105.0s.
+Each gate has one 300-second deadline.
+[Exact evidence and limitations](../../runtime/virtual/tests/native-task/native-clock-qualification.json).
+
+Runtime and negative tests were implemented in parallel and independently reviewed.
+This is not a new full-SPEC or FPGA qualification. 37 exchange calls remain
+in this SQLite census. Next measure pathname byte counts and repeated checked-copy
+setup, then prototype a bounded checked-string operation. Clock namespace/error-order
+corrections and bounded vectors remain separate work.
+
 ## Native confined pathname services qualified
 
 Feature 128 routes openat/unlinkat directly. Both transports retain the confined
@@ -24,41 +55,6 @@ in this SQLite census. Next measure pathname byte counts and repeated checked-co
 setup, then prototype a bounded checked-string operation. Clock_gettime and bounded
 vectors remain separate candidates; arbitrary iovec import remains unresolved.
 
-## Next narrow migration: basic clock transport
-
-Design review recommends a routing-only change before the checked-string work:
-add default-off `native_clock` and launch feature 256 (base IO bit required;
-bit 32 remains reserved). Route libc `clock_gettime` through the existing
-checked register dispatcher. Keep the clock ID scalar, preserve the output
-capability, zero unused arguments, and reuse the existing once-only completion
-envelope. Rename the shared libc file-service wrapper to service wrapper if
-needed; do not add a clock-specific fast handler or a one-caller provider helper.
-This migration is not implemented yet.
-
-Preserve `dl_clock` precedence and the native launcher's zero tick rate, which
-keeps approximate launch-time/rdtime clock synthesis disabled. The latest SQLite
-census contains 65 successful clock calls, not unsupported-clock errors.
-
-The inherited provider supports only CLOCK_REALTIME and CLOCK_MONOTONIC. It
-preflights output authority before clock-ID validation: an unsupported ID with
-bad output yields EFAULT, unlike Linux's ID-first validation. Its monotonic
-provider lacks the time-namespace offset, while absolute monotonic sleep already
-uses namespace conversion. Qualify this transport migration only in the initial
-time namespace. Correct namespace behavior and error ordering in a separate
-shared-provider change; do not present transport parity as complete Linux parity.
-
-Tests should assert the 16-byte RV64 timespec layout; validate timestamps and
-monotonic nondecrease (not realtime nondecrease); cover exact bounds, output
-canaries, write-only/read-only/short/NULL/forged capabilities, invalid IDs and
-invalid-ID-plus-invalid-output precedence, malformed scalars and unused tags.
-Preserve existing owner, replay and checked-copy controls. Rejections before
-copy must not modify output; an actual partial copy fault need not be atomic.
-Exercise feature off/on and native_fast off/on with a rebuilt SDK. Accept launch
-masks 257/479, reject 256 without IO, reserved 33 and unknown 513. Compare matched
-SQLite artifacts in A-B-B-A order, retaining all 32 oracles and GCC regression;
-expect 65 calls to leave exchange, but verify the fresh census. Each feedback
-gate includes build and lock wait within one 300-second deadline.
-
 ## Next milestone: bounded checked-string snapshots
 
 Measure pathname byte counts and checked-copy setup separately before claiming
@@ -80,9 +76,10 @@ catch missing rechecks, exclusion, holds and destructive prefaulting. Counter
 assertions should prove bounded windows and one hold/release; matched SQLite
 runs establish savings. Keep each build/test feedback gate below 300 seconds.
 
-Clock_gettime's 65 remaining exchange calls are a lower-risk independent
-migration. Bounded register vectors remain a separate design; arbitrary nested
-iovec capability import is not provided by byte-copying the array.
+The clock transport migration is now qualified above. Its namespace and
+error-order semantics remain separate correction work. Bounded register vectors
+remain a separate design; arbitrary nested iovec capability import is not
+provided by byte-copying the array.
 
 ## Native descriptor close qualified
 
