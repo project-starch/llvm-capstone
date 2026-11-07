@@ -26,3 +26,17 @@ also differs between QEMU and board for the same binary).
 
 **What it decides.** If either nc run is faster than its rv64gc Plain, the nc Plain becomes the denominator for every
 benchmark (rebuilt the same way), and the ratios are restated.
+
+## Result, gcc (8 Nov 00:2x): Plain without RVC is 6.0 % SLOWER; C1 FAILS on the upper side
+
+| Plain gcc train | time | machine-wide IPC | per 1k instructions: L1I miss / mispredict / scoreboard full |
+|---|---|---|---|
+| rv64gc (board 3, fill) | 3,510.0 s | 0.162 | 52.48 / 36.69 / 366.71 |
+| rv64imafd (board 1) | 3,725.4 s (rc 0, specdiff 1/1) | 0.154 | 67.86 / 42.14 / 316.70 |
+
+- Compressed instructions make Plain gcc FASTER on this core: denser code, 23 % fewer L1I misses. Plain rv64gc is
+  Plain at its best, so today's gcc denominator is the fair one. C1's band (−8 %…+3 %) assumed RVC could only cost.
+- For x264 the RVC hypothesis is weakened, not settled: its hot loops may fit the I-cache either way. Its nc run
+  stays in board 1's list.
+- The other reading: Capstone has no compressed encodings, and on gcc that alone is worth about 6 % to Plain;
+  compressed capability encodings (plan direction 3) would recover part of it.
