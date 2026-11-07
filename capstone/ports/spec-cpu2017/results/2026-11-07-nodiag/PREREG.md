@@ -53,3 +53,19 @@ specdiff PASS, 43 processes per snapshot, the context's time reads as system tim
 | D0 | as N0, plus both snapshots present |
 | D1 | run within ±1 % of 4,518.6 s (board 2); the snapshots attribute ≥ 80 % of the outside time (≈ 1,080 s) to named processes and /proc/stat states |
 | D2 | which one carries the ~380 s excess over c3f is not predicted: the run exists to name it |
+
+## Result, perlbench (8 Nov 04:04): 30,120.3 s, N2 holds; the best perlbench so far
+
+| perlbench test | run | inside | outside | exits [quantum, service, fault] |
+|---|---|---|---|---|
+| c3g (board 2) | 33,667.7 s | 23,867.9 s (100.53 G) | 9,799.8 s | 19,264 / 265,988 / 84,937 |
+| unify (board 3) | 37,131.8 s | 21,901.2 s | 15,230.5 s | |
+| **unify -nd (board 2)** | **30,120.3 s** | 21,869.3 s (93.55 G) | 8,251.0 s | 52,285 / 112,220 / 22,967 |
+
+- **N0 holds:** rc 0, specdiff 2/2 PASS, test.out 317 ok / 0 FAILED, outputs equal the twin's; @@NODIAG unset; no
+  `exit image` line. **N2 holds:** inside −0.1 % on unify's; run below c3g's, and below the 30,500-32,500 s point band.
+- **The digest was perlbench's excess.** 7,011.5 s went with it, 22.0 s per context exit over 318 contexts. The
+  module's windows did not move (ucyc 4,247 s against 4,272 s, kcyc 2,870 against 2,859 s): the digest ran after each
+  context's last step, outside every window, as the RETRACTION above says for gcc, where one context paid 92 s.
+- **perlbench is 1.294× Plain's 23,277.1 s** (c3g: 1.446×). Plain with the mapping cache (results/2026-11-07-plainreuse)
+  is the fair denominator for a stack that caches mappings; its perlbench run is on board 1 now.
