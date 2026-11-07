@@ -47,3 +47,12 @@ unchanged (P0-P2).
 - **P1 FAILS:** fault exits 86,610 (c3g 84,937). **P2 FAILS:** slower, not faster. The +2.0 % is board 3 against board 2
   and the THP kernel together; not separated.
 - Board 2's perlbench c3g-thp (Addendum 1) is withdrawn before its board call: it would read the same zero.
+
+## Result, gcc on board 3 (8 Nov 06:24): G1 FAILS; THP formed 4 huge pages
+
+- gcc train c3f-thp: 4,294.1 s (1.0096× c3f's 4,253.3 s on the same board), inside 3,514.6 s, outside 779.5 s;
+  rc 0, specdiff 1/1, control passes. thp_fault_alloc 0 → 4 over the arm; fault exits 2,952 (c3f 2,875).
+- **G1 FAILS** on every clause. gcc's heap arenas under the launcher's 4 MiB advice bound are not given huge pages,
+  and the four it did get changed nothing.
+- **Both programs read slower on the THP kit** (perlbench +2.0 %, gcc +1.0 %) without using huge pages: the kernel
+  with THP and compaction costs about 1-2 % by itself. THP stays a lever for mcf only (its arrays are large arenas).
