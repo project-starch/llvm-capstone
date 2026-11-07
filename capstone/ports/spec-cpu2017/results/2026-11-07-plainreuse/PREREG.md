@@ -67,3 +67,12 @@ replaced. Board 2 (perf/b3/gt-run-ga2.sh 2, C.5a), after perlbench c3g-thp there
 |---|---|
 | R3 | mcf plain-rv64r within −3 %…+1 % of 9,094.9 s (mcf allocates its arrays once; little churn) |
 | R4 | x264 plain-rv64r within −8 %…+1 % of 50,320.6 s |
+
+## Result, perlbench (8 Nov 08:0x): Plain with the cache is 6.0 % faster; R1 FAILS (the band was too narrow)
+
+- Board 1, C.5a: 499.4 + 21,383.2 s = **21,882.6 s** (0.9401× Plain's 23,277.1 s, the same board and bitstream);
+  rc 0, specdiff 2/2 PASS, test.out 317 ok / 0 FAILED.
+- **R1 FAILS:** −6.0 %, outside −3 %…+1 %. As on gcc (−6.7 %), the cache is worth about 6-7 % to Plain.
+- **Restated against it:** perlbench on the unified stack without the exit digest 30,120.3 s = **1.376×**; c3g
+  33,667.7 s = 1.539×. gcc train c3f 1.296× (above). These are the fair readings for every configuration that keeps
+  mappings in the context (ARENA_CACHE or MAPPING_REUSE).
