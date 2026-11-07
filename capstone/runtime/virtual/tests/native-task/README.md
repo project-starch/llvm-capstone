@@ -1,5 +1,32 @@
 # Experimental Linux task-return backend
 
+## Native seek qualified
+
+Musl routes `lseek` directly when launch advertises `CAPSTONE_LAUNCH_NATIVE_SEEK`.
+Both transports use one held-file helper preserving Linux's shared file-position
+lock. The handler admits each epoch once, enforces fd grants and scalar register
+shape, rejects oversized whence values before narrowing, and normalizes internal
+restart errors to EINTR. It has no request-buffer snapshot or copy workspace.
+Enable `capstone_vm.native_seek=1` with `capstone_vm.native_io=1` and a rebuilt
+SDK/application; the new feature defaults off. Unknown bits disable direct
+routing in older SDKs, so preserve their old feature mask when needed.
+
+SQLite moves all 2,283 seek calls to registers. With locks and stat enabled in
+both arms, two samples per arm in A-B-B-A order reduce kernel instruction
+attempts by 7.37% and total attempts by 4.53%. Every run matches
+all 32 reference phases. Build, file/negative tests, SQLite, regressions and
+original GCC comparator pass in 210.7s; combined-feature I/O and reverse-order
+measurements pass in 96.6s. Each gate has one 300-second deadline.
+[Exact evidence and limitations](native-seek-qualification.json).
+
+No ISA/QEMU changes or new full-SPEC/FPGA qualification. The independent review's
+restart parity fix is included; restarting device callbacks were not injected.
+Only 326 exchange calls remain in this SQLite census. Next implement the
+independently reviewed scalar-fd group (sync, truncate, chmod/chown); close and
+vectors remain separate migrations. Direct arbitrary iovecs lack production
+nested-capability import, so do not merely redirect libc readv/writev.
+
+
 ## Native file metadata qualified
 
 The native-I/O SDK now routes `newfstatat` and `fstat` through tagged registers
