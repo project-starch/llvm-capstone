@@ -1,5 +1,39 @@
 # Experimental Linux task-return backend
 
+## Generic copy workspace reuse
+
+`native_copy()` calls `cv_checked_copy_reuse()` with `n->copy` after both
+`native_owner()` and `riscv_capstone_owns()` succeed. The old wrapper's task
+ownership check is preserved. Scratch is initialized per copy; the same checked
+copy engine retains holds, rechecks, fault retry and partial-result semantics.
+No busy flag, lock or reference count was added: synchronous per-task calls
+cannot overlap this workspace, and the test racer dispatches no native copies.
+Other allocating copy paths, vectors and metadata replies remain unchanged.
+[Qualification](copy-reuse-qualification.json).
+
+The build/regression/GCC/measurement gate passes in 163.4s, and all 164
+race scenarios in a separate 52.2s gate. Each has one 300-second budget.
+Production and race images use separate destinations; the build scripts refuse
+to overwrite a frozen image with different bytes. The final production Image
+is retained locally as well as on the test host.
+
+Matched against the preceding authorization-reuse kernel, ABBA order with two
+repeats per kernel/setting, same 1 MiB resident-file copy and 4 KiB requests:
+
+| ABI / dispatch | Before: kernel attempts/call | After | Reduction |
+| --- | ---: | ---: | ---: |
+| exchange / generic | 18680.4 | 18313.3 | 1.97% |
+| direct / generic | 14500.1 | 14132.8 | 2.53% |
+| exchange / fast enabled | 18680.6 | 18312.0 | 1.97% |
+| direct / fast enabled | 8594.1 | 8589.5 | 0.05% |
+
+Exchange uses the generic dispatcher in both settings. Fast direct already
+reused scratch and is the control. Measurements use the unchanged
+`measure-helper-reuse.py`, with tracing disabled. These are attempted QEMU
+instructions, not cycle timings or a GCC speedup. Full SPEC remains separately
+qualified on its historical frozen image.
+
+
 ## Shared authorization workspace
 
 `cn_authorize()` and the direct fast path share `native_authorize_reuse()`.

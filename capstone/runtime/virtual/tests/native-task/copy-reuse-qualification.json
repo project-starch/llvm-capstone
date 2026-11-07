@@ -1,0 +1,782 @@
+{
+  "schema_version": 1,
+  "status": "PASS",
+  "source_snapshot": "df3cdec82c4149b683bedaf251c6d3872f0a8f85",
+  "baseline_source_snapshot": "036ee6176a8ae8fe32169cbf00c77abb296e1f45",
+  "scope": "Only native_copy switches to existing kmalloc-backed n->copy via cv_checked_copy_reuse. Both native_owner and riscv_capstone_owns remain explicit. Existing copy engine, fast path, other copy callers, task lifetime, ISA and flat tables are unchanged. Stale ioctl comment corrected.",
+  "artifact_hashes": {
+    "production_Image": "81ef5bd85a8c2f0882202ec0e0e6ba04c61ee6b79c7cb7f99d1de06750b6deae",
+    "production_System.map": "31e8d157348525e6e86be4b72504867397a687a616a416cf6a7114c67325a288",
+    "config": "f51113c4c6a15f41d5802c254596704e2ced36f292b5056bde39e8506f604e3c",
+    "native-syscall-dom.h": "a0744a42dd4c1a6b3cc2715c22e72e7b0185d090e84207aaa26560c23c17f873",
+    "checked-copy-dom.h": "f59b63640d9cf656f8904b396ef8582ebdf31ff599b8d545f9d18ed6ad2ac042",
+    "race_Image": "aa98dd24d79c68ac0c878bca1f15e2957f3d74cb54aad35cb24f65a39b0a983b"
+  },
+  "final_gate": {
+    "scope": "Configured quick gate only; not full SPEC qualification",
+    "status": "PASS",
+    "reason": null,
+    "budget_seconds": 300.0,
+    "cleanup_reserve_seconds": 2.0,
+    "elapsed_seconds": 163.3680885110516,
+    "steps": [
+      {
+        "name": "kernel-build",
+        "argv": [
+          "bash",
+          "/var/tmp/capstone-native-task-scratch/native-copy-reuse-01/build.sh"
+        ],
+        "status": "PASS",
+        "elapsed_seconds": 13.108785273041576,
+        "returncode": 0,
+        "pid": 329869,
+        "cleanup": {
+          "term_sent": false,
+          "kill_sent": false,
+          "leader_reaped": true
+        }
+      },
+      {
+        "name": "io-and-task",
+        "argv": [
+          "python3",
+          "/var/tmp/capstone-native-task-scratch/native-only-cleanup-01/tools/capstone/runtime/virtual/tests/native-task/run-musl-io.py",
+          "io",
+          "--qemu",
+          "/var/tmp/capstone-native-task-scratch/diagnostic-platform/qemu-system-riscv64",
+          "--images",
+          "/var/tmp/capstone-native-task-scratch/native-copy-reuse-01/images",
+          "--firmware",
+          "/var/tmp/capstone-native-task-scratch/diagnostic-platform/opensbi-riscv64-generic-fw_dynamic.bin",
+          "--probes",
+          "/var/tmp/capstone-native-task-scratch/native-only-cleanup-01/io-probes",
+          "--out",
+          "/var/tmp/capstone-native-task-scratch/native-copy-reuse-01/io"
+        ],
+        "status": "PASS",
+        "elapsed_seconds": 17.523090698989108,
+        "returncode": 0,
+        "pid": 333487,
+        "cleanup": {
+          "term_sent": false,
+          "kill_sent": false,
+          "leader_reaped": true
+        }
+      },
+      {
+        "name": "io-and-task-generic",
+        "argv": [
+          "python3",
+          "/var/tmp/capstone-native-task-scratch/native-only-cleanup-01/tools/capstone/runtime/virtual/tests/native-task/run-musl-io.py",
+          "io",
+          "--qemu",
+          "/var/tmp/capstone-native-task-scratch/diagnostic-platform/qemu-system-riscv64",
+          "--images",
+          "/var/tmp/capstone-native-task-scratch/native-copy-reuse-01/images",
+          "--firmware",
+          "/var/tmp/capstone-native-task-scratch/diagnostic-platform/opensbi-riscv64-generic-fw_dynamic.bin",
+          "--probes",
+          "/var/tmp/capstone-native-task-scratch/native-only-cleanup-01/io-probes",
+          "--out",
+          "/var/tmp/capstone-native-task-scratch/native-copy-reuse-01/io-generic",
+          "--fast",
+          "0"
+        ],
+        "status": "PASS",
+        "elapsed_seconds": 17.521863693837076,
+        "returncode": 0,
+        "pid": 333563,
+        "cleanup": {
+          "term_sent": false,
+          "kill_sent": false,
+          "leader_reaped": true
+        }
+      },
+      {
+        "name": "directory-dup-time",
+        "argv": [
+          "python3",
+          "/var/tmp/capstone-native-task-scratch/native-only-cleanup-01/tools/capstone/runtime/virtual/tests/native-task/run-directory.py",
+          "--qemu",
+          "/var/tmp/capstone-native-task-scratch/diagnostic-platform/qemu-system-riscv64",
+          "--images",
+          "/var/tmp/capstone-native-task-scratch/native-copy-reuse-01/images",
+          "--firmware",
+          "/var/tmp/capstone-native-task-scratch/diagnostic-platform/opensbi-riscv64-generic-fw_dynamic.bin",
+          "--probes",
+          "/var/tmp/capstone-native-task-scratch/directory-services-probes",
+          "--dup-probes",
+          "/var/tmp/capstone-native-task-scratch/directory-services-probes",
+          "--time-probes",
+          "/var/tmp/capstone-native-task-scratch/directory-services-probes",
+          "--out",
+          "/var/tmp/capstone-native-task-scratch/native-copy-reuse-01/directory"
+        ],
+        "status": "PASS",
+        "elapsed_seconds": 9.943427463062108,
+        "returncode": 0,
+        "pid": 333662,
+        "cleanup": {
+          "term_sent": false,
+          "kill_sent": false,
+          "leader_reaped": true
+        }
+      },
+      {
+        "name": "private-tmp",
+        "argv": [
+          "python3",
+          "/var/tmp/capstone-native-task-scratch/native-only-cleanup-01/tools/capstone/runtime/virtual/tests/native-task/run-local-tmp.py",
+          "--qemu",
+          "/var/tmp/capstone-native-task-scratch/diagnostic-platform/qemu-system-riscv64",
+          "--images",
+          "/var/tmp/capstone-native-task-scratch/native-copy-reuse-01/images",
+          "--firmware",
+          "/var/tmp/capstone-native-task-scratch/diagnostic-platform/opensbi-riscv64-generic-fw_dynamic.bin",
+          "--probes",
+          "/var/tmp/capstone-native-task-scratch/local-tmp-probes",
+          "--out",
+          "/var/tmp/capstone-native-task-scratch/native-copy-reuse-01/local-tmp"
+        ],
+        "status": "PASS",
+        "elapsed_seconds": 19.380372719140723,
+        "returncode": 0,
+        "pid": 333693,
+        "cleanup": {
+          "term_sent": false,
+          "kill_sent": false,
+          "leader_reaped": true
+        }
+      },
+      {
+        "name": "spawn-lifecycle",
+        "argv": [
+          "env",
+          "CAPSTONE_QEMU_CPU_EXTRA=x-capstone-supervisor-slots=1,x-pcrel=false,x-capstone-raw-moves=true,x-capstone-test-csrs=false,x-capstone-checked-copy=true,x-capstone-context-transport=true",
+          "python3",
+          "/var/tmp/capstone-native-task-scratch/native-only-cleanup-01/tools/capstone/runtime/virtual/run-staged.py",
+          "--qemu",
+          "/var/tmp/capstone-native-task-scratch/diagnostic-platform/qemu-system-riscv64",
+          "--images",
+          "/var/tmp/capstone-native-task-scratch/native-copy-reuse-01/images",
+          "--firmware",
+          "/var/tmp/capstone-native-task-scratch/diagnostic-platform/opensbi-riscv64-generic-fw_dynamic.bin",
+          "--stage",
+          "/var/tmp/capstone-native-task-scratch/spawn-services-probes",
+          "--work",
+          "/var/tmp/capstone-native-task-scratch/native-copy-reuse-01/spawn",
+          "--memory",
+          "8G",
+          "--disk-mib",
+          "64",
+          "--timeout",
+          "240",
+          "--icount",
+          "0",
+          "--kernel-arg",
+          "capstone_vm.native_task=1 capstone_vm.native_io=1 capstone_vm.dom_binfmt=1 capstone_vm.native_dispatch=1 capstone_vm.checked_copy=1 capstone_vm.native_slot_transport=1 capstone_vm.unpinned=1 capstone_vm.supervisor_slots=1 capstone_vm.dom_shell=/tmp/native-shell/hush.dom capstone_vm.dom_null=1"
+        ],
+        "status": "PASS",
+        "elapsed_seconds": 11.804912902181968,
+        "returncode": 0,
+        "pid": 333768,
+        "cleanup": {
+          "term_sent": false,
+          "kill_sent": false,
+          "leader_reaped": true
+        }
+      },
+      {
+        "name": "spawn-verdict",
+        "argv": [
+          "python3",
+          "-c",
+          "from pathlib import Path; import re,sys; s=Path(sys.argv[1]).read_text(errors='replace'); assert 'SPAWN_SHELL_GATE_EXIT:0' in s and 'VIRTUAL_STAGED_DONE' in s; assert not re.search(r'WARNING:|BUG:|Oops|Kernel panic|_FAIL|FAIL line|^FAIL ',s,re.M); print('SPAWN_PASS')",
+          "/var/tmp/capstone-native-task-scratch/native-copy-reuse-01/spawn/serial.log"
+        ],
+        "status": "PASS",
+        "elapsed_seconds": 0.06579671800136566,
+        "returncode": 0,
+        "pid": 333834,
+        "cleanup": {
+          "term_sent": false,
+          "kill_sent": false,
+          "leader_reaped": true
+        }
+      },
+      {
+        "name": "gcc-original-test",
+        "argv": [
+          "python3",
+          "/var/tmp/capstone-native-task-scratch/native-only-cleanup-01/tools/capstone/runtime/virtual/tests/native-task/run-spec-tests.py",
+          "--qemu",
+          "/var/tmp/capstone-native-task-scratch/diagnostic-platform/qemu-system-riscv64",
+          "--images",
+          "/var/tmp/capstone-native-task-scratch/native-copy-reuse-01/images",
+          "--firmware",
+          "/var/tmp/capstone-native-task-scratch/diagnostic-platform/opensbi-riscv64-generic-fw_dynamic.bin",
+          "--prepared",
+          "/var/tmp/capstone-native-task-scratch/native-only-cleanup-01/prepared",
+          "--out",
+          "/var/tmp/capstone-native-task-scratch/native-copy-reuse-01/gcc",
+          "--benchmarks",
+          "502.gcc_r",
+          "--timeout",
+          "240",
+          "--comparators",
+          "/var/tmp/capstone-native-task-scratch/native-copy-reuse-01/gcc-comparators.json"
+        ],
+        "status": "PASS",
+        "elapsed_seconds": 15.517042001942173,
+        "returncode": 0,
+        "pid": 333835,
+        "cleanup": {
+          "term_sent": false,
+          "kill_sent": false,
+          "leader_reaped": true
+        }
+      },
+      {
+        "name": "gcc-official-comparison",
+        "argv": [
+          "python3",
+          "/var/tmp/capstone-native-task-scratch/native-only-cleanup-01/tools/capstone/runtime/virtual/tests/native-task/validate-spec-tests.py",
+          "--results",
+          "/var/tmp/capstone-native-task-scratch/native-copy-reuse-01/gcc/runs",
+          "--comparators",
+          "/var/tmp/capstone-native-task-scratch/native-copy-reuse-01/gcc-comparators.json",
+          "--spec",
+          "/var/tmp/capstone-spec-php-20261105/share/SPEC17",
+          "--out",
+          "/var/tmp/capstone-native-task-scratch/native-copy-reuse-01/gcc-validation.json",
+          "--timeout",
+          "30"
+        ],
+        "status": "PASS",
+        "elapsed_seconds": 0.2661797890905291,
+        "returncode": 0,
+        "pid": 333876,
+        "cleanup": {
+          "term_sent": false,
+          "kill_sent": false,
+          "leader_reaped": true
+        }
+      },
+      {
+        "name": "matched-kernel-copy",
+        "argv": [
+          "python3",
+          "/var/tmp/capstone-native-task-scratch/native-only-cleanup-01/tools/capstone/runtime/virtual/tests/native-task/measure-helper-reuse.py",
+          "--qemu",
+          "/var/tmp/capstone-native-task-scratch/diagnostic-platform/qemu-system-riscv64",
+          "--baseline",
+          "/var/tmp/capstone-native-task-scratch/native-auth-reuse-final-02/images",
+          "--candidate",
+          "/var/tmp/capstone-native-task-scratch/native-copy-reuse-01/images",
+          "--firmware",
+          "/var/tmp/capstone-native-task-scratch/diagnostic-platform/opensbi-riscv64-generic-fw_dynamic.bin",
+          "--plugin",
+          "/var/tmp/capstone-native-task-scratch/native-auth-reuse-01/libcapprof.so",
+          "--probes",
+          "/var/tmp/capstone-native-task/musl-copy",
+          "--out",
+          "/var/tmp/capstone-native-task-scratch/native-copy-reuse-01/measurement"
+        ],
+        "status": "PASS",
+        "elapsed_seconds": 58.21108601009473,
+        "returncode": 0,
+        "pid": 333878,
+        "cleanup": {
+          "term_sent": false,
+          "kill_sent": false,
+          "leader_reaped": true
+        }
+      }
+    ]
+  },
+  "race_gate": {
+    "scope": "Configured quick gate only; not full SPEC qualification",
+    "status": "PASS",
+    "reason": null,
+    "budget_seconds": 300.0,
+    "cleanup_reserve_seconds": 2.0,
+    "elapsed_seconds": 52.21625402895734,
+    "steps": [
+      {
+        "name": "race-kernel-build",
+        "argv": [
+          "bash",
+          "/var/tmp/capstone-native-task-scratch/native-copy-reuse-01/build-race.sh"
+        ],
+        "status": "PASS",
+        "elapsed_seconds": 13.309139370918274,
+        "returncode": 0,
+        "pid": 334162,
+        "cleanup": {
+          "term_sent": false,
+          "kill_sent": false,
+          "leader_reaped": true
+        }
+      },
+      {
+        "name": "race-fast-0",
+        "argv": [
+          "python3",
+          "/var/tmp/capstone-native-task-scratch/native-only-cleanup-01/tools/capstone/runtime/virtual/tests/native-task/run-musl-io.py",
+          "race",
+          "--qemu",
+          "/var/tmp/capstone-native-task-scratch/diagnostic-platform/qemu-system-riscv64",
+          "--images",
+          "/var/tmp/capstone-native-task-scratch/native-copy-reuse-01/race-images",
+          "--firmware",
+          "/var/tmp/capstone-native-task-scratch/diagnostic-platform/opensbi-riscv64-generic-fw_dynamic.bin",
+          "--probes",
+          "/var/tmp/capstone-native-task/io-probes",
+          "--out",
+          "/var/tmp/capstone-native-task-scratch/native-copy-reuse-01/race-fast-0",
+          "--fast",
+          "0"
+        ],
+        "status": "PASS",
+        "elapsed_seconds": 9.496944951126352,
+        "returncode": 0,
+        "pid": 337733,
+        "cleanup": {
+          "term_sent": false,
+          "kill_sent": false,
+          "leader_reaped": true
+        }
+      },
+      {
+        "name": "race-fast-1",
+        "argv": [
+          "python3",
+          "/var/tmp/capstone-native-task-scratch/native-only-cleanup-01/tools/capstone/runtime/virtual/tests/native-task/run-musl-io.py",
+          "race",
+          "--qemu",
+          "/var/tmp/capstone-native-task-scratch/diagnostic-platform/qemu-system-riscv64",
+          "--images",
+          "/var/tmp/capstone-native-task-scratch/native-copy-reuse-01/race-images",
+          "--firmware",
+          "/var/tmp/capstone-native-task-scratch/diagnostic-platform/opensbi-riscv64-generic-fw_dynamic.bin",
+          "--probes",
+          "/var/tmp/capstone-native-task/io-probes",
+          "--out",
+          "/var/tmp/capstone-native-task-scratch/native-copy-reuse-01/race-fast-1",
+          "--fast",
+          "1"
+        ],
+        "status": "PASS",
+        "elapsed_seconds": 9.947250429075211,
+        "returncode": 0,
+        "pid": 337745,
+        "cleanup": {
+          "term_sent": false,
+          "kill_sent": false,
+          "leader_reaped": true
+        }
+      },
+      {
+        "name": "race-file-fast-0",
+        "argv": [
+          "python3",
+          "/var/tmp/capstone-native-task-scratch/native-only-cleanup-01/tools/capstone/runtime/virtual/tests/native-task/run-musl-io.py",
+          "race-file",
+          "--qemu",
+          "/var/tmp/capstone-native-task-scratch/diagnostic-platform/qemu-system-riscv64",
+          "--images",
+          "/var/tmp/capstone-native-task-scratch/native-copy-reuse-01/race-images",
+          "--firmware",
+          "/var/tmp/capstone-native-task-scratch/diagnostic-platform/opensbi-riscv64-generic-fw_dynamic.bin",
+          "--probes",
+          "/var/tmp/capstone-native-task/io-probes",
+          "--out",
+          "/var/tmp/capstone-native-task-scratch/native-copy-reuse-01/race-file-fast-0",
+          "--fast",
+          "0"
+        ],
+        "status": "PASS",
+        "elapsed_seconds": 9.994893449125811,
+        "returncode": 0,
+        "pid": 337841,
+        "cleanup": {
+          "term_sent": false,
+          "kill_sent": false,
+          "leader_reaped": true
+        }
+      },
+      {
+        "name": "race-file-fast-1",
+        "argv": [
+          "python3",
+          "/var/tmp/capstone-native-task-scratch/native-only-cleanup-01/tools/capstone/runtime/virtual/tests/native-task/run-musl-io.py",
+          "race-file",
+          "--qemu",
+          "/var/tmp/capstone-native-task-scratch/diagnostic-platform/qemu-system-riscv64",
+          "--images",
+          "/var/tmp/capstone-native-task-scratch/native-copy-reuse-01/race-images",
+          "--firmware",
+          "/var/tmp/capstone-native-task-scratch/diagnostic-platform/opensbi-riscv64-generic-fw_dynamic.bin",
+          "--probes",
+          "/var/tmp/capstone-native-task/io-probes",
+          "--out",
+          "/var/tmp/capstone-native-task-scratch/native-copy-reuse-01/race-file-fast-1",
+          "--fast",
+          "1"
+        ],
+        "status": "PASS",
+        "elapsed_seconds": 9.446599509101361,
+        "returncode": 0,
+        "pid": 337909,
+        "cleanup": {
+          "term_sent": false,
+          "kill_sent": false,
+          "leader_reaped": true
+        }
+      }
+    ]
+  },
+  "race_cases": {
+    "pipe_per_fast_setting": 41,
+    "regular_file_per_fast_setting": 41,
+    "fast_settings": [
+      0,
+      1
+    ],
+    "total": 164,
+    "verdict": "OVERALL OK for all four runs, including safe and deliberately broken controls"
+  },
+  "measurement": {
+    "status": "PASS",
+    "inputs": {
+      "qemu": "c6681ec8a8ff704b297ec3eafceb13b2fe9c1c61c7a65ed95304bd5dbe5183eb",
+      "firmware": "2335a28682ddf65e46c1f492632c2cb026efcb2271caf544a3f7ddc858b03e02",
+      "plugin": "a1883e39c6a1d4b1529081fda06ae7c7bba217a61e134041f9ef14ecf04f6ebc",
+      "baseline": {
+        "Image": "18efabfd6ad7506907e8ab6074a4b75dbf395cc5c5adb91f0e862271260fcdd7",
+        "System.map": "fb99e9f2663d1ce7a57b65b56af9fc94d345c0761fc340a888cd27fc4d69f3e2",
+        "rootfs.ext2": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845"
+      },
+      "candidate": {
+        "Image": "81ef5bd85a8c2f0882202ec0e0e6ba04c61ee6b79c7cb7f99d1de06750b6deae",
+        "System.map": "31e8d157348525e6e86be4b72504867397a687a616a416cf6a7114c67325a288",
+        "rootfs.ext2": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845"
+      },
+      "programs": {
+        "exchange": "fff0b2db971ee99f5428392496052534932fb3d5ae55ff60bcc2b79c3d49a58e",
+        "direct": "95282a413f67d4f815e45b3c3675db34588b9faa74a00182e077247fbdb67748"
+      }
+    },
+    "rows": [
+      {
+        "fast": 0,
+        "run": 0,
+        "version": "baseline",
+        "arm": "exchange",
+        "calls": 512,
+        "total_attempts": 12181079,
+        "counts": {
+          "kernel": 9561210,
+          "other": 2619869
+        }
+      },
+      {
+        "fast": 0,
+        "run": 0,
+        "version": "baseline",
+        "arm": "direct",
+        "calls": 512,
+        "total_attempts": 7720242,
+        "counts": {
+          "kernel": 7427143,
+          "other": 293099
+        }
+      },
+      {
+        "fast": 0,
+        "run": 1,
+        "version": "candidate",
+        "arm": "exchange",
+        "calls": 512,
+        "total_attempts": 11993070,
+        "counts": {
+          "kernel": 9373201,
+          "other": 2619869
+        }
+      },
+      {
+        "fast": 0,
+        "run": 1,
+        "version": "candidate",
+        "arm": "direct",
+        "calls": 512,
+        "total_attempts": 7532259,
+        "counts": {
+          "kernel": 7239160,
+          "other": 293099
+        }
+      },
+      {
+        "fast": 0,
+        "run": 2,
+        "version": "candidate",
+        "arm": "direct",
+        "calls": 512,
+        "total_attempts": 7525904,
+        "counts": {
+          "kernel": 7232805,
+          "other": 293099
+        }
+      },
+      {
+        "fast": 0,
+        "run": 2,
+        "version": "candidate",
+        "arm": "exchange",
+        "calls": 512,
+        "total_attempts": 11999518,
+        "counts": {
+          "kernel": 9379649,
+          "other": 2619869
+        }
+      },
+      {
+        "fast": 0,
+        "run": 3,
+        "version": "baseline",
+        "arm": "direct",
+        "calls": 512,
+        "total_attempts": 7714079,
+        "counts": {
+          "kernel": 7420980,
+          "other": 293099
+        }
+      },
+      {
+        "fast": 0,
+        "run": 3,
+        "version": "baseline",
+        "arm": "exchange",
+        "calls": 512,
+        "total_attempts": 12187422,
+        "counts": {
+          "kernel": 9567553,
+          "other": 2619869
+        }
+      },
+      {
+        "fast": 1,
+        "run": 0,
+        "version": "baseline",
+        "arm": "exchange",
+        "calls": 512,
+        "total_attempts": 12181124,
+        "counts": {
+          "kernel": 9561255,
+          "other": 2619869
+        }
+      },
+      {
+        "fast": 1,
+        "run": 0,
+        "version": "baseline",
+        "arm": "direct",
+        "calls": 512,
+        "total_attempts": 4698023,
+        "counts": {
+          "kernel": 4404924,
+          "other": 293099
+        }
+      },
+      {
+        "fast": 1,
+        "run": 1,
+        "version": "candidate",
+        "arm": "exchange",
+        "calls": 512,
+        "total_attempts": 11993341,
+        "counts": {
+          "kernel": 9373472,
+          "other": 2619869
+        }
+      },
+      {
+        "fast": 1,
+        "run": 1,
+        "version": "candidate",
+        "arm": "direct",
+        "calls": 512,
+        "total_attempts": 4692794,
+        "counts": {
+          "kernel": 4400193,
+          "other": 292601
+        }
+      },
+      {
+        "fast": 1,
+        "run": 2,
+        "version": "candidate",
+        "arm": "direct",
+        "calls": 512,
+        "total_attempts": 4688047,
+        "counts": {
+          "kernel": 4395446,
+          "other": 292601
+        }
+      },
+      {
+        "fast": 1,
+        "run": 2,
+        "version": "candidate",
+        "arm": "exchange",
+        "calls": 512,
+        "total_attempts": 11997908,
+        "counts": {
+          "kernel": 9378039,
+          "other": 2619869
+        }
+      },
+      {
+        "fast": 1,
+        "run": 3,
+        "version": "baseline",
+        "arm": "direct",
+        "calls": 512,
+        "total_attempts": 4688062,
+        "counts": {
+          "kernel": 4395461,
+          "other": 292601
+        }
+      },
+      {
+        "fast": 1,
+        "run": 3,
+        "version": "baseline",
+        "arm": "exchange",
+        "calls": 512,
+        "total_attempts": 12187540,
+        "counts": {
+          "kernel": 9567671,
+          "other": 2619869
+        }
+      }
+    ],
+    "means": [
+      {
+        "fast": 0,
+        "arm": "exchange",
+        "attempts_per_call": {
+          "baseline": {
+            "kernel": 18680.4326171875,
+            "other": 5116.931640625
+          },
+          "candidate": {
+            "kernel": 18313.330078125,
+            "other": 5116.931640625
+          }
+        },
+        "kernel_reduction_percent": 1.9651715063854325
+      },
+      {
+        "fast": 0,
+        "arm": "direct",
+        "attempts_per_call": {
+          "baseline": {
+            "kernel": 14500.1201171875,
+            "other": 572.458984375
+          },
+          "candidate": {
+            "kernel": 14132.7783203125,
+            "other": 572.458984375
+          }
+        },
+        "kernel_reduction_percent": 2.5333707162851438
+      },
+      {
+        "fast": 1,
+        "arm": "exchange",
+        "attempts_per_call": {
+          "baseline": {
+            "kernel": 18680.591796875,
+            "other": 5116.931640625
+          },
+          "candidate": {
+            "kernel": 18312.0224609375,
+            "other": 5116.931640625
+          }
+        },
+        "kernel_reduction_percent": 1.9730067438182397
+      },
+      {
+        "fast": 1,
+        "arm": "direct",
+        "attempts_per_call": {
+          "baseline": {
+            "kernel": 8594.1259765625,
+            "other": 571.97265625
+          },
+          "candidate": {
+            "kernel": 8589.4912109375,
+            "other": 571.486328125
+          }
+        },
+        "kernel_reduction_percent": 0.05392945876799837
+      }
+    ],
+    "limitations": [
+      "System-wide attempted guest instructions inside marked read/write loops, not cycles or FPGA performance.",
+      "Two repeats per kernel/route/ABI, kernel ABBA order; fixed 1 MiB resident-file copy in 4 KiB chunks.",
+      "Setup and byte-for-byte output validation are outside the windows; loop/check overhead is inside.",
+      "Tracing disabled. Fast=0 forces generic dispatcher; fast=1 exercises existing fast-path reuse.",
+      "The outer quick gate must enforce the shared 300-second deadline. No full SPEC claim."
+    ]
+  },
+  "adapter_text_bytes": {
+    "baseline": 87791,
+    "candidate": 87805
+  },
+  "error_semantics": "Removes temporary scratch allocation failure (CU_REFUSED, mapped to EFAULT by generic dispatcher); all owner/access/epoch and partial-result handling stays in place.",
+  "design_review": "Gemini Argon reviewed the proposed slice. Root verified the remaining service-header call paths. No same-session nested scratch use is admitted by the current synchronous task contract.",
+  "evidence_root_remote": "p12:/var/tmp/capstone-native-task-scratch/native-copy-reuse-01",
+  "evidence_root_local": "/tmp/capstone/native-task/native-copy-reuse-01/evidence",
+  "evidence_sha256": {
+    "plan.json": "8ff35b468c556492ff0a2da38c5e12118d4281b52f5829c325813c5bc9bbaff8",
+    "race-plan.json": "3ed545affb37c49efab2e96cc6050e74c56ca0f5dcef368df10306b62b864872",
+    "result/summary.json": "1039ada985bb15318a042c7c2fd022c79a092a4c7217969258bdf1c58ea4bb70",
+    "race-result/summary.json": "4e76b58eb3b27f1539b0cfd94ef53b1b795197498f50e41ad7a380f20703e88c",
+    "measurement/summary.json": "38f049879457d3dea51509db8d01f674cb8b2f28f53d6f8e5d526079a4e4ac32",
+    "gcc-validation.json": "129509748289aea357a33493e589169725749b621444fd4e4cd23bb3baa7aa64",
+    "artifact-hashes.json": "949771a368cb572c8a8ef716e2c1590acae262ac5bc9adb969a995879d2580ed"
+  },
+  "profile_sha256": {
+    "measurement/fast-0-0-baseline/profile/window-0.tsv": "22e9b97f26469943291648140d57322b9e1167c6f9ffcbb9e858899d1c4704aa",
+    "measurement/fast-0-0-baseline/profile/window-1.tsv": "ccc6598785ea3ab97b8769d88dcb7ba6a9f5544201eb095099454ada4902347c",
+    "measurement/fast-0-1-candidate/profile/window-0.tsv": "39a87efd8e04b2f5362a7b7157e0000fffa1fb18a78b53c56819637ba6ee1848",
+    "measurement/fast-0-1-candidate/profile/window-1.tsv": "867cb6530f9b5af487a08bcd8cc3d1740b8a28b45134760e81283cffb84bd380",
+    "measurement/fast-0-2-candidate/profile/window-0.tsv": "b527c0695d4bcb95f1c65f78cc4f4a22e02506d0f4f14d18026a1e0cdced9dd8",
+    "measurement/fast-0-2-candidate/profile/window-1.tsv": "774ddf92c98e4a7802c4867c48d778bc0adfab5dc98a96c39d06f8ecbf9f6c98",
+    "measurement/fast-0-3-baseline/profile/window-0.tsv": "2e48135f31ce28e3bbd72ddcde2bbb2a1d03a41f21a298fc506648e067b684b1",
+    "measurement/fast-0-3-baseline/profile/window-1.tsv": "f2ea27ac703b8799fad9c35a7941737cabe51179b8a2de9aaf8d15c804e4fca0",
+    "measurement/fast-1-0-baseline/profile/window-0.tsv": "99313bc6a2273925b880b0f99e05d7a278fb1fd37ba872cda7d6a437e1d063a9",
+    "measurement/fast-1-0-baseline/profile/window-1.tsv": "fd57fe2208f488077fec0de8048d6ee72dc70b894c39540e412f9d91a7eaee64",
+    "measurement/fast-1-1-candidate/profile/window-0.tsv": "8ea73b4710fb2276a9b2cf0c64c88001152813fa577b78caaae71caca9a3d446",
+    "measurement/fast-1-1-candidate/profile/window-1.tsv": "23830645ccfee2c9827fbb14da4280539b3a69b7a3cee7ac1afddb36091b9f0b",
+    "measurement/fast-1-2-candidate/profile/window-0.tsv": "a4dd0d81ff08e62b807a865bfe673a9a1233e5ba02fa476a883e79a17f3e17ee",
+    "measurement/fast-1-2-candidate/profile/window-1.tsv": "59cc40dc7d6f135deef4435c70cb3dbd379667b7455ba76e550c9dc49288639d",
+    "measurement/fast-1-3-baseline/profile/window-0.tsv": "99242709cdb8655007583417d589b6576cc10e41aa8fd1037297043770c643e1",
+    "measurement/fast-1-3-baseline/profile/window-1.tsv": "5882ff1e4a9dbb976047219c5cf9feb4cd0f4d42a4b3ca2f96cbcb85cf812e58"
+  },
+  "race_verdict_sha256": {
+    "race-fast-0": "13861ec396c4ddbd5da60ff06210ece59c2bffaf761d6460116f97a9d59054d8",
+    "race-fast-1": "13861ec396c4ddbd5da60ff06210ece59c2bffaf761d6460116f97a9d59054d8",
+    "race-file-fast-0": "13861ec396c4ddbd5da60ff06210ece59c2bffaf761d6460116f97a9d59054d8",
+    "race-file-fast-1": "13861ec396c4ddbd5da60ff06210ece59c2bffaf761d6460116f97a9d59054d8"
+  },
+  "limitations": [
+    "System-wide attempted QEMU guest instructions inside the marked copy loop; not hardware cycles.",
+    "Two repeats per kernel/ABI/fast setting, fixed 1 MiB resident-file copy in 4 KiB chunks.",
+    "GCC official output checked; no GCC performance measurement.",
+    "No complete SPEC or FPGA qualification on this new kernel.",
+    "General exchange metadata, vector-provider and spawn/wait copy allocation paths are outside this slice."
+  ]
+}
