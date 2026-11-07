@@ -127,3 +127,13 @@ against c3f (out-ga2-b3, the same board and bitstream).
 - **The earlier reading is withdrawn:** "a per-step cost … like a walk over the pinned pages" (the Result above) was a
   hypothesis, and it is wrong: the cost is per context exit, not per step. perlbench runs 318 contexts with a 3.2 MB
   image each, which is the shape of its +5,431 s.
+
+## RETRACTION (7 Nov, 19:3x): the digest is not the 440 s
+
+The section above ("The 440 s is found") is withdrawn for gcc. Board 2 ran the stage without the digest
+(results/2026-11-07-nodiag): 4,518.6 s, outside 1,083.5 s, ucyc 19.18 G cycles (unify 19.26 G, c3f 9.84 G). The digest
+was removed (`@@NODIAG unset`, no `exit image` line) and took 92 s with it, about what 1.35 G instructions cost on the
+board. It was never in ucyc: the digest runs once, after the last CV_STEP, and ucyc only counts time between two
+steps. The reasoning matched the QEMU launcher count to the board's per-step window without checking that they were
+the same window. The per-step excess, 3.2 M cycles against 0.87 M, is UNRESOLVED again; QEMU does not show it (its
+ucyc per step is 0.1 M for both stacks).

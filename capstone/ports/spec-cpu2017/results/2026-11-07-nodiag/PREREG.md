@@ -25,3 +25,12 @@ ends with DONE: gcc train -rgz-nd, then perlbench -rg-nd.
 **What would refute what.** N1 holding with N2 failing: perlbench's excess outside time has a second cause beyond the
 digest (its exits differ from gcc's: 316 contexts, delegated system calls). N1's outside bound failing: the digest
 was not the whole of gcc's 440 s.
+
+## Result, gcc (7 Nov 19:25): 4,518.6 s, N0 holds, N1 FAILS
+
+- **N0 holds:** rc 0, specdiff 1/1 PASS, outputs equal the twin's, control passes; @@NODIAG reads unset; no `exit image` line.
+- **N1 FAILS:** inside 3,435.1 s (13.426 G, +0.1 % on unify's 3,432.1 s: holds); outside 1,083.5 s against ≤ 900 s;
+  run 4,518.6 s against ≤ 4,253.3 s. 1.287× Plain on board 3's 3,510.0 s.
+- Removing the digest saved 92 s of unify's 4,611.0 s. ucyc is unchanged (19.18 G against 19.26 G cycles; c3f 9.84 G),
+  so the digest was not the per-step excess (results/2026-11-06-unify, RETRACTION).
+- perlbench -rg-nd runs next on board 2. There the digest ran at each of 318 context exits; N2 is still open.
