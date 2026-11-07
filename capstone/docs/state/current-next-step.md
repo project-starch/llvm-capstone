@@ -10,11 +10,13 @@ Native spawn/wait lifecycle gates, both confined hush ABI modes and the new
 time/directory/duplication services now pass their focused gates. Complete the
 original Perl invocations and official comparator on the matched frozen kernel.
 The private temporary-directory alias and focused original perlio test now
-pass. Resolve the separate
-[Perl pointer-serialization blocker](../../runtime/virtual/tests/native-task/spec-perl-pack-blocker.json).
-A genuine interpreter repair needs a new versioned src.alt package; the old
-frozen package, original test inputs and comparator must remain intact. Requalify the
-full ten-entry C-port gate on the final frozen kernel before FPGA acceptance.
+pass. The new [Perl provenance port](../../ports/perl/provenance/README.md) now
+passes the unchanged pack test and focused native/sanitizer/error-path checks.
+Complete its running original SPEC workload and official comparison, then combine
+that result with the nine verified non-Perl entries on the same final kernel.
+Keep the old frozen package, original inputs and comparators intact. The new
+versioned src.alt and fresh objects have separate identities. Require the full
+ten-entry C-port gate before FPGA acceptance.
 [Required process gates](../plans/native-linux-task-integration.md#native-subprocess-closure).
 The outer SPEC wrapper hides test exceptions, so exit zero is insufficient:
 retain every original invocation and official comparator. Do not claim the
