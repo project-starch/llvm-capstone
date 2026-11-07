@@ -40,3 +40,14 @@ an hour earlier.
 | Y0 | as X0, for perlbench (specdiff 2/2, 0 FAILED); exhpm lines for all 318 contexts |
 | Y1 | run within ±2 % of 33,667.7 s |
 | Y2 | ≥ 30 % of the off-CSRUNV samples in the launcher's user code or the delegated system calls' kernel paths |
+
+## Result, gcc on board 3 (8 Nov 04:58): VOID, the core wedged near the command's end
+
+- The control rungs passed with module 16d49244392d22c2, and the control context printed its exhpm line
+  (k_in 2,289,548 instructions over a 13.4 M-cycle kernel window: IPC 0.17; between steps 1.12 M in 9.15 M: IPC 0.12).
+- The spec step loaded cvprof (`cvprof: loaded`, `@@CVPROF 1`); the stage's heartbeats ran 116 times, about 4,600 s,
+  with no new stage output, then stopped. The driver read a wedged core: trap log {seen, mcause} 0x85 (load access
+  fault), mepc 0x3fba60df8c (domain VA). No exhpm line for gcc's context, no cvprof dump. **X0 FAILS; X1-X3 VOID.**
+- The wedge is not explained. It came at about the time gcc's command ends (4,253 s on c3f). Two variables changed
+  at once (the module and cvprof). Board 2's perlbench run with both instruments has passed many context exits with
+  cvprof enabled (exhpm lines at 2,621 s), so neither is shown to break a context exit; a split rerun is owed.
