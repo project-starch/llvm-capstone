@@ -355,8 +355,8 @@ make -C "$KERNEL_BUILD" ARCH=riscv CROSS_COMPILE="$CROSS_COMPILE" olddefconfig
 make -C "$KERNEL_BUILD" ARCH=riscv CROSS_COMPILE="$CROSS_COMPILE" -j12 Image
 ```
 
-The installer applies the architecture and `kernel-native-files.patch` patches,
-then stages matching runtime sources
+The installer applies all six native task, files, process, spawn, directory and
+time patches, then stages matching runtime sources
 as a built-in driver. It enables `RISCV_CAPSTONE_TASK`, disables SMP and selects
 generic virtual CPU accounting with forced user context tracking. The Kconfig
 option defaults off and execution additionally requires `capstone_vm.native_task=1`.
