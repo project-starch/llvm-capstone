@@ -38,3 +38,19 @@ same-size request takes it back zeroed; 512 entries.
 Correction (7 Nov, before any board call of these runs): the first version of this paragraph, pushed in c349058d7fd8,
 said c3f and c3g do not use such a cache. They do (CAPSTONE_HEAP_ARENA_CACHE); the claim was written from the
 switch's name without reading the SDK's build flags.
+
+## Result, gcc (8 Nov 01:34): Plain with the mapping cache is 6.7 % FASTER; R2 FAILS (the band was too narrow); gcc c3f restated at 1.296×
+
+Board 1, C.5a (the list moved to perf/b1q, results/2026-11-07-plainnc), rc 0, specdiff 1/1 PASS.
+
+| Plain gcc train | time | minor faults | user / sys | maxrss |
+|---|---|---|---|---|
+| plain-rv64 (board 1, 1 Nov; board 3 fill 3,510.0 s) | 3,515.5 s | 89,080 (board 3: 88,982) | 2,864 / 266 s | 98,868 kB |
+| plain-rv64r, the cache | **3,280.9 s** (0.933×) | 36,192 | 2,909 / 60.5 s | 146,688 kB |
+
+- **R2 FAILS:** −6.7 %, outside the −4 %…+1 % band. The cache removes 59 % of Plain's minor faults and 77 % of its
+  system time; it holds about 48 MB more.
+- **The baseline that is fair to c3f and c3g is this one:** both keep released group mappings in the context
+  (CAPSTONE_HEAP_ARENA_CACHE, the same bounds). Against it **gcc train c3f is 1.296× Plain** (4,253.3 / 3,280.9),
+  not 1.212×. The reviewer's point holds, and it costs 8.4 points on gcc.
+- perlbench plain-rv64r is running on board 1 now; its result restates perlbench the same way.
