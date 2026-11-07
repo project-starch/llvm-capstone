@@ -1,3 +1,33 @@
+## Native file metadata qualified
+
+The native-I/O SDK now routes `newfstatat` and `fstat` through tagged registers
+when launch advertises `CAPSTONE_LAUNCH_NATIVE_STAT`. A specialised handler
+avoids the exchange round and generic request snapshot; both transports share
+one confined Linux path/stat provider and the existing 128-byte stat conversion.
+Pathnames are snapshotted byte by byte through checked accesses up to the first
+NUL, preserving tightly bounded strings. Output rights, owner/lifetime checks,
+fd grants and the existing supported flags/path policy remain enforced.
+
+Enable `capstone_vm.native_stat=1` with `capstone_vm.native_io=1` and a rebuilt
+SDK/application. The new flag defaults off. The specialised path uses the
+existing `native_fast=1` default; the checked generic register route remains
+available with fast dispatch disabled. Older SDKs disable direct routing for
+unknown feature bits, so do not enable this feature for pinned older SDKs when
+preserving their direct-I/O/lock performance matters.
+
+SQLite speedtest1 size 1 moves 2,922 newfstatat and 1,463 fstat calls to registers.
+With native locks enabled in both arms, two samples per arm in A-B-B-A order
+reduce mean kernel instruction attempts by 15.36% and total attempts
+by 10.50%. Every diagnostic/profile run matches all 32 reference phases.
+Build, metadata/lock tests, SQLite, regressions and original GCC comparison pass
+in 205.9s; the combined-feature I/O gate and reversed measurement repeat
+pass in 90.6s. Each gate has one 300-second deadline.
+[Exact evidence and limitations](../../runtime/virtual/tests/native-task/native-stat-qualification.json).
+
+No ISA or QEMU change is required. These are incremental QEMU instruction
+results, not FPGA timings or a new full-SPEC verdict. Exchange compatibility
+remains. Next candidate: scalar `lseek`, still 2,283 exchange calls in SQLite.
+
 ## Native POSIX lock path qualified
 
 Musl now sends F_GETLK/F_SETLK/F_SETLKW directly through the register ABI
