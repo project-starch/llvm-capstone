@@ -24,6 +24,41 @@ in this SQLite census. Next measure pathname byte counts and repeated checked-co
 setup, then prototype a bounded checked-string operation. Clock_gettime and bounded
 vectors remain separate candidates; arbitrary iovec import remains unresolved.
 
+## Next narrow migration: basic clock transport
+
+Design review recommends a routing-only change before the checked-string work:
+add default-off `native_clock` and launch feature 256 (base IO bit required;
+bit 32 remains reserved). Route libc `clock_gettime` through the existing
+checked register dispatcher. Keep the clock ID scalar, preserve the output
+capability, zero unused arguments, and reuse the existing once-only completion
+envelope. Rename the shared libc file-service wrapper to service wrapper if
+needed; do not add a clock-specific fast handler or a one-caller provider helper.
+This migration is not implemented yet.
+
+Preserve `dl_clock` precedence and the native launcher's zero tick rate, which
+keeps approximate launch-time/rdtime clock synthesis disabled. The latest SQLite
+census contains 65 successful clock calls, not unsupported-clock errors.
+
+The inherited provider supports only CLOCK_REALTIME and CLOCK_MONOTONIC. It
+preflights output authority before clock-ID validation: an unsupported ID with
+bad output yields EFAULT, unlike Linux's ID-first validation. Its monotonic
+provider lacks the time-namespace offset, while absolute monotonic sleep already
+uses namespace conversion. Qualify this transport migration only in the initial
+time namespace. Correct namespace behavior and error ordering in a separate
+shared-provider change; do not present transport parity as complete Linux parity.
+
+Tests should assert the 16-byte RV64 timespec layout; validate timestamps and
+monotonic nondecrease (not realtime nondecrease); cover exact bounds, output
+canaries, write-only/read-only/short/NULL/forged capabilities, invalid IDs and
+invalid-ID-plus-invalid-output precedence, malformed scalars and unused tags.
+Preserve existing owner, replay and checked-copy controls. Rejections before
+copy must not modify output; an actual partial copy fault need not be atomic.
+Exercise feature off/on and native_fast off/on with a rebuilt SDK. Accept launch
+masks 257/479, reject 256 without IO, reserved 33 and unknown 513. Compare matched
+SQLite artifacts in A-B-B-A order, retaining all 32 oracles and GCC regression;
+expect 65 calls to leave exchange, but verify the fresh census. Each feedback
+gate includes build and lock wait within one 300-second deadline.
+
 ## Next milestone: bounded checked-string snapshots
 
 Measure pathname byte counts and checked-copy setup separately before claiming
