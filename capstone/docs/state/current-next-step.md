@@ -11,15 +11,24 @@ pointer tables doubled from 2,048 to 4,096 bytes. Separate fault-ahead and
 validated-VMA controls save only 0.269% and 0.984% total attempts respectively.
 [Mechanism evidence](../../runtime/virtual/tests/native-task/gcc-memory-mechanisms.json).
 
-Next correlate these allocation sites with mapping creation/release, then test
-one allocator grouping/retention change with capability bounds/revocation intact.
-Do not infer all extra mappings come from those two sites. In parallel only if
-authorized, audit every unpinned use of arena pages/frame arrays before omitting
-their allocation. Keep each intervention separate and require exact GCC output,
-existing safety checks and a <=300s feedback gate. The fault options are not
-new defaults; their broader safety/workload qualification remains separate.
-Do not infer that all 14.698M extra kernel attempts are removable. Tag clearing
-and ordinary Linux page accounting are distinct from obsolete pinning work.
+The next implementation must be general kernel-runtime work with unchanged GCC,
+musl and application binaries. The source study finds an unread production arena
+ID xarray (test-only lookup) and unnecessary unpinned page/frame storage; preserve
+registration IDs and adapt touch/error-unwind consumers before removing storage.
+More substantially, current unpinned read faults on writable VMAs request WRITE,
+materializing private dirty pages. Study actual-access demand faults without
+changing eager bootstrap or weakening grants, COW, copy holds or revocation.
+
+First compare identical map/touch/unmap event streams to distinguish greater
+application memory volume from higher runtime cost per event. Read-first and
+read-then-write workloads are both necessary: shared-zero-page reads may save
+allocation but introduce later COW faults. Keep xarray removal, array removal
+and access-direction changes separate; never add their estimated gains.
+[Source audit, invariants and experimental order](../plans/2026-11-03-boundary-north-star.md#7-current-kernel-runtime-study-2026-11-08).
+No runtime change is qualified by this study. Keep the first feedback gate within
+300 seconds, then require relevant fault/lifetime/race failures and exact GCC
+output before enabling a candidate. Full direct-trap integration and dead-namespace
+teardown require separate architectural proofs; neither is a free cleanup.
 The checked-string candidate below remains relevant to metadata-heavy workloads,
 not a demonstrated major GCC win.
 
