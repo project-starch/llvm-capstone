@@ -3,14 +3,13 @@
 #include <linux/module.h>
 #include <linux/of.h>
 #include <linux/cpu.h>
-#if defined(CONFIG_RISCV_CAPSTONE_TASK) && !defined(MODULE)
+#if !defined(CONFIG_RISCV_CAPSTONE_TASK) || defined(MODULE)
+#error "The Capstone adapter requires built-in CONFIG_RISCV_CAPSTONE_TASK"
+#endif
 #define CV_TASK_BACKEND 1
 #include <asm/capstone_task.h>
-#endif
 
 static bool copyable_exact_bounds;
-#include <linux/miscdevice.h>
-#include <linux/dma-mapping.h>
 #include <linux/fs.h>
 #include <linux/mm.h>
 #include <linux/version.h>
@@ -151,7 +150,6 @@ struct context {
     struct mm_struct *mm;
     unsigned long *frame, *table;
     phys_addr_t table_pa;   /* the table's physical root (select_root, the frame); from CMA when it is above the buddy limit */
-    dma_addr_t table_dma;   /* nonzero only for a CMA table: the handle dma_free_coherent needs */
     struct cv_thread *main_thread;
     struct list_head threads;
     u64 next_thread;
@@ -183,12 +181,10 @@ struct context {
 #endif
     /* The image file, writers denied from CV_IMAGE until release. */
     struct file *image;
-    /* Private native-task driver state; never copied from the trampoline. */
+    /* Private native-task driver state; never imported from scalar userspace. */
     unsigned long dom_meta, dom_exchange, dom_exchange_bytes;
     struct cv_step dom_step;
     pid_t dom_pid;
-    bool dom_protect_pending;
-    int dom_fd;
     struct dom_delegate *dom_delegate;
     struct cn_context *native_context;
     struct ns_session *native_session;
@@ -480,58 +476,6 @@ static unsigned long node_free_count(const struct context *c)
 static unsigned long node_available(const struct context *c)
 { return node_capacity(c) - c->table[1] + node_free_count(c); }
 
-/* The flat table is one physically contiguous allocation: select_root() publishes
- * virt_to_phys(c->table) into CSR 0x5c1, and QEMU's flat preflight requires the whole
- * capacity*16 extent to be range_ok from that physical root, so vmalloc will not do.
- * __GFP_RETRY_MAYFAIL tries hard without inviting the OOM killer; failing here is a clean
- * ENOMEM at context creation, which is strictly better than the paged path's failure
- * part-way through a running domain. */
-/* ids20: a table above the buddy allocator's largest block (order 10, 4 MiB = 262,144 records on these kernels)
- * comes from CMA through the misc device (dma_alloc_coherent zeroes it; dma == phys without an IOMMU). The kernel
- * needs a CMA area at least that large: the board and its twin boot with cma=256M.
- * The largest buddy order is MAX_ORDER - 1 before 6.4 and MAX_ORDER from 6.4 on, which made MAX_ORDER inclusive
- * (board 6.4.14 mmzone.h: MAX_ORDER 10, MAX_ORDER_NR_PAGES 1 << MAX_ORDER; twin 6.1: MAX_ORDER 11). Comparing against
- * MAX_ORDER on both sent a 4 MiB table, bitstream 3's 18-bit size, to CMA on the board only. */
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 4, 0)
-#define CV_BUDDY_MAX_ORDER MAX_ORDER
-#else
-#define CV_BUDDY_MAX_ORDER (MAX_ORDER - 1)
-#endif
-static struct miscdevice device;
-#if CAPSTONE_VM_INDEX_BITS == 25
-/* ids55 only: the first table this load allocates, and every failure up to a budget, are one KERN_EMERG line each,
- * so the module's first board boot records where its table came from (pa inside the CMA pool, linear or not) and why
- * an open failed. The other widths' objects are unchanged: their kits' parsers have never seen this line. */
-#define CV_TABLE_NOTE_BUDGET 4U
-static unsigned table_notes;
-#endif
-static unsigned long *node_new_flat_table(struct context *c)
-{
-    unsigned long *p;
-    if (get_order(CV_FLAT_BYTES) > CV_BUDDY_MAX_ORDER) {
-        p = dma_alloc_coherent(device.this_device, CV_FLAT_BYTES, &c->table_dma, GFP_KERNEL);
-        if (p) c->table_pa = (phys_addr_t)c->table_dma;
-    } else {
-        p = (void *)__get_free_pages(GFP_KERNEL | __GFP_ZERO | __GFP_RETRY_MAYFAIL, get_order(CV_FLAT_BYTES));
-        if (p) c->table_pa = virt_to_phys(p);
-    }
-    if (p) c->stats.node_bytes += CV_FLAT_BYTES;
-#if CAPSTONE_VM_INDEX_BITS == 25
-    if (table_notes < CV_TABLE_NOTE_BUDGET && (!p || !table_notes)) {
-        const char *from = get_order(CV_FLAT_BYTES) > CV_BUDDY_MAX_ORDER ? "CMA" : "buddy";
-        ++table_notes;
-        if (p)
-            pr_emerg("capstone_vm: flat table %lu records, %lu bytes, from %s, pa %llx, %s mapping\n",
-                     CV_FLAT_RECORDS, CV_FLAT_BYTES, from, (unsigned long long)c->table_pa,
-                     virt_addr_valid(p) && virt_to_phys(p) == c->table_pa ? "linear" : "NON-LINEAR");
-        else
-            pr_emerg("capstone_vm: flat table %lu records, %lu bytes, from %s: ALLOCATION FAILED\n",
-                     CV_FLAT_RECORDS, CV_FLAT_BYTES, from);
-    }
-#endif
-    return p;
-}
-
 /* Table pages grow with the identities minted, one per arena among them, so
  * they are charged to the process's memory cgroup like the arena records. */
 static unsigned long *node_new_page(struct context *c)
@@ -582,9 +526,8 @@ static void node_free_table(struct context *c)
 {
     if (!c->table) return;
     if (node_table_flat) {
-        if (c->table_dma) dma_free_coherent(device.this_device, CV_FLAT_BYTES, c->table, c->table_dma);
-        else free_pages((unsigned long)c->table, get_order(CV_FLAT_BYTES));
-        c->table = NULL; c->table_dma = 0;
+        free_pages((unsigned long)c->table, get_order(CV_FLAT_BYTES));
+        c->table = NULL;
         return;
     }
     for (unsigned i = 0; i < CAP_REV_TABLE_ROOT_ENTRIES; ++i) {
@@ -814,6 +757,8 @@ static bool arena_has_thread_frame(struct context *c, struct arena *a)
     return false;
 }
 
+#ifdef CV_RACE_TEST
+/* The native race fixture uses a private test frame; production has no user-frame entry. */
 /* A child start frame stays in the owning mm. Pin exactly one page so the
  * QEMU supervisor sees a stable physical frame and collection can include it.
  * Requiring page alignment also prevents a frame from straddling an unpinned
@@ -849,6 +794,8 @@ static int pin_thread_frame(struct context *c, unsigned long address,
     t->user_frame = true;
     return 0;
 }
+
+#endif
 
 static void drop_thread_frame(struct cv_thread *t)
 {
@@ -1666,52 +1613,13 @@ static int retire(struct context *c, struct arena *a, bool destroying)
     return 0;
 }
 
-#ifdef CV_GRANT_TXN
-struct grant_unmap_commit {
-    struct context *context;
-    struct arena *arena;
-    unsigned int inject;
-};
-static int grant_unmap_retire(void *opaque)
-{
-    struct grant_unmap_commit *tx = opaque;
-    if (tx->inject == CV_GRANT_INJECT_RETIRE) return -EIO;
-    return retire(tx->context, tx->arena, false);
-}
-static int grant_transaction(struct context *c,
-                             const struct cv_grant_transaction *r)
-{
-    typeof(capstone_grant_unmap) *unmap;
-    struct cv_thread *t;
-    struct arena *a;
-    struct grant_unmap_commit tx;
-    int error;
 
-    if (r->version != CV_GRANT_ABI_VERSION || r->flags || r->reserved ||
-        r->inject > CV_GRANT_INJECT_RETIRE) return -EINVAL;
-    if (!unpinned || r->operation != CV_GRANT_UNMAP) return -EOPNOTSUPP;
-    /* Running launchers own transport holds and an independent map registry.
-     * Until these migrate, only bootstrap test contexts may use this ioctl. */
-    list_for_each_entry(t, &c->threads, link)
-        if (t->started) return -EOPNOTSUPP;
-    a = xa_load(&c->ids, r->id);
-    if (!a || a->address != r->address || a->bytes != r->bytes ||
-        a->rx_bytes || a->ancestor_retired) return -EINVAL;
-    if (arena_has_thread_frame(c, a)) return -EBUSY;
-    unmap = symbol_get(capstone_grant_unmap);
-    if (!unmap) return -EOPNOTSUPP;
-    tx = (struct grant_unmap_commit){c, a, r->inject};
-    error = unmap(c->mm, a->address, a->bytes, grant_unmap_retire, &tx, r->inject);
-    symbol_put(capstone_grant_unmap);
-    return error;
-}
-#endif
 
 /* The meta block (reg 10 before the start) stays eager: asynchronous signal publication writes
  * it and cannot issue a sleeping CV_TOUCH. The main exchange (reg 11) is admitted through the
  * delegate dispatcher's prepare_write callback before every possible output span; worker
  * transports are touched at each attachment and held until detach/exit. In pinned mode a
- * launcher write must not populate an unheld page: exit_mm can free it before vm_release
+ * launcher write must not populate an unheld page: exit_mm can free it before context_destroy
  * sweeps its tags. In experimental unpinned mode arch_free_page clears released pages and
  * the raw copy hooks preserve tags across COW/migration. CV_TOUCH faults pages in without
  * retaining them. The launcher's cache records admission of the immutable main-exchange
@@ -2267,7 +2175,7 @@ static unsigned escape_prints;
  * work. 0644, so one boot can try both without a rebuild. */
 static bool diag_emerg;
 module_param(diag_emerg, bool, 0644);
-static unsigned eloop_prints, refuse_prints, childframe_prints, refused_prints;
+static unsigned eloop_prints, refused_prints;
 
 /* r12's reading: for `vm`, NONE of resolve()'s five refusal sites fired and the S-24 bound did --
  * the same address and cause 65 times with no change. So the !same deduction is refuted and the
@@ -3142,261 +3050,13 @@ static long cv_step_locked(struct context *c, struct cv_step *request, const uns
     return 0;
 }
 
-static long vm_ioctl(struct file *f, unsigned int op, unsigned long arg)
-{
-    struct context *c = f->private_data;
-    long rc = -EINVAL;
-    unsigned long flags;
-    if (current->mm != c->mm)
-        return -EPERM;
-    if (mutex_lock_interruptible(&vm_lock)) return -EINTR;
-#ifdef CV_GRANT_TXN
-    if (op == CV_GRANT_TRANSACTION) {
-        struct cv_grant_transaction r;
-        if (copy_from_user(&r, (void __user *)arg, sizeof(r))) rc = -EFAULT;
-        else rc = grant_transaction(c, &r);
-        goto out;
-    }
-#endif
-    if (op == CV_GLOBAL) {
-        struct context *other;
-        struct cv_global stats = {.nodes_allocated = allocated_total,
-            .collections = collections_total, .reclaimed = reclaimed_total};
-        list_for_each_entry(other, &contexts, link) {
-            node_stats(other);
-            stats.arenas += other->stats.arenas;
-            stats.pinned_pages += other->stats.pinned_pages;
-            stats.nodes_allocated += other->stats.nodes;
-            stats.nodes_live += other->stats.nodes_live;
-            stats.nodes_retired += other->stats.nodes_retired;
-            stats.collections += other->stats.collections;
-            stats.reclaimed += other->stats.reclaimed;
-            stats.node_capacity += other->stats.node_capacity;
-            stats.node_bytes += other->stats.node_bytes;
-            if (other->stats.arenas) ++stats.contexts;
-        }
-        stats.nodes_high_water = high_water;
-        rc = copy_to_user((void __user *)arg, &stats, sizeof(stats)) ? -EFAULT : 0;
-    } else if (op == CV_PROFILE) {
-        u64 profile = c->exact_bounds ? 0x100 : 0;
-        rc = copy_to_user((void __user *)arg, &profile, sizeof(profile)) ? -EFAULT : 0;
-    } else if (op == CV_IMAGE) {
-        /* Linux's own protection of a running executable (fs/exec.c):
-         * existing writers make it fail with ETXTBSY, later opens for
-         * writing fail with ETXTBSY until the context is released. It
-         * covers every writer only where the filesystem keeps one inode per
-         * file; elsewhere EOPNOTSUPP, and the launcher loads a sealed copy.
-         * Any file the caller can open for reading can be denied writers
-         * this way, without an execute permission (what MAP_DENYWRITE once
-         * allowed any process): acceptable while the device node is 0600. */
-        __s32 fd;
-        struct file *file;
-        if (copy_from_user(&fd, (void __user *)arg, sizeof(fd))) rc = -EFAULT;
-        else if (c->image) rc = -EBUSY;
-        else if (!(file = fget(fd))) rc = -EBADF;
-        else if (!S_ISREG(file_inode(file)->i_mode) || !(file->f_mode & FMODE_READ) ||
-                 (file->f_mode & FMODE_WRITE)) { fput(file); rc = -EINVAL; }
-        else if (!one_inode_per_file(file)) { fput(file); rc = -EOPNOTSUPP; }
-        else if ((rc = deny_write_access(file))) fput(file);
-        else c->image = file;
-    } else if (op == CV_REMAP_BEGIN || op == CV_REMAP_END) {
-        /* Never enter the old linear ownership-transfer transaction. */
-        rc = -EOPNOTSUPP;
-    } else if (op == CV_NODES) {
-        struct cv_nodes r;
-        struct cv_thread *t;
-        if (copy_from_user(&r, (void __user *)arg, sizeof(r))) { rc = -EFAULT; goto out; }
-        t = find_thread(c, r.thread);
-        if (!t || t->terminal) { rc = -ESRCH; goto out; }
-        if (r.available > CV_ID_RECORDS_MAX - CAP_REV_TABLE_RESERVE) { rc = -ENOMEM; goto out; }
-        if (node_max_records &&
-            r.available > node_max_records - CAP_REV_TABLE_RESERVE) { rc = -ENOMEM; goto out; }
-        rc = ensure_nodes(c, r.available + CAP_REV_TABLE_RESERVE);
-    } else if (op == CV_ADD) {
-        struct cv_map r;
-        struct cv_thread *t;
-        if (copy_from_user(&r, (void __user *)arg, sizeof(r))) { rc = -EFAULT; goto out; }
-        t = find_thread(c, r.thread);
-        if (!t || t->terminal) { rc = -ESRCH; goto out; }
-        rc = add(c, t, &r);
-        if (!rc && copy_to_user((void __user *)arg, &r, sizeof(r))) {
-            /* The caller did not receive the handle. Reclaim the entire
-             * context on close; never silently remove a delivered grant. */
-            t->terminal = true; rc = -EFAULT;
-        }
-    } else if (op == CV_THREAD_CREATE) {
-        struct cv_thread_create r;
-        struct cv_thread *t;
-        if (copy_from_user(&r, (void __user *)arg, sizeof(r))) { rc = -EFAULT; goto out; }
-        if (!r.frame || !find_arena(c, r.frame, PAGE_SIZE)) { rc = -EINVAL; goto out; }
-        if (arena_has_thread_frame(c, find_arena(c, r.frame, PAGE_SIZE))) {
-            if (++busy_frame_refusals <= CV_DIAG_BUDGET)
-                pr_emerg("capstone_vm: thread create refused: frame 0x%llx already backs a thread "
-                         "(refusals %lu)\n", (unsigned long long)r.frame, busy_frame_refusals);
-            rc = -EBUSY; goto out;
-        }
-        if (thread_count(c) >= 32) { rc = -ENOSPC; goto out; }
-        /* Refuse at CREATE, not at the join. The caller is itself a live frame -- it escaped to
-         * make this ioctl -- so on a one-slot machine the child could never be entered. Admitting
-         * it anyway is the illegible failure: contract.dom's `threads` busy-waits 100,000,000
-         * iterations on a value the child will never set and then fails an assertion that says
-         * nothing about slots, and `heap-threads` blocks in join for ever. -EBUSY here fails at the
-         * domain's own require(tid > 0, "thread create"), which a pre-registration can state and a
-         * judge can check. */
-        if (slot_live(NULL) + 1 > supervisor_slots) {
-            /* RETRACTED PREMISE (2026-10-18): this comment said the console "does not show
-             * KERN_INFO ... while the kernel's own pr_warn lines do appear". Wrong, and not mine
-             * to have repeated. The driver sets the console to level 1 before its first rung, so
-             * it shows KERN_EMERG only; the pr_warn lines that were cited as appearing were all
-             * printed during boot, before the quieting. r6/r7's absence of this line was the
-             * console level, not the printk level.
-             *
-             * This line is the must-fire positive control for the next boot, so it is budgeted
-             * rather than rate-limited: the launcher retries a refused create, and a time-based
-             * limiter would drop exactly the occurrence a judge reads. */
-            CV_EMIT_FIRST(refuse_prints,
-                          "capstone_vm: thread create refused, %lu supervisor slot%s in use\n",
-                          supervisor_slots, supervisor_slots == 1 ? "" : "s");
-            rc = -EBUSY; goto out;
-        }
-        t = kvzalloc(sizeof(*t), GFP_KERNEL);
-        if (!t) { rc = -ENOMEM; goto out; }
-        t->context = c; t->id = ++c->next_thread;
-        rc = pin_thread_frame(c, r.frame, t);
-        if (rc) { kvfree(t); goto out; }
-        /* The kernel owns the process address space and lifetime root. The
-         * application supplies only the entry/register capabilities. */
-        t->frame[0] = csr_read(CSR_SATP);
-        t->frame[1] = c->table_pa;
-        t->frame[2] = t->frame[3] = t->frame[4] = t->frame[5] = t->frame[6] = 0;
-        t->frame[7] = 3;
-        t->frame[80] = t->frame[81] = 0;
-        /* S-21: MAKE THE CHILD'S FRAME UNREACHABLE BY THE DOMAIN BEFORE IT IS EVER ENTERED.
-         *
-         * On the RTL every escape restores the S caller's snapshot from frame+1024 unchecked, and a
-         * child frame is a page the DOMAIN allocated and still holds a NONLIN RW copy of
-         * (thread.c's cap_vm_acquire + cap_vm_copyable; this ioctl only find_arena()s and pins it).
-         * So without this the domain could overwrite the kernel's saved pc/sp/satp/stvec in its
-         * child's frame and have the next escape load them. QEMU cannot show it at any slot count,
-         * because the caller stays in save_state -- so this is silicon-only and no record exhibits
-         * it; the reasoning is the RTL source, not a reading.
-         *
-         * Retiring the arena's ancestor kills the domain's copy (25 on access) while the page stays
-         * pinned and kernel-only. That is safe to do at whole-arena granularity BECAUSE a thread
-         * frame is its own arena: thread.c acquires exactly 4096 bytes for it, and
-         * arena_has_thread_frame() matches on t->frame_user == a->address. A frame sharing an arena
-         * with live objects would make this retire kill them too, which is why the granularity is
-         * checked here rather than assumed.
-         *
-         * The later teardown retires the same ancestor again. That is a tolerated no-op, not a
-         * second effect: cap_rev_retire returns CAP_REV_DEAD on an invalid node BEFORE any mutation
-         * (cap_rev_tree.c:249-251), helper_csretire maps that to status 1, retire() ignores a
-         * non-zero status when destroying, and ++c->retired_flat only fires on success. So no flag
-         * is needed to suppress it.
-         *
-         * A failed retire fails the create: a frame the domain can still write is the whole defect.
-         * Note this is unreachable on vp2 today -- with supervisor_slots = 1 the create is already
-         * refused above -- so it is the ABI's property for a multi-slot bitstream, not a fix for
-         * the current board. */
-        {
-            struct arena *fa = find_arena(c, r.frame, PAGE_SIZE);
-            unsigned long st, old_root;
-            unsigned long free_before;
-            if (!fa) { rc = -EINVAL; goto thread_unwind; }
-            free_before = node_free_count(c);
-            preempt_disable(); local_irq_save(flags);
-            old_root = select_root(c);
-            asm volatile(".insn r 0x5b, 1, 0x53, %0, %1, zero"
-                         : "=&r"(st) : "r"(fa->ancestor) : "memory");
-            restore_root(old_root);
-            local_irq_restore(flags); preempt_enable();
-            if (st) {
-                CV_EMIT_FIRST(childframe_prints,
-                              "capstone_vm: child frame grant not retired (status %lu); "
-                              "refusing the thread\n", st);
-                rc = -EACCES;
-                goto thread_unwind;
-            }
-            if (!st) {
-                ++c->retired_flat;
-                if (node_free_count(c) > free_before) ++c->pushed_flat;
-            }
-            fa->ancestor_retired = true;
-        }
-        INIT_LIST_HEAD(&t->link);
-        list_add_tail(&t->link, &c->threads);
-        r.thread = t->id;
-        rc = copy_to_user((void __user *)arg, &r, sizeof(r)) ? -EFAULT : 0;
-        if (rc) {
-            list_del(&t->link); clear_thread_frame(t); drop_thread_frame(t); kvfree(t);
-        }
-        if (0) {
-thread_unwind:
-            /* The frame is pinned and the thread is not on c->threads yet, so the teardown is the
-             * same minus the list_del. */
-            clear_thread_frame(t); drop_thread_frame(t); kvfree(t);
-        }
-    } else if (op == CV_THREAD_EXIT) {
-        struct cv_thread_control r;
-        struct cv_thread *t;
-        if (copy_from_user(&r, (void __user *)arg, sizeof(r))) { rc = -EFAULT; goto out; }
-        t = find_thread(c, r.thread);
-        if (!t || t == c->main_thread) { rc = -EINVAL; goto out; }
-        r.frame = t->frame_user;
-        if (t->started && !t->slot_exported) {
-            preempt_disable(); local_irq_save(flags);
-            run(t->frame_pa, 1);
-            local_irq_restore(flags); preempt_enable();
-        }
-        list_del(&t->link); clear_thread_frame(t); drop_thread_frame(t);
-        kvfree(t);
-        rc = copy_to_user((void __user *)arg, &r, sizeof(r)) ? -EFAULT : 0;
-    } else if (op == CV_STEP) {
-        struct cv_step r __uninitialized;
-        if (copy_from_user(&r, (void __user *)arg, sizeof(r))) { rc = -EFAULT; goto out; }
-        rc = cv_step_locked(c, &r, NULL);
-        if (!rc && copy_to_user((void __user *)arg, &r, sizeof(r))) {
-            struct cv_thread *t = find_thread(c, r.thread);
-            if (t) t->terminal = true;
-            rc = -EFAULT;
-        }
-    } else if (op == CV_RESOLVE) {
-        struct cv_thread_control r;
-        struct cv_thread *t;
-        if (copy_from_user(&r, (void __user *)arg, sizeof(r))) { rc = -EFAULT; goto out; }
-        t = find_thread(c, r.thread);
-        rc = t ? resolve(c, t, ktime_get_ns() + CV_STEP_BUDGET_NS) : -ESRCH;
-        if (!rc) t->sfence_pending = true;
-    } else if (op == CV_TOUCH) {
-        struct cv_touch r;
-        if (copy_from_user(&r, (void __user *)arg, sizeof(r))) { rc = -EFAULT; goto out; }
-        rc = touch(c, &r);
-    } else if (op == CV_RETIRE) {
-        u64 id;
-        struct arena *a;
-        if (copy_from_user(&id, (void __user *)arg, sizeof(id))) { rc = -EFAULT; goto out; }
-        a = xa_load(&c->ids, id);
-        if (a) rc = retire(c, a, false);
-    } else if (op == CV_STATS) {
-        node_stats(c);
-        rc = copy_to_user((void __user *)arg, &c->stats, sizeof(c->stats)) ? -EFAULT : 0;
-    } else rc = -ENOTTY;
-out:
-    TEST_IOCTL_DONE();
-    /* Q-26: one wake covers every way a frame can stop occupying the slot --
-     * terminal exit, a discard, an error path -- instead of enumerating them and
-     * missing one. A spurious wake costs a re-check. */
-    slot_changed();
-    mutex_unlock(&vm_lock);
-    return rc;
-}
 static int context_create(struct context **out)
 {
     struct context *c;
     struct context *existing;
     struct cv_thread *t;
     unsigned long available;
-    if (num_online_cpus() != 1 || !current->mm || PAGE_SIZE != 4096)
+    if (node_table_flat || num_online_cpus() != 1 || !current->mm || PAGE_SIZE != 4096)
         return -EOPNOTSUPP;
     if (node_initial_pages < 2 || node_initial_pages > CV_ID_PAGES_MAX ||
         !node_batch_pages || node_batch_pages > CV_ID_PAGES_MAX ||
@@ -3411,7 +3071,8 @@ static int context_create(struct context **out)
     t = kvzalloc(sizeof(*t), GFP_KERNEL);
     if (!t) { kvfree(c); return -ENOMEM; }
     c->frame = (void *)get_zeroed_page(GFP_KERNEL);
-    c->table = node_table_flat ? node_new_flat_table(c) : node_new_page(c);
+    /* Native task admission requires the paged table; no misc-device CMA allocator. */
+    c->table = node_new_page(c);
     if (c->table && !node_table_flat) c->table_pa = virt_to_phys(c->table);
     if (!c->frame || !c->table) {
         if (c->frame) free_page((unsigned long)c->frame);
@@ -3480,13 +3141,6 @@ static int context_create(struct context **out)
     mutex_unlock(&vm_lock);
     return 0;
 }
-static int vm_open(struct inode *inode, struct file *f)
-{
-    struct context *c;
-    int rc = context_create(&c);
-    if (!rc) f->private_data = c;
-    return rc;
-}
 static int context_destroy(struct context *c)
 {
     unsigned long flags;
@@ -3552,24 +3206,18 @@ static int context_destroy(struct context *c)
     mutex_unlock(&vm_lock);
     return 0;
 }
-static int vm_release(struct inode *inode, struct file *f)
-{
-    return context_destroy(f->private_data);
-}
-static const struct file_operations ops = {
-    .owner = THIS_MODULE, .open = vm_open, .release = vm_release, .unlocked_ioctl = vm_ioctl,
-};
 #include "checked-copy-dom.h"
 #include "binfmt-dom.h"
 
-static struct miscdevice device = {
-    .minor = MISC_DYNAMIC_MINOR, .name = "capstone-vm", .fops = &ops, .mode = 0600,
-};
 static int __init init(void)
 {
     struct device_node *profile;
     u32 id_bits, exact, page_size, granule_size, checked_abi = 0, transport_version = 0;
     int error;
+    /* Admission switches remain accepted by existing boot recipes. Disabling
+     * one disables this adapter; it can never select a legacy entry path. */
+    if (!native_task || !native_dispatch || !dom_binfmt || !checked_copy ||
+        !native_slot_transport || !unpinned) return -EOPNOTSUPP;
     profile = of_find_compatible_node(NULL, NULL, "capstone,copyable-v1");
     if (!profile) return -EOPNOTSUPP;
     error = of_property_read_u32(profile, "id-bits", &id_bits) ||
@@ -3657,15 +3305,6 @@ static int __init init(void)
          * below really did not fire. Banner absent => the module did not load at all, which is
          * a different and louder failure than a filtered print. Bump CV_DIAG_TAG whenever the
          * lines above change shape. */
-        int rc = misc_register(&device);
-        if (rc)
-            return rc;
-        /* ids20: the CMA path of node_new_flat_table allocates through this device */
-        if (get_order(CV_FLAT_BYTES) > CV_BUDDY_MAX_ORDER &&
-            dma_coerce_mask_and_coherent(device.this_device, DMA_BIT_MASK(64))) {
-            misc_deregister(&device);
-            return -EIO;
-        }
         /* Always KERN_EMERG, independent of diag_emerg: this is the line that tells a reader
          * whether the module loaded at all, so it must survive the quieted console even when the
          * rest are being read through dmesg. One line per insmod, before the rungs begin. */
@@ -3681,8 +3320,7 @@ static void __exit done(void)
 #ifdef CV_TEST_HOOKS
     test_report("unload");
 #endif
-    misc_deregister(&device);
 }
 module_init(init); module_exit(done);
 MODULE_LICENSE("GPL");
-MODULE_DESCRIPTION("Private virtual Capstone execution adapter");
+MODULE_DESCRIPTION("Built-in native Capstone task adapter");

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Stage one matching runtime source set for an external module or in-tree build.
+# Stage one matching source set for the built-in native-task adapter.
 set -euo pipefail
 here=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 source "$here/../../tests/capstone-test-env.sh"
@@ -14,7 +14,6 @@ cp "${CAPSTONE_QEMU_SOURCE:-$CAPSTONE_REPO_ROOT/capstone/capstone-qemu}/target/r
 # built, like the ABI header above, so a kit cannot pair a module and an SDK across revisions.
 cp "$here/../include/capstone/representable.h" "$out/"
 cp "$here/../include/capstone/delegate.h" "$out/capstone/"
-cp "$here/../linux/delegate-policy.h" "$out/"
 cp "$here/module/resource-dom.h" "$here/module/checked-copy-dom.h" "$out/"
 cp "$here/module/rt-dom.h" "$out/"
 cp "$here/module/native-process-dom.h" "$here/module/native-files-dom.h" "$here/module/native-gcc-dom.h" "$here/module/native-syscall-dom.h" "$out/"

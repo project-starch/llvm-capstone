@@ -46,7 +46,7 @@ static bool dom_stdio_file(const struct file *f)
 
 static bool dom_fd_allowed(struct context *c, u64 fd)
 {
-    return fd < DOM_FDS && fd != c->dom_fd &&
+    return fd < DOM_FDS &&
            test_bit(fd, c->dom_delegate->fds);
 }
 
@@ -122,7 +122,6 @@ static int dom_resources_init(struct context *c)
     d = kzalloc(sizeof(*d), GFP_KERNEL);
     if (!d) return -ENOMEM;
     c->dom_delegate = d;
-    d->path_fd = -1;
     get_fs_pwd(current->fs, &d->root);
     d->cwd_path = d->root;
     path_get(&d->cwd_path);
@@ -465,8 +464,3 @@ out:
     kfree(storage);
     return rc;
 }
-
-static struct file *dom_path_file(struct context *c, const struct capstone_delegate_entry *e)
-{ return dom_path_file_name(c, e, NULL); }
-static long dom_path_operation(struct context *c, const struct capstone_delegate_entry *e)
-{ return dom_path_operation_name(c, e, NULL); }
