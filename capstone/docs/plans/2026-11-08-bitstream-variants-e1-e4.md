@@ -127,3 +127,16 @@ Each module only runs on its own twin's ABI, so the pair is matched by design, n
 
 No domain fault lines in any cell. If live-T3 (built 30 Oct) does not run under today's launcher in EITHER world, the
 gate is VOID and a fresh live-T3 build is the next step, not a reading.
+
+**Result (8 Nov, perf/e5twin, both worlds on one boot each): every pre-registered cell holds.**
+
+| N | E5 world (twin20 398a6544 + kq20 ba57ac39) | 18-bit world (twin18 708bbff5 + kq18 7ee19fd0) |
+|---|---|---|
+| params | index_bits=20, node_flat_records=1048576 | index_bits=18, node_flat_records=262144 |
+| 1000 | LIVE-OK bad=0, nodes 1,111 | LIVE-OK bad=0, nodes 1,111 |
+| 400000 | LIVE-OK bad=0, nodes 414,217, capacity 1,048,576 | LIVE-NULL at 251,479, nodes 260,455, rc 3 |
+| 1100000 | LIVE-NULL at 1,011,158, nodes 1,046,942, rc 3 | LIVE-NULL at 251,479, nodes 260,455, rc 3 |
+
+FAULT-LINES 0 in every cell. The E5 world's three numbers equal option B's flat-module F0 twin cells on bitstream 4
+(414,217 / 1,011,158 / 1,046,942), and the 18-bit world's equal bitstream 4's 18-bit control (251,479 / 260,455): the
+live smoke's allocation sequence is deterministic, so the table width is the only thing these cells read.
