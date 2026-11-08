@@ -96,3 +96,14 @@ Slip recorded here because it touched these stages: building the arm copies, a `
 which is a symlink, wrote the arm exes into the production stages-eval-boarddevmk xz and nab exes (and nab's two
 hard links under perf/ns) for about three minutes. They were restored from two independent copies that agree byte
 for byte, and no process had them open. The arm stages are now real copies (no symlinks, link count 1).
+
+## Addendum 4 (8 Nov 15:1x, before their board calls): gcc train dcnofp repeated on boards 3 and 2
+
+The Result's 1.196× is N = 1 with a 13 s margin to 1.20×. The same stage, kit bkit32-q32, runs twice more: board 3
+after perlbench udcnofp, and board 2 after its Plain-reuse x264 run. Driver perf/exhpm/gt-run-q32.sh. On board 2 a
+wrapper waits for that board's chain (pid 756352) to exit first.
+
+| # | Prediction |
+|---|---|
+| D3 | each repeat rc 0, specdiff 1/1, outputs equal, in-context instret 12.870 G ± 0.05 % |
+| D4 | each repeat 3,924.9 s ± 10 s; all three under 3,937 s (1.20 × 3,280.9 s) |
