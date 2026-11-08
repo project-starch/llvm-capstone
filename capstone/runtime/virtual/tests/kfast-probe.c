@@ -66,12 +66,13 @@ int main(int argc, char **argv)
     /* O_DIRECT on ext2/3/4: the alignment check reads the buffer address, so the module must leave it to the
      * launcher (kfast_fb_file). The file is written by an ordinary descriptor first; every read result must be the
      * same on both settings, whichever it is. */
-    int w = open("/tmp/kf-direct.dat", O_WRONLY | O_CREAT | O_TRUNC, 0644);
+    const char *direct = argc > 2 ? argv[2] : "/tmp/kf-direct.dat";   /* must be on ext2/3/4: tmpfs refuses O_DIRECT */
+    int w = open(direct, O_WRONLY | O_CREAT | O_TRUNC, 0644);
     static char block[8192];
     memset(block, 'd', sizeof block);
     line("direct-fill", write(w, block, sizeof block));
     close(w);
-    int d = open("/tmp/kf-direct.dat", O_RDONLY | O_DIRECT);
+    int d = open(direct, O_RDONLY | O_DIRECT);
     line("direct-open", d >= 0);
     static const uint64_t offs[] = {0, 16, 496, 512, 4096};
     for (unsigned i = 0; d >= 0 && i < sizeof offs / sizeof offs[0]; ++i) {
