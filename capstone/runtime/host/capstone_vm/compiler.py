@@ -458,6 +458,90 @@ def defined_symbols(data: bytes) -> frozenset[str]:
         return frozenset()
 
 
+class SizeAssumptionError(ValueError):
+    """A linked image breaks a size assumption its compiler recorded."""
+
+
+def check_size_assumptions(data: bytes, what: str) -> tuple[int, int]:
+    """Check a linked image against its .capstone.size_assume records.
+
+    -mllvm -capstone-drop-redundant-shrink-declarations lets the compiler drop
+    the SHRINKTO / SHRINK narrowing of a global its unit only DECLARES, when
+    every access through it lies inside the declared size. That size is the
+    unit's belief, so the unit records, per such global, the bytes from the
+    symbol's start that its accesses reach: an 8-byte little-endian size, then
+    the NUL-terminated name. The link concatenates the records. Every named
+    symbol must have exactly one definition in the image, of nonzero size and
+    at least the largest record. Otherwise an ODR size mismatch, which the
+    dropped narrowing could have caught at the object's end, would pass silently.
+
+    A file-static (LOCAL, DEFAULT visibility) is not a definition. A LOCAL
+    symbol with HIDDEN or INTERNAL visibility is: the static link demotes a
+    hidden global to LOCAL (musl's __libc, __malloc_context).
+
+    Returns (symbols, records); (0, 0) for an image with no records. Raises
+    SizeAssumptionError for a failing record and ValueError for an image that
+    cannot be checked (malformed, or records but no symbol table)."""
+    if data[:4] != b"\x7fELF" or len(data) < 64 or data[4] != 2 or data[5] != 1:
+        raise ValueError(f"{what}: not a little-endian ELF64 file")
+    try:
+        e_shoff = struct.unpack_from("<Q", data, 40)[0]
+        e_shentsize, e_shnum, e_shstrndx = struct.unpack_from("<HHH", data, 58)
+        if e_shentsize != 64 or e_shoff + e_shnum * 64 > len(data) or e_shstrndx >= e_shnum:
+            raise ValueError(f"{what}: malformed section headers")
+        sections = [struct.unpack_from("<IIQQQQIIQQ", data, e_shoff + i * 64) for i in range(e_shnum)]
+        def contents(header):
+            if header[4] + header[5] > len(data):
+                raise ValueError(f"{what}: section beyond the file")
+            return data[header[4]:header[4] + header[5]]
+        names = contents(sections[e_shstrndx])
+        records = []
+        for header in sections:
+            if names[header[0]:names.find(b"\0", header[0])] != b".capstone.size_assume":
+                continue
+            body, at = contents(header), 0
+            while at < len(body):
+                end = body.find(b"\0", at + 8)
+                if at + 8 > len(body) or end < 0:
+                    raise ValueError(f"{what}: truncated .capstone.size_assume record")
+                records.append((body[at + 8:end].decode(errors="replace"),
+                                struct.unpack_from("<Q", body, at)[0]))
+                at = end + 1
+        if not records:
+            return 0, 0
+        defined: dict[str, list[int]] = {}
+        tables = [h for h in sections if h[1] == SHT_SYMTAB]
+        if not tables:
+            raise ValueError(f"{what}: {len(records)} size assumptions but no symbol table (stripped?)")
+        for header in tables:
+            if header[6] >= e_shnum or header[9] != 24:
+                raise ValueError(f"{what}: malformed symbol table")
+            strtab, table = contents(sections[header[6]]), contents(header)
+            for offset in range(24, len(table) - 23, 24):
+                st_name, st_info, st_other, st_shndx, _, st_size = struct.unpack_from("<IBBHQQ", table, offset)
+                if not st_name or st_shndx == 0 or ((st_info >> 4) == 0 and (st_other & 3) not in (1, 2)):
+                    continue
+                symbol = strtab[st_name:strtab.find(b"\0", st_name)].decode(errors="replace")
+                defined.setdefault(symbol, []).append(st_size)
+    except (IndexError, struct.error):
+        raise ValueError(f"{what}: malformed ELF file") from None
+    need: dict[str, int] = {}
+    for symbol, size in records:
+        need[symbol] = max(need.get(symbol, 0), size)
+    failures = []
+    for symbol, size in sorted(need.items()):
+        sizes = defined.get(symbol, [])
+        if not sizes:
+            failures.append(f"{symbol}: assumed >= {size} B, no definition in the image")
+        elif len(sizes) != 1:
+            failures.append(f"{symbol}: assumed >= {size} B, {len(sizes)} definitions")
+        elif sizes[0] == 0 or sizes[0] < size:
+            failures.append(f"{symbol}: assumed >= {size} B, defined {sizes[0]} B")
+    if failures:
+        raise SizeAssumptionError(f"{what}: {len(failures)} of {len(need)} size assumptions fail: " + "; ".join(failures))
+    return len(need), len(records)
+
+
 def check_archive(path: Path, virtual: bool, helpers_allowed: bool = False) -> None:
     members = archive_members(path)
     defines = frozenset().union(*(defined_symbols(body) for _, body in members))
@@ -791,10 +875,21 @@ def main(argv: list[str] | None = None) -> int:
             # (-Tx, @x) must reach lld as a file.
             sdk = {k: str(Path(config[k]).resolve()) for k in ("script", "runtime", "libc", "builtins")}
             check_link_inputs([*files, Path(sdk["runtime"]), Path(sdk["libc"]), Path(sdk["builtins"])], config)
-            return subprocess.call([config["ld"], "--no-dependent-libraries", "--gc-sections", "-T", sdk["script"],
-                                    "-o", str(Path(output).absolute()), "--whole-archive", sdk["runtime"],
-                                    "--no-whole-archive", "--start-group", *linker_inputs,
-                                    sdk["libc"], sdk["builtins"], "--end-group"])
+            image = Path(output).absolute()
+            result = subprocess.call([config["ld"], "--no-dependent-libraries", "--gc-sections", "-T", sdk["script"],
+                                      "-o", str(image), "--whole-archive", sdk["runtime"],
+                                      "--no-whole-archive", "--start-group", *linker_inputs,
+                                      sdk["libc"], sdk["builtins"], "--end-group"])
+            if result:
+                return result
+            # Part of the link, so no build can skip it: an image that breaks a
+            # size assumption a dropped narrowing relied on is removed.
+            try:
+                check_size_assumptions(image.read_bytes(), str(image))
+            except ValueError:
+                image.unlink(missing_ok=True)
+                raise
+            return 0
     except (OSError, ValueError, KeyError, StopIteration) as error:
         print(f"capstone-cc: {error or 'missing option argument'}", file=sys.stderr)
         return 1
