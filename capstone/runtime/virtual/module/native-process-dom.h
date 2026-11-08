@@ -41,11 +41,11 @@ static long native_pipe_stage(struct context *c, const struct cn_capref *out,
 static long native_pipe_direct(struct context *c, struct cv_step *step)
 {
     struct cv_thread *t = c->main_thread;
-    struct cn_capref out = {t->id, READ_ONCE(t->frame[82]), 10, 0};
+    struct cn_capref out = {t->id, READ_ONCE(t->frame[CV_FRAME_CHECK_EPOCH]), 10, 0};
     struct file *files[2];
     int fd[2];
     long rc = ns_session_admit(c->native_session, out.context_epoch);
-    if (!rc && !nf_regs_plain(t, READ_ONCE(t->frame[83]), 1ULL << 10)) rc = -EINVAL;
+    if (!rc && !nf_regs_plain(t, READ_ONCE(t->frame[CV_FRAME_CHECK_KINDS]), 1ULL << 10)) rc = -EINVAL;
     if (!rc) {
         rc = native_pipe_stage(c, &out, 0, step->args[1], fd, files);
         if (!rc) native_pipe_commit(c, fd, files);

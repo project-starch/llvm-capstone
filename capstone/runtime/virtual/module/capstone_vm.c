@@ -28,6 +28,16 @@ static bool copyable_exact_bounds;
 #include <asm/io.h>
 #include <asm/pgtable.h>
 #include "wire.h"
+/* Escape epoch and tag/raw-tag classification words in the paused frame
+ * (capstone-qemu native/checked-emu-measure, CHECK_EPOCH_OFFSET/CHECK_KINDS_OFFSET).
+ * Step 0 of the native checked-access RTL order moved them from +656/+664,
+ * inside the RTL's FP save area, to +2336/+2344: free in the RTL frame and
+ * outside every field of the v5/v6 transport image (FP policy ends at +2335,
+ * the immutable escape GPRs start at +2400). Not moved: the transport's
+ * epoch copy at +1072 and caller privilege at +1080, inside the RTL's caller
+ * snapshot (+1024..+1976); they matter only for export/import images. */
+#define CV_FRAME_CHECK_EPOCH (2336 / 8)
+#define CV_FRAME_CHECK_KINDS (2344 / 8)
 _Static_assert(sizeof(struct cv_step) == 136, "cv_step is two user-copy chunks and an 8-byte tail");
 #ifndef __uninitialized   /* kernels before 6.9 have no macro for the attribute */
 #define __uninitialized __attribute__((uninitialized))

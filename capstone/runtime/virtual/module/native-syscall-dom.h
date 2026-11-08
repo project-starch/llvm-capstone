@@ -48,7 +48,7 @@ int cn_get_epoch(struct cn_context *n, const struct cn_owner *owner, cn_u64 *epo
 {
     int rc = native_owner(n, owner);
     if (rc) return rc;
-    *epoch = READ_ONCE(n->t->frame[82]);
+    *epoch = READ_ONCE(n->t->frame[CV_FRAME_CHECK_EPOCH]);
     return *epoch ? 0 : -ESTALE;
 }
 int cn_get_capref(struct cn_context *n, const struct cn_owner *owner,
@@ -69,7 +69,7 @@ int cn_snapshot(struct cn_context *n, const struct cn_owner *owner, struct cn_fr
     if (rc) return rc;
     /* QEMU publishes this classification at the escape into kernel-owned RAM.
      * It is only a shape snapshot. CSCHECK authenticates each actual access. */
-    kinds = READ_ONCE(n->t->frame[83]);
+    kinds = READ_ONCE(n->t->frame[CV_FRAME_CHECK_KINDS]);
     memset(f, 0, sizeof(*f));
     for (i = 10; i <= 17; ++i) {
         f->x[i].payload[0] = n->t->frame[72 + i - 10];
@@ -380,7 +380,7 @@ static bool native_close_fast(struct context *c, struct cv_step *step, u64 kinds
     file = fget(step->args[0]);
     if (!file) return false;
     if (file->private_data == c || !file->f_op) { fput(file); return false; }
-    rc = ns_session_admit(c->native_session, READ_ONCE(t->frame[82]));
+    rc = ns_session_admit(c->native_session, READ_ONCE(t->frame[CV_FRAME_CHECK_EPOCH]));
     if (rc) rc = -ESTALE;
     else rc = native_close_issue(c, step->args[0]);
     fput(file);
@@ -400,7 +400,7 @@ static bool native_fd_fast(struct context *c, struct cv_step *step, u64 kinds)
     file = fget(step->args[0]);
     if (!file) return false;
     if (file->private_data == c || !file->f_op) { fput(file); return false; }
-    rc = ns_session_admit(c->native_session, READ_ONCE(t->frame[82]));
+    rc = ns_session_admit(c->native_session, READ_ONCE(t->frame[CV_FRAME_CHECK_EPOCH]));
     if (rc) rc = -ESTALE;
     else rc = native_fd_issue(file, step->args[6], step->args[1], step->args[2]);
     fput(file);
@@ -420,7 +420,7 @@ static bool native_seek_fast(struct context *c, struct cv_step *step, u64 kinds)
     file = fget(step->args[0]);
     if (!file) return false;
     if (file->private_data == c || !file->f_op) { fput(file); return false; }
-    rc = ns_session_admit(c->native_session, READ_ONCE(t->frame[82]));
+    rc = ns_session_admit(c->native_session, READ_ONCE(t->frame[CV_FRAME_CHECK_EPOCH]));
     if (rc) rc = -ESTALE;
     else rc = native_seek_issue(file, step->args[1], step->args[2]);
     fput(file);
@@ -451,7 +451,7 @@ static int native_snapshot_name(struct context *c, u64 epoch, char **name)
 static bool native_path_fast(struct context *c, struct cv_step *step, u64 kinds)
 {
     struct cv_thread *t = c->main_thread;
-    u64 nr = step->args[6], epoch = READ_ONCE(t->frame[82]);
+    u64 nr = step->args[6], epoch = READ_ONCE(t->frame[CV_FRAME_CHECK_EPOCH]);
     char *name = NULL;
     long rc;
     if (nr != CAPSTONE_SYS_openat && nr != CAPSTONE_SYS_unlinkat) return false;
@@ -476,7 +476,7 @@ static bool native_stat_fast(struct context *c, struct cv_step *step, u64 kinds)
 {
     struct cn_context *n = c->native_context;
     struct cv_thread *t = c->main_thread;
-    u64 nr = step->args[6], epoch = READ_ONCE(t->frame[82]);
+    u64 nr = step->args[6], epoch = READ_ONCE(t->frame[CV_FRAME_CHECK_EPOCH]);
     bool at = nr == CAPSTONE_SYS_newfstatat;
     struct cn_capref output;
     struct ns_copy_result copied;
@@ -526,7 +526,7 @@ static bool native_lock_fast(struct context *c, struct cv_step *step, u64 kinds)
     struct cn_capref ref;
     struct ns_copy_result copied;
     struct file *file;
-    u64 cmd = step->args[1], epoch = READ_ONCE(t->frame[82]);
+    u64 cmd = step->args[1], epoch = READ_ONCE(t->frame[CV_FRAME_CHECK_EPOCH]);
     long rc;
     if (step->args[6] != CAPSTONE_NR_FCNTL_LOCK ||
         (cmd != F_GETLK && cmd != F_SETLK && cmd != F_SETLKW) ||
@@ -578,7 +578,7 @@ static bool native_fast_try(struct context *c, struct cv_step *step)
 
     if (!native_fast || !n || native_owner(n, &n->owner) ||
         current->seccomp.mode != SECCOMP_MODE_DISABLED) return false;
-    kinds = READ_ONCE(t->frame[83]);
+    kinds = READ_ONCE(t->frame[CV_FRAME_CHECK_KINDS]);
     if (native_close_fast(c, step, kinds)) return true;
     if (native_fd_fast(c, step, kinds)) return true;
     if (native_seek_fast(c, step, kinds)) return true;
@@ -587,7 +587,7 @@ static bool native_fast_try(struct context *c, struct cv_step *step)
     if (native_lock_fast(c, step, kinds)) return true;
     if (native_task_value(nr, &value)) {
         if (!nf_regs_plain(t, kinds, 0)) return false;
-        if (ns_session_admit(c->native_session, READ_ONCE(t->frame[82]))) value = -ESTALE;
+        if (ns_session_admit(c->native_session, READ_ONCE(t->frame[CV_FRAME_CHECK_EPOCH]))) value = -ESTALE;
         step->result = value;
         ++native_fast_hits;
         return true;
@@ -611,7 +611,7 @@ static bool native_fast_try(struct context *c, struct cv_step *step)
         n->bounce = kmalloc(NATIVE_FAST_MAX, GFP_KERNEL);
         if (!n->bounce) { fput(file); return false; }
     }
-    epoch = READ_ONCE(t->frame[82]);
+    epoch = READ_ONCE(t->frame[CV_FRAME_CHECK_EPOCH]);
     if (ns_session_admit(c->native_session, epoch)) { fput(file); step->result = -ESTALE; return true; }
     ref = (struct cn_capref){t->id, epoch, 11, 0};
     /* Preflight only: the copy below re-authenticates every chunk. */
@@ -650,8 +650,8 @@ static long native_service_direct_impl(struct context *c, struct cv_step *step)
 #ifdef CV_TASK_BACKEND
     if (step->args[6] == CAPSTONE_NR_SPAWN || step->args[6] == CAPSTONE_SYS_wait4) {
         struct cv_thread *t = c->main_thread;
-        struct cn_capref ref = {t->id, READ_ONCE(t->frame[82]), 10, 0}, status = ref, usage = ref;
-        u64 tags = READ_ONCE(t->frame[83]);
+        struct cn_capref ref = {t->id, READ_ONCE(t->frame[CV_FRAME_CHECK_EPOCH]), 10, 0}, status = ref, usage = ref;
+        u64 tags = READ_ONCE(t->frame[CV_FRAME_CHECK_KINDS]);
         rc = ns_session_admit(c->native_session, ref.context_epoch);
         if (!rc && step->args[6] == CAPSTONE_NR_SPAWN) {
             if (!nf_regs_plain(t, tags, 1ULL << 10)) rc = -EINVAL;
@@ -672,7 +672,7 @@ static long native_service_direct_impl(struct context *c, struct cv_step *step)
 #endif
     if (!native_supported(step->args[6])) { step->result = native_refused(step->args[6]); return 0; }
     if (native_fast_try(c, step)) return 0;
-    rc = ns_dispatch(c->native_session, READ_ONCE(c->main_thread->frame[82]), &result);
+    rc = ns_dispatch(c->native_session, READ_ONCE(c->main_thread->frame[CV_FRAME_CHECK_EPOCH]), &result);
     step->result = rc ? rc : result.value;
     return 0;
 }
@@ -694,7 +694,7 @@ static long native_service(struct context *c, struct cv_step *step)
     struct ns_result result = {0};
     struct capstone_delegate_entry e;
     struct ns_request request = {0};
-    struct cn_capref meta = {c->main_thread->id, READ_ONCE(c->main_thread->frame[82]), 10, 0};
+    struct cn_capref meta = {c->main_thread->id, READ_ONCE(c->main_thread->frame[CV_FRAME_CHECK_EPOCH]), 10, 0};
     struct cn_capref exchange = meta;
     struct cu_result copied;
     size_t lengths[6];

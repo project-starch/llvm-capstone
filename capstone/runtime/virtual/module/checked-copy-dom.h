@@ -122,7 +122,7 @@ static cn_u32 cv_copy_check(void *opaque, const struct cn_capref *ref,
     }
 #endif
     if (ref->reserved || ref->context_id != s->t->id ||
-        !ref->context_epoch || ref->context_epoch != READ_ONCE(s->t->frame[82]) ||
+        !ref->context_epoch || ref->context_epoch != READ_ONCE(s->t->frame[CV_FRAME_CHECK_EPOCH]) ||
         !ref->frame_slot || ref->frame_slot >= 32) return CU_REFUSED;
     if (s->arena && s->arena->copy_retired) return CU_LIFETIME;
     d[0] = ref->context_epoch; d[1] = ref->frame_slot;
