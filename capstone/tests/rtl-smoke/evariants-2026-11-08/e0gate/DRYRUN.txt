@@ -1,0 +1,22 @@
+# E0 gate driver: grader controls and stubbed dry runs, 8-9 Nov 2026 (perf/e0gate on the host)
+## grader controls (perf/e0gate/ctl)
+a-c5asil: E0 GATE: 22 PASS, 10 FAIL, 0 NO DATA of 32
+b-synpass: E0 GATE: 32 PASS, 0 FAIL, 0 NO DATA of 32
+c-valuebad: E0 GATE: 31 PASS, 1 FAIL, 0 NO DATA of 32
+d-empty: E0 GATE: 0 PASS, 0 FAIL, 32 NO DATA of 32
+  a = C.5a's own silicon fed as E0 (must FAIL exactly the images whose sims change beyond the noise floor):
+    hpm-3 objb-perf-s2 objb-perf-s3 objb-perf-s4 objb-perf-s6 objb-perf-s7 shrinkto slot-2 slot-3 slot-7 
+  b = C.5a silicon with value fields set to E0 sim and trim-affected timing scaled by E0sim/C5sim (must PASS)
+  c = b with one R-67 value bit flipped (must FAIL one); d = an empty run dir (NO DATA, exit 2)
+## dry runs (every board call stubbed; the store holds the sealed E0 .bit, sha256 aecb81b2..., extracted from the seal tarball, and C.5a's; dry.sh, a fresh output dir per case)
+A-pass exit=E0 GATE PASS flashes=[caplifive_stageb_a481031ca ] images=32
+B-fail exit=board 3 back on flashes=[caplifive_stageb_a481031ca caplifive_vp2c_1fc2cd5aa ] images=32
+C-flashfail exit=FAILED too flashes=[caplifive_stageb_a481031ca caplifive_vp2c_1fc2cd5aa ] images=0
+D-busy exit=is busy flashes=[] images=0
+E-hard exit=board 3 back on flashes=[caplifive_stageb_a481031ca caplifive_vp2c_1fc2cd5aa ] images=7
+  A pass path: synthetic-pass vectors -> exit 0, ONE flash (E0), the board stays on E0.
+  B fail path: C.5a's silicon as E0 -> exit 1, E0 then C.5a flashed back.
+  C E0_FLASH=false: the E0 flash fails -> the fallback flash is attempted and fails too -> exit 3, no image run.
+  D E0_BUSY=false: stops at the preconditions, exit 2, nothing flashed.
+  E a HARD STOP (resident mismatch) at hpm-4: the images stop at the 7th, the grade reads NO DATA, C.5a flashed back,
+    exit 1.
