@@ -77,3 +77,15 @@ Replaces Addendum 2's order. Board 3:
 | # | Prediction |
 |---|---|
 | S1 | the wedge follows exactly one instrument; if neither run wedges, the pair is uninformative and the wedge is a third thing |
+
+## Result, split 1 (8 Nov 09:24): cvprof alone wedges the core; S1 points at cvprof
+
+- gcc train c3f with **cvprof only**, on c3f's own kit bkit27-gtq (module 65ede944a87ea742): the control passed, the spec
+  step loaded cvprof at 168 s, 119 heartbeats (~4,700 s), then a wedge: trap log {seen, mcause} 0x85 (load access
+  fault), mepc 0x3fad876ef0 (domain VA), tval 0x7b783. NO DATA. The same signature as both two-instrument runs.
+- So cvprof is sufficient for the wedge; whether the module is clean is split 2's question (running next).
+- cvprof's tick handler only reads the interrupted pc and comm and updates its own tables; the fault is a domain
+  load from a small address. That reads as domain register state damaged when the tick path does more work, i.e. a
+  latent defect on the interrupt/context-switch path that cvprof exposes, not a fault in cvprof's own code. NOT
+  established: one signature, three runs, no reproduction under QEMU (where the same stage passed).
+- cvprof is withdrawn from board use.
