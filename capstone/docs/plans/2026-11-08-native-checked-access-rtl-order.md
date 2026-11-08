@@ -72,3 +72,40 @@ Not in this order: CSRUNV 3/4/5, paged tables, CLDRAW/CSTRAW/CPTAG, the copyable
 needed for the collaborator's full adapter, not for the saving. Size them only if that adapter becomes the goal.
 
 Estimates are desk estimates from the C.5a source, not synthesis readings.
+
+## Addendum (8 Nov): steps 0 and 1 run now, in parallel, handed to their own agent
+
+The lead's word, relayed by the runtime lane: run steps 0-1 now, in parallel with the optimisation line, not gated on
+any other result. Steps 2-4 stay gated on step 1's number. Anchors for whoever takes 0-1:
+
+**Where the words are read and written today**
+- Kernel: `native/linux-task-integration`, `capstone/runtime/virtual/module/checked-copy-dom.h:125-134`. It reads the
+  epoch as `frame[82]` (+656) and issues `.insn r 0x5b, 1, 0x26` (CSCHECKW) / `0x25` (CSCHECKR), rd = status,
+  rs1 = the frame's physical address, rs2 = the 48-byte descriptor's physical address. The module parameter is
+  `checked_copy`, default off.
+- QEMU: capstone-qemu dd041bac5ad9, property `x-capstone-checked-copy`. Each escape publishes the epoch at +656 and
+  the tag/raw-tag bitmaps at +664. The semantics are in `tests/capstone-checked-copy/README.md` (descriptor words
+  0-5, causes 24..29, the checks). The check reads a HIDDEN escaped snapshot.
+
+**Step 0 (software only)**
+- Move the epoch to +2320 and the bitmaps to +2328: the QEMU property's publication, and the kernel's `frame[82]`
+  -> `frame[290]` (and the bitmap reader).
+- **Second collision, outside the saving:** transport v5/v6 puts the escape epoch at +1072 and the caller privilege
+  at +1080. Both are inside the RTL's caller snapshot (+1024..+1976). This matters for export/import images only,
+  not for the direct ABI; record it beside the move and leave it.
+
+**Step 1 (firmware emulation, measurement only)**
+- Model it on the monitor's CSMINT emulation: caplifive-sbi `vp2/csmint-emu` 868dd5f (`capstone_csmint.S`), plan
+  `docs/plans/2026-10-17-vp2-monitor-csmint-port.md`; a kit copy is
+  `tests/rtl-smoke/vp2-bare-2026-10-17/tests/inc/capstone_csmint.S`. Decode mtval on the illegal-instruction trap
+  from S (funct7 0x25/0x26), emulate, write rd, and step mepc.
+- The emulation reads the MUTABLE slot +64+16r (C.5a has no hidden snapshot) and takes the epoch from the moved
+  software word. Both are measurement-only shortcuts; say so wherever the number is cited.
+- M in capability mode needs a capability base for every access (an integer base reads cause 5 on a load and 24 on
+  a store). Mint over the frame, the descriptor and the lifetime table.
+- On QEMU, run with `x-capstone-checked-copy=false` so the instructions really trap to the firmware. Positive
+  control: with the property ON, QEMU executes them natively and the firmware is never entered. Count both.
+
+**The number wanted:** exits and instructions per delegated call, on QEMU, for perlbench test and gcc train01, on
+the exchange route (before) and the direct ABI with the emulated check (after). On silicon, the firmware trap adds a
+trap round trip per check; that cost is measured on the board once QEMU says the saving is worth it.
