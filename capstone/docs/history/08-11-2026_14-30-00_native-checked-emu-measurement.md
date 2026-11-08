@@ -222,3 +222,65 @@ move. gcc's exits are faults (87.9k) and mapping services (46.5k). Only 156 of i
 calls, and 122 of those are writev, which has no direct route. As predicted, the saving is not resolvable
 per call from the total. Firmware per emulated check is at most 1,098-1,110 instructions; the bucket also
 holds timer SBI calls.
+
+## perl test results (replacement stage, registered in d0703d0f27d5)
+
+Both commands summed. Model off, emulating firmware `e03268f9c8e64620`, Image `28e5cc224b5bd776`, QEMU
+`8f3f9118b1f57791`, perlbench `b42a89c7d06c3db1`, hush `tmp/hush-native` (native-IO SDK).
+
+| | exchange (before) | direct (after) | difference |
+|---|---|---|---|
+| rc (makerand, test) | 0, 0 | 0, 0 | |
+| specdiff | 2/2 | 2/2 | |
+| makerand.out / test.out sha256 | `539d02dc10fabf70` / `b41ee90a9ea04241` | the same | (= launcher run k0-perl) |
+| total instructions | 139,201,559,100 | 136,802,276,650 | **-2,399,282,450 (-1.72 %)** |
+| user / kernel / firmware | 107,300,558,834 / 30,272,534,466 / 1,628,465,800 | 107,034,380,984 / 28,940,168,092 / 827,727,574 | -266,177,850 / -1,332,366,374 / -800,738,226 |
+| exits (all kinds) | 720,613 | 691,554 | -29,059 (-4.0 %) |
+| of which kind 1 / 3 / 4 / 5 (test.pl) | 11,914 / 315,368 / 389,397 / 2,741 | 11,895 / 286,136 / 389,593 / 2,741 | |
+| delegated calls (register + exchange) | 159,288 (0 + 159,288) | 130,054 (102,809 + 27,245) | -29,234 |
+| other kind-3 services (map, nodes, spawn plumbing) | 156,205 | 156,205 | 0 |
+| emulated checks (all rd = 0) | 2,643,137 (16.6 per call) | 1,349,015 (10.4 per call) | -1,294,122 |
+| guest seconds (icount clock), test.pl | 134.6 | 132.2 | |
+
+**Instructions saved per delegated call:**
+- 15,063 per call of the exchange arm (2,399,282,450 / 159,288);
+- 18,448 per call of the direct arm;
+- 23,337 per register-routed call.
+
+These figures include 0.80e9 instructions of firmware emulation that the direct arm avoids by issuing fewer
+checks. They are measurement-only: the emulation reads the mutable +64+16r slot and the frame-word epoch.
+
+**Against the prediction** (d0703d0f27d5):
+- Held:
+  - rc, specdiff and hashes;
+  - calls 100k-200k;
+  - register share 79.1 % (inside 40-80 %);
+  - emulation entries > 0 in both arms;
+  - firmware per check about 613 (inside 300-1,200).
+- **Failed:**
+  - calls equal within 1 %: the direct arm makes 18.4 % fewer delegated calls;
+  - exits equal within 3 %: 4.0 % fewer;
+  - saving per register call 4k-10k: 23.3k;
+  - saving per delegated call 2k-8k: 15.1k-18.4k.
+- The direct ABI therefore removes calls and exits as well as making each call cheaper. Which calls
+  disappear is UNRESOLVED: the runs have no route trace. Chunking of large transfers through the exchange
+  buffer, against the direct ABI's 64 KiB single call, is a hypothesis that has not been tested.
+
+**Exits per run are dominated by work the direct ABI does not touch.** Of 691,554 direct-arm exits, 389,593
+are faults (kind 4, mostly resolved in cv_step_locked) and 156,205 are mapping and other services. Only
+130,054 are delegated calls. Today's launcher route on the same test (kfast `k0-perl.analysis`, a
+different kernel, adapter, binary and test.pl driver) shows 146,020 escapes for test.pl: kind 1/3/4 =
+11,478 / 112,149 / 22,393.
+
+**Positive control at SPEC scale and the emulation's cost.** The direct arm with `x-capstone-checked-copy=true`
+(`p2-dir-on`) gives:
+- rc 0, specdiff 2/2, `test.out` `b41ee90a9ea04241`;
+- **emulation entries 0**;
+- firmware 13,432,504 instructions (timer SBI work), against 827,727,574 with the model off;
+- the same calls (130,054, 102,809 register) and exits within 31 (691,585).
+
+Total 135,986,852,905 against 136,802,276,650 with the model off, so one emulated check costs **604
+instructions** machine-wide (603.6 of them in firmware). A trap round trip on silicon costs cycles beyond
+that. The exchange arm with the model on was not run. Scaling its 2,643,137 checks by 604 suggests about
+1.6e9 instructions of saving with in-hardware checks, about 10k per exchange-arm call. That figure is an
+estimate, not a reading.
