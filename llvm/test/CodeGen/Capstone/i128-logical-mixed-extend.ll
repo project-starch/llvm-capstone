@@ -16,9 +16,8 @@
 
 ; CHECK-LABEL: mixed_or_known_nonneg:
 ; CHECK: # %bb.0:
-; CHECK-NEXT: lui a2, 524288
-; CHECK-NEXT: addiw a2, a2, -1
-; CHECK-NEXT: and a0, a0, a2
+; CHECK-NEXT: slli a0, a0, 33
+; CHECK-NEXT: srli a0, a0, 33
 ; CHECK-NEXT: or a0, a0, a1
 ; CHECK-NEXT: li a1, 0
 ; CHECK-NEXT: cjalr zero, 0(ra)
@@ -32,9 +31,8 @@ define i128 @mixed_or_known_nonneg(i64 %a, i64 %b) {
 
 ; CHECK-LABEL: mixed_xor_known_nonneg:
 ; CHECK: # %bb.0:
-; CHECK-NEXT: lui a2, 16
-; CHECK-NEXT: addi a2, a2, -1
-; CHECK-NEXT: and a0, a0, a2
+; CHECK-NEXT: slli a0, a0, 48
+; CHECK-NEXT: srli a0, a0, 48
 ; CHECK-NEXT: xor a0, a0, a1
 ; CHECK-NEXT: li a1, 0
 ; CHECK-NEXT: cjalr zero, 0(ra)

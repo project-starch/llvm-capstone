@@ -3013,36 +3013,14 @@ void CapstoneDAGToDAGISel::Select(SDNode *Node) {
       return;
   }
 
-    if (Node->getSimpleValueType(0) != Subtarget->getXLenVT())
-      break;
-
-    SDValue LHS = Node->getOperand(0);
-    SDValue RHS = Node->getOperand(1);
-
-    if (auto *C = dyn_cast<ConstantSDNode>(LHS)) {
-      std::swap(LHS, RHS);
-      N1C = C;
-    } else {
-      N1C = dyn_cast<ConstantSDNode>(RHS);
-    }
-
-    if (N1C) {
-      int64_t Imm = N1C->getSExtValue();
-      if (isInt<12>(Imm)) {
-        SDNode *Res = CurDAG->getMachineNode(
-            Capstone::ANDI, DL, Node->getSimpleValueType(0), LHS,
-            CurDAG->getSignedTargetConstant(Imm, DL, Node->getSimpleValueType(0)));
-        ReplaceNode(Node, Res);
-        return;
-      }
-
-      RHS = selectImm(CurDAG, DL, Node->getSimpleValueType(0), Imm, *Subtarget);
-    }
-
-    SDNode *Res = CurDAG->getMachineNode(Capstone::AND, DL,
-                                         Node->getSimpleValueType(0), LHS, RHS);
-    ReplaceNode(Node, Res);
-    return;
+    // Anything not handled above goes to the generated matcher, which has the
+    // ANDI/AND patterns and, ahead of them, the ones that need no materialised
+    // mask: ZEXT_H and ANDN (Zbb), the SLLI/SRLI pairs for leading- and
+    // trailing-ones masks, and the COPY for an AND of 0xffffffff whose users
+    // read only the low word. Selecting every XLen AND here as ANDI or AND
+    // with the constant in a register (7ac35cf4b145, while i128 carried
+    // capabilities) kept the matcher from ever seeing one.
+    break;
   }
   case ISD::MUL: {
     // Special case for calculating (mul (and X, C2), C1) where the full product
