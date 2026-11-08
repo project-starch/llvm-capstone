@@ -320,8 +320,11 @@ integers (`capstone_csmint.S`: x[n] at a0 + 8n), so opaque cargo can never retur
 checked-copy ON, one slot, Image `b28fc66c17704252`, `gates/c5a-probe-on`:
 - `MUSL_IO checks=170/176 failures=0`, `native integration checks=51 failures=0`,
   `gcc coverage checks=20 failures=0`: single-task native I/O works pinned.
-- Then `task-driver` printed `PASS first native task ready` and died on its 30 s alarm (`Alarm clock`,
-  `MUSL_GATE_EXIT:142`) while starting a SECOND native task. Without transport, `slot_acquire` never evicts
+- Then `entry-driver` printed `PASS first native task ready` and died on its 30 s alarm (`Alarm clock`,
+  `MUSL_GATE_EXIT:142`) while starting a SECOND native task. **Correction (9 Nov):** this line first named
+  `task-driver`. The string is entry-driver's, and task-driver's binary does not contain it; the kernel-port
+  lane found this (native/board-6.4 b05aa17aa521). Both drivers start a second live native task, so the
+  finding is unchanged. Without transport, `slot_acquire` never evicts
   (`capstone_vm.c:680`), and a new context waits for the slot (`:2953-2963`), so two live native tasks
   deadlock on one slot.
 - **On C.5a's model only one native task can be live at a time.** The collaborator's perl recipe has three
@@ -367,3 +370,125 @@ validated only on the twin, with the model off.
    (`build-fpga/.config`). The native route needs CONFIG_RISCV_CAPSTONE_TASK and the native/helper patches,
    written for 6.1. "Swap only module/launcher/firmware" cannot hold: the kernel changes, and either the
    patches are ported to 6.4.14 or a 6.1 FPGA kernel is built. Neither has ever booted on the board.
+
+## The C.5a / E5 path (lead's decision: native goes to silicon, pinned arenas, rd-only slot detach/adopt)
+
+**Adapter** (`c5a_model=1`, MEASUREMENT ONLY):
+- CSRUNV 4/5 are the RTL's rd-only slot detach/adopt (rd 0 or -1). No image is written or read: no magic
+  at +1024, no epoch at +1072, and import writes satp to +928 (the switcher's saved satp) instead of the
+  image's +1192. A resident context needs no ASID rebind: +928 is refreshed before every resume.
+  `native_slot_transport=1` enables it.
+- Flat RECYCLE table, `make CV_FLAT_INDEX_BITS=20`. 2^20 records = 16 MiB come from CMA (boot with
+  `cma=`); the buddy allocator is used below its largest order.
+- The copyable-v1 node is read, holding truthful values: id-bits 30, exact-bounds 0, page 4096,
+  granule 16, checked-copy-abi 0, context-transport-version 0. `checked_copy_emu=1` admits abi 0.
+- The kernel writes the epoch at +2336 after every escape. The classification word (+2344) is fetched
+  on demand, once per escape, by CSKINDS rd, frame_pa (custom-2 funct7 0x27, MEASUREMENT ONLY). The
+  monitor emulates it with an LDC of each slot. Only the direct route and native spawn/pipe read it, so
+  its cost lands on the direct arm only (`kinds_queries` counts it).
+- Firmware entries: the monitor stamps descriptor word 5 with `0x4353434845` on every check it handles.
+  The adapter counts the stamps (`emu_fingerprints`); a processor-performed check never writes word 5.
+
+**Monitor** (capstone-sbi `native/cscheck-emu`, `capstone_cscheck.S`, `-DCAPSTONE_CSCHECK_EMU`): the hook sits
+before the CSMINT one in `_handle_non_ecall`. Physical capabilities come from CAPCREATE per page (as CSM_PHYS).
+- The stored type is read before any load: `CSC_STORED_NONLIN` 2 on the RTL, 1 in QEMU (Q-35). The check
+  never LDCs a slot that might be LINEAR.
+- Tag by LDC, then LCC TYPE (7 = untagged; NONLIN reads 1 on both machines).
+- Flat liveness: header RECYCLE set and PAGED clear; 2 <= index < next and < capacity; record word 1
+  VALID and not FREE; generation [59:50] == id >> 20.
+- LCC for perm, cursor, base and end; bounds; Sv39.
+- **QEMU does not decode CAPCREATE, so this file cannot run on any QEMU.** It assembles (291 instructions),
+  but it is unexecuted until an RTL-simulation arm runs it, as CSMINT's emulation was validated
+  (va-csmint-emu).
+
+**QEMU twin** (capstone-qemu `native/c5a-twin20-check`, on `virtual/flat-index-20` 23f9df04e5):
+`x-capstone-cscheck-frame=true` models the monitor's rules (frame-word epoch, mutable slot, stored-type
+pre-check, flat liveness), so the kernel path can be gated on the twin. With it, CSCHECK never reaches
+firmware. The detach/adopt CSRUNV 4/5 come from the rtl lane, not yet delivered.
+
+**Working check, before registration:** gcc train01 direct on twin20.
+- Setup: Image `d7712c4127479056` (flat 20), twin20 + model, the QEMU kit's monitor `fw_jump.elf`, the C.5a
+  dtb, 2 GiB with cma=256M, one slot, no transport.
+- rc 0, specdiff 1/1, total 16,591,075,992 instructions.
+- 156 calls (11 register, 145 exchange), kinds_queries 11, emu_fingerprints 0.
+
+lbm test direct: rc 0, specdiff 1/1, 332 calls (327 register).
+
+### Pre-registered prediction for the twin20 runs (written before them)
+
+**Setup:** the binaries above (`nat-*` builds of the capstone-lifetimes sources, native-IO SDK);
+exchange = native_io 0, direct = mask 479; check model on (QEMU, no firmware).
+
+**Predicted for every run:**
+- rc 0 and specdiff pass in both arms; output hashes equal across the arms.
+- emu_fingerprints 0 (the positive control: the check never reaches firmware). kinds_queries 0 in
+  exchange and <= register calls in direct.
+- Exits equal across the arms within 5 % (perl's 4 % drop was call-count driven).
+
+**Saving per run:**
+- gcc train01: under 0.01 %.
+- lbm test: 0.02-0.2 %.
+- nab test: under 0.1 %.
+- xz test: 0.1-2 %.
+- x264 test: 0.5-3 % (most write calls; its in-guest image validation is not run, so its specdiff is
+  expected to be unavailable).
+
+**Ranking by saving:** x264 > xz > lbm, nab > gcc.
+
+## twin20 results: exchange vs direct at test size, the two-live-task gate, and the native train stages
+
+**Exchange vs direct** (registered in f93d97008f2c). Setup: twin20 + `x-capstone-cscheck-frame`, Image
+`d7712c4127479056`, one slot, no transport. Every run: rc 0, specdiff pass in both arms, emu_fingerprints 0,
+kinds_queries = 0 in exchange and equal to the register calls in direct.
+
+| bench | exchange instr | direct instr | saving | exits | calls (register) |
+|---|---|---|---|---|---|
+| gcc train01 | 16,588,854,663 | 16,590,963,109 | -2.1e6 (-0.013 %) | 135,206 / 135,206 | 156 (11) |
+| lbm test | 7,960,542,674 | 7,954,328,287 | 6.2e6 (0.078 %) | 4,056 / 4,049 | 336 -> 332 (327) |
+| nab test | 7,970,132,919 | 7,969,948,918 | 0.18e6 (0.002 %) | 2,132 / 2,126 | 34 -> 30 (15) |
+| xz test (12 cmds) | 61,749,225,882 | 61,749,768,863 | -0.5e6 (-0.001 %) | 48,111 / 48,111 | 216 (36) |
+
+**Against the prediction:**
+- Held: lbm (0.02-0.2 %), nab (< 0.1 %), equal exits, the fingerprint control, kinds_queries.
+- Failed: xz (predicted 0.1-2 %, read ~0).
+- gcc: |-0.013 %| is just outside the "< 0.01 %" bound. Its negative sign, with only 11 register calls,
+  puts the run-to-run noise at about +-2e6 instructions, so nab and xz are also inside the noise.
+- x264 was not measured. The first attempt ran the generator as the native ldecod, which faults with cause
+  28 where today's stage runs a plain ldecod. The rerun was stopped after 85 min to yield the shared lock.
+
+**At test size no candidate has a measurable native saving.** Delegated calls are 30-340 per run.
+
+**Two live native tasks on twin20 with the rtl lane's detach/adopt** (local twin 5de8f6b012 cherry-picked on
+the check model, Image `0ee07f455a215c6e` with the adopt-kind gate). `run-musl-io.py io --c5a-model --twin`
+PASSes:
+- 170/176 musl-IO and 51 integration checks, `native entry failures=0`, `native task failures=0`;
+- `detaches=2 adopts=2 adopt_kind_refused=0`;
+- no twin `ADOPT-KIND-MISMATCH` or `ADOPT-UNPARKED` line, which the runner now asserts.
+
+Probe 1's deadlock is gone.
+
+**Native train stages** (`make-native-stage.py`: a cp -rL copy of the stages-train-fair stage with the
+launcher replaced by a direct exec):
+- **perlbench:** the same udcnofp objects as the frozen train image (perf/heapx/objs-udcnofp), relinked with
+  the native-IO SDK built by the same compiler (llvm-c1): `ef38a768580f370e`.
+- **mcf:** the tree-boarddevmk sources replayed with that SDK: `d5e5dc49eec9be7c` (stripped as the frozen
+  ones).
+- The train commands are the stage's own, each a single native perl or mcf process. Unlike test.pl, train
+  needs no native shell or spawn, so the command structure matches Plain's.
+- The stage runs on a private tmpfs, because the native grant admits tmpfs, ext4 and 9p only.
+- Short twin: perl `perfect.pl b 3`, direct, with transport. rc 0, specdiff 1/1, 19.6e9 instructions,
+  187 calls (132 register), no ADOPT lines.
+
+**Table size per stage.** The compiler lane's high-water runs: mcf train peaks at 221,072 pages and 14,065 live
+nodes, and was SIGKILLed with a 2^20 table on kit-f55. perlbench needs about 415 k live nodes. Each native
+stage therefore carries its own boot parameters (`cscheck-emu/stages/<stage>.params`):
+- mcf: `capstone_vm.node_flat_records=262144` (2^18, 4 MiB);
+- perlbench: `capstone_vm.node_flat_records=524288` (2^19, 8 MiB).
+
+The native route sizes its table per boot (module parameter, read at load), not per run within a boot.
+The flat table now comes from CMA first, with the buddy allocator as fallback: a multi-MiB buddy block can
+be missing on a fragmented 936 MiB guest.
+
+The twins run at the board's 936 MiB with a device tree dumped at that size
+(`cscheck-emu/twin20-936-c5a.dts`). A dtb dumped at 2 GiB on a 1 GiB guest faults the QEMU monitor at boot
+(cause 24 at 0xffffffc6feffe000).
