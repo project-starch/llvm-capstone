@@ -66,3 +66,27 @@ bkit35-nohz (stage perf/exitk/stages/perl-c3g-tk, C.5a, no new bitstream), again
 33,024 s; `kcyc − rcyc` 1,670 s): test command −1,000 to −1,300 s, `kcyc − rcyc` ≤ 600 s, specdiff 2/2. Board 3 is
 not board 2, so the comparison also crosses boards. If E0 is confirmed before this stage starts, the stage is
 withdrawn and E0 runs instead.
+
+## Result: K1, the NO_HZ_IDLE board kernel (board 3, 8 Nov 22:43 - 9 Nov 01:10)
+
+Predictions: perf/exit-kernel PREREG-nohz.md (93ecfc29648d). Kit bkit35-nohz on C.5a, out-nohz-b3.
+
+| | stock kernel (reference) | NO_HZ_IDLE | change |
+|---|---|---|---|
+| Capstone gcc train c3f (gtr-c3f-tk) | 4,253.3 s (out-ga2-b3) | 4,100.12 s | −153.2 s (−3.6 %) |
+| `kcyc − rcyc` | 5.228 G | 1.238 G (3.541 − 2.303) | −76 % |
+| in-context cycles / instret | 87.85 G / 13.737 G | 87.86 G / 13.739 G | unchanged |
+| `ucyc` | 9.84 G | 9.905 G | +0.7 % |
+| Plain gcc train (plain-gtr-tk) | 3,510.0 s (out-fill-b3) | 3,581.02 s | **+71.0 s (+2.0 %)** |
+
+- N0 holds (rc 0, specdiff 1/1, control passed); N1 holds (1.24 G, inside the point band 0.8-1.6); N3 holds; N4 holds
+  (4,100.1 s, inside the point band 4,060-4,110); N5 holds.
+- **P1 FAILS**: Plain on the NO_HZ kernel is 2.0 % slower (band ±1.5 %), so the kernel change moves Plain and a ratio
+  needs Plain measured on it. On this pair: Capstone/Plain = 4,100.1 / 3,581.0 = 1.145 against 4,253.3 / 3,510.0 =
+  1.212 on the stock kernel. The kernel lever survives the Plain correction, at about −0.07 on the gcc ratio.
+- Not used in this week's train, whose Plain arm runs on the stock kernel. The Plain arm's own response to NO_HZ is
+  unexplained (its idle ticks are not the replay).
+- Process slip, recorded: the cancelled NO_HZ perlbench stage (Addendum 2) was not fully stopped at 00:2x, because
+  its driver lived in its own process group. It took board 3 at 01:13, made the board-3 train chain read "busy" and
+  exit, and was stopped at 01:3x (run_baked terminated, booking 861 removed). The train chain was relaunched at
+  01:32 through train-board2.sh, which waits for a free board before each step.
