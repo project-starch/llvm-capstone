@@ -305,3 +305,65 @@ estimate, not a reading.
 - Steps 2-4 are on HOLD (runtime and rtl lanes agree): 1.72 % on perl and nothing on gcc, before any silicon cost.
   A hardware check cuts the exchange arm (16.6 checks per call) more than the direct arm (10.4), so the 15.1 k
   saving per call would shrink to about 11-12 k. The kfast module's board number is the input to reopen on.
+
+## C.5a route, probe 1: pinned arenas, no transport (branch native/c5a-route)
+
+On C.5a the adapter's admission fails three ways (the RTL lane, above): transport, the paged table, and the
+copyable profile. Also, the unpinned backing it requires uses CPTAG, CLDRAW and CSTRAW
+(`linux-6.1-unpinned.patch:202-248`, `capstone_vm.c:1031/1308`), which the boards' RTL does not decode.
+CLDRAW/CSTRAW cannot be emulated one instruction at a time either. The monitor saves S's registers as 8-byte
+integers (`capstone_csmint.S`: x[n] at a0 + 8n), so opaque cargo can never return to an S register.
+**Unpinned backing as written cannot work on C.5a.** The route survives only with pinned arenas.
+
+`capstone_vm.c5a_model=1` (MEASUREMENT ONLY, default off) admits no transport and `unpinned=0`.
+`run-musl-io.py --c5a-model` runs the model with raw moves and transport off. Result: QEMU d2bac4e08a21,
+checked-copy ON, one slot, Image `b28fc66c17704252`, `gates/c5a-probe-on`:
+- `MUSL_IO checks=170/176 failures=0`, `native integration checks=51 failures=0`,
+  `gcc coverage checks=20 failures=0`: single-task native I/O works pinned.
+- Then `task-driver` printed `PASS first native task ready` and died on its 30 s alarm (`Alarm clock`,
+  `MUSL_GATE_EXIT:142`) while starting a SECOND native task. Without transport, `slot_acquire` never evicts
+  (`capstone_vm.c:680`), and a new context waits for the slot (`:2953-2963`), so two live native tasks
+  deadlock on one slot.
+- **On C.5a's model only one native task can be live at a time.** The collaborator's perl recipe has three
+  live at once (test.pl in the native perl, the hush shell, the test child), so it cannot run there.
+  gcc train01 (one task) can. Perl test can run only with today's board structure (a plain driver that
+  execs one native perl at a time). That structure needs the exec grant root to be wider than the cwd
+  (`resource-dom.h` `dom_resources_init`), which is a change to the grant model.
+
+## C.5a route, probe 2: the flat table on QEMU, and where the work stops
+
+**Additions, MEASUREMENT ONLY and default off:**
+- `c5a_model=1` accepts no copyable-profile node (build id width, compressed bounds).
+- With `make CV_FLAT_INDEX_BITS=16|18` it takes a flat RECYCLE table, allocated contiguously per context.
+- `dom_grant_root=DIR` gives an exec whose cwd lies beneath DIR that directory as its grant root, keeping
+  the cwd. This is for the board's one-native-task perl structure.
+
+**gcc train01, direct arm, checked-copy ON, flat 16-bit table, no transport, pinned, one slot.** Run on
+QEMU d2bac4e08a21 with Image `18cffd642b651c59` (`spec/out-c5a-gtr-dir-on`): rc 139 after 11.26e9
+instructions, `capstone_task: fault rc=-14 kind=2 cause=30`, 0 emulation entries. The flat build never
+collects (`collect()` returns at once on flat tables), and 65,536 ids do not hold gcc train01. The launcher route
+completes the same input on the 18-bit twin (kfast k0-gtr). On QEMU, an 18-bit flat table exists only on
+the C.5a twin (capstone-qemu virtual/flat-index-18 46b69c03a4 + the Q-34 pin). That twin has no CSCHECK,
+transport or raw moves. Its legacy profile keeps CAPENTER, so it boots the capability-mode monitor. The
+copyable QEMU (dd041/d2bac4e) has native CSCHECK but cannot boot that monitor (CAPENTER removed). **No single
+QEMU has both native CSCHECK and C.5a's table.** The "check native, firmware entries 0" control therefore
+reads only on the copyable QEMU's 16-bit table, which gcc train01 exhausts. The monitor emulation can be
+validated only on the twin, with the model off.
+
+**Not started, recorded for the next step:**
+1. The CSCHECK emulation in the capability-mode monitor (csbi-batch d9da397, beside `csmint_dispatch`).
+   Planned design:
+   - Physical capabilities via `CSM_PHYS`, no Sv39 walk (rs1/rs2 are PAs).
+   - Tag by LDC through a minted frame capability.
+   - Type/bounds/perms by LCC selectors 1/3/4/5. The TYPE query agrees on RTL and QEMU (NONLIN reads 1,
+     Q-35), so the stored-enum difference is avoided.
+   - id = hi >> 34; flat liveness: header, then record root + 16 * (id & 0x3ffff), VALID && !FREE, word1
+     generation [59:48] == id >> 18.
+   - Software epoch: the kernel writes +2336 after each escape when the model publishes none.
+   - The classification word does not exist on C.5a, so the direct route needs an SBI "kinds" call per
+     service (8 LDCs in M). That cost lands only on the direct arm.
+2. The QEMU monitor build for the twin (kit firmware `fw_jump.elf` came from an opensbi-T tree).
+3. **The board kernel.** The board kit's Image is Linux 6.4.14 from the shared caplifive-system bake
+   (`build-fpga/.config`). The native route needs CONFIG_RISCV_CAPSTONE_TASK and the native/helper patches,
+   written for 6.1. "Swap only module/launcher/firmware" cannot hold: the kernel changes, and either the
+   patches are ported to 6.4.14 or a 6.1 FPGA kernel is built. Neither has ever booted on the board.

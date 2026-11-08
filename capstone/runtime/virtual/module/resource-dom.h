@@ -17,6 +17,13 @@ static bool dom_local_tmp;
 module_param(dom_local_tmp, bool, 0400);
 MODULE_PARM_DESC(dom_local_tmp,
     "alias /tmp to private .capstone-tmp inside the initial cwd grant (default off)");
+/* MEASUREMENT ONLY (the native route on C.5a's model, where one native task is live at a time): an exec
+ * whose cwd lies beneath this directory takes it as its grant root and keeps the cwd as its working
+ * directory, as a native chdir inside the grant would leave it. Today's board perl stage execs each test
+ * from t/ with -I../lib; with the cwd as root that path is outside the grant. Unset: the cwd is the root. */
+static char *dom_grant_root;
+module_param(dom_grant_root, charp, 0400);
+MODULE_PARM_DESC(dom_grant_root, "MEASUREMENT ONLY: grant root for execs beneath it (default unset: the cwd)");
 static bool dom_wide_grants;
 module_param(dom_wide_grants, bool, 0444);
 MODULE_PARM_DESC(dom_wide_grants,
@@ -125,6 +132,15 @@ static int dom_resources_init(struct context *c)
     get_fs_pwd(current->fs, &d->root);
     d->cwd_path = d->root;
     path_get(&d->cwd_path);
+    if (dom_grant_root && *dom_grant_root) {
+        struct path wide;
+        int rc = kern_path(dom_grant_root, LOOKUP_DIRECTORY, &wide);
+        if (rc) return rc;
+        if (d->cwd_path.mnt == wide.mnt && is_subdir(d->cwd_path.dentry, wide.dentry)) {
+            path_put(&d->root);
+            d->root = wide;
+        } else path_put(&wide);
+    }
     if (!dom_disk_inode(d_inode(d->root.dentry))) return -EACCES;
     buf = kmalloc(PATH_MAX, GFP_KERNEL);
     if (!buf) return -ENOMEM;

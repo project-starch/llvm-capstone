@@ -49,6 +49,12 @@ static bool copyable_exact_bounds;
 #define CV_CSC_COUNTERS 9
 static bool checked_copy_emu;
 module_param(checked_copy_emu, bool, 0444);
+/* MEASUREMENT ONLY (the native route on C.5a's model): admit a processor without context transport
+ * (CSRUNV actions 4/5), so one supervisor slot that is never evicted, and with pinned arenas (no
+ * CPTAG/CLDRAW/CSTRAW, so no unpinned backing). A new native context waits for the slot. */
+static bool c5a_model;
+module_param(c5a_model, bool, 0444);
+MODULE_PARM_DESC(c5a_model, "MEASUREMENT ONLY: admit no transport and pinned arenas (default off)");
 MODULE_PARM_DESC(checked_copy_emu, "MEASUREMENT ONLY: accept firmware-emulated CSCHECKR/W (default off)");
 static bool cv_csc_firmware(void)
 {
@@ -3125,7 +3131,7 @@ static int context_create(struct context **out)
     struct context *existing;
     struct cv_thread *t;
     unsigned long available;
-    if (node_table_flat || num_online_cpus() != 1 || !current->mm || PAGE_SIZE != 4096)
+    if ((node_table_flat && !c5a_model) || num_online_cpus() != 1 || !current->mm || PAGE_SIZE != 4096)
         return -EOPNOTSUPP;
     if (node_initial_pages < 2 || node_initial_pages > CV_ID_PAGES_MAX ||
         !node_batch_pages || node_batch_pages > CV_ID_PAGES_MAX ||
@@ -3140,8 +3146,11 @@ static int context_create(struct context **out)
     if (!t) { kvfree(c); return -ENOMEM; }
     c->frame = (void *)get_zeroed_page(GFP_KERNEL);
     /* Native task admission requires the paged table; no misc-device CMA allocator. */
-    c->table = node_new_page(c);
-    if (c->table && !node_table_flat) c->table_pa = virt_to_phys(c->table);
+    /* c5a_model's flat RECYCLE table: one physically contiguous allocation, freed by node_free_table. */
+    c->table = node_table_flat ? (void *)__get_free_pages(GFP_KERNEL | __GFP_ZERO, get_order(CV_FLAT_BYTES))
+                               : node_new_page(c);
+    if (c->table) c->table_pa = virt_to_phys(c->table);
+    if (c->table && node_table_flat) c->stats.node_bytes += CV_FLAT_BYTES;
     if (!c->frame || !c->table) {
         if (c->frame) free_page((unsigned long)c->frame);
         node_free_table(c);
@@ -3284,8 +3293,15 @@ static int __init init(void)
     /* Admission switches remain accepted by existing boot recipes. Disabling
      * one disables this adapter; it can never select a legacy entry path. */
     if (!native_task || !native_dispatch || !dom_binfmt || !checked_copy ||
-        !native_slot_transport || !unpinned) return -EOPNOTSUPP;
+        (!c5a_model && (!native_slot_transport || !unpinned))) return -EOPNOTSUPP;
     profile = of_find_compatible_node(NULL, NULL, "capstone,copyable-v1");
+    if (!profile && c5a_model) {
+        /* C.5a advertises no copyable profile: take the build's id width, compressed bounds, 4 KiB
+         * pages and 16-byte granules, and no checked-copy or transport ABI. */
+        profile = NULL; id_bits = CAPSTONE_VM_IDS; exact = 0; page_size = PAGE_SIZE; granule_size = 16;
+        error = 0;
+        goto profile_read;
+    }
     if (!profile) return -EOPNOTSUPP;
     error = of_property_read_u32(profile, "id-bits", &id_bits) ||
             of_property_read_u32(profile, "exact-bounds", &exact) ||
@@ -3294,8 +3310,9 @@ static int __init init(void)
     of_property_read_u32(profile, "checked-copy-abi", &checked_abi);
     of_property_read_u32(profile, "context-transport-version", &transport_version);
     of_node_put(profile);
+profile_read:
     if (error || id_bits != CAPSTONE_VM_IDS || exact > 1 ||
-        page_size != PAGE_SIZE || granule_size != 16 || node_table_flat)
+        page_size != PAGE_SIZE || granule_size != 16 || (node_table_flat && !c5a_model))
         return -EOPNOTSUPP;
     copyable_exact_bounds = exact;
     /* Refuse mismatched models at load, before an experimental instruction
@@ -3304,15 +3321,15 @@ static int __init init(void)
         pr_emerg("capstone_vm: MEASUREMENT ONLY: CSCHECKR/W emulated by firmware (checked_copy_emu=1)\n");
         checked_abi = 1; transport_version = transport_version == 5 ? 6 : 0;
     }
-    if ((checked_copy && (checked_abi != 1 || !native_slot_transport)) ||
+    if ((checked_copy && (checked_abi != 1 || (!native_slot_transport && !c5a_model))) ||
         (native_slot_transport && transport_version != (checked_copy ? 6 : 5)) ||
-        (native_dispatch && (!dom_binfmt || !checked_copy || !native_slot_transport)) ||
+        (native_dispatch && (!dom_binfmt || !checked_copy || (!native_slot_transport && !c5a_model))) ||
         ((native_slot_transport || checked_copy || dom_binfmt) && num_possible_cpus() != 1))
         return -EOPNOTSUPP;
 
 
 #ifdef CV_TASK_BACKEND
-    if (native_task && (!native_dispatch || !unpinned)) return -EOPNOTSUPP;
+    if (native_task && (!native_dispatch || (!unpinned && !c5a_model))) return -EOPNOTSUPP;
     if (native_io && !native_task) return -EOPNOTSUPP;
 #endif
     if (unpinned_fast_sweep && !unpinned) return -EINVAL;
