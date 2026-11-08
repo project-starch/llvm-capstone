@@ -1,7 +1,7 @@
 diff --git a/arch/riscv/Kconfig b/arch/riscv/Kconfig
 --- a/arch/riscv/Kconfig
 +++ b/arch/riscv/Kconfig
-@@ -827,3 +827,16 @@ source "drivers/cpufreq/Kconfig"
+@@ -827,3 +827,17 @@ source "drivers/cpufreq/Kconfig"
  endmenu # "CPU Power Management"
  
  source "arch/riscv/kvm/Kconfig"
@@ -9,15 +9,16 @@ diff --git a/arch/riscv/Kconfig b/arch/riscv/Kconfig
 +config RISCV_CAPSTONE_TASK
 +	bool "Experimental Capstone native task backend"
 +	depends on 64BIT && MMU
-+	depends on VIRT_CPU_ACCOUNTING_GEN && CONTEXT_TRACKING_USER_FORCE
 +	default n
 +	help
 +	  Experimental, default-off task-owned Capstone entry/return. Requires
 +	  matching copyable-only model and tag-aware memory patches. Root only.
 +	  Requires exactly one POSSIBLE CPU at run time, not !SMP: the attach
 +	  and the adapter's load refuse otherwise, so an SMP kernel on one hart
-+	  qualifies. Domain execution is accounted as user time through user
-+	  context tracking (task-driver's "compute charged to user").
++	  qualifies. Select VIRT_CPU_ACCOUNTING_GEN and
++	  CONTEXT_TRACKING_USER_FORCE to account domain execution as user time
++	  (task-driver's "compute charged to user"); without them it is
++	  accounted as system time and RCU sees a kernel-mode CPU during it.
 diff --git a/arch/riscv/include/asm/capstone_task.h b/arch/riscv/include/asm/capstone_task.h
 new file mode 100644
 --- /dev/null

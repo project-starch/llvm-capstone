@@ -103,6 +103,32 @@ table is in use. On a flat table, the prediction is C.5a probe 2's fault (`capst
 The native-to-Plain ratio is read only within one kernel. Both arms run on this kernel, so the accounting options cost
 both of them. Neither arm is compared with the stock kernel's module or Plain runs.
 
+## Kernel variant K-min (kit `bkit36-native64-min`)
+
+The Plain train runs on the STOCK kernel. Generic accounting with forced user context tracking adds work on every
+user/kernel transition, which would slow Plain on K-acc. K-min is the board's stock `.config` plus
+`RISCV_CAPSTONE_TASK=y` alone (`NATIVE_TASK_CONFIG=min`). The Kconfig no longer depends on the two accounting options.
+
+**Expectation, set by the coordinator before the K-min run:** everything passes except task-driver's two user-tick
+checks, "compute charged to user" and "compute resumes". Those two are WAIVED for SPEC timing, because on K-min domain
+time is accounted as system time. Any other failure, or anything functional that depends on context tracking, stops
+K-min. K-acc then stays the default, with the Plain-on-the-same-kernel arms above.
+
+**QEMU reading (K-min Image `811824918d15d4e8`, `rcupdate.rcu_cpu_stall_timeout=3`):**
+
+| Check | Reading |
+|---|---|
+| run-musl-io.py io | MUSL_IO 170/0, 4/0, 176/0, 4/0; native integration 51/0; gcc coverage 20/0; native entry failures 0 |
+| task-driver | exactly "FAIL compute charged to user" and "FAIL compute resumes" (`compute usage user=0.000000 system=0.501307`); every other task check passes, SIGSTOP, SIGCONT and SIGKILL included |
+| smoke stage | all 9 steps pass after the waiver |
+| SPEC stage a | all 5 commands rc 0, outputs byte-identical to the K-acc twin |
+| warnings | no RCU stall, WARNING or BUG line at a 3 s stall timeout, across a 17.7 s native gcc train01 |
+
+The prediction holds. The board rule for K-min: `classify.py --waive-accounting` waives those two lines only, with
+rc 1 and "native task failures=2". A doctored transcript with one more failing task check still reads FAIL.
+
+The stall detector itself was not driven to fire, so "no stall" is a reading without a positive control.
+
 ## Gates before the launch
 
 1. `preflight-board-run.sh` PASS.

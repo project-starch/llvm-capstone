@@ -10,8 +10,12 @@ other kernel version.
 ## Configuration: the minimal delta
 
 On the board's stock `.config`, olddefconfig after the install changes exactly these lines (`native-config.delta` in
-the board kit): `RISCV_CAPSTONE_TASK=y`, `VIRT_CPU_ACCOUNTING_GEN=y` in place of `TICK_CPU_ACCOUNTING`, and
-`CONTEXT_TRACKING_USER(_FORCE)=y`. SMP, NR_CPUS, TREE_RCU, HZ and preemption stay as stock.
+each board kit):
+- K-acc: `RISCV_CAPSTONE_TASK=y`, `VIRT_CPU_ACCOUNTING_GEN=y` in place of `TICK_CPU_ACCOUNTING`, and
+  `CONTEXT_TRACKING_USER(_FORCE)=y`;
+- K-min: `RISCV_CAPSTONE_TASK=y` alone.
+
+SMP, NR_CPUS, TREE_RCU, HZ and preemption stay as stock in both.
 
 - **One possible CPU, not `!SMP`.** The 6.1 Kconfig required `!SMP`. The requirement in the code is one POSSIBLE CPU:
   - `capstone_vm.c` refuses to load native transport, checked copy, binfmt or unpinned backing when
@@ -24,16 +28,22 @@ the board kit): `RISCV_CAPSTONE_TASK=y`, `VIRT_CPU_ACCOUNTING_GEN=y` in place of
   device tree has one hart (`cpu@0`), so an SMP kernel has one possible CPU there. `nr_cpus=1` gives the same on a
   machine with more harts. Two harts cannot be tried on QEMU, which refuses its own way: "x-capstone-u-mode requires
   exactly one possible hart".
-- **Generic virtual CPU accounting and forced user context tracking stay.** They are required: on an SMP kernel with
-  stock tick accounting, the gate fails exactly two checks.
-  - task-driver's `CHECK("compute charged to user", before > 0)` fails, reading `compute usage user=0.000000
-    system=0.501327`.
-  - Its `CHECK("compute resumes", user_ticks(pid) > stopped)` fails too.
-  - Both read the task's user ticks (`tests/native-task/task-driver.c:70-76`).
-  - This matches the design's "Linux must account domain computation as user execution"
-    (`docs/design/virtual-capstone/native-linux-tasks.md`).
-  - The Kconfig keeps `depends on VIRT_CPU_ACCOUNTING_GEN && CONTEXT_TRACKING_USER_FORCE`.
-- `NATIVE_TASK_6_1_CONFIG=1` also turns SMP off, as the 6.1 recipe did.
+- **Generic virtual CPU accounting and forced user context tracking are a choice, `NATIVE_TASK_CONFIG`.** Two kernels
+  come from the same series.
+  - **K-acc (`acc`, the default)** adds both. The gate passes in full.
+  - **K-min (`min`)** adds RISCV_CAPSTONE_TASK alone. On the board's stock `.config` that is a one-line delta, so a
+    Plain run on K-min matches the stock kernel's transitions. The gate fails exactly two checks:
+    - task-driver's `CHECK("compute charged to user", before > 0)` (`compute usage user=0.000000 system=0.501307`);
+    - `CHECK("compute resumes", user_ticks(pid) > stopped)`.
+
+    Both read the task's user ticks (`tests/native-task/task-driver.c:70-76`). That is the design's "account domain
+    computation as user execution": on K-min, domain time is system time. The board kit for K-min waives those two
+    checks for SPEC timing (`classify.py --waive-accounting`), and only those two.
+  - Nothing else in K-min depends on context tracking. `riscv_capstone_run_user`'s `user_enter_irqoff`/`user_exit_irqoff`
+    and the trap hook's balancing become no-ops. Signal delivery passes (SIGSTOP, SIGCONT and SIGKILL checks). RCU
+    showed no stall at a 3 s stall timeout across the gate, the smoke, and a 17.7 s native gcc train01 on QEMU. It
+    reaches quiescent states at the exit-work loop's scheduler calls instead of in a user-mode extended QS.
+- `NATIVE_TASK_CONFIG=6.1` is K-acc with SMP off, as the 6.1 recipe did.
 
 ## How the port was made
 
@@ -75,7 +85,8 @@ rootfs `9903242c`, the same probes and one hart.
 | 6.4.14, this series, the 6.1 native config moved forward (SMP off, TINY_RCU, generic accounting) | `9c0e6eff0248432f` | PASS: MUSL_IO 170/0, 4/0, 176/0, 4/0; native integration 51/0; gcc coverage 20/0; entry and task failures 0 |
 | 6.1 + the 6.1 series, the same adapter source (control) | `63642abef1915cbb` | PASS, the same readings; native_route counts per syscall number identical (840) |
 | 6.4.14, SMP=y, TREE_RCU, stock tick accounting, no context tracking | `313c7e405a79056f` | FAIL: "compute charged to user" and "compute resumes" (`compute usage user=0.000000 system=0.501327`); every other check passes |
-| 6.4.14, SMP=y, TREE_RCU, generic accounting + forced user context tracking (the minimal delta) | `31296c3bdb9cdbcb` | PASS, the same readings; `compute usage user=0.497410 system=0.003977` |
+| K-acc: 6.4.14, SMP=y, TREE_RCU, generic accounting + forced user context tracking | `31296c3bdb9cdbcb` | PASS, the same readings; `compute usage user=0.497410 system=0.003977` |
+| K-min: the series' final Kconfig, RISCV_CAPSTONE_TASK only, `rcupdate.rcu_cpu_stall_timeout=3` | `811824918d15d4e8` | the two accounting checks FAIL, as pre-registered; every other reading as above; no RCU stall, WARNING or BUG |
 
 ## Not covered by the port
 
