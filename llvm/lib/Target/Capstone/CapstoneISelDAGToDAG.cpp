@@ -126,6 +126,24 @@ static cl::opt<bool> CapstoneImageGp(
              "asserts the image gp is NONLIN, so no global base is delin'd"),
     cl::init(false));
 
+// Direct calls under the gp-free ABI. A call to a function defined in the image
+// is lowered today as PseudoLLA (auipc + addi) feeding PseudoCALLIndirect, whose
+// AsmPrinter lowering under gp-free is a plain `jalr`: three to four
+// instructions per call, and the callee address is a value that register
+// allocation copies (`mv`) and MachineLICM can hoist into a callee-saved
+// register. With this option such a call is PseudoCALL / PseudoTAIL instead:
+// `auipc ra, %pcrel_hi(f); jalr ra, %pcrel_lo(ra)` (R_Capstone_CALL_PLT), the
+// same plain jalr within PCC, with the address never a register value. The
+// July bring-up avoided PseudoCALL only because its CALL relocation was not yet
+// wired for Capstone; it is now (llvm-mc -filetype=obj, ld.lld and objdump
+// resolve `call f`, and relax it to `jal` under +relax). Default off.
+static cl::opt<bool> CapstoneDirectCalls(
+    "capstone-direct-calls", cl::Hidden,
+    cl::desc("Under the gp-free ABI, lower a direct call to a function defined "
+             "in the image as auipc+jalr (PseudoCALL/PseudoTAIL) instead of "
+             "materialising its address for an indirect jalr"),
+    cl::init(false));
+
 // gp-captable: the silicon-correct global-addressing half of the gp-free domain
 // ABI. gp is the base of a per-global cap-table (data authority, derived in-glue
 // from sp/cscratch) rather than a cap over the code image; a global at cap-table
@@ -2055,6 +2073,48 @@ void CapstoneDAGToDAGISel::selectCall(SDNode *Node) {
 
   // Target register that will be passed to CJALR (rs1)
   SDValue TargetReg;
+  bool IsTail = Node->getOpcode() == CapstoneISD::TAIL;
+
+  // -capstone-direct-calls: a direct call to a function of the image is a
+  // PC-relative auipc+jalr pair (see the option). Only a symbol the static link
+  // resolves inside the image qualifies: an extern-weak function may be
+  // undefined (address 0), which the indirect form reaches as `jalr 0` and a
+  // CALL relocation would not.
+  SDValue DirectSym;
+  if (CapstoneDirectCalls && capstoneGpFreeAbiActive() &&
+      Callee.getOpcode() == CapstoneISD::LGA) {
+    SDValue Symbol = Callee.getOperand(0);
+    if (auto *GA = dyn_cast<GlobalAddressSDNode>(Symbol)) {
+      const GlobalValue *GV = GA->getGlobal();
+      if (isa_and_nonnull<Function>(GV->getAliaseeObject()) &&
+          !GV->hasExternalWeakLinkage() && GA->getOffset() == 0)
+        DirectSym = CurDAG->getTargetGlobalAddress(GV, DL, MVT::i64, 0,
+                                                   CapstoneII::MO_CALL);
+    } else if (auto *ES = dyn_cast<ExternalSymbolSDNode>(Symbol)) {
+      DirectSym = CurDAG->getTargetExternalSymbol(ES->getSymbol(), MVT::i64,
+                                                  CapstoneII::MO_CALL);
+    }
+  }
+  if (DirectSym) {
+    SmallVector<SDValue, 8> Ops;
+    Ops.push_back(DirectSym);
+    for (unsigned I = 2, E = Node->getNumOperands(); I != E; ++I) {
+      SDValue Op = Node->getOperand(I);
+      if (Op.getValueType() == MVT::Other || Op.getValueType() == MVT::Glue)
+        continue;
+      Ops.push_back(Op);
+    }
+    Ops.push_back(Chain);
+    if (Node->getGluedNode())
+      Ops.push_back(Node->getOperand(Node->getNumOperands() - 1));
+    SDNode *Call = CurDAG->getMachineNode(
+        IsTail ? Capstone::PseudoTAIL : Capstone::PseudoCALL, DL,
+        CurDAG->getVTList(MVT::Other, MVT::Glue), Ops);
+    ReplaceUses(SDValue(Node, 0), SDValue(Call, 0));
+    ReplaceUses(SDValue(Node, 1), SDValue(Call, 1));
+    CurDAG->RemoveDeadNode(Node);
+    return;
+  }
 
   // Check if the call target is an LGA node (Direct Call lowered to Indirect)
   if (Callee.getOpcode() == CapstoneISD::LGA) {
@@ -2074,8 +2134,9 @@ void CapstoneDAGToDAGISel::selectCall(SDNode *Node) {
       // PC-relative address itself is a valid jump target inside PCC. Skip the
       // `cincoffset gp` code-capability formation and hand the raw PC-relative
       // address straight to the (indirect) call, which the AsmPrinter lowers to
-      // a plain `jalr` -- no gp, no cjalr. Reuses PseudoLLA's PC-relative fixup
-      // (the PseudoCALL/auipc+jalr CALL relocation is not wired for Capstone).
+      // a plain `jalr` -- no gp, no cjalr. Reuses PseudoLLA's PC-relative fixup.
+      // (Written when the PseudoCALL CALL relocation was not wired for Capstone;
+      // it is now, and -capstone-direct-calls above uses it.)
       TargetReg = SDValue(Offset, 0);
     } else {
       // The callee capability, gp moved to the callee: cincoffset + delin in ONE
@@ -2130,7 +2191,6 @@ void CapstoneDAGToDAGISel::selectCall(SDNode *Node) {
   // placed after the epilogue that frame lowering inserts, and its GPCRTC
   // operand class keeps the target out of the callee-saved registers that the
   // epilogue restores. See llvm/test/CodeGen/Capstone/tail-call.ll.
-  bool IsTail = Node->getOpcode() == CapstoneISD::TAIL;
   unsigned Opc = IsTail ? Capstone::PseudoTAILIndirect
                         : Capstone::PseudoCALLIndirect;
 
