@@ -42,25 +42,28 @@ per-PC profiles):
 
 | # | Lever | State | Missing |
 |---|---|---|---|
-| C1 | kfast: serve read/write/lseek/fstat/clock_gettime in the module (perf/kernel-fastpath 3f7c8e19fecc) | QEMU: −4.4 k instructions per served call, 31 % of perl's calls served, exits −29 %; audit fixes in | the board kit, Tier 1 boot plan, dry run; board go/no-go from the board's own per-exit kcyc/ucyc |
+| C1 | kfast: serve read/write/lseek/fstat/clock_gettime in the module (perf/kernel-fastpath 3f7c8e19fecc) | QEMU: −4.4 k instructions per served call, 31 % of perl's calls served, exits −29 %; audit fixes in. Board module 40e2e0a9fd831a53 (0 compressed instructions; the recipe's control rebuild of bkit30-unify's module matches it section for section), kit bkit35-kfast (+ launcher 02f1a98eaf4d209d, kfast=1), driver perf/univmod/un-run-kf.sh dry-run to DONE | pre-registration: Tier 1 boot (gcc train01 unify-nd) then perl test |
 | C2 | the Linux work per exit (~60 k instructions: interrupt replay, missed-tick catch-up, fault resolution, scheduling) | the largest lever for perl and mcf; not yet attacked | find which of it is avoidable (board kernel config: tick and NO_HZ, catch-up; module: fault-ahead, lazy grants, resume_quantum), build kernel/kit variants, QEMU |
 | C3 | 32 M supervisor quantum on every benchmark | gcc −38 s; used for 6 of 8 in train | — |
+| C4 | the unify stack's outside excess on gcc: +440 s against c3f, board-only (QEMU 0.1 M cycles per step on both) | lead: the dev launcher's sched_yield() on every quantum exit; grant log and console ruled out | exit agent; then the 2×2 on the board (c3f image on the unify kit, devrg image on the gtq kit) |
+| C5 | THP in the unify module | the thp commit b23b38ce15b4 conflicts with dev's new next_resident() page walk; not a mechanical port (the walk carries the retire's tags) | a careful port with fixtures; mcf keeps bkit29-thp meanwhile |
 
 ## D. Native Linux-task integration (native/linux-task-integration)
 
 | # | Lever | State | Missing |
 |---|---|---|---|
-| D1 | direct register syscall ABI, firmware-emulated check (native/checked-emu-measure) | QEMU perl −1.72 %, gcc 0; 10-16 checks per call | a C.5a port (RTL type numbering +1, flat RECYCLE table, Q-35) to measure on silicon without a bitstream |
-| D2 | the RTL checker (plan steps 2-4: epoch/kinds publication, hidden snapshot, multi-cycle DYN check) | on hold after D1's number | lint, synthesis-only gate, full build, sealed: one of the bitstream variants (E1) |
+| D1 | direct register syscall ABI, firmware-emulated check (native/checked-emu-measure) | QEMU perl −1.72 %, gcc 0; 10-16 checks per call. The C.5a port (native/c5a-route fbfed17d2b1a) STOPS on three hardware gaps: the unpinned memory model needs CPTAG/CLDRAW/CSTRAW, which the monitor cannot emulate (S registers are saved as integers); a second live native task waits forever without slot transport (CSRUNV 4/5); the adapter targets Linux 6.1, the board 6.4.14 | **lead's decision**: park native on silicon (recommended), or the RTL (transport, paged table, raw-tag instructions) + a 6.4.14 port |
+| D2 | the RTL checker (plan steps 2-4: epoch/kinds publication, hidden snapshot, multi-cycle DYN check) | stopped: without D1's hardware gaps closed it has no consumer on C.5a | the lead's decision on D1 |
 
 ## E. Bitstream variants (rtl lane, synthesis lane): built and sealed before the boards free
 
 | # | Variant | Why | Ready when |
 |---|---|---|---|
-| E1 | native checker (D2) | the native line, ready if D1 on silicon justifies it | sealed |
-| E2 | larger L1D (more ways; VIPT limits a way to 4 KiB) | mcf's footprint half; Plain must be re-measured on the same bitstream | sealed, with a Plain pair planned |
+| E0 | stage-B base a481031ca = C.5a + R-32 fix + R-68 NI fix + DYN handshake trim + LDC rs1; the control every variant builds on | trim: stc/ldc pair through one base 11.5 → 9.5 cycles per iteration in sim; synthesis job #1 on apollo | sealed; board gates as C.5a's plus one SPEC test stage, first after Wednesday; C.5a stays the fallback |
+| E1 | native checker (D2) | stopped with D1 | the lead's decision |
+| E2 | 16-way L1D (64 KiB) and/or DTLB 32/64 entries (a 32-byte line is out: the tag path assumes line = 16-byte granule) | mcf's footprint half; Plain re-measured on the same bitstream | the QEMU cache model (perf/dcm) must reproduce silicon's 2.90 G / 3.80 G L1D misses first; built only if ≥ 1-2 % of mcf's in-context cycles |
 | E3 | larger lifetime verdict cache | if mcf's hot set exceeds 256 nodes (64,004 nodes in its run); misses cost ~12-13 cycles | the hot-set count first (desk or QEMU), then sealed |
-| E4 | cheaper escape/resume (switcher save/restore) | the per-exit cost in hardware | rtl lane to size it |
+| E4 | cheaper escape/resume | sized and NOT a lever: ~760 cycles per round trip in sim, ≤ ~5 k on silicon with the TLB refill, ≤ 1 % of an exit, ≤ 0.2 % of a run | — |
 
 ## F. Instruments
 
