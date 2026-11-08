@@ -37,3 +37,13 @@ failing: the small-file heartbeat is itself expensive, and every board stage, Pl
 
 N = 1. If the coordinator prefers the harness fix itself (heartbeat sizes from `stat`), this stage still serves as its
 control.
+
+## Addendum 1 (8 Nov 22:xx; the predictions above are unchanged)
+
+The claim-auditor's inference from heartbeat periods (34.5-34.8 s on every small-file stage, at nd3's ~2 s of wall per
+CPU second) puts the small-file heartbeat at ~2.3-2.5 s of CPU, so H1 (≤ 1.5 s) may fail. The inference assumes the
+wall time is CPU, not waiting for the launcher to yield. The value is the reading either way.
+
+**QEMU (8 Nov 22:01, kit-unq, slot 76).** The stage ran: rc 0, specdiff 1/1 PASS, the `.s`/`.out` hashes equal
+perf/nodiag q-ndcpu's, `@@KSYMS-DEFERRED 35780 lines` before the stage and the dump after `@@SPEC-DONE`, and the tick
+probe reads 250 gaps/s at QEMU's HZ=250 with share 0.0012 (no heartbeat on QEMU).
