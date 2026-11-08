@@ -6,6 +6,13 @@ M=${1:?path to tickcost.ko}
 E=${2:?E1 or E2}
 P=/sys/module/tickcost/parameters
 insmod "$M" || { echo "@@TC INSMOD-FAIL"; exit 1; }
+# addendum 2: the addresses a GDB reader needs, at KERN_EMERG so they reach the console (stage output is only seen
+# through heartbeat tails, which stop before a wedge)
+echo 0 > /proc/sys/kernel/kptr_restrict
+for s in tick cvprof_body ktime_get; do
+  a=$(grep -w "$s" /proc/kallsyms | head -1 | cut -d' ' -f1)
+  echo "<0>tickcost-addr $s 0x$a" > /dev/kmsg
+done
 echo "@@TC A scanbench"
 echo 1 > $P/scanbench
 echo "@@TC A ALIVE"

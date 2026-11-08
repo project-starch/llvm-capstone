@@ -94,3 +94,59 @@ twice.** One sample cannot tell "an exception every cycle" from "an exception so
 Not answerable yet: the stopping point is not known. Known so far: the capstone_vm module registers no hrtimer,
 timer, tasklet or irq (dev and spec-silicon, by grep), so nothing it adds runs inside the tick. The six runs without
 cvprof did not wedge.
+
+## Result (board 3, C.5a 1fc2cd5aa, 8 Nov; transcripts sha256 f1805cca75d0fdfb (E1) and aa581864848cf32a (E2))
+
+The runtime lane ran both boots (kit bkit33-tickcost, tickcost.ko c16c5c56585b84c1, driver with
+`BAKED_WEDGE_REPEAT_224=10`). They were graded with `tc-grade.py`, fixed first (see below): **both rc 0, AS
+PRE-REGISTERED** on the graded items.
+
+| arm | pre-registered | E1 boot | E2 boot |
+|---|---|---|---|
+| A | six scan lines, probes 8192/16384 | user 18.87-18.90 ms, kernel 37.66-37.67 ms | user 18.68-18.71 ms, kernel 37.65-37.66 ms |
+| B | returns, maxbody 3,000-3,500 us, calls about 2,900-3,000 | returns, maxbody 3,106, **calls 1,500** | returns, 3,107, **1,500** |
+| C | returns, maxbody about the scan, kfull + ufull = samples | returns, 37,695 us, 633 = 551 + 82 | returns, 37,686 us, 630 = 558 + 72 |
+| D | returns, maxbody 15,000-15,600, calls below 3,000 | returns, 15,106, 1,521 | returns, 15,106, 1,512 |
+| E | stuck; trap log 0x85, tval an instruction | E1: 0x85, tval 0xa0d63 (a branch), mepc 0xffffffff8002fdea | E2: the same |
+| E 224 (reading) | E1: privM mostly 1, ex_commit.valid mostly 0; E2: both 0 | **E1: 0xff on 11/11 reads, no UNSTABLE** | E2: 0x1c on 11/11, as predicted |
+
+**Two predictions MISSED:**
+- B's call count. A low-res hrtimer forwarded 10 ms from the end of its callback expires on the tick after next,
+  so 20 ms per call.
+- E1's 224. The rdtime-emulation calibration in simulation (`ex_commit.valid` 0/75) does not predict silicon
+  (11/11), and is withdrawn as a reference. The reason for the difference is not known.
+
+**What this settles:**
+- A software loop stuck inside the tick handler that reads the clock (E1) reproduces the cvprof wedges' signature
+  exactly: trap log 0x85 with an instruction tval, 224 = 0xff on every read, zero UNSTABLE, and a commit pc ending
+  in ...fffe (0xffffffff80f6fffe).
+- **RETRACTED:** the reading that the cvprof wedges are a frozen hart, an RTL state. It was sent to the runtime lane
+  this afternoon and recorded on this branch at 06119da2cced.
+- A full-table cvprof tick (arm C, 37.7 ms per tick, every tick) slows this kernel but does not hang it in 30 s.
+- The stopping point in the real cvprof runs is a loop inside the tick path that reads the clock. It is NOT
+  identified.
+
+**Grader fix made before grading:**
+- Arm completion now comes from the kernel's enable/disable console lines, paired in order. The @@TC markers come
+  only through heartbeat tails, which stopped at arm C's start.
+- The disable lines were keyed by mode, which merged B and D.
+- Re-tested on seven synthetic captures, the two real boots, and a missing file.
+
+## Addendum 2 (8 Nov, before its board call): validate a GDB reader on a known stuck loop
+
+`wedge_gdb.py` halts the hart over the board's GDB session after a wedge is declared, samples the pc 8 times across
+resume/halt, and reads ra, sp, mcause, mepc, mtval, mstatus, scause, sepc and the disassembly. It never resets. It
+was dry-run on stub consoles: values in order; a dead session gives UNREAD on every line; the session always stops.
+`tickcost-guest.sh` now prints `tickcost-addr tick|cvprof_body|ktime_get 0x...` at KERN_EMERG before the arms.
+
+**The validation boot:** tickcost E2 (the register loop `.L85`, tick + 0x154 .. tick + 0x160, three instructions),
+with the driver calling `probe()` after the wedge apertures.
+- **READER VALID:** all 8 pc samples in [tick + 0x154, tick + 0x160), using the `tick` address the boot printed, and
+  the disassembly shows `addi a5,a5,1` / `addi a5,a5,1` / `j`.
+- **READER INVALID:** any pc sample reading 0xca11ab1ebadcab1e or outside that range, or UNREAD.
+
+Optional second boot, E1 (`.L83`, tick + 0x170 .. tick + 0x17c). Pre-registered: samples in that range, in
+`ktime_get`'s body, or in M-mode firmware [0x80000000, 0x80200000) (the rdtime emulation), and mstatus.MPP
+consistent with each.
+
+Only after READER VALID does a real cvprof wedge get the reader (the runtime lane's call, 1.5-5 h of board time).

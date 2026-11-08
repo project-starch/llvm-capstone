@@ -45,23 +45,48 @@ def main(argv):
         print("VOID: insmod failed"); return 2
     if not re.search(r"tickcost: loaded", text):
         print(f"VOID: no 'tickcost: loaded' in {path} (raw console or heartbeat tails)"); return 2
-    alive = {a: (f"@@TC {a} ALIVE" in text) for a in ARMS_RETURN + [earm]}
-    started_e = f"@@TC {earm} stuck" in text
+    # Arm completion comes from the KERNEL's console lines (KERN_EMERG, printed at once), paired in order: each
+    # `tickcost: enable` is an arm (B, C, D, then E), and it returned iff a `tickcost: disable` follows it. The
+    # @@TC markers reach the transcript only through heartbeat tails, which stop at the last heartbeat before a wedge
+    # (8 Nov: they ended at arm C's start), so they are not used for completion. A stage-side marker is shown only.
+    ev = [(m.group(1), m.group(2)) for m in re.finditer(
+        r"tickcost: (enable|disable) mode=(\d)", text.split("===== vbatch wedge apertures =====")[0])]
+    arms, cur = [], None
+    for kind, mode in ev:
+        if kind == "enable":
+            cur = {"mode": mode, "returned": False, "line": None}; arms.append(cur)
+        elif cur is not None and not cur["returned"]:
+            cur["returned"] = True
+    dis = [m.group(0) for m in re.finditer(r"tickcost: disable mode=\d calls=\d+ maxbody_us=\d+.*", text)]
+    names = ["B", "C", "D", earm]
+    alive = {"A": "@@TC A ALIVE" in text or bool(ev)}
+    for i, n in enumerate(names):
+        alive[n] = i < len(arms) and arms[i]["returned"]
+    modes_ok = [a["mode"] for a in arms] == ["0", "1", "0", "2" if earm == "E1" else "3"][:len(arms)]
+    started_e = bool(re.search(r"tickcost: stuck (rdtime|register)", text)) and len(arms) >= 4
     scans = re.findall(r"tickcost: scan (user|kernel) rep=(\d) probes=(\d+) ns=(\d+)", text)
-    dis = {m.group(1): m.group(0) for m in re.finditer(r"tickcost: disable mode=(\d) calls=(\d+) maxbody_us=(\d+).*", text)}
-    print(f"alive {alive}  E started {started_e}  scan lines {len(set(scans))}  disable lines {sorted(dis)}")
+    print(f"arms by enable/disable: {[(n, a['mode'], a['returned']) for n, a in zip(names, arms)]}  modes in order {modes_ok}"
+          f"  E stuck line {started_e}  scan lines {len(set(scans))}")
     for s in sorted(set(scans)):
         print(f"  scan {s[0]} rep {s[1]} probes {s[2]} {int(s[3]) / 1e6:.3f} ms")
-    for k in sorted(dis):
-        print("  " + dis[k])
-    if len(set(scans)) != 6 or not alive["A"]:
+    for d in dis:
+        print("  " + d)
+    if len(set(scans)) != 6:
         print("VOID: arm A did not print six scan lines"); return 2
+    if not modes_ok:
+        print("VOID: the arms did not run in the pre-registered order/modes"); return 2
     if not alive["B"]:
         print("VOID: arm B (3 ms callback) did not return"); return 2
     finding = []
-    for a, mode in (("C", "1"), ("D", "0")):
+    for a in ("C", "D"):
         if not alive[a]:
             finding.append(f"arm {a} did not return (the slow-tick path stopped this kernel)")
+    if finding:
+        for f in finding:
+            print("FINDING: " + f)
+        return 1
+    if not started_e:
+        print(f"VOID: arm {earm} never reached its stuck line"); return 2
     if alive[earm]:
         finding.append(f"arm {earm} RETURNED, but its callback never returns by construction")
     # the wedge block (the driver's last one)

@@ -10,6 +10,8 @@ One kernel module, two boots, no new bitstream:
 - `tickcost-guest.sh <ko> E1|E2` runs one boot's arms on the board guest.
 - `tc-grade.py <board.txt> E1|E2` grades one boot by script (exit 0 as pre-registered, 1 a finding, 2 void). It reads
   stage output from the console and the heartbeat tails, and was dry-run on ten synthetic captures before the run.
+- `wedge_gdb.py`: `probe(console)` halts a stuck hart over GDB after a wedge and reads pc (8 samples), ra, sp
+  and the trap CSRs; validated first on E2's known loop (PREREG addendum 2).
 - `PREREG.md` has the readings the wedges already give, the arms and the predicted readings. It opens with the
   withdrawal of this branch's first version (a tick-replay livelock, wrong by source).
 
