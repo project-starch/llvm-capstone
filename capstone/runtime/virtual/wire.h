@@ -100,4 +100,36 @@ struct cv_touch {
  * denies writers to it (ETXTBSY, as Linux does for a running executable) until
  * the context is released, so the bytes validated are the bytes loaded. */
 #define CV_IMAGE _IOW('V', 28, __s32)
+/* MEASUREMENT PROTOTYPE (perf/kernel-fastpath), used only when the module parameter kfast is 1:
+ * the module serves a few delegated Linux calls of the FIRST context inside CV_STEP, without a
+ * return to the launcher (capstone_vm.c, kfast_serve). The launcher describes its own transport:
+ * the META block and exchange region it granted (reg 10 and 11), the addresses of its signal ring
+ * indices and backpressure word (the round-end publication reads them), of the delegate host's
+ * counters (the module adds to them what capstone_delegate_serve would), its private descriptors
+ * (never an application's), and its shape rows for the calls the module serves, which the module
+ * compares with its own before it accepts the transport. Sent once, before the first CV_STEP; a
+ * module without this ioctl answers ENOTTY and the launcher serves every call itself. */
+#define CV_KFAST_SHAPES 5
+struct cv_kfast_shape {
+    __u16 nr;
+    __u8 group, argc;
+    __u8 kind[6], length[6], size[6], pad[2];   /* per argument: capstone_delegate_arg kind, length, size */
+};
+struct cv_kfast {
+    __u64 meta, exchange, exchange_bytes;
+    __u64 sig_head, sig_tail, sig_backpressure;
+    __u64 rounds, syscalls, bytes_in, bytes_out, last_nr;
+    __u32 private_count, version;
+    __s32 private_fds[9];   /* the host's private_fds[8] and the spawner's socket */
+    __u32 pad;
+    struct cv_kfast_shape shapes[CV_KFAST_SHAPES];
+};
+#define CV_KFAST_VERSION 1
+#define CV_KFAST _IOW('V', 32, struct cv_kfast)
+/* A kind-3 step whose cause is this value (outside every RISC-V cause) is a delegated call the
+ * module has already PERFORMED, stopped before the resume (a signal, a reschedule or the budget
+ * arrived during the call): `address` carries its result. The launcher completes the round as
+ * capstone_delegate_serve ends one -- the result into the entry, then capstone_signals_publish --
+ * and replies, never serving the call again. Only a kfast module returns it. */
+#define CV_CAUSE_KFAST_PUBLISH 0xcafe0002UL
 #endif

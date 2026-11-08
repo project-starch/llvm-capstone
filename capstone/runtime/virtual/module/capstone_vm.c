@@ -17,6 +17,14 @@
 #include <linux/rbtree.h>
 #include <linux/xarray.h>
 #include <linux/file.h>
+#include <linux/fsnotify.h>
+#include <linux/sched/xacct.h>
+#include <linux/uio.h>
+#include <linux/highuid.h>
+#include <linux/kdev_t.h>
+#include <linux/stat.h>
+#include <linux/time_namespace.h>
+#include <asm/stat.h>
 #include <asm/csr.h>
 #include <asm/io.h>
 #include <asm/pgtable.h>
@@ -211,6 +219,13 @@ struct context {
     struct page **remap_pages;
     u64 remap_thread;
     unsigned long remap_bytes;
+    /* kfast (MEASUREMENT PROTOTYPE, perf/kernel-fastpath; see kfast_serve): the first context's
+     * META block and exchange region as GRANTED before its start (reg 10 and reg 11, add()), and
+     * the transport the launcher described with CV_KFAST, accepted only when it names exactly those
+     * two grants. Zero until then. */
+    unsigned long kf_meta, kf_meta_bytes, kf_exchange, kf_exchange_bytes;
+    bool kf_on;
+    struct cv_kfast kf;
 };
 static DEFINE_MUTEX(vm_lock);
 /* Quotas are in base pages; zero means the 30-bit ISA limit. Parameters are
@@ -2006,6 +2021,9 @@ static int add(struct context *c, struct cv_thread *t, struct cv_map *r)
     ++c->stats.arenas; c->stats.pinned_pages += n;
     c->stats.peak_pages = max(c->stats.peak_pages, c->stats.pinned_pages);
     if (t->started) t->reply_cap = true;
+    /* kfast: what the first context was granted as its META block (reg 10) and exchange (reg 11). */
+    if (!t->started && t == c->main_thread && r->reg == 10) { c->kf_meta = r->address; c->kf_meta_bytes = r->bytes; }
+    if (!t->started && t == c->main_thread && r->reg == 11) { c->kf_exchange = r->address; c->kf_exchange_bytes = r->bytes; }
     return 0;
 unpin:
     for (i = 0; i < count; ++i) {
@@ -3153,6 +3171,427 @@ static bool one_inode_per_file(struct file *file)
     return false;
 }
 
+/* ===== kfast: in-module service of a few delegated Linux calls (MEASUREMENT PROTOTYPE) =====
+ *
+ * perf/kernel-fastpath, default OFF (kfast=0): with kfast=1, a kind-3 service escape of the FIRST context that is
+ * one of the calls below is served here, inside the same CV_STEP, and the context is resumed with the same CSRUNV
+ * action-2 completion the launcher's reply would make. No new instruction: this only moves the launcher's work
+ * into the module, which runs in the launcher's own process.
+ *
+ * WHAT IS SERVED, AND THE ARGUMENT THAT IT IS THE LAUNCHER'S PATH. The launcher serves a delegated call in
+ * exec.c virtual_service (CV_SERVICE_THREAD_DELEGATE) and capstone_delegate_serve/run (linux/delegate-service.c).
+ * kfast_serve takes a request ONLY when every check that path makes is known to PASS, and then performs exactly
+ * what that path performs; any other request (and anything unusual) returns to the launcher UNCHANGED, which then
+ * applies its own checks and answers as before -- so every refusal, every error result and every fault is still
+ * the launcher's. The checks, in the launcher's order, and where each is mirrored:
+ *   exec.c        args[0] == meta, args[1] == exchange, args[2] == exchange_bytes (the first context's own
+ *                 transport, "request == meta"); the module compares with the transport it ACCEPTED at CV_KFAST,
+ *                 which must be exactly the reg-10 and reg-11 regions granted before the start (kfast_accept).
+ *                 The registered_span checks and 0 < args[2] <= 64 MiB hold for these two by construction, and
+ *                 kfast_accept refuses an exchange outside (0, 64 MiB].
+ *   exec.c        request->version == 2 (else the launcher dies): kfast_check, which falls back otherwise.
+ *   serve         the entry is SNAPSHOT once (copy_from_user) and only the snapshot is read from then on.
+ *   validate      version 2, count 1, no flag above the six arguments, a flag exactly on each offset argument of
+ *                 the shape, and every flagged offset < exchange_bytes with its length <= exchange_bytes - offset:
+ *                 kfast_check, against the module's rows kfast_rows[], which kfast_accept requires to equal the
+ *                 launcher's own capstone_delegate_shape() rows (sent in CV_KFAST) before it serves anything.
+ *   prepare_write every OUT span of non-zero length is admitted by touch() -- the function CV_TOUCH, and so the
+ *                 launcher's exchange_prepare_write, calls -- before anything is written there.
+ *   run()         an fd argument that is one of the launcher's private descriptors (image, device, spawner
+ *                 socket) is refused (EBADF): kfast_private, falls back; command_ok is 1 for these calls; none of
+ *                 the per-call confinements (kill, wait4, prlimit, ...) applies to them.
+ *   run()         the call itself goes through capstone_signals_call's stub, which first answers RETRY when the
+ *                 signal ring holds unpublished events (head != tail): the module falls back unless head == tail
+ *                 and no backpressure is applied, so the launcher's stub would make the call.
+ * The call is the kernel's own syscall body, copied from Linux 6.1 below (ksys_read/ksys_write/ksys_lseek with
+ * vfs_read/vfs_write, newfstat with vfs_fstat and cp_new_stat, clock_gettime for REALTIME and MONOTONIC), with
+ * the user buffer at exchange + offset: the launcher passes its bounce copy of the same bytes, and copies back
+ * capstone_delegate_result_bytes() of the output, which for these calls is what the kernel wrote (read: the
+ * result's count; fstat, clock_gettime: the whole struct on success, nothing on an error). The domain cannot
+ * race the direct use: it is paused, and the context must be the process's only thread.
+ * The round then ends as capstone_delegate_serve ends it: entry->result, the publication of an EMPTY ring
+ * (block->count = 0, block->published = tail, entry->pending = 0, entry->status = DONE), and the host's
+ * counters (rounds, syscalls, last_nr, bytes_in/bytes_out) advanced as serve and run() advance them.
+ *
+ * KNOWN DIFFERENCES (measurement only, none visible to the domain's results): the call does not pass the syscall
+ * entry, so seccomp (the launcher's allowlist admits all five unconditionally), audit and syscall tracepoints do
+ * not see it; the launcher's malloc of its bounce buffer (ENOMEM only under memory exhaustion) is not made.
+ *
+ * WHAT IS NOT SERVED. Only regular files on a local filesystem (ext2/3/4, tmpfs, ramfs) for read, write and lseek,
+ * and those plus pipes for fstat: nothing that can block indefinitely while vm_lock is held, nothing whose
+ * restart semantics (ERESTARTSYS) the stub would turn into a RETRY round, no FUSE (whose daemon could be another
+ * context). A signal that arrives DURING the call, or a reschedule or budget stop before the resume, is handed back
+ * to the launcher as a performed call (CV_CAUSE_KFAST_PUBLISH): the launcher writes the result and publishes the
+ * ring as it would have after the same call, then replies -- never serving it again. */
+static bool kfast;
+module_param(kfast, bool, 0644);
+/* Counters, cumulative over all contexts (0444): accepted and refused transports; calls served whole in the module,
+ * by number; calls performed and handed back for publication; and each fall-back reason, counted only for a
+ * CV_SERVICE_THREAD_DELEGATE escape while kfast=1 and the context's transport is accepted. */
+static unsigned long kfast_registered, kfast_register_refused, kfast_served, kfast_served_read, kfast_served_write,
+    kfast_served_lseek, kfast_served_fstat, kfast_served_clock, kfast_publish_back, kfast_fb_transport, kfast_fb_stop,
+    kfast_fb_signal, kfast_fb_nr, kfast_fb_invalid, kfast_fb_touch, kfast_fb_private, kfast_fb_file, kfast_fb_clock,
+    kfast_fb_fault;
+module_param(kfast_registered, ulong, 0444); module_param(kfast_register_refused, ulong, 0444);
+module_param(kfast_served, ulong, 0444); module_param(kfast_served_read, ulong, 0444);
+module_param(kfast_served_write, ulong, 0444); module_param(kfast_served_lseek, ulong, 0444);
+module_param(kfast_served_fstat, ulong, 0444); module_param(kfast_served_clock, ulong, 0444);
+module_param(kfast_publish_back, ulong, 0444); module_param(kfast_fb_transport, ulong, 0444);
+module_param(kfast_fb_stop, ulong, 0444); module_param(kfast_fb_signal, ulong, 0444);
+module_param(kfast_fb_nr, ulong, 0444); module_param(kfast_fb_invalid, ulong, 0444);
+module_param(kfast_fb_touch, ulong, 0444); module_param(kfast_fb_private, ulong, 0444);
+module_param(kfast_fb_file, ulong, 0444); module_param(kfast_fb_clock, ulong, 0444);
+module_param(kfast_fb_fault, ulong, 0444);
+
+/* capstone/delegate.h, mirrored (the module builds without the runtime headers). */
+#define KF_ENTRY_RESULT 72          /* struct capstone_delegate_entry: result, pending, status at 72, 80, 88 */
+#define KF_META_BYTES 16384UL       /* CAPSTONE_DELEGATE_META_BYTES */
+#define KF_SIGNAL_OFFSET 4096UL     /* CAPSTONE_SIGNAL_OFFSET: struct capstone_signal_block */
+#define KF_BLOCK_PUBLISHED 8        /* block: recorded, published (u64), count (u32) at 0, 8, 16 */
+#define KF_BLOCK_COUNT 16
+#define KF_ROUND_DONE 0UL           /* CAPSTONE_ROUND_DONE */
+#define KF_DELEGATE_VERSION 2u
+#define KF_MAX_EXCHANGE (64UL << 20) /* exec.c: args[2] > 64 MiB is refused */
+enum { KF_INT = 0, KF_IN = 1, KF_OUT = 2 };                  /* enum capstone_delegate_kind */
+enum { KF_LEN_NONE = 0, KF_LEN_FIXED = 1, KF_LEN_ARG = 2 };  /* enum capstone_delegate_length */
+enum { KF_READ = 63, KF_WRITE = 64, KF_LSEEK = 62, KF_FSTAT = 80, KF_CLOCK_GETTIME = 113 };
+struct kf_entry {               /* struct capstone_delegate_entry, 96 bytes */
+    u32 version, count;
+    u64 nr, args[6], flags;
+    s64 result;
+    u64 pending, status;
+};
+/* The module's own shape rows: common/delegate.c's for these five numbers, compared at CV_KFAST. */
+static const struct cv_kfast_shape kfast_rows[CV_KFAST_SHAPES] = {
+    {KF_READ, 0, 3, {KF_INT, KF_OUT, KF_INT}, {KF_LEN_NONE, KF_LEN_ARG, KF_LEN_NONE}, {0, 2, 0}},
+    {KF_WRITE, 0, 3, {KF_INT, KF_IN, KF_INT}, {KF_LEN_NONE, KF_LEN_ARG, KF_LEN_NONE}, {0, 2, 0}},
+    {KF_LSEEK, 0, 3, {KF_INT, KF_INT, KF_INT}, {0}, {0}},
+    {KF_FSTAT, 0, 2, {KF_INT, KF_OUT}, {KF_LEN_NONE, KF_LEN_FIXED}, {0, 128}},
+    {KF_CLOCK_GETTIME, 0, 2, {KF_INT, KF_OUT}, {KF_LEN_NONE, KF_LEN_FIXED}, {0, 16}},
+};
+
+static int kfast_accept(struct context *c, const struct cv_kfast *k)
+{
+    unsigned i, j;
+    const u64 user[] = {k->sig_head, k->sig_tail, k->sig_backpressure, k->rounds, k->syscalls, k->bytes_in,
+                        k->bytes_out, k->last_nr};
+    c->kf_on = false;
+    if (k->version != CV_KFAST_VERSION || k->private_count > ARRAY_SIZE(k->private_fds) ||
+        !c->main_thread || c->main_thread->started)
+        goto refuse;
+    /* Exactly the first context's pre-start grants: META (reg 10) holding the entry and the signal block, and the
+     * exchange (reg 11) the offsets are bounded against. */
+    if (!c->kf_meta || k->meta != c->kf_meta || c->kf_meta_bytes < KF_META_BYTES ||
+        !c->kf_exchange || k->exchange != c->kf_exchange || k->exchange_bytes != c->kf_exchange_bytes ||
+        !k->exchange_bytes || k->exchange_bytes > KF_MAX_EXCHANGE)
+        goto refuse;
+    for (i = 0; i < ARRAY_SIZE(user); ++i)
+        if (!user[i] || (user[i] & 7) || !access_ok((void __user *)(uintptr_t)user[i], 8))
+            goto refuse;
+    for (i = 0; i < CV_KFAST_SHAPES; ++i) {
+        const struct cv_kfast_shape *a = &k->shapes[i], *b = &kfast_rows[i];
+        if (a->nr != b->nr || a->group != b->group || a->argc != b->argc) goto refuse;
+        for (j = 0; j < 6; ++j)
+            if (a->kind[j] != b->kind[j] || a->length[j] != b->length[j] || a->size[j] != b->size[j])
+                goto refuse;
+    }
+    c->kf = *k;
+    c->kf_on = true;
+    ++kfast_registered;
+    return 0;
+refuse:
+    ++kfast_register_refused;
+    return -EINVAL;
+}
+
+/* capstone_delegate_validate for one of the five rows, on the snapshot. 0: valid, and (*off, *len) is the one buffer
+ * argument (index 1) when the row has one; -1: the launcher must answer (it refuses with EINVAL or EFAULT). */
+static int kfast_check(const struct context *c, const struct kf_entry *e, const struct cv_kfast_shape **row,
+                       u64 *off, u64 *len)
+{
+    const struct cv_kfast_shape *s = NULL;
+    unsigned i;
+    if (e->version != KF_DELEGATE_VERSION || e->count != 1 || (e->flags >> 6)) return -1;
+    for (i = 0; i < CV_KFAST_SHAPES; ++i)
+        if (kfast_rows[i].nr == e->nr) s = &kfast_rows[i];
+    if (!s) return -2;
+    *row = s; *off = *len = 0;
+    for (i = 0; i < 6; ++i) {
+        bool flagged = (e->flags >> i) & 1;
+        bool offset = i < s->argc && s->kind[i] != KF_INT;
+        if (flagged != offset) return -1;    /* a flagged integer, or an offset argument not flagged (none is optional) */
+        if (!offset) continue;
+        if (e->args[i] >= c->kf.exchange_bytes) return -1;
+        *off = e->args[i];
+        *len = s->length[i] == KF_LEN_FIXED ? s->size[i] : e->args[s->size[i]];
+        if (*len > c->kf.exchange_bytes - *off) return -1;
+    }
+    return 0;
+}
+
+static bool kfast_private(const struct context *c, u64 fd)
+{
+    for (unsigned i = 0; i < c->kf.private_count; ++i)
+        if (c->kf.private_fds[i] == (int)fd) return true;   /* run(): private_fd(host, (int)entry->args[i]) */
+    return false;
+}
+
+/* Local filesystems only: a read, write or seek there never waits on another task's progress. */
+static bool kfast_local_file(struct file *file, bool pipes)
+{
+    unsigned long magic = file_inode(file)->i_sb->s_magic;
+    if (pipes && magic == 0x50495045 /* PIPEFS_MAGIC */) return true;
+    return S_ISREG(file_inode(file)->i_mode) &&
+           (magic == 0xEF53 /* EXT2/3/4 */ || magic == 0x01021994 /* TMPFS */ || magic == 0x858458f6 /* RAMFS */);
+}
+
+/* fs/file.c __fdget_pos and fdput_pos (the former is not exported): the same light lookup and f_pos lock. */
+static struct fd kfast_fdget_pos(unsigned int fd)
+{
+    unsigned long v = __fdget(fd);
+    struct file *file = (struct file *)(v & ~3);
+    if (file && (file->f_mode & FMODE_ATOMIC_POS) && file_count(file) > 1) {
+        v |= FDPUT_POS_UNLOCK;
+        mutex_lock(&file->f_pos_lock);
+    }
+    return (struct fd){(struct file *)(v & ~3), v & 3};
+}
+static void kfast_fdput_pos(struct fd f)
+{
+    if (f.flags & FDPUT_POS_UNLOCK) mutex_unlock(&f.file->f_pos_lock);
+    fdput(f);
+}
+
+/* fs/read_write.c, Linux 6.1: new_sync_read, vfs_read, new_sync_write, vfs_write, unchanged. */
+static ssize_t kfast_new_sync_read(struct file *filp, char __user *buf, size_t len, loff_t *ppos)
+{
+    struct kiocb kiocb;
+    struct iov_iter iter;
+    ssize_t ret;
+    init_sync_kiocb(&kiocb, filp);
+    kiocb.ki_pos = (ppos ? *ppos : 0);
+    iov_iter_ubuf(&iter, READ, buf, len);
+    ret = call_read_iter(filp, &kiocb, &iter);
+    BUG_ON(ret == -EIOCBQUEUED);
+    if (ppos) *ppos = kiocb.ki_pos;
+    return ret;
+}
+static ssize_t kfast_vfs_read(struct file *file, char __user *buf, size_t count, loff_t *pos)
+{
+    ssize_t ret;
+    if (!(file->f_mode & FMODE_READ)) return -EBADF;
+    if (!(file->f_mode & FMODE_CAN_READ)) return -EINVAL;
+    if (unlikely(!access_ok(buf, count))) return -EFAULT;
+    ret = rw_verify_area(READ, file, pos, count);
+    if (ret) return ret;
+    if (count > MAX_RW_COUNT) count = MAX_RW_COUNT;
+    if (file->f_op->read) ret = file->f_op->read(file, buf, count, pos);
+    else if (file->f_op->read_iter) ret = kfast_new_sync_read(file, buf, count, pos);
+    else ret = -EINVAL;
+    if (ret > 0) {
+        fsnotify_access(file);
+        add_rchar(current, ret);
+    }
+    inc_syscr(current);
+    return ret;
+}
+static ssize_t kfast_new_sync_write(struct file *filp, const char __user *buf, size_t len, loff_t *ppos)
+{
+    struct kiocb kiocb;
+    struct iov_iter iter;
+    ssize_t ret;
+    init_sync_kiocb(&kiocb, filp);
+    kiocb.ki_pos = (ppos ? *ppos : 0);
+    iov_iter_ubuf(&iter, WRITE, (void __user *)buf, len);
+    ret = call_write_iter(filp, &kiocb, &iter);
+    BUG_ON(ret == -EIOCBQUEUED);
+    if (ret > 0 && ppos) *ppos = kiocb.ki_pos;
+    return ret;
+}
+static ssize_t kfast_vfs_write(struct file *file, const char __user *buf, size_t count, loff_t *pos)
+{
+    ssize_t ret;
+    if (!(file->f_mode & FMODE_WRITE)) return -EBADF;
+    if (!(file->f_mode & FMODE_CAN_WRITE)) return -EINVAL;
+    if (unlikely(!access_ok(buf, count))) return -EFAULT;
+    ret = rw_verify_area(WRITE, file, pos, count);
+    if (ret) return ret;
+    if (count > MAX_RW_COUNT) count = MAX_RW_COUNT;
+    file_start_write(file);
+    if (file->f_op->write) ret = file->f_op->write(file, buf, count, pos);
+    else if (file->f_op->write_iter) ret = kfast_new_sync_write(file, buf, count, pos);
+    else ret = -EINVAL;
+    if (ret > 0) {
+        fsnotify_modify(file);
+        add_wchar(current, ret);
+    }
+    inc_syscw(current);
+    file_end_write(file);
+    return ret;
+}
+
+/* fs/stat.c, Linux 6.1: cp_new_stat, unchanged. */
+static int kfast_cp_new_stat(struct kstat *stat, struct stat __user *statbuf)
+{
+    struct stat tmp;
+    if (sizeof(tmp.st_dev) < 4 && !old_valid_dev(stat->dev)) return -EOVERFLOW;
+    if (sizeof(tmp.st_rdev) < 4 && !old_valid_dev(stat->rdev)) return -EOVERFLOW;
+    memset(&tmp, 0, sizeof(tmp));   /* INIT_STRUCT_STAT_PADDING's default */
+    tmp.st_dev = new_encode_dev(stat->dev);
+    tmp.st_ino = stat->ino;
+    if (sizeof(tmp.st_ino) < sizeof(stat->ino) && tmp.st_ino != stat->ino) return -EOVERFLOW;
+    tmp.st_mode = stat->mode;
+    tmp.st_nlink = stat->nlink;
+    if (tmp.st_nlink != stat->nlink) return -EOVERFLOW;
+    SET_UID(tmp.st_uid, from_kuid_munged(current_user_ns(), stat->uid));
+    SET_GID(tmp.st_gid, from_kgid_munged(current_user_ns(), stat->gid));
+    tmp.st_rdev = new_encode_dev(stat->rdev);
+    tmp.st_size = stat->size;
+    tmp.st_atime = stat->atime.tv_sec;
+    tmp.st_mtime = stat->mtime.tv_sec;
+    tmp.st_ctime = stat->ctime.tv_sec;
+    tmp.st_atime_nsec = stat->atime.tv_nsec;
+    tmp.st_mtime_nsec = stat->mtime.tv_nsec;
+    tmp.st_ctime_nsec = stat->ctime.tv_nsec;
+    tmp.st_blocks = stat->blocks;
+    tmp.st_blksize = stat->blksize;
+    return copy_to_user(statbuf, &tmp, sizeof(tmp)) ? -EFAULT : 0;
+}
+_Static_assert(sizeof(struct stat) == 128, "the wire's fstat row is 128 bytes");
+_Static_assert(sizeof(struct __kernel_timespec) == 16, "the wire's clock_gettime row is 16 bytes");
+
+/* The call, once it is known to be the launcher's. 1: performed, *result its value; 0: not eligible (nothing done). */
+static int kfast_call(struct context *c, const struct kf_entry *e, void __user *buf, long *result)
+{
+    if (e->nr == KF_READ || e->nr == KF_WRITE || e->nr == KF_LSEEK) {
+        /* ksys_read / ksys_write / ksys_lseek, with the file-shape check between the lookup and the call. */
+        struct fd f = kfast_fdget_pos((unsigned int)e->args[0]);
+        if (!f.file) return 0;
+        if (!kfast_local_file(f.file, false)) { kfast_fdput_pos(f); return 0; }
+        if (e->nr == KF_LSEEK) {
+            unsigned int whence = (unsigned int)e->args[2];
+            off_t retval = -EINVAL;
+            if (whence <= SEEK_MAX) {
+                loff_t res = vfs_llseek(f.file, (off_t)e->args[1], whence);
+                retval = res;
+                if (res != (loff_t)retval) retval = -EOVERFLOW;
+            }
+            *result = retval;
+        } else {
+            loff_t pos, *ppos = f.file->f_mode & FMODE_STREAM ? NULL : &f.file->f_pos;
+            ssize_t ret;
+            if (ppos) { pos = *ppos; ppos = &pos; }
+            ret = e->nr == KF_READ ? kfast_vfs_read(f.file, buf, (size_t)e->args[2], ppos)
+                                   : kfast_vfs_write(f.file, buf, (size_t)e->args[2], ppos);
+            if (ret >= 0 && ppos) f.file->f_pos = pos;
+            *result = ret;
+        }
+        kfast_fdput_pos(f);
+        return 1;
+    }
+    if (e->nr == KF_FSTAT) {
+        /* newfstat: vfs_fstat (fdget_raw, vfs_getattr) then cp_new_stat. */
+        struct kstat stat;
+        struct file *file = fget_raw((unsigned int)e->args[0]);
+        int error;
+        if (!file) return 0;
+        if (!kfast_local_file(file, true)) { fput(file); return 0; }
+        error = vfs_getattr(&file->f_path, &stat, STATX_BASIC_STATS, 0);
+        fput(file);
+        if (!error) error = kfast_cp_new_stat(&stat, buf);
+        *result = error;
+        return 1;
+    }
+    if (e->nr == KF_CLOCK_GETTIME) {
+        /* clock_gettime for the two clocks whose k_clock bodies are these (posix-timers.c). */
+        clockid_t which = (clockid_t)e->args[0];
+        struct timespec64 tp;
+        if (which == CLOCK_REALTIME) ktime_get_real_ts64(&tp);
+        else if (which == CLOCK_MONOTONIC) { ktime_get_ts64(&tp); timens_add_monotonic(&tp); }
+        else return 0;
+        *result = put_timespec64(&tp, buf) ? -EFAULT : 0;
+        return 1;
+    }
+    return 0;
+}
+
+static int kfast_add(u64 address, u64 delta)
+{
+    u64 v;
+    if (get_user(v, (u64 __user *)(uintptr_t)address)) return -EFAULT;
+    return put_user(v + delta, (u64 __user *)(uintptr_t)address);
+}
+
+/* A kind-3 escape of thread t. 0: not served, the launcher serves it as before; 1: served and the round ended in
+ * the domain's META block, resume with action 2; 2: performed, *result its value, and the launcher must end the
+ * round (CV_CAUSE_KFAST_PUBLISH). Called under vm_lock with interrupts on. */
+static int kfast_serve(struct context *c, struct cv_thread *t, u64 budget_end, long *result)
+{
+    const struct cv_kfast *k = &c->kf;
+    const struct cv_kfast_shape *row;
+    struct kf_entry e;
+    u64 off, len, head, tail, backpressure;
+    void __user *meta = (void __user *)(uintptr_t)k->meta;
+    void __user *buf;
+    int rc;
+    if (t->frame[79] != CV_SERVICE_THREAD_DELEGATE) return 0;
+    /* exec.c: the first context's own transport, served by the only thread of the process. */
+    if (t != c->main_thread || !list_is_singular(&c->threads) || get_nr_threads(current) != 1 ||
+        t->frame[72] != k->meta || t->frame[73] != k->exchange || t->frame[74] != k->exchange_bytes)
+        { ++kfast_fb_transport; return 0; }
+    if (cv_step_stop(budget_end)) { ++kfast_fb_stop; return 0; }
+    /* The stub's ring check (capstone_signals_call): an unpublished event makes it a RETRY round. */
+    if (get_user(head, (u64 __user *)(uintptr_t)k->sig_head) ||
+        get_user(tail, (u64 __user *)(uintptr_t)k->sig_tail) ||
+        get_user(backpressure, (u64 __user *)(uintptr_t)k->sig_backpressure))
+        { ++kfast_fb_fault; return 0; }
+    if (head != tail || backpressure) { ++kfast_fb_signal; return 0; }
+    /* capstone_delegate_serve: snapshot first. */
+    if (copy_from_user(&e, meta, sizeof(e))) { ++kfast_fb_fault; return 0; }
+    rc = kfast_check(c, &e, &row, &off, &len);
+    if (rc == -2) { ++kfast_fb_nr; return 0; }
+    if (rc) { ++kfast_fb_invalid; return 0; }
+    buf = (void __user *)(uintptr_t)(k->exchange + off);
+    /* prepare_write: admit every OUT span before it is written (idempotent, so a fall-back after it is harmless). */
+    if (row->kind[1] == KF_OUT && len) {
+        struct cv_touch span = {k->exchange + off, len};
+        if (touch(c, &span)) { ++kfast_fb_touch; return 0; }
+    }
+    /* run(): fd_arguments() is 1 (args[0]) for read, write, lseek and fstat, 0 for clock_gettime. */
+    if (e.nr != KF_CLOCK_GETTIME && kfast_private(c, e.args[0])) { ++kfast_fb_private; return 0; }
+    if (!kfast_call(c, &e, buf, result)) {
+        if (e.nr == KF_CLOCK_GETTIME) ++kfast_fb_clock; else ++kfast_fb_file;
+        return 0;
+    }
+    /* PERFORMED: from here on the call is never served again, by anyone. */
+    ++kfast_served;
+    if (e.nr == KF_READ) ++kfast_served_read;
+    else if (e.nr == KF_WRITE) ++kfast_served_write;
+    else if (e.nr == KF_LSEEK) ++kfast_served_lseek;
+    else if (e.nr == KF_FSTAT) ++kfast_served_fstat;
+    else ++kfast_served_clock;
+    /* serve and run(): ++rounds, last_nr, ++syscalls, and bytes_in (IN) or bytes_out (OUT) by the checked length.
+     * Diagnostic counters of the launcher's STATS line only: a failure here is not the domain's. */
+    kfast_add(k->rounds, 1); kfast_add(k->syscalls, 1);
+    put_user(e.nr, (u64 __user *)(uintptr_t)k->last_nr);
+    if (row->kind[1] == KF_IN) kfast_add(k->bytes_in, len);
+    if (row->kind[1] == KF_OUT) kfast_add(k->bytes_out, len);
+    /* A signal that arrived during the call has not reached the launcher's trampoline yet: the launcher must take it
+     * and publish it with this round, as it would after its own call. */
+    if (signal_pending(current)) return 2;
+    /* serve: entry->result; capstone_signals_publish with head == tail: the empty block, then pending and status. */
+    if (put_user(0U, (u32 __user *)(meta + KF_SIGNAL_OFFSET + KF_BLOCK_COUNT)) ||
+        put_user(tail, (u64 __user *)(meta + KF_SIGNAL_OFFSET + KF_BLOCK_PUBLISHED)) ||
+        put_user((s64)*result, (s64 __user *)(meta + KF_ENTRY_RESULT)) ||
+        put_user(0UL, (u64 __user *)(meta + KF_ENTRY_RESULT + 8)) ||
+        put_user(KF_ROUND_DONE, (u64 __user *)(meta + KF_ENTRY_RESULT + 16)))
+        return 2;
+    /* The launcher's reply: result 0 (virtual_service's step->result for a delegated call), a0 an integer. */
+    t->frame[28] = 0; t->frame[29] = 0;
+    return 1;
+}
+/* ===== end kfast ===== */
+
 static long vm_ioctl(struct file *f, unsigned int op, unsigned long arg)
 {
     struct context *c = f->private_data;
@@ -3384,6 +3823,11 @@ thread_unwind:
         struct cv_thread *t;
         u64 budget_end;
         bool resolved = false, text = false;
+        /* kfast: the entry after a served call resumes with action 2; a call performed here and not yet resumed
+         * (kf_inflight) goes back as a performed call (kf_handback) if the resume is stopped. */
+        unsigned long next_action = 0;
+        bool kf_inflight = false, kf_handback = false;
+        long kf_result = 0;
         if (copy_from_user(&r, (void __user *)arg, sizeof(r))) { rc = -EFAULT; goto out; }
         t = find_thread(c, r.thread);
         if (!t || t->terminal) { rc = -ESRCH; goto out; }
@@ -3416,7 +3860,7 @@ thread_unwind:
         TEST_STEP_BEGIN();
         TEST_HOOK(3);
         for (unsigned long action = r.reply ? 2 : 0, entries = 0;;
-             action = 0, ++entries) {
+             action = next_action, next_action = 0, ++entries) {
             if (entries && !text) TEST_HOOK(2);  /* after a data fault only, see below */
             preempt_disable(); local_irq_save(flags);
             /* Checked with interrupts and preemption off, immediately before
@@ -3435,6 +3879,7 @@ thread_unwind:
                     goto out;
                 }
                 resolved = true;
+                kf_handback = kf_inflight;
                 break;
             }
             TEST_ENTRY();
@@ -3481,7 +3926,7 @@ thread_unwind:
 #else
             t->event = run_event(t, action);
 #endif
-            t->started = true; t->reply_cap = false;
+            t->started = true; t->reply_cap = false; kf_inflight = false;
             local_irq_restore(flags); preempt_enable();
             ++c->stats.steps;
             if (t->event == CV_EVENT_UNWRITTEN) {
@@ -3508,6 +3953,11 @@ thread_unwind:
             }
             if (t->event == 1 && READ_ONCE(resume_quantum))
                 continue;   /* the stop check before the next entry hands it to the launcher when it must yield */
+            if (t->event == 3 && c->kf_on && READ_ONCE(kfast)) {
+                int served = kfast_serve(c, t, budget_end, &kf_result);
+                if (served == 1) { next_action = 2; kf_inflight = true; continue; }
+                if (served == 2) { kf_handback = true; break; }
+            }
             if (t->event != 4)
                 break;
             /* Resolve a page fault here, as CV_RESOLVE would, and resume
@@ -3571,6 +4021,11 @@ thread_unwind:
         r.args[4] = t->frame[76]; r.args[5] = t->frame[77];
         r.args[6] = t->frame[78]; r.args[7] = t->frame[79];
         r.thread = t->id;
+        if (kf_handback) {
+            /* A delegated call performed by kfast_serve and not resumed: the launcher ends the round (wire.h). */
+            r.cause = CV_CAUSE_KFAST_PUBLISH; r.address = (u64)kf_result;
+            ++kfast_publish_back;
+        }
         t->terminal = r.kind == 2;
         if (r.kind == 4 && !resolved && !text_fault(c, r.address)) {
             ++c->stats.faults;
@@ -3585,6 +4040,10 @@ thread_unwind:
         t = find_thread(c, r.thread);
         rc = t ? resolve(c, t, ktime_get_ns() + READ_ONCE(step_budget_ns)) : -ESRCH;
         if (!rc) t->sfence_pending = true;
+    } else if (op == CV_KFAST) {
+        struct cv_kfast r;
+        if (copy_from_user(&r, (void __user *)arg, sizeof(r))) { rc = -EFAULT; goto out; }
+        rc = kfast_accept(c, &r);
     } else if (op == CV_TOUCH) {
         struct cv_touch r;
         if (copy_from_user(&r, (void __user *)arg, sizeof(r))) { rc = -EFAULT; goto out; }
