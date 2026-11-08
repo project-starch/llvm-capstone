@@ -1,3 +1,17 @@
+## QEMU bounds-only refinement: five percent less GCC host CPU
+
+The QEMU integration candidate `perf/qemu-throughput` at `80eaf2c89b` combines
+cursor-window equivalence with shared bounds-only encoding and in-place cursor
+tests. A three-way 50-compilation comparison gives 32.660s original, 31.530s
+cursor-only and 31.010s bounds-only mean host CPU: 5.05% less than original.
+All 780 timed outputs and 14 warm-ups match; differential/sanitizer, codec,
+RTL-model, cursor and checked-copy gates pass. Six short SPEC entries match
+previously officially qualified output hashes, including the guest image check.
+This is not a new full-SPEC/comparator or hardware performance result.
+The redundant-copy experiment did not help and is excluded. Default pin and
+native handoff remain fixed while broader qualification continues.
+[Evidence and scope](../../runtime/virtual/tests/qemu-throughput/bounds-only-qualification.json).
+
 ## QEMU cursor-window candidate reduces host CPU in repeated GCC
 
 On `perf/qemu-throughput`, the separately published QEMU candidate

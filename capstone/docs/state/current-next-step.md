@@ -3,14 +3,13 @@
 Continue on `perf/qemu-throughput`, leaving the native RTL handoff branch fixed.
 [The matched host-throughput baseline](../../runtime/virtual/tests/qemu-throughput/README.md)
 and separate host profiles are complete for one small repeated GCC input.
-The cursor-window candidate in QEMU `perf/cursor-representability` at
-`ecd71075da` now has a repeated native GCC host CPU reduction (3.43% in
-the 50-compilation confirmation), with differential, sanitizer, codec, RTL-model
-and copyable instruction checks. It is based directly on the original QEMU pin.
-Next qualify representative functional workloads before advancing the default
-pin. A further source candidate is reducing encoding work used only to derive
-the window, retaining exact rounding and wide-ID cursor semantics; measure it
-separately. Keep profile shares distinct from demonstrated savings.
+The integration candidate in QEMU `perf/qemu-throughput` at `80eaf2c89b`
+now includes cursor-window equivalence, bounds-only encoding and additional
+in-place instruction tests. Its three-way GCC confirmation saves 5.05% host CPU
+against the original fork, with six short SPEC output regressions passing.
+Next complete broader safety/application qualification, test LTO as an isolated
+build control, and measure any further candidate separately before advancing
+the default pin. Keep profile shares distinct from demonstrated savings.
 The tag-lookup and QOM-debug candidates showed no measurable native benefit.
 The old LIN tag-writer bootstrap fails on the copyable-only baseline; use current
 fixtures and keep its passing NONLIN device arms separate.

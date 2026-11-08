@@ -323,3 +323,43 @@ patch, disassembly, logs and RTL model hash reproduce the experiment. The
 superproject default pin and native RTL handoff remain unchanged pending broader
 qualification. This candidate is worth carrying forward; the earlier tag-lookup
 and QOM-debug experiments do not have a demonstrated native benefit.
+
+
+## Bounds-only refinement and integration candidate
+
+QEMU [`perf/qemu-throughput`](https://github.com/project-starch/capstone-qemu/tree/perf/qemu-throughput)
+at `80eaf2c89b` combines the cursor-window predicate, bounds-only encoding
+(`925418d22c`), and additional in-place CINCOFFSET/SCC edge tests. The encoder
+is shared with full capability compression, preserving its rounding. The
+predicate avoids packing metadata it never uses. No ISA or RTL change is needed.
+[Qualification and individual samples](bounds-only-qualification.json).
+
+A three-way confirmation uses original/cursor/bounds/bounds/cursor/original
+order, 50 native GCC compilations per fresh guest, CPU 2 and icount0:
+
+| Build | Mean QEMU CPU per window |
+| --- | ---: |
+| Original fork | 32.660s |
+| Cursor-window predicate | 31.530s |
+| Bounds-only refinement | 31.010s |
+
+The combined change uses **5.05% less host CPU** than the original fork;
+the incremental refinement saves 1.65% in this cohort. A separate 20-compilation
+comparison agrees in direction (1.27% incremental reduction); its plain control
+is unchanged. All 780 timed outputs and 14 warm-ups match. These are host
+emulation results for one input, with two samples per variant, not RTL timings.
+The earlier differential, sanitizer, codec, RTL-model and instruction gates
+also pass on the refinement.
+
+Six short SPEC entries (GCC, Imagick, both specrand entries, LBM and NAB) pass
+`qualify-spec.py`: their outputs match hashes from the previous officially
+qualified full run, and the guest image validator runs for Imagick. This is
+an exact-output regression check, **not a fresh official comparator execution**.
+The helper verifies input and guest-platform hashes before execution. Broader
+qualification remains necessary before advancing the default QEMU pin.
+
+Removing two additional temporary capability copies did not improve throughput:
+20-compilation native means were 12.475s baseline versus 12.545s candidate
+(about 0.56% slower). The [experiment](move-copies-qualification.json) remains on
+`perf/cursor-move-copies`; its runtime change is excluded from integration.
+The extra in-place cursor tests are retained. No security checks were removed.
