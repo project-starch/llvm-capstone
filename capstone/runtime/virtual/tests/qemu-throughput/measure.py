@@ -22,7 +22,10 @@ def main():
     p.add_argument('--icount', type=int, choices=range(11))
     p.add_argument('--host-cpu', type=int, help='Pin entire emulator process tree to this allowed host CPU')
     p.add_argument('--host-perf', type=Path, help='Diagnostic sampling; results are excluded from clean timing comparisons')
+    p.add_argument('--pcrel', choices=['true', 'false'], help='Explicit scalar-only PC-relative translation control')
     a = p.parse_args()
+    if a.pcrel is not None and (not a.arm or 'platform-native' in a.arm):
+        p.error('--pcrel requires explicit scalar arms; native profile stays unchanged')
     if a.iterations < 1:
         p.error('iterations must be positive')
     if a.host_cpu is not None:
@@ -34,7 +37,7 @@ def main():
     pins = {k: sha(getattr(a, k)) for k in ['stock','fork','firmware','plain','native','input','reference']}
     pins.update({k:sha(a.images/k) for k in ['Image','rootfs.ext2']})
     report = dict(status='RUNNING', inputs=pins, iterations=a.iterations, icount=a.icount,
-                  profiled=bool(a.host_perf),
+                  profiled=bool(a.host_perf), pcrel_override=a.pcrel,
                   host=dict(uname=list(platform.uname()), affinity=sorted(os.sched_getaffinity(0))),
                   samples=[], limitations=[
                       'Host serial-delivery timing, not target cycles or hardware overhead.',
@@ -65,7 +68,10 @@ def main():
             cap = arm.startswith('platform-')
             flags = cap_flags if cap else ''
             assert len(('root=/dev/vda ro '+flags).encode()) < 512
-            cmd = ['python3',str(runner),'--qemu',str(a.stock if arm=='stock-plain' else a.fork),'--images',str(a.images),'--firmware',str(a.firmware),'--stage',str(stage),'--work',str(d/'vm'),'--memory','4G','--disk-mib','128','--timeout','180','--machine','virt-capstone' if cap else 'virt','--cpu',cap_cpu if cap else common_cpu,'--host-window']
+            cpu = cap_cpu if cap else common_cpu
+            if a.pcrel is not None:
+                cpu = re.sub(r',x-pcrel=(?:true|false)', '', cpu) + ',x-pcrel=' + a.pcrel
+            cmd = ['python3',str(runner),'--qemu',str(a.stock if arm=='stock-plain' else a.fork),'--images',str(a.images),'--firmware',str(a.firmware),'--stage',str(stage),'--work',str(d/'vm'),'--memory','4G','--disk-mib','128','--timeout','180','--machine','virt-capstone' if cap else 'virt','--cpu',cpu,'--host-window']
             if flags:cmd+=['--kernel-arg',flags]
             if a.host_perf:cmd+=['--host-perf',str(a.host_perf)]
             if a.icount is not None:cmd+=['--icount',str(a.icount)]

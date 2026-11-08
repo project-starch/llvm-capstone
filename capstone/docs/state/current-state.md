@@ -1,3 +1,15 @@
+## Clang/LTO candidate: twelve percent less GCC host CPU
+
+The reversed-order 50-compilation confirmation gives 32.640s original versus
+28.620s Clang/LTO with the cursor/bounds changes (12.32% less host CPU).
+Explicit no-icount mode gives 23.920s (26.72% less). All 1,360 timed outputs and
+24 warm-ups across the build matrix and confirmation match. Clang's bounded
+instruction/codec and eight task/timer/race gates pass in both clock modes.
+QEMU `2bc6e19ae9` adds only a required cleanup-guard lexical scope fix to the
+accepted source stack. Full ten-entry SPEC regression remains pending;
+default pin and native handoff remain fixed. No hardware speed claim.
+[Build controls and evidence](../../runtime/virtual/tests/qemu-throughput/compiler-build-qualification.json).
+
 ## Optional LTO candidate: eight percent less GCC host CPU
 
 QEMU `80eaf2c89b` with the matched O2/assertion settings and LTO uses 30.000s

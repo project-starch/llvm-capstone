@@ -448,3 +448,38 @@ and scope; these are host emulator measurements, not guest or hardware cycles.
 The [tool qualification](workload-window-qualification.json) records 29 host
 regressions and a real GCC invocation with exact qualified output, CPU affinity
 and `--no-icount`. Its single-run duration is not a performance comparison.
+
+## Host compiler and clock-mode controls
+
+The [compiler qualification](compiler-build-qualification.json) compares matched
+O2/LTO, O3/LTO, Clang/LTO and host-tuned builds. Clang 18 with LLD is the best of
+these controls; host tuning did not help. A separate reversed-order confirmation
+uses 50 GCC compilations per fresh guest (one untimed warm-up):
+
+| Build / mode | Mean host CPU seconds | Reduction from original |
+| --- | ---: | ---: |
+| Original fork, icount0 | 32.640 | — |
+| Bounds/cursor changes, GCC O2/LTO, icount0 | 29.895 | 8.41% |
+| Same changes, Clang O2/LTO, icount0 | 28.620 | 12.32% |
+| Clang O2/LTO, explicit no-icount | 23.920 | 26.72% |
+
+All 1,360 timed compilations and 24 warm-ups across the matrix and confirmation
+match. Clang also passes the cursor/checked-copy checks, codec differential and
+sanitizer checks, and all eight task/timer/race groups in both clock modes.
+Clang requires QEMU `2bc6e19ae9`: braces scope an existing cleanup lock guard
+inside its switch arm. GCC variants use `80eaf2c89b`. Assertions and QOM cast
+debugging remain enabled. Full SPEC qualification is separate and still pending.
+LTO increases link time; these remain explicit build choices.
+
+```sh
+CC=clang CXX=clang++ LDFLAGS=-fuse-ld=lld \
+  capstone/runtime/virtual/tests/qemu-throughput/build-candidate.sh \
+  "$QEMU_REPO" 2bc6e19ae9 "$FRESH_BUILD_DIR" --lto
+```
+
+The [scalar PC-relative control](pcrel-qualification.json) rules out `x-pcrel`
+as the explanation for platform-plain's speed: identical `virt` runs take 9.660s
+with it and 9.680s without it; platform-plain takes 5.935s. All 600 timed outputs
+and six warm-ups match. `measure.py --pcrel true|false` requires explicit scalar
+arms. Machine/CPU discovery and Linux paths still need separate controls.
+These results measure host emulator cost, not hardware cycles.

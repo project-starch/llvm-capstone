@@ -9,15 +9,17 @@ in-place instruction tests. Its three-way GCC confirmation saves 5.05% host CPU
 against the original fork, with six short SPEC output regressions passing.
 An optional LTO build brings the combined GCC reduction to 8.06%; task/timer
 and both race groups pass with and without icount. Next finish the ten-entry
-SPEC output regression and compare host compiler/build options before
-advancing the default pin. The single-bit dirty-update and sufficient local-cursor
+SPEC output regression on the strongest build before advancing the default pin. Clang/LTO now saves
+12.32% host CPU in the repeated GCC confirmation; explicit no-icount saves
+26.72% against original. Both modes pass bounded safety checks. The single-bit dirty-update and sufficient local-cursor
 candidates passed bounded correctness checks but showed no useful gain;
 neither is integrated. Keep profile shares distinct from demonstrated savings.
 The tag-lookup and QOM-debug candidates showed no measurable native benefit.
 The old LIN tag-writer bootstrap fails on the copyable-only baseline; use current
 fixtures and keep its passing NONLIN device arms separate.
-Add a scalar PC-relative translation control before attributing platform-plain's
-speed difference to capability handling. Explicit no-icount runner options now pass task/timer and race gates;
+The scalar PC-relative control is complete and does not explain platform-plain's
+speed difference. Separate the remaining CPU, machine and kernel configuration
+changes before attributing that difference to capability handling. Explicit no-icount runner options now pass task/timer and race gates;
 extend application coverage before recommending them for a broad fast test mode.
 Keep deterministic counts and hardware performance claims separate. Do not remove checks to make QEMU fast.
 
