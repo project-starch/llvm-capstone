@@ -1,0 +1,361 @@
+diff --git a/include/sbi/sbi_capstone_cscheck.h b/include/sbi/sbi_capstone_cscheck.h
+new file mode 100644
+index 0000000..0f2046c
+--- /dev/null
++++ b/include/sbi/sbi_capstone_cscheck.h
+@@ -0,0 +1,28 @@
++/*
++ * SPDX-License-Identifier: BSD-2-Clause
++ *
++ * MEASUREMENT PROTOTYPE: firmware emulation of Capstone CSCHECKR/CSCHECKW (see sbi_capstone_cscheck.c).
++ */
++#ifndef __SBI_CAPSTONE_CSCHECK_H__
++#define __SBI_CAPSTONE_CSCHECK_H__
++
++#include <sbi/sbi_types.h>
++
++struct sbi_trap_regs;
++
++/* Experimental SBI extension: fid 0 = probe (returns CSC_SBI_MAGIC), fid 1 = counter a0, fid 2 = reset. */
++#define CSC_SBI_EXT		0x08435343UL
++#define CSC_SBI_MAGIC		0x43534301UL
++
++enum {
++	CSC_ENTRIES = 0,	/* every emulated CSCHECKR/W */
++	CSC_OK,			/* rd = 0 */
++	CSC_CAUSE24, CSC_CAUSE25, CSC_CAUSE26, CSC_CAUSE27, CSC_CAUSE28, CSC_CAUSE29,
++	CSC_UNSUPPORTED_TABLE,	/* a liveness query met a table this emulation does not read */
++	CSC_COUNTERS
++};
++
++/* SBI_ENOTSUPP when insn is not CSCHECKR/W; otherwise 0 with rd written and mepc stepped. */
++int sbi_capstone_cscheck_insn(ulong insn, struct sbi_trap_regs *regs);
++
++#endif
+diff --git a/lib/sbi/objects.mk b/lib/sbi/objects.mk
+index c699187..c8296e3 100644
+--- a/lib/sbi/objects.mk
++++ b/lib/sbi/objects.mk
+@@ -26,6 +26,8 @@ carray-sbi_ecall_exts-$(CONFIG_SBI_ECALL_IPI) += ecall_ipi
+ libsbi-objs-$(CONFIG_SBI_ECALL_IPI) += sbi_ecall_ipi.o
+ 
+ carray-sbi_ecall_exts-y += ecall_base
++carray-sbi_ecall_exts-y += ecall_capstone_cscheck
++libsbi-objs-y += sbi_capstone_cscheck.o
+ libsbi-objs-y += sbi_ecall_base.o
+ 
+ carray-sbi_ecall_exts-$(CONFIG_SBI_ECALL_HSM) += ecall_hsm
+diff --git a/lib/sbi/sbi_capstone_cscheck.c b/lib/sbi/sbi_capstone_cscheck.c
+new file mode 100644
+index 0000000..00f2cfd
+--- /dev/null
++++ b/lib/sbi/sbi_capstone_cscheck.c
+@@ -0,0 +1,272 @@
++/*
++ * SPDX-License-Identifier: BSD-2-Clause
++ *
++ * MEASUREMENT PROTOTYPE: CSCHECKR/CSCHECKW (custom-2 0x5b, funct3 1, funct7 0x25/0x26) emulated in
++ * M mode on the illegal-instruction trap from S, for a processor without them (the boards' C.5a).
++ * Semantics are capstone-qemu helper_cscheck (target/riscv/capstone_supervisor.c, native/checked-emu-
++ * measure) as far as M can see them, in its refusal order:
++ *
++ *   rd = 0 and descriptor[4] = cursor + offset, or rd = a cause 24..29; mepc += 4 either way.
++ *
++ * Two shortcuts make this a cost model, not an implementation of the contract:
++ *   1. The capability is read from the MUTABLE frame slot +64+16*slot (compressed, as the escape
++ *      saved it), and its tag from the escape's classification word at +2344, not from a hidden
++ *      escaped snapshot (C.5a has none). Trusted frame rewrites are therefore not excluded.
++ *   2. The epoch is the frame word at +2336 (on this QEMU published by the escape because the
++ *      context transport is on; on C.5a it would be written by the kernel), not a hart register.
++ *      Paused/terminal state and resume invalidation are not visible to M.
++ * The satp and srevroot comparisons use the frame's entry words (+0, +8), which the kernel writes.
++ * The lifetime record is read from the PAGED table at the current srevroot (30-bit ids, no
++ * generations), the format the native adapter requires; any other table refuses with 25.
++ */
++#include <sbi/riscv_asm.h>
++#include <sbi/riscv_encoding.h>
++#include <sbi/sbi_ecall.h>
++#include <sbi/sbi_error.h>
++#include <sbi/sbi_scratch.h>
++#include <sbi/sbi_trap.h>
++#include <sbi/sbi_capstone_cscheck.h>
++
++#define CSC_EPOCH_OFFSET	2336
++#define CSC_KINDS_OFFSET	2344
++#define CSC_FRAME_BYTES		2352
++#define CSC_SLOTS_OFFSET	64
++
++#define CAUSE_UNEXP_OP_TYPE	24
++#define CAUSE_INVALID_CAP	25
++#define CAUSE_UNEXP_CAP_TYPE	26
++#define CAUSE_INSUF_CAP_PERMS	27
++#define CAUSE_CAP_OOB		28
++#define CAUSE_ILLEGAL_OP_VAL	29
++
++#define CAP_TYPE_NONLIN		1
++#define CAP_PERMS_WO		2
++#define CAP_PERMS_RO		4
++
++#define TBL_VALID		1ULL
++#define TBL_FREE		4ULL
++#define TBL_FLAGS_SHIFT		60
++#define TBL_RECYCLE		(1ULL << 63)
++#define TBL_PAGED		(1ULL << 62)
++#define TBL_MAGIC		0x3245474150444f4eULL
++#define TBL_DIRECTORY		64
++#define TBL_NAMESPACE		(1ULL << 30)
++
++static volatile u64 csc_count[CSC_COUNTERS];
++/* No memory map is kept here: the window is the virt machine's DRAM base and a 64 GiB bound,
++ * with the firmware's own image excluded. A physical address outside guest RAM would take an
++ * access fault in M, which only a broken kernel can cause; this is a measurement prototype. */
++#define CSC_RAM_BASE		0x80000000ULL
++#define CSC_RAM_END		(CSC_RAM_BASE + (64ULL << 30))
++
++static inline u64 rd64(u64 pa)
++{
++	return *(volatile u64 *)(ulong)pa;
++}
++
++/* Aligned ordinary RAM outside the firmware's own image. */
++static bool csc_ram_ok(u64 pa, u64 bytes, u64 align)
++{
++	struct sbi_scratch *scratch = sbi_scratch_thishart_ptr();
++	u64 fw0 = scratch->fw_start, fw1 = scratch->fw_start + scratch->fw_size;
++
++	if ((pa & (align - 1)) || pa > ~0ULL - bytes)
++		return false;
++	if (pa < CSC_RAM_BASE || pa + bytes > CSC_RAM_END)
++		return false;
++	return pa + bytes <= fw0 || pa >= fw1;
++}
++
++/* capstone-qemu cap_compress.c decode(), narrow (30-bit) ids. */
++struct csc_cap {
++	u64 cursor, base, end, id;
++	unsigned type, perms;
++};
++
++static void csc_decode(u64 lo, u64 hi, struct csc_cap *c)
++{
++	u64 E, B = ((hi >> 3) & 0x7ff) << 3, T = ((hi >> 17) & 0x1ff) << 3;
++	u64 b, t, span, window, A3, B3, T3, R;
++	u64 bE = hi & 7, tE = (hi >> 14) & 7;
++	bool carry, msb;
++
++	if ((hi >> 26) & 1) {
++		E = (tE << 3) | bE;
++		msb = true;
++	} else {
++		E = 0;
++		T |= tE;
++		B |= bE;
++		msb = false;
++	}
++	carry = (T & 4095) < (B & 4095);
++	T |= (((B >> 12) + carry + msb) & 3) << 12;
++	span = E + 14 < 64 ? 1ULL << (E + 14) : 0;
++	window = span ? ~(span - 1) : 0;
++	b = (lo & window) | (B << E);
++	t = (lo & window) | (T << E);
++	A3 = E + 11 < 64 ? (lo >> (E + 11)) & 7 : 0;
++	B3 = (B >> 11) & 7;
++	T3 = (T >> 11) & 7;
++	R = (B3 - 1) & 7;
++	if (A3 >= R && T3 < R)
++		t += span;
++	else if (A3 < R && T3 >= R)
++		t -= span;
++	if (A3 >= R && B3 < R)
++		b += span;
++	else if (A3 < R && B3 >= R)
++		b -= span;
++	c->cursor = lo;
++	c->base = b;
++	c->end = t;
++	c->type = (hi >> 27) & 7;
++	c->perms = (hi >> 30) & 15;
++	c->id = hi >> 34;
++}
++
++/* capstone_checked_id_live for a paged table (cap_rev_table.c open, record_pa, table_get). */
++static bool csc_id_live(u64 root, u64 id)
++{
++	u64 capacity, next, parents[3], address, page = 0, w1;
++	unsigned level, j;
++
++	if (!root || (root & 4095) || !csc_ram_ok(root, 4096, 16))
++		return false;
++	capacity = rd64(root);
++	if (!(capacity & TBL_PAGED) || !(capacity & TBL_RECYCLE)) {
++		csc_count[CSC_UNSUPPORTED_TABLE]++;
++		return false;
++	}
++	capacity &= ~(TBL_RECYCLE | TBL_PAGED);
++	next = rd64(root + 8);
++	if (capacity < 2 || capacity > TBL_NAMESPACE || (capacity & 255) || next < 2 ||
++	    next > capacity || rd64(root + 32) != TBL_MAGIC || rd64(root + 48) ||
++	    rd64(root + 56) || (rd64(root + 16) >> 32) > 0xffffffffULL)
++		return false;
++	if (id < 2 || id >= next)
++		return false;
++	parents[0] = root;
++	parents[1] = parents[2] = 0;
++	address = root + TBL_DIRECTORY + (id >> 26) * 8;
++	for (level = 0; level < 3; ++level) {
++		page = rd64(address);
++		if (!page || (page & 4095) || !csc_ram_ok(page, 4096, 16))
++			return false;
++		for (j = 0; j <= level; ++j)
++			if (page == parents[j])
++				return false;
++		if (level < 2) {
++			parents[level + 1] = page;
++			address = page + ((id >> (level == 0 ? 17 : 8)) & 511) * 8;
++		}
++	}
++	/* One aligned 64-bit read decides VALID and FREE together. */
++	w1 = rd64(page + (id & 255) * 16 + 8) >> TBL_FLAGS_SHIFT;
++	return (w1 & TBL_VALID) && !(w1 & TBL_FREE);
++}
++
++static bool csc_addr_ok(u64 a)
++{
++	return (u64)((s64)(a << 25) >> 25) == a; /* Sv39 */
++}
++
++static ulong csc_check(ulong frame, ulong desc, bool write, ulong prev_mode, bool virt)
++{
++	u64 epoch, slot, offset, bytes, address, lo, hi;
++	struct csc_cap cap;
++
++	if (prev_mode != PRV_S || virt || !csc_ram_ok(desc, 48, 16) ||
++	    !csc_ram_ok(frame, CSC_FRAME_BYTES, 16))
++		return CAUSE_ILLEGAL_OP_VAL;
++	epoch = rd64(desc);
++	slot = rd64(desc + 8);
++	offset = rd64(desc + 16);
++	bytes = rd64(desc + 24);
++	if (!epoch || epoch != rd64(frame + CSC_EPOCH_OFFSET) || slot == 0 || slot >= 32 ||
++	    rd64(desc + 40) || csr_read(CSR_SATP) != rd64(frame) ||
++	    csr_read(0x5c1) != rd64(frame + 8))
++		return CAUSE_ILLEGAL_OP_VAL;
++	if (!((rd64(frame + CSC_KINDS_OFFSET) >> slot) & 1))
++		return CAUSE_UNEXP_OP_TYPE;
++	lo = rd64(frame + CSC_SLOTS_OFFSET + 16 * slot);
++	hi = rd64(frame + CSC_SLOTS_OFFSET + 16 * slot + 8);
++	csc_decode(lo, hi, &cap);
++	if (!csc_id_live(csr_read(0x5c1), cap.id))
++		return CAUSE_INVALID_CAP;
++	if (cap.type != CAP_TYPE_NONLIN)
++		return CAUSE_UNEXP_CAP_TYPE;
++	if ((cap.perms & (write ? CAP_PERMS_WO : CAP_PERMS_RO)) !=
++	    (write ? CAP_PERMS_WO : CAP_PERMS_RO))
++		return CAUSE_INSUF_CAP_PERMS;
++	if (offset > ~0ULL - cap.cursor)
++		return CAUSE_CAP_OOB;
++	address = cap.cursor + offset;
++	if (address < cap.base || address > cap.end || bytes > cap.end - address ||
++	    !csc_addr_ok(address) || (bytes && !csc_addr_ok(address + bytes - 1)))
++		return CAUSE_CAP_OOB;
++	*(volatile u64 *)(ulong)(desc + 32) = address;
++	return 0;
++}
++
++int sbi_capstone_cscheck_insn(ulong insn, struct sbi_trap_regs *regs)
++{
++	ulong funct7 = insn >> 25, prev_mode, cause;
++	bool virt;
++
++	if (((insn >> 12) & 7) != 1 || (funct7 != 0x25 && funct7 != 0x26))
++		return SBI_ENOTSUPP;
++	prev_mode = (regs->mstatus & MSTATUS_MPP) >> MSTATUS_MPP_SHIFT;
++#if __riscv_xlen == 32
++	virt = (regs->mstatusH & MSTATUSH_MPV) ? true : false;
++#else
++	virt = (regs->mstatus & MSTATUS_MPV) ? true : false;
++#endif
++	csc_count[CSC_ENTRIES]++;
++	cause = csc_check(GET_RS1(insn, regs), GET_RS2(insn, regs), funct7 == 0x26, prev_mode, virt);
++	if (cause >= 24 && cause <= 29)
++		csc_count[CSC_CAUSE24 + cause - 24]++;
++	else
++		csc_count[CSC_OK]++;
++	SET_RD(insn, regs, cause);
++	regs->mepc += 4;
++	return 0;
++}
++
++static int sbi_ecall_cscheck_handler(unsigned long extid, unsigned long funcid,
++				     const struct sbi_trap_regs *regs,
++				     unsigned long *out_val,
++				     struct sbi_trap_info *out_trap)
++{
++	unsigned i;
++
++	switch (funcid) {
++	case 0:
++		*out_val = CSC_SBI_MAGIC;
++		return 0;
++	case 1:
++		if (regs->a0 >= CSC_COUNTERS)
++			return SBI_EINVAL;
++		*out_val = csc_count[regs->a0];
++		return 0;
++	case 2:
++		for (i = 0; i < CSC_COUNTERS; ++i)
++			csc_count[i] = 0;
++		return 0;
++	}
++	return SBI_ENOTSUPP;
++}
++
++struct sbi_ecall_extension ecall_capstone_cscheck;
++
++static int sbi_ecall_cscheck_register_extensions(void)
++{
++	return sbi_ecall_register_extension(&ecall_capstone_cscheck);
++}
++
++struct sbi_ecall_extension ecall_capstone_cscheck = {
++	.extid_start		= CSC_SBI_EXT,
++	.extid_end		= CSC_SBI_EXT,
++	.register_extensions	= sbi_ecall_cscheck_register_extensions,
++	.handle			= sbi_ecall_cscheck_handler,
++};
+diff --git a/lib/sbi/sbi_illegal_insn.c b/lib/sbi/sbi_illegal_insn.c
+index 2be4757..22c476c 100644
+--- a/lib/sbi/sbi_illegal_insn.c
++++ b/lib/sbi/sbi_illegal_insn.c
+@@ -18,6 +18,7 @@
+ #include <sbi/sbi_trap.h>
+ #include <sbi/sbi_unpriv.h>
+ #include <sbi/sbi_console.h>
++#include <sbi/sbi_capstone_cscheck.h>
+ 
+ typedef int (*illegal_insn_func)(ulong insn, struct sbi_trap_regs *regs);
+ 
+@@ -102,6 +103,14 @@ static int system_opcode_insn(ulong insn, struct sbi_trap_regs *regs)
+ 	return 0;
+ }
+ 
++/* custom-2 (0x5b): Capstone CSCHECKR/W emulation, measurement prototype; anything else stays illegal. */
++static int custom2_opcode_insn(ulong insn, struct sbi_trap_regs *regs)
++{
++	if (sbi_capstone_cscheck_insn(insn, regs) == 0)
++		return 0;
++	return truly_illegal_insn(insn, regs);
++}
++
+ static const illegal_insn_func illegal_insn_table[32] = {
+ 	truly_illegal_insn, /* 0 */
+ 	truly_illegal_insn, /* 1 */
+@@ -125,7 +134,7 @@ static const illegal_insn_func illegal_insn_table[32] = {
+ 	truly_illegal_insn, /* 19 */
+ 	truly_illegal_insn, /* 20 */
+ 	truly_illegal_insn, /* 21 */
+-	truly_illegal_insn, /* 22 */
++	custom2_opcode_insn, /* 22 */
+ 	truly_illegal_insn, /* 23 */
+ 	truly_illegal_insn, /* 24 */
+ 	truly_illegal_insn, /* 25 */

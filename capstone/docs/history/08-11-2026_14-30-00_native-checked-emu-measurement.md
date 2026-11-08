@@ -63,3 +63,63 @@ does test that the two offsets agree.
 **Second collision, recorded and left as it is:** the transport image's epoch copy (+1072) and caller
 privilege (+1080) lie inside the RTL's caller snapshot (+1024..+1976). They matter for export/import
 images, not for the direct ABI.
+
+## Step 1: CSCHECKR/W emulated by firmware (measurement only)
+
+The native platform boots QEMU's bundled OpenSBI (057eb10b6d52), not the Capstone monitor, and its M mode is
+not in capability mode. The emulation therefore goes into that OpenSBI, as
+`tests/native-task/cscheck-emu/opensbi-057eb10b-cscheck-emu.patch`, built by `build-firmware.sh` in the same
+folder (the build reproduces `fw_dynamic.bin` `e03268f9c8e64620` bit for bit). It follows the CSMINT
+emulation's pattern: decode mtval on the illegal-instruction trap, emulate, write rd, step mepc. The trap is
+custom-2 (0x5b), funct3 1, funct7 0x25/0x26, taken from S; anything else on custom-2 stays illegal. M reads
+everything physically: frame, descriptor and lifetime table.
+
+The checks follow capstone-qemu `helper_cscheck` in its refusal order:
+1. U or V caller, a descriptor or frame not aligned RAM outside the firmware: 29.
+2. Zero epoch, an epoch other than the frame word at +2336, slot outside 1..31, reserved word non-zero,
+   satp other than frame+0, or srevroot other than frame+8: 29.
+3. Untagged at the escape (bit `slot` of +2344): 24.
+4. Lifetime record not VALID or FREE (paged table at the current srevroot, 3-level 4:9:9:8 walk, one 64-bit
+   read of the flags): 25.
+5. Type other than NONLIN: 26.
+6. Read or write permission missing: 27.
+7. Offset overflow or bounds, or an address outside Sv39: 28.
+8. Otherwise descriptor[4] = cursor + offset and rd = 0.
+
+The bounds decode is `cap_compress.c` `decode()` for 30-bit ids.
+
+**Measurement-only shortcuts, to be stated wherever the number is cited:**
+1. The capability is the MUTABLE frame slot +64+16r (the compressed form the escape saved), and its tag is
+   the escape's classification bit at +2344. C.5a has no hidden escaped snapshot, so trusted frame rewrites
+   are not excluded.
+2. The epoch is the frame RAM word at +2336, not a hart register. On this QEMU the escape publishes it,
+   because the context transport is on. On C.5a the kernel would have to write it. The emulation cannot see
+   paused/terminal state or resume invalidation.
+
+The satp/srevroot comparisons use the kernel-written entry words +0/+8. The RAM check is the virt DRAM
+window [0x8000_0000, +64 GiB) with the firmware image excluded.
+
+The firmware also adds an experimental SBI extension 0x08435343: fid 0 probe, fid 1 counter, fid 2 reset.
+It counts entries, rd = 0, and each cause 24..29. Kernel side, measurement only, default off:
+- `capstone_vm.checked_copy_emu=1` admits a model whose device tree says `checked-copy-abi` 0 and transport
+  v5, provided the firmware answers the probe. It prints `MEASUREMENT ONLY: CSCHECKR/W emulated by firmware`.
+- `/sys/module/capstone_vm/parameters/native_counters` reads CSRUNV escapes by kind, counted in
+  cv_step_locked's loop so faults resolved in place are included. It also reads kind-3 services by route
+  (register, exchange, other) and the firmware's counters.
+- `run-musl-io.py` gains `--checked-copy-model off` and `--counters`.
+
+The native path's gate (`run-musl-io.py io`, one slot) on Image `28e5cc224b5bd776`, firmware `e03268f9c8e64620`:
+
+| Model | Firmware | Result | Emulation counters at the end |
+|---|---|---|---|
+| `x-capstone-checked-copy=true` (positive control) | emulating | PASS; 170/176 musl-IO and 51 integration checks, 0 failures | entries 0, ok 0, every cause 0 |
+| `x-capstone-checked-copy=false` | emulating | PASS; the same checks, 0 failures | entries 11,509, ok 11,492, c25 1, c28 16, others 0 |
+| `x-capstone-checked-copy=false` (control) | base OpenSBI `2493e91d13d61600`, same source unpatched | FAIL: adapter refuses to load, `.dom` not executable | n/a |
+
+With the property on, the firmware is never entered. With it off, every check is emulated and the gate's
+authority refusals still come back as the expected errors. Escapes and routes are the same in both arms
+(end: k1 104, k3 767, k4 532/531, register 227, exchange 393, other 147). During the IO phase the gate
+made 424 kind-3 services and 10,189 emulated checks, so one service can issue many checks: the copy
+re-authenticates every chunk. Per-call check counts therefore belong in the SPEC readings.
+
+The emulation is ready for the RTL lane's review against the RTL frame layout.

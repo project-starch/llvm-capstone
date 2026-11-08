@@ -237,11 +237,16 @@ static long dom_service(struct context *c, struct cv_step *s)
     long rc;
     s->reply = 1;
     s->result = -ENOSYS;
-    if (s->args[7] == NS_SERVICE_NATIVE)
+    if (s->args[7] == NS_SERVICE_NATIVE) {
+        ++cv_service_register;
         return native_service_direct(c, s);
+    }
     if (s->args[7] == CV_SERVICE_DELEGATE ||
-        s->args[7] == CV_SERVICE_THREAD_DELEGATE)
+        s->args[7] == CV_SERVICE_THREAD_DELEGATE) {
+        ++cv_service_exchange;
         return native_service(c, s);
+    }
+    ++cv_service_other;
 #ifdef CV_RACE_TEST
     if (rt_service(c, s)) return 0;
 #endif

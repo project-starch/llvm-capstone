@@ -27,6 +27,7 @@ static bool copyable_exact_bounds;
 #include <asm/csr.h>
 #include <asm/io.h>
 #include <asm/pgtable.h>
+#include <asm/sbi.h>
 #include "wire.h"
 /* Escape epoch and tag/raw-tag classification words in the paused frame
  * (capstone-qemu native/checked-emu-measure, CHECK_EPOCH_OFFSET/CHECK_KINDS_OFFSET).
@@ -38,6 +39,46 @@ static bool copyable_exact_bounds;
  * snapshot (+1024..+1976); they matter only for export/import images. */
 #define CV_FRAME_CHECK_EPOCH (2336 / 8)
 #define CV_FRAME_CHECK_KINDS (2344 / 8)
+/* MEASUREMENT ONLY (native checked access, step 1). checked_copy_emu=1 admits a model whose
+ * device tree reports checked-copy-abi 0 (CSCHECKR/W illegal, transport v5) when the firmware
+ * advertises the CSCHECK emulation extension below; the instructions then trap to M and are
+ * emulated there. The emulation's two shortcuts (mutable frame slot, frame-word epoch) are in
+ * its source. Never a production configuration. */
+#define CV_CSC_SBI_EXT 0x08435343UL
+#define CV_CSC_SBI_MAGIC 0x43534301UL
+#define CV_CSC_COUNTERS 9
+static bool checked_copy_emu;
+module_param(checked_copy_emu, bool, 0444);
+MODULE_PARM_DESC(checked_copy_emu, "MEASUREMENT ONLY: accept firmware-emulated CSCHECKR/W (default off)");
+static bool cv_csc_firmware(void)
+{
+    struct sbiret r;
+    if (sbi_probe_extension(CV_CSC_SBI_EXT) <= 0) return false;
+    r = sbi_ecall(CV_CSC_SBI_EXT, 0, 0, 0, 0, 0, 0, 0);
+    return !r.error && r.value == CV_CSC_SBI_MAGIC;
+}
+/* Read-only measurement counters: CSRUNV escapes by event kind (every escape, including the faults
+ * cv_step_locked resolves in place) and kind-3 services by route. */
+static unsigned long cv_exit_kind[8], cv_service_register, cv_service_exchange, cv_service_other;
+static int cv_counters_get(char *buffer, const struct kernel_param *kp)
+{
+    static const char *const names[CV_CSC_COUNTERS] = {
+        "entries", "ok", "c24", "c25", "c26", "c27", "c28", "c29", "unsupported_table"};
+    int n = scnprintf(buffer, PAGE_SIZE, "k0=%lu k1=%lu k2=%lu k3=%lu k4=%lu k5=%lu k6=%lu k7=%lu "
+                      "register=%lu exchange=%lu service_other=%lu",
+                      cv_exit_kind[0], cv_exit_kind[1], cv_exit_kind[2], cv_exit_kind[3],
+                      cv_exit_kind[4], cv_exit_kind[5], cv_exit_kind[6], cv_exit_kind[7],
+                      cv_service_register, cv_service_exchange, cv_service_other);
+    unsigned i;
+    if (!cv_csc_firmware()) return n + scnprintf(buffer + n, PAGE_SIZE - n, " emu=absent\n");
+    for (i = 0; i < CV_CSC_COUNTERS; ++i) {
+        struct sbiret r = sbi_ecall(CV_CSC_SBI_EXT, 1, i, 0, 0, 0, 0, 0);
+        n += scnprintf(buffer + n, PAGE_SIZE - n, " emu_%s=%ld", names[i], r.error ? -1L : (long)r.value);
+    }
+    return n + scnprintf(buffer + n, PAGE_SIZE - n, "\n");
+}
+static const struct kernel_param_ops cv_counters_ops = { .get = cv_counters_get };
+module_param_cb(native_counters, &cv_counters_ops, NULL, 0444);
 _Static_assert(sizeof(struct cv_step) == 136, "cv_step is two user-copy chunks and an 8-byte tail");
 #ifndef __uninitialized   /* kernels before 6.9 have no macro for the attribute */
 #define __uninitialized __attribute__((uninitialized))
@@ -2994,6 +3035,7 @@ static long cv_step_locked(struct context *c, struct cv_step *request, const uns
         t->started = true; t->reply_cap = false;
         local_irq_restore(flags); preempt_enable();
         ++c->stats.steps;
+        ++cv_exit_kind[t->event & 7];
         if (t->event == CV_EVENT_UNWRITTEN) {
             /* REFUSED: the CSRUNV wrote no event record. End the context, never loop. The
              * report below reads frame[2..5], so set them to a terminal kind and a cause no
@@ -3258,6 +3300,10 @@ static int __init init(void)
     copyable_exact_bounds = exact;
     /* Refuse mismatched models at load, before an experimental instruction
      * can trap in S mode. No test-only CSR probing or legacy ABI fallback. */
+    if (checked_copy && checked_abi == 0 && checked_copy_emu && cv_csc_firmware()) {
+        pr_emerg("capstone_vm: MEASUREMENT ONLY: CSCHECKR/W emulated by firmware (checked_copy_emu=1)\n");
+        checked_abi = 1; transport_version = transport_version == 5 ? 6 : 0;
+    }
     if ((checked_copy && (checked_abi != 1 || !native_slot_transport)) ||
         (native_slot_transport && transport_version != (checked_copy ? 6 : 5)) ||
         (native_dispatch && (!dom_binfmt || !checked_copy || !native_slot_transport)) ||
