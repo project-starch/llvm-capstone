@@ -36,7 +36,11 @@ all 8 pc samples in [tick + 0x154, tick + 0x160) with the disassembly showing th
 - Stage perf/tickgdb/stages/tickcost-E2g: tickcost-E2 with that commit's tickcost-guest.sh, which prints the `tick`,
   `cvprof_body` and `ktime_get` addresses at KERN_EMERG. Module unchanged (c16c5c56585b84c1).
 - Kit bkit34-tickgdb = bkit33-tickcost with two changes: BAKED_WEDGE_GDB=1 in board-run.sh, and the driver copy
-  perf/tickgdb/driver (run_baked_rungs_fpga.py f12edeb536f7a1de), which calls wedge_gdb.probe() after the wedge
-  apertures and before the board is released. wedge_gdb.py is that commit's file, unchanged.
+  perf/tickgdb/driver (run_baked_rungs_fpga.py 375b6458c96dc10f), which calls wedge_gdb.probe() after the wedge
+  apertures and before the board is released; an exception out of probe() is written as `GDB probe FAILED <type>:
+  <message>` into the transcript (a failed halt is one of the INVALID outcomes). wedge_gdb.py is that commit's file, unchanged.
 - Board 1, after its Plain pairs chain (results/2026-11-07-plainreuse Addendum 4) ends; driver perf/tickgdb/gt-run-tg.sh.
+- A second boot right after it: stage tickcost-E1g (E1, the clock-reading loop, with the same guest script), whose
+  predictions are in the same addendum 2 (samples in tick + 0x170..0x17c, in ktime_get, or in firmware
+  [0x80000000, 0x80200000), mstatus.MPP consistent with each).
 - A cvprof wedge with the reader follows only after READER VALID, as a separate pre-registration.
