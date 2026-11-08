@@ -66,6 +66,9 @@ MODULE_PARM_DESC(c5a_model, "MEASUREMENT ONLY: admit no transport and pinned are
  * it, once per escape. Set at load. */
 static bool cv_sw_frame;
 static unsigned long cv_sw_epoch, cv_kinds_queries, cv_emu_fingerprints;
+/* c5a ADOPT gate: an adopt whose kind is not the one recorded at that context's escape is refused, never issued
+ * (the RTL accepts a wrong kind and corrupts the context). Counted; a gate requires 0. */
+static unsigned long cv_adopt_kind_refused, cv_detaches, cv_adopts;
 /* The monitor's emulation writes this into descriptor word 5 (reserved, zero on entry) on every check it
  * handles; a check done by the processor never writes it. Counted per check: the firmware-entry count. */
 #define CV_CSC_FINGERPRINT 0x4353434845ULL
@@ -85,11 +88,12 @@ static int cv_counters_get(char *buffer, const struct kernel_param *kp)
     static const char *const names[CV_CSC_COUNTERS] = {
         "entries", "ok", "c24", "c25", "c26", "c27", "c28", "c29", "unsupported_table"};
     int n = scnprintf(buffer, PAGE_SIZE, "k0=%lu k1=%lu k2=%lu k3=%lu k4=%lu k5=%lu k6=%lu k7=%lu "
-                      "register=%lu exchange=%lu service_other=%lu kinds_queries=%lu emu_fingerprints=%lu",
+                      "register=%lu exchange=%lu service_other=%lu kinds_queries=%lu emu_fingerprints=%lu "
+                      "detaches=%lu adopts=%lu adopt_kind_refused=%lu",
                       cv_exit_kind[0], cv_exit_kind[1], cv_exit_kind[2], cv_exit_kind[3],
                       cv_exit_kind[4], cv_exit_kind[5], cv_exit_kind[6], cv_exit_kind[7],
                       cv_service_register, cv_service_exchange, cv_service_other,
-                      cv_kinds_queries, cv_emu_fingerprints);
+                      cv_kinds_queries, cv_emu_fingerprints, cv_detaches, cv_adopts, cv_adopt_kind_refused);
     unsigned i;
     if (!cv_csc_firmware()) return n + scnprintf(buffer + n, PAGE_SIZE - n, " emu=absent\n");
     for (i = 0; i < CV_CSC_COUNTERS; ++i) {
@@ -193,6 +197,7 @@ struct cv_thread {
     bool started, reply_cap, terminal;
     bool slot_exported; /* VM transport image in the kernel-owned frame */
     unsigned long kinds_epoch; /* c5a: the escape epoch the frame's classification word was read for */
+    unsigned long escape_kind; /* c5a: the kind this context's last escape returned (CSRUNV's rd), for ADOPT */
     unsigned long native_satp; /* translation identity of the paused snapshot */
     unsigned long event;
     /* S-24: the same kind-4 fault resolved repeatedly without changing anything. The RTL's walker
@@ -742,6 +747,7 @@ static int slot_acquire(struct cv_thread *t)
         local_irq_restore(flags); preempt_enable();
         if (result) return -EIO;
         t->slot_exported = true;
+        if (c5a_model) ++cv_detaches;
     }
     /* A terminal event can precede close(). Reclaim its occupied slot before
      * admitting another frame, even when the exiting task has not run yet. */
@@ -760,20 +766,28 @@ static int slot_acquire(struct cv_thread *t)
         local_irq_restore(flags); preempt_enable();
         if (result) return -EIO;
         holder->slot_exported = true;
+        if (c5a_model) ++cv_detaches;
     }
     if (t->slot_exported) {
         preempt_disable(); local_irq_save(flags);
         /* Transport v5/v6: SCALAR_STATE.satp is at byte 1192. This
          * kernel-owned field is not an application authority import. */
-        WRITE_ONCE(t->frame[c5a_model ? CV_FRAME_SAVED_SATP : 1192 / 8], csr_read(CSR_SATP));
+        /* c5a: after a detach the frame bytes ARE the context; nothing is written before the adopt. The resume
+         * path refreshes +928 after it (cv_step_locked). */
+        if (!c5a_model) WRITE_ONCE(t->frame[1192 / 8], csr_read(CSR_SATP));
         /* c5a ADOPT (rtl lane ABI, 2026-11-09): rs2 = 5 | (kind << 8), the paused kind this adapter holds from
          * the escape (1, 3, 4 or 5); the processor does not read it from frame +16. Any other kind is refused
          * here rather than issued. */
-        if (c5a_model && (t->event != 1 && t->event != 3 && t->event != 4 && t->event != 5)) {
+        if (c5a_model && (t->escape_kind != t->event ||
+            (t->escape_kind != 1 && t->escape_kind != 3 && t->escape_kind != 4 && t->escape_kind != 5))) {
             local_irq_restore(flags); preempt_enable();
+            ++cv_adopt_kind_refused;
+            pr_emerg("capstone_vm: c5a ADOPT refused: thread %llu escaped with kind %lu, event %lu\n",
+                     (unsigned long long)t->id, t->escape_kind, t->event);
             return -EIO;
         }
-        result = run(t->frame_pa, c5a_model ? 5 | (t->event << 8) : 5);
+        result = run(t->frame_pa, c5a_model ? 5 | (t->escape_kind << 8) : 5);
+        if (c5a_model && !result) ++cv_adopts;
         if (!result) t->native_satp = csr_read(CSR_SATP);
         local_irq_restore(flags); preempt_enable();
         if (result) return -EIO;
@@ -3088,6 +3102,7 @@ static long cv_step_locked(struct context *c, struct cv_step *request, const uns
         local_irq_restore(flags); preempt_enable();
         ++c->stats.steps;
         ++cv_exit_kind[t->event & 7];
+        t->escape_kind = t->event;
         if (cv_sw_frame) WRITE_ONCE(t->frame[CV_FRAME_CHECK_EPOCH], ++cv_sw_epoch);
         if (t->event == CV_EVENT_UNWRITTEN) {
             /* REFUSED: the CSRUNV wrote no event record. End the context, never loop. The
