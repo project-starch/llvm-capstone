@@ -27,9 +27,9 @@ shutil.copytree(a.stage / 'stage', st, symlinks=False)
 # large outputs never travel in-band (run-staged stops on a console window holding 'Oops' or 'Kernel panic', and
 # 5.7 MB of base64 can hold either by chance: the first perl twin was cut off that way).
 rs = (st / 'run.sh').read_text()
-cleanup = 'cd / && rm -rf /tmp/nt/sr /tmp/nt/b'
+cleanup = '\ncd / && rm -rf /tmp/nt/sr /tmp/nt/b\n'   # the whole last-cleanup line (the setup line starts the same way)
 assert rs.count(cleanup) == 1, 'cleanup line'
-(st / 'run-twin.sh').write_text(rs.replace(cleanup, 'cp -a /tmp/nt/sr/. /mnt/results/ 2>/dev/null; ' + cleanup))
+(st / 'run-twin.sh').write_text(rs.replace(cleanup, '\ncp -a /tmp/nt/sr/. /mnt/results/ 2>/dev/null; ' + cleanup[1:]))
 # Memory high-water, sampled every second while run.sh runs: the largest MemTotal - MemAvailable (kB) and the
 # largest VmHWM (kB) of any *_base* process (comm is cut to 15 characters).
 SAMPLER = r'''( mx=0; hw=0; while [ ! -f /tmp/sampler.stop ]; do
