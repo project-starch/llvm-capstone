@@ -374,6 +374,12 @@ MODULE_PARM_DESC(unpinned_fast_fault, "Experiment: reuse the validated anonymous
 static unsigned long unpinned_fast_faults;
 module_param(unpinned_fast_faults, ulong, 0444);
 MODULE_PARM_DESC(unpinned_fast_faults, "Faults resolved by the direct path since load (read-only)");
+static bool unpinned_access_fault;
+module_param(unpinned_access_fault, bool, 0444);
+MODULE_PARM_DESC(unpinned_access_fault, "Experiment: preserve read access on lazy anonymous demand faults");
+static unsigned long unpinned_access_reads;
+module_param(unpinned_access_reads, ulong, 0444);
+MODULE_PARM_DESC(unpinned_access_reads, "Anonymous read attempts with write-prefault suppressed; includes retries and failures");
 static bool unpinned_exact_bounds;
 static unsigned long unpinned_faults, unpinned_sweep_pages;
 module_param(unpinned_faults, ulong, 0444);
@@ -2332,9 +2338,9 @@ static bool image_data_vma(const struct arena *a, const struct vm_area_struct *v
  * The caller holds mmap_read_lock and v is the VMA it found (or, for a
  * fault-ahead page, the same VMA); an address outside v takes the old call.
  */
-static inline int unpinned_fault_vma(struct vm_area_struct *v, unsigned long address)
+static inline int unpinned_fault_vma(struct vm_area_struct *v, unsigned long address,
+                                    unsigned int flags)
 {
-    unsigned int flags = (v->vm_flags & VM_WRITE) ? FAULT_FLAG_WRITE : 0;
     vm_fault_t fault;
 
     if (!unpinned_fast_fault || !vma_is_anonymous(v) ||
@@ -2384,6 +2390,7 @@ static int unpinned_resolve(struct context *c, struct cv_thread *t, struct arena
     struct cv_stream *stream;
     unsigned index = (address - a->address - a->rx_bytes) / PAGE_SIZE;
     unsigned long ahead, limit, done = 0;
+    unsigned int flags = (v->vm_flags & VM_WRITE) ? FAULT_FLAG_WRITE : 0;
     int rc;
 #ifdef CONFIG_TRANSPARENT_HUGEPAGE
     /* add() required VM_NOHUGEPAGE on every VMA it admitted, but a later madvise(MADV_HUGEPAGE)
@@ -2392,7 +2399,16 @@ static int unpinned_resolve(struct context *c, struct cv_thread *t, struct arena
     if (!(v->vm_flags & VM_NOHUGEPAGE)) return -EOPNOTSUPP;
 #endif
     if (TEST_FAULT()) return -EAGAIN;
-    rc = unpinned_fault_vma(v, address);
+    /* The event and VMA access were authenticated by resolve(). Only read
+     * materialization changes: stores, execution, image mappings and eager
+     * bootstrap retain their existing policy. Speculation uses the same access
+     * as this demand fault; a later store must still resolve write/COW. */
+    if (unpinned_access_fault && a->lazy && (flags & FAULT_FLAG_WRITE) &&
+        vma_is_anonymous(v) && t->frame[3] == 13) {
+        flags = 0;
+        ++unpinned_access_reads;
+    }
+    rc = unpinned_fault_vma(v, address, flags);
     if (rc) return rc;
     ++unpinned_faults;
     if (diag_admit) ++a->unpinned_resolves;
@@ -2432,7 +2448,7 @@ static int unpinned_resolve(struct context *c, struct cv_thread *t, struct arena
         for (unsigned long j = 0; j < target; ++j) {
             if (!TEST_SKIP_RESIDENT_STOP() && unpinned_resident(c->mm, address + done * PAGE_SIZE))
                 goto finished;
-            if (unpinned_fault_vma(v, address + done * PAGE_SIZE))
+            if (unpinned_fault_vma(v, address + done * PAGE_SIZE, flags))
                 goto finished;
             ++done;
         }
@@ -2562,7 +2578,8 @@ static int resolve(struct context *c, struct cv_thread *t, u64 deadline)
             /* Unpinned: the kernel's own fault path, as the image's RX path and the
              * resolve_dirty path use it, and no pin. Write access where the VMA grants it (GUP's
              * FOLL_WRITE did the same), so a read fault still materializes private writable
-             * dirty backing rather than the zero page. The repeat bound stays: a resolve that
+             * dirty backing rather than the zero page, unless the anonymous-read
+             * experiment selects actual read access. The repeat bound stays: a resolve that
              * changes nothing must not report success for ever. */
             int rc;
             if (unpinned_fault_repeats(t, a, address, cause)) {

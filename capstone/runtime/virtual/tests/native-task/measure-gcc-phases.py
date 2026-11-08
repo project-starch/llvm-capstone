@@ -20,6 +20,13 @@ p.add_argument('--arm', action='append', choices=['plain', 'native'], help='Over
 p.add_argument('--kernel-arg', action='append', default=[], help='Additional kernel argument applied to both arms (diagnostic experiments).')
 a = p.parse_args()
 a.out.mkdir(parents=True, exist_ok=False)
+requested = {}
+for arg in a.kernel_arg:
+    for item in arg.split():
+        if item.startswith('capstone_vm.'):
+            key, value = item.split('=', 1)
+            requested[key.split('.', 1)[1]] = value
+
 sha = lambda f: hashlib.sha256(f.read_bytes()).hexdigest()
 inputs = {n: sha(getattr(a, n)) for n in ['qemu', 'firmware', 'plugin', 'profrun', 'gcc', 'plain', 'input', 'reference', 'resolver']}
 inputs.update({n: sha(a.images/n) for n in ['Image', 'System.map', 'rootfs.ext2']})
@@ -49,6 +56,10 @@ counters() {
   [ ! -f "$f" ] || echo COUNTER "$1" "$f" "$(cat "$f")"
  done
 }
+for key in unpinned_access_fault unpinned_fast_fault fault_ahead_max pin_ahead_pages native_fast; do
+ f=/sys/module/capstone_vm/parameters/$key
+ [ ! -f "$f" ] || echo SETTING:$key:$(cat "$f")
+done
 counters before
 ./profrun ./gcc.bin t1.c -O3 -finline-limit=50000 -o output.s
 counters after
@@ -60,7 +71,8 @@ dmesg
     if a.negative_boundary:
         sites['plugin_args'] = [('start_bytes='+format(int(v.split('=')[1], 16)^0x10, 'x')) if v.startswith('start_bytes=') else v for v in sites['plugin_args']]
     (d/'sites.json').write_text(json.dumps(sites, indent=2)+'\n')
-    flags = ' '.join('capstone_vm.'+s for s in ['native_task=1', 'native_io=1', 'native_locks=1', 'native_stat=1', 'native_seek=1', 'native_fd=1', 'native_close=1', 'native_path=1', 'native_clock=1', 'native_fast=1', 'dom_binfmt=1', 'native_dispatch=1', 'checked_copy=1', 'native_slot_transport=1', 'unpinned=1', 'supervisor_slots=32'])
+    flags = ' '.join('capstone_vm.'+s for s in ['native_task=1', 'native_io=1', 'native_locks=1', 'native_stat=1', 'native_seek=1', 'native_fd=1', 'native_close=1', 'native_path=1', 'native_clock=1', 'dom_binfmt=1', 'native_dispatch=1', 'checked_copy=1', 'native_slot_transport=1', 'unpinned=1', 'supervisor_slots=32'])
+    assert len(('root=/dev/vda ro '+flags+' '+' '.join(a.kernel_arg)).encode()) < 512, 'kernel command line would be truncated'
     cmd = ['python3', str(Path(__file__).resolve().parents[2]/'run-staged.py'), '--qemu', str(a.qemu), '--images', str(a.images), '--firmware', str(a.firmware), '--stage', str(stage), '--work', str(d/'vm'), '--memory', '4G', '--disk-mib', '128', '--timeout', '180', '--icount', '0', '--kernel-arg', flags, '--plugin', str(a.plugin), '--plugin-arg', 'out='+str(d/'profile')]
     for arg in a.kernel_arg: cmd += ['--kernel-arg', arg]
     for arg in ['phases=1']+sites['plugin_args']: cmd += ['--plugin-arg', arg]
@@ -71,6 +83,10 @@ dmesg
     log = (d/'vm/serial.log').read_text(errors='replace').replace('\r', '')
     assert 'GCC_PHASE_EXIT:0\n' in log and 'PASS:GCC_EXACT_OUTPUT\n' in log
     assert not re.search(r'WARNING:|BUG:|Oops|Kernel panic', log)
+    settings = dict(re.findall(r'^SETTING:(\w+):(\w+)$', log, re.M))
+    for key, expected in requested.items():
+        if key in ['unpinned_access_fault', 'unpinned_fast_fault', 'fault_ahead_max', 'pin_ahead_pages', 'native_fast']:
+            assert settings.get(key, '').replace('Y', '1').replace('N', '0') == expected, (key, expected, settings)
     invalid = list((d/'profile').glob('*.invalid'))
     if a.negative_boundary:
         assert invalid, 'corrupt boundary was not rejected'
@@ -117,7 +133,7 @@ dmesg
     outer = int((d/'profile/phase-total.txt').read_text()); assert sum(totals) == outer
     counters = {when: {name:int(value) for w,name,value in re.findall(r'^COUNTER (before|after) (\S+) (\d+)$', log, re.M) if w == when} for when in ['before', 'after']}
     delta = {k:v-counters['before'][k] for k,v in counters['after'].items() if k in counters['before']}
-    (d/'verdict.json').write_text(json.dumps(dict(status='PASS', phase_sum=sum(totals), outer_attempts=outer, counter_deltas=delta, reference_match=True), indent=2)+'\n')
+    (d/'verdict.json').write_text(json.dumps(dict(status='PASS', settings=settings, phase_sum=sum(totals), outer_attempts=outer, counter_deltas=delta, reference_match=True), indent=2)+'\n')
 if not a.negative_boundary:
     (a.out/'summary.json').write_text(json.dumps(dict(status='PASS', kernel_args=a.kernel_arg, inputs=inputs, rows=rows, boundaries=['first init_cgraph entry', 'first statistics_fini entry'], limitations=['QEMU attempted instructions, not hardware cycles or elapsed time.', 'Ordinary RV64 and Capstone builds have different recorded compiler/libc provenance; not pure ISA isolation.', 'Same patched Linux/model, not stock-kernel comparison.', 'Startup includes GCC backend initialization; compilation includes output close; finalization includes process exit.', 'Flat symbols and first-instruction attempts are not inclusive costs or guaranteed invocation counts.', 'Sysfs counter deltas cover invocation plus measurement shell activity; compare with the plain arm.']), indent=2)+'\n')
     print('PASS exact outputs, authenticated boundaries and phase conservation', flush=True)
