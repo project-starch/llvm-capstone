@@ -206,3 +206,25 @@ replaced by construction: the hook IS the capability access.
 - **But Plain gains the same:** -0.176 G model, ~0.21 G at silicon's scale (x1.17). Equal absolute cycles off both runs
   leave Capstone/Plain where it is or slightly worse (1.268 -> ~1.27 at the mid penalty). 32 ways is the same picture
   at twice the size. E2 is a lever for absolute run time, not for the overhead ratio.
+- **Status: PARKED — helps both arms equally** (the runtime lane's ruling, 8 Nov: the metric is the Capstone/Plain
+  ratio). Recipe if absolute time ever becomes the metric: `core/include/capstone_cv64a6_imafdc_sv39_config_pkg.sv`
+  CVA6ConfigDcacheByteSize 32768 -> 65536 and CVA6ConfigDcacheSetAssoc 8 -> 16 (4 KiB per way kept, VIPT); the line
+  width stays 128 (the capability tag is one bit per line, wt_dcache_mem.sv:146). A Plain pair on the same bitstream is
+  mandatory.
+
+## E0 first-boot vectors (image sims, 8 Nov): every VALUE equals C.5a's; only LDC/STC cycle counts move
+
+`e0-vectors.txt` (this folder): the 32 C.5a-gate images (slot 9, hpm 7 — hpm-8 has no ELF here and is not predicted —,
+ObjBounds 11, R-67 4, R-32 1), each reproduced bit for bit from its kit (the slot kit rebuilt with its build.sh; every
+hash checked against the kit's SHA256SUMS), simulated on fe4810dd1 clean (= stage-B a481031ca's RTL; S12_MEM_DELAY 12,
+time_out 3 M, model rebuilt), vectors from the recorder area, beside C.5a's own sims of the same images.
+- 19 images identical to C.5a in every field: slot-5/6/8/9, hpm-1/2/4/5/6/7, objb-pcc-ctrl/s1/stale/stale-w, the four
+  R-67 arms; objb-pcc records nothing on BOTH trees (retired 2,859 both, the same trap pcs).
+- 12 differ ONLY in their cycle fields, all on LDC/STC arms, all faster — the DYN handshake trim and LDC rs1 as
+  intended: slot-2/3 0x170b -> 0x1310 (5,899 -> 4,880), slot-1/4 -1, slot-7 (ldc alone) 0xa5d -> 0x860; hpm-3 stall
+  0x1ff -> 0x2 and cycles 0x55e -> 0x461; objb s2/s3/s4/s5/s6/s7 cycles down by 1-27 %; every count, address and
+  verdict field equal.
+- shrinkto: the R-32-fixed vector (equal to r32img-batch on the same RTL; C.5a reads the off-by-one).
+**Board pre-registration for E0 = the E0 column**, graded per kit; a value field that differs from it is a finding,
+a cycle field is graded against the E0 column with each kit's own tolerance. Then one SPEC test stage (the runtime
+lane's choice).
