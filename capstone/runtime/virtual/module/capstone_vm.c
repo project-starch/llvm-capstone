@@ -3218,9 +3218,14 @@ static bool one_inode_per_file(struct file *file)
  * not see it; the launcher's malloc of its bounce buffer (ENOMEM only under memory exhaustion) is not made.
  *
  * WHAT IS NOT SERVED. Only regular files on a local filesystem (ext2/3/4, tmpfs, ramfs) for read, write and lseek,
- * and those plus pipes for fstat: nothing that can block indefinitely while vm_lock is held, nothing whose
+ * and those plus pipes for fstat: nothing that waits on another task's progress while vm_lock is held, nothing whose
  * restart semantics (ERESTARTSYS) the stub would turn into a RETRY round, no FUSE (whose daemon could be another
- * context). A signal that arrives DURING the call, or a reschedule or budget stop before the resume, is handed back
+ * context). No O_DIRECT read or write: its alignment check reads the buffer ADDRESS, and the launcher's buffer is its
+ * bounce copy (found by audit 2026-11-08: the first version served it and could disagree with the launcher). The file
+ * shape is checked before the f_pos lock is taken, so no other file's lock is waited for under vm_lock. Not excluded:
+ * a write to a FROZEN filesystem (fsfreeze) waits in file_start_write, as the launcher's would, but under vm_lock;
+ * fanotify permission events are not configured in this kernel. A signal pending before the call falls back, so the
+ * launcher's stub makes it the RETRY round it would be. A signal that arrives DURING the call, or a reschedule or budget stop before the resume, is handed back
  * to the launcher as a performed call (CV_CAUSE_KFAST_PUBLISH): the launcher writes the result and publishes the
  * ring as it would have after the same call, then replies -- never serving it again. */
 static bool kfast;
@@ -3345,16 +3350,20 @@ static bool kfast_local_file(struct file *file, bool pipes)
            (magic == 0xEF53 /* EXT2/3/4 */ || magic == 0x01021994 /* TMPFS */ || magic == 0x858458f6 /* RAMFS */);
 }
 
-/* fs/file.c __fdget_pos and fdput_pos (the former is not exported): the same light lookup and f_pos lock. */
-static struct fd kfast_fdget_pos(unsigned int fd)
+/* fs/file.c __fdget_pos and fdput_pos (the former is not exported), in two steps: the same light lookup, then --
+ * only once the file has passed the shape check, so no lock of a file the module does not serve is ever waited
+ * for under vm_lock -- the same f_pos lock under the same condition. */
+static struct fd kfast_fdget(unsigned int fd)
 {
     unsigned long v = __fdget(fd);
-    struct file *file = (struct file *)(v & ~3);
-    if (file && (file->f_mode & FMODE_ATOMIC_POS) && file_count(file) > 1) {
-        v |= FDPUT_POS_UNLOCK;
-        mutex_lock(&file->f_pos_lock);
-    }
     return (struct fd){(struct file *)(v & ~3), v & 3};
+}
+static void kfast_lock_pos(struct fd *f)
+{
+    if ((f->file->f_mode & FMODE_ATOMIC_POS) && file_count(f->file) > 1) {
+        f->flags |= FDPUT_POS_UNLOCK;
+        mutex_lock(&f->file->f_pos_lock);
+    }
 }
 static void kfast_fdput_pos(struct fd f)
 {
@@ -3465,9 +3474,12 @@ static int kfast_call(struct context *c, const struct kf_entry *e, void __user *
 {
     if (e->nr == KF_READ || e->nr == KF_WRITE || e->nr == KF_LSEEK) {
         /* ksys_read / ksys_write / ksys_lseek, with the file-shape check between the lookup and the call. */
-        struct fd f = kfast_fdget_pos((unsigned int)e->args[0]);
+        struct fd f = kfast_fdget((unsigned int)e->args[0]);
         if (!f.file) return 0;
-        if (!kfast_local_file(f.file, false)) { kfast_fdput_pos(f); return 0; }
+        /* O_DIRECT checks the BUFFER's alignment (iomap: dma_alignment 511), and the launcher's buffer is its
+         * malloc'd bounce copy, not the exchange: the same request can succeed on one path and fail on the other. */
+        if (!kfast_local_file(f.file, false) || (f.file->f_flags & O_DIRECT)) { fdput(f); return 0; }
+        kfast_lock_pos(&f);
         if (e->nr == KF_LSEEK) {
             unsigned int whence = (unsigned int)e->args[2];
             off_t retval = -EINVAL;
@@ -3559,6 +3571,8 @@ static int kfast_serve(struct context *c, struct cv_thread *t, u64 budget_end, l
     }
     /* run(): fd_arguments() is 1 (args[0]) for read, write, lseek and fstat, 0 for clock_gettime. */
     if (e.nr != KF_CLOCK_GETTIME && kfast_private(c, e.args[0])) { ++kfast_fb_private; return 0; }
+    /* A signal that became pending since the stop check: the launcher's stub would make this a RETRY round. */
+    if (signal_pending(current)) { ++kfast_fb_stop; return 0; }
     if (!kfast_call(c, &e, buf, result)) {
         if (e.nr == KF_CLOCK_GETTIME) ++kfast_fb_clock; else ++kfast_fb_file;
         return 0;
