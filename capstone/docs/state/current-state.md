@@ -1,3 +1,31 @@
+## Anonymous read-fault experiment: keep default off
+
+Runtime `2ae1682c54c9` adds an opt-in actual-read policy for lazy anonymous RW
+arenas. Eager/bootstrap, file mappings, store/execute handling and checked-copy
+policy stay unchanged. Astra xhigh reviewed the scope and test oracles.
+
+Fresh 1MiB read-only traffic saves 41.14% of whole-invocation instruction attempts
+and 1,016KiB of peak RSS without fault-ahead. Read-then-write instead costs 28.98%
+more; with adaptive ahead64 it costs 2.92x the old policy. Unchanged GCC in fresh
+ABBA guests costs 1.617% more without ahead and 1.936% more with ahead64, with no
+peak-RSS reduction in either matched cohort. The option remains default off.
+
+Profiling identifies repeated residency scanning: native read-write with the
+new policy has 272 flat `next_resident` attempts without ahead versus 1,633,236
+with ahead64. Presence is not write readiness: shared zero-page mappings still
+need later COW faults. The stream's bounded per-fault scan repeatedly visits
+present pages. Access-aware or less repetitive scanning is the next experiment;
+no performance or safety claim for such a change exists yet.
+
+All eight GCC outputs match exactly. Eight fixture configurations pass, including
+distinct capability stores as the first writes after reads. IO integration and
+both 41-case race groups pass with policy readback enabled; each observes all 17
+negative controls. Final gates take 174s and 133s. Pilot runs with truncated boot
+arguments are excluded; runners now enforce the kernel's 512-byte command-line
+capacity and verify guest settings. These are QEMU attempts, not hardware timing;
+no new full-SPEC, multi-hart or FPGA claim.
+[Artifacts, samples, scope and exclusions](../../runtime/virtual/tests/native-task/access-fault-experiment.json).
+
 ## Unpinned arena arrays removed and qualified
 
 Unpinned grants no longer allocate the per-page pin array or duplicate-frame
@@ -20,8 +48,8 @@ copies and missing holds. Astra xhigh reviewed all consumers and the immutable
 memory-mode contract. The occupied pre-start register-slot unwind was reviewed
 statically, not dynamically injected. No new full-SPEC/multi-hart/FPGA claim.
 [Exact artifacts, samples and limits](../../runtime/virtual/tests/native-task/arena-arrays-qualification.json).
-The actual-access fault-policy experiment is still pending; read faults and
-fault-ahead behavior have not changed.
+The actual-access fault-policy experiment above is default off; baseline read
+faults and fault-ahead behavior remain unchanged.
 
 ## Native arena index removal qualified
 

@@ -1271,3 +1271,11 @@ settings. Do not infer activation from requested command arguments alone.
 Whole-invocation attempt counts include exec/libc startup and exit. `ru_maxrss`
 is whole-process peak RSS, not isolated arena residency. Preserve compiler and
 binary provenance; plain/Capstone fixtures are not a pure ISA comparison.
+
+The [verified experiment record](access-fault-experiment.json) keeps the option
+off: GCC attempts rise 1.617% without fault-ahead and 1.936% with ahead64.
+Fresh reads save allocation work, but read-then-write traffic adds COW faults
+and repeated residency scans. All final GCC outputs, memory configurations,
+tag-first checks, IO and both race groups pass. Pilot runs whose kernel arguments
+were truncated are excluded. The record includes hashes, scope and raw-evidence
+locations; these are instruction-attempt comparisons, not hardware timings.

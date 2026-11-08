@@ -1,0 +1,1967 @@
+{
+  "schema": 1,
+  "date": "2026-11-08",
+  "branch": "native/linux-task-integration",
+  "source_snapshot": "2ae1682c54c99bf49a02114371be627107cccc5c",
+  "base_snapshot": "f2b2dcadf93f",
+  "status": "PASS within stated experimental scope; not promoted",
+  "decision": "Keep unpinned_access_fault default false: fresh-read savings do not transfer to GCC or read-then-write traffic.",
+  "scope": "Only cause-13 reads in lazy anonymous writable arenas; stores, execute faults, file VMAs, eager bootstrap and checked-copy policy unchanged. No ISA change.",
+  "source_sha256": "ee8d37edcd23fa93502e401d612ee1a864fda6afd531566b9ded2c9ade3dadac",
+  "config_sha256": "f51113c4c6a15f41d5802c254596704e2ced36f292b5056bde39e8506f604e3c",
+  "review": "Astra xhigh static review; no independent dynamic testing by reviewer.",
+  "gcc": [
+    {
+      "ahead": 0,
+      "inputs": {
+        "qemu": "c6681ec8a8ff704b297ec3eafceb13b2fe9c1c61c7a65ed95304bd5dbe5183eb",
+        "firmware": "2335a28682ddf65e46c1f492632c2cb026efcb2271caf544a3f7ddc858b03e02",
+        "plugin": "b42832d44980e01ae4e758e0a754d54c0cda759e7846fc9d6647d3a5b271bf32",
+        "profrun": "1d13d4912794855ae9c3c3fe69c89ca55434c2dd02b836053ad18f7913b7904f",
+        "gcc": "a1509c81444586031c74c5752f72ec90dc6c7ab57635fff37ffa431c11663a9f",
+        "plain": "ebeca8e920328b5c893fc9ee910851cceabee2bebc00320322b2b77b75def4a0",
+        "input": "de7b86d79a68965adb62e750101d9211224884b2236053d906d1e23057bb6ad1",
+        "reference": "58111208509dd871223ae195a33304bd6b24afd29458f37c976556cbad506324",
+        "resolver": "09892db220a9b8f3c6b49022448ae1b155decea87d7929fb4e53e2e37548196d",
+        "Image": "1dc9368c5b947fb53468e7b26781c1476843607ebc86414fe61c24bc4b232168",
+        "System.map": "221eb2ca691ff2a551d29c9ef7f9f8338fac05a2ae04ae15ed0da6f99702110f",
+        "rootfs.ext2": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845"
+      },
+      "order": "off/on/on/off; fresh guests; identical executable",
+      "samples": [
+        {
+          "evidence": "verified-gcc-0-0-0",
+          "access": 0,
+          "total_attempts": 49810800,
+          "kernel_attempts": 25852152,
+          "program_attempts": 23947609,
+          "rusage": {
+            "minflt": 2200,
+            "majflt": 0,
+            "maxrss_kb": 17692,
+            "nvcsw": 1,
+            "nivcsw": 4
+          },
+          "verdict": {
+            "status": "PASS",
+            "settings": {
+              "unpinned_access_fault": "N",
+              "unpinned_fast_fault": "N",
+              "fault_ahead_max": "0",
+              "pin_ahead_pages": "1",
+              "native_fast": "Y"
+            },
+            "phase_sum": 49810800,
+            "outer_attempts": 49810800,
+            "counter_deltas": {
+              "/sys/module/capstone_vm/parameters/unpinned_faults": 2002,
+              "/sys/module/capstone_vm/parameters/unpinned_fast_faults": 0,
+              "/sys/module/capstone_vm/parameters/unpinned_sweep_pages": 0,
+              "/sys/module/capstone_vm/parameters/fault_ahead_pages": 0,
+              "/sys/module/capstone_vm/parameters/fault_ahead_windows": 0,
+              "/sys/module/captag/parameters/cleared_pages": 1396,
+              "/sys/module/captag/parameters/freed_pages": 2546,
+              "/sys/module/captag/parameters/copies": 412
+            },
+            "reference_match": true
+          },
+          "phases": [
+            {
+              "run": 0,
+              "arm": "native",
+              "phase": "startup_and_initialization",
+              "total_attempts": 21483165,
+              "classes": {
+                "other": 5971,
+                "kernel": 8669473,
+                "program": 12807721
+              },
+              "reference_match": true
+            },
+            {
+              "run": 0,
+              "arm": "native",
+              "phase": "compilation_and_output",
+              "total_attempts": 21496646,
+              "classes": {
+                "other": 4059,
+                "kernel": 10373434,
+                "program": 11119153
+              },
+              "reference_match": true
+            },
+            {
+              "run": 0,
+              "arm": "native",
+              "phase": "finalization_and_exit",
+              "total_attempts": 6830989,
+              "classes": {
+                "other": 1009,
+                "kernel": 6809245,
+                "program": 20735
+              },
+              "reference_match": true
+            }
+          ]
+        },
+        {
+          "evidence": "verified-gcc-0-1-1",
+          "access": 1,
+          "total_attempts": 50615141,
+          "kernel_attempts": 26656022,
+          "program_attempts": 23948080,
+          "rusage": {
+            "minflt": 2670,
+            "majflt": 0,
+            "maxrss_kb": 17692,
+            "nvcsw": 1,
+            "nivcsw": 4
+          },
+          "verdict": {
+            "status": "PASS",
+            "settings": {
+              "unpinned_access_fault": "Y",
+              "unpinned_fast_fault": "N",
+              "fault_ahead_max": "0",
+              "pin_ahead_pages": "1",
+              "native_fast": "Y"
+            },
+            "phase_sum": 50615141,
+            "outer_attempts": 50615141,
+            "counter_deltas": {
+              "/sys/module/capstone_vm/parameters/unpinned_faults": 2472,
+              "/sys/module/capstone_vm/parameters/unpinned_fast_faults": 0,
+              "/sys/module/capstone_vm/parameters/unpinned_sweep_pages": 0,
+              "/sys/module/capstone_vm/parameters/fault_ahead_pages": 0,
+              "/sys/module/capstone_vm/parameters/fault_ahead_windows": 0,
+              "/sys/module/captag/parameters/cleared_pages": 1396,
+              "/sys/module/captag/parameters/freed_pages": 2461,
+              "/sys/module/captag/parameters/copies": 412
+            },
+            "reference_match": true
+          },
+          "phases": [
+            {
+              "run": 0,
+              "arm": "native",
+              "phase": "startup_and_initialization",
+              "total_attempts": 21873380,
+              "classes": {
+                "other": 5971,
+                "kernel": 9059521,
+                "program": 12807888
+              },
+              "reference_match": true
+            },
+            {
+              "run": 0,
+              "arm": "native",
+              "phase": "compilation_and_output",
+              "total_attempts": 21913559,
+              "classes": {
+                "other": 4557,
+                "kernel": 10789545,
+                "program": 11119457
+              },
+              "reference_match": true
+            },
+            {
+              "run": 0,
+              "arm": "native",
+              "phase": "finalization_and_exit",
+              "total_attempts": 6828202,
+              "classes": {
+                "other": 511,
+                "kernel": 6806956,
+                "program": 20735
+              },
+              "reference_match": true
+            }
+          ]
+        },
+        {
+          "evidence": "verified-gcc-0-2-1",
+          "access": 1,
+          "total_attempts": 50620793,
+          "kernel_attempts": 26661176,
+          "program_attempts": 23948080,
+          "rusage": {
+            "minflt": 2671,
+            "majflt": 0,
+            "maxrss_kb": 17692,
+            "nvcsw": 1,
+            "nivcsw": 4
+          },
+          "verdict": {
+            "status": "PASS",
+            "settings": {
+              "unpinned_access_fault": "Y",
+              "unpinned_fast_fault": "N",
+              "fault_ahead_max": "0",
+              "pin_ahead_pages": "1",
+              "native_fast": "Y"
+            },
+            "phase_sum": 50620793,
+            "outer_attempts": 50620793,
+            "counter_deltas": {
+              "/sys/module/capstone_vm/parameters/unpinned_faults": 2473,
+              "/sys/module/capstone_vm/parameters/unpinned_fast_faults": 0,
+              "/sys/module/capstone_vm/parameters/unpinned_sweep_pages": 0,
+              "/sys/module/capstone_vm/parameters/fault_ahead_pages": 0,
+              "/sys/module/capstone_vm/parameters/fault_ahead_windows": 0,
+              "/sys/module/captag/parameters/cleared_pages": 1396,
+              "/sys/module/captag/parameters/freed_pages": 2452,
+              "/sys/module/captag/parameters/copies": 412
+            },
+            "reference_match": true
+          },
+          "phases": [
+            {
+              "run": 0,
+              "arm": "native",
+              "phase": "startup_and_initialization",
+              "total_attempts": 21878463,
+              "classes": {
+                "other": 6469,
+                "kernel": 9064106,
+                "program": 12807888
+              },
+              "reference_match": true
+            },
+            {
+              "run": 0,
+              "arm": "native",
+              "phase": "compilation_and_output",
+              "total_attempts": 21910657,
+              "classes": {
+                "other": 4059,
+                "kernel": 10787141,
+                "program": 11119457
+              },
+              "reference_match": true
+            },
+            {
+              "run": 0,
+              "arm": "native",
+              "phase": "finalization_and_exit",
+              "total_attempts": 6831673,
+              "classes": {
+                "other": 1009,
+                "kernel": 6809929,
+                "program": 20735
+              },
+              "reference_match": true
+            }
+          ]
+        },
+        {
+          "evidence": "verified-gcc-0-3-0",
+          "access": 0,
+          "total_attempts": 49814121,
+          "kernel_attempts": 25854975,
+          "program_attempts": 23947609,
+          "rusage": {
+            "minflt": 2200,
+            "majflt": 0,
+            "maxrss_kb": 17692,
+            "nvcsw": 1,
+            "nivcsw": 4
+          },
+          "verdict": {
+            "status": "PASS",
+            "settings": {
+              "unpinned_access_fault": "N",
+              "unpinned_fast_fault": "N",
+              "fault_ahead_max": "0",
+              "pin_ahead_pages": "1",
+              "native_fast": "Y"
+            },
+            "phase_sum": 49814121,
+            "outer_attempts": 49814121,
+            "counter_deltas": {
+              "/sys/module/capstone_vm/parameters/unpinned_faults": 2002,
+              "/sys/module/capstone_vm/parameters/unpinned_fast_faults": 0,
+              "/sys/module/capstone_vm/parameters/unpinned_sweep_pages": 0,
+              "/sys/module/capstone_vm/parameters/fault_ahead_pages": 0,
+              "/sys/module/capstone_vm/parameters/fault_ahead_windows": 0,
+              "/sys/module/captag/parameters/cleared_pages": 1396,
+              "/sys/module/captag/parameters/freed_pages": 2555,
+              "/sys/module/captag/parameters/copies": 412
+            },
+            "reference_match": true
+          },
+          "phases": [
+            {
+              "run": 0,
+              "arm": "native",
+              "phase": "startup_and_initialization",
+              "total_attempts": 21484858,
+              "classes": {
+                "other": 5971,
+                "kernel": 8671166,
+                "program": 12807721
+              },
+              "reference_match": true
+            },
+            {
+              "run": 0,
+              "arm": "native",
+              "phase": "compilation_and_output",
+              "total_attempts": 21498193,
+              "classes": {
+                "other": 4557,
+                "kernel": 10374483,
+                "program": 11119153
+              },
+              "reference_match": true
+            },
+            {
+              "run": 0,
+              "arm": "native",
+              "phase": "finalization_and_exit",
+              "total_attempts": 6831070,
+              "classes": {
+                "other": 1009,
+                "kernel": 6809326,
+                "program": 20735
+              },
+              "reference_match": true
+            }
+          ]
+        }
+      ],
+      "means": {
+        "0": {
+          "total_attempts": 49812460.5,
+          "kernel_attempts": 25853563.5,
+          "program_attempts": 23947609
+        },
+        "1": {
+          "total_attempts": 50617967,
+          "kernel_attempts": 26658599,
+          "program_attempts": 23948080
+        }
+      },
+      "percent_change": {
+        "total_attempts": 1.6170783211963524,
+        "kernel_attempts": 3.1138280028592646,
+        "program_attempts": 0.00196679342809869
+      }
+    },
+    {
+      "ahead": 64,
+      "inputs": {
+        "qemu": "c6681ec8a8ff704b297ec3eafceb13b2fe9c1c61c7a65ed95304bd5dbe5183eb",
+        "firmware": "2335a28682ddf65e46c1f492632c2cb026efcb2271caf544a3f7ddc858b03e02",
+        "plugin": "b42832d44980e01ae4e758e0a754d54c0cda759e7846fc9d6647d3a5b271bf32",
+        "profrun": "1d13d4912794855ae9c3c3fe69c89ca55434c2dd02b836053ad18f7913b7904f",
+        "gcc": "a1509c81444586031c74c5752f72ec90dc6c7ab57635fff37ffa431c11663a9f",
+        "plain": "ebeca8e920328b5c893fc9ee910851cceabee2bebc00320322b2b77b75def4a0",
+        "input": "de7b86d79a68965adb62e750101d9211224884b2236053d906d1e23057bb6ad1",
+        "reference": "58111208509dd871223ae195a33304bd6b24afd29458f37c976556cbad506324",
+        "resolver": "09892db220a9b8f3c6b49022448ae1b155decea87d7929fb4e53e2e37548196d",
+        "Image": "1dc9368c5b947fb53468e7b26781c1476843607ebc86414fe61c24bc4b232168",
+        "System.map": "221eb2ca691ff2a551d29c9ef7f9f8338fac05a2ae04ae15ed0da6f99702110f",
+        "rootfs.ext2": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845"
+      },
+      "order": "off/on/on/off; fresh guests; identical executable",
+      "samples": [
+        {
+          "evidence": "verified-gcc-64-0-0",
+          "access": 0,
+          "total_attempts": 49953838,
+          "kernel_attempts": 25995466,
+          "program_attempts": 23946835,
+          "rusage": {
+            "minflt": 2281,
+            "majflt": 0,
+            "maxrss_kb": 17720,
+            "nvcsw": 1,
+            "nivcsw": 4
+          },
+          "verdict": {
+            "status": "PASS",
+            "settings": {
+              "unpinned_access_fault": "N",
+              "unpinned_fast_fault": "N",
+              "fault_ahead_max": "64",
+              "pin_ahead_pages": "1",
+              "native_fast": "Y"
+            },
+            "phase_sum": 49953838,
+            "outer_attempts": 49953838,
+            "counter_deltas": {
+              "/sys/module/capstone_vm/parameters/unpinned_faults": 1228,
+              "/sys/module/capstone_vm/parameters/unpinned_fast_faults": 0,
+              "/sys/module/capstone_vm/parameters/unpinned_sweep_pages": 0,
+              "/sys/module/capstone_vm/parameters/fault_ahead_pages": 855,
+              "/sys/module/capstone_vm/parameters/fault_ahead_windows": 158,
+              "/sys/module/captag/parameters/cleared_pages": 1396,
+              "/sys/module/captag/parameters/freed_pages": 2641,
+              "/sys/module/captag/parameters/copies": 412
+            },
+            "reference_match": true
+          },
+          "phases": [
+            {
+              "run": 0,
+              "arm": "native",
+              "phase": "startup_and_initialization",
+              "total_attempts": 21072571,
+              "classes": {
+                "other": 5971,
+                "kernel": 8259519,
+                "program": 12807081
+              },
+              "reference_match": true
+            },
+            {
+              "run": 0,
+              "arm": "native",
+              "phase": "compilation_and_output",
+              "total_attempts": 22042340,
+              "classes": {
+                "other": 4557,
+                "kernel": 10918764,
+                "program": 11119019
+              },
+              "reference_match": true
+            },
+            {
+              "run": 0,
+              "arm": "native",
+              "phase": "finalization_and_exit",
+              "total_attempts": 6838927,
+              "classes": {
+                "other": 1009,
+                "kernel": 6817183,
+                "program": 20735
+              },
+              "reference_match": true
+            }
+          ]
+        },
+        {
+          "evidence": "verified-gcc-64-1-1",
+          "access": 1,
+          "total_attempts": 50923032,
+          "kernel_attempts": 26964185,
+          "program_attempts": 23947310,
+          "rusage": {
+            "minflt": 2750,
+            "majflt": 0,
+            "maxrss_kb": 17720,
+            "nvcsw": 1,
+            "nivcsw": 4
+          },
+          "verdict": {
+            "status": "PASS",
+            "settings": {
+              "unpinned_access_fault": "Y",
+              "unpinned_fast_fault": "N",
+              "fault_ahead_max": "64",
+              "pin_ahead_pages": "1",
+              "native_fast": "Y"
+            },
+            "phase_sum": 50923032,
+            "outer_attempts": 50923032,
+            "counter_deltas": {
+              "/sys/module/capstone_vm/parameters/unpinned_faults": 1702,
+              "/sys/module/capstone_vm/parameters/unpinned_fast_faults": 0,
+              "/sys/module/capstone_vm/parameters/unpinned_sweep_pages": 0,
+              "/sys/module/capstone_vm/parameters/fault_ahead_pages": 850,
+              "/sys/module/capstone_vm/parameters/fault_ahead_windows": 160,
+              "/sys/module/captag/parameters/cleared_pages": 1396,
+              "/sys/module/captag/parameters/freed_pages": 2547,
+              "/sys/module/captag/parameters/copies": 412
+            },
+            "reference_match": true
+          },
+          "phases": [
+            {
+              "run": 0,
+              "arm": "native",
+              "phase": "startup_and_initialization",
+              "total_attempts": 21544202,
+              "classes": {
+                "other": 6469,
+                "kernel": 8730481,
+                "program": 12807252
+              },
+              "reference_match": true
+            },
+            {
+              "run": 0,
+              "arm": "native",
+              "phase": "compilation_and_output",
+              "total_attempts": 22539007,
+              "classes": {
+                "other": 4059,
+                "kernel": 11415625,
+                "program": 11119323
+              },
+              "reference_match": true
+            },
+            {
+              "run": 0,
+              "arm": "native",
+              "phase": "finalization_and_exit",
+              "total_attempts": 6839823,
+              "classes": {
+                "other": 1009,
+                "kernel": 6818079,
+                "program": 20735
+              },
+              "reference_match": true
+            }
+          ]
+        },
+        {
+          "evidence": "verified-gcc-64-2-1",
+          "access": 1,
+          "total_attempts": 50916652,
+          "kernel_attempts": 26958305,
+          "program_attempts": 23947308,
+          "rusage": {
+            "minflt": 2750,
+            "majflt": 0,
+            "maxrss_kb": 17720,
+            "nvcsw": 1,
+            "nivcsw": 4
+          },
+          "verdict": {
+            "status": "PASS",
+            "settings": {
+              "unpinned_access_fault": "Y",
+              "unpinned_fast_fault": "N",
+              "fault_ahead_max": "64",
+              "pin_ahead_pages": "1",
+              "native_fast": "Y"
+            },
+            "phase_sum": 50916652,
+            "outer_attempts": 50916652,
+            "counter_deltas": {
+              "/sys/module/capstone_vm/parameters/unpinned_faults": 1700,
+              "/sys/module/capstone_vm/parameters/unpinned_fast_faults": 0,
+              "/sys/module/capstone_vm/parameters/unpinned_sweep_pages": 0,
+              "/sys/module/capstone_vm/parameters/fault_ahead_pages": 852,
+              "/sys/module/capstone_vm/parameters/fault_ahead_windows": 158,
+              "/sys/module/captag/parameters/cleared_pages": 1396,
+              "/sys/module/captag/parameters/freed_pages": 2543,
+              "/sys/module/captag/parameters/copies": 412
+            },
+            "reference_match": true
+          },
+          "phases": [
+            {
+              "run": 0,
+              "arm": "native",
+              "phase": "startup_and_initialization",
+              "total_attempts": 21537938,
+              "classes": {
+                "other": 5971,
+                "kernel": 8724717,
+                "program": 12807250
+              },
+              "reference_match": true
+            },
+            {
+              "run": 0,
+              "arm": "native",
+              "phase": "compilation_and_output",
+              "total_attempts": 22542338,
+              "classes": {
+                "other": 4557,
+                "kernel": 11418458,
+                "program": 11119323
+              },
+              "reference_match": true
+            },
+            {
+              "run": 0,
+              "arm": "native",
+              "phase": "finalization_and_exit",
+              "total_attempts": 6836376,
+              "classes": {
+                "other": 511,
+                "kernel": 6815130,
+                "program": 20735
+              },
+              "reference_match": true
+            }
+          ]
+        },
+        {
+          "evidence": "verified-gcc-64-3-0",
+          "access": 0,
+          "total_attempts": 49951286,
+          "kernel_attempts": 25993412,
+          "program_attempts": 23946835,
+          "rusage": {
+            "minflt": 2281,
+            "majflt": 0,
+            "maxrss_kb": 17720,
+            "nvcsw": 1,
+            "nivcsw": 4
+          },
+          "verdict": {
+            "status": "PASS",
+            "settings": {
+              "unpinned_access_fault": "N",
+              "unpinned_fast_fault": "N",
+              "fault_ahead_max": "64",
+              "pin_ahead_pages": "1",
+              "native_fast": "Y"
+            },
+            "phase_sum": 49951286,
+            "outer_attempts": 49951286,
+            "counter_deltas": {
+              "/sys/module/capstone_vm/parameters/unpinned_faults": 1228,
+              "/sys/module/capstone_vm/parameters/unpinned_fast_faults": 0,
+              "/sys/module/capstone_vm/parameters/unpinned_sweep_pages": 0,
+              "/sys/module/capstone_vm/parameters/fault_ahead_pages": 855,
+              "/sys/module/capstone_vm/parameters/fault_ahead_windows": 158,
+              "/sys/module/captag/parameters/cleared_pages": 1396,
+              "/sys/module/captag/parameters/freed_pages": 2637,
+              "/sys/module/captag/parameters/copies": 412
+            },
+            "reference_match": true
+          },
+          "phases": [
+            {
+              "run": 0,
+              "arm": "native",
+              "phase": "startup_and_initialization",
+              "total_attempts": 21071492,
+              "classes": {
+                "other": 5971,
+                "kernel": 8258440,
+                "program": 12807081
+              },
+              "reference_match": true
+            },
+            {
+              "run": 0,
+              "arm": "native",
+              "phase": "compilation_and_output",
+              "total_attempts": 22044325,
+              "classes": {
+                "other": 4557,
+                "kernel": 10920749,
+                "program": 11119019
+              },
+              "reference_match": true
+            },
+            {
+              "run": 0,
+              "arm": "native",
+              "phase": "finalization_and_exit",
+              "total_attempts": 6835469,
+              "classes": {
+                "other": 511,
+                "kernel": 6814223,
+                "program": 20735
+              },
+              "reference_match": true
+            }
+          ]
+        }
+      ],
+      "means": {
+        "0": {
+          "total_attempts": 49952562,
+          "kernel_attempts": 25994439,
+          "program_attempts": 23946835
+        },
+        "1": {
+          "total_attempts": 50919842,
+          "kernel_attempts": 26961245,
+          "program_attempts": 23947309
+        }
+      },
+      "percent_change": {
+        "total_attempts": 1.9363971761848786,
+        "kernel_attempts": 3.7192801121809227,
+        "program_attempts": 0.0019793847495952477
+      }
+    }
+  ],
+  "memory": [
+    {
+      "status": "PASS",
+      "settings": {
+        "unpinned_fast_fault": "N",
+        "fault_ahead_max": "0",
+        "pin_ahead_pages": "0"
+      },
+      "fast_count": 0,
+      "ahead_count": 0,
+      "access": 0,
+      "fast": 0,
+      "ahead": 0,
+      "inputs": {
+        "memory-plain": "d0ffa69e62015104d437c5861264d08c35fd02d690d35e896b51812f903a454f",
+        "memory.dom": "e1c32c009ef1df9c454e7e32a07f0b7164aa1c04e6ba5d248eb674bd1eefee62",
+        "profrun": "1d13d4912794855ae9c3c3fe69c89ca55434c2dd02b836053ad18f7913b7904f",
+        "memory-tag-store.dom": "804433a2db61c1abe2f22f33ad181f11b5a7defbc93f3d9f7d53add0bdcdd7a1",
+        "qemu": "c6681ec8a8ff704b297ec3eafceb13b2fe9c1c61c7a65ed95304bd5dbe5183eb",
+        "Image": "1dc9368c5b947fb53468e7b26781c1476843607ebc86414fe61c24bc4b232168",
+        "rootfs": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845",
+        "firmware": "2335a28682ddf65e46c1f492632c2cb026efcb2271caf544a3f7ddc858b03e02",
+        "plugin": "a1883e39c6a1d4b1529081fda06ae7c7bba217a61e134041f9ef14ecf04f6ebc"
+      },
+      "cases": [
+        {
+          "arm": "plain",
+          "mode": "read",
+          "rusage": {
+            "minflt": 267,
+            "majflt": 0,
+            "maxrss_kb": 52
+          },
+          "total_attempts": 683385
+        },
+        {
+          "arm": "plain",
+          "mode": "write",
+          "rusage": {
+            "minflt": 267,
+            "majflt": 0,
+            "maxrss_kb": 1072
+          },
+          "total_attempts": 1606035
+        },
+        {
+          "arm": "plain",
+          "mode": "read-write",
+          "rusage": {
+            "minflt": 523,
+            "majflt": 0,
+            "maxrss_kb": 1072
+          },
+          "total_attempts": 2014900
+        },
+        {
+          "arm": "plain",
+          "mode": "tagged",
+          "rusage": {
+            "minflt": 523,
+            "majflt": 0,
+            "maxrss_kb": 1072
+          },
+          "total_attempts": 2011361
+        },
+        {
+          "arm": "native",
+          "mode": "read",
+          "rusage": {
+            "minflt": 290,
+            "majflt": 0,
+            "maxrss_kb": 1232
+          },
+          "total_attempts": 2092924
+        },
+        {
+          "arm": "native",
+          "mode": "write",
+          "rusage": {
+            "minflt": 290,
+            "majflt": 0,
+            "maxrss_kb": 1232
+          },
+          "total_attempts": 2055212
+        },
+        {
+          "arm": "native",
+          "mode": "read-write",
+          "rusage": {
+            "minflt": 290,
+            "majflt": 0,
+            "maxrss_kb": 1232
+          },
+          "total_attempts": 2055870
+        },
+        {
+          "arm": "native",
+          "mode": "tagged",
+          "rusage": {
+            "minflt": 290,
+            "majflt": 0,
+            "maxrss_kb": 1232
+          },
+          "total_attempts": 2147385
+        },
+        {
+          "arm": "native",
+          "mode": "denied",
+          "rusage": {
+            "minflt": 32,
+            "majflt": 0,
+            "maxrss_kb": 208
+          },
+          "total_attempts": 723105
+        },
+        {
+          "arm": "native",
+          "mode": "stale",
+          "rusage": {
+            "minflt": 32,
+            "majflt": 0,
+            "maxrss_kb": 208
+          },
+          "total_attempts": 636226
+        }
+      ],
+      "tag_first_pass": true,
+      "eligible_read_attempts": 0,
+      "limitations": [
+        "Whole invocation includes exec/libc startup and exit; not isolated handler cost. RSS is whole-process ru_maxrss.",
+        "Denial/stale smoke checks require an armed marker and SIGSEGV, not a verified fault PC/cause.",
+        "Plain and Capstone compilers/libc differ; compare policy off/on within each arm.",
+        "QEMU instruction attempts, not time or physical-page counts."
+      ],
+      "evidence": "verified-memory-0-0-0"
+    },
+    {
+      "status": "PASS",
+      "settings": {
+        "unpinned_fast_fault": "N",
+        "fault_ahead_max": "0",
+        "pin_ahead_pages": "0"
+      },
+      "fast_count": 0,
+      "ahead_count": 0,
+      "access": 1,
+      "fast": 0,
+      "ahead": 0,
+      "inputs": {
+        "memory-plain": "d0ffa69e62015104d437c5861264d08c35fd02d690d35e896b51812f903a454f",
+        "memory.dom": "e1c32c009ef1df9c454e7e32a07f0b7164aa1c04e6ba5d248eb674bd1eefee62",
+        "profrun": "1d13d4912794855ae9c3c3fe69c89ca55434c2dd02b836053ad18f7913b7904f",
+        "memory-tag-store.dom": "804433a2db61c1abe2f22f33ad181f11b5a7defbc93f3d9f7d53add0bdcdd7a1",
+        "qemu": "c6681ec8a8ff704b297ec3eafceb13b2fe9c1c61c7a65ed95304bd5dbe5183eb",
+        "Image": "1dc9368c5b947fb53468e7b26781c1476843607ebc86414fe61c24bc4b232168",
+        "rootfs": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845",
+        "firmware": "2335a28682ddf65e46c1f492632c2cb026efcb2271caf544a3f7ddc858b03e02",
+        "plugin": "a1883e39c6a1d4b1529081fda06ae7c7bba217a61e134041f9ef14ecf04f6ebc"
+      },
+      "cases": [
+        {
+          "arm": "plain",
+          "mode": "read",
+          "rusage": {
+            "minflt": 267,
+            "majflt": 0,
+            "maxrss_kb": 52
+          },
+          "total_attempts": 680012
+        },
+        {
+          "arm": "plain",
+          "mode": "write",
+          "rusage": {
+            "minflt": 267,
+            "majflt": 0,
+            "maxrss_kb": 1072
+          },
+          "total_attempts": 1606035
+        },
+        {
+          "arm": "plain",
+          "mode": "read-write",
+          "rusage": {
+            "minflt": 523,
+            "majflt": 0,
+            "maxrss_kb": 1072
+          },
+          "total_attempts": 2011525
+        },
+        {
+          "arm": "plain",
+          "mode": "tagged",
+          "rusage": {
+            "minflt": 523,
+            "majflt": 0,
+            "maxrss_kb": 1072
+          },
+          "total_attempts": 2015135
+        },
+        {
+          "arm": "native",
+          "mode": "read",
+          "rusage": {
+            "minflt": 296,
+            "majflt": 0,
+            "maxrss_kb": 216
+          },
+          "total_attempts": 1231899
+        },
+        {
+          "arm": "native",
+          "mode": "write",
+          "rusage": {
+            "minflt": 296,
+            "majflt": 0,
+            "maxrss_kb": 1232
+          },
+          "total_attempts": 2071278
+        },
+        {
+          "arm": "native",
+          "mode": "read-write",
+          "rusage": {
+            "minflt": 552,
+            "majflt": 0,
+            "maxrss_kb": 1232
+          },
+          "total_attempts": 2651580
+        },
+        {
+          "arm": "native",
+          "mode": "tagged",
+          "rusage": {
+            "minflt": 552,
+            "majflt": 0,
+            "maxrss_kb": 1232
+          },
+          "total_attempts": 2739770
+        },
+        {
+          "arm": "native",
+          "mode": "denied",
+          "rusage": {
+            "minflt": 38,
+            "majflt": 0,
+            "maxrss_kb": 208
+          },
+          "total_attempts": 736857
+        },
+        {
+          "arm": "native",
+          "mode": "stale",
+          "rusage": {
+            "minflt": 38,
+            "majflt": 0,
+            "maxrss_kb": 208
+          },
+          "total_attempts": 649978
+        }
+      ],
+      "tag_first_pass": true,
+      "eligible_read_attempts": 1066,
+      "limitations": [
+        "Whole invocation includes exec/libc startup and exit; not isolated handler cost. RSS is whole-process ru_maxrss.",
+        "Denial/stale smoke checks require an armed marker and SIGSEGV, not a verified fault PC/cause.",
+        "Plain and Capstone compilers/libc differ; compare policy off/on within each arm.",
+        "QEMU instruction attempts, not time or physical-page counts."
+      ],
+      "evidence": "verified-memory-0-0-1"
+    },
+    {
+      "status": "PASS",
+      "settings": {
+        "unpinned_fast_fault": "N",
+        "fault_ahead_max": "64",
+        "pin_ahead_pages": "0"
+      },
+      "fast_count": 0,
+      "ahead_count": 1263,
+      "access": 0,
+      "fast": 0,
+      "ahead": 64,
+      "inputs": {
+        "memory-plain": "d0ffa69e62015104d437c5861264d08c35fd02d690d35e896b51812f903a454f",
+        "memory.dom": "e1c32c009ef1df9c454e7e32a07f0b7164aa1c04e6ba5d248eb674bd1eefee62",
+        "profrun": "1d13d4912794855ae9c3c3fe69c89ca55434c2dd02b836053ad18f7913b7904f",
+        "memory-tag-store.dom": "804433a2db61c1abe2f22f33ad181f11b5a7defbc93f3d9f7d53add0bdcdd7a1",
+        "qemu": "c6681ec8a8ff704b297ec3eafceb13b2fe9c1c61c7a65ed95304bd5dbe5183eb",
+        "Image": "1dc9368c5b947fb53468e7b26781c1476843607ebc86414fe61c24bc4b232168",
+        "rootfs": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845",
+        "firmware": "2335a28682ddf65e46c1f492632c2cb026efcb2271caf544a3f7ddc858b03e02",
+        "plugin": "a1883e39c6a1d4b1529081fda06ae7c7bba217a61e134041f9ef14ecf04f6ebc"
+      },
+      "cases": [
+        {
+          "arm": "plain",
+          "mode": "read",
+          "rusage": {
+            "minflt": 267,
+            "majflt": 0,
+            "maxrss_kb": 52
+          },
+          "total_attempts": 680020
+        },
+        {
+          "arm": "plain",
+          "mode": "write",
+          "rusage": {
+            "minflt": 267,
+            "majflt": 0,
+            "maxrss_kb": 1072
+          },
+          "total_attempts": 1606027
+        },
+        {
+          "arm": "plain",
+          "mode": "read-write",
+          "rusage": {
+            "minflt": 523,
+            "majflt": 0,
+            "maxrss_kb": 1072
+          },
+          "total_attempts": 2011525
+        },
+        {
+          "arm": "plain",
+          "mode": "tagged",
+          "rusage": {
+            "minflt": 523,
+            "majflt": 0,
+            "maxrss_kb": 1072
+          },
+          "total_attempts": 2014736
+        },
+        {
+          "arm": "native",
+          "mode": "read",
+          "rusage": {
+            "minflt": 294,
+            "majflt": 0,
+            "maxrss_kb": 1248
+          },
+          "total_attempts": 1870027
+        },
+        {
+          "arm": "native",
+          "mode": "write",
+          "rusage": {
+            "minflt": 294,
+            "majflt": 0,
+            "maxrss_kb": 1248
+          },
+          "total_attempts": 1833921
+        },
+        {
+          "arm": "native",
+          "mode": "read-write",
+          "rusage": {
+            "minflt": 294,
+            "majflt": 0,
+            "maxrss_kb": 1248
+          },
+          "total_attempts": 1836364
+        },
+        {
+          "arm": "native",
+          "mode": "tagged",
+          "rusage": {
+            "minflt": 294,
+            "majflt": 0,
+            "maxrss_kb": 1248
+          },
+          "total_attempts": 1924504
+        },
+        {
+          "arm": "native",
+          "mode": "denied",
+          "rusage": {
+            "minflt": 36,
+            "majflt": 0,
+            "maxrss_kb": 224
+          },
+          "total_attempts": 749481
+        },
+        {
+          "arm": "native",
+          "mode": "stale",
+          "rusage": {
+            "minflt": 36,
+            "majflt": 0,
+            "maxrss_kb": 224
+          },
+          "total_attempts": 659219
+        }
+      ],
+      "tag_first_pass": true,
+      "eligible_read_attempts": 0,
+      "limitations": [
+        "Whole invocation includes exec/libc startup and exit; not isolated handler cost. RSS is whole-process ru_maxrss.",
+        "Denial/stale smoke checks require an armed marker and SIGSEGV, not a verified fault PC/cause.",
+        "Plain and Capstone compilers/libc differ; compare policy off/on within each arm.",
+        "QEMU instruction attempts, not time or physical-page counts."
+      ],
+      "evidence": "verified-memory-0-64-0"
+    },
+    {
+      "status": "PASS",
+      "settings": {
+        "unpinned_fast_fault": "N",
+        "fault_ahead_max": "64",
+        "pin_ahead_pages": "0"
+      },
+      "fast_count": 0,
+      "ahead_count": 1263,
+      "access": 1,
+      "fast": 0,
+      "ahead": 64,
+      "inputs": {
+        "memory-plain": "d0ffa69e62015104d437c5861264d08c35fd02d690d35e896b51812f903a454f",
+        "memory.dom": "e1c32c009ef1df9c454e7e32a07f0b7164aa1c04e6ba5d248eb674bd1eefee62",
+        "profrun": "1d13d4912794855ae9c3c3fe69c89ca55434c2dd02b836053ad18f7913b7904f",
+        "memory-tag-store.dom": "804433a2db61c1abe2f22f33ad181f11b5a7defbc93f3d9f7d53add0bdcdd7a1",
+        "qemu": "c6681ec8a8ff704b297ec3eafceb13b2fe9c1c61c7a65ed95304bd5dbe5183eb",
+        "Image": "1dc9368c5b947fb53468e7b26781c1476843607ebc86414fe61c24bc4b232168",
+        "rootfs": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845",
+        "firmware": "2335a28682ddf65e46c1f492632c2cb026efcb2271caf544a3f7ddc858b03e02",
+        "plugin": "a1883e39c6a1d4b1529081fda06ae7c7bba217a61e134041f9ef14ecf04f6ebc"
+      },
+      "cases": [
+        {
+          "arm": "plain",
+          "mode": "read",
+          "rusage": {
+            "minflt": 267,
+            "majflt": 0,
+            "maxrss_kb": 52
+          },
+          "total_attempts": 680012
+        },
+        {
+          "arm": "plain",
+          "mode": "write",
+          "rusage": {
+            "minflt": 267,
+            "majflt": 0,
+            "maxrss_kb": 1072
+          },
+          "total_attempts": 1609410
+        },
+        {
+          "arm": "plain",
+          "mode": "read-write",
+          "rusage": {
+            "minflt": 523,
+            "majflt": 0,
+            "maxrss_kb": 1072
+          },
+          "total_attempts": 2011525
+        },
+        {
+          "arm": "plain",
+          "mode": "tagged",
+          "rusage": {
+            "minflt": 523,
+            "majflt": 0,
+            "maxrss_kb": 1072
+          },
+          "total_attempts": 2011361
+        },
+        {
+          "arm": "native",
+          "mode": "read",
+          "rusage": {
+            "minflt": 300,
+            "majflt": 0,
+            "maxrss_kb": 232
+          },
+          "total_attempts": 1006676
+        },
+        {
+          "arm": "native",
+          "mode": "write",
+          "rusage": {
+            "minflt": 300,
+            "majflt": 0,
+            "maxrss_kb": 1248
+          },
+          "total_attempts": 1846170
+        },
+        {
+          "arm": "native",
+          "mode": "read-write",
+          "rusage": {
+            "minflt": 556,
+            "majflt": 0,
+            "maxrss_kb": 1248
+          },
+          "total_attempts": 5356909
+        },
+        {
+          "arm": "native",
+          "mode": "tagged",
+          "rusage": {
+            "minflt": 556,
+            "majflt": 0,
+            "maxrss_kb": 1248
+          },
+          "total_attempts": 5445099
+        },
+        {
+          "arm": "native",
+          "mode": "denied",
+          "rusage": {
+            "minflt": 42,
+            "majflt": 0,
+            "maxrss_kb": 224
+          },
+          "total_attempts": 761747
+        },
+        {
+          "arm": "native",
+          "mode": "stale",
+          "rusage": {
+            "minflt": 42,
+            "majflt": 0,
+            "maxrss_kb": 224
+          },
+          "total_attempts": 674860
+        }
+      ],
+      "tag_first_pass": true,
+      "eligible_read_attempts": 78,
+      "limitations": [
+        "Whole invocation includes exec/libc startup and exit; not isolated handler cost. RSS is whole-process ru_maxrss.",
+        "Denial/stale smoke checks require an armed marker and SIGSEGV, not a verified fault PC/cause.",
+        "Plain and Capstone compilers/libc differ; compare policy off/on within each arm.",
+        "QEMU instruction attempts, not time or physical-page counts."
+      ],
+      "evidence": "verified-memory-0-64-1"
+    },
+    {
+      "status": "PASS",
+      "settings": {
+        "unpinned_fast_fault": "Y",
+        "fault_ahead_max": "0",
+        "pin_ahead_pages": "0"
+      },
+      "fast_count": 1401,
+      "ahead_count": 0,
+      "access": 0,
+      "fast": 1,
+      "ahead": 0,
+      "inputs": {
+        "memory-plain": "d0ffa69e62015104d437c5861264d08c35fd02d690d35e896b51812f903a454f",
+        "memory.dom": "e1c32c009ef1df9c454e7e32a07f0b7164aa1c04e6ba5d248eb674bd1eefee62",
+        "profrun": "1d13d4912794855ae9c3c3fe69c89ca55434c2dd02b836053ad18f7913b7904f",
+        "memory-tag-store.dom": "804433a2db61c1abe2f22f33ad181f11b5a7defbc93f3d9f7d53add0bdcdd7a1",
+        "qemu": "c6681ec8a8ff704b297ec3eafceb13b2fe9c1c61c7a65ed95304bd5dbe5183eb",
+        "Image": "1dc9368c5b947fb53468e7b26781c1476843607ebc86414fe61c24bc4b232168",
+        "rootfs": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845",
+        "firmware": "2335a28682ddf65e46c1f492632c2cb026efcb2271caf544a3f7ddc858b03e02",
+        "plugin": "a1883e39c6a1d4b1529081fda06ae7c7bba217a61e134041f9ef14ecf04f6ebc"
+      },
+      "cases": [
+        {
+          "arm": "plain",
+          "mode": "read",
+          "rusage": {
+            "minflt": 267,
+            "majflt": 0,
+            "maxrss_kb": 52
+          },
+          "total_attempts": 680020
+        },
+        {
+          "arm": "plain",
+          "mode": "write",
+          "rusage": {
+            "minflt": 267,
+            "majflt": 0,
+            "maxrss_kb": 1072
+          },
+          "total_attempts": 1606027
+        },
+        {
+          "arm": "plain",
+          "mode": "read-write",
+          "rusage": {
+            "minflt": 523,
+            "majflt": 0,
+            "maxrss_kb": 1072
+          },
+          "total_attempts": 2014900
+        },
+        {
+          "arm": "plain",
+          "mode": "tagged",
+          "rusage": {
+            "minflt": 523,
+            "majflt": 0,
+            "maxrss_kb": 1072
+          },
+          "total_attempts": 2011361
+        },
+        {
+          "arm": "native",
+          "mode": "read",
+          "rusage": {
+            "minflt": 290,
+            "majflt": 0,
+            "maxrss_kb": 1232
+          },
+          "total_attempts": 2051992
+        },
+        {
+          "arm": "native",
+          "mode": "write",
+          "rusage": {
+            "minflt": 290,
+            "majflt": 0,
+            "maxrss_kb": 1232
+          },
+          "total_attempts": 1982056
+        },
+        {
+          "arm": "native",
+          "mode": "read-write",
+          "rusage": {
+            "minflt": 290,
+            "majflt": 0,
+            "maxrss_kb": 1232
+          },
+          "total_attempts": 1982714
+        },
+        {
+          "arm": "native",
+          "mode": "tagged",
+          "rusage": {
+            "minflt": 290,
+            "majflt": 0,
+            "maxrss_kb": 1232
+          },
+          "total_attempts": 2077604
+        },
+        {
+          "arm": "native",
+          "mode": "denied",
+          "rusage": {
+            "minflt": 32,
+            "majflt": 0,
+            "maxrss_kb": 208
+          },
+          "total_attempts": 718319
+        },
+        {
+          "arm": "native",
+          "mode": "stale",
+          "rusage": {
+            "minflt": 32,
+            "majflt": 0,
+            "maxrss_kb": 208
+          },
+          "total_attempts": 634815
+        }
+      ],
+      "tag_first_pass": true,
+      "eligible_read_attempts": 0,
+      "limitations": [
+        "Whole invocation includes exec/libc startup and exit; not isolated handler cost. RSS is whole-process ru_maxrss.",
+        "Denial/stale smoke checks require an armed marker and SIGSEGV, not a verified fault PC/cause.",
+        "Plain and Capstone compilers/libc differ; compare policy off/on within each arm.",
+        "QEMU instruction attempts, not time or physical-page counts."
+      ],
+      "evidence": "verified-memory-1-0-0"
+    },
+    {
+      "status": "PASS",
+      "settings": {
+        "unpinned_fast_fault": "Y",
+        "fault_ahead_max": "0",
+        "pin_ahead_pages": "0"
+      },
+      "fast_count": 2211,
+      "ahead_count": 0,
+      "access": 1,
+      "fast": 1,
+      "ahead": 0,
+      "inputs": {
+        "memory-plain": "d0ffa69e62015104d437c5861264d08c35fd02d690d35e896b51812f903a454f",
+        "memory.dom": "e1c32c009ef1df9c454e7e32a07f0b7164aa1c04e6ba5d248eb674bd1eefee62",
+        "profrun": "1d13d4912794855ae9c3c3fe69c89ca55434c2dd02b836053ad18f7913b7904f",
+        "memory-tag-store.dom": "804433a2db61c1abe2f22f33ad181f11b5a7defbc93f3d9f7d53add0bdcdd7a1",
+        "qemu": "c6681ec8a8ff704b297ec3eafceb13b2fe9c1c61c7a65ed95304bd5dbe5183eb",
+        "Image": "1dc9368c5b947fb53468e7b26781c1476843607ebc86414fe61c24bc4b232168",
+        "rootfs": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845",
+        "firmware": "2335a28682ddf65e46c1f492632c2cb026efcb2271caf544a3f7ddc858b03e02",
+        "plugin": "a1883e39c6a1d4b1529081fda06ae7c7bba217a61e134041f9ef14ecf04f6ebc"
+      },
+      "cases": [
+        {
+          "arm": "plain",
+          "mode": "read",
+          "rusage": {
+            "minflt": 267,
+            "majflt": 0,
+            "maxrss_kb": 52
+          },
+          "total_attempts": 680020
+        },
+        {
+          "arm": "plain",
+          "mode": "write",
+          "rusage": {
+            "minflt": 267,
+            "majflt": 0,
+            "maxrss_kb": 1072
+          },
+          "total_attempts": 1609402
+        },
+        {
+          "arm": "plain",
+          "mode": "read-write",
+          "rusage": {
+            "minflt": 523,
+            "majflt": 0,
+            "maxrss_kb": 1072
+          },
+          "total_attempts": 2011525
+        },
+        {
+          "arm": "plain",
+          "mode": "tagged",
+          "rusage": {
+            "minflt": 523,
+            "majflt": 0,
+            "maxrss_kb": 1072
+          },
+          "total_attempts": 2011361
+        },
+        {
+          "arm": "native",
+          "mode": "read",
+          "rusage": {
+            "minflt": 296,
+            "majflt": 0,
+            "maxrss_kb": 216
+          },
+          "total_attempts": 1185269
+        },
+        {
+          "arm": "native",
+          "mode": "write",
+          "rusage": {
+            "minflt": 296,
+            "majflt": 0,
+            "maxrss_kb": 1232
+          },
+          "total_attempts": 1992409
+        },
+        {
+          "arm": "native",
+          "mode": "read-write",
+          "rusage": {
+            "minflt": 552,
+            "majflt": 0,
+            "maxrss_kb": 1232
+          },
+          "total_attempts": 2507478
+        },
+        {
+          "arm": "native",
+          "mode": "tagged",
+          "rusage": {
+            "minflt": 552,
+            "majflt": 0,
+            "maxrss_kb": 1232
+          },
+          "total_attempts": 2599043
+        },
+        {
+          "arm": "native",
+          "mode": "denied",
+          "rusage": {
+            "minflt": 38,
+            "majflt": 0,
+            "maxrss_kb": 208
+          },
+          "total_attempts": 730249
+        },
+        {
+          "arm": "native",
+          "mode": "stale",
+          "rusage": {
+            "minflt": 38,
+            "majflt": 0,
+            "maxrss_kb": 208
+          },
+          "total_attempts": 643370
+        }
+      ],
+      "tag_first_pass": true,
+      "eligible_read_attempts": 1066,
+      "limitations": [
+        "Whole invocation includes exec/libc startup and exit; not isolated handler cost. RSS is whole-process ru_maxrss.",
+        "Denial/stale smoke checks require an armed marker and SIGSEGV, not a verified fault PC/cause.",
+        "Plain and Capstone compilers/libc differ; compare policy off/on within each arm.",
+        "QEMU instruction attempts, not time or physical-page counts."
+      ],
+      "evidence": "verified-memory-1-0-1"
+    },
+    {
+      "status": "PASS",
+      "settings": {
+        "unpinned_fast_fault": "Y",
+        "fault_ahead_max": "64",
+        "pin_ahead_pages": "0"
+      },
+      "fast_count": 1429,
+      "ahead_count": 1263,
+      "access": 0,
+      "fast": 1,
+      "ahead": 64,
+      "inputs": {
+        "memory-plain": "d0ffa69e62015104d437c5861264d08c35fd02d690d35e896b51812f903a454f",
+        "memory.dom": "e1c32c009ef1df9c454e7e32a07f0b7164aa1c04e6ba5d248eb674bd1eefee62",
+        "profrun": "1d13d4912794855ae9c3c3fe69c89ca55434c2dd02b836053ad18f7913b7904f",
+        "memory-tag-store.dom": "804433a2db61c1abe2f22f33ad181f11b5a7defbc93f3d9f7d53add0bdcdd7a1",
+        "qemu": "c6681ec8a8ff704b297ec3eafceb13b2fe9c1c61c7a65ed95304bd5dbe5183eb",
+        "Image": "1dc9368c5b947fb53468e7b26781c1476843607ebc86414fe61c24bc4b232168",
+        "rootfs": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845",
+        "firmware": "2335a28682ddf65e46c1f492632c2cb026efcb2271caf544a3f7ddc858b03e02",
+        "plugin": "a1883e39c6a1d4b1529081fda06ae7c7bba217a61e134041f9ef14ecf04f6ebc"
+      },
+      "cases": [
+        {
+          "arm": "plain",
+          "mode": "read",
+          "rusage": {
+            "minflt": 267,
+            "majflt": 0,
+            "maxrss_kb": 52
+          },
+          "total_attempts": 680012
+        },
+        {
+          "arm": "plain",
+          "mode": "write",
+          "rusage": {
+            "minflt": 267,
+            "majflt": 0,
+            "maxrss_kb": 1072
+          },
+          "total_attempts": 1609410
+        },
+        {
+          "arm": "plain",
+          "mode": "read-write",
+          "rusage": {
+            "minflt": 523,
+            "majflt": 0,
+            "maxrss_kb": 1072
+          },
+          "total_attempts": 2014900
+        },
+        {
+          "arm": "plain",
+          "mode": "tagged",
+          "rusage": {
+            "minflt": 523,
+            "majflt": 0,
+            "maxrss_kb": 1072
+          },
+          "total_attempts": 2011361
+        },
+        {
+          "arm": "native",
+          "mode": "read",
+          "rusage": {
+            "minflt": 294,
+            "majflt": 0,
+            "maxrss_kb": 1248
+          },
+          "total_attempts": 1828082
+        },
+        {
+          "arm": "native",
+          "mode": "write",
+          "rusage": {
+            "minflt": 294,
+            "majflt": 0,
+            "maxrss_kb": 1248
+          },
+          "total_attempts": 1755990
+        },
+        {
+          "arm": "native",
+          "mode": "read-write",
+          "rusage": {
+            "minflt": 294,
+            "majflt": 0,
+            "maxrss_kb": 1248
+          },
+          "total_attempts": 1758549
+        },
+        {
+          "arm": "native",
+          "mode": "tagged",
+          "rusage": {
+            "minflt": 294,
+            "majflt": 0,
+            "maxrss_kb": 1248
+          },
+          "total_attempts": 1853439
+        },
+        {
+          "arm": "native",
+          "mode": "denied",
+          "rusage": {
+            "minflt": 36,
+            "majflt": 0,
+            "maxrss_kb": 224
+          },
+          "total_attempts": 740036
+        },
+        {
+          "arm": "native",
+          "mode": "stale",
+          "rusage": {
+            "minflt": 36,
+            "majflt": 0,
+            "maxrss_kb": 224
+          },
+          "total_attempts": 653149
+        }
+      ],
+      "tag_first_pass": true,
+      "eligible_read_attempts": 0,
+      "limitations": [
+        "Whole invocation includes exec/libc startup and exit; not isolated handler cost. RSS is whole-process ru_maxrss.",
+        "Denial/stale smoke checks require an armed marker and SIGSEGV, not a verified fault PC/cause.",
+        "Plain and Capstone compilers/libc differ; compare policy off/on within each arm.",
+        "QEMU instruction attempts, not time or physical-page counts."
+      ],
+      "evidence": "verified-memory-1-64-0"
+    },
+    {
+      "status": "PASS",
+      "settings": {
+        "unpinned_fast_fault": "Y",
+        "fault_ahead_max": "64",
+        "pin_ahead_pages": "0"
+      },
+      "fast_count": 2239,
+      "ahead_count": 1263,
+      "access": 1,
+      "fast": 1,
+      "ahead": 64,
+      "inputs": {
+        "memory-plain": "d0ffa69e62015104d437c5861264d08c35fd02d690d35e896b51812f903a454f",
+        "memory.dom": "e1c32c009ef1df9c454e7e32a07f0b7164aa1c04e6ba5d248eb674bd1eefee62",
+        "profrun": "1d13d4912794855ae9c3c3fe69c89ca55434c2dd02b836053ad18f7913b7904f",
+        "memory-tag-store.dom": "804433a2db61c1abe2f22f33ad181f11b5a7defbc93f3d9f7d53add0bdcdd7a1",
+        "qemu": "c6681ec8a8ff704b297ec3eafceb13b2fe9c1c61c7a65ed95304bd5dbe5183eb",
+        "Image": "1dc9368c5b947fb53468e7b26781c1476843607ebc86414fe61c24bc4b232168",
+        "rootfs": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845",
+        "firmware": "2335a28682ddf65e46c1f492632c2cb026efcb2271caf544a3f7ddc858b03e02",
+        "plugin": "a1883e39c6a1d4b1529081fda06ae7c7bba217a61e134041f9ef14ecf04f6ebc"
+      },
+      "cases": [
+        {
+          "arm": "plain",
+          "mode": "read",
+          "rusage": {
+            "minflt": 267,
+            "majflt": 0,
+            "maxrss_kb": 52
+          },
+          "total_attempts": 680020
+        },
+        {
+          "arm": "plain",
+          "mode": "write",
+          "rusage": {
+            "minflt": 267,
+            "majflt": 0,
+            "maxrss_kb": 1072
+          },
+          "total_attempts": 1611994
+        },
+        {
+          "arm": "plain",
+          "mode": "read-write",
+          "rusage": {
+            "minflt": 523,
+            "majflt": 0,
+            "maxrss_kb": 1072
+          },
+          "total_attempts": 2011525
+        },
+        {
+          "arm": "plain",
+          "mode": "tagged",
+          "rusage": {
+            "minflt": 523,
+            "majflt": 0,
+            "maxrss_kb": 1072
+          },
+          "total_attempts": 2017727
+        },
+        {
+          "arm": "native",
+          "mode": "read",
+          "rusage": {
+            "minflt": 300,
+            "majflt": 0,
+            "maxrss_kb": 232
+          },
+          "total_attempts": 959774
+        },
+        {
+          "arm": "native",
+          "mode": "write",
+          "rusage": {
+            "minflt": 300,
+            "majflt": 0,
+            "maxrss_kb": 1248
+          },
+          "total_attempts": 1775853
+        },
+        {
+          "arm": "native",
+          "mode": "read-write",
+          "rusage": {
+            "minflt": 556,
+            "majflt": 0,
+            "maxrss_kb": 1248
+          },
+          "total_attempts": 5208889
+        },
+        {
+          "arm": "native",
+          "mode": "tagged",
+          "rusage": {
+            "minflt": 556,
+            "majflt": 0,
+            "maxrss_kb": 1248
+          },
+          "total_attempts": 5306421
+        },
+        {
+          "arm": "native",
+          "mode": "denied",
+          "rusage": {
+            "minflt": 42,
+            "majflt": 0,
+            "maxrss_kb": 224
+          },
+          "total_attempts": 753855
+        },
+        {
+          "arm": "native",
+          "mode": "stale",
+          "rusage": {
+            "minflt": 42,
+            "majflt": 0,
+            "maxrss_kb": 224
+          },
+          "total_attempts": 669560
+        }
+      ],
+      "tag_first_pass": true,
+      "eligible_read_attempts": 78,
+      "limitations": [
+        "Whole invocation includes exec/libc startup and exit; not isolated handler cost. RSS is whole-process ru_maxrss.",
+        "Denial/stale smoke checks require an armed marker and SIGSEGV, not a verified fault PC/cause.",
+        "Plain and Capstone compilers/libc differ; compare policy off/on within each arm.",
+        "QEMU instruction attempts, not time or physical-page counts."
+      ],
+      "evidence": "verified-memory-1-64-1"
+    }
+  ],
+  "gates": [
+    {
+      "evidence": "verified-result-0",
+      "budget_seconds": 300.0,
+      "elapsed_seconds": 173.9771053220611,
+      "steps": [
+        {
+          "name": "build-tag-probe",
+          "status": "PASS",
+          "elapsed_seconds": 0.3157366099767387
+        },
+        {
+          "name": "memory-0-0-0",
+          "status": "PASS",
+          "elapsed_seconds": 11.351452463073656
+        },
+        {
+          "name": "memory-0-64-0",
+          "status": "PASS",
+          "elapsed_seconds": 11.352422539843246
+        },
+        {
+          "name": "memory-0-0-1",
+          "status": "PASS",
+          "elapsed_seconds": 11.35213878005743
+        },
+        {
+          "name": "memory-0-64-1",
+          "status": "PASS",
+          "elapsed_seconds": 11.552861710079014
+        },
+        {
+          "name": "gcc-0-0-0",
+          "status": "PASS",
+          "elapsed_seconds": 21.886140770977363
+        },
+        {
+          "name": "gcc-0-1-1",
+          "status": "PASS",
+          "elapsed_seconds": 21.886853620177135
+        },
+        {
+          "name": "gcc-0-2-1",
+          "status": "PASS",
+          "elapsed_seconds": 21.838497049873695
+        },
+        {
+          "name": "gcc-0-3-0",
+          "status": "PASS",
+          "elapsed_seconds": 21.83850351604633
+        },
+        {
+          "name": "verified-io-integration-access",
+          "status": "PASS",
+          "elapsed_seconds": 19.276795028941706
+        },
+        {
+          "name": "verified-race-access",
+          "status": "PASS",
+          "elapsed_seconds": 10.701116976095363
+        },
+        {
+          "name": "verified-race-file-access",
+          "status": "PASS",
+          "elapsed_seconds": 10.599905707873404
+        }
+      ]
+    },
+    {
+      "evidence": "verified-result-64",
+      "budget_seconds": 300.0,
+      "elapsed_seconds": 132.69878308707848,
+      "steps": [
+        {
+          "name": "memory-1-0-0",
+          "status": "PASS",
+          "elapsed_seconds": 11.403656545793638
+        },
+        {
+          "name": "memory-1-64-0",
+          "status": "PASS",
+          "elapsed_seconds": 11.30410783085972
+        },
+        {
+          "name": "memory-1-0-1",
+          "status": "PASS",
+          "elapsed_seconds": 11.353153342148289
+        },
+        {
+          "name": "memory-1-64-1",
+          "status": "PASS",
+          "elapsed_seconds": 11.354754033964127
+        },
+        {
+          "name": "gcc-64-0-0",
+          "status": "PASS",
+          "elapsed_seconds": 21.79021739005111
+        },
+        {
+          "name": "gcc-64-1-1",
+          "status": "PASS",
+          "elapsed_seconds": 21.840421061962843
+        },
+        {
+          "name": "gcc-64-2-1",
+          "status": "PASS",
+          "elapsed_seconds": 21.89049589401111
+        },
+        {
+          "name": "gcc-64-3-0",
+          "status": "PASS",
+          "elapsed_seconds": 21.740024192957208
+        }
+      ]
+    }
+  ],
+  "integration": [
+    {
+      "evidence": "verified-race-access",
+      "status": "PASS",
+      "scenarios": 41,
+      "controls_fired": 17,
+      "inputs": {
+        "qemu": "c6681ec8a8ff704b297ec3eafceb13b2fe9c1c61c7a65ed95304bd5dbe5183eb",
+        "Image": "3dfec47057eeb3f6f7144ca5a6765a855d3b590d3c265776785b79dd238efaff",
+        "firmware": "2335a28682ddf65e46c1f492632c2cb026efcb2271caf544a3f7ddc858b03e02",
+        "rootfs": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845",
+        "race.dom": "c2ce6d38d8fb252269380b051507a1b11f8caf79a34fb7c31af8fc00649d50a1",
+        "pipe-fill": "4dee68053fb13217688bc156eaec2a44de84f55065bef89a29b82cb8249c7f82"
+      }
+    },
+    {
+      "evidence": "verified-race-file-access",
+      "status": "PASS",
+      "scenarios": 41,
+      "controls_fired": 17,
+      "inputs": {
+        "qemu": "c6681ec8a8ff704b297ec3eafceb13b2fe9c1c61c7a65ed95304bd5dbe5183eb",
+        "Image": "3dfec47057eeb3f6f7144ca5a6765a855d3b590d3c265776785b79dd238efaff",
+        "firmware": "2335a28682ddf65e46c1f492632c2cb026efcb2271caf544a3f7ddc858b03e02",
+        "rootfs": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845",
+        "race.dom": "c2ce6d38d8fb252269380b051507a1b11f8caf79a34fb7c31af8fc00649d50a1",
+        "pipe-fill": "4dee68053fb13217688bc156eaec2a44de84f55065bef89a29b82cb8249c7f82"
+      }
+    },
+    {
+      "evidence": "verified-io-integration-access",
+      "status": "PASS",
+      "policy": "Y",
+      "scope": "IO, authority, entry and task integration as configured by run-musl-io.py"
+    }
+  ],
+  "residency_scan": {
+    "symbol": "next_resident",
+    "samples": [
+      {
+        "evidence": "verified-memory-0-0-1",
+        "window": 6,
+        "mode": "native read-write",
+        "ahead": 0,
+        "flat_attempts": 272,
+        "first_instruction_attempts": 1
+      },
+      {
+        "evidence": "verified-memory-0-64-1",
+        "window": 6,
+        "mode": "native read-write",
+        "ahead": 64,
+        "flat_attempts": 1633236,
+        "first_instruction_attempts": 14591
+      }
+    ],
+    "interpretation": "Source checks PTE presence, not write readiness. The adaptive stream scans up to 64 resident pages after a demand fault; zero-page mappings are present but later writes still need COW. Flat counts establish substantial scanning work, not an inclusive causal attribution or exact invocation count.",
+    "next_experiment": "Bound repeated scans or distinguish readiness for the requested access; retain Linux COW/permissions, arena identity, locking, revocation and copy holds. Keep separate from access-direction switch."
+  },
+  "excluded_pilots": [
+    "result and extra-result: long GCC cmdlines truncated at kernel COMMAND_LINE_SIZE=512; supposed no-ahead GCC actually used default ahead64. Initial IO/race access option was truncated and remained off. Superseded by verified cohorts with length guards and guest readback.",
+    "Earlier tag-first probe used identical pointers and immediate verification; superseded by distinct pointers, untouched-page checks and delayed verification."
+  ],
+  "limitations": [
+    "QEMU instruction attempts, not hardware cycles or speedup.",
+    "Two GCC samples per arm per ahead setting; one microbenchmark sample per configuration.",
+    "Microbenchmark totals include startup/exit; RSS is whole-process peak.",
+    "Plain and Capstone compiler/libc differ; policy effects use unchanged binaries within the native arm.",
+    "Armed SIGSEGV smoke tests do not verify precise fault PC/cause; existing race oracles are stronger separate checks.",
+    "Sysfs counters include measurement-shell activity; suppressed-read counter counts attempts, not unique pages.",
+    "No new full SPEC, multi-hart or FPGA qualification.",
+    "Default-off experiment; no claim that removing speculative writes is a general optimization."
+  ],
+  "evidence": {
+    "local_root": "$CAPSTONE_TMP_ROOT/native-task/access-fault-01/evidence",
+    "remote_root": "p12:/dev/shm/capstone-access-fault-01",
+    "archive": "$CAPSTONE_TMP_ROOT/native-task/access-fault-01-evidence.tar.gz",
+    "archive_sha256": "9553522e7fb81c2bff8c22c9f75f0e4891ee9e47f0edc400836679b36f188592",
+    "archive_bytes": 246646658
+  }
+}

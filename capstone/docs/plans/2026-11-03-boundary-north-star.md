@@ -207,7 +207,8 @@ names its source, assumptions and denominator.
 
 ## 7. Current kernel-runtime study (2026-11-08)
 
-This section studies `native/linux-task-integration` at `71347ccd4e59`.
+This section began at `native/linux-task-integration` revision `71347ccd4e59`;
+subsequent qualified changes and the default-off experiment are recorded below.
 Earlier measurements and proposed instructions above are historical, not the
 current qualification baseline. The implementation target is general kernel
 runtime behavior with unchanged GCC, musl and application binaries.
@@ -241,6 +242,24 @@ is diagnostic, not authority. Replacing the event path with ordinary scalar
 optimization. Direct trap delivery remains a separate architecture contract.
 
 ### General candidate: preserve actual fault access direction
+
+Implemented as a default-off experiment in `2ae1682c54c9`. Verified whole-invocation
+fresh-read attempts fall 41.14% without ahead, but read-then-write rises 28.98%
+and rises to 2.92x baseline with ahead64. Unchanged GCC regresses by 1.617% and
+1.936% respectively. Do not enable by default. Eight exact GCC outputs, the
+memory matrix, tag-first writes, IO and both race groups pass; this is limited
+experimental qualification, not full SPEC or FPGA acceptance.
+[Evidence](../../runtime/virtual/tests/native-task/access-fault-experiment.json).
+
+The next investigation is the interaction with residency scanning: with actual
+read faults, `next_resident` flat attempts in the read-write fixture rise from
+272 without ahead to 1,633,236 with ahead64. Present zero-page PTEs still need COW
+on stores, but the stream advancement loop repeatedly scans up to 64 resident
+pages. Test bounded scanning or access-aware readiness independently, preserving
+permission, COW, locking and grant-lifetime contracts. Flat profiles are not
+inclusive costs and do not alone assign every additional attempt to this loop.
+
+The following describes the pre-experiment finding and constraints.
 
 `unpinned_fault_vma` currently chooses `FAULT_FLAG_WRITE` from VMA writability,
 even for a read fault. The comment in `resolve` explicitly preserves the old

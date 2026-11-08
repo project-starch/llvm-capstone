@@ -18,22 +18,32 @@ Unpinned page/frame storage has now also been removed, with mode-correct touch
 and unwind paths: incremental total attempts -0.783%, kernel -1.493%. Four GCC
 outputs, integration and both race groups pass in 156.6s.
 [Evidence](../../runtime/virtual/tests/native-task/arena-arrays-qualification.json).
-The next general runtime experiment concerns unpinned read faults on writable VMAs,
-which currently request WRITE,
-materializing private dirty pages. Study actual-access demand faults without
-changing eager bootstrap or weakening grants, COW, copy holds or revocation.
+The actual-access read-fault experiment is implemented as `2ae1682c54c9`, default
+off. On identical binaries it saves about 41% of whole-invocation attempts for
+fresh reads without fault-ahead, but adds 29% for read-then-write. With adaptive
+fault-ahead the latter takes 2.92x the baseline work. GCC regresses by 1.617%
+without ahead and 1.936% with ahead64; keep the option off.
+[Verified controls and qualification](../../runtime/virtual/tests/native-task/access-fault-experiment.json).
 
-First compare identical map/touch/unmap event streams to distinguish greater
-application memory volume from higher runtime cost per event. Read-first and
-read-then-write workloads are both necessary: shared-zero-page reads may save
-allocation but introduce later COW faults. Keep access-direction changes separate
-from the qualified index and array removals; measure incremental effects rather
-than adding estimated gains.
-[Source audit, invariants and experimental order](../plans/2026-11-03-boundary-north-star.md#7-current-kernel-runtime-study-2026-11-08).
-The fault-policy proposal remains unqualified. Keep the first feedback gate within
-300 seconds, then require relevant fault/lifetime/race failures and exact GCC
-output before enabling a candidate. Full direct-trap integration and dead-namespace
-teardown require separate architectural proofs; neither is a free cleanup.
+Next isolate repeated residency scans in adaptive fault-ahead. In the read-write
+fixture with actual-access reads, `next_resident` grows from 272 flat attempts
+without ahead to 1,633,236 with ahead64. Its PTE-presence predicate treats a
+shared zero-page mapping as resident even though a later store needs COW, and
+stream advancement scans up to 64 present pages again after faults. Investigate
+bounded scanning or access-aware readiness, separately from the access-policy
+switch. Preserve Linux permission/COW decisions, locks, arena lifetime, repeat
+bounds and checked-copy holds; do not change GCC or musl to fit the benchmark.
+
+Use the existing read/write/read-write/tag-first fixtures, both fast-helper
+settings and unchanged GCC in fresh ABBA guests. Preserve the default-policy
+control. Verified IO and both 41-case race groups pass with the experiment on;
+each group observes all 17 deliberate controls. Feedback gates took 174s and
+133s, each below 300s. Long boot arguments previously truncated silently: keep
+the new 512-byte limit check and guest setting readback in every comparison.
+Full SPEC, multi-hart and FPGA qualification remain outside this experiment.
+[Invariants and experimental order](../plans/2026-11-03-boundary-north-star.md#7-current-kernel-runtime-study-2026-11-08).
+Full direct-trap integration and dead-namespace teardown require separate
+architectural proofs; neither is a free cleanup.
 The checked-string candidate below remains relevant to metadata-heavy workloads,
 not a demonstrated major GCC win.
 
