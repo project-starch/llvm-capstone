@@ -107,3 +107,21 @@ wrapper waits for that board's chain (pid 756352) to exit first.
 |---|---|
 | D3 | each repeat rc 0, specdiff 1/1, outputs equal, in-context instret 12.870 G ± 0.05 % |
 | D4 | each repeat 3,924.9 s ± 10 s; all three under 3,937 s (1.20 × 3,280.9 s) |
+
+## Result of Addendum 2 (8 Nov 14:17-22:38, board 3, kit bkit30-unify): perlbench test 29,053.8 s, 1.328× Plain-with-cache
+
+Stage perf/dcnofp/stages/500.perlbench_r-test-capstone-lifetimes-unify-rg-nd-udcnofp (exe 5996ba25b57a303c), against
+unify-nd's 30,120.3 s (board 2, exe 89398ba2be3127ab).
+
+| | unify-nd (board 2) | udcnofp (board 3) | change |
+|---|---|---|---|
+| run (2 commands) | 30,120.3 s | 29,053.8 s | −1,066.5 s (−3.54 %) |
+| in-context cycles | 546.73 G | 522.84 G | −4.37 % |
+| in-context instret | 93.547 G | 91.101 G | −2.61 % |
+
+- **U0 holds**: rc 0 on both commands, specdiff 2/2 PASS, control passed; instret 91.101 G = QEMU's 91.121 G − 0.02 %.
+- **U1 fails on the favourable side**: cycles −4.37 %, beyond the −2.6…−3.2 % band. As on gcc, the removed
+  instructions were not cheaper than average: cycles fell 1.7× the instructions here.
+- **U2 fails on the favourable side**: 29,053.8 s, below the 29,400-29,650 s band. The outside time also fell (by about
+  23.9 G cycles inside and ~110 s outside); boards 2 and 3 differ here, so the outside share is not attributed.
+- **Ratio**: 29,053.8 / 21,882.6 = **1.328× Plain-with-cache** (from 1.376×). Cross-board.
