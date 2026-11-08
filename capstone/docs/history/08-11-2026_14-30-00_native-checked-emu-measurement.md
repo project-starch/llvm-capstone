@@ -173,3 +173,52 @@ link lines (capstone-lifetimes arm sources, the sources today's kits were built 
 - About 150 delegated calls (kfast k0-gtr's histogram: 122 of them writev, which has no direct route). Fewer
   than 30 on the register route.
 - Saving per call is not resolvable from the total. Saving under 0.01 % of the run.
+
+## The pre-registered perl stage was void; the replacement stage, registered before its runs
+
+`perl-exch-off`, `perl-dir-off` and `perl-dir-on` (the stage registered in b0dc39bd66f3) ran makerand.pl
+correctly. test.pl, though, reported `Failed 317 tests out of 0`, and the adapter's counters did not move
+during that command (`@@CNT 1 begin` = `@@CNT 1 end`, k3 125 in both). No native perl was ever started.
+Cause: a native exec's grant root is its cwd (`resource-dom.h` `dom_resources_init`, `get_fs_pwd`). t/TEST
+`chdir 't'` and execs `../../sw/perl` from `t/` with `-I../lib`. That cwd has no `.capstone-tmp`, so the
+`dom_local_tmp` grant refuses the exec, and `../lib` would lie outside the grant anyway. The plain-perl driver
+of today's board stage therefore cannot run on the native backend. These three runs are void and are not
+used. The gcc runs of that registration are unaffected.
+
+**Replacement perl stage** (`run-native-stage.py`, perl part, the collaborator's qualified Perl recipe):
+- SPEC's own two invocations by the native perl itself, run from the staged directory as `./perlbench_r`.
+- test.pl's 317 children start through native spawn and the pinned native hush shell (BusyBox 1.37.0 port,
+  this branch, built with the native-IO SDK). The shell is exposed as `/bin/sh` through `dom_shell`.
+- Plus `dom_null=1`, `dom_local_tmp=1`.
+- `supervisor_slots=1`, the default, is no longer spelled out, because the kernel keeps 511 command-line
+  bytes. The runner now asserts that limit.
+- The shell and the children's spawn and pipe services now run on the native backend, so the workload
+  differs from kfast k0's.
+
+**Prediction for the replacement stage** (perl test, both commands):
+- rc 0 and specdiff 2/2 in both arms; `makerand.out` hash `539d02dc...` in both, as in the launcher run.
+- Delegated calls 100k-200k (the driver now reads 317 child pipes, and the shell's calls count too).
+  Equal across the arms within 1 %.
+- Exits equal across the arms within 3 %.
+- direct arm: 40-80 % of calls on the register route.
+- Saving 4,000-10,000 instructions per register-routed call. Per delegated call 2,000-8,000.
+- Emulation entries > 0 in both arms; firmware instructions per check 300-1,200.
+
+**gcc train01 results** (registered in b0dc39bd66f3):
+
+| | exchange | direct |
+|---|---|---|
+| rc, specdiff | 0, 1/1 | 0, 1/1 |
+| `.s` sha256 | `c786c07f51d56232` | `c786c07f51d56232` (= launcher run k0-gtr) |
+| total instructions | 17,495,899,853 | 17,495,878,377 |
+| user / kernel / firmware | 14,834,266,116 / 2,656,942,873 / 4,690,864 | 14,834,248,818 / 2,657,000,213 / 4,629,346 |
+| exits (k1, k3, k4, k5) | 135,259 (698, 46,608, 87,902, 51) | 135,258 (698, 46,608, 87,901, 51) |
+| delegated calls (register / exchange) | 156 (0 / 156) | 156 (11 / 145) |
+| other kind-3 services (map, nodes, ...) | 46,452 | 46,452 |
+| emulation entries (all ok) | 4,271 | 4,172 |
+
+The direct ABI saves 21,476 instructions in the run, 0.0001 %, about 2k per moved call, and only 11 calls
+move. gcc's exits are faults (87.9k) and mapping services (46.5k). Only 156 of its 135k exits are delegated
+calls, and 122 of those are writev, which has no direct route. As predicted, the saving is not resolvable
+per call from the total. Firmware per emulated check is at most 1,098-1,110 instructions; the bucket also
+holds timer SBI calls.

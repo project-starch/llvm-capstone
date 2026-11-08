@@ -4,8 +4,11 @@ checked-copy model selected, capmix snapshots around each command and the adapte
 
   run-native-stage.py --bench perl|gtr --arm exchange|direct --model on|off --out NEW_DIR [--plugin capmix.so]
 
-perl = 500.perlbench_r test (makerand.pl, then test.pl driven by a plain RV64 perl that execs the native
-perl for each of its 317 test files, as today's board stage does); gtr = 502.gcc_r train01.
+perl = 500.perlbench_r test, SPEC's two invocations (makerand.pl, test.pl) by the native perl itself, run from
+the staged directory as ./perlbench_r; test.pl's children start through native spawn and the pinned native hush
+shell (--shell), with null-device and private-/tmp grants, as the collaborator's qualified Perl run. (Today's
+board stage drives test.pl with a plain RV64 perl instead; on the native backend that cannot work: an exec's
+grant root is its cwd, and t/TEST execs each test from t/ with -I../lib.) gtr = 502.gcc_r train01.
 exchange = every native route off (capstone_vm.native_io=0); direct = native_io and the seven route
 features on (mask 479), the same binary in both arms. model off = x-capstone-checked-copy=false, so every
 CSCHECKR/W traps to the firmware's emulation (capstone_vm.checked_copy_emu=1).
@@ -26,10 +29,10 @@ p.add_argument('--dom', type=Path, required=True, help='the native-IO SDK build 
 p.add_argument('--stage-src', type=Path, required=True, help="a make-stage.py stage (its in/, natperl, mark1/mark2)")
 p.add_argument('--runner', type=Path, required=True, help='run-staged.py')
 p.add_argument('--plugin', type=Path)
+p.add_argument('--shell', type=Path, help='perl: the native hush.dom for test.pl children')
 p.add_argument('--marks', type=Path, help='directory with the capmix marker programs mark1/mark2 (HINT 0x701/0x702), if the stage has none')
 p.add_argument('--memory', default='2G')
 p.add_argument('--timeout', type=int, default=21600)
-p.add_argument('--tests', help='perl only: a space-separated subset of t/ files for a smoke run')
 a = p.parse_args()
 a.out.mkdir(parents=True, exist_ok=False)
 stage, results = a.out / 'stage', a.out / 'results'
@@ -39,12 +42,14 @@ def h(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 shutil.copytree(a.stage_src / 'in', stage / 'in', symlinks=True)
-for name in ['mark1', 'mark2'] + (['natperl'] if a.bench == 'perl' else []):
+for name in ['mark1', 'mark2']:
     src = a.stage_src / name
     if not src.exists() and a.marks:
         src = a.marks / name
     shutil.copy2(src, stage / name)
 shutil.copy2(a.dom, stage / 'bench.dom')
+if a.bench == 'perl':
+    shutil.copy2(a.shell, stage / 'hush.dom')
 
 cnt = 'cat /sys/module/capstone_vm/parameters/native_counters'
 lines = ['#!/bin/sh', 'set -u', 'R=/mnt/results', 'mkdir -p $R',
@@ -55,13 +60,10 @@ lines = ['#!/bin/sh', 'set -u', 'R=/mnt/results', 'mkdir -p $R',
          'mkdir -m 0700 /tmp/sr/.capstone-tmp',
          'echo "@@PARAMS $(for f in native_io native_locks native_stat native_seek native_fd native_close native_path native_clock checked_copy checked_copy_emu supervisor_slots; do printf "%s=%s " $f $(cat /sys/module/capstone_vm/parameters/$f); done)"']
 if a.bench == 'perl':
-    lines += ['cp /mnt/vm/natperl /tmp/b/ && chmod 755 /tmp/b/natperl', 'mkdir -p /tmp/sw && ln -s /tmp/b/bench.dom /tmp/sw/perl']
-    commands = [('makerand', '/tmp/b/bench.dom -I. -I./lib makerand.pl > makerand.out 2>> makerand.err')]
-    if a.tests:
-        driver = 'my @t = qw(' + a.tests + '); $^X="../sw/perl"; for (@t) { my $r = system($^X, "-I.", "-I./lib", $_); print "$_ rc=$r\\n"; }'
-        commands.append(('tests', '/tmp/b/natperl -I. -I./lib -e ' + shlex.quote(driver) + ' > test.out 2>> test.err'))
-    else:
-        commands.append(('test', '/tmp/b/natperl -I. -I./lib -e \'$^X="../sw/perl"; do "./test.pl"; die $@ if $@\' > test.out 2>> test.err'))
+    lines += ['cp /mnt/vm/bench.dom /tmp/sr/perlbench_r && chmod 755 /tmp/sr/perlbench_r',
+              'mkdir -p /tmp/s && cp /mnt/vm/hush.dom /tmp/s/h.dom && chmod 755 /tmp/s/h.dom']
+    commands = [('makerand', './perlbench_r -I. -I./lib makerand.pl > makerand.out 2>> makerand.err'),
+                ('test', './perlbench_r -I. -I./lib test.pl > test.out 2>> test.err')]
     outputs = ['makerand.out', 'makerand.err', 'test.out', 'test.err']
 else:
     commands = [('train01', '/tmp/b/bench.dom train01.c -O3 -finline-limit=50000 -o train01.opts-O3_-finline-limit_50000.s'
@@ -78,10 +80,14 @@ lines += ['sync', 'dmesg | grep -E "capstone|native" | tail -40', 'echo VIRTUAL_
 (stage / 'gate.sh').write_text('\n'.join(lines) + '\n')
 
 flags = ('capstone_vm.native_task=1 capstone_vm.dom_binfmt=1 capstone_vm.native_dispatch=1 capstone_vm.checked_copy=1 '
-         'capstone_vm.native_slot_transport=1 capstone_vm.unpinned=1 capstone_vm.supervisor_slots=1 '
+         'capstone_vm.native_slot_transport=1 capstone_vm.unpinned=1 '
          'capstone_vm.checked_copy_emu=1 capstone_vm.dom_null=1 capstone_vm.dom_local_tmp=1')
+if a.bench == 'perl':
+    flags += ' capstone_vm.dom_shell=/tmp/s/h.dom'
 if a.arm == 'direct':
     flags += ' capstone_vm.native_io=1' + ''.join(f' capstone_vm.native_{k}=1' for k in ['locks', 'stat', 'seek', 'fd', 'close', 'path', 'clock'])
+# supervisor_slots=1 is the adapter's default; the kernel keeps 511 command-line bytes, so it is not spelled out.
+assert len(('root=/dev/vda ro ' + flags).encode()) < 512, 'kernel command line would be truncated'
 cpu = (f'x-capstone-supervisor-slots=1,x-pcrel=false,x-capstone-raw-moves=true,x-capstone-test-csrs=false,'
        f'x-capstone-checked-copy={"true" if a.model == "on" else "false"},x-capstone-context-transport=true')
 cmd = ['python3', str(a.runner), '--qemu', str(a.qemu.resolve()), '--images', str(a.images.resolve()),
@@ -92,7 +98,7 @@ if a.plugin:
     cmd += ['--plugin', str(a.plugin.resolve()), '--plugin-arg', f'out={(a.out / "capmix.txt").resolve()}', '--plugin-arg', 'shift=24']
 record = dict(bench=a.bench, arm=a.arm, model=a.model, kernel_args=flags, cpu_extra=cpu, command=cmd,
               inputs={k: h(v) for k, v in [('qemu', a.qemu), ('Image', a.images / 'Image'), ('rootfs', a.images / 'rootfs.ext2'),
-                                           ('firmware', a.firmware), ('dom', a.dom)] + ([('plugin', a.plugin)] if a.plugin else [])})
+                                           ('firmware', a.firmware), ('dom', a.dom)] + ([('shell', a.shell)] if a.bench == 'perl' else []) + ([('plugin', a.plugin)] if a.plugin else [])})
 (a.out / 'run.json').write_text(json.dumps(record, indent=2) + '\n')
 env = dict(os.environ, CAPSTONE_QEMU_CPU_EXTRA=cpu)
 with (a.out / 'runner.log').open('w') as log:
