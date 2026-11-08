@@ -67,7 +67,8 @@ static cl::opt<bool> CapstoneShrinkToGlobals(
     "capstone-shrinkto-globals", cl::Hidden,
     cl::desc("Narrow small data globals with SHRINKTO instead of SHRINK"),
     cl::init(false));
-static cl::opt<unsigned> CapstoneShrinkToEndAdjust(
+// Non-static: also read by CapstoneRedundantShrink.cpp.
+cl::opt<unsigned> CapstoneShrinkToEndAdjust(
     "capstone-shrinkto-end-adjust", cl::Hidden,
     cl::desc("Added to the SHRINKTO length of a global (1 on bitstreams whose "
              "SHRINKTO ends at cursor + imm - 1)"),

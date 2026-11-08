@@ -39,6 +39,7 @@ add_llvm_target(CapstoneCodeGen
   CapstoneMisalignedCapAccess.cpp
   CapstoneConstantPoolValue.cpp
   CapstoneCursorReadFold.cpp
+  CapstoneRedundantShrink.cpp
   CapstoneDeadRegisterDefinitions.cpp
   CapstoneExpandAtomicPseudoInsts.cpp
   CapstoneExpandPseudoInsts.cpp

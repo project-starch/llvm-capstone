@@ -23,6 +23,7 @@
 #include "TargetInfo/CapstoneTargetInfo.h"
 #include "llvm/ADT/APInt.h"
 #include "llvm/ADT/Statistic.h"
+#include "llvm/ADT/MapVector.h"
 #include "llvm/BinaryFormat/ELF.h"
 #include "llvm/CodeGen/AsmPrinter.h"
 #include "llvm/CodeGen/MachineConstantPool.h"
@@ -138,6 +139,10 @@ public:
   void emitGlobalVariable(const GlobalVariable *GV) override;
 
 private:
+  // -capstone-drop-redundant-shrink-declarations: per declared global, the
+  // largest extent a dropped narrowing relied on (emitSizeAssumptions).
+  MapVector<const GlobalValue *, uint64_t> SizeAssumptions;
+  void emitSizeAssumptions();
   void emitStaticCapGCTSection(const Module &M);
   void emitCapGlobalInitTableEntry(const Module &M);
   void emitGpCaptableTable(const Module &M);
@@ -726,6 +731,12 @@ bool CapstoneAsmPrinter::runOnMachineFunction(MachineFunction &MF) {
   SetupMachineFunction(MF);
   emitFunctionBody();
 
+  for (const auto &[GV, Need] :
+       MF.getInfo<CapstoneMachineFunctionInfo>()->sizeAssumptions()) {
+    uint64_t &Max = SizeAssumptions[GV];
+    Max = std::max(Max, Need);
+  }
+
   // Emit the XRay table
   emitXRayTable();
 
@@ -834,6 +845,26 @@ void CapstoneAsmPrinter::emitEndOfAsmFile(Module &M) {
   emitCapGlobalInitTableEntry(M);
   emitGpCaptableTable(M);
   emitGpCaptableInitDesc(M);
+  emitSizeAssumptions();
+}
+
+// .capstone.size_assume, not allocated: one record per declared global whose
+// narrowing CapstoneRedundantShrink dropped, an 8-byte little-endian size (the
+// bytes from the symbol's start that the remaining accesses reach) followed by
+// the symbol's NUL-terminated name. The static link concatenates the records;
+// capstone/tests/capstone-size-assume-check.py fails an image whose definition
+// of a named symbol is smaller than a record requires.
+void CapstoneAsmPrinter::emitSizeAssumptions() {
+  if (SizeAssumptions.empty())
+    return;
+  MCSection *Sec = OutContext.getELFSection(".capstone.size_assume",
+                                            ELF::SHT_PROGBITS, 0);
+  OutStreamer->switchSection(Sec);
+  for (const auto &[GV, Need] : SizeAssumptions) {
+    OutStreamer->emitIntValue(Need, 8);
+    OutStreamer->emitBytes(getSymbol(GV)->getName());
+    OutStreamer->emitIntValue(0, 1);
+  }
 }
 
 // If this module has a capability-global initializer (synthesized by the
