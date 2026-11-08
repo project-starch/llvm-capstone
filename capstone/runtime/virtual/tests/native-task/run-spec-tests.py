@@ -198,7 +198,7 @@ def gate_script(commands, images, compares, shell=False, live_output=False, loca
         retain(command[-1], required=False)
     # Keep assembly and incidental diagnostics for execution-only runs too.
     lines.extend([
-        'for f in *.out *.err *.s frame_*.yuv; do [ ! -f "$f" ] || cp "$f" /mnt/results/; done',
+        'for f in *.out *.err *.s *.264 frame_*.yuv; do [ ! -f "$f" ] || cp "$f" /mnt/results/; done',
         "sync",
     ])
     return "\n".join(lines) + "\n"
