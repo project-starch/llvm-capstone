@@ -56,3 +56,13 @@ routed clean; LUT 169,275). The +317 FF are attributed to retiming and register 
 | E0b | mcf test THP (exe 3633be7e2f887047) | 11,230.8 s | rc 0, specdiff, outputs equal; run 10,600-11,200 s (mcf's ldc+stc are ~169 per 1k instructions; the trim saves ~0.5 cycles per LDC on a hit in sim) |
 
 An instret difference beyond ±0.01 %, or any output difference, is a finding about E0, not a speed result.
+
+## Addendum 2 (8 Nov 23:3x): E0 waits for the lead's confirmation of the reflash; board 3 runs NO_HZ perlbench meanwhile
+
+The E0 chain was not launched: flashing a new bitstream needs the lead's confirmation in this conversation, and it
+is asked for. So that board 3 is not idle, its NO_HZ chain continues with the optional stage of the exit agent's
+pre-registration (perf/exit-kernel PREREG-nohz.md, 93ecfc29648d, "Optional second board"): perlbench test c3g on
+bkit35-nohz (stage perf/exitk/stages/perl-c3g-tk, C.5a, no new bitstream), against out-best-b2 (test command
+33,024 s; `kcyc − rcyc` 1,670 s): test command −1,000 to −1,300 s, `kcyc − rcyc` ≤ 600 s, specdiff 2/2. Board 3 is
+not board 2, so the comparison also crosses boards. If E0 is confirmed before this stage starts, the stage is
+withdrawn and E0 runs instead.
