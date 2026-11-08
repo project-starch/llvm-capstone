@@ -1,0 +1,82 @@
+diff --git a/target/riscv/op_helper.c b/target/riscv/op_helper.c
+index d427aedca5..3a24943f70 100644
+--- a/target/riscv/op_helper.c
++++ b/target/riscv/op_helper.c
+@@ -1824,6 +1824,69 @@ static inline bool capstone_protected_data(CPURISCVState *env)
+             (env->priv == PRV_U && env->capstone_u_active));
+ }
+ 
++
++/* RVCM (rtl lane, 2026-11-08, measurement only): a model of C.5a's revocation verdict cache (load_store_unit.sv
++ * RVC: set = id[5:0], 4 ways, round-robin victim per set advanced only on a displacing install, 30-bit hit test;
++ * a miss is resolved by a probe whose read-back installs the id; the whole cache empties when the virtual-context
++ * flag or the lifetime-table base changes). Several geometries in one pass. Active only with RVCM_OUT set. */
++#include <stdlib.h>
++#define RVCM_NG 6
++static const int rvcm_sets[RVCM_NG] = { 64, 128, 256, 64, 128, 1024 };
++static const int rvcm_ways[RVCM_NG] = { 4, 4, 4, 8, 8, 4 };
++static uint32_t *rvcm_tag[RVCM_NG]; static uint8_t *rvcm_occ[RVCM_NG]; static uint8_t *rvcm_rr[RVCM_NG];
++static uint64_t rvcm_look[2], rvcm_miss[RVCM_NG][2], rvcm_flush;
++static int rvcm_state = -1; static bool rvcm_last_vc; static target_ulong rvcm_last_root;
++static void rvcm_dump(void)
++{
++    FILE *f = fopen(getenv("RVCM_OUT"), "w");
++    if (!f) return;
++    for (int c = 0; c < 2; c++) {
++        fprintf(f, "RVCM %s lookups %" PRIu64, c ? "vctx" : "other", rvcm_look[c]);
++        for (int g = 0; g < RVCM_NG; g++)
++            fprintf(f, " miss_%dx%d %" PRIu64, rvcm_sets[g], rvcm_ways[g], rvcm_miss[g][c]);
++        fprintf(f, "\n");
++    }
++    fprintf(f, "RVCM flushes %" PRIu64 "\nRVCM-END\n", rvcm_flush);
++    fclose(f);
++}
++static void rvcm_flush_all(void)
++{
++    for (int g = 0; g < RVCM_NG; g++) memset(rvcm_occ[g], 0, rvcm_sets[g] * rvcm_ways[g]);
++    rvcm_flush++;
++}
++static void rvcm_access(CPURISCVState *env, uint32_t id)
++{
++    if (rvcm_state < 0) {
++        rvcm_state = getenv("RVCM_OUT") != NULL;
++        if (rvcm_state) {
++            for (int g = 0; g < RVCM_NG; g++) {
++                rvcm_tag[g] = calloc(rvcm_sets[g] * rvcm_ways[g], 4);
++                rvcm_occ[g] = calloc(rvcm_sets[g] * rvcm_ways[g], 1);
++                rvcm_rr[g] = calloc(rvcm_sets[g], 1);
++            }
++            atexit(rvcm_dump);
++        }
++    }
++    if (!rvcm_state) return;
++    bool vc = env->capstone_virtual_c;
++    if (vc != rvcm_last_vc || env->srevroot != rvcm_last_root) {
++        rvcm_flush_all(); rvcm_last_vc = vc; rvcm_last_root = env->srevroot;
++    }
++    rvcm_look[vc]++;
++    for (int g = 0; g < RVCM_NG; g++) {
++        int W = rvcm_ways[g], set = id & (rvcm_sets[g] - 1), base = set * W, hit = 0, way = -1;
++        for (int w = 0; w < W; w++)
++            if (rvcm_occ[g][base + w] && rvcm_tag[g][base + w] == id) { hit = 1; break; }
++        if (hit) continue;
++        rvcm_miss[g][vc]++;
++        for (int w = 0; w < W; w++)        /* same index (another generation) else a free way else round-robin */
++            if (rvcm_occ[g][base + w] && (rvcm_tag[g][base + w] & 0x3ffff) == (id & 0x3ffff)) way = w;
++        if (way < 0) for (int w = W - 1; w >= 0; w--) if (!rvcm_occ[g][base + w]) way = w;
++        if (way < 0) { way = rvcm_rr[g][set] % W; rvcm_rr[g][set]++; }
++        rvcm_occ[g][base + way] = 1; rvcm_tag[g][base + way] = id;
++    }
++}
++
+ static inline bool capstone_cap_revoked(CPURISCVState *env, capfat_t *cap) {
+ #if CAPSTONE_REVOCATION_ENFORCE
+     cap_rev_node_id_t id = cap->rev_node_id;
+@@ -1883,6 +1946,7 @@ static uint64_t capstone_check_access(CPURISCVState *env, uint32_t rs1,
+         capstone_raise_cap_fault(env, RISCV_EXCP_UNEXP_OP_TYPE, fault_addr, ra);
+     }
+ 
++    rvcm_access(env, (uint32_t)rs1_v->val.cap.rev_node_id);
+     if(capstone_cap_revoked(env, &rs1_v->val.cap)) {
+         cpu_restore_state(env_cpu(env), ra);
+         CAPSTONE_DEBUG_PRINT("Cap mem access on revoked capability: pc = %lx, rs1 = x%u, imm = %ld, cursor = %lx, bounds = (%lx, %lx)\n",
