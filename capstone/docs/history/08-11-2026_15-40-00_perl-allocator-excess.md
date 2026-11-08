@@ -1,4 +1,4 @@
-# perlbench test: which part of the allocator's excess over Plain is avoidable (pre-registration)
+# perlbench test: which part of the allocator's excess over Plain is avoidable
 
 Branch `perf/heap-excess`, on dev a6956c05a6d1. Question: in 500.perlbench_r test, Capstone's mallocng and
 copy routines run +57.4 (allocator) and +10.1 (memmove) instructions per 1,000 Plain instructions more than
@@ -66,3 +66,65 @@ same way (kit-unq, marked stage, CAPMIX_SHIFT=2):
   granules as words fails memmove_ranges_tags / memcpy_ranges_tags.
 
 If x saves less than 10 per 1k Plain, the avoidable part is small and that is the answer.
+
+## Results (after the runs; pre-registration commit 76455aff7e7a)
+
+In-context instret, test.pl's two commands summed, same runner, kit (kit-unq), marked stage and CAPMIX_SHIFT=2 as
+the baseline profile:
+
+| arm | exe | instret | vs baseline | per 1k Plain |
+|---|---|---:|---:|---:|
+| baseline (udcnofp profile) | 5996ba25b57a303c | 91,121,906,225 | | |
+| o2: libc -O2 | f009a98694ef2cbc | 90,733,128,002 | -388,778,223 (-0.43 %) | -4.84 |
+| x: o2 + 0011 + string change | cfb5ce3d66ae7ec0 | 89,962,022,430 | -1,159,883,795 (-1.27 %) | -14.44 |
+
+x against o2: -771,105,572, -9.60 per 1k. Both arms: rc 0, specdiff 2/2 PASS, 558 of 560 output hashes equal to
+the baseline run's; the two that differ, test.err and makerand.err, hold only the launcher's per-context
+CAPSTONE_VM_STATS/STEPS lines (same 632 and 2 lines, differing in their numbers). The same-exe noise between the
+compiler lane's capmix and plain runs of udcnofp is 1.16 M.
+
+Per function (per 1k Plain; baseline / o2 / x; Plain): `__unlock` 4.06 / 4.06 / 0.00 (0.95); `__malloc_allzerop`
+9.91 / 9.19 / 0.00, replaced in x by `slot_allzero` 6.75 and `__malloc_calloc_alloc` 2.55 (4.35);
+`__libc_free` 31.81 / 29.51 / 29.25 (17.75); `__malloc_alloc` 26.45 / 25.93 / 25.18; memmove 12.34 / 12.34 / 9.59
+(2.20); memcpy 17.30 / 17.31 / 16.83 (19.02). Mapped exe totals 1133.9 / 1129.3 / 1119.5.
+
+Against the prediction:
+- o2 -0.39 G: inside -0.2 to -0.9 G. Most of it is the allocator (free -2.30, allzerop -0.72, `__malloc_alloc`
+  -0.52 per 1k). -O2 does not shrink-wrap: `__unlock` and free's 10-instruction entry are unchanged.
+- unlock: -5.1 per 1k (`__unlock` -4.06, and `__malloc_alloc`/free shrink by 0.75/0.26 where the call became a
+  test). ABOVE the band of -2.5 to -3.5: the band did not count the callers' own savings.
+- calloc: -1.28 per 1k, BELOW the band of -1.9 to -3.7. The lookup did go (allzerop 9.19 -> slot_allzero 6.75,
+  34 instructions per call), but `__malloc_calloc_alloc` costs what the malloc wrapper and stub it replaces cost
+  (+2.55 against -2.11), and calloc itself grew by 0.72 (the zero flag goes through memory). The band assumed the
+  wrapper would go too.
+- memmove + memcpy: -3.23 per 1k, inside -2.5 to -5. The 8/4/2/1 tail carries it; the shift path ran in 364,035
+  of the 11.1 M calls whose addresses differ mod 8 (2.35 M words).
+- x -14.44 per 1k: inside -9 to -24.
+
+Of the +57.4 allocator excess, -O2 and 0011 remove 11.1 (-4.8 build, -6.4 source); the copy routines remove 3.2 of
+memmove's. What remains is REQUIRED (heap_access in free and realloc, issue, end) or CODEGEN: no shrink-wrapping,
+a frame pointer and 4-instruction call stubs in libc (the application is built with -fomit-frame-pointer and
+-capstone-direct-calls, libc is not), six instructions per global access, a software CLZ, and two capability moves
+per byte-loop iteration.
+
+## Safety fixtures (kit-unq, domain slot 76)
+
+| runner | control SDK (devrg) | x SDK | positive control |
+|---|---|---|---|
+| run-hosted.py (94 checks, incl. memcpy/memmove_ranges_tags: every offset mod 16/32, len <= 80, both overlaps, exact bounds) | PASS 94/94 | PASS 94/94 | runtime whose granule copy is two words: 82/94, FAIL memcpy_ranges_tags, memmove_ranges_tags and 10 other pointer-copy and exit checks |
+| run-malloc.py (24 checks: stale, stale-free, inplace-stale, remap-stale, bounds, interior-free, reuse-stale, reuse-free, nested-*) | PASS 24/24 | PASS 24/24 | libc whose free does not end the child: FAIL stale, stale-free, inplace-stale, reuse-stale, reuse-free ("denial survived") |
+
+All 11 cases that fault on the control fault on x, each with the same exit (139) and the same cause after its READY marker: 25 (revoked capability) for the eight lifetime cases, 28 for bounds, 2 for interior-free, 29 for nested-grandchild. The
+devrg manifest predates run-malloc.py's `heap_object_bounds` key; the runs used a copy with the key set true, which
+is what the archive was built with (the linked policy symbol is `__malloc_policy_11`).
+
+Host-side, before any run: the new copy matched glibc memmove on 2,469,888 (src offset, dst offset, length,
+overlap) cases, and a variant with a wrong shift failed 218,432 of them; under ASan with every byte outside
+[src, src+n) and [dst, dst+n) poisoned the copy read and wrote nothing outside, and shrinking the source by one byte
+made ASan fire.
+
+## Not done
+
+- realloc's moving path repeats `heap_access` in `free(issued)` (2,237,124 times, ~0.9 per 1k). Skipping it would
+  also skip the liveness probe that catches a free racing the realloc; left in.
+- libc-test at -O2 was not run; the perl run and the two fixture suites are the -O2 evidence.
