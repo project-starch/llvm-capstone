@@ -38,3 +38,21 @@ A K0 failure stops board 2's chain before K1.
 
 The native bitstream (E5 + CSRUNV 4/5 detach/adopt, rtl lane) is due sealed Tuesday morning. Its quick tests, and the
 choice of the configuration for the Temporal train, get their own pre-registration.
+
+## Addendum 1 (8 Nov 23:1x, before its board call): E0, the stage-B bitstream, on board 3 after the NO_HZ pair
+
+E0 = caplifive_stageb_a481031ca.bit (sha256 aecb81b2…40f0; C.5a + R-32 fix + R-68 NI fix + DYN handshake trim + LDC
+rs1). Sealed and graded PASS by the rtl lane (land/rtl-evariants a3df86684667: congestion 4, 0 loops, WNS −11.007,
+routed clean; LUT 169,275). The +317 FF are attributed to retiming and register splitting, with no new state.
+1. The rtl lane's 32-image gate (land/rtl-evariants 7439d0ca7853 for the vectors, 3bc486095d65 for the driver
+   perf/e0gate/e0-gate.sh 3): VALUE fields equal E0's sim; TIMING fields within the grader's rule. Exit 0 keeps the
+   board on E0. Any other exit stops the chain, and C.5a is flashed back.
+2. Only after a PASS, two SPEC stages (drivers perf/e0/gt-run-e0-q32.sh and gt-run-e0-thp.sh, kits bkit37-e0-q32 and
+   bkit37-e0-thp = bkit32-q32 and bkit29-thp with only the bitstream changed):
+
+| # | Stage | Reference (board 3, C.5a, same kit and exe) | Prediction |
+|---|---|---|---|
+| E0a | gcc train01 dcnofp (exe 736f881f4958ac3b) | 3,924.9 s; in-context instret 12,869,971,613 | rc 0, specdiff 1/1, outputs equal; instret within ±0.01 % (the RTL does not change instruction counts); run 3,780-3,920 s |
+| E0b | mcf test THP (exe 3633be7e2f887047) | 11,230.8 s | rc 0, specdiff, outputs equal; run 10,600-11,200 s (mcf's ldc+stc are ~169 per 1k instructions; the trim saves ~0.5 cycles per LDC on a hit in sim) |
+
+An instret difference beyond ±0.01 %, or any output difference, is a finding about E0, not a speed result.
