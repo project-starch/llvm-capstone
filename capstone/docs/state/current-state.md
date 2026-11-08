@@ -18,6 +18,13 @@ capability representation/moves, 11.2% tag metadata and 8.1% capability
 load/store helpers. Three substantial profiles have zero lost samples; all
 650 diagnostic compilations and four warm-ups pass. Profiled timings are
 excluded from the throughput baseline.
+A QOM-type-debug-only build control shows no native GCC CPU gain (13.030s
+versus 13.030s for 20 compilations); the plain control improves 1.43% in two
+samples per build. All 480 timed outputs and eight warm-ups pass. A separate
+ten-compilation census finds 99.893% of physical tag clears touch one granule,
+the rest two; no larger calls occur. All diagnostic outputs pass. This favors
+small-clear lookup reuse over bulk-range batching for this input.
+[Control and census evidence](../../runtime/virtual/tests/qemu-throughput/qom-census-qualification.json).
 No emulator semantic optimization has been implemented. Existing native/RTL
 qualification below remains tied to its original snapshots.
 

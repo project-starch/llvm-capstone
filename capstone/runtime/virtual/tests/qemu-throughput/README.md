@@ -169,3 +169,56 @@ cohort for throughput claims. Four profiler lifecycle tests and five marker
 tests pass. Raw profiles, logs, package files, JIT maps and commands are in the
 archive identified by the qualification record; no benchmark sources are
 committed. Defaults and QEMU semantics remain unchanged.
+
+## QOM debugging control and tag-clear census
+
+The [follow-up qualification](qom-census-qualification.json) changes the next
+optimization priority. A new build differs in exactly one recorded Meson option:
+`qom_cast_debug=false` (`--disable-qom-cast-debug`). It retains `-O2`, ordinary
+assertions and capability checks. Unprofiled baseline/candidate/candidate/baseline
+runs use CPU 2, icount0, fresh guests and unchanged guest artifacts:
+
+| Workload window | Baseline mean QEMU CPU | Candidate mean QEMU CPU |
+| --- | ---: | ---: |
+| 20 native GCC compilations | 13.030s | 13.030s |
+| 100 plain GCC compilations on Capstone platform | 5.935s | 5.850s |
+
+All 480 timed outputs and eight warm-ups match. The plain control's mean CPU
+reduction is 1.43%; native shows no measurable gain. With two observations per
+build and uncontrolled host frequency, this is a preliminary control, not a
+reason to change the default. Existing profile shares are not guaranteed savings.
+
+A separate diagnostic build counts physical tag-clear calls during ten native
+GCC compilations, excluding boot and warm-up through a host-controlled shared
+byte at the serial markers. All ten outputs and its warm-up match. It observes:
+
+| Granules touched per call | Calls |
+| --- | ---: |
+| One | 38,711,545 (99.893%) |
+| Two | 41,346 (0.107%) |
+| Three or more | 0 |
+
+The largest caller is the scalar-store helper (`op_helper.c:4009`, 26,640,141
+calls), followed by untagged capability stores (`:3512`, 7,458,880 calls).
+Of the one-granule calls, 36,458,664 find existing page metadata and 2,252,881
+do not. Finding metadata does not imply that the bit was set; this census counts
+clear requests, not tag transitions. It also does not measure lock contention
+or cycles per call. Other workloads may have different size distributions.
+
+**Next optimize the one-granule path and reuse its already-found page entry.**
+Whole-page batching is not the first priority for this measured GCC workload.
+Keep the physical-map lock and clear every overlapping granule, including partial
+writes; validate tag writers, stale/live controls and exact GCC output before
+unprofiled paired timings. No such source optimization has been implemented yet.
+Bounds-calculation simplification remains a separate candidate.
+
+The archive contains the comparison driver and commands, both candidate binaries,
+final diagnostic patch, diagnostic runner, counters, build options and logs.
+The census uses fixed source-site labels and counters under the existing tag lock;
+it does not add guest instructions or change the ISA. Marker-observation latency
+makes the endpoints approximate. Its results are explicitly marked diagnostic
+and must not enter timing comparisons. The first census pilot used JIT return
+addresses and exhausted its bounded caller table; it is retained and excluded.
+Reproduce by applying `tag-census-final.patch` to the pinned fork and using the
+archived diagnostic runner; the earlier `instrument.py`/pilot patch is historical.
+No production runner, emulator pin, test default or native RTL handoff changed.

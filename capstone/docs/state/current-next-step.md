@@ -3,8 +3,12 @@
 Continue on `perf/qemu-throughput`, leaving the native RTL handoff branch fixed.
 [The matched host-throughput baseline](../../runtime/virtual/tests/qemu-throughput/README.md)
 and separate host profiles are complete for one small repeated GCC input.
-Next investigate batching tag-range bitmap clears and eliminating repeated
-metadata lookups, preserving locking and byte/tag semantics. Then assess
+The clear-size census finds 99.893% one-granule calls and no calls larger
+than two granules. Next optimize the small-clear path by reusing its existing
+page lookup, preserving locking and byte/tag semantics; bulk range batching
+is not the first priority for this GCC input. Disabling QOM cast debugging
+shows no native gain in the controlled sample, so leave the default unchanged.
+Then assess
 representation reuse with exact bounds/representability checks. Qualify each
 change with safety gates and unprofiled paired timings; profile shares are
 not predicted savings.
