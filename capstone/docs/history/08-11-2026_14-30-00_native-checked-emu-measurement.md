@@ -589,3 +589,13 @@ final  slot 12 LCC type 0x1 (NONLIN, still there); slot 13 hi word 0x1d88400000 
 Pre-registration step 6 above ("the emulation has never executed") is superseded by this run.
 The emulation has now executed. Only the full monitor trap path and the in-kernel callers remain untested on
 silicon.
+
+**perlbench train twin, outputs over 9p** (twin3, 936 MiB, 2^19 table):
+- all five commands rc 0; **specdiff 6/6**; no OOM; system peak MemTotal - MemAvailable 181,008 kB;
+- counters identical to the first twin (calls 9,482, register 9,145, kinds_queries 9,145, adopt_kind_refused 0),
+  and no twin ADOPT lines;
+- output sha256 (first 16): diffmail `f1683e4525ac1fee`, perfect `31bf9c8fa08508fb`, scrabbl `c66f2e1162c7c5a4`,
+  splitmail `c032987217551118`, suns `01688ea0c1058063`, validate `96611d1ca9418e47`. The board run's
+  @@SPEC-HASH lines are to equal these.
+- The sampler's VmHWM read 0 for perlbench. Its process name is cut to `perlbench_r_bas`, so the sampler's
+  `*_base*` match misses it; mcf's `mcf_r_base.nati` matched.
