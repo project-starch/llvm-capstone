@@ -1,3 +1,14 @@
+## QEMU feedback-speed investigation
+
+Continue on `perf/qemu-throughput`, leaving the native RTL handoff branch fixed.
+[The matched host-throughput baseline](../../runtime/virtual/tests/qemu-throughput/README.md)
+is complete for one small repeated GCC input. Next profile host helper execution
+in a separate diagnostic run; do not contaminate the timing cohort with a plugin.
+Add a scalar PC-relative translation control before attributing platform-plain's
+speed difference to capability handling. If proposing a no-icount fast test mode,
+first run timer/preemption, lifetime and race gates; keep deterministic counts
+and hardware performance claims separate. Do not remove checks to make QEMU fast.
+
 ## RTL implementation from the rebased native branch
 
 The developer entry is the [RTL handoff](../plans/native-task-rtl-handoff.md).

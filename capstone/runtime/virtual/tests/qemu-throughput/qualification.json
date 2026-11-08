@@ -1,0 +1,439 @@
+{
+  "schema_version": 1,
+  "status": "PASS for preliminary throughput experiment",
+  "branch": "perf/qemu-throughput",
+  "source_snapshot": "4d6b0bbb5edfc49d82c7e2c4a90297260d38717b",
+  "base_snapshot": "2b25f1714a5e",
+  "build": {
+    "source_base": "2b25f1714a5e",
+    "stock_revision": "6bb4a8a47a43f35a345f107227fcd6abed59e62c",
+    "fork_revision": "dd041bac5ad9c145c3872a50804ca714a26b1c88",
+    "configure_args": [
+      "--target-list=riscv64-softmmu",
+      "--disable-docs",
+      "--disable-werror",
+      "--disable-tools",
+      "--disable-guest-agent",
+      "--disable-slirp",
+      "--disable-plugins"
+    ],
+    "compiler": "cc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0\nCopyright (C) 2023 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\n\n",
+    "host_cpu": "Architecture:                            x86_64\nCPU op-mode(s):                          32-bit, 64-bit\nAddress sizes:                           46 bits physical, 48 bits virtual\nByte Order:                              Little Endian\nCPU(s):                                  28\nOn-line CPU(s) list:                     0-27\nVendor ID:                               GenuineIntel\nModel name:                              Intel(R) Core(TM) i7-14700\nCPU family:                              6\nModel:                                   183\nThread(s) per core:                      2\nCore(s) per socket:                      20\nSocket(s):                               1\nStepping:                                1\nCPU(s) scaling MHz:                      26%\nCPU max MHz:                             5400.0000\nCPU min MHz:                             800.0000\nBogoMIPS:                                4224.00\nFlags:                                   fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush dts acpi mmx fxsr sse sse2 ss ht tm pbe syscall nx pdpe1gb rdtscp lm constant_tsc art arch_perfmon pebs bts rep_good nopl xtopology nonstop_tsc cpuid aperfmperf tsc_known_freq pni pclmulqdq dtes64 monitor ds_cpl vmx smx est tm2 ssse3 sdbg fma cx16 xtpr pdcm pcid sse4_1 sse4_2 x2apic movbe popcnt tsc_deadline_timer aes xsave avx f16c rdrand lahf_lm abm 3dnowprefetch cpuid_fault epb ssbd ibrs ibpb stibp ibrs_enhanced tpr_shadow flexpriority ept vpid ept_ad fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms invpcid rdseed adx smap clflushopt clwb intel_pt sha_ni xsaveopt xsavec xgetbv1 xsaves split_lock_detect user_shstk avx_vnni dtherm ida arat pln pts hwp hwp_notify hwp_act_window hwp_epp hwp_pkg_req hfi vnmi umip pku ospke waitpkg gfni vaes vpclmulqdq rdpid movdiri movdir64b fsrm md_clear serialize pconfig arch_lbr ibt flush_l1d arch_capabilities\nVirtualization:                          VT-x\nL1d cache:                               768 KiB (20 instances)\nL1i cache:                               1 MiB (20 instances)\nL2 cache:                                28 MiB (11 instances)\nL3 cache:                                33 MiB (1 instance)\nNUMA node(s):                            1\nNUMA node0 CPU(s):                       0-27\nVulnerability Gather data sampling:      Not affected\nVulnerability Ghostwrite:                Not affected\nVulnerability Indirect target selection: Not affected\nVulnerability Itlb multihit:             Not affected\nVulnerability L1tf:                      Not affected\nVulnerability Mds:                       Not affected\nVulnerability Meltdown:                  Not affected\nVulnerability Mmio stale data:           Not affected\nVulnerability Old microcode:             Not affected\nVulnerability Reg file data sampling:    Mitigation; Clear Register File\nVulnerability Retbleed:                  Not affected\nVulnerability Spec rstack overflow:      Not affected\nVulnerability Spec store bypass:         Mitigation; Speculative Store Bypass disabled via prctl\nVulnerability Spectre v1:                Mitigation; usercopy/swapgs barriers and __user pointer sanitization\nVulnerability Spectre v2:                Mitigation; Enhanced / Automatic IBRS; IBPB conditional; PBRSB-eIBRS SW sequence; BHI BHI_DIS_S\nVulnerability Srbds:                     Not affected\nVulnerability Tsa:                       Not affected\nVulnerability Tsx async abort:           Not affected\nVulnerability Vmscape:                   Mitigation; IBPB before exit to userspace\n",
+    "binaries": {
+      "stock": "fef99d167011dca7bb155e8afe835b5b535cec51b13532300413cddeaf3fc929",
+      "fork": "8672296ec36f7098133ea6fd8fe956f0124a7e2f4b3663fe5d43fb48e9d1e180"
+    },
+    "build_options": {
+      "stock": {
+        "buildtype": "debug",
+        "debug": true,
+        "optimization": "2",
+        "b_sanitize": [],
+        "b_lto": false,
+        "c_args": [],
+        "c_link_args": [],
+        "slirp": "disabled",
+        "capstone": "auto"
+      },
+      "fork": {
+        "buildtype": "debug",
+        "debug": true,
+        "optimization": "2",
+        "b_lto": false,
+        "b_sanitize": [],
+        "c_args": [],
+        "c_link_args": [],
+        "slirp": "disabled",
+        "capstone": "auto"
+      }
+    }
+  },
+  "cohorts": {
+    "batch50-icount0": {
+      "status": "PASS",
+      "inputs": {
+        "stock": "fef99d167011dca7bb155e8afe835b5b535cec51b13532300413cddeaf3fc929",
+        "fork": "8672296ec36f7098133ea6fd8fe956f0124a7e2f4b3663fe5d43fb48e9d1e180",
+        "firmware": "2335a28682ddf65e46c1f492632c2cb026efcb2271caf544a3f7ddc858b03e02",
+        "plain": "ebeca8e920328b5c893fc9ee910851cceabee2bebc00320322b2b77b75def4a0",
+        "native": "a1509c81444586031c74c5752f72ec90dc6c7ab57635fff37ffa431c11663a9f",
+        "input": "de7b86d79a68965adb62e750101d9211224884b2236053d906d1e23057bb6ad1",
+        "reference": "58111208509dd871223ae195a33304bd6b24afd29458f37c976556cbad506324",
+        "Image": "b7de27fb28bc0807053ae3e1c4bcd058e79f601d255a0dcaaa6ce70d46a3815f",
+        "rootfs.ext2": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845"
+      },
+      "iterations": 50,
+      "icount": 0,
+      "host": {
+        "uname": [
+          "Linux",
+          "pop-os",
+          "6.18.7-76061807-generic",
+          "#202601231045~1778249322~24.04~b44a3c3 SMP PREEMPT_DYNAMIC Fri M",
+          "x86_64",
+          "x86_64"
+        ],
+        "affinity": [
+          2
+        ]
+      },
+      "samples": [
+        {
+          "arm": "stock-plain",
+          "run": 0,
+          "host_loadavg_before": [
+            1.9462890625,
+            1.466796875,
+            0.63037109375
+          ],
+          "reference_match": true,
+          "wall_seconds": 4.495633288,
+          "cpu_seconds": 4.49,
+          "cpu_tick_hz": 100,
+          "scope": "Guest serial window; host time, not guest cycles"
+        },
+        {
+          "arm": "fork-plain",
+          "run": 1,
+          "host_loadavg_before": [
+            1.80029296875,
+            1.451171875,
+            0.63525390625
+          ],
+          "reference_match": true,
+          "wall_seconds": 4.824533757,
+          "cpu_seconds": 4.82,
+          "cpu_tick_hz": 100,
+          "scope": "Guest serial window; host time, not guest cycles"
+        },
+        {
+          "arm": "platform-plain",
+          "run": 2,
+          "host_loadavg_before": [
+            1.73583984375,
+            1.443359375,
+            0.6376953125
+          ],
+          "reference_match": true,
+          "wall_seconds": 2.99269092,
+          "cpu_seconds": 2.98,
+          "cpu_tick_hz": 100,
+          "scope": "Guest serial window; host time, not guest cycles"
+        },
+        {
+          "arm": "platform-native",
+          "run": 3,
+          "host_loadavg_before": [
+            1.6767578125,
+            1.435546875,
+            0.6396484375
+          ],
+          "reference_match": true,
+          "wall_seconds": 32.644540217,
+          "cpu_seconds": 32.58,
+          "cpu_tick_hz": 100,
+          "scope": "Guest serial window; host time, not guest cycles"
+        },
+        {
+          "arm": "platform-native",
+          "run": 4,
+          "host_loadavg_before": [
+            1.5908203125,
+            1.44287109375,
+            0.6767578125
+          ],
+          "reference_match": true,
+          "wall_seconds": 32.615070472,
+          "cpu_seconds": 32.56,
+          "cpu_tick_hz": 100,
+          "scope": "Guest serial window; host time, not guest cycles"
+        },
+        {
+          "arm": "platform-plain",
+          "run": 5,
+          "host_loadavg_before": [
+            1.548828125,
+            1.46142578125,
+            0.71923828125
+          ],
+          "reference_match": true,
+          "wall_seconds": 3.005773928,
+          "cpu_seconds": 3.0,
+          "cpu_tick_hz": 100,
+          "scope": "Guest serial window; host time, not guest cycles"
+        },
+        {
+          "arm": "fork-plain",
+          "run": 6,
+          "host_loadavg_before": [
+            1.5849609375,
+            1.470703125,
+            0.7265625
+          ],
+          "reference_match": true,
+          "wall_seconds": 4.826345017,
+          "cpu_seconds": 4.83,
+          "cpu_tick_hz": 100,
+          "scope": "Guest serial window; host time, not guest cycles"
+        },
+        {
+          "arm": "stock-plain",
+          "run": 7,
+          "host_loadavg_before": [
+            1.49462890625,
+            1.45458984375,
+            0.72998046875
+          ],
+          "reference_match": true,
+          "wall_seconds": 4.499320536,
+          "cpu_seconds": 4.49,
+          "cpu_tick_hz": 100,
+          "scope": "Guest serial window; host time, not guest cycles"
+        }
+      ],
+      "limitations": [
+        "Host serial-delivery timing, not target cycles or hardware overhead.",
+        "One untimed warm-up compilation per fresh guest, then a batch including exec/exit.",
+        "Only stock-plain versus fork-plain uses identical machine/CPU options and binary.",
+        "Platform arms intentionally change discovery/CPU flags and Linux capability paths.",
+        "Native versus plain binaries differ in compiler/libc/ABI; not isolated ISA cost.",
+        "No profiling plugin; build flags and host contention still require auditing."
+      ],
+      "medians": {
+        "fork-plain": {
+          "wall_seconds": 4.825439387,
+          "cpu_seconds": 4.825
+        },
+        "platform-native": {
+          "wall_seconds": 32.6298053445,
+          "cpu_seconds": 32.57
+        },
+        "platform-plain": {
+          "wall_seconds": 2.9992324239999997,
+          "cpu_seconds": 2.99
+        },
+        "stock-plain": {
+          "wall_seconds": 4.497476912,
+          "cpu_seconds": 4.49
+        }
+      }
+    },
+    "batch50-noicount": {
+      "status": "PASS",
+      "inputs": {
+        "stock": "fef99d167011dca7bb155e8afe835b5b535cec51b13532300413cddeaf3fc929",
+        "fork": "8672296ec36f7098133ea6fd8fe956f0124a7e2f4b3663fe5d43fb48e9d1e180",
+        "firmware": "2335a28682ddf65e46c1f492632c2cb026efcb2271caf544a3f7ddc858b03e02",
+        "plain": "ebeca8e920328b5c893fc9ee910851cceabee2bebc00320322b2b77b75def4a0",
+        "native": "a1509c81444586031c74c5752f72ec90dc6c7ab57635fff37ffa431c11663a9f",
+        "input": "de7b86d79a68965adb62e750101d9211224884b2236053d906d1e23057bb6ad1",
+        "reference": "58111208509dd871223ae195a33304bd6b24afd29458f37c976556cbad506324",
+        "Image": "b7de27fb28bc0807053ae3e1c4bcd058e79f601d255a0dcaaa6ce70d46a3815f",
+        "rootfs.ext2": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845"
+      },
+      "iterations": 50,
+      "icount": null,
+      "host": {
+        "uname": [
+          "Linux",
+          "pop-os",
+          "6.18.7-76061807-generic",
+          "#202601231045~1778249322~24.04~b44a3c3 SMP PREEMPT_DYNAMIC Fri M",
+          "x86_64",
+          "x86_64"
+        ],
+        "affinity": [
+          2
+        ]
+      },
+      "samples": [
+        {
+          "arm": "stock-plain",
+          "run": 0,
+          "host_loadavg_before": [
+            1.37890625,
+            1.43212890625,
+            0.73388671875
+          ],
+          "reference_match": true,
+          "wall_seconds": 4.40839409,
+          "cpu_seconds": 4.37,
+          "cpu_tick_hz": 100,
+          "scope": "Guest serial window; host time, not guest cycles"
+        },
+        {
+          "arm": "fork-plain",
+          "run": 1,
+          "host_loadavg_before": [
+            1.4287109375,
+            1.44189453125,
+            0.74072265625
+          ],
+          "reference_match": true,
+          "wall_seconds": 4.898602753,
+          "cpu_seconds": 4.89,
+          "cpu_tick_hz": 100,
+          "scope": "Guest serial window; host time, not guest cycles"
+        },
+        {
+          "arm": "platform-plain",
+          "run": 2,
+          "host_loadavg_before": [
+            1.39404296875,
+            1.43408203125,
+            0.7421875
+          ],
+          "reference_match": true,
+          "wall_seconds": 2.876316973,
+          "cpu_seconds": 2.87,
+          "cpu_tick_hz": 100,
+          "scope": "Guest serial window; host time, not guest cycles"
+        },
+        {
+          "arm": "platform-native",
+          "run": 3,
+          "host_loadavg_before": [
+            1.3623046875,
+            1.4267578125,
+            0.74365234375
+          ],
+          "reference_match": true,
+          "wall_seconds": 28.365046271,
+          "cpu_seconds": 28.27,
+          "cpu_tick_hz": 100,
+          "scope": "Guest serial window; host time, not guest cycles"
+        },
+        {
+          "arm": "platform-native",
+          "run": 4,
+          "host_loadavg_before": [
+            1.3154296875,
+            1.4091796875,
+            0.7646484375
+          ],
+          "reference_match": true,
+          "wall_seconds": 28.312516442,
+          "cpu_seconds": 28.26,
+          "cpu_tick_hz": 100,
+          "scope": "Guest serial window; host time, not guest cycles"
+        },
+        {
+          "arm": "platform-plain",
+          "run": 5,
+          "host_loadavg_before": [
+            1.29150390625,
+            1.39453125,
+            0.78564453125
+          ],
+          "reference_match": true,
+          "wall_seconds": 2.89959876,
+          "cpu_seconds": 2.91,
+          "cpu_tick_hz": 100,
+          "scope": "Guest serial window; host time, not guest cycles"
+        },
+        {
+          "arm": "fork-plain",
+          "run": 6,
+          "host_loadavg_before": [
+            1.26806640625,
+            1.3876953125,
+            0.787109375
+          ],
+          "reference_match": true,
+          "wall_seconds": 4.977969761,
+          "cpu_seconds": 4.93,
+          "cpu_tick_hz": 100,
+          "scope": "Guest serial window; host time, not guest cycles"
+        },
+        {
+          "arm": "stock-plain",
+          "run": 7,
+          "host_loadavg_before": [
+            1.2265625,
+            1.37451171875,
+            0.7900390625
+          ],
+          "reference_match": true,
+          "wall_seconds": 4.33679122,
+          "cpu_seconds": 4.34,
+          "cpu_tick_hz": 100,
+          "scope": "Guest serial window; host time, not guest cycles"
+        }
+      ],
+      "limitations": [
+        "Host serial-delivery timing, not target cycles or hardware overhead.",
+        "One untimed warm-up compilation per fresh guest, then a batch including exec/exit.",
+        "Only stock-plain versus fork-plain uses identical machine/CPU options and binary.",
+        "Platform arms intentionally change discovery/CPU flags and Linux capability paths.",
+        "Native versus plain binaries differ in compiler/libc/ABI; not isolated ISA cost.",
+        "No profiling plugin; build flags and host contention still require auditing."
+      ],
+      "medians": {
+        "fork-plain": {
+          "wall_seconds": 4.938286257,
+          "cpu_seconds": 4.91
+        },
+        "platform-native": {
+          "wall_seconds": 28.3387813565,
+          "cpu_seconds": 28.265
+        },
+        "platform-plain": {
+          "wall_seconds": 2.8879578665,
+          "cpu_seconds": 2.89
+        },
+        "stock-plain": {
+          "wall_seconds": 4.372592655,
+          "cpu_seconds": 4.355
+        }
+      }
+    }
+  },
+  "ratios": {
+    "batch50-icount0": {
+      "fork_vs_stock_cpu_ratio": 1.0746102449888641,
+      "fork_vs_stock_wall_ratio": 1.072921436044495,
+      "native_vs_platform_plain_cpu_ratio": 10.892976588628763
+    },
+    "batch50-noicount": {
+      "fork_vs_stock_cpu_ratio": 1.1274397244546497,
+      "fork_vs_stock_wall_ratio": 1.1293725820430898,
+      "native_vs_platform_plain_cpu_ratio": 9.780276816608996
+    },
+    "native_noicount_cpu_ratio": 0.8678231501381639
+  },
+  "acceptance": {
+    "fresh_guests": 16,
+    "timed_compilations": 800,
+    "untimed_warmup_compilations": 16,
+    "all_outputs_exact": true,
+    "host_window_unit_tests": 5
+  },
+  "excluded_pilot": "timing-icount0 used five compilations and serial compiler diagnostics; short windows were superseded by 50-compile cohorts with file-directed diagnostics.",
+  "interpretation": [
+    "Stock/fork ordinary-RV64 pair isolates the fork difference for this pinned guest and these binaries; it is not a claim for all workloads.",
+    "Capstone/plain platform ratio includes different guest software/ABI, guest instruction volume and capability emulation. It cannot isolate per-instruction emulator cost or predict RTL slowdown.",
+    "Platform-plain is faster than fork-plain in this fixture. Machine/discovery/CPU settings differ, including x-pcrel=false; the cause is not isolated.",
+    "Removing icount reduces native GCC host CPU time in this experiment; no default changed and no whole-suite safety/timer qualification is inferred."
+  ],
+  "limitations": [
+    "Only two samples per arm and mode on one host, one small repeated GCC test.",
+    "Timing markers include serial endpoint jitter and 100-Hz CPU accounting.",
+    "Existing binaries reused; scalar/native compiler provenance differs.",
+    "Same host build options include -O2 with debug symbols, no LTO, no TCG plugins loaded.",
+    "Remote host unavailable; measurements run locally on the CPU and affinity recorded in the cohorts.",
+    "QEMU fork pin unchanged; no emulator optimization or ISA semantic change implemented.",
+    "Host frequency and unrelated host activity not controlled; affinity and observed load recorded."
+  ],
+  "next_steps": [
+    "Profile host execution of the native cohort separately from timings to rank helpers.",
+    "Isolate the PC-relative translation setting with a scalar control.",
+    "Qualify a no-icount fast functional-testing mode on timer/preemption and lifetime/race tests before changing test defaults."
+  ],
+  "evidence": {
+    "local_root": "$CAPSTONE_TMP_ROOT/qemu-throughput-01/evidence",
+    "archive": "$CAPSTONE_TMP_ROOT/qemu-throughput-01-evidence.tar.gz",
+    "note": "Includes exact emulator binaries, build logs/options, commands, serial logs and timing reports; excludes duplicate stage files and guest disk images.",
+    "archive_sha256": "52802749579b91218a3696fc59b81263b4ecc9fc968fb89a3a083de7ef1ea6ad",
+    "archive_bytes": 48469643
+  }
+}

@@ -64,3 +64,30 @@ nor establish cycles per instruction on hardware.
 `test-host-window.py` checks marker parsing and rejection behavior. Existing
 staged-runner defaults are retained; `--machine`, `--cpu` and `--host-window`
 are explicit measurement controls.
+
+## Preliminary measured result
+
+The [qualification record](qualification.json) contains matched local builds,
+two samples per arm/mode, 16 fresh guests, 800 timed compilations and 16 warm-ups.
+Every output matches the official reference. Median QEMU process CPU times:
+
+| Arm | `icount=0`, 50 compilations | No icount, 50 compilations |
+| --- | ---: | ---: |
+| stock-plain | 4.490s | 4.355s |
+| fork-plain | 4.825s | 4.910s |
+| platform-plain | 2.990s | 2.890s |
+| platform-native | 32.570s | 28.265s |
+
+The matched scalar fork penalty is 7.46% with icount and 12.74% without it.
+Native/plain on the Capstone platform is 10.89x/9.78x; this combines software
+and emulation effects. Removing icount reduces native CPU time by 13.22% here.
+It is not yet a qualified replacement for deterministic functional test mode.
+The faster platform-plain control has additional CPU/machine differences,
+including `x-pcrel=false`; its cause requires a separate control.
+
+No QEMU semantics or test defaults changed. Next profile host helpers separately,
+control PC-relative translation explicitly, and qualify any proposed faster
+functional-test configuration on timer/preemption and safety cases. Two samples
+on one host and a small repeated input are preliminary evidence, not a general
+performance characterization. Host frequency and unrelated host activity were
+not experimentally controlled; CPU affinity and observed load are recorded.

@@ -1,3 +1,21 @@
+## QEMU throughput experiment on a separate branch
+
+`perf/qemu-throughput` starts from full-SPEC-qualified native snapshot
+`2b25f1714a5e`; `native/linux-task-integration` is unchanged. Matched local
+upstream 8.1.1 / Capstone QEMU builds run identical plain RV64 GCC on `virt`,
+plus plain/native controls on the Capstone platform. The fork uses 7.46% more
+host CPU time with icount0 and 12.74% more without icount for the scalar pair.
+Native/plain on the Capstone platform is 10.89x/9.78x, including guest software,
+ABI and instruction-volume differences; it is not a hardware-overhead estimate.
+
+All 800 timed compilations and 16 warm-ups match the reference across 16 fresh
+guests. Disabling icount reduces native host CPU time by 13.22% in this small
+fixture; no runtime default is changed and no timer/lifetime qualification is
+inferred. The original five-compile pilot is excluded from the final ratios.
+[Method, samples and limits](../../runtime/virtual/tests/qemu-throughput/README.md).
+No emulator semantic optimization has been implemented. Existing native/RTL
+qualification below remains tied to its original snapshots.
+
 ## Rebased native kernel: full existing SPEC C-port gate passes
 
 All ten existing C-port entries pass on branch source `04350015dcad`, runtime

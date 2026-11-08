@@ -1,3 +1,11 @@
+# QEMU throughput investigation
+
+This branch is **`perf/qemu-throughput`**, based on the qualified native handoff.
+Start with the [experiment and results](capstone/runtime/virtual/tests/qemu-throughput/README.md).
+The native/RTL handoff below describes the unchanged base architecture.
+
+---
+
 # Capstone native Linux task branch
 
 **RTL developer: start with the [implementation handoff](capstone/docs/plans/native-task-rtl-handoff.md).**
