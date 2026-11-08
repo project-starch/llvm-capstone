@@ -514,3 +514,47 @@ link count 1, SHA256SUMS regenerated.
   are printed.
 - The stub's classifiers read NO RESULT, because the transcript fed in was a twin gate log. spec-classify.py
   does not parse a train stage's markers; the stage plan's host_validation is the verdict.
+
+## Train twins, and the pre-registration for the board train runs (written before any board run)
+
+**Twins** (twin20 + detach/adopt + check model, 936 MiB guest, the stage's own run.sh, Image `ffdd93e09fa97d20`).
+
+mcf train (2^18 table):
+- rc 0, specdiff 2/2, 140.7 guest s, no OOM;
+- **memory: native process VmHWM 887,196 kB = 221,799 pages**; system peak MemTotal - MemAvailable 921,252 kB;
+- for comparison: the frozen launcher image's peak is 221,072 pages, and the U1 twin was killed at 223,373;
+- counters: k1 26,356, k3 1,949, k4 38,467; calls 291 (284 register); kinds_queries 284; detaches/adopts 0;
+  adopt_kind_refused 0; no twin ADOPT lines.
+- The native route adds about 730 pages (+0.3 %) to mcf's peak. It passes at 936 MiB, 1,574 pages under the
+  kill point. The board has about 963 MiB.
+
+perlbench train (2^19 table):
+- all five commands rc 0, 229.7 guest s;
+- calls 9,482 (9,145 register); kinds_queries 9,145; k1 38,620, k3 47,424, k4 93,045; adopt_kind_refused 0.
+- The first twin's in-band output transfer was cut off inside splitmail.out: run-staged stops when its console
+  window holds "Oops", and base64 can contain it. diffmail, perfect and scrabbl pass specdiff (3/3). A rerun
+  copies outputs over 9p instead.
+- The board stages now keep in-band outputs at 64 KiB, as every board stage. Larger outputs are checked by
+  sha256 against the twin.
+
+### Pre-registration: native train on e5-native (kits bkit38-native-perl and bkit38-native-mcf)
+
+1. Control rungs b0-stats and b0-hello at their oracles; otherwise the boot is VOID.
+2. Native smoke `@@NS-RESULT 0`, or 70 with only task-driver's two user-tick checks failing. K-min keeps the
+   stock accounting, and the kit's classify.py waives exactly those two. The two-task steps pass, by slot
+   detach/adopt.
+3. Train commands:
+   - every one rc 0;
+   - every `@@SPEC-HASH` line equal to the twin's (mcf: inp.out and mcf.out; perlbench: all eleven outputs);
+   - in-band outputs pass specdiff.
+4. Counters (`@@NATIVE-CNT`), summed:
+   - calls and register calls equal to the twin's: mcf 291/284, perlbench 9,482/9,145;
+   - kinds_queries equal to the register calls;
+   - adopt_kind_refused 0;
+   - **emu_fingerprints > 0**: the checks are now emulated by the monitor. The twin modelled the check in
+     QEMU and read 0, so the twin gives no predicted count;
+   - k3 equal to the twin's within 1 %; k1 and k4 will differ (timer and fault behaviour).
+5. mcf completes without an OOM kill (peak ~221.8 k pages, under the board's ~963 MiB).
+6. A failure of the firmware emulation shows as rc != 0 or a fault on the first checked copy. The emulation
+   has never executed: QEMU cannot run it, and its RTL arm is pending. So step 3 is also the emulation's first
+   test, and a FAIL there with a passing smoke attributes to the emulation.

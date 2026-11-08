@@ -13,8 +13,8 @@ main() {
   bash "$KIT/make-stage.sh" "$OUT" > /dev/null
   cp -rL "$NS/stage" "$OUT/train"
   cp -L "$NS/plan.json" "$OUT/train/plan.json"
-  # outputs in-band up to 16 MiB each (the UART carries them)
-  printf '#!/bin/sh\nexport SPEC_INBAND_MAX=16777216\nsh /test-domains/vbatch/train/run.sh\n' > "$OUT/spec.sh"
+  # outputs in-band only up to 64 KiB, as every board stage: larger ones are checked by sha256 against the twin
+  printf '#!/bin/sh\nexport SPEC_INBAND_MAX=65536\nsh /test-domains/vbatch/train/run.sh\n' > "$OUT/spec.sh"
   echo "stage $OUT: $(find "$OUT" -type f | wc -l) files, $(du -sb "$OUT" | cut -f1) bytes, gzip $(cd "$OUT" && tar cf - . | gzip -9 | wc -c)"
 }
 main "$@"; exit
