@@ -144,3 +144,17 @@ Order, per board, with a wait for a free board before each step:
   (4) Capstone imagick (C.5a, q32), deferred; (5) Plain lbm.
 - Reported per benchmark: the native-route time, or the C.5a fallback's, whichever completed. The native ratio's Plain
   is this record's Plain on the stock kernel: K-min differs from stock by RISCV_CAPSTONE_TASK only.
+
+## Addendum 6 (9 Nov 07:3x, before any of it runs): board 3's perlbench fallback is E5c, so perlbench can complete in full
+
+E5c = caplifive_e5c_246e7abc2.bit (sha256 ad6db31b…fa27): E5 (stage-B + 20-bit lifetime index) + the R-69 resume clamp,
+csr_regfile only. Sealed by the board lane, full build 4/4 against E5 (WNS −12.723). Its vector gate is
+perf/e5cgate/e5c-gate.sh (rtl lane, land/rtl-evariants c84cc235ec46), with vectors equal to e5-native's and E0's.
+If board 3's native route does not complete (Addendum 5, step 3), the fallback is now:
+(a) the E5c gate; (b) on PASS, perlbench train udcnofp (5996ba25b57a303c) on kit t3-smoke/bkit39-e5c-unify. That kit
+is bkit30-unify with the E5c bitstream and the 20-bit unify module 6f4cea6f3d99c9c1, built from the same source and
+recipe as 13a5ad66 with only CAPSTONE_VM_INDEX_BITS=20; its .sdata reads index_bits 20 and 1,048,576 records. All
+five commands are expected to complete (the uncapped twins: scrabbl 414,817, splitmail 410,594 live nodes). Driver
+perf/train/un-run-e5c.sh. (c) If the E5c gate fails (the board is back on C.5a), perlbench on C.5a with commands
+{0, 1, 4} as before. The deferred stages follow unchanged. Board 2's mcf fallback (C.5a, 4K q32) is unchanged: mcf
+peaks at 14 k live nodes.
