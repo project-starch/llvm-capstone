@@ -1231,3 +1231,43 @@ outputs are archived at
 SHA-256 `b60fadc864d0d0165f1181f8b6615e663332d0b7e0dfee29544f457beff49aac`.
 Unchanged QEMU, firmware, rootfs and SDK provenance are those of the preceding
 musl migration/admission records; the comparison records their hashes.
+
+## Anonymous read-fault experiment
+
+`capstone_vm.unpinned_access_fault=1` is an opt-in, default-off experiment.
+For authenticated load page faults (cause 13) in lazy anonymous writable arenas,
+it suppresses write-prefaulting. Actual stores, instruction faults, file-backed
+mappings, eager bootstrap and checked-copy fault handling retain their policies.
+`unpinned_access_reads` counts suppressed-write-prefault attempts, including
+retries and failures, not unique pages or faults saved.
+
+Build the standalone fixtures with the unchanged native SDK and ordinary RV64
+musl compiler (external paths supplied by the caller):
+
+```sh
+source capstone/tests/capstone-test-env.sh
+"$PLAIN_RV_CC" -O2 capstone/runtime/virtual/tests/native-task/memory-access.c -o "$PROBES/memory-plain"
+"$CAPSTONE_NATIVE_CC" -O2 -DCAPSTONE_PROBE capstone/runtime/virtual/tests/native-task/memory-access.c -o "$PROBES/memory.dom"
+"$CAPSTONE_NATIVE_CC" -O2 capstone/runtime/virtual/tests/native-task/memory-tag-store.c -o "$PROBES/memory-tag-store.dom"
+```
+
+`run-memory-access.py` takes `--qemu`, `--images`, `--firmware`, the ordinary
+(non-phase) capprof `--plugin`, `--profrun`, `--probes` and fresh `--out` paths.
+Compare `--access 0/1`, `--fast 0/1` and `--ahead 0/64`. It sets fixed pin-ahead to
+zero and verifies actual guest settings and activation counters. Its 1MiB
+fixtures read fresh RW pages, write pages, read then write, and store capabilities.
+The separate tag-first fixture checks distinct targets, untouched neighboring
+pages, and a final all-page pass. Armed-marker-plus-SIGSEGV denial/stale checks
+are smoke checks, not precise fault-site or cause assertions; the existing race
+oracle supplies stronger lifetime/held-unmap negative controls.
+
+GCC comparisons use `measure-gcc-phases.py --arm native` with the same image and
+binary, toggling `--kernel-arg capstone_vm.unpinned_access_fault=0/1` in ABBA order.
+Control `fault_ahead_max` independently and inspect recorded `pin_ahead_pages`.
+Both GCC and IO runners reject a command line of 512 bytes or more (the current
+RISC-V kernel uses asm-generic `COMMAND_LINE_SIZE=512`) and verify selected guest
+settings. Do not infer activation from requested command arguments alone.
+
+Whole-invocation attempt counts include exec/libc startup and exit. `ru_maxrss`
+is whole-process peak RSS, not isolated arena residency. Preserve compiler and
+binary provenance; plain/Capstone fixtures are not a pure ISA comparison.
