@@ -82,7 +82,7 @@ CONTROL_MUST_FAIL = "src/malloc/mallocng/malloc.c"
 FOREIGN_ARCH_KEEP = {"riscv64", "capstone64", "generic"}
 
 
-def compile_flags(musl: pathlib.Path) -> list[str]:
+def compile_flags(musl: pathlib.Path, virtual: bool = False) -> list[str]:
     return [
         "-target", "capstone64-unknown-elf",
         "-Xclang", "-target-feature", "-Xclang", "+m",
@@ -106,10 +106,12 @@ def compile_flags(musl: pathlib.Path) -> list[str]:
         f"-I{musl}/src/internal",
         f"-I{musl}/obj/include",
         f"-I{musl}/include",
-        # -O2, as musl's own build and the Plain arm's libc. -O1 was the default until 2026-11-08; the
-        # libc-only -O2 experiment of spec-cpu2017/results/2026-11-05-minimal-mallocng measured it
-        # (gcc -0.50 %, PHP -0.5 to -0.6 %) with every validation passing.
-        "-O2", "-w",
+        # The virtual profile's libc at -O2, as musl's own build and the Plain arm's libc (until
+        # 2026-11-08 -O1). Measured: spec-cpu2017/results/2026-11-05-minimal-mallocng (gcc -0.50 %,
+        # PHP -0.5 to -0.6 %) and docs/history/08-11-2026_15-40-00_perl-allocator-excess.md (perlbench
+        # test -0.43 %). The physical profile compiles the same 1343 files at -O2 but has not been run
+        # there, so it stays at -O1.
+        "-O2" if virtual else "-O1", "-w",
     ] + shlex.split(os.environ.get("MUSL_CAPSTONE_EXTRA_CFLAGS", ""))
     # MUSL_CAPSTONE_EXTRA_CFLAGS is APPENDED, never a replacement, and empty when unset, so the
     # default archive is unchanged. B0 (docs/plans/b0-silicon-delegated-runtime.md) builds the
@@ -220,7 +222,7 @@ def main() -> int:
         print(f"replaced       {len(replaced)} generic/riscv64 source(s) by their "
               f"capstone64 arch form ({', '.join(sorted(str(f.relative_to(musl)) for f in replaced))})")
 
-    flags = compile_flags(musl)
+    flags = compile_flags(musl, virtual)
 
     def movc_feature() -> str:
         """runtime/cmake/VirtualCodegen.cmake's CAPSTONE_VIRTUAL_MOVC_KEEP, from the environment (default on)."""

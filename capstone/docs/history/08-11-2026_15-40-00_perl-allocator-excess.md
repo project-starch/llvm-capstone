@@ -128,3 +128,9 @@ made ASan fire.
 - realloc's moving path repeats `heap_access` in `free(issued)` (2,237,124 times, ~0.9 per 1k). Skipping it would
   also skip the liveness probe that catches a free racing the realloc; left in.
 - libc-test at -O2 was not run; the perl run and the two fixture suites are the -O2 evidence.
+- -O2 is the virtual profile's only. The physical profile compiles the same 1343 of 1349 files at -O2 as at -O1,
+  but nothing was run on it, so its libc stays -O1. The virtual archive is byte-identical either way the flag is
+  written (1349 of 1349 objects equal to the measured arm's).
+- test-mallocng-policy-narrowing.py now applies 0011 too (its reviewed-port case failed without it; 4/4 pass).
+  test-group-size-narrowing.py fails on dev's own tree before this change (its anchor, an earlier 0009's
+  `cap_single_slot_bytes`, is gone), so it says nothing here.
