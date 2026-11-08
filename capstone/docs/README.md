@@ -1,5 +1,10 @@
 # Capstone project documentation
 
+On `native/linux-task-integration`, start with the [RTL implementation handoff](plans/native-task-rtl-handoff.md).
+It pins the rebased branch and QEMU, separates current qualification from historical
+results, and lists the hardware contracts. The older profile descriptions below
+do not override that branch-specific entry point.
+
 Sublet ISA extension: [contract and qualification](design/virtual-capstone/development.md#sublet-lifetime-qualification).
 QEMU and runtime support are merged, pinned to QEMU `7dbfdd534eea`. Use matching
 QEMU and adapter builds. The allocator migration on

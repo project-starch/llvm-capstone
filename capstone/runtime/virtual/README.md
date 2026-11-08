@@ -4,7 +4,8 @@ On `native/linux-task-integration`, the adapter is now **built-in and native-onl
 Use [install-native-task.sh](install-native-task.sh) with the matching patched
 Linux tree and the [native task guide](tests/native-task/README.md). The device
 ioctl entry, control descriptor and scalar userspace trampoline have been removed.
-An external module build is rejected. Required native admission options must all
+An external module build is rejected. For the rebased checkout and processor
+contract, start with the [RTL handoff](../../docs/plans/native-task-rtl-handoff.md). Required native admission options must all
 be enabled; disabling one cannot select an older execution path. Native exchange
 and direct-I/O ABIs remain supported. Required Linux helpers now use direct,
 typed internal calls; the installer installs their common header and applies

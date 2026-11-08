@@ -1,74 +1,77 @@
 # Copyable native Linux tasks: RTL implementation handoff
 
-This is the developer entry point for `native/linux-task-integration`. It
-organizes the cumulative platform change, not just the final SQLite patch.
-The current source snapshot is `6f587e9bf0be`, including direct basic clocks and
-confined pathname services, close, scalar fd services, seek, file metadata and POSIX locks, session
-teardown encapsulation, authorization and generic-copy workspace reuse, direct typed
-Linux helpers, native-only adapter cleanup, subprocess services
-and Perl provenance repair; subsequent qualification changes are recorded
-separately. **The pre-cleanup kernel passed all ten existing C-port SPEC entries.**
-The current native-clock kernel passes the 258.0-second build,
-file/SQLite, regression and GCC gate; see [qualification](../../runtime/virtual/tests/native-task/native-clock-qualification.json). The earlier cleanup also passed focused gates;
-its full ten-entry rerun on the new kernel is incomplete. The remote long run
-was cancelled to free the host for bounded five-minute feedback gates. See
-[cleanup qualification](../../runtime/virtual/tests/native-task/native-only-cleanup-qualification.json).
-Do not transfer the old kernel verdict to the new image. The cleanup adds no ISA requirement. No FPGA synthesis or
-hardware qualification is claimed.
+Developer entry point for **`native/linux-task-integration`**, rebased on
+`origin/dev` at `c9611344eeb75ed628d488202a9394a6e44f3db5` on 2026-11-08.
+The rebased runtime source snapshot is `a62d1dfe59c3ee1a5786230db30231e3f2abfc46`.
+Later handoff and qualification commits do not change that runtime snapshot.
+This branch is ready for RTL implementation assessment, not FPGA acceptance.
 
-The [current GCC route comparison](../../runtime/virtual/tests/native-task/gcc-current-routes-comparison.json)
-uses this same native-clock kernel and one rebuilt GCC binary with all native
-routes off/on. All six reference checks pass; the mean reduction is 0.229% total
-and 0.371% kernel instruction attempts. This is not cumulative branch-versus-dev
-or hardware timing. The runtime source snapshot below is unchanged.
+## 1. Checkout, review and qualification boundaries
 
-## 1. Baselines and scope
+```sh
+git clone --branch native/linux-task-integration --single-branch \
+  https://github.com/project-starch/llvm-capstone.git llvm-capstone-native
+cd llvm-capstone-native
+git submodule update --init capstone/capstone-qemu
+git -C capstone/capstone-qemu rev-parse HEAD
+# Expected: dd041bac5ad9c145c3872a50804ca714a26b1c88
+```
+
+Read sections 2–3 for the software/hardware boundary and required semantics.
+Use the [native Linux task contract](../design/virtual-capstone/native-linux-tasks.md)
+and [runtime/build entry](../../runtime/virtual/README.md) for integration.
+Other build dependencies are documented there; the checkout above is the
+source-review checkout, not a complete compiler/Linux/firmware toolchain.
 
 | Item | Frozen revision |
 | --- | --- |
-| Comparison base | `aeabf009128746d332741dd1e33fbe5b2bca3754` |
-| Current source snapshot | `6f587e9bf0be502058d2ae9737383fd0dc715a55` |
-| Historical remote `origin/dev` observation, not refreshed | `c9611344eeb75ed628d488202a9394a6e44f3db5` |
-| QEMU at common ancestor | `0542c5556c2d` |
+| Rebase/comparison base | `c9611344eeb75ed628d488202a9394a6e44f3db5` |
+| Rebased runtime source | `a62d1dfe59c3ee1a5786230db30231e3f2abfc46` |
+| Preserved pre-rebase source | `8897411a0f03` on `archive/native-task-pre-rebase-20261108` |
+| QEMU at comparison base | `0542c5556c2daddf71795f3d48eec1fb8ae137b3` |
 | Required QEMU | `dd041bac5ad9c145c3872a50804ca714a26b1c88` |
 
-The snapshot contains 66 commits after the comparison base, 257 ordinary changed
-files and one changed QEMU gitlink. The recorded remote dev had nine separate
-commits after that base; this branch has not merged them. In particular, dev's mapping-cache
-and compiler changes must not silently enter the baseline. There are no LLVM
-compiler source changes in this branch's cumulative delta. A working compiler
-binary is still a separate, hash-pinned build dependency.
+The rebased source contains 78 linear commits above the base. The
+[current inventory](../../runtime/virtual/tests/native-task/rtl-handoff-current-inventory.json)
+groups the complete branch delta and lists the five QEMU commits. There are no
+LLVM compiler changes relative to this new base. Compiler changes inherited
+from `dev` are present; the new SHRINKTO-global optimization remains default off.
+Existing benchmark/compiler binaries retain their separately recorded hashes.
 
-The [current machine-readable inventory](../../runtime/virtual/tests/native-task/rtl-handoff-current-inventory.json)
-lists every changed path at the source snapshot, groups it by responsibility,
-and records all five QEMU commits. The [historical inventory](../../runtime/virtual/tests/native-task/rtl-handoff-inventory.json)
-remains pinned to `09b90be908e6`. The initial handoff
-commits add tools/evidence; the subsequent cwd/pipe/signal repair changes Linux
-helpers and the native frontend, with no further ISA or QEMU requirement.
-[Repair scope and qualification](../../runtime/virtual/tests/native-task/README.md#native-cwd-pipe-and-signal-repair).
-Native subprocess work additionally introduces an authenticated kernel child
-bootstrap, capability-image exec within that child bootstrap, inherited resource grants and admitted-child
-wait. The [hush port](../../ports/hush/app/README.md) is a native application
-using those services. Directory/time helpers and descriptor duplication extend
-Linux service coverage. The optional private `/tmp` alias stays within the
-original launch-directory grant and is separately qualified with original
-`perlio.t`. None changes the ISA, request register layout or QEMU model. [Subprocess qualification](../../runtime/virtual/tests/native-task/spawn-qualification.json)
-and [shell qualification](../../ports/hush/app/results/native-task.json) are
-separate from the original SPEC comparator gate.
-The observed Perl pointer-packing fault is repaired by the separately versioned
-`capstone_provenance_v2` application port. Its original pack test and focused
-native/host/error-path gates and the full original Perl workload now pass. This adds no RTL opcode requirement. Do not add integer-to-tagged
-pointer reconstruction. [Implementation and scope](native-linux-task-integration.md#remaining-perl-pointer-serialization-boundary).
-Each source archive describes its own pinned snapshot. Select the latest
-manifest containing this source snapshot and its qualification records.
-Git's configured submodule-ignore behavior can hide the
-most important hardware change: use `--ignore-submodules=none` when reviewing.
+The three rebase conflicts were resolved in the adapter: the old linear remap
+path stays removed, native checked-copy fields are retained, and the old ioctl
+mapping-pool hooks are removed with the retired ioctl adapter. The upstream
+`arena_at` inlining annotation is retained. Upstream legacy launcher pool sources
+remain historical; `CAPSTONE_VM_MAPCACHE` is not a native-task feature. No new
+native mapping-cache semantics or ISA feature were introduced by this rebase.
+
+Review against the actual base, including the QEMU gitlink:
 
 ```sh
-git diff --stat --ignore-submodules=none aeabf0091287 6f587e9bf0be
-git log --oneline aeabf0091287..6f587e9bf0be
+git diff --stat --ignore-submodules=none c9611344eeb7 HEAD
+git log --oneline c9611344eeb7..HEAD
 git -C capstone/capstone-qemu log --oneline 0542c5556c2d..dd041bac5ad9
 ```
+
+Qualification is snapshot-specific:
+
+- [Rebase regression record](../../runtime/virtual/tests/native-task/rebase-qualification.json):
+  the rebuilt runtime and bounded integration/GCC checks on this source snapshot.
+- [Full SPEC C-port record](../../runtime/virtual/tests/native-task/spec-final-qualification.json):
+  ten existing entries, 22 original invocations and 25 official comparisons
+  passed on the older pre-cleanup kernel. **The full ten-entry gate has not been
+  repeated on this rebased kernel.** Unported C++/Fortran entries are not covered.
+- [Read-fault experiment](../../runtime/virtual/tests/native-task/access-fault-experiment.json):
+  default off; it regressed GCC and read-then-write workloads. Its measurements,
+  like earlier index/array cleanup measurements, describe the pre-rebase images.
+- Existing JSON records and source archives keep their original hashes. The
+  archive branch preserves those source commits; do not relabel old results as
+  rebase qualification. Historical manifests are not current checkout instructions.
+
+The hardware model and interfaces are unchanged by the rebase and recent
+kernel-memory cleanups. RTL work still needs explicit lifetime collection,
+preemption and raw-cargo interrupt decisions described below. No synthesis,
+FPGA performance or multi-hart qualification is claimed.
 
 ## 2. Changes grouped by responsibility
 

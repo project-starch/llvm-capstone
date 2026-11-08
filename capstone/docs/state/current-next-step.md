@@ -1,3 +1,18 @@
+## RTL implementation from the rebased native branch
+
+The developer entry is the [RTL handoff](../plans/native-task-rtl-handoff.md).
+Use `native/linux-task-integration`, now based on dev `c9611344eeb7`, and its
+exact QEMU pin. Keep the reviewed hardware contract separate from kernel-only
+performance experiments. First resolve lifetime-table collection, timer escape
+and raw-cargo interrupt handling; implement the contract gates before FPGA
+benchmarking. A complete ten-entry SPEC rerun on the rebased kernel is still
+required; the older full-suite result does not qualify this image.
+
+The [rebase record](../../runtime/virtual/tests/native-task/rebase-qualification.json)
+identifies the current bounded checks. Preserve the archived pre-rebase source
+for all previous performance comparisons. The anonymous-read experiment stays
+off; the residency-scan investigation below remains independent follow-up work.
+
 ## GCC follow-up: reduce memory-management amplification
 
 The current matched phase comparison locates 71.47% of extra GCC attempts in the

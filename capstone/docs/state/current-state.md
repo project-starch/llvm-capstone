@@ -1,3 +1,28 @@
+## Native RTL handoff rebased onto current dev
+
+`native/linux-task-integration` is rebased onto `c9611344eeb7`, with runtime
+snapshot `a62d1dfe59c3`. The preserved pre-rebase branch is
+`archive/native-task-pre-rebase-20261108` at `8897411a0f03`. Older qualification
+records continue to name their original commits and binaries; their numbers
+are not measurements of the rebased image.
+
+The old linear ioctl mapping-pool additions on dev do not restore the removed
+adapter entry path. Native checked-copy state is retained; the upstream
+`arena_at` inlining annotation is the only adapter source difference from the
+pre-rebase runtime. Linux patches and QEMU pin are unchanged. Compiler changes
+from dev are inherited, but existing qualified binaries were not rebuilt with
+them; SHRINKTO globals remain default off.
+
+Use the [updated RTL handoff](../plans/native-task-rtl-handoff.md), its inventory,
+and the [rebase regression record](../../runtime/virtual/tests/native-task/rebase-qualification.json).
+Production and race builds, GCC with official comparison, IO/task, directory,
+private-tmp, spawn, four memory configurations and both 41-case race groups
+pass. The two final gates took 78.9s and 88.4s; each race group observes all 17
+deliberate controls firing. The first attempt failed before guest boot due to a
+missing test environment variable and remains in the evidence.
+Full ten-entry SPEC qualification on this new image, synthesis, FPGA execution
+and multi-hart qualification remain outstanding.
+
 ## Anonymous read-fault experiment: keep default off
 
 Runtime `2ae1682c54c9` adds an opt-in actual-read policy for lazy anonymous RW
