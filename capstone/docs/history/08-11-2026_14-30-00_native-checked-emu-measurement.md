@@ -123,3 +123,53 @@ made 424 kind-3 services and 10,189 emulated checks, so one service can issue ma
 re-authenticates every chunk. Per-call check counts therefore belong in the SPEC readings.
 
 The emulation is ready for the RTL lane's review against the RTL frame layout.
+
+## SPEC measurement: method and pre-registered prediction (written before the runs)
+
+**Arms.** One binary per benchmark, built with the native-IO SDK: the tree-board build's own compile and
+link lines (capstone-lifetimes arm sources, the sources today's kits were built from), with that SDK's
+`capstone-cc` in place of sdk-lifetimes'. perlbench `b42a89c7d06c3db1`, cpugcc `5fd1d99966f9ae77`.
+- **before = exchange:** `capstone_vm.native_io=0`, every native route off. The SDK sees no v3 feature and
+  sends every call through the exchange buffer. This is the native branch's own exchange route.
+- **after = direct:** `native_io=1` plus `native_{locks,stat,seek,fd,close,path,clock}=1`, the
+  collaborator's mask 479.
+- Both arms run with `x-capstone-checked-copy=false` and `capstone_vm.checked_copy_emu=1`, so every check
+  traps to the emulating firmware `e03268f9c8e64620`.
+- Everything else is identical: one supervisor slot, transport on, `dom_null=1`, `dom_local_tmp=1`, 2 GiB,
+  icount 0.
+
+**Today's launcher route** (dev's adapter and capstone-vexec, not this branch) is kfast's `k0-perl` /
+`k0-gtr`. It is a reference row only: a different kernel, adapter, binary and SDK.
+
+**Stages.**
+- perl test = kfast's perl stage inputs: makerand.pl, then test.pl driven by the plain RV64 perl, which
+  execs the native perl for each test file.
+- gcc train01 = kfast's gtr stage input.
+- Runner and analyzer: `tests/native-task/cscheck-emu/run-native-stage.py` and `analyze.py`.
+
+**Instruments.**
+- capmix3 (shift 24) totals between HINT markers before and after each command, split into firmware
+  ([0x8000_0000, 0x8100_0000)), kernel and user.
+- `native_counters` deltas: escapes by kind, kind-3 services by route, emulation entries and causes.
+- Definitions: exits = all CSRUNV escapes. Delegated calls = kind-3 services of the exchange and register
+  routes. Instructions saved per delegated call = (total_before - total_after) / delegated calls.
+- Machine-wide totals include the plain perl driver and Linux work, which are the same in both arms.
+
+**Prediction, perl test (both commands summed):**
+- rc 0 in both arms, specdiff 2/2 in both. Output hashes equal across the arms and equal to the launcher
+  run's `test.out`/`makerand.out` hashes.
+- Delegated calls 90k-120k, against kfast k0's 105,239 launcher-served requests. Equal across the arms
+  within 1 %.
+- direct arm: 55-80 % of calls on the register route. exchange arm: register = 0.
+- Exits (all kinds) equal across the arms within 3 %.
+- Emulation entries > 0 in both arms: 3-8 per delegated call in exchange, 1-4 in direct.
+- Firmware instructions per emulated check: 300-1,200.
+- **Saving: 4,000-10,000 instructions per delegated call**, 0.3-1.5 % of the run's total. Basis: the QEMU
+  syscall table's 15.9k exchange versus 4.2k specialised read and 9.6k generic dispatcher, plus the
+  emulation difference.
+
+**Prediction, gcc train01:**
+- rc 0 and specdiff 1/1 in both arms; the `.s` hash equal across the arms.
+- About 150 delegated calls (kfast k0-gtr's histogram: 122 of them writev, which has no direct route). Fewer
+  than 30 on the register route.
+- Saving per call is not resolvable from the total. Saving under 0.01 % of the run.
