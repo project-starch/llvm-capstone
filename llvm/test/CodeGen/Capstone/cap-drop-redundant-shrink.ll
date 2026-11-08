@@ -121,6 +121,17 @@ f:
 ; DEF: shrinkto
 ; DECL-NOT: shrinkto
 ; DECL: lbu {{a[0-9]+}}, 20({{a[0-9]+}})
+; Declarations mode records the assumption right after the function, in a
+; section SHF_LINK_ORDER ("o") to the function's own text section, so that
+; --gc-sections drops the record with the function: the declared global and the
+; bytes from its start the remaining accesses reach (ext[20], one byte: 21), for
+; capstone-cc's link-time check. The default mode records nothing.
+; DECL: .section .capstone.size_assume,"o",@progbits,.text
+; DECL-NEXT: .quad 21
+; DECL-NEXT: .ascii "ext"
+; DECL-NEXT: .byte 0
+; OFF-NOT: .capstone.size_assume
+; DEF-NOT: .capstone.size_assume
 define i8 @load_extern() addrspace(200) {
   %q = getelementptr [64 x i8], ptr addrspace(200) @ext, i64 0, i64 20
   %r = load i8, ptr addrspace(200) %q
@@ -137,13 +148,5 @@ define i8 @load_weak() addrspace(200) {
   ret i8 %r
 }
 
-; Declarations mode records each assumption: the declared global and the bytes
-; from its start the remaining accesses reach (ext[20], one byte: 21), for
-; capstone/tests/capstone-size-assume-check.py on the linked image. The default
-; mode records nothing.
-; DECL: .section .capstone.size_assume,"",@progbits
-; DECL-NEXT: .quad 21
-; DECL-NEXT: .ascii "ext"
-; DECL-NEXT: .byte 0
 ; DEF-NOT: .capstone.size_assume
 ; OFF-NOT: .capstone.size_assume

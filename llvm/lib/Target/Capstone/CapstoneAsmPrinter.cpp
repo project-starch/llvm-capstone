@@ -38,6 +38,7 @@
 #include "llvm/MC/MCInstBuilder.h"
 #include "llvm/MC/MCObjectFileInfo.h"
 #include "llvm/MC/MCSectionELF.h"
+#include "llvm/MC/MCSymbolELF.h"
 #include "llvm/MC/MCStreamer.h"
 #include "llvm/MC/MCSymbol.h"
 #include "llvm/MC/TargetRegistry.h"
@@ -139,10 +140,7 @@ public:
   void emitGlobalVariable(const GlobalVariable *GV) override;
 
 private:
-  // -capstone-drop-redundant-shrink-declarations: per declared global, the
-  // largest extent a dropped narrowing relied on (emitSizeAssumptions).
-  MapVector<const GlobalValue *, uint64_t> SizeAssumptions;
-  void emitSizeAssumptions();
+  void emitSizeAssumptions(const MachineFunction &MF);
   void emitStaticCapGCTSection(const Module &M);
   void emitCapGlobalInitTableEntry(const Module &M);
   void emitGpCaptableTable(const Module &M);
@@ -731,11 +729,7 @@ bool CapstoneAsmPrinter::runOnMachineFunction(MachineFunction &MF) {
   SetupMachineFunction(MF);
   emitFunctionBody();
 
-  for (const auto &[GV, Need] :
-       MF.getInfo<CapstoneMachineFunctionInfo>()->sizeAssumptions()) {
-    uint64_t &Max = SizeAssumptions[GV];
-    Max = std::max(Max, Need);
-  }
+  emitSizeAssumptions(MF);
 
   // Emit the XRay table
   emitXRayTable();
@@ -845,26 +839,46 @@ void CapstoneAsmPrinter::emitEndOfAsmFile(Module &M) {
   emitCapGlobalInitTableEntry(M);
   emitGpCaptableTable(M);
   emitGpCaptableInitDesc(M);
-  emitSizeAssumptions();
 }
 
 // .capstone.size_assume, not allocated: one record per declared global whose
-// narrowing CapstoneRedundantShrink dropped, an 8-byte little-endian size (the
-// bytes from the symbol's start that the remaining accesses reach) followed by
-// the symbol's NUL-terminated name. The static link concatenates the records;
-// capstone/tests/capstone-size-assume-check.py fails an image whose definition
-// of a named symbol is smaller than a record requires.
-void CapstoneAsmPrinter::emitSizeAssumptions() {
-  if (SizeAssumptions.empty())
+// narrowing CapstoneRedundantShrink dropped in this function, an 8-byte
+// little-endian size (the bytes from the symbol's start that the remaining
+// accesses reach) followed by the symbol's NUL-terminated name.
+// capstone/runtime/host/capstone_vm/compiler.py (capstone-cc's link) fails an
+// image whose definition of a named symbol is smaller than a record requires.
+// Like .stack_sizes, the section is SHF_LINK_ORDER to the function's own text
+// section, so --gc-sections drops a function's records with the function: a
+// record of code that is not in the image must not demand a definition the
+// same garbage collection removed.
+void CapstoneAsmPrinter::emitSizeAssumptions(const MachineFunction &MF) {
+  MapVector<const GlobalValue *, uint64_t> Need;
+  for (const auto &[GV, Bytes] :
+       MF.getInfo<CapstoneMachineFunctionInfo>()->sizeAssumptions()) {
+    uint64_t &Max = Need[GV];
+    Max = std::max(Max, Bytes);
+  }
+  if (Need.empty())
     return;
-  MCSection *Sec = OutContext.getELFSection(".capstone.size_assume",
-                                            ELF::SHT_PROGBITS, 0);
+  const auto &Text = static_cast<const MCSectionELF &>(*MF.getSection());
+  unsigned Flags = ELF::SHF_LINK_ORDER;
+  StringRef GroupName;
+  if (const MCSymbol *Group = Text.getGroup()) {
+    GroupName = Group->getName();
+    Flags |= ELF::SHF_GROUP;
+  }
+  MCSection *Sec = OutContext.getELFSection(
+      ".capstone.size_assume", ELF::SHT_PROGBITS, Flags, 0, GroupName, true,
+      Text.getUniqueID(),
+      static_cast<const MCSymbolELF *>(Text.getBeginSymbol()));
+  OutStreamer->pushSection();
   OutStreamer->switchSection(Sec);
-  for (const auto &[GV, Need] : SizeAssumptions) {
-    OutStreamer->emitIntValue(Need, 8);
+  for (const auto &[GV, Bytes] : Need) {
+    OutStreamer->emitIntValue(Bytes, 8);
     OutStreamer->emitBytes(getSymbol(GV)->getName());
     OutStreamer->emitIntValue(0, 1);
   }
+  OutStreamer->popSection();
 }
 
 // If this module has a capability-global initializer (synthesized by the
