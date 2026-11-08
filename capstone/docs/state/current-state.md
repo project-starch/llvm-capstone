@@ -1,3 +1,18 @@
+## Rebased native kernel: full existing SPEC C-port gate passes
+
+All ten existing C-port entries pass on branch source `04350015dcad`, runtime
+snapshot `a62d1dfe59c3`, kernel SHA-256 `b7de27fb28bc0807053ae3e1c4bcd058e79f601d255a0dcaaa6ce70d46a3815f`.
+The full original test inputs complete 22 benchmark invocations, four guest
+image validators and all 25 official output comparisons. The sequential campaign
+took 236.9 host minutes, including x264 at 133.0 minutes and Perl at 74.8 minutes.
+These times are diagnostic, not a hardware or branch performance comparison.
+
+This closes the full-suite software regression gap for the rebased kernel using
+the existing frozen binaries. Perl retains its qualified provenance-v2 revision07
+port and confined shell/null/tmp grants. Unported C++/Fortran entries, newly built
+compiler outputs, multi-hart execution and RTL/FPGA remain outside this result.
+[Complete qualification and raw evidence](../../runtime/virtual/tests/native-task/spec-rebase-qualification.json).
+
 ## Native RTL handoff rebased onto current dev
 
 `native/linux-task-integration` is rebased onto `c9611344eeb7`, with runtime
@@ -20,8 +35,8 @@ private-tmp, spawn, four memory configurations and both 41-case race groups
 pass. The two final gates took 78.9s and 88.4s; each race group observes all 17
 deliberate controls firing. The first attempt failed before guest boot due to a
 missing test environment variable and remains in the evidence.
-Full ten-entry SPEC qualification on this new image, synthesis, FPGA execution
-and multi-hart qualification remain outstanding.
+The full ten-entry SPEC rerun is now complete as recorded above. Synthesis, FPGA
+execution and multi-hart qualification remain outstanding.
 
 ## Anonymous read-fault experiment: keep default off
 

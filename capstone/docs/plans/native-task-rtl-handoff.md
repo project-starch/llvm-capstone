@@ -57,10 +57,13 @@ Qualification is snapshot-specific:
 
 - [Rebase regression record](../../runtime/virtual/tests/native-task/rebase-qualification.json):
   the rebuilt runtime and bounded integration/GCC checks on this source snapshot.
-- [Full SPEC C-port record](../../runtime/virtual/tests/native-task/spec-final-qualification.json):
-  ten existing entries, 22 original invocations and 25 official comparisons
-  passed on the older pre-cleanup kernel. **The full ten-entry gate has not been
-  repeated on this rebased kernel.** Unported C++/Fortran entries are not covered.
+- [Rebased full SPEC C-port record](../../runtime/virtual/tests/native-task/spec-rebase-qualification.json):
+  all ten existing entries pass on this rebased kernel: 22 original invocations,
+  four guest image validators and all 25 official output comparisons. The campaign
+  took 236.9 host minutes; this is functional qualification, not a speed result.
+  Existing benchmark binaries and inputs were unchanged. Unported C++/Fortran
+  entries are outside this gate. The [older record](../../runtime/virtual/tests/native-task/spec-final-qualification.json)
+  remains historical evidence for its pre-cleanup image.
 - [Read-fault experiment](../../runtime/virtual/tests/native-task/access-fault-experiment.json):
   default off; it regressed GCC and read-then-write workloads. Its measurements,
   like earlier index/array cleanup measurements, describe the pre-rebase images.
@@ -215,6 +218,11 @@ Contracts: [raw/page boundary](../../runtime/virtual/tests/copyable-only/raw-tra
   Production does not use test CSRs or test-only scalar-S LDC support.
 
 ## 4. QEMU acceptance before requesting RTL implementation
+
+The rebased snapshot now passes the full existing ten-entry C-port gate.
+[Current qualification](../../runtime/virtual/tests/native-task/spec-rebase-qualification.json)
+records every input/platform hash and comparator. The older runs described below
+remain historical and are not the evidence used for this new-kernel verdict.
 
 Use the final native kernel, its matching QEMU pin, ordinary OpenSBI and current
 launch-v3 SDK. Keep code/input/oracle hashes and failed attempts. Full application

@@ -5,8 +5,10 @@ Use `native/linux-task-integration`, now based on dev `c9611344eeb7`, and its
 exact QEMU pin. Keep the reviewed hardware contract separate from kernel-only
 performance experiments. First resolve lifetime-table collection, timer escape
 and raw-cargo interrupt handling; implement the contract gates before FPGA
-benchmarking. A complete ten-entry SPEC rerun on the rebased kernel is still
-required; the older full-suite result does not qualify this image.
+benchmarking. The complete ten-entry SPEC rerun now passes on the rebased kernel:
+22 original invocations, four image validators and 25 official comparisons.
+[Current full-suite record](../../runtime/virtual/tests/native-task/spec-rebase-qualification.json).
+Proceed with RTL contract gates; hardware acceptance remains separate.
 
 The [rebase record](../../runtime/virtual/tests/native-task/rebase-qualification.json)
 identifies the current bounded checks. Preserve the archived pre-rebase source
