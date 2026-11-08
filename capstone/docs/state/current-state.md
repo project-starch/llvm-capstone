@@ -1,3 +1,17 @@
+## Further QEMU store-path candidate: bounded checks and incremental gain
+
+QEMU `81246125dc` avoids the RAM/code-page lookup after a write probe when
+its actual TLB entry has no `TLB_NOTDIRTY` flag. Full-span code invalidation
+and tag locking remain intact. Eight self-modifying-code cases pass on both
+builds, including subpage PMP refills; the diagnostic invariant passes and
+removing invalidation deliberately fails the negative control. A clean
+100-compilation ABBA comparison gives 48.005s versus 45.950s mean host CPU
+(4.28% incremental reduction), with all 400 timed outputs and four warm-ups
+matching. Wider safety and full SPEC qualification remain pending; the default
+pin and native handoff are unchanged. This incremental cohort is not a total
+gain against the original build.
+[Evidence](../../runtime/virtual/tests/qemu-throughput/code-probe-qualification.json).
+
 ## Combined QEMU candidate: thirteen percent less GCC host CPU
 
 The stable fresh ABBA confirmation gives 27.480s original versus 23.835s

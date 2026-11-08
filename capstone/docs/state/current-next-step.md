@@ -12,8 +12,11 @@ individual workloads, host-speed shift and original-versus-realtime distinction.
 QEMU `perf/qemu-throughput-next` at `f3b74f0646` includes runtime `d81f426a7c`
 and a copyable-profile SFENCE test epilogue. Its nine cases pass on baseline
 and candidate. A further STC code-page lookup experiment (`81246125dc`) stays
-separate until its TLB invariant, subpage PMP behavior and performance are
-checked. Do not restart or silently replace the full-suite candidate.
+separate pending wider safety and full SPEC qualification. Its TLB invariant,
+subpage PMP cases and negative control pass; a clean paired GCC run saves a
+further 4.28% host CPU. Continue both frozen candidates in independent snapshot
+domains after validating private-output isolation. Keep concurrent functional
+times separate from clean exclusive performance measurements.
 
 The scalar controls now explain the platform/plain speed: U-mode avoids the
 legacy per-store helper, and reversing the existing page-specific SFENCE path

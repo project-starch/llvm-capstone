@@ -13,6 +13,16 @@ modes remain separate. All eight bounded safety groups pass in both modes;
 full ten-entry regression is running before the default pin can advance.
 The runtime is QEMU `d81f426a7c`; `f3b74f0646` adds only a test-epilogue repair.
 
+The further [code-page probe candidate](code-probe-qualification.json), QEMU
+`81246125dc`, saves another 4.28% in a separate 100-compilation ABBA comparison
+against the combined candidate. All 400 outputs and four warm-ups match;
+eight ordinary/subpage self-modifying-code cases and the diagnostic invariant
+pass, while deliberately missing invalidation fails. Wider regression remains
+pending. Do not add this percentage to an earlier cohort to claim a total gain.
+The [GCC non-LTO portability check](gcc-portability-qualification.json) covers
+`f3b74f0646` with codec, differential, instruction and bounded GCC smoke checks;
+it does not replace full-suite qualification of the Clang build.
+
 Four controls use the same patched kernel, rootfs, OpenSBI and GCC test input:
 
 | Arm | Emulator | Machine / guest executable |

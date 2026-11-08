@@ -1,0 +1,87 @@
+{
+  "schema_version": 1,
+  "status": "PASS bounded GCC non-LTO portability checks",
+  "source": "f3b74f0646",
+  "binary_sha256": "16cb54d310936a6b21d1ac75e4cc8270a857456ebcce5c7f2bff46d1591720ef",
+  "build_environment": "CC=gcc\nCXX=g++\n# CFLAGS unset\n# CXXFLAGS unset\n# LDFLAGS unset\nQEMU_BUILD_JOBS=6\n# QEMU_LTO_THREADS unset\n",
+  "logs": {
+    "representable.log": "representable: 1388832 cases, 411224 keep, 977608 clear, 0 mismatches\nPASS: negative control always-keep detected\nPASS: negative control canonical-new detected\nPASS: negative control coarse-fastpath detected\n",
+    "codec.log": "CODEC-PASS: 6014628 checks, 0 failures\n",
+    "store-code.log": "PASS store-code exact=0 ids=30\nPASS store-code exact=0 ids=55\nPASS store-code exact=1 ids=30\nPASS store-code exact=1 ids=55\nArtifacts: /tmp/capstone/copyable-store.6aIPSW\n",
+    "cursor-window.log": "PASS cursor-window exact=0 ids=30\nPASS cursor-window exact=0 ids=55\nPASS cursor-window exact=1 ids=30\nPASS cursor-window exact=1 ids=55\nArtifacts: /tmp/capstone/copyable-cursor.rWMHOk\n",
+    "checked-copy.log": "PASS read rc=0\nPASS scalar_result rc=0\nPASS transport rc=0\nPASS transport_forged_frame rc=0\nPASS transport_retired rc=0\nPASS exported rc=0\nPASS transport_epoch rc=0\nPASS supervisor_read rc=0\nPASS supervisor_write rc=0\nPASS write rc=0\nPASS zero_end rc=0\nPASS untagged rc=0\nPASS rights_read rc=0\nPASS rights_write rc=0\nPASS bounds rc=0\nPASS overflow rc=0\nPASS epoch rc=0\nPASS zero_epoch rc=0\nPASS slot rc=0\nPASS reserved rc=0\nPASS root rc=0\nPASS translation rc=0\nPASS frame rc=0\nPASS descriptor rc=0\nPASS mmio rc=0\nPASS retired rc=0\nPASS generation rc=0\nPASS forged_frame rc=0\nPASS discard rc=0\nPASS resume_epoch rc=0\nPASS write_only rc=0\nPASS read_only rc=0\nPASS cap_mode rc=0\nPASS user_mode rc=0\nPASS default_off rc=0\nchecked-copy ISA failures=0\n"
+  },
+  "gcc_smoke": {
+    "status": "PASS",
+    "inputs": {
+      "stock": "fef99d167011dca7bb155e8afe835b5b535cec51b13532300413cddeaf3fc929",
+      "fork": "16cb54d310936a6b21d1ac75e4cc8270a857456ebcce5c7f2bff46d1591720ef",
+      "firmware": "2335a28682ddf65e46c1f492632c2cb026efcb2271caf544a3f7ddc858b03e02",
+      "plain": "ebeca8e920328b5c893fc9ee910851cceabee2bebc00320322b2b77b75def4a0",
+      "native": "a1509c81444586031c74c5752f72ec90dc6c7ab57635fff37ffa431c11663a9f",
+      "input": "de7b86d79a68965adb62e750101d9211224884b2236053d906d1e23057bb6ad1",
+      "reference": "58111208509dd871223ae195a33304bd6b24afd29458f37c976556cbad506324",
+      "Image": "b7de27fb28bc0807053ae3e1c4bcd058e79f601d255a0dcaaa6ce70d46a3815f",
+      "rootfs.ext2": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845"
+    },
+    "iterations": 2,
+    "icount": 0,
+    "profiled": false,
+    "profile_mode": null,
+    "pcrel_override": null,
+    "scalar_controls": {
+      "cpu": null,
+      "machine": null,
+      "kernel": null
+    },
+    "host": {
+      "uname": [
+        "Linux",
+        "pop-os",
+        "6.18.7-76061807-generic",
+        "#202601231045~1778249322~24.04~b44a3c3 SMP PREEMPT_DYNAMIC Fri M",
+        "x86_64",
+        "x86_64"
+      ],
+      "affinity": [
+        2
+      ]
+    },
+    "samples": [
+      {
+        "arm": "platform-native",
+        "run": 0,
+        "host_loadavg_before": [
+          1.15380859375,
+          1.7607421875,
+          1.87109375
+        ],
+        "reference_match": true,
+        "wall_seconds": 1.018641166,
+        "cpu_seconds": 1.02,
+        "cpu_tick_hz": 100,
+        "scope": "Guest serial window; host time, not guest cycles",
+        "profiled": false
+      }
+    ],
+    "limitations": [
+      "Host serial-delivery timing, not target cycles or hardware overhead.",
+      "One untimed warm-up compilation per fresh guest, then a batch including exec/exit.",
+      "Default stock-plain/fork-plain is the matched scalar pair; explicit overrides must be audited separately.",
+      "Platform arms intentionally change discovery/CPU flags and Linux capability paths.",
+      "Native versus plain binaries differ in compiler/libc/ABI; not isolated ISA cost.",
+      "No profiling plugin; build flags and host contention still require auditing."
+    ],
+    "medians": {
+      "platform-native": {
+        "wall_seconds": 1.018641166,
+        "cpu_seconds": 1.02
+      }
+    }
+  },
+  "scope": "Normal GCC build without LTO: codec/differential/negative controls, store/cursor/checked-copy instructions and two native GCC outputs plus warmup. Smoke duration is not a performance comparison; full SPEC remains the separately identified Clang build.",
+  "evidence": {
+    "archive": "/tmp/capstone/qemu-code-probe-bounded-01-evidence.tar.gz",
+    "sha256": "96b6b28d221461cf897016b51017b36824a99829372b0e8b3403b0ac0b89d1d9"
+  }
+}
