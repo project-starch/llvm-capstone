@@ -1,0 +1,10 @@
+# E5c gate driver: the e5-native driver (../e5ngate) with the bitstream (caplifive_e5c_246e7abc2, sha256 from
+# e5c-bit.sha at the seal), vectors and names swapped. e5c-vectors.txt was generated from E5c's own 32 image sims
+# (.sup/e5cimgA/B on 246e7abc2); its rows equal e5-native's and E0's (objb-pcc empty on both). Grader controls: as
+# ../e5ngate (same rows, same ctl). Dry runs, every board call stubbed, 9 Nov 2026:
+A-pass      rc=0 flashes=[caplifive_e5c_246e7abc2] images=32  GATE PASS: board 3 stays on caplifive_e5c_246e7abc2
+B-fail      rc=1 flashes=[caplifive_e5c_246e7abc2 caplifive_vp2c_1fc2cd5aa] images=32  back on C.5a
+C-flashfail rc=3 flashes=[caplifive_e5c_246e7abc2 caplifive_vp2c_1fc2cd5aa] images=0   the flash back FAILED too
+D-busy      rc=2 flashes=[] images=0
+E-hard      rc=1 flashes=[... e5c, C.5a] images=7   (HARD STOP at hpm-4) back on C.5a
+F-noseal    rc=2 flashes=[] images=0   (no seal sha) STOP

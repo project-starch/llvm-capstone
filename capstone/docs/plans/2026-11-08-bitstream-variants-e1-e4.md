@@ -375,3 +375,44 @@ three worktrees, model rebuilt each) are all EQUAL to E0's column, objb-pcc empt
 it had run nowhere, since QEMU lacks CAPCREATE):
 - every row of the arm's pre-registered header holds, each refusal 24..29 once;
 - result lines are in tests/rtl-smoke/evariants-2026-11-08/cscheck-emu-rtl-14b0a57df.result-lines.txt.
+
+**E5 synthesis gate on leffe2 (synth lane, 443f67892)** — the one-variable control for e5-native:
+- core 144,677 LUT / 41,381 FF; ex 38,523 + issue 48,785 = 87,308 (E0 87,153); rev_node 3,078; lsu_i 15,755.
+- dyn_unit 5,893 (E0 10,766).
+- 0 loop headers, 0 Synth 8-326; mapping 5,409.7 MB; peak 22.45 GB.
+- Retiming summary 1 / 26 / 93 / 25, equal to C.5a's.
+Two keys failed by letter; ruled PASS by this lane:
+- **FF**: E0 is the retiming OUTLIER. Its own log (apollo stageb2-a481031ca-gate-out/synth_1.runme.log:24307) reads
+  forward 3 / backward 56 / 1,387 registers added / 28 deleted; C.5a's (ref-c5a :24310) reads 1 / 26 / 93 / 25. E5,
+  e5-native, b3, C.5a and stage A all sit at 41,381-41,427 FF. **A second correction to this lane's keys**: the
+  e5-native and E5 FF bands were centred on E0, a retiming outlier, so a ±300 band around it could not hold for a
+  tree that does not retime the same way.
+- **dyn_unit**: a hierarchy flip between ex_stage and issue_stage (ex -5,714, issue +5,869; IRO 33,404 vs stage A's
+  26,079). It is graded by the ex+issue stem, the recorded rule of 2026-10-22: +155, PASS.
+- e5-native minus E5: core LUT -62, FF +46, ex+issue -251. That is flash condition (2), MET.
+- **e5-native is cleared to flash on every condition**; the flash is the runtime lane's. E5's full build continues
+  on leffe2.
+
+**E5 FULL BUILD (synth lane, leffe2, 443f67892)**: every pre-registered key PASS.
+- placer congestion 4, router 5; routed clean; check_timing 0 loops (the matcher fires on vp3g);
+- WNS -14.418 (band -11.007 ±3.74, margin 0.329); TNS -288,110; WHS +0.060;
+- placed LUT 169,135, FF 63,604;
+- .bit sha256 87edca3550f08c72471f71e107ab31dec3e6d93e2fd1a76173664eaef72918c1;
+- tarball synth-443f67892-exit0.tar.gz, sha256 2221d5cf7c397bcc05cb2ff9a7b110b3acb784091b1466f36d5b9e3594844c5e.
+Standalone E5 is now the CONTROL: it carries R-69. The board lane holds read-only copies of its gate report and routed
+reports (apollo synth/ref-e5, sha256-matched). Graded against E5, e5-native passes 4/4 (WNS +0.465).
+
+## E5c: E5 + the resume clamp only, the module-path fallback (R-69; the semantics owner's yes, 9 Nov)
+
+capstone-ariane e5c **246e7abc2** = E5 443f67892 + e5-native's csr_regfile clamp hunks, byte-identical, + va-runv-bare.S.
+The switcher is unchanged, so the final claim-audit of the clamp (every id-3/66 write enumerated, timing SUPPORTED)
+applies as is.
+- Lint (rtl-ids20-wt): PASS, identical to E5 on every counter (UNUSEDSIGNAL 1430).
+- Arms (vp8 .sup/e5carms): satp-only, bare and ctrl read 3, 4, 4, 13, 0, 8, 0 (clamped). The va-runv family,
+  vp3-idx20-a1 and va-alloc-csret equal e5-native's.
+- Vectors: 31/32 = E0, objb-pcc empty on both.
+- Stopping keys, coded by the board lane as --spec=e5c-stem: core LUT ±2,000 and ex+issue ±2,500 vs E5, plus loop
+  headers. Every module row is reported, not graded. The any-module key was dropped: across the dyn_unit/issue flip
+  single rows move 6-7k (e5-native vs E5: issue -7,650, ex +7,399), so it would stop a healthy run at random.
+- Full build graded against E5's routed WNS (-14.418 ±3.74).
+- Flash gate: tests/rtl-smoke/evariants-2026-11-08/e5cgate (pre-registered here, before any board run).
