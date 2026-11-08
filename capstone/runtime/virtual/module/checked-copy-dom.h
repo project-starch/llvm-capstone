@@ -133,6 +133,7 @@ static cn_u32 cv_copy_check(void *opaque, const struct cn_capref *ref,
     else
         asm volatile(".insn r 0x5b, 1, 0x25, %0, %1, %2"
                      : "=&r"(cause) : "r"(s->t->frame_pa), "r"(virt_to_phys(d)) : "memory");
+    if (d[5] == CV_CSC_FINGERPRINT) ++cv_emu_fingerprints;
 #ifdef CV_NATIVE_UNSAFE_BOUNDS
     /* Test-only broken variant: the guest sentinel oracle must reject it. */
     if (cause == CU_BOUNDS) {
@@ -231,6 +232,7 @@ static cn_u32 cv_copy_bad_mapping(struct cv_copy_state *s)
     preempt_disable();
     local_irq_save(flags);
     if (!s->t->slot_exported) run(s->t->frame_pa, 1);
+    else if (c5a_model) memset(s->t->frame, 0, 656); /* a detached frame holds tagged slots, no image */
     else memset(s->t->frame + 1024 / 8, 0, PAGE_SIZE - 1024);
     s->t->slot_exported = false;
     s->t->started = false;

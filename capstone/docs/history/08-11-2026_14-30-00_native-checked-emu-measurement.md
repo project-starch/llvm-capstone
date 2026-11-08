@@ -367,3 +367,67 @@ validated only on the twin, with the model off.
    (`build-fpga/.config`). The native route needs CONFIG_RISCV_CAPSTONE_TASK and the native/helper patches,
    written for 6.1. "Swap only module/launcher/firmware" cannot hold: the kernel changes, and either the
    patches are ported to 6.4.14 or a 6.1 FPGA kernel is built. Neither has ever booted on the board.
+
+## The C.5a / E5 path (lead's decision: native goes to silicon, pinned arenas, rd-only slot detach/adopt)
+
+**Adapter** (`c5a_model=1`, MEASUREMENT ONLY):
+- CSRUNV 4/5 are the RTL's rd-only slot detach/adopt (rd 0 or -1). No image is written or read: no magic
+  at +1024, no epoch at +1072, and import writes satp to +928 (the switcher's saved satp) instead of the
+  image's +1192. A resident context needs no ASID rebind: +928 is refreshed before every resume.
+  `native_slot_transport=1` enables it.
+- Flat RECYCLE table, `make CV_FLAT_INDEX_BITS=20`. 2^20 records = 16 MiB come from CMA (boot with
+  `cma=`); the buddy allocator is used below its largest order.
+- The copyable-v1 node is read, holding truthful values: id-bits 30, exact-bounds 0, page 4096,
+  granule 16, checked-copy-abi 0, context-transport-version 0. `checked_copy_emu=1` admits abi 0.
+- The kernel writes the epoch at +2336 after every escape. The classification word (+2344) is fetched
+  on demand, once per escape, by CSKINDS rd, frame_pa (custom-2 funct7 0x27, MEASUREMENT ONLY). The
+  monitor emulates it with an LDC of each slot. Only the direct route and native spawn/pipe read it, so
+  its cost lands on the direct arm only (`kinds_queries` counts it).
+- Firmware entries: the monitor stamps descriptor word 5 with `0x4353434845` on every check it handles.
+  The adapter counts the stamps (`emu_fingerprints`); a processor-performed check never writes word 5.
+
+**Monitor** (capstone-sbi `native/cscheck-emu`, `capstone_cscheck.S`, `-DCAPSTONE_CSCHECK_EMU`): the hook sits
+before the CSMINT one in `_handle_non_ecall`. Physical capabilities come from CAPCREATE per page (as CSM_PHYS).
+- The stored type is read before any load: `CSC_STORED_NONLIN` 2 on the RTL, 1 in QEMU (Q-35). The check
+  never LDCs a slot that might be LINEAR.
+- Tag by LDC, then LCC TYPE (7 = untagged; NONLIN reads 1 on both machines).
+- Flat liveness: header RECYCLE set and PAGED clear; 2 <= index < next and < capacity; record word 1
+  VALID and not FREE; generation [59:50] == id >> 20.
+- LCC for perm, cursor, base and end; bounds; Sv39.
+- **QEMU does not decode CAPCREATE, so this file cannot run on any QEMU.** It assembles (291 instructions),
+  but it is unexecuted until an RTL-simulation arm runs it, as CSMINT's emulation was validated
+  (va-csmint-emu).
+
+**QEMU twin** (capstone-qemu `native/c5a-twin20-check`, on `virtual/flat-index-20` 23f9df04e5):
+`x-capstone-cscheck-frame=true` models the monitor's rules (frame-word epoch, mutable slot, stored-type
+pre-check, flat liveness), so the kernel path can be gated on the twin. With it, CSCHECK never reaches
+firmware. The detach/adopt CSRUNV 4/5 come from the rtl lane, not yet delivered.
+
+**Working check, before registration:** gcc train01 direct on twin20.
+- Setup: Image `d7712c4127479056` (flat 20), twin20 + model, the QEMU kit's monitor `fw_jump.elf`, the C.5a
+  dtb, 2 GiB with cma=256M, one slot, no transport.
+- rc 0, specdiff 1/1, total 16,591,075,992 instructions.
+- 156 calls (11 register, 145 exchange), kinds_queries 11, emu_fingerprints 0.
+
+lbm test direct: rc 0, specdiff 1/1, 332 calls (327 register).
+
+### Pre-registered prediction for the twin20 runs (written before them)
+
+**Setup:** the binaries above (`nat-*` builds of the capstone-lifetimes sources, native-IO SDK);
+exchange = native_io 0, direct = mask 479; check model on (QEMU, no firmware).
+
+**Predicted for every run:**
+- rc 0 and specdiff pass in both arms; output hashes equal across the arms.
+- emu_fingerprints 0 (the positive control: the check never reaches firmware). kinds_queries 0 in
+  exchange and <= register calls in direct.
+- Exits equal across the arms within 5 % (perl's 4 % drop was call-count driven).
+
+**Saving per run:**
+- gcc train01: under 0.01 %.
+- lbm test: 0.02-0.2 %.
+- nab test: under 0.1 %.
+- xz test: 0.1-2 %.
+- x264 test: 0.5-3 % (most write calls; its in-guest image validation is not run, so its specdiff is
+  expected to be unavailable).
+
+**Ranking by saving:** x264 > xz > lbm, nab > gcc.

@@ -28,6 +28,9 @@ static bool copyable_exact_bounds;
 #include <asm/io.h>
 #include <asm/pgtable.h>
 #include <asm/sbi.h>
+#include <linux/cma.h>
+#include <linux/dma-map-ops.h>
+#include <linux/version.h>
 #include "wire.h"
 /* Escape epoch and tag/raw-tag classification words in the paused frame
  * (capstone-qemu native/checked-emu-measure, CHECK_EPOCH_OFFSET/CHECK_KINDS_OFFSET).
@@ -39,6 +42,8 @@ static bool copyable_exact_bounds;
  * snapshot (+1024..+1976); they matter only for export/import images. */
 #define CV_FRAME_CHECK_EPOCH (2336 / 8)
 #define CV_FRAME_CHECK_KINDS (2344 / 8)
+/* The escape's saved satp (+928), restored by the RESUME (moved up from its first user below). */
+#define CV_FRAME_SAVED_SATP (928 / 8)
 /* MEASUREMENT ONLY (native checked access, step 1). checked_copy_emu=1 admits a model whose
  * device tree reports checked-copy-abi 0 (CSCHECKR/W illegal, transport v5) when the firmware
  * advertises the CSCHECK emulation extension below; the instructions then trap to M and are
@@ -55,6 +60,15 @@ module_param(checked_copy_emu, bool, 0444);
 static bool c5a_model;
 module_param(c5a_model, bool, 0444);
 MODULE_PARM_DESC(c5a_model, "MEASUREMENT ONLY: admit no transport and pinned arenas (default off)");
+/* c5a_model with a model that publishes no escape epoch or classification (checked-copy-abi 0, emulated):
+ * the kernel writes the epoch word after every escape, and asks the firmware for the tag classification
+ * with CSKINDS (custom-2 funct7 0x27, emulated by the monitor: LDC of each frame slot) when a service needs
+ * it, once per escape. Set at load. */
+static bool cv_sw_frame;
+static unsigned long cv_sw_epoch, cv_kinds_queries, cv_emu_fingerprints;
+/* The monitor's emulation writes this into descriptor word 5 (reserved, zero on entry) on every check it
+ * handles; a check done by the processor never writes it. Counted per check: the firmware-entry count. */
+#define CV_CSC_FINGERPRINT 0x4353434845ULL
 MODULE_PARM_DESC(checked_copy_emu, "MEASUREMENT ONLY: accept firmware-emulated CSCHECKR/W (default off)");
 static bool cv_csc_firmware(void)
 {
@@ -71,10 +85,11 @@ static int cv_counters_get(char *buffer, const struct kernel_param *kp)
     static const char *const names[CV_CSC_COUNTERS] = {
         "entries", "ok", "c24", "c25", "c26", "c27", "c28", "c29", "unsupported_table"};
     int n = scnprintf(buffer, PAGE_SIZE, "k0=%lu k1=%lu k2=%lu k3=%lu k4=%lu k5=%lu k6=%lu k7=%lu "
-                      "register=%lu exchange=%lu service_other=%lu",
+                      "register=%lu exchange=%lu service_other=%lu kinds_queries=%lu emu_fingerprints=%lu",
                       cv_exit_kind[0], cv_exit_kind[1], cv_exit_kind[2], cv_exit_kind[3],
                       cv_exit_kind[4], cv_exit_kind[5], cv_exit_kind[6], cv_exit_kind[7],
-                      cv_service_register, cv_service_exchange, cv_service_other);
+                      cv_service_register, cv_service_exchange, cv_service_other,
+                      cv_kinds_queries, cv_emu_fingerprints);
     unsigned i;
     if (!cv_csc_firmware()) return n + scnprintf(buffer + n, PAGE_SIZE - n, " emu=absent\n");
     for (i = 0; i < CV_CSC_COUNTERS; ++i) {
@@ -177,6 +192,7 @@ struct cv_thread {
     bool user_frame;
     bool started, reply_cap, terminal;
     bool slot_exported; /* VM transport image in the kernel-owned frame */
+    unsigned long kinds_epoch; /* c5a: the escape epoch the frame's classification word was read for */
     unsigned long native_satp; /* translation identity of the paused snapshot */
     unsigned long event;
     /* S-24: the same kind-4 fault resolved repeatedly without changing anything. The RTL's walker
@@ -584,11 +600,32 @@ static int node_grow(struct context *c, unsigned long required)
     return node_available(c) >= required ? 0 : -ENOMEM;
 }
 
+/* c5a's flat table: one zeroed physically contiguous block, from the buddy allocator up to its largest
+ * order and from the default CMA area beyond (2^20 records are 16 MiB; boot with cma=). */
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 4, 0)
+#define CV_MAX_ALLOC_ORDER MAX_ORDER        /* inclusive since 6.4 */
+#else
+#define CV_MAX_ALLOC_ORDER (MAX_ORDER - 1)
+#endif
+static void *cv_flat_alloc(void)
+{
+    unsigned long count = CV_FLAT_BYTES >> PAGE_SHIFT;
+    struct page *page;
+    if (get_order(CV_FLAT_BYTES) <= CV_MAX_ALLOC_ORDER)
+        return (void *)__get_free_pages(GFP_KERNEL | __GFP_ZERO, get_order(CV_FLAT_BYTES));
+    page = cma_alloc(dma_contiguous_default_area, count, 0, false);
+    if (!page) return NULL;
+    memset(page_address(page), 0, CV_FLAT_BYTES);
+    return page_address(page);
+}
 static void node_free_table(struct context *c)
 {
     if (!c->table) return;
     if (node_table_flat) {
-        free_pages((unsigned long)c->table, get_order(CV_FLAT_BYTES));
+        if (get_order(CV_FLAT_BYTES) <= CV_MAX_ALLOC_ORDER)
+            free_pages((unsigned long)c->table, get_order(CV_FLAT_BYTES));
+        else
+            cma_release(dma_contiguous_default_area, virt_to_page(c->table), CV_FLAT_BYTES >> PAGE_SHIFT);
         c->table = NULL;
         return;
     }
@@ -684,7 +721,10 @@ static int slot_acquire(struct cv_thread *t)
     unsigned long flags, result;
     lockdep_assert_held(&vm_lock);
     if (!native_slot_transport || (t->started && !t->slot_exported &&
-        t->native_satp == csr_read(CSR_SATP))) return 0;
+        (c5a_model || t->native_satp == csr_read(CSR_SATP)))) return 0;
+    /* c5a: export/import are the RTL's rd-only slot detach/adopt (CSRUNV 4/5, rd 0 or -1): no image is
+     * written or read, the context's state stays in the frame, and a resume reloads satp from +928, which
+     * cv_step_locked refreshes before every resume, so an ASID change needs no rebind. */
 #ifdef CV_RACE_TEST
     /* Test build: the racer's start frame is a user page. It may enter while a
      * slot is free (the legacy admission), never by evicting another frame. */
@@ -725,7 +765,7 @@ static int slot_acquire(struct cv_thread *t)
         preempt_disable(); local_irq_save(flags);
         /* Transport v5/v6: SCALAR_STATE.satp is at byte 1192. This
          * kernel-owned field is not an application authority import. */
-        WRITE_ONCE(t->frame[1192 / 8], csr_read(CSR_SATP));
+        WRITE_ONCE(t->frame[c5a_model ? CV_FRAME_SAVED_SATP : 1192 / 8], csr_read(CSR_SATP));
         result = run(t->frame_pa, 5);
         if (!result) t->native_satp = csr_read(CSR_SATP);
         local_irq_restore(flags); preempt_enable();
@@ -2280,7 +2320,6 @@ module_param(resume_sfences, ulong, 0444);
  * rollover. capstone-qemu's escape does not write +928 (its frame ends at x31) and its resume restores
  * an internal copy, so on QEMU the word reads 0 until the first refresh, the refresh is a no-op, and
  * changed stays 0 there by construction. */
-#define CV_FRAME_SAVED_SATP (928 / 8)
 static unsigned long resume_satp_refreshes, resume_satp_changed;
 module_param(resume_satp_refreshes, ulong, 0444);
 module_param(resume_satp_changed, ulong, 0444);
@@ -3042,6 +3081,7 @@ static long cv_step_locked(struct context *c, struct cv_step *request, const uns
         local_irq_restore(flags); preempt_enable();
         ++c->stats.steps;
         ++cv_exit_kind[t->event & 7];
+        if (cv_sw_frame) WRITE_ONCE(t->frame[CV_FRAME_CHECK_EPOCH], ++cv_sw_epoch);
         if (t->event == CV_EVENT_UNWRITTEN) {
             /* REFUSED: the CSRUNV wrote no event record. End the context, never loop. The
              * report below reads frame[2..5], so set them to a terminal kind and a cause no
@@ -3147,8 +3187,7 @@ static int context_create(struct context **out)
     c->frame = (void *)get_zeroed_page(GFP_KERNEL);
     /* Native task admission requires the paged table; no misc-device CMA allocator. */
     /* c5a_model's flat RECYCLE table: one physically contiguous allocation, freed by node_free_table. */
-    c->table = node_table_flat ? (void *)__get_free_pages(GFP_KERNEL | __GFP_ZERO, get_order(CV_FLAT_BYTES))
-                               : node_new_page(c);
+    c->table = node_table_flat ? cv_flat_alloc() : node_new_page(c);
     if (c->table) c->table_pa = virt_to_phys(c->table);
     if (c->table && node_table_flat) c->stats.node_bytes += CV_FLAT_BYTES;
     if (!c->frame || !c->table) {
@@ -3282,6 +3321,23 @@ static int context_destroy(struct context *c)
     mutex_unlock(&vm_lock);
     return 0;
 }
+/* The escape's tag classification word (+2344). A model that publishes it (QEMU's checked copy or
+ * transport) wrote it at the escape. On c5a (cv_sw_frame) the firmware computes it on demand, once per
+ * escape: CSKINDS rd, frame_pa (custom-2 funct7 0x27, MEASUREMENT ONLY) traps and the monitor LDCs
+ * each of x1..x31's frame slots through a frame capability, returning bit r = tag. Raw-tag bits stay 0. */
+static u64 cv_frame_kinds(struct cv_thread *t)
+{
+    unsigned long kinds, epoch;
+    if (!cv_sw_frame) return READ_ONCE(t->frame[CV_FRAME_CHECK_KINDS]);
+    epoch = READ_ONCE(t->frame[CV_FRAME_CHECK_EPOCH]);
+    if (t->kinds_epoch != epoch) {
+        asm volatile(".insn r 0x5b, 1, 0x27, %0, %1, x0" : "=r"(kinds) : "r"(t->frame_pa) : "memory");
+        WRITE_ONCE(t->frame[CV_FRAME_CHECK_KINDS], kinds);
+        t->kinds_epoch = epoch;
+        ++cv_kinds_queries;
+    }
+    return READ_ONCE(t->frame[CV_FRAME_CHECK_KINDS]);
+}
 #include "checked-copy-dom.h"
 #include "binfmt-dom.h"
 
@@ -3317,12 +3373,15 @@ profile_read:
     copyable_exact_bounds = exact;
     /* Refuse mismatched models at load, before an experimental instruction
      * can trap in S mode. No test-only CSR probing or legacy ABI fallback. */
-    if (checked_copy && checked_abi == 0 && checked_copy_emu && cv_csc_firmware()) {
+    /* c5a: the monitor's emulation answers no SBI probe; each check it handles stamps the descriptor
+     * (CV_CSC_FINGERPRINT), which native_counters counts. */
+    if (checked_copy && checked_abi == 0 && checked_copy_emu && (c5a_model || cv_csc_firmware())) {
         pr_emerg("capstone_vm: MEASUREMENT ONLY: CSCHECKR/W emulated by firmware (checked_copy_emu=1)\n");
         checked_abi = 1; transport_version = transport_version == 5 ? 6 : 0;
+        cv_sw_frame = c5a_model;
     }
     if ((checked_copy && (checked_abi != 1 || (!native_slot_transport && !c5a_model))) ||
-        (native_slot_transport && transport_version != (checked_copy ? 6 : 5)) ||
+        (native_slot_transport && !c5a_model && transport_version != (checked_copy ? 6 : 5)) ||
         (native_dispatch && (!dom_binfmt || !checked_copy || (!native_slot_transport && !c5a_model))) ||
         ((native_slot_transport || checked_copy || dom_binfmt) && num_possible_cpus() != 1))
         return -EOPNOTSUPP;

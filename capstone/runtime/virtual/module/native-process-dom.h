@@ -45,7 +45,7 @@ static long native_pipe_direct(struct context *c, struct cv_step *step)
     struct file *files[2];
     int fd[2];
     long rc = ns_session_admit(c->native_session, out.context_epoch);
-    if (!rc && !nf_regs_plain(t, READ_ONCE(t->frame[CV_FRAME_CHECK_KINDS]), 1ULL << 10)) rc = -EINVAL;
+    if (!rc && !nf_regs_plain(t, cv_frame_kinds(t), 1ULL << 10)) rc = -EINVAL;
     if (!rc) {
         rc = native_pipe_stage(c, &out, 0, step->args[1], fd, files);
         if (!rc) native_pipe_commit(c, fd, files);

@@ -69,7 +69,7 @@ int cn_snapshot(struct cn_context *n, const struct cn_owner *owner, struct cn_fr
     if (rc) return rc;
     /* QEMU publishes this classification at the escape into kernel-owned RAM.
      * It is only a shape snapshot. CSCHECK authenticates each actual access. */
-    kinds = READ_ONCE(n->t->frame[CV_FRAME_CHECK_KINDS]);
+    kinds = cv_frame_kinds(n->t);
     memset(f, 0, sizeof(*f));
     for (i = 10; i <= 17; ++i) {
         f->x[i].payload[0] = n->t->frame[72 + i - 10];
@@ -578,7 +578,7 @@ static bool native_fast_try(struct context *c, struct cv_step *step)
 
     if (!native_fast || !n || native_owner(n, &n->owner) ||
         current->seccomp.mode != SECCOMP_MODE_DISABLED) return false;
-    kinds = READ_ONCE(t->frame[CV_FRAME_CHECK_KINDS]);
+    kinds = cv_frame_kinds(t);
     if (native_close_fast(c, step, kinds)) return true;
     if (native_fd_fast(c, step, kinds)) return true;
     if (native_seek_fast(c, step, kinds)) return true;
@@ -651,7 +651,7 @@ static long native_service_direct_impl(struct context *c, struct cv_step *step)
     if (step->args[6] == CAPSTONE_NR_SPAWN || step->args[6] == CAPSTONE_SYS_wait4) {
         struct cv_thread *t = c->main_thread;
         struct cn_capref ref = {t->id, READ_ONCE(t->frame[CV_FRAME_CHECK_EPOCH]), 10, 0}, status = ref, usage = ref;
-        u64 tags = READ_ONCE(t->frame[CV_FRAME_CHECK_KINDS]);
+        u64 tags = cv_frame_kinds(t);
         rc = ns_session_admit(c->native_session, ref.context_epoch);
         if (!rc && step->args[6] == CAPSTONE_NR_SPAWN) {
             if (!nf_regs_plain(t, tags, 1ULL << 10)) rc = -EINVAL;
