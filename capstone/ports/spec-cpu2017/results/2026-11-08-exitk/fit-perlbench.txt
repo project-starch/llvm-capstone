@@ -1,0 +1,60 @@
+== best-b2
+contexts 317 sum inside 23315.9 s, k-r 1670.4 s, rcyc 1561.7 s, ucyc 4968.8 s, ocyc 892.7 s, steps 281332 entries 368243 ev1 17546 ev3 265853 ev4 84844
+kcyc-rcyc      R2=0.9997  const=4.779e+06  per_step=3.782e+04  per_entry=-5744  per_masked_tick=1.361e+04
+kcyc-rcyc      R2=0.9996  const=3.492e+06  per_step=3.218e+04  per_masked_tick=1.355e+04
+ucyc           R2=0.8017  const=-1.056e+08  per_step=3.823e+05  per_masked_tick=2.15e+04
+ucyc           R2=0.8443  const=-3.243e+07  per_svc=2.916e+06  per_step=-2.589e+06  per_masked_tick=3.768e+04
+k+u-r          R2=0.8834  const=-1.021e+08  per_step=4.145e+05  per_masked_tick=3.505e+04
+rcyc           R2=0.4523  const=-7.023e+08  per_fault=3.084e+06
+-- with quantum exits (ev1) as a regressor
+kcyc-rcyc      R2=0.9998  const=4.19e+06  per_step=2.987e+04  per_qexit=-2.133e+04  per_masked_tick=1.39e+04
+kcyc-rcyc      R2=0.9999  const=-6.858e+06  per_step=-1.182e+05  per_qexit=3.934e+04  per_svc=1.477e+05  per_fault=5.902e+04  per_masked_tick=1.382e+04
+ucyc           R2=0.9432  const=-4.294e+08  per_step=3.258e+07  per_qexit=-1.56e+07  per_svc=-3.325e+07  per_masked_tick=8.898e+04
+== out-rest-b1_500.perlbench_r-test-capstone-lifetimes-devmk-ac
+contexts 317 sum inside 24711.7 s, k-r 1987.3 s, rcyc 854.1 s, ucyc 4945.9 s, ocyc 570.5 s, steps 431971 entries 697431 ev1 18715 ev3 361457 ev4 317256
+kcyc-rcyc      R2=0.9997  const=-7.563e+06  per_step=-1.338e+04  per_entry=3.365e+04  per_masked_tick=1.392e+04
+kcyc-rcyc      R2=0.9992  const=1.724e+07  per_step=2.247e+04  per_masked_tick=1.397e+04
+ucyc           R2=0.8652  const=4.453e+07  per_step=6.477e+04  per_masked_tick=3.3e+04
+ucyc           R2=0.9624  const=1.846e+08  per_svc=1.365e+06  per_step=-1.29e+06  per_masked_tick=5.218e+04
+k+u-r          R2=0.9261  const=6.177e+07  per_step=8.724e+04  per_masked_tick=4.697e+04
+rcyc           R2=0.6458  const=-3.925e+07  per_fault=1.065e+05
+-- with quantum exits (ev1) as a regressor
+kcyc-rcyc      R2=0.9993  const=1.679e+07  per_step=2.186e+04  per_qexit=-2.386e+04  per_masked_tick=1.431e+04
+kcyc-rcyc      R2=0.9999  const=-8.382e+06  per_step=-6.232e+04  per_qexit=5.999e+04  per_svc=8.29e+04  per_fault=4.106e+04  per_masked_tick=1.422e+04
+ucyc           R2=0.9753  const=-6.85e+07  per_step=6.94e+05  per_qexit=-2.239e+06  per_svc=-6.912e+05  per_masked_tick=5.556e+04
+== out-un-b3_500.perlbench_r-test-capstone-lifetimes-unify-rg
+contexts 317 sum inside 21347.7 s, k-r 1336.6 s, rcyc 1489.1 s, ucyc 4214.5 s, ocyc 373.0 s, steps 141175 entries 185762 ev1 50615 ev3 112154 ev4 22993
+kcyc-rcyc      R2=0.9999  const=1.677e+06  per_step=4.433e+04  per_entry=-1.718e+04  per_masked_tick=1.397e+04
+kcyc-rcyc      R2=0.9998  const=1.021e+06  per_step=2.796e+04  per_masked_tick=1.365e+04
+ucyc           R2=0.7756  const=-2.765e+07  per_step=3.278e+05  per_masked_tick=3.178e+04
+ucyc           R2=0.8387  const=-3.337e+07  per_svc=-5.313e+06  per_step=5.596e+06  per_masked_tick=-3.667e+04
+k+u-r          R2=0.8648  const=-2.662e+07  per_step=3.558e+05  per_masked_tick=4.543e+04
+rcyc           R2=0.9960  const=-2.082e+08  per_fault=4.489e+06
+-- with quantum exits (ev1) as a regressor
+kcyc-rcyc      R2=0.9999  const=5.906e+05  per_step=2.563e+04  per_qexit=-2.862e+04  per_masked_tick=1.455e+04
+kcyc-rcyc      R2=1.0000  const=-3.428e+05  per_step=9.061e+04  per_qexit=-5.151e+04  per_svc=-6.782e+04  per_fault=9498  per_masked_tick=1.439e+04
+ucyc           R2=0.9486  const=-1.15e+08  per_step=1.225e+07  per_qexit=-4.918e+06  per_svc=-1.243e+07  per_masked_tick=2.579e+04
+== out-thp2-b3_500.perlbench_r-test-capstone-lifetimes-devmk-c3g-thp
+contexts 317 sum inside 23337.7 s, k-r 1744.3 s, rcyc 1635.5 s, ucyc 5492.8 s, ocyc 1003.1 s, steps 298515 entries 369905 ev1 17534 ev3 265854 ev4 86517
+kcyc-rcyc      R2=0.9995  const=4.995e+06  per_step=2.574e+04  per_entry=7477  per_masked_tick=1.353e+04
+kcyc-rcyc      R2=0.9995  const=6.357e+06  per_step=3.334e+04  per_masked_tick=1.356e+04
+ucyc           R2=0.7861  const=-8.523e+07  per_step=3.855e+05  per_masked_tick=2.11e+04
+ucyc           R2=0.8315  const=7.203e+06  per_svc=1.79e+06  per_step=-1.439e+06  per_masked_tick=3.795e+04
+k+u-r          R2=0.8720  const=-7.887e+07  per_step=4.189e+05  per_masked_tick=3.466e+04
+rcyc           R2=0.5207  const=-7.012e+08  per_fault=3.042e+06
+-- with quantum exits (ev1) as a regressor
+kcyc-rcyc      R2=0.9997  const=6.937e+06  per_step=3.099e+04  per_qexit=-2.822e+04  per_masked_tick=1.399e+04
+kcyc-rcyc      R2=0.9999  const=-6.498e+06  per_step=-2.765e+05  per_qexit=1.939e+05  per_svc=3.107e+05  per_fault=1.169e+05  per_masked_tick=1.375e+04
+ucyc           R2=0.9362  const=-7.286e+08  per_step=1.786e+07  per_qexit=-1.481e+07  per_svc=-1.836e+07  per_masked_tick=7.611e+04
+== out-nd-b2_500.perlbench_r-test-capstone-lifetimes-unify-rg-nd
+contexts 317 sum inside 21316.5 s, k-r 1331.8 s, rcyc 1505.0 s, ucyc 4190.7 s, ocyc 362.3 s, steps 141544 entries 185625 ev1 50564 ev3 112146 ev4 22915
+kcyc-rcyc      R2=0.9998  const=1.732e+06  per_step=4.369e+04  per_entry=-1.655e+04  per_masked_tick=1.39e+04
+kcyc-rcyc      R2=0.9998  const=1.1e+06  per_step=2.787e+04  per_masked_tick=1.36e+04
+ucyc           R2=0.7706  const=-3.003e+07  per_step=3.319e+05  per_masked_tick=3.158e+04
+ucyc           R2=0.8255  const=-3.323e+07  per_svc=-4.895e+06  per_step=5.199e+06  per_masked_tick=-3.362e+04
+k+u-r          R2=0.8611  const=-2.893e+07  per_step=3.598e+05  per_masked_tick=4.518e+04
+rcyc           R2=0.9962  const=-2.004e+08  per_fault=4.414e+06
+-- with quantum exits (ev1) as a regressor
+kcyc-rcyc      R2=0.9999  const=7.02e+05  per_step=2.579e+04  per_qexit=-2.569e+04  per_masked_tick=1.441e+04
+kcyc-rcyc      R2=1.0000  const=-2.854e+05  per_step=1.113e+05  per_qexit=-5.854e+04  per_svc=-8.898e+04  per_fault=7731  per_masked_tick=1.426e+04
+ucyc           R2=0.9492  const=-1.26e+08  per_step=1.332e+07  per_qexit=-5.619e+06  per_svc=-1.352e+07  per_masked_tick=2.803e+04
