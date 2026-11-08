@@ -8,6 +8,8 @@ One kernel module, two boots, no new bitstream:
   The module has zero two-byte instructions, and `build.sh` refuses otherwise. `images/SHA256SUMS` pins the module,
   and `build.sh` reproduces it byte for byte.
 - `tickcost-guest.sh <ko> E1|E2` runs one boot's arms on the board guest.
+- `tc-grade.py <board.txt> E1|E2` grades one boot by script (exit 0 as pre-registered, 1 a finding, 2 void). It reads
+  stage output from the console and the heartbeat tails, and was dry-run on ten synthetic captures before the run.
 - `PREREG.md` has the readings the wedges already give, the arms and the predicted readings. It opens with the
   withdrawal of this branch's first version (a tick-replay livelock, wrong by source).
 
