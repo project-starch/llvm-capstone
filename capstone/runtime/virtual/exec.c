@@ -118,6 +118,8 @@ static void *virtual_thread_worker(void *opaque);
  * reaches here: its count is the module's (kfast_served_*); `kfast_publish` counts the rounds the
  * module performed and handed back for publication only (CV_CAUSE_KFAST_PUBLISH). */
 static const char *nrhist_path;
+/* The module accepted this launcher's CV_KFAST: only then can a step carry CV_CAUSE_KFAST_PUBLISH. */
+static int kfast_on;
 #define NRHIST_LINUX 512
 #define NRHIST_RUNTIME 32
 static unsigned long nrhist_linux[NRHIST_LINUX], nrhist_runtime[NRHIST_RUNTIME], nrhist_other,
@@ -1197,7 +1199,7 @@ static int virtual_service(uint64_t tid, struct cv_step *step)
                        (unsigned long long)step->args[7]);
     step->reply = 1;
     step->result = 0;
-    if (step->cause == CV_CAUSE_KFAST_PUBLISH) {
+    if (kfast_on && step->cause == CV_CAUSE_KFAST_PUBLISH) {
         /* The module performed the first context's delegated call (kfast) and stopped before the
          * resume: end the round exactly as capstone_delegate_serve ends one -- the result into the
          * entry, then the publication of whatever the ring holds now -- under the same lock.
@@ -1572,7 +1574,8 @@ static void kfast_register(void)
             k.shapes[i].size[j] = s->args[j].size > 255 || s->args[j].scale ? 255 : s->args[j].size;
         }
     }
-    if (ioctl(device, CV_KFAST, &k) && errno != ENOTTY && getenv("CAPSTONE_VM_KFAST_REPORT"))
+    if (!ioctl(device, CV_KFAST, &k)) kfast_on = 1;
+    else if (errno != ENOTTY && getenv("CAPSTONE_VM_KFAST_REPORT"))
         fprintf(stderr, "capstone-vexec: kfast refused: %s\n", strerror(errno));
 }
 

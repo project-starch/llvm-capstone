@@ -14,6 +14,7 @@
  *           the module falling back (kfast_fb_private).
  *   ok-*    valid requests the module serves when kfast=1 (kfast_served_*): the control that the fast path fires.
  *   clock-* CLOCK_PROCESS_CPUTIME_ID is not served (kfast_fb_clock); its result is 0 either way. */
+#define _GNU_SOURCE
 #include <errno.h>
 #include <fcntl.h>
 #include <stdint.h>
@@ -62,5 +63,23 @@ int main(int argc, char **argv)
     line("bad-write-length", __capstone_delegate_ints4(NR_WRITE, out, 256, UINT64_C(1) << 40, 0));
     line("ok-close-out", close(out));
     line("ok-close", close(fd));
+    /* O_DIRECT on ext2/3/4: the alignment check reads the buffer address, so the module must leave it to the
+     * launcher (kfast_fb_file). The file is written by an ordinary descriptor first; every read result must be the
+     * same on both settings, whichever it is. */
+    int w = open("/tmp/kf-direct.dat", O_WRONLY | O_CREAT | O_TRUNC, 0644);
+    static char block[8192];
+    memset(block, 'd', sizeof block);
+    line("direct-fill", write(w, block, sizeof block));
+    close(w);
+    int d = open("/tmp/kf-direct.dat", O_RDONLY | O_DIRECT);
+    line("direct-open", d >= 0);
+    static const uint64_t offs[] = {0, 16, 496, 512, 4096};
+    for (unsigned i = 0; d >= 0 && i < sizeof offs / sizeof offs[0]; ++i) {
+        char what[32];
+        lseek(d, 0, SEEK_SET);
+        snprintf(what, sizeof what, "direct-read-at-%u", (unsigned)offs[i]);
+        line(what, __capstone_delegate_ints4(NR_READ, d, 4096 + offs[i], 512, 0));
+    }
+    if (d >= 0) close(d);
     return 0;
 }
