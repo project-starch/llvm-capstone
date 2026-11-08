@@ -13,6 +13,11 @@ guests. Disabling icount reduces native host CPU time by 13.22% in this small
 fixture; no runtime default is changed and no timer/lifetime qualification is
 inferred. The original five-compile pilot is excluded from the final ratios.
 [Method, samples and limits](../../runtime/virtual/tests/qemu-throughput/README.md).
+Host profiling is now complete: native icount self-cost shares include 12.8%
+capability representation/moves, 11.2% tag metadata and 8.1% capability
+load/store helpers. Three substantial profiles have zero lost samples; all
+650 diagnostic compilations and four warm-ups pass. Profiled timings are
+excluded from the throughput baseline.
 No emulator semantic optimization has been implemented. Existing native/RTL
 qualification below remains tied to its original snapshots.
 

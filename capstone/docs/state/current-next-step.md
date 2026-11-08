@@ -2,8 +2,12 @@
 
 Continue on `perf/qemu-throughput`, leaving the native RTL handoff branch fixed.
 [The matched host-throughput baseline](../../runtime/virtual/tests/qemu-throughput/README.md)
-is complete for one small repeated GCC input. Next profile host helper execution
-in a separate diagnostic run; do not contaminate the timing cohort with a plugin.
+and separate host profiles are complete for one small repeated GCC input.
+Next investigate batching tag-range bitmap clears and eliminating repeated
+metadata lookups, preserving locking and byte/tag semantics. Then assess
+representation reuse with exact bounds/representability checks. Qualify each
+change with safety gates and unprofiled paired timings; profile shares are
+not predicted savings.
 Add a scalar PC-relative translation control before attributing platform-plain's
 speed difference to capability handling. If proposing a no-icount fast test mode,
 first run timer/preemption, lifetime and race gates; keep deterministic counts

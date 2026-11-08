@@ -1,0 +1,969 @@
+{
+  "schema_version": 1,
+  "status": "PASS: diagnostic host profiling, not a timing qualification",
+  "branch": "perf/qemu-throughput",
+  "source_snapshot": "bfac321c05d747215aa5220bc1b3796ef2df4498",
+  "build": {
+    "source_base": "2b25f1714a5e",
+    "stock_revision": "6bb4a8a47a43f35a345f107227fcd6abed59e62c",
+    "fork_revision": "dd041bac5ad9c145c3872a50804ca714a26b1c88",
+    "configure_args": [
+      "--target-list=riscv64-softmmu",
+      "--disable-docs",
+      "--disable-werror",
+      "--disable-tools",
+      "--disable-guest-agent",
+      "--disable-slirp",
+      "--disable-plugins"
+    ],
+    "compiler": "cc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0\nCopyright (C) 2023 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\n\n",
+    "host_cpu": "Architecture:                            x86_64\nCPU op-mode(s):                          32-bit, 64-bit\nAddress sizes:                           46 bits physical, 48 bits virtual\nByte Order:                              Little Endian\nCPU(s):                                  28\nOn-line CPU(s) list:                     0-27\nVendor ID:                               GenuineIntel\nModel name:                              Intel(R) Core(TM) i7-14700\nCPU family:                              6\nModel:                                   183\nThread(s) per core:                      2\nCore(s) per socket:                      20\nSocket(s):                               1\nStepping:                                1\nCPU(s) scaling MHz:                      26%\nCPU max MHz:                             5400.0000\nCPU min MHz:                             800.0000\nBogoMIPS:                                4224.00\nFlags:                                   fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush dts acpi mmx fxsr sse sse2 ss ht tm pbe syscall nx pdpe1gb rdtscp lm constant_tsc art arch_perfmon pebs bts rep_good nopl xtopology nonstop_tsc cpuid aperfmperf tsc_known_freq pni pclmulqdq dtes64 monitor ds_cpl vmx smx est tm2 ssse3 sdbg fma cx16 xtpr pdcm pcid sse4_1 sse4_2 x2apic movbe popcnt tsc_deadline_timer aes xsave avx f16c rdrand lahf_lm abm 3dnowprefetch cpuid_fault epb ssbd ibrs ibpb stibp ibrs_enhanced tpr_shadow flexpriority ept vpid ept_ad fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms invpcid rdseed adx smap clflushopt clwb intel_pt sha_ni xsaveopt xsavec xgetbv1 xsaves split_lock_detect user_shstk avx_vnni dtherm ida arat pln pts hwp hwp_notify hwp_act_window hwp_epp hwp_pkg_req hfi vnmi umip pku ospke waitpkg gfni vaes vpclmulqdq rdpid movdiri movdir64b fsrm md_clear serialize pconfig arch_lbr ibt flush_l1d arch_capabilities\nVirtualization:                          VT-x\nL1d cache:                               768 KiB (20 instances)\nL1i cache:                               1 MiB (20 instances)\nL2 cache:                                28 MiB (11 instances)\nL3 cache:                                33 MiB (1 instance)\nNUMA node(s):                            1\nNUMA node0 CPU(s):                       0-27\nVulnerability Gather data sampling:      Not affected\nVulnerability Ghostwrite:                Not affected\nVulnerability Indirect target selection: Not affected\nVulnerability Itlb multihit:             Not affected\nVulnerability L1tf:                      Not affected\nVulnerability Mds:                       Not affected\nVulnerability Meltdown:                  Not affected\nVulnerability Mmio stale data:           Not affected\nVulnerability Old microcode:             Not affected\nVulnerability Reg file data sampling:    Mitigation; Clear Register File\nVulnerability Retbleed:                  Not affected\nVulnerability Spec rstack overflow:      Not affected\nVulnerability Spec store bypass:         Mitigation; Speculative Store Bypass disabled via prctl\nVulnerability Spectre v1:                Mitigation; usercopy/swapgs barriers and __user pointer sanitization\nVulnerability Spectre v2:                Mitigation; Enhanced / Automatic IBRS; IBPB conditional; PBRSB-eIBRS SW sequence; BHI BHI_DIS_S\nVulnerability Srbds:                     Not affected\nVulnerability Tsa:                       Not affected\nVulnerability Tsx async abort:           Not affected\nVulnerability Vmscape:                   Mitigation; IBPB before exit to userspace\n",
+    "binaries": {
+      "stock": "fef99d167011dca7bb155e8afe835b5b535cec51b13532300413cddeaf3fc929",
+      "fork": "8672296ec36f7098133ea6fd8fe956f0124a7e2f4b3663fe5d43fb48e9d1e180"
+    },
+    "build_options": {
+      "stock": {
+        "buildtype": "debug",
+        "debug": true,
+        "optimization": "2",
+        "b_sanitize": [],
+        "b_lto": false,
+        "c_args": [],
+        "c_link_args": [],
+        "slirp": "disabled",
+        "capstone": "auto"
+      },
+      "fork": {
+        "buildtype": "debug",
+        "debug": true,
+        "optimization": "2",
+        "b_lto": false,
+        "b_sanitize": [],
+        "c_args": [],
+        "c_link_args": [],
+        "slirp": "disabled",
+        "capstone": "auto"
+      }
+    }
+  },
+  "profiles": {
+    "final-icount0": {
+      "run": {
+        "status": "PASS",
+        "inputs": {
+          "stock": "fef99d167011dca7bb155e8afe835b5b535cec51b13532300413cddeaf3fc929",
+          "fork": "8672296ec36f7098133ea6fd8fe956f0124a7e2f4b3663fe5d43fb48e9d1e180",
+          "firmware": "2335a28682ddf65e46c1f492632c2cb026efcb2271caf544a3f7ddc858b03e02",
+          "plain": "ebeca8e920328b5c893fc9ee910851cceabee2bebc00320322b2b77b75def4a0",
+          "native": "a1509c81444586031c74c5752f72ec90dc6c7ab57635fff37ffa431c11663a9f",
+          "input": "de7b86d79a68965adb62e750101d9211224884b2236053d906d1e23057bb6ad1",
+          "reference": "58111208509dd871223ae195a33304bd6b24afd29458f37c976556cbad506324",
+          "Image": "b7de27fb28bc0807053ae3e1c4bcd058e79f601d255a0dcaaa6ce70d46a3815f",
+          "rootfs.ext2": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845"
+        },
+        "iterations": 50,
+        "icount": 0,
+        "profiled": true,
+        "host": {
+          "uname": [
+            "Linux",
+            "pop-os",
+            "6.18.7-76061807-generic",
+            "#202601231045~1778249322~24.04~b44a3c3 SMP PREEMPT_DYNAMIC Fri M",
+            "x86_64",
+            "x86_64"
+          ],
+          "affinity": [
+            2
+          ]
+        },
+        "samples": [
+          {
+            "arm": "platform-native",
+            "run": 0,
+            "host_loadavg_before": [
+              1.16259765625,
+              0.78271484375,
+              0.65380859375
+            ],
+            "reference_match": true,
+            "wall_seconds": 60.403486651,
+            "cpu_seconds": 32.73,
+            "cpu_tick_hz": 100,
+            "scope": "Guest serial window; host time, not guest cycles",
+            "profiled": true
+          },
+          {
+            "arm": "platform-plain",
+            "run": 1,
+            "host_loadavg_before": [
+              1.6318359375,
+              1.01318359375,
+              0.74609375
+            ],
+            "reference_match": true,
+            "wall_seconds": 2.978680476,
+            "cpu_seconds": 2.96,
+            "cpu_tick_hz": 100,
+            "scope": "Guest serial window; host time, not guest cycles",
+            "profiled": true
+          }
+        ],
+        "limitations": [
+          "Host serial-delivery timing, not target cycles or hardware overhead.",
+          "One untimed warm-up compilation per fresh guest, then a batch including exec/exit.",
+          "Only stock-plain versus fork-plain uses identical machine/CPU options and binary.",
+          "Platform arms intentionally change discovery/CPU flags and Linux capability paths.",
+          "Native versus plain binaries differ in compiler/libc/ABI; not isolated ISA cost.",
+          "No profiling plugin; build flags and host contention still require auditing."
+        ],
+        "medians": {
+          "platform-native": {
+            "wall_seconds": 60.403486651,
+            "cpu_seconds": 32.73
+          },
+          "platform-plain": {
+            "wall_seconds": 2.978680476,
+            "cpu_seconds": 2.96
+          }
+        }
+      },
+      "profile": {
+        "total_sampled_period": 142556321448,
+        "samples": 6488,
+        "lost_samples": 0,
+        "categories": {
+          "translated_guest_code": 27.44630682496397,
+          "other_qemu": 20.74708646770777,
+          "capability_representation_and_moves": 12.8020984805343,
+          "tag_metadata": 11.183441020407775,
+          "capability_load_store_helpers": 8.107310082503638,
+          "translation_block_dispatch": 7.698412678951718,
+          "lifetime_and_access_validation": 5.574678707530225,
+          "dirty_bitmap_bookkeeping": 5.024101092291816,
+          "host_libraries_or_unknown": 1.416564645108785
+        },
+        "shared_objects": {
+          "qemu-system-riscv64": 71.13712852992724,
+          "[JIT] tid 110567": 27.44630682496397,
+          "libglib-2.0.so.0.8000.0": 0.7521591663622738,
+          "libc.so.6": 0.6490257854594638,
+          "[unknown]": 0.015379693287047563
+        },
+        "scope": "Userspace host cycle samples, self cost; no inclusive-cost addition or target-cycle claim.",
+        "classification_note": "Explicit symbol groups; inlining and unknown callers limit attribution. decode.isra.0 and find_entry resolved to cap_compress.c and cap_mem_map.c in this pinned binary.",
+        "top_symbols": [
+          {
+            "symbol": "decode.isra.0",
+            "dso": "qemu-system-riscv64",
+            "samples": 224,
+            "period": 4927610384,
+            "category": "capability_representation_and_moves",
+            "percent": 3.4566060164490393
+          },
+          {
+            "symbol": "cap_compress",
+            "dso": "qemu-system-riscv64",
+            "samples": 196,
+            "period": 4318314689,
+            "category": "capability_representation_and_moves",
+            "percent": 3.0291990177195918
+          },
+          {
+            "symbol": "cap_mem_map_physical_lock",
+            "dso": "qemu-system-riscv64",
+            "samples": 193,
+            "period": 4231320423,
+            "category": "tag_metadata",
+            "percent": 2.9681745292112147
+          },
+          {
+            "symbol": "bitmap_set_atomic",
+            "dso": "qemu-system-riscv64",
+            "samples": 187,
+            "period": 4116701281,
+            "category": "dirty_bitmap_bookkeeping",
+            "percent": 2.8877718218210626
+          },
+          {
+            "symbol": "capstone_ldc_granule",
+            "dso": "qemu-system-riscv64",
+            "samples": 162,
+            "period": 3560081400,
+            "category": "capability_load_store_helpers",
+            "percent": 2.4973157022002734
+          },
+          {
+            "symbol": "helper_capstone_ldc_virtual",
+            "dso": "qemu-system-riscv64",
+            "samples": 144,
+            "period": 3163242039,
+            "category": "capability_load_store_helpers",
+            "percent": 2.218941964038999
+          },
+          {
+            "symbol": "cap_mem_map_physical_remove_range",
+            "dso": "qemu-system-riscv64",
+            "samples": 128,
+            "period": 2817100367,
+            "category": "tag_metadata",
+            "percent": 1.976131495527954
+          },
+          {
+            "symbol": "helper_capstone_stc_virtual",
+            "dso": "qemu-system-riscv64",
+            "samples": 124,
+            "period": 2727979924,
+            "category": "capability_load_store_helpers",
+            "percent": 1.913615542468301
+          },
+          {
+            "symbol": "tb_lookup",
+            "dso": "qemu-system-riscv64",
+            "samples": 122,
+            "period": 2684555846,
+            "category": "translation_block_dispatch",
+            "percent": 1.8831545446262377
+          },
+          {
+            "symbol": "cpu_get_tb_cpu_state",
+            "dso": "qemu-system-riscv64",
+            "samples": 121,
+            "period": 2658532834,
+            "category": "translation_block_dispatch",
+            "percent": 1.864899996714455
+          },
+          {
+            "symbol": "find_entry",
+            "dso": "qemu-system-riscv64",
+            "samples": 117,
+            "period": 2574350718,
+            "category": "tag_metadata",
+            "percent": 1.8058481671323436
+          },
+          {
+            "symbol": "cap_mem_map_physical_remove_range_locked",
+            "dso": "qemu-system-riscv64",
+            "samples": 102,
+            "period": 2247022507,
+            "category": "tag_metadata",
+            "percent": 1.5762349113502077
+          },
+          {
+            "symbol": "qht_lookup_custom",
+            "dso": "qemu-system-riscv64",
+            "samples": 100,
+            "period": 2197309577,
+            "category": "translation_block_dispatch",
+            "percent": 1.5413624276223405
+          },
+          {
+            "symbol": "capstone_stc_write_locked",
+            "dso": "qemu-system-riscv64",
+            "samples": 96,
+            "period": 2106179659,
+            "category": "capability_load_store_helpers",
+            "percent": 1.4774368737960646
+          },
+          {
+            "symbol": "mmu_lookup",
+            "dso": "qemu-system-riscv64",
+            "samples": 92,
+            "period": 2027382975,
+            "category": "other_qemu",
+            "percent": 1.42216280162611
+          },
+          {
+            "symbol": "capstone_watch_page",
+            "dso": "qemu-system-riscv64",
+            "samples": 87,
+            "period": 1913867907,
+            "category": "lifetime_and_access_validation",
+            "percent": 1.3425345769027281
+          },
+          {
+            "symbol": "find_next_bit",
+            "dso": "qemu-system-riscv64",
+            "samples": 83,
+            "period": 1810514827,
+            "category": "dirty_bitmap_bookkeeping",
+            "percent": 1.270034754411377
+          },
+          {
+            "symbol": "mmu_lookup1",
+            "dso": "qemu-system-riscv64",
+            "samples": 81,
+            "period": 1779945047,
+            "category": "other_qemu",
+            "percent": 1.2485907527077058
+          },
+          {
+            "symbol": "helper_lookup_tb_ptr",
+            "dso": "qemu-system-riscv64",
+            "samples": 76,
+            "period": 1670247716,
+            "category": "translation_block_dispatch",
+            "percent": 1.1716405831987275
+          },
+          {
+            "symbol": "guest_read64",
+            "dso": "qemu-system-riscv64",
+            "samples": 75,
+            "period": 1641613252,
+            "category": "lifetime_and_access_validation",
+            "percent": 1.1515541614187963
+          },
+          {
+            "symbol": "object_dynamic_cast_assert",
+            "dso": "qemu-system-riscv64",
+            "samples": 73,
+            "period": 1594176348,
+            "category": "other_qemu",
+            "percent": 1.118278257889465
+          },
+          {
+            "symbol": "capstone_cap_move_offset",
+            "dso": "qemu-system-riscv64",
+            "samples": 70,
+            "period": 1538188857,
+            "category": "capability_representation_and_moves",
+            "percent": 1.0790043130855353
+          },
+          {
+            "symbol": "qemu_ram_block_from_host",
+            "dso": "qemu-system-riscv64",
+            "samples": 69,
+            "period": 1514892581,
+            "category": "other_qemu",
+            "percent": 1.0626625081319767
+          },
+          {
+            "symbol": "helper_reg_set_cap_compressed",
+            "dso": "qemu-system-riscv64",
+            "samples": 67,
+            "period": 1475246087,
+            "category": "capability_representation_and_moves",
+            "percent": 1.0348513990929
+          },
+          {
+            "symbol": "capstone_cursor_representable",
+            "dso": "qemu-system-riscv64",
+            "samples": 65,
+            "period": 1431064291,
+            "category": "capability_representation_and_moves",
+            "percent": 1.003858879398769
+          }
+        ]
+      }
+    },
+    "final-noicount": {
+      "run": {
+        "status": "PASS",
+        "inputs": {
+          "stock": "fef99d167011dca7bb155e8afe835b5b535cec51b13532300413cddeaf3fc929",
+          "fork": "8672296ec36f7098133ea6fd8fe956f0124a7e2f4b3663fe5d43fb48e9d1e180",
+          "firmware": "2335a28682ddf65e46c1f492632c2cb026efcb2271caf544a3f7ddc858b03e02",
+          "plain": "ebeca8e920328b5c893fc9ee910851cceabee2bebc00320322b2b77b75def4a0",
+          "native": "a1509c81444586031c74c5752f72ec90dc6c7ab57635fff37ffa431c11663a9f",
+          "input": "de7b86d79a68965adb62e750101d9211224884b2236053d906d1e23057bb6ad1",
+          "reference": "58111208509dd871223ae195a33304bd6b24afd29458f37c976556cbad506324",
+          "Image": "b7de27fb28bc0807053ae3e1c4bcd058e79f601d255a0dcaaa6ce70d46a3815f",
+          "rootfs.ext2": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845"
+        },
+        "iterations": 50,
+        "icount": null,
+        "profiled": true,
+        "host": {
+          "uname": [
+            "Linux",
+            "pop-os",
+            "6.18.7-76061807-generic",
+            "#202601231045~1778249322~24.04~b44a3c3 SMP PREEMPT_DYNAMIC Fri M",
+            "x86_64",
+            "x86_64"
+          ],
+          "affinity": [
+            2
+          ]
+        },
+        "samples": [
+          {
+            "arm": "platform-native",
+            "run": 0,
+            "host_loadavg_before": [
+              1.3759765625,
+              1.04248046875,
+              0.77099609375
+            ],
+            "reference_match": true,
+            "wall_seconds": 47.271602003,
+            "cpu_seconds": 28.94,
+            "cpu_tick_hz": 100,
+            "scope": "Guest serial window; host time, not guest cycles",
+            "profiled": true
+          }
+        ],
+        "limitations": [
+          "Host serial-delivery timing, not target cycles or hardware overhead.",
+          "One untimed warm-up compilation per fresh guest, then a batch including exec/exit.",
+          "Only stock-plain versus fork-plain uses identical machine/CPU options and binary.",
+          "Platform arms intentionally change discovery/CPU flags and Linux capability paths.",
+          "Native versus plain binaries differ in compiler/libc/ABI; not isolated ISA cost.",
+          "No profiling plugin; build flags and host contention still require auditing."
+        ],
+        "medians": {
+          "platform-native": {
+            "wall_seconds": 47.271602003,
+            "cpu_seconds": 28.94
+          }
+        }
+      },
+      "profile": {
+        "total_sampled_period": 125104726415,
+        "samples": 5679,
+        "lost_samples": 0,
+        "categories": {
+          "other_qemu": 24.099978928841654,
+          "translated_guest_code": 18.426113981123006,
+          "capability_representation_and_moves": 14.174189377287885,
+          "tag_metadata": 12.18507668401906,
+          "translation_block_dispatch": 9.698301581949869,
+          "capability_load_store_helpers": 7.778973518328364,
+          "lifetime_and_access_validation": 6.103852767056147,
+          "dirty_bitmap_bookkeeping": 5.500061464644225,
+          "host_libraries_or_unknown": 2.0334516967497898
+        },
+        "shared_objects": {
+          "qemu-system-riscv64": 79.54043432212721,
+          "[JIT] tid 110962": 18.426113981123006,
+          "libc.so.6": 1.0934593513774562,
+          "libglib-2.0.so.0.8000.0": 0.9379839784049138,
+          "[vdso]": 0.0020083669674199815
+        },
+        "scope": "Userspace host cycle samples, self cost; no inclusive-cost addition or target-cycle claim.",
+        "classification_note": "Explicit symbol groups; inlining and unknown callers limit attribution. decode.isra.0 and find_entry resolved to cap_compress.c and cap_mem_map.c in this pinned binary.",
+        "top_symbols": [
+          {
+            "symbol": "decode.isra.0",
+            "dso": "qemu-system-riscv64",
+            "samples": 228,
+            "period": 5014922485,
+            "category": "capability_representation_and_moves",
+            "percent": 4.008579554671975
+          },
+          {
+            "symbol": "cap_compress",
+            "dso": "qemu-system-riscv64",
+            "samples": 194,
+            "period": 4302380843,
+            "category": "capability_representation_and_moves",
+            "percent": 3.4390234216475983
+          },
+          {
+            "symbol": "cap_mem_map_physical_lock",
+            "dso": "qemu-system-riscv64",
+            "samples": 185,
+            "period": 4126842752,
+            "category": "tag_metadata",
+            "percent": 3.298710504597845
+          },
+          {
+            "symbol": "bitmap_set_atomic",
+            "dso": "qemu-system-riscv64",
+            "samples": 182,
+            "period": 4052534628,
+            "category": "dirty_bitmap_bookkeeping",
+            "percent": 3.2393137686555886
+          },
+          {
+            "symbol": "capstone_ldc_granule",
+            "dso": "qemu-system-riscv64",
+            "samples": 160,
+            "period": 3516981470,
+            "category": "capability_load_store_helpers",
+            "percent": 2.811229895770201
+          },
+          {
+            "symbol": "cpu_get_tb_cpu_state",
+            "dso": "qemu-system-riscv64",
+            "samples": 152,
+            "period": 3361597938,
+            "category": "translation_block_dispatch",
+            "percent": 2.6870271286544662
+          },
+          {
+            "symbol": "cap_mem_map_physical_remove_range",
+            "dso": "qemu-system-riscv64",
+            "samples": 117,
+            "period": 2587287387,
+            "category": "tag_metadata",
+            "percent": 2.068097234326221
+          },
+          {
+            "symbol": "tb_lookup",
+            "dso": "qemu-system-riscv64",
+            "samples": 117,
+            "period": 2571057599,
+            "category": "translation_block_dispatch",
+            "percent": 2.0551242728202244
+          },
+          {
+            "symbol": "qht_lookup_custom",
+            "dso": "qemu-system-riscv64",
+            "samples": 116,
+            "period": 2537823658,
+            "category": "translation_block_dispatch",
+            "percent": 2.028559376391167
+          },
+          {
+            "symbol": "mmu_lookup",
+            "dso": "qemu-system-riscv64",
+            "samples": 111,
+            "period": 2457044965,
+            "category": "other_qemu",
+            "percent": 1.9639905185112185
+          },
+          {
+            "symbol": "find_entry",
+            "dso": "qemu-system-riscv64",
+            "samples": 110,
+            "period": 2424217268,
+            "category": "tag_metadata",
+            "percent": 1.9377503452254363
+          },
+          {
+            "symbol": "helper_capstone_ldc_virtual",
+            "dso": "qemu-system-riscv64",
+            "samples": 104,
+            "period": 2296588397,
+            "category": "capability_load_store_helpers",
+            "percent": 1.8357327199467341
+          },
+          {
+            "symbol": "cap_mem_map_physical_remove_range_locked",
+            "dso": "qemu-system-riscv64",
+            "samples": 104,
+            "period": 2292480811,
+            "category": "tag_metadata",
+            "percent": 1.8324494019477209
+          },
+          {
+            "symbol": "helper_capstone_stc_virtual",
+            "dso": "qemu-system-riscv64",
+            "samples": 103,
+            "period": 2267561709,
+            "category": "capability_load_store_helpers",
+            "percent": 1.8125308083708982
+          },
+          {
+            "symbol": "find_next_bit",
+            "dso": "qemu-system-riscv64",
+            "samples": 86,
+            "period": 1885824621,
+            "category": "dirty_bitmap_bookkeeping",
+            "percent": 1.5073967827117125
+          },
+          {
+            "symbol": "capstone_watch_page",
+            "dso": "qemu-system-riscv64",
+            "samples": 85,
+            "period": 1859876071,
+            "category": "lifetime_and_access_validation",
+            "percent": 1.4866553201438453
+          },
+          {
+            "symbol": "capstone_cap_move_offset",
+            "dso": "qemu-system-riscv64",
+            "samples": 78,
+            "period": 1726394216,
+            "category": "capability_representation_and_moves",
+            "percent": 1.3799592273381975
+          },
+          {
+            "symbol": "helper_lookup_tb_ptr",
+            "dso": "qemu-system-riscv64",
+            "samples": 77,
+            "period": 1704468058,
+            "category": "translation_block_dispatch",
+            "percent": 1.3624329846227416
+          },
+          {
+            "symbol": "capstone_stc_write_locked",
+            "dso": "qemu-system-riscv64",
+            "samples": 75,
+            "period": 1650731962,
+            "category": "capability_load_store_helpers",
+            "percent": 1.3194800942405307
+          },
+          {
+            "symbol": "mmu_lookup1",
+            "dso": "qemu-system-riscv64",
+            "samples": 70,
+            "period": 1542834747,
+            "category": "other_qemu",
+            "percent": 1.2332345797089044
+          },
+          {
+            "symbol": "guest_read64",
+            "dso": "qemu-system-riscv64",
+            "samples": 70,
+            "period": 1522929071,
+            "category": "lifetime_and_access_validation",
+            "percent": 1.2173233695009316
+          },
+          {
+            "symbol": "helper_reg_set_cap_compressed",
+            "dso": "qemu-system-riscv64",
+            "samples": 62,
+            "period": 1396664360,
+            "category": "capability_representation_and_moves",
+            "percent": 1.1163961586606697
+          },
+          {
+            "symbol": "qemu_ram_block_from_host",
+            "dso": "qemu-system-riscv64",
+            "samples": 59,
+            "period": 1325111124,
+            "category": "other_qemu",
+            "percent": 1.0592014882030227
+          },
+          {
+            "symbol": "object_dynamic_cast_assert",
+            "dso": "qemu-system-riscv64",
+            "samples": 60,
+            "period": 1307191193,
+            "category": "other_qemu",
+            "percent": 1.0448775441654843
+          },
+          {
+            "symbol": "capstone_mem_access_allowed",
+            "dso": "qemu-system-riscv64",
+            "samples": 59,
+            "period": 1292138067,
+            "category": "lifetime_and_access_validation",
+            "percent": 1.0328451242630856
+          }
+        ]
+      }
+    },
+    "plain-long": {
+      "run": {
+        "status": "PASS",
+        "inputs": {
+          "stock": "fef99d167011dca7bb155e8afe835b5b535cec51b13532300413cddeaf3fc929",
+          "fork": "8672296ec36f7098133ea6fd8fe956f0124a7e2f4b3663fe5d43fb48e9d1e180",
+          "firmware": "2335a28682ddf65e46c1f492632c2cb026efcb2271caf544a3f7ddc858b03e02",
+          "plain": "ebeca8e920328b5c893fc9ee910851cceabee2bebc00320322b2b77b75def4a0",
+          "native": "a1509c81444586031c74c5752f72ec90dc6c7ab57635fff37ffa431c11663a9f",
+          "input": "de7b86d79a68965adb62e750101d9211224884b2236053d906d1e23057bb6ad1",
+          "reference": "58111208509dd871223ae195a33304bd6b24afd29458f37c976556cbad506324",
+          "Image": "b7de27fb28bc0807053ae3e1c4bcd058e79f601d255a0dcaaa6ce70d46a3815f",
+          "rootfs.ext2": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845"
+        },
+        "iterations": 500,
+        "icount": 0,
+        "profiled": true,
+        "host": {
+          "uname": [
+            "Linux",
+            "pop-os",
+            "6.18.7-76061807-generic",
+            "#202601231045~1778249322~24.04~b44a3c3 SMP PREEMPT_DYNAMIC Fri M",
+            "x86_64",
+            "x86_64"
+          ],
+          "affinity": [
+            2
+          ]
+        },
+        "samples": [
+          {
+            "arm": "platform-plain",
+            "run": 0,
+            "host_loadavg_before": [
+              1.62060546875,
+              1.16064453125,
+              0.8291015625
+            ],
+            "reference_match": true,
+            "wall_seconds": 49.824244908,
+            "cpu_seconds": 29.66,
+            "cpu_tick_hz": 100,
+            "scope": "Guest serial window; host time, not guest cycles",
+            "profiled": true
+          }
+        ],
+        "limitations": [
+          "Host serial-delivery timing, not target cycles or hardware overhead.",
+          "One untimed warm-up compilation per fresh guest, then a batch including exec/exit.",
+          "Only stock-plain versus fork-plain uses identical machine/CPU options and binary.",
+          "Platform arms intentionally change discovery/CPU flags and Linux capability paths.",
+          "Native versus plain binaries differ in compiler/libc/ABI; not isolated ISA cost.",
+          "No profiling plugin; build flags and host contention still require auditing."
+        ],
+        "medians": {
+          "platform-plain": {
+            "wall_seconds": 49.824244908,
+            "cpu_seconds": 29.66
+          }
+        }
+      },
+      "profile": {
+        "total_sampled_period": 128858949928,
+        "samples": 5828,
+        "lost_samples": 0,
+        "categories": {
+          "translated_guest_code": 41.70890077331098,
+          "translation_block_dispatch": 33.93731377792141,
+          "other_qemu": 22.19575193184559,
+          "tag_metadata": 1.019849821633881,
+          "host_libraries_or_unknown": 0.7095308828070245,
+          "dirty_bitmap_bookkeeping": 0.2575904321628145,
+          "lifetime_and_access_validation": 0.17106238031829757
+        },
+        "shared_objects": {
+          "qemu-system-riscv64": 57.581568343882,
+          "[JIT] tid 111127": 41.70890077331098,
+          "libc.so.6": 0.3594385273656162,
+          "libglib-2.0.so.0.8000.0": 0.3500923554414082
+        },
+        "scope": "Userspace host cycle samples, self cost; no inclusive-cost addition or target-cycle claim.",
+        "classification_note": "Explicit symbol groups; inlining and unknown callers limit attribution. decode.isra.0 and find_entry resolved to cap_compress.c and cap_mem_map.c in this pinned binary.",
+        "top_symbols": [
+          {
+            "symbol": "cpu_get_tb_cpu_state",
+            "dso": "qemu-system-riscv64",
+            "samples": 579,
+            "period": 12845479224,
+            "category": "translation_block_dispatch",
+            "percent": 9.968635652531251
+          },
+          {
+            "symbol": "tb_lookup",
+            "dso": "qemu-system-riscv64",
+            "samples": 432,
+            "period": 9564842806,
+            "category": "translation_block_dispatch",
+            "percent": 7.422722916292861
+          },
+          {
+            "symbol": "qht_lookup_custom",
+            "dso": "qemu-system-riscv64",
+            "samples": 350,
+            "period": 7728172294,
+            "category": "translation_block_dispatch",
+            "percent": 5.9973888490617995
+          },
+          {
+            "symbol": "helper_lookup_tb_ptr",
+            "dso": "qemu-system-riscv64",
+            "samples": 301,
+            "period": 6666591625,
+            "category": "translation_block_dispatch",
+            "percent": 5.1735573110947755
+          },
+          {
+            "symbol": "object_dynamic_cast_assert",
+            "dso": "qemu-system-riscv64",
+            "samples": 271,
+            "period": 6006962808,
+            "category": "other_qemu",
+            "percent": 4.661657425701819
+          },
+          {
+            "symbol": "tb_htable_lookup.isra.0",
+            "dso": "qemu-system-riscv64",
+            "samples": 150,
+            "period": 3294428162,
+            "category": "translation_block_dispatch",
+            "percent": 2.5566157134143674
+          },
+          {
+            "symbol": "tb_lookup_cmp",
+            "dso": "qemu-system-riscv64",
+            "samples": 125,
+            "period": 2764995296,
+            "category": "translation_block_dispatch",
+            "percent": 2.1457533974511995
+          },
+          {
+            "symbol": "probe_access_internal.isra.0",
+            "dso": "qemu-system-riscv64",
+            "samples": 117,
+            "period": 2603554010,
+            "category": "other_qemu",
+            "percent": 2.020468125384179
+          },
+          {
+            "symbol": "riscv_cpu_mmu_index",
+            "dso": "qemu-system-riscv64",
+            "samples": 107,
+            "period": 2363404570,
+            "category": "other_qemu",
+            "percent": 1.834101993940315
+          },
+          {
+            "symbol": "get_physical_address",
+            "dso": "qemu-system-riscv64",
+            "samples": 59,
+            "period": 1293661584,
+            "category": "other_qemu",
+            "percent": 1.0039361524541632
+          },
+          {
+            "symbol": "guest-0x672b78",
+            "dso": "[JIT] tid 111127",
+            "samples": 48,
+            "period": 1069445164,
+            "category": "translated_guest_code",
+            "percent": 0.8299347190067535
+          },
+          {
+            "symbol": "tlb_set_page_full",
+            "dso": "qemu-system-riscv64",
+            "samples": 48,
+            "period": 1066229035,
+            "category": "other_qemu",
+            "percent": 0.8274388667576106
+          },
+          {
+            "symbol": "tlb_flush_page_by_mmuidx_async_0",
+            "dso": "qemu-system-riscv64",
+            "samples": 45,
+            "period": 1004002433,
+            "category": "other_qemu",
+            "percent": 0.7791483894296724
+          },
+          {
+            "symbol": "address_space_ldq",
+            "dso": "qemu-system-riscv64",
+            "samples": 44,
+            "period": 968118181,
+            "category": "other_qemu",
+            "percent": 0.7513006908258499
+          },
+          {
+            "symbol": "pmp_hart_has_privs",
+            "dso": "qemu-system-riscv64",
+            "samples": 32,
+            "period": 711267742,
+            "category": "other_qemu",
+            "percent": 0.5519738771714507
+          },
+          {
+            "symbol": "cpu_exec_loop",
+            "dso": "qemu-system-riscv64",
+            "samples": 30,
+            "period": 668023415,
+            "category": "translation_block_dispatch",
+            "percent": 0.5184144488010017
+          },
+          {
+            "symbol": "tlb_flush_vtlb_page_mask_locked",
+            "dso": "qemu-system-riscv64",
+            "samples": 30,
+            "period": 663833773,
+            "category": "other_qemu",
+            "percent": 0.5151631092531155
+          },
+          {
+            "symbol": "qemu_ram_block_from_host",
+            "dso": "qemu-system-riscv64",
+            "samples": 30,
+            "period": 661948448,
+            "category": "other_qemu",
+            "percent": 0.5137000172435551
+          },
+          {
+            "symbol": "address_space_translate_internal",
+            "dso": "qemu-system-riscv64",
+            "samples": 29,
+            "period": 641088631,
+            "category": "other_qemu",
+            "percent": 0.4975119162139755
+          },
+          {
+            "symbol": "get_page_addr_code_hostp",
+            "dso": "qemu-system-riscv64",
+            "samples": 28,
+            "period": 616618667,
+            "category": "other_qemu",
+            "percent": 0.4785221882876866
+          },
+          {
+            "symbol": "cap_mem_map_physical_remove_range",
+            "dso": "qemu-system-riscv64",
+            "samples": 24,
+            "period": 539506649,
+            "category": "tag_metadata",
+            "percent": 0.4186799980144566
+          },
+          {
+            "symbol": "helper_capture_store_phys",
+            "dso": "qemu-system-riscv64",
+            "samples": 22,
+            "period": 490271810,
+            "category": "other_qemu",
+            "percent": 0.3804716787417091
+          },
+          {
+            "symbol": "riscv_cpu_tlb_fill",
+            "dso": "qemu-system-riscv64",
+            "samples": 22,
+            "period": 483865325,
+            "category": "other_qemu",
+            "percent": 0.3754999751824456
+          },
+          {
+            "symbol": "victim_tlb_hit",
+            "dso": "qemu-system-riscv64",
+            "samples": 20,
+            "period": 440359992,
+            "category": "other_qemu",
+            "percent": 0.34173799510709296
+          },
+          {
+            "symbol": "find_entry",
+            "dso": "qemu-system-riscv64",
+            "samples": 18,
+            "period": 396868021,
+            "category": "tag_metadata",
+            "percent": 0.3079863845093804
+          }
+        ]
+      }
+    }
+  },
+  "additional_control": "final-icount0/01-platform-plain passed 50 exact-output compilations; low sample count superseded by plain-long",
+  "excluded": {
+    "icount0": "Pilot runner rejected perf re-raised SIGINT; no completed output qualification, 8 lost samples.",
+    "verified-icount0": "Perf ring allocation denied at 1024 pages; no usable profile."
+  },
+  "method": {
+    "event": "cycles:u",
+    "frequency_hz": 199,
+    "call_graph": "dwarf,8192",
+    "ring_pages": 128,
+    "host_cpu": 2,
+    "scope": "QEMU process threads between serial markers; attachment/stop have endpoint latency. Warmup and boot excluded.",
+    "caveats": [
+      "Profiler shares CPU affinity and perturbs timing; use unprofiled qualification.json for throughput.",
+      "Self-cost categories are disjoint symbol groups; inclusive callchain costs overlap.",
+      "JIT code includes guest kernel and userspace; no guest privilege-level split.",
+      "One small repeated GCC input, one profile per mode; no full SPEC or FPGA inference.",
+      "Shares are not removable overhead or promised speedups."
+    ]
+  },
+  "validation": {
+    "host_profile_tests": 4,
+    "host_window_tests": 5,
+    "exact_outputs": 650,
+    "warmups": 4
+  },
+  "evidence": {
+    "path": "/tmp/capstone/qemu-profile-01-evidence.tar.gz",
+    "sha256": "24008bfdb4e1d3fee937c341dc88720f132107088b7afaf18a113505915ffeed",
+    "raw_directory": "/tmp/capstone/qemu-profile-01"
+  }
+}

@@ -57,7 +57,7 @@ the warm-up must match the official reference exactly. Failed runs are retained.
 Serial delivery adds endpoint jitter; Linux CPU accounting has tick resolution.
 Use windows of several seconds, inspect individual samples and report CPU time
 alongside wall time. Coalesced, incomplete, repeated or misordered markers fail
-closed. Timing runs reject profiling plugins. Host profiling, if added, must be
+closed. Timing runs reject profiling plugins. Host profiling must be
 a separate diagnostic run. These measurements neither count guest instructions
 nor establish cycles per instruction on hardware.
 
@@ -85,9 +85,87 @@ It is not yet a qualified replacement for deterministic functional test mode.
 The faster platform-plain control has additional CPU/machine differences,
 including `x-pcrel=false`; its cause requires a separate control.
 
-No QEMU semantics or test defaults changed. Next profile host helpers separately,
+No QEMU semantics or test defaults changed. Next optimize only measured helper costs,
 control PC-relative translation explicitly, and qualify any proposed faster
 functional-test configuration on timer/preemption and safety cases. Two samples
 on one host and a small repeated input are preliminary evidence, not a general
 performance characterization. Host frequency and unrelated host activity were
 not experimentally controlled; CPU affinity and observed load are recorded.
+
+## Host CPU profile
+
+[Profile qualification](profile-qualification.json) records three substantial
+profiles: 50 native compilations with icount, 50 without, and 500 plain
+compilations with icount. All outputs and warm-ups match; all three profiles
+have zero lost samples (6,488 / 5,679 / 5,828 samples). An additional short plain
+control passes. Failed pilots are retained and excluded.
+
+Disjoint shares of sampled **host userspace cycles**, rounded:
+
+| Self-cost group | Native, icount0 | Native, no icount | Plain, icount0 |
+| --- | ---: | ---: | ---: |
+| Translated guest code | 27.4% | 18.4% | 41.7% |
+| Capability representation / moves | 12.8% | 14.2% | 0.0% |
+| Tag metadata | 11.2% | 12.2% | 1.0% |
+| Capability load/store helpers | 8.1% | 7.8% | 0.0% |
+| Translation-block dispatch | 7.7% | 9.7% | 33.9% |
+| Lifetime/access validation | 5.6% | 6.1% | 0.2% |
+| Dirty-bitmap bookkeeping | 5.0% | 5.5% | 0.3% |
+| Other QEMU and host libraries | 22.2% | 26.1% | 22.9% |
+
+This is distributed emulator work. The largest native self symbol is bounds
+`decode.isra.0` at 3.46%, followed by `cap_compress` (3.03%) and
+`cap_mem_map_physical_lock` (2.97%). Inclusive store-helper cost is 16.36%,
+but overlaps the rows above and must not be added to them. DWARF unwinding
+across JIT code can be incomplete. Plain percentages have a much smaller
+per-compilation denominator; compare shares cautiously.
+
+Source inspection of the pinned fork identifies these candidates, **not yet
+implemented or measured**:
+
+1. `target/riscv/cap_mem_map.c`: range removal repeats per-granule metadata
+   lookup after already finding the page. Clear bitmap ranges per page/word
+   and reuse the lookup. Preserve locking, every affected granule, conservative
+   tag-presence metadata and atomic publication of bytes/tags. A one-entry
+   page cache already exists. Even one vCPU shares RAM with device threads,
+   so simply removing the lock is unsafe.
+2. `target/riscv/cap_compress.c`: cursor representability compresses, unpacks
+   and decodes at both cursors. Investigate reusing derived representation
+   without changing exact bounds, invalidation or representability semantics.
+3. Investigate block dispatch and dirty tracking independently. Lifetime-table
+   page watching and fresh authority reads are correctness mechanisms; the
+   profile does not justify deleting them.
+
+No measured share is a promised speedup. These samples explain host emulation
+cost, not RTL cycles, and do not separate guest Linux from guest userspace.
+
+### Reproduce profiling
+
+Use the same `measure.py` arguments as above, adding `--host-perf /path/to/perf`
+and `--arm platform-native`. Keep `--iterations 50` for native; use
+`--arm platform-plain --iterations 500` for the longer scalar control.
+Use a fresh result directory for every cohort. Omit `--icount 0` for the
+separate no-icount profile. Then summarize each VM:
+
+```sh
+python3 capstone/runtime/virtual/tests/qemu-throughput/summarize-profile.py \
+  --perf /path/to/perf --vm "$FRESH_RESULT_DIR/00-platform-native/vm"
+```
+
+The runner enables QEMU `-perfmap`, attaches perf to QEMU threads at the begin
+marker, stops it at the end marker, and saves raw data, commands and the JIT
+map. Attachment and stopping have endpoint latency. Sampling uses `cycles:u`,
+199 Hz, DWARF stacks of 8192 bytes and a 128-page ring. It requires host perf
+permission; it does not modify system permissions. The analyzer refuses to
+replace a conflicting `/tmp/perf-PID.map`; use an isolated `/tmp` for archived
+runs with PID collisions. Keep the exact symbol-bearing QEMU binary available.
+Symbol classifications are specific to this pinned binary and need review
+for a different build, especially compiler-generated names.
+
+These runs used a scratch-extracted Ubuntu perf 6.8 package on host Linux
+6.18.7. The profiler inherited CPU 2 affinity and significantly perturbed wall
+time. Every result is marked `profiled`; use only the earlier **unprofiled**
+cohort for throughput claims. Four profiler lifecycle tests and five marker
+tests pass. Raw profiles, logs, package files, JIT maps and commands are in the
+archive identified by the qualification record; no benchmark sources are
+committed. Defaults and QEMU semantics remain unchanged.
