@@ -10,3 +10,20 @@ lane runs it on the board.
   (perf/tickcost/driver, run_baked_rungs_fpga.py 286f322bed76424a): the only change reads aperture 224 ten more
   times after a wedge (BAKED_WEDGE_REPEAT_224=10); each aperture read is still a pair 0.6 s apart, unstable marked.
 - The control rungs run first in each boot. The raw transcripts go to the rtl lane for grading.
+
+## Result (8 Nov 13:46-14:14, board 3): both boots ran to their stuck arm; the grading is the rtl lane's
+
+- Transcripts: spec/board/out-tc2-b3/tickcost-E1/guest/board.txt (sha256 prefix f1805cca75d0fdfb) and
+  tickcost-E2/guest/board.txt (aa581864848cf32a). Controls, b0-stats and b0-hello returned 0 in both. The stage reads
+  NO DATA and rc 2 by construction: E1 and E2 never return.
+- Arms A-D returned in both boots with near-equal numbers (full-table scans 18.9 ms user, 37.7 ms kernel; cvprof's
+  own body over full tables: 633 / 630 calls in 30 s, maxbody 37.7 ms).
+- E1 ("stuck rdtime", a loop in the tick that reads the clock, which the firmware emulates): aperture 224 = 0xff on
+  all 11 reads, no UNSTABLE, trap log 0x85 with tval 0x00000000000a0d63, commit pc ...fffe. E2 ("stuck register",
+  no traps): 224 = 0x1c, stable.
+- **What this changes in exitprof:** E1 reproduces the cvprof wedges' signature with a software loop in the tick
+  handler. The rtl lane withdrew its reading that those wedges were a frozen hart (an RTL state), and withdrew its
+  simulation calibration as a reference for silicon (sim read ex_commit.valid 0/75 for the same shape, silicon 11/11).
+  The exitprof Correction's "a trap loop at M of a filtered cause" is the shape E1 shows. The stuck loop in the real
+  runs is not identified. cvprof's cost alone did not hang the kernel in 30 idle seconds. The rtl lane's next
+  instrument reads the stuck pc at the next wedge.
