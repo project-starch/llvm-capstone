@@ -111,6 +111,46 @@ static unsigned long step_count(const unsigned long *counter)
 static void *meta;
 static void *virtual_thread_worker(void *opaque);
 
+/* CAPSTONE_VM_NRHIST=<file> (MEASUREMENT, perf/kernel-fastpath): count the delegated requests this
+ * launcher serves, by request number (Linux RV64 numbers, runtime requests 0xC0DE00nn apart), and
+ * append one line to <file> when the process ends: exit_group, an exec in place, or a fault. Off
+ * when unset (a single load of the flag per request). A call the module served itself (kfast) never
+ * reaches here: its count is the module's (kfast_served_*); `kfast_publish` counts the rounds the
+ * module performed and handed back for publication only (CV_CAUSE_KFAST_PUBLISH). */
+static const char *nrhist_path;
+#define NRHIST_LINUX 512
+#define NRHIST_RUNTIME 32
+static unsigned long nrhist_linux[NRHIST_LINUX], nrhist_runtime[NRHIST_RUNTIME], nrhist_other,
+                     nrhist_kfast_publish;
+static void nrhist_count(uint64_t nr)
+{
+    unsigned long *slot = nr < NRHIST_LINUX ? &nrhist_linux[nr]
+        : (nr >> 16) == 0xC0DE && (nr & 0xffff) < NRHIST_RUNTIME ? &nrhist_runtime[nr & 0xffff]
+        : &nrhist_other;
+    __atomic_fetch_add(slot, 1, __ATOMIC_RELAXED);
+}
+static void nrhist_write(const char *why)
+{
+    char line[8192];
+    size_t n;
+    int fd;
+    if (!nrhist_path) return;
+    n = (size_t)snprintf(line, sizeof line, "CAPSTONE_VM_NRHIST pid=%d why=%s kfast_publish=%lu other=%lu",
+                         (int)getpid(), why, nrhist_kfast_publish, nrhist_other);
+    for (unsigned i = 0; i < NRHIST_LINUX && n < sizeof line - 64; ++i)
+        if (nrhist_linux[i]) n += (size_t)snprintf(line + n, sizeof line - n, " %u:%lu", i, nrhist_linux[i]);
+    for (unsigned i = 0; i < NRHIST_RUNTIME && n < sizeof line - 64; ++i)
+        if (nrhist_runtime[i]) n += (size_t)snprintf(line + n, sizeof line - n, " r%u:%lu", i, nrhist_runtime[i]);
+    if (n < sizeof line - 1) line[n++] = '\n';
+    fd = open(nrhist_path, O_WRONLY | O_CREAT | O_APPEND | O_CLOEXEC, 0644);
+    if (fd < 0) return;
+    if (write(fd, line, n) < 0) { /* measurement only */ }
+    close(fd);
+    /* An exec in place that fails returns here and keeps serving: count from zero again. */
+    memset(nrhist_linux, 0, sizeof nrhist_linux); memset(nrhist_runtime, 0, sizeof nrhist_runtime);
+    nrhist_other = nrhist_kfast_publish = 0;
+}
+
 static int thread_add(uint64_t id)
 {
     int result = 0;
@@ -1157,6 +1197,23 @@ static int virtual_service(uint64_t tid, struct cv_step *step)
                        (unsigned long long)step->args[7]);
     step->reply = 1;
     step->result = 0;
+    if (step->cause == CV_CAUSE_KFAST_PUBLISH) {
+        /* The module performed the first context's delegated call (kfast) and stopped before the
+         * resume: end the round exactly as capstone_delegate_serve ends one -- the result into the
+         * entry, then the publication of whatever the ring holds now -- under the same lock.
+         * Only the first context's process transport is ever served there. */
+        struct capstone_delegate_entry *entry = meta;
+        if (tid != 0 || step->args[7] != CV_SERVICE_THREAD_DELEGATE ||
+            step->args[0] != (uintptr_t)meta) return -1;
+        __atomic_fetch_add(&nrhist_kfast_publish, 1, __ATOMIC_RELAXED);
+        pthread_mutex_unlock(&service_lock);
+        pthread_mutex_lock(&host_lock);
+        entry->result = (int64_t)step->address;
+        capstone_signals_publish(&host.signals, entry, 0);
+        pthread_mutex_unlock(&host_lock);
+        pthread_mutex_lock(&service_lock);
+        return 0;
+    }
     if (step->args[7] == CV_SERVICE_THREAD_SELF) {
         step->result = tid + 1; /* zero remains the wire lock's vacant value */
     } else if (step->args[7] == CV_SERVICE_THREAD_CREATE) {
@@ -1288,6 +1345,7 @@ static int virtual_service(uint64_t tid, struct cv_step *step)
             } else return -1;
         }
         if (request->version != CAPSTONE_DELEGATE_VERSION) return -1;
+        if (nrhist_path) nrhist_count(request->nr);
         /* Each native worker owns its bounce buffer and signal ring, or serves the shared
          * process host under host_lock. A blocked epoll/read must not stop another virtual
          * context that does not share its transport. */
@@ -1307,8 +1365,10 @@ static int virtual_service(uint64_t tid, struct cv_step *step)
         if (trace) fprintf(stderr, "CAPSTONE_VM_SERVICE tid=%llu nr=%llu result=%lld\n",
                            (unsigned long long)tid, (unsigned long long)request->nr,
                            (long long)request->result);
+        if (h->exec_requested && !tid) nrhist_write("exec");
         if (h->exec_requested) request->result = tid ? -ENOSYS : exec_in_place();
         if (h->exiting) {
+            if (tid == 0) nrhist_write("exit");
             struct cv_stats stats;
             if (tid == 0 && getenv("CAPSTONE_VM_STATS_MARK")) {
                 /* A mark in the kernel log right before the counters are read, so a gate can
@@ -1457,6 +1517,7 @@ static int virtual_service_loop(uint64_t tid)
                 host.preparing_nr = ((struct capstone_delegate_entry *)meta)->nr;
             fault(&step);
             pthread_mutex_unlock(&service_lock);
+            if (tid == 0) nrhist_write("fault");
             return 125;
         }
         pthread_mutex_lock(&service_lock);
@@ -1478,6 +1539,41 @@ static void *virtual_thread_worker(void *opaque)
     if (result) _exit(result);
     /* The exit service detached the worker's transport (transport_detach). */
     return NULL;
+}
+
+/* CV_KFAST (wire.h; MEASUREMENT PROTOTYPE, used only by a module loaded with kfast=1): describe the
+ * first context's transport so the module can serve its hottest delegated calls inside CV_STEP.
+ * Not sent while a trace is on (CAPSTONE_VM_TRACE, CAPSTONE_DELEGATE_TRACE): those print per call,
+ * and a call the module serves never reaches the printing code. Any failure (ENOTTY from a module
+ * without kfast, a refused shape) leaves every call to this launcher, as before. */
+static void kfast_register(void)
+{
+    static const uint16_t nrs[CV_KFAST_SHAPES] = {CAPSTONE_SYS_read, CAPSTONE_SYS_write,
+        CAPSTONE_SYS_lseek, CAPSTONE_SYS_fstat, CAPSTONE_SYS_clock_gettime};
+    struct cv_kfast k = {.meta = (uintptr_t)meta, .exchange = (uintptr_t)host.exchange,
+        .exchange_bytes = host.exchange_bytes,
+        .sig_head = (uintptr_t)&host.signals.head, .sig_tail = (uintptr_t)&host.signals.tail,
+        .sig_backpressure = (uintptr_t)&host.signals.backpressure,
+        .rounds = (uintptr_t)&host.rounds, .syscalls = (uintptr_t)&host.syscalls,
+        .bytes_in = (uintptr_t)&host.bytes_in, .bytes_out = (uintptr_t)&host.bytes_out,
+        .last_nr = (uintptr_t)&host.last_nr, .version = CV_KFAST_VERSION};
+    _Static_assert(sizeof host.signals.head == 8 && sizeof host.signals.tail == 8 &&
+                   sizeof host.signals.backpressure == 8 && sizeof host.rounds == 8 &&
+                   sizeof host.last_nr == 8, "kfast reads and writes these as 64-bit words");
+    if (trace || getenv("CAPSTONE_DELEGATE_TRACE") || host.private_count > 8) return;
+    for (unsigned i = 0; i < host.private_count; ++i) k.private_fds[k.private_count++] = host.private_fds[i];
+    if (host.spawner && host.spawner->socket >= 0) k.private_fds[k.private_count++] = host.spawner->socket;
+    for (unsigned i = 0; i < CV_KFAST_SHAPES; ++i) {
+        const struct capstone_delegate_shape *s = capstone_delegate_shape(nrs[i]);
+        if (!s) return;
+        k.shapes[i].nr = s->nr; k.shapes[i].group = s->group; k.shapes[i].argc = s->argc;
+        for (unsigned j = 0; j < CAPSTONE_DELEGATE_ARGS; ++j) {
+            k.shapes[i].kind[j] = s->args[j].kind; k.shapes[i].length[j] = s->args[j].length;
+            k.shapes[i].size[j] = s->args[j].size > 255 || s->args[j].scale ? 255 : s->args[j].size;
+        }
+    }
+    if (ioctl(device, CV_KFAST, &k) && errno != ENOTTY && getenv("CAPSTONE_VM_KFAST_REPORT"))
+        fprintf(stderr, "capstone-vexec: kfast refused: %s\n", strerror(errno));
 }
 
 int main(int argc, char **argv)
@@ -1585,6 +1681,9 @@ int main(int argc, char **argv)
     host.private_fds[host.private_count++] = device;
     capstone_signals_settle_libc();
     capstone_signals_init(&host.signals, (void *)((char *)meta + CAPSTONE_SIGNAL_OFFSET));
+    nrhist_path = getenv("CAPSTONE_VM_NRHIST");
+    if (nrhist_path && !*nrhist_path) nrhist_path = NULL;
+    kfast_register();
     if ((error = capstone_delegate_seccomp())) { errno = error; return die("seccomp"); }
     for (int fd = 0; fd < 3; ++fd) if (!(stdio_mask & (1u << fd))) close(fd);
     launch_ns = now_ns() - start_ns;
