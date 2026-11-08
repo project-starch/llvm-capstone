@@ -81,7 +81,7 @@ static int dom_extra_resources(struct dom_delegate *d)
             !is_subdir(f->f_path.dentry, d->root.dentry) ||
             !dom_disk_inode(inode) || !S_ISDIR(inode->i_mode) ||
             (inode->i_mode & (S_IRWXUGO | S_ISUID | S_ISGID | S_ISVTX)) != 0700 ||
-            !uid_eq(i_uid_into_mnt(mnt_user_ns(f->f_path.mnt), inode), current_fsuid()))
+            !cv_owner_is_fsuid(cv_mnt_idmap(f->f_path.mnt), inode))
             rc = -EACCES;
         if (!rc) { d->dirs[0] = f->f_path; path_get(&d->dirs[0]); }
         fput(f);
@@ -275,7 +275,7 @@ static int dom_parent(struct context *c, const struct capstone_delegate_entry *e
             dotdot = true;
             if (path_equal(parent, root) || parent->dentry == parent->mnt->mnt_root ||
                 !dom_beneath(parent, root)) { rc = -EACCES; goto put; }
-            rc = inode_permission(mnt_user_ns(parent->mnt), d_inode(parent->dentry), MAY_EXEC);
+            rc = inode_permission(cv_mnt_idmap(parent->mnt), d_inode(parent->dentry), MAY_EXEC);
             if (rc) goto put;
             up.dentry = dget_parent(parent->dentry);
             /* As in namei's scoped handle_dots(), a rename anywhere since
@@ -373,7 +373,7 @@ static long dom_path_operation_name(struct context *c, const struct capstone_del
         else {
             if (d_is_negative(victim)) rc = -ENOENT;
             else rc = security_path_unlink(&parent, victim);
-            if (!rc) rc = vfs_unlink(mnt_user_ns(parent.mnt), d_inode(parent.dentry), victim, NULL);
+            if (!rc) rc = vfs_unlink(cv_mnt_idmap(parent.mnt), d_inode(parent.dentry), victim, NULL);
             dput(victim);
         }
         inode_unlock(d_inode(parent.dentry));
@@ -403,7 +403,7 @@ static long dom_path_operation_name(struct context *c, const struct capstone_del
         /* O_PATH deliberately bypasses final-inode access checks, and
          * dentry_open does not perform may_open. Preserve Linux's permission
          * and append-only restrictions on the very same pinned inode. */
-        rc = inode_permission(mnt_user_ns(pin->f_path.mnt), inode, access);
+        rc = inode_permission(cv_mnt_idmap(pin->f_path.mnt), inode, access);
         if (!rc && S_ISDIR(inode->i_mode) && ((access & MAY_WRITE) || (flags & O_CREAT))) rc = -EISDIR;
         if (!rc && IS_APPEND(inode) &&
             (((access & MAY_WRITE) && !(flags & O_APPEND)) || (flags & O_TRUNC))) rc = -EPERM;
@@ -437,7 +437,7 @@ static long dom_chdir_name(struct context *c, const char *name)
     if (IS_ERR(f)) return PTR_ERR(f);
     rc = -ENOTDIR;
     if (!S_ISDIR(file_inode(f)->i_mode)) goto out;
-    rc = inode_permission(mnt_user_ns(f->f_path.mnt), file_inode(f), MAY_EXEC | MAY_CHDIR);
+    rc = inode_permission(cv_mnt_idmap(f->f_path.mnt), file_inode(f), MAY_EXEC | MAY_CHDIR);
     if (rc) goto out;
     /* Nothing fallible follows publication. Linux's fs cwd is kept in sync
      * so a future native spawn inherits the same directory. The immutable

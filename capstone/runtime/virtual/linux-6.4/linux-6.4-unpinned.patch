@@ -1,0 +1,385 @@
+diff --git a/arch/riscv/include/asm/page.h b/arch/riscv/include/asm/page.h
+--- a/arch/riscv/include/asm/page.h
++++ b/arch/riscv/include/asm/page.h
+@@ -44,17 +44,34 @@
+ 
+ #ifndef __ASSEMBLY__
+ 
+-#ifdef CONFIG_RISCV_ISA_ZICBOZ
+-void clear_page(void *page);
+-#else
+-#define clear_page(pgaddr)			memset((pgaddr), 0, PAGE_SIZE)
+-#endif
++/*
++ * 6.4 port: 6.1's clear_page was memset; 6.4 adds a Zicboz clear_page
++ * (arch/riscv/lib/clear_page.S). The Capstone clear keeps 6.1's memset
++ * fallback, so a page clear never uses cbo.zero outside captag_bulk_on.
++ */
++void capstone_clear_page(void *page);
++#define clear_page(pgaddr)			capstone_clear_page(pgaddr)
+ #define copy_page(to, from)			memcpy((to), (from), PAGE_SIZE)
+ 
+ #define clear_user_page(pgaddr, vaddr, page)	clear_page(pgaddr)
+ #define copy_user_page(vto, vfrom, vaddr, topg) \
+ 			memcpy((vto), (vfrom), PAGE_SIZE)
+ 
++/*
++ * Optional Capstone raw transport: capability tags follow physical pages.
++ * See arch/riscv/mm/captag.c. Every page copy also moves the copied page's tags, and every
++ * page free clears the freed pages' tags.
++ */
++struct page;
++struct vm_area_struct;
++#define __HAVE_ARCH_COPY_HIGHPAGE
++void copy_highpage(struct page *to, struct page *from);
++#define __HAVE_ARCH_COPY_USER_HIGHPAGE
++void copy_user_highpage(struct page *to, struct page *from,
++			unsigned long vaddr, struct vm_area_struct *vma);
++#define HAVE_ARCH_FREE_PAGE
++void arch_free_page(struct page *page, int order);
++
+ /*
+  * Use struct definitions to apply C type checking
+  */
+diff --git a/arch/riscv/include/asm/pgtable.h b/arch/riscv/include/asm/pgtable.h
+--- a/arch/riscv/include/asm/pgtable.h
++++ b/arch/riscv/include/asm/pgtable.h
+@@ -894,4 +894,11 @@ extern unsigned long empty_zero_page[PAGE_SIZE / sizeof(unsigned long)];
+ 
+ #endif /* !__ASSEMBLY__ */
+ 
++#ifndef __ASSEMBLY__
++/* EXPERIMENT experiment/tag-aware-mm: a page that holds capability tags is not swapped out
++ * (there is no swap-side tag store); see arch/riscv/mm/captag.c. */
++#define __HAVE_ARCH_PREPARE_TO_SWAP
++int arch_prepare_to_swap(struct page *page);
++#endif
++
+ #endif /* _ASM_RISCV_PGTABLE_H */
+diff --git a/arch/riscv/mm/Makefile b/arch/riscv/mm/Makefile
+--- a/arch/riscv/mm/Makefile
++++ b/arch/riscv/mm/Makefile
+@@ -17,6 +17,7 @@ obj-y += extable.o
+ obj-$(CONFIG_MMU) += fault.o pageattr.o
+ obj-y += cacheflush.o
+ obj-y += context.o
++obj-y += captag.o
+ obj-y += pgtable.o
+ obj-y += pmem.o
+ 
+diff --git a/arch/riscv/mm/captag.c b/arch/riscv/mm/captag.c
+new file mode 100644
+--- /dev/null
++++ b/arch/riscv/mm/captag.c
+@@ -0,0 +1,311 @@
++// SPDX-License-Identifier: GPL-2.0-only
++/* EXPERIMENT: unpinned capability pages with raw granule transport.
++ * CLDRAW/CSTRAW replace copy_page, including its byte copy: scalar loads may
++ * project a tagged address rather than return the stored representation.
++ * Swap of possibly tagged pages remains refused. CPTAG uses the physical
++ * may-hold-tags flag. No test-only page CSR is used.
++ */
++#include <linux/highmem.h>
++#include <linux/init.h>
++#include <linux/jump_label.h>
++#include <linux/mm.h>
++#include <linux/moduleparam.h>
++#include <linux/string.h>
++#include <linux/of.h>
++#include <linux/export.h>
++#include <linux/cpu.h>
++#include <asm/csr.h>
++
++/* Enabled only by a matching opt-in platform declaration. */
++static DEFINE_STATIC_KEY_FALSE(captag_on);
++static bool enabled;
++module_param(enabled, bool, 0444);
++/* A separate default-off experiment; the raw-move platform is not enough. */
++static DEFINE_STATIC_KEY_FALSE(captag_bulk_on);
++static bool captag_bulk_requested;
++static bool bulk_enabled;
++module_param(bulk_enabled, bool, 0444);
++
++static int __init captag_bulk_setup(char *s)
++{
++	captag_bulk_requested = s && !strcmp(s, "on");
++	return 1;
++}
++__setup("captag_bulk=", captag_bulk_setup);
++
++static bool __init captag_bulk_platform(void)
++{
++	struct device_node *cpu;
++	const char *isa, *ext;
++	u32 block;
++	bool valid = false;
++
++	if (num_possible_cpus() != 1)
++		return false;
++	cpu = of_get_cpu_node(0, NULL);
++	if (cpu && !of_property_read_string(cpu, "riscv,isa", &isa) &&
++	    !of_property_read_u32(cpu, "riscv,cboz-block-size", &block)) {
++		ext = strstr(isa, "_zicboz");
++		valid = ext && (ext[7] == '\0' || ext[7] == '_') && block == 64;
++	}
++	of_node_put(cpu);
++	return valid;
++}
++static bool captag_disabled;
++static unsigned int captag_ids;
++static bool captag_exact;
++static unsigned long copies, copy_retries, frees, freed_pages, swap_refused, cleared_pages;
++module_param(copies, ulong, 0444);
++module_param(copy_retries, ulong, 0444);
++module_param(frees, ulong, 0444);
++module_param(freed_pages, ulong, 0444);
++module_param(swap_refused, ulong, 0444);
++module_param(cleared_pages, ulong, 0444);
++
++static int __init captag_setup(char *s)
++{
++	if (s && !strcmp(s, "off"))
++		captag_disabled = true;
++	return 1;
++}
++__setup("captag=", captag_setup);
++
++static int __init captag_init(void)
++{
++	struct device_node *node;
++	u32 ids, exact, page, granule;
++	bool valid;
++
++	/* Readback describes the static key, never a boot-time parameter value. */
++	enabled = false;
++	bulk_enabled = false;
++	/* IRQ exclusion and the firmware retry protocol are single-hart.
++	 * Check possible CPUs, not online CPUs: hotplug cannot make this safe. */
++	if (num_possible_cpus() != 1) {
++		pr_warn("captag: disabled: requires one possible CPU\n");
++		return 0;
++	}
++	/* Byte-only merging and huge anonymous pages are outside this contract. */
++	if (IS_ENABLED(CONFIG_KSM) || IS_ENABLED(CONFIG_TRANSPARENT_HUGEPAGE))
++		return 0;
++	node = of_find_compatible_node(NULL, NULL, "capstone,unpinned-v1");
++	if (!node)
++		return 0;
++	valid = !of_property_read_u32(node, "id-bits", &ids) &&
++		!of_property_read_u32(node, "exact-bounds", &exact) &&
++		!of_property_read_u32(node, "page-size", &page) &&
++		!of_property_read_u32(node, "granule-size", &granule) &&
++		(ids == 30 || ids == 55) && exact <= 1 &&
++		page == PAGE_SIZE && granule == 16;
++	of_node_put(node);
++	if (!valid || captag_disabled)
++		return 0;
++	captag_ids = ids;
++	captag_exact = exact;
++	static_branch_enable(&captag_on);
++	enabled = true;
++	if (captag_bulk_requested && captag_bulk_platform()) {
++		bulk_enabled = true;
++		static_branch_enable(&captag_bulk_on);
++	}
++	pr_info("captag: bulk=%u (requires firmware S-mode CBZE permission)\n",
++		bulk_enabled);
++	return 0;
++}
++early_initcall(captag_init);
++
++/* The module resolves this symbol dynamically, so its default pinned build
++ * still loads on a stock kernel. Success certifies both model and mm support. */
++int capstone_unpinned_config(unsigned int ids, bool *exact)
++{
++	if (!static_branch_unlikely(&captag_on) || ids != captag_ids)
++		return -EOPNOTSUPP;
++	*exact = captag_exact;
++	return 0;
++}
++EXPORT_SYMBOL_GPL(capstone_unpinned_config);
++
++/* Hardware owns this flag: every capability publication, including a raw
++ * copy, sets it without a software trap. PG_arch_1 is already dcache state.
++ * Scalar writers leave it set; only a verified-empty acknowledgement resets
++ * it. The physical key covers all aliases and carries no access authority. */
++static unsigned long captag_summary(struct page *page, bool ack)
++{
++	unsigned long result, phys = page_to_phys(page);
++
++	if (ack)
++		asm volatile(".insn i 0x0b, 6, %0, %1, 1"
++			     : "=r" (result) : "r" (phys) : "memory");
++	else
++		asm volatile(".insn i 0x0b, 6, %0, %1, 0"
++			     : "=r" (result) : "r" (phys) : "memory");
++	return result;
++}
++
++/* The model's ordinary non-capability writer rule clears every tag in each
++ * zeroed block. No second granule sweep follows. The opt-in requires the
++ * declared 64-byte Zicboz block and firmware permission to execute it in S. */
++void capstone_clear_page(void *page)
++{
++	unsigned long p = (unsigned long)page, end = p + PAGE_SIZE;
++
++	if (!static_branch_unlikely(&captag_bulk_on)) {
++		memset(page, 0, PAGE_SIZE);
++		return;
++	}
++	asm volatile("1: .rept 8\n\t"
++		     ".insn i 0x0f, 2, x0, %0, 4\n\t"
++		     "addi %0, %0, 64\n\t.endr\n\t"
++		     "bltu %0, %1, 1b"
++		     : "+r" (p) : "r" (end) : "memory");
++}
++EXPORT_SYMBOL(capstone_clear_page);
++
++/* One pass of the raw transport. */
++static void captag_copy_pass(void *to, const void *from)
++{
++	unsigned long count = PAGE_SIZE / 16;
++
++	if (static_branch_unlikely(&captag_bulk_on)) {
++		count /= 8;
++		asm volatile("1: .set off, 0\n\t.rept 8\n\t"
++			     ".insn i 0x0b, 4, t0, %1, off\n\t"
++			     ".insn s 0x0b, 5, t0, off(%0)\n\t"
++			     ".set off, off + 16\n\t.endr\n\t"
++			     "addi %0, %0, 128\n\taddi %1, %1, 128\n\t"
++			     "addi %2, %2, -1\n\tbnez %2, 1b\n\t"
++			     "li t0, 0"
++			     : "+r" (to), "+r" (from), "+r" (count)
++			     : : "t0", "memory");
++		return;
++	}
++	asm volatile("1: .insn i 0x0b, 4, t0, %1, 0\n\t"
++		     ".insn s 0x0b, 5, t0, 0(%0)\n\t"
++		     "addi %0, %0, 16\n\taddi %1, %1, 16\n\t"
++		     "addi %2, %2, -1\n\tbnez %2, 1b\n\t"
++		     "li t0, 0"
++		     : "+r" (to), "+r" (from), "+r" (count)
++		     : : "t0", "memory");
++}
++
++/* The opaque temporary (t0) survives neither an S-mode interrupt frame nor a
++ * firmware trap: both save integer registers only. Masking S interrupts does
++ * not stop the firmware's machine-timer interrupt, and on an instruction-exact
++ * clock it can land between a raw load and its store, which then stores the
++ * granule without its tag (irq-window-probe.c reproduces this).
++ * The tested firmware (OpenSBI 1.3) serves that interrupt by clearing MTIE and
++ * setting STIP, so STIP clear before a pass and set after it means one was
++ * served inside it: redo the pass. The source is unchanged (one hart, S
++ * interrupts masked), so the redo is exact. STIP set before the pass means
++ * MTIE is already clear and none can arrive, so a second pass always ends the
++ * loop; a third would mean the firmware contract does not hold, and stopping
++ * is the only safe answer. With Sstc a supervisor deadline never enters
++ * firmware and STIP rising inside the pass costs one redundant pass; a
++ * firmware-owned machine timer would NOT be detected, nor would any other
++ * machine-level asynchronous event. This relies on that firmware contract and
++
++ * is no claim about other firmware or silicon. The caller masks interrupts. */
++static void captag_copy_raw(void *to, const void *from)
++{
++	unsigned long timer_before;
++	unsigned int pass = 0;
++
++	for (;;) {
++		timer_before = csr_read(CSR_IP);
++		captag_copy_pass(to, from);
++		if ((timer_before & IE_TIE) || !(csr_read(CSR_IP) & IE_TIE))
++			break;
++		++copy_retries;
++		BUG_ON(++pass > 1);
++	}
++}
++
++void copy_highpage(struct page *to, struct page *from)
++{
++	unsigned long flags;
++
++	if (!static_branch_unlikely(&captag_on)) {
++		copy_page(page_address(to), page_address(from));
++		return;
++	}
++	/* The sticky flag over-approximates "may hold a tag": hardware sets it on
++	 * every capability publication. A clear flag proves the source holds none
++	 * at this instant, so an ordinary copy is exact and its stores clear any
++	 * tag in the destination (rule 1). The query and the copy run with S
++	 * interrupts masked, so no other code on this hart can publish a tag in
++	 * between; a writer on another hart would, and one hart is required.
++	 * The contract is the one a data copy needs anyway: the caller keeps
++	 * other writers of the source out for the duration (migration and
++	 * compaction lock and unmap the page, fork COW of private anonymous
++	 * memory write-protects it). A page also writable through another
++	 * mapping, such as a private mapping of a shared file page, is outside
++	 * it. Only flagged pages pay for the raw transport. */
++	local_irq_save(flags);
++	if (captag_summary(from, false))
++		captag_copy_raw(page_address(to), page_address(from));
++	else
++		copy_page(page_address(to), page_address(from));
++	local_irq_restore(flags);
++	++copies;
++}
++EXPORT_SYMBOL(copy_highpage);
++
++void copy_user_highpage(struct page *to, struct page *from,
++			unsigned long vaddr, struct vm_area_struct *vma)
++{
++	copy_highpage(to, from);
++}
++EXPORT_SYMBOL(copy_user_highpage);
++
++/* One scalar store per granule clears the tag by rule 1. Contents of a
++ * freed page are dead, so zeroing only the first word is sufficient. */
++static void captag_clear_scalar(struct page *page)
++{
++	unsigned long *p = page_address(page);
++	unsigned long j;
++
++	for (j = 0; j < PAGE_SIZE / sizeof(*p); j += 16) {
++		WRITE_ONCE(p[j], 0UL);      WRITE_ONCE(p[j + 2], 0UL);
++		WRITE_ONCE(p[j + 4], 0UL);  WRITE_ONCE(p[j + 6], 0UL);
++		WRITE_ONCE(p[j + 8], 0UL);  WRITE_ONCE(p[j + 10], 0UL);
++		WRITE_ONCE(p[j + 12], 0UL); WRITE_ONCE(p[j + 14], 0UL);
++	}
++}
++
++void arch_free_page(struct page *page, int order)
++{
++	unsigned long i, n = 1UL << order;
++
++	if (!static_branch_unlikely(&captag_on))
++		return;
++	for (i = 0; i < n; ++i) {
++		/* Flagged: ask whether a tag is actually live. Scalar overwrites
++		 * leave the flag set, and a verified-empty answer resets it. */
++		if (captag_summary(page + i, false) && captag_summary(page + i, true)) {
++			if (static_branch_unlikely(&captag_bulk_on))
++				capstone_clear_page(page_address(page + i));
++			else
++				captag_clear_scalar(page + i);
++			/* The allocator owns the page exclusively until reuse. */
++			BUG_ON(captag_summary(page + i, true));
++			++cleared_pages;
++		}
++	}
++	++frees;
++	freed_pages += n;
++}
++
++int arch_prepare_to_swap(struct page *page)
++{
++	struct folio *folio = page_folio(page);
++	long i, n = folio_nr_pages(folio);
++
++	if (!static_branch_unlikely(&captag_on))
++		return 0;
++	for (i = 0; i < n; i++)
++		if (captag_summary(folio_page(folio, i), false)) {
++			++swap_refused;
++			return -EBUSY;
++		}
++	return 0;
++}

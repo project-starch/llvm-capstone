@@ -146,7 +146,7 @@ static int native_spawn_exec(void *data)
             if (!f) return -EBADF;
             rc = !S_ISDIR(file_inode(f)->i_mode) ? -ENOTDIR :
                  !dom_directory_grant(d, &f->f_path) ? -EACCES :
-                 inode_permission(mnt_user_ns(f->f_path.mnt), file_inode(f), MAY_EXEC | MAY_CHDIR);
+                 inode_permission(cv_mnt_idmap(f->f_path.mnt), file_inode(f), MAY_EXEC | MAY_CHDIR);
             if (!rc) {
                 old = d->cwd_path; d->cwd_path = f->f_path; path_get(&d->cwd_path);
                 set_fs_pwd(current->fs, &d->cwd_path); path_put(&old);
