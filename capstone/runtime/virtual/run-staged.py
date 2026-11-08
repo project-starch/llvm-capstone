@@ -21,7 +21,9 @@ def main():
     p.add_argument('--host-window', action='store_true',
                    help='Measure host wall/CPU time between HOST_WINDOW_BEGIN/END serial lines; no plugins')
     p.add_argument('--host-perf', type=Path,
-                   help='Diagnostic only: perf binary for sampling inside the host window; perturbs timing')
+                   help='Diagnostic only: perf binary inside the host window; excludes clean timing')
+    p.add_argument('--host-perf-mode', choices=['record', 'stat'], default='record',
+                   help='Sample stacks or count host user-mode instructions/cycles/branches')
     p.add_argument('--images', type=Path, required=True)
     p.add_argument('--firmware', type=Path, help='Override images/fw_jump.elf')
     p.add_argument('--dtb', type=Path, help='Override platform device tree (qualification fixtures)')
@@ -49,6 +51,8 @@ def main():
         p.error('--host-window timing must not include a profiling plugin')
     if a.host_perf and not a.host_window:
         p.error('--host-perf requires --host-window')
+    if a.host_perf_mode != 'record' and not a.host_perf:
+        p.error('--host-perf-mode stat requires --host-perf')
     if any(',' in arg or '=' not in arg for arg in a.plugin_arg):
         p.error('--plugin-arg must be key=value without commas')
     a.work.mkdir(parents=True, exist_ok=False)
@@ -91,7 +95,7 @@ def main():
         cmd += ['-icount', f'shift={a.icount}']
     if a.share:
         cmd += ['-virtfs', f'local,path={a.share.resolve()},mount_tag=gate9p,security_model=none,id=gate9p']
-    if a.host_perf:
+    if a.host_perf and a.host_perf_mode == 'record':
         cmd += ['-perfmap']
     (a.work/'qemu-command.json').write_text(json.dumps(cmd, indent=2)+'\n')
     completed = login = sent = False
@@ -101,7 +105,7 @@ def main():
         guest = subprocess.Popen(cmd, env=guest_env, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                  stderr=subprocess.STDOUT, bufsize=0)
         window = HostWindow(guest.pid) if a.host_window else None
-        profile = HostProfile(a.host_perf, a.work, guest.pid) if a.host_perf else None
+        profile = HostProfile(a.host_perf, a.work, guest.pid, a.host_perf_mode) if a.host_perf else None
         profile_started = False
         deadline = time.monotonic() + a.timeout
         try:
@@ -147,6 +151,8 @@ def main():
         if window and completed:
             result = window.result()
             result['profiled'] = bool(profile)
+            if profile:
+                result['profile_mode'] = a.host_perf_mode
             (a.work/'host-window.json').write_text(json.dumps(result, indent=2)+'\n')
     print(a.work/'serial.log')
     # Completion only; each application gate must validate its own oracle.

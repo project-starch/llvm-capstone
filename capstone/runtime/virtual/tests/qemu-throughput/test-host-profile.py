@@ -3,7 +3,7 @@ import sys
 import tempfile
 from pathlib import Path
 import unittest
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 sys.path.insert(0,str(Path(__file__).resolve().parents[2]))
 from host_profile import HostProfile
 
@@ -28,5 +28,18 @@ class ProfileTests(unittest.TestCase):
         proc.send_signal.assert_not_called()
     def test_clean_exit(self):
         p,proc=self.profiler(False,0);p.stop();proc.send_signal.assert_not_called()
+    def test_stat_mode_counts_instead_of_sampling(self):
+        with tempfile.TemporaryDirectory() as directory, patch('host_profile.subprocess.Popen') as popen:
+            p=HostProfile(Path('/perf'),Path(directory),123,mode='stat')
+            p.start()
+            cmd=popen.call_args.args[0]
+            self.assertEqual(cmd[1:4],['stat','-x',';'])
+            self.assertIn('instructions:u,cycles:u,branches:u,branch-misses:u',cmd)
+            self.assertNotIn('--call-graph',cmd)
+            self.assertEqual(cmd[-1],str(Path(directory)/'host-perf-stat.csv'))
+            p.log.close()
+    def test_unknown_mode_rejected(self):
+        with self.assertRaises(ValueError):
+            HostProfile(Path('/perf'),Path('/unused'),123,mode='unknown')
 
 if __name__=='__main__':unittest.main()

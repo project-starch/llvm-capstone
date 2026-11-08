@@ -22,11 +22,14 @@ def main():
     p.add_argument('--icount', type=int, choices=range(11))
     p.add_argument('--host-cpu', type=int, help='Pin entire emulator process tree to this allowed host CPU')
     p.add_argument('--host-perf', type=Path, help='Diagnostic sampling; results are excluded from clean timing comparisons')
+    p.add_argument('--host-perf-mode', choices=['record', 'stat'], default='record')
     p.add_argument('--pcrel', choices=['true', 'false'], help='Explicit scalar-only PC-relative translation control')
     p.add_argument('--scalar-cpu', choices=['common', 'u-mode', 'platform'], help='CPU configuration control for explicit fork scalar arms')
     p.add_argument('--scalar-machine', choices=['virt', 'virt-capstone'], help='Machine control for explicit fork scalar arms')
     p.add_argument('--scalar-kernel', choices=['off', 'native'], help='Kernel argument control for explicit fork scalar arms')
     a = p.parse_args()
+    if a.host_perf_mode != 'record' and not a.host_perf:
+        p.error('--host-perf-mode stat requires --host-perf')
     if a.pcrel is not None and (not a.arm or 'platform-native' in a.arm):
         p.error('--pcrel requires explicit scalar arms; native profile stays unchanged')
     scalar_controls = dict(cpu=a.scalar_cpu, machine=a.scalar_machine, kernel=a.scalar_kernel)
@@ -44,7 +47,8 @@ def main():
     pins = {k: sha(getattr(a, k)) for k in ['stock','fork','firmware','plain','native','input','reference']}
     pins.update({k:sha(a.images/k) for k in ['Image','rootfs.ext2']})
     report = dict(status='RUNNING', inputs=pins, iterations=a.iterations, icount=a.icount,
-                  profiled=bool(a.host_perf), pcrel_override=a.pcrel, scalar_controls=scalar_controls,
+                  profiled=bool(a.host_perf), profile_mode=a.host_perf_mode if a.host_perf else None,
+                  pcrel_override=a.pcrel, scalar_controls=scalar_controls,
                   host=dict(uname=list(platform.uname()), affinity=sorted(os.sched_getaffinity(0))),
                   samples=[], limitations=[
                       'Host serial-delivery timing, not target cycles or hardware overhead.',
@@ -86,7 +90,7 @@ def main():
                 cpu = re.sub(r',x-pcrel=(?:true|false)', '', cpu) + ',x-pcrel=' + a.pcrel
             cmd = ['python3',str(runner),'--qemu',str(a.stock if arm=='stock-plain' else a.fork),'--images',str(a.images),'--firmware',str(a.firmware),'--stage',str(stage),'--work',str(d/'vm'),'--memory','4G','--disk-mib','128','--timeout','180','--machine',machine,'--cpu',cpu,'--host-window']
             if flags:cmd+=['--kernel-arg',flags]
-            if a.host_perf:cmd+=['--host-perf',str(a.host_perf)]
+            if a.host_perf:cmd+=['--host-perf',str(a.host_perf),'--host-perf-mode',a.host_perf_mode]
             if a.icount is not None:cmd+=['--icount',str(a.icount)]
             (d/'command.json').write_text(json.dumps(cmd,indent=2)+'\n')
             env=dict(os.environ);env.pop('CAPSTONE_QEMU_CPU_EXTRA',None);env.pop('CAPSTONE_QEMU_DOMAIN_LOCK',None)

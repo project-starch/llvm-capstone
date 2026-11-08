@@ -1,4 +1,4 @@
-"""Optional host perf sampling, deliberately separate from clean timing runs."""
+"""Optional host perf diagnostics, deliberately separate from clean timing runs."""
 import json
 from pathlib import Path
 import shutil
@@ -7,14 +7,22 @@ import subprocess
 
 
 class HostProfile:
-    def __init__(self, perf, work, pid):
+    def __init__(self, perf, work, pid, mode='record'):
+        if mode not in ('record', 'stat'):
+            raise ValueError('Unknown host perf mode')
         self.perf, self.work, self.pid = perf, work, pid
+        self.mode = mode
         self.process = self.log = None
 
     def start(self):
-        cmd = [str(self.perf), 'record', '--clockid', 'mono', '-e', 'cycles:u',
-               '-F', '199', '-m', '128', '--call-graph', 'dwarf,8192', '-p', str(self.pid),
-               '-o', str(self.work/'host-perf.data')]
+        if self.mode == 'stat':
+            cmd = [str(self.perf), 'stat', '-x', ';', '-e',
+                   'instructions:u,cycles:u,branches:u,branch-misses:u',
+                   '-p', str(self.pid), '-o', str(self.work/'host-perf-stat.csv')]
+        else:
+            cmd = [str(self.perf), 'record', '--clockid', 'mono', '-e', 'cycles:u',
+                   '-F', '199', '-m', '128', '--call-graph', 'dwarf,8192', '-p', str(self.pid),
+                   '-o', str(self.work/'host-perf.data')]
         (self.work/'host-perf-command.json').write_text(json.dumps(cmd, indent=2)+'\n')
         self.log = (self.work/'host-perf.log').open('wb')
         try:

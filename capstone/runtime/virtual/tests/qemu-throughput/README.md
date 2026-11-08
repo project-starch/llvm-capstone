@@ -496,7 +496,12 @@ TLB store hook when needed. All 1,000 timed outputs and ten warm-ups match.
 This does not mean that capability security makes a program faster: these are
 different emulator paths for the same scalar binary. A separate stock/fork
 profile points to the fork's existing page-specific SFENCE.VMA path as another
-difference; an isolated full-flush reversal is still pending.
+difference. The [full-flush reversal](sfence-attribution-qualification.json)
+confirms it: the page-specific path takes 6.03s versus 9.61s with full flushing
+in the forward cohort, and 4.99s versus 7.99s in reverse (37.25% / 37.55% less
+CPU). Upstream takes 8.98s / 7.56s. Host speed shifted between the cohorts;
+both directions agree. This page-flush optimization already exists in the
+native handoff baseline. The diagnostic full-flush build is not a candidate.
 
 `measure.py` exposes `--scalar-cpu common|u-mode|platform`,
 `--scalar-machine virt|virt-capstone` and `--scalar-kernel off|native` only for
@@ -532,3 +537,19 @@ bounds with both ID widths. Separate dirty-log assertions exercise reset and
 reprobe; intentionally broken dirty-probe and code-invalidation builds fail.
 Instrumented runs are excluded from timing. Combined task/race and full-SPEC
 qualification is still required before advancing the default pin.
+
+## Counting host instructions separately from elapsed time
+
+`measure.py --host-perf /path/to/perf --host-perf-mode stat` counts host
+userspace instructions, cycles, branches and branch misses within the existing
+guest workload markers. The default perf mode remains stack sampling (`record`).
+Both modes set `profiled=true`; their timings must not enter clean comparisons.
+Counter mode writes `vm/host-perf-stat.csv` and records its exact command. It
+does not generate a JIT map or sample call stacks.
+
+These are QEMU's host instructions, including translated guest kernel work,
+not guest ISA instruction counts. Perf attaches after the begin marker, so
+small boundary losses are possible; use long, repeated windows. Inspect counter
+running coverage before comparing counts. On hybrid hosts the unused PMU can
+report `not counted`; require all four events on the active PMU and retain the
+raw report. Permission errors or a failed perf process fail the run.
