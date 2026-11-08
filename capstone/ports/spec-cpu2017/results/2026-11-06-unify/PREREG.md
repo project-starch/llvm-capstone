@@ -137,3 +137,14 @@ board. It was never in ucyc: the digest runs once, after the last CV_STEP, and u
 steps. The reasoning matched the QEMU launcher count to the board's per-step window without checking that they were
 the same window. The per-step excess, 3.2 M cycles against 0.87 M, is UNRESOLVED again; QEMU does not show it (its
 ucyc per step is 0.1 M for both stacks).
+
+## Correction (8 Nov 20:4x): the null-capability memset is not in this runtime
+
+Line 7 lists "the null-capability memset" as part of dev's heap runtime. It is not part of it. memset in
+capstone/ports/musl-capstone/runtime/string_bounds_safe.c has no null-capability path on dev (a6956c05a6d1 base), on
+the devrg SDK this stack links, or on heapport a443914d9df2. Only perf/arena-cache 46d67471e727 has it, behind
+`#ifdef CAPSTONE_MEMSET_CAP_ZERO`. The object code agrees: memset in string_bounds_safe.c.obj has 5 stc in c3f's ac12
+SDK, and 0 stc with 5 sd in devrg (checked by the compiler lane with llvm-objdump). Measured on gcc train in the
+arena addenda, the cache path is worth −0.12 G instructions. This stack's results are unchanged. Only the description
+of what the stack contains was wrong. The memset path is queued for the universal runtime under the allocator fixture
+gate (capstone/docs/plans/2026-11-08-optimisation-backlog.md).

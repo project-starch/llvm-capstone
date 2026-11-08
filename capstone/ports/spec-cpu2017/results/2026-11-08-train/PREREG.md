@@ -58,3 +58,12 @@ ended rc 1 in the out-hfl run.
 - A run that fails T0 is not reported as a train number. That benchmark falls back to its test-size number, marked
   as such. If the board has time before the deadline, the run repeats once.
 - A ratio outside T2 is checked before it is reported: kernel time, peak pages and outputs against the twin.
+
+## Addendum 1 (8 Nov 20:4x, board 1 running Plain perlbench): the stages' plan.json executable hashes rewritten
+
+Every stage in spec/stages-train-fair kept its SOURCE stage's `executables` sha256 in plan.json after its exe was
+replaced, for example gcc 5642377943d724c6 for the file 736f881f4958ac3b. The compiler lane found this on the
+Capstone stages, and the Plain stages had it too. The files are the pre-registered images: every file hash equals
+this record's table. run-stage.py never reads those fields (only make-stage.py writes them), so no run is affected. All
+17 plan.json files were rewritten to their files' hashes (written to a new file and renamed; link count 1). Results
+cite images by file hash.
