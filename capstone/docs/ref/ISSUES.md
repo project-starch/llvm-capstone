@@ -4201,6 +4201,57 @@ cycle's `dtlb_is_page`. `lsu_paddr_o` is unchanged.
 - Correctness: only where software maps a device through a superpage. No image has been checked for that.
 - The board's THP mcf run (runtime lane) is the cheap silicon reading of the performance half.
 
+### R-69 — a CSRUNV RESUME takes the context's mstatus and satp from the frame unchecked: a frame rewritten between the escape and the resume runs its context with bare translation and any mstatus bits (MPRV, MPP, TVM, ...) `OPEN on C.5a and E5 (present by source at e7af48457 / bitstream 3, 1fc2cd5aa / C.5a, a481031ca / E0 and 443f67892 / E5: the raw id-3 and id-66 writes and the single entry to the phase-7 precheck; vp2 bf3db3175 not checked for id 66); DEMONSTRATED IN SIMULATION 2026-11-09 on E5 443f67892 (va-runv-bare.S, predictions in its header before any run); FIX IN RTL on e5-native 14b0a57df (the resume clamp), sealed caplifive_e5native_14b0a57df (sha256 b6698b7c...), clamp measured in simulation; NOT MEASURED ON SILICON. Found 2026-11-09 by the claim-auditor of the native (i) detach/adopt design`
+
+Siblings: none. A resumed context's satp PPN/ASID and srevroot come from the frame too. Residual 2b in the plan doc:
+the semantics owner recorded it as kernel authority, because the kernel chooses both at ENTRY. It is not this entry.
+
+**The mechanism.**
+- The switcher's RESUME (runv_mode 3/4, `capstone_dom_switcher.anvil` `runv_resume_step`) goes from the caller's SAVE
+  straight to the restore steps. The ENTRY precheck (phase 7: satp mode 8, srevroot non-zero and 4 KiB-aligned,
+  options < 4, a tagged PCC) runs for mode 1 only.
+- rstep 2 writes reg id 3 from frame +920, which `csr_regfile.sv` applies as a raw `mstatus_d = data[63:0]`.
+- rstep 3 writes id 66 from +928 as a raw `satp_d`.
+- ENTRY never lets the frame set mstatus: id 69 forces SXL/UXL and FS Initial.
+
+**The consequences.**
+- satp with mode Bare makes `vctx_o` false (it needs MODE_SV), so the context runs untranslated at priv M.
+- MPRV = 1 with MPP != M also disarms the LSU's capability check for the context's loads and stores. The check is
+  armed only at ld_st priv M (`load_store_unit.sv:1347-1348`); the claim-auditor found this by source.
+- Before CSRUNV ADOPT this needed a real escape and then a rewrite of the frame before its resume. ADOPT (e5-native)
+  makes a never-escaped frame resumable, so the clamp went in with it.
+
+**The measurement** (va-runv-bare.S on capstone-ariane e5-native 2cf56f02f; options 3, the page `late` unmapped):
+- The context escapes on a service ecall. M rewrites +928 with its mode cleared to Bare (the PPN kept) and sets MPRV|TVM
+  (0x120000) in +920. S replies (action 2). The context loads through a capability over `late`.
+- The readings are the reply's rd, +16, +24, data[0], the saved satp mode, and the saved MPRV|TVM.
+
+| tree | the frame rewritten | the frame untouched (-DBARE_CTRL) |
+|---|---|---|
+| E5 443f67892 (no clamp) | kind 2, cause 5, data 0, **mode 0, 0x120000** | kind 4, cause 13, 0, mode 8, 0 |
+| e5-native 14b0a57df (clamp) | kind 4, cause 13, 0, **mode 8, 0** | kind 4, cause 13, 0, mode 8, 0 |
+
+- On E5 the next escape saved satp mode 0 and MPRV|TVM set, so the resume installed both rewritten words.
+- The pre-registered E5 prediction ("the unmapped load completes": 3, 3, 3, 11, 0x42, 0, 0x120000) is REFUTED in that
+  half. The context ended terminal with cause 5, a load access fault, instead. The claim-auditor's source reading also
+  predicts completion.
+- OPEN: what raises the cause 5 (not traced). The finding stands on the saved mode and mstatus words. It does not rest
+  on the load.
+
+**The fix (e5-native 14b0a57df, `csr_regfile.sv`).**
+- While `sup_runv_q` is set, the switcher's id-3 write keeps only SXL/UXL (as id 69 left them) plus the frame's FS, and
+  the id-66 write forces satp's mode to Sv39.
+- `sup_runv_q` rises at the switcher's receive handshake, so it covers the whole RESUME walk.
+- ENTRY's id-66 write is already Sv39 after its precheck.
+- The ESCAPE's restore of the CALLER runs after `sup_clear` has dropped `sup_runv_q`, so it is untouched.
+- The final claim-auditor enumerated every switcher write of ids 3 and 66 and found the timing SUPPORTED.
+- The semantics owner's ruling (2026-11-09): a RESUME must never yield raw M or bare translation, whoever wrote the
+  frame. It is not taken onto standalone E5 or C.5a, which keep the hole.
+- Record and arms: llvm-capstone land/rtl-evariants (2026-11-08-bitstream-variants-e1-e4.md, the e5-native section).
+
+**QEMU** keeps a parked context's callee state host-side. So it models neither the hole nor the clamp: a frame rewritten
+between escape and resume does not change what QEMU resumes. No QEMU result covers this case.
+
 ### R-57 — a capability STORE whose translation faults retires WITHOUT its page fault and is committed to the store buffer, which copies an INVALID speculative entry into its commit queue (a ghost head that never drains) and underflows its speculative count: the vp2 wedges r8..r11 `OPEN ON SILICON (caplifive_vp2_bf3db3175); DEMONSTRATED in simulation 2026-10-18 by a matched pair; FIXED on virtual-profile-2-c 2114e11bd for the next bitstream; the store-side twin of R-56; software rule S-25 (no capability store as a page's first access) until then`
 
 **What happens** (bf3db3175, read by the RTL lane and audited by a claim-auditor against the trace). The store syncer
