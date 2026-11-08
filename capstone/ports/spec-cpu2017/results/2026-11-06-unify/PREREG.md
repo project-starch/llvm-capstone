@@ -148,3 +148,14 @@ SDK, and 0 stc with 5 sd in devrg (checked by the compiler lane with llvm-objdum
 arena addenda, the cache path is worth −0.12 G instructions. This stack's results are unchanged. Only the description
 of what the stack contains was wrong. The memset path is queued for the universal runtime under the allocator fixture
 gate (capstone/docs/plans/2026-11-08-optimisation-backlog.md).
+
+## Correction (8 Nov 22:1x): the tick probe's VOID cause was the board heartbeat, not console drain
+
+The VOID verdict stands, but its stated cause is withdrawn. The exit-cost analysis (branch perf/exit-kernel 90b69152e63f,
+results/2026-11-08-exitk/UNIFY-440S.md, with a claim-auditor pass) traces it to the board harness's heartbeat. Every
+30 s the heartbeat runs `wc -c` and `wc -l` over /tmp/step.out, which in these unify gcc stages begins with the
+762 KB kallsyms dump. That is ~6.8 s of CPU per heartbeat on the 25 MHz core. The heartbeat's children used 704.7 s
+of CPU in out-nd3-b3, against 14.0 s for the first two heartbeats, before any context ran. The probe ran beside that
+`wc` (gap share 0.324-0.325, ~9.7 s of every 30 s). The same mechanism is the leading account of this stack's extra
+outside time on gcc against c3f (plausible, not proven; a fixed-heartbeat stage is drafted there). It does not apply
+to the perlbench unify stages, whose step output stays under 70 KB (@@HB lines), nor to the train stages.

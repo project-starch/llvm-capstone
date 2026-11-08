@@ -83,3 +83,12 @@ specdiff PASS, 43 processes per snapshot, the context's time reads as system tim
   taken in; when that is the launcher's user mode after the ioctl returns, context time reads as user time.
 - The same bias applies to cvprof's samples: deferred ticks land at the first point interrupts are taken, which
   must be separated when its perlbench dump is read (results/2026-11-08-exitprof).
+
+## Correction (8 Nov 22:1x): the 467 s of user time is the heartbeat's children, not context time
+
+The reading above, that deferred ticks make context time read as user time, is withdrawn, and so is its extension to
+cvprof's samples. The launcher's cutime moved only +155 ticks. The 467 s of user time is the board heartbeat's
+children: `wc -c` and `wc -l` over a step output that begins with a 762 KB kallsyms dump (perf/exit-kernel
+90b69152e63f, results/2026-11-08-exitk/UNIFY-440S.md). D1's attribution clause still FAILS, for this reason instead.
+The digest result of this record (perlbench 37,132 → 30,120 s) is unaffected. Both perlbench arms' step outputs stay
+under 70 KB, so neither carries the large-file heartbeat cost.
