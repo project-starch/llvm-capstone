@@ -209,6 +209,7 @@ def main():
     parser.add_argument("--live-output", action="store_true",
                         help="Diagnostic scalar watcher mirrors current stdout/stderr every guest second; not for performance measurements")
     parser.add_argument("--local-tmp", action="store_true", help="Map /tmp to a fresh private directory inside the existing workload grant")
+    parser.add_argument("--no-icount", action="store_true", help="Use wall-clock virtual time for functional tests; no deterministic instruction counts")
     args = parser.parse_args()
     if args.timeout <= 0:
         parser.error("--timeout must be positive")
@@ -235,6 +236,7 @@ def main():
     platform["null_device_grant"] = args.null_device
     platform["local_tmp_grant"] = args.local_tmp
     platform["live_output"] = args.live_output
+    platform["icount"] = None if args.no_icount else 0
     if args.live_output:
         platform["timing_note"] = "Live output observer enabled; elapsed times are diagnostic, not performance measurements."
         print("run-spec-tests: --live-output is diagnostic; elapsed times are not performance measurements", file=sys.stderr)
@@ -316,9 +318,11 @@ def main():
             "--qemu", str(args.qemu.resolve()), "--images", str(args.images.resolve()),
             "--firmware", str(args.firmware.resolve()), "--stage", str(stage),
             "--work", str(directory / "vm"), "--share", str(result), "--memory", args.memory,
-            "--disk-mib", "512", "--timeout", str(args.timeout), "--icount", "0",
+            "--disk-mib", "512", "--timeout", str(args.timeout),
             "--kernel-arg", flags,
         ]
+        if not args.no_icount:
+            command += ["--icount", "0"]
         write_json(directory / "command.json", command)
         environment = dict(os.environ, CAPSTONE_QEMU_CPU_EXTRA=(
             f"x-capstone-supervisor-slots={args.slots},x-pcrel=false,"
@@ -352,6 +356,7 @@ def main():
             errors.append("Kernel failure in serial log")
         row = {
             "benchmark": bench, "runner_rc": returncode,
+            "icount": None if args.no_icount else 0,
             "host_elapsed_seconds": time.monotonic() - start,
             "commands": commands, "expected_commands": len(commands), "exit_statuses": statuses,
             "image_commands": images, "expected_image_commands": len(images),

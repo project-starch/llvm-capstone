@@ -35,6 +35,7 @@ def main():
     parser.add_argument('--shell', type=Path)
     parser.add_argument('--null-device', action='store_true')
     parser.add_argument('--local-tmp', action='store_true')
+    parser.add_argument("--no-icount", action="store_true", help="Use wall-clock virtual time; functional checks only")
     args = parser.parse_args()
     if args.timeout <= 0 or len(set(args.benchmarks)) != len(args.benchmarks):
         parser.error('Positive timeout and distinct benchmarks required')
@@ -58,7 +59,7 @@ def main():
     spec.loader.exec_module(validation)
     report = dict(status='RUNNING', scope='Exact output equivalence to qualified baseline; not fresh official comparator execution',
                   baseline_sha256=digest(args.baseline), qemu_sha256=digest(args.qemu),
-                  results=[], started_epoch=time.time())
+                  icount=None if args.no_icount else 0, results=[], started_epoch=time.time())
     def save():
         (args.out/'qualification.json').write_text(json.dumps(report, indent=2)+'\n')
     save()
@@ -84,6 +85,8 @@ def main():
                    '--out', str(out), '--qemu', str(args.qemu), '--images', str(args.images),
                    '--firmware', str(args.firmware), '--benchmarks', bench,
                    '--timeout', str(args.timeout), '--comparators', str(manifest)]
+            if args.no_icount:
+                cmd += ["--no-icount"]
             if args.shell:
                 cmd += ['--shell', str(args.shell)]
             if args.null_device:

@@ -18,6 +18,7 @@ p.add_argument('--time-probes', type=Path,
                help='Optional directory containing time-services-exchange.dom and time-services-direct.dom')
 p.add_argument('--dup-probes', type=Path,
                help='Optional directory containing dup-services-exchange.dom and dup-services-direct.dom')
+p.add_argument('--no-icount', action='store_true', help='Use wall-clock virtual time for functional tests; no deterministic instruction counts')
 a = p.parse_args()
 if not os.environ.get('CAPSTONE_QEMU_LOCK'):
     p.error('CAPSTONE_QEMU_LOCK is required; source capstone/tests/capstone-test-env.sh first')
@@ -101,7 +102,8 @@ cmd = ['python3', str(a.runner.resolve()),
        '--qemu', str(a.qemu.resolve()), '--images', str(a.images.resolve()),
        '--firmware', str(a.firmware.resolve()), '--stage', str(stage.resolve()),
        '--work', str((a.out / 'vm').resolve()), '--memory', '8G',
-       '--disk-mib', '64', '--timeout', '240', '--icount', '0', '--kernel-arg', flags]
+       '--disk-mib', '64', '--timeout', '240', '--kernel-arg', flags]
+if not a.no_icount: cmd += ['--icount', '0']
 cpu = ','.join(['x-capstone-supervisor-slots=1', 'x-pcrel=false',
                 'x-capstone-raw-moves=true', 'x-capstone-test-csrs=false',
                 'x-capstone-checked-copy=true', 'x-capstone-context-transport=true'])
@@ -131,7 +133,7 @@ for arm in ['exchange', 'direct']:
         match = re.search(r'NATIVE_DUP checks=(\d+) failures=0\n', body)
         assert match and int(match[1]) > 0
         dup_rows.append(dict(arm=arm, checks=int(match[1]), failures=0))
-result = dict(status='PASS', inputs=inputs, rows=rows, time_rows=time_rows, dup_rows=dup_rows,
+result = dict(status='PASS', icount=None if a.no_icount else 0, inputs=inputs, rows=rows, time_rows=time_rows, dup_rows=dup_rows,
               limitations=['Single-hart root-only native task prototype.',
                            'Symlinks are inspected, never followed for data or directory access.',
                            'No rename-race, mount-race, caught-signal or generic-fork claim.'])
