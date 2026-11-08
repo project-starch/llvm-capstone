@@ -553,3 +553,17 @@ small boundary losses are possible; use long, repeated windows. Inspect counter
 running coverage before comparing counts. On hybrid hosts the unused PMU can
 report `not counted`; require all four events on the active PMU and retain the
 raw report. Permission errors or a failed perf process fail the run.
+
+The [matched counter campaign](host-counter-qualification.json) validates 600
+compilations plus six warm-ups, with all four active PMU events at 100% coverage:
+
+| Build | Host instructions per 100 compilations | Host cycles |
+| --- | ---: | ---: |
+| Original fork | 853.1 billion | 290.5 billion |
+| Clang/LTO cursor/bounds stack | 712.5 billion | 257.4 billion |
+| Combined STC/local-cursor candidate | 682.8 billion | 251.7 billion |
+
+The combined candidate executes 19.97% fewer host instructions and uses 13.37%
+fewer host cycles than the original. These separate diagnostics support the
+clean timing improvement despite host-frequency variation. They do not count
+Capstone ISA instructions or predict RTL performance.
