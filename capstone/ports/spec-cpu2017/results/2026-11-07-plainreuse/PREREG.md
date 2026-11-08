@@ -96,3 +96,15 @@ flash back to bitstream 3; the next driver on board 2 flashes what it needs.
 - **R3 holds:** −0.2 %, inside −3 %…+1 %. mcf allocates its arrays once, so there is nothing to cache.
 - mcf on 2 MiB pages (11,230.8 s, board 3) is 1.237× this reading; the same-board reading against board 3's Plain
   stays 1.227×.
+
+## Addendum 4 (8 Nov 11:0x, before their board calls): imagick, nab, lbm, xz as same-board pairs, board 1
+
+The lead set the goal as every SPEC test under 1.20× and x264 at the minimum. Board 1's x264 rv64nc run was stopped
+for it. These four have Capstone readings near 1.12-1.17× against 3 Nov Plain (old bitstream). Board 1 runs, on C.5a,
+each as a pair, Plain (the 3 Nov stage, unchanged) then Plain with the cache (only the binaries replaced; llvm-nm
+differs by the cache's symbols alone): imagick, nab, lbm, xz (perf/b1r, perf/b3/gt-run-ga2.sh 1).
+
+| # | Prediction |
+|---|---|
+| R5 | each Plain run within ±2 % of its 3 Nov reading (imagick 20.1 s, nab 867.2 s, lbm 1,895.2 s, xz 8,065.9 s) |
+| R6 | the cache: imagick and xz −1…−8 %, nab and lbm within ±1 % |
