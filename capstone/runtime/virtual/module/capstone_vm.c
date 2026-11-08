@@ -766,7 +766,14 @@ static int slot_acquire(struct cv_thread *t)
         /* Transport v5/v6: SCALAR_STATE.satp is at byte 1192. This
          * kernel-owned field is not an application authority import. */
         WRITE_ONCE(t->frame[c5a_model ? CV_FRAME_SAVED_SATP : 1192 / 8], csr_read(CSR_SATP));
-        result = run(t->frame_pa, 5);
+        /* c5a ADOPT (rtl lane ABI, 2026-11-09): rs2 = 5 | (kind << 8), the paused kind this adapter holds from
+         * the escape (1, 3, 4 or 5); the processor does not read it from frame +16. Any other kind is refused
+         * here rather than issued. */
+        if (c5a_model && (t->event != 1 && t->event != 3 && t->event != 4 && t->event != 5)) {
+            local_irq_restore(flags); preempt_enable();
+            return -EIO;
+        }
+        result = run(t->frame_pa, c5a_model ? 5 | (t->event << 8) : 5);
         if (!result) t->native_satp = csr_read(CSR_SATP);
         local_irq_restore(flags); preempt_enable();
         if (result) return -EIO;
