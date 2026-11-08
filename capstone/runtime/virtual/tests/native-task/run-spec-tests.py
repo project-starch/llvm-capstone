@@ -222,6 +222,9 @@ def main():
     parser.add_argument("--host-window-case", type=int, help="Measure QEMU host CPU/wall time around one zero-based workload command, excluding validators and output collection")
     parser.add_argument("--host-cpu", type=int, help="Pin a measured run to one allowed host CPU")
     args = parser.parse_args()
+    domain = os.environ.get('CAPSTONE_QEMU_DOMAIN_LOCK', '').strip()
+    if args.host_window_case is not None and domain:
+        parser.error('Host measurement windows require the global exclusive QEMU lock')
     if args.host_window_case is not None and (args.host_window_case < 0 or args.live_output):
         parser.error("A timing window needs a nonnegative case and no live output observer")
     if args.host_cpu is not None:
@@ -255,8 +258,12 @@ def main():
     platform["live_output"] = args.live_output
     platform["icount"] = None if args.no_icount else 0
     platform["host_window_case"] = args.host_window_case
-    if args.host_window_case is not None:
+    platform["private_output"] = True
+    platform["qemu_domain_lock"] = domain or None
+    if args.host_window_case is not None or domain:
         platform["host_affinity"] = sorted(os.sched_getaffinity(0))
+    if domain:
+        platform["timing_note"] = "Independent snapshot domain; elapsed times are functional diagnostics only."
     if args.live_output:
         platform["timing_note"] = "Live output observer enabled; elapsed times are diagnostic, not performance measurements."
         print("run-spec-tests: --live-output is diagnostic; elapsed times are not performance measurements", file=sys.stderr)
@@ -267,7 +274,8 @@ def main():
         directory.mkdir(parents=True, exist_ok=False)
         stage, result = directory / "stage", directory / "output"
         shutil.copytree(prepared / bench / "stage", stage)
-        result.mkdir()
+        # run-staged atomically creates the private 9p output directory. This
+        # permits independent snapshot guests in separate QEMU lock domains.
         record = json.loads((prepared / bench / "manifest.json").read_text())
         if record != records[bench]:
             raise ValueError(f"Prepared manifests disagree: {bench}")
@@ -338,7 +346,7 @@ def main():
             "python3", str(repository / "capstone/runtime/virtual/run-staged.py"),
             "--qemu", str(args.qemu.resolve()), "--images", str(args.images.resolve()),
             "--firmware", str(args.firmware.resolve()), "--stage", str(stage),
-            "--work", str(directory / "vm"), "--share", str(result), "--memory", args.memory,
+            "--work", str(directory / "vm"), "--share", str(result), "--private-share", "--memory", args.memory,
             "--disk-mib", "512", "--timeout", str(args.timeout),
             "--kernel-arg", flags,
         ]

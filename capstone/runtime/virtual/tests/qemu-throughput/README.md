@@ -576,3 +576,20 @@ The combined candidate executes 19.97% fewer host instructions and uses 13.37%
 fewer host cycles than the original. These separate diagnostics support the
 clean timing improvement despite host-frequency variation. They do not count
 Capstone ISA instructions or predict RTL performance.
+
+## Independent functional regressions
+
+SPEC runs reserve a fresh private 9p output directory through
+`run-staged.py --private-share`. Reservation is atomic: existing directories,
+including empty directories and symlinks, are refused. With a distinct
+`CAPSTONE_QEMU_DOMAIN_LOCK` per worker, these snapshot guests can share the
+single global lock while keeping each domain exclusive. Use disjoint host CPUs
+and fresh output trees. The rootfs remains a snapshot, the stage is read-only,
+and no network device is added. Existing shared 9p directories still require
+the global exclusive lock.
+
+Host measurement windows are rejected in a domain. Concurrent runs establish
+functional correctness only; their elapsed times are not performance samples.
+Each VM records its isolation mode, affinity and process lifetime. The host
+tests cover colliding directory reservations, accidental shared-output reuse,
+measurement rejection and the existing domain/exclusive lock ordering.

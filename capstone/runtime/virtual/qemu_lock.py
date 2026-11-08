@@ -2,7 +2,8 @@
 
 $CAPSTONE_QEMU_LOCK is the one global lock (capstone/tests/capstone-test-env.sh). A caller that sets nothing else takes
 it EXCLUSIVE, and so excludes every other QEMU session. A snapshot-class session -- the rootfs attached with -snapshot,
-a private read-only stage disk, no network, output only on its serial line (this directory's run-staged.py and run.py)
+a private read-only stage disk, no network, output on its serial line or a freshly reserved private 9p directory
+(run-staged.py --private-share; existing/shared 9p directories are refused in a domain)
 -- may instead set $CAPSTONE_QEMU_DOMAIN_LOCK to a per-domain lock file: it then holds the global lock SHARED and the
 domain lock EXCLUSIVE, so one session runs per domain, domains run in parallel, and an exclusive holder of the global
 lock still excludes all of them and waits for them.

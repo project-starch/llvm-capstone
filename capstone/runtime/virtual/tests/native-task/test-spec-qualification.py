@@ -214,6 +214,9 @@ class QualificationTests(unittest.TestCase):
             self.assertEqual(Path(command[1]).name, "run-staged.py")
             vm = Path(command[command.index("--work") + 1])
             results = Path(command[command.index("--share") + 1])
+            self.assertIn('--private-share', command)
+            self.assertFalse(results.exists())
+            results.mkdir(mode=0o700)
             vm.mkdir()
             (vm / "serial.log").write_text(SERIAL)
             for name in ("case-0.rc", "case-1.rc", "image-0.rc"):

@@ -13,6 +13,18 @@ from host_window import HostWindow
 from host_profile import HostProfile
 
 
+def prepare_share(share, private, domain):
+    """Reserve private output atomically; shared directories stay exclusive."""
+    if private and share is None:
+        raise ValueError('--private-share requires --share')
+    if domain and share is not None and not private:
+        raise ValueError('A QEMU lock domain requires --private-share for 9p output')
+    if private:
+        # mkdir without exist_ok also refuses existing empty directories and
+        # symlinks. Two runners cannot both reserve the same output path.
+        share.mkdir(mode=0o700)
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('--qemu', type=Path, required=True)
@@ -39,6 +51,8 @@ def main():
                    help="Run QEMU's exact-bounds profile. Option (iii) does not need it; it is kept so a suite can be run both ways as a two-sided control.")
     p.add_argument('--share', type=Path,
                    help='Directory exported to the guest over 9p (mount tag gate9p), for gates that need it')
+    p.add_argument('--private-share', action='store_true',
+                   help='Create a new private --share directory; required for 9p in a QEMU lock domain')
     p.add_argument('--plugin', type=Path, help='Optional QEMU TCG profiling plugin')
     p.add_argument('--plugin-arg', action='append', default=[])
     p.add_argument('--icount', type=int, choices=range(11))
@@ -53,9 +67,22 @@ def main():
         p.error('--host-perf requires --host-window')
     if a.host_perf_mode != 'record' and not a.host_perf:
         p.error('--host-perf-mode stat requires --host-perf')
+    domain = os.environ.get('CAPSTONE_QEMU_DOMAIN_LOCK', '').strip()
+    if a.host_window and domain:
+        p.error('Host measurement windows require the global exclusive QEMU lock')
     if any(',' in arg or '=' not in arg for arg in a.plugin_arg):
         p.error('--plugin-arg must be key=value without commas')
     a.work.mkdir(parents=True, exist_ok=False)
+    try:
+        prepare_share(a.share, a.private_share, domain)
+    except (ValueError, OSError) as error:
+        p.error(str(error))
+    isolation = dict(
+        snapshot=True, private_share=a.private_share,
+        domain_lock=domain or None, host_affinity=sorted(os.sched_getaffinity(0)),
+        timing_scope='Concurrent functional validation only' if domain else 'Global exclusive',
+    )
+    (a.work/'isolation.json').write_text(json.dumps(isolation, indent=2)+'\n')
     disk = a.work / 'stage.ext4'
     with disk.open('wb') as f:
         f.truncate(a.disk_mib << 20)
@@ -104,6 +131,7 @@ def main():
         guest_env = dict(os.environ, TMPDIR=str(a.work.resolve()))
         guest = subprocess.Popen(cmd, env=guest_env, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                  stderr=subprocess.STDOUT, bufsize=0)
+        isolation.update(guest_pid=guest.pid, started_monotonic_ns=time.monotonic_ns())
         window = HostWindow(guest.pid) if a.host_window else None
         profile = HostProfile(a.host_perf, a.work, guest.pid, a.host_perf_mode) if a.host_perf else None
         profile_started = False
@@ -145,6 +173,8 @@ def main():
                 guest.wait(timeout=5)
             except subprocess.TimeoutExpired:
                 guest.kill(); guest.wait()
+            isolation['ended_monotonic_ns'] = time.monotonic_ns()
+            (a.work/'isolation.json').write_text(json.dumps(isolation, indent=2)+'\n')
             if profile:
                 profile.stop()
                 profile.save_map()
