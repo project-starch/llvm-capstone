@@ -222,3 +222,53 @@ addresses and exhausted its bounded caller table; it is retained and excluded.
 Reproduce by applying `tag-census-final.patch` to the pinned fork and using the
 archived diagnostic runner; the earlier `instrument.py`/pilot patch is historical.
 No production runner, emulator pin, test default or native RTL handoff changed.
+
+## Page-lookup reuse candidate
+
+Implemented in the QEMU repository on
+[`perf/tag-clear-lookup`](https://github.com/project-starch/capstone-qemu/tree/perf/tag-clear-lookup),
+commit `1d6bf3548c`. The superproject's default QEMU pin remains unchanged.
+[Qualification and complete samples](tag-lookup-qualification.json).
+
+`cap_mem_map_physical_remove_range_locked` now keeps the page entry it found and
+clears the overlapping granules directly. The existing page split, physical-map
+lock, tag publication and conservative page summary are unchanged. This is
+lookup reuse, not bulk bitmap clearing. Machine-code inspection confirms one
+`find_entry` call site instead of two in this function.
+
+The candidate uses exactly the baseline build options, including QOM cast
+debugging. Fresh baseline/candidate/candidate/baseline guests on CPU 2, icount0:
+
+| Window | Baseline mean CPU | Candidate mean CPU | Difference |
+| --- | ---: | ---: | ---: |
+| 20 native GCC compilations | 13.005s | 12.995s | -0.077% |
+| 100 plain GCC compilations | 5.945s | 5.935s | -0.168% |
+
+All 480 outputs and eight warm-ups match. These tiny differences are unresolved
+at two samples per build and this host's noise; **no useful speedup is established**.
+Keep the candidate available for review rather than advancing the default pin.
+Next investigate local bounds/representability calculation reuse separately.
+
+Correctness checks pass:
+
+- Three tag-map unit tests: concurrent publication/read/write/mapping operations,
+  sticky summaries, and 962 independently checked byte intervals. Range cases
+  include partial granules, crossing pages, absent metadata, zero length and
+  the last byte of the address space. Surviving tags retain exact bounds.
+- 35 checked-copy instruction cases; 15 removed encodings at each of M/S/U,
+  rejected linear mint followed by successful copyable mint; 12 raw-transport
+  privilege/feature configurations with tag-copy and scalar-clear checks.
+- Existing NONLIN virtio mapping-race arms 24/25, including byte and tag oracles.
+
+The old full tag-writer suite is **not** a passing gate: most arms mint linear
+capabilities and exit with cause 29 on this copyable-only branch. Baseline arms
+0/2 reproduce the failure unchanged. The multi-hart arm is unsupported. Keep
+those logs and the two passing NONLIN device cases separate; this qualification
+is not a full writer-suite or full-SPEC result. No ISA or RTL changes are needed.
+
+To reproduce, check out the candidate QEMU commit and build with the baseline
+configure options in `build-pair.sh` (do not disable QOM cast debugging). Run
+`tests/unit/test-capstone-tag-map` from its build tree, the current copyable-only
+and checked-copy gates, then `measure.py` against baseline/candidate binaries.
+The evidence archive includes the driver, exact commands/options, candidate
+patch and binary, disassembly, successful checks and excluded failures.

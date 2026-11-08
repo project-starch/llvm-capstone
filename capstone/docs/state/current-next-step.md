@@ -3,15 +3,17 @@
 Continue on `perf/qemu-throughput`, leaving the native RTL handoff branch fixed.
 [The matched host-throughput baseline](../../runtime/virtual/tests/qemu-throughput/README.md)
 and separate host profiles are complete for one small repeated GCC input.
-The clear-size census finds 99.893% one-granule calls and no calls larger
-than two granules. Next optimize the small-clear path by reusing its existing
-page lookup, preserving locking and byte/tag semantics; bulk range batching
-is not the first priority for this GCC input. Disabling QOM cast debugging
-shows no native gain in the controlled sample, so leave the default unchanged.
-Then assess
-representation reuse with exact bounds/representability checks. Qualify each
-change with safety gates and unprofiled paired timings; profile shares are
-not predicted savings.
+The one-granule lookup-reuse candidate is implemented in QEMU branch
+`perf/tag-clear-lookup` at `1d6bf3548c`. Safety checks pass, but native GCC's
+0.077% mean CPU reduction is unresolved; retain the default pin. QOM cast
+checking removal also showed no native gain. Both candidates have preserved
+paired measurements and limitations in the throughput README.
+Next assess local representation/representability calculation reuse with exact
+bounds checks, before adding persistent caches. Qualify each change with the
+current copyable-only/tag/concurrency gates and unprofiled paired timings.
+The old LIN tag-writer bootstrap fails on the baseline; do not describe that
+whole suite as passing. Its existing NONLIN DMA arms 24/25 do pass.
+Profile shares and call counts are not predicted savings.
 Add a scalar PC-relative translation control before attributing platform-plain's
 speed difference to capability handling. If proposing a no-icount fast test mode,
 first run timer/preemption, lifetime and race gates; keep deterministic counts

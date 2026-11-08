@@ -25,8 +25,13 @@ ten-compilation census finds 99.893% of physical tag clears touch one granule,
 the rest two; no larger calls occur. All diagnostic outputs pass. This favors
 small-clear lookup reuse over bulk-range batching for this input.
 [Control and census evidence](../../runtime/virtual/tests/qemu-throughput/qom-census-qualification.json).
-No emulator semantic optimization has been implemented. Existing native/RTL
-qualification below remains tied to its original snapshots.
+A lookup-reuse candidate is implemented separately in QEMU branch
+`perf/tag-clear-lookup` at `1d6bf3548c`. Bounded tag/concurrency, checked-copy,
+copyable/raw and NONLIN DMA gates pass; 480 timed GCC outputs match. Native mean
+CPU changes from 13.005s to 12.995s per 20 compilations (0.077%), unresolved at
+this sample size. The default QEMU pin stays unchanged; no speedup is claimed.
+[Candidate qualification and legacy-suite exclusions](../../runtime/virtual/tests/qemu-throughput/tag-lookup-qualification.json).
+Existing native/RTL qualification below remains tied to its original snapshots.
 
 ## Rebased native kernel: full existing SPEC C-port gate passes
 
