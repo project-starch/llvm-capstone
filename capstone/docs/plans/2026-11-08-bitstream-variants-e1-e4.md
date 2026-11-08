@@ -363,3 +363,15 @@ three worktrees, model rebuilt each) are all EQUAL to E0's column, objb-pcc empt
   On the host it lives at perf/e5ngate.
 - Grader controls and dry runs on every branch: DRYRUN.txt beside it.
 - The rule is E0's: VALUE fields exact; TIMING fields against C.5a's silicon with the noise floor.
+
+**e5-native SEALED (board lane, apollo, 9 Nov 03:15)**:
+- caplifive_e5native_14b0a57df.bit, sha256 b6698b7c19a132a38c1196b77c713292d95940b50de858e69d93eeb5d7e5a475,
+  11,443,722 B. The rtl lane re-hashed it from the store; it is written into perf/e5ngate/e5n-bit.sha.
+- Tarball sha256 636f666a09cee828..., .bit cmp-identical, PROVENANCE HEAD 14b0a57df.
+- A stubbed dry run against the real store passes the preconditions.
+- Flash conditions: (1) the FF census, met; (3) the vectors, met; (2) leffe2's E5 control, pending.
+
+**The native route's CSCHECKR/W + CSKINDS monitor emulation EXECUTED on 14b0a57df** (capstone-sbi e04ecb8; until now
+it had run nowhere, since QEMU lacks CAPCREATE):
+- every row of the arm's pre-registered header holds, each refusal 24..29 once;
+- result lines are in tests/rtl-smoke/evariants-2026-11-08/cscheck-emu-rtl-14b0a57df.result-lines.txt.

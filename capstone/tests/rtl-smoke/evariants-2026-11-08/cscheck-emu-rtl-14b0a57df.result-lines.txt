@@ -1,0 +1,27 @@
+# va-cscheck-mon (the native route's CSCHECKR/W + CSKINDS monitor emulation) on e5-native's RTL, capstone-ariane
+# 14b0a57df (rtl lane, 2026-11-09; vp8-wt .sup/csc1, PROVENANCE rtl_commit=14b0a57df rtl_dirty=no, Anvil regenerated).
+# Inputs, sha256 of the bytes the run compiled (copied with `git show`, nothing checked out):
+#   va-cscheck-mon.S       40cb2d790c4d0d90...  llvm-capstone a00ada671a5c capstone/tests/rtl-smoke/cscheck-emu-2026-11-08/
+#   capstone_cscheck.S     8ba058fba79b7178...  capstone-sbi e04ecb826b5c (native/cscheck-emu, local to the host)
+#   capstone_csmint.S      4600d04680158edf...  capstone-sbi e04ecb826b5c (= the copy va-csmint-entry ran on 2026-10-18)
+# cva6.py rc 0 (CAP_PASS reached), 14,439 retired, no 0xbad1/0xbad2. Read from the retirement trace by
+# capprint-readings.py (all privilege levels). Symbols from llvm-nm on the built ELF: dbuf 0x8000c000, cframe 0x8000b000.
+# Each check row: rd, descriptor[4], descriptor[5] (the fingerprint FP = 0x4353434845). Every row = the arm's
+# pre-registered header.
+M0  CSMINT D1 RW NONLIN -> x10        rd 0x4
+M1  CSMINT D4 RO NONLIN -> x12        rd 0x6
+M2  CSMINT D6 RW LINEAR -> x13        rd 0x8
+1   CSKINDS(cframe)                   0x3400
+2   CSCHECKR e7 s10 off16 b32         0x0  0x8000c010 (dbuf+16)   FP
+3   CSCHECKW same                     0x0  0x8000c010             FP
+4   CSCHECKR off240 b32               0x1c (28)  0x0              FP
+5   CSCHECKR off256 b0                0x0  0x8000c100 (dbuf+256)  FP
+6   CSCHECKR epoch 8                  0x1d (29)  0x0              FP
+7   CSCHECKR slot 11 (hi 0)           0x18 (24)  0x0              FP
+8   CSCHECKR reserved word 1          0x1d (29)  0x0              FP
+9   CSCHECKW slot 12 (RO)             0x1b (27)  0x0              FP
+10  CSCHECKR slot 12                  0x0  0x8000c200 (dbuf+512)  FP
+11  CSCHECKR slot 13 (LINEAR)         0x1a (26)  0x0              FP
+12  CSCHECKR frame+16 (misaligned)    0x1d (29)  0x0              0x0 (refused before the descriptor)
+13  record VALID cleared, slot 10     0x19 (25)  0x0              FP  (25: the emulation's liveness refusal, not the RTL's LDC tag drop)
+final  slot 12 LCC type 0x1 (NONLIN, still there); slot 13 hi word 0x1d88400000 (non-zero: the LINEAR capability not moved)
