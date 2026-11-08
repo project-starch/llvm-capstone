@@ -117,3 +117,30 @@ on board 3) are cancelled. The running NO_HZ gcc pair on board 3 finishes first.
   is not sealed and gated in time, perlbench and mcf run on C.5a instead: perlbench is then reported on its commands
   {0, 1, 4} (Addendum 2).
 - The C.5a Capstone stages, exes, kits and gates T0-T2 are this record's, unchanged.
+
+## Addendum 5 (9 Nov 05:0x, before any e5-native board call): perlbench and mcf train on the native bitstream
+
+The lead's "new bitstream" for the worst benchmarks is e5-native: the native Linux-task integration
+(native/linux-task-integration, ported to C.5a's model) on caplifive_e5native_14b0a57df.bit (sha256 b6698b7c…a475;
+E5 + CSRUNV detach/adopt + the R-69 clamp). The rtl lane graded it 4/4 against E0, the FF delta is attributed by name,
+32/32 vectors are pre-registered (land/rtl-evariants 5cc4e683a354), the CSCHECK firmware emulation executed in RTL
+sim with every row as pre-registered, and leffe's E5 control was read. Native route on the board:
+- kernel K-min (the stock 6.4.14 .config + RISCV_CAPSTONE_TASK only, plus the adapter's command-line parameters);
+- firmware capstone-sbi native/cscheck-emu e04ecb8 with CSCHECK emulated;
+- kits t3-smoke/bkit38-native-perl and bkit38-native-mcf; driver perf/native-train/nt-run.sh;
+- table 2^19 records for perlbench, 2^18 for mcf.
+The native agent's pre-registration is llvm-capstone native/c5a-board 8cc014c0bdd2. QEMU twins: mcf train at 936M rc 0
+(peak 221,799 pages); perlbench train five commands rc 0, with a rerun for the full outputs.
+
+Order, per board, with a wait for a free board before each step:
+- **Board 3**, after its running Capstone x264 (C.5a): (1) the 32-vector gate (perf/e5ngate/e5n-gate.sh 3; a
+  failure flashes C.5a back); (2) only on GATE PASS, nt-run.sh: a native SMOKE boot, then perlbench train (the train
+  boot runs only on a smoke PASS); (3) if (2) does not complete, perlbench train on C.5a (bkit30-unify, udcnofp stage,
+  reported on commands {0, 1, 4} as in Addendum 2); (4) Capstone lbm and xz on C.5a (q32), deferred from this board's
+  list; (5) Plain xz.
+- **Board 2**, after its running Capstone nab (C.5a): (1) the gate on board 2; (2) native smoke, then mcf train;
+  (3) if (2) does not complete, mcf train on C.5a on the 4K q32 kit (stage 505.mcf_r-train-capstone-lifetimes-devmk,
+  the same frozen exe 3633be7e2f887047). Not THP: the THP twins were killed at 80 G at 936M and 957M (compiler lane);
+  (4) Capstone imagick (C.5a, q32), deferred; (5) Plain lbm.
+- Reported per benchmark: the native-route time, or the C.5a fallback's, whichever completed. The native ratio's Plain
+  is this record's Plain on the stock kernel: K-min differs from stock by RISCV_CAPSTONE_TASK only.
