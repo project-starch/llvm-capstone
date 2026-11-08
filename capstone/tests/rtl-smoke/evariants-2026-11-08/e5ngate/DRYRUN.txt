@@ -1,0 +1,17 @@
+# e5-native gate driver: grader controls and stubbed dry runs, 9 Nov 2026 (perf/e5ngate on the host)
+# The driver is perf/e0gate/e0-gate.sh with the bitstream (caplifive_e5native_14b0a57df; its sha256 read from
+# e5n-bit.sha, written at the seal), the vectors file and the grader swapped; the variable names are kept.
+# e5n-vectors.txt: all 32 e5-native image-sim vectors (.sup/nimgA/B/C on 14b0a57df, dirty=no) EQUAL E0's column,
+# objb-pcc empty on both; so E0's grader controls apply unchanged.
+## grader controls (ctl = perf/e0gate/ctl)
+a-c5asil: 22 PASS, 10 FAIL, 0 NO DATA of 32 (rc 1)   C.5a's own silicon fed as e5-native
+b-synpass: 32 PASS (rc 0)                            synthetic pass
+c-valuebad: 31 PASS, 1 FAIL (rc 1)                    one value bit flipped
+d-empty: 32 NO DATA (rc 2)                            empty run dir
+## dry runs (every board call stubbed; dry/store holds a STAND-IN under the e5-native name, E0's .bit bytes, for the sha check)
+A-pass      rc=0 flashes=[caplifive_e5native_14b0a57df] images=32  GATE PASS: board 3 stays on caplifive_e5native_14b0a57df
+B-fail      rc=1 flashes=[caplifive_e5native_14b0a57df caplifive_vp2c_1fc2cd5aa] images=32  back on C.5a
+C-flashfail rc=3 flashes=[caplifive_e5native_14b0a57df caplifive_vp2c_1fc2cd5aa] images=0   (E0_FLASH=false) the flash back FAILED too
+D-busy      rc=2 flashes=[] images=0   (E0_BUSY=false) stops at the preconditions
+E-hard      rc=1 flashes=[... e5native, C.5a] images=7   (HARD STOP at hpm-4) back on C.5a
+F-noseal    rc=2 flashes=[] images=0   (no e5n-bit.sha) STOP: .bit missing or hash differs
