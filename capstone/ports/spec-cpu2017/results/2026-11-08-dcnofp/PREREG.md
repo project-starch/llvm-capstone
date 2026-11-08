@@ -18,3 +18,10 @@ bkit27-gtq. **Board 3**, after the tickcost boots there.
 | D0 | rc 0, specdiff 1/1, outputs equal c3f's; control passes; in-context instret within ±0.1 % of 12.869 G |
 | D1 | inside time 3,514 s → 3,280-3,370 s (the removed instructions are moves, address arithmetic and spills, cheaper than average) |
 | D2 | run 4,253 s → 4,030-4,110 s, i.e. 1.23-1.25× Plain-with-cache (3,280.9 s); outside about unchanged |
+
+## Addendum 1 (8 Nov 12:2x, before the board call): on the 32 M quantum kit
+
+The quantum result (results/2026-11-08-quantum: c3f 4,215.0 s with a 32,000,000-cycle supervisor quantum, kit
+bkit32-q32) came in first. The run moves to kit bkit32-q32 so that its reference is that run (one variable: the
+image). Predictions restated against it: D1 inside 3,504 s → 3,270-3,360 s; D2 run 4,215 s → 3,990-4,075 s
+(1.22-1.24× Plain-with-cache).
