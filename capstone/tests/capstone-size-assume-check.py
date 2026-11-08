@@ -55,8 +55,10 @@ def check(path):
     defs = {}
     for k in range(st['size'] // 24):
         name, info, other, shndx, value, size = struct.unpack_from('<IBBHQQ', data, st['off'] + 24 * k)
-        bind = info >> 4
-        if shndx == 0 or bind == 0:          # undefined, or a local symbol (assumptions name external globals)
+        bind, vis = info >> 4, other & 3
+        # Skip undefined symbols and file-static locals. A LOCAL symbol with HIDDEN or INTERNAL visibility is a
+        # global the static link demoted (musl's __libc, __malloc_context, ...): it is the definition.
+        if shndx == 0 or (bind == 0 and vis not in (1, 2)):
             continue
         s = data[strs['off'] + name:]; s = s[:s.index(b'\0')].decode()
         defs.setdefault(s, []).append(size)
