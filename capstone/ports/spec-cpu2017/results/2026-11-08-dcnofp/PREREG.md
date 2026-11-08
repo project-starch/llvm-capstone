@@ -71,3 +71,28 @@ train image on kit bkit27-gtq read 4,255.8 s on board 2 (out-fill-b2) and 4,253.
 | U0 | rc 0 on both commands, specdiff 2/2, every output hash but the two .err files equal to unify-nd's; control passes; in-context instret 91.12 G ± 0.2 % |
 | U1 | in-context cycles −2.6…−3.2 % (gcc's cycles fell 1.14× its instructions): 529.2-532.5 G, inside 21,170-21,300 s |
 | U2 | run 29,400-29,650 s (outside 8,251 s ± 100 s), i.e. 1.344-1.355× Plain-with-cache (21,882.6 s) |
+
+## Addendum 3 (8 Nov 15:1x, before their board calls): nab and xz, control and arm on one board and kit
+
+The compiler lane rebuilt nab and xz on their production recipe (c1-gate/gt2/bg-rest.sh). Each control reproduces
+the stage's exe, and each arm adds llvm-c4 + direct calls + no frame pointer, so the c1 → c4 compiler step is in the
+arm. QEMU twin (kit-profq), rc 0 and specdiff PASS on all: in-context instret xz 50,141,748,886 → 49,198,888,009
+(−1.88 %), nab 7,361,565,957 → 7,200,512,410 (−2.19 %). imagick reads −0.36 % and is not run.
+
+**Stages**: the stages-eval-b1 stages (control, unchanged: xz 0d8878ad8a5046df, nab 092ff45c0c519283) and copies
+with the lifetimes exe replaced (perf/dcnofp/stages/*-dcnofp: xz f48a253d015c21ce, nab 51b0296f6a4889f7). The nab
+stage also runs its unchanged spatial arm. **Kit** bkit27-gtq (C.5a, module 65ede944a87ea742). **Board 1**, after
+the tickcost GDB boots; order nab control, nab arm, xz control, xz arm. These stages have never run on bkit27-gtq,
+so each control is measured in the same night, on the same board and kit as its arm.
+
+| # | Prediction |
+|---|---|
+| N0 | every run rc 0, specdiff PASS, control passes; each arm's outputs equal its control's |
+| N1 | nab control within ±5 % of all2's 991.1 s (a different kit); xz control within ±8 % of all's 9,398.2 s |
+| N2 | nab lifetimes arm / control 0.970-0.982 (inside cycles −1.8…−3.0 %); spatial arm unchanged within ±0.5 % |
+| N3 | xz arm / control 0.975-0.990 |
+
+Slip recorded here because it touched these stages: building the arm copies, a `cp -a` of a stages-eval-b1 stage,
+which is a symlink, wrote the arm exes into the production stages-eval-boarddevmk xz and nab exes (and nab's two
+hard links under perf/ns) for about three minutes. They were restored from two independent copies that agree byte
+for byte, and no process had them open. The arm stages are now real copies (no symlinks, link count 1).
