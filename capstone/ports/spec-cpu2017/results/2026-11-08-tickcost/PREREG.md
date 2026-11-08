@@ -27,3 +27,16 @@ lane runs it on the board.
   The exitprof Correction's "a trap loop at M of a filtered cause" is the shape E1 shows. The stuck loop in the real
   runs is not identified. cvprof's cost alone did not hang the kernel in 30 idle seconds. The rtl lane's next
   instrument reads the stuck pc at the next wedge.
+
+## Addendum 1 (8 Nov 15:xx, before its board call): the GDB reader's validation boot, board 1
+
+The predictions and grading are the rtl lane's: land/rtl-tickcost 9c449dac93d6, PREREG.md addendum 2 (READER VALID:
+all 8 pc samples in [tick + 0x154, tick + 0x160) with the disassembly showing the register loop; INVALID: any
+0xca11ab1ebadcab1e, a pc outside that range, or UNREAD). How the SPEC lane runs it:
+- Stage perf/tickgdb/stages/tickcost-E2g: tickcost-E2 with that commit's tickcost-guest.sh, which prints the `tick`,
+  `cvprof_body` and `ktime_get` addresses at KERN_EMERG. Module unchanged (c16c5c56585b84c1).
+- Kit bkit34-tickgdb = bkit33-tickcost with two changes: BAKED_WEDGE_GDB=1 in board-run.sh, and the driver copy
+  perf/tickgdb/driver (run_baked_rungs_fpga.py f12edeb536f7a1de), which calls wedge_gdb.probe() after the wedge
+  apertures and before the board is released. wedge_gdb.py is that commit's file, unchanged.
+- Board 1, after its Plain pairs chain (results/2026-11-07-plainreuse Addendum 4) ends; driver perf/tickgdb/gt-run-tg.sh.
+- A cvprof wedge with the reader follows only after READER VALID, as a separate pre-registration.
