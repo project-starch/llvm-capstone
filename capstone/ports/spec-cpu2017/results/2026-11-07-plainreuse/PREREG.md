@@ -89,3 +89,10 @@ Addendum 2 was wrong about the state: board 2's perlbench profiling run had alre
 driver had started mcf there at 07:06. Stopping that driver at 08:0x did not stop its chain: mcf, then x264, continue
 on board 2 under chain-board.sh. Nothing moves to board 3. The chain's end will not be followed by the driver's
 flash back to bitstream 3; the next driver on board 2 flashes what it needs.
+
+## Result, mcf (8 Nov 09:46): R3 holds; the cache does not move Plain mcf
+
+- Board 2, C.5a: 9,077.4 s (0.9981× 9,094.9 s on the same board; 0.9920× board 3's 9,150.5 s), rc 0, specdiff 2/2.
+- **R3 holds:** −0.2 %, inside −3 %…+1 %. mcf allocates its arrays once, so there is nothing to cache.
+- mcf on 2 MiB pages (11,230.8 s, board 3) is 1.237× this reading; the same-board reading against board 3's Plain
+  stays 1.227×.
