@@ -48,7 +48,13 @@ install -m 0644 "$stage/adapter/capstone_native_helpers.h" \
     "$kernel/include/linux/capstone_native_helpers.h"
 mv "$stage/adapter" "$kernel/drivers/misc/capstone"
 printf '\nobj-$(CONFIG_RISCV_CAPSTONE_TASK) += capstone/\n' >> "$kernel/drivers/misc/Makefile"
-"$kernel/scripts/config" --file "$kernel/.config" --disable SMP \
+# The minimal delta (README.md, "Configuration"): SMP, NR_CPUS and RCU stay as the tree's .config has them (one
+# POSSIBLE CPU is checked at run time: a one-hart device tree, or nr_cpus=1). Kept from the 6.1 recipe: generic virtual
+# CPU accounting with forced user context tracking, which task-driver's "compute charged to user" and "compute
+# resumes" checks require (without them the gate fails exactly those two). NATIVE_TASK_6_1_CONFIG=1 also turns SMP off,
+# as the 6.1 recipe did.
+[[ ${NATIVE_TASK_6_1_CONFIG:-0} == 1 ]] && "$kernel/scripts/config" --file "$kernel/.config" --disable SMP
+"$kernel/scripts/config" --file "$kernel/.config" \
     --disable VIRT_CPU_ACCOUNTING_NATIVE --disable TICK_CPU_ACCOUNTING \
     --enable VIRT_CPU_ACCOUNTING_GEN --enable CONTEXT_TRACKING_USER_FORCE \
     --enable RISCV_CAPSTONE_TASK

@@ -3,9 +3,37 @@
 The boards run the buildroot kernel, Linux 6.4.14 (upstream, unpatched, `build-fpga/.config`). The native adapter's
 kernel side was written for Linux 6.1. This directory is that series ported to 6.4.14. `install-native-task.sh` applies
 it, in the order of `series`, to a pristine 6.4.14 tree: the tag-aware memory patch, mprotect, gcc, then the seven
-patches `../install-native-task.sh` applies on 6.1. It stages the built-in adapter the same way, and makes the same
-`.config` changes: SMP off, VIRT_CPU_ACCOUNTING_GEN, CONTEXT_TRACKING_USER_FORCE and RISCV_CAPSTONE_TASK. The patches
-apply with zero fuzz. The script refuses fuzz and any other kernel version.
+patches `../install-native-task.sh` applies on 6.1. It stages the built-in adapter the same way. It no longer turns SMP
+off (see "Configuration"). The patches apply with zero fuzz. The script refuses fuzz and any
+other kernel version.
+
+## Configuration: the minimal delta
+
+On the board's stock `.config`, olddefconfig after the install changes exactly these lines (`native-config.delta` in
+the board kit): `RISCV_CAPSTONE_TASK=y`, `VIRT_CPU_ACCOUNTING_GEN=y` in place of `TICK_CPU_ACCOUNTING`, and
+`CONTEXT_TRACKING_USER(_FORCE)=y`. SMP, NR_CPUS, TREE_RCU, HZ and preemption stay as stock.
+
+- **One possible CPU, not `!SMP`.** The 6.1 Kconfig required `!SMP`. The requirement in the code is one POSSIBLE CPU:
+  - `capstone_vm.c` refuses to load native transport, checked copy, binfmt or unpinned backing when
+    `num_possible_cpus() != 1` ("Tag-copy interrupt exclusion and namespace sweeps are currently single-hart protocols.
+    Offline-but-possible CPUs are not safe");
+  - `captag.c` refuses the same way;
+  - `checked-copy-dom.h` requires it on every copy.
+
+  The 6.4 Kconfig drops `!SMP`, and `riscv_capstone_attach` now refuses on more than one possible CPU too. The board's
+  device tree has one hart (`cpu@0`), so an SMP kernel has one possible CPU there. `nr_cpus=1` gives the same on a
+  machine with more harts. Two harts cannot be tried on QEMU, which refuses its own way: "x-capstone-u-mode requires
+  exactly one possible hart".
+- **Generic virtual CPU accounting and forced user context tracking stay.** They are required: on an SMP kernel with
+  stock tick accounting, the gate fails exactly two checks.
+  - task-driver's `CHECK("compute charged to user", before > 0)` fails, reading `compute usage user=0.000000
+    system=0.501327`.
+  - Its `CHECK("compute resumes", user_ticks(pid) > stopped)` fails too.
+  - Both read the task's user ticks (`tests/native-task/task-driver.c:70-76`).
+  - This matches the design's "Linux must account domain computation as user execution"
+    (`docs/design/virtual-capstone/native-linux-tasks.md`).
+  - The Kconfig keeps `depends on VIRT_CPU_ACCOUNTING_GEN && CONTEXT_TRACKING_USER_FORCE`.
+- `NATIVE_TASK_6_1_CONFIG=1` also turns SMP off, as the 6.1 recipe did.
 
 ## How the port was made
 
@@ -37,19 +65,17 @@ The built-in adapter (`../module`) has 13 call sites of APIs that 6.3 changed. T
 replaced. The 6.4 board kernel, the 6.4 QEMU kernel and a 6.1 control kernel built from the same adapter sources all
 compile with no warning outside the adapter's pre-existing `-Wdeclaration-after-statement` warnings.
 
-## QEMU gate (8 Nov)
+## QEMU gate (8-9 Nov)
 
-The 6.4.14 QEMU kernel and a 6.1 control kernel each ran `run-musl-io.py io` on the same inputs: QEMU d2bac4e08a
-(`8f3f9118`), QEMU's `fw_dynamic` (`2335a286`), rootfs `9903242c`, and the same probes. The control is the 6.1 series
-with this commit's adapter, so the only difference between the arms is the kernel version and series.
+All runs used `run-musl-io.py io` with the same inputs: QEMU d2bac4e08a (`8f3f9118`), QEMU's `fw_dynamic` (`2335a286`),
+rootfs `9903242c`, the same probes and one hart.
 
 | Kernel | Image | Result |
 |---|---|---|
-| 6.4.14 + this series | `9c0e6eff0248432f` | PASS: MUSL_IO 170/0, 4/0, 176/0, 4/0; native integration 51/0; gcc coverage 20/0; entry and task failures 0 |
-| 6.1 + the 6.1 series | `63642abef1915cbb` | PASS, the same readings |
-
-The two runs have the same native_route count per syscall number: 840 lines each, and no number differs. Each has 20
-TRANSFER spans.
+| 6.4.14, this series, the 6.1 native config moved forward (SMP off, TINY_RCU, generic accounting) | `9c0e6eff0248432f` | PASS: MUSL_IO 170/0, 4/0, 176/0, 4/0; native integration 51/0; gcc coverage 20/0; entry and task failures 0 |
+| 6.1 + the 6.1 series, the same adapter source (control) | `63642abef1915cbb` | PASS, the same readings; native_route counts per syscall number identical (840) |
+| 6.4.14, SMP=y, TREE_RCU, stock tick accounting, no context tracking | `313c7e405a79056f` | FAIL: "compute charged to user" and "compute resumes" (`compute usage user=0.000000 system=0.501327`); every other check passes |
+| 6.4.14, SMP=y, TREE_RCU, generic accounting + forced user context tracking (the minimal delta) | `31296c3bdb9cdbcb` | PASS, the same readings; `compute usage user=0.497410 system=0.003977` |
 
 ## Not covered by the port
 
@@ -58,6 +84,6 @@ TRANSFER spans.
 - **6.4's `do_exit` adds `WARN_ON(irqs_disabled())`.** The QEMU gate rejects any `WARNING:`, and none appeared.
 - **Page copies.** captag hooks the same four entry points as on 6.1. New 6.4 page-copy paths that bypass
   `copy_highpage`/`copy_user_highpage` were not enumerated. THP and KSM are off in both configs.
-- **The board config.** With these options, olddefconfig also gives SMP off, TINY_RCU and context tracking forced on
-  every user entry (`config-board.diff` in the build directory). Timings on this kernel are not comparable with the
-  stock SMP kernel. The stock process-ABI `capstone.ko` does not load on it (vermagic).
+- **The accounting options cost something on every user entry and exit.** That cost applies to every process on the
+  native kernel, Plain included. A Plain run on the stock kernel therefore differs from one on this kernel by those
+  options. Compare native with Plain on THIS kernel.

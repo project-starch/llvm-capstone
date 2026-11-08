@@ -1,19 +1,23 @@
 diff --git a/arch/riscv/Kconfig b/arch/riscv/Kconfig
 --- a/arch/riscv/Kconfig
 +++ b/arch/riscv/Kconfig
-@@ -827,3 +827,12 @@ source "drivers/cpufreq/Kconfig"
+@@ -827,3 +827,16 @@ source "drivers/cpufreq/Kconfig"
  endmenu # "CPU Power Management"
  
  source "arch/riscv/kvm/Kconfig"
 +
 +config RISCV_CAPSTONE_TASK
 +	bool "Experimental Capstone native task backend"
-+	depends on 64BIT && MMU && !SMP
++	depends on 64BIT && MMU
 +	depends on VIRT_CPU_ACCOUNTING_GEN && CONTEXT_TRACKING_USER_FORCE
 +	default n
 +	help
 +	  Experimental, default-off task-owned Capstone entry/return. Requires
 +	  matching copyable-only model and tag-aware memory patches. Root only.
++	  Requires exactly one POSSIBLE CPU at run time, not !SMP: the attach
++	  and the adapter's load refuse otherwise, so an SMP kernel on one hart
++	  qualifies. Domain execution is accounted as user time through user
++	  context tracking (task-driver's "compute charged to user").
 diff --git a/arch/riscv/include/asm/capstone_task.h b/arch/riscv/include/asm/capstone_task.h
 new file mode 100644
 --- /dev/null
@@ -164,7 +168,7 @@ diff --git a/arch/riscv/kernel/capstone_task.c b/arch/riscv/kernel/capstone_task
 new file mode 100644
 --- /dev/null
 +++ b/arch/riscv/kernel/capstone_task.c
-@@ -0,0 +1,109 @@
+@@ -0,0 +1,112 @@
 +// SPDX-License-Identifier: GPL-2.0-only
 +#include <linux/context_tracking.h>
 +#include <linux/errno.h>
@@ -197,6 +201,9 @@ new file mode 100644
 +	if (!private || !ops || !current->mm || current->thread.capstone ||
 +	    current->mm->context.capstone_namespace || !ops->step || !ops->release)
 +		return -EINVAL;
++	/* 6.4 port: one possible CPU replaces the 6.1 Kconfig !SMP dependency. */
++	if (num_possible_cpus() != 1)
++		return -EOPNOTSUPP;
 +	state = kzalloc(sizeof(*state), GFP_KERNEL);
 +	if (!state)
 +		return -ENOMEM;
