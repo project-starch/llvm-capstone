@@ -4232,11 +4232,18 @@ the semantics owner recorded it as kernel authority, because the kernel chooses 
 | e5-native 14b0a57df (clamp) | kind 4, cause 13, 0, **mode 8, 0** | kind 4, cause 13, 0, mode 8, 0 |
 
 - On E5 the next escape saved satp mode 0 and MPRV|TVM set, so the resume installed both rewritten words.
-- The pre-registered E5 prediction ("the unmapped load completes": 3, 3, 3, 11, 0x42, 0, 0x120000) is REFUTED in that
-  half. The context ended terminal with cause 5, a load access fault, instead. The claim-auditor's source reading also
-  predicts completion.
-- OPEN: what raises the cause 5 (not traced). The finding stands on the saved mode and mstatus words. It does not rest
-  on the load.
+- The pre-registered E5 prediction ("the unmapped load completes": 3, 3, 3, 11, 0x42, 0, 0x120000) was REFUTED in
+  that half: the context ended terminal with cause 5, a load access fault, instead. The claim-auditor's source
+  reading had also predicted completion.
+- The cause 5 is explained by source. MPRV with MPP = U makes the context's loads U-level. Under capmode,
+  `pmp_data_if.sv:385-393` (at 443f67892) then requires a CPMP match, and the resume's id-69 strobe had zeroed the
+  CPMP.
+- **Measured** with -DBARE_SATP_ONLY (capstone-ariane e5-native 75b1c41b1, predicted before its run): only +928 is
+  rewritten, so the loads stay at priv M.
+  - E5 reads 3, 3, 3, 11, **0x42**, mode 0, 0: the context read the page its own table leaves unmapped, by physical
+    address.
+  - e5-native reads 3, 4, 4, 13, 0, mode 8, 0.
+  - So a rewritten satp word alone gives a resumed context untranslated physical access on C.5a and E5.
 
 **The fix (e5-native 14b0a57df, `csr_regfile.sv`).**
 - While `sup_runv_q` is set, the switcher's id-3 write keeps only SXL/UXL (as id 69 left them) plus the frame's FS, and
