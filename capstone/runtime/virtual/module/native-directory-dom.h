@@ -147,7 +147,7 @@ static long native_directory_change(struct context *c,
     rc = mnt_want_write(parent.mnt);
     if (rc) goto put_parent;
     inode_lock_nested(dir, I_MUTEX_PARENT);
-    entry = lookup_one(mnt_user_ns(parent.mnt), leaf, parent.dentry, strlen(leaf));
+    entry = lookup_one(cv_mnt_idmap(parent.mnt), leaf, parent.dentry, strlen(leaf));
     if (IS_ERR(entry)) rc = PTR_ERR(entry);
     else {
         switch (e->nr) {
@@ -158,21 +158,21 @@ static long native_directory_change(struct context *c,
                  * argument leaves ACL-supported filesystems to apply umask. */
                 umode_t checked_mode = IS_POSIXACL(dir) ? mode : mode & ~current_umask();
                 rc = security_path_mkdir(&parent, entry, checked_mode);
-                if (!rc) rc = vfs_mkdir(mnt_user_ns(parent.mnt), dir, entry, mode);
+                if (!rc) rc = vfs_mkdir(cv_mnt_idmap(parent.mnt), dir, entry, mode);
             }
             break;
         case CAPSTONE_SYS_unlinkat:
             if (d_is_negative(entry)) rc = -ENOENT;
             else {
                 rc = security_path_rmdir(&parent, entry);
-                if (!rc) rc = vfs_rmdir(mnt_user_ns(parent.mnt), dir, entry);
+                if (!rc) rc = vfs_rmdir(cv_mnt_idmap(parent.mnt), dir, entry);
             }
             break;
         default: /* symlinkat: target is inert text, never resolved here. */
             if (d_is_positive(entry)) rc = -EEXIST;
             else {
                 rc = security_path_symlink(&parent, entry, target);
-                if (!rc) rc = vfs_symlink(mnt_user_ns(parent.mnt), dir, entry, target);
+                if (!rc) rc = vfs_symlink(cv_mnt_idmap(parent.mnt), dir, entry, target);
             }
             break;
         }
@@ -217,7 +217,7 @@ static long native_directory_link(struct context *c, const struct ns_invocation 
     rc = mnt_want_write(parent.mnt);
     if (rc) goto put_parent;
     inode_lock_nested(d_inode(parent.dentry), I_MUTEX_PARENT);
-    entry = lookup_one(mnt_user_ns(parent.mnt), leaf, parent.dentry, strlen(leaf));
+    entry = lookup_one(cv_mnt_idmap(parent.mnt), leaf, parent.dentry, strlen(leaf));
     if (IS_ERR(entry)) rc = PTR_ERR(entry);
     else {
         rc = d_is_positive(entry) ? -EEXIST : capstone_native_path_link(&source->f_path, &parent, entry);

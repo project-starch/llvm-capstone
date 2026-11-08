@@ -286,7 +286,7 @@ static void dom_task_step(void *private, struct pt_regs *regs)
     unsigned long deadline = jiffies + CV_STEP_BUDGET_J;
     long rc;
     if (current->mm != c->mm || task_pid_nr(current) != c->dom_pid ||
-        current->ptrace || (read_thread_flags() & _TIF_SYSCALL_WORK)) {
+        current->ptrace || cv_syscall_work()) {
         force_exit_sig(SIGSYS);
         return;
     }
@@ -396,7 +396,7 @@ static int dom_load_binary(struct linux_binprm *bprm)
     if (bprm->argc < 1 || bprm->argc > DOM_MAX_STRINGS ||
         bprm->envc > DOM_MAX_STRINGS - bprm->argc) return -E2BIG;
     if (current->seccomp.mode != SECCOMP_MODE_DISABLED) return -EOPNOTSUPP;
-    if (current->ptrace || (read_thread_flags() & _TIF_SYSCALL_WORK))
+    if (current->ptrace || cv_syscall_work())
         return -EOPNOTSUPP;
     rc = dom_parse(bprm->file, &im);
     if (rc) return rc;

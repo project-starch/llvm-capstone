@@ -1,0 +1,210 @@
+diff --git a/arch/riscv/mm/captag.c b/arch/riscv/mm/captag.c
+--- a/arch/riscv/mm/captag.c
++++ b/arch/riscv/mm/captag.c
+@@ -5,6 +5,7 @@
+  * Swap of possibly tagged pages remains refused. CPTAG uses the physical
+  * may-hold-tags flag. No test-only page CSR is used.
+  */
++#include <linux/capstone_native_helpers.h>
+ #include <linux/highmem.h>
+ #include <linux/init.h>
+ #include <linux/jump_label.h>
+@@ -123,7 +124,6 @@ int capstone_unpinned_config(unsigned int ids, bool *exact)
+ 	*exact = captag_exact;
+ 	return 0;
+ }
+-EXPORT_SYMBOL_GPL(capstone_unpinned_config);
+ 
+ /* Hardware owns this flag: every capability publication, including a raw
+  * copy, sets it without a software trap. PG_arch_1 is already dcache state.
+diff --git a/fs/fcntl.c b/fs/fcntl.c
+--- a/fs/fcntl.c
++++ b/fs/fcntl.c
+@@ -5,6 +5,7 @@
+  *  Copyright (C) 1991, 1992  Linus Torvalds
+  */
+ 
++#include <linux/capstone_native_helpers.h>
+ #include <linux/syscalls.h>
+ #include <linux/init.h>
+ #include <linux/mm.h>
+@@ -440,7 +441,6 @@ static int check_fcntl_cmd(unsigned cmd)
+ /* Native capability frontend: callers hold the authorized file and supply a
+  * checked kernel-buffer flock. Reuse Linux's security, lock ownership, wait,
+  * deadlock and close-race behavior, without a user-pointer syscall trampoline. */
+-extern int capstone_native_dupfd(unsigned long, struct file *, unsigned, unsigned);
+ long capstone_native_fcntl(unsigned int fd, struct file *file, unsigned int cmd,
+                           unsigned long arg, struct flock *lock, unsigned limit)
+ {
+@@ -475,7 +475,6 @@ long capstone_native_fcntl(unsigned int fd, struct file *file, unsigned int cmd,
+ 		return do_fcntl(fd, cmd, arg, file);
+ 	}
+ }
+-EXPORT_SYMBOL_GPL(capstone_native_fcntl);
+ 
+ SYSCALL_DEFINE3(fcntl, unsigned int, fd, unsigned int, cmd, unsigned long, arg)
+ {	
+diff --git a/fs/file.c b/fs/file.c
+--- a/fs/file.c
++++ b/fs/file.c
+@@ -7,6 +7,7 @@
+  *  Manage the dynamic fd arrays in the process files_struct.
+  */
+ 
++#include <linux/capstone_native_helpers.h>
+ #include <linux/syscalls.h>
+ #include <linux/export.h>
+ #include <linux/fs.h>
+diff --git a/fs/namei.c b/fs/namei.c
+--- a/fs/namei.c
++++ b/fs/namei.c
+@@ -15,6 +15,7 @@
+ /* [Feb-Apr 2000, AV] Rewrite to the new namespace architecture.
+  */
+ 
++#include <linux/capstone_native_helpers.h>
+ #include <linux/init.h>
+ #include <linux/export.h>
+ #include <linux/kernel.h>
+@@ -4629,7 +4630,6 @@ int capstone_native_path_link(const struct path *source, const struct path *pare
+ 				 entry, NULL);
+ 	return error;
+ }
+-EXPORT_SYMBOL_GPL(capstone_native_path_link);
+ 
+ /*
+  * Hardlinks are often used in delicate situations.  We avoid
+diff --git a/fs/open.c b/fs/open.c
+--- a/fs/open.c
++++ b/fs/open.c
+@@ -5,6 +5,7 @@
+  *  Copyright (C) 1991, 1992  Linus Torvalds
+  */
+ 
++#include <linux/capstone_native_helpers.h>
+ #include <linux/string.h>
+ #include <linux/mm.h>
+ #include <linux/file.h>
+@@ -194,7 +195,6 @@ long capstone_native_ftruncate(struct file *file, loff_t length, int small)
+ out:
+ 	return error;
+ }
+-EXPORT_SYMBOL_GPL(capstone_native_ftruncate);
+ 
+ long do_sys_ftruncate(unsigned int fd, loff_t length, int small)
+ {
+@@ -669,7 +669,6 @@ int capstone_native_path_chmod(const struct path *path, umode_t mode)
+ {
+ 	return chmod_common(path, mode);
+ }
+-EXPORT_SYMBOL_GPL(capstone_native_path_chmod);
+ 
+ int vfs_fchmod(struct file *file, umode_t mode)
+ {
+@@ -1604,4 +1603,3 @@ int capstone_native_fmetadata(struct file *file, unsigned int op,
+ 	default: return -EINVAL;
+ 	}
+ }
+-EXPORT_SYMBOL_GPL(capstone_native_fmetadata);
+diff --git a/fs/pipe.c b/fs/pipe.c
+--- a/fs/pipe.c
++++ b/fs/pipe.c
+@@ -5,6 +5,7 @@
+  *  Copyright (C) 1991, 1992, 1999  Linus Torvalds
+  */
+ 
++#include <linux/capstone_native_helpers.h>
+ #include <linux/mm.h>
+ #include <linux/file.h>
+ #include <linux/poll.h>
+@@ -955,7 +956,6 @@ int create_pipe_files(struct file **res, int flags)
+ 
+ /* Prepare without publishing: the capability frontend installs only after
+  * checked result publication, or releases both reservations and file refs. */
+-extern int capstone_native_reserve_fd(unsigned, unsigned);
+ int capstone_native_pipe_prepare(int fd[2], struct file *files[2],
+ 				unsigned flags, unsigned limit)
+ {
+@@ -978,7 +978,6 @@ release_read:
+ 	put_unused_fd(fd[0]);
+ 	return error;
+ }
+-EXPORT_SYMBOL_GPL(capstone_native_pipe_prepare);
+ 
+ static int __do_pipe_flags(int *fd, struct file **files, int flags)
+ {
+diff --git a/fs/stat.c b/fs/stat.c
+--- a/fs/stat.c
++++ b/fs/stat.c
+@@ -5,6 +5,7 @@
+  *  Copyright (C) 1991, 1992  Linus Torvalds
+  */
+ 
++#include <linux/capstone_native_helpers.h>
+ #include <linux/blkdev.h>
+ #include <linux/export.h>
+ #include <linux/mm.h>
+@@ -413,7 +414,6 @@ int capstone_native_stat(struct kstat *stat, struct stat *statbuf)
+ 	return 0;
+ }
+ 
+-EXPORT_SYMBOL_GPL(capstone_native_stat);
+ static int cp_new_stat(struct kstat *stat, struct stat __user *statbuf)
+ {
+     struct stat tmp;
+diff --git a/kernel/signal.c b/kernel/signal.c
+--- a/kernel/signal.c
++++ b/kernel/signal.c
+@@ -11,6 +11,7 @@
+  *		to allow signals to be sent reliably.
+  */
+ 
++#include <linux/capstone_native_helpers.h>
+ #include <linux/slab.h>
+ #include <linux/export.h>
+ #include <linux/init.h>
+@@ -4838,4 +4839,3 @@ int capstone_native_signal_action(unsigned sig, unsigned cls, unsigned flags)
+ 	sigemptyset(&action.sa.sa_mask);
+ 	return do_sigaction(sig, &action, NULL);
+ }
+-EXPORT_SYMBOL_GPL(capstone_native_signal_action);
+diff --git a/kernel/sys.c b/kernel/sys.c
+--- a/kernel/sys.c
++++ b/kernel/sys.c
+@@ -5,6 +5,7 @@
+  *  Copyright (C) 1991, 1992  Linus Torvalds
+  */
+ 
++#include <linux/capstone_native_helpers.h>
+ #include <linux/export.h>
+ #include <linux/mm.h>
+ #include <linux/mm_inline.h>
+@@ -2879,9 +2880,7 @@ int capstone_native_sysinfo(struct sysinfo *info)
+ {
+     return do_sysinfo(info);
+ }
+-EXPORT_SYMBOL_GPL(capstone_native_sysinfo);
+ int capstone_native_getrlimit(unsigned int resource, struct rlimit *limit)
+ {
+     return do_prlimit(current, resource, NULL, limit);
+ }
+-EXPORT_SYMBOL_GPL(capstone_native_getrlimit);
+diff --git a/mm/mprotect.c b/mm/mprotect.c
+--- a/mm/mprotect.c
++++ b/mm/mprotect.c
+@@ -9,6 +9,7 @@
+  *  (C) Copyright 2002 Red Hat Inc, All Rights Reserved
+  */
+ 
++#include <linux/capstone_native_helpers.h>
+ #include <linux/pagewalk.h>
+ #include <linux/hugetlb.h>
+ #include <linux/shm.h>
+@@ -889,7 +890,6 @@ int capstone_native_mprotect(unsigned long start, size_t len, unsigned long prot
+ {
+ 	return do_mprotect_pkey(start, len, prot, -1);
+ }
+-EXPORT_SYMBOL_GPL(capstone_native_mprotect);
+ 
+ #ifdef CONFIG_ARCH_HAS_PKEYS
+ 

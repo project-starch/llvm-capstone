@@ -29,6 +29,20 @@ static bool copyable_exact_bounds;
 #include <asm/pgtable.h>
 #include <asm/sbi.h>
 #include "wire.h"
+
+/* Linux 6.4 port (the boards' 6.4.14 kernel, linux-6.4/): 6.3 replaced mount user namespaces with
+ * idmaps (the same substitution 6.4's own do_linkat/do_sys_ftruncate made), and riscv's generic entry
+ * moved syscall trace/audit/seccomp work from _TIF_SYSCALL_WORK to thread_info->syscall_work. On 6.1
+ * every macro expands to the expression it replaced. */
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 3, 0)
+#define cv_mnt_idmap(mnt) mnt_idmap(mnt)
+#define cv_owner_is_fsuid(idmap, inode) vfsuid_eq_kuid(i_uid_into_vfsuid((idmap), (inode)), current_fsuid())
+#define cv_syscall_work() riscv_capstone_syscall_work()
+#else
+#define cv_mnt_idmap(mnt) mnt_user_ns(mnt)
+#define cv_owner_is_fsuid(ns, inode) uid_eq(i_uid_into_mnt((ns), (inode)), current_fsuid())
+#define cv_syscall_work() (read_thread_flags() & _TIF_SYSCALL_WORK)
+#endif
 /* Escape epoch and tag/raw-tag classification words in the paused frame
  * (capstone-qemu native/checked-emu-measure, CHECK_EPOCH_OFFSET/CHECK_KINDS_OFFSET).
  * Step 0 of the native checked-access RTL order moved them from +656/+664,

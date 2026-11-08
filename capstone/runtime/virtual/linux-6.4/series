@@ -1,0 +1,11 @@
+# Linux 6.4.14 native-task series, applied in this order by install-native-task.sh.
+linux-6.4-unpinned.patch
+kernel-native-mprotect.patch
+kernel-native-gcc.patch
+kernel-native-task.patch
+kernel-native-files.patch
+kernel-native-process.patch
+kernel-native-spawn.patch
+kernel-native-directory.patch
+kernel-native-time.patch
+kernel-native-helpers.patch
