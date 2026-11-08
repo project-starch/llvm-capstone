@@ -3570,10 +3570,27 @@ static int kfast_serve(struct context *c, struct cv_thread *t, u64 budget_end, l
         { ++kfast_fb_transport; return 0; }
     if (cv_step_stop(budget_end)) { ++kfast_fb_stop; return 0; }
     /* The stub's ring check (capstone_signals_call): an unpublished event makes it a RETRY round. */
-    if (copy_from_user(sig, (void __user *)(uintptr_t)k->sig_head, sizeof(sig))) { ++kfast_fb_fault; return 0; }
+    /* One range check per region, then word accesses: RISC-V's copy_*_user moves anything under 64 bytes a byte at a
+     * time, and get_user/put_user each run might_fault (CONFIG_DEBUG_ATOMIC_SLEEP). */
+    {
+        u64 __user *sp = (u64 __user *)(uintptr_t)k->sig_head;
+        if (!access_ok(sp, 5 * 8) || __get_user(sig[0], sp) || __get_user(sig[1], sp + 1) || __get_user(sig[4], sp + 4))
+            { ++kfast_fb_fault; return 0; }
+    }
     if (sig[0] != sig[1] || sig[4]) { ++kfast_fb_signal; return 0; }
-    /* capstone_delegate_serve: snapshot first. */
-    if (copy_from_user(&e, meta, sizeof(e))) { ++kfast_fb_fault; return 0; }
+    /* capstone_delegate_serve: snapshot first (every field the request is judged by; result, pending and status are
+     * outputs). */
+    {
+        u64 __user *mp = (u64 __user *)meta;
+        u64 head;
+        unsigned i;
+        if (!access_ok(mp, KF_META_BYTES) || __get_user(head, mp) || __get_user(e.nr, mp + 1) ||
+            __get_user(e.flags, mp + 8))
+            { ++kfast_fb_fault; return 0; }
+        for (i = 0; i < 6; ++i)
+            if (__get_user(e.args[i], mp + 2 + i)) { ++kfast_fb_fault; return 0; }
+        e.version = (u32)head; e.count = (u32)(head >> 32);   /* little-endian: version at 0, count at 4 */
+    }
     rc = kfast_check(c, &e, &row, &off, &len);
     if (rc == -2) { ++kfast_fb_nr; return 0; }
     if (rc) { ++kfast_fb_invalid; return 0; }
@@ -3607,15 +3624,13 @@ static int kfast_serve(struct context *c, struct cv_thread *t, u64 budget_end, l
      * and publish it with this round, as it would after its own call. */
     if (signal_pending(current)) return 2;
     /* serve: entry->result; capstone_signals_publish with head == tail: the empty block, then pending and status. */
-    {
-        /* block: published (u64 at 8) then count (u32 at 16), one copy; entry: result, pending, status, one copy */
-        struct { u64 published; u32 count; } __packed blk = {sig[1], 0};
-        u64 tailw[3] = {(u64)*result, 0, KF_ROUND_DONE};
-        BUILD_BUG_ON(sizeof(blk) != 12);
-        if (copy_to_user(meta + KF_SIGNAL_OFFSET + KF_BLOCK_PUBLISHED, &blk, sizeof(blk)) ||
-            copy_to_user(meta + KF_ENTRY_RESULT, tailw, sizeof(tailw)))
-            return 2;
-    }
+    /* meta's range was checked above; the same order as capstone_signals_publish (block, then pending and status) */
+    if (__put_user(0U, (u32 __user *)(meta + KF_SIGNAL_OFFSET + KF_BLOCK_COUNT)) ||
+        __put_user(sig[1], (u64 __user *)(meta + KF_SIGNAL_OFFSET + KF_BLOCK_PUBLISHED)) ||
+        __put_user((s64)*result, (s64 __user *)(meta + KF_ENTRY_RESULT)) ||
+        __put_user(0UL, (u64 __user *)(meta + KF_ENTRY_RESULT + 8)) ||
+        __put_user(KF_ROUND_DONE, (u64 __user *)(meta + KF_ENTRY_RESULT + 16)))
+        return 2;
     /* The launcher's reply: result 0 (virtual_service's step->result for a delegated call), a0 an integer. */
     t->frame[28] = 0; t->frame[29] = 0;
     return 1;
