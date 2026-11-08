@@ -65,6 +65,9 @@ function(capstone_configure_application target)
       target_compile_definitions(capstone-application-core PRIVATE CAPSTONE_RUNTIME_VIRTUAL=1 CAPSTONE_RUNTIME_TRAP=1)
       target_sources(capstone-application-core PRIVATE
         "${musl}/native-syscall.S" "${musl}/linux-start.c" "${musl}/delegate.c")
+      if(CAPSTONE_MEMSET_CAP_ZERO)
+        target_compile_definitions(capstone-application-core PRIVATE CAPSTONE_MEMSET_CAP_ZERO=1)
+      endif()
       target_compile_options(capstone-application-core PRIVATE
         "$<$<COMPILE_LANGUAGE:C>:SHELL:${virtual_codegen}>")
     else()
