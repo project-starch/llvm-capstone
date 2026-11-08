@@ -93,3 +93,12 @@ Stage perf/exitk/stages/perl-c3g-tk (perf/best's c3g stage with the same three l
 N = 1 each. QEMU cannot measure the saving at the board's HZ. NO_HZ_IDLE also stops the tick in idle; idle is 0 % during
 these runs (out-nd3-b3 /proc/stat), so it should not show. Tick-based CPU accounting will under-count system time on the
 new kernel (one tick per exit): stime-based readings from these runs are not comparable to earlier runs.
+
+## Addendum 1 (8 Nov 21:5x, after the QEMU runs; the predictions above are unchanged)
+
+QEMU.md: the variant's kernel passes gcc train and perlbench test (rc 0, specdiff, outputs equal) with the readback
+`nohz_mode 1, event_handler: tick_nohz_handler`, and at HZ=1000 it removes 15.0 M instructions (33 %) of the kernel window
+but only 8.3 M machine-wide: on QEMU about half of the replay's cost reappears elsewhere (more context switches). If the
+board behaves the same, N1 holds and N4 fails, the "replay's cycles reappeared" branch above; N4 is the prediction at
+risk. The stage also shows a per-interrupt cost of the nohz path (~310 instructions on QEMU's 6.1 kernel), which P1
+reads on Plain.

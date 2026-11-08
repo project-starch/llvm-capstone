@@ -13,8 +13,10 @@ CPU because the stage had printed a 762,587-byte kallsyms dump into that file fi
 - **Kit** bkit30-unify, unchanged (module 13a5ad66752a4e0b, launcher a8a4dbe637ac758a). Driver
   perf/exitk/board-hb/un-run-hbfix.sh (results/2026-11-06-unify/un-run.sh with its own list and output root, and the
   pre-registration branch as a parameter); list perf/exitk/board-hb/un-b3.list; dry run perf/exitk/board-hb/dry.
-- A side effect, registered: the tick probe now runs on a quiet console. Its earlier run (2026-11-06-unify) was VOID
-  because the console was still draining this dump (54 gaps/s).
+- A side effect, registered: the tick probe no longer runs beside a heartbeat reading 762 KB. Its earlier runs
+  (2026-11-06-unify, three boards' readings 0.324-0.325, 54 gaps/s) were VOID because HB 1's `wc` ran during the
+  probe (HB 1's tail ends in `@@TICKPROBE-BEGIN`); the earlier record's stated cause, console drain, was wrong
+  (UNIFY-440S.md, last section).
 
 **Reference:** out-nd3-b3 (board 3, same kit and stage but the dump): 4,529.6 s; inside 85.80 G cycles; `kcyc - rcyc`
 4.874 G; `ucyc` 19.18 G (767.3 s) over 5,863 steps; the heartbeat subshell's children 44,567 + 25,905 ticks.

@@ -50,7 +50,8 @@ timer interrupt is taken at the `local_irq_restore` right after the CSRUNV, insi
 every 10 ms the context was masked. C.5a has no `time` CSR: each clock read in that path (`ktime_get` in
 `clockevents_program_event`, the clocksource read in `update_wall_time`, `sched_clock` in `scheduler_tick`,
 `hrtimer_run_queues`) is an illegal-instruction trap the monitor emulates (sbi_capstone.c `CSR_TIME` emulation; the
-rtl lane's tickcost record). 13.8 k cycles is about 2.2 k instructions per replayed period at the window's IPC 0.16.
+rtl lane's tickcost record). At the kernel window's average IPC (0.160, exhpm) 13.8 k cycles would be about 2.2 k instructions per replayed
+period; the replay's own IPC is not measured.
 The stock board kernel's kallsyms (out-nd3-b3 spec.txt) has `tick_periodic` and `tick_handle_periodic` and no
 `tick_nohz_handler`.
 
@@ -93,7 +94,7 @@ mm_percpu_wq 928 (9.3 s), ksoftirqd 63. The harness heartbeat's children 70,472 
 
 | # | lever | mechanism | predicted saving | state |
 |---|---|---|---|---|
-| K1 | board kernel `NO_HZ_IDLE` (HZ_PERIODIC off; HIGH_RES_TIMERS stays off) | the tick runs as `tick_nohz_handler`: `tick_do_update_jiffies64` adds `ticks += ktime_divns(delta, incr)` and `jiffies_64 += ticks` once (tick-sched.c:103-118), one `update_process_times`, and `hrtimer_forward(&ts->sched_timer, now, TICK_NSEC)` skips the missed periods (tick-sched.c:1390). The replay loop is gone | up to the masked-time term less one tick per timer interrupt: gcc train ~150-190 s of 4,253 s (3.5-4.5 %), mcf test ~400-500 s, perlbench test ~1,000-1,280 s, x264 test ~1,700-2,100 s | **built, kit bkit35-nohz** |
+| K1 | board kernel `NO_HZ_IDLE` (HZ_PERIODIC off; HIGH_RES_TIMERS stays off) | the tick runs as `tick_nohz_handler`: `tick_do_update_jiffies64` adds `ticks += ktime_divns(delta, incr)` and `jiffies_64 += ticks` once (tick-sched.c:103-118), one `update_process_times`, and `hrtimer_forward(&ts->sched_timer, now, TICK_NSEC)` skips the missed periods (tick-sched.c:1390). The replay loop is gone | up to the masked-time term less one tick per timer interrupt: gcc train ~150-190 s of 4,253 s (3.5-4.5 %), mcf test ~400-500 s, perlbench test ~1,000-1,280 s, x264 test ~1,700-2,100 s. QEMU at HZ=1000 nets about half of its kernel-window saving (QEMU.md), so the run saving may be ~half of these | **built, kit bkit35-nohz; QEMU-validated; dry-run; PREREG-nohz.md** |
 | K2 | HIGH_RES_TIMERS + NO_HZ_IDLE (QEMU's own setup) | the same O(1) catch-up through `tick_sched_timer`, plus hrtimer interrupt overhead | no more than K1 | not built: cannot beat K1 |
 | K3 | a lower HZ | fewer periods to replay | none available: HZ_100 is Kconfig's lowest | — |
 | K4 | NO_HZ_FULL | needs a housekeeping CPU; this board has one hart | — | — |

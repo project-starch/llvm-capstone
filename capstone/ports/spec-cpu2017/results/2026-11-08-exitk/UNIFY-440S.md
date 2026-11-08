@@ -1,4 +1,4 @@
-# The unify gcc train runs' extra ~440 s outside: the board harness's heartbeat, reading a 760 KB step output every 30 s
+# The unify gcc train runs' extra outside time: the board harness's heartbeat, reading a 760 KB step output every 30 s
 
 Desk reading of existing transcripts (8 Nov); no board call. Sibling record: ACCOUNTING.md (the per-exit kernel work).
 
@@ -30,8 +30,16 @@ exec.c `virtual_service_loop`) and dev's (wt-unify exec.c ~1438-1446) both do
 - **What is in /tmp/step.out:** the step's whole stdout so far. The unify gcc stages print the kernel's text symbols
   first (`echo @@KSYMS-BEGIN; grep -E ' [tT] ' /proc/kallsyms; echo @@KSYMS-END`, 19,983 lines), so the first heartbeat
   already reads `out=762587B/19983L`. c3f's stage (perf/ga2) has no dump: `out=538B/6L`.
-- So each heartbeat costs about 6.7 s of CPU on the 25 MHz core (704.7 s over ~105 heartbeats in the window), and the
-  heartbeat loop's period stretches to 43 s (109 heartbeats over the stage), against 34.8 s on c3f's run.
+- So each heartbeat costs about 6.8 s of CPU on the 25 MHz core (704.7 s over about 103 complete heartbeats in the
+  window, per the auditor's decoding of their tails), and the heartbeat loop's period stretches to ~43 s, against
+  34.5-34.8 s on every small-file stage (c3f gcc, c3g and unify perlbench).
+- **Control before the command.** At @@PST0 no launcher has run yet, and pid 97's children already read cutime 773,
+  cstime 623 (14.0 s) for the first two heartbeats: ~7.0 s each with no context window at all, so replayed ticks are
+  not what inflates the figure. Tick conservation agrees: the launcher's 373,013 ticks cover its inside time (3,432 s)
+  plus `kcyc - rcyc` (195 s) with ~30 s to spare, so at most ~30 s could have been misattributed.
+- **An instrument that does not count ticks agrees.** Machine-wide instret (GT-SNAP hpm) outside the context is 8.08 G
+  (nd3) and 8.00 G (nd-b2) against c3f's 2.79 G (ga2): 5.2-5.3 G more, about 33 instructions per byte over ~103 x 2
+  x 770 KB, a getc loop (busybox 1.36.1 `wc` reads every byte through `getc` for both -c and -l).
 - It lands in `ucyc` because the launcher only gives the hart up between steps: a woken heartbeat process sets
   `need_resched`, CV_STEP's stop check returns to the launcher, and the heartbeat runs before the next CV_STEP.
 
@@ -42,19 +50,26 @@ exec.c `virtual_service_loop`) and dev's (wt-unify exec.c ~1438-1446) both do
 
 The table alone is confounded (every dump run is a unify run). What breaks the confound: the per-task CPU above, read
 directly, and the unify **perlbench** runs, which have no dump (out-un-b3 and out-nd-b2: `out=226B` / `241B` at HB 1)
-and whose total `ucyc` shows no excess: 4,214 s and 4,191 s over the test command, against 4,946-5,493 s on the three
-devmk perlbench runs (fit-perlbench.txt; per step it is higher, 0.74 M against 0.29-0.44 M cycles, because unify makes
-half the steps). QEMU shows none of it because the
+and whose total `ucyc` is lower (4,214 s and 4,191 s against 4,946-5,493 s on the three devmk perlbench runs,
+fit-perlbench.txt). Per event it is higher (37.6 ms per service exit against 18.7 ms on best-b2; 0.75 M against
+0.29-0.46 M cycles per step), so a per-step cost of the unify stack is NOT excluded by perlbench; for gcc, with 527
+service exits, it could be small. QEMU shows none of it because the
 QEMU path (virtualvm.py) runs no heartbeat.
 
 ## How big the fix is: a band, not a point
 
+- The excess to explain, without the exit digest: outside +344 s (nd-b2, 1,083.5 against 739.5 s) and +358 s (nd3);
+  `ucyc` about +375 s. The headline ~440 s was un-b3's, which still carried the 92 s digest.
 - **Upper:** 704.7 s, the heartbeat children's measured CPU in the dump run.
-- **Lower:** ~370 s, unify's `ucyc` excess over c3f's (767 against ~400 s). unify serves 527 calls a run against
+- **Lower:** ~370 s, unify's `ucyc` excess over c3f's (767 against ~400 s).
+- That the heartbeat accounts for the excess (and not only for ~705 s of CPU) is PLAUSIBLE BUT UNPROVEN: it needs
+  c3f's small-file heartbeat to cost ~2.8 s each, or unify's other outside work to be cheaper than c3f's (plausible
+  with 527 against 7,528 service exits). The small-file cost has never been measured (out-nd3-b3 is the only board
+  run with @@PST snapshots, N = 1); PREREG-hbfix.md measures it. unify serves 527 calls a run against
   c3f's 7,525, which should leave its `ucyc` well below c3f's once the heartbeat is cheap; the difference between the
   two bounds is the heartbeat's cost on a small file (six process spawns every 30 s), which no run measured (no c3f
   or Plain run carries @@PST snapshots).
-- unify gcc train would then read about 3,830-4,150 s from 4,518.6 s (nodiag), against c3f's 4,253.3 s.
+- If it holds, unify gcc train would read about 3,830-4,150 s from 4,518.6 s (nodiag), against c3f's 4,253.3 s.
 
 ## The fix (harness, not kit; for the stage owner)
 
@@ -65,3 +80,12 @@ QEMU path (virtualvm.py) runs no heartbeat.
 
 **Not affected:** the running SPEC train lists. None of the 17 stages in stages-train-fair prints kallsyms (0 matches of
 `KSYMS|kallsyms` in each run.sh, 8 Nov).
+
+## A prior record's mechanism, corrected (claim-auditor, 8 Nov)
+
+2026-11-06-unify's result says its tick probe was VOID because "the console was still draining the stage's kallsyms
+dump". That mechanism cannot be right: gate.sh sends the step's stdout to /tmp/step.out and the console gets it only at
+`cat /tmp/step.out` after the step. HB 1's tail in all three unify gcc runs ends in `@@TICKPROBE-BEGIN`: the probe ran
+beside the heartbeat's `wc` over the 762 KB file (three readings, share 0.324-0.325, ~9.7 s of 30 s). The VOID verdict
+stands; the stated cause was the heartbeat. Likewise 2026-11-07-nodiag's reading that context time shows up as user
+time is contradicted by the launcher's cutime of +155 ticks: the 467 s of user time is the heartbeat's children.
