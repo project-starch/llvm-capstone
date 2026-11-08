@@ -23,9 +23,16 @@ def main():
     p.add_argument('--host-cpu', type=int, help='Pin entire emulator process tree to this allowed host CPU')
     p.add_argument('--host-perf', type=Path, help='Diagnostic sampling; results are excluded from clean timing comparisons')
     p.add_argument('--pcrel', choices=['true', 'false'], help='Explicit scalar-only PC-relative translation control')
+    p.add_argument('--scalar-cpu', choices=['common', 'u-mode', 'platform'], help='CPU configuration control for explicit fork scalar arms')
+    p.add_argument('--scalar-machine', choices=['virt', 'virt-capstone'], help='Machine control for explicit fork scalar arms')
+    p.add_argument('--scalar-kernel', choices=['off', 'native'], help='Kernel argument control for explicit fork scalar arms')
     a = p.parse_args()
     if a.pcrel is not None and (not a.arm or 'platform-native' in a.arm):
         p.error('--pcrel requires explicit scalar arms; native profile stays unchanged')
+    scalar_controls = dict(cpu=a.scalar_cpu, machine=a.scalar_machine, kernel=a.scalar_kernel)
+    if any(v is not None for v in scalar_controls.values()) and (
+            not a.arm or any(v not in ['fork-plain', 'platform-plain'] for v in a.arm)):
+        p.error('Scalar configuration controls require explicit fork scalar arms')
     if a.iterations < 1:
         p.error('iterations must be positive')
     if a.host_cpu is not None:
@@ -37,12 +44,12 @@ def main():
     pins = {k: sha(getattr(a, k)) for k in ['stock','fork','firmware','plain','native','input','reference']}
     pins.update({k:sha(a.images/k) for k in ['Image','rootfs.ext2']})
     report = dict(status='RUNNING', inputs=pins, iterations=a.iterations, icount=a.icount,
-                  profiled=bool(a.host_perf), pcrel_override=a.pcrel,
+                  profiled=bool(a.host_perf), pcrel_override=a.pcrel, scalar_controls=scalar_controls,
                   host=dict(uname=list(platform.uname()), affinity=sorted(os.sched_getaffinity(0))),
                   samples=[], limitations=[
                       'Host serial-delivery timing, not target cycles or hardware overhead.',
                       'One untimed warm-up compilation per fresh guest, then a batch including exec/exit.',
-                      'Only stock-plain versus fork-plain uses identical machine/CPU options and binary.',
+                      'Default stock-plain/fork-plain is the matched scalar pair; explicit overrides must be audited separately.',
                       'Platform arms intentionally change discovery/CPU flags and Linux capability paths.',
                       'Native versus plain binaries differ in compiler/libc/ABI; not isolated ISA cost.',
                       'No profiling plugin; build flags and host contention still require auditing.'])
@@ -67,11 +74,17 @@ def main():
             (stage/'gate.sh').write_text('\n'.join(script)+'\n')
             cap = arm.startswith('platform-')
             flags = cap_flags if cap else ''
+            if a.scalar_kernel is not None:
+                flags = cap_flags if a.scalar_kernel == 'native' else ''
+            machine = a.scalar_machine or ('virt-capstone' if cap else 'virt')
             assert len(('root=/dev/vda ro '+flags).encode()) < 512
             cpu = cap_cpu if cap else common_cpu
+            if a.scalar_cpu is not None:
+                cpu = {'common': common_cpu, 'u-mode': common_cpu + ',x-capstone-u-mode=true',
+                       'platform': cap_cpu}[a.scalar_cpu]
             if a.pcrel is not None:
                 cpu = re.sub(r',x-pcrel=(?:true|false)', '', cpu) + ',x-pcrel=' + a.pcrel
-            cmd = ['python3',str(runner),'--qemu',str(a.stock if arm=='stock-plain' else a.fork),'--images',str(a.images),'--firmware',str(a.firmware),'--stage',str(stage),'--work',str(d/'vm'),'--memory','4G','--disk-mib','128','--timeout','180','--machine','virt-capstone' if cap else 'virt','--cpu',cpu,'--host-window']
+            cmd = ['python3',str(runner),'--qemu',str(a.stock if arm=='stock-plain' else a.fork),'--images',str(a.images),'--firmware',str(a.firmware),'--stage',str(stage),'--work',str(d/'vm'),'--memory','4G','--disk-mib','128','--timeout','180','--machine',machine,'--cpu',cpu,'--host-window']
             if flags:cmd+=['--kernel-arg',flags]
             if a.host_perf:cmd+=['--host-perf',str(a.host_perf)]
             if a.icount is not None:cmd+=['--icount',str(a.icount)]

@@ -481,5 +481,54 @@ The [scalar PC-relative control](pcrel-qualification.json) rules out `x-pcrel`
 as the explanation for platform-plain's speed: identical `virt` runs take 9.660s
 with it and 9.680s without it; platform-plain takes 5.935s. All 600 timed outputs
 and six warm-ups match. `measure.py --pcrel true|false` requires explicit scalar
-arms. Machine/CPU discovery and Linux paths still need separate controls.
+arms. The separate configuration controls below resolve that part of the gap.
 These results measure host emulator cost, not hardware cycles.
+
+## Host configuration and two further source controls
+
+The [configuration qualification](host-configuration-qualification.json) isolates
+the scalar CPU, machine and kernel flags. On the original fork, 100 plain GCC
+compilations take 9.715s with the common CPU settings and 5.905s with only
+`x-capstone-u-mode=true` added. Adding the remaining platform CPU, machine and
+kernel settings gives 5.935s, 5.915s and 5.920s respectively. The legacy mode
+calls a tag-removal helper after ordinary stores; the U-mode platform uses the
+TLB store hook when needed. All 1,000 timed outputs and ten warm-ups match.
+This does not mean that capability security makes a program faster: these are
+different emulator paths for the same scalar binary. A separate stock/fork
+profile points to the fork's existing page-specific SFENCE.VMA path as another
+difference; an isolated full-flush reversal is still pending.
+
+`measure.py` exposes `--scalar-cpu common|u-mode|platform`,
+`--scalar-machine virt|virt-capstone` and `--scalar-kernel off|native` only for
+explicit fork scalar arms. Native measurements retain their existing profile.
+
+The same qualification records two practical build/host controls. Clang ThinLTO
+uses 28.945s versus full LTO's 28.530s for 50 native compilations (1.45% more CPU).
+Its observed link step is 35.2s versus 72.8s; these are individual build steps,
+not a repeated build benchmark. Use `--thin-lto` explicitly when that tradeoff
+helps iteration. On this hybrid host, the same full-LTO binary takes 11.375s
+on CPU2 versus 16.270s on CPU17 for 20 compilations. Record and hold affinity
+fixed; do not mix host-core differences into source-code speedups.
+
+The [runtime-path comparison](runtime-path-candidates-qualification.json)
+revisits the local-cursor shortcut under Clang and tests removal of STC's
+redundant dirty-page update. The write probe already handles TLB_NOTDIRTY;
+tag locks, access checks and full-span code invalidation remain intact.
+
+| Clang/LTO candidate | GCC CPU, 20 compilations | x264 CPU, three-frame excerpt |
+| --- | ---: | ---: |
+| Existing cursor/bounds baseline | 11.375s | 42.795s |
+| STC dirty-page reuse | 11.110s | 42.155s |
+| Local-cursor shortcut | 11.285s | 41.560s |
+
+All outputs match. The x264 derivative uses original frames 50–52 and checks
+the actual new bitstream, full-sized YUVs and three-frame completion receipt;
+it is not an official SPEC command or score. Its baseline samples drift from
+42.28s to 43.31s, so the mean differences are preliminary. These two changes
+are being combined and measured directly before integration.
+
+The STC store/tag/code fixture passes on baseline and candidate in compact/exact
+bounds with both ID widths. Separate dirty-log assertions exercise reset and
+reprobe; intentionally broken dirty-probe and code-invalidation builds fail.
+Instrumented runs are excluded from timing. Combined task/race and full-SPEC
+qualification is still required before advancing the default pin.
