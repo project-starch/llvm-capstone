@@ -85,3 +85,15 @@ diagnostic rerun is on QEMU.
   and marked as a subset, as gcc's train01 is. If a fix lands before Wednesday, commands 2 and 3 run again as their
   own short stage on the first free board.
 - T0 is read per command for perlbench: commands 0, 1 and 4 must be rc 0 with specdiff PASS.
+
+## Addendum 3 (8 Nov 21:4x): gcc is not re-run; schedule end corrected
+
+- gcc train01 already has its numbers in exactly this configuration: Capstone dcnofp 3,924.9 s (results/2026-11-08-dcnofp
+  Result, exe 736f881f4958ac3b, kit bkit32-q32, board 3) and Plain-with-cache 3,280.9 s (results/2026-11-07-plainreuse,
+  exe 4d9ddde9aee9b35f). Both gcc lines are removed. Board 3's q32 list was rewritten before that driver opened it.
+  On board 1 (chain running), an existing output directory makes the chain skip the stage (chain-board.sh:26).
+- A move of Plain x264 to board 1 was tried and reverted within minutes. It would have ended board 1 later than
+  board 2. The appended list line is neutralised the same way (an existing output directory).
+- The schedule table's end times were miscounted by a day for board 1. Corrected: board 1 Wed ~01:00, board 3
+  Wed ~04:00, board 2 Wed ~10:30 (SG time, which is the deadline's time zone). The last train number is due about
+  Wednesday 10:30.
