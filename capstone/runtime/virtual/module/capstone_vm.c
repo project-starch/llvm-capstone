@@ -226,6 +226,9 @@ struct context {
     unsigned long kf_meta, kf_meta_bytes, kf_exchange, kf_exchange_bytes;
     bool kf_on;
     struct cv_kfast kf;
+    /* The launcher-counter increments of the calls served since this CV_STEP began, written into the launcher's
+     * memory once, before the CV_STEP returns (kfast_flush): the launcher reads them only in its own code. */
+    u64 kf_rounds, kf_syscalls, kf_bytes_in, kf_bytes_out, kf_last_nr;
 };
 static DEFINE_MUTEX(vm_lock);
 /* Quotas are in base pages; zero means the 30-bit ISA limit. Parameters are
@@ -3293,6 +3296,8 @@ static int kfast_accept(struct context *c, const struct cv_kfast *k)
     for (i = 0; i < ARRAY_SIZE(user); ++i)
         if (!user[i] || (user[i] & 7) || !access_ok((void __user *)(uintptr_t)user[i], 8))
             goto refuse;
+    /* struct capstone_signal_state: head, tail, inflight, logical, backpressure, read as one 40-byte copy. */
+    if (k->sig_tail != k->sig_head + 8 || k->sig_backpressure != k->sig_head + 32) goto refuse;
     for (i = 0; i < CV_KFAST_SHAPES; ++i) {
         const struct cv_kfast_shape *a = &k->shapes[i], *b = &kfast_rows[i];
         if (a->nr != b->nr || a->group != b->group || a->argc != b->argc) goto refuse;
@@ -3530,8 +3535,20 @@ static int kfast_call(struct context *c, const struct kf_entry *e, void __user *
 static int kfast_add(u64 address, u64 delta)
 {
     u64 v;
+    if (!delta) return 0;
     if (get_user(v, (u64 __user *)(uintptr_t)address)) return -EFAULT;
     return put_user(v + delta, (u64 __user *)(uintptr_t)address);
+}
+/* serve and run() advance rounds, syscalls, last_nr and bytes_in/bytes_out per call; the module adds the calls it
+ * served since the CV_STEP began, once, before the CV_STEP returns. Diagnostic counters of the STATS line only. */
+static void kfast_flush(struct context *c)
+{
+    const struct cv_kfast *k = &c->kf;
+    if (!c->kf_rounds) return;
+    kfast_add(k->rounds, c->kf_rounds); kfast_add(k->syscalls, c->kf_syscalls);
+    kfast_add(k->bytes_in, c->kf_bytes_in); kfast_add(k->bytes_out, c->kf_bytes_out);
+    put_user(c->kf_last_nr, (u64 __user *)(uintptr_t)k->last_nr);
+    c->kf_rounds = c->kf_syscalls = c->kf_bytes_in = c->kf_bytes_out = 0;
 }
 
 /* A kind-3 escape of thread t. 0: not served, the launcher serves it as before; 1: served and the round ended in
@@ -3542,7 +3559,7 @@ static int kfast_serve(struct context *c, struct cv_thread *t, u64 budget_end, l
     const struct cv_kfast *k = &c->kf;
     const struct cv_kfast_shape *row;
     struct kf_entry e;
-    u64 off, len, head, tail, backpressure;
+    u64 off, len, sig[5];   /* head, tail, inflight, logical, backpressure */
     void __user *meta = (void __user *)(uintptr_t)k->meta;
     void __user *buf;
     int rc;
@@ -3553,11 +3570,8 @@ static int kfast_serve(struct context *c, struct cv_thread *t, u64 budget_end, l
         { ++kfast_fb_transport; return 0; }
     if (cv_step_stop(budget_end)) { ++kfast_fb_stop; return 0; }
     /* The stub's ring check (capstone_signals_call): an unpublished event makes it a RETRY round. */
-    if (get_user(head, (u64 __user *)(uintptr_t)k->sig_head) ||
-        get_user(tail, (u64 __user *)(uintptr_t)k->sig_tail) ||
-        get_user(backpressure, (u64 __user *)(uintptr_t)k->sig_backpressure))
-        { ++kfast_fb_fault; return 0; }
-    if (head != tail || backpressure) { ++kfast_fb_signal; return 0; }
+    if (copy_from_user(sig, (void __user *)(uintptr_t)k->sig_head, sizeof(sig))) { ++kfast_fb_fault; return 0; }
+    if (sig[0] != sig[1] || sig[4]) { ++kfast_fb_signal; return 0; }
     /* capstone_delegate_serve: snapshot first. */
     if (copy_from_user(&e, meta, sizeof(e))) { ++kfast_fb_fault; return 0; }
     rc = kfast_check(c, &e, &row, &off, &len);
@@ -3586,20 +3600,22 @@ static int kfast_serve(struct context *c, struct cv_thread *t, u64 budget_end, l
     else ++kfast_served_clock;
     /* serve and run(): ++rounds, last_nr, ++syscalls, and bytes_in (IN) or bytes_out (OUT) by the checked length.
      * Diagnostic counters of the launcher's STATS line only: a failure here is not the domain's. */
-    kfast_add(k->rounds, 1); kfast_add(k->syscalls, 1);
-    put_user(e.nr, (u64 __user *)(uintptr_t)k->last_nr);
-    if (row->kind[1] == KF_IN) kfast_add(k->bytes_in, len);
-    if (row->kind[1] == KF_OUT) kfast_add(k->bytes_out, len);
+    ++c->kf_rounds; ++c->kf_syscalls; c->kf_last_nr = e.nr;
+    if (row->kind[1] == KF_IN) c->kf_bytes_in += len;
+    if (row->kind[1] == KF_OUT) c->kf_bytes_out += len;
     /* A signal that arrived during the call has not reached the launcher's trampoline yet: the launcher must take it
      * and publish it with this round, as it would after its own call. */
     if (signal_pending(current)) return 2;
     /* serve: entry->result; capstone_signals_publish with head == tail: the empty block, then pending and status. */
-    if (put_user(0U, (u32 __user *)(meta + KF_SIGNAL_OFFSET + KF_BLOCK_COUNT)) ||
-        put_user(tail, (u64 __user *)(meta + KF_SIGNAL_OFFSET + KF_BLOCK_PUBLISHED)) ||
-        put_user((s64)*result, (s64 __user *)(meta + KF_ENTRY_RESULT)) ||
-        put_user(0UL, (u64 __user *)(meta + KF_ENTRY_RESULT + 8)) ||
-        put_user(KF_ROUND_DONE, (u64 __user *)(meta + KF_ENTRY_RESULT + 16)))
-        return 2;
+    {
+        /* block: published (u64 at 8) then count (u32 at 16), one copy; entry: result, pending, status, one copy */
+        struct { u64 published; u32 count; } __packed blk = {sig[1], 0};
+        u64 tailw[3] = {(u64)*result, 0, KF_ROUND_DONE};
+        BUILD_BUG_ON(sizeof(blk) != 12);
+        if (copy_to_user(meta + KF_SIGNAL_OFFSET + KF_BLOCK_PUBLISHED, &blk, sizeof(blk)) ||
+            copy_to_user(meta + KF_ENTRY_RESULT, tailw, sizeof(tailw)))
+            return 2;
+    }
     /* The launcher's reply: result 0 (virtual_service's step->result for a delegated call), a0 an integer. */
     t->frame[28] = 0; t->frame[29] = 0;
     return 1;
@@ -4035,6 +4051,7 @@ thread_unwind:
         r.args[4] = t->frame[76]; r.args[5] = t->frame[77];
         r.args[6] = t->frame[78]; r.args[7] = t->frame[79];
         r.thread = t->id;
+        kfast_flush(c);
         if (kf_handback) {
             /* A delegated call performed by kfast_serve and not resumed: the launcher ends the round (wire.h). */
             r.cause = CV_CAUSE_KFAST_PUBLISH; r.address = (u64)kf_result;
