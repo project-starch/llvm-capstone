@@ -284,3 +284,24 @@ instructions** machine-wide (603.6 of them in firmware). A trap round trip on si
 that. The exchange arm with the model on was not run. Scaling its 2,643,137 checks by 604 suggests about
 1.6e9 instructions of saving with in-hardware checks, about 10k per exchange-arm call. That figure is an
 estimate, not a reading.
+
+## RTL frame-layout review (rtl lane, 8 Nov, read against capstone-ariane c5a-wt; 1fc2cd5aa is its ancestor)
+
+- **Offsets agree.** satp at +0 and srevroot (CSR 0x5C1) at +8 (switcher `runv_load_advance`), PCC at +64, x1..x31
+  at +80 with stride 16 (+64+16r), so refusing slot 0 is right. +2336/+2344 is free on silicon: the caller snapshot
+  ends at +1983 and the caller FP block (+2048, stride 8) at +2311; nothing writes +2312..+4095. Bounds, perms
+  (hi[33:30], R = bit 2, W = bit 1) and id (hi[63:34]) field positions match.
+- **Difference 1, type numbering.** The RTL stores its own enum in the saved word: NOT_CAP 0, LINEAR 1, NONLIN 2
+  (ariane_pkg.sv:662-671; the tag is cap_type != NOT_CAP, ex_stage.sv:966). QEMU stores LIN 0, NONLIN 1 (cap.h:29-31).
+  A C.5a port needs CAP_TYPE_NONLIN = 2, or every check refuses with 26. Any module code that decodes the type field
+  of a saved slot reads numbers one higher on silicon. (kfast, perf/kernel-fastpath, reads only integer frame words:
+  the escape kind and the registers, not type fields.)
+- **Difference 2, the lifetime table.** C.5a refuses paged tables (capstone_rev_node.anvil:298-301): only a flat
+  RECYCLE table, idx = id[17:0], gen = id[29:18]. The emulation's 4:9:9:8 walk would return 25 on every check
+  there. A C.5a check is one header read plus one record read with a generation compare, cheaper than the 604
+  instructions measured here. The capability-mode monitor's minting and the trap round trip are unmeasured.
+- C.5a's escape writes real tags for the slots and no bitmap, so a port could read the tag by an LDC through a
+  minted frame capability instead of the +2344 bitmap.
+- Steps 2-4 are on HOLD (runtime and rtl lanes agree): 1.72 % on perl and nothing on gcc, before any silicon cost.
+  A hardware check cuts the exchange arm (16.6 checks per call) more than the direct arm (10.4), so the 15.1 k
+  saving per call would shrink to about 11-12 k. The kfast module's board number is the input to reopen on.
