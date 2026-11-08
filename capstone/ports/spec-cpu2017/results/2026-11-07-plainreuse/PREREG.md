@@ -108,3 +108,20 @@ differs by the cache's symbols alone): imagick, nab, lbm, xz (perf/b1r, perf/b3/
 |---|---|
 | R5 | each Plain run within ±2 % of its 3 Nov reading (imagick 20.1 s, nab 867.2 s, lbm 1,895.2 s, xz 8,065.9 s) |
 | R6 | the cache: imagick and xz −1…−8 %, nab and lbm within ±1 % |
+
+## Result of Addendum 4 (8 Nov 12:42-20:01, board 1, kit bkit27-gtq): imagick, nab, lbm, xz pairs
+
+Each run rc 0 with specdiff PASS. Each pair's executables were checked by hash in the baked batch: the Plain exe has
+no `plain_map` symbol and the cached one has it.
+
+| Benchmark | Plain | Plain-with-cache | Change | R5 (Plain within ±2 % of 3 Nov) | R6 |
+|---|---|---|---|---|---|
+| imagick | 19.90 s | 19.46 s | −2.2 % | holds (20.1) | holds (−1…−8 %) |
+| nab | 866.19 s | 862.99 s | −0.37 % | holds (867.2) | holds (±1 %) |
+| lbm | 1,892.19 s | 1,895.00 s | +0.15 % | holds (1,895.2) | holds (±1 %) |
+| xz | 8,053.9 s | 8,044.1 s | −0.12 % | holds (8,065.9) | **fails** (predicted −1…−8 %) |
+
+Fair ratios on the cached denominator, against each benchmark's best Capstone test run: imagick 22.6 / 19.46 =
+1.161×, nab 991.1 / 862.99 = 1.148×, lbm 1,811.0 / 1,895.0 = 0.956×, xz 9,398.2 / 8,044.1 = 1.168×. xz's mapping
+work is per-page index publication (results/2026-11-05-minimal-mallocng), not the mmap/munmap the cache saves, which
+fits R6 failing there.
