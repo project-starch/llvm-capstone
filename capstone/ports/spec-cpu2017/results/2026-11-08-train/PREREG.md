@@ -97,3 +97,23 @@ diagnostic rerun is on QEMU.
 - The schedule table's end times were miscounted by a day for board 1. Corrected: board 1 Wed ~01:00, board 3
   Wed ~04:00, board 2 Wed ~10:30 (SG time, which is the deadline's time zone). The last train number is due about
   Wednesday 10:30.
+
+## Addendum 4 (9 Nov 00:4x, before any of these board calls): the final board plan. Train complete by Wednesday 20:00 SG
+
+The lead's clarification: all of SPEC train must be done by the deadline (a hard condition). Plain runs first, since
+the bitstream does not matter to it. The two benchmarks worst for Capstone (perlbench 1.33×, mcf 1.24× at test size)
+run on the NEW bitstream E5 (stage-B + 20-bit lifetime index, so perlbench's scrabbl/splitmail can complete), and the
+rest of Capstone runs on C.5a now. The optimisation quick tests queued for tonight (kfast on board 2, NO_HZ perlbench
+on board 3) are cancelled. The running NO_HZ gcc pair on board 3 finishes first.
+
+| Board | Order (estimates) | Ends |
+|---|---|---|
+| 1, gtq | Plain perlbench (running), nab, mcf, imagick, x264 | ~Wed 12:00 |
+| 2, q32 then gtq | Capstone nab, imagick (C.5a, this record's stages and exes); Plain lbm; Capstone mcf on E5 (THP kit variant, after E5's gate) | ~Wed 09:00 |
+| 3, q32 then gtq | Capstone x264, lbm, xz (C.5a); Plain xz; Capstone perlbench on E5 (unify kit variant, after E5's gate) | ~Wed 02:00 |
+
+- Plain lbm and xz moved from board 1 to boards 2 and 3 (an existing output directory makes board 1 skip them).
+- The E5 stages get their own addendum with the bitstream's seal, gate result, kits and exes before they run. If E5
+  is not sealed and gated in time, perlbench and mcf run on C.5a instead: perlbench is then reported on its commands
+  {0, 1, 4} (Addendum 2).
+- The C.5a Capstone stages, exes, kits and gates T0-T2 are this record's, unchanged.
