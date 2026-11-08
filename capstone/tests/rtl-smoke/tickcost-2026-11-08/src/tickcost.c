@@ -1,14 +1,14 @@
-// tickcost: does a tick-driven hrtimer callback longer than one tick period (TICK_NSEC = 10 ms at HZ=100) livelock the
-// board kernel silently? The board kernel is HZ_PERIODIC with a oneshot clockevent and no high-resolution timers, so
-// tick_handle_periodic() replays every missed period in one interrupt, running tick_periodic() -> ... ->
-// hrtimer_run_queues() each time; clockevents_program_event() returns -ETIME without an SBI call while the next period
-// is already past. If one replay costs more than a period, the loop never ends and nothing traps except rdtime.
+// tickcost: what does the board kernel look like from the trap log and the status apertures when a tick-driven hrtimer
+// callback (cvprof's kind: HZ_PERIODIC, no high-resolution timers, so it runs inside tick_periodic(), BEFORE
+// tick_handle_periodic() re-arms the clockevent) is slow, or never returns?
 //
 //   scanbench  (write 1)  time one full miss-scan of tables shaped exactly as cvprof's (8192 x 32 B user, 16384 x 16 B
 //                         kernel), three times each, irqs off; printed as KERN_EMERG `tickcost: scan ...`
 //   mode=0, spin_us=N     the callback busy-waits N microseconds (ktime_get_ns, which reads rdtime)
 //   mode=1                the callback is cvprof's tick() over FULL tables (every slot used, no key can match), so
 //                         every tick does the full scan cvprof does once its table is full
+//   mode=2                the callback never returns, spinning on ktime_get_ns() (rdtime, emulated by M-mode firmware)
+//   mode=3                the callback never returns, spinning on a register loop (no trap of any kind)
 //   enable     (write 1/0) start/stop the hrtimer (period_ms, default 10); stopping prints calls and the longest body
 // Observation only otherwise. Built like cvprof (no compressed instructions).
 #include <linux/module.h>
@@ -82,6 +82,8 @@ static enum hrtimer_restart tick(struct hrtimer *t)
     u64 t0 = ktime_get_ns(), d;
     ++calls;
     if (mode == 1) cvprof_body(get_irq_regs());
+    else if (mode == 2) { pr_emerg("tickcost: stuck rdtime\n"); for (;;) (void)ktime_get_ns(); }
+    else if (mode == 3) { unsigned long x = 0; pr_emerg("tickcost: stuck register\n"); for (;;) asm volatile("addi %0, %0, 1" : "+r"(x)); }
     else while (ktime_get_ns() - t0 < (u64)spin_us * 1000ULL) cpu_relax();
     d = ktime_get_ns() - t0;
     if (d > maxbody_ns) maxbody_ns = d;
