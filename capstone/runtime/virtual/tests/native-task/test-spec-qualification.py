@@ -376,6 +376,30 @@ class QualificationTests(unittest.TestCase):
         self.assertLess(gate.index("rm /tmp/spec-native/.native-shell"), gate.index("CASE_BEGIN:0"))
         self.assertEqual(self.validate(directory)[0], 0)
 
+    def test_timing_window_excludes_other_cases_and_collection(self):
+        commands = [dict(argv=['first-workload'], stdout='one.out', stderr='one.err'),
+                    dict(argv=['second-workload'], stdout='two.out', stderr='two.err')]
+        images = [dict(argv=['imagevalidate', 'output.img', 'reference.img'],
+                       stdout='image.out', stderr='image.err')]
+        script = self.runner.gate_script(commands, images, [], host_window_case=1)
+        self.assertEqual(script.count('HOST_WINDOW_BEGIN'), 1)
+        self.assertEqual(script.count('HOST_WINDOW_END'), 1)
+        before, rest = script.split('echo HOST_WINDOW_BEGIN')
+        measured, after = rest.split('echo HOST_WINDOW_END')
+        self.assertIn('first-workload', before)
+        self.assertNotIn('first-workload', measured)
+        self.assertIn('second-workload', measured)
+        self.assertNotIn('/mnt/results', measured)
+        self.assertNotIn('imagevalidate', measured)
+        self.assertIn('imagevalidate', after)
+        self.assertIn('cp two.out /mnt/results/two.out', after)
+        self.assertNotIn('HOST_WINDOW', self.runner.gate_script(commands, [], []))
+        for case in [-1, 2]:
+            with self.assertRaises(ValueError):
+                self.runner.gate_script(commands, [], [], host_window_case=case)
+        with self.assertRaises(ValueError):
+            self.runner.gate_script(commands, [], [], host_window_case=0, live_output=True)
+
     def test_live_output_is_optional_and_preserves_workload(self):
         result, ordinary = self.execute()
         self.assertEqual(result, 0)

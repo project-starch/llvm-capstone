@@ -19,6 +19,14 @@ if [[ ${4:-} == --lto ]]; then
 fi
 (
     cd "$qemu_out/build"
+    # Record only toolchain inputs, never the whole process environment.
+    for qemu_env_name in CC CXX CFLAGS CXXFLAGS LDFLAGS QEMU_BUILD_JOBS QEMU_LTO_THREADS; do
+        if [[ -v $qemu_env_name ]]; then
+            printf '%s=%q\n' "$qemu_env_name" "${!qemu_env_name}"
+        else
+            printf '# %s unset\n' "$qemu_env_name"
+        fi
+    done > build-environment.txt
     printf '%q ' ../src/configure "${options[@]}" > configure-command.txt
     printf '\n' >> configure-command.txt
     ../src/configure "${options[@]}" > configure.log 2>&1

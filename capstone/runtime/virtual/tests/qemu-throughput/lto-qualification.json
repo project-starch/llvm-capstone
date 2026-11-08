@@ -1536,7 +1536,10 @@
     "No ISA/RTL or hardware-performance change; full application qualification is separate."
   ],
   "evidence": {
-    "directory": "/tmp/capstone/qemu-lto-01"
+    "directory": "/tmp/capstone/qemu-lto-01",
+    "archive": "/tmp/capstone/qemu-lto-01-timing-safety-evidence.tar.gz",
+    "sha256": "6f7a5c9df9c6b4fbd5f15d30293c137dbd70326a55810b7b79d7c9780ff8361c",
+    "scope": "Timing, profile and bounded safety evidence; full SPEC campaign archived separately."
   },
   "short_spec": {
     "status": "PASS",

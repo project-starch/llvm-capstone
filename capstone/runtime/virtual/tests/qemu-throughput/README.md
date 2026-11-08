@@ -380,7 +380,8 @@ The explicit builder preserves the baseline options:
 
 ```bash
 source capstone/tests/capstone-test-env.sh
-capstone/runtime/virtual/tests/qemu-throughput/build-candidate.sh   "$QEMU_REPO" 80eaf2c89b "$CAPSTONE_TMP_ROOT/qemu-candidate" --lto
+capstone/runtime/virtual/tests/qemu-throughput/build-candidate.sh \
+  "$QEMU_REPO" 80eaf2c89b "$CAPSTONE_TMP_ROOT/qemu-candidate" --lto
 ```
 
 Omit `--lto` for a normal build; use a fresh output directory. The builder records
@@ -427,3 +428,23 @@ checks, sanitizer and three negative controls pass, including an intentionally
 too-large shortcut; codec and independent RTL-model checks also pass. Both
 candidates pass the actual cursor-edge and 35 checked-copy cases. These
 correctness results do not establish a useful speedup.
+
+
+## Timing a full workload command
+
+`qualify-spec.py` and `native-task/run-spec-tests.py` accept
+`--host-window-case INDEX --host-cpu CPU`. The zero-based index selects one
+original benchmark command. The shared VM runner measures QEMU process CPU
+and host wall time around that command, including its exec/exit. Boot, workload
+staging, output collection and image validators are outside the window. There
+is no warm-up invocation; use fresh guests and reversed-order repetitions when
+comparing binaries. Correctness validation still covers all original commands.
+
+Timing cannot be combined with `--live-output`; that observer changes the work
+being measured. Keep `--no-icount` explicit and compare like clock modes.
+The result is saved under `execution.host_window`, with affinity, case index
+and scope; these are host emulator measurements, not guest or hardware cycles.
+
+The [tool qualification](workload-window-qualification.json) records 29 host
+regressions and a real GCC invocation with exact qualified output, CPU affinity
+and `--no-icount`. Its single-run duration is not a performance comparison.

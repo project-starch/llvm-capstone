@@ -36,6 +36,8 @@ def main():
     parser.add_argument('--null-device', action='store_true')
     parser.add_argument('--local-tmp', action='store_true')
     parser.add_argument("--no-icount", action="store_true", help="Use wall-clock virtual time; functional checks only")
+    parser.add_argument('--host-window-case', type=int, help='Measure one workload command using the shared runner')
+    parser.add_argument('--host-cpu', type=int, help='Pin a measured run to an allowed host CPU')
     args = parser.parse_args()
     if args.timeout <= 0 or len(set(args.benchmarks)) != len(args.benchmarks):
         parser.error('Positive timeout and distinct benchmarks required')
@@ -85,6 +87,10 @@ def main():
                    '--out', str(out), '--qemu', str(args.qemu), '--images', str(args.images),
                    '--firmware', str(args.firmware), '--benchmarks', bench,
                    '--timeout', str(args.timeout), '--comparators', str(manifest)]
+            if args.host_window_case is not None:
+                cmd += ['--host-window-case', str(args.host_window_case)]
+            if args.host_cpu is not None:
+                cmd += ['--host-cpu', str(args.host_cpu)]
             if args.no_icount:
                 cmd += ["--no-icount"]
             if args.shell:

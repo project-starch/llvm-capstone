@@ -1,0 +1,80 @@
+{
+  "status": "PASS",
+  "scope": "Functional qualification of workload-only timing and explicit no-icount options; no performance comparison",
+  "baseline_sha256": "4a7f0201fd8d68a6884996e79a4e8c5979ff544b7d8734666f5c9ea9a999c930",
+  "qemu_sha256": "2161a226bcd98041d84bdbd0e9d88196b7c279d9afc20e9f069e7c6fd0fa5db8",
+  "icount": null,
+  "results": [
+    {
+      "benchmark": "502.gcc_r",
+      "status": "PASS",
+      "inputs": {
+        "control": "9114609f801dfd5fd3c0c510fde241b58b705522cb29ad10f8f99eca68d62e43",
+        "cpugcc_r": "0b6ac27e8b2b33cd77ba3f64fbcca52615dec2b1691141f2d1e3413f21a47b28",
+        "t1.c": "de7b86d79a68965adb62e750101d9211224884b2236053d906d1e23057bb6ad1"
+      },
+      "execution": {
+        "benchmark": "502.gcc_r",
+        "runner_rc": 0,
+        "icount": null,
+        "host_elapsed_seconds": 177.76892474852502,
+        "commands": [
+          {
+            "argv": [
+              "./cpugcc_r",
+              "t1.c",
+              "-O3",
+              "-finline-limit=50000",
+              "-o",
+              "t1.opts-O3_-finline-limit_50000.s"
+            ],
+            "stdout": "t1.opts-O3_-finline-limit_50000.out",
+            "stderr": "t1.opts-O3_-finline-limit_50000.err"
+          }
+        ],
+        "expected_commands": 1,
+        "exit_statuses": [
+          0
+        ],
+        "image_commands": [],
+        "expected_image_commands": 0,
+        "image_exit_statuses": [],
+        "execution_errors": [],
+        "execution_ok": true,
+        "spec_validation": "PENDING",
+        "comparator_manifest_sha256": "347fdb43ab34ff6f81a90f58021c48fdbc27901011fe365441130412885b827d",
+        "host_window": {
+          "wall_seconds": 3.091498571,
+          "cpu_seconds": 3.09,
+          "cpu_tick_hz": 100,
+          "scope": "One workload invocation including exec/exit; no warm-up, boot, validators or host output collection. Host time, not guest cycles.",
+          "profiled": false,
+          "case": 0,
+          "affinity": [
+            2
+          ]
+        }
+      },
+      "errors": [],
+      "comparisons": [
+        {
+          "name": "t1.opts-O3_-finline-limit_50000.s",
+          "expected": "58111208509dd871223ae195a33304bd6b24afd29458f37c976556cbad506324",
+          "actual": "58111208509dd871223ae195a33304bd6b24afd29458f37c976556cbad506324",
+          "passed": true
+        }
+      ],
+      "images": [],
+      "elapsed_seconds": 179.18292837776244
+    }
+  ],
+  "started_epoch": 1794160903.7062423,
+  "finished_epoch": 1794161082.889476,
+  "host_regressions": "test_actual_staged_reference_hash_is_required (__main__.QualificationTests.test_actual_staged_reference_hash_is_required) ... ok\ntest_complete_pipeline_and_retained_evidence (__main__.QualificationTests.test_complete_pipeline_and_retained_evidence) ... ok\ntest_explicit_sdk_is_not_replaced_by_inherited_override (__main__.QualificationTests.test_explicit_sdk_is_not_replaced_by_inherited_override) ... ok\ntest_explicit_shell_preserves_workload_and_records_grants (__main__.QualificationTests.test_explicit_shell_preserves_workload_and_records_grants) ... ok\ntest_explicit_subset_does_not_require_other_builds (__main__.QualificationTests.test_explicit_subset_does_not_require_other_builds) ... ok\ntest_false_command_match_cannot_validate (__main__.QualificationTests.test_false_command_match_cannot_validate) ... ok\ntest_frozen_object_failures_precede_any_link (__main__.QualificationTests.test_frozen_object_failures_precede_any_link) ... ok\ntest_frozen_objects_and_source_identity_are_retained (__main__.QualificationTests.test_frozen_objects_and_source_identity_are_retained) ... ok\ntest_generated_input_and_checksum_policies (__main__.QualificationTests.test_generated_input_and_checksum_policies) ... ok\ntest_legacy_prepared_references_are_rejected (__main__.QualificationTests.test_legacy_prepared_references_are_rejected) ... ok\ntest_live_output_is_optional_and_preserves_workload (__main__.QualificationTests.test_live_output_is_optional_and_preserves_workload) ... run-spec-tests: --live-output is diagnostic; elapsed times are not performance measurements\nok\ntest_live_watcher_copies_only_outputs_and_reaps (__main__.QualificationTests.test_live_watcher_copies_only_outputs_and_reaps) ... ok\ntest_missing_benchmark_has_explicit_failure_row (__main__.QualificationTests.test_missing_benchmark_has_explicit_failure_row) ... ok\ntest_missing_or_wrong_official_image_hash_is_rejected (__main__.QualificationTests.test_missing_or_wrong_official_image_hash_is_rejected) ... ok\ntest_missing_or_wrong_output_cannot_validate (__main__.QualificationTests.test_missing_or_wrong_output_cannot_validate) ... ok\ntest_normal_spec_layout_and_ambiguity (__main__.QualificationTests.test_normal_spec_layout_and_ambiguity) ... ok\ntest_plain_official_commands_preserve_argv_and_reject_other_wrappers (__main__.QualificationTests.test_plain_official_commands_preserve_argv_and_reject_other_wrappers) ... ok\ntest_preparation_rejects_changed_original_input (__main__.QualificationTests.test_preparation_rejects_changed_original_input) ... ok\ntest_private_tmp_cannot_replace_workload_input (__main__.QualificationTests.test_private_tmp_cannot_replace_workload_input) ... ok\ntest_private_tmp_is_explicit_and_preserves_workload (__main__.QualificationTests.test_private_tmp_is_explicit_and_preserves_workload) ... ok\ntest_runner_failure_is_nonzero (__main__.QualificationTests.test_runner_failure_is_nonzero) ... ok\ntest_runner_rejects_incomplete_execution (__main__.QualificationTests.test_runner_rejects_incomplete_execution) ... ok\ntest_setup_rejects_different_generated_input (__main__.QualificationTests.test_setup_rejects_different_generated_input) ... ok\ntest_shell_reserved_filename_cannot_replace_workload_input (__main__.QualificationTests.test_shell_reserved_filename_cannot_replace_workload_input) ... ok\ntest_stale_output_is_rejected_before_execution (__main__.QualificationTests.test_stale_output_is_rejected_before_execution) ... ok\ntest_timing_window_excludes_other_cases_and_collection (__main__.QualificationTests.test_timing_window_excludes_other_cases_and_collection) ... ok\ntest_validator_independently_checks_completion_evidence (__main__.QualificationTests.test_validator_independently_checks_completion_evidence) ... ok\ntest_wrong_executed_argv_cannot_validate (__main__.QualificationTests.test_wrong_executed_argv_cannot_validate) ... ok\ntest_wrong_official_argv_is_rejected_before_execution (__main__.QualificationTests.test_wrong_official_argv_is_rejected_before_execution) ... ok\n\n----------------------------------------------------------------------\nRan 29 tests in 2.838s\n\nOK\n",
+  "sources": {
+    "capstone/runtime/virtual/tests/native-task/run-spec-tests.py": "44ed2d0552a06c2d871aa2e9d58f9d5fe8b43de9107b449768848414fd8d1453",
+    "capstone/runtime/virtual/tests/native-task/test-spec-qualification.py": "c55a9a82d2b79daefa1cc8d81ad0b38d58c07faa201f0da058171a3de6d7f260",
+    "capstone/runtime/virtual/tests/qemu-throughput/qualify-spec.py": "919aca39fc895d9733304ed22fd90eebb949cb24752b3a79a44cbc6b78d81fdc"
+  },
+  "evidence_directory": "/tmp/capstone/qemu-lto-01/spec-window-smoke"
+}

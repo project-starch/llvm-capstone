@@ -104,7 +104,11 @@ native_spec_live_stop() {
 """
 
 
-def gate_script(commands, images, compares, shell=False, live_output=False, local_tmp=False):
+def gate_script(commands, images, compares, shell=False, live_output=False, local_tmp=False, host_window_case=None):
+    if host_window_case is not None and not 0 <= host_window_case < len(commands):
+        raise ValueError("Host window case is outside the command inventory")
+    if host_window_case is not None and live_output:
+        raise ValueError("Live output observer cannot run in a timing window")
     lines = [
         "#!/bin/sh", "set -eu",
         "trap 'echo SPEC_ALL_GATE_EXIT:$?; dmesg; echo VIRTUAL_STAGED_DONE' EXIT",
@@ -159,11 +163,16 @@ def gate_script(commands, images, compares, shell=False, live_output=False, loca
                 "native_spec_live_watch " + live_arguments + " &",
                 "native_spec_live_pid=$!",
             ])
+        measured = stem == "case" and index == host_window_case
+        if measured:
+            lines.append("echo HOST_WINDOW_BEGIN")
         lines.extend([
             "rc=0",
             shlex.join(command["argv"]) + " >" + shlex.quote(command["stdout"])
             + " 2>" + shlex.quote(command["stderr"]) + " || rc=$?",
         ])
+        if measured:
+            lines.append("echo HOST_WINDOW_END")
         if live_output:
             lines.extend([
                 "native_spec_live_stop",
@@ -210,7 +219,15 @@ def main():
                         help="Diagnostic scalar watcher mirrors current stdout/stderr every guest second; not for performance measurements")
     parser.add_argument("--local-tmp", action="store_true", help="Map /tmp to a fresh private directory inside the existing workload grant")
     parser.add_argument("--no-icount", action="store_true", help="Use wall-clock virtual time for functional tests; no deterministic instruction counts")
+    parser.add_argument("--host-window-case", type=int, help="Measure QEMU host CPU/wall time around one zero-based workload command, excluding validators and output collection")
+    parser.add_argument("--host-cpu", type=int, help="Pin a measured run to one allowed host CPU")
     args = parser.parse_args()
+    if args.host_window_case is not None and (args.host_window_case < 0 or args.live_output):
+        parser.error("A timing window needs a nonnegative case and no live output observer")
+    if args.host_cpu is not None:
+        if args.host_window_case is None or args.host_cpu not in os.sched_getaffinity(0):
+            parser.error("--host-cpu requires a timing window and an allowed CPU")
+        os.sched_setaffinity(0, {args.host_cpu})
     if args.timeout <= 0:
         parser.error("--timeout must be positive")
     prepared, output = args.prepared.resolve(), args.out.resolve()
@@ -237,6 +254,9 @@ def main():
     platform["local_tmp_grant"] = args.local_tmp
     platform["live_output"] = args.live_output
     platform["icount"] = None if args.no_icount else 0
+    platform["host_window_case"] = args.host_window_case
+    if args.host_window_case is not None:
+        platform["host_affinity"] = sorted(os.sched_getaffinity(0))
     if args.live_output:
         platform["timing_note"] = "Live output observer enabled; elapsed times are diagnostic, not performance measurements."
         print("run-spec-tests: --live-output is diagnostic; elapsed times are not performance measurements", file=sys.stderr)
@@ -300,6 +320,7 @@ def main():
         })
         (stage / "gate.sh").write_text(gate_script(
             commands, images, compares, shell=bool(args.shell), live_output=args.live_output, local_tmp=args.local_tmp,
+            host_window_case=args.host_window_case,
         ))
         flags = (
             "capstone_vm.native_task=1 capstone_vm.native_io=1 capstone_vm.dom_binfmt=1 "
@@ -323,6 +344,8 @@ def main():
         ]
         if not args.no_icount:
             command += ["--icount", "0"]
+        if args.host_window_case is not None:
+            command += ["--host-window"]
         write_json(directory / "command.json", command)
         environment = dict(os.environ, CAPSTONE_QEMU_CPU_EXTRA=(
             f"x-capstone-supervisor-slots={args.slots},x-pcrel=false,"
@@ -364,6 +387,15 @@ def main():
             "execution_ok": not errors, "spec_validation": "PENDING",
             "comparator_manifest_sha256": digest(args.comparators) if args.comparators else None,
         }
+        if args.host_window_case is not None:
+            try:
+                row["host_window"] = json.loads((directory / "vm/host-window.json").read_text())
+                row["host_window"]["case"] = args.host_window_case
+                row["host_window"]["affinity"] = sorted(os.sched_getaffinity(0))
+                row["host_window"]["scope"] = "One workload invocation including exec/exit; no warm-up, boot, validators or host output collection. Host time, not guest cycles."
+            except (OSError, ValueError) as error:
+                errors.append(f"Missing or invalid timing window: {error}")
+                row["execution_ok"] = False
         rows.append(row)
         write_json(directory / "execution.json", row)
         write_json(output / "execution.json", rows)
