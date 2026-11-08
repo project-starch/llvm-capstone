@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Run a staged application gate on the qualified virtual Linux platform."""
 import argparse
+import json
 import fcntl
 import os
 from pathlib import Path
@@ -8,11 +9,16 @@ import select
 import subprocess
 import time
 from qemu_lock import qemu_lock
+from host_window import HostWindow
 
 
 def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('--qemu', type=Path, required=True)
+    p.add_argument('--machine', default='virt-capstone', choices=['virt', 'virt-capstone'])
+    p.add_argument('--cpu', default='rv64,sstc=false,h=false,sv48=false,sv57=false,x-capstone-u-mode=true')
+    p.add_argument('--host-window', action='store_true',
+                   help='Measure host wall/CPU time between HOST_WINDOW_BEGIN/END serial lines; no plugins')
     p.add_argument('--images', type=Path, required=True)
     p.add_argument('--firmware', type=Path, help='Override images/fw_jump.elf')
     p.add_argument('--dtb', type=Path, help='Override platform device tree (qualification fixtures)')
@@ -36,6 +42,8 @@ def main():
         p.error('--cpus must be positive')
     if a.plugin_arg and not a.plugin:
         p.error('--plugin-arg needs --plugin')
+    if a.host_window and a.plugin:
+        p.error('--host-window timing must not include a profiling plugin')
     if any(',' in arg or '=' not in arg for arg in a.plugin_arg):
         p.error('--plugin-arg must be key=value without commas')
     a.work.mkdir(parents=True, exist_ok=False)
@@ -43,7 +51,7 @@ def main():
     with disk.open('wb') as f:
         f.truncate(a.disk_mib << 20)
     subprocess.run(['/sbin/mkfs.ext4', '-F', '-q', '-d', str(a.stage), str(disk)], check=True)
-    cmd = [str(a.qemu), '-M', 'virt-capstone', '-m', a.memory, '-smp', str(a.cpus),
+    cmd = [str(a.qemu), '-M', a.machine, '-m', a.memory, '-smp', str(a.cpus),
            '-nographic', '-monitor', 'none', '-serial', 'stdio', '-snapshot',
            '-bios', str(a.firmware if a.firmware else a.images/'fw_jump.elf'), '-kernel', str(a.images/'Image'),
            '-append', ' '.join(['root=/dev/vda ro', *a.kernel_arg]),
@@ -51,7 +59,7 @@ def main():
            '-device', 'virtio-blk-device,drive=hd0',
            '-drive', f'file={disk},format=raw,id=gate,readonly=on',
            '-device', 'virtio-blk-device,drive=gate', '-cpu',
-           'rv64,sstc=false,h=false,sv48=false,sv57=false,x-capstone-u-mode=true']
+           a.cpu]
     if a.exact_bounds:
         cmd[-1] += ",x-capstone-exact-bounds=true"
     # CAPSTONE_QEMU_CPU_EXTRA appends to the -cpu string, so a reference pin differing only in a CPU
@@ -78,12 +86,14 @@ def main():
         cmd += ['-icount', f'shift={a.icount}']
     if a.share:
         cmd += ['-virtfs', f'local,path={a.share.resolve()},mount_tag=gate9p,security_model=none,id=gate9p']
+    (a.work/'qemu-command.json').write_text(json.dumps(cmd, indent=2)+'\n')
     completed = login = sent = False
     out = b''
     with qemu_lock(), (a.work/'serial.log').open('wb') as log:
         guest_env = dict(os.environ, TMPDIR=str(a.work.resolve()))
         guest = subprocess.Popen(cmd, env=guest_env, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                  stderr=subprocess.STDOUT, bufsize=0)
+        window = HostWindow(guest.pid) if a.host_window else None
         deadline = time.monotonic() + a.timeout
         try:
             while time.monotonic() < deadline:
@@ -95,6 +105,8 @@ def main():
                 if not data:
                     break
                 log.write(data); log.flush()
+                if window:
+                    window.feed(data)
                 # Keep only the marker window; transcripts remain in the log.
                 # Large network workloads must not repeatedly copy that log.
                 out = (out + data)[-65536:]
@@ -115,6 +127,8 @@ def main():
                 guest.wait(timeout=5)
             except subprocess.TimeoutExpired:
                 guest.kill(); guest.wait()
+        if window and completed:
+            (a.work/'host-window.json').write_text(json.dumps(window.result(), indent=2)+'\n')
     print(a.work/'serial.log')
     # Completion only; each application gate must validate its own oracle.
     return 0 if completed else 1
