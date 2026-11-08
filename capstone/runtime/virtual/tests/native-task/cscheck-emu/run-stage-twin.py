@@ -23,7 +23,15 @@ a = p.parse_args()
 a.out.mkdir(parents=True, exist_ok=False)
 st = a.out / 'stage'
 shutil.copytree(a.stage / 'stage', st, symlinks=False)
-(st / 'gate.sh').write_text('#!/bin/sh\nexport SPEC_INBAND_MAX=67108864\nsh /mnt/vm/run.sh\n'
+# Memory high-water, sampled every second while run.sh runs: the largest MemTotal - MemAvailable (kB) and the
+# largest VmHWM (kB) of any *_base* process (comm is cut to 15 characters).
+SAMPLER = r'''( mx=0; hw=0; while [ ! -f /tmp/sampler.stop ]; do
+  u=$(awk '/^MemTotal/{t=$2} /^MemAvailable/{a=$2} END{print t-a}' /proc/meminfo); [ "$u" -gt "$mx" ] && mx=$u
+  for f in /proc/[0-9]*/status; do case "$(head -1 $f 2>/dev/null)" in *_base*) h=$(awk '/^VmHWM/{print $2}' $f 2>/dev/null); [ -n "$h" ] && [ "$h" -gt "$hw" ] && hw=$h;; esac; done
+  echo "$mx $hw" > /tmp/sampler.out; sleep 1; done ) &
+'''
+(st / 'gate.sh').write_text('#!/bin/sh\nexport SPEC_INBAND_MAX=67108864\nrm -f /tmp/sampler.stop\n' + SAMPLER + 'sh /mnt/vm/run.sh\n'
+                            'touch /tmp/sampler.stop; sleep 2; echo "@@MEM-PEAK used_kB vmhwm_kB $(cat /tmp/sampler.out)"\n'
                             'echo "@@COUNTERS-FINAL $(cat /sys/module/capstone_vm/parameters/native_counters)"\n'
                             'echo VIRTUAL_STAGED_DONE\n')
 flags = ('capstone_vm.native_task=1 capstone_vm.dom_binfmt=1 capstone_vm.native_dispatch=1 capstone_vm.checked_copy=1 '
@@ -51,7 +59,9 @@ bad = [l for l in text.splitlines() if 'ADOPT-KIND-MISMATCH' in l or 'ADOPT-UNPA
 refused = re.findall(r'adopt_kind_refused=(\d+)', text)
 summary = dict(runner_rc=rc, commands=[(int(i), int(r)) for i, r in ends], files=sorted(x.name for x in res.iterdir()),
                twin_adopt_lines=len(bad), adopt_kind_refused=refused[-1] if refused else None,
-               done='@@SPEC-DONE' in text)
+               done='@@SPEC-DONE' in text,
+               mem_peak=re.findall(r'^@@MEM-PEAK used_kB vmhwm_kB (\d+) (\d+)', text, re.M),
+               oom=bool(re.search(r'Out of memory|oom-kill|Killed process', text)))
 (a.out / 'summary.json').write_text(json.dumps(summary, indent=1) + '\n')
 print(json.dumps(summary))
 sys.exit(0 if rc == 0 and summary['done'] and not bad and refused and refused[-1] == '0' and

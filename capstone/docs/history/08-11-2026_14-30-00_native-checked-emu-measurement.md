@@ -492,3 +492,25 @@ be missing on a fragmented 936 MiB guest.
 The twins run at the board's 936 MiB with a device tree dumped at that size
 (`cscheck-emu/twin20-936-c5a.dts`). A dtb dumped at 2 GiB on a 1 GiB guest faults the QEMU monitor at boot
 (cause 24 at 0xffffffc6feffe000).
+
+## Board kits for the native TRAIN runs on e5-native (bkit38-native-perl, bkit38-native-mcf)
+
+**Kits.** Each is a cp -rL of the native-6.4 lane's K-min kit (bkit36-native64-min, native/board-6.4 69df6952aadc):
+link count 1, SHA256SUMS regenerated.
+- Bitstream: caplifive_e5native_14b0a57df, sha256 b6698b7c19a1...a475.
+- Firmware: capstone-sbi native/cscheck-emu e04ecb8 with `-DCAPSTONE_CSCHECK_EMU` and bkit30-unify's defines.
+  The board firmware builds, its dom_stack gate PASSes (25,872 of 32,768 B), and cscheck_dispatch is linked.
+- Kernel: a private copy of the K-min 6.4.14 tree with the adapter from native/c5a-board, which merges
+  native/c5a-route into native/board-6.4. The flat 20-bit table is pinned in that tree's Makefile, and its
+  native-tree.sha256 list was regenerated (the five adapter files differ).
+- Command line: the stage's own params, direct arm, mcf 2^18 and perlbench 2^19 table.
+- Stage: `make-train-stage.sh` builds the K-min smoke plus the native train stage under `train/`, which
+  spec.sh runs after a passing smoke. gzip size: perlbench 6.03 MB, mcf 2.13 MB.
+
+**Dry runs, nothing on a board:**
+- `BOARD_STUB=1` prints the full plan for both kits (rc 3, the stub's exit).
+- `BOARD_STUB=2` really relinks the native kernel on the shared build's rootfs.cpio. Image `c5adb3f9d61ba0a2`
+  (perl) and `ffa82b78c5645851` (mcf) each carry the stage's command line, and the firmware and driver steps
+  are printed.
+- The stub's classifiers read NO RESULT, because the transcript fed in was a twin gate log. spec-classify.py
+  does not parse a train stage's markers; the stage plan's host_validation is the verdict.
