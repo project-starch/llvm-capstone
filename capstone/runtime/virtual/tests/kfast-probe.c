@@ -56,6 +56,11 @@ int main(int argc, char **argv)
         line(what, r < 0 ? r : 0);
     }
     line("clock-cputime", clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &ts));
+    /* ok: write(2) itself (stdio's printf goes out as writev), to a regular file */
+    int out = open("/tmp/kf-probe-out.txt", O_WRONLY | O_CREAT | O_TRUNC, 0644);
+    line("ok-write", write(out, "kfast probe\n", 12));
+    line("bad-write-length", __capstone_delegate_ints4(NR_WRITE, out, 256, UINT64_C(1) << 40, 0));
+    line("ok-close-out", close(out));
     line("ok-close", close(fd));
     return 0;
 }
