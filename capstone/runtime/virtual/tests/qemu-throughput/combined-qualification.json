@@ -1,0 +1,2408 @@
+{
+  "schema_version": 1,
+  "status": "PASS bounded gates and timing; full ten-entry SPEC qualification running",
+  "source": {
+    "runtime": "d81f426a7c",
+    "test_epilogue_fix": "f3b74f0646",
+    "binary_sha256": "fdbb824a80998913f93b1eee689a8bc8efd4bd15f8ff995c07a4be7736844e29",
+    "branch": "perf/qemu-throughput-next",
+    "contents": [
+      "Equivalent cursor-window predicate and shared bounds encoder",
+      "Clang cleanup-guard lexical scope repair",
+      "STC dirty-page update supplied by existing write probe",
+      "Sufficient local-cursor window shortcut",
+      "No ISA, tag/lock or guest software changes"
+    ]
+  },
+  "steady_confirmation": {
+    "controls": {
+      "original": {
+        "runs": [
+          {
+            "status": "PASS",
+            "inputs": {
+              "stock": "fef99d167011dca7bb155e8afe835b5b535cec51b13532300413cddeaf3fc929",
+              "fork": "8672296ec36f7098133ea6fd8fe956f0124a7e2f4b3663fe5d43fb48e9d1e180",
+              "firmware": "2335a28682ddf65e46c1f492632c2cb026efcb2271caf544a3f7ddc858b03e02",
+              "plain": "ebeca8e920328b5c893fc9ee910851cceabee2bebc00320322b2b77b75def4a0",
+              "native": "a1509c81444586031c74c5752f72ec90dc6c7ab57635fff37ffa431c11663a9f",
+              "input": "de7b86d79a68965adb62e750101d9211224884b2236053d906d1e23057bb6ad1",
+              "reference": "58111208509dd871223ae195a33304bd6b24afd29458f37c976556cbad506324",
+              "Image": "b7de27fb28bc0807053ae3e1c4bcd058e79f601d255a0dcaaa6ce70d46a3815f",
+              "rootfs.ext2": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845"
+            },
+            "iterations": 50,
+            "icount": 0,
+            "profiled": false,
+            "pcrel_override": null,
+            "scalar_controls": {
+              "cpu": null,
+              "machine": null,
+              "kernel": null
+            },
+            "host": {
+              "uname": [
+                "Linux",
+                "pop-os",
+                "6.18.7-76061807-generic",
+                "#202601231045~1778249322~24.04~b44a3c3 SMP PREEMPT_DYNAMIC Fri M",
+                "x86_64",
+                "x86_64"
+              ],
+              "affinity": [
+                2
+              ]
+            },
+            "samples": [
+              {
+                "arm": "platform-native",
+                "run": 0,
+                "host_loadavg_before": [
+                  1.2451171875,
+                  1.576171875,
+                  1.58349609375
+                ],
+                "reference_match": true,
+                "wall_seconds": 27.56624674,
+                "cpu_seconds": 27.51,
+                "cpu_tick_hz": 100,
+                "scope": "Guest serial window; host time, not guest cycles",
+                "profiled": false
+              }
+            ],
+            "limitations": [
+              "Host serial-delivery timing, not target cycles or hardware overhead.",
+              "One untimed warm-up compilation per fresh guest, then a batch including exec/exit.",
+              "Default stock-plain/fork-plain is the matched scalar pair; explicit overrides must be audited separately.",
+              "Platform arms intentionally change discovery/CPU flags and Linux capability paths.",
+              "Native versus plain binaries differ in compiler/libc/ABI; not isolated ISA cost.",
+              "No profiling plugin; build flags and host contention still require auditing."
+            ],
+            "medians": {
+              "platform-native": {
+                "wall_seconds": 27.56624674,
+                "cpu_seconds": 27.51
+              }
+            }
+          },
+          {
+            "status": "PASS",
+            "inputs": {
+              "stock": "fef99d167011dca7bb155e8afe835b5b535cec51b13532300413cddeaf3fc929",
+              "fork": "8672296ec36f7098133ea6fd8fe956f0124a7e2f4b3663fe5d43fb48e9d1e180",
+              "firmware": "2335a28682ddf65e46c1f492632c2cb026efcb2271caf544a3f7ddc858b03e02",
+              "plain": "ebeca8e920328b5c893fc9ee910851cceabee2bebc00320322b2b77b75def4a0",
+              "native": "a1509c81444586031c74c5752f72ec90dc6c7ab57635fff37ffa431c11663a9f",
+              "input": "de7b86d79a68965adb62e750101d9211224884b2236053d906d1e23057bb6ad1",
+              "reference": "58111208509dd871223ae195a33304bd6b24afd29458f37c976556cbad506324",
+              "Image": "b7de27fb28bc0807053ae3e1c4bcd058e79f601d255a0dcaaa6ce70d46a3815f",
+              "rootfs.ext2": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845"
+            },
+            "iterations": 50,
+            "icount": 0,
+            "profiled": false,
+            "pcrel_override": null,
+            "scalar_controls": {
+              "cpu": null,
+              "machine": null,
+              "kernel": null
+            },
+            "host": {
+              "uname": [
+                "Linux",
+                "pop-os",
+                "6.18.7-76061807-generic",
+                "#202601231045~1778249322~24.04~b44a3c3 SMP PREEMPT_DYNAMIC Fri M",
+                "x86_64",
+                "x86_64"
+              ],
+              "affinity": [
+                2
+              ]
+            },
+            "samples": [
+              {
+                "arm": "platform-native",
+                "run": 0,
+                "host_loadavg_before": [
+                  1.400390625,
+                  1.4853515625,
+                  1.5439453125
+                ],
+                "reference_match": true,
+                "wall_seconds": 27.506308397,
+                "cpu_seconds": 27.45,
+                "cpu_tick_hz": 100,
+                "scope": "Guest serial window; host time, not guest cycles",
+                "profiled": false
+              }
+            ],
+            "limitations": [
+              "Host serial-delivery timing, not target cycles or hardware overhead.",
+              "One untimed warm-up compilation per fresh guest, then a batch including exec/exit.",
+              "Default stock-plain/fork-plain is the matched scalar pair; explicit overrides must be audited separately.",
+              "Platform arms intentionally change discovery/CPU flags and Linux capability paths.",
+              "Native versus plain binaries differ in compiler/libc/ABI; not isolated ISA cost.",
+              "No profiling plugin; build flags and host contention still require auditing."
+            ],
+            "medians": {
+              "platform-native": {
+                "wall_seconds": 27.506308397,
+                "cpu_seconds": 27.45
+              }
+            }
+          }
+        ],
+        "mean_cpu_seconds": 27.48
+      },
+      "next": {
+        "runs": [
+          {
+            "status": "PASS",
+            "inputs": {
+              "stock": "fef99d167011dca7bb155e8afe835b5b535cec51b13532300413cddeaf3fc929",
+              "fork": "fdbb824a80998913f93b1eee689a8bc8efd4bd15f8ff995c07a4be7736844e29",
+              "firmware": "2335a28682ddf65e46c1f492632c2cb026efcb2271caf544a3f7ddc858b03e02",
+              "plain": "ebeca8e920328b5c893fc9ee910851cceabee2bebc00320322b2b77b75def4a0",
+              "native": "a1509c81444586031c74c5752f72ec90dc6c7ab57635fff37ffa431c11663a9f",
+              "input": "de7b86d79a68965adb62e750101d9211224884b2236053d906d1e23057bb6ad1",
+              "reference": "58111208509dd871223ae195a33304bd6b24afd29458f37c976556cbad506324",
+              "Image": "b7de27fb28bc0807053ae3e1c4bcd058e79f601d255a0dcaaa6ce70d46a3815f",
+              "rootfs.ext2": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845"
+            },
+            "iterations": 50,
+            "icount": 0,
+            "profiled": false,
+            "pcrel_override": null,
+            "scalar_controls": {
+              "cpu": null,
+              "machine": null,
+              "kernel": null
+            },
+            "host": {
+              "uname": [
+                "Linux",
+                "pop-os",
+                "6.18.7-76061807-generic",
+                "#202601231045~1778249322~24.04~b44a3c3 SMP PREEMPT_DYNAMIC Fri M",
+                "x86_64",
+                "x86_64"
+              ],
+              "affinity": [
+                2
+              ]
+            },
+            "samples": [
+              {
+                "arm": "platform-native",
+                "run": 0,
+                "host_loadavg_before": [
+                  1.2880859375,
+                  1.50830078125,
+                  1.5556640625
+                ],
+                "reference_match": true,
+                "wall_seconds": 23.833615525,
+                "cpu_seconds": 23.78,
+                "cpu_tick_hz": 100,
+                "scope": "Guest serial window; host time, not guest cycles",
+                "profiled": false
+              }
+            ],
+            "limitations": [
+              "Host serial-delivery timing, not target cycles or hardware overhead.",
+              "One untimed warm-up compilation per fresh guest, then a batch including exec/exit.",
+              "Default stock-plain/fork-plain is the matched scalar pair; explicit overrides must be audited separately.",
+              "Platform arms intentionally change discovery/CPU flags and Linux capability paths.",
+              "Native versus plain binaries differ in compiler/libc/ABI; not isolated ISA cost.",
+              "No profiling plugin; build flags and host contention still require auditing."
+            ],
+            "medians": {
+              "platform-native": {
+                "wall_seconds": 23.833615525,
+                "cpu_seconds": 23.78
+              }
+            }
+          },
+          {
+            "status": "PASS",
+            "inputs": {
+              "stock": "fef99d167011dca7bb155e8afe835b5b535cec51b13532300413cddeaf3fc929",
+              "fork": "fdbb824a80998913f93b1eee689a8bc8efd4bd15f8ff995c07a4be7736844e29",
+              "firmware": "2335a28682ddf65e46c1f492632c2cb026efcb2271caf544a3f7ddc858b03e02",
+              "plain": "ebeca8e920328b5c893fc9ee910851cceabee2bebc00320322b2b77b75def4a0",
+              "native": "a1509c81444586031c74c5752f72ec90dc6c7ab57635fff37ffa431c11663a9f",
+              "input": "de7b86d79a68965adb62e750101d9211224884b2236053d906d1e23057bb6ad1",
+              "reference": "58111208509dd871223ae195a33304bd6b24afd29458f37c976556cbad506324",
+              "Image": "b7de27fb28bc0807053ae3e1c4bcd058e79f601d255a0dcaaa6ce70d46a3815f",
+              "rootfs.ext2": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845"
+            },
+            "iterations": 50,
+            "icount": 0,
+            "profiled": false,
+            "pcrel_override": null,
+            "scalar_controls": {
+              "cpu": null,
+              "machine": null,
+              "kernel": null
+            },
+            "host": {
+              "uname": [
+                "Linux",
+                "pop-os",
+                "6.18.7-76061807-generic",
+                "#202601231045~1778249322~24.04~b44a3c3 SMP PREEMPT_DYNAMIC Fri M",
+                "x86_64",
+                "x86_64"
+              ],
+              "affinity": [
+                2
+              ]
+            },
+            "samples": [
+              {
+                "arm": "platform-native",
+                "run": 0,
+                "host_loadavg_before": [
+                  1.271484375,
+                  1.47509765625,
+                  1.54150390625
+                ],
+                "reference_match": true,
+                "wall_seconds": 23.936060295,
+                "cpu_seconds": 23.89,
+                "cpu_tick_hz": 100,
+                "scope": "Guest serial window; host time, not guest cycles",
+                "profiled": false
+              }
+            ],
+            "limitations": [
+              "Host serial-delivery timing, not target cycles or hardware overhead.",
+              "One untimed warm-up compilation per fresh guest, then a batch including exec/exit.",
+              "Default stock-plain/fork-plain is the matched scalar pair; explicit overrides must be audited separately.",
+              "Platform arms intentionally change discovery/CPU flags and Linux capability paths.",
+              "Native versus plain binaries differ in compiler/libc/ABI; not isolated ISA cost.",
+              "No profiling plugin; build flags and host contention still require auditing."
+            ],
+            "medians": {
+              "platform-native": {
+                "wall_seconds": 23.936060295,
+                "cpu_seconds": 23.89
+              }
+            }
+          }
+        ],
+        "mean_cpu_seconds": 23.835
+      }
+    },
+    "reduction_percent": 13.264192139737984,
+    "method": "Fresh ABBA guests, CPU2, icount0, 50 timed compilations plus one warmup per guest; all 200+4 outputs match."
+  },
+  "earlier_shifted_confirmation": {
+    "controls": {
+      "original": {
+        "runs": [
+          {
+            "status": "PASS",
+            "inputs": {
+              "stock": "fef99d167011dca7bb155e8afe835b5b535cec51b13532300413cddeaf3fc929",
+              "fork": "8672296ec36f7098133ea6fd8fe956f0124a7e2f4b3663fe5d43fb48e9d1e180",
+              "firmware": "2335a28682ddf65e46c1f492632c2cb026efcb2271caf544a3f7ddc858b03e02",
+              "plain": "ebeca8e920328b5c893fc9ee910851cceabee2bebc00320322b2b77b75def4a0",
+              "native": "a1509c81444586031c74c5752f72ec90dc6c7ab57635fff37ffa431c11663a9f",
+              "input": "de7b86d79a68965adb62e750101d9211224884b2236053d906d1e23057bb6ad1",
+              "reference": "58111208509dd871223ae195a33304bd6b24afd29458f37c976556cbad506324",
+              "Image": "b7de27fb28bc0807053ae3e1c4bcd058e79f601d255a0dcaaa6ce70d46a3815f",
+              "rootfs.ext2": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845"
+            },
+            "iterations": 50,
+            "icount": 0,
+            "profiled": false,
+            "pcrel_override": null,
+            "scalar_controls": {
+              "cpu": null,
+              "machine": null,
+              "kernel": null
+            },
+            "host": {
+              "uname": [
+                "Linux",
+                "pop-os",
+                "6.18.7-76061807-generic",
+                "#202601231045~1778249322~24.04~b44a3c3 SMP PREEMPT_DYNAMIC Fri M",
+                "x86_64",
+                "x86_64"
+              ],
+              "affinity": [
+                2
+              ]
+            },
+            "samples": [
+              {
+                "arm": "platform-native",
+                "run": 0,
+                "host_loadavg_before": [
+                  1.40478515625,
+                  2.09326171875,
+                  1.69970703125
+                ],
+                "reference_match": true,
+                "wall_seconds": 32.736859659,
+                "cpu_seconds": 32.68,
+                "cpu_tick_hz": 100,
+                "scope": "Guest serial window; host time, not guest cycles",
+                "profiled": false
+              }
+            ],
+            "limitations": [
+              "Host serial-delivery timing, not target cycles or hardware overhead.",
+              "One untimed warm-up compilation per fresh guest, then a batch including exec/exit.",
+              "Default stock-plain/fork-plain is the matched scalar pair; explicit overrides must be audited separately.",
+              "Platform arms intentionally change discovery/CPU flags and Linux capability paths.",
+              "Native versus plain binaries differ in compiler/libc/ABI; not isolated ISA cost.",
+              "No profiling plugin; build flags and host contention still require auditing."
+            ],
+            "medians": {
+              "platform-native": {
+                "wall_seconds": 32.736859659,
+                "cpu_seconds": 32.68
+              }
+            }
+          },
+          {
+            "status": "PASS",
+            "inputs": {
+              "stock": "fef99d167011dca7bb155e8afe835b5b535cec51b13532300413cddeaf3fc929",
+              "fork": "8672296ec36f7098133ea6fd8fe956f0124a7e2f4b3663fe5d43fb48e9d1e180",
+              "firmware": "2335a28682ddf65e46c1f492632c2cb026efcb2271caf544a3f7ddc858b03e02",
+              "plain": "ebeca8e920328b5c893fc9ee910851cceabee2bebc00320322b2b77b75def4a0",
+              "native": "a1509c81444586031c74c5752f72ec90dc6c7ab57635fff37ffa431c11663a9f",
+              "input": "de7b86d79a68965adb62e750101d9211224884b2236053d906d1e23057bb6ad1",
+              "reference": "58111208509dd871223ae195a33304bd6b24afd29458f37c976556cbad506324",
+              "Image": "b7de27fb28bc0807053ae3e1c4bcd058e79f601d255a0dcaaa6ce70d46a3815f",
+              "rootfs.ext2": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845"
+            },
+            "iterations": 50,
+            "icount": 0,
+            "profiled": false,
+            "pcrel_override": null,
+            "scalar_controls": {
+              "cpu": null,
+              "machine": null,
+              "kernel": null
+            },
+            "host": {
+              "uname": [
+                "Linux",
+                "pop-os",
+                "6.18.7-76061807-generic",
+                "#202601231045~1778249322~24.04~b44a3c3 SMP PREEMPT_DYNAMIC Fri M",
+                "x86_64",
+                "x86_64"
+              ],
+              "affinity": [
+                2
+              ]
+            },
+            "samples": [
+              {
+                "arm": "platform-native",
+                "run": 0,
+                "host_loadavg_before": [
+                  1.2666015625,
+                  1.5859375,
+                  1.5869140625
+                ],
+                "reference_match": true,
+                "wall_seconds": 27.595342056,
+                "cpu_seconds": 27.54,
+                "cpu_tick_hz": 100,
+                "scope": "Guest serial window; host time, not guest cycles",
+                "profiled": false
+              }
+            ],
+            "limitations": [
+              "Host serial-delivery timing, not target cycles or hardware overhead.",
+              "One untimed warm-up compilation per fresh guest, then a batch including exec/exit.",
+              "Default stock-plain/fork-plain is the matched scalar pair; explicit overrides must be audited separately.",
+              "Platform arms intentionally change discovery/CPU flags and Linux capability paths.",
+              "Native versus plain binaries differ in compiler/libc/ABI; not isolated ISA cost.",
+              "No profiling plugin; build flags and host contention still require auditing."
+            ],
+            "medians": {
+              "platform-native": {
+                "wall_seconds": 27.595342056,
+                "cpu_seconds": 27.54
+              }
+            }
+          }
+        ],
+        "mean_cpu_seconds": 30.11
+      },
+      "clang": {
+        "runs": [
+          {
+            "status": "PASS",
+            "inputs": {
+              "stock": "fef99d167011dca7bb155e8afe835b5b535cec51b13532300413cddeaf3fc929",
+              "fork": "9c80dacf7a0dbbd219e54d408d18aa36222f8d1b8213622de271c3375af1bfa0",
+              "firmware": "2335a28682ddf65e46c1f492632c2cb026efcb2271caf544a3f7ddc858b03e02",
+              "plain": "ebeca8e920328b5c893fc9ee910851cceabee2bebc00320322b2b77b75def4a0",
+              "native": "a1509c81444586031c74c5752f72ec90dc6c7ab57635fff37ffa431c11663a9f",
+              "input": "de7b86d79a68965adb62e750101d9211224884b2236053d906d1e23057bb6ad1",
+              "reference": "58111208509dd871223ae195a33304bd6b24afd29458f37c976556cbad506324",
+              "Image": "b7de27fb28bc0807053ae3e1c4bcd058e79f601d255a0dcaaa6ce70d46a3815f",
+              "rootfs.ext2": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845"
+            },
+            "iterations": 50,
+            "icount": 0,
+            "profiled": false,
+            "pcrel_override": null,
+            "scalar_controls": {
+              "cpu": null,
+              "machine": null,
+              "kernel": null
+            },
+            "host": {
+              "uname": [
+                "Linux",
+                "pop-os",
+                "6.18.7-76061807-generic",
+                "#202601231045~1778249322~24.04~b44a3c3 SMP PREEMPT_DYNAMIC Fri M",
+                "x86_64",
+                "x86_64"
+              ],
+              "affinity": [
+                2
+              ]
+            },
+            "samples": [
+              {
+                "arm": "platform-native",
+                "run": 0,
+                "host_loadavg_before": [
+                  1.33056640625,
+                  1.986328125,
+                  1.6796875
+                ],
+                "reference_match": true,
+                "wall_seconds": 28.635517787,
+                "cpu_seconds": 28.59,
+                "cpu_tick_hz": 100,
+                "scope": "Guest serial window; host time, not guest cycles",
+                "profiled": false
+              }
+            ],
+            "limitations": [
+              "Host serial-delivery timing, not target cycles or hardware overhead.",
+              "One untimed warm-up compilation per fresh guest, then a batch including exec/exit.",
+              "Default stock-plain/fork-plain is the matched scalar pair; explicit overrides must be audited separately.",
+              "Platform arms intentionally change discovery/CPU flags and Linux capability paths.",
+              "Native versus plain binaries differ in compiler/libc/ABI; not isolated ISA cost.",
+              "No profiling plugin; build flags and host contention still require auditing."
+            ],
+            "medians": {
+              "platform-native": {
+                "wall_seconds": 28.635517787,
+                "cpu_seconds": 28.59
+              }
+            }
+          },
+          {
+            "status": "PASS",
+            "inputs": {
+              "stock": "fef99d167011dca7bb155e8afe835b5b535cec51b13532300413cddeaf3fc929",
+              "fork": "9c80dacf7a0dbbd219e54d408d18aa36222f8d1b8213622de271c3375af1bfa0",
+              "firmware": "2335a28682ddf65e46c1f492632c2cb026efcb2271caf544a3f7ddc858b03e02",
+              "plain": "ebeca8e920328b5c893fc9ee910851cceabee2bebc00320322b2b77b75def4a0",
+              "native": "a1509c81444586031c74c5752f72ec90dc6c7ab57635fff37ffa431c11663a9f",
+              "input": "de7b86d79a68965adb62e750101d9211224884b2236053d906d1e23057bb6ad1",
+              "reference": "58111208509dd871223ae195a33304bd6b24afd29458f37c976556cbad506324",
+              "Image": "b7de27fb28bc0807053ae3e1c4bcd058e79f601d255a0dcaaa6ce70d46a3815f",
+              "rootfs.ext2": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845"
+            },
+            "iterations": 50,
+            "icount": 0,
+            "profiled": false,
+            "pcrel_override": null,
+            "scalar_controls": {
+              "cpu": null,
+              "machine": null,
+              "kernel": null
+            },
+            "host": {
+              "uname": [
+                "Linux",
+                "pop-os",
+                "6.18.7-76061807-generic",
+                "#202601231045~1778249322~24.04~b44a3c3 SMP PREEMPT_DYNAMIC Fri M",
+                "x86_64",
+                "x86_64"
+              ],
+              "affinity": [
+                2
+              ]
+            },
+            "samples": [
+              {
+                "arm": "platform-native",
+                "run": 0,
+                "host_loadavg_before": [
+                  1.3662109375,
+                  1.65283203125,
+                  1.6083984375
+                ],
+                "reference_match": true,
+                "wall_seconds": 24.558544846,
+                "cpu_seconds": 24.46,
+                "cpu_tick_hz": 100,
+                "scope": "Guest serial window; host time, not guest cycles",
+                "profiled": false
+              }
+            ],
+            "limitations": [
+              "Host serial-delivery timing, not target cycles or hardware overhead.",
+              "One untimed warm-up compilation per fresh guest, then a batch including exec/exit.",
+              "Default stock-plain/fork-plain is the matched scalar pair; explicit overrides must be audited separately.",
+              "Platform arms intentionally change discovery/CPU flags and Linux capability paths.",
+              "Native versus plain binaries differ in compiler/libc/ABI; not isolated ISA cost.",
+              "No profiling plugin; build flags and host contention still require auditing."
+            ],
+            "medians": {
+              "platform-native": {
+                "wall_seconds": 24.558544846,
+                "cpu_seconds": 24.46
+              }
+            }
+          }
+        ],
+        "mean_cpu_seconds": 26.525
+      },
+      "next": {
+        "runs": [
+          {
+            "status": "PASS",
+            "inputs": {
+              "stock": "fef99d167011dca7bb155e8afe835b5b535cec51b13532300413cddeaf3fc929",
+              "fork": "fdbb824a80998913f93b1eee689a8bc8efd4bd15f8ff995c07a4be7736844e29",
+              "firmware": "2335a28682ddf65e46c1f492632c2cb026efcb2271caf544a3f7ddc858b03e02",
+              "plain": "ebeca8e920328b5c893fc9ee910851cceabee2bebc00320322b2b77b75def4a0",
+              "native": "a1509c81444586031c74c5752f72ec90dc6c7ab57635fff37ffa431c11663a9f",
+              "input": "de7b86d79a68965adb62e750101d9211224884b2236053d906d1e23057bb6ad1",
+              "reference": "58111208509dd871223ae195a33304bd6b24afd29458f37c976556cbad506324",
+              "Image": "b7de27fb28bc0807053ae3e1c4bcd058e79f601d255a0dcaaa6ce70d46a3815f",
+              "rootfs.ext2": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845"
+            },
+            "iterations": 50,
+            "icount": 0,
+            "profiled": false,
+            "pcrel_override": null,
+            "scalar_controls": {
+              "cpu": null,
+              "machine": null,
+              "kernel": null
+            },
+            "host": {
+              "uname": [
+                "Linux",
+                "pop-os",
+                "6.18.7-76061807-generic",
+                "#202601231045~1778249322~24.04~b44a3c3 SMP PREEMPT_DYNAMIC Fri M",
+                "x86_64",
+                "x86_64"
+              ],
+              "affinity": [
+                2
+              ]
+            },
+            "samples": [
+              {
+                "arm": "platform-native",
+                "run": 0,
+                "host_loadavg_before": [
+                  1.1796875,
+                  1.84716796875,
+                  1.646484375
+                ],
+                "reference_match": true,
+                "wall_seconds": 28.250646287,
+                "cpu_seconds": 28.16,
+                "cpu_tick_hz": 100,
+                "scope": "Guest serial window; host time, not guest cycles",
+                "profiled": false
+              }
+            ],
+            "limitations": [
+              "Host serial-delivery timing, not target cycles or hardware overhead.",
+              "One untimed warm-up compilation per fresh guest, then a batch including exec/exit.",
+              "Default stock-plain/fork-plain is the matched scalar pair; explicit overrides must be audited separately.",
+              "Platform arms intentionally change discovery/CPU flags and Linux capability paths.",
+              "Native versus plain binaries differ in compiler/libc/ABI; not isolated ISA cost.",
+              "No profiling plugin; build flags and host contention still require auditing."
+            ],
+            "medians": {
+              "platform-native": {
+                "wall_seconds": 28.250646287,
+                "cpu_seconds": 28.16
+              }
+            }
+          },
+          {
+            "status": "PASS",
+            "inputs": {
+              "stock": "fef99d167011dca7bb155e8afe835b5b535cec51b13532300413cddeaf3fc929",
+              "fork": "fdbb824a80998913f93b1eee689a8bc8efd4bd15f8ff995c07a4be7736844e29",
+              "firmware": "2335a28682ddf65e46c1f492632c2cb026efcb2271caf544a3f7ddc858b03e02",
+              "plain": "ebeca8e920328b5c893fc9ee910851cceabee2bebc00320322b2b77b75def4a0",
+              "native": "a1509c81444586031c74c5752f72ec90dc6c7ab57635fff37ffa431c11663a9f",
+              "input": "de7b86d79a68965adb62e750101d9211224884b2236053d906d1e23057bb6ad1",
+              "reference": "58111208509dd871223ae195a33304bd6b24afd29458f37c976556cbad506324",
+              "Image": "b7de27fb28bc0807053ae3e1c4bcd058e79f601d255a0dcaaa6ce70d46a3815f",
+              "rootfs.ext2": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845"
+            },
+            "iterations": 50,
+            "icount": 0,
+            "profiled": false,
+            "pcrel_override": null,
+            "scalar_controls": {
+              "cpu": null,
+              "machine": null,
+              "kernel": null
+            },
+            "host": {
+              "uname": [
+                "Linux",
+                "pop-os",
+                "6.18.7-76061807-generic",
+                "#202601231045~1778249322~24.04~b44a3c3 SMP PREEMPT_DYNAMIC Fri M",
+                "x86_64",
+                "x86_64"
+              ],
+              "affinity": [
+                2
+              ]
+            },
+            "samples": [
+              {
+                "arm": "platform-native",
+                "run": 0,
+                "host_loadavg_before": [
+                  1.35205078125,
+                  1.69287109375,
+                  1.6181640625
+                ],
+                "reference_match": true,
+                "wall_seconds": 23.816830265,
+                "cpu_seconds": 23.77,
+                "cpu_tick_hz": 100,
+                "scope": "Guest serial window; host time, not guest cycles",
+                "profiled": false
+              }
+            ],
+            "limitations": [
+              "Host serial-delivery timing, not target cycles or hardware overhead.",
+              "One untimed warm-up compilation per fresh guest, then a batch including exec/exit.",
+              "Default stock-plain/fork-plain is the matched scalar pair; explicit overrides must be audited separately.",
+              "Platform arms intentionally change discovery/CPU flags and Linux capability paths.",
+              "Native versus plain binaries differ in compiler/libc/ABI; not isolated ISA cost.",
+              "No profiling plugin; build flags and host contention still require auditing."
+            ],
+            "medians": {
+              "platform-native": {
+                "wall_seconds": 23.816830265,
+                "cpu_seconds": 23.77
+              }
+            }
+          }
+        ],
+        "mean_cpu_seconds": 25.965
+      },
+      "realtime": {
+        "runs": [
+          {
+            "status": "PASS",
+            "inputs": {
+              "stock": "fef99d167011dca7bb155e8afe835b5b535cec51b13532300413cddeaf3fc929",
+              "fork": "fdbb824a80998913f93b1eee689a8bc8efd4bd15f8ff995c07a4be7736844e29",
+              "firmware": "2335a28682ddf65e46c1f492632c2cb026efcb2271caf544a3f7ddc858b03e02",
+              "plain": "ebeca8e920328b5c893fc9ee910851cceabee2bebc00320322b2b77b75def4a0",
+              "native": "a1509c81444586031c74c5752f72ec90dc6c7ab57635fff37ffa431c11663a9f",
+              "input": "de7b86d79a68965adb62e750101d9211224884b2236053d906d1e23057bb6ad1",
+              "reference": "58111208509dd871223ae195a33304bd6b24afd29458f37c976556cbad506324",
+              "Image": "b7de27fb28bc0807053ae3e1c4bcd058e79f601d255a0dcaaa6ce70d46a3815f",
+              "rootfs.ext2": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845"
+            },
+            "iterations": 50,
+            "icount": null,
+            "profiled": false,
+            "pcrel_override": null,
+            "scalar_controls": {
+              "cpu": null,
+              "machine": null,
+              "kernel": null
+            },
+            "host": {
+              "uname": [
+                "Linux",
+                "pop-os",
+                "6.18.7-76061807-generic",
+                "#202601231045~1778249322~24.04~b44a3c3 SMP PREEMPT_DYNAMIC Fri M",
+                "x86_64",
+                "x86_64"
+              ],
+              "affinity": [
+                2
+              ]
+            },
+            "samples": [
+              {
+                "arm": "platform-native",
+                "run": 0,
+                "host_loadavg_before": [
+                  1.27685546875,
+                  1.775390625,
+                  1.6318359375
+                ],
+                "reference_match": true,
+                "wall_seconds": 23.427510504,
+                "cpu_seconds": 23.38,
+                "cpu_tick_hz": 100,
+                "scope": "Guest serial window; host time, not guest cycles",
+                "profiled": false
+              }
+            ],
+            "limitations": [
+              "Host serial-delivery timing, not target cycles or hardware overhead.",
+              "One untimed warm-up compilation per fresh guest, then a batch including exec/exit.",
+              "Default stock-plain/fork-plain is the matched scalar pair; explicit overrides must be audited separately.",
+              "Platform arms intentionally change discovery/CPU flags and Linux capability paths.",
+              "Native versus plain binaries differ in compiler/libc/ABI; not isolated ISA cost.",
+              "No profiling plugin; build flags and host contention still require auditing."
+            ],
+            "medians": {
+              "platform-native": {
+                "wall_seconds": 23.427510504,
+                "cpu_seconds": 23.38
+              }
+            }
+          },
+          {
+            "status": "PASS",
+            "inputs": {
+              "stock": "fef99d167011dca7bb155e8afe835b5b535cec51b13532300413cddeaf3fc929",
+              "fork": "fdbb824a80998913f93b1eee689a8bc8efd4bd15f8ff995c07a4be7736844e29",
+              "firmware": "2335a28682ddf65e46c1f492632c2cb026efcb2271caf544a3f7ddc858b03e02",
+              "plain": "ebeca8e920328b5c893fc9ee910851cceabee2bebc00320322b2b77b75def4a0",
+              "native": "a1509c81444586031c74c5752f72ec90dc6c7ab57635fff37ffa431c11663a9f",
+              "input": "de7b86d79a68965adb62e750101d9211224884b2236053d906d1e23057bb6ad1",
+              "reference": "58111208509dd871223ae195a33304bd6b24afd29458f37c976556cbad506324",
+              "Image": "b7de27fb28bc0807053ae3e1c4bcd058e79f601d255a0dcaaa6ce70d46a3815f",
+              "rootfs.ext2": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845"
+            },
+            "iterations": 50,
+            "icount": null,
+            "profiled": false,
+            "pcrel_override": null,
+            "scalar_controls": {
+              "cpu": null,
+              "machine": null,
+              "kernel": null
+            },
+            "host": {
+              "uname": [
+                "Linux",
+                "pop-os",
+                "6.18.7-76061807-generic",
+                "#202601231045~1778249322~24.04~b44a3c3 SMP PREEMPT_DYNAMIC Fri M",
+                "x86_64",
+                "x86_64"
+              ],
+              "affinity": [
+                2
+              ]
+            },
+            "samples": [
+              {
+                "arm": "platform-native",
+                "run": 0,
+                "host_loadavg_before": [
+                  1.43505859375,
+                  1.7451171875,
+                  1.63037109375
+                ],
+                "reference_match": true,
+                "wall_seconds": 19.644932965,
+                "cpu_seconds": 19.6,
+                "cpu_tick_hz": 100,
+                "scope": "Guest serial window; host time, not guest cycles",
+                "profiled": false
+              }
+            ],
+            "limitations": [
+              "Host serial-delivery timing, not target cycles or hardware overhead.",
+              "One untimed warm-up compilation per fresh guest, then a batch including exec/exit.",
+              "Default stock-plain/fork-plain is the matched scalar pair; explicit overrides must be audited separately.",
+              "Platform arms intentionally change discovery/CPU flags and Linux capability paths.",
+              "Native versus plain binaries differ in compiler/libc/ABI; not isolated ISA cost.",
+              "No profiling plugin; build flags and host contention still require auditing."
+            ],
+            "medians": {
+              "platform-native": {
+                "wall_seconds": 19.644932965,
+                "cpu_seconds": 19.6
+              }
+            }
+          }
+        ],
+        "mean_cpu_seconds": 21.490000000000002
+      }
+    },
+    "observation": {
+      "epoch": 1794167413.1957457,
+      "affinity": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27
+      ],
+      "cpu2": {
+        "scaling_cur_freq": "5300000",
+        "scaling_max_freq": "5300000",
+        "scaling_min_freq": "800000",
+        "scaling_governor": "powersave",
+        "cpuinfo_max_freq": "5300000",
+        "energy_performance_preference": "balance_performance"
+      },
+      "loadavg": "1.34 1.64 1.60 2/836 383516",
+      "note": "A one-time observation after paired timings shifted by about 17%; not proof of frequency as cause."
+    },
+    "scope": "All 400+8 outputs match. Large host-speed shift between forward and reverse halves; retained for provenance, not used as the headline absolute-time comparison."
+  },
+  "workloads": {
+    "502.gcc_r": {
+      "cpu_seconds": {
+        "original": [
+          3.93,
+          4.18
+        ],
+        "candidate": [
+          3.32,
+          3.53
+        ],
+        "realtime": [
+          2.18,
+          2.37
+        ]
+      },
+      "mean_cpu_seconds": {
+        "original": 4.055,
+        "candidate": 3.425,
+        "realtime": 2.2750000000000004
+      },
+      "reductions_vs_original_percent": {
+        "candidate": 15.536374845869293,
+        "realtime": 43.89642416769419
+      }
+    },
+    "519.lbm_r": {
+      "cpu_seconds": {
+        "original": [
+          48.1,
+          45.48
+        ],
+        "candidate": [
+          45.3,
+          45.0
+        ],
+        "realtime": [
+          33.4,
+          33.25
+        ]
+      },
+      "mean_cpu_seconds": {
+        "original": 46.79,
+        "candidate": 45.15,
+        "realtime": 33.325
+      },
+      "reductions_vs_original_percent": {
+        "candidate": 3.5050224406924624,
+        "realtime": 28.777516563368234
+      }
+    },
+    "544.nab_r": {
+      "cpu_seconds": {
+        "original": [
+          58.13,
+          58.19
+        ],
+        "candidate": [
+          52.26,
+          52.05
+        ],
+        "realtime": [
+          38.93,
+          39.11
+        ]
+      },
+      "mean_cpu_seconds": {
+        "original": 58.16,
+        "candidate": 52.155,
+        "realtime": 39.019999999999996
+      },
+      "reductions_vs_original_percent": {
+        "candidate": 10.324965612104531,
+        "realtime": 32.9092159559835
+      }
+    }
+  },
+  "workload_qualification": {
+    "status": "PASS",
+    "scope": "Unmodified official test workload commands; exact qualified output hashes, not a fresh official comparator execution or SPEC score",
+    "results": [
+      {
+        "benchmark": "502.gcc_r",
+        "variant": "original",
+        "qualification": {
+          "status": "PASS",
+          "scope": "Exact output equivalence to qualified baseline; not fresh official comparator execution",
+          "baseline_sha256": "4a7f0201fd8d68a6884996e79a4e8c5979ff544b7d8734666f5c9ea9a999c930",
+          "qemu_sha256": "8672296ec36f7098133ea6fd8fe956f0124a7e2f4b3663fe5d43fb48e9d1e180",
+          "icount": 0,
+          "results": [
+            {
+              "benchmark": "502.gcc_r",
+              "status": "PASS",
+              "inputs": {
+                "control": "9114609f801dfd5fd3c0c510fde241b58b705522cb29ad10f8f99eca68d62e43",
+                "cpugcc_r": "0b6ac27e8b2b33cd77ba3f64fbcca52615dec2b1691141f2d1e3413f21a47b28",
+                "t1.c": "de7b86d79a68965adb62e750101d9211224884b2236053d906d1e23057bb6ad1"
+              },
+              "execution": {
+                "benchmark": "502.gcc_r",
+                "runner_rc": 0,
+                "icount": 0,
+                "host_elapsed_seconds": 40.90170095209032,
+                "commands": [
+                  {
+                    "argv": [
+                      "./cpugcc_r",
+                      "t1.c",
+                      "-O3",
+                      "-finline-limit=50000",
+                      "-o",
+                      "t1.opts-O3_-finline-limit_50000.s"
+                    ],
+                    "stdout": "t1.opts-O3_-finline-limit_50000.out",
+                    "stderr": "t1.opts-O3_-finline-limit_50000.err"
+                  }
+                ],
+                "expected_commands": 1,
+                "exit_statuses": [
+                  0
+                ],
+                "image_commands": [],
+                "expected_image_commands": 0,
+                "image_exit_statuses": [],
+                "execution_errors": [],
+                "execution_ok": true,
+                "spec_validation": "PENDING",
+                "comparator_manifest_sha256": "347fdb43ab34ff6f81a90f58021c48fdbc27901011fe365441130412885b827d",
+                "host_window": {
+                  "wall_seconds": 3.931660135,
+                  "cpu_seconds": 3.93,
+                  "cpu_tick_hz": 100,
+                  "scope": "One workload invocation including exec/exit; no warm-up, boot, validators or host output collection. Host time, not guest cycles.",
+                  "profiled": false,
+                  "case": 0,
+                  "affinity": [
+                    2
+                  ]
+                }
+              },
+              "errors": [],
+              "comparisons": [
+                {
+                  "name": "t1.opts-O3_-finline-limit_50000.s",
+                  "expected": "58111208509dd871223ae195a33304bd6b24afd29458f37c976556cbad506324",
+                  "actual": "58111208509dd871223ae195a33304bd6b24afd29458f37c976556cbad506324",
+                  "passed": true
+                }
+              ],
+              "images": [],
+              "elapsed_seconds": 43.13945424742997
+            }
+          ],
+          "started_epoch": 1794167446.493012,
+          "finished_epoch": 1794167489.6327426
+        }
+      },
+      {
+        "benchmark": "502.gcc_r",
+        "variant": "candidate",
+        "qualification": {
+          "status": "PASS",
+          "scope": "Exact output equivalence to qualified baseline; not fresh official comparator execution",
+          "baseline_sha256": "4a7f0201fd8d68a6884996e79a4e8c5979ff544b7d8734666f5c9ea9a999c930",
+          "qemu_sha256": "fdbb824a80998913f93b1eee689a8bc8efd4bd15f8ff995c07a4be7736844e29",
+          "icount": 0,
+          "results": [
+            {
+              "benchmark": "502.gcc_r",
+              "status": "PASS",
+              "inputs": {
+                "control": "9114609f801dfd5fd3c0c510fde241b58b705522cb29ad10f8f99eca68d62e43",
+                "cpugcc_r": "0b6ac27e8b2b33cd77ba3f64fbcca52615dec2b1691141f2d1e3413f21a47b28",
+                "t1.c": "de7b86d79a68965adb62e750101d9211224884b2236053d906d1e23057bb6ad1"
+              },
+              "execution": {
+                "benchmark": "502.gcc_r",
+                "runner_rc": 0,
+                "icount": 0,
+                "host_elapsed_seconds": 43.136830899864435,
+                "commands": [
+                  {
+                    "argv": [
+                      "./cpugcc_r",
+                      "t1.c",
+                      "-O3",
+                      "-finline-limit=50000",
+                      "-o",
+                      "t1.opts-O3_-finline-limit_50000.s"
+                    ],
+                    "stdout": "t1.opts-O3_-finline-limit_50000.out",
+                    "stderr": "t1.opts-O3_-finline-limit_50000.err"
+                  }
+                ],
+                "expected_commands": 1,
+                "exit_statuses": [
+                  0
+                ],
+                "image_commands": [],
+                "expected_image_commands": 0,
+                "image_exit_statuses": [],
+                "execution_errors": [],
+                "execution_ok": true,
+                "spec_validation": "PENDING",
+                "comparator_manifest_sha256": "347fdb43ab34ff6f81a90f58021c48fdbc27901011fe365441130412885b827d",
+                "host_window": {
+                  "wall_seconds": 3.316448221,
+                  "cpu_seconds": 3.32,
+                  "cpu_tick_hz": 100,
+                  "scope": "One workload invocation including exec/exit; no warm-up, boot, validators or host output collection. Host time, not guest cycles.",
+                  "profiled": false,
+                  "case": 0,
+                  "affinity": [
+                    2
+                  ]
+                }
+              },
+              "errors": [],
+              "comparisons": [
+                {
+                  "name": "t1.opts-O3_-finline-limit_50000.s",
+                  "expected": "58111208509dd871223ae195a33304bd6b24afd29458f37c976556cbad506324",
+                  "actual": "58111208509dd871223ae195a33304bd6b24afd29458f37c976556cbad506324",
+                  "passed": true
+                }
+              ],
+              "images": [],
+              "elapsed_seconds": 45.39541974198073
+            }
+          ],
+          "started_epoch": 1794167490.7622213,
+          "finished_epoch": 1794167536.157913
+        }
+      },
+      {
+        "benchmark": "502.gcc_r",
+        "variant": "realtime",
+        "qualification": {
+          "status": "PASS",
+          "scope": "Exact output equivalence to qualified baseline; not fresh official comparator execution",
+          "baseline_sha256": "4a7f0201fd8d68a6884996e79a4e8c5979ff544b7d8734666f5c9ea9a999c930",
+          "qemu_sha256": "fdbb824a80998913f93b1eee689a8bc8efd4bd15f8ff995c07a4be7736844e29",
+          "icount": null,
+          "results": [
+            {
+              "benchmark": "502.gcc_r",
+              "status": "PASS",
+              "inputs": {
+                "control": "9114609f801dfd5fd3c0c510fde241b58b705522cb29ad10f8f99eca68d62e43",
+                "cpugcc_r": "0b6ac27e8b2b33cd77ba3f64fbcca52615dec2b1691141f2d1e3413f21a47b28",
+                "t1.c": "de7b86d79a68965adb62e750101d9211224884b2236053d906d1e23057bb6ad1"
+              },
+              "execution": {
+                "benchmark": "502.gcc_r",
+                "runner_rc": 0,
+                "icount": null,
+                "host_elapsed_seconds": 33.837314751930535,
+                "commands": [
+                  {
+                    "argv": [
+                      "./cpugcc_r",
+                      "t1.c",
+                      "-O3",
+                      "-finline-limit=50000",
+                      "-o",
+                      "t1.opts-O3_-finline-limit_50000.s"
+                    ],
+                    "stdout": "t1.opts-O3_-finline-limit_50000.out",
+                    "stderr": "t1.opts-O3_-finline-limit_50000.err"
+                  }
+                ],
+                "expected_commands": 1,
+                "exit_statuses": [
+                  0
+                ],
+                "image_commands": [],
+                "expected_image_commands": 0,
+                "image_exit_statuses": [],
+                "execution_errors": [],
+                "execution_ok": true,
+                "spec_validation": "PENDING",
+                "comparator_manifest_sha256": "347fdb43ab34ff6f81a90f58021c48fdbc27901011fe365441130412885b827d",
+                "host_window": {
+                  "wall_seconds": 2.176269188,
+                  "cpu_seconds": 2.18,
+                  "cpu_tick_hz": 100,
+                  "scope": "One workload invocation including exec/exit; no warm-up, boot, validators or host output collection. Host time, not guest cycles.",
+                  "profiled": false,
+                  "case": 0,
+                  "affinity": [
+                    2
+                  ]
+                }
+              },
+              "errors": [],
+              "comparisons": [
+                {
+                  "name": "t1.opts-O3_-finline-limit_50000.s",
+                  "expected": "58111208509dd871223ae195a33304bd6b24afd29458f37c976556cbad506324",
+                  "actual": "58111208509dd871223ae195a33304bd6b24afd29458f37c976556cbad506324",
+                  "passed": true
+                }
+              ],
+              "images": [],
+              "elapsed_seconds": 36.07245401199907
+            }
+          ],
+          "started_epoch": 1794167537.257371,
+          "finished_epoch": 1794167573.3301814
+        }
+      },
+      {
+        "benchmark": "502.gcc_r",
+        "variant": "realtime",
+        "qualification": {
+          "status": "PASS",
+          "scope": "Exact output equivalence to qualified baseline; not fresh official comparator execution",
+          "baseline_sha256": "4a7f0201fd8d68a6884996e79a4e8c5979ff544b7d8734666f5c9ea9a999c930",
+          "qemu_sha256": "fdbb824a80998913f93b1eee689a8bc8efd4bd15f8ff995c07a4be7736844e29",
+          "icount": null,
+          "results": [
+            {
+              "benchmark": "502.gcc_r",
+              "status": "PASS",
+              "inputs": {
+                "control": "9114609f801dfd5fd3c0c510fde241b58b705522cb29ad10f8f99eca68d62e43",
+                "cpugcc_r": "0b6ac27e8b2b33cd77ba3f64fbcca52615dec2b1691141f2d1e3413f21a47b28",
+                "t1.c": "de7b86d79a68965adb62e750101d9211224884b2236053d906d1e23057bb6ad1"
+              },
+              "execution": {
+                "benchmark": "502.gcc_r",
+                "runner_rc": 0,
+                "icount": null,
+                "host_elapsed_seconds": 33.754448221065104,
+                "commands": [
+                  {
+                    "argv": [
+                      "./cpugcc_r",
+                      "t1.c",
+                      "-O3",
+                      "-finline-limit=50000",
+                      "-o",
+                      "t1.opts-O3_-finline-limit_50000.s"
+                    ],
+                    "stdout": "t1.opts-O3_-finline-limit_50000.out",
+                    "stderr": "t1.opts-O3_-finline-limit_50000.err"
+                  }
+                ],
+                "expected_commands": 1,
+                "exit_statuses": [
+                  0
+                ],
+                "image_commands": [],
+                "expected_image_commands": 0,
+                "image_exit_statuses": [],
+                "execution_errors": [],
+                "execution_ok": true,
+                "spec_validation": "PENDING",
+                "comparator_manifest_sha256": "347fdb43ab34ff6f81a90f58021c48fdbc27901011fe365441130412885b827d",
+                "host_window": {
+                  "wall_seconds": 2.372694583,
+                  "cpu_seconds": 2.37,
+                  "cpu_tick_hz": 100,
+                  "scope": "One workload invocation including exec/exit; no warm-up, boot, validators or host output collection. Host time, not guest cycles.",
+                  "profiled": false,
+                  "case": 0,
+                  "affinity": [
+                    2
+                  ]
+                }
+              },
+              "errors": [],
+              "comparisons": [
+                {
+                  "name": "t1.opts-O3_-finline-limit_50000.s",
+                  "expected": "58111208509dd871223ae195a33304bd6b24afd29458f37c976556cbad506324",
+                  "actual": "58111208509dd871223ae195a33304bd6b24afd29458f37c976556cbad506324",
+                  "passed": true
+                }
+              ],
+              "images": [],
+              "elapsed_seconds": 35.99068480357528
+            }
+          ],
+          "started_epoch": 1794167574.6047628,
+          "finished_epoch": 1794167610.5957499
+        }
+      },
+      {
+        "benchmark": "502.gcc_r",
+        "variant": "candidate",
+        "qualification": {
+          "status": "PASS",
+          "scope": "Exact output equivalence to qualified baseline; not fresh official comparator execution",
+          "baseline_sha256": "4a7f0201fd8d68a6884996e79a4e8c5979ff544b7d8734666f5c9ea9a999c930",
+          "qemu_sha256": "fdbb824a80998913f93b1eee689a8bc8efd4bd15f8ff995c07a4be7736844e29",
+          "icount": 0,
+          "results": [
+            {
+              "benchmark": "502.gcc_r",
+              "status": "PASS",
+              "inputs": {
+                "control": "9114609f801dfd5fd3c0c510fde241b58b705522cb29ad10f8f99eca68d62e43",
+                "cpugcc_r": "0b6ac27e8b2b33cd77ba3f64fbcca52615dec2b1691141f2d1e3413f21a47b28",
+                "t1.c": "de7b86d79a68965adb62e750101d9211224884b2236053d906d1e23057bb6ad1"
+              },
+              "execution": {
+                "benchmark": "502.gcc_r",
+                "runner_rc": 0,
+                "icount": 0,
+                "host_elapsed_seconds": 39.45023909769952,
+                "commands": [
+                  {
+                    "argv": [
+                      "./cpugcc_r",
+                      "t1.c",
+                      "-O3",
+                      "-finline-limit=50000",
+                      "-o",
+                      "t1.opts-O3_-finline-limit_50000.s"
+                    ],
+                    "stdout": "t1.opts-O3_-finline-limit_50000.out",
+                    "stderr": "t1.opts-O3_-finline-limit_50000.err"
+                  }
+                ],
+                "expected_commands": 1,
+                "exit_statuses": [
+                  0
+                ],
+                "image_commands": [],
+                "expected_image_commands": 0,
+                "image_exit_statuses": [],
+                "execution_errors": [],
+                "execution_ok": true,
+                "spec_validation": "PENDING",
+                "comparator_manifest_sha256": "347fdb43ab34ff6f81a90f58021c48fdbc27901011fe365441130412885b827d",
+                "host_window": {
+                  "wall_seconds": 3.577731396,
+                  "cpu_seconds": 3.53,
+                  "cpu_tick_hz": 100,
+                  "scope": "One workload invocation including exec/exit; no warm-up, boot, validators or host output collection. Host time, not guest cycles.",
+                  "profiled": false,
+                  "case": 0,
+                  "affinity": [
+                    2
+                  ]
+                }
+              },
+              "errors": [],
+              "comparisons": [
+                {
+                  "name": "t1.opts-O3_-finline-limit_50000.s",
+                  "expected": "58111208509dd871223ae195a33304bd6b24afd29458f37c976556cbad506324",
+                  "actual": "58111208509dd871223ae195a33304bd6b24afd29458f37c976556cbad506324",
+                  "passed": true
+                }
+              ],
+              "images": [],
+              "elapsed_seconds": 41.69920803513378
+            }
+          ],
+          "started_epoch": 1794167611.7213063,
+          "finished_epoch": 1794167653.4207823
+        }
+      },
+      {
+        "benchmark": "502.gcc_r",
+        "variant": "original",
+        "qualification": {
+          "status": "PASS",
+          "scope": "Exact output equivalence to qualified baseline; not fresh official comparator execution",
+          "baseline_sha256": "4a7f0201fd8d68a6884996e79a4e8c5979ff544b7d8734666f5c9ea9a999c930",
+          "qemu_sha256": "8672296ec36f7098133ea6fd8fe956f0124a7e2f4b3663fe5d43fb48e9d1e180",
+          "icount": 0,
+          "results": [
+            {
+              "benchmark": "502.gcc_r",
+              "status": "PASS",
+              "inputs": {
+                "control": "9114609f801dfd5fd3c0c510fde241b58b705522cb29ad10f8f99eca68d62e43",
+                "cpugcc_r": "0b6ac27e8b2b33cd77ba3f64fbcca52615dec2b1691141f2d1e3413f21a47b28",
+                "t1.c": "de7b86d79a68965adb62e750101d9211224884b2236053d906d1e23057bb6ad1"
+              },
+              "execution": {
+                "benchmark": "502.gcc_r",
+                "runner_rc": 0,
+                "icount": 0,
+                "host_elapsed_seconds": 7.0261811232194304,
+                "commands": [
+                  {
+                    "argv": [
+                      "./cpugcc_r",
+                      "t1.c",
+                      "-O3",
+                      "-finline-limit=50000",
+                      "-o",
+                      "t1.opts-O3_-finline-limit_50000.s"
+                    ],
+                    "stdout": "t1.opts-O3_-finline-limit_50000.out",
+                    "stderr": "t1.opts-O3_-finline-limit_50000.err"
+                  }
+                ],
+                "expected_commands": 1,
+                "exit_statuses": [
+                  0
+                ],
+                "image_commands": [],
+                "expected_image_commands": 0,
+                "image_exit_statuses": [],
+                "execution_errors": [],
+                "execution_ok": true,
+                "spec_validation": "PENDING",
+                "comparator_manifest_sha256": "347fdb43ab34ff6f81a90f58021c48fdbc27901011fe365441130412885b827d",
+                "host_window": {
+                  "wall_seconds": 4.184454381,
+                  "cpu_seconds": 4.18,
+                  "cpu_tick_hz": 100,
+                  "scope": "One workload invocation including exec/exit; no warm-up, boot, validators or host output collection. Host time, not guest cycles.",
+                  "profiled": false,
+                  "case": 0,
+                  "affinity": [
+                    2
+                  ]
+                }
+              },
+              "errors": [],
+              "comparisons": [
+                {
+                  "name": "t1.opts-O3_-finline-limit_50000.s",
+                  "expected": "58111208509dd871223ae195a33304bd6b24afd29458f37c976556cbad506324",
+                  "actual": "58111208509dd871223ae195a33304bd6b24afd29458f37c976556cbad506324",
+                  "passed": true
+                }
+              ],
+              "images": [],
+              "elapsed_seconds": 8.1543890517205
+            }
+          ],
+          "started_epoch": 1794167654.5259953,
+          "finished_epoch": 1794167662.6807117
+        }
+      },
+      {
+        "benchmark": "519.lbm_r",
+        "variant": "original",
+        "qualification": {
+          "status": "PASS",
+          "scope": "Exact output equivalence to qualified baseline; not fresh official comparator execution",
+          "baseline_sha256": "4a7f0201fd8d68a6884996e79a4e8c5979ff544b7d8734666f5c9ea9a999c930",
+          "qemu_sha256": "8672296ec36f7098133ea6fd8fe956f0124a7e2f4b3663fe5d43fb48e9d1e180",
+          "icount": 0,
+          "results": [
+            {
+              "benchmark": "519.lbm_r",
+              "status": "PASS",
+              "inputs": {
+                "100_100_130_cf_a.of": "18e20725a7638f3639c9f6304938f5ff9afe12fed8edb0098b093929986f4c1a",
+                "lbm.in": "7721a4fe66b52f7d56b32679270cef9166c668b2dca51ece71ebc89c8ada8843",
+                "lbm_r": "ae756749dfec9398e2d3c9b24d9a2f023d21f595fa0e0e31f431e35227544a09"
+              },
+              "execution": {
+                "benchmark": "519.lbm_r",
+                "runner_rc": 0,
+                "icount": 0,
+                "host_elapsed_seconds": 50.18760450836271,
+                "commands": [
+                  {
+                    "argv": [
+                      "./lbm_r",
+                      "20",
+                      "reference.dat",
+                      "0",
+                      "1",
+                      "100_100_130_cf_a.of"
+                    ],
+                    "stdout": "lbm.out",
+                    "stderr": "lbm.err"
+                  }
+                ],
+                "expected_commands": 1,
+                "exit_statuses": [
+                  0
+                ],
+                "image_commands": [],
+                "expected_image_commands": 0,
+                "image_exit_statuses": [],
+                "execution_errors": [],
+                "execution_ok": true,
+                "spec_validation": "PENDING",
+                "comparator_manifest_sha256": "c7b5eaf7b6c12da703298feeb93e6b46ec10ad2b34d42d7b6db030f24da6bc05",
+                "host_window": {
+                  "wall_seconds": 48.198583775,
+                  "cpu_seconds": 48.1,
+                  "cpu_tick_hz": 100,
+                  "scope": "One workload invocation including exec/exit; no warm-up, boot, validators or host output collection. Host time, not guest cycles.",
+                  "profiled": false,
+                  "case": 0,
+                  "affinity": [
+                    2
+                  ]
+                }
+              },
+              "errors": [],
+              "comparisons": [
+                {
+                  "name": "lbm.out",
+                  "expected": "7ab5463219d503a3cb54d5bd75b69c6620109b560058de7a20a719796433cdc5",
+                  "actual": "7ab5463219d503a3cb54d5bd75b69c6620109b560058de7a20a719796433cdc5",
+                  "passed": true
+                }
+              ],
+              "images": [],
+              "elapsed_seconds": 51.30374336987734
+            }
+          ],
+          "started_epoch": 1794167663.8609188,
+          "finished_epoch": 1794167715.1649392
+        }
+      },
+      {
+        "benchmark": "519.lbm_r",
+        "variant": "candidate",
+        "qualification": {
+          "status": "PASS",
+          "scope": "Exact output equivalence to qualified baseline; not fresh official comparator execution",
+          "baseline_sha256": "4a7f0201fd8d68a6884996e79a4e8c5979ff544b7d8734666f5c9ea9a999c930",
+          "qemu_sha256": "fdbb824a80998913f93b1eee689a8bc8efd4bd15f8ff995c07a4be7736844e29",
+          "icount": 0,
+          "results": [
+            {
+              "benchmark": "519.lbm_r",
+              "status": "PASS",
+              "inputs": {
+                "100_100_130_cf_a.of": "18e20725a7638f3639c9f6304938f5ff9afe12fed8edb0098b093929986f4c1a",
+                "lbm.in": "7721a4fe66b52f7d56b32679270cef9166c668b2dca51ece71ebc89c8ada8843",
+                "lbm_r": "ae756749dfec9398e2d3c9b24d9a2f023d21f595fa0e0e31f431e35227544a09"
+              },
+              "execution": {
+                "benchmark": "519.lbm_r",
+                "runner_rc": 0,
+                "icount": 0,
+                "host_elapsed_seconds": 47.70755595061928,
+                "commands": [
+                  {
+                    "argv": [
+                      "./lbm_r",
+                      "20",
+                      "reference.dat",
+                      "0",
+                      "1",
+                      "100_100_130_cf_a.of"
+                    ],
+                    "stdout": "lbm.out",
+                    "stderr": "lbm.err"
+                  }
+                ],
+                "expected_commands": 1,
+                "exit_statuses": [
+                  0
+                ],
+                "image_commands": [],
+                "expected_image_commands": 0,
+                "image_exit_statuses": [],
+                "execution_errors": [],
+                "execution_ok": true,
+                "spec_validation": "PENDING",
+                "comparator_manifest_sha256": "c7b5eaf7b6c12da703298feeb93e6b46ec10ad2b34d42d7b6db030f24da6bc05",
+                "host_window": {
+                  "wall_seconds": 45.408701377,
+                  "cpu_seconds": 45.3,
+                  "cpu_tick_hz": 100,
+                  "scope": "One workload invocation including exec/exit; no warm-up, boot, validators or host output collection. Host time, not guest cycles.",
+                  "profiled": false,
+                  "case": 0,
+                  "affinity": [
+                    2
+                  ]
+                }
+              },
+              "errors": [],
+              "comparisons": [
+                {
+                  "name": "lbm.out",
+                  "expected": "7ab5463219d503a3cb54d5bd75b69c6620109b560058de7a20a719796433cdc5",
+                  "actual": "7ab5463219d503a3cb54d5bd75b69c6620109b560058de7a20a719796433cdc5",
+                  "passed": true
+                }
+              ],
+              "images": [],
+              "elapsed_seconds": 48.807809157297015
+            }
+          ],
+          "started_epoch": 1794167716.271072,
+          "finished_epoch": 1794167765.079184
+        }
+      },
+      {
+        "benchmark": "519.lbm_r",
+        "variant": "realtime",
+        "qualification": {
+          "status": "PASS",
+          "scope": "Exact output equivalence to qualified baseline; not fresh official comparator execution",
+          "baseline_sha256": "4a7f0201fd8d68a6884996e79a4e8c5979ff544b7d8734666f5c9ea9a999c930",
+          "qemu_sha256": "fdbb824a80998913f93b1eee689a8bc8efd4bd15f8ff995c07a4be7736844e29",
+          "icount": null,
+          "results": [
+            {
+              "benchmark": "519.lbm_r",
+              "status": "PASS",
+              "inputs": {
+                "100_100_130_cf_a.of": "18e20725a7638f3639c9f6304938f5ff9afe12fed8edb0098b093929986f4c1a",
+                "lbm.in": "7721a4fe66b52f7d56b32679270cef9166c668b2dca51ece71ebc89c8ada8843",
+                "lbm_r": "ae756749dfec9398e2d3c9b24d9a2f023d21f595fa0e0e31f431e35227544a09"
+              },
+              "execution": {
+                "benchmark": "519.lbm_r",
+                "runner_rc": 0,
+                "icount": null,
+                "host_elapsed_seconds": 36.492087504826486,
+                "commands": [
+                  {
+                    "argv": [
+                      "./lbm_r",
+                      "20",
+                      "reference.dat",
+                      "0",
+                      "1",
+                      "100_100_130_cf_a.of"
+                    ],
+                    "stdout": "lbm.out",
+                    "stderr": "lbm.err"
+                  }
+                ],
+                "expected_commands": 1,
+                "exit_statuses": [
+                  0
+                ],
+                "image_commands": [],
+                "expected_image_commands": 0,
+                "image_exit_statuses": [],
+                "execution_errors": [],
+                "execution_ok": true,
+                "spec_validation": "PENDING",
+                "comparator_manifest_sha256": "c7b5eaf7b6c12da703298feeb93e6b46ec10ad2b34d42d7b6db030f24da6bc05",
+                "host_window": {
+                  "wall_seconds": 34.612322669,
+                  "cpu_seconds": 33.4,
+                  "cpu_tick_hz": 100,
+                  "scope": "One workload invocation including exec/exit; no warm-up, boot, validators or host output collection. Host time, not guest cycles.",
+                  "profiled": false,
+                  "case": 0,
+                  "affinity": [
+                    2
+                  ]
+                }
+              },
+              "errors": [],
+              "comparisons": [
+                {
+                  "name": "lbm.out",
+                  "expected": "7ab5463219d503a3cb54d5bd75b69c6620109b560058de7a20a719796433cdc5",
+                  "actual": "7ab5463219d503a3cb54d5bd75b69c6620109b560058de7a20a719796433cdc5",
+                  "passed": true
+                }
+              ],
+              "images": [],
+              "elapsed_seconds": 37.588122512213886
+            }
+          ],
+          "started_epoch": 1794167766.2189693,
+          "finished_epoch": 1794167803.8073668
+        }
+      },
+      {
+        "benchmark": "519.lbm_r",
+        "variant": "realtime",
+        "qualification": {
+          "status": "PASS",
+          "scope": "Exact output equivalence to qualified baseline; not fresh official comparator execution",
+          "baseline_sha256": "4a7f0201fd8d68a6884996e79a4e8c5979ff544b7d8734666f5c9ea9a999c930",
+          "qemu_sha256": "fdbb824a80998913f93b1eee689a8bc8efd4bd15f8ff995c07a4be7736844e29",
+          "icount": null,
+          "results": [
+            {
+              "benchmark": "519.lbm_r",
+              "status": "PASS",
+              "inputs": {
+                "100_100_130_cf_a.of": "18e20725a7638f3639c9f6304938f5ff9afe12fed8edb0098b093929986f4c1a",
+                "lbm.in": "7721a4fe66b52f7d56b32679270cef9166c668b2dca51ece71ebc89c8ada8843",
+                "lbm_r": "ae756749dfec9398e2d3c9b24d9a2f023d21f595fa0e0e31f431e35227544a09"
+              },
+              "execution": {
+                "benchmark": "519.lbm_r",
+                "runner_rc": 0,
+                "icount": null,
+                "host_elapsed_seconds": 96.62990495562553,
+                "commands": [
+                  {
+                    "argv": [
+                      "./lbm_r",
+                      "20",
+                      "reference.dat",
+                      "0",
+                      "1",
+                      "100_100_130_cf_a.of"
+                    ],
+                    "stdout": "lbm.out",
+                    "stderr": "lbm.err"
+                  }
+                ],
+                "expected_commands": 1,
+                "exit_statuses": [
+                  0
+                ],
+                "image_commands": [],
+                "expected_image_commands": 0,
+                "image_exit_statuses": [],
+                "execution_errors": [],
+                "execution_ok": true,
+                "spec_validation": "PENDING",
+                "comparator_manifest_sha256": "c7b5eaf7b6c12da703298feeb93e6b46ec10ad2b34d42d7b6db030f24da6bc05",
+                "host_window": {
+                  "wall_seconds": 33.305415408,
+                  "cpu_seconds": 33.25,
+                  "cpu_tick_hz": 100,
+                  "scope": "One workload invocation including exec/exit; no warm-up, boot, validators or host output collection. Host time, not guest cycles.",
+                  "profiled": false,
+                  "case": 0,
+                  "affinity": [
+                    2
+                  ]
+                }
+              },
+              "errors": [],
+              "comparisons": [
+                {
+                  "name": "lbm.out",
+                  "expected": "7ab5463219d503a3cb54d5bd75b69c6620109b560058de7a20a719796433cdc5",
+                  "actual": "7ab5463219d503a3cb54d5bd75b69c6620109b560058de7a20a719796433cdc5",
+                  "passed": true
+                }
+              ],
+              "images": [],
+              "elapsed_seconds": 98.82247048337013
+            }
+          ],
+          "started_epoch": 1794167804.9121313,
+          "finished_epoch": 1794167903.7348783
+        }
+      },
+      {
+        "benchmark": "519.lbm_r",
+        "variant": "candidate",
+        "qualification": {
+          "status": "PASS",
+          "scope": "Exact output equivalence to qualified baseline; not fresh official comparator execution",
+          "baseline_sha256": "4a7f0201fd8d68a6884996e79a4e8c5979ff544b7d8734666f5c9ea9a999c930",
+          "qemu_sha256": "fdbb824a80998913f93b1eee689a8bc8efd4bd15f8ff995c07a4be7736844e29",
+          "icount": 0,
+          "results": [
+            {
+              "benchmark": "519.lbm_r",
+              "status": "PASS",
+              "inputs": {
+                "100_100_130_cf_a.of": "18e20725a7638f3639c9f6304938f5ff9afe12fed8edb0098b093929986f4c1a",
+                "lbm.in": "7721a4fe66b52f7d56b32679270cef9166c668b2dca51ece71ebc89c8ada8843",
+                "lbm_r": "ae756749dfec9398e2d3c9b24d9a2f023d21f595fa0e0e31f431e35227544a09"
+              },
+              "execution": {
+                "benchmark": "519.lbm_r",
+                "runner_rc": 0,
+                "icount": 0,
+                "host_elapsed_seconds": 101.59214259125292,
+                "commands": [
+                  {
+                    "argv": [
+                      "./lbm_r",
+                      "20",
+                      "reference.dat",
+                      "0",
+                      "1",
+                      "100_100_130_cf_a.of"
+                    ],
+                    "stdout": "lbm.out",
+                    "stderr": "lbm.err"
+                  }
+                ],
+                "expected_commands": 1,
+                "exit_statuses": [
+                  0
+                ],
+                "image_commands": [],
+                "expected_image_commands": 0,
+                "image_exit_statuses": [],
+                "execution_errors": [],
+                "execution_ok": true,
+                "spec_validation": "PENDING",
+                "comparator_manifest_sha256": "c7b5eaf7b6c12da703298feeb93e6b46ec10ad2b34d42d7b6db030f24da6bc05",
+                "host_window": {
+                  "wall_seconds": 45.095217369,
+                  "cpu_seconds": 45.0,
+                  "cpu_tick_hz": 100,
+                  "scope": "One workload invocation including exec/exit; no warm-up, boot, validators or host output collection. Host time, not guest cycles.",
+                  "profiled": false,
+                  "case": 0,
+                  "affinity": [
+                    2
+                  ]
+                }
+              },
+              "errors": [],
+              "comparisons": [
+                {
+                  "name": "lbm.out",
+                  "expected": "7ab5463219d503a3cb54d5bd75b69c6620109b560058de7a20a719796433cdc5",
+                  "actual": "7ab5463219d503a3cb54d5bd75b69c6620109b560058de7a20a719796433cdc5",
+                  "passed": true
+                }
+              ],
+              "images": [],
+              "elapsed_seconds": 103.78888335451484
+            }
+          ],
+          "started_epoch": 1794167904.8631902,
+          "finished_epoch": 1794168008.6523812
+        }
+      },
+      {
+        "benchmark": "519.lbm_r",
+        "variant": "original",
+        "qualification": {
+          "status": "PASS",
+          "scope": "Exact output equivalence to qualified baseline; not fresh official comparator execution",
+          "baseline_sha256": "4a7f0201fd8d68a6884996e79a4e8c5979ff544b7d8734666f5c9ea9a999c930",
+          "qemu_sha256": "8672296ec36f7098133ea6fd8fe956f0124a7e2f4b3663fe5d43fb48e9d1e180",
+          "icount": 0,
+          "results": [
+            {
+              "benchmark": "519.lbm_r",
+              "status": "PASS",
+              "inputs": {
+                "100_100_130_cf_a.of": "18e20725a7638f3639c9f6304938f5ff9afe12fed8edb0098b093929986f4c1a",
+                "lbm.in": "7721a4fe66b52f7d56b32679270cef9166c668b2dca51ece71ebc89c8ada8843",
+                "lbm_r": "ae756749dfec9398e2d3c9b24d9a2f023d21f595fa0e0e31f431e35227544a09"
+              },
+              "execution": {
+                "benchmark": "519.lbm_r",
+                "runner_rc": 0,
+                "icount": 0,
+                "host_elapsed_seconds": 100.78814890235662,
+                "commands": [
+                  {
+                    "argv": [
+                      "./lbm_r",
+                      "20",
+                      "reference.dat",
+                      "0",
+                      "1",
+                      "100_100_130_cf_a.of"
+                    ],
+                    "stdout": "lbm.out",
+                    "stderr": "lbm.err"
+                  }
+                ],
+                "expected_commands": 1,
+                "exit_statuses": [
+                  0
+                ],
+                "image_commands": [],
+                "expected_image_commands": 0,
+                "image_exit_statuses": [],
+                "execution_errors": [],
+                "execution_ok": true,
+                "spec_validation": "PENDING",
+                "comparator_manifest_sha256": "c7b5eaf7b6c12da703298feeb93e6b46ec10ad2b34d42d7b6db030f24da6bc05",
+                "host_window": {
+                  "wall_seconds": 45.582810484,
+                  "cpu_seconds": 45.48,
+                  "cpu_tick_hz": 100,
+                  "scope": "One workload invocation including exec/exit; no warm-up, boot, validators or host output collection. Host time, not guest cycles.",
+                  "profiled": false,
+                  "case": 0,
+                  "affinity": [
+                    2
+                  ]
+                }
+              },
+              "errors": [],
+              "comparisons": [
+                {
+                  "name": "lbm.out",
+                  "expected": "7ab5463219d503a3cb54d5bd75b69c6620109b560058de7a20a719796433cdc5",
+                  "actual": "7ab5463219d503a3cb54d5bd75b69c6620109b560058de7a20a719796433cdc5",
+                  "passed": true
+                }
+              ],
+              "images": [],
+              "elapsed_seconds": 102.98688098229468
+            }
+          ],
+          "started_epoch": 1794168009.7581673,
+          "finished_epoch": 1794168112.7452974
+        }
+      },
+      {
+        "benchmark": "544.nab_r",
+        "variant": "original",
+        "qualification": {
+          "status": "PASS",
+          "scope": "Exact output equivalence to qualified baseline; not fresh official comparator execution",
+          "baseline_sha256": "4a7f0201fd8d68a6884996e79a4e8c5979ff544b7d8734666f5c9ea9a999c930",
+          "qemu_sha256": "8672296ec36f7098133ea6fd8fe956f0124a7e2f4b3663fe5d43fb48e9d1e180",
+          "icount": 0,
+          "results": [
+            {
+              "benchmark": "544.nab_r",
+              "status": "PASS",
+              "inputs": {
+                "control": "b4c597a6a697daa921344b3259d09dc27eba98dc1d3c9dcede454f4c161d7ebc",
+                "hkrdenq/hkrdenq.pdb": "949eaab83e7a41af1c8853aa1b3ced612438fc9bc071e8f1bf19e59c31d928ee",
+                "hkrdenq/hkrdenq.prm": "bdf8a69346a6e84505c424649a83588b6df46178217e869d58396a97be47435b",
+                "nab_r": "f30ab7275e04c61feb529969243f939c49513f9f4e668db5443931a82e32ecbc"
+              },
+              "execution": {
+                "benchmark": "544.nab_r",
+                "runner_rc": 0,
+                "icount": 0,
+                "host_elapsed_seconds": 112.96367135643959,
+                "commands": [
+                  {
+                    "argv": [
+                      "./nab_r",
+                      "hkrdenq",
+                      "1930344093",
+                      "1000"
+                    ],
+                    "stdout": "hkrdenq.out",
+                    "stderr": "hkrdenq.err"
+                  }
+                ],
+                "expected_commands": 1,
+                "exit_statuses": [
+                  0
+                ],
+                "image_commands": [],
+                "expected_image_commands": 0,
+                "image_exit_statuses": [],
+                "execution_errors": [],
+                "execution_ok": true,
+                "spec_validation": "PENDING",
+                "comparator_manifest_sha256": "817b57e49b608a1f2c7c6ac708966e30c69113348b5350e65df379dde4f5a845",
+                "host_window": {
+                  "wall_seconds": 58.28134851,
+                  "cpu_seconds": 58.13,
+                  "cpu_tick_hz": 100,
+                  "scope": "One workload invocation including exec/exit; no warm-up, boot, validators or host output collection. Host time, not guest cycles.",
+                  "profiled": false,
+                  "case": 0,
+                  "affinity": [
+                    2
+                  ]
+                }
+              },
+              "errors": [],
+              "comparisons": [
+                {
+                  "name": "hkrdenq.out",
+                  "expected": "2d580a95e2e596f2e06485149e9d91880bf47ded5a5495a366a80d4cea2a9afd",
+                  "actual": "2d580a95e2e596f2e06485149e9d91880bf47ded5a5495a366a80d4cea2a9afd",
+                  "passed": true
+                }
+              ],
+              "images": [],
+              "elapsed_seconds": 115.17463001608849
+            }
+          ],
+          "started_epoch": 1794168113.925781,
+          "finished_epoch": 1794168229.1006906
+        }
+      },
+      {
+        "benchmark": "544.nab_r",
+        "variant": "candidate",
+        "qualification": {
+          "status": "PASS",
+          "scope": "Exact output equivalence to qualified baseline; not fresh official comparator execution",
+          "baseline_sha256": "4a7f0201fd8d68a6884996e79a4e8c5979ff544b7d8734666f5c9ea9a999c930",
+          "qemu_sha256": "fdbb824a80998913f93b1eee689a8bc8efd4bd15f8ff995c07a4be7736844e29",
+          "icount": 0,
+          "results": [
+            {
+              "benchmark": "544.nab_r",
+              "status": "PASS",
+              "inputs": {
+                "control": "b4c597a6a697daa921344b3259d09dc27eba98dc1d3c9dcede454f4c161d7ebc",
+                "hkrdenq/hkrdenq.pdb": "949eaab83e7a41af1c8853aa1b3ced612438fc9bc071e8f1bf19e59c31d928ee",
+                "hkrdenq/hkrdenq.prm": "bdf8a69346a6e84505c424649a83588b6df46178217e869d58396a97be47435b",
+                "nab_r": "f30ab7275e04c61feb529969243f939c49513f9f4e668db5443931a82e32ecbc"
+              },
+              "execution": {
+                "benchmark": "544.nab_r",
+                "runner_rc": 0,
+                "icount": 0,
+                "host_elapsed_seconds": 108.03421444632113,
+                "commands": [
+                  {
+                    "argv": [
+                      "./nab_r",
+                      "hkrdenq",
+                      "1930344093",
+                      "1000"
+                    ],
+                    "stdout": "hkrdenq.out",
+                    "stderr": "hkrdenq.err"
+                  }
+                ],
+                "expected_commands": 1,
+                "exit_statuses": [
+                  0
+                ],
+                "image_commands": [],
+                "expected_image_commands": 0,
+                "image_exit_statuses": [],
+                "execution_errors": [],
+                "execution_ok": true,
+                "spec_validation": "PENDING",
+                "comparator_manifest_sha256": "817b57e49b608a1f2c7c6ac708966e30c69113348b5350e65df379dde4f5a845",
+                "host_window": {
+                  "wall_seconds": 52.361279919,
+                  "cpu_seconds": 52.26,
+                  "cpu_tick_hz": 100,
+                  "scope": "One workload invocation including exec/exit; no warm-up, boot, validators or host output collection. Host time, not guest cycles.",
+                  "profiled": false,
+                  "case": 0,
+                  "affinity": [
+                    2
+                  ]
+                }
+              },
+              "errors": [],
+              "comparisons": [
+                {
+                  "name": "hkrdenq.out",
+                  "expected": "2d580a95e2e596f2e06485149e9d91880bf47ded5a5495a366a80d4cea2a9afd",
+                  "actual": "2d580a95e2e596f2e06485149e9d91880bf47ded5a5495a366a80d4cea2a9afd",
+                  "passed": true
+                }
+              ],
+              "images": [],
+              "elapsed_seconds": 110.23553413245827
+            }
+          ],
+          "started_epoch": 1794168230.2692883,
+          "finished_epoch": 1794168340.5050929
+        }
+      },
+      {
+        "benchmark": "544.nab_r",
+        "variant": "realtime",
+        "qualification": {
+          "status": "PASS",
+          "scope": "Exact output equivalence to qualified baseline; not fresh official comparator execution",
+          "baseline_sha256": "4a7f0201fd8d68a6884996e79a4e8c5979ff544b7d8734666f5c9ea9a999c930",
+          "qemu_sha256": "fdbb824a80998913f93b1eee689a8bc8efd4bd15f8ff995c07a4be7736844e29",
+          "icount": null,
+          "results": [
+            {
+              "benchmark": "544.nab_r",
+              "status": "PASS",
+              "inputs": {
+                "control": "b4c597a6a697daa921344b3259d09dc27eba98dc1d3c9dcede454f4c161d7ebc",
+                "hkrdenq/hkrdenq.pdb": "949eaab83e7a41af1c8853aa1b3ced612438fc9bc071e8f1bf19e59c31d928ee",
+                "hkrdenq/hkrdenq.prm": "bdf8a69346a6e84505c424649a83588b6df46178217e869d58396a97be47435b",
+                "nab_r": "f30ab7275e04c61feb529969243f939c49513f9f4e668db5443931a82e32ecbc"
+              },
+              "execution": {
+                "benchmark": "544.nab_r",
+                "runner_rc": 0,
+                "icount": null,
+                "host_elapsed_seconds": 100.28074895497411,
+                "commands": [
+                  {
+                    "argv": [
+                      "./nab_r",
+                      "hkrdenq",
+                      "1930344093",
+                      "1000"
+                    ],
+                    "stdout": "hkrdenq.out",
+                    "stderr": "hkrdenq.err"
+                  }
+                ],
+                "expected_commands": 1,
+                "exit_statuses": [
+                  0
+                ],
+                "image_commands": [],
+                "expected_image_commands": 0,
+                "image_exit_statuses": [],
+                "execution_errors": [],
+                "execution_ok": true,
+                "spec_validation": "PENDING",
+                "comparator_manifest_sha256": "817b57e49b608a1f2c7c6ac708966e30c69113348b5350e65df379dde4f5a845",
+                "host_window": {
+                  "wall_seconds": 39.035682063,
+                  "cpu_seconds": 38.93,
+                  "cpu_tick_hz": 100,
+                  "scope": "One workload invocation including exec/exit; no warm-up, boot, validators or host output collection. Host time, not guest cycles.",
+                  "profiled": false,
+                  "case": 0,
+                  "affinity": [
+                    2
+                  ]
+                }
+              },
+              "errors": [],
+              "comparisons": [
+                {
+                  "name": "hkrdenq.out",
+                  "expected": "2d580a95e2e596f2e06485149e9d91880bf47ded5a5495a366a80d4cea2a9afd",
+                  "actual": "2d580a95e2e596f2e06485149e9d91880bf47ded5a5495a366a80d4cea2a9afd",
+                  "passed": true
+                }
+              ],
+              "images": [],
+              "elapsed_seconds": 102.46400624420494
+            }
+          ],
+          "started_epoch": 1794168341.6705136,
+          "finished_epoch": 1794168444.1347983
+        }
+      },
+      {
+        "benchmark": "544.nab_r",
+        "variant": "realtime",
+        "qualification": {
+          "status": "PASS",
+          "scope": "Exact output equivalence to qualified baseline; not fresh official comparator execution",
+          "baseline_sha256": "4a7f0201fd8d68a6884996e79a4e8c5979ff544b7d8734666f5c9ea9a999c930",
+          "qemu_sha256": "fdbb824a80998913f93b1eee689a8bc8efd4bd15f8ff995c07a4be7736844e29",
+          "icount": null,
+          "results": [
+            {
+              "benchmark": "544.nab_r",
+              "status": "PASS",
+              "inputs": {
+                "control": "b4c597a6a697daa921344b3259d09dc27eba98dc1d3c9dcede454f4c161d7ebc",
+                "hkrdenq/hkrdenq.pdb": "949eaab83e7a41af1c8853aa1b3ced612438fc9bc071e8f1bf19e59c31d928ee",
+                "hkrdenq/hkrdenq.prm": "bdf8a69346a6e84505c424649a83588b6df46178217e869d58396a97be47435b",
+                "nab_r": "f30ab7275e04c61feb529969243f939c49513f9f4e668db5443931a82e32ecbc"
+              },
+              "execution": {
+                "benchmark": "544.nab_r",
+                "runner_rc": 0,
+                "icount": null,
+                "host_elapsed_seconds": 40.970810355618596,
+                "commands": [
+                  {
+                    "argv": [
+                      "./nab_r",
+                      "hkrdenq",
+                      "1930344093",
+                      "1000"
+                    ],
+                    "stdout": "hkrdenq.out",
+                    "stderr": "hkrdenq.err"
+                  }
+                ],
+                "expected_commands": 1,
+                "exit_statuses": [
+                  0
+                ],
+                "image_commands": [],
+                "expected_image_commands": 0,
+                "image_exit_statuses": [],
+                "execution_errors": [],
+                "execution_ok": true,
+                "spec_validation": "PENDING",
+                "comparator_manifest_sha256": "817b57e49b608a1f2c7c6ac708966e30c69113348b5350e65df379dde4f5a845",
+                "host_window": {
+                  "wall_seconds": 39.200164822,
+                  "cpu_seconds": 39.11,
+                  "cpu_tick_hz": 100,
+                  "scope": "One workload invocation including exec/exit; no warm-up, boot, validators or host output collection. Host time, not guest cycles.",
+                  "profiled": false,
+                  "case": 0,
+                  "affinity": [
+                    2
+                  ]
+                }
+              },
+              "errors": [],
+              "comparisons": [
+                {
+                  "name": "hkrdenq.out",
+                  "expected": "2d580a95e2e596f2e06485149e9d91880bf47ded5a5495a366a80d4cea2a9afd",
+                  "actual": "2d580a95e2e596f2e06485149e9d91880bf47ded5a5495a366a80d4cea2a9afd",
+                  "passed": true
+                }
+              ],
+              "images": [],
+              "elapsed_seconds": 42.064338074065745
+            }
+          ],
+          "started_epoch": 1794168445.2882435,
+          "finished_epoch": 1794168487.3528266
+        }
+      },
+      {
+        "benchmark": "544.nab_r",
+        "variant": "candidate",
+        "qualification": {
+          "status": "PASS",
+          "scope": "Exact output equivalence to qualified baseline; not fresh official comparator execution",
+          "baseline_sha256": "4a7f0201fd8d68a6884996e79a4e8c5979ff544b7d8734666f5c9ea9a999c930",
+          "qemu_sha256": "fdbb824a80998913f93b1eee689a8bc8efd4bd15f8ff995c07a4be7736844e29",
+          "icount": 0,
+          "results": [
+            {
+              "benchmark": "544.nab_r",
+              "status": "PASS",
+              "inputs": {
+                "control": "b4c597a6a697daa921344b3259d09dc27eba98dc1d3c9dcede454f4c161d7ebc",
+                "hkrdenq/hkrdenq.pdb": "949eaab83e7a41af1c8853aa1b3ced612438fc9bc071e8f1bf19e59c31d928ee",
+                "hkrdenq/hkrdenq.prm": "bdf8a69346a6e84505c424649a83588b6df46178217e869d58396a97be47435b",
+                "nab_r": "f30ab7275e04c61feb529969243f939c49513f9f4e668db5443931a82e32ecbc"
+              },
+              "execution": {
+                "benchmark": "544.nab_r",
+                "runner_rc": 0,
+                "icount": 0,
+                "host_elapsed_seconds": 54.141763128340244,
+                "commands": [
+                  {
+                    "argv": [
+                      "./nab_r",
+                      "hkrdenq",
+                      "1930344093",
+                      "1000"
+                    ],
+                    "stdout": "hkrdenq.out",
+                    "stderr": "hkrdenq.err"
+                  }
+                ],
+                "expected_commands": 1,
+                "exit_statuses": [
+                  0
+                ],
+                "image_commands": [],
+                "expected_image_commands": 0,
+                "image_exit_statuses": [],
+                "execution_errors": [],
+                "execution_ok": true,
+                "spec_validation": "PENDING",
+                "comparator_manifest_sha256": "817b57e49b608a1f2c7c6ac708966e30c69113348b5350e65df379dde4f5a845",
+                "host_window": {
+                  "wall_seconds": 52.161160699,
+                  "cpu_seconds": 52.05,
+                  "cpu_tick_hz": 100,
+                  "scope": "One workload invocation including exec/exit; no warm-up, boot, validators or host output collection. Host time, not guest cycles.",
+                  "profiled": false,
+                  "case": 0,
+                  "affinity": [
+                    2
+                  ]
+                }
+              },
+              "errors": [],
+              "comparisons": [
+                {
+                  "name": "hkrdenq.out",
+                  "expected": "2d580a95e2e596f2e06485149e9d91880bf47ded5a5495a366a80d4cea2a9afd",
+                  "actual": "2d580a95e2e596f2e06485149e9d91880bf47ded5a5495a366a80d4cea2a9afd",
+                  "passed": true
+                }
+              ],
+              "images": [],
+              "elapsed_seconds": 55.24276075232774
+            }
+          ],
+          "started_epoch": 1794168488.4522667,
+          "finished_epoch": 1794168543.695275
+        }
+      },
+      {
+        "benchmark": "544.nab_r",
+        "variant": "original",
+        "qualification": {
+          "status": "PASS",
+          "scope": "Exact output equivalence to qualified baseline; not fresh official comparator execution",
+          "baseline_sha256": "4a7f0201fd8d68a6884996e79a4e8c5979ff544b7d8734666f5c9ea9a999c930",
+          "qemu_sha256": "8672296ec36f7098133ea6fd8fe956f0124a7e2f4b3663fe5d43fb48e9d1e180",
+          "icount": 0,
+          "results": [
+            {
+              "benchmark": "544.nab_r",
+              "status": "PASS",
+              "inputs": {
+                "control": "b4c597a6a697daa921344b3259d09dc27eba98dc1d3c9dcede454f4c161d7ebc",
+                "hkrdenq/hkrdenq.pdb": "949eaab83e7a41af1c8853aa1b3ced612438fc9bc071e8f1bf19e59c31d928ee",
+                "hkrdenq/hkrdenq.prm": "bdf8a69346a6e84505c424649a83588b6df46178217e869d58396a97be47435b",
+                "nab_r": "f30ab7275e04c61feb529969243f939c49513f9f4e668db5443931a82e32ecbc"
+              },
+              "execution": {
+                "benchmark": "544.nab_r",
+                "runner_rc": 0,
+                "icount": 0,
+                "host_elapsed_seconds": 60.46653825324029,
+                "commands": [
+                  {
+                    "argv": [
+                      "./nab_r",
+                      "hkrdenq",
+                      "1930344093",
+                      "1000"
+                    ],
+                    "stdout": "hkrdenq.out",
+                    "stderr": "hkrdenq.err"
+                  }
+                ],
+                "expected_commands": 1,
+                "exit_statuses": [
+                  0
+                ],
+                "image_commands": [],
+                "expected_image_commands": 0,
+                "image_exit_statuses": [],
+                "execution_errors": [],
+                "execution_ok": true,
+                "spec_validation": "PENDING",
+                "comparator_manifest_sha256": "817b57e49b608a1f2c7c6ac708966e30c69113348b5350e65df379dde4f5a845",
+                "host_window": {
+                  "wall_seconds": 58.333463911,
+                  "cpu_seconds": 58.19,
+                  "cpu_tick_hz": 100,
+                  "scope": "One workload invocation including exec/exit; no warm-up, boot, validators or host output collection. Host time, not guest cycles.",
+                  "profiled": false,
+                  "case": 0,
+                  "affinity": [
+                    2
+                  ]
+                }
+              },
+              "errors": [],
+              "comparisons": [
+                {
+                  "name": "hkrdenq.out",
+                  "expected": "2d580a95e2e596f2e06485149e9d91880bf47ded5a5495a366a80d4cea2a9afd",
+                  "actual": "2d580a95e2e596f2e06485149e9d91880bf47ded5a5495a366a80d4cea2a9afd",
+                  "passed": true
+                }
+              ],
+              "images": [],
+              "elapsed_seconds": 61.56285200547427
+            }
+          ],
+          "started_epoch": 1794168544.8169577,
+          "finished_epoch": 1794168606.3800673
+        }
+      }
+    ]
+  },
+  "workload_method": "Unmodified official test commands, CPU2, original/candidate/realtime/realtime/candidate/original, one original invocation per window without warmup. All 18 qualify against previously officially qualified hashes; not a fresh official comparator run.",
+  "bounded": {
+    "host_codec": {
+      "representable.log": "representable: 1388832 cases, 411224 keep, 977608 clear, 0 mismatches\nPASS: negative control always-keep detected\nPASS: negative control canonical-new detected\nPASS: negative control coarse-fastpath detected\n",
+      "codec.log": "CODEC-PASS: 6014628 checks, 0 failures\n",
+      "rtl-model.log": "r60-window: 10640 cases, 25 inexact sources skipped\nr60-window: 10640 cases, rtl keeps 3066 / clears 7574, mismatches 0\n"
+    },
+    "instructions": {
+      "store-code.log": "PASS store-code exact=0 ids=30\nPASS store-code exact=0 ids=55\nPASS store-code exact=1 ids=30\nPASS store-code exact=1 ids=55\nArtifacts: /tmp/capstone/copyable-store.g2ck3V\n",
+      "cursor-window.log": "PASS cursor-window exact=0 ids=30\nPASS cursor-window exact=0 ids=55\nPASS cursor-window exact=1 ids=30\nPASS cursor-window exact=1 ids=55\nArtifacts: /tmp/capstone/copyable-cursor.wOKljD\n",
+      "checked-copy.log": "PASS read rc=0\nPASS scalar_result rc=0\nPASS transport rc=0\nPASS transport_forged_frame rc=0\nPASS transport_retired rc=0\nPASS exported rc=0\nPASS transport_epoch rc=0\nPASS supervisor_read rc=0\nPASS supervisor_write rc=0\nPASS write rc=0\nPASS zero_end rc=0\nPASS untagged rc=0\nPASS rights_read rc=0\nPASS rights_write rc=0\nPASS bounds rc=0\nPASS overflow rc=0\nPASS epoch rc=0\nPASS zero_epoch rc=0\nPASS slot rc=0\nPASS reserved rc=0\nPASS root rc=0\nPASS translation rc=0\nPASS frame rc=0\nPASS descriptor rc=0\nPASS mmio rc=0\nPASS retired rc=0\nPASS generation rc=0\nPASS forged_frame rc=0\nPASS discard rc=0\nPASS resume_epoch rc=0\nPASS write_only rc=0\nPASS read_only rc=0\nPASS cap_mode rc=0\nPASS user_mode rc=0\nPASS default_off rc=0\nchecked-copy ISA failures=0\n",
+      "sfence-fixed-baseline.log": "PASS page_remap\nPASS superpage_remap_other_page\nPASS superpage_exec_remap\nPASS superpage_exec_after_page_flush\nPASS page_remap_asid\nPASS superpage_exec_after_watchpoint_flush\nPASS page_accessed_dirty\nPASS superpage_accessed_dirty\nPASS page_fence_keeps_other_page\n9/9 passed; logs: /tmp/capstone/sfence-page.1CUWVw\n",
+      "sfence-fixed-candidate.log": "PASS page_remap\nPASS superpage_remap_other_page\nPASS superpage_exec_remap\nPASS superpage_exec_after_page_flush\nPASS page_remap_asid\nPASS superpage_exec_after_watchpoint_flush\nPASS page_accessed_dirty\nPASS superpage_accessed_dirty\nPASS page_fence_keeps_other_page\n9/9 passed; logs: /tmp/capstone/sfence-page.SIMLof\n"
+    },
+    "safety_log": "START io-icount\nPASS io-icount 0\nSTART directory-icount\nPASS directory-icount 0\nSTART race-icount\nPASS race-icount 0\nSTART race-file-icount\nPASS race-file-icount 0\nSTART io-realtime\nPASS io-realtime 0\nSTART directory-realtime\nPASS directory-realtime 0\nSTART race-realtime\nPASS race-realtime 0\nSTART race-file-realtime\nPASS race-file-realtime 0\n",
+    "safety_scope": "I/O/lifecycle including stop/resume/kill, directory/dup/timers, two 41-case race groups including 17 unsafe controls each, in icount0 and realtime. One-hart software qualification."
+  },
+  "host_counters": "host-counter-qualification.json: 19.97% fewer host instructions, 13.37% fewer host cycles; diagnostic times excluded.",
+  "full_spec": {
+    "status": "RUNNING",
+    "path": "/tmp/capstone/qemu-next-01/spec-full",
+    "modes": [
+      "icount0",
+      "realtime"
+    ]
+  },
+  "limitations": [
+    "Two samples per timing variant; LBM original samples drift from 48.10 to 45.48 seconds, so its mean gain is less precise.",
+    "Only three original short workloads timed; no full-SPEC score or hardware speed claim.",
+    "Default QEMU gitlink and native RTL handoff remain unchanged pending full qualification.",
+    "Later STC code-page lookup experiment 81246125dc is separate and not included in these measurements."
+  ],
+  "evidence": {
+    "archive": "/tmp/capstone/qemu-next-bounded-01-evidence.tar.gz",
+    "sha256": "59b28d3cb8c393d1978b49b13248317c371d4858e915e6dff470243604e864f5",
+    "instruction_artifacts": {
+      "archive": "/tmp/capstone/qemu-next-instruction-artifacts-01.tar.gz",
+      "sha256": "9efdc39b8e3588d551d28bd41315eb2fdc9a1fb0183219609ba74daedc39eb20"
+    }
+  }
+}

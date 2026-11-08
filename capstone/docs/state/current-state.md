@@ -1,3 +1,17 @@
+## Combined QEMU candidate: thirteen percent less GCC host CPU
+
+The stable fresh ABBA confirmation gives 27.480s original versus 23.835s
+combined Clang/LTO per 50 GCC compilations (13.26% less host CPU). Separate
+counter runs show 19.97% fewer host instructions and 13.37% fewer host cycles.
+Unchanged SPEC test-command pairs pass for GCC, LBM and NAB, with mean CPU
+reductions of 15.54%, 3.51% and 10.32%; LBM has greater baseline variation.
+All eight task/timer/race groups pass in icount0 and explicit realtime mode.
+Runtime `d81f426a7c` combines the cursor/bounds stack, Clang scope repair, STC
+dirty-page reuse and local-cursor shortcut; `f3b74f0646` repairs only the SFENCE
+test epilogue. Full ten-entry regression is running in both clock modes.
+Default pin and native RTL handoff remain fixed. No hardware speed claim.
+[Qualification and raw samples](../../runtime/virtual/tests/qemu-throughput/combined-qualification.json).
+
 ## Clang/LTO candidate: twelve percent less GCC host CPU
 
 The reversed-order 50-compilation confirmation gives 32.640s original versus

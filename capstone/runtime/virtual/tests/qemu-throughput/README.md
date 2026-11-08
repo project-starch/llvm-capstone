@@ -4,6 +4,15 @@ Branch `perf/qemu-throughput`, based on the full-SPEC-qualified native branch at
 `2b25f1714a5e`. This experiment measures emulator host time, not RTL cycles.
 No capability checks, emulated semantics or runtime defaults are weakened.
 
+The [combined candidate](combined-qualification.json) saves 13.26% host CPU in
+the stable 50-compilation GCC confirmation (27.480s to 23.835s). Unchanged SPEC
+GCC/LBM/NAB commands pass, with 15.54% / 3.51% / 10.32% mean CPU reductions in
+icount mode; LBM's baseline varies more. Explicit no-icount reduces their host
+CPU by 43.90% / 28.78% / 32.91% versus the original icount build. These clock
+modes remain separate. All eight bounded safety groups pass in both modes;
+full ten-entry regression is running before the default pin can advance.
+The runtime is QEMU `d81f426a7c`; `f3b74f0646` adds only a test-epilogue repair.
+
 Four controls use the same patched kernel, rootfs, OpenSBI and GCC test input:
 
 | Arm | Emulator | Machine / guest executable |

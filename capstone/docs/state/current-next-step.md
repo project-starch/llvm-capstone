@@ -1,27 +1,29 @@
 ## QEMU feedback-speed investigation
 
-Continue on `perf/qemu-throughput`, leaving the native RTL handoff branch fixed.
-[The matched host-throughput baseline](../../runtime/virtual/tests/qemu-throughput/README.md)
-and separate host profiles are complete for one small repeated GCC input.
-The integration candidate in QEMU `perf/qemu-throughput` at `80eaf2c89b`
-now includes cursor-window equivalence, bounds-only encoding and additional
-in-place instruction tests. Its three-way GCC confirmation saves 5.05% host CPU
-against the original fork, with six short SPEC output regressions passing.
-An optional LTO build brings the combined GCC reduction to 8.06%; task/timer
-and both race groups pass with and without icount. Next finish the ten-entry
-SPEC output regression on the strongest build before advancing the default pin. Clang/LTO now saves
-12.32% host CPU in the repeated GCC confirmation; explicit no-icount saves
-26.72% against original. Both modes pass bounded safety checks. The single-bit dirty-update and sufficient local-cursor
-candidates passed bounded correctness checks but showed no useful gain;
-neither is integrated. Keep profile shares distinct from demonstrated savings.
-The tag-lookup and QOM-debug candidates showed no measurable native benefit.
-The old LIN tag-writer bootstrap fails on the copyable-only baseline; use current
-fixtures and keep its passing NONLIN device arms separate.
-The scalar PC-relative control is complete and does not explain platform-plain's
-speed difference. Separate the remaining CPU, machine and kernel configuration
-changes before attributing that difference to capability handling. Explicit no-icount runner options now pass task/timer and race gates;
-extend application coverage before recommending them for a broad fast test mode.
-Keep deterministic counts and hardware performance claims separate. Do not remove checks to make QEMU fast.
+Continue on `perf/qemu-throughput`, leaving the native RTL handoff fixed.
+The [combined candidate](../../runtime/virtual/tests/qemu-throughput/combined-qualification.json)
+saves 13.26% host CPU in a fresh stable GCC confirmation; independent counters
+show 19.97% fewer host instructions. Original GCC, LBM and NAB commands pass
+paired comparisons, and all eight task/timer/race groups pass with icount0 and
+explicit realtime mode. Full ten-entry SPEC output regression is now running
+in both modes. Finish it before advancing the default QEMU pin. Preserve the
+individual workloads, host-speed shift and original-versus-realtime distinction.
+
+QEMU `perf/qemu-throughput-next` at `f3b74f0646` includes runtime `d81f426a7c`
+and a copyable-profile SFENCE test epilogue. Its nine cases pass on baseline
+and candidate. A further STC code-page lookup experiment (`81246125dc`) stays
+separate until its TLB invariant, subpage PMP behavior and performance are
+checked. Do not restart or silently replace the full-suite candidate.
+
+The scalar controls now explain the platform/plain speed: U-mode avoids the
+legacy per-store helper, and reversing the existing page-specific SFENCE path
+costs about 60% more host CPU in both measurement orders. The latter feature
+already belongs to the native handoff baseline. ThinLTO links faster here but
+runs the GCC fixture 1.45% slower; record host affinity on this hybrid CPU.
+Tag-lookup reuse, QOM-debug removal, bitmap specialization and the earlier
+redundant-copy experiment did not establish useful native gains. Keep those
+negative results and all profiling timings separate from clean comparisons.
+No result here predicts RTL performance or permits weaker security checks.
 
 ## RTL implementation from the rebased native branch
 
