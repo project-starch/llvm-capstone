@@ -22,12 +22,14 @@ Runs: `$CAPSTONE_WORK/spec/board/out-xp-b3`, `out-xp2-b2`, `out-split1-b3` (`gue
   - So the last logged trap is an STI (0x8000000000000005) at mepc.
 - **Where mepc points.**
   - perlbench: 0x2aca438fa0, the launcher.
-  - gcc: 0x3fba60df8c and 0x3fad876ef0. These are 291 MB and 105 MB above the runs' domain image bases
-    (0x3fa90a5000, 0x3fa7402000; image 405,504 bytes), so they are not domain code. The vDSO is the likely
-    executable mapping there (UNRESOLVED without a map).
-  - So all three ticks landed in user code, as a real trap.
-  - The log is commit's exception output after the escape strip (`cva6.sv:2084`), and a context runs with
-    interrupts masked (entry: mie, mideleg, mip = 0, mstatus.MIE = 0; the module enters under `local_irq_save`).
+  - gcc: 0x3fba60df8c and 0x3fad876ef0, in the 0x3f.. mmap range where the launcher maps the domain image.
+  - WITHDRAWN (8 Nov, same day, before any run): an earlier version said these lie 105-291 MB above "the domain image".
+    That base (0x3fa90a5000, 405,504 bytes) is the CONTROL step's ADD_OK line (out-xp-b3 board.txt:107, inside
+    `@@STEP-BEGIN control`), not gcc's. gcc's image base is unknown, so these may be gcc domain code: UNRESOLVED.
+  - The log is commit's exception output after the escape strip (`cva6.sv:2084`), and a context runs with interrupts
+    masked (entry: mie, mideleg, mip = 0, mstatus.MIE = 0; the module enters under `local_irq_save`).
+  - If mepc is domain code, then a logged interrupt at a domain pc means a domain instruction reached commit with an
+    interrupt marked while supervision was off. That is an RTL-level anomaly.
 - **Nothing unfiltered was logged after that STI.**
   - The next MTI would log 0x87, the tick's re-arm ecall 0x89, and any page fault 0x8c/0x8d/0x8f.
   - OpenSBI masks MTIE when it forwards a timer interrupt, and only `sbi_set_timer` (the re-arm in
@@ -43,6 +45,13 @@ Runs: `$CAPSTONE_WORK/spec/board/out-xp-b3`, `out-xp2-b2`, `out-split1-b3` (`gue
     held at commit and never taken.
   - The commit-pc aperture reads 0xffffffff817ffffe (both gcc runs), 0xffffffff813ffffe (perlbench), and
     0xffffffff803ffffe (pb10): always ...ffffe. Recorded, not understood.
+- **The machine was static at the wedge reads.** The driver reads every aperture twice, 0.6 s apart, and prints
+  UNSTABLE on a change. All three cvprof wedges have ZERO UNSTABLE lines over about 25 apertures, the 8-byte commit
+  pc included. The check fires: out-hfl's heartbeat-limit stop, with its kernel alive, has 12, among them
+  224 0x7f -> 0xff.
+  - out-hfl's live system also reads 220 0xcf, 221 0xfe, 222 0x6e, 193 7, 194 3, the same as the cvprof wedges. So
+    those LSU/tag values are not wedge evidence, and 224 = 0xff also occurs on a live system.
+  - The E arms calibrate stability: how many UNSTABLE lines a software stall inside the tick produces.
 - **No panic, Oops, BUG or RCU line in any of the three transcripts.**
 - **The context itself is untouched.** perlbench with (out-xp2-b2) and without (out-best-b2) cvprof, 205 contexts
   matched in order: the context cycle-count ratio has median 1.000 (5th-95th percentile 0.998-1.004). Wall-clock lag
