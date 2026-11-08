@@ -7,16 +7,19 @@ The integration candidate in QEMU `perf/qemu-throughput` at `80eaf2c89b`
 now includes cursor-window equivalence, bounds-only encoding and additional
 in-place instruction tests. Its three-way GCC confirmation saves 5.05% host CPU
 against the original fork, with six short SPEC output regressions passing.
-Next complete broader safety/application qualification, test LTO as an isolated
-build control, and measure any further candidate separately before advancing
-the default pin. Keep profile shares distinct from demonstrated savings.
+An optional LTO build brings the combined GCC reduction to 8.06%; task/timer
+and both race groups pass with and without icount. Next finish the ten-entry
+SPEC output regression and compare host compiler/build options before
+advancing the default pin. The single-bit dirty-update and sufficient local-cursor
+candidates passed bounded correctness checks but showed no useful gain;
+neither is integrated. Keep profile shares distinct from demonstrated savings.
 The tag-lookup and QOM-debug candidates showed no measurable native benefit.
 The old LIN tag-writer bootstrap fails on the copyable-only baseline; use current
 fixtures and keep its passing NONLIN device arms separate.
 Add a scalar PC-relative translation control before attributing platform-plain's
-speed difference to capability handling. If proposing a no-icount fast test mode,
-first run timer/preemption, lifetime and race gates; keep deterministic counts
-and hardware performance claims separate. Do not remove checks to make QEMU fast.
+speed difference to capability handling. Explicit no-icount runner options now pass task/timer and race gates;
+extend application coverage before recommending them for a broad fast test mode.
+Keep deterministic counts and hardware performance claims separate. Do not remove checks to make QEMU fast.
 
 ## RTL implementation from the rebased native branch
 

@@ -400,3 +400,30 @@ one warm-up match. Its largest named self costs include capability loads/stores
 and dirty-bitmap updates. LTO changes inlining, so individual symbol shares
 cannot be compared directly with the original non-LTO profile. The profile's
 wall and CPU times are excluded from clean timing comparisons.
+
+
+## Additional source candidates: no useful gain established
+
+The [next three-way comparison](additional-candidates.json) keeps the accepted
+LTO build as its baseline and tests two changes independently:
+
+| Build | Native GCC mean CPU (20 compilations) | Plain mean CPU (100 compilations) |
+| --- | ---: | ---: |
+| Accepted LTO baseline | 11.975s | 5.825s |
+| Single-bit atomic bitmap path | 12.020s | 5.850s |
+| Sufficient local-cursor predicate | 11.930s | 5.890s |
+
+All 720 timed outputs and 12 warm-ups match. The bitmap specialization is
+slightly slower; the small-cursor native shift (0.38%) is unresolved and its
+plain control moves the other way. **Neither runtime change is integrated.**
+QEMU branches `perf/bitmap-single-bit` (`d1289780e4`) and
+`perf/cursor-small-step` (`665949035b`) retain the experiments for review.
+
+The bitmap path keeps the same atomic OR and ordering, and passes the bitmap
+unit suite. The cursor shortcut proves that equal upper 53 cursor bits imply
+equal window keys for every nonnegative encoding exponent. It preserves old
+wide-ID canonicalization and all new-cursor bits. Its 1,388,832 differential
+checks, sanitizer and three negative controls pass, including an intentionally
+too-large shortcut; codec and independent RTL-model checks also pass. Both
+candidates pass the actual cursor-edge and 35 checked-copy cases. These
+correctness results do not establish a useful speedup.

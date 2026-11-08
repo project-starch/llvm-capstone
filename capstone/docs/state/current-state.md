@@ -1,3 +1,16 @@
+## Optional LTO candidate: eight percent less GCC host CPU
+
+QEMU `80eaf2c89b` with the matched O2/assertion settings and LTO uses 30.000s
+mean host CPU versus 32.630s original in the 50-compilation confirmation
+(8.06% less, 3.55% incremental over the bounds-only build). All 780 timed
+outputs and 14 warm-ups match; six short SPEC entries match qualified hashes.
+Task lifecycle, timer/directory/dup checks and both 41-scenario race groups
+with negative controls pass in icount0 and explicit wall-clock mode. LTO adds
+about 17s to this host's link step, so the build option remains explicit.
+The full suite is being extended separately; default pin and native handoff
+remain fixed. These are emulator host costs, not hardware performance.
+[Samples and qualification](../../runtime/virtual/tests/qemu-throughput/lto-qualification.json).
+
 ## QEMU bounds-only refinement: five percent less GCC host CPU
 
 The QEMU integration candidate `perf/qemu-throughput` at `80eaf2c89b` combines
