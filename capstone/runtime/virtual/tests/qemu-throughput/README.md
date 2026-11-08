@@ -363,3 +363,40 @@ Removing two additional temporary capability copies did not improve throughput:
 (about 0.56% slower). The [experiment](move-copies-qualification.json) remains on
 `perf/cursor-move-copies`; its runtime change is excluded from integration.
 The extra in-place cursor tests are retained. No security checks were removed.
+
+
+## Optional LTO build and functional clock modes
+
+With the same source (`80eaf2c89b`), `-O2`, assertions and QOM cast debugging,
+link-time optimization further reduces native GCC host CPU. The three-way
+50-compilation confirmation gives 32.630s original, 31.105s bounds-only and
+30.000s bounds-only with LTO: **8.06% less than original**, or 3.55% incremental.
+All 780 timed compilations and 14 warm-ups match. The 20-compilation cohort
+agrees in direction. [Samples, build settings and safety checks](lto-qualification.json).
+
+LTO is optional: its observed link step took 17.9s versus 0.5s without LTO.
+This can pay off over longer campaigns but adds cost to each emulator rebuild.
+The explicit builder preserves the baseline options:
+
+```bash
+source capstone/tests/capstone-test-env.sh
+capstone/runtime/virtual/tests/qemu-throughput/build-candidate.sh   "$QEMU_REPO" 80eaf2c89b "$CAPSTONE_TMP_ROOT/qemu-candidate" --lto
+```
+
+Omit `--lto` for a normal build; use a fresh output directory. The builder records
+the source revision, configure command/options, build logs and binary hash.
+`QEMU_BUILD_JOBS` and `QEMU_LTO_THREADS` control build parallelism only.
+
+`run-musl-io.py`, `run-directory.py`, `run-spec-tests.py` and `qualify-spec.py`
+now accept explicit `--no-icount` for functional tests. Their default remains
+icount0. The LTO candidate passes I/O, task lifecycle (including compute
+stop/resume/kill), directory/dup/timer checks, and both 41-scenario race groups
+with their negative controls in **both** modes. Six short SPEC entries also
+match the qualified baseline in icount0. Full-suite checks continue separately.
+Wall-clock mode does not provide deterministic guest instruction counts.
+
+The fresh LTO profile has zero lost samples; all 100 diagnostic GCC outputs and
+one warm-up match. Its largest named self costs include capability loads/stores
+and dirty-bitmap updates. LTO changes inlining, so individual symbol shares
+cannot be compared directly with the original non-LTO profile. The profile's
+wall and CPU times are excluded from clean timing comparisons.
