@@ -10,6 +10,7 @@ import subprocess
 import time
 from qemu_lock import qemu_lock
 from host_window import HostWindow
+from host_profile import HostProfile
 
 
 def main():
@@ -19,6 +20,8 @@ def main():
     p.add_argument('--cpu', default='rv64,sstc=false,h=false,sv48=false,sv57=false,x-capstone-u-mode=true')
     p.add_argument('--host-window', action='store_true',
                    help='Measure host wall/CPU time between HOST_WINDOW_BEGIN/END serial lines; no plugins')
+    p.add_argument('--host-perf', type=Path,
+                   help='Diagnostic only: perf binary for sampling inside the host window; perturbs timing')
     p.add_argument('--images', type=Path, required=True)
     p.add_argument('--firmware', type=Path, help='Override images/fw_jump.elf')
     p.add_argument('--dtb', type=Path, help='Override platform device tree (qualification fixtures)')
@@ -44,6 +47,8 @@ def main():
         p.error('--plugin-arg needs --plugin')
     if a.host_window and a.plugin:
         p.error('--host-window timing must not include a profiling plugin')
+    if a.host_perf and not a.host_window:
+        p.error('--host-perf requires --host-window')
     if any(',' in arg or '=' not in arg for arg in a.plugin_arg):
         p.error('--plugin-arg must be key=value without commas')
     a.work.mkdir(parents=True, exist_ok=False)
@@ -86,6 +91,8 @@ def main():
         cmd += ['-icount', f'shift={a.icount}']
     if a.share:
         cmd += ['-virtfs', f'local,path={a.share.resolve()},mount_tag=gate9p,security_model=none,id=gate9p']
+    if a.host_perf:
+        cmd += ['-perfmap']
     (a.work/'qemu-command.json').write_text(json.dumps(cmd, indent=2)+'\n')
     completed = login = sent = False
     out = b''
@@ -94,6 +101,8 @@ def main():
         guest = subprocess.Popen(cmd, env=guest_env, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                  stderr=subprocess.STDOUT, bufsize=0)
         window = HostWindow(guest.pid) if a.host_window else None
+        profile = HostProfile(a.host_perf, a.work, guest.pid) if a.host_perf else None
+        profile_started = False
         deadline = time.monotonic() + a.timeout
         try:
             while time.monotonic() < deadline:
@@ -107,6 +116,11 @@ def main():
                 log.write(data); log.flush()
                 if window:
                     window.feed(data)
+                if profile and window.begin and not profile_started:
+                    profile.start()
+                    profile_started = True
+                if profile and window.end:
+                    profile.stop()
                 # Keep only the marker window; transcripts remain in the log.
                 # Large network workloads must not repeatedly copy that log.
                 out = (out + data)[-65536:]
@@ -127,8 +141,13 @@ def main():
                 guest.wait(timeout=5)
             except subprocess.TimeoutExpired:
                 guest.kill(); guest.wait()
+            if profile:
+                profile.stop()
+                profile.save_map()
         if window and completed:
-            (a.work/'host-window.json').write_text(json.dumps(window.result(), indent=2)+'\n')
+            result = window.result()
+            result['profiled'] = bool(profile)
+            (a.work/'host-window.json').write_text(json.dumps(result, indent=2)+'\n')
     print(a.work/'serial.log')
     # Completion only; each application gate must validate its own oracle.
     return 0 if completed else 1
