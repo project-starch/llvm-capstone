@@ -89,3 +89,18 @@ Replaces Addendum 2's order. Board 3:
   latent defect on the interrupt/context-switch path that cvprof exposes, not a fault in cvprof's own code. NOT
   established: one signature, three runs, no reproduction under QEMU (where the same stage passed).
 - cvprof is withdrawn from board use.
+
+## Result, split 2 (8 Nov 10:50): the module alone is clean; gcc's exit windows
+
+- gcc train c3f on kit bkit31-exhpm, no cvprof: 4,256.3 s (1.0007× c3f), inside 3,513.6 s, outside 742.7 s; rc 0,
+  specdiff 1/1, two exhpm lines (control and gcc). **Z0 and Z1 hold.** With split 1, S1 holds: the wedge follows cvprof.
+- Over gcc's context and the control's (11,253 + 294 steps):
+
+| window | time | instructions | IPC | per 1k instructions: L1I / L1D / mispredict / issue-stall cycles |
+|---|---|---|---|---|
+| kernel (CV_STEP minus CSRUNV; 92.5 s of it fault resolution) | 303.4 s | 1.217 G | 0.160 | 37.7 / 10.1 / 29.4 / 1,025 |
+| between steps (launcher, its calls, anything else) | 400.4 s | 1.455 G | 0.145 | 82.5 / 26.8 / 34.3 / 1,474 |
+
+- About 108 k kernel and 126 k between-step instructions per step, at 6-7 cycles each: both the instruction count
+  per exit and the stall per instruction are high. perlbench's 95 contexts (board 2, before its wedge) read the same
+  shape: IPC 0.13-0.14, L1I 1 miss per ~10 instructions between steps.
