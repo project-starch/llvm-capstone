@@ -140,3 +140,69 @@ gate is VOID and a fresh live-T3 build is the next step, not a reading.
 FAULT-LINES 0 in every cell. The E5 world's three numbers equal option B's flat-module F0 twin cells on bitstream 4
 (414,217 / 1,011,158 / 1,046,942), and the 18-bit world's equal bitstream 4's 18-bit control (251,479 / 260,455): the
 live smoke's allocation sequence is deterministic, so the table width is the only thing these cells read.
+
+## E3 result: NOT a lever (8 Nov, perf/rvcm)
+
+**First run VOID on control R1:** 11,982 flushes against the ~65 k pre-registered: the model flushed only when a lookup
+saw the context flag change, but the RTL empties the cache on every entry and escape. Fixed before reading any number
+(qemu-rvcm: `rvcm_ns_flush()` at every `save_state` / `restore_state` in capstone_supervisor.c; back-to-back flushes with
+no lookup between them count once). Re-run, mcf test rc 0, specdiff 2/2, instret 27.04 G as the recorded QEMU run:
+
+| geometry | entries | in-context misses (10.37 G lookups) |
+|---|---|---|
+| 64 x 4 (C.5a) | 256 | 180.58 M (1.74 %) |
+| 128 x 4 | 512 | 178.37 M |
+| 64 x 8 | 512 | 178.58 M |
+| 256 x 4 | 1,024 | 172.15 M |
+| 128 x 8 | 1,024 | 172.80 M |
+| 1024 x 4 | 4,096 | 59.84 M |
+
+- R1: 38,507 cold starts (flushes with lookups between them) for 32,513 context entries: a cold cache at every
+  residency. The pre-registered "about 2x entries" counted escape and entry separately; with the dedup it is one per
+  residency. The first run's under-flushed misses (180.43 M) differ by 0.15 M, so cold starts are not the miss source.
+- R0: 10.37 G in-context lookups. The pre-registered comparison (the dcm plugin's Capstone U count) does not exist —
+  that run was voided (below, E2) — so the comparison is to Plain's 10.66 G loads + stores on the same input: 0.973x,
+  consistent with Capstone's in-context instructions at 0.99x Plain.
+- Same totals at 64x8 and 128x4: the misses are capacity, not conflict. The hot set is between 1 k and 4 k ids.
+- **Build rule:** best larger geometry (1024x4, 16x the entries) saves 120.7 M misses: under 194 M (12 cycles, 1 %) and
+  under 137 M (34 cycles, 2 %). At most 4.1 G cycles = 1.8 % of mcf's in-context 233 G, for a 4,096-entry 30-bit tag
+  array. 1,024 entries save 8.4 M (0.04-0.12 %). **E3 is not built.**
+
+## E0 synthesis-only gate (board lane, apollo, Vivado 2024.2, 8 Nov): 6 of 7 keys, the FF key attributed
+
+Against C.5a's own gate report: core LUT 145,391 -> 144,853 (-538, band ±1,000) PASS; ex+issue -2,320 (ex -3,719,
+issue +1,399; ±2,500) PASS; flu_unit 7 -> 7 (the band cannot see SHRINKTO's change); cva6_mmu -314 PASS; Synth 8-326 on
+load_unit 0, timing-loop headers 0 = C.5a's PASS; peak RSS 22.35 GB. **core FF 41,426 -> 41,730 (+304, band ±300): FAIL
+by 4**, attributed by flop name (board lane's census of ex_stage_i's own flops in both synthesized checkpoints,
+836 / 1,153 = the report's counts; checked here by stem): dyn_child_repr_q 1 -> 253 (the 1-bit representability flop
+backward-retimed through the compress/decompress compare), capstone_dyn_ftval_q 0 -> 64 (byte-identical source in both
+commits; merged with an equivalent register in C.5a's netlist, not in stage-B's), dyn_child_q renamed 64 <-> 64,
+two fanout replicas +2, capstone_dyn_ready_q -1 (dead outside the trace block after the DYN trim, as predicted). No new
+state without a source cause. Other |dLUT| > 500 rows are hierarchy churn (dom_switcher +2,128, dyn_unit -1,926,
+csr_buffer -1,849, scoreboard +2,102, lsu_i -814, i_mult +580). Full build launched on the ruling (reversible; the seal
+serves as the control once its own keys pass).
+
+## E2 result (8 Nov): the model holds; 16 ways passes the build rule but is RATIO-NEUTRAL
+
+**Instrument change, stated:** the dcm.c plugin VOIDED the Capstone run: with its memory callbacks the firmware takes
+cause 24 at boot (pc 0x8002522a, an untagged base) right after the module loads, while the same kit without the plugin
+runs mcf to its timeout with no fault (perf/dcm/q-cap-noplug). The Capstone side was re-measured with the same model
+inside the twin QEMU (qemu-rvcm.patch, `dcm_access` at the end of `capstone_check_access`, every in-context capability
+access, vaddr-indexed / vaddr-tagged). The Plain side stays the plugin's (paddr). C0 (helper accesses visible) is
+replaced by construction: the hook IS the capability access.
+
+| | Plain (plugin, all classes) | Capstone (hook, in context) | silicon Plain / Capstone in context |
+|---|---|---|---|
+| L1D 8-way random | 2.487 G | 3.384 G | 2.898 G / 3.796 G |
+| L1D 16-way | 2.311 G (-7.1 %) | 3.195 G (-5.6 %) | |
+| L1D 32-way | 2.017 G (-18.9 %) | 2.924 G (-13.6 %) | |
+| L1D 8-way LRU | 2.420 G | 3.302 G | |
+| DTLB 16 / 32 / 64 | 0.772 / 0.555 / 0.434 G | 0.906 / 0.663 / 0.524 G | 0.341 / 0.463 G (16) |
+
+- C1 Plain -14 % PASS; C2 Capstone -11 % PASS; C3 ratio 1.361 vs 1.31 PASS (+0.05). C4 DTLB: the model is 2.0-2.3x
+  above silicon on both sides, so its DTLB numbers are not used as predictions.
+- **Build rule (Capstone side only, as pre-registered):** 16 ways saves 0.190 G model misses = ~0.21 G at silicon's scale
+  (x1.12): 2.6 G cycles at 12, 7.2 G at 34 = 1.1 % / 3.1 % of 233 G. PASSES at both.
+- **But Plain gains the same:** -0.176 G model, ~0.21 G at silicon's scale (x1.17). Equal absolute cycles off both runs
+  leave Capstone/Plain where it is or slightly worse (1.268 -> ~1.27 at the mid penalty). 32 ways is the same picture
+  at twice the size. E2 is a lever for absolute run time, not for the overhead ratio.
