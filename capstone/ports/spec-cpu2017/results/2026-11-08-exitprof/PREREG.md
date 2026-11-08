@@ -60,3 +60,20 @@ gcc's exhpm windows and tests the module alone across gcc's run. Board 3, after 
 |---|---|
 | Z0 | rc 0, specdiff 1/1, one exhpm line for gcc's context; no wedge |
 | Z1 | run within ±1.5 % of 4,253.3 s; kernel-window IPC < 0.2 (as perlbench's 0.13 and the control's 0.17) |
+
+## Result, perlbench on board 2 (8 Nov 07:03): VOID, the core wedged after 205 contexts
+
+- Both instruments on: 205 exhpm lines, cvprof enabled for the test command; the last kernel line at 9,659.9 s
+  uptime, then silence; the driver read a wedged core: trap log {seen, mcause} 0x85 (load access fault), mepc
+  0x2aca438fa0 (the launcher's address range), tval 0x1913c23. **Y0 FAILS; Y1, Y2 VOID.**
+- Two wedges with the same mcause, in the only two runs with both instruments; c3f and c3g ran without one on the
+  same bitstream (gcc 3 times, perlbench 3 times). The instruments are the prime suspect.
+
+## Addendum 3 (8 Nov 08:1x, before their board calls): the split, board 3
+
+Replaces Addendum 2's order. Board 3:
+1. gcc train c3f with **cvprof only**: kit bkit27-gtq (c3f's module 65ede944a87ea742), stage ...-c2ac7-prof;
+2. gcc train c3f with **the module only**: kit bkit31-exhpm, c3f's unchanged stage.
+| # | Prediction |
+|---|---|
+| S1 | the wedge follows exactly one instrument; if neither run wedges, the pair is uninformative and the wedge is a third thing |

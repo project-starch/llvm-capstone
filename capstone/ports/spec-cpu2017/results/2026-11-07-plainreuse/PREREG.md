@@ -82,3 +82,10 @@ replaced. Board 2 (perf/b3/gt-run-ga2.sh 2, C.5a), after perlbench c3g-thp there
 Board 3 freed first. Addendum 1's mcf and x264 runs move there (perf/b3q), unchanged otherwise; mcf first, x264
 last, with gcc's split exitprof rerun between them (results/2026-11-08-exitprof Addendum 2). mcf's reference
 9,094.9 s is board 2's; board 3 read Plain mcf 0.6 % slower (9,150.5 s on the THP kernel), so R3 is read against both.
+
+## Addendum 3 (8 Nov 08:1x): correction of Addendum 2 - mcf and x264 stay on board 2, where they are running
+
+Addendum 2 was wrong about the state: board 2's perlbench profiling run had already ended (07:03), and perf/b2q's
+driver had started mcf there at 07:06. Stopping that driver at 08:0x did not stop its chain: mcf, then x264, continue
+on board 2 under chain-board.sh. Nothing moves to board 3. The chain's end will not be followed by the driver's
+flash back to bitstream 3; the next driver on board 2 flashes what it needs.
