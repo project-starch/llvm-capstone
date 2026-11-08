@@ -320,8 +320,11 @@ integers (`capstone_csmint.S`: x[n] at a0 + 8n), so opaque cargo can never retur
 checked-copy ON, one slot, Image `b28fc66c17704252`, `gates/c5a-probe-on`:
 - `MUSL_IO checks=170/176 failures=0`, `native integration checks=51 failures=0`,
   `gcc coverage checks=20 failures=0`: single-task native I/O works pinned.
-- Then `task-driver` printed `PASS first native task ready` and died on its 30 s alarm (`Alarm clock`,
-  `MUSL_GATE_EXIT:142`) while starting a SECOND native task. Without transport, `slot_acquire` never evicts
+- Then `entry-driver` printed `PASS first native task ready` and died on its 30 s alarm (`Alarm clock`,
+  `MUSL_GATE_EXIT:142`) while starting a SECOND native task. **Correction (9 Nov):** this line first named
+  `task-driver`. The string is entry-driver's, and task-driver's binary does not contain it; the kernel-port
+  lane found this (native/board-6.4 b05aa17aa521). Both drivers start a second live native task, so the
+  finding is unchanged. Without transport, `slot_acquire` never evicts
   (`capstone_vm.c:680`), and a new context waits for the slot (`:2953-2963`), so two live native tasks
   deadlock on one slot.
 - **On C.5a's model only one native task can be live at a time.** The collaborator's perl recipe has three
@@ -431,3 +434,47 @@ exchange = native_io 0, direct = mask 479; check model on (QEMU, no firmware).
   expected to be unavailable).
 
 **Ranking by saving:** x264 > xz > lbm, nab > gcc.
+
+## twin20 results: exchange vs direct at test size, the two-live-task gate, and the native train stages
+
+**Exchange vs direct** (registered in f93d97008f2c). Setup: twin20 + `x-capstone-cscheck-frame`, Image
+`d7712c4127479056`, one slot, no transport. Every run: rc 0, specdiff pass in both arms, emu_fingerprints 0,
+kinds_queries = 0 in exchange and equal to the register calls in direct.
+
+| bench | exchange instr | direct instr | saving | exits | calls (register) |
+|---|---|---|---|---|---|
+| gcc train01 | 16,588,854,663 | 16,590,963,109 | -2.1e6 (-0.013 %) | 135,206 / 135,206 | 156 (11) |
+| lbm test | 7,960,542,674 | 7,954,328,287 | 6.2e6 (0.078 %) | 4,056 / 4,049 | 336 -> 332 (327) |
+| nab test | 7,970,132,919 | 7,969,948,918 | 0.18e6 (0.002 %) | 2,132 / 2,126 | 34 -> 30 (15) |
+| xz test (12 cmds) | 61,749,225,882 | 61,749,768,863 | -0.5e6 (-0.001 %) | 48,111 / 48,111 | 216 (36) |
+
+**Against the prediction:**
+- Held: lbm (0.02-0.2 %), nab (< 0.1 %), equal exits, the fingerprint control, kinds_queries.
+- Failed: xz (predicted 0.1-2 %, read ~0).
+- gcc: |-0.013 %| is just outside the "< 0.01 %" bound. Its negative sign, with only 11 register calls,
+  puts the run-to-run noise at about +-2e6 instructions, so nab and xz are also inside the noise.
+- x264 was not measured. The first attempt ran the generator as the native ldecod, which faults with cause
+  28 where today's stage runs a plain ldecod. The rerun was stopped after 85 min to yield the shared lock.
+
+**At test size no candidate has a measurable native saving.** Delegated calls are 30-340 per run.
+
+**Two live native tasks on twin20 with the rtl lane's detach/adopt** (local twin 5de8f6b012 cherry-picked on
+the check model, Image `0ee07f455a215c6e` with the adopt-kind gate). `run-musl-io.py io --c5a-model --twin`
+PASSes:
+- 170/176 musl-IO and 51 integration checks, `native entry failures=0`, `native task failures=0`;
+- `detaches=2 adopts=2 adopt_kind_refused=0`;
+- no twin `ADOPT-KIND-MISMATCH` or `ADOPT-UNPARKED` line, which the runner now asserts.
+
+Probe 1's deadlock is gone.
+
+**Native train stages** (`make-native-stage.py`: a cp -rL copy of the stages-train-fair stage with the
+launcher replaced by a direct exec):
+- **perlbench:** the same udcnofp objects as the frozen train image (perf/heapx/objs-udcnofp), relinked with
+  the native-IO SDK built by the same compiler (llvm-c1): `ef38a768580f370e`.
+- **mcf:** the tree-boarddevmk sources replayed with that SDK: `d5e5dc49eec9be7c` (stripped as the frozen
+  ones).
+- The train commands are the stage's own, each a single native perl or mcf process. Unlike test.pl, train
+  needs no native shell or spawn, so the command structure matches Plain's.
+- The stage runs on a private tmpfs, because the native grant admits tmpfs, ext4 and 9p only.
+- Short twin: perl `perfect.pl b 3`, direct, with transport. rc 0, specdiff 1/1, 19.6e9 instructions,
+  187 calls (132 register), no ADOPT lines.

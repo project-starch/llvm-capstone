@@ -31,6 +31,10 @@ p.add_argument('--checked-copy-model', choices=['on', 'off'], default='on')
 p.add_argument('--counters', action='store_true')
 # MEASUREMENT ONLY: C.5a's model -- no context transport, no raw moves (so pinned arenas), the adapter's c5a_model.
 p.add_argument('--c5a-model', action='store_true')
+# MEASUREMENT ONLY: the C.5a/E5 twin (capstone-qemu virtual/flat-index-20 + detach/adopt + x-capstone-cscheck-frame):
+# its own -cpu properties, the C.5a device tree, the rd-only slot detach/adopt, a CMA pool for the flat table.
+p.add_argument('--twin', action='store_true')
+p.add_argument('--dtb', type=Path)
 a = p.parse_args()
 a.out.mkdir(parents=True, exist_ok=False)
 stage = a.out/'stage'
@@ -83,14 +87,20 @@ slots = 1 if a.mode == 'io' else 32
 flags = f'capstone_vm.native_task=1 capstone_vm.native_io={a.feature} capstone_vm.native_locks={a.locks} capstone_vm.native_stat={a.stat} capstone_vm.native_seek={a.seek} capstone_vm.native_fd={a.fd} capstone_vm.native_close={a.close} capstone_vm.native_path={a.path} capstone_vm.native_clock={a.clock} capstone_vm.native_fast={a.fast} capstone_vm.native_route_trace={int(a.mode == "io")} capstone_vm.dom_binfmt=1 capstone_vm.native_dispatch=1 capstone_vm.checked_copy=1 capstone_vm.native_slot_transport=1 capstone_vm.unpinned=1 capstone_vm.supervisor_slots={slots}'
 # These features default off; omit redundant zeros to fit the kernel cmdline.
 if a.c5a_model:
-    flags = flags.replace('capstone_vm.native_slot_transport=1 capstone_vm.unpinned=1', 'capstone_vm.c5a_model=1')
+    flags = flags.replace('capstone_vm.native_slot_transport=1 capstone_vm.unpinned=1',
+                          'capstone_vm.c5a_model=1' + (' capstone_vm.native_slot_transport=1 capstone_vm.checked_copy_emu=1 cma=256M' if a.twin else ''))
 flags = ' '.join(item for item in flags.split() if item not in {f'capstone_vm.native_{key}=0' for key in ['io','locks','stat','seek','fd','close','path','clock','route_trace']})
+assert len(('root=/dev/vda ro '+flags+' '+' '.join(a.kernel_arg)).encode()) < 512, 'kernel command line would be truncated'
+flags = flags.replace(f' capstone_vm.supervisor_slots={slots}', '') if a.twin and slots == 1 else flags
 assert len(('root=/dev/vda ro '+flags+' '+' '.join(a.kernel_arg)).encode()) < 512, 'kernel command line would be truncated'
 cmd = ['python3', str(here.parents[1]/'run-staged.py'), '--qemu', str(a.qemu.resolve()), '--images', str(a.images.resolve()), '--firmware', str(a.firmware.resolve()), '--stage', str(stage.resolve()), '--work', str((a.out/'vm').resolve()), '--disk-mib', '64', '--memory', '4G', '--timeout', '360', '--icount', '0', '--kernel-arg', flags]
 for arg in a.kernel_arg: cmd += ['--kernel-arg', arg]
 (a.out/'command.json').write_text(json.dumps(cmd, indent=2)+'\n')
 env = dict(os.environ, CAPSTONE_QEMU_CPU_EXTRA=f'x-capstone-supervisor-slots={slots},x-pcrel=false,x-capstone-raw-moves=true,x-capstone-test-csrs=false,x-capstone-checked-copy={"true" if a.checked_copy_model == "on" else "false"},x-capstone-context-transport=true')
-if a.c5a_model:
+if a.twin:
+    env['CAPSTONE_QEMU_CPU_EXTRA'] = f'x-capstone-supervisor-slots={slots},svadu=false,x-capstone-cscheck-frame=true'
+    cmd += ['--dtb', str(a.dtb.resolve())]
+elif a.c5a_model:
     env['CAPSTONE_QEMU_CPU_EXTRA'] = env['CAPSTONE_QEMU_CPU_EXTRA'].replace('x-capstone-raw-moves=true', 'x-capstone-raw-moves=false').replace('x-capstone-context-transport=true', 'x-capstone-context-transport=false')
 with (a.out/'runner.log').open('w') as log:
     subprocess.run(cmd, env=env, stdout=log, stderr=subprocess.STDOUT, check=True)
@@ -100,6 +110,8 @@ for arg in a.kernel_arg:
         if item.startswith('capstone_vm.unpinned_access_fault='):
             assert 'ACCESS_POLICY:'+('Y' if item.endswith('=1') else 'N')+'\n' in log
 assert 'MUSL_GATE_EXIT:0\n' in log, log[-6000:]
+# the twin's own transport audit (capstone-qemu virtual/flat-index-20): no adopt of an unparked frame or wrong kind
+assert 'ADOPT-KIND-MISMATCH' not in log and 'ADOPT-UNPARKED' not in log, 'the twin counted a bad ADOPT'
 assert not re.search(r'WARNING:|BUG:|Oops|Kernel panic', log)
 if a.mode == 'io':
     assert 'native integration checks=51 failures=0\n' in log
