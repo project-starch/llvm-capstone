@@ -70,6 +70,9 @@ function(capstone_configure_application target)
         target_compile_definitions(capstone-application-core PRIVATE
           CAPSTONE_MUSL_NATIVE_IO=1 CAPSTONE_NATIVE_SYSCALL_ABI=1)
       endif()
+      if(CAPSTONE_MEMSET_CAP_ZERO)
+        target_compile_definitions(capstone-application-core PRIVATE CAPSTONE_MEMSET_CAP_ZERO=1)
+      endif()
       target_compile_options(capstone-application-core PRIVATE
         "$<$<COMPILE_LANGUAGE:C>:SHELL:${virtual_codegen}>")
     else()
