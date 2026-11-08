@@ -106,7 +106,10 @@ def compile_flags(musl: pathlib.Path) -> list[str]:
         f"-I{musl}/src/internal",
         f"-I{musl}/obj/include",
         f"-I{musl}/include",
-        "-O1", "-w",
+        # -O2, as musl's own build and the Plain arm's libc. -O1 was the default until 2026-11-08; the
+        # libc-only -O2 experiment of spec-cpu2017/results/2026-11-05-minimal-mallocng measured it
+        # (gcc -0.50 %, PHP -0.5 to -0.6 %) with every validation passing.
+        "-O2", "-w",
     ] + shlex.split(os.environ.get("MUSL_CAPSTONE_EXTRA_CFLAGS", ""))
     # MUSL_CAPSTONE_EXTRA_CFLAGS is APPENDED, never a replacement, and empty when unset, so the
     # default archive is unchanged. B0 (docs/plans/b0-silicon-delegated-runtime.md) builds the

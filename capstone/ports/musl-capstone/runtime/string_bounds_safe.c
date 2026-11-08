@@ -188,6 +188,27 @@ static inline __attribute__((always_inline)) void granule_copy(unsigned char *d,
 typedef unsigned long __attribute__((__may_alias__, __aligned__(8))) word8_t;
 typedef unsigned int __attribute__((__may_alias__, __aligned__(4))) word4_t;
 #define WORD_COPY(T, d, s) (*(T *)(d) = *(const T *)(s))
+/* The shift copy below spends up to 14 bytes aligning s and then d, so it starts at 32 bytes; shorter copies of
+ * addresses that differ mod 8 keep the 4-byte or byte loop. */
+#define SHIFT_COPY_MIN 32
+
+/* The bytes no word covers: the tail of every path, and all of a short copy whose addresses differ mod 4. Eight at a
+ * time, then 4, 2 and 1, each group at constant offsets from one pointer pair: the one-byte loop costs seven
+ * instructions a byte here (two capability increments and two capability moves besides the load and store). In
+ * 500.perlbench_r test, memmove ran that loop 78.7 M times, 551 M of its 991 M in-context instructions, with ~9
+ * bytes per call. The stores are in address order, each after the loads before it, as the one-byte loop's are, so
+ * it is still a forward copy for d below s. */
+static inline __attribute__((always_inline))
+void copy_bytes_forward(unsigned char *d, const unsigned char *s, size_t n)
+{
+	for (; n >= 8; d += 8, s += 8, n -= 8) {
+		d[0] = s[0]; d[1] = s[1]; d[2] = s[2]; d[3] = s[3];
+		d[4] = s[4]; d[5] = s[5]; d[6] = s[6]; d[7] = s[7];
+	}
+	if (n & 4) { d[0] = s[0]; d[1] = s[1]; d[2] = s[2]; d[3] = s[3]; d += 4; s += 4; }
+	if (n & 2) { d[0] = s[0]; d[1] = s[1]; d += 2; s += 2; }
+	if (n & 1) d[0] = s[0];
+}
 
 /* Forward copy. Also correct for overlapping ranges with d below s: a word or
  * granule is read before it is written, and the distance between d and s is
@@ -213,11 +234,32 @@ void copy_forward(unsigned char *d, const unsigned char *s, size_t n)
 	} else if (!(x & 7)) {
 		while (n && ((__UINTPTR_TYPE__)d & 7)) { *d++ = *s++; n--; }
 		for (; n >= 8; d += 8, s += 8, n -= 8) WORD_COPY(word8_t, d, s);
+	} else if (n >= SHIFT_COPY_MIN) {
+		/* Source and destination differ mod 8, so no word lands on a word: s is brought to an
+		 * 8-byte boundary by bytes, then d, and each aligned destination word is assembled from
+		 * the two aligned source words it straddles (little-endian), as musl's memcpy does with
+		 * 4-byte words. Every load is an aligned word that lies wholly inside [src, src+n): the
+		 * first is at s's boundary, at or above src, and the loop reads the word at s - m + 8
+		 * only while n >= 16. Every store is an aligned word inside [dst, dst+n). These are
+		 * scalar loads and stores, as the byte loop's are, so the copy clears the same
+		 * destination tags and sets none. With d below s and overlapping, each write ends below
+		 * s + 7, under the next word still to be read. */
+		while ((__UINTPTR_TYPE__)s & 7) { *d++ = *s++; n--; }
+		unsigned long w = *(const word8_t *)s;
+		unsigned m = 8 - ((__UINTPTR_TYPE__)d & 7);
+		for (unsigned i = 0; i < m; i++) *d++ = *s++;
+		n -= m;
+		unsigned rs = 8 * m, ls = 64 - rs;
+		for (; n >= 16; d += 8, s += 8, n -= 8) {
+			unsigned long v = *(const word8_t *)(s - m + 8);
+			*(word8_t *)d = (w >> rs) | (v << ls);
+			w = v;
+		}
 	} else if (!(x & 3)) {
 		while (n && ((__UINTPTR_TYPE__)d & 3)) { *d++ = *s++; n--; }
 		for (; n >= 4; d += 4, s += 4, n -= 4) WORD_COPY(word4_t, d, s);
 	}
-	while (n--) *d++ = *s++;
+	copy_bytes_forward(d, s, n);
 }
 
 void *memcpy(void *restrict dst, const void *restrict src, size_t n)

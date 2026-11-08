@@ -1,0 +1,110 @@
+Virtual mallocng: calloc checks for a zero slot before issuing the child, and unlock tests the lock word inline
+
+calloc asked is_allzero of the child malloc had just issued, so is_allzero had to
+recover the allocator's pointer with heap_access (a liveness probe, a base check and
+the page-index walk, ~33 instructions) for a child that is live and at its base by
+construction. calloc now takes the small path itself (__malloc_calloc_alloc): the zero
+check reads the group header through mallocng's own pointer, then the child is issued
+exactly as malloc issues it. Requests of 4096 or more still go through malloc and
+is_allzero. In 500.perlbench_r test that lookup ran 5.77 M times.
+
+unlock() called __unlock on every allocation and on every free that takes the lock
+path. __unlock does nothing unless the lock word is negative, but the capability
+backend builds its whole frame before that test (13 instructions per call against
+Plain's ~3; 25.1 M calls in perlbench test). unlock() now makes the same test before
+the call. need_locks is not involved: wrlock() already tests it inline.
+
+--- a/src/malloc/calloc.c
++++ b/src/malloc/calloc.c
+@@ -4,6 +4,10 @@
+ #include <errno.h>
+ #include "dynlink.h"
+ 
++#ifdef CAPSTONE_MUSL_MALLOC
++hidden void *__malloc_calloc_alloc(size_t, int *);
++#endif
++
+ static size_t mal0_clear(char *p, size_t n)
+ {
+ 	const size_t pagesz = 4096; /* arbitrary */
+@@ -37,9 +41,18 @@
+ 		return 0;
+ 	}
+ 	n *= m;
++#ifdef CAPSTONE_MUSL_MALLOC
++	/* mallocng's zero check on its own pointer, before the child is issued
++	 * (mallocng/malloc.c, __malloc_calloc_alloc). */
++	int zero = 0;
++	void *p = __malloc_replaced ? malloc(n) : __malloc_calloc_alloc(n, &zero);
++	if (!p || zero)
++		return p;
++#else
+ 	void *p = malloc(n);
+ 	if (!p || (!__malloc_replaced && __malloc_allzerop(p)))
+ 		return p;
++#endif
+ 	n = mal0_clear(p, n);
+ 	return memset(p, 0, n);
+ }
+--- a/src/malloc/mallocng/glue.h
++++ b/src/malloc/mallocng/glue.h
+@@ -79,7 +79,9 @@
+ }
+ static inline void unlock()
+ {
+-	UNLOCK(__malloc_lock);
++	/* __unlock does nothing unless the lock word is negative (held under
++	 * MT), and this compiler builds its full frame before that test. */
++	if (((volatile int *)__malloc_lock)[0] < 0) UNLOCK(__malloc_lock);
+ }
+ static inline void upgradelock()
+ {
+--- a/src/malloc/mallocng/malloc.c
++++ b/src/malloc/mallocng/malloc.c
+@@ -370,14 +370,18 @@
+ 	return enframe(g, idx, n, ctr);
+ }
+ 
+-int is_allzero(void *p)
++static int slot_allzero(void *p)
+ {
+-	p = heap_access(p);
+ 	struct meta *g = get_meta(p);
+ 	return g->sizeclass >= 48 ||
+ 		get_stride(g) < UNIT*size_classes[g->sizeclass];
+ }
+ 
++int is_allzero(void *p)
++{
++	return slot_allzero(heap_access(p));
++}
++
+ /* The common small path keeps mallocng's placement. Large requests need space
+  * and alignment for representable bounds; aligned_alloc uses the raw allocator
+  * above, so it does not create and immediately revoke an intermediate child. */
+@@ -387,4 +391,25 @@
+ 	if (n >= 4096) return aligned_alloc(heap_granule(heap_round(n)), n);
+ 	return heap_alloc_issue(__malloc_alloc(n), n);
+ }
++
++/* calloc's allocation (src/malloc/calloc.c). A small request is malloc's small
++ * path above, and the zero check reads the group header through the allocator's
++ * own pointer before the child is issued. Asked of the issued child, is_allzero
++ * must first recover that pointer with heap_access: a liveness probe, a base
++ * check and the page-index walk, for a child that was issued a moment ago, is
++ * live and starts at its base by construction. The child, its bounds and its
++ * lifetime are malloc's. */
++void *__malloc_calloc_alloc(size_t n, int *zero)
++{
++	if (size_overflows(n)) return 0;
++	if (n >= 4096) {
++		void *p = malloc(n);
++		*zero = p && is_allzero(p);
++		return p;
++	}
++	void *p = __malloc_alloc(n);
++	if (!p) return 0;
++	*zero = slot_allzero(p);
++	return heap_alloc_issue(p, n);
++}
+ void HEAP_POLICY_SYMBOL(void) {}
