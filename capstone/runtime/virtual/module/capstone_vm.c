@@ -225,6 +225,7 @@ struct cv_thread {
     unsigned long stream_clock;
 };
 struct context {
+    bool table_cma;   /* c5a: the flat table came from CMA (cv_flat_alloc) */
     struct list_head link;
     struct mm_struct *mm;
     unsigned long *frame, *table;
@@ -612,22 +613,28 @@ static int node_grow(struct context *c, unsigned long required)
 #else
 #define CV_MAX_ALLOC_ORDER (MAX_ORDER - 1)
 #endif
-static void *cv_flat_alloc(void)
+static void *cv_flat_alloc(struct context *c)
 {
     unsigned long count = CV_FLAT_BYTES >> PAGE_SHIFT;
-    struct page *page;
+    struct page *page = NULL;
+    /* CMA first: a multi-MiB buddy block can be unavailable on a fragmented, small board guest. */
+    if (dma_contiguous_default_area)
+        page = cma_alloc(dma_contiguous_default_area, count, 0, true);
+    if (page) {
+        c->table_cma = true;
+        memset(page_address(page), 0, CV_FLAT_BYTES);
+        return page_address(page);
+    }
+    c->table_cma = false;
     if (get_order(CV_FLAT_BYTES) <= CV_MAX_ALLOC_ORDER)
         return (void *)__get_free_pages(GFP_KERNEL | __GFP_ZERO, get_order(CV_FLAT_BYTES));
-    page = cma_alloc(dma_contiguous_default_area, count, 0, false);
-    if (!page) return NULL;
-    memset(page_address(page), 0, CV_FLAT_BYTES);
-    return page_address(page);
+    return NULL;
 }
 static void node_free_table(struct context *c)
 {
     if (!c->table) return;
     if (node_table_flat) {
-        if (get_order(CV_FLAT_BYTES) <= CV_MAX_ALLOC_ORDER)
+        if (!c->table_cma)
             free_pages((unsigned long)c->table, get_order(CV_FLAT_BYTES));
         else
             cma_release(dma_contiguous_default_area, virt_to_page(c->table), CV_FLAT_BYTES >> PAGE_SHIFT);
@@ -3209,7 +3216,7 @@ static int context_create(struct context **out)
     c->frame = (void *)get_zeroed_page(GFP_KERNEL);
     /* Native task admission requires the paged table; no misc-device CMA allocator. */
     /* c5a_model's flat RECYCLE table: one physically contiguous allocation, freed by node_free_table. */
-    c->table = node_table_flat ? cv_flat_alloc() : node_new_page(c);
+    c->table = node_table_flat ? cv_flat_alloc(c) : node_new_page(c);
     if (c->table) c->table_pa = virt_to_phys(c->table);
     if (c->table && node_table_flat) c->stats.node_bytes += CV_FLAT_BYTES;
     if (!c->frame || !c->table) {

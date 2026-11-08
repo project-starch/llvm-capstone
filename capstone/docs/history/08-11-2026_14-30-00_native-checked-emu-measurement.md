@@ -478,3 +478,17 @@ launcher replaced by a direct exec):
 - The stage runs on a private tmpfs, because the native grant admits tmpfs, ext4 and 9p only.
 - Short twin: perl `perfect.pl b 3`, direct, with transport. rc 0, specdiff 1/1, 19.6e9 instructions,
   187 calls (132 register), no ADOPT lines.
+
+**Table size per stage.** The compiler lane's high-water runs: mcf train peaks at 221,072 pages and 14,065 live
+nodes, and was SIGKILLed with a 2^20 table on kit-f55. perlbench needs about 415 k live nodes. Each native
+stage therefore carries its own boot parameters (`cscheck-emu/stages/<stage>.params`):
+- mcf: `capstone_vm.node_flat_records=262144` (2^18, 4 MiB);
+- perlbench: `capstone_vm.node_flat_records=524288` (2^19, 8 MiB).
+
+The native route sizes its table per boot (module parameter, read at load), not per run within a boot.
+The flat table now comes from CMA first, with the buddy allocator as fallback: a multi-MiB buddy block can
+be missing on a fragmented 936 MiB guest.
+
+The twins run at the board's 936 MiB with a device tree dumped at that size
+(`cscheck-emu/twin20-936-c5a.dts`). A dtb dumped at 2 GiB on a 1 GiB guest faults the QEMU monitor at boot
+(cause 24 at 0xffffffc6feffe000).

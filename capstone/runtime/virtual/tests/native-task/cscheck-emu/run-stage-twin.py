@@ -16,7 +16,8 @@ p.add_argument('out', type=Path)
 p.add_argument('--arm', choices=['exchange', 'direct'], required=True)
 for name in ['qemu', 'images', 'firmware', 'dtb', 'runner']:
     p.add_argument('--' + name, type=Path, required=True)
-p.add_argument('--memory', default='2G')
+p.add_argument('--memory', default='936M', help="the board's guest RAM")
+p.add_argument('--records', type=int, required=True, help='node_flat_records: the flat table size for this stage')
 p.add_argument('--timeout', type=int, default=43200)
 a = p.parse_args()
 a.out.mkdir(parents=True, exist_ok=False)
@@ -27,7 +28,7 @@ shutil.copytree(a.stage / 'stage', st, symlinks=False)
                             'echo VIRTUAL_STAGED_DONE\n')
 flags = ('capstone_vm.native_task=1 capstone_vm.dom_binfmt=1 capstone_vm.native_dispatch=1 capstone_vm.checked_copy=1 '
          'capstone_vm.c5a_model=1 capstone_vm.checked_copy_emu=1 capstone_vm.native_slot_transport=1 '
-         'capstone_vm.dom_local_tmp=1 cma=256M')
+         f'cma=256M capstone_vm.node_flat_records={a.records}')
 if a.arm == 'direct':
     flags += ' capstone_vm.native_io=1' + ''.join(f' capstone_vm.native_{k}=1' for k in
                                                   ['locks', 'stat', 'seek', 'fd', 'close', 'path', 'clock'])
