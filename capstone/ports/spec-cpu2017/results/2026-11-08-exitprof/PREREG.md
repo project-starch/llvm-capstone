@@ -104,3 +104,15 @@ Replaces Addendum 2's order. Board 3:
 - About 108 k kernel and 126 k between-step instructions per step, at 6-7 cycles each: both the instruction count
   per exit and the stall per instruction are high. perlbench's 95 contexts (board 2, before its wedge) read the same
   shape: IPC 0.13-0.14, L1I 1 miss per ~10 instructions between steps.
+
+## Correction (8 Nov 12:0x): the wedges' trap log is a timer interrupt, not a load access fault
+
+The rtl lane read the C.5a RTL (capstone-ariane 1fc2cd5aa): aperture 255 holds only mcause[6:0] (cva6.sv:1311), so
+0x85 cannot tell exception 5 from interrupt 5; the log is fed by commit's exception_o after the escape strip
+(cva6.sv:2084), and with TvalEn the decoder puts the instruction bits in tval before marking an interrupt
+(decoder.sv:1966-1968, 2060-2090). The three tvals decode as instructions (0x318a3683 ld a3,792(s4); 0x7b783 ld
+a5,0(a5); 0x1913c23 sd s9,24(sp)); a store cannot raise cause 5. So each record is the last logged supervisor timer
+interrupt (STI), and mepc is where that tick landed. **The readings "load access fault" and "a domain load from a
+small address" above are withdrawn.** What the apertures do show: no unfiltered trap committed after that tick, and
+aperture 224 = 0xff, consistent with a trap loop at M of a filtered cause or the same STI re-taken every cycle. The
+mechanism is UNRESOLVED; the rtl lane is reproducing it in simulation.
