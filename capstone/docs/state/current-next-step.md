@@ -3,17 +3,17 @@
 Continue on `perf/qemu-throughput`, leaving the native RTL handoff branch fixed.
 [The matched host-throughput baseline](../../runtime/virtual/tests/qemu-throughput/README.md)
 and separate host profiles are complete for one small repeated GCC input.
-The one-granule lookup-reuse candidate is implemented in QEMU branch
-`perf/tag-clear-lookup` at `1d6bf3548c`. Safety checks pass, but native GCC's
-0.077% mean CPU reduction is unresolved; retain the default pin. QOM cast
-checking removal also showed no native gain. Both candidates have preserved
-paired measurements and limitations in the throughput README.
-Next assess local representation/representability calculation reuse with exact
-bounds checks, before adding persistent caches. Qualify each change with the
-current copyable-only/tag/concurrency gates and unprofiled paired timings.
-The old LIN tag-writer bootstrap fails on the baseline; do not describe that
-whole suite as passing. Its existing NONLIN DMA arms 24/25 do pass.
-Profile shares and call counts are not predicted savings.
+The cursor-window candidate in QEMU `perf/cursor-representability` at
+`ecd71075da` now has a repeated native GCC host CPU reduction (3.43% in
+the 50-compilation confirmation), with differential, sanitizer, codec, RTL-model
+and copyable instruction checks. It is based directly on the original QEMU pin.
+Next qualify representative functional workloads before advancing the default
+pin. A further source candidate is reducing encoding work used only to derive
+the window, retaining exact rounding and wide-ID cursor semantics; measure it
+separately. Keep profile shares distinct from demonstrated savings.
+The tag-lookup and QOM-debug candidates showed no measurable native benefit.
+The old LIN tag-writer bootstrap fails on the copyable-only baseline; use current
+fixtures and keep its passing NONLIN device arms separate.
 Add a scalar PC-relative translation control before attributing platform-plain's
 speed difference to capability handling. If proposing a no-icount fast test mode,
 first run timer/preemption, lifetime and race gates; keep deterministic counts

@@ -272,3 +272,54 @@ configure options in `build-pair.sh` (do not disable QOM cast debugging). Run
 and checked-copy gates, then `measure.py` against baseline/candidate binaries.
 The evidence archive includes the driver, exact commands/options, candidate
 patch and binary, disassembly, successful checks and excluded failures.
+
+## Cursor-window comparison candidate
+
+QEMU branch
+[`perf/cursor-representability`](https://github.com/project-starch/capstone-qemu/tree/perf/cursor-representability),
+commit `ecd71075da`, is based directly on the original fork pin. It does not
+include the tag-lookup candidate. [Qualification](cursor-qualification.json).
+
+The old predicate compresses the source and fully decodes it at both old and
+new cursors, then compares bounds. Both decoded bounds share the same
+cursor-dependent window term. The new predicate compares that term directly,
+preserving compression rounding, old-cursor unpacking, all 64 new-cursor bits,
+unsigned wraparound and sealed exclusions. It neither removes the security
+predicate nor caches authority. The algebra is documented beside the code.
+Machine code no longer calls `decode` twice from the predicate.
+
+All configure options match the baseline. Fresh guests use CPU 2, icount0,
+and baseline/candidate/candidate/baseline order in each cohort:
+
+| Window | Baseline mean QEMU CPU | Candidate mean QEMU CPU | CPU reduction |
+| --- | ---: | ---: | ---: |
+| 20 native GCC compilations | 12.945s | 12.615s | 2.55% |
+| 50 native GCC compilations (confirmation) | 32.685s | 31.565s | 3.43% |
+| 100 plain GCC compilations | 5.915s | 5.865s | 0.85% |
+
+All 680 timed outputs and 12 warm-ups match the official reference. The repeated
+native result supports a modest host CPU reduction for this input; it is not a
+full-SPEC or RTL speedup. Host frequency and unrelated load are uncontrolled;
+individual samples and wall times remain in the qualification record.
+
+Correctness checks:
+
+- 1,306,912 comparisons against the original full two-decode predicate: zero
+  mismatches, both keep/clear outcomes, 30/55-bit IDs, rounded/inexact sources,
+  cursor-bit edges, sealed forms and arbitrary 64-bit cursors. Undefined-behavior
+  sanitization passes. Always-keep and new-cursor-canonicalization mutations
+  are both detected.
+- Existing codec: 6,014,628 checks pass. Separately pinned RTL bounds model:
+  10,640 window-edge cases agree; its generator skips 25 inexact sources,
+  which are separately covered by the larger differential test.
+- New copyable CINCOFFSET edge fixture: all four compact/exact and 30/55-bit
+  combinations pass on both baseline and candidate. The fixture checks tags,
+  scalar cursor after tag loss and source preservation without legacy ops.
+- All 35 checked-copy instruction cases pass on the candidate.
+
+The QEMU commit includes `tests/capstone-codec/run-representable.sh` and
+`tests/copyable-only/cursor-window.sh`. The archived commands, candidate binary,
+patch, disassembly, logs and RTL model hash reproduce the experiment. The
+superproject default pin and native RTL handoff remain unchanged pending broader
+qualification. This candidate is worth carrying forward; the earlier tag-lookup
+and QOM-debug experiments do not have a demonstrated native benefit.

@@ -1,3 +1,16 @@
+## QEMU cursor-window candidate reduces host CPU in repeated GCC
+
+On `perf/qemu-throughput`, the separately published QEMU candidate
+`perf/cursor-representability` at `ecd71075da` compares equivalent cursor-window
+keys instead of fully decoding both capabilities. The 50-compilation confirmation
+uses 32.685s baseline versus 31.565s candidate mean CPU (3.43% less); the
+20-compilation cohort agrees in direction. All 680 timed outputs and 12 warm-ups
+match. Differential/sanitizer checks (1,306,912), codec checks (6,014,628), RTL
+model edges (10,640), actual copyable cursor edges and 35 checked-copy cases pass.
+No ISA/RTL change or full-SPEC claim. Default QEMU pin and native handoff remain
+unchanged pending broader qualification; tag-lookup optimization is not stacked.
+[Method, samples and limits](../../runtime/virtual/tests/qemu-throughput/cursor-qualification.json).
+
 ## QEMU throughput experiment on a separate branch
 
 `perf/qemu-throughput` starts from full-SPEC-qualified native snapshot
