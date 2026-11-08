@@ -2655,6 +2655,39 @@ a30537aef8b0; records `tier3-smoke/records/b2bs-misal-b{1,2}.result-lines.txt`):
 - **So the ruling's store half holds on silicon.** The check is per access width (an `sd` at a 4-aligned address
   traps), and a store is never reported as a load.
 
+## Q-35 — a STORED capability's type field [29:27] carries the RTL enum on silicon (LINEAR 1, NONLIN 2) and QEMU's enum in the emulator (LIN 0, NONLIN 1): the two in-memory formats differ at the type bits `OPEN — low priority, filed 2026-11-08 by the RTL lane; RTL side MEASURED in sim on C.5a, QEMU side from source; no consumer found on dev`
+
+**What differs.** The RTL keeps `cap_type_t` (NOT_CAP 0, LINEAR 1, NONLIN 2, REVOKE 3, ...; `ariane_pkg.sv`
+`cap_type_t`) in `cap_metadata_t`, and the store path writes that struct raw as the second doubleword: no
+conversion at the memory boundary was found in `load_unit.sv`, `store_unit.sv`, `load_store_unit.sv` or
+`ex_stage.sv`, and only `LCC` selector 1 subtracts one (`capstone_dyn_unit.anvil:377, :403`). capstone-qemu stores
+its own enum (`cap.h:29-31` LIN 0, NONLIN 1, REV 2; `cap_compress.c:36` field `ty` [29:27], `:117`
+`ty_set(type)`; the same on `virtual-capstone` and on the native branch's d2bac4e08a21). So a NONLIN capability's
+stored hi word reads type bits 2 on silicon and 1 under QEMU. Every other field (bounds [26:0], perm [33:30],
+id [63:34]) sits at the same position on both, by struct and by the reading below.
+
+**Reading (RTL).** `capstone/tests/rtl-smoke/cap-type-word-2026-11-08/` on capstone-ariane fe4810dd1 (the local
+stage-B batch on C.5a 1fc2cd5aa): NONLIN hi 0x9d0403000, [29:27] = 2, LCC type 1; LINEAR hi 0x9c8403000, [29:27] = 1, LCC 0; the
+words differ only at bit 27, as predicted in the test header. The QEMU side was not run.
+
+**Reach.** Tags do not travel between the two machines' memory, so no capability word crosses them. The divergence
+reaches only code that decodes a stored or escape-saved word's type bits instead of asking `LCC`. The runtime lane
+grepped capstone/runtime, the board drivers and csbi-batch (2026-11-08) and found none: `capstone_cap_type`
+(runtime `capability.h`), `unpinned/torture.c` and the monitor's `cap_type` (`sbi_capstone.c:265`, comment at
+`sbi_capstone.h:23-30`) all use `LCC` selector 1; kfast reads only integer frame words. That absence covers those
+trees only. The one known would-be consumer is a C.5a port of the native step-1 CSCHECKR/W emulation (OpenSBI
+patch on `native/checked-emu-measure`, `CAP_TYPE_NONLIN 1`), which would refuse every check with 26 on silicon; the
+runtime lane recorded that on native/checked-emu-measure c25afb50881e. Distinct from Q-11 (the TYPE QUERY's
+numbering agrees; Q-11 is QEMU's ldc untagging a revoked node's capability).
+
+**What would close it.** Either a QEMU pin storing `type + 1` (the RTL is the reference for the in-memory
+format, as for Q-31/Q-34), or a ruling that the stored type field is not an interface and any raw-word decoder
+must branch per platform. The semantics owner's call; nothing on dev breaks today.
+
+Read at: capstone-ariane fe4810dd1 = the local stage-B batch on C.5a 1fc2cd5aa. Its seven changed core files (DYN
+handshake trim, LDC rs1, R-32, R-68's NI rule, sim traces) leave ariane_pkg.sv, the DYN unit and the store path unchanged;
+capstone-qemu 0542c5556c2d (virtual-capstone) and d2bac4e08a21.
+
 ## R-32 — the spec and the RTL still disagree by ONE on every bound taken or returned as a VALUE `SEAL's half FIXED ON SILICON 2026-10-03 (caplifive_supcall_36a641e0b.bit): all seven sup-sealsize arms bare on the board exact to simulation -- 64/1023/off8 trap 29, 1024/2048/off16/cur960 seal with the canaries intact (board lane, tests/rtl-smoke/sup-bare-2026-10-03-ladder); SHRINKTO's off-by-one and the two convention questions still OPEN`
 
 > **This is the residue of the `end`-convention resolution, and it is deliberate rather than

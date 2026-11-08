@@ -1,0 +1,5 @@
+- test: cap-type-word
+  iterations: 1
+  path_var: TESTS_PATH
+  gcc_opts: "-static -mcmodel=medany -fvisibility=hidden -nostdlib -nostartfiles -I<path_var>/riscv-tests/isa/macros/scalar/ -I<path_var>/riscv-tests/env/p/"
+  asm_tests: <path_var>/custom/capstone/cap-type-word.S
