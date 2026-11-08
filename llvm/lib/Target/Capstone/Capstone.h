@@ -47,6 +47,9 @@ FunctionPass *createCapstoneDeadRegisterDefinitionsPass();
 FunctionPass *createCapstoneCursorReadFoldPass();
 void initializeCapstoneCursorReadFoldPass(PassRegistry &);
 
+FunctionPass *createCapstoneRedundantShrinkPass();
+void initializeCapstoneRedundantShrinkPass(PassRegistry &);
+
 void initializeCapstoneDeadRegisterDefinitionsPass(PassRegistry &);
 
 FunctionPass *createCapstoneIndirectBranchTrackingPass();

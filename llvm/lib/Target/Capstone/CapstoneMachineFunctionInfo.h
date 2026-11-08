@@ -72,6 +72,11 @@ private:
   unsigned CalleeSavedStackSize = 0;
   /// Is there any vector argument or return?
   bool IsVectorCall = false;
+  /// Size assumptions CapstoneRedundantShrink made about declared globals:
+  /// (global, bytes from its start that the dropped narrowings' accesses
+  /// reach). The AsmPrinter emits them into .capstone.size_assume for the
+  /// post-link check (capstone/tests/capstone-size-assume-check.py).
+  SmallVector<std::pair<const GlobalValue *, uint64_t>, 0> SizeAssumptions;
 
   /// Registers that have been sign extended from i32.
   SmallVector<Register, 8> SExt32Registers;
@@ -90,6 +95,14 @@ private:
 
   /// Does it probe the stack for a dynamic allocation?
   bool HasDynamicAllocation = false;
+
+public:
+  void addSizeAssumption(const GlobalValue *GV, uint64_t Need) {
+    SizeAssumptions.push_back({GV, Need});
+  }
+  ArrayRef<std::pair<const GlobalValue *, uint64_t>> sizeAssumptions() const {
+    return SizeAssumptions;
+  }
 
 public:
   CapstoneMachineFunctionInfo(const Function &F, const CapstoneSubtarget *STI);

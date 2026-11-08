@@ -98,6 +98,15 @@ static cl::opt<bool> EnableCursorReadFold(
              "capability register when every reader is an ALU op or compare"),
     cl::init(true));
 
+// Off by default. On, a global's SHRINKTO / SHRINK whose every reader is a
+// load or store at a constant offset inside the object is dropped
+// (CapstoneRedundantShrink.cpp).
+static cl::opt<bool> EnableRedundantShrink(
+    "capstone-drop-redundant-shrink", cl::Hidden,
+    cl::desc("Drop a global's narrowing when every access through it is a "
+             "constant-offset load or store inside the object"),
+    cl::init(false));
+
 static cl::opt<bool>
     EnableLoopDataPrefetch("capstone-enable-loop-data-prefetch", cl::Hidden,
                            cl::desc("Enable the loop data prefetch pass"),
@@ -126,6 +135,7 @@ extern "C" LLVM_ABI LLVM_EXTERNAL_VISIBILITY void LLVMInitializeCapstoneTarget()
   initializeKCFIPass(*PR);
   initializeCapstoneDeadRegisterDefinitionsPass(*PR);
   initializeCapstoneCursorReadFoldPass(*PR);
+  initializeCapstoneRedundantShrinkPass(*PR);
   initializeCapstoneLateBranchOptPass(*PR);
   initializeCapstoneMakeCompressibleOptPass(*PR);
   initializeCapstoneGatherScatterLoweringPass(*PR);
@@ -660,6 +670,10 @@ void CapstonePassConfig::addPreEmitPass2() {
 void CapstonePassConfig::addMachineSSAOptimization() {
   addPass(createCapstoneVectorPeepholePass());
   addPass(createCapstoneFoldMemOffsetPass());
+  // Before the generic SSA passes, so DeadMachineInstructionElim removes the
+  // li/add a dropped SHRINK leaves behind.
+  if (EnableRedundantShrink)
+    addPass(createCapstoneRedundantShrinkPass());
 
   TargetPassConfig::addMachineSSAOptimization();
 
