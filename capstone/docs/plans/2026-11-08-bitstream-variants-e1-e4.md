@@ -64,3 +64,66 @@ tens of ids = 10^6-10^7 misses at 64x4, and larger geometries remove little.
 **Build rule:** E3 goes to synthesis if (misses at 64x4 - misses at the best larger geometry) x 12 cycles >= 1 % of
 mcf's 233 G in-context cycles (>= 194 M misses saved), or x 34 cycles >= 2 % (>= 137 M). Otherwise E3 is not a lever,
 reported with the numbers.
+
+## E4: the escape/resume hardware share — sized, NOT a lever
+
+**Switcher walks, measured in sim** (c5a-wt `.sup/irqsweep`, irq-p200-q1500-d0, fe4810dd1 + sim-only traces, zero
+memory delay; script `e4walk.py` over the `Save idx` / `Restore idx` dprints): 206 escape walks of ~101 ids in ~400
+cycles, 205 resume walks of ~69 ids in ~270 cycles, plus walks of 14 ids (~60) and 11 ids (~30) per round. About
+760 cycles of switcher work per exit+resume, ~3-4 cycles per id (the stores go through the store buffer, the loads
+hit the frame just written).
+
+**What else the hardware adds per exit:** every satp write by the switcher flushes all TLBs (S-29 fix), so a resume
+refills at most 16 DTLB + 16 ITLB entries; the verdict cache empties on the namespace change (E3 measures its refill).
+On silicon, at an assumed 1-3x the sim walk and ~100 cycles per page walk, that is at most ~5 k cycles per exit.
+
+**Against the per-exit cost on silicon:** perlbench ~500 k cycles per exit (backlog, test size); mcf 40.5 ms per exit
+outside the context at ~25 MHz = ~1 M cycles (results 2026-11-05-mcfx, bundle). The hardware share is at most 1 % of
+an exit (perl) and 0.5 % (mcf). Exits are ~18 % of perl's run (1.38x vs 1.13x inside) and 19 % of mcf's (2,232 of
+11,535 s), so even a switcher that cost nothing would move perl's run by at most ~0.2 % and mcf's by ~0.1 %.
+Halving the walk saves a quarter of that. **E4 is not built.** The exit cost is the Linux work around the exit
+(backlog C2).
+
+## E0: the stage-B control bitstream on silicon — first-boot gates (DRAFT; vectors from image sims, filled below)
+
+The runtime lane's conditions (8 Nov): E0 clears the same board gates C.5a did before any variant on it is read; C.5a
+stays the registered known-good fallback on every board; each seal records its routing margin (placed utilization,
+congestion level, WNS).
+
+**Boot 1, in this order (every image returns; one image per kit run as C.5a's kit session):**
+1. slot kit (`slot-bare-2026-11-04`, 9 images; reproduced bit for bit from kit-98ff08e6's build.sh): the
+   expected CHANGE. The DYN trim + LDC rs1 move the stc/ldc pair arms; slot-9 (bare loop), slot-5/6 (plain pair)
+   unchanged.
+2. R-32 kit (`r32-shrinkto-bare-2026-11-06`, land/rtl-r32-kit): FIXED vector (SHRINKTO 64 over 256 reads 64).
+3. R-67 kit: FIXED, controls unchanged (as C.5a).
+4. hpm kit (7 images; hpm-8 not simulated): C.5a's values; cycles may move by the trim on LDC/STC arms.
+5. ObjBounds kit (11 images): C.5a's verdicts and cost pattern.
+Then one SPEC test stage (the runtime lane's choice; xz or mcf test, 1-2 h): rc 0, specdiff, outputs = C.5a's.
+
+**Grading:** each kit's own grader against the stage-B column below; a value the sims did not predict is a finding,
+a missing kit result is VOID for that kit. The flash itself: sealed sha256 checked locally, resident name read back,
+C.5a's bitstream registered as fallback (unchanged).
+
+## E5: the 20-bit lifetime index (bitstream 4's option A on stage-B) — the QEMU twin's gate (written before the runs)
+
+RTL: capstone-ariane e5-idx20 443f67892 (local) = stage-B a481031ca + option A 741aff6a6 (cherry-picked d8626c14c) +
+its arms (35c224153) + the PC tracker's kill compares at [19:0] (443f67892). Twin: capstone-qemu
+virtual/flat-index-20 23f9df04e5 (flat-index-18 + the ABI constants re-split; model checks 0 failures, 4 failures on
+the 18-bit sources as the negative control), binary 398a6544425df6b2.
+
+**Gate (QEMU), the live smoke** of bitstream 4 (`f55/live-stage`, `live-T3` 1eb994b5fb979862: N 16-byte objects
+alive at once, N = 1000, 400000, 1100000), two worlds, same sources and launcher (vexec b8d0673e55527639, runtime's
+perf/univ-module 3f7c8e19fecc, runtime sources byte-identical):
+- E5 world: twin20 + kq20 (ko ba57ac39b6003f15, INDEX_BITS=20, runtime's build);
+- 18-bit world: twin18 (708bbff5663f0e86) + kq18 (ko 7ee19fd0382f2ac0, INDEX_BITS=18, built here from the same tree).
+Each module only runs on its own twin's ABI, so the pair is matched by design, not one variable.
+
+| N | E5 world | 18-bit world |
+|---|---|---|
+| params | index_bits=20, node_flat_records=1048576 | index_bits=18, node_flat_records=262144 |
+| 1000 | LIVE-OK | LIVE-OK |
+| 400000 | LIVE-OK, nodes 400,000-430,000, node_capacity 1048576 | LIVE-NULL at an index near 251,000-262,000, nodes 255,000-262,144 (bitstream 4's 18-bit control read 251,479 / 260,455) |
+| 1100000 | LIVE-NULL at an index 990,000-1,047,000, rc 3, nodes 1,040,000-1,048,576 (B's F0 window) | as N = 400000 |
+
+No domain fault lines in any cell. If live-T3 (built 30 Oct) does not run under today's launcher in EITHER world, the
+gate is VOID and a fresh live-T3 build is the next step, not a reading.
