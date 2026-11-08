@@ -67,3 +67,21 @@ Capstone stages, and the Plain stages had it too. The files are the pre-register
 this record's table. run-stage.py never reads those fields (only make-stage.py writes them), so no run is affected. All
 17 plan.json files were rewritten to their files' hashes (written to a new file and renamed; link count 1). Results
 cite images by file hash.
+
+## Addendum 2 (8 Nov 20:4x, before board 3's perlbench call): two perlbench train commands crash on the QEMU twin
+
+The compiler lane's train twins (kit-unq, dereferenced copies of these stages, exe hashes re-checked) of BOTH frozen
+Capstone perlbench images end commands 2 and 3 (scrabbl, splitmail) with rc 139 "Segmentation fault", specdiff 4/6.
+Commands 0, 1 and 4 pass. Per command, unify-nd 89398ba2be3127ab gives rc 0/0/139/139/0 at 108.94/20.59/0.59/2.95/2.32 G
+instructions, and udcnofp 5996ba25b57a303c gives the same rc pattern. Prior art: the 28 Oct board test (results/2026-10-28-
+board-test, PREREG 376-383 and 1052-1061) ended the same two commands rc 1 with perl's "Out of memory!" at the
+lifetime-node table's capacity (node_capacity 262,144, node_growths 0). The cause of the SEGV is UNRESOLVED; a
+diagnostic rerun is on QEMU.
+
+- **The schedule stays.** The crashes come early (0.6 and 3.0 G of ~135 G instructions), so board 3's run costs about
+  what the three passing commands cost. Plain perlbench (board 1, running) records every command's time.
+- **What is reported for perlbench train**: if commands 2 and 3 fail on the board too, perlbench is reported on the
+  subset {0, 1, 4} (diffmail, perfect, suns; the 3 commands that pass), Capstone against Plain on the same commands,
+  and marked as a subset, as gcc's train01 is. If a fix lands before Wednesday, commands 2 and 3 run again as their
+  own short stage on the first free board.
+- T0 is read per command for perlbench: commands 0, 1 and 4 must be rc 0 with specdiff PASS.
