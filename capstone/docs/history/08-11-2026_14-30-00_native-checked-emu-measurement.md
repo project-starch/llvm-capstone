@@ -558,3 +558,44 @@ perlbench train (2^19 table):
 6. A failure of the firmware emulation shows as rc != 0 or a fault on the first checked copy. The emulation
    has never executed: QEMU cannot run it, and its RTL arm is pending. So step 3 is also the emulation's first
    test, and a FAIL there with a passing smoke attributes to the emulation.
+
+## The monitor emulation executed: RTL simulation on e5-native (rtl lane, 9 Nov)
+
+The rtl lane ran va-cscheck-mon (this branch's arm, capstone-sbi e04ecb826b5c) on capstone-ariane 14b0a57df. The
+result lines are copied from llvm-capstone land/rtl-evariants,
+`capstone/tests/rtl-smoke/evariants-2026-11-08/cscheck-emu-rtl-14b0a57df.result-lines.txt`. Every row reads as
+pre-registered. Not covered: a check racing a revoke, and the firmware's real trap entry (the arm has its own).
+
+```
+M0  CSMINT D1 RW NONLIN -> x10        rd 0x4
+M1  CSMINT D4 RO NONLIN -> x12        rd 0x6
+M2  CSMINT D6 RW LINEAR -> x13        rd 0x8
+1   CSKINDS(cframe)                   0x3400
+2   CSCHECKR e7 s10 off16 b32         0x0  0x8000c010 (dbuf+16)   FP
+3   CSCHECKW same                     0x0  0x8000c010             FP
+4   CSCHECKR off240 b32               0x1c (28)  0x0              FP
+5   CSCHECKR off256 b0                0x0  0x8000c100 (dbuf+256)  FP
+6   CSCHECKR epoch 8                  0x1d (29)  0x0              FP
+7   CSCHECKR slot 11 (hi 0)           0x18 (24)  0x0              FP
+8   CSCHECKR reserved word 1          0x1d (29)  0x0              FP
+9   CSCHECKW slot 12 (RO)             0x1b (27)  0x0              FP
+10  CSCHECKR slot 12                  0x0  0x8000c200 (dbuf+512)  FP
+11  CSCHECKR slot 13 (LINEAR)         0x1a (26)  0x0              FP
+12  CSCHECKR frame+16 (misaligned)    0x1d (29)  0x0              0x0 (refused before the descriptor)
+13  record VALID cleared, slot 10     0x19 (25)  0x0              FP  (25: the emulation's liveness refusal, not the RTL's LDC tag drop)
+final  slot 12 LCC type 0x1 (NONLIN, still there); slot 13 hi word 0x1d88400000 (non-zero: the LINEAR capability not moved)
+```
+
+Pre-registration step 6 above ("the emulation has never executed") is superseded by this run.
+The emulation has now executed. Only the full monitor trap path and the in-kernel callers remain untested on
+silicon.
+
+**perlbench train twin, outputs over 9p** (twin3, 936 MiB, 2^19 table):
+- all five commands rc 0; **specdiff 6/6**; no OOM; system peak MemTotal - MemAvailable 181,008 kB;
+- counters identical to the first twin (calls 9,482, register 9,145, kinds_queries 9,145, adopt_kind_refused 0),
+  and no twin ADOPT lines;
+- output sha256 (first 16): diffmail `f1683e4525ac1fee`, perfect `31bf9c8fa08508fb`, scrabbl `c66f2e1162c7c5a4`,
+  splitmail `c032987217551118`, suns `01688ea0c1058063`, validate `96611d1ca9418e47`. The board run's
+  @@SPEC-HASH lines are to equal these.
+- The sampler's VmHWM read 0 for perlbench. Its process name is cut to `perlbench_r_bas`, so the sampler's
+  `*_base*` match misses it; mcf's `mcf_r_base.nati` matched.
