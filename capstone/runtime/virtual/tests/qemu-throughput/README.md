@@ -61,6 +61,45 @@ does not establish a timing gain or measure per-access table lookup cost.
 All five counter runs and the separate GDB capacity trace match GCC output;
 a deliberately disabled entry marker is correctly rejected by the detector.
 
+### Lifetime-table walk locality across short workloads
+
+The [walk-locality diagnostic](table-walk-locality.json) observes the unchanged
+`81246125dc` model during profrun-wrapped workload invocations, excluding boot
+and output validators. All original inputs match the qualified hashes and all
+outputs/guest image validators pass. GCC repeats exactly. These counters measure
+logical table operations, not host/guest CPU cycles or DRAM misses.
+
+| Workload | Slow liveness-helper calls | Full directory walks | Record pages touched | Shadow directory-read reuse |
+| --- | ---: | ---: | ---: | ---: |
+| GCC | 91,543 (5.072%) | 455,174 | 23 | 89.9% |
+| ImageMagick | 18,111 (6.310%) | 103,387 | 4 | 90.1% |
+| specrand floating-point | 634 (0.056%) | 10,122 | 1 | 85.8% |
+| specrand integer | 634 (0.056%) | 10,122 | 1 | 85.8% |
+| LBM | 14,565 (0.053%) | 72,680 | 2 | 88.4% |
+| NAB | 1,405,467 (1.156%) | 5,752,042 | 28 | 98.8% |
+
+Slow percentages are conditional on calls reaching `capstone_id_live`, combining
+data and PCC calls; successful inline proofs bypass it. Full walks also include
+allocation/other lifetime operations. Each slow lookup produces four walks in
+these runs. Additional GCC counters attribute two to table-open allocation
+preflight, one to record liveness, and one to finding the record for cache fill.
+That is software-model work, not a mandatory four-walk RTL contract.
+
+Every workload touches only one entry at each of the upper two directory levels.
+The reuse column models fully associative LRU caches with four entries **per
+level**, cold at start and flushed on observed table-generation or global
+watched-write-generation changes. All real reads/checks still execute. Keys
+include the observed pointer value, so this is a locality oracle, not an
+implemented cache or proof that cached pointers remain safe. The record also
+contains 1/16-entry and no-flush models. Mapping changes, concurrent writers and
+all invalidation paths require validation before any cache implementation.
+
+Actual shadow-cache routines pass known hit/eviction/root/value/flush sequences.
+A missing-stop-marker negative control retains exact GCC output but is rejected
+for its absent measurement window. Diagnostic timings are excluded. The next
+useful experiment is safe directory/validated-address reuse before changing leaf
+size; larger-page speedups cannot be inferred from these counts alone.
+
 ### Profile-guided host build candidate
 
 The [PGO experiment](pgo-qualification.json) uses the same `81246125dc`

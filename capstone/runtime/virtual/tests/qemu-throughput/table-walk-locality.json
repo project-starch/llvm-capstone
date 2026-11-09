@@ -1,0 +1,1921 @@
+{
+  "schema_version": 1,
+  "status": "PASS",
+  "source": "81246125dcf06bf057b9fca9fb5e850dddce0f5b",
+  "scope": "Diagnostic profrun-wrapped original workload arguments; exact qualified outputs and guest validators. Counters cover child fork/exec through exit, excluding boot and validators. No timings used.",
+  "summary": [
+    {
+      "benchmark": "502.gcc_r",
+      "liveness_helper_calls": 1804950,
+      "slow_liveness_calls": 91543,
+      "slow_fraction_percent": 5.07177484140835,
+      "walks": 455174,
+      "walks_for_slow_liveness": 366172,
+      "other_walks": 89002,
+      "directory_reads": 1365522,
+      "record_pages_touched": 23,
+      "unique_directory_entry_values": [
+        1,
+        1,
+        23
+      ],
+      "cache_models": {
+        "0-1": {
+          "hits": 1196062,
+          "misses": 169460,
+          "reuse_percent": 87.59009375169349,
+          "misses_per_walk": 0.37229718744919527
+        },
+        "0-4": {
+          "hits": 1345622,
+          "misses": 19900,
+          "reuse_percent": 98.54268184620973,
+          "misses_per_walk": 0.04371954461370817
+        },
+        "0-16": {
+          "hits": 1365449,
+          "misses": 73,
+          "reuse_percent": 99.99465405903383,
+          "misses_per_walk": 0.0001603782289849596
+        },
+        "1-1": {
+          "hits": 1105149,
+          "misses": 260373,
+          "reuse_percent": 80.93234675091284,
+          "misses_per_walk": 0.5720295974726148
+        },
+        "1-4": {
+          "hits": 1227838,
+          "misses": 137684,
+          "reuse_percent": 89.91711594540403,
+          "misses_per_walk": 0.30248652163787915
+        },
+        "1-16": {
+          "hits": 1230493,
+          "misses": 135029,
+          "reuse_percent": 90.11154708602278,
+          "misses_per_walk": 0.2966535874193166
+        }
+      }
+    },
+    {
+      "benchmark": "538.imagick_r",
+      "liveness_helper_calls": 287001,
+      "slow_liveness_calls": 18111,
+      "slow_fraction_percent": 6.310430974108104,
+      "walks": 103387,
+      "walks_for_slow_liveness": 72444,
+      "other_walks": 30943,
+      "directory_reads": 310161,
+      "record_pages_touched": 4,
+      "unique_directory_entry_values": [
+        1,
+        1,
+        4
+      ],
+      "cache_models": {
+        "0-1": {
+          "hits": 279251,
+          "misses": 30910,
+          "reuse_percent": 90.03420804034035,
+          "misses_per_walk": 0.2989737587897898
+        },
+        "0-4": {
+          "hits": 310155,
+          "misses": 6,
+          "reuse_percent": 99.99806552081016,
+          "misses_per_walk": 5.8034375695203456e-05
+        },
+        "0-16": {
+          "hits": 310155,
+          "misses": 6,
+          "reuse_percent": 99.99806552081016,
+          "misses_per_walk": 5.8034375695203456e-05
+        },
+        "1-1": {
+          "hits": 256927,
+          "misses": 53234,
+          "reuse_percent": 82.83665580134188,
+          "misses_per_walk": 0.5149003259597434
+        },
+        "1-4": {
+          "hits": 279585,
+          "misses": 30576,
+          "reuse_percent": 90.14189404857477,
+          "misses_per_walk": 0.29574317854275683
+        },
+        "1-16": {
+          "hits": 279585,
+          "misses": 30576,
+          "reuse_percent": 90.14189404857477,
+          "misses_per_walk": 0.29574317854275683
+        }
+      }
+    },
+    {
+      "benchmark": "997.specrand_fr",
+      "liveness_helper_calls": 1134665,
+      "slow_liveness_calls": 634,
+      "slow_fraction_percent": 0.055875522731378864,
+      "walks": 10122,
+      "walks_for_slow_liveness": 2536,
+      "other_walks": 7586,
+      "directory_reads": 30366,
+      "record_pages_touched": 1,
+      "unique_directory_entry_values": [
+        1,
+        1,
+        1
+      ],
+      "cache_models": {
+        "0-1": {
+          "hits": 30363,
+          "misses": 3,
+          "reuse_percent": 99.99012052953961,
+          "misses_per_walk": 0.0002963841138114997
+        },
+        "0-4": {
+          "hits": 30363,
+          "misses": 3,
+          "reuse_percent": 99.99012052953961,
+          "misses_per_walk": 0.0002963841138114997
+        },
+        "0-16": {
+          "hits": 30363,
+          "misses": 3,
+          "reuse_percent": 99.99012052953961,
+          "misses_per_walk": 0.0002963841138114997
+        },
+        "1-1": {
+          "hits": 26055,
+          "misses": 4311,
+          "reuse_percent": 85.80320094842916,
+          "misses_per_walk": 0.42590397154712506
+        },
+        "1-4": {
+          "hits": 26055,
+          "misses": 4311,
+          "reuse_percent": 85.80320094842916,
+          "misses_per_walk": 0.42590397154712506
+        },
+        "1-16": {
+          "hits": 26055,
+          "misses": 4311,
+          "reuse_percent": 85.80320094842916,
+          "misses_per_walk": 0.42590397154712506
+        }
+      }
+    },
+    {
+      "benchmark": "999.specrand_ir",
+      "liveness_helper_calls": 1134665,
+      "slow_liveness_calls": 634,
+      "slow_fraction_percent": 0.055875522731378864,
+      "walks": 10122,
+      "walks_for_slow_liveness": 2536,
+      "other_walks": 7586,
+      "directory_reads": 30366,
+      "record_pages_touched": 1,
+      "unique_directory_entry_values": [
+        1,
+        1,
+        1
+      ],
+      "cache_models": {
+        "0-1": {
+          "hits": 30363,
+          "misses": 3,
+          "reuse_percent": 99.99012052953961,
+          "misses_per_walk": 0.0002963841138114997
+        },
+        "0-4": {
+          "hits": 30363,
+          "misses": 3,
+          "reuse_percent": 99.99012052953961,
+          "misses_per_walk": 0.0002963841138114997
+        },
+        "0-16": {
+          "hits": 30363,
+          "misses": 3,
+          "reuse_percent": 99.99012052953961,
+          "misses_per_walk": 0.0002963841138114997
+        },
+        "1-1": {
+          "hits": 26055,
+          "misses": 4311,
+          "reuse_percent": 85.80320094842916,
+          "misses_per_walk": 0.42590397154712506
+        },
+        "1-4": {
+          "hits": 26055,
+          "misses": 4311,
+          "reuse_percent": 85.80320094842916,
+          "misses_per_walk": 0.42590397154712506
+        },
+        "1-16": {
+          "hits": 26055,
+          "misses": 4311,
+          "reuse_percent": 85.80320094842916,
+          "misses_per_walk": 0.42590397154712506
+        }
+      }
+    },
+    {
+      "benchmark": "519.lbm_r",
+      "liveness_helper_calls": 27383657,
+      "slow_liveness_calls": 14565,
+      "slow_fraction_percent": 0.05318865920647487,
+      "walks": 72680,
+      "walks_for_slow_liveness": 58260,
+      "other_walks": 14420,
+      "directory_reads": 218040,
+      "record_pages_touched": 2,
+      "unique_directory_entry_values": [
+        1,
+        1,
+        2
+      ],
+      "cache_models": {
+        "0-1": {
+          "hits": 197077,
+          "misses": 20963,
+          "reuse_percent": 90.38570904421208,
+          "misses_per_walk": 0.2884287286736379
+        },
+        "0-4": {
+          "hits": 218036,
+          "misses": 4,
+          "reuse_percent": 99.99816547422492,
+          "misses_per_walk": 5.50357732526142e-05
+        },
+        "0-16": {
+          "hits": 218036,
+          "misses": 4,
+          "reuse_percent": 99.99816547422492,
+          "misses_per_walk": 5.50357732526142e-05
+        },
+        "1-1": {
+          "hits": 178065,
+          "misses": 39975,
+          "reuse_percent": 81.6662080352229,
+          "misses_per_walk": 0.5500137589433132
+        },
+        "1-4": {
+          "hits": 192700,
+          "misses": 25340,
+          "reuse_percent": 88.37827921482297,
+          "misses_per_walk": 0.34865162355531093
+        },
+        "1-16": {
+          "hits": 192700,
+          "misses": 25340,
+          "reuse_percent": 88.37827921482297,
+          "misses_per_walk": 0.34865162355531093
+        }
+      }
+    },
+    {
+      "benchmark": "544.nab_r",
+      "liveness_helper_calls": 121545282,
+      "slow_liveness_calls": 1405467,
+      "slow_fraction_percent": 1.1563320080165678,
+      "walks": 5752042,
+      "walks_for_slow_liveness": 5621868,
+      "other_walks": 130174,
+      "directory_reads": 17256126,
+      "record_pages_touched": 28,
+      "unique_directory_entry_values": [
+        1,
+        1,
+        28
+      ],
+      "cache_models": {
+        "0-1": {
+          "hits": 14581637,
+          "misses": 2674489,
+          "reuse_percent": 84.50122003049816,
+          "misses_per_walk": 0.46496339908505535
+        },
+        "0-4": {
+          "hits": 17207529,
+          "misses": 48597,
+          "reuse_percent": 99.7183782733158,
+          "misses_per_walk": 0.008448651800525796
+        },
+        "0-16": {
+          "hits": 17256093,
+          "misses": 33,
+          "reuse_percent": 99.99980876356605,
+          "misses_per_walk": 5.73709301844458e-06
+        },
+        "1-1": {
+          "hits": 14469509,
+          "misses": 2786617,
+          "reuse_percent": 83.85143339820306,
+          "misses_per_walk": 0.4844569980539085
+        },
+        "1-4": {
+          "hits": 17050945,
+          "misses": 205181,
+          "reuse_percent": 98.81096718927527,
+          "misses_per_walk": 0.03567098432174174
+        },
+        "1-16": {
+          "hits": 17064646,
+          "misses": 191480,
+          "reuse_percent": 98.89036507962447,
+          "misses_per_walk": 0.03328904761126571
+        }
+      }
+    }
+  ],
+  "results": [
+    {
+      "name": "502.gcc_r",
+      "benchmark": "502.gcc_r",
+      "status": "PASS",
+      "windows": [
+        {
+          "starts": 1,
+          "stops": 1,
+          "errors": 0,
+          "live_origin_open": false,
+          "flushes": 34046,
+          "distinct_root_record_pages": 23,
+          "live": [
+            [
+              634843,
+              553171,
+              0,
+              81672
+            ],
+            [
+              1170107,
+              1160236,
+              0,
+              9871
+            ]
+          ],
+          "walks_other_live": [
+            89002,
+            366172
+          ],
+          "directory_reads_other_live": [
+            [
+              89002,
+              89002,
+              89002
+            ],
+            [
+              366172,
+              366172,
+              366172
+            ]
+          ],
+          "unique_entry_value_triples": [
+            1,
+            1,
+            23
+          ],
+          "cache": [
+            {
+              "model": 0,
+              "level": 0,
+              "entries": 1,
+              "hits": 455173,
+              "misses": 1
+            },
+            {
+              "model": 0,
+              "level": 0,
+              "entries": 4,
+              "hits": 455173,
+              "misses": 1
+            },
+            {
+              "model": 0,
+              "level": 0,
+              "entries": 16,
+              "hits": 455173,
+              "misses": 1
+            },
+            {
+              "model": 0,
+              "level": 1,
+              "entries": 1,
+              "hits": 455173,
+              "misses": 1
+            },
+            {
+              "model": 0,
+              "level": 1,
+              "entries": 4,
+              "hits": 455173,
+              "misses": 1
+            },
+            {
+              "model": 0,
+              "level": 1,
+              "entries": 16,
+              "hits": 455173,
+              "misses": 1
+            },
+            {
+              "model": 0,
+              "level": 2,
+              "entries": 1,
+              "hits": 285716,
+              "misses": 169458
+            },
+            {
+              "model": 0,
+              "level": 2,
+              "entries": 4,
+              "hits": 435276,
+              "misses": 19898
+            },
+            {
+              "model": 0,
+              "level": 2,
+              "entries": 16,
+              "hits": 455103,
+              "misses": 71
+            },
+            {
+              "model": 1,
+              "level": 0,
+              "entries": 1,
+              "hits": 421128,
+              "misses": 34046
+            },
+            {
+              "model": 1,
+              "level": 0,
+              "entries": 4,
+              "hits": 421128,
+              "misses": 34046
+            },
+            {
+              "model": 1,
+              "level": 0,
+              "entries": 16,
+              "hits": 421128,
+              "misses": 34046
+            },
+            {
+              "model": 1,
+              "level": 1,
+              "entries": 1,
+              "hits": 421128,
+              "misses": 34046
+            },
+            {
+              "model": 1,
+              "level": 1,
+              "entries": 4,
+              "hits": 421128,
+              "misses": 34046
+            },
+            {
+              "model": 1,
+              "level": 1,
+              "entries": 16,
+              "hits": 421128,
+              "misses": 34046
+            },
+            {
+              "model": 1,
+              "level": 2,
+              "entries": 1,
+              "hits": 262893,
+              "misses": 192281
+            },
+            {
+              "model": 1,
+              "level": 2,
+              "entries": 4,
+              "hits": 385582,
+              "misses": 69592
+            },
+            {
+              "model": 1,
+              "level": 2,
+              "entries": 16,
+              "hits": 388237,
+              "misses": 66937
+            }
+          ]
+        }
+      ],
+      "output_hashes": [
+        {
+          "name": "t1.opts-O3_-finline-limit_50000.s",
+          "sha256": "58111208509dd871223ae195a33304bd6b24afd29458f37c976556cbad506324"
+        }
+      ],
+      "execution": {
+        "benchmark": "502.gcc_r",
+        "runner_rc": 0,
+        "icount": 0,
+        "host_elapsed_seconds": 5.865997364744544,
+        "commands": [
+          {
+            "argv": [
+              "./profrun",
+              "./cpugcc_r",
+              "t1.c",
+              "-O3",
+              "-finline-limit=50000",
+              "-o",
+              "t1.opts-O3_-finline-limit_50000.s"
+            ],
+            "stdout": "t1.opts-O3_-finline-limit_50000.out",
+            "stderr": "t1.opts-O3_-finline-limit_50000.err"
+          }
+        ],
+        "expected_commands": 1,
+        "exit_statuses": [
+          0
+        ],
+        "image_commands": [],
+        "expected_image_commands": 0,
+        "image_exit_statuses": [],
+        "execution_errors": [],
+        "execution_ok": true,
+        "spec_validation": "PENDING",
+        "comparator_manifest_sha256": "77821c50daabb1be10bc767b10e70c97cce4f0ee540cac59c64761e226e7195b"
+      }
+    },
+    {
+      "name": "538.imagick_r",
+      "benchmark": "538.imagick_r",
+      "status": "PASS",
+      "windows": [
+        {
+          "starts": 1,
+          "stops": 1,
+          "errors": 0,
+          "live_origin_open": false,
+          "flushes": 8528,
+          "distinct_root_record_pages": 4,
+          "live": [
+            [
+              85072,
+              69026,
+              0,
+              16046
+            ],
+            [
+              201929,
+              199864,
+              0,
+              2065
+            ]
+          ],
+          "walks_other_live": [
+            30943,
+            72444
+          ],
+          "directory_reads_other_live": [
+            [
+              30943,
+              30943,
+              30943
+            ],
+            [
+              72444,
+              72444,
+              72444
+            ]
+          ],
+          "unique_entry_value_triples": [
+            1,
+            1,
+            4
+          ],
+          "cache": [
+            {
+              "model": 0,
+              "level": 0,
+              "entries": 1,
+              "hits": 103386,
+              "misses": 1
+            },
+            {
+              "model": 0,
+              "level": 0,
+              "entries": 4,
+              "hits": 103386,
+              "misses": 1
+            },
+            {
+              "model": 0,
+              "level": 0,
+              "entries": 16,
+              "hits": 103386,
+              "misses": 1
+            },
+            {
+              "model": 0,
+              "level": 1,
+              "entries": 1,
+              "hits": 103386,
+              "misses": 1
+            },
+            {
+              "model": 0,
+              "level": 1,
+              "entries": 4,
+              "hits": 103386,
+              "misses": 1
+            },
+            {
+              "model": 0,
+              "level": 1,
+              "entries": 16,
+              "hits": 103386,
+              "misses": 1
+            },
+            {
+              "model": 0,
+              "level": 2,
+              "entries": 1,
+              "hits": 72479,
+              "misses": 30908
+            },
+            {
+              "model": 0,
+              "level": 2,
+              "entries": 4,
+              "hits": 103383,
+              "misses": 4
+            },
+            {
+              "model": 0,
+              "level": 2,
+              "entries": 16,
+              "hits": 103383,
+              "misses": 4
+            },
+            {
+              "model": 1,
+              "level": 0,
+              "entries": 1,
+              "hits": 94859,
+              "misses": 8528
+            },
+            {
+              "model": 1,
+              "level": 0,
+              "entries": 4,
+              "hits": 94859,
+              "misses": 8528
+            },
+            {
+              "model": 1,
+              "level": 0,
+              "entries": 16,
+              "hits": 94859,
+              "misses": 8528
+            },
+            {
+              "model": 1,
+              "level": 1,
+              "entries": 1,
+              "hits": 94859,
+              "misses": 8528
+            },
+            {
+              "model": 1,
+              "level": 1,
+              "entries": 4,
+              "hits": 94859,
+              "misses": 8528
+            },
+            {
+              "model": 1,
+              "level": 1,
+              "entries": 16,
+              "hits": 94859,
+              "misses": 8528
+            },
+            {
+              "model": 1,
+              "level": 2,
+              "entries": 1,
+              "hits": 67209,
+              "misses": 36178
+            },
+            {
+              "model": 1,
+              "level": 2,
+              "entries": 4,
+              "hits": 89867,
+              "misses": 13520
+            },
+            {
+              "model": 1,
+              "level": 2,
+              "entries": 16,
+              "hits": 89867,
+              "misses": 13520
+            }
+          ]
+        }
+      ],
+      "output_hashes": [
+        {
+          "name": "test_validate.out",
+          "sha256": "c3bfd816afd261fd4a1d4b6c8a4ed639f0872229ea26cbcaed127b04a5425a1a"
+        },
+        {
+          "name": "test_output.tga",
+          "sha256": "3f70992184b213de3b457de27312f52f1222877fd5bb17eeb8e1e9c67a1b0deb"
+        }
+      ],
+      "execution": {
+        "benchmark": "538.imagick_r",
+        "runner_rc": 0,
+        "icount": 0,
+        "host_elapsed_seconds": 3.899268575012684,
+        "commands": [
+          {
+            "argv": [
+              "./profrun",
+              "./imagick_r",
+              "-limit",
+              "disk",
+              "0",
+              "test_input.tga",
+              "-shear",
+              "25",
+              "-resize",
+              "640x480",
+              "-negate",
+              "-alpha",
+              "Off",
+              "test_output.tga"
+            ],
+            "stdout": "test_convert.out",
+            "stderr": "test_convert.err"
+          }
+        ],
+        "expected_commands": 1,
+        "exit_statuses": [
+          0
+        ],
+        "image_commands": [
+          {
+            "argv": [
+              "../run_base_test_native_qemu.0000/imagevalidate_538_base.native_qemu",
+              "-avg",
+              "-threshold",
+              "0.95",
+              "-maxthreshold",
+              "0.001",
+              "test_output.tga",
+              "/var/tmp/capstone-spec-php-20261105/share/SPEC17/benchspec/CPU/538.imagick_r/data/test/compare/test_expected.tga"
+            ],
+            "stdout": "test_validate.out",
+            "stderr": "test_validate.err",
+            "reference_sha256": "d7e4e331655a156377e3837cbdae3cb0f4e696032d37cc4f8ff33660b95c5c72"
+          }
+        ],
+        "expected_image_commands": 1,
+        "image_exit_statuses": [
+          0
+        ],
+        "execution_errors": [],
+        "execution_ok": true,
+        "spec_validation": "PENDING",
+        "comparator_manifest_sha256": "77821c50daabb1be10bc767b10e70c97cce4f0ee540cac59c64761e226e7195b"
+      }
+    },
+    {
+      "name": "997.specrand_fr",
+      "benchmark": "997.specrand_fr",
+      "status": "PASS",
+      "windows": [
+        {
+          "starts": 1,
+          "stops": 1,
+          "errors": 0,
+          "live_origin_open": false,
+          "flushes": 1437,
+          "distinct_root_record_pages": 1,
+          "live": [
+            [
+              1108172,
+              1107655,
+              0,
+              517
+            ],
+            [
+              26493,
+              26376,
+              0,
+              117
+            ]
+          ],
+          "walks_other_live": [
+            7586,
+            2536
+          ],
+          "directory_reads_other_live": [
+            [
+              7586,
+              7586,
+              7586
+            ],
+            [
+              2536,
+              2536,
+              2536
+            ]
+          ],
+          "unique_entry_value_triples": [
+            1,
+            1,
+            1
+          ],
+          "cache": [
+            {
+              "model": 0,
+              "level": 0,
+              "entries": 1,
+              "hits": 10121,
+              "misses": 1
+            },
+            {
+              "model": 0,
+              "level": 0,
+              "entries": 4,
+              "hits": 10121,
+              "misses": 1
+            },
+            {
+              "model": 0,
+              "level": 0,
+              "entries": 16,
+              "hits": 10121,
+              "misses": 1
+            },
+            {
+              "model": 0,
+              "level": 1,
+              "entries": 1,
+              "hits": 10121,
+              "misses": 1
+            },
+            {
+              "model": 0,
+              "level": 1,
+              "entries": 4,
+              "hits": 10121,
+              "misses": 1
+            },
+            {
+              "model": 0,
+              "level": 1,
+              "entries": 16,
+              "hits": 10121,
+              "misses": 1
+            },
+            {
+              "model": 0,
+              "level": 2,
+              "entries": 1,
+              "hits": 10121,
+              "misses": 1
+            },
+            {
+              "model": 0,
+              "level": 2,
+              "entries": 4,
+              "hits": 10121,
+              "misses": 1
+            },
+            {
+              "model": 0,
+              "level": 2,
+              "entries": 16,
+              "hits": 10121,
+              "misses": 1
+            },
+            {
+              "model": 1,
+              "level": 0,
+              "entries": 1,
+              "hits": 8685,
+              "misses": 1437
+            },
+            {
+              "model": 1,
+              "level": 0,
+              "entries": 4,
+              "hits": 8685,
+              "misses": 1437
+            },
+            {
+              "model": 1,
+              "level": 0,
+              "entries": 16,
+              "hits": 8685,
+              "misses": 1437
+            },
+            {
+              "model": 1,
+              "level": 1,
+              "entries": 1,
+              "hits": 8685,
+              "misses": 1437
+            },
+            {
+              "model": 1,
+              "level": 1,
+              "entries": 4,
+              "hits": 8685,
+              "misses": 1437
+            },
+            {
+              "model": 1,
+              "level": 1,
+              "entries": 16,
+              "hits": 8685,
+              "misses": 1437
+            },
+            {
+              "model": 1,
+              "level": 2,
+              "entries": 1,
+              "hits": 8685,
+              "misses": 1437
+            },
+            {
+              "model": 1,
+              "level": 2,
+              "entries": 4,
+              "hits": 8685,
+              "misses": 1437
+            },
+            {
+              "model": 1,
+              "level": 2,
+              "entries": 16,
+              "hits": 8685,
+              "misses": 1437
+            }
+          ]
+        }
+      ],
+      "output_hashes": [
+        {
+          "name": "rand.24239.out",
+          "sha256": "15e5b13042aa23597530688bfbcdfdfa83c55308372db51abeb73475af4dc72a"
+        }
+      ],
+      "execution": {
+        "benchmark": "997.specrand_fr",
+        "runner_rc": 0,
+        "icount": 0,
+        "host_elapsed_seconds": 2.8287479067221284,
+        "commands": [
+          {
+            "argv": [
+              "./profrun",
+              "./specrand_fr",
+              "324342",
+              "24239"
+            ],
+            "stdout": "rand.24239.out",
+            "stderr": "rand.24239.err"
+          }
+        ],
+        "expected_commands": 1,
+        "exit_statuses": [
+          0
+        ],
+        "image_commands": [],
+        "expected_image_commands": 0,
+        "image_exit_statuses": [],
+        "execution_errors": [],
+        "execution_ok": true,
+        "spec_validation": "PENDING",
+        "comparator_manifest_sha256": "77821c50daabb1be10bc767b10e70c97cce4f0ee540cac59c64761e226e7195b"
+      }
+    },
+    {
+      "name": "999.specrand_ir",
+      "benchmark": "999.specrand_ir",
+      "status": "PASS",
+      "windows": [
+        {
+          "starts": 1,
+          "stops": 1,
+          "errors": 0,
+          "live_origin_open": false,
+          "flushes": 1437,
+          "distinct_root_record_pages": 1,
+          "live": [
+            [
+              1108172,
+              1107655,
+              0,
+              517
+            ],
+            [
+              26493,
+              26376,
+              0,
+              117
+            ]
+          ],
+          "walks_other_live": [
+            7586,
+            2536
+          ],
+          "directory_reads_other_live": [
+            [
+              7586,
+              7586,
+              7586
+            ],
+            [
+              2536,
+              2536,
+              2536
+            ]
+          ],
+          "unique_entry_value_triples": [
+            1,
+            1,
+            1
+          ],
+          "cache": [
+            {
+              "model": 0,
+              "level": 0,
+              "entries": 1,
+              "hits": 10121,
+              "misses": 1
+            },
+            {
+              "model": 0,
+              "level": 0,
+              "entries": 4,
+              "hits": 10121,
+              "misses": 1
+            },
+            {
+              "model": 0,
+              "level": 0,
+              "entries": 16,
+              "hits": 10121,
+              "misses": 1
+            },
+            {
+              "model": 0,
+              "level": 1,
+              "entries": 1,
+              "hits": 10121,
+              "misses": 1
+            },
+            {
+              "model": 0,
+              "level": 1,
+              "entries": 4,
+              "hits": 10121,
+              "misses": 1
+            },
+            {
+              "model": 0,
+              "level": 1,
+              "entries": 16,
+              "hits": 10121,
+              "misses": 1
+            },
+            {
+              "model": 0,
+              "level": 2,
+              "entries": 1,
+              "hits": 10121,
+              "misses": 1
+            },
+            {
+              "model": 0,
+              "level": 2,
+              "entries": 4,
+              "hits": 10121,
+              "misses": 1
+            },
+            {
+              "model": 0,
+              "level": 2,
+              "entries": 16,
+              "hits": 10121,
+              "misses": 1
+            },
+            {
+              "model": 1,
+              "level": 0,
+              "entries": 1,
+              "hits": 8685,
+              "misses": 1437
+            },
+            {
+              "model": 1,
+              "level": 0,
+              "entries": 4,
+              "hits": 8685,
+              "misses": 1437
+            },
+            {
+              "model": 1,
+              "level": 0,
+              "entries": 16,
+              "hits": 8685,
+              "misses": 1437
+            },
+            {
+              "model": 1,
+              "level": 1,
+              "entries": 1,
+              "hits": 8685,
+              "misses": 1437
+            },
+            {
+              "model": 1,
+              "level": 1,
+              "entries": 4,
+              "hits": 8685,
+              "misses": 1437
+            },
+            {
+              "model": 1,
+              "level": 1,
+              "entries": 16,
+              "hits": 8685,
+              "misses": 1437
+            },
+            {
+              "model": 1,
+              "level": 2,
+              "entries": 1,
+              "hits": 8685,
+              "misses": 1437
+            },
+            {
+              "model": 1,
+              "level": 2,
+              "entries": 4,
+              "hits": 8685,
+              "misses": 1437
+            },
+            {
+              "model": 1,
+              "level": 2,
+              "entries": 16,
+              "hits": 8685,
+              "misses": 1437
+            }
+          ]
+        }
+      ],
+      "output_hashes": [
+        {
+          "name": "rand.24239.out",
+          "sha256": "15e5b13042aa23597530688bfbcdfdfa83c55308372db51abeb73475af4dc72a"
+        }
+      ],
+      "execution": {
+        "benchmark": "999.specrand_ir",
+        "runner_rc": 0,
+        "icount": 0,
+        "host_elapsed_seconds": 2.8463418316096067,
+        "commands": [
+          {
+            "argv": [
+              "./profrun",
+              "./specrand_ir",
+              "324342",
+              "24239"
+            ],
+            "stdout": "rand.24239.out",
+            "stderr": "rand.24239.err"
+          }
+        ],
+        "expected_commands": 1,
+        "exit_statuses": [
+          0
+        ],
+        "image_commands": [],
+        "expected_image_commands": 0,
+        "image_exit_statuses": [],
+        "execution_errors": [],
+        "execution_ok": true,
+        "spec_validation": "PENDING",
+        "comparator_manifest_sha256": "77821c50daabb1be10bc767b10e70c97cce4f0ee540cac59c64761e226e7195b"
+      }
+    },
+    {
+      "name": "519.lbm_r",
+      "benchmark": "519.lbm_r",
+      "status": "PASS",
+      "windows": [
+        {
+          "starts": 1,
+          "stops": 1,
+          "errors": 0,
+          "live_origin_open": false,
+          "flushes": 7209,
+          "distinct_root_record_pages": 2,
+          "live": [
+            [
+              27341559,
+              27330828,
+              0,
+              10731
+            ],
+            [
+              42098,
+              38264,
+              0,
+              3834
+            ]
+          ],
+          "walks_other_live": [
+            14420,
+            58260
+          ],
+          "directory_reads_other_live": [
+            [
+              14420,
+              14420,
+              14420
+            ],
+            [
+              58260,
+              58260,
+              58260
+            ]
+          ],
+          "unique_entry_value_triples": [
+            1,
+            1,
+            2
+          ],
+          "cache": [
+            {
+              "model": 0,
+              "level": 0,
+              "entries": 1,
+              "hits": 72679,
+              "misses": 1
+            },
+            {
+              "model": 0,
+              "level": 0,
+              "entries": 4,
+              "hits": 72679,
+              "misses": 1
+            },
+            {
+              "model": 0,
+              "level": 0,
+              "entries": 16,
+              "hits": 72679,
+              "misses": 1
+            },
+            {
+              "model": 0,
+              "level": 1,
+              "entries": 1,
+              "hits": 72679,
+              "misses": 1
+            },
+            {
+              "model": 0,
+              "level": 1,
+              "entries": 4,
+              "hits": 72679,
+              "misses": 1
+            },
+            {
+              "model": 0,
+              "level": 1,
+              "entries": 16,
+              "hits": 72679,
+              "misses": 1
+            },
+            {
+              "model": 0,
+              "level": 2,
+              "entries": 1,
+              "hits": 51719,
+              "misses": 20961
+            },
+            {
+              "model": 0,
+              "level": 2,
+              "entries": 4,
+              "hits": 72678,
+              "misses": 2
+            },
+            {
+              "model": 0,
+              "level": 2,
+              "entries": 16,
+              "hits": 72678,
+              "misses": 2
+            },
+            {
+              "model": 1,
+              "level": 0,
+              "entries": 1,
+              "hits": 65471,
+              "misses": 7209
+            },
+            {
+              "model": 1,
+              "level": 0,
+              "entries": 4,
+              "hits": 65471,
+              "misses": 7209
+            },
+            {
+              "model": 1,
+              "level": 0,
+              "entries": 16,
+              "hits": 65471,
+              "misses": 7209
+            },
+            {
+              "model": 1,
+              "level": 1,
+              "entries": 1,
+              "hits": 65471,
+              "misses": 7209
+            },
+            {
+              "model": 1,
+              "level": 1,
+              "entries": 4,
+              "hits": 65471,
+              "misses": 7209
+            },
+            {
+              "model": 1,
+              "level": 1,
+              "entries": 16,
+              "hits": 65471,
+              "misses": 7209
+            },
+            {
+              "model": 1,
+              "level": 2,
+              "entries": 1,
+              "hits": 47123,
+              "misses": 25557
+            },
+            {
+              "model": 1,
+              "level": 2,
+              "entries": 4,
+              "hits": 61758,
+              "misses": 10922
+            },
+            {
+              "model": 1,
+              "level": 2,
+              "entries": 16,
+              "hits": 61758,
+              "misses": 10922
+            }
+          ]
+        }
+      ],
+      "output_hashes": [
+        {
+          "name": "lbm.out",
+          "sha256": "7ab5463219d503a3cb54d5bd75b69c6620109b560058de7a20a719796433cdc5"
+        }
+      ],
+      "execution": {
+        "benchmark": "519.lbm_r",
+        "runner_rc": 0,
+        "icount": 0,
+        "host_elapsed_seconds": 54.62046668678522,
+        "commands": [
+          {
+            "argv": [
+              "./profrun",
+              "./lbm_r",
+              "20",
+              "reference.dat",
+              "0",
+              "1",
+              "100_100_130_cf_a.of"
+            ],
+            "stdout": "lbm.out",
+            "stderr": "lbm.err"
+          }
+        ],
+        "expected_commands": 1,
+        "exit_statuses": [
+          0
+        ],
+        "image_commands": [],
+        "expected_image_commands": 0,
+        "image_exit_statuses": [],
+        "execution_errors": [],
+        "execution_ok": true,
+        "spec_validation": "PENDING",
+        "comparator_manifest_sha256": "77821c50daabb1be10bc767b10e70c97cce4f0ee540cac59c64761e226e7195b"
+      }
+    },
+    {
+      "name": "544.nab_r",
+      "benchmark": "544.nab_r",
+      "status": "PASS",
+      "windows": [
+        {
+          "starts": 1,
+          "stops": 1,
+          "errors": 0,
+          "live_origin_open": false,
+          "flushes": 46190,
+          "distinct_root_record_pages": 28,
+          "live": [
+            [
+              121461465,
+              120069705,
+              0,
+              1391760
+            ],
+            [
+              83817,
+              70110,
+              0,
+              13707
+            ]
+          ],
+          "walks_other_live": [
+            130174,
+            5621868
+          ],
+          "directory_reads_other_live": [
+            [
+              130174,
+              130174,
+              130174
+            ],
+            [
+              5621868,
+              5621868,
+              5621868
+            ]
+          ],
+          "unique_entry_value_triples": [
+            1,
+            1,
+            28
+          ],
+          "cache": [
+            {
+              "model": 0,
+              "level": 0,
+              "entries": 1,
+              "hits": 5752041,
+              "misses": 1
+            },
+            {
+              "model": 0,
+              "level": 0,
+              "entries": 4,
+              "hits": 5752041,
+              "misses": 1
+            },
+            {
+              "model": 0,
+              "level": 0,
+              "entries": 16,
+              "hits": 5752041,
+              "misses": 1
+            },
+            {
+              "model": 0,
+              "level": 1,
+              "entries": 1,
+              "hits": 5752041,
+              "misses": 1
+            },
+            {
+              "model": 0,
+              "level": 1,
+              "entries": 4,
+              "hits": 5752041,
+              "misses": 1
+            },
+            {
+              "model": 0,
+              "level": 1,
+              "entries": 16,
+              "hits": 5752041,
+              "misses": 1
+            },
+            {
+              "model": 0,
+              "level": 2,
+              "entries": 1,
+              "hits": 3077555,
+              "misses": 2674487
+            },
+            {
+              "model": 0,
+              "level": 2,
+              "entries": 4,
+              "hits": 5703447,
+              "misses": 48595
+            },
+            {
+              "model": 0,
+              "level": 2,
+              "entries": 16,
+              "hits": 5752011,
+              "misses": 31
+            },
+            {
+              "model": 1,
+              "level": 0,
+              "entries": 1,
+              "hits": 5705852,
+              "misses": 46190
+            },
+            {
+              "model": 1,
+              "level": 0,
+              "entries": 4,
+              "hits": 5705852,
+              "misses": 46190
+            },
+            {
+              "model": 1,
+              "level": 0,
+              "entries": 16,
+              "hits": 5705852,
+              "misses": 46190
+            },
+            {
+              "model": 1,
+              "level": 1,
+              "entries": 1,
+              "hits": 5705852,
+              "misses": 46190
+            },
+            {
+              "model": 1,
+              "level": 1,
+              "entries": 4,
+              "hits": 5705852,
+              "misses": 46190
+            },
+            {
+              "model": 1,
+              "level": 1,
+              "entries": 16,
+              "hits": 5705852,
+              "misses": 46190
+            },
+            {
+              "model": 1,
+              "level": 2,
+              "entries": 1,
+              "hits": 3057805,
+              "misses": 2694237
+            },
+            {
+              "model": 1,
+              "level": 2,
+              "entries": 4,
+              "hits": 5639241,
+              "misses": 112801
+            },
+            {
+              "model": 1,
+              "level": 2,
+              "entries": 16,
+              "hits": 5652942,
+              "misses": 99100
+            }
+          ]
+        }
+      ],
+      "output_hashes": [
+        {
+          "name": "hkrdenq.out",
+          "sha256": "2d580a95e2e596f2e06485149e9d91880bf47ded5a5495a366a80d4cea2a9afd"
+        }
+      ],
+      "execution": {
+        "benchmark": "544.nab_r",
+        "runner_rc": 0,
+        "icount": 0,
+        "host_elapsed_seconds": 64.05759186949581,
+        "commands": [
+          {
+            "argv": [
+              "./profrun",
+              "./nab_r",
+              "hkrdenq",
+              "1930344093",
+              "1000"
+            ],
+            "stdout": "hkrdenq.out",
+            "stderr": "hkrdenq.err"
+          }
+        ],
+        "expected_commands": 1,
+        "exit_statuses": [
+          0
+        ],
+        "image_commands": [],
+        "expected_image_commands": 0,
+        "image_exit_statuses": [],
+        "execution_errors": [],
+        "execution_ok": true,
+        "spec_validation": "PENDING",
+        "comparator_manifest_sha256": "77821c50daabb1be10bc767b10e70c97cce4f0ee540cac59c64761e226e7195b"
+      }
+    },
+    {
+      "name": "gcc-repeat",
+      "benchmark": "502.gcc_r",
+      "status": "PASS",
+      "windows": [
+        {
+          "starts": 1,
+          "stops": 1,
+          "errors": 0,
+          "live_origin_open": false,
+          "flushes": 34046,
+          "distinct_root_record_pages": 23,
+          "live": [
+            [
+              634843,
+              553171,
+              0,
+              81672
+            ],
+            [
+              1170107,
+              1160236,
+              0,
+              9871
+            ]
+          ],
+          "walks_other_live": [
+            89002,
+            366172
+          ],
+          "directory_reads_other_live": [
+            [
+              89002,
+              89002,
+              89002
+            ],
+            [
+              366172,
+              366172,
+              366172
+            ]
+          ],
+          "unique_entry_value_triples": [
+            1,
+            1,
+            23
+          ],
+          "cache": [
+            {
+              "model": 0,
+              "level": 0,
+              "entries": 1,
+              "hits": 455173,
+              "misses": 1
+            },
+            {
+              "model": 0,
+              "level": 0,
+              "entries": 4,
+              "hits": 455173,
+              "misses": 1
+            },
+            {
+              "model": 0,
+              "level": 0,
+              "entries": 16,
+              "hits": 455173,
+              "misses": 1
+            },
+            {
+              "model": 0,
+              "level": 1,
+              "entries": 1,
+              "hits": 455173,
+              "misses": 1
+            },
+            {
+              "model": 0,
+              "level": 1,
+              "entries": 4,
+              "hits": 455173,
+              "misses": 1
+            },
+            {
+              "model": 0,
+              "level": 1,
+              "entries": 16,
+              "hits": 455173,
+              "misses": 1
+            },
+            {
+              "model": 0,
+              "level": 2,
+              "entries": 1,
+              "hits": 285716,
+              "misses": 169458
+            },
+            {
+              "model": 0,
+              "level": 2,
+              "entries": 4,
+              "hits": 435276,
+              "misses": 19898
+            },
+            {
+              "model": 0,
+              "level": 2,
+              "entries": 16,
+              "hits": 455103,
+              "misses": 71
+            },
+            {
+              "model": 1,
+              "level": 0,
+              "entries": 1,
+              "hits": 421128,
+              "misses": 34046
+            },
+            {
+              "model": 1,
+              "level": 0,
+              "entries": 4,
+              "hits": 421128,
+              "misses": 34046
+            },
+            {
+              "model": 1,
+              "level": 0,
+              "entries": 16,
+              "hits": 421128,
+              "misses": 34046
+            },
+            {
+              "model": 1,
+              "level": 1,
+              "entries": 1,
+              "hits": 421128,
+              "misses": 34046
+            },
+            {
+              "model": 1,
+              "level": 1,
+              "entries": 4,
+              "hits": 421128,
+              "misses": 34046
+            },
+            {
+              "model": 1,
+              "level": 1,
+              "entries": 16,
+              "hits": 421128,
+              "misses": 34046
+            },
+            {
+              "model": 1,
+              "level": 2,
+              "entries": 1,
+              "hits": 262893,
+              "misses": 192281
+            },
+            {
+              "model": 1,
+              "level": 2,
+              "entries": 4,
+              "hits": 385582,
+              "misses": 69592
+            },
+            {
+              "model": 1,
+              "level": 2,
+              "entries": 16,
+              "hits": 388237,
+              "misses": 66937
+            }
+          ]
+        }
+      ],
+      "output_hashes": [
+        {
+          "name": "t1.opts-O3_-finline-limit_50000.s",
+          "sha256": "58111208509dd871223ae195a33304bd6b24afd29458f37c976556cbad506324"
+        }
+      ],
+      "execution": {
+        "benchmark": "502.gcc_r",
+        "runner_rc": 0,
+        "icount": 0,
+        "host_elapsed_seconds": 6.149178918451071,
+        "commands": [
+          {
+            "argv": [
+              "./profrun",
+              "./cpugcc_r",
+              "t1.c",
+              "-O3",
+              "-finline-limit=50000",
+              "-o",
+              "t1.opts-O3_-finline-limit_50000.s"
+            ],
+            "stdout": "t1.opts-O3_-finline-limit_50000.out",
+            "stderr": "t1.opts-O3_-finline-limit_50000.err"
+          }
+        ],
+        "expected_commands": 1,
+        "exit_statuses": [
+          0
+        ],
+        "image_commands": [],
+        "expected_image_commands": 0,
+        "image_exit_statuses": [],
+        "execution_errors": [],
+        "execution_ok": true,
+        "spec_validation": "PENDING",
+        "comparator_manifest_sha256": "77821c50daabb1be10bc767b10e70c97cce4f0ee540cac59c64761e226e7195b"
+      }
+    }
+  ],
+  "gcc_purpose_check": {
+    "walks": [
+      0,
+      183086,
+      91543,
+      91543
+    ],
+    "labels": [
+      "unclassified",
+      "table_open_allocation_preflight",
+      "requested_record_liveness",
+      "cache_fill_record_address"
+    ],
+    "all_original_counters_match": true,
+    "shadow_cache_selftests": "PASS actual C cache routines: hit, capacity eviction, root/value key separation and generation-flush reset"
+  },
+  "negative_control": {
+    "status": "PASS",
+    "exact_output": true,
+    "missing_window_rejected": true
+  },
+  "inputs": {
+    "diagnostic_binary_sha256": "98e9b4ec1ba63afad215b98c8e677d9fae8f46237a66f196d91b4929c8fcf55d",
+    "purpose_binary_sha256": "2d9dfcb583292c0e286d42508dfda0b1b6b4f2f6e9e84738e309410fc7edc40d",
+    "kernel_sha256": "b7de27fb28bc0807053ae3e1c4bcd058e79f601d255a0dcaaa6ce70d46a3815f",
+    "observer_sha256": "1d13d4912794855ae9c3c3fe69c89ca55434c2dd02b836053ad18f7913b7904f",
+    "original_inputs": "All original input/binary hashes match spec-rebase-qualification.json; only profrun observer added",
+    "build": "Clang O2, non-LTO diagnostic export; never used for performance timing"
+  },
+  "definitions": {
+    "live_arrays": "Rows data/PCC; columns calls, watched-cache hit, direct-record-cache access, slow lookup",
+    "walks": "Calls to paged cap_rev_table_record_pa after table/ID validity checks; includes lifetime operations outside capstone_id_live",
+    "levels": "0 root directory pointer, 1 middle directory pointer, 2 record-page pointer; each successful walk reads all three",
+    "cache_models": "Fully associative LRU with 1/4/16 entries separately per level, cold at start; key=(root, entry physical address, observed pointer value). Model 0 measures raw observed-value locality. Model 1 additionally clears all entries on observed table-generation or global watched-write-generation changes before a walk.",
+    "reuse": "Shadow hits divided by observed directory-pointer reads. Both models still execute every real read and check; no cached value influences architectural state."
+  },
+  "findings": [
+    "Every workload uses only one root-directory entry and one middle-directory entry; record-page working sets range from 1 to 28 pages.",
+    "Each slow liveness lookup produces four directory walks in these runs. Extra purpose counters on GCC attribute two to table-open allocation preflight, one to liveness, and one to cache fill.",
+    "Directory locality supports testing a small cache and eliminating redundant walks before changing leaf size; the current software walk count is not a mandatory RTL access count."
+  ],
+  "limitations": [
+    "These are logical QEMU table operations, not CPU data-cache misses or DRAM transactions.",
+    "The slow fraction is conditional on calls reaching capstone_id_live. Successful inline register/PCC proofs bypass that helper and are not in its denominator.",
+    "Generation-flush shadow results are opportunity estimates, not a coherence/security proof: mapping lifetime, root reuse, concurrent writers and all invalidation paths need validation before implementing a cache. The observed-pointer value in the key is an oracle unavailable without the real read.",
+    "Single-hart short workloads, largely one protected process. Results do not establish multiprocess working sets, longer-run locality, or speedup.",
+    "Directory-read reuse does not eliminate record/header reads, validation, or other work.",
+    "Training/diagnostic host timings are excluded. No default binary, guest ISA or table format changed.",
+    "First preparation attempt referenced a missing observer path and stopped before execution. First negative-control preparation found two compiler-emitted stop sites; both verified HINT sites were suppressed for the successful negative run."
+  ],
+  "archive": {
+    "path": "/tmp/capstone/table-walk-01-evidence.tar.gz",
+    "sha256": "f97b7ae8a19e7dd2c3caa26b7eb6a2a6f722090add7663833eea4c1241ca5f78"
+  }
+}

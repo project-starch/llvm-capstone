@@ -36,6 +36,16 @@ on this frozen build before promoting it: Perl, full x264, mcf and xz remain.
 Keep clean timing, instrumented training, and functional qualification separate.
 Native RTL handoff stays fixed.
 
+The [six-workload lifetime-table diagnostic](../../runtime/virtual/tests/qemu-throughput/table-walk-locality.json)
+finds one used entry at each upper directory level and 1–28 touched record pages.
+Four-entry-per-level shadow caches capture 85.8–98.8% directory-read reuse with
+observed-generation flushes, but these are locality oracles, not a coherence
+proof or measured speedup. Each slow liveness lookup performs four software
+walks; GCC purpose counters identify two allocation preflights, one liveness
+read and one cache-fill resolution. Prioritize safe reuse of validated directory
+or record addresses before changing page size, preserving invalidation and
+fail-closed checks. The qualified production binaries remain unchanged.
+
 ## RTL implementation from the rebased native branch
 
 The developer entry is the [RTL handoff](../plans/native-task-rtl-handoff.md).
