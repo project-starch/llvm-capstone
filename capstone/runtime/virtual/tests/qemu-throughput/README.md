@@ -32,6 +32,45 @@ kernel paths from the common-machine controls.
 
 Earlier cohorts below are retained with their own source/build identities.
 
+### Profile-guided host build candidate
+
+The [PGO experiment](pgo-qualification.json) uses the same `81246125dc`
+source and Clang/full-LTO configuration, with profiles collected from GCC,
+LBM and NAB. It reduces GCC host CPU from 53.790 to 45.115 seconds per 100
+compilations (16.13%) in a fresh forward/reverse comparison. A held-out
+three-frame x264 excerpt improves from 40.375 to 36.440 seconds (9.75%),
+with identical bitstream and decoded frames. This excerpt is not the full
+SPEC test command or a SPEC score.
+
+Plain platform execution also improves, from 5.555 to 4.980 seconds. Thus
+the native/plain ratio changes from 9.68 to 9.06, rather than falling by
+the full native speedup. A separate counter pair reports 21.91% fewer host
+user-mode instructions and 14.93% fewer branches; branch misses increase
+1.26%. The emitted helpers inline more common access-check and tag work.
+These are host compiler effects, not removed checks or a hardware speedup.
+
+This is a separate build candidate, not a replacement for the full-suite
+qualified build above. Its qualification record distinguishes bounded checks
+and short workloads from the remaining full ten-entry rerun.
+
+To reproduce the build stages, use `build-candidate.sh` with Clang/full LTO
+and `-fprofile-instr-generate` in `CFLAGS`, `CXXFLAGS` and `LDFLAGS` (retain
+`-fuse-ld=lld` in `LDFLAGS`). Run the training workloads with
+`LLVM_PROFILE_FILE` naming a fresh directory and `%p.profraw`; verify outputs
+and normal QEMU exit before merging files with the matching LLVM 18
+`llvm-profdata merge`. Build the same source/configuration in a fresh directory
+with `-fprofile-instr-use=/absolute/path/training.profdata` replacing the
+generation flag. Training times are not performance results.
+
+In this experiment the dtc subproject initially treated missing-profile
+warnings for unused objects as errors. The recorded retry runs
+`./pyvenv/bin/meson configure -Ddtc:werror=false` then Ninja in the use-build
+directory. Retain and inspect warnings: the observed profile mismatches are
+confined to stub implementations, not the capability helpers. Host and target
+configuration headers match between training and use builds. Freeze the
+uninstrumented binary before independent timing and qualification; retrain
+after source/configuration changes instead of silently accepting stale data.
+
 The [combined candidate](combined-qualification.json) saves 13.26% host CPU in
 the stable 50-compilation GCC confirmation (27.480s to 23.835s). Unchanged SPEC
 GCC/LBM/NAB commands pass, with 15.54% / 3.51% / 10.32% mean CPU reductions in

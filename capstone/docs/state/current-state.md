@@ -1,3 +1,17 @@
+## PGO candidate: another 16.13% less GCC host CPU, full qualification pending
+
+On the unchanged QEMU `81246125dc` source, Clang/full-LTO profile-guided
+compilation reduces mean GCC host CPU from 53.790s to 45.115s per 100
+compilations. All 800 timed native/plain outputs and eight warm-ups match.
+A held-out three-frame x264 excerpt improves 9.75%. A separate diagnostic
+pair reports 21.91% fewer host instructions; branch misses do not improve.
+Plain execution also speeds up, so native/plain changes from 9.68x to 9.06x.
+No ISA or guest software changes are involved. The candidate passes 55 bounded
+cases, all eight safety groups, and six short SPEC entries in both clock modes.
+It remains separate from the fully qualified default below until the complete
+ten-entry suite is rerun. [Evidence and limitations](../../runtime/virtual/tests/qemu-throughput/pgo-qualification.json),
+[build recipe](../../runtime/virtual/tests/qemu-throughput/README.md).
+
 ## Qualified QEMU throughput branch: 17.58% less GCC host CPU
 
 `perf/qemu-throughput` now selects QEMU `81246125dc`. The final exclusive

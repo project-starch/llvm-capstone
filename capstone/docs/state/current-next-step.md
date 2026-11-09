@@ -26,9 +26,14 @@ passes bounded checks but shows no useful GCC gain (10.700 s versus 10.715 s).
 It remains separate on QEMU `perf/ldc-tagged-query`; the qualified pin is unchanged.
 The [MMU-index reuse experiment](../../runtime/virtual/tests/qemu-throughput/memory-index-qualification.json)
 also passes 55 bounded cases but provides no GCC gain (10.72 s versus 10.82 s).
-Keep it separate on `perf/cap-memory-index`. Next evaluate profile-guided host
-compilation on the qualified source, with mixed training workloads and an
-independent correctness/performance gate; no semantic checks should be removed.
+Keep it separate on `perf/cap-memory-index`.
+The [PGO host-build candidate](../../runtime/virtual/tests/qemu-throughput/pgo-qualification.json)
+now saves another 16.13% GCC host CPU on unchanged source and 9.75% on a
+held-out x264 excerpt. All 55 bounded cases, eight safety groups and six short
+SPEC entries in both modes pass. Its lower instruction count supports improving
+the compiled common paths while retaining checks. Complete the ten-entry suite
+on this frozen build before promoting it: Perl, full x264, mcf and xz remain.
+Keep clean timing, instrumented training, and functional qualification separate.
 Native RTL handoff stays fixed.
 
 ## RTL implementation from the rebased native branch
