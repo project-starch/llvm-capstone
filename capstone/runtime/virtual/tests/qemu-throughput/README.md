@@ -4,21 +4,51 @@ Branch `perf/qemu-throughput`, based on the full-SPEC-qualified native branch at
 `2b25f1714a5e`. This experiment measures emulator host time, not RTL cycles.
 No capability checks, emulated semantics or runtime defaults are weakened.
 
+The qualified QEMU pin is `81246125dc`. The [final direct comparison](final-comparison.json)
+passes all 1,800 timed outputs and 18 warm-ups, with these mean host CPU times
+per 100 GCC test compilations:
+
+| Build / clock mode | Host CPU | Reduction vs original icount |
+| --- | ---: | ---: |
+| Original fork / icount0 | 65.055 s | — |
+| Combined Clang/LTO / icount0 | 55.840 s | 14.17% |
+| Final Clang/LTO / icount0 | 53.620 s | **17.58%** |
+| Final Clang/LTO / no icount | 44.830 s | **31.09%** |
+
+Two reversed-order samples per variant agree closely. Source changes and host
+build choices both contribute; these are emulator host costs, not RTL cycles.
+Both frozen candidates pass all ten existing SPEC C-port entries in both clock
+modes, with 22 original commands, four guest image validators and 25 qualified
+output-hash comparisons per suite. The latest passes all eight safety groups.
+See [full qualification](full-qualification.json) for scope and bounded GCC
+portability. The native RTL handoff remains unchanged.
+
+Plain controls in the same cohort use 8.890 s for stock QEMU, 9.685 s for the
+original fork, and 9.100 s for the optimized fork on the common machine/CPU and
+identical plain GCC binary. The optimized fork comparison includes Clang/LTO;
+it does not isolate ISA-extension cost. Platform/plain means are 5.915 s
+original and 5.555 s optimized; those deliberately use different discovery and
+kernel paths from the common-machine controls.
+
+Earlier cohorts below are retained with their own source/build identities.
+
 The [combined candidate](combined-qualification.json) saves 13.26% host CPU in
 the stable 50-compilation GCC confirmation (27.480s to 23.835s). Unchanged SPEC
 GCC/LBM/NAB commands pass, with 15.54% / 3.51% / 10.32% mean CPU reductions in
 icount mode; LBM's baseline varies more. Explicit no-icount reduces their host
 CPU by 43.90% / 28.78% / 32.91% versus the original icount build. These clock
 modes remain separate. All eight bounded safety groups pass in both modes;
-full ten-entry regression is running before the default pin can advance.
+the [full regression](full-qualification.json) now passes on both candidates in
+both clock modes. The final exclusive timing confirmation is shown above.
 The runtime is QEMU `d81f426a7c`; `f3b74f0646` adds only a test-epilogue repair.
 
 The further [code-page probe candidate](code-probe-qualification.json), QEMU
 `81246125dc`, saves another 4.28% in a separate 100-compilation ABBA comparison
 against the combined candidate. All 400 outputs and four warm-ups match;
 eight ordinary/subpage self-modifying-code cases and the diagnostic invariant
-pass, while deliberately missing invalidation fails. Wider regression remains
-pending. Do not add this percentage to an earlier cohort to claim a total gain.
+pass, while deliberately missing invalidation fails. Full regression and eight
+safety groups now pass in both modes. Do not add this percentage to an earlier
+cohort to claim a total gain.
 The [GCC non-LTO portability check](gcc-portability-qualification.json) covers
 `f3b74f0646` with codec, differential, instruction and bounded GCC smoke checks;
 it does not replace full-suite qualification of the Clang build.
@@ -36,6 +66,31 @@ Only the first pair holds the machine/CPU flags and application binary identical
 The platform controls deliberately expose different discovery and kernel paths.
 The native application has different compiler/libc/ABI provenance. Their wall-time
 ratio cannot be labeled emulator-only overhead or predicted hardware slowdown.
+
+## Build the qualified candidate
+
+The qualified runtime source is QEMU `81246125dcf06bf057b9fca9fb5e850dddce0f5b`.
+The faster measured build uses Clang with full LTO; assertions and QOM debug
+checks remain enabled. A normal GCC non-LTO build also passes the bounded
+portability gates, but its speed is not the Clang/LTO result.
+
+```sh
+source capstone/tests/capstone-test-env.sh
+CC=clang CXX=clang++ LDFLAGS=-fuse-ld=lld \
+  QEMU_BUILD_JOBS=6 QEMU_LTO_THREADS=4 \
+  capstone/runtime/virtual/tests/qemu-throughput/build-candidate.sh \
+  "$QEMU_REPO" 81246125dcf06bf057b9fca9fb5e850dddce0f5b \
+  "$FRESH_BUILD_DIR" --lto
+```
+
+The resulting binary is `$FRESH_BUILD_DIR/build/qemu-system-riscv64`.
+Use it as `--fork` in the measurement command below, or as `--qemu` for
+functional regressions. Keep instruction-counted and explicit `--no-icount`
+functional runs separate. The latter is an optional feedback mode, not a
+change to the runtime defaults or an RTL performance estimate.
+
+The following pair builder creates the original controls for comparison;
+it does not build the optimized candidate.
 
 ## Build and run
 

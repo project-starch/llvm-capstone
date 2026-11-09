@@ -1,0 +1,1360 @@
+{
+  "status": "PASS",
+  "started_epoch": 1794187921.2872334,
+  "native": [
+    {
+      "label": "native-0-original",
+      "variant": "original",
+      "arm": "platform-native",
+      "summary": {
+        "status": "PASS",
+        "inputs": {
+          "stock": "fef99d167011dca7bb155e8afe835b5b535cec51b13532300413cddeaf3fc929",
+          "fork": "8672296ec36f7098133ea6fd8fe956f0124a7e2f4b3663fe5d43fb48e9d1e180",
+          "firmware": "2335a28682ddf65e46c1f492632c2cb026efcb2271caf544a3f7ddc858b03e02",
+          "plain": "ebeca8e920328b5c893fc9ee910851cceabee2bebc00320322b2b77b75def4a0",
+          "native": "a1509c81444586031c74c5752f72ec90dc6c7ab57635fff37ffa431c11663a9f",
+          "input": "de7b86d79a68965adb62e750101d9211224884b2236053d906d1e23057bb6ad1",
+          "reference": "58111208509dd871223ae195a33304bd6b24afd29458f37c976556cbad506324",
+          "Image": "b7de27fb28bc0807053ae3e1c4bcd058e79f601d255a0dcaaa6ce70d46a3815f",
+          "rootfs.ext2": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845"
+        },
+        "iterations": 100,
+        "icount": 0,
+        "profiled": false,
+        "profile_mode": null,
+        "pcrel_override": null,
+        "scalar_controls": {
+          "cpu": null,
+          "machine": null,
+          "kernel": null
+        },
+        "host": {
+          "uname": [
+            "Linux",
+            "pop-os",
+            "6.18.7-76061807-generic",
+            "#202601231045~1778249322~24.04~b44a3c3 SMP PREEMPT_DYNAMIC Fri M",
+            "x86_64",
+            "x86_64"
+          ],
+          "affinity": [
+            2
+          ]
+        },
+        "samples": [
+          {
+            "arm": "platform-native",
+            "run": 0,
+            "host_loadavg_before": [
+              0.47021484375,
+              0.11865234375,
+              0.04345703125
+            ],
+            "reference_match": true,
+            "wall_seconds": 65.247247001,
+            "cpu_seconds": 65.09,
+            "cpu_tick_hz": 100,
+            "scope": "Guest serial window; host time, not guest cycles",
+            "profiled": false
+          }
+        ],
+        "limitations": [
+          "Host serial-delivery timing, not target cycles or hardware overhead.",
+          "One untimed warm-up compilation per fresh guest, then a batch including exec/exit.",
+          "Default stock-plain/fork-plain is the matched scalar pair; explicit overrides must be audited separately.",
+          "Platform arms intentionally change discovery/CPU flags and Linux capability paths.",
+          "Native versus plain binaries differ in compiler/libc/ABI; not isolated ISA cost.",
+          "No profiling plugin; build flags and host contention still require auditing."
+        ],
+        "medians": {
+          "platform-native": {
+            "wall_seconds": 65.247247001,
+            "cpu_seconds": 65.09
+          }
+        }
+      }
+    },
+    {
+      "label": "native-1-combined",
+      "variant": "combined",
+      "arm": "platform-native",
+      "summary": {
+        "status": "PASS",
+        "inputs": {
+          "stock": "fef99d167011dca7bb155e8afe835b5b535cec51b13532300413cddeaf3fc929",
+          "fork": "fdbb824a80998913f93b1eee689a8bc8efd4bd15f8ff995c07a4be7736844e29",
+          "firmware": "2335a28682ddf65e46c1f492632c2cb026efcb2271caf544a3f7ddc858b03e02",
+          "plain": "ebeca8e920328b5c893fc9ee910851cceabee2bebc00320322b2b77b75def4a0",
+          "native": "a1509c81444586031c74c5752f72ec90dc6c7ab57635fff37ffa431c11663a9f",
+          "input": "de7b86d79a68965adb62e750101d9211224884b2236053d906d1e23057bb6ad1",
+          "reference": "58111208509dd871223ae195a33304bd6b24afd29458f37c976556cbad506324",
+          "Image": "b7de27fb28bc0807053ae3e1c4bcd058e79f601d255a0dcaaa6ce70d46a3815f",
+          "rootfs.ext2": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845"
+        },
+        "iterations": 100,
+        "icount": 0,
+        "profiled": false,
+        "profile_mode": null,
+        "pcrel_override": null,
+        "scalar_controls": {
+          "cpu": null,
+          "machine": null,
+          "kernel": null
+        },
+        "host": {
+          "uname": [
+            "Linux",
+            "pop-os",
+            "6.18.7-76061807-generic",
+            "#202601231045~1778249322~24.04~b44a3c3 SMP PREEMPT_DYNAMIC Fri M",
+            "x86_64",
+            "x86_64"
+          ],
+          "affinity": [
+            2
+          ]
+        },
+        "samples": [
+          {
+            "arm": "platform-native",
+            "run": 0,
+            "host_loadavg_before": [
+              0.8505859375,
+              0.31787109375,
+              0.12109375
+            ],
+            "reference_match": true,
+            "wall_seconds": 56.150845178,
+            "cpu_seconds": 56.0,
+            "cpu_tick_hz": 100,
+            "scope": "Guest serial window; host time, not guest cycles",
+            "profiled": false
+          }
+        ],
+        "limitations": [
+          "Host serial-delivery timing, not target cycles or hardware overhead.",
+          "One untimed warm-up compilation per fresh guest, then a batch including exec/exit.",
+          "Default stock-plain/fork-plain is the matched scalar pair; explicit overrides must be audited separately.",
+          "Platform arms intentionally change discovery/CPU flags and Linux capability paths.",
+          "Native versus plain binaries differ in compiler/libc/ABI; not isolated ISA cost.",
+          "No profiling plugin; build flags and host contention still require auditing."
+        ],
+        "medians": {
+          "platform-native": {
+            "wall_seconds": 56.150845178,
+            "cpu_seconds": 56.0
+          }
+        }
+      }
+    },
+    {
+      "label": "native-2-candidate",
+      "variant": "candidate",
+      "arm": "platform-native",
+      "summary": {
+        "status": "PASS",
+        "inputs": {
+          "stock": "fef99d167011dca7bb155e8afe835b5b535cec51b13532300413cddeaf3fc929",
+          "fork": "c5d7588a9bfda4108b92d18ead08d99be9f2436722748ff72b5a23ed36e9d7f4",
+          "firmware": "2335a28682ddf65e46c1f492632c2cb026efcb2271caf544a3f7ddc858b03e02",
+          "plain": "ebeca8e920328b5c893fc9ee910851cceabee2bebc00320322b2b77b75def4a0",
+          "native": "a1509c81444586031c74c5752f72ec90dc6c7ab57635fff37ffa431c11663a9f",
+          "input": "de7b86d79a68965adb62e750101d9211224884b2236053d906d1e23057bb6ad1",
+          "reference": "58111208509dd871223ae195a33304bd6b24afd29458f37c976556cbad506324",
+          "Image": "b7de27fb28bc0807053ae3e1c4bcd058e79f601d255a0dcaaa6ce70d46a3815f",
+          "rootfs.ext2": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845"
+        },
+        "iterations": 100,
+        "icount": 0,
+        "profiled": false,
+        "profile_mode": null,
+        "pcrel_override": null,
+        "scalar_controls": {
+          "cpu": null,
+          "machine": null,
+          "kernel": null
+        },
+        "host": {
+          "uname": [
+            "Linux",
+            "pop-os",
+            "6.18.7-76061807-generic",
+            "#202601231045~1778249322~24.04~b44a3c3 SMP PREEMPT_DYNAMIC Fri M",
+            "x86_64",
+            "x86_64"
+          ],
+          "affinity": [
+            2
+          ]
+        },
+        "samples": [
+          {
+            "arm": "platform-native",
+            "run": 0,
+            "host_loadavg_before": [
+              1.1396484375,
+              0.51416015625,
+              0.2041015625
+            ],
+            "reference_match": true,
+            "wall_seconds": 53.693982056,
+            "cpu_seconds": 53.59,
+            "cpu_tick_hz": 100,
+            "scope": "Guest serial window; host time, not guest cycles",
+            "profiled": false
+          }
+        ],
+        "limitations": [
+          "Host serial-delivery timing, not target cycles or hardware overhead.",
+          "One untimed warm-up compilation per fresh guest, then a batch including exec/exit.",
+          "Default stock-plain/fork-plain is the matched scalar pair; explicit overrides must be audited separately.",
+          "Platform arms intentionally change discovery/CPU flags and Linux capability paths.",
+          "Native versus plain binaries differ in compiler/libc/ABI; not isolated ISA cost.",
+          "No profiling plugin; build flags and host contention still require auditing."
+        ],
+        "medians": {
+          "platform-native": {
+            "wall_seconds": 53.693982056,
+            "cpu_seconds": 53.59
+          }
+        }
+      }
+    },
+    {
+      "label": "native-3-realtime",
+      "variant": "realtime",
+      "arm": "platform-native",
+      "summary": {
+        "status": "PASS",
+        "inputs": {
+          "stock": "fef99d167011dca7bb155e8afe835b5b535cec51b13532300413cddeaf3fc929",
+          "fork": "c5d7588a9bfda4108b92d18ead08d99be9f2436722748ff72b5a23ed36e9d7f4",
+          "firmware": "2335a28682ddf65e46c1f492632c2cb026efcb2271caf544a3f7ddc858b03e02",
+          "plain": "ebeca8e920328b5c893fc9ee910851cceabee2bebc00320322b2b77b75def4a0",
+          "native": "a1509c81444586031c74c5752f72ec90dc6c7ab57635fff37ffa431c11663a9f",
+          "input": "de7b86d79a68965adb62e750101d9211224884b2236053d906d1e23057bb6ad1",
+          "reference": "58111208509dd871223ae195a33304bd6b24afd29458f37c976556cbad506324",
+          "Image": "b7de27fb28bc0807053ae3e1c4bcd058e79f601d255a0dcaaa6ce70d46a3815f",
+          "rootfs.ext2": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845"
+        },
+        "iterations": 100,
+        "icount": null,
+        "profiled": false,
+        "profile_mode": null,
+        "pcrel_override": null,
+        "scalar_controls": {
+          "cpu": null,
+          "machine": null,
+          "kernel": null
+        },
+        "host": {
+          "uname": [
+            "Linux",
+            "pop-os",
+            "6.18.7-76061807-generic",
+            "#202601231045~1778249322~24.04~b44a3c3 SMP PREEMPT_DYNAMIC Fri M",
+            "x86_64",
+            "x86_64"
+          ],
+          "affinity": [
+            2
+          ]
+        },
+        "samples": [
+          {
+            "arm": "platform-native",
+            "run": 0,
+            "host_loadavg_before": [
+              1.21044921875,
+              0.65771484375,
+              0.27685546875
+            ],
+            "reference_match": true,
+            "wall_seconds": 44.882284706,
+            "cpu_seconds": 44.79,
+            "cpu_tick_hz": 100,
+            "scope": "Guest serial window; host time, not guest cycles",
+            "profiled": false
+          }
+        ],
+        "limitations": [
+          "Host serial-delivery timing, not target cycles or hardware overhead.",
+          "One untimed warm-up compilation per fresh guest, then a batch including exec/exit.",
+          "Default stock-plain/fork-plain is the matched scalar pair; explicit overrides must be audited separately.",
+          "Platform arms intentionally change discovery/CPU flags and Linux capability paths.",
+          "Native versus plain binaries differ in compiler/libc/ABI; not isolated ISA cost.",
+          "No profiling plugin; build flags and host contention still require auditing."
+        ],
+        "medians": {
+          "platform-native": {
+            "wall_seconds": 44.882284706,
+            "cpu_seconds": 44.79
+          }
+        }
+      }
+    },
+    {
+      "label": "native-4-realtime",
+      "variant": "realtime",
+      "arm": "platform-native",
+      "summary": {
+        "status": "PASS",
+        "inputs": {
+          "stock": "fef99d167011dca7bb155e8afe835b5b535cec51b13532300413cddeaf3fc929",
+          "fork": "c5d7588a9bfda4108b92d18ead08d99be9f2436722748ff72b5a23ed36e9d7f4",
+          "firmware": "2335a28682ddf65e46c1f492632c2cb026efcb2271caf544a3f7ddc858b03e02",
+          "plain": "ebeca8e920328b5c893fc9ee910851cceabee2bebc00320322b2b77b75def4a0",
+          "native": "a1509c81444586031c74c5752f72ec90dc6c7ab57635fff37ffa431c11663a9f",
+          "input": "de7b86d79a68965adb62e750101d9211224884b2236053d906d1e23057bb6ad1",
+          "reference": "58111208509dd871223ae195a33304bd6b24afd29458f37c976556cbad506324",
+          "Image": "b7de27fb28bc0807053ae3e1c4bcd058e79f601d255a0dcaaa6ce70d46a3815f",
+          "rootfs.ext2": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845"
+        },
+        "iterations": 100,
+        "icount": null,
+        "profiled": false,
+        "profile_mode": null,
+        "pcrel_override": null,
+        "scalar_controls": {
+          "cpu": null,
+          "machine": null,
+          "kernel": null
+        },
+        "host": {
+          "uname": [
+            "Linux",
+            "pop-os",
+            "6.18.7-76061807-generic",
+            "#202601231045~1778249322~24.04~b44a3c3 SMP PREEMPT_DYNAMIC Fri M",
+            "x86_64",
+            "x86_64"
+          ],
+          "affinity": [
+            2
+          ]
+        },
+        "samples": [
+          {
+            "arm": "platform-native",
+            "run": 0,
+            "host_loadavg_before": [
+              1.17919921875,
+              0.7421875,
+              0.32666015625
+            ],
+            "reference_match": true,
+            "wall_seconds": 44.967766757,
+            "cpu_seconds": 44.87,
+            "cpu_tick_hz": 100,
+            "scope": "Guest serial window; host time, not guest cycles",
+            "profiled": false
+          }
+        ],
+        "limitations": [
+          "Host serial-delivery timing, not target cycles or hardware overhead.",
+          "One untimed warm-up compilation per fresh guest, then a batch including exec/exit.",
+          "Default stock-plain/fork-plain is the matched scalar pair; explicit overrides must be audited separately.",
+          "Platform arms intentionally change discovery/CPU flags and Linux capability paths.",
+          "Native versus plain binaries differ in compiler/libc/ABI; not isolated ISA cost.",
+          "No profiling plugin; build flags and host contention still require auditing."
+        ],
+        "medians": {
+          "platform-native": {
+            "wall_seconds": 44.967766757,
+            "cpu_seconds": 44.87
+          }
+        }
+      }
+    },
+    {
+      "label": "native-5-candidate",
+      "variant": "candidate",
+      "arm": "platform-native",
+      "summary": {
+        "status": "PASS",
+        "inputs": {
+          "stock": "fef99d167011dca7bb155e8afe835b5b535cec51b13532300413cddeaf3fc929",
+          "fork": "c5d7588a9bfda4108b92d18ead08d99be9f2436722748ff72b5a23ed36e9d7f4",
+          "firmware": "2335a28682ddf65e46c1f492632c2cb026efcb2271caf544a3f7ddc858b03e02",
+          "plain": "ebeca8e920328b5c893fc9ee910851cceabee2bebc00320322b2b77b75def4a0",
+          "native": "a1509c81444586031c74c5752f72ec90dc6c7ab57635fff37ffa431c11663a9f",
+          "input": "de7b86d79a68965adb62e750101d9211224884b2236053d906d1e23057bb6ad1",
+          "reference": "58111208509dd871223ae195a33304bd6b24afd29458f37c976556cbad506324",
+          "Image": "b7de27fb28bc0807053ae3e1c4bcd058e79f601d255a0dcaaa6ce70d46a3815f",
+          "rootfs.ext2": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845"
+        },
+        "iterations": 100,
+        "icount": 0,
+        "profiled": false,
+        "profile_mode": null,
+        "pcrel_override": null,
+        "scalar_controls": {
+          "cpu": null,
+          "machine": null,
+          "kernel": null
+        },
+        "host": {
+          "uname": [
+            "Linux",
+            "pop-os",
+            "6.18.7-76061807-generic",
+            "#202601231045~1778249322~24.04~b44a3c3 SMP PREEMPT_DYNAMIC Fri M",
+            "x86_64",
+            "x86_64"
+          ],
+          "affinity": [
+            2
+          ]
+        },
+        "samples": [
+          {
+            "arm": "platform-native",
+            "run": 0,
+            "host_loadavg_before": [
+              1.138671875,
+              0.8037109375,
+              0.3740234375
+            ],
+            "reference_match": true,
+            "wall_seconds": 53.792252437,
+            "cpu_seconds": 53.65,
+            "cpu_tick_hz": 100,
+            "scope": "Guest serial window; host time, not guest cycles",
+            "profiled": false
+          }
+        ],
+        "limitations": [
+          "Host serial-delivery timing, not target cycles or hardware overhead.",
+          "One untimed warm-up compilation per fresh guest, then a batch including exec/exit.",
+          "Default stock-plain/fork-plain is the matched scalar pair; explicit overrides must be audited separately.",
+          "Platform arms intentionally change discovery/CPU flags and Linux capability paths.",
+          "Native versus plain binaries differ in compiler/libc/ABI; not isolated ISA cost.",
+          "No profiling plugin; build flags and host contention still require auditing."
+        ],
+        "medians": {
+          "platform-native": {
+            "wall_seconds": 53.792252437,
+            "cpu_seconds": 53.65
+          }
+        }
+      }
+    },
+    {
+      "label": "native-6-combined",
+      "variant": "combined",
+      "arm": "platform-native",
+      "summary": {
+        "status": "PASS",
+        "inputs": {
+          "stock": "fef99d167011dca7bb155e8afe835b5b535cec51b13532300413cddeaf3fc929",
+          "fork": "fdbb824a80998913f93b1eee689a8bc8efd4bd15f8ff995c07a4be7736844e29",
+          "firmware": "2335a28682ddf65e46c1f492632c2cb026efcb2271caf544a3f7ddc858b03e02",
+          "plain": "ebeca8e920328b5c893fc9ee910851cceabee2bebc00320322b2b77b75def4a0",
+          "native": "a1509c81444586031c74c5752f72ec90dc6c7ab57635fff37ffa431c11663a9f",
+          "input": "de7b86d79a68965adb62e750101d9211224884b2236053d906d1e23057bb6ad1",
+          "reference": "58111208509dd871223ae195a33304bd6b24afd29458f37c976556cbad506324",
+          "Image": "b7de27fb28bc0807053ae3e1c4bcd058e79f601d255a0dcaaa6ce70d46a3815f",
+          "rootfs.ext2": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845"
+        },
+        "iterations": 100,
+        "icount": 0,
+        "profiled": false,
+        "profile_mode": null,
+        "pcrel_override": null,
+        "scalar_controls": {
+          "cpu": null,
+          "machine": null,
+          "kernel": null
+        },
+        "host": {
+          "uname": [
+            "Linux",
+            "pop-os",
+            "6.18.7-76061807-generic",
+            "#202601231045~1778249322~24.04~b44a3c3 SMP PREEMPT_DYNAMIC Fri M",
+            "x86_64",
+            "x86_64"
+          ],
+          "affinity": [
+            2
+          ]
+        },
+        "samples": [
+          {
+            "arm": "platform-native",
+            "run": 0,
+            "host_loadavg_before": [
+              1.13916015625,
+              0.87060546875,
+              0.42578125
+            ],
+            "reference_match": true,
+            "wall_seconds": 55.789899436,
+            "cpu_seconds": 55.68,
+            "cpu_tick_hz": 100,
+            "scope": "Guest serial window; host time, not guest cycles",
+            "profiled": false
+          }
+        ],
+        "limitations": [
+          "Host serial-delivery timing, not target cycles or hardware overhead.",
+          "One untimed warm-up compilation per fresh guest, then a batch including exec/exit.",
+          "Default stock-plain/fork-plain is the matched scalar pair; explicit overrides must be audited separately.",
+          "Platform arms intentionally change discovery/CPU flags and Linux capability paths.",
+          "Native versus plain binaries differ in compiler/libc/ABI; not isolated ISA cost.",
+          "No profiling plugin; build flags and host contention still require auditing."
+        ],
+        "medians": {
+          "platform-native": {
+            "wall_seconds": 55.789899436,
+            "cpu_seconds": 55.68
+          }
+        }
+      }
+    },
+    {
+      "label": "native-7-original",
+      "variant": "original",
+      "arm": "platform-native",
+      "summary": {
+        "status": "PASS",
+        "inputs": {
+          "stock": "fef99d167011dca7bb155e8afe835b5b535cec51b13532300413cddeaf3fc929",
+          "fork": "8672296ec36f7098133ea6fd8fe956f0124a7e2f4b3663fe5d43fb48e9d1e180",
+          "firmware": "2335a28682ddf65e46c1f492632c2cb026efcb2271caf544a3f7ddc858b03e02",
+          "plain": "ebeca8e920328b5c893fc9ee910851cceabee2bebc00320322b2b77b75def4a0",
+          "native": "a1509c81444586031c74c5752f72ec90dc6c7ab57635fff37ffa431c11663a9f",
+          "input": "de7b86d79a68965adb62e750101d9211224884b2236053d906d1e23057bb6ad1",
+          "reference": "58111208509dd871223ae195a33304bd6b24afd29458f37c976556cbad506324",
+          "Image": "b7de27fb28bc0807053ae3e1c4bcd058e79f601d255a0dcaaa6ce70d46a3815f",
+          "rootfs.ext2": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845"
+        },
+        "iterations": 100,
+        "icount": 0,
+        "profiled": false,
+        "profile_mode": null,
+        "pcrel_override": null,
+        "scalar_controls": {
+          "cpu": null,
+          "machine": null,
+          "kernel": null
+        },
+        "host": {
+          "uname": [
+            "Linux",
+            "pop-os",
+            "6.18.7-76061807-generic",
+            "#202601231045~1778249322~24.04~b44a3c3 SMP PREEMPT_DYNAMIC Fri M",
+            "x86_64",
+            "x86_64"
+          ],
+          "affinity": [
+            2
+          ]
+        },
+        "samples": [
+          {
+            "arm": "platform-native",
+            "run": 0,
+            "host_loadavg_before": [
+              1.11962890625,
+              0.91455078125,
+              0.4736328125
+            ],
+            "reference_match": true,
+            "wall_seconds": 65.176699638,
+            "cpu_seconds": 65.02,
+            "cpu_tick_hz": 100,
+            "scope": "Guest serial window; host time, not guest cycles",
+            "profiled": false
+          }
+        ],
+        "limitations": [
+          "Host serial-delivery timing, not target cycles or hardware overhead.",
+          "One untimed warm-up compilation per fresh guest, then a batch including exec/exit.",
+          "Default stock-plain/fork-plain is the matched scalar pair; explicit overrides must be audited separately.",
+          "Platform arms intentionally change discovery/CPU flags and Linux capability paths.",
+          "Native versus plain binaries differ in compiler/libc/ABI; not isolated ISA cost.",
+          "No profiling plugin; build flags and host contention still require auditing."
+        ],
+        "medians": {
+          "platform-native": {
+            "wall_seconds": 65.176699638,
+            "cpu_seconds": 65.02
+          }
+        }
+      }
+    }
+  ],
+  "plain": [
+    {
+      "label": "plain-0-stock",
+      "variant": "original",
+      "arm": "stock-plain",
+      "summary": {
+        "status": "PASS",
+        "inputs": {
+          "stock": "fef99d167011dca7bb155e8afe835b5b535cec51b13532300413cddeaf3fc929",
+          "fork": "8672296ec36f7098133ea6fd8fe956f0124a7e2f4b3663fe5d43fb48e9d1e180",
+          "firmware": "2335a28682ddf65e46c1f492632c2cb026efcb2271caf544a3f7ddc858b03e02",
+          "plain": "ebeca8e920328b5c893fc9ee910851cceabee2bebc00320322b2b77b75def4a0",
+          "native": "a1509c81444586031c74c5752f72ec90dc6c7ab57635fff37ffa431c11663a9f",
+          "input": "de7b86d79a68965adb62e750101d9211224884b2236053d906d1e23057bb6ad1",
+          "reference": "58111208509dd871223ae195a33304bd6b24afd29458f37c976556cbad506324",
+          "Image": "b7de27fb28bc0807053ae3e1c4bcd058e79f601d255a0dcaaa6ce70d46a3815f",
+          "rootfs.ext2": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845"
+        },
+        "iterations": 100,
+        "icount": 0,
+        "profiled": false,
+        "profile_mode": null,
+        "pcrel_override": null,
+        "scalar_controls": {
+          "cpu": null,
+          "machine": null,
+          "kernel": null
+        },
+        "host": {
+          "uname": [
+            "Linux",
+            "pop-os",
+            "6.18.7-76061807-generic",
+            "#202601231045~1778249322~24.04~b44a3c3 SMP PREEMPT_DYNAMIC Fri M",
+            "x86_64",
+            "x86_64"
+          ],
+          "affinity": [
+            2
+          ]
+        },
+        "samples": [
+          {
+            "arm": "stock-plain",
+            "run": 0,
+            "host_loadavg_before": [
+              1.0322265625,
+              0.9365234375,
+              0.517578125
+            ],
+            "reference_match": true,
+            "wall_seconds": 8.881308728,
+            "cpu_seconds": 8.88,
+            "cpu_tick_hz": 100,
+            "scope": "Guest serial window; host time, not guest cycles",
+            "profiled": false
+          }
+        ],
+        "limitations": [
+          "Host serial-delivery timing, not target cycles or hardware overhead.",
+          "One untimed warm-up compilation per fresh guest, then a batch including exec/exit.",
+          "Default stock-plain/fork-plain is the matched scalar pair; explicit overrides must be audited separately.",
+          "Platform arms intentionally change discovery/CPU flags and Linux capability paths.",
+          "Native versus plain binaries differ in compiler/libc/ABI; not isolated ISA cost.",
+          "No profiling plugin; build flags and host contention still require auditing."
+        ],
+        "medians": {
+          "stock-plain": {
+            "wall_seconds": 8.881308728,
+            "cpu_seconds": 8.88
+          }
+        }
+      }
+    },
+    {
+      "label": "plain-1-original-fork",
+      "variant": "original",
+      "arm": "fork-plain",
+      "summary": {
+        "status": "PASS",
+        "inputs": {
+          "stock": "fef99d167011dca7bb155e8afe835b5b535cec51b13532300413cddeaf3fc929",
+          "fork": "8672296ec36f7098133ea6fd8fe956f0124a7e2f4b3663fe5d43fb48e9d1e180",
+          "firmware": "2335a28682ddf65e46c1f492632c2cb026efcb2271caf544a3f7ddc858b03e02",
+          "plain": "ebeca8e920328b5c893fc9ee910851cceabee2bebc00320322b2b77b75def4a0",
+          "native": "a1509c81444586031c74c5752f72ec90dc6c7ab57635fff37ffa431c11663a9f",
+          "input": "de7b86d79a68965adb62e750101d9211224884b2236053d906d1e23057bb6ad1",
+          "reference": "58111208509dd871223ae195a33304bd6b24afd29458f37c976556cbad506324",
+          "Image": "b7de27fb28bc0807053ae3e1c4bcd058e79f601d255a0dcaaa6ce70d46a3815f",
+          "rootfs.ext2": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845"
+        },
+        "iterations": 100,
+        "icount": 0,
+        "profiled": false,
+        "profile_mode": null,
+        "pcrel_override": null,
+        "scalar_controls": {
+          "cpu": null,
+          "machine": null,
+          "kernel": null
+        },
+        "host": {
+          "uname": [
+            "Linux",
+            "pop-os",
+            "6.18.7-76061807-generic",
+            "#202601231045~1778249322~24.04~b44a3c3 SMP PREEMPT_DYNAMIC Fri M",
+            "x86_64",
+            "x86_64"
+          ],
+          "affinity": [
+            2
+          ]
+        },
+        "samples": [
+          {
+            "arm": "fork-plain",
+            "run": 0,
+            "host_loadavg_before": [
+              1.0244140625,
+              0.94091796875,
+              0.5263671875
+            ],
+            "reference_match": true,
+            "wall_seconds": 9.693948191,
+            "cpu_seconds": 9.7,
+            "cpu_tick_hz": 100,
+            "scope": "Guest serial window; host time, not guest cycles",
+            "profiled": false
+          }
+        ],
+        "limitations": [
+          "Host serial-delivery timing, not target cycles or hardware overhead.",
+          "One untimed warm-up compilation per fresh guest, then a batch including exec/exit.",
+          "Default stock-plain/fork-plain is the matched scalar pair; explicit overrides must be audited separately.",
+          "Platform arms intentionally change discovery/CPU flags and Linux capability paths.",
+          "Native versus plain binaries differ in compiler/libc/ABI; not isolated ISA cost.",
+          "No profiling plugin; build flags and host contention still require auditing."
+        ],
+        "medians": {
+          "fork-plain": {
+            "wall_seconds": 9.693948191,
+            "cpu_seconds": 9.7
+          }
+        }
+      }
+    },
+    {
+      "label": "plain-2-candidate-fork",
+      "variant": "candidate",
+      "arm": "fork-plain",
+      "summary": {
+        "status": "PASS",
+        "inputs": {
+          "stock": "fef99d167011dca7bb155e8afe835b5b535cec51b13532300413cddeaf3fc929",
+          "fork": "c5d7588a9bfda4108b92d18ead08d99be9f2436722748ff72b5a23ed36e9d7f4",
+          "firmware": "2335a28682ddf65e46c1f492632c2cb026efcb2271caf544a3f7ddc858b03e02",
+          "plain": "ebeca8e920328b5c893fc9ee910851cceabee2bebc00320322b2b77b75def4a0",
+          "native": "a1509c81444586031c74c5752f72ec90dc6c7ab57635fff37ffa431c11663a9f",
+          "input": "de7b86d79a68965adb62e750101d9211224884b2236053d906d1e23057bb6ad1",
+          "reference": "58111208509dd871223ae195a33304bd6b24afd29458f37c976556cbad506324",
+          "Image": "b7de27fb28bc0807053ae3e1c4bcd058e79f601d255a0dcaaa6ce70d46a3815f",
+          "rootfs.ext2": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845"
+        },
+        "iterations": 100,
+        "icount": 0,
+        "profiled": false,
+        "profile_mode": null,
+        "pcrel_override": null,
+        "scalar_controls": {
+          "cpu": null,
+          "machine": null,
+          "kernel": null
+        },
+        "host": {
+          "uname": [
+            "Linux",
+            "pop-os",
+            "6.18.7-76061807-generic",
+            "#202601231045~1778249322~24.04~b44a3c3 SMP PREEMPT_DYNAMIC Fri M",
+            "x86_64",
+            "x86_64"
+          ],
+          "affinity": [
+            2
+          ]
+        },
+        "samples": [
+          {
+            "arm": "fork-plain",
+            "run": 0,
+            "host_loadavg_before": [
+              1.09228515625,
+              0.9609375,
+              0.54052734375
+            ],
+            "reference_match": true,
+            "wall_seconds": 9.169423035,
+            "cpu_seconds": 9.12,
+            "cpu_tick_hz": 100,
+            "scope": "Guest serial window; host time, not guest cycles",
+            "profiled": false
+          }
+        ],
+        "limitations": [
+          "Host serial-delivery timing, not target cycles or hardware overhead.",
+          "One untimed warm-up compilation per fresh guest, then a batch including exec/exit.",
+          "Default stock-plain/fork-plain is the matched scalar pair; explicit overrides must be audited separately.",
+          "Platform arms intentionally change discovery/CPU flags and Linux capability paths.",
+          "Native versus plain binaries differ in compiler/libc/ABI; not isolated ISA cost.",
+          "No profiling plugin; build flags and host contention still require auditing."
+        ],
+        "medians": {
+          "fork-plain": {
+            "wall_seconds": 9.169423035,
+            "cpu_seconds": 9.12
+          }
+        }
+      }
+    },
+    {
+      "label": "plain-3-original-platform",
+      "variant": "original",
+      "arm": "platform-plain",
+      "summary": {
+        "status": "PASS",
+        "inputs": {
+          "stock": "fef99d167011dca7bb155e8afe835b5b535cec51b13532300413cddeaf3fc929",
+          "fork": "8672296ec36f7098133ea6fd8fe956f0124a7e2f4b3663fe5d43fb48e9d1e180",
+          "firmware": "2335a28682ddf65e46c1f492632c2cb026efcb2271caf544a3f7ddc858b03e02",
+          "plain": "ebeca8e920328b5c893fc9ee910851cceabee2bebc00320322b2b77b75def4a0",
+          "native": "a1509c81444586031c74c5752f72ec90dc6c7ab57635fff37ffa431c11663a9f",
+          "input": "de7b86d79a68965adb62e750101d9211224884b2236053d906d1e23057bb6ad1",
+          "reference": "58111208509dd871223ae195a33304bd6b24afd29458f37c976556cbad506324",
+          "Image": "b7de27fb28bc0807053ae3e1c4bcd058e79f601d255a0dcaaa6ce70d46a3815f",
+          "rootfs.ext2": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845"
+        },
+        "iterations": 100,
+        "icount": 0,
+        "profiled": false,
+        "profile_mode": null,
+        "pcrel_override": null,
+        "scalar_controls": {
+          "cpu": null,
+          "machine": null,
+          "kernel": null
+        },
+        "host": {
+          "uname": [
+            "Linux",
+            "pop-os",
+            "6.18.7-76061807-generic",
+            "#202601231045~1778249322~24.04~b44a3c3 SMP PREEMPT_DYNAMIC Fri M",
+            "x86_64",
+            "x86_64"
+          ],
+          "affinity": [
+            2
+          ]
+        },
+        "samples": [
+          {
+            "arm": "platform-plain",
+            "run": 0,
+            "host_loadavg_before": [
+              1.07763671875,
+              0.962890625,
+              0.54638671875
+            ],
+            "reference_match": true,
+            "wall_seconds": 5.916222734,
+            "cpu_seconds": 5.92,
+            "cpu_tick_hz": 100,
+            "scope": "Guest serial window; host time, not guest cycles",
+            "profiled": false
+          }
+        ],
+        "limitations": [
+          "Host serial-delivery timing, not target cycles or hardware overhead.",
+          "One untimed warm-up compilation per fresh guest, then a batch including exec/exit.",
+          "Default stock-plain/fork-plain is the matched scalar pair; explicit overrides must be audited separately.",
+          "Platform arms intentionally change discovery/CPU flags and Linux capability paths.",
+          "Native versus plain binaries differ in compiler/libc/ABI; not isolated ISA cost.",
+          "No profiling plugin; build flags and host contention still require auditing."
+        ],
+        "medians": {
+          "platform-plain": {
+            "wall_seconds": 5.916222734,
+            "cpu_seconds": 5.92
+          }
+        }
+      }
+    },
+    {
+      "label": "plain-4-candidate-platform",
+      "variant": "candidate",
+      "arm": "platform-plain",
+      "summary": {
+        "status": "PASS",
+        "inputs": {
+          "stock": "fef99d167011dca7bb155e8afe835b5b535cec51b13532300413cddeaf3fc929",
+          "fork": "c5d7588a9bfda4108b92d18ead08d99be9f2436722748ff72b5a23ed36e9d7f4",
+          "firmware": "2335a28682ddf65e46c1f492632c2cb026efcb2271caf544a3f7ddc858b03e02",
+          "plain": "ebeca8e920328b5c893fc9ee910851cceabee2bebc00320322b2b77b75def4a0",
+          "native": "a1509c81444586031c74c5752f72ec90dc6c7ab57635fff37ffa431c11663a9f",
+          "input": "de7b86d79a68965adb62e750101d9211224884b2236053d906d1e23057bb6ad1",
+          "reference": "58111208509dd871223ae195a33304bd6b24afd29458f37c976556cbad506324",
+          "Image": "b7de27fb28bc0807053ae3e1c4bcd058e79f601d255a0dcaaa6ce70d46a3815f",
+          "rootfs.ext2": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845"
+        },
+        "iterations": 100,
+        "icount": 0,
+        "profiled": false,
+        "profile_mode": null,
+        "pcrel_override": null,
+        "scalar_controls": {
+          "cpu": null,
+          "machine": null,
+          "kernel": null
+        },
+        "host": {
+          "uname": [
+            "Linux",
+            "pop-os",
+            "6.18.7-76061807-generic",
+            "#202601231045~1778249322~24.04~b44a3c3 SMP PREEMPT_DYNAMIC Fri M",
+            "x86_64",
+            "x86_64"
+          ],
+          "affinity": [
+            2
+          ]
+        },
+        "samples": [
+          {
+            "arm": "platform-plain",
+            "run": 0,
+            "host_loadavg_before": [
+              1.06005859375,
+              0.9658203125,
+              0.5537109375
+            ],
+            "reference_match": true,
+            "wall_seconds": 5.530988437,
+            "cpu_seconds": 5.53,
+            "cpu_tick_hz": 100,
+            "scope": "Guest serial window; host time, not guest cycles",
+            "profiled": false
+          }
+        ],
+        "limitations": [
+          "Host serial-delivery timing, not target cycles or hardware overhead.",
+          "One untimed warm-up compilation per fresh guest, then a batch including exec/exit.",
+          "Default stock-plain/fork-plain is the matched scalar pair; explicit overrides must be audited separately.",
+          "Platform arms intentionally change discovery/CPU flags and Linux capability paths.",
+          "Native versus plain binaries differ in compiler/libc/ABI; not isolated ISA cost.",
+          "No profiling plugin; build flags and host contention still require auditing."
+        ],
+        "medians": {
+          "platform-plain": {
+            "wall_seconds": 5.530988437,
+            "cpu_seconds": 5.53
+          }
+        }
+      }
+    },
+    {
+      "label": "plain-5-candidate-platform",
+      "variant": "candidate",
+      "arm": "platform-plain",
+      "summary": {
+        "status": "PASS",
+        "inputs": {
+          "stock": "fef99d167011dca7bb155e8afe835b5b535cec51b13532300413cddeaf3fc929",
+          "fork": "c5d7588a9bfda4108b92d18ead08d99be9f2436722748ff72b5a23ed36e9d7f4",
+          "firmware": "2335a28682ddf65e46c1f492632c2cb026efcb2271caf544a3f7ddc858b03e02",
+          "plain": "ebeca8e920328b5c893fc9ee910851cceabee2bebc00320322b2b77b75def4a0",
+          "native": "a1509c81444586031c74c5752f72ec90dc6c7ab57635fff37ffa431c11663a9f",
+          "input": "de7b86d79a68965adb62e750101d9211224884b2236053d906d1e23057bb6ad1",
+          "reference": "58111208509dd871223ae195a33304bd6b24afd29458f37c976556cbad506324",
+          "Image": "b7de27fb28bc0807053ae3e1c4bcd058e79f601d255a0dcaaa6ce70d46a3815f",
+          "rootfs.ext2": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845"
+        },
+        "iterations": 100,
+        "icount": 0,
+        "profiled": false,
+        "profile_mode": null,
+        "pcrel_override": null,
+        "scalar_controls": {
+          "cpu": null,
+          "machine": null,
+          "kernel": null
+        },
+        "host": {
+          "uname": [
+            "Linux",
+            "pop-os",
+            "6.18.7-76061807-generic",
+            "#202601231045~1778249322~24.04~b44a3c3 SMP PREEMPT_DYNAMIC Fri M",
+            "x86_64",
+            "x86_64"
+          ],
+          "affinity": [
+            2
+          ]
+        },
+        "samples": [
+          {
+            "arm": "platform-plain",
+            "run": 0,
+            "host_loadavg_before": [
+              1.05517578125,
+              0.966796875,
+              0.55615234375
+            ],
+            "reference_match": true,
+            "wall_seconds": 5.572851123,
+            "cpu_seconds": 5.58,
+            "cpu_tick_hz": 100,
+            "scope": "Guest serial window; host time, not guest cycles",
+            "profiled": false
+          }
+        ],
+        "limitations": [
+          "Host serial-delivery timing, not target cycles or hardware overhead.",
+          "One untimed warm-up compilation per fresh guest, then a batch including exec/exit.",
+          "Default stock-plain/fork-plain is the matched scalar pair; explicit overrides must be audited separately.",
+          "Platform arms intentionally change discovery/CPU flags and Linux capability paths.",
+          "Native versus plain binaries differ in compiler/libc/ABI; not isolated ISA cost.",
+          "No profiling plugin; build flags and host contention still require auditing."
+        ],
+        "medians": {
+          "platform-plain": {
+            "wall_seconds": 5.572851123,
+            "cpu_seconds": 5.58
+          }
+        }
+      }
+    },
+    {
+      "label": "plain-6-original-platform",
+      "variant": "original",
+      "arm": "platform-plain",
+      "summary": {
+        "status": "PASS",
+        "inputs": {
+          "stock": "fef99d167011dca7bb155e8afe835b5b535cec51b13532300413cddeaf3fc929",
+          "fork": "8672296ec36f7098133ea6fd8fe956f0124a7e2f4b3663fe5d43fb48e9d1e180",
+          "firmware": "2335a28682ddf65e46c1f492632c2cb026efcb2271caf544a3f7ddc858b03e02",
+          "plain": "ebeca8e920328b5c893fc9ee910851cceabee2bebc00320322b2b77b75def4a0",
+          "native": "a1509c81444586031c74c5752f72ec90dc6c7ab57635fff37ffa431c11663a9f",
+          "input": "de7b86d79a68965adb62e750101d9211224884b2236053d906d1e23057bb6ad1",
+          "reference": "58111208509dd871223ae195a33304bd6b24afd29458f37c976556cbad506324",
+          "Image": "b7de27fb28bc0807053ae3e1c4bcd058e79f601d255a0dcaaa6ce70d46a3815f",
+          "rootfs.ext2": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845"
+        },
+        "iterations": 100,
+        "icount": 0,
+        "profiled": false,
+        "profile_mode": null,
+        "pcrel_override": null,
+        "scalar_controls": {
+          "cpu": null,
+          "machine": null,
+          "kernel": null
+        },
+        "host": {
+          "uname": [
+            "Linux",
+            "pop-os",
+            "6.18.7-76061807-generic",
+            "#202601231045~1778249322~24.04~b44a3c3 SMP PREEMPT_DYNAMIC Fri M",
+            "x86_64",
+            "x86_64"
+          ],
+          "affinity": [
+            2
+          ]
+        },
+        "samples": [
+          {
+            "arm": "platform-plain",
+            "run": 0,
+            "host_loadavg_before": [
+              1.0419921875,
+              0.9697265625,
+              0.5634765625
+            ],
+            "reference_match": true,
+            "wall_seconds": 5.896948433,
+            "cpu_seconds": 5.91,
+            "cpu_tick_hz": 100,
+            "scope": "Guest serial window; host time, not guest cycles",
+            "profiled": false
+          }
+        ],
+        "limitations": [
+          "Host serial-delivery timing, not target cycles or hardware overhead.",
+          "One untimed warm-up compilation per fresh guest, then a batch including exec/exit.",
+          "Default stock-plain/fork-plain is the matched scalar pair; explicit overrides must be audited separately.",
+          "Platform arms intentionally change discovery/CPU flags and Linux capability paths.",
+          "Native versus plain binaries differ in compiler/libc/ABI; not isolated ISA cost.",
+          "No profiling plugin; build flags and host contention still require auditing."
+        ],
+        "medians": {
+          "platform-plain": {
+            "wall_seconds": 5.896948433,
+            "cpu_seconds": 5.91
+          }
+        }
+      }
+    },
+    {
+      "label": "plain-7-candidate-fork",
+      "variant": "candidate",
+      "arm": "fork-plain",
+      "summary": {
+        "status": "PASS",
+        "inputs": {
+          "stock": "fef99d167011dca7bb155e8afe835b5b535cec51b13532300413cddeaf3fc929",
+          "fork": "c5d7588a9bfda4108b92d18ead08d99be9f2436722748ff72b5a23ed36e9d7f4",
+          "firmware": "2335a28682ddf65e46c1f492632c2cb026efcb2271caf544a3f7ddc858b03e02",
+          "plain": "ebeca8e920328b5c893fc9ee910851cceabee2bebc00320322b2b77b75def4a0",
+          "native": "a1509c81444586031c74c5752f72ec90dc6c7ab57635fff37ffa431c11663a9f",
+          "input": "de7b86d79a68965adb62e750101d9211224884b2236053d906d1e23057bb6ad1",
+          "reference": "58111208509dd871223ae195a33304bd6b24afd29458f37c976556cbad506324",
+          "Image": "b7de27fb28bc0807053ae3e1c4bcd058e79f601d255a0dcaaa6ce70d46a3815f",
+          "rootfs.ext2": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845"
+        },
+        "iterations": 100,
+        "icount": 0,
+        "profiled": false,
+        "profile_mode": null,
+        "pcrel_override": null,
+        "scalar_controls": {
+          "cpu": null,
+          "machine": null,
+          "kernel": null
+        },
+        "host": {
+          "uname": [
+            "Linux",
+            "pop-os",
+            "6.18.7-76061807-generic",
+            "#202601231045~1778249322~24.04~b44a3c3 SMP PREEMPT_DYNAMIC Fri M",
+            "x86_64",
+            "x86_64"
+          ],
+          "affinity": [
+            2
+          ]
+        },
+        "samples": [
+          {
+            "arm": "fork-plain",
+            "run": 0,
+            "host_loadavg_before": [
+              1.03515625,
+              0.97119140625,
+              0.568359375
+            ],
+            "reference_match": true,
+            "wall_seconds": 9.071651282,
+            "cpu_seconds": 9.08,
+            "cpu_tick_hz": 100,
+            "scope": "Guest serial window; host time, not guest cycles",
+            "profiled": false
+          }
+        ],
+        "limitations": [
+          "Host serial-delivery timing, not target cycles or hardware overhead.",
+          "One untimed warm-up compilation per fresh guest, then a batch including exec/exit.",
+          "Default stock-plain/fork-plain is the matched scalar pair; explicit overrides must be audited separately.",
+          "Platform arms intentionally change discovery/CPU flags and Linux capability paths.",
+          "Native versus plain binaries differ in compiler/libc/ABI; not isolated ISA cost.",
+          "No profiling plugin; build flags and host contention still require auditing."
+        ],
+        "medians": {
+          "fork-plain": {
+            "wall_seconds": 9.071651282,
+            "cpu_seconds": 9.08
+          }
+        }
+      }
+    },
+    {
+      "label": "plain-8-original-fork",
+      "variant": "original",
+      "arm": "fork-plain",
+      "summary": {
+        "status": "PASS",
+        "inputs": {
+          "stock": "fef99d167011dca7bb155e8afe835b5b535cec51b13532300413cddeaf3fc929",
+          "fork": "8672296ec36f7098133ea6fd8fe956f0124a7e2f4b3663fe5d43fb48e9d1e180",
+          "firmware": "2335a28682ddf65e46c1f492632c2cb026efcb2271caf544a3f7ddc858b03e02",
+          "plain": "ebeca8e920328b5c893fc9ee910851cceabee2bebc00320322b2b77b75def4a0",
+          "native": "a1509c81444586031c74c5752f72ec90dc6c7ab57635fff37ffa431c11663a9f",
+          "input": "de7b86d79a68965adb62e750101d9211224884b2236053d906d1e23057bb6ad1",
+          "reference": "58111208509dd871223ae195a33304bd6b24afd29458f37c976556cbad506324",
+          "Image": "b7de27fb28bc0807053ae3e1c4bcd058e79f601d255a0dcaaa6ce70d46a3815f",
+          "rootfs.ext2": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845"
+        },
+        "iterations": 100,
+        "icount": 0,
+        "profiled": false,
+        "profile_mode": null,
+        "pcrel_override": null,
+        "scalar_controls": {
+          "cpu": null,
+          "machine": null,
+          "kernel": null
+        },
+        "host": {
+          "uname": [
+            "Linux",
+            "pop-os",
+            "6.18.7-76061807-generic",
+            "#202601231045~1778249322~24.04~b44a3c3 SMP PREEMPT_DYNAMIC Fri M",
+            "x86_64",
+            "x86_64"
+          ],
+          "affinity": [
+            2
+          ]
+        },
+        "samples": [
+          {
+            "arm": "fork-plain",
+            "run": 0,
+            "host_loadavg_before": [
+              1.029296875,
+              0.97216796875,
+              0.5732421875
+            ],
+            "reference_match": true,
+            "wall_seconds": 9.725538869,
+            "cpu_seconds": 9.67,
+            "cpu_tick_hz": 100,
+            "scope": "Guest serial window; host time, not guest cycles",
+            "profiled": false
+          }
+        ],
+        "limitations": [
+          "Host serial-delivery timing, not target cycles or hardware overhead.",
+          "One untimed warm-up compilation per fresh guest, then a batch including exec/exit.",
+          "Default stock-plain/fork-plain is the matched scalar pair; explicit overrides must be audited separately.",
+          "Platform arms intentionally change discovery/CPU flags and Linux capability paths.",
+          "Native versus plain binaries differ in compiler/libc/ABI; not isolated ISA cost.",
+          "No profiling plugin; build flags and host contention still require auditing."
+        ],
+        "medians": {
+          "fork-plain": {
+            "wall_seconds": 9.725538869,
+            "cpu_seconds": 9.67
+          }
+        }
+      }
+    },
+    {
+      "label": "plain-9-stock",
+      "variant": "original",
+      "arm": "stock-plain",
+      "summary": {
+        "status": "PASS",
+        "inputs": {
+          "stock": "fef99d167011dca7bb155e8afe835b5b535cec51b13532300413cddeaf3fc929",
+          "fork": "8672296ec36f7098133ea6fd8fe956f0124a7e2f4b3663fe5d43fb48e9d1e180",
+          "firmware": "2335a28682ddf65e46c1f492632c2cb026efcb2271caf544a3f7ddc858b03e02",
+          "plain": "ebeca8e920328b5c893fc9ee910851cceabee2bebc00320322b2b77b75def4a0",
+          "native": "a1509c81444586031c74c5752f72ec90dc6c7ab57635fff37ffa431c11663a9f",
+          "input": "de7b86d79a68965adb62e750101d9211224884b2236053d906d1e23057bb6ad1",
+          "reference": "58111208509dd871223ae195a33304bd6b24afd29458f37c976556cbad506324",
+          "Image": "b7de27fb28bc0807053ae3e1c4bcd058e79f601d255a0dcaaa6ce70d46a3815f",
+          "rootfs.ext2": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845"
+        },
+        "iterations": 100,
+        "icount": 0,
+        "profiled": false,
+        "profile_mode": null,
+        "pcrel_override": null,
+        "scalar_controls": {
+          "cpu": null,
+          "machine": null,
+          "kernel": null
+        },
+        "host": {
+          "uname": [
+            "Linux",
+            "pop-os",
+            "6.18.7-76061807-generic",
+            "#202601231045~1778249322~24.04~b44a3c3 SMP PREEMPT_DYNAMIC Fri M",
+            "x86_64",
+            "x86_64"
+          ],
+          "affinity": [
+            2
+          ]
+        },
+        "samples": [
+          {
+            "arm": "stock-plain",
+            "run": 0,
+            "host_loadavg_before": [
+              1.02197265625,
+              0.9736328125,
+              0.58056640625
+            ],
+            "reference_match": true,
+            "wall_seconds": 8.905997378,
+            "cpu_seconds": 8.9,
+            "cpu_tick_hz": 100,
+            "scope": "Guest serial window; host time, not guest cycles",
+            "profiled": false
+          }
+        ],
+        "limitations": [
+          "Host serial-delivery timing, not target cycles or hardware overhead.",
+          "One untimed warm-up compilation per fresh guest, then a batch including exec/exit.",
+          "Default stock-plain/fork-plain is the matched scalar pair; explicit overrides must be audited separately.",
+          "Platform arms intentionally change discovery/CPU flags and Linux capability paths.",
+          "Native versus plain binaries differ in compiler/libc/ABI; not isolated ISA cost.",
+          "No profiling plugin; build flags and host contention still require auditing."
+        ],
+        "medians": {
+          "stock-plain": {
+            "wall_seconds": 8.905997378,
+            "cpu_seconds": 8.9
+          }
+        }
+      }
+    }
+  ],
+  "scope": "Unprofiled exclusive paired host CPU windows; each has 100 compilations and one untimed warmup. Native and plain applications differ; only compare the same arm/binary across QEMU builds.",
+  "native_mean_cpu_seconds": {
+    "original": 65.055,
+    "combined": 55.84,
+    "candidate": 53.620000000000005,
+    "realtime": 44.83
+  },
+  "candidate_reduction_vs_original_percent": 17.577434478518185,
+  "candidate_incremental_reduction_percent": 3.9756446991404015,
+  "finished_epoch": 1794188555.9663131,
+  "schema_version": 1,
+  "source": "81246125dcf06bf057b9fca9fb5e850dddce0f5b",
+  "original_source": "dd041bac5ad9c145c3872a50804ca714a26b1c88",
+  "combined_runtime": "d81f426a7c",
+  "source_branch": "perf/qemu-throughput",
+  "full_qualification": "full-qualification.json",
+  "timed_outputs": 1800,
+  "warmup_outputs": 18,
+  "limitations": [
+    "Two unprofiled samples per variant on this host and GCC test input; not a general SPEC score or hardware speed estimate.",
+    "Candidate uses Clang/full LTO while original controls use their original GCC build; measured gain includes source and host-toolchain improvements.",
+    "Plain machine/CPU and executable are held fixed within stock-plain/fork-plain, but candidate-versus-stock includes different host build choices. Platform/plain also changes kernel and CPU discovery paths.",
+    "Realtime omits icount; keep it separate from same-clock comparisons.",
+    "Full-suite correctness uses exact previously officially qualified hashes and guest image validators; fresh official SPEC comparators are not rerun."
+  ],
+  "realtime_reduction_vs_original_icount_percent": 31.089078472062116,
+  "plain_mean_cpu_seconds": {
+    "original stock-plain": 8.89,
+    "original fork-plain": 9.684999999999999,
+    "candidate fork-plain": 9.1,
+    "original platform-plain": 5.915,
+    "candidate platform-plain": 5.555
+  },
+  "evidence": {
+    "archive": "/tmp/capstone/qemu-final-01-evidence.tar.gz",
+    "sha256": "ba98e509a43ced5f92d3fae08f1e11e9f23f86063edc1068dbb655693aa9ebd0",
+    "scope": "Full workload receipts, captured outputs, safety and portability logs, isolation proof, diagnostic x264 sample and final paired timing records. Input staging directories/disks omitted; immutable inputs and binaries identified by hashes in qualification records and prior bounded evidence."
+  }
+}

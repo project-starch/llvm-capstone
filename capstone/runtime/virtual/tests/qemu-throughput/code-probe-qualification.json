@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "status": "PASS bounded invariants and clean GCC comparison; full qualification pending",
+  "status": "PASS bounded invariants and clean GCC comparison; full follow-up also PASS",
   "source": "81246125dc",
   "baseline_runtime": "d81f426a7c",
   "branch": "perf/stc-code-probe",
@@ -386,10 +386,11 @@
   "limits": [
     "Two samples per arm on one repeated GCC input; no hardware or full-SPEC speed claim.",
     "This is incremental over the already optimized combined candidate; do not add percentages from separate cohorts.",
-    "Full task/race and ten-entry application qualification is pending on this source. Default pin remains fixed."
+    "Full task/race and ten-entry application qualification subsequently passed in both modes; see full-qualification.json. The timing samples here remain the original incremental cohort."
   ],
   "evidence": {
     "archive": "/tmp/capstone/qemu-code-probe-bounded-01-evidence.tar.gz",
     "sha256": "96b6b28d221461cf897016b51017b36824a99829372b0e8b3403b0ac0b89d1d9"
-  }
+  },
+  "full_followup": "full-qualification.json"
 }

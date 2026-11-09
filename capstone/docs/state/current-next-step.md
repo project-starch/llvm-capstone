@@ -1,32 +1,22 @@
-## QEMU feedback-speed investigation
+## Qualified QEMU for faster software feedback
 
-Continue on `perf/qemu-throughput`, leaving the native RTL handoff fixed.
-The [combined candidate](../../runtime/virtual/tests/qemu-throughput/combined-qualification.json)
-saves 13.26% host CPU in a fresh stable GCC confirmation; independent counters
-show 19.97% fewer host instructions. Original GCC, LBM and NAB commands pass
-paired comparisons, and all eight task/timer/race groups pass with icount0 and
-explicit realtime mode. Full ten-entry SPEC output regression is now running
-in both modes. Finish it before advancing the default QEMU pin. Preserve the
-individual workloads, host-speed shift and original-versus-realtime distinction.
+Use `perf/qemu-throughput`, now pinned to QEMU `81246125dc`, and its
+[Clang/full-LTO build recipe](../../runtime/virtual/tests/qemu-throughput/README.md).
+The final direct GCC comparison saves 17.58% host CPU against the original
+build; explicit no-icount saves 31.09% against original icount. Both candidates
+pass ten SPEC C-port entries in both clock modes, with original commands,
+qualified hashes and guest image validators. The latest also passes all eight
+safety groups, privilege contracts and GCC non-LTO portability checks.
+[Final comparison](../../runtime/virtual/tests/qemu-throughput/final-comparison.json),
+[full qualification](../../runtime/virtual/tests/qemu-throughput/full-qualification.json).
 
-QEMU `perf/qemu-throughput-next` at `f3b74f0646` includes runtime `d81f426a7c`
-and a copyable-profile SFENCE test epilogue. Its nine cases pass on baseline
-and candidate. A further STC code-page lookup experiment (`81246125dc`) stays
-separate pending wider safety and full SPEC qualification. Its TLB invariant,
-subpage PMP cases and negative control pass; a clean paired GCC run saves a
-further 4.28% host CPU. Continue both frozen candidates in independent snapshot
-domains after validating private-output isolation. Keep concurrent functional
-times separate from clean exclusive performance measurements.
-
-The scalar controls now explain the platform/plain speed: U-mode avoids the
-legacy per-store helper, and reversing the existing page-specific SFENCE path
-costs about 60% more host CPU in both measurement orders. The latter feature
-already belongs to the native handoff baseline. ThinLTO links faster here but
-runs the GCC fixture 1.45% slower; record host affinity on this hybrid CPU.
-Tag-lookup reuse, QOM-debug removal, bitmap specialization and the earlier
-redundant-copy experiment did not establish useful native gains. Keep those
-negative results and all profiling timings separate from clean comparisons.
-No result here predicts RTL performance or permits weaker security checks.
+No further source change is needed to use this result. Keep no-icount optional
+and separate from instruction-counted measurements. Concurrent private snapshot
+domains shorten functional qualification; use the global exclusive lock for
+host timing. Further tuning should start with a fresh profile and a separate
+candidate: the remaining x264 sample has 61.5% unattributed JIT cost, with cursor
+updates and tag/store helpers among the named costs. Do not extrapolate that
+single diagnostic sample to an expected speedup. Native RTL handoff stays fixed.
 
 ## RTL implementation from the rebased native branch
 

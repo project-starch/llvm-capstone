@@ -1,0 +1,2720 @@
+{
+  "schema_version": 1,
+  "status": "PASS",
+  "scope": "Both frozen candidate binaries, ten existing C-port SPEC entries in each of icount0 and explicit realtime mode. Original complete test commands and exact output hashes from the officially qualified native baseline, with guest image validators. Not fresh official comparator execution, unported SPEC entries, a reportable SPEC score, or hardware performance.",
+  "candidates": {
+    "combined": {
+      "runtime_source": "d81f426a7c",
+      "qemu_sha256": "fdbb824a80998913f93b1eee689a8bc8efd4bd15f8ff995c07a4be7736844e29",
+      "modes": {
+        "icount": {
+          "status": "PASS",
+          "counts": {
+            "entries": 10,
+            "original_commands": 22,
+            "image_validators": 4,
+            "qualified_hash_comparisons": 25
+          },
+          "results": [
+            {
+              "benchmark": "502.gcc_r",
+              "status": "PASS",
+              "input_manifest_sha256": "13ff945d7b3c7aca217274b9863b92f2bd106cee928bf9ab18c145e93bc474b9",
+              "commands": [
+                {
+                  "argv": [
+                    "./cpugcc_r",
+                    "t1.c",
+                    "-O3",
+                    "-finline-limit=50000",
+                    "-o",
+                    "t1.opts-O3_-finline-limit_50000.s"
+                  ],
+                  "stdout": "t1.opts-O3_-finline-limit_50000.out",
+                  "stderr": "t1.opts-O3_-finline-limit_50000.err"
+                }
+              ],
+              "exit_statuses": [
+                0
+              ],
+              "image_exit_statuses": [],
+              "comparisons": [
+                {
+                  "name": "t1.opts-O3_-finline-limit_50000.s",
+                  "expected": "58111208509dd871223ae195a33304bd6b24afd29458f37c976556cbad506324",
+                  "actual": "58111208509dd871223ae195a33304bd6b24afd29458f37c976556cbad506324",
+                  "passed": true
+                }
+              ]
+            },
+            {
+              "benchmark": "538.imagick_r",
+              "status": "PASS",
+              "input_manifest_sha256": "7478612c18d2f841d42907908e0de09c392a76e6fa7e1a8fdc84b93e9da3d0a5",
+              "commands": [
+                {
+                  "argv": [
+                    "./imagick_r",
+                    "-limit",
+                    "disk",
+                    "0",
+                    "test_input.tga",
+                    "-shear",
+                    "25",
+                    "-resize",
+                    "640x480",
+                    "-negate",
+                    "-alpha",
+                    "Off",
+                    "test_output.tga"
+                  ],
+                  "stdout": "test_convert.out",
+                  "stderr": "test_convert.err"
+                }
+              ],
+              "exit_statuses": [
+                0
+              ],
+              "image_exit_statuses": [
+                0
+              ],
+              "comparisons": [
+                {
+                  "name": "test_validate.out",
+                  "expected": "c3bfd816afd261fd4a1d4b6c8a4ed639f0872229ea26cbcaed127b04a5425a1a",
+                  "actual": "c3bfd816afd261fd4a1d4b6c8a4ed639f0872229ea26cbcaed127b04a5425a1a",
+                  "passed": true
+                }
+              ]
+            },
+            {
+              "benchmark": "997.specrand_fr",
+              "status": "PASS",
+              "input_manifest_sha256": "260ce8135dc0e04f576343d776f19d4b937083a4ccaaad88bb2f15ab119a6e7e",
+              "commands": [
+                {
+                  "argv": [
+                    "./specrand_fr",
+                    "324342",
+                    "24239"
+                  ],
+                  "stdout": "rand.24239.out",
+                  "stderr": "rand.24239.err"
+                }
+              ],
+              "exit_statuses": [
+                0
+              ],
+              "image_exit_statuses": [],
+              "comparisons": [
+                {
+                  "name": "rand.24239.out",
+                  "expected": "15e5b13042aa23597530688bfbcdfdfa83c55308372db51abeb73475af4dc72a",
+                  "actual": "15e5b13042aa23597530688bfbcdfdfa83c55308372db51abeb73475af4dc72a",
+                  "passed": true
+                }
+              ]
+            },
+            {
+              "benchmark": "999.specrand_ir",
+              "status": "PASS",
+              "input_manifest_sha256": "22d8c51d4003638c15af9b7adb368ba12b5b368bc7f3dfa6f7990ceabb994031",
+              "commands": [
+                {
+                  "argv": [
+                    "./specrand_ir",
+                    "324342",
+                    "24239"
+                  ],
+                  "stdout": "rand.24239.out",
+                  "stderr": "rand.24239.err"
+                }
+              ],
+              "exit_statuses": [
+                0
+              ],
+              "image_exit_statuses": [],
+              "comparisons": [
+                {
+                  "name": "rand.24239.out",
+                  "expected": "15e5b13042aa23597530688bfbcdfdfa83c55308372db51abeb73475af4dc72a",
+                  "actual": "15e5b13042aa23597530688bfbcdfdfa83c55308372db51abeb73475af4dc72a",
+                  "passed": true
+                }
+              ]
+            },
+            {
+              "benchmark": "519.lbm_r",
+              "status": "PASS",
+              "input_manifest_sha256": "b8988db8c978166f27e027328602885238e5091fa42bf4b0bcdd1e1289f3ca28",
+              "commands": [
+                {
+                  "argv": [
+                    "./lbm_r",
+                    "20",
+                    "reference.dat",
+                    "0",
+                    "1",
+                    "100_100_130_cf_a.of"
+                  ],
+                  "stdout": "lbm.out",
+                  "stderr": "lbm.err"
+                }
+              ],
+              "exit_statuses": [
+                0
+              ],
+              "image_exit_statuses": [],
+              "comparisons": [
+                {
+                  "name": "lbm.out",
+                  "expected": "7ab5463219d503a3cb54d5bd75b69c6620109b560058de7a20a719796433cdc5",
+                  "actual": "7ab5463219d503a3cb54d5bd75b69c6620109b560058de7a20a719796433cdc5",
+                  "passed": true
+                }
+              ]
+            },
+            {
+              "benchmark": "544.nab_r",
+              "status": "PASS",
+              "input_manifest_sha256": "bcb1af24c5c9b820ed480dea1e1114670de9466173cf5decf2b6cda96b1ec5cd",
+              "commands": [
+                {
+                  "argv": [
+                    "./nab_r",
+                    "hkrdenq",
+                    "1930344093",
+                    "1000"
+                  ],
+                  "stdout": "hkrdenq.out",
+                  "stderr": "hkrdenq.err"
+                }
+              ],
+              "exit_statuses": [
+                0
+              ],
+              "image_exit_statuses": [],
+              "comparisons": [
+                {
+                  "name": "hkrdenq.out",
+                  "expected": "2d580a95e2e596f2e06485149e9d91880bf47ded5a5495a366a80d4cea2a9afd",
+                  "actual": "2d580a95e2e596f2e06485149e9d91880bf47ded5a5495a366a80d4cea2a9afd",
+                  "passed": true
+                }
+              ]
+            },
+            {
+              "benchmark": "505.mcf_r",
+              "status": "PASS",
+              "input_manifest_sha256": "d26471eb6eb56d1fac26cd60e19632c27c38d2c7c23604d0b8831a3f90cf454d",
+              "commands": [
+                {
+                  "argv": [
+                    "./mcf_r",
+                    "inp.in"
+                  ],
+                  "stdout": "inp.out",
+                  "stderr": "inp.err"
+                }
+              ],
+              "exit_statuses": [
+                0
+              ],
+              "image_exit_statuses": [],
+              "comparisons": [
+                {
+                  "name": "inp.out",
+                  "expected": "b8a0d3ecba350c7f07063bb58799fa579fe46a2e5911b12fdfffdbf7f1895a6c",
+                  "actual": "b8a0d3ecba350c7f07063bb58799fa579fe46a2e5911b12fdfffdbf7f1895a6c",
+                  "passed": true
+                },
+                {
+                  "name": "mcf.out",
+                  "expected": "b272028fe374deea3865a5d29e71762a6c974558e97606b40292ed9744010530",
+                  "actual": "b272028fe374deea3865a5d29e71762a6c974558e97606b40292ed9744010530",
+                  "passed": true
+                }
+              ]
+            },
+            {
+              "benchmark": "557.xz_r",
+              "status": "PASS",
+              "input_manifest_sha256": "d51887851c732f4d6e687d8ba87587e06d241de0854a60fd1cc5e375f3390820",
+              "commands": [
+                {
+                  "argv": [
+                    "./xz_r",
+                    "cpu2006docs.tar.xz",
+                    "4",
+                    "055ce243071129412e9dd0b3b69a21654033a9b723d874b2015c774fac1553d9713be561ca86f74e4f16f22e664fc17a79f30caa5ad2c04fbc447549c2810fae",
+                    "1548636",
+                    "1555348",
+                    "0"
+                  ],
+                  "stdout": "cpu2006docs.tar-4-0.out",
+                  "stderr": "cpu2006docs.tar-4-0.err"
+                },
+                {
+                  "argv": [
+                    "./xz_r",
+                    "cpu2006docs.tar.xz",
+                    "4",
+                    "055ce243071129412e9dd0b3b69a21654033a9b723d874b2015c774fac1553d9713be561ca86f74e4f16f22e664fc17a79f30caa5ad2c04fbc447549c2810fae",
+                    "1462248",
+                    "-1",
+                    "1"
+                  ],
+                  "stdout": "cpu2006docs.tar-4-1.out",
+                  "stderr": "cpu2006docs.tar-4-1.err"
+                },
+                {
+                  "argv": [
+                    "./xz_r",
+                    "cpu2006docs.tar.xz",
+                    "4",
+                    "055ce243071129412e9dd0b3b69a21654033a9b723d874b2015c774fac1553d9713be561ca86f74e4f16f22e664fc17a79f30caa5ad2c04fbc447549c2810fae",
+                    "1428548",
+                    "-1",
+                    "2"
+                  ],
+                  "stdout": "cpu2006docs.tar-4-2.out",
+                  "stderr": "cpu2006docs.tar-4-2.err"
+                },
+                {
+                  "argv": [
+                    "./xz_r",
+                    "cpu2006docs.tar.xz",
+                    "4",
+                    "055ce243071129412e9dd0b3b69a21654033a9b723d874b2015c774fac1553d9713be561ca86f74e4f16f22e664fc17a79f30caa5ad2c04fbc447549c2810fae",
+                    "1034828",
+                    "-1",
+                    "3e"
+                  ],
+                  "stdout": "cpu2006docs.tar-4-3e.out",
+                  "stderr": "cpu2006docs.tar-4-3e.err"
+                },
+                {
+                  "argv": [
+                    "./xz_r",
+                    "cpu2006docs.tar.xz",
+                    "4",
+                    "055ce243071129412e9dd0b3b69a21654033a9b723d874b2015c774fac1553d9713be561ca86f74e4f16f22e664fc17a79f30caa5ad2c04fbc447549c2810fae",
+                    "1061968",
+                    "-1",
+                    "4"
+                  ],
+                  "stdout": "cpu2006docs.tar-4-4.out",
+                  "stderr": "cpu2006docs.tar-4-4.err"
+                },
+                {
+                  "argv": [
+                    "./xz_r",
+                    "cpu2006docs.tar.xz",
+                    "4",
+                    "055ce243071129412e9dd0b3b69a21654033a9b723d874b2015c774fac1553d9713be561ca86f74e4f16f22e664fc17a79f30caa5ad2c04fbc447549c2810fae",
+                    "1034588",
+                    "-1",
+                    "4e"
+                  ],
+                  "stdout": "cpu2006docs.tar-4-4e.out",
+                  "stderr": "cpu2006docs.tar-4-4e.err"
+                },
+                {
+                  "argv": [
+                    "./xz_r",
+                    "cpu2006docs.tar.xz",
+                    "1",
+                    "055ce243071129412e9dd0b3b69a21654033a9b723d874b2015c774fac1553d9713be561ca86f74e4f16f22e664fc17a79f30caa5ad2c04fbc447549c2810fae",
+                    "650156",
+                    "-1",
+                    "0"
+                  ],
+                  "stdout": "cpu2006docs.tar-1-0.out",
+                  "stderr": "cpu2006docs.tar-1-0.err"
+                },
+                {
+                  "argv": [
+                    "./xz_r",
+                    "cpu2006docs.tar.xz",
+                    "1",
+                    "055ce243071129412e9dd0b3b69a21654033a9b723d874b2015c774fac1553d9713be561ca86f74e4f16f22e664fc17a79f30caa5ad2c04fbc447549c2810fae",
+                    "639996",
+                    "-1",
+                    "1"
+                  ],
+                  "stdout": "cpu2006docs.tar-1-1.out",
+                  "stderr": "cpu2006docs.tar-1-1.err"
+                },
+                {
+                  "argv": [
+                    "./xz_r",
+                    "cpu2006docs.tar.xz",
+                    "1",
+                    "055ce243071129412e9dd0b3b69a21654033a9b723d874b2015c774fac1553d9713be561ca86f74e4f16f22e664fc17a79f30caa5ad2c04fbc447549c2810fae",
+                    "637616",
+                    "-1",
+                    "2"
+                  ],
+                  "stdout": "cpu2006docs.tar-1-2.out",
+                  "stderr": "cpu2006docs.tar-1-2.err"
+                },
+                {
+                  "argv": [
+                    "./xz_r",
+                    "cpu2006docs.tar.xz",
+                    "1",
+                    "055ce243071129412e9dd0b3b69a21654033a9b723d874b2015c774fac1553d9713be561ca86f74e4f16f22e664fc17a79f30caa5ad2c04fbc447549c2810fae",
+                    "628996",
+                    "-1",
+                    "3e"
+                  ],
+                  "stdout": "cpu2006docs.tar-1-3e.out",
+                  "stderr": "cpu2006docs.tar-1-3e.err"
+                },
+                {
+                  "argv": [
+                    "./xz_r",
+                    "cpu2006docs.tar.xz",
+                    "1",
+                    "055ce243071129412e9dd0b3b69a21654033a9b723d874b2015c774fac1553d9713be561ca86f74e4f16f22e664fc17a79f30caa5ad2c04fbc447549c2810fae",
+                    "631912",
+                    "-1",
+                    "4"
+                  ],
+                  "stdout": "cpu2006docs.tar-1-4.out",
+                  "stderr": "cpu2006docs.tar-1-4.err"
+                },
+                {
+                  "argv": [
+                    "./xz_r",
+                    "cpu2006docs.tar.xz",
+                    "1",
+                    "055ce243071129412e9dd0b3b69a21654033a9b723d874b2015c774fac1553d9713be561ca86f74e4f16f22e664fc17a79f30caa5ad2c04fbc447549c2810fae",
+                    "629064",
+                    "-1",
+                    "4e"
+                  ],
+                  "stdout": "cpu2006docs.tar-1-4e.out",
+                  "stderr": "cpu2006docs.tar-1-4e.err"
+                }
+              ],
+              "exit_statuses": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "image_exit_statuses": [],
+              "comparisons": [
+                {
+                  "name": "cpu2006docs.tar-1-0.out",
+                  "expected": "211f54ac64f8a7efe5a61f1a476363c64e6eb7493cb917353b144a9df5982e5b",
+                  "actual": "211f54ac64f8a7efe5a61f1a476363c64e6eb7493cb917353b144a9df5982e5b",
+                  "passed": true
+                },
+                {
+                  "name": "cpu2006docs.tar-1-1.out",
+                  "expected": "c74343902f42ca10bf9569e9a6a65968aff0867f12cb4b732a69ffc63b5a420d",
+                  "actual": "c74343902f42ca10bf9569e9a6a65968aff0867f12cb4b732a69ffc63b5a420d",
+                  "passed": true
+                },
+                {
+                  "name": "cpu2006docs.tar-1-2.out",
+                  "expected": "10ae9343a2dd8d81da44d44e737fc2940af0349ad89e0de7a86f65ea240c3a58",
+                  "actual": "10ae9343a2dd8d81da44d44e737fc2940af0349ad89e0de7a86f65ea240c3a58",
+                  "passed": true
+                },
+                {
+                  "name": "cpu2006docs.tar-1-3e.out",
+                  "expected": "8d5b873c430087cb3f0d13e20075b6521f939926ed69c09cfcd7aeb4be922ca3",
+                  "actual": "8d5b873c430087cb3f0d13e20075b6521f939926ed69c09cfcd7aeb4be922ca3",
+                  "passed": true
+                },
+                {
+                  "name": "cpu2006docs.tar-1-4.out",
+                  "expected": "02f8d81e89fa6b1add13f9305a0b79d3d31c4587a267037483b77ba290c423ef",
+                  "actual": "02f8d81e89fa6b1add13f9305a0b79d3d31c4587a267037483b77ba290c423ef",
+                  "passed": true
+                },
+                {
+                  "name": "cpu2006docs.tar-1-4e.out",
+                  "expected": "c43cf718699a474ba763d32930ee9daacbe488ed3c70bedeaa4ea19e44776102",
+                  "actual": "c43cf718699a474ba763d32930ee9daacbe488ed3c70bedeaa4ea19e44776102",
+                  "passed": true
+                },
+                {
+                  "name": "cpu2006docs.tar-4-0.out",
+                  "expected": "80b9e98184e536eafd18ad059278c304f3f59b3673e4c71203a305441740e264",
+                  "actual": "80b9e98184e536eafd18ad059278c304f3f59b3673e4c71203a305441740e264",
+                  "passed": true
+                },
+                {
+                  "name": "cpu2006docs.tar-4-1.out",
+                  "expected": "d57fb0b14ee67557acea66f34a1a73ef0c7c55dbaf4c1f8d46ff14a1885cf7bf",
+                  "actual": "d57fb0b14ee67557acea66f34a1a73ef0c7c55dbaf4c1f8d46ff14a1885cf7bf",
+                  "passed": true
+                },
+                {
+                  "name": "cpu2006docs.tar-4-2.out",
+                  "expected": "5225a92bffeaa6e61e86a136f92bcff31b03a2ab1c71f76cec6d365a99940327",
+                  "actual": "5225a92bffeaa6e61e86a136f92bcff31b03a2ab1c71f76cec6d365a99940327",
+                  "passed": true
+                },
+                {
+                  "name": "cpu2006docs.tar-4-3e.out",
+                  "expected": "3522866056b5ae84c19cae75e2bce8bfd9b5d055b86ccf7a3c7847f9a696189d",
+                  "actual": "3522866056b5ae84c19cae75e2bce8bfd9b5d055b86ccf7a3c7847f9a696189d",
+                  "passed": true
+                },
+                {
+                  "name": "cpu2006docs.tar-4-4.out",
+                  "expected": "a854805559ca63152d290f3953664818b86e84e05dca29e9b09646f1c9e04cb1",
+                  "actual": "a854805559ca63152d290f3953664818b86e84e05dca29e9b09646f1c9e04cb1",
+                  "passed": true
+                },
+                {
+                  "name": "cpu2006docs.tar-4-4e.out",
+                  "expected": "2a5b52fd57239898203d16a3c8f0e7346f0d12124cfbb95d9a9971b72c647579",
+                  "actual": "2a5b52fd57239898203d16a3c8f0e7346f0d12124cfbb95d9a9971b72c647579",
+                  "passed": true
+                }
+              ]
+            },
+            {
+              "benchmark": "525.x264_r",
+              "status": "PASS",
+              "input_manifest_sha256": "8700c99a3bcf49d1a9f6a40c58882017486ef633d7ebb4a5177cd000dac0a4f1",
+              "commands": [
+                {
+                  "argv": [
+                    "./x264_r",
+                    "--dumpyuv",
+                    "50",
+                    "--frames",
+                    "156",
+                    "-o",
+                    "BuckBunny_New.264",
+                    "BuckBunny.yuv",
+                    "1280x720"
+                  ],
+                  "stdout": "run_000-156_x264_r_base.native_qemu_x264.out",
+                  "stderr": "run_000-156_x264_r_base.native_qemu_x264.err"
+                }
+              ],
+              "exit_statuses": [
+                0
+              ],
+              "image_exit_statuses": [
+                0,
+                0,
+                0
+              ],
+              "comparisons": [
+                {
+                  "name": "imagevalidate_frame_100.out",
+                  "expected": "18becbed0f32c42d434198638fa23757be12f1f68952749289446f6cdcb6ec9d",
+                  "actual": "18becbed0f32c42d434198638fa23757be12f1f68952749289446f6cdcb6ec9d",
+                  "passed": true
+                },
+                {
+                  "name": "imagevalidate_frame_155.out",
+                  "expected": "9bd07ce8334e58bbb516449c054de128069ef6d30e99361cfa96da8297fddcbd",
+                  "actual": "9bd07ce8334e58bbb516449c054de128069ef6d30e99361cfa96da8297fddcbd",
+                  "passed": true
+                },
+                {
+                  "name": "imagevalidate_frame_50.out",
+                  "expected": "1c7fedcf715f76721507933049e9a2121b81fcc3597e178467d87dd4a417c5a6",
+                  "actual": "1c7fedcf715f76721507933049e9a2121b81fcc3597e178467d87dd4a417c5a6",
+                  "passed": true
+                }
+              ]
+            },
+            {
+              "benchmark": "500.perlbench_r",
+              "status": "PASS",
+              "input_manifest_sha256": "fe7ea2a29694c51353c283b3df19d2605d595e549f80d702e23cfdc8604f8b95",
+              "commands": [
+                {
+                  "argv": [
+                    "./perlbench_r",
+                    "-I.",
+                    "-I./lib",
+                    "makerand.pl"
+                  ],
+                  "stdout": "makerand.out",
+                  "stderr": "makerand.err"
+                },
+                {
+                  "argv": [
+                    "./perlbench_r",
+                    "-I.",
+                    "-I./lib",
+                    "test.pl"
+                  ],
+                  "stdout": "test.out",
+                  "stderr": "test.err"
+                }
+              ],
+              "exit_statuses": [
+                0,
+                0
+              ],
+              "image_exit_statuses": [],
+              "comparisons": [
+                {
+                  "name": "makerand.out",
+                  "expected": "539d02dc10fabf7096fdc8331ec144d1e42f813913ec48e4f611bce3f840950e",
+                  "actual": "539d02dc10fabf7096fdc8331ec144d1e42f813913ec48e4f611bce3f840950e",
+                  "passed": true
+                },
+                {
+                  "name": "test.out",
+                  "expected": "b41ee90a9ea042419027290477917941e279b3c818ae6e8d7a32f0c7a14ec47b",
+                  "actual": "b41ee90a9ea042419027290477917941e279b3c818ae6e8d7a32f0c7a14ec47b",
+                  "passed": true
+                }
+              ]
+            }
+          ],
+          "receipts": [
+            {
+              "path": "/tmp/capstone/qemu-next-01/spec-full/icount-short/qualification.json",
+              "sha256": "b3d2828130a9a3ed8a75cc0db08642631c62acfafcf70ac15d9144044dee88cb"
+            },
+            {
+              "path": "/tmp/capstone/qemu-next-01/spec-full/icount-medium/qualification.json",
+              "sha256": "392d63b777706e3ad1cf2c619b3ba7f105347be4220b9a3eb78c80832966caa5"
+            },
+            {
+              "path": "/tmp/capstone/qemu-next-01/spec-full/icount-x264/qualification.json",
+              "sha256": "29950173ac9e4d292c4372e608c84ededa11aa07ac383a6147e3e1ae785a3e7a"
+            },
+            {
+              "path": "/tmp/capstone/qemu-next-01/spec-full/icount-perl/qualification.json",
+              "sha256": "8386535079af86a7215bc49020f03c2829f8c79712d602ce605e49b21589232e"
+            }
+          ]
+        },
+        "realtime": {
+          "status": "PASS",
+          "counts": {
+            "entries": 10,
+            "original_commands": 22,
+            "image_validators": 4,
+            "qualified_hash_comparisons": 25
+          },
+          "results": [
+            {
+              "benchmark": "502.gcc_r",
+              "status": "PASS",
+              "input_manifest_sha256": "13ff945d7b3c7aca217274b9863b92f2bd106cee928bf9ab18c145e93bc474b9",
+              "commands": [
+                {
+                  "argv": [
+                    "./cpugcc_r",
+                    "t1.c",
+                    "-O3",
+                    "-finline-limit=50000",
+                    "-o",
+                    "t1.opts-O3_-finline-limit_50000.s"
+                  ],
+                  "stdout": "t1.opts-O3_-finline-limit_50000.out",
+                  "stderr": "t1.opts-O3_-finline-limit_50000.err"
+                }
+              ],
+              "exit_statuses": [
+                0
+              ],
+              "image_exit_statuses": [],
+              "comparisons": [
+                {
+                  "name": "t1.opts-O3_-finline-limit_50000.s",
+                  "expected": "58111208509dd871223ae195a33304bd6b24afd29458f37c976556cbad506324",
+                  "actual": "58111208509dd871223ae195a33304bd6b24afd29458f37c976556cbad506324",
+                  "passed": true
+                }
+              ]
+            },
+            {
+              "benchmark": "538.imagick_r",
+              "status": "PASS",
+              "input_manifest_sha256": "7478612c18d2f841d42907908e0de09c392a76e6fa7e1a8fdc84b93e9da3d0a5",
+              "commands": [
+                {
+                  "argv": [
+                    "./imagick_r",
+                    "-limit",
+                    "disk",
+                    "0",
+                    "test_input.tga",
+                    "-shear",
+                    "25",
+                    "-resize",
+                    "640x480",
+                    "-negate",
+                    "-alpha",
+                    "Off",
+                    "test_output.tga"
+                  ],
+                  "stdout": "test_convert.out",
+                  "stderr": "test_convert.err"
+                }
+              ],
+              "exit_statuses": [
+                0
+              ],
+              "image_exit_statuses": [
+                0
+              ],
+              "comparisons": [
+                {
+                  "name": "test_validate.out",
+                  "expected": "c3bfd816afd261fd4a1d4b6c8a4ed639f0872229ea26cbcaed127b04a5425a1a",
+                  "actual": "c3bfd816afd261fd4a1d4b6c8a4ed639f0872229ea26cbcaed127b04a5425a1a",
+                  "passed": true
+                }
+              ]
+            },
+            {
+              "benchmark": "997.specrand_fr",
+              "status": "PASS",
+              "input_manifest_sha256": "260ce8135dc0e04f576343d776f19d4b937083a4ccaaad88bb2f15ab119a6e7e",
+              "commands": [
+                {
+                  "argv": [
+                    "./specrand_fr",
+                    "324342",
+                    "24239"
+                  ],
+                  "stdout": "rand.24239.out",
+                  "stderr": "rand.24239.err"
+                }
+              ],
+              "exit_statuses": [
+                0
+              ],
+              "image_exit_statuses": [],
+              "comparisons": [
+                {
+                  "name": "rand.24239.out",
+                  "expected": "15e5b13042aa23597530688bfbcdfdfa83c55308372db51abeb73475af4dc72a",
+                  "actual": "15e5b13042aa23597530688bfbcdfdfa83c55308372db51abeb73475af4dc72a",
+                  "passed": true
+                }
+              ]
+            },
+            {
+              "benchmark": "999.specrand_ir",
+              "status": "PASS",
+              "input_manifest_sha256": "22d8c51d4003638c15af9b7adb368ba12b5b368bc7f3dfa6f7990ceabb994031",
+              "commands": [
+                {
+                  "argv": [
+                    "./specrand_ir",
+                    "324342",
+                    "24239"
+                  ],
+                  "stdout": "rand.24239.out",
+                  "stderr": "rand.24239.err"
+                }
+              ],
+              "exit_statuses": [
+                0
+              ],
+              "image_exit_statuses": [],
+              "comparisons": [
+                {
+                  "name": "rand.24239.out",
+                  "expected": "15e5b13042aa23597530688bfbcdfdfa83c55308372db51abeb73475af4dc72a",
+                  "actual": "15e5b13042aa23597530688bfbcdfdfa83c55308372db51abeb73475af4dc72a",
+                  "passed": true
+                }
+              ]
+            },
+            {
+              "benchmark": "519.lbm_r",
+              "status": "PASS",
+              "input_manifest_sha256": "b8988db8c978166f27e027328602885238e5091fa42bf4b0bcdd1e1289f3ca28",
+              "commands": [
+                {
+                  "argv": [
+                    "./lbm_r",
+                    "20",
+                    "reference.dat",
+                    "0",
+                    "1",
+                    "100_100_130_cf_a.of"
+                  ],
+                  "stdout": "lbm.out",
+                  "stderr": "lbm.err"
+                }
+              ],
+              "exit_statuses": [
+                0
+              ],
+              "image_exit_statuses": [],
+              "comparisons": [
+                {
+                  "name": "lbm.out",
+                  "expected": "7ab5463219d503a3cb54d5bd75b69c6620109b560058de7a20a719796433cdc5",
+                  "actual": "7ab5463219d503a3cb54d5bd75b69c6620109b560058de7a20a719796433cdc5",
+                  "passed": true
+                }
+              ]
+            },
+            {
+              "benchmark": "544.nab_r",
+              "status": "PASS",
+              "input_manifest_sha256": "bcb1af24c5c9b820ed480dea1e1114670de9466173cf5decf2b6cda96b1ec5cd",
+              "commands": [
+                {
+                  "argv": [
+                    "./nab_r",
+                    "hkrdenq",
+                    "1930344093",
+                    "1000"
+                  ],
+                  "stdout": "hkrdenq.out",
+                  "stderr": "hkrdenq.err"
+                }
+              ],
+              "exit_statuses": [
+                0
+              ],
+              "image_exit_statuses": [],
+              "comparisons": [
+                {
+                  "name": "hkrdenq.out",
+                  "expected": "2d580a95e2e596f2e06485149e9d91880bf47ded5a5495a366a80d4cea2a9afd",
+                  "actual": "2d580a95e2e596f2e06485149e9d91880bf47ded5a5495a366a80d4cea2a9afd",
+                  "passed": true
+                }
+              ]
+            },
+            {
+              "benchmark": "505.mcf_r",
+              "status": "PASS",
+              "input_manifest_sha256": "d26471eb6eb56d1fac26cd60e19632c27c38d2c7c23604d0b8831a3f90cf454d",
+              "commands": [
+                {
+                  "argv": [
+                    "./mcf_r",
+                    "inp.in"
+                  ],
+                  "stdout": "inp.out",
+                  "stderr": "inp.err"
+                }
+              ],
+              "exit_statuses": [
+                0
+              ],
+              "image_exit_statuses": [],
+              "comparisons": [
+                {
+                  "name": "inp.out",
+                  "expected": "b8a0d3ecba350c7f07063bb58799fa579fe46a2e5911b12fdfffdbf7f1895a6c",
+                  "actual": "b8a0d3ecba350c7f07063bb58799fa579fe46a2e5911b12fdfffdbf7f1895a6c",
+                  "passed": true
+                },
+                {
+                  "name": "mcf.out",
+                  "expected": "b272028fe374deea3865a5d29e71762a6c974558e97606b40292ed9744010530",
+                  "actual": "b272028fe374deea3865a5d29e71762a6c974558e97606b40292ed9744010530",
+                  "passed": true
+                }
+              ]
+            },
+            {
+              "benchmark": "557.xz_r",
+              "status": "PASS",
+              "input_manifest_sha256": "d51887851c732f4d6e687d8ba87587e06d241de0854a60fd1cc5e375f3390820",
+              "commands": [
+                {
+                  "argv": [
+                    "./xz_r",
+                    "cpu2006docs.tar.xz",
+                    "4",
+                    "055ce243071129412e9dd0b3b69a21654033a9b723d874b2015c774fac1553d9713be561ca86f74e4f16f22e664fc17a79f30caa5ad2c04fbc447549c2810fae",
+                    "1548636",
+                    "1555348",
+                    "0"
+                  ],
+                  "stdout": "cpu2006docs.tar-4-0.out",
+                  "stderr": "cpu2006docs.tar-4-0.err"
+                },
+                {
+                  "argv": [
+                    "./xz_r",
+                    "cpu2006docs.tar.xz",
+                    "4",
+                    "055ce243071129412e9dd0b3b69a21654033a9b723d874b2015c774fac1553d9713be561ca86f74e4f16f22e664fc17a79f30caa5ad2c04fbc447549c2810fae",
+                    "1462248",
+                    "-1",
+                    "1"
+                  ],
+                  "stdout": "cpu2006docs.tar-4-1.out",
+                  "stderr": "cpu2006docs.tar-4-1.err"
+                },
+                {
+                  "argv": [
+                    "./xz_r",
+                    "cpu2006docs.tar.xz",
+                    "4",
+                    "055ce243071129412e9dd0b3b69a21654033a9b723d874b2015c774fac1553d9713be561ca86f74e4f16f22e664fc17a79f30caa5ad2c04fbc447549c2810fae",
+                    "1428548",
+                    "-1",
+                    "2"
+                  ],
+                  "stdout": "cpu2006docs.tar-4-2.out",
+                  "stderr": "cpu2006docs.tar-4-2.err"
+                },
+                {
+                  "argv": [
+                    "./xz_r",
+                    "cpu2006docs.tar.xz",
+                    "4",
+                    "055ce243071129412e9dd0b3b69a21654033a9b723d874b2015c774fac1553d9713be561ca86f74e4f16f22e664fc17a79f30caa5ad2c04fbc447549c2810fae",
+                    "1034828",
+                    "-1",
+                    "3e"
+                  ],
+                  "stdout": "cpu2006docs.tar-4-3e.out",
+                  "stderr": "cpu2006docs.tar-4-3e.err"
+                },
+                {
+                  "argv": [
+                    "./xz_r",
+                    "cpu2006docs.tar.xz",
+                    "4",
+                    "055ce243071129412e9dd0b3b69a21654033a9b723d874b2015c774fac1553d9713be561ca86f74e4f16f22e664fc17a79f30caa5ad2c04fbc447549c2810fae",
+                    "1061968",
+                    "-1",
+                    "4"
+                  ],
+                  "stdout": "cpu2006docs.tar-4-4.out",
+                  "stderr": "cpu2006docs.tar-4-4.err"
+                },
+                {
+                  "argv": [
+                    "./xz_r",
+                    "cpu2006docs.tar.xz",
+                    "4",
+                    "055ce243071129412e9dd0b3b69a21654033a9b723d874b2015c774fac1553d9713be561ca86f74e4f16f22e664fc17a79f30caa5ad2c04fbc447549c2810fae",
+                    "1034588",
+                    "-1",
+                    "4e"
+                  ],
+                  "stdout": "cpu2006docs.tar-4-4e.out",
+                  "stderr": "cpu2006docs.tar-4-4e.err"
+                },
+                {
+                  "argv": [
+                    "./xz_r",
+                    "cpu2006docs.tar.xz",
+                    "1",
+                    "055ce243071129412e9dd0b3b69a21654033a9b723d874b2015c774fac1553d9713be561ca86f74e4f16f22e664fc17a79f30caa5ad2c04fbc447549c2810fae",
+                    "650156",
+                    "-1",
+                    "0"
+                  ],
+                  "stdout": "cpu2006docs.tar-1-0.out",
+                  "stderr": "cpu2006docs.tar-1-0.err"
+                },
+                {
+                  "argv": [
+                    "./xz_r",
+                    "cpu2006docs.tar.xz",
+                    "1",
+                    "055ce243071129412e9dd0b3b69a21654033a9b723d874b2015c774fac1553d9713be561ca86f74e4f16f22e664fc17a79f30caa5ad2c04fbc447549c2810fae",
+                    "639996",
+                    "-1",
+                    "1"
+                  ],
+                  "stdout": "cpu2006docs.tar-1-1.out",
+                  "stderr": "cpu2006docs.tar-1-1.err"
+                },
+                {
+                  "argv": [
+                    "./xz_r",
+                    "cpu2006docs.tar.xz",
+                    "1",
+                    "055ce243071129412e9dd0b3b69a21654033a9b723d874b2015c774fac1553d9713be561ca86f74e4f16f22e664fc17a79f30caa5ad2c04fbc447549c2810fae",
+                    "637616",
+                    "-1",
+                    "2"
+                  ],
+                  "stdout": "cpu2006docs.tar-1-2.out",
+                  "stderr": "cpu2006docs.tar-1-2.err"
+                },
+                {
+                  "argv": [
+                    "./xz_r",
+                    "cpu2006docs.tar.xz",
+                    "1",
+                    "055ce243071129412e9dd0b3b69a21654033a9b723d874b2015c774fac1553d9713be561ca86f74e4f16f22e664fc17a79f30caa5ad2c04fbc447549c2810fae",
+                    "628996",
+                    "-1",
+                    "3e"
+                  ],
+                  "stdout": "cpu2006docs.tar-1-3e.out",
+                  "stderr": "cpu2006docs.tar-1-3e.err"
+                },
+                {
+                  "argv": [
+                    "./xz_r",
+                    "cpu2006docs.tar.xz",
+                    "1",
+                    "055ce243071129412e9dd0b3b69a21654033a9b723d874b2015c774fac1553d9713be561ca86f74e4f16f22e664fc17a79f30caa5ad2c04fbc447549c2810fae",
+                    "631912",
+                    "-1",
+                    "4"
+                  ],
+                  "stdout": "cpu2006docs.tar-1-4.out",
+                  "stderr": "cpu2006docs.tar-1-4.err"
+                },
+                {
+                  "argv": [
+                    "./xz_r",
+                    "cpu2006docs.tar.xz",
+                    "1",
+                    "055ce243071129412e9dd0b3b69a21654033a9b723d874b2015c774fac1553d9713be561ca86f74e4f16f22e664fc17a79f30caa5ad2c04fbc447549c2810fae",
+                    "629064",
+                    "-1",
+                    "4e"
+                  ],
+                  "stdout": "cpu2006docs.tar-1-4e.out",
+                  "stderr": "cpu2006docs.tar-1-4e.err"
+                }
+              ],
+              "exit_statuses": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "image_exit_statuses": [],
+              "comparisons": [
+                {
+                  "name": "cpu2006docs.tar-1-0.out",
+                  "expected": "211f54ac64f8a7efe5a61f1a476363c64e6eb7493cb917353b144a9df5982e5b",
+                  "actual": "211f54ac64f8a7efe5a61f1a476363c64e6eb7493cb917353b144a9df5982e5b",
+                  "passed": true
+                },
+                {
+                  "name": "cpu2006docs.tar-1-1.out",
+                  "expected": "c74343902f42ca10bf9569e9a6a65968aff0867f12cb4b732a69ffc63b5a420d",
+                  "actual": "c74343902f42ca10bf9569e9a6a65968aff0867f12cb4b732a69ffc63b5a420d",
+                  "passed": true
+                },
+                {
+                  "name": "cpu2006docs.tar-1-2.out",
+                  "expected": "10ae9343a2dd8d81da44d44e737fc2940af0349ad89e0de7a86f65ea240c3a58",
+                  "actual": "10ae9343a2dd8d81da44d44e737fc2940af0349ad89e0de7a86f65ea240c3a58",
+                  "passed": true
+                },
+                {
+                  "name": "cpu2006docs.tar-1-3e.out",
+                  "expected": "8d5b873c430087cb3f0d13e20075b6521f939926ed69c09cfcd7aeb4be922ca3",
+                  "actual": "8d5b873c430087cb3f0d13e20075b6521f939926ed69c09cfcd7aeb4be922ca3",
+                  "passed": true
+                },
+                {
+                  "name": "cpu2006docs.tar-1-4.out",
+                  "expected": "02f8d81e89fa6b1add13f9305a0b79d3d31c4587a267037483b77ba290c423ef",
+                  "actual": "02f8d81e89fa6b1add13f9305a0b79d3d31c4587a267037483b77ba290c423ef",
+                  "passed": true
+                },
+                {
+                  "name": "cpu2006docs.tar-1-4e.out",
+                  "expected": "c43cf718699a474ba763d32930ee9daacbe488ed3c70bedeaa4ea19e44776102",
+                  "actual": "c43cf718699a474ba763d32930ee9daacbe488ed3c70bedeaa4ea19e44776102",
+                  "passed": true
+                },
+                {
+                  "name": "cpu2006docs.tar-4-0.out",
+                  "expected": "80b9e98184e536eafd18ad059278c304f3f59b3673e4c71203a305441740e264",
+                  "actual": "80b9e98184e536eafd18ad059278c304f3f59b3673e4c71203a305441740e264",
+                  "passed": true
+                },
+                {
+                  "name": "cpu2006docs.tar-4-1.out",
+                  "expected": "d57fb0b14ee67557acea66f34a1a73ef0c7c55dbaf4c1f8d46ff14a1885cf7bf",
+                  "actual": "d57fb0b14ee67557acea66f34a1a73ef0c7c55dbaf4c1f8d46ff14a1885cf7bf",
+                  "passed": true
+                },
+                {
+                  "name": "cpu2006docs.tar-4-2.out",
+                  "expected": "5225a92bffeaa6e61e86a136f92bcff31b03a2ab1c71f76cec6d365a99940327",
+                  "actual": "5225a92bffeaa6e61e86a136f92bcff31b03a2ab1c71f76cec6d365a99940327",
+                  "passed": true
+                },
+                {
+                  "name": "cpu2006docs.tar-4-3e.out",
+                  "expected": "3522866056b5ae84c19cae75e2bce8bfd9b5d055b86ccf7a3c7847f9a696189d",
+                  "actual": "3522866056b5ae84c19cae75e2bce8bfd9b5d055b86ccf7a3c7847f9a696189d",
+                  "passed": true
+                },
+                {
+                  "name": "cpu2006docs.tar-4-4.out",
+                  "expected": "a854805559ca63152d290f3953664818b86e84e05dca29e9b09646f1c9e04cb1",
+                  "actual": "a854805559ca63152d290f3953664818b86e84e05dca29e9b09646f1c9e04cb1",
+                  "passed": true
+                },
+                {
+                  "name": "cpu2006docs.tar-4-4e.out",
+                  "expected": "2a5b52fd57239898203d16a3c8f0e7346f0d12124cfbb95d9a9971b72c647579",
+                  "actual": "2a5b52fd57239898203d16a3c8f0e7346f0d12124cfbb95d9a9971b72c647579",
+                  "passed": true
+                }
+              ]
+            },
+            {
+              "benchmark": "525.x264_r",
+              "status": "PASS",
+              "input_manifest_sha256": "8700c99a3bcf49d1a9f6a40c58882017486ef633d7ebb4a5177cd000dac0a4f1",
+              "commands": [
+                {
+                  "argv": [
+                    "./x264_r",
+                    "--dumpyuv",
+                    "50",
+                    "--frames",
+                    "156",
+                    "-o",
+                    "BuckBunny_New.264",
+                    "BuckBunny.yuv",
+                    "1280x720"
+                  ],
+                  "stdout": "run_000-156_x264_r_base.native_qemu_x264.out",
+                  "stderr": "run_000-156_x264_r_base.native_qemu_x264.err"
+                }
+              ],
+              "exit_statuses": [
+                0
+              ],
+              "image_exit_statuses": [
+                0,
+                0,
+                0
+              ],
+              "comparisons": [
+                {
+                  "name": "imagevalidate_frame_100.out",
+                  "expected": "18becbed0f32c42d434198638fa23757be12f1f68952749289446f6cdcb6ec9d",
+                  "actual": "18becbed0f32c42d434198638fa23757be12f1f68952749289446f6cdcb6ec9d",
+                  "passed": true
+                },
+                {
+                  "name": "imagevalidate_frame_155.out",
+                  "expected": "9bd07ce8334e58bbb516449c054de128069ef6d30e99361cfa96da8297fddcbd",
+                  "actual": "9bd07ce8334e58bbb516449c054de128069ef6d30e99361cfa96da8297fddcbd",
+                  "passed": true
+                },
+                {
+                  "name": "imagevalidate_frame_50.out",
+                  "expected": "1c7fedcf715f76721507933049e9a2121b81fcc3597e178467d87dd4a417c5a6",
+                  "actual": "1c7fedcf715f76721507933049e9a2121b81fcc3597e178467d87dd4a417c5a6",
+                  "passed": true
+                }
+              ]
+            },
+            {
+              "benchmark": "500.perlbench_r",
+              "status": "PASS",
+              "input_manifest_sha256": "fe7ea2a29694c51353c283b3df19d2605d595e549f80d702e23cfdc8604f8b95",
+              "commands": [
+                {
+                  "argv": [
+                    "./perlbench_r",
+                    "-I.",
+                    "-I./lib",
+                    "makerand.pl"
+                  ],
+                  "stdout": "makerand.out",
+                  "stderr": "makerand.err"
+                },
+                {
+                  "argv": [
+                    "./perlbench_r",
+                    "-I.",
+                    "-I./lib",
+                    "test.pl"
+                  ],
+                  "stdout": "test.out",
+                  "stderr": "test.err"
+                }
+              ],
+              "exit_statuses": [
+                0,
+                0
+              ],
+              "image_exit_statuses": [],
+              "comparisons": [
+                {
+                  "name": "makerand.out",
+                  "expected": "539d02dc10fabf7096fdc8331ec144d1e42f813913ec48e4f611bce3f840950e",
+                  "actual": "539d02dc10fabf7096fdc8331ec144d1e42f813913ec48e4f611bce3f840950e",
+                  "passed": true
+                },
+                {
+                  "name": "test.out",
+                  "expected": "b41ee90a9ea042419027290477917941e279b3c818ae6e8d7a32f0c7a14ec47b",
+                  "actual": "b41ee90a9ea042419027290477917941e279b3c818ae6e8d7a32f0c7a14ec47b",
+                  "passed": true
+                }
+              ]
+            }
+          ],
+          "receipts": [
+            {
+              "path": "/tmp/capstone/qemu-next-01/spec-full/realtime-short/qualification.json",
+              "sha256": "6635da9fe1ab2d9ee18d0123dbb607e5ee960a2fcc8610dd2b21076971f77ced"
+            },
+            {
+              "path": "/tmp/capstone/qemu-next-01/spec-full/realtime-medium/qualification.json",
+              "sha256": "7e8b27b33e5f5159d403ac94882194105cb890474fbebb9836ea65935237c686"
+            },
+            {
+              "path": "/tmp/capstone/qemu-next-01/spec-full/realtime-x264/qualification.json",
+              "sha256": "87686066b481f6ed4f2bc673568423106e79e7aa976bef589866af7c0904f829"
+            },
+            {
+              "path": "/tmp/capstone/qemu-next-01/spec-full/realtime-perl/qualification.json",
+              "sha256": "747c958b78c295dd5536b79cd6cfd0f814e5ebc5ed5e3b5dd409b6775d16302b"
+            }
+          ]
+        }
+      }
+    },
+    "code_probe": {
+      "runtime_source": "81246125dcf06bf057b9fca9fb5e850dddce0f5b",
+      "qemu_sha256": "c5d7588a9bfda4108b92d18ead08d99be9f2436722748ff72b5a23ed36e9d7f4",
+      "modes": {
+        "icount": {
+          "status": "PASS",
+          "counts": {
+            "entries": 10,
+            "original_commands": 22,
+            "image_validators": 4,
+            "qualified_hash_comparisons": 25
+          },
+          "results": [
+            {
+              "benchmark": "502.gcc_r",
+              "status": "PASS",
+              "input_manifest_sha256": "13ff945d7b3c7aca217274b9863b92f2bd106cee928bf9ab18c145e93bc474b9",
+              "commands": [
+                {
+                  "argv": [
+                    "./cpugcc_r",
+                    "t1.c",
+                    "-O3",
+                    "-finline-limit=50000",
+                    "-o",
+                    "t1.opts-O3_-finline-limit_50000.s"
+                  ],
+                  "stdout": "t1.opts-O3_-finline-limit_50000.out",
+                  "stderr": "t1.opts-O3_-finline-limit_50000.err"
+                }
+              ],
+              "exit_statuses": [
+                0
+              ],
+              "image_exit_statuses": [],
+              "comparisons": [
+                {
+                  "name": "t1.opts-O3_-finline-limit_50000.s",
+                  "expected": "58111208509dd871223ae195a33304bd6b24afd29458f37c976556cbad506324",
+                  "actual": "58111208509dd871223ae195a33304bd6b24afd29458f37c976556cbad506324",
+                  "passed": true
+                }
+              ]
+            },
+            {
+              "benchmark": "538.imagick_r",
+              "status": "PASS",
+              "input_manifest_sha256": "7478612c18d2f841d42907908e0de09c392a76e6fa7e1a8fdc84b93e9da3d0a5",
+              "commands": [
+                {
+                  "argv": [
+                    "./imagick_r",
+                    "-limit",
+                    "disk",
+                    "0",
+                    "test_input.tga",
+                    "-shear",
+                    "25",
+                    "-resize",
+                    "640x480",
+                    "-negate",
+                    "-alpha",
+                    "Off",
+                    "test_output.tga"
+                  ],
+                  "stdout": "test_convert.out",
+                  "stderr": "test_convert.err"
+                }
+              ],
+              "exit_statuses": [
+                0
+              ],
+              "image_exit_statuses": [
+                0
+              ],
+              "comparisons": [
+                {
+                  "name": "test_validate.out",
+                  "expected": "c3bfd816afd261fd4a1d4b6c8a4ed639f0872229ea26cbcaed127b04a5425a1a",
+                  "actual": "c3bfd816afd261fd4a1d4b6c8a4ed639f0872229ea26cbcaed127b04a5425a1a",
+                  "passed": true
+                }
+              ]
+            },
+            {
+              "benchmark": "997.specrand_fr",
+              "status": "PASS",
+              "input_manifest_sha256": "260ce8135dc0e04f576343d776f19d4b937083a4ccaaad88bb2f15ab119a6e7e",
+              "commands": [
+                {
+                  "argv": [
+                    "./specrand_fr",
+                    "324342",
+                    "24239"
+                  ],
+                  "stdout": "rand.24239.out",
+                  "stderr": "rand.24239.err"
+                }
+              ],
+              "exit_statuses": [
+                0
+              ],
+              "image_exit_statuses": [],
+              "comparisons": [
+                {
+                  "name": "rand.24239.out",
+                  "expected": "15e5b13042aa23597530688bfbcdfdfa83c55308372db51abeb73475af4dc72a",
+                  "actual": "15e5b13042aa23597530688bfbcdfdfa83c55308372db51abeb73475af4dc72a",
+                  "passed": true
+                }
+              ]
+            },
+            {
+              "benchmark": "999.specrand_ir",
+              "status": "PASS",
+              "input_manifest_sha256": "22d8c51d4003638c15af9b7adb368ba12b5b368bc7f3dfa6f7990ceabb994031",
+              "commands": [
+                {
+                  "argv": [
+                    "./specrand_ir",
+                    "324342",
+                    "24239"
+                  ],
+                  "stdout": "rand.24239.out",
+                  "stderr": "rand.24239.err"
+                }
+              ],
+              "exit_statuses": [
+                0
+              ],
+              "image_exit_statuses": [],
+              "comparisons": [
+                {
+                  "name": "rand.24239.out",
+                  "expected": "15e5b13042aa23597530688bfbcdfdfa83c55308372db51abeb73475af4dc72a",
+                  "actual": "15e5b13042aa23597530688bfbcdfdfa83c55308372db51abeb73475af4dc72a",
+                  "passed": true
+                }
+              ]
+            },
+            {
+              "benchmark": "519.lbm_r",
+              "status": "PASS",
+              "input_manifest_sha256": "b8988db8c978166f27e027328602885238e5091fa42bf4b0bcdd1e1289f3ca28",
+              "commands": [
+                {
+                  "argv": [
+                    "./lbm_r",
+                    "20",
+                    "reference.dat",
+                    "0",
+                    "1",
+                    "100_100_130_cf_a.of"
+                  ],
+                  "stdout": "lbm.out",
+                  "stderr": "lbm.err"
+                }
+              ],
+              "exit_statuses": [
+                0
+              ],
+              "image_exit_statuses": [],
+              "comparisons": [
+                {
+                  "name": "lbm.out",
+                  "expected": "7ab5463219d503a3cb54d5bd75b69c6620109b560058de7a20a719796433cdc5",
+                  "actual": "7ab5463219d503a3cb54d5bd75b69c6620109b560058de7a20a719796433cdc5",
+                  "passed": true
+                }
+              ]
+            },
+            {
+              "benchmark": "544.nab_r",
+              "status": "PASS",
+              "input_manifest_sha256": "bcb1af24c5c9b820ed480dea1e1114670de9466173cf5decf2b6cda96b1ec5cd",
+              "commands": [
+                {
+                  "argv": [
+                    "./nab_r",
+                    "hkrdenq",
+                    "1930344093",
+                    "1000"
+                  ],
+                  "stdout": "hkrdenq.out",
+                  "stderr": "hkrdenq.err"
+                }
+              ],
+              "exit_statuses": [
+                0
+              ],
+              "image_exit_statuses": [],
+              "comparisons": [
+                {
+                  "name": "hkrdenq.out",
+                  "expected": "2d580a95e2e596f2e06485149e9d91880bf47ded5a5495a366a80d4cea2a9afd",
+                  "actual": "2d580a95e2e596f2e06485149e9d91880bf47ded5a5495a366a80d4cea2a9afd",
+                  "passed": true
+                }
+              ]
+            },
+            {
+              "benchmark": "505.mcf_r",
+              "status": "PASS",
+              "input_manifest_sha256": "d26471eb6eb56d1fac26cd60e19632c27c38d2c7c23604d0b8831a3f90cf454d",
+              "commands": [
+                {
+                  "argv": [
+                    "./mcf_r",
+                    "inp.in"
+                  ],
+                  "stdout": "inp.out",
+                  "stderr": "inp.err"
+                }
+              ],
+              "exit_statuses": [
+                0
+              ],
+              "image_exit_statuses": [],
+              "comparisons": [
+                {
+                  "name": "inp.out",
+                  "expected": "b8a0d3ecba350c7f07063bb58799fa579fe46a2e5911b12fdfffdbf7f1895a6c",
+                  "actual": "b8a0d3ecba350c7f07063bb58799fa579fe46a2e5911b12fdfffdbf7f1895a6c",
+                  "passed": true
+                },
+                {
+                  "name": "mcf.out",
+                  "expected": "b272028fe374deea3865a5d29e71762a6c974558e97606b40292ed9744010530",
+                  "actual": "b272028fe374deea3865a5d29e71762a6c974558e97606b40292ed9744010530",
+                  "passed": true
+                }
+              ]
+            },
+            {
+              "benchmark": "557.xz_r",
+              "status": "PASS",
+              "input_manifest_sha256": "d51887851c732f4d6e687d8ba87587e06d241de0854a60fd1cc5e375f3390820",
+              "commands": [
+                {
+                  "argv": [
+                    "./xz_r",
+                    "cpu2006docs.tar.xz",
+                    "4",
+                    "055ce243071129412e9dd0b3b69a21654033a9b723d874b2015c774fac1553d9713be561ca86f74e4f16f22e664fc17a79f30caa5ad2c04fbc447549c2810fae",
+                    "1548636",
+                    "1555348",
+                    "0"
+                  ],
+                  "stdout": "cpu2006docs.tar-4-0.out",
+                  "stderr": "cpu2006docs.tar-4-0.err"
+                },
+                {
+                  "argv": [
+                    "./xz_r",
+                    "cpu2006docs.tar.xz",
+                    "4",
+                    "055ce243071129412e9dd0b3b69a21654033a9b723d874b2015c774fac1553d9713be561ca86f74e4f16f22e664fc17a79f30caa5ad2c04fbc447549c2810fae",
+                    "1462248",
+                    "-1",
+                    "1"
+                  ],
+                  "stdout": "cpu2006docs.tar-4-1.out",
+                  "stderr": "cpu2006docs.tar-4-1.err"
+                },
+                {
+                  "argv": [
+                    "./xz_r",
+                    "cpu2006docs.tar.xz",
+                    "4",
+                    "055ce243071129412e9dd0b3b69a21654033a9b723d874b2015c774fac1553d9713be561ca86f74e4f16f22e664fc17a79f30caa5ad2c04fbc447549c2810fae",
+                    "1428548",
+                    "-1",
+                    "2"
+                  ],
+                  "stdout": "cpu2006docs.tar-4-2.out",
+                  "stderr": "cpu2006docs.tar-4-2.err"
+                },
+                {
+                  "argv": [
+                    "./xz_r",
+                    "cpu2006docs.tar.xz",
+                    "4",
+                    "055ce243071129412e9dd0b3b69a21654033a9b723d874b2015c774fac1553d9713be561ca86f74e4f16f22e664fc17a79f30caa5ad2c04fbc447549c2810fae",
+                    "1034828",
+                    "-1",
+                    "3e"
+                  ],
+                  "stdout": "cpu2006docs.tar-4-3e.out",
+                  "stderr": "cpu2006docs.tar-4-3e.err"
+                },
+                {
+                  "argv": [
+                    "./xz_r",
+                    "cpu2006docs.tar.xz",
+                    "4",
+                    "055ce243071129412e9dd0b3b69a21654033a9b723d874b2015c774fac1553d9713be561ca86f74e4f16f22e664fc17a79f30caa5ad2c04fbc447549c2810fae",
+                    "1061968",
+                    "-1",
+                    "4"
+                  ],
+                  "stdout": "cpu2006docs.tar-4-4.out",
+                  "stderr": "cpu2006docs.tar-4-4.err"
+                },
+                {
+                  "argv": [
+                    "./xz_r",
+                    "cpu2006docs.tar.xz",
+                    "4",
+                    "055ce243071129412e9dd0b3b69a21654033a9b723d874b2015c774fac1553d9713be561ca86f74e4f16f22e664fc17a79f30caa5ad2c04fbc447549c2810fae",
+                    "1034588",
+                    "-1",
+                    "4e"
+                  ],
+                  "stdout": "cpu2006docs.tar-4-4e.out",
+                  "stderr": "cpu2006docs.tar-4-4e.err"
+                },
+                {
+                  "argv": [
+                    "./xz_r",
+                    "cpu2006docs.tar.xz",
+                    "1",
+                    "055ce243071129412e9dd0b3b69a21654033a9b723d874b2015c774fac1553d9713be561ca86f74e4f16f22e664fc17a79f30caa5ad2c04fbc447549c2810fae",
+                    "650156",
+                    "-1",
+                    "0"
+                  ],
+                  "stdout": "cpu2006docs.tar-1-0.out",
+                  "stderr": "cpu2006docs.tar-1-0.err"
+                },
+                {
+                  "argv": [
+                    "./xz_r",
+                    "cpu2006docs.tar.xz",
+                    "1",
+                    "055ce243071129412e9dd0b3b69a21654033a9b723d874b2015c774fac1553d9713be561ca86f74e4f16f22e664fc17a79f30caa5ad2c04fbc447549c2810fae",
+                    "639996",
+                    "-1",
+                    "1"
+                  ],
+                  "stdout": "cpu2006docs.tar-1-1.out",
+                  "stderr": "cpu2006docs.tar-1-1.err"
+                },
+                {
+                  "argv": [
+                    "./xz_r",
+                    "cpu2006docs.tar.xz",
+                    "1",
+                    "055ce243071129412e9dd0b3b69a21654033a9b723d874b2015c774fac1553d9713be561ca86f74e4f16f22e664fc17a79f30caa5ad2c04fbc447549c2810fae",
+                    "637616",
+                    "-1",
+                    "2"
+                  ],
+                  "stdout": "cpu2006docs.tar-1-2.out",
+                  "stderr": "cpu2006docs.tar-1-2.err"
+                },
+                {
+                  "argv": [
+                    "./xz_r",
+                    "cpu2006docs.tar.xz",
+                    "1",
+                    "055ce243071129412e9dd0b3b69a21654033a9b723d874b2015c774fac1553d9713be561ca86f74e4f16f22e664fc17a79f30caa5ad2c04fbc447549c2810fae",
+                    "628996",
+                    "-1",
+                    "3e"
+                  ],
+                  "stdout": "cpu2006docs.tar-1-3e.out",
+                  "stderr": "cpu2006docs.tar-1-3e.err"
+                },
+                {
+                  "argv": [
+                    "./xz_r",
+                    "cpu2006docs.tar.xz",
+                    "1",
+                    "055ce243071129412e9dd0b3b69a21654033a9b723d874b2015c774fac1553d9713be561ca86f74e4f16f22e664fc17a79f30caa5ad2c04fbc447549c2810fae",
+                    "631912",
+                    "-1",
+                    "4"
+                  ],
+                  "stdout": "cpu2006docs.tar-1-4.out",
+                  "stderr": "cpu2006docs.tar-1-4.err"
+                },
+                {
+                  "argv": [
+                    "./xz_r",
+                    "cpu2006docs.tar.xz",
+                    "1",
+                    "055ce243071129412e9dd0b3b69a21654033a9b723d874b2015c774fac1553d9713be561ca86f74e4f16f22e664fc17a79f30caa5ad2c04fbc447549c2810fae",
+                    "629064",
+                    "-1",
+                    "4e"
+                  ],
+                  "stdout": "cpu2006docs.tar-1-4e.out",
+                  "stderr": "cpu2006docs.tar-1-4e.err"
+                }
+              ],
+              "exit_statuses": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "image_exit_statuses": [],
+              "comparisons": [
+                {
+                  "name": "cpu2006docs.tar-1-0.out",
+                  "expected": "211f54ac64f8a7efe5a61f1a476363c64e6eb7493cb917353b144a9df5982e5b",
+                  "actual": "211f54ac64f8a7efe5a61f1a476363c64e6eb7493cb917353b144a9df5982e5b",
+                  "passed": true
+                },
+                {
+                  "name": "cpu2006docs.tar-1-1.out",
+                  "expected": "c74343902f42ca10bf9569e9a6a65968aff0867f12cb4b732a69ffc63b5a420d",
+                  "actual": "c74343902f42ca10bf9569e9a6a65968aff0867f12cb4b732a69ffc63b5a420d",
+                  "passed": true
+                },
+                {
+                  "name": "cpu2006docs.tar-1-2.out",
+                  "expected": "10ae9343a2dd8d81da44d44e737fc2940af0349ad89e0de7a86f65ea240c3a58",
+                  "actual": "10ae9343a2dd8d81da44d44e737fc2940af0349ad89e0de7a86f65ea240c3a58",
+                  "passed": true
+                },
+                {
+                  "name": "cpu2006docs.tar-1-3e.out",
+                  "expected": "8d5b873c430087cb3f0d13e20075b6521f939926ed69c09cfcd7aeb4be922ca3",
+                  "actual": "8d5b873c430087cb3f0d13e20075b6521f939926ed69c09cfcd7aeb4be922ca3",
+                  "passed": true
+                },
+                {
+                  "name": "cpu2006docs.tar-1-4.out",
+                  "expected": "02f8d81e89fa6b1add13f9305a0b79d3d31c4587a267037483b77ba290c423ef",
+                  "actual": "02f8d81e89fa6b1add13f9305a0b79d3d31c4587a267037483b77ba290c423ef",
+                  "passed": true
+                },
+                {
+                  "name": "cpu2006docs.tar-1-4e.out",
+                  "expected": "c43cf718699a474ba763d32930ee9daacbe488ed3c70bedeaa4ea19e44776102",
+                  "actual": "c43cf718699a474ba763d32930ee9daacbe488ed3c70bedeaa4ea19e44776102",
+                  "passed": true
+                },
+                {
+                  "name": "cpu2006docs.tar-4-0.out",
+                  "expected": "80b9e98184e536eafd18ad059278c304f3f59b3673e4c71203a305441740e264",
+                  "actual": "80b9e98184e536eafd18ad059278c304f3f59b3673e4c71203a305441740e264",
+                  "passed": true
+                },
+                {
+                  "name": "cpu2006docs.tar-4-1.out",
+                  "expected": "d57fb0b14ee67557acea66f34a1a73ef0c7c55dbaf4c1f8d46ff14a1885cf7bf",
+                  "actual": "d57fb0b14ee67557acea66f34a1a73ef0c7c55dbaf4c1f8d46ff14a1885cf7bf",
+                  "passed": true
+                },
+                {
+                  "name": "cpu2006docs.tar-4-2.out",
+                  "expected": "5225a92bffeaa6e61e86a136f92bcff31b03a2ab1c71f76cec6d365a99940327",
+                  "actual": "5225a92bffeaa6e61e86a136f92bcff31b03a2ab1c71f76cec6d365a99940327",
+                  "passed": true
+                },
+                {
+                  "name": "cpu2006docs.tar-4-3e.out",
+                  "expected": "3522866056b5ae84c19cae75e2bce8bfd9b5d055b86ccf7a3c7847f9a696189d",
+                  "actual": "3522866056b5ae84c19cae75e2bce8bfd9b5d055b86ccf7a3c7847f9a696189d",
+                  "passed": true
+                },
+                {
+                  "name": "cpu2006docs.tar-4-4.out",
+                  "expected": "a854805559ca63152d290f3953664818b86e84e05dca29e9b09646f1c9e04cb1",
+                  "actual": "a854805559ca63152d290f3953664818b86e84e05dca29e9b09646f1c9e04cb1",
+                  "passed": true
+                },
+                {
+                  "name": "cpu2006docs.tar-4-4e.out",
+                  "expected": "2a5b52fd57239898203d16a3c8f0e7346f0d12124cfbb95d9a9971b72c647579",
+                  "actual": "2a5b52fd57239898203d16a3c8f0e7346f0d12124cfbb95d9a9971b72c647579",
+                  "passed": true
+                }
+              ]
+            },
+            {
+              "benchmark": "525.x264_r",
+              "status": "PASS",
+              "input_manifest_sha256": "8700c99a3bcf49d1a9f6a40c58882017486ef633d7ebb4a5177cd000dac0a4f1",
+              "commands": [
+                {
+                  "argv": [
+                    "./x264_r",
+                    "--dumpyuv",
+                    "50",
+                    "--frames",
+                    "156",
+                    "-o",
+                    "BuckBunny_New.264",
+                    "BuckBunny.yuv",
+                    "1280x720"
+                  ],
+                  "stdout": "run_000-156_x264_r_base.native_qemu_x264.out",
+                  "stderr": "run_000-156_x264_r_base.native_qemu_x264.err"
+                }
+              ],
+              "exit_statuses": [
+                0
+              ],
+              "image_exit_statuses": [
+                0,
+                0,
+                0
+              ],
+              "comparisons": [
+                {
+                  "name": "imagevalidate_frame_100.out",
+                  "expected": "18becbed0f32c42d434198638fa23757be12f1f68952749289446f6cdcb6ec9d",
+                  "actual": "18becbed0f32c42d434198638fa23757be12f1f68952749289446f6cdcb6ec9d",
+                  "passed": true
+                },
+                {
+                  "name": "imagevalidate_frame_155.out",
+                  "expected": "9bd07ce8334e58bbb516449c054de128069ef6d30e99361cfa96da8297fddcbd",
+                  "actual": "9bd07ce8334e58bbb516449c054de128069ef6d30e99361cfa96da8297fddcbd",
+                  "passed": true
+                },
+                {
+                  "name": "imagevalidate_frame_50.out",
+                  "expected": "1c7fedcf715f76721507933049e9a2121b81fcc3597e178467d87dd4a417c5a6",
+                  "actual": "1c7fedcf715f76721507933049e9a2121b81fcc3597e178467d87dd4a417c5a6",
+                  "passed": true
+                }
+              ]
+            },
+            {
+              "benchmark": "500.perlbench_r",
+              "status": "PASS",
+              "input_manifest_sha256": "fe7ea2a29694c51353c283b3df19d2605d595e549f80d702e23cfdc8604f8b95",
+              "commands": [
+                {
+                  "argv": [
+                    "./perlbench_r",
+                    "-I.",
+                    "-I./lib",
+                    "makerand.pl"
+                  ],
+                  "stdout": "makerand.out",
+                  "stderr": "makerand.err"
+                },
+                {
+                  "argv": [
+                    "./perlbench_r",
+                    "-I.",
+                    "-I./lib",
+                    "test.pl"
+                  ],
+                  "stdout": "test.out",
+                  "stderr": "test.err"
+                }
+              ],
+              "exit_statuses": [
+                0,
+                0
+              ],
+              "image_exit_statuses": [],
+              "comparisons": [
+                {
+                  "name": "makerand.out",
+                  "expected": "539d02dc10fabf7096fdc8331ec144d1e42f813913ec48e4f611bce3f840950e",
+                  "actual": "539d02dc10fabf7096fdc8331ec144d1e42f813913ec48e4f611bce3f840950e",
+                  "passed": true
+                },
+                {
+                  "name": "test.out",
+                  "expected": "b41ee90a9ea042419027290477917941e279b3c818ae6e8d7a32f0c7a14ec47b",
+                  "actual": "b41ee90a9ea042419027290477917941e279b3c818ae6e8d7a32f0c7a14ec47b",
+                  "passed": true
+                }
+              ]
+            }
+          ],
+          "receipts": [
+            {
+              "path": "/tmp/capstone/qemu-code-probe-01/spec-full/icount-short/qualification.json",
+              "sha256": "8dcafb25c064afa3b6c2f54f69c7ddeb03869bebdc1abcb7ca0c3f98f70c98ab"
+            },
+            {
+              "path": "/tmp/capstone/qemu-code-probe-01/spec-full/icount-medium/qualification.json",
+              "sha256": "92d3d1e908891801734df062e257cacdd9d6ff6cf7258308afe22e074b3cd408"
+            },
+            {
+              "path": "/tmp/capstone/qemu-code-probe-01/spec-full/icount-x264/qualification.json",
+              "sha256": "9f95a8ca07b2ebcd6f33e6a4fb28d38f5fade0bde2a18fe65ecdccd72606242a"
+            },
+            {
+              "path": "/tmp/capstone/qemu-code-probe-01/spec-full/icount-perl/qualification.json",
+              "sha256": "33bd501ea689255f5f147dcf519ff266b352b99aff483f9e2705069329d577e8"
+            }
+          ]
+        },
+        "realtime": {
+          "status": "PASS",
+          "counts": {
+            "entries": 10,
+            "original_commands": 22,
+            "image_validators": 4,
+            "qualified_hash_comparisons": 25
+          },
+          "results": [
+            {
+              "benchmark": "502.gcc_r",
+              "status": "PASS",
+              "input_manifest_sha256": "13ff945d7b3c7aca217274b9863b92f2bd106cee928bf9ab18c145e93bc474b9",
+              "commands": [
+                {
+                  "argv": [
+                    "./cpugcc_r",
+                    "t1.c",
+                    "-O3",
+                    "-finline-limit=50000",
+                    "-o",
+                    "t1.opts-O3_-finline-limit_50000.s"
+                  ],
+                  "stdout": "t1.opts-O3_-finline-limit_50000.out",
+                  "stderr": "t1.opts-O3_-finline-limit_50000.err"
+                }
+              ],
+              "exit_statuses": [
+                0
+              ],
+              "image_exit_statuses": [],
+              "comparisons": [
+                {
+                  "name": "t1.opts-O3_-finline-limit_50000.s",
+                  "expected": "58111208509dd871223ae195a33304bd6b24afd29458f37c976556cbad506324",
+                  "actual": "58111208509dd871223ae195a33304bd6b24afd29458f37c976556cbad506324",
+                  "passed": true
+                }
+              ]
+            },
+            {
+              "benchmark": "538.imagick_r",
+              "status": "PASS",
+              "input_manifest_sha256": "7478612c18d2f841d42907908e0de09c392a76e6fa7e1a8fdc84b93e9da3d0a5",
+              "commands": [
+                {
+                  "argv": [
+                    "./imagick_r",
+                    "-limit",
+                    "disk",
+                    "0",
+                    "test_input.tga",
+                    "-shear",
+                    "25",
+                    "-resize",
+                    "640x480",
+                    "-negate",
+                    "-alpha",
+                    "Off",
+                    "test_output.tga"
+                  ],
+                  "stdout": "test_convert.out",
+                  "stderr": "test_convert.err"
+                }
+              ],
+              "exit_statuses": [
+                0
+              ],
+              "image_exit_statuses": [
+                0
+              ],
+              "comparisons": [
+                {
+                  "name": "test_validate.out",
+                  "expected": "c3bfd816afd261fd4a1d4b6c8a4ed639f0872229ea26cbcaed127b04a5425a1a",
+                  "actual": "c3bfd816afd261fd4a1d4b6c8a4ed639f0872229ea26cbcaed127b04a5425a1a",
+                  "passed": true
+                }
+              ]
+            },
+            {
+              "benchmark": "997.specrand_fr",
+              "status": "PASS",
+              "input_manifest_sha256": "260ce8135dc0e04f576343d776f19d4b937083a4ccaaad88bb2f15ab119a6e7e",
+              "commands": [
+                {
+                  "argv": [
+                    "./specrand_fr",
+                    "324342",
+                    "24239"
+                  ],
+                  "stdout": "rand.24239.out",
+                  "stderr": "rand.24239.err"
+                }
+              ],
+              "exit_statuses": [
+                0
+              ],
+              "image_exit_statuses": [],
+              "comparisons": [
+                {
+                  "name": "rand.24239.out",
+                  "expected": "15e5b13042aa23597530688bfbcdfdfa83c55308372db51abeb73475af4dc72a",
+                  "actual": "15e5b13042aa23597530688bfbcdfdfa83c55308372db51abeb73475af4dc72a",
+                  "passed": true
+                }
+              ]
+            },
+            {
+              "benchmark": "999.specrand_ir",
+              "status": "PASS",
+              "input_manifest_sha256": "22d8c51d4003638c15af9b7adb368ba12b5b368bc7f3dfa6f7990ceabb994031",
+              "commands": [
+                {
+                  "argv": [
+                    "./specrand_ir",
+                    "324342",
+                    "24239"
+                  ],
+                  "stdout": "rand.24239.out",
+                  "stderr": "rand.24239.err"
+                }
+              ],
+              "exit_statuses": [
+                0
+              ],
+              "image_exit_statuses": [],
+              "comparisons": [
+                {
+                  "name": "rand.24239.out",
+                  "expected": "15e5b13042aa23597530688bfbcdfdfa83c55308372db51abeb73475af4dc72a",
+                  "actual": "15e5b13042aa23597530688bfbcdfdfa83c55308372db51abeb73475af4dc72a",
+                  "passed": true
+                }
+              ]
+            },
+            {
+              "benchmark": "519.lbm_r",
+              "status": "PASS",
+              "input_manifest_sha256": "b8988db8c978166f27e027328602885238e5091fa42bf4b0bcdd1e1289f3ca28",
+              "commands": [
+                {
+                  "argv": [
+                    "./lbm_r",
+                    "20",
+                    "reference.dat",
+                    "0",
+                    "1",
+                    "100_100_130_cf_a.of"
+                  ],
+                  "stdout": "lbm.out",
+                  "stderr": "lbm.err"
+                }
+              ],
+              "exit_statuses": [
+                0
+              ],
+              "image_exit_statuses": [],
+              "comparisons": [
+                {
+                  "name": "lbm.out",
+                  "expected": "7ab5463219d503a3cb54d5bd75b69c6620109b560058de7a20a719796433cdc5",
+                  "actual": "7ab5463219d503a3cb54d5bd75b69c6620109b560058de7a20a719796433cdc5",
+                  "passed": true
+                }
+              ]
+            },
+            {
+              "benchmark": "544.nab_r",
+              "status": "PASS",
+              "input_manifest_sha256": "bcb1af24c5c9b820ed480dea1e1114670de9466173cf5decf2b6cda96b1ec5cd",
+              "commands": [
+                {
+                  "argv": [
+                    "./nab_r",
+                    "hkrdenq",
+                    "1930344093",
+                    "1000"
+                  ],
+                  "stdout": "hkrdenq.out",
+                  "stderr": "hkrdenq.err"
+                }
+              ],
+              "exit_statuses": [
+                0
+              ],
+              "image_exit_statuses": [],
+              "comparisons": [
+                {
+                  "name": "hkrdenq.out",
+                  "expected": "2d580a95e2e596f2e06485149e9d91880bf47ded5a5495a366a80d4cea2a9afd",
+                  "actual": "2d580a95e2e596f2e06485149e9d91880bf47ded5a5495a366a80d4cea2a9afd",
+                  "passed": true
+                }
+              ]
+            },
+            {
+              "benchmark": "505.mcf_r",
+              "status": "PASS",
+              "input_manifest_sha256": "d26471eb6eb56d1fac26cd60e19632c27c38d2c7c23604d0b8831a3f90cf454d",
+              "commands": [
+                {
+                  "argv": [
+                    "./mcf_r",
+                    "inp.in"
+                  ],
+                  "stdout": "inp.out",
+                  "stderr": "inp.err"
+                }
+              ],
+              "exit_statuses": [
+                0
+              ],
+              "image_exit_statuses": [],
+              "comparisons": [
+                {
+                  "name": "inp.out",
+                  "expected": "b8a0d3ecba350c7f07063bb58799fa579fe46a2e5911b12fdfffdbf7f1895a6c",
+                  "actual": "b8a0d3ecba350c7f07063bb58799fa579fe46a2e5911b12fdfffdbf7f1895a6c",
+                  "passed": true
+                },
+                {
+                  "name": "mcf.out",
+                  "expected": "b272028fe374deea3865a5d29e71762a6c974558e97606b40292ed9744010530",
+                  "actual": "b272028fe374deea3865a5d29e71762a6c974558e97606b40292ed9744010530",
+                  "passed": true
+                }
+              ]
+            },
+            {
+              "benchmark": "557.xz_r",
+              "status": "PASS",
+              "input_manifest_sha256": "d51887851c732f4d6e687d8ba87587e06d241de0854a60fd1cc5e375f3390820",
+              "commands": [
+                {
+                  "argv": [
+                    "./xz_r",
+                    "cpu2006docs.tar.xz",
+                    "4",
+                    "055ce243071129412e9dd0b3b69a21654033a9b723d874b2015c774fac1553d9713be561ca86f74e4f16f22e664fc17a79f30caa5ad2c04fbc447549c2810fae",
+                    "1548636",
+                    "1555348",
+                    "0"
+                  ],
+                  "stdout": "cpu2006docs.tar-4-0.out",
+                  "stderr": "cpu2006docs.tar-4-0.err"
+                },
+                {
+                  "argv": [
+                    "./xz_r",
+                    "cpu2006docs.tar.xz",
+                    "4",
+                    "055ce243071129412e9dd0b3b69a21654033a9b723d874b2015c774fac1553d9713be561ca86f74e4f16f22e664fc17a79f30caa5ad2c04fbc447549c2810fae",
+                    "1462248",
+                    "-1",
+                    "1"
+                  ],
+                  "stdout": "cpu2006docs.tar-4-1.out",
+                  "stderr": "cpu2006docs.tar-4-1.err"
+                },
+                {
+                  "argv": [
+                    "./xz_r",
+                    "cpu2006docs.tar.xz",
+                    "4",
+                    "055ce243071129412e9dd0b3b69a21654033a9b723d874b2015c774fac1553d9713be561ca86f74e4f16f22e664fc17a79f30caa5ad2c04fbc447549c2810fae",
+                    "1428548",
+                    "-1",
+                    "2"
+                  ],
+                  "stdout": "cpu2006docs.tar-4-2.out",
+                  "stderr": "cpu2006docs.tar-4-2.err"
+                },
+                {
+                  "argv": [
+                    "./xz_r",
+                    "cpu2006docs.tar.xz",
+                    "4",
+                    "055ce243071129412e9dd0b3b69a21654033a9b723d874b2015c774fac1553d9713be561ca86f74e4f16f22e664fc17a79f30caa5ad2c04fbc447549c2810fae",
+                    "1034828",
+                    "-1",
+                    "3e"
+                  ],
+                  "stdout": "cpu2006docs.tar-4-3e.out",
+                  "stderr": "cpu2006docs.tar-4-3e.err"
+                },
+                {
+                  "argv": [
+                    "./xz_r",
+                    "cpu2006docs.tar.xz",
+                    "4",
+                    "055ce243071129412e9dd0b3b69a21654033a9b723d874b2015c774fac1553d9713be561ca86f74e4f16f22e664fc17a79f30caa5ad2c04fbc447549c2810fae",
+                    "1061968",
+                    "-1",
+                    "4"
+                  ],
+                  "stdout": "cpu2006docs.tar-4-4.out",
+                  "stderr": "cpu2006docs.tar-4-4.err"
+                },
+                {
+                  "argv": [
+                    "./xz_r",
+                    "cpu2006docs.tar.xz",
+                    "4",
+                    "055ce243071129412e9dd0b3b69a21654033a9b723d874b2015c774fac1553d9713be561ca86f74e4f16f22e664fc17a79f30caa5ad2c04fbc447549c2810fae",
+                    "1034588",
+                    "-1",
+                    "4e"
+                  ],
+                  "stdout": "cpu2006docs.tar-4-4e.out",
+                  "stderr": "cpu2006docs.tar-4-4e.err"
+                },
+                {
+                  "argv": [
+                    "./xz_r",
+                    "cpu2006docs.tar.xz",
+                    "1",
+                    "055ce243071129412e9dd0b3b69a21654033a9b723d874b2015c774fac1553d9713be561ca86f74e4f16f22e664fc17a79f30caa5ad2c04fbc447549c2810fae",
+                    "650156",
+                    "-1",
+                    "0"
+                  ],
+                  "stdout": "cpu2006docs.tar-1-0.out",
+                  "stderr": "cpu2006docs.tar-1-0.err"
+                },
+                {
+                  "argv": [
+                    "./xz_r",
+                    "cpu2006docs.tar.xz",
+                    "1",
+                    "055ce243071129412e9dd0b3b69a21654033a9b723d874b2015c774fac1553d9713be561ca86f74e4f16f22e664fc17a79f30caa5ad2c04fbc447549c2810fae",
+                    "639996",
+                    "-1",
+                    "1"
+                  ],
+                  "stdout": "cpu2006docs.tar-1-1.out",
+                  "stderr": "cpu2006docs.tar-1-1.err"
+                },
+                {
+                  "argv": [
+                    "./xz_r",
+                    "cpu2006docs.tar.xz",
+                    "1",
+                    "055ce243071129412e9dd0b3b69a21654033a9b723d874b2015c774fac1553d9713be561ca86f74e4f16f22e664fc17a79f30caa5ad2c04fbc447549c2810fae",
+                    "637616",
+                    "-1",
+                    "2"
+                  ],
+                  "stdout": "cpu2006docs.tar-1-2.out",
+                  "stderr": "cpu2006docs.tar-1-2.err"
+                },
+                {
+                  "argv": [
+                    "./xz_r",
+                    "cpu2006docs.tar.xz",
+                    "1",
+                    "055ce243071129412e9dd0b3b69a21654033a9b723d874b2015c774fac1553d9713be561ca86f74e4f16f22e664fc17a79f30caa5ad2c04fbc447549c2810fae",
+                    "628996",
+                    "-1",
+                    "3e"
+                  ],
+                  "stdout": "cpu2006docs.tar-1-3e.out",
+                  "stderr": "cpu2006docs.tar-1-3e.err"
+                },
+                {
+                  "argv": [
+                    "./xz_r",
+                    "cpu2006docs.tar.xz",
+                    "1",
+                    "055ce243071129412e9dd0b3b69a21654033a9b723d874b2015c774fac1553d9713be561ca86f74e4f16f22e664fc17a79f30caa5ad2c04fbc447549c2810fae",
+                    "631912",
+                    "-1",
+                    "4"
+                  ],
+                  "stdout": "cpu2006docs.tar-1-4.out",
+                  "stderr": "cpu2006docs.tar-1-4.err"
+                },
+                {
+                  "argv": [
+                    "./xz_r",
+                    "cpu2006docs.tar.xz",
+                    "1",
+                    "055ce243071129412e9dd0b3b69a21654033a9b723d874b2015c774fac1553d9713be561ca86f74e4f16f22e664fc17a79f30caa5ad2c04fbc447549c2810fae",
+                    "629064",
+                    "-1",
+                    "4e"
+                  ],
+                  "stdout": "cpu2006docs.tar-1-4e.out",
+                  "stderr": "cpu2006docs.tar-1-4e.err"
+                }
+              ],
+              "exit_statuses": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "image_exit_statuses": [],
+              "comparisons": [
+                {
+                  "name": "cpu2006docs.tar-1-0.out",
+                  "expected": "211f54ac64f8a7efe5a61f1a476363c64e6eb7493cb917353b144a9df5982e5b",
+                  "actual": "211f54ac64f8a7efe5a61f1a476363c64e6eb7493cb917353b144a9df5982e5b",
+                  "passed": true
+                },
+                {
+                  "name": "cpu2006docs.tar-1-1.out",
+                  "expected": "c74343902f42ca10bf9569e9a6a65968aff0867f12cb4b732a69ffc63b5a420d",
+                  "actual": "c74343902f42ca10bf9569e9a6a65968aff0867f12cb4b732a69ffc63b5a420d",
+                  "passed": true
+                },
+                {
+                  "name": "cpu2006docs.tar-1-2.out",
+                  "expected": "10ae9343a2dd8d81da44d44e737fc2940af0349ad89e0de7a86f65ea240c3a58",
+                  "actual": "10ae9343a2dd8d81da44d44e737fc2940af0349ad89e0de7a86f65ea240c3a58",
+                  "passed": true
+                },
+                {
+                  "name": "cpu2006docs.tar-1-3e.out",
+                  "expected": "8d5b873c430087cb3f0d13e20075b6521f939926ed69c09cfcd7aeb4be922ca3",
+                  "actual": "8d5b873c430087cb3f0d13e20075b6521f939926ed69c09cfcd7aeb4be922ca3",
+                  "passed": true
+                },
+                {
+                  "name": "cpu2006docs.tar-1-4.out",
+                  "expected": "02f8d81e89fa6b1add13f9305a0b79d3d31c4587a267037483b77ba290c423ef",
+                  "actual": "02f8d81e89fa6b1add13f9305a0b79d3d31c4587a267037483b77ba290c423ef",
+                  "passed": true
+                },
+                {
+                  "name": "cpu2006docs.tar-1-4e.out",
+                  "expected": "c43cf718699a474ba763d32930ee9daacbe488ed3c70bedeaa4ea19e44776102",
+                  "actual": "c43cf718699a474ba763d32930ee9daacbe488ed3c70bedeaa4ea19e44776102",
+                  "passed": true
+                },
+                {
+                  "name": "cpu2006docs.tar-4-0.out",
+                  "expected": "80b9e98184e536eafd18ad059278c304f3f59b3673e4c71203a305441740e264",
+                  "actual": "80b9e98184e536eafd18ad059278c304f3f59b3673e4c71203a305441740e264",
+                  "passed": true
+                },
+                {
+                  "name": "cpu2006docs.tar-4-1.out",
+                  "expected": "d57fb0b14ee67557acea66f34a1a73ef0c7c55dbaf4c1f8d46ff14a1885cf7bf",
+                  "actual": "d57fb0b14ee67557acea66f34a1a73ef0c7c55dbaf4c1f8d46ff14a1885cf7bf",
+                  "passed": true
+                },
+                {
+                  "name": "cpu2006docs.tar-4-2.out",
+                  "expected": "5225a92bffeaa6e61e86a136f92bcff31b03a2ab1c71f76cec6d365a99940327",
+                  "actual": "5225a92bffeaa6e61e86a136f92bcff31b03a2ab1c71f76cec6d365a99940327",
+                  "passed": true
+                },
+                {
+                  "name": "cpu2006docs.tar-4-3e.out",
+                  "expected": "3522866056b5ae84c19cae75e2bce8bfd9b5d055b86ccf7a3c7847f9a696189d",
+                  "actual": "3522866056b5ae84c19cae75e2bce8bfd9b5d055b86ccf7a3c7847f9a696189d",
+                  "passed": true
+                },
+                {
+                  "name": "cpu2006docs.tar-4-4.out",
+                  "expected": "a854805559ca63152d290f3953664818b86e84e05dca29e9b09646f1c9e04cb1",
+                  "actual": "a854805559ca63152d290f3953664818b86e84e05dca29e9b09646f1c9e04cb1",
+                  "passed": true
+                },
+                {
+                  "name": "cpu2006docs.tar-4-4e.out",
+                  "expected": "2a5b52fd57239898203d16a3c8f0e7346f0d12124cfbb95d9a9971b72c647579",
+                  "actual": "2a5b52fd57239898203d16a3c8f0e7346f0d12124cfbb95d9a9971b72c647579",
+                  "passed": true
+                }
+              ]
+            },
+            {
+              "benchmark": "525.x264_r",
+              "status": "PASS",
+              "input_manifest_sha256": "8700c99a3bcf49d1a9f6a40c58882017486ef633d7ebb4a5177cd000dac0a4f1",
+              "commands": [
+                {
+                  "argv": [
+                    "./x264_r",
+                    "--dumpyuv",
+                    "50",
+                    "--frames",
+                    "156",
+                    "-o",
+                    "BuckBunny_New.264",
+                    "BuckBunny.yuv",
+                    "1280x720"
+                  ],
+                  "stdout": "run_000-156_x264_r_base.native_qemu_x264.out",
+                  "stderr": "run_000-156_x264_r_base.native_qemu_x264.err"
+                }
+              ],
+              "exit_statuses": [
+                0
+              ],
+              "image_exit_statuses": [
+                0,
+                0,
+                0
+              ],
+              "comparisons": [
+                {
+                  "name": "imagevalidate_frame_100.out",
+                  "expected": "18becbed0f32c42d434198638fa23757be12f1f68952749289446f6cdcb6ec9d",
+                  "actual": "18becbed0f32c42d434198638fa23757be12f1f68952749289446f6cdcb6ec9d",
+                  "passed": true
+                },
+                {
+                  "name": "imagevalidate_frame_155.out",
+                  "expected": "9bd07ce8334e58bbb516449c054de128069ef6d30e99361cfa96da8297fddcbd",
+                  "actual": "9bd07ce8334e58bbb516449c054de128069ef6d30e99361cfa96da8297fddcbd",
+                  "passed": true
+                },
+                {
+                  "name": "imagevalidate_frame_50.out",
+                  "expected": "1c7fedcf715f76721507933049e9a2121b81fcc3597e178467d87dd4a417c5a6",
+                  "actual": "1c7fedcf715f76721507933049e9a2121b81fcc3597e178467d87dd4a417c5a6",
+                  "passed": true
+                }
+              ]
+            },
+            {
+              "benchmark": "500.perlbench_r",
+              "status": "PASS",
+              "input_manifest_sha256": "fe7ea2a29694c51353c283b3df19d2605d595e549f80d702e23cfdc8604f8b95",
+              "commands": [
+                {
+                  "argv": [
+                    "./perlbench_r",
+                    "-I.",
+                    "-I./lib",
+                    "makerand.pl"
+                  ],
+                  "stdout": "makerand.out",
+                  "stderr": "makerand.err"
+                },
+                {
+                  "argv": [
+                    "./perlbench_r",
+                    "-I.",
+                    "-I./lib",
+                    "test.pl"
+                  ],
+                  "stdout": "test.out",
+                  "stderr": "test.err"
+                }
+              ],
+              "exit_statuses": [
+                0,
+                0
+              ],
+              "image_exit_statuses": [],
+              "comparisons": [
+                {
+                  "name": "makerand.out",
+                  "expected": "539d02dc10fabf7096fdc8331ec144d1e42f813913ec48e4f611bce3f840950e",
+                  "actual": "539d02dc10fabf7096fdc8331ec144d1e42f813913ec48e4f611bce3f840950e",
+                  "passed": true
+                },
+                {
+                  "name": "test.out",
+                  "expected": "b41ee90a9ea042419027290477917941e279b3c818ae6e8d7a32f0c7a14ec47b",
+                  "actual": "b41ee90a9ea042419027290477917941e279b3c818ae6e8d7a32f0c7a14ec47b",
+                  "passed": true
+                }
+              ]
+            }
+          ],
+          "receipts": [
+            {
+              "path": "/tmp/capstone/qemu-code-probe-01/spec-full/realtime-short/qualification.json",
+              "sha256": "2c1433e288b9d1e7b7933bed56ac3e7185026b7f6334b26e8540dfd3ca90bcf6"
+            },
+            {
+              "path": "/tmp/capstone/qemu-code-probe-01/spec-full/realtime-medium/qualification.json",
+              "sha256": "6c1631e199eb7a465b3c782c19c453e6535c2d70403e9a4d11d9bc6c2123b648"
+            },
+            {
+              "path": "/tmp/capstone/qemu-code-probe-01/spec-full/realtime-x264/qualification.json",
+              "sha256": "17c6edc8c99200302fbe9c171912530802d9fa317709b1e25c5131cd6736ce89"
+            },
+            {
+              "path": "/tmp/capstone/qemu-code-probe-01/spec-full/realtime-perl/qualification.json",
+              "sha256": "2f27b651836601096cb14f4c82a1afc689b75cdb2756afab822efc1a06cdbd58"
+            }
+          ]
+        }
+      }
+    }
+  },
+  "candidate_safety": {
+    "status": "PASS",
+    "log": "/tmp/capstone/qemu-code-probe-01/safety.log",
+    "sha256": "221178813578f44abff0e9ffb50430f2fc2f0fec34b9a82025230f3b4b82e090",
+    "groups": "START io-icount\nPASS io-icount 0\nSTART directory-icount\nPASS directory-icount 0\nSTART race-icount\nPASS race-icount 0\nSTART race-file-icount\nPASS race-file-icount 0\nSTART io-realtime\nPASS io-realtime 0\nSTART directory-realtime\nPASS directory-realtime 0\nSTART race-realtime\nPASS race-realtime 0\nSTART race-file-realtime\nPASS race-file-realtime 0\n"
+  },
+  "gcc_non_lto": {
+    "status": "PASS bounded portability",
+    "source_revision": "81246125dcf06bf057b9fca9fb5e850dddce0f5b",
+    "binary_sha256": "6bab37632b6478ddae1b7c5f60cc8741a31f0b8765bcec8405325d03f6c6b662",
+    "logs": {
+      "representable.log": "representable: 1388832 cases, 411224 keep, 977608 clear, 0 mismatches\nPASS: negative control always-keep detected\nPASS: negative control canonical-new detected\nPASS: negative control coarse-fastpath detected\n",
+      "codec.log": "CODEC-PASS: 6014628 checks, 0 failures\n",
+      "store-code.log": "PASS store-code exact=0 subpage=0 ids=30\nPASS store-code exact=0 subpage=0 ids=55\nPASS store-code exact=0 subpage=1 ids=30\nPASS store-code exact=0 subpage=1 ids=55\nPASS store-code exact=1 subpage=0 ids=30\nPASS store-code exact=1 subpage=0 ids=55\nPASS store-code exact=1 subpage=1 ids=30\nPASS store-code exact=1 subpage=1 ids=55\nArtifacts: /tmp/capstone/copyable-store.K7IGBa\n",
+      "cursor-window.log": "PASS cursor-window exact=0 ids=30\nPASS cursor-window exact=0 ids=55\nPASS cursor-window exact=1 ids=30\nPASS cursor-window exact=1 ids=55\nArtifacts: /tmp/capstone/copyable-cursor.KOQ6a5\n",
+      "checked-copy.log": "PASS read rc=0\nPASS scalar_result rc=0\nPASS transport rc=0\nPASS transport_forged_frame rc=0\nPASS transport_retired rc=0\nPASS exported rc=0\nPASS transport_epoch rc=0\nPASS supervisor_read rc=0\nPASS supervisor_write rc=0\nPASS write rc=0\nPASS zero_end rc=0\nPASS untagged rc=0\nPASS rights_read rc=0\nPASS rights_write rc=0\nPASS bounds rc=0\nPASS overflow rc=0\nPASS epoch rc=0\nPASS zero_epoch rc=0\nPASS slot rc=0\nPASS reserved rc=0\nPASS root rc=0\nPASS translation rc=0\nPASS frame rc=0\nPASS descriptor rc=0\nPASS mmio rc=0\nPASS retired rc=0\nPASS generation rc=0\nPASS forged_frame rc=0\nPASS discard rc=0\nPASS resume_epoch rc=0\nPASS write_only rc=0\nPASS read_only rc=0\nPASS cap_mode rc=0\nPASS user_mode rc=0\nPASS default_off rc=0\nchecked-copy ISA failures=0\n",
+      "sfence-page-retry.log": "PASS page_remap\nPASS superpage_remap_other_page\nPASS superpage_exec_remap\nPASS superpage_exec_after_page_flush\nPASS page_remap_asid\nPASS superpage_exec_after_watchpoint_flush\nPASS page_accessed_dirty\nPASS superpage_accessed_dirty\nPASS page_fence_keeps_other_page\n9/9 passed; logs: /tmp/capstone/sfence-page.rJiJj9\n"
+    },
+    "original_gcc": {
+      "status": "PASS",
+      "scope": "Exact output equivalence to qualified baseline; not fresh official comparator execution",
+      "baseline_sha256": "4a7f0201fd8d68a6884996e79a4e8c5979ff544b7d8734666f5c9ea9a999c930",
+      "qemu_sha256": "6bab37632b6478ddae1b7c5f60cc8741a31f0b8765bcec8405325d03f6c6b662",
+      "icount": 0,
+      "results": [
+        {
+          "benchmark": "502.gcc_r",
+          "status": "PASS",
+          "inputs": {
+            "control": "9114609f801dfd5fd3c0c510fde241b58b705522cb29ad10f8f99eca68d62e43",
+            "cpugcc_r": "0b6ac27e8b2b33cd77ba3f64fbcca52615dec2b1691141f2d1e3413f21a47b28",
+            "t1.c": "de7b86d79a68965adb62e750101d9211224884b2236053d906d1e23057bb6ad1"
+          },
+          "execution": {
+            "benchmark": "502.gcc_r",
+            "runner_rc": 0,
+            "icount": 0,
+            "host_elapsed_seconds": 7.8917409759014845,
+            "commands": [
+              {
+                "argv": [
+                  "./cpugcc_r",
+                  "t1.c",
+                  "-O3",
+                  "-finline-limit=50000",
+                  "-o",
+                  "t1.opts-O3_-finline-limit_50000.s"
+                ],
+                "stdout": "t1.opts-O3_-finline-limit_50000.out",
+                "stderr": "t1.opts-O3_-finline-limit_50000.err"
+              }
+            ],
+            "expected_commands": 1,
+            "exit_statuses": [
+              0
+            ],
+            "image_commands": [],
+            "expected_image_commands": 0,
+            "image_exit_statuses": [],
+            "execution_errors": [],
+            "execution_ok": true,
+            "spec_validation": "PENDING",
+            "comparator_manifest_sha256": "347fdb43ab34ff6f81a90f58021c48fdbc27901011fe365441130412885b827d"
+          },
+          "errors": [],
+          "comparisons": [
+            {
+              "name": "t1.opts-O3_-finline-limit_50000.s",
+              "expected": "58111208509dd871223ae195a33304bd6b24afd29458f37c976556cbad506324",
+              "actual": "58111208509dd871223ae195a33304bd6b24afd29458f37c976556cbad506324",
+              "passed": true
+            }
+          ],
+          "images": [],
+          "elapsed_seconds": 9.220985110849142
+        }
+      ],
+      "started_epoch": 1794187912.0307477,
+      "finished_epoch": 1794187921.2520237
+    }
+  },
+  "privilege_contract": {
+    "copyable-contract.log": "PASS: 15 removed instructions fault precisely at privilege 3\nPASS: 15 removed instructions fault precisely at privilege 1\nPASS: 15 removed instructions fault precisely at privilege 0\nArtifacts: /tmp/capstone/copyable-only-contract.gcNIHd\nPASS: linear mint refused without publication or node allocation; copyable mint succeeds\n",
+    "raw-boundary-retry.log": "PASS raw-boundary enabled-m allowed=1\nPASS raw-boundary enabled-s allowed=1\nPASS raw-boundary enabled-u allowed=0\nPASS raw-boundary enabled-vs allowed=0\nPASS raw-boundary raw-off-m allowed=0\nPASS raw-boundary raw-off-s allowed=0\nPASS raw-boundary raw-off-u allowed=0\nPASS raw-boundary raw-off-vs allowed=0\nPASS raw-boundary profile-off-m allowed=0\nPASS raw-boundary profile-off-s allowed=0\nPASS raw-boundary profile-off-u allowed=0\nPASS raw-boundary profile-off-vs allowed=0\nArtifacts: /tmp/capstone/copyable-raw-boundary.owb4GC\n"
+  },
+  "parallel_isolation": {
+    "status": "PASS",
+    "guest_lifetimes": [
+      {
+        "snapshot": true,
+        "private_share": true,
+        "domain_lock": "$HOME/.capstone-locks/qemu-domain-throughput-baseline.lock",
+        "host_affinity": [
+          2
+        ],
+        "timing_scope": "Concurrent functional validation only",
+        "guest_pid": 458055,
+        "started_monotonic_ns": 5315920799867220,
+        "ended_monotonic_ns": 5315926165381290
+      },
+      {
+        "snapshot": true,
+        "private_share": true,
+        "domain_lock": "$HOME/.capstone-locks/qemu-domain-throughput-candidate.lock",
+        "host_affinity": [
+          4
+        ],
+        "timing_scope": "Concurrent functional validation only",
+        "guest_pid": 458056,
+        "started_monotonic_ns": 5315920799982474,
+        "ended_monotonic_ns": 5315926128830909
+      }
+    ],
+    "overlap_seconds": 5.328848435,
+    "scope": "Two original GCC commands match qualified hashes in independent snapshots, private 9p directories and disjoint host CPUs; functional concurrency only"
+  },
+  "limitations": [
+    "All concurrent, built-overlap and profiled full-run elapsed times are diagnostic only. Use the independent exclusive timing cohorts.",
+    "Two supplementary shell test sequences exhausted their 3600-second global-lock wait during the long regressions. Their incomplete logs are retained. Raw privilege cases and GCC SFENCE were rerun on the idle host and passed; original GCC portability then passed.",
+    "The native RTL handoff branch and its QEMU pin remain unchanged."
+  ],
+  "remaining_profile": {
+    "pid": 436441,
+    "source": "d81f426a7c",
+    "started_epoch": 1794170473.7435002,
+    "command": [
+      "/tmp/capstone/qemu-profile-01/tools/extracted/usr/lib/linux-tools-6.8.0-149/perf",
+      "record",
+      "--clockid",
+      "mono",
+      "-e",
+      "cycles:u",
+      "-F",
+      "199",
+      "-m",
+      "128",
+      "--call-graph",
+      "dwarf,8192",
+      "-p",
+      "436441",
+      "-o",
+      "/tmp/capstone/qemu-next-x264-profile-01/host-perf.data"
+    ],
+    "host_affinity": [
+      2
+    ],
+    "scope": "Thirty-second mid-run sample of original full x264 input on combined candidate; phase not matched to earlier sample. All elapsed time for this full invocation is diagnostic. No startup perfmap: unnamed JIT addresses remain unattributed.",
+    "finished_epoch": 1794170503.777105,
+    "groups": {
+      "QEMU named": {
+        "period": 60390223348,
+        "percent": 38.47083478621189
+      },
+      "JIT/unattributed": {
+        "period": 96541028864,
+        "percent": 61.50025228613197
+      },
+      "Other host code": {
+        "period": 45386542,
+        "percent": 0.028912927656150035
+      }
+    },
+    "top_named": [
+      {
+        "symbol": "[.] capstone_cap_move_offset",
+        "object": "qemu-system-riscv64",
+        "samples": 369,
+        "period": 9738090041,
+        "percent": 6.203528192663546
+      },
+      {
+        "symbol": "[.] capstone_store_hook",
+        "object": "qemu-system-riscv64",
+        "samples": 207,
+        "period": 5461083223,
+        "percent": 3.478914611974926
+      },
+      {
+        "symbol": "[.] capstone_ldc_granule",
+        "object": "qemu-system-riscv64",
+        "samples": 145,
+        "period": 3828144743,
+        "percent": 2.4386716223419285
+      },
+      {
+        "symbol": "[.] helper_cscincoffsetimm",
+        "object": "qemu-system-riscv64",
+        "samples": 128,
+        "period": 3376358016,
+        "percent": 2.1508665510994485
+      },
+      {
+        "symbol": "[.] mmu_lookup",
+        "object": "qemu-system-riscv64",
+        "samples": 118,
+        "period": 3115097258,
+        "percent": 1.9844336601458938
+      },
+      {
+        "symbol": "[.] capstone_stc_write_locked",
+        "object": "qemu-system-riscv64",
+        "samples": 105,
+        "period": 2768019673,
+        "percent": 1.7633322352747005
+      },
+      {
+        "symbol": "[.] cap_mem_map_physical_remove_range_locked",
+        "object": "qemu-system-riscv64",
+        "samples": 104,
+        "period": 2743070600,
+        "percent": 1.7474387410592345
+      },
+      {
+        "symbol": "[.] mmu_lookup1",
+        "object": "qemu-system-riscv64",
+        "samples": 98,
+        "period": 2583811776,
+        "percent": 1.645984903555696
+      },
+      {
+        "symbol": "[.] capstone_cursor_representable",
+        "object": "qemu-system-riscv64",
+        "samples": 88,
+        "period": 2319403404,
+        "percent": 1.477546864559105
+      },
+      {
+        "symbol": "[.] capstone_check_granule_access",
+        "object": "qemu-system-riscv64",
+        "samples": 83,
+        "period": 2193724197,
+        "percent": 1.39748450114148
+      },
+      {
+        "symbol": "[.] helper_cscincoffset",
+        "object": "qemu-system-riscv64",
+        "samples": 60,
+        "period": 1587815777,
+        "percent": 1.0114981373045484
+      },
+      {
+        "symbol": "[.] helper_reg_set_cap_compressed",
+        "object": "qemu-system-riscv64",
+        "samples": 56,
+        "period": 1477479676,
+        "percent": 0.9412099072368191
+      },
+      {
+        "symbol": "[.] helper_lookup_tb_ptr",
+        "object": "qemu-system-riscv64",
+        "samples": 52,
+        "period": 1371865809,
+        "percent": 0.8739299171451032
+      },
+      {
+        "symbol": "[.] helper_capstone_stc_virtual",
+        "object": "qemu-system-riscv64",
+        "samples": 50,
+        "period": 1320121346,
+        "percent": 0.8409667556130936
+      },
+      {
+        "symbol": "[.] helper_capstone_ldc_virtual",
+        "object": "qemu-system-riscv64",
+        "samples": 43,
+        "period": 1134525894,
+        "percent": 0.7227354993744829
+      },
+      {
+        "symbol": "[.] helper_csmovc",
+        "object": "qemu-system-riscv64",
+        "samples": 43,
+        "period": 1132286978,
+        "percent": 0.7213092260017242
+      },
+      {
+        "symbol": "[.] storewatch_report",
+        "object": "qemu-system-riscv64",
+        "samples": 40,
+        "period": 1055057280,
+        "percent": 0.6721110149729942
+      },
+      {
+        "symbol": "[.] tagwatch_report",
+        "object": "qemu-system-riscv64",
+        "samples": 38,
+        "period": 1004433326,
+        "percent": 0.6398616596537398
+      },
+      {
+        "symbol": "[.] cap_mem_map_physical_query_locked",
+        "object": "qemu-system-riscv64",
+        "samples": 32,
+        "period": 843838891,
+        "percent": 0.5375569879046718
+      },
+      {
+        "symbol": "[.] helper_stb_mmu",
+        "object": "qemu-system-riscv64",
+        "samples": 30,
+        "period": 791715710,
+        "percent": 0.5043525688180311
+      }
+    ],
+    "lost_samples": 0,
+    "status": "PASS diagnostic capture within output-qualified full x264 run",
+    "qualification": "/tmp/capstone/qemu-next-01/spec-full/icount-x264/qualification.json"
+  },
+  "evidence": {
+    "archive": "/tmp/capstone/qemu-final-01-evidence.tar.gz",
+    "sha256": "ba98e509a43ced5f92d3fae08f1e11e9f23f86063edc1068dbb655693aa9ebd0",
+    "scope": "Full workload receipts, captured outputs, safety and portability logs, isolation proof, diagnostic x264 sample and final paired timing records. Input staging directories/disks omitted; immutable inputs and binaries identified by hashes in qualification records and prior bounded evidence."
+  }
+}

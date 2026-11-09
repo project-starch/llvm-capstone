@@ -1,3 +1,33 @@
+## Qualified QEMU throughput branch: 17.58% less GCC host CPU
+
+`perf/qemu-throughput` now selects QEMU `81246125dc`. The final exclusive
+100-compilation confirmation gives 65.055s original versus 53.620s optimized
+mean host CPU (17.58% reduction); explicit no-icount gives 44.830s (31.09% below
+the original icount build). Both orders agree and all 1,800 timed outputs plus
+18 warm-ups across native/plain controls match. The gain includes source changes
+and Clang/full LTO, with assertions and QOM debug checks retained. It is not a
+hardware speed estimate. Both frozen candidates pass the full ten-entry suite in
+both clock modes; the latest also passes all eight safety groups. The native RTL
+handoff and its QEMU pin are unchanged.
+[Final samples and build instructions](../../runtime/virtual/tests/qemu-throughput/README.md),
+[comparison](../../runtime/virtual/tests/qemu-throughput/final-comparison.json).
+
+## Full QEMU candidate regression passes in both clock modes
+
+The combined runtime `d81f426a7c` and code-page lookup candidate `81246125dc`
+each pass all ten existing SPEC C-port entries in icount0 and explicit realtime
+mode: 22 original commands, four guest image validators and 25 qualified output
+hash comparisons per suite. The latest candidate also passes all eight safety
+groups, copyable/privilege contracts, and bounded GCC non-LTO portability checks.
+These are exact comparisons against the previously officially qualified native
+baseline, not a fresh invocation of official SPEC comparators. Concurrent and
+profiled suite times are diagnostic only. The final exclusive timing confirmation
+is recorded above. Native RTL handoff remains unchanged.
+[Full qualification](../../runtime/virtual/tests/qemu-throughput/full-qualification.json).
+
+Earlier cohort reports below retain their original scope; their pending full-suite
+status is superseded by the qualification above.
+
 ## Further QEMU store-path candidate: bounded checks and incremental gain
 
 QEMU `81246125dc` avoids the RAM/code-page lookup after a write probe when

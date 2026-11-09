@@ -2384,17 +2384,18 @@
   },
   "host_counters": "host-counter-qualification.json: 19.97% fewer host instructions, 13.37% fewer host cycles; diagnostic times excluded.",
   "full_spec": {
-    "status": "RUNNING",
+    "status": "PASS",
     "path": "/tmp/capstone/qemu-next-01/spec-full",
     "modes": [
       "icount0",
       "realtime"
-    ]
+    ],
+    "qualification": "full-qualification.json"
   },
   "limitations": [
     "Two samples per timing variant; LBM original samples drift from 48.10 to 45.48 seconds, so its mean gain is less precise.",
     "Only three original short workloads timed; no full-SPEC score or hardware speed claim.",
-    "Default QEMU gitlink and native RTL handoff remain unchanged pending full qualification.",
+    "Full qualification subsequently passed; the experimental pin may advance separately. The native RTL handoff remains unchanged.",
     "Later STC code-page lookup experiment 81246125dc is separate and not included in these measurements."
   ],
   "evidence": {
