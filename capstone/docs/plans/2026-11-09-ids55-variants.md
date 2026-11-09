@@ -150,3 +150,17 @@ younger plain load of doubleword 0 reads the stale tag and B projects it (sext39
 - Lint: every counter at V1's; UNOPTFLAT names identical to V1's.
 - Synthesis: core LUT within ±500 of V1's; check_timing 0 loops; DRC LUTLP-1 0 on the post-synth checkpoint (S-10b's
   failure mode, which no in-flight key catches).
+
+**Addendum (2026-11-09, before any V1f/V2f/V3f synthesis; two corrections the board lane caught).**
+- The V1f hash for synthesis is **0ef470559** (e5-ids55-r70), not d92abd930 as written above. 0ef470559 = d92abd930
+  plus the restructure that moves the stale-tag logic inside the SpecHold generate block: d92abd930 failed the lint
+  gate on UNUSEDSIGNAL 1481 (ceiling 1480); 0ef470559 passes with every counter equal to V1's. No function change.
+  V2f = **c95525476** (e5c-ids55-r70), V3f = **596c36fc7** (c5a-ids55-r70): each is its unfixed variant plus the same
+  wt_dcache_ctrl.sv, byte-identical to 0ef470559's.
+- The synthesis key "core LUT within ±500 of V1's" was written BELOW the recorded redistribution floor (±2,000 at TOP,
+  ±2,500 per module; source-identical builds move that much). Third instance of this mistake on this lane. The key
+  is **core LUT 0 ±2,000** against the unfixed parent's post-synth report (V1 for V1f, V2 for V2f, V3 for V3f). The
+  ±500 reading is printed beside it as REPORT only, never graded.
+- LUTLP-1: the board lane runs it in flight on the post-synth AND post-opt checkpoints and stops on any count above 0;
+  until the S-10b-tree control (eaa4e7984) shows whether such a loop is already visible post-synth, the post-synth 0
+  is necessary, not sufficient, and post-opt is the stronger reading.
