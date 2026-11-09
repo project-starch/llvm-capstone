@@ -287,3 +287,17 @@ After Addendum 12's session, board 2 runs perf/train/qt-board2-v1f.sh. It shares
   delta of 0 on its 32 images); run time within ±2 %.
 - **Use:** with Addendum 12's rule (native vs module), the train runs on whichever of e5-native and V1f is not slower
   by more than 2 % on any of the four; ties go to V1f (option B, the lead's and collaborator's choice).
+
+## Addendum 14 (9 Nov 18:5x, before either session runs): V1f first; the e5-native session only as a fallback
+
+The rtl lane's simulation reads V1f identical to e5-native on all 32 gate images: values, end cycles and committed
+instructions alike (delta 0). Its trace sweep equals V1's on all 92, which differs from its base only in option B's
+own 8 raw-read tests. A vs B on silicon is therefore predicted equal, and a session to show that costs about 2.5 h of
+board 2 the train needs. Order on board 2 after Capstone nab:
+1. Addendum 13's V1f session (gate, then native gcc/imagick/nab/lbm, then the same through the ids55 module).
+2. Addendum 12's e5-native session ONLY if V1f's gate does not pass (perf/train/qt-fallback.sh reads the V1f session's
+   own log; dry-run on pass, fail and a stale pass line).
+3. Board 2's chain as before.
+- **Decision:** Addendum 12's native-vs-module rule, read on V1f. The bitstream for the Temporal train is V1f (option B),
+  unless its quick tests fail T0, when the fallback session's e5-native readings decide.
+- Addendum 13's A-vs-B comparison stays open. A V1f-vs-e5-native pair can be run after the deadline.
