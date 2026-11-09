@@ -419,3 +419,24 @@ perf/train/qt-native-rerun3.sh then runs:
 The dry run reaches DONE.
 **Reading.** Addendum 12's rule on V1f: wall time per benchmark, native / module, over imagick, nab and lbm. The in-VM
 column is reported beside it.
+
+## Addendum 20 (10 Nov 04:4x): the re-run was cut again, this time by board-watchdog's entry-stall abort; fixed; run 4
+
+Addendum 19's re-run passed its smoke boot. In the SPEC boot, board-watchdog.sh (ABORT_ON_ENTRY_STALL=1, 420 s)
+aborted the runner 991 s in: "last share marker=SHA5:00000000, no SHA6 for 420s". The smoke steps that open the SPEC
+boot leave SHA5 as the last share marker, the native route never prints SHA6, and nab runs silent. So the abort was
+certain on any silent SPEC stage. No board transcript was written (DRIVER rc=130).
+**Fix** in the nine native kits: a stage with spec.sh runs the watchdog with ABORT_ON_ENTRY_STALL=0. Its lines are kept
+and only the abort is dropped. The NO-BOOT abort, which acts before the boot, is unchanged. The smoke keeps both limits.
+board-run.sh adddd44ac0ddc01b → 24a7a9b634fef6ec. The watchdog's other kill paths act only before the boot (NO-BOOT).
+**Run 4.** qt-native-rerun4.sh is rerun3 plus three changes:
+- It requires both fixes in the kit.
+- It skips the flash when V1f reads back resident, which it does now.
+- It stops board 2's waiting Plain and nat-board scripts before either started a step, and relaunches them behind it.
+The dry run reaches DONE.
+Each of these defects stopped a native session on board 2 tonight before the native route itself was exercised:
+- the bake saved no cpio;
+- the runner did not flash;
+- the runner's silence limit;
+- the watchdog's entry-stall abort.
+None of them is a native-route result.
