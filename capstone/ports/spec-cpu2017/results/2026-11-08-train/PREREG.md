@@ -235,3 +235,17 @@ prepared in parallel. None is used until it is sealed and passes its board gate.
 - Plain is unaffected.
 - Every benchmark's row names its bitstream. A row on option A or C.5a is marked as such, since the paper describes B.
 - A gate failure on a B variant flashes C.5a back and falls to the next rule; no stage runs on an ungated bitstream.
+
+## Addendum 11 (9 Nov 16:1x, before any B board run): unfixed B variants only where the hazard census reads zero
+
+The rtl lane found a defect in option B's load rule (R-70, to be filed). A plain store to doubleword 1 of a tagged
+granule, still in the store buffer, does not order a following plain load of doubleword 0. That load can return
+the projected cursor instead of the raw word, depending on timing. QEMU always returns the raw word. The fix (V1f
+0ef470559, V2f c95525476, V3f 596c36fc7: the D-cache read controller treats a granule with a pending plain store as
+untagged) read as pre-registered in RTL simulation on V1f. All six variants are in synthesis.
+The compiler lane's QEMU census counts that pattern (exact distance K, tag read before the store): gcc test reads 27
+tagged events at K ≤ 16. Its positive control reads exactly.
+- **Amends D1-D2:** a benchmark runs on an UNFIXED variant (V1, V2, V3) only if the census reads zero tagged events at
+  K ≤ 64 for that benchmark's exact exe at that size. Otherwise only a fixed variant (V1f, V2f, V3f) is eligible.
+  With no fixed variant sealed and gated, the benchmark falls through to option A or C.5a as in Addendum 10.
+- The native route's firmware needs the fence (capstone-sbi 4f51541) on unfixed variants only. It is correct on both.
