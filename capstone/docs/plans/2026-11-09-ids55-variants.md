@@ -115,3 +115,38 @@ The 7 widened CJALR sites add a few hundred LUT at most.
 - **Failure branch:** if route_design fails, there is no bitstream and no WNS is recorded. Placed area is reported
   from the post-phys_opt checkpoint. V3 is the smallest delta from what has routed.
 - Presence on the routed netlist (B's own key): the widened id buses survive, read on the routed DCP after the seal.
+
+## R-70: B's load rule reads a stale tag past a buffered store (found 2026-11-09 by the native CSCHECK arm on V1)
+
+**The defect.** A plain store to one doubleword of a tagged granule clears its tag when it drains. Until then the D-cache
+line keeps the old tag. The store buffer's hazard compare is doubleword-granular (store_buffer.sv `address_checker`,
+page offset [11:3]), and R-29's hold in wt_dcache_ctrl.sv treats a plain read of the low word as conflict-free, so a
+younger plain load of doubleword 0 reads the stale tag and B projects it (sext39) where program order makes it raw.
+- va-cscheck-mon-ids55 on V1 (capstone-sbi b366655): rows 3, 4, 5, 9 and 10 read 25 where 0 / 28 / 0 / 27 / 0 are
+  registered. The retirement trace shows the scratch word read raw `0x000001808000d000` once (first touch, a cache
+  miss) and projected `0x000000008000d000` six times.
+- ids55-sbhazard.S (V1, predictions in its header before the run): A1 `0x80003040` (projected), A2 `0x10080003040`
+  (raw), A3 projected. The prediction was projected on all three, so 2 of 3: timing-dependent even in simulation.
+  F (fence) and B (same doubleword) raw. The B control is weak: this slot leaves R's bits 63:56 zero.
+- The firmware workaround (capstone-sbi 4f51541, a fence before the raw load) reads every registered row on V1.
+
+**The fix, V1f = e5-ids55-r70 d92abd930 (5fc07e4e1 + d92abd930; tests ba8bd0a96 below it).**
+- In wt_dcache_ctrl.sv, on the load unit's port only (SpecHold), a plain read's data_rtag is cleared while a plain
+  store to the same physical granule is pending in the write buffer or the store buffer, under R-29's
+  speculative-entry rule. It is taken live in READ (the tag cycle) and held for a replay or miss response.
+- No hold is added, and no state machine, store-buffer hazard compare or load-unit stall changes.
+- Prior art, read before writing: S-10b (21-08-2026, the [11:3] -> [11:4] compare formed a LUTLP-1 loop through the
+  load unit's stall cone); R-29's own comment (this controller).
+- A first cut gated every port. Lint kept all 39 UNOPTFLAT names, but the standing rd_ctag ring's example path then
+  showed the new assign on port 2 (the rev node's), so d92abd930 restricts it to port 1.
+
+**Pre-registered for V1f (before any V1f simulation):**
+- ids55-sbhazard: A1 = A2 = A3 = R = `0x10080003040` (raw), F = R, B = R, cursor `0x80003040`, mcause 0.
+- va-cscheck-mon-ids55 WITHOUT the fence (b366655): every registered row, as the fence build reads on V1.
+- The 32 first-boot images: every value and every end cycle identical to V1's. No image's dw0 load follows a plain
+  store to its granule's other doubleword while that store is buffered, as far as is known; a difference is traced
+  before it is reported.
+- The native arms (va-runv-bare, -ctrl, -tag928, -xfer): identical to V1's.
+- Lint: every counter at V1's; UNOPTFLAT names identical to V1's.
+- Synthesis: core LUT within ±500 of V1's; check_timing 0 loops; DRC LUTLP-1 0 on the post-synth checkpoint (S-10b's
+  failure mode, which no in-flight key catches).
