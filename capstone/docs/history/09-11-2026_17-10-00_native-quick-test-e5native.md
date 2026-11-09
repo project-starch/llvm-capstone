@@ -81,3 +81,20 @@ The table above is superseded by:
 | qt-lbm | 410af1b21f3049b3 | lbm_r ed43d5cc37d18396 |
 
 Twin20 smokes, all four: rc 0, specdiff 1/1, adopt_kind_refused 0 (imagick 2/2 commands).
+
+## Addendum 2 (before any board run): the hand-off command, two boots of stages
+
+perf/train/qt-board2.sh runs e5n-gate.sh 2 and then perf/train/qt-native.cmd with QT_GATE_LOG. That file calls
+perf/native-train/nt-run.sh twice, each time with NT_WAITLOG=$QT_GATE_LOG and kit bkit38-native-mcf:
+- qt-gcc (SHA256SUMS sha256 b3bcbdc6ccea0ec1): 502.gcc_r test;
+- qt-inl (SHA256SUMS sha256 02686954ecefd86f): 538.imagick_r, 544.nab_r and 519.lbm_r test in one boot,
+  in that order.
+
+qt-inl's train/, train-nab/ and train-lbm/ are the stage directories of qt-imagick, qt-nab and qt-lbm, byte for
+byte. Its smoke part equals qt-imagick's.
+
+Why two stages, not one: all four in one initramfs would sit at the kit's 26,000,000-byte firmware cap. qt-gcc
+alone is the module gcc test's size.
+
+Exit 0 only if both boots ran and every command ended rc 0 with its @@SPEC-DONE (qt-gcc: 1 command, 1 done;
+qt-inl: 4 commands, 3 done). The predictions of the main section apply per benchmark.
