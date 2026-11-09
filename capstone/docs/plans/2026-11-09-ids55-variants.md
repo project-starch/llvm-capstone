@@ -183,3 +183,31 @@ younger plain load of doubleword 0 reads the stale tag and B projects it (sext39
   post-synth report, GRADED POST HOC, never a stopper; the ±500 reading stays REPORT. This lane agrees with the board
   lane's rule from here on: in-flight stoppers are loop headers, LUTLP-1 and area past routability; prediction bands
   are graded after the run.
+
+## V1s: B's memory format with a 20-bit CORE slot (a speculative area hedge for V1f's routing; NOT full B)
+
+*Approved by the runtime lane 2026-11-09 ~16:00 as a hedge, synthesised only if V1f fails to route. Written before any
+V1s simulation or synthesis.*
+
+- capstone-ariane e5-ids55-s20: **eef29005e** (core; on V1f 0ef470559 + its tests), tests 171f1fbc9.
+- Lanes only: the {slot, tag, metadata} lane's slot is 20 bits (CAP_LSLOT_W; CAP_MD_W 85, CAP_PCMD_W 84, CAP_WORD_W 149,
+  Anvil raw_data / pc_next_metadata 84). Ids stay 55 bits in every unit (rev node, ex_stage, revocation cache,
+  trackers); the memory format is B's (25-bit slot field). The virtual capacity / next-unused saturate at 2^20.
+- Fail closed, never truncated: an id whose slot does not fit a lane enters it untagged (cap_lane, ra_data); a stored
+  word whose slot field has bits [63:59] set is unpacked untagged and raw. **Twin difference:** a use then faults 24
+  where QEMU (25-bit slots) answers 25. Unreachable while tables hold <= 2^20 records (the module's flat table is
+  2^20 records; tags cannot be forged).
+- **Semantics claim:** equivalent to B (V1f) while every table holds <= 2^20 records.
+
+**Pre-registered readings.**
+- ids55-basic -DSLOT20 (free head 2^20 - 2, next-unused 2^20 - 1): CSNODE's rd 1048575 (live), the stored child's raw
+  slot 1048574, every other reading as the default build; identical on V1s and V1f.
+- ids55-basic -DSLOT20_FULL (next-unused exactly 2^20): V1s refuses the ancestor bump, srevroot 0 then the trap
+  handler's 30; V1f (full B) allocates slot 2^20, CSNODE's rd 1048576. The discriminator.
+- B's acceptance arms (the 46) and the native arms: identical to V1f's. The 32 first-boot images: identical to V1f's in
+  values and end cycles. ids55-sbhazard: as V1f.
+- Lint: UNOPTFLAT names = V1f's; UNUSEDSIGNAL may move by the narrowed fields (attributed by name before hand-off).
+- Synthesis (only if V1f fails to route; graded post hoc, stoppers = loops and LUTLP-1): post-synth core LUT
+  **-1,500 to -2,500 vs V1f** (5 of B's 25 lane slot bits in the register file, operand muxes, scoreboard, pipeline and
+  PC/CSR lanes); core FF about -700. A reading inside ±2,500 of V1f is NOT distinguishable from noise and is reported as
+  such.
