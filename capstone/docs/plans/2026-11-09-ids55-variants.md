@@ -264,3 +264,23 @@ hashes, and every copied unit set equals a from-source regeneration at the same 
   delta 0 on 32 of 32; V3f vs C.5a delta 0 on the 18 images whose C.5a commit traces exist (the other 14 by vector
   only). V3f's grader passes C.5a's own silicon run and fails the stage-B-timing control.
 - Still running at this writing: V1s and V3f synthesis (leffe2); V2 / V3 unfixed arms and vectors; V1s's images.
+
+## Final readings (2026-11-09 evening): all seven sealed, every functional gate in
+
+- V1 b91439bf7 SEALED (board lane, 18:49): sha256 c21577b2...2b0b; 4/4 vs e5-native; WNS -17.611; placed 178,670; the
+  pre-registered area key stays FAIL (+9,899). Vectors = e5-native's on 32 (cycles 0); B's 46 arms exact.
+- V1s 0dbf188da SEALED (synth): sha256 1b504203a58049f65f36f608b9ab0de83f1290fa734bc475ba0ed05e95ca101b; every key PASS
+  with the widest margin of the set (congestion 4 placer and router; WNS -12.715; placed 175,028). Area: the 20-bit lane
+  is measured in flip-flops (cap-metadata regfile -155 FF = 31 registers x 5 bits exactly; integer-regfile control 0);
+  its LUT effect is below the floor; the post-synth core -3.9k vs V1 is dominated by dyn_unit's bistable (-6.2k).
+  Functional: boundary arms two-sided vs V1f; B's 46 arms exact; native arms and CSCHECK = V1f's; vectors = e5-native's
+  (cycles 0 vs V1f on 32); sweep = V1f's on all 92.
+- V3f 596c36fc7 SEALED (synth): sha256 03a6168cf6419b6589d8782d6b2e49564ac71ca4bac4f29854e8f60a35753753; every key PASS;
+  WNS -12.360; placed 176,022. Its synthesis Timing Optimization took 1:46 (V3 0:37) with mapping in class and a run peak
+  of 26.9 GB; the wall-clock alarm fired during post-route reports after routing had converged.
+- V2 and V3 (unfixed): B's 46 arms exact; vectors = E5c's / C.5a's on 32.
+- LUTLP-1 controls: S-10b eaa4e7984 reads 1 violation post-synth and post-opt (the board lane's own tool: 62 / 61 LUT
+  cells through csr_regfile_i/mmu_exception), 31 check_timing loops, 179 loop headers; every fixed and narrowed variant
+  reads 0 at every stage.
+- Gate drivers for all seven under perf/v*gate, each dry-run on pass / fail (C.5a flashed back) / busy / no-seal; the
+  unfixed three carry R-70, so the native route needs the fenced firmware (capstone-sbi 4f51541) on them.
