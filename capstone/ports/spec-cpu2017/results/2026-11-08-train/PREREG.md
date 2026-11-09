@@ -345,3 +345,30 @@ train (train-board4.sh) and native mcf train (nat-board.sh) are relaunched behin
 started a step. This delays board 2's Plain by about 1.5 h.
 **Decision rule unchanged** (Addendum 12 on V1f). If native fails again, module wins by default for the Temporal train
 and the native failure is recorded as such.
+
+## Addendum 17 (10 Nov 02:0x): the first native re-run stopped at the readback; the native quick tests move behind board 2's Plain
+
+**What happened.** The module quick tests on V1f all passed (rc 0, specdiff 1/1 PASS on each):
+
+| Test | Wall time (s) |
+|---|---|
+| gcc | 130.7 |
+| imagick | 60.7 |
+| nab | 991.1 |
+| lbm | 1813.1 |
+
+The module session ended at 01:56 by flashing board 2 back to bitstream 3, as every gt-run driver does. Addendum 16's
+re-run then stopped at nt-run's readback ("board 2 is not on caplifive_e5nids55f_0ef470559"; nt-run does not flash).
+No boot was spent. Its dry run stubbed that readback, so the bitstream the previous session leaves on the board could
+not be seen.
+**Board 2's Plain started meanwhile.** train-board4.sh (Plain imagick train, then xz c0 and c1) took the free board at
+01:56. It is not interrupted.
+**New order on board 2:**
+1. Plain (running).
+2. perf/train/qt-native-rerun2.sh. It flashes and gates V1f itself (v1f-gate.sh 2, the 32-image gate, output
+   run-b2-qt2), then runs qt-native-v1f.cmd unchanged against that gate's log. This is the gate-then-native order that
+   read V1f back correctly at 00:24. Dry run: on gate pass it reaches DONE; on gate fail it skips native.
+3. nat-board.sh (native mcf train, relaunched with the same arguments, no step started).
+
+The native-vs-module reading (Addendum 12's rule on V1f) moves to about 12-18 h from now. Meanwhile the Temporal train
+goes on with the kits already queued; no queued stage depends on this reading.
