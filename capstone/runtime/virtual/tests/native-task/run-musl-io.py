@@ -35,6 +35,9 @@ p.add_argument('--c5a-model', action='store_true')
 # its own -cpu properties, the C.5a device tree, the rd-only slot detach/adopt, a CMA pool for the flat table.
 p.add_argument('--twin', action='store_true')
 p.add_argument('--dtb', type=Path)
+# MEASUREMENT ONLY (native/c5a-ids55): the twin with option B's 55-bit ids (capstone-qemu x-capstone-ids=55, which needs
+# x-capstone-addr=sv39), for a kernel built CV_FLAT_INDEX_BITS=25 CV_IDS=55.
+p.add_argument('--ids55', action='store_true')
 a = p.parse_args()
 a.out.mkdir(parents=True, exist_ok=False)
 stage = a.out/'stage'
@@ -99,6 +102,8 @@ for arg in a.kernel_arg: cmd += ['--kernel-arg', arg]
 env = dict(os.environ, CAPSTONE_QEMU_CPU_EXTRA=f'x-capstone-supervisor-slots={slots},x-pcrel=false,x-capstone-raw-moves=true,x-capstone-test-csrs=false,x-capstone-checked-copy={"true" if a.checked_copy_model == "on" else "false"},x-capstone-context-transport=true')
 if a.twin:
     env['CAPSTONE_QEMU_CPU_EXTRA'] = f'x-capstone-supervisor-slots={slots},svadu=false,x-capstone-cscheck-frame=true'
+    if a.ids55:
+        env['CAPSTONE_QEMU_CPU_EXTRA'] += ',x-capstone-addr=sv39,x-capstone-ids=55'
     cmd += ['--dtb', str(a.dtb.resolve())]
 elif a.c5a_model:
     env['CAPSTONE_QEMU_CPU_EXTRA'] = env['CAPSTONE_QEMU_CPU_EXTRA'].replace('x-capstone-raw-moves=true', 'x-capstone-raw-moves=false').replace('x-capstone-context-transport=true', 'x-capstone-context-transport=false')

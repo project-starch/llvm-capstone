@@ -19,6 +19,7 @@ for name in ['qemu', 'images', 'firmware', 'dtb', 'runner']:
 p.add_argument('--memory', default='936M', help="the board's guest RAM")
 p.add_argument('--records', type=int, required=True, help='node_flat_records: the flat table size for this stage')
 p.add_argument('--timeout', type=int, default=43200)
+p.add_argument('--ids55', action='store_true', help="MEASUREMENT ONLY: option B's 55-bit ids (x-capstone-ids=55 with x-capstone-addr=sv39; kernel CV_FLAT_INDEX_BITS=25 CV_IDS=55)")
 a = p.parse_args()
 a.out.mkdir(parents=True, exist_ok=False)
 st = a.out / 'stage'
@@ -50,6 +51,8 @@ if a.arm == 'direct':
                                                   ['locks', 'stat', 'seek', 'fd', 'close', 'path', 'clock'])
 assert len(('root=/dev/vda ro ' + flags).encode()) < 512
 cpu = 'x-capstone-supervisor-slots=1,svadu=false,x-capstone-cscheck-frame=true'
+if a.ids55:
+    cpu += ',x-capstone-addr=sv39,x-capstone-ids=55'
 cmd = ['python3', str(a.runner), '--qemu', str(a.qemu.resolve()), '--images', str(a.images.resolve()),
        '--firmware', str(a.firmware.resolve()), '--stage', str(st.resolve()), '--work', str((a.out / 'vm').resolve()),
        '--memory', a.memory, '--disk-mib', '1024', '--timeout', str(a.timeout), '--icount', '0',
