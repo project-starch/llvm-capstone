@@ -268,3 +268,22 @@ Then board 2's chain continues.
 - **Decision rule:** native takes the remaining Capstone train if it is faster or equal on at least 2 of the 3, and
   slower on none by more than 2 %. Otherwise the module route does. Plain then keeps one board, and the chosen route gets
   two, by a further addendum that also covers the queue change.
+
+## Addendum 13 (9 Nov 17:3x, before it runs): the same quick tests on V1f (option B + the R-70 fix), board 2, after Addendum 12
+
+V1f = capstone-ariane 0ef470559 (e5-native + option B + the R-70 load-rule fix) routed and sealed 17:22:
+caplifive_e5nids55f_0ef470559.bit, sha256 06f6be7e3cf977908d0f103526929d97643c8241e30be6df3133d653867d86bf. Full grade
+4/4 vs e5-native: WNS −13.873, 0 loops, routed clean; placed 179,757 LUT, placer congestion 5 (at the key's limit).
+After Addendum 12's session, board 2 runs perf/train/qt-board2-v1f.sh. It shares that session's structure.
+1. V1f's 32-image gate (perf/v1fgate/v1f-gate.sh 2; vectors from the rtl lane's V1f simulation; C.5a flashed back on a
+   FAIL). No stage runs unless it passes.
+2. native: the same four test programs (gcc, imagick, nab, lbm), through the native lane's ids55 kits (firmware
+   capstone-sbi 4f51541, its RTL arm passed on V1's model);
+3. module: the same four module stages through bkit41-ids55-unify (m55-unify 63d6081632249045, 2^20 table) and
+   perf/ids55mod/run-ids55-unify.sh.
+- **Reading:** per benchmark and route, V1f against e5-native (B against A) on the same board, the same exes and the same
+  route.
+- **Prediction:** in-context cycles equal within 0.5 % for B and A on every benchmark (the rtl lane predicts a cycle
+  delta of 0 on its 32 images); run time within ±2 %.
+- **Use:** with Addendum 12's rule (native vs module), the train runs on whichever of e5-native and V1f is not slower
+  by more than 2 % on any of the four; ties go to V1f (option B, the lead's and collaborator's choice).
