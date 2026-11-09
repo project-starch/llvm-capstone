@@ -21,6 +21,9 @@ The current host profile highlights capability loads/stores and scalar-store
 hooks, with 35.25% in translated guest code (including inline checks). These
 shares do not predict removable overhead. Further work can address emulator
 load/store costs and guest memory-management amplification separately.
+The [tagged-only LDC query experiment](../../runtime/virtual/tests/qemu-throughput/ldc-tagged-query-qualification.json)
+passes bounded checks but shows no useful GCC gain (10.700 s versus 10.715 s).
+It remains separate on QEMU `perf/ldc-tagged-query`; the qualified pin is unchanged.
 Native RTL handoff stays fixed.
 
 ## RTL implementation from the rebased native branch

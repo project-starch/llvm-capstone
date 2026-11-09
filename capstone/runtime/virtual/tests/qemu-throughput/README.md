@@ -110,6 +110,18 @@ blocks. This amplifies host cost on top of the additional guest Linux work.
 It does not predict a 9.65-times hardware slowdown. Profiled elapsed times are
 excluded from the clean ratios above.
 
+## LDC tagged-only query follow-up: no measured gain
+
+The [bounded experiment](ldc-tagged-query-qualification.json) on QEMU branch
+`perf/ldc-tagged-query` skips the 24-byte bounds copy for untagged LDC snapshots.
+The old query API remains unchanged for raw transport and other callers.
+Concurrent tag-map checks, tagged/cleared/missing/unaligned queries, eight
+store/code cases and 35 checked-copy cases pass. All 80 timed GCC outputs and
+four warm-ups match. The reversed-order 20-compilation means are 10.700 s
+baseline versus 10.715 s candidate: no useful gain, so the candidate is not
+integrated and no full-suite rerun is warranted. The qualified pin stays at
+`81246125dc`; the separate experimental branch preserves the source and tests.
+
 ## Build the qualified candidate
 
 The qualified runtime source is QEMU `81246125dcf06bf057b9fca9fb5e850dddce0f5b`.
