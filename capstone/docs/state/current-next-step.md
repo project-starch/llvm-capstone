@@ -24,6 +24,11 @@ load/store costs and guest memory-management amplification separately.
 The [tagged-only LDC query experiment](../../runtime/virtual/tests/qemu-throughput/ldc-tagged-query-qualification.json)
 passes bounded checks but shows no useful GCC gain (10.700 s versus 10.715 s).
 It remains separate on QEMU `perf/ldc-tagged-query`; the qualified pin is unchanged.
+The [MMU-index reuse experiment](../../runtime/virtual/tests/qemu-throughput/memory-index-qualification.json)
+also passes 55 bounded cases but provides no GCC gain (10.72 s versus 10.82 s).
+Keep it separate on `perf/cap-memory-index`. Next evaluate profile-guided host
+compilation on the qualified source, with mixed training workloads and an
+independent correctness/performance gate; no semantic checks should be removed.
 Native RTL handoff stays fixed.
 
 ## RTL implementation from the rebased native branch
