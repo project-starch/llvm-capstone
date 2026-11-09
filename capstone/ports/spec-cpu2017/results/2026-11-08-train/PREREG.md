@@ -318,3 +318,30 @@ would have cost about an hour more. The lifetimes block of each run.sh is byte-i
 f50dc465183e4f1f + imagevalidate 8ecf59b59b9bc166 (Addendum 12 named the imagevalidate hash as imagick's; corrected
 here), nab 092ff45c0c519283, lbm f0269eea1b555bd9. gcc's stage was already lifetimes-only.
 Board 2's waiting sessions are relaunched with GT_CHAIN on board-x; no step had started.
+
+## Addendum 16 (10 Nov 01:5x, before the re-run): V1f gate passed; native quick tests stopped at the bake, re-run after the fix
+
+**What happened.** V1f's gate on board 2 passed (10 Nov 00:24, 32 PASS of 32, board left on
+caplifive_e5nids55f_0ef470559). The native quick tests (qt-native-v1f.cmd) then stopped before either boot, on both
+stages: "the bake saved no rootfs.cpio". The module quick tests went on as planned on the same bitstream.
+**Defect.** The native kits' bake-manifest.sh saved Image and dtb only. Their board-run.sh relinks the private native
+kernel on the bake's rootfs.cpio, so it stopped at that check. The kits' dry runs used BOARD_STUB=2, which takes a
+prepared image that has a cpio, so the bake's real output was never checked. This applies to all ten native kits
+(bkit36-native64{,-min}, bkit38-native-{mcf,perl}, bkit40-native-ids55-*, bkit41-native-v1f-{mcf,perl}). So board 2's
+and board 3's native train steps (Addendum 5, nat-board.sh) would have stopped the same way and fallen back to C.5a.
+**Fix.** bake-manifest.sh now also saves the baked rootfs.cpio, taken before the restore. The kits' SHA256SUMS are updated
+(bake-manifest.sh 2504d7c03575f01c → 0de17ae89c3da809). Nothing else changed.
+**Checked on a real bake, not a stub.** For the smoke stage, qt-gcc and qt-inl, each check ran without the board:
+- the real bake;
+- every manifest file present by hash in the saved cpio (smoke 17 of 17), and the replaced /capstone.ko;
+- the real private-kernel relink on that cpio (BOARD_STUB=2 pointed at the real bake);
+- the real firmware build: dom_stack gate PASS, monitor 4f51541 clean, size under the 26,000,000-byte cap (smoke
+  19,565,576 B, qt-gcc 23,759,880 B, qt-inl 21,662,728 B);
+- the pinned driver and V1f's sha256.
+The first step that has not run is the driver itself.
+**Re-run.** perf/train/qt-native-rerun.sh waits for the V1f session's fallback waiter, requires V1f's gate pass line and
+a free board, then runs qt-native-v1f.cmd unchanged (sha 0c06eac3d67d16a2). Its dry run reaches DONE. Board 2's Plain
+train (train-board4.sh) and native mcf train (nat-board.sh) are relaunched behind it with the same arguments. Neither had
+started a step. This delays board 2's Plain by about 1.5 h.
+**Decision rule unchanged** (Addendum 12 on V1f). If native fails again, module wins by default for the Temporal train
+and the native failure is recorded as such.
