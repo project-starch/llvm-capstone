@@ -76,6 +76,13 @@ per-PC profiles):
 ## After Wednesday: first board days
 
 1. The universal configuration: A1 + A2 + B1 (+ A3 if ready) on one kit, test size first on all 8.
+   U1 train twins on kit-unq at 936M (compiler lane, 9 Nov) pass for gcc, lbm, imagick, x264 and nab. perl fails on the
+   2^18 lifetime table (two commands, as on every kit-unq perl train twin) and needs a 20-bit-table kit. mcf and xz are
+   killed for memory: U1's train peak is +5.7 % over the frozen image on the same kit (233,738 vs 221,072 pages), so
+   they wait for the footprint fix. At test size, on the same kit and stage, the gap is +8.4 % (frozen 174,004, llvm-c4
+   173,956, + dcnofp 173,987, against U1 188,591), so neither the compiler nor dcnofp causes it. The cause lies in the
+   SDK runtime and libc or in the remaining U flags; the crossed pair (gu, dg) decides between them. The first +8 %
+   figure was withdrawn because its baseline ran on another kit, and the same-kit reading confirms it.
 2. C1 kfast: Tier 1 boot alone, then perl.
 3. The bitstream variants E1-E3 in order of their expected gain, each with its Plain pair where the change also helps
    Plain.

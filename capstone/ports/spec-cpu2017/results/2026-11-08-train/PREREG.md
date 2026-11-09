@@ -158,3 +158,17 @@ five commands are expected to complete (the uncapped twins: scrabbl 414,817, spl
 perf/train/un-run-e5c.sh. (c) If the E5c gate fails (the board is back on C.5a), perlbench on C.5a with commands
 {0, 1, 4} as before. The deferred stages follow unchanged. Board 2's mcf fallback (C.5a, 4K q32) is unchanged: mcf
 peaks at 14 k live nodes.
+
+## Addendum 7 (9 Nov 10:0x, before it runs): Capstone xz train runs on its best test configuration, kit bkit25-nset
+
+The rule of this record is the best configuration that passed on the board at test size. For xz that is kit
+bkit25-nset (retire_exit_sweep=2, 8 M quantum, module 645749816c02751e), not bkit32-q32. Its run (out-ns-b2x, board 2,
+C.5a) read 8,084.2 s, specdiff 12/12 PASS, outputs equal to the twin's: 1.005× Plain-with-cache's 8,044.1 s. It ran
+the same 50.1 G instructions as out-all-b1 (9,398.2 s), so the difference is outside time. q32 never ran xz at test
+size. T2's xz reference changes from 1.17 to 1.005, band ±0.10.
+- Board 3: xz leaves perf/train/b3d-q32/b3.list (lbm stays there). Once nat-board2.sh (pid 3671072) ends, a waiter
+  (perf/train/train-board3.sh) runs the same stage, 557.xz_r-train-capstone-lifetimes-link-c0-devmk (exe
+  0d8878ad8a5046df, command 0), through perf/train/gt-run-nset.sh: the q32 driver with the kit, its module/vexec
+  hashes, the 8 M quantum, the s26 wrapper and the sweep-2 params line checked instead. Output out-train3-b3-nset.
+- Plain xz is unchanged and runs before it, as step 5 of Addendum 5.
+- Cost: none on board time; xz moves after Plain xz on the same board, about 5.7 h, ending about Wed 10:00.
