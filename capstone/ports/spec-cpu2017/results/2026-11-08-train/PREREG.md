@@ -172,3 +172,19 @@ size. T2's xz reference changes from 1.17 to 1.005, band ±0.10.
   hashes, the 8 M quantum, the s26 wrapper and the sweep-2 params line checked instead. Output out-train3-b3-nset.
 - Plain xz is unchanged and runs before it, as step 5 of Addendum 5.
 - Cost: none on board time; xz moves after Plain xz on the same board, about 5.7 h, ending about Wed 10:00.
+
+## Addendum 8 (9 Nov 12:4x, before any of it runs): Plain first on all three boards, as the lead decided
+
+The lead's order was Plain first, then the worst benchmarks on the new bitstream. Only board 1 ran Plain; boards 2
+and 3 ran Capstone C.5a stages first, which put all of Plain in one queue ending Wednesday. The runs in progress are
+not stopped (board 1 Plain nab, board 2 Capstone nab, board 3 Capstone x264). Only waiting wrappers are replaced; none
+had started a board step. Stages, exes, kits and drivers are unchanged; only their board and order move.
+- **Board 1:** Plain nab (running), Plain mcf; imagick and x264 leave its list (SKIPPED out dirs); then Capstone
+  imagick (q32) and Capstone xz (nset, Addendum 7).
+- **Board 2:** Capstone nab (running); Plain imagick, Plain xz; then Addendum 5's native mcf with its 4K q32
+  fallback; then Capstone lbm (q32).
+- **Board 3:** Capstone x264 (running); Plain x264, Plain lbm; then Addendum 5/6's native perlbench with the E5c and
+  C.5a fallbacks. Its deferred q32 and Plain steps are now empty.
+- Estimates: Plain complete about Tue 13:00; native perlbench and mcf end about Wed 04:00-05:00; all about Wed 11:00.
+- Cost, accepted: a native run that fails late leaves no time for its C.5a fallback before the deadline. That
+  benchmark then reports its test-size number, marked as such (rule T0).
