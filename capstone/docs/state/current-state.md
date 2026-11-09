@@ -5,6 +5,9 @@ compilation reduces mean GCC host CPU from 53.790s to 45.115s per 100
 compilations. All 800 timed native/plain outputs and eight warm-ups match.
 A held-out three-frame x264 excerpt improves 9.75%. A separate diagnostic
 pair reports 21.91% fewer host instructions; branch misses do not improve.
+Five further short-program comparisons save 6.4–20.2% host CPU, with all
+20 measured runs passing; LBM absolute times vary but both paired reductions
+are about 14%. [Short-program measurements](../../runtime/virtual/tests/qemu-throughput/pgo-short-programs.json).
 Plain execution also speeds up, so native/plain changes from 9.68x to 9.06x.
 No ISA or guest software changes are involved. The candidate passes 55 bounded
 cases, all eight safety groups, and six short SPEC entries in both clock modes.

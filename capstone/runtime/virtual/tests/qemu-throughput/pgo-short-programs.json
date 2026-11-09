@@ -1,0 +1,1786 @@
+{
+  "status": "PASS",
+  "scope": "Five unmodified SPEC test workload commands, first command timed; exact qualified output hashes and guest validators, not a fresh official comparator execution or SPEC score. CPU2, icount0, baseline/PGO/PGO/baseline; no warmup, boot excluded.",
+  "results": [
+    {
+      "benchmark": "538.imagick_r",
+      "variant": "baseline",
+      "qualification": {
+        "status": "PASS",
+        "scope": "Exact output equivalence to qualified baseline; not fresh official comparator execution",
+        "baseline_sha256": "4a7f0201fd8d68a6884996e79a4e8c5979ff544b7d8734666f5c9ea9a999c930",
+        "qemu_sha256": "c5d7588a9bfda4108b92d18ead08d99be9f2436722748ff72b5a23ed36e9d7f4",
+        "icount": 0,
+        "results": [
+          {
+            "benchmark": "538.imagick_r",
+            "status": "PASS",
+            "inputs": {
+              "control": "c80ab07264a600337b4fa388e1ce8743a227733c41ad77e4bbb9210d326e22a5",
+              "imagevalidate_538": "aa5e2660423ff30be45e4ddb942d489ff17c2afdfad89797fd9c2d83e622c782",
+              "imagick_r": "b2896dc49370d06a39075886cf1b3bbc5c0fe07fa52ca61a35e33b8590c9511a",
+              "test_expected.tga": "d7e4e331655a156377e3837cbdae3cb0f4e696032d37cc4f8ff33660b95c5c72",
+              "test_input.tga": "9a5cfa8014c14cb13a9b455a2b892efde1b19d4200cff10e5b16868512ce01bf"
+            },
+            "execution": {
+              "benchmark": "538.imagick_r",
+              "runner_rc": 0,
+              "icount": 0,
+              "host_elapsed_seconds": 4.456227397546172,
+              "commands": [
+                {
+                  "argv": [
+                    "./imagick_r",
+                    "-limit",
+                    "disk",
+                    "0",
+                    "test_input.tga",
+                    "-shear",
+                    "25",
+                    "-resize",
+                    "640x480",
+                    "-negate",
+                    "-alpha",
+                    "Off",
+                    "test_output.tga"
+                  ],
+                  "stdout": "test_convert.out",
+                  "stderr": "test_convert.err"
+                }
+              ],
+              "expected_commands": 1,
+              "exit_statuses": [
+                0
+              ],
+              "image_commands": [
+                {
+                  "argv": [
+                    "../run_base_test_native_qemu.0000/imagevalidate_538_base.native_qemu",
+                    "-avg",
+                    "-threshold",
+                    "0.95",
+                    "-maxthreshold",
+                    "0.001",
+                    "test_output.tga",
+                    "/var/tmp/capstone-spec-php-20261105/share/SPEC17/benchspec/CPU/538.imagick_r/data/test/compare/test_expected.tga"
+                  ],
+                  "stdout": "test_validate.out",
+                  "stderr": "test_validate.err",
+                  "reference_sha256": "d7e4e331655a156377e3837cbdae3cb0f4e696032d37cc4f8ff33660b95c5c72"
+                }
+              ],
+              "expected_image_commands": 1,
+              "image_exit_statuses": [
+                0
+              ],
+              "execution_errors": [],
+              "execution_ok": true,
+              "spec_validation": "PENDING",
+              "comparator_manifest_sha256": "a680d6f9698f351d098af99aff0a564281e050ae29a23cc8d29149d71cac5740",
+              "host_window": {
+                "wall_seconds": 1.261762444,
+                "cpu_seconds": 1.26,
+                "cpu_tick_hz": 100,
+                "scope": "One workload invocation including exec/exit; no warm-up, boot, validators or host output collection. Host time, not guest cycles.",
+                "profiled": false,
+                "case": 0,
+                "affinity": [
+                  2
+                ]
+              }
+            },
+            "errors": [],
+            "comparisons": [
+              {
+                "name": "test_validate.out",
+                "expected": "c3bfd816afd261fd4a1d4b6c8a4ed639f0872229ea26cbcaed127b04a5425a1a",
+                "actual": "c3bfd816afd261fd4a1d4b6c8a4ed639f0872229ea26cbcaed127b04a5425a1a",
+                "passed": true
+              }
+            ],
+            "images": [
+              {
+                "name": "test_output.tga",
+                "expected": "3f70992184b213de3b457de27312f52f1222877fd5bb17eeb8e1e9c67a1b0deb",
+                "actual": "3f70992184b213de3b457de27312f52f1222877fd5bb17eeb8e1e9c67a1b0deb",
+                "passed": true
+              }
+            ],
+            "elapsed_seconds": 5.794691488146782
+          }
+        ],
+        "started_epoch": 1794195200.3061988,
+        "finished_epoch": 1794195206.101173
+      }
+    },
+    {
+      "benchmark": "538.imagick_r",
+      "variant": "pgo",
+      "qualification": {
+        "status": "PASS",
+        "scope": "Exact output equivalence to qualified baseline; not fresh official comparator execution",
+        "baseline_sha256": "4a7f0201fd8d68a6884996e79a4e8c5979ff544b7d8734666f5c9ea9a999c930",
+        "qemu_sha256": "73662370ea68246837f728794d5b5b7fc2cc767cd4fe376dd29b4d07263bc022",
+        "icount": 0,
+        "results": [
+          {
+            "benchmark": "538.imagick_r",
+            "status": "PASS",
+            "inputs": {
+              "control": "c80ab07264a600337b4fa388e1ce8743a227733c41ad77e4bbb9210d326e22a5",
+              "imagevalidate_538": "aa5e2660423ff30be45e4ddb942d489ff17c2afdfad89797fd9c2d83e622c782",
+              "imagick_r": "b2896dc49370d06a39075886cf1b3bbc5c0fe07fa52ca61a35e33b8590c9511a",
+              "test_expected.tga": "d7e4e331655a156377e3837cbdae3cb0f4e696032d37cc4f8ff33660b95c5c72",
+              "test_input.tga": "9a5cfa8014c14cb13a9b455a2b892efde1b19d4200cff10e5b16868512ce01bf"
+            },
+            "execution": {
+              "benchmark": "538.imagick_r",
+              "runner_rc": 0,
+              "icount": 0,
+              "host_elapsed_seconds": 4.404766637831926,
+              "commands": [
+                {
+                  "argv": [
+                    "./imagick_r",
+                    "-limit",
+                    "disk",
+                    "0",
+                    "test_input.tga",
+                    "-shear",
+                    "25",
+                    "-resize",
+                    "640x480",
+                    "-negate",
+                    "-alpha",
+                    "Off",
+                    "test_output.tga"
+                  ],
+                  "stdout": "test_convert.out",
+                  "stderr": "test_convert.err"
+                }
+              ],
+              "expected_commands": 1,
+              "exit_statuses": [
+                0
+              ],
+              "image_commands": [
+                {
+                  "argv": [
+                    "../run_base_test_native_qemu.0000/imagevalidate_538_base.native_qemu",
+                    "-avg",
+                    "-threshold",
+                    "0.95",
+                    "-maxthreshold",
+                    "0.001",
+                    "test_output.tga",
+                    "/var/tmp/capstone-spec-php-20261105/share/SPEC17/benchspec/CPU/538.imagick_r/data/test/compare/test_expected.tga"
+                  ],
+                  "stdout": "test_validate.out",
+                  "stderr": "test_validate.err",
+                  "reference_sha256": "d7e4e331655a156377e3837cbdae3cb0f4e696032d37cc4f8ff33660b95c5c72"
+                }
+              ],
+              "expected_image_commands": 1,
+              "image_exit_statuses": [
+                0
+              ],
+              "execution_errors": [],
+              "execution_ok": true,
+              "spec_validation": "PENDING",
+              "comparator_manifest_sha256": "a680d6f9698f351d098af99aff0a564281e050ae29a23cc8d29149d71cac5740",
+              "host_window": {
+                "wall_seconds": 1.146825913,
+                "cpu_seconds": 1.14,
+                "cpu_tick_hz": 100,
+                "scope": "One workload invocation including exec/exit; no warm-up, boot, validators or host output collection. Host time, not guest cycles.",
+                "profiled": false,
+                "case": 0,
+                "affinity": [
+                  2
+                ]
+              }
+            },
+            "errors": [],
+            "comparisons": [
+              {
+                "name": "test_validate.out",
+                "expected": "c3bfd816afd261fd4a1d4b6c8a4ed639f0872229ea26cbcaed127b04a5425a1a",
+                "actual": "c3bfd816afd261fd4a1d4b6c8a4ed639f0872229ea26cbcaed127b04a5425a1a",
+                "passed": true
+              }
+            ],
+            "images": [
+              {
+                "name": "test_output.tga",
+                "expected": "3f70992184b213de3b457de27312f52f1222877fd5bb17eeb8e1e9c67a1b0deb",
+                "actual": "3f70992184b213de3b457de27312f52f1222877fd5bb17eeb8e1e9c67a1b0deb",
+                "passed": true
+              }
+            ],
+            "elapsed_seconds": 5.6903904136270285
+          }
+        ],
+        "started_epoch": 1794195207.3645952,
+        "finished_epoch": 1794195213.0552614
+      }
+    },
+    {
+      "benchmark": "538.imagick_r",
+      "variant": "pgo",
+      "qualification": {
+        "status": "PASS",
+        "scope": "Exact output equivalence to qualified baseline; not fresh official comparator execution",
+        "baseline_sha256": "4a7f0201fd8d68a6884996e79a4e8c5979ff544b7d8734666f5c9ea9a999c930",
+        "qemu_sha256": "73662370ea68246837f728794d5b5b7fc2cc767cd4fe376dd29b4d07263bc022",
+        "icount": 0,
+        "results": [
+          {
+            "benchmark": "538.imagick_r",
+            "status": "PASS",
+            "inputs": {
+              "control": "c80ab07264a600337b4fa388e1ce8743a227733c41ad77e4bbb9210d326e22a5",
+              "imagevalidate_538": "aa5e2660423ff30be45e4ddb942d489ff17c2afdfad89797fd9c2d83e622c782",
+              "imagick_r": "b2896dc49370d06a39075886cf1b3bbc5c0fe07fa52ca61a35e33b8590c9511a",
+              "test_expected.tga": "d7e4e331655a156377e3837cbdae3cb0f4e696032d37cc4f8ff33660b95c5c72",
+              "test_input.tga": "9a5cfa8014c14cb13a9b455a2b892efde1b19d4200cff10e5b16868512ce01bf"
+            },
+            "execution": {
+              "benchmark": "538.imagick_r",
+              "runner_rc": 0,
+              "icount": 0,
+              "host_elapsed_seconds": 4.192866697907448,
+              "commands": [
+                {
+                  "argv": [
+                    "./imagick_r",
+                    "-limit",
+                    "disk",
+                    "0",
+                    "test_input.tga",
+                    "-shear",
+                    "25",
+                    "-resize",
+                    "640x480",
+                    "-negate",
+                    "-alpha",
+                    "Off",
+                    "test_output.tga"
+                  ],
+                  "stdout": "test_convert.out",
+                  "stderr": "test_convert.err"
+                }
+              ],
+              "expected_commands": 1,
+              "exit_statuses": [
+                0
+              ],
+              "image_commands": [
+                {
+                  "argv": [
+                    "../run_base_test_native_qemu.0000/imagevalidate_538_base.native_qemu",
+                    "-avg",
+                    "-threshold",
+                    "0.95",
+                    "-maxthreshold",
+                    "0.001",
+                    "test_output.tga",
+                    "/var/tmp/capstone-spec-php-20261105/share/SPEC17/benchspec/CPU/538.imagick_r/data/test/compare/test_expected.tga"
+                  ],
+                  "stdout": "test_validate.out",
+                  "stderr": "test_validate.err",
+                  "reference_sha256": "d7e4e331655a156377e3837cbdae3cb0f4e696032d37cc4f8ff33660b95c5c72"
+                }
+              ],
+              "expected_image_commands": 1,
+              "image_exit_statuses": [
+                0
+              ],
+              "execution_errors": [],
+              "execution_ok": true,
+              "spec_validation": "PENDING",
+              "comparator_manifest_sha256": "a680d6f9698f351d098af99aff0a564281e050ae29a23cc8d29149d71cac5740",
+              "host_window": {
+                "wall_seconds": 1.18946374,
+                "cpu_seconds": 1.19,
+                "cpu_tick_hz": 100,
+                "scope": "One workload invocation including exec/exit; no warm-up, boot, validators or host output collection. Host time, not guest cycles.",
+                "profiled": false,
+                "case": 0,
+                "affinity": [
+                  2
+                ]
+              }
+            },
+            "errors": [],
+            "comparisons": [
+              {
+                "name": "test_validate.out",
+                "expected": "c3bfd816afd261fd4a1d4b6c8a4ed639f0872229ea26cbcaed127b04a5425a1a",
+                "actual": "c3bfd816afd261fd4a1d4b6c8a4ed639f0872229ea26cbcaed127b04a5425a1a",
+                "passed": true
+              }
+            ],
+            "images": [
+              {
+                "name": "test_output.tga",
+                "expected": "3f70992184b213de3b457de27312f52f1222877fd5bb17eeb8e1e9c67a1b0deb",
+                "actual": "3f70992184b213de3b457de27312f52f1222877fd5bb17eeb8e1e9c67a1b0deb",
+                "passed": true
+              }
+            ],
+            "elapsed_seconds": 5.478643415495753
+          }
+        ],
+        "started_epoch": 1794195214.3219616,
+        "finished_epoch": 1794195219.8008802
+      }
+    },
+    {
+      "benchmark": "538.imagick_r",
+      "variant": "baseline",
+      "qualification": {
+        "status": "PASS",
+        "scope": "Exact output equivalence to qualified baseline; not fresh official comparator execution",
+        "baseline_sha256": "4a7f0201fd8d68a6884996e79a4e8c5979ff544b7d8734666f5c9ea9a999c930",
+        "qemu_sha256": "c5d7588a9bfda4108b92d18ead08d99be9f2436722748ff72b5a23ed36e9d7f4",
+        "icount": 0,
+        "results": [
+          {
+            "benchmark": "538.imagick_r",
+            "status": "PASS",
+            "inputs": {
+              "control": "c80ab07264a600337b4fa388e1ce8743a227733c41ad77e4bbb9210d326e22a5",
+              "imagevalidate_538": "aa5e2660423ff30be45e4ddb942d489ff17c2afdfad89797fd9c2d83e622c782",
+              "imagick_r": "b2896dc49370d06a39075886cf1b3bbc5c0fe07fa52ca61a35e33b8590c9511a",
+              "test_expected.tga": "d7e4e331655a156377e3837cbdae3cb0f4e696032d37cc4f8ff33660b95c5c72",
+              "test_input.tga": "9a5cfa8014c14cb13a9b455a2b892efde1b19d4200cff10e5b16868512ce01bf"
+            },
+            "execution": {
+              "benchmark": "538.imagick_r",
+              "runner_rc": 0,
+              "icount": 0,
+              "host_elapsed_seconds": 4.625085328705609,
+              "commands": [
+                {
+                  "argv": [
+                    "./imagick_r",
+                    "-limit",
+                    "disk",
+                    "0",
+                    "test_input.tga",
+                    "-shear",
+                    "25",
+                    "-resize",
+                    "640x480",
+                    "-negate",
+                    "-alpha",
+                    "Off",
+                    "test_output.tga"
+                  ],
+                  "stdout": "test_convert.out",
+                  "stderr": "test_convert.err"
+                }
+              ],
+              "expected_commands": 1,
+              "exit_statuses": [
+                0
+              ],
+              "image_commands": [
+                {
+                  "argv": [
+                    "../run_base_test_native_qemu.0000/imagevalidate_538_base.native_qemu",
+                    "-avg",
+                    "-threshold",
+                    "0.95",
+                    "-maxthreshold",
+                    "0.001",
+                    "test_output.tga",
+                    "/var/tmp/capstone-spec-php-20261105/share/SPEC17/benchspec/CPU/538.imagick_r/data/test/compare/test_expected.tga"
+                  ],
+                  "stdout": "test_validate.out",
+                  "stderr": "test_validate.err",
+                  "reference_sha256": "d7e4e331655a156377e3837cbdae3cb0f4e696032d37cc4f8ff33660b95c5c72"
+                }
+              ],
+              "expected_image_commands": 1,
+              "image_exit_statuses": [
+                0
+              ],
+              "execution_errors": [],
+              "execution_ok": true,
+              "spec_validation": "PENDING",
+              "comparator_manifest_sha256": "a680d6f9698f351d098af99aff0a564281e050ae29a23cc8d29149d71cac5740",
+              "host_window": {
+                "wall_seconds": 1.218993822,
+                "cpu_seconds": 1.23,
+                "cpu_tick_hz": 100,
+                "scope": "One workload invocation including exec/exit; no warm-up, boot, validators or host output collection. Host time, not guest cycles.",
+                "profiled": false,
+                "case": 0,
+                "affinity": [
+                  2
+                ]
+              }
+            },
+            "errors": [],
+            "comparisons": [
+              {
+                "name": "test_validate.out",
+                "expected": "c3bfd816afd261fd4a1d4b6c8a4ed639f0872229ea26cbcaed127b04a5425a1a",
+                "actual": "c3bfd816afd261fd4a1d4b6c8a4ed639f0872229ea26cbcaed127b04a5425a1a",
+                "passed": true
+              }
+            ],
+            "images": [
+              {
+                "name": "test_output.tga",
+                "expected": "3f70992184b213de3b457de27312f52f1222877fd5bb17eeb8e1e9c67a1b0deb",
+                "actual": "3f70992184b213de3b457de27312f52f1222877fd5bb17eeb8e1e9c67a1b0deb",
+                "passed": true
+              }
+            ],
+            "elapsed_seconds": 5.926717191003263
+          }
+        ],
+        "started_epoch": 1794195221.074876,
+        "finished_epoch": 1794195227.0018878
+      }
+    },
+    {
+      "benchmark": "997.specrand_fr",
+      "variant": "baseline",
+      "qualification": {
+        "status": "PASS",
+        "scope": "Exact output equivalence to qualified baseline; not fresh official comparator execution",
+        "baseline_sha256": "4a7f0201fd8d68a6884996e79a4e8c5979ff544b7d8734666f5c9ea9a999c930",
+        "qemu_sha256": "c5d7588a9bfda4108b92d18ead08d99be9f2436722748ff72b5a23ed36e9d7f4",
+        "icount": 0,
+        "results": [
+          {
+            "benchmark": "997.specrand_fr",
+            "status": "PASS",
+            "inputs": {
+              "control": "4ba09f494e74551b67af28ab11495f83d346d000945f570ed418cd67da840835",
+              "specrand_fr": "9de8efa03aaf305e9375e334db6da1717a2fe6d0d16fbf3e0588285b4a823038"
+            },
+            "execution": {
+              "benchmark": "997.specrand_fr",
+              "runner_rc": 0,
+              "icount": 0,
+              "host_elapsed_seconds": 3.548875785432756,
+              "commands": [
+                {
+                  "argv": [
+                    "./specrand_fr",
+                    "324342",
+                    "24239"
+                  ],
+                  "stdout": "rand.24239.out",
+                  "stderr": "rand.24239.err"
+                }
+              ],
+              "expected_commands": 1,
+              "exit_statuses": [
+                0
+              ],
+              "image_commands": [],
+              "expected_image_commands": 0,
+              "image_exit_statuses": [],
+              "execution_errors": [],
+              "execution_ok": true,
+              "spec_validation": "PENDING",
+              "comparator_manifest_sha256": "2e00cfa7ffbbeb32bc0276c725204ca9722f6e175c26f5913cba52f3472e0b13",
+              "host_window": {
+                "wall_seconds": 1.060498983,
+                "cpu_seconds": 1.07,
+                "cpu_tick_hz": 100,
+                "scope": "One workload invocation including exec/exit; no warm-up, boot, validators or host output collection. Host time, not guest cycles.",
+                "profiled": false,
+                "case": 0,
+                "affinity": [
+                  2
+                ]
+              }
+            },
+            "errors": [],
+            "comparisons": [
+              {
+                "name": "rand.24239.out",
+                "expected": "15e5b13042aa23597530688bfbcdfdfa83c55308372db51abeb73475af4dc72a",
+                "actual": "15e5b13042aa23597530688bfbcdfdfa83c55308372db51abeb73475af4dc72a",
+                "passed": true
+              }
+            ],
+            "images": [],
+            "elapsed_seconds": 4.832147412002087
+          }
+        ],
+        "started_epoch": 1794195228.259234,
+        "finished_epoch": 1794195233.0916584
+      }
+    },
+    {
+      "benchmark": "997.specrand_fr",
+      "variant": "pgo",
+      "qualification": {
+        "status": "PASS",
+        "scope": "Exact output equivalence to qualified baseline; not fresh official comparator execution",
+        "baseline_sha256": "4a7f0201fd8d68a6884996e79a4e8c5979ff544b7d8734666f5c9ea9a999c930",
+        "qemu_sha256": "73662370ea68246837f728794d5b5b7fc2cc767cd4fe376dd29b4d07263bc022",
+        "icount": 0,
+        "results": [
+          {
+            "benchmark": "997.specrand_fr",
+            "status": "PASS",
+            "inputs": {
+              "control": "4ba09f494e74551b67af28ab11495f83d346d000945f570ed418cd67da840835",
+              "specrand_fr": "9de8efa03aaf305e9375e334db6da1717a2fe6d0d16fbf3e0588285b4a823038"
+            },
+            "execution": {
+              "benchmark": "997.specrand_fr",
+              "runner_rc": 0,
+              "icount": 0,
+              "host_elapsed_seconds": 3.244221279397607,
+              "commands": [
+                {
+                  "argv": [
+                    "./specrand_fr",
+                    "324342",
+                    "24239"
+                  ],
+                  "stdout": "rand.24239.out",
+                  "stderr": "rand.24239.err"
+                }
+              ],
+              "expected_commands": 1,
+              "exit_statuses": [
+                0
+              ],
+              "image_commands": [],
+              "expected_image_commands": 0,
+              "image_exit_statuses": [],
+              "execution_errors": [],
+              "execution_ok": true,
+              "spec_validation": "PENDING",
+              "comparator_manifest_sha256": "2e00cfa7ffbbeb32bc0276c725204ca9722f6e175c26f5913cba52f3472e0b13",
+              "host_window": {
+                "wall_seconds": 0.908382364,
+                "cpu_seconds": 0.91,
+                "cpu_tick_hz": 100,
+                "scope": "One workload invocation including exec/exit; no warm-up, boot, validators or host output collection. Host time, not guest cycles.",
+                "profiled": false,
+                "case": 0,
+                "affinity": [
+                  2
+                ]
+              }
+            },
+            "errors": [],
+            "comparisons": [
+              {
+                "name": "rand.24239.out",
+                "expected": "15e5b13042aa23597530688bfbcdfdfa83c55308372db51abeb73475af4dc72a",
+                "actual": "15e5b13042aa23597530688bfbcdfdfa83c55308372db51abeb73475af4dc72a",
+                "passed": true
+              }
+            ],
+            "images": [],
+            "elapsed_seconds": 4.52471520844847
+          }
+        ],
+        "started_epoch": 1794195234.3621063,
+        "finished_epoch": 1794195238.887097
+      }
+    },
+    {
+      "benchmark": "997.specrand_fr",
+      "variant": "pgo",
+      "qualification": {
+        "status": "PASS",
+        "scope": "Exact output equivalence to qualified baseline; not fresh official comparator execution",
+        "baseline_sha256": "4a7f0201fd8d68a6884996e79a4e8c5979ff544b7d8734666f5c9ea9a999c930",
+        "qemu_sha256": "73662370ea68246837f728794d5b5b7fc2cc767cd4fe376dd29b4d07263bc022",
+        "icount": 0,
+        "results": [
+          {
+            "benchmark": "997.specrand_fr",
+            "status": "PASS",
+            "inputs": {
+              "control": "4ba09f494e74551b67af28ab11495f83d346d000945f570ed418cd67da840835",
+              "specrand_fr": "9de8efa03aaf305e9375e334db6da1717a2fe6d0d16fbf3e0588285b4a823038"
+            },
+            "execution": {
+              "benchmark": "997.specrand_fr",
+              "runner_rc": 0,
+              "icount": 0,
+              "host_elapsed_seconds": 3.047577234916389,
+              "commands": [
+                {
+                  "argv": [
+                    "./specrand_fr",
+                    "324342",
+                    "24239"
+                  ],
+                  "stdout": "rand.24239.out",
+                  "stderr": "rand.24239.err"
+                }
+              ],
+              "expected_commands": 1,
+              "exit_statuses": [
+                0
+              ],
+              "image_commands": [],
+              "expected_image_commands": 0,
+              "image_exit_statuses": [],
+              "execution_errors": [],
+              "execution_ok": true,
+              "spec_validation": "PENDING",
+              "comparator_manifest_sha256": "2e00cfa7ffbbeb32bc0276c725204ca9722f6e175c26f5913cba52f3472e0b13",
+              "host_window": {
+                "wall_seconds": 0.890165253,
+                "cpu_seconds": 0.88,
+                "cpu_tick_hz": 100,
+                "scope": "One workload invocation including exec/exit; no warm-up, boot, validators or host output collection. Host time, not guest cycles.",
+                "profiled": false,
+                "case": 0,
+                "affinity": [
+                  2
+                ]
+              }
+            },
+            "errors": [],
+            "comparisons": [
+              {
+                "name": "rand.24239.out",
+                "expected": "15e5b13042aa23597530688bfbcdfdfa83c55308372db51abeb73475af4dc72a",
+                "actual": "15e5b13042aa23597530688bfbcdfdfa83c55308372db51abeb73475af4dc72a",
+                "passed": true
+              }
+            ],
+            "images": [],
+            "elapsed_seconds": 4.328748304396868
+          }
+        ],
+        "started_epoch": 1794195240.15657,
+        "finished_epoch": 1794195244.485588
+      }
+    },
+    {
+      "benchmark": "997.specrand_fr",
+      "variant": "baseline",
+      "qualification": {
+        "status": "PASS",
+        "scope": "Exact output equivalence to qualified baseline; not fresh official comparator execution",
+        "baseline_sha256": "4a7f0201fd8d68a6884996e79a4e8c5979ff544b7d8734666f5c9ea9a999c930",
+        "qemu_sha256": "c5d7588a9bfda4108b92d18ead08d99be9f2436722748ff72b5a23ed36e9d7f4",
+        "icount": 0,
+        "results": [
+          {
+            "benchmark": "997.specrand_fr",
+            "status": "PASS",
+            "inputs": {
+              "control": "4ba09f494e74551b67af28ab11495f83d346d000945f570ed418cd67da840835",
+              "specrand_fr": "9de8efa03aaf305e9375e334db6da1717a2fe6d0d16fbf3e0588285b4a823038"
+            },
+            "execution": {
+              "benchmark": "997.specrand_fr",
+              "runner_rc": 0,
+              "icount": 0,
+              "host_elapsed_seconds": 3.3633221751078963,
+              "commands": [
+                {
+                  "argv": [
+                    "./specrand_fr",
+                    "324342",
+                    "24239"
+                  ],
+                  "stdout": "rand.24239.out",
+                  "stderr": "rand.24239.err"
+                }
+              ],
+              "expected_commands": 1,
+              "exit_statuses": [
+                0
+              ],
+              "image_commands": [],
+              "expected_image_commands": 0,
+              "image_exit_statuses": [],
+              "execution_errors": [],
+              "execution_ok": true,
+              "spec_validation": "PENDING",
+              "comparator_manifest_sha256": "2e00cfa7ffbbeb32bc0276c725204ca9722f6e175c26f5913cba52f3472e0b13",
+              "host_window": {
+                "wall_seconds": 1.0686307,
+                "cpu_seconds": 1.07,
+                "cpu_tick_hz": 100,
+                "scope": "One workload invocation including exec/exit; no warm-up, boot, validators or host output collection. Host time, not guest cycles.",
+                "profiled": false,
+                "case": 0,
+                "affinity": [
+                  2
+                ]
+              }
+            },
+            "errors": [],
+            "comparisons": [
+              {
+                "name": "rand.24239.out",
+                "expected": "15e5b13042aa23597530688bfbcdfdfa83c55308372db51abeb73475af4dc72a",
+                "actual": "15e5b13042aa23597530688bfbcdfdfa83c55308372db51abeb73475af4dc72a",
+                "passed": true
+              }
+            ],
+            "images": [],
+            "elapsed_seconds": 4.700192108750343
+          }
+        ],
+        "started_epoch": 1794195245.7361608,
+        "finished_epoch": 1794195250.4366221
+      }
+    },
+    {
+      "benchmark": "999.specrand_ir",
+      "variant": "baseline",
+      "qualification": {
+        "status": "PASS",
+        "scope": "Exact output equivalence to qualified baseline; not fresh official comparator execution",
+        "baseline_sha256": "4a7f0201fd8d68a6884996e79a4e8c5979ff544b7d8734666f5c9ea9a999c930",
+        "qemu_sha256": "c5d7588a9bfda4108b92d18ead08d99be9f2436722748ff72b5a23ed36e9d7f4",
+        "icount": 0,
+        "results": [
+          {
+            "benchmark": "999.specrand_ir",
+            "status": "PASS",
+            "inputs": {
+              "control": "4ba09f494e74551b67af28ab11495f83d346d000945f570ed418cd67da840835",
+              "specrand_ir": "9de8efa03aaf305e9375e334db6da1717a2fe6d0d16fbf3e0588285b4a823038"
+            },
+            "execution": {
+              "benchmark": "999.specrand_ir",
+              "runner_rc": 0,
+              "icount": 0,
+              "host_elapsed_seconds": 3.4331086007878184,
+              "commands": [
+                {
+                  "argv": [
+                    "./specrand_ir",
+                    "324342",
+                    "24239"
+                  ],
+                  "stdout": "rand.24239.out",
+                  "stderr": "rand.24239.err"
+                }
+              ],
+              "expected_commands": 1,
+              "exit_statuses": [
+                0
+              ],
+              "image_commands": [],
+              "expected_image_commands": 0,
+              "image_exit_statuses": [],
+              "execution_errors": [],
+              "execution_ok": true,
+              "spec_validation": "PENDING",
+              "comparator_manifest_sha256": "ca22ce7be8d6ec5376b62bb596ef747727227c04b34b06eb0bdba30ee0153f89",
+              "host_window": {
+                "wall_seconds": 1.074467443,
+                "cpu_seconds": 1.07,
+                "cpu_tick_hz": 100,
+                "scope": "One workload invocation including exec/exit; no warm-up, boot, validators or host output collection. Host time, not guest cycles.",
+                "profiled": false,
+                "case": 0,
+                "affinity": [
+                  2
+                ]
+              }
+            },
+            "errors": [],
+            "comparisons": [
+              {
+                "name": "rand.24239.out",
+                "expected": "15e5b13042aa23597530688bfbcdfdfa83c55308372db51abeb73475af4dc72a",
+                "actual": "15e5b13042aa23597530688bfbcdfdfa83c55308372db51abeb73475af4dc72a",
+                "passed": true
+              }
+            ],
+            "images": [],
+            "elapsed_seconds": 4.717677438631654
+          }
+        ],
+        "started_epoch": 1794195251.691078,
+        "finished_epoch": 1794195256.40904
+      }
+    },
+    {
+      "benchmark": "999.specrand_ir",
+      "variant": "pgo",
+      "qualification": {
+        "status": "PASS",
+        "scope": "Exact output equivalence to qualified baseline; not fresh official comparator execution",
+        "baseline_sha256": "4a7f0201fd8d68a6884996e79a4e8c5979ff544b7d8734666f5c9ea9a999c930",
+        "qemu_sha256": "73662370ea68246837f728794d5b5b7fc2cc767cd4fe376dd29b4d07263bc022",
+        "icount": 0,
+        "results": [
+          {
+            "benchmark": "999.specrand_ir",
+            "status": "PASS",
+            "inputs": {
+              "control": "4ba09f494e74551b67af28ab11495f83d346d000945f570ed418cd67da840835",
+              "specrand_ir": "9de8efa03aaf305e9375e334db6da1717a2fe6d0d16fbf3e0588285b4a823038"
+            },
+            "execution": {
+              "benchmark": "999.specrand_ir",
+              "runner_rc": 0,
+              "icount": 0,
+              "host_elapsed_seconds": 3.0524476896971464,
+              "commands": [
+                {
+                  "argv": [
+                    "./specrand_ir",
+                    "324342",
+                    "24239"
+                  ],
+                  "stdout": "rand.24239.out",
+                  "stderr": "rand.24239.err"
+                }
+              ],
+              "expected_commands": 1,
+              "exit_statuses": [
+                0
+              ],
+              "image_commands": [],
+              "expected_image_commands": 0,
+              "image_exit_statuses": [],
+              "execution_errors": [],
+              "execution_ok": true,
+              "spec_validation": "PENDING",
+              "comparator_manifest_sha256": "ca22ce7be8d6ec5376b62bb596ef747727227c04b34b06eb0bdba30ee0153f89",
+              "host_window": {
+                "wall_seconds": 0.887333668,
+                "cpu_seconds": 0.88,
+                "cpu_tick_hz": 100,
+                "scope": "One workload invocation including exec/exit; no warm-up, boot, validators or host output collection. Host time, not guest cycles.",
+                "profiled": false,
+                "case": 0,
+                "affinity": [
+                  2
+                ]
+              }
+            },
+            "errors": [],
+            "comparisons": [
+              {
+                "name": "rand.24239.out",
+                "expected": "15e5b13042aa23597530688bfbcdfdfa83c55308372db51abeb73475af4dc72a",
+                "actual": "15e5b13042aa23597530688bfbcdfdfa83c55308372db51abeb73475af4dc72a",
+                "passed": true
+              }
+            ],
+            "images": [],
+            "elapsed_seconds": 4.3332711746916175
+          }
+        ],
+        "started_epoch": 1794195257.6740294,
+        "finished_epoch": 1794195262.0075748
+      }
+    },
+    {
+      "benchmark": "999.specrand_ir",
+      "variant": "pgo",
+      "qualification": {
+        "status": "PASS",
+        "scope": "Exact output equivalence to qualified baseline; not fresh official comparator execution",
+        "baseline_sha256": "4a7f0201fd8d68a6884996e79a4e8c5979ff544b7d8734666f5c9ea9a999c930",
+        "qemu_sha256": "73662370ea68246837f728794d5b5b7fc2cc767cd4fe376dd29b4d07263bc022",
+        "icount": 0,
+        "results": [
+          {
+            "benchmark": "999.specrand_ir",
+            "status": "PASS",
+            "inputs": {
+              "control": "4ba09f494e74551b67af28ab11495f83d346d000945f570ed418cd67da840835",
+              "specrand_ir": "9de8efa03aaf305e9375e334db6da1717a2fe6d0d16fbf3e0588285b4a823038"
+            },
+            "execution": {
+              "benchmark": "999.specrand_ir",
+              "runner_rc": 0,
+              "icount": 0,
+              "host_elapsed_seconds": 3.074438437819481,
+              "commands": [
+                {
+                  "argv": [
+                    "./specrand_ir",
+                    "324342",
+                    "24239"
+                  ],
+                  "stdout": "rand.24239.out",
+                  "stderr": "rand.24239.err"
+                }
+              ],
+              "expected_commands": 1,
+              "exit_statuses": [
+                0
+              ],
+              "image_commands": [],
+              "expected_image_commands": 0,
+              "image_exit_statuses": [],
+              "execution_errors": [],
+              "execution_ok": true,
+              "spec_validation": "PENDING",
+              "comparator_manifest_sha256": "ca22ce7be8d6ec5376b62bb596ef747727227c04b34b06eb0bdba30ee0153f89",
+              "host_window": {
+                "wall_seconds": 0.888990228,
+                "cpu_seconds": 0.89,
+                "cpu_tick_hz": 100,
+                "scope": "One workload invocation including exec/exit; no warm-up, boot, validators or host output collection. Host time, not guest cycles.",
+                "profiled": false,
+                "case": 0,
+                "affinity": [
+                  2
+                ]
+              }
+            },
+            "errors": [],
+            "comparisons": [
+              {
+                "name": "rand.24239.out",
+                "expected": "15e5b13042aa23597530688bfbcdfdfa83c55308372db51abeb73475af4dc72a",
+                "actual": "15e5b13042aa23597530688bfbcdfdfa83c55308372db51abeb73475af4dc72a",
+                "passed": true
+              }
+            ],
+            "images": [],
+            "elapsed_seconds": 4.357209743000567
+          }
+        ],
+        "started_epoch": 1794195263.2658937,
+        "finished_epoch": 1794195267.6234848
+      }
+    },
+    {
+      "benchmark": "999.specrand_ir",
+      "variant": "baseline",
+      "qualification": {
+        "status": "PASS",
+        "scope": "Exact output equivalence to qualified baseline; not fresh official comparator execution",
+        "baseline_sha256": "4a7f0201fd8d68a6884996e79a4e8c5979ff544b7d8734666f5c9ea9a999c930",
+        "qemu_sha256": "c5d7588a9bfda4108b92d18ead08d99be9f2436722748ff72b5a23ed36e9d7f4",
+        "icount": 0,
+        "results": [
+          {
+            "benchmark": "999.specrand_ir",
+            "status": "PASS",
+            "inputs": {
+              "control": "4ba09f494e74551b67af28ab11495f83d346d000945f570ed418cd67da840835",
+              "specrand_ir": "9de8efa03aaf305e9375e334db6da1717a2fe6d0d16fbf3e0588285b4a823038"
+            },
+            "execution": {
+              "benchmark": "999.specrand_ir",
+              "runner_rc": 0,
+              "icount": 0,
+              "host_elapsed_seconds": 3.479757059365511,
+              "commands": [
+                {
+                  "argv": [
+                    "./specrand_ir",
+                    "324342",
+                    "24239"
+                  ],
+                  "stdout": "rand.24239.out",
+                  "stderr": "rand.24239.err"
+                }
+              ],
+              "expected_commands": 1,
+              "exit_statuses": [
+                0
+              ],
+              "image_commands": [],
+              "expected_image_commands": 0,
+              "image_exit_statuses": [],
+              "execution_errors": [],
+              "execution_ok": true,
+              "spec_validation": "PENDING",
+              "comparator_manifest_sha256": "ca22ce7be8d6ec5376b62bb596ef747727227c04b34b06eb0bdba30ee0153f89",
+              "host_window": {
+                "wall_seconds": 1.062935075,
+                "cpu_seconds": 1.06,
+                "cpu_tick_hz": 100,
+                "scope": "One workload invocation including exec/exit; no warm-up, boot, validators or host output collection. Host time, not guest cycles.",
+                "profiled": false,
+                "case": 0,
+                "affinity": [
+                  2
+                ]
+              }
+            },
+            "errors": [],
+            "comparisons": [
+              {
+                "name": "rand.24239.out",
+                "expected": "15e5b13042aa23597530688bfbcdfdfa83c55308372db51abeb73475af4dc72a",
+                "actual": "15e5b13042aa23597530688bfbcdfdfa83c55308372db51abeb73475af4dc72a",
+                "passed": true
+              }
+            ],
+            "images": [],
+            "elapsed_seconds": 4.812247692607343
+          }
+        ],
+        "started_epoch": 1794195268.877174,
+        "finished_epoch": 1794195273.6896992
+      }
+    },
+    {
+      "benchmark": "519.lbm_r",
+      "variant": "baseline",
+      "qualification": {
+        "status": "PASS",
+        "scope": "Exact output equivalence to qualified baseline; not fresh official comparator execution",
+        "baseline_sha256": "4a7f0201fd8d68a6884996e79a4e8c5979ff544b7d8734666f5c9ea9a999c930",
+        "qemu_sha256": "c5d7588a9bfda4108b92d18ead08d99be9f2436722748ff72b5a23ed36e9d7f4",
+        "icount": 0,
+        "results": [
+          {
+            "benchmark": "519.lbm_r",
+            "status": "PASS",
+            "inputs": {
+              "100_100_130_cf_a.of": "18e20725a7638f3639c9f6304938f5ff9afe12fed8edb0098b093929986f4c1a",
+              "lbm.in": "7721a4fe66b52f7d56b32679270cef9166c668b2dca51ece71ebc89c8ada8843",
+              "lbm_r": "ae756749dfec9398e2d3c9b24d9a2f023d21f595fa0e0e31f431e35227544a09"
+            },
+            "execution": {
+              "benchmark": "519.lbm_r",
+              "runner_rc": 0,
+              "icount": 0,
+              "host_elapsed_seconds": 56.451672703027725,
+              "commands": [
+                {
+                  "argv": [
+                    "./lbm_r",
+                    "20",
+                    "reference.dat",
+                    "0",
+                    "1",
+                    "100_100_130_cf_a.of"
+                  ],
+                  "stdout": "lbm.out",
+                  "stderr": "lbm.err"
+                }
+              ],
+              "expected_commands": 1,
+              "exit_statuses": [
+                0
+              ],
+              "image_commands": [],
+              "expected_image_commands": 0,
+              "image_exit_statuses": [],
+              "execution_errors": [],
+              "execution_ok": true,
+              "spec_validation": "PENDING",
+              "comparator_manifest_sha256": "c7b5eaf7b6c12da703298feeb93e6b46ec10ad2b34d42d7b6db030f24da6bc05",
+              "host_window": {
+                "wall_seconds": 53.97421175,
+                "cpu_seconds": 53.87,
+                "cpu_tick_hz": 100,
+                "scope": "One workload invocation including exec/exit; no warm-up, boot, validators or host output collection. Host time, not guest cycles.",
+                "profiled": false,
+                "case": 0,
+                "affinity": [
+                  2
+                ]
+              }
+            },
+            "errors": [],
+            "comparisons": [
+              {
+                "name": "lbm.out",
+                "expected": "7ab5463219d503a3cb54d5bd75b69c6620109b560058de7a20a719796433cdc5",
+                "actual": "7ab5463219d503a3cb54d5bd75b69c6620109b560058de7a20a719796433cdc5",
+                "passed": true
+              }
+            ],
+            "images": [],
+            "elapsed_seconds": 57.73963705915958
+          }
+        ],
+        "started_epoch": 1794195274.9580767,
+        "finished_epoch": 1794195332.697981
+      }
+    },
+    {
+      "benchmark": "519.lbm_r",
+      "variant": "pgo",
+      "qualification": {
+        "status": "PASS",
+        "scope": "Exact output equivalence to qualified baseline; not fresh official comparator execution",
+        "baseline_sha256": "4a7f0201fd8d68a6884996e79a4e8c5979ff544b7d8734666f5c9ea9a999c930",
+        "qemu_sha256": "73662370ea68246837f728794d5b5b7fc2cc767cd4fe376dd29b4d07263bc022",
+        "icount": 0,
+        "results": [
+          {
+            "benchmark": "519.lbm_r",
+            "status": "PASS",
+            "inputs": {
+              "100_100_130_cf_a.of": "18e20725a7638f3639c9f6304938f5ff9afe12fed8edb0098b093929986f4c1a",
+              "lbm.in": "7721a4fe66b52f7d56b32679270cef9166c668b2dca51ece71ebc89c8ada8843",
+              "lbm_r": "ae756749dfec9398e2d3c9b24d9a2f023d21f595fa0e0e31f431e35227544a09"
+            },
+            "execution": {
+              "benchmark": "519.lbm_r",
+              "runner_rc": 0,
+              "icount": 0,
+              "host_elapsed_seconds": 48.79923539608717,
+              "commands": [
+                {
+                  "argv": [
+                    "./lbm_r",
+                    "20",
+                    "reference.dat",
+                    "0",
+                    "1",
+                    "100_100_130_cf_a.of"
+                  ],
+                  "stdout": "lbm.out",
+                  "stderr": "lbm.err"
+                }
+              ],
+              "expected_commands": 1,
+              "exit_statuses": [
+                0
+              ],
+              "image_commands": [],
+              "expected_image_commands": 0,
+              "image_exit_statuses": [],
+              "execution_errors": [],
+              "execution_ok": true,
+              "spec_validation": "PENDING",
+              "comparator_manifest_sha256": "c7b5eaf7b6c12da703298feeb93e6b46ec10ad2b34d42d7b6db030f24da6bc05",
+              "host_window": {
+                "wall_seconds": 46.44474749,
+                "cpu_seconds": 46.34,
+                "cpu_tick_hz": 100,
+                "scope": "One workload invocation including exec/exit; no warm-up, boot, validators or host output collection. Host time, not guest cycles.",
+                "profiled": false,
+                "case": 0,
+                "affinity": [
+                  2
+                ]
+              }
+            },
+            "errors": [],
+            "comparisons": [
+              {
+                "name": "lbm.out",
+                "expected": "7ab5463219d503a3cb54d5bd75b69c6620109b560058de7a20a719796433cdc5",
+                "actual": "7ab5463219d503a3cb54d5bd75b69c6620109b560058de7a20a719796433cdc5",
+                "passed": true
+              }
+            ],
+            "images": [],
+            "elapsed_seconds": 50.08250207453966
+          }
+        ],
+        "started_epoch": 1794195333.963282,
+        "finished_epoch": 1794195384.046049
+      }
+    },
+    {
+      "benchmark": "519.lbm_r",
+      "variant": "pgo",
+      "qualification": {
+        "status": "PASS",
+        "scope": "Exact output equivalence to qualified baseline; not fresh official comparator execution",
+        "baseline_sha256": "4a7f0201fd8d68a6884996e79a4e8c5979ff544b7d8734666f5c9ea9a999c930",
+        "qemu_sha256": "73662370ea68246837f728794d5b5b7fc2cc767cd4fe376dd29b4d07263bc022",
+        "icount": 0,
+        "results": [
+          {
+            "benchmark": "519.lbm_r",
+            "status": "PASS",
+            "inputs": {
+              "100_100_130_cf_a.of": "18e20725a7638f3639c9f6304938f5ff9afe12fed8edb0098b093929986f4c1a",
+              "lbm.in": "7721a4fe66b52f7d56b32679270cef9166c668b2dca51ece71ebc89c8ada8843",
+              "lbm_r": "ae756749dfec9398e2d3c9b24d9a2f023d21f595fa0e0e31f431e35227544a09"
+            },
+            "execution": {
+              "benchmark": "519.lbm_r",
+              "runner_rc": 0,
+              "icount": 0,
+              "host_elapsed_seconds": 40.582706711255014,
+              "commands": [
+                {
+                  "argv": [
+                    "./lbm_r",
+                    "20",
+                    "reference.dat",
+                    "0",
+                    "1",
+                    "100_100_130_cf_a.of"
+                  ],
+                  "stdout": "lbm.out",
+                  "stderr": "lbm.err"
+                }
+              ],
+              "expected_commands": 1,
+              "exit_statuses": [
+                0
+              ],
+              "image_commands": [],
+              "expected_image_commands": 0,
+              "image_exit_statuses": [],
+              "execution_errors": [],
+              "execution_ok": true,
+              "spec_validation": "PENDING",
+              "comparator_manifest_sha256": "c7b5eaf7b6c12da703298feeb93e6b46ec10ad2b34d42d7b6db030f24da6bc05",
+              "host_window": {
+                "wall_seconds": 38.371280597,
+                "cpu_seconds": 38.31,
+                "cpu_tick_hz": 100,
+                "scope": "One workload invocation including exec/exit; no warm-up, boot, validators or host output collection. Host time, not guest cycles.",
+                "profiled": false,
+                "case": 0,
+                "affinity": [
+                  2
+                ]
+              }
+            },
+            "errors": [],
+            "comparisons": [
+              {
+                "name": "lbm.out",
+                "expected": "7ab5463219d503a3cb54d5bd75b69c6620109b560058de7a20a719796433cdc5",
+                "actual": "7ab5463219d503a3cb54d5bd75b69c6620109b560058de7a20a719796433cdc5",
+                "passed": true
+              }
+            ],
+            "images": [],
+            "elapsed_seconds": 41.86697477474809
+          }
+        ],
+        "started_epoch": 1794195385.3716493,
+        "finished_epoch": 1794195427.2388992
+      }
+    },
+    {
+      "benchmark": "519.lbm_r",
+      "variant": "baseline",
+      "qualification": {
+        "status": "PASS",
+        "scope": "Exact output equivalence to qualified baseline; not fresh official comparator execution",
+        "baseline_sha256": "4a7f0201fd8d68a6884996e79a4e8c5979ff544b7d8734666f5c9ea9a999c930",
+        "qemu_sha256": "c5d7588a9bfda4108b92d18ead08d99be9f2436722748ff72b5a23ed36e9d7f4",
+        "icount": 0,
+        "results": [
+          {
+            "benchmark": "519.lbm_r",
+            "status": "PASS",
+            "inputs": {
+              "100_100_130_cf_a.of": "18e20725a7638f3639c9f6304938f5ff9afe12fed8edb0098b093929986f4c1a",
+              "lbm.in": "7721a4fe66b52f7d56b32679270cef9166c668b2dca51ece71ebc89c8ada8843",
+              "lbm_r": "ae756749dfec9398e2d3c9b24d9a2f023d21f595fa0e0e31f431e35227544a09"
+            },
+            "execution": {
+              "benchmark": "519.lbm_r",
+              "runner_rc": 0,
+              "icount": 0,
+              "host_elapsed_seconds": 47.083138772286475,
+              "commands": [
+                {
+                  "argv": [
+                    "./lbm_r",
+                    "20",
+                    "reference.dat",
+                    "0",
+                    "1",
+                    "100_100_130_cf_a.of"
+                  ],
+                  "stdout": "lbm.out",
+                  "stderr": "lbm.err"
+                }
+              ],
+              "expected_commands": 1,
+              "exit_statuses": [
+                0
+              ],
+              "image_commands": [],
+              "expected_image_commands": 0,
+              "image_exit_statuses": [],
+              "execution_errors": [],
+              "execution_ok": true,
+              "spec_validation": "PENDING",
+              "comparator_manifest_sha256": "c7b5eaf7b6c12da703298feeb93e6b46ec10ad2b34d42d7b6db030f24da6bc05",
+              "host_window": {
+                "wall_seconds": 44.880022108,
+                "cpu_seconds": 44.82,
+                "cpu_tick_hz": 100,
+                "scope": "One workload invocation including exec/exit; no warm-up, boot, validators or host output collection. Host time, not guest cycles.",
+                "profiled": false,
+                "case": 0,
+                "affinity": [
+                  2
+                ]
+              }
+            },
+            "errors": [],
+            "comparisons": [
+              {
+                "name": "lbm.out",
+                "expected": "7ab5463219d503a3cb54d5bd75b69c6620109b560058de7a20a719796433cdc5",
+                "actual": "7ab5463219d503a3cb54d5bd75b69c6620109b560058de7a20a719796433cdc5",
+                "passed": true
+              }
+            ],
+            "images": [],
+            "elapsed_seconds": 48.19008522480726
+          }
+        ],
+        "started_epoch": 1794195428.5099719,
+        "finished_epoch": 1794195476.7003264
+      }
+    },
+    {
+      "benchmark": "544.nab_r",
+      "variant": "baseline",
+      "qualification": {
+        "status": "PASS",
+        "scope": "Exact output equivalence to qualified baseline; not fresh official comparator execution",
+        "baseline_sha256": "4a7f0201fd8d68a6884996e79a4e8c5979ff544b7d8734666f5c9ea9a999c930",
+        "qemu_sha256": "c5d7588a9bfda4108b92d18ead08d99be9f2436722748ff72b5a23ed36e9d7f4",
+        "icount": 0,
+        "results": [
+          {
+            "benchmark": "544.nab_r",
+            "status": "PASS",
+            "inputs": {
+              "control": "b4c597a6a697daa921344b3259d09dc27eba98dc1d3c9dcede454f4c161d7ebc",
+              "hkrdenq/hkrdenq.pdb": "949eaab83e7a41af1c8853aa1b3ced612438fc9bc071e8f1bf19e59c31d928ee",
+              "hkrdenq/hkrdenq.prm": "bdf8a69346a6e84505c424649a83588b6df46178217e869d58396a97be47435b",
+              "nab_r": "f30ab7275e04c61feb529969243f939c49513f9f4e668db5443931a82e32ecbc"
+            },
+            "execution": {
+              "benchmark": "544.nab_r",
+              "runner_rc": 0,
+              "icount": 0,
+              "host_elapsed_seconds": 53.902610315941274,
+              "commands": [
+                {
+                  "argv": [
+                    "./nab_r",
+                    "hkrdenq",
+                    "1930344093",
+                    "1000"
+                  ],
+                  "stdout": "hkrdenq.out",
+                  "stderr": "hkrdenq.err"
+                }
+              ],
+              "expected_commands": 1,
+              "exit_statuses": [
+                0
+              ],
+              "image_commands": [],
+              "expected_image_commands": 0,
+              "image_exit_statuses": [],
+              "execution_errors": [],
+              "execution_ok": true,
+              "spec_validation": "PENDING",
+              "comparator_manifest_sha256": "817b57e49b608a1f2c7c6ac708966e30c69113348b5350e65df379dde4f5a845",
+              "host_window": {
+                "wall_seconds": 51.957186592,
+                "cpu_seconds": 51.85,
+                "cpu_tick_hz": 100,
+                "scope": "One workload invocation including exec/exit; no warm-up, boot, validators or host output collection. Host time, not guest cycles.",
+                "profiled": false,
+                "case": 0,
+                "affinity": [
+                  2
+                ]
+              }
+            },
+            "errors": [],
+            "comparisons": [
+              {
+                "name": "hkrdenq.out",
+                "expected": "2d580a95e2e596f2e06485149e9d91880bf47ded5a5495a366a80d4cea2a9afd",
+                "actual": "2d580a95e2e596f2e06485149e9d91880bf47ded5a5495a366a80d4cea2a9afd",
+                "passed": true
+              }
+            ],
+            "images": [],
+            "elapsed_seconds": 55.00885527487844
+          }
+        ],
+        "started_epoch": 1794195478.0316384,
+        "finished_epoch": 1794195533.0407732
+      }
+    },
+    {
+      "benchmark": "544.nab_r",
+      "variant": "pgo",
+      "qualification": {
+        "status": "PASS",
+        "scope": "Exact output equivalence to qualified baseline; not fresh official comparator execution",
+        "baseline_sha256": "4a7f0201fd8d68a6884996e79a4e8c5979ff544b7d8734666f5c9ea9a999c930",
+        "qemu_sha256": "73662370ea68246837f728794d5b5b7fc2cc767cd4fe376dd29b4d07263bc022",
+        "icount": 0,
+        "results": [
+          {
+            "benchmark": "544.nab_r",
+            "status": "PASS",
+            "inputs": {
+              "control": "b4c597a6a697daa921344b3259d09dc27eba98dc1d3c9dcede454f4c161d7ebc",
+              "hkrdenq/hkrdenq.pdb": "949eaab83e7a41af1c8853aa1b3ced612438fc9bc071e8f1bf19e59c31d928ee",
+              "hkrdenq/hkrdenq.prm": "bdf8a69346a6e84505c424649a83588b6df46178217e869d58396a97be47435b",
+              "nab_r": "f30ab7275e04c61feb529969243f939c49513f9f4e668db5443931a82e32ecbc"
+            },
+            "execution": {
+              "benchmark": "544.nab_r",
+              "runner_rc": 0,
+              "icount": 0,
+              "host_elapsed_seconds": 43.349415734410286,
+              "commands": [
+                {
+                  "argv": [
+                    "./nab_r",
+                    "hkrdenq",
+                    "1930344093",
+                    "1000"
+                  ],
+                  "stdout": "hkrdenq.out",
+                  "stderr": "hkrdenq.err"
+                }
+              ],
+              "expected_commands": 1,
+              "exit_statuses": [
+                0
+              ],
+              "image_commands": [],
+              "expected_image_commands": 0,
+              "image_exit_statuses": [],
+              "execution_errors": [],
+              "execution_ok": true,
+              "spec_validation": "PENDING",
+              "comparator_manifest_sha256": "817b57e49b608a1f2c7c6ac708966e30c69113348b5350e65df379dde4f5a845",
+              "host_window": {
+                "wall_seconds": 41.423448548,
+                "cpu_seconds": 41.32,
+                "cpu_tick_hz": 100,
+                "scope": "One workload invocation including exec/exit; no warm-up, boot, validators or host output collection. Host time, not guest cycles.",
+                "profiled": false,
+                "case": 0,
+                "affinity": [
+                  2
+                ]
+              }
+            },
+            "errors": [],
+            "comparisons": [
+              {
+                "name": "hkrdenq.out",
+                "expected": "2d580a95e2e596f2e06485149e9d91880bf47ded5a5495a366a80d4cea2a9afd",
+                "actual": "2d580a95e2e596f2e06485149e9d91880bf47ded5a5495a366a80d4cea2a9afd",
+                "passed": true
+              }
+            ],
+            "images": [],
+            "elapsed_seconds": 44.44856860488653
+          }
+        ],
+        "started_epoch": 1794195534.3072138,
+        "finished_epoch": 1794195578.7560604
+      }
+    },
+    {
+      "benchmark": "544.nab_r",
+      "variant": "pgo",
+      "qualification": {
+        "status": "PASS",
+        "scope": "Exact output equivalence to qualified baseline; not fresh official comparator execution",
+        "baseline_sha256": "4a7f0201fd8d68a6884996e79a4e8c5979ff544b7d8734666f5c9ea9a999c930",
+        "qemu_sha256": "73662370ea68246837f728794d5b5b7fc2cc767cd4fe376dd29b4d07263bc022",
+        "icount": 0,
+        "results": [
+          {
+            "benchmark": "544.nab_r",
+            "status": "PASS",
+            "inputs": {
+              "control": "b4c597a6a697daa921344b3259d09dc27eba98dc1d3c9dcede454f4c161d7ebc",
+              "hkrdenq/hkrdenq.pdb": "949eaab83e7a41af1c8853aa1b3ced612438fc9bc071e8f1bf19e59c31d928ee",
+              "hkrdenq/hkrdenq.prm": "bdf8a69346a6e84505c424649a83588b6df46178217e869d58396a97be47435b",
+              "nab_r": "f30ab7275e04c61feb529969243f939c49513f9f4e668db5443931a82e32ecbc"
+            },
+            "execution": {
+              "benchmark": "544.nab_r",
+              "runner_rc": 0,
+              "icount": 0,
+              "host_elapsed_seconds": 43.34835406951606,
+              "commands": [
+                {
+                  "argv": [
+                    "./nab_r",
+                    "hkrdenq",
+                    "1930344093",
+                    "1000"
+                  ],
+                  "stdout": "hkrdenq.out",
+                  "stderr": "hkrdenq.err"
+                }
+              ],
+              "expected_commands": 1,
+              "exit_statuses": [
+                0
+              ],
+              "image_commands": [],
+              "expected_image_commands": 0,
+              "image_exit_statuses": [],
+              "execution_errors": [],
+              "execution_ok": true,
+              "spec_validation": "PENDING",
+              "comparator_manifest_sha256": "817b57e49b608a1f2c7c6ac708966e30c69113348b5350e65df379dde4f5a845",
+              "host_window": {
+                "wall_seconds": 41.535643982,
+                "cpu_seconds": 41.43,
+                "cpu_tick_hz": 100,
+                "scope": "One workload invocation including exec/exit; no warm-up, boot, validators or host output collection. Host time, not guest cycles.",
+                "profiled": false,
+                "case": 0,
+                "affinity": [
+                  2
+                ]
+              }
+            },
+            "errors": [],
+            "comparisons": [
+              {
+                "name": "hkrdenq.out",
+                "expected": "2d580a95e2e596f2e06485149e9d91880bf47ded5a5495a366a80d4cea2a9afd",
+                "actual": "2d580a95e2e596f2e06485149e9d91880bf47ded5a5495a366a80d4cea2a9afd",
+                "passed": true
+              }
+            ],
+            "images": [],
+            "elapsed_seconds": 44.44691624119878
+          }
+        ],
+        "started_epoch": 1794195580.0163195,
+        "finished_epoch": 1794195624.4635088
+      }
+    },
+    {
+      "benchmark": "544.nab_r",
+      "variant": "baseline",
+      "qualification": {
+        "status": "PASS",
+        "scope": "Exact output equivalence to qualified baseline; not fresh official comparator execution",
+        "baseline_sha256": "4a7f0201fd8d68a6884996e79a4e8c5979ff544b7d8734666f5c9ea9a999c930",
+        "qemu_sha256": "c5d7588a9bfda4108b92d18ead08d99be9f2436722748ff72b5a23ed36e9d7f4",
+        "icount": 0,
+        "results": [
+          {
+            "benchmark": "544.nab_r",
+            "status": "PASS",
+            "inputs": {
+              "control": "b4c597a6a697daa921344b3259d09dc27eba98dc1d3c9dcede454f4c161d7ebc",
+              "hkrdenq/hkrdenq.pdb": "949eaab83e7a41af1c8853aa1b3ced612438fc9bc071e8f1bf19e59c31d928ee",
+              "hkrdenq/hkrdenq.prm": "bdf8a69346a6e84505c424649a83588b6df46178217e869d58396a97be47435b",
+              "nab_r": "f30ab7275e04c61feb529969243f939c49513f9f4e668db5443931a82e32ecbc"
+            },
+            "execution": {
+              "benchmark": "544.nab_r",
+              "runner_rc": 0,
+              "icount": 0,
+              "host_elapsed_seconds": 53.80924019869417,
+              "commands": [
+                {
+                  "argv": [
+                    "./nab_r",
+                    "hkrdenq",
+                    "1930344093",
+                    "1000"
+                  ],
+                  "stdout": "hkrdenq.out",
+                  "stderr": "hkrdenq.err"
+                }
+              ],
+              "expected_commands": 1,
+              "exit_statuses": [
+                0
+              ],
+              "image_commands": [],
+              "expected_image_commands": 0,
+              "image_exit_statuses": [],
+              "execution_errors": [],
+              "execution_ok": true,
+              "spec_validation": "PENDING",
+              "comparator_manifest_sha256": "817b57e49b608a1f2c7c6ac708966e30c69113348b5350e65df379dde4f5a845",
+              "host_window": {
+                "wall_seconds": 51.908394151,
+                "cpu_seconds": 51.8,
+                "cpu_tick_hz": 100,
+                "scope": "One workload invocation including exec/exit; no warm-up, boot, validators or host output collection. Host time, not guest cycles.",
+                "profiled": false,
+                "case": 0,
+                "affinity": [
+                  2
+                ]
+              }
+            },
+            "errors": [],
+            "comparisons": [
+              {
+                "name": "hkrdenq.out",
+                "expected": "2d580a95e2e596f2e06485149e9d91880bf47ded5a5495a366a80d4cea2a9afd",
+                "actual": "2d580a95e2e596f2e06485149e9d91880bf47ded5a5495a366a80d4cea2a9afd",
+                "passed": true
+              }
+            ],
+            "images": [],
+            "elapsed_seconds": 54.92106120940298
+          }
+        ],
+        "started_epoch": 1794195625.7323663,
+        "finished_epoch": 1794195680.6537356
+      }
+    }
+  ],
+  "summary": [
+    {
+      "benchmark": "538.imagick_r",
+      "mean_cpu_seconds": {
+        "baseline": 1.245,
+        "pgo": 1.165
+      },
+      "reduction_percent": 6.425702811244982,
+      "training_workload": false,
+      "samples_cpu_seconds": {
+        "baseline": [
+          1.26,
+          1.23
+        ],
+        "pgo": [
+          1.14,
+          1.19
+        ]
+      },
+      "paired_reduction_percent": [
+        9.523809523809534,
+        3.25203252032521
+      ]
+    },
+    {
+      "benchmark": "997.specrand_fr",
+      "mean_cpu_seconds": {
+        "baseline": 1.07,
+        "pgo": 0.895
+      },
+      "reduction_percent": 16.355140186915897,
+      "training_workload": false,
+      "samples_cpu_seconds": {
+        "baseline": [
+          1.07,
+          1.07
+        ],
+        "pgo": [
+          0.91,
+          0.88
+        ]
+      },
+      "paired_reduction_percent": [
+        14.953271028037385,
+        17.757009345794394
+      ]
+    },
+    {
+      "benchmark": "999.specrand_ir",
+      "mean_cpu_seconds": {
+        "baseline": 1.065,
+        "pgo": 0.885
+      },
+      "reduction_percent": 16.901408450704224,
+      "training_workload": false,
+      "samples_cpu_seconds": {
+        "baseline": [
+          1.07,
+          1.06
+        ],
+        "pgo": [
+          0.88,
+          0.89
+        ]
+      },
+      "paired_reduction_percent": [
+        17.757009345794394,
+        16.03773584905661
+      ]
+    },
+    {
+      "benchmark": "519.lbm_r",
+      "mean_cpu_seconds": {
+        "baseline": 49.345,
+        "pgo": 42.325
+      },
+      "reduction_percent": 14.226365386563977,
+      "training_workload": true,
+      "samples_cpu_seconds": {
+        "baseline": [
+          53.87,
+          44.82
+        ],
+        "pgo": [
+          46.34,
+          38.31
+        ]
+      },
+      "paired_reduction_percent": [
+        13.978095414887681,
+        14.524765729584999
+      ]
+    },
+    {
+      "benchmark": "544.nab_r",
+      "mean_cpu_seconds": {
+        "baseline": 51.825,
+        "pgo": 41.375
+      },
+      "reduction_percent": 20.164013506994692,
+      "training_workload": true,
+      "samples_cpu_seconds": {
+        "baseline": [
+          51.85,
+          51.8
+        ],
+        "pgo": [
+          41.32,
+          41.43
+        ]
+      },
+      "paired_reduction_percent": [
+        20.30858244937319,
+        20.019305019305012
+      ]
+    }
+  ],
+  "schema_version": 1,
+  "source": "81246125dcf06bf057b9fca9fb5e850dddce0f5b",
+  "builds": {
+    "baseline": {
+      "path": "/tmp/capstone/qemu-code-probe-01/qemu-clean",
+      "sha256": "c5d7588a9bfda4108b92d18ead08d99be9f2436722748ff72b5a23ed36e9d7f4"
+    },
+    "pgo": {
+      "path": "/tmp/capstone/qemu-pgo-use-01/qemu-clean",
+      "sha256": "73662370ea68246837f728794d5b5b7fc2cc767cd4fe376dd29b4d07263bc022"
+    }
+  },
+  "limitations": [
+    "Two samples per build per workload; roughly one-second cases have limited timing resolution",
+    "LBM varies substantially in absolute time, with similar relative reductions in both neighboring pairs; cause not isolated",
+    "LBM and NAB were training workloads; ImageMagick and both specrand workloads were not",
+    "Host emulator time only; not guest cycles, a SPEC score, or a fresh official comparator execution",
+    "Full ten-entry qualification of the PGO build remains pending"
+  ],
+  "archive": {
+    "path": "/tmp/capstone/qemu-pgo-short-programs-01-evidence.tar.gz",
+    "sha256": "292d155a808695e53b0698851fb69c6c5e5de23d91a5469d9a30ef185c3bc733"
+  }
+}

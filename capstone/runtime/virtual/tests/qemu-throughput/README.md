@@ -49,6 +49,25 @@ user-mode instructions and 14.93% fewer branches; branch misses increase
 1.26%. The emitted helpers inline more common access-check and tag work.
 These are host compiler effects, not removed checks or a hardware speedup.
 
+The [other short-program comparison](pgo-short-programs.json) uses two samples
+per build, ordered baseline/PGO/PGO/baseline, on CPU2 with icount0. All 20 runs
+pass qualified output comparisons and applicable guest validators. Mean host
+CPU seconds for one workload invocation, excluding boot and validation:
+
+| Program | Previous Clang/LTO | PGO | CPU reduction |
+| --- | ---: | ---: | ---: |
+| ImageMagick | 1.245 | 1.165 | 6.4% |
+| specrand floating-point | 1.070 | 0.895 | 16.4% |
+| specrand integer | 1.065 | 0.885 | 16.9% |
+| LBM | 49.345 | 42.325 | 14.2% |
+| NAB | 51.825 | 41.375 | 20.2% |
+
+LBM and NAB contributed to training; the other three did not. The roughly
+one-second cases have limited timing resolution. LBM absolute times vary
+(baseline 44.82–53.87s, PGO 38.31–46.34s), but both neighboring pairs improve
+about 14%; the variation's cause is not isolated. These are short comparisons,
+not a SPEC score or a substitute for full-suite qualification.
+
 This is a separate build candidate, not a replacement for the full-suite
 qualified build above. Its qualification record distinguishes bounded checks
 and short workloads from the remaining full ten-entry rerun.
