@@ -14,9 +14,14 @@ No further source change is needed to use this result. Keep no-icount optional
 and separate from instruction-counted measurements. Concurrent private snapshot
 domains shorten functional qualification; use the global exclusive lock for
 host timing. Further tuning should start with a fresh profile and a separate
-candidate: the remaining x264 sample has 61.5% unattributed JIT cost, with cursor
-updates and tag/store helpers among the named costs. Do not extrapolate that
-single diagnostic sample to an expected speedup. Native RTL handoff stays fixed.
+candidate. The [fresh GCC breakdown](../../runtime/virtual/tests/qemu-throughput/gcc-overhead-breakdown.json)
+finds 1.656 times the guest instruction attempts and a normalized 5.830 times
+host cost per guest instruction; about 70% of extra guest attempts are in Linux.
+The current host profile highlights capability loads/stores and scalar-store
+hooks, with 35.25% in translated guest code (including inline checks). These
+shares do not predict removable overhead. Further work can address emulator
+load/store costs and guest memory-management amplification separately.
+Native RTL handoff stays fixed.
 
 ## RTL implementation from the rebased native branch
 

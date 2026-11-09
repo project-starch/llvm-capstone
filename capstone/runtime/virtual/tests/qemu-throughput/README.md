@@ -67,6 +67,49 @@ The platform controls deliberately expose different discovery and kernel paths.
 The native application has different compiler/libc/ABI provenance. Their wall-time
 ratio cannot be labeled emulator-only overhead or predicted hardware slowdown.
 
+## Why Capstone GCC still takes 9.65 times the host CPU
+
+The [fresh overhead breakdown](gcc-overhead-breakdown.json) separates guest
+instruction attempts from host emulator cost. On the current guest kernel,
+two plain and two Capstone invocations give these means:
+
+| Guest work | Plain | Capstone |
+| --- | ---: | ---: |
+| Program instruction attempts | 18.088 million | 23.947 million |
+| Kernel instruction attempts | 12.090 million | 26.017 million |
+| Total, including small other category | 30.182 million | 49.975 million |
+
+That is 1.656 times the guest work. Dividing the clean 9.653 host-time ratio by
+this gives a normalized 5.830 times host cost per guest instruction. This is
+an explanatory normalization, not an independent causal experiment: the counter
+runs use the frozen plugin-capable diagnostic emulator and individual profrun
+invocations; clean timings use the optimized build and warmed batches. Guest
+kernel, rootfs and application identities match. Counts are attempts, not
+hardware cycles. About 70.36% of the extra guest attempts are in Linux, with
+memory clearing, mapping lookup, page allocation/release and domain fault work
+among the increases. Earlier mapping traces also found larger pointer-bearing
+allocations and more mapping requests; the whole difference cannot be assigned
+to pointer width alone.
+
+Fresh host profiles on the final optimized binary validate 100 Capstone and
+1,000 plain GCC outputs plus a warm-up each, with zero lost samples
+(10,904 and 10,900 samples). In the Capstone profile, disjoint self-cost groups
+are 35.25% translated guest code, 10.60% capability load/store helpers, 8.73%
+capability representation/moves, 7.74% tag-map and lifetime/access functions,
+9.30% block dispatch, and 28.39% other QEMU/host work. The last group includes
+scalar-store hooks, memory translation and checks not classified separately.
+Inlining places some checks/tag work inside enclosing helpers or JIT blocks;
+these shares are not complete semantic costs or predicted removable overhead.
+The largest named symbols include capability load (4.37%), STC write (3.41%)
+and scalar-store hook (3.10%).
+
+Plain instructions often execute as short translated host sequences. Capstone
+operations also implement bounds/representation rules, lifetime validation,
+tag lookup and synchronization in software, including checks within translated
+blocks. This amplifies host cost on top of the additional guest Linux work.
+It does not predict a 9.65-times hardware slowdown. Profiled elapsed times are
+excluded from the clean ratios above.
+
 ## Build the qualified candidate
 
 The qualified runtime source is QEMU `81246125dcf06bf057b9fca9fb5e850dddce0f5b`.
