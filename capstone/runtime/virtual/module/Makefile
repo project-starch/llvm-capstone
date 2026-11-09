@@ -25,4 +25,10 @@ endif
 ifdef CV_FLAT_INDEX_BITS
 ccflags-y += -DCAPSTONE_VM_FLAT_TABLE=1 -DCAPSTONE_VM_INDEX_BITS=$(CV_FLAT_INDEX_BITS)
 endif
+# make CV_FLAT_INDEX_BITS=25 CV_IDS=55 (MEASUREMENT ONLY): option B's 55-bit lifetime id (capstone-ariane rtl-ids55,
+# {generation[54:25], slot[24:0]}), flat wide records. Needs the ids-55 cap_rev_table_abi.h (CAP_REV_WIDE_*) beside the
+# module: stage it from a capstone-qemu tree that has x-capstone-ids=55 (CAPSTONE_QEMU_SOURCE).
+ifdef CV_IDS
+ccflags-y += -DCAPSTONE_VM_IDS=$(CV_IDS)
+endif
 ccflags-y += -I$(src)
