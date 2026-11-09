@@ -249,3 +249,22 @@ tagged events at K ≤ 16. Its positive control reads exactly.
   K ≤ 64 for that benchmark's exact exe at that size. Otherwise only a fixed variant (V1f, V2f, V3f) is eligible.
   With no fixed variant sealed and gated, the benchmark falls through to option A or C.5a as in Addendum 10.
 - The native route's firmware needs the fence (capstone-sbi 4f51541) on unfixed variants only. It is correct on both.
+
+## Addendum 12 (9 Nov 17:0x, before it runs): quick test-size runs tonight decide native vs the kernel module
+
+The collaborator asked for a decision tonight between the native Linux-task integration and the kernel-module route,
+from quick test-size board runs, before the Capstone train is committed. Running stages are not stopped. Board 2,
+after its Capstone nab (about 18:00), runs one session on e5-native (caplifive_e5native_14b0a57df, option A, sealed):
+1. its 32-image gate (perf/e5ngate/e5n-gate.sh 2);
+2. native: smoke, then imagick, nab and lbm at test size (native lane's qt stages, the same lifetimes exes as below);
+3. module route on the same bitstream: kit bkit39-e5n-unify (bkit39-e5c-unify with only BOARD_BITSTREAM changed,
+   fresh SHA256SUMS; driver perf/train/un-run-e5n.sh), stages stages-eval-b1/{538.imagick_r,544.nab_r,519.lbm_r}-test-devmk
+   (lifetimes exes 8ecf59b59b9bc166, 092ff45c0c519283, f0269eea1b555bd9).
+Then board 2's chain continues.
+- **Reading:** per benchmark, native / module run time on the same board and bitstream, plus each one's ratio to Plain
+  with the cache (imagick 19.46 s, nab 862.99 s, lbm 1,895.0 s).
+- **Prediction:** native ≤ module on every benchmark. The gain is largest where exits dominate: nab and imagick's
+  outside time. lbm is near 1.00.
+- **Decision rule:** native takes the remaining Capstone train if it is faster or equal on at least 2 of the 3, and
+  slower on none by more than 2 %. Otherwise the module route does. Plain then keeps one board, and the chosen route gets
+  two, by a further addendum that also covers the queue change.
