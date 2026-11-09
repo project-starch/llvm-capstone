@@ -60,3 +60,24 @@ test-size board runs. The order is gcc, imagick, nab, lbm. Written before any bo
    lbm 1,811.0 s, the best Capstone test runs on C.5a (results/2026-11-07-plainreuse); gcc test is about 26 s.
    Native runs on e5-native, a different bitstream. Its ratio to Plain uses the same Plain-with-cache test
    denominators.
+
+## Addendum 1 (before any board run): imagick, nab and lbm are unstripped, as the module route's exes are
+
+I compared the module stages' exes with tree-boarddevmk's built exes:
+- nab 092ff45c, lbm f0269eea, imagick f50dc465 and xz 0d8878ad equal the tree's UNSTRIPPED exes byte for byte;
+- only gcc's stage exe (d5916419) is the stripped one.
+
+So the native stages now carry the same treatment:
+- imagick, nab and lbm unstripped, which are exactly the exes their twins ran;
+- gcc stripped. Its twin ran the unstripped build of the same link.
+
+The table above is superseded by:
+
+| stage | SHA256SUMS sha256 | native exe(s) sha256 (first 16) |
+|---|---|---|
+| qt-gcc | b3bcbdc6ccea0ec1 | cpugcc_r df93c433bb1a5418 (stripped) |
+| qt-imagick | f2502b6fcbdaf58b | imagevalidate_538 6e5613cc944bb95d, imagick_r f008168e93193db3 |
+| qt-nab | 6669b525e9513708 | nab_r 3007ce4c2240055b |
+| qt-lbm | 410af1b21f3049b3 | lbm_r ed43d5cc37d18396 |
+
+Twin20 smokes, all four: rc 0, specdiff 1/1, adopt_kind_refused 0 (imagick 2/2 commands).
