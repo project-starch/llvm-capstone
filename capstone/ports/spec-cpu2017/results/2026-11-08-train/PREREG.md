@@ -301,3 +301,20 @@ board 2 the train needs. Order on board 2 after Capstone nab:
 - **Decision:** Addendum 12's native-vs-module rule, read on V1f. The bitstream for the Temporal train is V1f (option B),
   unless its quick tests fail T0, when the fallback session's e5-native readings decide.
 - Addendum 13's A-vs-B comparison stays open. A V1f-vs-e5-native pair can be run after the deadline.
+
+## Addendum 15 (9 Nov 19:3x, before any of it runs): a chain defect for non-vp2c bitstreams fixed; lifetimes-only module stages
+
+**Defect, found by a deeper dry run.** perf/b3/board/spec-board.sh checks the kit with
+`BOARD_BITSTREAM=caplifive_vp2c_<SB_BITSTREAM>`. Every bitstream sealed since stage B is named caplifive_<name> (E5c,
+e5-native, the ids55 seals). So every module-route stage on them would have stopped with "is not the perf kit"
+before the board: the quick tests on V1f and e5-native, and board 3's E5c perlbench fallback (Addendum 6). The earlier dry
+runs stubbed the chain (GT_CHAIN=echo) and could not see it. Fix: a copy, perf/b3/board-x, whose kit check also accepts
+`caplifive_<SB_BITSTREAM>`. The original stays as it is, because running chains read it. Controls: the four V1f stages
+and an e5-native stage pass; a wrong name (e5nids55_b91439bf7 against V1f's kit) still STOPs. A deep dry run (driver →
+chain → runner, only the board calls stubbed) reaches SB END rc=0 on all four.
+**Module stages cut to the lifetimes arm** (spec/stages-qt, perf/train/cut-lifetimes.py: the spatial arm block removed,
+every substitution counted, exes re-hashed). The native qt stages are lifetimes-only, and the two-arm module stages
+would have cost about an hour more. The lifetimes block of each run.sh is byte-identical to its source. Exes: imagick
+f50dc465183e4f1f + imagevalidate 8ecf59b59b9bc166 (Addendum 12 named the imagevalidate hash as imagick's; corrected
+here), nab 092ff45c0c519283, lbm f0269eea1b555bd9. gcc's stage was already lifetimes-only.
+Board 2's waiting sessions are relaunched with GT_CHAIN on board-x; no step had started.
