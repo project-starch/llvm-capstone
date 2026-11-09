@@ -1,0 +1,490 @@
+{
+  "schema_version": 1,
+  "status": "PASS",
+  "scope": "GCC SPEC test t1.c, existing native paged-table Linux image. Guest instruction attempts, not host time or RTL cycles.",
+  "inputs": {
+    "kernel": {
+      "path": "/tmp/capstone/qemu-throughput-01/images/Image",
+      "sha256": "b7de27fb28bc0807053ae3e1c4bcd058e79f601d255a0dcaaa6ce70d46a3815f"
+    },
+    "system_map": {
+      "path": "/tmp/capstone/native-task/rebase-01/evidence/images/System.map",
+      "sha256": "95b56bad36659c32d9f6f1a2af82f1dec211c27428b5f65f5ee4499472dea509"
+    },
+    "qemu": {
+      "path": "/tmp/capstone/native-task/final-local-platform/qemu-system-riscv64",
+      "sha256": "c6681ec8a8ff704b297ec3eafceb13b2fe9c1c61c7a65ed95304bd5dbe5183eb"
+    },
+    "phase_plugin": {
+      "path": "/tmp/capstone/native-task/gcc-attribution-01/evidence/libcapprof-phases.so",
+      "sha256": "b42832d44980e01ae4e758e0a754d54c0cda759e7846fc9d6647d3a5b271bf32"
+    },
+    "growth_plugin": {
+      "path": "/tmp/capstone/table-growth-01/growth.so",
+      "sha256": "5ee9d1abd97cfe59bd05722fd666f955e0ed1f2c765effa934cb2704566c729e"
+    },
+    "growth_plugin_source": {
+      "path": "/tmp/capstone/table-growth-01/growth.c",
+      "sha256": "e22ae45e01e873d6a61a8fa7795c66af29d7b8b63825d62f86e6d0090546e50e"
+    },
+    "gcc": {
+      "path": "/tmp/capstone/table-growth-01/baseline/stage/gcc.bin",
+      "sha256": "a1509c81444586031c74c5752f72ec90dc6c7ab57635fff37ffa431c11663a9f"
+    }
+  },
+  "sites": {
+    "ensure_nodes": {
+      "start": 18446744071566475998,
+      "end": 18446744071566476576,
+      "returns": [
+        18446744071566476288
+      ]
+    },
+    "node_add_page": {
+      "start": 18446744071566456874,
+      "end": 18446744071566457142,
+      "returns": [
+        18446744071566457086
+      ]
+    },
+    "get_zeroed_page": {
+      "start": 18446744071563277692,
+      "end": 18446744071563277770,
+      "returns": [
+        18446744071563277758,
+        18446744071563277768
+      ]
+    },
+    "collect": {
+      "start": 18446744071566475200,
+      "end": 18446744071566475998,
+      "returns": [
+        18446744071566475490
+      ]
+    }
+  },
+  "runs": {
+    "baseline": {
+      "verdict": {
+        "status": "PASS",
+        "exact_output": true,
+        "negative": false,
+        "detector_valid": true,
+        "summary": [
+          "summary",
+          "381",
+          "36",
+          "18950",
+          "42514",
+          "0",
+          "0",
+          "0"
+        ]
+      },
+      "total_attempts": 49974058,
+      "phases": [
+        {
+          "phase": "startup_and_initialization",
+          "total_attempts": 21077856,
+          "entry_attempts": {
+            "ensure_nodes": 99,
+            "node_add_page": 20,
+            "get_zeroed_page": 24,
+            "collect": 0
+          }
+        },
+        {
+          "phase": "compilation_and_output",
+          "total_attempts": 22057788,
+          "entry_attempts": {
+            "ensure_nodes": 282,
+            "node_add_page": 16,
+            "get_zeroed_page": 16,
+            "collect": 0
+          }
+        },
+        {
+          "phase": "finalization_and_exit",
+          "total_attempts": 6838414,
+          "entry_attempts": {
+            "ensure_nodes": 0,
+            "node_add_page": 0,
+            "get_zeroed_page": 0,
+            "collect": 0
+          }
+        }
+      ],
+      "growths": [
+        {
+          "sequence": 37,
+          "record_pages_added": 16,
+          "inclusive_attempts": 21257,
+          "zeroed_pages": 16,
+          "collections": 0
+        },
+        {
+          "sequence": 337,
+          "record_pages_added": 16,
+          "inclusive_attempts": 21257,
+          "zeroed_pages": 16,
+          "collections": 0
+        }
+      ],
+      "ensure_calls": 381,
+      "fast_ensure_attempts": 18950,
+      "page_call_attempts": 49874,
+      "initial_page_call_attempts": 7762,
+      "zeroed_pages_in_page_calls": 38
+    },
+    "repeat": {
+      "verdict": {
+        "status": "PASS",
+        "exact_output": true,
+        "negative": false,
+        "detector_valid": true,
+        "summary": [
+          "summary",
+          "381",
+          "36",
+          "18950",
+          "42514",
+          "0",
+          "0",
+          "0"
+        ]
+      },
+      "total_attempts": 49973284,
+      "phases": [
+        {
+          "phase": "startup_and_initialization",
+          "total_attempts": 21075091,
+          "entry_attempts": {
+            "ensure_nodes": 99,
+            "node_add_page": 20,
+            "get_zeroed_page": 24,
+            "collect": 0
+          }
+        },
+        {
+          "phase": "compilation_and_output",
+          "total_attempts": 22063142,
+          "entry_attempts": {
+            "ensure_nodes": 282,
+            "node_add_page": 16,
+            "get_zeroed_page": 16,
+            "collect": 0
+          }
+        },
+        {
+          "phase": "finalization_and_exit",
+          "total_attempts": 6835051,
+          "entry_attempts": {
+            "ensure_nodes": 0,
+            "node_add_page": 0,
+            "get_zeroed_page": 0,
+            "collect": 0
+          }
+        }
+      ],
+      "growths": [
+        {
+          "sequence": 37,
+          "record_pages_added": 16,
+          "inclusive_attempts": 21257,
+          "zeroed_pages": 16,
+          "collections": 0
+        },
+        {
+          "sequence": 337,
+          "record_pages_added": 16,
+          "inclusive_attempts": 21257,
+          "zeroed_pages": 16,
+          "collections": 0
+        }
+      ],
+      "ensure_calls": 381,
+      "fast_ensure_attempts": 18950,
+      "page_call_attempts": 49874,
+      "initial_page_call_attempts": 7762,
+      "zeroed_pages_in_page_calls": 38
+    },
+    "preallocated": {
+      "verdict": {
+        "status": "PASS",
+        "exact_output": true,
+        "negative": false,
+        "detector_valid": true,
+        "summary": [
+          "summary",
+          "379",
+          "36",
+          "18950",
+          "0",
+          "0",
+          "0",
+          "0"
+        ]
+      },
+      "total_attempts": 49971565,
+      "phases": [
+        {
+          "phase": "startup_and_initialization",
+          "total_attempts": 21096593,
+          "entry_attempts": {
+            "ensure_nodes": 98,
+            "node_add_page": 36,
+            "get_zeroed_page": 40,
+            "collect": 0
+          }
+        },
+        {
+          "phase": "compilation_and_output",
+          "total_attempts": 22039119,
+          "entry_attempts": {
+            "ensure_nodes": 281,
+            "node_add_page": 0,
+            "get_zeroed_page": 0,
+            "collect": 0
+          }
+        },
+        {
+          "phase": "finalization_and_exit",
+          "total_attempts": 6835853,
+          "entry_attempts": {
+            "ensure_nodes": 0,
+            "node_add_page": 0,
+            "get_zeroed_page": 0,
+            "collect": 0
+          }
+        }
+      ],
+      "growths": [],
+      "ensure_calls": 379,
+      "fast_ensure_attempts": 18950,
+      "page_call_attempts": 49874,
+      "initial_page_call_attempts": 49874,
+      "zeroed_pages_in_page_calls": 38
+    },
+    "preallocated-repeat": {
+      "verdict": {
+        "status": "PASS",
+        "exact_output": true,
+        "negative": false,
+        "detector_valid": true,
+        "summary": [
+          "summary",
+          "379",
+          "36",
+          "18950",
+          "0",
+          "0",
+          "0",
+          "0"
+        ]
+      },
+      "total_attempts": 49969982,
+      "phases": [
+        {
+          "phase": "startup_and_initialization",
+          "total_attempts": 21095013,
+          "entry_attempts": {
+            "ensure_nodes": 98,
+            "node_add_page": 36,
+            "get_zeroed_page": 40,
+            "collect": 0
+          }
+        },
+        {
+          "phase": "compilation_and_output",
+          "total_attempts": 22039127,
+          "entry_attempts": {
+            "ensure_nodes": 281,
+            "node_add_page": 0,
+            "get_zeroed_page": 0,
+            "collect": 0
+          }
+        },
+        {
+          "phase": "finalization_and_exit",
+          "total_attempts": 6835842,
+          "entry_attempts": {
+            "ensure_nodes": 0,
+            "node_add_page": 0,
+            "get_zeroed_page": 0,
+            "collect": 0
+          }
+        }
+      ],
+      "growths": [],
+      "ensure_calls": 379,
+      "fast_ensure_attempts": 18950,
+      "page_call_attempts": 49874,
+      "initial_page_call_attempts": 49874,
+      "zeroed_pages_in_page_calls": 38
+    },
+    "negative": {
+      "verdict": {
+        "status": "PASS",
+        "exact_output": true,
+        "negative": true,
+        "detector_valid": false,
+        "summary": [
+          "summary",
+          "0",
+          "36",
+          "0",
+          "0",
+          "381",
+          "0",
+          "0"
+        ]
+      },
+      "total_attempts": 49976357,
+      "phases": [
+        {
+          "phase": "startup_and_initialization",
+          "total_attempts": 21076706,
+          "entry_attempts": {
+            "ensure_nodes": 99,
+            "node_add_page": 20,
+            "get_zeroed_page": 24,
+            "collect": 0
+          }
+        },
+        {
+          "phase": "compilation_and_output",
+          "total_attempts": 22061138,
+          "entry_attempts": {
+            "ensure_nodes": 282,
+            "node_add_page": 16,
+            "get_zeroed_page": 16,
+            "collect": 0
+          }
+        },
+        {
+          "phase": "finalization_and_exit",
+          "total_attempts": 6838513,
+          "entry_attempts": {
+            "ensure_nodes": 0,
+            "node_add_page": 0,
+            "get_zeroed_page": 0,
+            "collect": 0
+          }
+        }
+      ],
+      "growths": [],
+      "ensure_calls": 0,
+      "fast_ensure_attempts": 0,
+      "page_call_attempts": 49874,
+      "initial_page_call_attempts": 49874,
+      "zeroed_pages_in_page_calls": 38
+    }
+  },
+  "capacity_changes": [
+    {
+      "context": 18446743904073329152,
+      "required": 257,
+      "before": {
+        "address": 18446743904074481664,
+        "capacity": 1024,
+        "next": 768,
+        "free_count": 0,
+        "words": [
+          13835058055282164736,
+          768,
+          0,
+          766,
+          3622379821134532430,
+          160
+        ]
+      },
+      "after": {
+        "address": 18446743904074481664,
+        "capacity": 5120,
+        "next": 768,
+        "free_count": 0,
+        "words": [
+          13835058055282168832,
+          768,
+          0,
+          766,
+          3622379821134532430,
+          160
+        ]
+      },
+      "result": 0
+    },
+    {
+      "context": 18446743904073329152,
+      "required": 257,
+      "before": {
+        "address": 18446743904074481664,
+        "capacity": 5120,
+        "next": 4864,
+        "free_count": 0,
+        "words": [
+          13835058055282168832,
+          4864,
+          0,
+          4862,
+          3622379821134532430,
+          2724
+        ]
+      },
+      "after": {
+        "address": 18446743904074481664,
+        "capacity": 9216,
+        "next": 4864,
+        "free_count": 0,
+        "words": [
+          13835058055282172928,
+          4864,
+          0,
+          4862,
+          3622379821134532430,
+          2724
+        ]
+      },
+      "result": 0
+    }
+  ],
+  "summary": {
+    "initial_record_pages": 4,
+    "initial_slots": 1024,
+    "growth_steps": 2,
+    "record_pages_per_growth": 16,
+    "bytes_per_growth": 65536,
+    "slots_per_growth": 4096,
+    "final_slots": 9216,
+    "final_record_pages": 36,
+    "directory_pages": 2,
+    "root_pages": 1,
+    "final_table_bytes_including_root_and_directories": 159744,
+    "inclusive_guest_attempts_per_growth": 21257,
+    "combined_growth_attempts": 42514,
+    "growth_share_of_total_percent": 0.085072797633778,
+    "baseline_mean_attempts": 49973671,
+    "preallocated_mean_attempts": 49970773.5,
+    "preallocated_reduction_percent": 0.005798053138816872,
+    "page_add_attempts_both_variants": 49874
+  },
+  "method": [
+    "Unchanged frozen guest kernel and applications. Two default runs, two runs with only capstone_vm.node_initial_pages=36, and one negative detector run. All exact GCC outputs match.",
+    "Single-vCPU plugin counts every guest instruction attempt and brackets ensure_nodes and node_add_page at entry/return. This includes their callees and any intervening interrupt work. Both symbols and return instructions are resolved from the exact Image/System.map.",
+    "Existing independent phase plugin agrees on all function-entry counts and its phase totals sum to profrun total. Growth sequences and inclusive counts agree across repeats.",
+    "A separate GDB register/memory trace confirms table capacities, requested headroom and successful returns for both growths; breakpoint-run timing is not used.",
+    "Negative control disables the ensure_nodes entry marker: the detector reports 381 orphan returns and is rejected, while GCC output still matches."
+  ],
+  "limitations": [
+    "Inclusive handler counts exclude the triggering task transition/retry outside ensure_nodes; whole-run preallocation control includes these effects but also moves allocation work to startup.",
+    "The approximately 0.006 percent whole-run reduction is tiny and sensitive to short-run kernel variation; it is not an established elapsed-time speedup.",
+    "Initial node_add_page counts exclude allocating the root page and other task/context setup. Final table footprint adds the root separately.",
+    "Allocation and growth are not lifetime-table lookup, per-access validation, cache behavior, or a flat-versus-paged comparison.",
+    "Sites and context+32 table-pointer layout are tied to the recorded kernel. The diagnostic addresses must be regenerated/audited for another kernel.",
+    "No collection call occurred in these GCC runs; this result does not measure namespace-recycling cost."
+  ],
+  "archive": {
+    "path": "/tmp/capstone/table-growth-01-evidence.tar.gz",
+    "sha256": "9fd220d662aa6060a8ce3ad1ee357b280d2634c5ff1f3ca32dba5ff23b4fd68f"
+  }
+}

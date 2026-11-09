@@ -46,6 +46,21 @@ arm also uses the patched kernel. Earlier allocation traces establish wider
 pointer-bearing objects and greater mapping traffic; exact causal shares of
 layout, allocator policy and capability bookkeeping remain unisolated.
 
+The [paged lifetime-table growth measurement](gcc-table-growth.json) finds two
+growth events for GCC test input: 1,024 → 5,120 → 9,216 slots. Each adds sixteen
+separately allocated 4-KiB record pages and takes 21,257 inclusive guest
+instruction attempts in `ensure_nodes`, including allocation/zeroing callees.
+Both repeats agree. Together these handlers represent 0.085% of whole-run
+attempts. Initial allocation is separate; final table storage is 144 KiB of
+records plus 12 KiB of root/directories. No namespace collection occurs.
+
+Preallocating 36 record pages removes both growths but moves the same 49,874
+`node_add_page` inclusive attempts to startup. Whole-run attempts decline only
+about 0.006%, a tiny difference sensitive to short-run kernel variation. This
+does not establish a timing gain or measure per-access table lookup cost.
+All five counter runs and the separate GDB capacity trace match GCC output;
+a deliberately disabled entry marker is correctly rejected by the detector.
+
 ### Profile-guided host build candidate
 
 The [PGO experiment](pgo-qualification.json) uses the same `81246125dc`
