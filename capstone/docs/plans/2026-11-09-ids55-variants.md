@@ -164,3 +164,22 @@ younger plain load of doubleword 0 reads the stale tag and B projects it (sext39
 - LUTLP-1: the board lane runs it in flight on the post-synth AND post-opt checkpoints and stops on any count above 0;
   until the S-10b-tree control (eaa4e7984) shows whether such a loop is already visible post-synth, the post-synth 0
   is necessary, not sufficient, and post-opt is the stronger reading.
+
+**Addendum 2 (2026-11-09 ~15:50, after V1's in-flight gate and before any fixed-variant synthesis reading).**
+- V1's in-flight gate (board lane, apollo) FAIL-STOPPED on this lane's prediction key: post-synth core LUT +9,899 vs
+  e5-native, against +7,100 ±2,000. Loops 0, LUTLP-1 post-synth 0. The other readings beside their report-only
+  predictions: core FF +3,792 (+3,654 ±1,000), ex+issue +7,560 (+8,130 ±2,500), pmp_data_if FF +410 (~+389),
+  csr_regfile FF +532 (+400..+700). The excess sits in modules that redistribute between builds: dyn_unit +2,874
+  (+2,363 in _spawn_0), csr_buffer +2,081 (source unchanged, re-homed logic, cause UNRESOLVED), dom_switcher +1,093;
+  iro +3,731 against scoreboard -2,303. The prediction was low by ~2,800; its basis (B on bitstream 3, +6,962) had no
+  stage-B / native logic under it. The board lane relaunched V1 (e5nids55r, 15:43:54) stopping only on loops and LUTLP-1.
+- **Routing risk, restated with this reading.** On B's own bitstream-3 ratio (placed growth ~0.95 of post-synth growth)
+  V1 places near 168,933 + ~9,400 = ~178,300 LUT, essentially AT the vp3 build that failed to route (178,543,
+  2026-10-24). Pre-registered failure branch, unchanged: route_design fails -> no bitstream and no WNS; placed area from
+  post-phys_opt; the unfixed V2/V3 (and their fixed builds) are then the candidates, and what to cut for V1 is the
+  lead's decision.
+- **The fixed variants' area key, amended.** The board lane's TOP floor rose to ±2,500 (its retraction: a parent sums
+  its children, so one module's bistable can land whole at TOP). The key is core LUT 0 ±2,500 vs the unfixed parent's
+  post-synth report, GRADED POST HOC, never a stopper; the ±500 reading stays REPORT. This lane agrees with the board
+  lane's rule from here on: in-flight stoppers are loop headers, LUTLP-1 and area past routability; prediction bands
+  are graded after the run.
