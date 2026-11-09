@@ -188,3 +188,24 @@ had started a board step. Stages, exes, kits and drivers are unchanged; only the
 - Estimates: Plain complete about Tue 13:00; native perlbench and mcf end about Wed 04:00-05:00; all about Wed 11:00.
 - Cost, accepted: a native run that fails late leaves no time for its C.5a fallback before the deadline. That
   benchmark then reports its test-size number, marked as such (rule T0).
+
+## Addendum 9 (9 Nov 13:4x, before it runs): xz train command 1 (IMG_2560.cr2.xz) on both arms, so xz runs its full train input
+
+xz ran command 0 only because the full stage bakes to 42,633,736 B. The 26,000,000-byte cap is this project's own
+kit setting (BOARD_FW_CAP, preflight C10's declared-bake value), not a board limit. A board campaign plan records
+the console's upload limit as 32 MB (HTTP 413). Command 1 alone was estimated at 34,245,128 B
+(results/2026-10-28-board-test, "above every proven upload"), so this is also the first test of that limit.
+- **Stages** (spec/stages-train-fair, made by perf/train/make-xz-c1.py from each arm's c0 stage, the same selection
+  make-stage.py --commands makes; every substitution counted and asserted): 557.xz_r-train-capstone-lifetimes-link-c1-devmk
+  (exe 0d8878ad8a5046df) and 557.xz_r-train-plain-rv64-link-c1r (exe 27d9c10dc11946b6). Input IMG_2560.cr2.xz
+  (sha256 6e17c28f…). One command, one host specdiff. Apart from the argv and file names, run.sh is the c0 stage's.
+- **Kits:** bkit25-nset-fw36 and bkit27-gtq-fw36 are copies of bkit25-nset and bkit27-gtq with BOARD_FW_CAP 36,000,000
+  and fresh SHA256SUMS. The originals are untouched. Drivers gt-run-nset-fw36.sh and gt-run-ga2-fw36.sh check the
+  copies.
+- **QEMU twin** (census-train, lifetimes, 936M): command 1 runs 50.97 G instructions (command 0: 112.65 G), peak
+  142,631 pages. Estimates: Capstone ~2.6 h, Plain ~2.2 h.
+- **Order:** Plain c1 on board 2 after its Plain xz c0, before the native mcf; Capstone c1 on board 3 after native
+  perlbench. Both deadlines keep the end before Wed ~14:00.
+- **Predictions:** X0: rc 0 and specdiff PASS on both arms. X1: firmware 33-35 MB. X2: if the upload is refused (HTTP
+  413), the stage reads NO DATA. Each arm costs one boot, and xz reports command 0 alone, as now. X3: xz's full train
+  time is the sum of the two commands' run seconds per arm, and its ratio lies within ±0.10 of command 0's.
