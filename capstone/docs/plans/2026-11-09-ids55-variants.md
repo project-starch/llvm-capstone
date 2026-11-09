@@ -245,3 +245,22 @@ hashes, and every copied unit set equals a from-source regeneration at the same 
 - V2 35928968c gate: core 151,925 (prediction 151,950), LUTLP-1 0. V3 026e6b3bd gate: core 151,822, LUTLP-1 0.
   V2f c95525476 gate: core 152,220 (V2 +295), LUTLP-1 0 post-synth and post-opt. ex+issue rows outside their bands
   were ruled report-only (the totals land on prediction).
+- **V1f's sweep (18:26): RVFI traces identical to V1's on all 92**, as predicted; V1f's last functional gate. Its board
+  gate (perf/v1fgate/v1f-gate.sh, dry-run on every branch and against the real store) is armed by the runtime lane on
+  board 2 after the e5-native quick tests.
+- V2 35928968c SEALED (synth): sha256 afcdb31ee691db0f2446b1edd2710ee3700969ddc1eb306ab6ca4af99eb3296d; every key PASS
+  except routed WNS -17.301, outside its -12.723 ±3.74 band by 0.84 ns by letter: ruled reported and non-gating (the
+  user's 2026-11-04 decision; the lead's bitstream-4 ruling; inside the ~6.5 ns per-path null), carried to the lead.
+- V3 026e6b3bd SEALED (synth): sha256 aaffcfd3d5150e4b54c35763f767dd56a956f9e1061e8efba4f4529e4fff1b04; every key PASS;
+  WNS -10.449; placed 176,090.
+- V2f c95525476 SEALED (synth): sha256 1c2d4e9143247ab5ec620cc84a3aa25d960abaa60286397c3bd9575ce19e01d7; LUTLP-1 0 at
+  synth, opt (control fires post-opt too: S-10b after opt_design reads 1 / 31) and routed; WNS -12.129.
+- **RETRACTION (this lane's estimate, 2026-11-09):** V3 was predicted ~0.8k ABOVE V1 (~178.5-179.5k placed), inferred
+  from C.5a's seal being +776 / +805 above e5-native's. It placed 176,090, 3.7k BELOW V1f, and its post-synth core is
+  2.7k below V1's. An inference smaller than the ±2,500 floor carries no information; it should have been stated as
+  "indistinguishable from V1".
+- Functional, fixed hedges: V2f and V3f each read B's 46 arms exactly; V2f's native arms = E5c's. Vectors: V2f = E5c's on
+  all 32, V3f = C.5a's sims on all 32 (perf/v2fgate, perf/v3fgate, shas 4c1cba25... / de7e0067...). Cycles: V2f vs E5c
+  delta 0 on 32 of 32; V3f vs C.5a delta 0 on the 18 images whose C.5a commit traces exist (the other 14 by vector
+  only). V3f's grader passes C.5a's own silicon run and fails the stage-B-timing control.
+- Still running at this writing: V1s and V3f synthesis (leffe2); V2 / V3 unfixed arms and vectors; V1s's images.
