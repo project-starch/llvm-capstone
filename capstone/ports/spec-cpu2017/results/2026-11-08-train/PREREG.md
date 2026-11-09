@@ -372,3 +372,17 @@ not be seen.
 
 The native-vs-module reading (Addendum 12's rule on V1f) moves to about 12-18 h from now. Meanwhile the Temporal train
 goes on with the kits already queued; no queued stage depends on this reading.
+
+## Addendum 18 (10 Nov 02:1x, the user's decision): board 2's Plain imagick stopped 11 minutes into its run; the native quick tests go first
+
+The user decided this: a run that started recently may be stopped, and the next priority is which bitstream is optimal.
+- **Stopped.** Board 2's Plain 538.imagick_r train, which began at 01:59:03 (step budget 90,000 s). It is stopped as one
+  process group, the chain, driver and runner together. Its output directory is set aside as
+  out-train4-b2-plain.aborted-1110, and no reading from it is used.
+- **New order on board 2:**
+  1. qt-native-rerun2.sh (Addendum 17): V1f flash and 32-image gate, then the native quick tests.
+  2. Plain (train-board4.sh, the same two lists, from the start).
+  3. nat-board.sh (native mcf train).
+- **Cost.** Board 2's Plain ends about 1.5-2 h later, around Tue 23:30-24:00, against the Wed 20:00 deadline.
+- **Next, if native wins on V1f.** The A-vs-B question for native (e5-native against V1f, Addendum 13) is the next
+  candidate for a gap. It is not queued here.
