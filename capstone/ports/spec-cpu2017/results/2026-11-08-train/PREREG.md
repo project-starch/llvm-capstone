@@ -386,3 +386,36 @@ The user decided this: a run that started recently may be stopped, and the next 
 - **Cost.** Board 2's Plain ends about 1.5-2 h later, around Tue 23:30-24:00, against the Wed 20:00 deadline.
 - **Next, if native wins on V1f.** The A-vs-B question for native (e5-native against V1f, Addendum 13) is the next
   candidate for a gap. It is not queued here.
+
+## Addendum 19 (10 Nov 04:1x): native on V1f, first readings; nab was cut by the runner's silence limit; the kits fixed; imagick + nab + lbm again
+
+**Readings (board 2, V1f, gate PASS 32/32 at 03:12, run-b2-qt2):**
+
+| Test | Native wall (s) | Module wall (s) | Module in-VM (s) |
+|---|---|---|---|
+| gcc | 20.2 | 130.7 | 25.4 |
+| imagick run | 20.6 | 60.7 | 23.0 |
+| imagick validation | 11.2 | 21.1 | — |
+
+- gcc's .s output is byte-identical between native and module. imagick's validation ended rc 0 on both.
+- Module wall minus in-VM time grows with the executable's size, at about 7 s per MB: gcc 14.8 MB → 105 s, imagick
+  5.2 MB → 38 s, nab 0.72 MB → 6 s, lbm 0.26 MB → 3 s. Its cause is not established. A whole-image hash at exit is
+  the leading guess, because the unify kit's launcher prints `exit image=... sha256=...`. For nab and lbm it is under 1 %.
+**Defect.** The runner stopped nab after 200 s of console silence (BAKED_IDLE_S=200 in the native kits' board-run.sh)
+and recorded the vbatch rung as "wedged". The core was live: the debug apertures changed between reads. A native SPEC
+stage prints nothing while a benchmark runs, so every native train (mcf and perl, queued on boards 2 and 3) would have
+been cut the same way and fallen back to C.5a.
+**Fix.** In the nine native kits in use, a stage with spec.sh gets BAKED_IDLE_S = the stage budget; the smoke keeps 200 s.
+board-run.sh 311e827b230ec428 → adddd44ac0ddc01b, SHA256SUMS updated. bkit36-native64-min carries its own board-run.sh
+and is not used; it is unchanged.
+**Re-run (the user's rule: a run that started recently may be stopped).** Board 2's Plain imagick, started 04:04, is
+stopped again; its directory is set aside as out-train4-b2-plain.aborted-1110b and its hub booking is released by id.
+perf/train/qt-native-rerun3.sh then runs:
+1. A V1f reflash only: sealed sha256 checked locally, flash, name read back. The gate is not repeated; it passed twice
+   today on this board.
+2. nt-run on qt-inl, the same imagick + nab + lbm stage, with the 03:12 gate log.
+3. Plain and nat-board relaunched behind it, with the same arguments.
+
+The dry run reaches DONE.
+**Reading.** Addendum 12's rule on V1f: wall time per benchmark, native / module, over imagick, nab and lbm. The in-VM
+column is reported beside it.
