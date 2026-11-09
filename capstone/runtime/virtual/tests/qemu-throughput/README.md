@@ -32,6 +32,20 @@ kernel paths from the common-machine controls.
 
 Earlier cohorts below are retained with their own source/build identities.
 
+The [guest instruction reanalysis](gcc-extra-instructions.json) separates
+additional guest work from emulator overhead. Plain/native means are 18.09/23.95
+million program attempts and 12.09/26.02 million kernel attempts. In these
+whole-run traces, page-allocation entry attempts rise from 918 to 2,177 and
+page-fault-handler entries from 1,114 to 2,282. GCC's `ggc_alloc_stat` retains
+12,129 recorded entries but grows from 1.127 to 1.558 million self attempts;
+the same operation can therefore cost more even without more entries. These
+counts do not isolate code generation from changed object sizes or branch paths.
+“Native” denotes Linux task admission and built-in capability-aware runtime
+paths, not the stock RISC-V ABI or hardware execution outside QEMU. The plain
+arm also uses the patched kernel. Earlier allocation traces establish wider
+pointer-bearing objects and greater mapping traffic; exact causal shares of
+layout, allocator policy and capability bookkeeping remain unisolated.
+
 ### Profile-guided host build candidate
 
 The [PGO experiment](pgo-qualification.json) uses the same `81246125dc`

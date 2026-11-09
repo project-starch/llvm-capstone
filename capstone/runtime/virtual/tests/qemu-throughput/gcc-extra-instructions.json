@@ -1,0 +1,445 @@
+{
+  "schema_version": 1,
+  "status": "PASS reanalysis of existing matched four-run guest traces; no new execution",
+  "guest_means": {
+    "plain": {
+      "total": 30182240,
+      "kernel": 12089733,
+      "program": 18087885,
+      "other": 4622
+    },
+    "native": {
+      "total": 49974809.5,
+      "kernel": 26016686.5,
+      "program": 23946835,
+      "other": 11288
+    }
+  },
+  "selected_symbols": {
+    "program:ggc_alloc_stat": {
+      "plain": {
+        "attempts": 1127181.0,
+        "entry_attempts": 12129.0
+      },
+      "native": {
+        "attempts": 1557796.0,
+        "entry_attempts": 12129.0
+      }
+    },
+    "program:recog_32": {
+      "plain": {
+        "attempts": 669653.0,
+        "entry_attempts": 3759.0
+      },
+      "native": {
+        "attempts": 824183.0,
+        "entry_attempts": 3759.0
+      }
+    },
+    "program:memcpy": {
+      "plain": {
+        "attempts": 489052.0,
+        "entry_attempts": 8068.0
+      },
+      "native": {
+        "attempts": 683061.0,
+        "entry_attempts": 11380.0
+      }
+    },
+    "program:memset": {
+      "plain": {
+        "attempts": 558583.0,
+        "entry_attempts": 7349.0
+      },
+      "native": {
+        "attempts": 741121.0,
+        "entry_attempts": 10030.0
+      }
+    },
+    "program:__libc_free": {
+      "plain": {
+        "attempts": 173061.0,
+        "entry_attempts": 2644.0
+      },
+      "native": {
+        "attempts": 357619.0,
+        "entry_attempts": 2759.0
+      }
+    },
+    "kernel:do_mmap": {
+      "plain": {
+        "attempts": 22589.0,
+        "entry_attempts": 180.0
+      },
+      "native": {
+        "attempts": 47663.0,
+        "entry_attempts": 381.0
+      }
+    },
+    "kernel:__handle_mm_fault": {
+      "plain": {
+        "attempts": 243808.0,
+        "entry_attempts": 1114.0
+      },
+      "native": {
+        "attempts": 517907.0,
+        "entry_attempts": 2282.0
+      }
+    },
+    "kernel:arch_free_page": {
+      "plain": {
+        "attempts": 44016.0,
+        "entry_attempts": 917.0
+      },
+      "native": {
+        "attempts": 597398.0,
+        "entry_attempts": 2171.0
+      }
+    },
+    "kernel:__alloc_pages": {
+      "plain": {
+        "attempts": 122035.0,
+        "entry_attempts": 918.0
+      },
+      "native": {
+        "attempts": 289376.0,
+        "entry_attempts": 2177.0
+      }
+    }
+  },
+  "largest_self_deltas": {
+    "program": [
+      {
+        "symbol": "program:__malloc_alloc",
+        "plain": 0,
+        "native": 477007.0,
+        "extra": 477007.0
+      },
+      {
+        "symbol": "program:ggc_alloc_stat",
+        "plain": 1127181.0,
+        "native": 1557796.0,
+        "extra": 430615.0
+      },
+      {
+        "symbol": "program:__capstone_cap_init",
+        "plain": 0,
+        "native": 289206.0,
+        "extra": 289206.0
+      },
+      {
+        "symbol": "program:memcpy",
+        "plain": 489052.0,
+        "native": 683061.0,
+        "extra": 194009.0
+      },
+      {
+        "symbol": "program:__libc_free",
+        "plain": 173061.0,
+        "native": 357619.0,
+        "extra": 184558.0
+      },
+      {
+        "symbol": "program:memset",
+        "plain": 558583.0,
+        "native": 741121.0,
+        "extra": 182538.0
+      },
+      {
+        "symbol": "program:__malloc_allzerop",
+        "plain": 75937.0,
+        "native": 238112.0,
+        "extra": 162175.0
+      },
+      {
+        "symbol": "program:__heap_mapping",
+        "plain": 0,
+        "native": 156531.0,
+        "extra": 156531.0
+      },
+      {
+        "symbol": "program:recog_32",
+        "plain": 669653.0,
+        "native": 824183.0,
+        "extra": 154530.0
+      },
+      {
+        "symbol": "program:printf_core",
+        "plain": 235493.0,
+        "native": 382853.0,
+        "extra": 147360.0
+      },
+      {
+        "symbol": "program:constrain_operands",
+        "plain": 442252.0,
+        "native": 579252.0,
+        "extra": 137000.0
+      },
+      {
+        "symbol": "program:rtx_cost",
+        "plain": 363286.0,
+        "native": 497873.0,
+        "extra": 134587.0
+      },
+      {
+        "symbol": "program:aligned_alloc",
+        "plain": 0,
+        "native": 125366.0,
+        "extra": 125366.0
+      },
+      {
+        "symbol": "program:general_operand",
+        "plain": 382793.0,
+        "native": 498602.0,
+        "extra": 115809.0
+      },
+      {
+        "symbol": "program:decl_attributes",
+        "plain": 368250.0,
+        "native": 476851.0,
+        "extra": 108601.0
+      },
+      {
+        "symbol": "program:alloc_slot",
+        "plain": 165048.0,
+        "native": 269305.0,
+        "extra": 104257.0
+      },
+      {
+        "symbol": "program:calloc",
+        "plain": 51086.0,
+        "native": 150153.0,
+        "extra": 99067.0
+      },
+      {
+        "symbol": "program:ix86_rtx_costs",
+        "plain": 300326.0,
+        "native": 398505.0,
+        "extra": 98179.0
+      },
+      {
+        "symbol": "program:ix86_hard_regno_mode_ok",
+        "plain": 349091.0,
+        "native": 437659.0,
+        "extra": 88568.0
+      },
+      {
+        "symbol": "program:ix86_decompose_address",
+        "plain": 326654.0,
+        "native": 412975.0,
+        "extra": 86321.0
+      },
+      {
+        "symbol": "program:lookup_attribute",
+        "plain": 138293.0,
+        "native": 220971.0,
+        "extra": 82678.0
+      },
+      {
+        "symbol": "program:inline_memory_move_cost",
+        "plain": 211106.0,
+        "native": 287154.0,
+        "extra": 76048.0
+      },
+      {
+        "symbol": "program:recog",
+        "plain": 143520.0,
+        "native": 211408.0,
+        "extra": 67888.0
+      },
+      {
+        "symbol": "program:htab_delete",
+        "plain": 135362.0,
+        "native": 202154.0,
+        "extra": 66792.0
+      },
+      {
+        "symbol": "program:init_regs",
+        "plain": 431742.0,
+        "native": 497978.0,
+        "extra": 66236.0
+      }
+    ],
+    "kernel": [
+      {
+        "symbol": "kernel:memset",
+        "plain": 741681.0,
+        "native": 1627023.0,
+        "extra": 885342.0
+      },
+      {
+        "symbol": "kernel:mt_find",
+        "plain": 290245.0,
+        "native": 899408.0,
+        "extra": 609163.0
+      },
+      {
+        "symbol": "kernel:arch_free_page",
+        "plain": 44016.0,
+        "native": 597398.0,
+        "extra": 553382.0
+      },
+      {
+        "symbol": "kernel:__mod_memcg_lruvec_state",
+        "plain": 622045.0,
+        "native": 1050843.0,
+        "extra": 428798.0
+      },
+      {
+        "symbol": "kernel:dom_task_step",
+        "plain": 0,
+        "native": 398910.0,
+        "extra": 398910.0
+      },
+      {
+        "symbol": "kernel:next_resident",
+        "plain": 0,
+        "native": 356984.0,
+        "extra": 356984.0
+      },
+      {
+        "symbol": "kernel:memcpy",
+        "plain": 104686.0,
+        "native": 437635.0,
+        "extra": 332949.0
+      },
+      {
+        "symbol": "kernel:__handle_mm_fault",
+        "plain": 243808.0,
+        "native": 517907.0,
+        "extra": 274099.0
+      },
+      {
+        "symbol": "kernel:get_page_from_freelist",
+        "plain": 198593.0,
+        "native": 471016.0,
+        "extra": 272423.0
+      },
+      {
+        "symbol": "kernel:pagevec_lookup_range_tag",
+        "plain": 332075.0,
+        "native": 602223.0,
+        "extra": 270148.0
+      },
+      {
+        "symbol": "kernel:__mod_lruvec_page_state",
+        "plain": 394052.0,
+        "native": 664110.0,
+        "extra": 270058.0
+      },
+      {
+        "symbol": "kernel:release_pages",
+        "plain": 204140.0,
+        "native": 455866.0,
+        "extra": 251726.0
+      },
+      {
+        "symbol": "kernel:unmap_page_range",
+        "plain": 326474.5,
+        "native": 562069.0,
+        "extra": 235594.5
+      },
+      {
+        "symbol": "kernel:__mod_lruvec_state",
+        "plain": 337428.0,
+        "native": 570052.0,
+        "extra": 232624.0
+      },
+      {
+        "symbol": "kernel:unpinned_resolve",
+        "plain": 0,
+        "native": 220670.0,
+        "extra": 220670.0
+      },
+      {
+        "symbol": "kernel:resolve",
+        "plain": 0,
+        "native": 214197.5,
+        "extra": 214197.5
+      },
+      {
+        "symbol": "kernel:folio_activate",
+        "plain": 498200.0,
+        "native": 705705.0,
+        "extra": 207505.0
+      },
+      {
+        "symbol": "kernel:do_raw_spin_unlock",
+        "plain": 130897.0,
+        "native": 337194.0,
+        "extra": 206297.0
+      },
+      {
+        "symbol": "kernel:lru_add_fn",
+        "plain": 126348.0,
+        "native": 295266.0,
+        "extra": 168918.0
+      },
+      {
+        "symbol": "kernel:__alloc_pages",
+        "plain": 122035.0,
+        "native": 289376.0,
+        "extra": 167341.0
+      },
+      {
+        "symbol": "kernel:kmem_cache_free",
+        "plain": 107553.0,
+        "native": 268164.0,
+        "extra": 160611.0
+      },
+      {
+        "symbol": "kernel:add",
+        "plain": 0,
+        "native": 154698.0,
+        "extra": 154698.0
+      },
+      {
+        "symbol": "kernel:__might_resched",
+        "plain": 103972.0,
+        "native": 255497.0,
+        "extra": 151525.0
+      },
+      {
+        "symbol": "kernel:kmem_cache_free_bulk.part.0",
+        "plain": 109129.0,
+        "native": 256401.0,
+        "extra": 147272.0
+      },
+      {
+        "symbol": "kernel:__count_memcg_events",
+        "plain": 182364.0,
+        "native": 329040.0,
+        "extra": 146676.0
+      }
+    ]
+  },
+  "native_definition": "Native Linux task admission and built-in capability-aware syscall/runtime paths, under full-system QEMU; no external .ko/ioctl transport. Plain arm uses a plain RISC-V executable on the same patched kernel/model.",
+  "mechanism_evidence": "../native-task/gcc-memory-mechanisms.json",
+  "interpretation": [
+    "Kernel accounts for about 70 percent of extra guest attempts. Both increased traffic and extra work per event contribute.",
+    "Identical recorded entries in ggc_alloc_stat and recog_32 but larger self counts demonstrate extra code-path work without more entries. They do not by themselves isolate compiler code generation from changed branch paths or object sizes.",
+    "Earlier mapping/request traces on the same application binaries show doubled pointer-bearing allocation sizes and 118 versus 281 mapping requests during compilation. That older trace used an earlier kernel; do not equate those phase counts with whole-run counts above.",
+    "The native syscall path is capability-aware Linux integration, not an identical stock Linux ABI. Removing external-module transport does not remove allocator, lifetime and page-management responsibilities."
+  ],
+  "limitations": [
+    "Guest instruction attempts, not retired instructions, cycles or host instructions.",
+    "Symbol self counts exclude callees; do not sum them as inclusive function costs.",
+    "Entry attempts are first-instruction execution counts, not guaranteed function invocation counts.",
+    "Full run includes initialization, compilation/output and finalization; mapping evidence cited separately covers compilation/output.",
+    "Exact causal fractions for wider representation, allocator policy, capability runtime and compiler code generation remain unisolated."
+  ],
+  "source_files": {
+    "/tmp/capstone/qemu-final-guest-counts-02/results/0-plain/compilation_and_output-symbols.json": "2fa7e221f85ce41e978fa41ac346601b79698f31c2c36d75d6ef2807d0093be7",
+    "/tmp/capstone/qemu-final-guest-counts-02/results/0-plain/finalization_and_exit-symbols.json": "5b8516ef06c88ed449c8dbc5b67bf248d21784ea1d44f167aeb6f9857c49f546",
+    "/tmp/capstone/qemu-final-guest-counts-02/results/0-plain/startup_and_initialization-symbols.json": "e0671958ba9837b9b0d1b463dea9bb166a6286aa7fee825aa98c470f62ff581e",
+    "/tmp/capstone/qemu-final-guest-counts-02/results/3-plain/compilation_and_output-symbols.json": "6330c93bc66ba77ac863c3d0db6f3bb2ab61224bfd589d4c5c1be2fa7cb62d2e",
+    "/tmp/capstone/qemu-final-guest-counts-02/results/3-plain/finalization_and_exit-symbols.json": "f292c781bdb36341cb35ea9083d342c73a7c274b9d5956c9567313cb118794d8",
+    "/tmp/capstone/qemu-final-guest-counts-02/results/3-plain/startup_and_initialization-symbols.json": "460ab97a2e956f8082aebfedb6225202fbb56979ac12b4cbd77aec0c3194ee39",
+    "/tmp/capstone/qemu-final-guest-counts-02/results/1-native/compilation_and_output-symbols.json": "74057cfda7818239ed9ed5a1a165bd9aca719c1017ec8aaf4d63ce59ac11154e",
+    "/tmp/capstone/qemu-final-guest-counts-02/results/1-native/finalization_and_exit-symbols.json": "b31cadba5b0b52cfacb761ea9083581a1e2d43ceea72fc041aaeaa73d497e93f",
+    "/tmp/capstone/qemu-final-guest-counts-02/results/1-native/startup_and_initialization-symbols.json": "2b51d1f43e86f52ffc766dbb49be5d2be8b03eaf8ddd038188a236b5d5bb16f3",
+    "/tmp/capstone/qemu-final-guest-counts-02/results/2-native/compilation_and_output-symbols.json": "9a0f7505e504ffd9328513cc519e3d6c5919580894c6f78e548ace162d4686d1",
+    "/tmp/capstone/qemu-final-guest-counts-02/results/2-native/finalization_and_exit-symbols.json": "354e79e1e42fa6821d9706a9e541ca348dd80be68575bb6a9c72ea8d9916b547",
+    "/tmp/capstone/qemu-final-guest-counts-02/results/2-native/startup_and_initialization-symbols.json": "dab510f619d0b071c53b1201aeee3aa874ef27f37915d99fe74c98a260035b22"
+  }
+}
