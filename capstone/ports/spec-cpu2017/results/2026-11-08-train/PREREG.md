@@ -440,3 +440,30 @@ Each of these defects stopped a native session on board 2 tonight before the nat
 - the runner's silence limit;
 - the watchdog's entry-stall abort.
 None of them is a native-route result.
+
+## Addendum 21 (10 Nov 05:5x): native vs module on V1f, read; native wins on all three
+
+Run 4 (perf/native-qt/run-b2-v1f-inl-1110-044054, kit bkit41-native-v1f-mcf, V1f resident, gate run-b2-qt2 PASS):
+smoke 9/9 PASS; SPEC boot 4 commands, all rc 0, 3 @@SPEC-DONE. Module: out-qt-b2-v1f-mod (kit bkit41-ids55-unify),
+same board, same bitstream, same lifetimes executables.
+
+| Test | Native wall (s) | Module wall (s) | native / module | Module in-VM (s) | native / module in-VM |
+|---|---|---|---|---|---|
+| imagick | 20.59 | 60.74 | 0.339 | 23.02 | 0.894 |
+| nab | 894.17 | 991.08 | 0.902 | 984.67 | 0.908 |
+| lbm | 1658.05 | 1813.13 | 0.914 | 1809.75 | 0.916 |
+| gcc (first number) | 20.17 | 130.65 | 0.154 | 25.38 | 0.795 |
+
+**Outputs.** Native and module outputs are identical by hash:
+- imagick test_output.tga and test_validate.out; its validation is rc 0 on both;
+- nab's and lbm's output files;
+- gcc's .s.
+
+The only differences are the .err files, which on the module carry its statistics lines, and imagick's reference .tga.
+The reference file is hashed only in the native run directory and equals the stage's ref copy (d7e4e331).
+**Decision (Addendum 12's rule).** Native is faster on 3 of 3 and slower on none, by wall time and by the module's
+in-VM time alike. Native on V1f takes the remaining Capstone train. Option B costs nothing on the module route
+(Addendum 17) and is the bitstream these readings come from.
+**Not established here:**
+- Native over a long run. These are test-size runs of 20-900 s; a train runs for hours.
+- The ratios to Plain. The Plain test readings come from other sessions and kits, not same-board pairs.
