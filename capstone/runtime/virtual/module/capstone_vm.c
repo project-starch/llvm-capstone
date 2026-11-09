@@ -241,7 +241,14 @@ MODULE_PARM_DESC(node_max_records,
 #if CAPSTONE_VM_INDEX_BITS == 25
 /* 2^25 records is 512 MiB per context, more than the 256 MiB CMA pool the board and its twin reserve, so the
  * default is 2^20 (16 MiB of CMA; gcc train T3 holds ~816k live) and a larger value is the kit's to ask for. */
+/* CAPSTONE_VM_FLAT_RECORDS_DEFAULT (a build define, ids55 only) lowers the default for a kit whose programs need few
+ * records and whose guest memory is tight (mcf and xz train at 936M sit within ~2,300 pages of the OOM line with
+ * option A's 4 MiB table); unset, the build is the one above. */
+#ifdef CAPSTONE_VM_FLAT_RECORDS_DEFAULT
+#define CV_FLAT_RECORDS_DEFAULT (CAPSTONE_VM_FLAT_RECORDS_DEFAULT)
+#else
 #define CV_FLAT_RECORDS_DEFAULT (1UL << 20)
+#endif
 #else
 #define CV_FLAT_RECORDS_DEFAULT CV_FLAT_RECORDS_MAX
 #endif
