@@ -211,3 +211,37 @@ V1s simulation or synthesis.*
   **-1,500 to -2,500 vs V1f** (5 of B's 25 lane slot bits in the register file, operand muxes, scoreboard, pipeline and
   PC/CSR lanes); core FF about -700. A reading inside ±2,500 of V1f is NOT distinguishable from noise and is reported as
   such.
+
+## Readings (2026-11-09, graded against the predictions above)
+
+**Functional, simulation** (S12_MEM_DELAY=12 unless stated; every run dir carries a PROVENANCE with its Anvil unit
+hashes, and every copied unit set equals a from-source regeneration at the same Anvil sources):
+- B's 46 acceptance arms on V1 (c5a-wt .sup/v1arms): 46 of 46 equal B's own readings on 325966ee4.
+- Native arms on V1's core with rd made visible (va-runv-bare, -ctrl, -xfer): equal e5-native's in every value.
+  va-runv-bare -DTAG928 (the claim-auditor's SUSPECT): the satp the next escape saved equals the original exactly, as
+  pre-registered; the context then escaped with cause 25 on the garbage srevroot (not predicted).
+- R-70 (see ISSUES R-70): on V1 the hazard arms read projected in 2 of 3; on V1f raw on all three, with the younger-store
+  and same-set other-granule arms projected, at memory delays 12 and 40. The native CSCHECK emulation reads every
+  registered row on V1f with and without its fence (capstone-sbi b366655 / 4f51541), and on V1 only with it.
+- V1s boundary: -DSLOT20 equal on V1s and V1f (rd 0xfffff, live); -DSLOT20_FULL refused on V1s (srevroot 0, then 30),
+  allocated on V1f (rd 0x100000).
+- 32 first-boot images on V1f: all 32 vectors equal e5-native's (perf/v1fgate/v1f-vectors.txt, sha256 ea7e1b65...).
+  **Cycles, V1f vs e5-native: delta 0 on all 32** (end cycle and committed count), the LDC/STC-heavy objb-perf-s1..s7
+  and slot-1..9 included. The prediction (no added cycle on any LDC/STC path) holds exactly.
+- 95-sweeps, RVFI trace compare: V1 vs its 18-bit base, V3 vs C.5a's own sweep, and B vs bitstream 3 each differ in
+  exactly the same 8 of 92 tests (identical line counts and first retirements; 78be372d38df's stored-word raw reads);
+  V2 equals V1 on all 92.
+
+**Synthesis** (board lane on apollo, synth lane on leffe2; stoppers loops and LUTLP-1, area post hoc):
+- LUTLP-1 positive control (synth): S-10b eaa4e7984's post-synth checkpoint reads 1 violation (62 LUT cells through
+  csr_regfile, the board lane's own reading), 31 check_timing loops and 179 "Found timing loop" headers, so the
+  post-synth check fires on that shape. The board lane retracted its earlier statement that S-10b emitted no headers.
+- V1 b91439bf7: post-synth core 154,514 (+9,899 vs e5-native; the prediction +7,100 ±2,000 was low, attributed to the
+  redistribution modules), TOP 181,042; LUTLP-1 0; rebuilt as the comparator.
+- **V1f 0ef470559 SEALED** (board lane, 17:22): caplifive_e5nids55f_0ef470559.bit, sha256 06f6be7e3cf977908d0f103526929d97643c8241e30be6df3133d653867d86bf.
+  4/4 vs e5-native: WNS -13.873, 0 loops, routed clean, LUTLP-1 0 at synth, opt and routed DRC; placer congestion 5;
+  placed LUT 179,757 (slices 98.67 %) -- routed ABOVE the vp3 failure point (178,543), so total placed LUT is not the
+  cliff by itself. Post hoc vs V1: core +1,095; the R-70 controller 145 -> 416 LUT.
+- V2 35928968c gate: core 151,925 (prediction 151,950), LUTLP-1 0. V3 026e6b3bd gate: core 151,822, LUTLP-1 0.
+  V2f c95525476 gate: core 152,220 (V2 +295), LUTLP-1 0 post-synth and post-opt. ex+issue rows outside their bands
+  were ruled report-only (the totals land on prediction).

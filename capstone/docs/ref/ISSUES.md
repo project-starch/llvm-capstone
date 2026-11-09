@@ -4259,6 +4259,61 @@ the semantics owner recorded it as kernel authority, because the kernel chooses 
 **QEMU** keeps a parked context's callee state host-side. So it models neither the hole nor the clamp: a frame rewritten
 between escape and resume does not change what QEMU resumes. No QEMU result covers this case.
 
+### R-70 — option B's load rule reads a STALE tag past a buffered store: a plain load of a tagged granule's first doubleword, issued while a plain store to the granule's other doubleword is still pending, is projected to sext39 where program order makes it raw `DEMONSTRATED IN SIMULATION 2026-11-09 on e5-ids55 b91439bf7 (V1; ids55-sbhazard.S, predictions in its header before the run); PRESENT by source in every option-B tree: bitstream 4 (325966ee4) and the e5n/e5c/c5a-ids55 variants; NOT MEASURED ON SILICON; FIX IN RTL on V1f 0ef470559, sealed caplifive_e5nids55f_0ef470559 (sha256 06f6be7e3cf97790...), the fix measured in simulation; V2f c95525476 and V3f 596c36fc7 in synthesis. Found 2026-11-09 by the native route's CSCHECK emulation arm (va-cscheck-mon-ids55, capstone-sbi b366655)`
+
+Siblings: R-29 (granule tearing in the D-cache write buffer; its hold in wt_dcache_ctrl.sv is where this fix lives),
+R-51 (its mirror), S-10b (the widened store-buffer compare that formed a LUTLP-1 loop, 21-08-2026). None of them is
+this: before option B a plain load never looked at the tag.
+
+**The mechanism.**
+- Option B's load rule (`load_unit.sv` `ids55_proj`) projects a plain integer or FP load of bytes in a TAGGED granule's
+  FIRST doubleword to sext39 of the address field, using the response tag `req_port_i.data_rtag`. That makes a plain
+  read's tag part of its architectural result.
+- A plain store to the granule clears its tag when it reaches the D-cache array. Until then the line keeps the old tag.
+- The store buffer's load/store hazard compare is doubleword-granular (`store_buffer.sv` `address_checker`,
+  `page_offset_i[11:3]`), so a younger load of doubleword 0 is not held back for a store to doubleword 1.
+- R-29's hold in `wt_dcache_ctrl.sv` treats a plain read of the low word as conflict-free. That was right before B.
+- So the load reads the stale tag and is projected. QEMU (`helper_capstone_wide_load`) reads in program order: raw.
+
+**The readings (sim, V1 b91439bf7, SUP_TRACE, S12_MEM_DELAY=12).**
+- va-cscheck-mon-ids55 (the native route's CSCHECK emulation, which reads a de-tagged scratch word's slot): rows 3, 4,
+  5, 9 and 10 read 25 where 0 / 28 / 0 / 27 / 0 are registered. The retirement trace shows `ld t3, 0(t2)` after
+  `sd zero, 8(t2)` returning the raw `0x000001808000d000` once (a first-touch miss) and the projected
+  `0x000000008000d000` six times.
+- ids55-sbhazard.S: A1 `0x80003040` (projected), A2 `0x10080003040` (raw), A3 projected. The prediction was projected
+  on all three, so the hazard is timing-dependent even in simulation. The fence control (F) and the same-doubleword
+  control (B) read raw. B is a weak control: this slot leaves R's bits 63:56 zero.
+- With a fence between the store and the load (capstone-sbi 4f51541), the CSCHECK arm reads every registered row.
+
+**Reach.** Any program that stores to one doubleword of a granule holding a capability and then, while that store is
+buffered, loads the granule's first doubleword with a plain load. The value read is the projected cursor or the raw
+word depending on store-buffer timing. Not counted in any corpus yet (the compiler lane is asked for a twin count).
+The switcher's context reads take the same tag (`ids55_unpack_word`), so a frame word de-tagged by a buffered store can
+be unpacked; not measured.
+
+**The fix (V1f e5-ids55-r70 0ef470559; V2f c95525476, V3f 596c36fc7; one file).**
+- `wt_dcache_ctrl.sv`, on the load unit's port only (SpecHold): a plain read's data_rtag is cleared while a plain store
+  to the same physical granule is pending in the store buffer (R-29's speculative-entry rule; the fix also compares the
+  write buffer, which is REDUNDANT: S-10's read overlay, `wt_dcache_mem.sv:296-301, :379`, already clears rd_ctag for a
+  resident plain write-buffer entry in the granule, so R-70's window is the store buffer alone and that compare is dead
+  area). It is taken live in READ (the tag cycle) and held for a replay or miss response.
+- The switcher's scalar first-doubleword context reads go through the same port and are masked too: correct for its
+  committed stores; whether a speculative leftover store can be pending during a switch is UNRESOLVED.
+- No hold is added; no state machine, store-buffer hazard compare, load-unit stall or clear path changes.
+- rd_ctag is on the standing UNOPTFLAT list and the new term enters its cone on port 1, so synthesis is the deciding
+  gate: the unfixed variants stay the hedge until a fixed one routes and writes a bitstream, with a LUTLP-1 DRC on its
+  post-synth checkpoint.
+- Record: llvm-capstone land/rtl-ids55-variants (2026-11-09-ids55-variants.md, the R-70 section).
+
+**Fix readings (sim, V1f 0ef470559 / tests 243ad0141, predictions written before each run).**
+- ids55-sbhazard at S12_MEM_DELAY 12 and 40: the three hazard arms, F and B read raw (`0x10080004040` with the
+  page-aligned layout; `0x10080003040` before it); Y (the load is older than the store) and O (a buffered store to
+  another granule of the same D-cache set) read projected, as a correct fix must leave them.
+- va-cscheck-mon-ids55 without the firmware fence reads every registered row; with it, the same.
+- claim-auditor (loop-freedom): no new feedback edge; every new operand traced to flops or to the live address tag
+  rd_ctag already depends on; data_rtag drives nothing that returns to the request. PLAUSIBLE-BUT-UNPROVEN: synthesis
+  with a LUTLP-1 DRC on the post-synth and post-opt checkpoints decides.
+
 ### R-57 — a capability STORE whose translation faults retires WITHOUT its page fault and is committed to the store buffer, which copies an INVALID speculative entry into its commit queue (a ghost head that never drains) and underflows its speculative count: the vp2 wedges r8..r11 `OPEN ON SILICON (caplifive_vp2_bf3db3175); DEMONSTRATED in simulation 2026-10-18 by a matched pair; FIXED on virtual-profile-2-c 2114e11bd for the next bitstream; the store-side twin of R-56; software rule S-25 (no capability store as a page's first access) until then`
 
 **What happens** (bf3db3175, read by the RTL lane and audited by a claim-auditor against the trace). The store syncer
