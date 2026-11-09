@@ -209,3 +209,29 @@ the console's upload limit as 32 MB (HTTP 413). Command 1 alone was estimated at
 - **Predictions:** X0: rc 0 and specdiff PASS on both arms. X1: firmware 33-35 MB. X2: if the upload is refused (HTTP
   413), the stage reads NO DATA. Each arm costs one boot, and xz reports command 0 alone, as now. X3: xz's full train
   time is the sum of the two commands' run seconds per arm, and its ratio lies within ±0.10 of command 0's.
+
+## Addendum 10 (9 Nov 14:4x, before any of it exists on a board): option B (ids55) for the Temporal train, with decision rules
+
+The lead and the external collaborator chose option B (rtl-ids55, 325966ee4: a 55-bit lifetime id, 30-bit generation +
+25-bit slot) over option A (E5's 30-bit id re-split to 10 + 20). B's software side exists (the flat ids55 module, its
+QEMU twin, the 30 Oct board test on bitstream 4). B is not on C.5a's lineage, so three bitstream variants are being
+prepared in parallel. None is used until it is sealed and passes its board gate.
+- **V1 e5n-ids55:** e5-native + B (capstone-ariane b91439bf7 and successors). For native perlbench and mcf.
+- **V2 e5c-ids55:** stage-B + the R-69 clamp + B, without DETACH/ADOPT. For the module route; the hedge if V1 does not
+  route.
+- **V3 c5a-ids55:** C.5a + B only. The smallest delta from the bitstream the current numbers ran on.
+- **Software:** native-route ids55 kernel/firmware (native lane), and module-route ids55 kits (bkit41-ids55-*). Each
+  gets QEMU twin gates and train twins at 936M first.
+
+**Decision rules** (the order of preference; every switch is its own addendum with hashes before it runs):
+- D1, perlbench (board 3) and mcf (board 2), at their start (about Tue 10:00):
+  (a) native on V1 if V1 is sealed, its board gate passes, and the native ids55 kits passed their twins;
+  (b) else the module route on V2, else on V3, if sealed, gated, and the module ids55 kits passed twins;
+  (c) else Addendums 5/6 unchanged (option A, e5-native native route, C.5a and E5c fallbacks).
+- D2, the Capstone runs not yet started (imagick on board 1, lbm on board 2, xz commands 0 and 1): on the best sealed,
+  gated B variant whose q32/nset ids55 kit passed its twin; else C.5a as now.
+- D3, the Capstone runs already done on C.5a (gcc train01, nab, x264): reported on C.5a, marked so. They rerun on B in any
+  board slack before the deadline, longest gap to the target first, and otherwise after it.
+- Plain is unaffected.
+- Every benchmark's row names its bitstream. A row on option A or C.5a is marked as such, since the paper describes B.
+- A gate failure on a B variant flashes C.5a back and falls to the next rule; no stage runs on an ungated bitstream.
