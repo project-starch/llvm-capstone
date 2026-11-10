@@ -515,3 +515,26 @@ the same stage first (list perf/train/b3pc1-plain, out-train5-b3-plain-c1). Plai
   in the schedule.
 - **A native failure:** falls back if the guard allows. Otherwise that benchmark reports its test-size number, marked
   as such (rule T0). xz has no native stage and stays on the module route on C.5a.
+
+## Addendum 23 (10 Nov 08:4x, before it runs): native gcc train01 on V1f, board 2 after native mcf; the four native stages checked on a real bake
+
+**Real bake, no board** (bake, private-kernel relink on that bake, firmware with its dom_stack gate, the 26,000,000-byte cap):
+
+| Stage | Kit | cpio (B) | Firmware (B) | Gate |
+|---|---|---|---|---|
+| perl-train | bkit41-native-v1f-perl | 24,154,112 | 23,759,880 | PASS |
+| mcf-train | bkit41-native-v1f-mcf | 13,687,808 | 19,565,576 | PASS |
+| nt-imagick-train | bkit41-native-v1f-mcf | 19,275,264 | 19,565,576 | PASS |
+| nt-lbm-train | bkit41-native-v1f-mcf | 12,782,592 | 19,565,576 | PASS |
+| nt-gcc-train01 | bkit41-native-v1f-mcf | 27,479,040 | 23,759,880 | PASS |
+
+**gcc train01 native.** gcc's train number is on the module route (C.5a, 1.196x Plain, Addendum 3), at the 1.20 bar.
+- **Stage:** native01/board-stages/nt-gcc-train01.
+- **How it was made:** make-native-stage.py (llvm-capstone 727a28aec168), run on stages-train-fair/502.gcc_r-train01-capstone-lifetimes-devmk-dcnofp. Then the module-only lines were removed, each counted and asserted:
+  - step_budget_ns, resume_quantum, retire_exit_sweep and arena_pin, and their restore;
+  - the gtsnap calls.
+- **Result:** its run.sh equals the native test stage's (qt-gcc) except for the input names.
+- **Exe:** qt-gcc's cpugcc_r_base.native, df93c433bb1a5418. It ran and passed on V1f in Addendum 19.
+- **Not checked:** no QEMU twin. The board run is the first run of this input on the native route, and its outputs are checked against the reference afterwards.
+- **Where it runs:** board 2, after native mcf (a second nat-v1f.sh waits for the first). Timeout 10,000 s; 1.5 h needed by the deadline guard. Nothing else moves.
+- **If it fails:** gcc keeps its module train number.
