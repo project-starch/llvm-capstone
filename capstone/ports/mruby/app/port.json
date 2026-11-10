@@ -23,8 +23,5 @@
   "corpora": [
     "capstone/bug-corpora/mruby/gc-slot-repros",
     "capstone/bug-corpora/mruby/release-differential"
-  ],
-  "related": [
-    "xlang/repro"
   ]
 }

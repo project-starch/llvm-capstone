@@ -30,8 +30,5 @@
     "capstone/bug-corpora/sqlite/capi-repros",
     "capstone/bug-corpora/sqlite/engine-repros"
   ],
-  "related": [
-    "xlang/reuse-not-free"
-  ],
   "note": "3.22.0 is the published PoisonCap artifact's release and the anchor of the measured memory campaigns; 3.53.3 is the general port and the version the binding corpus's host arm builds."
 }

@@ -11,9 +11,9 @@
 | sort | where | count | what it is |
 |---|---|---:|---|
 | third-party defects, as cases | `capstone/bug-corpora/` | 425 | one directory per case, `case.json` + `PROVENANCE.md`, a runner per corpus |
-| the same, cross-language | `xlang/` | 30 | distilled C shims with their own row tables and measured columns |
-| our own silicon defects | `capstone/tests/fpga-repros/` | 31 | one self-contained report per defect, the folder is the report |
-| our own compiler and runtime defects | `docs/ref/ISSUES.md` | 166 open, 77 resolved | the registry, not reproduced cases |
+| the same, cross-language | `xlang/` | 0 | distilled C shims with their own row tables and measured columns |
+| our own silicon defects | `capstone/tests/fpga-repros/` | 32 | one self-contained report per defect, the folder is the report |
+| our own compiler and runtime defects | `docs/ref/ISSUES.md` | 171 open, 77 resolved | the registry, not reproduced cases |
 
 Protection fixtures under `capstone/ports/*/security-tests/` are **not** bug material and are counted nowhere above: they are this project's own oracles. 4 components have them: `apr/pools`, `ffmpeg/buffer-pool`, `memcached/allocators`, `whisper/ggml-context`.
 
@@ -49,12 +49,8 @@ Protection fixtures under `capstone/ports/*/security-tests/` are **not** bug mat
 | [`capstone/bug-corpora/wireshark/plain-heap-repros`](wireshark/plain-heap-repros) | wireshark | 4.6.8 | 12 | 1 live, 11 fixed before the pin | 0 | case-json | measured |
 | [`capstone/bug-corpora/wireshark/plain-temporal-repros`](wireshark/plain-temporal-repros) | wireshark | 4.6.8 | 10 | 10 fixed before the pin | 0 | case-json | measured |
 | [`capstone/bug-corpora/wireshark/wmem-repros`](wireshark/wmem-repros) | wireshark | 4.6.8 | 23 | 3 live, 20 fixed before the pin | 0 | case-json | measured |
-| [`xlang/lua-cdp`](../../xlang/lua-cdp) | Lua C-data-pointer bindings | per row | 13 | not recorded | 0 | xlang-row | measured |
-| [`xlang/repro`](../../xlang/repro) | cross-language FFI (12 of 15 rows are mruby or an mruby gem) | per row | 15 | not recorded | 11 | xlang-row | measured |
-| [`xlang/reuse-not-free`](../../xlang/reuse-not-free) | sqlite | per row | 2 | not recorded | 0 | xlang-row | built |
-| [`xlang/toctou-double-fetch`](../../xlang/toctou-double-fetch) | various (sandbox and host boundaries) | per row | 0 | not recorded | 0 | xlang-row | triaged |
 
-**455 cases in 32 corpora**, of which 275 are recorded live in the version their corpus pins, 122 were fixed upstream before it, and 28 carry an explicit decision not to assert liveness. 22 advisories are cited across all corpora.
+**425 cases in 28 corpora**, of which 275 are recorded live in the version their corpus pins, 122 were fixed upstream before it, and 28 carry an explicit decision not to assert liveness. 11 advisories are cited across all corpora.
 
 ## Every port component, and what bug material it has
 
@@ -96,7 +92,7 @@ Protection fixtures under `capstone/ports/*/security-tests/` are **not** bug mat
 - `capstone/bug-corpora/httpd/bucket-repros`: liveness deliberately not asserted for 8 cases.
 - `capstone/bug-corpora/memcached/plain-temporal-repros` has no triage inventory under docs/ref/.
 - `capstone/bug-corpora/mruby/gc-slot-repros` is declared and empty: 0 cases, status planned.
-- `capstone/bug-corpora/mruby/gc-slot-repros` does not record live_in_pin: No cases yet. The xlang rows are pinned to their own vulnerable upstream commits, all older than 4.0.0-rc2, so none of them is live in the ported release; what belongs here is the shape, re-run in the real interpreter.
+- `capstone/bug-corpora/mruby/gc-slot-repros` does not record live_in_pin: No cases yet.
 - `capstone/bug-corpora/mruby/release-differential` has no triage inventory under docs/ref/.
 - `capstone/bug-corpora/perl/release-differential` has no triage inventory under docs/ref/.
 - `capstone/bug-corpora/php/engine-repros` has no triage inventory under docs/ref/.
@@ -110,12 +106,6 @@ Protection fixtures under `capstone/ports/*/security-tests/` are **not** bug mat
 - `capstone/bug-corpora/sqlite/capi-repros` commits no result bundle of its own.
 - `capstone/bug-corpora/sqlite/engine-repros` has no triage inventory under docs/ref/.
 - `capstone/bug-corpora/wireshark/plain-temporal-repros` has no triage inventory under docs/ref/.
-- `xlang/lua-cdp` does not record live_in_pin: Each row is pinned to the binding version its upstream report names, not to a release this project ports.
-- `xlang/repro` does not record live_in_pin: Each row is pinned to its own vulnerable upstream commit, named in its target.md, rather than to a release this project ports.
-- `xlang/reuse-not-free` does not record live_in_pin: These are documented API contracts rather than fixed defects, so there is no upstream fix against which a pin could be live.
-- `xlang/reuse-not-free` commits no result bundle of its own.
-- `xlang/toctou-double-fetch` is triage only -- nothing built.
-- `xlang/toctou-double-fetch` does not record live_in_pin: Nothing is built, so there is no case to place in a pin.
 - `capstone/ports/micropython` is a complete application with no corpus.
 - `capstone/ports/php/engine` is a complete application with no corpus.
 - `capstone/ports/postgres/app` is a complete application with no corpus.
@@ -130,7 +120,7 @@ Protection fixtures under `capstone/ports/*/security-tests/` are **not** bug mat
 
 ## Our own silicon defects
 
-31 folders under `capstone/tests/fpga-repros/`, plus `ARCHIVED/`. 16 carry a `SHA256SUMS`, which is what lets a board result be cited by image hash rather than by label.
+32 folders under `capstone/tests/fpga-repros/`, plus `ARCHIVED/`. 16 carry a `SHA256SUMS`, which is what lets a board result be cited by image hash rather than by label.
 
 - `R01-lsu-hazard` -- no heading in 00-README.md
 - `R02-delin` -- no heading in 00-README.md
@@ -147,6 +137,7 @@ Protection fixtures under `capstone/ports/*/security-tests/` are **not** bug mat
 - `R35-revoked-reference-retains-authority` -- R-35 — on silicon a REVOKED capability still reads AND writes the storage its object has given up, at every age, and the access does not trap
 - `R42-icache-killed-miss-refill` -- R-42 — a speculative I-cache miss killed by a taken-branch redirect costs +1 cycle every loop iteration
 - `R43-revocation-cache-false-deny` -- R-43 — R-35's revocation cache refused LIVE capabilities once ~256 revocation ids were live. FIXED ON SILICON 2026-09-29 (`8f6a0af98`, `caplifive_r43_8f6a0af98.bit`)
+- `R67-pcc-adopts-dead-code-capability` -- R-67: a jump through a code capability whose node has ended runs its target
 - `RTL-cap-mcause-off-by-one` -- SPEC VIOLATION — every capability `mcause` from the DATA path is one code too high, and 25 aliases
 - `RTL-domain-trap-vector-unset` -- A domain enters with NO trap vector: `create_domain` never writes the trap-vector context slot
 - `RTL-give-cost-tracks-global-placement` -- Release cost tracks GLOBAL PLACEMENT, not the arm: a 16-byte relocation moves `give_cyc/n` by 83 %

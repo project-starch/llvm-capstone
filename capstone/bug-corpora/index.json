@@ -806,7 +806,7 @@
     {
       "program": "mruby",
       "boundary": "GC slots (mrb_heap_page)",
-      "title": "Planned: the xlang mruby rows re-run inside the complete interpreter",
+      "title": "Planned: GC-slot defect cases inside the complete interpreter",
       "upstream": {
         "version": "4.0.0-rc2",
         "port": "capstone/ports/mruby/app"
@@ -815,14 +815,12 @@
       "case_schema": "case-json",
       "status": "planned",
       "live_in_pin_recorded": false,
-      "live_in_pin_note": "No cases yet. The xlang rows are pinned to their own vulnerable upstream commits, all older than 4.0.0-rc2, so none of them is live in the ported release; what belongs here is the shape, re-run in the real interpreter.",
+      "live_in_pin_note": "No cases yet.",
       "checker": "capstone/bug-corpora/tools/check-corpus.py",
       "advisories": [],
       "related": [
-        "xlang/repro",
         "capstone/ports/mruby/app"
       ],
-      "note": "Six xlang rows (4, 5, 8, 10, 13, 15) share the realloc-vmstack shape and are the intended first cases.",
       "where": "capstone/bug-corpora/mruby/gc-slot-repros"
     },
     {
@@ -842,8 +840,7 @@
       "advisories": [],
       "related": [
         "capstone/bug-corpora/mruby/gc-slot-repros",
-        "capstone/ports/mruby/app",
-        "xlang/repro"
+        "capstone/ports/mruby/app"
       ],
       "note": "ledger.json is the triage of the whole release: 165 defects live at the pin, found by extracting the Ruby test upstream added with each fix and running it at the pin and at master. The 23 cases here are the measured subset: every case on which a Capstone arm reports. They were selected by MEASUREMENT, not by the ledger, which is why 5 of them are not ledger rows at all -- their tests pass at the pin, so the ledger's 'fails at the pin' rule could never admit them, and host ASan is what found them. 17 of the 23 are spatial or temporal; the other 6 are 4 null dereferences, one type confusion and one C-stack exhaustion, kept because they are what the arms actually reported and dropping them would make the arms' own numbers unreproducible. All four arms are measured. sysalloc-bounds is the baseline: per-object heap bounds are what applications get by default since PR #170, so a catch is a case the bounds arm does not fault on.",
       "case_number_base": 1,
@@ -1602,129 +1599,6 @@
         "vp2-nested-pools": "results/2026-10-19-vp2c-treeB/vp2-nested-pools-q15"
       },
       "where": "capstone/bug-corpora/wireshark/wmem-repros"
-    },
-    {
-      "program": "Lua C-data-pointer bindings",
-      "boundary": "a C object borrowed by a Lua binding",
-      "title": "Corpus C: GC-ended and allocator-ended borrows in Lua bindings",
-      "cases": 13,
-      "case_schema": "xlang-row",
-      "case_table": "xlang/lua-cdp/capstone/rows.tsv",
-      "case_dir_column": "slug",
-      "case_doc": "CASE.md",
-      "status": "measured",
-      "live_in_pin_recorded": false,
-      "live_in_pin_note": "Each row is pinned to the binding version its upstream report names, not to a release this project ports.",
-      "checker": "capstone/bug-corpora/tools/check-corpus.py",
-      "inventory": "capstone/docs/ref/paper-bug-inventory.md",
-      "evidence": [
-        "xlang/lua-cdp/capstone/rows.tsv",
-        "xlang/lua-cdp/cheri/rows.tsv"
-      ],
-      "advisories": [],
-      "related": [
-        "capstone/bug-corpora"
-      ],
-      "note": "7 of the 13 are GC-frees, which is the structural sub-case. Blocked specimens (C++/STL, LuaJIT) sit beside the rows and are not cases.",
-      "required_arms": [
-        "virtual-malloc",
-        "vp2-malloc"
-      ],
-      "arm_configurations": {
-        "virtual-malloc": "virtual-mallocng",
-        "vp2-malloc": "virtual-mallocng"
-      },
-      "runners": [
-        "xlang/virtual/run-virtual.py"
-      ],
-      "where": "xlang/lua-cdp"
-    },
-    {
-      "program": "cross-language FFI (12 of 15 rows are mruby or an mruby gem)",
-      "boundary": "handles held across a language boundary",
-      "title": "Corpus B: cross-language FFI memory-safety defects, as distilled C shims",
-      "cases": 15,
-      "case_schema": "xlang-row",
-      "case_table": "xlang/capstone/rows.tsv",
-      "case_dir_column": "key",
-      "status": "measured",
-      "live_in_pin_recorded": false,
-      "live_in_pin_note": "Each row is pinned to its own vulnerable upstream commit, named in its target.md, rather than to a release this project ports.",
-      "checker": "capstone/bug-corpora/tools/check-corpus.py",
-      "inventory": "capstone/docs/ref/paper-bug-inventory.md",
-      "evidence": [
-        "xlang/capstone/rows.tsv",
-        "xlang/cheri/rows.tsv"
-      ],
-      "advisories": [
-        "CVE-2017-9527",
-        "CVE-2018-10191",
-        "CVE-2018-10199",
-        "CVE-2020-6838",
-        "CVE-2020-6840",
-        "CVE-2022-1071",
-        "CVE-2022-1106",
-        "CVE-2022-1934",
-        "CVE-2026-1979",
-        "GHSA-f56g-chqp-22m9",
-        "RUSTSEC-2022-0070"
-      ],
-      "related": [
-        "capstone/bug-corpora",
-        "capstone/bug-corpora/mruby/gc-slot-repros"
-      ],
-      "note": "Rows 8 and 13 are one upstream defect, so 15 rows are 14 distinct fixes. The advisory list is the front-page table's; rows 8, 12, 13 and 14 carry their CVE id in that table but not yet in their own target.md.",
-      "required_arms": [
-        "virtual-malloc",
-        "vp2-malloc"
-      ],
-      "arm_configurations": {
-        "virtual-malloc": "virtual-mallocng",
-        "vp2-malloc": "virtual-mallocng"
-      },
-      "runners": [
-        "xlang/virtual/run-virtual.py"
-      ],
-      "where": "xlang/repro"
-    },
-    {
-      "program": "sqlite",
-      "boundary": "borrowed row data across a step or a reset",
-      "title": "Row 3: reuse without any allocator event, built on real SQLite",
-      "cases": 2,
-      "case_schema": "xlang-row",
-      "case_glob": "sqlite-*",
-      "case_doc": "EVIDENCE.txt",
-      "status": "built",
-      "live_in_pin_recorded": false,
-      "live_in_pin_note": "These are documented API contracts rather than fixed defects, so there is no upstream fix against which a pin could be live.",
-      "checker": "capstone/bug-corpora/tools/check-corpus.py",
-      "inventory": "capstone/docs/ref/paper-bug-inventory.md",
-      "advisories": [],
-      "related": [
-        "capstone/bug-corpora/sqlite/capi-repros"
-      ],
-      "note": "Host-verified: ASan is silent on both, and one is silent only while lookaside is on. Neither has a Capstone or CHERI column yet.",
-      "where": "xlang/reuse-not-free"
-    },
-    {
-      "program": "various (sandbox and host boundaries)",
-      "boundary": "a value read twice across a sharing boundary",
-      "title": "Row 6: TOCTOU / double-fetch, triaged and not built",
-      "cases": 0,
-      "case_schema": "xlang-row",
-      "case_glob": "[0-9]*",
-      "status": "triaged",
-      "live_in_pin_recorded": false,
-      "live_in_pin_note": "Nothing is built, so there is no case to place in a pin.",
-      "checker": "capstone/bug-corpora/tools/check-corpus.py",
-      "inventory": "capstone/docs/ref/paper-bug-inventory.md",
-      "advisories": [],
-      "related": [
-        "capstone/bug-corpora"
-      ],
-      "note": "Eight specimens are triaged in this directory's README. The inventory also records four fabricated CVE ids that must never be cited.",
-      "where": "xlang/toctou-double-fetch"
     }
   ],
   "ports": [
@@ -1943,9 +1817,6 @@
       "corpora": [
         "capstone/bug-corpora/mruby/gc-slot-repros",
         "capstone/bug-corpora/mruby/release-differential"
-      ],
-      "related": [
-        "xlang/repro"
       ],
       "where": "capstone/ports/mruby/app"
     },
@@ -2320,9 +2191,6 @@
         "capstone/bug-corpora/sqlite/capi-repros",
         "capstone/bug-corpora/sqlite/engine-repros"
       ],
-      "related": [
-        "xlang/reuse-not-free"
-      ],
       "note": "3.22.0 is the published PoisonCap artifact's release and the anchor of the measured memory campaigns; 3.53.3 is the general port and the version the binding corpus's host arm builds.",
       "where": "capstone/ports/sqlite"
     },
@@ -2468,6 +2336,11 @@
       "has_sha256sums": true
     },
     {
+      "id": "R67-pcc-adopts-dead-code-capability",
+      "title": "R-67: a jump through a code capability whose node has ended runs its target",
+      "has_sha256sums": false
+    },
+    {
       "id": "RTL-cap-mcause-off-by-one",
       "title": "SPEC VIOLATION \u2014 every capability `mcause` from the DATA path is one code too high, and 25 aliases",
       "has_sha256sums": false
@@ -2549,7 +2422,7 @@
     }
   ],
   "issues": {
-    "open": 166,
+    "open": 171,
     "resolved": 77
   },
   "fixtures": [
@@ -2586,19 +2459,15 @@
     "capstone/bug-corpora/sqlite/engine-repros": 33,
     "capstone/bug-corpora/wireshark/plain-heap-repros": 12,
     "capstone/bug-corpora/wireshark/plain-temporal-repros": 10,
-    "capstone/bug-corpora/wireshark/wmem-repros": 23,
-    "xlang/lua-cdp": 13,
-    "xlang/repro": 15,
-    "xlang/reuse-not-free": 2,
-    "xlang/toctou-double-fetch": 0
+    "capstone/bug-corpora/wireshark/wmem-repros": 23
   },
   "cases_here": 425,
-  "cases_xlang": 30,
-  "cases_total": 455,
+  "cases_xlang": 0,
+  "cases_total": 425,
   "live_true": 275,
   "live_false": 122,
   "live_not": 28,
-  "advisories_total": 22,
+  "advisories_total": 11,
   "renames": {
     "schema_version": 1,
     "note": "Path history for port components. An archived result bundle records which directory a measured binary was built from, so it is never rewritten and keeps quoting the 'from' path; docs/history/ is append-only for the same reason. Resolve an old path here. check-ports.py verifies that every 'from' is gone, every 'to' exists, and every file listed under quoted_by really still quotes the old path.",
@@ -2667,7 +2536,7 @@
     "`capstone/bug-corpora/httpd/bucket-repros`: liveness deliberately not asserted for 8 cases.",
     "`capstone/bug-corpora/memcached/plain-temporal-repros` has no triage inventory under docs/ref/.",
     "`capstone/bug-corpora/mruby/gc-slot-repros` is declared and empty: 0 cases, status planned.",
-    "`capstone/bug-corpora/mruby/gc-slot-repros` does not record live_in_pin: No cases yet. The xlang rows are pinned to their own vulnerable upstream commits, all older than 4.0.0-rc2, so none of them is live in the ported release; what belongs here is the shape, re-run in the real interpreter.",
+    "`capstone/bug-corpora/mruby/gc-slot-repros` does not record live_in_pin: No cases yet.",
     "`capstone/bug-corpora/mruby/release-differential` has no triage inventory under docs/ref/.",
     "`capstone/bug-corpora/perl/release-differential` has no triage inventory under docs/ref/.",
     "`capstone/bug-corpora/php/engine-repros` has no triage inventory under docs/ref/.",
@@ -2681,12 +2550,6 @@
     "`capstone/bug-corpora/sqlite/capi-repros` commits no result bundle of its own.",
     "`capstone/bug-corpora/sqlite/engine-repros` has no triage inventory under docs/ref/.",
     "`capstone/bug-corpora/wireshark/plain-temporal-repros` has no triage inventory under docs/ref/.",
-    "`xlang/lua-cdp` does not record live_in_pin: Each row is pinned to the binding version its upstream report names, not to a release this project ports.",
-    "`xlang/repro` does not record live_in_pin: Each row is pinned to its own vulnerable upstream commit, named in its target.md, rather than to a release this project ports.",
-    "`xlang/reuse-not-free` does not record live_in_pin: These are documented API contracts rather than fixed defects, so there is no upstream fix against which a pin could be live.",
-    "`xlang/reuse-not-free` commits no result bundle of its own.",
-    "`xlang/toctou-double-fetch` is triage only -- nothing built.",
-    "`xlang/toctou-double-fetch` does not record live_in_pin: Nothing is built, so there is no case to place in a pin.",
     "`capstone/ports/micropython` is a complete application with no corpus.",
     "`capstone/ports/php/engine` is a complete application with no corpus.",
     "`capstone/ports/postgres/app` is a complete application with no corpus.",
