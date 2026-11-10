@@ -1,6 +1,6 @@
 {
   "case": 94,
-  "title": "CONTROL (parent): A's storage, after cache_free, read and written through the reference cache.c keeps to it (cache->head.stqh_first, the free-list head; under patch 0006 A's lifetime, its CREVOKE parent)",
+  "title": "CONTROL (parent): A's storage, after cache_free, read and written through the reference cache.c keeps to it (cache->head.stqh_first, the free-list head; under patch 0006 the pointer malloc returned, A's parent)",
   "variants": {
     "list-head": "through cache->head.stqh_first"
   },

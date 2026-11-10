@@ -8,19 +8,22 @@ reaches whatever value the head is handed out to next, and the memory never
 returns to malloc, so neither the system allocator nor ASan sees the free.
 
 Two instructions do the work. CDERIVE makes a child capability of a
-non-linear parent, bounded to a sub-range; CREVOKE(parent, child) ends a
-direct child and everything below it.
+non-linear parent, bounded to a sub-range; CREVOKE(object) ends the lifetime
+of the object and of everything derived inside it. The object is the only
+operand, and any live reference to it names it.
 
 - Perl_more_sv allocates the arena with a trailer: the child each head was
-  handed out as. The arena's first slot, which is not an SV, keeps the arena's
-  lifetime (a CDERIVE of the arena) in its sv_u.
+  handed out as.
 - uproot_SV, the one path to a new head (new_SV and Perl_more_sv), hands the
-  head out as a CDERIVE child of the arena's lifetime bounded to the head, and
-  records it in the trailer.
+  head out as a CDERIVE child of the arena bounded to the head, and records
+  it in the trailer.
 - plant_SV finds the head's arena by address, revokes the recorded child
   (CREVOKE) and works on the head through the arena's own pointer, which is
-  what the free list holds. An SVf_BREAK head is not revoked: upstream keeps
-  it off the free list because pointers to it are expected to outlive it.
+  what the free list holds. The recorded child is the operand, not the
+  pointer plant_SV is given: that one may be the arena's own (the sweeps of
+  global destruction free heads through it), which names the whole arena. An
+  SVf_BREAK head is not revoked: upstream keeps it off the free list because
+  pointers to it are expected to outlive it.
 - The core reads freed heads by design (sv.h: "there are some parts of the
   core that have pointers to already-freed SV heads"). SvIS_FREED, GvIO's type
   test and the stash probes in pp_caller, the eval compiler and pp_anonconst
@@ -76,10 +79,10 @@ index d5a6442..d63b7c4 100644
          else {
              SvREFCNT_inc_simple_void(PL_curstash);
 diff --git sv.c sv.c
-index 669678a..a1297b4 100644
+index 1737a1e..7b66c92 100644
 --- a/sv.c
 +++ b/sv.c
-@@ -249,4 +249,93 @@ Public API:
+@@ -249,4 +249,92 @@ Public API:
   * case is for it to be reused. */
  
 +#ifdef PERL_CAPSTONE_SUBLET
@@ -90,12 +93,12 @@ index 669678a..a1297b4 100644
 +   copy of a freed SV* is dead before the head is handed out again.
 +
 +   An arena is one Newx block: upstream's PERL_ARENA_SIZE of heads, then the
-+   child each head was handed out as (NULL while free). The arena's own first
-+   slot, which is not an SV, keeps the arena's lifetime in its sv_u. The free
-+   list holds the arena's own pointers, as does everything below that works on
-+   a head by address. */
++   child each head was handed out as (NULL while free). CREVOKE ends the
++   lifetime its one operand names, so it is given the recorded child: the
++   pointer a head is freed through may be the arena's own, which names the
++   whole arena. The free list holds the arena's own pointers, as does
++   everything below that works on a head by address. */
 +#define SV_ARENA_HEADS		(PERL_ARENA_SIZE / sizeof(SV) - 1)
-+#define SV_ARENA_LIFE(sva)	((void *)(sva)->sv_u.svu_rv)
 +#define SV_ARENA_ISSUED(sva)	((SV **)((char *)(sva) + PERL_ARENA_SIZE))
 +
 +static SV *sv_arena_last;	/* the arena found last; most lookups repeat it */
@@ -128,9 +131,8 @@ index 669678a..a1297b4 100644
 +Perl_sv_arena_issue(SV *sv)
 +{
 +    SV *const sva = S_sv_arena_of(sv);
-+    void *const life = SV_ARENA_LIFE(sva);
-+    SV *const child = (SV *)capstone_cap_derive(life,
-+        PTR2UV(sv) - __builtin_capstone_cap_get_base(life), sizeof(SV));
++    SV *const child = (SV *)capstone_cap_derive(sva,
++        PTR2UV(sv) - __builtin_capstone_cap_get_base(sva), sizeof(SV));
 +    SV_ARENA_ISSUED(sva)[sv - (sva + 1)] = child;
 +    return child;
 +}
@@ -149,7 +151,7 @@ index 669678a..a1297b4 100644
 +    head = sva + 1 + (PTR2UV(p) - PTR2UV(sva + 1)) / sizeof(SV);
 +    issued = &SV_ARENA_ISSUED(sva)[head - (sva + 1)];
 +    if (*issued && !(SvFLAGS(head) & SVf_BREAK)) {
-+        capstone_cap_revoke_child(SV_ARENA_LIFE(sva), *issued);
++        capstone_cap_release(*issued);
 +        *issued = NULL;
 +    }
 +    return head;
@@ -173,29 +175,24 @@ index 669678a..a1297b4 100644
 +#else
  #define plant_SV(p) \
      STMT_START {					\
-@@ -263,4 +352,5 @@ Public API:
+@@ -263,4 +351,5 @@ Public API:
          --PL_sv_count;					\
      } STMT_END
 +#endif
  
  
-@@ -272,6 +362,15 @@ Perl_more_sv(pTHX)
+@@ -272,5 +361,10 @@ Perl_more_sv(pTHX)
      SV* sv;
      char *chunk;                /* must use New here to match call to */
 +#ifdef PERL_CAPSTONE_SUBLET
 +    /* The heads, then the child each was handed out as (above plant_SV). */
 +    Newxz(chunk, PERL_ARENA_SIZE + SV_ARENA_HEADS * sizeof(SV *), char);
-+    sv_add_arena(chunk, PERL_ARENA_SIZE, 0);
-+    ((SV *)chunk)->sv_u.svu_rv = (SV *)capstone_cap_derive(chunk,
-+        __builtin_capstone_cap_get_cursor(chunk)
-+            - __builtin_capstone_cap_get_base(chunk), PERL_ARENA_SIZE);
 +#else
      Newx(chunk,PERL_ARENA_SIZE,char);  /* Safefree() in sv_free_arenas() */
-     sv_add_arena(chunk, PERL_ARENA_SIZE, 0);
 +#endif
+     sv_add_arena(chunk, PERL_ARENA_SIZE, 0);
      uproot_SV(sv);
-     return sv;
-@@ -681,4 +780,7 @@ Perl_sv_free_arenas(pTHX)
+@@ -681,4 +775,7 @@ Perl_sv_free_arenas(pTHX)
      PL_sv_arenaroot = 0;
      PL_sv_root = 0;
 +#ifdef PERL_CAPSTONE_SUBLET

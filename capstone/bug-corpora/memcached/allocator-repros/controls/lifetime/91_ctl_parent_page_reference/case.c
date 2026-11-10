@@ -3,17 +3,17 @@
  *
  * WHICH REFERENCE. slabs.c keeps each page in its class's slab_list[]; slabs_peek_page returns
  * slab_list[0] (it is the page mover's way in, and answers once the class has two pages, which
- * ctl_page_zero arranges). Under patch 0006 that is the page's lifetime: memory_allocate derives it
- * (CDERIVE) from the memory virtual mallocng returned, bounded to the 1 MiB page, and keeps it in
- * slab_list. It is not A's direct parent. split_slab_page_into_freelist derives from it the
+ * ctl_page_zero arranges). That is the page as memory_allocate got it: the 1 MiB object virtual
+ * mallocng returned, kept in slab_list. Under patch 0006 it is not A's direct parent.
+ * split_slab_page_into_freelist derives from it the
  * generation for the class (bounded to perslab * chunk size) and writes that generation into byte 0
  * of every chunk (item.sublet_parent); do_slabs_alloc hands A out as a CDERIVE child of the
- * generation, and slabs_free revokes A with CREVOKE(generation, A). So the chain is
- *     virtual-mallocng object -> page lifetime (slab_list[0]) -> generation (chunk byte 0) -> A
- * and variant `page` accesses A's chunk through the page lifetime (A's grandparent), variant
- * `generation` through the generation (A's direct parent, the CREVOKE parent), which it loads from
- * A's former chunk, slot 0, through the page lifetime. In the release build (virtual-malloc,
- * MCP_STOCK_MALLOC) slab_list[0] is virtual mallocng's own pointer to the page and there is no
+ * generation, and slabs_free revokes A with CREVOKE(A). So the chain is
+ *     virtual-mallocng object, the page (slab_list[0]) -> generation (chunk byte 0) -> A
+ * and variant `page` accesses A's chunk through the page (A's grandparent), variant
+ * `generation` through the generation (A's direct parent), which it loads from
+ * A's former chunk, slot 0, through the page. In the release build (virtual-malloc,
+ * MCP_STOCK_MALLOC) slab_list[0] is the same pointer to the page and there is no
  * generation, so only `page` runs there.
  *
  * WHAT IS READ AND WRITTEN, through the parent reference, at A's former chunk:

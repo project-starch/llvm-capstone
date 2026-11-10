@@ -23,14 +23,14 @@
  * upstream's reset rewinds `pos` through it. That is the reference control 00
  * uses first, on both builds.
  *
- * Patch 0001 keeps two more in the block header (wmem_sublet_block_t): `life`,
- * CDERIVEd from the block, and `generation`, CDERIVEd from life. Every object
- * is a CDERIVE child of `generation`. The reset keeps the first block and
- * renews it (wmem_sublet_block_renew): CREVOKE(life, generation), which ends
- * the generation and every object below it, then a NEW generation CDERIVEd
- * from life. So after the reset, `life` is the revoked generation's parent
- * (the CREVOKE source), and `generation` is the new generation the next object
- * will be derived from. Control 00 uses both, on the protected build only.
+ * Patch 0001 keeps one more in the block header (wmem_sublet_block_t):
+ * `generation`, CDERIVEd from the block. Every object is a CDERIVE child of
+ * `generation`. The reset keeps the first block and renews it
+ * (wmem_sublet_block_renew): CRENEW(generation), which ends the generation's
+ * lifetime and every object below it and begins a new lifetime in the same
+ * place. So after the reset, `generation` names the new lifetime, from which
+ * the next object will be derived. Control 00 uses it, on the protected build
+ * only.
  *
  * The layouts below restate wmem_allocator_block_fast.c at the 4.6.8 pin
  * (wmem_block_fast_hdr_t, wmem_block_fast_chunk_t,
@@ -47,7 +47,7 @@ struct wm_bf_hdr {
   struct wm_bf_hdr *next;
   int32_t pos;
 #if WM_CTL_PROTECTED
-  wmem_sublet_block_t sublet; /* patch 0001: life, generation */
+  wmem_sublet_block_t sublet; /* patch 0001: generation */
 #endif
 };
 struct wm_bf_chunk {
@@ -93,7 +93,6 @@ static inline unsigned char *wm_bf_setup(wmem_allocator_t **out,
   wm_ctl_show("second", second);
   wm_ctl_show("block", block);
 #if WM_CTL_PROTECTED
-  wm_ctl_show("life", block->sublet.life);
   wm_ctl_show("generation-before-reset", block->sublet.generation);
 #endif
   printf("WM_CTL A_offset_in_block=%#lx block_header=%lu chunk_header=%lu "
@@ -105,8 +104,8 @@ static inline unsigned char *wm_bf_setup(wmem_allocator_t **out,
   return a;
 }
 
-/* The release: wmem_free_all. Patch 0001: CREVOKE(life, generation), which
- * ends A and the second object, then a new generation from life; upstream's
+/* The release: wmem_free_all. Patch 0001: CRENEW(generation), which ends A
+ * and the second object and begins the generation's next lifetime; upstream's
  * reset rewinds pos to the header. */
 static inline void wm_bf_release(wmem_allocator_t *al) {
   wmem_free_all(al);

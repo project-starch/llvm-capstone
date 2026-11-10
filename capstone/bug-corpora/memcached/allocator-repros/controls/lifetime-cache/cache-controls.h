@@ -7,13 +7,13 @@
  *
  * THE OBJECT LAYOUT, per arm.
  *   virtual-nested-pools (patch 0006, MC_CAPSTONE_SUBLET): cache_create adds one capability slot in
- *     front of each object (bufsize = request + 16). A new object's LIFETIME is CDERIVEd from what
- *     malloc returned, bounded to bufsize; cache_alloc writes the lifetime into the slot and returns
- *     get_object(CDERIVE(lifetime, 0, bufsize)): a child bounded to [slot, slot + bufsize) whose
- *     cursor is the object, slot + 16. cache_free reads the lifetime from the slot through the
- *     caller's pointer, CREVOKEs the caller's object and pushes the LIFETIME on the cache's STAILQ,
+ *     front of each object (bufsize = request + 16). cache_alloc writes the pointer malloc
+ *     returned into the slot and returns
+ *     get_object(CDERIVE(that pointer, 0, bufsize)): a child bounded to [slot, slot + bufsize) whose
+ *     cursor is the object, slot + 16. cache_free reads malloc's pointer from the slot through the
+ *     caller's pointer, CREVOKEs the caller's object and pushes malloc's pointer on the cache's STAILQ,
  *     whose link then overwrites the slot. So the cache's own reference to a free object's storage is
- *     cache->head.stqh_first, and under patch 0006 that is exactly the CREVOKE parent.
+ *     cache->head.stqh_first, and under patch 0006 that is the parent of the released object.
  *   virtual-malloc (the registered release arm, patch 0002 hooks, stock ledger mode 0): no slot; the
  *     object is the virtual-mallocng object and the STAILQ link is written into the object's first
  *     pointer-sized bytes.
@@ -95,7 +95,7 @@ __attribute__((unused)) static void cc_prime(cache_t *c, unsigned n, unsigned lo
 }
 
 /* The slot in front of a live object, read through the object (as cache_free reads it). Under patch
- * 0006 it is the object's lifetime. Returns it. */
+ * 0006 it is the pointer malloc returned for the object. Returns it. */
 __attribute__((unused)) static void *cc_read_slot_at(const char *name, const char *via, void *obj, const char *file,
                                                      int line) {
 #ifdef MC_CAPSTONE_SUBLET

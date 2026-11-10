@@ -17,7 +17,7 @@ import re
 PREDICTIONS = {
     # (arm, mode): (expected outcome, what else must hold, in words)
     ("protected", "parent"): ("completed", "A freed (MRB_TT_FREE, issued[i] NULL, read through the page); "
-                              "A's slot read and written through the page pointer and through page->life"),
+                              "A's slot read and written through the page pointer, the parent of A's child"),
     ("protected", "sibling"): ("completed", "B on A's page, intact after A was freed, written and read back"),
     ("protected", "successor"): ("completed", "C's address equals A's; C read and written"),
     ("protected", "stale"): ("fault", "cause 25 at the stale-read-A probe"),
@@ -50,9 +50,6 @@ def mode_row(arm, mode, d):
            "A": address(lines, "A"), "B": address(lines, "B"), "C": address(lines, "C"),
            "lines": [cut(l) for l in lines if not l.startswith("CTL ") or " start " in l or "completed" in l
                      or "PRECONDITION" in l or "CHECK-FAILED" in l]}
-    life = next((l for l in lines if l.startswith("ADDR life=")), None)
-    if life:
-        row["life"] = life
     if d.get("outcome") == "fault":
         at = d.get("at", {})
         row["fault"] = {"cause": d.get("cause"), "pc": d.get("pc"), "function": at.get("function"),
@@ -78,8 +75,8 @@ def holds(arm, mode, row):
     if mode in ("parent", "sibling", "successor", "stale") and "FREED A after" not in text:
         return False, "A's release not shown"
     if mode == "parent":
-        ok = "read back 0x5a5a1234c0ffee11" in text and (arm == "release" or "READ life: tt=4" in text)
-        return ok, "slot read (MRB_TT_FREE) and written through the page" + (" and page->life" if arm == "protected" else "")
+        ok = "read back 0x5a5a1234c0ffee11" in text
+        return ok, "slot read (MRB_TT_FREE) and written through the page"
     if mode == "sibling":
         ok = (row["A"] and row["B"] and row["A"]["page"] == row["B"]["page"] and "intact=yes" in text
               and 'match=yes' in text)

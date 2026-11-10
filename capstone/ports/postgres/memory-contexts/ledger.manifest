@@ -17,6 +17,6 @@ src/shared/replay-engine.c                                              test    
 src/shared/replay-engine.h                                              test       replay interface
 patches/postgresql-17.0-0001-allocset-capstone-size-classes.patch       compat     capability ABI alignment and minimum size class
 patches/postgresql-17.0-0002-memorychunk-capstone-alignment.patch       compat     capability ABI chunk header
-patches/postgresql-17.0-0003-memory-contexts-sublet-lifetimes.patch     allocator  chunks as child lifetimes of their blocks (CDERIVE/CREVOKE)
+patches/postgresql-17.0-0003-memory-contexts-sublet-lifetimes.patch     allocator  chunks as child lifetimes of their blocks (CDERIVE/CREVOKE/CRENEW)
 tests/contexts-workload.h                                              test       common upstream and protected policy and payload workload
 tests/contexts-native.c                                                test       native upstream context workload entry

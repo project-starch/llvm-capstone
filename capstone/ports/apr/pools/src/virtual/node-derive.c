@@ -1,15 +1,15 @@
 /* Virtual profile, nested: authority over a node follows the free-list
- * transitions apr_pools.c already has, with the virtual ISA's two Sublet
+ * transitions apr_pools.c already has, with the virtual ISA's Sublet
  * instructions (docs/design/virtual-capstone/isa.md) and no region of our own.
  *
  * A node's memory comes from the platform's malloc, as in the stock adapter
  * (src/cheribsd/node-malloc.c), 4 KiB aligned so every node size APR asks for
  * is exactly representable. Its OWNER is a CDERIVE child of that memory
- * covering the node; it carries MANAGE, and it is the alias APR's free list
- * holds. A pool never sees the owner:
+ * covering the node, and it is the alias APR's free list holds. A pool never
+ * sees the owner:
  *   issue    CDERIVE a fresh child of the owner, covering the node; the pool
  *            gets it, and so does everything the pool hands out of the node.
- *   release  CREVOKE(owner, that child): every handle into the node, and every
+ *   release  CREVOKE(that child): every handle into the node, and every
  *            bucket piece derived below it (src/virtual/bucket-derive.c), dies.
  *            Upstream gets the owner back to write the free-list link through.
  *   discard  free() of the memory, from apr_allocator_destroy only.
@@ -28,7 +28,7 @@
 
 struct record {
   void *memory; /* what malloc returned: freed at discard */
-  void *owner;  /* CDERIVE of memory over the node, MANAGE; the free list's alias */
+  void *owner;  /* CDERIVE of memory over the node; the free list's alias */
   void *issued; /* the live child while a pool holds the node, else NULL */
   size_t size;
   unsigned live, released_once, discarded, lent;
@@ -84,7 +84,7 @@ void *aprp_node_release(void *node) {
   struct record *r = record_for(node);
   if (!r->live || r->discarded || !r->issued)
     aprp_fail(519);
-  capstone_cap_revoke_child(r->owner, r->issued);
+  capstone_cap_release(r->issued);
   r->issued = NULL;
   r->live = 0;
   r->released_once = 1;

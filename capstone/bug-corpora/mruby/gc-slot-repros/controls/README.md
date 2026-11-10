@@ -6,12 +6,12 @@ The mruby row of the pre-registration
 object slots. These controls ask the other half: does it leave the permitted accesses alone? The
 nested allocator is mruby 4.0.0-rc2's GC. `mrb_obj_alloc` hands out an object slot of a heap page,
 and the sweep releases the slot. Under patch 0008 (`MRB_CAPSTONE_SUBLET`) each slot goes out as
-a CDERIVE child of the page's lifetime `page->life`. The sweep revokes that child (CREVOKE) once
-`obj_free` has run, and `page->issued[i]` records the child.
+a CDERIVE child of its page, derived from the page pointer. The sweep revokes that child (CREVOKE)
+once `obj_free` has run, and `page->issued[i]` records the child.
 
 | mode | what it does | predicted, protected | predicted, release |
 |---|---|---|---|
-| `parent` | allocate A, drop it, full GC; confirm A was freed (`tt` = `MRB_TT_FREE` read through the page, and under 0008 `issued[i]` = NULL); read and write A's slot through the page pointer the GC uses (`mrb->gc.heaps` → `page->objects[i]`), and under 0008 also through `page->life` | completes | completes |
+| `parent` | allocate A, drop it, full GC; confirm A was freed (`tt` = `MRB_TT_FREE` read through the page, and under 0008 `issued[i]` = NULL); read and write A's slot through the page pointer the GC uses (`mrb->gc.heaps` → `page->objects[i]`), which under 0008 is the direct parent of A's revoked child | completes | completes |
 | `sibling` | B (kept reachable) and A on the same page; free A by GC; read B through B, check its contents, write B, read it back | completes, B intact | completes, B intact |
 | `successor` | free A; allocate until `mrb_obj_alloc` hands out A's slot address as C; require C = A; read and write through C | completes | completes |
 | `stale` | as `successor`, then read through A's old pointer at the probe `stale-read-A` (a separate process) | fault, cause 25, at the probe | completes and reads C's data |
@@ -47,10 +47,12 @@ stays allocated until A's slot comes back. It came back at the first allocation 
 ## The page reference, and the layout mirror
 
 The GC reaches a slot as `page->objects[i]`, from the page pointers it keeps in `mrb->gc.heaps`.
-That is what the sweep, `gc_page_of` and `free_heap` use, and the driver walks the same list. The
-heap page and `RVALUE` layouts are private to `gc.c`, so the driver mirrors them verbatim from the
-pin (with 0008's two fields under `MRB_CAPSTONE_SUBLET`). `build.sh` compiles the driver with that
-define exactly when libmruby has it. At run time the mirror is checked against the object
+That is what the sweep, `gc_page_of` and `free_heap` use, and the driver walks the same list.
+Under 0008 `gc_issue` derives every slot's child from that page pointer, so the `parent` control
+reads and writes through the direct parent of A's revoked child. The heap page and `RVALUE`
+layouts are private to `gc.c`, so the driver mirrors them verbatim from the pin (with 0008's
+`issued[]` field under `MRB_CAPSTONE_SUBLET`). `build.sh` compiles the driver with that define
+exactly when libmruby has it. At run time the mirror is checked against the object
 `mrb_obj_alloc` returned:
 
 - `page->objects[i]` has the object's address;

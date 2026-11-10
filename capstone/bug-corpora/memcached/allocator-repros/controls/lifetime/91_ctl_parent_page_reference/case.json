@@ -2,7 +2,7 @@
   "case": 91,
   "title": "CONTROL (parent): A's chunk, after slabs_free, read and written through the page reference slabs.c keeps (slab_list[0], from slabs_peek_page)",
   "variants": {
-    "page": "through slab_list[0]: under patch 0006 the page's lifetime, A's grandparent",
+    "page": "through slab_list[0]: the page as virtual mallocng returned it, under patch 0006 A's grandparent",
     "generation": "through the generation in A's chunk slot 0, A's direct (CREVOKE) parent; virtual-nested-pools only"
   },
   "arms": {
