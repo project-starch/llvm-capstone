@@ -37,5 +37,7 @@
   "control_probe": "probe-142664.py",
   "control_probe_why": "trigger.py runs the whole upstream file, which faults at three sites on the physical sublet arm (gh-142664, gh-143195 and gh-92888's test; d3a500f411cb), so no whole-file control can be silent. probe-142664.py runs gh-142664's six tests alone and negative_control.py the same six with the re-entrant release removed; a fault counts by control only when the probe faults in the trigger's function at the trigger's offset and the control is silent.",
   "nested": false,
-  "nested_why": "the object is a libc malloc block, so the allocator below bounds the arena it came from, not the block"
+  "nested_why": "the object is a libc malloc block, so the allocator below bounds the arena it came from, not the block",
+  "fix_commit": "00e24b80e092",
+  "backport_commit": "b3a0d15e3bfa"
 }

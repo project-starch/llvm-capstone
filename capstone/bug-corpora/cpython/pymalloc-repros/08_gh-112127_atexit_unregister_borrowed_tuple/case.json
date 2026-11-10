@@ -56,5 +56,8 @@
       "oracle": "virtual profile, pymalloc's blocks as child lifetimes (the port's patch 0003, CDERIVE/CREVOKE; tools/arms.json virtual-pymalloc-pools): as virtual-malloc"
     }
   },
-  "status": "measured on virtual Capstone (virtual-malloc, virtual-nested-pools) and stock CheriBSD (cheribsd-revocation); each arm's verdict_from names its bundle"
+  "status": "measured on virtual Capstone (virtual-malloc, virtual-nested-pools) and stock CheriBSD (cheribsd-revocation); each arm's verdict_from names its bundle",
+  "fix_commit": "2b466c47c333",
+  "backport_commit": "08d665d607ad",
+  "class": "temporal"
 }

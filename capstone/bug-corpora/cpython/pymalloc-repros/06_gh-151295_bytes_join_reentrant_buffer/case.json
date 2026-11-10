@@ -56,5 +56,9 @@
       "oracle": "virtual profile, pymalloc's blocks as child lifetimes (the port's patch 0003, CDERIVE/CREVOKE; tools/arms.json virtual-pymalloc-pools): as virtual-malloc"
     }
   },
-  "status": "measured on virtual Capstone (virtual-malloc, virtual-nested-pools) and stock CheriBSD (cheribsd-revocation); each arm's verdict_from names its bundle"
+  "status": "measured on virtual Capstone (virtual-malloc, virtual-nested-pools) and stock CheriBSD (cheribsd-revocation); each arm's verdict_from names its bundle",
+  "fix_commit": "84a322aa1555",
+  "backport_commit": "5c17ae6c1c96",
+  "class": "temporal",
+  "live_note": "size-sensitive: the corpus README binds this case to the 512-byte pymalloc ceiling, and the C model pins the object below it. No host use-after-free report exists for this issue: the collection pipeline's interpreter trigger reported a global-buffer-overflow (a different symptom of the same re-entrancy), and there is no interpreter re-run of it in allocator-boundary-repros. Its liveness rests on the 3.13 backport"
 }

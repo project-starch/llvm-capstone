@@ -2,7 +2,7 @@
   "case": 21,
   "upstream_fix": "gh-146169",
   "title": "Segfault/UB from expat when re-entering the XML Parser",
-  "consumer": "not established; the trigger is the upstream fix's own regression test",
+  "consumer": "the bundled expat's UTF-16 little-endian decoder, little2_toUtf8 (Modules/expat/xmltok.c:723), reached by re-entering Parse from a handler; the trigger is the issue's own reproducer, not a fix's regression test",
   "class": "temporal",
   "trigger": "trigger.py",
   "live_in_pin": true,
@@ -35,5 +35,8 @@
   "fault_sites_why": "Host ASan (CPython 3.13.7 --with-address-sanitizer, PYTHONMALLOC=malloc, results/2026-10-10-asan/sites.tsv) reports heap-use-after-free (READ 1) at little2_toUtf8 Modules/expat/xmltok.c:723. That run uses no Capstone arm and was recorded before any virtual arm ran.",
   "note": "All three arms genuinely detect, and 21 is the only temporal case where that happens. (1) and (2) fault cause=25 INVALID_CAP in little2_toUtf8, the function host ASan names. (3) faults SIGPROT si_code=2 PROT_CHERI_TAG at si_addr=0x426656a8, which on the TEMPORAL axis is the mechanism, not a consequence: revocation clears the tag, and the guest's own sicode selftest prints `revoked si_code=2` for its revoked control. The process died at the fault, which is why the quarantine probe's exit line is absent from the row. Why the sweep intervened here and not on 19, 20 or ten other temporal cases: CheriBSD's revocation is sweep-based (security.cheri.runtime_revocation_every_free_default is 0, runtime_revocation_async is 1), and the sweep trigger in CheriBSD's own MRS (lib/libc/stdlib/malloc/mrs/mrs.c) is `allocated_size >= MIN_REVOKE_HEAP_SIZE` (8 MiB) and then `quarantine->size * 4 >= allocated_size`, i.e. a quarter of the live heap. This case's freed object is 524288 bytes -- the largest in the corpus -- so one free crosses that fraction by itself and the flush is immediate. Every other temporal row frees between 2 and 4355 bytes and is missed, except 31, where the free CheriBSD saw was a returned 1 MiB pymalloc arena rather than the 32-byte block..",
   "nested": false,
-  "nested_why": "the object is a libc malloc block, so the allocator below bounds the arena it came from, not the block"
+  "nested_why": "the object is a libc malloc block, so the allocator below bounds the arena it came from, not the block",
+  "fix_commit": "dfd2c7cce8",
+  "backport_commit": "none for 3.13 as of 2026-11-10: the fix dfd2c7cce8 (main, 2026-10-22) was backported to 3.14 (75e8f80a4e) and 3.15 (310c445465) on 2026-10-23, and the 3.13 backport is PR #160412",
+  "live_note": "collected from the issue tracker while open and unfixed (channel R-tracker). Fixed upstream after collection: dfd2c7cce8, 2026-10-22, 'gh-146169: correctly handle re-entrant parsing calls in Expat handlers (#146566)', on CPython's pyexpat side, not libexpat's; backported to 3.14 and 3.15 on 2026-10-23, 3.13 backport PR #160412. None is an ancestor of v3.13.7."
 }

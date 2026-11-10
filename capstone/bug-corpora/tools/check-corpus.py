@@ -76,7 +76,8 @@ CASE_OPTIONAL = {"live_in_pin", "live_proof", "live_note", "distinguishing",
                  "memory_error_is_the_defect", "memory_error_is_the_defect_why",
                  "platform_precondition", "platform_precondition_why",
                  "arena_bytes", "arena_bytes_why",
-                 "dir_token", "dir_token_why"}
+                 "dir_token", "dir_token_why",
+                 "fix_commit", "backport_commit"}
 # `class` states the defect's AXIS outright. The case-json schema used to leave it to be read
 # out of `lifetime_ender`'s English (tools/catch-tables.py extra_kind), which cannot be corrected
 # by a review without rewriting the sentence that describes the defect. A case whose axis the

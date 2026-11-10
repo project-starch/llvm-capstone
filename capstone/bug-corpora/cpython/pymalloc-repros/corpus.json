@@ -43,7 +43,7 @@
     "[Tt]wenty reports, (\\w+) shapes",
     "The (\\w+) shapes, and what each"
   ],
-  "note": "The inventory states this is the whole reachable set at the pin, not a sample.",
+  "note": "The inventory (docs/ref/cpython-pymalloc-defects.md) states this is the whole reachable set at the pin for the cell consumer-side, pymalloc-served, no true concurrency -- not a sample -- enumerated over v3.13.7..v3.13.15 plus every main-only fix. Read with the inventory's own caveats: two candidates are unresolved (gh-154189, gh-116946) and could raise the count to 22; v3.13.16 has been tagged since; and the free-list layer beside this one is a lower bound because the layer was assigned from the file the fix touches. 20 confirmed, up to 22.",
   "arm_configurations": {
     "virtual-malloc": "virtual-pymalloc",
     "virtual-nested-pools": "virtual-pymalloc-pools",

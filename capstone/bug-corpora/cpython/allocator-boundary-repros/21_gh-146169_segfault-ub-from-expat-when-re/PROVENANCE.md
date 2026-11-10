@@ -1,7 +1,7 @@
 # Provenance
 
-**Upstream fix:** `gh-146169`, *"Segfault/UB from expat when re-entering the XML Parser"*.
-**Consumer:** `unknown.c`. **CVE:** `NO VERIFIED CVE`.
+**Upstream issue:** `gh-146169`, *"Segfault/UB from expat when re-entering the XML Parser"* -- collected from the tracker while open and unfixed; the trigger is the issue's own reproducer. **Fixed upstream after collection:** `dfd2c7cce8` (main, 2026-10-22, "correctly handle re-entrant parsing calls in Expat handlers", #146566), backported to 3.14 (`75e8f80a4e`) and 3.15 (`310c445465`) on 2026-10-23; the 3.13 backport is PR #160412. None is an ancestor of `v3.13.7`.
+**Consumer:** the bundled expat's UTF-16 little-endian decoder, `little2_toUtf8` (`Modules/expat/xmltok.c:723`), reached by re-entering `Parse` from a handler. **CVE:** `NO VERIFIED CVE`.
 
 ## Liveness at the pin, measured
 
