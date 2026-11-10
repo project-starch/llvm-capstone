@@ -37,12 +37,17 @@ The following R-type encodings all use opcode `0x5b`, funct3 `1`.
 |---|---|---|---|
 | `CSRUNV rd, rs1, rs2` | `0x24` | Physical frame address, action | Event kind or action result |
 | `CSMINT rd, rs1, rs2` | `0x50` | Destination slot VA, descriptor VA (v7: base, end, perms+type, cursor, second slot, 0) | Scalar private ancestor ID; the tagged child (LINEAR or NONLIN, at the cursor) in the slot, and in the second slot when given |
-| `CDERIVE rd, rs1, rs2` | `0x51` | Non-linear parent with cursor at child start, scalar size | Fresh non-linear child with inherited data rights and MANAGE |
-| `CREVOKE rs1, rs2` (rd=0) | `0x52` | Management-capable non-linear parent, non-linear child reference | Invalidate that direct child and its subtree |
+| `CDERIVE rd, rs1, rs2` | `0x51` | Non-linear parent with cursor at child start, scalar size | Fresh non-linear child with inherited data rights |
+| `CREVOKE rs1` (rd=0, rs2=0) | `0x52` | Non-linear reference to the object | Invalidate the object's node and its subtree |
 | `CSRETIRE rd, rs1, rs2` | `0x53` | Ancestor ID; conventionally zero in rs2 | Zero on success, one on rejected retirement |
+| `CRENEW rd, rs1` (rs2=0) | `0x54` | Non-linear reference to the object | Invalidate the object's subtree and begin a new lifetime in its node; the renewed reference |
 
-Virtual applications can execute `CDERIVE` and `CREVOKE`. Both decode in every profile, in QEMU and on
-the RTL (capstone-ariane since d93a8d66b); a nonzero rd on `CREVOKE` is illegal-instruction fault 2 on both.
+Virtual applications can execute `CDERIVE`, `CREVOKE` and `CRENEW`. All three decode in every profile in
+QEMU. **The RTL differs** (capstone-ariane since d93a8d66b): it implements `CDERIVE` and the two-operand
+`CREVOKE rs1, rs2` described under "The deployed two-operand CREVOKE", and has no `CRENEW`. QEMU's `CREVOKE`
+takes the object alone since the branch `one-operand-crevoke-crenew` (2026-11-10), and it refuses the
+two-operand encoding, which names a register in rs2, as illegal. Until the RTL follows, an image runs on
+one of the two and not on the other. A nonzero rd on `CREVOKE` is illegal-instruction fault 2 on both.
 QEMU refuses an inexact `CDERIVE` child with 29 unless exact bounds is enabled; the RTL refuses it only
 under its table namespace (`vctx_table_o`, `csr_regfile.sv:2885-2887`: a supervised context with
 `csupctl.virt` or under CSRUNV; S outside supervision with `srevroot` non-zero; M outside supervision with
@@ -118,26 +123,55 @@ the parent's bounds; subtraction checks the range without overflow. The
 compact profile also requires an exact bounds round trip. The exact-bounds
 profile retains the requested bounds in the existing shadow metadata.
 The operation creates a non-linear child node immediately after its parent
-in preorder and returns its capability. Data rights are inherited; MANAGE
-is granted for the new node even when the parent lacks it. Sources are
+in preorder and returns its capability. Data rights are inherited, and no
+other right is granted. Sources are
 unchanged except when explicitly selected as rd; rd=0 discards the result
 but still allocates. Allocation uses the existing pressure/collection path.
 
-`CREVOKE` checks both tags, that both operands are NONLIN references (cause 26
-otherwise), both live nodes, MANAGE on rs1, and direct parentage of rs2's node;
-the node table also refuses a linear node as the child. It then invalidates and
-unlinks that child and its descendants. The type checks matter because `CSMINT`
-can mint MANAGE onto a linear grant: without them, an `MREV` handle over that
-grant could end the linear node behind it, and legacy `CSREVOKE` of the handle
-would then find an empty subtree and return LIN instead of UNINIT, skipping the
-re-initialization rule.
-No payload bytes are accessed or initialized. Narrowed bounds, offsets and
-data rights on either reference do not affect release authority. Foreign
-children, grandchildren and self-revocation fault with cause 29; missing
-MANAGE faults with 27; stale operands fault with 25. All checks precede
-mutation. Nonzero rd is reserved and causes illegal-instruction fault 2.
-This two-operand operation is distinct from legacy one-handle `CSREVOKE`
-(funct7=0), which retains its reclamation semantics.
+`CREVOKE` takes one operand, a reference to the object whose lifetime ends,
+as `release(r)` has one argument in the abstract machine. It checks the tag
+(cause 24), that the operand is a NONLIN reference (26) and that its node is
+live (25). The node table also refuses a linear node (29). The instruction
+then invalidates and unlinks the node and its descendants. No parent is named,
+the table consults none, and no right is checked: whoever holds a live
+reference to an object may end its lifetime. No payload bytes are accessed or
+initialized. Narrowed bounds, offsets and data rights on the reference do not
+matter, because the release belongs to the node. All checks precede mutation.
+Nonzero rd and nonzero rs2 are reserved and cause illegal-instruction fault 2.
+The type checks matter because an `MREV` handle over a linear grant would
+otherwise end the linear node behind it, and legacy `CSREVOKE` of the handle
+would then find an empty subtree and return LIN instead of UNINIT, skipping
+the re-initialization rule. A node that `CSMINT` made is linear until a legacy
+`CSDELIN`, so `CREVOKE` does not end a grant as the kernel issued it. The
+kernel does, with `CSRETIRE`. This operation is distinct from legacy
+one-handle `CSREVOKE` (funct7=0), which retains its reclamation semantics.
+
+`CRENEW` is a release and an allocation in the same place, in one instruction.
+Its checks are `CREVOKE`'s. The object's descendants end as under `CREVOKE`.
+The object's own node begins a new lifetime: it keeps its parent, its depth
+and its position in the list. The result has the operand's cursor, bounds and
+rights and names the new lifetime, so the operand and every other reference
+to the old lifetime are stale (25 on use). Where ids carry a generation, the
+node keeps its record and the record takes its next generation, so no identity
+is issued. Where ids are bare (the host tree, a paged table at 30 bits), or the
+record holds its last generation, the new lifetime takes a free identity whose
+record takes over the links, with the pressure and exhaustion rules of
+`CDERIVE`, and the old record retires like any other. rd may be rs1, and rd=0
+ends the old lifetime and keeps no reference to the new one. Nonzero rs2 is
+reserved (2). A pool that takes a piece back and hands it out again needs only
+the reference its client returned.
+
+#### The deployed two-operand CREVOKE
+
+The capstone-sublet RTL implements `CREVOKE rs1, rs2` with the parent in rs1
+and the child in rs2. It checks both tags, that both operands are NONLIN
+references (26), both live nodes (25), the fourth right, MANAGE, on rs1 (27),
+and direct parentage of rs2's node. Foreign children, grandchildren and
+self-revocation fault with 29. Its `CDERIVE` grants MANAGE for the new node
+even when the parent lacks it. QEMU implemented this form until 2026-11-10 and
+now refuses it. The old form always faulted on rs2 = x0, which is never a
+capability, so the one-operand encoding takes no encoding that the old form
+used.
 
 `CSTIGHTEN` accepts four rights bits and cannot add any of them. Non-linear
 `CSSPLIT` keeps the original node in both resulting references; allocating
@@ -153,15 +187,20 @@ any type reloads untagged (24). That differs from the RTL, whose `LDC` forwards
 the loaded value verbatim for every type (`docs/ref/ISSUES.md` Q-11), and is left
 for Q-11's own fix so that recorded physical results stay reproducible.
 
-**Authority model.** MANAGE is the right to end direct children. Creating a child
-is unprivileged: `CDERIVE` needs no MANAGE, so any non-linear reference can create
-lifetimes and consume nodes, and `capstone_cap_without_manage` stops a client from
-ending lifetimes but not from creating them. The right to end a child does not
-depend on the parent reference's bounds, and MANAGE survives `CSSHRINK`,
-`CSCINCOFFSET` and non-linear `CSSPLIT`. An allocator must therefore keep this
-invariant: **every pointer that leaves the allocator is a `CDERIVE` child, or has
-had MANAGE removed.** A narrowed or offset view of a pool that escapes with MANAGE
-can end every live object in that pool.
+**Authority model.** A live reference to an object is the authority to end
+that object's lifetime, and to renew it. There is no separate right. Creating a
+child is unprivileged as well, so any non-linear reference can create lifetimes
+and consume nodes. A client that holds an object can therefore end it without
+its allocator: this ends a lifetime the allocator still counts as issued, and a
+later release by the allocator faults with 25, as a double release does. It
+lets no stale reference through. What an allocator must keep to itself is the
+reference to its block. That reference names the block's lifetime, so whoever
+holds it can end every live object in the block, and its bounds cover them all.
+An allocator must therefore keep this invariant: **every pointer that leaves
+the allocator is a `CDERIVE` child or a `CRENEW` result.** On the deployed RTL
+the two-operand rule of the previous subsection applies instead: MANAGE is the
+right to end direct children, and a pointer that leaves the allocator is a
+`CDERIVE` child or has had MANAGE removed.
 
 **Overlap.** Live children may overlap: two `CDERIVE`s over the same bytes both
 succeed. Linear carving made disjointness hold by construction; with `CDERIVE`
@@ -182,26 +221,31 @@ The exact-bounds profile has no such restriction.
 The C interface is [capability.h](../../../runtime/include/capstone/capability.h):
 `capstone_cap_derive(parent, offset, size)` interprets the offset relative
 to the parent's base and rejects offset overflow before setting the cursor;
-`capstone_cap_revoke_child(parent, child)` releases the child; and
-`capstone_cap_without_manage(cap)` removes only MANAGE. These wrappers use
+`capstone_cap_release(object)` ends the object's lifetime; and
+`capstone_cap_renew(object)` ends it and returns a reference to a new lifetime
+in the same place. `capstone_cap_revoke_child(parent, child)` and
+`capstone_cap_without_manage(cap)` remain for code built for the deployed RTL.
+These wrappers use
 raw `.insn` encodings and require no compiler backend, mnemonic or intrinsic
 addition. `capstone_cap_derive` and `capstone_cap_without_manage` check that
 their operand is a NONLIN reference first, and refuse anything else atomically
 with a zero-size `CDERIVE` (cause 26, or 24 if untagged), because the `CSSCC` and
 `CSTIGHTEN` they use would otherwise move a linear operand out of its register.
-Allocator bookkeeping must still prevent overlapping live children and protect
-management-capable copies. This ISA change does not migrate the allocator
-adapters or qualify RTL.
+Allocator bookkeeping must still prevent overlapping live children and keep
+block references private. The one-operand form is not qualified on RTL.
 
 **Open items** (deferred design choices, recorded at review):
-- whether ending a child should depend on the parent reference's bounds (CREVOKE
-  requiring the child to lie within them, which needs the child node's own extent),
-  or narrowing should drop MANAGE;
+- closed for QEMU by the one-operand `CREVOKE`: whether ending a child should
+  depend on the parent reference's bounds, or narrowing should drop MANAGE. No
+  parent and no right take part in a release any more. It stays open on the RTL;
 - `CDERIVE` with rd=0 still allocates a node nothing can name; reserving rd=0 as
-  illegal, as `CREVOKE` reserves rd≠0, would remove it;
-- NOT_CHILD and a corrupt node table both raise cause 29 with tval 0, so a
-  program defect cannot be told from an infrastructure fault; a distinguishing
-  tval would separate them;
+  illegal, as `CREVOKE` reserves rd≠0, would remove it. `CRENEW` with rd=0 keeps
+  a live node nothing can name in the same way;
+- a linear operand node and a corrupt node table both raise cause 29 with tval 0,
+  so a program defect cannot be told from an infrastructure fault; a
+  distinguishing tval would separate them;
+- a client that renews or releases an object behind its allocator's back is not
+  detected at that instruction, only at the allocator's own later release (25);
 - a representability query for the compact profile (see above);
 - one mnemonic everywhere: the QEMU decoder says `cskill`, and `CREVOKE` differs
   by one letter from legacy `CSREVOKE`;

@@ -223,11 +223,13 @@ int main(int argc, char **argv)
         if (!strcmp(mode, "nested-grandchild")) {
             char *grand = heap_issue(child, 16);
             require(grand != NULL, "nested grandchild derive");
-            puts("MALLOC_FAULT_READY:nested-grandchild"); fflush(stdout);
-            heap_end(p, grand);
+            /* The object alone ends: no parent is named, and its own parent lives on. */
+            heap_end(grand);
+            child[0] = 'c';
+            puts("MALLOC_FAULT_READY:nested-grandchild"); fflush(stdout); fault_store(grand);
             return survived(mode, may_survive);
         }
-        heap_end(p, child);
+        heap_end(child);
         char *back = p;
         require(back != NULL && __builtin_capstone_cap_get_cursor(back) == (uintptr_t)p,
                 "nested reclaim returns the object at its start");
@@ -237,7 +239,7 @@ int main(int argc, char **argv)
         }
         if (!strcmp(mode, "nested-double")) {
             puts("MALLOC_FAULT_READY:nested-double"); fflush(stdout);
-            heap_end(p, child);
+            heap_end(child);
             return survived(mode, may_survive);
         }
         if (!strcmp(mode, "nested-ok")) {
@@ -247,7 +249,11 @@ int main(int argc, char **argv)
             again = heap_issue(back + 48, 40); /* the cache hit: a fresh child */
             require(again != NULL, "nested re-derive");
             memset(again, 'd', 40);
-            heap_end(back, again);
+            again = heap_renew(again);         /* the next hit: the same piece, a new lifetime */
+            require(again != NULL && __builtin_capstone_cap_get_base(again) == (uintptr_t)p + 48 &&
+                    __builtin_capstone_cap_get_end(again) == (uintptr_t)p + 88 && again[39] == 'd',
+                    "nested renewal keeps bounds and bytes");
+            heap_end(again);
             free(back);
             puts("MALLOC_SURVIVED:nested-ok"); fflush(stdout);
             return 0;
