@@ -12,18 +12,20 @@ memcached at two cases when it had five, and did not mention the Wireshark corpu
     python3 tools/check-ports.py --self-test     # every port component's version pin
     python3 tools/build-index.py                 # regenerate INDEX.md and index.json
 
+[`classification.json`](classification.json) gives every one of the 425 declared records a
+normalized memory-safety axis and root/manifestation CWE classification.  It distinguishes the
+418 unique active defects from two duplicate records and five withdrawn records.  The method,
+acceptance rules and summary are in [CLASSIFICATION.md](CLASSIFICATION.md); regenerate it with
+`tools/classify-cases-gemini.py` rather than editing model votes by hand.
+
 [SCHEMA.md](SCHEMA.md) is the contract: what a case is, field by field, what a
 `corpus.json` declares, and what a `port.json` declares. Where it and the checker
 disagree, the checker is the authority.
 
-## The other three places bug material lives
+## The other places bug material lives
 
-This directory is one of four, and INDEX.md covers all of them:
+INDEX.md also covers the project's own defect material:
 
-- `../../xlang/` — the cross-language corpora, on stock toolchains: Corpus B (15 rows, 12 of
-  them mruby or an mruby gem), the Lua-CDP corpus (13 rows), the reuse-without-free pair and
-  the triaged TOCTOU class. Its cases are distilled C shims with their own row tables, and
-  each row is pinned to its own vulnerable upstream commit rather than to a release we port.
 - `../tests/fpga-repros/` — **our own** silicon and RTL defects, one self-contained folder
   per issue. No third-party defect belongs there and none of these belongs here.
 - `../docs/ref/ISSUES.md` — **our own** compiler and runtime defects, as a registry rather

@@ -1,5 +1,16 @@
 # Current Capstone state
 
+## 2026-11-10 — Normalized third-party defect classification
+
+The 425 declared bug-corpus records now have a normalized, auditable classification artifact:
+418 unique active defects, two duplicate records and five withdrawn records.  The active split is
+263 temporal, 139 spatial, 11 other memory-safety, four non-memory-safety and one independently both.
+Every record has a root CWE or an explicit unassigned value, plus manifestation CWEs, evidence,
+confidence and review status.  Two independent Gemini passes, disagreement adjudication, 70
+authoritative sanitizer-CWE controls and five direct provenance reviews leave zero unresolved rows.
+See [the method and summary](../../bug-corpora/CLASSIFICATION.md) and
+[`classification.json`](../../bug-corpora/classification.json).
+
 ## 2026-11-05 — Perl work-bounded comparison
 
 On the same `ae47030ceeb6` SDK baseline, unchanged Perl makerand slices of
