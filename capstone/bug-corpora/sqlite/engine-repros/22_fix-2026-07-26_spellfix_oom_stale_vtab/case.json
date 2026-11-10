@@ -1,6 +1,6 @@
 {
   "case": 22,
-  "upstream_fix": "fix-2026-07-26",
+  "upstream_fix": "d9305a65c876",
   "title": "row24",
   "consumer": "sqlite3.c",
   "live_in_pin": true,
@@ -67,5 +67,7 @@
   "fault_sites": [
     "editDist3FindLang"
   ],
-  "fault_sites_why": "host ASan on the corrected trigger, built with its SQLITE_CONFIG_HEAP call replaced so the allocator wrapper sits on the system allocator (results/2026-10-11-host-asan, variant), reports the heap-use-after-free in editDist3FindLang <- editDist3SqlFunc. Declared 2026-10-11, before the first Sublet run of that trigger."
+  "fault_sites_why": "host ASan on the corrected trigger, built with its SQLITE_CONFIG_HEAP call replaced so the allocator wrapper sits on the system allocator (results/2026-10-11-host-asan, variant), reports the heap-use-after-free in editDist3FindLang <- editDist3SqlFunc. Declared 2026-10-11, before the first Sublet run of that trigger.",
+  "dir_token": "fix-2026-07-26",
+  "dir_token_why": "the directory is addressed by 106 records that must not be rewritten -- the bundles name this case by directory in verdicts.jsonl, and so do the board run records under tests/rtl-smoke/ -- so the name keeps the token it has always had and upstream_fix now says what is true. The token is the fix's DATE, not its commit, so the field could not be looked up. The commit is d9305a65c876, 2026-07-26, 'Add reference counting to the EditDist3Config object in the spellfix extension', touching ext/misc/spellfix.c."
 }

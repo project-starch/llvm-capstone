@@ -1,10 +1,10 @@
 {
   "case": 20,
-  "upstream_fix": "d21bd37c7c",
+  "upstream_fix": "unfixed",
   "title": "new16; unfixed in every release",
   "consumer": "sqlite3.c",
   "live_in_pin": true,
-  "live_proof": "inspection in the 3.22.0 tree: nodeWrite() inserts the node into the hash with no check for iNode==0, while nodeHashDelete() keys off iNode and treats 0 as 'not in the hash', so nodeRelease() frees a block that stays linked in aHash[0]. Fixed upstream in d21bd37c7c; the note recorded with the entry is that it is unfixed in every release up to the one we checked",
+  "live_proof": "inspection in the 3.22.0 tree, re-verified 2026-11-10 against both 3.22.0 and upstream HEAD: nodeWrite() takes sqlite3_last_insert_rowid() when pNode->iNode==0 and calls nodeHashInsert() with the result (ext/rtree/rtree.c:788-790 in 3.22.0), while nodeHashDelete() opens with `if( pNode->iNode!=0 )` (:572) and so cannot unlink a node whose iNode is still 0, and nodeRelease() frees the block immediately after calling it. A BEFORE INSERT trigger that raises IGNORE suppresses the %_node insert, so last_insert_rowid() returns 0 and the freed block stays linked in aHash[0]. UNFIXED: the same three sites are unchanged at upstream HEAD (mirror head 2026-09-17), so there is no fix commit to cite. An earlier revision of this field claimed 'Fixed upstream in d21bd37c7c' while its own title said 'unfixed in every release'; the measurement settles it the way the title had it.",
   "allocator_layer": "memsys5",
   "object": "an RtreeNode linked into aHash[0] while still carrying iNode==0",
   "lifetime_ender": "nodeRelease() frees the block, but nodeHashDelete() cannot unlink it because it keys off an iNode of 0",
@@ -68,5 +68,7 @@
     "nodeAcquire",
     "nodeHashLookup"
   ],
-  "fault_sites_why": "The next nodeAcquire walks the aHash bucket that still holds the freed node and reads p->iNode out of freed memory (PROVENANCE.md); the bucket walk is nodeHashLookup. Declared 2026-10-10 after the virtual runs resolved faults there; the reason is the source and PROVENANCE.md cited, which predate those runs."
+  "fault_sites_why": "The next nodeAcquire walks the aHash bucket that still holds the freed node and reads p->iNode out of freed memory (PROVENANCE.md); the bucket walk is nodeHashLookup. Declared 2026-10-10 after the virtual runs resolved faults there; the reason is the source and PROVENANCE.md cited, which predate those runs.",
+  "dir_token": "d21bd37c7c",
+  "dir_token_why": "the directory is addressed by 104 records that must not be rewritten -- the bundles name this case by directory in verdicts.jsonl, and so do the board run records under tests/rtl-smoke/ -- so the name keeps the token it has always had and upstream_fix now says what is true. The token LOOKS like an upstream commit and is not one: checked 2026-11-10 against the SQLite git mirror, `d21bd37c7c` is not a commit, no commit hash begins `d21bd3`, and the string appears nowhere in the 36709 commits of upstream history. Anyone who looked it up would find nothing, which is why it must not stand as the provenance field."
 }

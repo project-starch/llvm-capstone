@@ -1,6 +1,10 @@
 # spellfixoom -- fix-2026-07-26
 
-Upstream fix `2026-07-26`. Collected in round R1 (NVD and upstream history).
+Upstream fix **`d9305a65c876`**, 2026-07-26. Collected in round R1 (NVD and upstream history).
+
+"Add reference counting to the EditDist3Config object in the spellfix extension", touching
+`ext/misc/spellfix.c`. The directory's token is the fix's DATE, which could not be looked up;
+`case.json` now carries the commit in `upstream_fix` and the date in `dir_token`.
 
 The reduction is argued in the case source's own header, reproduced here so the
 claim travels with the case rather than living only in the build tree.

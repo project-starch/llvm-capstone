@@ -1,6 +1,6 @@
 {
   "case": 13,
-  "upstream_fix": "fix-2026-06-08",
+  "upstream_fix": "b677c5afd4",
   "title": "row22",
   "consumer": "sqlite3.c",
   "live_in_pin": true,
@@ -65,5 +65,7 @@
   "fault_sites": [
     "sqlite3Fts5PoslistNext64"
   ],
-  "fault_sites_why": "Declared 2026-10-29 from the host ASan reference run on the corrected trigger (shared/run-host-asan.py, both controls satisfied): heap-use-after-free, a 1-byte read 52 bytes inside the freed 64-byte poslist buffer in sqlite3Fts5PoslistNext64 under fts5LookaheadReaderNext, freed by sqlite3_realloc under sqlite3Fts5PoslistWriterAppend. The lookahead reader decodes the varint itself, so there is no libc primitive to declare beside it. The case carried no fault_sites before, because the trigger replaced on 2026-10-29 never reached the defect."
+  "fault_sites_why": "Declared 2026-10-29 from the host ASan reference run on the corrected trigger (shared/run-host-asan.py, both controls satisfied): heap-use-after-free, a 1-byte read 52 bytes inside the freed 64-byte poslist buffer in sqlite3Fts5PoslistNext64 under fts5LookaheadReaderNext, freed by sqlite3_realloc under sqlite3Fts5PoslistWriterAppend. The lookahead reader decodes the varint itself, so there is no libc primitive to declare beside it. The case carried no fault_sites before, because the trigger replaced on 2026-10-29 never reached the defect.",
+  "dir_token": "fix-2026-06-08",
+  "dir_token_why": "the directory is addressed by 98 records that must not be rewritten -- the bundles name this case by directory in verdicts.jsonl, and so do the board run records under tests/rtl-smoke/ -- so the name keeps the token it has always had and upstream_fix now says what is true. The token is the fix's DATE, not its commit, so the field could not be looked up. The commit is b677c5afd4, 2026-06-08, 'Avoid a potential use-after-free in fts5. Report [bugs:/info/2026-06-08T08:45:27Z]', shipped with ext/fts5/test/fts5near.test."
 }

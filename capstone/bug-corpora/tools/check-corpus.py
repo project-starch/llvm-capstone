@@ -75,7 +75,8 @@ CASE_OPTIONAL = {"live_in_pin", "live_proof", "live_note", "distinguishing",
                  "control_probe", "control_probe_why",
                  "memory_error_is_the_defect", "memory_error_is_the_defect_why",
                  "platform_precondition", "platform_precondition_why",
-                 "arena_bytes", "arena_bytes_why"}
+                 "arena_bytes", "arena_bytes_why",
+                 "dir_token", "dir_token_why"}
 # `class` states the defect's AXIS outright. The case-json schema used to leave it to be read
 # out of `lifetime_ender`'s English (tools/catch-tables.py extra_kind), which cannot be corrected
 # by a review without rewriting the sentence that describes the defect. A case whose axis the
@@ -358,12 +359,25 @@ def check_cases(corpus, decl, dirs, problems):
             problems.append(f"{where}: arena_bytes must be an integer, at least 65536 and a power "
                             f"of two (repro322_common.h CAPSTONE_REPR_ASSERT_POW2) -- got {arena!r}")
 
+        # `dir_token` separates the DIRECTORY's historical token from the provenance CLAIM.
+        # The two were one field, so a token that turned out to be wrong could not be corrected:
+        # the directory name is addressed by records that must not be rewritten -- a bundle's
+        # verdicts.jsonl names the case by it, and so do the board run records -- exactly as
+        # `withdrawn` keeps a directory and its number for the same reason. With `dir_token` the
+        # directory keeps what it has always been called and `upstream_fix` says what is true.
+        # It requires `dir_token_why`, because a directory that silently disagrees with its own
+        # provenance field is worse than one that never claimed anything.
         number, fix = case.get("case"), case.get("upstream_fix")
-        if isinstance(number, int) and fix:
+        dir_token = case.get("dir_token") or fix
+        if isinstance(number, int) and dir_token:
             prefix = f"row{number}_" if decl["case_schema"] == "sqlite-row" \
-                else f"{number:02d}_{fix}_"   # case-json and script-trigger share this
+                else f"{number:02d}_{dir_token}_"   # case-json and script-trigger share this
             if not where.startswith(prefix):
                 problems.append(f"{where}: directory should start with {prefix!r}")
+        if "dir_token" in case and not str(case.get("dir_token_why", "")).strip():
+            problems.append(f"{where}: dir_token without dir_token_why")
+        elif "dir_token_why" in case and "dir_token" not in case:
+            problems.append(f"{where}: dir_token_why without dir_token")
         if isinstance(number, int):
             numbers.setdefault(number, []).append(where)
 

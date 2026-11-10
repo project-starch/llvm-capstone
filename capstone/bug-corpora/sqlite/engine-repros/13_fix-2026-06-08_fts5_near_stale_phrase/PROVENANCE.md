@@ -1,6 +1,10 @@
 # fts5near -- fix-2026-06-08
 
-Upstream fix `2026-06-08`. Collected in round R1 (NVD and upstream history).
+Upstream fix **`b677c5afd4`**, 2026-06-08. Collected in round R1 (NVD and upstream history).
+
+"Avoid a potential use-after-free in fts5. Report [bugs:/info/2026-06-08T08:45:27Z]", shipped
+with `ext/fts5/test/fts5near.test`. The directory's token is the fix's DATE, which could not be
+looked up; `case.json` now carries the commit in `upstream_fix` and the date in `dir_token`.
 
 The reduction is argued in the case source's own header, reproduced here so the
 claim travels with the case rather than living only in the build tree.

@@ -119,6 +119,68 @@ and 8 spatial** -- case 00 among the spatial, which is what its `class` now says
 own "BUFFER OVERREAD" and the measured `cause=28` always said. It was 28 and 20 until 2026-10-30,
 when 08 was withdrawn for the reason 01 and 09 already carried.
 
+## Is each defect real? How to check one, without taking our word for it
+
+A reviewer's first question is whether these are upstream defects or our own inventions, and
+`PROVENANCE.md` is **not** the answer on its own: it says so itself -- *"the reduction is argued in
+the case source's own header, reproduced here"* -- so it restates our claim rather than
+corroborating it. It is the index. The three anchors it points at are what carry the weight, and
+each is independent of us:
+
+1. **The upstream fix commit** named in `upstream_fix`. Resolve it in SQLite's own history (the
+   fossil export; a local mirror resolves these as **git** hashes, not as `FossilOrigin-Name`
+   prefixes). Read its subject and the regression test it ships.
+2. **The defective source in the pinned release.** `live_proof` cites file and line in 3.22.0.
+3. **Host ASan on unmodified 3.22.0** -- `results/2026-10-11-host-asan`, which reports
+   `heap-use-after-free` for 16 of the 19 counted temporal cases.
+
+**A fix must POSTDATE the pin, or the case is void.** 3.22.0 is 2018-01-22; a "fix" that is an
+ancestor of it was already in our version, so the defect never was. Checked 2026-11-10 with
+`git merge-base --is-ancestor <fix> version-3.22.0` for all sixteen cited commits: **none is an
+ancestor**, the earliest fix lands 2018-02-07 and the latest 2026-07-26.
+
+Three provenance fields were wrong and are corrected (2026-11-10). None of them made a defect
+unreal; all three would have made a reviewer unable to check one:
+
+| case | was | is | why |
+|---|---|---|---|
+| 20 | `upstream_fix: d21bd37c7c` | `unfixed`, token in `dir_token` | **that hash is not an upstream commit** -- not a commit, no hash begins `d21bd3`, and the string is absent from all 36709 commits. Its own `live_proof` claimed "Fixed upstream in d21bd37c7c" while its title said "unfixed in every release"; the source settles it for the title, in 3.22.0 and at HEAD alike |
+| 13 | `upstream_fix: fix-2026-06-08` | `b677c5afd4` | the token was the fix's DATE, so the field could not be looked up |
+| 22 | `upstream_fix: fix-2026-07-26` | `d9305a65c876` | the same |
+
+The directories keep their old tokens, in `dir_token`: 98 to 106 records address each case by
+directory name, including the bundles' `verdicts.jsonl` and the board run records, and those are
+measurements that must not be rewritten to tidy a name.
+
+**Cases 21 and 23 cite one commit and count as two.** `eab0e10304` repairs a class of defect, and
+upstream's own subject says where: *"In extensions rtree, fts3 **and** fts5, ensure that when
+dynamic buffers are bound to persistent statements..."*. The two cases are distinct instances of it
+-- different objects (an `RtreeNode` payload buffer; the fts3 segment writer's root buffer),
+different code ending the lifetime (`nodeRelease()`; `fts3SegWriterFree()`), different extensions.
+Their shared `fault_sites` are the copy path a bound parameter travels, common to both by
+construction. Upstream repaired at least three sites and this corpus reproduces two, so counting
+instances under-counts that class rather than inflating it. A reviewer who prefers to count root
+causes should merge this one pair, and the temporal denominator reads 18.
+
+**How the corpus was gathered, and what that does and does not support.** Two methods: a
+**backport walk** -- read upstream's history from the newest release backwards, and where a commit
+fixes a lifetime defect, the defect existed before it, so check whether its code is in 3.22.0 -- and
+a search of **CVE/NVD and other published reports**. 12 of the 19 carry a `rowNN` title from that
+round; the other 7 are `newNN`, found by structural inspection of the pinned source. No case in this
+corpus records a CVE: for defects of this kind SQLite's own history, not NVD, is where they live.
+
+**This is a sample, and it is not a census -- do not claim one.** Enumerating *every* temporal
+defect of 3.22.0 by keyword over upstream subjects does not work, and the corpus itself measures by
+how much: of the sixteen fixes cited here, a keyword hunt over commit subjects
+(`use-after-free|dangling|freed pointer|double-free|...`) finds **ten**, and misses **six** --
+cases 03, 06, 17, 19, 21/23 and 22, which upstream describes as "a crash", "unregisters any SQL
+user-functions", "needs to survive longer than", "do not allow writes when a read cursor is
+active", "ensure dynamic buffers are bound", and "add reference counting". A **37.5 % measured
+false-negative rate** on a set whose ground truth we hold. The same hunt also over-counts, since
+some of its 42 hits fix defects introduced after 3.22.0. A real census means triaging the 4212
+defect-shaped commits that touch `src/`, `ext/fts3`, `ext/fts5`, `ext/rtree` or `ext/misc` after
+3.22.0, and checking each against the pinned source.
+
 **Two configurations, and `tools/catch-tables.py --all --board` prints the nested one.** The
 non-nested table is recomputed the same way, from the same cells, by the arms named under it.
 **The two tables are the same defects measured twice, so their counts are not additive**: 19

@@ -1,6 +1,14 @@
 # rtreeinode0 -- d21bd37c7c
 
-Upstream fix `d21bd37c7c`. Collected in round R1 (NVD and upstream history).
+**UNFIXED upstream.** Collected in round R1 (NVD and upstream history).
+
+The directory's token `d21bd37c7c` is NOT an upstream commit. Checked 2026-11-10 against the
+SQLite git mirror: it is not a commit, no commit hash begins `d21bd3`, and the string appears
+nowhere in upstream's 36709 commits. The directory keeps the name because 104 records address
+the case by it -- the bundles' `verdicts.jsonl` and the board run records under
+`tests/rtl-smoke/` -- so `case.json` carries `dir_token` for the name and `upstream_fix:
+unfixed` for the claim. The defect itself is verified in source, in 3.22.0 and at upstream
+HEAD alike: `ext/rtree/rtree.c:788-790` and `:572`, see `live_proof`.
 
 The reduction is argued in the case source's own header, reproduced here so the
 claim travels with the case rather than living only in the build tree.

@@ -470,6 +470,7 @@ checkable from outside, and it is the only input to the generated index.
 | `runners`, `checker`, `inventory`, `evidence`, `related` | repository-root-relative paths. Every one must exist |
 | `advisories` | one entry per advisory, with its aliases in the same string, so counting entries counts advisories rather than identifiers |
 | `shape_table`, `shape_prose` | whether the README carries a shape table that must partition the cases, and any prose claim about its size |
+| `dir_token` | optional per case: the token the DIRECTORY name carries, when it differs from `upstream_fix`. The two were one field, so a token that turned out to be wrong could not be corrected -- the directory is addressed by records that must not be rewritten (a bundle's `verdicts.jsonl` names the case by directory, and so do the board run records), exactly as `withdrawn` keeps a directory and its number. With it the directory keeps what it has always been called and `upstream_fix` says what is true. Requires `dir_token_why`: a directory that silently disagrees with its own provenance field is worse than one that never claimed anything. Three cases of `sqlite/engine-repros` use it as of 2026-11-10 -- 20, whose token resolves to no upstream commit at all, and 13 and 22, whose tokens are the fix's date rather than its hash |
 | `arm_configurations` | arm name -> configuration in `tools/arms.json`; see "Verdicts" above |
 | `verdict_bundles` | arm name -> the current `tools/verdicts.py` bundle, relative to the corpus |
 | `note` | anything a reader needs that no field above holds |
