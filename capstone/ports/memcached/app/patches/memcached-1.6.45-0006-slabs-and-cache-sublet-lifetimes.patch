@@ -1,19 +1,20 @@
-Subject: [PATCH 6/6] Slab chunks and cache objects as Sublet child lifetimes (CDERIVE/CREVOKE)
+Subject: [PATCH 6/6] Slab chunks and cache objects as Sublet lifetimes (CDERIVE/CREVOKE/CRENEW)
 Upstream: memcached 1.6.45
 Upstream-Archive: https://memcached.org/files/memcached-1.6.45.tar.gz
 Upstream-SHA256: d362c64e6d8d5287153501eabf7c85b4a761432fbf53f5d7b085d0bb1653c1dd
-Build-Variants: only with -DMC_CAPSTONE_SUBLET, on the virtual profile (musl mallocng), with
-  -I capstone/runtime/include (capability.h) and NDEBUG; every other build is unchanged
+Build-Variants: only with -DMC_CAPSTONE_SUBLET, on the virtual profile (musl mallocng, object
+  lifetimes on), with -I capstone/runtime/include (capability.h); every other build is unchanged
 Depends-On: memcached-1.6.45-0001-capability-alignment.patch
 Apply-From: upstream source root, with patch --batch --forward --fuzz=0 -p1
 
 memcached's slab allocator never frees a chunk: do_slabs_free files it on its class's free list
 and do_slabs_alloc hands it out again, and cache.c keeps freed objects on a list the same way. A
-stale item or buffer pointer therefore reaches whatever the chunk holds next. Two instructions,
+stale item or buffer pointer therefore reaches whatever the chunk holds next. Three instructions,
 inserted where the allocators hand memory out and take it back, end that
 (docs/design/virtual-capstone/isa.md): CDERIVE makes a child capability of a non-linear parent,
 bounded to a sub-range; CREVOKE(object) ends the object its one operand names and everything
-derived inside it, and faults when that object is not live. It names no parent and needs no right.
+derived inside it, and faults when that object is not live; CRENEW(object) ends it the same way
+and begins a new lifetime in the same place. Neither names a parent or needs a right.
 
 Slabs. The slab lists hold each page as memory_allocate returns it. Each page carries one
 lifetime, the generation:
@@ -39,19 +40,20 @@ item (MOVE_FROM_LRU, MOVE_BUSY_ACTIVE) the mover therefore takes the hash table'
 under the item lock, and every unlink, replace or remove that may free it uses that reference. Its
 three whole-chunk copies keep the destination's own parent.
 
-Cache. cache_create reserves one capability in front of each object, and that slot keeps the
-pointer malloc returned. cache_alloc returns a child of it covering the slot and the object,
-positioned at the object; cache_free reads malloc's pointer from the slot, ends the caller's
-object and files malloc's pointer on the free list. Freeing the object, or a page, passes free()
-the pointer malloc returned. The debug redzone would share the slot, so the build requires
-NDEBUG, which memcached's own Makefile sets.
+Cache. Every cache object is one malloc, so it already has a lifetime: the one the system
+allocator gave it. cache_alloc hands out the pointer malloc returned, as upstream does.
+cache_free renews that lifetime (CRENEW), which ends every copy of the caller's pointer, and
+files the renewed pointer on the free list. cache_destroy passes free() that pointer, which
+names the allocation's current lifetime. The layout of an object is upstream's, with or without
+the debug redzone. This relies on the system allocator giving each object a lifetime of its
+own: on a heap without object lifetimes the pointer would name something larger, and renewing
+it would end that.
 
-What it gives up: a live pointer can read the slot in front of it, as it could read the item header
-without the patch, and so can load the generation or malloc's pointer, which have page-wide or
-object-wide bounds, and whose CREVOKE ends every chunk of the page or the object itself. A stale
-pointer cannot, since it is revoked. Overwriting the slot clears its tag and the next free faults.
-Restart mode (-e) rebuilds item pointers from addresses, so the items it restores are not children
-of a generation and their first free faults.
+What it gives up: a live item pointer can read the item header, as it could without the patch,
+and so can load the generation, which has page-wide bounds and whose CREVOKE ends every chunk of
+the page. A stale pointer cannot, since it is revoked. Overwriting that slot clears its tag and
+the next free faults. Restart mode (-e) rebuilds item pointers from addresses, so the items it
+restores are not children of a generation and their first free faults.
 
 --- a/memcached.h
 +++ b/memcached.h
@@ -226,64 +228,26 @@ of a generation and their first free faults.
              case MOVE_FROM_LRU:
 --- a/cache.c
 +++ b/cache.c
-@@ -9,6 +9,12 @@
+@@ -9,6 +9,9 @@
  #endif
  
  #include "cache.h"
 +#ifdef MC_CAPSTONE_SUBLET
 +#include <capstone/capability.h>
-+#ifndef NDEBUG
-+#error "MC_CAPSTONE_SUBLET keeps malloc's pointer where the debug redzone goes: build with NDEBUG"
-+#endif
 +#endif
  
  #ifndef NDEBUG
  const uint64_t redzone_pattern = 0xdeadbeefcafedeed;
-@@ -33,6 +39,9 @@
- #else
-     ret->bufsize = bufsize;
- #endif
-+#ifdef MC_CAPSTONE_SUBLET
-+    ret->bufsize += sizeof(void *); /* malloc's pointer, before the object */
-+#endif
-     assert(ret->bufsize >= sizeof(struct cache_free_s));
- 
-     return ret;
-@@ -45,6 +54,9 @@
- }
- 
- static inline void* get_object(void *ptr) {
-+#ifdef MC_CAPSTONE_SUBLET
-+    return (void **)ptr + 1;
-+#endif
- #ifndef NDEBUG
-     uint64_t *pre = ptr;
-     return pre + 1;
-@@ -101,6 +113,14 @@
-                &redzone_pattern, sizeof(redzone_pattern));
-     }
- #endif
-+#ifdef MC_CAPSTONE_SUBLET
-+    if (object != NULL) {
-+        /* The caller's object is a child of the memory malloc returned. The
-+         * slot in front of it keeps malloc's pointer for cache_free. */
-+        *(void **)ret = ret;
-+        object = get_object(capstone_cap_derive(ret, 0, cache->bufsize));
-+    }
-+#endif
- 
-     return object;
- }
-@@ -112,6 +132,13 @@
+@@ -112,6 +115,13 @@
  }
  
  void do_cache_free(cache_t *cache, void *ptr) {
 +#ifdef MC_CAPSTONE_SUBLET
-+    /* End the caller's object (CREVOKE), which faults on a reference that is
-+     * not live, and continue with malloc's pointer. */
-+    void *mem = ((void **)ptr)[-1];
-+    capstone_cap_release(ptr);
-+    ptr = mem;
++    /* An object is its own allocation. Renewing its lifetime (CRENEW) ends
++     * every copy of the caller's pointer before the object is reissued, and
++     * faults on a pointer that is not live. The cache continues with the
++     * renewed pointer. */
++    ptr = capstone_cap_renew(ptr);
 +#endif
  #ifndef NDEBUG
      /* validate redzone... */

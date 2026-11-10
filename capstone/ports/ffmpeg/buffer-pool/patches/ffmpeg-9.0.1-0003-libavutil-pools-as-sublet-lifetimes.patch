@@ -6,105 +6,57 @@ Build-Variants: protected Capstone process (capstone-application, FFPOOL_SUBLET=
 Depends-On: ffmpeg-9.0.1-0001-libavutil-pool-event-instrumentation.patch
 Apply-From: upstream source root, with patch --batch --forward --fuzz=0 -p1
 
-Every buffer or object a pool hands out is a child lifetime of its pool
-entry (CDERIVE); returning it to the pool releases that child (CREVOKE),
-so every copy of the user's pointer dies before the entry is reissued.
-The release names the child alone. The pools keep upstream's allocation:
-each entry is its own allocation, and freeing it at the pool's end ends
-everything derived from it.
+Every buffer or object a pool hands out is its own allocation, so it
+already has a lifetime: the one the system allocator gave it. Returning it
+to the pool renews that lifetime (CRENEW), so every copy of the user's
+pointer dies before the entry is reissued, and the pool continues with the
+renewed pointer. The pools keep upstream's allocation and add no field.
+Each entry is freed at the pool's end through that pointer, which names
+the allocation's current lifetime.
 
-# AVBufferPool. Each hand-out, the first in pool_alloc_buffer and every
-# reissue in av_buffer_pool_get, gives the user a fresh child of the storage
-# the pool's allocator returned, bounded to pool->size, as AVBufferRef.data
-# and AVBuffer.data. pool_release_buffer releases the child. The entry keeps
-# its original pointer (data): every child is derived from it, and
-# buffer_pool_flush frees the storage through it as upstream does.
+# AVBufferPool. pool_release_buffer renews the entry's storage and keeps
+# the result in BufferPoolEntry.data. av_buffer_pool_get makes the next
+# AVBufferRef from it, and buffer_pool_flush frees the storage through it,
+# as upstream does.
 #
-# AVRefStructPool. A refstruct object's RefCount header sits in front of it,
-# and unref finds the header from the user's pointer. So the user's child
-# covers the header and the object. The pool reaches a returned entry only
-# through that pointer, which is stale after the release. So when an entry
-# is created, the pool records its own pointer to the allocation in the
-# header (sublet_entry). The user's child is derived from it.
-# pool_return_entry reads it, releases the child and continues with it, so
-# pool_free_entry frees the allocation through its original pointer, as
-# upstream does. Objects allocated outside a pool are untouched.
+# AVRefStructPool. A refstruct object's RefCount header sits in front of it
+# in the same allocation, and unref finds the header from the user's
+# pointer. pool_return_entry renews through that pointer and continues with
+# the result: the free list holds it and pool_free_entry frees through it.
+# Objects allocated outside a pool are untouched.
 #
-# A user's pointer can read its own RefCount header, as it can without the
-# patch; that header holds the pool's pointer to the allocation and the
-# pool pointer.
+# What this relies on. Each entry is one allocation of the system
+# allocator: patch 0001 refuses every buffer allocator but av_buffer_alloc
+# and av_buffer_allocz, and a refstruct entry always comes from av_malloc.
+# The system allocator gives every object a lifetime of its own, as the
+# virtual heap does with lifetimes on. Without that, the pointer names the
+# lifetime of something larger, and renewing it would end that.
 diff --git a/libavutil/buffer.c b/libavutil/buffer.c
 --- a/libavutil/buffer.c
 +++ b/libavutil/buffer.c
-@@ -362,6 +362,9 @@ static void pool_release_buffer(void *opaque, uint8_t *data)
+@@ -362,6 +362,10 @@ static void pool_release_buffer(void *opaque, uint8_t *data)
      AVBufferPool *pool = buf->pool;
      uint64_t call = ff2_begin(FF2_RETURN, FF2_BUFFER, pool, 0, 0, data);
  
-+    /* Every copy of the user's pointer dies before the entry is reissued. */
-+    capstone_cap_release(buf->sublet_issued);
++    /* The entry is its own allocation. Renewing its lifetime (CRENEW) ends
++     * every copy of the user's pointer before the entry is reissued. */
++    buf->data = capstone_cap_renew(buf->data);
 +
      ff_mutex_lock(&pool->mutex);
      buf->next = pool->pool;
      pool->pool = buf;
-@@ -398,6 +401,8 @@ static AVBufferRef *pool_alloc_buffer(AVBufferPool *pool)
-     buf->free   = ret->buffer->free;
-     buf->pool   = pool;
- 
-+    buf->sublet_issued  = ff_sublet_derive(buf->data, FFMAX(pool->size, 1));
-+    ret->buffer->data   = ret->data = buf->sublet_issued;
-     ret->buffer->opaque = buf;
-     ret->buffer->free   = pool_release_buffer;
- 
-@@ -414,13 +419,16 @@ AVBufferRef *av_buffer_pool_get(AVBufferPool *pool)
-     ff_mutex_lock(&pool->mutex);
-     buf = pool->pool;
-     if (buf) {
-+        buf->sublet_issued = ff_sublet_derive(buf->data, FFMAX(pool->size, 1));
-         memset(&buf->buffer, 0, sizeof(buf->buffer));
--        ret = buffer_create(&buf->buffer, buf->data, pool->size,
-+        ret = buffer_create(&buf->buffer, buf->sublet_issued, pool->size,
-                             pool_release_buffer, buf, 0);
-         if (ret) {
-             pool->pool = buf->next;
-             buf->next = NULL;
-             buf->buffer.flags_internal |= BUFFER_FLAG_NO_FREE;
-+        } else {
-+            capstone_cap_release(buf->sublet_issued);
-         }
-     } else {
-         ret = pool_alloc_buffer(pool);
 diff --git a/libavutil/buffer_internal.h b/libavutil/buffer_internal.h
 --- a/libavutil/buffer_internal.h
 +++ b/libavutil/buffer_internal.h
-@@ -25,6 +25,15 @@
+@@ -25,6 +25,8 @@
  #include "buffer.h"
  #include "thread.h"
  
 +#include <capstone/capability.h>
 +
-+/* A child lifetime of p's object, size bytes from p (CDERIVE). */
-+static inline void *ff_sublet_derive(void *p, size_t size)
-+{
-+    return capstone_cap_derive(p, __builtin_capstone_cap_get_cursor(p) -
-+                                  __builtin_capstone_cap_get_base(p), size);
-+}
-+
  /**
   * The buffer was av_realloc()ed, so it is reallocatable.
   */
-@@ -75,6 +84,12 @@ typedef struct BufferPoolEntry {
-     void *opaque;
-     void (*free)(void *opaque, uint8_t *data);
- 
-+    /*
-+     * Sublet: the child lifetime of data that the current user holds.
-+     * Returning the buffer releases it.
-+     */
-+    void *sublet_issued;
-+
-     AVBufferPool *pool;
-     struct BufferPoolEntry *next;
- 
 diff --git a/libavutil/refstruct.c b/libavutil/refstruct.c
 --- a/libavutil/refstruct.c
 +++ b/libavutil/refstruct.c
@@ -116,72 +68,14 @@ diff --git a/libavutil/refstruct.c b/libavutil/refstruct.c
  
  #include "avassert.h"
  #include "error.h"
-@@ -63,6 +64,14 @@ typedef struct RefCount {
-     void (*free_cb)(AVRefStructOpaque opaque, void *obj);
-     void (*free)(void *ref);
- 
-+    /*
-+     * Sublet, for a pool entry: the pool's own pointer to the allocation,
-+     * and the child of it the current user holds, which covers this header
-+     * and the object. Returning the entry releases that child.
-+     */
-+    void *sublet_entry;
-+    void *sublet_issued;
-+
- #if REFSTRUCT_CHECKED
-     uint64_t cookie;
- #endif
-@@ -246,9 +255,14 @@ static void pool_free_entry(AVRefStructPool *pool, RefCount *ref)
+@@ -246,7 +247,9 @@ static void pool_free_entry(AVRefStructPool *pool, RefCount *ref)
  
  static void pool_return_entry(void *ref_)
  {
 -    RefCount *ref = ref_;
-+    RefCount *user = ref_;
-+    /* The pool's own pointer, at the same address. */
-+    RefCount *ref = user->sublet_entry;
++    /* The entry is its own allocation. Renewing its lifetime (CRENEW) ends
++     * every copy of the user's pointer before the entry is reissued. */
++    RefCount *ref = capstone_cap_renew(ref_);
      AVRefStructPool *pool = ref->opaque.nc;
  
-+    /* Every copy of the user's pointer dies before the entry is reissued. */
-+    capstone_cap_release(user->sublet_issued);
-+
      ff_mutex_lock(&pool->mutex);
-     if (!pool->uninited) {
-         ref->opaque.nc = pool->available_entries;
-@@ -278,6 +292,7 @@ static int refstruct_pool_get_ext(void *datap, AVRefStructPool *pool)
-     FF2_GUARD;
-     uint64_t call = ff2_begin(FF2_GET, FF2_REFSTRUCT, pool, 0, 0, NULL);
-     void *ret = NULL;
-+    RefCount *entry = NULL;
- 
-     memcpy(datap, &(void *){ NULL }, sizeof(void*));
- 
-@@ -285,6 +300,7 @@ static int refstruct_pool_get_ext(void *datap, AVRefStructPool *pool)
-     ff_assert(!pool->uninited);
-     if (pool->available_entries) {
-         RefCount *ref = pool->available_entries;
-+        entry = ref;
-         ret = get_userdata(ref);
-         pool->available_entries = ref->opaque.nc;
-         ref->opaque.nc = pool;
-@@ -300,6 +316,8 @@ static int refstruct_pool_get_ext(void *datap, AVRefStructPool *pool)
-             return AVERROR(ENOMEM);
-         ref = get_refcount(ret);
-         ref->free = pool_return_entry;
-+        ref->sublet_entry = ref;
-+        entry = ref;
-         ff2_new(FF2_REFSTRUCT, pool, ret);
-         if (pool->init_cb) {
-             uint64_t cb = ff2_callback(FF2_REFSTRUCT, pool, ret, FF2_INIT_CB);
-@@ -321,6 +339,12 @@ static int refstruct_pool_get_ext(void *datap, AVRefStructPool *pool)
-     if (pool->pool_flags & AV_REFSTRUCT_POOL_FLAG_ZERO_EVERY_TIME)
-         memset(ret, 0, pool->size);
- 
-+    /* The user's pointer: a child of the entry's allocation, bounded to the
-+     * header and the object (CDERIVE). */
-+    entry->sublet_issued = ff_sublet_derive(entry,
-+                                            REFCOUNT_OFFSET + pool->size);
-+    ret = (char *)entry->sublet_issued + REFCOUNT_OFFSET;
-+
-     memcpy(datap, &ret, sizeof(ret));
-     ff2_end(call, ret);
- 

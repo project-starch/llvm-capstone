@@ -37,9 +37,9 @@ The Sublet build (`-DMCP_SUBLET=ON`, capstone-application only) applies
 than copied, in place of `0002`: the two lifetime instructions in `slabs.c` and
 `cache.c` themselves, with no hooks, no ledger and no metadata heap. Pages and
 objects come from the system allocator -- virtual mallocng -- as upstream's do
-from `malloc`; every chunk is a CDERIVE child of its page's generation and
-every object a child of the memory `malloc` returned for it, and `slabs_free`
-and `cache_free` revoke them (CREVOKE). `cmake/prepare-source.py --variant
+from `malloc`; every chunk is a CDERIVE child of its page's generation, which
+`slabs_free` revokes (CREVOKE), and every cache object is the allocation
+`malloc` returned, whose lifetime `cache_free` renews (CRENEW). `cmake/prepare-source.py --variant
 protected` builds that source; the library is `slabs.c`, `cache.c` and
 `src/shared/services.c`.
 

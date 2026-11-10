@@ -1,4 +1,5 @@
-/* CONTROL 1, parent stays usable (pre-registration 2026-10-11-nested-lifetime-controls.md).
+/* CONTROL 1, the pool's own reference stays usable (pre-registration
+ * 2026-10-11-nested-lifetime-controls.md, where it is the parent control).
  *
  * A = av_buffer_pool_get(pool); av_buffer_unref(&A) returns the entry to the pool. Then the
  * entry's storage is read and written through the POOL'S OWN reference to it:
@@ -6,16 +7,16 @@
  *   entry->data   BufferPoolEntry.data (libavutil/buffer_internal.h). pool_alloc_buffer stores
  *                 the allocation's own pointer there (buf->data = ret->buffer->data, i.e. what
  *                 av_buffer_alloc -> av_malloc returned); buffer_pool_flush frees the storage
- *                 through it when the pool ends. Patch 0003 keeps it unchanged ("the entry keeps
- *                 its original pointer") and hands each user a child of it
- *                 (sublet_issued = CDERIVE(entry->data)), which pool_release_buffer revokes. So
- *                 entry->data is the direct parent of the child the release ends, and the
- *                 reference the pool itself uses to manage the storage.
+ *                 through it when the pool ends. The user holds a copy of it. Under patch 0003
+ *                 pool_release_buffer renews the entry's lifetime (CRENEW) and stores the
+ *                 result there, so after the release entry->data names the entry's new
+ *                 lifetime and the user's copy the one that ended. It is the reference the
+ *                 pool itself uses to manage the storage.
  *
  * The read must return what the pool left there: it does not clear an entry on return, so the
  * bytes A wrote (0x5A). The write (0xC3) must land and read back. Expected on both arms:
- * completes. A final hand-out C must be the same entry and show the parent's write, which ties
- * the parent reference to the storage the pool hands out.
+ * completes. A final hand-out C must be the same entry and show that write, which ties
+ * the pool's reference to the storage the pool hands out.
  */
 #include "ctl.h"
 
@@ -43,14 +44,12 @@ CTL_CASE(91, "parent") {
   CHECK(entry && entry->pool == g_pool, 913, "A's AVBuffer opaque is not an entry of g_pool");
   ctl_ptr("A.data", A->data);
   ctl_ptr("entry.data", entry->data);
-#if CTL_PROTECTED
-  ctl_ptr("entry.sublet_issued", entry->sublet_issued);
-#endif
   CHECK(CTL_CURSOR(A->data) == CTL_CURSOR(entry->data), 914,
         "A->data and entry->data name different addresses");
   memset(A->data, 0x5A, POOL_BYTES);
 
-  av_buffer_unref(&A); /* pool_release_buffer: back to the pool; protected: CREVOKE the child */
+  av_buffer_unref(&A); /* pool_release_buffer: back to the pool; protected: CRENEW the entry */
+  ctl_ptr("entry.data-after-release", entry->data);
   printf("CTL-STEP released A to the pool\n");
 
   unsigned bad;

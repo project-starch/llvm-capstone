@@ -5,29 +5,24 @@
  * still one load or store in ctl_read_u8 / ctl_write_u8 / ctl_load_ptr, and the stale access is the
  * corpus's labelled read_probe (shared/corpus.h).
  *
- * THE OBJECT LAYOUT, per arm.
- *   virtual-nested-pools (patch 0006, MC_CAPSTONE_SUBLET): cache_create adds one capability slot in
- *     front of each object (bufsize = request + 16). cache_alloc writes the pointer malloc
- *     returned into the slot and returns
- *     get_object(CDERIVE(that pointer, 0, bufsize)): a child bounded to [slot, slot + bufsize) whose
- *     cursor is the object, slot + 16. cache_free reads malloc's pointer from the slot through the
- *     caller's pointer, CREVOKEs the caller's object and pushes malloc's pointer on the cache's STAILQ,
- *     whose link then overwrites the slot. So the cache's own reference to a free object's storage is
- *     cache->head.stqh_first, and under patch 0006 that is the parent of the released object.
- *   virtual-malloc (the registered release arm, patch 0002 hooks, stock ledger mode 0): no slot; the
- *     object is the virtual-mallocng object and the STAILQ link is written into the object's first
- *     pointer-sized bytes.
- * In both arms the first 16 bytes of the object can hold the free-list link (stock) and the 16 bytes
- * before it the lifetime (protected), so the controls read and write the object's bytes
- * [CC_DATA, CC_DATA + CTL_SPAN) only, which nothing in cache.c touches.
+ * THE OBJECT LAYOUT is upstream's on both arms: the object is the virtual-mallocng object, and the
+ * STAILQ link is written into its first pointer-sized bytes while it is on the free list.
+ *   virtual-nested-pools (patch 0006, MC_CAPSTONE_SUBLET): cache_alloc hands out the pointer on the
+ *     list, as upstream does. cache_free renews the object's lifetime through the caller's pointer
+ *     (CRENEW) and pushes the renewed pointer on the cache's STAILQ. So the cache's own reference to
+ *     a free object's storage is cache->head.stqh_first, and under patch 0006 it names the object's
+ *     new lifetime, while every copy of the caller's pointer names the one that ended.
+ *   virtual-malloc (the registered release arm, patch 0002 hooks, stock ledger mode 0): the list
+ *     holds the object pointer the ledger handed back.
+ * The first 16 bytes of the object can hold the free-list link, so the controls read and write the
+ * object's bytes [CC_DATA, CC_DATA + CTL_SPAN) only, which nothing in cache.c touches.
  *
  * WHERE A COMES FROM. cache.c hands out from its own storage (the STAILQ free list) only when the
  * list is not empty; otherwise it mallocs. Every control therefore primes the cache (cache_alloc then
  * cache_free) and takes A with cc_take_from_list, which requires: freecurr drops by one, total does
- * not change (no malloc), A's address is the list head's (plus the slot under patch 0006), and, under
- * patch 0006, A's capability is [slot, slot + bufsize) with its cursor at slot + 16 and the slot,
- * read through A, holds a tagged capability with the same bounds: the shape cache_alloc's patched
- * CDERIVE produces. On the release arm the ledger's object_reuses count rises by one
+ * not change (no malloc), A's address is the list head's, and, under patch 0006, A's capability is
+ * [object, object + bufsize) with its cursor at the object: the bounds of the allocation, which a
+ * renewal keeps. On the release arm the ledger's object_reuses count rises by one
  * (mcp_object_issue, the free-list branch). */
 #ifndef MC_CACHE_CONTROLS_H
 #define MC_CACHE_CONTROLS_H
@@ -36,11 +31,6 @@
 
 #define CC_REQUEST 256u                   /* cache_create's bufsize argument */
 #define CC_DATA ((size_t)sizeof(void *)) /* the object bytes past the free-list link */
-#ifdef MC_CAPSTONE_SUBLET
-#define CC_SLOT ((unsigned long)sizeof(void *)) /* the lifetime slot in front of each object */
-#else
-#define CC_SLOT 0ul
-#endif
 
 __attribute__((unused)) static void cc_state(const cache_t *c, const char *when) {
   printf("CACHE when=%s bufsize=%lu total=%d freecurr=%d limit=%d head=%#lx", when, (unsigned long)c->bufsize,
@@ -65,13 +55,13 @@ __attribute__((unused)) static void cc_print_cap(const char *tag, const char *na
 #endif
 }
 
-/* cache_create, with the patch's bufsize checked: request + 16 under patch 0006, the request without. */
+/* cache_create, with bufsize checked: the request on both arms. */
 __attribute__((unused)) static cache_t *cc_create(const char *name) {
   cache_t *c = cache_create(name, CC_REQUEST, sizeof(char *));
   CHECK(c, 901);
   cc_state(c, "created");
   CHECK(c->limit == 0 && c->total == 0 && c->freecurr == 0, 902);
-  CHECK(c->bufsize == CC_REQUEST + CC_SLOT, 903);
+  CHECK(c->bufsize == CC_REQUEST, 903);
   return c;
 }
 
@@ -94,27 +84,8 @@ __attribute__((unused)) static void cc_prime(cache_t *c, unsigned n, unsigned lo
   CHECK(c->freecurr == (int)n && c->total == (int)n, 907);
 }
 
-/* The slot in front of a live object, read through the object (as cache_free reads it). Under patch
- * 0006 it is the pointer malloc returned for the object. Returns it. */
-__attribute__((unused)) static void *cc_read_slot_at(const char *name, const char *via, void *obj, const char *file,
-                                                     int line) {
-#ifdef MC_CAPSTONE_SUBLET
-  void *volatile *slot = (void *volatile *)obj - 1;
-  printf("ACCESS-BEGIN name=%s kind=read via=%s addr=%#lx site=%s:%d probe=ctl_load_ptr@controls.h:%d\n", name,
-         via, ctl_addr(slot), file, line, ctl_load_ptr_line);
-  void *life = ctl_load_ptr(slot);
-  printf("ACCESS-DONE name=%s value=%#lx\n", name, ctl_addr(life));
-  cc_print_cap("LIFETIME", name, life);
-  return life;
-#else
-  (void)name, (void)via, (void)obj, (void)file, (void)line;
-  return NULL;
-#endif
-}
-#define cc_read_slot(name, via, obj) cc_read_slot_at(name, via, obj, __FILE__, __LINE__)
-
 /* cache_alloc, required to come from the cache's own free list and, under patch 0006, to have the
- * shape of the patched derive (see the header comment). */
+ * bounds of the allocation (see the header comment). */
 __attribute__((unused)) static void *cc_take_from_list(cache_t *c, const char *name) {
   int total = c->total, freecurr = c->freecurr;
   unsigned long head = ctl_addr(STAILQ_FIRST(&c->head));
@@ -129,18 +100,13 @@ __attribute__((unused)) static void *cc_take_from_list(cache_t *c, const char *n
   printf("SOURCE name=%s addr=%#lx path=free-list list_head_before=%#lx freecurr=%d->%d total=%d->%d\n", name, at,
          head, freecurr, c->freecurr, total, c->total);
   CHECK(c->freecurr == freecurr - 1 && c->total == total, 912);
-  CHECK(at == head + CC_SLOT, 913);
+  CHECK(at == head, 913);
   cc_print_cap("CHUNK-CAP", name, obj);
 #ifdef MC_CAPSTONE_SUBLET
   unsigned long base = (unsigned long)__builtin_capstone_cap_get_base(obj);
   unsigned long end = (unsigned long)__builtin_capstone_cap_get_end(obj);
   CHECK(base == head && end - base == c->bufsize, 914);
-  void *life = cc_read_slot("slot-through-new-object", name, obj);
-  CHECK(__builtin_capstone_cap_get_tag(life) && ctl_addr(life) == head &&
-            (unsigned long)__builtin_capstone_cap_get_base(life) == base &&
-            (unsigned long)__builtin_capstone_cap_get_end(life) == end, 915);
-  printf("CHECK name=%s-patched-derive-shape object=[%#lx,%#lx) cursor=%#lx slot_lifetime=[%#lx,%#lx) ok\n", name,
-         base, end, at, base, end);
+  printf("CHECK name=%s-renewed-object-shape object=[%#lx,%#lx) cursor=%#lx ok\n", name, base, end, at);
 #else
   mcp_stats(&after);
   printf("CHECK name=%s-ledger-issue object_reuses=%llu->%llu\n", name, (unsigned long long)before.object_reuses,
