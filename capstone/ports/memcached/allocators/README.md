@@ -38,9 +38,10 @@ than copied, in place of `0002`: the two lifetime instructions in `slabs.c` and
 `cache.c` themselves, with no hooks, no ledger and no metadata heap. Pages and
 objects come from the system allocator -- virtual mallocng -- as upstream's do
 from `malloc`; every chunk is a CDERIVE child of its page's generation and
-every object a child of its own lifetime, and `slabs_free` and `cache_free`
-revoke them (CREVOKE). `cmake/prepare-source.py --variant protected` builds that
-source; the library is `slabs.c`, `cache.c` and `src/shared/services.c`.
+every object a child of the memory `malloc` returned for it, and `slabs_free`
+and `cache_free` revoke them (CREVOKE). `cmake/prepare-source.py --variant
+protected` builds that source; the library is `slabs.c`, `cache.c` and
+`src/shared/services.c`.
 
 ## Lifetime mapping
 

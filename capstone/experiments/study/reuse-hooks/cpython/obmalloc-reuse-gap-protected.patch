@@ -84,8 +84,8 @@
      return block_issue(state, bp, nbytes);
  }
  
-@@ -2541,6 +2611,9 @@
-     capstone_cap_revoke_child(ao->arena_life, p);
+@@ -2543,6 +2613,9 @@
+     capstone_cap_release(p);
      p = arena_inside(ao, p);
      pool = POOL_ADDR(p);
 +#ifdef EXP_REUSE_GAP

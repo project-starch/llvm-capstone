@@ -163,15 +163,15 @@ three of which revoke-on-free cannot see.
 ## Every GC object slot a Sublet lifetime (`MRBD_SUBLET=1`, virtual profile)
 
 Patch 0008 (4.0.0-rc2, `MRB_CAPSTONE_SUBLET`) makes every GC object slot a
-child lifetime of its heap page. Each page keeps a lifetime over its slots
-(`CDERIVE` of the page) and, per slot, the child it handed out; `mrb_obj_alloc`
-returns the object as a child bounded to its slot, and the sweep revokes that
+child lifetime of its heap page. Each page keeps, per slot, the child it
+handed out; `mrb_obj_alloc` returns the object as a child of the page bounded
+to its slot (`CDERIVE` of the page's own pointer), and the sweep revokes that
 child (`CREVOKE`) once `obj_free` has freed the object, so a stale reference to
 a collected object faults instead of reaching the slot's next occupant. The GC
 works on its own pointers, derived from the page; where it is asked about a
 pointer that may be dead (`mrb_object_dead_p`, and `obj_free`'s walk of a dying
 fiber's frames) it finds the slot by address. Without the define `gc.c`
-preprocesses as without the patch. 61 lines of code.
+preprocesses as without the patch. 58 lines of code.
 
 It runs on the virtual profile: build with `MRBD_SDK` naming a virtual SDK, and
 `malloc` is that SDK's musl mallocng, which bounds and retires every object it

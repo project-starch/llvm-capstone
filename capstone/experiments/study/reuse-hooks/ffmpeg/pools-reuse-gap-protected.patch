@@ -57,7 +57,7 @@ which the wrapper copies into libavutil/.
          av_freep(&buf);
 @@ -365,6 +376,9 @@
      /* Every copy of the user's pointer dies before the entry is reissued. */
-     capstone_cap_revoke_child(buf->sublet_life, buf->sublet_issued);
+     capstone_cap_release(buf->sublet_issued);
  
 +#ifdef EXP_REUSE_GAP
 +    reuse_gap_hook_release(&buffer_pool_reuse_gap, (uint64_t)(uintptr_t)buf->data);
@@ -65,7 +65,7 @@ which the wrapper copies into libavutil/.
      ff_mutex_lock(&pool->mutex);
      buf->next = pool->pool;
      pool->pool = buf;
-@@ -436,6 +450,16 @@
+@@ -435,6 +449,16 @@
      }
      ff_mutex_unlock(&pool->mutex);
  
@@ -111,7 +111,7 @@ which the wrapper copies into libavutil/.
  
 @@ -263,6 +274,9 @@
      /* Every copy of the user's pointer dies before the entry is reissued. */
-     capstone_cap_revoke_child(ref->sublet_life, user->sublet_issued);
+     capstone_cap_release(user->sublet_issued);
  
 +#ifdef EXP_REUSE_GAP
 +    reuse_gap_hook_release(&refstruct_pool_reuse_gap, (uint64_t)(uintptr_t)ref);
@@ -136,11 +136,11 @@ which the wrapper copies into libavutil/.
 +#ifdef EXP_REUSE_GAP
 +        reuse_gap_fresh = 1;
 +#endif
-         ref->sublet_life = ff_sublet_derive(ref, REFCOUNT_OFFSET + pool->size);
+         ref->sublet_entry = ref;
          entry = ref;
          ff2_new(FF2_REFSTRUCT, pool, ret);
 @@ -345,6 +365,12 @@
-                                                REFCOUNT_OFFSET + pool->size);
+                                             REFCOUNT_OFFSET + pool->size);
      ret = (char *)entry->sublet_issued + REFCOUNT_OFFSET;
  
 +#ifdef EXP_REUSE_GAP

@@ -14,7 +14,8 @@ find_package(Python3 3.11.4 REQUIRED COMPONENTS Interpreter)
 port_path(WM_WORK "${tmp_root}/wireshark-wmem" "External sources, builds and results")
 # The nested arm in a Capstone process: patch 0001 makes every object of the
 # block and block_fast allocators a child lifetime of its block (CDERIVE),
-# revoked by free, realloc and the reset that ends its pool (CREVOKE).
+# revoked by free and realloc (CREVOKE) and by the reset that ends its pool
+# (CRENEW).
 option(WM_SUBLET "wmem objects as Sublet lifetimes (patch 0001)" OFF)
 if(WM_SUBLET AND NOT PORT_PLATFORM STREQUAL "capstone-application")
   message(FATAL_ERROR "WM_SUBLET needs the capstone-application toolchain")

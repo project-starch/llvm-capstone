@@ -20,8 +20,8 @@ number they belonged to.
 # pcache1TruncateUnsafe, which unlinks a dropped page by hand. PgHdr1.pRaw
 # keeps the buffer as the allocator gave it, so pcache1FreePage and
 # pcache1MemSize hand the allocator its own pointer and page.pBuf can be the
-# assignment's. One derive is enough: a memsys5 block already carries MANAGE,
-# because CDERIVE grants it to every child.
+# assignment's. One derive is enough: pcache1Issue derives the child from
+# that buffer, and the CREVOKE in pcache1Retire takes the child alone.
 #
 # NOT the pin. The reference count reaching zero looks like the end -- and
 # sqlite3PagerGetData asserts a held reference -- but it is not one: for an
@@ -47,7 +47,7 @@ number they belonged to.
 # btree's own cell bounds to answer, not this patch's.
 --- a/sqlite3-capstone.c
 +++ b/sqlite3-capstone.c
-@@ -46199,6 +46199,8 @@ struct PgHdr1 {
+@@ -46234,6 +46234,8 @@ struct PgHdr1 {
    unsigned int iKey;             /* Key value (page number) */
    u8 isBulkLocal;                /* This page from bulk local storage */
    u8 isAnchor;                   /* This is the PGroup.lru element */
@@ -56,7 +56,7 @@ number they belonged to.
    PgHdr1 *pNext;                 /* Next in hash table chain */
    PCache1 *pCache;               /* Cache that currently owns this page */
    PgHdr1 *pLruNext;              /* Next in LRU list of unpinned pages */
-@@ -46396,7 +46398,8 @@ static int pcache1InitBulk(PCache1 *pCache){
+@@ -46431,7 +46433,8 @@ static int pcache1InitBulk(PCache1 *pCache){
      int nBulk = sqlite3MallocSize(zBulk)/pCache->szAlloc;
      do{
        PgHdr1 *pX = (PgHdr1*)&zBulk[pCache->szPage];
@@ -66,7 +66,7 @@ number they belonged to.
        pX->page.pExtra = &pX[1];
        pX->isBulkLocal = 1;
        pX->isAnchor = 0;
-@@ -46541,15 +46544,42 @@ static PgHdr1 *pcache1AllocPage(PCache1 *pCache, int benignMalloc){
+@@ -46576,15 +46579,42 @@ static PgHdr1 *pcache1AllocPage(PCache1 *pCache, int benignMalloc){
      pcache1EnterMutex(pCache->pGroup);
  #endif
      if( pPg==0 ) return 0;
@@ -101,7 +101,7 @@ number they belonged to.
 +}
 +static void pcache1Retire(PgHdr1 *p){
 +  if( p->isIssued ){
-+    capstone_cap_revoke_child(p->pRaw, p->page.pBuf);
++    capstone_cap_release(p->page.pBuf);
 +    p->page.pBuf = p->pRaw;
 +    p->isIssued = 0;
 +  }
@@ -110,7 +110,7 @@ number they belonged to.
  /*
  ** Free a page object allocated by pcache1AllocPage().
  */
-@@ -46562,7 +46592,7 @@ static void pcache1FreePage(PgHdr1 *p){
+@@ -46597,7 +46627,7 @@ static void pcache1FreePage(PgHdr1 *p){
      p->pNext = pCache->pFree;
      pCache->pFree = p;
    }else{
@@ -119,7 +119,7 @@ number they belonged to.
  #ifdef SQLITE_PCACHE_SEPARATE_HEADER
      sqlite3_free(p);
  #endif
-@@ -46696,6 +46726,7 @@ static void pcache1RemoveFromHash(PgHdr1 *pPage, int freeFlag){
+@@ -46731,6 +46761,7 @@ static void pcache1RemoveFromHash(PgHdr1 *pPage, int freeFlag){
    *pp = (*pp)->pNext;
  
    pCache->nPage--;
@@ -127,7 +127,7 @@ number they belonged to.
    if( freeFlag ) pcache1FreePage(pPage);
  }
  
-@@ -46761,6 +46792,7 @@ static void pcache1TruncateUnsafe(
+@@ -46796,6 +46827,7 @@ static void pcache1TruncateUnsafe(
          pCache->nPage--;
          *pp = pPage->pNext;
          if( PAGE_IS_UNPINNED(pPage) ) pcache1PinPage(pPage);
@@ -135,7 +135,7 @@ number they belonged to.
          pcache1FreePage(pPage);
        }else{
          pp = &pPage->pNext;
-@@ -47006,6 +47038,7 @@ static SQLITE_NOINLINE PgHdr1 *pcache1FetchStage2(
+@@ -47041,6 +47073,7 @@ static SQLITE_NOINLINE PgHdr1 *pcache1FetchStage2(
      unsigned int h = iKey % pCache->nHash;
      pCache->nPage++;
      pPage->iKey = iKey;
@@ -143,7 +143,7 @@ number they belonged to.
      pPage->pNext = pCache->apHash[h];
      pPage->pCache = pCache;
      pPage->pLruPrev = 0;
-@@ -47320,7 +47353,7 @@ SQLITE_PRIVATE int sqlite3PcacheReleaseMemory(int nReq){
+@@ -47355,7 +47388,7 @@ SQLITE_PRIVATE int sqlite3PcacheReleaseMemory(int nReq){
         &&  (p=pcache1.grp.lru.pLruPrev)!=0
         &&  p->isAnchor==0
      ){

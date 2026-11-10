@@ -29,16 +29,16 @@ The old A is held through memory (`pymctl_held`), as the corpus's `held` is.
 
 obmalloc keeps, per arena, the capability the system allocator (mallocng) returned for the 1 MiB
 arena: `allarenas[i].arena_ptr` (patch 0009, read through `_Py_ARENA_PTR`). In the protected build
-patch 0014 derives `arena_life` from it with `CDERIVE`, and every client block from `arena_life`
-with `CDERIVE` again, bounded to the request. `pymalloc_free` revokes the block's child through
-`arena_life` (`CREVOKE`), then carries on with `arena_inside(ao, p)` =
+patch 0014 derives every client block from it with `CDERIVE`, bounded to the request.
+`pymalloc_free` ends the block's child (`CREVOKE`, the client's reference alone), then carries on
+with `arena_inside(ao, p)` =
 `_Py_ARENA_PTR(ao) + (p - ao->address)` and `pool = POOL_ADDR(that)`. That pool pointer is what
 writes the free-list link into the freed block.
 
 Control 1 takes the same path: it finds A's arena by address in obmalloc's own table
 (`interp->obmalloc->mgmt.arenas`), forms `_Py_ARENA_PTR(ao) + offset`, applies `POOL_ADDR`, and
 reaches A's former range as the pool plus A's offset in it. So the reference is `arena_ptr`, the
-grandparent of A's revoked child, not A and not `arena_life`. The release build has the same field
+parent of A's revoked child, not A. The release build has the same field
 (0009) and takes the same path, although there A's own pointer would reach the pool too.
 
 ## Probes

@@ -9,7 +9,7 @@ controls ask whether it leaves the permitted ones alone. Each drives FFmpeg 9.0.
 
 | control | sequence | release arm (`FFPOOL_SUBLET=OFF`) | protected arm (`FFPOOL_SUBLET=ON`, patch 0003 on 0001) |
 |---|---|---|---|
-| `91_ctl_parent_entry_reference` | get A, fill 0x5A, `av_buffer_unref(&A)`, then read, write and read back through `BufferPoolEntry.data` | completes, reads 0x5A | completes, reads 0x5A; also through `sublet_life` |
+| `91_ctl_parent_entry_reference` | get A, fill 0x5A, `av_buffer_unref(&A)`, then read, write and read back through `BufferPoolEntry.data` | completes, reads 0x5A | completes, reads 0x5A |
 | `92_ctl_sibling_entry` | get A and B, unref A, read, write and read back B through `B->data` | completes, B intact | completes, B intact |
 | `93_ctl_successor_entry` `run` | unref A, get until C is at A's address, write and read C through `C->data` | completes, C == A | completes, C == A |
 | `93_ctl_successor_entry` `stale` | the same, then one read through A's old pointer at `stale_read_probe` | completes, reads C's 0x77 | fault, cause 25, at `stale_read_probe` |
@@ -24,12 +24,10 @@ entry's storage is `av_buffer_alloc(64)`.
 storage. `pool_alloc_buffer` stores there what the pool's allocator returned
 (`buf->data = ret->buffer->data`), and `buffer_pool_flush` frees the storage through it when the pool
 ends. Patch 0003 leaves that field as it is ("the entry keeps its original pointer"). From it the
-patch derives the entry's lifetime, `sublet_life = CDERIVE(entry->data)`, and from that, at every
-hand-out, the user's child, `sublet_issued = CDERIVE(sublet_life)`. That child becomes
-`AVBufferRef.data`, and `pool_release_buffer` revokes it. So `entry->data` is the root of the subtree
-that the release cuts a leaf off. It is the reference the pool manages the storage through. On the
-protected arm, control 91 also reads and writes through `sublet_life`, the direct parent named by
-`CREVOKE`.
+patch derives, at every hand-out, the user's child, `sublet_issued = CDERIVE(entry->data)`. That
+child becomes `AVBufferRef.data`, and `pool_release_buffer` revokes it. So `entry->data` is the
+direct parent of the child that the release ends. It is the reference the pool manages the storage
+through.
 
 The control reaches the entry through `A->buffer->opaque`, which it reads before the release. That
 is the `opaque` that `pool_release_buffer` receives. After the release it never touches A's
