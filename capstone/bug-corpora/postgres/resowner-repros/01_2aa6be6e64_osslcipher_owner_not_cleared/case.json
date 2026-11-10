@@ -1,0 +1,42 @@
+{
+  "case": 1,
+  "upstream_fix": "2aa6be6e64",
+  "title": "a release callback that leaves its owner set, so the owner refuses the recursive forget and the handle is freed twice",
+  "consumer": "contrib/pgcrypto/openssl.c",
+  "class": "temporal",
+  "live_in_pin": true,
+  "live_proof": "inspection of REL_17_5 contrib/pgcrypto/openssl.c: ResOwnerReleaseOSSLCipher at :799-803 hands the object to free_openssl_cipher with no `cipher->owner = NULL;` (2aa6be6e64 adds exactly that line), and free_openssl_cipher at :299-305 calls EVP_CIPHER_CTX_free(od->evp_ctx) and THEN `if (od->owner != NULL) ResourceOwnerForgetOSSLCipher(...)`. Real resowner.c at the same pin raises from ResourceOwnerForget when owner->releasing is set. Quoted in PROVENANCE.md",
+  "object": "od->evp_ctx, the EVP_CIPHER_CTX from OpenSSL's allocator",
+  "lifetime_ender": "the release callback frees the handle and then calls ResourceOwnerForget during release, which resowner.c refuses with an ERROR; abort cleanup releases the same item again and the handle is freed a second time",
+  "shape": "double release through an item the owner never forgot",
+  "sibling_issue": "00_011eedcdc3_release_before_forget",
+  "allocator_layer": "libc (OpenSSL's allocator for the EVP handle); the OSSLCipher struct itself is aset and is NOT the object freed twice",
+  "nested": false,
+  "nested_why": "At the pin free_openssl_cipher frees the EVP handle BEFORE the ResourceOwnerForget that raises, so pfree(od) is never reached on either pass: od leaks, and the object freed twice is OpenSSL's. That is what makes this a temporal, NON-nested defect in the backend, and the counterexample to the idea that the backend is all nested.",
+  "fidelity": "real subject, transcribed consumer: resowner.c and the memory managers are compiled unmodified from the pin and raise the error themselves; openssl.c's two functions are transcribed in shape with the EVP handle modelled by a libc allocation, because pgcrypto in place needs the px framework and OpenSSL",
+  "memory_error_is_the_defect": true,
+  "memory_error_is_the_defect_why": "The defect IS the second EVP_CIPHER_CTX_free. The error that gets it there is raised by real resowner.c, not injected by the case.",
+  "fault_sites": ["ro_free_probe"],
+  "fault_sites_why": "the second free is the invalid operation, and it is made in one labelled frame so a fault can be attributed to the defect rather than to the sequence",
+  "fault_site_files": {
+    "ro_free_probe": "capstone/bug-corpora/postgres/resowner-repros/shared/driver.c"
+  },
+  "arms": {
+    "native-detect": {
+      "oracle": "build-host.sh: the control must complete, then the defect run must either exit 0 having released one handle twice, or be killed with a host-allocator double-free diagnostic",
+      "verdict": "CAUGHT",
+      "verdict_note": "real resowner.c raised \"ResourceOwnerForget called for pgcrypto OpenSSL cipher handle after release started\", abort cleanup released the same item again, glibc: \"free(): double free detected in tcache 2\", SIGABRT exit 134; the control completed exit 0 and showed the error raised twice, which is upstream's error cleanup loop",
+      "verdict_from": "results/2026-11-10-host/result-lines.txt"
+    },
+    "host-asan": {
+      "oracle": "the same program under -fsanitize=address: ASan must report attempting double-free, with the report's frame in ro_free_probe",
+      "verdict": "CAUGHT",
+      "verdict_note": "AddressSanitizer: attempting double-free; #1 ro_free_probe shared/driver.c:57, #2 free_openssl_cipher case.c:57",
+      "verdict_from": "results/2026-11-10-host/result-lines.txt"
+    },
+    "cheribsd-revocation": { "status": "not written" },
+    "virtual-malloc": { "status": "not written" },
+    "virtual-pg-pools": { "status": "not written" }
+  },
+  "status": "built and reproduced on the host (native-detect, host-asan); no capability arm has been run"
+}

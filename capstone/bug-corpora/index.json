@@ -1199,6 +1199,45 @@
     },
     {
       "program": "postgres",
+      "boundary": "ResourceOwner release (src/backend/utils/resowner/resowner.c)",
+      "title": "Upstream double-free defects at PostgreSQL's resource-owner boundary, where the object freed twice is libc's",
+      "upstream": {
+        "version": "17.5",
+        "port": "capstone/ports/postgres/memory-contexts"
+      },
+      "cases": 2,
+      "case_schema": "case-json",
+      "case_macro": "RO",
+      "required_arms": [
+        "native-detect",
+        "host-asan",
+        "cheribsd-revocation",
+        "virtual-malloc",
+        "virtual-pg-pools"
+      ],
+      "status": "built",
+      "live_in_pin_recorded": true,
+      "expect_live_in_pin": {
+        "true": 2
+      },
+      "expect_provenance": 2,
+      "runners": [
+        "capstone/bug-corpora/postgres/resowner-repros/build-host.sh"
+      ],
+      "checker": "capstone/bug-corpora/tools/check-corpus.py",
+      "evidence": [
+        "capstone/bug-corpora/postgres/resowner-repros/results/2026-11-10-host"
+      ],
+      "advisories": [],
+      "related": [
+        "capstone/bug-corpora/postgres/mmgr-repros",
+        "capstone/bug-corpora/postgres/resowner-repros/SCREENED.md"
+      ],
+      "note": "A second boundary in the same program, and the reason it is a separate corpus rather than two more mmgr-repros cases: ResourceOwner is the layer ABOVE the allocator, holding references to objects whose release is a callback, and what both defects free twice is NOT a memory-context chunk. Case 01's EVP handle comes from OpenSSL's allocator; case 00's payload from libc. So ASan and a malloc-granular revoker are real oracles here, where in mmgr-repros their silence is a restatement of how AllocSet works. This fills the temporal, non-nested cell that ../HANDOFF.md records as the one empty cell of the PostgreSQL study, and it removes that document's stated blocker: the trigger was thought to need a cheap error path or a 1 GB bytea, but at the pin the recursive ResourceOwnerForget raises the error by itself. Found by a sweep of REL_17_5..REL_18_6 plus REL_17_5..REL_17_11 (2026-11-10) that read the code diff of all 165 keyword candidates; the sweep's other temporal findings and why each is not here are in SCREENED.md. resowner.c and the seven memory managers are compiled unmodified from the pin and gated by sha256 (check-sources.sh); all ten compiled files are byte-identical in REL_17_0 and REL_17_5, so the memory-context port's 17.0 allocator pin and this corpus's 17.5 defect pin do not disagree about any byte this corpus builds.",
+      "where": "capstone/bug-corpora/postgres/resowner-repros"
+    },
+    {
+      "program": "postgres",
       "boundary": "a running PostgreSQL 17.5 server, reached by SQL; no reduction of any kind stands between the statement and the defect",
       "title": "Memory-safety defects in PostgreSQL 17.5 reached by SQL against a real server",
       "upstream": {
@@ -2453,6 +2492,7 @@
     "capstone/bug-corpora/php/zend-alloc-repros": 30,
     "capstone/bug-corpora/postgres/c-repros": 5,
     "capstone/bug-corpora/postgres/mmgr-repros": 5,
+    "capstone/bug-corpora/postgres/resowner-repros": 2,
     "capstone/bug-corpora/postgres/sql-repros": 9,
     "capstone/bug-corpora/probes/cheribsd-realloc-stale-cap": 2,
     "capstone/bug-corpora/sqlite/capi-repros": 19,
@@ -2461,10 +2501,10 @@
     "capstone/bug-corpora/wireshark/plain-temporal-repros": 10,
     "capstone/bug-corpora/wireshark/wmem-repros": 23
   },
-  "cases_here": 425,
+  "cases_here": 427,
   "cases_xlang": 0,
-  "cases_total": 425,
-  "live_true": 275,
+  "cases_total": 427,
+  "live_true": 277,
   "live_false": 122,
   "live_not": 28,
   "advisories_total": 11,
@@ -2544,6 +2584,8 @@
     "`capstone/bug-corpora/php/zend-alloc-repros` has no triage inventory under docs/ref/.",
     "`capstone/bug-corpora/postgres/c-repros` has no triage inventory under docs/ref/.",
     "`capstone/bug-corpora/postgres/mmgr-repros`: 3 of 5 cases have a PROVENANCE.md.",
+    "`capstone/bug-corpora/postgres/resowner-repros`: 2 of 2 cases have a PROVENANCE.md.",
+    "`capstone/bug-corpora/postgres/resowner-repros` has no triage inventory under docs/ref/.",
     "`capstone/bug-corpora/postgres/sql-repros` has no triage inventory under docs/ref/.",
     "`capstone/bug-corpora/probes/cheribsd-realloc-stale-cap` has no triage inventory under docs/ref/.",
     "`capstone/bug-corpora/sqlite/capi-repros`: liveness deliberately not asserted for 19 cases.",
@@ -2558,6 +2600,7 @@
     "`capstone/bug-corpora/ffmpeg/plain-temporal-repros` is not referenced by any port.json.",
     "`capstone/bug-corpora/memcached/plain-temporal-repros` is not referenced by any port.json.",
     "`capstone/bug-corpora/postgres/c-repros` is not referenced by any port.json.",
+    "`capstone/bug-corpora/postgres/resowner-repros` is not referenced by any port.json.",
     "`capstone/bug-corpora/postgres/sql-repros` is not referenced by any port.json.",
     "`capstone/bug-corpora/probes/cheribsd-realloc-stale-cap` is not referenced by any port.json.",
     "`capstone/bug-corpora/wireshark/plain-temporal-repros` is not referenced by any port.json."

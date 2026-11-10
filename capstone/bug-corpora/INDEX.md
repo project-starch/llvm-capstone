@@ -10,7 +10,7 @@
 
 | sort | where | count | what it is |
 |---|---|---:|---|
-| third-party defects, as cases | `capstone/bug-corpora/` | 425 | one directory per case, `case.json` + `PROVENANCE.md`, a runner per corpus |
+| third-party defects, as cases | `capstone/bug-corpora/` | 427 | one directory per case, `case.json` + `PROVENANCE.md`, a runner per corpus |
 | the same, cross-language | `xlang/` | 0 | distilled C shims with their own row tables and measured columns |
 | our own silicon defects | `capstone/tests/fpga-repros/` | 32 | one self-contained report per defect, the folder is the report |
 | our own compiler and runtime defects | `docs/ref/ISSUES.md` | 171 open, 77 resolved | the registry, not reproduced cases |
@@ -42,6 +42,7 @@ Protection fixtures under `capstone/ports/*/security-tests/` are **not** bug mat
 | [`capstone/bug-corpora/php/zend-alloc-repros`](php/zend-alloc-repros) | php | 5.0.0 | 30 | 30 live | 0 | script-trigger | built |
 | [`capstone/bug-corpora/postgres/c-repros`](postgres/c-repros) | postgres | 17.5 | 5 | 5 live | 3 | case-json | measured |
 | [`capstone/bug-corpora/postgres/mmgr-repros`](postgres/mmgr-repros) | postgres | 17.5 | 5 | 5 live | 0 | case-json | measured |
+| [`capstone/bug-corpora/postgres/resowner-repros`](postgres/resowner-repros) | postgres | 17.5 | 2 | 2 live | 0 | case-json | built |
 | [`capstone/bug-corpora/postgres/sql-repros`](postgres/sql-repros) | postgres | 17.5 | 9 | 9 live | 4 | script-trigger | measured |
 | [`capstone/bug-corpora/probes/cheribsd-realloc-stale-cap`](probes/cheribsd-realloc-stale-cap) | mruby and perl | per row | 2 | 2 fixed before the pin | 0 | case-json | measured |
 | [`capstone/bug-corpora/sqlite/capi-repros`](sqlite/capi-repros) | sqlite | 3.53.3 amalgamation, for the host ASan arm | 19 | 19 not asserted | 2 | sqlite-row | measured |
@@ -50,7 +51,7 @@ Protection fixtures under `capstone/ports/*/security-tests/` are **not** bug mat
 | [`capstone/bug-corpora/wireshark/plain-temporal-repros`](wireshark/plain-temporal-repros) | wireshark | 4.6.8 | 10 | 10 fixed before the pin | 0 | case-json | measured |
 | [`capstone/bug-corpora/wireshark/wmem-repros`](wireshark/wmem-repros) | wireshark | 4.6.8 | 23 | 3 live, 20 fixed before the pin | 0 | case-json | measured |
 
-**425 cases in 28 corpora**, of which 275 are recorded live in the version their corpus pins, 122 were fixed upstream before it, and 28 carry an explicit decision not to assert liveness. 11 advisories are cited across all corpora.
+**427 cases in 29 corpora**, of which 277 are recorded live in the version their corpus pins, 122 were fixed upstream before it, and 28 carry an explicit decision not to assert liveness. 11 advisories are cited across all corpora.
 
 ## Every port component, and what bug material it has
 
@@ -100,6 +101,8 @@ Protection fixtures under `capstone/ports/*/security-tests/` are **not** bug mat
 - `capstone/bug-corpora/php/zend-alloc-repros` has no triage inventory under docs/ref/.
 - `capstone/bug-corpora/postgres/c-repros` has no triage inventory under docs/ref/.
 - `capstone/bug-corpora/postgres/mmgr-repros`: 3 of 5 cases have a PROVENANCE.md.
+- `capstone/bug-corpora/postgres/resowner-repros`: 2 of 2 cases have a PROVENANCE.md.
+- `capstone/bug-corpora/postgres/resowner-repros` has no triage inventory under docs/ref/.
 - `capstone/bug-corpora/postgres/sql-repros` has no triage inventory under docs/ref/.
 - `capstone/bug-corpora/probes/cheribsd-realloc-stale-cap` has no triage inventory under docs/ref/.
 - `capstone/bug-corpora/sqlite/capi-repros`: liveness deliberately not asserted for 19 cases.
@@ -114,6 +117,7 @@ Protection fixtures under `capstone/ports/*/security-tests/` are **not** bug mat
 - `capstone/bug-corpora/ffmpeg/plain-temporal-repros` is not referenced by any port.json.
 - `capstone/bug-corpora/memcached/plain-temporal-repros` is not referenced by any port.json.
 - `capstone/bug-corpora/postgres/c-repros` is not referenced by any port.json.
+- `capstone/bug-corpora/postgres/resowner-repros` is not referenced by any port.json.
 - `capstone/bug-corpora/postgres/sql-repros` is not referenced by any port.json.
 - `capstone/bug-corpora/probes/cheribsd-realloc-stale-cap` is not referenced by any port.json.
 - `capstone/bug-corpora/wireshark/plain-temporal-repros` is not referenced by any port.json.

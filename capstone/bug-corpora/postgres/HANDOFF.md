@@ -6,11 +6,20 @@ Written 2026-10-06, when this branch was parked to go back to SQLite.
 
 |            | nested | non-nested |
 |------------|-------:|-----------:|
-| temporal   | 5      | **0**      |
+| temporal   | 5      | **2**      |
 | spatial    | 9      | 5          |
 
-18 cases of which 15 have been run. `temporal, non-nested` is the one empty
-cell and the candidate that fills it is identified below.
+20 cases of which 17 have been run. **The `temporal, non-nested` cell was
+filled on 2026-11-10** by a new corpus at a second boundary,
+[`resowner-repros`](resowner-repros/README.md): `011eedcdc3` and `2aa6be6e64`,
+both live at 17.5, both reproduced on the host with their controls. The
+blocker recorded below for `2aa6be6e64` is **removed, and it was the wrong
+blocker**: the trigger does not need a cheap error path or a 1 GB bytea,
+because at the pin pgcrypto's own recursive `ResourceOwnerForget` makes real
+`resowner.c` raise the error by itself. Reading the pin also corrected the
+classification -- the defect is cleanly non-nested, not mixed, because
+`free_openssl_cipher` frees the EVP handle before the forget that raises, so
+`pfree(od)` is never reached. See `resowner-repros/01_.../PROVENANCE.md`.
 
 - `mmgr-repros` 5 — temporal, nested. All five run on five arms.
 - `sql-repros` 9 — spatial, nested. 01-05 run on three arms; 06, 07, 08, 09 not run.
@@ -22,14 +31,19 @@ cell and the candidate that fills it is identified below.
 
 | commit | bucket | cost |
 |---|---|---|
-| `2aa6be6e64` + `011eedcdc3` | **temporal, non-nested** | highest value, highest cost — see below |
-| `ac3afd1d00` | temporal, nested | induce OOM inside the aligned-allocation path |
+| ~~`2aa6be6e64` + `011eedcdc3`~~ | **temporal, non-nested** | **BUILT 2026-11-10** as `resowner-repros/01` and `/00` |
+| `ac3afd1d00` | temporal, nested | induce OOM inside the aligned-allocation path. Screened out 2026-11-10: allocator-internal, which `mmgr-repros` declares out of scope, and latent twice over (needs `MCXT_ALLOC_NO_OOM`, which upstream says no in-core caller passes). See `resowner-repros/SCREENED.md` |
 | `c05c3baf16` | spatial, **both** | `src/common/pg_lzcompress.c`, so one defect fills two cells |
 | `319e8a6441` | spatial, nested | upstream hardened seven contrib extensions at once; `10ebc4bd67` adds coverage tests whose inputs can serve as triggers |
 | `d1bd9a7dc3` | spatial, nested | ltree casefolding changes byte length |
 | `2543b9ea92` | spatial, nested | the DSA allocator corrupting its own pagemap; needs test_dsa, and whether a single-user backend can run DSA is unverified |
 
-### The one that fills the empty cell
+### The one that filled the empty cell -- DONE 2026-11-10
+
+Built as `resowner-repros/01` and `resowner-repros/00`. The analysis below is
+kept because it is what the build was aimed at, and because its stated blocker
+turned out not to exist; what actually happened is in that corpus's README and
+PROVENANCE files.
 
 `2aa6be6e64` with `011eedcdc3`. `contrib/pgcrypto/openssl.c:765` allocates the
 OSSLCipher with `MemoryContextAllocZero` (nested), but the object that gets
