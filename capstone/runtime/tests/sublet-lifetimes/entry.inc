@@ -8,12 +8,12 @@
     .insn r 0x5b, 1, 0x0a, a0, s2, zero
 #endif
     jal ra, wrapper_code
-#ifdef STALE_ALIAS
+#if defined(STALE_ALIAS) || defined(RENEW_STALE)
 fault_site:
-    lbu t0, 0(a0) /* the child, released through its client alias */
+    lbu t0, 0(a0) /* the child, whose lifetime a release or a renewal ended */
 #else
     bnez a0, wrapper_fail
-#if defined(BAD_OFFSET) || defined(LINEAR_PARENT) || defined(NO_MANAGE)
+#if defined(BAD_OFFSET) || defined(LINEAR_PARENT) || defined(LEGACY_FORM)
     .set fault_site, wrapper_code+WRAPPER_FAULT_OFFSET
 #else
 fault_site:

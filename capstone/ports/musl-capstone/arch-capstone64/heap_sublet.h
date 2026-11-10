@@ -52,10 +52,21 @@ static inline void *heap_issue(void *at, size_t n)
                      : "=r"(child) : "r"(at), "r"(n ? n : 1) : "memory");
     return child;
 }
-static inline void heap_end(void *parent, void *child)
+static inline void heap_end(void *object)
 {
-    __asm__ volatile(".insn r 0x5b, 0x1, 0x52, x0, %0, %1"
-                     : : "r"(parent), "r"(child) : "memory");
+    /* CREVOKE takes the object alone. Hardware validates its tag and liveness
+     * and ends everything derived inside it. */
+    __asm__ volatile(".insn r 0x5b, 0x1, 0x52, x0, %0, x0"
+                     : : "r"(object) : "memory");
+}
+static inline void *heap_renew(void *object)
+{
+    void *renewed;
+    /* CRENEW: the object's lifetime ends and a new one begins in the same
+     * place, with the cursor, bounds and rights of the operand. */
+    __asm__ volatile(".insn r 0x5b, 0x1, 0x54, %0, %1, x0"
+                     : "=r"(renewed) : "r"(object) : "memory");
+    return renewed;
 }
 /* malloc/free's compile-time controls; nested allocators always use the direct
  * primitives above, independently of the outer heap's measurement arm. */
@@ -71,12 +82,12 @@ static inline void *heap_alloc_issue(void *p, size_t n)
     return p;
 #endif
 }
-static inline void heap_alloc_end(void *parent, void *child)
+static inline void heap_alloc_end(void *object)
 {
 #if CAPSTONE_HEAP_LIFETIMES
-    heap_end(parent, child);
+    heap_end(object);
 #else
-    (void)parent; (void)child;
+    (void)object;
 #endif
 }
 static inline void *heap_access(void *p)

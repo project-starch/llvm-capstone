@@ -39,7 +39,8 @@ an assertion that capability layout or representability are identical to RV64.
 
 ## Mapping authority and nested allocators
 
-`heap_sublet.h` supplies direct `heap_issue` (CDERIVE) and `heap_end` (CREVOKE).
+`heap_sublet.h` supplies direct `heap_issue` (CDERIVE), `heap_end` (CREVOKE, the
+object alone) and `heap_renew` (CRENEW).
 The mapping layer retains a three-level Sv39 page index. Each occupied page
 names its mapping-wide parent; there are no entries for individual allocations
 or mallocng groups. Lookup is a fixed sequence of indexed loads, not a search.

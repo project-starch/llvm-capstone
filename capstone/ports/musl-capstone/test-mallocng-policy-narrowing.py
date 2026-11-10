@@ -29,8 +29,8 @@ class Guard(unittest.TestCase):
         p.write_text(s.replace('usage <= 12','usage <= 13'));self.check(False)
     def test_removed_revoke(self):
         p=self.tree/'src/malloc/mallocng/free.c'
-        s=p.read_text();self.assertIn('heap_alloc_end(p, issued);',s)
-        p.write_text(s.replace('heap_alloc_end(p, issued);',''));self.check(False)
+        s=p.read_text();self.assertIn('heap_alloc_end(issued);',s)
+        p.write_text(s.replace('heap_alloc_end(issued);',''));self.check(False)
     def test_unreviewed_file(self):
         (self.tree/'src/malloc/mallocng/registry.c').write_text('int registry;\n');self.check(False)
 
