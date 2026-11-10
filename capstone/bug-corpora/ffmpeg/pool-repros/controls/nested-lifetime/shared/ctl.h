@@ -19,8 +19,7 @@
 #define FF2_CTL_H
 
 #include "libavutil/buffer.h"
-/* BufferPoolEntry: the pool's own record of an entry. Patch 0003 adds sublet_issued to it;
- * the release arm's header does not have it. */
+/* BufferPoolEntry: the pool's own record of an entry. Patch 0003 leaves its layout as it is. */
 #include "libavutil/buffer_internal.h"
 #include "trace.h"
 #include <stdint.h>

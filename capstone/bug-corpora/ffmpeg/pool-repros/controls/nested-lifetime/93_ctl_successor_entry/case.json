@@ -1,9 +1,9 @@
 {
   "case": 93,
   "title": "CONTROL 3 (successor): A returned, C handed out at A's address and used through C->data; in a separate run, A's old pointer is read",
-  "control_for": "patch 0003 (FFPOOL_SUBLET=ON): the successor's child is live, the stale one is revoked; the release arm is the control for the control",
+  "control_for": "patch 0003 (FFPOOL_SUBLET=ON): the successor's lifetime is live, the stale one has ended; the release arm is the control for the control",
   "pre_registration": "capstone/docs/plans/2026-10-11-nested-lifetime-controls.md",
-  "release_operation": "av_buffer_unref -> pool_release_buffer, where patch 0003 revokes (CREVOKE)",
+  "release_operation": "av_buffer_unref -> pool_release_buffer, where patch 0003 renews the entry (CRENEW)",
   "argv": {"run": ["run", "93"], "stale": ["stale", "93"]},
   "probes": ["read_probe", "write_probe", "stale_read_probe"],
   "arms": {

@@ -87,8 +87,8 @@ guest a per-case script would have to reinvent. A Capstone domain:
 
 On the virtual profile, each `case.c` unchanged against the buffer-pool port's library in a
 Capstone process: `virtual-malloc` (the stock pools, every entry one virtual-mallocng object) and
-`virtual-nested-pools` (`-DFFPOOL_SUBLET=ON`, the port's patch 0003: every hand-out a child lifetime
-of its pool entry, revoked when it returns). Build both, then run each in one boot:
+`virtual-nested-pools` (`-DFFPOOL_SUBLET=ON`, the port's patch 0003: every entry's lifetime renewed
+when a hand-out returns). Build both, then run each in one boot:
 
 **The SDK is a corpus SDK (C-81).** Build it with `CAPSTONE_SDK_CORPUS=1` exported
 (`CAPSTONE_SDK_CORPUS=1 bash capstone/runtime/virtual/build-sdk.sh <out> <musl>`, or the port's
