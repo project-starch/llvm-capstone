@@ -574,3 +574,55 @@ step.
 - **Board 2:**
   - Native mcf now starts after Plain imagick, about 18:00, not about 23:00.
   - Nominal ends: native mcf Wed ~08:40, gcc ~10:10, Plain xz c0 ~15:00.
+
+## Addendum 26 (11 Nov 06:1x, before its board call): every native/Plain ratio also crosses a bitstream; Plain on V1f at test size
+
+**The confound.** Every Plain train run is on C.5a (caplifive_vp2c_1fc2cd5aa; out-train*-plain SEQ files). Every native
+run is on V1f (caplifive_e5nids55f_0ef470559). So each native/Plain ratio is also a ratio between two bitstreams. The
+same is true of the test-size native ratios (Plain at test ran on C.5a, results/2026-11-07-plainreuse Addendum 4). The
+module-route train ratios are not affected, because both arms ran on C.5a. That includes x264.
+- No Plain run exists on any V1f or E5 bitstream. All `spec/board/out-*` SEQ files were searched.
+- The RTL between the two differs in more than the capability paths: 25 files under core/, including wt_dcache_ctrl,
+  load_unit, the frontend and cva6_mmu. 213378a11 changes when a load through a 2 MiB page takes the FPGA's
+  non-idempotent stall.
+- Precedent: Plain moved within ±2 % between the 3 Nov bitstream and C.5a (plainreuse R5). That is evidence about those
+  two bitstreams only.
+
+**Native results so far** (V1f, board as listed, against the C.5a Plain train run):
+- perlbench, board 3: 5/5 rc 0, specdiff 6/6. 54,021.8 s against Plain 48,206.5 s (board 1): 1.121.
+- imagick, board 1: 2/2 rc 0, specdiff 1/1. 38,251.9 s against Plain 43,517.9 s (board 2): 0.879. Every output hash
+  equals Plain's, train_output.tga included. The twin read prints DIFFER only because the native stage carries one
+  extra file, 8811215d-train_expected.tga, whose hash equals train_output.tga's.
+- imagick at 0.879 is not reported as a gain. It reverses the test-size reading (1.058). The calibration below tells
+  whether the bitstream accounts for it. If it does not, the Plain imagick train run (hart CPI 3.66) is the next thing to
+  check.
+
+**Calibration.** Board 1, after its last train step (Capstone xz c0, ~14:00). Driver perf/train/cal-v1f.sh:
+1. Wait for board 1's nat-v1f.
+2. Make V1f resident: readback, flash if needed, readback.
+3. Run perf/b3/board-x/chain-board.sh over perf/train/cal-v1f.list. The list holds the three Plain-with-cache test
+   stages of plainreuse Addendum 4, unchanged: imagick, nab and lbm.
+
+The kit is bkit41-ids55-unify. Its board.env equals bkit27-gtq's except BOARD_BITSTREAM, with the same monitor
+(d9da397), firmware recipe and wrap. Its module and launcher are the ids55 ones that V1f's known-good control needs.
+Plain does not use them.
+
+The pair is same-board and same-stage against Addendum 4's C.5a readings on board 1: imagick 19.46 s, nab 862.99 s,
+lbm 1,895.0 s.
+
+| # | Prediction |
+|---|---|
+| C1 | V1f/C.5a for Plain within ±1 % for nab and lbm, and ±3 % for imagick (20 s, startup-dominated) |
+
+Basis for C1, from readings already made: module-route code moved by at most 0.1 % between the two bitstreams at test
+size. For lbm, native/module on V1f was 0.914 (board 2) and native V1f/Plain was 0.875, so module V1f/Plain = 0.957,
+against module C.5a/Plain = 0.956. For nab the same chain gives 1.149 against 1.148. This is evidence about Capstone
+code; the calibration measures Plain code.
+
+**Reading rule.** If C1 holds, the native train ratios stand against C.5a Plain. If C1 fails, each native ratio is
+reported twice: once against C.5a Plain, and once corrected by the measured factor for that benchmark, or by the
+geomean factor where none was measured. The correction is labelled as a correction, never as a same-bitstream
+measurement.
+
+**Dry run** (perf/train/cal-dry; every board call stubbed): it reaches the chain, and spec-board's kit and stage checks
+pass for real on all three stages. A pre-registration that is not on origin STOPs. An existing output directory STOPs.
