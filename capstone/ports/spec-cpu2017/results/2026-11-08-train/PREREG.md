@@ -557,3 +557,20 @@ One watcher runs per board and ends with that board's nat-v1f processes.
 - Negative: on board 3's live state it takes no action.
 - Dry, with the clock set to Wed 15:00: it names exactly the live perlbench runner's pgid (1476878) and does not kill it.
 - Positive: on a fake step with a fake runner tree it kills the runner (rc 143), and the parent script continues.
+
+## Addendum 25 (10 Nov 17:1x, the user's decision): xz command 0 goes to the end of every queue
+
+xz command 1 already has its Plain number (8,736.0 s, specdiff 1/1), and its Capstone run (board 3) is queued, so xz
+can be reported on command 1 if command 0 does not complete. Command 0 now runs last on both arms, after every native
+step.
+- **Plain xz c0** leaves board 2's running Plain chain before it starts: an output directory
+  out-train4-b2-plain/557.xz_r-train-plain-rv64-link-c0r with a SKIPPED marker makes chain-board.sh skip it
+  (chain-board.sh:26). Plain imagick, still running, is not touched.
+- **It is requeued** as the last step on board 2, after native mcf and native gcc. A third nat-v1f.sh waits for the gcc
+  waiter; it uses the same stage, kit (bkit27-gtq) and driver (gt-run-ga2.sh). Its list is perf/train/b2pxz0-plain, its
+  output out-train6-b2-plain-xz0, and the deadline guard needs 5 h.
+- **Capstone xz c0** (board 1, after native imagick) is already its board's last step and is unchanged.
+- **Dry run:** the new step starts when given Wed 10:30 and is SKIPPED when given Wed 16:00.
+- **Board 2:**
+  - Native mcf now starts after Plain imagick, about 18:00, not about 23:00.
+  - Nominal ends: native mcf Wed ~08:40, gcc ~10:10, Plain xz c0 ~15:00.
