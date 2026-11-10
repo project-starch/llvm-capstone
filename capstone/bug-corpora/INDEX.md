@@ -10,10 +10,10 @@
 
 | sort | where | count | what it is |
 |---|---|---:|---|
-| third-party defects, as cases | `capstone/bug-corpora/` | 425 | one directory per case, `case.json` + `PROVENANCE.md`, a runner per corpus |
+| third-party defects, as cases | `capstone/bug-corpora/` | 427 | one directory per case, `case.json` + `PROVENANCE.md`, a runner per corpus |
 | the same, cross-language | `xlang/` | 30 | distilled C shims with their own row tables and measured columns |
-| our own silicon defects | `capstone/tests/fpga-repros/` | 31 | one self-contained report per defect, the folder is the report |
-| our own compiler and runtime defects | `docs/ref/ISSUES.md` | 166 open, 77 resolved | the registry, not reproduced cases |
+| our own silicon defects | `capstone/tests/fpga-repros/` | 32 | one self-contained report per defect, the folder is the report |
+| our own compiler and runtime defects | `docs/ref/ISSUES.md` | 167 open, 77 resolved | the registry, not reproduced cases |
 
 Protection fixtures under `capstone/ports/*/security-tests/` are **not** bug material and are counted nowhere above: they are this project's own oracles. 4 components have them: `apr/pools`, `ffmpeg/buffer-pool`, `memcached/allocators`, `whisper/ggml-context`.
 
@@ -42,6 +42,7 @@ Protection fixtures under `capstone/ports/*/security-tests/` are **not** bug mat
 | [`capstone/bug-corpora/php/zend-alloc-repros`](php/zend-alloc-repros) | php | 5.0.0 | 30 | 30 live | 0 | script-trigger | built |
 | [`capstone/bug-corpora/postgres/c-repros`](postgres/c-repros) | postgres | 17.5 | 5 | 5 live | 3 | case-json | measured |
 | [`capstone/bug-corpora/postgres/mmgr-repros`](postgres/mmgr-repros) | postgres | 17.5 | 5 | 5 live | 0 | case-json | measured |
+| [`capstone/bug-corpora/postgres/resowner-repros`](postgres/resowner-repros) | postgres | 17.5 | 2 | 2 live | 0 | case-json | built |
 | [`capstone/bug-corpora/postgres/sql-repros`](postgres/sql-repros) | postgres | 17.5 | 9 | 9 live | 4 | script-trigger | measured |
 | [`capstone/bug-corpora/probes/cheribsd-realloc-stale-cap`](probes/cheribsd-realloc-stale-cap) | mruby and perl | per row | 2 | 2 fixed before the pin | 0 | case-json | measured |
 | [`capstone/bug-corpora/sqlite/capi-repros`](sqlite/capi-repros) | sqlite | 3.53.3 amalgamation, for the host ASan arm | 19 | 19 not asserted | 2 | sqlite-row | measured |
@@ -54,7 +55,7 @@ Protection fixtures under `capstone/ports/*/security-tests/` are **not** bug mat
 | [`xlang/reuse-not-free`](../../xlang/reuse-not-free) | sqlite | per row | 2 | not recorded | 0 | xlang-row | built |
 | [`xlang/toctou-double-fetch`](../../xlang/toctou-double-fetch) | various (sandbox and host boundaries) | per row | 0 | not recorded | 0 | xlang-row | triaged |
 
-**455 cases in 32 corpora**, of which 275 are recorded live in the version their corpus pins, 122 were fixed upstream before it, and 28 carry an explicit decision not to assert liveness. 22 advisories are cited across all corpora.
+**457 cases in 33 corpora**, of which 277 are recorded live in the version their corpus pins, 122 were fixed upstream before it, and 28 carry an explicit decision not to assert liveness. 22 advisories are cited across all corpora.
 
 ## Every port component, and what bug material it has
 
@@ -104,6 +105,8 @@ Protection fixtures under `capstone/ports/*/security-tests/` are **not** bug mat
 - `capstone/bug-corpora/php/zend-alloc-repros` has no triage inventory under docs/ref/.
 - `capstone/bug-corpora/postgres/c-repros` has no triage inventory under docs/ref/.
 - `capstone/bug-corpora/postgres/mmgr-repros`: 3 of 5 cases have a PROVENANCE.md.
+- `capstone/bug-corpora/postgres/resowner-repros`: 2 of 2 cases have a PROVENANCE.md.
+- `capstone/bug-corpora/postgres/resowner-repros` has no triage inventory under docs/ref/.
 - `capstone/bug-corpora/postgres/sql-repros` has no triage inventory under docs/ref/.
 - `capstone/bug-corpora/probes/cheribsd-realloc-stale-cap` has no triage inventory under docs/ref/.
 - `capstone/bug-corpora/sqlite/capi-repros`: liveness deliberately not asserted for 19 cases.
@@ -124,13 +127,14 @@ Protection fixtures under `capstone/ports/*/security-tests/` are **not** bug mat
 - `capstone/bug-corpora/ffmpeg/plain-temporal-repros` is not referenced by any port.json.
 - `capstone/bug-corpora/memcached/plain-temporal-repros` is not referenced by any port.json.
 - `capstone/bug-corpora/postgres/c-repros` is not referenced by any port.json.
+- `capstone/bug-corpora/postgres/resowner-repros` is not referenced by any port.json.
 - `capstone/bug-corpora/postgres/sql-repros` is not referenced by any port.json.
 - `capstone/bug-corpora/probes/cheribsd-realloc-stale-cap` is not referenced by any port.json.
 - `capstone/bug-corpora/wireshark/plain-temporal-repros` is not referenced by any port.json.
 
 ## Our own silicon defects
 
-31 folders under `capstone/tests/fpga-repros/`, plus `ARCHIVED/`. 16 carry a `SHA256SUMS`, which is what lets a board result be cited by image hash rather than by label.
+32 folders under `capstone/tests/fpga-repros/`, plus `ARCHIVED/`. 16 carry a `SHA256SUMS`, which is what lets a board result be cited by image hash rather than by label.
 
 - `R01-lsu-hazard` -- no heading in 00-README.md
 - `R02-delin` -- no heading in 00-README.md
@@ -147,6 +151,7 @@ Protection fixtures under `capstone/ports/*/security-tests/` are **not** bug mat
 - `R35-revoked-reference-retains-authority` -- R-35 — on silicon a REVOKED capability still reads AND writes the storage its object has given up, at every age, and the access does not trap
 - `R42-icache-killed-miss-refill` -- R-42 — a speculative I-cache miss killed by a taken-branch redirect costs +1 cycle every loop iteration
 - `R43-revocation-cache-false-deny` -- R-43 — R-35's revocation cache refused LIVE capabilities once ~256 revocation ids were live. FIXED ON SILICON 2026-09-29 (`8f6a0af98`, `caplifive_r43_8f6a0af98.bit`)
+- `R67-pcc-adopts-dead-code-capability` -- R-67: a jump through a code capability whose node has ended runs its target
 - `RTL-cap-mcause-off-by-one` -- SPEC VIOLATION — every capability `mcause` from the DATA path is one code too high, and 25 aliases
 - `RTL-domain-trap-vector-unset` -- A domain enters with NO trap vector: `create_domain` never writes the trap-vector context slot
 - `RTL-give-cost-tracks-global-placement` -- Release cost tracks GLOBAL PLACEMENT, not the arm: a 16-byte relocation moves `give_cyc/n` by 83 %
