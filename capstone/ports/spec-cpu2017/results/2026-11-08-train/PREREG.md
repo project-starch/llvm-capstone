@@ -538,3 +538,22 @@ the same stage first (list perf/train/b3pc1-plain, out-train5-b3-plain-c1). Plai
 - **Not checked:** no QEMU twin. The board run is the first run of this input on the native route, and its outputs are checked against the reference afterwards.
 - **Where it runs:** board 2, after native mcf (a second nat-v1f.sh waits for the first). Timeout 10,000 s; 1.5 h needed by the deadline guard. Nothing else moves.
 - **If it fails:** gcc keeps its module train number.
+
+## Addendum 24 (10 Nov 12:5x): Addendum 22's native timeouts were not in force; an external watcher enforces them
+
+**Defect.** nat-v1f.sh passes each native step's timeout to nt-run-v1f.sh as NT_TRAIN_TO, and the kit's board-run.sh
+multiplies it by BOARD_TIMEOUT_MULT=4 (board.env). The running perlbench train boot reads `idle limit 360000 s` in its
+SEQ and its runner is `timeout 361800`. So Addendum 22's "native timeouts are capped at the deadline" was false: a wedged
+native step would have held its board past the deadline and lost the steps after it. Found by reading the running boot's
+SEQ. It has cost nothing so far: perlbench command 0 started at 12:07 and is running.
+**Fix, with no running script edited.** perf/train/cap-enforce.sh enforces the pre-registered per-step caps (perlbench
+90,000 s, mcf 76,000, imagick 68,000, lbm 37,000, gcc 10,000, each already capped at the deadline by nat-v1f.sh).
+- **Trigger:** a native step's train boot (nt log "BOOT 2 train BEGIN") has run longer than its cap.
+- **Action:** the watcher kills the process group of the `timeout ... run_baked_rungs_fpga` runner whose ancestor
+  board-run.sh names that step's output directory. Nothing else is touched.
+- **Effect:** nt-run logs BOOT 2 END and unbooks. nat-v1f reads the step as FAIL and goes on through its deadline guard.
+One watcher runs per board and ends with that board's nat-v1f processes.
+**Controls:**
+- Negative: on board 3's live state it takes no action.
+- Dry, with the clock set to Wed 15:00: it names exactly the live perlbench runner's pgid (1476878) and does not kill it.
+- Positive: on a fake step with a fake runner tree it kills the runner (rc 143), and the parent script continues.
