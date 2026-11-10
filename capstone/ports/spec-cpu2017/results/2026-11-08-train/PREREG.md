@@ -467,3 +467,51 @@ in-VM time alike. Native on V1f takes the remaining Capstone train. Option B cos
 **Not established here:**
 - Native over a long run. These are test-size runs of 20-900 s; a train runs for hours.
 - The ratios to Plain. The Plain test readings come from other sessions and kits, not same-board pairs.
+
+## Addendum 22 (10 Nov 08:5x, before any of it runs): the remaining Capstone train on V1f + native; no running step is stopped
+
+The user's decision: as many benchmarks as possible on the optimal configuration (V1f + native, Addendum 21), every
+problematic one among them, and the deadline holds. Running steps are not interrupted. Plain mcf (board 1), Plain imagick
+(board 2) and Plain lbm (board 3) run on. Only waiting wrappers are replaced, and none of them had started a step:
+train-board3 3882166 (board 1), nat-board 1097298 (board 2), nat-board2 576476 and train-board4 576649 (board 3).
+**Already on the record, module route on C.5a:** nab (79,730 s, specdiff 2/2), x264 (5/5, 3/3) and gcc train01
+(Addendum 3). These have no V1f run here. A native nab train would take about 20 h, and no slot holds that.
+**Native stages** (native01/board-stages, SHA256SUMS ok):
+- perl-train and mcf-train: Addendum 5's, QEMU-twinned by the native lane.
+- nt-imagick-train and nt-lbm-train: their exes equal by hash the ones that ran and passed on V1f in Addendum 21
+  (imagick_r f008168e93193db3, imagevalidate 6e5613cc944bb95d, lbm_r ed43d5cc37d18396).
+- **Kits:** perlbench runs on bkit41-native-v1f-perl (524,288 records). mcf, imagick and lbm run on bkit41-native-v1f-mcf
+  (262,144 records; imagick's test run used about 1.2 k nodes). Both kits load the same module (f2a2645cc570dcc6).
+**Driver: perf/train/nat-v1f.sh.**
+- Each native step:
+  1. waits for a free board;
+  2. reads the resident bitstream back, and flashes V1f only if another bitstream is resident (sealed sha256, the flash
+     tool's checks, readback);
+  3. runs nt-run-v1f.sh: a smoke boot, then the train boot.
+- **Pass condition:** nt-run rc 0, every @@SPEC-END rc=0, as many markers as the plan's commands plus validations, and
+  @@SPEC-DONE.
+- **Deadline guard:** before every step and every fallback, a step whose nominal hours do not fit before Wed 20:00 is
+  SKIPPED, not started. Native timeouts are capped at the deadline.
+- **Defect fixed along the way:** nt-run's default train budget is 20,000 s. nat-board.sh never set it, so the queued
+  native mcf and perlbench would have been cut at 5.6 h. Each step now sets its own: perlbench 90,000 s, mcf 76,000,
+  imagick 68,000, lbm 37,000.
+- **Dry runs** (scratchpad, every board call stubbed, all ending DONE):
+  - native pass;
+  - native fail into the fallback: mcf4k; e5c, with the E5c gate failing into C.5a unify;
+  - a late start that skips perlbench;
+  - a late fail with the timeout capped.
+**No 32-image V1f gate on boards 1 and 3.** V1f passed it three times on board 2 from the same sealed file. On each
+board, the flash checks, the readback and the native smoke boot (Tier 1) still run first. This saves about 2 board-hours.
+**Plain xz c1 moves from board 2 to board 3.** Board 2 skips it (SKIPPED in out-train5-b2-plain-c1), and board 3 runs
+the same stage first (list perf/train/b3pc1-plain, out-train5-b3-plain-c1). Plain still runs first on each board.
+
+| Board | After the running Plain (est. end) | Then | Nominal end | Capstone at +35 % |
+|---|---|---|---|---|
+| 1 | Plain mcf (~Tue 19:00) | native imagick 13.1 h; Cap xz c0 (C.5a nset) 6 h | Wed ~14:00 | imagick Wed ~12:40; xz c0 then skipped |
+| 2 | Plain imagick (~18:00); Plain xz c0 (~23:00) | native mcf 14.7 h (fallback C.5a 4K q32 15.7 h) | Wed ~13:40 | Wed ~18:50 |
+| 3 | Plain lbm (~10:00) | Plain xz c1 2.5 h; native perlbench 17.5 h (fallback E5c 19.6 h); native lbm 7.5 h; Cap xz c1 (C.5a nsetfw) 2.9 h | Wed ~16:30 | perlbench Wed ~12:10; lbm fits; xz c1 skipped |
+
+- **Predictions:** N0: each native step passes as above, and its outputs equal the reference (checked afterwards, as in Addendum 21). N1: native time = 0.85-0.95 × the module estimate
+  in the schedule.
+- **A native failure:** falls back if the guard allows. Otherwise that benchmark reports its test-size number, marked
+  as such (rule T0). xz has no native stage and stays on the module route on C.5a.
