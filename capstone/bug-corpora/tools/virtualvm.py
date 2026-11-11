@@ -1,9 +1,13 @@
 """Running corpus steps on the virtual Capstone platform, all in one boot.
 
-The virtual platform (capstone/runtime/virtual) runs each application as an ordinary Linux process
-under `capstone-vexec`: a capability fault ends that process and not the guest. So a corpus run is
-one boot that executes every control and every case in turn, staged on a read-only disk, through
-runtime/virtual/run-staged.py -- the same harness that qualified the platform.
+The virtual platform (capstone/runtime/virtual) runs each application as an ordinary Linux task,
+started through `capstone-vexec`: a capability fault ends that task and not the guest. So a corpus
+run is one boot that executes every control and every case in turn, staged on a read-only disk,
+through runtime/virtual/run-staged.py -- the same harness that qualified the platform.
+
+The Capstone adapter is built into the kit's kernel (runtime/virtual/native_platform.py). A batch
+loads no module: its script asks the launcher whether the kernel runs native tasks and stops when it
+does not.
 
 A Batch collects files to stage and named shell steps. execute() returns, per step, the console
 text and a result dict shaped like the persistent VM's (`kind`, `value`, `fault`), so a corpus's
@@ -11,7 +15,7 @@ observe() reads a virtual step exactly as it reads a physical run. Nothing here 
 
 The platform is a kit directory holding exactly what the qualification recorded:
 qemu-system-riscv64 (+ libslirp.so.0), images/{Image,fw_jump.elf,rootfs.ext2},
-adapter/capstone-vexec, adapter/module/capstone_vm.ko, and optionally adapter/module/params (see module_params()).
+adapter/capstone-vexec, and optionally adapter/params (see kernel_params()).
 """
 import os
 import re
@@ -24,20 +28,37 @@ from verdicts import sha256
 
 REPO = Path(__file__).resolve().parents[3]
 STAGED = REPO / "capstone/runtime/virtual/run-staged.py"
+sys.path.insert(0, str(STAGED.parent))
+import native_platform  # noqa: E402
+
 FILES = ("qemu-system-riscv64", "images/Image", "images/fw_jump.elf", "images/rootfs.ext2",
-         "adapter/capstone-vexec", "adapter/module/capstone_vm.ko")
+         "adapter/capstone-vexec")
 BEGIN, END = "@@STEP-BEGIN ", "@@STEP-END "
 BOUND = "@@STEP-BOUND "   # a board step killed at its bound (boardvm): it reads as a timeout, never as a signal
 NSIG = 64   # Linux _NSIG: the highest signal number a step's 128+N status can carry
-PARAMS = "adapter/module/params"
+PARAMS = "adapter/module/params"   # a board kit: its module's parameters, written through sysfs (boardvm)
+KERNEL_PARAMS = "adapter/params"   # a QEMU kit: the adapter's parameters, given on the kernel command line
 SYSFS = "/sys/module/capstone_vm/parameters"
 
 
-def module_params(kit):
+def kernel_params(kit):
+    """A QEMU kit's adapter parameters: adapter/params, in the format of module_params(). The adapter is built into the
+    kernel, so execute() puts each on the kernel command line as `capstone_vm.name=value`. The guest script prints the
+    read-back of each as `@@PARAM name=<value>`, and the run is refused unless every one reads back as set."""
+    return module_params(kit, KERNEL_PARAMS)
+
+
+def read_back_lines(params):
+    """The guest lines that print the read-back of parameters the kernel command line set."""
+    return [f"[ -f {SYSFS}/{n} ] && echo \"@@PARAM {n}=$(cat {SYSFS}/{n})\" || "
+            f"{{ echo '@@PARAM {n} REFUSED'; echo VIRTUAL_STAGED_DONE; exit 1; }}" for n, _ in params]
+
+
+def module_params(kit, file=PARAMS):
     """The kit's module parameters: adapter/module/params, one `name=value` per line (# comments allowed). The guest
     script writes each through sysfs right after insmod and prints its read-back as `@@PARAM name=<value>`; the run is
     refused unless every one reads back as set (check_params). No file: no parameters, and the script is unchanged."""
-    f = Path(kit) / PARAMS
+    f = Path(kit) / file
     if not f.is_file():
         return []
     params = []
@@ -71,8 +92,8 @@ def check_params(params, text):
 
 
 def record_params(record, kit):
-    """Add the kit's module parameters to a platform record, only when it has any (records without stay as before)."""
-    params = module_params(kit)
+    """Add the kit's adapter parameters to a platform record, only when it has any (records without stay as before)."""
+    params = kernel_params(kit)
     if params:
         record["module_params"] = " ".join(f"{n}={v}" for n, v in params)
     return record
@@ -83,7 +104,7 @@ def platform(kit, compiler, runner):
     kit = Path(kit)
     record = {"qemu": sha256(kit / FILES[0]), "kernel": sha256(kit / FILES[1]),
               "firmware": sha256(kit / FILES[2]), "rootfs": sha256(kit / FILES[3]),
-              "launcher": sha256(kit / FILES[4]), "module": sha256(kit / FILES[5])}
+              "launcher": sha256(kit / FILES[4]), "module": "built into the kernel"}
     record["compiler"] = sha256(compiler) if compiler and Path(compiler).is_file() else "unrecorded"
     record["runner"] = sha256(runner)
     record["judge"] = sha256(Path(__file__).with_name("verdicts.py"))
@@ -122,16 +143,15 @@ class Batch:
 
     def script(self):
         lines = ["#!/bin/sh", "cd /mnt/vm || exit 1", "dmesg -n 1",
-                 "insmod capstone_vm.ko || { echo VIRTUAL_STAGED_DONE; exit 1; }",
-                 "chmod 666 /dev/capstone-vm",
+                 f"./{native_platform.LAUNCHER} --platform || {{ echo VIRTUAL_STAGED_DONE; exit 1; }}",
                  # The launcher prints its `capstone-exec: domain fault cause= pc= ... code=` line only
                  # with diagnostics on (as run-ports.py runs it); without it a fault is a bare
                  # SIGSEGV, which no observe() may read as the mechanism reporting.
-                 "export CAPSTONE_EXEC_DIAGNOSTICS=1"] + param_lines(self.params)
+                 "export CAPSTONE_EXEC_DIAGNOSTICS=1"] + read_back_lines(self.params)
         for name, command in self.steps:
             lines += [f"echo '{BEGIN}{name}'", f"( {command} ) > /tmp/step.out 2>&1", "rc=$?",
                       "cat /tmp/step.out", f"echo \"{END}{name} $rc\""]
-        lines += ["rmmod capstone_vm", "echo VIRTUAL_STAGED_DONE", ""]
+        lines += ["echo VIRTUAL_STAGED_DONE", ""]
         return "\n".join(lines)
 
     def execute(self, kit, work, timeout):
@@ -139,8 +159,7 @@ class Batch:
         kit = Path(kit)
         shutil.copy2(kit / "adapter/capstone-vexec", self.stage / "capstone-vexec")
         (self.stage / "capstone-vexec").chmod(0o755)
-        shutil.copy2(kit / "adapter/module/capstone_vm.ko", self.stage / "capstone_vm.ko")
-        self.params = module_params(kit)
+        self.params = kernel_params(kit)
         (self.stage / "gate.sh").write_text(self.script())
         size = sum(f.stat().st_size for f in self.stage.rglob("*") if f.is_file())
         env = dict(os.environ)
@@ -150,7 +169,11 @@ class Batch:
         run = subprocess.run([sys.executable, str(STAGED), "--qemu", str(kit / FILES[0]),
                               "--images", str(kit / "images"), "--stage", str(self.stage),
                               "--work", str(work), "--timeout", str(timeout),
-                              "--disk-mib", str(max(1024, (size >> 20) * 2 + 256))], env=env)
+                              "--disk-mib", str(max(1024, (size >> 20) * 2 + 256)),
+                              # the cases write to /tmp from the read-only stage
+                              "--kernel-arg", native_platform.WIDE_GRANTS,
+                              *[word for n, v in self.params for word in ("--kernel-arg", f"capstone_vm.{n}={v}")]],
+                             env=env)
         serial = Path(work) / "serial.log"
         text = serial.read_text(errors="replace").replace("\r\n", "\n") if serial.exists() else ""
         check_params(self.params, text)

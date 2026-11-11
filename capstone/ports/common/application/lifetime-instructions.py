@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""Check lifetime opcodes in an allocator object's executable ELF sections."""
+"""Check lifetime opcodes in an allocator object's executable ELF sections.
+
+An allocator is protected when its code begins and ends lifetimes. It does that with a
+CDERIVE and a CREVOKE, or with a CRENEW, which ends a lifetime and begins the next one in
+its place.
+"""
 import argparse
 from pathlib import Path
 import struct
@@ -11,7 +16,7 @@ def counts(path):
         raise ValueError('expected a little-endian Capstone ELF64 object (machine 259)')
     offset = struct.unpack_from('<Q', data, 40)[0]
     stride, count = struct.unpack_from('<HH', data, 58)
-    found = {0x51: 0, 0x52: 0}
+    found = {0x51: 0, 0x52: 0, 0x54: 0}
     for i in range(count):
         header = offset + i * stride
         flags, _, start, size = struct.unpack_from('<QQQQ', data, header + 8)
@@ -32,7 +37,7 @@ def counts(path):
                 if word & 0xfe00707f == (opcode << 25) | (1 << 12) | 0x5b:
                     found[opcode] += 1
             pos += 4
-    return found[0x51], found[0x52]
+    return found[0x51], found[0x52], found[0x54]
 
 
 def main():
@@ -41,11 +46,16 @@ def main():
     parser.add_argument('--expect', choices=('present', 'absent'), required=True)
     args = parser.parse_args()
     try:
-        derive, revoke = counts(args.object)
+        derive, revoke, renew = counts(args.object)
     except (OSError, ValueError, struct.error) as error:
         parser.error(str(error))
-    ok = derive > 0 and revoke > 0 if args.expect == 'present' else derive == revoke == 0
-    print(f'{"PASS" if ok else "FAIL"} {args.object.name}: CDERIVE={derive} CREVOKE={revoke}')
+    if args.expect == 'present':
+        ok = (derive > 0 and revoke > 0) or renew > 0
+    elif args.expect == 'absent':
+        ok = derive == revoke == renew == 0
+    else:
+        raise ValueError(args.expect)
+    print(f'{"PASS" if ok else "FAIL"} {args.object.name}: CDERIVE={derive} CREVOKE={revoke} CRENEW={renew}')
     return 0 if ok else 1
 
 
