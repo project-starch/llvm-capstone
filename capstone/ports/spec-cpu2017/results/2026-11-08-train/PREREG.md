@@ -650,3 +650,51 @@ new bitstream. Plain xz c0 had already started on board 2 at 09:14:20 (Addendum 
   number beside it.
 - If it fails or is skipped by the deadline guard, gcc keeps the module number.
 - The stopped run is not a reading.
+
+## Addendum 28 (11 Nov 10:4x): RETRACTION. The native/Plain train ratios are not fair, because the Plain arm pays a 9-11 % harness heartbeat that the native kit does not run
+
+**Retracted:**
+- Every native-route train ratio as a fair Capstone/Plain number: perlbench 1.121, imagick 0.879 (Addendum 26), and
+  mcf 1.062 and lbm 0.840 (recorded since).
+- The run times, outputs and specdiff verdicts stand. Only the denominator is unfair.
+
+**Mechanism.**
+- The Plain kit's batch script (boardvm.py:200-206) runs a heartbeat every 30 s. Each beat is about six process
+  spawns (`wc`, `tail`, `base64`), and the arms share it.
+- Measured cost: 3.1-3.7 s of hart time per ~35 s beat, i.e. 8.9-10.8 % of the hart, from three sources:
+  - mcf out-mx-b2: GT-SNAP window minus rusage, 819 s of 9,087 s;
+  - gcc train: four runs, 9.3-10.8 %;
+  - lbm test: `times`, 173 s of 1,899 s.
+- Direct check, imagick r10 Plain: repetitions containing a beat take 19.05-20.06 s, against 16.36-16.42 s for those
+  without one.
+- The native kit (bkit41-native-v1f-*, nt-run spec.sh) has no heartbeat: 0 `@@HB` lines in the native lbm and
+  imagick train transcripts, against 712 in Plain lbm train.
+- The native and stock kernels have the same tick configuration (HZ=100, HZ_PERIODIC, PREEMPT_NONE, no THP).
+- The module route is not affected, because both arms run the same gate.sh. Capstone pays the beats in ucyc, outside
+  its in-context counters. Its ratios stand: x264 0.882, nab 1.088 and gcc 1.196.
+
+**Corrected estimates.** Each is labelled a correction, not a measurement: native / (Plain × (1 − f)), with f in
+[0.089, 0.108].
+
+| Benchmark | Correction |
+|---|---|
+| perlbench | 1.230-1.256, above the 1.20 bar |
+| mcf | 1.166-1.191 |
+| imagick | 0.965-0.985 |
+| lbm | 0.922-0.942 |
+
+**Ruled out for the sub-1.0 readings, with evidence:**
+- Misaligned-access emulation. A QEMU plugin counted 0 misaligned accesses in Plain lbm, imagick, mcf, nab and x264
+  at test size. Its positive control counted 1,000,003 of 1,000,003. On this firmware a misaligned user access is a
+  SIGBUS, not an emulation.
+- Bitstream. Every Plain and module run was read back as C.5a. Capstone lbm's in-context cycles are 34.57 G on C.5a
+  and 34.55 G on V1f.
+- Huge pages. The module refuses huge mappings, and THP is off in both kernels.
+- Executables. The hot loops do the same FP and memory work, plus 0-4 integer instructions for Capstone. lbm train is
+  86.0 G instructions for Plain against 88.5 G for Capstone.
+
+**Still open:**
+- x264's module ratio, 0.882 on train and 0.897 on test, with the same harness in both arms. Plain's user time
+  exceeds Capstone's in-context time by about 8-11 %. The candidate is the per-tick cost: Plain takes 100 live ticks
+  per second, while the context masks them and replays them in batches. That cost is unmeasured.
+- lbm, where Plain user time is 1,589.5 s against 1,383 s in context, likewise.
