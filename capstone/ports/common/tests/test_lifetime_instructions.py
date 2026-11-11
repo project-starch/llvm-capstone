@@ -36,13 +36,16 @@ class LifetimeInstructions(unittest.TestCase):
 
     def test_compressed_prefix_and_register_operands(self):
         derive = struct.pack('<I', int.from_bytes(word(0x51), 'little') | (7 << 7) | (8 << 15) | (9 << 20))
-        self.assertEqual(self.scan(elf(b'\x01\x00' + derive + word(0x52))), (1, 1))
+        self.assertEqual(self.scan(elf(b'\x01\x00' + derive + word(0x52))), (1, 1, 0))
 
     def test_data_and_old_opcodes_do_not_protect_allocator(self):
-        self.assertEqual(self.scan(elf(word(0x50), word(0x51) + word(0x52))), (0, 0))
+        self.assertEqual(self.scan(elf(word(0x50), word(0x51) + word(0x52) + word(0x54))), (0, 0, 0))
 
     def test_missing_revoke_is_distinguishable(self):
-        self.assertEqual(self.scan(elf(word(0x51))), (1, 0))
+        self.assertEqual(self.scan(elf(word(0x51))), (1, 0, 0))
+
+    def test_renew_alone_is_counted(self):
+        self.assertEqual(self.scan(elf(word(0x54) + word(0x54))), (0, 0, 2))
 
     def test_wrong_machine_and_truncation_are_rejected(self):
         for content in (elf(word(0x51), machine=243), elf(word(0x51))[:-2], elf(b'\x03\x00')):
