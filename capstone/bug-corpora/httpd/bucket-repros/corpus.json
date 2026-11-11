@@ -42,7 +42,7 @@
     "virtual-nested-pools": "virtual-aprbucket-sublet"
   },
   "verdict_bundles": {
-    "virtual-malloc": "results/2026-10-26-virtual/virtual-malloc",
-    "virtual-nested-pools": "results/2026-10-26-virtual/virtual-nested-pools"
+    "virtual-malloc": "results/2026-11-11-virtual/virtual-malloc",
+    "virtual-nested-pools": "results/2026-11-11-virtual/virtual-nested-pools"
   }
 }

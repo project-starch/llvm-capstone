@@ -183,6 +183,13 @@ the same one failure (`File#path`, a file-I/O test the guest answers empty),
 caught without the patch and 22 with it, the three it adds being the GC-slot
 rows.
 
+On the one-operand lifetime instructions (2026-11-11): the release corpus reads 20 faults without the patch and 23
+with it, 44 of the 46 cells as recorded
+([results/2026-11-11-virtual](../../../bug-corpora/mruby/release-differential/results/2026-11-11-virtual/README.md)),
+and the GC-slot controls hold. mrbtest has no capability fault on either image, and on each image one run with native's
+result and runs in which mruby-io tests read their scratch file empty
+([results/2026-11-11-mrbtest](results/2026-11-11-mrbtest/README.md)).
+
 Until 2026-10-11 this port also carried two physical-domain arms on the Sublet
 heap (`runtime/sublet_heap.c`): `MRBD_HEAP=sublet`, every body and page on the
 buddy heap, and `MRBD_HEAP=sublet-gc`, the GC's pages carved from a second

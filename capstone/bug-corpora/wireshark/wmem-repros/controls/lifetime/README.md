@@ -68,7 +68,9 @@ The port builds these exactly as it builds the corpus, from this directory:
 process under `capstone-vexec`. The runner resolves a fault's pc to the labelled instruction from
 the image's own symbols, and judges each program against the prediction above. A program with no
 result is an ERROR, never a match. The record of 2026-10-11 is
-[`../../results/2026-10-11-controls/`](../../results/2026-10-11-controls/README.md).
+[`../../results/2026-10-11-controls/`](../../results/2026-10-11-controls/README.md); the record on the
+processor model with the one-operand `CREVOKE` is
+[`../../results/2026-11-11-controls/`](../../results/2026-11-11-controls/README.md).
 
 This directory adds no case to the corpus. The CMake glob and `shared/run-defects.py` both scan
 only `NN_*` directories, so neither reaches `controls/lifetime/`.

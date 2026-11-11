@@ -20,3 +20,10 @@ patches/postgresql-17.0-0002-memorychunk-capstone-alignment.patch       compat  
 patches/postgresql-17.0-0003-memory-contexts-sublet-lifetimes.patch     allocator  chunks as child lifetimes of their blocks (CDERIVE/CREVOKE/CRENEW)
 tests/contexts-workload.h                                              test       common upstream and protected policy and payload workload
 tests/contexts-native.c                                                test       native upstream context workload entry
+results/2026-11-11-virtual/probe/shared/blockref.h                      test       probe: the reference malloc returned for a single-chunk block
+results/2026-11-11-virtual/probe/00_probe_small_block_reference_after_pfree/case.c  test  probe: is that reference live after pfree of the chunk
+results/2026-11-11-virtual/probe/01_probe_small_block_reference_control/case.c      test  probe: the same block freed through the context's list
+results/2026-11-11-virtual/probe/shared/slabref.h                       test       probe: the list link a Slab context holds to a block
+results/2026-11-11-virtual/probe/02_probe_slab_block_reference_after_pfree_and_reset/case.c  test  probe: Slab block relinked by pfree, freed by reset
+results/2026-11-11-virtual/probe/03_probe_slab_empty_block_reference_after_reset/case.c      test  probe: empty Slab block freed by reset
+results/2026-11-11-virtual/probe/04_probe_slab_block_reference_control/case.c                test  probe: Slab block freed by reset without a pfree

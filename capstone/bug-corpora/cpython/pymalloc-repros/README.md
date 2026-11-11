@@ -6,7 +6,7 @@ event to see. Each defect is one program around the real `Objects/obmalloc.c`
 (ports/cpython/pymalloc), and a fault counts only at its labelled probe.
 
 The arms: `virtual-malloc` (pymalloc stock on virtual Capstone), `virtual-nested-pools`
-(the same with the port's patch 0003: every block a child lifetime of its
+(the same with the port's patches 0003 and 0004: every block a child lifetime of its
 arena, `CDERIVE`/`CREVOKE`) and `cheribsd-revocation` (stock CheriBSD, libc
 revocation as shipped).
 
@@ -14,7 +14,7 @@ revocation as shipped).
 reachable set at the pin, not a sample — the inventory, the triage and the three
 corrections that took it from 23 to 20 are in
 `docs/ref/cpython-pymalloc-defects.md`. Each arm's verdict names its bundle
-(`results/2026-10-10-patch0003/` for the two virtual arms).
+(`results/2026-11-11-virtual/` for the two virtual arms).
 
 ## The twenty
 

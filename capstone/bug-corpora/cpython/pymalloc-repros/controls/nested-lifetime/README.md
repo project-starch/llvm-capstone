@@ -65,7 +65,8 @@ header, not in A's range.
         --arm protected=OUT/protected --arm release=OUT/release --repeats N
 
 `run-controls.py` refuses a kit whose QEMU, `capstone-vexec` or `capstone_vm.ko` is not the
-registered one (af37cc32, 3975314a, a1c6cb6b) and a build whose manifest is not the arm's. It boots
+registered one (2d5a7107, 0f8e0f90, e47bca62: the model with the one-operand
+`CREVOKE`, since 2026-11-11) and a build whose manifest is not the arm's. It boots
 each arm and repeat on its own staged disk through `capstone/runtime/virtual/run-staged.py` (one
 hart, exact bounds) with its own QEMU lock, and writes `RESULTS/results.json`: result lines, fault
 lines resolved against the image's symbols and the probe labels, and the per-control verdict

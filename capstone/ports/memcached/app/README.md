@@ -66,17 +66,18 @@ The virtual profile here uses the outer revoking heap.
 
 ### Sublet inside the slabs and the object cache
 
-Patch 0006 (`-DMC_CAPSTONE_SUBLET`) closes the nested-allocator gap with two
-instructions in memcached's own allocators: `slabs.c` and `cache.c` hand out
-every chunk and object as a CDERIVE child lifetime, and `slabs_free` and
-`cache_free` revoke it (CREVOKE). There is no adapter. The patch header says
+Patch 0006 (`-DMC_CAPSTONE_SUBLET`) closes the nested-allocator gap with three
+instructions in memcached's own allocators: `slabs.c` hands out every chunk as
+a CDERIVE child of its page's generation, and `slabs_free` ends it (CREVOKE).
+A `cache.c` object is the allocation `malloc` returned, and `cache_free` renews
+its lifetime (CRENEW). There is no adapter. The patch header says
 how the slab mover, chunked items and page moves are covered and what it
 gives up. `host/build-sublet.sh` (run by `build-virtual.sh`) builds its oracle
 and safety images under `$MC_WORK/sublet/`. Its gate checks both allocator
-objects for the two instructions, then recompiles those objects without the
-inner-protection define and requires neither instruction. Whole-image counts
-cannot distinguish the variants: the shared outer mallocng uses both operations
-too. `run-virtual.py --arm sublet` runs the
+objects for lifetime instructions (CDERIVE and CREVOKE, or CRENEW), then
+recompiles those objects without the inner-protection define and requires
+none. Whole-image counts cannot distinguish the variants: the shared outer
+mallocng uses CDERIVE and CREVOKE too. `run-virtual.py --arm sublet` runs the
 same gate on them and judges the fixtures by the `lifetimes` predictions in
 `host/safety-expect.txt`, registered before the first build. The physical
 `slabsublet` arms, the allocators port's ledger inside memcached on the Sublet

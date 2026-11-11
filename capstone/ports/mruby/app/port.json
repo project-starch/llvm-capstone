@@ -18,7 +18,8 @@
   "workload": "mrbtest, and the upstream ao-render benchmark for the study",
   "evidence": [
     "capstone/ports/mruby/app/results/2026-09-26",
-    "capstone/experiments/study/results/mruby-gc-memory-20260927"
+    "capstone/experiments/study/results/mruby-gc-memory-20260927",
+    "capstone/ports/mruby/app/results/2026-11-11-mrbtest"
   ],
   "corpora": [
     "capstone/bug-corpora/mruby/gc-slot-repros",

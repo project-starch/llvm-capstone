@@ -37,7 +37,8 @@
   "evidence": [
     "capstone/bug-corpora/sqlite/engine-repros/results",
     "capstone/bug-corpora/sqlite/engine-repros/results/2026-10-10-virtual",
-    "capstone/tests/rtl-smoke/repro322-silicon-2026-10-16"
+    "capstone/tests/rtl-smoke/repro322-silicon-2026-10-16",
+    "capstone/bug-corpora/sqlite/engine-repros/results/2026-11-11-virtual"
   ],
   "related": [
     "capstone/bug-corpora/sqlite/capi-repros"
@@ -54,11 +55,11 @@
     "cheribsd-platform": "cheribsd-sqlite-sysalloc"
   },
   "verdict_bundles": {
-    "virtual-malloc": "results/2026-10-29-virtual/virtual-malloc",
-    "virtual-nested-pools": "results/2026-10-29-virtual/virtual-nested-pools",
+    "virtual-malloc": "results/2026-11-11-virtual/virtual-malloc",
+    "virtual-nested-pools": "results/2026-11-11-virtual/virtual-nested-pools",
     "silicon-sqlite-stock": "results/2026-10-16-silicon/silicon-sqlite-stock",
     "vp2-malloc": "results/2026-10-18-vp2-rdx0/vp2-malloc",
-    "virtual-platform": "results/2026-10-29-virtual/virtual-platform",
+    "virtual-platform": "results/2026-11-11-virtual/virtual-platform",
     "cheribsd-revocation": "results/2026-10-30-cheribsd/cheribsd-revocation",
     "cheribsd-platform": "results/2026-10-30-cheribsd/cheribsd-platform"
   }

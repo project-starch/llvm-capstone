@@ -127,6 +127,7 @@ backend was removed on 2026-10-10.
 | **PoisonCap** | the lease return: poison, then sweep before reissue | **SIGPROT** 162 | **SIGPROT** 162 | **SIGPROT** 162 |
 | **Sublet port of FFmpeg's own pools** (2026-09-29) | FFmpeg's own `buffer.c`: the return to the pool is a revoke | **fault**, cause 24, at `case.c:85` | **fault**, cause 24, at `case.c:48` | **fault**, cause 24, at `case.c:33` |
 | **virtual Capstone, patch 0003** (2026-10-11) | FFmpeg's own pools: every hand-out a child lifetime, revoked at the return | **fault**, cause 25, at `case.c:85` | **fault**, cause 25, at `case.c:48` | **fault**, cause 25, at `case.c:33` |
+| **virtual Capstone, patch 0003 with `CRENEW`** (2026-11-11) | FFmpeg's own pools: every entry its own allocation, its lifetime renewed at the return | **fault**, cause 25, at `case.c:85` | **fault**, cause 25, at `case.c:48` | **fault**, cause 25, at `case.c:33` |
 
 > **MEASURED LATER THE SAME DAY — the row below is now a reading, and the retraction that
 > preceded it is kept rather than deleted.** `results/20261006-cheribsd/`: all four cases
@@ -174,9 +175,13 @@ The 2026-09-29 row is the Sublet port of FFmpeg's own pools (`ports/ffmpeg/suble
 it, in the FFmpeg app port's domain, with upstream's pools as the one-macro control:
 [`results/20260929-qemu-sublet-port/`](results/20260929-qemu-sublet-port/README.md), N = 3 per cell.
 
-The last row is patch 0003 on the virtual profile (`results/2026-10-11-virtual`): `virtual-malloc`
+The last two rows are patch 0003 on the virtual profile. On 2026-10-11 (`results/2026-10-11-virtual`)
+the patch derived a child lifetime per hand-out and revoked it at the return: `virtual-malloc`
 missed all four cases with its controls as declared, `virtual-nested-pools` caught all four, cause
 25, each at the stale access the line table names (case 03, the side table, at `case.c:104`).
+On 2026-11-11 (`results/2026-11-11-virtual`) the patch renews the entry's own lifetime (`CRENEW`)
+and derives nothing, on the model with the one-operand `CREVOKE`: the same verdicts, the same
+cause and the same lines.
 
 It catches whoever listens for the moment the nested allocator takes the storage
 back. The other two listen for an event that never happens here: Capstone

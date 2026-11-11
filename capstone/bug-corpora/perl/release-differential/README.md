@@ -66,6 +66,12 @@ two adjacent arms is that one thing and nothing else.
 (2026-10-06), and the arms measured since are on the virtual profile
 ([`results/2026-10-11-virtual`](results/2026-10-11-virtual/README.md)).
 
+The two virtual arms were run again on the one-operand lifetime instructions on 2026-11-11
+([`results/2026-11-11-virtual`](results/2026-11-11-virtual/README.md)): 21 of the 22 cells read as on 2026-10-11, and
+the counts by the registered rules are the same. The cell that differs is case 06 on the protected arm, which is
+outside both counts and reads the same on unmodified dev. The SV-head controls hold as well
+([`results/2026-11-11-controls`](results/2026-11-11-controls/README.md)).
+
 | arm | protection | catches |
 |---|---|---:|
 | **`sysalloc-bounds`** | the base an application gets today: per-object heap bounds, `free` only marks | **6** |

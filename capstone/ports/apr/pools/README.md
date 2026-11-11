@@ -173,3 +173,9 @@ The domain and CheriBSD arms are the corpus's, run and judged by
 expected address is published by the run, and the negative control must make
 every oracle fail before a pass is believed. Recorded results live with the
 corpus, as summaries, never captures.
+
+On the virtual profile (preset `capstone-application`, `APRP_SUBLET` for the
+adapters in `src/virtual/`) the arms are the corpus's too, run by
+`bug-corpora/tools/run-virtual-cases.py --prebuilt`. The port's examples and
+the census probes ran there on 2026-11-11, after the adapters moved to the
+one-operand CREVOKE: `security-tests/results/20261111-virtual/`.

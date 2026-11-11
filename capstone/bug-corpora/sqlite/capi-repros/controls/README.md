@@ -48,4 +48,5 @@ decides from the log:
 - **fault at the probe**: cause 25, the last probe is `stale-A-read` with no `done`, and the fault
   pc symbolizes to that probe's line.
 
-Results: [`../results/2026-10-11-controls/`](../results/2026-10-11-controls/).
+Results: [`../results/2026-10-11-controls/`](../results/2026-10-11-controls/), and on the one-operand lifetime
+instructions [`../results/2026-11-11-controls/`](../results/2026-11-11-controls/).

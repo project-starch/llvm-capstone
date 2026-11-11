@@ -89,12 +89,21 @@ the native programs' output, byte for byte:
 
 `SQLITE_HEAP=memsys5` builds the engine with `SQLITE_ENABLE_MEMSYS5`, and
 `SQLITE_HEAP=memsys5-sublet` also applies [`../sublet/sublet-3220000-memsys5.patch`](../sublet/README.md),
-the protected memsys5 and lookaside of `../repro322/build-virtual.py --sublet`. Both compile the
-same copy with the same flags, so the two images differ only in the patch. memsys5 takes over
+the protected memsys5 and lookaside of `../repro322/build-virtual.py --sublet`.
+`SQLITE_HEAP=memsys5-sublet-block` applies the block port, `../sublet/sublet-3220000-memsys5-block.patch`,
+instead (`build-virtual.py --sublet --block-port`): block bounds, and a realloc that keeps its block or
+its lookaside slot renews the lifetime (`CRENEW`). All three compile the
+same copy with the same flags, so the images differ only in the patch. memsys5 takes over
 only when the program configures a heap: `speedtest1 --heap 1048576 64` is the corpus's heap
 (`repro322_common.h`).
 
 ## Results
+
+The three memsys5 builds on the one-operand lifetime instructions, 2026-11-11:
+[`results/2026-11-11-nested-heaps`](results/2026-11-11-nested-heaps/README.md). `again` and `speedtest1` pass on all
+three, speedtest1 over a configured 8 MiB memsys5 heap gives native's 32 phases on all three, and `work` differs from
+native by the launcher's exit line of the second writer, on the unpatched build as well. `work` needs a module with
+more than one context.
 
 Recorded in [`results/20260930-sqlite-322-app.json`](results/20260930-sqlite-322-app.json).
 - At `-O2` and `-O0`, all three checks match the native oracle.

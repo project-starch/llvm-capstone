@@ -46,7 +46,11 @@ split comes from the run.
 | `virtual-nested-pools` | `php-real-exact` (`PHP_CAP_MODE=7`) | every `emalloc` block a `CDERIVE` child bounded at the caller's size, `CREVOKE`d at `efree` |
 | `cheribsd-revocation` | `cheribsd-default` | stock CheriBSD purecap: bounds in `malloc`, quarantine and revocation after `free` |
 
-`host-asan` and `cheribsd-revocation` are measured. The two virtual arms are declared and not yet run.
+`host-asan` and `cheribsd-revocation` are measured. The two virtual arms ran on 2026-11-11, on the nested layer's
+one-operand CREVOKE: `virtual-nested-pools` 8 CAUGHT (cause 25, at a declared site), 11 out-of-denominator, 2 infra,
+1 setup-fault and 4 not-reached (cases 18 to 21 need `ext/mbstring` and `ext/pcre`, which the image does not have);
+`virtual-malloc` reads no MISSED, because the runner cannot count a completed run as reached on its own baseline
+arm ([`results/20261111/README.md`](results/20261111/README.md)).
 
 ## Run it
 

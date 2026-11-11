@@ -254,7 +254,7 @@ the two bundles but the scoring.
 
 ## Results
 
-Seven records, each a run of the whole corpus on the virtual profile, one bundle per arm with the two
+Eight records, each a run of the whole corpus on the virtual profile, one bundle per arm with the two
 populations merged (`tools/merge-population-bundles.py`), every table computed from the bundles by
 `tools/result-tables.py` and written into that record's README, never typed:
 
@@ -263,33 +263,34 @@ populations merged (`tools/merge-population-bundles.py`), every table computed f
 - `results/2026-10-28-run14/` and `results/2026-10-28-run15/`: the follow-up lane's measurement (the 8 MiB-stack SDK with line tables for the musl objects, the launcher that records the frame chain and, from run15, names its image on exit, the putenv probe); run15's verdicts and reasons are cell-identical to run14's.
 - `results/2026-10-28-run16/`: the merged corpus measured whole (70 cases): the first 65 exactly as in run15, the five merged cases measured for the first time.
 - `results/2026-10-28-run17/`: the same 70 cases on the reduced nested layer, every cell identical to run16.
-- `results/2026-10-28-run18/`: **the current record**, the same 70 cases under the renamed layer ("seam" is now "nested"), every cell identical to run17. `corpus.json`'s `verdict_bundles` names its arm bundles, `derive-verdicts.py` wrote their verdicts into every `case.json`, and `check-corpus.py` re-judges them.
+- `results/2026-10-28-run18/`: the same 70 cases under the renamed layer ("seam" is now "nested"), every cell identical to run17.
+- `results/2026-11-11-run19/`: **the current record**, the same 70 cases after the nested layer moved to the one-operand CREVOKE, on the QEMU that implements it. Against run18, 274 of the 280 default-scoring cells are identical; the six that moved are CRASH-092 on every arm and CRASH-139 on the two nested arms, and both read the same on unmodified `dev` (that record's `control-dev/`), so neither is the instruction change's. `corpus.json`'s `verdict_bundles` names its arm bundles, `derive-verdicts.py` wrote their verdicts into every `case.json`, and `check-corpus.py` re-judges them.
 
 Over the 55 temporal cases (51 CWE-416, 3 CWE-590, 1 CWE-415). The four virtual arms come from
-`results/2026-10-28-run18/README.md` (identical to run16's and run17's) and `cheribsd-revocation`
+`results/2026-11-11-run19/README.md` and `cheribsd-revocation`
 from `results/2026-10-30-cheribsd/README.md`. Those are separate boots on separate vehicles, so the
 rows are set side by side and not merged; the generator states each row's record and refuses two
 records claiming one arm. Generated, never typed:
-`tools/result-tables.py --across results/2026-10-28-run18 results/2026-10-30-cheribsd`.
+`tools/result-tables.py --across results/2026-11-11-run19 results/2026-10-30-cheribsd`.
 
 **Default scoring** (the native crashers out of the denominator):
 
 | arm | CAUGHT | of which by chain | MISSED | NO-READING |
 |---|--:|--:|--:|---|
-| stock | 1 | 1 | 24 | infra 1, not-reached 2, out-of-denominator 27 |
-| system allocator | 12 | 1 | 12 | infra 1, not-reached 2, out-of-denominator 27, unattributed 1 |
-| nested | 25 | 1 | 0 | infra 2, out-of-denominator 27, unattributed 1 |
-| nested exact | 25 | 1 | 0 | infra 2, out-of-denominator 27, unattributed 1 |
+| stock | 1 | 1 | 24 | infra 2, not-reached 1, out-of-denominator 27 |
+| system allocator | 12 | 1 | 12 | infra 2, not-reached 1, out-of-denominator 27, unattributed 1 |
+| nested | 26 | 1 | 1 | infra 1, out-of-denominator 27 |
+| nested exact | 26 | 1 | 1 | infra 1, out-of-denominator 27 |
 | CheriBSD revocation | 1 | n/a | 26 | inconclusive 1, out-of-denominator 27 |
 
 **Sensitivity scoring** (every case scored by fault site; reported beside the default, never instead):
 
 | arm | CAUGHT | of which by chain | MISSED | NO-READING |
 |---|--:|--:|--:|---|
-| stock | 2 | 1 | 24 | infra 3, not-reached 13, out-of-denominator 1, setup-fault 7, unattributed 5 |
-| system allocator | 25 | 1 | 12 | infra 2, not-reached 2, out-of-denominator 1, setup-fault 9, unattributed 4 |
-| nested | 48 | 2 | 0 | infra 3, out-of-denominator 1, unattributed 3 |
-| nested exact | 48 | 2 | 0 | infra 3, out-of-denominator 1, unattributed 3 |
+| stock | 2 | 1 | 24 | infra 4, not-reached 12, out-of-denominator 1, setup-fault 7, unattributed 5 |
+| system allocator | 25 | 1 | 12 | infra 3, not-reached 1, out-of-denominator 1, setup-fault 9, unattributed 4 |
+| nested | 49 | 2 | 1 | infra 2, out-of-denominator 1, unattributed 2 |
+| nested exact | 49 | 2 | 1 | infra 2, out-of-denominator 1, unattributed 2 |
 | CheriBSD revocation | 8 | n/a | 32 | inconclusive 13, infra 1, out-of-denominator 1 |
 
 ("n/a" in the chain column: the CheriBSD arm does not attribute a catch by call path at all -- it
@@ -315,9 +316,12 @@ out of the denominator because this libc's putenv never creates the dangling ref
 -148 free a symbol table malloc never returned: the nested layer refuses the pointer on every arm, which the
 judge reads as `unattributed` (their declared site is PHP's allocator). CRASH-075 and CRASH-161 are
 `infra` on every arm (the 40 s watchdog; the plan document records a separate 600 s run of 075, not
-archived here, as a catch at `php_array_walk`); CRASH-092 is `infra` on the nested arms and
-`not-reached` on stock and the system allocator (it hangs, or completes short of its defect, on
-uninitialised stack contents).
+archived here, as a catch at `php_array_walk`); CRASH-092 depends on uninitialised stack contents (it
+hangs, or completes short of its defect, or reaches it): in run19 it is `infra` on stock and the system
+allocator and CAUGHT on the nested arms, where run18 read `not-reached` and `infra`. CRASH-139, the
+invalid free of a static string, completes on every arm in run19 and is the nested arms' one MISSED in
+the table; run18's layer refused its pointer by name (`unattributed`). Both read as in run19 on
+unmodified `dev`.
 
 The native population and the system allocator's column disagree on 17 of the 51 CWE-416 cases: 7
 asan-blind cases the system allocator catches, and 10 temporal-asan-visible cases it does not read (8

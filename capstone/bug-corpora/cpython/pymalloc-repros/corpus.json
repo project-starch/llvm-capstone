@@ -35,6 +35,7 @@
     "capstone/bug-corpora/cpython/pymalloc-repros/results/20261008-cheribsd",
     "capstone/bug-corpora/cpython/pymalloc-repros/results/2026-10-10-virtual",
     "capstone/bug-corpora/cpython/pymalloc-repros/results/2026-10-10-patch0003",
+    "capstone/bug-corpora/cpython/pymalloc-repros/results/2026-11-11-virtual",
     "capstone/bug-corpora/silicon-runs/2026-10-16-pymalloc"
   ],
   "advisories": [],
@@ -53,8 +54,8 @@
     "vp2-nested-pools": "virtual-pymalloc-pools"
   },
   "verdict_bundles": {
-    "virtual-malloc": "results/2026-10-10-patch0003/virtual-malloc",
-    "virtual-nested-pools": "results/2026-10-10-patch0003/virtual-nested-pools",
+    "virtual-malloc": "results/2026-11-11-virtual/virtual-malloc",
+    "virtual-nested-pools": "results/2026-11-11-virtual/virtual-nested-pools",
     "silicon-pym-stock": "results/2026-10-16-silicon/silicon-pym-stock",
     "silicon-pym-sublet": "results/2026-10-16-silicon/silicon-pym-sublet",
     "vp2-malloc": "results/2026-10-18-vp2-rdx0/vp2-malloc",

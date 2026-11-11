@@ -1,0 +1,29 @@
+{
+  "arm": "virtual-malloc",
+  "build": {
+    "heap": "virtual-mallocng",
+    "opt": "-O0",
+    "runtime_sha256": "e681d37071b5a86a07d1a4ddbb4f1914df7918c55da7cbdcb543878d58e0f7b2",
+    "sdk": "~/crenew-step4/corpus/sdk-corpus/sdk",
+    "virtual": "ON"
+  },
+  "cases": 5,
+  "configuration": "virtual-mallocng",
+  "contract": "verdicts-v1",
+  "corpus": "postgres/c-repros",
+  "platform": {
+    "compiler": "0bbb1f88bc9084e387ec6b3c2db24876dfe267897a13f0d1a53d606a2ded189e",
+    "firmware": "5b5c047a00306f35c99bc4b506ec840c784fe1b73dd13ea6ecb4cf793fece9af",
+    "judge": "9011d1cf7ef368ecd000354058a6847bb28b2544f2f3ea090ed89aa5b4a4fff3",
+    "kernel": "48eb725a40e448fa9ac85abb8b7f9fe8a4080d73ffd49c051bed111319d64da2",
+    "launcher": "0f8e0f903725d734817b3e30d79127c290f3480a641d4f6de8bc7f699d05c76e",
+    "module": "e47bca62addfc9356f8150755f2500b737912eb01088e91398e29a1ed7a4e180",
+    "profile": "virtual",
+    "qemu": "2d5a7107890e48475fada73439d90ffd5c7cff166eb1d547d7a9fc5f31722365",
+    "rootfs": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845",
+    "runner": "0607ef62407b6593b6b1dfc04ce1cf784b0537bea23b0ff90a6a5c304f68c429"
+  },
+  "tally": {
+    "CAUGHT": 5
+  }
+}

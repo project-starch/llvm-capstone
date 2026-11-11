@@ -1,0 +1,39 @@
+{
+  "arm": "virtual-malloc",
+  "boot": {
+    "booted": true,
+    "completed": true,
+    "panic": false,
+    "reached_script": true
+  },
+  "cases": 30,
+  "configuration": "php-real-stock",
+  "contract": "verdicts-v1",
+  "corpus": "zend-alloc-repros",
+  "image_sha256": "a8a77eadd554cc8577e139654d634270d21052294bd0d75e9cecf05789a87949",
+  "note": "one boot per arm; every run in it is one capstone-vexec process at this arm's PHP_CAP_MODE. The trigger files are the corpus's own, staged verbatim",
+  "php_cap_mode": 0,
+  "platform": {
+    "compiler": "llvm/bin",
+    "firmware": "unrecorded",
+    "kernel": "kit/images",
+    "qemu": "kit/qemu-system-riscv64",
+    "runner": "capstone/bug-corpora/php/tools/run-php-corpus.py"
+  },
+  "population": "the 30 cases of php/zend-alloc-repros",
+  "probe_sha256": null,
+  "scoring": {
+    "attribution": "declared function (case.json fault_sites) in its file, with a protective cause (arms.json protective_causes)",
+    "gate": "sensitivity: the same observations with that gate lifted, scored by fault site. Reported BESIDE the default reading and never instead of it (bug-corpora/php/engine-repros pre-registration); the two bundles are written from ONE set of boots, so nothing differs but the scoring",
+    "protective_causes": [
+      25,
+      28
+    ],
+    "score_oracle_crashes": true
+  },
+  "tally": {
+    "CAUGHT": 1,
+    "NO-READING:not-reached": 23,
+    "NO-READING:setup-fault": 6
+  }
+}

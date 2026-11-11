@@ -15,7 +15,8 @@
   ],
   "workload": "run-crash008.sh (spatial, a corpus case) and run-uaf.sh (temporal, synthetic) in a physical domain; sublet/probe-nested.c and sublet/probe-derive-split.c on the virtual profile, which qualify the nested layer before the app port's arms are believed",
   "evidence": [
-    "capstone/ports/php/zend-alloc/sublet/results/derive-rebase-2026-10-26"
+    "capstone/ports/php/zend-alloc/sublet/results/derive-rebase-2026-10-26",
+    "capstone/ports/php/zend-alloc/sublet/results/one-operand-crevoke-2026-11-11"
   ],
   "corpora": [
     "capstone/bug-corpora/php/plain-temporal-repros",

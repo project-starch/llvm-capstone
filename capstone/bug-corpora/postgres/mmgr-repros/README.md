@@ -103,8 +103,10 @@ For a fresh ephemeral guest, replace `--state VM_STATE` with
 defects and safe per-case variants into one boot and applies the same judge.
 
 The runner refuses a build whose `PG_SUBLET` or SDK does not match the arm. It
-reports one Observation per run and the shared judge decides; it writes
-`OUT/<arm>/` bundles, and `tools/derive-verdicts.py` turns the bundles named in
+reports one Observation per run and the shared judge decides; it writes the
+bundle into `OUT` itself, so every arm takes its own directory
+(`results/<date>-virtual/<arm>`: a second arm run into the same `OUT` replaces
+the first), and `tools/derive-verdicts.py` turns the bundles named in
 `corpus.json` `verdict_bundles` into the `case.json` verdicts and
 `results/verdicts.tsv` (SCHEMA.md, "Verdicts").
 
@@ -137,6 +139,30 @@ replays built from c775cdf0, bundles in `results/2026-10-11-virtual`:
 Case 3 is a context deleted under a live alias: the chunk dies because freeing its block
 revokes everything below it. `results/2026-10-11-exact` is the same corpus under the
 exact-request bounds of 93971f29, with the same readings.
+
+## Measured 2026-11-11, on the one-operand CREVOKE and CRENEW
+
+The lifetime instructions changed: `CREVOKE` takes the object alone, `CRENEW` ends a lifetime and
+begins the next in its place, and patch 0003 was converted (`pfree` and `repalloc` revoke the chunk
+through the caller's pointer, a reset renews a kept block's generation). Both replays were rebuilt
+from this tree on a corpus SDK and run with `--virtual-kit` on the emulator that implements the new
+encoding (QEMU sha256 `2d5a7107890e`, module `e47bca62addf`, launcher `0f8e0f903725`, pinned mode,
+`x-capstone-test-csrs=true,x-capstone-exact-bounds=true`). Bundles in `results/2026-11-11-virtual`,
+which `verdict_bundles` now names:
+
+| arm | result | control |
+|---|---|---|
+| `virtual-malloc` | MISSED 5/5 | complete |
+| `virtual-pg-pools` | CAUGHT 5/5, every fault cause 25 (stale); cases 1-4 in `pg_probe`, case 0 in `GetMemoryChunkMethodID`; every case's own negative control completed | fault |
+
+Every verdict, cause, fault function and attribution route is the one `results/2026-10-11-virtual`
+records. The pools bundle is the patch with the block's own pointer in the block header (patch
+sha256 `29b94c5a026e`): as converted, the patch passed a block that `pfree` or `repalloc` reached
+from one of its chunks to `free` through the generation, which ends the generation and leaves the
+block's own lifetime live while malloc reuses the memory. A run of the patch as converted (sha256
+`c63524ea5731`) gave the same five verdicts at the same sites; the corpus does not exercise that
+path, the port's result record does
+(`ports/postgres/memory-contexts/results/2026-11-11-virtual`).
 
 ## Why the system allocator's mechanisms miss these
 

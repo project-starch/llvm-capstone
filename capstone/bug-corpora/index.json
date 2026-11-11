@@ -82,6 +82,7 @@
         "capstone/bug-corpora/cpython/pymalloc-repros/results/20261008-cheribsd",
         "capstone/bug-corpora/cpython/pymalloc-repros/results/2026-10-10-virtual",
         "capstone/bug-corpora/cpython/pymalloc-repros/results/2026-10-10-patch0003",
+        "capstone/bug-corpora/cpython/pymalloc-repros/results/2026-11-11-virtual",
         "capstone/bug-corpora/silicon-runs/2026-10-16-pymalloc"
       ],
       "advisories": [],
@@ -100,8 +101,8 @@
         "vp2-nested-pools": "virtual-pymalloc-pools"
       },
       "verdict_bundles": {
-        "virtual-malloc": "results/2026-10-10-patch0003/virtual-malloc",
-        "virtual-nested-pools": "results/2026-10-10-patch0003/virtual-nested-pools",
+        "virtual-malloc": "results/2026-11-11-virtual/virtual-malloc",
+        "virtual-nested-pools": "results/2026-11-11-virtual/virtual-nested-pools",
         "silicon-pym-stock": "results/2026-10-16-silicon/silicon-pym-stock",
         "silicon-pym-sublet": "results/2026-10-16-silicon/silicon-pym-sublet",
         "vp2-malloc": "results/2026-10-18-vp2-rdx0/vp2-malloc",
@@ -182,8 +183,8 @@
         "vp2-nested-pools": "virtual-ffmpeg-carve"
       },
       "verdict_bundles": {
-        "virtual-malloc": "results/2026-10-10-virtual/virtual-malloc",
-        "virtual-nested-pools": "results/2026-10-10-virtual/virtual-nested-pools",
+        "virtual-malloc": "results/2026-11-11-virtual/virtual-malloc",
+        "virtual-nested-pools": "results/2026-11-11-virtual/virtual-nested-pools",
         "silicon-level0": "results/2026-10-16-silicon/silicon-level0",
         "silicon-carve-bounds": "results/2026-10-16-silicon/silicon-carve-bounds",
         "silicon-carve-sublet": "results/2026-10-16-silicon/silicon-carve-sublet",
@@ -308,7 +309,7 @@
         "vp2-malloc": "virtual-mallocng"
       },
       "verdict_bundles": {
-        "virtual-malloc": "results/2026-10-11-virtual/virtual-malloc",
+        "virtual-malloc": "results/2026-11-11-virtual/virtual-malloc",
         "silicon-lifetimes": "results/2026-10-16-silicon/silicon-lifetimes",
         "silicon-level0": "results/2026-10-16-silicon/silicon-level0",
         "vp2-malloc": "results/2026-10-18-vp2-rdx0/vp2-malloc"
@@ -429,7 +430,8 @@
         "capstone/bug-corpora/ffmpeg/pool-repros/results/20261006-cheribsd",
         "capstone/bug-corpora/ffmpeg/pool-repros/results/2026-10-09-native-asan",
         "capstone/bug-corpora/ffmpeg/pool-repros/results/2026-10-09-poisoncap",
-        "capstone/bug-corpora/ffmpeg/pool-repros/results/2026-10-11-virtual"
+        "capstone/bug-corpora/ffmpeg/pool-repros/results/2026-10-11-virtual",
+        "capstone/bug-corpora/ffmpeg/pool-repros/results/2026-11-11-virtual"
       ],
       "advisories": [],
       "shape_table": true,
@@ -442,8 +444,8 @@
         "vp2-nested-pools": "virtual-ffmpeg-pool-sublet"
       },
       "verdict_bundles": {
-        "virtual-malloc": "results/2026-10-11-virtual/virtual-malloc",
-        "virtual-nested-pools": "results/2026-10-11-virtual/virtual-nested-pools",
+        "virtual-malloc": "results/2026-11-11-virtual/virtual-malloc",
+        "virtual-nested-pools": "results/2026-11-11-virtual/virtual-nested-pools",
         "silicon-pool-stock": "results/2026-10-16-silicon/silicon-pool-stock",
         "silicon-pool-sublet": "results/2026-10-16-silicon/silicon-pool-sublet",
         "vp2-malloc": "results/2026-10-18-vp2-rdx0/vp2-malloc",
@@ -562,8 +564,8 @@
         "virtual-nested-pools": "virtual-aprpool-sublet"
       },
       "verdict_bundles": {
-        "virtual-malloc": "results/2026-10-26-virtual/virtual-malloc",
-        "virtual-nested-pools": "results/2026-10-26-virtual/virtual-nested-pools"
+        "virtual-malloc": "results/2026-11-11-virtual/virtual-malloc",
+        "virtual-nested-pools": "results/2026-11-11-virtual/virtual-nested-pools"
       },
       "where": "capstone/bug-corpora/httpd/apr-pool-repros"
     },
@@ -611,8 +613,8 @@
         "virtual-nested-pools": "virtual-aprbucket-sublet"
       },
       "verdict_bundles": {
-        "virtual-malloc": "results/2026-10-26-virtual/virtual-malloc",
-        "virtual-nested-pools": "results/2026-10-26-virtual/virtual-nested-pools"
+        "virtual-malloc": "results/2026-11-11-virtual/virtual-malloc",
+        "virtual-nested-pools": "results/2026-11-11-virtual/virtual-nested-pools"
       },
       "where": "capstone/bug-corpora/httpd/bucket-repros"
     },
@@ -655,7 +657,7 @@
         "CVE-2018-1000127"
       ],
       "shape_table": true,
-      "note": "This corpus gitignores its own results/ by policy -- run summaries stay outside it and the case files' status carries the outcome -- so its committed evidence lives in the port named above: capstone-domain spatial/sublet for all five cases plus the negative control, 2026-10-04. Its CheriBSD fixtures also live with the port. Cases 5-7 are SPATIAL, added 2026-10-05 from a SHAPE search over item-size computations (item_make_header / ITEM_* / do_item_alloc) rather than a wording filter -- the wording filter found 0 class-B defects here, and these three have subjects that say 'corruption' rather than 'overflow', which is exactly why it missed them. See docs/ref/memcached-spatial-defect-triage.md. This corpus's .gitignore keeps run summaries OUT of the repository by design -- 'the case files' status carries the outcome' -- so cases 5-7's measured readings live in their status fields and in docs/ref/memcached-spatial-defect-triage.md section 6, not in a committed results/ bundle. 2026-10-07: case 8 is CAUGHT on stock CheriBSD while cases 5-7 complete, and the split is the finding -- src/cheribsd/malloc-leases.c:79 malloc's a slab PAGE which slabs.c then carves, while :161 malloc's each cache OBJECT separately. A slab-chunk crossing therefore stays inside one malloc and a cache-object crossing does not. '0 of 9 caught' would be the wrong summary for this corpus on CheriBSD; it is 0 of 8 and 1 of 1, split by inner allocator. 2026-10-11: the physical Capstone-domain pair (spatial, sublet) and sublet-malloc keep their recorded verdicts but can no longer be rebuilt: the freestanding domain target and its runner were removed with the physical Sublet heap and the lend API. virtual-nested-pools is now the allocators with the application's Sublet patch 0006 (tools/arms.json virtual-memcached-sublet), no ledger. Measured 2026-10-11 on the Sublet lifetime platform (results/2026-10-11-virtual, both arms in their own boot, same images and controls): virtual-malloc CAUGHT 1 (08) and MISSED 8; virtual-nested-pools CAUGHT 8 and NO-READING 1 -- case 05's fixed run faults because the case's setup writes a sentinel into byte 0 of the neighbouring live item, which under patch 0006 is that item's parent capability, so its later slabs_free faults (diagnosed with the sentinel moved past the slot: both frees pass). The 2026-10-10 ledger bundles stay as history.",
+      "note": "This corpus gitignores its own results/ by policy -- run summaries stay outside it and the case files' status carries the outcome -- so its committed evidence lives in the port named above: capstone-domain spatial/sublet for all five cases plus the negative control, 2026-10-04. Its CheriBSD fixtures also live with the port. Cases 5-7 are SPATIAL, added 2026-10-05 from a SHAPE search over item-size computations (item_make_header / ITEM_* / do_item_alloc) rather than a wording filter -- the wording filter found 0 class-B defects here, and these three have subjects that say 'corruption' rather than 'overflow', which is exactly why it missed them. See docs/ref/memcached-spatial-defect-triage.md. This corpus's .gitignore keeps run summaries OUT of the repository by design -- 'the case files' status carries the outcome' -- so cases 5-7's measured readings live in their status fields and in docs/ref/memcached-spatial-defect-triage.md section 6, not in a committed results/ bundle. 2026-10-07: case 8 is CAUGHT on stock CheriBSD while cases 5-7 complete, and the split is the finding -- src/cheribsd/malloc-leases.c:79 malloc's a slab PAGE which slabs.c then carves, while :161 malloc's each cache OBJECT separately. A slab-chunk crossing therefore stays inside one malloc and a cache-object crossing does not. '0 of 9 caught' would be the wrong summary for this corpus on CheriBSD; it is 0 of 8 and 1 of 1, split by inner allocator. 2026-10-11: the physical Capstone-domain pair (spatial, sublet) and sublet-malloc keep their recorded verdicts but can no longer be rebuilt: the freestanding domain target and its runner were removed with the physical Sublet heap and the lend API. virtual-nested-pools is now the allocators with the application's Sublet patch 0006 (tools/arms.json virtual-memcached-sublet), no ledger. Measured 2026-10-11 on the Sublet lifetime platform (results/2026-10-11-virtual, both arms in their own boot, same images and controls): virtual-malloc CAUGHT 1 (08) and MISSED 8; virtual-nested-pools CAUGHT 8 and NO-READING 1 -- case 05's fixed run faults because the case's setup writes a sentinel into byte 0 of the neighbouring live item, which under patch 0006 is that item's parent capability, so its later slabs_free faults (diagnosed with the sentinel moved past the slot: both frees pass). The 2026-10-10 ledger bundles stay as history. 2026-11-11: both virtual arms re-measured on the model with the one-operand CREVOKE and CRENEW, with patch 0006 as converted (slabs_free ends the chunk with CREVOKE(chunk); cache_free renews the object's own lifetime with CRENEW and cache.c derives nothing), exact bounds as on 2026-10-11 (results/2026-11-11-virtual, README.md there): every verdict equals the 2026-10-11 bundle's, virtual-malloc CAUGHT 1 (08) and MISSED 8, virtual-nested-pools CAUGHT 8 and NO-READING 1 (05, the same setup fault). The 2026-10-11 bundles stay as history.",
       "evidence": [
         "capstone/ports/memcached/allocators/results/20261004-qemu-corpus-defects",
         "capstone/bug-corpora/memcached/allocator-repros/results/20261006-cheribsd",
@@ -675,8 +677,8 @@
         "vp2-malloc": "virtual-memcached-stock"
       },
       "verdict_bundles": {
-        "virtual-malloc": "results/2026-10-11-virtual/virtual-malloc",
-        "virtual-nested-pools": "results/2026-10-11-virtual/virtual-nested-pools",
+        "virtual-malloc": "results/2026-11-11-virtual/virtual-malloc",
+        "virtual-nested-pools": "results/2026-11-11-virtual/virtual-nested-pools",
         "silicon-mc-stock": "results/2026-10-16-silicon/silicon-mc-stock",
         "silicon-mc-sublet": "results/2026-10-16-silicon/silicon-mc-sublet",
         "vp2-malloc": "results/2026-10-18-vp2-rdx0/vp2-malloc"
@@ -796,7 +798,7 @@
         "vp2-malloc": "virtual-mallocng"
       },
       "verdict_bundles": {
-        "virtual-malloc": "results/2026-10-11-virtual/virtual-malloc",
+        "virtual-malloc": "results/2026-11-11-virtual/virtual-malloc",
         "silicon-lifetimes": "results/2026-10-16-silicon/silicon-lifetimes",
         "silicon-level0": "results/2026-10-16-silicon/silicon-level0",
         "vp2-malloc": "results/2026-10-18-vp2-rdx0/vp2-malloc"
@@ -958,9 +960,9 @@
       },
       "note": "Derived, not retyped: tools/build-cases.py writes every case from the collaborator's php-5.0.0-bug-corpus (185 cases; zip sha256 31d22a3b468e96e0ff9f991d8667e78a..., not in this repository) and from OUR three native runs of its 127 default-build cases (ASan with PHP's allocator patched, ASan with it as shipped, the plain build), on which each case's population and oracle.json rest. 48 asan-blind and 22 temporal-asan-visible here, 70 cases. The first build gave 65, 46 and 19, against the collaborator's 31 and 29 on its gcc-13 ASan: 16 cases were placed differently, one (CRASH-100, needs an HTTP listener) is absent, two of theirs (CRASH-062, CRASH-070) end as shipped in PHP's own fatal error with no report, and one (CRASH-064) is a use-after-free NEITHER ASan build reports as one -- it dereferences an integer read from a reused object-store bucket, ASan:SEGV on both -- so those three were in neither population; each said in its PROVENANCE.md. The merge with the sibling corpus (2026-10-28) widened the temporal rule and admitted five as cases 66 to 70: CRASH-062 and -070 as asan-blind, CRASH-012, -148 (CWE-590) and -161 (CWE-415) as temporal-asan-visible. CRASH-064 is still in neither. The fourth configuration run-realphp.py drives, php-real-stock, is the judge's control (nothing revoked), not a case arm. The default-build cases outside both populations (spatial defects ASan sees unaided, NULL dereferences, type confusions) are not here yet.",
       "verdict_bundles": {
-        "virtual-malloc": "results/2026-10-28-run18/bundle-virtual-malloc",
-        "virtual-nested-pools": "results/2026-10-28-run18/bundle-virtual-nested-pools",
-        "virtual-nested-exact": "results/2026-10-28-run18/bundle-virtual-nested-exact",
+        "virtual-malloc": "results/2026-11-11-run19/bundle-virtual-malloc",
+        "virtual-nested-pools": "results/2026-11-11-run19/bundle-virtual-nested-pools",
+        "virtual-nested-exact": "results/2026-11-11-run19/bundle-virtual-nested-exact",
         "cheribsd-revocation": "results/2026-10-30-cheribsd/bundle-cheribsd-revocation"
       },
       "where": "capstone/bug-corpora/php/engine-repros"
@@ -1004,7 +1006,8 @@
       ],
       "evidence": [
         "capstone/bug-corpora/php/plain-temporal-repros/results/20261028-host-asan",
-        "capstone/bug-corpora/php/plain-temporal-repros/results/20261029/cheribsd-revocation"
+        "capstone/bug-corpora/php/plain-temporal-repros/results/20261029/cheribsd-revocation",
+        "capstone/bug-corpora/php/plain-temporal-repros/results/20261111"
       ],
       "advisories": [],
       "related": [
@@ -1057,7 +1060,8 @@
       ],
       "evidence": [
         "capstone/bug-corpora/php/zend-alloc-repros/results/20261028-host-asan",
-        "capstone/bug-corpora/php/zend-alloc-repros/results/20261029/cheribsd-revocation"
+        "capstone/bug-corpora/php/zend-alloc-repros/results/20261029/cheribsd-revocation",
+        "capstone/bug-corpora/php/zend-alloc-repros/results/20261111"
       ],
       "advisories": [],
       "related": [
@@ -1115,7 +1119,8 @@
         "capstone/bug-corpora/postgres/c-repros/results/cheribsd-revocation-20261006-162023",
         "capstone/bug-corpora/postgres/c-repros/results/2026-10-10-virtual",
         "capstone/bug-corpora/postgres/c-repros/results/20261010-150616-qemu/spatial",
-        "capstone/bug-corpora/postgres/c-repros/results/20261011-034640-qemu/sublet"
+        "capstone/bug-corpora/postgres/c-repros/results/20261011-034640-qemu/sublet",
+        "capstone/bug-corpora/postgres/c-repros/results/2026-11-11-virtual"
       ],
       "arm_configurations": {
         "spatial": "app-level0",
@@ -1125,7 +1130,7 @@
         "vp2-malloc": "virtual-mallocng"
       },
       "verdict_bundles": {
-        "virtual-malloc": "results/2026-10-10-virtual/virtual-malloc",
+        "virtual-malloc": "results/2026-11-11-virtual/virtual-malloc",
         "spatial": "results/20261010-150616-qemu/spatial",
         "silicon-level0": "results/2026-10-16-silicon/silicon-level0",
         "silicon-lifetimes": "results/2026-10-16-silicon/silicon-lifetimes",
@@ -1175,7 +1180,8 @@
         "capstone/bug-corpora/postgres/mmgr-repros/results/2026-10-11-exact",
         "capstone/bug-corpora/postgres/mmgr-repros/results/2026-10-11-virtual",
         "capstone/bug-corpora/postgres/mmgr-repros/results/2026-10-11-qemu/spatial",
-        "capstone/bug-corpora/postgres/mmgr-repros/results/2026-10-11-qemu/sublet"
+        "capstone/bug-corpora/postgres/mmgr-repros/results/2026-10-11-qemu/sublet",
+        "capstone/bug-corpora/postgres/mmgr-repros/results/2026-11-11-virtual"
       ],
       "advisories": [],
       "note": "The allocator pin is 17.0; the complete single-user backend port is 17.5. 2026-10-05: a cheribsd-revocation arm was added by this project and run on all 8. The corpus had no plain-purecap arm, only the two PoisonCap ones, and PoisonCap is out of scope for the study these results feed; without it these 8 could not be compared with the other PostgreSQL corpora, which all carry that arm. The build path already existed -- cmake/Replay.cmake builds one hosted executable per case under PG_CORPUS_DIR and says 'plain CheriBSD' when PG_POISONCAP is off -- so nothing in the corpus or the port was changed to produce it. One qualification on reading those 8 silences, because it bites elsewhere: the guest's security.cheri.runtime_revocation_every_free_default is 0, so a revocation sweep runs only once a quarantine threshold is crossed, and a short case that frees a handful of objects may never cross one -- a silence can then mean 'no sweep ran yet' rather than 'the mechanism could not see it'. That confound does NOT apply here, and the reason is worth stating: pfree returns a chunk to its context and never returns the block to malloc, so there is no malloc free for a sweep to act on at any threshold. The silence is a property of the nesting, not of when the quarantine happens to flush. Re-pinned from 17.0 to 17.5 on 2026-10-06, and three cases moved to not-live-at-17-5/ because `git merge-base --is-ancestor` shows their upstream fixes are already in REL_17_5: 83ce20d671, 727bc6ac33f6 and 9d5ce4f1a00a. The 17.0 pin was the only one in the PostgreSQL study, and it is what let three already-fixed defects appear in a 17.5 result table. The five that remain all have fixes later than REL_17_5 (2025-05-05): 2025-08-02, 2025-08-30, 2025-10-03, 2025-10-09 and 2026-03-30. COMPARABILITY, recorded 2026-10-06 rather than resolved. This corpus's `spatial` and `sublet` rows were measured on 2026-09-18, before the 17.5 re-pin, and against the memory-contexts replay study's level 0 (ports/postgres/memory-contexts/src/allocators): backing-allocator.c for the unprotected arm and the refusing unsupported-allocators.c for the protected one. The sibling corpora sql-repros and c-repros were measured on 2026-10-06 against the application domain, whose level 0 is ports/musl-capstone/runtime/level0.c with CAPSTONE_LEVEL0_OBJECT_BOUNDS on. The two are different allocators with different bounds behaviour -- the replay one hands out pointers carrying the whole arena's bounds, the application one narrows to the request -- so these five rows may be added to a per-arm total only with that stated. They are not withdrawn: each is a real measurement of its own arm, and the temporal result they carry (sublet 5 of 5 where both others report 0 of 5) does not depend on bounds granularity, because a use-after-free is caught by revocation and not by a bound. Rerunning them against the application domain would make the three corpora directly comparable and has not been done. 2026-10-11: the arms are native-detect, cheribsd-revocation, virtual-malloc and virtual-pg-pools. The freestanding domain pair (spatial, sublet) and the PoisonCap pair are removed with their builds; their bundles stay in results/. virtual-pg-pools is now the port's patch 0003 (chunks as CDERIVE children of their blocks, revoked by CREVOKE) instead of the lifetime adapter over a lent linear arena.",
@@ -1188,8 +1194,8 @@
         "vp2-pg-pools": "virtual-mallocng-replay-pools"
       },
       "verdict_bundles": {
-        "virtual-malloc": "results/2026-10-11-virtual/virtual-malloc",
-        "virtual-pg-pools": "results/2026-10-11-virtual/virtual-pg-pools",
+        "virtual-malloc": "results/2026-11-11-virtual/virtual-malloc",
+        "virtual-pg-pools": "results/2026-11-11-virtual/virtual-pg-pools",
         "silicon-pg-stock": "results/2026-10-16-silicon/silicon-pg-stock",
         "silicon-pg-sublet": "results/2026-10-16-silicon/silicon-pg-sublet",
         "vp2-malloc": "results/2026-10-18-vp2-rdx0/vp2-malloc",
@@ -1283,7 +1289,8 @@
         "capstone/bug-corpora/postgres/sql-repros/results/2026-10-11-exact",
         "capstone/bug-corpora/postgres/sql-repros/results/2026-10-11-virtual",
         "capstone/bug-corpora/postgres/sql-repros/results/20261010-181355-qemu/spatial",
-        "capstone/bug-corpora/postgres/sql-repros/results/20261010-183151-qemu/sublet"
+        "capstone/bug-corpora/postgres/sql-repros/results/20261010-183151-qemu/sublet",
+        "capstone/bug-corpora/postgres/sql-repros/results/2026-11-11-virtual"
       ],
       "runners": [
         "capstone/bug-corpora/postgres/sql-repros/shared/run-arm.py",
@@ -1295,7 +1302,7 @@
       },
       "verdict_bundles": {
         "virtual-malloc": "results/2026-10-18-review/virtual-malloc",
-        "virtual-pg-pools": "results/2026-10-21-review/virtual-pg-pools"
+        "virtual-pg-pools": "results/2026-11-11-virtual/virtual-pg-pools"
       },
       "where": "capstone/bug-corpora/postgres/sql-repros"
     },
@@ -1411,7 +1418,8 @@
       "evidence": [
         "capstone/bug-corpora/sqlite/engine-repros/results",
         "capstone/bug-corpora/sqlite/engine-repros/results/2026-10-10-virtual",
-        "capstone/tests/rtl-smoke/repro322-silicon-2026-10-16"
+        "capstone/tests/rtl-smoke/repro322-silicon-2026-10-16",
+        "capstone/bug-corpora/sqlite/engine-repros/results/2026-11-11-virtual"
       ],
       "related": [
         "capstone/bug-corpora/sqlite/capi-repros"
@@ -1428,11 +1436,11 @@
         "cheribsd-platform": "cheribsd-sqlite-sysalloc"
       },
       "verdict_bundles": {
-        "virtual-malloc": "results/2026-10-29-virtual/virtual-malloc",
-        "virtual-nested-pools": "results/2026-10-29-virtual/virtual-nested-pools",
+        "virtual-malloc": "results/2026-11-11-virtual/virtual-malloc",
+        "virtual-nested-pools": "results/2026-11-11-virtual/virtual-nested-pools",
         "silicon-sqlite-stock": "results/2026-10-16-silicon/silicon-sqlite-stock",
         "vp2-malloc": "results/2026-10-18-vp2-rdx0/vp2-malloc",
-        "virtual-platform": "results/2026-10-29-virtual/virtual-platform",
+        "virtual-platform": "results/2026-11-11-virtual/virtual-platform",
         "cheribsd-revocation": "results/2026-10-30-cheribsd/cheribsd-revocation",
         "cheribsd-platform": "results/2026-10-30-cheribsd/cheribsd-platform"
       },
@@ -1503,7 +1511,7 @@
         "vp2-malloc": "virtual-mallocng"
       },
       "verdict_bundles": {
-        "virtual-malloc": "results/2026-10-10-virtual/virtual-malloc",
+        "virtual-malloc": "results/2026-11-11-virtual/virtual-malloc",
         "silicon-lifetimes": "results/2026-10-16-silicon/silicon-lifetimes",
         "silicon-level0": "results/2026-10-16-silicon/silicon-level0",
         "vp2-malloc": "results/2026-10-18-vp2-rdx0/vp2-malloc"
@@ -1559,7 +1567,7 @@
         "vp2-malloc": "virtual-mallocng"
       },
       "verdict_bundles": {
-        "virtual-malloc": "results/2026-10-10-virtual/virtual-malloc",
+        "virtual-malloc": "results/2026-11-11-virtual/virtual-malloc",
         "silicon-lifetimes": "results/2026-10-16-silicon/silicon-lifetimes",
         "silicon-level0": "results/2026-10-16-silicon/silicon-level0",
         "vp2-malloc": "results/2026-10-18-vp2-rdx0/vp2-malloc"
@@ -1615,7 +1623,8 @@
         "capstone/bug-corpora/wireshark/wmem-repros/results/2026-10-09-domain-regression",
         "capstone/bug-corpora/wireshark/wmem-repros/results/2026-10-09-poisoncap",
         "capstone/bug-corpora/wireshark/wmem-repros/results/2026-10-11-virtual",
-        "capstone/bug-corpora/wireshark/wmem-repros/results/2026-10-11-virtual-23"
+        "capstone/bug-corpora/wireshark/wmem-repros/results/2026-10-11-virtual-23",
+        "capstone/bug-corpora/wireshark/wmem-repros/results/2026-11-11-virtual"
       ],
       "advisories": [],
       "shape_table": true,
@@ -1630,8 +1639,8 @@
         "vp2-nested-pools": "virtual-wmem-pools"
       },
       "verdict_bundles": {
-        "virtual-malloc": "results/2026-10-11-virtual-23/virtual-malloc",
-        "virtual-nested-pools": "results/2026-10-11-virtual-23/virtual-nested-pools",
+        "virtual-malloc": "results/2026-11-11-virtual/virtual-malloc",
+        "virtual-nested-pools": "results/2026-11-11-virtual/virtual-nested-pools",
         "silicon-wm-stock": "results/2026-10-16-silicon/silicon-wm-stock",
         "silicon-wm-sublet": "results/2026-10-16-silicon/silicon-wm-sublet",
         "vp2-malloc": "results/2026-10-19-vp2c-treeA/vp2-malloc",
@@ -1851,7 +1860,8 @@
       "workload": "mrbtest, and the upstream ao-render benchmark for the study",
       "evidence": [
         "capstone/ports/mruby/app/results/2026-09-26",
-        "capstone/experiments/study/results/mruby-gc-memory-20260927"
+        "capstone/experiments/study/results/mruby-gc-memory-20260927",
+        "capstone/ports/mruby/app/results/2026-11-11-mrbtest"
       ],
       "corpora": [
         "capstone/bug-corpora/mruby/gc-slot-repros",
@@ -1961,7 +1971,8 @@
       "workload": "scripts/smoke.pl, byte-identical to the native reference",
       "evidence": [
         "capstone/ports/perl/musl/results/2026-09-26",
-        "capstone/ports/perl/musl/results/virtual/2026-10-07.json"
+        "capstone/ports/perl/musl/results/virtual/2026-10-07.json",
+        "capstone/ports/perl/musl/results/2026-11-11-same-answers"
       ],
       "related": [
         "capstone/ports/perl/cheribsd"
@@ -1988,6 +1999,7 @@
       ],
       "workload": "the two populations of bug-corpora/php/engine-repros (48 asan-blind, 22 temporal-asan-visible), each trigger a .php script staged into the guest, judged by run-realphp.py through bug-corpora/tools/verdicts.py against the case's own oracle.json (our native ASan and pristine runs); php -n -v exits 1 as native PHP does and the stock arm's output matches the native build",
       "evidence": [
+        "capstone/ports/php/app/results/2026-11-11-one-operand-crevoke",
         "capstone/ports/php/app/results/2026-10-27-common-entry",
         "capstone/ports/php/app/results/2026-10-27-requalification",
         "capstone/ports/php/app/results/2026-10-26",
@@ -2080,7 +2092,8 @@
       ],
       "workload": "run-crash008.sh (spatial, a corpus case) and run-uaf.sh (temporal, synthetic) in a physical domain; sublet/probe-nested.c and sublet/probe-derive-split.c on the virtual profile, which qualify the nested layer before the app port's arms are believed",
       "evidence": [
-        "capstone/ports/php/zend-alloc/sublet/results/derive-rebase-2026-10-26"
+        "capstone/ports/php/zend-alloc/sublet/results/derive-rebase-2026-10-26",
+        "capstone/ports/php/zend-alloc/sublet/results/one-operand-crevoke-2026-11-11"
       ],
       "corpora": [
         "capstone/bug-corpora/php/plain-temporal-repros",
@@ -2163,7 +2176,8 @@
       ],
       "workload": "work.sql.in and again.sql on a database file, with a second writer refused while the first holds a transaction; speedtest1 main at size 1 with the per-phase result oracle; each byte for byte against the native build of the same release",
       "evidence": [
-        "capstone/ports/sqlite/app/results/20260930-sqlite-322-app.json"
+        "capstone/ports/sqlite/app/results/20260930-sqlite-322-app.json",
+        "capstone/ports/sqlite/app/results/2026-11-11-nested-heaps"
       ],
       "related": [
         "capstone/ports/sqlite"

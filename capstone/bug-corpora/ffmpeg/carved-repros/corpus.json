@@ -71,8 +71,8 @@
     "vp2-nested-pools": "virtual-ffmpeg-carve"
   },
   "verdict_bundles": {
-    "virtual-malloc": "results/2026-10-10-virtual/virtual-malloc",
-    "virtual-nested-pools": "results/2026-10-10-virtual/virtual-nested-pools",
+    "virtual-malloc": "results/2026-11-11-virtual/virtual-malloc",
+    "virtual-nested-pools": "results/2026-11-11-virtual/virtual-nested-pools",
     "silicon-level0": "results/2026-10-16-silicon/silicon-level0",
     "silicon-carve-bounds": "results/2026-10-16-silicon/silicon-carve-bounds",
     "silicon-carve-sublet": "results/2026-10-16-silicon/silicon-carve-sublet",

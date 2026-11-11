@@ -176,6 +176,39 @@ configuration choice with a measured cost on both sides. 09's `memcpy` overruns
 bound is the struct and is correct, `palloc` never saw `sess_key`, and the case faults in
 the same place on both bound settings, so bound width is irrelevant to it.
 
+## Measured 2026-11-11, on the one-operand CREVOKE and CRENEW
+
+`results/2026-11-11-virtual/virtual-pg-pools` is the pools arm after the lifetime instructions
+changed (`CREVOKE` takes the object alone, `CRENEW` renews a kept block's generation) and patch
+0003 was converted to them; `verdict_bundles` now names it for this arm. The server was built with
+`ports/common/application/build-virtual.sh postgres` (`CAPSTONE_VIRTUAL_LIFETIMES=1`, which is
+`PGSU_NESTED=sublet`) on a corpus SDK, patch 0003 at sha256 `29b94c5a026e`, image `260e63bd61f5`,
+and run with `--virtual-kit` on the emulator that implements the new encoding (QEMU sha256
+`2d5a7107890e`, module `e47bca62addf` with its default of one context, launcher `0f8e0f903725`,
+pinned mode, `x-capstone-test-csrs=true,x-capstone-exact-bounds=true`), against the kit fixture
+cluster (tree `0353a5b9770f`). All four controls fault as declared, through `malloc` and through
+`palloc`.
+
+| arm | CAUGHT | MISSED | NO-READING |
+|---|---|---|---|
+| `virtual-pg-pools` (patch 0003) | 01, 02, 03, 04, 06, 07, 08 | 05 | 09 (unattributed) |
+
+**All nine verdicts equal `results/2026-10-21-review`, with the same cause, fault function and
+attribution route in every row**: 01 `__stpcpy`, 04 `oidvectorout`, 06 `pg_wchar2utf_with_len` and
+08 `varstr_levenshtein_less_equal` by declared site; 02 and 03 `memcpy` and 07
+`pg_popcount_optimized` by `control.sql`; 09 `memcpy`, unattributed; every fault cause 28. Only the
+offsets inside those functions and the load bases moved, with the compiler and the runtime.
+
+Two runs stand behind the row. The bundle is the patch of this tree, whose block header keeps the
+pointer `malloc` returned for the block (the port README says why). The patch exactly as converted
+(sha256 `c63524ea5731`, image `e7efdd7dfaf9`) was run first, on the same kit and fixture, and gave
+the same nine verdicts at the same sites; that bundle is not committed, because it describes a
+patch this tree no longer has. `virtual-malloc` was not re-measured and still rests on
+`results/2026-10-18-review`.
+
+The nested lifetime controls were run again as well, and every prediction holds on both arms:
+[`results/2026-11-11-controls`](results/2026-11-11-controls/README.md).
+
 ## What these results do not say
 
 **Seven vp2 bundles beside this corpus ran case 08's OLD trigger, and their 08 cell is not a

@@ -34,7 +34,7 @@ application command:
 The Sublet build (`-DMCP_SUBLET=ON`, capstone-application only) applies
 `0001` and then the application's
 [`0006-slabs-and-cache-sublet-lifetimes`](../app/patches/), referenced rather
-than copied, in place of `0002`: the two lifetime instructions in `slabs.c` and
+than copied, in place of `0002`: the lifetime instructions in `slabs.c` and
 `cache.c` themselves, with no hooks, no ledger and no metadata heap. Pages and
 objects come from the system allocator -- virtual mallocng -- as upstream's do
 from `malloc`; every chunk is a CDERIVE child of its page's generation, which

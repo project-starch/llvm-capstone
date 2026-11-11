@@ -64,4 +64,5 @@ parent control reads the link and restores it with `PROBE_LOAD_PTR` / `PROBE_STO
 
 Staging, flags, arms and the judge are unchanged.
 
-Results: [`../../results/2026-10-12-controls-ext/`](../../results/2026-10-12-controls-ext/).
+Results: [`../../results/2026-10-12-controls-ext/`](../../results/2026-10-12-controls-ext/), and on the one-operand
+lifetime instructions [`../../results/2026-11-11-controls-ext/`](../../results/2026-11-11-controls-ext/).

@@ -41,8 +41,11 @@ CONTROLS_C = REPO / "capstone/bug-corpora/postgres/c-repros/shared/controls.c"
 CACHE = {"virtual-nested-pools": {"MCP_SUBLET": "ON", "MCP_STOCK_MALLOC": "OFF"},
          "virtual-malloc": {"MCP_SUBLET": "OFF", "MCP_STOCK_MALLOC": "ON"}}
 CONFIG = {"virtual-nested-pools": "virtual-memcached-sublet", "virtual-malloc": "virtual-memcached-stock"}
-# The registered platform (2026-10-11-protected-same-answers.md): sha256 prefixes.
-PLATFORM = {"qemu": "af37cc32", "launcher": "3975314a", "module": "a1c6cb6b"}
+# The registered platforms: sha256 prefixes. The first is the platform of the 2026-10-11 and 2026-10-12
+# records (2026-10-11-protected-same-answers.md). The second is the platform of the 2026-11-11 records:
+# the QEMU with the one-operand CREVOKE and CRENEW, and the launcher and module built for it.
+PLATFORMS = ({"qemu": "af37cc32", "launcher": "3975314a", "module": "a1c6cb6b"},
+             {"qemu": "2d5a7107", "launcher": "0f8e0f90", "module": "e47bca62"})
 RUNS = {
     "virtual-nested-pools": [("91", "page"), ("91", "generation"), ("92", "sibling"), ("93", "through-c"),
                              ("93", "stale")],
@@ -205,9 +208,9 @@ def main():
         print(f"CONTROL-FAILED kit {a.virtual_kit} lacks {missing}", file=sys.stderr)
         return 75
     platform = virtualvm.platform(a.virtual_kit, a.llvm_bin / "clang", HERE)
-    wrong = {k: platform[k] for k, pre in PLATFORM.items() if not platform[k].startswith(pre)}
-    if wrong:
-        print(f"CONTROL-FAILED the kit is not the registered platform: {wrong}", file=sys.stderr)
+    if not any(all(platform[k].startswith(pre) for k, pre in registered.items()) for registered in PLATFORMS):
+        wrong = {k: platform[k] for k in PLATFORMS[0]}
+        print(f"CONTROL-FAILED the kit is not a registered platform: {wrong}", file=sys.stderr)
         return 75
 
     bindir = a.raw / "bin"

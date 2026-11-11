@@ -16,7 +16,8 @@
   ],
   "workload": "work.sql.in and again.sql on a database file, with a second writer refused while the first holds a transaction; speedtest1 main at size 1 with the per-phase result oracle; each byte for byte against the native build of the same release",
   "evidence": [
-    "capstone/ports/sqlite/app/results/20260930-sqlite-322-app.json"
+    "capstone/ports/sqlite/app/results/20260930-sqlite-322-app.json",
+    "capstone/ports/sqlite/app/results/2026-11-11-nested-heaps"
   ],
   "related": [
     "capstone/ports/sqlite"

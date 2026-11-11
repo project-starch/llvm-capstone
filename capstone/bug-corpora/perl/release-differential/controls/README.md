@@ -26,4 +26,5 @@ Each access goes through a `noinline` `probe_*` function and is announced first 
 - `collect.py` reads the serial logs into one JSON (outcome, addresses, probes, fault cause, pc,
   function and source line), and refuses a log whose in-guest image hash differs.
 
-Results: [`../results/2026-10-11-controls/`](../results/2026-10-11-controls/README.md).
+Results: [`../results/2026-10-11-controls/`](../results/2026-10-11-controls/README.md), and on the one-operand
+lifetime instructions [`../results/2026-11-11-controls/`](../results/2026-11-11-controls/README.md).

@@ -37,7 +37,8 @@
  ],
  "evidence": [
   "capstone/bug-corpora/php/zend-alloc-repros/results/20261028-host-asan",
-  "capstone/bug-corpora/php/zend-alloc-repros/results/20261029/cheribsd-revocation"
+  "capstone/bug-corpora/php/zend-alloc-repros/results/20261029/cheribsd-revocation",
+  "capstone/bug-corpora/php/zend-alloc-repros/results/20261111"
  ],
  "advisories": [],
  "related": [

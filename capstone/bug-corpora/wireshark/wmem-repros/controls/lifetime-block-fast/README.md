@@ -32,7 +32,9 @@ Build exactly as `../lifetime/README.md` says, with `-DWM_CORPUS_DIR=<this direc
 `run-lifetime-controls.py` is that directory's runner, with the judge and the recorded
 configuration changed for block_fast. It runs the three programs on one arm in one boot of the
 virtual platform. The record of 2026-10-12 is
-[`../../results/2026-10-12-controls-ext/`](../../results/2026-10-12-controls-ext/README.md).
+[`../../results/2026-10-12-controls-ext/`](../../results/2026-10-12-controls-ext/README.md); the record on
+the processor model with the one-operand `CREVOKE` and `CRENEW` is
+[`../../results/2026-11-11-controls/`](../../results/2026-11-11-controls/README.md).
 
 This directory adds no case to the corpus. The CMake glob and `shared/run-defects.py` scan only
 `NN_*` directories, so neither reaches `controls/lifetime-block-fast/`.

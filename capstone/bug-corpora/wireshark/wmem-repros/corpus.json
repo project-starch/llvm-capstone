@@ -47,7 +47,8 @@
     "capstone/bug-corpora/wireshark/wmem-repros/results/2026-10-09-domain-regression",
     "capstone/bug-corpora/wireshark/wmem-repros/results/2026-10-09-poisoncap",
     "capstone/bug-corpora/wireshark/wmem-repros/results/2026-10-11-virtual",
-    "capstone/bug-corpora/wireshark/wmem-repros/results/2026-10-11-virtual-23"
+    "capstone/bug-corpora/wireshark/wmem-repros/results/2026-10-11-virtual-23",
+    "capstone/bug-corpora/wireshark/wmem-repros/results/2026-11-11-virtual"
   ],
   "advisories": [],
   "shape_table": true,
@@ -62,8 +63,8 @@
     "vp2-nested-pools": "virtual-wmem-pools"
   },
   "verdict_bundles": {
-    "virtual-malloc": "results/2026-10-11-virtual-23/virtual-malloc",
-    "virtual-nested-pools": "results/2026-10-11-virtual-23/virtual-nested-pools",
+    "virtual-malloc": "results/2026-11-11-virtual/virtual-malloc",
+    "virtual-nested-pools": "results/2026-11-11-virtual/virtual-nested-pools",
     "silicon-wm-stock": "results/2026-10-16-silicon/silicon-wm-stock",
     "silicon-wm-sublet": "results/2026-10-16-silicon/silicon-wm-sublet",
     "vp2-malloc": "results/2026-10-19-vp2c-treeA/vp2-malloc",

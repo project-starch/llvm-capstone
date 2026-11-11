@@ -9,12 +9,14 @@ used.
 | arm | configuration (`tools/arms.json`) | build | what bounds a pymalloc block |
 |---|---|---|---|
 | `virtual-malloc` | `virtual-pymalloc` | `-DPYMALLOC_SUBLET=OFF` | nothing: the arena is one mallocng object |
-| `virtual-nested-pools` | `virtual-pymalloc-pools` | `-DPYMALLOC_SUBLET=ON` | patch 0003: one derived child per block, revoked on free |
+| `virtual-nested-pools` | `virtual-pymalloc-pools` | `-DPYMALLOC_SUBLET=ON` | patches 0003 and 0004: one derived child per block, revoked on free |
 
-In the pools arm the replay is built with the port's patch 0003: obmalloc derives one child of
-the arena region per arena and one child per block, bounded to the request (`CDERIVE`), and
-revokes the block's child when it takes the block back (`CREVOKE`,
-`docs/design/virtual-capstone/isa.md`).
+In the pools arm the replay is built with the port's patches 0003 and 0004 (`prepare-source.py --variant
+protected-virtual`): obmalloc derives one child of the arena region per arena and one child per block,
+bounded to the request (`CDERIVE`), and ends the block's child through the client's reference when it
+takes the block back (`CREVOKE`, one operand, `docs/design/virtual-capstone/isa.md`). Patch 0003 alone
+carries the two-operand `CREVOKE` of the capstone-sublet bitstream, which the processor model of the
+virtual profile refuses as an illegal instruction (cause 2 at the first free: `results/2026-11-11-virtual/`).
 
 ## Build
 

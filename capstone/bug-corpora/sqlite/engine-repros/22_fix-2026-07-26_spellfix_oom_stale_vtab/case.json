@@ -30,13 +30,13 @@
       "oracle": "virtual profile, memsys5 stock over its static arena (tools/arms.json virtual-sqlite-memsys5): a fault in the function host ASan reported (fault_sites), or the case returns and this arm did not see it",
       "verdict": "MISSED",
       "verdict_note": "reached, and faulted with cause=24 in editDist3FindLang -- not one of this arm's mechanism causes [25, 28], so the defective access was allowed and this is a later consequence of it, not a catch",
-      "verdict_from": "results/2026-10-29-virtual/virtual-malloc"
+      "verdict_from": "results/2026-11-11-virtual/virtual-malloc"
     },
     "virtual-nested-pools": {
       "oracle": "virtual profile, memsys5 on its Sublet port (tools/arms.json virtual-sqlite-memsys5-pools): as virtual-malloc",
       "verdict": "CAUGHT",
-      "verdict_note": "cause=25 pc=0x3faa01f2f0 in editDist3FindLang; by function: editDist3FindLang is where host ASan reported it",
-      "verdict_from": "results/2026-10-29-virtual/virtual-nested-pools"
+      "verdict_note": "cause=25 pc=0x3f8541cb98 in editDist3FindLang; by function: editDist3FindLang is where host ASan reported it",
+      "verdict_from": "results/2026-11-11-virtual/virtual-nested-pools"
     },
     "silicon-sqlite-stock": {
       "status": "not written",
@@ -52,7 +52,7 @@
       "oracle": "the same build without memsys5, where this case has no form at all: it reaches for sqlite_heap to engineer its OOM, and that array exists only when memsys5 is configured, so the builder reports it not applicable and the run scores NO-READING:out-of-denominator",
       "verdict": "NO-READING",
       "verdict_note": "the builder marks it not applicable to this arm (it configures sqlite_heap itself)",
-      "verdict_from": "results/2026-10-29-virtual/virtual-platform",
+      "verdict_from": "results/2026-11-11-virtual/virtual-platform",
       "verdict_reason": "out-of-denominator"
     },
     "cheribsd-platform": {

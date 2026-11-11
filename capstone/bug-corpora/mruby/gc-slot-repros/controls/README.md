@@ -90,4 +90,5 @@ be made, which is a precondition failure and not a reading.
   prediction. A prediction holds only when every repetition shows it; a missing or incomplete
   reading is "no reading".
 
-Results: [`../results/2026-10-11-controls/`](../results/2026-10-11-controls/README.md).
+Results: [`../results/2026-10-11-controls/`](../results/2026-10-11-controls/README.md), and on the one-operand
+lifetime instructions [`../results/2026-11-11-controls/`](../results/2026-11-11-controls/README.md).

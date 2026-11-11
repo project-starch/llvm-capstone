@@ -1,0 +1,50 @@
+{
+  "arm": "virtual-pg-pools",
+  "cases": 9,
+  "configuration": "virtual-mallocng-pg-pools",
+  "contract": "verdicts-v1",
+  "corpus": "postgres/sql-repros",
+  "extensions": {
+    "available": [
+      "fuzzystrmatch",
+      "ltree",
+      "pg_trgm",
+      "pgcorpus_reach"
+    ],
+    "wanted": [
+      "fuzzystrmatch",
+      "ltree",
+      "pg_trgm",
+      "pgcorpus_reach"
+    ]
+  },
+  "fixture": {
+    "cluster_stable_tree_sha256": "799df33864da9ca8bf4789f93c3c9811f385e382ab4716cbe288b532a7db322e",
+    "cluster_tree_sha256": "0353a5b9770f056e91d0bc2b4d47a1795e0716b6b0b91a79eabbc28bddaa6aa2",
+    "preinstalled": [],
+    "provenance": null,
+    "provenance_note": "no provenance beside the fixture and no builder image in its run record, so which image created its extensions is not recorded in this run"
+  },
+  "image": {
+    "heap": "virtual-mallocng",
+    "nested": "sublet",
+    "sha256": "260e63bd61f54ff6f931536d2bf03a9937290753ffc0e8af19fb2bae977f0c3f"
+  },
+  "platform": {
+    "compiler": "0bbb1f88bc9084e387ec6b3c2db24876dfe267897a13f0d1a53d606a2ded189e",
+    "firmware": "5b5c047a00306f35c99bc4b506ec840c784fe1b73dd13ea6ecb4cf793fece9af",
+    "judge": "9011d1cf7ef368ecd000354058a6847bb28b2544f2f3ea090ed89aa5b4a4fff3",
+    "kernel": "48eb725a40e448fa9ac85abb8b7f9fe8a4080d73ffd49c051bed111319d64da2",
+    "launcher": "0f8e0f903725d734817b3e30d79127c290f3480a641d4f6de8bc7f699d05c76e",
+    "module": "e47bca62addfc9356f8150755f2500b737912eb01088e91398e29a1ed7a4e180",
+    "profile": "virtual",
+    "qemu": "2d5a7107890e48475fada73439d90ffd5c7cff166eb1d547d7a9fc5f31722365",
+    "rootfs": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845",
+    "runner": "7ce203f9fd6a3ccee109f3453f6bccbdc10fea149237898551f74a689d7477f0"
+  },
+  "tally": {
+    "CAUGHT": 7,
+    "MISSED": 1,
+    "NO-READING:unattributed": 1
+  }
+}

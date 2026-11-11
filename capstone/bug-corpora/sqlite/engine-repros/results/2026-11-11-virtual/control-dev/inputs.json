@@ -1,0 +1,44 @@
+{
+  "amalgamation_sha256": "7fc92e19a3af61f3961b83447a91f1e1dec06646e343037dfd96a397167700b2",
+  "arm": "virtual-platform",
+  "build": {
+    "arm": "platform",
+    "groups": {
+      "core": [
+        "-USQLITE_OMIT_INCRBLOB",
+        "-DSQLITE_ENABLE_PREUPDATE_HOOK",
+        "-DSQLITE_COUNTOFVIEW_OPTIMIZATION"
+      ],
+      "memfs3": [
+        "-USQLITE_OMIT_INCRBLOB",
+        "-DSQLITE_ENABLE_FTS3",
+        "-DSQLITE_ENABLE_FTS4"
+      ]
+    },
+    "opt": "-O0",
+    "sdk": "~/crenew-step4/corpus/work-sqlite-mruby-perl/ctl-sdk/sdk"
+  },
+  "cases": 2,
+  "configuration": "virtual-mallocng",
+  "contract": "verdicts-v1",
+  "corpus": "sqlite/engine-repros",
+  "platform": {
+    "compiler": "0bbb1f88bc9084e387ec6b3c2db24876dfe267897a13f0d1a53d606a2ded189e",
+    "exact_bounds": true,
+    "firmware": "5b5c047a00306f35c99bc4b506ec840c784fe1b73dd13ea6ecb4cf793fece9af",
+    "job_helper": "fb6192b8641012fe3154c1af2c4084072a40662a1117b2c01ae4431d88838cc1",
+    "judge": "9011d1cf7ef368ecd000354058a6847bb28b2544f2f3ea090ed89aa5b4a4fff3",
+    "kernel": "48eb725a40e448fa9ac85abb8b7f9fe8a4080d73ffd49c051bed111319d64da2",
+    "launcher": "0f8e0f903725d734817b3e30d79127c290f3480a641d4f6de8bc7f699d05c76e",
+    "module": "1f2ac8580711b54e97f3d1c7ad0cfbe3ce4755f836ff15ffd6d1fc1bd8e0efac",
+    "profile": "virtual",
+    "qemu": "35529815bf4b3ba5139482dba9f12fc3516d1819046998e34bedd6b24fe3e1f7",
+    "rootfs": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845",
+    "runner": "933632f966eed596da1c14c8e94aa28346f50a9a401e12298a56fe0bbb8e1ac2",
+    "ssh_server": "f4fa3153325d7098785926e5edda553b31dfd9f9cb3448023b83a61e53b77d9b"
+  },
+  "predicted": "CAUGHT",
+  "tally": {
+    "CAUGHT": 2
+  }
+}
