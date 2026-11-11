@@ -204,3 +204,140 @@ kernel signal frames, the binfmt and native task, and last, if a cycle model jus
 Rerun the census on each landed baseline, with a same-time plain run, and add a row to 1.1 with the baseline commit.
 Each measurement cites its exact run, platform and binary baseline, counting convention and exclusions; each estimate
 names its source, assumptions and denominator.
+
+## 7. Current kernel-runtime study (2026-11-08)
+
+This section began at `native/linux-task-integration` revision `71347ccd4e59`;
+subsequent qualified changes and the default-off experiment are recorded below.
+Earlier measurements and proposed instructions above are historical, not the
+current qualification baseline. The implementation target is general kernel
+runtime behavior with unchanged GCC, musl and application binaries.
+
+### Separate event volume from cost per event
+
+The current GCC comparison has 14.698M additional kernel attempts, but it also
+has more mappings and greater cumulative mapping volume. This does not establish
+that 14.698M attempts are duplicated runtime bookkeeping. Match mapping sizes,
+alignment, live mapping count, touch order and access direction in a small
+plain/Capstone memory workload to measure the additional cost per event. Separate
+map-without-touch, read-first, write-first, read-then-write, tagged-page release,
+and process exit. Measure steady-state regions separately from exec/exit. GCC
+remains the unchanged end-to-end check. Instruction attempts do not price the
+internal latency of CSRUNV or cache-block operations.
+
+### One Linux memory manager, a separate authority lifetime
+
+Linux remains responsible for VMA/PTE policy, physical pages, COW, migration and
+page release. Capstone retains the information Linux does not express: grant
+identity, revocation ancestry, domain policy and outstanding checked-copy holds.
+An arena is therefore not merely a duplicate VMA. VMA splitting, merging and
+address reuse cannot silently change grant lifetime. Removing arena metadata or
+folding it into Linux VMAs requires an explicit lifetime contract.
+
+Current faults already resolve in the kernel through `cv_step_locked`/`resolve`;
+there is no launcher round trip in this path. `dom_task_step` and the Linux return
+hook resume via the protected capability frame. Its scalar `pt_regs` projection
+is diagnostic, not authority. Replacing the event path with ordinary scalar
+`sret` or calling a Linux fault entry using fabricated registers is not a safe
+optimization. Direct trap delivery remains a separate architecture contract.
+
+### General candidate: preserve actual fault access direction
+
+Implemented as a default-off experiment in `2ae1682c54c9`. Verified whole-invocation
+fresh-read attempts fall 41.14% without ahead, but read-then-write rises 28.98%
+and rises to 2.92x baseline with ahead64. Unchanged GCC regresses by 1.617% and
+1.936% respectively. Do not enable by default. Eight exact GCC outputs, the
+memory matrix, tag-first writes, IO and both race groups pass; this is limited
+experimental qualification, not full SPEC or FPGA acceptance.
+[Evidence](../../runtime/virtual/tests/native-task/access-fault-experiment.json).
+
+The next investigation is the interaction with residency scanning: with actual
+read faults, `next_resident` flat attempts in the read-write fixture rise from
+272 without ahead to 1,633,236 with ahead64. Present zero-page PTEs still need COW
+on stores, but the stream advancement loop repeatedly scans up to 64 resident
+pages. Test bounded scanning or access-aware readiness independently, preserving
+permission, COW, locking and grant-lifetime contracts. Flat profiles are not
+inclusive costs and do not alone assign every additional attempt to this loop.
+
+The following describes the pre-experiment finding and constraints.
+
+`unpinned_fault_vma` currently chooses `FAULT_FLAG_WRITE` from VMA writability,
+even for a read fault. The comment in `resolve` explicitly preserves the old
+GUP/FOLL_WRITE behavior: materialize private writable dirty backing instead of
+using the zero page. This policy is distinct from capability bounds/liveness.
+The checked-copy resolver already chooses access direction from the operation.
+
+Study a demand-fault mode that uses the authenticated event cause: read faults
+remain reads, store faults request write/COW, instruction faults retain execute
+admission. Keep arena/VMA validation, address bounds, repeat detection, stop checks
+and protected resume intact. Do not alter eager bootstrap metadata or kernel-write
+preflight as part of this experiment. Restrict the first experiment to anonymous
+memory; private image mappings need a separate policy review. Fault-ahead must
+be controlled independently: a first read does not predict future writes.
+
+This could avoid private allocation, zeroing, accounting and release for pages
+only read. It may lose on read-then-write traffic by introducing later COW faults.
+No performance benefit or safety qualification is claimed yet. The existing
+`test_fast_noflags` mutant deliberately breaks write handling and is not an
+implementation of this proposal.
+
+### Small cleanup: remove an unread production lookup index
+
+Implemented after this study as `af6893dc17a8`: GCC total attempts -0.757%,
+kernel -1.435%, unchanged program binary, four exact outputs and both race suites
+pass. [Qualification](../../runtime/virtual/tests/native-task/arena-index-qualification.json).
+The description below records the pre-change finding.
+
+The arena `c->ids` xarray is inserted/erased/initialized/destroyed but has no
+production lookup at this revision. The only `xa_load` is in the `CV_RACE_TEST`
+fixture (`rt-dom.h`). Production range lookup uses the arena RB tree. Remove the
+unused secondary index independently, adapting the test fixture explicitly.
+Retain monotonic `a->id`/`next_id`: fault-repeat detection and fault-ahead streams
+still depend on registration identity. This removes duplicated indexing, not
+capability authority or lifetime checks. Its cost is not yet measured.
+
+### Small cleanup: remove obsolete per-page pinning storage
+
+Implemented after this study as `205b53613621`, independently of index removal:
+GCC total attempts -0.783%, kernel -1.493%, unchanged application binary.
+Integration and both race suites pass. [Qualification](../../runtime/virtual/tests/native-task/arena-arrays-qualification.json).
+The occupied-slot unwind was statically audited, not dynamically injected.
+The following describes the pre-change audit and sizing estimate.
+
+`add` allocates `pages` and `frames` arrays even though native adapter admission
+requires unpinned mode. From the measured 281 compilation heap mappings, the
+array formulas request 10,040 + 26,960 = 37,000 bytes in 562 allocation calls.
+This is a derived cumulative request count, excluding slab rounding, initial
+arenas and other mappings; it is not a measured instruction saving.
+
+Omitting allocation alone is incorrect: `touch` reads `a->pages[index]`, and
+`add`'s failure unwind reads `pages[i]`. Audit every consumer, split unpinned
+handling explicitly, and preserve range geometry, IDs, ancestor and copy-hold
+state. Collection in unpinned mode walks the whole mm, including retired but
+still-mapped storage; do not replace that with a live-arena-only scan.
+
+### Changes that require separate proof
+
+- Whole-context teardown still retires individual arenas. A dead-namespace
+  release could avoid per-arena hardware retirement only after all execution
+  slots and checked copies are quiescent and namespace/table reuse cannot revive
+  stale tags. Mid-process unmap must continue to revoke immediately. Removing
+  payload pin sweeps is not a new benefit: they are already skipped unpinned.
+- Global `vm_lock` also protects execution, slot ownership and revocation.
+  Replacing it is a concurrency redesign, not a justified single-hart GCC win.
+- Existing optional `captag_bulk` uses declared Zicboz/firmware permission and
+  changes page zero/copy implementation. Keep this separate from software-only
+  cleanup; QEMU counts do not establish RTL latency. Page-reuse tag clearing and
+  tag-preserving COW/migration remain mandatory.
+
+First feedback must fit one 300-second gate. Before any default change, require
+read-zero correctness, read-then-write COW, tagged stores/copies, denied writes,
+stale-capability rejection across unmap/reuse, pending-copy lifetime protection,
+rollback/failure paths, and byte-exact GCC output. Each result must identify its
+scope; a small diagnostic gate does not qualify all SPEC or multiple harts.
+
+Relevant current source: [mapping and task entry](../../runtime/virtual/module/binfmt-dom.h),
+[arena/fault lifecycle](../../runtime/virtual/module/capstone_vm.c),
+[checked-copy lifecycle](../../runtime/virtual/module/checked-copy-dom.h),
+[Linux entry contract](../../runtime/virtual/kernel-native-task.patch), and
+[measured controls](../../runtime/virtual/tests/native-task/gcc-memory-mechanisms.json).

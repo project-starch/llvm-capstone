@@ -7,6 +7,19 @@
 /* Little-endian wire data. Offsets name NUL-terminated byte strings, never
  * pointers. The same decoder is tested natively and linked into the CRT. */
 #define CAPSTONE_LAUNCH_VERSION 2u
+/* Launch-wire extension only; application descriptors and default pack stay v2. */
+#define CAPSTONE_LAUNCH_NATIVE_VERSION 3u
+#define CAPSTONE_LAUNCH_NATIVE_IO 1u
+#define CAPSTONE_LAUNCH_NATIVE_LOCKS 2u
+#define CAPSTONE_LAUNCH_NATIVE_STAT 4u
+#define CAPSTONE_LAUNCH_NATIVE_SEEK 8u
+#define CAPSTONE_LAUNCH_NATIVE_FD 16u
+#define CAPSTONE_LAUNCH_NATIVE_CLOSE 64u
+#define CAPSTONE_LAUNCH_NATIVE_PATH 128u
+#define CAPSTONE_LAUNCH_NATIVE_CLOCK 256u
+struct capstone_launch_native {
+  uint32_t abi, features, max_io, reserved;
+};
 #define CAPSTONE_LAUNCH_BYTES 65536u
 #define CAPSTONE_LAUNCH_STRINGS 1024u
 #define CAPSTONE_APPLICATION_MAGIC UINT64_C(0x315050414e4f5043)
@@ -29,6 +42,7 @@ struct capstone_launch_header {
 struct capstone_launch_task {
   uint32_t pid, ppid, uid, euid, gid, egid;
   uint64_t realtime_ns, monotonic_ns, ticks, ticks_per_second;
+  struct capstone_launch_native native;
 };
 
 struct capstone_application_descriptor {

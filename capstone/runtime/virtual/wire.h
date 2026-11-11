@@ -6,8 +6,10 @@
 
 /* Experimental one-hart adapter; all thread and mapping addresses belong to
  * the owning Linux mm and share one lifetime table. */
+/* Copyable-only grant ABI: smaller payload gives CV_ADD a new ioctl number.
+ * Old linear-grant launchers are rejected, not silently converted. */
 struct cv_map {
-    __u64 thread, address, bytes, permissions, reg, cursor, linear;
+    __u64 thread, address, bytes, permissions, reg, cursor;
     __u64 id;
     /* The image grant only (reg 3): its first rx_bytes are the read+execute
      * segment, mapped from the image file without write permission. They are

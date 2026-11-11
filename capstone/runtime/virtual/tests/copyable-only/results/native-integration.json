@@ -1,0 +1,1226 @@
+{
+  "date": "2026-11-06",
+  "branch": "prototype/copyable-only",
+  "baseline_superproject": "e5588ec3eeca508a3f6a361f22537783b9599e58",
+  "qemu_commit": "dd041bac5ad9c145c3872a50804ca714a26b1c88",
+  "source_imports": {
+    "NS": "73730ea7b2736ae9355a13982ecb5589f69286c1",
+    "RT": "d034e369da8c90c649ad094662cd893e142fca3e"
+  },
+  "profile": {
+    "native": "default off; root-only; one hart; unpinned; one domain thread per native context",
+    "transport": 6,
+    "checked_copy_abi": 1,
+    "firmware": "ordinary OpenSBI",
+    "entry": "same-task U-mode ioctl trampoline",
+    "mprotect": "normal Linux wrapper; page-subrange protection retained"
+  },
+  "checks": {
+    "native_functional": {
+      "generic": 51,
+      "fast": 51,
+      "failures": 0
+    },
+    "native_entry_one_slot": {
+      "generic": 10,
+      "fast": 10,
+      "failures": 0
+    },
+    "races": {
+      "generic": 41,
+      "fast": 41,
+      "safe_per_mode": 24,
+      "negative_controls_per_mode": 17,
+      "all_oracles_pass": true
+    },
+    "launcher_regression": {
+      "pinned": 22,
+      "unpinned": 22,
+      "all_pass": true
+    },
+    "platform_admission": {
+      "cases": 5,
+      "all_pass": true
+    },
+    "native_admission": {
+      "model_features_off": 5,
+      "missing_kernel_wrapper": 5,
+      "all_pass": true
+    },
+    "hosted": {
+      "descriptors": 106,
+      "checks": 211,
+      "negative_controls": 10,
+      "all_pass": true
+    },
+    "checked_model": {
+      "checks": 35,
+      "all_pass": true
+    },
+    "removed_instructions": {
+      "privilege_cases": 45,
+      "linear_mint_refusal": true,
+      "all_pass": true
+    },
+    "test_controls_absent_from_production_module": true
+  },
+  "inputs_sha256": {
+    "qualification-reviewed": {
+      "capstone_vm.ko": "2a7084f495d3061c577d25764a159c438e2f2b9fcba5d352b45ab345bd9a2e01",
+      "qemu": "c6681ec8a8ff704b297ec3eafceb13b2fe9c1c61c7a65ed95304bd5dbe5183eb",
+      "Image": "013fb0bda008b518db83502915a49e504e8e0303a9fa1495f1a845fb9c6786c1",
+      "firmware": "2335a28682ddf65e46c1f492632c2cb026efcb2271caf544a3f7ddc858b03e02",
+      "probe.dom": "95e97f35001999715015ce6e481b1c18378466c48808a333b440759161d9d4fd",
+      "blocked.dom": "7b07297a2b501644f405b1e081e612184af47e00f95f566d3ecdc4dadcd758a8",
+      "entry-driver": "36ee083abf3c1818dbba9f882aa6c18503850489d653f910f8c6fcd27448a938"
+    },
+    "races-fast-reviewed": {
+      "capstone_vm.ko": "0a706fcb1213b93be3e70723002dcd4defbbd629e1a876ee54452eda1a11b9c4",
+      "qemu": "c6681ec8a8ff704b297ec3eafceb13b2fe9c1c61c7a65ed95304bd5dbe5183eb",
+      "Image": "013fb0bda008b518db83502915a49e504e8e0303a9fa1495f1a845fb9c6786c1",
+      "firmware": "2335a28682ddf65e46c1f492632c2cb026efcb2271caf544a3f7ddc858b03e02",
+      "race.dom": "bb24065f6cd0ddceb007c33bf05f833e4a53808b5272bc9d97c4304981ff965b",
+      "pipe-fill": "4dee68053fb13217688bc156eaec2a44de84f55065bef89a29b82cb8249c7f82"
+    },
+    "races-generic-reviewed": {
+      "capstone_vm.ko": "0a706fcb1213b93be3e70723002dcd4defbbd629e1a876ee54452eda1a11b9c4",
+      "qemu": "c6681ec8a8ff704b297ec3eafceb13b2fe9c1c61c7a65ed95304bd5dbe5183eb",
+      "Image": "013fb0bda008b518db83502915a49e504e8e0303a9fa1495f1a845fb9c6786c1",
+      "firmware": "2335a28682ddf65e46c1f492632c2cb026efcb2271caf544a3f7ddc858b03e02",
+      "race.dom": "bb24065f6cd0ddceb007c33bf05f833e4a53808b5272bc9d97c4304981ff965b",
+      "pipe-fill": "4dee68053fb13217688bc156eaec2a44de84f55065bef89a29b82cb8249c7f82"
+    },
+    "budget-measured": {
+      "capstone_vm.ko": "2a7084f495d3061c577d25764a159c438e2f2b9fcba5d352b45ab345bd9a2e01",
+      "qemu": "c6681ec8a8ff704b297ec3eafceb13b2fe9c1c61c7a65ed95304bd5dbe5183eb",
+      "Image": "013fb0bda008b518db83502915a49e504e8e0303a9fa1495f1a845fb9c6786c1",
+      "firmware": "2335a28682ddf65e46c1f492632c2cb026efcb2271caf544a3f7ddc858b03e02",
+      "pipe-exec": "f760fd4636d20addde646478c8846db60225ca456f15c2e728facac6e18a5668",
+      "budget-plain": "d69ed89774761b7adb13a4405bd2c4717947f6cd111101696a334f6d5c7fd33a",
+      "budget-legacy.dom": "0f10d2f6869928eae01be7371da21e55a293243f184a7ec797e486297acae30b",
+      "budget-native.dom": "2d2387b99fd44e56bf7ec61c7ff0b94b9f9736e50a0c216898c1d6fd6f754db5",
+      "launcher": "8110b7b1adcd80c8f667d38d67e00ef583761670bfdc01ba0e8ed48e6834e0e9"
+    },
+    "budget-generic-measured": {
+      "capstone_vm.ko": "2a7084f495d3061c577d25764a159c438e2f2b9fcba5d352b45ab345bd9a2e01",
+      "qemu": "c6681ec8a8ff704b297ec3eafceb13b2fe9c1c61c7a65ed95304bd5dbe5183eb",
+      "Image": "013fb0bda008b518db83502915a49e504e8e0303a9fa1495f1a845fb9c6786c1",
+      "firmware": "2335a28682ddf65e46c1f492632c2cb026efcb2271caf544a3f7ddc858b03e02",
+      "pipe-exec": "f760fd4636d20addde646478c8846db60225ca456f15c2e728facac6e18a5668",
+      "budget-plain": "d69ed89774761b7adb13a4405bd2c4717947f6cd111101696a334f6d5c7fd33a",
+      "budget-legacy.dom": "0f10d2f6869928eae01be7371da21e55a293243f184a7ec797e486297acae30b",
+      "budget-native.dom": "2d2387b99fd44e56bf7ec61c7ff0b94b9f9736e50a0c216898c1d6fd6f754db5",
+      "launcher": "8110b7b1adcd80c8f667d38d67e00ef583761670bfdc01ba0e8ed48e6834e0e9"
+    },
+    "admission-model-off": {
+      "capstone_vm.ko": "2a7084f495d3061c577d25764a159c438e2f2b9fcba5d352b45ab345bd9a2e01",
+      "qemu": "c6681ec8a8ff704b297ec3eafceb13b2fe9c1c61c7a65ed95304bd5dbe5183eb",
+      "Image": "013fb0bda008b518db83502915a49e504e8e0303a9fa1495f1a845fb9c6786c1",
+      "firmware": "2335a28682ddf65e46c1f492632c2cb026efcb2271caf544a3f7ddc858b03e02"
+    },
+    "admission-old-kernel": {
+      "capstone_vm.ko": "2a7084f495d3061c577d25764a159c438e2f2b9fcba5d352b45ab345bd9a2e01",
+      "qemu": "c6681ec8a8ff704b297ec3eafceb13b2fe9c1c61c7a65ed95304bd5dbe5183eb",
+      "Image": "135f77640d2040f442f667d3b8099d195c063d634f6910c95a714f1ee953f1f2",
+      "firmware": "2335a28682ddf65e46c1f492632c2cb026efcb2271caf544a3f7ddc858b03e02"
+    },
+    "additional": {
+      "native-integration/images/System.map": "43eedffcfebec075df91d3a758899e66f07286d636b56ec08d405d4257781862",
+      "native-qemu-build/contrib/plugins/libcapprof.so": "a1883e39c6a1d4b1529081fda06ae7c7bba217a61e134041f9ef14ecf04f6ebc"
+    },
+    "sdk_compiler": "c24a54155d39a236bfe8b46e9202ee15418a7330490fb1eaf7179406638e57e4"
+  },
+  "measurements": [
+    {
+      "arm": "launcher",
+      "dispatcher": null,
+      "call": "getpid",
+      "bytes": 0,
+      "repetitions": 3,
+      "calls_per_window": 100,
+      "median_attempts_per_call": 255.12,
+      "median_kernel_per_call": 0.0,
+      "median_module_per_call": 0.0,
+      "median_other_per_call": 255.12,
+      "median_kernel_plus_module_per_call": 0.0,
+      "samples": [
+        {
+          "arm": "launcher",
+          "direction": "read",
+          "bytes": "0",
+          "rep": "1",
+          "attempts": "25512",
+          "calls": "100",
+          "attempts_per_call": "255.12",
+          "kernel_per_call": "0.00",
+          "module_per_call": "0.00",
+          "other_per_call": "255.12"
+        },
+        {
+          "arm": "launcher",
+          "direction": "read",
+          "bytes": "0",
+          "rep": "2",
+          "attempts": "25512",
+          "calls": "100",
+          "attempts_per_call": "255.12",
+          "kernel_per_call": "0.00",
+          "module_per_call": "0.00",
+          "other_per_call": "255.12"
+        },
+        {
+          "arm": "launcher",
+          "direction": "read",
+          "bytes": "0",
+          "rep": "3",
+          "attempts": "25512",
+          "calls": "100",
+          "attempts_per_call": "255.12",
+          "kernel_per_call": "0.00",
+          "module_per_call": "0.00",
+          "other_per_call": "255.12"
+        }
+      ]
+    },
+    {
+      "arm": "launcher",
+      "dispatcher": null,
+      "call": "read",
+      "bytes": 1,
+      "repetitions": 3,
+      "calls_per_window": 100,
+      "median_attempts_per_call": 7894.81,
+      "median_kernel_per_call": 3483.84,
+      "median_module_per_call": 373.05,
+      "median_other_per_call": 4034.79,
+      "median_kernel_plus_module_per_call": 3859.65,
+      "samples": [
+        {
+          "arm": "launcher",
+          "direction": "read",
+          "bytes": "1",
+          "rep": "1",
+          "attempts": "755043",
+          "calls": "100",
+          "attempts_per_call": "7550.43",
+          "kernel_per_call": "3147.57",
+          "module_per_call": "373.05",
+          "other_per_call": "4029.81"
+        },
+        {
+          "arm": "launcher",
+          "direction": "read",
+          "bytes": "1",
+          "rep": "2",
+          "attempts": "794347",
+          "calls": "100",
+          "attempts_per_call": "7943.47",
+          "kernel_per_call": "3535.63",
+          "module_per_call": "373.05",
+          "other_per_call": "4034.79"
+        },
+        {
+          "arm": "launcher",
+          "direction": "read",
+          "bytes": "1",
+          "rep": "3",
+          "attempts": "789481",
+          "calls": "100",
+          "attempts_per_call": "7894.81",
+          "kernel_per_call": "3483.84",
+          "module_per_call": "375.81",
+          "other_per_call": "4035.16"
+        }
+      ]
+    },
+    {
+      "arm": "launcher",
+      "dispatcher": null,
+      "call": "read",
+      "bytes": 65536,
+      "repetitions": 3,
+      "calls_per_window": 1,
+      "median_attempts_per_call": 277558.0,
+      "median_kernel_per_call": 182250.0,
+      "median_module_per_call": 2611.0,
+      "median_other_per_call": 92697.0,
+      "median_kernel_plus_module_per_call": 184861.0,
+      "samples": [
+        {
+          "arm": "launcher",
+          "direction": "read",
+          "bytes": "65536",
+          "rep": "1",
+          "attempts": "296591",
+          "calls": "1",
+          "attempts_per_call": "296591.00",
+          "kernel_per_call": "201283.00",
+          "module_per_call": "2611.00",
+          "other_per_call": "92697.00"
+        },
+        {
+          "arm": "launcher",
+          "direction": "read",
+          "bytes": "65536",
+          "rep": "2",
+          "attempts": "277458",
+          "calls": "1",
+          "attempts_per_call": "277458.00",
+          "kernel_per_call": "182150.00",
+          "module_per_call": "2611.00",
+          "other_per_call": "92697.00"
+        },
+        {
+          "arm": "launcher",
+          "direction": "read",
+          "bytes": "65536",
+          "rep": "3",
+          "attempts": "277558",
+          "calls": "1",
+          "attempts_per_call": "277558.00",
+          "kernel_per_call": "182250.00",
+          "module_per_call": "2611.00",
+          "other_per_call": "92697.00"
+        }
+      ]
+    },
+    {
+      "arm": "launcher",
+      "dispatcher": null,
+      "call": "write",
+      "bytes": 1,
+      "repetitions": 3,
+      "calls_per_window": 100,
+      "median_attempts_per_call": 8349.12,
+      "median_kernel_per_call": 4070.04,
+      "median_module_per_call": 376.64,
+      "median_other_per_call": 3902.44,
+      "median_kernel_plus_module_per_call": 4446.68,
+      "samples": [
+        {
+          "arm": "launcher",
+          "direction": "write",
+          "bytes": "1",
+          "rep": "1",
+          "attempts": "834912",
+          "calls": "100",
+          "attempts_per_call": "8349.12",
+          "kernel_per_call": "4070.04",
+          "module_per_call": "376.64",
+          "other_per_call": "3902.44"
+        },
+        {
+          "arm": "launcher",
+          "direction": "write",
+          "bytes": "1",
+          "rep": "2",
+          "attempts": "834987",
+          "calls": "100",
+          "attempts_per_call": "8349.87",
+          "kernel_per_call": "4070.79",
+          "module_per_call": "376.64",
+          "other_per_call": "3902.44"
+        },
+        {
+          "arm": "launcher",
+          "direction": "write",
+          "bytes": "1",
+          "rep": "3",
+          "attempts": "834912",
+          "calls": "100",
+          "attempts_per_call": "8349.12",
+          "kernel_per_call": "4070.04",
+          "module_per_call": "376.64",
+          "other_per_call": "3902.44"
+        }
+      ]
+    },
+    {
+      "arm": "launcher",
+      "dispatcher": null,
+      "call": "write",
+      "bytes": 65536,
+      "repetitions": 3,
+      "calls_per_window": 1,
+      "median_attempts_per_call": 374462.0,
+      "median_kernel_per_call": 285455.0,
+      "median_module_per_call": 7939.0,
+      "median_other_per_call": 81068.0,
+      "median_kernel_plus_module_per_call": 293394.0,
+      "samples": [
+        {
+          "arm": "launcher",
+          "direction": "write",
+          "bytes": "65536",
+          "rep": "1",
+          "attempts": "374462",
+          "calls": "1",
+          "attempts_per_call": "374462.00",
+          "kernel_per_call": "285455.00",
+          "module_per_call": "7939.00",
+          "other_per_call": "81068.00"
+        },
+        {
+          "arm": "launcher",
+          "direction": "write",
+          "bytes": "65536",
+          "rep": "2",
+          "attempts": "374523",
+          "calls": "1",
+          "attempts_per_call": "374523.00",
+          "kernel_per_call": "285516.00",
+          "module_per_call": "7939.00",
+          "other_per_call": "81068.00"
+        },
+        {
+          "arm": "launcher",
+          "direction": "write",
+          "bytes": "65536",
+          "rep": "3",
+          "attempts": "374448",
+          "calls": "1",
+          "attempts_per_call": "374448.00",
+          "kernel_per_call": "285441.00",
+          "module_per_call": "7939.00",
+          "other_per_call": "81068.00"
+        }
+      ]
+    },
+    {
+      "arm": "native",
+      "dispatcher": "fast",
+      "call": "getpid",
+      "bytes": 0,
+      "repetitions": 3,
+      "calls_per_window": 100,
+      "median_attempts_per_call": 602.07,
+      "median_kernel_per_call": 40.0,
+      "median_module_per_call": 536.0,
+      "median_other_per_call": 26.07,
+      "median_kernel_plus_module_per_call": 576.0,
+      "samples": [
+        {
+          "arm": "native",
+          "direction": "read",
+          "bytes": "0",
+          "rep": "1",
+          "attempts": "60207",
+          "calls": "100",
+          "attempts_per_call": "602.07",
+          "kernel_per_call": "40.00",
+          "module_per_call": "536.00",
+          "other_per_call": "26.07"
+        },
+        {
+          "arm": "native",
+          "direction": "read",
+          "bytes": "0",
+          "rep": "2",
+          "attempts": "60207",
+          "calls": "100",
+          "attempts_per_call": "602.07",
+          "kernel_per_call": "40.00",
+          "module_per_call": "536.00",
+          "other_per_call": "26.07"
+        },
+        {
+          "arm": "native",
+          "direction": "read",
+          "bytes": "0",
+          "rep": "3",
+          "attempts": "60207",
+          "calls": "100",
+          "attempts_per_call": "602.07",
+          "kernel_per_call": "40.00",
+          "module_per_call": "536.00",
+          "other_per_call": "26.07"
+        }
+      ]
+    },
+    {
+      "arm": "native",
+      "dispatcher": "fast",
+      "call": "read",
+      "bytes": 1,
+      "repetitions": 3,
+      "calls_per_window": 100,
+      "median_attempts_per_call": 3603.91,
+      "median_kernel_per_call": 1744.77,
+      "median_module_per_call": 1831.07,
+      "median_other_per_call": 28.07,
+      "median_kernel_plus_module_per_call": 3575.84,
+      "samples": [
+        {
+          "arm": "native",
+          "direction": "read",
+          "bytes": "1",
+          "rep": "1",
+          "attempts": "360391",
+          "calls": "100",
+          "attempts_per_call": "3603.91",
+          "kernel_per_call": "1744.77",
+          "module_per_call": "1831.07",
+          "other_per_call": "28.07"
+        },
+        {
+          "arm": "native",
+          "direction": "read",
+          "bytes": "1",
+          "rep": "2",
+          "attempts": "360391",
+          "calls": "100",
+          "attempts_per_call": "3603.91",
+          "kernel_per_call": "1744.77",
+          "module_per_call": "1831.07",
+          "other_per_call": "28.07"
+        },
+        {
+          "arm": "native",
+          "direction": "read",
+          "bytes": "1",
+          "rep": "3",
+          "attempts": "360391",
+          "calls": "100",
+          "attempts_per_call": "3603.91",
+          "kernel_per_call": "1744.77",
+          "module_per_call": "1831.07",
+          "other_per_call": "28.07"
+        }
+      ]
+    },
+    {
+      "arm": "native",
+      "dispatcher": "fast",
+      "call": "read",
+      "bytes": 65536,
+      "repetitions": 3,
+      "calls_per_window": 1,
+      "median_attempts_per_call": 70902.0,
+      "median_kernel_per_call": 62949.0,
+      "median_module_per_call": 7918.0,
+      "median_other_per_call": 35.0,
+      "median_kernel_plus_module_per_call": 70867.0,
+      "samples": [
+        {
+          "arm": "native",
+          "direction": "read",
+          "bytes": "65536",
+          "rep": "1",
+          "attempts": "70902",
+          "calls": "1",
+          "attempts_per_call": "70902.00",
+          "kernel_per_call": "62949.00",
+          "module_per_call": "7918.00",
+          "other_per_call": "35.00"
+        },
+        {
+          "arm": "native",
+          "direction": "read",
+          "bytes": "65536",
+          "rep": "2",
+          "attempts": "70902",
+          "calls": "1",
+          "attempts_per_call": "70902.00",
+          "kernel_per_call": "62949.00",
+          "module_per_call": "7918.00",
+          "other_per_call": "35.00"
+        },
+        {
+          "arm": "native",
+          "direction": "read",
+          "bytes": "65536",
+          "rep": "3",
+          "attempts": "70902",
+          "calls": "1",
+          "attempts_per_call": "70902.00",
+          "kernel_per_call": "62949.00",
+          "module_per_call": "7918.00",
+          "other_per_call": "35.00"
+        }
+      ]
+    },
+    {
+      "arm": "native",
+      "dispatcher": "fast",
+      "call": "write",
+      "bytes": 1,
+      "repetitions": 3,
+      "calls_per_window": 100,
+      "median_attempts_per_call": 4983.52,
+      "median_kernel_per_call": 3045.98,
+      "median_module_per_call": 1904.39,
+      "median_other_per_call": 33.15,
+      "median_kernel_plus_module_per_call": 4950.37,
+      "samples": [
+        {
+          "arm": "native",
+          "direction": "write",
+          "bytes": "1",
+          "rep": "1",
+          "attempts": "506910",
+          "calls": "100",
+          "attempts_per_call": "5069.10",
+          "kernel_per_call": "3131.56",
+          "module_per_call": "1904.39",
+          "other_per_call": "33.15"
+        },
+        {
+          "arm": "native",
+          "direction": "write",
+          "bytes": "1",
+          "rep": "2",
+          "attempts": "464617",
+          "calls": "100",
+          "attempts_per_call": "4646.17",
+          "kernel_per_call": "2715.03",
+          "module_per_call": "1903.07",
+          "other_per_call": "28.07"
+        },
+        {
+          "arm": "native",
+          "direction": "write",
+          "bytes": "1",
+          "rep": "3",
+          "attempts": "498352",
+          "calls": "100",
+          "attempts_per_call": "4983.52",
+          "kernel_per_call": "3045.98",
+          "module_per_call": "1904.39",
+          "other_per_call": "33.15"
+        }
+      ]
+    },
+    {
+      "arm": "native",
+      "dispatcher": "fast",
+      "call": "write",
+      "bytes": 65536,
+      "repetitions": 3,
+      "calls_per_window": 1,
+      "median_attempts_per_call": 119873.0,
+      "median_kernel_per_call": 111928.0,
+      "median_module_per_call": 7910.0,
+      "median_other_per_call": 35.0,
+      "median_kernel_plus_module_per_call": 119838.0,
+      "samples": [
+        {
+          "arm": "native",
+          "direction": "write",
+          "bytes": "65536",
+          "rep": "1",
+          "attempts": "119873",
+          "calls": "1",
+          "attempts_per_call": "119873.00",
+          "kernel_per_call": "111928.00",
+          "module_per_call": "7910.00",
+          "other_per_call": "35.00"
+        },
+        {
+          "arm": "native",
+          "direction": "write",
+          "bytes": "65536",
+          "rep": "2",
+          "attempts": "119873",
+          "calls": "1",
+          "attempts_per_call": "119873.00",
+          "kernel_per_call": "111928.00",
+          "module_per_call": "7910.00",
+          "other_per_call": "35.00"
+        },
+        {
+          "arm": "native",
+          "direction": "write",
+          "bytes": "65536",
+          "rep": "3",
+          "attempts": "119848",
+          "calls": "1",
+          "attempts_per_call": "119848.00",
+          "kernel_per_call": "111903.00",
+          "module_per_call": "7910.00",
+          "other_per_call": "35.00"
+        }
+      ]
+    },
+    {
+      "arm": "plain",
+      "dispatcher": null,
+      "call": "getpid",
+      "bytes": 0,
+      "repetitions": 3,
+      "calls_per_window": 100,
+      "median_attempts_per_call": 196.06,
+      "median_kernel_per_call": 185.0,
+      "median_module_per_call": 0.0,
+      "median_other_per_call": 11.06,
+      "median_kernel_plus_module_per_call": 185.0,
+      "samples": [
+        {
+          "arm": "plain",
+          "direction": "read",
+          "bytes": "0",
+          "rep": "1",
+          "attempts": "19606",
+          "calls": "100",
+          "attempts_per_call": "196.06",
+          "kernel_per_call": "185.00",
+          "module_per_call": "0.00",
+          "other_per_call": "11.06"
+        },
+        {
+          "arm": "plain",
+          "direction": "read",
+          "bytes": "0",
+          "rep": "2",
+          "attempts": "19606",
+          "calls": "100",
+          "attempts_per_call": "196.06",
+          "kernel_per_call": "185.00",
+          "module_per_call": "0.00",
+          "other_per_call": "11.06"
+        },
+        {
+          "arm": "plain",
+          "direction": "read",
+          "bytes": "0",
+          "rep": "3",
+          "attempts": "19606",
+          "calls": "100",
+          "attempts_per_call": "196.06",
+          "kernel_per_call": "185.00",
+          "module_per_call": "0.00",
+          "other_per_call": "11.06"
+        }
+      ]
+    },
+    {
+      "arm": "plain",
+      "dispatcher": null,
+      "call": "read",
+      "bytes": 1,
+      "repetitions": 3,
+      "calls_per_window": 100,
+      "median_attempts_per_call": 1342.05,
+      "median_kernel_per_call": 1311.0,
+      "median_module_per_call": 0.0,
+      "median_other_per_call": 31.05,
+      "median_kernel_plus_module_per_call": 1311.0,
+      "samples": [
+        {
+          "arm": "plain",
+          "direction": "read",
+          "bytes": "1",
+          "rep": "1",
+          "attempts": "134205",
+          "calls": "100",
+          "attempts_per_call": "1342.05",
+          "kernel_per_call": "1311.00",
+          "module_per_call": "0.00",
+          "other_per_call": "31.05"
+        },
+        {
+          "arm": "plain",
+          "direction": "read",
+          "bytes": "1",
+          "rep": "2",
+          "attempts": "134205",
+          "calls": "100",
+          "attempts_per_call": "1342.05",
+          "kernel_per_call": "1311.00",
+          "module_per_call": "0.00",
+          "other_per_call": "31.05"
+        },
+        {
+          "arm": "plain",
+          "direction": "read",
+          "bytes": "1",
+          "rep": "3",
+          "attempts": "134205",
+          "calls": "100",
+          "attempts_per_call": "1342.05",
+          "kernel_per_call": "1311.00",
+          "module_per_call": "0.00",
+          "other_per_call": "31.05"
+        }
+      ]
+    },
+    {
+      "arm": "plain",
+      "dispatcher": null,
+      "call": "read",
+      "bytes": 65536,
+      "repetitions": 3,
+      "calls_per_window": 1,
+      "median_attempts_per_call": 41033.0,
+      "median_kernel_per_call": 40997.0,
+      "median_module_per_call": 0.0,
+      "median_other_per_call": 36.0,
+      "median_kernel_plus_module_per_call": 40997.0,
+      "samples": [
+        {
+          "arm": "plain",
+          "direction": "read",
+          "bytes": "65536",
+          "rep": "1",
+          "attempts": "41033",
+          "calls": "1",
+          "attempts_per_call": "41033.00",
+          "kernel_per_call": "40997.00",
+          "module_per_call": "0.00",
+          "other_per_call": "36.00"
+        },
+        {
+          "arm": "plain",
+          "direction": "read",
+          "bytes": "65536",
+          "rep": "2",
+          "attempts": "41033",
+          "calls": "1",
+          "attempts_per_call": "41033.00",
+          "kernel_per_call": "40997.00",
+          "module_per_call": "0.00",
+          "other_per_call": "36.00"
+        },
+        {
+          "arm": "plain",
+          "direction": "read",
+          "bytes": "65536",
+          "rep": "3",
+          "attempts": "41033",
+          "calls": "1",
+          "attempts_per_call": "41033.00",
+          "kernel_per_call": "40997.00",
+          "module_per_call": "0.00",
+          "other_per_call": "36.00"
+        }
+      ]
+    },
+    {
+      "arm": "plain",
+      "dispatcher": null,
+      "call": "write",
+      "bytes": 1,
+      "repetitions": 3,
+      "calls_per_window": 100,
+      "median_attempts_per_call": 2273.15,
+      "median_kernel_per_call": 2243.1,
+      "median_module_per_call": 0.0,
+      "median_other_per_call": 30.05,
+      "median_kernel_plus_module_per_call": 2243.1,
+      "samples": [
+        {
+          "arm": "plain",
+          "direction": "write",
+          "bytes": "1",
+          "rep": "1",
+          "attempts": "227315",
+          "calls": "100",
+          "attempts_per_call": "2273.15",
+          "kernel_per_call": "2243.10",
+          "module_per_call": "0.00",
+          "other_per_call": "30.05"
+        },
+        {
+          "arm": "plain",
+          "direction": "write",
+          "bytes": "1",
+          "rep": "2",
+          "attempts": "227315",
+          "calls": "100",
+          "attempts_per_call": "2273.15",
+          "kernel_per_call": "2243.10",
+          "module_per_call": "0.00",
+          "other_per_call": "30.05"
+        },
+        {
+          "arm": "plain",
+          "direction": "write",
+          "bytes": "1",
+          "rep": "3",
+          "attempts": "227315",
+          "calls": "100",
+          "attempts_per_call": "2273.15",
+          "kernel_per_call": "2243.10",
+          "module_per_call": "0.00",
+          "other_per_call": "30.05"
+        }
+      ]
+    },
+    {
+      "arm": "plain",
+      "dispatcher": null,
+      "call": "write",
+      "bytes": 65536,
+      "repetitions": 3,
+      "calls_per_window": 1,
+      "median_attempts_per_call": 90227.0,
+      "median_kernel_per_call": 90192.0,
+      "median_module_per_call": 0.0,
+      "median_other_per_call": 35.0,
+      "median_kernel_plus_module_per_call": 90192.0,
+      "samples": [
+        {
+          "arm": "plain",
+          "direction": "write",
+          "bytes": "65536",
+          "rep": "1",
+          "attempts": "90489",
+          "calls": "1",
+          "attempts_per_call": "90489.00",
+          "kernel_per_call": "90454.00",
+          "module_per_call": "0.00",
+          "other_per_call": "35.00"
+        },
+        {
+          "arm": "plain",
+          "direction": "write",
+          "bytes": "65536",
+          "rep": "2",
+          "attempts": "90227",
+          "calls": "1",
+          "attempts_per_call": "90227.00",
+          "kernel_per_call": "90192.00",
+          "module_per_call": "0.00",
+          "other_per_call": "35.00"
+        },
+        {
+          "arm": "plain",
+          "direction": "write",
+          "bytes": "65536",
+          "rep": "3",
+          "attempts": "90227",
+          "calls": "1",
+          "attempts_per_call": "90227.00",
+          "kernel_per_call": "90192.00",
+          "module_per_call": "0.00",
+          "other_per_call": "35.00"
+        }
+      ]
+    },
+    {
+      "arm": "native",
+      "dispatcher": "generic",
+      "call": "getpid",
+      "bytes": 0,
+      "repetitions": 3,
+      "calls_per_window": 100,
+      "median_attempts_per_call": 4570.07,
+      "median_kernel_per_call": 1879.0,
+      "median_module_per_call": 2665.0,
+      "median_other_per_call": 26.07,
+      "median_kernel_plus_module_per_call": 4544.0,
+      "samples": [
+        {
+          "arm": "native",
+          "direction": "read",
+          "bytes": "0",
+          "rep": "1",
+          "attempts": "456607",
+          "calls": "100",
+          "attempts_per_call": "4566.07",
+          "kernel_per_call": "1875.00",
+          "module_per_call": "2665.00",
+          "other_per_call": "26.07"
+        },
+        {
+          "arm": "native",
+          "direction": "read",
+          "bytes": "0",
+          "rep": "2",
+          "attempts": "457007",
+          "calls": "100",
+          "attempts_per_call": "4570.07",
+          "kernel_per_call": "1879.00",
+          "module_per_call": "2665.00",
+          "other_per_call": "26.07"
+        },
+        {
+          "arm": "native",
+          "direction": "read",
+          "bytes": "0",
+          "rep": "3",
+          "attempts": "457007",
+          "calls": "100",
+          "attempts_per_call": "4570.07",
+          "kernel_per_call": "1879.00",
+          "module_per_call": "2665.00",
+          "other_per_call": "26.07"
+        }
+      ]
+    },
+    {
+      "arm": "native",
+      "dispatcher": "generic",
+      "call": "read",
+      "bytes": 1,
+      "repetitions": 3,
+      "calls_per_window": 100,
+      "median_attempts_per_call": 9164.07,
+      "median_kernel_per_call": 4852.0,
+      "median_module_per_call": 4284.0,
+      "median_other_per_call": 28.07,
+      "median_kernel_plus_module_per_call": 9136.0,
+      "samples": [
+        {
+          "arm": "native",
+          "direction": "read",
+          "bytes": "1",
+          "rep": "1",
+          "attempts": "949726",
+          "calls": "100",
+          "attempts_per_call": "9497.26",
+          "kernel_per_call": "5178.79",
+          "module_per_call": "4285.32",
+          "other_per_call": "33.15"
+        },
+        {
+          "arm": "native",
+          "direction": "read",
+          "bytes": "1",
+          "rep": "2",
+          "attempts": "916407",
+          "calls": "100",
+          "attempts_per_call": "9164.07",
+          "kernel_per_call": "4852.00",
+          "module_per_call": "4284.00",
+          "other_per_call": "28.07"
+        },
+        {
+          "arm": "native",
+          "direction": "read",
+          "bytes": "1",
+          "rep": "3",
+          "attempts": "916407",
+          "calls": "100",
+          "attempts_per_call": "9164.07",
+          "kernel_per_call": "4852.00",
+          "module_per_call": "4284.00",
+          "other_per_call": "28.07"
+        }
+      ]
+    },
+    {
+      "arm": "native",
+      "dispatcher": "generic",
+      "call": "read",
+      "bytes": 65536,
+      "repetitions": 3,
+      "calls_per_window": 1,
+      "median_attempts_per_call": 87412.0,
+      "median_kernel_per_call": 77013.0,
+      "median_module_per_call": 10364.0,
+      "median_other_per_call": 35.0,
+      "median_kernel_plus_module_per_call": 87377.0,
+      "samples": [
+        {
+          "arm": "native",
+          "direction": "read",
+          "bytes": "65536",
+          "rep": "1",
+          "attempts": "87655",
+          "calls": "1",
+          "attempts_per_call": "87655.00",
+          "kernel_per_call": "77256.00",
+          "module_per_call": "10364.00",
+          "other_per_call": "35.00"
+        },
+        {
+          "arm": "native",
+          "direction": "read",
+          "bytes": "65536",
+          "rep": "2",
+          "attempts": "87412",
+          "calls": "1",
+          "attempts_per_call": "87412.00",
+          "kernel_per_call": "77013.00",
+          "module_per_call": "10364.00",
+          "other_per_call": "35.00"
+        },
+        {
+          "arm": "native",
+          "direction": "read",
+          "bytes": "65536",
+          "rep": "3",
+          "attempts": "87412",
+          "calls": "1",
+          "attempts_per_call": "87412.00",
+          "kernel_per_call": "77013.00",
+          "module_per_call": "10364.00",
+          "other_per_call": "35.00"
+        }
+      ]
+    },
+    {
+      "arm": "native",
+      "dispatcher": "generic",
+      "call": "write",
+      "bytes": 1,
+      "repetitions": 3,
+      "calls_per_window": 100,
+      "median_attempts_per_call": 10136.17,
+      "median_kernel_per_call": 5821.1,
+      "median_module_per_call": 4287.0,
+      "median_other_per_call": 28.07,
+      "median_kernel_plus_module_per_call": 10108.1,
+      "samples": [
+        {
+          "arm": "native",
+          "direction": "write",
+          "bytes": "1",
+          "rep": "1",
+          "attempts": "1013333",
+          "calls": "100",
+          "attempts_per_call": "10133.33",
+          "kernel_per_call": "5818.26",
+          "module_per_call": "4287.00",
+          "other_per_call": "28.07"
+        },
+        {
+          "arm": "native",
+          "direction": "write",
+          "bytes": "1",
+          "rep": "2",
+          "attempts": "1013617",
+          "calls": "100",
+          "attempts_per_call": "10136.17",
+          "kernel_per_call": "5821.10",
+          "module_per_call": "4287.00",
+          "other_per_call": "28.07"
+        },
+        {
+          "arm": "native",
+          "direction": "write",
+          "bytes": "1",
+          "rep": "3",
+          "attempts": "1013617",
+          "calls": "100",
+          "attempts_per_call": "10136.17",
+          "kernel_per_call": "5821.10",
+          "module_per_call": "4287.00",
+          "other_per_call": "28.07"
+        }
+      ]
+    },
+    {
+      "arm": "native",
+      "dispatcher": "generic",
+      "call": "write",
+      "bytes": 65536,
+      "repetitions": 3,
+      "calls_per_window": 1,
+      "median_attempts_per_call": 136314.0,
+      "median_kernel_per_call": 125992.0,
+      "median_module_per_call": 10287.0,
+      "median_other_per_call": 35.0,
+      "median_kernel_plus_module_per_call": 136279.0,
+      "samples": [
+        {
+          "arm": "native",
+          "direction": "write",
+          "bytes": "65536",
+          "rep": "1",
+          "attempts": "136622",
+          "calls": "1",
+          "attempts_per_call": "136622.00",
+          "kernel_per_call": "126300.00",
+          "module_per_call": "10287.00",
+          "other_per_call": "35.00"
+        },
+        {
+          "arm": "native",
+          "direction": "write",
+          "bytes": "65536",
+          "rep": "2",
+          "attempts": "136289",
+          "calls": "1",
+          "attempts_per_call": "136289.00",
+          "kernel_per_call": "125967.00",
+          "module_per_call": "10287.00",
+          "other_per_call": "35.00"
+        },
+        {
+          "arm": "native",
+          "direction": "write",
+          "bytes": "65536",
+          "rep": "3",
+          "attempts": "136314",
+          "calls": "1",
+          "attempts_per_call": "136314.00",
+          "kernel_per_call": "125992.00",
+          "module_per_call": "10287.00",
+          "other_per_call": "35.00"
+        }
+      ]
+    }
+  ],
+  "measurement_method": {
+    "metric": "system-wide QEMU attempted instructions, not cycles",
+    "order": "three repetitions with alternating arm order",
+    "read": "prefilled pipe",
+    "write": "regular file; all output bytes verified outside window",
+    "kernel_classification": "System.map _stext.._etext",
+    "module_classification": "actual loaded executable ELF section addresses and sizes",
+    "other": "user/launcher/firmware/unresolved PCs",
+    "excluded_runs": "budget-reviewed and budget-generic-reviewed: write fixture prefault stores zeroed expected X bytes; oracle rejected. Fixture fixed, complete fresh runs recorded."
+  },
+  "review": {
+    "model": "gemini-4-argon",
+    "rounds": 3,
+    "outcome": "Final review reports no unresolved blockers within the stated prototype scope; independent review is not a security proof.",
+    "addressed": [
+      "ABI/transport/kernel-export admission",
+      "SATP rebinding after blocked calls and slot eviction",
+      "mapping preflight and special VMA refusal",
+      "metadata protection refusal",
+      "terminal exported-frame cleanup"
+    ],
+    "not_changes": [
+      "exact file-object identity retained",
+      "self-refuted partial-result/reply findings did not justify patches",
+      "pinned native write-only admission not qualified"
+    ]
+  },
+  "limitations": [
+    "not full native architecture return or process/signal/restart integration",
+    "native single-domain-thread and one-hart unpinned scope",
+    "no SMP/DMA/RTL qualification",
+    "RT deterministic hooks, not scheduler-selected races or actual new-generation ID reuse",
+    "bounce buffers remain",
+    "unsupported syscall families return ENOSYS",
+    "no native full SPEC run",
+    "cached launcher getpid faster; small-write kernel/module work increases",
+    "SDK uses existing compiler binary; freshness checker cannot inspect missing build.ninja"
+  ],
+  "evidence": {
+    "path": "$CAPSTONE_TMP_ROOT/copyable-only/native-integration-evidence.tar.gz",
+    "sha256": "a624075c37ecf5a7c5b051a4c0971e34c7e4ce4d4d8cc087bf27b469f323bdfc",
+    "remote_mirror": "p12:/var/tmp/capstone-copyable-only/native-integration-evidence.tar.gz"
+  },
+  "implementation_sha256": {
+    "capstone/runtime/virtual/module/checked-copy-dom.h": "298c1109ec8712409f0481e8877b7f79b07eeb9ac4267af168a7e5f05d695933",
+    "capstone/runtime/virtual/module/resource-dom.h": "69706389f2962b063d5776e6049234c82c98f815e37ef7ab1a4223cf18e9573e",
+    "capstone/runtime/virtual/module/native-syscall-dom.h": "44adf5fa49de9301c2a2511d8738f7d4faef7283fd6d930f4085ac2da9b88bee",
+    "capstone/runtime/virtual/module/binfmt-dom.h": "c389efd5c003645095f6a36180cffe95a180f431db05475db407936bc2e78b42",
+    "capstone/runtime/virtual/module/Makefile": "8a01fc36d35f989c9e6503ff63b6a632f5e94273dd7dd9f3017f2302b87fd3e9",
+    "capstone/runtime/virtual/module/delegate-dom.h": "1a5ff1c6fe5237e4ee1f2893881e29a14fd4ea76ca691d0705d1b404cb0eea07",
+    "capstone/runtime/virtual/module/rt-dom.h": "eb7d7e653958af4f20cba85c5a3aca6ab9a049de4a59377dd529912c5cb06f9b",
+    "capstone/runtime/virtual/module/capstone_vm.c": "d47431fa44b3340d181f962e94ed10b864441ea3a6ce662959d5438b9f3cf4c7",
+    "capstone/runtime/virtual/module/trampoline.S": "b8c848a61fc5e9b3aa7dbcb61b899fdca1da2179a38112fcc17d67ba2442e0be",
+    "capstone/runtime/virtual/tests/native-integration/build.sh": "66eeef053d1629e12dea67f78fc5079e066f2f0d470b4acce735bf21d407f840",
+    "capstone/runtime/virtual/tests/native-integration/README.md": "a21c618ed02c963ecc0ed5264b3265e2ce9eafc3b28d474b0314becf84d58be9",
+    "capstone/runtime/virtual/tests/native-integration/run-copyable.py": "5e28b0ad9c7d72c753488b98f70c6c8b5f11ce31fdd06f5dccce873f6d7e068b",
+    "capstone/runtime/virtual/tests/native-integration/blocked.c": "16b84a7162add392278cee795143eb93cc4f2e1131ff1ffc036a11ff4b811d6a",
+    "capstone/runtime/virtual/tests/native-integration/budget.c": "840049f8d64dc919c1dde8086365473d0e4c15ce530960f772f8bac97e0b81ae",
+    "capstone/runtime/virtual/tests/native-integration/entry-driver.c": "08cd83196a45c1926e947d64c51eab70bf719b74edd9e85bc8b694e810e5910e",
+    "capstone/runtime/virtual/tests/native-integration/summarize.py": "76828358cd42ac704697c9bc9cebd874a80429d25e266bc2d51e7a7d75db0cd4",
+    "capstone/runtime/virtual/tests/native-integration/pipe-exec.c": "bb4a58e8286d3722d4cdfd53bfb137d68b0781c0ae537291dd3e3985d6f6bd0e",
+    "capstone/runtime/virtual/tests/native-integration/probe.c": "bfcae8005e016733fb0d7dd4a8535e15b4be7cf380bfbe5f29a778b76d66685f",
+    "capstone/runtime/virtual/tests/native-race/build.sh": "93c962c336daa12cc1abbfc1bde5cdc3064eca19ebecab5b14e0cbc2a49dcf84",
+    "capstone/runtime/virtual/tests/native-race/run.sh": "69ebdd18cd34263ce4256b955b60867b5c77d2183ccd81fce62a40b6621eb340",
+    "capstone/runtime/virtual/tests/native-race/pipe-fill.c": "2e8c68bac776219be4808ad97d306e3d1c51a4ba9a994b6a2e18685c70401301",
+    "capstone/runtime/virtual/tests/native-race/README.md": "c23040c44a3bbc79a65351b4edc7e2d5d2e1e75b7074eca674b129c67ee77496",
+    "capstone/runtime/virtual/tests/native-race/scenarios.txt": "5a1bcef1afed3cdbcb8635944a0def0300ff61513ec26044389aa39a0a35b335",
+    "capstone/runtime/virtual/tests/native-race/race.c": "dd6a915692e325bbfb4e8dc4662baa82d9086ec78d0cdec1bd80c8ef64df7b4b",
+    "capstone/runtime/virtual/tests/native-race/judge.py": "3408a38472d9d36975421b3cc249e5b08332b2dc2399acaca7b9f88e31aeb2b4",
+    "capstone/runtime/virtual/tests/native-race/rt-stubs.S": "e2a50fe30be9b4993f391880b4793f01b5b28179ec5777af12d21ddcd4edbb89"
+  }
+}

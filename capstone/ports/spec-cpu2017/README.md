@@ -10,6 +10,11 @@ and `srcalt-notes/` says what each one changes and why. `artifacts/` (source arc
 adapter) is local and unversioned; the manifest pins every file in it too. Results built this way are
 research results and never reportable.
 
+The default manifest and launcher workflow below retain their historical source,
+toolchain, and platform pins. They do not select the native-task Perl repair.
+For that build, use the explicit [Perl v2 source-selection recipe](../perl/provenance/README.md#build-and-run-the-explicit-v2-package)
+with a current native SDK and the native qualification helpers.
+
 The measurement plan, with the pre-registered readings of its controls, is
 `capstone/docs/plans/spec-spatial-vs-temporal.md`; the heap switches it measures are PR #279.
 
@@ -52,6 +57,39 @@ staged run-directory copies, must remain unchanged. The former Perl `pack.t`
 stubbing helper is removed; historical runs that used it do not qualify as
 unchanged-input results. The verdict rejects records of that intervention.
 `tools/build.sh` checks the installed tree against SPEC's MANIFEST after the build.
+
+New portability revisions must use a distinct source-alternative identity and
+fresh objects. `tools/make-srcalt.sh SPEC_ROOT KIT_DIR BENCH OUTDIR NAME` accepts
+an optional explicit name, for example `capstone_provenance_v2`; omitting it
+retains `capstone`. Keep the old package and pinned manifest intact, use a fresh
+output directory, and record the new package hash and build configuration
+separately. The helper refuses to replace an existing package or checksum.
+Creating a package does not select it in the build configuration or qualify it.
+
+`CAPSTONE_SPEC_SOURCE_SELECTION` optionally names a source-only overlay for
+`tools/build.sh`. The [pinned Perl overlay](../perl/provenance/srcalt-selection.json)
+binds the unchanged base manifest, the v2 package, its twenty replacement files,
+and its 69-object count. Other benchmarks keep their original packages. The
+build requires packages only for the selected benchmarks; the default full set
+still installs all three source alternatives. The
+effective selection and build command are recorded; it changes no platform or
+SDK defaults. Use an explicit native SDK and a fresh label for this workflow.
+The overlay does not affect the historical `tools/run.sh` launcher path.
+
+Each successful arm now emits `frozen-LABEL.json`, including single-arm builds:
+source hashes, every compiled object, compile/link commands, binaries, source
+selection, and SDK compiler/linker/runtime/libc/builtins/header identities.
+Existing same-label build directories are refused before the build. Native
+preparation can require these object hashes before relinking. This records a
+fresh build; it does not confer application qualification on the new artifacts.
+
+The source-selection and native-preparation checks use synthetic data only:
+
+```sh
+source capstone/tests/capstone-test-env.sh
+python3 capstone/ports/spec-cpu2017/tools/test-build-record.py -v
+python3 capstone/runtime/virtual/tests/native-task/test-spec-qualification.py -v
+```
 
 ## From the archive to results
 

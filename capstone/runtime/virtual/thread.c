@@ -54,9 +54,7 @@ long __capstone_virtual_context_create(void *(*entry)(void *), void *argument,
     /* mmap in the virtual profile returns page-aligned, private anonymous
      * memory. One page is enough for the fixed CSRUNV start frame and gives
      * the kernel an unambiguous pinning unit. */
-    /* vm_map returns a linear grant.  Keep that grant in a slot and
-     * delinearise a loaded copy before C code stores or clears the frame;
-     * passing the linear return through a C variable loses its tag. */
+    /* Grants are copyable; retain a local slot while checking acquisition. */
     {
         sublet_cap slot;
         if (cap_vm_acquire(&slot, 4096, 4096, PROT_READ | PROT_WRITE,

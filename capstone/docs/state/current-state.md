@@ -1,3 +1,837 @@
+## Rebased native kernel: full existing SPEC C-port gate passes
+
+All ten existing C-port entries pass on branch source `04350015dcad`, runtime
+snapshot `a62d1dfe59c3`, kernel SHA-256 `b7de27fb28bc0807053ae3e1c4bcd058e79f601d255a0dcaaa6ce70d46a3815f`.
+The full original test inputs complete 22 benchmark invocations, four guest
+image validators and all 25 official output comparisons. The sequential campaign
+took 236.9 host minutes, including x264 at 133.0 minutes and Perl at 74.8 minutes.
+These times are diagnostic, not a hardware or branch performance comparison.
+
+This closes the full-suite software regression gap for the rebased kernel using
+the existing frozen binaries. Perl retains its qualified provenance-v2 revision07
+port and confined shell/null/tmp grants. Unported C++/Fortran entries, newly built
+compiler outputs, multi-hart execution and RTL/FPGA remain outside this result.
+[Complete qualification and raw evidence](../../runtime/virtual/tests/native-task/spec-rebase-qualification.json).
+
+## Native RTL handoff rebased onto current dev
+
+`native/linux-task-integration` is rebased onto `c9611344eeb7`, with runtime
+snapshot `a62d1dfe59c3`. The preserved pre-rebase branch is
+`archive/native-task-pre-rebase-20261108` at `8897411a0f03`. Older qualification
+records continue to name their original commits and binaries; their numbers
+are not measurements of the rebased image.
+
+The old linear ioctl mapping-pool additions on dev do not restore the removed
+adapter entry path. Native checked-copy state is retained; the upstream
+`arena_at` inlining annotation is the only adapter source difference from the
+pre-rebase runtime. Linux patches and QEMU pin are unchanged. Compiler changes
+from dev are inherited, but existing qualified binaries were not rebuilt with
+them; SHRINKTO globals remain default off.
+
+Use the [updated RTL handoff](../plans/native-task-rtl-handoff.md), its inventory,
+and the [rebase regression record](../../runtime/virtual/tests/native-task/rebase-qualification.json).
+Production and race builds, GCC with official comparison, IO/task, directory,
+private-tmp, spawn, four memory configurations and both 41-case race groups
+pass. The two final gates took 78.9s and 88.4s; each race group observes all 17
+deliberate controls firing. The first attempt failed before guest boot due to a
+missing test environment variable and remains in the evidence.
+The full ten-entry SPEC rerun is now complete as recorded above. Synthesis, FPGA
+execution and multi-hart qualification remain outstanding.
+
+## Anonymous read-fault experiment: keep default off
+
+Runtime `2ae1682c54c9` adds an opt-in actual-read policy for lazy anonymous RW
+arenas. Eager/bootstrap, file mappings, store/execute handling and checked-copy
+policy stay unchanged. Astra xhigh reviewed the scope and test oracles.
+
+Fresh 1MiB read-only traffic saves 41.14% of whole-invocation instruction attempts
+and 1,016KiB of peak RSS without fault-ahead. Read-then-write instead costs 28.98%
+more; with adaptive ahead64 it costs 2.92x the old policy. Unchanged GCC in fresh
+ABBA guests costs 1.617% more without ahead and 1.936% more with ahead64, with no
+peak-RSS reduction in either matched cohort. The option remains default off.
+
+Profiling identifies repeated residency scanning: native read-write with the
+new policy has 272 flat `next_resident` attempts without ahead versus 1,633,236
+with ahead64. Presence is not write readiness: shared zero-page mappings still
+need later COW faults. The stream's bounded per-fault scan repeatedly visits
+present pages. Access-aware or less repetitive scanning is the next experiment;
+no performance or safety claim for such a change exists yet.
+
+All eight GCC outputs match exactly. Eight fixture configurations pass, including
+distinct capability stores as the first writes after reads. IO integration and
+both 41-case race groups pass with policy readback enabled; each observes all 17
+negative controls. Final gates take 174s and 133s. Pilot runs with truncated boot
+arguments are excluded; runners now enforce the kernel's 512-byte command-line
+capacity and verify guest settings. These are QEMU attempts, not hardware timing;
+no new full-SPEC, multi-hart or FPGA claim.
+[Artifacts, samples, scope and exclusions](../../runtime/virtual/tests/native-task/access-fault-experiment.json).
+
+## Unpinned arena arrays removed and qualified
+
+Unpinned grants no longer allocate the per-page pin array or duplicate-frame
+hash array. Range geometry, IDs, revocation and copy holds are retained; touch
+and registration unwind avoid array reads in this mode. All other consumers
+remain behind pinned branches. Runtime source: `205b53613621`.
+
+Against the already-qualified index-removal kernel, unchanged GCC/musl binaries
+in baseline/candidate/candidate/baseline fresh guests reduce mean total attempts
+from 50,348,695.5 to 49,954,678.5 (**0.783%**) and kernel attempts from
+26,390,323.5 to 25,996,306.0 (**1.493%**). Program counts differ by only 0.5
+attempt on average. Flat savings are concentrated in kernel allocation/free,
+zeroing and frame-array sizing. These are incremental measurements, not an
+additive estimate of cumulative speedup or hardware time.
+
+Production and race kernel builds, four byte-exact GCC outputs, IO/authority/
+entry/task integration, and both 41-case race groups pass within **156.6s**.
+Each race group observes all 17 deliberate controls firing, including stale
+copies and missing holds. Astra xhigh reviewed all consumers and the immutable
+memory-mode contract. The occupied pre-start register-slot unwind was reviewed
+statically, not dynamically injected. No new full-SPEC/multi-hart/FPGA claim.
+[Exact artifacts, samples and limits](../../runtime/virtual/tests/native-task/arena-arrays-qualification.json).
+The actual-access fault-policy experiment above is default off; baseline read
+faults and fault-ahead behavior remain unchanged.
+
+## Native arena index removal qualified
+
+The production runtime no longer maintains the unread arena-ID xarray.
+Monotonic registration IDs, the address tree, grant retirement and checked-copy
+holds are unchanged. The race fixture finds its newly created arena through a
+test-only scan of the surviving tree. Runtime source: `af6893dc17a8`.
+
+With unchanged GCC/musl/application binaries, baseline/candidate/candidate/baseline
+fresh guests reduce mean total instruction attempts from 50,728,469.5 to
+50,344,376.5 (**0.757%**) and kernel attempts from 26,770,595.5 to
+26,386,502.5 (**1.435%**). Program attempts are identical at 23,946,835.
+The flat reductions primarily involve xarray operations and their locking.
+This is a general kernel-runtime saving, not an allocator or GCC modification.
+
+Both kernel builds, four byte-exact GCC runs, and two 41-scenario copy/unmap/reuse
+race groups pass in one **134.2-second** gate. Each race group also observes all
+17 deliberate negative controls firing. Astra xhigh independently reviewed the
+source diff. No new full-SPEC, multi-hart or FPGA qualification is claimed.
+The page/frame arrays and fault-access policy remain separate, unimplemented
+experiments. [Hashes, samples, checks and limitations](../../runtime/virtual/tests/native-task/arena-index-qualification.json).
+
+## GCC memory amplification and fault-path controls
+
+Follow-up diagnostics tie part of the larger memory demand to concrete GCC ABI
+layouts. During compilation `_cpp_clean_line` makes 195 fresh line-note array
+allocations in both arms: 200 entries require 3,200 bytes on plain RV64 and
+6,400 bytes on Capstone. Another 65 pointer tables request 256 x 8 versus
+256 x 16 bytes. Those requests cross the Capstone allocator's 4KiB aligned
+allocation threshold. This is actual argument/caller evidence, not an estimate
+from binary sizes. It does not yet assign a precise number of extra mappings
+to those individual allocation sites.
+
+The mapping trace confirms 118 versus 281 calls, requesting cumulatively
+1,912,832 versus 5,140,480 page-rounded bytes during compilation/output (not RSS).
+Both mapping and caller diagnostics produce exact reference output. The
+allocator's group layout, representability alignment and size classes amplify
+larger application objects into different mapping behavior.
+
+Independent existing-option experiments use the same binaries and four fresh
+guests per configuration, plus a new same-harness baseline. Disabling adaptive
+fault-ahead reduces native total attempts by 0.269% (kernel 0.513%); demand
+resolutions rise from roughly 1,227 to 2,002. Reusing the validated VMA via
+`unpinned_fast_fault=1` reduces total by 0.984% (kernel 1.866%). These are separate
+experiments, not additive savings. All twelve performance guests and four
+argument-trace guests match the official output. Every gate finishes below
+129 seconds, including lock waits. No runtime default is changed and these
+GCC diagnostics are not safety/full-SPEC qualification of either option.
+
+[Exact input hashes, caller arguments, histograms and controls](../../runtime/virtual/tests/native-task/gcc-memory-mechanisms.json).
+
+## Current GCC overhead against ordinary RV64
+
+Matched current Linux/QEMU, plain/native/native/plain fresh guests, all native
+routes enabled in both arms: 30.166M plain versus 50.730M Capstone instruction
+attempts (+68.17%). Four exact reference matches; authenticated phase boundaries,
+phase conservation and a corrupt-fingerprint rejection control pass in 69.4s.
+Kernel accounts for 14.698M of the 20.563M extra attempts (71.47%); program and
+runtime account for 5.859M. Startup/initialization adds 7.328M, compilation/output
+10.290M, finalization/exit 2.946M.
+
+During compilation, first-instruction attempts at Linux do_mmap rise from 118
+to 281 and handle_mm_fault from 418 to 959. Capstone heap mappings also number
+281, with 239 heap unmaps. This establishes amplified memory-management traffic;
+flat deltas include memset, mapping-tree lookup, domain stepping and faults.
+At exit, arch_free_page alone adds 428,228 flat attempts. Whole-invocation sysfs
+counters observe 1,396 cleared tagged pages versus zero, and about 2,591 freed
+pages versus 1,307 (these counters also include measurement shell activity).
+The old pinned-page retirement sweep remains zero. No heap-remapping entry was
+observed; map-copy-unmap is not an established cause in this workload.
+
+Source mechanisms include mallocng capability layout/alignment, page-owner index
+mappings, per-arena bookkeeping arrays allocated even unpinned, and domain fault
+handling including 855 fault-ahead pages. Their individual causal contributions
+are not yet isolated. Plain and Capstone compiler/libc provenance differs, so
+this is an end-to-end comparison on the same patched kernel, not isolated ISA
+cost or a stock-kernel result. Counts are attempts, not hardware cycles.
+
+[Inputs, phase means, symbol deltas, counters and limitations](../../runtime/virtual/tests/native-task/gcc-current-plain-attribution.json).
+The reproducible runner is `measure-gcc-phases.py` beside that record; raw evidence
+is archived under `/tmp/capstone/native-task/gcc-attribution-01/evidence`.
+
+## Current GCC native-route comparison
+
+SPEC 502.gcc_r test/t1.c with `-O3 -finline-limit=50000` now has a matched
+current-kernel comparison. The original GCC object hashes are unchanged; one
+binary relinked with the native-clock SDK runs with all native feature flags
+off/on (masks 0/479), in A-B-B-A order. Two separate guests collect routes.
+All six runs match the official assembly reference byte for byte. Relink,
+measurement and diagnostics pass in 102.7 seconds.
+
+| Native routes | Total instruction attempts | Kernel attempts |
+| --- | ---: | ---: |
+| Off | 50,944,339.5 | 26,969,674.0 |
+| On | 50,827,707.0 | 26,869,673.5 |
+
+The mean reduction is **0.229% total, 0.371% kernel**: a small
+incremental gain, not measured elapsed-time speedup. There are 31 service
+completions in each diagnostic run; 11 move to registers and 20 remain exchange.
+This isolates current routing options, not cumulative branch-vs-dev changes
+or overhead against plain Linux. The kernel remains the native-clock baseline.
+[Exact inputs, routes and profiles](../../runtime/virtual/tests/native-task/gcc-current-routes-comparison.json).
+
+## Native basic clock transport qualified
+
+Feature 256 routes clock_gettime through the existing generic checked register
+dispatcher. Only CLOCK_REALTIME and CLOCK_MONOTONIC are supported; provider semantics,
+launch tick rate and owner/epoch/output-authority checks are unchanged. No
+clock-specific fast handler was added.
+Every admitted direct operation completes once; errors never trigger replay.
+Enable `capstone_vm.native_clock=1` together with `native_io=1` and a rebuilt
+SDK/application. The new feature defaults off; old SDKs disable direct routing
+on unknown feature bits. No ISA change is required.
+
+Qualification is restricted to the initial time namespace: the inherited provider
+lacks the monotonic namespace offset. Output authority is checked before clock ID,
+so a bad ID combined with bad output yields EFAULT. These differences from Linux
+are not changed by this transport migration. Actual copy faults need not be atomic.
+
+SQLite moves 65 calls from exchange to registers. With previous native
+features enabled in both arms, two samples per arm in A-B-B-A order reduce
+kernel instruction attempts by 0.117% and total attempts by
+0.089%. All 32 reference phases match in every run.
+The build/file/SQLite/regression/GCC gate passes in 258.0s;
+combined-feature IO and reversed measurements pass in 105.0s.
+Each gate has one 300-second deadline.
+[Exact evidence and limitations](../../runtime/virtual/tests/native-task/native-clock-qualification.json).
+
+Runtime and negative tests were implemented in parallel and independently reviewed.
+This is not a new full-SPEC or FPGA qualification. 37 exchange calls remain
+in this SQLite census. Next measure pathname byte counts and repeated checked-copy
+setup, then prototype a bounded checked-string operation. Clock namespace/error-order
+corrections and bounded vectors remain separate work.
+
+## No external Capstone module in the native deployment
+
+The native kernel contains the Capstone adapter built in. A QEMU boot audit
+confirmed no `capstone_vm.ko*` in the root filesystem or staged resources,
+no loaded Capstone module in `/proc/modules`, and no Capstone insmod/modprobe
+startup in `/etc/init.d` or `/etc/inittab`. The native task/dispatch parameters
+are enabled. The audit passes in 3.4 seconds on the qualified native-path kernel.
+The rootfs already lacked this artifact; it was not modified.
+
+The obsolete `build-adapter.sh` external-module/launcher recipe is retired;
+its old entry point now directs callers to `install-native-task.sh` and an
+in-tree `Image` build. Historical module runners remain for old platforms.
+The built-in adapter, capability checks and remaining exchange services are
+still required. Module-free deployment does not mean all syscalls are direct
+or that all Linux semantics have been qualified.
+[Boot evidence](../../runtime/virtual/tests/native-task/module-free-qualification.json).
+
+## Native confined pathname services qualified
+
+Feature 128 routes openat/unlinkat directly. Both transports retain the confined
+resolver, Linux permission checks and fd publication. Checked bytewise snapshots stop at
+the first NUL. Nonzero unlink flags use generic register dispatch before admission,
+retaining AT_REMOVEDIR behavior.
+Every admitted direct operation completes once; errors never trigger replay.
+Enable `capstone_vm.native_path=1` together with `native_io=1` and a rebuilt
+SDK/application. The new feature defaults off; old SDKs disable direct routing
+on unknown feature bits. No ISA change is required.
+
+SQLite moves 69 calls from exchange to registers. With previous native
+features enabled in both arms, two samples per arm in A-B-B-A order reduce
+kernel instruction attempts by 0.351% and total attempts by
+0.207%. All 32 reference phases match in every run.
+The build/file/SQLite/regression/GCC gate passes in 212.9s;
+combined-feature IO and reversed measurements pass in 88.3s.
+Each gate has one 300-second deadline.
+[Exact evidence and limitations](../../runtime/virtual/tests/native-task/native-path-qualification.json).
+
+Runtime and negative tests were implemented in parallel and independently reviewed.
+This is not a new full-SPEC or FPGA qualification. 102 exchange calls remain
+in this SQLite census. Next measure pathname byte counts and repeated checked-copy
+setup, then prototype a bounded checked-string operation. Clock_gettime and bounded
+vectors remain separate candidates; arbitrary iovec import remains unresolved.
+
+## Native descriptor close qualified
+
+Feature 64 routes close directly. Both transports share close_fd with grant revocation,
+POSIX lock cleanup and restart-to-EINTR normalization. An authorized held-file reference
+survives through close; descriptor reuse receives a fresh grant.
+Every admitted direct operation completes once; errors never trigger replay.
+Enable `capstone_vm.native_close=1` together with `native_io=1` and a rebuilt
+SDK/application. The new feature defaults off; old SDKs disable direct routing
+on unknown feature bits. No ISA change is required.
+
+SQLite moves 45 calls from exchange to registers. With previous native
+features enabled in both arms, two samples per arm in A-B-B-A order reduce
+kernel instruction attempts by 0.164% and total attempts by
+0.096%. All 32 reference phases match in every run.
+The build/file/SQLite/regression/GCC gate passes in 212.1s;
+combined-feature IO and reversed measurements pass in 88.0s.
+Each gate has one 300-second deadline.
+[Exact evidence and limitations](../../runtime/virtual/tests/native-task/native-close-qualification.json).
+
+Runtime and negative tests were implemented in parallel and independently reviewed.
+This is not a new full-SPEC or FPGA qualification. 171 exchange calls remain
+in this SQLite census. Next qualify confined openat/unlinkat migration.
+
+## Native scalar file services qualified
+
+Feature `CAPSTONE_LAUNCH_NATIVE_FD` (16) routes exactly `fsync`, `fdatasync`,
+`ftruncate`, `fchmod` and `fchown` through the register ABI. Both transports
+share one held-file Linux provider, preserving VFS/LSM checks, signed truncate
+lengths, uid/gid -1 sentinels and restart normalization. Scalar shape, fd grants
+and once-only epoch admission precede effects. Close/fcntl/dup are separate.
+Enable `capstone_vm.native_fd=1` with `capstone_vm.native_io=1` and a rebuilt
+SDK/application. It defaults off; old SDKs disable direct routes for unknown
+feature bits. Full measured configuration also enables locks/stat/seek.
+
+SQLite moves 88 fsync and 22 fchown calls out of exchange. Two samples per arm
+in A-B-B-A order reduce kernel instruction attempts by 0.39% and total
+attempts by 0.23%, with all 32 reference phases matching in each run.
+This is a small incremental gain with the other native features already on.
+Build, expanded file tests, SQLite, regressions and original GCC comparison pass
+in 211.4s; combined-feature IO and reversed measurements pass in
+87.7s, each under one 300-second deadline.
+[Exact evidence and limitations](../../runtime/virtual/tests/native-task/native-fd-qualification.json).
+
+Runtime implementation and negative tests were developed independently in an
+isolated worktree, then reviewed and integrated; QEMU runs remained serial.
+The 35 new raw checks include rejected mutation preservation. No ISA change,
+new full-SPEC verdict, crash-durability or non-root permission claim is made.
+
+There are 216 remaining exchange calls in this SQLite census: clock_gettime 65,
+openat 46, close 45, writev 34, unlinkat 23 and three single calls. Next candidates
+are close and confined pathname services. Keep vector work independent: the
+virtual provider lacks production nested-capability import for arbitrary iovecs;
+a bounded register-vector ABI is a proposal, not implemented support.
+
+## Native seek qualified
+
+Musl routes `lseek` directly when launch advertises `CAPSTONE_LAUNCH_NATIVE_SEEK`.
+Both transports use one held-file helper preserving Linux's shared file-position
+lock. The handler admits each epoch once, enforces fd grants and scalar register
+shape, rejects oversized whence values before narrowing, and normalizes internal
+restart errors to EINTR. It has no request-buffer snapshot or copy workspace.
+Enable `capstone_vm.native_seek=1` with `capstone_vm.native_io=1` and a rebuilt
+SDK/application; the new feature defaults off. Unknown bits disable direct
+routing in older SDKs, so preserve their old feature mask when needed.
+
+SQLite moves all 2,283 seek calls to registers. With locks and stat enabled in
+both arms, two samples per arm in A-B-B-A order reduce kernel instruction
+attempts by 7.37% and total attempts by 4.53%. Every run matches
+all 32 reference phases. Build, file/negative tests, SQLite, regressions and
+original GCC comparator pass in 210.7s; combined-feature I/O and reverse-order
+measurements pass in 96.6s. Each gate has one 300-second deadline.
+[Exact evidence and limitations](../../runtime/virtual/tests/native-task/native-seek-qualification.json).
+
+No ISA/QEMU changes or new full-SPEC/FPGA qualification. The independent review's
+restart parity fix is included; restarting device callbacks were not injected.
+Only 326 exchange calls remain in this SQLite census. Next implement the
+independently reviewed scalar-fd group (sync, truncate, chmod/chown); close and
+vectors remain separate migrations. Direct arbitrary iovecs lack production
+nested-capability import, so do not merely redirect libc readv/writev.
+
+## Native file metadata qualified
+
+The native-I/O SDK now routes `newfstatat` and `fstat` through tagged registers
+when launch advertises `CAPSTONE_LAUNCH_NATIVE_STAT`. A specialised handler
+avoids the exchange round and generic request snapshot; both transports share
+one confined Linux path/stat provider and the existing 128-byte stat conversion.
+Pathnames are snapshotted byte by byte through checked accesses up to the first
+NUL, preserving tightly bounded strings. Output rights, owner/lifetime checks,
+fd grants and the existing supported flags/path policy remain enforced.
+
+Enable `capstone_vm.native_stat=1` with `capstone_vm.native_io=1` and a rebuilt
+SDK/application. The new flag defaults off. The specialised path uses the
+existing `native_fast=1` default; the checked generic register route remains
+available with fast dispatch disabled. Older SDKs disable direct routing for
+unknown feature bits, so do not enable this feature for pinned older SDKs when
+preserving their direct-I/O/lock performance matters.
+
+SQLite speedtest1 size 1 moves 2,922 newfstatat and 1,463 fstat calls to registers.
+With native locks enabled in both arms, two samples per arm in A-B-B-A order
+reduce mean kernel instruction attempts by 15.36% and total attempts
+by 10.50%. Every diagnostic/profile run matches all 32 reference phases.
+Build, metadata/lock tests, SQLite, regressions and original GCC comparison pass
+in 205.9s; the combined-feature I/O gate and reversed measurement repeat
+pass in 90.6s. Each gate has one 300-second deadline.
+[Exact evidence and limitations](../../runtime/virtual/tests/native-task/native-stat-qualification.json).
+
+No ISA or QEMU change is required. These are incremental QEMU instruction
+results, not FPGA timings or a new full-SPEC verdict. Exchange compatibility
+remains. Next candidate: scalar `lseek`, still 2,283 exchange calls in SQLite.
+
+## Native POSIX lock path qualified
+
+Musl now sends F_GETLK/F_SETLK/F_SETLKW directly through the register ABI
+when launch advertises `CAPSTONE_LAUNCH_NATIVE_LOCKS`. The specialised service
+uses the existing checked-copy/owner helper and Linux POSIX lock helper,
+without an exchange round or generic request snapshot. Input/output authority,
+fd grants, epoch admission and Linux contention semantics remain enforced.
+Enable `capstone_vm.native_locks=1` together with `capstone_vm.native_io=1`;
+the new switch is default off. The specialised path uses `native_fast=1`
+(the existing default); with it disabled, the checked generic register path
+remains available. Rebuild the native-I/O SDK and relink applications to use it.
+
+SQLite speedtest1 size 1 moves all 5,862 lock calls from exchange to register
+routing. Two samples per arm, using the same binary and kernel in A-B-B-A
+order, reduce mean kernel instruction attempts by 18.12% and total
+attempts by 12.39%; every run matches all 32 reference phases.
+The combined build, lock tests, SQLite, regressions and original GCC comparator
+gate passes in 210.8s. The new-I/O-feature test and reverse-order
+measurement repeat pass in 92.2s, each gate under 300 seconds.
+[Exact inputs, counts and limitations](../../runtime/virtual/tests/native-task/native-locks-qualification.json).
+
+This is a QEMU instruction result, not hardware timing or a full-SPEC verdict.
+No ISA or QEMU changes are required. Exchange compatibility remains; next
+consider metadata calls (`newfstatat`/`fstat`) using the same bounded workflow.
+Older launch decoders disable direct routing on unknown feature bits; they
+do not reject the whole program. Keep the new feature off for pinned older
+SDKs when preserving their direct-I/O performance matters.
+
+## Native broker census: next migration candidate
+
+On the session-teardown kernel, SQLite speedtest1 size 1 passes all 32
+reference phases in each of two fresh guests: a route census and a separate
+untraced instruction profile. The combined gate takes 37.7 seconds under a
+300-second deadline. No runtime or ABI changes are included.
+[Measured inputs and results](../../runtime/virtual/tests/native-task/native-broker-census.json).
+
+Remaining exchange calls include 5,862 POSIX file-lock requests, 2,922
+newfstatat calls, 2,283 lseek calls and 1,463 fstat calls. The untraced profile
+counts 352,883,780 kernel instruction attempts; cv_copy_check accounts for
+10.25%, cu_copy for 6.26%, and ns_dispatch_request for 6.17% of those attempts.
+These are flat symbol costs, not inclusive costs per syscall family or FPGA
+cycles. A single run is a baseline, not a speedup result.
+
+Next migrate POSIX file locking end to end: musl marshalling and the native
+kernel service, preserving capability permissions, fd policy and Linux lock
+semantics. Compare matched old/new SQLite binaries and negative lock tests
+within bounded gates. Resolve feature negotiation first: current launch
+parsing accepts exactly feature mask 1, so adding a bit unconditionally would
+disable direct routing in existing binaries. Remove exchange handlers only after callers have
+migrated; the broker has not yet been removed.
+
+## Native session teardown encapsulated
+
+Final session cleanup now lives beside session creation in
+`native_session_destroy()`. The loader delegates the same three frees in the
+same order; constructor failure unwind and task ownership are unchanged.
+The incremental build, both I/O dispatch settings, task/kill, resource policy,
+directory/dup/time, spawn and original GCC comparator gate passes in 104.0s
+under one 300-second deadline. Adapter text/data/BSS sizes are unchanged.
+[Qualification](../../runtime/virtual/tests/native-task/session-teardown-qualification.json).
+
+This is a responsibility cleanup, not a performance optimization. Existing
+negative admission tests cover policy failure on a partially initialized
+context; they do not inject session allocation failures or prove leak absence.
+No new full-SPEC or race-profile verdict is transferred from earlier kernels.
+Keep future lifecycle or allocation-policy changes separate and use bounded
+gates; the final-only destructor is not a reusable session reset API.
+
+## Native generic copy workspace reuse qualified
+
+`native_copy()` now reuses its session's existing kmalloc-backed copy workspace,
+retaining both native-owner and Linux task-ownership checks. The checked-copy
+engine, fault handling, mapping holds and other copy callers are unchanged.
+Build, both ABI/fast settings, resource/spawn gates, original GCC comparison
+and matched instruction measurements pass in 163.4s under one 300-second
+budget. A separate 52.2s race gate passes 164 scenarios: pipe and file,
+both fast settings, with safe and deliberately broken controls.
+[Qualification](../../runtime/virtual/tests/native-task/copy-reuse-qualification.json).
+
+Against the preceding authorization-reuse kernel, the fixed 1 MiB/4 KiB copy
+loop uses 1.97% fewer kernel attempts in exchange and
+2.53% fewer in generic direct mode. Fast direct remains a control.
+These are workload-specific QEMU counts, not a GCC or FPGA speedup.
+Keep any session teardown encapsulation or broader scratch reuse as a separate
+change with its own ownership proof and bounded gate. Flat tables remain intact.
+
+## Native authorization scratch reuse qualified
+
+The generic capability preflight now reuses the existing kzalloc-backed native
+context workspace through one offset-aware helper shared with the fast path.
+Ownership checks and the checked-access protocol remain unchanged. The final
+kernel's incremental build, both fast settings and ABIs, resource/spawn gates,
+original GCC comparator and matched instruction measurements pass together in
+160.6 seconds under one 300-second deadline. A separate 25.2-second
+race gate passes 41 pipe and 41 regular-file scenarios, including negative controls.
+[Qualification and measurements](../../runtime/virtual/tests/native-task/authorization-reuse-qualification.json).
+
+For the fixed 1 MiB copy in 4 KiB chunks, generic direct requests use
+2.42% fewer kernel instruction attempts; exchange requests use
+1.90% fewer with fast dispatch disabled. Fast direct requests are effectively
+unchanged. These are QEMU instruction counts, not GCC or FPGA speedups.
+Next keep session teardown encapsulation separate; broader copy-state reuse
+and slot accounting require their own proof and bounded tests. No new task
+ownership mechanism is needed, and flat-table support remains untouched.
+
+## Native helper calls: direct and typed
+
+The built-in adapter now calls required Linux helpers directly through one
+shared internal header. Twelve obsolete module exports are removed. Build,
+native task/I/O, directory/dup/time, private-tmp, spawn lifecycle and original
+GCC with its official comparator pass together in 93.1 seconds (300-second
+budget). Adapter text shrinks by 986 bytes; no runtime speedup is claimed.
+ISA, QEMU and flat-table support are unchanged. Full SPEC remains separately
+qualified on its older frozen kernel; do not transfer that verdict.
+[Direct-helper evidence](../../runtime/virtual/tests/native-task/direct-helper-qualification.json).
+Continue in small changes using the bounded quick gate; a further migration
+should select one remaining adapter responsibility and its regression scope.
+
+## Native iterative feedback: bounded five-minute gate
+
+The quick gate passes in 83.6 seconds on the cleanup kernel: incremental build,
+native I/O/task, directory/dup/time, private-tmp policy, spawn lifecycle, and
+original GCC test input with its official comparator. Its one 300-second budget
+includes all configured work and lock waits; a timeout is never a pass. Seven
+process-level supervisor tests pass. Full SPEC remains a separate qualification.
+[Quick-gate evidence](../../runtime/virtual/tests/native-task/quick-gate-qualification.json).
+
+## Native-only adapter cleanup: focused qualification passed
+
+The legacy device/ioctl entry and scalar userspace trampoline are removed from
+the committed native-task adapter. Context execution, checked copying, resource
+grants and native direct/exchange service dispatch remain. The adapter now
+requires an in-tree `CONFIG_RISCV_CAPSTONE_TASK=y` build; external-module builds
+and legacy fallback admission are refused. New kernel `e2dca4c948f5` passes native I/O/task, directory/time/duplication,
+private-tmp and spawn gates. The task gate explicitly proves no old device,
+misc registration, trampoline mapping or control FD. The long remote SPEC rerun was cancelled to provide a five-minute feedback
+loop; it is not a full-pass result. Local x264 continues independently. [Focused evidence](../../runtime/virtual/tests/native-task/native-only-cleanup-qualification.json). The complete ten-entry result below still
+identifies the pre-cleanup kernel and must not be relabeled as a new-kernel pass.
+
+## 2026-11-07 — Native C-port SPEC qualification complete
+
+All ten existing C-port entries pass on the frozen final QEMU/Linux platform:
+22 original benchmark invocations, four guest image validators and all 25
+official output comparisons. Perl revision 07 completed in 4,831.9 host seconds,
+with empty stderr and no logged kernel fault. The nine other entries use their
+independently verified runs on the same final kernel.
+[Final qualification](../../runtime/virtual/tests/native-task/spec-final-qualification.json).
+The [RTL handoff](../plans/native-task-rtl-handoff.md) is ready for implementation
+assessment; this result establishes neither FPGA operation nor performance.
+
+## Native subprocess and shell qualification
+
+Native capability-image spawn and admitted-child wait now pass focused QEMU
+lifecycle gates in both exchange and direct SDK modes. These cover ordered
+file actions, inherited grants, failed exec cleanup, reply-publication failure,
+autoreaping, parent death and ambient-child exclusion. Bootstrap-only ptrace
+races and cancellation during blocked bootstrap I/O remain unqualified.
+[Exact scope and artifact hashes](../../runtime/virtual/tests/native-task/spawn-qualification.json).
+
+A real BusyBox hush port uses native posix_spawn and passes exchange/direct
+QEMU gates including large pipes, substitutions, functions, redirection,
+background waits, a 100 KB heredoc and repeated descriptor rollback. It receives
+an exact pinned shell image and optional exact `/dev/null` grant. General fork,
+caller-replacing exec and caught signal handlers remain unsupported.
+[Shell qualification](../../ports/hush/app/results/native-task.json).
+
+The next kernel adds confined mkdir/rmdir, path chmod/truncate, hardlinks,
+symlink inspection, directory iteration, correct destination handling for dup3,
+and native nanosleep/clock_nanosleep/pselect. Each SDK passes 94 directory,
+36 duplication and 33 time/select checks. The dispatcher passes 299 host checks
+and ten negative controls; all six Linux patches install on a fresh fixture.
+[Service qualification](../../runtime/virtual/tests/native-task/directory-time-qualification.json).
+
+The original Perl test now reaches its child tests. Musl's hard-coded `/tmp`
+is supported through a default-off alias to a private directory inside the
+original launch grant. Four policy modes pass in both SDK profiles; unchanged
+`perlio.t` completes all 48 results with zero unexpected failures, including
+actual passes for the previously failing temp-file assertions 23–29.
+[Private storage qualification](../../runtime/virtual/tests/native-task/local-tmp-qualification.json).
+
+The old Perl build lost pointer tags during endian reversal, unaligned storage
+and UTF-8 conversion, faulting at assertion 243 of `pack.t`.
+[Original diagnosis](../../runtime/virtual/tests/native-task/spec-perl-pack-blocker.json).
+The new `capstone_provenance_v2` interpreter port retains exact capabilities in
+private scalar metadata and explicitly propagates or invalidates that metadata.
+Frozen revision 06 passes the unchanged 14,708-assertion pack test, 89 pointer
+checks and 101 independent controls in native direct mode; exchange mode passes
+the same 89+101 controls. Host sanitizer and allocation-failure probes pass too.
+It changes no ISA, kernel, SDK, benchmark input or comparator.
+[Port and focused qualification](../../ports/perl/provenance/README.md).
+All nine non-Perl C-port benchmarks now pass their original complete test
+invocations and official comparisons on the final private-tmp kernel
+`1bd9b8ecf702`, including all 156 x264 frames.
+[Current non-Perl qualification](../../runtime/virtual/tests/native-task/spec-nonperl-services-qualification.json).
+The full original Perl diagnostic on the preceding services kernel finished
+with two failing test files: perlio (fixed and separately qualified above) and
+pack (now repaired in the separately qualified interpreter). The complete original
+Perl workload on the final kernel and revision-06 interpreter completed in
+4,380.8 seconds: 315 of 316 test files passed, but `t/op/sort.t` failed and the
+official comparison rejected the output. The provenance adapter inspected the
+body of a scalar marked freed before Perl could raise its normal exception.
+Revision 07 guards that marker and preserves the original error path; its
+unchanged sort test matches all 183 baseline results on the host and passes
+the focused native direct gate. Revision 07 subsequently passed both original
+invocations and official comparisons. The obsolete partial diagnostic was stopped after confirming the missing services, not
+reported as a full execution. The final record above supersedes this failed
+revision-06 attempt. These service additions require no ISA/QEMU/compiler change; hush is a newly built native application.
+
+## 2026-11-07 — Native cwd, pipe and simple signal repair
+
+The native task branch now implements capability-confined cwd changes and
+bounded parent traversal, transactional pipe creation, and default/ignore
+signal dispositions. Both exchange and direct QEMU fixtures pass, including
+concurrent renames, authority escapes, 128 partial payload failures and 64
+fatal metadata-publication failures per path, descriptor exhaustion/recovery,
+and real signal delivery. The host dispatcher passes 275 checks plus ten
+negative controls; the installer applies the new Linux helper patch cleanly.
+[Implementation and qualification](../../runtime/virtual/tests/native-task/README.md#native-cwd-pipe-and-signal-repair).
+
+A focused original SPEC rerun passes GCC's exact reference and Perl makerand.
+Perl test.pl now finds all 317 tests but cannot start their child processes
+(SPAWN returns ENOSYS); its official output comparison still fails despite
+exit zero. [Focused evidence](../../runtime/virtual/tests/native-task/spec-process-repair.json).
+
+That repair added no ISA/QEMU/compiler/SDK requirement. At that snapshot,
+`popen` still needed a confined shell and native subprocess support; wait was
+not yet implemented. The subsequent subprocess qualification is recorded
+above. The older full SPEC campaign below belongs to its frozen kernel; its nine passing benchmarks
+must not be silently attributed to the repaired kernel.
+
+## 2026-11-07 — Full native SPEC test gate and RTL handoff
+
+The implementation snapshot `09b90be908e6` on `native/linux-task-integration`
+now has a complete functional check of the ten existing C-port entries: **9
+PASS, 1 FAIL**. All 22 original test invocations completed; 24 of 25 official
+output comparisons pass. x264's full 156-frame encode and three image checks
+pass. This does not qualify unported C++/Fortran entries or FPGA performance.
+
+Perl makerand passes, but test.pl exits zero with incomplete output. A separate
+QEMU diagnosis confirms native chdir returns ENOSYS; the test wrapper hides the
+subsequent file-open exception. Pipe/popen and signal service gaps also remain.
+No production code or benchmark source was changed during this qualification.
+[Results and reproduction](../../runtime/virtual/tests/native-task/README.md#full-spec-test-input-qualification).
+
+The [RTL handoff](../plans/native-task-rtl-handoff.md) inventories the cumulative
+change, separates new interfaces from inherited hardware requirements, and
+records the unmatched origin/dev commits. Its software acceptance gate remains
+failed until Perl is closed; hardware implementation and synthesis are not
+claimed.
+
+## 2026-11-06 — Native Linux task architecture
+
+`native/linux-task-integration` starts from measured `a13e2ffaa9a2` in a separate
+worktree. The selected endpoint is a Linux-owned Capstone task with protected
+context/mm namespace state, architecture entry/return, capability-aware syscall
+access, and Linux signal/restart/scheduling integration. CSRUNV remains the
+initial privileged entry primitive; direct hardware traps are separately gated.
+A new syscall that only wraps dom_ioctl and a vDSO are not substitutes.
+
+A default-off in-tree task/architecture-return prototype now runs without a
+scalar trampoline or context-owning control FD. It passes GCC exact output,
+51 authority/ABI checks, one-slot blocking transport, compute STOP/CONT/KILL,
+user-time accounting, admission-exception recovery and 41 copy-race scenarios.
+The concrete Linux 6.1 transition contract and reproducible installer are present.
+A matched four-run GCC comparison shows 0.2125% more total attempted instructions
+(0.4019% more kernel work), so this first implementation is not a speedup.
+
+Syscall microbenchmarks now isolate entry and argument ABI: 128 valid windows
+show direct-register specialised read/write saving 61–74% versus exchange on
+the task backend. A generic-dispatch control also improves, while task entry
+alone remains more expensive. Cached musl getpid never enters Linux and is
+kept distinct from a forced scalar request. These probe results are separate
+from the implemented first slice: opt-in read/write/pread64/pwrite64 with nonzero
+requests up to 64 KiB, preserving caches and checked-copy rules. Select once
+before effects, return direct short results without refill, and require a
+validated loader feature announcement. Larger calls and vectors keep their
+existing paths. See the [reviewed migration plan](../plans/native-linux-task-integration.md#reviewed-first-musl-register-abi-slice).
+[Syscall measurement](../../runtime/virtual/tests/native-task/README.md#syscall-path-and-direct-register-measurement).
+
+The first opt-in musl migration now implements that reviewed slice, with a
+validated launch-v3 feature announcement and strict scalar canonicalization.
+Fast/generic and feature-absent tests pass, as do 41 pipe and 41 regular-file
+race scenarios. Matched GCC objects produce exact output in four ABBA runs;
+total attempts change +0.0411%, kernel +0.0833%: no observed speedup. Separate
+route tracing finds only one 69-byte read eligible in this GCC input; its three
+writev calls and other recorded services remain exchange. Attribute remaining
+kernel work by service/phase before broadening the migration. Global v3 activation
+requires rebuilt SDKs; full signal/cancellation and Linux policy gates remain open.
+[Implementation, reproduction and evidence](../../runtime/virtual/tests/native-task/README.md#opt-in-musl-small-io-migration).
+
+The short SPEC follow-up adds two runs per SDK variant for ImageMagick, lbm
+and nab. All twelve runs pass original SPEC comparisons; input hashes match
+original test data. Mean total attempts decrease 0.0375%, 0.0900% and 0.0035%
+respectively (kernel decreases 0.2332%, 0.6355% and 1.3880%). This reinforces
+that the small-I/O migration is functional but not a large total-work saving
+for these inputs. [Results and raw evidence](../../runtime/virtual/tests/native-task/README.md#short-spec-test-input-comparison).
+
+A syscall-heavy resident-file copy now tests the actual musl integration:
+1 MiB in 64-byte blocks makes 32,768 read/write calls and saves 65.91% total
+attempts, 64.96% kernel attempts. Larger 4-KiB/64-KiB buffers save 61.08%/46.47%
+total attempts. All twelve measured windows pass byte-for-byte output checks.
+These CPU-work savings are workload-dependent and are not hardware speedups.
+[Reproducible workload](../../runtime/virtual/tests/native-task/README.md#syscall-heavy-workload-through-real-musl).
+
+SQLite file-backed speedtest1 now completes in both SDK variants after adding
+real native POSIX locks, bounded fcntl duplication, sync, truncate, unlink and
+fd metadata services. All 32 host-reference SQL phases match in each of four
+ABBA measurement runs and two separate route-diagnostic runs. Direct small I/O
+reduces mean total attempts from 657.856M to 630.508M (4.1571%), kernel attempts
+from 433.044M to 410.436M (5.2207%). The same two application objects and unchanged
+SQLite defaults are used. This is a tmpfs CPU-work measurement, not disk latency
+or crash-durability evidence. The earlier failed admission remains historical.
+
+Real Linux/domain contention, blocking wakeup, killed waiters, duplicate-limit
+failure without lost locks, close-release semantics, confined unlink and raw
+flock capability checks pass in both modes. Host dispatcher checks pass 275/275
+under ASan/UBSan plus ten existing negative controls. Existing I/O, authority,
+entry and lifecycle regressions pass. Review also corrected shared-position
+locking around native lseek. [Implementation, reproduction and records](../../runtime/virtual/tests/native-task/README.md#native-file-services-and-sqlite-comparison).
+
+The measured direct arm migrates 1,460 reads and 823 writes. Its 5,862 POSIX lock
+requests, 2,283 seeks and metadata requests still use the exchange argument ABI,
+though Linux services them inside the native task backend. Next attribute those
+costs and qualify further ABI migration; do not infer savings for those services
+from the small-I/O result or label this complete Linux syscall coverage.
+
+Next close the remaining policy and qualification gates: native syscall
+audit/seccomp/tracing (currently rejected), full register/FP/bounds and raw-platform
+negative matrices, exhaustive lifetime/failed-exec race tests, then capability
+signal/restart semantics and direct register ABI. Current repeated start/kill
+checks do not prove absence of all leaks. This is quantum-assisted, single-hart,
+root-only work, not complete Linux compatibility.
+[Implementation and verified evidence](../../runtime/virtual/tests/native-task/README.md).
+
+[Architecture](../design/virtual-capstone/native-linux-tasks.md) ·
+[Milestones and acceptance gates](../plans/native-linux-task-integration.md).
+
+## 2026-11-06 — Preliminary native GCC measurement
+
+`experiment/native-gcc-preliminary` extends frozen `ea6464a9b2a5` with native
+file/status/vector/system syscall coverage and kernel-buffer Linux helpers.
+The unchanged GCC SPEC test input now produces the exact reference in all four
+order-balanced runs. Mean total QEMU attempts decrease 7.499% (58.461M to
+54.077M), kernel plus module 10.855% (32.541M to 29.008M). Both modes pass 20
+new coverage checks and 51 authority/ABI/protection checks.
+
+Plain follow-up: all six orders of plain/launcher/native pass exact output
+validation (18 runs). Mean total attempts are 32.893M / 58.402M / 54.029M.
+Native saves 7.488% versus launcher and remains 1.643x plain. This compares the
+existing RV64/musl and Capstone builds on the same patched measurement kernel;
+compiler revisions are not matched for an isolated ISA-cost claim.
+[Three-arm record](../../runtime/virtual/tests/copyable-only/results/gcc-three-arm.json).
+
+Phase follow-up (fresh guest per invocation): native compilation/output itself
+costs 24.205M attempts versus plain 13.186M. About 55% of the native-minus-plain
+excess occurs in startup/initialization and finalization/exit, 45% during
+compilation/output. Kernel+module accounts for about 74% of the latter excess.
+Next inspect allocation/mapping/fault work inside compilation; the native task
+entry alone cannot be assumed to remove it. All six outputs and phase-count
+conservation pass, including a wrong-boundary negative control.
+[Phase evidence](../../runtime/virtual/tests/copyable-only/results/gcc-phases.json).
+
+Memory follow-up: eight reference-exact fresh-guest runs isolate two existing
+fault switches. Direct anonymous fault resolution plus disabled fault-ahead
+saves 2.02% total, 3.97% in compilation. Mapping creation remains 281 native
+versus 118 plain, all 281 native creations matching heap-mapping entries;
+malloc implementation entries differ only 3.16%. Next isolate allocator
+layout/alignment/group mapping amplification, preserving bounds and lifetimes.
+No runtime defaults changed. [Memory diagnosis](../../runtime/virtual/tests/native-integration/README.md#gcc-memory-work-diagnosis).
+
+Allocator attribution clarifies the cause: wider GCC pointers/records double
+195 line-note allocations (3200->6400 bytes) and 65 pointer arrays (2048->4096).
+Those two cohorts localize 124/163 extra mapping creations. Their raw allocator
+requests have no extra alignment padding. Total malloc request volume is 1.87x,
+not nearly equal despite the similar call count. Built mallocng matches pristine
+1.2.5 plus patches 0009/0010; group release-policy functions are unchanged.
+Four exact-output argument traces and repeated-sequence checks pass. Next isolate
+reuse for these cohorts while preserving object bounds/lifetimes; do not assign
+this mapping delta to brk or native task entry.
+[Allocator diagnosis](../../runtime/virtual/tests/native-integration/README.md#why-the-gcc-heap-creates-more-mappings).
+
+Ordinary-musl replay now isolates request-size effects: plain and Capstone
+allocation/free histories produce 118 and 296 mappings in normal RV64 Linux
+processes. Doubling only the two plain cohorts raises 118 to 245; halving them
+in the Capstone history only lowers 296 to 277. Thus request growth is causal,
+but allocator history/other sizes interact: the earlier 124/163 localization is
+not an independently removable fraction. Eight fresh-guest replay runs pass;
+plain reproduces GCC's original 118 mappings / 94 unmaps. This uses the same
+patched kernel and is not a full computation/access-pattern replay. No production
+defaults changed. [Replay evidence](../../runtime/virtual/tests/native-integration/README.md#ordinary-linux-allocator-replay).
+
+This is a bounded experiment, not completion of native Linux compatibility.
+Five SIGACTION and one IOCTL_BUF request are still refused in this unsignalled
+run; GCC tolerates them. The exchange ABI and ioctl entry remain. Next qualify
+native caught-signal/ioctl behavior and larger workloads before extrapolating
+this startup-inclusive small-input result or undertaking the full task rewrite.
+See [scope and reproduction](../../runtime/virtual/tests/native-integration/README.md#preliminary-native-gcc-result).
+
+## 2026-11-06 — Qualified kernel syscall prototype
+
+On `prototype/copyable-only`, the narrow Point 2 kernel consumer is implemented
+and measured. Both dispatchers pass 51 ABI/authority/protection checks plus 10
+entry checks, including two blocked processes sharing one hardware slot; both
+pass all 41 deterministic RT cases (17 negative controls). Launcher regressions
+still pass 22 checks each pinned/unpinned, and raw platform admission passes.
+The default-off native path requires matching checked-copy/transport features,
+a private FD broker and the normal-Linux mprotect wrapper. No legacy ownership
+instructions return. Gemini Argon assisted review.
+
+Median total QEMU attempts versus launcher: read 1 byte -54%, read 64 KiB -74%,
+write 1 byte -40%, write 64 KiB -68%. Cached launcher getpid is faster; small
+writes increase kernel/module work despite reducing total work. See the
+[qualified integration and reproduction](../../runtime/virtual/tests/native-integration/README.md)
+and [source import boundary](../design/virtual-capstone/syscall-import.md).
+
+GCC follow-up: the existing launcher passes the unchanged SPEC test input twice,
+but both native dispatch modes exit before producing output. Diagnostics expose
+missing openat/newfstatat/writev plus signal, sysinfo and prlimit64 requests.
+These syscall families need safe support and a reference-validated GCC rerun;
+there is currently no GCC speedup measurement for Point 2. See the
+[GCC attempt record](../../runtime/virtual/tests/copyable-only/results/gcc-native-check.json).
+
+Next milestone is Point 3: native Linux task/architecture-return integration,
+with explicit signal/restart/process semantics. The current ioctl trampoline
+is only a prototype entry mechanism. Before broad workloads, extend unsupported
+syscalls and requalify their authority/FD policies; measure remaining bounce
+copies separately. MC's pinned mapping pool remains deferred. No full native
+SPEC, SMP, DMA or RTL qualification is claimed.
+
+## 2026-11-06 — Copyable-only prototype branch
+
+`prototype/copyable-only` boots ordinary OpenSBI/Linux and runs copyable capability
+applications with legacy ownership/control instructions rejected in M/S/U. Both
+pinned and unpinned modes pass the directed runtime, fault, ABI and shutdown gates.
+The existing tag-aware Linux patch also passes physical reuse, timer-copy and COW
+movement checks with this model. Three matched allocation pairs show a 12.085%
+reduction in instruction attempts with unpinned payload backing; no hardware
+speedup is claimed. This is a one-hart QEMU branch qualification, not a landed
+production or RTL baseline. [Evidence and commands](../../runtime/virtual/tests/copyable-only/README.md).
+Full SPEC test inputs now pass four runs each for lbm, ImageMagick and nab.
+Order-balanced mean instruction reductions from unpinning are 1.7905%, 0.7220%
+and 0.0069%; mcf was stopped and excluded. This is a quick application check,
+not a hardware timing result.
+The page-lifecycle admission boundary is now independently enforced in Linux
+and the module: one possible CPU, matching platform/kernel support, no spoofable
+activation readback. Raw-operation privilege/precise-fault, platform-refusal,
+runtime and page-lifecycle checks pass on the rebuilt kernel/module; see the
+[hardening qualification](../../runtime/virtual/tests/copyable-only/results/hardening.json).
+
+The fixed NS dispatcher, checked-copy loop and hosted context reference are now
+imported as a provider-independent foundation for the syscall milestone. Their
+hosted suites and 20 negative controls pass; the existing mapping/tag peer
+fixtures compose successfully. No native kernel path or new application ABI is
+activated. See [selection and prerequisites](../design/virtual-capstone/syscall-import.md).
+
 # Current Capstone state
 
 ## 2026-11-10 — Normalized third-party defect classification

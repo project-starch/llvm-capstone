@@ -1,0 +1,437 @@
+{
+  "status": "PASS",
+  "source_snapshot": "205b53613621caa982924d4c78062b3d25b4648d",
+  "baseline_runtime": "af6893dc17a8",
+  "scope": "Do not allocate per-arena pages/frame pinning arrays in unpinned mode; guard touch and registration unwind. Preserve geometry, registration IDs, revocation, copy holds, demand-fault policy and whole-mm collection.",
+  "artifact_hashes": {
+    "images/Image": "93759410c9e1d6f8dd87fbaa167271c6bb51ab022c41d03185b583f99c6081c6",
+    "images/System.map": "5b09b109fc4870a479b4849cab1d1c4b931426ce9033f6bb56ecce3282352a6d",
+    "race-images/Image": "95e20cf8ceedc8d5cee891633c87f4ea9f162a4188bd0011edfffd2a6ffe201d",
+    "race-images/System.map": "4064210a5f8c9b26697efd8f6983b1cbdd87a2e8734c81c5c02e8aed93684d95",
+    "config": "f51113c4c6a15f41d5802c254596704e2ced36f292b5056bde39e8506f604e3c",
+    "src/capstone_vm.c": "56339e1d13f76a1d85c3173a351ad0cdae4a8a3dce61f60af5e3ac08a215a294",
+    "src/rt-dom.h": "b6d82bb22edd15eeeb0abc524deda2ed6430b4f6c897da63256311b4aded3932"
+  },
+  "inputs": {
+    "baseline": {
+      "qemu": "c6681ec8a8ff704b297ec3eafceb13b2fe9c1c61c7a65ed95304bd5dbe5183eb",
+      "firmware": "2335a28682ddf65e46c1f492632c2cb026efcb2271caf544a3f7ddc858b03e02",
+      "plugin": "b42832d44980e01ae4e758e0a754d54c0cda759e7846fc9d6647d3a5b271bf32",
+      "profrun": "1d13d4912794855ae9c3c3fe69c89ca55434c2dd02b836053ad18f7913b7904f",
+      "gcc": "a1509c81444586031c74c5752f72ec90dc6c7ab57635fff37ffa431c11663a9f",
+      "plain": "ebeca8e920328b5c893fc9ee910851cceabee2bebc00320322b2b77b75def4a0",
+      "input": "de7b86d79a68965adb62e750101d9211224884b2236053d906d1e23057bb6ad1",
+      "reference": "58111208509dd871223ae195a33304bd6b24afd29458f37c976556cbad506324",
+      "resolver": "09892db220a9b8f3c6b49022448ae1b155decea87d7929fb4e53e2e37548196d",
+      "Image": "a29b09d3be356b1d7190f1beece06b1887fb92ac48169ae33b66aa44015564c1",
+      "System.map": "369d53201e4d1029c43796ab79a0d6bed23f2b3653dfb6e572112300a1f30d50",
+      "rootfs.ext2": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845"
+    },
+    "candidate": {
+      "qemu": "c6681ec8a8ff704b297ec3eafceb13b2fe9c1c61c7a65ed95304bd5dbe5183eb",
+      "firmware": "2335a28682ddf65e46c1f492632c2cb026efcb2271caf544a3f7ddc858b03e02",
+      "plugin": "b42832d44980e01ae4e758e0a754d54c0cda759e7846fc9d6647d3a5b271bf32",
+      "profrun": "1d13d4912794855ae9c3c3fe69c89ca55434c2dd02b836053ad18f7913b7904f",
+      "gcc": "a1509c81444586031c74c5752f72ec90dc6c7ab57635fff37ffa431c11663a9f",
+      "plain": "ebeca8e920328b5c893fc9ee910851cceabee2bebc00320322b2b77b75def4a0",
+      "input": "de7b86d79a68965adb62e750101d9211224884b2236053d906d1e23057bb6ad1",
+      "reference": "58111208509dd871223ae195a33304bd6b24afd29458f37c976556cbad506324",
+      "resolver": "09892db220a9b8f3c6b49022448ae1b155decea87d7929fb4e53e2e37548196d",
+      "Image": "93759410c9e1d6f8dd87fbaa167271c6bb51ab022c41d03185b583f99c6081c6",
+      "System.map": "5b09b109fc4870a479b4849cab1d1c4b931426ce9033f6bb56ecce3282352a6d",
+      "rootfs.ext2": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845"
+    }
+  },
+  "gate": {
+    "status": "PASS",
+    "budget_seconds": 300.0,
+    "elapsed_seconds": 156.6349680351559,
+    "steps": [
+      {
+        "name": "build",
+        "status": "PASS",
+        "elapsed_seconds": 15.566876607015729,
+        "returncode": 0
+      },
+      {
+        "name": "gcc-0-baseline",
+        "status": "PASS",
+        "elapsed_seconds": 22.139438072917983,
+        "returncode": 0
+      },
+      {
+        "name": "gcc-1-candidate",
+        "status": "PASS",
+        "elapsed_seconds": 22.491297455970198,
+        "returncode": 0
+      },
+      {
+        "name": "gcc-2-candidate",
+        "status": "PASS",
+        "elapsed_seconds": 22.64027628907934,
+        "returncode": 0
+      },
+      {
+        "name": "gcc-3-baseline",
+        "status": "PASS",
+        "elapsed_seconds": 22.49113485403359,
+        "returncode": 0
+      },
+      {
+        "name": "io-integration",
+        "status": "PASS",
+        "elapsed_seconds": 18.024909540079534,
+        "returncode": 0
+      },
+      {
+        "name": "build-race",
+        "status": "PASS",
+        "elapsed_seconds": 13.060998083092272,
+        "returncode": 0
+      },
+      {
+        "name": "race",
+        "status": "PASS",
+        "elapsed_seconds": 10.24975772202015,
+        "returncode": 0
+      },
+      {
+        "name": "race-file",
+        "status": "PASS",
+        "elapsed_seconds": 9.947863794164732,
+        "returncode": 0
+      }
+    ]
+  },
+  "rows": [
+    {
+      "run": 0,
+      "arm": "baseline",
+      "phases": [
+        {
+          "run": 0,
+          "arm": "native",
+          "phase": "startup_and_initialization",
+          "total_attempts": 21156150,
+          "classes": {
+            "other": 6469,
+            "kernel": 8342600,
+            "program": 12807081
+          },
+          "reference_match": true
+        },
+        {
+          "run": 0,
+          "arm": "native",
+          "phase": "compilation_and_output",
+          "total_attempts": 22288147,
+          "classes": {
+            "other": 4059,
+            "kernel": 11165069,
+            "program": 11119019
+          },
+          "reference_match": true
+        },
+        {
+          "run": 0,
+          "arm": "native",
+          "phase": "finalization_and_exit",
+          "total_attempts": 6902651,
+          "classes": {
+            "other": 1009,
+            "kernel": 6880907,
+            "program": 20735
+          },
+          "reference_match": true
+        }
+      ],
+      "verdict": {
+        "status": "PASS",
+        "phase_sum": 50346948,
+        "outer_attempts": 50346948,
+        "counter_deltas": {
+          "/sys/module/capstone_vm/parameters/unpinned_faults": 1227,
+          "/sys/module/capstone_vm/parameters/unpinned_fast_faults": 0,
+          "/sys/module/capstone_vm/parameters/unpinned_sweep_pages": 0,
+          "/sys/module/capstone_vm/parameters/fault_ahead_pages": 855,
+          "/sys/module/capstone_vm/parameters/fault_ahead_windows": 158,
+          "/sys/module/captag/parameters/cleared_pages": 1396,
+          "/sys/module/captag/parameters/freed_pages": 2657,
+          "/sys/module/captag/parameters/copies": 413
+        },
+        "reference_match": true
+      }
+    },
+    {
+      "run": 1,
+      "arm": "candidate",
+      "phases": [
+        {
+          "run": 0,
+          "arm": "native",
+          "phase": "startup_and_initialization",
+          "total_attempts": 21073514,
+          "classes": {
+            "other": 5971,
+            "kernel": 8260461,
+            "program": 12807082
+          },
+          "reference_match": true
+        },
+        {
+          "run": 0,
+          "arm": "native",
+          "phase": "compilation_and_output",
+          "total_attempts": 22043241,
+          "classes": {
+            "other": 4557,
+            "kernel": 10919665,
+            "program": 11119019
+          },
+          "reference_match": true
+        },
+        {
+          "run": 0,
+          "arm": "native",
+          "phase": "finalization_and_exit",
+          "total_attempts": 6838939,
+          "classes": {
+            "other": 1009,
+            "kernel": 6817195,
+            "program": 20735
+          },
+          "reference_match": true
+        }
+      ],
+      "verdict": {
+        "status": "PASS",
+        "phase_sum": 49955694,
+        "outer_attempts": 49955694,
+        "counter_deltas": {
+          "/sys/module/capstone_vm/parameters/unpinned_faults": 1228,
+          "/sys/module/capstone_vm/parameters/unpinned_fast_faults": 0,
+          "/sys/module/capstone_vm/parameters/unpinned_sweep_pages": 0,
+          "/sys/module/capstone_vm/parameters/fault_ahead_pages": 854,
+          "/sys/module/capstone_vm/parameters/fault_ahead_windows": 159,
+          "/sys/module/captag/parameters/cleared_pages": 1396,
+          "/sys/module/captag/parameters/freed_pages": 2638,
+          "/sys/module/captag/parameters/copies": 413
+        },
+        "reference_match": true
+      }
+    },
+    {
+      "run": 2,
+      "arm": "candidate",
+      "phases": [
+        {
+          "run": 0,
+          "arm": "native",
+          "phase": "startup_and_initialization",
+          "total_attempts": 21071315,
+          "classes": {
+            "other": 5971,
+            "kernel": 8258263,
+            "program": 12807081
+          },
+          "reference_match": true
+        },
+        {
+          "run": 0,
+          "arm": "native",
+          "phase": "compilation_and_output",
+          "total_attempts": 22043415,
+          "classes": {
+            "other": 4557,
+            "kernel": 10919839,
+            "program": 11119019
+          },
+          "reference_match": true
+        },
+        {
+          "run": 0,
+          "arm": "native",
+          "phase": "finalization_and_exit",
+          "total_attempts": 6838933,
+          "classes": {
+            "other": 1009,
+            "kernel": 6817189,
+            "program": 20735
+          },
+          "reference_match": true
+        }
+      ],
+      "verdict": {
+        "status": "PASS",
+        "phase_sum": 49953663,
+        "outer_attempts": 49953663,
+        "counter_deltas": {
+          "/sys/module/capstone_vm/parameters/unpinned_faults": 1227,
+          "/sys/module/capstone_vm/parameters/unpinned_fast_faults": 0,
+          "/sys/module/capstone_vm/parameters/unpinned_sweep_pages": 0,
+          "/sys/module/capstone_vm/parameters/fault_ahead_pages": 855,
+          "/sys/module/capstone_vm/parameters/fault_ahead_windows": 158,
+          "/sys/module/captag/parameters/cleared_pages": 1396,
+          "/sys/module/captag/parameters/freed_pages": 2647,
+          "/sys/module/captag/parameters/copies": 413
+        },
+        "reference_match": true
+      }
+    },
+    {
+      "run": 3,
+      "arm": "baseline",
+      "phases": [
+        {
+          "run": 0,
+          "arm": "native",
+          "phase": "startup_and_initialization",
+          "total_attempts": 21154162,
+          "classes": {
+            "other": 5971,
+            "kernel": 8341110,
+            "program": 12807081
+          },
+          "reference_match": true
+        },
+        {
+          "run": 0,
+          "arm": "native",
+          "phase": "compilation_and_output",
+          "total_attempts": 22293528,
+          "classes": {
+            "other": 4557,
+            "kernel": 11169952,
+            "program": 11119019
+          },
+          "reference_match": true
+        },
+        {
+          "run": 0,
+          "arm": "native",
+          "phase": "finalization_and_exit",
+          "total_attempts": 6902753,
+          "classes": {
+            "other": 1009,
+            "kernel": 6881009,
+            "program": 20735
+          },
+          "reference_match": true
+        }
+      ],
+      "verdict": {
+        "status": "PASS",
+        "phase_sum": 50350443,
+        "outer_attempts": 50350443,
+        "counter_deltas": {
+          "/sys/module/capstone_vm/parameters/unpinned_faults": 1229,
+          "/sys/module/capstone_vm/parameters/unpinned_fast_faults": 0,
+          "/sys/module/capstone_vm/parameters/unpinned_sweep_pages": 0,
+          "/sys/module/capstone_vm/parameters/fault_ahead_pages": 855,
+          "/sys/module/capstone_vm/parameters/fault_ahead_windows": 158,
+          "/sys/module/captag/parameters/cleared_pages": 1396,
+          "/sys/module/captag/parameters/freed_pages": 2653,
+          "/sys/module/captag/parameters/copies": 413
+        },
+        "reference_match": true
+      }
+    }
+  ],
+  "means": {
+    "baseline": {
+      "total": 50348695.5,
+      "kernel": 26390323.5,
+      "program": 23946835.0,
+      "other": 11537.0
+    },
+    "candidate": {
+      "total": 49954678.5,
+      "kernel": 25996306.0,
+      "program": 23946835.5,
+      "other": 11537.0
+    }
+  },
+  "reduction_percent": {
+    "total": 0.782576382738655,
+    "kernel": 1.49303777954825
+  },
+  "top_flat_symbol_reductions": [
+    [
+      "kernel:__kmem_cache_alloc_node",
+      74081.0
+    ],
+    [
+      "kernel:__kmem_cache_free",
+      64699.0
+    ],
+    [
+      "kernel:kfree",
+      39426.0
+    ],
+    [
+      "kernel:memset",
+      37500.0
+    ],
+    [
+      "kernel:kmalloc_slab",
+      26306.0
+    ],
+    [
+      "kernel:__kmalloc_node",
+      25003.0
+    ],
+    [
+      "kernel:__slab_free",
+      23874.0
+    ],
+    [
+      "kernel:__might_resched",
+      16918.0
+    ],
+    [
+      "kernel:__might_sleep",
+      15390.0
+    ],
+    [
+      "kernel:kvmalloc_node",
+      15190.0
+    ],
+    [
+      "kernel:frame_slots",
+      13520.0
+    ],
+    [
+      "kernel:add",
+      7963.0
+    ]
+  ],
+  "race_qualification": {
+    "race": {
+      "status": "PASS",
+      "scenario_count": 41,
+      "controls_fired": 17,
+      "verdict_sha256": "13861ec396c4ddbd5da60ff06210ece59c2bffaf761d6460116f97a9d59054d8"
+    },
+    "race-file": {
+      "status": "PASS",
+      "scenario_count": 41,
+      "controls_fired": 17,
+      "verdict_sha256": "13861ec396c4ddbd5da60ff06210ece59c2bffaf761d6460116f97a9d59054d8"
+    }
+  },
+  "io_integration": {
+    "status": "PASS",
+    "verdict": "PASS musl IO, scalar shape, route boundaries, cached identity, authority, entry and task lifecycle",
+    "verdict_sha256": "bb8136393170ad74548b3002c9a28c6972b35ba7ea033e47f6b17abc1540af94"
+  },
+  "review": "Astra xhigh independently audited all remaining array consumers and immutable unpinned mode; no correctness blockers. Build and runtime qualification executed separately.",
+  "evidence_archive": "/tmp/capstone/native-task/arena-arrays-01/evidence",
+  "limitations": [
+    "QEMU instruction attempts, not hardware elapsed-time speedup.",
+    "Same unchanged GCC/musl binary on baseline/candidate/candidate/baseline kernels, two samples each. Baseline already includes arena-index removal.",
+    "No new full-SPEC, multi-hart or FPGA qualification.",
+    "Occupied pre-start register-slot rejection/unwind reviewed statically, not forced dynamically.",
+    "Read-fault policy and fault-ahead are unchanged; their future savings cannot be inferred from this result.",
+    "Flat symbol reductions are not inclusive costs."
+  ]
+}

@@ -665,7 +665,14 @@ static long dl_call_once(const struct capstone_delegate_shape *s, uint64_t nr,
   return result;
 }
 
+#if defined(CAPSTONE_RUNTIME_VIRTUAL) && defined(CAPSTONE_MUSL_NATIVE_IO)
+static int dl_direct_service_ready(uint64_t nr);
+static long dl_direct_service(uint64_t nr, syscall_arg_t raw[CAPSTONE_DELEGATE_ARGS]);
+#endif
 static long dl_call(uint64_t nr, syscall_arg_t raw[CAPSTONE_DELEGATE_ARGS]) {
+#if defined(CAPSTONE_RUNTIME_VIRTUAL) && defined(CAPSTONE_MUSL_NATIVE_IO)
+  if (dl_direct_service_ready(nr)) return dl_direct_service(nr, raw);
+#endif
   const struct capstone_delegate_shape *s = capstone_delegate_shape(nr);
   long result;
   if (!s)
@@ -1287,6 +1294,10 @@ static long dl_epoll_pwait(long epfd, struct epoll_event *ev, long count, long t
   return r;
 }
 
+#if defined(CAPSTONE_RUNTIME_VIRTUAL) && defined(CAPSTONE_MUSL_NATIVE_IO)
+static int dl_direct_locks_ready(void);
+static long dl_direct_lock(long fd, long cmd, void *arg);
+#endif
 static long dl_fcntl(long fd, long cmd, void *arg) {
   if (cmd == F_GETLK || cmd == F_SETLK || cmd == F_SETLKW) {
     uint64_t args[CAPSTONE_DELEGATE_ARGS] = {(uint64_t)fd, (uint64_t)cmd, 0, 0, 0, 0};
@@ -1295,6 +1306,9 @@ static long dl_fcntl(long fd, long cmd, void *arg) {
       return -EFAULT;
     if (!dl_buffer_ok(arg, 32, cmd == F_GETLK ? 6 : 4))
       return -EFAULT;
+#if defined(CAPSTONE_RUNTIME_VIRTUAL) && defined(CAPSTONE_MUSL_NATIVE_IO)
+    if (dl_direct_locks_ready()) return dl_direct_lock(fd, cmd, arg);
+#endif
     dl_wire_acquire();
     do {
       dl_reset();
@@ -1339,7 +1353,108 @@ long __capstone_delegate_hello(unsigned long entry_address, unsigned long code_b
  * failure after progress reports the bytes moved, as an interrupted transfer
  * does. Pipes, sockets and terminals keep the single round: there a short
  * count is the kernel's own answer, and another round could block. */
+#if defined(CAPSTONE_RUNTIME_VIRTUAL) && defined(CAPSTONE_MUSL_NATIVE_IO)
+#include <capstone/native-syscall-abi.h>
+extern long __capstone_native_syscall(long, void *, void *, void *, void *, void *, void *);
+static int dl_direct_io_ready(syscall_arg_t raw[CAPSTONE_DELEGATE_ARGS]) {
+  const struct capstone_launch_task *t = __capstone_launch_task();
+  size_t count = (size_t)(unsigned long)raw[2];
+  return t && t->native.abi == NS_ABI_VERSION &&
+         (t->native.features & CAPSTONE_LAUNCH_NATIVE_IO) &&
+         t->native.max_io == 65536 && !t->native.reserved && count && count <= 65536;
+}
+/* Scalar arithmetic defines the low 64 bits, not the upper payload. Build
+ * the strict wire representation without turning a malformed capability into
+ * an integer. Keep tagged inputs intact for the backend's shape rejection. */
+static syscall_arg_t dl_direct_scalar(syscall_arg_t input) {
+  unsigned long type;
+  syscall_arg_t output;
+  __asm__ volatile(".insn r 0x5b, 0x1, 0x04, %0, %1, x1"
+                   : "=r"(type) : "r"(input));
+  if (type != 7) return input;
+  __asm__ volatile("movc %0, zero\n\tmv %0, %1"
+                   : "=&r"(output) : "r"(input));
+  return output;
+}
+static int dl_direct_service_ready(uint64_t nr) {
+  unsigned feature = nr == CAPSTONE_SYS_clock_gettime ? CAPSTONE_LAUNCH_NATIVE_CLOCK :
+      (nr == CAPSTONE_SYS_openat || nr == CAPSTONE_SYS_unlinkat) ? CAPSTONE_LAUNCH_NATIVE_PATH :
+      nr == CAPSTONE_SYS_close ? CAPSTONE_LAUNCH_NATIVE_CLOSE :
+      nr == CAPSTONE_SYS_lseek ? CAPSTONE_LAUNCH_NATIVE_SEEK :
+      (nr == CAPSTONE_SYS_fstat || nr == CAPSTONE_SYS_newfstatat) ? CAPSTONE_LAUNCH_NATIVE_STAT :
+      (nr == CAPSTONE_SYS_fsync || nr == CAPSTONE_SYS_fdatasync ||
+       nr == CAPSTONE_SYS_ftruncate || nr == CAPSTONE_SYS_fchmod ||
+       nr == CAPSTONE_SYS_fchown) ? CAPSTONE_LAUNCH_NATIVE_FD : 0;
+  if (!feature) return 0;
+  const struct capstone_launch_task *t = __capstone_launch_task();
+  return t && t->native.abi == NS_ABI_VERSION &&
+         (t->native.features & feature) && !t->native.reserved;
+}
+static long dl_direct_service(uint64_t nr, syscall_arg_t raw[CAPSTONE_DELEGATE_ARGS]) {
+  long result;
+  int at = nr == CAPSTONE_SYS_newfstatat;
+  dl_wire_acquire();
+  dl_reset();
+  if (nr == CAPSTONE_SYS_close || nr == CAPSTONE_SYS_fsync || nr == CAPSTONE_SYS_fdatasync)
+    result = __capstone_native_syscall(nr, dl_direct_scalar(raw[0]), 0, 0, 0, 0, 0);
+  else if (nr == CAPSTONE_SYS_ftruncate || nr == CAPSTONE_SYS_fchmod)
+    result = __capstone_native_syscall(nr, dl_direct_scalar(raw[0]),
+        dl_direct_scalar(raw[1]), 0, 0, 0, 0);
+  else if (nr == CAPSTONE_SYS_lseek || nr == CAPSTONE_SYS_fchown)
+    result = __capstone_native_syscall(nr, dl_direct_scalar(raw[0]),
+        dl_direct_scalar(raw[1]), dl_direct_scalar(raw[2]), 0, 0, 0);
+  else if (nr == CAPSTONE_SYS_openat || nr == CAPSTONE_SYS_unlinkat)
+    result = __capstone_native_syscall(nr, dl_direct_scalar(raw[0]), raw[1],
+        dl_direct_scalar(raw[2]), nr == CAPSTONE_SYS_openat ? dl_direct_scalar(raw[3]) : 0, 0, 0);
+  else
+    result = __capstone_native_syscall(nr, dl_direct_scalar(raw[0]), raw[1],
+        at ? raw[2] : 0, at ? dl_direct_scalar(raw[3]) : 0, 0, 0);
+  dl_status = CAPSTONE_ROUND_DONE;
+  (void)dl_settle();
+  dl_wire_release();
+  return result;
+}
+static int dl_direct_locks_ready(void) {
+  const struct capstone_launch_task *t = __capstone_launch_task();
+  return t && t->native.abi == NS_ABI_VERSION &&
+         (t->native.features & CAPSTONE_LAUNCH_NATIVE_LOCKS) && !t->native.reserved;
+}
+static long dl_direct_lock(long fd, long cmd, void *arg) {
+  long result;
+  dl_wire_acquire();
+  dl_reset();
+  result = __capstone_native_syscall(CAPSTONE_NR_FCNTL_LOCK,
+      dl_direct_scalar((syscall_arg_t)fd), dl_direct_scalar((syscall_arg_t)cmd), arg, 0, 0, 0);
+  dl_status = CAPSTONE_ROUND_DONE;
+  /* A completed lock operation must never be replayed through exchange. */
+  (void)dl_settle();
+  dl_wire_release();
+  return result;
+}
+static long dl_direct_io(uint64_t nr, syscall_arg_t raw[CAPSTONE_DELEGATE_ARGS]) {
+  long result;
+  int positioned = nr == CAPSTONE_SYS_pread64 || nr == CAPSTONE_SYS_pwrite64;
+  dl_wire_acquire();
+  dl_reset();
+  /* Preserve the buffer and malformed scalar tags; canonicalize only actual
+   * scalar payloads. Unused arguments are explicit scalar zero. */
+  result = __capstone_native_syscall(nr, dl_direct_scalar(raw[0]), raw[1],
+                                    dl_direct_scalar(raw[2]),
+                                    positioned ? dl_direct_scalar(raw[3]) : 0, 0, 0);
+  dl_status = CAPSTONE_ROUND_DONE;
+  /* No fresh exchange signal block is published by direct completion. Never
+   * import the previous block again. Settle completed cancellation state and
+   * already queued events, but never replay the operation or refill a short IO. */
+  (void)dl_settle();
+  dl_wire_release();
+  return result;
+}
+#endif
+
 static long dl_transfer(uint64_t nr, syscall_arg_t raw[CAPSTONE_DELEGATE_ARGS]) {
+#if defined(CAPSTONE_RUNTIME_VIRTUAL) && defined(CAPSTONE_MUSL_NATIVE_IO)
+  if (dl_direct_io_ready(raw)) return dl_direct_io(nr, raw);
+#endif
   long first = dl_call(nr, raw);
   size_t want = (size_t)(unsigned long)raw[2];
   if (first <= 0 || (size_t)first >= want)

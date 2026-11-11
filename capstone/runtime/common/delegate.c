@@ -1,7 +1,12 @@
 #include "capstone/delegate.h"
-#include "capstone/spawn.h"
+#ifdef __KERNEL__
+#include <linux/errno.h>
+#include <linux/string.h>
+#include <linux/limits.h>
+#else
 #include <errno.h>
 #include <string.h>
+#endif
 
 #if __BYTE_ORDER__ != __ORDER_LITTLE_ENDIAN__
 #error "Delegated syscall ABI v2 requires little-endian scalar encoding"
@@ -390,7 +395,8 @@ size_t capstone_delegate_result_bytes(uint64_t nr, unsigned index, size_t bytes,
                                       int64_t result) {
   if (result < 0) {
     if (result == -EINTR && ((nr == CAPSTONE_SYS_nanosleep && index == 1) ||
-                             (nr == CAPSTONE_SYS_clock_nanosleep && index == 3)))
+                             (nr == CAPSTONE_SYS_clock_nanosleep && index == 3) ||
+                             (nr == CAPSTONE_SYS_pselect6 && index == 4)))
       return bytes;
     return 0;
   }

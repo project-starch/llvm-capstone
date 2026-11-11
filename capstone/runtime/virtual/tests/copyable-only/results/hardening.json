@@ -1,0 +1,150 @@
+{
+  "scope": "Single-hart copyable-only QEMU/Linux prototype. No SMP, tagged swap, KSM/THP, protected fork or general DMA/shared-memory qualification.",
+  "platform": {
+    "inputs_sha256": {
+      "$CAPSTONE_TMP_ROOT/copyable-only/qemu-build/qemu-system-riscv64": "845b967fa12c87adf1d73ea6fd647c0803411221b1d5ba27592aacc70e9d2332",
+      "$CAPSTONE_TMP_ROOT/copyable-only/hardening/images/Image": "135f77640d2040f442f667d3b8099d195c063d634f6910c95a714f1ee953f1f2",
+      "$CAPSTONE_TMP_ROOT/copyable-only/platform/images/rootfs.ext2": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845",
+      "$CAPSTONE_REPO_ROOT/capstone/capstone-qemu/pc-bios/opensbi-riscv64-generic-fw_dynamic.bin": "2335a28682ddf65e46c1f492632c2cb026efcb2271caf544a3f7ddc858b03e02",
+      "$CAPSTONE_TMP_ROOT/copyable-only/hardening/raw-op.dom": "beb5d8b8b09c678d4f77ef274d8727c6431a21d8a102d3a609629ff92665806e",
+      "$CAPSTONE_TMP_ROOT/copyable-only/hardening/adapter/capstone-vexec": "8110b7b1adcd80c8f667d38d67e00ef583761670bfdc01ba0e8ed48e6834e0e9",
+      "$CAPSTONE_TMP_ROOT/copyable-only/hardening/adapter/module/capstone_vm.ko": "59639880ea9580dae8c27f88288514c6cf495c50dc12a20bc4b01d596e2b57e4",
+      "$CAPSTONE_REPO_ROOT/capstone/runtime/virtual/tests/copyable-only/platform.py": "1b93320330301d14e808b294b03371f130e03d6c042fb0de9b3086edcbc46483",
+      "$CAPSTONE_REPO_ROOT/capstone/runtime/virtual/tests/copyable-only/platform-gate.sh": "c1fbf86cbf1e991fc855694c2684cde77f711c080a2c4ad1dadfc744774b4f6b",
+      "$CAPSTONE_REPO_ROOT/capstone/runtime/virtual/tests/copyable-only/raw-op.c": "8a4c87da9ab5e24079e1614bb575782127325e6cfd98a7ed9a4ed54fd92a0fc6",
+      "$CAPSTONE_REPO_ROOT/capstone/runtime/virtual/run-staged.py": "70f391080fb90cb88be8396498a9e03e158b5fd9fcdc173ef5801a4543ffabe5",
+      "$CAPSTONE_TMP_ROOT/copyable-only/hardening/platform-reviewed/unsupported.dtb": "c13f9a65c03dfa92f028b643ea78a147203eb915e87ab3ac85470144984322a6"
+    },
+    "cases": [
+      {
+        "name": "enabled",
+        "cpus": 1,
+        "raw": true,
+        "kernel_args": [
+          "captag.enabled=0"
+        ],
+        "pass": true
+      },
+      {
+        "name": "raw-disabled",
+        "cpus": 1,
+        "raw": false,
+        "kernel_args": [
+          "captag.enabled=1"
+        ],
+        "pass": true
+      },
+      {
+        "name": "kernel-disabled",
+        "cpus": 1,
+        "raw": true,
+        "kernel_args": [
+          "captag=off",
+          "captag.enabled=1"
+        ],
+        "pass": true
+      },
+      {
+        "name": "model-two-harts",
+        "cpus": 2,
+        "raw": true,
+        "kernel_args": [],
+        "pass": true
+      },
+      {
+        "name": "kernel-two-harts",
+        "cpus": 2,
+        "raw": true,
+        "kernel_args": [
+          "captag.enabled=1"
+        ],
+        "pass": true
+      }
+    ],
+    "pass": true
+  },
+  "runtime": {
+    "pinned": {
+      "pass": true,
+      "checks": 22
+    },
+    "unpinned": {
+      "pass": true,
+      "checks": 22
+    }
+  },
+  "page_lifecycle": {
+    "pass": true,
+    "oracles": [
+      "RAW_MM acknowledge_refuses_live_tag=1",
+      "RAW_MM copied_tag=1 expected=1",
+      "RAW_MM tagged_swap=-16 untagged_swap=0",
+      "RAW_MM reused_same_frame=1 tag=0",
+      "COPYABLE_MM_EXIT:0",
+      "COPYABLE_MM_COMPLETE"
+    ]
+  },
+  "interrupt_copy": {
+    "pass": true,
+    "runner_rc": 0,
+    "config_ok": true,
+    "bulk": "off",
+    "cpu_extra": "x-capstone-raw-moves=true,x-capstone-test-csrs=false",
+    "iterations": 4000,
+    "deadline_in_copy": 2705,
+    "lost_iterations": 0,
+    "s_interrupt_taken_in_copy": 0,
+    "copy_retries": 2500,
+    "copies": 5022,
+    "expect": {
+      "lost": "none",
+      "retries": "any",
+      "window": "inside"
+    }
+  },
+  "raw_privileges": {
+    "pass": true,
+    "cases": 12,
+    "precise_illegal_operations": 40,
+    "trusted_tagged_copy_modes": [
+      "M",
+      "S"
+    ]
+  },
+  "removed_instructions": {
+    "pass": true,
+    "precise_illegal_operations": 45,
+    "linear_mint_refused_before_publication": true
+  },
+  "fault_oracle_tests": {
+    "pass": true,
+    "cases": 6
+  },
+  "review": {
+    "remaining_blockers": 0,
+    "scope": "single-hart prototype",
+    "findings_fixed": [
+      "boot-parameter spoof of activation readback",
+      "raw-operation oracle accepted unrelated illegal instructions"
+    ],
+    "gemini_argon": {
+      "model": "gemini-4-argon",
+      "reviewed_superproject_commit": "ff5bea584d80c3ceebce9c95a8e00eeaa2ac38aa",
+      "remaining_blockers": 0,
+      "verdict": "Adequately qualified within the restricted single-hart QEMU/OpenSBI/Linux 6.1 prototype scope",
+      "dispositions": {
+        "binary_build_vs_test_revision": "provenance clarity improvement resolved by separate commit fields; no build mismatch",
+        "mm_probe_destination_cleanup": "withdrawn: initial allocation failure skips clean; dst is non-NULL on every path to clean"
+      },
+      "evidence": "p12:/var/tmp/capstone-copyable-only/argon-review.tar.gz",
+      "evidence_sha256": "511e5989f92d2ea9dad7b63f12db0216aa19248b27b3cd7517abf05b88c3d1b1"
+    }
+  },
+  "linux_patch_sha256": "ddee3722344c880e4bb86931edfc010ed440453650c82944965d21561c7c731b",
+  "kernel_config_sha256": "caf22cfddf3630683ffb3483d8d691f73165065969ab5501e9804a1538270df7",
+  "qemu_binary_source_commit": "316c44ae56c6df16656a44407560db5855085b33",
+  "evidence": "p12:/var/tmp/capstone-copyable-only/hardening-evidence.tar.gz",
+  "evidence_sha256": "dcb515ed961b85e46c97d57c6fcbe84d73f71e8fa9c3fbdb6d056c99a8099817",
+  "qemu_test_source_commit": "2b87cc1fb961cee6a663f7aa57ec2c3595ccc846",
+  "qemu_build_provenance": "The binary was built at qemu_binary_source_commit. qemu_test_source_commit adds only tests/copyable-only/README.md, raw-boundary.S and raw-boundary.sh; no emulator source changed and no rebuild is claimed."
+}

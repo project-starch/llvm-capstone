@@ -1,0 +1,200 @@
+--- a/mm/mprotect.c
++++ b/mm/mprotect.c
+@@ -9,6 +9,7 @@
+  *  (C) Copyright 2002 Red Hat Inc, All Rights Reserved
+  */
+ 
++#include <linux/capstone_native_helpers.h>
+ #include <linux/pagewalk.h>
+ #include <linux/hugetlb.h>
+ #include <linux/shm.h>
+@@ -826,7 +827,6 @@
+ {
+ 	return do_mprotect_pkey(start, len, prot, -1);
+ }
+-EXPORT_SYMBOL_GPL(capstone_native_mprotect);
+ 
+ #ifdef CONFIG_ARCH_HAS_PKEYS
+ 
+--- a/kernel/sys.c
++++ b/kernel/sys.c
+@@ -5,6 +5,7 @@
+  *  Copyright (C) 1991, 1992  Linus Torvalds
+  */
+ 
++#include <linux/capstone_native_helpers.h>
+ #include <linux/export.h>
+ #include <linux/mm.h>
+ #include <linux/mm_inline.h>
+@@ -2797,9 +2798,7 @@
+ {
+     return do_sysinfo(info);
+ }
+-EXPORT_SYMBOL_GPL(capstone_native_sysinfo);
+ int capstone_native_getrlimit(unsigned int resource, struct rlimit *limit)
+ {
+     return do_prlimit(current, resource, NULL, limit);
+ }
+-EXPORT_SYMBOL_GPL(capstone_native_getrlimit);
+--- a/kernel/signal.c
++++ b/kernel/signal.c
+@@ -11,6 +11,7 @@
+  *		to allow signals to be sent reliably.
+  */
+ 
++#include <linux/capstone_native_helpers.h>
+ #include <linux/slab.h>
+ #include <linux/export.h>
+ #include <linux/init.h>
+@@ -4814,4 +4815,3 @@
+ 	sigemptyset(&action.sa.sa_mask);
+ 	return do_sigaction(sig, &action, NULL);
+ }
+-EXPORT_SYMBOL_GPL(capstone_native_signal_action);
+--- a/fs/file.c
++++ b/fs/file.c
+@@ -7,6 +7,7 @@
+  *  Manage the dynamic fd arrays in the process files_struct.
+  */
+ 
++#include <linux/capstone_native_helpers.h>
+ #include <linux/syscalls.h>
+ #include <linux/export.h>
+ #include <linux/fs.h>
+--- a/fs/fcntl.c
++++ b/fs/fcntl.c
+@@ -5,6 +5,7 @@
+  *  Copyright (C) 1991, 1992  Linus Torvalds
+  */
+ 
++#include <linux/capstone_native_helpers.h>
+ #include <linux/syscalls.h>
+ #include <linux/init.h>
+ #include <linux/mm.h>
+@@ -439,7 +440,6 @@
+ /* Native capability frontend: callers hold the authorized file and supply a
+  * checked kernel-buffer flock. Reuse Linux's security, lock ownership, wait,
+  * deadlock and close-race behavior, without a user-pointer syscall trampoline. */
+-extern int capstone_native_dupfd(unsigned long, struct file *, unsigned, unsigned);
+ long capstone_native_fcntl(unsigned int fd, struct file *file, unsigned int cmd,
+                           unsigned long arg, struct flock *lock, unsigned limit)
+ {
+@@ -474,7 +474,6 @@
+ 		return do_fcntl(fd, cmd, arg, file);
+ 	}
+ }
+-EXPORT_SYMBOL_GPL(capstone_native_fcntl);
+ 
+ SYSCALL_DEFINE3(fcntl, unsigned int, fd, unsigned int, cmd, unsigned long, arg)
+ {	
+--- a/fs/open.c
++++ b/fs/open.c
+@@ -5,6 +5,7 @@
+  *  Copyright (C) 1991, 1992  Linus Torvalds
+  */
+ 
++#include <linux/capstone_native_helpers.h>
+ #include <linux/string.h>
+ #include <linux/mm.h>
+ #include <linux/file.h>
+@@ -191,7 +192,6 @@
+ out:
+ 	return error;
+ }
+-EXPORT_SYMBOL_GPL(capstone_native_ftruncate);
+ 
+ long do_sys_ftruncate(unsigned int fd, loff_t length, int small)
+ {
+@@ -630,7 +630,6 @@
+ {
+ 	return chmod_common(path, mode);
+ }
+-EXPORT_SYMBOL_GPL(capstone_native_path_chmod);
+ 
+ int vfs_fchmod(struct file *file, umode_t mode)
+ {
+@@ -1555,4 +1554,3 @@
+ 	default: return -EINVAL;
+ 	}
+ }
+-EXPORT_SYMBOL_GPL(capstone_native_fmetadata);
+--- a/fs/namei.c
++++ b/fs/namei.c
+@@ -15,6 +15,7 @@
+ /* [Feb-Apr 2000, AV] Rewrite to the new namespace architecture.
+  */
+ 
++#include <linux/capstone_native_helpers.h>
+ #include <linux/init.h>
+ #include <linux/export.h>
+ #include <linux/kernel.h>
+@@ -4558,7 +4559,6 @@
+ 				 entry, NULL);
+ 	return error;
+ }
+-EXPORT_SYMBOL_GPL(capstone_native_path_link);
+ 
+ /*
+  * Hardlinks are often used in delicate situations.  We avoid
+--- a/fs/pipe.c
++++ b/fs/pipe.c
+@@ -5,6 +5,7 @@
+  *  Copyright (C) 1991, 1992, 1999  Linus Torvalds
+  */
+ 
++#include <linux/capstone_native_helpers.h>
+ #include <linux/mm.h>
+ #include <linux/file.h>
+ #include <linux/poll.h>
+@@ -953,7 +954,6 @@
+ 
+ /* Prepare without publishing: the capability frontend installs only after
+  * checked result publication, or releases both reservations and file refs. */
+-extern int capstone_native_reserve_fd(unsigned, unsigned);
+ int capstone_native_pipe_prepare(int fd[2], struct file *files[2],
+ 				unsigned flags, unsigned limit)
+ {
+@@ -976,7 +976,6 @@
+ 	put_unused_fd(fd[0]);
+ 	return error;
+ }
+-EXPORT_SYMBOL_GPL(capstone_native_pipe_prepare);
+ 
+ static int __do_pipe_flags(int *fd, struct file **files, int flags)
+ {
+--- a/fs/stat.c
++++ b/fs/stat.c
+@@ -5,6 +5,7 @@
+  *  Copyright (C) 1991, 1992  Linus Torvalds
+  */
+ 
++#include <linux/capstone_native_helpers.h>
+ #include <linux/blkdev.h>
+ #include <linux/export.h>
+ #include <linux/mm.h>
+@@ -404,7 +405,6 @@
+ 	return 0;
+ }
+ 
+-EXPORT_SYMBOL_GPL(capstone_native_stat);
+ static int cp_new_stat(struct kstat *stat, struct stat __user *statbuf)
+ {
+     struct stat tmp;
+--- a/arch/riscv/mm/captag.c
++++ b/arch/riscv/mm/captag.c
+@@ -5,6 +5,7 @@
+  * Swap of possibly tagged pages remains refused. CPTAG uses the physical
+  * may-hold-tags flag. No test-only page CSR is used.
+  */
++#include <linux/capstone_native_helpers.h>
+ #include <linux/highmem.h>
+ #include <linux/init.h>
+ #include <linux/jump_label.h>
+@@ -123,7 +124,6 @@
+ 	*exact = captag_exact;
+ 	return 0;
+ }
+-EXPORT_SYMBOL_GPL(capstone_unpinned_config);
+ 
+ /* Hardware owns this flag: every capability publication, including a raw
+  * copy, sets it without a software trap. PG_arch_1 is already dcache state.

@@ -1,0 +1,221 @@
+{
+  "workload": "two rounds of 16384 allocations; sizes 64+(i%32)*128; touch ends and free",
+  "program_sha256": "84ae630b444ec90688fd173a3dffd30763347f539e026704e6bd865688d46b7f",
+  "unit": "QEMU instruction attempts inside workload markers; not cycles or elapsed time",
+  "same_binary_both_arms": true,
+  "rows": [
+    {
+      "invocation": "0000",
+      "window": 0,
+      "total_attempts": 226545441,
+      "classes": {
+        "kernel": 183747738,
+        "program": 21662083,
+        "module": 18736083,
+        "launcher": 2359655,
+        "firmware": 28386,
+        "ambiguous launcher/job-helper": 11496
+      },
+      "repeat": 1,
+      "unpinned": false,
+      "entry_attempts": {
+        "pin_user_pages_remote": 14515,
+        "__get_user_pages": 14515,
+        "handle_mm_fault": 18455,
+        "__handle_mm_fault": 18455,
+        "fixup_user_fault": 0,
+        "sys_ioctl": 6044,
+        "sys_mmap": 1556,
+        "sys_munmap": 1536
+      },
+      "boundary_attempts": 204883358
+    },
+    {
+      "invocation": "0000",
+      "window": 1,
+      "total_attempts": 198679903,
+      "classes": {
+        "kernel": 161534022,
+        "program": 21662083,
+        "module": 13020800,
+        "launcher": 2380297,
+        "firmware": 71205,
+        "ambiguous launcher/job-helper": 11496
+      },
+      "repeat": 1,
+      "unpinned": true,
+      "entry_attempts": {
+        "pin_user_pages_remote": 0,
+        "__get_user_pages": 1462,
+        "handle_mm_fault": 18468,
+        "__handle_mm_fault": 18468,
+        "fixup_user_fault": 18444,
+        "sys_ioctl": 6045,
+        "sys_mmap": 1556,
+        "sys_munmap": 1536
+      },
+      "boundary_attempts": 177017820
+    },
+    {
+      "invocation": "0000",
+      "window": 2,
+      "total_attempts": 198791518,
+      "classes": {
+        "kernel": 161645788,
+        "program": 21662082,
+        "module": 13020588,
+        "launcher": 2380359,
+        "firmware": 71205,
+        "ambiguous launcher/job-helper": 11496
+      },
+      "repeat": 2,
+      "unpinned": true,
+      "entry_attempts": {
+        "pin_user_pages_remote": 0,
+        "__get_user_pages": 1462,
+        "handle_mm_fault": 18468,
+        "__handle_mm_fault": 18468,
+        "fixup_user_fault": 18444,
+        "sys_ioctl": 6047,
+        "sys_mmap": 1556,
+        "sys_munmap": 1536
+      },
+      "boundary_attempts": 177129436
+    },
+    {
+      "invocation": "0000",
+      "window": 3,
+      "total_attempts": 226118941,
+      "classes": {
+        "kernel": 183294679,
+        "program": 21662083,
+        "module": 18742062,
+        "launcher": 2380235,
+        "firmware": 28386,
+        "ambiguous launcher/job-helper": 11496
+      },
+      "repeat": 2,
+      "unpinned": false,
+      "entry_attempts": {
+        "pin_user_pages_remote": 14514,
+        "__get_user_pages": 14514,
+        "handle_mm_fault": 18466,
+        "__handle_mm_fault": 18466,
+        "fixup_user_fault": 0,
+        "sys_ioctl": 6043,
+        "sys_mmap": 1556,
+        "sys_munmap": 1536
+      },
+      "boundary_attempts": 204456858
+    },
+    {
+      "invocation": "0000",
+      "window": 4,
+      "total_attempts": 226109804,
+      "classes": {
+        "kernel": 183284877,
+        "program": 21662083,
+        "module": 18742541,
+        "launcher": 2380421,
+        "firmware": 28386,
+        "ambiguous launcher/job-helper": 11496
+      },
+      "repeat": 3,
+      "unpinned": false,
+      "entry_attempts": {
+        "pin_user_pages_remote": 14516,
+        "__get_user_pages": 14516,
+        "handle_mm_fault": 18466,
+        "__handle_mm_fault": 18466,
+        "fixup_user_fault": 0,
+        "sys_ioctl": 6049,
+        "sys_mmap": 1556,
+        "sys_munmap": 1536
+      },
+      "boundary_attempts": 204447721
+    },
+    {
+      "invocation": "0000",
+      "window": 5,
+      "total_attempts": 198828522,
+      "classes": {
+        "kernel": 161674996,
+        "program": 21662083,
+        "module": 13020205,
+        "launcher": 2380235,
+        "firmware": 71703,
+        "ambiguous launcher/job-helper": 11496,
+        "other": 7804
+      },
+      "repeat": 3,
+      "unpinned": true,
+      "entry_attempts": {
+        "pin_user_pages_remote": 0,
+        "__get_user_pages": 1462,
+        "handle_mm_fault": 18467,
+        "__handle_mm_fault": 18467,
+        "fixup_user_fault": 18443,
+        "sys_ioctl": 6043,
+        "sys_mmap": 1556,
+        "sys_munmap": 1536
+      },
+      "boundary_attempts": 177166439
+    }
+  ],
+  "medians": {
+    "pinned": {
+      "total_attempts": 226118941,
+      "boundary_attempts": 204456858,
+      "classes": {
+        "ambiguous launcher/job-helper": 11496,
+        "firmware": 28386,
+        "kernel": 183294679,
+        "launcher": 2380235,
+        "module": 18742062,
+        "program": 21662083
+      },
+      "entry_attempts": {
+        "pin_user_pages_remote": 14515,
+        "__get_user_pages": 14515,
+        "handle_mm_fault": 18466,
+        "__handle_mm_fault": 18466,
+        "fixup_user_fault": 0,
+        "sys_ioctl": 6044,
+        "sys_mmap": 1556,
+        "sys_munmap": 1536
+      },
+      "total_range": [
+        226109804,
+        226545441
+      ]
+    },
+    "unpinned": {
+      "total_attempts": 198791518,
+      "boundary_attempts": 177129436,
+      "classes": {
+        "ambiguous launcher/job-helper": 11496,
+        "firmware": 71205,
+        "kernel": 161645788,
+        "launcher": 2380297,
+        "module": 13020588,
+        "other": 0,
+        "program": 21662083
+      },
+      "entry_attempts": {
+        "pin_user_pages_remote": 0,
+        "__get_user_pages": 1462,
+        "handle_mm_fault": 18468,
+        "__handle_mm_fault": 18468,
+        "fixup_user_fault": 18444,
+        "sys_ioctl": 6045,
+        "sys_mmap": 1556,
+        "sys_munmap": 1536
+      },
+      "total_range": [
+        198679903,
+        198828522
+      ]
+    }
+  },
+  "total_change_percent": -12.085419681847887
+}

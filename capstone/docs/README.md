@@ -1,5 +1,10 @@
 # Capstone project documentation
 
+On `native/linux-task-integration`, start with the [RTL implementation handoff](plans/native-task-rtl-handoff.md).
+It pins the rebased branch and QEMU, separates current qualification from historical
+results, and lists the hardware contracts. The older profile descriptions below
+do not override that branch-specific entry point.
+
 Sublet ISA extension: [contract and qualification](design/virtual-capstone/development.md#sublet-lifetime-qualification).
 QEMU and runtime support are merged, pinned to QEMU `7dbfdd534eea`. Use matching
 QEMU and adapter builds. The allocator migration on
@@ -207,6 +212,21 @@ table is for is the **role** of each directory.
 - `CLAUDE.md` (repo root) — the permanent rules. Read it before the docs, not after.
 
 ## Current verified baseline
+
+For the cumulative native-branch delta and FPGA implementation requirements,
+start with the [RTL handoff](plans/native-task-rtl-handoff.md). Its full SPEC
+test-input acceptance gate is separate from the short performance comparisons;
+an application exit code alone does not establish output correctness.
+
+The full native test gate now reports **9 of 10 existing C-port entries PASS**,
+including complete x264 and its image comparisons. Perl remains a confirmed
+software blocker: a refused chdir causes an exception that its test wrapper
+hides behind exit zero. [Full results and reproduction](../runtime/virtual/tests/native-task/README.md#full-spec-test-input-qualification).
+
+The opt-in native Linux task branch now runs file-backed SQLite speedtest1 with
+real Linux file/lock services. All 32 SQL phases match its host reference; four
+matched runs show 4.16% fewer total attempted instructions with direct small
+musl I/O. [Qualification, scope and reproduction](../runtime/virtual/tests/native-task/README.md#native-file-services-and-sqlite-comparison).
 
 The `domain-process-runtime` application stack supports a persistent Linux guest,
 ordinary application arguments/streams, trusted fault/preemption return and owned

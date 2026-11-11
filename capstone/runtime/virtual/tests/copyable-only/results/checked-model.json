@@ -1,0 +1,74 @@
+{
+  "schema": 1,
+  "scope": "copyable-only QEMU checked-access and protected-transport prerequisite; no kernel syscall activation",
+  "source_snapshot": "ede5e467462f258775f1d1f2fb989eab3665e73f",
+  "qemu_commit": "59ee967eaf091578fb006a13745ff09018c6caae",
+  "qemu_binary_sha256": "fe3712f6da44855cd7343a58bf7e2f56e630c39f4542adcd6e1942061c516f3c",
+  "transport_versions": {
+    "checked_copy_off": 5,
+    "checked_copy_on": 6
+  },
+  "checks": {
+    "checked_access": {
+      "passed": 35,
+      "failed": 0
+    },
+    "context_transport": {
+      "passed": 10,
+      "deliberately_broken_controls": 3
+    },
+    "atomic_generation": {
+      "widths": 2,
+      "correct_implementation": "pass",
+      "split_observation_mutant": "expected failure"
+    },
+    "removed_instructions": {
+      "operations": 45,
+      "precise_faults": 45
+    },
+    "linear_mint": "refused without publication or allocation; copyable mint succeeds",
+    "raw_boundary": {
+      "configurations": 12,
+      "result": "pass"
+    },
+    "linux_unpinned_features_enabled": {
+      "passed": 22,
+      "failed": 0,
+      "syscall_consumer": "existing module; no native dispatcher"
+    }
+  },
+  "review": {
+    "provider": "Gemini",
+    "model": "gemini-4-argon",
+    "rounds": 2,
+    "fixed": [
+      "separate immutable escaped GPRs from mutable resume slots across transport",
+      "strict nontrapping import loader",
+      "epoch/caller checks for both transport variants",
+      "canonical scalar upper half on CSCHECK result"
+    ],
+    "withdrawn": [
+      "destination tag clearing: existing 32-bit TCG global already clears tag/live_ok/raw_tag"
+    ],
+    "remaining_observation": "PCC cursor normalization is not needed for a valid saved context; import validates it and resume reloads the mutable PCC slot."
+  },
+  "evidence": {
+    "archive": "$CAPSTONE_TMP_ROOT/copyable-only/checked-model-evidence.tar.gz",
+    "sha256": "ccb8d27cabd2b3e76d783af71e50324d11700902e9b236d6df23981c79e141a0"
+  },
+  "not_qualified": [
+    "kernel native syscall providers/resource policy/Seccomp",
+    "guest checked-copy COW and revoke/reuse race matrix",
+    "syscall instruction budgets",
+    "SMP",
+    "RTL"
+  ],
+  "logs": {
+    "isa-final.log": "4a6dd98d2c85bcacbd6a7136f328304637f47a5e95aec9b469a113b7baacd607",
+    "transport-final.log": "ded9a64b3d390565e8657836727c9dac638cced1e033772bc0269c85320f007c",
+    "removed-final.log": "6305fa3db2591cd36a592ac357aa06dcbea262741f5adb6e46c793c4190fb607",
+    "raw-final.log": "12260366bf6136fd5cbb7687142f31e88f1c97cfa181c69c091b027d9afda48e",
+    "linux-enabled.log": "90e6009c045c700d390ca88d4b83038e7a01368c46c199ace1d63997147b6bab",
+    "rebuild-final.log": "2c487b1cb922aed3537a1cb2b27bd8222ae757fb0cd961dd15d16ae3bb382b80"
+  }
+}

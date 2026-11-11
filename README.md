@@ -1,3 +1,17 @@
+# Capstone native Linux task branch
+
+**RTL developer: start with the [implementation handoff](capstone/docs/plans/native-task-rtl-handoff.md).**
+It contains the pinned checkout instructions, hardware contracts, changed-file
+inventory, qualification boundaries and remaining implementation decisions.
+
+Branch: `native/linux-task-integration`.
+
+[Project documentation](capstone/docs/README.md) ·
+[Current state](capstone/docs/state/current-state.md) ·
+[Next work](capstone/docs/state/current-next-step.md)
+
+---
+
 # The LLVM Compiler Infrastructure
 
 [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/llvm/llvm-project/badge)](https://securityscorecards.dev/viewer/?uri=github.com/llvm/llvm-project)

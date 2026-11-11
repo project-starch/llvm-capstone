@@ -1,0 +1,288 @@
+{
+  "base_commit": "99e7a3cefd6d",
+  "scope": "Ordinary RV64 Linux process, pristine musl 1.2.5, replay of allocation/free/realloc/calloc/aligned_alloc lifecycles from entry through GCC statistics_fini. Reported region follows init_cgraph; startup history replayed before that boundary.",
+  "trace_identity": {
+    "plain": {
+      "events": 6654,
+      "ids": 4154,
+      "live": 1450,
+      "cohort_events": {
+        "0": 6394,
+        "1": 195,
+        "2": 65
+      }
+    },
+    "native": {
+      "events": 7168,
+      "ids": 4557,
+      "live": 1740,
+      "cohort_events": {
+        "0": 6908,
+        "1": 195,
+        "2": 65
+      }
+    }
+  },
+  "modes": [
+    {
+      "mode": 0,
+      "label": "plain trace",
+      "stable_entry_attempts": {
+        "do_mmap": 118,
+        "__vm_munmap": 94,
+        "capstone_clear_page": 233,
+        "handle_mm_fault": 246,
+        "sys_brk": 1
+      },
+      "mean_replay_region_attempts": 4486308.5,
+      "mean_kernel_attempts": 3185472.0
+    },
+    {
+      "mode": 1,
+      "label": "Capstone trace",
+      "stable_entry_attempts": {
+        "do_mmap": 296,
+        "__vm_munmap": 249,
+        "capstone_clear_page": 556,
+        "handle_mm_fault": 600,
+        "sys_brk": 1
+      },
+      "mean_replay_region_attempts": 9823918.5,
+      "mean_kernel_attempts": 8267728.5
+    },
+    {
+      "mode": 2,
+      "label": "plain trace; two cohorts doubled",
+      "stable_entry_attempts": {
+        "do_mmap": 245,
+        "__vm_munmap": 220,
+        "capstone_clear_page": 521,
+        "handle_mm_fault": 534,
+        "sys_brk": 1
+      },
+      "mean_replay_region_attempts": 8750584.5,
+      "mean_kernel_attempts": 7355470.5
+    },
+    {
+      "mode": 3,
+      "label": "Capstone trace; two cohorts halved",
+      "stable_entry_attempts": {
+        "do_mmap": 277,
+        "__vm_munmap": 230,
+        "capstone_clear_page": 410,
+        "handle_mm_fault": 454,
+        "sys_brk": 1
+      },
+      "mean_replay_region_attempts": 8666837.5,
+      "mean_kernel_attempts": 7136478.5
+    }
+  ],
+  "samples": [
+    {
+      "rep": 0,
+      "mode": 0,
+      "pass_": true,
+      "compilation_attempts": 4449512,
+      "kernel_attempts": 3149052,
+      "entry_attempts": {
+        "capstone_clear_page": 233,
+        "find_vma": 352,
+        "handle_mm_fault": 246,
+        "do_mmap": 118,
+        "__vm_munmap": 94,
+        "sys_brk": 1
+      },
+      "phase_totals": [
+        1441004,
+        4449512,
+        654699
+      ]
+    },
+    {
+      "rep": 0,
+      "mode": 1,
+      "pass_": true,
+      "compilation_attempts": 9828291,
+      "kernel_attempts": 8271852,
+      "entry_attempts": {
+        "capstone_clear_page": 556,
+        "find_vma": 973,
+        "handle_mm_fault": 600,
+        "do_mmap": 296,
+        "__vm_munmap": 249,
+        "sys_brk": 1
+      },
+      "phase_totals": [
+        2208674,
+        9828291,
+        738818
+      ]
+    },
+    {
+      "rep": 0,
+      "mode": 2,
+      "pass_": true,
+      "compilation_attempts": 8742411,
+      "kernel_attempts": 7347546,
+      "entry_attempts": {
+        "capstone_clear_page": 521,
+        "find_vma": 868,
+        "handle_mm_fault": 534,
+        "do_mmap": 245,
+        "__vm_munmap": 220,
+        "sys_brk": 1
+      },
+      "phase_totals": [
+        1444456,
+        8742411,
+        581178
+      ]
+    },
+    {
+      "rep": 0,
+      "mode": 3,
+      "pass_": true,
+      "compilation_attempts": 8666667,
+      "kernel_attempts": 7136308,
+      "entry_attempts": {
+        "capstone_clear_page": 410,
+        "find_vma": 810,
+        "handle_mm_fault": 454,
+        "do_mmap": 277,
+        "__vm_munmap": 230,
+        "sys_brk": 1
+      },
+      "phase_totals": [
+        2266608,
+        8666667,
+        725871
+      ]
+    },
+    {
+      "rep": 1,
+      "mode": 3,
+      "pass_": true,
+      "compilation_attempts": 8667008,
+      "kernel_attempts": 7136649,
+      "entry_attempts": {
+        "capstone_clear_page": 410,
+        "find_vma": 810,
+        "handle_mm_fault": 454,
+        "do_mmap": 277,
+        "__vm_munmap": 230,
+        "sys_brk": 1
+      },
+      "phase_totals": [
+        2225865,
+        8667008,
+        750230
+      ]
+    },
+    {
+      "rep": 1,
+      "mode": 2,
+      "pass_": true,
+      "compilation_attempts": 8758758,
+      "kernel_attempts": 7363395,
+      "entry_attempts": {
+        "capstone_clear_page": 521,
+        "find_vma": 868,
+        "handle_mm_fault": 534,
+        "do_mmap": 245,
+        "__vm_munmap": 220,
+        "sys_brk": 1
+      },
+      "phase_totals": [
+        1444483,
+        8758758,
+        647341
+      ]
+    },
+    {
+      "rep": 1,
+      "mode": 1,
+      "pass_": true,
+      "compilation_attempts": 9819546,
+      "kernel_attempts": 8263605,
+      "entry_attempts": {
+        "capstone_clear_page": 556,
+        "find_vma": 973,
+        "handle_mm_fault": 600,
+        "do_mmap": 296,
+        "__vm_munmap": 249,
+        "sys_brk": 1
+      },
+      "phase_totals": [
+        2223259,
+        9819546,
+        766747
+      ]
+    },
+    {
+      "rep": 1,
+      "mode": 0,
+      "pass_": true,
+      "compilation_attempts": 4523105,
+      "kernel_attempts": 3221892,
+      "entry_attempts": {
+        "capstone_clear_page": 233,
+        "find_vma": 406,
+        "handle_mm_fault": 246,
+        "do_mmap": 118,
+        "__vm_munmap": 94,
+        "sys_brk": 1
+      },
+      "phase_totals": [
+        1501325,
+        4523105,
+        566292
+      ]
+    }
+  ],
+  "hashes": {
+    "replay": "d984abe537b8e3d70b68de7ddfb861d30d97123644e9f2d2b4eb6e6e1845d843",
+    "replay.c": "7f7bf8fd7b71edc6868588e3c0a4df5ca9430aac55461c90225f93eccbcf7e75",
+    "events.h": "8fea9c7bcaebc7c68d7a5b0eac2f26c98a7f1d3cfa465ffbf08405ad460faccf",
+    "plain-v2/trace.json": "0d01a03ccb70d3bf27cc1464040027ea7ea241b7218f14c27f97f4e9b062fd6f",
+    "native-v2/trace.json": "144404d2eb7ebac7ae0939a47fa8297de7d64d7d953dc1f3f7d4da1420bde6f8"
+  },
+  "libc_archive_sha256": "93ce972d375be255d6f3df5d8f727e99f37a77a98d2409b6c9e81f18efa7bb59",
+  "pristine_musl_archive_sha256": "a9a118bbe84d8764da0ea0d28b3ab3fae8477fc7e4085d90102b8596fc7c75e4",
+  "compiler": "RV64 clang b9dd0ccc0b31ed901eb6b38e4d2eaeb439bf05b4, rv64imafd lp64 static; same plain toolchain provenance as GCC reference",
+  "build_flags": [
+    "-O2",
+    "-g",
+    "-fno-builtin"
+  ],
+  "checks": [
+    "Both original GCC lifecycle capture runs match the assembly reference. Every nonnull free/realloc refers to a recorded live allocation; duplicate live pointers rejected.",
+    "Two repetitions each in fresh guests, mode order 0/1/2/3 then 3/2/1/0; all eight replay oracles pass.",
+    "calloc endpoints zero, realloc first byte preserved, allocation success, object-ID liveness and final live counts checked.",
+    "All phase boundaries and outer count conservation pass. Mapping/unmapping/page-clear/fault counts stable across repeats; other kernel counts vary.",
+    "Plain replay reproduces original GCC compilation mapping/unmapping counts exactly: 118/94.",
+    "Portable event generator produces byte-identical events.h."
+  ],
+  "findings": [
+    "Pristine musl given the Capstone request/free sequence creates 296 mappings versus 118 with the plain sequence. Special capability allocator or module dispatch is not necessary to produce mapping amplification.",
+    "Changing only 195 plain line-note requests from 3200 to 6400 and 65 pointer arrays from 2048 to 4096 increases mapping count from 118 to 245; same allocator, operation order and startup prefix.",
+    "Reverse size change in the Capstone trace reduces mappings only 296 to 277; allocator history and other request sizes interact. Earlier 124/163 localization is not an independently additive causal fraction."
+  ],
+  "limitations": [
+    "Not a complete GCC replay: no compiler computation, files or payload access pattern; minimal data checks only.",
+    "Do not subtract replay instruction counts from full GCC costs or interpret cumulative allocation sizes as RSS.",
+    "Replaying startup reproduces allocation history, not a byte-identical internal heap layout or address state.",
+    "Same patched measurement Linux/QEMU as before, normal RV64 process and ordinary syscalls; no separate unmodified-kernel run.",
+    "One recorded workload per arm; repeated replay validates deterministic mapping counts, not workload generality.",
+    "No production allocator, syscall or protection defaults changed."
+  ],
+  "excluded_attempts": [
+    "Initial capture setup failed because _start has no sized nm entry; corrected to ELF e_entry before accepted captures.",
+    "Initial replay completed correctly but oracle incorrectly required empty stderr; corrected to validate the expected PROFRUN_RUSAGE line."
+  ],
+  "evidence": {
+    "path": "$CAPSTONE_TMP_ROOT/native-gcc-preliminary/replay/gcc-allocator-replay-evidence.tar.gz",
+    "mirror": "p12:/var/tmp/capstone-copyable-only/gcc-allocator-replay-evidence.tar.gz",
+    "sha256": "80e9db3a364f48fd30360ed6760d50397ecf6bae915ba08013fe6c8cfb5f1cb4",
+    "original_argument_trace_archive_sha256": "d929b8d918eff01b44e4de9f17680ccee9d245114d5a863f65abb1ecae280677"
+  }
+}

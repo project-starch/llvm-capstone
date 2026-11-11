@@ -1,0 +1,372 @@
+{
+  "date": "2026-11-06",
+  "profile": "QEMU copyable-only, one hart, paged 30-bit IDs, compact bounds",
+  "compiler_sha256": "c24a54155d39a236bfe8b46e9202ee15418a7330490fb1eaf7179406638e57e4",
+  "linux_compiler_sha256": "d096661695bfc7d94d2203bc726abd80d17bcb70ee308896ce066eddb5e0a838",
+  "inputs_sha256": {
+    "qemu": "845b967fa12c87adf1d73ea6fd647c0803411221b1d5ba27592aacc70e9d2332",
+    "linux_image": "0dd725c4f38bccb65050b6a0dba877503a625178eb9fcb05221b83a2f0cb45da",
+    "linux_config": "caf22cfddf3630683ffb3483d8d691f73165065969ab5501e9804a1538270df7",
+    "linux_system_map": "3f6b970e5bb5b7e62b7de6d8d59ce39156843ce249cbe2193cb5d2d5e23da1f6",
+    "rootfs": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845",
+    "firmware": "2335a28682ddf65e46c1f492632c2cb026efcb2271caf544a3f7ddc858b03e02",
+    "module": "f5d1e95bd1d76cd7cffd7e350fda3e9dd63df450001d44e94da48ee6267058b9",
+    "launcher": "8110b7b1adcd80c8f667d38d67e00ef583761670bfdc01ba0e8ed48e6834e0e9",
+    "contract": "f42eeb8d5de9e17794c2b456d17a32db9ef0dc1cd0e55b08e2cb5d2aa988a1fd",
+    "allocation": "84ae630b444ec90688fd173a3dffd30763347f539e026704e6bd865688d46b7f",
+    "profiler": "dac6ab5bd4eb0be42c1650d380e4c99815c601ed0598c462f9c4d19289e8533c",
+    "abi_probe": "81fe6d81d156e85e788d4b03b59d1e93d6819baa3c1421a47ab7562d8675fbb8",
+    "mm_probe": "16e7d6a7ab7ee1dd96721edf7921422d8b6f61014d09bebfa824f12132e68a11",
+    "irq_probe": "67e74cadcc9dd511ae7ed741c293683367e8c250abc44cd044ad9f732a57c6fc",
+    "movement_launcher": "4910b2c3faac1074b981ffad0f586bb5b18b6ce2c7d0509415433b2621d131ee",
+    "movement_program": "83671b9a71d675849a990979e5bef632c3c9eb7c29ca9a409f2088e6068fa66d",
+    "linux_patch": "7bda423c643ede0ea4993b7f639bdc431489445e7e957c551c699fc16c3d0a84",
+    "workload_source": "3dc8b18266de41a9e940df65bd2834fc07713b1046f02e7ccdcb5c9cc4004ecf"
+  },
+  "pinned": {
+    "pass": true,
+    "checks": [
+      {
+        "mode": "ok",
+        "pass": true,
+        "status": 0,
+        "causes": []
+      },
+      {
+        "mode": "vm",
+        "pass": true,
+        "status": 0,
+        "causes": []
+      },
+      {
+        "mode": "vm-large",
+        "pass": true,
+        "status": 0,
+        "causes": []
+      },
+      {
+        "mode": "vm-mappings",
+        "pass": true,
+        "status": 0,
+        "causes": []
+      },
+      {
+        "mode": "nested",
+        "pass": true,
+        "status": 0,
+        "causes": []
+      },
+      {
+        "mode": "threads",
+        "pass": true,
+        "status": 0,
+        "causes": []
+      },
+      {
+        "mode": "heap-threads",
+        "pass": true,
+        "status": 0,
+        "causes": []
+      },
+      {
+        "mode": "map-churn",
+        "pass": true,
+        "status": 0,
+        "causes": []
+      },
+      {
+        "mode": "stale",
+        "pass": true,
+        "status": 139,
+        "causes": [
+          25
+        ]
+      },
+      {
+        "mode": "bounds",
+        "pass": true,
+        "status": 139,
+        "causes": [
+          28
+        ]
+      },
+      {
+        "mode": "nested-stale",
+        "pass": true,
+        "status": 139,
+        "causes": [
+          25
+        ]
+      },
+      {
+        "mode": "retired",
+        "pass": true,
+        "status": 139,
+        "causes": [
+          25
+        ]
+      },
+      {
+        "mode": "vm-ro-write",
+        "pass": true,
+        "status": 139,
+        "causes": [
+          15
+        ]
+      },
+      {
+        "mode": "vm-none-read",
+        "pass": true,
+        "status": 139,
+        "causes": [
+          13
+        ]
+      },
+      {
+        "mode": "vm-guard",
+        "pass": true,
+        "status": 139,
+        "causes": [
+          13
+        ]
+      },
+      {
+        "mode": "vm-padding",
+        "pass": true,
+        "status": 139,
+        "causes": [
+          28
+        ]
+      },
+      {
+        "check": "COPYABLE_ABI_PASS old-grant-refused legacy-remap-refused",
+        "pass": true
+      },
+      {
+        "check": "COPYABLE_TIMER_WAKE_PASS",
+        "pass": true
+      },
+      {
+        "check": "COPYABLE_SUITE_COMPLETE",
+        "pass": true
+      },
+      {
+        "check": "COPYABLE_GATE_EXIT:0",
+        "pass": true
+      },
+      {
+        "check": "VIRTUAL_STAGED_DONE",
+        "pass": true
+      },
+      {
+        "check": "no-kernel-fault",
+        "pass": true
+      }
+    ]
+  },
+  "unpinned": {
+    "pass": true,
+    "checks": [
+      {
+        "mode": "ok",
+        "pass": true,
+        "status": 0,
+        "causes": []
+      },
+      {
+        "mode": "vm",
+        "pass": true,
+        "status": 0,
+        "causes": []
+      },
+      {
+        "mode": "vm-large",
+        "pass": true,
+        "status": 0,
+        "causes": []
+      },
+      {
+        "mode": "vm-mappings",
+        "pass": true,
+        "status": 0,
+        "causes": []
+      },
+      {
+        "mode": "nested",
+        "pass": true,
+        "status": 0,
+        "causes": []
+      },
+      {
+        "mode": "threads",
+        "pass": true,
+        "status": 0,
+        "causes": []
+      },
+      {
+        "mode": "heap-threads",
+        "pass": true,
+        "status": 0,
+        "causes": []
+      },
+      {
+        "mode": "map-churn",
+        "pass": true,
+        "status": 0,
+        "causes": []
+      },
+      {
+        "mode": "stale",
+        "pass": true,
+        "status": 139,
+        "causes": [
+          25
+        ]
+      },
+      {
+        "mode": "bounds",
+        "pass": true,
+        "status": 139,
+        "causes": [
+          28
+        ]
+      },
+      {
+        "mode": "nested-stale",
+        "pass": true,
+        "status": 139,
+        "causes": [
+          25
+        ]
+      },
+      {
+        "mode": "retired",
+        "pass": true,
+        "status": 139,
+        "causes": [
+          25
+        ]
+      },
+      {
+        "mode": "vm-ro-write",
+        "pass": true,
+        "status": 139,
+        "causes": [
+          15
+        ]
+      },
+      {
+        "mode": "vm-none-read",
+        "pass": true,
+        "status": 139,
+        "causes": [
+          13
+        ]
+      },
+      {
+        "mode": "vm-guard",
+        "pass": true,
+        "status": 139,
+        "causes": [
+          13
+        ]
+      },
+      {
+        "mode": "vm-padding",
+        "pass": true,
+        "status": 139,
+        "causes": [
+          28
+        ]
+      },
+      {
+        "check": "COPYABLE_ABI_PASS old-grant-refused legacy-remap-refused",
+        "pass": true
+      },
+      {
+        "check": "COPYABLE_TIMER_WAKE_PASS",
+        "pass": true
+      },
+      {
+        "check": "COPYABLE_SUITE_COMPLETE",
+        "pass": true
+      },
+      {
+        "check": "COPYABLE_GATE_EXIT:0",
+        "pass": true
+      },
+      {
+        "check": "VIRTUAL_STAGED_DONE",
+        "pass": true
+      },
+      {
+        "check": "no-kernel-fault",
+        "pass": true
+      }
+    ]
+  },
+  "instruction_contract": {
+    "removed_encodings": 15,
+    "privilege_levels": [
+      "M",
+      "S",
+      "U"
+    ],
+    "exact_illegal_faults": 45,
+    "linear_mint_refused_without_mutation": true,
+    "copyable_mint_succeeds": true
+  },
+  "irq_copy": {
+    "pass": true,
+    "runner_rc": 0,
+    "config_ok": true,
+    "bulk": "off",
+    "cpu_extra": "x-capstone-raw-moves=true,x-capstone-test-csrs=false",
+    "iterations": 4000,
+    "deadline_in_copy": 2707,
+    "lost_iterations": 0,
+    "s_interrupt_taken_in_copy": 0,
+    "copy_retries": 2501,
+    "copies": 5022,
+    "expect": {
+      "lost": "none",
+      "retries": "any",
+      "window": "inside"
+    }
+  },
+  "page_lifecycle": {
+    "pass": true,
+    "markers": [
+      "RAW_MM acknowledge_refuses_live_tag=1",
+      "RAW_MM copied_tag=1 expected=1",
+      "RAW_MM tagged_swap=-16 untagged_swap=0",
+      "RAW_MM reused_same_frame=1 tag=0",
+      "RAW_MM PASS",
+      "COPYABLE_MM_COMPLETE",
+      "COPYABLE_MM_EXIT:0"
+    ]
+  },
+  "movement": {
+    "pass": true,
+    "live_rounds": 4,
+    "stale_rounds": 2,
+    "stale_fault_cause": 25,
+    "pfn_observations": {
+      "heap": {
+        "samples": 25,
+        "frame_changes": 9902
+      },
+      "bss": {
+        "samples": 25,
+        "frame_changes": 1133
+      }
+    },
+    "scope": "COW forced by test-only sleeping children; compaction requested but not separately attributed; not protected fork support"
+  },
+  "pass": true,
+  "evidence": {
+    "path": "$CAPSTONE_TMP_ROOT/copyable-only/evidence.tar.gz",
+    "sha256": "223049dab82760bef85c8f249a6ea5a77a39194642dd5eb3ab7e63de37763b68"
+  },
+  "qemu_source_commit": "316c44ae56"
+}

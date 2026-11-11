@@ -14,10 +14,13 @@ def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('--qemu', type=Path, required=True)
     p.add_argument('--images', type=Path, required=True)
+    p.add_argument('--firmware', type=Path, help='Override images/fw_jump.elf')
+    p.add_argument('--dtb', type=Path, help='Override platform device tree (qualification fixtures)')
     p.add_argument('--stage', type=Path, required=True, help='Contains executable gate.sh and application resources')
     p.add_argument('--timeout', type=int, default=600)
     p.add_argument('--disk-mib', type=int, default=1024)
     p.add_argument('--memory', default='2G', help="Guest RAM, as QEMU's -m takes it")
+    p.add_argument('--cpus', type=int, default=1, help='Guest CPUs (default: 1)')
     p.add_argument('--kernel-arg', action='append', default=[],
                    help='Additional kernel command-line argument (repeatable)')
     p.add_argument('--work', type=Path, required=True, help='New output directory')
@@ -25,15 +28,24 @@ def main():
                    help="Run QEMU's exact-bounds profile. Option (iii) does not need it; it is kept so a suite can be run both ways as a two-sided control.")
     p.add_argument('--share', type=Path,
                    help='Directory exported to the guest over 9p (mount tag gate9p), for gates that need it')
+    p.add_argument('--plugin', type=Path, help='Optional QEMU TCG profiling plugin')
+    p.add_argument('--plugin-arg', action='append', default=[])
+    p.add_argument('--icount', type=int, choices=range(11))
     a = p.parse_args()
+    if a.cpus < 1:
+        p.error('--cpus must be positive')
+    if a.plugin_arg and not a.plugin:
+        p.error('--plugin-arg needs --plugin')
+    if any(',' in arg or '=' not in arg for arg in a.plugin_arg):
+        p.error('--plugin-arg must be key=value without commas')
     a.work.mkdir(parents=True, exist_ok=False)
     disk = a.work / 'stage.ext4'
     with disk.open('wb') as f:
         f.truncate(a.disk_mib << 20)
     subprocess.run(['/sbin/mkfs.ext4', '-F', '-q', '-d', str(a.stage), str(disk)], check=True)
-    cmd = [str(a.qemu), '-M', 'virt-capstone', '-m', a.memory, '-smp', '1',
+    cmd = [str(a.qemu), '-M', 'virt-capstone', '-m', a.memory, '-smp', str(a.cpus),
            '-nographic', '-monitor', 'none', '-serial', 'stdio', '-snapshot',
-           '-bios', str(a.images/'fw_jump.elf'), '-kernel', str(a.images/'Image'),
+           '-bios', str(a.firmware if a.firmware else a.images/'fw_jump.elf'), '-kernel', str(a.images/'Image'),
            '-append', ' '.join(['root=/dev/vda ro', *a.kernel_arg]),
            '-drive', f'file={a.images/"rootfs.ext2"},format=raw,id=hd0',
            '-device', 'virtio-blk-device,drive=hd0',
@@ -58,6 +70,12 @@ def main():
     a.work.mkdir(parents=True, exist_ok=True)
     (a.work / 'cpu.txt').write_text(cmd[-1] + "\n")
     print(f"run-staged: -cpu {cmd[-1]}", flush=True)
+    if a.plugin:
+        cmd += ['-plugin', ','.join([str(a.plugin), *a.plugin_arg])]
+    if a.dtb:
+        cmd += ['-dtb', str(a.dtb)]
+    if a.icount is not None:
+        cmd += ['-icount', f'shift={a.icount}']
     if a.share:
         cmd += ['-virtfs', f'local,path={a.share.resolve()},mount_tag=gate9p,security_model=none,id=gate9p']
     completed = login = sent = False

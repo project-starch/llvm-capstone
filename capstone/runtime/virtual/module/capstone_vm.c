@@ -1,8 +1,16 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /* Trusted OS adapter: one shared-mm namespace and explicit C contexts. */
 #include <linux/module.h>
-#include <linux/miscdevice.h>
-#include <linux/dma-mapping.h>
+#include <linux/of.h>
+#include <linux/cpu.h>
+#if !defined(CONFIG_RISCV_CAPSTONE_TASK) || defined(MODULE)
+#error "The Capstone adapter requires built-in CONFIG_RISCV_CAPSTONE_TASK"
+#endif
+#define CV_TASK_BACKEND 1
+#include <asm/capstone_task.h>
+#include <linux/capstone_native_helpers.h>
+
+static bool copyable_exact_bounds;
 #include <linux/fs.h>
 #include <linux/mm.h>
 #include <linux/version.h>
@@ -15,7 +23,6 @@
 #include <linux/ktime.h>
 #include <linux/log2.h>
 #include <linux/rbtree.h>
-#include <linux/xarray.h>
 #include <linux/file.h>
 #include <asm/csr.h>
 #include <asm/io.h>
@@ -52,8 +59,7 @@ _Static_assert(sizeof(struct cv_step) == 136, "cv_step is two user-copy chunks a
 #include "native-grant.h"
 _Static_assert(CV_NODE_RESERVE == CAP_REV_TABLE_RESERVE, "processor reserve ABI");
 
-/* One registered mapping. Arenas are allocated one by one and never move, so
- * the remap window may hold a pointer across its unlocked mremap. */
+/* One registered mapping, with its own revocable ancestor. */
 struct arena {
     struct rb_node node;
     u64 id;
@@ -67,8 +73,8 @@ struct arena {
      * open-addressing table of frame_slots(count) entries. It is the whole-arena duplicate
      * check (frames_distinct, commit 35fee9127ec2) kept for the arena's lifetime, so a page
      * admitted after the mint -- at a fault, in a pin-ahead window or by the resident scan --
-     * is held to the same rule as one pinned at mint. NULL for a linear arena, which was never
-     * frame-checked and still is not. */
+     * is held to the same rule as one pinned at mint. Unpinned arenas have
+     * neither pages nor frames; their count still describes range geometry. */
     unsigned long *frames;
     /* Data fault events received on this arena's pages, counted under diag_admit where CV_STEP
      * receives the event (not where CAPSTONE_VM_STATS faults is advanced, at the resolution or
@@ -91,21 +97,16 @@ struct arena {
     unsigned unpinned_resolves, unpinned_touches, unpinned_events, unpinned_ahead;
     /* Pages are admitted one by one at the domain's first access (resolve). */
     bool lazy;
-    /* The grant was LINEAR: the heap's move-only shape, the one CV_REMAP may grow. lazy used
-     * to imply this; since lazy_grants it does not. */
-    bool linear;
     /* S-21: the ancestor was already CSRETIREd at CV_THREAD_CREATE, to make a child's frame
      * unreachable by the domain before its first entry. A second retire is not an error, but the
      * non-destroying path reports one, so it must be skipped rather than tolerated. */
     bool ancestor_retired;
-    /* Mapping cache (CV_PARK/CV_REVIVE). The launcher gave the domain's access up (the ancestor is
-     * retired, so every capability to the arena is dead) but keeps the Linux mapping and this
-     * registration, with the pages it already holds pinned, to hand the same backing to a later
-     * grant of the same size. A parked arena is invisible to every domain-facing lookup
-     * (arena_at): no fault resolves in it, no touch or thread frame names it. It still occupies its
-     * range (arena_overlaps), is swept by every collection like any pinned page, and is retired
-     * like any other arena at CV_RETIRE (the launcher's eviction) or at the context's release. */
-    bool parked;
+    /* Native-task mappings only; initial transport cannot be retired. */
+    bool dom_dynamic, dom_metadata;
+    /* Checked-copy holds retain both pages and the VA reservation after a
+     * logical native unmap. The node is retired immediately, under vm_lock. */
+    unsigned copy_holds;
+    bool copy_retired, copy_unmap_pending;
 };
 struct context;
 struct cv_thread {
@@ -118,6 +119,8 @@ struct cv_thread {
     struct page *frame_page;
     bool user_frame;
     bool started, reply_cap, terminal;
+    bool slot_exported; /* VM transport image in the kernel-owned frame */
+    unsigned long native_satp; /* translation identity of the paused snapshot */
     unsigned long event;
     /* S-24: the same kind-4 fault resolved repeatedly without changing anything. The RTL's walker
      * faults on a clear A bit and never sets it, so a PTE this module leaves untouched can re-fault
@@ -148,15 +151,13 @@ struct context {
     struct mm_struct *mm;
     unsigned long *frame, *table;
     phys_addr_t table_pa;   /* the table's physical root (select_root, the frame); from CMA when it is above the buddy limit */
-    dma_addr_t table_dma;   /* nonzero only for a CMA table: the handle dma_free_coherent needs */
     struct cv_thread *main_thread;
     struct list_head threads;
     u64 next_thread;
-    /* Registered arenas by address and by mapping ID, both under vm_lock.
+    /* Registered arenas by address, under vm_lock.
      * Arenas never overlap, so the address tree answers containment with
      * one predecessor lookup. registered_bytes is the sum of their sizes. */
     struct rb_root arenas;
-    struct xarray ids;
     unsigned long registered_bytes;
     struct cv_stats stats;
     u64 next_id;
@@ -180,11 +181,13 @@ struct context {
 #endif
     /* The image file, writers denied from CV_IMAGE until release. */
     struct file *image;
-    wait_queue_head_t remap_wait;
-    struct arena *remapping;
-    struct page **remap_pages;
-    u64 remap_thread;
-    unsigned long remap_bytes;
+    /* Private native-task driver state; never imported from scalar userspace. */
+    unsigned long dom_meta, dom_exchange, dom_exchange_bytes;
+    struct cv_step dom_step;
+    pid_t dom_pid;
+    struct dom_delegate *dom_delegate;
+    struct cn_context *native_context;
+    struct ns_session *native_session;
 };
 static DEFINE_MUTEX(vm_lock);
 /* Quotas are in base pages; zero means the 30-bit ISA limit. Parameters are
@@ -371,11 +374,16 @@ MODULE_PARM_DESC(unpinned_fast_fault, "Experiment: reuse the validated anonymous
 static unsigned long unpinned_fast_faults;
 module_param(unpinned_fast_faults, ulong, 0444);
 MODULE_PARM_DESC(unpinned_fast_faults, "Faults resolved by the direct path since load (read-only)");
+static bool unpinned_access_fault;
+module_param(unpinned_access_fault, bool, 0444);
+MODULE_PARM_DESC(unpinned_access_fault, "Experiment: preserve read access on lazy anonymous demand faults");
+static unsigned long unpinned_access_reads;
+module_param(unpinned_access_reads, ulong, 0444);
+MODULE_PARM_DESC(unpinned_access_reads, "Anonymous read attempts with write-prefault suppressed; includes retries and failures");
 static bool unpinned_exact_bounds;
 static unsigned long unpinned_faults, unpinned_sweep_pages;
 module_param(unpinned_faults, ulong, 0444);
 module_param(unpinned_sweep_pages, ulong, 0444);
-extern int capstone_unpinned_config(unsigned int ids, bool *exact);
 
 /* Pages a lazy-arena fault pins, from the faulting page on, clipped to the
  * arena, the VMA and the first page already pinned. 1 pins only the page. */
@@ -451,10 +459,9 @@ module_param(diag_admit, bool, 0644);
 /* The CSMINT descriptor, v7 (Q-23's ruling). Six words, 8-aligned:
  *   w0 base
  *   w1 end
- *   w2 perms in bits 0-3, bit 8 set = NONLIN, clear = LINEAR
+ *   w2 perms in bits 0-3; bit 8 must be set (copyable)
  *   w3 cursor, base <= cursor <= end or the mint refuses with 29
- *   w4 a SECOND slot address, 0 for none; same checks as the first, and non-zero
- *      together with LINEAR refuses with 29
+ *   w4 a SECOND slot address, 0 for none; same checks as the first
  *   w5 reserved, must be 0
  * One rev node however many slots are written, which is why this replaces the old
  * load/delin/scc/store round trip rather than a second mint: two mints would make two
@@ -473,58 +480,6 @@ static unsigned long node_free_count(const struct context *c)
 { return READ_ONCE(c->table[2]) >> 32; }
 static unsigned long node_available(const struct context *c)
 { return node_capacity(c) - c->table[1] + node_free_count(c); }
-
-/* The flat table is one physically contiguous allocation: select_root() publishes
- * virt_to_phys(c->table) into CSR 0x5c1, and QEMU's flat preflight requires the whole
- * capacity*16 extent to be range_ok from that physical root, so vmalloc will not do.
- * __GFP_RETRY_MAYFAIL tries hard without inviting the OOM killer; failing here is a clean
- * ENOMEM at context creation, which is strictly better than the paged path's failure
- * part-way through a running domain. */
-/* ids20: a table above the buddy allocator's largest block (order 10, 4 MiB = 262,144 records on these kernels)
- * comes from CMA through the misc device (dma_alloc_coherent zeroes it; dma == phys without an IOMMU). The kernel
- * needs a CMA area at least that large: the board and its twin boot with cma=256M.
- * The largest buddy order is MAX_ORDER - 1 before 6.4 and MAX_ORDER from 6.4 on, which made MAX_ORDER inclusive
- * (board 6.4.14 mmzone.h: MAX_ORDER 10, MAX_ORDER_NR_PAGES 1 << MAX_ORDER; twin 6.1: MAX_ORDER 11). Comparing against
- * MAX_ORDER on both sent a 4 MiB table, bitstream 3's 18-bit size, to CMA on the board only. */
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 4, 0)
-#define CV_BUDDY_MAX_ORDER MAX_ORDER
-#else
-#define CV_BUDDY_MAX_ORDER (MAX_ORDER - 1)
-#endif
-static struct miscdevice device;
-#if CAPSTONE_VM_INDEX_BITS == 25
-/* ids55 only: the first table this load allocates, and every failure up to a budget, are one KERN_EMERG line each,
- * so the module's first board boot records where its table came from (pa inside the CMA pool, linear or not) and why
- * an open failed. The other widths' objects are unchanged: their kits' parsers have never seen this line. */
-#define CV_TABLE_NOTE_BUDGET 4U
-static unsigned table_notes;
-#endif
-static unsigned long *node_new_flat_table(struct context *c)
-{
-    unsigned long *p;
-    if (get_order(CV_FLAT_BYTES) > CV_BUDDY_MAX_ORDER) {
-        p = dma_alloc_coherent(device.this_device, CV_FLAT_BYTES, &c->table_dma, GFP_KERNEL);
-        if (p) c->table_pa = (phys_addr_t)c->table_dma;
-    } else {
-        p = (void *)__get_free_pages(GFP_KERNEL | __GFP_ZERO | __GFP_RETRY_MAYFAIL, get_order(CV_FLAT_BYTES));
-        if (p) c->table_pa = virt_to_phys(p);
-    }
-    if (p) c->stats.node_bytes += CV_FLAT_BYTES;
-#if CAPSTONE_VM_INDEX_BITS == 25
-    if (table_notes < CV_TABLE_NOTE_BUDGET && (!p || !table_notes)) {
-        const char *from = get_order(CV_FLAT_BYTES) > CV_BUDDY_MAX_ORDER ? "CMA" : "buddy";
-        ++table_notes;
-        if (p)
-            pr_emerg("capstone_vm: flat table %lu records, %lu bytes, from %s, pa %llx, %s mapping\n",
-                     CV_FLAT_RECORDS, CV_FLAT_BYTES, from, (unsigned long long)c->table_pa,
-                     virt_addr_valid(p) && virt_to_phys(p) == c->table_pa ? "linear" : "NON-LINEAR");
-        else
-            pr_emerg("capstone_vm: flat table %lu records, %lu bytes, from %s: ALLOCATION FAILED\n",
-                     CV_FLAT_RECORDS, CV_FLAT_BYTES, from);
-    }
-#endif
-    return p;
-}
 
 /* Table pages grow with the identities minted, one per arena among them, so
  * they are charged to the process's memory cgroup like the arena records. */
@@ -576,9 +531,8 @@ static void node_free_table(struct context *c)
 {
     if (!c->table) return;
     if (node_table_flat) {
-        if (c->table_dma) dma_free_coherent(device.this_device, CV_FLAT_BYTES, c->table, c->table_dma);
-        else free_pages((unsigned long)c->table, get_order(CV_FLAT_BYTES));
-        c->table = NULL; c->table_dma = 0;
+        free_pages((unsigned long)c->table, get_order(CV_FLAT_BYTES));
+        c->table = NULL;
         return;
     }
     for (unsigned i = 0; i < CAP_REV_TABLE_ROOT_ENTRIES; ++i) {
@@ -618,10 +572,20 @@ module_param(supervisor_slots, ulong, 0444);
 MODULE_PARM_DESC(supervisor_slots,
     "saved-context slots the processor has (default 1, as vp2); the module never issues an entry "
     "beyond this many live frames");
+/* Experimental VM backend: requires x-capstone-context-transport. Never
+ * enable on the legacy RTL ABI, which uses the extension area differently. */
+static bool native_slot_transport;
+module_param(native_slot_transport, bool, 0444);
+MODULE_PARM_DESC(native_slot_transport,
+    "experimental VM protected-frame slot export/import (default off)");
 static DECLARE_WAIT_QUEUE_HEAD(slot_wait);
-/* The wait condition, evaluated WITHOUT vm_lock: it takes the lock itself, because the sleeper
- * released it. A false wake just re-checks. */
-static bool slot_free_now(void);
+/* Writers and admission hold vm_lock. A waiter snapshots this generation
+ * before dropping the lock, then checks it without sleeping in the wait
+ * predicate (prepare_to_wait_event has already changed its task state).
+ * Publish before waking, including releases before the waiter is enqueued.
+ * A changed generation is only a retry hint, never a slot reservation. */
+static unsigned long slot_generation;
+static void slot_changed(void);
 
 /* Live frames across EVERY context, and one of them if asked. vm_lock is held by every caller. */
 static unsigned slot_live(struct cv_thread **holder)
@@ -631,26 +595,88 @@ static unsigned slot_live(struct cv_thread **holder)
     unsigned n = 0;
     list_for_each_entry(c, &contexts, link)
         list_for_each_entry(t, &c->threads, link)
-            if (t->started && !t->terminal) {
+            if (t->started && !t->terminal && !t->slot_exported) {
                 if (holder && !n) *holder = t;
                 ++n;
             }
     return n;
 }
 
-/* Evaluated by wait_event_interruptible WITHOUT vm_lock held -- the sleeper released it -- so this
- * takes the lock itself. A spurious wake simply re-checks. */
-static bool slot_free_now(void)
+static void slot_changed(void)
 {
-    bool free;
-    if (mutex_lock_interruptible(&vm_lock)) return true;   /* let the sleeper return -EINTR */
-    free = slot_live(NULL) < supervisor_slots;
-    mutex_unlock(&vm_lock);
-    return free;
+    lockdep_assert_held(&vm_lock);
+    /* Waiters returning EAGAIN must not wake one another while all slots
+     * remain occupied. Only a possible admission publishes a new epoch. */
+    if (slot_live(NULL) < supervisor_slots) {
+        WRITE_ONCE(slot_generation, slot_generation + 1);
+        wake_up_all(&slot_wait);
+    }
 }
+
 static u64 allocated_total, high_water, collections_total, reclaimed_total;
 
 static unsigned long run(unsigned long frame, unsigned long action);
+
+/* vm_lock serializes physical-slot ownership and protected-frame lifetime.
+ * Only kernel pages can hold an importable transport image. User start frames
+ * remain on the legacy admission path until they have a protected copy. */
+static int slot_acquire(struct cv_thread *t)
+{
+    struct cv_thread *holder = NULL, *dead;
+    struct context *c;
+    unsigned long flags, result;
+    lockdep_assert_held(&vm_lock);
+    if (!native_slot_transport || (t->started && !t->slot_exported &&
+        t->native_satp == csr_read(CSR_SATP))) return 0;
+#ifdef CV_RACE_TEST
+    /* Test build: the racer's start frame is a user page. It may enter while a
+     * slot is free (the legacy admission), never by evicting another frame. */
+    if (t->user_frame)
+        return !t->started && slot_live(NULL) < supervisor_slots ? 0 : -EOPNOTSUPP;
+#else
+    if (t->user_frame) return -EOPNOTSUPP;
+#endif
+    /* Linux can change the ASID while a native I/O sleeps. Rebind the
+     * trusted snapshot to this mm's current translation identity through
+     * export/import, preserving its immutable register epoch. */
+    if (t->started && !t->slot_exported) {
+        preempt_disable(); local_irq_save(flags);
+        result = run(t->frame_pa, 4);
+        local_irq_restore(flags); preempt_enable();
+        if (result) return -EIO;
+        t->slot_exported = true;
+    }
+    /* A terminal event can precede close(). Reclaim its occupied slot before
+     * admitting another frame, even when the exiting task has not run yet. */
+    list_for_each_entry(c, &contexts, link)
+        list_for_each_entry(dead, &c->threads, link)
+            if (dead->started && dead->terminal && !dead->slot_exported) {
+                preempt_disable(); local_irq_save(flags);
+                run(dead->frame_pa, 1);
+                local_irq_restore(flags); preempt_enable();
+                dead->started = false;
+            }
+    if (slot_live(&holder) >= supervisor_slots) {
+        if (!holder || holder->user_frame) return -EOPNOTSUPP;
+        preempt_disable(); local_irq_save(flags);
+        result = run(holder->frame_pa, 4);
+        local_irq_restore(flags); preempt_enable();
+        if (result) return -EIO;
+        holder->slot_exported = true;
+    }
+    if (t->slot_exported) {
+        preempt_disable(); local_irq_save(flags);
+        /* Transport v5/v6: SCALAR_STATE.satp is at byte 1192. This
+         * kernel-owned field is not an application authority import. */
+        WRITE_ONCE(t->frame[1192 / 8], csr_read(CSR_SATP));
+        result = run(t->frame_pa, 5);
+        if (!result) t->native_satp = csr_read(CSR_SATP);
+        local_irq_restore(flags); preempt_enable();
+        if (result) return -EIO;
+        t->slot_exported = false;
+    }
+    return 0;
+}
 
 static struct cv_thread *find_thread(struct context *c, u64 id)
 {
@@ -684,7 +710,7 @@ static struct arena *arena_below(struct context *c, unsigned long end)
 static __always_inline struct arena *arena_at(struct context *c, unsigned long address)
 {
     struct arena *a = address == ULONG_MAX ? NULL : arena_below(c, address + 1);
-    return a && !a->parked && address - a->address < a->bytes ? a : NULL;
+    return a && address - a->address < a->bytes ? a : NULL;
 }
 /* A fault in the image's read+execute prefix. Linux resolves it from the
  * file, with fault-around and no pin, so it is not one of the adapter's fault
@@ -736,6 +762,8 @@ static bool arena_has_thread_frame(struct context *c, struct arena *a)
     return false;
 }
 
+#ifdef CV_RACE_TEST
+/* The native race fixture uses a private test frame; production has no user-frame entry. */
 /* A child start frame stays in the owning mm. Pin exactly one page so the
  * QEMU supervisor sees a stable physical frame and collection can include it.
  * Requiring page alignment also prevents a frame from straddling an unpinned
@@ -771,6 +799,8 @@ static int pin_thread_frame(struct context *c, unsigned long address,
     t->user_frame = true;
     return 0;
 }
+
+#endif
 
 static void drop_thread_frame(struct cv_thread *t)
 {
@@ -846,7 +876,7 @@ static unsigned long frame_slots(long n)
 
 /* Record a page's frame in the arena's frame set: false if the frame is there already, i.e.
  * another page of the arena holds it. Expected O(1): the set is at most half full, since no
- * index of pages[] is filled twice. A linear arena has no set and is never refused here. */
+ * index of pages[] is filled twice. */
 static bool frame_insert(struct arena *a, struct page *page)
 {
     unsigned long mask, key, at;
@@ -1268,6 +1298,8 @@ static int collect(struct context *c, struct cv_thread *owner)
                  node_retired(c), node_available(c), collect_skips);
     return -ENOMEM;
 #endif
+    error = slot_acquire(owner);
+    if (error) return error;
     /* The unpinned sweep covers the whole mm, including retired arenas that
      * are still mapped. Pinning only current arenas could resurrect stale IDs.
      * Hold mmap_lock through the sweep/recycle so fork and unmap cannot copy or
@@ -1441,13 +1473,30 @@ static void run_x0(unsigned long frame, unsigned long action)
 /* The cause reported to the launcher for a refused CSRUNV: outside every RISC-V cause, so a judge
  * reading the fault line can tell it from any real one. */
 #define CV_CAUSE_REFUSED 0xcafe0001UL
+#if defined(CV_TASK_BACKEND) && defined(CV_TEST_HOOKS)
+/* Deliberate S-origin admission exception, once, to exercise CT + extable. */
+static bool task_refuse_once;
+module_param(task_refuse_once, bool, 0600);
+#endif
 static unsigned long run_event(struct cv_thread *t, unsigned long action)
 {
     WRITE_ONCE(t->frame[2], CV_EVENT_UNWRITTEN);
     /* The sentinel must reach memory before the switcher can write the record over it; a kernel
      * store still draining after the escape's write would turn a real event into a refusal. */
     asm volatile("fence rw,rw" ::: "memory");
-    run_x0(t->frame_pa, action);
+#ifdef CV_TASK_BACKEND
+    if (current->thread.capstone) {
+#ifdef CV_TEST_HOOKS
+        if (task_refuse_once) {
+            task_refuse_once = false;
+            action = ~0UL;
+        }
+#endif
+        if (riscv_capstone_run_user(t->frame_pa, action))
+            return CV_EVENT_UNWRITTEN;
+    } else
+#endif
+        run_x0(t->frame_pa, action);
     return READ_ONCE(t->frame[2]);
 }
 static unsigned long select_root(struct context *c)
@@ -1493,7 +1542,8 @@ static int retire(struct context *c, struct arena *a, bool destroying)
     unsigned i, swept;
     if (!destroying && arena_has_thread_frame(c, a))
         return -EBUSY;
-    if (!destroying && !unpinned) {
+    if (destroying && WARN_ON_ONCE(a->copy_holds)) return -EBUSY;
+    if (!destroying && !unpinned && !a->copy_holds) {
         int error = pin_remaining(c, a, FOLL_FORCE | FOLL_NOFAULT);
         if (error) return error;
     }
@@ -1519,6 +1569,11 @@ static int retire(struct context *c, struct arena *a, bool destroying)
             ++c->retired_flat;
             if (node_free_count(c) > free_before) ++c->pushed_flat;
         }
+    }
+    if (a->copy_holds) {
+        a->ancestor_retired = true;
+        a->copy_retired = true;
+        return 0;
     }
     /* Clear every tag before returning frames to Linux. Later collection can
      * reuse dead IDs only after sweeping all remaining namespace storage.
@@ -1555,7 +1610,6 @@ static int retire(struct context *c, struct arena *a, bool destroying)
                 a->unpinned_ahead);
     --c->stats.arenas;
     rb_erase(&a->node, &c->arenas);
-    xa_erase(&c->ids, a->id);
     c->registered_bytes -= a->bytes;
     kvfree(a->pages);
     kvfree(a->frames);
@@ -1563,195 +1617,13 @@ static int retire(struct context *c, struct arena *a, bool destroying)
     return 0;
 }
 
-/* ---- Mapping cache: CV_PARK and CV_REVIVE ----
- *
- * The launcher's mapping pool (exec.c) keeps the Linux mapping and this registration of a heap
- * arena the domain has unmapped, and hands the same backing to a later grant of the same size.
- * It saves the mmap and munmap, the arena record, and above all the page lifecycle (fault, pin,
- * zero, tag clear, unpin, free) of every page the arena already holds. What it must not change is
- * what the domain can observe:
- *   - PARK ends the domain's access NOW: the arena's ancestor lifetime is retired, so every
- *     capability derived from it (the grant, the allocator's mapping-wide owner, every object)
- *     is dead, exactly as at CV_RETIRE. The arena then stops being visible to every
- *     domain-facing lookup (arena_at).
- *   - REVIVE hands the backing out again only after every pinned page has been overwritten with
- *     zeros (a store clears the tags of the granules it writes, rule 1: data and tags go
- *     together), under a NEW ancestor and a NEW arena id. A pointer from before the park names the
- *     retired ancestor, so it still faults with a lifetime cause after the reuse, at the same
- *     address.
- *   - Pages not pinned are not resident (PARK and REVIVE both pin every resident page first, as
- *     CV_RETIRE does; a native writer can populate a page of a parked VMA in between), so the new
- *     grant reads zeros from them as from any fresh mapping.
- * Pinned mode only: in unpinned mode the pages are not held, so there is nothing to clear in
- * place and the launcher takes the ordinary path (EOPNOTSUPP). */
-#ifdef CV_TEST_HOOKS
-/* Negative controls, test build only: each removes exactly one guard and a gate must then fail. */
-static bool test_revive_skip_clear;     /* REVIVE leaves the previous contents (data and tags) in the pages */
-static bool test_revive_keep_ancestor;  /* PARK retires nothing: the old ancestor stays alive, so a stale pointer keeps working after the reuse */
-static bool test_revive_skip_pin;       /* REVIVE does not pin pages that became resident while parked: they are handed out uncleared */
-module_param(test_revive_skip_clear, bool, 0444);
-module_param(test_revive_keep_ancestor, bool, 0444);
-module_param(test_revive_skip_pin, bool, 0444);
-#define CV_MUTANT(flag) (flag)
-#else
-#define CV_MUTANT(flag) false
-#endif
-static unsigned long map_parks, map_revives, map_revive_pages;
-module_param(map_parks, ulong, 0444);
-module_param(map_revives, ulong, 0444);
-module_param(map_revive_pages, ulong, 0444);
 
-/* Overwrite a whole page: every granule is stored to twice, so the data is zero and no tag is left. */
-static void clear_page_full(struct page *page)
-{
-    unsigned long *p = page_address(page);
-    for (unsigned j = 0; j < PAGE_SIZE / sizeof(*p); j += 8) {
-        WRITE_ONCE(p[j], 0UL);     WRITE_ONCE(p[j + 1], 0UL);
-        WRITE_ONCE(p[j + 2], 0UL); WRITE_ONCE(p[j + 3], 0UL);
-        WRITE_ONCE(p[j + 4], 0UL); WRITE_ONCE(p[j + 5], 0UL);
-        WRITE_ONCE(p[j + 6], 0UL); WRITE_ONCE(p[j + 7], 0UL);
-    }
-}
-
-static int park(struct context *c, struct arena *a)
-{
-    unsigned long flags, old, status;
-    unsigned long free_before;
-    int error;
-    if (unpinned) return -EOPNOTSUPP;
-    if (a->parked || a->ancestor_retired || !a->linear || !a->lazy || a->rx_bytes || a->frames)
-        return -EINVAL;
-    if (arena_has_thread_frame(c, a)) return -EBUSY;
-    if (c->remapping) return -EBUSY;
-    /* Everything that can fail comes before the retire. */
-    error = pin_remaining(c, a, FOLL_FORCE | FOLL_NOFAULT);
-    if (error) return error;
-    if (!CV_MUTANT(test_revive_keep_ancestor)) {
-        free_before = node_free_count(c);
-        preempt_disable(); local_irq_save(flags);
-        old = select_root(c);
-        asm volatile(".insn r 0x5b, 1, 0x53, %0, %1, zero"
-                     : "=&r"(status) : "r"(a->ancestor) : "memory");
-        restore_root(old);
-        local_irq_restore(flags); preempt_enable();
-        if (status) return -EIO;
-        ++c->retired_flat;
-        if (node_free_count(c) > free_before) ++c->pushed_flat;
-        a->ancestor_retired = true;
-    }
-    a->parked = true;
-    ++map_parks;
-    return 0;
-}
-
-static int revive(struct context *c, struct cv_thread *t, struct cv_map *r)
-{
-    unsigned long flags, old, desc[CV_DESC_WORDS], ancestor, *slot, cleared = 0;
-    struct arena *a;
-    u64 id;
-    unsigned i;
-    if (unpinned) return -EOPNOTSUPP;
-    a = xa_load(&c->ids, r->id);
-    /* The same conditions as a reply grant at add(): a started context paused at a service, the
-     * heap's move-only shape (reg 10, read+write, cursor at the base) and exactly the range that was parked. */
-    if (!a || !a->parked || a->address != r->address || a->bytes != r->bytes ||
-        r->permissions != 6 || r->linear != 1 || r->reg != 10 || r->cursor != r->address ||
-        !t->started || t->event != 3 || t->reply_cap)
-        return -EINVAL;
-    if (c->next_id == U64_MAX) return -ENOSPC;
-    /* A page can have become resident since PARK without a fault this module saw (a native writer
-     * such as /proc/self/mem, which Linux serves through get_user_pages_remote). Pin it now, as
-     * PARK did, so the clearing below reaches every resident page of the arena. */
-    if (!CV_MUTANT(test_revive_skip_pin)) {
-        int error = pin_remaining(c, a, FOLL_FORCE | FOLL_NOFAULT);
-        if (error) return error;
-    }
-    if (ensure_nodes(c, 2 + CAP_REV_TABLE_RESERVE)) return -ENOMEM;
-    id = c->next_id + 1;
-    /* The new identity is published before the old one goes, so a failure leaves the arena parked. */
-    if (xa_err(xa_store(&c->ids, id, a, GFP_KERNEL_ACCOUNT))) return -ENOMEM;
-    /* Clear first: no capability to the arena exists (PARK retired the ancestor), so the pages are
-     * still the module's alone, and nothing can be minted over contents that were not cleared. */
-    if (!CV_MUTANT(test_revive_skip_clear)) {
-        for (i = 0; i < a->count; ++i) {
-            if (!a->pages[i]) continue;
-            clear_page_full(a->pages[i]);
-            ++cleared;
-        }
-    }
-    map_revive_pages += cleared;
-    xa_erase(&c->ids, a->id);
-    slot = t->frame + 8 + r->reg * 2;
-    slot[0] = 0;
-    slot[1] = 0;
-    desc[0] = r->address;
-    desc[1] = r->address + r->bytes;
-    desc[2] = r->permissions;     /* linear: move-only until the allocator derives a non-linear object */
-    desc[3] = r->cursor;
-    desc[4] = 0;
-    desc[5] = 0;
-    preempt_disable(); local_irq_save(flags);
-    old = select_root(c);
-    asm volatile(".insn r 0x5b, 1, 0x50, %0, %1, %2"
-                 : "=&r"(ancestor) : "r"(slot), "r"(desc) : "memory");
-    restore_root(old);
-    local_irq_restore(flags); preempt_enable();
-    a->ancestor = ancestor;
-    a->ancestor_retired = false;
-    a->parked = false;
-    a->id = id;
-    r->id = c->next_id = id;
-    t->reply_cap = true;
-    ++map_revives;
-    return 0;
-}
-
-#ifdef CV_GRANT_TXN
-struct grant_unmap_commit {
-    struct context *context;
-    struct arena *arena;
-    unsigned int inject;
-};
-static int grant_unmap_retire(void *opaque)
-{
-    struct grant_unmap_commit *tx = opaque;
-    if (tx->inject == CV_GRANT_INJECT_RETIRE) return -EIO;
-    return retire(tx->context, tx->arena, false);
-}
-static int grant_transaction(struct context *c,
-                             const struct cv_grant_transaction *r)
-{
-    typeof(capstone_grant_unmap) *unmap;
-    struct cv_thread *t;
-    struct arena *a;
-    struct grant_unmap_commit tx;
-    int error;
-
-    if (r->version != CV_GRANT_ABI_VERSION || r->flags || r->reserved ||
-        r->inject > CV_GRANT_INJECT_RETIRE) return -EINVAL;
-    if (!unpinned || r->operation != CV_GRANT_UNMAP) return -EOPNOTSUPP;
-    /* Running launchers own transport holds and an independent map registry.
-     * Until these migrate, only bootstrap test contexts may use this ioctl. */
-    list_for_each_entry(t, &c->threads, link)
-        if (t->started) return -EOPNOTSUPP;
-    a = xa_load(&c->ids, r->id);
-    if (!a || a->parked || a->address != r->address || a->bytes != r->bytes ||
-        a->rx_bytes || a->ancestor_retired) return -EINVAL;
-    if (arena_has_thread_frame(c, a)) return -EBUSY;
-    unmap = symbol_get(capstone_grant_unmap);
-    if (!unmap) return -EOPNOTSUPP;
-    tx = (struct grant_unmap_commit){c, a, r->inject};
-    error = unmap(c->mm, a->address, a->bytes, grant_unmap_retire, &tx, r->inject);
-    symbol_put(capstone_grant_unmap);
-    return error;
-}
-#endif
 
 /* The meta block (reg 10 before the start) stays eager: asynchronous signal publication writes
  * it and cannot issue a sleeping CV_TOUCH. The main exchange (reg 11) is admitted through the
  * delegate dispatcher's prepare_write callback before every possible output span; worker
  * transports are touched at each attachment and held until detach/exit. In pinned mode a
- * launcher write must not populate an unheld page: exit_mm can free it before vm_release
+ * launcher write must not populate an unheld page: exit_mm can free it before context_destroy
  * sweeps its tags. In experimental unpinned mode arch_free_page clears released pages and
  * the raw copy hooks preserve tags across COW/migration. CV_TOUCH faults pages in without
  * retaining them. The launcher's cache records admission of the immutable main-exchange
@@ -1760,7 +1632,7 @@ static int grant_transaction(struct context *c,
  * are written by the launcher only BEFORE their grant, and those pages are pinned at the mint
  * by the resident scan; after it, only the domain's own accesses populate them, every one of
  * which faults into resolve(). The launcher reads the stack after a fault (its frame chain),
- * which maps the zero page at most. Reply grants (a started context, reg 10) are linear. */
+ * which maps the zero page at most. Reply grants are copyable and use lazy admission. */
 static bool eager_grant(const struct cv_thread *t, const struct cv_map *r)
 {
     return !t->started && r->reg == 10;
@@ -1773,8 +1645,11 @@ static int add(struct context *c, struct cv_thread *t, struct cv_map *r)
     unsigned long flags, old, desc[CV_DESC_WORDS], ancestor, *slot;
     struct page **pages;
     long n;
+    /* Runtime-created mappings may reserve inaccessible pages and later change
+     * their PTE permissions. Capability rights remain a ceiling on access. */
+    bool mapping_reply = t->started && r->reg == 10;
     if (!r->bytes || r->bytes > CV_MAX_REGION_BYTES ||
-        (!r->linear && r->bytes > CV_MAX_EAGER_BYTES) ||
+        (!mapping_reply && r->bytes > CV_MAX_EAGER_BYTES) ||
         ((r->address | r->bytes) & (PAGE_SIZE - 1)) ||
         /* With exact bounds off the encoder quantises both edges, so an arena must be exactly
          * REPRESENTABLE. This used to demand a naturally aligned power of two, which is a much
@@ -1794,13 +1669,12 @@ static int add(struct context *c, struct cv_thread *t, struct cv_map *r)
         (!c->exact_bounds && !capstone_repr_ok(r->address, r->bytes)) ||
         r->address > ULONG_MAX - r->bytes ||
         !access_ok((void __user *)r->address, r->bytes) ||
-        r->permissions > 7 || r->linear > 1 || r->reg > 31 ||
+        r->permissions > 7 || r->reg > 31 ||
         r->cursor < r->address || r->cursor > r->address + r->bytes ||
-        (r->linear && r->cursor != r->address) ||
         (t->started && (t->event != 3 || r->reg != 10 || t->reply_cap)) ||
         (!t->started && r->reg != 2 && r->reg != 3 &&
          r->reg != 10 && r->reg != 11 && r->reg != 12 && r->reg != 13) ||
-        (r->reg == 3 && (!(r->permissions & 1) || r->linear)) ||
+        (r->reg == 3 && !(r->permissions & 1)) ||
         /* Only the initial image grant has a read+execute prefix, a whole
          * number of pages strictly inside it, and it starts there. */
         (r->rx_bytes && (r->reg != 3 || t->started || (r->rx_bytes & (PAGE_SIZE - 1)) ||
@@ -1833,16 +1707,16 @@ static int add(struct context *c, struct cv_thread *t, struct cv_map *r)
                   (v->vm_flags & VM_EXEC);
         else
             bad = v->vm_file ||
-                  ((r->permissions & 4) && !(v->vm_flags & (r->linear ? VM_MAYREAD : VM_READ))) ||
-                  ((r->permissions & 2) && !(v->vm_flags & (r->linear ? VM_MAYWRITE : VM_WRITE))) ||
-                  ((r->permissions & 1) && !(v->vm_flags & (r->linear ? VM_MAYEXEC : VM_EXEC)));
+                  ((r->permissions & 4) && !(v->vm_flags & (mapping_reply ? VM_MAYREAD : VM_READ))) ||
+                  ((r->permissions & 2) && !(v->vm_flags & (mapping_reply ? VM_MAYWRITE : VM_WRITE))) ||
+                  ((r->permissions & 1) && !(v->vm_flags & (mapping_reply ? VM_MAYEXEC : VM_EXEC)));
         if (bad) { mmap_read_unlock(c->mm); return -EACCES; }
 #ifdef CONFIG_TRANSPARENT_HUGEPAGE
         if (!(v->vm_flags & VM_NOHUGEPAGE)) {
             mmap_read_unlock(c->mm); return -EOPNOTSUPP;
         }
 #endif
-        if (unpinned && !r->linear && !rx && (!lazy_grants || eager_grant(t, r))) {
+        if (unpinned && !mapping_reply && !rx && (!lazy_grants || eager_grant(t, r))) {
             /* Unpinned: populate every page of a NONLIN grant through the kernel's own
              * fault path, as pin_user_pages_fast(FOLL_WRITE) below would, but take no pin. Write
              * access where the VMA grants it, so the PTE comes out writable and dirty as GUP's did. */
@@ -1858,7 +1732,7 @@ static int add(struct context *c, struct cv_thread *t, struct cv_map *r)
     }
     mmap_read_unlock(c->mm);
     /* Everything that can fail is prepared before the grant is minted. The
-     * record, its ID slot and its page array are charged to the process's
+     * record and its page array are charged to the process's
      * memory cgroup: there is no count limit, only the registered-bytes one,
      * and a million single-page arenas fit under it. */
     /* An arena id names one registration for the context's whole life: the launcher releases
@@ -1869,19 +1743,21 @@ static int add(struct context *c, struct cv_thread *t, struct cv_map *r)
     a = kzalloc(sizeof(*a), GFP_KERNEL_ACCOUNT);
     if (!a) return -ENOMEM;
     a->id = c->next_id + 1;
-    if (xa_insert(&c->ids, a->id, a, GFP_KERNEL_ACCOUNT)) { kfree(a); return -ENOMEM; }
     count = (r->bytes - r->rx_bytes) / PAGE_SIZE;
-    pages = kvcalloc(count, sizeof(*pages), GFP_KERNEL_ACCOUNT);
-    if (!pages) { xa_erase(&c->ids, a->id); kfree(a); return -ENOMEM; }
+    pages = NULL;
+    if (!unpinned) {
+        pages = kvcalloc(count, sizeof(*pages), GFP_KERNEL_ACCOUNT);
+        if (!pages) { kfree(a); return -ENOMEM; }
+    }
     /* The arena's geometry, before anything is pinned against it. The frame set lives as long
      * as the arena (a page admitted at any later fault is checked against it), so it is
      * accounted like the page array. */
     a->address = r->address; a->bytes = r->bytes; a->rx_bytes = r->rx_bytes;
-    a->pages = pages; a->count = count; a->linear = r->linear;
-    a->lazy = r->linear || (lazy_grants && !eager_grant(t, r));
-    if (!r->linear) {
+    a->pages = pages; a->count = count;
+    a->lazy = mapping_reply || (lazy_grants && !eager_grant(t, r));
+    if (!unpinned) {
         a->frames = kvcalloc(frame_slots(count), sizeof(*a->frames), GFP_KERNEL_ACCOUNT);
-        if (!a->frames) { kvfree(pages); xa_erase(&c->ids, a->id); kfree(a); return -ENOMEM; }
+        if (!a->frames) { kvfree(pages); kfree(a); return -ENOMEM; }
     }
     n = 0;
     if (!unpinned && !a->lazy) {
@@ -1895,7 +1771,7 @@ static int add(struct context *c, struct cv_thread *t, struct cv_map *r)
         for (i = 0; i < n; ++i)
             if (!PageAnon(pages[i]) || page_mapcount(pages[i]) != 1 || !frame_insert(a, pages[i]))
                 goto unpin;
-    } else if (!unpinned && !r->linear) {
+    } else if (!unpinned && !mapping_reply) {
         /* Lazy: the pages already resident -- what the launcher wrote before the grant -- are
          * pinned and checked now, exactly as the whole-arena pin would have (FOLL_WRITE breaks
          * a private file page's copy-on-write); every absent page is admitted at the domain's
@@ -1931,10 +1807,9 @@ static int add(struct context *c, struct cv_thread *t, struct cv_map *r)
     } else if (slot[0] || slot[1]) goto unpin;
     desc[0] = r->address;
     desc[1] = r->address + r->bytes;
-    /* C pointers are copyable, so a non-linear grant is minted NONLIN directly. A linear
-     * mapping grant stays move-only until the allocator derives a non-linear object. */
-    desc[2] = r->permissions | (r->linear ? 0 : CV_DESC_NONLIN);
-    /* The cursor the caller asked for. For a LINEAR grant this equals the base in every
+    /* Every application grant is copyable from creation. */
+    desc[2] = r->permissions | CV_DESC_NONLIN;
+    /* The cursor the caller asked for. For a mapping reply this equals the base in every
      * caller (exec.c:292 and :844 both pass the region's own address), so naming it here
      * is what the old path produced by letting the mint default to base. */
     desc[3] = r->cursor;
@@ -1960,7 +1835,7 @@ static int add(struct context *c, struct cv_thread *t, struct cv_map *r)
     if (t->started) t->reply_cap = true;
     return 0;
 unpin:
-    for (i = 0; i < count; ++i) {
+    for (i = 0; !unpinned && i < count; ++i) {
         if (!pages[i]) continue;
         unpin_user_page(pages[i]);
         if (a->lazy) --c->stats.pinned_pages;
@@ -1970,102 +1845,9 @@ unpin:
         pr_info("capstone_vm: unwind arena 0x%lx+0x%lx scan=%u\n", a->address, a->bytes, a->scans);
     kvfree(a->frames);
     kvfree(pages);
-    xa_erase(&c->ids, a->id); kfree(a);
+    kfree(a);
     return -EFAULT;
 }
-/* Linux performs mremap; the adapter only updates lifetime and physical-tag
- * ownership. Pinned frames retained by mremap keep their tags. Truncated frames
- * are cleared before their pins are released. The syscall may fail without
- * changing any capability lifetime. */
-static int remap_begin(struct context *c, const struct cv_remap *r)
-{
-    struct cv_thread *t = find_thread(c, r->thread);
-    struct arena *a;
-    int error;
-    if (!c->exact_bounds || c->remapping || !t || t->terminal ||
-        !t->started || t->event != 3 || t->reply_cap ||
-        !r->bytes || r->bytes > CV_MAX_REGION_BYTES || (r->bytes & ~PAGE_MASK))
-        return -EINVAL;
-    a = xa_load(&c->ids, r->id);
-    if (!a || a->parked || !a->linear || arena_has_thread_frame(c, a)) return -EINVAL;
-    if (c->registered_bytes - a->bytes + r->bytes > CV_MAX_BYTES) return -ENOMEM;
-    error = unpinned ? 0 : pin_remaining(c, a, FOLL_FORCE | FOLL_NOFAULT);
-    if (error) return error;
-    error = ensure_nodes(c, 2 + CAP_REV_TABLE_RESERVE);
-    if (error) return error;
-    c->remap_pages = kvcalloc(r->bytes / PAGE_SIZE, sizeof(struct page *), GFP_KERNEL_ACCOUNT);
-    if (!c->remap_pages) return -ENOMEM;
-    c->remapping = a; c->remap_thread = r->thread; c->remap_bytes = r->bytes;
-    return 0;
-}
-static int remap_end(struct context *c, const struct cv_remap *r)
-{
-    struct arena *a = c->remapping;
-    struct cv_thread *t = find_thread(c, r->thread);
-    unsigned long flags, root, result, desc[CV_DESC_WORDS], *slot;
-    unsigned count;
-    struct vm_area_struct *v;
-    bool valid;
-    if (!a || !t || c->remap_thread != r->thread || c->remap_bytes != r->bytes)
-        return -EINVAL;
-    if (!r->address) {
-        kvfree(c->remap_pages); c->remap_pages = NULL; c->remapping = NULL; wake_up_all(&c->remap_wait);
-        return 0;
-    }
-    if ((r->address & ~PAGE_MASK) || r->address > ULONG_MAX-r->bytes ||
-        !access_ok((void __user *)r->address, r->bytes)) return -EINVAL;
-    /* The launcher is trusted, but reject overlap with another registered
-     * arena and malformed VM state before retiring the old ancestor. */
-    if (arena_overlaps(c, r->address, r->bytes, a)) return -EINVAL;
-    mmap_read_lock(c->mm);
-    v = find_vma(c->mm, r->address);
-    valid = v && v->vm_start <= r->address && v->vm_end >= r->address+r->bytes &&
-                 !v->vm_file && !(v->vm_flags & VM_SHARED) &&
-                 (v->vm_flags & (VM_READ|VM_WRITE)) == (VM_READ|VM_WRITE);
-    mmap_read_unlock(c->mm);
-    if (!valid) return -EACCES;
-    slot = t->frame + 28;
-    /* Q-30, the same shape as add(). Unreachable in the FLAT build -- remap_begin returns -EINVAL
-     * when exact_bounds is false -- so this is for the paged build and is written to match rather
-     * than to be exercised here. remap_end only runs on a started context at its heap-grow reply,
-     * so there is no pre-start case to preserve. */
-    slot[0] = 0;
-    slot[1] = 0;
-    count = r->bytes / PAGE_SIZE;
-    for (unsigned i=0; i<min(count, a->count); ++i) c->remap_pages[i] = a->pages[i];
-    /* v7, behaviour-preserving: this slot is the heap's, which is LINEAR, and the old
-     * path let the mint default the cursor to the base. No second slot. */
-    desc[0] = r->address; desc[1] = r->address+r->bytes; desc[2] = 6;
-    desc[3] = r->address; desc[4] = 0; desc[5] = 0;
-    preempt_disable(); local_irq_save(flags); root = select_root(c);
-    asm volatile(".insn r 0x5b, 1, 0x53, %0, %1, zero"
-                 : "=&r"(result) : "r"(a->ancestor) : "memory");
-    if (!result) {
-        asm volatile(".insn r 0x5b, 1, 0x50, %0, %1, %2"
-                     : "=&r"(result) : "r"(slot), "r"(desc) : "memory");
-        a->ancestor = result;
-    } else {
-        restore_root(root); local_irq_restore(flags); preempt_enable();
-        return -EIO;
-    }
-    restore_root(root); local_irq_restore(flags); preempt_enable();
-    for (unsigned i=count; i<a->count; ++i) {
-        if (!a->pages[i]) continue;
-        clear_page_tags(a->pages[i]);
-        set_page_dirty_lock(a->pages[i]); unpin_user_page(a->pages[i]);
-        --c->stats.pinned_pages;
-        ++a->released;
-    }
-    kvfree(a->pages); a->pages = c->remap_pages; c->remap_pages = NULL;
-    /* Rekeying the tree allocates nothing: no new failure after the commit. */
-    rb_erase(&a->node, &c->arenas);
-    c->registered_bytes += r->bytes - a->bytes;
-    a->address = r->address; a->bytes = r->bytes; a->count = count;
-    arena_insert(c, a);
-    c->remapping = NULL; wake_up_all(&c->remap_wait); t->reply_cap = true;
-    return 0;
-}
-
 /* CV_STEP resolves faults and resumes for at most one supervisor quantum;
  * CV_RESOLVE gives its pin-ahead window the same bound. */
 #define CV_STEP_BUDGET_NS (5 * NSEC_PER_MSEC)
@@ -2076,8 +1858,9 @@ static int remap_end(struct context *c, const struct cv_remap *r)
  * must catch, at a chosen point of CV_STEP; counters say whether CSRUNV was
  * entered while an injection was pending, and what GUP was asked for. */
 static unsigned long test_inject;       /* 1 resched, 2 signal, 3 deadline, 4 SIGKILL */
-static unsigned long test_inject_at;    /* 1 after a demand GUP/fixup, 2 before an entry, 3 before an ioctl's first entry,
-                                           4 after CSRUNV returns a fault, before resolve() */
+static unsigned long test_inject_at;    /* 1 after a demand GUP, 2 before an entry, 3 before an ioctl's first entry,
+                                           4 after CSRUNV returns a fault, before resolve(),
+                                           5 before native syscall service */
 static unsigned long test_inject_every = 1;
 static unsigned long test_short_gup;    /* pin-ahead GUP pins only half of a batch */
 /* Policy-only tests need exact windows despite unrelated scheduling/deadline cuts. The
@@ -2398,7 +2181,7 @@ static unsigned escape_prints;
  * work. 0644, so one boot can try both without a rebuild. */
 static bool diag_emerg;
 module_param(diag_emerg, bool, 0644);
-static unsigned eloop_prints, refuse_prints, childframe_prints, refused_prints;
+static unsigned eloop_prints, refused_prints;
 
 /* r12's reading: for `vm`, NONE of resolve()'s five refusal sites fired and the S-24 bound did --
  * the same address and cause 65 times with no change. So the !same deduction is refuted and the
@@ -2555,9 +2338,9 @@ static bool image_data_vma(const struct arena *a, const struct vm_area_struct *v
  * The caller holds mmap_read_lock and v is the VMA it found (or, for a
  * fault-ahead page, the same VMA); an address outside v takes the old call.
  */
-static inline int unpinned_fault_vma(struct vm_area_struct *v, unsigned long address)
+static inline int unpinned_fault_vma(struct vm_area_struct *v, unsigned long address,
+                                    unsigned int flags)
 {
-    unsigned int flags = (v->vm_flags & VM_WRITE) ? FAULT_FLAG_WRITE : 0;
     vm_fault_t fault;
 
     if (!unpinned_fast_fault || !vma_is_anonymous(v) ||
@@ -2607,6 +2390,7 @@ static int unpinned_resolve(struct context *c, struct cv_thread *t, struct arena
     struct cv_stream *stream;
     unsigned index = (address - a->address - a->rx_bytes) / PAGE_SIZE;
     unsigned long ahead, limit, done = 0;
+    unsigned int flags = (v->vm_flags & VM_WRITE) ? FAULT_FLAG_WRITE : 0;
     int rc;
 #ifdef CONFIG_TRANSPARENT_HUGEPAGE
     /* add() required VM_NOHUGEPAGE on every VMA it admitted, but a later madvise(MADV_HUGEPAGE)
@@ -2615,7 +2399,16 @@ static int unpinned_resolve(struct context *c, struct cv_thread *t, struct arena
     if (!(v->vm_flags & VM_NOHUGEPAGE)) return -EOPNOTSUPP;
 #endif
     if (TEST_FAULT()) return -EAGAIN;
-    rc = unpinned_fault_vma(v, address);
+    /* The event and VMA access were authenticated by resolve(). Only read
+     * materialization changes: stores, execution, image mappings and eager
+     * bootstrap retain their existing policy. Speculation uses the same access
+     * as this demand fault; a later store must still resolve write/COW. */
+    if (unpinned_access_fault && a->lazy && (flags & FAULT_FLAG_WRITE) &&
+        vma_is_anonymous(v) && t->frame[3] == 13) {
+        flags = 0;
+        ++unpinned_access_reads;
+    }
+    rc = unpinned_fault_vma(v, address, flags);
     if (rc) return rc;
     ++unpinned_faults;
     if (diag_admit) ++a->unpinned_resolves;
@@ -2655,7 +2448,7 @@ static int unpinned_resolve(struct context *c, struct cv_thread *t, struct arena
         for (unsigned long j = 0; j < target; ++j) {
             if (!TEST_SKIP_RESIDENT_STOP() && unpinned_resident(c->mm, address + done * PAGE_SIZE))
                 goto finished;
-            if (unpinned_fault_vma(v, address + done * PAGE_SIZE))
+            if (unpinned_fault_vma(v, address + done * PAGE_SIZE, flags))
                 goto finished;
             ++done;
         }
@@ -2785,7 +2578,8 @@ static int resolve(struct context *c, struct cv_thread *t, u64 deadline)
             /* Unpinned: the kernel's own fault path, as the image's RX path and the
              * resolve_dirty path use it, and no pin. Write access where the VMA grants it (GUP's
              * FOLL_WRITE did the same), so a read fault still materializes private writable
-             * dirty backing rather than the zero page. The repeat bound stays: a resolve that
+             * dirty backing rather than the zero page, unless the anonymous-read
+             * experiment selects actual read access. The repeat bound stays: a resolve that
              * changes nothing must not report success for ever. */
             int rc;
             if (unpinned_fault_repeats(t, a, address, cause)) {
@@ -3038,7 +2832,7 @@ static int touch(struct context *c, const struct cv_touch *r)
         if (at - a->address < a->rx_bytes) return -EACCES;
         if (!a->lazy) continue;
         index = (at - a->address - a->rx_bytes) / PAGE_SIZE;
-        if (a->pages[index]) continue;
+        if (!unpinned && a->pages[index]) continue;
         error = admit_page(c, a, index);
         if (error) return error;
     }
@@ -3072,457 +2866,214 @@ static bool one_inode_per_file(struct file *file)
     return false;
 }
 
-static long vm_ioctl(struct file *f, unsigned int op, unsigned long arg)
+/* vm_lock is held on entry and return, including a supervisor-slot wait.
+ * Both the launcher ioctl and the experimental native-task driver use this
+ * operation; request/result storage belongs to the trusted caller. */
+/* `jdl` non-NULL selects the native loop's coarse bound: a jiffies deadline, one load per
+ * check instead of a clock read. It bounds how long vm_lock is held exactly as the
+ * nanosecond budget does, to within one tick. The test-hook build keeps nanoseconds. */
+static bool cv_step_stop_j(unsigned long jdl)
 {
-    struct context *c = f->private_data;
+    return signal_pending(current) || need_resched() ||
+           time_after_eq(jiffies, jdl) || TEST_EXPIRED();
+}
+#define CV_STEP_BUDGET_J (msecs_to_jiffies(CV_STEP_BUDGET_NS / NSEC_PER_MSEC) + 1)
+static long cv_step_locked(struct context *c, struct cv_step *request, const unsigned long *jdl)
+{
+    /* Edited in place: nothing is stored before the last line, so a refusal leaves the
+     * request as it came. */
+    struct cv_step *const r = request;
     long rc = -EINVAL;
     unsigned long flags;
-    if (current->mm != c->mm)
-        return -EPERM;
-retry:
-    if (mutex_lock_interruptible(&vm_lock)) return -EINTR;
-    if (c->remapping && op != CV_REMAP_END) {
-        mutex_unlock(&vm_lock);
-        if (wait_event_interruptible(c->remap_wait, !READ_ONCE(c->remapping))) return -EINTR;
-        goto retry;
+    struct cv_thread *t;
+    u64 budget_end;
+    bool resolved = false, text = false;
+    t = c->main_thread && c->main_thread->id == r->thread ? c->main_thread : find_thread(c, r->thread);
+    if (!t || t->terminal) { rc = -ESRCH; return rc; }
+    if (r->reply > 1 || (r->reply != (t->started && t->event == 3))) return rc;
+    if (!t->started && (!t->frame[8] || !t->frame[12])) return rc;
+    /* A frame that has not started needs a free slot to enter. Waiting is safe ACROSS
+     * contexts -- two vexec processes never join each other, so run.py's parallel pair simply
+     * serialises and still prints both results -- and is NOT safe within one context, where a
+     * live sibling is the thing that would have to finish first. The create refusal above means
+     * the same-context case cannot normally arise; it is rejected here too rather than
+     * deadlocking if it ever does. vm_lock must be dropped while waiting, so the wait is
+     * outside it and the ioctl restarts. */
+    if (!native_slot_transport && !t->started) {
+        struct cv_thread *holder = NULL;
+        if (slot_live(&holder) >= supervisor_slots) {
+            unsigned long generation = slot_generation;
+            if (holder && holder->context == c) { rc = -EBUSY; return rc; }
+            mutex_unlock(&vm_lock);
+            rc = wait_event_interruptible(slot_wait,
+                    READ_ONCE(slot_generation) != generation);
+            mutex_lock(&vm_lock);
+            return rc ? -EINTR : -EAGAIN;   /* the launcher's loop retries EAGAIN, as it does for the quantum */
+        }
     }
-#ifdef CV_GRANT_TXN
-    if (op == CV_GRANT_TRANSACTION) {
-        struct cv_grant_transaction r;
-        if (copy_from_user(&r, (void __user *)arg, sizeof(r))) rc = -EFAULT;
-        else rc = grant_transaction(c, &r);
-        goto out;
+    if (native_slot_transport) {
+        rc = slot_acquire(t);
+        if (rc) return rc;
     }
-#endif
-    if (op == CV_GLOBAL) {
-        struct context *other;
-        struct cv_global stats = {.nodes_allocated = allocated_total,
-            .collections = collections_total, .reclaimed = reclaimed_total};
-        list_for_each_entry(other, &contexts, link) {
-            node_stats(other);
-            stats.arenas += other->stats.arenas;
-            stats.pinned_pages += other->stats.pinned_pages;
-            stats.nodes_allocated += other->stats.nodes;
-            stats.nodes_live += other->stats.nodes_live;
-            stats.nodes_retired += other->stats.nodes_retired;
-            stats.collections += other->stats.collections;
-            stats.reclaimed += other->stats.reclaimed;
-            stats.node_capacity += other->stats.node_capacity;
-            stats.node_bytes += other->stats.node_bytes;
-            if (other->stats.arenas) ++stats.contexts;
-        }
-        stats.nodes_high_water = high_water;
-        rc = copy_to_user((void __user *)arg, &stats, sizeof(stats)) ? -EFAULT : 0;
-    } else if (op == CV_PROFILE) {
-        u64 profile = c->exact_bounds ? 0x100 : 0;
-        rc = copy_to_user((void __user *)arg, &profile, sizeof(profile)) ? -EFAULT : 0;
-    } else if (op == CV_IMAGE) {
-        /* Linux's own protection of a running executable (fs/exec.c):
-         * existing writers make it fail with ETXTBSY, later opens for
-         * writing fail with ETXTBSY until the context is released. It
-         * covers every writer only where the filesystem keeps one inode per
-         * file; elsewhere EOPNOTSUPP, and the launcher loads a sealed copy.
-         * Any file the caller can open for reading can be denied writers
-         * this way, without an execute permission (what MAP_DENYWRITE once
-         * allowed any process): acceptable while the device node is 0600. */
-        __s32 fd;
-        struct file *file;
-        if (copy_from_user(&fd, (void __user *)arg, sizeof(fd))) rc = -EFAULT;
-        else if (c->image) rc = -EBUSY;
-        else if (!(file = fget(fd))) rc = -EBADF;
-        else if (!S_ISREG(file_inode(file)->i_mode) || !(file->f_mode & FMODE_READ) ||
-                 (file->f_mode & FMODE_WRITE)) { fput(file); rc = -EINVAL; }
-        else if (!one_inode_per_file(file)) { fput(file); rc = -EOPNOTSUPP; }
-        else if ((rc = deny_write_access(file))) fput(file);
-        else c->image = file;
-    } else if (op == CV_REMAP_BEGIN || op == CV_REMAP_END) {
-        struct cv_remap r;
-        if (copy_from_user(&r, (void __user *)arg, sizeof(r))) { rc = -EFAULT; goto out; }
-        rc = op == CV_REMAP_BEGIN ? remap_begin(c, &r) : remap_end(c, &r);
-    } else if (op == CV_NODES) {
-        struct cv_nodes r;
-        struct cv_thread *t;
-        if (copy_from_user(&r, (void __user *)arg, sizeof(r))) { rc = -EFAULT; goto out; }
-        t = find_thread(c, r.thread);
-        if (!t || t->terminal) { rc = -ESRCH; goto out; }
-        if (r.available > CV_ID_RECORDS_MAX - CAP_REV_TABLE_RESERVE) { rc = -ENOMEM; goto out; }
-        if (node_max_records &&
-            r.available > node_max_records - CAP_REV_TABLE_RESERVE) { rc = -ENOMEM; goto out; }
-        rc = ensure_nodes(c, r.available + CAP_REV_TABLE_RESERVE);
-    } else if (op == CV_ADD) {
-        struct cv_map r;
-        struct cv_thread *t;
-        if (copy_from_user(&r, (void __user *)arg, sizeof(r))) { rc = -EFAULT; goto out; }
-        t = find_thread(c, r.thread);
-        if (!t || t->terminal) { rc = -ESRCH; goto out; }
-        rc = add(c, t, &r);
-        if (!rc && copy_to_user((void __user *)arg, &r, sizeof(r))) {
-            /* The caller did not receive the handle. Reclaim the entire
-             * context on close; never silently remove a delivered grant. */
-            t->terminal = true; rc = -EFAULT;
-        }
-    } else if (op == CV_THREAD_CREATE) {
-        struct cv_thread_create r;
-        struct cv_thread *t;
-        if (copy_from_user(&r, (void __user *)arg, sizeof(r))) { rc = -EFAULT; goto out; }
-        if (!r.frame || !find_arena(c, r.frame, PAGE_SIZE)) { rc = -EINVAL; goto out; }
-        if (arena_has_thread_frame(c, find_arena(c, r.frame, PAGE_SIZE))) {
-            if (++busy_frame_refusals <= CV_DIAG_BUDGET)
-                pr_emerg("capstone_vm: thread create refused: frame 0x%llx already backs a thread "
-                         "(refusals %lu)\n", (unsigned long long)r.frame, busy_frame_refusals);
-            rc = -EBUSY; goto out;
-        }
-        if (thread_count(c) >= 32) { rc = -ENOSPC; goto out; }
-        /* Refuse at CREATE, not at the join. The caller is itself a live frame -- it escaped to
-         * make this ioctl -- so on a one-slot machine the child could never be entered. Admitting
-         * it anyway is the illegible failure: contract.dom's `threads` busy-waits 100,000,000
-         * iterations on a value the child will never set and then fails an assertion that says
-         * nothing about slots, and `heap-threads` blocks in join for ever. -EBUSY here fails at the
-         * domain's own require(tid > 0, "thread create"), which a pre-registration can state and a
-         * judge can check. */
-        if (slot_live(NULL) + 1 > supervisor_slots) {
-            /* RETRACTED PREMISE (2026-10-18): this comment said the console "does not show
-             * KERN_INFO ... while the kernel's own pr_warn lines do appear". Wrong, and not mine
-             * to have repeated. The driver sets the console to level 1 before its first rung, so
-             * it shows KERN_EMERG only; the pr_warn lines that were cited as appearing were all
-             * printed during boot, before the quieting. r6/r7's absence of this line was the
-             * console level, not the printk level.
-             *
-             * This line is the must-fire positive control for the next boot, so it is budgeted
-             * rather than rate-limited: the launcher retries a refused create, and a time-based
-             * limiter would drop exactly the occurrence a judge reads. */
-            CV_EMIT_FIRST(refuse_prints,
-                          "capstone_vm: thread create refused, %lu supervisor slot%s in use\n",
-                          supervisor_slots, supervisor_slots == 1 ? "" : "s");
-            rc = -EBUSY; goto out;
-        }
-        t = kvzalloc(sizeof(*t), GFP_KERNEL);
-        if (!t) { rc = -ENOMEM; goto out; }
-        t->context = c; t->id = ++c->next_thread;
-        rc = pin_thread_frame(c, r.frame, t);
-        if (rc) { kvfree(t); goto out; }
-        /* The kernel owns the process address space and lifetime root. The
-         * application supplies only the entry/register capabilities. */
-        t->frame[0] = csr_read(CSR_SATP);
-        t->frame[1] = c->table_pa;
-        t->frame[2] = t->frame[3] = t->frame[4] = t->frame[5] = t->frame[6] = 0;
-        t->frame[7] = 3;
-        t->frame[80] = t->frame[81] = 0;
-        /* S-21: MAKE THE CHILD'S FRAME UNREACHABLE BY THE DOMAIN BEFORE IT IS EVER ENTERED.
-         *
-         * On the RTL every escape restores the S caller's snapshot from frame+1024 unchecked, and a
-         * child frame is a page the DOMAIN allocated and still holds a NONLIN RW copy of
-         * (thread.c's cap_vm_acquire + cap_vm_copyable; this ioctl only find_arena()s and pins it).
-         * So without this the domain could overwrite the kernel's saved pc/sp/satp/stvec in its
-         * child's frame and have the next escape load them. QEMU cannot show it at any slot count,
-         * because the caller stays in save_state -- so this is silicon-only and no record exhibits
-         * it; the reasoning is the RTL source, not a reading.
-         *
-         * Retiring the arena's ancestor kills the domain's copy (25 on access) while the page stays
-         * pinned and kernel-only. That is safe to do at whole-arena granularity BECAUSE a thread
-         * frame is its own arena: thread.c acquires exactly 4096 bytes for it, and
-         * arena_has_thread_frame() matches on t->frame_user == a->address. A frame sharing an arena
-         * with live objects would make this retire kill them too, which is why the granularity is
-         * checked here rather than assumed.
-         *
-         * The later teardown retires the same ancestor again. That is a tolerated no-op, not a
-         * second effect: cap_rev_retire returns CAP_REV_DEAD on an invalid node BEFORE any mutation
-         * (cap_rev_tree.c:249-251), helper_csretire maps that to status 1, retire() ignores a
-         * non-zero status when destroying, and ++c->retired_flat only fires on success. So no flag
-         * is needed to suppress it.
-         *
-         * A failed retire fails the create: a frame the domain can still write is the whole defect.
-         * Note this is unreachable on vp2 today -- with supervisor_slots = 1 the create is already
-         * refused above -- so it is the ABI's property for a multi-slot bitstream, not a fix for
-         * the current board. */
-        {
-            struct arena *fa = find_arena(c, r.frame, PAGE_SIZE);
-            unsigned long st, old_root;
-            unsigned long free_before;
-            if (!fa) { rc = -EINVAL; goto thread_unwind; }
-            free_before = node_free_count(c);
-            preempt_disable(); local_irq_save(flags);
-            old_root = select_root(c);
-            asm volatile(".insn r 0x5b, 1, 0x53, %0, %1, zero"
-                         : "=&r"(st) : "r"(fa->ancestor) : "memory");
-            restore_root(old_root);
+    if (r->reply && !t->reply_cap) {
+        t->frame[28] = r->result; t->frame[29] = 0;
+    }
+    /* Each CSRUNV restarts the 5 ms quantum, so a domain that keeps
+     * faulting would never be preempted: bound the resolved faults by
+     * one quantum of this ioctl, then return and release vm_lock. */
+    budget_end = jdl ? 0 : ktime_get_ns() + CV_STEP_BUDGET_NS;
+    TEST_STEP_BEGIN();
+    TEST_HOOK(3);
+    for (unsigned long action = r->reply ? 2 : 0, entries = 0;;
+         action = 0, ++entries) {
+        if (entries && !text) TEST_HOOK(2);  /* after a data fault only, see below */
+        preempt_disable(); local_irq_save(flags);
+        /* Checked with interrupts and preemption off, immediately before
+         * CSRUNV: no interrupt can set need_resched or a signal between
+         * this check and the entry. Before the first entry nothing has
+         * changed, so the launcher simply repeats the same CV_STEP (its
+         * loop retries EINTR and EAGAIN; the reply above is rewritten
+         * identically). Before a later one the fault just resolved goes
+         * back as it was, already counted. */
+        TEST_CHECK();
+        if (jdl ? cv_step_stop_j(*jdl) : cv_step_stop(budget_end)) {
             local_irq_restore(flags); preempt_enable();
-            if (st) {
-                CV_EMIT_FIRST(childframe_prints,
-                              "capstone_vm: child frame grant not retired (status %lu); "
-                              "refusing the thread\n", st);
-                rc = -EACCES;
-                goto thread_unwind;
+            TEST_STOPPED(!entries);
+            if (!entries) {
+                rc = signal_pending(current) ? -EINTR : -EAGAIN;
+                return rc;
             }
-            if (!st) {
-                ++c->retired_flat;
-                if (node_free_count(c) > free_before) ++c->pushed_flat;
-            }
-            fa->ancestor_retired = true;
+            resolved = true;
+            break;
         }
-        INIT_LIST_HEAD(&t->link);
-        list_add_tail(&t->link, &c->threads);
-        r.thread = t->id;
-        rc = copy_to_user((void __user *)arg, &r, sizeof(r)) ? -EFAULT : 0;
-        if (rc) {
-            list_del(&t->link); clear_thread_frame(t); drop_thread_frame(t); kvfree(t);
-        }
-        if (0) {
-thread_unwind:
-            /* The frame is pinned and the thread is not on c->threads yet, so the teardown is the
-             * same minus the list_del. */
-            clear_thread_frame(t); drop_thread_frame(t); kvfree(t);
-        }
-    } else if (op == CV_THREAD_EXIT) {
-        struct cv_thread_control r;
-        struct cv_thread *t;
-        if (copy_from_user(&r, (void __user *)arg, sizeof(r))) { rc = -EFAULT; goto out; }
-        t = find_thread(c, r.thread);
-        if (!t || t == c->main_thread) { rc = -EINVAL; goto out; }
-        r.frame = t->frame_user;
-        if (t->started) {
-            preempt_disable(); local_irq_save(flags);
-            run(t->frame_pa, 1);
-            local_irq_restore(flags); preempt_enable();
-        }
-        list_del(&t->link); clear_thread_frame(t); drop_thread_frame(t);
-        kvfree(t);
-        rc = copy_to_user((void __user *)arg, &r, sizeof(r)) ? -EFAULT : 0;
-    } else if (op == CV_STEP) {
-        /* Exempt from the kernel's stack zeroing (a memset call at this size):
-         * copy_from_user fills every byte or the ioctl fails, and every output
-         * member is assigned before the copy back. */
-        struct cv_step r __uninitialized;
-        struct cv_thread *t;
-        u64 budget_end;
-        bool resolved = false, text = false;
-        if (copy_from_user(&r, (void __user *)arg, sizeof(r))) { rc = -EFAULT; goto out; }
-        t = find_thread(c, r.thread);
-        if (!t || t->terminal) { rc = -ESRCH; goto out; }
-        if (r.reply > 1 || (r.reply != (t->started && t->event == 3))) goto out;
-        if (!t->started && (!t->frame[8] || !t->frame[12])) goto out;
-        /* A frame that has not started needs a free slot to enter. Waiting is safe ACROSS
-         * contexts -- two vexec processes never join each other, so run.py's parallel pair simply
-         * serialises and still prints both results -- and is NOT safe within one context, where a
-         * live sibling is the thing that would have to finish first. The create refusal above means
-         * the same-context case cannot normally arise; it is rejected here too rather than
-         * deadlocking if it ever does. vm_lock must be dropped while waiting, so the wait is
-         * outside it and the ioctl restarts. */
+        TEST_ENTRY();
         if (!t->started) {
-            struct cv_thread *holder = NULL;
-            if (slot_live(&holder) >= supervisor_slots) {
-                if (holder && holder->context == c) { rc = -EBUSY; goto out; }
-                mutex_unlock(&vm_lock);
-                if (wait_event_interruptible(slot_wait, slot_free_now()))
-                    return -EINTR;
-                return -EAGAIN;   /* the launcher's loop retries EAGAIN, as it does for the quantum */
-            }
+            t->frame[0] = csr_read(CSR_SATP);
+            t->frame[1] = c->table_pa;
+            t->frame[7] = 3;
         }
-        if (r.reply && !t->reply_cap) {
-            t->frame[28] = r.result; t->frame[29] = 0;
+        if (t->sfence_pending) {
+            asm volatile("sfence.vma %0, zero" : : "r"(t->last_fault_addr) : "memory");
+            t->sfence_pending = false;
+            ++resume_sfences;
         }
-        /* Each CSRUNV restarts the 5 ms quantum, so a domain that keeps
-         * faulting would never be preempted: bound the resolved faults by
-         * one quantum of this ioctl, then return and release vm_lock. */
-        budget_end = ktime_get_ns() + CV_STEP_BUDGET_NS;
-        TEST_STEP_BEGIN();
-        TEST_HOOK(3);
-        for (unsigned long action = r.reply ? 2 : 0, entries = 0;;
-             action = 0, ++entries) {
-            if (entries && !text) TEST_HOOK(2);  /* after a data fault only, see below */
-            preempt_disable(); local_irq_save(flags);
-            /* Checked with interrupts and preemption off, immediately before
-             * CSRUNV: no interrupt can set need_resched or a signal between
-             * this check and the entry. Before the first entry nothing has
-             * changed, so the launcher simply repeats the same CV_STEP (its
-             * loop retries EINTR and EAGAIN; the reply above is rewritten
-             * identically). Before a later one the fault just resolved goes
-             * back as it was, already counted. */
-            TEST_CHECK();
-            if (cv_step_stop(budget_end)) {
-                local_irq_restore(flags); preempt_enable();
-                TEST_STOPPED(!entries);
-                if (!entries) {
-                    rc = signal_pending(current) ? -EINTR : -EAGAIN;
-                    goto out;
-                }
-                resolved = true;
-                break;
-            }
-            TEST_ENTRY();
-            if (!t->started) {
-                t->frame[0] = csr_read(CSR_SATP);
-                t->frame[1] = c->table_pa;
-                t->frame[7] = 3;
-            }
-            if (t->sfence_pending) {
-                asm volatile("sfence.vma %0, zero" : : "r"(t->last_fault_addr) : "memory");
-                t->sfence_pending = false;
-                ++resume_sfences;
-            }
-            if (t->started) {
-                /* run_event's fence orders this store before the CSRUNV, with the sentinel's. */
-                unsigned long satp = csr_read(CSR_SATP), saved = t->frame[CV_FRAME_SAVED_SATP];
-                if (saved && saved != satp) ++resume_satp_changed;
-                WRITE_ONCE(t->frame[CV_FRAME_SAVED_SATP], satp);
-                ++resume_satp_refreshes;
-            }
+        if (t->started) {
+            /* run_event's fence orders this store before the CSRUNV, with the sentinel's. */
+            unsigned long satp = csr_read(CSR_SATP), saved = t->frame[CV_FRAME_SAVED_SATP];
+            if (saved && saved != satp) ++resume_satp_changed;
+            WRITE_ONCE(t->frame[CV_FRAME_SAVED_SATP], satp);
+            ++resume_satp_refreshes;
+        }
 #ifdef CAPSTONE_VM_BENCH_COUNTERS
-            {
-                /* Interrupts are off: both reads bracket the CSRUNV alone. */
-                unsigned long cy0 = csr_read(CSR_CYCLE), in0 = csr_read(CSR_INSTRET);
-                t->event = run_event(t, action);
-                unsigned long dcy = csr_read(CSR_CYCLE) - cy0, din = csr_read(CSR_INSTRET) - in0;
-                atomic64_add(dcy, &c->bench_cycles);
-                atomic64_add(din, &c->bench_instret);
-                WRITE_ONCE(bench_cycles, bench_cycles + dcy);
-                WRITE_ONCE(bench_instret, bench_instret + din);
-                WRITE_ONCE(bench_entries, bench_entries + 1);
-                atomic64_inc(&c->bench_entries);
-            }
-#else
+        {
+            /* Interrupts are off: both reads bracket the CSRUNV alone. */
+            unsigned long cy0 = csr_read(CSR_CYCLE), in0 = csr_read(CSR_INSTRET);
             t->event = run_event(t, action);
+            unsigned long dcy = csr_read(CSR_CYCLE) - cy0, din = csr_read(CSR_INSTRET) - in0;
+            atomic64_add(dcy, &c->bench_cycles);
+            atomic64_add(din, &c->bench_instret);
+            WRITE_ONCE(bench_cycles, bench_cycles + dcy);
+            WRITE_ONCE(bench_instret, bench_instret + din);
+            WRITE_ONCE(bench_entries, bench_entries + 1);
+            atomic64_inc(&c->bench_entries);
+        }
+#else
+        t->event = run_event(t, action);
 #endif
-            t->started = true; t->reply_cap = false;
-            local_irq_restore(flags); preempt_enable();
-            ++c->stats.steps;
-            if (t->event == CV_EVENT_UNWRITTEN) {
-                /* REFUSED: the CSRUNV wrote no event record. End the context, never loop. The
-                 * report below reads frame[2..5], so set them to a terminal kind and a cause no
-                 * real fault carries. Must-fire, budgeted, at KERN_EMERG: the board console shows
-                 * nothing lower. */
-                if (refused_prints < CV_DIAG_BUDGET) {
-                    ++refused_prints;
-                    pr_emerg("capstone_vm: CSRUNV action %lu wrote no event record (refused), "
-                             "thread %llu entries %lu: context ended\n",
-                             action, (unsigned long long)t->id, entries);
-                }
-                t->frame[2] = 2; t->frame[3] = CV_CAUSE_REFUSED;
-                t->frame[4] = t->frame[5] = 0;
-                t->event = 2;
+        if (!t->started) t->native_satp = csr_read(CSR_SATP);
+        t->started = true; t->reply_cap = false;
+        local_irq_restore(flags); preempt_enable();
+        ++c->stats.steps;
+        if (t->event == CV_EVENT_UNWRITTEN) {
+            /* REFUSED: the CSRUNV wrote no event record. End the context, never loop. The
+             * report below reads frame[2..5], so set them to a terminal kind and a cause no
+             * real fault carries. Must-fire, budgeted, at KERN_EMERG: the board console shows
+             * nothing lower. */
+            if (refused_prints < CV_DIAG_BUDGET) {
+                ++refused_prints;
+                pr_emerg("capstone_vm: CSRUNV action %lu wrote no event record (refused), "
+                         "thread %llu entries %lu: context ended\n",
+                         action, (unsigned long long)t->id, entries);
             }
-            if (diag_escapes && escape_prints < CV_ESCAPE_BUDGET) {
-                ++escape_prints;
-                CV_EMIT("capstone_vm: escape %u action %lu event %lu frame kind 0x%lx cause 0x%lx "
-                        "pc 0x%lx tval 0x%lx a0 0x%lx\n",
-                        escape_prints, action, t->event,
-                        t->frame[2], t->frame[3], t->frame[4], t->frame[5], t->frame[6]);
-            }
-            if (t->event != 4)
-                break;
-            /* Resolve a page fault here, as CV_RESOLVE would, and resume
-             * without the two system calls a return through the launcher
-             * costs. resolve() can sleep in mmap_lock and GUP while vm_lock
-             * is held, so a stop condition already raised (or a quantum
-             * already spent) returns the fault unresolved, as without this
-             * loop. A fault resolve() refuses goes back to the launcher,
-             * whose own CV_RESOLVE fails the same way and delivers it. A
-             * fault resolved here but stopped before the next entry is
-             * resolved again, idempotently, by the launcher's CV_RESOLVE. */
-            /* A text fault is not a fault event (text_fault), nor an
-             * injection point of the test build's stop hooks: neither this
-             * one nor the re-entry hook above. */
-            text = text_fault(c, t->frame[5]);
-            if (!text && diag_admit) {
-                /* The census of fault events, at their receipt: see struct arena faulted. */
-                struct arena *fa = arena_at(c, t->frame[5]);
-                if (fa) ++fa->faulted;
-            }
-            if (!text)
-                TEST_HOOK(4);
-            if (cv_step_stop(budget_end)) {
-                TEST_STOPPED(false);
-                TEST_REAL_STOP(false, budget_end);
-                break;
-            }
-            if (resolve(c, t, budget_end))
-                break;
-            t->sfence_pending = true;
-            if (!text) {
-                ++c->stats.faults;
-                unpinned_fault_event(c, t, "step");
-            }
+            t->frame[2] = 2; t->frame[3] = CV_CAUSE_REFUSED;
+            t->frame[4] = t->frame[5] = 0;
+            t->event = 2;
         }
-        if (t->event == 5) {
-            int error = ensure_nodes(c, CAP_REV_TABLE_RESERVE + 1);
-            /* Return through Linux between retries. Refuse endless retries
-             * when the namespace consists of live or pinned identities. */
-            t->frame[2] = error ? 2 : 1;
+        if (diag_escapes && escape_prints < CV_ESCAPE_BUDGET) {
+            ++escape_prints;
+            CV_EMIT("capstone_vm: escape %u action %lu event %lu frame kind 0x%lx cause 0x%lx "
+                    "pc 0x%lx tval 0x%lx a0 0x%lx\n",
+                    escape_prints, action, t->event,
+                    t->frame[2], t->frame[3], t->frame[4], t->frame[5], t->frame[6]);
         }
-        r.kind = t->frame[2]; r.cause = t->frame[3];
-        r.pc = t->frame[4]; r.address = t->frame[5];
-        /* The low word of register slots 1 and 8 (byte 80 and 192: x1 = ra,
-         * x8 = fp; see wire.h cv_step). The escape writes them on a terminal
-         * step; otherwise they hold what ENTRY left, zero. */
-        r.ra = t->frame[10]; r.fp = t->frame[24];
-        /* Eight loads and stores: for 64 aligned bytes the kernel's memcpy is
-         * a call around a four-byte loop. */
-        r.args[0] = t->frame[72]; r.args[1] = t->frame[73];
-        r.args[2] = t->frame[74]; r.args[3] = t->frame[75];
-        r.args[4] = t->frame[76]; r.args[5] = t->frame[77];
-        r.args[6] = t->frame[78]; r.args[7] = t->frame[79];
-        r.thread = t->id;
-        t->terminal = r.kind == 2;
-        if (r.kind == 4 && !resolved && !text_fault(c, r.address)) {
+        if (t->event != 4)
+            break;
+        /* Resolve a page fault here, as CV_RESOLVE would, and resume
+         * without the two system calls a return through the launcher
+         * costs. resolve() can sleep in mmap_lock and GUP while vm_lock
+         * is held, so a stop condition already raised (or a quantum
+         * already spent) returns the fault unresolved, as without this
+         * loop. A fault resolve() refuses goes back to the launcher,
+         * whose own CV_RESOLVE fails the same way and delivers it. A
+         * fault resolved here but stopped before the next entry is
+         * resolved again, idempotently, by the launcher's CV_RESOLVE. */
+        /* A text fault is not a fault event (text_fault), nor an
+         * injection point of the test build's stop hooks: neither this
+         * one nor the re-entry hook above. */
+        text = text_fault(c, t->frame[5]);
+        if (!text && diag_admit) {
+            struct arena *fa = arena_at(c, t->frame[5]);
+            if (fa) ++fa->faulted;
+        }
+        if (!text)
+            TEST_HOOK(4);
+        if (jdl ? cv_step_stop_j(*jdl) : cv_step_stop(budget_end)) {
+            TEST_STOPPED(false);
+            TEST_REAL_STOP(false, budget_end);
+            break;
+        }
+        if (resolve(c, t, jdl ? ktime_get_ns() + CV_STEP_BUDGET_NS : budget_end))
+            break;
+        t->sfence_pending = true;
+        if (!text) {
             ++c->stats.faults;
-            unpinned_fault_event(c, t, "return");
+            unpinned_fault_event(c, t, "step");
         }
-        rc = copy_to_user((void __user *)arg, &r, sizeof(r)) ? -EFAULT : 0;
-        if (rc) t->terminal = true;
-    } else if (op == CV_RESOLVE) {
-        struct cv_thread_control r;
-        struct cv_thread *t;
-        if (copy_from_user(&r, (void __user *)arg, sizeof(r))) { rc = -EFAULT; goto out; }
-        t = find_thread(c, r.thread);
-        rc = t ? resolve(c, t, ktime_get_ns() + CV_STEP_BUDGET_NS) : -ESRCH;
-        if (!rc) t->sfence_pending = true;
-    } else if (op == CV_TOUCH) {
-        struct cv_touch r;
-        if (copy_from_user(&r, (void __user *)arg, sizeof(r))) { rc = -EFAULT; goto out; }
-        rc = touch(c, &r);
-    } else if (op == CV_RETIRE) {
-        u64 id;
-        struct arena *a;
-        if (copy_from_user(&id, (void __user *)arg, sizeof(id))) { rc = -EFAULT; goto out; }
-        a = xa_load(&c->ids, id);
-        if (a) rc = retire(c, a, false);
-    } else if (op == CV_PARK) {
-        u64 id;
-        struct arena *a;
-        if (copy_from_user(&id, (void __user *)arg, sizeof(id))) { rc = -EFAULT; goto out; }
-        a = xa_load(&c->ids, id);
-        if (a) rc = park(c, a);
-    } else if (op == CV_REVIVE) {
-        struct cv_map r;
-        struct cv_thread *t;
-        if (copy_from_user(&r, (void __user *)arg, sizeof(r))) { rc = -EFAULT; goto out; }
-        t = find_thread(c, r.thread);
-        if (!t || t->terminal) { rc = -ESRCH; goto out; }
-        rc = revive(c, t, &r);
-        if (!rc && copy_to_user((void __user *)arg, &r, sizeof(r))) {
-            /* As CV_ADD: the grant was minted and its handle not delivered. */
-            t->terminal = true; rc = -EFAULT;
-        }
-    } else if (op == CV_STATS) {
-        node_stats(c);
-        rc = copy_to_user((void __user *)arg, &c->stats, sizeof(c->stats)) ? -EFAULT : 0;
-    } else rc = -ENOTTY;
-out:
-    TEST_IOCTL_DONE();
-    /* Q-26: one wake covers every way a frame can stop occupying the slot --
-     * terminal exit, a discard, an error path -- instead of enumerating them and
-     * missing one. A spurious wake costs a re-check. */
-    wake_up_all(&slot_wait);
-    mutex_unlock(&vm_lock);
-    return rc;
+    }
+    if (t->event == 5) {
+        int error = ensure_nodes(c, CAP_REV_TABLE_RESERVE + 1);
+        /* Return through Linux between retries. Refuse endless retries
+         * when the namespace consists of live or pinned identities. */
+        t->frame[2] = error ? 2 : 1;
+    }
+    r->kind = t->frame[2]; r->cause = t->frame[3];
+    r->pc = t->frame[4]; r->address = t->frame[5];
+    /* The low word of register slots 1 and 8 (byte 80 and 192: x1 = ra,
+     * x8 = fp; see wire.h cv_step). The escape writes them on a terminal
+     * step; otherwise they hold what ENTRY left, zero. */
+    r->ra = t->frame[10]; r->fp = t->frame[24];
+    /* Eight loads and stores: for 64 aligned bytes the kernel's memcpy is
+     * a call around a four-byte loop. */
+    r->args[0] = t->frame[72]; r->args[1] = t->frame[73];
+    r->args[2] = t->frame[74]; r->args[3] = t->frame[75];
+    r->args[4] = t->frame[76]; r->args[5] = t->frame[77];
+    r->args[6] = t->frame[78]; r->args[7] = t->frame[79];
+    r->thread = t->id;
+    t->terminal = r->kind == 2;
+    if (r->kind == 4 && !resolved && !text_fault(c, r->address)) {
+        ++c->stats.faults;
+        unpinned_fault_event(c, t, "return");
+    }
+    return 0;
 }
-static int vm_open(struct inode *inode, struct file *f)
+
+static int context_create(struct context **out)
 {
     struct context *c;
     struct context *existing;
     struct cv_thread *t;
     unsigned long available;
-    if (num_online_cpus() != 1 || !current->mm || PAGE_SIZE != 4096)
+    if (node_table_flat || num_online_cpus() != 1 || !current->mm || PAGE_SIZE != 4096)
         return -EOPNOTSUPP;
     if (node_initial_pages < 2 || node_initial_pages > CV_ID_PAGES_MAX ||
         !node_batch_pages || node_batch_pages > CV_ID_PAGES_MAX ||
@@ -3531,14 +3082,13 @@ static int vm_open(struct inode *inode, struct file *f)
     c = kvzalloc(sizeof(*c), GFP_KERNEL);
     if (!c) return -ENOMEM;
     INIT_LIST_HEAD(&c->threads);
-    init_waitqueue_head(&c->remap_wait);
     c->arenas = RB_ROOT;
-    xa_init_flags(&c->ids, XA_FLAGS_ACCOUNT);
     c->next_thread = 0;
     t = kvzalloc(sizeof(*t), GFP_KERNEL);
     if (!t) { kvfree(c); return -ENOMEM; }
     c->frame = (void *)get_zeroed_page(GFP_KERNEL);
-    c->table = node_table_flat ? node_new_flat_table(c) : node_new_page(c);
+    /* Native task admission requires the paged table; no misc-device CMA allocator. */
+    c->table = node_new_page(c);
     if (c->table && !node_table_flat) c->table_pa = virt_to_phys(c->table);
     if (!c->frame || !c->table) {
         if (c->frame) free_page((unsigned long)c->frame);
@@ -3565,48 +3115,14 @@ static int vm_open(struct inode *inode, struct file *f)
             }
         }
     }
-    /* An older processor rejects the versioned format through urevavail.
-     * Detect that before CSMINT could fault in the kernel context.
-     *
-     * NOT IN FLAT MODE. urevavail (0xcc0) does not exist on vp2 -- csr_regfile.sv falls through
-     * to its default and a csrr is an ILLEGAL INSTRUCTION, so this probe would trap in S the
-     * first time a context is created. QEMU implements 0xcc0 as capacity - next + free_count
-     * read live, which is exactly node_available(), so in flat mode the header answers it
-     * without touching the CSR. Saturated at CV_FLAT_RECORDS as the hardware saturates. The
-     * probe's purpose -- detecting a processor too old for the versioned format -- does not
-     * apply to vp2, which is the newer part. Recorded in inputs.json as a computed count. */
-#if node_table_flat
-    available = min(node_available(c), CV_FLAT_RECORDS);
-#else
-    /* Braced so the declarations stay at the head of a block: the kernel builds with
-     * -Wdeclaration-after-statement, and scoping them here keeps the flat build free of
-     * -Wunused-variable, which is how the need for this was caught. */
-    if (unpinned) {
-        available = node_available(c);
-    } else {
-        unsigned long flags, previous_root;
-        preempt_disable(); local_irq_save(flags);
-        previous_root = select_root(c);
-        asm volatile("csrr %0, 0xcc0" : "=r"(available));
-        restore_root(previous_root);
-        local_irq_restore(flags); preempt_enable();
-    }
-#endif
+    /* Profile discovery happened at module load, without executing optional
+     * CSRs. Capacity is authoritative in the table we have just allocated. */
+    available = node_available(c);
     if (available != node_capacity(c) - CV_NODE_FIRST) {
         node_free_table(c); free_page((unsigned long)c->frame);
         kvfree(t); kvfree(c); return -EOPNOTSUPP;
     }
-#if node_table_flat
-    /* scapctl (0x5c0) does not exist on vp2 either -- any access, any mode, is illegal. The only
-     * thing this read produced was the exact-bounds property, which under option (iii) is false.
-     * The module never WROTE 0x5c0 (one access in the file, a read), so nothing else is lost. */
-    c->exact_bounds = false;
-#else
-    if (unpinned) c->exact_bounds = unpinned_exact_bounds;
-    else { unsigned long profile;
-      asm volatile("csrr %0, 0x5c0" : "=r"(profile));
-      c->exact_bounds = !!(profile & 0x100); }
-#endif
+    c->exact_bounds = copyable_exact_bounds;
     c->frame[1] = c->table_pa;
     t->context = c; t->id = 0; t->frame = c->frame;
     t->frame_pa = virt_to_phys(c->frame); t->user_frame = false;
@@ -3636,18 +3152,16 @@ static int vm_open(struct inode *inode, struct file *f)
             return error;
         }
     }
-    f->private_data = c;
+    *out = c;
     list_add(&c->link, &contexts);
     mutex_unlock(&vm_lock);
     return 0;
 }
-static int vm_release(struct inode *inode, struct file *f)
+static int context_destroy(struct context *c)
 {
-    struct context *c = f->private_data;
     unsigned long flags;
     struct cv_thread *t, *tmp;
     mutex_lock(&vm_lock);
-    kvfree(c->remap_pages);
     list_del(&c->link);
     node_stats(c);
     allocated_total += c->stats.nodes;
@@ -3655,7 +3169,7 @@ static int vm_release(struct inode *inode, struct file *f)
     reclaimed_total += c->stats.reclaimed;
     /* Stop every supervisor slot while its frame pages are still pinned. */
     list_for_each_entry(t, &c->threads, link) {
-        if (t->started) {
+        if (t->started && !t->slot_exported) {
             preempt_disable(); local_irq_save(flags);
             run(t->frame_pa, 1);
             local_irq_restore(flags); preempt_enable();
@@ -3683,7 +3197,6 @@ static int vm_release(struct inode *inode, struct file *f)
             retire(c, a, true);
         }
         WARN_ON(!RB_EMPTY_ROOT(&c->arenas));
-        xa_destroy(&c->ids);
         if (node_table_flat)
             pr_emerg("capstone_vm: release retires attempted=%lu succeeded=%lu pushed=%lu first_id=%lu\n",
                      attempted, c->retired_flat - before, c->pushed_flat - pushed_before,
@@ -3704,33 +3217,70 @@ static int vm_release(struct inode *inode, struct file *f)
     node_free_table(c);
     if (c->image) { allow_write_access(c->image); fput(c->image); }
     mmdrop(c->mm); kvfree(c);
-    wake_up_all(&slot_wait);   /* the released context's frames are gone */
+    slot_changed();   /* the released context's frames are gone */
     mutex_unlock(&vm_lock);
     return 0;
 }
-static const struct file_operations ops = {
-    .owner = THIS_MODULE, .open = vm_open, .release = vm_release, .unlocked_ioctl = vm_ioctl,
-};
-static struct miscdevice device = {
-    .minor = MISC_DYNAMIC_MINOR, .name = "capstone-vm", .fops = &ops, .mode = 0600,
-};
+#include "checked-copy-dom.h"
+#include "binfmt-dom.h"
+
 static int __init init(void)
 {
+    struct device_node *profile;
+    u32 id_bits, exact, page_size, granule_size, checked_abi = 0, transport_version = 0;
+    int error;
+    /* Admission switches remain accepted by existing boot recipes. Disabling
+     * one disables this adapter; it can never select a legacy entry path. */
+    if (!native_task || !native_dispatch || !dom_binfmt || !checked_copy ||
+        !native_slot_transport || !unpinned) return -EOPNOTSUPP;
+    profile = of_find_compatible_node(NULL, NULL, "capstone,copyable-v1");
+    if (!profile) return -EOPNOTSUPP;
+    error = of_property_read_u32(profile, "id-bits", &id_bits) ||
+            of_property_read_u32(profile, "exact-bounds", &exact) ||
+            of_property_read_u32(profile, "page-size", &page_size) ||
+            of_property_read_u32(profile, "granule-size", &granule_size);
+    of_property_read_u32(profile, "checked-copy-abi", &checked_abi);
+    of_property_read_u32(profile, "context-transport-version", &transport_version);
+    of_node_put(profile);
+    if (error || id_bits != CAPSTONE_VM_IDS || exact > 1 ||
+        page_size != PAGE_SIZE || granule_size != 16 || node_table_flat)
+        return -EOPNOTSUPP;
+    copyable_exact_bounds = exact;
+    /* Refuse mismatched models at load, before an experimental instruction
+     * can trap in S mode. No test-only CSR probing or legacy ABI fallback. */
+    if ((checked_copy && (checked_abi != 1 || !native_slot_transport)) ||
+        (native_slot_transport && transport_version != (checked_copy ? 6 : 5)) ||
+        (native_dispatch && (!dom_binfmt || !checked_copy || !native_slot_transport)) ||
+        ((native_slot_transport || checked_copy || dom_binfmt) && num_possible_cpus() != 1))
+        return -EOPNOTSUPP;
+
+
+#ifdef CV_TASK_BACKEND
+    if (native_task && (!native_dispatch || !unpinned)) return -EOPNOTSUPP;
+    if (native_io && !native_task) return -EOPNOTSUPP;
+#endif
     if (unpinned_fast_sweep && !unpinned) return -EINVAL;
     if (unpinned_fast_fault && !unpinned) {
         pr_emerg("capstone_vm: unpinned_fast_fault requires unpinned=1\n");
         return -EINVAL;
     }
     if (unpinned) {
-        typeof(capstone_unpinned_config) *config;
         int error;
+        /* Tag-copy interrupt exclusion and namespace sweeps are currently
+         * single-hart protocols. Offline-but-possible CPUs are not safe:
+         * hotplug must not silently invalidate the load-time contract. */
+        if (num_possible_cpus() != 1) {
+            pr_err("capstone_vm: unpinned backing requires one possible CPU\n");
+            return -EOPNOTSUPP;
+        }
         if (node_table_flat) return -EOPNOTSUPP;
-        config = symbol_get(capstone_unpinned_config);
-        if (!config) return -EOPNOTSUPP;
-        error = config(CAPSTONE_VM_IDS, &unpinned_exact_bounds);
-        symbol_put(capstone_unpinned_config);
+        error = capstone_unpinned_config(CAPSTONE_VM_IDS, &unpinned_exact_bounds);
         if (error) return error;
+        if (unpinned_exact_bounds != copyable_exact_bounds) return -EOPNOTSUPP;
     }
+#ifdef CONFIG_TRANSPARENT_HUGEPAGE
+    if (dom_binfmt) return -EOPNOTSUPP;
+#endif
 #ifdef CAPSTONE_VM_FLAT_TABLE
     /* Refuse the LOAD, so a bad value cannot reach a run. 2 because ids 0 and 1 are the header;
      * the maximum because silicon saturates capacity there; whole pages because the table is one
@@ -3760,28 +3310,22 @@ static int __init init(void)
          * below really did not fire. Banner absent => the module did not load at all, which is
          * a different and louder failure than a filtered print. Bump CV_DIAG_TAG whenever the
          * lines above change shape. */
-        int rc = misc_register(&device);
-        if (rc)
-            return rc;
-        /* ids20: the CMA path of node_new_flat_table allocates through this device */
-        if (get_order(CV_FLAT_BYTES) > CV_BUDDY_MAX_ORDER &&
-            dma_coerce_mask_and_coherent(device.this_device, DMA_BIT_MASK(64))) {
-            misc_deregister(&device);
-            return -EIO;
-        }
         /* Always KERN_EMERG, independent of diag_emerg: this is the line that tells a reader
          * whether the module loaded at all, so it must survive the quieted console even when the
          * rest are being read through dmesg. One line per insmod, before the rungs begin. */
         pr_emerg("capstone_vm: loaded, diag %s, supervisor_slots=%lu, diag_emerg=%d, unpinned=%d, fast_sweep=%d, unpinned_fast_fault=%d\n",
                  CV_DIAG_TAG, supervisor_slots, diag_emerg, unpinned, unpinned_fast_sweep, unpinned_fast_fault);
+        if (dom_binfmt) insert_binfmt(&capstone_dom);
         return 0;
     }
 }
+static void __exit done(void)
+{
+    if (dom_binfmt) unregister_binfmt(&capstone_dom);
 #ifdef CV_TEST_HOOKS
-static void __exit done(void) { test_report("unload"); misc_deregister(&device); }
-#else
-static void __exit done(void) { misc_deregister(&device); }
+    test_report("unload");
 #endif
+}
 module_init(init); module_exit(done);
 MODULE_LICENSE("GPL");
-MODULE_DESCRIPTION("Private virtual Capstone execution adapter");
+MODULE_DESCRIPTION("Built-in native Capstone task adapter");

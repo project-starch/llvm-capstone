@@ -1,0 +1,1653 @@
+{
+  "schema_version": 2,
+  "branch": "native/linux-task-integration",
+  "source_head": "a62d1dfe59c3ee1a5786230db30231e3f2abfc46",
+  "scope": "Rebased runtime snapshot; later handoff/evidence-only commits are excluded.",
+  "comparison_base": "c9611344eeb75ed628d488202a9394a6e44f3db5",
+  "runtime_source_head": "a62d1dfe59c3ee1a5786230db30231e3f2abfc46",
+  "origin_dev_fetched_for_this_inventory": true,
+  "branch_commits_since_base": 78,
+  "pre_rebase_head": "8897411a0f03",
+  "pre_rebase_archive_branch": "archive/native-task-pre-rebase-20261108",
+  "qemu_base": "0542c5556c2daddf71795f3d48eec1fb8ae137b3",
+  "qemu_head": "dd041bac5ad9c145c3872a50804ca714a26b1c88",
+  "qemu_commits": [
+    "dd041bac5ad9c145c3872a50804ca714a26b1c88 riscv: advertise checked-copy and context transport contracts",
+    "59ee967eaf091578fb006a13745ff09018c6caae Port checked access and immutable context transport to copyable model",
+    "2b87cc1fb961cee6a663f7aa57ec2c3595ccc846 test: qualify copyable raw transport privilege boundaries",
+    "316c44ae56c6df16656a44407560db5855085b33 Run copyable contexts with ordinary interrupts and explicit platform discovery",
+    "e6a379826cad2808ade7674289540c514b2a7adb Reject legacy ownership instructions in copyable-only prototype"
+  ],
+  "llvm_compiler_source_changes": false,
+  "upstream_compiler_changes": "Inherited from origin/dev; SHRINKTO globals remain default off. No compiler change in branch delta.",
+  "files_by_layer": {
+    "processor_model_gitlink": 1,
+    "documentation": 10,
+    "application_abi_and_ports": 48,
+    "linux_and_runtime": 40,
+    "verification": 171
+  },
+  "changed_paths": 270,
+  "files": [
+    {
+      "path": "capstone/capstone-qemu",
+      "added": 1,
+      "removed": 1,
+      "layer": "processor_model_gitlink"
+    },
+    {
+      "path": "capstone/docs/README.md",
+      "added": 15,
+      "removed": 0,
+      "layer": "documentation"
+    },
+    {
+      "path": "capstone/docs/design/virtual-capstone/README.md",
+      "added": 6,
+      "removed": 0,
+      "layer": "documentation"
+    },
+    {
+      "path": "capstone/docs/design/virtual-capstone/native-linux-tasks.md",
+      "added": 280,
+      "removed": 0,
+      "layer": "documentation"
+    },
+    {
+      "path": "capstone/docs/design/virtual-capstone/syscall-import.md",
+      "added": 143,
+      "removed": 0,
+      "layer": "documentation"
+    },
+    {
+      "path": "capstone/docs/plans/2026-11-03-boundary-north-star.md",
+      "added": 137,
+      "removed": 0,
+      "layer": "documentation"
+    },
+    {
+      "path": "capstone/docs/plans/2026-11-06-copyable-only-prototype.md",
+      "added": 95,
+      "removed": 0,
+      "layer": "documentation"
+    },
+    {
+      "path": "capstone/docs/plans/native-linux-task-integration.md",
+      "added": 319,
+      "removed": 0,
+      "layer": "documentation"
+    },
+    {
+      "path": "capstone/docs/plans/native-task-rtl-handoff.md",
+      "added": 341,
+      "removed": 0,
+      "layer": "documentation"
+    },
+    {
+      "path": "capstone/docs/state/current-next-step.md",
+      "added": 577,
+      "removed": 0,
+      "layer": "documentation"
+    },
+    {
+      "path": "capstone/docs/state/current-state.md",
+      "added": 794,
+      "removed": 0,
+      "layer": "documentation"
+    },
+    {
+      "path": "capstone/ports/hush/app/README.md",
+      "added": 97,
+      "removed": 0,
+      "layer": "application_abi_and_ports"
+    },
+    {
+      "path": "capstone/ports/hush/app/build.py",
+      "added": 101,
+      "removed": 0,
+      "layer": "application_abi_and_ports"
+    },
+    {
+      "path": "capstone/ports/hush/app/build.sh",
+      "added": 5,
+      "removed": 0,
+      "layer": "application_abi_and_ports"
+    },
+    {
+      "path": "capstone/ports/hush/app/patches/0001-hush-native-spawn.patch",
+      "added": 1170,
+      "removed": 0,
+      "layer": "application_abi_and_ports"
+    },
+    {
+      "path": "capstone/ports/hush/app/port.json",
+      "added": 26,
+      "removed": 0,
+      "layer": "application_abi_and_ports"
+    },
+    {
+      "path": "capstone/ports/hush/app/prepare-sources.sh",
+      "added": 32,
+      "removed": 0,
+      "layer": "application_abi_and_ports"
+    },
+    {
+      "path": "capstone/ports/hush/app/results/native-task.json",
+      "added": 236,
+      "removed": 0,
+      "layer": "application_abi_and_ports"
+    },
+    {
+      "path": "capstone/ports/hush/app/sdk-cc.py",
+      "added": 9,
+      "removed": 0,
+      "layer": "application_abi_and_ports"
+    },
+    {
+      "path": "capstone/ports/hush/app/tests/child.c",
+      "added": 55,
+      "removed": 0,
+      "layer": "application_abi_and_ports"
+    },
+    {
+      "path": "capstone/ports/hush/app/tests/driver.c",
+      "added": 29,
+      "removed": 0,
+      "layer": "application_abi_and_ports"
+    },
+    {
+      "path": "capstone/ports/hush/app/tests/host-check.py",
+      "added": 49,
+      "removed": 0,
+      "layer": "application_abi_and_ports"
+    },
+    {
+      "path": "capstone/ports/hush/app/tests/run-native.py",
+      "added": 116,
+      "removed": 0,
+      "layer": "application_abi_and_ports"
+    },
+    {
+      "path": "capstone/ports/hush/app/tests/semantics.sh",
+      "added": 59,
+      "removed": 0,
+      "layer": "application_abi_and_ports"
+    },
+    {
+      "path": "capstone/ports/musl-capstone/runtime/delegate.c",
+      "added": 115,
+      "removed": 0,
+      "layer": "application_abi_and_ports"
+    },
+    {
+      "path": "capstone/ports/musl-capstone/runtime/native-syscall.S",
+      "added": 28,
+      "removed": 0,
+      "layer": "application_abi_and_ports"
+    },
+    {
+      "path": "capstone/ports/perl/provenance/README.md",
+      "added": 175,
+      "removed": 0,
+      "layer": "application_abi_and_ports"
+    },
+    {
+      "path": "capstone/ports/perl/provenance/allocation-failure.c",
+      "added": 64,
+      "removed": 0,
+      "layer": "application_abi_and_ports"
+    },
+    {
+      "path": "capstone/ports/perl/provenance/allocation-failure.pl",
+      "added": 26,
+      "removed": 0,
+      "layer": "application_abi_and_ports"
+    },
+    {
+      "path": "capstone/ports/perl/provenance/apply.py",
+      "added": 403,
+      "removed": 0,
+      "layer": "application_abi_and_ports"
+    },
+    {
+      "path": "capstone/ports/perl/provenance/baseline.json",
+      "added": 55,
+      "removed": 0,
+      "layer": "application_abi_and_ports"
+    },
+    {
+      "path": "capstone/ports/perl/provenance/build.py",
+      "added": 65,
+      "removed": 0,
+      "layer": "application_abi_and_ports"
+    },
+    {
+      "path": "capstone/ports/perl/provenance/callback-controls.pl",
+      "added": 183,
+      "removed": 0,
+      "layer": "application_abi_and_ports"
+    },
+    {
+      "path": "capstone/ports/perl/provenance/capstone-provenance.h",
+      "added": 23,
+      "removed": 0,
+      "layer": "application_abi_and_ports"
+    },
+    {
+      "path": "capstone/ports/perl/provenance/capstone-provenance.inc",
+      "added": 282,
+      "removed": 0,
+      "layer": "application_abi_and_ports"
+    },
+    {
+      "path": "capstone/ports/perl/provenance/pointer-provenance.t",
+      "added": 124,
+      "removed": 0,
+      "layer": "application_abi_and_ports"
+    },
+    {
+      "path": "capstone/ports/perl/provenance/qualification-07.json",
+      "added": 724,
+      "removed": 0,
+      "layer": "application_abi_and_ports"
+    },
+    {
+      "path": "capstone/ports/perl/provenance/qualification.json",
+      "added": 615,
+      "removed": 0,
+      "layer": "application_abi_and_ports"
+    },
+    {
+      "path": "capstone/ports/perl/provenance/run-allocation-failure.py",
+      "added": 105,
+      "removed": 0,
+      "layer": "application_abi_and_ports"
+    },
+    {
+      "path": "capstone/ports/perl/provenance/scalar-lifetime.pl",
+      "added": 39,
+      "removed": 0,
+      "layer": "application_abi_and_ports"
+    },
+    {
+      "path": "capstone/ports/perl/provenance/srcalt-selection.json",
+      "added": 34,
+      "removed": 0,
+      "layer": "application_abi_and_ports"
+    },
+    {
+      "path": "capstone/ports/spec-cpu2017/README.md",
+      "added": 38,
+      "removed": 0,
+      "layer": "application_abi_and_ports"
+    },
+    {
+      "path": "capstone/ports/spec-cpu2017/config/capstone-virtual.cfg",
+      "added": 5,
+      "removed": 1,
+      "layer": "application_abi_and_ports"
+    },
+    {
+      "path": "capstone/ports/spec-cpu2017/tools/build-record.py",
+      "added": 195,
+      "removed": 0,
+      "layer": "application_abi_and_ports"
+    },
+    {
+      "path": "capstone/ports/spec-cpu2017/tools/build.sh",
+      "added": 46,
+      "removed": 6,
+      "layer": "application_abi_and_ports"
+    },
+    {
+      "path": "capstone/ports/spec-cpu2017/tools/make-srcalt.sh",
+      "added": 16,
+      "removed": 2,
+      "layer": "application_abi_and_ports"
+    },
+    {
+      "path": "capstone/ports/spec-cpu2017/tools/test-build-record.py",
+      "added": 217,
+      "removed": 0,
+      "layer": "application_abi_and_ports"
+    },
+    {
+      "path": "capstone/runtime/application/CMakeLists.txt",
+      "added": 6,
+      "removed": 0,
+      "layer": "linux_and_runtime"
+    },
+    {
+      "path": "capstone/runtime/cmake/Application.cmake",
+      "added": 9,
+      "removed": 0,
+      "layer": "linux_and_runtime"
+    },
+    {
+      "path": "capstone/runtime/common/delegate.c",
+      "added": 8,
+      "removed": 2,
+      "layer": "application_abi_and_ports"
+    },
+    {
+      "path": "capstone/runtime/common/launch.c",
+      "added": 18,
+      "removed": 5,
+      "layer": "application_abi_and_ports"
+    },
+    {
+      "path": "capstone/runtime/common/native-syscall-table.c",
+      "added": 124,
+      "removed": 0,
+      "layer": "application_abi_and_ports"
+    },
+    {
+      "path": "capstone/runtime/common/native-syscall.c",
+      "added": 368,
+      "removed": 0,
+      "layer": "application_abi_and_ports"
+    },
+    {
+      "path": "capstone/runtime/common/spawn.c",
+      "added": 5,
+      "removed": 0,
+      "layer": "application_abi_and_ports"
+    },
+    {
+      "path": "capstone/runtime/include/capstone/checked-copy.h",
+      "added": 41,
+      "removed": 0,
+      "layer": "application_abi_and_ports"
+    },
+    {
+      "path": "capstone/runtime/include/capstone/delegate.h",
+      "added": 8,
+      "removed": 0,
+      "layer": "application_abi_and_ports"
+    },
+    {
+      "path": "capstone/runtime/include/capstone/launch.h",
+      "added": 14,
+      "removed": 0,
+      "layer": "application_abi_and_ports"
+    },
+    {
+      "path": "capstone/runtime/include/capstone/native-context.h",
+      "added": 127,
+      "removed": 0,
+      "layer": "application_abi_and_ports"
+    },
+    {
+      "path": "capstone/runtime/include/capstone/native-syscall-abi.h",
+      "added": 11,
+      "removed": 0,
+      "layer": "application_abi_and_ports"
+    },
+    {
+      "path": "capstone/runtime/include/capstone/native-syscall.h",
+      "added": 95,
+      "removed": 0,
+      "layer": "application_abi_and_ports"
+    },
+    {
+      "path": "capstone/runtime/include/capstone/spawn.h",
+      "added": 8,
+      "removed": 0,
+      "layer": "application_abi_and_ports"
+    },
+    {
+      "path": "capstone/runtime/linux/delegate-policy.h",
+      "added": 65,
+      "removed": 0,
+      "layer": "linux_and_runtime"
+    },
+    {
+      "path": "capstone/runtime/tests/application/launch-test.c",
+      "added": 69,
+      "removed": 1,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/README.md",
+      "added": 16,
+      "removed": 0,
+      "layer": "linux_and_runtime"
+    },
+    {
+      "path": "capstone/runtime/virtual/build-adapter.sh",
+      "added": 9,
+      "removed": 25,
+      "layer": "linux_and_runtime"
+    },
+    {
+      "path": "capstone/runtime/virtual/checked-copy.c",
+      "added": 51,
+      "removed": 0,
+      "layer": "linux_and_runtime"
+    },
+    {
+      "path": "capstone/runtime/virtual/exec.c",
+      "added": 20,
+      "removed": 96,
+      "layer": "linux_and_runtime"
+    },
+    {
+      "path": "capstone/runtime/virtual/install-native-task.sh",
+      "added": 52,
+      "removed": 0,
+      "layer": "linux_and_runtime"
+    },
+    {
+      "path": "capstone/runtime/virtual/kernel-capstone-helpers.h",
+      "added": 45,
+      "removed": 0,
+      "layer": "linux_and_runtime"
+    },
+    {
+      "path": "capstone/runtime/virtual/kernel-native-directory.patch",
+      "added": 46,
+      "removed": 0,
+      "layer": "linux_and_runtime"
+    },
+    {
+      "path": "capstone/runtime/virtual/kernel-native-files.patch",
+      "added": 181,
+      "removed": 0,
+      "layer": "linux_and_runtime"
+    },
+    {
+      "path": "capstone/runtime/virtual/kernel-native-gcc.patch",
+      "added": 48,
+      "removed": 0,
+      "layer": "linux_and_runtime"
+    },
+    {
+      "path": "capstone/runtime/virtual/kernel-native-helpers.patch",
+      "added": 200,
+      "removed": 0,
+      "layer": "linux_and_runtime"
+    },
+    {
+      "path": "capstone/runtime/virtual/kernel-native-mprotect.patch",
+      "added": 26,
+      "removed": 0,
+      "layer": "linux_and_runtime"
+    },
+    {
+      "path": "capstone/runtime/virtual/kernel-native-process.patch",
+      "added": 74,
+      "removed": 0,
+      "layer": "linux_and_runtime"
+    },
+    {
+      "path": "capstone/runtime/virtual/kernel-native-spawn.patch",
+      "added": 591,
+      "removed": 0,
+      "layer": "linux_and_runtime"
+    },
+    {
+      "path": "capstone/runtime/virtual/kernel-native-task.patch",
+      "added": 328,
+      "removed": 0,
+      "layer": "linux_and_runtime"
+    },
+    {
+      "path": "capstone/runtime/virtual/kernel-native-time.patch",
+      "added": 95,
+      "removed": 0,
+      "layer": "linux_and_runtime"
+    },
+    {
+      "path": "capstone/runtime/virtual/module/Makefile",
+      "added": 16,
+      "removed": 3,
+      "layer": "linux_and_runtime"
+    },
+    {
+      "path": "capstone/runtime/virtual/module/binfmt-dom.h",
+      "added": 501,
+      "removed": 0,
+      "layer": "linux_and_runtime"
+    },
+    {
+      "path": "capstone/runtime/virtual/module/capstone_vm.c",
+      "added": 453,
+      "removed": 909,
+      "layer": "linux_and_runtime"
+    },
+    {
+      "path": "capstone/runtime/virtual/module/checked-copy-dom.h",
+      "added": 407,
+      "removed": 0,
+      "layer": "linux_and_runtime"
+    },
+    {
+      "path": "capstone/runtime/virtual/module/delegate-dom.h",
+      "added": 57,
+      "removed": 0,
+      "layer": "linux_and_runtime"
+    },
+    {
+      "path": "capstone/runtime/virtual/module/native-directory-dom.h",
+      "added": 338,
+      "removed": 0,
+      "layer": "linux_and_runtime"
+    },
+    {
+      "path": "capstone/runtime/virtual/module/native-files-dom.h",
+      "added": 106,
+      "removed": 0,
+      "layer": "linux_and_runtime"
+    },
+    {
+      "path": "capstone/runtime/virtual/module/native-gcc-dom.h",
+      "added": 200,
+      "removed": 0,
+      "layer": "linux_and_runtime"
+    },
+    {
+      "path": "capstone/runtime/virtual/module/native-process-dom.h",
+      "added": 70,
+      "removed": 0,
+      "layer": "linux_and_runtime"
+    },
+    {
+      "path": "capstone/runtime/virtual/module/native-spawn-dom.h",
+      "added": 313,
+      "removed": 0,
+      "layer": "linux_and_runtime"
+    },
+    {
+      "path": "capstone/runtime/virtual/module/native-syscall-dom.h",
+      "added": 763,
+      "removed": 0,
+      "layer": "linux_and_runtime"
+    },
+    {
+      "path": "capstone/runtime/virtual/module/native-time-dom.h",
+      "added": 71,
+      "removed": 0,
+      "layer": "linux_and_runtime"
+    },
+    {
+      "path": "capstone/runtime/virtual/module/resource-dom.h",
+      "added": 466,
+      "removed": 0,
+      "layer": "linux_and_runtime"
+    },
+    {
+      "path": "capstone/runtime/virtual/module/rt-dom.h",
+      "added": 270,
+      "removed": 0,
+      "layer": "linux_and_runtime"
+    },
+    {
+      "path": "capstone/runtime/virtual/module/trampoline.S",
+      "added": 46,
+      "removed": 0,
+      "layer": "linux_and_runtime"
+    },
+    {
+      "path": "capstone/runtime/virtual/run-staged.py",
+      "added": 20,
+      "removed": 2,
+      "layer": "linux_and_runtime"
+    },
+    {
+      "path": "capstone/runtime/virtual/stage-adapter.sh",
+      "added": 33,
+      "removed": 0,
+      "layer": "linux_and_runtime"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/checked-copy/README.md",
+      "added": 37,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/checked-copy/run.sh",
+      "added": 26,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/checked-copy/test.c",
+      "added": 323,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/copyable-only/README.md",
+      "added": 219,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/copyable-only/abi-probe.c",
+      "added": 26,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/copyable-only/allocation.c",
+      "added": 35,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/copyable-only/check.py",
+      "added": 57,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/copyable-only/gate.sh",
+      "added": 22,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/copyable-only/measure-gate.sh",
+      "added": 25,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/copyable-only/mm-gate.sh",
+      "added": 10,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/copyable-only/movement-gate.sh",
+      "added": 41,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/copyable-only/platform-gate.sh",
+      "added": 37,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/copyable-only/platform.py",
+      "added": 144,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/copyable-only/raw-op.c",
+      "added": 13,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/copyable-only/raw-transport.md",
+      "added": 101,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/copyable-only/report.py",
+      "added": 84,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/copyable-only/results/checked-model.json",
+      "added": 74,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/copyable-only/results/comparison.json",
+      "added": 221,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/copyable-only/results/gcc-allocator-replay.json",
+      "added": 288,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/copyable-only/results/gcc-allocator.json",
+      "added": 1809,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/copyable-only/results/gcc-memory.json",
+      "added": 714,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/copyable-only/results/gcc-native-check.json",
+      "added": 125,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/copyable-only/results/gcc-native-preliminary.json",
+      "added": 157,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/copyable-only/results/gcc-phases.json",
+      "added": 419,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/copyable-only/results/gcc-three-arm.json",
+      "added": 284,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/copyable-only/results/hardening.json",
+      "added": 150,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/copyable-only/results/native-integration.json",
+      "added": 1226,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/copyable-only/results/qualification.json",
+      "added": 372,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/copyable-only/results/spec-test-comparison.json",
+      "added": 328,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/copyable-only/results/syscall-import.json",
+      "added": 220,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/copyable-only/run.sh",
+      "added": 24,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/copyable-only/test-platform.py",
+      "added": 45,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-context/README.md",
+      "added": 22,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-context/reference.c",
+      "added": 332,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-context/run-peers.sh",
+      "added": 40,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-context/run.sh",
+      "added": 31,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-context/test.c",
+      "added": 244,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-integration/README.md",
+      "added": 479,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-integration/allocator-events.py",
+      "added": 35,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-integration/allocator-replay.c",
+      "added": 53,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-integration/blocked.c",
+      "added": 9,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-integration/budget.c",
+      "added": 67,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-integration/build.sh",
+      "added": 19,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-integration/capprof-phases.patch",
+      "added": 130,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-integration/entry-driver.c",
+      "added": 54,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-integration/gcc-coverage.c",
+      "added": 50,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-integration/gcc-phases.py",
+      "added": 145,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-integration/gcc-preliminary.py",
+      "added": 113,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-integration/pipe-exec.c",
+      "added": 18,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-integration/probe.c",
+      "added": 146,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-integration/run-copyable.py",
+      "added": 128,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-integration/summarize.py",
+      "added": 54,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-race/README.md",
+      "added": 46,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-race/build.sh",
+      "added": 12,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-race/judge.py",
+      "added": 101,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-race/pipe-fill.c",
+      "added": 22,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-race/race.c",
+      "added": 171,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-race/rt-stubs.S",
+      "added": 13,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-race/run.sh",
+      "added": 6,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-race/scenarios.txt",
+      "added": 42,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-syscall/README.md",
+      "added": 36,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-syscall/reference.c",
+      "added": 3,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-syscall/run.sh",
+      "added": 43,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-syscall/table-test.c",
+      "added": 23,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-syscall/test.c",
+      "added": 586,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-task/README.md",
+      "added": 1281,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-task/access-fault-experiment.json",
+      "added": 1967,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-task/arena-arrays-qualification.json",
+      "added": 437,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-task/arena-index-qualification.json",
+      "added": 424,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-task/authorization-reuse-qualification.json",
+      "added": 743,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-task/build-clock.sh",
+      "added": 11,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-task/build-cwd.sh",
+      "added": 11,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-task/build-directory.sh",
+      "added": 11,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-task/build-dup.sh",
+      "added": 11,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-task/build-files.sh",
+      "added": 12,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-task/build-local-tmp.sh",
+      "added": 12,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-task/build-musl-copy.sh",
+      "added": 12,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-task/build-musl-io.sh",
+      "added": 17,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-task/build-process.sh",
+      "added": 11,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-task/build-spawn-lifecycle.sh",
+      "added": 12,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-task/build-spawn.sh",
+      "added": 13,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-task/build-sqlite.sh",
+      "added": 14,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-task/build-syscalls.sh",
+      "added": 15,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-task/build-time.sh",
+      "added": 11,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-task/build.sh",
+      "added": 9,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-task/clock.c",
+      "added": 79,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-task/compute.c",
+      "added": 9,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-task/copy-reuse-qualification.json",
+      "added": 782,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-task/cwd-driver.c",
+      "added": 86,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-task/cwd-process-qualification.json",
+      "added": 242,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-task/cwd.c",
+      "added": 127,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-task/direct-helper-qualification.json",
+      "added": 119,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-task/directory-services.c",
+      "added": 143,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-task/directory-time-qualification.json",
+      "added": 162,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-task/dup-services.c",
+      "added": 57,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-task/files-driver.c",
+      "added": 75,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-task/files-qualification.json",
+      "added": 57,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-task/files.c",
+      "added": 306,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-task/gate.sh",
+      "added": 16,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-task/gcc-comparison.json",
+      "added": 79,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-task/gcc-current-plain-attribution.json",
+      "added": 767,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-task/gcc-current-routes-comparison.json",
+      "added": 1117,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-task/gcc-memory-mechanisms.json",
+      "added": 368,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-task/local-tmp-driver.c",
+      "added": 148,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-task/local-tmp-qualification.json",
+      "added": 273,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-task/local-tmp.c",
+      "added": 130,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-task/measure-gcc-phases.py",
+      "added": 139,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-task/measure-gcc.py",
+      "added": 73,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-task/measure-helper-reuse.py",
+      "added": 90,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-task/measure-musl-copy.py",
+      "added": 83,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-task/measure-musl-gcc.py",
+      "added": 104,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-task/measure-musl-sqlite.py",
+      "added": 88,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-task/measure-syscalls.py",
+      "added": 102,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-task/memory-access.c",
+      "added": 53,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-task/memory-tag-store.c",
+      "added": 28,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-task/module-free-qualification.json",
+      "added": 89,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-task/module-free.sh",
+      "added": 22,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-task/musl-copy-comparison.json",
+      "added": 246,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-task/musl-copy.c",
+      "added": 46,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-task/musl-gcc-comparison.json",
+      "added": 63,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-task/musl-gcc-routes.json",
+      "added": 411,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-task/musl-io.c",
+      "added": 100,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-task/musl-pipe.c",
+      "added": 20,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-task/musl-qualification.json",
+      "added": 96,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-task/musl-spec-short-comparison.json",
+      "added": 485,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-task/musl-sqlite-comparison.json",
+      "added": 339,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-task/native-broker-census.json",
+      "added": 298,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-task/native-clock-qualification.json",
+      "added": 1399,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-task/native-close-qualification.json",
+      "added": 1346,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-task/native-fd-qualification.json",
+      "added": 1302,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-task/native-locks-qualification.json",
+      "added": 1241,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-task/native-only-cleanup-qualification.json",
+      "added": 213,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-task/native-path-qualification.json",
+      "added": 1355,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-task/native-seek-qualification.json",
+      "added": 1280,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-task/native-stat-qualification.json",
+      "added": 1266,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-task/prepare-spec-tests.py",
+      "added": 266,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-task/process-driver.c",
+      "added": 106,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-task/process-services.c",
+      "added": 228,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-task/profile-native-broker.py",
+      "added": 109,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-task/qualification.json",
+      "added": 46,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-task/quick-gate-qualification.json",
+      "added": 147,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-task/rtl-handoff-current-inventory.json",
+      "added": 2024,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-task/rtl-handoff-inventory.json",
+      "added": 914,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-task/run-clock.py",
+      "added": 71,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-task/run-directory.py",
+      "added": 139,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-task/run-files.py",
+      "added": 75,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-task/run-local-tmp.py",
+      "added": 92,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-task/run-memory-access.py",
+      "added": 58,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-task/run-musl-io.py",
+      "added": 114,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-task/run-quick-gate.py",
+      "added": 186,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-task/run-spec-tests.py",
+      "added": 370,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-task/session-teardown-qualification.json",
+      "added": 317,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-task/setup-spec-validation.py",
+      "added": 164,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-task/spawn-driver.c",
+      "added": 200,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-task/spawn-lifecycle.c",
+      "added": 237,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-task/spawn-qualification.json",
+      "added": 254,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-task/spawn.c",
+      "added": 79,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-task/spec-final-qualification.json",
+      "added": 1247,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-task/spec-nonperl-services-qualification.json",
+      "added": 1133,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-task/spec-perl-blocker.json",
+      "added": 28,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-task/spec-perl-pack-blocker.json",
+      "added": 66,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-task/spec-process-repair.json",
+      "added": 163,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-task/spec-test-qualification.json",
+      "added": 1647,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-task/sqlite-admission.json",
+      "added": 331,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-task/syscall-comparison.json",
+      "added": 1852,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-task/task-driver.c",
+      "added": 87,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-task/test-quick-gate.py",
+      "added": 145,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-task/test-spec-qualification.py",
+      "added": 614,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-task/time-services.c",
+      "added": 47,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/tests/native-task/validate-spec-tests.py",
+      "added": 185,
+      "removed": 0,
+      "layer": "verification"
+    },
+    {
+      "path": "capstone/runtime/virtual/thread.c",
+      "added": 1,
+      "removed": 3,
+      "layer": "linux_and_runtime"
+    },
+    {
+      "path": "capstone/runtime/virtual/unpinned/README.md",
+      "added": 9,
+      "removed": 4,
+      "layer": "linux_and_runtime"
+    },
+    {
+      "path": "capstone/runtime/virtual/unpinned/linux-6.1-unpinned.patch",
+      "added": 11,
+      "removed": 1,
+      "layer": "linux_and_runtime"
+    },
+    {
+      "path": "capstone/runtime/virtual/vm.h",
+      "added": 2,
+      "removed": 4,
+      "layer": "linux_and_runtime"
+    },
+    {
+      "path": "capstone/runtime/virtual/wire.h",
+      "added": 3,
+      "removed": 1,
+      "layer": "linux_and_runtime"
+    }
+  ]
+}

@@ -1,5 +1,22 @@
 # Virtual C applications on Linux
 
+On `native/linux-task-integration`, the adapter is now **built-in and native-only**.
+Use [install-native-task.sh](install-native-task.sh) with the matching patched
+Linux tree and the [native task guide](tests/native-task/README.md). The device
+ioctl entry, control descriptor and scalar userspace trampoline have been removed.
+An external module build is rejected. For the rebased checkout and processor
+contract, start with the [RTL handoff](../../docs/plans/native-task-rtl-handoff.md). Required native admission options must all
+be enabled; disabling one cannot select an older execution path. Native exchange
+and direct-I/O ABIs remain supported. Required Linux helpers now use direct,
+typed internal calls; the installer installs their common header and applies
+the final helper-internalization patch.
+
+The loadable-module, ownership and pthread descriptions below document the
+historical dev profile and its archived evidence. They are not build or execution
+instructions for this native-only branch. The pre-cleanup ten-entry SPEC result
+remains pinned to its original kernel; the cleanup requires its own qualification.
+
+
 The virtual stack, node growth and local mallocng are merged on `dev`.
 The managed lifetime ISA is pinned at QEMU `7dbfdd534eea`; rebuild the adapter
 against that pin. The allocator uses musl mallocng with local `CDERIVE` and

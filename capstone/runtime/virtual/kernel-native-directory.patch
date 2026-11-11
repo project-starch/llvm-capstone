@@ -1,0 +1,46 @@
+diff --git a/fs/open.c b/fs/open.c
+--- a/fs/open.c
++++ b/fs/open.c
+@@ -624,6 +624,14 @@ int chmod_common(const struct path *path, umode_t mode)
+ 	return error;
+ }
+ 
++/* The native frontend supplies an already confined, held path. Keep the
++ * ordinary ownership, mount-write and LSM checks without opening a data fd. */
++int capstone_native_path_chmod(const struct path *path, umode_t mode)
++{
++	return chmod_common(path, mode);
++}
++EXPORT_SYMBOL_GPL(capstone_native_path_chmod);
++
+ int vfs_fchmod(struct file *file, umode_t mode)
+ {
+ 	audit_file(file);
+--- a/fs/namei.c
++++ b/fs/namei.c
+@@ -4541,6 +4541,25 @@
+ }
+ EXPORT_SYMBOL(vfs_link);
+ 
++/* Called with a held, confined source path and a locked destination parent
++ * whose mount is write-held. Delegation conflicts return -EWOULDBLOCK. */
++int capstone_native_path_link(const struct path *source, const struct path *parent,
++                             struct dentry *entry)
++{
++	struct user_namespace *mnt_userns = mnt_user_ns(parent->mnt);
++	int error;
++	if (source->mnt != parent->mnt)
++		return -EXDEV;
++	error = may_linkat(mnt_userns, source);
++	if (!error)
++		error = security_path_link(source->dentry, parent, entry);
++	if (!error)
++		error = vfs_link(source->dentry, mnt_userns, d_inode(parent->dentry),
++				 entry, NULL);
++	return error;
++}
++EXPORT_SYMBOL_GPL(capstone_native_path_link);
++
+ /*
+  * Hardlinks are often used in delicate situations.  We avoid
+  * security-related surprises by not following symlinks on the

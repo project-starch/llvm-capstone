@@ -1,0 +1,63 @@
+{
+  "inputs": {
+    "qemu": "c6681ec8a8ff704b297ec3eafceb13b2fe9c1c61c7a65ed95304bd5dbe5183eb",
+    "Image": "806dd66d360238a1ed0a91b825cf0b66133076affd0096b37b7454dfef627cd4",
+    "System.map": "076aa38233701b969b5b60d98efcb146d8ca25e713bb8a5b1af9f22ba3016d84",
+    "rootfs": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845",
+    "firmware": "2335a28682ddf65e46c1f492632c2cb026efcb2271caf544a3f7ddc858b03e02",
+    "plugin": "a1883e39c6a1d4b1529081fda06ae7c7bba217a61e134041f9ef14ecf04f6ebc",
+    "gcc": "449d66abc5ead34a4bcc32812bcdb929cb4932e7f1f103ffe0b48386dd82aec7",
+    "gcc_direct": "0b6ac27e8b2b33cd77ba3f64fbcca52615dec2b1691141f2d1e3413f21a47b28",
+    "input": "de7b86d79a68965adb62e750101d9211224884b2236053d906d1e23057bb6ad1",
+    "reference": "58111208509dd871223ae195a33304bd6b24afd29458f37c976556cbad506324",
+    "profrun": "1d13d4912794855ae9c3c3fe69c89ca55434c2dd02b836053ad18f7913b7904f"
+  },
+  "rows": [
+    {
+      "index": 0,
+      "direct_io": false,
+      "total_attempts": 51039478,
+      "classes": {
+        "kernel": 27065404,
+        "other": 23974074
+      },
+      "reference_match": true
+    },
+    {
+      "index": 1,
+      "direct_io": true,
+      "total_attempts": 51060027,
+      "classes": {
+        "kernel": 27087517,
+        "other": 23972510
+      },
+      "reference_match": true
+    },
+    {
+      "index": 2,
+      "direct_io": true,
+      "total_attempts": 51056727,
+      "classes": {
+        "kernel": 27084218,
+        "other": 23972509
+      },
+      "reference_match": true
+    },
+    {
+      "index": 3,
+      "direct_io": false,
+      "total_attempts": 51035327,
+      "classes": {
+        "kernel": 27061252,
+        "other": 23974075
+      },
+      "reference_match": true
+    }
+  ],
+  "limitations": [
+    "attempted instructions, not wall time",
+    "same task kernel/config and program objects; musl routing off/on",
+    "built-in adapter counted as kernel; other includes firmware and userspace",
+    "two cold runs per libc variant; scoped prototype, not complete Linux compatibility"
+  ]
+}

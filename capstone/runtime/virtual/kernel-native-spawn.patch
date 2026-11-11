@@ -1,0 +1,591 @@
+--- a/arch/riscv/include/asm/processor.h
++++ b/arch/riscv/include/asm/processor.h
+@@ -35,6 +35,7 @@
+ struct thread_struct {
+ #ifdef CONFIG_RISCV_CAPSTONE_TASK
+ 	struct riscv_capstone_task *capstone;
++	struct capstone_native_spawn *capstone_spawn;
+ 	bool capstone_user;
+ #endif
+ 	/* Callee-saved registers */
+--- a/arch/riscv/kernel/Makefile
++++ b/arch/riscv/kernel/Makefile
+@@ -90,4 +90,4 @@
+ obj-$(CONFIG_COMPAT)		+= compat_signal.o
+ obj-$(CONFIG_COMPAT)		+= compat_vdso/
+ 
+-obj-$(CONFIG_RISCV_CAPSTONE_TASK) += capstone_task.o
++obj-$(CONFIG_RISCV_CAPSTONE_TASK) += capstone_task.o capstone_spawn.o
+--- /dev/null
++++ b/arch/riscv/kernel/capstone_spawn.c
+@@ -0,0 +1,170 @@
++// SPDX-License-Identifier: GPL-2.0-only
++#include <linux/capstone_native_spawn.h>
++#include <linux/completion.h>
++#include <linux/errno.h>
++#include <linux/export.h>
++#include <linux/kref.h>
++#include <linux/pid.h>
++#include <linux/sched/signal.h>
++#include <linux/sched/task.h>
++#include <linux/seccomp.h>
++#include <linux/slab.h>
++#include <asm/capstone_task.h>
++
++struct capstone_native_spawn {
++	struct kref refs;
++	struct completion done;
++	const struct capstone_native_spawn_ops *ops;
++	void *data;
++	struct task_struct *parent, *child;
++	struct pid *pid;
++	int result;
++};
++
++static void capstone_spawn_free(struct kref *refs)
++{
++	struct capstone_native_spawn *s =
++		container_of(refs, struct capstone_native_spawn, refs);
++	s->ops->release(s->data);
++	if (s->child)
++		put_task_struct(s->child);
++	put_pid(s->pid);
++	kfree(s);
++}
++
++/* The parent retains its reference until completion or final reaping. Drop
++ * the child's reference before completing, so no callback outlives spawn(). */
++static void capstone_spawn_done(struct capstone_native_spawn *s, int result)
++{
++	current->thread.capstone_spawn = NULL;
++	s->result = result;
++	kref_put(&s->refs, capstone_spawn_free);
++	complete_all(&s->done);
++}
++
++void capstone_native_spawn_exit(struct task_struct *task)
++{
++	struct capstone_native_spawn *s = task->thread.capstone_spawn;
++	if (s) {
++		WARN_ON_ONCE(task != current);
++		capstone_spawn_done(s, -ENOEXEC);
++	}
++}
++
++void *capstone_native_spawn_data(void)
++{
++	struct capstone_native_spawn *s = current->thread.capstone_spawn;
++	return s ? s->data : NULL;
++}
++EXPORT_SYMBOL_GPL(capstone_native_spawn_data);
++
++static int capstone_spawn_child(void *data)
++{
++	struct capstone_native_spawn *s = data;
++	int ret;
++	if (WARN_ON_ONCE(current->thread.capstone_spawn != s))
++		do_exit(127 << 8);
++	ret = fatal_signal_pending(current) ? -EINTR : s->ops->exec(s->data);
++	/* A successful callback must have installed the native personality. No
++	 * callback return, scalar exec, or failed loader can reach scalar sret. */
++	if (!ret && (!current->thread.capstone ||
++		     current->mm == s->parent->mm ||
++		     !test_thread_flag(TIF_CAPSTONE)))
++		ret = -ENOEXEC;
++	if (ret > 0)
++		ret = -EINVAL;
++	capstone_spawn_done(s, ret);
++	if (ret)
++		do_exit(127 << 8);
++	return 0;
++}
++
++bool capstone_native_spawn_clone(struct task_struct *child,
++				const struct kernel_clone_args *args)
++{
++	struct capstone_native_spawn *s = args->capstone_bootstrap;
++	if (!current->thread.capstone || current->thread.capstone_spawn ||
++	    !s || args->fn != capstone_spawn_child || args->fn_arg != s ||
++	    args->flags != (CLONE_VM | CLONE_UNTRACED) ||
++	    args->exit_signal != SIGCHLD || args->kthread || args->io_thread ||
++	    args->idle || s->parent != current)
++		return false;
++	/* Publish before copy_process makes the child visible to ptrace. */
++	child->thread.capstone_spawn = s;
++	return true;
++}
++
++void capstone_native_spawn_record(const struct kernel_clone_args *args,
++				 struct task_struct *child, struct pid *pid)
++{
++	struct capstone_native_spawn *s = args->capstone_bootstrap;
++	BUG_ON(!s || child->thread.capstone_spawn != s || s->parent != current);
++	get_task_struct(child);
++	s->child = child;
++	s->pid = get_pid(pid);
++}
++
++long capstone_native_spawn(const struct capstone_native_spawn_ops *ops,
++			  void *data, struct pid **child_pid)
++{
++	struct capstone_native_spawn *s;
++	struct kernel_clone_args args = {
++		.flags = CLONE_VM | CLONE_UNTRACED,
++		.exit_signal = SIGCHLD,
++		.fn = capstone_spawn_child,
++	};
++	long ret = -EINVAL;
++	int error;
++	if (child_pid)
++		*child_pid = NULL;
++	if (!ops || !ops->release)
++		return -EINVAL;
++	if (!data || !child_pid || !ops->exec)
++		goto release;
++	ret = -EOPNOTSUPP;
++	if (!current->thread.capstone || current->thread.capstone_spawn ||
++	    current->ptrace || current->seccomp.mode != SECCOMP_MODE_DISABLED ||
++	    (read_thread_flags() & _TIF_SYSCALL_WORK))
++		goto release;
++	ret = -ENOMEM;
++	s = kzalloc(sizeof(*s), GFP_KERNEL);
++	if (!s)
++		goto release;
++	kref_init(&s->refs);
++	kref_get(&s->refs); /* parent and prospective child */
++	init_completion(&s->done);
++	s->ops = ops;
++	s->data = data;
++	s->parent = current;
++	s->result = -ENOEXEC;
++	args.fn_arg = s;
++	args.capstone_bootstrap = s;
++	ret = kernel_clone(&args);
++	if (ret < 0) {
++		kref_put(&s->refs, capstone_spawn_free); /* no child was created */
++		goto put;
++	}
++	/* Exact references were recorded before the child could run or autoreap. */
++	BUG_ON(!s->child || !s->pid);
++	error = wait_for_completion_killable(&s->done);
++	if (error || fatal_signal_pending(current))
++		error = -EINTR;
++	else
++		error = s->result;
++	if (error) {
++		/* Finish cleanup despite the parent's pending fatal signal. The exit
++		 * hook also completes a child which dies inside exec's lifecycle. */
++		capstone_native_cancel(s->pid);
++		wait_for_completion(&s->done);
++		ret = error;
++	} else {
++		*child_pid = get_pid(s->pid);
++	}
++put:
++	kref_put(&s->refs, capstone_spawn_free);
++	return ret;
++release:
++	ops->release(data);
++	return ret;
++}
++EXPORT_SYMBOL_GPL(capstone_native_spawn);
+--- a/arch/riscv/kernel/process.c
++++ b/arch/riscv/kernel/process.c
+@@ -10,6 +10,9 @@
+ #include <linux/cpu.h>
+ #include <linux/kernel.h>
+ #include <linux/sched.h>
++#ifdef CONFIG_RISCV_CAPSTONE_TASK
++#include <linux/capstone_native_spawn.h>
++#endif
+ #include <linux/sched/debug.h>
+ #include <linux/sched/task_stack.h>
+ #include <linux/tick.h>
+@@ -156,6 +159,7 @@
+ 	*dst = *src;
+ #ifdef CONFIG_RISCV_CAPSTONE_TASK
+ 	dst->thread.capstone = NULL;
++	dst->thread.capstone_spawn = NULL;
+ 	dst->thread.capstone_user = false;
+ 	clear_tsk_thread_flag(dst, TIF_CAPSTONE);
+ #endif
+@@ -170,7 +174,11 @@
+ 	struct pt_regs *childregs = task_pt_regs(p);
+ 
+ #ifdef CONFIG_RISCV_CAPSTONE_TASK
+-	if (current->thread.capstone) return -EOPNOTSUPP;
++	if (current->thread.capstone || current->thread.capstone_spawn ||
++	    args->capstone_bootstrap) {
++		if (!capstone_native_spawn_clone(p, args))
++			return -EOPNOTSUPP;
++	}
+ #endif
+ 	memset(&p->thread.s, 0, sizeof(p->thread.s));
+ 
+--- a/fs/exec.c
++++ b/fs/exec.c
+@@ -25,6 +25,7 @@
+ 
+ #ifdef CONFIG_RISCV_CAPSTONE_TASK
+ #include <asm/capstone_task.h>
++#include <linux/capstone_native_spawn.h>
+ #endif
+ #include <linux/kernel_read_file.h>
+ #include <linux/slab.h>
+@@ -1723,9 +1724,19 @@
+ 		return retval;
+ 
+ 	retval = -ENOENT;
++#ifdef CONFIG_RISCV_CAPSTONE_TASK
++	if (bprm->capstone_native) {
++		need_retry = false;
++		retval = -ENOEXEC;
++	}
++#endif
+  retry:
+ 	read_lock(&binfmt_lock);
+ 	list_for_each_entry(fmt, &formats, lh) {
++#ifdef CONFIG_RISCV_CAPSTONE_TASK
++		if (bprm->capstone_native && !fmt->capstone_native)
++			continue;
++#endif
+ 		if (!try_module_get(fmt->module))
+ 			continue;
+ 		read_unlock(&binfmt_lock);
+@@ -1776,6 +1787,14 @@
+ 			return ret;
+ 		if (!bprm->interpreter)
+ 			break;
++#ifdef CONFIG_RISCV_CAPSTONE_TASK
++		if (bprm->capstone_native) {
++			allow_write_access(bprm->interpreter);
++			fput(bprm->interpreter);
++			bprm->interpreter = NULL;
++			return -ENOEXEC;
++		}
++#endif
+ 
+ 		exec = bprm->file;
+ 		bprm->file = bprm->interpreter;
+@@ -1954,12 +1973,12 @@
+ 	return retval;
+ }
+ 
+-int kernel_execve(const char *kernel_filename,
+-		  const char *const *argv, const char *const *envp)
++static int kernel_execveat(int fd, const char *kernel_filename,
++			 const char *const *argv, const char *const *envp,
++			 int flags, bool capstone_native)
+ {
+ 	struct filename *filename;
+ 	struct linux_binprm *bprm;
+-	int fd = AT_FDCWD;
+ 	int retval;
+ 
+ 	/* It is non-sense for kernel threads to call execve */
+@@ -1976,6 +1995,9 @@
+ 		goto out_ret;
+ 	}
+ 
++#ifdef CONFIG_RISCV_CAPSTONE_TASK
++	bprm->capstone_native = capstone_native;
++#endif
+ 	retval = count_strings_kernel(argv);
+ 	if (WARN_ON_ONCE(retval == 0))
+ 		retval = -EINVAL;
+@@ -2005,13 +2027,48 @@
+ 	if (retval < 0)
+ 		goto out_free;
+ 
+-	retval = bprm_execve(bprm, fd, filename, 0);
++	retval = bprm_execve(bprm, fd, filename, flags);
+ out_free:
+ 	free_bprm(bprm);
+ out_ret:
+ 	putname(filename);
+ 	return retval;
+ }
++
++int kernel_execve(const char *kernel_filename,
++		  const char *const *argv, const char *const *envp)
++{
++	return kernel_execveat(AT_FDCWD, kernel_filename, argv, envp, 0, false);
++}
++
++#ifdef CONFIG_RISCV_CAPSTONE_TASK
++int capstone_native_exec_file(struct file *file, const char *const *argv,
++			     const char *const *envp)
++{
++	struct file *left;
++	int fd, ret;
++	if (!file || !argv || !envp || !current->thread.capstone_spawn ||
++	    current->thread.capstone)
++		return -EINVAL;
++	/* This descriptor belongs only to the bootstrap child, after its ordered
++	 * file actions. AT_EMPTY_PATH reopens this pinned object with MAY_EXEC,
++	 * noexec and write exclusion checks, including when file was O_PATH. */
++	fd = get_unused_fd_flags(O_CLOEXEC);
++	if (fd < 0)
++		return fd;
++	fd_install(fd, get_file(file));
++	ret = kernel_execveat(fd, "", argv, envp, AT_EMPTY_PATH, true);
++	/* Successful exec closed it. On pre-PONR failure, remove only our exact
++	 * temporary file; never close a descriptor reused by a binary loader. */
++	left = fget_raw(fd);
++	if (left == file)
++		close_fd(fd);
++	if (left)
++		fput(left);
++	return ret;
++}
++EXPORT_SYMBOL_GPL(capstone_native_exec_file);
++#endif
+ 
+ static int do_execve(struct filename *filename,
+ 	const char __user *const __user *__argv,
+--- a/include/linux/binfmts.h
++++ b/include/linux/binfmts.h
+@@ -43,6 +43,9 @@
+ 		 * original userspace.
+ 		 */
+ 		point_of_no_return:1;
++#ifdef CONFIG_RISCV_CAPSTONE_TASK
++	bool capstone_native; /* trusted native-only exec admission */
++#endif
+ 	struct file *executable; /* Executable to pass to the interpreter */
+ 	struct file *interpreter;
+ 	struct file *file;
+@@ -82,6 +85,9 @@
+ struct linux_binfmt {
+ 	struct list_head lh;
+ 	struct module *module;
++#ifdef CONFIG_RISCV_CAPSTONE_TASK
++	bool capstone_native; /* this handler installs the native personality */
++#endif
+ 	int (*load_binary)(struct linux_binprm *);
+ 	int (*load_shlib)(struct file *);
+ #ifdef CONFIG_COREDUMP
+--- /dev/null
++++ b/include/linux/capstone_native_spawn.h
+@@ -0,0 +1,47 @@
++/* SPDX-License-Identifier: GPL-2.0-only */
++#ifndef _LINUX_CAPSTONE_NATIVE_SPAWN_H
++#define _LINUX_CAPSTONE_NATIVE_SPAWN_H
++
++#include <linux/types.h>
++
++struct file;
++struct kernel_clone_args;
++struct pid;
++struct rusage;
++struct task_struct;
++
++struct capstone_native_spawn_ops {
++	/* Runs in the child, with private files/fs/sighand and a temporary shared
++	 * mm. Apply authorized actions, then call capstone_native_exec_file(). */
++	int (*exec)(void *data);
++	void (*release)(void *data);
++};
++
++/* Consumes data on every return when ops->release is valid. The caller keeps
++ * ops/code resident until return. Success gives a held exact child pid; errors
++ * leave no child to reap. A killed setup is cancelled and reaped before return,
++ * which can wait for the child's uninterruptible filesystem operations. */
++long capstone_native_spawn(const struct capstone_native_spawn_ops *ops,
++			  void *data, struct pid **child_pid);
++void *capstone_native_spawn_data(void);
++
++/* Borrows the pinned file and kernel strings. Bootstrap only, native-only
++ * binfmt dispatch; scripts and interpreter chains cannot execute. */
++int capstone_native_exec_file(struct file *file, const char *const *argv,
++			     const char *const *envp);
++
++/* Exact children only. options is zero or WNOHANG; outputs are kernel buffers.
++ * Neither helper consumes the pid reference. cancel kills and reaps. */
++long capstone_native_wait(struct pid *pid, int options, int *status,
++			 struct rusage *usage);
++int capstone_native_cancel(struct pid *pid);
++
++/* Internal hooks: the architecture validates the one trusted bootstrap and
++ * fork records task/pid references before wakeup. Never a generic fn escape. */
++bool capstone_native_spawn_clone(struct task_struct *child,
++				const struct kernel_clone_args *args);
++void capstone_native_spawn_record(const struct kernel_clone_args *args,
++				 struct task_struct *child, struct pid *pid);
++void capstone_native_spawn_exit(struct task_struct *task);
++
++#endif
+--- a/include/linux/sched/task.h
++++ b/include/linux/sched/task.h
+@@ -36,6 +36,9 @@
+ 	int idle;
+ 	int (*fn)(void *);
+ 	void *fn_arg;
++#ifdef CONFIG_RISCV_CAPSTONE_TASK
++	void *capstone_bootstrap; /* internal authenticated spawn request only */
++#endif
+ 	struct cgroup *cgrp;
+ 	struct css_set *cset;
+ };
+--- a/kernel/exit.c
++++ b/kernel/exit.c
+@@ -7,6 +7,7 @@
+ 
+ #ifdef CONFIG_RISCV_CAPSTONE_TASK
+ #include <asm/capstone_task.h>
++#include <linux/capstone_native_spawn.h>
+ #endif
+ #include <linux/mm.h>
+ #include <linux/slab.h>
+@@ -808,6 +809,7 @@
+ 	taskstats_exit(tsk, group_dead);
+ 
+ #ifdef CONFIG_RISCV_CAPSTONE_TASK
++	capstone_native_spawn_exit(current);
+ 	riscv_capstone_release(current);
+ #endif
+ 	exit_mm();
+@@ -1514,13 +1516,22 @@
+ 	return 0;
+ }
+ 
+-static long do_wait(struct wait_opts *wo)
++/* Child exit normally wakes TASK_INTERRUPTIBLE waiters. A cancellation reap
++ * deliberately ignores the parent's fatal signal, so widen only its callback. */
++static int child_wait_callback_uninterruptible(wait_queue_entry_t *wait,
++					      unsigned mode, int sync, void *key)
++{
++	return child_wait_callback(wait, TASK_NORMAL, sync, key);
++}
++
++static long do_wait_state(struct wait_opts *wo, unsigned int state)
+ {
+ 	int retval;
+ 
+ 	trace_sched_process_wait(wo->wo_pid);
+ 
+-	init_waitqueue_func_entry(&wo->child_wait, child_wait_callback);
++	init_waitqueue_func_entry(&wo->child_wait, state == TASK_UNINTERRUPTIBLE ?
++		child_wait_callback_uninterruptible : child_wait_callback);
+ 	wo->child_wait.private = current;
+ 	add_wait_queue(&current->signal->wait_chldexit, &wo->child_wait);
+ repeat:
+@@ -1535,7 +1546,7 @@
+ 	   (!wo->wo_pid || !pid_has_task(wo->wo_pid, wo->wo_type)))
+ 		goto notask;
+ 
+-	set_current_state(TASK_INTERRUPTIBLE);
++	set_current_state(state);
+ 	read_lock(&tasklist_lock);
+ 
+ 	if (wo->wo_type == PIDTYPE_PID) {
+@@ -1564,7 +1575,7 @@
+ 	retval = wo->notask_error;
+ 	if (!retval && !(wo->wo_flags & WNOHANG)) {
+ 		retval = -ERESTARTSYS;
+-		if (!signal_pending(current)) {
++		if (state == TASK_UNINTERRUPTIBLE || !signal_pending(current)) {
+ 			schedule();
+ 			goto repeat;
+ 		}
+@@ -1574,6 +1585,65 @@
+ 	remove_wait_queue(&current->signal->wait_chldexit, &wo->child_wait);
+ 	return retval;
+ }
++
++static long do_wait(struct wait_opts *wo)
++{
++	return do_wait_state(wo, TASK_INTERRUPTIBLE);
++}
++
++#ifdef CONFIG_RISCV_CAPSTONE_TASK
++/* No user pointer reaches do_wait. Keep Linux child ownership, zombie status,
++ * rusage and autoreaping semantics; only the supported option set is smaller. */
++long capstone_native_wait(struct pid *pid, int options, int *status,
++			 struct rusage *usage)
++{
++	struct wait_opts wo = {
++		.wo_type = PIDTYPE_PID,
++		.wo_pid = pid,
++		.wo_flags = options | WEXITED | __WNOTHREAD,
++		.wo_rusage = usage,
++	};
++	long ret;
++	if (!pid || (options & ~WNOHANG))
++		return -EINVAL;
++	ret = do_wait(&wo);
++	if (ret > 0 && status)
++		*status = wo.wo_stat;
++	return ret == -ERESTARTSYS ? -EINTR : ret;
++}
++EXPORT_SYMBOL_GPL(capstone_native_wait);
++
++int capstone_native_cancel(struct pid *pid)
++{
++	struct task_struct *child;
++	struct wait_opts wo = {
++		.wo_type = PIDTYPE_PID,
++		.wo_pid = pid,
++		.wo_flags = WEXITED | __WNOTHREAD,
++	};
++	long ret;
++	if (!pid)
++		return -EINVAL;
++	read_lock(&tasklist_lock);
++	child = pid_task(pid, PIDTYPE_PID);
++	if (child && child->real_parent != current) {
++		read_unlock(&tasklist_lock);
++		return -ECHILD;
++	}
++	if (child)
++		get_task_struct(child);
++	read_unlock(&tasklist_lock);
++	if (!child)
++		return 0; /* already autoreaped; the held pid cannot be reused */
++	send_sig(SIGKILL, child, 1);
++	put_task_struct(child);
++	/* Cancellation must not strand a child when the parent has SIGKILL
++	 * pending. This final reap may wait for uninterruptible child I/O. */
++	ret = do_wait_state(&wo, TASK_UNINTERRUPTIBLE);
++	return ret > 0 || ret == -ECHILD ? 0 : ret;
++}
++EXPORT_SYMBOL_GPL(capstone_native_cancel);
++#endif
+ 
+ static long kernel_waitid(int which, pid_t upid, struct waitid_info *infop,
+ 			  int options, struct rusage *ru)
+--- a/kernel/fork.c
++++ b/kernel/fork.c
+@@ -12,6 +12,9 @@
+  * management can be a bitch. See 'mm/memory.c': 'copy_page_range()'
+  */
+ 
++#ifdef CONFIG_RISCV_CAPSTONE_TASK
++#include <linux/capstone_native_spawn.h>
++#endif
+ #include <linux/anon_inodes.h>
+ #include <linux/slab.h>
+ #include <linux/sched/autogroup.h>
+@@ -2682,6 +2685,10 @@
+ 
+ 	pid = get_task_pid(p, PIDTYPE_PID);
+ 	nr = pid_vnr(pid);
++#ifdef CONFIG_RISCV_CAPSTONE_TASK
++	if (args->capstone_bootstrap)
++		capstone_native_spawn_record(args, p, pid);
++#endif
+ 
+ 	if (clone_flags & CLONE_PARENT_SETTID)
+ 		put_user(nr, args->parent_tid);
+--- a/kernel/ptrace.c
++++ b/kernel/ptrace.c
+@@ -430,7 +430,8 @@
+ 
+ #ifdef CONFIG_RISCV_CAPSTONE_TASK
+ 	/* Serialize publication by exec with debugger admission. */
+-	if (READ_ONCE(task->thread.capstone)) {
++	if (READ_ONCE(task->thread.capstone) ||
++	    READ_ONCE(task->thread.capstone_spawn)) {
+ 		retval = -EOPNOTSUPP;
+ 		goto unlock_creds;
+ 	}

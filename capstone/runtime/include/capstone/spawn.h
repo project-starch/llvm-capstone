@@ -10,8 +10,16 @@
 #ifndef CAPSTONE_SPAWN_H
 #define CAPSTONE_SPAWN_H
 
+#ifdef __KERNEL__
+#include <linux/types.h>
+#include <linux/stddef.h>
+#ifndef UINT64_C
+#define UINT64_C(x) x##ULL
+#endif
+#else
 #include <stddef.h>
 #include <stdint.h>
+#endif
 
 #define CAPSTONE_NR_SPAWN UINT64_C(0xC0DE0002)
 #define CAPSTONE_SPAWN_VERSION 1u

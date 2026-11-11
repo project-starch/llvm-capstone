@@ -1,0 +1,74 @@
+--- a/fs/file.c
++++ b/fs/file.c
+@@ -1338,3 +1338,13 @@
+ 	return res;
+ }
+ EXPORT_SYMBOL(iterate_fd);
++
++/* Reserve inside the capability frontend's descriptor namespace. No install
++ * or close-on-failure: reservations must not release existing POSIX locks. */
++int capstone_native_reserve_fd(unsigned flags, unsigned limit)
++{
++	if (flags & ~O_CLOEXEC)
++		return -EINVAL;
++	return alloc_fd(0, min_t(unsigned long, rlimit(RLIMIT_NOFILE), limit), flags);
++}
++
+--- a/fs/pipe.c
++++ b/fs/pipe.c
+@@ -950,6 +950,33 @@
+ 	stream_open(inode, res[1]);
+ 	return 0;
+ }
++
++/* Prepare without publishing: the capability frontend installs only after
++ * checked result publication, or releases both reservations and file refs. */
++extern int capstone_native_reserve_fd(unsigned, unsigned);
++int capstone_native_pipe_prepare(int fd[2], struct file *files[2],
++				unsigned flags, unsigned limit)
++{
++	int error;
++	if (flags & ~(O_CLOEXEC | O_NONBLOCK))
++		return -EINVAL;
++	fd[0] = capstone_native_reserve_fd(flags & O_CLOEXEC, limit);
++	if (fd[0] < 0)
++		return fd[0];
++	fd[1] = capstone_native_reserve_fd(flags & O_CLOEXEC, limit);
++	if (fd[1] < 0) {
++		error = fd[1];
++		goto release_read;
++	}
++	error = create_pipe_files(files, flags);
++	if (!error)
++		return 0;
++	put_unused_fd(fd[1]);
++release_read:
++	put_unused_fd(fd[0]);
++	return error;
++}
++EXPORT_SYMBOL_GPL(capstone_native_pipe_prepare);
+ 
+ static int __do_pipe_flags(int *fd, struct file **files, int flags)
+ {
+--- a/kernel/signal.c
++++ b/kernel/signal.c
+@@ -4799,3 +4799,19 @@
+ 		kdb_printf("Signal %d is sent to process %d.\n", sig, t->pid);
+ }
+ #endif	/* CONFIG_KGDB_KDB */
++
++/* Capability runtime signal classes, not user handler addresses. Caught
++ * handlers require a protected delivery protocol and remain unsupported. */
++int capstone_native_signal_action(unsigned sig, unsigned cls, unsigned flags)
++{
++	struct k_sigaction action = {};
++	if (!valid_signal(sig) || !sig || sig == SIGKILL || sig == SIGSTOP || cls > 2)
++		return -EINVAL;
++	if (cls == 2)
++		return -EOPNOTSUPP;
++	action.sa.sa_handler = cls == 1 ? SIG_IGN : SIG_DFL;
++	action.sa.sa_flags = flags & (SA_NOCLDSTOP | SA_NOCLDWAIT);
++	sigemptyset(&action.sa.sa_mask);
++	return do_sigaction(sig, &action, NULL);
++}
++EXPORT_SYMBOL_GPL(capstone_native_signal_action);
