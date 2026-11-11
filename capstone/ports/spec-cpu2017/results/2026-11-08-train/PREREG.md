@@ -1468,3 +1468,53 @@ The dry runs of both reach every stage.
   - Plain on the baseline.
 
   The P5 same-kit ratio is reported beside it. That ratio holds the SoC fixed, so it isolates the software cost.
+
+## Addendum 45 (11 Nov 19:5x): phase 2 test stages and B2 read. Against ordinary RISC-V, Capstone costs 1.31-1.71x on SPEC test, and most of that is the Capstone SoC running ordinary code slower
+
+**Phase 2, read** (OpenSBI v1.3, kit bkit42-rvbase-sbi13, no heartbeat). Every stage passes specdiff, and the
+executables are the plainreuse ones of every Plain record.
+
+| | Plain, baseline | Plain, Capstone SoC (V1f), stock v1.3 | baseline / V1f-stock | Plain, Capstone SoC, Capstone monitor (P5) |
+|---|---|---|---|---|
+| imagick test (board 3) | 11.17 s | 16.89 s | 0.661 | 16.10 s |
+| nab test (board 3) | 664.14 s | 802.37 s | 0.828 | 776.27 s |
+| lbm test (board 2) | 1,098.43 s | 1,774.28 s | 0.619 | 1,713.76 s |
+
+- **The specdiff prediction holds**, and so does the prediction that the baseline is faster.
+- **The [0.70, 0.96] band fails for imagick and lbm.** Both are faster than the STREAM ratio allowed. The band's lower
+  bound assumed the 8 MiB streaming probe was the worst case, and it is not.
+- **Clock check.** A wrong timebase on the new bitstream would scale every guest time. The host clock rules that out.
+  The chain's host timestamps put the lbm stage at 1,438 s on the baseline, against 2,148 s (V1f stock) and 2,191 s
+  (C.5a, P5). The difference, 710 s, matches the guest difference, 676 s, plus a faster boot. hart_cycles / 25 MHz
+  agrees with the guest time on every stage.
+
+**B2, read.** lbm dcnofprs takes 1,668.90 s against base 1,652.37 s, so it is 1.0 % slower. The base arms reproduced
+their earlier records to 0.1 %, so this difference is outside the noise.
+
+**Choice per benchmark** (rule: dcnofprs unless slower than base on the board):
+
+| | Build | Capstone exe sha256[:16] |
+|---|---|---|
+| imagick | dcnofprs | f85865346235fd28 |
+| nab | dcnofprs | b4eebed370ede16a |
+| lbm | base | f0269eea1b555bd9 |
+
+**Capstone against ordinary RISC-V, SPEC test, measured.** Both sides run with no heartbeat, each on its own SoC and
+firmware.
+
+| | Capstone, best build, Capstone SoC | Plain, baseline | **Capstone / ordinary RISC-V** | = SoC factor (Plain C.5a / Plain baseline) | × software factor (Capstone / Plain, same SoC) |
+|---|---|---|---|---|---|
+| imagick | 19.09 s | 11.17 s | **1.709** | 1.441 | 1.186 |
+| nab | 871.88 s | 664.14 s | **1.313** | 1.169 | 1.123 |
+| lbm | 1,652.37 s | 1,098.43 s | **1.504** | 1.560 | 0.964 |
+
+- **The ≤1.20× target is not met on any of the three against ordinary RISC-V.**
+- **The SoC factor dominates.** Plain, the same executable, runs 1.17-1.56× slower on the Capstone SoC than on the
+  baseline. Both bitstreams start from the same upstream CVA6, so this is the cost of the fork's changes to ordinary
+  code, before any Capstone instruction runs.
+- **Mechanism: unresolved.** getppid (Addendum 44) shows the same instruction count at 1.86× the cycles, so the
+  slowdown is per instruction, not extra work. Which fork change causes it is the next question, for RTL simulation:
+  the same directed loops on both configurations.
+- **Withdrawn.** Every "Capstone / Plain" ratio in this file before Addendum 44 measured the software cost on the
+  Capstone SoC only, as Addendum 40 already said. None of them is a cost against ordinary RISC-V. The same-kit column
+  is kept as the software factor.
