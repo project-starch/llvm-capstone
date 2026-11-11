@@ -1518,3 +1518,46 @@ firmware.
 - **Withdrawn.** Every "Capstone / Plain" ratio in this file before Addendum 44 measured the software cost on the
   Capstone SoC only, as Addendum 40 already said. None of them is a cost against ordinary RISC-V. The same-kit column
   is kept as the software factor.
+
+## Addendum 46 (11 Nov 20:xx, before synthesis completes): where the SoC factor comes from. A V1f bitstream with the shadow-tag FSM tied off, Plain only
+
+**Candidate, from the RTL.** An rtl-oracle read of the fork at 0ef470559 against the baseline named one change that
+taxes ordinary code. I checked it in the source myself.
+- It is the shadow capability-tag FSM in `core/cache_subsystem/wt_axi_adapter.sv`, and nothing guards it with
+  CAPSTONE_EXT or CAPSTONE_ITFC_EN.
+- `needs_tag` (line 156) holds for every D-cache load or store request in [0x8000_0000, 0xBC2D_2D2D), which is all of
+  DRAM.
+- A store takes a second 1-byte AXI write (TAG_WR).
+- A load miss takes a second 1-byte AXI read (TAG_RD). Its data return is held until the tag beat arrives.
+- Before that read, the load waits in TAG_WAIT for every outstanding tag-write response, with both AXI request lines
+  held low.
+- The arbiter grant is withheld in those states, so I-cache fills wait too.
+- The D-cache is write-through, so every store goes through this path.
+- The FSM is byte-identical in C.5a (1fc2cd5aa).
+
+The oracle found no other plain-path difference that costs cycles:
+- the cache geometry, cache type (WT), scoreboard, commit ports, predictors, MIG and SoC fabric match;
+- the capability checks are gated on capmode.
+
+It left store_unit, scoreboard, commit_stage, decoder and parts of csr_regfile UNRESOLVED.
+
+**Measurement bitstream.** capstone-ariane branch measure-notag-v1f, 6806732fb, pushed: 0ef470559 (V1f) with
+`needs_tag = 1'b0`, a one-term tie-off.
+- Capability tags do not survive DRAM on it. It is for Plain timing only, never for Capstone code, and never an image
+  for anything else.
+- It is a measurement, not a Capstone configuration. It gives the upper bound of what a free tag mechanism would
+  recover, for example a tag cache or skipping tag writes to granules already untagged.
+
+**Run, after synthesis and seal.**
+- Synthesis: launch-job.sh, full flow, 40 GB guard. It is held until the host's memory projection allows it.
+- Kit: bkit41-stockfw-v1f with only BOARD_BITSTREAM changed (stock OpenSBI v1.3).
+- Stages: tickcost, hiccup2, then Plain imagick, nab and lbm test.
+
+**Predictions:**
+- **(a)** If the tag FSM is the whole SoC factor, every reading lands within 5 % of the baseline: getppid 1,018
+  cycles, imagick 11.17 s, nab 664.14 s, lbm 1,098.43 s.
+- **(b)** If it is none of it, every reading lands within 5 % of V1f stock: 1,891 cycles, 16.89 s, 802.37 s,
+  1,774.28 s.
+- **What is reported** is the share of the gap it removes, per reading: (V1f − notag) / (V1f − baseline).
+- **The lead question this answers.** It shows how much of Capstone's 1.31-1.71× against ordinary RISC-V is this
+  implementation of tag storage, and how much is the rest of the fork.
