@@ -1561,3 +1561,38 @@ It left store_unit, scoreboard, commit_stage, decoder and parts of csr_regfile U
 - **What is reported** is the share of the gap it removes, per reading: (V1f − notag) / (V1f − baseline).
 - **The lead question this answers.** It shows how much of Capstone's 1.31-1.71× against ordinary RISC-V is this
   implementation of tag storage, and how much is the rest of the fork.
+
+## Addendum 47 (11 Nov 20:2x): gcc train01 Plain on the baseline read; overnight runs for mcf and xz, before they run
+
+**gcc train01, Plain, baseline** (board 3, OpenSBI v1.3, no heartbeat): 1,736.35 s, specdiff PASS. The prediction
+"below 3,280.89 s" holds.
+- **Comparison, which needs a correction.** The Capstone record is 3,924.91 s: dcnofp 736f881f4958ac3b, kit bkit32-q32,
+  run with the heartbeat. The Plain record on the Capstone SoC is 3,280.9 s, also with the heartbeat.
+- **With the heartbeat removed by f** (Plain 0.0966, the mean f; Capstone f_C ≈ 0.088 from P2):
+  - Capstone ≈ 3,580 s;
+  - Plain on the Capstone SoC ≈ 2,964 s;
+  - SoC factor ≈ 1.71;
+  - **Capstone / ordinary RISC-V ≈ 2.06.**
+- **This is an estimate.** A direct no-heartbeat Capstone gcc train run replaces it when one is made.
+
+**The boards are released to this lane for the night** (the board lane holds no lease). Each driver passed a stubbed
+dry run to its last stage.
+
+| Board | Driver | Stages | Bitstream, kit |
+|---|---|---|---|
+| 1 | perf/ccsel/ccsel-mx.sh, mx1.list | Capstone mcf test: base 3633be7e2f887047, dcnofprs 741ba94c3e164e03 | C.5a, bkit23-all2-b1-nohb |
+| 2 | perf/ccsel/ccsel-mx.sh, mx2.list | Capstone xz test: base 0d8878ad8a5046df, dcnofprs 66afc8c2d5227d33 | C.5a, bkit23-all2-b1-nohb |
+| 3 | perf/stockfw/rvbase-p2.sh, rvbase-p2b.list | Plain xz test, Plain mcf test (hpm stage) | baseline, bkit42-rvbase-sbi13 |
+
+- **ccsel-mx.sh** is ccsel-b2.sh with the list as an argument and one fix. ccsel-b2.sh did not export
+  BOARD_URL_FILE, so its kit's board-run.sh would open board 1's console from any other board. The fix exports it
+  per board. B2 ran on board 1 only, so none of its readings is affected.
+- **Choice rule:** as in Addendum 45, dcnofprs unless it is slower than base on the board.
+- **Predictions:**
+  - Every stage passes specdiff.
+  - Plain mcf and xz run faster on the baseline than on the Capstone SoC (Plain mcf test there, 9,077-9,150 s).
+  - mcf is load-miss bound, and every miss pays the tag read (Addendum 46). So its SoC factor is at least 1.3, above
+    nab's 1.17.
+  - QEMU instret puts dcnofprs below base by 0.26 % for mcf. The board reading may fall either way, as it did for lbm.
+- **Addendum 46's measurement** runs on the first board free after its bitstream is sealed. It is pre-registered
+  there.
