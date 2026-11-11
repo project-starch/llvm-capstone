@@ -61,7 +61,10 @@ no TAG_WAIT drain and no tag beat.
   that head is granted.
 - In TAG_IDLE, `arb_gnt`, the FSM branch and the `tag_pend` push all use `needs_tag & page_bit_q`, which is the
   registered value. No combinational BRAM output reaches `arb_gnt`.
-- Cost: one cycle per D$ memory request whose page is looked up for the first time.
+- Cost: one cycle per D$ memory request in the data region. The lookup is dropped on every grant, so each new FIFO
+  head waits for its own read: measured +1.3 % on Plain lbm (train PREREG Addendum 56). Next revision: the lookup is
+  valid without a wait when the head's page lies in the registered word (64 pages) and no bitmap write happened in
+  the previous cycle.
 
 **What it changes besides speed (deliberate, recorded).**
 - Tag bytes left in DRAM by an earlier boot, or written into the tag region by a JTAG or software store, are invisible

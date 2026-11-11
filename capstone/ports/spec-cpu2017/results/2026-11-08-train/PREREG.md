@@ -1945,3 +1945,43 @@ The WNS difference, 0.15 ns, lies inside the ±3.74 ns null band.
   - That condition was meant to stop a functional regression. This flip is a passing test that now fits the budget.
   - The base passes it too, given time.
   - The seal is released on that ground, and this addendum is pushed before it.
+
+## Addendum 56 (12 Nov 04:xx): Addendum 54's Plain chain read; P1 holds; the lookup costs one cycle per request
+
+**Plain on caplifive_tagbm_6df309173** (board 1, kit bkit44-tagbm-sbi13, stock OpenSBI v1.3). Every stage ran with rc 0
+and specdiff PASS, with no heartbeat lines.
+
+| Plain test | riscv | notag | tagbm | tagbm / riscv | hart cycles, tagbm / notag |
+|---|---|---|---|---|---|
+| getppid (cycles) | 1,018 | 1,054 | 1,024 | +0.6 % | |
+| imagick | 11.17 s | 11.18 s | 11.25 s | +0.7 % | 295.87 M / 293.75 M = +0.7 % |
+| nab | 664.14 s | 664.07 s | 665.28 s | +0.2 % | 16.647 G / 16.616 G = +0.2 % |
+| lbm | 1,098.43 s | 1,098.38 s | 1,112.84 s | +1.3 % | 27.835 G / 27.474 G = +1.3 % |
+
+- **P1 holds**: every reading is inside its band (3 %; 5 % for getppid). Against V1f stock, the Plain SoC factor goes
+  from 1.51 to 1.007 on imagick, 1.21 to 1.002 on nab, and 1.62 to 1.013 on lbm.
+- The chain's two other readers are labelled "538.imagick_r ... rc!=0: 1, specdiff 0/1". These are stage-tickcost and
+  stage-hiccup2, the tick probes; their reader uses imagick's name. The notag chain shows the same pattern
+  (out-notag-n1-b3: 60.81 s and 68.65 s there, 60.85 s and 66.69 s here). They are not imagick runs and not failures.
+- **The lbm residual has a mechanism in the RTL.** It is 361 M cycles on equal instret (6.925 G against 6.918 G).
+  - `tbm_lkp_valid_d = ~dcache_data_empty & ~arb_ack[1] & ~tbm_clr_q` (wt_axi_adapter.sv:207) drops the lookup on
+    every grant of the D$ port. So every D$ request in the data region waits one cycle, not only the first request to
+    a page.
+  - The plan doc said "one cycle per D$ memory request whose page is looked up for the first time". That is wrong, and
+    it is corrected in this commit.
+  - lbm, a store stream through a write-through D$, issues the most requests per instruction of the three.
+  - This attribution is a reading of the RTL. The fix (below) is its test: if it is right, Plain lbm moves onto notag.
+- **The fix, for the next bitstream:** keep the word index of the registered BRAM word, and treat the lookup as valid
+  when the head's page lies in the same 64-page word and no bitmap write happened in the previous cycle. A head in the
+  same 256 KiB as the previous one then pays nothing. The compare is 12 bits of the FIFO head's paddr against a
+  register. needs_tag already feeds arb_gnt from the same paddr, so this adds no new cone.
+
+**The board driver's wedge diagnostic now reads something the core does not.**
+`run_sqlite_stages_fpga.py:3025-3034` and `:3247-3258` read DRAM tag bytes directly. On a page whose bitmap bit is 0,
+those bytes are not the tags the core sees: the core reads every tag there as 0. A tag reported by that diagnostic on
+this bitstream counts only for a page known to be marked. A search of the firmware and module sources finds no other
+reader or writer of the tag region by address: caplifive-system and caplifive-buildroot, *.c/*.h/*.S, for
+bc2d2d2d / 2d2d / tag_mem / 0xbff0 / 0xbc.
+
+**Chain C** (Capstone, kit bkit45-tagbm-all2-nohb) started at 03:53 and is read against P0, P2 and P3 in the next
+addendum.
