@@ -1011,3 +1011,55 @@ and 23.6 % of lbm test's, so the true adjustment is 1-2 points smaller. Whether 
 
   Native comes from Addendum 21's run 4 (board 2), Plain from Addendum 30 (board 1). This lbm ratio is consistent with
   the tick cost.
+
+## Addendum 36 (11 Nov 15:2x): Addendum 31's RVC pair read, RVC ruled out (F7); and P3, hiccup2 inside a Capstone context, before it runs
+
+**RVC pair** (board 3, C.5a, kit bkit27-gtq, out-rvc-b3; flashed C.5a 12:46, chain 12:46-15:08, bitstream 3 flashed back
+at 15:10 and read back). Each arm ran once, alternating RVC then no-RVC per benchmark. Every arm is rc 0 with specdiff
+PASS.
+
+| Benchmark | RVC (plain-rv64r) | No RVC (rv64g) | No RVC / RVC | Hart CPI RVC / no RVC | C.5a record |
+|---|---|---|---|---|---|
+| imagick | 19.55 s | 19.37 s | 0.991 | 4.10 / 4.07 | 19.46 s |
+| nab | 862.23 s | 867.03 s | 1.006 | 3.15 / 3.17 | 862.99 s |
+| lbm | 1,892.96 s | 1,890.02 s | 0.998 | 6.15 / 6.15 | 1,895.0 s |
+
+- **R2b holds.** Every pair is within ±1 %, inside the ±2 % band, and the RVC arms reproduce the record within 0.5 %. R2a
+  fails: neither lbm nor nab runs ≥ 5 % faster without RVC.
+- **R1, partly.** rc and specdiff hold. The QEMU instruction counts are within 0.5 % for lbm (−0.24 %) and nab (−0.10 %),
+  and not for imagick (+0.86 %, 0.1175 G against 0.1165 G). The board's hart_instret for imagick goes the other way
+  (−0.29 %), and that count includes the kernel.
+- **F7 RULED OUT.** RVC does not explain Plain's higher CPI. The rtl-oracle prediction holds: on this core RVC costs one
+  cycle only on a redirect to a 2-mod-4 target, which is negligible here. Plain-relative ratios carry no RVC correction.
+
+**P2 arm A** (board 1, C.5a, no heartbeat): Capstone lbm test 1,651.3 s (spatial) and 1,651.1 s (lifetimes), specdiff
+PASS, 0 @@HB. Arm B (heartbeat) is running. Its reading comes in the next addendum.
+
+**P3: what a Capstone task loses to exits and interrupts.** Addendum 35 measured Plain's loss as t = 0.094 and bounded the
+tick adjustment from above, because Capstone pays ticks outside its contexts. P3 measures the Capstone side directly.
+- **The probe.** perf/tick/hiccup2.c, unchanged, built with each module-route SDK (spec/sdks-dev2mk/sdk-{spatial,lifetimes}
+  capstone-cc -O2). spatial is 193c49e5f64c0278, lifetimes 82c05ac3c35e938e.
+- **The stage.** perf/tick/cap/stage-cap-hiccup2 is a copy of stages-eval-boarddevmk/538.imagick_r-test. Only
+  imagick_r_base.capstone-{spatial,lifetimes} and their plan.json hashes changed. The validation step fails by
+  construction, because the probe writes no image. The probe's lines are read from files/<arm>/test_convert.out.
+- **The run.** Board 1, C.5a, kit bkit23-all2-b1-nohb with the no-heartbeat tools (P2's arm A environment). Driver
+  perf/tick/caphic.sh (from capnohb.sh, chain A only). It waits for capnohb's driver to exit. Dry run is clean, and the
+  extraction line was checked on Addendum 35's Plain transcript.
+- **What it reads.** Each gap is a step over 400 cycles of the free-running cycle counter inside the context. A gap is
+  any time the hart spends away from the task: a context exit (quantum, syscall, fault) and whatever the kernel and
+  monitor do before re-entry. The probe's own clock_gettime every 2^20 iterations is a syscall, so it adds a few hundred
+  exits of its own. The gap count and IA histogram show them.
+- **Predictions:**
+  - **P3a, ticks masked in context** (the working assumption of Addendum 35): HIC2-ALL ≤ 3 %, and no 10/20 ms
+    inter-arrival peak.
+  - **P3b, ticks reach the context:** HIC2-ALL ≥ 8 %, with the 10/20 ms peak.
+  - **Otherwise:** the share is reported as read, and it replaces the 0 that the upper bound assumed for Capstone.
+  - **Fault case:** if rdcycle traps in a context, the arm ends at once with a non-zero rc and nothing is read.
+- **How it is used.** The tick-adjusted column becomes ratio × (1 − t_C) / (1 − t_P), with t_P = 0.094 and t_C read
+  here. It is still reported beside the measured ratio, never instead.
+
+**Operational note.** Building P3's stage, a `cp -a` of stages-eval-b1/538.imagick_r-test-devmk copied the SYMLINK, and
+writes into the "copy" landed in stages-eval-boarddevmk/538.imagick_r-test from 15:13 to 15:15. Both imagick
+executables were restored from tree-boarddevmk's exe directory (b4073795…, f50dc465…). plan.json was restored with
+the same writer format as make-stage.py, and all four of its hashes verify. No run read that stage in the window. The P3
+stage is now a real copy: no symlinks, and no file with more than one link.
