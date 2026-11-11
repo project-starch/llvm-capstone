@@ -1852,3 +1852,61 @@ OpenSBI v1.3, no heartbeat (HB lines 0 in every stage). It ran 23:22-00:21. Ever
 | per-command kernel lines (teardown, release, bench) and the launcher stats line | 3-4 lines per command | kept |
 | monitor diagnostics (CPMX_DIAG, S23_REFUSAL_READ) | only on a refusal or fault; none of their tags in tonight's xz or mcf transcripts | kept |
 | monitor per-invoke lines | about 5 ms each | OFF (CAPSTONE_SUPERVISE_QUIET) |
+
+## Addendum 54 (12 Nov 01:4x, before it runs): the tag page bitmap bitstream on board 1; mcf U1c8 moves behind it
+
+**What runs.** caplifive_tagbm_6df309173: capstone-ariane perf/tag-page-bitmap 6df309173, which is C.5a 1fc2cd5aa plus
+the page bitmap of docs/plans/2026-11-12-tag-page-bitmap.md. It is being built now: launch-job full, 40 GB guard.
+
+**Checks on the RTL before the board** (detail in the two commit messages):
+- **Lint**, paired with 1fc2cd5aa: equal on every gated counter.
+- **Directed test tag-page-bitmap: SUCCESS**, with and without S12_MEM_DELAY. Its positive control (the bitmap forced
+  to ones) fails at T1, as designed.
+- **claim-auditor.** It refuted one sub-claim of 52dab4ddd: tag_wr_pend could wrap after a fill. 6df309173 fixes that:
+  - the fill drains to 0 before TAG_WR;
+  - the counter is one bit wider.
+
+  The simulation cannot create that wrap (T2b, recorded as non-discriminating), so the fix rests on the argument.
+- **Synthesis-only gate on 52dab4ddd:**
+  - the adapter grows from 1,657 to 1,980 LUT and from 412 to 530 FF, plus 7 RAMB36 and 1 RAMB18;
+  - the core LUT count reads 145,134 against C.5a's 145,391.
+
+**The seal is gated.** perf/tagbm/SEAL.sha256 is written only when all of these hold:
+- the full build exits 0;
+- routing is clean;
+- WNS is within the null band of C.5a's;
+- the 95-test sweep on 6df309173 shows no test whose classification differs from the 1fc2cd5aa sweep (same seed,
+  S12_MEM_DELAY=12, SUP_TRACE; PASS/TIMEOUT/FAIL per test).
+
+Until then the driver waits. A fault in any of these stops this addendum before any board call.
+
+**Driver.** perf/tagbm/tbrun.sh on board 1, after the mcf base/dcnofprs chain (pid 86168). It waits for the seal, flashes
+it, and reads it back. Then two chains in one bitstream session:
+- **P:** Plain, stock OpenSBI v1.3, kit bkit44-tagbm-sbi13. These are Addendum 46's stages (tickcost, hiccup2, imagick,
+  nab, lbm test), with no Capstone control.
+- **C:** Capstone, kit bkit45-tagbm-all2-nohb, no heartbeat. These are the stages of the 11 Nov C.5a runs: imagick base,
+  nab dcnofprs, lbm base, xz dcnofprs, mcf base. The kit's control rungs run in every boot, so they are this bitstream's
+  Tier 1 for Capstone code.
+- A failed P chain stops C.
+- The kits differ from bkit42-rvbase-sbi13 and bkit23-all2-b1-nohb only in BOARD_BITSTREAM, which the driver checks.
+- The dry run reached all 10 stages, and a foreign pre-registration commit stops it (perf/tagbm/dry-tbrun.log).
+
+**The board move.** Addendum 51's mcf U1c8 run on board 1 (u1run.sh pid 401470, still waiting, no board call) is
+stopped. It is queued again behind tbrun.sh with the same list, kit and output path.
+
+**Predictions:**
+- **P0.** Every stage rc 0 and specdiff PASS. The Capstone control rungs pass.
+- **P1, Plain.** Every page is bit 0, because nothing stores a tag under stock OpenSBI. So each reading is within 3 % of
+  the ordinary RISC-V baseline:
+  - getppid 1,018 cycles (band 5 %);
+  - imagick 11.17 s;
+  - nab 664.14 s;
+  - lbm 1,098.43 s.
+- **P2, Capstone, against the 11 Nov C.5a runs.** Each run falls by at least 10 % on imagick (19.16 s), nab (871.88 s),
+  lbm (1,652.37 s) and xz (7,740.77 s). Points: imagick ~14 s, nab ~730 s, lbm ~1,150 s, xz ~5,800 s.
+- **P3, mcf.** It falls by less than 15 % (10,555.03 s, point ~10,000 s). Its node and arc arrays hold capabilities, so
+  their pages stay on the tag path. That is the v2 question.
+- **What would refute the design.**
+  - P1 failing: the lookup costs more than the tag path saved.
+  - P2 failing while P1 holds: Capstone's data pages are marked by tagged stores that this reading of the programs
+    does not predict.
