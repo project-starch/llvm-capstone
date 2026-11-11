@@ -861,3 +861,53 @@ regenerated. Driver perf/nohb/capnohb.sh (from nohb2-v1f.sh), board 1: flash C.5
 - Both drivers reach every stage, and a fake pre-registration stops each of them.
 - capnohb stops on an existing output directory.
 - P1's executable was run in QEMU before the board.
+
+## Addendum 33 (11 Nov 13:3x): results of Addenda 29/30 (the heartbeat's share, measured), xz, and the cheap fairness checks
+
+**The heartbeat's share on Plain test** (board 1, V1f; the heartbeat arm is Addendum 26's calibration, or chain B for perl c0):
+
+| Benchmark | With HB | Without HB | Beats in the step | c per beat | f = (T_hb − T_nohb) / T_hb |
+|---|---|---|---|---|---|
+| perl c0 | 498.04 s | 450.95 s | 26 (period 19.2 s) | 1.81 s | 0.0946 |
+| imagick | 19.58 s | 16.13 s | 1 | 3.45 s | 0.176 (one beat in 19 s, not a steady-state share) |
+| nab | 862.44 s | 775.94 s | 25 (period 34.5 s) | 3.46 s | 0.1003 |
+| lbm | 1,888.68 s | 1,713.29 s | 55 (period 34.3 s) | 3.19 s | 0.0929 |
+
+- **Checks.** Every arm is rc 0 with specdiff PASS. N1 holds: 0 @@HB lines in every no-heartbeat transcript.
+- **N2 holds for imagick, nab and lbm, and fails for perl c0.** perl's beats come every 19.2 s rather than about 35 s, and
+  each costs 1.81 s, but its share, 0.095, is the same as nab's and lbm's. The predicted no-heartbeat times were met:
+  perl 452 s (read 450.95), nab about 780 s (775.94), lbm about 1,720 s (1,713.29). imagick's 16.2-16.6 s read 16.13 s.
+- Beats are the @@HB lines between @@STEP-BEGIN spec and the step's output. The step's output is printed after it
+  ends, so the beats interleave before it.
+- **Corrected native train ratios, raw / (1 − f).** These replace Addendum 28's ranges and are still labelled
+  corrections:
+  - perlbench 1.121 → **1.238** (perl f);
+  - lbm 0.840 → **0.926** (lbm f);
+  - mcf 1.062 → **1.171-1.180** (lbm-nab f range);
+  - imagick 0.879 → **0.969-0.977** (lbm-nab f range).
+- **One deviation from the reading rule.** imagick's own f is not used: its test step holds a single beat, at the start,
+  so 0.176 overstates the steady share of a 12-hour run. The lbm-nab steady range is used instead.
+
+**xz.**
+- **c1:** Capstone 8,730.5 s (out-train5-b3-nset-c1, specdiff PASS) against Plain 8,735.95 s: **0.999**, module route, both
+  arms with the heartbeat.
+- **c0:** NO READING.
+  - Plain was killed at 9,764 s (rc 137, "Killed", no @@STEP-BOUND).
+  - A board-memory twin (pinwheel, 936M, cma=256M), run as a diagnostic copy of the stage that prints meminfo and dmesg
+    around xz with the workload unchanged, reads "Out of memory: Killed process (xz_r_base.plain) total-vm:954124kB,
+    anon-rss:902012kB" on MemTotal 921,484 kB.
+  - Plain xz c0 does not fit a 1 GiB board, while Capstone c0 did (12,159.09 s, peak_pages 222,976). The difference is
+    F10, open.
+
+**Fairness checks run today (Addendum 32's table):**
+- **F5, compiler.** The SPEC configs have the same OPTIMIZE (-O2) and PORTABILITY lines.
+  - The cc1 sets on lbm.c share -O2, -ffp-contract=on, -vectorize-loops and -vectorize-slp.
+  - Capstone alone has: -fno-jump-tables, -mframe-pointer=non-leaf, -target-abi lp64 (FP arguments in integer
+    registers), static, +movc-keeps-integer-source, -capstone-gp-free and -capstone-image-gp.
+  - Plain alone has: rv64gc, lp64d, PIE codegen, -mframe-pointer=none, -fno-signed-char and unwind tables.
+  - Plain lbm.c compiled by Capstone's compiler (llvm-c1 724bf0bea11e) and by Plain's (cc-prmerged fca004e7e063)
+    disassembles byte-identical (2,177 instructions). The compiler commit does not change generic optimisation here.
+- **F6, clock.** RULED OUT. Host time minus guest uptime is 1,694 s for Capstone x264 train and 1,669 s for Plain.
+- **F11, NEW.** The devmk images carry +movc-keeps-integer-source, which the 3 Nov compiler evaluation allowed only on a
+  bitstream whose Q-04(b) reads PRESENT. Readings exist for bitstream 3 and for ObjBounds. None is recorded for C.5a or
+  V1f. Every Capstone output passed specdiff on both. OPEN: the Q-04(b) state of C.5a and V1f.
