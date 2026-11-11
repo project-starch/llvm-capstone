@@ -745,3 +745,30 @@ new bitstream. Plain xz c0 had already started on board 2 at 09:14:20 (Addendum 
 - A fake pre-registration stops the run; an existing output directory stops it.
 - Generating the real batch with the copy, against a recorded transcript, gives a gate.sh with 0 heartbeat loops. The
   original tools give 1.
+
+## Addendum 30 (11 Nov 12:0x, before it runs): Addendum 29's chain A lost three of four stages to the watchdog; re-run with its entry-stall abort off
+
+**What happened.** Chain A (kit bkit41-ids55-unify-nohb) read imagick: 16.13 s, specdiff 1/1 PASS, 0 @@HB lines. perl c0,
+nab and lbm ended rc 2 with no SPEC step in the transcript. In each, board-watchdog.sh printed `ENTRY-STALL ... last share
+marker=SHA5, no SHA6 for 420s` at 735-795 s and killed the runner. The kit starts the watchdog with ABORT_ON_ENTRY_STALL=1
+and ENTRY_STALL_S=420. In the heartbeat kit the 30 s beats keep the console from ever being quiet for 420 s, so that abort
+never fires on a Plain batch. Without the heartbeat, any command quiet for 420 s reads as an entry stall. Addendum 29's
+dry runs stubbed the runner and the watchdog, so they could not show this.
+
+**Change.** Kit bkit41-ids55-unify-nohb2: the nohb kit with `ABORT_ON_ENTRY_STALL=0` on the watchdog line, plus a board.env
+comment and a regenerated SHA256SUMS. The watchdog still runs and still logs QUIET/STALE. The runner's own idle limit
+stays at the step budget, as in Addendum 29. Driver perf/nohb/nohb2-v1f.sh, which is nohb-v1f.sh with:
+- chain A only, over nohb2.list (perl c0, nab, lbm);
+- output spec/board/out-nohb2-v1f-b1;
+- the kit diff check allowing the abort line too;
+- a check that the kit really has the abort off.
+
+It waits for the Addendum 29 driver (chain B, perl c0 with the heartbeat) to exit, then runs on board 1, V1f.
+
+**Predictions and reading rule.** Addendum 29's, unchanged: N1, N2 (perl c0 ≈ 452 s, nab ≈ 780 s, lbm ≈ 1,720 s). The
+imagick reading is Addendum 29's chain-A one. The three killed stages give no reading.
+
+**Dry runs** (scratchpad nohb2-dry; board calls stubbed):
+- All three stages are reached, with kit nohb2.
+- A fake pre-registration stops the run, and so does an existing output directory.
+- Pointing the driver at the old nohb kit stops it: "keeps the entry-stall abort".
