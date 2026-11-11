@@ -1615,3 +1615,26 @@ This replaces Addendum 47's heartbeat-corrected gcc estimate with a measurement.
   - specdiff PASS.
   - The time is 3,924.91 × (1 − f_C) ≈ 3,580 s, minus about 1 % for the exe change, so within ±5 % of 3,540 s.
   - Capstone / ordinary RISC-V = that time / 1,736.35, about 2.0-2.1.
+
+## Addendum 49 (11 Nov 21:4x): the measurement bitstream is sealed; Addendum 46's run is launched
+
+- **Seal.** caplifive_notag_6806732fb.bit, sha256 9c93016e5147de9edfa5c43fa3aab5363b68b1bc01055f76cc2e35e815c81bcd.
+  - Built from capstone-ariane measure-notag-v1f 6806732fb = V1f 0ef470559 plus `needs_tag` tied to 0.
+  - launch-job.sh full under vivado-guard: exit 0, 1 h 24 min, peak RSS 21.8 GB.
+  - Placed 0444 in both bitstream stores; read back.
+- **Checks against V1f (0ef470559):**
+
+  | | notag | V1f |
+  |---|---|---|
+  | core-clock WNS @25 MHz | −12.827 ns | −13.873 ns |
+  | routing errors | 0 | 0 |
+  | LUTLP-1 in routed DRC | 0 | 0 |
+  | core LUT | 154,176 | 154,688 |
+  | wt_axi_adapter LUT / FF | 4,046 / 325 | 4,485 / 412 |
+
+  The WNS difference is inside the ±3.74 ns null band. The adapter lost 439 LUTs and 87 FFs, so the tag FSM's logic
+  is gone, as intended.
+- **Run.** perf/stockfw/notag.sh on board 3, after the p2b chain (pid 86169), with kit bkit43-notag-sbi13 and
+  notag.list. The stages and predictions are Addendum 46's, unchanged.
+  - The dry run reached all 5 stages.
+  - A wrong NB_SHA stops the driver at its hash gate (negative control).
