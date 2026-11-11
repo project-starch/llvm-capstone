@@ -2070,3 +2070,47 @@ Checks on ebe86cc01:
 **Correction to the record of 6df309173.** The adapter's assertions, including tag_wr_pend_no_wrap, cited in Addendum 54,
 sit inside `ifndef VERILATOR`. No simulation has ever evaluated them. 6df309173's wrap fix rests on the argument, as
 Addendum 54 already said of the simulation; it does not rest on an assertion.
+
+## Addendum 59 (12 Nov 08:1x, before it runs): the tag-word cache bitstream on board 1, after Addendum 54's chain; mcf U1c8 moves behind it again
+
+**What runs.** caplifive_twc_ebe86cc01: capstone-ariane perf/tag-page-bitmap ebe86cc01, which is 6df309173 (Addendum
+54's bitmap) plus the same-word lookup bypass (7b929ac71) and the tag-word cache (dcb52a030, ebe86cc01). Its checks are in
+Addendum 58. The full build is running: launch-job full, 40 GB guard.
+
+**The seal is gated.** perf/twc/SEAL.sha256 is written only when all of these hold:
+- the full build exits 0;
+- routing is clean, with no LUTLP;
+- the core-clock WNS lies within the null band of 6df309173's −13.908 ns (±3.74 ns).
+
+Until then the driver waits. A fault in any of these stops this addendum before any board call.
+
+**Driver.** perf/twc/twrun.sh on board 1. It is tbrun.sh with only the bitstream, kits, lists and paths changed. It waits
+for Addendum 54's driver (pid 788633, now in mcf) and for the seal, flashes the bitstream, and reads it back. Then:
+- **P:** Plain, kit bkit46-twc-sbi13, perf/twc/tw-plain.list. These are Addendum 46's stages.
+- **C:** Capstone, kit bkit47-twc-all2-nohb, no heartbeat, perf/twc/tw-cap.list: Addendum 54's chain C (imagick base,
+  nab dcnofprs, lbm base, xz dcnofprs, mcf base), plus gcc test U1c8 and gcc test c3fdcnofprs after lbm.
+- A failed P chain stops C.
+
+The kits are bkit42-rvbase-sbi13 and bkit23-all2-b1-nohb with only BOARD_BITSTREAM changed, as the driver checks. The
+dry run (perf/twc/dry-twrun.log) reached all 12 stages with the right kit for each.
+
+**The board move.** Addendum 51's mcf U1c8 on board 1 (u1run.sh pid 788989, waiting, no board call made) is stopped. It
+is queued again behind twrun.sh with the same list, kit and output path. U1c8 lost on lbm, nab and xz (Addendum 58), so
+measuring the new hardware comes first.
+
+**Predictions:**
+- **P0.** Every stage rc 0 and specdiff PASS. The Capstone control rungs pass.
+- **P1, Plain, against Addendum 56's tagbm readings.**
+  - imagick 11.25 s and nab 665.28 s within 1 %; getppid within 5 % of riscv's 1,018 cycles.
+  - **lbm moves onto notag: ≤ 1,105 s** (tagbm 1,112.84 s, notag 1,098.38 s). This is the test of Addendum 56's
+    attribution of the lbm residual to the per-request lookup cycle. If lbm stays above 1,108 s, that attribution is
+    wrong.
+- **P2, nab dcnofprs: ≤ 782 s, at least 5 % under tagbm's 823.09 s.** This is the TWC's main test. A reading within 2 % of
+  823.09 s means one of two things:
+  - the marked-page cost is not mostly tag reads and writes of words the TWC can hold;
+  - or nab's pages are not marked, and Addendum 57's hypothesis is wrong.
+- **P3, imagick, lbm and xz: no worse than tagbm** (14.39 s, 1,096.40 s, 5,946.72 s; band +2 %). lbm and xz may fall by
+  the lookup bypass.
+- **P4, mcf: below its tagbm reading** (Addendum 54's chain C, still running), by at least 5 %. Its arrays hold
+  capabilities, which is the TWC's case.
+- **P5, gcc test U1c8: below its C.5a reading of 13.2 s.**
