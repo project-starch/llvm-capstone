@@ -1700,3 +1700,59 @@ Order, before any U1c8 run on a board:
    - perl and x264 last, as single runs of U1c8 without the heartbeat. U1c8 is reported for perl or x264 if its run
      command is no longer than the best record × (1 − f). Otherwise the best record's build runs again without the
      heartbeat, and the shorter one is reported.
+
+## Addendum 51 (11 Nov 22:3x, before it runs): U1c8 on the board, shakedown first, against dcnofprs
+
+**The same-kit QEMU screen** (Addendum 50, step 1) is done. Kit kit-unq; capstone-lifetimes run commands only.
+Instructions and entries are summed from result.json (perf/u1c8/capsum.py, which exits 1 on a missing reading). The
+U1c8 lbm, imagick, nab and perl twins are the compiler lane's (c1-gate/gt2/U/u2/twins); the rest are perf/u1c8/twins.
+Every run is rc 0, with specdiff PASS.
+
+| Benchmark | U1c8 instret | dcnofprs instret | Δ | entries U1c8 / dcnofprs | Board |
+|---|---|---|---|---|---|
+| gcc test | 22,190,676 | 22,790,194 (c3fdcnofprs) | −2.63 % | 899 / 1,642 | shakedown |
+| gcc train01 | 12,452,064,005 | 12,766,006,325 (c3fdcnofprs) | −2.46 % | 3,911 / 11,765 | train phase |
+| nab | 7,165,821,787 | 7,181,950,384 | −0.22 % | 1,602 / 2,045 | yes |
+| lbm | 6,097,844,994 | 6,092,805,233 | +0.08 % | 3,824 / 3,558 | yes (within noise, the board decides) |
+| mcf | 26,784,991,655 | 26,968,269,803 | −0.68 % | 37,285 / 32,676 | yes |
+| xz | 48,960,920,435 | 49,198,638,757 | −0.48 % | 47,795 / 38,461 | yes |
+| imagick | 100,026,768 | 97,188,009 | +2.92 % | 376 / 727 | **no**: worse by more than 0.5 %, so it stays dcnofprs |
+| perl | 87,623,200,705 | udcnofp 91,120,748,598 | −3.84 % | | Addendum 50, step 3 |
+
+"Not worse" in Addendum 50 is read here as Δ ≤ +0.5 %. On mcf and xz U1c8 has more entries: its runtime's mapping cache
+keeps memory mapped, which costs exits.
+
+**Stages.** perf/u1c8/stages/<bench>-U1c8, built with perf/ccsel/mkstage.py from the same reference stages as the ccsel
+candidates. They are one-arm and resolved. Only the lifetimes executable is replaced; helper programs stay at base.
+- The executables are the compiler lane's stripped sdk-U1c8 builds, the same files the QEMU twins ran: gcc
+  f2c29c060c8bfda4, nab 7828c50d35c5a29c, lbm 8b2d81e6899bbedb, mcf 442fc8659e51d917, xz c035ff64b4fc0f8e.
+- Their sections match the board-run c3fdcnofprs gcc image: .capstone_virtual and .capstone_domreq are kept.
+
+**SDK provenance:**
+- **Runtime:** the c8 line is a443914d9df2 + 8f44f762e826 (origin/perf/heap-mapping-c8), MR_FREE_BYTES 64 → 8 MiB. That
+  commit was read here.
+- **Archives:** runtime 5aa897d3f1752657, libc lu1 a608a653ec7d66cc.
+- **Compiler:** llvm-c4 from 2833be4b46d5 (origin/compiler-spec-c4).
+- **The whole SDK:** perf/u1c8/sdk-U1c8.manifest lists capstone-cc, sdk.json and every file it names, each with its
+  sha256. The manifest's own sha256 begins a59fede62c22b768.
+
+**Runs.** perf/u1c8/u1run.sh is ccsel-mx.sh (Addendum 47) with only its log and output paths and this pre-registration
+changed. It uses kit bkit23-all2-b1-nohb on C.5a, with no heartbeat. The dry runs reached every stage on both boards.
+- **Board 2,** after gcctr (pid 128388). The list is u1b2.list:
+  1. gcc test U1c8, the shakedown: the first silicon run of the rt-x runtime;
+  2. nab U1c8, then nab dcnofprs;
+  3. lbm U1c8, then lbm dcnofprs;
+  4. xz U1c8. Its dcnofprs pair is Addendum 47's xz run on this board and kit tonight.
+- **Board 1,** after the ccsel mcf chain (pid 86168): mcf U1c8. Its dcnofprs pair is Addendum 47's mcf run on that board.
+
+**Predictions** (run command, board time):
+- gcc test: rc 0, specdiff 1/1. A failure here is a silicon defect of the U1c8 runtime, not a timing, and it stops U1c8
+  everywhere until it is understood.
+- nab: U1c8 / dcnofprs in [0.97, 1.01]. lbm: [0.985, 1.015].
+- mcf and xz: U1c8 / dcnofprs in [0.98, 1.01].
+  - Their extra entries cost about 4,600 and 9,300 exits. At ~30 k cycles per exit that is 6 s and 11 s at 25 MHz,
+    small against the run.
+- specdiff PASS everywhere.
+
+**Choice rule.** For each benchmark, the build with the shorter board time on its run command is reported, among base,
+dcnofprs and U1c8. Every choice is disclosed with its exe hash. imagick stays dcnofprs, on Addendum 45's board reading.
