@@ -1339,3 +1339,46 @@ Two fork commits that fix bugs only the fork has (546807884, ae21e121e) are not 
 branch riscv-baseline-fixes d31345cf3. Verilator lint gives 0 errors, the same as stock cv64a6. The guarded full
 synthesis has run on apollo since 16:50. A pure-upstream build (riscv-baseline fbbcf282e) was started first and
 stopped at 15 min, because the memory projection allows one job.
+
+## Addendum 43 (11 Nov 17:2x): stock OpenSBI on V1f, read in part; the ordinary RISC-V baseline bitstream sealed; phase 1 on it, before it runs
+
+**Addendum 41, read so far** (board 2, V1f, kit bkit41-stockfw-v1f, out-stockfw-v1f-b2). **S1 holds:** stock OpenSBI
+v1.3 boots this SoC and Linux, the module loads, and imagick and nab pass specdiff. lbm is still running.
+
+| | Capstone monitor (V1f) | Stock OpenSBI v1.3 (V1f) |
+|---|---|---|
+| hiccup2 loss | 9.432 % | 12.617 % (6,163 gaps; 2^14 5,293, 10.55 %; inter-arrival 10 ms: 2,993) |
+| tickcost idle / streaming | 9.233 % / 10.906 % | 12.423 % / 13.724 % |
+| mean big gap, idle | 42,554 cycles, 4,645 insns, 54/s | 31,057 cycles, 3,339 insns, 100/s |
+| rdtime | 1,116 cycles | 2,231 cycles |
+| Plain imagick / nab test | 16.13 s / 775.94 s | 16.89 s / 802.37 s |
+
+- **S2 fails, in the other direction.** Stock OpenSBI costs Plain MORE than the Capstone monitor does. Every tick is
+  taken at 100/s and each is cheaper, but the total is +3.2 points. rdtime emulation costs twice as much.
+- **S3 holds in sign:** imagick +4.7 %, nab +3.4 %.
+- **What it means.** Under the Capstone monitor Linux runs through the monitor's own trap path (the fork's interrupt
+  handling). That path is not stock OpenSBI with tuning. An "ordinary RISC-V" baseline should still not use a firmware
+  that is slower than necessary, so the baseline's firmware is chosen by measurement among stock releases. It is the
+  fastest of v1.3, v1.6 and v1.9, which is the choice least favourable to Capstone.
+
+**The ordinary RISC-V bitstream** (Addendum 42's RTL, riscv-baseline-fixes d31345cf3). The full flow ran on apollo
+under vivado-guard in 27 min 39 s, peak RSS 16.22 GB.
+- **Clean:** routing errors 0, timing loops 0, Synth 8-326 0, LUTLP-1 0.
+- **Timing:** the core clock is 25 MHz (40 ns), the same as the Capstone bitstreams, with WNS +13.228 ns. All timing
+  is met.
+- **Sealed:** caplifive_rvbase_d31345cf3.bit, sha256 51e883b7c0beffa23ba012ec9cdef8d32c7129ba15c83ce1402b090395e5f8ed.
+  Reports and SHA256SUMS are in synth/rvbasefix-d31345cf3-full-out/seal.
+
+**Phase 1** (board 2, after Addendum 41's run). Driver perf/stockfw/rvbase-b2.sh: flash the baseline (sha checked,
+read back), then tickcost and hiccup2 under three stock firmwares, one chain each:
+- kit bkit42-rvbase-sbi13: OpenSBI v1.3, d6b78e4;
+- kit bkit42-rvbase-sbi16: v1.6 + the board UART, 121a885;
+- kit bkit42-rvbase-sbi19: v1.9, platform/generic from the device tree.
+
+Each kit is bkit41-stockfw-v1f with only BOARD_BITSTREAM and the firmware lines changed, and the driver checks this.
+The dry run is clean.
+- **Predictions:**
+  - The baseline boots Linux on stock OpenSBI.
+  - getppid is within ±10 % of 1,891 cycles: same core pipeline, different extension.
+  - Each firmware's tick share is read. The phase-2 firmware is the one with the lowest hiccup2 share.
+  - If the baseline does not boot, nothing is read about the firmwares, and the bitstream goes back to RTL.
