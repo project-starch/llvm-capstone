@@ -963,3 +963,51 @@ quanta avoid it, the tick-adjusted ratios are ratio / (1 − t). They are report
 instead of them. Whether to adjust is the lead's call, because a stock kernel on this board pays t.
 
 **Dry run** (scratchpad tick2-dry): both arms reach the stage, and a fake pre-registration stops the run.
+
+## Addendum 35 (11 Nov 14:1x): P1b read; the Plain task loses 9.4 % of the hart to the timer path, at 1.64 ms per event
+
+**Where it ran.** It ran on board 2, not board 1: board 2 freed first, after gcc2. The driver is perf/tick/tick2b-v1f.sh,
+which is tick2-v1f.sh plus `export BOARD_URL_FILE`. Board 1's queued copy was cancelled before it started, and the
+cancellation is logged in tick2-v1f-b1.log. Board 2, V1f, out-tick2-v1f-b2.
+
+| Arm | Wall | Gaps | 2^14-2^17 share | 2^18+ share | All gaps |
+|---|---|---|---|---|---|
+| A, no heartbeat | 60.026 s at 25.000 MHz | 3,453 | 9.384 % | 0 | 9.432 % |
+| B, heartbeat | 60.124 s | 3,350 | 8.347 % | 10.594 % (313 gaps; 2 @@HB) | 18.991 % |
+
+- **The population.** Arm A has 3,453 gaps, 57.5/s, with a mean of 40,991 cycles = 1.64 ms. The buckets are 2^14 574,
+  2^15 2,420, 2^16 315 and 2^17 1.
+- **Inter-arrival** (A): 20 ms in 2,699 events, 10 ms in 580, and a scatter of others. The source is periodic at the
+  10 ms tick, and most events come every second tick. This is the timer path: no other periodic source runs at that
+  rate. Why one tick in two stays under the 400-cycle threshold is not read here.
+- **Prediction.** Addendum 34's [6.4, 12.8] % band holds: 9.38 % in A, 8.35 % in B.
+- **Heartbeat.** B's 2^18+ share, 10.6 %, matches Addendum 33's measured f of 0.093-0.100. The two costs add, 9.4 +
+  10.6 = 19.0.
+- **F8 CONFIRMED as a cost on Plain.** t = 0.094 of the hart, spent away from the task at 1.64 ms per event. P1's refill
+  excess is about 400 cycles per event, which is small beside that.
+- **What is not read.** Which of the kernel, the M-mode monitor, SBI set_timer or trapped rdtime takes the 41,000 cycles
+  is not read here. A stock kernel on this board pays the same cost.
+
+**Tick-adjusted ratios, reported BESIDE the measured ones, never instead.** They are ratio / (1 − 0.094). This is an upper
+bound for the adjustment: Capstone pays the tick outside its contexts. Outside-context time is 13.6 % of x264 train's run
+and 23.6 % of lbm test's, so the true adjustment is 1-2 points smaller. Whether to adjust at all is the lead's call.
+
+| | perl | gcc (module) | mcf | nab | xz c1 | imagick | lbm | x264 |
+|---|---|---|---|---|---|---|---|---|
+| Measured (heartbeat-corrected) | 1.238 | 1.196 | 1.180 | 1.088 | 0.999 | 0.977 | 0.926 | 0.882 |
+| Tick-adjusted | 1.367 | 1.321 | 1.303 | 1.201 | 1.103 | 1.079 | 1.022 | 0.974 |
+
+- **The "Capstone faster than Plain" readings.** After both corrections only x264 (0.974) stays below 1. imagick and lbm
+  go above it.
+- **gcc native train01.** 4,456.25 s, specdiff PASS. Against Plain-with-cache 3,280.9 s that is 1.358 raw and 1.497-1.509
+  heartbeat-corrected. The reporting rule (Add. 23/27) reports native, with the module route's 1.196 beside it.
+- **Same-environment test-size pairs** (V1f, neither arm with the heartbeat):
+
+  | Benchmark | Native | Plain | Ratio |
+  |---|---|---|---|
+  | imagick | 20.59 s | 16.13 s | 1.277 |
+  | nab | 894.17 s | 775.94 s | 1.152 |
+  | lbm | 1,658.05 s | 1,713.29 s | 0.968 |
+
+  Native comes from Addendum 21's run 4 (board 2), Plain from Addendum 30 (board 1). This lbm ratio is consistent with
+  the tick cost.
