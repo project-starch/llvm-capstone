@@ -65,26 +65,19 @@ EDITS = [
 ** The outer layer memory allocator prevents this routine from
 """, """/*
 ** Sublet: a realloc that keeps its block still ends the old allocation, as
-** realloc's contract says, so the block goes out again as a new child of
-** the pool: every copy of the old pointer faults, and the returned pointer
-** reaches the same bytes at the same address.  The old child is revoked
-** before the new one is derived, so the pool's children stay disjoint; the
-** new one is a sibling, not a child of the old one.  With
-** SUBLET_REALLOC_KEEPS_LIFETIME (the ablation) the old child is returned.
+** realloc's contract says, so the block's lifetime is renewed (CRENEW):
+** every copy of the old pointer faults, and the returned pointer reaches
+** the same bytes at the same address.  The new lifetime takes the old
+** one's place under the pool, with the cursor and bounds of pPrior.  Those
+** are the block's: memsys5 hands out every block at its first byte and
+** bounded to the whole block.  With SUBLET_REALLOC_KEEPS_LIFETIME (the
+** ablation) the old child is returned.
 */
 static void *memsys5Renew(void *pPrior){
 #ifdef SUBLET_REALLOC_KEEPS_LIFETIME
   return pPrior;
 #else
-  int i, iSize;
-  void *p;
-  memsys5Enter();
-  i = (int)(((u8 *)pPrior-mem5.zPool)/mem5.szAtom);
-  iSize = memsys5Size(pPrior);
-  capstone_cap_revoke_child(mem5.zPool, pPrior);
-  p = capstone_cap_derive(mem5.zPool, (unsigned long)i*mem5.szAtom, iSize);
-  memsys5Leave();
-  return p;
+  return capstone_cap_renew(pPrior);
 #endif
 }
 
@@ -119,25 +112,26 @@ static int memsys5Roundup(int n){
 """, ""),
     # The lookaside's realloc in place renews the slot's lifetime the same way.
     ("""static LookasideSlot *lookasideRelease(sqlite3 *db, void *p){
-  capstone_cap_revoke_child(db->lookaside.pLife, p);
+  capstone_cap_release(p);
   return (LookasideSlot*)&((u8*)db->lookaside.pStart)[(u8*)p-(u8*)db->lookaside.pStart];
 }
 """, """static LookasideSlot *lookasideRelease(sqlite3 *db, void *p){
-  capstone_cap_revoke_child(db->lookaside.pLife, p);
+  capstone_cap_release(p);
   return (LookasideSlot*)&((u8*)db->lookaside.pStart)[(u8*)p-(u8*)db->lookaside.pStart];
 }
-/* A realloc that keeps its slot ends the old lifetime and issues the slot
-** again (memsys5Renew says why); the ablation returns the old child. */
-static void *lookasideRenew(sqlite3 *db, void *p){
+/* A realloc that keeps its slot renews the slot's lifetime (memsys5Renew
+** says why): p has the slot's cursor and bounds, as lookasideIssue gave
+** them.  The ablation returns the old child. */
+static void *lookasideRenew(void *p){
 #ifdef SUBLET_REALLOC_KEEPS_LIFETIME
   return p;
 #else
-  return lookasideIssue(db, lookasideRelease(db, p));
+  return capstone_cap_renew(p);
 #endif
 }
 """),
     ("  if( isLookaside(db,p) && n<=db->lookaside.sz ) return p;\n",
-     "  if( isLookaside(db,p) && n<=db->lookaside.sz ) return lookasideRenew(db, p);\n"),
+     "  if( isLookaside(db,p) && n<=db->lookaside.sz ) return lookasideRenew(p);\n"),
     # SQLITE_DEBUG trashes a freed slot through the lookaside's own authority, not the revoked child.
     ("      memset(p, 0xaa, db->lookaside.sz);\n",
      "      memset(pBuf, 0xaa, db->lookaside.sz);\n"),
@@ -148,8 +142,8 @@ static void *lookasideRenew(sqlite3 *db, void *p){
   }else if( sqlite3GlobalConfig.bMemstat ){
 """, """  nNew = sqlite3GlobalConfig.m.xRoundup((int)nBytes);
   /* Sublet: no shortcut when the rounded size is unchanged.  The realloc
-  ** still ends the old allocation, so it goes to xRealloc, which issues the
-  ** block again (memsys5Renew).  The ablation keeps the shortcut. */
+  ** still ends the old allocation, so it goes to xRealloc, which renews the
+  ** block's lifetime (memsys5Renew).  The ablation keeps the shortcut. */
 #ifdef SUBLET_REALLOC_KEEPS_LIFETIME
   if( nOld==nNew ){
     pNew = pOld;

@@ -8,7 +8,7 @@
  *
  *   run    ends there: expected to complete on both arms.
  *   stale  the same sequence, then ONE read through A_data, the old pointer, at stale_read_probe.
- *          Protected (patch 0003): A's child was revoked at the return, so the read must fault
+ *          Protected (patch 0003): A's lifetime ended at the return, so the read must fault
  *          with cause 25 at the probe. Release: it must complete and read C's data (0x77).
  */
 #include "ctl.h"
@@ -45,7 +45,7 @@ CTL_CASE(93, "successor") {
   ctl_ptr("A.data", A_data);
   memset(A->data, 0x44, POOL_BYTES);
 
-  av_buffer_unref(&A); /* back to the pool; protected: CREVOKE A's child */
+  av_buffer_unref(&A); /* back to the pool; protected: CRENEW the entry */
   printf("CTL-STEP released A to the pool\n");
 
   AVBufferRef *held[CTL_MAX_GETS] = {0};

@@ -158,7 +158,8 @@ void *zend_cap_issue(void *p, size_t hdr, size_t size)
 /* The prefix holds the original malloc capability. heap_access first probes
  * the supplied child for liveness, then uses the existing mapping page index
  * to reach allocator metadata. Address arithmetic alone grants no authority.
- * CREVOKE below checks that the recovered parent really issued this child. */
+ * CREVOKE below names the child alone, so no instruction checks that the
+ * recovered block issued it: the start-of-object test above is what remains. */
 static void *cap_block_of(void *ptr, size_t hdr, const char *who)
 {
     unsigned long cur = __builtin_capstone_cap_get_cursor(ptr);
@@ -186,15 +187,16 @@ void *zend_cap_header(void *ptr, size_t hdr)
 }
 
 /* ZEND_CAP_RECLAIM(ptr): _efree's derivation. In the revoking arms the caller's child ends in
- * the same call through the block's own authority: a grandchild the caller
- * derived is cause 29 at CREVOKE, a child already ended (a double efree) cause 25. */
+ * the same call: a child already ended (a double efree) is cause 25. The release names the
+ * object alone. A grandchild the caller derived at the same start therefore ends by itself and
+ * leaves the issued child live, which this heap cannot tell from a correct free. */
 void *zend_cap_reclaim(void *ptr, size_t hdr)
 {
     void *block;
     if (!ptr) { return (void *)0; }
     block = cap_block_of(ptr, hdr, "free of a pointer this heap did not issue, or not at its start");
     if (zend_cap_mode() & ZEND_CAP_MODE_REVOKE) {
-        heap_end(block, ptr);
+        heap_end(ptr);
         ++st_retires;
     }
     return block;

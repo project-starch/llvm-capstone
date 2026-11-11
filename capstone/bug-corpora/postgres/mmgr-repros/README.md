@@ -49,7 +49,7 @@ reduction class are visibly siblings rather than accidentally similar.
 | system | what it is |
 |---|---|
 | **virtual Capstone** | this project's capability architecture on RISC-V. LLVM fork (`capstone64-unknown-elf`), QEMU fork (`virt-capstone`); each case runs as a Linux process under `capstone-vexec`, its heap musl mallocng |
-| **Sublet** | two instructions on virtual Capstone: `CDERIVE` makes a child lifetime of a capability, `CREVOKE` ends a direct child and everything below it. The port's patch 0003 makes every chunk a child of its block and revokes it in `pfree` and `repalloc` |
+| **Sublet** | the lifetime instructions on virtual Capstone: `CDERIVE` makes a child lifetime of a capability, `CREVOKE` ends a lifetime and everything below it, `CRENEW` ends one and begins a new one in its place. The port's patch 0003 makes every chunk a child of its block, revokes it in `pfree` and `repalloc`, and renews a kept block's generation at a reset |
 | **CheriBSD** | CHERI-RISC-V purecap, CheriBSD under QEMU. Its own temporal safety is malloc quarantine plus a revoker sweep |
 
 The same `case.c` builds for every target. That is what makes the comparison

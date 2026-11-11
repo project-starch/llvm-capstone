@@ -37,11 +37,12 @@ each variant as a mirror of the manager files with its ordered patches applied:
 
 The capability platforms build `spatial`, or `sublet` with `PG_SUBLET=ON` (capstone-application
 only); native builds the pristine managers. Patch 0003 needs no table and no
-new file: every block keeps a lifetime and a generation in its header, the
+new file: every block keeps a generation in its header, the
 managers issue each chunk at their return sites as a child of the generation
 covering the chunk header and the request, and store the parent in the header.
-`pfree` reads the parent through the caller's own pointer, revokes the chunk,
-and hands the context method a pointer derived from the parent. Its header
+`pfree` reads the parent through the caller's own pointer, revokes the chunk
+through that pointer, and hands the context method a pointer derived from the
+parent. A reset that keeps a block renews its generation (`CRENEW`). Its header
 states the reasons and the one thing it gives up: a live pointer can load its
 block's generation from the header in front of it.
 

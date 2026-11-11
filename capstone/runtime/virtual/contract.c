@@ -220,14 +220,18 @@ int main(int argc, char **argv)
         char *sibling = capstone_cap_derive(parent, 128, 128);
         p[0] = 17; sibling[0] = 31;
         stale = p;
-        capstone_cap_revoke_child(parent, p);
+        capstone_cap_release(p);
         parent[0] = 23;
         require(sibling[0] == 31, "sibling survives child retirement");
         char *replacement = capstone_cap_derive(parent, 0, 128);
         require((uintptr_t)replacement == (uintptr_t)p && replacement[0] == 23,
                 "same-address successor survives");
+        /* A renewal keeps the place and the bytes and begins a new lifetime. */
+        char *renewed = capstone_cap_renew(replacement);
+        require((uintptr_t)renewed == (uintptr_t)p && renewed[0] == 23 && sibling[0] == 31,
+                "renewed successor keeps its place and bytes");
         /* Free the outer malloc object: its child and grandchild must die. */
-        stale = capstone_cap_derive(replacement, 0, 16);
+        stale = capstone_cap_derive(renewed, 0, 16);
         free(allocation);
         if (!strcmp(mode, "nested-stale")) {
             puts("VIRTUAL_NESTED_ACCESS:stale"); fflush(stdout);

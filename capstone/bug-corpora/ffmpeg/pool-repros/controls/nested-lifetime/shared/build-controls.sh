@@ -3,12 +3,12 @@
 # capstone-application library: FFmpeg 9.0.1's libavutil/buffer.c (and refstruct.c) in a Capstone
 # process, their memory from the process's malloc (virtual mallocng). A copy of
 # controls/virtual/shared/build-cases.sh that takes the arm and passes it to the control as
-# CTL_PROTECTED, because control 91 reads a field (sublet_life) only patch 0003 has.
+# CTL_PROTECTED, which the driver prints as the arm.
 #
 #   CAPSTONE_SDK=<virtual SDK> build-controls.sh capstone-application OUT protected|release [cmake options]
 #
-#   protected  -DFFPOOL_SUBLET=ON: buffer-pool patches 0001 + 0003, every hand-out a CDERIVE child of
-#              its entry's lifetime, revoked (CREVOKE) by pool_release_buffer
+#   protected  -DFFPOOL_SUBLET=ON: buffer-pool patches 0001 + 0003, every entry's lifetime
+#              renewed (CRENEW) by pool_release_buffer
 #   release    -DFFPOOL_SUBLET=OFF: the same source without 0003 (0001's event hooks only)
 set -euo pipefail
 HERE=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
@@ -35,9 +35,9 @@ cmake --preset capstone-application -S "$PORT" -B "$work" -DCAPSTONE_SDK="$CAPST
 cmake --build "$work" >> "$OUT/work/port.log" 2>&1
 SRC=$(ls -d "$work"/sources/ffmpeg-*)
 [[ $(wc -w <<< "$SRC") == 1 ]] || { echo "expected one prepared source under $work/sources: $SRC" >&2; exit 2; }
-# The control includes buffer_internal.h; its BufferPoolEntry must be the one the library was
-# built from, so the header must carry patch 0003 exactly when the arm does.
-if grep -q sublet_life "$SRC/libavutil/buffer_internal.h"; then has=1; else has=0; fi
+# The control must be built against the source the library was built from, so the header must
+# carry patch 0003 exactly when the arm does. The patch adds one include to it.
+if grep -q 'capstone/capability.h' "$SRC/libavutil/buffer_internal.h"; then has=1; else has=0; fi
 [[ $has == "$PROTECTED" ]] || { echo "$SRC/libavutil/buffer_internal.h: patch 0003 present=$has, arm $ARM" >&2; exit 2; }
 # buffer_internal.h includes <stdatomic.h>, which the library's compile finds through the toolchain
 # file's CMAKE_C_FLAGS (the compiler's own resource headers); the controls take the same flags.

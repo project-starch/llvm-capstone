@@ -25,7 +25,7 @@
  *   8  the SYSTEM-ALLOCATOR arm on a CACHE-ABSORBED free: must NOT fault
  *   9  the SYSTEM-ALLOCATOR arm on a REAL free: must fault
  *  10  a double efree: the second reclaim faults at the liveness probe
- *  11  a grandchild the caller derived for itself is refused by the reclaim (cause 29)
+ *  11  a grandchild the caller derived for itself: the reclaim ends it alone, no fault
  *  12  an interior pointer handed to efree is refused by name (ZEND_CAP_FAIL code=4)
  *
  * Stage 6 is what makes 1, 2, 3 and 5 mean anything: it is the same access on an arm whose
@@ -38,9 +38,11 @@
  * survive (stage 8) while a real one must not (stage 9). Without that pair, every temporal
  * catch here would be unattributable between the two layers.
  *
- * Stages 10 and 11 are the identity checks the previous nested did in software (its issued flag
- * and its index) and that the liveness probe and CREVOKE now do in hardware: the fault is in the
- * allocator, at a named site, which the judge attributes through the record's return address. */
+ * Stage 10 is the identity check the previous nested did in software (its issued flag) and
+ * that the liveness probe and CREVOKE now do in hardware: the fault is in the allocator, at a
+ * named site, which the judge attributes through the record's return address. Stage 11 records
+ * what CREVOKE does not check: it names the object alone, so a grandchild the caller derived
+ * ends by itself and the issued child stays live. */
 #include "zend-cap-mode.h"
 #include <heap_sublet.h>
 
@@ -321,9 +323,16 @@ int main(int argc, char **argv)
     if (stage == 11) {
         void *grand = heap_issue(pay, 16);   /* what a client could do itself */
         if (!grand) { say("S11 FAIL: the grandchild derive returned NULL"); return 1; }
-        say("S11 handing a GRANDCHILD to efree (expect a fault at CREVOKE, cause 29)");
+        /* The release names the object alone. Handed a grandchild, it ends the grandchild and
+         * nothing else: no instruction tells it from the issued child, so efree does not fault
+         * and the issued payload stays live. This stage records that limit. */
+        say("S11 handing a GRANDCHILD to efree (expect NO fault: the grandchild alone ends)");
         efree_like(grand, 0);
-        say("S11 RESULT: NO FAULT -- a grandchild was accepted as the issued child. IDENTITY CHECK BROKEN.");
+        ((char *)pay)[0] = 'x';
+        say("S11 RESULT: no fault, and the issued payload is still live. The release cannot tell a\n"
+            "            grandchild from the issued child; using the grandchild now (expect a FAULT)");
+        ((char *)grand)[0] = 'x';
+        say("S11 RESULT: NO FAULT -- the grandchild survived its own release.");
         return 1;
     }
 

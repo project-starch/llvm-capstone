@@ -39,7 +39,15 @@ an assertion that capability layout or representability are identical to RV64.
 
 ## Mapping authority and nested allocators
 
-`heap_sublet.h` supplies direct `heap_issue` (CDERIVE) and `heap_end` (CREVOKE).
+`heap_sublet.h` supplies direct `heap_issue` (CDERIVE), `heap_end` (CREVOKE, the
+object alone) and `heap_renew` (CRENEW).
+`free(p)` ends the lifetime that `p` names and no other. So a caller must free
+through the reference `malloc` returned, moved or narrowed copies included. A
+nested allocator that derives a lifetime of its own over a block and then
+frees the block through that lifetime ends only what it derived: the block's
+own lifetime stays live while mallocng reuses the memory, and one node is
+lost. No instruction refuses this any more, so every port keeps the pointer
+`malloc` gave it and frees through that.
 The mapping layer retains a three-level Sv39 page index. Each occupied page
 names its mapping-wide parent; there are no entries for individual allocations
 or mallocng groups. Lookup is a fixed sequence of indexed loads, not a search.

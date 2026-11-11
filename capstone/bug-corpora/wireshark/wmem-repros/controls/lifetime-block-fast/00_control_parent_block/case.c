@@ -9,10 +9,8 @@
  *                   for the 2 MiB block, moved to A's offset: the pointer
  *                   upstream's alloc carves chunks from. Both builds.
  *   via=generation  patch 0001's block->sublet.generation AFTER the reset:
- *                   the new generation the reset derived, from which the next
- *                   object is derived. Protected build only.
- *   via=life        patch 0001's block->sublet.life: the parent of the
- *                   revoked generation, the reset's CREVOKE source.
+ *                   the generation's new lifetime, which the reset began with
+ *                   CRENEW and from which the next object is derived.
  *                   Protected build only.
  *
  * The read first checks what the allocator itself left there. block_fast's
@@ -65,17 +63,6 @@ WM_CASE(0) {
   wm_ctl_read("A-former-range", "block", parent, WM_CTL_N, got, WM_CTL_AT("case.c"));
   wm_ctl_expect("A-former-range-written-via-generation", got, 0, WM_CTL_N,
                 wm_ctl_pattern_v);
-
-  void *life = block->sublet.life;
-  wm_ctl_show("life", life);
-  unsigned char *source = (unsigned char *)life +
-                          (WM_CTL_CURSOR(parent) - WM_CTL_CURSOR(life));
-  wm_ctl_read("A-former-range", "life", source, WM_CTL_N, got, WM_CTL_AT("case.c"));
-  wm_ctl_expect("A-former-range-via-life", got, 0, WM_CTL_N, wm_ctl_pattern_v);
-  wm_ctl_write("A-former-range", "life", source, WM_CTL_N, wm_ctl_pattern_b,
-               WM_CTL_AT("case.c"));
-  wm_ctl_read("A-former-range", "block", parent, WM_CTL_N, got, WM_CTL_AT("case.c"));
-  wm_ctl_expect("A-former-range-written-via-life", got, 0, WM_CTL_N, wm_ctl_pattern_b);
 #else
   printf("WM_CTL generation absent: the release build has no patch 0001\n");
 #endif

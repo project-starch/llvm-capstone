@@ -28,7 +28,7 @@ read is a separate run: on the protected build its fault ends the process.
   to A's offset. It does so on both builds.
 * **`via=generation`**: patch 0001's `block->sublet.generation`, A's DIRECT parent lifetime.
   `wmem_sublet_issue` derives every object from it with CDERIVE, and `wmem_free` ends the object
-  with `CREVOKE(generation, object)`. This path exists on the protected build only.
+  with `CREVOKE(object)`. This path exists on the protected build only.
 
 Before writing, control 00 checks what the allocator itself left in the range, reading through the
 block reference:

@@ -58,7 +58,7 @@ void sqlite3_sublet_stats(unsigned long *aOut);
 #define CAPSTONE_DELIN(value)                                                \
   __asm__ volatile(".insn r 0x5b, 0x1, 0x3, %0, x0, x0" : "+r"(value))
 
-/* Option (iii): memsys5 derives mem5.pHeap and mem5.zPool over the WHOLE arena, so the arena's
+/* Option (iii): memsys5 derives mem5.zPool over the WHOLE arena, so the arena's
  * own base must be a multiple of its bounds granule -- 2048 for 1 MiB, 512 for 256 KiB -- or the
  * compressed encoder truncates it downward and the pool gains authority below itself. aligned(16)
  * was enough when QEMU kept exact shadow bounds; it is not under the compact profile. */

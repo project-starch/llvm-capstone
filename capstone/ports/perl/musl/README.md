@@ -98,8 +98,8 @@ physical Sublet heap; their recorded results stay in the corpus's
 
 On the virtual profile the SV heads are protected by the two Sublet instructions directly:
 `PERLD_SUBLET=1` applies [`../sublet/patches/5.36.3`](../sublet/patches/5.36.3) with
-`-DPERL_CAPSTONE_SUBLET`, and each head is handed out as a CDERIVE child of its arena's
-lifetime and revoked by CREVOKE when it is freed. No adapter, region or grant is involved; the
+`-DPERL_CAPSTONE_SUBLET`, and each head is handed out as a CDERIVE child of its arena
+and revoked by CREVOKE when it is freed. No adapter, region or grant is involved; the
 patch header says what it changes and why. Measured 2026-10-11 on the Sublet-lifetime QEMU
 (`bug-corpora/perl/release-differential`): on that platform backticks fault with cause 25 in
 `fileno` and a piped `open` returns ENOSYS, on the stock image and the protected one alike, so

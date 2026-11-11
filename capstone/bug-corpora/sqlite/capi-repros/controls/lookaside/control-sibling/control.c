@@ -5,7 +5,7 @@
  * the lookaside. Take slots A and B from one connection's lookaside (sqlite3DbMallocRaw), fill
  * both, release A (sqlite3DbFree), then read B through B's own reference and check its bytes,
  * write it, and read the write back. On the protected arm A and B are sibling CDERIVE children
- * of lookaside.pLife, and sqlite3DbFree(db, A) is CREVOKE(pLife, A).
+ * of lookaside.pLife, and sqlite3DbFree(db, A) is CREVOKE(A).
  *
  * Expected on both arms: every access completes and B's contents are intact. The control
  * reports whether A and B are adjacent slots.
