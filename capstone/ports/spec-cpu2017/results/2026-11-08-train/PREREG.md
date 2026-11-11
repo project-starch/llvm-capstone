@@ -1063,3 +1063,55 @@ writes into the "copy" landed in stages-eval-boarddevmk/538.imagick_r-test from 
 executables were restored from tree-boarddevmk's exe directory (b4073795…, f50dc465…). plan.json was restored with
 the same writer format as make-stage.py, and all four of its hashes verify. No run read that stage in the window. The P3
 stage is now a real copy: no symlinks, and no file with more than one link.
+
+## Addendum 37 (11 Nov 15:5x, before it runs): two board checks of the tick hypothesis on SPEC test, boards 2 and 3
+
+**What the existing counters already say.** Plain lbm test retires 7.70 G instructions on the hart (out-rvc-b3), while
+QEMU counts 6.66 G for the program itself. The excess, about 1.0 G over 1,893 s, is kernel and monitor work. At 57.5
+expensive events per second (Addendum 35), that is about 9,600 instructions per event, if most of the excess is the
+tick. nab gives about 0.60 G over 862 s. Both include syscalls and page faults, so this is an upper bound per event. A
+stock OpenSBI timer path is a few hundred instructions, so the cost may belong to this platform's firmware and not to
+"any kernel on this board", as Addendum 35 said. That sentence is withdrawn until P4 reads.
+
+**P4, tickcost on board 2** (V1f, kit nohb2, nohb tools, chain A only; driver perf/tick/tick3-v1f.sh, stage
+perf/tick/stage-tickcost, probe perf/tick/tickcost.c, Plain build 11543a68ab1376a4). The probe is in place of imagick_r,
+and the validation fails by construction. It measures four things:
+- rdtime cycles (median of 10,000);
+- getppid cycles and instructions (median of 10,000);
+- 30 s of a rdcycle/rdinstret loop, with the cycles and the instructions retired inside every gap over 400 cycles;
+- the same 30 s while streaming over 8 MiB.
+
+Predictions:
+- **P4a.** rdtime ≥ 500 cycles means the time CSR is trapped and emulated in M-mode; ≤ 50 means it is native.
+- **P4b.** The mean instructions inside a ≥ 2^13-cycle gap are ≥ 2,000, so the event is software-heavy. This would be
+  consistent with the ~9,600 above. If they read < 500, the 41k cycles are stalls, not code.
+- **P4c.** The idle loop's big-gap share reproduces Addendum 35's 9.4 % within ±1.5 points.
+- **P4d.** If the streaming loop's big-gap share exceeds the idle one by ≥ 1 point, a tick costs memory-bound code
+  (lbm, x264) more than 9.4 %. If not, the 9.4 % stands for them.
+- If rdinstret is refused (SIGILL), the probe prints TC-NOTE and the instruction columns read 0. Then P4b is not read.
+
+**P5, same-kit pairs on board 3.** Flash C.5a, run perf/samekit/b3.list, then flash bitstream 3 back. Driver
+perf/samekit/samekit.sh is from perf/b3/gt-run-ga2.sh. Both arms run on ONE kit, bkit23-all2-b1-nohb, the kit of every
+module-route record and of P2's arm A, with the no-heartbeat tools copy. Only the stage differs between the Plain arm
+and the Capstone arm.
+
+| # | Stage | Arm |
+|---|---|---|
+| 1 | plainreuse 538.imagick_r-test-plain-rv64r | Plain |
+| 2 | stages-eval-b1 538.imagick_r-test-devmk | Capstone spatial, lifetimes |
+| 3 | stage-tickcost | P4 repeated on C.5a |
+| 4 | plainreuse 544.nab_r-test-plain-rv64r | Plain |
+| 5 | stages-eval-b1 544.nab_r-test-devmk | Capstone |
+| 6 | plainreuse 519.lbm_r-test-plain-rv64r | Plain; Capstone lbm on this kit is P2 arm A, 1,651.3 s |
+
+- **board-env-check C2 is waived.** The kit module is the 16-bit-table default build, and C.5a is an 18-bit-table
+  bitstream. This is the same kit every module-route record used. Any other failing check stops the run. The waiver
+  logic was negative-tested.
+- **x264 is not in the set.** Its Plain test takes 50,441 s, which does not fit before the deadline.
+- **Predictions:**
+  - **P5a.** The Plain arms reproduce the V1f no-heartbeat Plain times within ±2 %: imagick 16.13 s, nab 775.94 s,
+    lbm 1,713.29 s. This is F2, the bitstream and kit, for Plain.
+  - **P5b.** The same-kit ratio Capstone / Plain equals the heartbeat-corrected one within ±3 %. For lbm that predicts
+    1,651.3 / 1,713 ≈ 0.964.
+  - **Reporting.** The same-kit ratios are reported as the MEASURED ratios with the fewest confounds. The tick
+    adjustment is applied beside them, never instead, with P3 and P4 as inputs.
