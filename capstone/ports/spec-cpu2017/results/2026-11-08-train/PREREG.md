@@ -1155,3 +1155,59 @@ arms, about 52 per arm.
   - The like-for-like module number on the c3f exe is 4,214.98 s (out-q32-b3, same kit) = 1.285.
   - Which gcc build is the reported one is the lead's call. The reporting rule's "native" assumed the same exe, and it
     does not hold here.
+
+## Addendum 39 (11 Nov 16:1x): P4 and P3 read; and P3b (the q32 kit) and P6 (the native route), before they run
+
+**P4 read** (board 2, V1f, kit nohb2, out-tick3-v1f-b2; tickcost a09d… rebuilt as 11543a68ab1376a4, specdiff fails by
+construction).
+
+| Line | Reading | Prediction |
+|---|---|---|
+| rdtime | median 1,116 cycles; a rdcycle pair takes 4 | P4a holds: the time CSR is trapped and emulated in M-mode |
+| getppid | median 1,891 cycles, 275 instructions | — |
+| Idle, 30.5 s | 1,655 gaps ≥ 2^13; mean 42,554 cycles, of which 4,645 instructions; share 9.233 % (all gaps 9.262 %) | P4b holds (≥ 2,000 instructions). P4c holds (9.43 % ± 1.5) |
+| Streaming over 8 MiB, 31.8 s | 3,178 gaps ≥ 2^13; mean 27,262 cycles, of which 3,716 instructions; share 10.906 % | P4d holds: +1.67 points ≥ 1 |
+
+- **Software, not stalls.** The interruption is about 4,600 instructions at a CPI of about 9 (cold caches, 16 B lines),
+  plus a trapped rdtime at 1,116 cycles each. That is about what a stock Linux tick plus SBI costs in instructions.
+  The cycles come from this FPGA system's CPI.
+- **Memory-bound code pays more.** Under the streaming load every tick shows: 100/s, against 54/s idle. The share is
+  10.9 % rather than 9.2 %.
+
+**P3 read** (board 1, C.5a, kit bkit23-all2-b1-nohb, out-caphic-b1). hiccup2 inside a Capstone context, both arms. The
+validation fails by construction.
+
+| Arm | Wall | Gaps | 2^17 | 2^18 | 2^19 | All |
+|---|---|---|---|---|---|---|
+| spatial | 60.166 s | 297 | 148, 1.784 % | 144, 4.532 % | 5, 0.180 % | 6.496 % |
+| lifetimes | 60.132 s | 297 | 148, 1.765 % | 146, 4.571 % | 3, 0.107 % | 6.443 % |
+
+- **Timeline** (raw gaps). Every 326-328 ms there is a ~18-22 ms gap: the 8,000,000-cycle supervisor quantum, plus the
+  exit and re-entry. 76-80 ms after each comes a ~6.5-8.5 ms gap. The module's step_budget_ns is 80,000,000.
+- **There is no 10/20 ms population.** Neither P3a (≤ 3 %) nor P3b (≥ 8 % with the tick peak) holds. The share is
+  read: **t_C = 0.065** on this kit, in the idle loop.
+- **Capstone pays for periodic preemption too**, batched at the quantum, at about 69 % of Plain's 9.4 %. So
+  Addendum 35's tick-adjusted column (t_C = 0) overstated the adjustment. The symmetric adjustment, removing
+  periodic-interrupt cost from both sides, is ratio × (1 − t_C) / (1 − t_P):
+  - × 1.031 for t_P = 0.093 (idle);
+  - up to × 1.049 for memory-bound code (t_P = 0.109), if t_C does not also grow under memory load. That is not
+    measured.
+
+**Still to read before t_C applies to the train numbers.** They ran on other configurations:
+- **P3b.** The module train runs of gcc, nab and x264 used kit bkit32-q32: a 32,000,000-cycle quantum and the 18-bit
+  module. A new kit, t3-smoke/bkit32-q32-nohb, is bkit32-q32 with only the runner idle limit = step budget and the
+  watchdog entry-stall abort off. A board.env comment says so, and SHA256SUMS is regenerated. Both kits verify, and the
+  diff is checked in the driver.
+  - Driver perf/tick/caphic-q32.sh (caphic.sh with that kit, module 65ede944a87ea742 and vexec 1d8b4f0829bef0e7);
+    board 1; the same stage-cap-hiccup2. Its dry run is clean.
+  - Prediction: a quantum gap every ~1.3 s. The share is in [1.5, 7] %: low if the exit's fixed cost dominates, about
+    6.5 % if the cost is per deferred tick. It is reported as read.
+- **P6.** The native train runs of perlbench, mcf, imagick, lbm and gcc used the native route. hiccup2 is built with
+  native01/sdk-native-c1 (68867466…). Stage perf/tick/nt/qt-hiccup is a real copy of native01/board-stages/qt-imagick.
+  - Only two things change: the imagick executable, and one run.sh line that copies the probe's HIC2 lines to the
+    console. qt-hiccup.SHA256SUMS is regenerated; the file set is the same, and only those two hashes differ.
+  - The driver is perf/train/nat-v1f.sh (step nat:hic, kit bkit41-native-v1f-mcf, 1,800 s, fallback none), on board 2,
+    V1f. Its dry run is clean.
+  - The validation fails by construction, so the step logs NAT FAIL. That is expected and is not a route failure.
+  - Prediction: if a native task takes ticks as a Linux task does, the share is 9.2 % ± 1.5 with the 10/20 ms peak,
+    and the native-route ratios need no tick adjustment. If the native route masks ticks, it is read like P3.
