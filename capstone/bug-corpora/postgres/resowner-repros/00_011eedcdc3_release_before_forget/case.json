@@ -1,0 +1,42 @@
+{
+  "case": 0,
+  "upstream_fix": "011eedcdc3",
+  "title": "a resource released twice because the owner forgot it only after the release returned",
+  "consumer": "src/backend/utils/resowner/resowner.c",
+  "class": "temporal",
+  "live_in_pin": true,
+  "live_proof": "inspection of REL_17_5 src/backend/utils/resowner/resowner.c: ResourceOwnerReleaseAll calls kind->ReleaseResource(value) and only then nitems--, writing the count back after the loop; and ResourceOwnerReleaseInternal sets owner->releasing once and never clears it, so a second entry skips the sort and still runs ResourceOwnerReleaseAll over an array that still holds the item. Quoted in PROVENANCE.md. Nothing is reverted to reproduce it",
+  "object": "the resource's payload -- a libc allocation, as pgcrypto's EVP_CIPHER_CTX is",
+  "lifetime_ender": "the kind's ReleaseResource frees the payload; the item is still in the owner, so abort cleanup runs ReleaseResource on it again",
+  "shape": "double release through an item the owner never forgot",
+  "sibling_issue": "01_2aa6be6e64_osslcipher_owner_not_cleared",
+  "allocator_layer": "libc (the payload); resowner's own bookkeeping is aset",
+  "nested": false,
+  "nested_why": "The object freed twice is a libc allocation, so both frees are events the system allocator sees. resowner.c allocates its OWN arrays out of a memory context, but those are not the object the defect frees. This is the corpus's point: the temporal, non-nested cell that mmgr-repros cannot fill.",
+  "fidelity": "real subject, model resource kind: resowner.c and the seven memory managers are compiled unmodified from the pin; what the case supplies is a ResourceOwnerDesc and a payload, which is what every consumer of resowner.c supplies",
+  "memory_error_is_the_defect": true,
+  "memory_error_is_the_defect_why": "The defect IS the second free. There is no later stale read to probe, so the invalid operation and the detection site are the same instruction.",
+  "fault_sites": ["ro_free_probe"],
+  "fault_sites_why": "the second free is the invalid operation, and it is made in one labelled frame so a fault can be attributed to the defect rather than to the sequence",
+  "fault_site_files": {
+    "ro_free_probe": "capstone/bug-corpora/postgres/resowner-repros/shared/driver.c"
+  },
+  "arms": {
+    "native-detect": {
+      "oracle": "build-host.sh: the control must complete, then the defect run must either exit 0 having released one payload twice, or be killed with a host-allocator double-free diagnostic. glibc's tcache check is a real detection here and not a restatement, because the payload is a libc object",
+      "verdict": "CAUGHT",
+      "verdict_note": "released twice ([ReleaseThing] pass 1 then pass 2 on one address), then glibc: \"free(): double free detected in tcache 2\", SIGABRT exit 134; the -DRO_NEGATIVE_CONTROL build completed exit 0",
+      "verdict_from": "results/2026-11-10-host/result-lines.txt"
+    },
+    "host-asan": {
+      "oracle": "the same program under -fsanitize=address: ASan must report attempting double-free, with the report's frame in ro_free_probe",
+      "verdict": "CAUGHT",
+      "verdict_note": "AddressSanitizer: attempting double-free; #1 ro_free_probe shared/driver.c:57, #2 ReleaseThing case.c:39",
+      "verdict_from": "results/2026-11-10-host/result-lines.txt"
+    },
+    "cheribsd-revocation": { "status": "not written" },
+    "virtual-malloc": { "status": "not written" },
+    "virtual-pg-pools": { "status": "not written" }
+  },
+  "status": "built and reproduced on the host (native-detect, host-asan); no capability arm has been run"
+}

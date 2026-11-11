@@ -1,0 +1,29 @@
+# ResourceOwner defect corpus -- host run, 2026-11-10
+# Result lines only. The captures they came from are not committed: a raw log
+# carries account names and build paths, and twelve result lines are better
+# evidence than a thousand contaminated ones.
+#
+# build-host.sh, cc (gcc) on x86-64, PostgreSQL 17.5 sources for the seven
+# memory-manager files and resowner.c (byte-identical to REL_17_0 for all
+# eight -- see check-sources.sh).
+
+case 00_011eedcdc3_release_before_forget
+  control   RO_DEFECT case=0 completed; releases of payload: 2 (errors escaped: 1)
+  control   exit 0 -- the sequence ran twice over and the withheld second free did not happen
+  defect    [ReleaseThing] pass 1, [raise], [abort cleanup], [ReleaseThing] pass 2
+  defect    glibc: "free(): double free detected in tcache 2"; SIGABRT (exit 134)
+  asan      AddressSanitizer: attempting double-free
+  asan      #1 ro_free_probe shared/driver.c:57
+  asan      #2 ReleaseThing 00_011eedcdc3_release_before_forget/case.c:39
+
+case 01_2aa6be6e64_osslcipher_owner_not_cleared
+  control   RO_DEFECT case=1 completed; releases of evp_ctx: 2 (errors escaped: 2)
+  control   real resowner.c raised, twice: "ResourceOwnerForget called for pgcrypto
+            OpenSSL cipher handle after release started" -- upstream's error cleanup loop
+  defect    glibc: "free(): double free detected in tcache 2"; SIGABRT (exit 134)
+  asan      AddressSanitizer: attempting double-free
+  asan      #1 ro_free_probe shared/driver.c:57
+  asan      #2 free_openssl_cipher 01_2aa6be6e64_osslcipher_owner_not_cleared/case.c:57
+
+# Both controls completed, so both defect faults are attributable.
+# Both faults land in ro_free_probe, the labelled site.
