@@ -17,6 +17,7 @@ REPO = APP.parents[3]
 VIRTUAL = REPO / 'capstone/runtime/virtual'
 sys.path.insert(0, str(VIRTUAL))
 import memory_mode
+import native_platform
 spec = importlib.util.spec_from_file_location('judge', APP.parents[1] / 'common/application/check-safety.py')
 judge = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(judge)
@@ -43,6 +44,17 @@ def self_reported_noop(detail):
     return low >= 0xE0000 or low == 0x7
 
 
+def kernel_records(label):
+    """The guest shell line that prints the adapter's kernel records of the case that just ended.
+
+    The console is quiet (dmesg -n 1), so the kernel's fault record of a native task and the calls
+    the adapter refused (capstone_vm.native_refused_trace=1) reach the serial log only this way.
+    The line stands after the case's MC_END line: the judge reads the text between MC_BEGIN and
+    MC_END and never these records.
+    """
+    return f'dmesg -c | grep -E "capstone|native refused" | sed "s/^/MC_KERNEL:{label}: /"'
+
+
 def worker_counts(data):
     counts = {}
     for value in re.findall(rb'^MC-WORKER (\d+) conn$', data, re.M):
@@ -61,7 +73,9 @@ def main():
     p.add_argument('--arm', choices=('virtual', 'sublet'), default='virtual')
     p.add_argument('--port', type=int, default=21299)
     p.add_argument('--timeout', type=int, default=1200)
-    p.add_argument('--unpinned', action='store_true', help='load the module with unpinned=1 and require it to report so')
+    p.add_argument('--unpinned', action='store_true', help='require the adapter to report unpinned memory (the native adapter has no other mode)')
+    p.add_argument('--kernel-arg', action='append', default=[],
+                   help='Additional kernel command-line argument for the guest (repeatable), as run-staged.py takes it')
     p.add_argument('--native-reference', type=Path,
                    help='Reuse native transcripts from a passing gate with identical native binaries and harness source')
     a = p.parse_args()
@@ -72,7 +86,7 @@ def main():
     host_harness = a.work / 'mc-harness-host'
     subprocess.run(['gcc', '-O1', '-Wall', str(harness_source), '-lpthread', '-o', str(host_harness)], check=True)
     subprocess.run([str(a.cross_cc), '-O1', '-Wall', str(harness_source), '-lpthread', '-o', str(stage/'mc-harness')], check=True)
-    inputs = dict(launcher=a.adapter/'capstone-vexec', module=a.adapter/'module/capstone_vm.ko',
+    inputs = dict(launcher=a.adapter/native_platform.LAUNCHER,
                   job=a.adapter/'capstone-job', pthread=a.pthread,
                   memcached=a.build/('sublet/memcached.dom' if a.arm == 'sublet' else 'domain/memcached.dom'),
                   marker=a.build/'marker/memcached.dom',
@@ -81,7 +95,7 @@ def main():
                   native=a.build/'native/bin/memcached', native_marker=a.build/'marker/memcached-native',
                   qemu=a.qemu, harness_source=harness_source)
     inputs.update({name: a.images/name for name in ('Image', 'fw_jump.elf', 'rootfs.ext2')})
-    for name, filename in [('launcher', 'capstone-vexec'), ('module', 'capstone_vm.ko'),
+    for name, filename in [('launcher', native_platform.LAUNCHER),
                            ('job', 'capstone-job'), ('pthread', 'pthread.dom'),
                            ('memcached', 'memcached.dom'), ('marker', 'marker.dom'), ('safety', 'safety.dom')]:
         shutil.copy2(inputs[name], stage/filename)
@@ -121,9 +135,10 @@ def main():
     for label in ('value', 'cas'):
         check('oracle_detects_' + label, reference != native[label]['transcript.norm'])
     script = ['#!/bin/sh', 'cd /mnt/vm || exit 1', 'dmesg -n 1',
-              'insmod capstone_vm.ko' + memory_mode.args(a.unpinned) + ' || exit 1', memory_mode.echo('MC_'), 'chmod 666 /dev/capstone-vm',
+              native_platform.admit(), memory_mode.echo('MC_'),
               'export CAPSTONE_EXEC_DIAGNOSTICS=1',
-              'echo MC_BEGIN:pthread', './capstone-vexec ./pthread.dom', 'echo MC_END:pthread:$?']
+              'echo MC_BEGIN:pthread', './capstone-vexec ./pthread.dom', 'echo MC_END:pthread:$?',
+              kernel_records('pthread')]
     predicted_arm = 'lifetimes' if a.arm == 'sublet' else 'sublet'
     predictions = {}
     for line in (APP/'host/safety-expect.txt').read_text().splitlines():
@@ -148,13 +163,14 @@ def main():
                    f'[ ! -f {out}/transcript.norm ] || gzip -c {out}/transcript.norm > {out}/transcript.norm.gz',
                    f'for name in transcript.norm.gz status.txt identity.txt job.json server.out server.err fault.txt; do '
                    f'f={out}/$name; [ -f "$f" ] || continue; echo MC_FILE:{label}:$name; base64 "$f"; echo MC_FILE_END; done',
-                   f'echo MC_END:{label}:$mc_status']
-    script += ['rmmod capstone_vm', 'echo MC_CLEANUP:$?', 'echo VIRTUAL_STAGED_DONE']
+                   f'echo MC_END:{label}:$mc_status', kernel_records(label)]
+    script += [native_platform.leave('MC_'), 'echo VIRTUAL_STAGED_DONE']
     gate = '\n'.join(script) + '\n'
     (stage/'gate.sh').write_text(gate)
     run = subprocess.run([sys.executable, str(VIRTUAL/'run-staged.py'), '--qemu', str(a.qemu.resolve()),
                           '--images', str(a.images.resolve()), '--stage', str(stage),
-                          '--work', str(a.work/'guest'), '--timeout', str(a.timeout)])
+                          '--work', str(a.work/'guest'), '--timeout', str(a.timeout),
+                          *(word for arg in a.kernel_arg for word in ('--kernel-arg', arg))])
     log = (a.work/'guest/serial.log').read_text(errors='replace').replace('\r', '')
     parts = {label: (text, int(status)) for label, text, status in
              re.findall(r'^MC_BEGIN:([^\n]+)\n(.*?)^MC_END:\1:(\d+)\n', log, re.M | re.S)}
@@ -211,7 +227,7 @@ def main():
                              for want in predictions[number])
             check(label + '_trigger',
                   got != 'RETURN' or registered or not self_reported_noop(detail))
-    check('adapter_cleanup', run.returncode == 0 and '\nMC_CLEANUP:0\n' in log)
+    check('no_loadable_module', run.returncode == 0 and '\nMC_CLEANUP:0\n' in log)
     record = dict(status='PASS' if all(c['passed'] for c in checks) else 'FAIL', arm=a.arm, unpinned=a.unpinned,
                   checks=checks, fixtures=fixtures, workers=4, harts=1, virtual_vm_abi=5,
                   native_reference_sha256=sha(reference_record) if reference_record else None,

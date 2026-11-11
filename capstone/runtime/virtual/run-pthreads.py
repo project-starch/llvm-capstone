@@ -3,6 +3,7 @@
 import argparse
 import hashlib
 import json
+import os
 from pathlib import Path
 import re
 import shutil
@@ -10,12 +11,27 @@ import subprocess
 import sys
 
 import memory_mode
+import native_platform
 
 HERE = Path(__file__).resolve().parent
+SLOTS_PROPERTY = 'x-capstone-supervisor-slots='
 
 
 def sha(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def staged_environment(supervisor_slots):
+    """The environment for run-staged.py, which reads the slot count of QEMU and of the kernel from
+    CAPSTONE_QEMU_CPU_EXTRA. An explicit count replaces the one the caller's variable names."""
+    environment = dict(os.environ)
+    if supervisor_slots is None:
+        return environment
+
+    words = [word.strip() for word in environment.get('CAPSTONE_QEMU_CPU_EXTRA', '').split(',')]
+    kept = [word for word in words if word and not word.startswith(SLOTS_PROPERTY)]
+    environment['CAPSTONE_QEMU_CPU_EXTRA'] = ','.join([*kept, f'{SLOTS_PROPERTY}{supervisor_slots}'])
+    return environment
 
 
 def main():
@@ -23,8 +39,8 @@ def main():
     for name in ('adapter', 'application', 'qemu', 'images', 'work'):
         p.add_argument('--' + name, type=Path, required=True)
     p.add_argument('--timeout', type=int, default=180)
-    p.add_argument('--supervisor-slots', type=int, help='explicit module context capacity for multi-thread tests')
-    p.add_argument('--unpinned', action='store_true', help='require unpinned CV_TOUCH and cleanup witnesses')
+    p.add_argument('--supervisor-slots', type=int, help='explicit context capacity of QEMU and the kernel for multi-thread tests')
+    p.add_argument('--unpinned', action='store_true', help='require unpinned CV_TOUCH and cleanup witnesses (the native adapter has no other mode)')
     p.add_argument('--exact-bounds', action=argparse.BooleanOptionalAction, default=False,
                    help="Run QEMU's exact-bounds profile. Option (iii) does not need it; "
                         "it is kept so a suite can be run both ways as a two-sided control.")
@@ -36,20 +52,20 @@ def main():
     a.work.mkdir(parents=True, exist_ok=False)
     stage = a.work/'stage'
     stage.mkdir()
-    paths = dict(launcher=a.adapter/'capstone-vexec', module=a.adapter/'module/capstone_vm.ko',
-                 application=a.application, qemu=a.qemu, source=HERE/'pthread-contract.c')
+    paths = dict(launcher=a.adapter/native_platform.LAUNCHER, application=a.application, qemu=a.qemu,
+                 source=HERE/'pthread-contract.c')
     paths.update({name: a.images/name for name in ('Image', 'fw_jump.elf', 'rootfs.ext2')})
-    for key, name in [('launcher', 'capstone-vexec'), ('module', 'capstone_vm.ko'), ('application', 'pthread.dom')]:
+    for key, name in [('launcher', native_platform.LAUNCHER), ('application', 'pthread.dom')]:
         shutil.copy2(paths[key], stage/name)
-    # A module with the diag_admit parameter prints one line per page it admits (dmesg); the
-    # exit-word check below reads the `touch` line of the page the contract names. A module
-    # without it (the lazy-grants change's control) runs the gate as before and the check is
-    # recorded as uninstrumented rather than passed.
-    instrumented = b'diag_admit' in paths['module'].read_bytes()
-    # /proc/vmstat's FOLL_PIN counters, before insmod and after rmmod (when no context is left):
-    # every pin taken during the test must have been released by then. The module's census and
-    # counters cannot show that -- a module that sweeps, decrements and prints but never unpins
-    # keeps both consistent. The counters are guest-wide, so the balance is taken over the test
+    # The kernel boots with capstone_vm.diag_admit=1, and the adapter then prints one line per page
+    # it admits (dmesg); the exit-word check below reads the `touch` line of the page the contract
+    # names. The gate echoes the parameter. A kernel that does not report it on runs the gate all
+    # the same, and the check is recorded as uninstrumented rather than passed.
+    #
+    # /proc/vmstat's FOLL_PIN counters, before the first image and after the last (when no context
+    # is left): every pin taken during the test must have been released by then. The adapter's
+    # counters cannot show that -- an adapter that sweeps, decrements and prints but never unpins
+    # keeps them consistent. The counters are guest-wide, so the balance is taken over the test
     # alone (acquired minus released between the two readings), which tolerates a pin some other
     # guest process holds throughout; it assumes no other process takes or drops pins during the
     # test without balancing them by the second reading (the staged guest runs nothing else).
@@ -58,50 +74,53 @@ cd /mnt/vm || exit 1
 pins() { echo 1 > /proc/sys/vm/stat_refresh; grep -E "^nr_foll_pin_(acquired|released) " /proc/vmstat | tr "\\n" " "; }
 dmesg -n 1
 echo "PTHREAD_PINS_BEFORE:$(pins)"
-insmod capstone_vm.ko ''' + ('diag_admit=1' if instrumented else '') + memory_mode.args(a.unpinned) + (f' supervisor_slots={a.supervisor_slots}' if a.supervisor_slots is not None else '') + ''' || exit 1
+''' + native_platform.admit() + '''
 ''' + memory_mode.echo('PTHREAD_') + '''
-CAPSTONE_EXEC_DIAGNOSTICS=1 CAPSTONE_VM_STATS=1 CAPSTONE_VM_STATS_MARK=1 CAPSTONE_VM_GRANTS=1 ./capstone-vexec pthread.dom
+echo "PTHREAD_DIAG_ADMIT:$(cat /sys/module/capstone_vm/parameters/diag_admit 2>/dev/null || echo A)"
+CAPSTONE_EXEC_DIAGNOSTICS=1 ./capstone-vexec pthread.dom
 echo PTHREAD_EXIT:$?
-dmesg | grep -E "capstone_vm: |CAPSTONE_VM_STATS_MARK" | sed "s/^/PTHREAD_DIAG:/"
+dmesg | grep -E "capstone_vm: " | sed "s/^/PTHREAD_DIAG:/"
 echo PTHREAD_FALLBACK_BEGIN
 echo 0 > /sys/module/capstone_vm/parameters/diag_admit 2>/dev/null || true
-CAPSTONE_EXEC_DIAGNOSTICS=1 CAPSTONE_VM_STATS=1 ./capstone-vexec pthread.dom fallback
+CAPSTONE_EXEC_DIAGNOSTICS=1 ./capstone-vexec pthread.dom fallback
 echo PTHREAD_FALLBACK_EXIT:$?
 for mode in identity-exit identity-jump private-tls; do
   echo PTHREAD_IDENTITY_BEGIN:$mode
   ./capstone-vexec pthread.dom "$mode"
   echo PTHREAD_IDENTITY_EXIT:$mode:$?
 done
-rmmod capstone_vm
-echo PTHREAD_CLEANUP:$?
+''' + native_platform.leave('PTHREAD_') + '''
 echo "PTHREAD_PINS_END:$(pins)"
 echo VIRTUAL_STAGED_DONE
 '''
     (stage/'gate.sh').write_text(gate)
     run = subprocess.run([sys.executable, str(HERE/'run-staged.py'), '--qemu', str(a.qemu.resolve()),
                           '--images', str(a.images.resolve()), '--stage', str(stage),
-                          '--work', str(a.work/'guest'), '--timeout', str(a.timeout)] + (['--exact-bounds'] if a.exact_bounds else ['--no-exact-bounds']))
+                          '--work', str(a.work/'guest'), '--timeout', str(a.timeout),
+                          '--kernel-arg', native_platform.WIDE_GRANTS, '--kernel-arg', 'capstone_vm.diag_admit=1'
+                          ] + (['--exact-bounds'] if a.exact_bounds else ['--no-exact-bounds']),
+                         env=staged_environment(a.supervisor_slots))
     log = (a.work/'guest/serial.log').read_text(errors='replace').replace('\r', '')
+    instrumented = log.count('PTHREAD_DIAG_ADMIT:Y\n') == 1
     main_log, _, fallback_log = log.partition('PTHREAD_FALLBACK_BEGIN\n')
     checks = {name: log.count('VIRTUAL_PTHREAD_OK ' + name) == 1 for name in
               ('unsupported_clone_refused', 'protected_fork_refused', 'process_creation_refused_or_delegated', 'tls mutex cond tagged_join', 'timed_wait', 'independent_blocking_io', 'private_epoll_events', 'shared_tls_transport', '64_joined_lifetimes', 'concurrent_allocator_remap', 'transport_lifetime', 'transport_identity', 'exit_word_untouched_stack', 'context_identity')}
     checks['memory_mode_verified'] = memory_mode.verified(log, a.unpinned, 1)
-    # The exit word's page (VIRTUAL_PTHREAD_WORD, in the main stack: the reg 2 grant) must have
-    # been admitted by the launcher's CV_TOUCH before its store: a `touch` line for that arena and
-    # page index. Without CV_TOUCH (the commit before it) the line is absent and this fails.
+    # The exit word's page (VIRTUAL_PTHREAD_WORD, in the main stack) must have been admitted by
+    # CV_TOUCH before its store: a `touch` line for the arena that holds the word, at the word's
+    # page index. The line names the arena's base and length, so the word itself selects the
+    # arena. Without CV_TOUCH the line is absent and this fails.
     word = re.search(r'^VIRTUAL_PTHREAD_WORD:0x([0-9a-f]+)$', log, re.M)
     stack = re.search(r'CAPSTONE_VM_ADD_OK slot=\d+ base=0x([0-9a-f]+) bytes=(\d+) reg=2 ', log)
-    touched = set()
-    for m in re.finditer(r'capstone_vm: touch arena 0x([0-9a-f]+)\+0x([0-9a-f]+) page (\d+)', log):
-        touched.add((int(m.group(1), 16), int(m.group(3))))
-    if a.unpinned:
-        touched = {(int(m[1], 16), int(m[3])) for m in re.finditer(
-            r'capstone_vm: unpinned touch arena 0x([0-9a-f]+)\+0x([0-9a-f]+) page (\d+)', main_log)}
+    touch, where = ('unpinned touch', main_log) if a.unpinned else ('touch', log)
+    touched = {(int(m[1], 16), int(m[2], 16), int(m[3])) for m in re.finditer(
+        r'capstone_vm: ' + touch + r' arena 0x([0-9a-f]+)\+0x([0-9a-f]+) page (\d+)', where)}
     if not instrumented:
         checks['exit_word_admitted'] = 'uninstrumented'
-    elif word and stack and int(word.group(1), 16) - int(stack.group(1), 16) < int(stack.group(2)):
-        index = (int(word.group(1), 16) - int(stack.group(1), 16)) // 4096
-        checks['exit_word_admitted'] = (int(stack.group(1), 16), index) in touched
+    elif word:
+        address = int(word.group(1), 16)
+        checks['exit_word_admitted'] = any(base <= address < base + size and page == (address - base) // 4096
+                                           for base, size, page in touched)
     else:
         checks['exit_word_admitted'] = False
     # The module's own counters against its per-arena census (the retire lines, in dmesg order,
@@ -170,12 +189,27 @@ echo VIRTUAL_STAGED_DONE
     checks['private_tls_other_refused'] = bool(part and 'VIRTUAL_PTHREAD_OK private_tls_other_refused\n' in part[1])
     checks['exit'] = log.count('PTHREAD_EXIT:0') == 1
     checks['cleanup'] = run.returncode == 0 and log.count('PTHREAD_CLEANUP:0') == 1
+    # A native task runs without the launcher's loop, so nothing prints the launcher's grant lines
+    # (CAPSTONE_VM_ADD_OK), its exit statistics (CAPSTONE_VM_STATS, after CAPSTONE_VM_STATS_MARK) or
+    # its step counts (CAPSTONE_VM_STEPS). A check that reads a line its part of the log does not
+    # hold leaves the verdict, and the record names it as not observable.
+    reads = {'pages_match_census': (log, 'CAPSTONE_VM_STATS ', 'CAPSTONE_VM_STATS_MARK'),
+             'stack_sweep_complete': (log, 'CAPSTONE_VM_ADD_OK '),
+             'stack_unpinned_retired': (log, 'CAPSTONE_VM_ADD_OK ', 'CAPSTONE_VM_STATS '),
+             'no_thread_self_exits': (main_log, 'CAPSTONE_VM_STEPS '),
+             'fallback_identity': (fallback_log, 'CAPSTONE_VM_STEPS ')}
+    not_observable = [name for name, (part, *lines) in reads.items()
+                      if name in checks and not all(line in part for line in lines)]
+    for name in not_observable:
+        del checks[name]
     record = dict(status='PASS' if all(v is True or v == 'uninstrumented' for v in checks.values()) else 'FAIL',
-                  tests=checks, instrumented=instrumented,
+                  tests=checks, not_observable=not_observable, instrumented=instrumented,
                   harts=1, virtual_vm_abi=7, exact_bounds=a.exact_bounds, supervisor_slots=a.supervisor_slots, input_sha256={name: sha(path) for name, path in paths.items()},
                   gate_sha256=hashlib.sha256(gate.encode()).hexdigest(), runner_sha256=sha(Path(__file__)))
     (a.work/'result.json').write_text(json.dumps(record, indent=2) + '\n')
     print(json.dumps(record, indent=2))
+    for name in not_observable:
+        print('NOT OBSERVABLE ' + name)
     return 0 if record['status'] == 'PASS' else 1
 
 

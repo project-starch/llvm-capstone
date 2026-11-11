@@ -9,6 +9,7 @@ import subprocess
 import sys
 
 import memory_mode
+import native_platform
 
 HERE = Path(__file__).resolve().parent
 
@@ -25,25 +26,23 @@ def main():
     p.add_argument('--exact-bounds', action=argparse.BooleanOptionalAction, default=False,
                    help="Run QEMU's exact-bounds profile. Option (iii) does not need it; "
                         "it is kept so a suite can be run both ways as a two-sided control.")
-    p.add_argument('--unpinned', action='store_true', help='load the module with unpinned=1 and require it to report so')
+    p.add_argument('--unpinned', action='store_true', help='require the adapter to report unpinned memory (the native adapter has no other mode)')
     a = p.parse_args()
     a.work.mkdir(parents=True, exist_ok=False)
     stage = a.work/'stage'
     stage.mkdir()
-    paths = dict(launcher=a.adapter/'capstone-vexec', module=a.adapter/'module/capstone_vm.ko',
-                 application=a.application, qemu=a.qemu, source=HERE/'fp-contract.c')
+    paths = dict(launcher=a.adapter/native_platform.LAUNCHER, application=a.application, qemu=a.qemu, source=HERE/'fp-contract.c')
     paths.update({name: a.images/name for name in ('Image', 'fw_jump.elf', 'rootfs.ext2')})
-    for key, name in [('launcher', 'capstone-vexec'), ('module', 'capstone_vm.ko'), ('application', 'fp.dom')]:
+    for key, name in [('launcher', native_platform.LAUNCHER), ('application', 'fp.dom')]:
         shutil.copy2(paths[key], stage/name)
     gate = '''#!/bin/sh
 cd /mnt/vm || exit 1
 dmesg -n 1
-insmod capstone_vm.ko''' + memory_mode.args(a.unpinned) + ''' || exit 1
+''' + native_platform.admit() + '''
 ''' + memory_mode.echo('FP_') + '''
 CAPSTONE_EXEC_DIAGNOSTICS=1 ./capstone-vexec fp.dom
 echo FP_EXIT:$?
-rmmod capstone_vm
-echo FP_CLEANUP:$?
+''' + native_platform.leave('FP_') + '''
 echo VIRTUAL_STAGED_DONE
 '''
     (stage/'gate.sh').write_text(gate)

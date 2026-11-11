@@ -5,6 +5,16 @@ retirement releases every prefetched pin. Window 1 is the control. The module's 
 gate qualifies the fixed window page for page; run-step-hooks.py's 'adapt' configurations test
 the adaptive one.
 
+The adapter is built into the kernel, and pin_ahead_pages is read-only after boot, so every window
+is one boot of the same stage: the kernel command line names the window and the gate script reads
+it back from sysfs. The unpinned oracle needs a kernel built with CV_TEST_HOOKS=1 (test_full_window);
+--hooks-images names the images directory of that kit.
+
+A native task has no launcher loop. The launcher's counters (CAPSTONE_VM_STATS), its mark in the
+kernel log and the adapter's census (--stats) do not exist there. A log without them grades what
+the kernel's own records show, under names of their own, and lists every check that reads the
+counters as not observable.
+
 --evaluate <serial.log> re-runs the checks on a saved transcript (no guest),
 for checking the checks: a transcript whose CAPSTONE_VM_STATS counters are
 zeroed must fail."""
@@ -17,41 +27,40 @@ import re
 import shutil
 import subprocess
 import memory_mode
+import native_platform
 import unpinned_checks
 
 HERE = Path(__file__).resolve().parent
 WINDOWS = (1, 16, 64)
 MODES = ('base', 'seq', 'stop', 'vma', 'vmax', 'rowrite', 'retire')
-# With a module that has the diag_admit parameter, every arena's retirement prints its census
+# With diag_admit on the kernel command line, every arena's retirement prints its census
 # (pages admitted at faults, by windows, by the resident scan, by CV_TOUCH, pinned whole at the
-# mint; released before; swept), read after each run with the ring buffer cleared, and the
-# launcher marks the kernel log right before it reads CAPSTONE_VM_STATS. The checks then count
-# the pins of the REGION'S arena alone -- the process-wide total also holds the program's own
-# pages, which since lazy NONLIN grants are admitted at first touch and vary with placement
-# (the allocator's address-hashed index in .bss) and with windows cut by the quantum -- and hold
-# the module's counters to that census. The console is quieted first (dmesg -n 1): lines written
-# to the serial console inside a window cost more than the step's quantum and cut its second
-# batch. A module without the parameter (the control before that change) has no census; the
-# counter assertions below are the same with a census of zero.
+# mint; released before; swept), read after each run with the ring buffer cleared. A task's
+# arenas are retired when it exits, before the launcher's wait returns, so each run's records
+# are complete when the script reads them. The checks count the pins of the REGION'S arena
+# alone -- the process-wide total also holds the program's own pages, which since lazy NONLIN
+# grants are admitted at first touch and vary with placement (the allocator's address-hashed
+# index in .bss) and with windows cut by the quantum. The console is quieted first (dmesg -n 1):
+# lines written to the serial console inside a window cost more than the step's quantum and cut
+# its second batch. The script takes the window from sysfs, so the PIN_EXIT lines also say that
+# the kernel got the window the boot asked for. The kernel of a native kit is built without SMP
+# and has no stat_refresh: its vmstat counters are exact.
 SCRIPT = '''#!/bin/sh
 cd /mnt/vm || exit 1
-export CAPSTONE_VM_STATS=1 CAPSTONE_VM_STATS_MARK=1 CAPSTONE_VM_GRANTS=1 CAPSTONE_EXEC_DIAGNOSTICS=1
-pins() { echo 1 > /proc/sys/vm/stat_refresh; grep -E "^nr_foll_pin_(acquired|released) " /proc/vmstat | tr "\\n" " "; }
+export CAPSTONE_EXEC_DIAGNOSTICS=1
+pins() { [ ! -e /proc/sys/vm/stat_refresh ] || echo 1 > /proc/sys/vm/stat_refresh; grep -E "^nr_foll_pin_(acquired|released) " /proc/vmstat | tr "\\n" " "; }
 dmesg -n 1
-dmesg -c > /dev/null
-@LIVENESS@for w in ''' + ' '.join(map(str, WINDOWS)) + '''; do
-  insmod capstone_vm.ko pin_ahead_pages=$w fault_ahead_max=0 @DIAG_PARAM@ || exit 1
-  @MODE_ECHO@
-  for mode in ''' + ' '.join(MODES) + '''; do
-    ./capstone-vexec pin.dom "$mode" > /tmp/pin.out 2>&1
-    echo PIN_EXIT:$w:$mode:$?
-    cat /tmp/pin.out
-    dmesg -c | grep -E "capstone_vm: |CAPSTONE_VM_STATS_MARK" | sed "s/^/PIN_DIAG:/"
-  done
-  ./capstone-vexec --stats
-  rmmod capstone_vm || exit 1
-  echo "PIN_PINS_END:$w:$(pins)"
+@ADMIT@
+w=$(cat /sys/module/capstone_vm/parameters/pin_ahead_pages)
+@LIVENESS@dmesg -c > /dev/null
+@MODE_ECHO@
+for mode in ''' + ' '.join(MODES) + '''; do
+  ./capstone-vexec pin.dom "$mode" > /tmp/pin.out 2>&1
+  echo PIN_EXIT:$w:$mode:$?
+  cat /tmp/pin.out
+  dmesg -c | grep "capstone_vm: " | sed "s/^/PIN_DIAG:/"
 done
+echo "PIN_PINS_END:$w:$(pins)"
 echo VIRTUAL_STAGED_DONE
 '''
 # Per mode, the region's arena: pages pinned in it (demand faults, windows and scans), the
@@ -81,7 +90,11 @@ EXPECT = {
 
 RETIRE = re.compile(r'capstone_vm: retire arena 0x([0-9a-f]+)\+0x[0-9a-f]+ admit=(\d+) window=(\d+) '
                     r'scan=(\d+) touch=(\d+) eager=(\d+) released=(\d+) swept=(\d+)')
+# An arena's base and size. The launcher of the module route printed every grant (ADD_OK). A
+# native task has no such line, and its arenas are read from the kernel's retire records: every
+# arena is retired at the task's exit at the latest.
 ADD_OK = re.compile(r'CAPSTONE_VM_ADD_OK slot=\d+ base=0x([0-9a-f]+) bytes=(\d+) ')
+RETIRED = re.compile(r'capstone_vm: retire arena 0x([0-9a-f]+)\+0x([0-9a-f]+) ')
 FIELDS = ('admit', 'window', 'scan', 'touch', 'eager', 'released', 'swept')
 
 
@@ -141,27 +154,53 @@ def parse(log):
                 runs[current]['census'][base] = dict(zip(FIELDS, (int(m.group(i)) for i in range(2, 9))))
                 if runs[current]['marked']:
                     runs[current]['after_mark'].add(base)
+                arena = (base, int(RETIRED.search(line).group(2), 16))
+                if arena not in runs[current]['arenas']:
+                    runs[current]['arenas'].append(arena)
     return runs
 
 
 # An unpinned run's independent pin witness is the kernel's FOLL_PIN counter, which must not move
-# during the whole run. It is worth that zero only if the counters count, so the ON script first
-# runs the pthread contract in the same guest with the same module: a thread's supervisor frame is
-# pinned even in unpinned mode, so that launch must acquire and release pins. (Pinned mode cannot
-# supply the control on the ON platform, which has no test CSRs.)
-LIVENESS = '''insmod capstone_vm.ko unpinned=1 || exit 1
-echo "PIN_LIVE_MODE:$(cat /sys/module/capstone_vm/parameters/unpinned 2>/dev/null || echo A)"
-./capstone-vexec pthread.dom > /tmp/live.out 2>&1
-echo "PIN_LIVE_STATUS:$?"
-rmmod capstone_vm || exit 1
-echo "PIN_PINS_LIVE:$(pins)"
-dmesg -c > /dev/null
+# during the whole run. It is worth that zero only if the counters count, so every boot first
+# runs the pthread contract: on the module route a thread's supervisor frame was pinned even in
+# unpinned mode, so that launch acquired and released pins. The check keeps that requirement. A
+# boot whose liveness launch fails, or acquires no pin, has no control for its zero, and the
+# lines PIN_LIVE_OUT show what the launch printed last.
+LIVENESS = '''./capstone-vexec pthread.dom > /tmp/live.out 2>&1
+echo "PIN_LIVE_STATUS:$w:$?"
+echo "PIN_LIVE_MODE:$w:$(cat /sys/module/capstone_vm/parameters/unpinned 2>/dev/null || echo A)"
+echo "PIN_PINS_LIVE:$w:$(pins)"
+tail -n 4 /tmp/live.out | sed "s/^/PIN_LIVE_OUT:$w:/"
 '''
 
 
 def foll_pins(text):
     v = dict(re.findall(r'nr_foll_pin_(acquired|released) (\d+)', text))
     return (int(v['acquired']), int(v['released'])) if len(v) == 2 else None
+
+
+def kernel_accounted(run):
+    """unpinned_checks.accounted() without the launcher's counters, from the kernel's records alone.
+
+    The kernel numbers a context's fault events from 1 without a gap. Each event lies in a retired
+    arena with a load or store page fault cause, every arena's retire record agrees with its own
+    events and windows, no page is resolved twice, and at least one fault was resolved. That the
+    last number equals the launcher's public total is the part this cannot say.
+    """
+    events = run.get('raw_events', [])
+    windows = run.get('raw_windows', [])
+    retired = run.get('raw_retire', {})
+    return bool(retired and events and
+        [e['number'] for e in events] == list(range(1, len(events) + 1)) and
+        all(e['arena'] in retired and e['cause'] in (13, 15) and
+            any(base == e['arena'] and base <= e['address'] < base + size
+                for base, size in run['arenas']) for e in events) and
+        all(v['events'] == sum(e['arena'] == base for e in events) and
+            v['ahead'] == sum(w[2] for w in windows if w[0] == base)
+            for base, v in retired.items()) and
+        sum(v['ahead'] for v in retired.values()) == sum(w[2] for w in windows) and
+        unpinned_checks.disjoint(run) and
+        sum(v['resolves'] for v in retired.values()) > 0)
 
 
 def evaluate(log, completed, instrumented, unpinned=False):
@@ -171,10 +210,28 @@ def evaluate(log, completed, instrumented, unpinned=False):
               'all_runs': len(runs) == len(WINDOWS) * len(MODES),
               'memory_mode_verified': memory_mode.verified(log, unpinned, len(WINDOWS)),
               'no_contract_failure': 'PIN_FAIL:' not in log}
+    # A check that reads the launcher's counters, its mark or the adapter's census is graded when
+    # the log has the counters. A native task prints none: the check's name then goes to
+    # not_observable, and what the kernel's own records show is graded under a name of its own.
+    counters = 'CAPSTONE_VM_STATS ' in log
+    not_observable = []
+
+    def counted(name, ok):
+        if counters:
+            checks[name] = ok
+        else:
+            not_observable.append(name)
+
+    def replaced(name):
+        checks.pop(name, None)
+        if name in not_observable:
+            not_observable.remove(name)
+
     region, deltas = {}, {}
     for w in WINDOWS:
         base = runs.get((w, 'base'))
-        checks[f'w{w}_base'] = bool(base and base['exit'] == 0 and base['ok'] and base['stats'])
+        base_ok = bool(base and base['exit'] == 0 and base['ok'] and base['stats'])
+        counted(f'w{w}_base', base_ok)
         # The region's own census against the window's arithmetic (instrumented module).
         if instrumented:
             for mode, expect in EXPECT_REGION.items():
@@ -190,7 +247,7 @@ def evaluate(log, completed, instrumented, unpinned=False):
         # program's own pages, which the census gives and which is zero without one.
         for mode, expect in EXPECT.items():
             r = runs.get((w, mode))
-            ok = bool(r and r['exit'] == 0 and r['ok'] and r['stats'] and checks[f'w{w}_base'])
+            ok = bool(r and r['exit'] == 0 and r['ok'] and r['stats'] and base_ok)
             if ok:
                 s, b = r['stats'], base['stats']
                 own_r, own_b = own_pages(r), own_pages(base)
@@ -201,108 +258,122 @@ def evaluate(log, completed, instrumented, unpinned=False):
                         want[2] + own_r[1] - own_b[1])
                 deltas[f'w{w}_{mode}'] = got
                 ok = all(e is None or g == e for g, e in zip(got, want))
-            checks[f'w{w}_{mode}'] = ok
+            counted(f'w{w}_{mode}', ok)
         # Instrumented: pages= of every completed run is exactly what the arenas retired after
         # the launcher's mark still held (the counter against the whole census).
         if instrumented:
             for mode in EXPECT_REGION:
                 r = runs.get((w, mode))
-                checks[f'w{w}_{mode}_pages_census'] = bool(
+                counted(f'w{w}_{mode}_pages_census', bool(
                     r and r['stats'] and r['marked'] and
                     r['stats']['pages'] == sum(held(c) for base, c in r['census'].items()
-                                               if base in r['after_mark']))
+                                               if base in r['after_mark'])))
         r = runs.get((w, 'rowrite'))
         checks[f'w{w}_rowrite_faults'] = bool(r and r['exit'] == 139 and not r['ok'])
     checks['rowrite_reached_store'] = log.count('PIN_ROWRITE_ATTEMPT') == len(WINDOWS)
     checks['denials_are_store_faults'] = re.findall(
         r'^capstone-exec: domain fault cause=(\d+) ', log, re.M) == ['15'] * len(WINDOWS)
-    checks['cleanup'] = len(census) == len(WINDOWS) and all(
-        s['live_domains'] == s['live_regions'] == s['live_bytes'] == 0 for s in census)
+    counted('cleanup', len(census) == len(WINDOWS) and all(
+        s['live_domains'] == s['live_regions'] == s['live_bytes'] == 0 for s in census))
     if unpinned:
         unpinned_checks.attach(log, runs)
-        live = re.findall(r'^PIN_PINS_LIVE:(.*)$', log, re.M)
-        live = foll_pins(live[0]) if len(live) == 1 else None
+        # Every window is its own boot, and each boot proves its own counters live.
+        live = {int(w): foll_pins(t) for w, t in re.findall(r'^PIN_PINS_LIVE:(\d+):(.*)$', log, re.M)}
         ends = {int(w): foll_pins(t) for w, t in re.findall(r'^PIN_PINS_END:(\d+):(.*)$', log, re.M)}
-        checks['foll_pin_counters_live'] = bool(live and live[0] == live[1] > 0 and
-            'PIN_LIVE_STATUS:0' in log and 'PIN_LIVE_MODE:Y' in log)
-        checks['no_payload_pins'] = bool(live and sorted(ends) == sorted(WINDOWS) and
-            all(e == live for e in ends.values()))
+        checks['foll_pin_counters_live'] = sorted(live) == sorted(WINDOWS) and all(
+            bool(live[w] and live[w][0] == live[w][1] > 0 and
+                 f'PIN_LIVE_STATUS:{w}:0\n' in log and f'PIN_LIVE_MODE:{w}:Y\n' in log) for w in WINDOWS)
+        checks['no_payload_pins'] = sorted(live) == sorted(ends) == sorted(WINDOWS) and all(
+            live[w] is not None and ends[w] == live[w] for w in WINDOWS)
         for w in WINDOWS:
             for mode, expect in EXPECT_REGION.items():
                 r = runs.get((w, mode))
                 counts = unpinned_checks.region_counts(r) if r else None
                 checks.pop(f'w{w}_{mode}_region', None)
                 checks[f'w{w}_{mode}_window_event_disjoint'] = bool(r and unpinned_checks.disjoint(r) and r.get('raw_events'))
-                checks[f'w{w}_{mode}_resolved_region'] = bool(r and r['exit'] == 0 and r['ok'] and
-                    counts == expect(w)[:2] and unpinned_checks.accounted(r))
+                counted(f'w{w}_{mode}_resolved_region', bool(r and r['exit'] == 0 and r['ok'] and
+                    counts == expect(w)[:2] and unpinned_checks.accounted(r)))
+                if not counters:
+                    checks[f'w{w}_{mode}_resolved_region_kernel'] = bool(r and r['exit'] == 0 and r['ok'] and
+                        counts == expect(w)[:2] and kernel_accounted(r))
                 if mode in ('vma', 'vmax'):
                     # pages 8.. are another VMA: no window planned from the first one may reach it
                     checks[f'w{w}_{mode}_window_in_vma'] = bool(r and r['region'] is not None and
                         unpinned_checks.windows_stay_below(r, r['region'] + 8 * 4096))
                 if mode in EXPECT:
-                    checks.pop(f'w{w}_{mode}')
-                    checks[f'w{w}_{mode}_unpinned_accounting'] = bool(r and
-                        unpinned_checks.counter_counts(r) == expect(w)[:2] and unpinned_checks.accounted(r))
-    return checks, deltas, region, runs
+                    replaced(f'w{w}_{mode}')
+                    counted(f'w{w}_{mode}_unpinned_accounting', bool(r and
+                        unpinned_checks.counter_counts(r) == expect(w)[:2] and unpinned_checks.accounted(r)))
+    return checks, deltas, region, runs, not_observable
 
 
 def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('--evaluate', type=Path, help='a saved serial.log: run the checks on it, no guest')
-    p.add_argument('--instrumented', action='store_true', help='with --evaluate: the module had diag_admit')
-    p.add_argument('--unpinned', action='store_true', help='require unpinned mode and its resolution oracle')
+    p.add_argument('--instrumented', action='store_true', help='with --evaluate: the kernel had diag_admit')
+    p.add_argument('--unpinned', action='store_true', help='require unpinned mode and its resolution oracle (the native adapter has no other mode)')
     p.add_argument('--qemu', type=Path)
-    p.add_argument('--images', type=Path)
+    p.add_argument('--images', type=Path, help="the kit's images directory; booted unless --hooks-images is given")
     p.add_argument('--adapter', type=Path)
-    p.add_argument('--module', type=Path, help='optional module override (ON policy gate uses test hooks)')
+    p.add_argument('--hooks-images', type=Path,
+                   help='images directory of a kit whose kernel Image was built with CV_TEST_HOOKS=1 (with its '
+                        'fw_jump.elf and rootfs.ext2); every boot of this gate then uses it instead of --images. '
+                        '--unpinned needs it for test_full_window')
     p.add_argument('--application', type=Path)
-    p.add_argument('--pthread-application', type=Path, help='pthread.dom; the ON liveness launch of the FOLL_PIN counters')
+    p.add_argument('--pthread-application', type=Path, help='pthread.dom; the liveness launch of the FOLL_PIN counters')
     p.add_argument('--work', type=Path)
-    p.add_argument('--timeout', type=int, default=600)
+    p.add_argument('--timeout', type=int, default=600, help='seconds for each boot')
     a = p.parse_args()
     if a.evaluate:
         log = a.evaluate.read_text(errors='replace').replace('\r', '')
-        checks, deltas, region, _ = evaluate(log, True, a.instrumented, a.unpinned)
-        for name, ok in checks.items(): print(('PASS ' if ok else 'FAIL ') + name)
-        print('deltas (pages, peak, faults):', json.dumps(deltas))
-        print('region (pins, faults, swept):', json.dumps(region))
+        checks, deltas, region, _, not_observable = evaluate(log, True, a.instrumented, a.unpinned)
+        report(checks, deltas, region, not_observable)
         return 0 if all(checks.values()) else 1
     for name in ('qemu', 'images', 'adapter', 'application', 'work'):
         if getattr(a, name) is None:
             p.error(f'--{name} is required')
     if a.unpinned and not a.pthread_application:
         p.error('--unpinned requires --pthread-application')
+    images = a.hooks_images or a.images
+    kernel = (images/'Image').read_bytes()
+    instrumented = b'diag_admit' in kernel
+    if a.unpinned and b'test_full_window' not in kernel:
+        p.error('--unpinned requires --hooks-images: a kernel built with CV_TEST_HOOKS=1, for deterministic window policy')
     a.work.mkdir(parents=True, exist_ok=False)
     stage = a.work / 'stage'; stage.mkdir()
     inputs = {'qemu': a.qemu, 'application': a.application,
-              'launcher': a.adapter/'capstone-vexec',
-              'module': a.module or a.adapter/'module/capstone_vm.ko',
-              **{n: a.images/n for n in ('Image', 'fw_jump.elf', 'rootfs.ext2')}}
+              'launcher': a.adapter/native_platform.LAUNCHER,
+              **{n: images/n for n in ('Image', 'fw_jump.elf', 'rootfs.ext2')}}
     if a.unpinned:
         inputs['pthread'] = a.pthread_application
         shutil.copy2(a.pthread_application, stage/'pthread.dom')
     hashes = {k: hashlib.sha256(v.read_bytes()).hexdigest() for k, v in inputs.items()}
     for src, name in ((inputs['application'], 'pin.dom'),
-                      (inputs['launcher'], 'capstone-vexec'),
-                      (inputs['module'], 'capstone_vm.ko')):
+                      (inputs['launcher'], native_platform.LAUNCHER)):
         shutil.copy2(src, stage/name)
-    instrumented = b'diag_admit' in inputs['module'].read_bytes()
-    gate = SCRIPT.replace('@LIVENESS@', LIVENESS if a.unpinned else '').replace('@MODE_ECHO@', memory_mode.echo('PIN_')).replace('@DIAG_PARAM@', ('diag_admit=1' if instrumented else '') + memory_mode.args(a.unpinned))
-    if a.unpinned:
-        if b'test_full_window' not in inputs['module'].read_bytes():
-            p.error('--unpinned requires the hooks module for deterministic window policy')
-        gate = gate.replace('fault_ahead_max=0', 'fault_ahead_max=0 test_full_window=1')
+    gate = (SCRIPT.replace('@ADMIT@', native_platform.admit())
+                  .replace('@LIVENESS@', LIVENESS if a.unpinned else '')
+                  .replace('@MODE_ECHO@', memory_mode.echo('PIN_')))
     (stage/'gate.sh').write_text(gate)
-    run = subprocess.run([os.environ.get('PYTHON', 'python3'),
-        str(HERE/'run-staged.py'), '--qemu', str(a.qemu), '--images', str(a.images),
-        '--stage', str(stage), '--work', str(a.work/'guest'), '--disk-mib', '64',
-        '--timeout', str(a.timeout)])
-    log = (a.work/'guest/serial.log').read_text(errors='replace').replace('\r', '')
-    checks, deltas, region, runs = evaluate(log, run.returncode == 0, instrumented, a.unpinned)
+    log, completed, kernel_arguments = '', True, {}
+    for w in WINDOWS:
+        kernel_arguments[w] = window_arguments(w, instrumented, a.unpinned)
+        run = subprocess.run([os.environ.get('PYTHON', 'python3'),
+            str(HERE/'run-staged.py'), '--qemu', str(a.qemu), '--images', str(images),
+            '--stage', str(stage), '--work', str(a.work/f'guest-w{w}'), '--disk-mib', '64',
+            '--timeout', str(a.timeout),
+            *(word for argument in kernel_arguments[w] for word in ('--kernel-arg', argument))])
+        completed = completed and run.returncode == 0
+        log += (a.work/f'guest-w{w}/serial.log').read_text(errors='replace').replace('\r', '')
+    # The three transcripts in window order, as one file --evaluate can read.
+    (a.work/'serial.log').write_text(log)
+    checks, deltas, region, runs, not_observable = evaluate(log, completed, instrumented, a.unpinned)
     checks['inputs_unchanged'] = hashes == {
         k: hashlib.sha256(v.read_bytes()).hexdigest() for k, v in inputs.items()}
     result = {'schema': 1, 'status': 'PASS' if all(checks.values()) else 'FAIL',
-              'checks': checks, 'instrumented': instrumented, 'unpinned': a.unpinned,
+              'checks': checks, 'not_observable': not_observable,
+              'instrumented': instrumented, 'unpinned': a.unpinned,
+              'kernel_arguments': {str(w): words for w, words in kernel_arguments.items()},
               'resolved_pages_and_events': {f'{w}:{m}': unpinned_checks.region_counts(r)
                                            for (w, m), r in runs.items()} if a.unpinned else None,
               'deltas_pages_peak_faults': deltas, 'region_pins_faults_swept': region,
@@ -315,10 +386,25 @@ def main():
               'gate_sha256': hashlib.sha256(gate.encode()).hexdigest(),
               'scope': 'one hart, private anonymous arenas, windows ' + ', '.join(map(str, WINDOWS))}
     (a.work/'result.json').write_text(json.dumps(result, indent=2, default=str) + '\n')
+    report(checks, deltas, region, not_observable)
+    return 0 if all(checks.values()) else 1
+
+
+def window_arguments(window, instrumented, unpinned):
+    """The kernel words of one window's boot, where the module route passed insmod parameters."""
+    words = [f'capstone_vm.pin_ahead_pages={window}', 'capstone_vm.fault_ahead_max=0']
+    if instrumented:
+        words.append('capstone_vm.diag_admit=1')
+    if unpinned:
+        words.append('capstone_vm.test_full_window=1')
+    return words
+
+
+def report(checks, deltas, region, not_observable):
     for name, ok in checks.items(): print(('PASS ' if ok else 'FAIL ') + name)
+    for name in not_observable: print('NOT OBSERVABLE ' + name)
     print('deltas (pages, peak, faults):', json.dumps(deltas))
     print('region (pins, faults, swept):', json.dumps(region))
-    return 0 if all(checks.values()) else 1
 
 
 if __name__ == '__main__':

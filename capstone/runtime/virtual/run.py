@@ -14,6 +14,7 @@ import tempfile
 import time
 from qemu_lock import qemu_lock
 import memory_mode
+import native_platform
 import unpinned_checks
 
 HERE = Path(__file__).resolve().parent
@@ -23,6 +24,16 @@ def digest(path):
     with open(path, 'rb') as f:
         for b in iter(lambda: f.read(1048576), b''): h.update(b)
     return h.hexdigest()
+
+def kernel_words(parameters):
+    """Adapter parameters (`name=value` words) as words for the kernel command line."""
+    return [f'capstone_vm.{word}' for word in parameters.split()]
+
+def entry_point(path):
+    """The entry point a 64-bit little-endian ELF image names in its header."""
+    with open(path, 'rb') as f:
+        f.seek(24)
+        return int.from_bytes(f.read(8), 'little')
 
 PARALLEL_BLOCK = (
     './capstone-vexec contract.dom ok argument > /tmp/one.out 2>&1 & one=$!\n'
@@ -34,23 +45,24 @@ PARALLEL_BLOCK = (
 
 SCRIPT = r'''#!/bin/sh
 cd /mnt/vm || exit 1
-insmod capstone_vm.ko __MODULE_ARGS__ || exit 1
+__ADMIT__
 __MODE_ECHO__
-# The module's own lines, read from the kernel RING BUFFER rather than relied on reaching the
+# The adapter's own lines, read from the kernel RING BUFFER rather than relied on reaching the
 # console. The console level does not filter the buffer. run.py itself never lowers that level --
 # but six sibling runners do (`dmesg -n 1` in run-malloc/-hosted/-ports/-safety/-fp/-pthreads), and
 # on the board the baked driver sets it to 1 before its first rung, which is what voided two boots'
 # diagnostics. A reading that depends on the console staying open is one edit away from being void,
 # so this reads the same way the board records do.
-# The banner is this read's OWN control: absent, the route is broken and every module-line absence
-# in this run is void rather than a reading -- which is why it reports instead of printing nothing.
+# The banner the adapter logs when the kernel initializes it is this read's OWN control: absent,
+# the route is broken and every adapter-line absence in this run is void rather than a reading --
+# which is why it reports instead of printing nothing.
 dmesg | grep 'capstone_vm:' | sed 's/^/KMSG:/'
 dmesg | grep -q 'capstone_vm: loaded, diag' \
-  || echo 'KMSG_CONTROL_FAILED: no load banner in the ring buffer -- module-line absences in this run are VOID'
+  || echo 'KMSG_CONTROL_FAILED: no load banner in the ring buffer -- adapter-line absences in this run are VOID'
 export CAPSTONE_VM_CONTRACT=environment CAPSTONE_VM_STATS=1 CAPSTONE_VM_RSS=1 CAPSTONE_EXEC_DIAGNOSTICS=1
 # The three `ok argument` launches (normal, parallel_one, parallel_two) are the ones
 # linux_demand_faults counts, page at a time: the window is off around them only. Every
-# other row runs the module's shipped policy (or the explicit --module-args override).
+# other row runs the adapter's shipped policy (or the explicit --module-args override).
 ahead=/sys/module/capstone_vm/parameters/fault_ahead_max
 saved_ahead=unavailable
 [ -r "$ahead" ] && saved_ahead=$(cat "$ahead")
@@ -84,9 +96,11 @@ done
 echo VM_EXIT:vm-large:$?
 # Its record is renamed: it gives the registered count at exit. A failed
 # remap falls back to a copy, so the trace counts the remaps that succeeded.
+# The count is printed only beside the launcher's record. A launcher that prints
+# neither record nor trace gives no count, and a zero would read as one.
 CAPSTONE_VM_TRACE=1 ./capstone-vexec contract.dom vm-mappings > /tmp/mappings.out 2>&1
 echo VM_EXIT:vm-mappings:$?
-echo VM_MAPPINGS_REMAPS:$(grep -c '^CAPSTONE_VM_REMAP_OK ' /tmp/mappings.out)
+grep -q '^CAPSTONE_VM_STATS ' /tmp/mappings.out && echo VM_MAPPINGS_REMAPS:$(grep -c '^CAPSTONE_VM_REMAP_OK ' /tmp/mappings.out)
 grep -v -E '^CAPSTONE_VM_(BOUNDARY|SERVICE|REMAP_OK) ' /tmp/mappings.out | sed -e 's/^CAPSTONE_VM_STATS /VM_MAPPINGS_STATS /' -e 's/^CAPSTONE_VM_RSS /VM_MAPPINGS_RSS /'
 ./capstone-vexec contract.dom spin > /tmp/spin.out 2>&1 & spin=$!
 # QEMU startup includes Linux image loading and the first delegated rounds;
@@ -132,11 +146,10 @@ if [ -f perl.dom ]; then
     cat /tmp/perl-smoke.out
   fi
 fi
-# Second read, before the module goes away: everything it printed during the run, in one place,
-# independent of whatever the console level was doing.
-dmesg | grep 'capstone_vm:' | sed 's/^/KMSG:/'
-rmmod capstone_vm
-echo VM_EXIT:cleanup:$?
+# Second read, after the last launch: everything the adapter printed during the run, its fault
+# records included, in one place, independent of whatever the console level was doing.
+dmesg | grep -E 'capstone_(vm|task):' | sed 's/^/KMSG:/'
+__LEAVE__
 if [ -f legacy.dom ]; then
   ./capstone-vexec legacy.dom ok argument > /tmp/legacy.out 2>&1
   echo VM_EXIT:legacy:$?
@@ -159,8 +172,10 @@ def main():
     p.add_argument('--legacy-application', type=Path)
     p.add_argument('--skip-recycling', action='store_true', help='Omit the two long recycling cases; recorded explicitly')
     p.add_argument('--module-args', default='',
-                   help="Parameters appended to insmod (e.g. 'resolve_pte=1 fault_repeat_max=1')")
-    p.add_argument('--unpinned', action='store_true', help='require the unpinned payload oracle')
+                   help="Adapter parameters (e.g. 'resolve_pte=1 fault_repeat_max=1'); each goes on the "
+                        'kernel command line as capstone_vm.NAME=VALUE')
+    p.add_argument('--unpinned', action='store_true',
+                   help='require the adapter to report unpinned memory (the native adapter has no other mode)')
     p.add_argument('--exact-bounds', action=argparse.BooleanOptionalAction, default=False,
                    help="Run QEMU's exact-bounds profile. Option (iii) does not need it; it is kept "
                         'so the suite can be run both ways as a two-sided control.')
@@ -174,15 +189,15 @@ def main():
     # it uses the same order. An OPTION and not a reorder: every existing caller's guest script
     # stays byte-identical, because this runner's argv is pinned by other suites' tests.
     p.add_argument('--parallel-last', action='store_true',
-                   help='Run the parallel pair immediately before rmmod, not mid-suite '
+                   help='Run the parallel pair after every other launch, not mid-suite '
                         '(one-slot machines: the pair can end the guest)')
     a = p.parse_args()
     if a.unpinned:
         a.module_args += memory_mode.args(True)
     work = Path(tempfile.mkdtemp(prefix='virtual-app.', dir=os.environ['CAPSTONE_TMP_ROOT']))
     stage = work/'stage'; stage.mkdir()
-    inputs = {'qemu': a.qemu, 'launcher': a.adapter/'capstone-vexec',
-              'module': a.adapter/'module/capstone_vm.ko', 'application': a.application,
+    inputs = {'qemu': a.qemu, 'launcher': a.adapter/native_platform.LAUNCHER,
+              'application': a.application,
               'sqlite': a.sqlite,
               'mruby': a.mruby,
               **{n: a.images/n for n in ('Image', 'fw_jump.elf', 'rootfs.ext2')}}
@@ -190,20 +205,17 @@ def main():
     if a.perl: inputs['perl'] = a.perl
     if a.php: inputs['php'] = a.php
     if a.perl_smoke: inputs['perl_smoke'] = a.perl_smoke
-    shutil.copyfile(inputs['launcher'], stage/'capstone-vexec')
-    (stage/'capstone-vexec').chmod(0o755)
-    shutil.copyfile(inputs['module'], stage/'capstone_vm.ko')
-    if not a.omit_application: shutil.copyfile(a.application, stage/'contract.dom')
-    shutil.copyfile(a.sqlite, stage/'sqlite3.dom')
-    shutil.copyfile(a.mruby, stage/'mruby.dom')
-    if a.perl: shutil.copyfile(a.perl, stage/'perl.dom')
-    if a.php: shutil.copyfile(a.php, stage/'php.dom')
+    shutil.copyfile(inputs['launcher'], stage/native_platform.LAUNCHER)
+    (stage/native_platform.LAUNCHER).chmod(0o755)
+    # The kernel executes an image as a file, so each image keeps the mode its build gave it.
+    if not a.omit_application: shutil.copy2(a.application, stage/'contract.dom')
+    shutil.copy2(a.sqlite, stage/'sqlite3.dom')
+    shutil.copy2(a.mruby, stage/'mruby.dom')
+    if a.perl: shutil.copy2(a.perl, stage/'perl.dom')
+    if a.php: shutil.copy2(a.php, stage/'php.dom')
     if a.perl_smoke: shutil.copyfile(a.perl_smoke, stage/'perl-smoke.pl')
-    if a.legacy_application: shutil.copyfile(a.legacy_application, stage/'legacy.dom')
-    # Empty args leave the line byte-identical to the pre-option script: ' __MODULE_ARGS__'
-    # collapses with its leading space, so no trailing whitespace is introduced either.
-    script = SCRIPT.replace(' __MODULE_ARGS__',
-                            (' ' + a.module_args.strip()) if a.module_args.strip() else '')
+    if a.legacy_application: shutil.copy2(a.legacy_application, stage/'legacy.dom')
+    script = SCRIPT.replace('__ADMIT__', native_platform.admit())
     script = script.replace('__MODE_ECHO__', memory_mode.echo('VM_'))
     if a.skip_recycling:
         script = script.replace(' sparse-churn', '').replace(' sparse-stale', '')
@@ -214,25 +226,32 @@ def main():
         assert script.count(block) == 1, 'parallel block not found verbatim'
         script = script.replace(block, '', 1)
         assert script.count(block) == 0, 'parallel block not removed'
-        anchor = 'rmmod capstone_vm\n'
-        assert script.count(anchor) == 1, 'rmmod anchor is not unique'
-        # Immediately BEFORE rmmod -- after mruby and the perl block, while the module is still
-        # loaded. After rmmod (before VIRTUAL_RUNTIME_DONE) the pair would launch with NO module on
-        # a machine where rmmod succeeds, and would test nothing about the slot at all.
+        anchor = '__LEAVE__\n'
+        assert script.count(anchor) == 1, 'leave anchor is not unique'
+        # Immediately BEFORE the leave lines -- after mruby and the perl block, so the pair is the
+        # last launch of an image the adapter accepts.
         script = script.replace(anchor, block + anchor, 1)
         assert script.count(block) == 1, 'parallel block not reinserted'
+    script = script.replace('__LEAVE__', native_platform.leave('VM_'))
     (stage/'gate.sh').write_text(script)
     disk = work/'stage.ext4'
     with disk.open('wb') as f: f.truncate(64 << 20)
     subprocess.run(['/sbin/mkfs.ext4', '-F', '-q', '-d', str(stage), str(disk)], check=True)
-    cmd = [str(a.qemu), '-M', 'virt-capstone', '-m', '2G', '-smp', '1',
+    # The adapter's parameters are fixed when the kernel starts, so they go on its command line.
+    # The gate script starts images in the read-only stage and lets them write to /tmp, which the
+    # wide grants allow. A later word wins, so --module-args changes a default without removing it.
+    slots = native_platform.supervisor_slots_from_environment()
+    kernel = ['root=/dev/vda ro',
+              *native_platform.kernel_arguments(slots, [native_platform.WIDE_GRANTS, *kernel_words(a.module_args)])]
+    cmd = [str(a.qemu), '-M', 'virt-capstone', '-m', native_platform.GUEST_MEMORY, '-smp', '1',
            '-nographic', '-monitor', 'none', '-serial', 'stdio', '-bios', str(inputs['fw_jump.elf']),
-           '-kernel', str(inputs['Image']), '-append', 'root=/dev/vda ro', '-snapshot',
+           '-kernel', str(inputs['Image']), '-append', ' '.join(kernel), '-snapshot',
            '-drive', f'file={inputs["rootfs.ext2"]},format=raw,id=hd0',
            '-device', 'virtio-blk-device,drive=hd0',
            '-drive', f'file={disk},format=raw,id=gate,readonly=on',
            '-device', 'virtio-blk-device,drive=gate', '-cpu',
-           'rv64,sstc=false,h=false,sv48=false,sv57=false,x-capstone-u-mode=true'
+           'rv64,sstc=false,h=false,sv48=false,sv57=false,x-capstone-u-mode=true,'
+           + ','.join(native_platform.cpu_properties(slots))
            + (',x-capstone-exact-bounds=true' if a.exact_bounds else '')]
     # Same knob as run-staged.py, for the same reason: a reference pin differing only in a CPU
     # property must not need a wrapper script, because virtualvm.platform() and this runner's own
@@ -242,6 +261,7 @@ def main():
     cpu_extra = os.environ.get('CAPSTONE_QEMU_CPU_EXTRA', '').strip()
     if cpu_extra:
         cmd[-1] += ',' + cpu_extra.lstrip(',')
+    print(f'run.py: -append {" ".join(kernel)}', flush=True)
     print(f'run.py: -cpu {cmd[-1]}', flush=True)
     with qemu_lock(), (work/'serial.log').open('wb') as log:
         guest = subprocess.Popen(cmd, env=dict(os.environ, TMPDIR=str(work)), stdin=subprocess.PIPE, stdout=subprocess.PIPE,
@@ -271,9 +291,10 @@ def main():
     tests = {}
     for name, code in [('normal', 0), ('threads', 0), ('vm', 0), ('vm-large', 0), ('vm-mappings', 0), ('nested', 0), ('nested-stale', 139), ('heap-threads', 0), ('vm-ro-write', 139), ('vm-none-read', 139), ('vm-guard', 139), ('vm-padding', 139), ('sparse-churn', 0), ('sparse-stale', 139), ('stale', 139), ('bounds', 139), ('retired', 139),
                        ('preempt', 143), ('parallel_one', 0), ('parallel_two', 0),
-                       ('sqlite_write', 0), ('sqlite_read', 0), ('mruby', 0), ('cleanup', 0)]:
+                       ('sqlite_write', 0), ('sqlite_read', 0), ('mruby', 0)]:
         if a.skip_recycling and name in ('sparse-churn', 'sparse-stale'): continue
         tests[name] = lines.count(f'VM_EXIT:{name}:{code}') == 1
+    tests['no_loadable_module'] = lines.count('VM_CLEANUP:0') == 1
     if a.legacy_application:
         tests['legacy_abi_rejected'] = lines.count('VM_EXIT:legacy:126') == 1 and any('Exec format error' in s for s in lines)
     if a.php:
@@ -311,23 +332,34 @@ def main():
     fault_sites = [tuple(int(v, 16) for v in m.groups()) for s in lines
                    if (m := re.search(r'domain fault cause=\d+ pc=0x([0-9a-f]+).* entry=0x([0-9a-f]+)', s))]
     names = ('ro', 'none', 'guard', 'padding') + (() if a.skip_recycling else ('collected',))
+    # The fault line's entry word is the address at which the kernel placed the image's ELF entry
+    # point, so a fault site lies as far from it as its symbol lies from the entry point.
+    image_entry = entry_point(a.application)
     tests['nested_output'] = lines.count('VIRTUAL_NESTED_OK') == 1
-    tests['nested_denial_site'] = bool(fault_sites) and fault_sites[0][0] - fault_sites[0][1] == symbols.get('cap_vm_fault_nested', -1) - symbols['domain_main']
+    tests['nested_denial_site'] = bool(fault_sites) and fault_sites[0][0] - fault_sites[0][1] == symbols.get('cap_vm_fault_nested', -1) - image_entry
     tests['vm_denial_sites'] = len(fault_sites) == 4 + len(names) and all(
-        pc - entry == symbols.get('cap_vm_fault_' + name, -1) - symbols['domain_main']
+        pc - entry == symbols.get('cap_vm_fault_' + name, -1) - image_entry
         for name, (pc, entry) in zip(names, fault_sites[4:]))
     tests['vm_contract'] = lines.count('VIRTUAL_VM_OK protections guards requested_length unused_pages execute rollback') == 1
     tests['vm_large_contract'] = lines.count('VIRTUAL_VM_LARGE_OK region aggregate realloc release') == 1
     mapping_stats = [dict((k, int(v)) for k, v in re.findall(r'(\w+)=(\d+)', s))
                      for s in lines if s.startswith('VM_MAPPINGS_STATS ')]
     moved = [int(s.split()[1]) for s in lines if s.startswith('VIRTUAL_VM_MAPPINGS_MOVED ')]
-    tests['vm_mappings_contract'] = (lines.count('VIRTUAL_VM_MAPPINGS_OK 9000') == 1 and
-                                     len(mapping_stats) == 1 and mapping_stats[0]['arenas'] > 9000 and
-                                     # The eight grows remap in place only under exact bounds:
-                                     # remap_begin refuses the default profile and mallocng
-                                     # falls back to a copy, which still registers and moves.
-                                     lines.count('VM_MAPPINGS_REMAPS:%d' % (8 if a.exact_bounds else 0)) == 1 and
-                                     len(moved) == 1 and moved[0] >= 1)
+    # The checks in `recorded` read what the launcher of the module route printed about a launch:
+    # its CAPSTONE_VM_STATS and CAPSTONE_VM_RSS records at exit and, under CAPSTONE_VM_TRACE, its
+    # remap trace. A native task has no launcher loop and prints none of them. Every launch still
+    # runs and is graded by its exit status and by the image's own lines, which the two *_output
+    # checks read for the launches that had no other check of them. The record names the checks in
+    # `recorded` as not observable when the console holds no such record.
+    recorded = {}
+    tests['vm_mappings_output'] = (lines.count('VIRTUAL_VM_MAPPINGS_OK 9000') == 1 and
+                                   len(moved) == 1 and moved[0] >= 1)
+    recorded['vm_mappings_contract'] = (tests['vm_mappings_output'] and
+                                        len(mapping_stats) == 1 and mapping_stats[0]['arenas'] > 9000 and
+                                        # The eight grows remap in place only under exact bounds:
+                                        # remap_begin refuses the default profile and mallocng
+                                        # falls back to a copy, which still registers and moves.
+                                        lines.count('VM_MAPPINGS_REMAPS:%d' % (8 if a.exact_bounds else 0)) == 1)
     tests['heap_threads'] = lines.count('VIRTUAL_HEAP_THREADS_OK shared_ownership metadata_growth arena_growth') == 1
     tests['vm_denial_operations'] = all(lines.count('VIRTUAL_VM_ACCESS:' + op) == 1
                                       for op in ('write_ro', 'read_none', 'guard', 'padding') + (() if a.skip_recycling else ('collected',)))
@@ -342,19 +374,20 @@ def main():
     release_stats = [s for s in base_stats if s['peak'] > s['pages'] + 300]
     demand_stats = [s for s in base_stats if s.get('faults', 0) >= 384]
     expected_stats = (10 if a.skip_recycling else 11) + (1 if a.perl else 0) + (1 if a.perl_smoke else 0) + (1 if a.php else 0)
-    tests['linux_pages_released'] = len(stats) == expected_stats and len(release_stats) == 3
-    tests['linux_demand_faults'] = len(stats) == expected_stats and len(demand_stats) == 3
+    recorded['linux_pages_released'] = len(stats) == expected_stats and len(release_stats) == 3
+    recorded['linux_demand_faults'] = len(stats) == expected_stats and len(demand_stats) == 3
     policy = [s.split(':', 1)[1] for s in lines if s.startswith('VM_DEMAND_POLICY:')]
     restored = [s.split(':', 1)[1] for s in lines if s.startswith('VM_RESTORED_POLICY:')]
     tests['fault_ahead_policy_restored'] = len(policy) == 2 and policy == restored
-    tests['unused_pages_not_populated'] = len(stats) >= 4 and stats[2]['peak'] - stats[2]['pages'] < 32
-    tests['shared_heap_pages_released'] = len(stats) >= 5 and stats[4]['peak'] - stats[4]['pages'] >= 768
+    recorded['unused_pages_not_populated'] = len(stats) >= 4 and stats[2]['peak'] - stats[2]['pages'] < 32
+    recorded['shared_heap_pages_released'] = len(stats) >= 5 and stats[4]['peak'] - stats[4]['pages'] >= 768
     tests['memory_mode_verified'] = memory_mode.verified('\n'.join(lines), a.unpinned, 1)
     if a.unpinned:
         for name in ('linux_pages_released', 'shared_heap_pages_released', 'unused_pages_not_populated'):
-            del tests[name]
-        tests.update(unpinned_checks.residency(lines, start, expected_stats))
+            del recorded[name]
+        recorded.update(unpinned_checks.residency(lines, start, expected_stats))
     if not a.skip_recycling:
+        tests['sparse_churn_output'] = lines.count('VIRTUAL_SPARSE_CHURN_OK allocations=200000 protected_stale_tags') == 1
         sparse = stats[5] if len(stats) >= 6 else {}
         # The fixed table happened to collect ~195k IDs in three sweeps.
         # A growing table has different collection boundaries. Require reuse
@@ -372,14 +405,20 @@ def main():
         # metadata bound is its own extent (1 MiB at 16 bits, 4 MiB at 18); the 1 MiB budget binds the paged one.
         software = sparse.get('collections', 0) > 0 and sparse.get('reclaimed', 0) >= sparse.get('nodes', 0) - capacity
         hardware = sparse.get('collections', -1) == 0 and sparse.get('reclaimed', -1) == 0
-        tests['sparse_recycling'] = (lines.count('VIRTUAL_SPARSE_CHURN_OK allocations=200000 protected_stale_tags') == 1
+        recorded['sparse_recycling'] = (tests['sparse_churn_output']
                                  and capacity > 0 and (software or hardware)
                                  and sparse.get('nodes', 0) > 2 * capacity
                                  and sparse.get('node_bytes', 1 << 30) <= (16 * capacity if hardware else 1048576) and sparse.get('peak', 1 << 30) < 2048)
+    if any(s.startswith(('CAPSTONE_VM_STATS ', 'CAPSTONE_VM_RSS ', 'VM_MAPPINGS_STATS ')) for s in lines):
+        tests.update(recorded)
+        not_observable = []
+    else:
+        not_observable = list(recorded)
     tests['sqlite_results'] = lines.count('SQLITE_SUM=5050') == 1 and lines.count('SQLITE_PERSIST=100') == 1
     tests['mruby_results'] = lines.count('MRUBY_SUM=5050') == 1 and lines.count('MRUBY_FILE=virtual') == 1
     tests['completed'] = lines.count('VIRTUAL_RUNTIME_DONE') == 1
     result = {'status': 'PASS' if all(tests.values()) else 'FAIL', 'tests': tests,
+              'not_observable': not_observable,
               'scope': 'one hart; private anonymous arenas; same-mm virtual threads',
               'virtual_vm_abi': 5,
               'control_omit_application': a.omit_application,
@@ -392,7 +431,10 @@ def main():
     a.record.write_text(json.dumps(result, indent=2) + '\n')
     print(f'{result["status"]}: {work / "serial.log"}')
     for s in lines:
-        if s.startswith(('VM_EXIT:', 'VM_MEMORY_MODE:', 'VM_FAST_FAULT:', 'VIRTUAL_', 'CAPSTONE_VM_', 'capstone-vexec:', 'VM_CONTRACT_', 'SQLITE_', 'MRUBY_')): print(s)
+        if s.startswith(('VM_EXIT:', 'VM_CLEANUP:', 'VM_MEMORY_MODE:', 'VM_FAST_FAULT:', 'VIRTUAL_', 'CAPSTONE_VM_', 'capstone-vexec:', 'VM_CONTRACT_', 'SQLITE_', 'MRUBY_')): print(s)
+    for name, ok in tests.items():
+        if not ok: print('FAIL ' + name)
+    for name in not_observable: print('NOT OBSERVABLE ' + name)
     return 0 if result['status'] == 'PASS' else 1
 
 if __name__ == '__main__': raise SystemExit(main())

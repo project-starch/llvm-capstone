@@ -14,6 +14,10 @@
  * The launcher of the module route printed that line from its own step record.
  * Here the kernel logs the record (`capstone_task: fault ...`, module/binfmt-dom.h)
  * and this program prints the line from the record that names its child.
+ * `code=` is the image text the loader mapped. `entry=` is the image's ELF
+ * entry point, which the loader knows. The module route printed the address
+ * the image reported for domain_main there, so a reader that turns pc into an
+ * image offset takes `code=`, or the ELF entry, as its reference.
  *
  * The image runs as a child, and this program ends the way the child ended: the
  * same exit status, or death by the same signal. A caught signal goes on to the
