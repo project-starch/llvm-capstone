@@ -698,3 +698,50 @@ new bitstream. Plain xz c0 had already started on board 2 at 09:14:20 (Addendum 
   exceeds Capstone's in-context time by about 8-11 %. The candidate is the per-tick cost: Plain takes 100 live ticks
   per second, while the context masks them and replays them in batches. That cost is unmeasured.
 - lbm, where Plain user time is 1,589.5 s against 1,383 s in context, likewise.
+
+## Addendum 29 (11 Nov 10:5x, before it runs): the heartbeat's cost measured per benchmark, Plain with and without it, on board 1 after the calibration
+
+**Question.** How much of each Plain reading is the batch heartbeat? This is the f that Addendum 28 bounded at
+0.089-0.108 from other runs.
+
+**Arms.** One variable: the heartbeat. Plus the runner idle limit, which a silent step needs.
+- **No heartbeat (chain A):**
+  - run-stage.py from a copy of the board tools (perf/nohb/tree). Its boardvm.py heartbeat subshell is replaced by
+    `( : ) & hb=$!`; nothing else changes.
+  - Kit bkit41-ids55-unify-nohb: bkit41-ids55-unify with board-run.sh `BAKED_IDLE_S=200` changed to `$TO`, and
+    SHA256SUMS regenerated.
+- **With the heartbeat:**
+  - perl c0 runs in chain B: the standard tools and bkit41-ids55-unify.
+  - imagick, nab and lbm use Addendum 26's calibration readings, which are the same board (1), bitstream (V1f), kit
+    and stages.
+- **Stages:**
+  - The plainreuse imagick, nab and lbm test stages, unchanged.
+  - perlbench test command 0 only (makerand.pl, about 500 s), at perf/nohb/stages/500.perlbench_r-test-plain-rv64r-c0.
+    It is the plainreuse stage with the command-1 block, its two output files and its host validation removed. The
+    workload is unchanged.
+- **Order:** chain A runs perl c0, imagick, nab and lbm; then chain B runs perl c0. About 2 board-hours.
+
+**Metric.**
+- The per-beat cost c = (T_hb − T_nohb) / beats, where beats is the number of @@HB lines inside that command's window
+  in the heartbeat transcript.
+- The steady-state share is f = c / beat period. The period is about 35 s; each run's own value is measured.
+
+**Predictions:**
+
+| # | Prediction |
+|---|---|
+| N1 | 0 @@HB lines in every chain-A transcript; outputs and specdiff as in the heartbeat runs |
+| N2 | c in [3.0, 3.8] s for each benchmark. Predicted times: perl c0 ≈ 452 s, imagick 16.2-16.6 s, nab ≈ 780 s, lbm ≈ 1,720 s |
+
+**Reading rule.**
+- Each measured f replaces Addendum 28's range for that benchmark's corrected native ratio: perl's f from perl c0,
+  lbm's from lbm, imagick's from imagick.
+- mcf keeps the range.
+- Everything stays labelled a correction. A same-environment native/Plain pair at train size still needs
+  board time after the deadline.
+
+**Dry runs** (scratchpad nohb-dry; board calls stubbed):
+- Both chains reach every stage, and spec-board's kit and stage checks pass.
+- A fake pre-registration stops the run; an existing output directory stops it.
+- Generating the real batch with the copy, against a recorded transcript, gives a gate.sh with 0 heartbeat loops. The
+  original tools give 1.
