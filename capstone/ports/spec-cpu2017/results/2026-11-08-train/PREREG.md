@@ -1256,3 +1256,47 @@ Their residual is still open.
     narrower quantity.
   - The baseline build and its firmware bring-up are being scoped now. The baseline is not available before the
     20:00 deadline.
+
+## Addendum 41 (11 Nov 16:4x, before it runs): Plain on stock OpenSBI, same bitstream (plan step A4), board 2
+
+**Why.** The lead set the baseline to ordinary RISC-V (Addendum 40). The first separable part is the firmware: Plain on
+the Capstone monitor against Plain on STOCK OpenSBI, with the bitstream, kernel, initramfs base and device tree held
+fixed.
+- **Stock firmware.** stock-sbi d6b78e4: upstream OpenSBI v1.3 (the opensbi repo's `vanilla` tag, 057eb10) plus the
+  board's UART clock, 25 MHz / 57600, which the fork and the device tree use. It is a branch stock-ariane-25mhz in a new
+  worktree.
+- **Recipe.** perf/stockfw/build-stock-fw.sh has the same interface as build-fpga-fw.sh and builds no monitor. Its gate
+  checks that there are no Capstone monitor symbols, that the Image is in the payload, and that the platform name is
+  the stock one.
+  - A test build passed: 17,467,912 B.
+  - The symbol check fires on a Capstone firmware ELF (4 symbols).
+- **Kit t3-smoke/bkit41-stockfw-v1f.** It is bkit41-ids55-unify-nohb2 with these changes, nothing else:
+  - the firmware lines: recipe, wrap = mon = stock-sbi, commit d6b78e4, a placeholder define;
+  - BOARD_RUNGS="vbatch", since the b0 rungs are Capstone domains;
+  - no debug-aperture reads.
+  
+  SHA256SUMS is regenerated, and the driver checks the diff (12 board.env lines and the aperture line).
+- **Runner perf/stockfw/run-stage-noctl.py.** It is the nohb tools' run-stage.py with spec-board's `--control` dropped.
+  The known-good control is a Capstone image and cannot run without the monitor, so these boots have no Capstone
+  control. A boot that fails to come up yields no stage result.
+- **Driver perf/stockfw/stockfw-v1f.sh** (from tick3-v1f.sh), board 2, V1f. List: tickcost, hiccup2, then Plain
+  imagick, nab and lbm test (plainreuse rv64r). Its dry run is clean, and the extraction line was checked on a P1b
+  transcript.
+- **Predictions:**
+  - **S1.** It boots and every Plain stage passes specdiff, except the two probes, whose validation fails by
+    construction.
+  - **S2.** The tick share falls if the Capstone monitor inflates it. That means hiccup2 < 9.4 % and tickcost's mean
+    gap < 42,554 cycles. rdtime < 1,116 cycles if stock emulation is cheaper.
+  - **S3.** Plain test times change by about the tick difference: × (1 − t_stock) / (1 − t_monitor). This is
+    against Addendum 30's V1f no-heartbeat Plain: imagick 16.13 s, nab 775.94 s, lbm 1,713.29 s.
+  - Whatever the reading, it is the firmware's cost on ordinary code.
+
+**RTL finding for step A1 (rtl-oracle, verilator lint of a V1f copy; the repo was not touched).** The Capstone fork
+with CAPSTONE_EXT = 0 and no CAPSTONE_ITFC_EN does NOT elaborate:
+- ex_stage.sv:2161-2172 has a syntax error;
+- after that is patched in the copy, 166+ "can't find definition" errors remain, from uses outside `ifdef
+  CAPSTONE_ITFC_EN`.
+
+Ungated Capstone glue also stays on the next-PC path (frontend.sv:458-466) and adds a regfile read port
+(issue_read_operands.sv:1662). So "the fork with the flag off" is not an ordinary core without RTL work. The
+alternative is upstream CVA6 at the fork's base, with the Capstone config's parameters. That is being scoped.
