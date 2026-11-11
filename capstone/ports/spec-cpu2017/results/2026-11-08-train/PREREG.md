@@ -813,3 +813,51 @@ encodings. On CVA6, mixed 16/32-bit code can cost fetch bubbles: 32-bit instruct
 **Dry runs** (scratchpad rvc-dry):
 - The driver and chain-board reach all six stages, with only the board calls stubbed.
 - board-env-check passes.
+
+## Addendum 32 (11 Nov 13:1x, before it runs): every open fairness hypothesis in one place, and two more board checks (board 1)
+
+**Status of each hypothesis.** The question in every row: does the hypothesis make a Capstone/Plain ratio wrong?
+
+| # | Hypothesis | Status |
+|---|---|---|
+| F1 | Native kit runs no heartbeat, Plain kit does (9-11 %) | CONFIRMED; native ratios retracted (Add. 28), measured per benchmark (Add. 29/30) |
+| F2 | V1f vs C.5a bitstream changes Plain | RULED OUT (Add. 26, C1: 1.006, 0.9994, 0.9967) |
+| F3 | Misaligned accesses emulated on Plain only | RULED OUT (0 in every Plain test; control 1,000,003 counted) |
+| F4 | Huge pages or THP for one arm | RULED OUT (capstone_vm refuses pmd_leaf; THP off) |
+| F5 | Capstone does less work (compiler, libm, flags) | RULED OUT as a Capstone advantage: same-work QEMU instructions Capstone/Plain 1.026 (lbm train), 1.039 (imagick), 0.994 (x264) |
+| F6 | Capstone's clock runs slow while ticks are masked | RULED OUT: host time minus guest uptime is 1,694 s (Capstone x264 train) vs 1,669 s (Plain), a 0.06 % difference over 40,000 s |
+| F7 | Plain's RVC code costs CVA6 fetch cycles | TESTING (Add. 31, board 3). The RTL read finds one RVC-only bubble: a redirect to a 2-mod-4 target whose first instruction is 32-bit. It predicts a small effect |
+| F8 | Plain pays live 100 Hz ticks through the M-mode monitor (no sstc; rdtime trapped) plus cache refill; Capstone masks ticks for its quanta | TESTING here (P1) |
+| F9 | The Capstone arm pays the heartbeat differently from Plain, so the module-route ratios (x264, nab, gcc) are not symmetric after all | TESTING here (P2) |
+| F10 | Allocator: Plain-with-cache (mallocng + mapping cache) has a different footprint or kernel time | OPEN, unmeasured. Plain xz c0 is OOM-killed at anon-rss 902 MB, while Capstone c0 fits in 871 MiB. Plain test sys share: lbm 7.2 %, imagick 9.9 % |
+
+**P1, the tick cost on Plain.** perf/tick/hiccup.c (plain-cc, rv64gc) runs in place of imagick_r in a copy of the imagick test stage
+(perf/tick/stage-hiccup; the executable is 9a81ac642924cd07, plan.json updated). Board 1, V1f, kit bkit41-ids55-unify
+(the calibration kit, heartbeat on). Driver perf/tick/tick-v1f.sh, which is cal-v1f.sh with list perf/tick/tick.list.
+- Phase A (60 s): a tight rdcycle loop. Every step over 400 cycles is time spent away from the task. Gaps under 1 ms
+  are counted as ticks, gaps of 1 ms or more as heartbeat or other.
+- Phase B (60 s): 256-load passes over a 16 KiB working set. The extra time in the four passes after a gap is the refill
+  cost. It is a lower bound for SPEC, whose working sets and code are larger.
+- Predictions:
+  - F8 explains the residual (8-15 % CPI): small gaps at about 100/s, and stolen plus refill at least 5 % of cycles.
+  - F8 is minor: stolen plus refill under 2 %.
+  - Either way, the measured MHz is 25.0 ± 0.1.
+
+**P2, the heartbeat on the Capstone arm.** Capstone lbm test, module route (stages-eval-b1/519.lbm_r-test-devmk, the
+out-all2-b1 run: 1,809.88 s, 104 @@HB). It runs on kit bkit23-all2-b1 with the standard tools (B), and on kit
+bkit23-all2-b1-nohb with the no-heartbeat tools copy perf/nohb/tree (A). The nohb kit differs from bkit23-all2-b1 by
+the runner idle limit = step budget, the watchdog entry-stall abort off, and a board.env comment, with SHA256SUMS
+regenerated. Driver perf/nohb/capnohb.sh (from nohb2-v1f.sh), board 1: flash C.5a if it is not resident, then A, then B.
+- Predictions:
+  - F9 false: B − A per beat is in Plain's 3.0-3.8 s band. The Capstone arm pays the heartbeat as Plain does, and the
+    module-route ratios stand as symmetric.
+  - F9 true: the per-beat cost is outside that band. Then the module ratios carry an asymmetric correction, which gets
+    reported.
+  - B reproduces 1,809.88 s within ±2 %.
+
+**Order on board 1:** Addendum 30's re-run (running), P1, P2. Then board 1 stays on C.5a.
+
+**Dry runs** (scratchpad tick-dry, capnohb-dry; board calls stubbed):
+- Both drivers reach every stage, and a fake pre-registration stops each of them.
+- capnohb stops on an existing output directory.
+- P1's executable was run in QEMU before the board.
