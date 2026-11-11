@@ -772,3 +772,44 @@ imagick reading is Addendum 29's chain-A one. The three killed stages give no re
 - All three stages are reached, with kit nohb2.
 - A fake pre-registration stops the run, and so does an existing output directory.
 - Pointing the driver at the old nohb kit stops it: "keeps the entry-stall abort".
+
+## Addendum 31 (11 Nov 12:4x, before it runs): does RVC explain Plain's higher CPI? Plain test with and without compressed instructions, board 3
+
+**Question.** Plain user code runs at an 8-15 % higher CPI than the same work inside Capstone contexts (lbm, x264,
+imagick; Addendum 28's open item). The same-work QEMU instruction ratio, Capstone in-context over Plain user, is 1.026 for
+lbm train, 1.039 for imagick and 0.994 for x264. One difference has not been measured: Plain is `-march=rv64gc`, and 41-48 % of
+its static instructions are 16-bit (in lbm's LBM_performStreamCollideTRT, 207 of 833). Capstone code has no compressed
+encodings. On CVA6, mixed 16/32-bit code can cost fetch bubbles: 32-bit instructions that straddle fetch blocks, and
+2-byte-aligned branch targets. The other candidate, live 100 Hz ticks, is unchanged by this pair.
+
+**Arms.** One variable: the program's code is compiled with `-march=rv64gc` (the record) or `-march=rv64g`.
+- RVC: the record's Plain test stages, perf/plainreuse/stages/{538.imagick,544.nab,519.lbm}_r-test-plain-rv64r. Their
+  executables are the plain-rv64r builds (cache musl). Their plan.json still lists the earlier plain-rv64 hashes; the
+  files were swapped on 8 Nov without updating it. Noted here, and not changed.
+- No RVC: copies with only the executables swapped for plain-rv64rg. The build is build-r3's, with `-march=rv64g` in
+  perf/norvc/plain-cc-reuse-g, label plain-rv64rg, and the same clang, flags, cache musl and libgcc. musl's libc.a stays
+  rv64gc, so the remaining 2-byte instructions are libc code (printf_core, __floatscan, vfscanf...): imagick 3.0 % of
+  static instructions, nab 13.5 %, lbm 35.6 %. lbm's hot function has 0.
+  - Executables: lbm 1dc62d7766773cb2, imagick 662609e82596f715, imagevalidate 2df726fcc87fac38, nab d3f2b014b73035ae.
+  - plan.json differs only in `executables`.
+- Board 3, C.5a, kit bkit27-gtq: the Plain train kit, with the heartbeat in both arms. Driver perf/b3/gt-run-ga2.sh
+  (flash C.5a, chain, flash bitstream 3 back), list perf/norvc/b3/b3.list. The arms alternate per benchmark: imagick,
+  nab, lbm.
+
+**Predictions:**
+
+| # | Prediction |
+|---|---|
+| R1 | Both arms rc 0 and specdiff PASS; the no-RVC instruction count in QEMU is within 0.5 % of the RVC one |
+| R2a | If RVC explains the residual: no-RVC lbm and nab run ≥ 5 % faster than RVC; imagick moves the same way |
+| R2b | If it does not (ticks or something else): every pair within ±2 %. The RVC arms reproduce the C.5a record within ±2 % (imagick 19.46 s, nab 862.99 s, lbm 1,895.0 s) |
+
+**Reading rule.**
+- Under R2a, report the CPI share RVC accounts for, and flag every Plain-relative ratio as including a Plain-side ISA choice.
+  Whether the fair denominator is rv64gc or rv64g is the lead's call, not this record's.
+- Under R2b, RVC is ruled out for the residual.
+- Nothing else is re-labelled.
+
+**Dry runs** (scratchpad rvc-dry):
+- The driver and chain-board reach all six stages, with only the board calls stubbed.
+- board-env-check passes.
