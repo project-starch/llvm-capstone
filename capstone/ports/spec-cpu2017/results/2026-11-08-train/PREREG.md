@@ -1300,3 +1300,42 @@ with CAPSTONE_EXT = 0 and no CAPSTONE_ITFC_EN does NOT elaborate:
 Ungated Capstone glue also stays on the next-PC path (frontend.sv:458-466) and adds a regfile read port
 (issue_read_operands.sv:1662). So "the fork with the flag off" is not an ordinary core without RTL work. The
 alternative is upstream CVA6 at the fork's base, with the Capstone config's parameters. That is being scoped.
+
+## Addendum 42 (11 Nov 17:0x, before it runs): plan track B2, the Capstone compiler chosen on the board; the baseline bitstream in synthesis
+
+**B1 so far (QEMU, test size; perf/ccsel, subagent build, verified by exact rebuild of every base exe).** Every
+candidate is rc 0 with specdiff PASS, and specdiff's positive control fires (one digit changed → 0/1, rc 1). In-context
+instret against base:
+
+| Benchmark | dcnofp | dcnofprs |
+|---|---|---|
+| imagick | −0.60 % | −0.62 % |
+| nab | −2.19 % | −2.44 % |
+| lbm | −1.70 % | −1.70 % |
+
+- **gcc.** The c3f recipe exes read −14.9 % (c3f), −18.3 % (c3f+dcnofp) and −18.8 % (c3f+dcnofprs). This is a recipe
+  difference, not the flags alone.
+- **Still in QEMU:** mcf, x264, perl and xz.
+- **The candidates:**
+  - dcnofp = gate-dc SDK (llvm-c4 98337e20) with `-capstone-direct-calls -fomit-frame-pointer`;
+  - dcnofprs = dcnofp plus `-capstone-drop-redundant-shrink`.
+- **The `+movc-keeps-integer-source` question (F11) is unchanged.** Both SDKs carry it, and so does every base.
+
+**B2, board 1** (C.5a, kit bkit23-all2-b1-nohb, nohb tools, one-arm lifetimes stages from perf/ccsel/stages). The
+list alternates base and dcnofprs: imagick, nab, lbm (perf/ccsel/b2.list). The driver is perf/ccsel/ccsel-b2.sh, from
+caphic.sh, and its dry run is clean.
+- **Prediction:** dcnofprs is faster by about the instret change, nab −2 to −3 % and lbm −1 to −2 %. imagick is within
+  noise.
+- **Rule:** a benchmark takes dcnofprs if it is not slower than base on the board.
+
+**Track A.** The baseline RTL is upstream CVA6 2ef1c1b1f (the fork point), plus:
+- the Capstone board's clock and pins;
+- `baseline_cv64a6_imafdc_sv39` = the Capstone config minus CAPSTONE_ITFC_EN and CAPSTONE_EXT;
+- the five stock-logic fixes the fork carries: 213378a11, the c77c65324 MMU hunk, 6cbdaeeb4, cc1159a51, and
+  a73a7c670 + e7af48457;
+- the zero-initialised FPGA regfile.
+
+Two fork commits that fix bugs only the fork has (546807884, ae21e121e) are not ported. The result is capstone-ariane
+branch riscv-baseline-fixes d31345cf3. Verilator lint gives 0 errors, the same as stock cv64a6. The guarded full
+synthesis has run on apollo since 16:50. A pure-upstream build (riscv-baseline fbbcf282e) was started first and
+stopped at 15 min, because the memory projection allows one job.
