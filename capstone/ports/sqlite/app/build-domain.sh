@@ -10,7 +10,10 @@
 # SQLITE_HEAP selects the nested heap, the two arms of repro322/build-virtual.py:
 #   memsys5         the amalgamation compiled with SQLITE_ENABLE_MEMSYS5
 #   memsys5-sublet  the same, with ../sublet/sublet-3220000-memsys5.patch applied (-F0)
-# Both compile a copy, src/sqlite3-capstone.c, with the same flags, so they differ only in the
+#   memsys5-sublet-block  the same, with the block port ../sublet/sublet-3220000-memsys5-block.patch
+#                   instead (-F0): block bounds, and every realloc that keeps its block or its
+#                   lookaside slot renews the lifetime (CRENEW)
+# All compile a copy, src/sqlite3-capstone.c, with the same flags, so they differ only in the
 # patch. The heap is configured at run time: speedtest1 --heap <bytes> <min>.
 set -euo pipefail
 SDK=${1:?usage: build-domain.sh <sdk> <sources> <out>}
@@ -28,16 +31,21 @@ mkdir -p "$OUT"
 ENGINE=$SRC/sqlite3.c
 case ${SQLITE_HEAP:-} in
   '') ;;
-  memsys5|memsys5-sublet)
+  memsys5|memsys5-sublet|memsys5-sublet-block)
     REPO=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../../../.." && pwd)
     ENGINE=$OUT/src/sqlite3-capstone.c
     mkdir -p "$OUT/src"
     cp "$SRC/sqlite3.c" "$ENGINE"
-    [[ $SQLITE_HEAP == memsys5 ]] ||
-      patch -s -F0 -p1 -d "$OUT/src" < "$REPO/capstone/ports/sqlite/sublet/sublet-3220000-memsys5.patch"
+    case $SQLITE_HEAP in
+      memsys5-sublet) PATCH=sublet-3220000-memsys5.patch ;;
+      memsys5-sublet-block) PATCH=sublet-3220000-memsys5-block.patch ;;
+      memsys5) PATCH= ;;
+    esac
+    [[ -z $PATCH ]] ||
+      patch -s -F0 -p1 -d "$OUT/src" < "$REPO/capstone/ports/sqlite/sublet/$PATCH"
     CONFIG+=(-DSQLITE_ENABLE_MEMSYS5 -I"$REPO/capstone/runtime/include")
     ;;
-  *) echo "SQLITE_HEAP is memsys5 or memsys5-sublet, not $SQLITE_HEAP" >&2; exit 2 ;;
+  *) echo "SQLITE_HEAP is memsys5, memsys5-sublet or memsys5-sublet-block, not $SQLITE_HEAP" >&2; exit 2 ;;
 esac
 "$CC" "$OPT" "${CONFIG[@]}" -I"$SRC" -c "$ENGINE" -o "$OUT/sqlite3.o"
 "$CC" "$OPT" -I"$SRC" "$SRC/shell.c" "$OUT/sqlite3.o" -lpthread -ldl -lm -o "$OUT/sqlite3.dom"

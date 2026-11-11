@@ -72,10 +72,10 @@
  /* obmalloc state for main interpreter and shared by all interpreters without
   * their own obmalloc state.  By not explicitly initalizing this structure, it
   * will be allocated in the BSS which is a small performance win.  The radix
-@@ -2291,6 +2356,11 @@
-         bp = allocate_from_new_pool(state, size);
+@@ -2294,6 +2359,11 @@
+     if (UNLIKELY(bp == NULL)) {
+         return NULL;
      }
- 
 +#ifdef EXP_REUSE_GAP
 +    if (bp != NULL) {
 +        exp_reuse_gap_issue(AS_UINT(bp), INDEX2SIZE(size));

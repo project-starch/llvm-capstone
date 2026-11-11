@@ -126,7 +126,7 @@
     },
     "virtual-pymalloc-pools": {
       "target": "capstone-virtual",
-      "summary": "the same replay built with PYMALLOC_SUBLET, which applies the port's patch 0003: obmalloc hands out every block as a child lifetime of its arena, bounded to the request (CDERIVE), and revokes it on free (CREVOKE)",
+      "summary": "the same replay built with PYMALLOC_SUBLET, which applies the port's patches 0003 and 0004: obmalloc hands out every block as a child lifetime of its arena, bounded to the request (CDERIVE), and revokes it on free (CREVOKE)",
       "mechanism": "as virtual-pymalloc; per-block bounds and revocation inside obmalloc",
       "controls": {
         "uaf-block": "fault"
@@ -185,7 +185,7 @@
     "virtual-memcached-sublet": {
       "target": "capstone-virtual",
       "summary": "the same corpus with the application's Sublet patch 0006 in slabs.c and cache.c (the allocators port's -DMCP_SUBLET=ON, shared/driver-virtual.c, `fixed|buggy N`): no hooks and no ledger; pages and objects come from virtual mallocng as upstream's come from malloc, every chunk is a CDERIVE child of its page's generation, bounded to the chunk, and slabs_free revokes it (CREVOKE); every cache object is the allocation malloc returned, and cache_free renews its lifetime (CRENEW); with the carve remedy (MC_CARVE_BOUNDS) for 06 and 07, as the physical column 3 read sublet-carve for them",
-      "mechanism": "per-chunk and per-object bounds and revocation by the allocators' own two lifetime instructions; for 06 and 07 also the item's key/suffix carve",
+      "mechanism": "per-chunk and per-object bounds and revocation by the allocators' own lifetime instructions; for 06 and 07 also the item's key/suffix carve",
       "controls": {
         "bounds-malloc": "fault",
         "uaf-malloc": "fault",
@@ -214,7 +214,7 @@
     },
     "virtual-wmem-pools": {
       "target": "capstone-virtual",
-      "summary": "the same with WM_SUBLET, which applies the port's patch 0001: every object of the block and block_fast allocators a child lifetime of its block (CDERIVE), bounded to the request, revoked by free, realloc and the reset that ends its pool (CREVOKE)",
+      "summary": "the same with WM_SUBLET, which applies the port's patch 0001: every object of the block and block_fast allocators a child lifetime of its block (CDERIVE), bounded to the request, revoked by free and realloc (CREVOKE) and by the reset that ends its pool (CRENEW)",
       "mechanism": "as virtual-wmem; per-object bounds and revocation inside block and block_fast",
       "controls": {
         "uaf-chunk": "fault",
@@ -242,7 +242,7 @@
     },
     "virtual-cpython-pools": {
       "target": "capstone-virtual",
-      "summary": "the same interpreter built with CPY_SUBLET=1: patch 0014 makes obmalloc hand out every block as a child lifetime of its arena, bounded to the request (CDERIVE), and revoke it on free (CREVOKE); the arena's own child dies with the arena when mallocng frees it; requests over 512 bytes go to mallocng, as in the stock arm",
+      "summary": "the same interpreter built with CPY_SUBLET=1: patch 0014 makes obmalloc hand out every block as a child lifetime of its arena, bounded to the request (CDERIVE), and revoke it on free (CREVOKE); the blocks die with the arena when mallocng frees it; requests over 512 bytes go to mallocng, as in the stock arm",
       "mechanism": "as virtual-cpython; per-block bounds and revocation inside obmalloc",
       "controls": {
         "uaf-block": "fault",
@@ -784,7 +784,7 @@
     "php-real-object": {
       "target": "capstone-virtual",
       "summary": "PHP 5.0.0 built as a capability application from the Makefile's own PHP_GLOBAL_OBJS plus PHP_CLI_OBJS -- 145 translation units including main/ (PHP's runtime host), main/streams/, sapi/cli, TSRM/, regex/, all 65 of ext/standard and 39 of Zend/, with no SAPI of ours and no stubbed libc. Zend/ and ext/ are byte-identical to the read-only corpus (the build tree is a symlink mirror); the only real files are a php_config.h with two configure answers corrected for musl and, here, the patched zend_alloc.c. ONE IMAGE serves every arm: zend_cap_mode() reads PHP_CAP_MODE from the environment. PHP_CAP_MODE=6: the payload region is revoked at EVERY _efree, cache-absorbed or not, and re-taken under a fresh node when AG(cache) hands the block to its next tenant. The header is never revoked, so zend_alloc.c keeps its own control flow byte for byte -- the cache park still writes p->cached and REMOVE_POINTER_FROM_LIST still walks neighbour headers, all live. The bound is PHP's own REAL_SIZE rounding, which makes this the CONTROL of the spatial pair as well as the fault arm of the temporal triple INSTRUMENT CONTROL: nested-bound-probe is probes/probe-nested stage 7, built from the same zend-cap-blocks.c and zend-cap-backing.c as this image. It emalloc's 9 bytes, reads index 9 under PHP's REAL_SIZE rounding (which must SUCCEED, proving the slack is reachable exactly as in stock PHP), then re-bounds exactly and reads index 9 again (which must FAULT). It therefore ends in a fault BY DESIGN and is declared identically on both spatial arms: it establishes that the nested layer's bound logic distinguishes the two arms, NOT that this particular image is running a particular arm. What establishes the arm is the ZEND_CAP_MODE line the image itself prints, which the runner gates on.",
-      "mechanism": "nested allocator (virtual-nested-pools): as the system-allocator arm, plus a lifetime per object -- every emalloc payload a CDERIVE child of its block (__capstone_malloc_derive), ended at every efree through the libc's reclaim (__capstone_malloc_reclaim), cache-absorbed or not; bounded to REAL_SIZE(n)",
+      "mechanism": "nested allocator (virtual-nested-pools): as the system-allocator arm, plus a lifetime per object -- every emalloc payload a CDERIVE child of its block (heap_issue), ended at every efree through the libc's heap_end, cache-absorbed or not; bounded to REAL_SIZE(n)",
       "mode": 6,
       "protective_causes": [
         25,

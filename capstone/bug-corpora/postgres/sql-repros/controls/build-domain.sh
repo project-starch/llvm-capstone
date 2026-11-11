@@ -85,8 +85,14 @@ CF=(-target capstone64-unknown-elf -Xclang -target-feature -Xclang +m
 RF=("${CF[@]}" -std=c99 -D_XOPEN_SOURCE=700
     -I"$MUSL/src/include" -I"$MUSL/src/internal" -I"$MUSL/obj/src/internal")
 if [[ ${CAPSTONE_APPLICATION_PROFILE:-virtual} == virtual ]]; then  # the default the SDK and musl builders it calls now follow (#241)
-  CF+=(-mllvm -capstone-gp-free -mllvm -capstone-image-gp)
-  RF+=(-mllvm -capstone-gp-free -mllvm -capstone-image-gp)
+  # As the port's script since the virtual profile's objects carry F and D: capstone-cc refuses
+  # static_modules.o, which this script compiles directly, without them.
+  CF+=(-mllvm -capstone-gp-free -mllvm -capstone-image-gp
+       -Xclang -target-feature -Xclang +f -Xclang -target-feature -Xclang +d
+       -Xclang -target-abi -Xclang lp64)
+  RF+=(-mllvm -capstone-gp-free -mllvm -capstone-image-gp
+       -Xclang -target-feature -Xclang +f -Xclang -target-feature -Xclang +d
+       -Xclang -target-abi -Xclang lp64)
 fi
 O=$ROOT/runtime
 if stage runtime; then

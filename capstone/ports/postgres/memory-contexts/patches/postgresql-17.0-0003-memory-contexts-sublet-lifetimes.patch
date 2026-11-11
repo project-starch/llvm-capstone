@@ -20,7 +20,8 @@ the server.
 # under the same parent, with the operand's cursor and bounds.
 #
 # Every block carries one lifetime in its header: the generation, derived
-# from the malloc'd object. Where a manager returns a chunk,
+# from the malloc'd object, beside the pointer malloc returned for the block.
+# Where a manager returns a chunk,
 # MemoryChunkIssue derives the caller's pointer from the generation,
 # covering the chunk header and MAXALIGN(size), and stores the generation in
 # the header. MAXALIGN, PostgreSQL's allocation unit, and not the exact
@@ -33,7 +34,13 @@ the server.
 # the chunk in place.
 #
 # Freeing a block revokes the system allocator's lifetime of it, and every
-# chunk lies below. A reset that keeps a block (AllocSet, Generation, Bump
+# chunk lies below. free and realloc end only the lifetime their argument
+# names. pfree and repalloc reach a block from one of its chunks, through a
+# pointer derived from the generation; passed to free, that pointer would end
+# the generation and leave the block's own lifetime live while malloc reuses
+# the memory. So AllocSetFree, AllocSetRealloc, GenerationFree and SlabFree
+# take the block's own pointer from its header before they unlink, keep, free
+# or realloc it. A reset that keeps a block (AllocSet, Generation, Bump
 # keepers) renews its generation: CRENEW revokes every chunk of the block and
 # gives the block a new generation with the same bounds. Bump chunks have no
 # header and no pfree; bump derives them itself, at its chunk size, and gives
@@ -45,7 +52,7 @@ the server.
 # pointer cannot, since it is revoked; a live one handed to code that loads
 # the header deliberately gets the block. Overwriting the stored parent
 # clears its tag and the next pfree faults. The chunk header grows from 16
-# to 32 bytes, and every block header by one capability.
+# to 32 bytes, and every block header by two capabilities.
 diff --git a/src/backend/utils/mmgr/aset.c b/src/backend/utils/mmgr/aset.c
 --- a/src/backend/utils/mmgr/aset.c
 +++ b/src/backend/utils/mmgr/aset.c
@@ -118,7 +125,23 @@ diff --git a/src/backend/utils/mmgr/aset.c b/src/backend/utils/mmgr/aset.c
  	}
  
  	/*
-@@ -1242,6 +1249,8 @@ AllocSetRealloc(void *pointer, Size size, int flags)
+@@ -1082,6 +1089,7 @@ AllocSetFree(void *pointer)
+ 			elog(ERROR, "could not find block containing chunk %p", chunk);
+ 
+ 		set = block->aset;
++		block = block->sublet.self;
+ 
+ #ifdef MEMORY_CONTEXT_CHECKING
+ 		{
+@@ -1200,6 +1208,7 @@ AllocSetRealloc(void *pointer, Size size, int flags)
+ 			elog(ERROR, "could not find block containing chunk %p", chunk);
+ 
+ 		set = block->aset;
++		block = block->sublet.self;
+ 
+ 		/* only check size in paths where the limits could be hit */
+ 		MemoryContextCheckSize((MemoryContext) set, size, flags);
+@@ -1242,6 +1251,8 @@ AllocSetRealloc(void *pointer, Size size, int flags)
  		/* Update pointers since block has likely been moved */
  		chunk = (MemoryChunk *) (((char *) block) + ALLOC_BLOCKHDRSZ);
  		pointer = MemoryChunkGetPointer(chunk);
@@ -274,6 +297,14 @@ diff --git a/src/backend/utils/mmgr/generation.c b/src/backend/utils/mmgr/genera
  
  	/* add it to the doubly-linked list of blocks */
  	dlist_push_head(&set->blocks, &block->node);
+@@ -749,6 +756,7 @@ GenerationFree(void *pointer)
+ 	chunk->requested_size = InvalidAllocSize;
+ #endif
+ 
++	block = block->sublet.self;
+ 	block->nfree += 1;
+ 
+ 	Assert(block->nchunks > 0);
 diff --git a/src/backend/utils/mmgr/mcxt.c b/src/backend/utils/mmgr/mcxt.c
 --- a/src/backend/utils/mmgr/mcxt.c
 +++ b/src/backend/utils/mmgr/mcxt.c
@@ -406,6 +437,14 @@ diff --git a/src/backend/utils/mmgr/slab.c b/src/backend/utils/mmgr/slab.c
  
  		/* use the first chunk in the new block */
  		chunk = SlabBlockGetChunk(slab, block, 0);
+@@ -718,6 +720,7 @@ SlabFree(void *pointer)
+ 	 */
+ 	Assert(SlabBlockIsValid(block));
+ 	slab = block->slab;
++	block = block->sublet.self;
+ 
+ #ifdef MEMORY_CONTEXT_CHECKING
+ 	/* Test for someone scribbling on unused space in chunk */
 diff --git a/src/include/utils/memutils_memorychunk.h b/src/include/utils/memutils_memorychunk.h
 --- a/src/include/utils/memutils_memorychunk.h
 +++ b/src/include/utils/memutils_memorychunk.h
@@ -432,7 +471,7 @@ diff --git a/src/include/utils/memutils_memorychunk.h b/src/include/utils/memuti
  	uint64		capstone_pad;
  	/* bitfield for storing details about the chunk */
  	uint64		hdrmask;		/* must be last */
-@@ -263,4 +272,51 @@ MemoryChunkGetBlock(MemoryChunk *chunk)
+@@ -263,4 +272,56 @@ MemoryChunkGetBlock(MemoryChunk *chunk)
  #undef HdrMaskBlockOffset
  #undef HdrMaskCheckMagic
  
@@ -440,10 +479,14 @@ diff --git a/src/include/utils/memutils_memorychunk.h b/src/include/utils/memuti
 + * Sublet lifetimes.  Every block has a generation, a lifetime derived from
 + * its malloc'd object; the chunks are children of the generation.  Freeing
 + * the block revokes all of them; a reset that keeps the block renews the
-+ * generation (CRENEW), which revokes the chunks.
++ * generation (CRENEW), which revokes the chunks.  A block reached from one of
++ * its chunks is named by the generation, and free and realloc end only the
++ * lifetime their argument names, so the block also keeps the pointer malloc
++ * returned for it and goes back to malloc through that.
 + */
 +typedef struct SubletBlock
 +{
++	void	   *self;
 +	void	   *generation;
 +} SubletBlock;
 +
@@ -451,6 +494,7 @@ diff --git a/src/include/utils/memutils_memorychunk.h b/src/include/utils/memuti
 +static inline void
 +SubletBlockInit(SubletBlock *b, void *alloc, void *start, Size size)
 +{
++	b->self = start;
 +	b->generation = capstone_cap_derive(alloc,
 +										(char *) start - (char *) alloc, size);
 +}
