@@ -1382,3 +1382,89 @@ The dry run is clean.
   - getppid is within ±10 % of 1,891 cycles: same core pipeline, different extension.
   - Each firmware's tick share is read. The phase-2 firmware is the one with the lowest hiccup2 share.
   - If the baseline does not boot, nothing is read about the firmwares, and the bitstream goes back to RTL.
+
+## Addendum 44 (11 Nov 19:2x): P5 and phase 1 read; OpenSBI v1.3 chosen for the baseline; B2 in part; phase 2 (Plain SPEC on the ordinary RISC-V baseline), before it runs
+
+**P5, same kit, read** (board 3, C.5a, kit bkit23-all2-b1-nohb, out-samekit-b3). Every arm passes specdiff.
+
+| | Plain | Capstone lifetimes | Same-kit ratio |
+|---|---|---|---|
+| imagick test | 16.10 s | 19.14 s (spatial 19.18 s) | 1.189 |
+| nab test | 776.27 s | 903.36 s (spatial 899.50 s) | 1.164 |
+| lbm test | 1,713.76 s | 1,651.3 s (P2 arm A) | 0.964 |
+
+- **P5a holds.** Plain reproduces the V1f no-heartbeat times: 16.10 vs 16.13 s, 776.27 vs 775.94 s, 1,713.76 vs
+  1,713.29 s. For Plain, F2 (the bitstream and kit) is ruled out between C.5a and V1f.
+- **P5b holds for lbm:** 0.964 against the predicted 0.964.
+- tickcost on C.5a reads 9.28 % idle, inside P4's V1f range.
+- **Scope.** All of these ratios share one SoC: both arms ran on the Capstone hardware and the Capstone monitor. Phase 2
+  replaces the Plain side.
+
+**Addendum 41, lbm:** stock OpenSBI v1.3 on V1f gives 1,774.28 s, specdiff PASS. This is +3.6 % on the Capstone
+monitor's 1,713.29 s, the same sign as imagick (+4.7 %) and nab (+3.4 %).
+
+**Phase 1, read** (board 2, baseline caplifive_rvbase_d31345cf3, out-rvbase-tick-b2).
+
+| | Capstone SoC (V1f), stock v1.3 | Baseline, stock v1.3 | Baseline, stock v1.6 | Baseline, stock v1.9 |
+|---|---|---|---|---|
+| boots | yes | yes | yes | **no** |
+| hiccup2 loss | 12.617 % | 7.764 % | 8.530 % | — |
+| tickcost idle / streaming | 12.423 / 13.724 % | 7.604 / 8.136 % | 8.390 / 9.007 % | — |
+| mean big gap, idle (cycles / insns) | 31,057 / 3,339 | 19,012 / 3,422 | 20,974 / 3,794 | — |
+| rdtime | 2,231 cycles | 1,200 | 1,501 | — |
+| getppid | 1,891 cycles, 275 insns | 1,018 cycles, 275 insns | 1,018 cycles | — |
+| STREAM steps/s | 319,491 | 456,044 | 451,678 | — |
+
+- **The baseline boots Linux on stock OpenSBI.** The module loads, and the Plain probes run.
+- **The getppid prediction fails, by a wide margin.** The baseline needs 1,018 cycles, not 1,891 ±10 %. Both SoCs run
+  the same 275 instructions under the same firmware. So the Capstone SoC runs this ordinary kernel path at 1.86× the
+  cycles per instruction. The tick handler shows the same effect: about the same instructions, 19,012 against 31,057
+  cycles. Streaming over 8 MiB is 43 % faster on the baseline.
+  - The baseline is upstream CVA6 2ef1c1b1f. That commit is the merge-base of the Capstone fork's branches
+    (capstone-bootstrap, v1f-ids55-native) with upstream, so both bitstreams start from the same CVA6.
+  - The difference is therefore what the Capstone fork changed in the core and the SoC. Which of those changes costs
+    this is not resolved here.
+  - **Consequence.** Every ratio against Plain on the Capstone SoC, the P5 table included, understates Capstone's
+    cost relative to ordinary RISC-V.
+- **v1.9 does not boot on this SoC.** The bootrom prints its banner, the JTAG load completes, and then the console is
+  silent until the 1,800 s login timeout. The likely cause is that platform/generic needs a device tree pointer in a1,
+  which the board flow does not pass. This is not debugged here. The choice is between v1.3 and v1.6, and the newer
+  release is not the faster one.
+- **Choice: OpenSBI v1.3, kit bkit42-rvbase-sbi13.** It has the lowest hiccup2 share, 7.764 %, as pre-registered.
+
+**B2, read in part** (board 1, C.5a, kit bkit23-all2-b1-nohb, no heartbeat; Capstone lifetimes). Every arm passes
+specdiff.
+
+| | base (devmk, llvm-c1) | dcnofprs (c4, direct calls, no frame pointer, drop redundant shrink) | dcnofprs / base |
+|---|---|---|---|
+| imagick test | 19.16 s | 19.09 s | 0.996 |
+| nab test | 903.88 s | 871.88 s | 0.965 |
+| lbm test | 1,652.37 s | running | |
+
+The base arms reproduce P5's lifetimes arms (19.14 s, 903.36 s) and P2 arm A (1,651.3 s) to 0.1 %.
+
+**Phase 2: Plain SPEC on the ordinary RISC-V baseline.** Driver perf/stockfw/rvbase-p2.sh: flash the baseline (sealed
+sha checked, read back), then a chain over plainreuse Plain stages with kit bkit42-rvbase-sbi13. The kit has no
+heartbeat and no Capstone control step. These are the same stages and executables as every Plain record so far.
+
+| Board | List | Stages |
+|---|---|---|
+| 3 | rvbase-p2c.list | imagick test, nab test, gcc train01 |
+| 2, after phase 1 | rvbase-p2d.list | lbm test |
+
+The dry runs of both reach every stage.
+- **Cross-board.** P5a showed Plain does not depend on the bitstream and kit between C.5a and V1f. Boards 2 and 3 are
+  the same hardware, so a stage is read on whichever board runs it.
+- **Predictions:**
+  - Every stage passes specdiff.
+  - Each test stage is faster than on the Capstone SoC with the same stock v1.3 firmware (imagick 16.89 s, nab
+    802.37 s, lbm 1,774.28 s).
+  - The ratio of baseline time to V1f-stock time lies in [0.70, 0.96]:
+    - the lower bound is the STREAM ratio, 319,491 / 456,044;
+    - the upper bound is the tick share alone, 12.6 % to 7.8 %.
+  - gcc train01 is below the lowest Plain record on the Capstone SoC, 3,280.89 s.
+- **Reporting.** Capstone / ordinary RISC-V for a benchmark is:
+  - Capstone, the best build chosen in B2, on the Capstone SoC, divided by
+  - Plain on the baseline.
+
+  The P5 same-kit ratio is reported beside it. That ratio holds the SoC fixed, so it isolates the software cost.
