@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""Run a staged application gate on the qualified virtual Linux platform."""
+"""Run a staged application gate on the native Linux platform.
+
+The kernel command line and the -cpu string start with the native platform's words
+(native_platform.py). A later word wins in both, so --kernel-arg and
+CAPSTONE_QEMU_CPU_EXTRA change a default without removing it.
+"""
 import argparse
 import fcntl
 import os
@@ -7,6 +12,7 @@ from pathlib import Path
 import select
 import subprocess
 import time
+import native_platform
 from qemu_lock import qemu_lock
 
 
@@ -19,7 +25,7 @@ def main():
     p.add_argument('--stage', type=Path, required=True, help='Contains executable gate.sh and application resources')
     p.add_argument('--timeout', type=int, default=600)
     p.add_argument('--disk-mib', type=int, default=1024)
-    p.add_argument('--memory', default='2G', help="Guest RAM, as QEMU's -m takes it")
+    p.add_argument('--memory', default=native_platform.GUEST_MEMORY, help="Guest RAM, as QEMU's -m takes it")
     p.add_argument('--cpus', type=int, default=1, help='Guest CPUs (default: 1)')
     p.add_argument('--kernel-arg', action='append', default=[],
                    help='Additional kernel command-line argument (repeatable)')
@@ -43,15 +49,17 @@ def main():
     with disk.open('wb') as f:
         f.truncate(a.disk_mib << 20)
     subprocess.run(['/sbin/mkfs.ext4', '-F', '-q', '-d', str(a.stage), str(disk)], check=True)
+    slots = native_platform.supervisor_slots_from_environment()
     cmd = [str(a.qemu), '-M', 'virt-capstone', '-m', a.memory, '-smp', str(a.cpus),
            '-nographic', '-monitor', 'none', '-serial', 'stdio', '-snapshot',
            '-bios', str(a.firmware if a.firmware else a.images/'fw_jump.elf'), '-kernel', str(a.images/'Image'),
-           '-append', ' '.join(['root=/dev/vda ro', *a.kernel_arg]),
+           '-append', ' '.join(['root=/dev/vda ro', *native_platform.kernel_arguments(slots), *a.kernel_arg]),
            '-drive', f'file={a.images/"rootfs.ext2"},format=raw,id=hd0',
            '-device', 'virtio-blk-device,drive=hd0',
            '-drive', f'file={disk},format=raw,id=gate,readonly=on',
            '-device', 'virtio-blk-device,drive=gate', '-cpu',
            'rv64,sstc=false,h=false,sv48=false,sv57=false,x-capstone-u-mode=true']
+    cmd[-1] += ',' + ','.join(native_platform.cpu_properties(slots))
     if a.exact_bounds:
         cmd[-1] += ",x-capstone-exact-bounds=true"
     # CAPSTONE_QEMU_CPU_EXTRA appends to the -cpu string, so a reference pin differing only in a CPU

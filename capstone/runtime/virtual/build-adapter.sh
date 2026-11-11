@@ -1,11 +1,18 @@
 #!/usr/bin/env bash
-# Historical entry point; this branch has no external-module/launcher build.
+# build-adapter.sh OUT: the adapter directory of a native kit.
+#
+# The Capstone adapter is built into the kernel (install-native-task.sh, then
+# Image with CONFIG_RISCV_CAPSTONE_TASK=y), so this directory holds no module.
+# It holds the two programs the runners stage next to an image:
+#   capstone-vexec  starts an image as a native task and prints the launcher's
+#                   "domain fault" line from the kernel's record (../linux/native-exec.c)
+#   capstone-job    records a remote command's wait status (../linux/job.c)
+# Do not package or load an old capstone_vm.ko with the native kernel.
 set -euo pipefail
-cat >&2 <<'MESSAGE'
-The external Capstone module and capstone-vexec build has been retired on this branch.
-Use capstone/runtime/virtual/install-native-task.sh with a prepared Linux tree,
-then build Image with CONFIG_RISCV_CAPSTONE_TASK=y. Boot native applications
-with the capstone_vm kernel arguments documented in tests/native-task/README.md.
-Do not package or load an old capstone_vm.ko with the native kernel.
-MESSAGE
-exit 1
+here=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+: "${CROSS_COMPILE:?RISC-V Linux compiler prefix}"
+out=${1:?Output directory}
+mkdir -p "$out"
+
+"${CROSS_COMPILE}gcc" -O2 -static -Wall -Wextra -Werror "$here/../linux/native-exec.c" -o "$out/capstone-vexec"
+"${CROSS_COMPILE}gcc" -O2 -static -Wall -Wextra -Werror "$here/../linux/job.c" -o "$out/capstone-job"

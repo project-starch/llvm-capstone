@@ -185,6 +185,7 @@ struct context {
     unsigned long dom_meta, dom_exchange, dom_exchange_bytes;
     struct cv_step dom_step;
     pid_t dom_pid;
+    unsigned long dom_entry;
     struct dom_delegate *dom_delegate;
     struct cn_context *native_context;
     struct ns_session *native_session;

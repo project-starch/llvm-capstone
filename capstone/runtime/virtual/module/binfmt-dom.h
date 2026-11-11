@@ -311,8 +311,14 @@ static void dom_task_step(void *private, struct pt_regs *regs)
     }
     goto out;
 fault:
-    pr_info("capstone_task: fault rc=%ld kind=%llu cause=%llu pc=0x%llx\n",
-            rc, s->kind, s->cause, s->pc);
+    /* One record per fault, read by capstone-vexec (runtime/linux/native-exec.c),
+     * which prints the launcher's "domain fault" line from it. The first four
+     * words keep their order. The code range is the image text the loader
+     * mapped, so a reader can turn pc into an offset in the image. */
+    pr_info("capstone_task: fault rc=%ld kind=%llu cause=%llu pc=0x%llx address=0x%llx ra=0x%llx fp=0x%llx pid=%d entry=0x%lx code=0x%lx-0x%lx\n",
+            rc, s->kind, s->cause, s->pc, s->address, s->ra, s->fp,
+            task_pid_nr(current), c->dom_entry,
+            current->mm->start_code, current->mm->end_code);
     force_exit_sig(SIGSEGV);
 out:
     slot_changed();
@@ -463,6 +469,7 @@ static int dom_load_binary(struct linux_binprm *bprm)
     mutex_unlock(&vm_lock);
     if (rc) goto out;
     c->dom_pid = task_pid_nr(current);
+    c->dom_entry = base + im.entry;
     WRITE_ONCE(dom_last_base, base);
     current->mm->start_code = base;
     current->mm->end_code = base + im.text.p_memsz;

@@ -14,6 +14,7 @@ import subprocess
 import sys
 
 import memory_mode
+import native_platform
 
 HERE = Path(__file__).resolve().parent
 
@@ -30,16 +31,16 @@ def main():
     p.add_argument('--exact-bounds', action=argparse.BooleanOptionalAction, default=False,
                    help="Run QEMU's exact-bounds profile. Option (iii) does not need it; "
                         "it is kept so a suite can be run both ways as a two-sided control.")
-    p.add_argument('--unpinned', action='store_true', help='load the module with unpinned=1 and require it to report so')
+    p.add_argument('--unpinned', action='store_true', help='require the adapter to report unpinned memory (the native adapter has no other mode)')
     a = p.parse_args()
     a.work.mkdir(parents=True, exist_ok=False)
     stage = a.work / 'stage'
     stage.mkdir()
-    inputs = dict(launcher=a.adapter / 'capstone-vexec', module=a.adapter / 'module/capstone_vm.ko',
+    inputs = dict(launcher=a.adapter / native_platform.LAUNCHER,
                   application=a.application, noreturn=a.noreturn, native=a.native, qemu=a.qemu,
                   source=HERE / 'hosted-contract.c', noreturn_source=HERE / 'hosted-noreturn.c')
     inputs.update({name: a.images / name for name in ('Image', 'fw_jump.elf', 'rootfs.ext2')})
-    for key, name in [('launcher', 'capstone-vexec'), ('module', 'capstone_vm.ko'),
+    for key, name in [('launcher', native_platform.LAUNCHER),
                       ('application', 'hosted.dom'), ('noreturn', 'noreturn.dom'),
                       ('native', 'native-hosted')]:
         shutil.copy2(inputs[key], stage / name)
@@ -49,21 +50,22 @@ dmesg -n 1
 echo HOSTED_ARM:native
 ./native-hosted
 echo HOSTED_EXIT:native:$?
-insmod capstone_vm.ko__MODULE_ARGS__ || exit 1
+__ADMIT__
 __MODE_ECHO__
 echo HOSTED_ARM:virtual
 ./capstone-vexec hosted.dom
 echo HOSTED_EXIT:virtual:$?
 ./capstone-vexec noreturn.dom
 echo HOSTED_EXIT:noreturn:$?
-rmmod capstone_vm
-echo HOSTED_CLEANUP:$?
+__LEAVE__
 echo VIRTUAL_STAGED_DONE
-'''.replace('__MODULE_ARGS__', memory_mode.args(a.unpinned))
+'''.replace('__ADMIT__', native_platform.admit())
+                              .replace('__LEAVE__', native_platform.leave('HOSTED_'))
                               .replace('__MODE_ECHO__', memory_mode.echo('HOSTED_')))
     subprocess.run([sys.executable, str(HERE / 'run-staged.py'), '--qemu', str(a.qemu.resolve()),
                     '--images', str(a.images.resolve()), '--stage', str(stage.resolve()),
-                    '--work', str((a.work / 'guest').resolve()), '--timeout', str(a.timeout)
+                    '--work', str((a.work / 'guest').resolve()), '--timeout', str(a.timeout),
+                    '--kernel-arg', native_platform.WIDE_GRANTS
                     ] + (['--exact-bounds'] if a.exact_bounds else ['--no-exact-bounds']))
     serial = a.work / 'guest/serial.log'
     log = serial.read_text(errors='replace').replace('\r', '') if serial.exists() else ''
@@ -79,7 +81,7 @@ echo VIRTUAL_STAGED_DONE
     tests['virtual:exit'] = exits.get('virtual') == '0'
     tests['noreturn:exit_zero'] = exits.get('noreturn') == '0'
     tests['noreturn:ran'] = 'HOSTED_NORETURN:41' in log
-    tests['module_unloaded'] = 'HOSTED_CLEANUP:0' in log
+    tests['no_loadable_module'] = 'HOSTED_CLEANUP:0' in log
     tests['memory_mode_verified'] = memory_mode.verified(log, a.unpinned, 1)
     # The zero-size alloca checks, by name: an image built before them would
     # otherwise pass on the remaining checks.
