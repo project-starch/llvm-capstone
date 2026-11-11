@@ -1756,3 +1756,56 @@ changed. It uses kit bkit23-all2-b1-nohb on C.5a, with no heartbeat. The dry run
 
 **Choice rule.** For each benchmark, the build with the shorter board time on its run command is reported, among base,
 dcnofprs and U1c8. Every choice is disclosed with its exe hash. imagick stays dcnofprs, on Addendum 45's board reading.
+
+## Addendum 52 (11 Nov 23:4x): Addendum 47's baseline readings; xz with the exit sweep off, before it runs
+
+**Plain on the baseline** (board 3, perf/stockfw/rvbase-p2b.list, kit bkit42-rvbase-sbi13, no heartbeat; sums of the
+run commands from result.json):
+
+| Benchmark | Baseline | rc, specdiff | Plain on C.5a (record, with heartbeat) | SoC factor, raw / heartbeat-corrected (f 0.0966) |
+|---|---|---|---|---|
+| xz test, 12 commands | 4,956.00 s | 0 ×12, 12/12 PASS | 8,044.1 s | 1.62 / 1.47 |
+| mcf test (hpm stage) | 5,085.28 s | 0, 2/2 PASS | 9,077-9,150 s | 1.78-1.80 / 1.61-1.63 |
+
+- Addendum 47's predictions: both run faster on the baseline (holds); mcf's SoC factor is at least 1.3 (holds, 1.61
+  corrected).
+- **Capstone xz test, base 0d8878ad8a5046df** (board 2, C.5a, bkit23-all2-b1-nohb): 7,829.32 s, rc 0 ×12, specdiff
+  12/12. **Capstone / ordinary RISC-V = 1.580.** dcnofprs is still running.
+- **Where xz's time goes** (per command, run 0): 299 s in the context, 186 s outside it inside the VM window (3,458
+  faults pinning 130,555 pages, 4,427 steps), and 64.9 s of exit teardown. In-context time over the 12 commands is
+  4,578 s, below the baseline's 4,956 s total. The gap to the baseline is outside time.
+
+**The run.** One xz test run on board 2 after its U1c8 chain (u1run.sh, pid 401469) ends, with `retire_exit_sweep=2`.
+- **Build:** the fastest of base, dcnofprs and U1c8 on board 2's no-heartbeat runs. The rule is perf/ns/pickxz.py:
+  done, 12 run commands at rc 0, 12/12 specdiff PASS, smallest sum of run seconds. Its controls: a candidate that is
+  faster but fails one specdiff is skipped; no data exits 1 and the driver stops.
+- **Stages:** perf/ns/stages/557.xz_r-{base,dcnofprs,U1c8}-ns, made by perf/ns/mkstages.py. Each is a resolved copy of
+  its source stage. Every file is byte-identical except run.sh, which gains two lines and loses none:
+  - after `@@SPEC-ARM-BEGIN`, write 2 to retire_exit_sweep through sysfs and print `@@NS` with the value read back;
+  - before `@@SPEC-ARM-END`, write 3 back.
+  - The executables are base 0d8878ad8a5046df, dcnofprs 66afc8c2d5227d33 and U1c8 c035ff64b4fc0f8e.
+- **Kit and module:** bkit23-all2-b1-nohb, unchanged. Its module (2188cab26d40) declares the parameter 0644. Mode 2
+  skips the sweep only on a destroying retire of an exiting task, and every other retire takes mode 0. xz has none of
+  those: all 13 teardown lines of the base run read exiting=1. So one variable changes against the picked build's
+  run.
+- **Driver:** perf/ns/nsrun.sh waits for the pid, picks, writes perf/ns/ns-b2.list, and calls u1run.sh with log
+  perf/ns/nsrun-b2.log and output out-ns2-b2. Its dry run is clean and is kept as perf/ns/dry-nsrun.log.
+
+**Predictions.**
+- rc 0 and specdiff 12/12. `@@NS` reads 2. The 12 command teardowns read `sweep=2 exiting=1`. Instret is within
+  0.1 % of the picked build's run.
+- Teardown falls from 778.5 s to about 279.5 s, the 5 Nov sweep-2 run's measure (out-ns-b2x: 1,566,694 pages,
+  0.1784 ms/page, against 0.4968 ms/page at sweep 3).
+- **The run sum is 400-600 s below the picked build's run** (point −499 s). For base that is about 7,330 s, or 1.48×
+  the baseline.
+
+**Disclosure, for the per-benchmark options table.**
+- With mode 2, an exiting context's frames go back to Linux without the tag sweep.
+- The tags are cleared by the kernel's overwrite before any reuse. results/2026-11-05-nosweep N1 showed this on
+  silicon: 0 tagged granules in ≥ 47 k reused frames.
+- Its gate weakness stands: the skip keys on PF_EXITING, not on `mm_users == 0`.
+- The record for xz test already uses this mode (Addendum 7: bkit25-nset, 8,084.2 s with the heartbeat). This run is
+  its no-heartbeat counterpart on today's builds.
+
+**Not for mcf.** mcf retires its arrays during the run, and under mode 2 those retires take mode 0, which is slower
+(results/2026-11-05-mcfx).
