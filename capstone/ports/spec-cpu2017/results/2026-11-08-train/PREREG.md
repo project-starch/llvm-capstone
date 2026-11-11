@@ -2018,3 +2018,55 @@ and specdiff PASS. The kit's control rungs ran in each boot.
   has it.
 
 **Chain C continues:** xz dcnofprs, then mcf base. They are read against P2 (xz) and P3 (mcf) in the next addendum.
+
+## Addendum 58 (12 Nov 08:0x): xz on the tag page bitmap (P2 holds); U1c8 on board 2 read and the choice rule applied; the tag-word cache (v2) through sweep and synthesis gate
+
+**xz dcnofprs on caplifive_tagbm_6df309173** (board 1, Addendum 54's chain C, kit bkit45-tagbm-all2-nohb): 12/12
+commands rc 0, specdiff 12/12 PASS. The run commands sum to 5,946.72 s, against 7,740.77 s on C.5a: −23.2 %. **P2 holds
+for xz** (point ~5,800 s). Capstone / ordinary RISC-V for xz goes from 1.562 to **1.200** (riscv 4,956.00 s). mcf, the
+last stage, is running; P3 is read in the next addendum.
+
+**U1c8 on board 2** (Addendum 51; C.5a, kit bkit23-all2-b1-nohb, no heartbeat; every stage rc 0 and specdiff PASS):
+
+| Test | dcnofprs | U1c8 | U1c8 / dcnofprs | Other record |
+|---|---|---|---|---|
+| gcc test | (not in this chain) | 13.2 s | | |
+| lbm | 1,668.27 s | 1,673.20 s | +0.3 % | base 1,652.37 s (board 1, 11 Nov) |
+| nab | 870.98 s | 876.85 s | +0.7 % | dcnofprs 871.88 s (board 1, 11 Nov) |
+| xz (12 commands) | 7,740.77 s (board 1) | 7,797.03 s | +0.7 % | base 7,829.32 s |
+
+- nab dcnofprs read 870.98 s here and 871.88 s on board 1: the two boards agree to 0.1 %.
+- **Choice rule (Addendum 51: the shortest board time among base, dcnofprs and U1c8):** lbm base, nab dcnofprs, xz
+  dcnofprs. U1c8 is not chosen for any of the three. gcc's choice waits for a gcc test dcnofprs run without the heartbeat.
+- These are C.5a readings. The tagbm and tag-word-cache bitstreams change the memory side, not the code, so the order is
+  expected to hold, but it is not re-measured there.
+
+**The tag-word cache (v2) for marked pages.** Design: docs/plans/2026-11-12-tag-page-bitmap.md section v2, revised in
+this commit after claim-auditor refuted the first draft. capstone-ariane perf/tag-page-bitmap:
+- 7b929ac71: the page-bitmap lookup no longer waits a cycle for a head in the previous head's 64-page word (Addendum 56's
+  lbm residual). Sim T5 matched pair, delay 0: 1,024 load misses 10,243 → 9,220 cycles, stores unchanged.
+- dcb52a030: the TWC (256 whole tag words, BRAM). A marked-page load miss whose word is cached makes no tag read; a
+  store whose cached byte is unchanged makes no tag write.
+- ebe86cc01: claim-auditor on dcb52a030 found that an install could withdraw an AXI VALID without a handshake. Fixed,
+  and a sim-only VALID-stability check was added. Its positive control (+define+AXI_DROP_PC) prints 9 drops.
+
+Checks on ebe86cc01:
+- **Directed test tag-word-cache:**
+  - SUCCESS at S12_MEM_DELAY=12 and at delay 0;
+  - the TWC_OFF control passes with the same values and 53 tag reads against the TWC's 25.
+- **What no run has exercised.** The poison of a fill read by a tag or fill write issued while the read is in flight:
+  16 race variants created no overlap, because the D$ issued the older store about 135 cycles after the younger load's
+  tag beat. Nor did any test create the VALID-drop scenario. Both rest on review (claim-auditor, twice), not on a run.
+- **Sweep, 95 tests, against the 6df309173 sweep** (same seed 20260922, S12_MEM_DELAY=12, SUP_TRACE):
+  - 90 identical, 3 excused as missing on both sides.
+  - call-hot and s06sec-ctx-scalar-roundtrip differ only in exception counts: TIMEOUT on both sides at 2,000,013.
+  - RVFI: 91 of 92 traces identical; cap-tag-cache differs only in mcycle reads.
+  - AXI-VALID-DROP 0 in every test, and a wait for READY was seen in each, so the check was not vacuous.
+- **Lint gate PASS**, every counter equal to 6df309173.
+- **Synthesis-only gate** (40 GB guard, peak 20.64 GB): wt_axi_adapter 2,706 LUT / 865 FF / 8 RAMB36 + 2 RAMB18,
+  against 1,980 / 530 / 7 + 1 for v1's gate. Core 145,849 LUT against 145,134.
+- The full build is running.
+
+**Correction to the record of 6df309173.** The adapter's assertions, including tag_wr_pend_no_wrap, cited in Addendum 54,
+sit inside `ifndef VERILATOR`. No simulation has ever evaluated them. 6df309173's wrap fix rests on the argument, as
+Addendum 54 already said of the simulation; it does not rest on an assertion.

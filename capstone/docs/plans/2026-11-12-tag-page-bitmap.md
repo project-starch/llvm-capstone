@@ -114,6 +114,93 @@ no TAG_WAIT drain and no tag beat.
 - Capstone in-context cycles fall on lbm, nab, xz and imagick.
 - mcf in-context falls by less than 15 % with v1 alone.
 
+## v2: a tag-word cache for marked pages (design, 12 Nov, before any RTL; revised after claim-auditor)
+
+**Why.** On silicon v1 took 25-34 % off Capstone imagick and lbm but only 5.6 % off nab (train PREREG Addendum 57).
+The Plain bitmap removed 138 s of nab's tag path; Capstone nab kept most of it. The working hypothesis: nab's
+pointer-holding records make its data pages marked. On a marked page each store still writes its tag byte, and each
+load miss still drains every outstanding tag write and then makes a second, serialised memory round trip.
+
+**State.** A direct-mapped tag-word cache (TWC):
+- 256 entries, indexed by the tag word address bits [10:3]. One tag word is 8 tag bytes, 128 B of data, so the cache
+  covers 32 KiB, the D$ size.
+- Each entry: a valid bit (flops), the word address bits [31:11], and the 8 tag bytes whole. The D$ receives the whole
+  byte (`dcache_rd_shift_user_d[0]`), so a cached bit would not be equivalent.
+- A sticky `twc_off` bit, cleared only by reset.
+
+**Invariant.** A valid entry holds the bytes DRAM will hold once every tag write the adapter has issued has completed.
+
+**Lookup.** Address and data are read every cycle at the D$ FIFO head's tag word (BRAM, registered, like the bitmap).
+The registered result serves the head only if:
+- the head's granule (paddr[31:4]) is the one it was read for;
+- no TWC change (install, invalidation, `twc_off`) happened in the read cycle.
+
+So a head waits one cycle whenever its granule changes, and only on a marked page. A tag word does not line up with
+128 B of data (the base is at byte 5 of a word), and comparing word addresses would put an adder into the arb_gnt cone.
+No decision about a head is taken without a valid lookup: the head waits, as with the bitmap.
+
+**Load miss on a marked page.**
+- **Hit:** no tag read, no TAG_WAIT. The cached byte is pushed with the request into the tag-pending FIFO, which becomes
+  {beat, override, byte}. At the data's last beat the byte goes into the user lane, as a tag beat would.
+  - The byte is taken at grant. Every older store's TAG_WR was issued (the store head is popped only on its TAG_WR
+    grant), so the byte includes it. No younger store's write is included.
+- **Miss:** today's path: drain, then the tag read. The read is the whole aligned 8-byte word (size 3) at the same bus
+  cost. Its beat installs the entry unless the read was poisoned.
+
+**Poison.** A fill read is not installed if any of these happened from its issue up to and including the cycle its beat
+is consumed (the check in that cycle is combinational):
+- a TAG_WR to the same word;
+- any TAG_FILL write, to any word. 1 tag word in 32 holds bytes of two pages, so a fill can rewrite part of a word that a
+  marked page's read is fetching (claim-auditor 2a);
+- `twc_off` being set.
+
+**Store on a marked page.**
+- With a hit and the cached byte equal to {7'b0, ctag}: no TAG_WR.
+- Otherwise TAG_WR as today, and its issue **invalidates** the entry at that index. There is no byte merge, so a stale
+  hit can never overwrite another word's entry (claim-auditor 5i/5ii). An invalidation and an install in the same cycle
+  at the same index: the invalidation wins.
+
+**Writers of tag bytes, enumerated.** The invariant holds only against writers the adapter sees:
+1. TAG_WR: invalidates its entry and poisons a same-word fill in flight.
+2. TAG_FILL: clears every valid bit and poisons any fill in flight.
+3. **Software writes into the tag region** set `twc_off` for the rest of the boot and poison any fill in flight. These
+   are D$ stores, AMOs or SC (ATOMIC_REQ) whose paddr lies in [0xBC2D_2D20, 0xBFF0_0000).
+   - The lower bound is the 16-byte granule that holds the first tag byte. A store at 0xBC2D_2D20..2F is a
+     data-region store that writes tag bytes (claim-auditor 3).
+   - Their B responses are not counted in tag_wr_pend, so TAG_WAIT does not order them before a tag read (claim-auditor
+     2b). Turning the cache off makes that today's behaviour again, not a lasting stale entry.
+   - No firmware or module source writes the tag region (train PREREG Addendum 56). Only tests forge tags this way, and
+     a boot that does it falls back to v1.
+4. **Not seen:** the debug module's system-bus master (`dm_axi_m_req`, ariane_xilinx.sv:398). The TWC is cleared only
+   by reset. A debug-bus write into the tag region while the core runs can leave a stale entry; a fence does not flush
+   the TWC. The board flow loads over JTAG before the core runs; the wedge diagnostic only reads. Recorded, not handled.
+5. There is no other writer. The bitstream's top is ariane_xilinx (the synthesis report's design name), and its
+   crossbar has two master ports (`NrSlaves = 2`, corev_apu/tb/ariane_soc_pkg.sv:20, "actually masters"):
+   - slave[0], the core;
+   - slave[1], the debug module (ariane_xilinx.sv:659-672).
+
+   Revocation reads and writes use D$ ports 2 and 3 (cva6.sv:2421-2423), so they pass through this adapter.
+
+**Expected effect.**
+- Load misses that walk an array hit 7 of 8 times.
+- Untagged stores to words whose tags are known to be 0 write nothing.
+- With fewer outstanding tag writes, a miss's drain is shorter.
+- The targets are nab, mcf, gcc and perl.
+
+**Verification.** The same order as v1.
+- Directed test tag-word-cache, each case created:
+  - a hit with tag 1, and a hit with tag 0;
+  - a store skip, and a store that changes the tag (the entry invalidated, DRAM checked after a conflict eviction);
+  - an older tagged store in the write buffer racing a younger load's fill read on the same word;
+  - the same race on a boundary word, against a page's first tagged store;
+  - a software write into the tag region (last, since it turns the TWC off).
+- `+define+TWC_TRACE` prints every tag read and write, so the counts tell the models apart, not only the verdict.
+- The 95-test sweep against v1.
+- The lint gate, and claim-auditor on the RTL.
+- A synthesis-only gate, then the full build.
+
+It ships in one bitstream with the same-word lookup bypass (perf/tag-page-bitmap 7b929ac71).
+
 ## Fairness
 
 - This changes the Capstone SoC only. The riscv baseline is untouched.
