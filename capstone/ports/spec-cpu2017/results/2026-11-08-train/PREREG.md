@@ -1809,3 +1809,46 @@ run commands from result.json):
 
 **Not for mcf.** mcf retires its arrays during the run, and under mode 2 those retires take mode 0, which is slower
 (results/2026-11-05-mcfx).
+
+## Addendum 53 (12 Nov 00:3x): Addendum 46 read: the shadow-tag FSM is the whole SoC factor for Plain; instrumentation audit
+
+**The run.** Board 3, bitstream caplifive_notag_6806732fb (V1f with `needs_tag = 1'b0`), kit bkit43-notag-sbi13, stock
+OpenSBI v1.3, no heartbeat (HB lines 0 in every stage). It ran 23:22-00:21. Every stage rc 0, specdiff PASS.
+
+| Reading | riscv baseline | notag | V1f stock | (V1f − notag) / (V1f − riscv) |
+|---|---|---|---|---|
+| getppid | 1,018 cycles | 1,054 | 1,891 | 95.9 % |
+| imagick test | 11.17 s | 11.18 s | 16.89 s | 99.8 % |
+| nab test | 664.14 s | 664.07 s | 802.37 s | 100.0 % |
+| lbm test | 1,098.43 s | 1,098.38 s | 1,774.28 s | 100.0 % |
+| hiccup2 gaps | 7.764 % | 7.756 % | | |
+
+- **Prediction (a) holds on every reading:** each is within 5 % of the baseline.
+- For ordinary code, the SoC factor is the shadow-tag FSM in `wt_axi_adapter.sv`, and only that.
+- The optimisation that follows is docs/plans/2026-11-12-tag-page-bitmap.md, an on-chip page bitmap. RTL is on
+  capstone-ariane perf/tag-page-bitmap from 1fc2cd5aa. It is lint-clean against its base, with every gated counter
+  equal, and in simulation now.
+
+**Capstone / ordinary RISC-V on tonight's clean runs** (C.5a, bkit23-all2-b1-nohb; sums of run commands from result.json):
+
+| Benchmark | Capstone | riscv | Ratio | Capstone in-context | Largest bucket |
+|---|---|---|---|---|---|
+| xz (base) | 7,829.32 s | 4,956.00 s | 1.580 | 4,578 s | outside the context (pins, teardown) |
+| mcf (base) | 10,555.03 s | 5,085.28 s | 2.076 | 9,306 s | in the context |
+| lbm (base) | 1,652.37 s | 1,098.43 s | 1.504 | 1,383 s | in the context |
+| nab (dcnofprs) | 871.88 s | 664.14 s | 1.313 | 816 s | in the context |
+| imagick (base) | 19.16 s | 11.17 s | 1.715 | 11.8 s | outside the context and the launch |
+
+**Instrumentation audit of the Capstone path.** The rule from here on:
+- An instrument stays when it costs O(1) per command, or a few CSR reads per context entry.
+- Anything that perturbs is off.
+- No reported ratio uses a correction factor (f). Only direct runs count.
+
+| Item | Cost inside the timed window | Status |
+|---|---|---|
+| batch heartbeat | f 8.9-10.8 % | OFF in every *-nohb kit; each run logs `HB lines 0` |
+| launcher SHA-256 of the image at every exit (launcher a8a4dbe637ac758a under CAPSTONE_EXEC_DIAGNOSTICS=1, which boardvm.py exports) | gcc train 92 s, perlbench 7.0 ks | absent in the bkit23 (0bde5fd8e0c9c374) and bkit32 (1d8b4f0829bef0e7) launchers, where the switch gates only the fault record. A stage on an a8a4dbe6 kit must `unset` it |
+| module bench counters and exit timing | a few CSR reads and atomic adds per entry; under 10^6 cycles per xz command | kept |
+| per-command kernel lines (teardown, release, bench) and the launcher stats line | 3-4 lines per command | kept |
+| monitor diagnostics (CPMX_DIAG, S23_REFUSAL_READ) | only on a refusal or fault; none of their tags in tonight's xz or mcf transcripts | kept |
+| monitor per-invoke lines | about 5 ms each | OFF (CAPSTONE_SUPERVISE_QUIET) |
