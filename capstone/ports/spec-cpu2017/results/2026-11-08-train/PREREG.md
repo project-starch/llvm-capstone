@@ -1638,3 +1638,65 @@ This replaces Addendum 47's heartbeat-corrected gcc estimate with a measurement.
   notag.list. The stages and predictions are Addendum 46's, unchanged.
   - The dry run reached all 5 stages.
   - A wrong NB_SHA stops the driver at its hash gate (negative control).
+
+## Addendum 50 (11 Nov 22:0x, before it runs): Plain perlbench and x264 test on the baseline; F11 from the RTL; the U1c8 candidate
+
+**Plain perlbench and x264 test on the ordinary RISC-V baseline.** Neither has been run on caplifive_rvbase_d31345cf3.
+- **Driver.** perf/stockfw/rvbase-p2.sh 3, waiting on the notag driver (pid 329593), with kit bkit42-rvbase-sbi13 (stock
+  OpenSBI v1.3, no heartbeat) and list rvbase-p2e.list. The driver flashes the baseline back if notag is resident. Its
+  dry run reached both stages.
+- **Stages, executables, budgets.** Exe hashes come from the stage files, because plan.json is stale on both stages.
+
+  | Stage | Exe hash | Step / booking |
+  |---|---|---|
+  | perf/plainreuse/stages/500.perlbench_r-test-plain-rv64r | 3bbd77760d40d34a | 55,000 s / 960 min |
+  | perf/plainreuse/stages/525.x264_r-test-plain-rv64r | 2d8170fd12b5114f, imagevalidate 52b5c95397740354 | 60,000 s / 960 min |
+
+  The kit's idle limit equals the step budget, so a quiet run is not cut.
+- **Pass criteria:**
+  - perlbench: rc 0, specdiff 2/2.
+  - x264: rc 0. Its test stage has no imagevalidate, so specdiff reads 0/3 NO-OUTPUT by construction. The verdict is
+    that the data outputs are identical by hash to the C.5a Plain record, out-b2q.
+- **References** (C.5a, heartbeat):
+  - perl: c0 499.35 s + c1 21,383.22 s (out-b1q). Its heartbeat share is f = 0.0946 (Addendum 34).
+  - x264: gen 4,110.44 s + run 50,441.53 s (out-b2q).
+- **Predictions.** The run command's time on the baseline is the C.5a time × (1 − f) divided by the SoC factor. That
+  factor is 1.17-1.56 on imagick, nab and lbm.
+  - perl c0 + c1: 12,700-16,900 s, point about 15,000 s.
+  - x264 run command: 29,000-39,500 s, taking f ≈ 0.09 as for perl.
+  - Outside either band means the SoC factor for these programs lies outside the range measured so far. That is a
+    finding, not a fault.
+
+**F11 from the RTL source.** Q-04 (b) is in the sealed sources of both bitstreams the Capstone arms use. In C.5a 1fc2cd5aa
+and V1f 0ef470559, capstone_flu_unit.anvil:14-18 keeps an untagged (NOT_CAP) MOVC source, like NONLIN. Bitstream 3
+(e7af48457) has the same lines, and its board reading was PRESENT. So `+movc-keeps-integer-source` matches the RTL on
+C.5a and V1f by source. A board reading on C.5a is still to come. F11 stays open only for that reading.
+
+**The U1c8 candidate.** sdk-U1c8 is the compiler lane's universal configuration:
+- llvm-c4 2833be4b46d5 with U/FLAGS: shrinkto-globals with end-adjust, direct calls, no frame pointer, both
+  drop-redundant-shrink modes, and -fno-jump-tables;
+- libc and the rt-x runtime built with the same flags;
+- the runtime's mapping cache bounded at 8 MiB;
+- no Zbb. The baseline decodes Zbb (CVA6ConfigBExtEn = 1), but Zbb stays off in both arms.
+
+None of it is landed. The c8 runtime line is uncommitted (wt-fpc a443914d9df2 + malloc-mapping.c:66). Before any U1c8 board
+number is reported, the lane is asked to push it, and sdk-U1c8's directory hash goes in the record.
+
+QEMU (kit-unq), in-context instructions:
+
+| Benchmark | U1c8 | Best so far |
+|---|---|---|
+| perl test | 87.623 G, specdiff 2/2 (U/u2/twins/q-perl-test-U1c8/result.json) | udcnofp 91.12 G; the board's best perl, 28,509.41 s run command (out-udc-b3) |
+| gcc test | 22.19 M | c3fdcnofprs 22.79 M (same kit, perf/u1c8) |
+| gcc train01 | 12.452 G | c3fdcnofprs twin running |
+
+Order, before any U1c8 run on a board:
+1. **Same-kit QEMU screen.** dcnofprs twins of imagick, lbm, nab, mcf and xz (perf/u1c8/twin2.sh) sit beside the U1c8
+   twins, all on kit-unq. U1c8 goes to the board for a benchmark only where it is not worse there.
+2. **Shakedown boot on C.5a,** because rt-x has never run on silicon. Kit bkit23-all2-b1-nohb, the kit of the B2 base and
+   dcnofprs runs. U1c8 gcc test comes first, then mcf test. It is pre-registered on its own, with its exe hashes.
+3. **Then the choice runs:**
+   - the short benchmarks first;
+   - perl and x264 last, as single runs of U1c8 without the heartbeat. U1c8 is reported for perl or x264 if its run
+     command is no longer than the best record × (1 − f). Otherwise the best record's build runs again without the
+     heartbeat, and the shorter one is reported.
