@@ -1115,3 +1115,43 @@ and the Capstone arm.
     1,651.3 / 1,713 ≈ 0.964.
   - **Reporting.** The same-kit ratios are reported as the MEASURED ratios with the fewest confounds. The tick
     adjustment is applied beside them, never instead, with P3 and P4 as inputs.
+
+## Addendum 38 (11 Nov 16:1x): P2 read (F9 false); the table re-derived from its sources; the two gcc numbers are not one variable
+
+**P2 arm B** (board 1, C.5a, kit bkit23-all2-b1, heartbeat): Capstone lbm test 1,810.12 s (spatial) and 1,810.91 s
+(lifetimes), specdiff PASS. It reproduces the record of 1,809.88 s to 0.01 %. There are 104 @@HB lines over the two
+arms, about 52 per arm.
+- The Capstone heartbeat share is f_C = 0.0877 (spatial) and 0.0882 (lifetimes), against Plain lbm's 0.0929.
+- The cost per beat is (1,810.12 − 1,651.3) / 52 = 3.05 s, inside Plain's 3.0-3.8 s band. **F9 FALSE:** the Capstone
+  arm pays the heartbeat as Plain does.
+- The residual on module-route ratios is × (1 − f_C) / (1 − f_P) = × 1.006. It is measured on lbm only and is reported
+  as a range, not applied as a point.
+
+**Table re-derived from the recorded times** (no deviation either way):
+- **perlbench, 1.238.** Raw 54,021.76 / 48,206.54 = 1.1206, divided by (1 − perl's own f 0.0946).
+- **mcf, 1.176** (it was 1.180, the top of its range). Raw 47,980.64 / 45,160.79 = 1.0624. mcf has no f of its own, so
+  the mean of lbm's and nab's f, 0.0966, is used.
+- **imagick, 0.973** (it was 0.977, the top of its range). Raw 38,251.91 / 43,517.91 = 0.8790, with the same mean f.
+- **lbm, 0.926.** Raw 20,773.27 / 24,724.69 = 0.8402, with lbm's own f.
+- **Module route, both arms with the heartbeat:**
+  - nab 79,730.08 / 73,311.84 = 1.088;
+  - x264 run0 36,355.01 / 41,232.13 = 0.882;
+  - xz c1 8,730.5 / 8,735.95 = 0.999;
+  - gcc 3,924.91 / 3,280.9 = 1.196.
+
+**gcc: the native and module numbers differ in the EXECUTABLE, not only the route.**
+- **Module, 3,924.91 s,** is the dcnofp image 736f881f4958ac3b (results/2026-11-08-dcnofp), on kit bkit32-q32 with
+  a 32 M-cycle quantum. It is built with llvm-c4, `-mllvm -capstone-direct-calls` (default off, on a compiler-lane
+  branch) and `-fomit-frame-pointer`. Its in-context instructions are 6.3 % fewer than the c3f build's.
+- **Native, 4,456.25 s,** is df93c433bb1a5418: the 3 Nov devmk make lines, llvm-c1, with the frame pointer and without
+  direct calls. It was replayed with the native SDK
+  (docs/history/09-11-2026_17-10-00_native-quick-test-e5native.md).
+- **The other Capstone numbers are mostly devmk builds.** perl, mcf, imagick, lbm and nab are devmk builds through
+  each route. x264 is c3f.
+- **Conclusions:**
+  - gcc's module 1.196 used a compiler configuration no other benchmark got. That is favourable to Capstone.
+  - gcc's native 1.503 is not a native-route effect measured on the same code. At test size, the same devmk exe ran
+    native 20.17 s against the module's 25.38 s in-VM (Addendum 21).
+  - The like-for-like module number on the c3f exe is 4,214.98 s (out-q32-b3, same kit) = 1.285.
+  - Which gcc build is the reported one is the lead's call. The reporting rule's "native" assumed the same exe, and it
+    does not hold here.
