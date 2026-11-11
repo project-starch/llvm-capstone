@@ -1985,3 +1985,36 @@ bc2d2d2d / 2d2d / tag_mem / 0xbff0 / 0xbc.
 
 **Chain C** (Capstone, kit bkit45-tagbm-all2-nohb) started at 03:53 and is read against P0, P2 and P3 in the next
 addendum.
+
+## Addendum 57 (12 Nov 04:5x): Addendum 54's Capstone chain, first three stages read; P2 holds for imagick and lbm, fails for nab
+
+**Capstone on caplifive_tagbm_6df309173** (board 1, kit bkit45-tagbm-all2-nohb, no heartbeat). Every stage has rc 0
+and specdiff PASS. The kit's control rungs ran in each boot.
+
+| Test (build) | C.5a, 11 Nov | tagbm | Change | P2 (≥ 10 %) | riscv | Capstone / riscv, C.5a → tagbm |
+|---|---|---|---|---|---|---|
+| imagick (base) | 19.16 s | 14.39 s | −24.9 % | holds | 11.17 s | 1.715 → 1.288 |
+| nab (dcnofprs) | 871.88 s | 823.09 s | −5.6 % | **fails** | 664.14 s | 1.313 → 1.239 |
+| lbm (base) | 1,652.37 s | 1,096.40 s | −33.6 % | holds | 1,098.43 s | 1.504 → 0.998 |
+
+- In-context cycles: imagick 240.76 M, nab 19.552 G, lbm 23.800 G.
+- **nab fails P2, in the way Addendum 54 named.** On Plain the bitmap removed 138 s of nab's tag path (V1f 802.37 s →
+  664.07 s, notag). On Capstone it removed 49 s. The reading the addendum gave for this case: Capstone's nab data pages
+  are marked by tagged stores. nab's molecule, strand, residue and atom records hold pointers, which are capabilities
+  under Capstone, so their pages take the tag path. This is a hypothesis; nothing here has counted marked pages. It is
+  the v2 question, as for mcf.
+- **lbm now reads as fast as ordinary RISC-V, 0.998.** That is not a measurement artefact of this run. Addendum 40 already
+  had Capstone lbm below Plain on the Capstone SoC, and that residual is still open. What is known:
+  - both builds use the same clang (the SDKs' cc-prmerged) and the same OPTIMIZE; lbm base carries no Capstone-only
+    tuning (RVC was ruled out as a cause in Addendum 36);
+  - on the same tagbm bitstream, Capstone (1,096.40 s) is faster than Plain (1,112.84 s);
+  - the candidates, not yet tested: address translation (Plain runs under Sv39 with 4 KiB pages and a 16-entry DTLB;
+    a Capstone context does not translate) and the layout of lbm's two grids (musl mallocng against Capstone's heap).
+  - If translation is the cause, a fairer ordinary-RISC-V arm is Plain with huge pages (THP), the same lever the audit
+    listed for mcf. That arm is not run yet.
+- **Fairness note, separate from these three.** U1c8 (Addendum 51) carries `-fno-jump-tables`, which is generic, not
+  Capstone-specific. Plain has not been tried with it. Where U1c8 is reported (perl, gcc), Plain gets the same flag tried
+  before the ratio is final. `-fomit-frame-pointer` in dcnofp is already clang's default for RISC-V at -O2, so Plain
+  has it.
+
+**Chain C continues:** xz dcnofprs, then mcf base. They are read against P2 (xz) and P3 (mcf) in the next addendum.
