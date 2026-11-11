@@ -1211,3 +1211,48 @@ validation fails by construction.
   - The validation fails by construction, so the step logs NAT FAIL. That is expected and is not a route failure.
   - Prediction: if a native task takes ticks as a Linux task does, the share is 9.2 % ± 1.5 with the 10/20 ms peak,
     and the native-route ratios need no tick adjustment. If the native route masks ticks, it is read like P3.
+
+## Addendum 40 (11 Nov 16:3x): P3b and P6 read; the tick-neutral table; the lead's decisions on gcc, native builds and the baseline
+
+**P3b read** (board 1, C.5a, kit bkit32-q32-nohb, out-caphic-q32-b1). In both arms there is one gap of 23-27 ms every
+~402 ms, 149 of them, all 2^19. Shares are 5.909 % (spatial) and 5.935 % (lifetimes), so **t_C(q32) = 0.059**, inside
+the predicted [1.5, 7] %. The period is ~402 ms, not the 1.28 s quantum, so another limit sets the exit rate. That limit
+is not identified here.
+
+**P6 read** (board 2, V1f, native route, out perf/tick/nt/out/v1f-hic-b2). The run is rc 0. The validation is rc 255,
+which was expected, so the driver logged NAT FAIL by construction. There are 298 gaps: 148 of 2^17 (2.010 %), 149 of
+2^18 (4.540 %) and one of 2^16. The pattern matches P3's. **t_C(native) = 0.0655.** The native route also batches
+preemption at about 6.5 %, and the native prediction "9.2 % with the 10/20 ms peak" fails: no 10/20 ms population.
+
+**Tick-neutral factors**, applied symmetrically: × (1 − t_C) / (1 − t_P), with t_P = 0.0933 (the mean of Addendum 35's
+9.432 % and P4's 9.233 %, idle) and t_C read on each ratio's own configuration, also idle. A memory-heavy load raised
+Plain's share to 10.9 % (P4d). Capstone's share under memory load is not measured, so idle against idle is the
+unbiased point. The upper column assumes Capstone's share does not grow.
+
+| Benchmark | Measured | Configuration, t_C | Factor | Tick-neutral | Upper |
+|---|---|---|---|---|---|
+| perlbench | 1.238 | native, 0.0655 | 1.0307 | 1.276 | 1.298 |
+| gcc | 1.196 | module q32, 0.059 | 1.0376 | 1.241 | 1.263 |
+| mcf | 1.176 | native | 1.0307 | 1.212 | 1.233 |
+| nab | 1.088 | module q32 | 1.0376 | 1.129 | 1.149 |
+| xz c1 | 0.999 | module 8 M (nset), 0.065 | 1.0315 | 1.030 | 1.049 |
+| imagick | 0.973 | native | 1.0307 | 1.003 | 1.020 |
+| lbm | 0.926 | native | 1.0307 | 0.954 | 0.971 |
+| x264 | 0.882 | module q32 | 1.0376 | 0.915 | 0.931 |
+| geomean | 1.052 | | | 1.087 | |
+
+The module-route heartbeat residual (× 1.006, P2) is not applied. lbm and x264 stay below 1 after this correction.
+Their residual is still open.
+
+**Lead's decisions (11 Nov, this conversation):**
+- gcc train reports the module route, 1.196 (dcnofp, 3,924.91 s). That replaces Addendum 38's reporting-rule reading.
+- From now on, native-route executables are built with the best optimised compiler configuration available.
+- **The baseline is "ordinary RISC-V".** Plain is measured on a bitstream of the same SoC with the Capstone extension
+  off: the Capstone config with only CAPSTONE_EXT = 0 and without CAPSTONE_ITFC_EN, with caches, TLBs and predictors
+  unchanged. The firmware is stock OpenSBI and the Linux kernel is the same.
+  - **CORRECTION.** The 2026-11-01 pre-registration called ObjLife / Plain "the cost of Capstone as a whole". It is the
+    cost of Capstone's software on Capstone hardware and firmware. Any cost the extension's logic or the Capstone
+    monitor imposes on ordinary code is paid by Plain too, and cancels. Every Plain-relative ratio so far is that
+    narrower quantity.
+  - The baseline build and its firmware bring-up are being scoped now. The baseline is not available before the
+    20:00 deadline.
