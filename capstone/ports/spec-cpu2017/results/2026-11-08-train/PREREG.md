@@ -1910,3 +1910,38 @@ stopped. It is queued again behind tbrun.sh with the same list, kit and output p
   - P1 failing: the lookup costs more than the tag path saved.
   - P2 failing while P1 holds: Capstone's data pages are marked by tagged stores that this reading of the programs
     does not predict.
+
+## Addendum 55 (12 Nov 02:5x, before any board call of Addendum 54): the seal checks read; one sweep flip, attributed
+
+**Build.**
+- 6df309173 built with launch-job full: exit 0, 1 h 14 min.
+- Sealed bitstream: caplifive_tagbm_6df309173.bit, sha256 d85ef822a765d3511d310d67f32cd16ea4d079d3224ed9c10245ee282d73730c.
+  The seal, with its reports, is in the build host's synth/tagbm-6df309173-full-out/seal. The bitstream is in the store at
+  mode 0444, read back.
+
+| | tagbm 6df309173 | C.5a 1fc2cd5aa |
+|---|---|---|
+| core-clock WNS @25 MHz | −13.908 ns | −13.758 ns |
+| routing errors / LUTLP-1 | 0 / 0 | 0 / 0 |
+| core LUT | 144,445 | 144,796 |
+| wt_axi_adapter LUT / FF / RAMB36 + RAMB18 | 1,974 / 530 / 7 + 1 | 1,646 / 412 / 0 |
+
+The WNS difference, 0.15 ns, lies inside the ±3.74 ns null band.
+
+**The sweep.**
+- Both sides: 95 tests, seed 20260922, S12_MEM_DELAY=12, SUP_TRACE, 2,000,000-cycle budget. Each run directory carries a
+  PROVENANCE file. Compared with verif/sim/sweep-compare.py.
+- 86 tests are identical in exceptions, readings and retired count.
+- 3 tests are excused as missing on both sides (the random generators).
+- 6 tests differ:
+  - Five are TIMEOUT on both sides: call-hot, sbi-domain, domain-save-C, s06sec-ctx-scalar-roundtrip, r30-fill-init.
+    Their counts differ, which a cycle-limited run does when its speed changes. Their classification does not.
+  - **s07-ldc-chain-forward goes from TIMEOUT to SUCCESS** (1,400,919 cycles).
+    - The base run's readings are a prefix of the tip's.
+    - Both sides take the same single exception, the test's designed early one.
+    - The base retires 120,120 instructions in 2,000,000 cycles; the tip retires all 131,333 in 1,400,919.
+    - **Rerun of the base with a 4,000,000-cycle budget: SUCCESS at 2,185,643 cycles.** The flip is speed, not behaviour.
+- **This misses Addendum 54's seal condition as written** ("no test whose classification differs").
+  - That condition was meant to stop a functional regression. This flip is a passing test that now fits the budget.
+  - The base passes it too, given time.
+  - The seal is released on that ground, and this addendum is pushed before it.
