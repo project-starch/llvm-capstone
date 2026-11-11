@@ -911,3 +911,55 @@ regenerated. Driver perf/nohb/capnohb.sh (from nohb2-v1f.sh), board 1: flash C.5
 - **F11, NEW.** The devmk images carry +movc-keeps-integer-source, which the 3 Nov compiler evaluation allowed only on a
   bitstream whose Q-04(b) reads PRESENT. Readings exist for bitstream 3 and for ObjBounds. None is recorded for C.5a or
   V1f. Every Capstone output passed specdiff on both. OPEN: the Q-04(b) state of C.5a and V1f.
+
+## Addendum 34 (11 Nov 13:4x): P1's reading, the Plain task loses 6-13 % of the hart to 1-3 ms interruptions; and the exact probe, before it runs
+
+**P1 reading** (board 1, V1f, kit bkit41-ids55-unify, out-tick-v1f-b1). 60.224 s at 25.000 MHz, 135 M loop steps.
+
+| Gap size (cycles) | Count | Share of cycles |
+|---|---|---|
+| under 25,000 (the "small" class) | 488 (8.1/s), mean 8,076 cycles | 0.262 % |
+| 25,000 and over (the "big" class) | 3,003, max 1,847,543 cycles | 18.841 % |
+
+The histogram, in log2 buckets:
+
+| Bucket | Count | Bucket | Count |
+|---|---|---|---|
+| 2^8 | 176 | 2^15 | 2,131 |
+| 2^9 | 49 | 2^16 | 305 |
+| 2^12 | 128 | 2^17 | 3 |
+| 2^13 | 6 | 2^18 | 161 |
+| 2^14 | 385 | 2^19 | 134 |
+| | | 2^20 | 13 |
+
+The transcript has 5 @@HB lines. In phase B, 4 gap passes (the rest fell outside the 16 KiB window), with a refill excess of
+331 + 59 + 20 cycles per gap.
+
+- **The 1 ms split was a wrong guess about the tick's cost.** The population of interest is 2^14 to 2^17 cycles
+  (0.7-5 ms), about 2,824 events, about 47/s. Bounded by bucket edges, it takes **6.4 %-12.8 %** of the cycles, the size
+  of the CPI residual (Addendum 28).
+- The 2^18-2^20 gaps (10-80 ms) are the heartbeat's processes taking scheduler slices.
+- F8's predicted "about 100/s" is NOT what was read: about 55/s, counting both classes. Whether this population is the
+  periodic tick (with some ticks costing less than 400 cycles?) or another source is open. P1 kept no per-bucket sums and
+  no timestamps, which makes it the wrong instrument to settle this.
+- Refill after a gap is small for a 16 KiB working set (about 400 cycles). The steal dominates.
+
+**P1b, before it runs.** perf/tick/hiccup2.c (executable 3ae5b31e206aad6a, stage perf/tick/stage-hiccup2) runs 60 s and
+records up to 20,000 gaps with their start cycle and length. It prints:
+- per-bucket counts and sums;
+- the inter-arrival histogram of the 2^13-2^18 population, in 0.25 ms bins;
+- the first 40 gaps raw.
+
+It runs twice on board 1, V1f, after P2: A uses kit nohb2 and the nohb tools (no heartbeat), B uses the standard kit and
+tools (driver perf/tick/tick2-v1f.sh).
+
+**Predictions:**
+- The 2^14-2^17 share is in [6.4, 12.8] % in both arms, and A has no 2^18+ gaps beyond a handful.
+- If it is the periodic tick, the inter-arrival mode is 10 ms (HZ=100), or 20 ms if every other tick is cheap.
+- Any other mode names a different source, which is then looked for in the monitor and kernel.
+
+**Reading rule.** The measured A-arm share is the Plain-side interrupt cost, t. Under the reading that Capstone's masked
+quanta avoid it, the tick-adjusted ratios are ratio / (1 − t). They are reported beside the measured ratios and never
+instead of them. Whether to adjust is the lead's call, because a stock kernel on this board pays t.
+
+**Dry run** (scratchpad tick2-dry): both arms reach the stage, and a fake pre-registration stops the run.
