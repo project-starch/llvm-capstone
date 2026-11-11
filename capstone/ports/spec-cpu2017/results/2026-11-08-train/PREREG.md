@@ -1596,3 +1596,22 @@ dry run to its last stage.
   - QEMU instret puts dcnofprs below base by 0.26 % for mcf. The board reading may fall either way, as it did for lbm.
 - **Addendum 46's measurement** runs on the first board free after its bitstream is sealed. It is pre-registered
   there.
+
+## Addendum 48 (11 Nov 20:2x): Capstone gcc train01, best build, no heartbeat, before it runs
+
+This replaces Addendum 47's heartbeat-corrected gcc estimate with a measurement.
+- **Stage.** perf/gcctr/stages/502.gcc_r-train01-capstone-lifetimes-c3fdcnofprs. It is a resolved copy of the
+  3,924.91 s record's stage: no symlinks, no hardlinks, both checked. Only the executable is replaced, by c3fdcnofprs
+  f95ad8ceddddc132 (perf/ccsel), and plan.json is updated to match.
+- **Why c3fdcnofprs.** In the QEMU screen it has the fewest in-context instructions of the four gcc builds: −0.7 %
+  against c3fdcnofp, −18.8 % against base.
+- **Kit and board.** bkit32-q32-nohb, the record's kit without the heartbeat. C.5a, board 2, after Addendum 47's xz
+  chain. Driver perf/gcctr/gcctr.sh is ccsel-mx.sh with the q32 kits and their module and launcher hashes. Its dry run
+  is clean.
+- **A record-keeping note.** The record stage's plan.json names 5642377943d724c6 (c3f). The record's image manifest
+  shows that 736f881f4958ac3b (dcnofp) is what ran, so the record stands as published. Only the stage's plan.json is
+  stale.
+- **Predictions:**
+  - specdiff PASS.
+  - The time is 3,924.91 × (1 − f_C) ≈ 3,580 s, minus about 1 % for the exe change, so within ±5 % of 3,540 s.
+  - Capstone / ordinary RISC-V = that time / 1,736.35, about 2.0-2.1.
