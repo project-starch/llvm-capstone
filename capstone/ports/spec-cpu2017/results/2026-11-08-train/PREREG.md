@@ -626,3 +626,27 @@ measurement.
 
 **Dry run** (perf/train/cal-dry; every board call stubbed): it reaches the chain, and spec-board's kit and stage checks
 pass for real on all three stages. A pre-registration that is not on origin STOPs. An existing output directory STOPs.
+
+## Addendum 27 (11 Nov 09:3x, before it runs): native gcc train01 was stopped by mistake; it runs again after Plain xz c0
+
+**What happened.** The user said gcc already has a train number and should not be measured again. Native gcc train01
+on board 2 (Addendum 23, perf/native-train/v1f-gcc-b2) was stopped at 09:14. The stop used cap-enforce's method:
+TERM to the runner's process group, then KILL after 30 s. At that point command 0 had run about 76 minutes and had not
+ended, so the run has no reading. Minutes later the user withdrew the request: native gcc runs, because it is on the
+new bitstream. Plain xz c0 had already started on board 2 at 09:14:20 (Addendum 25) and is not interrupted.
+
+**Re-run.**
+- It runs as board 2's last step, after Plain xz c0, with the same stage (native01/board-stages/nt-gcc-train01), kit
+  (bkit41-native-v1f-mcf), timeout (10,000 s, capped at the deadline) and deadline-guard need (1.5 h).
+- The driver is a new nat-v1f.sh. It waits for the xz waiter, and its label gcc2 writes perf/native-train/v1f-gcc2-b2.
+  The stopped run's directory is kept as it is.
+- A new cap-enforce watches it.
+- V1f is made resident first: the step reads the bitstream back and flashes V1f if the xz driver left another one.
+
+**Prediction:** Addendum 23's (rc 0, specdiff PASS).
+
+**Reporting rule, unchanged from Addendum 23:**
+- If it passes, gcc reports the native number, whether it is above or below the module's 1.196, with the module
+  number beside it.
+- If it fails or is skipped by the deadline guard, gcc keeps the module number.
+- The stopped run is not a reading.
