@@ -63,7 +63,7 @@ static struct heap_leaf *leaf_for(size_t a, int create)
  * the original munmap. The kernel's retirement of a mapping ends the holder with everything else. */
 #define MR_LIVE 16384U          /* live mappings tracked (holders), a power of two */
 #define MR_FREE 4096U           /* cached mappings (region pieces are not counted against MR_FREE_BYTES) */
-#define MR_FREE_BYTES (64UL << 20)
+#define MR_FREE_BYTES (8UL << 20)
 struct mr_rec { size_t base, bytes; void *holder; unsigned piece; };
 static struct mr_rec mr_live[MR_LIVE], mr_free[MR_FREE];
 static unsigned mr_nfree; static size_t mr_free_bytes;
