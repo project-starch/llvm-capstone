@@ -131,7 +131,8 @@ static long native_gcc_vector(struct context *c, const struct capstone_delegate_
     bool write = e->nr == CAPSTONE_SYS_writev || e->nr == CAPSTONE_SYS_pwritev;
     bool positional = e->nr == CAPSTONE_SYS_preadv || e->nr == CAPSTONE_SYS_pwritev;
     bool locked = false;
-    loff_t pos;
+    loff_t pos, at;
+    char *data = NULL, *cursor;
     long rc;
     rc = ns_session_admit(c->native_session, exchange->context_epoch);
     if (rc) return rc;
@@ -158,12 +159,24 @@ static long native_gcc_vector(struct context *c, const struct capstone_delegate_
             cn_authorize(c->native_context, &owner, exchange, offset, bytes, !write)) {
             rc = -EFAULT; goto out;
         }
+    }
+    /* One kernel buffer for the whole vector, placed at the file position's alignment: vfs_iter_{read,write} copy
+     * a kvec to and from the page cache with memcpy, which copies one byte at a time when the two addresses differ
+     * mod 8 (arch/riscv/lib/memcpy.S), while the exchange side is copied by __copy_{from,to}_user, which shifts
+     * words. The segments are contiguous in the file, so each keeps that alignment. Separate page-aligned buffers
+     * copied imagick's 864 KB TGA output (after an 18-byte header) byte by byte: 858,448 iterations. The position
+     * is only a hint here (it is read again under f_pos_lock); a stale one costs speed, not correctness. */
+    at = write && (file->f_flags & O_APPEND) ? i_size_read(file_inode(file)) : READ_ONCE(file->f_pos);
+    data = kvzalloc(total + sizeof(long), GFP_KERNEL);
+    if (!data) { rc = -ENOMEM; goto out; }
+    cursor = data + (at & (sizeof(long) - 1));
+    for (i = 0; i < count; cursor += wire[i].iov_len, ++i) {
+        size_t bytes = wire[i].iov_len;
         vec[i].iov_len = bytes;
-        vec[i].iov_base = kvzalloc(bytes ?: 1, GFP_KERNEL);
-        if (!vec[i].iov_base) { rc = -ENOMEM; goto out; }
+        vec[i].iov_base = cursor;
         if (write && bytes) {
-            copied = cv_checked_copy(c, c->main_thread, exchange, offset,
-                                     vec[i].iov_base, bytes, CU_FROM_DOMAIN);
+            copied = cv_checked_copy(c, c->main_thread, exchange, (unsigned long)wire[i].iov_base,
+                                     cursor, bytes, CU_FROM_DOMAIN);
             if (copied.cause) { rc = -EFAULT; goto out; }
         }
     }
@@ -193,7 +206,7 @@ static long native_gcc_vector(struct context *c, const struct capstone_delegate_
         }
     }
 out:
-    if (vec) for (i = 0; i < count; ++i) kvfree(vec[i].iov_base);
+    kvfree(data);
     kfree(vec); kfree(wire);
     if (file) fput(file);
     return rc;

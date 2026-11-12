@@ -575,6 +575,8 @@ static bool native_fast_try(struct context *c, struct cv_step *step)
     size_t length;
     long rc, value;
     bool write;
+    loff_t at;
+    void *buf;
 
     if (!native_fast || !n || native_owner(n, &n->owner) ||
         current->seccomp.mode != SECCOMP_MODE_DISABLED) return false;
@@ -608,24 +610,32 @@ static bool native_fast_try(struct context *c, struct cv_step *step)
         ((nr == CAPSTONE_SYS_pread64 || nr == CAPSTONE_SYS_pwrite64) &&
          !(file->f_mode & (write ? FMODE_PWRITE : FMODE_PREAD)))) { fput(file); return false; }
     if (!n->bounce) {
-        n->bounce = kmalloc(NATIVE_FAST_MAX, GFP_KERNEL);
+        n->bounce = kmalloc(NATIVE_FAST_MAX + sizeof(long), GFP_KERNEL);
         if (!n->bounce) { fput(file); return false; }
     }
+    /* kernel_read/kernel_write copy between this buffer and the page cache with memcpy, which copies one byte at
+     * a time when the two addresses differ mod 8 (arch/riscv/lib/memcpy.S); the domain side is copied by
+     * __copy_{from,to}_user, which shifts words. So the data is placed at the file position's alignment: a
+     * TGA written after its 18-byte header was copied byte by byte (858,448 iterations for imagick's 864 KB
+     * output). The position is only a hint here (it is read again under f_pos_lock); a stale one costs speed. */
+    at = (nr == CAPSTONE_SYS_pread64 || nr == CAPSTONE_SYS_pwrite64) ? (loff_t)step->args[3] :
+         write && (file->f_flags & O_APPEND) ? i_size_read(file_inode(file)) : READ_ONCE(file->f_pos);
+    buf = (char *)n->bounce + (at & (sizeof(long) - 1));
     epoch = READ_ONCE(t->frame[CV_FRAME_CHECK_EPOCH]);
     if (ns_session_admit(c->native_session, epoch)) { fput(file); step->result = -ESTALE; return true; }
     ref = (struct cn_capref){t->id, epoch, 11, 0};
     /* Preflight only: the copy below re-authenticates every chunk. */
     if (native_authorize_reuse(n, &ref, 0, length, !write)) { value = -EFAULT; goto out; }
     if (write) {
-        r = cv_checked_copy_reuse(&n->copy, c, t, &ref, 0, n->bounce, length, CU_FROM_DOMAIN);
+        r = cv_checked_copy_reuse(&n->copy, c, t, &ref, 0, buf, length, CU_FROM_DOMAIN);
         if (r.cause || r.bytes_done != length) { value = -EFAULT; goto out; }
     }
-    rc = native_rw(file, nr, step->args[3], n->bounce, length);
+    rc = native_rw(file, nr, step->args[3], buf, length);
     if (rc <= -ERESTARTSYS && rc >= -ERESTART_RESTARTBLOCK) rc = -EINTR;
     value = rc;
     if (rc > 0 && (size_t)rc > length) value = -EPROTO;
     else if (rc > 0 && !write) {
-        r = cv_checked_copy_reuse(&n->copy, c, t, &ref, 0, n->bounce, rc, CU_TO_DOMAIN);
+        r = cv_checked_copy_reuse(&n->copy, c, t, &ref, 0, buf, rc, CU_TO_DOMAIN);
         if (r.bytes_done > (size_t)rc || (!r.cause && r.bytes_done != (size_t)rc)) value = -EPROTO;
         else if (r.cause) value = r.bytes_done ? (long)r.bytes_done : -EFAULT;
     }
