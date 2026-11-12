@@ -2314,3 +2314,66 @@ The xz build is definitions mode, as on board 1's chain. So against board 1's xz
 - **P4.** Capstone / riscv-base for mcf is reported for the THP pair beside the no-THP pair, never instead of it.
 - **P5, the heartbeat's cost:** riscv mcf without THP on hb120 is within ±0.5 % of Addendum 47's 5,085.28 s (no heartbeat,
   the same board, kit and stage).
+
+## Addendum 63 (2026-11-12 17:00, before it runs): the whole SPEC test on cap-tagcache-ni with jump tables; mcf and the THP reading
+
+**Readings since Addendum 62** (all rc 0, specdiff PASS unless stated):
+
+| Run | Board, bitstream | Time | Capstone / riscv-base |
+|---|---|---|---|
+| gcc test U1c8 (cc-universal) | 1, cap-tagcache | 9.78 s | no riscv-base gcc test reading |
+| gcc test c3fdcnofprs (cc-tuned) | 1, cap-tagcache | 11.67 s | no riscv-base gcc test reading |
+| xz dcnofprs, sweep 3 | 1, cap-tagcache | 5,504.21 s (12 commands) | 1.111 |
+| mcf base | 1, cap-tagcache | 8,552.7 s | 1.682 |
+| mcf base, no THP | 2, cap-tagcache-ni | 8,551.98 s, entries 50,843 | 1.682 |
+| mcf base, THP | 2, cap-tagcache-ni | 8,350.76 s, entries 25,789 | 1.642 (riscv THP arm pending) |
+| x264 plain-rv64r | 3, riscv-base | gen 2,473.12 s + run 35,432.4 s | the denominator |
+
+- Addendum 59: P3 holds for xz (−7.4 % against cap-pagemap); P4 holds (mcf −16.5 % against 10,243.61 s); P5 holds (9.78 s < 13.2 s).
+- Addendum 61 P3 fails: sweep 2 is 221.6 s under board 1's sweep 3, not 400-550 s.
+- Addendum 62 P1 holds (8,551.98 vs 8,552.7 s, 0.01 %): the NI fix does not move mcf.
+- Addendum 62 P2: −201.2 s (holds, at the edge); entries −49.3 % (misses "at least half" by 0.7 points). In-context cycles
+  and the @@THP-VMSTAT lines are read in the next addendum, with the riscv THP pair.
+- x264 on riscv-base: specdiff 0/3 NO-OUTPUT by construction (no imagevalidate on the board stage, Addendum 50). Its data
+  outputs equal out-b2q's by hash, 14 of 15; log.dec differs, as it does between any two runs (2026-10-28 Addendum 5).
+  The run time is inside Addendum 50's 29,000-39,500 s band.
+- Board 1's Addendum 51 chain (mcf U1c8 on cap-hw0, queued behind Addendum 59) started at 15:59. It is stopped: cap-hw0 is
+  superseded and U1c8 was not chosen (Addendum 58). It is withdrawn, not read.
+
+**Jump-table parity, checked by binary.** The lead's rule (Addendum 60) needs Capstone builds with `-fjump-tables`.
+Rebuilt with perf/ccsel/build.sh, appending `-fjump-tables` after the wrapper's `-fno-jump-tables`:
+- mcf base + jt = mcf base control, byte for byte (3633be7e2f88); mcf D = mcf Djt (1a26f98ed770). mcf has no jump table,
+  so every mcf reading above already meets the rule.
+- lbm base + jt = lbm base control (f0269eea1b55); lbm D = lbm Djt (6c973cd300e4). Same for lbm.
+- imagick base + jt (f9e539160824) differs from base (f50dc465183e). imagick, nab, xz, gcc, perl and x264 need re-runs.
+- QEMU twins (perf/ccsel/QLOG, qjt3): D against Djt, instret: perl −1.02 %, nab +0.16 %, imagick +0.005 %, gcc +0.27 %,
+  xz +0.79 %; specdiff unchanged in every pair (perl 1/2 in both, the abigail command of Addendum 16).
+  x264 does not finish in the 3,600 s QEMU step, as recorded on 11 Nov; both x264 twins are void.
+
+**The run.** Bitstream cap-tagcache-ni (caplifive_twcni_63e5dde82, perf/thp2/SEAL-twcni.sha256), kit bkit48-twcni-all2-nohb,
+the hb120 tools, no THP (the riscv-base references have none), exit sweep 3 except xz (sweep 2, the better mode,
+Addendum 61). Driver perf/thp2/thrun.sh with perf/full/b{1,2}.conf.
+- **Board 1** (perf/full/full-b1.list), after the Addendum 51 chain is stopped:
+  1. gcc test c3fdcnofprsDjt (cc-tuned + jt);
+  2. imagick base + jt (perf/full/stages/538.imagick_r-basejt) and imagick dcnofprsDjt; the faster one is imagick's choice;
+  3. nab dcnofprsDjt;
+  4. lbm base (no jump table, see above), so every test has a cap-tagcache-ni reading;
+  5. xz dcnofprsDjt with sweep 2 (perf/full/stages/557.xz_r-dcnofprsDjt-ns, ns/mkstages.py's two lines, diff checked);
+  6. perl dcnofprsDjt, last: its abigail command is expected to fail specdiff (Addendum 16).
+- **Board 2** (perf/full/full-b2.list): x264 dcnofprsDjt, step 108,000 s.
+- mcf is not re-run: board 2's 8,551.98 s is this bitstream, this kit and a binary equal to base + jt.
+
+**Predictions** (against the cap-tagcache readings; jump tables are the only change besides the NI fix):
+- **P0.** rc 0 and specdiff PASS everywhere except perl's abigail (1/2) and x264 (0/3 by construction; x264's data outputs
+  must equal riscv-base's by hash, log.dec and .err aside). The xz arm prints `@@NS retire_exit_sweep=2`.
+- **P1.** imagick, both arms, within ±3 % of 13.95 s.
+- **P2.** nab within ±2 % of 755.05 s.
+- **P3.** gcc test within ±5 % of 11.67 s.
+- **P4.** lbm within ±1 % of 1,079.77 s.
+- **P5.** xz within ±2 % of 5,282.61 s.
+- **P6.** perl, both commands, 15,000-30,000 s (the board's best Capstone perl, udcnofp on cap-hw0, ran its long command
+  in 28,509.41 s).
+- **P7.** x264 run command 40,000-70,000 s.
+- Outside a band is a finding, reported as read, not a fault.
+- The riscv-base gcc test reading is still missing; a plain-rv64r gcc test stage is built and queued on board 3 in a later
+  addendum.
