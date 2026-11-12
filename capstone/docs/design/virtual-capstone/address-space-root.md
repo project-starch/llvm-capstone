@@ -98,6 +98,17 @@ the table root.
 Not implemented. QEMU has the trap path as a test mode (protected U, which
 the address-space root gate runs in). The adapter and the RTL use `CSRUNV`.
 
+## The program counter
+
+Decided on 2026-11-12: unchanged from today. One reference covers the
+program's code, and the processor checks every fetch against its bounds, its
+execute right and its lifetime. Jump targets and return addresses are plain
+addresses inside it. A fetch is thus a read through a reference, like every
+other access, and when the lifetime of a code mapping ends, no instruction
+executes from it. With kernel-saved registers the code reference is one more
+register to save, and the trap's saved pc stays an address. The design does
+not constrain where a program jumps inside its own code.
+
 ## Evidence
 
 `capstone-qemu/tests/address-space-root` runs a small kernel in S that
@@ -141,9 +152,5 @@ Each is a decision about the design and not yet about code.
   keeps the address range reserved until the whole mapping ends.
 - Who checks the buffer of a system call. Proposal: the kernel accesses it
   through the reference the program passed, at every access.
-- The program counter. Today one capability covers the image, the processor
-  checks every fetch against it, and jump targets and return addresses are
-  plain addresses inside it. With kernel-saved registers this reference is
-  one more register to save, and the trap's saved pc stays an address.
 - Signals, `fork`, more than one hart, lifetimes for stack objects, what a
   program sees at a resource limit, exact bounds, and swap of tagged pages.
