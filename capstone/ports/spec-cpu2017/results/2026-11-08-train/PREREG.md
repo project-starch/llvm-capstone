@@ -2392,3 +2392,38 @@ Addendum 61). Driver perf/thp2/thrun.sh with perf/full/b{1,2}.conf.
 64 pages beyond a fault. Two QEMU runs of mcf base (perf/mcfdiag) read `fault_ahead_pages` and the peak with
 fault_ahead_max 64 (control) and 0. If peak falls toward riscv-base's maxrss (306,160 kB, 74,540 pages), part of the
 2.3x "footprint" is pinned-ahead pages, not data.
+
+## Addendum 65 (2026-11-12 17:50, before it runs): what mcf's 2.3x memory is; plain-on-cap mcf on board 1
+
+**Footprint, QEMU (perf/mcfdiag, mcf base, kit-profq), all rc 0 and specdiff 2/2 PASS.**
+
+| Run | peak pinned pages | instret | entries |
+|---|---|---|---|
+| control, fault_ahead_max 64 | 174,308 | 27,039,956,421 | 32,510 |
+| fault_ahead_max 0 | 174,231 | 27,044,640,437 | 392,533 |
+| calloc without memset on fresh mmap groups (diagnostic SDK, wt-calloc) | 174,291 | 26,900,408,100 | 35,439 |
+
+- The fault-ahead window does not inflate the peak: every pinned page is touched.
+- The runtime's calloc (heap.c) memsets every block; musl's skips fresh mmap memory. Skipping it removes 0.52 % of
+  mcf's instructions and leaves the peak unchanged. Not a footprint cause for mcf.
+- **The realloc copies.** A host build of the same source with a malloc hook shows mcf growing arcs and sorted_arcs
+  twice (to 2,102,404 and 4,102,404 arcs; riscv-base maxrss 306,160 kB). A diagnostic print in the runtime's realloc
+  (QEMU) shows all four large growths MOVED (malloc + copy): 235,469,248 bytes twice, then 459,469,248 bytes twice.
+  The Capstone mallocng path refuses an in-place remap when the group header size changes (realloc.c), so each growth
+  copies; musl on riscv-base mremaps. arc_t is 112 bytes on Capstone against 72.
+- So the 174k-page peak is the copy transient: the new arcs, the old and the new sorted_arcs alive at once (about
+  3 x 235 MB). The steady footprint is about 1.56x riscv-base's in the arc arrays.
+- Cost on silicon is not measured. A header-stable large-block layout (so the remap is taken) is a runtime change
+  for a later addendum; it brings the allocator to what riscv-base's musl does.
+
+**Plain-on-cap mcf.** riscv-base's mcf binary (the hpm stage of the 5,085.28 s reading) on the Capstone bitstream
+splits mcf's in-context gap (about 2,650 s) into the hardware's share (the tag path on every load miss) and the
+capability program's share (bigger structures, more misses).
+- Board 1, after Addendum 63's driver (pid 2476894). Bitstream cap-tagcache (caplifive_twc_ebe86cc01,
+  perf/twc/SEAL.sha256): Addendum 63 shows the NI fix leaves mcf at 0.01 %. Kit bkit46-twc-sbi13 (Addendum 59's
+  plain-on-cap kit), the hb120 riscv runner, list perf/full/b1-plainmcf.list, conf perf/full/b1p.conf.
+- **Prediction:** rc 0, specdiff 2/2. The reading R decides:
+  - R within 3 % of 5,085.28 s: the hardware costs a plain miss-bound program nothing; mcf's gap is the capability
+    program's;
+  - R above 5,240 s: the tag path on misses is a share of the gap, (R − 5,085.28) / (8,552.7 − 5,085.28).
+  - Plain-on-cap readings so far: lbm 1,105.04 s (riscv-base 1,098.43), nab 665.06 s (664.14).
