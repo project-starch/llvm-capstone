@@ -2587,3 +2587,20 @@ on fair3 is re-run on fair2.
 **Board 2.** Addendum 63's stock-kernel x264 (old SDK and binary, started 16:37) is stopped: it cannot enter the fair
 table and would hold the board until morning. Board 2 starts the fair x264 now (Addendum 68's list, stage
 525.x264_r-cap-fair3, K2, bkit51-k2cap); its correctness check is the data outputs' hash against riscv-base's, as before.
+
+## Addendum 70 (2026-11-12 21:15, before it runs): plain-on-cap mcf read; twins read; board 1's fair Capstone list, missing benchmarks first
+
+**Plain-on-cap mcf** (Addendum 65; board 1, cap-tagcache, riscv-base's mcf binary): 5,180.26 s, specdiff 2/2. Against
+riscv-base's 5,080.15 s (hb120): +1.97 %. Addendum 65's first branch (within 3 %) holds. The hardware's share of mcf's
+gap is (5,180.26 − 5,085.28) / (8,552.7 − 5,085.28) = 2.7 %; the rest is the capability program (16-byte pointers:
+arc 72 → 112 B; exits). A tag-path RTL change cannot bring mcf to 1.20.
+
+**QEMU twins** (perf/fair/QLOG, kit-profq): fair2 all seven pass (perl 2/2, its abigail command now passes on this
+runtime); fair3 (shrinkto-globals) imagick, nab, lbm, mcf, xz, gcc train01 pass; perl fair3 is running. A process slip:
+two instances of qtwins4.sh ran (the first launch's pid was not the one killed); they split the work under the QEMU
+lock; readings are functional only and unaffected.
+**First fair riscv-base readings (K2):** gcc train01 1,731.62 s, imagick 11.09 s, nab 678.69 s (all specdiff PASS).
+
+**Board 1** (the lead: fill the table first): perf/k2/k2f-cap.list, fair3 stages, order gcc train01, perl, mcf, imagick,
+nab, lbm, xz; kit bkit51-k2cap (cap-tagcache-ni, flashed by the driver), K2. If perl's fair3 twin does not pass, its
+stage is withdrawn before it starts (Addendum 69's rule then moves all eight to fair2).
