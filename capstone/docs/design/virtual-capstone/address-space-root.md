@@ -76,6 +76,28 @@ are refused with 24, as on the RTL, and selector 8 answers 0. This changes
 the ruling Q-23 of 2026-10-18 ("trusted S performs no capability memory
 access") for platforms that set the property.
 
+## Entering and leaving the kernel
+
+Decided on 2026-11-12. The kernel saves the registers of a program itself.
+
+A trap leaves the program's registers in place and enters the kernel as any
+RISC-V trap does. The kernel stores the registers with their tags into its
+own memory with `STC` and loads them with `LDC` before it returns. On a
+switch to another process it also writes the table root, which clears the
+processor's lifetime caches. Each thread has its own save area in kernel
+memory.
+
+This needs no rule beyond supervisor references: a kernel that holds R can
+save a register the same way. It replaces the supervised entry of today, in
+which the processor saves all registers into a frame at every event
+(`CSRUNV`, its frame format, event kinds, actions and context slots). Three
+conditions hold in both forms: a paused program cannot reach its saved
+registers, the registers keep their tags, and a change of process changes
+the table root.
+
+Not implemented. QEMU has the trap path as a test mode (protected U, which
+the address-space root gate runs in). The adapter and the RTL use `CSRUNV`.
+
 ## Evidence
 
 `capstone-qemu/tests/address-space-root` runs a small kernel in S that
@@ -119,7 +141,9 @@ Each is a decision about the design and not yet about code.
   keeps the address range reserved until the whole mapping ends.
 - Who checks the buffer of a system call. Proposal: the kernel accesses it
   through the reference the program passed, at every access.
-- Context switch: whether the kernel saves the registers of a program itself
-  or the processor does, as `CSRUNV` does today.
+- The program counter. Today one capability covers the image, the processor
+  checks every fetch against it, and jump targets and return addresses are
+  plain addresses inside it. With kernel-saved registers this reference is
+  one more register to save, and the trap's saved pc stays an address.
 - Signals, `fork`, more than one hart, lifetimes for stack objects, what a
   program sees at a resource limit, exact bounds, and swap of tagged pages.
