@@ -254,7 +254,20 @@ int main(int argc, char **argv)
                     __builtin_capstone_cap_get_end(again) == (uintptr_t)p + 88 && again[39] == 'd',
                     "nested renewal keeps bounds and bytes");
             heap_end(again);
+            if (!may_survive) {
+                /* A pool that keeps one allocation renews malloc's own object at each return and
+                 * frees the allocation through the renewed reference: it names the same lifetime. */
+                uintptr_t base = __builtin_capstone_cap_get_base(back), end = __builtin_capstone_cap_get_end(back);
+                back = heap_renew(back);
+                require(back != NULL && __builtin_capstone_cap_get_cursor(back) == base &&
+                        __builtin_capstone_cap_get_base(back) == base &&
+                        __builtin_capstone_cap_get_end(back) == end && back[47] == 'h',
+                        "renewal of malloc's reference keeps cursor, bounds and bytes");
+            }
             free(back);
+            back = malloc(100);
+            require(back != NULL, "allocation after freeing a renewed reference");
+            memset(back, 'n', 100); free(back);
             puts("MALLOC_SURVIVED:nested-ok"); fflush(stdout);
             return 0;
         }

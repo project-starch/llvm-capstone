@@ -48,6 +48,12 @@ frees the block through that lifetime ends only what it derived: the block's
 own lifetime stays live while mallocng reuses the memory, and one node is
 lost. No instruction refuses this any more, so every port keeps the pointer
 `malloc` gave it and frees through that.
+A reference that `heap_renew` returned for the object `malloc` handed out names
+that same lifetime, so `free` and `realloc` accept it. The reference from
+before the renewal is stale. The malloc contract's `nested-ok` case frees an
+allocation through its renewed reference. With heap lifetimes off, `malloc`
+returns a reference to the mapping itself, and a renewal would end the mapping:
+a pool renews only where the outer heap has lifetimes.
 The mapping layer retains a three-level Sv39 page index. Each occupied page
 names its mapping-wide parent; there are no entries for individual allocations
 or mallocng groups. Lookup is a fixed sequence of indexed loads, not a search.
