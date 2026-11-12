@@ -224,6 +224,15 @@ mapping by its registered range and not by a reference.
   reference in one straight-line run, which holds on QEMU only (it takes
   interrupts between translation blocks). The rejected alternative, no M
   trap under S or U, breaks with any SBI call or emulation trap.
+  Implemented on 2026-11-12 for the QEMU platform: the monitor's trap entry
+  (caplifive-sbi `664dec6`, wrapper caplifive-opensbi `ad308f8`, build option
+  `CAPSTONE_TRAP_KEEP_TAGS`) keeps the tags, and a kernel reference held
+  across timer traps survives 8 of 8 holds (0 of 8 on the stock firmware).
+  The monitor runs in legacy C mode and saves through its stack capability.
+  QEMU's rule for scalar M (capstone-qemu `f8aeb15905`) covers OpenSBI's
+  own `_trap_handler`, which handles traps only once protected U is the
+  program mode. That handler is not patched yet: it needs a register it can
+  free without losing a tag, and CSCRATCH holds the monitor's stack.
 
 ## Open design points
 
