@@ -2427,3 +2427,43 @@ capability program's share (bigger structures, more misses).
     program's;
   - R above 5,240 s: the tag path on misses is a share of the gap, (R − 5,085.28) / (8,552.7 − 5,085.28).
   - Plain-on-cap readings so far: lbm 1,105.04 s (riscv-base 1,098.43), nab 665.06 s (664.14).
+
+## Addendum 66 (2026-11-12 18:30, before it runs): both arms on one shared NO_HZ_IDLE kernel (K2); Capstone quantum 32M; perl on the stock kernel withdrawn
+
+**Why.** The lead's goal (12 Nov): every SPEC test benchmark under 1.20 (Capstone full temporal / riscv-base), with
+equivalent conditions. Above it now: imagick (1.24), mcf (1.68); gcc, perl and x264 have no ratio yet. The largest prepared
+lever is the tick replay (optimisation backlog C2): under HZ_PERIODIC the kernel replays every tick a context masked,
+at each exit. K1 (quick Addendum, 8-9 Nov, C.5a): Capstone gcc train −3.6 %, Plain on the same kernel +2.0 %, ratio
+1.212 → 1.145. The kernel is shared, so riscv-base must run on it too: both arms move to one kernel here, and every
+riscv-base reference is re-measured on it.
+
+**K2** (perf/k2): the board's 6.4.14 build-fpga tree, private copy, with K1's change (NO_HZ_IDLE, HIGH_RES_TIMERS
+stays off) and the THP-madvise change of Addendum 62 (CONFIG diff perf/k2/config.diff). Image d0cf697ec434f328 on
+perf/thp's seed, relinked per bake on the bake's rootfs. THP stays OFF in this addendum's stages (no MADV_HUGEPAGE
+from either arm's launcher or libc, `enabled` left at madvise): K2 carries THP only so that a later THP pair needs no
+new kernel.
+- Modules on K2, each with a control: capstone_vm k2cap 009db2cafbf01beb (wt-thp-all2 e73b31d80fc0; .text identical to
+  thpall2h e9395bbf, the THP-kernel build that ran Addendum 62); riscv-kit capstone_vm m55u-k2 c3ec55fbf4f59ec6 (.text
+  identical to m55u-thp 5020b6e9); process-ABI ctl ko (fpga-pkg-127 source; .text identical to fpga-pkg-127's and to
+  bkit49's 5fe2b197, 0 compressed instructions). The stock-tree control of capstone_vm (k2ctl) differs, as the THP
+  config changes code, which is why the THP-kernel build is the reference.
+- **Kits:** bkit51-k2cap = bkit48 (cap-tagcache-ni) with K2 and the firmware's CAPSTONE_SUPERVISOR_QUANTUM 8000000 →
+  32000000 (backlog C3, Capstone's own scheduling parameter; same monitor d9da397); bkit52-k2rv = bkit42 (riscv-base,
+  stock OpenSBI 1.3) with K2. Module params and launchers unchanged from bkit48 / bkit42.
+- **First boots:** each kit's first stage is gcc test (seconds), so a broken kit costs one short boot.
+
+**Lists** (perf/k2, driver perf/thp2/thrun.sh, hb120 tools on both arms):
+- board 3, riscv-base, after Addendum 64's driver: gcc test, imagick, nab, lbm, xz, mcf (hpm stage), perl, x264;
+- board 1, Capstone, after Addendum 65's driver: gcc c3fdcnofprsDjt, imagick dcnofprsDjt, nab dcnofprsDjt, lbm base,
+  xz dcnofprsDjt with sweep 2, mcf base, perl dcnofprsDjt;
+- board 2, Capstone x264 dcnofprsDjt, after Addendum 63's driver.
+- Addendum 63's perl stage on the stock kernel (board 1) is withdrawn before it starts: its output directory is created
+  empty, which chain-board skips. Its x264 (board 2, stock kernel) runs to the end.
+
+**Predictions** (K1's shifts: Capstone outside time falls with the replayed ticks, riscv-base +0-2 %):
+- **P0.** rc 0, specdiff as on the stock kernel, every stage on both arms.
+- **P1, riscv-base on K2:** each benchmark within −1 % .. +3 % of its stock-kernel reference.
+- **P2, Capstone on K2:** outside-context time (wall − in-context cycles / 25 MHz) falls on every benchmark; imagick
+  13.87 s → 12.6-13.3 s; mcf 8,552 s → 7,900-8,300 s; in-context cycles within ±1 % of the stock-kernel run.
+- **P3, the ratio on K2:** imagick ≤ 1.20; mcf 1.50-1.62 (still above 1.20: its in-context gap is footprint, Addenda 63/65).
+- Each ratio is reported on K2 (both arms on K2) beside the stock-kernel ratio, never mixing kernels.
