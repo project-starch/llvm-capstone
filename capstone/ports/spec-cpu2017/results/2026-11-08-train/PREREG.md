@@ -2566,3 +2566,24 @@ both riscv-base's defaults at -O2.
 - **P1, riscv-base fair vs the plain-rv64r references** (same programs, new compiler, no PIE, K2): each within −4 % .. +4 %.
 - **P2, Capstone fair on K2 vs its stock-kernel reading:** imagick 12.6-13.5 s; nab, lbm within ±3 %; mcf 7,900-8,400 s.
 - **P3, ratios:** lbm, nab, xz ≤ 1.20; imagick ≤ 1.20; gcc train01 ≤ 1.30; mcf 1.45-1.65 (above 1.20).
+
+## Addendum 69 (2026-11-12 19:45, before it runs): the retraction extended to Capstone gcc train; shrinkto-globals for all eight; board 2's stock x264 stopped
+
+**RETRACTION, extended.** The Capstone gcc *train* stages (perf/gcctr, perf/ga2 and their copies) write
+`retire_exit_sweep=2` for the stage. Every Capstone gcc train reading taken with them (c3f 4,253.3 s and the rest) is
+void, as Addendum 67's xz sweep-2 readings are. The test-size Capstone stages behind the reported ratios (imagick, nab,
+lbm, xz dcnofprs, mcf, gcc test) write no module parameter (checked by grep of each run.sh). The fair gcc train01 stages
+(perf/fair/stages/502.gcc_r-train01-cap-fair{2,3}) have that one write removed (sweep stays 3); they keep the stage's
+other Capstone module settings, arena_pin=1 and step_budget_ns=10 s, disclosed as gcc-only Capstone tuning.
+
+**gcc is reported at train01 only** (the lead, 12 Nov); gcc test leaves the table.
+
+**Compile configuration.** The c3f recipe's Capstone-only pair `-mllvm -capstone-shrinkto-globals -mllvm
+-capstone-shrinkto-end-adjust=1` is added for ALL eight (build-cap3.sh, executables *.fair3; .text −8 % gcc, −8.6 %
+imagick, −4 % perl, −3 % x264), so the configuration stays one for all. QEMU twins: perf/fair/qtwins4.sh. Decision rule,
+fixed now: fair3 is used if every fair3 twin passes as its fair2 twin; otherwise fair2 for all eight, and an x264 run
+on fair3 is re-run on fair2.
+
+**Board 2.** Addendum 63's stock-kernel x264 (old SDK and binary, started 16:37) is stopped: it cannot enter the fair
+table and would hold the board until morning. Board 2 starts the fair x264 now (Addendum 68's list, stage
+525.x264_r-cap-fair3, K2, bkit51-k2cap); its correctness check is the data outputs' hash against riscv-base's, as before.
