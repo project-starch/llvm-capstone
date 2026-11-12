@@ -2,14 +2,14 @@
   "arm": "virtual-malloc",
   "build": {
     "application": "cpython",
-    "image_sha256": "a650d8c1712e4648fd22622a677c69ee07e135c7b14b6c037a58788a4ffd34fa",
+    "image_sha256": "6f19a8bc07f828b5d6ccc43e4ad4b3d2924f6410ae24f325e84efefbf76d254e",
     "nested": "none",
     "profile": "virtual",
-    "runtime_dirty": false,
+    "runtime_dirty": true,
     "runtime_revision": "a4a4d8f8b1df2593aac5af3068dfdd80883129fa",
     "stack_bytes": 8388608
   },
-  "cases": 35,
+  "cases": 36,
   "configuration": "virtual-cpython",
   "contract": "verdicts-v1",
   "corpus": "cpython/allocator-boundary-repros",
@@ -36,8 +36,8 @@
   },
   "predicted": "MISSED",
   "tally": {
-    "CAUGHT": 17,
-    "MISSED": 15,
+    "CAUGHT": 16,
+    "MISSED": 17,
     "NO-READING:inconclusive": 1,
     "NO-READING:not-reached": 1,
     "NO-READING:unattributed": 1

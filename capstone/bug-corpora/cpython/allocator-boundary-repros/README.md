@@ -63,11 +63,11 @@ inside one of its blocks.
 Every case is live at the pin and the proof is a measurement, never an
 assertion: the trigger is upstream's own reproducer from the issue, and running
 it on the pinned 3.13.7 ASan build produces the sanitizer report quoted in
-`live_proof`. All 35 reproduce from their case directory with the oracle
+`live_proof`. All 36 reproduce from their case directory with the oracle
 recorded for them -- the 21 filling the three cells `pymalloc-repros`
-does not cover, and the 14 temporal/nested cases that re-measure its
-issues through the interpreter (22-32, and 33-35 added 2026-10-29, whose
-record and the six of its issues that cannot run whole are in
+does not cover, and the 15 temporal/nested cases that re-measure its
+issues through the interpreter (22-32, and 33-36 added 2026-10-29, whose
+record and the five of its issues that cannot run whole are in
 `results/2026-10-29-asan/README.md`).
 
 Three things that had to be got right for those runs to mean anything:

@@ -51,7 +51,13 @@ def inputs(app, root):
             names += survey.make_var(root / 'build', var)
         for _, objects in survey.EXTRA:
             names += objects
-        return [root / 'build' / name for name in dict.fromkeys(names)]
+        objs = [root / 'build' / name for name in dict.fromkeys(names)]
+        # zlib is an external library, linked as an archive rather than as loose
+        # objects the survey tracks (prepare-cpython-capstone.sh cross-builds it).
+        libz = root / 'zlib/libz.a'
+        if libz.is_file():
+            objs.append(libz)
+        return objs
     if app == 'postgres':
         src = root / 'domain/postgresql-17.5'
         listing = root / 'link/backend-objects.txt'
