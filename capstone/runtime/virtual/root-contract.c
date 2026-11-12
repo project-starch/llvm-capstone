@@ -1,11 +1,12 @@
 /* Root grants (module parameter root_grants=1): each mapping is a reservation, a record M that the
  * kernel derives from the one reference over the address space and keeps to itself, and the
  * program's reference P is a child of M. Every request of the program to end a mapping comes with
- * P: munmap, the stack at thread exit, the frame's hand-over at thread creation (stages 2 and 3
- * of docs/plans/2026-11-12-address-space-root-adapter.md). The kernel accepts the reference only
- * if it is a live child of M whose bounds cover the mapping as mmap exposed it, and the call
- * names that whole length; then it ends the mapping with CREVOKE of M. run-root-grants.py runs
- * this program once per mode (argv[1]) in one boot. Build with the virtual SDK.
+ * P: munmap, the stack at thread exit, the frame's hand-over at thread creation (stages 2, 3 and
+ * 3b of docs/plans/2026-11-12-address-space-root-adapter.md). The kernel accepts the reference
+ * only if it is a live child of M whose bounds cover the mapping as mmap exposed it, and the call
+ * names that whole length; then it ends the mapping with CREVOKE of M. An mprotect comes with P
+ * too and may name part of the mapping, which P must cover. run-root-grants.py runs this program
+ * once per mode (argv[1]) in one boot. Build with the virtual SDK.
  *
  * Every mode first reads the type of a grant as the adapter issues it (ROOT_GRANT_TYPE): 1
  * (non-linear) under root_grants=1, 0 (linear) without. A check that holds only with root grants
@@ -82,11 +83,49 @@
  *   failed_create_releases_frame    the launcher's thread table is full (31 contexts exited and not
  *                                   joined), so the launcher fails the create after the module
  *                                   took the frame: the create answers EAGAIN and the frame's
- *                                   mapping is no longer registered (mprotect of its address
- *                                   answers EINVAL)
+ *                                   mapping is no longer registered (registered())
  * detached (exit 0):
  *   detached_exit_unmaps_stack      a detached pthread exits through musl's __unmapself: its stack
  *                                   mapping is registered before the exit and gone after it.
+ * exit-length (exit 0):
+ *   exit_with_wrong_length_completes
+ *                                   a thread exits naming its own stack's mapping with a length
+ *                                   that is not the mapping's: the joiner returns and the launcher
+ *                                   wrote the exit word
+ *   wrong_length_stack_stays_mapped the stack's mapping is still registered and works through the
+ *                                   reference the main thread kept
+ *   wrong_length_stack_unmaps_afterwards
+ *                                   munmap through that reference then releases it
+ * protect (exit 0, or 1 under the negative control):
+ *   protect_through_mapping_reference
+ *                                   mprotect through the mapping's reference changes the
+ *                                   protection of the whole mapping and of one page of it, as
+ *                                   /proc/self/maps shows
+ *   protect_integer_address_refused (root grants)
+ *                                   mprotect with the mapping's address as an integer is refused
+ *                                   and the protection is unchanged
+ *   protect_stale_reference_refused (root grants)
+ *                                   the same through the reference from before CRENEW
+ *   protect_narrowed_reference_refused (root grants)
+ *                                   the same through a reference narrowed to the first page of a
+ *                                   two-page mapping, for both pages
+ *   protect_nested_object_refused (root grants)
+ *                                   the same through an object derived over the whole page
+ *   protect_narrowed_covering_range a narrowed reference changes the page it covers: an mprotect
+ *                                   may name part of a mapping (musl opens a stack past its guard)
+ * create-gate (exit 0, or 1 under the negative control):
+ *   create_metadata_frame_refused   a frame in a one-page mapping of the allocator's metadata is
+ *                                   refused (EINVAL), and the page still works
+ *   create_launcher_page_refused    the launcher's own stack mapping, named at its base, is refused
+ *   create_mismatched_frame_refused a frame named with its reference moved inside the page is
+ *                                   refused, and the frame still works. The launcher refuses it;
+ *                                   a launcher that names the mapping around the cursor
+ *                                   (run-root-grants.py --launcher-frame-floor) leaves it to the
+ *                                   module, which compares the frame with a0's cursor
+ *   create_after_refusals           the create through the frame's own reference then succeeds
+ *
+ * registered() asks the launcher whether an address lies in a registered mapping, by integer: a
+ * futex wake of no waiter there answers 0, outside every mapping EFAULT.
  *
  * Before each stale read the program maps the same address again (ROOT_REMAP same_address=1).
  * An access that the processor lets through then reads the new page and does not fault at all,
@@ -112,6 +151,8 @@
 #define IDLE_THREADS 31
 
 extern long __capstone_vm_thread_create_frame(void *frame);
+extern long __capstone_vm_futex(void *word, int op, int value, long seconds, long nanoseconds,
+                                int bitset);
 extern _Noreturn void __capstone_vm_thread_exit_clear(uintptr_t clear, void *stack, size_t bytes,
                                                       long status);
 extern uintptr_t __capstone_context_identity_take(void);
@@ -166,6 +207,12 @@ static void *untagged(unsigned long address)
     void *p;
     __asm__("mv %0, %1" : "=r"(p) : "r"(address));
     return p;
+}
+
+/* Does address lie in a mapping the launcher has registered? */
+static int registered(unsigned long address)
+{
+    return __capstone_vm_futex(untagged(address), 1 /* FUTEX_WAKE */, 0, -1, 0, 0) != -EFAULT;
 }
 
 static char *map(unsigned long bytes)
@@ -557,12 +604,21 @@ static void *frame_return(void *unused)
     capstone_virtual_thread_exit(NULL);
 }
 
+static unsigned char *frame_fill(unsigned char *frame, void *(*entry)(void *), void *stack_top,
+                                 uintptr_t *identity);
+
 static unsigned char *frame_new(void *(*entry)(void *), void *stack_top, uintptr_t *identity)
 {
     sublet_cap slot;
     require(!cap_vm_acquire(&slot, PAGE, PAGE, PROT_READ | PROT_WRITE, 6, CAP_VM_HEAP),
             "the frame's grant");
-    unsigned char *frame = cap_vm_copyable(&slot);
+    return frame_fill(cap_vm_copyable(&slot), entry, stack_top, identity);
+}
+
+/* The page frame as a start frame for entry on stack_top, with a new context identity. */
+static unsigned char *frame_fill(unsigned char *frame, void *(*entry)(void *), void *stack_top,
+                                 uintptr_t *identity)
+{
     memset(frame, 0, PAGE);
     ((uint64_t *)frame)[7] = 3;
     *identity = __capstone_context_identity_take();
@@ -651,11 +707,10 @@ static int mode_create_fail(void)
     fflush(stdout);
     require(id == -EAGAIN, "the launcher fails the create after the module took the frame");
     __capstone_context_identity_give(identity);
-    errno = 0;
-    int probe = mprotect(untagged(address), PAGE, PROT_READ | PROT_WRITE);
-    printf("ROOT_FRAME_PROBE rc=%d errno=%d\n", probe, errno);
+    int probe = registered(address);
+    printf("ROOT_FRAME_PROBE registered=%d\n", probe);
     fflush(stdout);
-    require(probe == -1 && errno == EINVAL, "the frame's mapping is no longer registered");
+    require(!probe, "the frame's mapping is no longer registered");
     pass("failed_create_releases_frame");
 
     for (unsigned i = 0; i < IDLE_THREADS; ++i)
@@ -682,8 +737,7 @@ static void *detached_worker(void *arg)
 
 static int stack_probe(void)
 {
-    errno = 0;
-    return mprotect(untagged(detached_page), PAGE, PROT_READ | PROT_WRITE) ? errno : 0;
+    return registered(detached_page) ? 0 : EINVAL;
 }
 
 static int mode_detached(void)
@@ -714,6 +768,218 @@ static int mode_detached(void)
     return 0;
 }
 
+/* exit-length: a thread exits naming its own stack's mapping with a length that is not the
+ * mapping's. The exit completes and writes the exit word; the mapping stays until the program
+ * unmaps it through the reference it kept. */
+static volatile int exit_word;
+
+static void *exit_word_worker(void *arg)
+{
+    (void)arg;
+    __capstone_vm_thread_exit_clear(cursor((void *)&exit_word), exit_operand, exit_bytes, 0);
+}
+
+static int mode_exit_length(void)
+{
+    (void)grant();
+    char *stack = map(STACK);
+    unsigned long address = cursor(stack);
+
+    exit_operand = stack;
+    exit_bytes = STACK - PAGE;
+    exit_word = 1;
+    long id = __capstone_virtual_context_create(exit_word_worker, NULL, stack + STACK,
+                                                thread_pointer());
+    require(id > 0, "create the exiting context");
+    require(!capstone_virtual_thread_join(id), "join the context that named a wrong length");
+    require(exit_word == 0, "the launcher wrote the exit word");
+    pass("exit_with_wrong_length_completes");
+
+    require(registered(address), "the stack's mapping is still registered");
+    stack[0] = 0x31;
+    stack[STACK - 1] = 0x32;
+    require(stack[0] == 0x31 && stack[STACK - 1] == 0x32,
+            "the stack's mapping works through the kept reference");
+    pass("wrong_length_stack_stays_mapped");
+
+    require(!munmap(stack, STACK), "munmap of the stack through the kept reference");
+    require(!registered(address), "the stack's mapping is gone after the munmap");
+    pass("wrong_length_stack_unmaps_afterwards");
+    return 0;
+}
+
+/* The protection of the page at address as /proc/self/maps shows it ("rw-", "r--", "---"), or
+ * "?" where no line holds it. The launcher's process is the program's address space. */
+static void protection(unsigned long address, char out[4])
+{
+    char line[256];
+    FILE *maps = fopen("/proc/self/maps", "r");
+
+    strcpy(out, "?");
+    if (!maps)
+        return;
+    while (fgets(line, sizeof line, maps)) {
+        unsigned long low, high;
+        char rights[8];
+        if (sscanf(line, "%lx-%lx %7s", &low, &high, rights) == 3 && low <= address &&
+            address < high) {
+            memcpy(out, rights, 3);
+            out[3] = 0;
+            break;
+        }
+    }
+    fclose(maps);
+}
+
+/* Is the page at address protected as rights says? Printed for the record. */
+static int protected_as(unsigned long address, const char *rights)
+{
+    char seen[4];
+    protection(address, seen);
+    printf("ROOT_PROTECTION 0x%lx %s\n", address, seen);
+    fflush(stdout);
+    return !strcmp(seen, rights);
+}
+
+static int mode_protect(void)
+{
+    (void)grant();
+    char *two = map(2 * PAGE);
+    unsigned long base = cursor(two);
+    two[PAGE] = 2;
+
+    require(!mprotect(two, 2 * PAGE, PROT_READ), "mprotect through the mapping's reference");
+    require(protected_as(base, "r--") && protected_as(base + PAGE, "r--"),
+            "the whole mapping is read-only");
+    require(two[0] == 1 && two[PAGE] == 2, "the read-only mapping reads");
+    require(!mprotect(two, 2 * PAGE, PROT_READ | PROT_WRITE), "restore write rights");
+    require(!mprotect(two + PAGE, PAGE, PROT_NONE), "mprotect of the second page");
+    require(protected_as(base, "rw-") && protected_as(base + PAGE, "---"),
+            "only the second page is inaccessible");
+    require(!mprotect(two + PAGE, PAGE, PROT_READ | PROT_WRITE), "restore the second page");
+    two[1] = 3;
+    two[PAGE + 1] = 4;
+    require(two[1] == 3 && two[PAGE + 1] == 4, "the mapping after the restores");
+    pass("protect_through_mapping_reference");
+
+    if (root_grants) {
+        char *page = map(PAGE);
+        unsigned long address = cursor(page);
+        require(refused(mprotect(untagged(address), PAGE, PROT_NONE)),
+                "mprotect with an integer address");
+        require(protected_as(address, "rw-"), "the protection after the refusal of an address");
+        page[1] = 5;
+        require(page[0] == 1 && page[1] == 5, "the mapping after the refusal of an address");
+        pass("protect_integer_address_refused");
+
+        char *renewed = capstone_cap_renew(page);
+        require(refused(mprotect(page, PAGE, PROT_NONE)),
+                "mprotect through the reference from before CRENEW");
+        require(protected_as(address, "rw-"), "the protection after the refusal of a stale reference");
+        renewed[2] = 6;
+        require(renewed[1] == 5 && renewed[2] == 6, "the renewed mapping after the refusal");
+        pass("protect_stale_reference_refused");
+
+        char *narrow = __builtin_capstone_cap_shrink(two, base, base + PAGE);
+        require(refused(mprotect(narrow, 2 * PAGE, PROT_NONE)),
+                "mprotect of two pages through a reference narrowed to one");
+        require(protected_as(base, "rw-") && protected_as(base + PAGE, "rw-"),
+                "the protection after the refusal of a narrowed reference");
+        pass("protect_narrowed_reference_refused");
+
+        char *object = capstone_cap_derive(renewed, 0, PAGE);
+        require(refused(mprotect(object, PAGE, PROT_NONE)),
+                "mprotect through an object over the whole page");
+        require(protected_as(address, "rw-"), "the protection after the refusal of an object");
+        object[3] = 7;
+        require(renewed[3] == 7, "the object and the mapping after the refusal");
+        pass("protect_nested_object_refused");
+    } else {
+        skip("protect_integer_address_refused", BY_ADDRESS);
+        skip("protect_stale_reference_refused", BY_ADDRESS);
+        skip("protect_narrowed_reference_refused", BY_ADDRESS);
+        skip("protect_nested_object_refused", BY_ADDRESS);
+    }
+
+    char *first = __builtin_capstone_cap_shrink(two, base, base + PAGE);
+    require(!mprotect(first, PAGE, PROT_READ), "mprotect of the page a narrowed reference covers");
+    require(protected_as(base, "r--") && protected_as(base + PAGE, "rw-"),
+            "only the covered page is read-only");
+    require(!mprotect(two, PAGE, PROT_READ | PROT_WRITE), "restore the first page");
+    pass("protect_narrowed_covering_range");
+    return 0;
+}
+
+/* The base of a reference's bounds (LCC selector 3). */
+static unsigned long base_of(void *p)
+{
+    unsigned long base;
+    __asm__ volatile(".insn r 0x5b, 0x1, 0x04, %0, %1, x3" : "=r"(base) : "r"(p));
+    return base;
+}
+
+static void *stack_pointer(void)
+{
+    void *sp;
+    __asm__ volatile("movc %0, sp" : "=r"(sp));
+    return sp;
+}
+
+/* create-gate: the launcher hands the module only a frame that the program may end, a whole
+ * one-page heap mapping named at its address, and the module takes only the frame that a0
+ * names. */
+static int mode_create_gate(void)
+{
+    (void)grant();
+    char *stack = map(STACK);
+    uintptr_t identity;
+    sublet_cap slot;
+
+    require(!cap_vm_acquire(&slot, PAGE, PAGE, PROT_READ | PROT_WRITE, 6, CAP_VM_METADATA),
+            "a page of the allocator's metadata");
+    unsigned char *metadata = frame_fill(cap_vm_copyable(&slot), frame_child, stack + STACK,
+                                         &identity);
+    long id = __capstone_vm_thread_create_frame(metadata);
+    printf("ROOT_CREATE metadata=%ld\n", id);
+    fflush(stdout);
+    require(id == -EINVAL, "thread create with a frame in a metadata page");
+    __capstone_context_identity_give(identity);
+    metadata[PAGE - 1] = 0x5b;
+    require(metadata[PAGE - 1] == 0x5b && ((uint64_t *)metadata)[7] == 3,
+            "the metadata page after the refused create");
+    pass("create_metadata_frame_refused");
+
+    void *sp = stack_pointer();
+    void *launcher_stack = at_address(sp, base_of(sp));
+    id = __capstone_vm_thread_create_frame(launcher_stack);
+    printf("ROOT_CREATE launcher_stack=%ld base=0x%lx type=%lu\n", id, base_of(sp),
+           type_of(launcher_stack));
+    fflush(stdout);
+    require(id == -EINVAL, "thread create with the launcher's stack mapping");
+    pass("create_launcher_page_refused");
+
+    unsigned char *frame = frame_new(frame_child, stack + STACK, &identity);
+    void *inside = at_address(frame, cursor(frame) + 64);
+    id = __capstone_vm_thread_create_frame(inside);
+    printf("ROOT_CREATE inside=%ld\n", id);
+    fflush(stdout);
+    require(id == -EINVAL,
+            "thread create with a frame reference whose cursor is not the frame's address");
+    frame[PAGE - 1] = 0x5c;
+    require(frame[PAGE - 1] == 0x5c && ((uint64_t *)frame)[7] == 3,
+            "the frame after the refused create");
+    pass("create_mismatched_frame_refused");
+
+    id = __capstone_vm_thread_create_frame(frame);
+    printf("ROOT_CREATE own=%ld\n", id);
+    fflush(stdout);
+    require(id > 0, "thread create through the frame's own reference afterwards");
+    require(!capstone_virtual_thread_join(id) && __atomic_load_n(&child_ran, __ATOMIC_ACQUIRE),
+            "the created thread ran");
+    pass("create_after_refusals");
+    return 0;
+}
+
 int main(int argc, char **argv)
 {
     const char *mode = argc > 1 ? argv[1] : "unmap";
@@ -729,6 +995,9 @@ int main(int argc, char **argv)
     if (!strcmp(mode, "create")) return mode_create();
     if (!strcmp(mode, "create-fail")) return mode_create_fail();
     if (!strcmp(mode, "detached")) return mode_detached();
+    if (!strcmp(mode, "exit-length")) return mode_exit_length();
+    if (!strcmp(mode, "protect")) return mode_protect();
+    if (!strcmp(mode, "create-gate")) return mode_create_gate();
     fail("unknown mode");
     return 1;
 }

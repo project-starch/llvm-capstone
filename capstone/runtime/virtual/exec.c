@@ -87,6 +87,9 @@ static __thread int host_signals_attached;   /* this worker's thread records int
 #define CV_MAX_THREADS 32
 static uint64_t thread_ids[CV_MAX_THREADS] = {0};
 static unsigned thread_done[CV_MAX_THREADS];
+/* Each thread's frame mapping, by address and identity (the module's arena id, never reused): the
+ * exit names it to the module for release (thread_frame_mapping). */
+static struct { uintptr_t address; uint64_t id; } thread_frames[CV_MAX_THREADS];
 static unsigned thread_count = 1;
 static pthread_mutex_t service_lock = PTHREAD_MUTEX_INITIALIZER;
 static pthread_mutex_t thread_state_lock = PTHREAD_MUTEX_INITIALIZER;
@@ -110,8 +113,10 @@ static unsigned long step_count(const unsigned long *counter)
 { return __atomic_load_n(counter, __ATOMIC_RELAXED); }
 static void *meta;
 static void *virtual_thread_worker(void *opaque);
+static struct mapping *map_find(uintptr_t base);
 
-static int thread_add(uint64_t id)
+/* Record thread id, whose frame lies in the mapping frame. */
+static int thread_add(uint64_t id, const struct mapping *frame)
 {
     int result = 0;
     if (!id) return -EINVAL;
@@ -122,12 +127,30 @@ static int thread_add(uint64_t id)
             if (!thread_ids[i]) {
                 thread_ids[i] = id;
                 thread_done[i] = 0;
+                thread_frames[i].address = (uintptr_t)frame->address;
+                thread_frames[i].id = frame->id;
                 ++thread_count;
                 break;
             }
     }
     pthread_mutex_unlock(&thread_state_lock);
     return result;
+}
+/* The registered mapping that holds thread id's frame, found by identity, or NULL. */
+static struct mapping *thread_frame_mapping(uint64_t id)
+{
+    uintptr_t address = 0;
+    uint64_t frame_id = 0;
+    pthread_mutex_lock(&thread_state_lock);
+    for (unsigned i = 1; i < CV_MAX_THREADS; ++i)
+        if (thread_ids[i] == id) {
+            address = thread_frames[i].address;
+            frame_id = thread_frames[i].id;
+            break;
+        }
+    pthread_mutex_unlock(&thread_state_lock);
+    struct mapping *m = address ? map_find(address) : NULL;
+    return m && m->id == frame_id ? m : NULL;
 }
 static void thread_remove(uint64_t id)
 {
@@ -136,6 +159,8 @@ static void thread_remove(uint64_t id)
         if (thread_ids[i] != id) continue;
         thread_ids[i] = 0;
         thread_done[i] = 0;
+        thread_frames[i].address = 0;
+        thread_frames[i].id = 0;
         --thread_count;
         pthread_mutex_unlock(&thread_state_lock);
         return;
@@ -163,6 +188,8 @@ static int thread_join(uint64_t id)
             pthread_cond_wait(&thread_state_cond, &thread_state_lock);
         thread_ids[i] = 0;
         thread_done[i] = 0;
+        thread_frames[i].address = 0;
+        thread_frames[i].id = 0;
         --thread_count;
         pthread_mutex_unlock(&thread_state_lock);
         return 0;
@@ -537,7 +564,7 @@ static void mc_unlink(struct mc_entry *e)
     mc.bytes -= e->m.bytes; --mc.entries;
 }
 static void mc_release(struct mc_entry *e) { e->chain = mc.spare; mc.spare = e; }
-/* Give a pooled mapping back to Linux, as unmap_arena does for an ordinary one. A retirement that
+/* Give a pooled mapping back to Linux, as release_range does for an ordinary one. A retirement that
  * fails for good (not an interrupted ioctl, which is repeated) leaves the arena registered in the
  * module and mapped here with nobody remembering it: counted as lost, and the pool stops taking new
  * mappings, so a defect shows in the statistics and cannot grow without bound. */
@@ -610,38 +637,54 @@ static struct mc_entry *mc_find(size_t bytes, size_t alignment)
         if (e->m.bytes == bytes && !((uintptr_t)e->m.address & (alignment - 1))) return e;
     return NULL;
 }
-/* Unmap the whole mapping at base. domain: the domain thread tid asked (CV_SERVICE_UNMAP, base
- * the cursor of the reference it passed in a0): one CV_UNMAP pools the mapping where the pool
- * takes it and the module can, and retires it otherwise; with root_grants the module checks that
- * reference, the address and the length first. Otherwise the launcher unmaps for itself
- * (CV_RETIRE), and tid is unused: with root_grants the module then releases only a mapping whose
- * reservation has already ended (EPERM otherwise, and the mapping stays registered). A partial
- * unmap is refused here, with or without root_grants, and again by the module with root_grants. */
-static long unmap_arena_for(uintptr_t base, size_t bytes, int domain, uint64_t tid)
+static long mapping_gate(const struct mapping *m, size_t bytes);
+static long release_range(struct mapping *m);
+/* Unmap the whole mapping at base for the domain thread tid (CV_SERVICE_UNMAP, base the cursor
+ * of the reference it passed in a0): one CV_UNMAP pools the mapping where the pool takes it and
+ * the module can, and retires it otherwise; with root_grants the module checks that reference,
+ * the address and the length first. A partial unmap is refused here, with or without root_grants,
+ * and again by the module with root_grants. */
+static long unmap_arena_for(uintptr_t base, size_t bytes, uint64_t tid)
 {
     struct mapping *m = map_find(base);
+    long gate = mapping_gate(m, bytes);
+    if (gate) return gate;
+    int pool = mc_eligible(m);
+    struct cv_unmap request = {.thread = tid, .id = m->id, .park = pool};
+    if (ioctl(device, CV_UNMAP, &request)) return -errno;
+    if (request.park == CV_UNMAP_PARKED) { mc_pool(m); return 0; }
+    if (pool) {
+        /* The module retired the mapping instead of parking it. */
+        ++mc.refused;
+        if (request.park == CV_UNMAP_NO_POOL) { mc_flush(); mc.cap = 0; }
+    }
+    return release_range(m);
+}
+/* May a request of the program end m, a mapping of exactly bytes: munmap, the frame's hand-over
+ * at thread creation, the stack at thread exit? Only a registered heap mapping of that visible
+ * length that is not the allocator's metadata (else EINVAL) and that no worker holds (else
+ * EBUSY). The launcher's own mappings (image, stack, transport, startup data) never are. */
+static long mapping_gate(const struct mapping *m, size_t bytes)
+{
     if (!m || m->visible != bytes || !m->heap || m->kind == CV_MAP_METADATA)
         return -EINVAL;
     if (m->holder) return -EBUSY;
-    if (domain) {
-        int pool = mc_eligible(m);
-        struct cv_unmap request = {.thread = tid, .id = m->id, .park = pool};
-        if (ioctl(device, CV_UNMAP, &request)) return -errno;
-        if (request.park == CV_UNMAP_PARKED) { mc_pool(m); return 0; }
-        if (pool) {
-            /* The module retired the mapping instead of parking it. */
-            ++mc.refused;
-            if (request.park == CV_UNMAP_NO_POOL) { mc_flush(); mc.cap = 0; }
-        }
-    } else if (ioctl(device, CV_RETIRE, &m->id)) return -errno;
+    return 0;
+}
+/* Give the range of m, whose arena the module has released, back to Linux and drop its
+ * registration. */
+static long release_range(struct mapping *m)
+{
     if (munmap(m->address, m->bytes)) return -errno;
     reuse_address = m->address; reuse_bytes = m->bytes;
     map_remove(m);
     return 0;
 }
-/* The launcher's own unmaps (a thread's frame and stack) never enter the pool. */
-static long unmap_arena(uintptr_t base, size_t bytes) { return unmap_arena_for(base, bytes, 0, 0); }
-static long protect_range(uintptr_t base, size_t bytes, int prot)
+/* The domain thread tid's mprotect of [base, + bytes) (CV_SERVICE_PROTECT, base the cursor of the
+ * reference it passed in a0): a page range inside the visible length of one registered heap
+ * mapping that is not the allocator's metadata. With root_grants the module checks the reference
+ * first (CV_PROTECT): a live reference to that mapping whose bounds cover the range. */
+static long protect_range(uint64_t tid, uintptr_t base, size_t bytes, int prot)
 {
     if (!bytes || (base & 4095) || (bytes & 4095) ||
         (prot & ~(PROT_READ | PROT_WRITE | PROT_EXEC))) return -EINVAL;
@@ -649,6 +692,8 @@ static long protect_range(uintptr_t base, size_t bytes, int prot)
     uintptr_t at = m ? (uintptr_t)m->address : 0;
     if (!m || !m->heap || m->kind == CV_MAP_METADATA ||
         base - at > m->visible || bytes > m->visible - (base - at)) return -EINVAL;
+    struct cv_protect request = {.thread = tid, .id = m->id};
+    if (ioctl(device, CV_PROTECT, &request)) return -errno;
     m->protected_range = 1;
     return mprotect((void *)base, bytes, prot) ? -errno : 0;
 }
@@ -844,7 +889,7 @@ static long remap_mapping(uint64_t tid, struct cv_step *step)
 }
 /* The error exit's cleanup. It does not unmap the registered mappings: die() runs on any worker
  * while the others may still be inside a delegated service that writes into their transport,
- * and an unmap here would bypass the transport hold (unmap_arena) and reopen the address to
+ * and an unmap here would bypass the transport hold (mapping_gate) and reopen the address to
  * reuse under that write. Linux releases the mappings at the process's exit, after exit_group
  * has stopped every worker, as on the normal exit path. */
 static void cleanup(void)
@@ -1177,18 +1222,19 @@ static int reserve_stdio(unsigned *mask) {
 }
 
 /* Undo a CV_THREAD_CREATE that succeeded: stop the new thread (it never ran) and release its
- * frame's mapping. The create ended every reference of the program to the frame (with
- * root_grants the module ended the reservation; without, it retired the frame's ancestor), so the
- * program cannot unmap the frame itself any more; without this release the frame would stay
- * pinned and registered until exit. */
-static void thread_rollback(uint64_t thread)
+ * frame's mapping, which the module names in its answer. The create ended every reference of the
+ * program to the frame (with root_grants the module ended the reservation; without, it retired
+ * the frame's ancestor), so the program cannot unmap the frame itself any more; without this
+ * release the frame would stay pinned and registered until exit. */
+static void thread_rollback(uint64_t thread, struct mapping *frame)
 {
-    struct cv_thread_exit rollback = {.thread = thread};
-    if (ioctl(device, CV_THREAD_EXIT, &rollback) || !rollback.frame) return;
-    long rc = unmap_arena(rollback.frame, 4096);
+    struct cv_thread_exit rollback = {.thread = thread, .frame = frame->id};
+    long rc = ioctl(device, CV_THREAD_EXIT, &rollback) ? -errno : 0;
+    if (!rc && !(rollback.released & CV_EXIT_FRAME)) rc = -EBUSY;
+    if (!rc) rc = release_range(frame);
     if (rc)
         fprintf(stderr, "CAPSTONE_VM_FRAME_RELEASE_FAILED frame=0x%lx error=%ld\n",
-                (unsigned long)rollback.frame, -rc);
+                (unsigned long)(uintptr_t)frame->address, -rc);
 }
 
 static int virtual_service(uint64_t tid, struct cv_step *step)
@@ -1200,18 +1246,23 @@ static int virtual_service(uint64_t tid, struct cv_step *step)
     if (step->args[7] == CV_SERVICE_THREAD_SELF) {
         step->result = tid + 1; /* zero remains the wire lock's vacant value */
     } else if (step->args[7] == CV_SERVICE_THREAD_CREATE) {
-        /* a0 is the frame's reference (thread.c), its cursor the frame's address. With
-         * root_grants the module checks the reference in the caller's a0 and ends the frame's
-         * mapping only if the thread is created. After a successful CV_THREAD_CREATE the frame
-         * belongs to the module: if a later step here fails, the rollback stops the thread and
-         * this launcher releases the frame's mapping itself, since every reference of the program
-         * to it has ended. EAGAIN tells the program so (vm-abi.h); every other error leaves the
-         * frame the program's. */
+        /* a0 is the frame's reference (thread.c), its cursor the frame's address. The frame must
+         * be a whole one-page mapping that the program may end (mapping_gate): the hand-over ends
+         * every reference of the program to it. With root_grants the module checks the reference
+         * in the caller's a0 and ends the frame's mapping only if the thread is created. After a
+         * successful CV_THREAD_CREATE the frame belongs to the module: if a later step here fails,
+         * the rollback stops the thread and releases the frame's mapping, since every reference of
+         * the program to it has ended. EAGAIN tells the program so (vm-abi.h); every other error
+         * leaves the frame the program's. */
+        struct mapping *frame = map_find(step->args[0]);
         struct cv_thread_create request = {.frame = step->args[0], .creator = tid};
-        if (ioctl(device, CV_THREAD_CREATE, &request)) {
+        long gate = mapping_gate(frame, 4096);
+        if (gate) {
+            step->result = gate;
+        } else if (ioctl(device, CV_THREAD_CREATE, &request)) {
             step->result = -errno;
-        } else if (thread_add(request.thread)) {
-            thread_rollback(request.thread);
+        } else if (thread_add(request.thread, frame)) {
+            thread_rollback(request.thread, frame);
             step->result = -EAGAIN;
         } else {
             uint64_t *child = malloc(sizeof(*child));
@@ -1220,7 +1271,7 @@ static int virtual_service(uint64_t tid, struct cv_step *step)
                                          (child ? (*child = request.thread), child : NULL))) {
                 free(child);
                 thread_remove(request.thread);
-                thread_rollback(request.thread);
+                thread_rollback(request.thread, frame);
                 step->result = -EAGAIN;
             } else {
                 pthread_detach(worker);
@@ -1228,47 +1279,42 @@ static int virtual_service(uint64_t tid, struct cv_step *step)
             }
         }
     } else if (step->args[7] == CV_SERVICE_THREAD_EXIT || step->args[7] == CV_SERVICE_PTHREAD_EXIT) {
-        struct cv_thread_exit request = {.thread = tid};
         int posix = step->args[7] == CV_SERVICE_PTHREAD_EXIT;
         uintptr_t clear = posix ? step->args[0] : 0;
+        if (tid == 0) return -1;
         if (clear && (!registered_word(clear) || touch(clear, sizeof(int)))) return -1;
-        /* The exit word is stored after the two unmaps below, so it must lie in neither: a
-         * store into a range just given back to Linux would land in whatever Linux maps there
-         * next. musl's word is a global (the thread-list lock), never in the thread's stack. */
+        /* The module releases the thread's frame and the stack it names before the exit word is
+         * stored, so the word must lie in neither: a store into a range just given back to Linux
+         * would land in whatever Linux maps there next. musl's word is a global (the thread-list
+         * lock), never in the thread's stack. */
+        struct mapping *frame = thread_frame_mapping(tid);
         if (clear && posix && step->args[1] && clear - step->args[1] < step->args[2]) return -1;
-        /* The stack unmap is the program's request: a1 is the stack's reference (pthread.c,
-         * __unmapself), a2 its length. With root_grants the module checks the reference while the
-         * frame still holds it and ends the stack's mapping after the thread has stopped. */
-        if (posix && step->args[1]) {
-            struct mapping *stack = map_find(step->args[1]);
-            if (stack && stack->visible == step->args[2] && stack->heap &&
-                stack->kind != CV_MAP_METADATA) {
-                request.stack = stack->id;
-                request.stack_reg = 11;
-            }
-        }
-        if (tid == 0 || ioctl(device, CV_THREAD_EXIT, &request))
-            return -1;
-        /* A worker that exits still attached gives its holds back here. */
+        if (clear && frame && clear - (uintptr_t)frame->address < frame->bytes) return -1;
+        /* A worker that exits still attached gives its holds back here, so they keep none of its
+         * mappings. */
         transport_detach(tid);
-        if (clear && request.frame && clear - request.frame < 4096) return -1;
-        if (request.frame) {
-            long cleanup_rc = unmap_arena(request.frame, 4096);
-            if (cleanup_rc && cleanup_rc != -EINVAL) return -1;
-        }
+        /* The frame, and the stack that the program asks to unmap (a1 the stack's reference,
+         * pthread.c __unmapself, a2 its length), each only where the program may end it. With
+         * root_grants the stack is the program's request: the module checks the reference while
+         * the frame still holds it and ends the stack's reservation after the thread has stopped.
+         * A refused stack stays mapped and registered, and the exit goes on. */
+        struct cv_thread_exit request = {.thread = tid};
+        struct mapping *stack = posix && step->args[1] ? map_find(step->args[1]) : NULL;
+        if (frame && !mapping_gate(frame, 4096)) request.frame = frame->id;
+        if (stack && !mapping_gate(stack, step->args[2])) request.stack = stack->id;
+        if (ioctl(device, CV_THREAD_EXIT, &request))
+            return -1;
+        if (!(request.released & CV_EXIT_FRAME) || release_range(frame))
+            fprintf(stderr, "CAPSTONE_VM_FRAME_RELEASE_FAILED frame=0x%lx\n",
+                    frame ? (unsigned long)(uintptr_t)frame->address : 0UL);
         thread_mark_done(tid);
         /* musl join may retire the child's stack/TLS after this store.
-         * The virtual CPU has stopped and its tagged frame is gone first. With root_grants the
-         * module refuses (EPERM) to release a stack whose request it refused at CV_THREAD_EXIT:
-         * the mapping stays registered and the exit goes on. */
-        if (posix && step->args[1]) {
-            long stack_rc = unmap_arena(step->args[1], step->args[2]);
-            if (stack_rc == -EPERM)
-                fprintf(stderr, "CAPSTONE_VM_STACK_UNMAP_REFUSED tid=%llu base=0x%lx bytes=%lu\n",
-                        (unsigned long long)tid, (unsigned long)step->args[1],
-                        (unsigned long)step->args[2]);
-            else if (stack_rc) return -1;
-        }
+         * The virtual CPU has stopped and its tagged frame is gone first. */
+        if (posix && step->args[1] &&
+            (!(request.released & CV_EXIT_STACK) || release_range(stack)))
+            fprintf(stderr, "CAPSTONE_VM_STACK_UNMAP_REFUSED tid=%llu base=0x%lx bytes=%lu\n",
+                    (unsigned long long)tid, (unsigned long)step->args[1],
+                    (unsigned long)step->args[2]);
         if (clear) {
             __atomic_store_n((int *)clear, 0, __ATOMIC_RELEASE);
             syscall(SYS_futex, (int *)clear, FUTEX_WAKE_PRIVATE, INT_MAX, NULL, NULL, 0);
@@ -1470,12 +1516,12 @@ static int virtual_service(uint64_t tid, struct cv_step *step)
     } else if (step->args[7] == CV_SERVICE_REMAP) {
         step->result = remap_mapping(tid, step);
     } else if (step->args[7] == CV_SERVICE_UNMAP) {
-        step->result = unmap_arena_for(step->args[0], step->args[1], 1, tid);
+        step->result = unmap_arena_for(step->args[0], step->args[1], tid);
     } else if (step->args[7] == CV_SERVICE_TRANSPORT_DETACH) {
         /* The worker gives its transport back (pthread.c, before it unmaps the blocks). */
         transport_detach(tid);
     } else if (step->args[7] == CV_SERVICE_PROTECT) {
-        step->result = protect_range(step->args[0], step->args[1], step->args[2]);
+        step->result = protect_range(tid, step->args[0], step->args[1], step->args[2]);
     } else if (step->args[7] == CV_SERVICE_WAIT) {
         /* The heap's contended atomic mutex must let its owner run, including
          * the owner's mapping service. Never yield with the wire lock held. */

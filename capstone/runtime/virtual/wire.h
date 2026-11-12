@@ -60,18 +60,25 @@ struct cv_thread_control {
     __u64 thread;
     __u64 frame;
 };
-/* CV_THREAD_EXIT. thread: the exiting thread; frame (out): its frame's user
- * address, as before. stack: the arena id of the stack the thread asks to
- * unmap at its exit (CV_SERVICE_PTHREAD_EXIT with a stack), or 0; stack_reg:
- * the register that holds the stack's reference, 11 (a1). With root_grants
- * the module checks that reference before it clears the frame and ends the
- * stack's mapping after the thread has stopped; stack_ended (out) is then 1.
- * A refused reference does not stop the exit: the thread exits, the stack's
- * mapping stays, and a later CV_RETIRE of it is refused. Without root_grants
- * the module ignores stack and stack_reg. */
+/* CV_THREAD_EXIT: stop thread and release the arenas the launcher names with
+ * it, each by its arena id or 0. frame: the thread's frame. stack: the stack
+ * the thread asks to unmap at its exit (CV_SERVICE_PTHREAD_EXIT, a1 the
+ * stack's reference, a2 its length). The launcher names only a registered heap
+ * mapping, not the allocator's metadata, held by no worker, of the length the
+ * call names. With root_grants the stack is a request of the program: the
+ * module checks the reference in a1 before it clears the frame, and after the
+ * thread has stopped it ends the stack's reservation (CREVOKE of M) and
+ * releases the arena. released (out): CV_EXIT_FRAME and CV_EXIT_STACK for the
+ * arenas the module released; the launcher then unmaps those ranges. The
+ * module writes it before the first irreversible step, and nothing after that
+ * step can fail. A refused or impossible release does not stop the exit: the
+ * thread exits and that arena stays registered (a leak, counted in exit_kept
+ * and reported). */
 struct cv_thread_exit {
-    __u64 thread, frame, stack, stack_reg, stack_ended;
+    __u64 thread, frame, stack, released;
 };
+#define CV_EXIT_FRAME 1
+#define CV_EXIT_STACK 2
 struct cv_remap {
     __u64 thread, id, bytes, address; /* address zero cancels after Linux failure */
 };
@@ -123,9 +130,10 @@ struct cv_touch {
 #define CV_PARK _IOW('V', 30, __u64)
 #define CV_REVIVE _IOWR('V', 31, struct cv_map)
 /* With root_grants, CV_RETIRE releases only an arena whose mapping has already ended: through a
- * program's request (CV_UNMAP, the frame's hand-over at CV_THREAD_CREATE, the stack at
- * CV_THREAD_EXIT) or a park. While the mapping lives it is refused with EPERM and changes nothing.
- * CV_PARK is refused with EPERM: a park is a program's request and goes through CV_UNMAP. */
+ * program's request (CV_UNMAP, the frame's hand-over at CV_THREAD_CREATE) or a park. While the
+ * mapping lives it is refused with EPERM and changes nothing. The launcher's one CV_RETIRE is the
+ * eviction of a parked mapping from its pool. CV_PARK is refused with EPERM: a park is a
+ * program's request and goes through CV_UNMAP. */
 /* A program's own unmap (CV_SERVICE_UNMAP): thread is the caller, paused at the service, id the
  * arena the launcher resolved from the cursor of the reference in a0. park (in): 1 asks to pool
  * the mapping (CV_PARK's effect) where the module can, 0 to retire it. park (out): what the module
@@ -135,7 +143,8 @@ struct cv_touch {
  * module reads it with its tag from the caller's saved a0 and ends the mapping only if it is a
  * live reference whose record is a child of the mapping's reservation record and whose bounds
  * cover the length the program's mmap exposed, and the call names exactly that length
- * (capstone_vm.c, request_operand). A refusal is EINVAL and changes nothing. */
+ * (capstone_vm.c, request_operand). A refusal is EINVAL and changes nothing. The module writes
+ * park (out) before it ends anything, and nothing after that can fail. */
 struct cv_unmap {
     __u64 thread, id, park;
 };
@@ -143,6 +152,17 @@ struct cv_unmap {
 #define CV_UNMAP_PARKED 1
 #define CV_UNMAP_NO_POOL 2   /* retired: this module does not pool (unpinned) */
 #define CV_UNMAP _IOWR('V', 32, struct cv_unmap)
+/* A program's mprotect (CV_SERVICE_PROTECT), asked before the launcher changes the protection:
+ * thread is the caller, paused at the service, id the arena the launcher resolved from the cursor
+ * of the reference in a0. Without root_grants the module ignores thread and accepts. With
+ * root_grants the reference is the authority, as for munmap, except that the call may name any
+ * page range inside the visible length: the module accepts only a live reference whose record is
+ * a child of the mapping's reservation record and whose bounds cover [a0's cursor, + a1). It ends
+ * nothing. A refusal is EINVAL, and the launcher then changes nothing. */
+struct cv_protect {
+    __u64 thread, id;
+};
+#define CV_PROTECT _IOW('V', 33, struct cv_protect)
 /* The image file, by descriptor, before the launcher validates it: the module
  * denies writers to it (ETXTBSY, as Linux does for a running executable) until
  * the context is released, so the bytes validated are the bytes loaded. */

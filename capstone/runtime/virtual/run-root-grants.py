@@ -23,10 +23,18 @@ Modes (root-contract.c lists the checks of each):
   create-fail  the launcher fails a create after the module took the frame: the frame's mapping is
                released (exit 0)
   detached     a detached pthread's stack is unmapped at its exit (exit 0)
+  exit-length  a thread exits naming its stack with a wrong length: the exit completes, the stack
+               stays mapped and unmaps later through the kept reference (exit 0)
+  protect      mprotect through the mapping's reference, part of it, and refused through an integer
+               address, a stale or narrowed reference and a nested object (exit 0)
+  create-gate  thread create with a metadata page, the launcher's stack and a frame reference
+               moved inside the page: refused; then through the frame's own reference (exit 0)
 Every refusal of a request is counted (parameter unmap_refused) and reported in the kernel log
 with its reason and request, and so is every CV_RETIRE that the module refuses because the
-mapping's reservation is live (parameter retire_refused). The runner reads both back per mode (the
-log is read and cleared after each mode) and compares them with what each mode does.
+mapping's reservation is live (parameter retire_refused; no launcher path asks for one any more)
+and every arena that a thread exit names but keeps (parameter exit_kept). The runner reads them
+back per mode (the log is read and cleared after each mode) and compares them with what each mode
+does. Every thread's frame must be released at its exit (no CAPSTONE_VM_FRAME_RELEASE_FAILED).
 
 --root-grants 0 loads the module without the parameter. The checks that hold only with root
 grants print ROOT_SKIP with a reason, and the runner requires those skips instead.
@@ -34,14 +42,20 @@ grants print ROOT_SKIP with a reason, and the runner requires those skips instea
   cover          the unmap check skips condition 4 (the bounds cover the mapping): the narrowed
                  munmap is accepted, and the narrow mode fails at that check (exit 1)
   parent         the check skips condition 3 (the operand's record is a child of M): the object
-                 over the whole page ends the whole mapping, and the refuse mode fails there
-  exit-operand   the stack's mapping at thread exit ends through the program's operand (the a1
-                 slot, cleared with the frame by then) instead of M: the renewed stack lifetime
-                 survives, exit-renew reads through it, and detached finds the stack still mapped
+                 over the whole page ends the whole mapping, and the refuse mode fails there; the
+                 protect mode fails at the object's mprotect
+  exit-operand   the stack's arena at thread exit is released without the CREVOKE of M: the
+                 renewed stack lifetime survives, and exit-renew reads through it
+  protect-check  CV_PROTECT accepts without checking the reference: the protect mode fails at the
+                 integer address (exit 1)
+  create-address thread create without the comparison of the launcher's frame with a0's cursor:
+                 with --launcher-frame-floor the create-gate mode fails at the moved reference
 Every other mode must pass as without the control.
 --launcher PATH runs another capstone-vexec. --launcher-bypass says that it lacks the launcher's
 whole-mapping check: the partial munmap then reaches the module, which must refuse it
-(reason "range is not the mapping").
+(reason "range is not the mapping"). --launcher-frame-floor says that it names the mapping around
+a0's cursor as the frame at thread create: the moved frame reference of create-gate then reaches
+the module, which must refuse it (reason "range is not the mapping").
 --no-refs runs on a processor without supervisor references. The module must not load. Where the
 firmware hands cause 24 to S the load is refused with a message. The gate platform's monitor keeps
 the trap and halts the machine at the module's probe, after the module printed why.
@@ -58,7 +72,8 @@ import memory_mode
 
 HERE = Path(__file__).resolve().parent
 MODES = ('unmap', 'refuse', 'narrow', 'renew', 'renew-ref', 'mremap',
-         'exit-victim', 'exit-renew', 'create', 'create-fail', 'detached')
+         'exit-victim', 'exit-renew', 'create', 'create-fail', 'detached',
+         'exit-length', 'protect', 'create-gate')
 # Per mode: the checks, those that need root grants (skipped otherwise), and the expected exit.
 CHECKS = {
     'unmap': ('grant_reads_and_writes', 'libc_accepts_copyable_grant',
@@ -76,13 +91,22 @@ CHECKS = {
     'create': ('create_with_stale_frame_refused', 'create_with_renewed_frame'),
     'create-fail': ('failed_create_releases_frame',),
     'detached': ('detached_exit_unmaps_stack',),
+    'exit-length': ('exit_with_wrong_length_completes', 'wrong_length_stack_stays_mapped',
+                    'wrong_length_stack_unmaps_afterwards'),
+    'protect': ('protect_through_mapping_reference', 'protect_integer_address_refused',
+                'protect_stale_reference_refused', 'protect_narrowed_reference_refused',
+                'protect_nested_object_refused', 'protect_narrowed_covering_range'),
+    'create-gate': ('create_metadata_frame_refused', 'create_launcher_page_refused',
+                    'create_mismatched_frame_refused', 'create_after_refusals'),
 }
 ROOT_ONLY = {'stale_reference_at_reused_address_refused', 'address_refused',
              'nested_object_refused', 'stale_reference_refused',
              'stale_reference_after_collection_refused', 'narrowed_reference_refused',
              'whole_reference_after_narrowed', 'renewed_old_reference_refused',
              'exit_with_own_stack_at_victim_refused', 'exit_with_victim_address_refused',
-             'victim_unmaps_afterwards', 'create_with_stale_frame_refused'}
+             'victim_unmaps_afterwards', 'create_with_stale_frame_refused',
+             'protect_integer_address_refused', 'protect_stale_reference_refused',
+             'protect_narrowed_reference_refused', 'protect_nested_object_refused'}
 FAULTING = {'unmap', 'renew', 'renew-ref', 'mremap', 'exit-renew', 'create'}
 # Modes whose stale read does not map the address again first (the frame is not reused).
 NO_REMAP = {'create'}
@@ -108,21 +132,32 @@ REFUSALS = {
     'create': [('not live', 'thread create')],
     'create-fail': [],
     'detached': [],
+    'exit-length': [],
+    'protect': [('not a reference', 'mprotect'), ('not live', 'mprotect'),
+                ('does not cover the mapping', 'mprotect'), ('not the mapping', 'mprotect')],
+    'create-gate': [],
 }
 # What each control changes: the mode it must break, and how.
 CONTROL_CUTS = {
     'cover': {'narrow': ('ROOT_FAIL:munmap through a narrowed reference', 'narrowed_reference_refused')},
-    'parent': {'refuse': ('ROOT_FAIL:munmap through an object over the whole page', 'nested_object_refused')},
-    'exit-operand': {'exit-renew': ('ROOT_STALE_READ', None),
-                     'detached': ('ROOT_FAIL:the stack\'s mapping is gone after the thread\'s exit',
-                                  'detached_exit_unmaps_stack')},
+    'parent': {'refuse': ('ROOT_FAIL:munmap through an object over the whole page', 'nested_object_refused'),
+               'protect': ('ROOT_FAIL:mprotect through an object over the whole page',
+                           'protect_nested_object_refused')},
+    'exit-operand': {'exit-renew': ('ROOT_STALE_READ', None)},
+    'protect-check': {'protect': ('ROOT_FAIL:mprotect with an integer address',
+                                  'protect_integer_address_refused')},
+    'create-address': {'create-gate': ('ROOT_FAIL:thread create with a frame reference whose cursor '
+                                       'is not the frame\'s address', 'create_mismatched_frame_refused')},
 }
-# The kernel's refusals of the launcher's CV_RETIRE per mode: the two stacks that exit-victim's
-# threads named stay mapped, and under the exit-operand control so do the stacks in its cut modes.
-RETIRES = {'exit-victim': 2}
-CONTROL_RETIRES = {'exit-operand': {'exit-renew': 1, 'detached': 1}}
+# The arenas that a thread exit names and the module keeps, per mode: the two stacks that
+# exit-victim's threads named. exit-length's stack never reaches the module (the launcher's
+# length check), so the launcher reports it (CAPSTONE_VM_STACK_UNMAP_REFUSED) and the module not.
+EXIT_KEPT = {'exit-victim': 2}
+# The launcher's reports of a stack it leaves mapped at a thread exit, per mode.
+STACKS_KEPT = {'exit-victim': 2, 'exit-length': 1}
 REPORT = re.compile(r'^ROOT_KERNEL:([\w-]+):unmap refused \(([^)]*)\) at ([a-z ]+):', re.M)
 RETIRE_REPORT = re.compile(r'^ROOT_KERNEL:([\w-]+):retire refused:', re.M)
+KEPT_REPORT = re.compile(r'^ROOT_KERNEL:([\w-]+):thread exit keeps the (stack|frame) \(([^)]*)\)', re.M)
 
 
 def refusals_match(seen, expected):
@@ -136,10 +171,15 @@ def refusals_match(seen, expected):
     return True
 
 
-def expected_refusals(mode, control, bypass, victim_reason):
+def expected_refusals(mode, control, bypass, frame_floor, victim_reason):
     """The (reason, request) list a mode's kernel log must show, or None where a control cuts the
     mode short (then only a prefix is checked)."""
     refusals = list(REFUSALS[mode])
+    if frame_floor and mode == 'create-gate' and control != 'create-address':
+        # The frame reference moved inside the page reaches the module, which compares it.
+        refusals.append(('range is not the mapping', 'thread create'))
+    if control == 'protect-check' and mode == 'protect':
+        return []
     if mode == 'exit-victim':
         refusals[0] = (victim_reason, 'thread exit')
     if bypass and mode == 'refuse':
@@ -148,6 +188,8 @@ def expected_refusals(mode, control, bypass, victim_reason):
         refusals.insert(2, ('range is not the mapping', 'munmap'))
     if control == 'parent' and mode == 'refuse':
         return refusals[:1]                 # the address; the nested object is accepted
+    if control == 'parent' and mode == 'protect':
+        return refusals[:3]                 # the nested object is accepted
     if control == 'parent' and mode == 'exit-victim' and victim_reason == 'not the mapping':
         refusals[0] = ('does not cover the mapping', 'thread exit')
     if control == 'cover' and mode == 'narrow':
@@ -163,6 +205,8 @@ def main():
     p.add_argument('--launcher', type=Path, help='capstone-vexec to run instead of the adapter\'s')
     p.add_argument('--launcher-bypass', action='store_true',
                    help='the launcher lacks its whole-mapping check; the module must refuse a partial munmap')
+    p.add_argument('--launcher-frame-floor', action='store_true',
+                   help='the launcher names the mapping around a0\'s cursor as the frame; the module must compare')
     p.add_argument('--root-grants', type=int, choices=(0, 1), default=1)
     p.add_argument('--control', choices=sorted(CONTROL_CUTS), help='the module is this control (see above)')
     p.add_argument('--modes', default=','.join(MODES), help='comma-separated subset of the modes')
@@ -175,6 +219,8 @@ def main():
         p.error(f'unknown mode in {a.modes}')
     if a.control and not a.module:
         p.error('--control needs --module')
+    if a.control == 'create-address' and not a.launcher_frame_floor:
+        p.error('--control create-address needs a --launcher built --launcher-frame-floor')
 
     a.work.mkdir(parents=True, exist_ok=False)
     stage = a.work / 'stage'
@@ -188,7 +234,7 @@ def main():
     runs = '\n'.join(f'''echo ROOT_MODE_BEGIN:{mode}
 CAPSTONE_VM_STATS=1 ./capstone-vexec root.dom {mode}
 echo ROOT_EXIT:{mode}:$?
-dmesg -c | grep 'capstone_vm: \\(unmap\\|retire\\) refused' | sed 's/^.*capstone_vm: /ROOT_KERNEL:{mode}:/'
+dmesg -c | grep 'capstone_vm: \\(unmap refused\\|retire refused\\|thread exit keeps\\)' | sed 's/^.*capstone_vm: /ROOT_KERNEL:{mode}:/'
 ''' for mode in modes)
     (stage / 'gate.sh').write_text(f'''#!/bin/sh
 cd /mnt/vm || exit 1
@@ -201,6 +247,7 @@ dmesg -c > /dev/null
 {runs}
 echo "ROOT_UNMAP_REFUSED:$(cat /sys/module/capstone_vm/parameters/unmap_refused 2>/dev/null || echo A)"
 echo "ROOT_RETIRE_REFUSED:$(cat /sys/module/capstone_vm/parameters/retire_refused 2>/dev/null || echo A)"
+echo "ROOT_EXIT_KEPT:$(cat /sys/module/capstone_vm/parameters/exit_kept 2>/dev/null || echo A)"
 rmmod capstone_vm
 echo ROOT_CLEANUP:$?
 echo VIRTUAL_STAGED_DONE
@@ -237,6 +284,7 @@ echo VIRTUAL_STAGED_DONE
         cuts = CONTROL_CUTS.get(a.control, {})
         reports = REPORT.findall(log)
         retire_reports = RETIRE_REPORT.findall(log)
+        kept_reports = KEPT_REPORT.findall(log)
         retires_seen = {}
         for mode in modes:
             begin = log.find(f'ROOT_MODE_BEGIN:{mode}\n')
@@ -248,9 +296,10 @@ echo VIRTUAL_STAGED_DONE
             seen = [(reason, request) for m, reason, request in reports if m == mode]
             refusals_seen[mode] = seen
             retires_seen[mode] = retire_reports.count(mode)
-            if a.root_grants:
-                retires = CONTROL_RETIRES.get(a.control, {}).get(mode, RETIRES.get(mode, 0))
-                tests[f'{mode}:kernel_retire_refusals'] = retires_seen[mode] == retires
+            tests[f'{mode}:kernel_retire_refusals'] = retires_seen[mode] == 0
+            kept = [what for m, what, why in kept_reports if m == mode]
+            tests[f'{mode}:kernel_exit_kept'] = kept == ['stack'] * (EXIT_KEPT.get(mode, 0) if a.root_grants else 0)
+            tests[f'{mode}:frames_released'] = 'CAPSTONE_VM_FRAME_RELEASE_FAILED' not in part
             tests[f'{mode}:grant_type'] = line(r'^ROOT_GRANT_TYPE:(\d+)$', part) == str(a.root_grants)
             if mode in cuts:
                 # The control must break this mode, at this point, and nothing else.
@@ -263,7 +312,8 @@ echo VIRTUAL_STAGED_DONE
                 tests[f'{mode}:control_breaks_here'] = marker in part
                 tests[f'{mode}:control_no_fault'] = mode_causes == []
                 if a.root_grants:
-                    expected = expected_refusals(mode, a.control, a.launcher_bypass, None)
+                    expected = expected_refusals(mode, a.control, a.launcher_bypass,
+                                                 a.launcher_frame_floor, None)
                     tests[f'{mode}:kernel_refusals'] = refusals_match(seen[:len(expected)], expected)
                 continue
             for name in CHECKS[mode]:
@@ -279,6 +329,9 @@ echo VIRTUAL_STAGED_DONE
                 tests[f'{mode}:stale_access_did_not_read'] = 'ROOT_STALE_READ' not in part
             else:
                 tests[f'{mode}:exit_zero'] = mode_causes == [] and status == '0'
+            if mode in STACKS_KEPT and (a.root_grants or mode == 'exit-length'):
+                stacks_kept = len(re.findall(r'^CAPSTONE_VM_STACK_UNMAP_REFUSED ', part, re.M))
+                tests[f'{mode}:launcher_stacks_kept'] = stacks_kept == STACKS_KEPT[mode]
             if mode == 'refuse' and a.root_grants:
                 collections = line(r'^CAPSTONE_VM_STATS .*\bcollections=(\d+)', part)
                 tests['refuse:collected'] = collections is not None and int(collections) >= 1
@@ -288,24 +341,26 @@ echo VIRTUAL_STAGED_DONE
                     operand = line(r'^ROOT_OPERAND own_stack_at_victim type=(\d+) adjacent=1 tries=\d+$', part)
                     victim_reason = 'not a reference' if operand == '7' else 'not the mapping'
                     tests['exit-victim:operand_is_a_reference'] = operand == '1'
-                    stack_refusals = len(re.findall(r'^CAPSTONE_VM_STACK_UNMAP_REFUSED ', part, re.M))
-                    tests['exit-victim:launcher_keeps_both_victim_unmaps'] = stack_refusals == 2
-                expected = expected_refusals(mode, a.control, a.launcher_bypass, victim_reason)
+                expected = expected_refusals(mode, a.control, a.launcher_bypass,
+                                             a.launcher_frame_floor, victim_reason)
                 tests[f'{mode}:kernel_refusals'] = refusals_match(seen, expected)
             else:
                 tests[f'{mode}:kernel_refuses_nothing'] = seen == []
         refused_count = line(r'^ROOT_UNMAP_REFUSED:(\w+)$')
         tests['kernel_count_matches_reports'] = refused_count == str(len(reports))
+        tests['kernel_kept_count_matches_reports'] = line(r'^ROOT_EXIT_KEPT:(\w+)$') == str(len(kept_reports))
         tests['module_unloaded'] = 'ROOT_CLEANUP:0' in log
         tests['no_kernel_fault'] = 'Oops' not in log and 'Kernel panic' not in log
 
     result = dict(status='PASS' if all(tests.values()) else 'FAIL', root_grants=a.root_grants,
                   control=a.control, launcher=str(a.launcher) if a.launcher else None,
-                  launcher_bypass=a.launcher_bypass, no_refs=a.no_refs, unpinned=a.unpinned,
+                  launcher_bypass=a.launcher_bypass, launcher_frame_floor=a.launcher_frame_floor,
+                  no_refs=a.no_refs, unpinned=a.unpinned,
                   passed=sum(tests.values()), total=len(tests), tests=tests,
                   insmod=insmod, exits=exits, fault_causes=causes, refusals=refusals_seen,
                   retire_refusals=retires_seen if not a.no_refs else None,
-                  retire_refused=line(r'^ROOT_RETIRE_REFUSED:(\w+)$'), no_refs_outcome=outcome)
+                  retire_refused=line(r'^ROOT_RETIRE_REFUSED:(\w+)$'),
+                  exit_kept=line(r'^ROOT_EXIT_KEPT:(\w+)$'), no_refs_outcome=outcome)
     (a.work / 'result.json').write_text(json.dumps(result, indent=2) + '\n')
     print(json.dumps({k: result[k] for k in ('status', 'passed', 'total', 'exits', 'fault_causes')}))
     for name, ok in tests.items():

@@ -74,7 +74,7 @@ program.
 | `munmap` | only the whole reservation, with an accepted reference: `CREVOKE` of M, then the address range becomes free. A partial `munmap` is refused. |
 | `MAP_FIXED` | into free address space: a new reservation. Inside a reservation: only with an accepted reference and only while the program derived no object below P (the record after P's in the preorder list is not deeper, one step) |
 | `mremap` | `MREMAP_MAYMOVE` only, atomic: a new reservation, the pages move with their tags, the old reservation ends. On failure nothing changes. In-place resizing, `MREMAP_FIXED` and `MREMAP_DONTUNMAP` are refused. |
-| `mprotect` | with a covering reference. Page permissions never grant a right that the capability lacks. |
+| `mprotect` | with a reference that passes conditions 1 to 3 and covers the named page range, which may be part of the reservation. It ends nothing. Page permissions never grant a right that the capability lacks. |
 | kinds | anonymous mappings only. File-backed mappings, mappings shared between processes, `brk` and `userfaultfd` are refused. |
 | shared region | the system-call region belongs to the kernel, is never unmapped, and its address range is never reused |
 
@@ -93,6 +93,13 @@ A program that ends a mapping's lifetime itself and hands back the stale
 reference is refused, and the range stays unusable until `exit`. That is a
 leak in a faulty program, not a safety problem: every reference into the
 range is already stale.
+
+A program that narrows its mapping reference and then renews the narrowed
+reference can no longer unmap that mapping. The renewal ends the lifetime
+of P and of every copy of it, and gives M a new child with the narrowed
+bounds. That child does not cover the visible length, so every request to
+end the mapping is refused, and the mapping stays until teardown. That is a
+leak, not a safety problem: M stays live, and the kernel releases nothing.
 
 ## Supervisor references
 

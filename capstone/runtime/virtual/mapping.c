@@ -57,7 +57,9 @@ int mprotect(void *p, size_t n, int prot)
     }
     if (!n) return 0;
     if (mapping_length(n, &bytes)) return -1;
-    long rc = __capstone_vm_protect(address, bytes, prot);
+    /* p goes to the service as a reference, as for munmap: with root_grants the kernel changes
+     * the protection only if p is a live reference to the mapping that covers [p, p + bytes). */
+    long rc = __capstone_vm_protect(p, bytes, prot);
     if (rc) { errno = -rc; return -1; }
     return 0;
 }

@@ -1,7 +1,7 @@
 # Address-space root: adapter and libc plan
 
-Status: plan of 2026-11-12 on the branch `address-space-root`. Stage 0 is
-done. No adapter or libc code has changed yet.
+Status: plan of 2026-11-12 on the branch `address-space-root`. Stages 0 to 3b
+are done (see each stage); stage 4 is next.
 Design: [the kernel as the outermost allocator](../design/virtual-capstone/address-space-root.md).
 
 ## What the code does today
@@ -80,7 +80,7 @@ in the last stage, when every feature is in.
    (today an unauthenticated unmap by address through `pthread_exit`, which
    must check the stack reference before the frame is cleared), the frame at
    thread creation (kill last, after every fallible step). The module checks
-   the visible length itself. Implemented on 2026-11-12, not yet committed:
+   the visible length itself. Done (2026-11-12, commit "Adapter stage 3"):
    `root_derive` makes M and P in one run; `request_operand` checks the four
    conditions for munmap and park (one `CV_UNMAP` decides park or retire),
    the stack at `CV_THREAD_EXIT` (checked before the frame is cleared, M ended
@@ -92,6 +92,25 @@ in the last stage, when every feature is in.
    94 of 94, mapcache park and revive, the partial munmap refused by the
    module behind a launcher without its check; controls without condition 3
    and with the stack ended through the cleared operand fail where expected.
+3b. **Fixes after the review of stage 3** (2026-11-12). `CV_THREAD_EXIT`
+   releases the stack and the frame itself, after the thread has stopped and
+   the frame is cleared, ending M first; the launcher only unmaps the ranges
+   the module reports. A refused stack request does not stop the exit: the
+   stack stays mapped and registered, counted in `exit_kept`. `CV_UNMAP` and
+   `CV_THREAD_EXIT` decide first, write the outcome to the launcher, and then
+   commit, which cannot fail with root grants. `mprotect` passes the
+   reference, and `CV_PROTECT` checks it: conditions 1 to 3, and the bounds
+   cover the named page range, which may be part of the mapping (musl opens a
+   thread stack and a mallocng meta area past a guard page this way). Thread
+   creation passes the launcher's mapping check first, and the module
+   compares the frame with the cursor of the creator's a0. One helper checks
+   every request. The record margin of a grant run counts its two records,
+   the reserve and slack. Unit tests: three new modes of root-contract.c
+   (`exit-length`, `protect`, `create-gate`); root_grants=1 pinned and
+   unpinned 160 of 160, root_grants=0 157 of 157, hosted contract 94 of 94,
+   mapcache park and revive; controls without the reference check in
+   `mprotect` and without the a0 comparison at creation (behind a launcher
+   that names the mapping around a0's cursor) fail where expected.
    Then the remaining items of the old stage 3:
 4. **`mremap`, mapping cache, thread frames.** Found in stage 2: after the
    program renews a mapping with CRENEW, the kernel's copy no longer names it.
