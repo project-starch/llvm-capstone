@@ -244,10 +244,21 @@ class Symbols:
         self.base = min(loads)
 
     def lookup(self, runtime_pc, code_start):
+        """The function that holds the pc, and the pc's offset in it.
+
+        A symbol without a size is a label: it names one instruction. A compiler that emits a function without a
+        frame puts a label on the function's first instruction, so both share one address and llvm-nm may list
+        the label first. The function is the answer there. A label answers only where no function holds the pc.
+        """
         pc = runtime_pc - code_start + self.base
+        label = None
         for addr, size, name in self.funcs:
-            if addr <= pc < addr + max(size, 1):
+            if size and addr <= pc < addr + size:
                 return name, pc - addr
+            if not size and addr == pc and label is None:
+                label = name
+        if label is not None:
+            return label, 0
         return None, None
 
 

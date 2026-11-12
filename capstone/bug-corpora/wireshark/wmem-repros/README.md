@@ -96,8 +96,9 @@ reduction class are visibly siblings rather than accidentally similar.
 | `virtual-nested-pools` | the same with the port's patch 0001 (`virtual-wmem-pools`) | every object of `block` and `block_fast` is a child lifetime of its block (`CDERIVE`), bounded to the request and revoked by free and realloc (`CREVOKE`) and by the pool's reset (`CRENEW` of the block's generation) |
 
 The two virtual arms run the same cases from two builds of the port, `WM_SUBLET` off and on.
-A fault counts as the defect's only at the labelled read or write probe, resolved from the
-image's own symbols; a silence counts as MISSED only when the arm's controls
+A fault counts as the defect's only at the labelled read or write probe or, for case 22, in a fault
+site its `case.json` declares, resolved from the image's own symbols; a silence counts as MISSED only
+when the arm's controls
 ([`controls/`](controls/README.md)) behaved in the same invocation.
 
 **Q-15, the compact bounds format (2026-10-19).** On vp2 and on capstone-qemu without exact bounds, CDERIVE refuses
@@ -107,19 +108,29 @@ on the compact profile cell for cell as with exact bounds ([`results/2026-10-19-
 The pad report is unmeasured in this arm: `Q15_PAD` prints only after a completed case, every nested-pools case faults
 first, and the pad-masked count (0) stands on the verdicts.
 
-case 22 reads NO-READING:unattributed in Debug builds, where the revoke is the out-of-line wrapper
-`capstone_cap_release` (until 2026-11-11 `capstone_cap_revoke_child`): the pc lies in the wrapper, not in the declared
-free. Until 2026-11-11 the reset called the same wrapper (caller census 4d30d15a50df,
+**Case 22** reads CAUGHT in the current bundle of `virtual-nested-pools`, a Release build: its second `wmem_free`
+faults with cause 25 at `wmem_block_sublet_free+76`, the inlined one-operand `CREVOKE` of the freed object and a fault
+site the case declares ([`results/2026-11-12-virtual-release/`](results/2026-11-12-virtual-release/README.md)). The
+2026-10-11 CAUGHT came from a build that inlined the revoke in the same way. In Debug builds case 22 reads
+NO-READING:unattributed, because the revoke is the out-of-line wrapper `capstone_cap_release` (until 2026-11-11
+`capstone_cap_revoke_child`): the pc lies in the wrapper, not in the declared free. The Debug bundles of 2026-10-19 and
+2026-11-11 read so, and the current `vp2-nested-pools` bundle of 2026-10-19 still does. Until 2026-11-11 the reset
+called the same wrapper (caller census 4d30d15a50df,
 [`results/2026-10-19-q15-repair/case22-caller-census.txt`](results/2026-10-19-q15-repair/case22-caller-census.txt)); since
 then `wmem_sublet_block_renew` calls `capstone_cap_renew`, and every caller of `capstone_cap_release` in wmem is a free
-or a realloc. The 2026-10-11 CAUGHT came from a build that inlined the revoke into `wmem_block_sublet_free`.
+or a realloc.
 
-**The build type (2026-11-11).** The port's `capstone-application` preset is a Release build. With the compiler of
-2026-11-11 a Release image puts the label `wm_defect_probe` at `wm_probe+0`, `tools/verdicts.py` resolves a fault there
-to the label, and the runner, which counts a fault in `wm_probe` or `wm_write_probe`, reads every control as `none`:
-NO-READING:control-failed 23, before and after the conversion
-([`results/2026-11-11-virtual/`](results/2026-11-11-virtual/README.md)). The bundles of 2026-10-19 and 2026-11-11 are
-Debug builds (`-DCMAKE_BUILD_TYPE=Debug`), where the label lies inside `wm_probe`.
+**The build type (2026-11-12).** The port's `capstone-application` preset is a Release build, and the current bundles
+of both virtual arms are Release builds: `virtual-nested-pools` reads CAUGHT 23 and `virtual-malloc` reads MISSED 23,
+each with its controls as declared
+([`results/2026-11-12-virtual-release/`](results/2026-11-12-virtual-release/README.md)). With the compiler of
+2026-11-11 a Release image puts the label `wm_defect_probe` at `wm_probe+0`. Until 2026-11-12 `tools/verdicts.py`
+resolved a fault there to the label, and the runner, which counts a fault in `wm_probe` or `wm_write_probe`, read every
+control as `none`: NO-READING:control-failed 23, before and after the conversion
+([`results/2026-11-11-virtual/`](results/2026-11-11-virtual/README.md)). The lookup now returns the function that
+holds the pc, and a label only where no function holds it, so the same Release images read. The bundles of 2026-10-19
+and 2026-11-11 are Debug builds (`-DCMAKE_BUILD_TYPE=Debug`), where the label lies inside `wm_probe`. The Debug
+bundles of 2026-11-11 read as the Release bundles do, except for case 22.
 
 ## History: the Capstone domain arms, 2026-09-21 to 2026-10-09
 

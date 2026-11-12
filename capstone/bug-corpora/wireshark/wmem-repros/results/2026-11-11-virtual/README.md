@@ -2,7 +2,9 @@
 
 Both virtual arms, measured again after patch 0001 and the processor model changed their lifetime
 instructions: `CREVOKE` takes the object alone, and the reset that keeps a block renews its
-generation with `CRENEW`. The block header's `life` field is gone.
+generation with `CRENEW`. The block header's `life` field is gone. The successor of this record is
+[`../2026-11-12-virtual-release/`](../2026-11-12-virtual-release/README.md), which reads the Release
+images after a repair of the symbol lookup.
 
 | arm | configuration | build | controls (uaf-chunk, uaf-jumbo, bounds-chunk) | cases | against the newest record |
 |---|---|---|---|---|---|

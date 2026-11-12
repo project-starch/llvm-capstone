@@ -253,5 +253,31 @@ class LlvmBin(unittest.TestCase):
                 v.llvm_bin_dir(d)
 
 
+class SymbolLookup(unittest.TestCase):
+    """A pc resolves to the function that holds it, also where a label shares the function's first address."""
+
+    def symbols(self, funcs):
+        s = v.Symbols.__new__(v.Symbols)
+        s.funcs, s.base = funcs, 0x10000
+        return s
+
+    def test_label_listed_before_its_function(self):   # a frameless probe: wm_defect_probe at wm_probe+0
+        s = self.symbols([(0x1e4fc, 0, "wm_defect_probe"), (0x1e4fc, 0x10, "wm_probe")])
+        self.assertEqual(s.lookup(0x1e4fc, 0x10000), ("wm_probe", 0))
+
+    def test_label_inside_its_function(self):
+        s = self.symbols([(0x1e4fc, 0x20, "wm_probe"), (0x1e510, 0, "wm_defect_probe")])
+        self.assertEqual(s.lookup(0x1e510, 0x10000), ("wm_probe", 0x14))
+
+    def test_label_that_no_function_holds(self):
+        s = self.symbols([(0x1e4fc, 0x10, "wm_probe"), (0x1e600, 0, "trampoline")])
+        self.assertEqual(s.lookup(0x1e600, 0x10000), ("trampoline", 0))
+        self.assertEqual(s.lookup(0x1e604, 0x10000), (None, None))
+
+    def test_relocated_image(self):
+        s = self.symbols([(0x1e4fc, 0x10, "wm_probe")])
+        self.assertEqual(s.lookup(0x7000e500, 0x70000000), ("wm_probe", 4))
+
+
 if __name__ == "__main__":
     unittest.main()
