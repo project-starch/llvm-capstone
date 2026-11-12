@@ -2518,3 +2518,51 @@ rebuilt executables in a later addendum.
 hb120 5,080.15 s (Addendum 62 P5 holds: −0.10 %); riscv mcf with THP 5,045.09 s (P3 holds: −0.69 %). gcc test is
 therefore Capstone 11.79 s / 4.76 s = 2.48 on the stock kernel: in context 4.64 s, launcher 1.20 s, 1,035 exits about
 3.85 s, outside the module about 2.1 s.
+
+## Addendum 68 (2026-11-12 19:00, before it runs): the fair rebuild of both arms; gcc train replaces gcc test
+
+**Revision of Addendum 67's plan, mapping cache.** Addendum 67 proposed removing the mapping cache from riscv-base. One
+more fact: Capstone's gcc executables (c3f, c3fdcnofprs*) were linked against perf/arena/sdk-ac15, whose runtime has
+CAPSTONE_HEAP_ARENA_CACHE=ON with the same bounds as riscv-base's plain_reuse.c (512 mappings, 64 MiB; heap.c AC_FREE,
+AC_FREE_BYTES). So gcc had a cache on both arms and the other benchmarks on riscv-base only. The rebuild gives BOTH arms
+the cache with equal bounds, which is the design plain_reuse.c states ("Plain baseline's counterpart"). ac15's other
+switches: INDEX_BITS=16 and INDEX_SIMPLE (the slot index; no policy change) are kept; SLOT_CACHE (a LIFO reuse of freed
+small slots, a policy musl's mallocng does not have) is left OFF.
+
+**The lead's instruction (12 Nov): gcc is measured at train size (train01), not test.** gcc test's 4.8 s program is
+dominated by fixed per-process costs (launcher 1.2 s, teardown 1.0 s); train01 runs about half an hour.
+
+**riscv-base** (perf/fair): compiler llvm-c4 98337e20 (the Capstone arm's); `-fno-pie` (perf/fair/plain-cc-fairr);
+musl 1.2.5 = perf/plainreuse's source with the cache (only free.c, glue.h, malloc.c, plain_reuse.c differ from T0b's),
+rebuilt by llvm-c4 with the same configure line (-O1; CFLAGS_AUTO has -fomit-frame-pointer); runcpu label plain-rv64fr
+(plain-rv64.cfg with only the label changed). Executables (sha256/16): perlbench eb432eec9edab726, gcc
+600eed684dd7256b, mcf 05e07af3ffd0ac36, lbm a2501daf2852d28a, x264 c38b475c4339161b (imagevalidate
+02f4f089cb1dad0c), imagick 73a8492dafeb50d9, nab 09db79dd881bd0b4, xz f0ba0c81d4970a20. Stages
+perf/fair/stages/*-rv-fair2: the plain-rv64r stages with every binary swapped and plan.json updated; perl's command 1
+runs its harness on natperl (`$^X="../sw/perl"`) exactly as the Capstone stage does.
+
+**Capstone** (perf/fair/sdk2): wt-fair2 = wt-arena 46d67471e727 (86f638759ecf + 18 runtime commits, all default-off)
++ Application.cmake's three `-fno-jump-tables` turned into `-fjump-tables -fomit-frame-pointer`; libc with
+MUSL_CAPSTONE_EXTRA_CFLAGS=-fomit-frame-pointer (frame-pointer set-ups in libc 1,199 → 95); all compiled by llvm-c4;
+musl tree prepared by wt-fair2's prepare script (its 0009/0011 patches, private copy perf/fair/musl-arena);
+HEAP_LIFETIMES=ON, SCRUB_FREE=OFF, ARENA_CACHE=ON, INDEX_BITS=16, INDEX_SIMPLE=ON; movc-keep as before (Q-04(b) is in
+the bitstream line, F11). One compile configuration for all eight: cc-tuned (direct calls, -fomit-frame-pointer,
+drop-redundant-shrink declarations mode) + -fjump-tables. Executables: perlbench 2fa975e3fece9054, gcc 7b431ca3e1d747db,
+mcf 62e224bbe46fbc22, lbm edb0b4ef47145f36, x264 63076dc415c8bb52, imagick cb720928814d46d9, nab a266e1639caa7f1b,
+xz ca23ca80633df2d1. Stages perf/fair/stages/*-cap-fair2 (perf/ccsel/mkstage.py; sweep 3 everywhere).
+Compile-line check (nab): the two arms differ only by Capstone-only options, -fomit-frame-pointer and -fjump-tables,
+both riscv-base's defaults at -O2.
+
+**Runs**, all on K2 (Addenda 66/67), driver perf/thp2/thrun.sh, hb120 tools:
+- board 3, riscv-base (bkit52-k2rv), after Addendum 67's short K2 list: gcc train01, imagick, nab, lbm, mcf, xz, perl, x264;
+- board 1, Capstone (bkit51-k2cap, cap-tagcache-ni), after Addendum 65's plain-on-cap mcf: imagick, nab, lbm, gcc
+  train01, mcf, xz, perl;
+- board 2, Capstone x264, after Addendum 63's stock-kernel x264.
+- Gate for the Capstone drivers: their QEMU twins (perf/fair/QLOG, kit-profq) rc 0 and specdiff as the previous builds
+  (perl 1/2 is the known abigail command); x264 has no twin (3,600 s step). They are launched only after the twins read.
+
+**Predictions:**
+- **P0.** rc 0 and specdiff PASS on every riscv-base stage; Capstone as its twin.
+- **P1, riscv-base fair vs the plain-rv64r references** (same programs, new compiler, no PIE, K2): each within −4 % .. +4 %.
+- **P2, Capstone fair on K2 vs its stock-kernel reading:** imagick 12.6-13.5 s; nab, lbm within ±3 %; mcf 7,900-8,400 s.
+- **P3, ratios:** lbm, nab, xz ≤ 1.20; imagick ≤ 1.20; gcc train01 ≤ 1.30; mcf 1.45-1.65 (above 1.20).
