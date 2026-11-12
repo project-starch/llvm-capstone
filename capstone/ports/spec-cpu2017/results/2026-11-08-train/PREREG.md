@@ -2467,3 +2467,54 @@ new kernel.
   13.87 s → 12.6-13.3 s; mcf 8,552 s → 7,900-8,300 s; in-context cycles within ±1 % of the stock-kernel run.
 - **P3, the ratio on K2:** imagick ≤ 1.20; mcf 1.50-1.62 (still above 1.20: its in-context gap is footprint, Addenda 63/65).
 - Each ratio is reported on K2 (both arms on K2) beside the stock-kernel ratio, never mixing kernels.
+
+## Addendum 67 (2026-11-12 18:40): RETRACTION of xz sweep 2 as a configuration; the fairness audit; queue changes before they run
+
+**RETRACTION.** xz with `retire_exit_sweep=2` (Addenda 52, 61, 63; reported as 1.066, "the better mode") is not a valid
+Capstone configuration. The module's own comment (capstone_vm.c, retire_exit_sweep): "2: MEASUREMENT ONLY, no sweep at
+all -- leaves tags in frames returned to Linux; never set outside a timing boot". A configuration that leaves tags in
+freed frames is not Capstone. xz's ratio is the sweep-3 reading, 5,504.21 s / 4,956.00 s = **1.111**. Addendum 63's
+xz stage (dcnofprsDjt with sweep 2, board 1, running) is measurement-only and not reported as a ratio. Every later xz
+stage uses sweep 3: Addendum 66's Capstone list is changed to perf/ccsel/stages/557.xz_r-dcnofprsDjt (sweep 3)
+before its chain started.
+
+**The fairness audit** (claim-auditor, read-only, 12 Nov; load-bearing rows re-checked from their sources here). Rows
+that are not inherent to Capstone:
+1. **Mapping cache in riscv-base's libc only.** perf/plainreuse/musl-1.2.5/src/malloc/mallocng/plain_reuse.c (512
+   mappings, 64 MiB), `T __plain_map`/`__plain_unmap` in musl-rv64gc-reuse/lib/libc.a, linked by plain-cc-reuse. The
+   Capstone runtime of every measured build (c1-gate/sdk-dev-T3-mk, wt-perf 86f638759ecf) has no mapping reuse
+   (`git grep MAPPING_REUSE` 0 hits; mallocng free.c munmaps). The cache was added as "the fair denominator" when the
+   Capstone stack kept freed mappings; the measured Capstone builds do not. Favours riscv-base: on C.5a gcc −6.7 %,
+   perl −6.0 %, imagick −2.2 % for Plain.
+2. **Frame pointers and jump tables in the libraries.** Capstone's musl is built -O1 without -fomit-frame-pointer
+   (survey-musl-capstone.py); its runtime has -fno-jump-tables in 82 files; riscv musl omits frame pointers. Favours
+   riscv-base, unmeasured.
+3. **Compiler identity.** riscv-base exes come from cc-prmerged (fca004e7), Capstone from llvm-c1 (724bf0be) and llvm-c4
+   (98337e20), 300 commits apart with generic optimiser files changed. Direction unknown.
+4. **PIE.** riscv-base compiles `-pic-is-pie` (checked with -###); Capstone static relocation. Favours Capstone.
+5. **perl's harness on natperl** in the Capstone arm (one saved-context slot), on the perl under test in riscv-base.
+   Favours Capstone, unmeasured.
+6. **Best-of-N selection** for Capstone builds, one build for riscv-base. Favours Capstone, about the noise floor.
+7. char signedness and predefined macros differ by target definition. Direction unknown, low.
+Inherent to Capstone, disclosed: the launcher, arena setup and teardown inside the timed window; ticks masked inside a
+context and the supervisor quantum; Capstone's bitstream fails timing at the shared 25 MHz (core WNS −13.426 ns) while
+riscv-base meets it (+13.228 ns), so an iso-frequency comparison hides a frequency penalty; plain code on the Capstone
+SoC +0.1-0.6 %. Checked equal: the SoC configuration (only CAPSTONE_* parameters differ), constraints, clocks (40 ns),
+DDR, bootrom, kits' base manifest and dtb, SPEC inputs and argv, -O2 compile lines apart from the rows above.
+Board-to-board: same-bitstream pairs agree within 0.10 %; no same-bitstream pair exists for the riscv-base bitstream.
+
+**What follows.** One rebuild of both arms with the rows above made equal, then one campaign on K2 (Addendum 66's kernel):
+- riscv-base: the same compiler binary as Capstone cc-tuned (llvm-c4), `-fno-pie`, musl without the mapping cache;
+- Capstone: libc and runtime with -fomit-frame-pointer and jump tables; one compile configuration (cc-tuned + jump
+  tables) for all eight, so no per-benchmark selection; sweep 3 everywhere;
+- perl: both arms' harness on natperl, so the program under test is the only difference;
+- QEMU twins of every executable before any board run; executable and library hashes in the next addendum.
+Queue changes now, before they run: board 3's K2 chain keeps gcc test, imagick, nab and lbm (the kernel's effect on
+riscv-base with today's executables; Addendum 66 P1); its xz, mcf, perl and x264 stages are withdrawn (empty output
+directories, skipped). The two Capstone K2 drivers (boards 1 and 2) are stopped before any stage; they return with the
+rebuilt executables in a later addendum.
+
+**New readings** (rc 0, specdiff PASS): riscv gcc test 4.76 s (Addendum 64; prediction 5-10 s FAILS low); riscv mcf on
+hb120 5,080.15 s (Addendum 62 P5 holds: −0.10 %); riscv mcf with THP 5,045.09 s (P3 holds: −0.69 %). gcc test is
+therefore Capstone 11.79 s / 4.76 s = 2.48 on the stock kernel: in context 4.64 s, launcher 1.20 s, 1,035 exits about
+3.85 s, outside the module about 2.1 s.
