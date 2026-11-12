@@ -79,12 +79,27 @@ def identity(image):
     return (mode.read_text().strip() if mode.is_file() else "none"), appvm.sdk_identity(root / "runtime")[0], root
 
 
-def backend(args, sql_path, data_name, out_base, timeout=1800):
+def settings(path):
+    """The server settings a case file asks for, as `-c` words: one `-- SERVER-SETTING: name=value` line
+    each. Only what the defect needs at startup and SQL cannot set (wal_level is PGC_POSTMASTER), so a
+    case states it beside its statements instead of the fixture carrying it for every case. A name or
+    value outside [A-Za-z0-9_.] is refused: the words go into a shell command on the virtual kit."""
+    words = []
+    for line in Path(path).read_text().splitlines():
+        m = re.match(r"\s*--\s*SERVER-SETTING:\s*(\S+)\s*$", line)
+        if m:
+            if not re.fullmatch(r"[a-z_]+=[A-Za-z0-9_.]+", m.group(1)):
+                sys.exit(f"{path}: SERVER-SETTING {m.group(1)!r} is not name=value")
+            words += ["-c", m.group(1)]
+    return words
+
+
+def backend(args, sql_path, data_name, out_base, timeout=1800, extra=()):
     """One stand-alone backend against its own cluster, SQL on stdin."""
     return appvm.run_app(args.state, args.image, [
         "--single", "-D", f"/mnt/host/{data_name}", "-c", "shared_buffers=4MB",
         "-c", "max_connections=10", "-c", "timezone=GMT", "-c", "log_timezone=GMT",
-        "-c", "dynamic_shared_memory_type=sysv", "postgres"], out_base,
+        "-c", "dynamic_shared_memory_type=sysv", *extra, "postgres"], out_base,
         run_args=["--user", "1000:1000", "--stdin", str(sql_path)], timeout=timeout)
 
 
@@ -115,8 +130,9 @@ def cluster(args, name):
     return data
 
 
-def session(args, sql_text_or_path, name, raw):
+def session(args, sql_text_or_path, name, raw, extra=()):
     """Write the SQL if given as text, run it on a fresh cluster, clean up. (text, result).
+    EXTRA is `-c name=value` words from the case file's SERVER-SETTING lines (settings()).
 
     On the virtual kit nothing runs yet: the session becomes a step of the one batch boot, and
     its (text, result) is read from args.runs after the boot."""
@@ -134,15 +150,17 @@ def session(args, sql_text_or_path, name, raw):
         # sessions of sql0-drt (2026-10-19). Each session recreates them after its copy; on QEMU, whose mount carries
         # them, the mkdir -p is a no-op.
         root = posixpath.dirname(args.cluster_guest)
+        head, dbname = PG_ARGS.format(data='/tmp/pgd').rsplit(' ', 1)   # the database name stays last
+        pg_args = ' '.join([head, *extra, dbname])
         mk = "".join(f" && mkdir -p /tmp/pgd/{d}" for d in getattr(args, "cluster_empty_dirs", []))
         args.batch.step(name, f"rm -rf /tmp/pgd && cp -a {args.cluster_guest} /tmp/pgd{mk} && chown -R nobody /tmp/pgd && chmod 700 /tmp/pgd "
                         f"&& su nobody -s /bin/sh -c 'cd {root}; ./capstone-vexec ./bin/postgres "
-                        f"{PG_ARGS.format(data='/tmp/pgd')} < {staged}'; rc=$?; rm -rf /tmp/pgd; exit $rc")
+                        f"{pg_args} < {staged}'; rc=$?; rm -rf /tmp/pgd; exit $rc")
         return "", {"kind": "none"}
     data = f"pgdata-{name}"
     cluster(args, data)
     try:
-        return backend(args, sql, data, raw / name)
+        return backend(args, sql, data, raw / name, extra=extra)
     finally:
         shutil.rmtree(args.share / data, ignore_errors=True)
 
@@ -355,15 +373,18 @@ def measure(args, spec, raw, preinstalled, symbols):
 
     rows = []
     for case_dir in cases(args):
-        text, result = session(args, statements(case_dir / "trigger.sql"), case_dir.name, raw)
+        text, result = session(args, statements(case_dir / "trigger.sql"), case_dir.name, raw,
+                               extra=settings(case_dir / "trigger.sql"))
         if planning:
             if (case_dir / "control.sql").is_file():
-                session(args, statements(case_dir / "control.sql"), f"{case_dir.name}-control", raw)
+                session(args, statements(case_dir / "control.sql"), f"{case_dir.name}-control", raw,
+                        extra=settings(case_dir / "control.sql"))
             continue
         o = observe(case_dir, text, result, available, preinstalled, symbols)
         o.arm, o.image_sha256, o.controls = args.rec, v.sha256(args.image), list(controls)
         if o.fault and o.reached and not o.attribution and (case_dir / "control.sql").is_file():
-            ctext, cresult = session(args, statements(case_dir / "control.sql"), f"{case_dir.name}-control", raw)
+            ctext, cresult = session(args, statements(case_dir / "control.sql"), f"{case_dir.name}-control", raw,
+                        extra=settings(case_dir / "control.sql"))
             if faulted(ctext, cresult):
                 o.attribution_evidence += "; its control.sql FAULTS too, so the fault is not the defect's"
             elif "backend>" in ctext and cresult.get("kind") == "exit":

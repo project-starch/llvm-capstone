@@ -1,0 +1,30 @@
+{
+ "case": 11,
+ "upstream_fix": "9e0b4b1ab5",
+ "title": "logical decoding updates progress from a speculative-insert change it just freed -- reorderbuffer stale read",
+ "consumer": "pg_logical_slot_get_changes through test_decoding, on a transaction ending in INSERT ON CONFLICT",
+ "class": "temporal",
+ "allocator_layer": "slab",
+ "trigger": "trigger.sql",
+ "live_in_pin": true,
+ "live_proof": "measured 2026-10-29 on p13: PostgreSQL 17.5 (the port's tarball), --enable-debug CFLAGS='-O1 -g' CPPFLAGS=-DUSE_VALGRIND (no cassert, as the port), test_decoding installed, trigger.sql's statements through `postgres --single -c wal_level=logical` under Valgrind 3.26 with src/tools/valgrind.supp: one error, 'Invalid read of size 8' at ReorderBufferProcessTXN (reorderbuffer.c:2501) by ReorderBufferReplay by ReorderBufferCommit by DecodeCommit ... by pg_logical_slot_get_changes; the address is inside an 8192-byte block from SlabAllocFromNewBlock, allocated by ReorderBufferGetChange. control.sql (99 rows): no error. 97 rows: no error either, as the threshold arithmetic predicts. Natively the stale read is silent and decoding returns its 101 rows.",
+ "fidelity": "real server, core. Upstream reproduced it with CHANGES_THRESHOLD recompiled to 1; this trigger reaches the same read in the release as shipped by sizing the transaction so the hundredth change is the freed one. The same defect is ../../mmgr-repros/04_9e0b4b1ab5_reorderbuffer_spec_insert_lsn as a C program against the real Slab context; not two defects.",
+ "nested": true,
+ "nested_why": "the freed change is a Slab chunk inside an 8 KiB block the Change context keeps; malloc never sees it freed",
+ "fault_sites": [
+  "ReorderBufferProcessTXN"
+ ],
+ "fault_sites_why": "Valgrind with PostgreSQL's own mempool annotations (USE_VALGRIND) on the host, recorded before any Capstone arm ran: the invalid read is at ReorderBufferProcessTXN (reorderbuffer.c:2501), the update_progress_txn call's change->lsn. A fault elsewhere counts through control.sql.",
+ "arms": {
+  "virtual-malloc": {
+   "oracle": "virtual profile, PostgreSQL's contexts stock (tools/arms.json virtual-mallocng): a fault after the trigger started that its control.sql or a justified fault_sites ties to the defect, or the trigger completes and this arm did not see it"
+  },
+  "virtual-pg-pools": {
+   "oracle": "virtual profile with the memory-context port's patch 0003: every palloc chunk a child lifetime of its block (CDERIVE), revoked by pfree and repalloc (CREVOKE) (tools/arms.json virtual-mallocng-pg-pools): as virtual-malloc"
+  },
+  "cheribsd-revocation": {
+   "oracle": "completes: the change is freed into its Slab block, which libc's revocation never sees freed, so the platform has nothing to revoke"
+  }
+ },
+ "status": "live at the pin, measured on the host under Valgrind (2026-10-29); no Capstone or CheriBSD arm has run it"
+}

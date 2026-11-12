@@ -217,6 +217,11 @@ MODULES="dict_snowball:src/backend/snowball plpgsql:src/pl/plpgsql/src"
 MODULES="$MODULES ltree:contrib/ltree pg_trgm:contrib/pg_trgm"
 MODULES="$MODULES fuzzystrmatch:contrib/fuzzystrmatch"
 MODULES="$MODULES pgcorpus_reach:contrib/pgcorpus_reach"
+# test_decoding is a logical decoding OUTPUT PLUGIN, not an extension: pg_create_logical_replication_slot
+# asks dfmgr for it by name and there is no CREATE EXTENSION, so it ships no .control file (PLUGINS below).
+# sql-repros case 11 (reorderbuffer.c's update_progress_txn reading a freed change) decodes through it.
+MODULES="$MODULES test_decoding:contrib/test_decoding"
+PLUGINS="test_decoding"
 module_objs() { make -s -C "$1" -f Makefile -f "$SCRIPT_DIR/toolchain/print-objs.mk" print-objs; }
 
 # ---- make ---------------------------------------------------------------------------
@@ -292,6 +297,7 @@ if stage make; then
     d=${md#*:}
     case $d in contrib/*) ;; *) continue ;; esac
     m=${md%%:*}
+    case " $PLUGINS " in *" $m "*) continue ;; esac   # an output plugin has no extension files
     [[ -f $d/$m.control ]] || { echo "module $m: no $d/$m.control" >&2; exit 2; }
     cp "$d/$m.control" "$EXTDIR/"
     cp "$d"/"$m"--*.sql "$EXTDIR/"
