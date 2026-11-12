@@ -42,8 +42,9 @@ int munmap(void *p, size_t n)
         errno = EINVAL; return -1;
     }
     /* VM operations must work on PROT_NONE, without probing its contents.
-     * The trusted service resolves the range against its mapping registry. */
-    long rc = __capstone_vm_unmap(address, bytes);
+     * The trusted service resolves the range against its mapping registry,
+     * and with root_grants the reference p is the authority for the unmap. */
+    long rc = __capstone_vm_unmap(p, bytes);
     if (rc) { errno = -rc; return -1; }
     return 0;
 }
@@ -73,7 +74,8 @@ int __mprotect(void *p, size_t n, int prot) { return mprotect(p, n, prot); }
  *   - the new mapping is PROT_READ|PROT_WRITE whatever the old one's protection was, and the old
  *     one must be readable for the copy;
  *   - `old` must name a whole registered mapping (the unmap service refuses anything else, and
- *     then nothing has changed: the new mapping is released and the error returned).
+ *     then nothing has changed: the new mapping is released and the error returned). With
+ *     root_grants p must also be a live reference to that whole mapping, as for munmap.
  * A same-page-count resize returns p unchanged, as Linux does. */
 #ifndef MREMAP_MAYMOVE
 #define MREMAP_MAYMOVE 1   /* Linux's value; <sys/mman.h> declares it only under _GNU_SOURCE */

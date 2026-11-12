@@ -96,6 +96,18 @@ struct cv_touch {
  *              and tags), mints a new ancestor and gives the arena a new id, returned in .id. */
 #define CV_PARK _IOW('V', 30, __u64)
 #define CV_REVIVE _IOWR('V', 31, struct cv_map)
+/* A program's own unmap (CV_SERVICE_UNMAP): thread is the caller, paused at the service, id the
+ * arena the launcher resolved from the cursor of the reference in a0, and park asks for CV_PARK's
+ * effect instead of CV_RETIRE's. Without root_grants the module ignores thread and does what
+ * CV_RETIRE or CV_PARK does. With root_grants the reference is the authority: the module reads it
+ * with its tag from the caller's saved a0 and ends the mapping only if it is a live reference to
+ * the mapping itself whose bounds cover the range the call names (capstone_vm.c, unmap_operand).
+ * A refusal is EINVAL and changes nothing. The launcher's own unmaps (a thread's frame and stack,
+ * a pool eviction) stay on CV_RETIRE. */
+struct cv_unmap {
+    __u64 thread, id, park;
+};
+#define CV_UNMAP _IOW('V', 32, struct cv_unmap)
 /* The image file, by descriptor, before the launcher validates it: the module
  * denies writers to it (ETXTBSY, as Linux does for a running executable) until
  * the context is released, so the bytes validated are the bytes loaded. */

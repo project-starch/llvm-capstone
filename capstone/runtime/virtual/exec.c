@@ -474,14 +474,14 @@ static void transport_detach(uint64_t tid)
  * mmaps with their PROT_NONE padding, metadata, thread frames and stacks, the unmaps this launcher
  * does itself) takes the ordinary path.
  *
- * The safe sequence is the module's (CV_PARK, CV_REVIVE; capstone_vm.c): the domain's access ends at
- * the park (the arena's lifetime is retired, so a pointer from before it faults with a lifetime
- * cause for ever), a pooled mapping is not in the registry (no service sees it: not unmap, not
- * protect, not futex, not a delegated copy), and the revive overwrites the pinned pages with zeros
- * (data and tags) before it mints a new lifetime and a new arena id. Bounded by bytes and by
- * entries, oldest first; emptied at the first ENOMEM of a new mapping. Nothing is done at exit: the
- * module retires every arena it still holds and Linux unmaps the rest. Pinned mode only: when the
- * module refuses a park with EOPNOTSUPP (unpinned) the pool turns itself off. */
+ * The safe sequence is the module's (CV_UNMAP with park, CV_REVIVE; capstone_vm.c): the domain's
+ * access ends at the park (the arena's lifetime is retired, so a pointer from before it faults
+ * with a lifetime cause for ever), a pooled mapping is not in the registry (no service sees it:
+ * not unmap, not protect, not futex, not a delegated copy), and the revive overwrites the pinned
+ * pages with zeros (data and tags) before it mints a new lifetime and a new arena id. Bounded by
+ * bytes and by entries, oldest first; emptied at the first ENOMEM of a new mapping. Nothing is done
+ * at exit: the module retires every arena it still holds and Linux unmaps the rest. Pinned mode
+ * only: when the module refuses a park with EOPNOTSUPP (unpinned) the pool turns itself off. */
 #define MC_MAX_ENTRIES 256
 #define MC_BUCKETS 64
 struct mc_entry {
@@ -562,9 +562,11 @@ static void mc_trim(void)
     /* Negative control: no bound. */
 #endif
 }
-/* Try to pool m (a registered, unheld mapping the domain asked to unmap). 1: pooled and removed
- * from the registry; 0: take the ordinary path. */
-static int mc_park(struct mapping *m)
+/* Try to pool m (a registered, unheld mapping the domain thread tid asked to unmap). 1: pooled
+ * and removed from the registry; 0: take the ordinary path. The park is the domain's unmap, so it
+ * goes through CV_UNMAP: with root_grants the module ends the mapping only through the reference
+ * the domain handed back, and a refused reference is refused again on the ordinary path. */
+static int mc_park(struct mapping *m, uint64_t tid)
 {
 #ifdef CAPSTONE_MAPCACHE_MUTANT_PROT
     /* Negative control: pool a mapping whose protections were changed. */
@@ -575,7 +577,8 @@ static int mc_park(struct mapping *m)
     if (!mc.cap || mc.broken || m->kind != CV_MAP_HEAP || MC_PROTECTED || m->bytes != m->visible ||
         m->bytes > mc.cap / 2 || !mc.spare)
         return 0;
-    if (ioctl(device, CV_PARK, &m->id)) {
+    struct cv_unmap request = {.thread = tid, .id = m->id, .park = 1};
+    if (ioctl(device, CV_UNMAP, &request)) {
         if (errno == EOPNOTSUPP) { mc_flush(); mc.cap = 0; }
         ++mc.refused;
         return 0;
@@ -602,21 +605,26 @@ static struct mc_entry *mc_find(size_t bytes, size_t alignment)
         if (e->m.bytes == bytes && !((uintptr_t)e->m.address & (alignment - 1))) return e;
     return NULL;
 }
-static long unmap_arena_for(uintptr_t base, size_t bytes, int domain)
+/* Unmap the whole mapping at base. domain: the domain thread tid asked (CV_SERVICE_UNMAP, base
+ * the cursor of the reference it passed in a0): the module ends the mapping through CV_UNMAP,
+ * which with root_grants checks that reference. Otherwise the launcher unmaps for itself
+ * (CV_RETIRE), and tid is unused. A partial unmap is refused here, with or without root_grants. */
+static long unmap_arena_for(uintptr_t base, size_t bytes, int domain, uint64_t tid)
 {
     struct mapping *m = map_find(base);
     if (!m || m->visible != bytes || !m->heap || m->kind == CV_MAP_METADATA)
         return -EINVAL;
     if (m->holder) return -EBUSY;
-    if (domain && mc_park(m)) return 0;
-    if (ioctl(device, CV_RETIRE, &m->id)) return -errno;
+    if (domain && mc_park(m, tid)) return 0;
+    struct cv_unmap request = {.thread = tid, .id = m->id, .park = 0};
+    if (domain ? ioctl(device, CV_UNMAP, &request) : ioctl(device, CV_RETIRE, &m->id)) return -errno;
     if (munmap(m->address, m->bytes)) return -errno;
     reuse_address = m->address; reuse_bytes = m->bytes;
     map_remove(m);
     return 0;
 }
 /* The launcher's own unmaps (a thread's frame and stack) never enter the pool. */
-static long unmap_arena(uintptr_t base, size_t bytes) { return unmap_arena_for(base, bytes, 0); }
+static long unmap_arena(uintptr_t base, size_t bytes) { return unmap_arena_for(base, bytes, 0, 0); }
 static long protect_range(uintptr_t base, size_t bytes, int prot)
 {
     if (!bytes || (base & 4095) || (bytes & 4095) ||
@@ -1405,7 +1413,7 @@ static int virtual_service(uint64_t tid, struct cv_step *step)
     } else if (step->args[7] == CV_SERVICE_REMAP) {
         step->result = remap_mapping(tid, step);
     } else if (step->args[7] == CV_SERVICE_UNMAP) {
-        step->result = unmap_arena_for(step->args[0], step->args[1], 1);
+        step->result = unmap_arena_for(step->args[0], step->args[1], 1, tid);
     } else if (step->args[7] == CV_SERVICE_TRANSPORT_DETACH) {
         /* The worker gives its transport back (pthread.c, before it unmaps the blocks). */
         transport_detach(tid);

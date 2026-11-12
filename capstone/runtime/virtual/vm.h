@@ -18,7 +18,11 @@
 #define CAP_VM_METADATA CV_MAP_METADATA
 extern void *__capstone_vm_acquire(unsigned long, unsigned long, int, unsigned, unsigned);
 extern void *__capstone_vm_remap(unsigned long, unsigned long, unsigned long);
-extern long __capstone_vm_unmap(unsigned long, unsigned long);
+/* The unmap service takes the mapping's reference itself in a0, with its tag, and the length in
+ * a1. With root_grants the kernel ends the mapping only through that reference: a live reference
+ * to the mapping (not to an object inside it) whose bounds cover the whole mapping. Without it
+ * the launcher reads the address from a0, which is the reference's cursor. */
+extern long __capstone_vm_unmap(void *, unsigned long);
 extern long __capstone_vm_protect(unsigned long, unsigned long, int);
 extern long __capstone_vm_wait(void);
 extern long __capstone_vm_nodes(unsigned long);

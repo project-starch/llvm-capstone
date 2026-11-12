@@ -58,7 +58,13 @@ in the last stage, when every feature is in.
    a second `mmap` work on copyable grants, an object derived in a page
    faults with 25 after the page's `munmap`, the other mapping lives on.
    Control: without the `CREVOKE` the access succeeds.
-2. **Unmap by reference, with reservations.** The libc passes the reference
+2. **Unmap by reference, with reservations. Done** (2026-11-12, commit
+   "Adapter stage 2"). The kernel keeps its per-mapping copy. With a paged
+   table without generations, CRENEW moves a mapping to a new record, so the
+   operand is accepted if its id equals the copy's, or if the copy has ended
+   and the operand is a live direct child of R that covers the call's range.
+   The covering check uses the length the call names, since the public mmap
+   narrows its reference to the requested length. The libc passes the reference
    in a0, the adapter reads it from the frame and applies the conditions of
    the design note (section Mappings): live, directly under R, the
    reservation's lifetime, bounds covering the whole reservation. A partial
@@ -67,7 +73,13 @@ in the last stage, when every feature is in.
    cases of the QEMU gate in one program (nested object, stale reference,
    address, narrowed reference, renewed mapping). The per-mapping copy of
    stage 1 goes.
-3. **`mremap`, mapping cache, thread frames.** Carry each over or remove it
+3. **`mremap`, mapping cache, thread frames.** Found in stage 2: after the
+   program renews a mapping with CRENEW, the kernel's copy no longer names it.
+   Two paths still end mappings through that copy and must take the
+   program's reference instead: thread creation (a frame mapping renewed
+   before creation would keep a live reference to the protected frame) and
+   the unmap of a thread's stack at thread exit (the range would return to
+   use while the renewed lifetime lives). Carry each over or remove it
    with its reason, one unit test each. Decide partial unmap here (design
    note, open points).
 4. **Remove the old path.** Drop the parameter, `arena.ancestor`, the private

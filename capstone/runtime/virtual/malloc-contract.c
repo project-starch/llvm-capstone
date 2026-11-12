@@ -113,7 +113,17 @@ static void tagged(void)
     sublet_move(&owner, (sublet_cap *)container);
     container = realloc(container, 65536); require(container != NULL, "linear container move");
     require(sublet_base((sublet_cap *)container) == base, "linear tag transfer");
-    require(!__capstone_vm_unmap(base, 4096), "linear VM grant release");
+    /* With root_grants the grant is a copyable child of the address-space reference (type 1, not
+     * 0), and the kernel unmaps it only through that reference, so the release passes the
+     * reference the realloc moved. Without root_grants the grant stays linear in the container
+     * and the release names the mapping by its address, as before. */
+    if (sublet_type((sublet_cap *)container) == SUBLET_TYPE_NONLIN)
+        require(!__capstone_vm_unmap(((sublet_cap *)container)->c, 4096), "root VM grant release");
+    else {
+        void *address;
+        __asm__("mv %0, %1" : "=r"(address) : "r"(base));   /* an integer in a0, untagged */
+        require(!__capstone_vm_unmap(address, 4096), "linear VM grant release");
+    }
     free(container);
 #endif
     puts("MALLOC_TAG_COPY_OK");

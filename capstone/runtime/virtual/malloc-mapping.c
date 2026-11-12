@@ -8,6 +8,11 @@
 #include <heap_sublet.h>
 
 struct heap_mid *__malloc_page_root[512];
+/* The mapping's own reference, at the entry of its first page, in an index of the same shape.
+ * The owner that mallocng holds is a child one level below it (heap_issue), and munmap must hand
+ * back the mapping itself: with root_grants the kernel refuses an object derived inside a mapping,
+ * even one over its whole range. Only this file reads it. */
+static struct heap_mid *mapping_root[512];
 static unsigned index_mutex;
 static void index_lock(void)
 {
@@ -22,13 +27,13 @@ static void index_unlock(void)
  * never race table creation/destruction. A page entry changes only after its
  * mapping has no live allocations. Mapping changes serialize here, separately
  * from mallocng's own locks; no lookup takes this lock. */
-static struct heap_leaf *leaf_for(size_t a, int create)
+static struct heap_leaf *leaf_in(struct heap_mid **root, size_t a, int create)
 {
-    struct heap_mid *mid = __malloc_page_root[a >> 30];
+    struct heap_mid *mid = root[a >> 30];
     if (!mid && create) {
         mid = mmap(0, sizeof *mid, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
         if (mid == MAP_FAILED) return 0;
-        __malloc_page_root[a >> 30] = mid;
+        root[a >> 30] = mid;
     }
     if (!mid) return 0;
     struct heap_leaf *leaf = mid->leaf[(a >> 21) & 511];
@@ -39,6 +44,8 @@ static struct heap_leaf *leaf_for(size_t a, int create)
     }
     return leaf;
 }
+static struct heap_leaf *leaf_for(size_t a, int create)
+{ return leaf_in(__malloc_page_root, a, create); }
 
 void *__heap_mapping(size_t n)
 {
@@ -63,6 +70,11 @@ void *__heap_mapping(size_t n)
             index_unlock(); munmap(raw,bytes); errno=e; return MAP_FAILED;
         }
     }
+    struct heap_leaf *mapping=leaf_in(mapping_root,base,1);
+    if (!mapping) {
+        int e=errno;
+        index_unlock(); munmap(raw,bytes); errno=e; return MAP_FAILED;
+    }
     /* mmap's returned capability need not carry MANAGE. This one mapping-wide
      * child does, and becomes the parent of all objects within the mapping. */
     void *owner=heap_issue(raw,bytes);
@@ -71,6 +83,8 @@ void *__heap_mapping(size_t n)
         if (leaf->owner[(a>>12)&511]) __builtin_trap();
         leaf->owner[(a>>12)&511]=owner;
     }
+    if (mapping->owner[(base>>12)&511]) __builtin_trap();
+    mapping->owner[(base>>12)&511]=raw;
     index_unlock();
     return owner;
 }
@@ -80,13 +94,17 @@ int __heap_unmapping(void *owner,size_t n)
     size_t bytes=heap_round((n+4095)&-4096UL);
     size_t base=__builtin_capstone_cap_get_cursor(owner);
     index_lock();
-    int rc=munmap(owner,bytes);
+    struct heap_leaf *mapping=leaf_in(mapping_root,base,0);
+    void *raw=mapping ? mapping->owner[(base>>12)&511] : 0;
+    if (!raw) __builtin_trap();
+    int rc=munmap(raw,bytes);
     if (!rc) {
         for (size_t a=base; a<base+bytes; a+=4096) {
             struct heap_leaf *leaf=leaf_for(a,0);
             if (!leaf) __builtin_trap();
             leaf->owner[(a>>12)&511]=0;
         }
+        mapping->owner[(base>>12)&511]=0;
     }
     index_unlock();
     return rc;

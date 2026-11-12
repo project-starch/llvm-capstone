@@ -78,7 +78,7 @@ long __capstone_virtual_context_create(void *(*entry)(void *), void *argument,
      * transport lock reads (delegate.c, dl_wire_identity). */
     uintptr_t identity = __capstone_context_identity_take();
     if (!identity) {
-        __capstone_vm_unmap((uintptr_t)frame, 4096);
+        __capstone_vm_unmap(frame, 4096);
         errno = EAGAIN;
         return -1;
     }
@@ -96,7 +96,7 @@ long __capstone_virtual_context_create(void *(*entry)(void *), void *argument,
     if (id < 0) {
         int error = (int)-id;
         __capstone_context_identity_give(identity);
-        __capstone_vm_unmap((uintptr_t)frame, 4096);
+        __capstone_vm_unmap(frame, 4096);
         errno = error ? error : EAGAIN;
     }
     return id;
