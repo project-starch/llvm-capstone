@@ -80,7 +80,19 @@ in the last stage, when every feature is in.
    (today an unauthenticated unmap by address through `pthread_exit`, which
    must check the stack reference before the frame is cleared), the frame at
    thread creation (kill last, after every fallible step). The module checks
-   the visible length itself. Then the remaining items of the old stage 3:
+   the visible length itself. Implemented on 2026-11-12, not yet committed:
+   `root_derive` makes M and P in one run; `request_operand` checks the four
+   conditions for munmap and park (one `CV_UNMAP` decides park or retire),
+   the stack at `CV_THREAD_EXIT` (checked before the frame is cleared, M ended
+   after the thread stopped) and the frame at `CV_THREAD_CREATE` (M ended
+   after every fallible step); `CV_RETIRE` releases only a reservation that
+   has ended; after a failed create the launcher releases the frame and
+   answers EAGAIN. Unit test: root-contract.c, eleven modes, root_grants=1
+   pinned and unpinned 102 of 102, root_grants=0 88 of 88, hosted contract
+   94 of 94, mapcache park and revive, the partial munmap refused by the
+   module behind a launcher without its check; controls without condition 3
+   and with the stack ended through the cleared operand fail where expected.
+   Then the remaining items of the old stage 3:
 4. **`mremap`, mapping cache, thread frames.** Found in stage 2: after the
    program renews a mapping with CRENEW, the kernel's copy no longer names it.
    Two paths still end mappings through that copy and must take the

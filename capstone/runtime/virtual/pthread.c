@@ -14,7 +14,10 @@
 #include "capstone/delegate.h"
 #include "vm.h"
 
-extern _Noreturn void __capstone_vm_thread_exit_clear(uintptr_t, uintptr_t, size_t, long);
+/* The exit service: the exit word, then the mapping that holds the thread's stack (its
+ * reference, with its tag, or NULL) and that mapping's length, then the status. With root_grants
+ * the kernel unmaps the stack only through that reference (vm.h, as for munmap). */
+extern _Noreturn void __capstone_vm_thread_exit_clear(uintptr_t, void *, size_t, long);
 extern long __capstone_vm_futex(void *, int, int, long, long, int);
 /* delegate.c: this context gives back the identity its creator took (thread.c), right before
  * its exit service, after its last delegated call (release_clone's frees and unmaps). */
@@ -94,7 +97,7 @@ static void *clone_entry(void *p)
     int *clear = r->clear;
     release_clone(r);
     __capstone_context_identity_release();
-    __capstone_vm_thread_exit_clear((uintptr_t)clear, 0, 0, result);
+    __capstone_vm_thread_exit_clear((uintptr_t)clear, NULL, 0, result);
 }
 
 int __clone(int (*entry)(void *), void *stack, int flags, void *arg, ...)
@@ -155,16 +158,18 @@ _Noreturn void __capstone_virtual_pthread_exit(long status)
      * trusted launcher releases the clear word only after stopping it. */
     if (r) release_clone(r);
     __capstone_context_identity_release();
-    __capstone_vm_thread_exit_clear((uintptr_t)clear, 0, 0, status);
+    __capstone_vm_thread_exit_clear((uintptr_t)clear, NULL, 0, status);
 }
 
+/* base is musl's map_base: the reference its mmap of the stack and TLS returned. It goes to the
+ * exit service as a reference, never as an address. */
 _Noreturn void __unmapself(void *base, size_t size)
 {
     struct virtual_clone *r = current_clone;
     int *clear = r ? r->clear : NULL;
     if (r) release_clone(r);
     __capstone_context_identity_release();
-    __capstone_vm_thread_exit_clear((uintptr_t)clear, (uintptr_t)base, size, 0);
+    __capstone_vm_thread_exit_clear((uintptr_t)clear, base, size, 0);
 }
 
 long __capstone_virtual_futex(void *word, int op, int value, const struct timespec *timeout, int bitset)

@@ -92,11 +92,15 @@ long __capstone_virtual_context_create(void *(*entry)(void *), void *argument,
     capstone_cap_store((capstone_cap_slot *)(frame + 64 + 10 * 16), argument);
     capstone_cap_store((capstone_cap_slot *)(frame + 64), (void *)entry);
 
+    /* The frame goes to the service as its reference: with root_grants the kernel ends the
+     * frame's mapping through it when it creates the thread. EAGAIN means the kernel took the
+     * frame and the launcher has released it after a later failure (vm-abi.h): every reference
+     * to it has ended, so the frame is not unmapped here. Any other error leaves the frame ours. */
     id = __capstone_vm_thread_create_frame(frame);
     if (id < 0) {
         int error = (int)-id;
         __capstone_context_identity_give(identity);
-        __capstone_vm_unmap(frame, 4096);
+        if (error != EAGAIN) __capstone_vm_unmap(frame, 4096);
         errno = error ? error : EAGAIN;
     }
     return id;

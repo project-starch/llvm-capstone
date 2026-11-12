@@ -1,9 +1,11 @@
-/* Root grants (module parameter root_grants=1): a mapping is a child of the one reference over
- * the address space, and a program's munmap ends it only through the reference the program hands
- * back (stage 2 of docs/plans/2026-11-12-address-space-root-adapter.md). The kernel accepts the
- * reference only if it is a live reference to the mapping itself whose bounds cover the whole
- * mapping, and then ends the mapping with CREVOKE. run-root-grants.py runs this program once per
- * mode (argv[1]) in one boot. Build with the virtual SDK.
+/* Root grants (module parameter root_grants=1): each mapping is a reservation, a record M that the
+ * kernel derives from the one reference over the address space and keeps to itself, and the
+ * program's reference P is a child of M. Every request of the program to end a mapping comes with
+ * P: munmap, the stack at thread exit, the frame's hand-over at thread creation (stages 2 and 3
+ * of docs/plans/2026-11-12-address-space-root-adapter.md). The kernel accepts the reference only
+ * if it is a live child of M whose bounds cover the mapping as mmap exposed it, and the call
+ * names that whole length; then it ends the mapping with CREVOKE of M. run-root-grants.py runs
+ * this program once per mode (argv[1]) in one boot. Build with the virtual SDK.
  *
  * Every mode first reads the type of a grant as the adapter issues it (ROOT_GRANT_TYPE): 1
  * (non-linear) under root_grants=1, 0 (linear) without. A check that holds only with root grants
@@ -42,31 +44,78 @@
  *   whole_reference_after_narrowed  the whole mapping then unmaps through its own reference
  * renew (ends with a fault):
  *   renewed_old_reference_refused (root grants)
- *                                   after CRENEW, munmap through the reference from before it
+ *                                   after CRENEW, munmap through the reference from before it is
+ *                                   refused, and the renewed mapping still works
  *   renewed_mapping_unmaps          munmap through the renewed reference succeeds; the last line
  *                                   reads through an object derived in the renewed mapping and
  *                                   must fault with 25
+ * renew-ref (ends with a fault): as renew, and the last line reads through the renewed reference
+ *                                   itself.
  * mremap (ends with a fault):
  *   public_mremap_moves             the libc's mremap (map, copy, unmap) moves a page to two
  *   mremap_old_reference_refused    munmap through the old reference afterwards is refused
  *                                   (the old mapping is gone); the last line reads through the old
  *                                   reference and must fault with 25.
+ * exit-victim (exit 0; root grants):
+ *   exit_with_own_stack_at_victim_refused
+ *                                   a thread exits naming a victim mapping with its own stack's
+ *                                   reference moved to the victim's address, which is the stack's
+ *                                   end (the stack lies right below the victim), so the operand is
+ *                                   a live reference to another mapping; the victim still works
+ *                                   afterwards
+ *   exit_with_victim_address_refused
+ *                                   the same with the victim's address as an integer
+ *   victim_unmaps_afterwards        the victim then unmaps through its own reference
+ * exit-renew (ends with a fault):
+ *   stack_renewed_before_exit       a thread renews its own stack's mapping with CRENEW and exits
+ *                                   naming the renewed reference; the main thread kept a copy.
+ *                                   The last line reads through that copy after the main thread
+ *                                   mapped the stack's address again: it must fault with 25.
+ * create (ends with a fault):
+ *   create_with_stale_frame_refused (root grants)
+ *                                   the creator renews the frame's mapping and passes the
+ *                                   reference from before: the create is refused, and the renewed
+ *                                   reference still works
+ *   create_with_renewed_frame       the create through the renewed reference succeeds; the last
+ *                                   line reads the frame through it and must fault with 25.
+ * create-fail (exit 0):
+ *   failed_create_releases_frame    the launcher's thread table is full (31 contexts exited and not
+ *                                   joined), so the launcher fails the create after the module
+ *                                   took the frame: the create answers EAGAIN and the frame's
+ *                                   mapping is no longer registered (mprotect of its address
+ *                                   answers EINVAL)
+ * detached (exit 0):
+ *   detached_exit_unmaps_stack      a detached pthread exits through musl's __unmapself: its stack
+ *                                   mapping is registered before the exit and gone after it.
  *
  * Before each stale read the program maps the same address again (ROOT_REMAP same_address=1).
  * An access that the processor lets through then reads the new page and does not fault at all,
  * so a missing CREVOKE shows as a read, not as a page fault. */
 #define _GNU_SOURCE
 #include <errno.h>
+#include <pthread.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 #include <sys/mman.h>
 #include <capstone/capability.h>
+#include <capstone/virtual.h>
 #include "vm.h"
 
 #define PAGE 4096UL
 #define LARGE (1UL << 20)
 #define ROUNDS 12000UL
+#define STACK (64UL * 1024)
+/* The launcher's thread table holds 32 contexts, the first one included. */
+#define IDLE_THREADS 31
+
+extern long __capstone_vm_thread_create_frame(void *frame);
+extern _Noreturn void __capstone_vm_thread_exit_clear(uintptr_t clear, void *stack, size_t bytes,
+                                                      long status);
+extern uintptr_t __capstone_context_identity_take(void);
+extern void __capstone_context_identity_give(uintptr_t identity);
 #ifndef MREMAP_MAYMOVE
 #define MREMAP_MAYMOVE 1
 #endif
@@ -139,17 +188,52 @@ static char *grant(void)
     return cap_vm_copyable(&slot);
 }
 
-/* Map the address of the mapping that just ended again, then read through the stale reference.
- * The read must fault with 25 and never print. */
-static void stale_read(unsigned long address)
+/* Map the address of the mapping of `bytes` that just ended again, then read through the stale
+ * reference. The read must fault with 25 and never print. */
+static void stale_read_bytes(unsigned long address, unsigned long bytes)
 {
-    char *again = map(PAGE);
+    char *again = map(bytes);
     again[64] = 0x77;
     printf("ROOT_REMAP same_address=%d\n", cursor(again) == address);
     fflush(stdout);
     char seen = *(volatile char *)stale;
     printf("ROOT_STALE_READ value=0x%x\n", seen);
     fflush(stdout);
+}
+
+static void stale_read(unsigned long address)
+{
+    stale_read_bytes(address, PAGE);
+}
+
+static void pause_ms(long ms)
+{
+    struct timespec t = {ms / 1000, (ms % 1000) * 1000000};
+    nanosleep(&t, NULL);
+}
+
+static void *thread_pointer(void)
+{
+    void *tp;
+    __asm__ volatile("movc %0, tp" : "=r"(tp));
+    return tp;
+}
+
+/* The type LCC answers for a reference in a register: 1 non-linear, 7 for an integer. */
+static unsigned long type_of(void *p)
+{
+    unsigned long type;
+    __asm__ volatile(".insn r 0x5b, 0x1, 0x04, %0, %1, x1" : "=r"(type) : "r"(p));
+    return type;
+}
+
+/* p with its cursor set to address (SCC). Outside what the bounds can represent the result is
+ * an integer. */
+static void *at_address(void *p, unsigned long address)
+{
+    void *q;
+    __asm__ volatile(".insn r 0x5b, 0x1, 0x05, %0, %1, %2" : "=r"(q) : "r"(p), "r"(address));
+    return q;
 }
 
 static int mode_unmap(void)
@@ -286,7 +370,9 @@ static int mode_narrow(void)
     return 0;
 }
 
-static int mode_renew(void)
+/* through_object: the last read goes through an object derived in the renewed mapping, else
+ * through the renewed reference itself. */
+static int mode_renew(int through_object)
 {
     (void)grant();
     char *page = map(PAGE);
@@ -295,6 +381,8 @@ static int mode_renew(void)
 
     if (root_grants) {
         require(refused(munmap(page, PAGE)), "munmap through the reference from before CRENEW");
+        renewed[1] = 0x56;
+        require(renewed[0] == 1 && renewed[1] == 0x56, "the renewed mapping after the refusal");
         pass("renewed_old_reference_refused");
     } else {
         skip("renewed_old_reference_refused", BY_ADDRESS);
@@ -303,7 +391,7 @@ static int mode_renew(void)
     char *object = capstone_cap_derive(renewed, 64, 64);
     object[0] = 0x55;
     require(renewed[64] == 0x55, "the object lies in the renewed mapping");
-    stale = object;
+    stale = through_object ? object : renewed;
     require(!munmap(renewed, PAGE), "munmap through the renewed reference");
     pass("renewed_mapping_unmaps");
     stale_read(address);
@@ -332,6 +420,300 @@ static int mode_mremap(void)
     return 0;
 }
 
+/* ---- Threads ----
+ *
+ * The thread cases use raw contexts (__capstone_virtual_context_create, as the pthread contract
+ * does) that share the main thread's TLS and touch none of it, so each case controls exactly
+ * what its exit service names. */
+
+/* exit-victim: the exit service's stack operand and its length, chosen by the main thread. */
+static void *volatile exit_operand;
+static volatile unsigned long exit_bytes;
+
+static void *exit_naming_worker(void *arg)
+{
+    (void)arg;
+    __capstone_vm_thread_exit_clear(0, exit_operand, exit_bytes, 0);
+}
+
+/* One raw context on its own stack mapping (own, own_bytes) that exits naming exit_operand;
+ * joined. */
+static void exit_naming(void *operand, unsigned long bytes, char *own, unsigned long own_bytes)
+{
+    exit_operand = operand;
+    exit_bytes = bytes;
+    long id = __capstone_virtual_context_create(exit_naming_worker, NULL, own + own_bytes,
+                                                thread_pointer());
+    require(id > 0, "create the exiting context");
+    require(!capstone_virtual_thread_join(id), "join the exiting context");
+}
+
+static int mode_exit_victim(void)
+{
+    (void)grant();
+    if (!root_grants) {
+        skip("exit_with_own_stack_at_victim_refused", BY_ADDRESS);
+        skip("exit_with_victim_address_refused", BY_ADDRESS);
+        skip("victim_unmaps_afterwards", "follows the refused cases");
+        return 0;
+    }
+
+    /* Two heap grants in a row: the launcher places each one right below the one before where
+     * that range is free, so the thread's stack ends where the victim begins, and the stack's
+     * reference with its cursor at the victim's address stays a reference (a cursor at the end
+     * is inside what the bounds represent). A pair that did not land so is left mapped and the
+     * next pair tried. */
+    char *victim = NULL, *own = NULL;
+    unsigned long address = 0;
+    unsigned tries = 0;
+    for (; tries < 8; ++tries) {
+        sublet_cap slot;
+        victim = grant();
+        address = cursor(victim);
+        require(!cap_vm_acquire(&slot, 2 * PAGE, PAGE, PROT_READ | PROT_WRITE, 6, CAP_VM_HEAP),
+                "the thread's stack");
+        own = cap_vm_copyable(&slot);
+        if (cursor(own) + 2 * PAGE == address) break;
+    }
+    victim[0] = 1;
+    void *moved = at_address(own, address);
+    printf("ROOT_OPERAND own_stack_at_victim type=%lu adjacent=%d tries=%u\n", type_of(moved),
+           cursor(own) + 2 * PAGE == address, tries + 1);
+    fflush(stdout);
+    exit_naming(moved, PAGE, own, 2 * PAGE);
+    victim[1] = 2;
+    require(victim[0] == 1 && victim[1] == 2, "the victim after an exit with the own stack's reference");
+    pass("exit_with_own_stack_at_victim_refused");
+
+    char *other = map(STACK);
+    exit_naming(untagged(address), PAGE, other, STACK);
+    victim[2] = 3;
+    require(victim[0] == 1 && victim[2] == 3, "the victim after an exit with its address");
+    pass("exit_with_victim_address_refused");
+
+    require(!munmap(victim, PAGE), "munmap of the victim through its own reference");
+    pass("victim_unmaps_afterwards");
+    return 0;
+}
+
+/* exit-renew: the worker renews the reference to its own stack's mapping and exits naming the
+ * renewed reference, of which the main thread keeps a copy. From the CRENEW on the worker's sp
+ * names the old lifetime and is stale, so everything after it is one asm block that touches no
+ * stack. */
+static void *volatile exit_stack;
+static void *volatile kept;
+
+static void *renew_exit_worker(void *arg)
+{
+    (void)arg;
+    __asm__ volatile(".insn i 0x5b, 0x3, t0, 0(%[from])\n"       /* LDC t0, the stack's mapping */
+                     ".insn r 0x5b, 0x1, 0x54, a1, t0, x0\n"     /* CRENEW a1, t0 */
+                     ".insn s 0x5b, 0x4, a1, 0(%[keep])\n"       /* STC a1, the main thread's copy */
+                     "li a0, 0\n"
+                     "mv a2, %[bytes]\n"
+                     "li a3, 0\n"
+                     "li a7, %[service]\n"
+                     "ecall\n"
+                     "ebreak\n"
+                     :
+                     : [from] "r"(&exit_stack), [keep] "r"(&kept), [bytes] "r"(STACK),
+                       [service] "i"(CV_SERVICE_PTHREAD_EXIT)
+                     : "t0", "a0", "a1", "a2", "a3", "a7", "memory");
+    __builtin_unreachable();
+}
+
+static int mode_exit_renew(void)
+{
+    (void)grant();
+    char *stack = map(STACK);
+    unsigned long address = cursor(stack);
+
+    exit_stack = stack;
+    long id = __capstone_virtual_context_create(renew_exit_worker, NULL, stack + STACK,
+                                                thread_pointer());
+    require(id > 0, "create the worker");
+    require(!capstone_virtual_thread_join(id), "join the worker");
+    char *renewed = kept;
+    require(type_of(renewed) == 1 && cursor(renewed) == address,
+            "the main thread holds the worker's renewed stack reference");
+    pass("stack_renewed_before_exit");
+    stale = renewed;
+    stale_read_bytes(address, STACK);
+    return 0;
+}
+
+/* create and create-fail: a start frame as thread.c builds it, on its own one-page mapping. */
+static volatile int child_ran;
+
+static void *frame_child(void *arg)
+{
+    __atomic_store_n(&child_ran, 1, __ATOMIC_RELEASE);
+    return arg;
+}
+
+static void *frame_return(void *unused)
+{
+    (void)unused;
+    capstone_virtual_thread_exit(NULL);
+}
+
+static unsigned char *frame_new(void *(*entry)(void *), void *stack_top, uintptr_t *identity)
+{
+    sublet_cap slot;
+    require(!cap_vm_acquire(&slot, PAGE, PAGE, PROT_READ | PROT_WRITE, 6, CAP_VM_HEAP),
+            "the frame's grant");
+    unsigned char *frame = cap_vm_copyable(&slot);
+    memset(frame, 0, PAGE);
+    ((uint64_t *)frame)[7] = 3;
+    *identity = __capstone_context_identity_take();
+    require(*identity != 0, "an identity for the context");
+    capstone_cap_store((capstone_cap_slot *)(frame + 64 + 1 * 16), (void *)frame_return);
+    capstone_cap_store((capstone_cap_slot *)(frame + 64 + 2 * 16), stack_top);
+    __asm__ volatile("scc t0, gp, %1\n\tstc t0, 0(%0)"
+                     : : "r"(frame + 64 + 3 * 16), "r"(*identity) : "t0", "memory");
+    capstone_cap_store((capstone_cap_slot *)(frame + 64 + 4 * 16), thread_pointer());
+    capstone_cap_store((capstone_cap_slot *)(frame + 64 + 10 * 16), NULL);
+    capstone_cap_store((capstone_cap_slot *)(frame + 64), (void *)entry);
+    return frame;
+}
+
+static int mode_create(void)
+{
+    (void)grant();
+    char *stack = map(STACK);
+    uintptr_t identity;
+    unsigned char *frame = frame_new(frame_child, stack + STACK, &identity);
+    unsigned char *renewed = capstone_cap_renew(frame);
+
+    if (root_grants) {
+        long id = __capstone_vm_thread_create_frame(frame);
+        printf("ROOT_CREATE stale=%ld\n", id);
+        fflush(stdout);
+        require(id == -EINVAL, "thread create with the frame's reference from before CRENEW");
+        renewed[PAGE - 1] = 0x5a;
+        require(renewed[PAGE - 1] == 0x5a && ((uint64_t *)renewed)[7] == 3,
+                "the renewed frame after the refused create");
+        pass("create_with_stale_frame_refused");
+    } else {
+        skip("create_with_stale_frame_refused", BY_ADDRESS);
+    }
+
+    long id = __capstone_vm_thread_create_frame(renewed);
+    printf("ROOT_CREATE renewed=%ld\n", id);
+    fflush(stdout);
+    require(id > 0, "thread create with the renewed frame reference");
+    pass("create_with_renewed_frame");
+    stale = (char *)renewed;
+    char seen = *(volatile char *)stale;
+    printf("ROOT_STALE_READ value=0x%x\n", seen);
+    fflush(stdout);
+    capstone_virtual_thread_join(id);
+    return 0;
+}
+
+static volatile int idle_done;
+
+static void *idle_entry(void *arg)
+{
+    __atomic_fetch_add(&idle_done, 1, __ATOMIC_RELEASE);
+    return arg;
+}
+
+static int mode_create_fail(void)
+{
+    (void)grant();
+    char *stacks = map((IDLE_THREADS + 1) * STACK);
+    long ids[IDLE_THREADS];
+
+    /* Fill the launcher's thread table: contexts that exit and are not joined keep their entries
+     * there, while the module has let them go. */
+    for (unsigned i = 0; i < IDLE_THREADS; ++i) {
+        ids[i] = __capstone_virtual_context_create(idle_entry, NULL, stacks + (i + 1) * STACK,
+                                                   thread_pointer());
+        require(ids[i] > 0, "create an idle context");
+    }
+    for (unsigned spins = 0; __atomic_load_n(&idle_done, __ATOMIC_ACQUIRE) < IDLE_THREADS; ++spins) {
+        require(spins < 1000, "the idle contexts finish");
+        pause_ms(10);
+    }
+    pause_ms(200);
+
+    uintptr_t identity;
+    unsigned char *frame = frame_new(frame_child, stacks + (IDLE_THREADS + 1) * STACK, &identity);
+    unsigned long address = cursor(frame);
+    long id;
+    for (unsigned tries = 0;; ++tries) {
+        id = __capstone_vm_thread_create_frame(frame);
+        if ((id == -EBUSY || id == -ENOSPC) && tries < 100) { pause_ms(20); continue; }
+        break;
+    }
+    printf("ROOT_CREATE_FAIL result=%ld\n", id);
+    fflush(stdout);
+    require(id == -EAGAIN, "the launcher fails the create after the module took the frame");
+    __capstone_context_identity_give(identity);
+    errno = 0;
+    int probe = mprotect(untagged(address), PAGE, PROT_READ | PROT_WRITE);
+    printf("ROOT_FRAME_PROBE rc=%d errno=%d\n", probe, errno);
+    fflush(stdout);
+    require(probe == -1 && errno == EINVAL, "the frame's mapping is no longer registered");
+    pass("failed_create_releases_frame");
+
+    for (unsigned i = 0; i < IDLE_THREADS; ++i)
+        require(!capstone_virtual_thread_join(ids[i]), "join an idle context");
+    return 0;
+}
+
+/* detached: a pthread's stack mapping is registered while it runs and gone after its exit, which
+ * unmaps it through musl's __unmapself (pthread.c) with the mapping's reference. */
+static volatile unsigned long detached_page;
+static volatile int detached_ready, detached_go;
+
+static void *detached_worker(void *arg)
+{
+    pthread_attr_t attr;
+    void *base = NULL;
+    size_t bytes = 0;
+    if (!pthread_getattr_np(pthread_self(), &attr) && !pthread_attr_getstack(&attr, &base, &bytes))
+        detached_page = (cursor(base) + bytes / 2) & ~(PAGE - 1);
+    __atomic_store_n(&detached_ready, 1, __ATOMIC_RELEASE);
+    while (!__atomic_load_n(&detached_go, __ATOMIC_ACQUIRE)) pause_ms(5);
+    return arg;
+}
+
+static int stack_probe(void)
+{
+    errno = 0;
+    return mprotect(untagged(detached_page), PAGE, PROT_READ | PROT_WRITE) ? errno : 0;
+}
+
+static int mode_detached(void)
+{
+    (void)grant();
+    pthread_attr_t attr;
+    pthread_t thread;
+    require(!pthread_attr_init(&attr) &&
+            !pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED), "detached attribute");
+    require(!pthread_create(&thread, &attr, detached_worker, NULL), "pthread_create");
+    for (unsigned spins = 0; !__atomic_load_n(&detached_ready, __ATOMIC_ACQUIRE); ++spins) {
+        require(spins < 1000, "the detached thread starts");
+        pause_ms(10);
+    }
+    require(detached_page, "the detached thread's stack");
+    int before = stack_probe();
+    __atomic_store_n(&detached_go, 1, __ATOMIC_RELEASE);
+    int after = 0;
+    for (unsigned spins = 0; spins < 200 && !after; ++spins) {
+        pause_ms(20);
+        after = stack_probe();
+    }
+    printf("ROOT_DETACHED page=0x%lx before=%d after=%d\n", detached_page, before, after);
+    fflush(stdout);
+    require(before == 0, "the stack's mapping is registered while the thread runs");
+    require(after == EINVAL, "the stack's mapping is gone after the thread's exit");
+    pass("detached_exit_unmaps_stack");
+    return 0;
+}
+
 int main(int argc, char **argv)
 {
     const char *mode = argc > 1 ? argv[1] : "unmap";
@@ -339,8 +721,14 @@ int main(int argc, char **argv)
     if (!strcmp(mode, "unmap")) return mode_unmap();
     if (!strcmp(mode, "refuse")) return mode_refuse();
     if (!strcmp(mode, "narrow")) return mode_narrow();
-    if (!strcmp(mode, "renew")) return mode_renew();
+    if (!strcmp(mode, "renew")) return mode_renew(1);
+    if (!strcmp(mode, "renew-ref")) return mode_renew(0);
     if (!strcmp(mode, "mremap")) return mode_mremap();
+    if (!strcmp(mode, "exit-victim")) return mode_exit_victim();
+    if (!strcmp(mode, "exit-renew")) return mode_exit_renew();
+    if (!strcmp(mode, "create")) return mode_create();
+    if (!strcmp(mode, "create-fail")) return mode_create_fail();
+    if (!strcmp(mode, "detached")) return mode_detached();
     fail("unknown mode");
     return 1;
 }

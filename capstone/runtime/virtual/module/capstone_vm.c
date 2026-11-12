@@ -107,12 +107,16 @@ struct arena {
      * range (arena_overlaps), is swept by every collection like any pinned page, and is retired
      * like any other arena at CV_RETIRE (the launcher's eviction) or at the context's release. */
     bool parked;
-    /* root_grants only, NULL otherwise: the kernel slot that holds a copy of the mapping's
-     * reference, the reservation's lifetime. A program's unmap must hand back a reference to this
-     * lifetime (unmap_operand, condition 3); the launcher's own unmaps and teardown end the
-     * mapping through the copy (root_end). Last in the structure, so every other member keeps
-     * its offset. */
+    /* root_grants only, NULL otherwise: the kernel slot that holds the only reference to the
+     * mapping's reservation record M, a child of R over the whole arena (padding included). The
+     * program's reference P is a child of M. Every end of the mapping is a CREVOKE of M
+     * (root_end), which the program cannot renew or reach. Last in the structure, so every other
+     * member keeps its offset. */
     unsigned long *ref;
+    /* The length the program's mmap exposes, from address (CV_ADD's visible, else bytes). With
+     * root_grants a request to end the mapping must name this length and its reference must
+     * cover it (request_operand, condition 4). */
+    unsigned long visible;
 };
 struct context;
 struct cv_thread {
@@ -462,15 +466,16 @@ MODULE_PARM_DESC(lazy_grants, "admit NONLIN grants page by page at first access 
 static bool diag_admit;
 module_param(diag_admit, bool, 0644);
 
-/* The kernel as the outermost allocator of an address space, stages 1 and 2
+/* The kernel as the outermost allocator of an address space, stages 1 to 3
  * (docs/design/virtual-capstone/address-space-root.md). With 1 the adapter creates one reference,
- * R, over the user address range when it creates a context's table, and every grant is a child
- * of R: CDERIVE at the grant's base, the cursor and the rights the request names, STC into the
- * frame slot. No grant is linear. A program's munmap ends a mapping only through the reference
- * the program hands back, with CREVOKE, after the checks of unmap_operand (CV_UNMAP); a partial
- * unmap is refused. The adapter keeps a copy of each mapping's reference in a kernel slot, and
- * its own unmaps end a mapping with CREVOKE on that copy, where it executes CSRETIRE on the
- * private parent's number today. It needs a processor with supervisor references (QEMU
+ * R, over the user address range when it creates a context's table. Each mapping is a
+ * reservation: the adapter derives a record M from R over the whole arena and keeps the only
+ * reference to it in a kernel slot, then derives the program's reference P from M with the same
+ * bounds and stores P into the frame slot. No grant is linear. Every request of the program to
+ * end a mapping comes with P (munmap and a park at CV_UNMAP, the stack at CV_THREAD_EXIT, the
+ * frame's hand-over at CV_THREAD_CREATE): the adapter checks it (request_operand) and then ends
+ * the mapping with CREVOKE of M. Teardown and the rollback of a failed grant end M without a
+ * request. A partial unmap is refused. It needs a processor with supervisor references (QEMU
  * x-capstone-supervisor-refs=true): the load probes for them (supervisor_refs_probe). 0 executes
  * the instructions the module executed before the parameter existed. Read-only, so a context
  * never changes rule. */
@@ -1704,11 +1709,10 @@ static void ref_read(unsigned long *slot, unsigned long *type, unsigned long *id
     *id = slot_id;
 }
 
-/* End the lifetime of the mapping whose reference the slot holds. True if this call ended it.
- * False if the lifetime had ended already (the program released or renewed its mapping itself,
- * or the slot is empty): the unmap is then done as far as this reference goes, since every
- * reference to that lifetime is stale. A stale reference never reaches CREVOKE, which would
- * trap. The slot keeps what it holds. */
+/* End the lifetime of the reservation record whose reference the slot holds. True if this call
+ * ended it. False if the lifetime had ended already (an earlier end, or the slot is empty): every
+ * reference into the reservation is stale then. A stale reference never reaches CREVOKE, which
+ * would trap. The slot keeps what it holds. */
 static bool ref_kill(struct context *c, unsigned long *slot)
 {
     unsigned long flags, old, type, id, parent = 0;
@@ -1719,7 +1723,7 @@ static bool ref_kill(struct context *c, unsigned long *slot)
 
     /* The checks CREVOKE makes, made first: a non-linear reference (24, 26), to a live
      * lifetime (25), whose node is not linear (29). And the record hangs directly under R, as
-     * every mapping does. */
+     * every reservation record does. */
     ref_read(slot, &type, &id);
     live = type == CV_TYPE_NONLIN &&
            ref_lifetime(c, id, &parent) == CAP_REV_TABLE_VALID && parent == c->root_index;
@@ -1735,54 +1739,45 @@ static bool ref_kill(struct context *c, unsigned long *slot)
     return live;
 }
 
-/* As ref_kill, for a kernel slot, which it empties. */
-static bool ref_end(struct context *c, unsigned long *slot)
-{
-    bool live = ref_kill(c, slot);
-
-    WRITE_ONCE(slot[0], 0UL);
-    WRITE_ONCE(slot[1], 0UL);
-    return live;
-}
-
-/* ---- Root grants: a program's unmap through the reference it hands back ----
+/* ---- Root grants: requests of the program to end a mapping ----
  *
- * The libc passes the mapping's reference in a0 (mapping.c, munmap), so the escape saves it with
- * its tag in register slot 10 of the caller's frame. The launcher resolves the mapping from the
- * reference's cursor and names the caller and the arena (CV_UNMAP). The module reads the
- * reference from the frame slot with LDC and ends the mapping only if all of these hold
+ * Every request of the program to end a mapping comes with the mapping's reference P in a register
+ * of the calling thread, which the escape saved with its tag in the thread's frame: munmap and a
+ * park in the mapping cache (CV_UNMAP, a0), the stack at thread exit (CV_THREAD_EXIT, a1, checked
+ * before the frame is cleared) and the frame's hand-over at thread creation (CV_THREAD_CREATE,
+ * a0). The launcher resolves the arena from the reference's cursor and names the caller. The
+ * module reads P from the frame slot with LDC and accepts it only if all of these hold
  * (docs/design/virtual-capstone/address-space-root.md, section Mappings):
  *
  *   1. The operand is a non-linear reference (LCC type 1; an integer answers 7).
  *   2. Its lifetime is live.
- *   3. Its record hangs directly under R, and it is the reservation's lifetime: its id is the id
- *      of the kernel's copy of the mapping's reference. The one exception is a copy whose
- *      lifetime has ended while the operand is live under R. Then the program renewed the
- *      mapping (CRENEW keeps the parent, and in a table without generations it moves the new
- *      lifetime to another record), and condition 4 says which mapping the operand is: only the
- *      kernel makes children of R, one live child per reservation, and reservations never
- *      overlap. A copy that is live and differs from the operand refuses the operand.
- *   4. Its bounds cover the range the call names: [a0's cursor, + a1), which the launcher has
- *      matched to the whole reservation as the program requested it (the visible length; an
- *      mmap reference is shrunk to that length and the padding behind it is PROT_NONE). A
- *      narrowed reference to part of a mapping is refused.
+ *   3. Its record's parent is M, the reservation's record: the parent index of P's record equals
+ *      the index of the record that the kernel slot names, which is live. This separates the
+ *      mapping from an object that an allocator made over its whole range (a grandchild of M),
+ *      and from every other mapping. The comparison is exact: the program cannot reach M, so M
+ *      lives until the kernel ends it, and a live P whose parent index is M's is a child of M.
+ *      A CRENEW of P keeps the parent, so a renewed P is accepted and the old one is stale.
+ *   4. Its bounds cover the reservation's visible length, [address, address + visible), and the
+ *      call names that address and exactly that length. A narrowed reference to part of a
+ *      mapping, and a call that names part of it, are refused.
  *
- * Then the mapping ends with CREVOKE through the program's reference, at the point where
- * retire() or park() ends a mapping, after everything that can fail. Nothing between the check
- * and the CREVOKE can change the operand: the caller is paused at its service, and every other
- * thread of the context needs vm_lock to run. The CREVOKE goes through ref_kill, which checks
- * conditions 1 to 3 again and never traps.
+ * Then the mapping ends with CREVOKE of M (root_end), after everything that can fail: that ends
+ * P, every renewal of P and everything below. Nothing between the check and the CREVOKE can
+ * change the operand: the caller is paused at its service, and every other thread of the context
+ * needs vm_lock to run.
  *
- * A refused operand never faults in the kernel: LCC selector 1 is total, and the other selectors
- * run only on a non-linear reference. Each refusal is counted in unmap_refused and reported by
- * reason, the first CV_UNMAP_REPORTS of each. */
+ * A refused operand never faults in the kernel: LCC selector 1 is total, the other selectors run
+ * only on a non-linear reference, and CREVOKE runs only on M through ref_kill, which checks M
+ * again. On a refused request the module releases nothing and the launcher keeps the mapping
+ * registered. Each refusal is counted in unmap_refused and reported by reason, the first
+ * CV_UNMAP_REPORTS of each (request_refused). */
 enum cv_unmap_reason {
     CV_UNMAP_ACCEPTED,
     CV_UNMAP_NOT_REFERENCE,     /* 1 */
     CV_UNMAP_NOT_LIVE,          /* 2 */
     CV_UNMAP_NOT_MAPPING,       /* 3 */
     CV_UNMAP_NOT_COVERING,      /* 4 */
-    CV_UNMAP_CALL,              /* the call's range is not the arena's */
+    CV_UNMAP_CALL,              /* the call names another address or length */
     CV_UNMAP_REASONS
 };
 static const char *const cv_unmap_reasons[CV_UNMAP_REASONS] = {
@@ -1791,25 +1786,37 @@ static const char *const cv_unmap_reasons[CV_UNMAP_REASONS] = {
 };
 static unsigned long unmap_refused;
 module_param(unmap_refused, ulong, 0444);
-#define CV_UNMAP_REPORTS 8U
+#define CV_UNMAP_REPORTS 16U
 static unsigned unmap_reports[CV_UNMAP_REASONS];
+/* CV_RETIRE of an arena whose reservation is live (root_grants): refused and counted here. */
+static unsigned long retire_refused;
+module_param(retire_refused, ulong, 0444);
+static unsigned retire_reports;
 
-/* The register slot of a0 in a thread's frame: x10 at frame + 64 + 16 * 10. */
-#define CV_FRAME_A0_SLOT(t) ((t)->frame + 8 + 10 * 2)
-/* The escape's integer copies of a0 and a1 (frame + 576): the operand's cursor and the length. */
+/* The register slot of x<reg> in a thread's frame: frame + 64 + 16 * reg. */
+#define CV_FRAME_SLOT(t, reg) ((t)->frame + 8 + (reg) * 2)
+/* The escape's integer copies of a0 to a7 (frame + 576): a reference's cursor, a length, and the
+ * service number in a7. */
 #define CV_FRAME_ARG(t, i) READ_ONCE((t)->frame[72 + (i)])
 
-/* Why the reference in the caller's a0 slot cannot end arena a, or CV_UNMAP_ACCEPTED. Ends
- * nothing. */
-static enum cv_unmap_reason unmap_operand(struct context *c, struct cv_thread *t, struct arena *a)
+/* Is t paused at its service number service, with its registers still its own? */
+static bool caller_paused(struct cv_thread *t, unsigned long service)
 {
-    unsigned long *operand = CV_FRAME_A0_SLOT(t);
-    unsigned long address = CV_FRAME_ARG(t, 0), bytes = CV_FRAME_ARG(t, 1);
-    unsigned long flags, old, type, id = 0, base = 0, end = 0;
-    unsigned long copy_type, copy_id, parent = 0, copy_parent = 0;
-    bool copy_live;
+    return t && !t->terminal && t->started && t->event == 3 && !t->reply_cap &&
+           CV_FRAME_ARG(t, 7) == service;
+}
 
-    if (address != a->address || !bytes || (bytes & ~PAGE_MASK) || bytes > a->bytes)
+/* Why the reference in register reg of thread t cannot end arena a for a call that names
+ * [address, address + bytes), or CV_UNMAP_ACCEPTED. Ends nothing. */
+static enum cv_unmap_reason request_operand(struct context *c, struct cv_thread *t,
+                                            struct arena *a, unsigned reg,
+                                            unsigned long address, unsigned long bytes)
+{
+    unsigned long *operand = CV_FRAME_SLOT(t, reg);
+    unsigned long flags, old, type, id = 0, base = 0, end = 0, parent = 0;
+    unsigned long m_type, m_id, m_parent = 0;
+
+    if (address != a->address || bytes != a->visible)
         return CV_UNMAP_CALL;
 
     preempt_disable(); local_irq_save(flags);
@@ -1831,7 +1838,7 @@ static enum cv_unmap_reason unmap_operand(struct context *c, struct cv_thread *t
                      : [id] "=&r"(id), [base] "=&r"(base), [end] "=&r"(end)
                      : [slot] "r"(operand)
                      : "t0", "memory");
-    ref_read(a->ref, &copy_type, &copy_id);
+    ref_read(a->ref, &m_type, &m_id);
     restore_root(old);
     local_irq_restore(flags); preempt_enable();
 
@@ -1839,22 +1846,39 @@ static enum cv_unmap_reason unmap_operand(struct context *c, struct cv_thread *t
         return CV_UNMAP_NOT_REFERENCE;
     if (ref_lifetime(c, id, &parent) != CAP_REV_TABLE_VALID)
         return CV_UNMAP_NOT_LIVE;
-    copy_live = copy_type == CV_TYPE_NONLIN && ref_lifetime(c, copy_id, &copy_parent);
-    if (parent != c->root_index || (copy_live && id != copy_id))
+    /* M has ended: an earlier end of the mapping. Then P has ended too, so this is defence. */
+    if (m_type != CV_TYPE_NONLIN || ref_lifetime(c, m_id, &m_parent) != CAP_REV_TABLE_VALID ||
+        m_parent != c->root_index)
         return CV_UNMAP_NOT_MAPPING;
-    if (base > address || end < address + bytes)
+    if (parent != CV_ID_INDEX(m_id))
+        return CV_UNMAP_NOT_MAPPING;
+    if (base > a->address || end < a->address + a->visible)
         return CV_UNMAP_NOT_COVERING;
     return CV_UNMAP_ACCEPTED;
 }
 
-/* Statistics of a mapping's end, and the end itself: through the program's operand when the
- * unmap came with one (checked by unmap_operand), through the kernel's copy otherwise. The copy
- * names an ended lifetime afterwards in both cases and is emptied. */
-static void root_end(struct context *c, struct arena *a, unsigned long *operand)
+/* Is the reservation of arena a still live? Its kernel slot names M until root_end. */
+static bool root_live(struct context *c, struct arena *a)
+{
+    unsigned long flags, old, type, id, parent = 0;
+
+    preempt_disable(); local_irq_save(flags);
+    old = select_root(c);
+    ref_read(a->ref, &type, &id);
+    restore_root(old);
+    local_irq_restore(flags); preempt_enable();
+    return type == CV_TYPE_NONLIN && ref_lifetime(c, id, &parent) == CAP_REV_TABLE_VALID &&
+           parent == c->root_index;
+}
+
+/* The end of arena a's reservation: CREVOKE of M through the kernel slot, which ends P, every
+ * renewal of P and every object below, and empties the slot. A reservation that has ended already
+ * (an earlier request, a park, the frame's hand-over) is left alone. */
+static void root_end(struct context *c, struct arena *a)
 {
     unsigned long free_before = node_free_count(c);
 
-    if (ref_kill(c, operand ? operand : a->ref)) {
+    if (ref_kill(c, a->ref)) {
         ++c->retired_flat;
         if (node_free_count(c) > free_before) ++c->pushed_flat;
     }
@@ -1862,11 +1886,13 @@ static void root_end(struct context *c, struct arena *a, unsigned long *operand)
     WRITE_ONCE(a->ref[1], 0UL);
 }
 
-/* One run that makes a grant as a child of R. t0 is R, moved to the grant's base and reduced
- * to the requested rights. t1 is the mapping, which CDERIVE makes from t0 and which inherits
- * those rights. The kernel's copy is t1 with its cursor at the base, the grant is t1 with the
- * requested cursor, stored into the frame slot and into slot2 (which is the frame slot again
- * where the request needs one slot). */
+/* One run that makes a reservation and the program's reference to it. t0 is R, moved to the
+ * grant's base and reduced to the requested rights. t1 is M, the reservation record, which
+ * CDERIVE makes from t0 over the whole arena and which inherits those rights; it goes into the
+ * kernel slot (copy) with its cursor at the base. t0 is then P, which CDERIVE makes from M with
+ * the same bounds, moved to the requested cursor and stored into the frame slot and into slot2
+ * (which is the frame slot again where the request needs one slot). 11 instructions, inside one
+ * 64-byte block. */
 #define CV_ROOT_DERIVE_RUN(n)                                                                    \
     asm volatile(CV_RUN                                                                          \
                  CV_LDC("t0", "%[root]")                                                         \
@@ -1874,9 +1900,10 @@ static void root_end(struct context *c, struct arena *a, unsigned long *operand)
                  CV_TIGHTEN("t0", n)                                                             \
                  CV_DERIVE("t1", "t0", "%[bytes]")                                               \
                  CV_STC("t1", "%[copy]")                                                         \
-                 CV_INC("t1", "t1", "%[cursor]")                                                 \
-                 CV_STC("t1", "%[slot]")                                                         \
-                 CV_STC("t1", "%[slot2]")                                                        \
+                 CV_DERIVE("t0", "t1", "%[bytes]")                                               \
+                 CV_INC("t0", "t0", "%[cursor]")                                                 \
+                 CV_STC("t0", "%[slot]")                                                         \
+                 CV_STC("t0", "%[slot2]")                                                        \
                  "li t0, 0\n"                                                                    \
                  "li t1, 0\n"                                                                    \
                  : : [root] "r"(c->root_slot), [base] "r"(base), [bytes] "r"(bytes),             \
@@ -1899,12 +1926,12 @@ static unsigned long ref_type(unsigned long *slot)
     return type;
 }
 
-/* Make the grant r as a child of R: store it into the frame slot (and slot2 where the request
- * needs the same reference twice, or NULL) and store the kernel's copy into copy. Zero on
- * success. Nonzero if the frame slot does not hold a reference afterwards, which happens when
- * the cursor the request names is not one the format holds for this range (CINCOFFSET then
- * answers the address alone): the mapping is ended again through the copy, and both slots are
- * cleared. Rights and cursor do not matter to a release. */
+/* Make the reservation for the grant r: M, a child of R, into the kernel slot copy, and P, a
+ * child of M, into the frame slot (and slot2 where the request needs the same reference twice, or
+ * NULL). Zero on success. Nonzero if the frame slot does not hold a reference afterwards, which
+ * happens when the cursor the request names is not one the format holds for this range
+ * (CINCOFFSET then answers the address alone): the rollback ends M through the kernel slot, which
+ * ends P with it, and every slot is cleared. Rights and cursor do not matter to a release. */
 static unsigned long root_derive(struct context *c, unsigned long *copy, unsigned long *slot,
                                  unsigned long *slot2, const struct cv_map *r)
 {
@@ -2041,9 +2068,7 @@ static void clear_page_tags(struct page *page)
     }
 }
 
-/* operand: root_grants only, the slot of the program's reference when the program unmaps the
- * arena itself (CV_UNMAP, checked by unmap_operand), else NULL. */
-static int retire(struct context *c, struct arena *a, bool destroying, unsigned long *operand)
+static int retire(struct context *c, struct arena *a, bool destroying)
 {
     unsigned long flags, old, status;
     unsigned i, swept;
@@ -2059,16 +2084,15 @@ static int retire(struct context *c, struct arena *a, bool destroying, unsigned 
      * launcher surfaces as "service: Input/output error" and a 125 exit. Measured: the child thread
      * ran and printed VIRTUAL_THREAD_CHILD, and the step then failed on the unmap. An earlier
      * version of this change reasoned that no flag was needed because retire(destroying=true)
-     * ignores the status; that enumerated only one of the two paths. An operand that
-     * unmap_operand accepted is a live reference to this mapping, so it is ended even then. */
-    if (a->ancestor_retired && !operand) {
+     * ignores the status; that enumerated only one of the two paths.
+     *
+     * With root_grants the reservation ends through M, whoever ends it. A reservation that has
+     * ended already (a request of the program, the frame's hand-over, a park) is left alone by
+     * root_end, so the S-21 skip is not needed there. */
+    if (root_grants) {
+        root_end(c, a);
         status = 0;
-    } else if (root_grants) {
-        /* The mapping ends through the program's reference when the program unmaps it, and
-         * through the kernel's copy when the launcher does (its own unmaps, a pool eviction,
-         * teardown). A lifetime that the program ended itself is not an error there: nothing is
-         * left to end. */
-        root_end(c, a, operand);
+    } else if (a->ancestor_retired) {
         status = 0;
     } else {
         unsigned long free_before = node_free_count(c);
@@ -2178,8 +2202,7 @@ static void clear_page_full(struct page *page)
     }
 }
 
-/* operand: as for retire(). */
-static int park(struct context *c, struct arena *a, unsigned long *operand)
+static int park(struct context *c, struct arena *a)
 {
     unsigned long flags, old, status;
     unsigned long free_before;
@@ -2193,8 +2216,8 @@ static int park(struct context *c, struct arena *a, unsigned long *operand)
     error = pin_remaining(c, a, FOLL_FORCE | FOLL_NOFAULT);
     if (error) return error;
     if (root_grants && !CV_MUTANT(test_revive_keep_ancestor)) {
-        /* As retire(): through the program's reference, or the kernel's copy without one. */
-        root_end(c, a, operand);
+        /* As retire(): the reservation ends through M. */
+        root_end(c, a);
         a->ancestor_retired = true;
     } else if (!CV_MUTANT(test_revive_keep_ancestor)) {
         free_before = node_free_count(c);
@@ -2252,7 +2275,7 @@ static int revive(struct context *c, struct cv_thread *t, struct cv_map *r)
     map_revive_pages += cleared;
     slot = t->frame + 8 + r->reg * 2;
     if (root_grants) {
-        /* The reuse is a new mapping: a new child of R, and its copy in the arena's slot. A
+        /* The reuse is a new mapping: a new reservation M in the arena's slot and a new P. A
          * refusal leaves the arena parked under its old id. */
         slot[0] = 0;
         slot[1] = 0;
@@ -2298,7 +2321,7 @@ static int grant_unmap_retire(void *opaque)
 {
     struct grant_unmap_commit *tx = opaque;
     if (tx->inject == CV_GRANT_INJECT_RETIRE) return -EIO;
-    return retire(tx->context, tx->arena, false, NULL);
+    return retire(tx->context, tx->arena, false);
 }
 static int grant_transaction(struct context *c,
                              const struct cv_grant_transaction *r)
@@ -2377,6 +2400,7 @@ static int add(struct context *c, struct cv_thread *t, struct cv_map *r)
         r->address > ULONG_MAX - r->bytes ||
         !access_ok((void __user *)r->address, r->bytes) ||
         r->permissions > 7 || r->linear > 1 || r->reg > 31 ||
+        (r->visible & (PAGE_SIZE - 1)) || r->visible > r->bytes ||
         r->cursor < r->address || r->cursor > r->address + r->bytes ||
         (r->linear && r->cursor != r->address) ||
         (t->started && (t->event != 3 || r->reg != 10 || t->reply_cap)) ||
@@ -2459,6 +2483,7 @@ static int add(struct context *c, struct cv_thread *t, struct cv_map *r)
      * as the arena (a page admitted at any later fault is checked against it), so it is
      * accounted like the page array. */
     a->address = r->address; a->bytes = r->bytes; a->rx_bytes = r->rx_bytes;
+    a->visible = r->visible ? r->visible : r->bytes;
     a->pages = pages; a->count = count; a->linear = r->linear;
     a->lazy = r->linear || (lazy_grants && !eager_grant(t, r));
     if (!r->linear) {
@@ -2520,8 +2545,9 @@ static int add(struct context *c, struct cv_thread *t, struct cv_map *r)
         slot[1] = 0;
     } else if (slot[0] || slot[1]) goto unpin;
     if (root_grants) {
-        /* The grant is a child of R, whatever r->linear says, with the cursor and the rights
-         * the request names. The image's second slot is register slot 0, as in the mint. */
+        /* The grant is a child of the reservation M, a child of R, whatever r->linear says, with
+         * the cursor and the rights the request names. The image's second slot is register slot
+         * 0, as in the mint. */
         if (root_derive(c, a->ref, slot, r->reg == 3 ? t->frame + 8 : NULL, r)) goto unpin;
     } else {
         desc[0] = r->address;
@@ -3673,36 +3699,55 @@ static bool one_inode_per_file(struct file *file)
     return false;
 }
 
-/* CV_UNMAP: a program's munmap of arena r->id, park or retire. Without root_grants the launcher's
- * resolution of the address is the authority, as at CV_RETIRE and CV_PARK. With root_grants the
- * reference in the caller's saved a0 is (unmap_operand): the caller must be paused at its unmap
- * service with a0 still its own, and the mapping ends through that reference. */
-static int unmap(struct context *c, const struct cv_unmap *r)
+/* Count and report a refused request of the program to end arena a (request_operand). */
+static void request_refused(struct arena *a, enum cv_unmap_reason reason, const char *request,
+                            unsigned long address, unsigned long bytes)
+{
+    ++unmap_refused;
+    if (unmap_reports[reason] < CV_UNMAP_REPORTS) {
+        ++unmap_reports[reason];
+        CV_EMIT("capstone_vm: unmap refused (%s) at %s: arena 0x%lx+0x%lx visible 0x%lx, "
+                "call 0x%lx+0x%lx\n", cv_unmap_reasons[reason], request, a->address, a->bytes,
+                a->visible, address, bytes);
+    }
+}
+
+/* CV_UNMAP: a program's munmap of arena r->id. r->park asks to pool the mapping; one call decides
+ * and reports in r->park what it did (CV_UNMAP_PARKED, or CV_UNMAP_RETIRED and CV_UNMAP_NO_POOL
+ * when the park was refused and the arena retired instead), so a refused reference is refused
+ * and counted once. Without root_grants the launcher's resolution of the address is the
+ * authority, as at CV_RETIRE. With root_grants the reference in the caller's saved a0 is
+ * (request_operand): the caller must be paused at its unmap service with a0 still its own, the
+ * call names [a0's cursor, + a1), and the reservation ends through M. */
+static int unmap(struct context *c, struct cv_unmap *r)
 {
     struct arena *a = xa_load(&c->ids, r->id);
-    struct cv_thread *t;
-    enum cv_unmap_reason reason;
+    bool pool = r->park;
+    int rc;
 
     if (!a || r->park > 1) return -EINVAL;
-    if (!root_grants)
-        return r->park ? park(c, a, NULL) : retire(c, a, false, NULL);
+    if (root_grants) {
+        struct cv_thread *t = find_thread(c, r->thread);
+        enum cv_unmap_reason reason;
 
-    t = find_thread(c, r->thread);
-    if (!t || t->terminal || !t->started || t->event != 3 || t->reply_cap ||
-        CV_FRAME_ARG(t, 7) != CV_SERVICE_UNMAP)
-        return -EINVAL;
-    reason = unmap_operand(c, t, a);
-    if (reason != CV_UNMAP_ACCEPTED) {
-        ++unmap_refused;
-        if (unmap_reports[reason] < CV_UNMAP_REPORTS) {
-            ++unmap_reports[reason];
-            CV_EMIT("capstone_vm: unmap refused (%s): arena 0x%lx+0x%lx, call 0x%lx+0x%lx\n",
-                    cv_unmap_reasons[reason], a->address, a->bytes,
-                    CV_FRAME_ARG(t, 0), CV_FRAME_ARG(t, 1));
+        if (!caller_paused(t, CV_SERVICE_UNMAP)) return -EINVAL;
+        reason = request_operand(c, t, a, 10, CV_FRAME_ARG(t, 0), CV_FRAME_ARG(t, 1));
+        if (reason != CV_UNMAP_ACCEPTED) {
+            request_refused(a, reason, pool ? "park" : "munmap", CV_FRAME_ARG(t, 0),
+                            CV_FRAME_ARG(t, 1));
+            return -EINVAL;
         }
-        return -EINVAL;
     }
-    return r->park ? park(c, a, CV_FRAME_A0_SLOT(t)) : retire(c, a, false, CV_FRAME_A0_SLOT(t));
+
+    if (pool) {
+        rc = park(c, a);
+        if (!rc) {
+            r->park = CV_UNMAP_PARKED;
+            return 0;
+        }
+        r->park = rc == -EOPNOTSUPP ? CV_UNMAP_NO_POOL : CV_UNMAP_RETIRED;
+    }
+    return retire(c, a, false);
 }
 
 static long vm_ioctl(struct file *f, unsigned int op, unsigned long arg)
@@ -3829,6 +3874,20 @@ retry:
                           supervisor_slots, supervisor_slots == 1 ? "" : "s");
             rc = -EBUSY; goto out;
         }
+        if (root_grants) {
+            /* The hand-over is the program's request to end the frame's mapping: the creator
+             * passes the frame's reference in a0 (thread.c), and the call names the frame's one
+             * page. Checked before anything changes; the mapping ends last, below. */
+            struct arena *fa = find_arena(c, r.frame, PAGE_SIZE);
+            struct cv_thread *creator = find_thread(c, r.creator);
+            enum cv_unmap_reason reason;
+            if (!caller_paused(creator, CV_SERVICE_THREAD_CREATE)) { rc = -EINVAL; goto out; }
+            reason = request_operand(c, creator, fa, 10, CV_FRAME_ARG(creator, 0), PAGE_SIZE);
+            if (reason != CV_UNMAP_ACCEPTED) {
+                request_refused(fa, reason, "thread create", CV_FRAME_ARG(creator, 0), PAGE_SIZE);
+                rc = -EINVAL; goto out;
+            }
+        }
         t = kvzalloc(sizeof(*t), GFP_KERNEL);
         if (!t) { rc = -ENOMEM; goto out; }
         t->context = c; t->id = ++c->next_thread;
@@ -3867,29 +3926,24 @@ retry:
          * A failed retire fails the create: a frame the domain can still write is the whole defect.
          * Note this is unreachable on vp2 today -- with supervisor_slots = 1 the create is already
          * refused above -- so it is the ABI's property for a multi-slot bitstream, not a fix for
-         * the current board. */
-        {
+         * the current board.
+         *
+         * With root_grants the creator's reference was checked above, and the frame's
+         * reservation ends through M after every step that can fail, below: M ends P, every
+         * renewal of P and every object below, so no reference of the program to the frame stays
+         * live. A refused create has ended nothing. */
+        if (!root_grants) {
             struct arena *fa = find_arena(c, r.frame, PAGE_SIZE);
             unsigned long st, old_root;
             unsigned long free_before;
-            bool ended = true;
             if (!fa) { rc = -EINVAL; goto thread_unwind; }
             free_before = node_free_count(c);
-            if (root_grants) {
-                /* The frame's mapping ends through the kernel's copy of its reference. An arena
-                 * retired before has no copy left and is refused, as CSRETIRE answers 1 for it.
-                 * A mapping the program ended itself is accepted: no reference to the frame is
-                 * live, which is what this step is for. */
-                st = fa->ancestor_retired ? 1 : 0;
-                ended = !st && ref_end(c, fa->ref);
-            } else {
-                preempt_disable(); local_irq_save(flags);
-                old_root = select_root(c);
-                asm volatile(".insn r 0x5b, 1, 0x53, %0, %1, zero"
-                             : "=&r"(st) : "r"(fa->ancestor) : "memory");
-                restore_root(old_root);
-                local_irq_restore(flags); preempt_enable();
-            }
+            preempt_disable(); local_irq_save(flags);
+            old_root = select_root(c);
+            asm volatile(".insn r 0x5b, 1, 0x53, %0, %1, zero"
+                         : "=&r"(st) : "r"(fa->ancestor) : "memory");
+            restore_root(old_root);
+            local_irq_restore(flags); preempt_enable();
             if (st) {
                 CV_EMIT_FIRST(childframe_prints,
                               "capstone_vm: child frame grant not retired (status %lu); "
@@ -3897,10 +3951,8 @@ retry:
                 rc = -EACCES;
                 goto thread_unwind;
             }
-            if (!st && ended) {
-                ++c->retired_flat;
-                if (node_free_count(c) > free_before) ++c->pushed_flat;
-            }
+            ++c->retired_flat;
+            if (node_free_count(c) > free_before) ++c->pushed_flat;
             fa->ancestor_retired = true;
         }
         INIT_LIST_HEAD(&t->link);
@@ -3909,6 +3961,10 @@ retry:
         rc = copy_to_user((void __user *)arg, &r, sizeof(r)) ? -EFAULT : 0;
         if (rc) {
             list_del(&t->link); clear_thread_frame(t); drop_thread_frame(t); kvfree(t);
+        } else if (root_grants) {
+            struct arena *fa = find_arena(c, r.frame, PAGE_SIZE);
+            root_end(c, fa);
+            fa->ancestor_retired = true;
         }
         if (0) {
 thread_unwind:
@@ -3917,18 +3973,45 @@ thread_unwind:
             clear_thread_frame(t); drop_thread_frame(t); kvfree(t);
         }
     } else if (op == CV_THREAD_EXIT) {
-        struct cv_thread_control r;
+        struct cv_thread_exit r;
         struct cv_thread *t;
+        struct arena *stack = NULL;
         if (copy_from_user(&r, (void __user *)arg, sizeof(r))) { rc = -EFAULT; goto out; }
         t = find_thread(c, r.thread);
         if (!t || t == c->main_thread) { rc = -EINVAL; goto out; }
         r.frame = t->frame_user;
+        r.stack_ended = 0;
+        if (root_grants && r.stack) {
+            /* The stack unmap at thread exit is the program's request to end the stack's
+             * mapping: the thread passes the stack's reference in a1 and its length in a2
+             * (pthread.c, __unmapself). Checked now, while the frame still holds a1. A refused
+             * reference does not stop the exit; the stack's mapping stays. */
+            enum cv_unmap_reason reason;
+            stack = xa_load(&c->ids, r.stack);
+            if (!stack || stack->parked || r.stack_reg != 11 ||
+                !caller_paused(t, CV_SERVICE_PTHREAD_EXIT)) { rc = -EINVAL; goto out; }
+            reason = request_operand(c, t, stack, 11, CV_FRAME_ARG(t, 1), CV_FRAME_ARG(t, 2));
+            if (reason != CV_UNMAP_ACCEPTED) {
+                request_refused(stack, reason, "thread exit", CV_FRAME_ARG(t, 1),
+                                CV_FRAME_ARG(t, 2));
+                stack = NULL;
+            }
+        }
         if (t->started) {
             preempt_disable(); local_irq_save(flags);
             run(t->frame_pa, 1);
             local_irq_restore(flags); preempt_enable();
         }
-        list_del(&t->link); clear_thread_frame(t); drop_thread_frame(t);
+        list_del(&t->link); clear_thread_frame(t);
+        /* The thread has stopped and its frame holds no reference any more: the stack's
+         * reservation ends through M, which the frame never held. The launcher releases the
+         * range afterwards (CV_RETIRE). */
+        if (stack) {
+            root_end(c, stack);
+            stack->ancestor_retired = true;
+            r.stack_ended = 1;
+        }
+        drop_thread_frame(t);
         kvfree(t);
         rc = copy_to_user((void __user *)arg, &r, sizeof(r)) ? -EFAULT : 0;
     } else if (op == CV_STEP) {
@@ -4128,17 +4211,35 @@ thread_unwind:
         struct arena *a;
         if (copy_from_user(&id, (void __user *)arg, sizeof(id))) { rc = -EFAULT; goto out; }
         a = xa_load(&c->ids, id);
-        if (a) rc = retire(c, a, false, NULL);
+        /* With root_grants the launcher's own unmap releases only a range whose reservation has
+         * ended: only the program's request, checked here, ends a live one (CV_UNMAP, the
+         * frame's hand-over, the stack at CV_THREAD_EXIT), and only teardown and the rollback
+         * of a failed grant end M without one. A live reservation is refused, which also keeps
+         * the stack of a thread whose exit request was refused. */
+        if (a && root_grants && root_live(c, a)) {
+            ++retire_refused;
+            if (retire_reports < CV_UNMAP_REPORTS) {
+                ++retire_reports;
+                CV_EMIT("capstone_vm: retire refused: arena 0x%lx+0x%lx, its reservation is live\n",
+                        a->address, a->bytes);
+            }
+            rc = -EPERM;
+        } else if (a) {
+            rc = retire(c, a, false);
+        }
     } else if (op == CV_PARK) {
         u64 id;
         struct arena *a;
         if (copy_from_user(&id, (void __user *)arg, sizeof(id))) { rc = -EFAULT; goto out; }
         a = xa_load(&c->ids, id);
-        if (a) rc = park(c, a, NULL);
+        /* With root_grants a park ends a live reservation, so it is a request of the program and
+         * goes through CV_UNMAP. */
+        if (a) rc = root_grants ? -EPERM : park(c, a);
     } else if (op == CV_UNMAP) {
         struct cv_unmap r;
         if (copy_from_user(&r, (void __user *)arg, sizeof(r))) { rc = -EFAULT; goto out; }
         rc = unmap(c, &r);
+        if (!rc && copy_to_user((void __user *)arg, &r, sizeof(r))) rc = -EFAULT;
     } else if (op == CV_REVIVE) {
         struct cv_map r;
         struct cv_thread *t;
@@ -4338,7 +4439,7 @@ static int vm_release(struct inode *inode, struct file *f)
             /* The task may be in exit_mm() here.  A teardown must never
              * call pin_user_pages_fast() to materialize lazy holes; only
              * already pinned pages can safely be revoked and released. */
-            retire(c, a, true, NULL);
+            retire(c, a, true);
         }
         WARN_ON(!RB_EMPTY_ROOT(&c->arenas));
         xa_destroy(&c->ids);

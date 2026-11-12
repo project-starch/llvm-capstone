@@ -361,8 +361,11 @@ static void map_remove(struct mapping *m)
     /* Kept for the next registration (remap_mapping removes, then inserts). */
     gone->child[0] = map_free; map_free = gone;
 }
-static int grant(void *base, size_t bytes, unsigned reg, unsigned perms,
-                 uintptr_t cursor, int linear, uint64_t thread, size_t rx_bytes)
+/* Register [base, + bytes) with the module and grant it in register reg of thread. visible: the
+ * length the program's mmap exposes (the rest is PROT_NONE padding); the module checks a request
+ * to end the mapping against it (wire.h, cv_map). */
+static int grant_mapping(void *base, size_t bytes, size_t visible, unsigned reg, unsigned perms,
+                         uintptr_t cursor, int linear, uint64_t thread, size_t rx_bytes)
 {
     if (map_reserve()) return -1;
     /* Option (iii): refuse to mint an arena whose bounds the encoder cannot represent, rather
@@ -381,7 +384,7 @@ static int grant(void *base, size_t bytes, unsigned reg, unsigned perms,
      * carries its own alignment guarantee. Negative-tested in
      * tests/exact-bounds-iii/grant-repr-test.c. */
     if (!capstone_repr_ok((uintptr_t)base, bytes)) { errno = ERANGE; return -1; }
-    struct cv_map r = {thread, (uintptr_t)base, bytes, perms, reg, cursor, linear, 0, rx_bytes};
+    struct cv_map r = {thread, (uintptr_t)base, bytes, perms, reg, cursor, linear, 0, rx_bytes, visible};
     if (ioctl(device, CV_ADD, &r)) {
         /* Evaluate add()'s two disjuncts on the REAL values the module saw. The domain cannot do
          * this: cap_vm_acquire clears its slot on failure, so the base never reaches it, and a
@@ -412,10 +415,16 @@ static int grant(void *base, size_t bytes, unsigned reg, unsigned perms,
     if (grants)
         fprintf(stderr, "CAPSTONE_VM_ADD_OK slot=%zu base=0x%lx bytes=%zu reg=%u perms=%u linear=%d\n",
                 map_count, (unsigned long)(uintptr_t)base, bytes, reg, perms, linear);
-    map_insert((struct mapping){.address = base, .bytes = bytes, .visible = bytes,
+    map_insert((struct mapping){.address = base, .bytes = bytes, .visible = visible,
                                 .id = r.id, .heap = linear,
                                 .kind = linear ? CV_MAP_HEAP : -1});
     return 0;
+}
+/* The launcher's own grants (image, stack, transport, startup data, regions): no padding. */
+static int grant(void *base, size_t bytes, unsigned reg, unsigned perms,
+                 uintptr_t cursor, int linear, uint64_t thread, size_t rx_bytes)
+{
+    return grant_mapping(base, bytes, bytes, reg, perms, cursor, linear, thread, rx_bytes);
 }
 /* The calling worker's attachment: its meta block and exchange region, the two spans this
  * launcher writes for it, each with the identity of the mapping it holds. The identity is the
@@ -562,11 +571,8 @@ static void mc_trim(void)
     /* Negative control: no bound. */
 #endif
 }
-/* Try to pool m (a registered, unheld mapping the domain thread tid asked to unmap). 1: pooled
- * and removed from the registry; 0: take the ordinary path. The park is the domain's unmap, so it
- * goes through CV_UNMAP: with root_grants the module ends the mapping only through the reference
- * the domain handed back, and a refused reference is refused again on the ordinary path. */
-static int mc_park(struct mapping *m, uint64_t tid)
+/* May m (a registered, unheld mapping the domain asked to unmap) enter the pool? */
+static int mc_eligible(const struct mapping *m)
 {
 #ifdef CAPSTONE_MAPCACHE_MUTANT_PROT
     /* Negative control: pool a mapping whose protections were changed. */
@@ -574,15 +580,15 @@ static int mc_park(struct mapping *m, uint64_t tid)
 #else
 #define MC_PROTECTED m->protected_range
 #endif
-    if (!mc.cap || mc.broken || m->kind != CV_MAP_HEAP || MC_PROTECTED || m->bytes != m->visible ||
-        m->bytes > mc.cap / 2 || !mc.spare)
-        return 0;
-    struct cv_unmap request = {.thread = tid, .id = m->id, .park = 1};
-    if (ioctl(device, CV_UNMAP, &request)) {
-        if (errno == EOPNOTSUPP) { mc_flush(); mc.cap = 0; }
-        ++mc.refused;
-        return 0;
-    }
+    return mc.cap && !mc.broken && m->kind == CV_MAP_HEAP && !MC_PROTECTED &&
+           m->bytes == m->visible && m->bytes <= mc.cap / 2 && mc.spare;
+}
+/* Pool m, which the module has parked (CV_UNMAP answered CV_UNMAP_PARKED), and remove it from the
+ * registry. The park is the domain's unmap and goes through the same CV_UNMAP as the ordinary
+ * path: one call decides park or retire, so with root_grants a refused reference is refused once
+ * (unmap_arena_for). */
+static void mc_pool(struct mapping *m)
+{
     struct mc_entry *e = mc.spare;
     mc.spare = e->chain;
     e->m = *m;
@@ -596,7 +602,6 @@ static int mc_park(struct mapping *m, uint64_t tid)
     if (trace) fprintf(stderr, "CAPSTONE_VM_MAPCACHE_PARK base=0x%lx bytes=%zu id=%llu\n",
                        (unsigned long)(uintptr_t)e->m.address, e->m.bytes, (unsigned long long)e->m.id);
     mc_trim();
-    return 1;
 }
 /* A pooled mapping of exactly this size and an address that satisfies the alignment, newest first. */
 static struct mc_entry *mc_find(size_t bytes, size_t alignment)
@@ -606,18 +611,29 @@ static struct mc_entry *mc_find(size_t bytes, size_t alignment)
     return NULL;
 }
 /* Unmap the whole mapping at base. domain: the domain thread tid asked (CV_SERVICE_UNMAP, base
- * the cursor of the reference it passed in a0): the module ends the mapping through CV_UNMAP,
- * which with root_grants checks that reference. Otherwise the launcher unmaps for itself
- * (CV_RETIRE), and tid is unused. A partial unmap is refused here, with or without root_grants. */
+ * the cursor of the reference it passed in a0): one CV_UNMAP pools the mapping where the pool
+ * takes it and the module can, and retires it otherwise; with root_grants the module checks that
+ * reference, the address and the length first. Otherwise the launcher unmaps for itself
+ * (CV_RETIRE), and tid is unused: with root_grants the module then releases only a mapping whose
+ * reservation has already ended (EPERM otherwise, and the mapping stays registered). A partial
+ * unmap is refused here, with or without root_grants, and again by the module with root_grants. */
 static long unmap_arena_for(uintptr_t base, size_t bytes, int domain, uint64_t tid)
 {
     struct mapping *m = map_find(base);
     if (!m || m->visible != bytes || !m->heap || m->kind == CV_MAP_METADATA)
         return -EINVAL;
     if (m->holder) return -EBUSY;
-    if (domain && mc_park(m, tid)) return 0;
-    struct cv_unmap request = {.thread = tid, .id = m->id, .park = 0};
-    if (domain ? ioctl(device, CV_UNMAP, &request) : ioctl(device, CV_RETIRE, &m->id)) return -errno;
+    if (domain) {
+        int pool = mc_eligible(m);
+        struct cv_unmap request = {.thread = tid, .id = m->id, .park = pool};
+        if (ioctl(device, CV_UNMAP, &request)) return -errno;
+        if (request.park == CV_UNMAP_PARKED) { mc_pool(m); return 0; }
+        if (pool) {
+            /* The module retired the mapping instead of parking it. */
+            ++mc.refused;
+            if (request.park == CV_UNMAP_NO_POOL) { mc_flush(); mc.cap = 0; }
+        }
+    } else if (ioctl(device, CV_RETIRE, &m->id)) return -errno;
     if (munmap(m->address, m->bytes)) return -errno;
     reuse_address = m->address; reuse_bytes = m->bytes;
     map_remove(m);
@@ -693,7 +709,7 @@ static long acquire_mapping(uint64_t tid, struct cv_step *step)
     if (kind == CV_MAP_HEAP && mc.cap) {
         struct mc_entry *e = mc_find(visible, alignment);
         if (e && !map_reserve()) {
-            struct cv_map r = {tid, (uintptr_t)e->m.address, visible, 6, 10, (uintptr_t)e->m.address, 1, e->m.id, 0};
+            struct cv_map r = {tid, (uintptr_t)e->m.address, visible, 6, 10, (uintptr_t)e->m.address, 1, e->m.id, 0, visible};
             if (!ioctl(device, CV_REVIVE, &r)) {
                 mc_unlink(e);
                 if (grants)
@@ -730,7 +746,8 @@ static long acquire_mapping(uint64_t tid, struct cv_step *step)
      * No capability reply exists until registration has succeeded. The range
      * is mapped readable and writable, so that protection needs no call. */
     if ((visible < bytes && mprotect((char *)p + visible, bytes - visible, PROT_NONE)) ||
-        (prot != (PROT_READ | PROT_WRITE) && mprotect(p, visible, prot)) || grant(p, bytes, 10, rights, (uintptr_t)p, 1, tid, 0)) {
+        (prot != (PROT_READ | PROT_WRITE) && mprotect(p, visible, prot)) ||
+        grant_mapping(p, bytes, visible, 10, rights, (uintptr_t)p, 1, tid, 0)) {
         int error = errno;
         munmap(p, bytes);
         if (error == ENOMEM && !retried && mc_flush()) continue;
@@ -1159,6 +1176,21 @@ static int reserve_stdio(unsigned *mask) {
   return 0;
 }
 
+/* Undo a CV_THREAD_CREATE that succeeded: stop the new thread (it never ran) and release its
+ * frame's mapping. The create ended every reference of the program to the frame (with
+ * root_grants the module ended the reservation; without, it retired the frame's ancestor), so the
+ * program cannot unmap the frame itself any more; without this release the frame would stay
+ * pinned and registered until exit. */
+static void thread_rollback(uint64_t thread)
+{
+    struct cv_thread_exit rollback = {.thread = thread};
+    if (ioctl(device, CV_THREAD_EXIT, &rollback) || !rollback.frame) return;
+    long rc = unmap_arena(rollback.frame, 4096);
+    if (rc)
+        fprintf(stderr, "CAPSTONE_VM_FRAME_RELEASE_FAILED frame=0x%lx error=%ld\n",
+                (unsigned long)rollback.frame, -rc);
+}
+
 static int virtual_service(uint64_t tid, struct cv_step *step)
 {
     if (trace) fprintf(stderr, "CAPSTONE_VM_BOUNDARY kind=%llu\n",
@@ -1168,12 +1200,18 @@ static int virtual_service(uint64_t tid, struct cv_step *step)
     if (step->args[7] == CV_SERVICE_THREAD_SELF) {
         step->result = tid + 1; /* zero remains the wire lock's vacant value */
     } else if (step->args[7] == CV_SERVICE_THREAD_CREATE) {
-        struct cv_thread_create request = {.frame = step->args[0]};
+        /* a0 is the frame's reference (thread.c), its cursor the frame's address. With
+         * root_grants the module checks the reference in the caller's a0 and ends the frame's
+         * mapping only if the thread is created. After a successful CV_THREAD_CREATE the frame
+         * belongs to the module: if a later step here fails, the rollback stops the thread and
+         * this launcher releases the frame's mapping itself, since every reference of the program
+         * to it has ended. EAGAIN tells the program so (vm-abi.h); every other error leaves the
+         * frame the program's. */
+        struct cv_thread_create request = {.frame = step->args[0], .creator = tid};
         if (ioctl(device, CV_THREAD_CREATE, &request)) {
             step->result = -errno;
         } else if (thread_add(request.thread)) {
-            struct cv_thread_control rollback = {.thread = request.thread};
-            ioctl(device, CV_THREAD_EXIT, &rollback);
+            thread_rollback(request.thread);
             step->result = -EAGAIN;
         } else {
             uint64_t *child = malloc(sizeof(*child));
@@ -1182,8 +1220,7 @@ static int virtual_service(uint64_t tid, struct cv_step *step)
                                          (child ? (*child = request.thread), child : NULL))) {
                 free(child);
                 thread_remove(request.thread);
-                struct cv_thread_control rollback = {.thread = request.thread};
-                ioctl(device, CV_THREAD_EXIT, &rollback);
+                thread_rollback(request.thread);
                 step->result = -EAGAIN;
             } else {
                 pthread_detach(worker);
@@ -1191,7 +1228,7 @@ static int virtual_service(uint64_t tid, struct cv_step *step)
             }
         }
     } else if (step->args[7] == CV_SERVICE_THREAD_EXIT || step->args[7] == CV_SERVICE_PTHREAD_EXIT) {
-        struct cv_thread_control request = {.thread = tid};
+        struct cv_thread_exit request = {.thread = tid};
         int posix = step->args[7] == CV_SERVICE_PTHREAD_EXIT;
         uintptr_t clear = posix ? step->args[0] : 0;
         if (clear && (!registered_word(clear) || touch(clear, sizeof(int)))) return -1;
@@ -1199,6 +1236,17 @@ static int virtual_service(uint64_t tid, struct cv_step *step)
          * store into a range just given back to Linux would land in whatever Linux maps there
          * next. musl's word is a global (the thread-list lock), never in the thread's stack. */
         if (clear && posix && step->args[1] && clear - step->args[1] < step->args[2]) return -1;
+        /* The stack unmap is the program's request: a1 is the stack's reference (pthread.c,
+         * __unmapself), a2 its length. With root_grants the module checks the reference while the
+         * frame still holds it and ends the stack's mapping after the thread has stopped. */
+        if (posix && step->args[1]) {
+            struct mapping *stack = map_find(step->args[1]);
+            if (stack && stack->visible == step->args[2] && stack->heap &&
+                stack->kind != CV_MAP_METADATA) {
+                request.stack = stack->id;
+                request.stack_reg = 11;
+            }
+        }
         if (tid == 0 || ioctl(device, CV_THREAD_EXIT, &request))
             return -1;
         /* A worker that exits still attached gives its holds back here. */
@@ -1210,8 +1258,17 @@ static int virtual_service(uint64_t tid, struct cv_step *step)
         }
         thread_mark_done(tid);
         /* musl join may retire the child's stack/TLS after this store.
-         * The virtual CPU has stopped and its tagged frame is gone first. */
-        if (posix && step->args[1] && unmap_arena(step->args[1], step->args[2])) return -1;
+         * The virtual CPU has stopped and its tagged frame is gone first. With root_grants the
+         * module refuses (EPERM) to release a stack whose request it refused at CV_THREAD_EXIT:
+         * the mapping stays registered and the exit goes on. */
+        if (posix && step->args[1]) {
+            long stack_rc = unmap_arena(step->args[1], step->args[2]);
+            if (stack_rc == -EPERM)
+                fprintf(stderr, "CAPSTONE_VM_STACK_UNMAP_REFUSED tid=%llu base=0x%lx bytes=%lu\n",
+                        (unsigned long long)tid, (unsigned long)step->args[1],
+                        (unsigned long)step->args[2]);
+            else if (stack_rc) return -1;
+        }
         if (clear) {
             __atomic_store_n((int *)clear, 0, __ATOMIC_RELEASE);
             syscall(SYS_futex, (int *)clear, FUTEX_WAKE_PRIVATE, INT_MAX, NULL, NULL, 0);

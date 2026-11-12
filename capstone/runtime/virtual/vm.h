@@ -20,8 +20,10 @@ extern void *__capstone_vm_acquire(unsigned long, unsigned long, int, unsigned, 
 extern void *__capstone_vm_remap(unsigned long, unsigned long, unsigned long);
 /* The unmap service takes the mapping's reference itself in a0, with its tag, and the length in
  * a1. With root_grants the kernel ends the mapping only through that reference: a live reference
- * to the mapping (not to an object inside it) whose bounds cover the whole mapping. Without it
- * the launcher reads the address from a0, which is the reference's cursor. */
+ * to the mapping (not to an object inside it, not a narrowed one) whose bounds cover the whole
+ * mapping as mmap exposed it, and a1 must be that whole length. Without it the launcher reads the
+ * address from a0, which is the reference's cursor. The thread-create service takes the frame's
+ * reference in a0 and the exit service the stack's reference in a1, under the same rule. */
 extern long __capstone_vm_unmap(void *, unsigned long);
 extern long __capstone_vm_protect(unsigned long, unsigned long, int);
 extern long __capstone_vm_wait(void);

@@ -11,12 +11,18 @@
 #define CV_SERVICE_DELEGATE 0
 #define CV_SERVICE_MAP 1
 #define CV_SERVICE_UNMAP 2
+/* a0: the start frame's reference. With root_grants the kernel checks it as a munmap operand and
+ * ends the frame's mapping when it creates the thread. -EAGAIN: the kernel took the frame and the
+ * launcher released it after a later failure, so the program must not unmap it; every other error
+ * leaves the frame the program's. */
 #define CV_SERVICE_THREAD_CREATE 3
 #define CV_SERVICE_THREAD_EXIT 4
 #define CV_SERVICE_THREAD_JOIN 5
 #define CV_SERVICE_PROTECT 6
 #define CV_SERVICE_WAIT 7
 #define CV_SERVICE_FUTEX 8
+/* a0 the exit word, a1 the reference of the mapping that holds the thread's stack (or 0), a2 its
+ * length, a3 the status. With root_grants the stack is unmapped only through a1, as for munmap. */
 #define CV_SERVICE_PTHREAD_EXIT 9
 #define CV_SERVICE_THREAD_DELEGATE 10
 /* The calling context's launcher id + 1. Since the transport lock reads its identity from gp's

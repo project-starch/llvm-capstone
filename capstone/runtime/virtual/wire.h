@@ -14,6 +14,12 @@ struct cv_map {
      * neither pinned nor swept; the rest is admitted page by page at first
      * touch, as any grant. */
     __u64 rx_bytes;
+    /* The length the program's mmap exposes, from the base: bytes minus the
+     * PROT_NONE padding behind it. 0 means bytes. A whole number of pages, at
+     * most bytes. With root_grants a program's request to end the mapping must
+     * name exactly this length (capstone_vm.c, request_operand). CV_REVIVE
+     * ignores it: the parked arena keeps the length of its CV_ADD. */
+    __u64 visible;
 };
 struct cv_step {
     /* Zero is the original process thread. Other IDs are allocated by
@@ -37,14 +43,34 @@ struct cv_step {
 };
 /* A start frame is a page-aligned, writable user page containing the virtual
  * CSRUNV frame format. The trusted adapter fills satp and srevroot, then
- * consumes the tagged register slots when the thread first runs. */
+ * consumes the tagged register slots when the thread first runs.
+ *
+ * creator: the thread paused at CV_SERVICE_THREAD_CREATE. With root_grants
+ * the hand-over of the frame is the program's request to end the frame's
+ * mapping: the creator passes the frame's reference in a0, and the module
+ * checks it like a munmap operand and ends the mapping only if the thread is
+ * created. A refused reference refuses the create (EINVAL) and changes
+ * nothing. Without root_grants the module ignores creator. */
 struct cv_thread_create {
     __u64 frame;
     __u64 thread;
+    __u64 creator;
 };
 struct cv_thread_control {
     __u64 thread;
     __u64 frame;
+};
+/* CV_THREAD_EXIT. thread: the exiting thread; frame (out): its frame's user
+ * address, as before. stack: the arena id of the stack the thread asks to
+ * unmap at its exit (CV_SERVICE_PTHREAD_EXIT with a stack), or 0; stack_reg:
+ * the register that holds the stack's reference, 11 (a1). With root_grants
+ * the module checks that reference before it clears the frame and ends the
+ * stack's mapping after the thread has stopped; stack_ended (out) is then 1.
+ * A refused reference does not stop the exit: the thread exits, the stack's
+ * mapping stays, and a later CV_RETIRE of it is refused. Without root_grants
+ * the module ignores stack and stack_reg. */
+struct cv_thread_exit {
+    __u64 thread, frame, stack, stack_reg, stack_ended;
 };
 struct cv_remap {
     __u64 thread, id, bytes, address; /* address zero cancels after Linux failure */
@@ -69,7 +95,7 @@ struct cv_global {
 #define CV_RESOLVE _IOW('V', 20, struct cv_thread_control)
 #define CV_GLOBAL _IOR('V', 21, struct cv_global)
 #define CV_THREAD_CREATE _IOWR('V', 22, struct cv_thread_create)
-#define CV_THREAD_EXIT _IOW('V', 23, struct cv_thread_control)
+#define CV_THREAD_EXIT _IOWR('V', 23, struct cv_thread_exit)
 #define CV_NODES _IOW('V', 24, struct cv_nodes)
 #define CV_REMAP_BEGIN _IOW('V', 25, struct cv_remap)
 #define CV_REMAP_END _IOW('V', 26, struct cv_remap)
@@ -96,18 +122,27 @@ struct cv_touch {
  *              and tags), mints a new ancestor and gives the arena a new id, returned in .id. */
 #define CV_PARK _IOW('V', 30, __u64)
 #define CV_REVIVE _IOWR('V', 31, struct cv_map)
+/* With root_grants, CV_RETIRE releases only an arena whose mapping has already ended: through a
+ * program's request (CV_UNMAP, the frame's hand-over at CV_THREAD_CREATE, the stack at
+ * CV_THREAD_EXIT) or a park. While the mapping lives it is refused with EPERM and changes nothing.
+ * CV_PARK is refused with EPERM: a park is a program's request and goes through CV_UNMAP. */
 /* A program's own unmap (CV_SERVICE_UNMAP): thread is the caller, paused at the service, id the
- * arena the launcher resolved from the cursor of the reference in a0, and park asks for CV_PARK's
- * effect instead of CV_RETIRE's. Without root_grants the module ignores thread and does what
- * CV_RETIRE or CV_PARK does. With root_grants the reference is the authority: the module reads it
- * with its tag from the caller's saved a0 and ends the mapping only if it is a live reference to
- * the mapping itself whose bounds cover the range the call names (capstone_vm.c, unmap_operand).
- * A refusal is EINVAL and changes nothing. The launcher's own unmaps (a thread's frame and stack,
- * a pool eviction) stay on CV_RETIRE. */
+ * arena the launcher resolved from the cursor of the reference in a0. park (in): 1 asks to pool
+ * the mapping (CV_PARK's effect) where the module can, 0 to retire it. park (out): what the module
+ * did, one of the CV_UNMAP_* values; the launcher unmaps the range unless it reads
+ * CV_UNMAP_PARKED. One call decides, so a refused reference is refused and counted once. Without
+ * root_grants the module ignores thread. With root_grants the reference is the authority: the
+ * module reads it with its tag from the caller's saved a0 and ends the mapping only if it is a
+ * live reference whose record is a child of the mapping's reservation record and whose bounds
+ * cover the length the program's mmap exposed, and the call names exactly that length
+ * (capstone_vm.c, request_operand). A refusal is EINVAL and changes nothing. */
 struct cv_unmap {
     __u64 thread, id, park;
 };
-#define CV_UNMAP _IOW('V', 32, struct cv_unmap)
+#define CV_UNMAP_RETIRED 0
+#define CV_UNMAP_PARKED 1
+#define CV_UNMAP_NO_POOL 2   /* retired: this module does not pool (unpinned) */
+#define CV_UNMAP _IOWR('V', 32, struct cv_unmap)
 /* The image file, by descriptor, before the launcher validates it: the module
  * denies writers to it (ETXTBSY, as Linux does for a running executable) until
  * the context is released, so the bytes validated are the bytes loaded. */
