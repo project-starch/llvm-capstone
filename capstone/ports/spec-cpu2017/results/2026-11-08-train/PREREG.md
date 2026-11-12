@@ -2708,3 +2708,30 @@ node_flat_records 262144), monitor csbi-ids55 4f51541, quantum 8M, deep dry runs
 skipped the launcher costs on cap-ids55-native: 0.89 of module in-VM); nab, lbm ≤ 1.10; xz ≤ 1.15; gcc train01 ≤ 1.35;
 mcf 1.4-1.6 (its gap is footprint, Addenda 63/65); perlbench and x264 no band (no native test reading exists). Every
 native row carries: checked accesses emulated by the firmware.
+
+## Addendum 74 (2026-11-13 06:15, before it runs): first native readings; perl test on makerand; the mapping cache on both arms for gcc, perl, imagick
+
+**Readings, cap-ids55-native-tagcache, native route, K2N, no mapping cache on either arm** (specdiff PASS everywhere;
+riscv-base on K2N, plain-rv64f): imagick 13.75 / 11.26 s = 1.221; nab 747.14 / 675.63 = 1.106; lbm 1,073.62 /
+1,077.88 = 0.996; gcc train01 3,409.84 / 1,879.48 = 1.814. riscv-base mcf 5,146.72 s. Addendum 73's predictions:
+imagick (≤ 1.15) and gcc (≤ 1.35) FAIL; nab and lbm hold. Native counters on gcc train01: 46,452 service escapes
+(mmap/munmap; no mapping cache in the native runtime) and 32,033 fault escapes, against 104 and 239 on imagick.
+Simulation sweep of the port (99 tests, cap-ids55-native vs + tag adapter, one file different): RVFI 93/96 identical;
+the 3 that differ do so by construction (two page-bitmap tests read a forged tag that the bitmap hides, and
+cap-tag-cache reads mcycle).
+
+**perl test on the native route is compared on makerand.pl only, on both arms.** test.pl runs its sub-tests in t/, and
+a native task's grant is rooted at its start directory, so ../TestInit.pm is refused ("Permission denied"; compiler
+lane's twin, 13 Nov). The native stage's test.pl command is removed before the board ran it; riscv-base's perl row
+uses its makerand command (run0) from the same stage it always ran.
+
+**Mapping cache on both arms (the improvement step for gcc and perl):** native SDK nat-fair-cache (compiler lane
+eb73a2bf475c = nat-fair-sdk + origin/perf/heap-mapping-reuse-review 61fa2db9714c, MAPPING_REUSE on, REGION off,
+MR_FREE 512 whole mappings, 64 MiB, exact-length reuse, zeroed; also revokes each released mapping — Capstone's own
+lifetime semantics); riscv-base plain-rv64fr (plain_reuse.c, 512 / 64 MiB). QEMU twins: gcc train01 service escapes
+46,452 → 2,600, fault escapes 24,317 → 2,594, specdiff PASS; mcf, xz, perl makerand PASS.
+- Board 1, after its running chain: Capstone with the cache (imagick, gcc train01, perl makerand), then reflashed to
+  riscv-base: riscv-base with the cache (imagick, gcc train01, perl), both on K2N.
+- **Predictions:** Capstone gcc train01 with the cache 2,000-2,800 s; riscv-base gcc train01 with the cache
+  1,700-1,780 s (its K2 reading 1,731.62 s); gcc ratio 1.15-1.60. imagick and perl within ±3 % of their no-cache
+  ratios.
