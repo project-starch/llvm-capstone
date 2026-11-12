@@ -1290,7 +1290,8 @@
         "capstone/bug-corpora/postgres/sql-repros/results/2026-10-11-virtual",
         "capstone/bug-corpora/postgres/sql-repros/results/20261010-181355-qemu/spatial",
         "capstone/bug-corpora/postgres/sql-repros/results/20261010-183151-qemu/sublet",
-        "capstone/bug-corpora/postgres/sql-repros/results/2026-11-11-virtual"
+        "capstone/bug-corpora/postgres/sql-repros/results/2026-11-11-virtual",
+        "capstone/bug-corpora/postgres/sql-repros/results/2026-11-12-virtual"
       ],
       "runners": [
         "capstone/bug-corpora/postgres/sql-repros/shared/run-arm.py",

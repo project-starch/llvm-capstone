@@ -13,7 +13,9 @@ reached through a transaction sized so that upstream's recompiled threshold is n
 liveness, and why mmgr-repros' other three cannot run in the single-user backend, are in
 [`results/2026-10-29-host/README.md`](results/2026-10-29-host/README.md). Its first Capstone reading,
 with 01-09 on the same platform, is [`results/2026-10-29-virtual`](results/2026-10-29-virtual/README.md):
-missed by `virtual-malloc`, caught by `virtual-pg-pools`. The per-arm tables below are cases 01-09.
+missed by `virtual-malloc`, caught by `virtual-pg-pools`. Both read the same on the one-operand
+lifetime instructions ([`results/2026-11-12-virtual`](results/2026-11-12-virtual/README.md)). The
+per-arm tables below are cases 01-09.
 
 ## Classes
 
@@ -216,6 +218,22 @@ patch this tree no longer has. `virtual-malloc` was not re-measured and still re
 
 The nested lifetime controls were run again as well, and every prediction holds on both arms:
 [`results/2026-11-11-controls`](results/2026-11-11-controls/README.md).
+
+## Measured 2026-11-12: all 11 cases on the one-operand instructions
+
+[`results/2026-11-12-virtual`](results/2026-11-12-virtual/README.md) is one boot for each arm on the
+kit of 2026-11-11, with servers built from this branch that link test_decoding. It is the first
+reading of cases 10 and 11 on the one-operand instructions, and the first of `virtual-malloc` on them.
+
+| arm | CAUGHT | MISSED | NO-READING |
+|---|---|---|---|
+| `virtual-malloc` | 02, 03, 08 | 01, 04, 05, 06, 07, 09, 10, 11 | none |
+| `virtual-pg-pools` (patch 0003) | 01, 02, 03, 04, 06, 07, 08, 10, 11 | 05 | 09 (unattributed) |
+
+Cases 10 and 11 are missed by `virtual-malloc` and caught by `virtual-pg-pools` with cause 25, as on
+2026-10-29. All 11 rows of each arm equal `results/2026-10-29-virtual` in verdict, cause, fault function
+and attribution route, and rows 01-09 equal the bundle `verdict_bundles` names for the arm in the same
+four fields. `verdict_bundles` is unchanged, so this run sits beside the declared bundles.
 
 ## What these results do not say
 
