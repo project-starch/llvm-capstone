@@ -109,6 +109,29 @@ executes from it. With kernel-saved registers the code reference is one more
 register to save, and the trap's saved pc stays an address. The design does
 not constrain where a program jumps inside its own code.
 
+## System-call buffers
+
+Decided on 2026-11-12. The program's libc copies a buffer through the
+caller's reference into a region it shares with the kernel, and the kernel
+accesses only that region. Every access to an object of the program thus
+happens in the program, through the reference the caller passed, and a stale
+buffer faults in the copy before the kernel acts. The libc also converts
+structures that hold pointers into the kernel's layout, since a user pointer
+is 16 bytes and a kernel pointer 8. The kernel refuses access to any other
+user address of a protected process, including through pinned pages.
+
+Frequent small calls (read, write, pread, pwrite) take a direct path: the
+program passes the reference in a register, and the kernel code of these
+calls accesses the buffer through exactly that reference.
+
+Rejected after review: a search of the saved registers for a covering
+capability (a stale argument is authorized by another live register), and
+handles in the high address bits (integers read from user memory forge
+them, and every structure with pointers changes layout). The general
+zero-copy design is Morello's PCuABI, in which `__user` pointers are
+capabilities in the kernel. It needs a compiler with hybrid capability
+types, which llvm-capstone does not have.
+
 ## Evidence
 
 `capstone-qemu/tests/address-space-root` runs a small kernel in S that
@@ -162,7 +185,5 @@ Each is a decision about the design and not yet about code.
 - Partial `munmap`, `mremap` and a fixed mapping over a live one. The abstract
   machine has no partial release. Proposal: the kernel frees the pages and
   keeps the address range reserved until the whole mapping ends.
-- Who checks the buffer of a system call. Proposal: the kernel accesses it
-  through the reference the program passed, at every access.
 - Signals, `fork`, more than one hart, lifetimes for stack objects, what a
   program sees at a resource limit, exact bounds, and swap of tagged pages.
