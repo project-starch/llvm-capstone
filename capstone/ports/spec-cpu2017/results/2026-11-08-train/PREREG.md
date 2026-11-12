@@ -2796,3 +2796,27 @@ tag read without the sim-only B-hold switch); the board is the first instrument 
 imagick and nab within ±1.5 %; mcf and gcc train01 0 to −5 %. **Decision rule:** mlp replaces tagcache for the final
 table only if mcf or gcc train01 improves by more than 2 % and no row regresses by more than 1.5 %; otherwise the table
 stays on cap-ids55-native-tagcache and this run is reported as a negative result.
+
+## Addendum 77 (2026-11-13 07:55, before it runs): Capstone native mcf 1.569; a footprint-only control for mcf on riscv-base
+
+**Reading:** Capstone mcf test, native, cap-ids55-native-tagcache, K2N, no cache: 8,076.96 s, specdiff 2/2 PASS;
+riscv-base 5,146.72 s; ratio 1.569 (Addendum 73's band 1.4-1.6 holds). Native counters over the command: fault
+escapes +46,494, k1 +21,897, service +1,402.
+
+**Twin instruction profile** (capmix3, the mcf command's window, specdiff PASS; perf/mcfprof): native user 26.80 G,
+kernel 2.26 G, firmware 0.23 G = 29.29 G; riscv-base (rv-fair, kit-profq kernel) user 27.32 G, kernel 0.74 G,
+firmware 0.08 G = 28.14 G. Instructions give 1.041; the program itself executes 2 % FEWER instructions natively. So
+mcf's gap on silicon is cycles per instruction, not instructions.
+
+**Diagnostic (not a table row): riscv-base mcf with capability-sized pointer slots.** perf/mcfpad: the plain-rv64f
+build of mcf (same compiler, wrapper and flags, replayed from its make.out; the unmodified replay reproduces the stage's
+binary byte for byte, fb555086f151) with every pointer member of struct node, struct arc and BASKET in a 16-byte,
+16-aligned slot (a union with char[16]), which gives Capstone's layout: arc 72 -> 112 B, node 176 B, basket 48 B
+(static asserts). Remaining differences from the Capstone build: pointer arrays outside these structs (the basket
+pointer array) keep 8-byte slots. Twin: specdiff 2/2 PASS, 28.73 G instructions (+1.9 %). Board 1, riscv-base,
+bkit54-k2n-rv, after the riscv-base cache chain (Addendum 75).
+
+**What it decides:** how much of mcf's 1.569 is data footprint (which only a layout change or a smaller capability
+could remove) and how much is capability- or tag-specific memory traffic (the hardware path: tag reads on marked-page
+misses, the tag-write list of Addendum 76). **Prediction:** padded / unpadded riscv-base mcf = 1.15-1.35. Above 1.40
+means footprint explains nearly all of mcf's gap; below 1.10 means it is the tag or capability path.
