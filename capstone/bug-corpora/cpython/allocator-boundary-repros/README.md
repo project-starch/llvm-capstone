@@ -189,6 +189,21 @@ The case-by-case review that follows was written against the 2026-10-20 pair. Fo
 verdict, cause and function, 28 of 32 on `virtual-nested-pools` and 29 of 32 on `virtual-malloc`,
 it holds for the declared bundles too.
 
+## Measured 2026-11-12: all 36 cases, on images with zlib
+
+[`results/2026-11-12-whole`](results/2026-11-12-whole/README.md) runs all 36 cases with the
+invocation of the declared bundles (hash seed 0) on the same kit, one boot for each arm. The images
+are new: they carry zlib and the `_capstone_nomemory` module that case 36 needs.
+
+    virtual-malloc        CAUGHT 18  MISSED 17  NO-READING 1
+    virtual-nested-pools  CAUGHT 32  MISSED  3  NO-READING 1
+
+Cases 33-36 read as on 2026-10-29: 33 and 34 caught by both arms, 35 and 36 missed by
+`virtual-malloc` and caught by `virtual-nested-pools`, every catch with `cause=25` at a host fault
+site. Of the 32 older rows, `virtual-nested-pools` equals the declared bundle in all 32 and
+`virtual-malloc` in 30. The two that differ, 09 and 15, are the rows already read as unstable from
+run to run on that arm. `verdict_bundles` is unchanged.
+
 ## Measured 2026-10-20, case by case (the declared bundles until 2026-11-12)
 
 Bundle `results/2026-10-20-review-t1800`, on the emulator this repo pins
