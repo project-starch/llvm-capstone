@@ -122,3 +122,17 @@ synthesis-only gate, then the full flow on a pass.
   trip per marked miss that follows another word's tag write.
 - No workload fraction comes from sim: the default testbench reads 0, a testbench artefact. Under held B, tag-mlp
   reads 320 of 643, but the test is built that way.
+
+## Sweep result (appended before the hand-over)
+
+The 95-test sweep (`S12_MEM_DELAY=12`, `SUP_TRACE`, `TAGMLP_PROBE`, seed 20260922, time_out 2,000,000), base
+6f3f18888 against the change 53276815f. Both runs are `rtl_dirty=no`, and their PROVENANCE files carry identical Anvil
+unit, `ex_stage` and `ariane_pkg` hashes.
+- 95 ran on each side, and 184 logs were copied from each.
+- **RVFI traces:** 92 compared, 92 identical, 0 differing. 26 were compared over the common prefix (cycle-limited).
+  3 are absent on both sides: rand, perf_tcache_random, perf_riscv_random.
+- **Verdicts:** verdict, tohost and cycle count are identical in all 92 tests, with 66 SUCCESS and 26 FAILED on each
+  side.
+- **AXI checks:** `AXI-VALID-DROP` 0 on both sides. `AXI-WAIT-SEEN` 276 on both sides, so the drop check was live.
+- **Probe:** `TMLP-HAZARD` 0. Of 124 marked-miss tag reads, 0 had a tag write outstanding, on both trees. That is
+  the testbench reading above, not a workload fraction.
