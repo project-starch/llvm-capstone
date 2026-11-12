@@ -173,7 +173,7 @@ does the `.bit` inside synth's tarball (`synth-b98f5a51728d-exit0.tar.gz`, sha25
 | key | reading | grade |
 |---|---|---|
 | placed LUT | 179,661 vs 179,560 (+101) | PASS |
-| congestion | placer 4 (16x16, N and E); router 5 (effective 5 W, 4 N/S/E). The base's levels were recorded on another host; the board lane has been asked for them | PENDING |
+| congestion | placer 4 (16x16, N and E) = base 4; router 5 post-route (effective 5 W, 4 N/S/E) = base 5 (5 E); detail below | PASS |
 | routing | 0 nets with routing errors, 226,802 fully routed | PASS |
 | WNS | -13.738 vs -14.789 (+1.05 ns), inside the null band; TNS -295,609, 48,577 of 204,207 endpoints failing. A value, not an attribution | PASS |
 | loops | synthesis "Found timing loop" 0; `check_timing` 0 post-synth and routed; LUTLP-1 0 post-synth and in routed DRC (S-10b control 1 / 31) | PASS |
@@ -185,3 +185,14 @@ Routed `wt_axi_adapter`: hierarchical 5,755 LUT / 1,121 FF; own cells 3,372 / 1,
 `f56a175c44983eea…`) on mcf and nab, native route. The prediction is the one in the silicon paragraph above.
 The SPEC lane pre-registered the A/B in spec-silicon cab76f557181 (Addendum 76): kit bkit58 = bkit56 with only the
 bitstream changed, rows imagick, nab, mcf and gcc train01, with its own decision rule. Its readings land there.
+
+**Congestion base (board lane, from 79cf8de17's primary log in synth-79cf8de17-exit0.tar.gz).**
+- Placer: Place 30-612 max level 4 (16x16 in E and W). The change reads max 4 (16x16 in N and E): PASS.
+- Router: the base run has no initial-estimate table. Its post-route hotspot block reads effective levels N 4, S 4,
+  E 5, W 4, max 5, and the log carries Route 35-447 (congestion over timing) in Phase 5.
+- Router, the change (synth): the same post-route report, inside Phase 8 Route finalize. Effective levels N 4, S 4,
+  E 4, W 5, max 5 = the base's max (the peak moved from E to W). No initial-estimate table in this run either.
+  Max congestion: N 87.98 %, S 87.70 %, E 85.58 %, W 90.10 %. PASS.
+- Route 35-447 does not appear in the change's logs (0 hits in the impl log and both primary logs; the same `Route 35-`
+  prefix finds the other router messages, 35-16 through 35-416, in each file).
+- **Congestion key: PASS.** Every full-build key now passes.
