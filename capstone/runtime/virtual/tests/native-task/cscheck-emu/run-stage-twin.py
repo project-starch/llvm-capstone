@@ -20,6 +20,10 @@ p.add_argument('--memory', default='936M', help="the board's guest RAM")
 p.add_argument('--records', type=int, required=True, help='node_flat_records: the flat table size for this stage')
 p.add_argument('--timeout', type=int, default=43200)
 p.add_argument('--ids55', action='store_true', help="MEASUREMENT ONLY: option B's 55-bit ids (x-capstone-ids=55 with x-capstone-addr=sv39; kernel CV_FLAT_INDEX_BITS=25 CV_IDS=55)")
+p.add_argument('--plugin', type=Path, help='a capmix plugin: OUT/capmix.txt, snapshots at the stage\'s mark1/mark2 (prof-stage.sh)')
+p.add_argument('--plugin-shift', type=int, default=24)
+p.add_argument('--no-sampler', action='store_true', help='no memory sampler (mem_peak is then empty): for profiles, '
+               'whose windows the sampler\'s once-a-second forks of head/awk per /proc entry would otherwise enter')
 a = p.parse_args()
 a.out.mkdir(parents=True, exist_ok=False)
 st = a.out / 'stage'
@@ -38,7 +42,7 @@ SAMPLER = r'''( mx=0; hw=0; while [ ! -f /tmp/sampler.stop ]; do
   for f in /proc/[0-9]*/status; do case "$(head -1 $f 2>/dev/null)" in *_base*) h=$(awk '/^VmHWM/{print $2}' $f 2>/dev/null); [ -n "$h" ] && [ "$h" -gt "$hw" ] && hw=$h;; esac; done
   echo "$mx $hw" > /tmp/sampler.out; sleep 1; done ) &
 '''
-(st / 'gate.sh').write_text('#!/bin/sh\nexport SPEC_INBAND_MAX=65536\nrm -f /tmp/sampler.stop\n' + SAMPLER + 'mkdir -p /mnt/results && mount -t 9p -o trans=virtio,version=9p2000.L gate9p /mnt/results || echo @@NO9P\n'
+(st / 'gate.sh').write_text('#!/bin/sh\nexport SPEC_INBAND_MAX=65536\nrm -f /tmp/sampler.stop\n' + ('' if a.no_sampler else SAMPLER) + 'mkdir -p /mnt/results && mount -t 9p -o trans=virtio,version=9p2000.L gate9p /mnt/results || echo @@NO9P\n'
                             'sh /mnt/vm/run-twin.sh\n'
                             'touch /tmp/sampler.stop; sleep 2; echo "@@MEM-PEAK used_kB vmhwm_kB $(cat /tmp/sampler.out)"\n'
                             'echo "@@COUNTERS-FINAL $(cat /sys/module/capstone_vm/parameters/native_counters)"\n'
@@ -57,6 +61,9 @@ cmd = ['python3', str(a.runner), '--qemu', str(a.qemu.resolve()), '--images', st
        '--firmware', str(a.firmware.resolve()), '--stage', str(st.resolve()), '--work', str((a.out / 'vm').resolve()),
        '--memory', a.memory, '--disk-mib', '1024', '--timeout', str(a.timeout), '--icount', '0',
        '--kernel-arg', flags, '--dtb', str(a.dtb.resolve()), '--share', str((a.out / 'results').resolve())]
+if a.plugin:
+    cmd += ['--plugin', str(a.plugin.resolve()), '--plugin-arg', f'out={(a.out / "capmix.txt").resolve()}',
+            '--plugin-arg', f'shift={a.plugin_shift}']
 (a.out / 'results').mkdir()
 (a.out / 'run.json').write_text(json.dumps(dict(arm=a.arm, flags=flags, cpu=cpu, command=cmd), indent=1) + '\n')
 with (a.out / 'runner.log').open('w') as log:
