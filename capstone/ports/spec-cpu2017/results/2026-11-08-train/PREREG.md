@@ -2228,3 +2228,89 @@ The xz build is definitions mode, as on board 1's chain. So against board 1's xz
   headroom. Capstone / riscv-base then reads at most 1.12.
 - **P3.** Against board 1's xz on cap-tagcache (sweep mode 3, read later), this run is 400-550 s shorter. The two boards
   agreed to 0.1 % on nab (Addendum 58).
+
+## Addendum 62 (12 Nov 11:0x, before it runs): the NI superpage fix for the Capstone line; a light heartbeat; mcf with 2 MiB THP on both arms (boards 2 and 3)
+
+**1. An unequal fix, found and closed.**
+- riscv-base (d31345cf3) was built with the five stock-CVA6 fixes the Capstone fork carries. One of them is missing from
+  the cap-hw0 → cap-tagcache line: 213378a11, the NI probe's superpage PPN.
+  - Without it, a load in the first 512 KiB of a 2 MiB page (and the low part of a 1 GiB page) is checked as an address
+    below 0x8000_0000. It then takes the non-idempotent stall.
+  - This affects kernel loads through the linear map, and any THP mapping, on Capstone only.
+- The other four are ancestors of ebe86cc01: c77c65324, 6cbdaeeb4, cc1159a51, a73a7c670 + e7af48457, 2bf3d39f0.
+- capstone-ariane perf/tag-page-bitmap:
+  - d7ff26dc4: the niss-superpage test and the sim-only FPGA NI rule (from ca49a9c22);
+  - 63e5dde82: the fix (from 213378a11).
+- Matched pair, niss-superpage with CAPSTONE_FPGA_NI and SUP_TRACE:
+
+  | | NI aborts | at ppn 0x40200 (2 MiB) | at ppn 0x6000 | bootrom control | cycles |
+  |---|---|---|---|---|---|
+  | before the fix | 330 | 132 | 66 | 132 | 10,935 |
+  | after the fix | 132 | 0 | 0 | 132 | 10,198 |
+
+- Lint gate PASS, every counter unchanged.
+- Bitstream caplifive_twcni_63e5dde82 (cap-tagcache-ni): the full build is running. The seal file perf/thp2/SEAL-twcni.sha256
+  is written only when all of these hold:
+  - the build exits 0;
+  - routing is clean, with no LUTLP;
+  - WNS is within the band of cap-tagcache's −12.315 ns;
+  - the running 95-test sweep shows no classification change against ebe86cc01's.
+
+**2. A light heartbeat for every run from here on** (the lead, 12 Nov): perf/hb120.
+- It is perf/nohb's tools with one change: the stage script prints `@@HB n`, a few characters, every 120 s, nothing else.
+- The original heartbeat ran every 30 s, ran wc, tail and base64 on the step output, and sent about 330 characters.
+- Seven beats fit in the watchdog's 900 s STALE window, so a silent stretch longer than that now means a hang.
+- The same in every arm.
+- The riscv runner wrapper is the hb120 copy of run-stage-noctl.py.
+- Its cost is measured here (P5), not assumed.
+
+**3. mcf with 2 MiB transparent huge pages, both arms.** This is the 6-7 Nov recipe (results/2026-11-06-thp,
+2026-11-07-thp2) ported onto today's sources:
+- the private THP-madvise kernel perf/thp/linux-board, relinked on each bake's rootfs. A relink test on today's rootfs
+  passed: "AS usr/initramfs_data.o", Image built.
+- **Capstone:**
+  - capstone_vm 2188cab + b23b38c + 37806776 (wt-thp-all2 e73b31d80fc0), built against the THP tree: e9395bbf0f9570c9,
+    no 2-byte instructions, `thp=1` in params;
+  - capstone-vexec 9bf376a + 19bafe4, built `-DCAPSTONE_VEXEC_EXACT_IMAGE -DCAPSTONE_VEXEC_HUGE_HEAP`:
+    f44ff6884dee5866. It madvises heap arenas of 4 MiB or more. The control built with EXACT_IMAGE only reproduces
+    today's 0bde5fd8e0c9c374 byte for byte;
+  - process-ABI module ctl-capstone.ko 5fe2b197 (the THP-tree build of f2a2645c).
+- **riscv-base:**
+  - the same kernel and process-ABI module;
+  - capstone_vm m55-unify rebuilt against the THP tree (5020b6e9104eeb19). Its stock-tree rebuild reproduces
+    63d60816's code exactly;
+  - the stage sets `enabled=always` and `defrag=always`, because musl's malloc madvises nothing. Under madvise mode the
+    riscv arm gets no huge pages at all; the 6 Nov Plain THP run was such a run, with no @@THP line.
+- **Kits:**
+  - bkit48-twcni-all2-nohb: bkit23 on cap-tagcache-ni;
+  - bkit49-twcni-thp: bkit48 with THP;
+  - bkit50-rvbase-thp: bkit42 with THP.
+- **Stages** (perf/thp2/mkstages.py adds two lines to each and checks the diff):
+  - Capstone mcf base reads back `@@THP enabled defrag thp` before the arm;
+  - riscv mcf (the hpm stage of the 5,085.28 s reading) sets always/always and reads them back;
+  - both print `@@THP-VMSTAT` (thp_fault_alloc and friends) after the arm.
+- **Drivers:** perf/thp2/thrun.sh with b2.conf and b3.conf. Each runs the no-THP chain, then the THP chain, on one board
+  and one bitstream. Dry runs reached all four chains (perf/thp2/dry-thrun-b{2,3}.log).
+  - Board 2 waits for Addendum 61's driver and the cap-tagcache-ni seal.
+  - Board 3 waits for Addendum 50's driver (x264).
+
+**Fairness, stated before the run.**
+- The two arms' huge-page policies differ:
+  - Capstone madvises its large heap arenas;
+  - riscv-base gets THP for every eligible anonymous mapping, which can only favour riscv-base.
+- The launcher's heap is 2 MiB-aligned, and mallocng's mmaps are huge-page-backed only in their aligned interior, which
+  favours Capstone. Neither size is measured; the vmstat lines show what each arm got.
+
+**Predictions:**
+- **P0.** Every stage rc 0 and specdiff PASS. Every THP arm prints `@@THP` with the mode set, and a thp_fault_alloc above 0.
+  An arm with thp_fault_alloc 0 got no huge pages: it is void, not a negative result.
+- **P1, Capstone mcf on cap-tagcache-ni without THP:** within 3 % of board 1's mcf on cap-tagcache (Addendum 59). The NI
+  fix touches kernel loads, a small share of mcf.
+- **P2, Capstone mcf with THP:**
+  - at least 200 s under the same board's no-THP run, with its context entries falling by at least half (6 Nov: −94 %
+    of fault exits, −343 s);
+  - in-context cycles within 2 %. Huge pages change the faults, not the work.
+- **P3, riscv mcf with THP:** between −5 % and +2 % against the same board's no-THP run.
+- **P4.** Capstone / riscv-base for mcf is reported for the THP pair beside the no-THP pair, never instead of it.
+- **P5, the heartbeat's cost:** riscv mcf without THP on hb120 is within ±0.5 % of Addendum 47's 5,085.28 s (no heartbeat,
+  the same board, kit and stage).
