@@ -73,6 +73,20 @@ C/M retains the legacy host-tree backend; the virtual context uses its guest
 table. There are no implemented `CSCHECKR`/`CSCHECKW` instructions at this
 revision. Linux syscall and VM service numbers belong to software ABIs.
 
+### Supervisor references
+
+Optional, QEMU property `x-capstone-supervisor-refs` (default off, branch
+`address-space-root`). With it the kernel can hold references, which the
+[address-space root design](address-space-root.md) needs:
+
+- `LDC` and `STC` in S take a plain kernel address as their base and keep the
+  tag. Without the property they are refused with 24 (Q-23).
+- `LCC` selector 8 in S answers the id of the operand's lifetime. Without the
+  property it answers 0 outside the probe instrument.
+
+`CINCOFFSET`, `CDERIVE` and `CREVOKE` need no rule: in S with `srevroot` set
+they act on that table, as they do for a program. The RTL has neither rule.
+
 ### Minting and retiring an arena
 
 `CSMINT` reads an 8-byte-aligned descriptor of six little-endian u64 values (**descriptor v7, ruled
