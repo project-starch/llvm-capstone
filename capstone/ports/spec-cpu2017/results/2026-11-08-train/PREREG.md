@@ -2671,3 +2671,40 @@ Outside those bands the kernel differs from K2 for riscv-base, which is a findin
 
 **Native route caveat, to be carried in every native row:** checked accesses are emulated by the firmware (native
 CSCHECK emulation, about 600 cycles each, MEASUREMENT ONLY shortcuts on frame-slot and epoch trust, not skipped work).
+
+## Addendum 73 (2026-11-13 04:05, before it runs): the Capstone arm on cap-ids55-native-tagcache, native route, K2N
+
+**Bitstream sealed** (board lane): caplifive_ids55-native-tagcache_79cf8de17.bit, sha256 f56a175c44983eea…, 11,443,722 B
+(capstone-ariane 79cf8de17 = cap-ids55-native + page bitmap + tag-word cache). Routed clean: WNS −14.789 ns, TNS
+−276,131, WHS +0.055, Slice LUTs 179,560 (88.11 %), placer congestion 4, router 5 (Route 35-447 printed: closer to the
+edge than cap-ids55-native, which routed at 4). LUTLP-1 0, loop headers 0. Lint gate PASS (as Addendum 72). The
+synth lane's hedge (page bitmap only) was stopped once this one routed.
+
+**Native SDK and images** (compiler lane): origin/nat-fair-sdk 8decdcbc6aaf on native/c5a-ids55 441d7ec409ce: llvm-c4,
+libc and runtime -fomit-frame-pointer (jump tables were already on in this tree), sdk-native-c1's cmake options, no
+mapping cache, movc-keep ON. Images (perf/nat-fair/exes, .strip.dom sha256/16): perlbench b3ad5fa91d515349, gcc
+a73396ab7b6f9ff6, mcf 5e9d25039d49b7bc, lbm c3eac87b6cc352e5, x264 66b242b48f5e6159, imagick 22a6ca7711a8460d, nab
+e2d3a3189fd9cd8a, xz 071b49f35c13fe3e; compiled with cc-tuned + jump tables + shrinkto-globals. QEMU twins (qemu55,
+native route): lbm, mcf, nab, xz, gcc test rc 0 and specdiff PASS; imagick's run passes and its native imagevalidate
+fails (rc 255; the board stages below run imagevalidate as riscv-base's plain build); perl 1/2 on the twin's own stage
+(harness from a different stage); x264 and gcc train01 running.
+
+**Board stages** (perf/natstage): perf/fair/stages/*-cap-fair3 (SPEC's commands and inputs) converted by
+make-native-stage.py (native/c5a-ids55), with imagevalidate as the plain riscv build and perl's harness on natperl with
+$^X = the native perl image; then the kit's make-train-stage.sh (native smoke first). The timed window brackets only
+the program's exec. Largest image (gcc train01): firmware 23,760,392 B, under the 26,000,000 B cap (real bake).
+
+**Kits** (board lane): bkit56-k2n-native-tagcache (this bitstream) and bkit55-k2n-native (cap-ids55-native, the
+fallback), both on K2N via a private copy of the tree (same .config and command line as riscv-base's K2N:
+node_flat_records 262144), monitor csbi-ids55 4f51541, quantum 8M, deep dry runs PASS.
+
+**Runs** (driver perf/natstage/nat-run.sh: flash and readback, per stage a booked boot; the smoke must PASS):
+- board 1: imagick (the bitstream's first boot), gcc train01, mcf, perlbench;
+- board 2: nab, lbm, xz, x264. Board 2's cap-ids30 module-route x264 diagnostic is stopped for it.
+- riscv-base on K2N so far (no cache, specdiff PASS): imagick 11.26 s, nab 675.63 s, lbm 1,077.88 s (Addendum 72's
+  bands hold: +1.5 %, −0.45 %, −0.3 % against K2).
+
+**Predictions** (Capstone native, cap-ids55-native-tagcache, K2N, against riscv-base on K2N): imagick ≤ 1.15 (native
+skipped the launcher costs on cap-ids55-native: 0.89 of module in-VM); nab, lbm ≤ 1.10; xz ≤ 1.15; gcc train01 ≤ 1.35;
+mcf 1.4-1.6 (its gap is footprint, Addenda 63/65); perlbench and x264 no band (no native test reading exists). Every
+native row carries: checked accesses emulated by the firmware.
