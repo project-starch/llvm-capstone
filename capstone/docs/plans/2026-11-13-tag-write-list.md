@@ -154,3 +154,34 @@ and subtree +231 both sit inside the floor. The subtree figure matches the circu
 instantiated inside the adapter (`wt_axi_adapter.sv:1379`) and takes `axi_wr_req` (`:1396`), which TAG_WR now gates
 with `~twl_full` (`:672`). So re-homing across that boundary is plausible, and +42 + 273 - 60 - 27 = +228 matches the
 subtree's +231. The adapter is the only file in `core/` that the change touches. The full build continued to seal.
+
+**Own footprint by name (synth, post-synth checkpoints, primitive cells under `i_adapter`).** `twl_*` = 246 FF / 63 LUT
+on the change, 0 under every pattern on the base. Breakdown, FF / LUT: `twl_word_q` 232 (8 x 29) / 38, `twl_v_q` 8 / 16,
+`twl_head_q` 3 / 5, `twl_tail_q` 3 / 4. The FF count equals the 246 state bits exactly.
+- Positive control `tag_wr_pend_q*`: 4 / 5 on the change, 4 / 6 on the base. Negative control (a nonexistent name):
+  0 on both.
+- `twl_hit*` and `twl_full*` read 0 / 0. These are combinational nets absorbed into LUTs named for their consumers, so
+  this is a name that did not survive, not an absence of logic.
+- The compares therefore have no by-name count. The subtree's +231 LUT stays the reading for them.
+
+## Full build: SEALED (synth lane, leffe; 2h12m, `run.exit` 0, `write_bitstream` completed)
+
+`caplifive_ids55-native-tagcache-mlp_b98f5a517`, PROVENANCE HEAD b98f5a51728d. `.bit` 11,443,722 B, sha256
+`5e8421a567a60848d3c12bcddb449055f6af8798b16abc2df41c89e8ed21596c`. The board lane's copy hashes identically, and so
+does the `.bit` inside synth's tarball (`synth-b98f5a51728d-exit0.tar.gz`, sha256 `0be16ffc4241413c…`).
+
+| key | reading | grade |
+|---|---|---|
+| placed LUT | 179,661 vs 179,560 (+101) | PASS |
+| congestion | placer 4 (16x16, N and E); router 5 (effective 5 W, 4 N/S/E). The base's levels were recorded on another host; the board lane has been asked for them | PENDING |
+| routing | 0 nets with routing errors, 226,802 fully routed | PASS |
+| WNS | -13.738 vs -14.789 (+1.05 ns), inside the null band; TNS -295,609, 48,577 of 204,207 endpoints failing. A value, not an attribution | PASS |
+| loops | synthesis "Found timing loop" 0; `check_timing` 0 post-synth and routed; LUTLP-1 0 post-synth and in routed DRC (S-10b control 1 / 31) | PASS |
+
+Routed `wt_axi_adapter`: hierarchical 5,755 LUT / 1,121 FF; own cells 3,372 / 1,070; `i_axi_shim` 305 / 4. Routed TOP:
+179,667 LUT, 68,144 FF.
+
+**Handed to the SPEC lane** for the board A/B against `cap-ids55-native-tagcache` (79cf8de17, sha256
+`f56a175c44983eea…`) on mcf and nab, native route. The prediction is the one in the silicon paragraph above.
+The SPEC lane pre-registered the A/B in spec-silicon cab76f557181 (Addendum 76): kit bkit58 = bkit56 with only the
+bitstream changed, rows imagick, nab, mcf and gcc train01, with its own decision rule. Its readings land there.
