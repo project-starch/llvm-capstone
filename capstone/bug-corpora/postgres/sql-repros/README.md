@@ -10,8 +10,9 @@ the real upstream functions; these are not reducible that way, so they use the
 Case 10 (2026-10-29) is the one temporal case: mmgr-repros' tuplestore double free (its case 00),
 reached whole through upstream's own reproducer. Its liveness, and why mmgr-repros' other four
 cannot run in the single-user backend, are in
-[`results/2026-10-29-host/README.md`](results/2026-10-29-host/README.md). No Capstone or CheriBSD arm
-has run it; the per-arm tables below are cases 01-09.
+[`results/2026-10-29-host/README.md`](results/2026-10-29-host/README.md). Its first Capstone reading,
+with 01-09 on the same platform, is [`results/2026-10-29-virtual`](results/2026-10-29-virtual/README.md):
+missed by `virtual-malloc`, caught by `virtual-pg-pools`. The per-arm tables below are cases 01-09.
 
 ## Classes
 

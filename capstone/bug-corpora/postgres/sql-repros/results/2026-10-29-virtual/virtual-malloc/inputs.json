@@ -1,0 +1,49 @@
+{
+  "arm": "virtual-malloc",
+  "cases": 10,
+  "configuration": "virtual-mallocng",
+  "contract": "verdicts-v1",
+  "corpus": "postgres/sql-repros",
+  "extensions": {
+    "available": [
+      "fuzzystrmatch",
+      "ltree",
+      "pg_trgm",
+      "pgcorpus_reach"
+    ],
+    "wanted": [
+      "fuzzystrmatch",
+      "ltree",
+      "pg_trgm",
+      "pgcorpus_reach"
+    ]
+  },
+  "fixture": {
+    "cluster_stable_tree_sha256": "d63b081dc1fa95e9356c902cb9c9f7064caa986aad71f8abeb482f6d1e056074",
+    "cluster_tree_sha256": "c83427e4e454bf8259f664e360e18f55a69974de914f893766c27cd7fbfca968",
+    "preinstalled": [],
+    "provenance": null,
+    "provenance_note": "no provenance beside the fixture and no builder image in its run record, so which image created its extensions is not recorded in this run"
+  },
+  "image": {
+    "heap": "virtual-mallocng",
+    "nested": "none",
+    "sha256": "4a74f447082c55059cb9f0a90ac4647a131b65ccc227fb84296f80156e856d70"
+  },
+  "platform": {
+    "compiler": "2236d7f34ca381d80ff60156f3618ef5253143d435f8c66645aa600c2e80d19d",
+    "firmware": "4dd4a2ade361a8bdb9cc45aeca02c6b7309b60d1e8701c2a4ed91c117a495f16",
+    "judge": "d5cf411c3906a2dad8f853df94313eac7d6a2a92a260f971603758de9ed1f977",
+    "kernel": "e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b",
+    "launcher": "b533a0689e31cb828caae954a64da770d0a12e9d27ab5ababc520e040ed9dcc2",
+    "module": "74c60cd60df0208ecccda8c13d087184f19c994c24ededcefee8cb46e205a09f",
+    "profile": "virtual",
+    "qemu": "e8a89c014e5aa627b294cdf0b7d366610cf4334adc1f9d1579c498f33e4fee23",
+    "rootfs": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845",
+    "runner": "7ce203f9fd6a3ccee109f3453f6bccbdc10fea149237898551f74a689d7477f0"
+  },
+  "tally": {
+    "CAUGHT": 3,
+    "MISSED": 7
+  }
+}
