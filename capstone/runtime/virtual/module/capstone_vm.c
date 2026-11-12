@@ -97,17 +97,24 @@ static bool cv_csc_firmware(void)
 /* Read-only measurement counters: CSRUNV escapes by event kind (every escape, including the faults
  * cv_step_locked resolves in place) and kind-3 services by route. */
 static unsigned long cv_exit_kind[8], cv_service_register, cv_service_exchange, cv_service_other;
+/* MEASUREMENT ONLY, read-only: cycle-CSR sums. run_cycles over each CSRUNV that runs a context (runs of them);
+ * between_cycles from a thread's escape to its next entry: the module's handling of the escape plus whatever
+ * Linux ran meanwhile, a blocking call or another task included; check_cycles over each CSCHECKR/W (checks of
+ * them): on a bitstream whose firmware emulates CSCHECK, the trap and the emulation. */
+static unsigned long cv_runs, cv_run_cycles, cv_between_cycles, cv_checks, cv_check_cycles;
 static int cv_counters_get(char *buffer, const struct kernel_param *kp)
 {
     static const char *const names[CV_CSC_COUNTERS] = {
         "entries", "ok", "c24", "c25", "c26", "c27", "c28", "c29", "unsupported_table"};
     int n = scnprintf(buffer, PAGE_SIZE, "k0=%lu k1=%lu k2=%lu k3=%lu k4=%lu k5=%lu k6=%lu k7=%lu "
                       "register=%lu exchange=%lu service_other=%lu kinds_queries=%lu emu_fingerprints=%lu "
-                      "detaches=%lu adopts=%lu adopt_kind_refused=%lu",
+                      "detaches=%lu adopts=%lu adopt_kind_refused=%lu "
+                      "checks=%lu check_cycles=%lu runs=%lu run_cycles=%lu between_cycles=%lu",
                       cv_exit_kind[0], cv_exit_kind[1], cv_exit_kind[2], cv_exit_kind[3],
                       cv_exit_kind[4], cv_exit_kind[5], cv_exit_kind[6], cv_exit_kind[7],
                       cv_service_register, cv_service_exchange, cv_service_other,
-                      cv_kinds_queries, cv_emu_fingerprints, cv_detaches, cv_adopts, cv_adopt_kind_refused);
+                      cv_kinds_queries, cv_emu_fingerprints, cv_detaches, cv_adopts, cv_adopt_kind_refused,
+                      cv_checks, cv_check_cycles, cv_runs, cv_run_cycles, cv_between_cycles);
     unsigned i;
     if (!cv_csc_firmware()) return n + scnprintf(buffer + n, PAGE_SIZE - n, " emu=absent\n");
     for (i = 0; i < CV_CSC_COUNTERS; ++i) {
@@ -212,6 +219,7 @@ struct cv_thread {
     bool slot_exported; /* VM transport image in the kernel-owned frame */
     unsigned long kinds_epoch; /* c5a: the escape epoch the frame's classification word was read for */
     unsigned long escape_kind; /* c5a: the kind this context's last escape returned (CSRUNV's rd), for ADOPT */
+    unsigned long left_cycle;  /* cycle CSR when its last CSRUNV returned, 0 before the first (between_cycles) */
     unsigned long native_satp; /* translation identity of the paused snapshot */
     unsigned long event;
     /* S-24: the same kind-4 fault resolved repeatedly without changing anything. The RTL's walker
@@ -3102,6 +3110,10 @@ static long cv_step_locked(struct context *c, struct cv_step *request, const uns
             WRITE_ONCE(t->frame[CV_FRAME_SAVED_SATP], satp);
             ++resume_satp_refreshes;
         }
+        {
+        /* native_counters' run/between cycles; interrupts are off here, as below. */
+        unsigned long entered = csr_read(CSR_CYCLE), left;
+        if (t->left_cycle) cv_between_cycles += entered - t->left_cycle;
 #ifdef CAPSTONE_VM_BENCH_COUNTERS
         {
             /* Interrupts are off: both reads bracket the CSRUNV alone. */
@@ -3118,6 +3130,9 @@ static long cv_step_locked(struct context *c, struct cv_step *request, const uns
 #else
         t->event = run_event(t, action);
 #endif
+        left = csr_read(CSR_CYCLE);
+        cv_run_cycles += left - entered; ++cv_runs; t->left_cycle = left;
+        }
         if (!t->started) t->native_satp = csr_read(CSR_SATP);
         t->started = true; t->reply_cap = false;
         local_irq_restore(flags); preempt_enable();

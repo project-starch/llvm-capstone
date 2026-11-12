@@ -111,7 +111,7 @@ static cn_u32 cv_copy_check(void *opaque, const struct cn_capref *ref,
                             enum cu_direction dir, cn_u64 *address)
 {
     struct cv_copy_state *s = opaque;
-    unsigned long cause;
+    unsigned long cause, cycle;
     u64 *d = s->descriptor;
     if (s->admission_cause) return s->admission_cause;
 #ifdef CV_RACE_TEST
@@ -127,12 +127,14 @@ static cn_u32 cv_copy_check(void *opaque, const struct cn_capref *ref,
     if (s->arena && s->arena->copy_retired) return CU_LIFETIME;
     d[0] = ref->context_epoch; d[1] = ref->frame_slot;
     d[2] = offset; d[3] = bytes; d[4] = 0; d[5] = 0;
+    cycle = csr_read(CSR_CYCLE);
     if (dir == CU_TO_DOMAIN)
         asm volatile(".insn r 0x5b, 1, 0x26, %0, %1, %2"
                      : "=&r"(cause) : "r"(s->t->frame_pa), "r"(virt_to_phys(d)) : "memory");
     else
         asm volatile(".insn r 0x5b, 1, 0x25, %0, %1, %2"
                      : "=&r"(cause) : "r"(s->t->frame_pa), "r"(virt_to_phys(d)) : "memory");
+    cv_check_cycles += csr_read(CSR_CYCLE) - cycle; ++cv_checks;
     if (d[5] == CV_CSC_FINGERPRINT) ++cv_emu_fingerprints;
 #ifdef CV_NATIVE_UNSAFE_BOUNDS
     /* Test-only broken variant: the guest sentinel oracle must reject it. */
