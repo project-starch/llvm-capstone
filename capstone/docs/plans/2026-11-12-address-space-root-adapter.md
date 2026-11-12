@@ -73,7 +73,15 @@ in the last stage, when every feature is in.
    cases of the QEMU gate in one program (nested object, stale reference,
    address, narrowed reference, renewed mapping). The per-mapping copy of
    stage 1 goes.
-3. **`mremap`, mapping cache, thread frames.** Found in stage 2: after the
+3. **Reservation records and requests with references** (decided after the
+   review of stage 2, 2026-11-12). Each mapping gets a kernel-private record M
+   between R and the program's reference P. Every program request that ends a
+   mapping comes with P and ends M: munmap, park, the stack at thread exit
+   (today an unauthenticated unmap by address through `pthread_exit`, which
+   must check the stack reference before the frame is cleared), the frame at
+   thread creation (kill last, after every fallible step). The module checks
+   the visible length itself. Then the remaining items of the old stage 3:
+4. **`mremap`, mapping cache, thread frames.** Found in stage 2: after the
    program renews a mapping with CRENEW, the kernel's copy no longer names it.
    Two paths still end mappings through that copy and must take the
    program's reference instead: thread creation (a frame mapping renewed
@@ -82,10 +90,10 @@ in the last stage, when every feature is in.
    use while the renewed lifetime lives). Carry each over or remove it
    with its reason, one unit test each. Decide partial unmap here (design
    note, open points).
-4. **Remove the old path.** Drop the parameter, `arena.ancestor`, the private
+5. **Remove the old path.** Drop the parameter, `arena.ancestor`, the private
    parents and the collection paths that exist only for them. `CSMINT` stays
    at one site.
-5. **End to end, once.** After the open design points that we implement are
+6. **End to end, once.** After the open design points that we implement are
    in as well: landing gates, port gates, bug corpora, Juliet, the reuse
    study. Regenerate the recorded results.
 

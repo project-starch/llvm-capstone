@@ -31,30 +31,48 @@ and the only step reserved for the kernel.
 
 ## Mappings
 
-Decided on 2026-11-12, after review. Each `mmap` creates a reservation: one
-child record of R and one kernel object that holds the reservation's extent
-(padding included), the kernel's copy of its reference and the number of its
-mapped pages. Linux splits and merges VMAs for its own reasons, so the
-reservation object, not a VMA, identifies the mapping, and VMAs of different
+Decided on 2026-11-12, after review; the reservation record was added the
+same day after the review of stage 2. Each `mmap` creates a reservation in
+two steps. The kernel derives a reservation record M from R and keeps the
+only reference to M, as an allocator keeps the reference to its pool. It
+then derives the program's mapping reference P from M, with the same bounds,
+and hands P out. A kernel object holds the reservation's extent (padding
+included), its visible length, the reference to M and the number of mapped
+pages. Linux splits and merges VMAs for its own reasons, so the reservation
+object, not a VMA, identifies the mapping, and VMAs of different
 reservations never merge.
 
-The authority for every mapping call is a reference the program hands back.
-The kernel accepts it only if all of these hold:
+The program can renew or end P and anything it derives, but it cannot reach
+M. A `CREVOKE` of M therefore always ends the whole reservation, including
+references the program renewed. This removes the failure that the first
+version had: there the kernel held a copy of the program's own reference,
+and after a `CRENEW` by the program that copy ended nothing while the kernel
+still released the range.
+
+Every request of the program to end a mapping comes with its reference:
+`munmap`, a park in the mapping cache, the unmap of a thread's stack at
+thread exit, and the hand-over of a thread's frame at thread creation. The
+kernel accepts the reference only if all of these hold:
 
 1. The operand is a reference.
 2. Its lifetime is live.
-3. Its record hangs directly under R, and it is the reservation's lifetime.
-4. Its bounds cover the range the call names.
+3. Its record's parent is M, the reservation's record.
+4. Its bounds cover the reservation's visible length, and the call names
+   that whole length.
 
-Condition 3 separates a mapping from an object that an allocator made over
-the whole range of a mapping. Condition 4 keeps a narrowed reference to part
-of a mapping from ending the whole mapping.
+Then the kernel executes `CREVOKE` on M. Condition 3 separates the mapping
+from an object that an allocator made over its whole range. Condition 4
+keeps a narrowed reference to part of a mapping from ending the whole
+mapping. A refused operand never reaches an instruction that can trap, and
+the kernel releases no range on a refused request. Only the teardown of the
+process and the rollback of a failed grant end M without a request of the
+program.
 
 | Call | Rule |
 |---|---|
 | `mmap` | a new reservation, as above |
-| `munmap` | only the whole reservation, with a reference that covers it: `CREVOKE`, then the address range becomes free. A partial `munmap` is refused. |
-| `MAP_FIXED` | into free address space: a new reservation. Inside a reservation: only with its covering reference and only while no object is derived in it (the record after the reservation's in the preorder list is not deeper, one step) |
+| `munmap` | only the whole reservation, with an accepted reference: `CREVOKE` of M, then the address range becomes free. A partial `munmap` is refused. |
+| `MAP_FIXED` | into free address space: a new reservation. Inside a reservation: only with an accepted reference and only while the program derived no object below P (the record after P's in the preorder list is not deeper, one step) |
 | `mremap` | `MREMAP_MAYMOVE` only, atomic: a new reservation, the pages move with their tags, the old reservation ends. On failure nothing changes. In-place resizing, `MREMAP_FIXED` and `MREMAP_DONTUNMAP` are refused. |
 | `mprotect` | with a covering reference. Page permissions never grant a right that the capability lacks. |
 | kinds | anonymous mappings only. File-backed mappings, mappings shared between processes, `brk` and `userfaultfd` are refused. |
