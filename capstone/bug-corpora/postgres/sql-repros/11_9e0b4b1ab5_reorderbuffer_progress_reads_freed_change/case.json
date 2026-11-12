@@ -26,5 +26,5 @@
    "oracle": "completes: the change is freed into its Slab block, which libc's revocation never sees freed, so the platform has nothing to revoke"
   }
  },
- "status": "live at the pin, measured on the host under Valgrind (2026-10-29); no Capstone or CheriBSD arm has run it"
+ "status": "live at the pin, measured on the host under Valgrind (2026-10-29); first Capstone reading in results/2026-10-29-virtual, beside the corpus's verdict_bundles and not derived into this file: virtual-malloc MISSED (completes), virtual-pg-pools CAUGHT (cause 25 in ReorderBufferProcessTXN). cheribsd-revocation has not run it"
 }
