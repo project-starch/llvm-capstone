@@ -1,5 +1,7 @@
 # 2026-11-11-run19
 
+Succeeded as the current record by `results/2026-11-12-crash-139`, which judges these boots again after CRASH-139 declared a reach witness: its MISSED on the four arms reads NO-READING `not-reached` there, and every other cell is unchanged.
+
 The current record: the 70 cases on the nested allocator layer after it moved to the one-operand CREVOKE (`heap_end(ptr)` in `ports/php/zend-alloc/sublet/zend-cap-mode.c`, where it called `heap_end(block, ptr)`), on the QEMU that implements that instruction. Against run18, in the default scoring, 274 of the 280 cells keep their verdict and reason; six move, on two cases, and both read the same on unmodified `dev` with `dev`'s QEMU (`control-dev/matrix.tsv`), so neither is the instruction change's. The sensitivity scoring moves the same cells and four more, on one case, which also reads the same on `dev`. The image holds 7 CDERIVE and 4 CREVOKE instructions, every CREVOKE of the one-operand form. The cross-arm gates pass; `revocation-sanity` completes on every arm and `nested-bound-probe` faults on the two that declare it.
 
 - pre-registration: none was written for this run; it is a re-measurement of run18's configurations after a conversion, compared cell by cell

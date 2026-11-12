@@ -52,6 +52,25 @@ each Observation records WHICH route licensed it. The honest cost: for such a ca
 no longer carries the independent check that a control arm reproduced the oracle's output. It
 is named in the results rather than left to be discovered.
 
+(2) DOES NOT TRANSFER WHEN THE DEFECT IS CONDITIONAL ON UNINITIALISED MEMORY (2026-11-12). "The
+bytes that ran the trigger under mode 0 are the bytes running it under mode 7" says the TRIGGER
+ran. It says the DEFECT ran only when the defect follows from the script alone, and CRASH-139's
+does not: zend_read_property() builds a zval on the C stack without setting its reference count,
+and the engine frees the static string only when that field happens to hold zero. Measured on
+run19's image (bug-corpora/php/engine-repros/results/2026-11-12-crash-139): the field holds 48 on
+every arm in every run, the free never executes and every arm completes -- which the rule above
+read as `reached`, and so as MISSED. Such a case declares a REACH WITNESS in its oracle.json
+(`reach_witness`, written by build-cases.py before anything is judged): an event the arm's own
+transcript shows when the defect executes. For that case the stock arm's completed run licenses
+no arm, the stock arm included. An arm is `reached` only by its own transcript -- the witness, or
+a fault at the declared site as before -- and a completed run without the witness reads
+NO-READING:not-reached. The one kind so far is `nested-free-entry`: the nested layer's free
+entry (zend_cap_reclaim, which _efree calls on every arm) stopped on the pointer it was handed,
+shown by a ZEND_CAP_FAIL code 3 or 4 that names a free or by a fault whose call path is
+_efree -> zend_cap_reclaim. A witness establishes reach and nothing else: the layer's own check
+is software, not a capability fault at a declared site, so a run that shows it reads
+`unattributed`, never CAUGHT.
+
 DEVIATION FROM THE PRE-REGISTRATION, stated here because it weakens a stated criterion. The
 pre-registration said the control arm's stdout would have to equal the corpus's recorded
 pristine stdout BYTE FOR BYTE. That cannot be required, and the reason is PHP's own output, not
@@ -308,6 +327,39 @@ def chain_owner(llvm_bin, image, fault, text):
         return cfunc, cpath, cline, skipped
     return None
 
+# THE REACH WITNESS `nested-free-entry` (see the module docstring, "(2) DOES NOT TRANSFER").
+# zend_cap_reclaim is the nested layer's free entry: the patched _efree calls it first, on every
+# arm, and it looks the pointer up before anything ends. A pointer the heap never issued stops
+# there, in one of two forms: cap_fail prints ZEND_CAP_FAIL code 3 or 4 with the wording below
+# and aborts, or the lookup itself traps (heap_access, called from cap_block_of). Either is the
+# layer's free entry receiving the pointer, in this run.
+NESTED_FREE_ENTRY = "zend_cap_reclaim"
+NESTED_FREE_REFUSAL = "free of a pointer"
+
+
+def nested_free_entry_fault(llvm_bin, image, fault, text):
+    """Is this fault inside the nested layer's free entry, entered from _efree? The frames are
+    read outward from the fault: its pc, its return address, then the frame chain. The witness
+    holds when zend_cap_reclaim is met before any frame of PHP's tree and the frame that called
+    it is _efree in Zend/zend_alloc.c. A fault elsewhere in the layer (an allocation, a
+    realloc), or one whose record carries no call path, is not the witness."""
+    pcs = [fault.pc] + ([fault.ra - 2] if fault.ra else []) + [ret - 2 for ret in fault.chain]
+    for i, pc in enumerate(pcs):
+        func, path, _ = symbolize_at(llvm_bin, image, pc, text)
+        if func == NESTED_FREE_ENTRY:
+            if i + 1 == len(pcs):
+                return False
+            cfunc, cpath, _ = symbolize_at(llvm_bin, image, pcs[i + 1], text)
+            return cfunc == "_efree" and at_file(cpath, ALLOCATOR_SITE)
+        if in_php_tree(path):
+            return False
+    return False
+
+
+# kind -> the reader of a FAULT for that witness. A kind this runner cannot read is refused when
+# the corpus is loaded (population), never judged as if no witness were declared.
+REACH_WITNESSES = {"nested-free-entry": nested_free_entry_fault}
+
 # The per-run watchdog in run-virtual.py fired on this run. A run that was KILLED is not
 # an observation of the program at all -- it is the harness giving up -- so it is reported
 # as infra rather than as a silence. Keyed on the marker and not on exit 137, because the
@@ -413,7 +465,17 @@ def population(corpus, kind="asan-blind"):
             "pristine_stdout": o["pristine"].get("stdout", ""), "pristine_outcome": o["pristine"]["outcome"],
             "pristine_rc": o["pristine"].get("rc", 0),
             "platform_precondition": c.get("platform_precondition") or None,
+            "reach_witness": o.get("reach_witness") or None,
         }
+        # A declared reach witness must be one this runner can read, and must say what it is
+        # and why the stock arm cannot vouch for the case: a declaration nobody can check
+        # would take a case out of MISSED on its own say-so.
+        rw = cases[d.name]["reach_witness"]
+        if rw is not None and (not isinstance(rw, dict) or rw.get("kind") not in REACH_WITNESSES
+                               or not str(rw.get("witness", "")).strip()
+                               or not str(rw.get("why", "")).strip()):
+            sys.exit(f"{d.name}: oracle.json reach_witness must be an object with a kind this runner "
+                     f"reads ({sorted(REACH_WITNESSES)}) and non-empty witness and why")
         # A CONSISTENCY CHECK, not two independent sources: oracle.json's crash flag is derived
         # from the same pristine run it records, so a disagreement means the case file was
         # edited or generated wrongly, and that must stop the measurement rather than be
@@ -725,6 +787,14 @@ def observe(case, spec, arm, image_sha, text, exit_code, controls, stock_reached
         obs.infra = "unattributed" if code in (3, 4) else "setup-fault"
         obs.notes = ((f"the nested layer refused the pointer efree was given, by name: " if code in (3, 4)
                       else f"the nested layer failed: ") + f"code={code} {fail.group(2)[:90]}")
+        rw = spec.get("reach_witness")
+        if (rw and rw["kind"] == "nested-free-entry" and code in (3, 4)
+                and fail.group(2).startswith(NESTED_FREE_REFUSAL)):
+            # The declared reach witness, in its named form. The reading stays `unattributed`
+            # (infra is set above): reach is recorded, nothing is attributed.
+            obs.reached = True
+            obs.reach_evidence = ("this run shows the case's declared reach witness (nested-free-entry): "
+                                  "the nested layer's free entry refused the pointer by name")
         return obs
     fault = verdicts.domain_fault(text, None)
     if fault is not None and fault.cause == CAUSE_RESOURCE:
@@ -952,7 +1022,30 @@ def observe(case, spec, arm, image_sha, text, exit_code, controls, stock_reached
     # trigger running. It licenses THIS observation only. Until 2026-10-27 a site hit on ANY
     # arm licensed reach on every arm of the case, which let a silence elsewhere read as
     # MISSED on the strength of another configuration's fault; that transfer is gone.
-    obs.reached = at_site or (bool(stock_reached) and bool(precondition_met))
+    #
+    # THE THIRD ROUTE, for a case that declares a reach witness (module docstring, "(2) DOES NOT
+    # TRANSFER"): its defect is conditional on uninitialised memory, so the stock arm's
+    # completed run shows the trigger ran and says nothing about the defect, on any arm. The
+    # stock route is closed for it. What is left is this arm's own transcript: a fault at the
+    # declared site (above), or the witness.
+    rw = spec.get("reach_witness")
+    witness_seen = (bool(rw) and fault is not None and not at_site
+                    and REACH_WITNESSES[rw["kind"]](llvm_bin, image, fault, text))
+    stock_route = bool(stock_reached) and bool(precondition_met) and not rw
+    obs.reached = at_site or stock_route or witness_seen
+    if witness_seen and obs.attribution is None:
+        # Said in the layer's terms: the generic sentence for a non-protective cause speaks
+        # of causes 24 and 29, and the layer's own trap is neither.
+        obs.attribution_evidence = (
+            f"cause {fault.cause} in {fault.symbol or '?'}, inside the nested layer's free entry "
+            f"({NESTED_FREE_ENTRY} <- _efree): the layer's own lookup stopped on a pointer this heap "
+            f"did not issue. That is a software check of the layer, not a capability fault at a "
+            f"declared site, so reach is established and nothing is attributed")
+    if rw and not obs.reached:
+        note(obs, f"the case's declared reach witness ({rw['kind']}, oracle.json reach_witness) is "
+                  f"absent from this run's transcript: its defect is conditional on uninitialised "
+                  f"memory and is not shown to have executed on this arm, so this run is not a "
+                  f"reading of it (the stock arm's completed run licenses no arm for this case)")
     if at_site and obs.attribution == "chain":
         # the fault is NOT in the site: it is in a forwarding routine whose call path reaches
         # the site, which is weaker, and the wording must not read stronger (fifth review)
@@ -964,6 +1057,10 @@ def observe(case, spec, arm, image_sha, text, exit_code, controls, stock_reached
         obs.reach_evidence = (f"this run faulted in {matched_site or spec['fault_sites'][0]}, the case's own "
                               f"declared site, which cannot be reached without the trigger "
                               f"having run")
+    elif witness_seen:
+        obs.reach_evidence = (f"this run shows the case's declared reach witness ({rw['kind']}): it "
+                              f"faulted inside the nested layer's free entry ({NESTED_FREE_ENTRY}), "
+                              f"entered from _efree, so the trigger's free handed the layer its pointer")
     elif obs.reached:
         obs.reach_evidence = ("the stock arm ran this case to its normal end, the corpus's "
                               "pristine record says it completes, and revocation-sanity "
@@ -1413,6 +1510,12 @@ def main():
                   f"run -- a silence on this case is not a reading; an arm's own fault in the "
                   f"declared function licenses that arm alone")
 
+    for case, spec in cases.items():
+        if spec.get("reach_witness"):
+            print(f"    {case}: declares the reach witness {spec['reach_witness']['kind']!r} -- its defect is "
+                  f"conditional on uninitialised memory, so the stock arm's completed run licenses no arm; "
+                  f"each arm is reached only by its own transcript")
+
     rows, table = {arm: [] for arm in ARMS}, {}
     for arm in ARMS:
         controls = arm_controls(arm, per_arm[arm]["sanity_ok"], per_arm[arm]["probe_ok"], arms)
@@ -1473,6 +1576,13 @@ def main():
                                                    "licenses own reach; 2026-10-27; a catch through "
                                                    "a forwarding routine's call path is the chain "
                                                    "class, counted apart; 2026-10-28"),
+                                   # Constant, not a list of cases: the two populations'
+                                   # bundles must carry the same scoring to be merged.
+                                   "reach": ("the stock arm's completed run and the pristine record, "
+                                             "or the arm's own fault at the declared site; a case that "
+                                             "declares oracle.json reach_witness is reached on an arm "
+                                             "only by that arm's own transcript (the witness, or a fault "
+                                             "at the declared site); 2026-11-12"),
                                    "protective_causes": arms[arm]["protective_causes"]}})
     print(f"\nbundles written under {args.out}")
 

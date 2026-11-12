@@ -1,0 +1,159 @@
+{
+ "booted": true,
+ "reached_script": true,
+ "completed": true,
+ "panic": false,
+ "exits": {
+  "stock__sanity": 0,
+  "stock__case__r1": 134,
+  "stock__case__r2": 134,
+  "stock__case__r3": 134,
+  "block__sanity": 0,
+  "block__case__r1": 134,
+  "block__case__r2": 134,
+  "block__case__r3": 134,
+  "object__sanity": 0,
+  "object__case__r1": 134,
+  "object__case__r2": 134,
+  "object__case__r3": 134,
+  "exact__sanity": 0,
+  "exact__case__r1": 134,
+  "exact__case__r2": 134,
+  "exact__case__r3": 134
+ },
+ "output": {
+  "stock__sanity": [
+   "ZEND_CAP_MODE 0 exact=0 revoke=0",
+   "sanity 573 200 17 abc 0,1,2,3,4,5,6,7,8,9",
+   "PHP_VIRTUAL NESTED blocks=3391 frees=3391 issues=6375 retires=0 revokes=0 splits=0 reallocs=292 live=6375",
+   "CAPSTONE_VM_STATS arenas=156 pages=386 peak=548 nodes=7071 steps=1726 faults=475 collections=0 reclaimed=0 rounds=59 bytes_in=469 bytes_out=29229 node_bytes=4210688 node_capacity=262144 node_growths=0 launch_ns=140680900 elapsed_ns=7015269200",
+   "CAPSTONE_VM_STEPS quantum=784 service=395 fault=89 other=0 service0_delegate=0 service1_map=242 service2_unmap=91 service3_thread_create=0 service4_thread_exit=0 service5_thread_join=0 service6_protect=3 service7_wait=0 service8_futex=0 service9_pthread_exit=0 service10_thread_delegate=59 service11_thread_self=0 service12_nodes=0 service13_remap=0 service14_transport_detach=0 service_other=0",
+   "capstone-exec: exit image=php-real-nested.dom sha256=6c35fdddb684bedb3eb07889f4d7273fc75179e7643a11d1cbd104cf3958b44e"
+  ],
+  "stock__case__r1": [
+   "ZEND_CAP_MODE 0 exact=0 revoke=0",
+   "ZEND_CAP_FAIL code=3 free of a pointer this heap did not issue, or not at its start a=0x3f89e35d11 b=0x0 (blocks=341 issues=407 retires=0)",
+   "Aborted"
+  ],
+  "stock__case__r2": [
+   "ZEND_CAP_MODE 0 exact=0 revoke=0",
+   "ZEND_CAP_FAIL code=3 free of a pointer this heap did not issue, or not at its start a=0x3fa1635d11 b=0x0 (blocks=341 issues=407 retires=0)",
+   "Aborted"
+  ],
+  "stock__case__r3": [
+   "ZEND_CAP_MODE 0 exact=0 revoke=0",
+   "ZEND_CAP_FAIL code=3 free of a pointer this heap did not issue, or not at its start a=0x3f89235d11 b=0x0 (blocks=341 issues=407 retires=0)",
+   "Aborted"
+  ],
+  "block__sanity": [
+   "ZEND_CAP_MODE 4 exact=0 revoke=0",
+   "sanity 573 200 17 abc 0,1,2,3,4,5,6,7,8,9",
+   "PHP_VIRTUAL NESTED blocks=3391 frees=3391 issues=6375 retires=0 revokes=0 splits=0 reallocs=292 live=6375",
+   "CAPSTONE_VM_STATS arenas=15 pages=100 peak=373 nodes=6918 steps=1139 faults=356 collections=0 reclaimed=0 rounds=59 bytes_in=469 bytes_out=29229 node_bytes=4210688 node_capacity=262144 node_growths=0 launch_ns=55978200 elapsed_ns=3328314900",
+   "CAPSTONE_VM_STEPS quantum=311 service=434 fault=35 other=0 service0_delegate=0 service1_map=191 service2_unmap=181 service3_thread_create=0 service4_thread_exit=0 service5_thread_join=0 service6_protect=3 service7_wait=0 service8_futex=0 service9_pthread_exit=0 service10_thread_delegate=59 service11_thread_self=0 service12_nodes=0 service13_remap=0 service14_transport_detach=0 service_other=0",
+   "capstone-exec: exit image=php-real-nested.dom sha256=6c35fdddb684bedb3eb07889f4d7273fc75179e7643a11d1cbd104cf3958b44e"
+  ],
+  "block__case__r1": [
+   "ZEND_CAP_MODE 4 exact=0 revoke=0",
+   "ZEND_CAP_FAIL code=3 free of a pointer this heap did not issue, or not at its start a=0x3fb7635d11 b=0x0 (blocks=341 issues=407 retires=0)",
+   "Aborted"
+  ],
+  "block__case__r2": [
+   "ZEND_CAP_MODE 4 exact=0 revoke=0",
+   "ZEND_CAP_FAIL code=3 free of a pointer this heap did not issue, or not at its start a=0x3fb6235d11 b=0x0 (blocks=341 issues=407 retires=0)",
+   "Aborted"
+  ],
+  "block__case__r3": [
+   "ZEND_CAP_MODE 4 exact=0 revoke=0",
+   "ZEND_CAP_FAIL code=3 free of a pointer this heap did not issue, or not at its start a=0x3fb6235d11 b=0x0 (blocks=341 issues=407 retires=0)",
+   "Aborted"
+  ],
+  "object__sanity": [
+   "ZEND_CAP_MODE 6 exact=0 revoke=1",
+   "sanity 573 200 17 abc 0,1,2,3,4,5,6,7,8,9",
+   "PHP_VIRTUAL NESTED blocks=3391 frees=3391 issues=6375 retires=6375 revokes=6375 splits=0 reallocs=292 live=0",
+   "CAPSTONE_VM_STATS arenas=14 pages=99 peak=372 nodes=13291 steps=1408 faults=355 collections=0 reclaimed=0 rounds=59 bytes_in=472 bytes_out=29229 node_bytes=4210688 node_capacity=262144 node_growths=0 launch_ns=56359300 elapsed_ns=4980986300",
+   "CAPSTONE_VM_STEPS quantum=582 service=433 fault=34 other=0 service0_delegate=0 service1_map=190 service2_unmap=181 service3_thread_create=0 service4_thread_exit=0 service5_thread_join=0 service6_protect=3 service7_wait=0 service8_futex=0 service9_pthread_exit=0 service10_thread_delegate=59 service11_thread_self=0 service12_nodes=0 service13_remap=0 service14_transport_detach=0 service_other=0",
+   "capstone-exec: exit image=php-real-nested.dom sha256=6c35fdddb684bedb3eb07889f4d7273fc75179e7643a11d1cbd104cf3958b44e"
+  ],
+  "object__case__r1": [
+   "ZEND_CAP_MODE 6 exact=0 revoke=1",
+   "ZEND_CAP_FAIL code=3 free of a pointer this heap did not issue, or not at its start a=0x3fb9a35d11 b=0x0 (blocks=341 issues=407 retires=130)",
+   "Aborted"
+  ],
+  "object__case__r2": [
+   "ZEND_CAP_MODE 6 exact=0 revoke=1",
+   "ZEND_CAP_FAIL code=3 free of a pointer this heap did not issue, or not at its start a=0x3f9a235d11 b=0x0 (blocks=341 issues=407 retires=130)",
+   "Aborted"
+  ],
+  "object__case__r3": [
+   "ZEND_CAP_MODE 6 exact=0 revoke=1",
+   "ZEND_CAP_FAIL code=3 free of a pointer this heap did not issue, or not at its start a=0x3fb9a35d11 b=0x0 (blocks=341 issues=407 retires=130)",
+   "Aborted"
+  ],
+  "exact__sanity": [
+   "ZEND_CAP_MODE 7 exact=1 revoke=1",
+   "sanity 573 200 17 abc 0,1,2,3,4,5,6,7,8,9",
+   "PHP_VIRTUAL NESTED blocks=3391 frees=3391 issues=6375 retires=6375 revokes=6375 splits=0 reallocs=292 live=0",
+   "CAPSTONE_VM_STATS arenas=14 pages=99 peak=372 nodes=13291 steps=1282 faults=355 collections=0 reclaimed=0 rounds=59 bytes_in=472 bytes_out=29229 node_bytes=4210688 node_capacity=262144 node_growths=0 launch_ns=61558600 elapsed_ns=4125359600",
+   "CAPSTONE_VM_STEPS quantum=456 service=433 fault=27 other=0 service0_delegate=0 service1_map=190 service2_unmap=181 service3_thread_create=0 service4_thread_exit=0 service5_thread_join=0 service6_protect=3 service7_wait=0 service8_futex=0 service9_pthread_exit=0 service10_thread_delegate=59 service11_thread_self=0 service12_nodes=0 service13_remap=0 service14_transport_detach=0 service_other=0",
+   "capstone-exec: exit image=php-real-nested.dom sha256=6c35fdddb684bedb3eb07889f4d7273fc75179e7643a11d1cbd104cf3958b44e"
+  ],
+  "exact__case__r1": [
+   "ZEND_CAP_MODE 7 exact=1 revoke=1",
+   "ZEND_CAP_FAIL code=3 free of a pointer this heap did not issue, or not at its start a=0x3f8a235d11 b=0x0 (blocks=341 issues=407 retires=130)",
+   "Aborted"
+  ],
+  "exact__case__r2": [
+   "ZEND_CAP_MODE 7 exact=1 revoke=1",
+   "ZEND_CAP_FAIL code=3 free of a pointer this heap did not issue, or not at its start a=0x3fa7a35d11 b=0x0 (blocks=341 issues=407 retires=130)",
+   "Aborted"
+  ],
+  "exact__case__r3": [
+   "ZEND_CAP_MODE 7 exact=1 revoke=1",
+   "ZEND_CAP_FAIL code=3 free of a pointer this heap did not issue, or not at its start a=0x3f86235d11 b=0x0 (blocks=341 issues=407 retires=130)",
+   "Aborted"
+  ]
+ },
+ "serial_log": "proposed-forced-boot1-serial.log (not archived)",
+ "filtered": {
+  "what": "CAPSTONE_VM_ADD_OK launcher mapping lines and kernel console lines removed from output; exits and every other line kept",
+  "removed_per_run": {
+   "stock__sanity": 0,
+   "stock__case__r1": 0,
+   "stock__case__r2": 0,
+   "stock__case__r3": 0,
+   "block__sanity": 0,
+   "block__case__r1": 0,
+   "block__case__r2": 0,
+   "block__case__r3": 0,
+   "object__sanity": 0,
+   "object__case__r1": 0,
+   "object__case__r2": 0,
+   "object__case__r3": 0,
+   "exact__sanity": 0,
+   "exact__case__r1": 0,
+   "exact__case__r2": 0,
+   "exact__case__r3": 0
+  }
+ },
+ "image_sha256": "6c35fdddb684bedb3eb07889f4d7273fc75179e7643a11d1cbd104cf3958b44e",
+ "argv": {
+  "stock__sanity": "PHP_CAP_MODE=0 php-real-nested.dom -d memory_limit=512M /mnt/vm/phpb-sanity.php",
+  "stock__case__r1": "PHP_CAP_MODE=0 php-real-nested.dom -d memory_limit=512M /mnt/vm/41_9a98904ddd0e_crash-139.php",
+  "stock__case__r2": "PHP_CAP_MODE=0 php-real-nested.dom -d memory_limit=512M /mnt/vm/41_9a98904ddd0e_crash-139.php",
+  "stock__case__r3": "PHP_CAP_MODE=0 php-real-nested.dom -d memory_limit=512M /mnt/vm/41_9a98904ddd0e_crash-139.php",
+  "block__sanity": "PHP_CAP_MODE=4 php-real-nested.dom -d memory_limit=512M /mnt/vm/phpb-sanity.php",
+  "block__case__r1": "PHP_CAP_MODE=4 php-real-nested.dom -d memory_limit=512M /mnt/vm/41_9a98904ddd0e_crash-139.php",
+  "block__case__r2": "PHP_CAP_MODE=4 php-real-nested.dom -d memory_limit=512M /mnt/vm/41_9a98904ddd0e_crash-139.php",
+  "block__case__r3": "PHP_CAP_MODE=4 php-real-nested.dom -d memory_limit=512M /mnt/vm/41_9a98904ddd0e_crash-139.php",
+  "object__sanity": "PHP_CAP_MODE=6 php-real-nested.dom -d memory_limit=512M /mnt/vm/phpb-sanity.php",
+  "object__case__r1": "PHP_CAP_MODE=6 php-real-nested.dom -d memory_limit=512M /mnt/vm/41_9a98904ddd0e_crash-139.php",
+  "object__case__r2": "PHP_CAP_MODE=6 php-real-nested.dom -d memory_limit=512M /mnt/vm/41_9a98904ddd0e_crash-139.php",
+  "object__case__r3": "PHP_CAP_MODE=6 php-real-nested.dom -d memory_limit=512M /mnt/vm/41_9a98904ddd0e_crash-139.php",
+  "exact__sanity": "PHP_CAP_MODE=7 php-real-nested.dom -d memory_limit=512M /mnt/vm/phpb-sanity.php",
+  "exact__case__r1": "PHP_CAP_MODE=7 php-real-nested.dom -d memory_limit=512M /mnt/vm/41_9a98904ddd0e_crash-139.php",
+  "exact__case__r2": "PHP_CAP_MODE=7 php-real-nested.dom -d memory_limit=512M /mnt/vm/41_9a98904ddd0e_crash-139.php",
+  "exact__case__r3": "PHP_CAP_MODE=7 php-real-nested.dom -d memory_limit=512M /mnt/vm/41_9a98904ddd0e_crash-139.php"
+ }
+}

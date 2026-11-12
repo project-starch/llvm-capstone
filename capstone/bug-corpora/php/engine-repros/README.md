@@ -59,7 +59,8 @@ NN_<fix12>_crash-nnn/
   trigger.php      the corpus script, byte for byte
   oracle.json      what run-realphp.py reads: population, ASan's first PHP frame (the
                    expected site), the pristine run's outcome, rc and stdout, the crash flag,
-                   and the sha256 of the three result files it was derived from
+                   the sha256 of the three result files it was derived from and, for a case
+                   whose defect is conditional on uninitialised memory, its reach witness
   case.json        the framework's script-trigger record; derive-verdicts.py fills the arms
   PROVENANCE.md    the corpus record verbatim, our oracle, every disagreement
 ```
@@ -82,6 +83,16 @@ the stock run is the judge's control for `reached` and keeps its own name. A run
 transcript shows a defaulted arm (`ZEND_CAP_MODE_DEFAULTED`) or another arm's mode is refused.
 `corpus.json`'s `verdict_bundles` names the current bundles, `derive-verdicts.py` writes the
 verdicts into each `case.json`, and `check-corpus.py` re-judges them.
+
+**A reach witness (2026-11-12).** The stock run shows that a trigger ran. It shows that the defect
+ran only when the defect follows from the script alone. CRASH-139's does not: the engine frees the
+static string only when a field that `zend_read_property()` leaves uninitialised on the C stack
+holds zero. Such a case declares `reach_witness` in its `oracle.json` (written by
+`tools/build-cases.py`, `REACH_WITNESSES`): an event the arm's own transcript shows when the defect
+executes. For it the stock run licenses reach on no arm; an arm is reached only by its own
+transcript, and a completed run without the witness reads NO-READING `not-reached`. A witness
+establishes reach and nothing else: it never makes a catch. Only CRASH-139 declares one, and
+`results/2026-11-12-crash-139/README.md` holds the measurement behind it.
 
 The fourth arm runs on a different platform and so has its own runner, which reports into the
 same judge and writes the same bundle contract:
@@ -254,7 +265,8 @@ the two bundles but the scoring.
 
 ## Results
 
-Eight records, each a run of the whole corpus on the virtual profile, one bundle per arm with the two
+Eight records, each a run of the whole corpus on the virtual profile, and a ninth that judges the
+eighth's boots again, one bundle per arm with the two
 populations merged (`tools/merge-population-bundles.py`), every table computed from the bundles by
 `tools/result-tables.py` and written into that record's README, never typed:
 
@@ -264,33 +276,34 @@ populations merged (`tools/merge-population-bundles.py`), every table computed f
 - `results/2026-10-28-run16/`: the merged corpus measured whole (70 cases): the first 65 exactly as in run15, the five merged cases measured for the first time.
 - `results/2026-10-28-run17/`: the same 70 cases on the reduced nested layer, every cell identical to run16.
 - `results/2026-10-28-run18/`: the same 70 cases under the renamed layer ("seam" is now "nested"), every cell identical to run17.
-- `results/2026-11-11-run19/`: **the current record**, the same 70 cases after the nested layer moved to the one-operand CREVOKE, on the QEMU that implements it. Against run18, 274 of the 280 default-scoring cells are identical; the six that moved are CRASH-092 on every arm and CRASH-139 on the two nested arms, and both read the same on unmodified `dev` (that record's `control-dev/`), so neither is the instruction change's. `corpus.json`'s `verdict_bundles` names its arm bundles, `derive-verdicts.py` wrote their verdicts into every `case.json`, and `check-corpus.py` re-judges them.
+- `results/2026-11-11-run19/`: the same 70 cases after the nested layer moved to the one-operand CREVOKE, on the QEMU that implements it. Against run18, 274 of the 280 default-scoring cells are identical; the six that moved are CRASH-092 on every arm and CRASH-139 on the two nested arms, and both read the same on unmodified `dev` (that record's `control-dev/`), so neither is the instruction change's.
+- `results/2026-11-12-crash-139/`: **the current record**. It is not a new run of the corpus: it is run19's boots judged again after CRASH-139 declared a reach witness, with the measurement behind the declaration (the uninitialised field read on run19's image, 48 on every arm in every run, so the invalid free never executes). Against run19, 552 of the 560 cells of the two scorings are byte-identical rows; the eight that moved are CRASH-139's, MISSED to NO-READING `not-reached` on the four arms. `corpus.json`'s `verdict_bundles` names its arm bundles, `derive-verdicts.py` wrote their verdicts into every `case.json`, and `check-corpus.py` re-judges them.
 
 Over the 55 temporal cases (51 CWE-416, 3 CWE-590, 1 CWE-415). The four virtual arms come from
-`results/2026-11-11-run19/README.md` and `cheribsd-revocation`
+`results/2026-11-12-crash-139/README.md` (run19's boots) and `cheribsd-revocation`
 from `results/2026-10-30-cheribsd/README.md`. Those are separate boots on separate vehicles, so the
 rows are set side by side and not merged; the generator states each row's record and refuses two
 records claiming one arm. Generated, never typed:
-`tools/result-tables.py --across results/2026-11-11-run19 results/2026-10-30-cheribsd`.
+`tools/result-tables.py --across results/2026-11-12-crash-139 results/2026-10-30-cheribsd`.
 
 **Default scoring** (the native crashers out of the denominator):
 
 | arm | CAUGHT | of which by chain | MISSED | NO-READING |
 |---|--:|--:|--:|---|
-| stock | 1 | 1 | 24 | infra 2, not-reached 1, out-of-denominator 27 |
-| system allocator | 12 | 1 | 12 | infra 2, not-reached 1, out-of-denominator 27, unattributed 1 |
-| nested | 26 | 1 | 1 | infra 1, out-of-denominator 27 |
-| nested exact | 26 | 1 | 1 | infra 1, out-of-denominator 27 |
+| stock | 1 | 1 | 23 | infra 2, not-reached 2, out-of-denominator 27 |
+| system allocator | 12 | 1 | 11 | infra 2, not-reached 2, out-of-denominator 27, unattributed 1 |
+| nested | 26 | 1 | 0 | infra 1, not-reached 1, out-of-denominator 27 |
+| nested exact | 26 | 1 | 0 | infra 1, not-reached 1, out-of-denominator 27 |
 | CheriBSD revocation | 1 | n/a | 26 | inconclusive 1, out-of-denominator 27 |
 
 **Sensitivity scoring** (every case scored by fault site; reported beside the default, never instead):
 
 | arm | CAUGHT | of which by chain | MISSED | NO-READING |
 |---|--:|--:|--:|---|
-| stock | 2 | 1 | 24 | infra 4, not-reached 12, out-of-denominator 1, setup-fault 7, unattributed 5 |
-| system allocator | 25 | 1 | 12 | infra 3, not-reached 1, out-of-denominator 1, setup-fault 9, unattributed 4 |
-| nested | 49 | 2 | 1 | infra 2, out-of-denominator 1, unattributed 2 |
-| nested exact | 49 | 2 | 1 | infra 2, out-of-denominator 1, unattributed 2 |
+| stock | 2 | 1 | 23 | infra 4, not-reached 13, out-of-denominator 1, setup-fault 7, unattributed 5 |
+| system allocator | 25 | 1 | 11 | infra 3, not-reached 2, out-of-denominator 1, setup-fault 9, unattributed 4 |
+| nested | 49 | 2 | 0 | infra 2, not-reached 1, out-of-denominator 1, unattributed 2 |
+| nested exact | 49 | 2 | 0 | infra 2, not-reached 1, out-of-denominator 1, unattributed 2 |
 | CheriBSD revocation | 8 | n/a | 32 | inconclusive 13, infra 1, out-of-denominator 1 |
 
 ("n/a" in the chain column: the CheriBSD arm does not attribute a catch by call path at all -- it
@@ -318,10 +331,14 @@ judge reads as `unattributed` (their declared site is PHP's allocator). CRASH-07
 `infra` on every arm (the 40 s watchdog; the plan document records a separate 600 s run of 075, not
 archived here, as a catch at `php_array_walk`); CRASH-092 depends on uninitialised stack contents (it
 hangs, or completes short of its defect, or reaches it): in run19 it is `infra` on stock and the system
-allocator and CAUGHT on the nested arms, where run18 read `not-reached` and `infra`. CRASH-139, the
-invalid free of a static string, completes on every arm in run19 and is the nested arms' one MISSED in
-the table; run18's layer refused its pointer by name (`unattributed`). Both read as in run19 on
-unmodified `dev`.
+allocator and CAUGHT on the nested arms, where run18 read `not-reached` and `infra`, and it reads the
+same on unmodified `dev`. CRASH-139, the invalid free of a static string, completes on every arm in
+run19 and reads `not-reached` on every arm: its free executes only when an uninitialised field on the
+C stack holds zero, the field was measured at 48 on every arm of this image and of `dev`'s
+(`results/2026-11-12-crash-139`), and the case declares a reach witness, so a completed run is not a
+reading of the defect. Run19 read those runs as MISSED, the nested arms' one MISSED in its table;
+run18's layer refused the pointer by name on the nested arms (`unattributed`). The `cheribsd-revocation`
+arm's MISSED for this case is not covered by that measurement and stands as recorded.
 
 The native population and the system allocator's column disagree on 17 of the 51 CWE-416 cases: 7
 asan-blind cases the system allocator catches, and 10 temporal-asan-visible cases it does not read (8

@@ -1,0 +1,69 @@
+--- a/zend-cap-mode.c	2026-11-12 09:16:18.139785849 +0800
++++ b/zend-cap-mode.c	2026-11-12 09:16:29.588007151 +0800
+@@ -9,6 +9,17 @@
+ static unsigned int cap_mode, cap_mode_set;
+ static unsigned long st_blocks, st_frees, st_issues, st_retires, st_reallocs;
+ 
++/* DIAGNOSTIC WITNESS, probe build only (results/2026-11-12-crash-139/probes). Statics, so that no
++ * function gains a stack slot: the question is about stack contents. wit_* record every pointer
++ * _efree hands to zend_cap_reclaim that lies in no mapping of this heap (the page index heap_access
++ * reads, read here without trapping), and the member zval zend_std_call_getter was given. */
++unsigned long zend_cap_wit_reclaims, zend_cap_wit_foreign, zend_cap_wit_first;
++unsigned long zend_cap_wit_getters, zend_cap_wit_refcount = ~0UL, zend_cap_wit_is_ref = ~0UL,
++              zend_cap_wit_type = ~0UL, zend_cap_wit_str;
++static unsigned long wit_a, wit_owned;
++static struct heap_mid *wit_mid;
++static struct heap_leaf *wit_leaf;
++
+ /* A capability grain. The block is rounded up to a multiple of this, at least a header plus one
+  * grain, so that both the header and a payload bounded to REAL_SIZE(n) lie inside it -- including
+  * emalloc(0), whose block would otherwise be the header alone and whose one-byte payload would
+@@ -80,6 +91,10 @@
+             "splits=0 reallocs=%lu live=%lu\n",
+             st_blocks, st_frees, st_issues, st_retires, st_retires, st_reallocs,
+             st_issues - st_retires);
++    fprintf(stderr, "ZEND_CAP_WITNESS exit reclaims=%lu foreign=%lu first_foreign=0x%lx getters=%lu "
++            "member_refcount=%lu member_is_ref=%lu member_type=%lu member_str=0x%lx\n",
++            zend_cap_wit_reclaims, zend_cap_wit_foreign, zend_cap_wit_first, zend_cap_wit_getters,
++            zend_cap_wit_refcount, zend_cap_wit_is_ref, zend_cap_wit_type, zend_cap_wit_str);
+     fflush(stderr);
+ }
+ 
+@@ -186,6 +201,22 @@
+     return cap_block_of(ptr, hdr, "header of a pointer this heap did not issue, or not at its start");
+ }
+ 
++/* The witness's report, in a function of its own so that zend_cap_reclaim's frame keeps its size.
++ * It runs only when a foreign pointer has arrived, after which stack contents no longer matter. */
++__attribute__((noinline)) static void wit_foreign(void *ptr)
++{
++    if (!zend_cap_wit_foreign) { zend_cap_wit_first = wit_a; }
++    ++zend_cap_wit_foreign;
++    fflush(stdout);
++    fprintf(stderr, "ZEND_CAP_WITNESS foreign-free cursor=0x%lx base=0x%lx end=0x%lx tag=%d mode=%u "
++            "reclaim_call=%lu getters=%lu member_refcount=%lu member_is_ref=%lu member_str=0x%lx\n",
++            wit_a, (unsigned long)__builtin_capstone_cap_get_base(ptr),
++            (unsigned long)__builtin_capstone_cap_get_end(ptr), (int)__builtin_capstone_cap_get_tag(ptr),
++            zend_cap_mode(), zend_cap_wit_reclaims, zend_cap_wit_getters, zend_cap_wit_refcount,
++            zend_cap_wit_is_ref, zend_cap_wit_str);
++    fflush(stderr);
++}
++
+ /* ZEND_CAP_RECLAIM(ptr): _efree's derivation. In the revoking arms the caller's child ends in
+  * the same call: a child already ended (a double efree) is cause 25. The release names the
+  * object alone. A grandchild the caller derived at the same start therefore ends by itself and
+@@ -194,6 +225,14 @@
+ {
+     void *block;
+     if (!ptr) { return (void *)0; }
++    /* the witness: is ptr's page in the heap's mapping index? Loads and static stores only. */
++    ++zend_cap_wit_reclaims;
++    wit_a = __builtin_capstone_cap_get_cursor(ptr);
++    wit_mid = (struct heap_mid *)0; wit_leaf = (struct heap_leaf *)0; wit_owned = 0;
++    if (!(wit_a >> 39)) { wit_mid = __malloc_page_root[wit_a >> 30]; }
++    if (wit_mid) { wit_leaf = wit_mid->leaf[(wit_a >> 21) & 511]; }
++    if (wit_leaf) { wit_owned = wit_leaf->owner[(wit_a >> 12) & 511] != (void *)0; }
++    if (!wit_owned) { wit_foreign(ptr); }
+     block = cap_block_of(ptr, hdr, "free of a pointer this heap did not issue, or not at its start");
+     if (zend_cap_mode() & ZEND_CAP_MODE_REVOKE) {
+         heap_end(ptr);

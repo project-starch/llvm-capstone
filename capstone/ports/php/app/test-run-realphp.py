@@ -880,6 +880,167 @@ def population_cases():
                   "crashes_on_pristine_build" in str(e), True)
 
 
+WITNESS = {"kind": "nested-free-entry",
+           "conditional_on": "an uninitialised field on the C stack",
+           "witness": "the nested layer's free entry stops on the pointer",
+           "why": "the defect executes only when the field holds zero"}
+
+
+def reach_witness_cases():
+    """A case whose defect is conditional on uninitialised memory declares a reach witness
+    (CRASH-139). For it the stock arm's completed run licenses no arm, and reach is what the
+    arm's own transcript shows. Every other case reads as before."""
+    print("\n-- a declared reach witness: reach per arm, from the arm's own transcript --")
+    arms = verdicts.load_arms()
+    exact, stock = arms["php-real-exact"], arms["php-real-stock"]
+    orig, orig_at = R.symbolize, R.symbolize_at
+    done = "done\n" + STATS % (100, 9216)
+    # CRASH-139's shape: ASan's site is _efree, in PHP's allocator.
+    spec = dict(SPEC, asan_func="_efree", asan_file="Zend/zend_alloc.c", asan_line=263,
+                asan_stack=[{"index": 0, "func": "_efree", "file": "Zend/zend_alloc.c", "line": 263}],
+                fault_sites=["_efree"], site_files={"_efree": "Zend/zend_alloc.c"}, reach_witness=WITNESS)
+    plain = dict(spec, reach_witness=None)
+
+    # THE CELL THIS RULE EXISTS FOR: the run completes, the stock arm completed, no witness.
+    obs = R.observe("CRASH-139", spec, "php-real-exact", SHA, done, 0, controls(), True, "/x", "/y")
+    check("a completed run without the witness is not-reached, whatever the stock arm did",
+          verdicts.judge(obs, exact)[:2], (verdicts.NO_READING, "not-reached"))
+    check("and it says why", "declared reach witness (nested-free-entry" in obs.notes
+          and "licenses no arm" in obs.notes, True)
+    obs = R.observe("CRASH-139", spec, "php-real-stock", SHA, done, 0,
+                    [verdicts.Control(name=R.SANITY, observed="complete")], True, "/x", "/y")
+    check("the stock arm's own completed run is not-reached too",
+          verdicts.judge(obs, stock)[:2], (verdicts.NO_READING, "not-reached"))
+    # THE SAME RUN WITHOUT THE DECLARATION reads as it always did: the rule touches no other case.
+    obs = R.observe("CRASH-139", plain, "php-real-exact", SHA, done, 0, controls(), True, "/x", "/y")
+    check("without the declaration the same run is MISSED, as before",
+          verdicts.judge(obs, exact)[0], verdicts.MISSED)
+    check("and carries no witness note", "reach witness" in obs.notes, False)
+
+    # THE WITNESS, NAMED FORM: the layer refuses the freed pointer by name. Reach is recorded
+    # and the reading is what it was in run18: unattributed, never a catch.
+    for code in (3, 4):
+        obs = R.observe("CRASH-139", spec, "php-real-exact", SHA,
+                        f"ZEND_CAP_FAIL code={code} free of a pointer this heap did not issue, or not at its start "
+                        f"a=0x3f9f246a62 b=0x0\n", 134, controls(), True, "/x", "/y")
+        check(f"the named refusal of a free (code {code}) is the witness: reached, unattributed",
+              (verdicts.judge(obs, exact)[:2], obs.reached),
+              ((verdicts.NO_READING, "unattributed"), True))
+    # A refusal that names a REALLOC's header lookup is not the free's witness.
+    obs = R.observe("CRASH-139", spec, "php-real-exact", SHA,
+                    "ZEND_CAP_FAIL code=3 header of a pointer this heap did not issue, or not at its start "
+                    "a=0x40 b=0x0\n", 134, controls(), True, "/x", "/y")
+    check("a refusal that names a realloc's lookup is not the free's witness",
+          (verdicts.judge(obs, exact)[1], obs.reached), ("unattributed", False))
+    # Any other layer failure stays the instrument's.
+    obs = R.observe("CRASH-139", spec, "php-real-exact", SHA,
+                    "ZEND_CAP_FAIL code=5 request does not fit the block a=0x40 b=0x0\n", 134,
+                    controls(), True, "/x", "/y")
+    check("another layer failure is still a setup-fault", verdicts.judge(obs, exact)[1], "setup-fault")
+
+    # THE WITNESS, TRAP FORM: the layer's lookup traps (heap_access <- cap_block_of <-
+    # zend_cap_reclaim <- _efree), as the forced probe of 2026-11-12 recorded it on every arm.
+    def by_pc(table):
+        return lambda llvm_bin, image, pc, text: table.get(pc, ("", "", 0))
+    PC, RA = 0x3f904e7f90, 0x3f90508d7c
+    TRAP = (FAULT.replace("cause=25", "cause=2").replace(
+        "address=0x3f909c8074", "address=0xc0001073 ra=0x3f90508d7c fp=0x3f80a01f00")
+        + " chain=0x3f90a00010,0x3f90a00020,0x3f90a00030")
+    path = {PC: ("heap_access", "/k/musl-1.2.5/arch/capstone64/heap_sublet.h", 106),
+            RA - 2: ("cap_block_of", "/r/capstone/ports/php/zend-alloc/sublet/zend-cap-mode.c", 187),
+            0x3f90a00010 - 2: ("zend_cap_reclaim", "/r/capstone/ports/php/zend-alloc/sublet/zend-cap-mode.c", 236),
+            0x3f90a00020 - 2: ("_efree", "/b/Zend/zend_alloc.c", 284),
+            0x3f90a00030 - 2: ("_zval_dtor", "/b/Zend/zend_variables.c", 45)}
+    R.symbolize = fake_symbolize("/k/musl-1.2.5/arch/capstone64/heap_sublet.h", 106, func="heap_access")
+    R.symbolize_at = by_pc(path)
+    for stock_reached in (True, False):
+        obs = R.observe("CRASH-139", spec, "php-real-exact", SHA, TRAP % SHA, 139, controls(),
+                        stock_reached, "/x", "/y")
+        v, reason, ev = verdicts.judge(obs, exact)
+        check(f"a trap inside the layer's free entry is the witness (stock arm reached: {stock_reached})",
+              (v, reason, obs.reached), (verdicts.NO_READING, "unattributed", True))
+    check("the reach evidence names the witness", "declared reach witness (nested-free-entry)" in obs.reach_evidence, True)
+    check("and the evidence says it is the layer's software check, not a catch",
+          "software check of the layer" in ev and "nothing is attributed" in ev, True)
+    # ...with a PROTECTIVE cause too: a fault in the layer's own code is never a catch.
+    obs = R.observe("CRASH-139", spec, "php-real-exact", SHA, TRAP.replace("cause=2", "cause=25") % SHA, 139,
+                    controls(), True, "/x", "/y")
+    check("the witness with a protective cause is still not a catch",
+          (verdicts.judge(obs, exact)[:2], obs.attribution), ((verdicts.NO_READING, "unattributed"), None))
+    # The same fault on a case WITHOUT the declaration: the stock route decides, as before.
+    obs = R.observe("CRASH-139", plain, "php-real-exact", SHA, TRAP % SHA, 139, controls(), False, "/x", "/y")
+    check("without the declaration the same trap is a setup-fault when the stock arm did not complete",
+          verdicts.judge(obs, exact)[1], "setup-fault")
+    # NOT THE WITNESS: the layer's free entry entered from somewhere other than _efree...
+    R.symbolize_at = by_pc({**path, 0x3f90a00020 - 2: ("_erealloc", "/b/Zend/zend_alloc.c", 354)})
+    obs = R.observe("CRASH-139", spec, "php-real-exact", SHA, TRAP % SHA, 139, controls(), True, "/x", "/y")
+    check("the layer's entry reached from another caller is not the witness: setup-fault",
+          (verdicts.judge(obs, exact)[1], obs.reached), ("setup-fault", False))
+    # ...a fault in another routine of the layer (an allocation)...
+    R.symbolize_at = by_pc({PC: ("heap_issue", "/k/musl-1.2.5/arch/capstone64/heap_sublet.h", 50),
+                            RA - 2: ("zend_cap_issue", "/r/capstone/ports/php/zend-alloc/sublet/zend-cap-mode.c", 150),
+                            0x3f90a00010 - 2: ("_emalloc", "/b/Zend/zend_alloc.c", 202)})
+    obs = R.observe("CRASH-139", spec, "php-real-exact", SHA, TRAP % SHA, 139, controls(), True, "/x", "/y")
+    check("a fault in the layer's allocation path is not the witness: setup-fault",
+          (verdicts.judge(obs, exact)[1], obs.reached), ("setup-fault", False))
+    # ...a fault somewhere in PHP with the stock arm completed: the stock route is closed.
+    R.symbolize = fake_symbolize("/b/Zend/zend_hash.c", 400, func="zend_hash_find")
+    R.symbolize_at = by_pc({PC: ("zend_hash_find", "/b/Zend/zend_hash.c", 400)})
+    obs = R.observe("CRASH-139", spec, "php-real-exact", SHA, FAULT % SHA, 139, controls(), True, "/x", "/y")
+    check("a fault elsewhere is a setup-fault: the stock arm's run does not license reach here",
+          verdicts.judge(obs, exact)[1], "setup-fault")
+    # ...and a record with no call path at all.
+    R.symbolize = fake_symbolize("/k/musl-1.2.5/arch/capstone64/heap_sublet.h", 106, func="heap_access")
+    R.symbolize_at = by_pc(path)
+    obs = R.observe("CRASH-139", spec, "php-real-exact", SHA, FAULT.replace("cause=25", "cause=2") % SHA, 139,
+                    controls(), True, "/x", "/y")
+    check("a fault record with no call path cannot show the witness", obs.reached, False)
+    # THE OWN-FAULT ROUTE IS UNCHANGED: a fault in the declared function licenses the arm.
+    R.symbolize = fake_symbolize("/b/Zend/zend_alloc.c", 290, func="_efree")
+    R.symbolize_at = by_pc({PC: ("_efree", "/b/Zend/zend_alloc.c", 290)})
+    obs = R.observe("CRASH-139", spec, "php-real-exact", SHA, FAULT % SHA, 139, controls(), False, "/x", "/y")
+    check("a fault in the declared function still licenses its own arm (and is the allocator's: unattributed)",
+          (verdicts.judge(obs, exact)[1], obs.reached), ("unattributed", True))
+    R.symbolize, R.symbolize_at = orig, orig_at
+
+    # THE DECLARATION IS READ FROM oracle.json AND CHECKED WHEN THE CORPUS IS LOADED.
+    with tempfile.TemporaryDirectory() as d:
+        root = Path(d) / "corpus-root"
+        fake_corpus(root)
+        op = root / K("CRASH-086") / "oracle.json"
+        base = json.loads(op.read_text())
+        check("a case that declares none carries none", R.population(root)[K("CRASH-086")]["reach_witness"], None)
+        op.write_text(json.dumps(dict(base, reach_witness=WITNESS)))
+        check("a declared witness is carried into the case's spec",
+              R.population(root)[K("CRASH-086")]["reach_witness"]["kind"], "nested-free-entry")
+        for label, bad in (("a kind this runner cannot read", dict(WITNESS, kind="stack-canary")),
+                           ("a witness with no reason", dict(WITNESS, why=" ")),
+                           ("a witness that does not say what it is", {k: v for k, v in WITNESS.items() if k != "witness"}),
+                           ("a declaration that is not an object", "nested-free-entry")):
+            op.write_text(json.dumps(dict(base, reach_witness=bad)))
+            try:
+                R.population(root)
+                check(f"{label} is refused", "ran", "refused")
+            except SystemExit as e:
+                check(f"{label} is refused", "reach_witness" in str(e), True)
+
+    # END TO END: one case declares the witness; every arm completes every case. That case is
+    # not-reached on all four arms, and its neighbour, which declares nothing, is MISSED.
+    with tempfile.TemporaryDirectory() as d:
+        tmp = Path(d)
+        rc = drive(tmp, reach_witness=("CRASH-110",))
+        check("a measurement with a declared witness completes", rc, 0)
+        for arm in R.ARMS:
+            rows = [json.loads(l) for l in (tmp / "out" / f"bundle-{R.FRAMEWORK_ARM[arm]}" / "verdicts.jsonl")
+                    .read_text().splitlines()]
+            got = {r["observation"]["case"]: (r["verdict"], r["reason"]) for r in rows}
+            check(f"{arm}: the witness case is not-reached, its neighbour still MISSED",
+                  (got[K("CRASH-110")], got[K("CRASH-086")]),
+                  ((verdicts.NO_READING, "not-reached"), (verdicts.MISSED, None)))
+        inputs = json.loads((tmp / "out" / f"bundle-{R.FRAMEWORK_ARM['php-real-exact']}" / "inputs.json").read_text())
+        check("the bundle records the reach rule it was judged with", "reach_witness" in inputs["scoring"]["reach"], True)
+
+
 def synth_record(cases, mode, revokes, *, case_faults=(), sanity_ok=True, probe=True,
                  stdout="done", sha=SHA, probe_sha=PROBE_SHA):
     nested = f"ZEND_CAP_MODE {mode} exact={1 if mode & 1 else 0} revoke={1 if mode & 2 else 0}"
@@ -905,7 +1066,7 @@ def synth_record(cases, mode, revokes, *, case_faults=(), sanity_ok=True, probe=
 
 
 def drive(tmp, *, revokes=(0, 0, 77, 77), faults=None, extra_argv=(), modes=None,
-          defaulted=False, probe_mode_line=False, probe_shape=True):
+          defaulted=False, probe_mode_line=False, probe_shape=True, reach_witness=()):
     """Run main() end to end over stored records, with the toolchain stubbed out.
 
     defaulted: the first arm's sanity transcript carries ZEND_CAP_MODE_DEFAULTED, as an image
@@ -913,6 +1074,10 @@ def drive(tmp, *, revokes=(0, 0, 77, 77), faults=None, extra_argv=(), modes=None
     probe_shape: the bound probe's transcript on the arms that declare it (probe_transcript)."""
     root = tmp / "corpus-root"
     fake_corpus(root)
+    # reach_witness: corpus ids whose oracle.json declares the witness (reach_witness_cases)
+    for cid in reach_witness:
+        op = root / K(cid) / "oracle.json"
+        op.write_text(json.dumps(dict(json.loads(op.read_text()), reach_witness=WITNESS)))
     out = tmp / "out"
     out.mkdir(exist_ok=True)
     cases = [K("CRASH-057"), K("CRASH-086"), K("CRASH-092"), K("CRASH-110"), K("CRASH-052")]
@@ -1388,6 +1553,7 @@ if __name__ == "__main__":
     population_cases()
     observation_cases()
     main_path_cases()
+    reach_witness_cases()
     probe_predicate_cases()
     policy_cases()
     stale_image_case()

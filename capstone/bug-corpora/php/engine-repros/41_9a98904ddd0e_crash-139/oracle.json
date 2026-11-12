@@ -135,6 +135,13 @@
   "rc": 0,
   "stdout": "v\nend\n"
  },
+ "reach_witness": {
+  "conditional_on": "an uninitialised field on the C stack: zend_read_property() (Zend/zend_API.c:1957) builds the member zval without setting its reference count, and the engine frees the static string only when that field holds zero",
+  "kind": "nested-free-entry",
+  "measured_by": "results/2026-11-12-crash-139",
+  "why": "Whether the invalid free executes is decided by what earlier calls left on the stack, not by the script, so one arm's completed run says nothing about the defect on any arm and the stock arm cannot be the control for reached. Measured on the run19 image (results/2026-11-12-crash-139): the field holds 48 on all four arms in every run, read by a probe script on the measured image and by a diagnostic build; the free never executes and every arm completes. With the field forced to zero in a second diagnostic build the free arrives at the layer's free entry on every arm, the stock arm included, and the layer's lookup stops there. The layer looks up every pointer _efree is given before anything ends, in every mode, so a run in which the free executes shows the witness, and a completed run did not execute it.",
+  "witness": "the arm's own transcript shows the nested layer's free entry (zend_cap_reclaim, which _efree calls on every arm) stopping on the pointer: a ZEND_CAP_FAIL code 3 or 4 line that names a free, or a fault whose call path is _efree -> zend_cap_reclaim"
+ },
  "requires": "",
  "requires_kind": "",
  "sources": {
