@@ -44,6 +44,24 @@ t = re.sub(r'^chmod 755 /tmp/sw/perl.*\n', '', t, flags=re.M)
 t = re.sub(r'^"\$V" --application-argv "\$S/bin/' + re.escape(arm) + r'/([A-Za-z0-9_]+)_base\.' + re.escape(arm) + r'" -- \.\./sw/perl',
            lambda m: f'"$S/bin/{arm}/{m.group(1)}_base.{arm}"'.replace('$S', '$$S'), t, flags=re.M)
 t = t.replace('"$$S/bin/', '"$V" "$S/bin/')
+# perl's test size: a host perl (natperl) runs test.pl with $^X="../sw/perl", so every sub-test execs ../sw/perl from
+# the cwd. Without that wrapper each one fails to start ("can't run '../../sw/perl ...'") and test.out miscompares.
+# The cwd is /tmp/nt/sr here, so the wrapper is /tmp/nt/sw/perl, and it execs the native image.
+if '$^X="../sw/perl"' in t:
+    assert w == 1 and exes.get('perlbench_r'), (w, list(exes))
+    setup = 'cd /tmp/nt/sr && mkdir -m 0700 .capstone-tmp || exit 1\n'
+    assert t.count(setup) == 1
+    t = t.replace(setup, setup + 'mkdir -p /tmp/nt/sw && printf \'#!/bin/sh\\nexec /tmp/nt/b/perlbench_r_base.native "$@"\\n\' '
+                  '> /tmp/nt/sw/perl && chmod 755 /tmp/nt/sw/perl || exit 1\n')
+# imagick's form: the validator reads "$S/ref/<file>", which a native task cannot open outside its grant (the guest
+# reads "Could not open for read", rc 255). As native01's qt20 stage does, copy ref/ into the cwd and name it there.
+nref = len(re.findall(r'"\$S/ref/([^"/]+)"', t))
+if nref:
+    setup = 'cp -a "$S/in/." /tmp/nt/sr/ && '
+    assert t.count(setup) == 1 and plan.get('refs'), (t.count(setup), plan.get('refs'))
+    t, r = re.subn(r'"\$S/ref/([^"/]+)"', r'\1', t)   # before the copy is added: "$S/ref/." would match too
+    assert r == nref
+    t = t.replace(setup, setup + 'cp -a "$S/ref/." /tmp/nt/sr/ && ')
 pat = re.compile(r'^"\$V" "\$S/bin/' + re.escape(arm) + r'/([A-Za-z0-9_]+)_base\.' + re.escape(arm) + r'"', re.M)
 names = pat.findall(t)
 assert names and set(names) <= set(exes), (names, list(exes))
