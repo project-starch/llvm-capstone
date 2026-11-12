@@ -58,8 +58,12 @@ in the last stage, when every feature is in.
    a second `mmap` work on copyable grants, an object derived in a page
    faults with 25 after the page's `munmap`, the other mapping lives on.
    Control: without the `CREVOKE` the access succeeds.
-2. **Unmap by reference.** The libc passes the reference in a0, the adapter
-   reads it from the frame and applies the four conditions. Unit test: the
+2. **Unmap by reference, with reservations.** The libc passes the reference
+   in a0, the adapter reads it from the frame and applies the conditions of
+   the design note (section Mappings): live, directly under R, the
+   reservation's lifetime, bounds covering the whole reservation. A partial
+   unmap is refused. The reservation object keeps the extent and the mapped
+   page count, and VMAs of different reservations never merge. Unit test: the
    cases of the QEMU gate in one program (nested object, stale reference,
    address, narrowed reference, renewed mapping). The per-mapping copy of
    stage 1 goes.

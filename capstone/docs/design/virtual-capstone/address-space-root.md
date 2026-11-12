@@ -29,28 +29,52 @@ every allocator does: it keeps the reference to its block and hands out
 children. Creating R is the only step that makes a reference from numbers,
 and the only step reserved for the kernel.
 
-## What the kernel must do at an unmap
+## Mappings
 
-A program can end or renew the lifetime of anything it holds a reference to.
-The kernel therefore does not remember an identity for a mapping. It takes
-the reference that the program hands back and ends that lifetime only if all
-four conditions hold:
+Decided on 2026-11-12, after review. Each `mmap` creates a reservation: one
+child record of R and one kernel object that holds the reservation's extent
+(padding included), the kernel's copy of its reference and the number of its
+mapped pages. Linux splits and merges VMAs for its own reasons, so the
+reservation object, not a VMA, identifies the mapping, and VMAs of different
+reservations never merge.
+
+The authority for every mapping call is a reference the program hands back.
+The kernel accepts it only if all of these hold:
 
 1. The operand is a reference.
-2. Its range is one whole mapping.
-3. Its lifetime is live.
-4. Its record hangs directly under R.
+2. Its lifetime is live.
+3. Its record hangs directly under R, and it is the reservation's lifetime.
+4. Its bounds cover the range the call names.
 
-Condition 4 separates a mapping from an object that an allocator made over
-the whole range of a mapping. Ending that object would leave the mapping
-live, and the kernel would hand out an address range that live references
-still cover.
+Condition 3 separates a mapping from an object that an allocator made over
+the whole range of a mapping. Condition 4 keeps a narrowed reference to part
+of a mapping from ending the whole mapping.
 
-A renewed mapping keeps its place under R, so its renewed reference passes
-the check. A program that ends its mapping itself and hands back the stale
-reference is refused, and the address range stays unusable until `exit`. That
-is a leak in a faulty program and not a safety problem: every reference into
-the range is already stale.
+| Call | Rule |
+|---|---|
+| `mmap` | a new reservation, as above |
+| `munmap` | only the whole reservation, with a reference that covers it: `CREVOKE`, then the address range becomes free. A partial `munmap` is refused. |
+| `MAP_FIXED` | into free address space: a new reservation. Inside a reservation: only with its covering reference and only while no object is derived in it (the record after the reservation's in the preorder list is not deeper, one step) |
+| `mremap` | `MREMAP_MAYMOVE` only, atomic: a new reservation, the pages move with their tags, the old reservation ends. On failure nothing changes. In-place resizing, `MREMAP_FIXED` and `MREMAP_DONTUNMAP` are refused. |
+| `mprotect` | with a covering reference. Page permissions never grant a right that the capability lacks. |
+| kinds | anonymous mappings only. File-backed mappings, mappings shared between processes, `brk` and `userfaultfd` are refused. |
+| shared region | the system-call region belongs to the kernel, is never unmapped, and its address range is never reused |
+
+An address range returns to use only after the lifetime of its whole
+reservation has ended, so no stale reference reaches a new mapping.
+Whole-reservation `munmap` keeps the abstract machine exact: a partial unmap
+would leave objects with live lifetimes in pages that no longer exist. The
+runtime of today already refuses partial unmaps, fixed mappings and in-place
+`mremap`, and every evaluated program runs with these limits. Extending the
+machine with page availability is the way to allow partial unmaps later.
+
+`madvise(MADV_DONTNEED)` and `MADV_FREE` change backing, not lifetimes, and
+need no revocation: a fresh page carries no tag.
+
+A program that ends a mapping's lifetime itself and hands back the stale
+reference is refused, and the range stays unusable until `exit`. That is a
+leak in a faulty program, not a safety problem: every reference into the
+range is already stale.
 
 ## Supervisor references
 
@@ -166,24 +190,41 @@ mapping by its registered range and not by a reference.
 4. RTL: neither rule exists there. Until it follows, a kit runs on QEMU or on
    the board and not on both, as with the one-operand `CREVOKE`.
 
+## Further decisions of 2026-11-12
+
+- Signals. The kernel writes the signal frame with tagged registers through
+  the saved stack reference, an exact reference like the direct path of
+  read and write. `sigreturn` restores capabilities only from that frame and
+  validates the restored execution state.
+- Long releases. Above a threshold of records, `CREVOKE` traps to the
+  kernel, which finishes the walk preemptibly. No thread of the process runs
+  until the walk is done, and the release takes effect when every
+  generation is advanced and the lifetime caches are invalidated, before any
+  slot or memory of the released objects is reused.
+- Resource limits. Allocation can fail, and the abstract machine gets that
+  outcome: `CDERIVE` reports failure and `malloc` returns NULL, no fault. A
+  slot at its last generation retires. `CRENEW` on such a slot ends the old
+  lifetime, and only the new one fails when no free slot is left.
+- `fork`. The kernel copies the lifetime table at `fork`, with the same slots
+  and generations, since the processor writes the table through physical
+  addresses and Linux's copy-on-write does not cover it. Out of scope for
+  the prototype.
+- More than one hart, swap of tagged pages, lifetimes for stack objects: out
+  of scope. The claim covers heap objects and nested allocations of
+  statically linked programs.
+- Allocator trust. The processor checks that a child lies inside its parent.
+  That live siblings do not overlap is the allocator's duty. A client holds
+  only its object's reference and cannot create an overlapping sibling.
+- Machine-mode traps. Firmware preserves register tags across every trap
+  into M: it saves and restores the interrupted registers with capability
+  stores and loads. Found in stage 1: with `sstc=false` the firmware takes
+  the timer in M and restores the S registers with plain loads, which strips
+  their tags, and program registers saved by the kernel meet the same
+  problem. Until the firmware does this, the adapter keeps every use of a
+  reference in one straight-line run, which holds on QEMU only (it takes
+  interrupts between translation blocks). The rejected alternative, no M
+  trap under S or U, breaks with any SBI call or emulation trap.
+
 ## Open design points
 
-Each is a decision about the design and not yet about code.
-
-- Machine-mode traps. Found in stage 1 (2026-11-12): with `sstc=false` the
-  firmware takes the timer in M and saves and restores the S registers with
-  plain stores and loads, which strips their tags. A kernel that holds a
-  reference across such a trap loses it. On QEMU the adapter keeps every use
-  of a reference in one straight-line run without a branch, and QEMU takes
-  interrupts only between translation blocks. That does not hold on hardware
-  that traps between any two instructions. Kernel-saved program registers
-  meet the same problem. The design must require firmware that preserves
-  register tags across every M trap, or a platform on which no M trap
-  interrupts S or U (Sstc and no emulation traps). With `sstc=true` the
-  current QEMU guest stalls during boot.
-
-- Partial `munmap`, `mremap` and a fixed mapping over a live one. The abstract
-  machine has no partial release. Proposal: the kernel frees the pages and
-  keeps the address range reserved until the whole mapping ends.
-- Signals, `fork`, more than one hart, lifetimes for stack objects, what a
-  program sees at a resource limit, exact bounds, and swap of tagged pages.
+- Exact bounds.
