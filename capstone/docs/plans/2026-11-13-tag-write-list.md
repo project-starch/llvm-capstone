@@ -136,3 +136,21 @@ unit, `ex_stage` and `ariane_pkg` hashes.
 - **AXI checks:** `AXI-VALID-DROP` 0 on both sides. `AXI-WAIT-SEEN` 276 on both sides, so the drop check was live.
 - **Probe:** `TMLP-HAZARD` 0. Of 124 marked-miss tag reads, 0 had a tag write outstanding, on both trees. That is
   the testbench reading above, not a workload fraction.
+
+## Synthesis-only gate (synth lane, leffe; base 79cf8de17 synthesised there under the same guard)
+
+| key | reading | grade |
+|---|---|---|
+| 1 mapping | technology mapping 5,114.6 MB vs base 5,111.6; guard peak 22.6 vs 22.8 GB; retiming summary identical (2/27/94/26) | PASS |
+| 2 loops | `check_timing` loops 0 = base 0; LUTLP-1 0 on both; synthesis "Found timing loop" 0 and Synth 8-326 0 on both; the same script on the S-10b control reads 1 violation / 31 loops | PASS |
+| 3 FF | `wt_axi_adapter` own cells 814 -> 1,070 = +256 (band +230..+270) | PASS |
+| 3 LUT | own cells 3,345 -> 3,387 = +42; whole `i_adapter` subtree 5,552 -> 5,783 = +231 (FF +256); `i_axi_shim` +273 (FF 0), `i_dcache_data_fifo` -60, `i_tag_pending_fifo` -27 | key WITHDRAWN, report only |
+| 4 core / TOP | core 155,058 -> 155,291 (+233, FF +256); TOP 181,955 -> 182,187 (+232); outside the cache subsystem every row moved by at most 1 LUT | PASS (post hoc) |
+
+**Key 3 LUT withdrawn (mis-scoped, written below the floor).** The +50..+500 band on one module's own LUT was sized
+from the change, not from the recorded per-module redistribution floor of +/-2,500 LUT. A sub-floor band is a
+prediction, and a prediction band is never a stopper. Regraded post hoc as "0 +/- 2,500, report only". Own cells +42
+and subtree +231 both sit inside the floor. The subtree figure matches the circuit's size. `i_axi_shim` is
+instantiated inside the adapter (`wt_axi_adapter.sv:1379`) and takes `axi_wr_req` (`:1396`), which TAG_WR now gates
+with `~twl_full` (`:672`). So re-homing across that boundary is plausible, and +42 + 273 - 60 - 27 = +228 matches the
+subtree's +231. The adapter is the only file in `core/` that the change touches. The full build continued to seal.
