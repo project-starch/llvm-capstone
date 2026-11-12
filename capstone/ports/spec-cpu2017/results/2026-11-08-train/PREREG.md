@@ -2114,3 +2114,92 @@ measuring the new hardware comes first.
 - **P4, mcf: below its tagbm reading** (Addendum 54's chain C, still running), by at least 5 %. Its arrays hold
   capabilities, which is the TWC's case.
 - **P5, gcc test U1c8: below its C.5a reading of 13.2 s.**
+
+## Addendum 60 (12 Nov 09:4x): mcf on the bitmap (P3 holds); xz with exit sweep mode 2; the tag-word cache sealed; the flag-parity rule, jump tables, and two modes behind the name dcnofprs
+
+**Names used from here on.** The old labels stay valid; they are the names in every addendum above.
+
+| Name | Label(s) in this record | What it is |
+|---|---|---|
+| riscv-base | riscv, caplifive_rvbase_d31345cf3 | ordinary CVA6, Capstone off: the baseline |
+| cap-hw0 | V1f (0ef470559), C.5a (caplifive_vp2c_1fc2cd5aa) | Capstone hardware before the tag work |
+| cap-notag | notag (6806732fb) | measurement only: shadow-tag logic tied off |
+| cap-pagemap | tagbm (caplifive_tagbm_6df309173) | + page bitmap |
+| cap-tagcache | twc (caplifive_twc_ebe86cc01) | + same-word lookup bypass + tag-word cache |
+| plain-on-cap | Plain on a Capstone bitstream | diagnostic only, never a baseline |
+| cc-default | base | Capstone compiler, default options |
+| cc-tuned | dcnofprs (c3fdcnofprs for gcc) | + direct calls, no frame pointer, drop-redundant-shrink |
+| cc-universal | U1c8 | the compiler lane's all-in configuration |
+
+**mcf base on cap-pagemap** (Addendum 54's chain C, last stage): 10,243.61 s, rc 0, specdiff 2/2 PASS, against 10,555.03 s
+on cap-hw0, −3.0 %. **P3 holds** (a fall of less than 15 %). Capstone / riscv-base for mcf: 2.076 → 2.014 (riscv-base
+5,085.28 s). Addendum 54 is complete: P0, P1, P3 hold; P2 holds for imagick, lbm and xz, fails for nab (Addendum 57).
+
+**xz cc-tuned with retire_exit_sweep = 2** (Addendum 52's run; board 2, cap-hw0, kit bkit23-all2-b1-nohb): 12/12 rc 0
+and specdiff PASS. The sum is 7,270.37 s, against 7,740.77 s with sweep mode 3: −470.4 s (−6.1 %; predicted −499 s). The
+teardown reads 0.1783 ms per page (130,5xx pages, 23.28 s per command), on the model's 0.1784. Not yet run on
+cap-pagemap.
+
+**cap-tagcache sealed** under Addendum 59's gate:
+- launch-job full exits 0 in 1 h 10 m, peak RSS 20.71 GB;
+- route errors 0, LUTLP 0;
+- core-clock WNS −12.315 ns against cap-pagemap's −13.908 ns, inside the band;
+- core 145,134 LUT; wt_axi_adapter 2,695 LUT / 865 FF / 8 RAMB36 + 2 RAMB18;
+- bitstream caplifive_twc_ebe86cc01.bit, sha256 52776f462203f7da1d33f55843d439552702ab5f29f5d3f8b8e614c1431ce1bf. It is in the
+  store, read back. The seal holds the reports and a bundle of perf/tag-page-bitmap 1fc2cd5aa..ebe86cc01.
+
+Addendum 59's driver began flashing it on board 1 at 09:35.
+
+**Rule from the lead (12 Nov): every generic compiler option is the same in the Capstone builds and in riscv-base.**
+Capstone-only options are exempt; ISA and ABI limits of the Capstone target are disclosed, not equalised. The audit:
+
+| Option | riscv-base | Capstone | Status |
+|---|---|---|---|
+| -O2 | yes | yes | equal |
+| jump tables | on (clang default) | **off**: the SDK wrapper passes `-fno-jump-tables` to every compile (capstone-cc:757) | unequal, against Capstone: fixed below |
+| frame pointer | omitted (default at -O2 on RISC-V, clang CommonArgs.cpp:91-102) | omitted in cc-tuned, kept in cc-default | equal for cc-tuned |
+| Zbb | off | off | equal |
+| float ABI | lp64d | lp64 (+f +d), the Capstone target's ABI | disclosed |
+| compressed instructions | rv64gc | none, the Capstone ISA; RVC ruled out as a cause (Addendum 36) | disclosed |
+| compiler build | cc-prmerged clang | llvm-c1 / llvm-c4, same fork | the optimisation pipelines are yet to be compared |
+
+- **Jump tables.** The wrapper's flag was a correctness workaround from August: a table read by a plain lw through a raw
+  address. With `-fjump-tables` the current compiler reads the table through a capability derived from gp (scc,
+  cincoffset, lw) and jumps with an integer jr.
+- The compiler lane's census (c1-gate/gt2/U/RESULTS "JUMP-TABLE CENSUS") finds the same table dispatch already linked
+  into every SPEC exe through musl and the runtime glue: printf_core, pop_arg, vfscanf, the delegate glue. Those exes
+  passed on silicon. Silicon evidence that the integer jr form works there, though no trace shows those sites executing.
+- **Correction to Addendum 57:** its note that U1c8's `-fno-jump-tables` should be tried on Plain is withdrawn. Every
+  Capstone build carries the flag through the wrapper. The fix goes the other way: Capstone gets jump tables, as
+  riscv-base has them.
+- The fix is `-fjump-tables` appended to the build, after the wrapper's flag, so it wins. The shared SDK wrapper is not
+  edited; the compiler lane is told before production flips it.
+- Builds: perl, xz, imagick, nab and x264 change. lbm and mcf are byte-identical with the flag (no table-sized switch).
+
+**Two modes behind "dcnofprs"** (found by the compiler lane, checked here).
+- `-capstone-drop-redundant-shrink` was split into a definitions mode and a declarations mode on 8 Nov.
+- gcc's c3fdcnofprs (f95ad8ce, built before the split) is declarations mode. Every perf/ccsel dcnofprs exe (11 Nov) passes
+  the flag alone: definitions mode. So cc-tuned on the board so far meant declarations mode for gcc and definitions mode
+  for nab, xz and mcf.
+- Declarations-mode builds of the others (`-mllvm -capstone-drop-redundant-shrink-declarations` added; same compiler,
+  98337e20741b, as every dcnofprs and jt build here):
+
+| Test | SHRINK, defs → decl | Static instructions |
+|---|---|---|
+| perl | 28,190 → 18,374 | −5.2 % |
+| nab | 3,599 → 3,385 | −0.7 % |
+| xz | 1,751 → 1,651 | −0.5 % |
+| x264 | 4,965 → 4,875 | −0.1 % |
+| imagick | 32,351 → 32,290 | −0.02 % |
+| mcf | 1,219 → 1,217 | −0.02 % |
+| lbm | identical | identical |
+
+- **cc-tuned means declarations mode from here on**, for every test. The board readings so far labelled dcnofprs for
+  nab, xz and mcf are definitions-mode builds and are reported as such.
+- QEMU twins are queued one at a time (perf/ccsel/qjt3.sh, kit-profq, under qemu.lock): declarations mode (D) and
+  D + `-fjump-tables` (Djt) for imagick, nab, mcf, gcc, xz, x264 and perl.
+  - The gcc pair was built by the compiler lane with c3f's recipe on today's compiler: D f07290e0aa4faa72 (it matches
+    c3fdcnofprs instruction for instruction) and Djt bc46a5454508eb54.
+- First QEMU reading, definitions mode: xz with `-fjump-tables`, 12/12 specdiff PASS, in-context instret
+  49,589,636,311 against 49,198,631,731 (+0.79 %).
+- The compiler lane recorded +0.44 % for gcc train earlier. Board time decides, not instret.
