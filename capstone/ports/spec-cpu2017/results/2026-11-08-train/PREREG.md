@@ -2604,3 +2604,26 @@ lock; readings are functional only and unaffected.
 **Board 1** (the lead: fill the table first): perf/k2/k2f-cap.list, fair3 stages, order gcc train01, perl, mcf, imagick,
 nab, lbm, xz; kit bkit51-k2cap (cap-tagcache-ni, flashed by the driver), K2. If perl's fair3 twin does not pass, its
 stage is withdrawn before it starts (Addendum 69's rule then moves all eight to fair2).
+
+## Addendum 71 (2026-11-12 22:45, before it runs): Capstone gcc train fails on the 65,536-record lifetime table; an 18-bit kit
+
+**Reading.** Board 1, gcc train01 fair3 on bkit51-k2cap: rc 1, specdiff 0/1, after 2,130.48 s (instret 8.63 G of the
+twin's 13.25 G). CAPSTONE_VM_STATS: node_capacity 65,536 (node_bytes 1 MiB). Its QEMU twin passed on kit-profq,
+node_capacity 262,144, and the last passing board gcc train (out-gcctr-b2, kit bkit32-q32-nohb on vp2c_1fc2cd5aa) read
+node_capacity 262,144. The K2 module k2cap was built without CAPSTONE_VM_INDEX_BITS, so 16 bits; gcc runs out of
+lifetime records, malloc fails, gcc exits 1 (gcc's stderr was not in band; the mechanism is inferred from the two
+capacities and the exit code, not read). A kit error of mine: the module's index width was not checked against the
+workload's need.
+
+**Fix.** capstone_vm k2cap18 0cf6bc2c892fc993: the same source and K2 tree with -DCAPSTONE_VM_INDEX_BITS=18 (option
+A; the module's comment: the width must be the bitstream's; C.5a-line bitstreams carry it, bkit32 ran 18 on
+vp2c_1fc2cd5aa and cap-tagcache-ni descends from that line). Kit bkit53-k2cap18 = bkit51-k2cap with that module.
+The table width is a capacity, not a speed setting.
+
+**Queues.**
+- Board 1: perl fair3 (running on bkit51; perl's twin uses about 16 k nodes) finishes; the rest of its list is
+  withdrawn before starting. Then perf/k2/k2f18-cap.list on bkit53: imagick (the new module's first boot), gcc train01,
+  mcf, nab, lbm, xz.
+- Board 2: the fair x264 on bkit51 (started 19:38) is stopped: its node need is unknown, a failure would show only at
+  the end, and its module would differ from the other benchmarks'. Restarted on bkit53 (imagick first, then x264).
+- perl alone runs on the 16-bit table; it is disclosed, and re-run on bkit53 if the boards have room.
