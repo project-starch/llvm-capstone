@@ -2377,3 +2377,18 @@ Addendum 61). Driver perf/thp2/thrun.sh with perf/full/b{1,2}.conf.
 - Outside a band is a finding, reported as read, not a fault.
 - The riscv-base gcc test reading is still missing; a plain-rv64r gcc test stage is built and queued on board 3 in a later
   addendum.
+
+## Addendum 64 (2026-11-12 17:20, before it runs): the riscv-base gcc test denominator; mcf diagnostics in QEMU
+
+**riscv gcc test.** No riscv-base gcc test reading exists, so gcc's ratio has no denominator.
+- Stage perf/full/stages/502.gcc_r-test-plain-rv64r: make-stage.py on spec/tree-plain (arm plain-rv64, rdctr
+  6f05e7be00dc), with the executable swapped for the plain-rv64r build (cpugcc_r_base.plain-rv64r, 4d9ddde9aee9b35f,
+  the one in the gcc train01 riscv stage) and plan.json updated to that hash.
+- Board 3, kit bkit42-rvbase-sbi13, the hb120 riscv runner, after Addendum 62's driver (pid 1919310). Driver
+  perf/thp2/thrun.sh with perf/full/b3.conf.
+- **Prediction:** rc 0, specdiff 1/1 PASS, 5-10 s. Capstone's gcc test spends 4.70 s of its 11.67 s in context.
+
+**mcf in QEMU (board-free).** The Capstone module's peak counts PINNED pages, and the adaptive fault-ahead pins up to
+64 pages beyond a fault. Two QEMU runs of mcf base (perf/mcfdiag) read `fault_ahead_pages` and the peak with
+fault_ahead_max 64 (control) and 0. If peak falls toward riscv-base's maxrss (306,160 kB, 74,540 pages), part of the
+2.3x "footprint" is pinned-ahead pages, not data.
