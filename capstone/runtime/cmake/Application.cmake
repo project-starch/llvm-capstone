@@ -94,7 +94,7 @@ function(capstone_configure_application target)
     set_source_files_properties("${musl}/posix_spawn_delegate.c" PROPERTIES
         INCLUDE_DIRECTORIES "${PORT_MUSL_ROOT}/src/process")
     target_compile_options(capstone-application-core PRIVATE
-      -ffunction-sections -fdata-sections
+      -ffunction-sections -fdata-sections -fjump-tables -fomit-frame-pointer
       "$<$<COMPILE_LANGUAGE:C>:-Wno-int-conversion>")
     target_link_libraries(capstone-application-core PUBLIC Capstone::Runtime)
     file(STRINGS "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/softfloat.list" builtins)
@@ -104,7 +104,7 @@ function(capstone_configure_application target)
         "${capstone}/../compiler-rt/lib/builtins/${source}.c")
     endforeach()
     target_compile_options(capstone-application-builtins PRIVATE
-      -ffunction-sections -fdata-sections)
+      -ffunction-sections -fdata-sections -fjump-tables -fomit-frame-pointer)
     if(CAPSTONE_APPLICATION_VIRTUAL)
       target_compile_options(capstone-application-builtins PRIVATE
         "$<$<COMPILE_LANGUAGE:C>:SHELL:${virtual_codegen}>")
@@ -191,7 +191,7 @@ function(capstone_configure_application target)
     CAPSTONE_DOMREQ_DATA=${data_bytes} CAPSTONE_DOMREQ_STACK=${app_STACK_BYTES}
     CAPSTONE_CONTEXT_ARENA_BYTES=${app_CONTEXT_BYTES}
     CAPSTONE_LEVEL0_ARENA_BYTES=${app_ARENA_BYTES})
-  target_compile_options(${target} PRIVATE -ffunction-sections -fdata-sections)
+  target_compile_options(${target} PRIVATE -ffunction-sections -fdata-sections -fjump-tables -fomit-frame-pointer)
   target_sources(${target} PRIVATE $<TARGET_OBJECTS:capstone-application-core>)
   target_link_libraries(${target} PRIVATE Capstone::Runtime
     "${CAPSTONE_MUSL_ARCHIVE}" capstone-application-builtins)
