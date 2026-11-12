@@ -2774,3 +2774,25 @@ stopped before it booked anything and replaced by:
 emu_fingerprints delta (every check emulated), about 2,970-3,000 on imagick; check_cycles / checks 1,000-20,000 cycles
 (informational: the first silicon reading of an emulated check). e gcc train01 2,000-2,800 s (Addendum 74's band), with
 service + fault escapes under 8,000; imagick and perl within ±3 % of d's and of the no-cache perl ratio.
+
+## Addendum 76 (2026-11-13 07:45, before it runs): cap-ids55-native-tagcache-mlp against cap-ids55-native-tagcache, board 2
+
+**Reading since Addendum 75:** riscv-base xz on K2N (no cache) 4,993.81 s over 12 commands, specdiff 12/12 PASS; the
+Capstone native xz row is 5,504.98 / 4,993.81 = 1.102 (Addendum 73's band ≤ 1.15 holds).
+
+**Bitstream:** caplifive_ids55-native-tagcache-mlp_b98f5a517 (capstone-ariane b98f5a517 = 79cf8de17 + an 8-entry
+pending tag-write list in wt_axi_adapter: a marked-page load miss's tag read waits only for outstanding tag writes to
+its own tag word, where the base drained every outstanding tag write and held the adapter, I$ fills included). Sealed
+by the synth lane on leffe: sha256 5e8421a567a60848d3c12bcddb449055f6af8798b16abc2df41c89e8ed21596c (checked after
+the copy), WNS −13.738 (base −14.789), 179,661 LUT, router congestion 5, 0 routing errors. The rtl lane's simulation
+could not show a saving (the testbench memory answers one transaction at a time, so no tag write is outstanding at a
+tag read without the sim-only B-hold switch); the board is the first instrument that can.
+
+**Kit bkit58-k2n-native-tagcache-mlp** = bkit56 with only the bitstream changed, so each reading pairs with bkit56's
+(same kernel tree linux-board-k2n-native, firmware, command line, no cache). **Runs, board 2** after its running chain
+(x264): imagick, nab, mcf, gcc train01; the native smoke gates every boot as usual.
+
+**Predictions** (against bkit56: imagick 13.75 s, nab 747.14 s, mcf board 1's reading, gcc train01 3,409.84 s):
+imagick and nab within ±1.5 %; mcf and gcc train01 0 to −5 %. **Decision rule:** mlp replaces tagcache for the final
+table only if mcf or gcc train01 improves by more than 2 % and no row regresses by more than 1.5 %; otherwise the table
+stays on cap-ids55-native-tagcache and this run is reported as a negative result.
