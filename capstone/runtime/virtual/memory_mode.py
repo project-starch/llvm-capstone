@@ -12,6 +12,11 @@ OFF, valid only with unpinned=1). The gate environment asks for it with GATE_UNP
 exports it from FAST_FAULT=on); args() then adds `unpinned_fast_fault=1` to every unpinned insmod, and echo()
 also logs `<PREFIX>FAST_FAULT:<Y|N|A>` (A: a module without the parameter) so that the guest log of every
 module load says which path that load ran. gates/compare.py reads those lines back against OUT/fast-fault.
+
+Root grants are a third option (module parameter `root_grants`, default OFF, in either memory mode). The gate
+environment asks for it with GATE_ROOT_GRANTS=1 (run-arm.sh exports it from ROOT_GRANTS=on); args() then adds
+`root_grants=1` to every insmod. The processor must then have supervisor references
+(x-capstone-supervisor-refs=true in CAPSTONE_QEMU_CPU_EXTRA), or the module refuses its load.
 """
 import os
 import re
@@ -19,6 +24,7 @@ import re
 PARAMETER = '/sys/module/capstone_vm/parameters/unpinned'
 FAST_PARAMETER = '/sys/module/capstone_vm/parameters/unpinned_fast_fault'
 FAST_ENV = 'GATE_UNPINNED_FAST_FAULT'
+ROOT_ENV = 'GATE_ROOT_GRANTS'
 LINE = re.compile(r'^(\w*MEMORY_MODE):(\w*)\s*$', re.M)
 FAST_LINE = re.compile(r'^(\w*FAST_FAULT):(\w*)\s*$', re.M)
 
@@ -27,11 +33,16 @@ def fast_requested():
     return os.environ.get(FAST_ENV) == '1'
 
 
+def root_requested():
+    return os.environ.get(ROOT_ENV) == '1'
+
+
 def args(unpinned):
-    """The insmod argument for the requested mode (empty when pinned: the default)."""
+    """The insmod arguments for the requested mode (empty when pinned without root grants: the default)."""
+    root = ' root_grants=1' if root_requested() else ''
     if not unpinned:
-        return ''
-    return ' unpinned=1 unpinned_fast_fault=1' if fast_requested() else ' unpinned=1'
+        return root
+    return (' unpinned=1 unpinned_fast_fault=1' if fast_requested() else ' unpinned=1') + root
 
 
 def echo(prefix=''):

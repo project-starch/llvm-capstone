@@ -17,6 +17,7 @@
 #include <linux/rbtree.h>
 #include <linux/xarray.h>
 #include <linux/file.h>
+#include <asm/asm-extable.h>
 #include <asm/csr.h>
 #include <asm/io.h>
 #include <asm/pgtable.h>
@@ -106,6 +107,10 @@ struct arena {
      * range (arena_overlaps), is swept by every collection like any pinned page, and is retired
      * like any other arena at CV_RETIRE (the launcher's eviction) or at the context's release. */
     bool parked;
+    /* root_grants only, NULL otherwise: the kernel slot that holds a copy of the mapping's
+     * reference. The adapter uses the copy once, to end the mapping's lifetime (ref_end). Last in
+     * the structure, so every other member keeps its offset. */
+    unsigned long *ref;
 };
 struct context;
 struct cv_thread {
@@ -185,6 +190,14 @@ struct context {
     struct page **remap_pages;
     u64 remap_thread;
     unsigned long remap_bytes;
+    /* root_grants only. R is the one reference over the address space, in root_slot, and
+     * root_index is the index of its record. ref_pages are the kernel pages that hold R and one
+     * copy of each mapping's reference in 16-byte slots, and ref_free chains the unused slots
+     * through their first word. */
+    struct list_head ref_pages;
+    unsigned long *ref_free;
+    unsigned long *root_slot;
+    unsigned long root_index;
 };
 static DEFINE_MUTEX(vm_lock);
 /* Quotas are in base pages; zero means the 30-bit ISA limit. Parameters are
@@ -446,6 +459,29 @@ MODULE_PARM_DESC(lazy_grants, "admit NONLIN grants page by page at first access 
  * 0644 so a boot can turn it on for one run. */
 static bool diag_admit;
 module_param(diag_admit, bool, 0644);
+
+/* The kernel as the outermost allocator of an address space, stage 1
+ * (docs/design/virtual-capstone/address-space-root.md). With 1 the adapter creates one reference,
+ * R, over the user address range when it creates a context's table, and every grant is a child
+ * of R: CDERIVE at the grant's base, the cursor and the rights the request names, STC into the
+ * frame slot. No grant is linear. The adapter keeps a copy of each mapping's reference in a
+ * kernel slot and ends the mapping with CREVOKE on that copy, where it executes CSRETIRE on the
+ * private parent's number today. It needs a processor with supervisor references (QEMU
+ * x-capstone-supervisor-refs=true): the load probes for them (supervisor_refs_probe). 0 executes
+ * the instructions the module executed before the parameter existed. Read-only, so a context
+ * never changes rule. */
+static bool root_grants;
+module_param(root_grants, bool, 0444);
+MODULE_PARM_DESC(root_grants,
+    "make every grant a child of one reference over the address space (needs supervisor references)");
+/* A page of 16-byte kernel slots for references. A slot page is ordinary kernel memory that the
+ * context owns until its release. Every collection sweeps it like a thread frame. */
+struct ref_page {
+    struct list_head link;
+    unsigned long *slots;
+};
+#define CV_REF_SLOT_WORDS (16 / sizeof(unsigned long))
+#define CV_REF_PAGE_SLOTS (PAGE_SIZE / 16)
 
 /* The retired count, from wherever this format keeps it. */
 /* The CSMINT descriptor, v7 (Q-23's ruling). Six words, 8-aligned:
@@ -1286,6 +1322,13 @@ static int collect(struct context *c, struct cv_thread *owner)
     error = -ENOMEM;
     list_for_each_entry(t, &c->threads, link)
         if (collect_page(&list, t->frame_pa)) goto out;
+    if (root_grants) {
+        /* A copy can outlive its lifetime: a program may end its mapping itself. The sweep
+         * clears such a copy before the table reuses the identity, as in a thread frame. */
+        struct ref_page *slots;
+        list_for_each_entry(slots, &c->ref_pages, link)
+            if (collect_page(&list, virt_to_phys(slots->slots))) goto out;
+    }
     if (unpinned) {
         unsigned long *page = held.head;
         while (page) {
@@ -1464,6 +1507,386 @@ static void restore_root(unsigned long root)
     (void)root;
     asm volatile("csrw 0x5c1, zero" : : : "memory");
 }
+
+/* ---- Root grants: R, the grants as its children, and the end of a mapping ----
+ *
+ * The kernel computes with plain addresses, so a reference lives either in a kernel slot or, for
+ * the length of one asm block, in t0 and t1. The compiler never sees a reference: every block
+ * loads what it needs from a slot, lists its registers as clobbered and clears them before it
+ * ends, because a tagged register that the compiler reuses as scratch would carry its tag into
+ * the next plain store. Every block runs inside a select_root window with interrupts and
+ * preemption off, like every other capability instruction in this file.
+ *
+ * Masking S interrupts is not enough. A trap to M from S, such as the machine timer on a
+ * processor without Sstc, saves and restores the S registers in the firmware, and the gate
+ * platform's firmware does that with plain loads and stores: a reference in a register comes
+ * back as its address, without its tag (measured: one loss per timer tick while a tagged t0
+ * waited with interrupts off). The next instruction that needs the reference then traps in S
+ * with 24 or 26, a cause the firmware does not delegate, and the machine stops. So every block
+ * is one RUN: it loads each reference with LDC and consumes it completely in straight-line code,
+ * with no branch between the LDC and the last use, inside one 64-byte block (CV_RUN). Choices
+ * between variants are made on integers, before the run, and checks of the result after it, by
+ * loading the stored reference again. QEMU takes interrupts only between translation blocks,
+ * and a translation block ends at a branch and at a page boundary, so no trap can fall inside a
+ * run there. On a processor that takes a trap between any two instructions, references in S
+ * registers need a firmware that preserves the tags of the registers it saves.
+ *
+ * Encodings as in capstone-qemu tests/address-space-root/root.S. The selector of LCC and the
+ * rights of TIGHTEN are register NUMBERS in the rs2 field. */
+#define CV_RUN ".balign 64\n"
+#define CV_LDC(rd, base) ".insn i 0x5b, 3, " rd ", " base ", 0\n"
+#define CV_STC(src, base) ".insn s 0x5b, 4, " src ", 0(" base ")\n"
+#define CV_INC(rd, src, offset) ".insn r 0x5b, 1, 0x0c, " rd ", " src ", " offset "\n"
+#define CV_LCC(rd, src, selector) ".insn r 0x5b, 1, 4, " rd ", " src ", " selector "\n"
+#define CV_LCC_TYPE "x1"
+#define CV_LCC_ID "x8"
+#define CV_DERIVE(rd, parent, size) ".insn r 0x5b, 1, 0x51, " rd ", " parent ", " size "\n"
+#define CV_KILL(object) ".insn r 0x5b, 1, 0x52, zero, " object ", zero\n"
+/* TIGHTEN takes its rights from the encoding: n is a literal 0 to 7. */
+#define CV_TIGHTEN(ref, n) ".insn r 0x5b, 1, 2, " ref ", " ref ", x" #n "\n"
+#define CV_TYPE_NONLIN 1UL
+
+/* R covers [0, TASK_SIZE): exactly the addresses add() can register, since it admits a range
+ * only if access_ok() does. A base of 0 is a multiple of every granule and TASK_SIZE is a power
+ * of two (2^38 under Sv39), so the compact bounds hold the range exactly, and they decode to
+ * the same range at every cursor inside it. root_create() asks capstone_repr_ok() before it
+ * executes CSMINT, which would trap on a range the format does not hold. */
+#define CV_ROOT_BASE 0UL
+#define CV_ROOT_END ((unsigned long)TASK_SIZE)
+
+/* The id of a lifetime as LCC selector 8 answers it, and word 1 of its record, in the formats
+ * QEMU implements (cap_rev_table_abi.h). The flat formats of 18 and 20 index bits exist only on
+ * bitstreams, which have no supervisor references: init() refuses root_grants there. */
+#if CAPSTONE_VM_IDS == 55
+#define CV_REF_FORMAT 1
+#define CV_ID_INDEX(id) ((id) & CAP_REV_WIDE_INDEX_MASK)
+#define CV_ID_GENERATION(id) ((id) >> CAP_REV_WIDE_INDEX_BITS)
+#define CV_RECORD_GENERATION(w1) (((w1) >> CAP_REV_WIDE_GEN_SHIFT) & CAP_REV_WIDE_GEN_MASK)
+#define CV_RECORD_PARENT(w1) (((w1) >> CAP_REV_WIDE_PARENT_SHIFT) & CAP_REV_WIDE_INDEX_MASK)
+#elif node_table_flat && CAPSTONE_VM_INDEX_BITS == 16
+#define CV_REF_FORMAT 1
+#define CV_ID_INDEX(id) ((id) & CAP_REV_ID_INDEX_MASK)
+#define CV_ID_GENERATION(id) ((id) >> CAP_REV_ID_GEN_SHIFT)
+#define CV_RECORD_GENERATION(w1) (((w1) >> CAP_REV_TABLE_GEN_SHIFT) & CAP_REV_TABLE_GEN_MASK)
+#define CV_RECORD_PARENT(w1) (((w1) >> CAP_REV_TABLE_PARENT_SHIFT) & CAP_REV_TABLE_FLAT_PARENT_MASK)
+#elif !node_table_flat
+/* The paged table at 30 bits: an id is its record's index, and no record has a generation. */
+#define CV_REF_FORMAT 1
+#define CV_ID_INDEX(id) (id)
+#define CV_ID_GENERATION(id) 0UL
+#define CV_RECORD_GENERATION(w1) 0UL
+#define CV_RECORD_PARENT(w1) (((w1) >> CAP_REV_TABLE_PARENT_SHIFT) & CAP_REV_TABLE_FIELD_MASK)
+#else
+#define CV_REF_FORMAT 0
+#define CV_ID_INDEX(id) (id)
+#define CV_ID_GENERATION(id) 0UL
+#define CV_RECORD_GENERATION(w1) 0UL
+#define CV_RECORD_PARENT(w1) 0UL
+#endif
+
+/* A free 16-byte slot of the context, untagged and zero, or NULL. */
+static unsigned long *ref_slot_get(struct context *c)
+{
+    unsigned long *slot;
+
+    if (!c->ref_free) {
+        struct ref_page *page = kmalloc(sizeof(*page), GFP_KERNEL_ACCOUNT);
+        if (!page) return NULL;
+        page->slots = (void *)get_zeroed_page(GFP_KERNEL_ACCOUNT);
+        if (!page->slots) { kfree(page); return NULL; }
+        list_add_tail(&page->link, &c->ref_pages);
+
+        for (unsigned i = CV_REF_PAGE_SLOTS; i--;) {
+            slot = page->slots + i * CV_REF_SLOT_WORDS;
+            slot[0] = (unsigned long)c->ref_free;
+            c->ref_free = slot;
+        }
+    }
+
+    slot = c->ref_free;
+    c->ref_free = (unsigned long *)slot[0];
+    slot[0] = 0;
+    return slot;
+}
+
+/* Plain stores to both words: the slot holds no tag afterwards, whatever it held. */
+static void ref_slot_put(struct context *c, unsigned long *slot)
+{
+    WRITE_ONCE(slot[1], 0UL);
+    WRITE_ONCE(slot[0], (unsigned long)c->ref_free);
+    c->ref_free = slot;
+}
+
+static void ref_pages_free(struct context *c)
+{
+    struct ref_page *page, *next;
+
+    list_for_each_entry_safe(page, next, &c->ref_pages, link) {
+        /* R is still in its slot. A plain store to a granule clears its tag, so no tag goes
+         * back to Linux with the page. */
+        for (unsigned i = 0; i < CV_REF_PAGE_SLOTS; ++i)
+            WRITE_ONCE(page->slots[i * CV_REF_SLOT_WORDS], 0UL);
+        list_del(&page->link);
+        free_page((unsigned long)page->slots);
+        kfree(page);
+    }
+    c->ref_free = c->root_slot = NULL;
+}
+
+/* The record of a lifetime, by index, or NULL where the table has none. */
+static unsigned long *node_record(struct context *c, unsigned long index)
+{
+    unsigned long *entry;
+
+    if (index < 2 || index >= READ_ONCE(c->table[1]) || index >= node_capacity(c)) return NULL;
+    if (node_table_flat) return c->table + index * (CAP_REV_TABLE_RECORD / sizeof(*c->table));
+
+    entry = c->table + CAP_REV_TABLE_DIRECTORY / 8 + (index >> 26);
+    for (unsigned level = 0; level < 2; ++level) {
+        if (!*entry) return NULL;
+        entry = (unsigned long *)phys_to_virt(*entry) + ((index >> (level == 0 ? 17 : 8)) & 511);
+    }
+    if (!*entry) return NULL;
+    return (unsigned long *)phys_to_virt(*entry) +
+           (index & 255) * (CAP_REV_TABLE_RECORD / sizeof(*c->table));
+}
+
+/* The state of the lifetime that an id names: 0 if it has ended (the record is free, holds no
+ * lifetime, or holds a later one than the id names), else the record's flags, VALID with or
+ * without LINEAR, and the index of its parent in *parent. */
+static unsigned long ref_lifetime(struct context *c, unsigned long id, unsigned long *parent)
+{
+    unsigned long *record = node_record(c, CV_ID_INDEX(id));
+    unsigned long word, state;
+
+    if (!record) return 0;
+    word = READ_ONCE(record[1]);
+    state = (word >> CAP_REV_TABLE_FLAGS_SHIFT) &
+            (CAP_REV_TABLE_VALID | CAP_REV_TABLE_LINEAR | CAP_REV_TABLE_FREE);
+    if (!(state & CAP_REV_TABLE_VALID) || (state & CAP_REV_TABLE_FREE)) return 0;
+    if (CV_RECORD_GENERATION(word) != CV_ID_GENERATION(id)) return 0;
+
+    *parent = CV_RECORD_PARENT(word);
+    return state;
+}
+
+/* What a slot holds: the type LCC answers (7 for anything untagged) and, for a non-linear
+ * reference, the id of its lifetime. Inside a select_root window. */
+static void ref_read(unsigned long *slot, unsigned long *type, unsigned long *id)
+{
+    unsigned long slot_type, slot_id = 0;
+
+    /* LCC selector 1 answers 7 for anything untagged; selector 8 traps on it. So the id is read
+     * in a second run, only after the first said the slot holds a non-linear reference. */
+    asm volatile(CV_RUN
+                 CV_LDC("t0", "%[slot]")
+                 CV_LCC("%[type]", "t0", CV_LCC_TYPE)
+                 "li t0, 0\n"
+                 : [type] "=r"(slot_type)
+                 : [slot] "r"(slot)
+                 : "t0", "memory");
+    if (slot_type == CV_TYPE_NONLIN)
+        asm volatile(CV_RUN
+                     CV_LDC("t0", "%[slot]")
+                     CV_LCC("%[id]", "t0", CV_LCC_ID)
+                     "li t0, 0\n"
+                     : [id] "=r"(slot_id)
+                     : [slot] "r"(slot)
+                     : "t0", "memory");
+
+    *type = slot_type;
+    *id = slot_id;
+}
+
+/* End the lifetime of the mapping whose reference the slot holds, and empty the slot. True if
+ * this call ended it. False if the lifetime had ended already (the program released its mapping
+ * itself, or the slot is empty): the unmap is then done as far as lifetimes go, since every
+ * reference into the range is stale. A stale copy never reaches CREVOKE, which would trap. */
+static bool ref_end(struct context *c, unsigned long *slot)
+{
+    unsigned long flags, old, type, id, parent = 0;
+    bool live;
+
+    preempt_disable(); local_irq_save(flags);
+    old = select_root(c);
+
+    /* The checks CREVOKE makes, made first: a non-linear reference (24, 26), to a live
+     * lifetime (25), whose node is not linear (29). And the record hangs directly under R, as
+     * every mapping does. */
+    ref_read(slot, &type, &id);
+    live = type == CV_TYPE_NONLIN &&
+           ref_lifetime(c, id, &parent) == CAP_REV_TABLE_VALID && parent == c->root_index;
+    if (live)
+        asm volatile(CV_RUN
+                     CV_LDC("t0", "%[slot]")
+                     CV_KILL("t0")
+                     "li t0, 0\n"
+                     : : [slot] "r"(slot) : "t0", "memory");
+
+    restore_root(old);
+    local_irq_restore(flags); preempt_enable();
+
+    WRITE_ONCE(slot[0], 0UL);
+    WRITE_ONCE(slot[1], 0UL);
+    return live;
+}
+
+/* One run that makes a grant as a child of R. t0 is R, moved to the grant's base and reduced
+ * to the requested rights. t1 is the mapping, which CDERIVE makes from t0 and which inherits
+ * those rights. The kernel's copy is t1 with its cursor at the base, the grant is t1 with the
+ * requested cursor, stored into the frame slot and into slot2 (which is the frame slot again
+ * where the request needs one slot). */
+#define CV_ROOT_DERIVE_RUN(n)                                                                    \
+    asm volatile(CV_RUN                                                                          \
+                 CV_LDC("t0", "%[root]")                                                         \
+                 CV_INC("t0", "t0", "%[base]")                                                   \
+                 CV_TIGHTEN("t0", n)                                                             \
+                 CV_DERIVE("t1", "t0", "%[bytes]")                                               \
+                 CV_STC("t1", "%[copy]")                                                         \
+                 CV_INC("t1", "t1", "%[cursor]")                                                 \
+                 CV_STC("t1", "%[slot]")                                                         \
+                 CV_STC("t1", "%[slot2]")                                                        \
+                 "li t0, 0\n"                                                                    \
+                 "li t1, 0\n"                                                                    \
+                 : : [root] "r"(c->root_slot), [base] "r"(base), [bytes] "r"(bytes),             \
+                     [cursor] "r"(cursor), [copy] "r"(copy), [slot] "r"(slot), [slot2] "r"(slot2) \
+                 : "t0", "t1", "memory")
+
+/* The type LCC answers for the content of a slot: 1 for a non-linear reference, 7 for an
+ * integer. One run. */
+static unsigned long ref_type(unsigned long *slot)
+{
+    unsigned long type;
+
+    asm volatile(CV_RUN
+                 CV_LDC("t0", "%[slot]")
+                 CV_LCC("%[type]", "t0", CV_LCC_TYPE)
+                 "li t0, 0\n"
+                 : [type] "=r"(type)
+                 : [slot] "r"(slot)
+                 : "t0", "memory");
+    return type;
+}
+
+/* Make the grant r as a child of R: store it into the frame slot (and slot2 where the request
+ * needs the same reference twice, or NULL) and store the kernel's copy into copy. Zero on
+ * success. Nonzero if the frame slot does not hold a reference afterwards, which happens when
+ * the cursor the request names is not one the format holds for this range (CINCOFFSET then
+ * answers the address alone): the mapping is ended again through the copy, and both slots are
+ * cleared. Rights and cursor do not matter to a release. */
+static unsigned long root_derive(struct context *c, unsigned long *copy, unsigned long *slot,
+                                 unsigned long *slot2, const struct cv_map *r)
+{
+    unsigned long flags, old, status = 0;
+    unsigned long base = r->address - CV_ROOT_BASE, bytes = r->bytes;
+    unsigned long cursor = r->cursor - r->address;
+
+    if (!slot2) slot2 = slot;
+    preempt_disable(); local_irq_save(flags);
+    old = select_root(c);
+
+    switch (r->permissions) {
+    case 0: CV_ROOT_DERIVE_RUN(0); break;
+    case 1: CV_ROOT_DERIVE_RUN(1); break;
+    case 2: CV_ROOT_DERIVE_RUN(2); break;
+    case 3: CV_ROOT_DERIVE_RUN(3); break;
+    case 4: CV_ROOT_DERIVE_RUN(4); break;
+    case 5: CV_ROOT_DERIVE_RUN(5); break;
+    case 6: CV_ROOT_DERIVE_RUN(6); break;
+    case 7: CV_ROOT_DERIVE_RUN(7); break;
+    default: status = 1;   /* add() admits rights up to 7 only */
+    }
+    if (!status && ref_type(slot) != CV_TYPE_NONLIN) {
+        status = 1;
+        if (ref_type(copy) == CV_TYPE_NONLIN)
+            asm volatile(CV_RUN
+                         CV_LDC("t0", "%[copy]")
+                         CV_KILL("t0")
+                         "li t0, 0\n"
+                         : : [copy] "r"(copy) : "t0", "memory");
+    }
+
+    restore_root(old);
+    local_irq_restore(flags); preempt_enable();
+    if (status) {
+        WRITE_ONCE(copy[0], 0UL); WRITE_ONCE(copy[1], 0UL);
+        WRITE_ONCE(slot[0], 0UL); WRITE_ONCE(slot[1], 0UL);
+        WRITE_ONCE(slot2[0], 0UL); WRITE_ONCE(slot2[1], 0UL);
+    }
+    return status;
+}
+
+/* Create R, once, when the context's table exists: the one step that makes a reference from
+ * numbers. CSMINT writes R into its slot and answers the number of R's private parent. The
+ * function then reads R back the way every later use does and checks the answer against the
+ * table: LCC selector 8 must name a live record whose parent is the one CSMINT answered. A
+ * processor that answers 0 there (no supervisor references) is refused here, and so is a table
+ * format this code misreads. */
+static int root_create(struct context *c)
+{
+    unsigned long flags, old, desc[CV_DESC_WORDS], ancestor, type, id, parent = 0;
+    unsigned long *slot;
+
+    if (!c->exact_bounds && !capstone_repr_ok(CV_ROOT_BASE, CV_ROOT_END - CV_ROOT_BASE))
+        return -EOPNOTSUPP;
+    slot = ref_slot_get(c);
+    if (!slot) return -ENOMEM;
+
+    desc[0] = CV_ROOT_BASE;
+    desc[1] = CV_ROOT_END;
+    desc[2] = 7 | CV_DESC_NONLIN;
+    desc[3] = CV_ROOT_BASE;
+    desc[4] = 0;
+    desc[5] = 0;
+    preempt_disable(); local_irq_save(flags);
+    old = select_root(c);
+    asm volatile(".insn r 0x5b, 1, 0x50, %0, %1, %2"
+                 : "=&r"(ancestor) : "r"(slot), "r"(desc) : "memory");
+    ref_read(slot, &type, &id);
+    restore_root(old);
+    local_irq_restore(flags); preempt_enable();
+
+    if (type != CV_TYPE_NONLIN || !ref_lifetime(c, id, &parent) ||
+        parent != CV_ID_INDEX(ancestor)) {
+        pr_emerg("capstone_vm: root_grants: R reads back as type %lu, id %lu under %lu, and "
+                 "CSMINT answered %lu: no supervisor references, or an unknown table format\n",
+                 type, id, parent, ancestor);
+        return -EOPNOTSUPP;
+    }
+    c->root_slot = slot;
+    c->root_index = CV_ID_INDEX(id);
+    return 0;
+}
+
+/* Does the processor let S load a reference from a plain kernel address? Without supervisor
+ * references LDC with a plain base traps with cause 24. Where the firmware hands that trap to
+ * S, it is an unknown exception to Linux, which resumes a kernel-mode trap at its fixup, and the
+ * probe answers false. The gate platform's monitor does not delegate cause 24 (medeleg 0xb109):
+ * it takes the trap itself and halts the machine. There the probe cannot refuse cleanly, and no
+ * instruction lets S ask without the trap. It still moves the failure to the load of the
+ * module, before any context exists, and init() prints the reason first. The slot holds no tag:
+ * the loaded value is a number. */
+static bool supervisor_refs_probe(void)
+{
+    static unsigned long slot[CV_REF_SLOT_WORDS] __aligned(16);
+    unsigned long flags, refused;
+
+    preempt_disable(); local_irq_save(flags);
+    asm volatile("li %[refused], 0\n"
+                 CV_RUN
+                 "1:\n"
+                 CV_LDC("t0", "%[slot]")
+                 "li t0, 0\n"
+                 "j 3f\n"
+                 "2: li %[refused], 1\n"
+                 "3:\n"
+                 _ASM_EXTABLE(1b, 2b)
+                 : [refused] "=&r"(refused)
+                 : [slot] "r"(slot)
+                 : "t0", "memory");
+    local_irq_restore(flags); preempt_enable();
+    return !refused;
+}
 /* Clear every capability tag in a page; its bytes are dead (see below). A scalar store
  * clears the tag of the 16-byte granule it writes into, whatever its width
  * (capstone-qemu's store hook rounds both ends to granules; on the RTL a
@@ -1505,6 +1928,15 @@ static int retire(struct context *c, struct arena *a, bool destroying)
      * version of this change reasoned that no flag was needed because retire(destroying=true)
      * ignores the status; that enumerated only one of the two paths. */
     if (a->ancestor_retired) {
+        status = 0;
+    } else if (root_grants) {
+        /* The mapping ends through the kernel's copy of its reference. A lifetime that the
+         * program ended itself is not an error: nothing is left to end. */
+        unsigned long free_before = node_free_count(c);
+        if (ref_end(c, a->ref)) {
+            ++c->retired_flat;
+            if (node_free_count(c) > free_before) ++c->pushed_flat;
+        }
         status = 0;
     } else {
         unsigned long free_before = node_free_count(c);
@@ -1557,6 +1989,7 @@ static int retire(struct context *c, struct arena *a, bool destroying)
     rb_erase(&a->node, &c->arenas);
     xa_erase(&c->ids, a->id);
     c->registered_bytes -= a->bytes;
+    if (a->ref) ref_slot_put(c, a->ref);
     kvfree(a->pages);
     kvfree(a->frames);
     kfree(a);
@@ -1626,7 +2059,15 @@ static int park(struct context *c, struct arena *a)
     /* Everything that can fail comes before the retire. */
     error = pin_remaining(c, a, FOLL_FORCE | FOLL_NOFAULT);
     if (error) return error;
-    if (!CV_MUTANT(test_revive_keep_ancestor)) {
+    if (root_grants && !CV_MUTANT(test_revive_keep_ancestor)) {
+        /* As retire(): the mapping's lifetime ends through the kernel's copy of its reference. */
+        free_before = node_free_count(c);
+        if (ref_end(c, a->ref)) {
+            ++c->retired_flat;
+            if (node_free_count(c) > free_before) ++c->pushed_flat;
+        }
+        a->ancestor_retired = true;
+    } else if (!CV_MUTANT(test_revive_keep_ancestor)) {
         free_before = node_free_count(c);
         preempt_disable(); local_irq_save(flags);
         old = select_root(c);
@@ -1680,23 +2121,35 @@ static int revive(struct context *c, struct cv_thread *t, struct cv_map *r)
         }
     }
     map_revive_pages += cleared;
-    xa_erase(&c->ids, a->id);
     slot = t->frame + 8 + r->reg * 2;
-    slot[0] = 0;
-    slot[1] = 0;
-    desc[0] = r->address;
-    desc[1] = r->address + r->bytes;
-    desc[2] = r->permissions;     /* linear: move-only until the allocator derives a non-linear object */
-    desc[3] = r->cursor;
-    desc[4] = 0;
-    desc[5] = 0;
-    preempt_disable(); local_irq_save(flags);
-    old = select_root(c);
-    asm volatile(".insn r 0x5b, 1, 0x50, %0, %1, %2"
-                 : "=&r"(ancestor) : "r"(slot), "r"(desc) : "memory");
-    restore_root(old);
-    local_irq_restore(flags); preempt_enable();
-    a->ancestor = ancestor;
+    if (root_grants) {
+        /* The reuse is a new mapping: a new child of R, and its copy in the arena's slot. A
+         * refusal leaves the arena parked under its old id. */
+        slot[0] = 0;
+        slot[1] = 0;
+        if (root_derive(c, a->ref, slot, NULL, r)) {
+            xa_erase(&c->ids, id);
+            return -EIO;
+        }
+        xa_erase(&c->ids, a->id);
+    } else {
+        xa_erase(&c->ids, a->id);
+        slot[0] = 0;
+        slot[1] = 0;
+        desc[0] = r->address;
+        desc[1] = r->address + r->bytes;
+        desc[2] = r->permissions;     /* linear: move-only until the allocator derives a non-linear object */
+        desc[3] = r->cursor;
+        desc[4] = 0;
+        desc[5] = 0;
+        preempt_disable(); local_irq_save(flags);
+        old = select_root(c);
+        asm volatile(".insn r 0x5b, 1, 0x50, %0, %1, %2"
+                     : "=&r"(ancestor) : "r"(slot), "r"(desc) : "memory");
+        restore_root(old);
+        local_irq_restore(flags); preempt_enable();
+        a->ancestor = ancestor;
+    }
     a->ancestor_retired = false;
     a->parked = false;
     a->id = id;
@@ -1883,6 +2336,14 @@ static int add(struct context *c, struct cv_thread *t, struct cv_map *r)
         a->frames = kvcalloc(frame_slots(count), sizeof(*a->frames), GFP_KERNEL_ACCOUNT);
         if (!a->frames) { kvfree(pages); xa_erase(&c->ids, a->id); kfree(a); return -ENOMEM; }
     }
+    if (root_grants) {
+        /* linear and lazy keep describing the REQUEST (the heap's shape: admitted page by page,
+         * pooled, never frame-checked). The reference itself is never linear under root_grants. */
+        a->ref = ref_slot_get(c);
+        if (!a->ref) {
+            kvfree(a->frames); kvfree(pages); xa_erase(&c->ids, a->id); kfree(a); return -ENOMEM;
+        }
+    }
     n = 0;
     if (!unpinned && !a->lazy) {
         /* Pinned whole at the mint (lazy_grants off, or eager_grant): Linux resolves each first
@@ -1929,27 +2390,33 @@ static int add(struct context *c, struct cv_thread *t, struct cv_map *r)
         slot[0] = 0;
         slot[1] = 0;
     } else if (slot[0] || slot[1]) goto unpin;
-    desc[0] = r->address;
-    desc[1] = r->address + r->bytes;
-    /* C pointers are copyable, so a non-linear grant is minted NONLIN directly. A linear
-     * mapping grant stays move-only until the allocator derives a non-linear object. */
-    desc[2] = r->permissions | (r->linear ? 0 : CV_DESC_NONLIN);
-    /* The cursor the caller asked for. For a LINEAR grant this equals the base in every
-     * caller (exec.c:292 and :844 both pass the region's own address), so naming it here
-     * is what the old path produced by letting the mint default to base. */
-    desc[3] = r->cursor;
-    /* The image also has to appear in register slot 0: run() refuses to start a thread
-     * unless frame[8] and frame[12] are both filled, and slot 0 is never granted. One
-     * mint, two slots, one node. t->frame is unsigned long *, so + 8 is byte frame+64. */
-    desc[4] = r->reg == 3 ? (unsigned long)(t->frame + 8) : 0;
-    desc[5] = 0;
-    preempt_disable(); local_irq_save(flags);
-    old = select_root(c);
-    asm volatile(".insn r 0x5b, 1, 0x50, %0, %1, %2"
-                 : "=&r"(ancestor) : "r"(slot), "r"(desc) : "memory");
-    restore_root(old);
-    local_irq_restore(flags); preempt_enable();
-    a->ancestor = ancestor;
+    if (root_grants) {
+        /* The grant is a child of R, whatever r->linear says, with the cursor and the rights
+         * the request names. The image's second slot is register slot 0, as in the mint. */
+        if (root_derive(c, a->ref, slot, r->reg == 3 ? t->frame + 8 : NULL, r)) goto unpin;
+    } else {
+        desc[0] = r->address;
+        desc[1] = r->address + r->bytes;
+        /* C pointers are copyable, so a non-linear grant is minted NONLIN directly. A linear
+         * mapping grant stays move-only until the allocator derives a non-linear object. */
+        desc[2] = r->permissions | (r->linear ? 0 : CV_DESC_NONLIN);
+        /* The cursor the caller asked for. For a LINEAR grant this equals the base in every
+         * caller (exec.c:292 and :844 both pass the region's own address), so naming it here
+         * is what the old path produced by letting the mint default to base. */
+        desc[3] = r->cursor;
+        /* The image also has to appear in register slot 0: run() refuses to start a thread
+         * unless frame[8] and frame[12] are both filled, and slot 0 is never granted. One
+         * mint, two slots, one node. t->frame is unsigned long *, so + 8 is byte frame+64. */
+        desc[4] = r->reg == 3 ? (unsigned long)(t->frame + 8) : 0;
+        desc[5] = 0;
+        preempt_disable(); local_irq_save(flags);
+        old = select_root(c);
+        asm volatile(".insn r 0x5b, 1, 0x50, %0, %1, %2"
+                     : "=&r"(ancestor) : "r"(slot), "r"(desc) : "memory");
+        restore_root(old);
+        local_irq_restore(flags); preempt_enable();
+        a->ancestor = ancestor;
+    }
     arena_insert(c, a);
     c->registered_bytes += a->bytes;
     r->id = c->next_id = a->id;
@@ -1968,6 +2435,7 @@ unpin:
     /* The scan's lines were printed; a census reading them needs the unwind too. */
     if (diag_admit && a->scans)
         pr_info("capstone_vm: unwind arena 0x%lx+0x%lx scan=%u\n", a->address, a->bytes, a->scans);
+    if (a->ref) ref_slot_put(c, a->ref);
     kvfree(a->frames);
     kvfree(pages);
     xa_erase(&c->ids, a->id); kfree(a);
@@ -1982,6 +2450,10 @@ static int remap_begin(struct context *c, const struct cv_remap *r)
     struct cv_thread *t = find_thread(c, r->thread);
     struct arena *a;
     int error;
+    /* Stage 1 leaves mremap on the old design: remap_end retires the private parent and mints
+     * a linear grant over the new range. Refused before anything changes. The launcher answers
+     * the program with the error, and the libc's mremap is map, copy and unmap. */
+    if (root_grants) return -EOPNOTSUPP;
     if (!c->exact_bounds || c->remapping || !t || t->terminal ||
         !t->started || t->event != 3 || t->reply_cap ||
         !r->bytes || r->bytes > CV_MAX_REGION_BYTES || (r->bytes & ~PAGE_MASK))
@@ -3239,14 +3711,24 @@ retry:
             struct arena *fa = find_arena(c, r.frame, PAGE_SIZE);
             unsigned long st, old_root;
             unsigned long free_before;
+            bool ended = true;
             if (!fa) { rc = -EINVAL; goto thread_unwind; }
             free_before = node_free_count(c);
-            preempt_disable(); local_irq_save(flags);
-            old_root = select_root(c);
-            asm volatile(".insn r 0x5b, 1, 0x53, %0, %1, zero"
-                         : "=&r"(st) : "r"(fa->ancestor) : "memory");
-            restore_root(old_root);
-            local_irq_restore(flags); preempt_enable();
+            if (root_grants) {
+                /* The frame's mapping ends through the kernel's copy of its reference. An arena
+                 * retired before has no copy left and is refused, as CSRETIRE answers 1 for it.
+                 * A mapping the program ended itself is accepted: no reference to the frame is
+                 * live, which is what this step is for. */
+                st = fa->ancestor_retired ? 1 : 0;
+                ended = !st && ref_end(c, fa->ref);
+            } else {
+                preempt_disable(); local_irq_save(flags);
+                old_root = select_root(c);
+                asm volatile(".insn r 0x5b, 1, 0x53, %0, %1, zero"
+                             : "=&r"(st) : "r"(fa->ancestor) : "memory");
+                restore_root(old_root);
+                local_irq_restore(flags); preempt_enable();
+            }
             if (st) {
                 CV_EMIT_FIRST(childframe_prints,
                               "capstone_vm: child frame grant not retired (status %lu); "
@@ -3254,7 +3736,7 @@ retry:
                 rc = -EACCES;
                 goto thread_unwind;
             }
-            if (!st) {
+            if (!st && ended) {
                 ++c->retired_flat;
                 if (node_free_count(c) > free_before) ++c->pushed_flat;
             }
@@ -3531,6 +4013,7 @@ static int vm_open(struct inode *inode, struct file *f)
     c = kvzalloc(sizeof(*c), GFP_KERNEL);
     if (!c) return -ENOMEM;
     INIT_LIST_HEAD(&c->threads);
+    INIT_LIST_HEAD(&c->ref_pages);
     init_waitqueue_head(&c->remap_wait);
     c->arenas = RB_ROOT;
     xa_init_flags(&c->ids, XA_FLAGS_ACCOUNT);
@@ -3607,6 +4090,14 @@ static int vm_open(struct inode *inode, struct file *f)
       asm volatile("csrr %0, 0x5c0" : "=r"(profile));
       c->exact_bounds = !!(profile & 0x100); }
 #endif
+    if (root_grants) {
+        int error = root_create(c);
+        if (error) {
+            ref_pages_free(c);
+            node_free_table(c); free_page((unsigned long)c->frame);
+            kvfree(t); kvfree(c); return error;
+        }
+    }
     c->frame[1] = c->table_pa;
     t->context = c; t->id = 0; t->frame = c->frame;
     t->frame_pa = virt_to_phys(c->frame); t->user_frame = false;
@@ -3618,6 +4109,7 @@ static int vm_open(struct inode *inode, struct file *f)
         if (existing->mm == c->mm) {
             mutex_unlock(&vm_lock);
             mmdrop(c->mm);
+            ref_pages_free(c);
             node_free_table(c);
             memset(c->frame, 0, PAGE_SIZE);
             free_page((unsigned long)c->frame);
@@ -3630,6 +4122,7 @@ static int vm_open(struct inode *inode, struct file *f)
         if (error) {
             mutex_unlock(&vm_lock);
             mmdrop(c->mm);
+            ref_pages_free(c);
             node_free_table(c);
             free_page((unsigned long)c->frame);
             kvfree(t); kvfree(c);
@@ -3701,6 +4194,7 @@ static int vm_release(struct inode *inode, struct file *f)
         else if (t->frame) { memset(t->frame, 0, PAGE_SIZE); free_page((unsigned long)t->frame); }
         kvfree(t);
     }
+    ref_pages_free(c);
     node_free_table(c);
     if (c->image) { allow_write_access(c->image); fput(c->image); }
     mmdrop(c->mm); kvfree(c);
@@ -3730,6 +4224,22 @@ static int __init init(void)
         error = config(CAPSTONE_VM_IDS, &unpinned_exact_bounds);
         symbol_put(capstone_unpinned_config);
         if (error) return error;
+    }
+    if (root_grants) {
+        /* Refuse the LOAD, so the kernel never traps later on its first LDC. KERN_EMERG, like
+         * the other load refusals: the banner is absent and a reader needs the reason. */
+        if (!CV_REF_FORMAT) {
+            pr_emerg("capstone_vm: root_grants: this build's table format has no supervisor references\n");
+            return -EOPNOTSUPP;
+        }
+        pr_emerg("capstone_vm: root_grants=1: every grant is a child of one reference over the "
+                 "address space. Probing supervisor references: a processor without them traps "
+                 "at this LDC in S (cause 24)\n");
+        if (!supervisor_refs_probe()) {
+            pr_emerg("capstone_vm: root_grants needs supervisor references "
+                     "(QEMU x-capstone-supervisor-refs=true): LDC in S was refused\n");
+            return -EOPNOTSUPP;
+        }
     }
 #ifdef CAPSTONE_VM_FLAT_TABLE
     /* Refuse the LOAD, so a bad value cannot reach a run. 2 because ids 0 and 1 are the header;

@@ -7,10 +7,12 @@
 #include "../../sublet/sublet.h"
 #include "vm-abi.h"
 
-/* Internal libc interface. Grants are linear and must immediately be moved
- * into a slot. Public mmap explicitly delinearises its grant; heap allocators
- * retain ownership and derive separate object lifetimes. All grants belong to
- * the owning virtual address space, including its other threads. */
+/* Internal libc interface. A grant must immediately be moved into a slot: it
+ * is linear, unless the adapter runs with root_grants, where every grant is a
+ * copyable child of the address-space reference. cap_vm_copyable accepts both.
+ * Public mmap makes its grant copyable; heap allocators retain ownership and
+ * derive separate object lifetimes. All grants belong to the owning virtual
+ * address space, including its other threads. */
 #define CAP_VM_HEAP CV_MAP_HEAP
 #define CAP_VM_MAPPING CV_MAP_APPLICATION
 #define CAP_VM_METADATA CV_MAP_METADATA
@@ -41,11 +43,20 @@ static inline int cap_vm_acquire(sublet_cap *slot, size_t bytes,
     }
     return 0;
 }
+/* The grant in [slot] as a copyable reference. A linear grant is delinearised.
+ * A grant that is already non-linear (LCC type 1) is returned as loaded: DELIN
+ * refuses everything but a linear capability with cause 26. Any other content
+ * of the slot reaches DELIN and faults there, as before. */
 static inline void *cap_vm_copyable(sublet_cap *slot)
 {
     void *p;
-    __asm__ volatile("ldc %0, 0(%1)\ndelin %0"
-                     : "=&r"(p) : "r"(slot) : "memory");
+    __asm__ volatile("ldc %0, 0(%1)\n"
+                     ".insn r 0x5b, 0x1, 0x04, t0, %0, x1\n"
+                     "addi t0, t0, -1\n"
+                     "beqz t0, 1f\n"
+                     "delin %0\n"
+                     "1:\n"
+                     : "=&r"(p) : "r"(slot) : "t0", "memory");
     return p;
 }
 #endif

@@ -11,6 +11,9 @@
 #       [APP_SQLITE=... APP_MRUBY=... APP_PERL=... APP_MEMCACHED=...] [JOBS=8] \
 #       [FAST_FAULT=on|off (default off; needs --mode on): the module's unpinned_fast_fault parameter, the direct
 #        handle_mm_fault path. Recorded in OUT/fast-fault and read back from every insmod's FAST_FAULT line.]
+#       [ROOT_GRANTS=on|off (default off): the module's root_grants parameter, every grant a child of one
+#        reference over the address space. `on` adds x-capstone-supervisor-refs=true to the default CPU_EXTRA
+#        (a given CPU_EXTRA must carry it itself) and is recorded in OUT/root-grants.]
 #     bash run-arm.sh --mode on|off OUT
 #
 # --mode off|on is the memory mode of the module under test, required, and it reaches ALL nine gates:
@@ -61,6 +64,8 @@ memory=()
 FAST_FAULT=${FAST_FAULT:-off}
 [[ $FAST_FAULT =~ ^(on|off)$ ]] || { echo 'FAST_FAULT must be on or off' >&2; exit 2; }
 [[ $FAST_FAULT == off || $MODE == on ]] || { echo 'FAST_FAULT=on requires --mode on' >&2; exit 2; }
+ROOT_GRANTS=${ROOT_GRANTS:-off}
+[[ $ROOT_GRANTS =~ ^(on|off)$ ]] || { echo 'ROOT_GRANTS must be on or off' >&2; exit 2; }
 if [[ " $GATES " == *" unpinned-mutants "* && $MODE != on ]]; then
   echo 'unpinned-mutants requires --mode on' >&2; exit 2
 fi
@@ -199,11 +204,14 @@ gates_phase() {
   export CAPSTONE_QEMU_LOCK=${QEMU_LOCK:-$OUT/qemu.lock} CAPSTONE_TMP_ROOT=$G/tmp
   local cpu_default=x-capstone-test-csrs=true,x-capstone-supervisor-slots=32
   [[ $MODE == off ]] || cpu_default=x-capstone-test-csrs=false,x-capstone-supervisor-slots=32,x-capstone-raw-moves=true
+  [[ $ROOT_GRANTS == off ]] || cpu_default+=,x-capstone-supervisor-refs=true
   export CAPSTONE_QEMU_CPU_EXTRA=${CPU_EXTRA:-$cpu_default}
   printf '%s\n' "$MODE" > "$OUT/mode"
   printf '%s\n' "$FAST_FAULT" > "$OUT/fast-fault"
   # The runners read the request from the environment (memory_mode.py); run-arm.sh sets it, never the caller.
   if [[ $FAST_FAULT == on ]]; then export GATE_UNPINNED_FAST_FAULT=1; else unset GATE_UNPINNED_FAST_FAULT; fi
+  printf '%s\n' "$ROOT_GRANTS" > "$OUT/root-grants"
+  if [[ $ROOT_GRANTS == on ]]; then export GATE_ROOT_GRANTS=1; else unset GATE_ROOT_GRANTS; fi
   printf '%s\n' "$CAPSTONE_QEMU_CPU_EXTRA" > "$OUT/cpu-extra"
   sha256sum "$P/qemu-system-riscv64" "$P"/images/* "$P/adapter/capstone-vexec" "$P/adapter/capstone-job" \
     "$P/adapter/module/capstone_vm.ko" "$HOOKS" > "$OUT/platform.sha256"
