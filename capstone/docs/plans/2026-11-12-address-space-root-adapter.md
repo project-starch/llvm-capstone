@@ -40,9 +40,11 @@ Read at `41f94d8eb7`, in `runtime/virtual/module/capstone_vm.c`,
 
 ## Stages
 
-Each stage ends with gates on QEMU against a control built from the parent
-commit. A stage lands only when the control and the arm read the same on
-every gate that the stage does not mean to change.
+Each stage ends with one short unit test on QEMU: a contract program of a
+few dozen lines, one boot, with a negative control that shows the test
+measures the change. A stage also runs one smoke test of the unchanged path.
+No stage runs a full gate. The gates, the corpora and the studies run once,
+in the last stage, when every feature is in.
 
 0. **Instruction rules in QEMU. Done** (capstone-qemu `6bad7a2ee7`,
    `tests/address-space-root`, 22 of 22).
@@ -51,18 +53,23 @@ every gate that the stage does not mean to change.
    `STC`. The libc accepts a copyable grant where it expects a linear one.
    `munmap` stays on the range in this stage: the adapter keeps a copy of
    each mapping's reference only to end it, and this copy goes away in
-   stage 2. Gates: hosted, malloc, mapcache and node contracts, with
-   `root_grants` 0 and 1.
+   stage 2. Unit test: a mapped page works through the grant, `malloc` and
+   a second `mmap` work on copyable grants, an object derived in a page
+   faults with 25 after the page's `munmap`, the other mapping lives on.
+   Control: without the `CREVOKE` the access succeeds.
 2. **Unmap by reference.** The libc passes the reference in a0, the adapter
-   reads it from the frame and applies the four conditions. New contract
-   cases mirror the QEMU gate: nested object, stale reference, address,
-   narrowed reference, renewed mapping. The per-mapping copy of stage 1 goes.
+   reads it from the frame and applies the four conditions. Unit test: the
+   cases of the QEMU gate in one program (nested object, stale reference,
+   address, narrowed reference, renewed mapping). The per-mapping copy of
+   stage 1 goes.
 3. **`mremap`, mapping cache, thread frames.** Carry each over or remove it
-   with its reason. Decide partial unmap here (design note, open points).
+   with its reason, one unit test each. Decide partial unmap here (design
+   note, open points).
 4. **Remove the old path.** Drop the parameter, `arena.ancestor`, the private
    parents and the collection paths that exist only for them. `CSMINT` stays
    at one site.
-5. **Requalify.** Landing gates, port gates, bug corpora, Juliet, the reuse
+5. **End to end, once.** After the open design points that we implement are
+   in as well: landing gates, port gates, bug corpora, Juliet, the reuse
    study. Regenerate the recorded results.
 
 ## Not in this plan
