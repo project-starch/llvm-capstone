@@ -2203,3 +2203,28 @@ Capstone-only options are exempt; ISA and ABI limits of the Capstone target are 
 - First QEMU reading, definitions mode: xz with `-fjump-tables`, 12/12 specdiff PASS, in-context instret
   49,589,636,311 against 49,198,631,731 (+0.79 %).
 - The compiler lane recorded +0.44 % for gcc train earlier. Board time decides, not instret.
+
+## Addendum 61 (12 Nov 09:4x, before it runs): board 2 flashes cap-tagcache and runs xz with exit sweep mode 2
+
+**Why now.** Board 2 has been idle since 09:00. The next long runs, perl and x264 in declarations mode, wait for their
+QEMU twins (perf/ccsel/qjt3.sh, now first in its queue), about two hours away. xz with retire_exit_sweep = 2 fills the
+gap: its stage passed on board 2 (Addendum 60), and it measures the exit sweep on the final hardware.
+
+**What runs.** perf/twc/tw2run.sh on board 2, which is twrun.sh (Addendum 59) with chain C only and list
+perf/twc/tw2-cap.list:
+- bitstream caplifive_twc_ebe86cc01 (sealed, Addendum 60), flashed and read back;
+- kit bkit47-twc-all2-nohb, no heartbeat; its control rungs run in the boot;
+- one stage: perf/ns/stages/557.xz_r-dcnofprs-ns, Addendum 52's stage. That is xz cc-tuned in definitions mode
+  (66afc8c2d5227d33), with `echo 2 > /sys/module/capstone_vm/parameters/retire_exit_sweep` in the arm. Its dry run is
+  perf/twc/dry-tw2run.log.
+
+The xz build is definitions mode, as on board 1's chain. So against board 1's xz on cap-tagcache (Addendum 59, sweep mode
+3) this pair differs in the sweep mode, and in the board.
+
+**Predictions:**
+- **P0.** rc 0, specdiff 12/12 PASS, control rungs pass; the transcript's teardown lines read sweep=2.
+- **P1.** Teardown 0.17-0.19 ms per page, as on cap-hw0 (0.1783).
+- **P2.** The 12-command sum is at most 5,550 s. That is cap-pagemap's 5,946.72 s minus Addendum 60's 470 s, with 2 %
+  headroom. Capstone / riscv-base then reads at most 1.12.
+- **P3.** Against board 1's xz on cap-tagcache (sweep mode 3, read later), this run is 400-550 s shorter. The two boards
+  agreed to 0.1 % on nab (Addendum 58).
