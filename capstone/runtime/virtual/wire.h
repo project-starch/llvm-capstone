@@ -65,15 +65,16 @@ struct cv_thread_control {
  * the thread asks to unmap at its exit (CV_SERVICE_PTHREAD_EXIT, a1 the
  * stack's reference, a2 its length). The launcher names only a registered heap
  * mapping, not the allocator's metadata, held by no worker, of the length the
- * call names. With root_grants the stack is a request of the program: the
- * module checks the reference in a1 before it clears the frame, and after the
- * thread has stopped it ends the stack's reservation (CREVOKE of M) and
- * releases the arena. released (out): CV_EXIT_FRAME and CV_EXIT_STACK for the
- * arenas the module released; the launcher then unmaps those ranges. The
- * module writes it before the first irreversible step, and nothing after that
- * step can fail. A refused or impossible release does not stop the exit: the
- * thread exits and that arena stays registered (a leak, counted in exit_kept
- * and reported). */
+ * call names, that does not hold the exit word (a0). The module refuses a stack
+ * that is the thread's own frame. With root_grants the stack is a request of
+ * the program: the module checks the reference in a1 before it clears the
+ * frame, and after the thread has stopped it ends the stack's reservation
+ * (CREVOKE of M) and releases the arena. released (out): CV_EXIT_FRAME and
+ * CV_EXIT_STACK for the arenas the module released; the launcher then unmaps
+ * those ranges. The module writes it before the first irreversible step, and
+ * with root_grants nothing after that step can fail. A refused or impossible
+ * release does not stop the exit: the thread exits and that arena stays
+ * registered (a leak, counted in exit_kept and reported). */
 struct cv_thread_exit {
     __u64 thread, frame, stack, released;
 };

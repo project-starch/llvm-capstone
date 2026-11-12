@@ -2687,9 +2687,11 @@ static int remap_begin(struct context *c, const struct cv_remap *r)
     struct cv_thread *t = find_thread(c, r->thread);
     struct arena *a;
     int error;
-    /* Stage 1 leaves mremap on the old design: remap_end retires the private parent and mints
-     * a linear grant over the new range. Refused before anything changes. The launcher answers
-     * the program with the error, and the libc's mremap is map, copy and unmap. */
+    /* The remap transaction belongs to the old design: remap_end retires the private parent and
+     * mints a linear grant over the new range. With root_grants it is refused before anything
+     * changes. No libc code calls it (__capstone_vm_remap): the public mremap and mallocng's
+     * __heap_remapping both map, copy and unmap through the program's references. The removal of
+     * the old path deletes it (docs/plans/2026-11-12-address-space-root-adapter.md, stage 5). */
     if (root_grants) return -EOPNOTSUPP;
     if (!c->exact_bounds || c->remapping || !t || t->terminal ||
         !t->started || t->event != 3 || t->reply_cap ||
@@ -3946,13 +3948,19 @@ static void exit_keeps(const struct arena *a, const char *what, const char *why)
 }
 
 /* The arena id of the stack that thread t asks to unmap at its exit, if the module releases it,
- * else NULL. With root_grants the request must pass request_accept: the reference in a1, the
- * length in a2. Every release must pass retire_prepare, which refuses an arena that holds a
- * thread's frame, t's own included. Changes nothing that the release would not undo. */
+ * else NULL. t's own frame is never its stack: the exit releases that arena as the frame, so a
+ * request that names it is refused first, whatever the reference. With root_grants the request
+ * must pass request_accept: the reference in a1, the length in a2. Every release must pass
+ * retire_prepare, which refuses an arena that holds another thread's frame. Changes nothing that
+ * the release would not undo. */
 static struct arena *exit_stack(struct context *c, struct cv_thread *t, u64 id)
 {
     struct arena *a = xa_load(&c->ids, id);
 
+    if (a && t->user_frame && a->address == t->frame_user) {
+        exit_keeps(a, "stack", "is the thread's frame");
+        return NULL;
+    }
     if (root_grants && request_accept(c, t, CV_SERVICE_PTHREAD_EXIT, a, 11, CV_FRAME_ARG(t, 1),
                                       CV_FRAME_ARG(t, 2), true, "thread exit")) {
         exit_keeps(a, "stack", "request refused");
@@ -4115,17 +4123,14 @@ retry:
         }
         if (root_grants) {
             /* The hand-over is the program's request to end the frame's mapping: the creator
-             * passes the frame's reference in a0 (thread.c). The frame that the launcher names
-             * must be the one that the program named, the cursor of a0, and the call names the
-             * frame's one page. Checked before anything changes; the mapping ends last, below. */
+             * passes the frame's reference in a0 (thread.c), and the call names a0's cursor and
+             * the frame's one page. The whole-mapping check of request_accept then requires that
+             * cursor to be the address of fa, the arena at the frame that the launcher names
+             * (find_arena matched fa->address == r.frame), so the module takes only the frame that
+             * the program named. Checked before anything changes; the mapping ends last, below. */
             struct cv_thread *creator = find_thread(c, r.creator);
-            unsigned long named = CV_CALLER_ARG(creator, 0);
-            if (caller_paused(creator, CV_SERVICE_THREAD_CREATE) && named != r.frame) {
-                request_refused(fa, CV_UNMAP_CALL, "thread create", named, PAGE_SIZE);
-                rc = -EINVAL; goto out;
-            }
-            if (request_accept(c, creator, CV_SERVICE_THREAD_CREATE, fa, 10, r.frame, PAGE_SIZE,
-                               true, "thread create")) {
+            if (request_accept(c, creator, CV_SERVICE_THREAD_CREATE, fa, 10,
+                               CV_CALLER_ARG(creator, 0), PAGE_SIZE, true, "thread create")) {
                 rc = -EINVAL; goto out;
             }
         }

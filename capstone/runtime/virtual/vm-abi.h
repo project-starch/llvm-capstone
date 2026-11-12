@@ -20,14 +20,16 @@
 #define CV_SERVICE_THREAD_JOIN 5
 /* a0: the reference of the mapping, its cursor the first page; a1 the length; a2 the protection.
  * With root_grants the kernel checks the reference as for munmap, except that the range may be
- * any page range inside the mapping, which the reference must cover. It ends nothing. */
+ * any page range inside the mapping, which the reference must cover. It ends nothing. A mapping
+ * that holds a worker's transport answers EBUSY, as for munmap. */
 #define CV_SERVICE_PROTECT 6
 #define CV_SERVICE_WAIT 7
 #define CV_SERVICE_FUTEX 8
 /* a0 the exit word, a1 the reference of the mapping that holds the thread's stack (or 0), a2 its
  * length, a3 the status. With root_grants the stack is unmapped only through a1, as for munmap.
  * A refused stack does not stop the exit: the mapping stays, and the program can still unmap it
- * through a reference it kept. */
+ * through a reference it kept. A stack of the wrong length, one that holds the exit word and the
+ * thread's own frame are refused this way. */
 #define CV_SERVICE_PTHREAD_EXIT 9
 #define CV_SERVICE_THREAD_DELEGATE 10
 /* The calling context's launcher id + 1. Since the transport lock reads its identity from gp's

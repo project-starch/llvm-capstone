@@ -34,12 +34,12 @@ struct mapping {
     /* The worker whose transport block (its meta block or its exchange region) lies in this
      * mapping, or 0. This launcher writes into a worker's transport for the worker's whole
      * attachment, through Linux and with service_lock released while a service blocks, so the
-     * mapping must outlive the attachment: while a holder is set, retirement (unmap) and
-     * remapping are refused to EVERY caller, the holder included, and hence the address is never
-     * reused under it. The hold is released only by the holder's own detach (the SDK detaches
-     * before it gives the blocks back) or by its exit. One holder per mapping and one block per
-     * mapping: the SDK maps each block on its own (pthread.c), and the attachment refuses a
-     * mapping that already has a holder. Without the hold, a second worker could retire the
+     * mapping must outlive the attachment: while a holder is set, retirement (unmap), remapping
+     * and protection changes are refused to EVERY caller, the holder included, and hence the
+     * address is never reused under it and its pages stay writable. The hold is released only by
+     * the holder's own detach (the SDK detaches before it gives the blocks back) or by its exit.
+     * One holder per mapping and one block per mapping: the SDK maps each block on its own
+     * (pthread.c), and the attachment refuses a mapping that already has a holder. Without the hold, a second worker could retire the
      * mapping under a blocked read, map a fresh one at the same address, and the read's
      * copy-back would create backing the module never admitted. On dev since linear arenas
      * became lazy: the transport blocks were heap blocks. */
@@ -87,6 +87,8 @@ static __thread int host_signals_attached;   /* this worker's thread records int
 #define CV_MAX_THREADS 32
 static uint64_t thread_ids[CV_MAX_THREADS] = {0};
 static unsigned thread_done[CV_MAX_THREADS];
+/* The joiners that wait in thread_join on each entry. */
+static unsigned thread_waiters[CV_MAX_THREADS];
 /* Each thread's frame mapping, by address and identity (the module's arena id, never reused): the
  * exit names it to the module for release (thread_frame_mapping). */
 static struct { uintptr_t address; uint64_t id; } thread_frames[CV_MAX_THREADS];
@@ -152,30 +154,43 @@ static struct mapping *thread_frame_mapping(uint64_t id)
     struct mapping *m = address ? map_find(address) : NULL;
     return m && m->id == frame_id ? m : NULL;
 }
-static void thread_remove(uint64_t id)
+/* Free entry i of the thread table. Called with thread_state_lock held. */
+static void thread_slot_free(unsigned i)
 {
-    pthread_mutex_lock(&thread_state_lock);
-    for (unsigned i = 1; i < CV_MAX_THREADS; ++i) {
-        if (thread_ids[i] != id) continue;
-        thread_ids[i] = 0;
-        thread_done[i] = 0;
-        thread_frames[i].address = 0;
-        thread_frames[i].id = 0;
-        --thread_count;
-        pthread_mutex_unlock(&thread_state_lock);
-        return;
-    }
-    pthread_mutex_unlock(&thread_state_lock);
+    thread_ids[i] = 0;
+    thread_done[i] = 0;
+    thread_waiters[i] = 0;
+    thread_frames[i].address = 0;
+    thread_frames[i].id = 0;
+    --thread_count;
 }
-static void thread_mark_done(uint64_t id)
+static void thread_remove(uint64_t id)
 {
     pthread_mutex_lock(&thread_state_lock);
     for (unsigned i = 1; i < CV_MAX_THREADS; ++i)
         if (thread_ids[i] == id) {
-            thread_done[i] = 1;
-            pthread_cond_broadcast(&thread_state_cond);
+            thread_slot_free(i);
             break;
         }
+    pthread_mutex_unlock(&thread_state_lock);
+}
+/* Publish thread id's exit, after all of its cleanup: a joiner through the launcher (thread_join)
+ * returns from here on. remove: no joiner through the launcher is expected (a POSIX exit with an
+ * exit word, which musl's join waits on), so the entry goes now, unless a joiner already waits on
+ * it. That joiner then takes the entry, as after any other exit. */
+static void thread_finish(uint64_t id, int remove)
+{
+    pthread_mutex_lock(&thread_state_lock);
+    for (unsigned i = 1; i < CV_MAX_THREADS; ++i) {
+        if (thread_ids[i] != id) continue;
+        if (remove && !thread_waiters[i]) {
+            thread_slot_free(i);
+        } else {
+            thread_done[i] = 1;
+            pthread_cond_broadcast(&thread_state_cond);
+        }
+        break;
+    }
     pthread_mutex_unlock(&thread_state_lock);
 }
 static int thread_join(uint64_t id)
@@ -184,13 +199,10 @@ static int thread_join(uint64_t id)
     pthread_mutex_lock(&thread_state_lock);
     for (unsigned i = 1; i < CV_MAX_THREADS; ++i) {
         if (thread_ids[i] != id) continue;
+        ++thread_waiters[i];
         while (!thread_done[i])
             pthread_cond_wait(&thread_state_cond, &thread_state_lock);
-        thread_ids[i] = 0;
-        thread_done[i] = 0;
-        thread_frames[i].address = 0;
-        thread_frames[i].id = 0;
-        --thread_count;
+        thread_slot_free(i);
         pthread_mutex_unlock(&thread_state_lock);
         return 0;
     }
@@ -682,8 +694,11 @@ static long release_range(struct mapping *m)
 }
 /* The domain thread tid's mprotect of [base, + bytes) (CV_SERVICE_PROTECT, base the cursor of the
  * reference it passed in a0): a page range inside the visible length of one registered heap
- * mapping that is not the allocator's metadata. With root_grants the module checks the reference
- * first (CV_PROTECT): a live reference to that mapping whose bounds cover the range. */
+ * mapping that is not the allocator's metadata (else EINVAL) and that no worker holds (else
+ * EBUSY, as mapping_gate answers): this launcher writes a held mapping through Linux for the
+ * worker's whole attachment, and a protection change would take the pages from under that write.
+ * With root_grants the module checks the reference first (CV_PROTECT): a live reference to that
+ * mapping whose bounds cover the range. */
 static long protect_range(uint64_t tid, uintptr_t base, size_t bytes, int prot)
 {
     if (!bytes || (base & 4095) || (bytes & 4095) ||
@@ -692,6 +707,7 @@ static long protect_range(uint64_t tid, uintptr_t base, size_t bytes, int prot)
     uintptr_t at = m ? (uintptr_t)m->address : 0;
     if (!m || !m->heap || m->kind == CV_MAP_METADATA ||
         base - at > m->visible || bytes > m->visible - (base - at)) return -EINVAL;
+    if (m->holder) return -EBUSY;
     struct cv_protect request = {.thread = tid, .id = m->id};
     if (ioctl(device, CV_PROTECT, &request)) return -errno;
     m->protected_range = 1;
@@ -1286,10 +1302,14 @@ static int virtual_service(uint64_t tid, struct cv_step *step)
         /* The module releases the thread's frame and the stack it names before the exit word is
          * stored, so the word must lie in neither: a store into a range just given back to Linux
          * would land in whatever Linux maps there next. musl's word is a global (the thread-list
-         * lock), never in the thread's stack. */
+         * lock), never in the thread's stack. Both checks use the mappings this launcher found,
+         * with their whole extent, never the base and length the program names. A word in the
+         * frame stops the launcher. A word in the stack makes the stack request a wrong one: the
+         * stack stays mapped, like every refused stack, and the exit goes on. */
         struct mapping *frame = thread_frame_mapping(tid);
-        if (clear && posix && step->args[1] && clear - step->args[1] < step->args[2]) return -1;
+        struct mapping *stack = posix && step->args[1] ? map_find(step->args[1]) : NULL;
         if (clear && frame && clear - (uintptr_t)frame->address < frame->bytes) return -1;
+        int word_in_stack = clear && stack && clear - (uintptr_t)stack->address < stack->bytes;
         /* A worker that exits still attached gives its holds back here, so they keep none of its
          * mappings. */
         transport_detach(tid);
@@ -1299,27 +1319,28 @@ static int virtual_service(uint64_t tid, struct cv_step *step)
          * the frame still holds it and ends the stack's reservation after the thread has stopped.
          * A refused stack stays mapped and registered, and the exit goes on. */
         struct cv_thread_exit request = {.thread = tid};
-        struct mapping *stack = posix && step->args[1] ? map_find(step->args[1]) : NULL;
         if (frame && !mapping_gate(frame, 4096)) request.frame = frame->id;
-        if (stack && !mapping_gate(stack, step->args[2])) request.stack = stack->id;
+        if (stack && !word_in_stack && !mapping_gate(stack, step->args[2]))
+            request.stack = stack->id;
         if (ioctl(device, CV_THREAD_EXIT, &request))
             return -1;
         if (!(request.released & CV_EXIT_FRAME) || release_range(frame))
             fprintf(stderr, "CAPSTONE_VM_FRAME_RELEASE_FAILED frame=0x%lx\n",
                     frame ? (unsigned long)(uintptr_t)frame->address : 0UL);
-        thread_mark_done(tid);
-        /* musl join may retire the child's stack/TLS after this store.
-         * The virtual CPU has stopped and its tagged frame is gone first. */
         if (posix && step->args[1] &&
             (!(request.released & CV_EXIT_STACK) || release_range(stack)))
             fprintf(stderr, "CAPSTONE_VM_STACK_UNMAP_REFUSED tid=%llu base=0x%lx bytes=%lu\n",
                     (unsigned long long)tid, (unsigned long)step->args[1],
                     (unsigned long)step->args[2]);
+        /* musl join may retire the child's stack/TLS after this store.
+         * The virtual CPU has stopped and its tagged frame is gone first. */
         if (clear) {
             __atomic_store_n((int *)clear, 0, __ATOMIC_RELEASE);
             syscall(SYS_futex, (int *)clear, FUTEX_WAKE_PRIVATE, INT_MAX, NULL, NULL, 0);
-            thread_remove(tid);
         }
+        /* A joiner through the launcher (CV_SERVICE_THREAD_JOIN) returns only after everything
+         * above: the frame and the stack are released or kept, and the exit word is stored. */
+        thread_finish(tid, clear != 0);
         step->reply = 0;
         return 1;
     } else if (step->args[7] == CV_SERVICE_FUTEX) {

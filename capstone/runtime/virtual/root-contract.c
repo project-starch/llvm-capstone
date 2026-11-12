@@ -1,8 +1,8 @@
 /* Root grants (module parameter root_grants=1): each mapping is a reservation, a record M that the
  * kernel derives from the one reference over the address space and keeps to itself, and the
  * program's reference P is a child of M. Every request of the program to end a mapping comes with
- * P: munmap, the stack at thread exit, the frame's hand-over at thread creation (stages 2, 3 and
- * 3b of docs/plans/2026-11-12-address-space-root-adapter.md). The kernel accepts the reference
+ * P: munmap, the stack at thread exit, the frame's hand-over at thread creation (stages 2 to 4 of
+ * docs/plans/2026-11-12-address-space-root-adapter.md). The kernel accepts the reference
  * only if it is a live child of M whose bounds cover the mapping as mmap exposed it, and the call
  * names that whole length; then it ends the mapping with CREVOKE of M. An mprotect comes with P
  * too and may name part of the mapping, which P must cover. run-root-grants.py runs this program
@@ -52,11 +52,21 @@
  *                                   must fault with 25
  * renew-ref (ends with a fault): as renew, and the last line reads through the renewed reference
  *                                   itself.
- * mremap (ends with a fault):
- *   public_mremap_moves             the libc's mremap (map, copy, unmap) moves a page to two
+ * mremap (ends with a fault): the libc's mremap (map, copy, unmap) of a two-page mapping that
+ *                                   holds data and, at offset 64, a reference to another mapping
+ *   mremap_wrong_length_refused     an old length that is not the mapping's: the unmap of the old
+ *                                   mapping is refused, so mremap fails with EINVAL, and the old
+ *                                   mapping keeps its contents and takes writes
+ *   mremap_nested_object_refused (root grants)
+ *                                   the same through an object over the whole mapping
+ *   public_mremap_grows             mremap to three pages moves the data and the stored reference,
+ *                                   which still reads its object; the third page reads zero
  *   mremap_old_reference_refused    munmap through the old reference afterwards is refused
- *                                   (the old mapping is gone); the last line reads through the old
- *                                   reference and must fault with 25.
+ *                                   (the old mapping is gone)
+ *   public_mremap_shrinks           mremap of the grown mapping to one page keeps the data of that
+ *                                   page and the stored reference; the last line reads through the
+ *                                   grown mapping's reference after the program mapped its address
+ *                                   again, and must fault with 25.
  * exit-victim (exit 0; root grants):
  *   exit_with_own_stack_at_victim_refused
  *                                   a thread exits naming a victim mapping with its own stack's
@@ -96,6 +106,16 @@
  *                                   reference the main thread kept
  *   wrong_length_stack_unmaps_afterwards
  *                                   munmap through that reference then releases it
+ * exit-huge (exit 0): the same with the length 2^64 - 1 (exit_with_huge_length_completes,
+ *                                   huge_length_stack_stays_mapped,
+ *                                   huge_length_stack_unmaps_afterwards). The exit word lies
+ *                                   outside the stack, below the named base plus that length.
+ * exit-frame (exit 0):
+ *   exit_with_frame_as_stack_completes
+ *                                   a thread exits naming its own frame's mapping as its stack:
+ *                                   the joiner returns and the launcher wrote the exit word
+ *   frame_as_stack_released_once    the frame's mapping is no longer registered, and the thread's
+ *                                   stack still works and unmaps
  * protect (exit 0, or 1 under the negative control):
  *   protect_through_mapping_reference
  *                                   mprotect through the mapping's reference changes the
@@ -113,6 +133,12 @@
  *                                   the same through an object derived over the whole page
  *   protect_narrowed_covering_range a narrowed reference changes the page it covers: an mprotect
  *                                   may name part of a mapping (musl opens a stack past its guard)
+ * protect-held (exit 0, or 1 under the negative control):
+ *   protect_held_mapping_refused    a pthread's mprotect of its own exchange region, which the
+ *                                   launcher holds while the thread is attached, is refused
+ *                                   with EBUSY
+ *   protect_after_detach            after the thread detaches its transport, the same mprotect
+ *                                   succeeds
  * create-gate (exit 0, or 1 under the negative control):
  *   create_metadata_frame_refused   a frame in a one-page mapping of the allocator's metadata is
  *                                   refused (EINVAL), and the page still works
@@ -445,25 +471,68 @@ static int mode_renew(int through_object)
     return 0;
 }
 
+/* mremap: the libc's mremap maps a new reservation, copies the contents with their tags and
+ * unmaps the old reservation through the program's reference (mapping.c). The stored reference
+ * at offset 64 names another mapping. */
 static int mode_mremap(void)
 {
     (void)grant();
-    char *p = map(PAGE);
+    char *target = map(PAGE);
+    target[1] = 0x71;
+    char *p = map(2 * PAGE);
     unsigned long address = cursor(p);
-    memset(p, 0x61, PAGE);
+    memset(p, 0x61, 2 * PAGE);
+    *(char **)(p + 64) = target;
 
-    char *q = mremap(p, PAGE, 2 * PAGE, MREMAP_MAYMOVE);
-    require(q != MAP_FAILED, "mremap");
-    require(q[0] == 0x61 && q[PAGE - 1] == 0x61, "the moved page keeps its contents");
-    q[PAGE] = 0x62;
-    q[2 * PAGE - 1] = 0x63;
-    require(q[PAGE] == 0x62 && q[2 * PAGE - 1] == 0x63, "the second page of the new mapping");
-    pass("public_mremap_moves");
+    errno = 0;
+    require(mremap(p, PAGE, 3 * PAGE, MREMAP_MAYMOVE) == MAP_FAILED && errno == EINVAL,
+            "mremap with an old length that is not the mapping's");
+    p[2] = 0x62;
+    require(p[0] == 0x61 && p[2] == 0x62 && p[2 * PAGE - 1] == 0x61 &&
+            (*(char **)(p + 64))[1] == 0x71, "the old mapping after the refused mremap");
+    pass("mremap_wrong_length_refused");
 
-    require(refused(munmap(p, PAGE)), "munmap through the old reference after mremap");
+    if (root_grants) {
+        char *object = capstone_cap_derive(p, 0, 2 * PAGE);
+        errno = 0;
+        require(mremap(object, 2 * PAGE, 3 * PAGE, MREMAP_MAYMOVE) == MAP_FAILED && errno == EINVAL,
+                "mremap through an object over the whole mapping");
+        object[3] = 0x63;
+        require(p[3] == 0x63 && p[2] == 0x62 && p[2 * PAGE - 1] == 0x61,
+                "the mapping and the object after the refused mremap");
+        pass("mremap_nested_object_refused");
+    } else {
+        skip("mremap_nested_object_refused", BY_ADDRESS);
+    }
+
+    char *q = mremap(p, 2 * PAGE, 3 * PAGE, MREMAP_MAYMOVE);
+    require(q != MAP_FAILED && cursor(q) != address, "mremap to three pages moves the mapping");
+    char *moved = *(char **)(q + 64);
+    printf("ROOT_MREMAP grown moved_type=%lu\n", type_of(moved));
+    fflush(stdout);
+    require(q[0] == 0x61 && q[2] == 0x62 && q[2 * PAGE - 1] == 0x61,
+            "the grown mapping keeps the data");
+    require(type_of(moved) == 1 && cursor(moved) == cursor(target) && moved[1] == 0x71,
+            "the grown mapping keeps the stored reference");
+    require(q[2 * PAGE] == 0 && q[3 * PAGE - 1] == 0, "the third page reads zero");
+    q[3 * PAGE - 1] = 0x64;
+    require(q[3 * PAGE - 1] == 0x64, "the third page takes a write");
+    pass("public_mremap_grows");
+
+    require(refused(munmap(p, 2 * PAGE)), "munmap through the old reference after mremap");
     pass("mremap_old_reference_refused");
-    stale = p;
-    stale_read(address);
+
+    unsigned long grown = cursor(q);
+    char *r = mremap(q, 3 * PAGE, PAGE, MREMAP_MAYMOVE);
+    require(r != MAP_FAILED && cursor(r) != grown, "mremap to one page moves the mapping");
+    moved = *(char **)(r + 64);
+    require(r[0] == 0x61 && r[2] == 0x62 && r[PAGE - 1] == 0x61,
+            "the shrunk mapping keeps the data of its page");
+    require(type_of(moved) == 1 && moved[1] == 0x71, "the shrunk mapping keeps the stored reference");
+    pass("public_mremap_shrinks");
+
+    stale = q;
+    stale_read_bytes(grown, 3 * PAGE);
     return 0;
 }
 
@@ -768,9 +837,11 @@ static int mode_detached(void)
     return 0;
 }
 
-/* exit-length: a thread exits naming its own stack's mapping with a length that is not the
- * mapping's. The exit completes and writes the exit word; the mapping stays until the program
- * unmaps it through the reference it kept. */
+/* exit-length and exit-huge: a thread exits naming its own stack's mapping with a length that is
+ * not the mapping's, STACK - PAGE or 2^64 - 1. The exit completes and writes the exit word; the
+ * mapping stays until the program unmaps it through the reference it kept. The exit word lies
+ * outside the stack, so a launcher that checks it against the base and the length the program
+ * names (and not against the mapping it found) stops at the huge length. */
 static volatile int exit_word;
 
 static void *exit_word_worker(void *arg)
@@ -779,32 +850,77 @@ static void *exit_word_worker(void *arg)
     __capstone_vm_thread_exit_clear(cursor((void *)&exit_word), exit_operand, exit_bytes, 0);
 }
 
-static int mode_exit_length(void)
+static int mode_exit_length(unsigned long bytes, const char *tag)
 {
+    char name[80];
     (void)grant();
     char *stack = map(STACK);
     unsigned long address = cursor(stack);
 
+    printf("ROOT_EXIT_WORD in_stack=%d length=0x%lx\n",
+           cursor((void *)&exit_word) - address < STACK, bytes);
+    fflush(stdout);
+    require(cursor((void *)&exit_word) - address >= STACK, "the exit word lies outside the stack");
     exit_operand = stack;
-    exit_bytes = STACK - PAGE;
+    exit_bytes = bytes;
     exit_word = 1;
     long id = __capstone_virtual_context_create(exit_word_worker, NULL, stack + STACK,
                                                 thread_pointer());
     require(id > 0, "create the exiting context");
     require(!capstone_virtual_thread_join(id), "join the context that named a wrong length");
     require(exit_word == 0, "the launcher wrote the exit word");
-    pass("exit_with_wrong_length_completes");
+    snprintf(name, sizeof name, "exit_with_%s_length_completes", tag);
+    pass(name);
 
     require(registered(address), "the stack's mapping is still registered");
     stack[0] = 0x31;
     stack[STACK - 1] = 0x32;
     require(stack[0] == 0x31 && stack[STACK - 1] == 0x32,
             "the stack's mapping works through the kept reference");
-    pass("wrong_length_stack_stays_mapped");
+    snprintf(name, sizeof name, "%s_length_stack_stays_mapped", tag);
+    pass(name);
 
     require(!munmap(stack, STACK), "munmap of the stack through the kept reference");
     require(!registered(address), "the stack's mapping is gone after the munmap");
-    pass("wrong_length_stack_unmaps_afterwards");
+    snprintf(name, sizeof name, "%s_length_stack_unmaps_afterwards", tag);
+    pass(name);
+    return 0;
+}
+
+/* exit-frame: a thread exits naming its own frame's mapping as its stack, through the frame's
+ * reference from before the create (stale since the hand-over). The module refuses the stack
+ * because it is the thread's frame and releases the arena once, as the frame. */
+static void *volatile frame_operand;
+
+static void *frame_as_stack_child(void *arg)
+{
+    (void)arg;
+    __capstone_vm_thread_exit_clear(cursor((void *)&exit_word), frame_operand, PAGE, 0);
+}
+
+static int mode_exit_frame(void)
+{
+    (void)grant();
+    char *stack = map(STACK);
+    uintptr_t identity;
+    unsigned char *frame = frame_new(frame_as_stack_child, stack + STACK, &identity);
+    unsigned long address = cursor(frame);
+
+    frame_operand = frame;
+    exit_word = 1;
+    long id = __capstone_vm_thread_create_frame(frame);
+    require(id > 0, "create the thread on its frame");
+    require(!capstone_virtual_thread_join(id), "join the thread that named its frame as its stack");
+    require(exit_word == 0, "the launcher wrote the exit word");
+    pass("exit_with_frame_as_stack_completes");
+
+    int probe = registered(address);
+    printf("ROOT_FRAME_PROBE registered=%d\n", probe);
+    fflush(stdout);
+    require(!probe, "the frame's mapping is released");
+    stack[0] = 0x33;
+    require(stack[0] == 0x33 && !munmap(stack, STACK), "the thread's stack afterwards");
+    pass("frame_as_stack_released_once");
     return 0;
 }
 
@@ -910,6 +1026,47 @@ static int mode_protect(void)
     return 0;
 }
 
+/* protect-held: a pthread's exchange region is a mapping of its own that the launcher holds
+ * while the thread is attached, since the launcher writes it through Linux. mprotect of it through
+ * the thread's own reference is refused with EBUSY. After the thread detaches its transport, the
+ * same mprotect succeeds. The worker restores each protection it changed before its next
+ * delegated call writes the region again. */
+extern void *__capstone_virtual_exchange(void);
+extern long __capstone_vm_transport_detach(void);
+static int held_errno = -1, detached_errno = -1;
+
+static void *held_worker(void *arg)
+{
+    printf("ROOT_HELD_WORKER attached\n");      /* a delegated call: the worker attaches */
+    fflush(stdout);
+    char *exchange = __capstone_virtual_exchange();
+    if (!exchange)
+        return arg;
+    held_errno = mprotect(exchange, PAGE, PROT_READ) ? errno : 0;
+    if (!held_errno)
+        mprotect(exchange, PAGE, PROT_READ | PROT_WRITE);
+    __capstone_vm_transport_detach();
+    detached_errno = mprotect(exchange, PAGE, PROT_READ) ? errno : 0;
+    if (!detached_errno)
+        mprotect(exchange, PAGE, PROT_READ | PROT_WRITE);
+    return arg;
+}
+
+static int mode_protect_held(void)
+{
+    (void)grant();
+    pthread_t thread;
+    require(!pthread_create(&thread, NULL, held_worker, NULL), "pthread_create");
+    require(!pthread_join(thread, NULL), "pthread_join");
+    printf("ROOT_HELD held_errno=%d detached_errno=%d\n", held_errno, detached_errno);
+    fflush(stdout);
+    require(held_errno == EBUSY, "mprotect of a held mapping");
+    pass("protect_held_mapping_refused");
+    require(detached_errno == 0, "mprotect of the same mapping after the detach");
+    pass("protect_after_detach");
+    return 0;
+}
+
 /* The base of a reference's bounds (LCC selector 3). */
 static unsigned long base_of(void *p)
 {
@@ -995,7 +1152,10 @@ int main(int argc, char **argv)
     if (!strcmp(mode, "create")) return mode_create();
     if (!strcmp(mode, "create-fail")) return mode_create_fail();
     if (!strcmp(mode, "detached")) return mode_detached();
-    if (!strcmp(mode, "exit-length")) return mode_exit_length();
+    if (!strcmp(mode, "exit-length")) return mode_exit_length(STACK - PAGE, "wrong");
+    if (!strcmp(mode, "exit-huge")) return mode_exit_length(~0UL, "huge");
+    if (!strcmp(mode, "exit-frame")) return mode_exit_frame();
+    if (!strcmp(mode, "protect-held")) return mode_protect_held();
     if (!strcmp(mode, "protect")) return mode_protect();
     if (!strcmp(mode, "create-gate")) return mode_create_gate();
     fail("unknown mode");

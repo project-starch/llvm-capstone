@@ -1,7 +1,8 @@
 # Address-space root: adapter and libc plan
 
-Status: plan of 2026-11-12 on the branch `address-space-root`. Stages 0 to 3b
-are done (see each stage); stage 4 is next.
+Status: plan of 2026-11-12 on the branch `address-space-root`. Stages 0 to 4
+are done (see each stage); stage 5 is next, in a reduced form until the
+project lead decides on the old path.
 Design: [the kernel as the outermost allocator](../design/virtual-capstone/address-space-root.md).
 
 ## What the code does today
@@ -112,18 +113,59 @@ in the last stage, when every feature is in.
    `mprotect` and without the a0 comparison at creation (behind a launcher
    that names the mapping around a0's cursor) fail where expected.
    Then the remaining items of the old stage 3:
-4. **`mremap`, mapping cache, thread frames.** Found in stage 2: after the
-   program renews a mapping with CRENEW, the kernel's copy no longer names it.
-   Two paths still end mappings through that copy and must take the
-   program's reference instead: thread creation (a frame mapping renewed
-   before creation would keep a live reference to the protected frame) and
-   the unmap of a thread's stack at thread exit (the range would return to
-   use while the renewed lifetime lives). Carry each over or remove it
-   with its reason, one unit test each. Decide partial unmap here (design
-   note, open points).
+4. **Fixes after the review of stage 3b, and `mremap`. Done** (2026-11-13).
+   The mapping cache, the frame at thread creation and the stack at thread
+   exit already take the program's reference since stages 3 and 3b. Partial
+   `munmap` stays refused, as the design note decides. The changes:
+   - Thread exit. The launcher checks the exit word against the frame and
+     stack mappings that it found, over their whole extent, and no longer
+     against the base and length that the program names. A wrong stack
+     length, however large, never stops the exit. A word inside the stack
+     keeps the stack, like every refused stack. The launcher tells its own
+     joiners that the thread is done only after the frame and stack releases
+     and the store and wake of the exit word. An exit with an exit word frees
+     its table entry at once, unless a joiner already waits on it. The module
+     refuses a stack that is the thread's own frame before every other check
+     (`exit_kept`, reason "is the thread's frame").
+   - `mprotect`. The launcher refuses a mapping that a worker's transport
+     holds (EBUSY), as `munmap` does: it writes that mapping through Linux.
+   - Thread creation. The module hands the cursor of the creator's a0 to
+     `request_accept`, whose whole-mapping check compares it with the frame
+     that the launcher names. The separate comparison is gone.
+   - `mremap`. No libc code calls the module's remap transaction
+     (`__capstone_vm_remap` in `start.S` and `vm.h`, `CV_SERVICE_REMAP`, the
+     launcher's `remap_mapping`, `CV_REMAP_BEGIN` and `CV_REMAP_END`). The
+     public `mremap` maps a new reservation, copies the contents with their
+     tags and unmaps the old one through the program's reference
+     (`mapping.c`). mallocng's realloc of a large group does the same through
+     `__heap_remapping` (`malloc-mapping.c`, musl patch 0009), and musl's
+     `pthread_getattr_np` calls `mremap` without `MREMAP_MAYMOVE` and gets
+     ENOSYS. The transaction stays refused with root grants, and stage 5
+     deletes it.
+   No ABI change: the ioctl structures and the services keep their layout.
+   Unit test: root-contract.c, three new modes (`exit-huge`, `exit-frame`,
+   `protect-held`) and `mremap` rewritten (refused with a wrong old length and
+   through an object over the mapping, then a growth and a shrink that keep
+   the data and a stored reference, and the old reference faults with 25).
+   Two batches: root_grants=1 193 of 193 pinned and unpinned, root_grants=0
+   190 of 190, hosted contract 94 of 94, mapcache park and revive, a launcher
+   without its length check 80 of 80 (the module refuses the wrong stack
+   lengths and the wrong old length of `mremap`), a launcher that names the
+   frame around a0's cursor 28 of 28. Controls: the old exit-word check stops
+   the launcher at the huge length (exit 125); without the hold check the
+   held mapping's `mprotect` succeeds; without the a0 cursor in
+   `request_accept` a moved frame reference creates a thread; the stage 3b
+   controls (condition 3, the stack's CREVOKE, the `mprotect` check) still
+   fail where expected.
 5. **Remove the old path.** Drop the parameter, `arena.ancestor`, the private
    parents and the collection paths that exist only for them. `CSMINT` stays
-   at one site.
+   at one site. Pending a decision of the project lead (2026-11-13): the
+   root_grants=0 path stays for now, since the FPGA bitstream lacks the new
+   instruction rules (supervisor references), and without that path the
+   adapter does not run on the board. Until the decision, this stage deletes
+   only the remap transaction, which neither path calls (`remap_begin`,
+   `remap_end`, `CV_REMAP_BEGIN`, `CV_REMAP_END`, `CV_SERVICE_REMAP`, the
+   launcher's `remap_mapping` and the `__capstone_vm_remap` stub).
 6. **End to end, once.** After the open design points that we implement are
    in as well: landing gates, port gates, bug corpora, Juliet, the reuse
    study. Regenerate the recorded results.
