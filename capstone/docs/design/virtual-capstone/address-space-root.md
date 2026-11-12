@@ -147,6 +147,18 @@ mapping by its registered range and not by a reference.
 
 Each is a decision about the design and not yet about code.
 
+- Machine-mode traps. Found in stage 1 (2026-11-12): with `sstc=false` the
+  firmware takes the timer in M and saves and restores the S registers with
+  plain stores and loads, which strips their tags. A kernel that holds a
+  reference across such a trap loses it. On QEMU the adapter keeps every use
+  of a reference in one straight-line run without a branch, and QEMU takes
+  interrupts only between translation blocks. That does not hold on hardware
+  that traps between any two instructions. Kernel-saved program registers
+  meet the same problem. The design must require firmware that preserves
+  register tags across every M trap, or a platform on which no M trap
+  interrupts S or U (Sstc and no emulation traps). With `sstc=true` the
+  current QEMU guest stalls during boot.
+
 - Partial `munmap`, `mremap` and a fixed mapping over a live one. The abstract
   machine has no partial release. Proposal: the kernel frees the pages and
   keeps the address range reserved until the whole mapping ends.

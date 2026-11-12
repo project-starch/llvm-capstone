@@ -48,7 +48,8 @@ in the last stage, when every feature is in.
 
 0. **Instruction rules in QEMU. Done** (capstone-qemu `6bad7a2ee7`,
    `tests/address-space-root`, 22 of 22).
-1. **R and grants behind a module parameter.** `root_grants=1` (default 0):
+1. **R and grants behind a module parameter. Done** (2026-11-12, see the
+   commit "Adapter stage 1"). `root_grants=1` (default 0):
    create R with the table, make every grant a child of R, store it with
    `STC`. The libc accepts a copyable grant where it expects a linear one.
    `munmap` stays on the range in this stage: the adapter keeps a copy of
