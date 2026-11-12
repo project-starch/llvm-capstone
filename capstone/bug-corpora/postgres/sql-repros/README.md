@@ -1,11 +1,17 @@
 # PostgreSQL 17.5 engine defects, reached through SQL
 
-9 defects in PostgreSQL 17.5 and its contrib extensions, each a `trigger.sql`
+10 defects in PostgreSQL 17.5 and its contrib extensions, each a `trigger.sql`
 run against a real server. Siblings: [`../mmgr-repros`](../mmgr-repros), five
 memory-manager defects reduced to C programs against the managers themselves,
 and [`../c-repros`](../c-repros), five frontend defects reduced to C against
 the real upstream functions; these are not reducible that way, so they use the
 `script-trigger` schema described in [`../../SCHEMA.md`](../../SCHEMA.md).
+
+Case 10 (2026-10-29) is the one temporal case: mmgr-repros' tuplestore double free (its case 00),
+reached whole through upstream's own reproducer. Its liveness, and why mmgr-repros' other four
+cannot run in the single-user backend, are in
+[`results/2026-10-29-host/README.md`](results/2026-10-29-host/README.md). No Capstone or CheriBSD arm
+has run it; the per-arm tables below are cases 01-09.
 
 ## Classes
 
