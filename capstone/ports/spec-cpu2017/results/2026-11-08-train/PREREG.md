@@ -2627,3 +2627,47 @@ The table width is a capacity, not a speed setting.
 - Board 2: the fair x264 on bkit51 (started 19:38) is stopped: its node need is unknown, a failure would show only at
   the end, and its module would differ from the other benchmarks'. Restarted on bkit53 (imagick first, then x264).
 - perl alone runs on the 16-bit table; it is disclosed, and re-run on bkit53 if the boards have room.
+
+## Addendum 72 (2026-11-13 03:10, before it runs): the Capstone arm is option B + native; names; one kernel K2N; riscv-base on it
+
+**The lead's decision (13 Nov), recorded:** the Capstone arm is **option B** (55-bit lifetime ids) through the **native
+route**, as Addendum 10 chose and as the paper describes. On 12 Nov the work ran on the 30-bit-id line through the
+module route by my mistake. Every Capstone reading of Addenda 54-71 is relabelled **cap-ids30(-tagcache), module route,
+diagnostic**; none enters the final table.
+
+**Names** (the lead: name a bitstream by the ideas it combines):
+riscv-base (d31345cf3); cap-ids30 (1fc2cd5aa, formerly "C.5a"); cap-ids30-tagcache (63e5dde82); cap-ids55-native
+(0ef470559, formerly "V1f": 55-bit ids + native Linux-task support + R-70 fix, NI fix included);
+cap-ids55-native-tagcache (79cf8de17 = cap-ids55-native + page bitmap + tag-word cache; capstone-ariane
+perf/v1f-tagcache; the adapter file byte-identical to cap-ids30-tagcache's; lint gate PASS, figures as 63e5dde82's);
+cap-ids55-native-pagemap (c62d59175, page bitmap only).
+
+**Bitstream order, fixed now:** cap-ids55-native-tagcache (building on apollo since 02:30) if it routes, seals and passes
+the native smoke as its first boot; else cap-ids55-native-pagemap (building on the synth lane's host); else the sealed
+cap-ids55-native (caplifive_e5nids55f_0ef470559). Each native chain starts with the native smoke stage.
+
+**One kernel for both arms: K2N** (perf/k2n/mk-k2n.sh): the native ids55 board kernel tree (native01/linux-board-ids55:
+6.4.14 + the linux-6.4/ native series, RISCV_CAPSTONE_TASK, capstone_vm built in, the native command line incl.
+cma=256M and node_flat_records=262144) with K2's tick change (NO_HZ_IDLE, HIGH_RES_TIMERS off), no THP. Config diff
+against the native tree: NO_HZ only (perf/k2n/config.diff). Image fd61316e8466983367.
+- riscv-base on K2N: kit bkit54-k2n-rv (bkit52-k2rv with K2N relinked per bake, ctl ko built on K2N with .text equal to
+  fpga-pkg-127's, no module parameters). Its tools perf/k2n/tree are perf/nohb/tree with one change: boardvm's insmod
+  guard tests /sys/module/capstone_vm (a built-in module is not in /proc/modules). No heartbeat, as the native kits
+  run none (Addendum 62's hb120 cost on riscv mcf was −0.1 %). Real bake and relink dry run: rc 0, gate PASS.
+- Disclosed: K2N's native command line and cma=256M apply to riscv-base too.
+
+**Mapping cache: off on both arms.** The native runtime (dev's allocator) has no mapping cache; riscv-base therefore
+runs plain-rv64f (llvm-c4, -fno-pie, musl WITHOUT plain_reuse.c), stages perf/fair/stages/*-rv-fair. Cache on both
+arms would need a port of the dev-allocator mapping reuse (perf/heap-mapping-c8) into the native runtime; that is an
+improvement step, not done here.
+
+**Board 3, stopped and restarted:** its K2 riscv list (Addendum 68) is stopped during perl (the K2 kernel is no longer
+the measurement kernel). It now runs perf/k2n/k2n-rv.list: imagick, nab, lbm, gcc train01, mcf, xz, perl, x264.
+Boards 1 and 2 keep their cap-ids30 module-route diagnostics until the native stages are ready, then switch.
+
+**Predictions, riscv-base K2N no-cache vs its K2 cache reading (Addendum 68):** imagick +0 % .. +4 % (the cache was
+worth −2.2 % on cap-ids30 Plain); nab, lbm, mcf, xz within ±1.5 %; gcc train01 +3 % .. +9 % (cache −6.7 %).
+Outside those bands the kernel differs from K2 for riscv-base, which is a finding.
+
+**Native route caveat, to be carried in every native row:** checked accesses are emulated by the firmware (native
+CSCHECK emulation, about 600 cycles each, MEASUREMENT ONLY shortcuts on frame-slot and epoch trust, not skipped work).
