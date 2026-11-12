@@ -2735,3 +2735,42 @@ lifetime semantics); riscv-base plain-rv64fr (plain_reuse.c, 512 / 64 MiB). QEMU
 - **Predictions:** Capstone gcc train01 with the cache 2,000-2,800 s; riscv-base gcc train01 with the cache
   1,700-1,780 s (its K2 reading 1,731.62 s); gcc ratio 1.15-1.60. imagick and perl within ±3 % of their no-cache
   ratios.
+
+## Addendum 75 (2026-11-13 07:30, before it runs): the native I/O alignment batch (bkit57); board 1's cache chain moves onto it
+
+**Reading since Addendum 74:** Capstone xz test (native, no cache) 5,504.98 s over its 12 commands, specdiff 12/12
+PASS (riscv-base's K2N xz still running on board 3).
+
+**gcc train01 instruction profiles on the QEMU twin** (capmix3, the train01 command's window, specdiff PASS each;
+perf/gccprof): native, no cache: user 12.42 G, kernel 1.83 G, firmware 0.18 G = 14.43 G; native, cache: user 12.59 G
+(+165 M of memset: reused memory is zeroed in user space), kernel 0.43 G, firmware 0.04 G = 13.06 G; riscv-base
+(rv-fair, kit-profq kernel, not K2N): user 10.78 G, kernel 0.82 G, firmware 0.08 G = 11.68 G. So instructions give
+1.235 (no cache) and 1.118 (cache), against the board's 1.814: most of gcc's gap on silicon is not instruction count.
+The user +15 % is capability arithmetic and bounds operations (+1.78 G; pointer loads/stores become capability
+ones about one for one), per the compiler lane's per-function diff (perf/nat-fair/gcc-func-diff-full.txt).
+
+**bkit57-k2n-native-tagcache-ioalign** = bkit56 with the native kernel copy perf/k2n/linux-board-k2n-native-ioalign:
+linux-board-k2n-native plus the five adapter files of llvm-capstone native-io-align 2d380284ee86 (base native/c5a-ids55
+441d7ec409ce; the copy's five files equalled the base's before). Changes, all in Capstone's own native path
+(capstone_vm; riscv-base's K2N tree is not touched):
+- 517f8ec5044a: kernel read/write buffers placed at the file position's alignment. imagick's 864 KB output went
+  through a byte-by-byte memcpy because the TGA header leaves the file offset misaligned; twin: that loop 858,448 ->
+  10,180 iterations, kernel instructions of the convert command -17.0 %, program instructions unchanged.
+- 1931fe59535e: cu_copy skips the zero-length probe check once the next cursor is predicted (the authorizing check
+  still covers exactly the chunk; on a mismatch the old two-check path runs). Twin imagick checks 3,169 -> 2,977.
+- 2d380284ee86, MEASUREMENT ONLY: native counters gain checks, check_cycles, runs, run_cycles, between_cycles (cycle
+  CSR, read with interrupts off; the firmware sets mcounteren to all ones).
+Checks: twins on the batch kernel give byte-identical result files for imagick, xz, gcc test, gcc train01 (compiler
+lane); the copy compiles drivers/misc/capstone with the same 11 pre-existing warnings; native-tree.sha256 regenerated
+over the same 67 paths, exactly the five files differ; stubbed dry runs of both chains reach their last stage.
+
+**Runs, board 1** (after its running chain: mcf, perl makerand). Addendum 74's Capstone cache chain on bkit56 was
+stopped before it booked anything and replaced by:
+- d: bkit57, no cache: imagick (the isolated effect of the batch against Addendum 74's 13.75 s);
+- e: bkit57, mapping cache (nat-fair-cache): imagick, gcc train01, perl makerand;
+- then riscv-base with the cache (Addendum 74's chain, unchanged): imagick, gcc train01, perl.
+
+**Predictions:** d imagick 13.15-13.55 s (ratio 1.17-1.20 against 11.26 s); checks delta per command = its
+emu_fingerprints delta (every check emulated), about 2,970-3,000 on imagick; check_cycles / checks 1,000-20,000 cycles
+(informational: the first silicon reading of an emulated check). e gcc train01 2,000-2,800 s (Addendum 74's band), with
+service + fault escapes under 8,000; imagick and perl within ±3 % of d's and of the no-cache perl ratio.
