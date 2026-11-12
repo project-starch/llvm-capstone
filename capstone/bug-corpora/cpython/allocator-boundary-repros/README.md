@@ -121,7 +121,71 @@ expectation pre-registered for them and how it held up are in
 [`results/20261006/README.md`](results/20261006/README.md); `probe/counts.py --check` still
 re-derives that page's tables from its matrix.
 
-## Measured 2026-10-20, case by case
+## The declared bundles: 2026-11-12, hash seed 0
+
+`corpus.json` names `results/2026-11-12-seed0/virtual-malloc` and
+`results/2026-11-12-seed0/virtual-nested-pools`. They ran the images and the platform of
+`results/2026-11-11-t1800` (patch 0014 with the one-operand `CREVOKE`, `--timeout 1800`) with one
+change to the invocation, the hash seed. `results/2026-11-12-seed0/README.md` compares every row
+with the two earlier records.
+
+    virtual-malloc        CAUGHT 17  MISSED 14  NO-READING 1
+    virtual-nested-pools  CAUGHT 28  MISSED  3  NO-READING 1
+    cheribsd-revocation   unchanged, the record of 2026-10-20
+
+**The hash seed is pinned.** The declared bundles are measured with
+`run-virtual.py --guest-env PYTHONHASHSEED=0`, which sets the variable for every guest process of
+the run. Nothing else about the run changes. Seed 0 was fixed before the first seeded run, and no
+other seed was run. Without the seed, rows 02, 03 and 04 read a property of one process's hash key
+and not of the image. Their triggers hand a `bytes` field name to a `%U` format, and
+`_copy_characters` reads the `bytes` object through the `str` layout. On this ABI
+`PyBytesObject.ob_shash` and `PyASCIIObject.state` share offset 48, so the word that tells the copy
+how wide a character is and where the characters lie is the cached hash of the field name, which
+CPython keys per process. One process copies one-byte units from inside the object, the next
+two-byte units past its end, the next takes its data pointer from the payload. Unseeded, rows 02
+and 04 took both verdicts from run to run, on the converted and on the unconverted tree: the spread
+table is in `results/2026-11-11-t1800/README.md` (ten runs of `virtual-nested-pools`, 02 CAUGHT in
+six and 04 in four). Under seed 0 the three rows read the same in five of five runs per arm
+(`results/2026-11-12-seed0/repeats/`), although the address space layout still differs from process
+to process.
+
+**Rows 02, 03, 04, 13 and 18 as they now read:**
+
+| case | `virtual-malloc` | `virtual-nested-pools` | why it differs from 2026-10-20 |
+|---|---|---|---|
+| 02 | MISSED: the copy ends inside the block's 128-byte size class | CAUGHT, `cause=28` in `memcpy` called from `_copy_characters`, on the first byte past the 121-byte block; attributed by the negative control | the seed selects a one-byte copy of 64 bytes from offset 64 |
+| 03 | MISSED, as 02 | CAUGHT, as 02 | the same field name and so the same copy as 02 |
+| 04 | MISSED | MISSED `◇` | the seed selects a copy that reads no character: the run performs no out-of-bounds access |
+| 13 | MISSED: `MemoryError`, declared the defect's own uncaught read | CAUGHT, `cause=28` in `unicode_fromformat_write_str` | `memory_error_is_the_defect`, declared 2026-10-22, now measured |
+| 18 | CAUGHT, `cause=28` in `mmap_ass_subscript` | CAUGHT, `cause=28` in `mmap_ass_subscript` | the runtime serves `mremap` since 2026-10-22, so `mmap.resize` succeeds and the write meets the mapping's bounds |
+
+**`04` joins `06` and `17` as a `◇` row: counted, and the measured run performs no out-of-bounds
+access.** Under seed 0 the hash of `b'\xff' * 524288` says "not compact", the data pointer comes
+from 16 payload bytes of `0xff`, and the copy loop ends before its first read. Both arms print a
+field name of 524288 NUL characters. The row is counted as a miss on both arms, the conservative
+reading, and it says nothing about the bounds of the object. The unseeded `CAUGHT` readings of `04`
+came from processes whose hash selected a wider copy.
+
+**One more cell differs, and the seed does not explain it: `09` on `virtual-malloc`.** The stock
+arm does not bound a frame, the defective stores succeed, and the row reads what the interpreter
+does afterwards. The declared bundle's run faulted in a dictionary lookup past the end of an arena
+(`cause=28` in `unicodekeys_lookup_unicode`, counted by the negative control). Six further seeded
+runs of the same image aborted as the earlier records did (`NO-READING:inconclusive`), so the
+`CAUGHT` is 1 of 7. `results/2026-11-12-seed0/README.md` has the runs and what they exclude.
+
+**The arms read 17 / 31, 28 / 31 and 12 / 31**, over the denominator the next section defines:
+every case both Capstone arms reached, which leaves out `11` alone. With the review's withdrawal
+rule of the next section the `virtual-malloc` figure is 11 / 31: the same six cells carry a code
+that is not their axis's mechanism (`01`, `05`, `10`, `15` and `31` with `cause=24`, `32` with
+`cause=12`). It is 10 / 31 when `09` is also read as the consequence it is. `virtual-nested-pools`
+stays at 28 / 31, every catch with its axis's code. These two figures are this review's reading and
+not a measurement, as before.
+
+The case-by-case review that follows was written against the 2026-10-20 pair. For the rows equal in
+verdict, cause and function, 28 of 32 on `virtual-nested-pools` and 29 of 32 on `virtual-malloc`,
+it holds for the declared bundles too.
+
+## Measured 2026-10-20, case by case (the declared bundles until 2026-11-12)
 
 Bundle `results/2026-10-20-review-t1800`, on the emulator this repo pins
 (`capstone/capstone-qemu d35af47b163c`) with a compiler carrying the C-80 fix,
@@ -164,9 +228,10 @@ required -- is a consequence on either axis.
 | `virtual-nested-pools` | **0** | every one of its 27 catches carries its axis's code |
 | `cheribsd-revocation` | 8 | 01, 05, 09, 10, 13, 14 (spatial, `si_code=2`), 31 (temporal, `si_code=2`, decided by `si_addr` -- see below), 32 (`si_code=5` `PROT_CHERI_PERM`, neither code) |
 
-**The arms read 15 / 31, 27 / 31 and 12 / 31.** That is what the declared bundle and the
+**The arms read 15 / 31, 27 / 31 and 12 / 31.** That is what the 2026-10-20 bundles and the
 CheriBSD record say, every cell of it derived by the judge or, for ③, taken from that run's
-record, and it is the figure to quote.
+record. It was the figure to quote until 2026-11-12. The declared bundles now read 17 / 31 and
+28 / 31 (previous section), and ③ is unchanged.
 
 With the fourteen withdrawals above applied the same cells read 9 / 31, 27 / 31 and 4 / 31. **That
 is this review's reading, not a measurement**: no tool enforces the withdrawal rule, so nothing in
@@ -200,10 +265,12 @@ declares `memory_error_is_the_defect`, which records that the `MemoryError`
 `virtual-malloc` hits is the defect's own uncaught read and not the table
 refusing; under that rule the case is reached and the arm missed it.
 `runners/virtual/run-virtual.py` applies the rule, so it takes effect on a run,
-and the declared bundle predates it: the cell still reads
-`NO-READING:infra`, and reads MISSED-pending until the arm is re-measured.
+and the 2026-10-20 bundle predates it: its cell reads
+`NO-READING:infra`. The arm was re-measured on 2026-11-11 and 2026-11-12, and the declared cell
+reads MISSED.
 `virtual-nested-pools` detects it, `cause=28` in `unicode_fromformat_write_str`.
-`18` is **in**: both arms reached it and both MISSED. It had been held out on `NOTIMPL` from the `spatial` and `sublet` arms
+`18` is **in**: both arms reached it and both MISSED on the 2026-10-20 bundles. Since the runtime
+serves `mremap` both arms catch it (previous section). It had been held out on `NOTIMPL` from the `spatial` and `sublet` arms
 retired on 2026-10-11, which is a verdict from arms this table no longer reports.
 Including it is the conservative direction -- it is a case both unprotected arms and
 Sublet missed, so holding it out removed evidence against Sublet.
@@ -238,9 +305,10 @@ caveat on two rows:
   `negative_control.py`.
 * **`02`, `03` and `04` read from the declared bundle like every other row.**
   They were re-measured under `PYTHONHASHSEED=0` with five repeats per arm
-  during the review; those runs are not in the committed bundle, so they are not
-  what the table reports and the claims they carried have been dropped from the
-  notes.
+  during the review; those runs were not committed, so they were not
+  what the table reported and the claims they carried were dropped from the
+  notes. Since 2026-11-12 the declared bundles are themselves measured under that
+  seed, and `results/2026-11-12-seed0/repeats/` commits five repeats per arm.
 * **`16` on Sublet was `NO-READING` and is a detection, shown `D 28‖`.** It
   had faulted `cause=28` in `advance_with_locations`, a symbol the case did not
   declare. That symbol is `read_byte` inlined: `read_byte` is one statement,
@@ -291,18 +359,22 @@ this paragraph ran the two together.
 
 ### One cell that moved for a reason worth recording
 
-**Case 02 and case 04 depend on the contents of neighbouring memory.** 02 was
+**Case 02 and case 04 depend on the process's hash key.** 02 was
 `D 5` on the pools arm in `results/2026-10-10-sublet-isa` and MISSED in the
 first full run of 2026-10-18; 04 was MISSED in that run and `cause=24` in the
-re-run, from the same image and the same trigger. `_copy_characters` copies a
-length taken from the field the overread fetched, so what the copy does depends
-on what lies past the object, and CPython randomises that per process.
+re-run, from the same image and the same trigger. An earlier revision of this
+paragraph put that down to the contents of neighbouring memory. The layout shows
+the cause: `_copy_characters` takes the character width and the location of the
+characters from the `state` word of the `str` layout, and on this ABI that word
+is the `bytes` object's cached hash (`ob_shash`, offset 48), which CPython keys
+per process. The length is `ob_size` in every process. The seed rule of
+2026-11-12 fixes the key (section "The declared bundles").
 
-Both read from the declared bundle, like every other row in the table: 02 is
-MISSED on both virtual arms, 04 is MISSED on `virtual-malloc` and `CAUGHT`
-`cause=28` in `_copy_characters` on `virtual-nested-pools`. The
-`PYTHONHASHSEED=0` repeats run during the review are not in the committed
-bundle and are not what the table reports.
+In the 2026-10-20 bundles 02 is MISSED on both virtual arms, 04 is MISSED on
+`virtual-malloc` and `CAUGHT` `cause=28` in `_copy_characters` on
+`virtual-nested-pools`. The `PYTHONHASHSEED=0` repeats run during that review
+were not committed. The declared bundles of 2026-11-12 read 02 `CAUGHT` on
+`virtual-nested-pools` and MISSED on `virtual-malloc`, and 04 MISSED on both.
 
 **Case 16's fault was real and unattributable, and the reason was a symbol
 name.** The pools arm faults `cause=28` in `advance_with_locations`, which was

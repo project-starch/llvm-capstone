@@ -229,7 +229,7 @@
     },
     "virtual-cpython": {
       "target": "capstone-virtual",
-      "summary": "the CPython 3.13.7 interpreter for the virtual profile (ports/common/application/build-virtual.sh cpython, CPY_TEST_CAPI=1) run as a process under capstone-vexec: its one heap is musl mallocng, which bounds and retires every object it hands out -- PyMem_Raw allocations, objects over 512 bytes, and the arenas pymalloc takes -- while pymalloc stock (patch 0009) carves its blocks inside those arenas unbounded",
+      "summary": "the CPython 3.13.7 interpreter for the virtual profile (ports/common/application/build-virtual.sh cpython, CPY_TEST_CAPI=1) run as a process under capstone-vexec: its one heap is musl mallocng, which bounds and retires every object it hands out -- PyMem_Raw allocations, objects over 512 bytes, and the arenas pymalloc takes -- while pymalloc stock (patch 0009) carves its blocks inside those arenas unbounded. cpython/allocator-boundary-repros measures its declared bundles of this configuration and of virtual-cpython-pools with PYTHONHASHSEED=0 in every guest process (run-virtual.py --guest-env; the corpus README says why), and each bundle's inputs.json records the guest's reading",
       "mechanism": "exact bounds and lifetime retirement of malloc objects; none per pymalloc block",
       "controls": {
         "uaf-block": "complete",

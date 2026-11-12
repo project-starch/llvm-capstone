@@ -13,6 +13,9 @@ instructions. obmalloc now derives every block from the arena as mallocng return
 case-by-case review is written against that pair, and six cells read differently here for the
 reasons this page gives. None of them comes from the conversion.
 
+Successor: since 2026-11-12 `corpus.json` names `../2026-11-12-seed0`, the same images measured with
+`PYTHONHASHSEED=0`. Its README explains why rows 02 and 04 spread here and how they read under the seed.
+
 The 29 equal rows of `virtual-nested-pools`: cause 28 at the same declared function for the spatial rows 01, 03, 05, 07 to
 10 and 12 to 16, cause 25 at the same function for the temporal rows 19 to 32 (19 by its control
 pairing), MISSED for 06 and 17, NO-READING:not-reached for 11 (`ModuleNotFoundError`, no `_ctypes`).

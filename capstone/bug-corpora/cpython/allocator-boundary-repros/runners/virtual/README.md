@@ -19,7 +19,17 @@ otherwise, because with `malloc` as a library builtin LLVM may elide an allocati
 
     capstone_vm --state VM up --profile virtual --exact-bounds ...
     runners/virtual/run-virtual.py results/<stamp>/virtual-malloc --arm virtual-malloc \
-        --state VM --build OUT --llvm-bin <llvm>/bin --raw RAW
+        --state VM --build OUT --llvm-bin <llvm>/bin --raw RAW --guest-env PYTHONHASHSEED=0
+
+**A declared bundle pins the hash seed.** Since 2026-11-12 the bundles that `corpus.json`
+`verdict_bundles` names are measured with `--guest-env PYTHONHASHSEED=0`. The runner passes the
+variable to every guest process of the run: the workload, both controls, each trigger, each negative
+control and each probe. It records the guest's own reading under `guest` in `inputs.json`, and a
+seeded run reads `hash_randomization` 0, `pythonhashseed` "0" and `hash_abc` 1453079729188098211
+(FNV of "abc" under a zero key, the hash this build uses). A bundle whose `guest` block reads
+otherwise is not a declared measurement of this corpus. The corpus README states the rule and its
+reason under "The hash seed is pinned". The runner does not set the variable by itself, so a run
+without the flag is the unseeded invocation of the earlier records.
 
 The runner stages the release's `Lib` under the VM share as `PYTHONHOME` (compiled by the build's
 native 3.13.7), and each case's `.py` files into a directory of its own. It runs `trigger.py`
