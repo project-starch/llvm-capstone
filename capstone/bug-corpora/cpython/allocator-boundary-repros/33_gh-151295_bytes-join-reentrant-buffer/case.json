@@ -21,7 +21,7 @@
       "oracle": "completion while the block's arena stays live: pymalloc links the freed block onto its own pool free list, so the platform has no free to revoke. Once pymalloc returns an emptied arena to the system allocator (insert_to_freepool, when nf == ao->ntotalpools && ao->nextarena != NULL) the platform does have a free, and after a revocation sweep the stale access faults with SIGPROT si_code=2 (PROT_CHERI_TAG). Both outcomes are admissible; which one occurs depends on arena occupancy and sweep timing rather than on the defect, so this arm does not separate these cases. A bounds fault (si_code=1) would falsify this."
     }
   },
-  "status": "live and its layer measured on the host (2026-10-29); the Capstone and CheriBSD arms have not run on it",
+  "status": "live and its layer measured on the host (2026-10-29); first Capstone reading in results/2026-10-29-virtual, beside the corpus's verdict_bundles and not derived into this file: virtual-malloc CAUGHT, virtual-nested-pools CAUGHT. cheribsd-revocation has not run it",
   "sibling_issue": "../pymalloc-repros/06_gh-151295_bytes_join_reentrant_buffer",
   "layer_note": "measured 2026-10-29: ASan reported a 328-byte region, at or under the 512 B SMALL_REQUEST_THRESHOLD, and the heap report does not survive PYTHONMALLOC=pymalloc on a second 3.13.7 build with ASan and pymalloc both on (CFLAGS/LDFLAGS -fsanitize=address, because configure's --with-address-sanitizer forces pymalloc off): under PYTHONMALLOC=pymalloc the run dies with SEGV at address 0x8 in Py_TYPE (_PyObject_GET_WEAKREFS_LISTPTR): the stale read returns the free-list link pymalloc writes inside the freed block",
   "fault_sites": [

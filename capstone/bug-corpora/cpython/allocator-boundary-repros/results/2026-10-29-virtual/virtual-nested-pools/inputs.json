@@ -1,0 +1,44 @@
+{
+  "arm": "virtual-nested-pools",
+  "build": {
+    "application": "cpython",
+    "image_sha256": "1e3674938089bb61fa375a92e16e71ba6e402eac7a0a7d3cb5cd14c098feb753",
+    "nested": "cpython",
+    "profile": "virtual",
+    "runtime_dirty": false,
+    "runtime_revision": "a4a4d8f8b1df2593aac5af3068dfdd80883129fa",
+    "stack_bytes": 8388608
+  },
+  "cases": 35,
+  "configuration": "virtual-cpython-pools",
+  "contract": "verdicts-v1",
+  "corpus": "cpython/allocator-boundary-repros",
+  "guest": {
+    "guest_env": [
+      "PYTHONHASHSEED=0"
+    ],
+    "hash_abc": 1453079729188098211,
+    "hash_randomization": 0,
+    "kernel_cmdline": "root=/dev/vda ro",
+    "pythonhashseed": "0"
+  },
+  "platform": {
+    "compiler": "2236d7f34ca381d80ff60156f3618ef5253143d435f8c66645aa600c2e80d19d",
+    "firmware": "4dd4a2ade361a8bdb9cc45aeca02c6b7309b60d1e8701c2a4ed91c117a495f16",
+    "judge": "d5cf411c3906a2dad8f853df94313eac7d6a2a92a260f971603758de9ed1f977",
+    "kernel": "e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b",
+    "launcher": "b533a0689e31cb828caae954a64da770d0a12e9d27ab5ababc520e040ed9dcc2",
+    "module": "74c60cd60df0208ecccda8c13d087184f19c994c24ededcefee8cb46e205a09f",
+    "profile": "virtual",
+    "qemu": "e8a89c014e5aa627b294cdf0b7d366610cf4334adc1f9d1579c498f33e4fee23",
+    "rootfs": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845",
+    "runner": "e0976db1c3e801ebb09fda66fa95e5d228a327b1b69acb78c705da5af5ab9a2f"
+  },
+  "predicted": "CAUGHT",
+  "tally": {
+    "CAUGHT": 30,
+    "MISSED": 3,
+    "NO-READING:not-reached": 1,
+    "NO-READING:unattributed": 1
+  }
+}
