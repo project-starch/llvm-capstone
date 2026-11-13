@@ -635,3 +635,31 @@ on slices.
 
 **Keys:** the final's six. A failure to place or to route is a NEGATIVE result: the placed or utilisation reading and
 the census are read, no WNS is recorded, and there is no rerun.
+
+## final-IC 8-way (9972ae79d): SEALED on apollo, every key met
+
+`caplifive_ids55-native-tagcache-mlp-fpieee-hpmreplay-dynbypass3-shrinkfix-ic32k_9972ae79d.bit` was sealed by the board
+lane at 2026-11-13T14:05:35Z.
+- sha256 d00bb291dc5e507d79dfd9eb20e29410b84744517aee62c319a03e136bce51a2 (11,443,722 B).
+- Stored 0444 at <mnt-hdd>/capstone/bitstreams/; the tarball's .bit is identical, and PROVENANCE HEAD is 9972ae79d4f2...
+- run.exit 0; run peak 22.36 GB.
+
+| key | reading | grade |
+|---|---|---|
+| 1 mapping | 4,993 MB | PASS |
+| 2 loops | check_timing 0; latch loops 0; found-loop 0; 8-326 0; LUTLP-1 0 on the synth and opt checkpoints | PASS |
+| 3 routing | 0 errors, 235,265 / 235,265 nets; Route 35-447 PRESENT (absent on the final) | PASS |
+| 4 congestion | placer max 5 (E, 32x32); router effective N4 S4 E5 W4 | PASS, at the limit |
+| 5 WNS | -13.038 (TNS -226,474.2, 43,602 failing; WHS +0.061), inside the null band | PASS |
+| 6 sha256 | above | recorded |
+
+**Area against the prediction (report):**
+- Placed Slice LUT 185,791 (91.16 %): -1,542 against the final. With DTLB 64's ~3.1 k removed, the placed cost of the
+  8-way I$ is about +1.5 k LUT, which is MORE than the gate's synthesis estimate (+264) and the guess (+0.3-1 k).
+- BRAM 75 against the final's 63 (+12).
+- Slices 50,275 (98.68 %).
+- Registers 70,628, which is -4,839, consistent with DTLB 64's FFs removed.
+
+**Bearing on the fourth candidate (3c6b9906c, the final + the 8-way I$).** If the 8-way I$ costs about +1.5 k placed
+LUT on top of the final as well, that build lands near 188.8 k LUT. The final already used 50,654 of 50,950 slices
+(99.42 %), so the fourth candidate's placement is at real risk. This is a prediction, recorded before its seal.
