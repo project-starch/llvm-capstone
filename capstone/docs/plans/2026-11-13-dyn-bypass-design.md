@@ -459,3 +459,63 @@ also gives the first placed reading of v3.
 
 **Failure branch.** A routing failure is a NEGATIVE result: placed area, congestion and the census are read; no WNS
 is recorded; there is no rerun with identical inputs.
+
+## Checks completed, DYN bypass v2 sealed, and the v3-alone build (2026-11-13)
+
+**DYN bypass v2 (eb101c351), sealed on leffe** by the synth lane; graded against the v2 keys above.
+
+| key | reading | grade |
+|---|---|---|
+| placed Slice LUT (report) | 189,064 (+7,499 on 5f41c486e) | reported |
+| congestion: placer max | 4 | PASS |
+| congestion: router effective | N5 S5 E3 W5 | PASS |
+| routing | 0 errors (238,908 nets routed); one Route 35-447 warning in Phase 5, the same phase as b98f5a517's base reading | PASS |
+| loops | 0; LUTLP-1 0 | PASS |
+| WNS | -15.382 (TNS -390,257.75; 56,255 of 211,715 failing), inside the null band of -15.077 | PASS |
+| sha256 | aeb8639cdd04389d42358c30aa4d4db2468459bf4658942ce7fd3f6c581700d0 (tarball synth-eb101c3519bc-exit0.tar.gz, sha256 7c520e49…; its .bit matches) | |
+
+The combined build (bypass + DTLB 64 + L1D 64 KiB, ea174bfdd) is NEGATIVE, as recorded above: placement failed.
+
+**Bypass v3: every check that could void its builds has passed.**
+- The raw-lane A/B on 3ef8dd947: 39 of 40 arms identical, as recorded in the final's section.
+- The 95-test sweep on 3ef8dd947 (sim13 .sup/swrl), against the base 5f41c486e (.sup/swbest):
+  - `sweep-compare.py`: 92 identical (exceptions, readings, retired), 0 differ; 3 expected-missing on both sides.
+  - `sweep-compare-rvfi.py`: 92 identical retirement traces, 0 differ, 26 compared over the prefix only (parked).
+- The final 6d0e754d5's own sweep (sim14 .sup/swfinal), against the same base: the same result, 92 / 92 by value and
+  by trace. So the condition "a sweep failure voids the build" is cleared for the apollo build.
+- Lint on v3 alone, 38ae2d775, re-run after the void reading (vp8 .sup/lint-v3alone-lint2): PASS, every counter at
+  baseline (UNUSEDSIGNAL 1480).
+
+**Pre-registration: v3 alone (38ae2d775), leffe, before the build.** The tree is 3ef8dd947 plus the lint fix only:
+the round-trip temporaries are hoisted under `ifndef` and the type bits are read directly, with no logic change.
+- Name: `caplifive_ids55-native-tagcache-mlp-fpieee-hpmreplay-dynbypass3_38ae2d775`.
+- It is the single-change bitstream for the SPEC lane's same-board A/B of the bypass against the base.
+- Predicted placement: 5f41c486e's 181,565 plus v2's +7,499, minus the round trips. This is a report, not a key.
+  The final's post-synth rows against bec4beb51 (board lane) read:
+  - dyn_unit -6,114 and rev_node +7,551, with the design TOP at -6,887;
+  - capstone_rev_node.anvil has no changed lines between the two trees;
+  - the FLU's own row is 4-6 LUT in every build, so the FLU fix's comparators are homed in other rows too.
+  The module table cannot split rev_node's rise between moved bypass cones and the fix, so only the design total is a
+  reading. Roughly 183-188 k placed.
+- Keys, as for v2:
+  1. mapping in class;
+  2. 0 loops;
+  3. 0 routing errors;
+  4. congestion <= 5, with a routed 6 reported as not met by letter;
+  5. WNS inside the null band of -15.077;
+  6. sha256.
+- A routing failure is a NEGATIVE result: no WNS is recorded, and the build is not rerun.
+
+**The final-IC tree, prepared: v3 + the SHRINKTO fix + 64 B I$ lines, without DTLB 64.**
+- capstone-ariane perf/ids55-final-ic64b **105c464bc** (pushed). It is 38ae2d775 with the probe tests, the fix
+  commits and 5384cf84c's config line cherry-picked on top.
+- Against 6d0e754d5 it differs in exactly two config lines: DataTlbEntries 64 -> 16, IcacheLineWidth 128 -> 512.
+- Lint (vp8 .sup/lint-fic64-lint): PASS at baseline, UNUSEDSIGNAL 1480.
+- Arms (vp8 .sup/fic64arms, rtl 105c464bc dirty=no): every value is identical to its reference. The references are
+  6d0e754d5's finalarms, v3's rlon and the 64 B I$ variant's ic64b. Only cycle fields move:
+  - c5a-cost-ldc-hit8-dist 0xaff -> 0xa8a;
+  - c5a-cost-stc-hit8-dist 0xaee -> 0x6cd, -38 %, with identical instruction counts. v3 and the final read the same
+    as each other, so this move belongs to the 64 B lines. It is not attributed further.
+  - c5a-cost-ldc-miss8-hpm: +1,186 cycles and replays 1,021 -> 1,024 against ic64b, which has no bypass. That is the
+    bypass's miss path, not the I$.
+- Its build waits for the 64 B I$ gate on leffe. Its own pre-registration is written before that launch.
