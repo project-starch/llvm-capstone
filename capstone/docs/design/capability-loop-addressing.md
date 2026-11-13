@@ -18,6 +18,35 @@ refusal preserves.
 Distance from an access alone is insufficient: even `p - 1` can be refused
 under phys56 when `p` is zero.
 
+### The global-address exception (2026-11-13)
+
+The project lead relaxed the rule above for one backend fold, and only under
+its own flag, `-mllvm -capstone-fold-global-lo` (default off). Under the
+image-gp ABI a global's capability is `auipc; addi %pcrel_lo; scc gp`, and the
+fold drops the `addi`: the capability is derived from the auipc's partial
+address and each access carries the `%pcrel_lo` (`auipc; scc gp; ld
+%pcrel_lo(cap)`). That partial cursor lies up to 2 KiB before or after the
+accessed address, and the program never formed it. Two conditions make it
+safe, and both are required:
+
+- **The cursor never survives.** The fold is made only when the derived
+  capability's every use is the base of a load or store with one common
+  immediate offset: never the stored value, a copy, a call argument, a
+  compare, a `cincoffset`, a `shrink`/`shrinkto` or a debug use, and never when
+  anything in the function writes gp (`CapstoneMergeBaseOffset.cpp`,
+  `foldIntoCapGlobalMemoryOps`).
+- **The cursor stays inside gp's bounds.** gp spans the image from the text
+  segment's start. The virtual image's link script (`capstone/runtime/virtual/
+  link.ld`) asserts that `.text` opens the image and is at least 2 KiB, and
+  pads 2 KiB after `.bss`. Every gp-reachable symbol therefore has 2 KiB of
+  gp on both sides, so a partial cursor is inside gp's bounds, which the
+  address policy accepts. The rule's own concern, a cursor refused at a
+  window or policy boundary, cannot arise.
+
+An image linked without that script gets no such guarantee, so the flag is
+for virtual-profile images only. Constant-pool entries reached through gp are
+folded under the same conditions.
+
 SelectionDAG lowering sums all indices of a non-integral GEP in the integer
 index type before applying one pointer offset. InstCombine keeps multi-index
 capability GEPs whole and does not move constants
