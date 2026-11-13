@@ -593,3 +593,45 @@ Graded against this note's pre-registration (b5e9bfef7045):
   total is a reading.
 - **The sweep condition is cleared:** 92 / 92 against the base, by value and by trace.
 - It is a flash candidate. Silicon is the SPEC lane's: problem rows first, with a same-board base run.
+
+## The three I$ gates (leffe), and pre-registration of the fourth candidate: the final + the 8-way I$ (3c6b9906c)
+
+**I$ synthesis-only gates** (synth lane, each against the ids55-best gate: core 157,186 LUT, TOP 184,082; I$ 795 LUT /
+12 RAMB36). All three PASS every key: mapping in class; found-loop 0, 8-326 0, LUTLP-1 0 and check_timing 0, with the
+S-10b control reading 1 by the same script.
+
+| variant | core LUT | I$ (i_cva6_icache) | adapter FF | worst path |
+|---|---|---|---|---|
+| 32 KiB 8-way (8fe6375f9) | +253 | LUT +264, RAMB36 12 -> 24 | +1 | +1.880 ns, base family; 0 I$ endpoints in the top 200 |
+| 32 B lines (582f23f83) | +257 | LUT +185, RAMB36 12 -> 20 | +131 | +1.884, base family |
+| 64 B lines (5384cf84c) | -101 | LUT +449, RAMB36 12 -> 36 | +389 | +2.200, base family |
+
+- These are synthesis estimates, before placement.
+- Against the guesses in the pre-registration:
+  - the 8-way's BRAM read +12, against the guessed +8-10;
+  - every LUT delta came in at or under the guess.
+- So neither final-IC build is void.
+
+**Why a fourth candidate.** The SPEC lane read mcf on the base: DTLB walks 471.0 M (2.55 per 1 k cycles, 184.43 G run
+cycles). At 15-30 cycles per walk that is 4-8 % of mcf's time, if 64 entries remove most of the walks. So DTLB 64 is
+kept, and the 8-way I$ is added on top of it.
+
+**Launch rule, written before the gate read:** launch if lint is clean and the 8-way gate's I$ delta is <= ~1.5 k
+LUT. It read +264 LUT, so it launches.
+
+**The tree.** capstone-ariane perf/ids55-final-dtlb64-ic32k **3c6b9906c** (pushed) = the sealed final 6d0e754d5 +
+8fe6375f9's two config lines (IcacheSetAssoc 4 -> 8, IcacheByteSize 16384 -> 32768), nothing else. Name:
+`caplifive_ids55-native-tagcache-mlp-fpieee-hpmreplay-dynbypass3-dtlb64-shrinkfix-ic32k_3c6b9906c`.
+
+**Gates:**
+- Lint (vp8 .sup/lint-fd8-lint): PASS, every counter at baseline (UNUSEDSIGNAL 1480).
+- Arms (vp8 .sup/fd8arms, rtl 3c6b9906c dirty=no): 11 of 11 identical to the references (the final's arms and the
+  8-way final-IC's), cycle fields included.
+
+**Predicted, as a report:** placed = the final's 187,333 + about 0.3 k LUT, BRAM 63 -> 75.
+
+**The risk is SLICES, not LUT.** The final placed at 99.42 % of slices, and the full E2 combination failed placement
+on slices.
+
+**Keys:** the final's six. A failure to place or to route is a NEGATIVE result: the placed or utilisation reading and
+the census are read, no WNS is recorded, and there is no rerun.
