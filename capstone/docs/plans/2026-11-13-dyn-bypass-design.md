@@ -407,3 +407,55 @@ the base, of which the DTLB is ~3 k, at 99.6 % slices and router congestion 6. I
   A report, not a key.
 - Keys as for v2: mapping in class; 0 loops; 0 routing errors; WNS against -15.077 (null band); congestion reported.
   A routing failure or a WNS outside the band is a NEGATIVE result.
+
+## Pre-registration: the realistic final, v3 + DTLB 64 + the SHRINKTO/CAPBOUND/CAPENTER fix (6d0e754d5), before any build
+
+**What changed since the v3 section above.** Neither v3 build launched:
+- v3 + DTLB 64 (39dfed222) failed the lint gate at UNUSEDSIGNAL 1486. The fix, 38ae2d775, hoists the round-trip
+  temporaries under `ifndef` and reads the type bits directly. v3 + DTLB 64 on it is c1fbeb632, lint PASS 1480.
+- v3 alone (38ae2d775) has a VOID lint: two Anvil regenerations ran at once and left an empty
+  `capstone_dyn_unit.anvil.sv`. It is re-run before that tree goes anywhere.
+
+**The tree.** capstone-ariane perf/ids55-final **6d0e754d5** (pushed) is c1fbeb632 + ee82e1c6a + 6d0e754d5:
+- SHRINKTO refuses an immediate that wraps below the cursor;
+- CAPBOUND refuses inverted bounds and lengths >= 2^64 - 2^55;
+- CAPENTER's operand form refuses operands past MEM_END;
+- all three with ILLEGAL_OPERAND_VALUE (29).
+
+That FLU fix closes the E = 52 lanes, the one class where the raw-lane identity proof does not hold. Name:
+`caplifive_ids55-native-tagcache-mlp-fpieee-hpmreplay-dynbypass3-dtlb64-shrinkfix_6d0e754d5`.
+
+**Gates passed** (sim14-wt, rtl 6d0e754d5, dirty=no):
+- Lint: PASS, every counter at baseline (LATCH 44, MULTIDRIVEN 3, UNOPTFLAT 39, UNDRIVEN 25, UNUSEDSIGNAL 1480,
+  SELRANGE 100, the rest 0 or at baseline).
+- Arms, compared by value:
+  - shrinkto-neg = the fixed reading (ffb82d5bb, 25 values: N, B and E read 29; P and O unchanged).
+  - ldcstc-excodes, vb-trans-vp2, vb-trans-capa-vp2, va-runv, c5a-cost-ldc/stc-hit8-dist = v3's readings
+    (sim10 .sup/rlon on 3ef8dd947), 6 of 6 SAME.
+- v3's raw-lane A/B on 3ef8dd947: 39 of 40 arms identical with `+define+CAPSTONE_NO_DYN_RAWLANE` (confirmed in the
+  build line) against raw lanes on, cost arms included. stc-neighbour-load parks at wfi on both sides, as on every
+  sweep since vp3.
+- Running or queued at hand-off; a failure of either voids the build: the 95-test sweep on 6d0e754d5 itself (it covers
+  v3, DTLB 64 and the fix together), and v3's sweep on 3ef8dd947.
+
+**Host and order.** apollo (board lane), speculative, under the lead's parallel order. It is a hedge: the SPEC lane
+now prefers a final with the winning I$ change and WITHOUT DTLB 64, unless mcf's event-4 count is large. This build
+also gives the first placed reading of v3.
+
+**Predicted:**
+- Placed about 185-189 k LUT: bec4beb51 placed at 193,954, and v3 removes the round trips that were most of the
+  bypass's +9 k.
+- The FLU fix adds a few hundred LUT (three 64-bit compares).
+- A report, not a key.
+
+**Keys** (base 5f41c486e: placed 181,565, WNS -15.077):
+1. Mapping in class (5.0-5.5 GB at the marker). A blow-up fails; its partition is read.
+2. Loops: check_timing 0, "Found timing loop" 0, Synth 8-326 0, LUTLP-1 0.
+3. 0 routing errors.
+4. Congestion: placer max <= 5, router effective <= 5. bec4beb51 read 6 and routed; a 6 that routes is reported as
+   not met by letter, not as a failure.
+5. WNS inside the null band of -15.077 (+/- ~3.7 ns), reported as a value.
+6. sha256 recorded.
+
+**Failure branch.** A routing failure is a NEGATIVE result: placed area, congestion and the census are read; no WNS
+is recorded; there is no rerun with identical inputs.
