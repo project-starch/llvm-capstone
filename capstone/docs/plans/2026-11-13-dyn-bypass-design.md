@@ -519,3 +519,46 @@ the round-trip temporaries are hoisted under `ifndef` and the type bits are read
   - c5a-cost-ldc-miss8-hpm: +1,186 cycles and replays 1,021 -> 1,024 against ic64b, which has no bypass. That is the
     bypass's miss path, not the I$.
 - Its build waits for the 64 B I$ gate on leffe. Its own pre-registration is written before that launch.
+
+## Pre-registration: the two final-IC candidates (before either build, 2026-11-13)
+
+**Why two.** The SPEC lane and this lane agreed to replace DTLB 64 with an I$ change. The silicon gcc reading caps
+DTLB 64 at <= 0.8 %, while L1I misses are 7.84 per 1 k cycles. The I$ model cannot pick the geometry. It reads 0.76x
+of silicon on gcc and 0.22x on perl. On gcc, 8 ways beat 64 B lines; on perl, 64 B lines read WORSE than today and
+8 ways remove nearly every miss. So both candidates are built speculatively under the lead's parallel order, and the
+board's hpm3 and run time on each decide. Neither waits for its I$ synthesis-only gate (leffe, in synthesis). A gate
+failure or a routing failure is a recorded NEGATIVE.
+
+| candidate | commit (pushed) | against the final 6d0e754d5 | name |
+|---|---|---|---|
+| final-IC 64 B | perf/ids55-final-ic64b **105c464bc** | DataTlbEntries 64 -> 16; IcacheLineWidth 128 -> 512 | `caplifive_ids55-native-tagcache-mlp-fpieee-hpmreplay-dynbypass3-shrinkfix-ic64b_105c464bc` |
+| final-IC 8-way | perf/ids55-final-ic32k **9972ae79d** | DataTlbEntries 64 -> 16; IcacheSetAssoc 4 -> 8, IcacheByteSize 16384 -> 32768 | `caplifive_ids55-native-tagcache-mlp-fpieee-hpmreplay-dynbypass3-shrinkfix-ic32k_9972ae79d` |
+
+Both trees are 38ae2d775 (v3) + the probe tests + ee82e1c6a/6d0e754d5 (the fix, cherry-picked) + one I$ config
+commit.
+
+**Gates:**
+- 105c464bc: lint PASS at baseline, and every arm value-identical (the section above).
+- 9972ae79d: its lint and arms are running in vp8 (the same list). A failure voids its build.
+- v3's sweep and the final's sweep are clean (92 / 92 by value and trace). The fix and the I$ geometry are config or
+  FLU-only changes on top of those.
+
+**Predicted, as reports:**
+- Placed area: the v3 build's placed area plus the I$ delta measured by its gate. DTLB 64's +3.1 k is removed.
+- I$ deltas, as guesses:
+  - 8-way: +8-10 BRAM36, +0.3-1 k LUT;
+  - 64 B: +8 to +24 BRAM36, +1-3 k LUT.
+
+**Keys,** the same as for the final (base 5f41c486e: placed 181,565, WNS -15.077):
+1. mapping in class;
+2. 0 loops (check_timing, found-loop, 8-326, LUTLP-1);
+3. 0 routing errors;
+4. congestion placer and router <= 5, with a routed 6 reported as not met by letter;
+5. WNS inside the null band of -15.077, as a value;
+6. sha256.
+
+A routing failure is NEGATIVE: placed area, congestion and the census are read, no WNS is recorded, and the build is
+not rerun.
+
+**Silicon (the SPEC lane's):** board 2, problem rows first, each candidate with its own same-board base run
+(5f41c486e, bkit61h). hpm3 (L1I misses) and run time are the readings.
