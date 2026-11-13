@@ -3201,3 +3201,26 @@ the final's gcc and mcf: final-IC 8-way, perl makerand, gcc train01, mcf.
 **Predictions** (against the final, same board): perl makerand -3..-9 % (its 44.8 M L1I misses mostly removed, by the
 model's 8-way reading); gcc train01 -4..-12 % (L1I misses 550 M -> roughly 40 %); mcf +1..+8 % (DTLB 64 removed: its
 walks return toward the base's 471 M).
+
+## Addendum 97 (2026-11-14 00:55, before it runs): the final bitstream's gcc and mcf; compressed instructions (stage 1) on board 1
+
+**Readings, the final bitstream** (6d0e754d5, bkit67, FR images, board 1, specdiff PASS): gcc train01 2,831.36 s
+(base 2,930.01: -3.4 %; ratio against plain-rv64fre 1.644; DTLB walks 19.4 M -> 5.7 M; L1I misses unchanged at 549 M);
+mcf 7,416.01 s (base 7,610.69: -2.6 %; ratio 1.447; DTLB walks 471 M -> 381 M, -19 % only; L1D misses 3.75 G
+unchanged; issue stalls > 60 % of in-domain cycles). Addendum 92's bands: perl and gcc hold, mcf at the low edge.
+
+**Compressed instructions, stage 1** (compiler lane, llvm-capstone compiler-capbase-rvc 394f73607fbb and
++cap-base-rvc 74080cce29e5; no ISA change): standard RVC for instructions that do not touch capabilities (+c), plus
+16-bit forms of plain loads and stores whose base is a capability register (+cap-base-rvc: the standard C.LD/C.SD
+encodings, which the core expands to the same LD/SD, codegen and compression patterns only), with
+-capstone-disable-cost-per-use (RVC's register costs otherwise add capability spills). The RTL side was cleared by the
+rtl lane (decoder ungated in capability mode; 2-aligned targets legal; a CSRUNV-context arm with preemptions and an
+escape at 2 mod 4 passes; R-72 records the start-only PCC fetch check). Arm FRCDK = FR + those flags: twin outputs
+byte-identical on every row; instruction bytes fetched gcc -13.9 %, perl makerand -14.2 % against FR (user
+instructions -0.02 %); text gcc 9.65 -> 8.18 MB, perl 2.32 -> 1.92 MB. Images cpugcc_r d8dd096cfe57ba2c, perlbench_r
+d6b6f9147a0631a7. Open: on exec-heavy runs (perl's test.pl) a smaller text segment raises kernel page work per exec
+(+3.8 pages, +18 k kernel instructions per exec; follows the text size, not RVC itself); so only gcc and makerand-only
+perl run now.
+**Run, board 1** after final-IC 8-way: the final bitstream (bkit67) with FRCDK images, perl makerand and gcc train01;
+the pair with the final's FR readings (360.60 s, 2,831.36 s) is one variable, the images.
+**Predictions:** both -1 to -6 % against FR on the same bitstream (L1I misses -10..-25 %); specdiff PASS.
