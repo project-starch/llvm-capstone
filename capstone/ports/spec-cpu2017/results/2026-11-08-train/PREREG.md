@@ -3284,3 +3284,30 @@ The perl and mcf bands are unchanged.
 **Process note.** The follow-on script that ends the stopped chain lost its log lines, and with them the unbook and the
 classifiers: `local N=… L=$N/…` expands L before N is assigned. It had not been dry-run itself, only the chain it
 launches (board-run rule 8). The steps were done by hand; the fdk chain was unaffected.
+
+## Addendum 100 (2026-11-14 02:00, before it runs): arm C x264; board 2 moves to fdk for the rows not yet on the best bitstream
+
+**Reading.** Arm C x264 (mlp b98f5a517 + bkit59, board 2): run 36,219.53 s, rc 0. Input generation (ldecod, untimed)
+took 2,469.01 s. The run.sh reader prints "specdiff 0/3": the native x264 stage records validations=0, so x264's
+imagevalidate step never ran and its three .out files do not exist. Correctness is read instead from the five decoded
+frames, frame_{0,50,100,150,155}.yuv: their sha256 equal those of plain-rv64r's board run
+(out-b2q/525.x264_r-test-plain-rv64r) on all five. The ratio waits for riscv-base fre's x264, which has run on board 3
+since 14:53.
+
+**Run, board 2:**
+- Bitstream fdk (Addendum 98), kit bkit71, FR images (board-fr, the same stages as board 1's FR rows).
+- List ag-b2: imagick (at the 1.20 line, so first), nab, lbm, xz, then x264 last (about 11 h).
+- A stubbed dry run reaches all five boots.
+- Board 2 reads the rows board 1 does not run. Board 1 keeps the problem rows and their FR/FRCDK pairs.
+- This is a second board on the same bitstream. Addendum 82 measured cross-board agreement on perl.
+
+**Predictions** (FR on fdk; arm C readings in brackets):
+| row | prediction | arm C |
+|---|---|---|
+| imagick | 12.3-13.4 s | 13.29 |
+| nab | 690-750 s | 741.97 |
+| lbm | 1,055-1,095 s | 1,083.68 |
+| xz | 5,150-5,500 s | 5,462.89 |
+| x264 | 33,500-36,500 s | 36,219.53 |
+
+Correctness: specdiff PASS on imagick, nab, lbm and xz; x264's five frame hashes equal to plain-rv64r's.
