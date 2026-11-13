@@ -77,9 +77,11 @@ on (32 compressed instructions in the text) and off.
 - The first run's 2-mod-4 count was VOID: S read the frame through an unmapped address (cause 13, skipped by the
   handler). The count was moved into M and re-run.
 
-**QEMU's PCC check covers the whole instruction** (qemu55 `translate.c:1530/1538`, `helper_capstone_check_pcc(pc,
-len)`; `capstone_supervisor.c:1215-1219`). It is stricter than silicon's start-only check, so a twin pass cannot hide
-the silicon leniency.
+**QEMU's PCC check covers the whole instruction, on the VIRTUAL-CONTEXT path only** (qemu55
+`translate.c:1530/1538`, inside `if (ctx->capstone_virtual_c)`; `capstone_supervisor.c:1215-1219`). There it is
+stricter than silicon's start-only check, so for CSRUNV contexts a twin pass cannot hide the silicon leniency.
+CORRECTED 2026-11-14: an earlier version said this without the scope. On QEMU's plain M capability-mode path a
+claim-auditor's grep found no PCC fetch-bounds check at all (nothing run). The silicon side is filed as R-72.
 
 **The .dom loader does no relocation or patching of text** (compiler lane: `binfmt-dom.h`, `capstone_vm.c`), so the
 data-side hazard does not apply to domain images.
@@ -104,8 +106,7 @@ The board firmware is already compiled with RVC. The build-fpga `fw_jump.elf` (2
   kernel module once hung insmod (`docs/history/07-10-2026_16-11-23_virtual-capstone-stack-audit-and-landing.md`).
 - **Open:**
   - whether CPMP bounds can end at 2 mod 4;
-  - the M-mode PCC-end leniency itself (a 32-bit instruction starting at bound_end - 2 commits), to become an R-entry
-    once characterised by an arm;
+  - the M-mode PCC-end leniency: characterised and filed as R-72 (dev cc375bcb1fc9);
   - the straddle attribution by an arm, not only by source;
   - silicon: the compiler lane's RVC images on board 1.
 
