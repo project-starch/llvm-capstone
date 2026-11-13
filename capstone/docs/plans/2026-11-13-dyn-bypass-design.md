@@ -562,3 +562,34 @@ not rerun.
 
 **Silicon (the SPEC lane's):** board 2, problem rows first, each candidate with its own same-board base run
 (5f41c486e, bkit61h). hpm3 (L1I misses) and run time are the readings.
+
+## The realistic final (6d0e754d5): SEALED on apollo, every key met
+
+`caplifive_ids55-native-tagcache-mlp-fpieee-hpmreplay-dynbypass3-dtlb64-shrinkfix_6d0e754d5.bit` was built by the board
+lane on apollo and sealed at 2026-11-13T12:28:58Z.
+- run.exit 0; run peak 30.91 GB; collector peak 12.24 GB.
+- PROVENANCE HEAD 6d0e754d5e00..., and the tarball's .bit is identical to the built .bit.
+- Stored 0444 at <mnt-hdd>/capstone/bitstreams/ and /tmp/capstone/_bitstreams/; the sha reads back in both.
+
+Graded against this note's pre-registration (b5e9bfef7045):
+
+| key | reading | grade |
+|---|---|---|
+| 1 mapping | 5,170 MB at "Finished Technology Mapping" (30:34 elapsed, against 17:43 for bec4beb51) | PASS |
+| 2 loops | check_timing 0 combinational loops; latch loops 0; found-loop 0; 8-326 0; LUTLP-1 0 on the synth and opt checkpoints | PASS |
+| 3 routing | 0 errors, 240,195 / 240,195 nets routed; Route 35-447 absent (bec4beb51 and the tagcache build had it) | PASS |
+| 4 congestion | placer max 4; router effective N5 S5 E4 W4, max 5 | PASS (bec4beb51 read 6) |
+| 5 WNS | -12.363 (TNS -150,200.9, 35,978 failing; WHS +0.051), inside the null band of -15.077 | PASS; +2.7 ns is not an improvement claim |
+| 6 sha256 | 72bf215d1b4bdc743b1996a5e5cb0c1c17c12003fa6c3bd9ed679347178c76b9 (11,443,722 B) | recorded |
+
+- **Placed:** Slice LUT 187,333 (91.92 %), +5,768 on the base, inside the predicted 185-189 k. Slices 50,654 of
+  50,950 (99.42 %); registers 75,467; BRAM 63.
+- **Post-synth rows against bec4beb51** (board lane, the same flow):
+  - TOP 189,704 vs 196,591 (-6,887);
+  - dyn_unit -6,114; lsu -2,475; issue_read_operands -3,052; csr_buffer -1,844; i_dtlb -539;
+  - rev_node +7,551, although its source is unchanged.
+
+  The FLU's own row is 4-6 LUT in every build, so the module table cannot apportion rev_node's rise. Only the design
+  total is a reading.
+- **The sweep condition is cleared:** 92 / 92 against the base, by value and by trace.
+- It is a flash candidate. Silicon is the SPEC lane's: problem rows first, with a same-board base run.
