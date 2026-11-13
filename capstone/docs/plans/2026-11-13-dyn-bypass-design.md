@@ -381,3 +381,29 @@ labelled, no reruns.
   those values fold onto 8..11 (wt_dcache_missunit.sv). A power-of-two way count never takes the fold.
 - Its lint and a simulation smoke test against the base are running. It launches only if L1D 64 KiB fails to route,
   on the SPEC lane's word.
+
+## Bypass v3 (raw lanes) and its speculative builds (2026-11-13, before any build)
+
+**The finding.** bypass v2 + DTLB 64 (bec4beb51, sealed on apollo, sha256 5190f43a...) placed at 193,954 LUT: +12.4 k on
+the base, of which the DTLB is ~3 k, at 99.6 % slices and router congestion 6. It routed with 0 errors and WNS -14.885
+(inside the null band).
+- The bypass's bulk is decompress -> compress round trips: one compress on the LDC result path; two decompress and two
+  compress at STC dispatch.
+
+**v3.** capstone-ariane perf/ids55-dynbypass-v3 **3ef8dd947**, `CAPSTONE_DYN_BYPASS_RAWLANE`:
+- the LDC lane is the memory word's own {slot, tag, metadata};
+- the STC table stores the operands' raw lanes, and reads only the tag bit and the type field.
+- Correct only if cap_lane(decompress(L)) == L on every lane a register or memory holds. Two checks run in parallel
+  with the builds, and a failure of either voids them:
+  - (1) an identity test of the package's own functions (perf/lane-proof/);
+  - (2) the same tree with `+define+CAPSTONE_NO_DYN_RAWLANE`, which restores the round trip, compared arm for arm,
+    then the 95-test sweep.
+
+**Builds, in parallel with the checks (the lead's standing order):**
+- v3 + DTLB 64: perf/ids55-dynbypass3-dtlb64 **39dfed222**, apollo (board lane). Name
+  `caplifive_ids55-native-tagcache-mlp-fpieee-hpmreplay-dynbypass3-dtlb64_39dfed222`.
+- v3 alone (3ef8dd947): leffe, when a slot frees.
+- Predicted: placed well below bec4beb51's 193,954. The round trips were the bypass's bulk, so roughly 185-188 k.
+  A report, not a key.
+- Keys as for v2: mapping in class; 0 loops; 0 routing errors; WNS against -15.077 (null band); congestion reported.
+  A routing failure or a WNS outside the band is a NEGATIVE result.
