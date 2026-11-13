@@ -67,15 +67,20 @@ static int dom_extra_resources(struct dom_delegate *d)
     int rc = 0;
     /* /tmp cannot simultaneously name the entire launch grant and its
      * private child. Preserve physical-root pathname round trips elsewhere. */
-    if (dom_local_tmp && (dom_wide_grants || !strcmp(d->root_name, "/tmp"))) return -EINVAL;
-    if (dom_local_tmp) {
+    if (dom_local_tmp && dom_wide_grants) return -EINVAL;
+    /* The /tmp alias exists only where the launch policy created a valid reserved child. Without
+     * one (a root of /tmp itself, no .capstone-tmp, or one that fails the checks below) the exec
+     * gets no alias and /tmp stays refused, as without dom_local_tmp; the exec is never failed for
+     * it. Failing it would be the task's SIGSEGV (this runs after begin_new_exec), which killed
+     * every native exec outside a stage directory (bkit61's smoke, 2026-11-13). */
+    if (dom_local_tmp && strcmp(d->root_name, "/tmp")) {
         struct inode *inode;
         /* Trusted launch policy creates this reserved child before exec.
          * Pin the object once; an application rename or replacement must
          * never redirect the logical /tmp prefix into ambient storage. */
         f = file_open_root(&d->root, ".capstone-tmp",
                            O_PATH | O_NOFOLLOW | O_DIRECTORY, 0);
-        if (IS_ERR(f)) return PTR_ERR(f);
+        if (IS_ERR(f)) goto no_tmp_alias;
         inode = file_inode(f);
         if (f->f_path.mnt != d->root.mnt ||
             !is_subdir(f->f_path.dentry, d->root.dentry) ||
@@ -85,8 +90,9 @@ static int dom_extra_resources(struct dom_delegate *d)
             rc = -EACCES;
         if (!rc) { d->dirs[0] = f->f_path; path_get(&d->dirs[0]); }
         fput(f);
-        if (rc) return rc;
+        rc = 0;
     }
+no_tmp_alias:
     if (!dom_wide_grants && !dom_null) return 0;
     for (unsigned i = 0; dom_wide_grants && i < DOM_EXTRA_DIRS; ++i) {
         f = filp_open(dom_dir_names[i], O_PATH | O_NOFOLLOW | O_DIRECTORY, 0);
@@ -132,14 +138,18 @@ static int dom_resources_init(struct context *c)
     get_fs_pwd(current->fs, &d->root);
     d->cwd_path = d->root;
     path_get(&d->cwd_path);
+    /* dom_grant_root applies only when it resolves and the cwd lies beneath it; otherwise the root
+     * stays the cwd. A missing directory is not an error: this runs after begin_new_exec, where any
+     * error becomes the task's SIGSEGV, so a grant root a launch policy creates later (a stage's run
+     * directory) killed every native exec before it existed (bkit61's smoke, 2026-11-13). */
     if (dom_grant_root && *dom_grant_root) {
         struct path wide;
-        int rc = kern_path(dom_grant_root, LOOKUP_DIRECTORY, &wide);
-        if (rc) return rc;
+        if (!kern_path(dom_grant_root, LOOKUP_DIRECTORY, &wide)) {
         if (d->cwd_path.mnt == wide.mnt && is_subdir(d->cwd_path.dentry, wide.dentry)) {
             path_put(&d->root);
             d->root = wide;
         } else path_put(&wide);
+        }
     }
     if (!dom_disk_inode(d_inode(d->root.dentry))) return -EACCES;
     buf = kmalloc(PATH_MAX, GFP_KERNEL);
