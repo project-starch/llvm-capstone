@@ -47,12 +47,21 @@ t = t.replace('"$$S/bin/', '"$V" "$S/bin/')
 # perl's test size: a host perl (natperl) runs test.pl with $^X="../sw/perl", so every sub-test execs ../sw/perl from
 # the cwd. Without that wrapper each one fails to start ("can't run '../../sw/perl ...'") and test.out miscompares.
 # The cwd is /tmp/nt/sr here, so the wrapper is /tmp/nt/sw/perl, and it execs the native image.
+# The image it execs is a copy INSIDE the run directory, /tmp/nt/sr/.perl-native: a sub-test's $^X is the path its perl
+# was exec'd by, and t/base/term.t (ok 7) opens $^X. A native task reads only beneath its grant (the run directory), so
+# with the image in /tmp/nt/b that open was refused. riscv-base reads its own binary through /tmp/sw/perl; here the
+# program under test sits in the run directory instead. The copy is removed before the stage hashes its files, so the
+# hashed file set is unchanged.
 if '$^X="../sw/perl"' in t:
     assert w == 1 and exes.get('perlbench_r'), (w, list(exes))
     setup = 'cd /tmp/nt/sr && mkdir -m 0700 .capstone-tmp || exit 1\n'
     assert t.count(setup) == 1
-    t = t.replace(setup, setup + 'mkdir -p /tmp/nt/sw && printf \'#!/bin/sh\\nexec /tmp/nt/b/perlbench_r_base.native "$@"\\n\' '
+    t = t.replace(setup, setup + 'cp /tmp/nt/b/perlbench_r_base.native /tmp/nt/sr/.perl-native && chmod 755 /tmp/nt/sr/.perl-native && '
+                  'mkdir -p /tmp/nt/sw && printf \'#!/bin/sh\\nexec /tmp/nt/sr/.perl-native "$@"\\n\' '
                   '> /tmp/nt/sw/perl && chmod 755 /tmp/nt/sw/perl || exit 1\n')
+    hb = 'echo "@@SPEC-HASH-BEGIN '
+    assert t.count(hb) == 1, t.count(hb)
+    t = t.replace(hb, 'rm -f /tmp/nt/sr/.perl-native\n' + hb)
 # imagick's form: the validator reads "$S/ref/<file>", which a native task cannot open outside its grant (the guest
 # reads "Could not open for read", rc 255). As native01's qt20 stage does, copy ref/ into the cwd and name it there.
 nref = len(re.findall(r'"\$S/ref/([^"/]+)"', t))
