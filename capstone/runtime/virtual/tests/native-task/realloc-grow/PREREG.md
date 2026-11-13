@@ -12,3 +12,13 @@ Predictions (B against A):
   A's (specdiff / host validation); kernel instructions within +-5 %.
 - Failure branch: mcf pages above 300k means the in-place path did not take the arc arrays; then read why before any
   other claim.
+
+## Arm C: the mapping cache makes room by eviction (written before any C run)
+
+C = B + malloc-mapping.c's mr_make_room (perf/natevict/stages), same twin configuration. Predictions (C against B):
+- 505.mcf_r test: 7 of the 8 arcs_pointer_sorted mappings (64,094,208 B) reused: pages fall 90k-125k; kernel
+  instructions fall 0.5-0.8 G; user instructions rise 30-150 M (the reuse path's memset of 61 MB, 7 times).
+- 502.gcc_r train01: service_other within +-15 % of B's (evictions must not cost the small-mapping hits); outputs
+  identical to A's. The other benchmarks: outputs identical, kernel within +-5 %.
+- mapping-reuse-probe on the native twin, every mode, A/B/C: the same verdicts on all three; C's pressure count equal
+  to A's. Failure branch: gcc service_other more than 15 % above B's means eviction thrashes the small classes.

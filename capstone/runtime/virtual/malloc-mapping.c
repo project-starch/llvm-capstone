@@ -113,6 +113,23 @@ static void mr_evict_all(void)
         ++__heap_reuse_evicted;
     }
 }
+/* Give cached mappings back, from the front of the table, until one of `bytes` fits both bounds. Called with
+ * index_mutex held. That is put order, oldest first, except that a reuse fills the gap it leaves with the last
+ * (newest) entry.
+ * Without this a mapping that fits the byte bound by itself was refused whenever the cache already held more
+ * than the bound minus its size: 505.mcf_r test re-creates a 64,094,208-byte arcs_pointer_sorted on each of its 8
+ * passes, 3 MB under the bound, and with the cache on all 8 were unmapped and re-faulted (125k of the run's
+ * 394k pinned pages; the native twin's diag_admit census). */
+static void mr_make_room(size_t bytes)
+{
+    while (mr_nfree && (mr_nfree >= MR_FREE || mr_free_bytes + bytes > MR_FREE_BYTES)) {
+        struct mr_rec e = mr_free[0];
+        memmove(mr_free, mr_free + 1, --mr_nfree * sizeof *mr_free);
+        mr_free_bytes -= e.bytes;
+        munmap(e.holder, e.bytes);
+        ++__heap_reuse_evicted;
+    }
+}
 #endif
 #if CAPSTONE_HEAP_MAPPING_REUSE
 /* The cursor of the owner published for page a, or 0 for a page of no live mapping. */
@@ -234,6 +251,7 @@ int __heap_unmapping(void *owner,size_t n)
 #if CAPSTONE_HEAP_MAPPING_REUSE
     {
         struct mr_rec *r = mr_find(base);
+        if (r && !r->noreuse && r->bytes == bytes && bytes <= MR_FREE_BYTES) mr_make_room(bytes);
         if (r && !r->noreuse && r->bytes == bytes && mr_nfree < MR_FREE && mr_free_bytes + bytes <= MR_FREE_BYTES) {
 #ifndef CAPSTONE_HEAP_MAPPING_REUSE_TEST_NO_REVOKE   /* positive control of the safety probe ONLY */
             heap_end(r->holder, owner);   /* every object, nested group and derivative of this mapping */
