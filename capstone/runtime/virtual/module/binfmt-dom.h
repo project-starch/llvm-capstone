@@ -447,6 +447,12 @@ static int dom_load_binary(struct linux_binprm *bprm)
     }
     mutex_lock(&vm_lock);
     rc = dom_grant(c, base, im.bytes, 3, 7, base + im.entry, im.text.p_memsz);
+    if (!rc && arena_pin_image_end) {
+        /* arena_pin's window stops at the end of .bss, not in the region's slack. */
+        struct arena *a = find_arena(c, base, im.bytes);
+        unsigned long end = (PAGE_ALIGN(im.text.p_memsz + im.data.p_memsz) - im.text.p_memsz) / PAGE_SIZE;
+        if (a) a->pin_end = min_t(unsigned long, a->count, end);
+    }
     if (!rc) rc = dom_grant(c, stack, im.stack, 2, 6, stack + im.stack, 0);
     if (!rc) rc = dom_grant(c, c->dom_meta, DOM_META_BYTES, 10, 6, c->dom_meta, 0);
     if (!rc) rc = dom_grant(c, c->dom_exchange, im.exchange, 11, 6, c->dom_exchange, 0);

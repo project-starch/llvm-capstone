@@ -203,6 +203,10 @@ struct arena {
      * bytes (112 to 120 on RV64) and not by the padding of a 32-bit field. */
     u64 faulted;
     unsigned count;
+    /* arena_pin's forward window ends at page pin_end (pages after rx_bytes): count, except
+     * for the image arena under arena_pin_image_end, where binfmt-dom sets it to the end of
+     * the image's .bss. */
+    unsigned pin_end;
     /* The arena's page census, printed once at its retirement under diag_admit: pages admitted
      * at a fault, by a pin-ahead window, by the resident scan, by CV_TOUCH, or pinned whole at
      * the mint; released before retirement by a remap's truncation. admits + windows + scans +
@@ -476,6 +480,16 @@ MODULE_PARM_DESC(node_flat_records,
  * harmless when off, and the arm that sets it tests the pin. */
 static bool arena_pin;
 module_param(arena_pin, bool, 0644);
+
+/* With arena_pin, the image arena's window stops at the end of the image's .bss instead of the
+ * arena's end. The image grant is the power-of-two region binfmt-dom reserves (im.bytes), so the
+ * rest of the arena is slack no access of the program's own reaches, and the window pinned (and so
+ * zero-filled) all of it at every exec: the smaller the text, the larger the slack. Measured
+ * (perl makerand, one exec): window=298 pages with arm C's text, 356 with the same program
+ * compressed (58 pages less text). A slack page the program does touch is admitted at its fault,
+ * as in any lazy arena. Default OFF, as arena_pin is: a stage that sets arena_pin sets this. */
+static bool arena_pin_image_end;
+module_param(arena_pin_image_end, bool, 0644);
 
 /* Optional tag-aware Linux path. Read-only: a namespace never changes its
  * page-ownership contract while active. Stock kernels reject this option. */
@@ -1920,7 +1934,7 @@ static int add(struct context *c, struct cv_thread *t, struct cv_map *r)
      * as the arena (a page admitted at any later fault is checked against it), so it is
      * accounted like the page array. */
     a->address = r->address; a->bytes = r->bytes; a->rx_bytes = r->rx_bytes;
-    a->pages = pages; a->count = count;
+    a->pages = pages; a->count = count; a->pin_end = count;
     a->lazy = mapping_reply || (lazy_grants && !eager_grant(t, r));
     if (!unpinned) {
         a->frames = kvcalloc(frame_slots(count), sizeof(*a->frames), GFP_KERNEL_ACCOUNT);
@@ -2227,7 +2241,8 @@ static unsigned long pin_ahead(struct context *c, struct arena *a,
     unsigned long count = 0, done;
     unsigned long fixed = pin_ahead_pages ? pin_ahead_pages - 1 : 0;
     unsigned long limit = max(fixed, extra);
-    while ((arena_pin || count < limit) && first + count < a->count &&
+    while ((arena_pin ? count < limit || first + count < a->pin_end : count < limit) &&
+           first + count < a->count &&
            start + count * PAGE_SIZE < v->vm_end && !a->pages[first + count])
         ++count;
     for (done = 0; done < count;) {
