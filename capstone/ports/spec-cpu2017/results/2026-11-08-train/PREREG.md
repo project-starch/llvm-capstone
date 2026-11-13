@@ -2984,3 +2984,27 @@ never part of a fair pair (Addendum 82).
 **Predictions** (against the A readings on mlp where they exist, else against no-cache bkit56): imagick, nab, lbm,
 perl, xz within ±1.5 %; gcc train01 0 to -3 % against A on mlp (lands within the hour); mcf 3-10 % faster than its
 no-cache 8,076.96 s (twin kernel -63 % of 2.5 G instructions, at the program's CPI); x264 within ±2 % of no cache.
+
+## Addendum 85 (2026-11-13 13:00, before it runs): readings; board 2's arm-C queue split with board 1; riscv-base xz not re-run
+
+**Readings** (specdiff PASS everywhere):
+- Arm C (mlp + bkit59 + matching allocator, board 2): imagick 13.29 s, nab 741.97 s. Against riscv-base plain-rv64fre
+  (board 3): imagick 13.29 / 11.08 = 1.1995; nab 741.97 / 679.92 = 1.091. riscv-base plain-rv64fre also: lbm
+  1,077.50 s, perl makerand 257.90 s (Addendum 83's ±1.5 % bands hold).
+- Padded-mcf diagnostic (Addendum 77, riscv-base, board 1): 5,854.28 s against unpadded 5,146.72 s (board 3) = 1.137,
+  just under the 1.15-1.35 band. Data footprint is ~24 % of Capstone's no-cache mcf gap (1.569); the rest is
+  capability- and tag-specific, so the DYN bypass is the right lever for mcf too.
+- Board-vs-bitstream cross (Addendum 82, cache A): perl makerand mlp board 1 405.56 s (mlp board 2 409.41, tagcache
+  board 1 400.99): board term -0.9 %, bitstream term +1.1 %; imagick mlp board 1 13.31 s (board 2 13.30). Both terms
+  are at the ~1 % noise level of single readings; with gcc train01 at mlp -0.94 % and the rtl lane's drain-vs-list
+  simulation (8 of 8 pairs equal or faster), mlp stays the base. Single readings carry about ±1 %.
+- Reader fix: read-all.sh read the arm-C runs against the no-cache stages' plans; it now uses stages-evict (whose perl
+  carries the makerand-only edit). Re-read: imagick and nab unchanged.
+
+**riscv-base xz is not re-run on the fixed cache:** QEMU instret over the 12 commands is 59.618 G without the cache,
+59.631 G with the old cache and 59.576 G with the fixed one (specdiff 12/12 each), so the change does not move xz; its
+no-cache board reading 4,993.81 s stands as the pair for arm C (lead: no riscv-base re-run without a strong reason).
+gcc train01, mcf and x264 stay on board 3 (mcf and gcc are where the fix matters; x264 has no K2N reading at all).
+
+**Split of board 2's arm-C queue** (lead: problem rows first): board 2 ends its chain after the running lbm and runs
+perl makerand, gcc train01; board 1 (idle, mlp resident) runs mcf, xz, x264. Same kit, images and stages as Addendum 84.
