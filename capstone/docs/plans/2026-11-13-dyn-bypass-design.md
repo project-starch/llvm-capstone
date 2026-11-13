@@ -730,3 +730,59 @@ term). It is a report. The risk is slices, as on 3c6b9906c.
 
 **Failure branch:** a placement or routing failure is NEGATIVE. Read the placed utilisation and the census, record no
 WNS and do not rerun. The fallback tree is 75e4fb3c2 (the 8-way tree without DTLB 64).
+
+## Seals: v3 alone (38ae2d775) and the fourth candidate, final + 8-way I$ (3c6b9906c), both on leffe, every key met
+
+| key | v3 alone 38ae2d775 | final + 8-way I$ 3c6b9906c |
+|---|---|---|
+| run | 4h19m; 3h30m alarm overridden in opt_design (router-stall rule) | 2h56m |
+| 1 mapping | 5,168.4 MB | 5,426.0 MB; synth peak 33.45 GB (watchdog raised 34 -> 40, the guard ceiling) |
+| 2 loops | 0 (synth, routed check_timing, LUTLP-1) | 0 |
+| 3 routing | 0 errors, 232,542 nets; Route 35-447 0 | 0 errors, 241,123 nets; Route 35-447 0 |
+| 4 congestion | placer 5, router effective max 5 | placer 4, router effective max 5 |
+| 5 WNS | -16.475 (1.40 ns below -15.077, inside the band) | -11.930 |
+| placed Slice LUT | 183,890 (predicted 183-188 k) | 187,646 (slices 99.48 %, BRAM 75) |
+| sha256 | a6e2e92c8293a7730a83942504dad4d9e4a379f0dc5f96fdafa15f920e4d36b6 | 141f840eb8a59149762605e47aa6fb22a7b9c2525bc51f7df7c8ace85114e7d3 |
+
+- v3 alone is the single-change bypass bitstream for the same-board A/B.
+- 3c6b9906c placed, against the slice-risk prediction recorded before its seal. It is the base of the next batch,
+  d10608fc9.
+
+**Correction to the batch pre-registration above, before the build:** the memory watchdog is 48 GB, not 36 GB.
+3c6b9906c, the same tree without R-72's fix and lever (a), peaked at 33.45 GB, so a 36 GB ceiling could have killed a
+healthy run. 48 GB is about 1.4x that envelope, inside the rule (about twice the reference envelope, below what the
+host can spare: apollo 125 GB total, 108 GB available), and far below the 100 GB pathological class. Raised at the
+SPEC lane's request.
+
+## Lever (a) REFUTED by the claim-auditor, batch HELD; R-72's synthesis-only gate alone (pre-registered before the gate, 2026-11-14)
+
+**Lever (a) at 6784c69e8 is refuted (claim-auditor; the mechanism re-read here).**
+- A non-UNINIT STC no longer claims rs1, but it is still an rs1 FORWARDING SOURCE: `check_fwd_rs1` lists STC
+  (`ariane_pkg.sv:1098`), and scoreboard-entry forwarding matches on `sbe.rs1` independent of the clobber vector
+  (`issue_read_operands.sv:792`; the WB-port path at `:713` is the same).
+- So a younger writer of rs1 can issue while the STC is in flight, and a reader after it can be forwarded the STC's
+  OLD rs1. That is the mirror image of S5b.
+- The off-build is immune: the claim WAW-stalls the writer.
+- The 37-arm A/B could not see it: no arm holds an STC uncommitted while a multi-cycle writer of its base issues.
+- **The batch build of d10608fc9 was NOT launched.**
+- **The directed arm,** stc-fwd-hazard.S (perf/b-next 7c49921eb), is running with the lever on and off: a missing
+  load at the head, a non-UNINIT STC through s3, a div (or a mul) writing s3, then a read of s3. The predictions are in
+  its header. The lever-on run must read the stale cursor first, or the shape does not reach the hazard.
+- **The fix to follow:** an STC is an rs1 forwarding source only when its stc_uninit_q bit is set, in the entry and
+  WB-port paths, for rs1/rs2/rs3. It then gets this arm, the A/B, the auditor and its own synthesis-only gate.
+
+**R-72's synthesis-only gate, alone.** capstone-ariane perf/r72-on-fdk **84a23b65b** = 3c6b9906c (fdk, sealed) +
+only R-72's pc_cap_check hunk (+5/-1). The claim-auditor found the logic SUPPORTED, but asked for a gate: the new
+64-bit subtract and compare sit after the decompress of pc_metadata in `pc_cap_ex_valid`'s cone, which reaches
+exception_o, and through it the CSR file's update_access_exception, on the standing UNOPTFLAT list.
+- Its added arm, pcc-end-rvc PE_C (a 2-byte c.addi ending exactly at END must commit), is running.
+
+Keys, against fdk's sealed 3c6b9906c:
+1. Mapping in class: about 5.4 GB at the marker. fdk's whole-synthesis peak was 33.45 GB, so this run needs the
+   40 GB guard and a watchdog above 34 GB.
+2. Loops: found-loop 0, 8-326 0, LUTLP-1 0, check_timing 0.
+3. Area, report only: the floor first (module, core and TOP 0 +/- 2,500). Read commit_stage's own row and the
+   csr_regfile row, with the LUT delta against fdk.
+4. The worst-path family and its slack: does any path through pc_cap_check's new compare enter the top 200?
+
+The batch build waits for this gate AND for the fixed lever (a)'s own gate.
