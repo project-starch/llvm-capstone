@@ -1,8 +1,9 @@
 # Address-space root: adapter and libc plan
 
-Status: plan of 2026-11-12 on the branch `address-space-root`. Stages 0 to 4b
-are done (see each stage); stage 5 is next, in a reduced form until the
-project lead decides on the old path.
+Status: plan of 2026-11-12 on the branch `address-space-root`. Stages 0 to 4c
+are done (see each stage); stage 4d (partial `munmap` as a page operation) is
+next, then block A (the format alignment) and stage 5, in a reduced form until
+the project lead decides on the old path.
 Design: [the kernel as the outermost allocator](../design/virtual-capstone/address-space-root.md).
 
 ## What the code does today
@@ -222,6 +223,131 @@ in the last stage, when every feature is in.
    word traps to the firmware, which halts the machine at that address; a libc
    whose mremap copies first takes a bounds fault (28) at the oversized old
    length. The stage 4 controls still fail where expected.
+4c. **Every service through a checked reference. Done** (2026-11-13). Rule,
+   decided after the review of stage 4b: the kernel side (module and launcher)
+   reads or writes program memory, or holds a program mapping, only through a
+   reference that the program passed and the module checked, or through the
+   system-call region it shares with the program (the process transport). The
+   module checks bounds and lifetime only; read, write and execute rights are
+   the page table's (design note, section Mappings).
+
+   Audit of every launcher service and module path that touched program memory
+   at an address the program named, read at `29672da5e` (line numbers of the
+   stage 4c tree):
+
+   | Path | Before | Decision |
+   |---|---|---|
+   | exit word, `CV_SERVICE_PTHREAD_EXIT` a0 (exec.c `exit_word_refusal` 982, store and wake 1572) | integer; written if registered, aligned, writable, outside the exiting thread's own frame | a0 is the word's reference. Launcher: inside one mapping, writable pages, outside every transport it writes itself. Module (`CV_WORD`, capstone_vm.c `word_check` 3814): with root grants a live non-linear reference covering the word; in both modes aligned, inside one arena past the image text, in no thread's frame. Then `CV_TOUCH`. A refused word is not written, logged, the exit completes; futex waiters on it stay blocked (program bug) |
+   | futex wait, `CV_SERVICE_FUTEX` a0 (exec.c 1581, `syscall(SYS_futex)` 1603) | integer; Linux read the word if registered and aligned | Linux reads the word, so `CV_WORD` checks it as an exit word (no write conditions); EFAULT and a log line otherwise. The wait runs with `service_lock` released after the check: a concurrent unmap by another thread of the program affects only that program's wait |
+   | futex wake, same service | integer | stays an integer: a wake neither reads nor writes the word (Linux hashes the address of a private futex). It must be an aligned int inside one registered mapping (EFAULT otherwise), which keeps it off the launcher's own futexes |
+   | worker attach, `CV_SERVICE_THREAD_DELEGATE` a0, a1, a2 (exec.c `transport_attach` 1435) | integers; held and written if registered, writable, not held | a0 and a1 are references. Each block a whole mapping the program may end (`mapping_gate`, which refuses the launcher's own transport: no heap mapping), the two distinct, every page writable, and with root grants both references pass the whole-mapping check of munmap (`CV_ATTACH`, capstone_vm.c `attach` 3866), neither in a thread's frame; then `CV_TOUCH` and the hold. A refusal ends the program |
+   | process transport, same service (exec.c 1622) | integers checked by registration, compared with the launcher's own | the shared system-call region: compared with the launcher's own meta block and exchange region, never resolved; registration check dropped |
+   | an attached worker's later calls (exec.c, after 1622) | compared with the attached blocks | unchanged: equality with blocks checked at the attachment |
+   | `CV_SERVICE_DELEGATE`, `capstone_delegate_serve` (exec.c 1659, linux/delegate-service.c) | the launcher's own meta block; exchange offsets checked against its length | unchanged: shared region only |
+   | `exchange_prepare_write` (exec.c 911) | `CV_TOUCH` of the process exchange | unchanged: shared region |
+   | park requests (linux/delegate-service.c `park_request` 775) | integer key | unchanged: the key is never dereferenced (park.h) |
+   | `madvise` | the domain answered ENOSYS (ports/musl-capstone/runtime/delegate.c 1566, group memory) and the launcher's validator refuses the memory group (common/delegate.c `capstone_delegate_validate` 337) | new service 16 (`CV_SERVICE_ADVISE`, exec.c `advise_range` 861, capstone_vm.c `advise` 3894) for `MADV_DONTNEED` and `MADV_FREE`, with a reference that passes conditions 1 to 3 and covers the page range, as mprotect; libc `madvise` in mapping.c. Other advice still answers ENOSYS in the libc |
+   | `set_tid_address`, `set_robust_list` | answered in the domain (ports/musl-capstone/runtime/delegate.c 1385, 1528) | unchanged: never reach the launcher |
+   | thread create a0, stack at exit a1, munmap, park, mprotect, mapping check (exec.c 1481, 1558, `unmap_arena_for` 778, `protect_range` 839, `check_mapping` 880) | checked references since stages 2 to 4b | unchanged |
+   | fault diagnostics, `frame_chain` (exec.c 1356) | reads the main stack at the faulting thread's fp | unchanged and documented: a diagnostic after the program stopped for good, bounded to the main stack (a launcher grant, never unmapped while the process lives), written to the fault record and never returned to the program |
+   | map, join, self, wait, nodes, detach | no program memory | unchanged |
+   | module `CV_TOUCH` (capstone_vm.c `touch` 3647) | pins pages the launcher names | unchanged: the launcher names only spans checked above or the process exchange |
+   | module `CV_THREAD_CREATE` `pin_thread_frame` (capstone_vm.c 4190) | pins the frame a0 names | unchanged: `request_accept` with root grants since stage 3 |
+   | module `resolve` (capstone_vm.c 3325) | the faulting address | unchanged: the processor checked the reference before the fault |
+
+   Other changes:
+   - Writable state: the conservative interval (`write_from`, `write_to`) is gone.
+     Each mapping records the protection Linux maps on every page of its visible
+     length, exactly: one value while all pages share it (no allocation for the
+     mappings that no mprotect changed in part), one byte per page after the
+     first partial change, back to one value after a whole-mapping change. A byte
+     and not a bit: three protection bits and room for stage 4d's removed state;
+     bounded by 512 KiB per mapping and 1 MiB per context (`CV_MAX_REGION_BYTES`,
+     `CV_MAX_BYTES`). Interface for stage 4d: `page_split`, `page_set`, `page_and`,
+     `page_all`, `page_get`, `page_free` (exec.c, section Page state).
+     `protect_range` intersects old and new rights before mprotect and sets the
+     new ones after it. A page counts as writable when Linux maps it with
+     `PROT_WRITE` (RWX included), and mremap's check asks for exactly read-write.
+   - Join: the module issues a thread id only when the create succeeds, and the
+     launcher's rollback of the newest create gives it back (capstone_vm.c
+     `thread_exit`); the launcher publishes an id only after `pthread_create`
+     succeeded (`thread_publish`, `thread_withdraw`). A failed create consumes
+     no id, so a join of it answers ESRCH until the next create takes it. The
+     main thread's join of itself answers EDEADLK (the EDEADLK test now comes
+     first). `registered_word`, which the reviewers called dead, was the futex
+     service's check; it is folded into `word_mapping`. Dead code removed:
+     `registered_span`, `writable_cut`, `writable_join`, the frame parameter of
+     `exit_word_refusal`.
+   - `die()` runs its cleanup once: a second failing thread waits for the exit.
+     Before, an attachment refused by a worker while the main thread stepped
+     could free the host state twice (one SIGSEGV instead of exit 125 in the
+     first unpinned batch).
+   - mremap's check-to-copy window is documented (mapping.c, design note).
+   ABI: `CV_SERVICE_PTHREAD_EXIT` and `CV_SERVICE_FUTEX` take the word's reference
+   in a0 (`__capstone_vm_thread_exit_clear(int *, ...)`), a worker's
+   `CV_SERVICE_THREAD_DELEGATE` takes references in a0 and a1, service 16
+   `CV_SERVICE_ADVISE` is new; ioctls 34 `CV_WORD`, 35 `CV_ATTACH` and 36
+   `CV_ADVISE` are new. The other ioctl structures keep their layout.
+   Unit test: root-contract.c, six new modes (`exit-word-refs`, `futex`,
+   `advise`, `join-burned`, `attach-exchange`, `attach-address`), `exit-word`
+   through references, `create-fail` with a join of the failed id.
+   `pthread-contract.c` passes its exit word as a reference too (compiled, its
+   gate not run in this stage). Two batches on the
+   final images, equal counts: root_grants=1 374 of 374 pinned and unpinned,
+   root_grants=0 370 of 370, hosted contract 94 of 94, mapcache park and
+   revive, the launcher without its length check 96 of 96, the launcher that
+   names the frame around a0's cursor 32 of 32, the 4-entry table 68 of 68 with
+   and without root grants. The first batch, before the `die()` fix, read 373 of
+   374 unpinned (`attach-readonly` ended with SIGSEGV after the refusal); after
+   it, three unpinned runs of the attach modes and `advise` read 51 of 51 each.
+   Controls: with stage 4b's exit-word check (by address alone) the word in
+   another thread's frame is written, with and without root grants, and that
+   thread resumes at a return address whose low half is zero and faults (12);
+   with stage 4b's single writable interval the word in the third page of the
+   middle-protected mapping is refused ("not writable") and the program fails
+   there; the module controls of stage 3b and 4 (condition 3, the stack's
+   CREVOKE, the `mprotect` check, the a0 cursor at create) and the hold control
+   still fail where expected, and condition 3's control now also breaks
+   `advise` at the nested object.
+4d. **Partial munmap as a page operation** (next). A partial `munmap` inside a
+   mapping block removes pages and leaves a `PROT_NONE` placeholder; no lifetime
+   ends, and no other mapping gets addresses inside the block while M lives. M
+   ends with `CREVOKE` when the last logically mapped page goes, when one call
+   names the whole block, or at exit. Exact per-page accounting on the page
+   state of stage 4c: `PROT_NONE` and untouched pages count as mapped, and a
+   repeated unmap of a hole is idempotent. `MAP_FIXED` into a hole only under
+   today's `MAP_FIXED` rule (an accepted reference, no object derived below P).
+   `mremap` shrinks in place and grows in place within M. The module's frame
+   set needs deletion (it is insert-only today, `frame_insert`), and the module
+   clears the tags of each removed page range before it unpins the pages.
+A. **Format alignment: no capability rights** (block A, after stage 4d; decided
+   2026-11-13). Sublet checks bounds and lifetime only, and the page table
+   checks mapping and rights. Remove capability rights from the module and the
+   launcher: the grant's permissions (0 to 7, `cv_map.permissions`),
+   `CV_TIGHTEN` and the rights switch of `root_derive` (capstone_vm.c 1569,
+   1949, 2004), the rights checks of `add()` against the VMA (2493 to 2535) and
+   of `revive()` (2342), the exec.c kind-dependent rights checks of
+   `acquire_mapping` (996 to 1003), `CV_GRANT_WRITE` and `grant_writes`
+   (exec.c 57 to 61, 577, 887, 937), the rights arguments of the grants
+   (exec.c 1918, 1937 to 1944; `__capstone_vm_map` in start.S 64;
+   `cap_vm_acquire` in vm.h, mapping.c 31, malloc-mapping.c 58, thread.c 62)
+   and the "maximum rights" comment in mapping.c 29. Places that rely on a
+   capability right for protection today, so the kernel must map them with the
+   matching page rights instead:
+   - the startup block (exec.c 1940): a read-only grant (4) over pages Linux
+     maps read-write; the launcher must map it `PROT_READ`, and its own
+     `grant_writes` gate goes with it;
+   - the image (exec.c 1918): one grant with all rights over text (Linux maps
+     read-execute) and data (read-write), and the module requires the execute
+     right for register 3 (capstone_vm.c 2500); the page table already matches;
+   - heap, metadata, stacks, frames, the transport and the heap region (rights 6)
+     are mapped read-write without execute; the page table already matches, but
+     a program's `mprotect(PROT_EXEC)` of such a mapping then makes it
+     executable, where today the missing execute right refuses the fetch;
+   - application mappings (rights 7) already rely on the page table;
+   - without root grants `CSMINT`'s descriptor carries the rights (capstone_vm.c
+     2384, 2648), and the processor checks them; the design note's section on the
+     program counter still names the execute right of the code reference.
 5. **Remove the old path.** Drop the parameter, `arena.ancestor`, the private
    parents and the collection paths that exist only for them. `CSMINT` stays
    at one site. Pending a decision of the project lead (2026-11-13): the

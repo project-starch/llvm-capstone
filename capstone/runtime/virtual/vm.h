@@ -32,6 +32,9 @@ extern long __capstone_vm_protect(void *, unsigned long, int);
  * does, and answers 0 if that unmap would be accepted and every page of the mapping is read-write
  * (ENOTSUP otherwise). It changes nothing: mremap asks it before it copies. */
 extern long __capstone_vm_mapping_check(void *, unsigned long);
+/* The advise service (CV_SERVICE_ADVISE) takes a reference, a length and MADV_DONTNEED or MADV_FREE,
+ * and checks the reference as the protect service does. The range reads zero afterwards. */
+extern long __capstone_vm_advise(void *, unsigned long, int);
 extern long __capstone_vm_wait(void);
 extern long __capstone_vm_nodes(unsigned long);
 

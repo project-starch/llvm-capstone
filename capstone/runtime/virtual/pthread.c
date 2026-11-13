@@ -14,10 +14,11 @@
 #include "capstone/delegate.h"
 #include "vm.h"
 
-/* The exit service: the exit word, then the mapping that holds the thread's stack (its
- * reference, with its tag, or NULL) and that mapping's length, then the status. With root_grants
- * the kernel unmaps the stack only through that reference (vm.h, as for munmap). */
-extern _Noreturn void __capstone_vm_thread_exit_clear(uintptr_t, void *, size_t, long);
+/* The exit service: the exit word's reference (or NULL), then the mapping that holds the thread's
+ * stack (its reference, with its tag, or NULL) and that mapping's length, then the status. With
+ * root_grants the kernel writes the exit word only through its reference and unmaps the stack only
+ * through that reference (vm.h, as for munmap). */
+extern _Noreturn void __capstone_vm_thread_exit_clear(int *, void *, size_t, long);
 extern long __capstone_vm_futex(void *, int, int, long, long, int);
 /* delegate.c: this context gives back the identity its creator took (thread.c), right before
  * its exit service, after its last delegated call (release_clone's frees and unmaps). */
@@ -97,7 +98,7 @@ static void *clone_entry(void *p)
     int *clear = r->clear;
     release_clone(r);
     __capstone_context_identity_release();
-    __capstone_vm_thread_exit_clear((uintptr_t)clear, NULL, 0, result);
+    __capstone_vm_thread_exit_clear(clear, NULL, 0, result);
 }
 
 int __clone(int (*entry)(void *), void *stack, int flags, void *arg, ...)
@@ -158,7 +159,7 @@ _Noreturn void __capstone_virtual_pthread_exit(long status)
      * trusted launcher releases the clear word only after stopping it. */
     if (r) release_clone(r);
     __capstone_context_identity_release();
-    __capstone_vm_thread_exit_clear((uintptr_t)clear, NULL, 0, status);
+    __capstone_vm_thread_exit_clear(clear, NULL, 0, status);
 }
 
 /* base is musl's map_base: the reference its mmap of the stack and TLS returned. It goes to the
@@ -169,7 +170,7 @@ _Noreturn void __unmapself(void *base, size_t size)
     int *clear = r ? r->clear : NULL;
     if (r) release_clone(r);
     __capstone_context_identity_release();
-    __capstone_vm_thread_exit_clear((uintptr_t)clear, base, size, 0);
+    __capstone_vm_thread_exit_clear(clear, base, size, 0);
 }
 
 long __capstone_virtual_futex(void *word, int op, int value, const struct timespec *timeout, int bitset)
@@ -178,8 +179,9 @@ long __capstone_virtual_futex(void *word, int op, int value, const struct timesp
     /* musl has a wake fallback when requeue is unsupported. Its fourth
      * argument is an integer, not a timeout pointer, for this operation. */
     if (command != 0 && command != 1 && command != 9 && command != 10) return -ENOSYS;
-    /* The original capability performs the liveness/read check. Linux gets
-     * the registered address, never a bounced copy of the futex word. */
+    /* The original capability performs the liveness/read check here, and the
+     * service checks it again before a wait (vm-abi.h). Linux gets the
+     * registered address, never a bounced copy of the futex word. */
     (void)__atomic_load_n((int *)word, __ATOMIC_ACQUIRE);
     long seconds = timeout ? timeout->tv_sec : -1;
     long nanos = timeout ? timeout->tv_nsec : 0;

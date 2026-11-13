@@ -1116,6 +1116,40 @@ silicon-specific is the cost of a delegated round.
   tick on vp2, so the workaround stands regardless. Any other program with a periodic timer faster than ~25 ms will
   storm the same way on silicon.
 
+## S-35 — QEMU platform: a misaligned scalar store by an ordinary Linux user process halts the whole machine in the firmware, on the stock and on the tag-keeping firmware `OPEN — filed 2026-11-13 from stage 4b's no-align control of the address-space-root adapter; origin not established (the firmware's trap path, or how the platform routes a U-mode misaligned-access trap to it)`
+
+**Behaviour.** The adapter's launcher (`capstone-vexec`, a static glibc binary running as an ordinary Linux user
+process) stores an `int` to an address that is 1 mod 4. The store traps to M. Instead of emulating the access or
+delivering SIGBUS, the firmware executes a capability memory access with an integer base (rs1 = x7 = 0), QEMU raises
+cause 24 in M, and the machine halts: no later guest output, the gate never ends.
+
+**Reproducer.** Branch `address-space-root` at `29672da5e` (stage 4b). Build a launcher whose `exit_word_refusal`
+(runtime/virtual/exec.c) lacks the line `if (p & (sizeof(int) - 1)) return "unaligned";` and run
+`runtime/virtual/run-root-grants.py --launcher <that launcher> --launcher-control no-align --modes exit-word`, once
+with the module's root_grants=1 on the tag-keeping platform (fw_jump.elf 180baebb5758d9dc) and once with
+`--root-grants 0` on the stock platform (5b5c047a00306f35). The mode's first case names an unaligned exit word in the
+image's data, and the launcher stores 0 into it. From stage 4c on the module checks the alignment (`CV_WORD`), so the
+launcher no longer reaches the store. No other user process was tried.
+
+**Evidence** (QEMU `f8aeb15905`, serial logs on the lab host under `asr-work/stage4b/out/`): `b2-control-no-align`
+and `b3-control-no-align` on the tag-keeping firmware and `x-no-align-stock-rg0` on the stock firmware, all three
+halted the same way:
+
+    ROOT_EXIT_WORD case=unaligned word=0x3fa1e624f1
+    [CAPSTONE] Cap mem access requires capability: pc = 80023f8e, rs1 = x7, imm = 0, value = 0, value_hi = 0
+    [CAPSTONE] domain halted by capability fault: cause = 24, pc = 0x80023f8e, tval = 0x0, badaddr = 0x3fa1e624f1
+
+(stock firmware; on the tag-keeping firmware pc = 0x800241ee, the same badaddr pattern). Both halt pcs symbolize, with
+`llvm-nm` against each platform's own `fw_jump.elf`, to `_return_from_domain.1 + 0xa`: the trap of a plain Linux
+process lands in the monitor's path for a return from a capability domain, which loads through a context it does not
+have. `badaddr` is the launcher's unaligned word in every run.
+
+**Tried.** Nothing beyond the three runs; the firmware was not instrumented.
+
+**Impact.** Any misaligned scalar access by a user process on this platform stops every lane on the machine, not only
+the faulting process. The adapter avoids it on its own write path (the module refuses an unaligned exit word); other
+user code, native helpers included, is not protected.
+
 ## Q-04 — QEMU's MOVC does not null a NOT_CAP source; the RTL does, and whether a scalar source MUST be consumed is an open spec question (the 2026-09-10 ruling that the spec settles it was RETRACTED the same day) `DECIDED 2026-10-14 (the lead adopted option 1: MOVC keeps an untagged source, consumes every tagged non-NONLIN source); recorded in llvm/lib/Target/Capstone/CapstoneISASemantics.md (the academic-spec text is not updated), QEMU follows it on the virtual profile and keeps the RTL's MOVC on the physical profile until Q-04 (b) (x0 deviation fixed), virtual SDK drops the C-32 rewrite; RTL change Q-04 (b) APPLIED in the batch (capstone-ariane c721c1a2a, item 5) and in every sealed bitstream since; PRESENT ON SILICON 2026-11-04 on bitstream 3 (board 1) and ObjBounds (board 2), N = 1 each (kit rtl-smoke/q04-movc-bare-2026-11-03). C-32's board-image rule is the lead's and is not changed by this. See plans/2026-10-14-movc-untagged-source.md. Was: OPEN — QEMU/RTL divergence, filed 2026-09-05; the spec question is the lead's; 2026-09-15: masks C-32 on every emulator pass; 2026-09-24: CAPSTONE_MOVC_NULL_SCALAR=1 makes the emulator null it as the RTL does, opt-in`
 
 > **DECIDED 2026-10-14 by the project lead: option 1, "wie vorgeschlagen, vorsichtig sein".**

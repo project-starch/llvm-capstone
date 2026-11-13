@@ -163,6 +163,53 @@ struct cv_protect {
     __u64 thread, id;
 };
 #define CV_PROTECT _IOW('V', 33, struct cv_protect)
+/* A word that the launcher reads or writes for the program (stage 4c): the exit word that a
+ * thread's exit names (CV_SERVICE_PTHREAD_EXIT, which the launcher writes) and the word of a futex
+ * wait (CV_SERVICE_FUTEX, which Linux reads). thread is the caller, paused at one of those
+ * services (the module reads which from its a7); the word is the int at a0's cursor. The module
+ * accepts the word only if, with root_grants, a0 holds a live non-linear reference whose bounds
+ * cover the word, and, in both modes, the word is aligned, lies inside the visible length of one
+ * registered arena past the image's read+execute prefix, and lies in no page that holds the frame
+ * of a thread. reason (out): CV_WORD_ACCEPTED, or the reason of the refusal. The ioctl itself
+ * fails only for a caller that is not paused at those services (EINVAL). Changes nothing: the
+ * launcher admits a word it writes with CV_TOUCH afterwards. */
+struct cv_word {
+    __u64 thread, reason;
+};
+#define CV_WORD_ACCEPTED 0
+#define CV_WORD_NOT_REFERENCE 1
+#define CV_WORD_NOT_LIVE 2
+#define CV_WORD_NOT_COVERING 3
+#define CV_WORD_UNALIGNED 4
+#define CV_WORD_NOT_MAPPED 5
+#define CV_WORD_IN_FRAME 6
+#define CV_WORD_REASONS 7
+#define CV_WORD _IOWR('V', 34, struct cv_word)
+/* A worker's attachment of its own transport (CV_SERVICE_THREAD_DELEGATE, stage 4c): thread is the
+ * caller, paused at the service; meta and exchange are the arenas the launcher resolved from the
+ * cursors of a0 (the meta block's reference) and a1 (the exchange region's); meta_bytes is the
+ * meta block's length, a2 the exchange region's. With root_grants each reference must pass the
+ * whole-mapping check of munmap (a live reference whose record is a child of the mapping's
+ * reservation record and whose bounds cover the visible length, which the call names). In both
+ * modes neither arena may hold the frame of a thread (EBUSY). Ends nothing. A refused reference is
+ * EINVAL, and the launcher then refuses the attachment. */
+struct cv_attach {
+    __u64 thread, meta, exchange, meta_bytes;
+};
+#define CV_ATTACH _IOW('V', 35, struct cv_attach)
+/* A program's madvise(MADV_DONTNEED or MADV_FREE) of [a0's cursor, + a1) in arena id
+ * (CV_SERVICE_ADVISE, stage 4c): thread is the caller, paused at the service. With root_grants
+ * the reference in a0 must be a live reference whose record is a child of the mapping's
+ * reservation record and whose bounds cover the named page range, which may be part of the
+ * mapping, as for mprotect. In both modes the arena may not hold the frame of a thread (EBUSY).
+ * zeroed (out): 1 if the module, after pinning every resident page of the range, overwrote every
+ * page of it that it holds with zeros (data and tags); the launcher then changes nothing. 0 in the
+ * unpinned mode, where the module holds no pages: the launcher gives the range back to Linux with
+ * madvise(MADV_DONTNEED). Either way the range reads zero afterwards. A refusal is EINVAL. */
+struct cv_advise {
+    __u64 thread, id, zeroed;
+};
+#define CV_ADVISE _IOWR('V', 36, struct cv_advise)
 /* The image file, by descriptor, before the launcher validates it: the module
  * denies writers to it (ETXTBSY, as Linux does for a running executable) until
  * the context is released, so the bytes validated are the bytes loaded. */

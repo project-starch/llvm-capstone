@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/ipc.h>
+#include <sys/syscall.h>
 #include "vm.h"
 __attribute__((__weak__)) void __vm_wait(void) {}
 static int mapping_length(size_t n, unsigned long *bytes)
@@ -65,6 +66,30 @@ int mprotect(void *p, size_t n, int prot)
 }
 /* musl's pthread stack setup calls the hidden symbol directly. */
 int __mprotect(void *p, size_t n, int prot) { return mprotect(p, n, prot); }
+/* madvise(MADV_DONTNEED) and MADV_FREE destroy the contents of the range, so p goes to the service as
+ * a reference, as for mprotect: with root_grants the kernel acts only if p is a live reference to the
+ * mapping that covers [p, p + bytes). The range reads zero afterwards. Every other advice answers
+ * ENOSYS and is reported as unserved, as before this service existed. */
+#ifndef MADV_DONTNEED
+#define MADV_DONTNEED 4    /* Linux's values; <sys/mman.h> declares them only under _BSD_SOURCE */
+#define MADV_FREE 8
+#endif
+void __capstone_hc_note_unserved(long n);
+int madvise(void *p, size_t n, int advice)
+{
+    unsigned long bytes, address = __builtin_capstone_cap_get_cursor(p);
+    if (advice != MADV_DONTNEED && advice != MADV_FREE) {
+        __capstone_hc_note_unserved(SYS_madvise);
+        errno = ENOSYS; return -1;
+    }
+    if (address & 4095) { errno = EINVAL; return -1; }
+    if (!n) return 0;
+    if (mapping_length(n, &bytes)) return -1;
+    long rc = __capstone_vm_advise(p, bytes, advice);
+    if (rc) { errno = -rc; return -1; }
+    return 0;
+}
+int __madvise(void *p, size_t n, int advice) { return madvise(p, n, advice); }
 /* Public mremap, the MREMAP_MAYMOVE form only, as map-copy-unmap (2026-10-22: cpython's
  * mmap.resize, which corpus cell lt0 18 needs before its bug runs). The old mapping is unmapped
  * through the ordinary service, so it is RETIRED: every capability to it is revoked and a stale
@@ -75,7 +100,10 @@ int __mprotect(void *p, size_t n, int prot) { return mprotect(p, n, prot); }
  * must name a whole registered mapping of the program, which no worker's transport holds, and with
  * root_grants p must be a live reference to that whole mapping, as for munmap. A refusal returns
  * MAP_FAILED with nothing changed (EINVAL, or EBUSY for a held mapping), never a fault in the copy.
- * Then the copy reads at most the old mapping's visible length, which p covers, and writes at most
+ * The check states what holds when it answers, not what holds at the copy: another thread of the
+ * program may end the old mapping or change its protection between the check and the copy, and the
+ * copy then faults instead of answering EINVAL. That affects only the program itself, as a
+ * concurrent free does for realloc. Then the copy reads at most the old mapping's visible length, which p covers, and writes at most
  * the new mapping's, which mmap's reference covers. Without root_grants the address is the
  * authority, as for munmap, so a reference that does not cover the mapping faults in the copy.
  * Limits, each explicit:

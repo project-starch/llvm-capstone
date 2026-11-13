@@ -37,9 +37,11 @@ two steps. The kernel derives a reservation record M from R and keeps the
 only reference to M, as an allocator keeps the reference to its pool. It
 then derives the program's mapping reference P from M, with the same bounds,
 and hands P out. A kernel object holds the reservation's extent (padding
-included), its visible length, the reference to M and the number of mapped
-pages. Linux splits and merges VMAs for its own reasons, so the reservation
-object, not a VMA, identifies the mapping, and VMAs of different
+included), its visible length and the reference to M, and the launcher's
+record of the mapping holds the protection of each page. Neither counts
+mapped pages: until a partial `munmap` exists, every page of the visible
+length stays mapped. Linux splits and merges VMAs for its own reasons, so the
+reservation object, not a VMA, identifies the mapping, and VMAs of different
 reservations never merge.
 
 The program can renew or end P and anything it derives, but it cannot reach
@@ -68,13 +70,35 @@ the kernel releases no range on a refused request. Only the teardown of the
 process and the rollback of a failed grant end M without a request of the
 program.
 
+The same holds for every other service of the launcher (decided on
+2026-11-13, stage 4c of the adapter plan): the kernel side reads or writes
+the program's memory, or holds a mapping of the program, only through a
+reference that the program passed and the kernel checked, or through the
+system-call region it shares with the program. `mprotect` and `madvise`
+come with a reference that passes conditions 1 to 3 and covers the named
+page range. A worker's attachment of its transport names its meta block and
+its exchange region with references that pass conditions 1 to 4, and ends
+nothing. The exit word that the launcher writes at a thread's exit and the
+word of a futex wait come with a reference that is live and covers the word;
+the word may be any object's, so condition 3 does not apply. No request may
+reach a page that holds the frame of a thread, whatever reference it
+carries. A futex wake takes an address, because it neither reads nor writes
+the word.
+
+Sublet checks bounds and lifetime, and the page table checks mapping and
+rights. An access needs both: the page must be mapped with the right the
+access needs, and the reference must be live and in bounds. Read, write and
+execute rights are the page table's alone. A reference passed to `mprotect`
+or `munmap` only proves ownership of the mapping block.
+
 | Call | Rule |
 |---|---|
 | `mmap` | a new reservation, as above |
 | `munmap` | only the whole reservation, with an accepted reference: `CREVOKE` of M, then the address range becomes free. A partial `munmap` is refused. |
 | `MAP_FIXED` | into free address space: a new reservation. Inside a reservation: only with an accepted reference and only while the program derived no object below P (the record after P's in the preorder list is not deeper, one step) |
 | `mremap` | `MREMAP_MAYMOVE` only, atomic: a new reservation, the pages move with their tags, the old reservation ends. On failure nothing changes. In-place resizing, `MREMAP_FIXED` and `MREMAP_DONTUNMAP` are refused. |
-| `mprotect` | with a reference that passes conditions 1 to 3 and covers the named page range, which may be part of the reservation. It ends nothing. Page permissions never grant a right that the capability lacks. |
+| `mprotect` | with a reference that passes conditions 1 to 3 and covers the named page range, which may be part of the reservation. It ends nothing. |
+| `madvise` | `MADV_DONTNEED` and `MADV_FREE` as `mprotect`: a reference that passes conditions 1 to 3 and covers the named page range. The range reads zero afterwards. It ends nothing. Other advice answers `ENOSYS`. |
 | kinds | anonymous mappings only. File-backed mappings, mappings shared between processes, `brk` and `userfaultfd` are refused. |
 | shared region | the system-call region belongs to the kernel, is never unmapped, and its address range is never reused |
 
@@ -91,14 +115,22 @@ unmap in the libc, not one kernel step. Before it copies anything it asks the
 kernel, without changing anything, whether `munmap` of the old mapping through
 the same reference and length would be accepted, so a stale reference, an
 object below P or a wrong length fails with nothing changed and never faults
-in the copy. It moves only an anonymous mapping that is read-write over its
-whole length, and refuses every other one (`ENOTSUP`). The old reservation
+in the copy. The answer holds when it is given: another thread of the program
+may end the old mapping or change its protection between the check and the
+copy, and the copy then faults instead of answering `EINVAL`. That affects
+only the program itself, as a concurrent `free` does for `realloc`. It moves
+only an anonymous mapping that is read-write over its whole length, and
+refuses every other one (`ENOTSUP`). The old reservation
 ends through P, as at `munmap`. The copy is not atomic for the program's
 other threads: a write to the old mapping during the copy may be lost, as for
 `realloc`.
 
-`madvise(MADV_DONTNEED)` and `MADV_FREE` change backing, not lifetimes, and
-need no revocation: a fresh page carries no tag.
+`madvise(MADV_DONTNEED)` and `MADV_FREE` change contents, not lifetimes, and
+need no revocation. They destroy contents, so they come with a reference, as
+`mprotect` does. The pinned kernel overwrites the pages of the range it holds
+with zeros, data and tags, and keeps them pinned and mapped, so no tagged page
+goes back to Linux. The unpinned kernel holds no pages, and Linux gives the
+range back, as at the unpinned release of a whole mapping.
 
 A program that ends a mapping's lifetime itself and hands back the stale
 reference is refused, and the range stays unusable until `exit`. That is a

@@ -77,7 +77,8 @@ worker installs its own META/exchange pair, bounce buffer, logical signal mask
 and event ring. Linux executes blocking I/O without holding the process service
 lock, and futexes use the original registered VA rather than an exchange copy.
 The child clears musl's exit word only after its virtual CPU and saved frame
-have stopped, so join can safely retire its stack. Process exit and faults stop
+have stopped, so join can safely retire its stack. The exit word and the word
+of a futex wait reach the launcher as references (see the VM service contract). Process exit and faults stop
 all Linux workers before mappings are released by the adapter's fd teardown.
 
 The [pthread gate](pthread-result.json) checks separate TLS, tagged join results,
@@ -242,8 +243,30 @@ retirement services. Images carry `CPONVVM7` (two load segments, see
 `link.ld`); the launcher accepts no other version. MAPPING_CHECK answers,
 without changing anything, whether an unmap of a whole mapping would be accepted
 and the mapping is read-write; `mremap` asks it before it copies. The remap
-transaction of the first design (service 13) is gone. Ordinary malloc/free
-execute locally. Application ABI-v2's
+transaction of the first design (service 13) is gone. ADVISE (16, stage 4c)
+serves `madvise(MADV_DONTNEED)` and `MADV_FREE` on a page range that PROTECT
+could name, and the range reads zero afterwards: the pinned module overwrites
+the pages it holds with zeros, data and tags, and keeps them; unpinned, Linux
+gives the range back. Other advice answers ENOSYS in the libc, as before.
+Ordinary malloc/free execute locally.
+
+Since stage 4c the launcher and the module read or write the program's memory,
+or hold one of its mappings, only through a reference that the program passed
+and the module checked (`wire.h`), or through the process transport, the
+system-call region they share with the program. With root grants: UNMAP,
+MAPPING_CHECK, the frame at THREAD_CREATE and the stack at PTHREAD_EXIT need a
+live reference to the whole mapping; PROTECT and ADVISE one to the mapping that
+covers the named range; a worker's first THREAD_DELEGATE names its meta block
+and exchange region with references to their whole mappings (`CV_ATTACH`); the
+exit word at PTHREAD_EXIT and the word of a FUTEX wait need a live reference
+that covers the word (`CV_WORD`). In both modes no request reaches a page that
+holds a thread's frame. A FUTEX wake neither reads nor writes the word, so its
+integer address is enough; it must lie in a registered mapping, which keeps it
+off the launcher's own futexes. The module checks bounds and lifetime only;
+whether a page may be read or written is the page table's business, which the
+launcher checks before its own writes (the page state of each mapping, one byte
+per page once a protection changed in part). The audit of every such path is
+in `docs/plans/2026-11-12-address-space-root-adapter.md`, stage 4c. Application ABI-v2's
 ordinary delegated system-service format remains independent of this marker.
 
 Linux, the adapter and the runtime belong to the TCB. Linearity concerns
@@ -300,8 +323,9 @@ Its negative controls are the module's `test_revive_skip_clear`, `test_revive_ke
 control must fail the check it names. The pinned pages of pooled arenas stay resident until eviction
 or exit: peak pinned pages rise by the pool's resident part, and the runtime gate's `linux_pages_released`
 oracle (peak minus final pinned pages above 300) tolerates a cap of about 256K but not 1M. Known limit: a
-futex word is validated and then used after the service lock is dropped, as before the pool, so a waiter
-started on a mapping can outlive its park and see the address reused.
+futex word is checked (with root grants, through its reference) and then used after the service lock is
+dropped, as before the pool, so a waiter started on a mapping can outlive its park and see the address
+reused; that affects only the program's own wait.
 
 ## Floating point
 
@@ -588,8 +612,8 @@ ordering with a blocking serve and an independent writer. Both native tests
 run under CTest.
 
 A write the launcher makes into domain memory on the domain's behalf -- a
-thread's exit word, a worker's meta block and exchange region -- is preceded by
-`CV_TOUCH` over the span, which admits every page of it a lazily admitted arena
+thread's exit word, a worker's meta block and exchange region, each after its
+checks -- is preceded by `CV_TOUCH` over the span, which admits every page of it a lazily admitted arena
 does not hold yet, with the same pin and checks as a fault; otherwise the write
 would create backing the domain can store a capability into with no pin and no
 sweep. `run-pthreads.py` checks it with an exit word in an untouched page of the
@@ -599,15 +623,22 @@ A worker's meta block and exchange region are each a mapping of their own, and
 from the worker's attachment (its first delegate service) the worker holds both
 mappings: an unmap, an `mprotect` or an `mremap` of a held mapping answers
 `EBUSY` to every caller, the worker included, so the launcher's writes into them
-never meet a fresh mapping at the same address or a changed protection. An
-attachment naming a mapping that already has a holder, both blocks in one
-mapping, or a block whose pages are not read-write for the launcher, is refused,
+never meet a fresh mapping at the same address or a changed protection. Each
+block must be a whole mapping that the program may end (as for munmap: a heap
+mapping of exactly that length, not the allocator's metadata, so never the
+launcher's own transport), named at its base through a reference that the module
+accepts for munmap with root grants, held by no worker, not the other block,
+with every page writable for the launcher, and in no thread's frame. Otherwise
+the attachment is refused (`CAPSTONE_VM_TRANSPORT_REFUSED` with the reason),
 and the launcher ends the program. The hold ends only
 with the worker's own detach (`CV_SERVICE_TRANSPORT_DETACH`, which the SDK
 issues before it unmaps the blocks) or its exit; a later delegate service
 attaches again, `CV_TOUCH` included. A thread's exit word may not lie in the
 stack or frame mapping its exit gives back, since the word is stored after
-those unmaps. The error exit does not unmap: Linux releases the mappings after
+those unmaps, nor in any other thread's frame or in a transport the launcher
+writes itself. A refused word is not written (`CAPSTONE_VM_EXIT_WORD_REFUSED`
+with the reason), the exit completes, and futex waiters on that word stay
+blocked, which is the program's bug. The error exit does not unmap: Linux releases the mappings after
 exit_group has stopped every worker.
 
 The launcher validates and loads an image without copying the file first. It

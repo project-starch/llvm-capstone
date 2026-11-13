@@ -134,8 +134,9 @@ static void check_file(int fd, char *buffer, char value)
  * worker is a raw virtual thread the main thread joins -- the join returns once the worker's
  * exit protocol ran -- and a short delegated sleep follows it, since the exit service marks the
  * thread done before it stores the word. A violated order shows as a missing `touch` line, a
- * FAIL, never as a pass. The runner checks the module's `touch` line for this page. */
-extern _Noreturn void __capstone_vm_thread_exit_clear(uintptr_t clear, uintptr_t stack,
+ * FAIL, never as a pass. The runner checks the module's `touch` line for this page. The word goes
+ * to the exit service as its reference (stage 4c of the address-space root). */
+extern _Noreturn void __capstone_vm_thread_exit_clear(void *clear, void *stack,
                                                       size_t bytes, long status);
 static int *exit_word;
 static void *exit_word_worker(void *arg)
@@ -146,7 +147,7 @@ static void *exit_word_worker(void *arg)
      * __capstone_context_identity_release, which dev's SDK (the control) does not define, and a
      * weak reference to it does not read as null here: the gp-free codegen forms the address
      * pc-relative, so the undefined symbol is the image's base (control run: cause 12 at it). */
-    __capstone_vm_thread_exit_clear((uintptr_t)exit_word, 0, 0, 0);
+    __capstone_vm_thread_exit_clear(exit_word, NULL, 0, 0);
 }
 /* A worker's transport cannot be retired under it (transport_lifetime): worker A names its
  * exchange mapping and blocks in a read; the main thread tries to unmap that mapping, which must

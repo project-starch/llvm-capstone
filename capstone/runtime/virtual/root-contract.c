@@ -108,6 +108,8 @@
  *                                   (run-root-grants.py --launcher-small-table) the launcher fails
  *                                   the create after the module took the frame: EAGAIN, and the
  *                                   frame's mapping is no longer registered (registered())
+ *   failed_create_id_refused        either way the failed create issued no id: a join of the id
+ *                                   after the last created one answers ESRCH
  * join-two (exit 0):
  *   two_joiners_return              two contexts join one context that waits until released;
  *                                   after the release both joins return 0
@@ -133,7 +135,50 @@
  *   read_only_exit_word_not_written a word in a page the program made read-only
  *   writable_exit_word_written      the same word after write rights are restored: written
  *   frame_exit_word_not_written     a word in the exiting thread's own frame, which the exit
- *                                   releases
+ *                                   releases, named through the frame's reference from before the
+ *                                   create (stale with root grants)
+ *   Every exit word goes to the exit service as a reference (stage 4c).
+ * exit-word-refs (exit 0): exit words through references (stage 4c)
+ *   other_frame_word_not_written    a word in another thread's frame (its saved return address),
+ *                                   named through the frame's reference from before its create;
+ *                                   that thread runs on and is joined
+ *   middle_protected_word_written   a word in the third page of a mapping whose middle page was
+ *                                   made inaccessible and restored: written, and a futex waiter on
+ *                                   it returns
+ *   stale_reference_word_not_written (root grants)
+ *                                   a word through the reference from before CRENEW
+ *   narrow_reference_word_not_written (root grants)
+ *                                   a word through a reference that covers two of its bytes
+ * futex (exit 0): a wait reads the word and needs its reference; a wake takes an integer
+ *   futex_wait_through_reference    a wait through the word's reference times out (its value) or
+ *                                   answers EAGAIN (another value)
+ *   futex_wait_integer_refused, futex_wait_stale_refused, futex_wait_narrow_refused (root grants)
+ *                                   a wait on an integer address, through the reference from
+ *                                   before CRENEW, through a reference covering half the word:
+ *                                   EFAULT
+ *   futex_wait_frame_refused        a wait on a word in another thread's frame: EFAULT
+ *   futex_wake_integer_answers      a wake by integer address answers 0, outside every mapping
+ *                                   EFAULT
+ * advise (exit 0): madvise(MADV_DONTNEED) and MADV_FREE need a reference that covers the range
+ *   advise_integer_refused, advise_stale_refused, advise_narrowed_refused,
+ *   advise_nested_object_refused (root grants)
+ *                                   EINVAL, and the data stays
+ *   advise_zeroes_covered_page      through a reference narrowed to the second page of two: that
+ *                                   page reads zero, a reference stored in it is gone, the first
+ *                                   page keeps its data
+ *   advise_free_zeroes              MADV_FREE through the mapping's reference: all of it reads zero
+ * join-burned (exit 0):
+ *   join_failed_create_refused      a create on a read-only frame fails; a join of the id after the
+ *                                   last created one answers ESRCH
+ *   failed_create_consumes_no_id    the next create takes that id
+ *   main_self_join_deadlock         the main thread's join of itself (id 0) answers EDEADLK
+ * attach-exchange (exit 125):
+ *   launcher_exchange_reference     the program holds a reference to the launcher's exchange region
+ *                                   (_start's saved a1); a pthread that detached its transport then
+ *                                   names it as its own exchange region: the launcher refuses the
+ *                                   attachment and ends the program, ROOT_ATTACH_RETURNED never prints
+ * attach-address (exit 125 with root grants, else a skip and exit 0): the same with a fresh mapping
+ *                                   named by its plain address
  * attach-readonly (exit 125):
  *   attach_protect_before_attach    a pthread detaches its transport (the launcher's hold ends) and
  *                                   makes its exchange region read-only; its read() then attaches
@@ -213,6 +258,7 @@
 #include <unistd.h>
 #include <sys/mman.h>
 #include <capstone/capability.h>
+#include <capstone/delegate.h>
 #include <capstone/virtual.h>
 #include "vm.h"
 
@@ -224,9 +270,10 @@
 #define IDLE_THREADS 31
 
 extern long __capstone_vm_thread_create_frame(void *frame);
+extern long __capstone_vm_thread_join(long thread);
 extern long __capstone_vm_futex(void *word, int op, int value, long seconds, long nanoseconds,
                                 int bitset);
-extern _Noreturn void __capstone_vm_thread_exit_clear(uintptr_t clear, void *stack, size_t bytes,
+extern _Noreturn void __capstone_vm_thread_exit_clear(void *clear, void *stack, size_t bytes,
                                                       long status);
 extern uintptr_t __capstone_context_identity_take(void);
 extern void __capstone_context_identity_give(uintptr_t identity);
@@ -257,6 +304,9 @@ static void pass(const char *check)
 
 /* The reason for nearly every skip: without root grants the launcher resolves the address. */
 #define BY_ADDRESS "root_grants=0 names a mapping by its address, so this unmap would succeed"
+/* The same for the requests of stage 4c that are no unmap: madvise, futex waits, exit words and
+ * transport attachments. */
+#define ADDRESS_AUTHORITY "root_grants=0 takes the address as the authority, so this request would be accepted"
 
 static void skip(const char *check, const char *reason)
 {
@@ -637,7 +687,7 @@ static volatile unsigned long exit_bytes;
 static void *exit_naming_worker(void *arg)
 {
     (void)arg;
-    __capstone_vm_thread_exit_clear(0, exit_operand, exit_bytes, 0);
+    __capstone_vm_thread_exit_clear(NULL, exit_operand, exit_bytes, 0);
 }
 
 /* One raw context on its own stack mapping (own, own_bytes) that exits naming exit_operand;
@@ -894,6 +944,14 @@ static int mode_create_fail(void)
         fail("the create fails with EAGAIN or ENOSPC");
     }
 
+    /* The failed create issued no id: the module gives back the id of a create that the launcher
+     * rolls back, and refuses before it issues one. */
+    long rc = __capstone_vm_thread_join(ids[live - 1] + 1);
+    printf("ROOT_CREATE_FAIL join_next=%ld\n", rc);
+    fflush(stdout);
+    require(rc == -ESRCH, "a join of the failed create's id");
+    pass("failed_create_id_refused");
+
     release_blocked();
     for (unsigned i = 0; i < live; ++i)
         require(!capstone_virtual_thread_join(ids[i]), "join a released context");
@@ -902,7 +960,6 @@ static int mode_create_fail(void)
 
 /* join-two: two contexts join one context. The launcher keeps the joined context's table entry
  * while joiners wait, and the last joiner to leave frees it. */
-extern long __capstone_vm_thread_join(long thread);
 static volatile long join_target;
 static volatile long join_result[2] = {1, 1};
 static volatile int joins_returned;
@@ -1090,7 +1147,7 @@ static int mode_detached(void)
 static void *exit_word_worker(void *arg)
 {
     (void)arg;
-    __capstone_vm_thread_exit_clear(cursor((void *)&exit_word), exit_operand, exit_bytes, 0);
+    __capstone_vm_thread_exit_clear((void *)&exit_word, exit_operand, exit_bytes, 0);
 }
 
 static int mode_exit_length(unsigned long bytes, const char *tag)
@@ -1138,7 +1195,7 @@ static void *volatile frame_operand;
 static void *frame_as_stack_child(void *arg)
 {
     (void)arg;
-    __capstone_vm_thread_exit_clear(cursor((void *)&exit_word), frame_operand, PAGE, 0);
+    __capstone_vm_thread_exit_clear((void *)&exit_word, frame_operand, PAGE, 0);
 }
 
 static int mode_exit_frame(void)
@@ -1313,7 +1370,7 @@ static int mode_protect_held(void)
 /* exit-word: exits naming an exit word that the launcher must not write. Each context runs on
  * its own stack and exits through the exit service with the word, the stack operand and its
  * length set here; the main thread joins it. */
-static volatile unsigned long word_address;
+static void *volatile word_ref;
 static void *volatile word_stack;
 static volatile unsigned long word_stack_bytes;
 static volatile int words[2];
@@ -1321,12 +1378,12 @@ static volatile int words[2];
 static void *word_exit_worker(void *arg)
 {
     (void)arg;
-    __capstone_vm_thread_exit_clear(word_address, word_stack, word_stack_bytes, 0);
+    __capstone_vm_thread_exit_clear(word_ref, word_stack, word_stack_bytes, 0);
 }
 
-static void exit_with_word(unsigned long word, void *stack, unsigned long bytes, char *own_top)
+static void exit_with_word(void *word, void *stack, unsigned long bytes, char *own_top)
 {
-    word_address = word;
+    word_ref = word;
     word_stack = stack;
     word_stack_bytes = bytes;
     long id = context(word_exit_worker, own_top);
@@ -1341,7 +1398,7 @@ static int mode_exit_word(void)
     words[0] = words[1] = 0x11111111;
     printf("ROOT_EXIT_WORD case=unaligned word=0x%lx\n", cursor((void *)words) + 1);
     fflush(stdout);
-    exit_with_word(cursor((void *)words) + 1, NULL, 0, own + STACK);
+    exit_with_word((char *)words + 1, NULL, 0, own + STACK);
     require(words[0] == 0x11111111 && words[1] == 0x11111111, "the unaligned word keeps its bytes");
     pass("unaligned_exit_word_not_written");
 
@@ -1365,7 +1422,7 @@ static int mode_exit_word(void)
     fflush(stdout);
     low[PAGE - 2] = 0x5a;
     low[PAGE - 1] = 0x5b;
-    exit_with_word(stack_address - 2, stack, STACK, stack + STACK);
+    exit_with_word(low + PAGE - 2, stack, STACK, stack + STACK);
     require(low[PAGE - 2] == 0x5a && low[PAGE - 1] == 0x5b, "the straddling word keeps its bytes");
     require(!registered(stack_address), "the stack is released");
     pass("straddling_exit_word_not_written");
@@ -1375,18 +1432,18 @@ static int mode_exit_word(void)
     require(!mprotect(page, PAGE, PROT_READ), "make the word's page read-only");
     printf("ROOT_EXIT_WORD case=read-only\n");
     fflush(stdout);
-    exit_with_word(cursor(page) + 64, NULL, 0, own + STACK);
+    exit_with_word(page + 64, NULL, 0, own + STACK);
     require(*(volatile int *)(page + 64) == 0x2222, "the read-only word keeps its value");
     pass("read_only_exit_word_not_written");
     require(!mprotect(page, PAGE, PROT_READ | PROT_WRITE), "restore write rights");
-    exit_with_word(cursor(page) + 64, NULL, 0, own + STACK);
+    exit_with_word(page + 64, NULL, 0, own + STACK);
     require(*(volatile int *)(page + 64) == 0, "the launcher writes the word again");
     pass("writable_exit_word_written");
 
     uintptr_t identity;
     unsigned char *frame = frame_new(word_exit_worker, own + STACK, &identity);
     unsigned long frame_address = cursor(frame);
-    word_address = frame_address + 64;
+    word_ref = frame + 64;
     word_stack = NULL;
     word_stack_bytes = 0;
     long id = __capstone_vm_thread_create_frame(frame);
@@ -1509,6 +1566,359 @@ static int mode_create_gate(void)
     return 0;
 }
 
+/* ---- Stage 4c: words, madvise, ids and transports through references ---- */
+
+/* The end of a reference's bounds (LCC selector 4). */
+static unsigned long end_of(void *p)
+{
+    unsigned long end;
+    __asm__ volatile(".insn r 0x5b, 0x1, 0x04, %0, %1, x4" : "=r"(end) : "r"(p));
+    return end;
+}
+
+/* A context on a frame of its own that waits until the main thread releases it (release_blocked)
+ * and then sets other_done. Its frame belongs to the module from the create on; the program keeps
+ * only the stale reference from before. */
+static volatile int other_done;
+
+static void *other_entry(void *arg)
+{
+    while (!__atomic_load_n(&release_word, __ATOMIC_ACQUIRE))
+        __capstone_vm_futex((void *)&release_word, 0 /* FUTEX_WAIT */, 0, -1, 0, 0);
+    __atomic_store_n(&other_done, 1, __ATOMIC_RELEASE);
+    return arg;
+}
+
+/* Create the waiting context on a new frame; *frame_out is the frame's reference from before the
+ * create. */
+static long other_thread(char *stack_top, unsigned char **frame_out)
+{
+    uintptr_t identity;
+    unsigned char *frame = frame_new(other_entry, stack_top, &identity);
+    long id = __capstone_vm_thread_create_frame(frame);
+    require(id > 0, "create the other thread on its frame");
+    *frame_out = frame;
+    return id;
+}
+
+/* The slot of x1 (ra) in a frame: frame + 64 + 16 * 1. The escape saves the paused context's
+ * registers there and the resume loads them, so a store of 0 clears the tag of its return address. */
+#define FRAME_RA 80
+
+/* A context that waits on *waited_word with FUTEX_WAIT until the word is 0, then sets waiter_done. */
+static int *volatile waited_word;
+static volatile int waiter_done;
+
+static void *word_waiter_entry(void *arg)
+{
+    while (__atomic_load_n(waited_word, __ATOMIC_ACQUIRE))
+        __capstone_vm_futex(waited_word, 0 /* FUTEX_WAIT */, 1, -1, 0, 0);
+    __atomic_store_n(&waiter_done, 1, __ATOMIC_RELEASE);
+    return arg;
+}
+
+/* exit-word-refs: exit words that come as references. Each refused word keeps its value and the
+ * exit completes; the written one releases its futex waiter. */
+static int mode_exit_word_refs(void)
+{
+    (void)grant();
+    char *stacks = map(3 * STACK);
+    char *own = stacks + STACK;
+    unsigned char *frame;
+
+    long other = other_thread(stacks + 2 * STACK, &frame);
+    pause_ms(200);
+    unsigned long target = cursor(frame) + FRAME_RA;
+    printf("ROOT_EXIT_WORD case=other-frame word=0x%lx\n", target);
+    fflush(stdout);
+    exit_with_word(at_address(frame, target), NULL, 0, own);
+    release_blocked();
+    require(wait_for(&other_done, 1, 5000), "the other thread runs on after the exit");
+    require(!capstone_virtual_thread_join(other), "join the other thread");
+    pass("other_frame_word_not_written");
+
+    char *three = map(3 * PAGE);
+    require(!mprotect(three + PAGE, PAGE, PROT_NONE), "make the middle page inaccessible");
+    require(!mprotect(three + PAGE, PAGE, PROT_READ | PROT_WRITE), "restore the middle page");
+    int *word = (int *)(three + 2 * PAGE + 64);
+    *word = 1;
+    waited_word = word;
+    long waiter = context(word_waiter_entry, stacks + 3 * STACK);
+    pause_ms(200);
+    printf("ROOT_EXIT_WORD case=middle-protected word=0x%lx\n", cursor(word));
+    fflush(stdout);
+    exit_with_word(word, NULL, 0, own);
+    require(*(volatile int *)word == 0, "the launcher writes the word in the third page");
+    require(wait_for(&waiter_done, 1, 5000), "the futex waiter on the word returns");
+    require(!capstone_virtual_thread_join(waiter), "join the waiter");
+    pass("middle_protected_word_written");
+
+    if (!root_grants) {
+        skip("stale_reference_word_not_written", ADDRESS_AUTHORITY);
+        skip("narrow_reference_word_not_written", ADDRESS_AUTHORITY);
+        return 0;
+    }
+    char *page = map(PAGE);
+    *(volatile int *)(page + 64) = 0x3333;
+    char *renewed = capstone_cap_renew(page);
+    exit_with_word(page + 64, NULL, 0, own);
+    require(*(volatile int *)(renewed + 64) == 0x3333, "the word behind a stale reference");
+    pass("stale_reference_word_not_written");
+
+    char *other_page = map(PAGE);
+    unsigned long base = cursor(other_page);
+    *(volatile int *)(other_page + 128) = 0x4444;
+    char *narrow = __builtin_capstone_cap_shrink(other_page, base + 128, base + 130);
+    exit_with_word(narrow, NULL, 0, own);
+    require(*(volatile int *)(other_page + 128) == 0x4444, "the word behind a narrowed reference");
+    pass("narrow_reference_word_not_written");
+    return 0;
+}
+
+/* futex: a wait reads the word, so it needs a live reference that covers the word, outside every
+ * thread's frame. A wake reads nothing and takes an integer. A wait that the launcher accepts with
+ * the word's own value times out (1 ms); a refused one answers EFAULT without waiting. */
+static long futex_wait_ms(void *word, int value)
+{
+    return __capstone_vm_futex(word, 0 /* FUTEX_WAIT */, value, 0, 1000000, 0);
+}
+
+static int mode_futex(void)
+{
+    (void)grant();
+    char *stacks = map(2 * STACK);
+    char *page = map(PAGE);
+    int *word = (int *)(page + 64);
+    *word = 5;
+
+    long timed = futex_wait_ms(word, 5), other_value = futex_wait_ms(word, 6);
+    printf("ROOT_FUTEX reference timed=%ld other_value=%ld\n", timed, other_value);
+    fflush(stdout);
+    require(timed == -ETIMEDOUT && other_value == -EAGAIN, "a wait through the word's reference");
+    pass("futex_wait_through_reference");
+
+    if (root_grants) {
+        long rc = futex_wait_ms(untagged(cursor(word)), 5);
+        require(rc == -EFAULT, "a wait on an integer address");
+        pass("futex_wait_integer_refused");
+
+        char *stale = map(PAGE);
+        *(volatile int *)(stale + 64) = 5;
+        char *renewed = capstone_cap_renew(stale);
+        rc = futex_wait_ms(stale + 64, 5);
+        require(rc == -EFAULT && *(volatile int *)(renewed + 64) == 5,
+                "a wait through the reference from before CRENEW");
+        pass("futex_wait_stale_refused");
+
+        unsigned long base = cursor(page);
+        rc = futex_wait_ms(__builtin_capstone_cap_shrink(page, base + 64, base + 66), 5);
+        require(rc == -EFAULT, "a wait through a reference that covers half the word");
+        pass("futex_wait_narrow_refused");
+    } else {
+        skip("futex_wait_integer_refused", ADDRESS_AUTHORITY);
+        skip("futex_wait_stale_refused", ADDRESS_AUTHORITY);
+        skip("futex_wait_narrow_refused", ADDRESS_AUTHORITY);
+    }
+
+    unsigned char *frame;
+    long other = other_thread(stacks + STACK, &frame);
+    pause_ms(200);
+    long rc = futex_wait_ms(at_address(frame, cursor(frame) + FRAME_RA), 0);
+    printf("ROOT_FUTEX frame=%ld\n", rc);
+    fflush(stdout);
+    release_blocked();
+    require(rc == -EFAULT, "a wait on a word in the other thread's frame");
+    require(wait_for(&other_done, 1, 5000) && !capstone_virtual_thread_join(other),
+            "the other thread runs on");
+    pass("futex_wait_frame_refused");
+
+    long woken = __capstone_vm_futex(untagged(cursor(word)), 1 /* FUTEX_WAKE */, 1, -1, 0, 0);
+    long outside = __capstone_vm_futex(untagged(4096), 1 /* FUTEX_WAKE */, 1, -1, 0, 0);
+    printf("ROOT_FUTEX wake_integer=%ld wake_outside=%ld\n", woken, outside);
+    fflush(stdout);
+    require(woken == 0 && outside == -EFAULT, "a wake by integer address");
+    pass("futex_wake_integer_answers");
+    return 0;
+}
+
+/* advise: madvise(MADV_DONTNEED) and MADV_FREE destroy contents, so they need a reference to the
+ * mapping that covers the range, as mprotect does. A refused call changes nothing; an accepted one
+ * leaves the range reading zero, the tags of stored references included. */
+static int mode_advise(void)
+{
+    (void)grant();
+    char *target = map(PAGE);
+    target[1] = 0x71;
+    char *two = map(2 * PAGE);
+    unsigned long base = cursor(two);
+    memset(two, 0x5a, 2 * PAGE);
+    *(char **)(two + PAGE + 64) = target;
+
+    if (root_grants) {
+        require(refused(madvise(untagged(base), 2 * PAGE, MADV_DONTNEED)),
+                "madvise with an integer address");
+        require(two[0] == 0x5a && two[2 * PAGE - 1] == 0x5a, "the mapping after the refusal of an address");
+        pass("advise_integer_refused");
+
+        char *page = map(PAGE);
+        page[1] = 0x6a;
+        char *renewed = capstone_cap_renew(page);
+        require(refused(madvise(page, PAGE, MADV_DONTNEED)),
+                "madvise through the reference from before CRENEW");
+        require(renewed[1] == 0x6a, "the renewed mapping after the refusal");
+        pass("advise_stale_refused");
+
+        char *narrow = __builtin_capstone_cap_shrink(two, base, base + PAGE);
+        require(refused(madvise(narrow, 2 * PAGE, MADV_DONTNEED)),
+                "madvise of two pages through a reference narrowed to one");
+        require(two[0] == 0x5a && two[PAGE] == 0x5a, "the mapping after the refusal of a narrowed reference");
+        pass("advise_narrowed_refused");
+
+        char *object = capstone_cap_derive(two, 0, 2 * PAGE);
+        require(refused(madvise(object, 2 * PAGE, MADV_DONTNEED)),
+                "madvise through an object over the whole mapping");
+        require(two[1] == 0x5a && type_of(*(char **)(two + PAGE + 64)) == 1,
+                "the mapping after the refusal of an object");
+        pass("advise_nested_object_refused");
+    } else {
+        skip("advise_integer_refused", ADDRESS_AUTHORITY);
+        skip("advise_stale_refused", ADDRESS_AUTHORITY);
+        skip("advise_narrowed_refused", ADDRESS_AUTHORITY);
+        skip("advise_nested_object_refused", ADDRESS_AUTHORITY);
+    }
+
+    char *second = __builtin_capstone_cap_shrink(two, base + PAGE, base + 2 * PAGE);
+    require(!madvise(second, PAGE, MADV_DONTNEED), "madvise of the page a narrowed reference covers");
+    printf("ROOT_ADVISE first=0x%x second=0x%x stored_type=%lu\n", two[0], two[PAGE + 1],
+           type_of(*(char **)(two + PAGE + 64)));
+    fflush(stdout);
+    require(two[0] == 0x5a && two[PAGE - 1] == 0x5a, "the first page keeps its data");
+    require(two[PAGE] == 0 && two[2 * PAGE - 1] == 0 && type_of(*(char **)(two + PAGE + 64)) == 7,
+            "the second page reads zero, and the stored reference is gone");
+    two[PAGE] = 0x5c;
+    require(two[PAGE] == 0x5c, "the second page takes a write");
+    pass("advise_zeroes_covered_page");
+
+    require(!madvise(two, 2 * PAGE, MADV_FREE), "madvise(MADV_FREE) through the mapping's reference");
+    require(two[0] == 0 && two[PAGE - 1] == 0 && two[PAGE] == 0, "the whole mapping reads zero");
+    pass("advise_free_zeroes");
+    return 0;
+}
+
+/* join-burned: a create that fails after the kernel checked the frame issues no id, and the main
+ * thread joining itself answers EDEADLK. The frame is made read-only, so the module cannot pin it
+ * and refuses the create after it checked the reference. */
+static int mode_join_burned(void)
+{
+    (void)grant();
+    char *stacks = map(3 * STACK);
+    long first = context(idle_entry, stacks + STACK);
+    require(!capstone_virtual_thread_join(first), "join the first context");
+
+    uintptr_t identity;
+    unsigned char *frame = frame_new(frame_child, stacks + 2 * STACK, &identity);
+    require(!mprotect(frame, PAGE, PROT_READ), "make the frame read-only");
+    long failed = __capstone_vm_thread_create_frame(frame);
+    __capstone_context_identity_give(identity);
+    long rc = __capstone_vm_thread_join(first + 1);
+    printf("ROOT_JOIN_BURNED first=%ld failed=%ld join=%ld\n", first, failed, rc);
+    fflush(stdout);
+    require(failed < 0 && failed != -EAGAIN, "a create on a read-only frame fails before the kernel takes it");
+    require(rc == -ESRCH, "a join of the failed create's id");
+    pass("join_failed_create_refused");
+
+    require(!mprotect(frame, PAGE, PROT_READ | PROT_WRITE) && !munmap(frame, PAGE),
+            "the frame stays the program's and unmaps");
+    long next = context(idle_entry, stacks + 3 * STACK);
+    printf("ROOT_JOIN_BURNED next=%ld\n", next);
+    fflush(stdout);
+    require(next == first + 1, "the next create takes the id that the failed create did not use");
+    require(!capstone_virtual_thread_join(next), "join it");
+    pass("failed_create_consumes_no_id");
+
+    rc = __capstone_vm_thread_join(0);
+    printf("ROOT_JOIN_BURNED self=%ld\n", rc);
+    fflush(stdout);
+    require(rc == -EDEADLK, "the main thread joins itself");
+    pass("main_self_join_deadlock");
+    return 0;
+}
+
+/* attach-exchange and attach-address: a pthread gives its transport back to the launcher and then
+ * attaches a transport that names a mapping it may not: the launcher's own exchange region through
+ * the reference the program holds to it, or a fresh mapping by its plain address. The launcher
+ * refuses the attachment (CAPSTONE_VM_TRANSPORT_REFUSED) and ends the program, so
+ * ROOT_ATTACH_RETURNED never prints. */
+extern void __capstone_vm_delegate_transport(void *meta, void *exchange, size_t bytes);
+static void *volatile named_exchange;
+static volatile unsigned long named_bytes;
+static volatile int named_by_address, attach_returned;
+
+static void *attach_named_worker(void *arg)
+{
+    void *meta = mmap(NULL, CAPSTONE_DELEGATE_META_BYTES, PROT_READ | PROT_WRITE,
+                      MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    void *exchange = named_exchange;
+    if (named_by_address) {
+        void *fresh = mmap(NULL, LARGE, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+        exchange = fresh == MAP_FAILED ? NULL : untagged(cursor(fresh));
+    }
+    if (meta == MAP_FAILED || !exchange)
+        return arg;
+    /* No delegated call from here on: the next one would attach the thread's own transport. */
+    __capstone_vm_transport_detach();
+    __capstone_vm_delegate_transport(meta, exchange, named_bytes);
+    __atomic_store_n(&attach_returned, 1, __ATOMIC_RELEASE);
+    return arg;
+}
+
+/* The launcher's grant that start.S's _start received in register a<index> (0 the meta block,
+ * 1 the exchange region): _start stores a0 to a3 at the top of the main stack, at top - 80 + 16 *
+ * index, before it calls anything, and that frame lasts as long as the program. */
+static void *launcher_grant(unsigned index)
+{
+    void *sp = stack_pointer();
+    return *(void **)at_address(sp, end_of(sp) - 80 + 16 * index);
+}
+
+static int attach_named(void *exchange, unsigned long bytes, int by_address)
+{
+    pthread_t thread;
+    named_exchange = exchange;
+    named_bytes = bytes;
+    named_by_address = by_address;
+    require(!pthread_create(&thread, NULL, attach_named_worker, NULL), "pthread_create");
+    for (unsigned spins = 0; spins < 500 && !__atomic_load_n(&attach_returned, __ATOMIC_ACQUIRE); ++spins)
+        pause_ms(10);
+    printf("ROOT_ATTACH_RETURNED\n");
+    fflush(stdout);
+    return 0;
+}
+
+static int mode_attach_exchange(void)
+{
+    (void)grant();
+    void *exchange = launcher_grant(1);
+    unsigned long type = type_of(exchange);
+    unsigned long bytes = type == 1 ? end_of(exchange) - base_of(exchange) : 0;
+    printf("ROOT_ATTACH launcher_exchange type=%lu address=0x%lx bytes=%lu\n", type,
+           type == 1 ? cursor(exchange) : 0UL, bytes);
+    fflush(stdout);
+    require(type == 1 && bytes, "the launcher's exchange region as the program holds it");
+    pass("launcher_exchange_reference");
+    return attach_named(exchange, bytes, 0);
+}
+
+static int mode_attach_address(void)
+{
+    (void)grant();
+    if (!root_grants) {
+        skip("attach_address_refused", ADDRESS_AUTHORITY);
+        return 0;
+    }
+    return attach_named(NULL, LARGE, 1);
+}
+
 int main(int argc, char **argv)
 {
     const char *mode = argc > 1 ? argv[1] : "unmap";
@@ -1535,6 +1945,12 @@ int main(int argc, char **argv)
     if (!strcmp(mode, "exit-many")) return mode_exit_many();
     if (!strcmp(mode, "exit-word")) return mode_exit_word();
     if (!strcmp(mode, "attach-readonly")) return mode_attach_readonly();
+    if (!strcmp(mode, "exit-word-refs")) return mode_exit_word_refs();
+    if (!strcmp(mode, "futex")) return mode_futex();
+    if (!strcmp(mode, "advise")) return mode_advise();
+    if (!strcmp(mode, "join-burned")) return mode_join_burned();
+    if (!strcmp(mode, "attach-exchange")) return mode_attach_exchange();
+    if (!strcmp(mode, "attach-address")) return mode_attach_address();
     fail("unknown mode");
     return 1;
 }

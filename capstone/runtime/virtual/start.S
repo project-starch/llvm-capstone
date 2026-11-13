@@ -133,6 +133,11 @@ __capstone_vm_futex:
     li a7, CV_SERVICE_FUTEX
     ecall
     ret
+.global __capstone_vm_advise
+__capstone_vm_advise:
+    li a7, CV_SERVICE_ADVISE
+    ecall
+    ret
 .section .gct,"a",@progbits
 .balign 16
 .global __capstone_gct_start
