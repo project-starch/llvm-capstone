@@ -263,6 +263,9 @@ def GPCRMemZeroOffset : MemOperand<GPCR> {
 def SPMem : MemOperand<SP>;
 
 def GPRCMem : MemOperand<GPRC>;
+// Capability bases of the 16-bit loads and stores (cap-base-rvc).
+def GPCRCMem : MemOperand<GPCRC>;
+def GPCRSPMem : MemOperand<GPCRSP>;
 
 class SImmAsmOperand<int width, string suffix = "">
     : ImmAsmOperand<"S", width, suffix> {

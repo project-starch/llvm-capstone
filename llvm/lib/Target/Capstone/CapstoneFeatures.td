@@ -1713,6 +1713,20 @@ def FeatureMovcKeepsIntegerSource
                        "true",
                        "MOVC leaves an untagged (integer) source register intact">;
 
+// Capability-base RVC (default off). With C, a load or store whose base is a
+// capability in c8-c15, or the stack capability c2, is emitted as the standard
+// 16-bit C.LW/C.LD/C.SW/C.SD/C.FLD/C.FSD or its SP-relative form. Every access on
+// this target takes a capability base (Load_ri), so the upstream patterns, which
+// name GPR bases, never fire on it. A 16-bit load or store expands to the same
+// 32-bit encoding, and that encoding already reaches memory through the base
+// register's capability, so this changes code size and not semantics or the ISA.
+def FeatureCapBaseRVC
+    : SubtargetFeature<"cap-base-rvc", "CapBaseRVC", "true",
+                       "Compress loads and stores whose base is a capability">;
+def HasCapBaseRVC : Predicate<"Subtarget->hasCapBaseRVC()">,
+                    AssemblerPredicate<(all_of FeatureCapBaseRVC),
+                                       "Capability-base RVC">;
+
 def FeatureSaveRestore : SubtargetFeature<"save-restore", "EnableSaveRestore",
                                           "true", "Enable save/restore.">;
 
