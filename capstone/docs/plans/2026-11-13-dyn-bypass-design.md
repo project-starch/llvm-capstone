@@ -663,3 +663,70 @@ lane at 2026-11-13T14:05:35Z.
 **Bearing on the fourth candidate (3c6b9906c, the final + the 8-way I$).** If the 8-way I$ costs about +1.5 k placed
 LUT on top of the final as well, that build lands near 188.8 k LUT. The final already used 50,654 of 50,950 slices
 (99.42 %), so the fourth candidate's placement is at real risk. This is a prediction, recorded before its seal.
+
+## final-IC 64 B (105c464bc): SEALED on leffe, every key met
+
+`caplifive_ids55-native-tagcache-mlp-fpieee-hpmreplay-dynbypass3-shrinkfix-ic64b_105c464bc` was sealed by the synth lane,
+with a bitstream at 16:15Z.
+- run.exit 0. sha256 89b7d825d54a18d0d079bb3c265094d84cd2575b4e986e111d59f078d4217da3 (11,443,722 B).
+- Tarball synth-105c464bc687-exit0.tar.gz (sha256 1f15fa87...); its .bit matches, and PROVENANCE names 105c464bc687.
+
+| key | reading | grade |
+|---|---|---|
+| 1 mapping | 5,261.0 MB | PASS |
+| 2 loops | found-loop 0, 8-326 0; routed check_timing 0; LUTLP-1 0 | PASS |
+| 3 routing | 0 errors, 236,711 nets; Route 35-447 0 | PASS |
+| 4 congestion | placer max 5 (E 32x32); router effective 5 in every direction | PASS, at the limit |
+| 5 WNS | -12.172 (TNS -251,246.5, 47,413 of 214,976 failing), inside the null band | PASS |
+| 6 sha256 | above | recorded |
+
+- **Placed Slice LUT 186,015.**
+- **The 3h30m wall-clock alarm fired in route_design (about 15:56Z) and was overridden.** The ruling, agreed with the
+  synth lane before the alarm, replaced the wall-clock rule with a 20-minute router-stall rule. Convergence was
+  monotone: overlaps 142,426 -> ... -> 3 -> 0. The extra time came from synthesis under host load 90-100.
+
+## The next batch: R-72's fix + lever (a) safe form, on the fourth-candidate tree (pre-registered before the build, 2026-11-14)
+
+**The tree.** capstone-ariane perf/b-next-dtlb64-ic32k **d10608fc9**:
+- 3c6b9906c, the sealed final 6d0e754d5 + the 8-way I$;
+- + R-72's fix (commit_stage.sv: an instruction must lie wholly inside the PC capability);
+- + lever (a) safe form, 647ef2f16 + 6784c69e8 (issue_read_operands.sv: an STC claims rs1 only when its rs1 lane was a
+  tagged UNINIT at issue; the STC's own rs1 WAW stall is kept).
+
+Against perf/b-next 6784c69e8 (6d0e754d5's core plus the same two changes) it differs only in the two I$ config lines.
+
+Name: `caplifive_ids55-native-tagcache-mlp-fpieee-hpmreplay-dynbypass3-dtlb64-shrinkfix-ic32k-r72-stcnoclaim_d10608fc9`.
+
+**Lever (a), how it got here.**
+- The first safe form, 647ef2f16, also dropped the STC's rs1 WAW stall. That let an UNINIT STC issue beside an older
+  in-flight writer of rs1, so excodes S5b's reader was forwarded the older writer's value: 0x80003000 for
+  0x80003010.
+- The STC_CLAIM_TRACE run (perf/b-next-dbg e286fc0bc) showed the claim flop itself correct. The fix, 6784c69e8, keeps
+  the WAW stall.
+- The same-tree A/B on 6784c69e8 (vp8 .sup/lvaoff2, lvaon2; the off-define confirmed in the build line) has 36 of 37
+  arms identical by value. The one difference is the intended gain, c5a-cost-stc-base1 0x151a -> 0xaee cycles
+  (5.28 -> 2.73 per STC), with the same instruction count.
+
+**R-72's fix:** pcc-end-rvc flips as predicted (the straddler now faults at itself; both controls unchanged), 8
+regression arms are identical, and lint is at baseline (vp9 .sup/r72arms, lint r72-lint).
+
+**Running beside the build; a failure voids it:**
+- lint on d10608fc9, 75e4fb3c2 and 6784c69e8 (the build waits for d10608fc9's);
+- the 95-test sweep on 6784c69e8 against the base;
+- a claim-auditor over both diffs.
+
+**Keys** (base: the fourth candidate 3c6b9906c, routed WNS -11.930; the final 6d0e754d5 placed 187,333 at 99.42 %
+slices):
+1. Mapping in class. Note that 3c6b9906c's synthesis peaked at 33.45 GB, so the memory watchdog is set ABOVE that
+   (36 GB) and under the 40 GB guard ceiling. A peak in the 33 GB class is that tree's known envelope, not a blow-up.
+2. 0 loops.
+3. 0 routing errors.
+4. Congestion <= 5, with a routed 6 reported by letter.
+5. WNS inside the null band of -15.077, reported as a value, and compared with 3c6b9906c's -11.930.
+6. sha256.
+
+**Placed area** is predicted at 3c6b9906c's + a few hundred LUT (the R-72 compare and 16 flops with their clobber
+term). It is a report. The risk is slices, as on 3c6b9906c.
+
+**Failure branch:** a placement or routing failure is NEGATIVE. Read the placed utilisation and the census, record no
+WNS and do not rerun. The fallback tree is 75e4fb3c2 (the 8-way tree without DTLB 64).
