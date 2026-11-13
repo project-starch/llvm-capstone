@@ -2902,3 +2902,38 @@ recorded, as the earlier configuration.
   riscv-base with the cache: imagick, gcc train01, perl makerand (Addendum 80), then the padded-mcf diagnostic.
 **Predictions** (mlp + cache against tagcache, same kernel where it exists): imagick 13.0-13.4 s; gcc train01
 2,850-3,050 s; every other Capstone row within -5 % to +1.5 % of its no-cache bkit56 reading; specdiff PASS everywhere.
+
+## Addendum 82 (2026-11-13 11:35, before it runs): a fairness defect in riscv-base's mapping cache; readings so far; a board-vs-bitstream cross for perl
+
+**FAIRNESS DEFECT, against riscv-base (found by the compiler lane, read in perf/fair/musl-src-reuse):** riscv-base's
+plain_reuse cache has never reused an individually mmapped chunk. malloc.c:309 maps a large chunk with the exact
+request (`__plain_map(n + IB + UNIT)`), free.c:25 releases `maplen*4096`, the cache stores the page-rounded length and
+looks up the exact one, so the two never match. Capstone's mapping cache rounds both sides (heap_round) and does reuse
+them. So every "mapping cache on both arms" reading since Addendum 74 gave Capstone a reuse riscv-base did not get,
+wherever large blocks are freed and re-made. QEMU, riscv-base mcf test (kit-profq, specdiff 2/2 in every variant):
+as built, 0 hits on mcf's 8 arcs_pointer_sorted mappings, pgfault 132,539; with rounding and eviction, 6 hits,
+pgfault 85,654. The ratios with the cache listed below are therefore biased in Capstone's favour where large mappings
+recur (mcf above all, gcc to a degree), and none of them is final.
+
+**Fix, and the next configuration (both arms rebuilt, one step):** riscv-base gets the rounding fix (a baseline bug,
+not a policy) plus the eviction rule (musl perf/plainevict/musl-rv64gc-reuse-round-evict, wrapper
+plain-cc-fairr-round-evict); Capstone gets the same eviction rule plus in-place growth of large reallocs (compiler
+lane nat-realloc-inplace f097dd782aae and nat-realloc-evict 3e70344d8c3f, musl patch 0011; riscv-base already grows
+large reallocs in place through mremap). Twin, Capstone mcf: kernel 2.484 G / 392,471 pages (cache) -> 1.596 G /
+248,406 (+ in-place realloc) -> 0.916 G / 138,140 (+ eviction), outputs byte-identical. Both image sets are rebuilt
+and every row of both arms is re-run on them; a separate addendum pre-registers that run.
+
+**Readings since Addendum 81** (specdiff PASS everywhere; the cache readings carry the defect above):
+- Capstone, mlp + bkit59 + cache (board 2): imagick 13.30 s, nab 745.19 s, lbm 1,072.63 s, perl makerand 409.41 s.
+- Capstone, tagcache + bkit57 + cache (board 1): perl makerand 400.99 s.
+- riscv-base + cache (board 1): imagick 11.02 s, gcc train01 1,721.71 s, perl makerand 254.34 s.
+- With the cache on both arms: imagick 1.207; gcc train01 (tagcache) 1.742; perl makerand 1.610 (mlp) / 1.577
+  (tagcache). Addendum 81's predictions for imagick, nab, lbm and perl hold.
+
+**The perl pair:** mlp 409.41 s against tagcache 400.99 s with the same kernel and images, +2.1 %, all in the domain
+(run_cycles 10.095 G against 9.886 G; escape and check counts identical). They ran on DIFFERENT boards (mlp on board 2,
+tagcache on board 1), and the two builds differ in RTL only in wt_axi_adapter.sv (rtl lane, by git diff), so it is
+either the tag-write list (an rtl-lane simulation A/B is queued) or the board. **Run, board 1** after its running
+diagnostic: mlp + bkit59 + cache, perl makerand then imagick. Within 1 % of 409.41 s means the bitstream; within 1 %
+of 400.99 s means the board, and then every cross-board ratio carries that effect and the table needs same-board
+pairs. No outcome is favoured.
