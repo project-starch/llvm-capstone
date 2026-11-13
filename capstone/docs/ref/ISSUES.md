@@ -4485,6 +4485,31 @@ byte-identical (blob 213b9e5cea99) on ffb82d5bb, 6d0e754d5, 105c464bc and 9972ae
 - **Synthesis:** no FLU signal is on the standing loop list. The cost was not measured by a gate, but the final
   6d0e754d5 carrying the fix routed and sealed on every key.
 
+### R-73 — the debug module's system-bus master writes DRAM around the AXI adapter, so its writes update neither capability tags, the tag-word cache nor the page bitmap `OPEN 2026-11-14 — by source (claim-audited while auditing the TWC change); present on every tree with the shadow-tag adapter; exposure on the board UNMEASURED: whether the JTAG load path uses this master and is followed by a reset is not established; no fix written`
+
+**Mechanism.** The SoC crossbar has two masters: `localparam NBSlave = 2; // debug, ariane`
+(`corev_apu/fpga/src/ariane_xilinx.sv:220`). The debug module's AXI master is `slave[1]` (`i_dm_axi_master`, with
+`slave[1].aw_addr`/`ar_addr` driven from `dm_master_m_*`, `:633-660`). Capability tags live in shadow DRAM behind the
+core's `wt_axi_adapter`: a data write there issues the matching tag write, turns the tag-word cache (TWC) off when
+software writes the tag region (`twc_set_off`), and keeps the page bitmap. A write from the debug master reaches DRAM
+directly and does none of these. So:
+- a system-bus write of DATA onto a granule that held a capability leaves its tag byte 1: the next capability load of
+  that granule returns a tag the data no longer carries;
+- a system-bus write INTO the tag region changes tags without turning the TWC off, so cached tag words go stale;
+- the bitmap's "an unmarked page's tag bytes are invisible until its first tagged store zeroes them" holds only while
+  no other master writes those bytes.
+The only other crossbar master slot is the core's own (`corev_apu/tb/ariane_soc_pkg.sv:20`, `NrSlaves = 2`); the I$
+path only reads.
+
+**Exposure.** Debug-only by construction, but the board's image load goes over JTAG. If that load writes memory
+through this master into pages a previous run had marked, and no reset (which clears the bitmap and the TWC) follows,
+the loaded program starts with stale tags. Not established either way: the load flow's use of the system bus and its
+reset sequence have not been read. What would settle it: read the board driver's load sequence for `sbaccess` /
+`ndmreset`, or a board arm that STCs into a page, re-loads an image over it without a power cycle, and reads the tag.
+
+**Siblings.** I-16 (a sim-trace defect found in the same session), and the TWC work on capstone-ariane
+perf/twc-reach (where this was found; that change neither fixes nor worsens it).
+
 ### R-72 — the PC capability's bounds check reads only the instruction's START address: in M-mode capability mode an instruction whose upper bytes lie past bound_end commits `DEMONSTRATED IN SIMULATION 2026-11-14 on 6d0e754d5's RTL (5f41c486e by source identity), claim-audited (SUPPORTED); M-mode only; NOT MEASURED ON SILICON; QEMU's virtual-context path checks the whole instruction, its plain M path has no PCC fetch-bounds check found; no fix written`
 
 Siblings: none on this check. Found while clearing standard RVC for Capstone code
