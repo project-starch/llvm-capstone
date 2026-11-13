@@ -179,10 +179,13 @@ long __capstone_virtual_futex(void *word, int op, int value, const struct timesp
     /* musl has a wake fallback when requeue is unsupported. Its fourth
      * argument is an integer, not a timeout pointer, for this operation. */
     if (command != 0 && command != 1 && command != 9 && command != 10) return -ENOSYS;
-    /* The original capability performs the liveness/read check here, and the
-     * service checks it again before a wait (vm-abi.h). Linux gets the
-     * registered address, never a bounced copy of the futex word. */
-    (void)__atomic_load_n((int *)word, __ATOMIC_ACQUIRE);
+    /* A wait reads the word: it is read here first through the caller's
+     * reference, so a stale one faults in the program, and the kernel then
+     * checks that reference and compares the word in one step (vm-abi.h). A
+     * wake reads nothing: the service takes the word's address as an integer
+     * and wakes the launcher's own waiters of that mapping, so no read is
+     * made for it. */
+    if (command == 0 || command == 9) (void)__atomic_load_n((int *)word, __ATOMIC_ACQUIRE);
     long seconds = timeout ? timeout->tv_sec : -1;
     long nanos = timeout ? timeout->tv_nsec : 0;
     return __capstone_vm_futex(word, op, value, seconds, nanos, bitset);

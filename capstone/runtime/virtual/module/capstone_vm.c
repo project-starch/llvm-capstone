@@ -840,9 +840,23 @@ static void clear_thread_frame(struct cv_thread *t)
  * granularity, so a 1 MiB stack with four resident pages costs one PMD lookup and one walk of
  * that PMD's entries rather than 256 page-table walks. Missing entries hold no application
  * tags; swapped and huge mappings are outside this profile and fail closed, as they always
- * did (-EOPNOTSUPP), a bad table -EFAULT. Called with mmap_read_lock held. */
+ * did (-EOPNOTSUPP), a bad table -EFAULT. Called with mmap_read_lock held.
+ *
+ * With clear (CV_ADVISE, clear_unheld): the walk does not stop at a present entry. It overwrites
+ * the page with zeros in place, while it holds the entry's page-table lock, which keeps the page
+ * mapped while the stores run, and goes on; the zero page is skipped. The page must be exclusive
+ * anonymous memory, private to this mapping (PageAnon, mapcount 1), else -EACCES. 0 at the end. A
+ * present entry includes one of a PROT_NONE VMA, which no GUP can pin. */
+static void clear_page_full(struct page *page);
+static long walk_resident(struct mm_struct *mm, unsigned long address, unsigned long end,
+                          unsigned long *at, unsigned long *pfn, bool clear);
 static long next_resident(struct mm_struct *mm, unsigned long address, unsigned long end,
                           unsigned long *at, unsigned long *pfn)
+{
+    return walk_resident(mm, address, end, at, pfn, false);
+}
+static long walk_resident(struct mm_struct *mm, unsigned long address, unsigned long end,
+                          unsigned long *at, unsigned long *pfn, bool clear)
 {
     while (address < end) {
         pgd_t *pgd = pgd_offset(mm, address);
@@ -873,6 +887,14 @@ static long next_resident(struct mm_struct *mm, unsigned long address, unsigned 
             pte_t value = READ_ONCE(pte[i]);
             if (pte_none(value)) continue;
             if (!pte_present(value)) { found = -EOPNOTSUPP; break; }
+            if (clear) {
+                unsigned long frame = pte_pfn(value);
+                struct page *page = pfn_valid(frame) ? pfn_to_page(frame) : NULL;
+                if (is_zero_pfn(frame)) continue;
+                if (!page || !PageAnon(page) || page_mapcount(page) != 1) { found = -EACCES; break; }
+                clear_page_full(page);
+                continue;
+            }
             *at = address; *pfn = pte_pfn(value);
             found = 1;
             break;
@@ -927,8 +949,9 @@ static int pin_remaining(struct context *c, struct arena *a, unsigned int gup_fl
     return pin_resident(c, a, 0, a->count, gup_flags);
 }
 
-/* pin_remaining for the pages [first, end) of pages[] alone: CV_ADVISE pins the resident pages of
- * the range it overwrites. */
+/* pin_remaining for the pages [first, end) of pages[] alone. (CV_ADVISE used it in stage 4c; since
+ * stage 4d it zeroes such pages in place instead, clear_unheld, since GUP cannot pin a page of a
+ * PROT_NONE VMA.) */
 static int pin_resident(struct context *c, struct arena *a, unsigned first, unsigned end,
                         unsigned int gup_flags)
 {
@@ -1721,6 +1744,40 @@ static void ref_read(unsigned long *slot, unsigned long *type, unsigned long *id
     *id = slot_id;
 }
 
+/* What a request's operand slot holds: the type LCC answers (7 for anything untagged) and, for a
+ * non-linear reference, the id of its lifetime and its bounds (0 otherwise). Inside a select_root
+ * window. The same two runs as ref_read: selector 1 is total, and the others run only after it
+ * answered a non-linear reference, so an operand that holds none never reaches an instruction that
+ * can trap. request_operand and word_check read their operand with it. */
+static void ref_bounds(unsigned long *slot, unsigned long *type, unsigned long *id,
+                       unsigned long *base, unsigned long *end)
+{
+    unsigned long slot_type, slot_id = 0, slot_base = 0, slot_end = 0;
+
+    asm volatile(CV_RUN
+                 CV_LDC("t0", "%[slot]")
+                 CV_LCC("%[type]", "t0", CV_LCC_TYPE)
+                 "li t0, 0\n"
+                 : [type] "=r"(slot_type)
+                 : [slot] "r"(slot)
+                 : "t0", "memory");
+    if (slot_type == CV_TYPE_NONLIN)
+        asm volatile(CV_RUN
+                     CV_LDC("t0", "%[slot]")
+                     CV_LCC("%[id]", "t0", CV_LCC_ID)
+                     CV_LCC("%[base]", "t0", CV_LCC_BASE)
+                     CV_LCC("%[end]", "t0", CV_LCC_END)
+                     "li t0, 0\n"
+                     : [id] "=&r"(slot_id), [base] "=&r"(slot_base), [end] "=&r"(slot_end)
+                     : [slot] "r"(slot)
+                     : "t0", "memory");
+
+    *type = slot_type;
+    *id = slot_id;
+    *base = slot_base;
+    *end = slot_end;
+}
+
 /* ---- Root grants: requests of the program with a reference ----
  *
  * Every request of the program that ends a mapping or changes it comes with the mapping's
@@ -1730,9 +1787,10 @@ static void ref_read(unsigned long *slot, unsigned long *type, unsigned long *id
  * creation (CV_THREAD_CREATE, a0), mprotect (CV_PROTECT, a0), the mapping check that mremap
  * makes before it copies (CV_PROTECT at CV_SERVICE_MAPPING_CHECK, a0), madvise (CV_ADVISE, a0)
  * and a worker's attachment of its transport (CV_ATTACH, a0 and a1). The launcher resolves the
- * arena from the reference's cursor and names the caller. A word that the launcher reads or writes
- * for the program, the exit word and a futex wait's word, comes with its reference too (CV_WORD,
- * word_check), which must be live and cover the word but may be any object's. The module reads P
+ * arena from the reference's cursor and names the caller. A word that the module reads or writes
+ * for the program, the exit word (CV_THREAD_EXIT) and a futex wait's word (CV_WORD), comes with its
+ * reference too, which must be live and cover the word but may be any object's; the module checks
+ * it and accesses the word in the same ioctl (word_check, word_access). The module reads P
  * from the frame slot with LDC and accepts it only if all of these hold
  * (docs/design/virtual-capstone/address-space-root.md, section Mappings):
  *
@@ -1864,8 +1922,7 @@ static enum cv_unmap_reason request_operand(struct context *c, struct cv_thread 
                                             unsigned long address, unsigned long bytes,
                                             bool whole)
 {
-    unsigned long *operand = CV_FRAME_SLOT(t, reg);
-    unsigned long flags, old, type, id = 0, base = 0, end = 0;
+    unsigned long flags, old, type, id, base, end;
     unsigned long m_type, m_id;
     enum cv_unmap_reason reason;
     bool m_live;
@@ -1875,23 +1932,7 @@ static enum cv_unmap_reason request_operand(struct context *c, struct cv_thread 
 
     preempt_disable(); local_irq_save(flags);
     old = select_root(c);
-    asm volatile(CV_RUN
-                 CV_LDC("t0", "%[slot]")
-                 CV_LCC("%[type]", "t0", CV_LCC_TYPE)
-                 "li t0, 0\n"
-                 : [type] "=r"(type)
-                 : [slot] "r"(operand)
-                 : "t0", "memory");
-    if (type == CV_TYPE_NONLIN)
-        asm volatile(CV_RUN
-                     CV_LDC("t0", "%[slot]")
-                     CV_LCC("%[id]", "t0", CV_LCC_ID)
-                     CV_LCC("%[base]", "t0", CV_LCC_BASE)
-                     CV_LCC("%[end]", "t0", CV_LCC_END)
-                     "li t0, 0\n"
-                     : [id] "=&r"(id), [base] "=&r"(base), [end] "=&r"(end)
-                     : [slot] "r"(operand)
-                     : "t0", "memory");
+    ref_bounds(CV_FRAME_SLOT(t, reg), &type, &id, &base, &end);
     ref_read(a->ref, &m_type, &m_id);
     restore_root(old);
     local_irq_restore(flags); preempt_enable();
@@ -3802,62 +3843,117 @@ static bool frame_page(struct context *c, unsigned long address)
     return false;
 }
 
-/* CV_WORD (wire.h): may the launcher read or write the int at a0's cursor for thread t, which is
- * paused at its exit or its futex wait? The reason of a refusal, or CV_WORD_ACCEPTED. With
- * root_grants a0 is the authority: a non-linear reference (LCC type 1), live, whose bounds cover
- * the word. The module checks bounds and lifetime only; whether the page may be written is the
- * page table's business, which the launcher checks. In both modes the word lies inside the visible
- * length of one arena, past the image's read+execute prefix, and outside every thread's frame:
- * without root_grants that last check is the only thing that keeps an exit word from naming
- * another thread's saved registers. A refused operand never reaches an instruction that can trap:
- * LCC selector 1 is total, and the other selectors run only on a non-linear reference. */
-static unsigned word_check(struct context *c, struct cv_thread *t)
+/* ---- Words that the module reads or writes for the program (stage 4d) ----
+ *
+ * Check and access in one step. The exit word that a thread's exit names (CV_THREAD_EXIT) and the
+ * word of a futex wait (CV_WORD) are program memory, which the kernel side reaches only through the
+ * reference the program passed in a0. The module checks that reference and accesses the word in
+ * the same ioctl, under vm_lock, which every thread of the program needs to run (CV_STEP holds it
+ * while the program executes): no thread can end the word's lifetime, unmap its page or map another
+ * page there between the check and the access. That is what a kernel with supervisor references
+ * does by construction, accessing through the reference and letting the processor check it at the
+ * access. Before stage 4d the module only checked: the launcher stored the exit word later, and
+ * Linux read a futex word after service_lock dropped, so another thread could end the word's object
+ * or unmap its mapping in between, and the access then reached whatever was there by then.
+ *
+ * The word the check accepted: its address (a0's cursor), the lifetime id of the reference in a0
+ * (root_grants), the arena that holds it and its offset in that arena. word_access uses it later in
+ * the same ioctl. */
+struct cv_word_ref {
+    unsigned long address, lifetime, offset;
+    u64 arena;
+};
+
+/* May the module read or write the int at a0's cursor for thread t, which is paused at its exit or
+ * its futex wait? The reason of a refusal, or CV_WORD_ACCEPTED with *w filled. With root_grants a0
+ * is the authority: a non-linear reference (LCC type 1), live, whose bounds cover the word. The
+ * module checks bounds and lifetime only; whether the page may be read or written is the page
+ * table's business (word_access accesses through the program's mapping). In both modes the word
+ * lies inside the visible length of one arena, past the image's read+execute prefix, and outside
+ * every thread's frame: without root_grants that last check is the only thing that keeps an exit
+ * word from naming another thread's saved registers. A refused operand never reaches an instruction
+ * that can trap (ref_bounds). Called before t's frame is cleared, so a0 is still t's. */
+static unsigned word_check(struct context *c, struct cv_thread *t, struct cv_word_ref *w)
 {
-    unsigned long address = CV_FRAME_ARG(t, 0), bytes = sizeof(int);
+    unsigned long bytes = sizeof(u32);
     struct arena *a;
 
+    w->address = CV_FRAME_ARG(t, 0);
+    w->lifetime = 0;
     if (root_grants) {
-        unsigned long *operand = CV_FRAME_SLOT(t, 10);
-        unsigned long flags, old, type, id = 0, base = 0, end = 0, parent = 0;
+        unsigned long flags, old, type, base, end, parent = 0;
 
         preempt_disable(); local_irq_save(flags);
         old = select_root(c);
-        asm volatile(CV_RUN
-                     CV_LDC("t0", "%[slot]")
-                     CV_LCC("%[type]", "t0", CV_LCC_TYPE)
-                     "li t0, 0\n"
-                     : [type] "=r"(type)
-                     : [slot] "r"(operand)
-                     : "t0", "memory");
-        if (type == CV_TYPE_NONLIN)
-            asm volatile(CV_RUN
-                         CV_LDC("t0", "%[slot]")
-                         CV_LCC("%[id]", "t0", CV_LCC_ID)
-                         CV_LCC("%[base]", "t0", CV_LCC_BASE)
-                         CV_LCC("%[end]", "t0", CV_LCC_END)
-                         "li t0, 0\n"
-                         : [id] "=&r"(id), [base] "=&r"(base), [end] "=&r"(end)
-                         : [slot] "r"(operand)
-                         : "t0", "memory");
+        ref_bounds(CV_FRAME_SLOT(t, 10), &type, &w->lifetime, &base, &end);
         restore_root(old);
         local_irq_restore(flags); preempt_enable();
 
         if (type != CV_TYPE_NONLIN)
             return CV_WORD_NOT_REFERENCE;
-        if (ref_lifetime(c, id, &parent) != CAP_REV_TABLE_VALID)
+        if (ref_lifetime(c, w->lifetime, &parent) != CAP_REV_TABLE_VALID)
             return CV_WORD_NOT_LIVE;
-        if (address < base || end < address || end - address < bytes)
+        if (w->address < base || end < w->address || end - w->address < bytes)
             return CV_WORD_NOT_COVERING;
     }
-    if (address & (bytes - 1))
+    if (w->address & (bytes - 1))
         return CV_WORD_UNALIGNED;
-    a = arena_at(c, address);
-    if (!a || address - a->address < a->rx_bytes || a->visible < bytes ||
-        address - a->address > a->visible - bytes)
+    a = arena_at(c, w->address);
+    if (!a || w->address - a->address < a->rx_bytes || a->visible < bytes ||
+        w->address - a->address > a->visible - bytes)
         return CV_WORD_NOT_MAPPED;
-    if (frame_page(c, address))
+    if (frame_page(c, w->address))
         return CV_WORD_IN_FRAME;
+    w->arena = a->id;
+    w->offset = w->address - a->address;
     return CV_WORD_ACCEPTED;
+}
+
+/* The access of the word that word_check accepted earlier in this ioctl: a store of *value, or a
+ * load into *value. The reason of a refusal, or CV_WORD_ACCEPTED. Between the check and here this
+ * ioctl may have released the exiting thread's frame and stack, so the module checks again what
+ * those releases could change: with root_grants the lifetime of the reference is still live (the end
+ * of the stack's reservation ends every object in it), the same arena still holds the word (arena
+ * ids are never reused, and a released arena is gone), and no thread's frame holds it. Nothing else
+ * can change in between: the ioctl holds vm_lock. Then the module admits the word's page as the
+ * program's own fault would (touch, the rule of CV_TOUCH), so the access creates no backing the
+ * module does not hold, and accesses the word through the program's mapping with put_user or
+ * get_user: the page table decides the right, and a page without it answers an error, not a fault.
+ * A scalar store clears the tag of the granule it writes, as the launcher's store did. */
+static unsigned word_access(struct context *c, const struct cv_word_ref *w, u32 *value, bool store)
+{
+    struct cv_touch page = {w->address, sizeof(u32)};
+    struct arena *a = arena_at(c, w->address);
+    unsigned long parent = 0;
+    u32 __user *word = (u32 __user *)w->address;
+
+    if (root_grants && ref_lifetime(c, w->lifetime, &parent) != CAP_REV_TABLE_VALID)
+        return CV_WORD_NOT_LIVE;
+    if (!a || a->id != w->arena)
+        return CV_WORD_NOT_MAPPED;
+    if (frame_page(c, w->address))
+        return CV_WORD_IN_FRAME;
+    if (touch(c, &page))
+        return CV_WORD_NOT_ADMITTED;
+    if (store ? put_user(*value, word) : get_user(*value, word))
+        return CV_WORD_NO_ACCESS;
+    return CV_WORD_ACCEPTED;
+}
+
+/* CV_WORD (wire.h): the compare of thread t's futex wait, paused at CV_SERVICE_FUTEX: check the word
+ * at a0's cursor, read it and compare it with a2, in one step. The launcher's waiter then sleeps on
+ * the key (r->arena, r->offset) and never names the program's address to Linux. */
+static void futex_compare(struct context *c, struct cv_thread *t, struct cv_word *r)
+{
+    struct cv_word_ref w;
+    u32 value = 0;
+
+    r->reason = word_check(c, t, &w);
+    if (r->reason == CV_WORD_ACCEPTED)
+        r->reason = word_access(c, &w, &value, false);
+    r->equal = r->reason == CV_WORD_ACCEPTED && value == (u32)CV_FRAME_ARG(t, 2);
+    r->arena = r->reason == CV_WORD_ACCEPTED ? w.arena : 0;
+    r->offset = r->reason == CV_WORD_ACCEPTED ? w.offset : 0;
 }
 
 /* CV_ATTACH (wire.h): a worker's attachment of its own transport, the meta block in a0 and the
@@ -3881,16 +3977,49 @@ static int attach(struct context *c, const struct cv_attach *r)
                           CV_CALLER_ARG(t, 2), true, "attach");
 }
 
+/* Overwrite with zeros, in place, every page of pages [first, end) of arena a that pages[] does not
+ * hold and that has contents, whatever the protection of its VMA (walk_resident with clear). In
+ * pinned mode a heap arena has no such page: the program's accesses are admitted at their faults,
+ * the launcher writes only after CV_TOUCH and a delegated call writes only the process exchange, so
+ * a page that pages[] does not hold has no entry or maps the zero page, holds nothing, and reads
+ * zero. The walk makes the advise exact even where that does not hold, where GUP could not pin the
+ * page (a PROT_NONE VMA): it zeroes such a page while it holds its page-table lock. A swapped entry
+ * fails closed (EOPNOTSUPP); swap is outside this profile. Only the runs of pages[] that it does not
+ * hold are walked, as in pin_resident. */
+static int clear_unheld(struct context *c, struct arena *a, unsigned first, unsigned end)
+{
+    unsigned long base = a->address + a->rx_bytes, at, pfn;
+    unsigned j = first, run;
+    long rc = 0;
+
+    mmap_read_lock(c->mm);
+    while (j < end && !rc) {
+        if (a->pages[j]) { ++j; continue; }
+        for (run = j + 1; run < end && !a->pages[run]; ++run)
+            ;
+        rc = walk_resident(c->mm, base + (unsigned long)j * PAGE_SIZE,
+                           base + (unsigned long)run * PAGE_SIZE, &at, &pfn, true);
+        j = run;
+    }
+    mmap_read_unlock(c->mm);
+    return rc;
+}
+
+/* Held pages of an advise whose backing is not private to the mapping: never seen, reported. */
+static unsigned advise_shared_prints;
+
 /* CV_ADVISE (wire.h): the program's madvise(MADV_DONTNEED or MADV_FREE) of [a0's cursor, + a1) in
  * arena r->id. With root_grants the reference in a0 is the authority, as for mprotect: conditions
  * 1 to 3, and its bounds cover the named page range. In both modes the arena may not hold a
- * thread's frame. Pinned, the module first pins every resident page of the range that pages[] does
- * not hold yet, as a retire does, and then overwrites every page of the range it holds with zeros,
- * data and tags (clear_page_full); a page that is not resident reads zero already. The pages stay
- * pinned and mapped, so pages[] stays exact and no tagged page goes back to Linux. Unpinned, the
- * module holds no pages, and the launcher gives the range back to Linux (r->zeroed 0), as the
- * unpinned retire does with a whole arena. Ends no lifetime: madvise changes contents, not
- * lifetimes. */
+ * thread's frame. Pinned, the module overwrites every page of the range with zeros, data and tags
+ * (clear_page_full), whatever the protection Linux maps it with, a PROT_NONE page included: the
+ * pages it holds through pages[], after it checked that each is still exclusive anonymous memory
+ * (PageAnon, mapcount 1, as at its admission: a store through the kernel's mapping then reaches
+ * this mapping alone), and every other page with contents through the page table (clear_unheld).
+ * The held pages stay pinned and mapped, so pages[] stays exact and no tagged page goes back to
+ * Linux. Unpinned, the module holds no pages, and the launcher gives the range back to Linux
+ * (r->zeroed 0), as the unpinned retire does with a whole arena; Linux's madvise accepts a PROT_NONE
+ * range. Ends no lifetime: madvise changes contents, not lifetimes. */
 static int advise(struct context *c, struct cv_advise *r)
 {
     struct arena *a = xa_load(&c->ids, r->id);
@@ -3918,7 +4047,17 @@ static int advise(struct context *c, struct cv_advise *r)
     end = first + bytes / PAGE_SIZE;
     if (end > a->count)
         return -EINVAL;
-    rc = pin_resident(c, a, first, end, FOLL_FORCE | FOLL_NOFAULT);
+    for (unsigned i = first; i < end; ++i) {
+        struct page *page = a->pages[i];
+        if (!page || (PageAnon(page) && page_mapcount(page) == 1))
+            continue;
+        CV_EMIT_FIRST(advise_shared_prints,
+                      "capstone_vm: advise refused: arena 0x%lx+0x%lx page %u is no longer private "
+                      "(anon %d mapcount %d)\n", a->address, a->bytes, i, !!PageAnon(page),
+                      page_mapcount(page));
+        return -EIO;
+    }
+    rc = clear_unheld(c, a, first, end);
     if (rc)
         return rc;
     for (unsigned i = first; i < end; ++i)
@@ -3938,21 +4077,35 @@ static struct arena *exit_stack(struct context *c, struct cv_thread *t, u64 id);
  * Then the irreversible part: the thread stops, its frame is cleared, and each released arena
  * ends its reservation through M first and then gives back its pages (retire_commit). With
  * root_grants nothing in that part can fail. A refused or impossible release does not stop the
- * exit: that arena stays registered (exit_keeps). */
+ * exit: that arena stays registered (exit_keeps).
+ *
+ * The exit word (r->word, stage 4d): checked with the decisions, while the frame still holds a0
+ * (word_check), and stored at the end, after the releases are committed, by word_access, which
+ * checks again what the releases could change. The store comes after the releases as the
+ * launcher's store did in stages 4b and 4c, and in the same ioctl as the check, so no thread of the
+ * program runs in between. The outcome goes to the launcher last (r->word_reason). */
 static int thread_exit(struct context *c, struct cv_thread_exit *r, void __user *user)
 {
     struct cv_thread *t = find_thread(c, r->thread);
     struct arena *frame = NULL, *stack = NULL;
+    struct cv_word_ref word;
+    unsigned word_reason = CV_WORD_ACCEPTED;
     unsigned long flags;
+    u32 zero = 0;
     int error = 0;
 
-    if (!t || t == c->main_thread)
+    if (!t || t == c->main_thread || r->word > 1)
+        return -EINVAL;
+    if (r->word && !caller_paused(t, CV_SERVICE_PTHREAD_EXIT))
         return -EINVAL;
     if (r->frame)
         frame = exit_frame(c, t, r->frame);
     if (r->stack)
         stack = exit_stack(c, t, r->stack);
+    if (r->word)
+        word_reason = word_check(c, t, &word);
     r->released = (frame ? CV_EXIT_FRAME : 0) | (stack ? CV_EXIT_STACK : 0);
+    r->word_reason = 0;
 
     if (copy_to_user(user, r, sizeof(*r)))
         return -EFAULT;
@@ -3975,8 +4128,12 @@ static int thread_exit(struct context *c, struct cv_thread_exit *r, void __user 
         error = retire_commit(c, stack, false);
     if (frame)
         error = retire_commit(c, frame, false) ?: error;
+    if (r->word && word_reason == CV_WORD_ACCEPTED)
+        word_reason = word_access(c, &word, &zero, true);
     drop_thread_frame(t);
     kvfree(t);
+    if (r->word && put_user((__u64)word_reason, &((struct cv_thread_exit __user *)user)->word_reason))
+        error = error ?: -EFAULT;
     /* Without root_grants a CSRETIRE of the stack's ancestor can refuse in retire_commit, which
      * then leaves the arena as it was: EIO stops the launcher, as a refused CV_RETIRE of the
      * stack did before. */
@@ -4506,9 +4663,9 @@ thread_unwind:
         struct cv_thread *t;
         if (copy_from_user(&r, (void __user *)arg, sizeof(r))) { rc = -EFAULT; goto out; }
         t = find_thread(c, r.thread);
-        if (!caller_paused(t, CV_SERVICE_PTHREAD_EXIT) && !caller_paused(t, CV_SERVICE_FUTEX))
+        if (!caller_paused(t, CV_SERVICE_FUTEX))
             goto out;
-        r.reason = word_check(c, t);
+        futex_compare(c, t, &r);
         rc = copy_to_user((void __user *)arg, &r, sizeof(r)) ? -EFAULT : 0;
     } else if (op == CV_ATTACH) {
         struct cv_attach r;

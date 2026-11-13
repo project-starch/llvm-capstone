@@ -65,6 +65,22 @@ Modes (root-contract.c lists the checks of each):
                launcher refuses the attachment and ends the program (exit 125)
   attach-address the same with a mapping named by its plain address (exit 125; skipped without
                root grants, exit 0)
+  futex-remap  a waiter of a mapping that is unmapped and mapped again at the same address is not
+               woken by a wake of the new mapping (exit 0)
+  die-blocked  the launcher ends the program (a refused attachment) while the main thread blocks in
+               a delegated read: exit 125 without a crash
+  word-metadata a futex wait and an exit word in the allocator's metadata are refused (exit 0)
+  advise       (stage 4d) also zeroes a page made PROT_NONE after it held data
+Modes that need a launcher built with -DCAPSTONE_VM_TEST_HOOKS (--launcher-hooks; the runner sets
+their delays, HOOK_ENV, and runs them by default only then):
+  futex-race   the futex window: a waiter compared and sleeps while the word's mapping is replaced
+               (the wait times out, never comparing the new mapping), and a wake inside the window
+               reaches the waiter (exit 0)
+  exit-race    the exit-word window: the word's object is revoked and its memory reused between the
+               launcher's checks and the store: the word is refused (not live) and the new object
+               keeps its value (exit 0; skipped without root grants)
+  join-withdrawn a joiner waits on the entry of a create that fails: ESRCH (exit 0)
+  rollback-fail a refused rollback of a failed create ends the program (exit 125)
 The modes that join every thread also read the launcher's thread census at exit
 (CAPSTONE_VM_THREADS count=1: every entry freed once). Every refused exit word and futex wait is
 logged by the launcher with its reason (CAPSTONE_VM_EXIT_WORD_REFUSED, CAPSTONE_VM_FUTEX_REFUSED),
@@ -125,6 +141,13 @@ module's limit: create-fail then reaches the launcher's rollback.
                  the writable state is stage 4b's single interval per mapping, which keeps only the
                  larger part after a split: exit-word-refs' word in the third page of a mapping
                  whose middle page was protected and restored is refused (exit 1)
+  futex-4c       the --launcher and --module are stage 4c's (exec.c with the two delays of the hooks
+                 build): futex-race's waiter compares the new mapping (EAGAIN) and futex-remap's
+                 wake of the new mapping wakes the old mapping's waiter
+  exit-word-4c   the same pair: exit-race's store reaches the object reused after the revoke
+  withdraw-4c    the hooks launcher with stage 4c's thread_withdraw (the entry of a failed create is
+                 freed without a broadcast): join-withdrawn's joiner never returns
+--launcher-hooks says that the --launcher (or the adapter's) is a hooks build; the hook modes then run.
 --libc-control no-remap-check says that the --application was built with a libc whose mremap
 copies before any check (stage 4): the mremap mode faults at the oversized old length (139).
 --no-refs runs on a processor without supervisor references. The module must not load. Where the
@@ -146,7 +169,17 @@ MODES = ('unmap', 'refuse', 'narrow', 'renew', 'renew-ref', 'mremap',
          'exit-victim', 'exit-renew', 'create', 'create-fail', 'detached',
          'exit-length', 'exit-huge', 'exit-frame', 'protect', 'protect-held', 'create-gate',
          'join-two', 'join-after', 'exit-many', 'exit-word', 'attach-readonly',
-         'exit-word-refs', 'futex', 'advise', 'join-burned', 'attach-exchange', 'attach-address')
+         'exit-word-refs', 'futex', 'advise', 'join-burned', 'attach-exchange', 'attach-address',
+         'futex-remap', 'die-blocked', 'word-metadata')
+# The modes that need the launcher's test hooks, and the environment that sets their delays.
+HOOK_ENV = {
+    'futex-race': 'CAPSTONE_VM_TEST_FUTEX_DELAY_MS=2000',
+    'exit-race': 'CAPSTONE_VM_TEST_EXIT_DELAY_MS=3000',
+    'join-withdrawn': ('CAPSTONE_VM_TEST_JOIN_DELAY_MS=1000 CAPSTONE_VM_TEST_CREATE_FAIL=2 '
+                       'CAPSTONE_VM_TEST_CREATE_DELAY_MS=2000'),
+    'rollback-fail': 'CAPSTONE_VM_TEST_CREATE_FAIL=1 CAPSTONE_VM_TEST_ROLLBACK_FAIL=1',
+}
+HOOK_MODES = tuple(HOOK_ENV)
 # Per mode: the checks, those that need root grants (skipped otherwise), and the expected exit.
 CHECKS = {
     'unmap': ('grant_reads_and_writes', 'libc_accepts_copyable_grant',
@@ -190,11 +223,19 @@ CHECKS = {
     'futex': ('futex_wait_through_reference', 'futex_wait_integer_refused', 'futex_wait_stale_refused',
               'futex_wait_narrow_refused', 'futex_wait_frame_refused', 'futex_wake_integer_answers'),
     'advise': ('advise_integer_refused', 'advise_stale_refused', 'advise_narrowed_refused',
-               'advise_nested_object_refused', 'advise_zeroes_covered_page', 'advise_free_zeroes'),
+               'advise_nested_object_refused', 'advise_zeroes_covered_page', 'advise_free_zeroes',
+               'advise_prot_none_zeroes'),
     'join-burned': ('join_failed_create_refused', 'failed_create_consumes_no_id',
                     'main_self_join_deadlock'),
     'attach-exchange': ('launcher_exchange_reference',),
     'attach-address': ('attach_address_refused',),
+    'futex-remap': ('futex_wake_reaches_only_its_mapping',),
+    'die-blocked': ('die_reader_blocks',),
+    'word-metadata': ('metadata_futex_wait_refused', 'metadata_exit_word_not_written'),
+    'futex-race': ('futex_wait_never_reads_new_mapping', 'futex_wake_in_window_caught'),
+    'exit-race': ('exit_word_after_revoke_not_written',),
+    'join-withdrawn': ('joiner_on_withdrawn_id_returns',),
+    'rollback-fail': ('rollback_create_started',),
 }
 # create-fail behind a launcher whose table is smaller than the module's limit.
 CHECKS_SMALL_TABLE = {'create-fail': ('failed_create_releases_frame', 'failed_create_id_refused')}
@@ -210,7 +251,8 @@ ROOT_ONLY = {'stale_reference_at_reused_address_refused', 'address_refused',
              'stale_reference_word_not_written', 'narrow_reference_word_not_written',
              'futex_wait_integer_refused', 'futex_wait_stale_refused', 'futex_wait_narrow_refused',
              'advise_integer_refused', 'advise_stale_refused', 'advise_narrowed_refused',
-             'advise_nested_object_refused', 'attach_address_refused'}
+             'advise_nested_object_refused', 'attach_address_refused',
+             'exit_word_after_revoke_not_written'}
 FAULTING = {'unmap', 'renew', 'renew-ref', 'mremap', 'exit-renew', 'create'}
 # Modes whose stale read does not map the address again first (the frame is not reused).
 NO_REMAP = {'create'}
@@ -255,6 +297,13 @@ REFUSALS = {
     'join-burned': [],
     'attach-exchange': [],
     'attach-address': [('not a reference', 'attach')],
+    'futex-remap': [],
+    'die-blocked': [],
+    'word-metadata': [],
+    'futex-race': [],
+    'exit-race': [],
+    'join-withdrawn': [],
+    'rollback-fail': [],
 }
 # What each control changes: the mode it must break, and how.
 CONTROL_CUTS = {
@@ -292,6 +341,12 @@ LAUNCHER_CUTS = {
                                         'domain-fault')},
     'writable-interval': {'exit-word-refs': ('ROOT_FAIL:the launcher writes the word in the third page',
                                              'middle_protected_word_written')},
+    'futex-4c': {'futex-race': ('ROOT_FUTEX_RACE remap rc=-11', 'futex_wait_never_reads_new_mapping'),
+                 'futex-remap': ('ROOT_FUTEX_REMAP same_address=1 woken=1 rc=0',
+                                 'futex_wake_reaches_only_its_mapping')},
+    'exit-word-4c': {'exit-race': ('ROOT_EXIT_RACE value=0x0', 'exit_word_after_revoke_not_written')},
+    'withdraw-4c': {'join-withdrawn': ('ROOT_FAIL:the joiner of the failed create\'s id returns',
+                                       'joiner_on_withdrawn_id_returns')},
 }
 # Libc controls (--libc-control): the --application was built against a libc one change away.
 LIBC_CUTS = {
@@ -306,20 +361,26 @@ LIBC_CUTS = {
 ATTACH_REFUSED = 'CAPSTONE_VM_TRANSPORT_REFUSED '
 ATTACH_MODES = {'attach-readonly': ('not writable', 'ROOT_ATTACH_READ'),
                 'attach-exchange': ('not a whole mapping of the program', 'ROOT_ATTACH_RETURNED'),
-                'attach-address': ('reference refused', 'ROOT_ATTACH_RETURNED')}
+                'attach-address': ('reference refused', 'ROOT_ATTACH_RETURNED'),
+                'die-blocked': ('not a whole mapping of the program', 'ROOT_DIE_READ')}
+# Modes that the launcher ends with 125 at another failure: the line it prints, and the marker the
+# program prints only if it returns from the service that fails.
+ENDING_MODES = {'rollback-fail': ('capstone-vexec: thread rollback:', 'ROOT_ROLLBACK_RETURNED')}
 # The exit words and futex waits the launcher refuses per mode, as the reasons it logs, in order,
 # with and without root grants. A reason may be a tuple of alternatives: a stale frame reference
 # moved by SCC may lose its tag, which the kernel then reports as no reference.
 STALE = ('not live', 'not a reference')
 EXIT_WORD_REFUSALS = {
     1: {'exit-word': ['unaligned', 'not inside one mapping', 'not writable', STALE],
-        'exit-word-refs': [STALE, 'not live', 'does not cover the word']},
+        'exit-word-refs': [STALE, 'not live', 'does not cover the word'],
+        'exit-race': [STALE], 'word-metadata': ["in the allocator's metadata"]},
     0: {'exit-word': ['unaligned', 'not inside one mapping', 'not writable', "in a thread's frame"],
-        'exit-word-refs': ["in a thread's frame"]},
+        'exit-word-refs': ["in a thread's frame"], 'word-metadata': ["in the allocator's metadata"]},
 }
 FUTEX_REFUSALS = {
-    1: {'futex': ['not a reference', 'not live', 'does not cover the word', STALE]},
-    0: {'futex': ["in a thread's frame"]},
+    1: {'futex': ['not a reference', 'not live', 'does not cover the word', STALE],
+        'word-metadata': ["in the allocator's metadata"]},
+    0: {'futex': ["in a thread's frame"], 'word-metadata': ["in the allocator's metadata"]},
 }
 EXIT_WORD_REPORT = re.compile(r'^CAPSTONE_VM_EXIT_WORD_REFUSED tid=\d+ word=0x[0-9a-f]+ reason=(.*)$', re.M)
 FUTEX_REPORT = re.compile(r'^CAPSTONE_VM_FUTEX_REFUSED tid=\d+ word=0x[0-9a-f]+ reason=(.*)$', re.M)
@@ -334,7 +395,8 @@ def reasons_match(seen, expected):
 # Modes whose threads have all exited and been joined at the program's exit: the launcher's census
 # must count only the main thread.
 CENSUS_MODES = {'create-fail', 'join-two', 'join-after', 'exit-many', 'exit-word', 'exit-word-refs',
-                'futex', 'join-burned'}
+                'futex', 'join-burned', 'futex-race', 'futex-remap', 'exit-race', 'join-withdrawn',
+                'word-metadata'}
 # The arenas that a thread exit names and the module keeps, per mode, as the reasons it reports:
 # the two stacks that exit-victim's threads named (root grants only), and the frame that
 # exit-frame's thread named as its stack. exit-length's and exit-huge's stacks reach the module
@@ -410,20 +472,27 @@ def main():
                    help='the launcher names the mapping around a0\'s cursor as the frame; the module must compare')
     p.add_argument('--launcher-small-table', action='store_true',
                    help='the launcher\'s thread table has 4 entries; create-fail reaches its rollback')
+    p.add_argument('--launcher-hooks', action='store_true',
+                   help='the launcher is a hooks build (-DCAPSTONE_VM_TEST_HOOKS); the hook modes run')
     p.add_argument('--root-grants', type=int, choices=(0, 1), default=1)
     p.add_argument('--control', choices=sorted(CONTROL_CUTS), help='the module is this control (see above)')
     p.add_argument('--launcher-control', choices=sorted(LAUNCHER_CUTS),
                    help='the --launcher is this control (see above)')
     p.add_argument('--libc-control', choices=sorted(LIBC_CUTS),
                    help='the --application was built against this control libc (see above)')
-    p.add_argument('--modes', default=','.join(MODES), help='comma-separated subset of the modes')
+    p.add_argument('--modes', help='comma-separated subset of the modes (default: every mode, the hook '
+                                   'modes only with --launcher-hooks)')
     p.add_argument('--no-refs', action='store_true', help='the processor has no supervisor references: insmod must fail')
     p.add_argument('--unpinned', action='store_true', help='load the module with unpinned=1')
     p.add_argument('--timeout', type=int, default=600)
     a = p.parse_args()
+    if a.modes is None:
+        a.modes = ','.join(MODES + (HOOK_MODES if a.launcher_hooks else ()))
     modes = [m for m in a.modes.split(',') if m]
-    if any(m not in MODES for m in modes):
+    if any(m not in MODES + HOOK_MODES for m in modes):
         p.error(f'unknown mode in {a.modes}')
+    if any(m in HOOK_MODES for m in modes) and not a.launcher_hooks:
+        p.error('the hook modes need --launcher-hooks')
     if a.control and not a.module:
         p.error('--control needs --module')
     if a.launcher_control and not a.launcher:
@@ -441,7 +510,7 @@ def main():
     if a.root_grants:
         module_args += ' root_grants=1'
     runs = '\n'.join(f'''echo ROOT_MODE_BEGIN:{mode}
-CAPSTONE_VM_STATS=1 ./capstone-vexec root.dom {mode}
+{HOOK_ENV.get(mode, '') if a.launcher_hooks else ''} CAPSTONE_VM_STATS=1 ./capstone-vexec root.dom {mode}
 echo ROOT_EXIT:{mode}:$?
 dmesg -c | grep 'capstone_vm: \\(unmap refused\\|retire refused\\|thread exit keeps\\)' | sed 's/^.*capstone_vm: /ROOT_KERNEL:{mode}:/'
 ''' for mode in modes)
@@ -542,6 +611,19 @@ echo VIRTUAL_STAGED_DONE
                 if a.root_grants:
                     tests[f'{mode}:kernel_refusals'] = refusals_match(seen, REFUSALS[mode])
                 continue
+            if mode in ENDING_MODES:
+                # The launcher ends the program inside the service: the runner reads its line and
+                # the exit status.
+                ending_line, marker = ENDING_MODES[mode]
+                for name in checks[mode]:
+                    tests[f'{mode}:{name}'] = f'ROOT_CHECK:{name}:PASS' in part
+                tests[f'{mode}:service_never_returned'] = marker not in part
+                tests[f'{mode}:launcher_ended_program'] = (status == '125' and mode_causes == [] and
+                                                          ending_line in part)
+                tests[f'{mode}:no_contract_failure'] = 'ROOT_FAIL' not in part
+                if a.root_grants:
+                    tests[f'{mode}:kernel_refusals'] = refusals_match(seen, REFUSALS[mode])
+                continue
             if mode in cuts:
                 # The control must break this mode, at this point, and nothing else.
                 marker, check, *ending = cuts[mode]
@@ -585,6 +667,10 @@ echo VIRTUAL_STAGED_DONE
                     re.search(r'^CAPSTONE_VM_THREADS count=1 ', part, re.M) is not None
             if mode == 'exit-word':
                 tests['exit-word:straddle_adjacent'] = 'ROOT_STRADDLE adjacent=1' in part
+            if mode == 'join-withdrawn':
+                # The hooks build's witness: the joiner waited on the entry when it was withdrawn.
+                tests['join-withdrawn:joiner_waited_on_entry'] = re.search(
+                    r'^CAPSTONE_VM_TEST_WITHDRAWN id=\d+ waiters=[1-9]', part, re.M) is not None
             if mode in FAULTING:
                 if mode not in NO_REMAP:
                     tests[f'{mode}:remapped_at_the_same_address'] = 'ROOT_REMAP same_address=1' in part
@@ -625,6 +711,7 @@ echo VIRTUAL_STAGED_DONE
                   libc_control=a.libc_control, launcher_small_table=a.launcher_small_table,
                   launcher=str(a.launcher) if a.launcher else None,
                   launcher_bypass=a.launcher_bypass, launcher_frame_floor=a.launcher_frame_floor,
+                  launcher_hooks=a.launcher_hooks,
                   no_refs=a.no_refs, unpinned=a.unpinned,
                   passed=sum(tests.values()), total=len(tests), tests=tests,
                   insmod=insmod, exits=exits, fault_causes=causes, refusals=refusals_seen,

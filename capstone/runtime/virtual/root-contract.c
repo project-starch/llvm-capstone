@@ -167,6 +167,50 @@
  *                                   page reads zero, a reference stored in it is gone, the first
  *                                   page keeps its data
  *   advise_free_zeroes              MADV_FREE through the mapping's reference: all of it reads zero
+ *   advise_prot_none_zeroes         madvise of a page that held data and a stored reference and was
+ *                                   made PROT_NONE first: after mprotect back to read-write the page
+ *                                   reads zero, the reference is gone, the first page keeps its data
+ *                                   (stage 4d)
+ * Stage 4d, check and access in one step. The modes marked (hooks) need a launcher built with
+ * -DCAPSTONE_VM_TEST_HOOKS and the delays run-root-grants.py sets for them (--launcher-hooks):
+ * futex-race (exit 0; hooks: the futex wait sleeps 2 s after its compare, service_lock released):
+ *   futex_wait_never_reads_new_mapping
+ *                                   a context waits on a word that holds 5; inside the window the
+ *                                   main thread unmaps the word's whole mapping, maps a new one at
+ *                                   the same address and writes 6 there: the wait times out, since
+ *                                   it compared before the unmap (a read of the new mapping answers
+ *                                   EAGAIN)
+ *   futex_wake_in_window_caught     inside the window the main thread stores 0 and wakes: the wake
+ *                                   counts the waiter, which returns 0
+ * futex-remap (exit 0):
+ *   futex_wake_reaches_only_its_mapping
+ *                                   a context sleeps on a word; the main thread unmaps its mapping,
+ *                                   maps a new one at the same address and wakes that address: the
+ *                                   wake counts nobody and the waiter times out
+ * exit-race (exit 0; root grants; hooks: the exit sleeps 3 s after the launcher's own checks):
+ *   exit_word_after_revoke_not_written
+ *                                   a context exits naming an exit word inside an object; inside the
+ *                                   window the main thread ends the object with CREVOKE, derives a
+ *                                   new object at the same address and writes 0x7777 into it: the
+ *                                   word is refused (not live) and the new object keeps its value
+ * join-withdrawn (exit 0; hooks: a join sleeps 1 s after releasing service_lock, and the second
+ *                                   create fails after thread_add with a delay of 2 s):
+ *   joiner_on_withdrawn_id_returns  a context joins the id of the next create, which fails while the
+ *                                   joiner waits on its entry: the join answers ESRCH, and the next
+ *                                   create takes the id
+ * rollback-fail (exit 125; hooks: the first create fails and its rollback is refused):
+ *   rollback_create_started         printed before the create; the launcher ends the program
+ *                                   (capstone-vexec: thread rollback), ROOT_ROLLBACK_RETURNED never
+ *                                   prints
+ * die-blocked (exit 125):
+ *   die_reader_blocks               the main thread blocks in a read of an empty pipe on the process
+ *                                   transport; a pthread names the launcher's exchange as its
+ *                                   transport, and the launcher ends the program with 125 without a
+ *                                   crash; ROOT_DIE_READ never prints
+ * word-metadata (exit 0):
+ *   metadata_futex_wait_refused     a futex wait on a word in a mapping of the allocator's metadata:
+ *                                   EFAULT
+ *   metadata_exit_word_not_written  an exit word there is refused and keeps its value
  * join-burned (exit 0):
  *   join_failed_create_refused      a create on a read-only frame fails; a join of the id after the
  *                                   last created one answers ESRCH
@@ -1802,6 +1846,22 @@ static int mode_advise(void)
     require(!madvise(two, 2 * PAGE, MADV_FREE), "madvise(MADV_FREE) through the mapping's reference");
     require(two[0] == 0 && two[PAGE - 1] == 0 && two[PAGE] == 0, "the whole mapping reads zero");
     pass("advise_free_zeroes");
+
+    /* A page that the program made inaccessible after it wrote data and a reference into it: the
+     * advise zeroes it all the same, and the restored page reads zero (stage 4d). */
+    char *none = map(2 * PAGE);
+    memset(none, 0x6b, 2 * PAGE);
+    *(char **)(none + PAGE + 64) = target;
+    require(!mprotect(none + PAGE, PAGE, PROT_NONE), "make the second page inaccessible");
+    require(!madvise(none + PAGE, PAGE, MADV_DONTNEED), "madvise of the inaccessible page");
+    require(!mprotect(none + PAGE, PAGE, PROT_READ | PROT_WRITE), "restore the second page");
+    printf("ROOT_ADVISE none first=0x%x second=0x%x stored_type=%lu\n", none[0], none[PAGE + 1],
+           type_of(*(char **)(none + PAGE + 64)));
+    fflush(stdout);
+    require(none[0] == 0x6b && none[PAGE - 1] == 0x6b, "the first page keeps its data");
+    require(none[PAGE] == 0 && none[2 * PAGE - 1] == 0 && type_of(*(char **)(none + PAGE + 64)) == 7,
+            "the inaccessible page reads zero after the restore, and the stored reference is gone");
+    pass("advise_prot_none_zeroes");
     return 0;
 }
 
@@ -1919,6 +1979,290 @@ static int mode_attach_address(void)
     return attach_named(NULL, LARGE, 1);
 }
 
+/* ---- Stage 4d: check and access in one step ---- */
+
+/* A busy wait of about ms milliseconds that makes no service call: a thread that must act while
+ * another thread's service holds service_lock cannot sleep through the launcher. spin_calibrate
+ * measures the loop once against the clock, before the race. */
+static unsigned long spins_per_ms;
+
+static void spin_calibrate(void)
+{
+    struct timespec a, b;
+    clock_gettime(CLOCK_MONOTONIC, &a);
+    for (volatile unsigned long i = 0; i < 4000000UL; ++i)
+        ;
+    clock_gettime(CLOCK_MONOTONIC, &b);
+    long ms = (b.tv_sec - a.tv_sec) * 1000L + (b.tv_nsec - a.tv_nsec) / 1000000L;
+    spins_per_ms = 4000000UL / (ms > 0 ? (unsigned long)ms : 1UL);
+    printf("ROOT_SPIN per_ms=%lu\n", spins_per_ms);
+    fflush(stdout);
+}
+
+static void spin_ms(unsigned long ms)
+{
+    for (volatile unsigned long i = 0; i < spins_per_ms * ms; ++i)
+        ;
+}
+
+/* A context that waits on race_word for race_value with a timeout of race_seconds and records the
+ * answer in race_rc. */
+static int *volatile race_word;
+static volatile int race_value, race_started, race_done;
+static volatile long race_rc, race_seconds;
+
+static void *race_wait_entry(void *arg)
+{
+    __atomic_store_n(&race_started, 1, __ATOMIC_RELEASE);
+    race_rc = __capstone_vm_futex(race_word, 0 /* FUTEX_WAIT */, race_value, race_seconds, 0, 0);
+    __atomic_store_n(&race_done, 1, __ATOMIC_RELEASE);
+    return arg;
+}
+
+static long race_waiter(int *word, int value, long seconds, char *stack_top)
+{
+    race_word = word;
+    race_value = value;
+    race_seconds = seconds;
+    race_started = race_done = 0;
+    race_rc = 1;
+    return context(race_wait_entry, stack_top);
+}
+
+/* futex-race: the futex window of stage 4c, forced open by the launcher's test hook. */
+static int mode_futex_race(void)
+{
+    (void)grant();
+    char *stacks = map(3 * STACK);
+
+    char *page = map(PAGE);
+    unsigned long address = cursor(page);
+    *(volatile int *)(page + 64) = 5;
+    long waiter = race_waiter((int *)(page + 64), 5, 6, stacks + STACK);
+    require(wait_for(&race_started, 1, 5000), "the waiter starts");
+    pause_ms(500);
+    require(!munmap(page, PAGE), "munmap of the waited word's whole mapping");
+    char *again = map(PAGE);
+    *(volatile int *)(again + 64) = 6;
+    printf("ROOT_FUTEX_RACE remap same_address=%d\n", cursor(again) == address);
+    fflush(stdout);
+    require(wait_for(&race_done, 1, 12000), "the waiter returns");
+    printf("ROOT_FUTEX_RACE remap rc=%ld\n", race_rc);
+    fflush(stdout);
+    require(cursor(again) == address, "the new mapping lies at the old address");
+    require(race_rc == -ETIMEDOUT, "the waiter compared the old mapping's word, never the new one's");
+    require(!capstone_virtual_thread_join(waiter), "join the waiter");
+    pass("futex_wait_never_reads_new_mapping");
+
+    int *word = (int *)(again + 128);
+    *word = 7;
+    waiter = race_waiter(word, 7, 6, stacks + 2 * STACK);
+    require(wait_for(&race_started, 1, 5000), "the second waiter starts");
+    pause_ms(500);
+    __atomic_store_n(word, 0, __ATOMIC_RELEASE);
+    long woken = __capstone_vm_futex(untagged(cursor(word)), 1 /* FUTEX_WAKE */, 1, -1, 0, 0);
+    require(wait_for(&race_done, 1, 12000), "the second waiter returns");
+    printf("ROOT_FUTEX_RACE wake woken=%ld rc=%ld\n", woken, race_rc);
+    fflush(stdout);
+    require(woken == 1 && race_rc == 0, "the wake inside the window reaches the waiter");
+    require(!capstone_virtual_thread_join(waiter), "join the second waiter");
+    pass("futex_wake_in_window_caught");
+    return 0;
+}
+
+/* futex-remap: a wake names a mapping, not an address. */
+static int mode_futex_remap(void)
+{
+    (void)grant();
+    char *stacks = map(2 * STACK);
+    char *page = map(PAGE);
+    unsigned long address = cursor(page);
+
+    *(volatile int *)(page + 64) = 3;
+    long waiter = race_waiter((int *)(page + 64), 3, 3, stacks + STACK);
+    require(wait_for(&race_started, 1, 5000), "the waiter starts");
+    pause_ms(500);
+    require(!munmap(page, PAGE), "munmap of the waited word's whole mapping");
+    char *again = map(PAGE);
+    long woken = __capstone_vm_futex(untagged(address + 64), 1 /* FUTEX_WAKE */, 1, -1, 0, 0);
+    require(wait_for(&race_done, 1, 10000), "the waiter returns");
+    printf("ROOT_FUTEX_REMAP same_address=%d woken=%ld rc=%ld\n", cursor(again) == address, woken,
+           race_rc);
+    fflush(stdout);
+    require(cursor(again) == address, "the new mapping lies at the old address");
+    require(woken == 0 && race_rc == -ETIMEDOUT,
+            "a wake of the new mapping does not reach the old mapping's waiter");
+    require(!capstone_virtual_thread_join(waiter), "join the waiter");
+    pass("futex_wake_reaches_only_its_mapping");
+    return 0;
+}
+
+/* exit-race: the exit-word window of stage 4c, forced open by the launcher's test hook. */
+static int *volatile exit_race_word;
+static volatile int exit_race_started;
+
+static void *exit_race_entry(void *arg)
+{
+    (void)arg;
+    __atomic_store_n(&exit_race_started, 1, __ATOMIC_RELEASE);
+    __capstone_vm_thread_exit_clear(exit_race_word, NULL, 0, 0);
+}
+
+static int mode_exit_race(void)
+{
+    (void)grant();
+    if (!root_grants) {
+        skip("exit_word_after_revoke_not_written",
+             "root_grants=0 has no lifetime that a CREVOKE ends; the address is the authority");
+        return 0;
+    }
+    spin_calibrate();
+    char *stacks = map(2 * STACK);
+    char *page = map(PAGE);
+    char *object = capstone_cap_derive(page, 0, 64);
+
+    exit_race_word = (int *)(object + 16);
+    *exit_race_word = 1;
+    long id = context(exit_race_entry, stacks + STACK);
+    while (!__atomic_load_n(&exit_race_started, __ATOMIC_ACQUIRE))
+        ;
+    /* The exiting context passes the launcher's own checks within a few milliseconds and then
+     * sleeps in the hook with service_lock held: no service call from here until the join. */
+    spin_ms(500);
+    capstone_cap_release(object);
+    char *reused = capstone_cap_derive(page, 0, 64);
+    *(volatile int *)(reused + 16) = 0x7777;
+    require(!capstone_virtual_thread_join(id), "join the exiting context");
+    int value = *(volatile int *)(page + 16);
+    printf("ROOT_EXIT_RACE value=0x%x\n", value);
+    fflush(stdout);
+    require(value == 0x7777, "the exit word's store does not reach the object reused after the revoke");
+    pass("exit_word_after_revoke_not_written");
+    return 0;
+}
+
+/* join-withdrawn: a joiner waits on the entry of a create that then fails. */
+static volatile long withdrawn_target, withdrawn_rc = 1;
+static volatile int withdrawn_go, withdrawn_started, withdrawn_done;
+
+static void *withdrawn_joiner(void *arg)
+{
+    while (!__atomic_load_n(&withdrawn_go, __ATOMIC_ACQUIRE))
+        ;
+    __atomic_store_n(&withdrawn_started, 1, __ATOMIC_RELEASE);
+    withdrawn_rc = __capstone_vm_thread_join(withdrawn_target);
+    __atomic_store_n(&withdrawn_done, 1, __ATOMIC_RELEASE);
+    return arg;
+}
+
+static int mode_join_withdrawn(void)
+{
+    (void)grant();
+    char *stacks = map(3 * STACK);
+    uintptr_t identity;
+
+    long joiner = context(withdrawn_joiner, stacks + STACK);
+    withdrawn_target = joiner + 1;
+    __atomic_store_n(&withdrawn_go, 1, __ATOMIC_RELEASE);
+    require(wait_for(&withdrawn_started, 1, 5000), "the joiner starts");
+    pause_ms(300);
+    unsigned char *frame = frame_new(frame_child, stacks + 2 * STACK, &identity);
+    unsigned long frame_address = cursor(frame);
+    long failed = __capstone_vm_thread_create_frame(frame);
+    __capstone_context_identity_give(identity);
+    require(wait_for(&withdrawn_done, 1, 6000), "the joiner of the failed create's id returns");
+    printf("ROOT_JOIN_WITHDRAWN target=%ld failed=%ld join=%ld\n", withdrawn_target, failed,
+           withdrawn_rc);
+    fflush(stdout);
+    require(failed == -EAGAIN, "the create fails after the launcher took the frame");
+    require(!registered(frame_address), "the failed create's frame is released");
+    require(withdrawn_rc == -ESRCH, "the join of the withdrawn id answers ESRCH");
+    long next = context(idle_entry, stacks + 2 * STACK);
+    printf("ROOT_JOIN_WITHDRAWN next=%ld\n", next);
+    fflush(stdout);
+    require(next == withdrawn_target, "the next create takes the withdrawn id");
+    require(!capstone_virtual_thread_join(next) && !capstone_virtual_thread_join(joiner),
+            "join the next context and the joiner");
+    pass("joiner_on_withdrawn_id_returns");
+    return 0;
+}
+
+/* rollback-fail: the launcher's rollback of a failed create is refused; the program ends. */
+static int mode_rollback_fail(void)
+{
+    (void)grant();
+    char *stack = map(STACK);
+    uintptr_t identity;
+    unsigned char *frame = frame_new(frame_child, stack + STACK, &identity);
+
+    pass("rollback_create_started");
+    long id = __capstone_vm_thread_create_frame(frame);
+    printf("ROOT_ROLLBACK_RETURNED id=%ld\n", id);
+    fflush(stdout);
+    return 0;
+}
+
+/* die-blocked: the launcher ends the program while the main thread blocks in a delegated read. The
+ * pthread sleeps half a second without a delegated call (one would attach its own transport), then
+ * names the launcher's exchange region as its transport, which the launcher refuses. */
+static int die_fds[2];
+
+static void *die_attach_worker(void *arg)
+{
+    int sleeper = 0;
+    void *meta = mmap(NULL, CAPSTONE_DELEGATE_META_BYTES, PROT_READ | PROT_WRITE,
+                      MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    __capstone_vm_futex(&sleeper, 0 /* FUTEX_WAIT */, 0, 0, 500000000, 0);
+    if (meta == MAP_FAILED)
+        return arg;
+    __capstone_vm_transport_detach();
+    __capstone_vm_delegate_transport(meta, named_exchange, named_bytes);
+    __atomic_store_n(&attach_returned, 1, __ATOMIC_RELEASE);
+    return arg;
+}
+
+static int mode_die_blocked(void)
+{
+    (void)grant();
+    pthread_t thread;
+    void *exchange = launcher_grant(1);
+
+    require(type_of(exchange) == 1, "the launcher's exchange region as the program holds it");
+    named_exchange = exchange;
+    named_bytes = end_of(exchange) - base_of(exchange);
+    require(!pipe(die_fds), "an empty pipe");
+    require(!pthread_create(&thread, NULL, die_attach_worker, NULL), "pthread_create");
+    pass("die_reader_blocks");
+    char byte;
+    long n = read(die_fds[0], &byte, 1);
+    printf("ROOT_DIE_READ result=%ld\n", n);
+    fflush(stdout);
+    return 0;
+}
+
+/* word-metadata: no word of the allocator's metadata reaches the kernel. */
+static int mode_word_metadata(void)
+{
+    (void)grant();
+    char *own = map(STACK);
+    sublet_cap slot;
+
+    require(!cap_vm_acquire(&slot, PAGE, PAGE, PROT_READ | PROT_WRITE, 6, CAP_VM_METADATA),
+            "a page of the allocator's metadata");
+    char *metadata = cap_vm_copyable(&slot);
+    int *word = (int *)(metadata + 64);
+    *word = 0x5151;
+    long rc = futex_wait_ms(word, 0x5151);
+    printf("ROOT_WORD_METADATA futex=%ld\n", rc);
+    fflush(stdout);
+    require(rc == -EFAULT, "a futex wait on a word in the allocator's metadata");
+    pass("metadata_futex_wait_refused");
+    exit_with_word(word, NULL, 0, own + STACK);
+    require(*(volatile int *)word == 0x5151, "the exit word in the allocator's metadata keeps its value");
+    pass("metadata_exit_word_not_written");
+    return 0;
+}
+
 int main(int argc, char **argv)
 {
     const char *mode = argc > 1 ? argv[1] : "unmap";
@@ -1951,6 +2295,13 @@ int main(int argc, char **argv)
     if (!strcmp(mode, "join-burned")) return mode_join_burned();
     if (!strcmp(mode, "attach-exchange")) return mode_attach_exchange();
     if (!strcmp(mode, "attach-address")) return mode_attach_address();
+    if (!strcmp(mode, "futex-race")) return mode_futex_race();
+    if (!strcmp(mode, "futex-remap")) return mode_futex_remap();
+    if (!strcmp(mode, "exit-race")) return mode_exit_race();
+    if (!strcmp(mode, "join-withdrawn")) return mode_join_withdrawn();
+    if (!strcmp(mode, "rollback-fail")) return mode_rollback_fail();
+    if (!strcmp(mode, "die-blocked")) return mode_die_blocked();
+    if (!strcmp(mode, "word-metadata")) return mode_word_metadata();
     fail("unknown mode");
     return 1;
 }

@@ -65,7 +65,7 @@ struct cv_thread_control {
  * the thread asks to unmap at its exit (CV_SERVICE_PTHREAD_EXIT, a1 the
  * stack's reference, a2 its length). The launcher names only a registered heap
  * mapping, not the allocator's metadata, held by no worker, of the length the
- * call names, that does not hold the exit word (a0) the launcher will write. The
+ * call names, that does not hold the exit word (a0) the module will write. The
  * module refuses a stack that is the thread's own frame, and releases that
  * arena once, as the frame. With root_grants the stack is a request of
  * the program: the module checks the reference in a1 before it clears the
@@ -75,9 +75,25 @@ struct cv_thread_control {
  * those ranges. The module writes it before the first irreversible step, and
  * with root_grants nothing after that step can fail. A refused or impossible
  * release does not stop the exit: the thread exits and that arena stays
- * registered (a leak, counted in exit_kept and reported). */
+ * registered (a leak, counted in exit_kept and reported).
+ *
+ * word (in, stage 4d): 1 asks the module to store 0 into the thread's exit word, the int at a0's
+ * cursor (CV_SERVICE_PTHREAD_EXIT), at the end of this same ioctl, after the thread has stopped
+ * and the frame and stack releases are committed; 0 asks nothing. The launcher asks only after its
+ * own conditions on the address (one registered mapping, not the allocator's metadata, pages that
+ * Linux maps writable, outside every transport it writes itself). The module checks the word as
+ * CV_WORD does before it clears the frame (with root_grants a0 holds a live reference that covers
+ * the word; in both modes the word is aligned, inside one arena past the image's read+execute
+ * prefix, and in no thread's frame), and checks it again at the store, under vm_lock, which also
+ * excludes the program's execution: the reference is still live, the same arena still holds the
+ * word (no release of this ioctl took it) and no thread's frame does. Then it admits the word's page
+ * (CV_TOUCH's rule) and stores through the program's mapping, so the page table decides the write
+ * right. Check and store are one step: no thread can end the word's lifetime, unmap or remap its
+ * page in between. word_reason (out): CV_WORD_ACCEPTED if the module stored the word, else the
+ * reason of the refusal; written at the end, and 0 when word is 0. A refused word does not stop the
+ * exit. */
 struct cv_thread_exit {
-    __u64 thread, frame, stack, released;
+    __u64 thread, frame, stack, released, word, word_reason;
 };
 #define CV_EXIT_FRAME 1
 #define CV_EXIT_STACK 2
@@ -105,8 +121,9 @@ struct cv_global {
 #define CV_NODES _IOW('V', 24, struct cv_nodes)
 /* 25 and 26 were CV_REMAP_BEGIN and CV_REMAP_END, the remap transaction of the first design. */
 #define CV_PROFILE _IOR('V', 27, __u64)
-/* A span the launcher is about to WRITE on the domain's behalf through Linux: a thread's exit
- * word, a worker's meta block and exchange region. Every page of it inside a lazily admitted
+/* A span the launcher is about to WRITE on the domain's behalf through Linux: a worker's meta block
+ * and exchange region, the process exchange (since stage 4d the module admits an exit word or a
+ * futex word itself, with the same rule, inside the ioctl that accesses it). Every page of it inside a lazily admitted
  * arena is admitted first, pinned and checked exactly as the domain's own fault would admit it,
  * so the launcher's write never creates backing the domain can store a capability into without
  * the module's pin and sweep (a frame freed at exit_mm with its tags). Pages already held and
@@ -163,18 +180,21 @@ struct cv_protect {
     __u64 thread, id;
 };
 #define CV_PROTECT _IOW('V', 33, struct cv_protect)
-/* A word that the launcher reads or writes for the program (stage 4c): the exit word that a
- * thread's exit names (CV_SERVICE_PTHREAD_EXIT, which the launcher writes) and the word of a futex
- * wait (CV_SERVICE_FUTEX, which Linux reads). thread is the caller, paused at one of those
- * services (the module reads which from its a7); the word is the int at a0's cursor. The module
- * accepts the word only if, with root_grants, a0 holds a live non-linear reference whose bounds
- * cover the word, and, in both modes, the word is aligned, lies inside the visible length of one
- * registered arena past the image's read+execute prefix, and lies in no page that holds the frame
- * of a thread. reason (out): CV_WORD_ACCEPTED, or the reason of the refusal. The ioctl itself
- * fails only for a caller that is not paused at those services (EINVAL). Changes nothing: the
- * launcher admits a word it writes with CV_TOUCH afterwards. */
+/* The compare of a futex wait (CV_SERVICE_FUTEX, stage 4d), one step that checks and reads: thread
+ * is the caller, paused at the service; the word is the int at a0's cursor and the value is a2. The
+ * module checks the word as at an exit (with root_grants a0 holds a live non-linear reference whose
+ * bounds cover the word; in both modes the word is aligned, lies inside the visible length of one
+ * registered arena past the image's read+execute prefix, and in no page that holds the frame of a
+ * thread), admits its page (CV_TOUCH's rule) and reads it through the program's mapping, so the
+ * page table decides the read right, all under vm_lock, which also excludes the program's
+ * execution: no thread can end the word's lifetime, unmap or remap its page between the check and
+ * the read. reason (out): CV_WORD_ACCEPTED, or the reason of the refusal. equal (out): 1 if the
+ * word read holds the value. arena and offset (out, when accepted): the arena id of the mapping that
+ * holds the word (never reused) and the word's offset in it, the key the launcher's waiter sleeps
+ * on; Linux never sees the program's address. The ioctl itself fails only for a caller that is not
+ * paused at the service (EINVAL). Changes no program memory. */
 struct cv_word {
-    __u64 thread, reason;
+    __u64 thread, reason, equal, arena, offset;
 };
 #define CV_WORD_ACCEPTED 0
 #define CV_WORD_NOT_REFERENCE 1
@@ -183,7 +203,9 @@ struct cv_word {
 #define CV_WORD_UNALIGNED 4
 #define CV_WORD_NOT_MAPPED 5
 #define CV_WORD_IN_FRAME 6
-#define CV_WORD_REASONS 7
+#define CV_WORD_NOT_ADMITTED 7      /* the module cannot admit the word's page (CV_TOUCH's rule) */
+#define CV_WORD_NO_ACCESS 8         /* the page table refuses the read or the write */
+#define CV_WORD_REASONS 9
 #define CV_WORD _IOWR('V', 34, struct cv_word)
 /* A worker's attachment of its own transport (CV_SERVICE_THREAD_DELEGATE, stage 4c): thread is the
  * caller, paused at the service; meta and exchange are the arenas the launcher resolved from the

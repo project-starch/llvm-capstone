@@ -50,9 +50,10 @@ struct mapping {
     int protected_range;
     /* The protection Linux maps on each page of the visible length (PROT_READ, PROT_WRITE,
      * PROT_EXEC), exact per page: prot for every page while pages is NULL, else one byte per page
-     * (see "Page state" below). This launcher writes into the program's memory on its behalf (an
-     * exit word, a worker's transport) only into pages that Linux maps writable, so neither a
-     * protection the program set nor the image's read-execute text can make that write fault. */
+     * (see "Page state" below). This launcher writes a worker's transport into the program's
+     * memory, and asks the module to store an exit word, only in pages that Linux maps writable, so
+     * neither a protection the program set nor the image's read-execute text can make that write
+     * fault. */
     unsigned char prot, *pages;
     /* The program's grant carries the write right (CV_GRANT_WRITE). */
     int grant_writes;
@@ -97,12 +98,16 @@ static pthread_mutex_t host_lock = PTHREAD_MUTEX_INITIALIZER;
 static __thread int host_signals_attached;   /* this worker's thread records into host.signals */
 /* The thread table: one entry per live thread, the first one (the main thread) included. An exit
  * frees its entry at once unless joiners wait on it; then the last joiner to leave frees it
- * (thread_finish, thread_join). So an entry outlives its thread only while a joiner waits, and
- * threads that are never joined cannot fill the table. */
+ * (thread_finish, thread_join). A create that fails after thread_add withdraws its entry the same
+ * way (thread_withdraw). So an entry outlives its thread only while a joiner waits, and threads that
+ * are never joined cannot fill the table. */
 #define CV_MAX_THREADS 32
 static uint64_t thread_ids[CV_MAX_THREADS] = {0};
 /* Set by the exit of an entry's thread while joiners wait on the entry. */
 static unsigned thread_done[CV_MAX_THREADS];
+/* Set by thread_withdraw while joiners wait on the entry of a create that failed: the entry no
+ * longer names its id (thread_entry skips it), and its joiners return ESRCH. */
+static unsigned thread_withdrawn[CV_MAX_THREADS];
 /* The joiners that wait in thread_join on each entry. */
 static unsigned thread_waiters[CV_MAX_THREADS];
 /* The highest thread id of a create that succeeded (thread_publish). The module issues ids in order,
@@ -136,11 +141,62 @@ static unsigned long step_count(const unsigned long *counter)
 static void *meta;
 static void *virtual_thread_worker(void *opaque);
 static struct mapping *map_find(uintptr_t base);
+static _Noreturn void die(const char *what);
+
+#ifdef CAPSTONE_VM_TEST_HOOKS
+/* Test build only (exec.c compiled with -DCAPSTONE_VM_TEST_HOOKS; run-root-grants.py
+ * --launcher-hooks). Each hook forces one interleaving of the stage 4d cases and is off unless its
+ * environment variable is set:
+ *   CAPSTONE_VM_TEST_FUTEX_DELAY_MS   a futex wait sleeps this long after its compare, with
+ *                                     service_lock released, before it blocks (the window in which
+ *                                     stage 4c let Linux read the word later)
+ *   CAPSTONE_VM_TEST_EXIT_DELAY_MS    a thread's exit sleeps this long after this launcher's own
+ *                                     checks of the exit word, with service_lock held, before the
+ *                                     module checks and stores the word (stage 4c stored it after this
+ *                                     point, on a check made before it)
+ *   CAPSTONE_VM_TEST_JOIN_DELAY_MS    a join sleeps this long after it released service_lock, before
+ *                                     it looks the id up
+ *   CAPSTONE_VM_TEST_CREATE_FAIL=N    the N-th create that reaches thread_add fails as if
+ *                                     pthread_create had failed, after CAPSTONE_VM_TEST_CREATE_DELAY_MS
+ *   CAPSTONE_VM_TEST_ROLLBACK_FAIL=1  the rollback of a failed create names thread 0 to
+ *                                     CV_THREAD_EXIT, which the module refuses
+ * A delay prints CAPSTONE_VM_TEST_DELAY with its name. */
+static long test_number(const char *name)
+{
+    const char *text = getenv(name);
+    return text ? strtol(text, NULL, 10) : 0;
+}
+static void test_delay(const char *name)
+{
+    long ms = test_number(name);
+    if (ms <= 0) return;
+    fprintf(stderr, "CAPSTONE_VM_TEST_DELAY %s ms=%ld\n", name, ms);
+    struct timespec t = {ms / 1000, (ms % 1000) * 1000000};
+    while (nanosleep(&t, &t) && errno == EINTR) {}
+}
+/* Is this create, which reached thread_add, the one CAPSTONE_VM_TEST_CREATE_FAIL names? Called with
+ * service_lock held. */
+static int test_create_fails(void)
+{
+    static long creates;
+    long n = test_number("CAPSTONE_VM_TEST_CREATE_FAIL");
+    return n > 0 && ++creates == n;
+}
+#define TEST_DELAY(name) test_delay(name)
+#define TEST_CREATE_FAILS() test_create_fails()
+#define TEST_ROLLBACK_FAILS() (test_number("CAPSTONE_VM_TEST_ROLLBACK_FAIL") > 0)
+#else
+#define TEST_DELAY(name) ((void)0)
+#define TEST_CREATE_FAILS() 0
+#define TEST_ROLLBACK_FAILS() 0
+#endif
 
 /* Record thread id, which CV_THREAD_CREATE has just issued and whose frame lies in the mapping
- * frame. -EAGAIN if the table is full. A join sees the id only after thread_publish; until then the
- * create can still fail (thread_withdraw). Joiners cannot name it in between: the creator holds
- * service_lock until the create service ends, and a join starts under service_lock. */
+ * frame. -EAGAIN if the table is full. Until thread_publish the create can still fail
+ * (thread_withdraw). A joiner can find the entry in between: the creator holds service_lock until
+ * the create service ends, but thread_join runs with service_lock released, so a join that entered
+ * its service before the create waits on the entry. If the create then fails, thread_withdraw wakes
+ * it with ESRCH. */
 static int thread_add(uint64_t id, const struct mapping *frame)
 {
     int result = -EAGAIN;
@@ -150,6 +206,7 @@ static int thread_add(uint64_t id, const struct mapping *frame)
         if (thread_ids[i]) continue;
         thread_ids[i] = id;
         thread_done[i] = 0;
+        thread_withdrawn[i] = 0;
         thread_waiters[i] = 0;
         thread_frames[i].address = (uintptr_t)frame->address;
         thread_frames[i].id = frame->id;
@@ -168,13 +225,27 @@ static void thread_publish(uint64_t id)
     pthread_mutex_unlock(&thread_state_lock);
 }
 static void thread_slot_free(unsigned i);
-/* The create of thread id failed after thread_add, and its thread never ran: free its entry. The
- * id was never published, so no joiner waits on it, and the module issues it again. */
+static unsigned thread_entry(uint64_t id);
+/* The create of thread id failed after thread_add, and its thread never ran; the module issues the
+ * id again to the next create. Without joiners the entry is freed at once. A joiner that found the
+ * entry before the failure (thread_add) waits on it: the entry is marked withdrawn, which ends its
+ * claim on the id, and the joiners are woken; each returns ESRCH, and the last one to leave frees
+ * the entry, as after an exit (thread_join). */
 static void thread_withdraw(uint64_t id)
 {
     pthread_mutex_lock(&thread_state_lock);
-    for (unsigned i = 1; i < CV_MAX_THREADS; ++i)
-        if (thread_ids[i] == id) { thread_slot_free(i); break; }
+    unsigned i = thread_entry(id);
+    if (i && thread_waiters[i]) {
+#ifdef CAPSTONE_VM_TEST_HOOKS
+        /* The witness of join-withdrawn's interleaving: a joiner waits on the entry. */
+        fprintf(stderr, "CAPSTONE_VM_TEST_WITHDRAWN id=%llu waiters=%u\n", (unsigned long long)id,
+                thread_waiters[i]);
+#endif
+        thread_withdrawn[i] = 1;
+        pthread_cond_broadcast(&thread_state_cond);
+    } else if (i) {
+        thread_slot_free(i);
+    }
     pthread_mutex_unlock(&thread_state_lock);
 }
 /* The registered mapping that holds thread id's frame, found by identity, or NULL. */
@@ -183,21 +254,30 @@ static struct mapping *thread_frame_mapping(uint64_t id)
     uintptr_t address = 0;
     uint64_t frame_id = 0;
     pthread_mutex_lock(&thread_state_lock);
-    for (unsigned i = 1; i < CV_MAX_THREADS; ++i)
-        if (thread_ids[i] == id) {
-            address = thread_frames[i].address;
-            frame_id = thread_frames[i].id;
-            break;
-        }
+    unsigned i = thread_entry(id);
+    if (i) {
+        address = thread_frames[i].address;
+        frame_id = thread_frames[i].id;
+    }
     pthread_mutex_unlock(&thread_state_lock);
     struct mapping *m = address ? map_find(address) : NULL;
     return m && m->id == frame_id ? m : NULL;
+}
+/* The entry of thread id, or 0 (entry 0 is the main thread's, which no lookup names). A withdrawn
+ * entry is not the id's any more: the module issues the id again, and its next create adds an entry
+ * of its own. Called with thread_state_lock held. */
+static unsigned thread_entry(uint64_t id)
+{
+    for (unsigned i = 1; i < CV_MAX_THREADS; ++i)
+        if (thread_ids[i] == id && !thread_withdrawn[i]) return i;
+    return 0;
 }
 /* Free entry i of the thread table. Called with thread_state_lock held. */
 static void thread_slot_free(unsigned i)
 {
     thread_ids[i] = 0;
     thread_done[i] = 0;
+    thread_withdrawn[i] = 0;
     thread_waiters[i] = 0;
     thread_frames[i].address = 0;
     thread_frames[i].id = 0;
@@ -211,15 +291,12 @@ static void thread_slot_free(unsigned i)
 static void thread_finish(uint64_t id)
 {
     pthread_mutex_lock(&thread_state_lock);
-    for (unsigned i = 1; i < CV_MAX_THREADS; ++i) {
-        if (thread_ids[i] != id) continue;
-        if (thread_waiters[i]) {
-            thread_done[i] = 1;
-            pthread_cond_broadcast(&thread_state_cond);
-        } else {
-            thread_slot_free(i);
-        }
-        break;
+    unsigned i = thread_entry(id);
+    if (i && thread_waiters[i]) {
+        thread_done[i] = 1;
+        pthread_cond_broadcast(&thread_state_cond);
+    } else if (i) {
+        thread_slot_free(i);
     }
     pthread_mutex_unlock(&thread_state_lock);
 }
@@ -227,26 +304,29 @@ static void thread_finish(uint64_t id)
  * whether the exit comes before or after the call: an id at or below thread_last_id without an
  * entry belongs to a thread that has exited. -EDEADLK for the caller's own id, the main thread's 0
  * included. -ESRCH for an id that names no thread that ran: 0 from another thread, an id never
- * issued, and the id of a failed create, which the module issues again to the next create. Any
- * number of joiners may wait on one thread: each counts itself in thread_waiters while it waits,
- * the last one to leave frees the entry, and the others leave it alone. The entry cannot be freed,
- * nor reused, while a joiner waits on it, so every joiner sees the exit of the thread it named. */
+ * issued, and the id of a failed create, which the module issues again to the next create; a
+ * joiner that already waits on the entry of a create that then fails is woken with ESRCH
+ * (thread_withdraw). Any number of joiners may wait on one thread: each counts itself in
+ * thread_waiters while it waits, the last one to leave frees the entry, and the others leave it
+ * alone. The entry cannot be freed, nor reused, while a joiner waits on it, so every joiner sees
+ * the end of the thread it named. Runs with service_lock released. */
 static int thread_join(uint64_t tid, uint64_t id)
 {
     int result;
     if (id == tid) return -EDEADLK;
     if (!id) return -ESRCH;
+    TEST_DELAY("CAPSTONE_VM_TEST_JOIN_DELAY_MS");
     pthread_mutex_lock(&thread_state_lock);
-    for (unsigned i = 1; i < CV_MAX_THREADS; ++i) {
-        if (thread_ids[i] != id) continue;
+    unsigned i = thread_entry(id);
+    if (i) {
         ++thread_waiters[i];
-        while (!thread_done[i])
+        while (!thread_done[i] && !thread_withdrawn[i])
             pthread_cond_wait(&thread_state_cond, &thread_state_lock);
+        result = thread_withdrawn[i] ? -ESRCH : 0;
         if (!--thread_waiters[i]) thread_slot_free(i);
-        pthread_mutex_unlock(&thread_state_lock);
-        return 0;
+    } else {
+        result = id <= thread_last_id ? 0 : -ESRCH;
     }
-    result = id <= thread_last_id ? 0 : -ESRCH;
     pthread_mutex_unlock(&thread_state_lock);
     return result;
 }
@@ -451,7 +531,7 @@ static void map_remove(struct mapping *m)
  * no mprotect ever changed in part: a registration and its removal call no allocator. The first
  * change of part of a mapping gives it one byte per page (page_split), and a change of the whole
  * mapping returns it to the one value. A byte per page and not a bit: three protection bits, and
- * room for the state that stage 4d adds when a partial munmap removes a page (a removed page stays
+ * room for the state that stage 4e adds when a partial munmap removes a page (a removed page stays
  * a PROT_NONE placeholder that the program can map again only under the MAP_FIXED rule). The cost is
  * bounded: a mapping is at most CV_MAX_REGION_BYTES (512 Ki pages, 512 KiB of state) and all
  * mappings of a context together at most CV_MAX_BYTES (1 MiB), paid only where a protection changed
@@ -514,6 +594,13 @@ static void page_free(struct mapping *m)
 static int grant_mapping(void *base, size_t bytes, size_t visible, unsigned reg, unsigned perms,
                          uintptr_t cursor, int linear, uint64_t thread, size_t rx_bytes)
 {
+    /* The page state needs whole pages: the visible length and the image's read-execute prefix are
+     * whole pages inside the grant (every caller rounds them: acquire_mapping refuses a visible
+     * length that is not, the launcher's own grants are powers of two or page multiples, and the
+     * image's text is checked page-aligned by image_layout). Then page_count covers the visible
+     * length exactly, and neither writable_span nor page_all indexes past m->pages. A violation is a
+     * launcher defect. */
+    if ((visible & 4095) || (rx_bytes & 4095) || rx_bytes > visible || visible > bytes) abort();
     if (map_reserve()) return -1;
     /* Option (iii): refuse to mint an arena whose bounds the encoder cannot represent, rather
      * than hand the domain a capability silently widened below its base or above its end.
@@ -893,9 +980,10 @@ static long check_mapping(uint64_t tid, uintptr_t base, size_t bytes)
  * module admits every page of it that a lazily admitted arena does not hold yet (CV_TOUCH: the
  * same pin and checks as the domain's own fault). Without it the write would create backing the
  * domain can store a capability into with no pin and no sweep: at exit the frame is freed with
- * its tags before the module runs. The destinations: a thread's exit word and a worker's meta
- * block and exchange region, each after its checks (exit_word_refusal, transport_attach), and the
- * process transport's exchange region (exchange_prepare_write). */
+ * its tags before the module runs. The destinations: a worker's meta block and exchange region,
+ * after their checks (transport_attach), and the process transport's exchange region
+ * (exchange_prepare_write). An exit word and a futex word are no destination of this launcher since
+ * stage 4d: the module admits the word's page itself, in the ioctl that checks and accesses it. */
 static int touch(uintptr_t address, size_t bytes)
 {
     struct cv_touch r = {address, bytes};
@@ -960,35 +1048,164 @@ static int span_overlaps(uintptr_t p, size_t bytes, const struct mapping *m)
 /* The kernel's reasons to refuse a word (CV_WORD_*, wire.h). */
 static const char *const word_reasons[CV_WORD_REASONS] = {
     "accepted", "not a reference", "not live", "does not cover the word", "unaligned",
-    "not inside one mapping", "in a thread's frame",
+    "not inside one mapping", "in a thread's frame", "not admitted", "refused by the page table",
 };
-/* Why the kernel refuses the word at a0's cursor of thread tid, paused at its exit or its futex
- * wait (CV_WORD), or NULL: with root_grants a0 must be a live reference that covers the word, and
- * in both modes the word must be aligned, inside one mapping and in no thread's frame. */
-static const char *word_refusal(uint64_t tid)
+static const char *word_reason(uint64_t reason)
 {
-    struct cv_word request = {.thread = tid};
-    if (ioctl(device, CV_WORD, &request) || request.reason >= CV_WORD_REASONS)
-        return "refused by the kernel";
-    return request.reason ? word_reasons[request.reason] : NULL;
+    return reason < CV_WORD_REASONS ? word_reasons[reason] : "refused by the kernel";
 }
-/* Why the exit word at p, a0's cursor at thread tid's exit, may not be written, or NULL. First
- * this launcher's own conditions, on the address: an int inside one registered mapping, in pages
- * it may write (writable_span), outside every transport that it writes by itself. Then the
- * kernel's, on the reference in a0 (word_refusal), which also keeps the word out of every thread's
- * frame, the exiting thread's own included (the exit releases it before the store). Then the
- * module admits the word's page (touch). The caller checks the stack the exit names, which stays
- * mapped when the word lies in it. */
-static const char *exit_word_refusal(uint64_t tid, uintptr_t p)
+/* Why this launcher refuses a word that the kernel would read or write for the program (an exit
+ * word, write set, or the word of a futex wait), or NULL. Its own conditions, on the address: an int
+ * inside the visible length of one registered mapping that is not the allocator's metadata (the
+ * program's requests never reach it, as for mprotect and madvise, range_mapping), and for a write in
+ * a page that Linux maps writable (writable_span, the page state) and outside every transport that
+ * this launcher writes by itself. The kernel's conditions follow in the module, on the reference in
+ * a0, in the same ioctl that accesses the word (CV_THREAD_EXIT, CV_WORD). */
+static const char *word_precheck(uintptr_t p, int write)
 {
     struct mapping *m = word_mapping(p);
-    const char *refused;
     if (!m) return "not inside one mapping";
+    if (m->kind == CV_MAP_METADATA) return "in the allocator's metadata";
+    if (!write) return NULL;
     if (!writable_span(p, sizeof(int))) return "not writable";
     if (transport_holds(m)) return "in a transport";
-    if ((refused = word_refusal(tid))) return refused;
-    if (touch(p, sizeof(int))) return "not admitted";
     return NULL;
+}
+
+/* ---- Futexes of the program (stage 4d) ----
+ *
+ * A futex word is program memory, so this launcher never names it to Linux: Linux would read the
+ * word at the program's address after the service checked the reference, and another thread's
+ * whole-mapping munmap in between (a park and a revive at the same address, or a release after
+ * which Linux, reserve() or glibc places another mapping there) would let it read whatever is mapped
+ * there by then, an equality oracle on it (EAGAIN or sleep). Instead a wait is one module step
+ * (CV_WORD): the module checks the reference in a0, reads the word and compares it with a2 under
+ * vm_lock, which also excludes the program's execution, so no thread can end the word's lifetime,
+ * unmap or remap its page between the check and the read. If the word holds the value, the waiter
+ * sleeps on a key of this launcher's own: the module's identity of the mapping that holds the word
+ * (its arena id, never reused) and the word's offset in it. A wake names an integer address, which
+ * this launcher resolves to the same key through its registry; it reads and writes no program
+ * memory, and it reaches only waiters of the mapping that holds that address now, never a waiter of
+ * an earlier mapping at the same address. Every futex operation on Linux is private and on this
+ * launcher's own words.
+ *
+ * No wake is lost. A waiter compares and enters the waiter list in one hold of service_lock, and a
+ * wake needs service_lock. So a wake that follows the program's store either comes before the
+ * compare, which then reads the stored value, or finds the waiter in the list and marks it woken
+ * (futex_waiter.woken) before it wakes the waiter's sleep, a private Linux futex wait on that word
+ * that returns at once if the mark came first. Waiters on one key wake oldest first. */
+struct futex_waiter {
+    struct futex_waiter *older, *newer;
+    uint64_t arena, offset;   /* the key */
+    uint32_t bitset;
+    int woken;                /* 1 once a wake counted this waiter: this launcher's word, not the program's */
+};
+static struct futex_waiter *futex_oldest, *futex_newest;   /* under service_lock */
+static void futex_link(struct futex_waiter *w)
+{
+    w->older = futex_newest;
+    w->newer = NULL;
+    if (futex_newest) futex_newest->newer = w; else futex_oldest = w;
+    futex_newest = w;
+}
+static void futex_unlink(struct futex_waiter *w)
+{
+    if (w->older) w->older->newer = w->newer; else futex_oldest = w->newer;
+    if (w->newer) w->newer->older = w->older; else futex_newest = w->older;
+}
+/* Wake the oldest waiters on the key (arena, offset) whose bitset meets bitset: at most count, and
+ * at least one, as Linux's FUTEX_WAKE does. Answers how many. Called with service_lock held, which
+ * keeps every waiter in the list from returning, so its record (on the waiter's stack) outlives the
+ * wake. */
+static long futex_wake_key(uint64_t arena, uint64_t offset, int count, uint32_t bitset)
+{
+    long woken = 0;
+    for (struct futex_waiter *w = futex_oldest, *next; w; w = next) {
+        next = w->newer;
+        if (w->arena != arena || w->offset != offset || !(w->bitset & bitset)) continue;
+        futex_unlink(w);
+        __atomic_store_n(&w->woken, 1, __ATOMIC_RELEASE);
+        syscall(SYS_futex, &w->woken, FUTEX_WAKE_PRIVATE, 1, NULL, NULL, 0);
+        if (++woken >= count) break;
+    }
+    return woken;
+}
+/* The domain thread tid's FUTEX_WAIT or FUTEX_WAIT_BITSET (CV_SERVICE_FUTEX: a0 the word's
+ * reference, a1 the operation, a2 the value, a3 and a4 the timeout, seconds -1 for none, a5 the
+ * bitset of FUTEX_WAIT_BITSET). This launcher's own conditions first (word_precheck), then the
+ * module's check, read and compare (CV_WORD): EFAULT for a refused word, with its reason logged,
+ * EAGAIN if the word does not hold the value. Otherwise the waiter enters the list under the key
+ * the module answered and sleeps until a wake marks it (0), or until the timeout (ETIMEDOUT): a
+ * FUTEX_WAIT timeout counts from the call on CLOCK_MONOTONIC, a FUTEX_WAIT_BITSET one is a point on
+ * CLOCK_MONOTONIC, or on CLOCK_REALTIME with FUTEX_CLOCK_REALTIME, as for Linux. A signal of this
+ * launcher's thread ends the sleep with EINTR, as it ended the Linux wait before. Called with
+ * service_lock held, which it releases while it sleeps. */
+static long futex_wait(uint64_t tid, const struct cv_step *step)
+{
+    int op = (int)step->args[1], command = op & FUTEX_CMD_MASK;
+    uint32_t bitset = command == FUTEX_WAIT_BITSET ? (uint32_t)step->args[5] : FUTEX_BITSET_MATCH_ANY;
+    int realtime = command == FUTEX_WAIT_BITSET && (op & FUTEX_CLOCK_REALTIME);
+    struct timespec deadline, *until = NULL;
+    struct cv_word word = {.thread = tid};
+    const char *refused;
+    if (!bitset) return -EINVAL;
+    if ((long)step->args[3] >= 0) {
+        if ((long)step->args[4] < 0 || step->args[4] >= 1000000000UL) return -EINVAL;
+        deadline.tv_sec = (time_t)step->args[3];
+        deadline.tv_nsec = (long)step->args[4];
+        if (command == FUTEX_WAIT) {
+            struct timespec now;
+            clock_gettime(CLOCK_MONOTONIC, &now);
+            deadline.tv_sec += now.tv_sec;
+            deadline.tv_nsec += now.tv_nsec;
+            if (deadline.tv_nsec >= 1000000000L) { ++deadline.tv_sec; deadline.tv_nsec -= 1000000000L; }
+        }
+        until = &deadline;
+    }
+    refused = word_precheck(step->args[0], 0);
+    if (!refused && (ioctl(device, CV_WORD, &word) || word.reason))
+        refused = word.reason ? word_reason(word.reason) : "refused by the kernel";
+    if (refused) {
+        fprintf(stderr, "CAPSTONE_VM_FUTEX_REFUSED tid=%llu word=0x%lx reason=%s\n",
+                (unsigned long long)tid, (unsigned long)step->args[0], refused);
+        return -EFAULT;
+    }
+    if (!word.equal) return -EAGAIN;
+
+    struct futex_waiter waiter = {.arena = word.arena, .offset = word.offset, .bitset = bitset};
+    long result = 0;
+    futex_link(&waiter);
+    pthread_mutex_unlock(&service_lock);
+    TEST_DELAY("CAPSTONE_VM_TEST_FUTEX_DELAY_MS");
+    while (!__atomic_load_n(&waiter.woken, __ATOMIC_ACQUIRE)) {
+        if (syscall(SYS_futex, &waiter.woken,
+                    FUTEX_WAIT_BITSET | FUTEX_PRIVATE_FLAG | (realtime ? FUTEX_CLOCK_REALTIME : 0),
+                    0, until, NULL, FUTEX_BITSET_MATCH_ANY) && errno != EAGAIN) {
+            result = -errno;
+            break;
+        }
+    }
+    pthread_mutex_lock(&service_lock);
+
+    /* A wake that came while this thread timed out or took a signal counted it: it answers 0. */
+    if (__atomic_load_n(&waiter.woken, __ATOMIC_ACQUIRE)) return 0;
+    futex_unlink(&waiter);
+    return result;
+}
+/* The domain thread's FUTEX_WAKE or FUTEX_WAKE_BITSET (CV_SERVICE_FUTEX: a0 the word's address as
+ * an integer, since a wake reads and writes nothing; a2 the number to wake, a5 the bitset of
+ * FUTEX_WAKE_BITSET). The address must be an aligned int inside one registered mapping (EFAULT
+ * otherwise, which registered() in root-contract.c relies on); the key is that mapping's identity
+ * and the offset. Called with service_lock held. */
+static long futex_wake(const struct cv_step *step)
+{
+    uintptr_t address = step->args[0];
+    int command = (int)step->args[1] & FUTEX_CMD_MASK;
+    uint32_t bitset = command == FUTEX_WAKE_BITSET ? (uint32_t)step->args[5] : FUTEX_BITSET_MATCH_ANY;
+    struct mapping *m = (address & 3) ? NULL : word_mapping(address);
+    if (!m) return -EFAULT;
+    if (!bitset) return -EINVAL;
+    return futex_wake_key(m->id, address - (uintptr_t)m->address, (int)step->args[2], bitset);
 }
 static long acquire_mapping(uint64_t tid, struct cv_step *step)
 {
@@ -1061,11 +1278,8 @@ static long acquire_mapping(uint64_t tid, struct cv_step *step)
     m->prot = prot;
     return 0;
 }
-/* The error exit's cleanup. It does not unmap the registered mappings: die() runs on any worker
- * while the others may still be inside a delegated service that writes into their transport,
- * and an unmap here would bypass the transport hold (mapping_gate) and reopen the address to
- * reuse under that write. Linux releases the mappings at the process's exit, after exit_group
- * has stopped every worker, as on the normal exit path. */
+/* The cleanup of main's image errors, before any service ran and with no other thread. It does not
+ * unmap the registered mappings: Linux releases them at the process's exit. */
 static void cleanup(void)
 {
     if (device >= 0) { close(device); device = -1; }
@@ -1073,19 +1287,22 @@ static void cleanup(void)
     capstone_spawner_stop(&spawner);
     capstone_delegate_host_free(&host);
 }
-/* End the process with 125. Its caller ends the process: a worker with _exit, the main thread by
- * returning from main. One thread does it. Another thread that fails afterwards (its CV_STEP finds
- * the device closed by the first one's cleanup) waits for that exit instead of running cleanup a
- * second time beside the first, which freed the host state twice (found in stage 4c: an attachment
- * refused by one worker while the main thread stepped ended with SIGSEGV instead of 125). */
-static int die(const char *what)
+/* End the process at once with 125, after one line on stderr (unbuffered; this launcher writes
+ * nothing to stdout that an exit must flush). Nothing shared is freed or closed first: another worker
+ * may be inside capstone_delegate_serve with service_lock released, blocked in Linux on its own
+ * transport or on the process transport's host state, and a teardown here would free that state
+ * under it (stage 4c ran cleanup() here; its once-only guard kept a second cleanup out, not a use
+ * after the first). _exit is exit_group: Linux stops every worker, then releases the mappings and
+ * the device, and the spawner, which watches its parent (PR_SET_PDEATHSIG), ends with it. One thread
+ * prints; another that fails meanwhile waits for that exit. */
+static _Noreturn void die(const char *what)
 {
     static int ending;
     int error = errno;
     if (__atomic_exchange_n(&ending, 1, __ATOMIC_ACQ_REL))
         for (;;) pause();
     fprintf(stderr, "capstone-vexec: %s: %s\n", what, strerror(error));
-    cleanup(); return 125;
+    _exit(125);
 }
 /* Whether the NUL-terminated section name at `at` in a string table of `len` bytes is `want`,
  * without reading past the table. */
@@ -1352,7 +1569,11 @@ static size_t domain_stack_bytes;
  * t->frame[24]`). So a frame is {fp-32: the caller's fp, fp-16: the return address}. The chain
  * stops at a frame outside the stack or misaligned, a zero return address, a caller's fp not
  * above this one, or the 16th frame. A thread's stack is not this mapping, so a worker's fault
- * gets no chain rather than a wrong one. Diagnostic: nothing here decides on it. */
+ * gets no chain rather than a wrong one. Diagnostic: nothing here decides on it. It is the one read
+ * of program memory outside the rule of check and access in one step (design note, section
+ * Mappings): the program has stopped for good, every read lies inside the main stack's mapping (a
+ * launcher grant that is never unmapped while the process lives) whatever the frame pointers hold,
+ * and nothing read is returned to the program. */
 static unsigned frame_chain(uint64_t fp, uint64_t *out, unsigned max)
 {
     uint64_t lo = (uint64_t)(uintptr_t)domain_stack;
@@ -1408,13 +1629,18 @@ static int reserve_stdio(unsigned *mask) {
  * frame's mapping, which the module names in its answer. The create ended every reference of the
  * program to the frame (with root_grants the module ended the reservation; without, it retired
  * the frame's ancestor), so the program cannot unmap the frame itself any more; without this
- * release the frame would stay pinned and registered until exit. */
+ * release the frame would stay pinned and registered until exit. The rollback also gives the id
+ * back to the module, which issues it to the next create (capstone_vm.c, thread_exit). If the
+ * module refuses the rollback, it keeps the thread and the id, while this launcher withdraws the
+ * entry: the next create would take the id after it, and a join of the lost id would answer 0 as
+ * for a thread that exited. That gap is never allowed to arise: a refused rollback ends the
+ * program. */
 static void thread_rollback(uint64_t thread, struct mapping *frame)
 {
-    struct cv_thread_exit rollback = {.thread = thread, .frame = frame->id};
-    long rc = ioctl(device, CV_THREAD_EXIT, &rollback) ? -errno : 0;
-    if (!rc && !(rollback.released & CV_EXIT_FRAME)) rc = -EBUSY;
-    if (!rc) rc = release_range(frame);
+    struct cv_thread_exit rollback = {.thread = TEST_ROLLBACK_FAILS() ? 0 : thread, .frame = frame->id};
+    long rc;
+    if (ioctl(device, CV_THREAD_EXIT, &rollback)) die("thread rollback");
+    rc = rollback.released & CV_EXIT_FRAME ? release_range(frame) : -EBUSY;
     if (rc)
         fprintf(stderr, "CAPSTONE_VM_FRAME_RELEASE_FAILED frame=0x%lx error=%ld\n",
                 (unsigned long)(uintptr_t)frame->address, -rc);
@@ -1501,11 +1727,14 @@ static int virtual_service(uint64_t tid, struct cv_step *step)
         } else {
             uint64_t *child = malloc(sizeof(*child));
             pthread_t worker;
-            if (!child || pthread_create(&worker, NULL, virtual_thread_worker,
-                                         (child ? (*child = request.thread), child : NULL))) {
+            int forced = TEST_CREATE_FAILS();
+            if (forced) TEST_DELAY("CAPSTONE_VM_TEST_CREATE_DELAY_MS");
+            if (!child || forced || pthread_create(&worker, NULL, virtual_thread_worker,
+                                                   (*child = request.thread, child))) {
                 free(child);
-                /* The thread never ran and its id was never published: the entry goes, and the
-                 * module issues the id again. */
+                /* The thread never ran and its id was never published: the module takes the id
+                 * back (a refusal ends the program), and the entry is withdrawn, which wakes a
+                 * joiner that already waits on it with ESRCH. */
                 thread_rollback(request.thread, frame);
                 thread_withdraw(request.thread);
                 step->result = -EAGAIN;
@@ -1518,30 +1747,40 @@ static int virtual_service(uint64_t tid, struct cv_step *step)
     } else if (step->args[7] == CV_SERVICE_THREAD_EXIT || step->args[7] == CV_SERVICE_PTHREAD_EXIT) {
         int posix = step->args[7] == CV_SERVICE_PTHREAD_EXIT;
         uintptr_t clear = posix ? step->args[0] : 0;
+        uint64_t word_arena = 0, word_offset = 0;
         if (tid == 0) return -1;
-        /* The exit word (a0, its reference; clear is its cursor) is the program's: this launcher
-         * stores 0 into it through Linux and wakes its futex waiters after the thread has stopped.
-         * With root_grants the kernel accepts it only through a live reference that covers it, so
-         * the launcher never writes memory that the program holds no reference to; in both modes
-         * the kernel keeps it out of every thread's frame (exit_word_refusal). The module releases
-         * the thread's frame and the stack it names before the store, so the word must lie in
-         * neither: a store into a range just given back to Linux would land in whatever Linux maps
-         * there next. musl's word is a global (the thread-list lock), never in the thread's stack.
-         * The stack check uses the mapping this launcher found, with its whole extent, never the
-         * base and length the program names. A word that fails (exit_word_refusal) is not written
-         * and the refusal is logged: the exit goes on, joiners through the launcher return at
-         * thread_finish as after every exit, and futex waiters on the word stay blocked, which is
-         * the program's bug. A word in the stack makes the stack request a wrong one: the stack
-         * stays mapped and registered, and the word is written. */
+        /* The exit word (a0, its reference; clear is its cursor) is the program's. Since stage 4d
+         * the module stores 0 into it, in CV_THREAD_EXIT, after the thread has stopped and the
+         * frame and stack releases are committed: it checks the reference and stores in that one
+         * ioctl, under vm_lock, so no thread can end the word's object, unmap or remap its page
+         * between the check and the store (wire.h, cv_thread_exit). With root_grants the module
+         * accepts the word only through a live reference that covers it, and in both modes it
+         * keeps the word out of every thread's frame and out of the frame and stack this exit
+         * releases. This launcher checks its own conditions first (word_precheck: one mapping, not
+         * the allocator's metadata, writable pages, no transport it writes itself) and then wakes
+         * the word's futex waiters through its own key (futex_wake_key), never through the
+         * program's address. musl's word is a global (the thread-list lock), never in the thread's
+         * stack. A word that fails is not written and the refusal is logged: the exit goes on,
+         * joiners through the launcher return at thread_finish as after every exit, and futex
+         * waiters on the word stay blocked, which is the program's bug. A word in the stack (the
+         * mapping this launcher found, with its whole extent, never the base and length the program
+         * names) makes the stack request a wrong one: the stack stays mapped and registered, and
+         * the word is written. */
         struct mapping *frame = thread_frame_mapping(tid);
         struct mapping *stack = posix && step->args[1] ? map_find(step->args[1]) : NULL;
-        const char *refused = clear ? exit_word_refusal(tid, clear) : NULL;
+        const char *refused = clear ? word_precheck(clear, 1) : NULL;
         if (refused) {
             fprintf(stderr, "CAPSTONE_VM_EXIT_WORD_REFUSED tid=%llu word=0x%lx reason=%s\n",
                     (unsigned long long)tid, (unsigned long)clear, refused);
             clear = 0;
         }
+        if (clear) {
+            struct mapping *m = word_mapping(clear);
+            word_arena = m->id;
+            word_offset = clear - (uintptr_t)m->address;
+        }
         int word_in_stack = clear && stack && span_overlaps(clear, sizeof(int), stack);
+        TEST_DELAY("CAPSTONE_VM_TEST_EXIT_DELAY_MS");
         /* A worker that exits still attached gives its holds back here, so they keep none of its
          * mappings. */
         transport_detach(tid);
@@ -1552,12 +1791,17 @@ static int virtual_service(uint64_t tid, struct cv_step *step)
          * A refused stack stays mapped and registered, and the exit goes on. A stack that is the
          * thread's own frame is the exception: the module refuses it as a stack, and the frame's
          * release still ends that mapping. */
-        struct cv_thread_exit request = {.thread = tid};
+        struct cv_thread_exit request = {.thread = tid, .word = clear != 0};
         if (frame && !mapping_gate(frame, 4096)) request.frame = frame->id;
         if (stack && !word_in_stack && !mapping_gate(stack, step->args[2]))
             request.stack = stack->id;
         if (ioctl(device, CV_THREAD_EXIT, &request))
             return -1;
+        if (clear && request.word_reason) {
+            fprintf(stderr, "CAPSTONE_VM_EXIT_WORD_REFUSED tid=%llu word=0x%lx reason=%s\n",
+                    (unsigned long long)tid, (unsigned long)clear, word_reason(request.word_reason));
+            clear = 0;
+        }
         if (!(request.released & CV_EXIT_FRAME) || release_range(frame))
             fprintf(stderr, "CAPSTONE_VM_FRAME_RELEASE_FAILED frame=0x%lx\n",
                     frame ? (unsigned long)(uintptr_t)frame->address : 0UL);
@@ -1566,47 +1810,27 @@ static int virtual_service(uint64_t tid, struct cv_step *step)
             fprintf(stderr, "CAPSTONE_VM_STACK_UNMAP_REFUSED tid=%llu base=0x%lx bytes=%lu\n",
                     (unsigned long long)tid, (unsigned long)step->args[1],
                     (unsigned long)step->args[2]);
-        /* musl join may retire the child's stack/TLS after this store.
-         * The virtual CPU has stopped and its tagged frame is gone first. */
-        if (clear) {
-            __atomic_store_n((int *)clear, 0, __ATOMIC_RELEASE);
-            syscall(SYS_futex, (int *)clear, FUTEX_WAKE_PRIVATE, INT_MAX, NULL, NULL, 0);
-        }
+        /* musl's join may retire the child's stack and TLS once the word reads 0. The virtual CPU
+         * has stopped and its tagged frame is gone first, and the word's waiters wake through
+         * this launcher's key, after the releases. */
+        if (clear) futex_wake_key(word_arena, word_offset, INT_MAX, FUTEX_BITSET_MATCH_ANY);
         /* A joiner through the launcher (CV_SERVICE_THREAD_JOIN) returns only after everything
-         * above: the frame and the stack are released or kept, and the exit word is stored or
-         * refused. */
+         * above: the frame and the stack are released or kept, the exit word is stored or refused,
+         * and its waiters are woken. */
         thread_finish(tid);
         step->reply = 0;
         return 1;
     } else if (step->args[7] == CV_SERVICE_FUTEX) {
-        /* a0 the word's reference. A wait makes Linux read the word, so the kernel checks the
-         * reference first, as for an exit word (word_refusal). A wake neither reads nor writes the
-         * word: Linux only hashes the address of a private futex. Its integer address must still
-         * be an aligned int inside one registered mapping, which keeps it off this launcher's own
-         * futexes. The wait itself runs with service_lock released, after the check: another thread
-         * of the program can end the mapping in between, and the wait then compares against
-         * whatever Linux maps there, which affects only the program itself. */
-        int op = (int)step->args[1];
-        int command = op & FUTEX_CMD_MASK;
-        int wait = command == FUTEX_WAIT || command == FUTEX_WAIT_BITSET;
-        const char *refused = NULL;
-        if ((step->args[0] & 3) || !word_mapping(step->args[0])) step->result = -EFAULT;
-        else if (!wait && command != FUTEX_WAKE && command != FUTEX_WAKE_BITSET)
+        /* a0 the word's reference. A wait is the module's check, read and compare in one step and
+         * a sleep on this launcher's own key (futex_wait); a wake reads and writes nothing and wakes
+         * that key (futex_wake). Linux never sees the program's address. */
+        int command = (int)step->args[1] & FUTEX_CMD_MASK;
+        if (command == FUTEX_WAIT || command == FUTEX_WAIT_BITSET)
+            step->result = futex_wait(tid, step);
+        else if (command == FUTEX_WAKE || command == FUTEX_WAKE_BITSET)
+            step->result = futex_wake(step);
+        else
             step->result = -ENOSYS;
-        else if (wait && (refused = word_refusal(tid))) {
-            fprintf(stderr, "CAPSTONE_VM_FUTEX_REFUSED tid=%llu word=0x%lx reason=%s\n",
-                    (unsigned long long)tid, (unsigned long)step->args[0], refused);
-            step->result = -EFAULT;
-        } else {
-            struct timespec timeout = {(long)step->args[3], (long)step->args[4]};
-            pthread_mutex_unlock(&service_lock);
-            long result = syscall(SYS_futex, (int *)(uintptr_t)step->args[0],
-                                  op | FUTEX_PRIVATE_FLAG, (int)step->args[2],
-                                  timeout.tv_sec < 0 ? NULL : &timeout, NULL, (int)step->args[5]);
-            int error = errno;
-            pthread_mutex_lock(&service_lock);
-            step->result = result < 0 ? -error : result;
-        }
     } else if (step->args[7] == CV_SERVICE_THREAD_JOIN) {
         /* The child must acquire the same transport lock to publish its
          * exit.  Do not wait while holding it, or join would deadlock. */
@@ -1797,7 +2021,7 @@ static int virtual_service_loop(uint64_t tid)
     struct cv_step step = {.thread = tid};
     for (;;) {
         while (ioctl(device, CV_STEP, &step))
-            if (errno != EINTR && errno != EAGAIN) return die("step");
+            if (errno != EINTR && errno != EAGAIN) die("step");
         __atomic_fetch_add(&step_kinds[step.kind < 8 ? step.kind : 7], 1, __ATOMIC_RELAXED);
         if (step.kind == 3)
             __atomic_fetch_add(&step_services[step.args[7] < STEP_SERVICE_COUNT
@@ -1829,7 +2053,7 @@ static int virtual_service_loop(uint64_t tid)
         int result = virtual_service(tid, &step);
         pthread_mutex_unlock(&service_lock);
         if (result == 1) return 0;
-        if (result < 0) return die("service");
+        if (result < 0) die("service");
         if (result & 2) return result >> 8;
     }
 }
@@ -1902,10 +2126,10 @@ int main(int argc, char **argv)
     if (fd < 0) { perror("capstone-vexec: image"); return errno == ENOENT ? 127 : 126; }
     image_fd = fd;
     if (spawner.socket < 0) { int error = capstone_spawner_start(&spawner);
-        if (error) { errno = error; return die("spawner"); } }
+        if (error) { errno = error; die("spawner"); } }
     host.spawner = &spawner;
     device = open("/dev/capstone-vm", O_RDWR | O_CLOEXEC);
-    if (device < 0) return die("open");
+    if (device < 0) die("open");
     if (image_denied(&fd, &desc)) { perror("capstone-vexec: image"); cleanup(); return 126; }
     void *image; size_t image_bytes, image_rx, stack_bytes; uintptr_t entry;
     if (load(fd, &desc, &image, &image_bytes, &image_rx, &entry, &stack_bytes)) {
@@ -1915,14 +2139,14 @@ int main(int argc, char **argv)
     /* Option (iii): no exact-bounds profile bit is required. Bounds are representable by
      * construction -- the allocator's geometry keeps every rounded bound inside its own slot --
      * so the launcher runs on the default profile. The bit may still be set; it is not read. */
-    if (grant(image, image_bytes, 3, 7, entry, 0, 0, image_rx)) { munmap(image, image_bytes); return die("image grant"); }
+    if (grant(image, image_bytes, 3, 7, entry, 0, 0, image_rx)) { munmap(image, image_bytes); die("image grant"); }
     void *stack = reserve(stack_bytes);
     domain_stack = stack; domain_stack_bytes = stack_bytes;
     meta = reserve(CAPSTONE_DELEGATE_META_BYTES);
     size_t exchange_bytes = rounded(desc.exchange_bytes);
     void *exchange = exchange_bytes ? reserve(exchange_bytes) : NULL;
     void *startup = reserve(CAPSTONE_LAUNCH_BYTES);
-    if (!stack || !meta || !exchange || !startup) return die("allocate startup");
+    if (!stack || !meta || !exchange || !startup) die("allocate startup");
     char *cwd = getcwd(NULL, 0);
     struct timespec rt, mt;
     clock_gettime(CLOCK_REALTIME, &rt); clock_gettime(CLOCK_MONOTONIC, &mt);
@@ -1933,25 +2157,25 @@ int main(int argc, char **argv)
     int error = cwd ? capstone_launch_pack(startup, CAPSTONE_LAUNCH_BYTES,
         argc - (app_args ? 4 : binfmt ? 2 : 1), argv + (app_args ? 4 : binfmt ? 2 : 1), environ, cwd, stdio_mask, &task) : ENOMEM;
     free(cwd);
-    if (error) { errno = error; return die("startup"); }
+    if (error) { errno = error; die("startup"); }
     if (grant(stack, stack_bytes, 2, 6, (uintptr_t)stack + stack_bytes, 0, 0, 0) ||
         grant(meta, CAPSTONE_DELEGATE_META_BYTES, 10, 6, (uintptr_t)meta, 0, 0, 0) ||
         grant(exchange, exchange_bytes, 11, 6, (uintptr_t)exchange, 0, 0, 0) ||
-        grant(startup, CAPSTONE_LAUNCH_BYTES, 12, 4, (uintptr_t)startup, 0, 0, 0)) return die("grant");
+        grant(startup, CAPSTONE_LAUNCH_BYTES, 12, 4, (uintptr_t)startup, 0, 0, 0)) die("grant");
     if (desc.v1.heap_bytes) {
         size_t bytes = rounded(desc.v1.heap_bytes);
         void *region = bytes ? reserve(bytes) : NULL;
         if (!region || grant(region, bytes, 13, 6, (uintptr_t)region, 1, 0, 0))
-            return die("nested allocator grant");
+            die("nested allocator grant");
     }
     host.exchange = exchange; host.exchange_bytes = exchange_bytes;
     exchange_admitted = calloc(exchange_bytes / 4096, 1);
-    if (!exchange_admitted) return die("exchange admission cache");
+    if (!exchange_admitted) die("exchange admission cache");
     host.prepare_write = exchange_prepare_write;
     host.private_fds[host.private_count++] = device;
     capstone_signals_settle_libc();
     capstone_signals_init(&host.signals, (void *)((char *)meta + CAPSTONE_SIGNAL_OFFSET));
-    if ((error = capstone_delegate_seccomp())) { errno = error; return die("seccomp"); }
+    if ((error = capstone_delegate_seccomp())) { errno = error; die("seccomp"); }
     for (int fd = 0; fd < 3; ++fd) if (!(stdio_mask & (1u << fd))) close(fd);
     launch_ns = now_ns() - start_ns;
     return virtual_service_loop(0);

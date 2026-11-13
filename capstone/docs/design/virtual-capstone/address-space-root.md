@@ -78,12 +78,50 @@ system-call region it shares with the program. `mprotect` and `madvise`
 come with a reference that passes conditions 1 to 3 and covers the named
 page range. A worker's attachment of its transport names its meta block and
 its exchange region with references that pass conditions 1 to 4, and ends
-nothing. The exit word that the launcher writes at a thread's exit and the
+nothing. The exit word that the kernel writes at a thread's exit and the
 word of a futex wait come with a reference that is live and covers the word;
-the word may be any object's, so condition 3 does not apply. No request may
-reach a page that holds the frame of a thread, whatever reference it
-carries. A futex wake takes an address, because it neither reads nor writes
-the word.
+the word may be any object's, so condition 3 does not apply, but it may not
+lie in the allocator's metadata. No request may reach a page that holds the
+frame of a thread, whatever reference it carries. A futex wake takes an
+address, because it neither reads nor writes the word.
+
+Check and access in one step (decided on 2026-11-13, stage 4d of the adapter
+plan). Every access of the kernel side to program memory through a program
+reference happens inside one step of the kernel that checks the reference and
+performs the access, and no thread of the program runs during that step. In
+the prototype the step is one module ioctl under the module's lock, which
+every thread of the program needs to execute. So no other thread can end the
+reference's lifetime, unmap the page or map another page there between the
+check and the access. A check whose access comes later, outside the step, is
+not enough: in stage 4c the launcher stored the exit word after the module had
+checked it, and Linux read a futex word after the service lock dropped, so a
+concurrent `CREVOKE` or a whole-mapping `munmap` could put another object or
+another mapping under the access. The design reaches the same property by
+construction: the kernel accesses through the reference, and the processor
+checks it at the access.
+
+- The exit word. The kernel checks the reference while the exiting thread's
+  registers still hold it and stores 0 at the end of the same step, after the
+  thread's frame and stack releases are committed. It checks again what those
+  releases can change (the lifetime, the mapping, the frames), admits the page
+  as a fault of the program would, and stores through the program's page
+  table, which decides the write right.
+- A futex wait. The kernel checks the reference, reads the word and compares
+  it with the expected value in one step. If they are equal, the waiter sleeps
+  on a key of the kernel's own, the identity of the mapping that holds the
+  word (never reused) and the offset, and never on the program's address. A
+  wake resolves its address to the same key, reads and writes nothing, and
+  reaches only waiters of the mapping that holds that address now. A waiter
+  enters the queue in the same critical section as the compare, and a wake
+  needs that section, so a wake between the compare and the sleep marks the
+  waiter, whose sleep then returns at once.
+
+One access stays outside the rule, as a diagnostic: after a fault has stopped
+the program for good, the launcher walks the frame chain of the main stack for
+the fault record. Every read is bounded to the main stack's mapping, a grant
+of the launcher that is never unmapped while the process lives, including
+reads reached through a corrupted frame pointer, and nothing it reads is
+returned to the program, which never runs again.
 
 Sublet checks bounds and lifetime, and the page table checks mapping and
 rights. An access needs both: the page must be mapped with the right the
@@ -127,10 +165,15 @@ other threads: a write to the old mapping during the copy may be lost, as for
 
 `madvise(MADV_DONTNEED)` and `MADV_FREE` change contents, not lifetimes, and
 need no revocation. They destroy contents, so they come with a reference, as
-`mprotect` does. The pinned kernel overwrites the pages of the range it holds
-with zeros, data and tags, and keeps them pinned and mapped, so no tagged page
-goes back to Linux. The unpinned kernel holds no pages, and Linux gives the
-range back, as at the unpinned release of a whole mapping.
+`mprotect` does. The pinned kernel overwrites every page of the range with
+zeros, data and tags, whatever protection the page has, `PROT_NONE` included:
+the pages it holds through its pin, after it checked that each is still
+private to the mapping, and any other page with contents in place through the
+page table (there is none in a heap mapping, since every page the program
+touches is admitted at its fault, but the kernel does not rely on that). It
+keeps its pages pinned and mapped, so no tagged page goes back to Linux. The
+unpinned kernel holds no pages, and Linux gives the range back, as at the
+unpinned release of a whole mapping.
 
 A program that ends a mapping's lifetime itself and hands back the stale
 reference is refused, and the range stays unusable until `exit`. That is a
@@ -192,10 +235,12 @@ the address-space root gate runs in). The adapter and the RTL use `CSRUNV`.
 
 ## The program counter
 
-Decided on 2026-11-12: unchanged from today. One reference covers the
-program's code, and the processor checks every fetch against its bounds, its
-execute right and its lifetime. Jump targets and return addresses are plain
-addresses inside it. A fetch is thus a read through a reference, like every
+Decided on 2026-11-12; the rights part on 2026-11-13. One reference covers
+the program's code, and the processor checks every fetch against its bounds
+and its lifetime. Sublet checks only those two; whether the page may be
+executed is decided by its X bit in the page table, as every read and write
+right is. Jump targets and return addresses are plain addresses inside the
+code reference. A fetch is thus an access through a reference, like every
 other access, and when the lifetime of a code mapping ends, no instruction
 executes from it. With kernel-saved registers the code reference is one more
 register to save, and the trap's saved pc stays an address. The design does

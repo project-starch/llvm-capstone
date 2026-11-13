@@ -31,23 +31,28 @@
 /* a0 the word's reference, a1 the operation (FUTEX_WAIT, FUTEX_WAKE and their BITSET forms), a2
  * the value, a3 and a4 the timeout (seconds -1: none), a5 the bitset. A wait reads the word, so
  * the kernel checks it as an exit word, without the conditions on writing: with root_grants a live
- * reference whose bounds cover the word, and in both modes an aligned int inside one mapping and in
- * no thread's frame (EFAULT otherwise). A wake neither reads nor writes the word, so an integer
- * address is enough; it must lie inside one registered mapping (EFAULT otherwise). */
+ * reference whose bounds cover the word, and in both modes an aligned int inside one mapping that is
+ * not the allocator's metadata and in no thread's frame (EFAULT otherwise). The kernel checks the
+ * reference and compares the word with the value in one step (EAGAIN if they differ), and the
+ * waiter then sleeps on a key of the mapping and the offset, never on the program's address. A wake
+ * neither reads nor writes the word, so an integer address is enough; it must be an aligned int
+ * inside one registered mapping (EFAULT otherwise), and it wakes only waiters of the mapping that
+ * holds that address now. */
 #define CV_SERVICE_FUTEX 8
 /* a0 the exit word's reference (or 0), a1 the reference of the mapping that holds the thread's
  * stack (or 0), a2 its length, a3 the status. With root_grants the stack is unmapped only through
  * a1, as for munmap. A refused stack does not stop the exit: the mapping stays, and the program can
  * still unmap it through a reference it kept. A stack of the wrong length and one that holds the
  * exit word are refused this way. A stack that is the thread's own frame is refused as a stack too,
- * but the exit releases the frame, which ends that mapping. After the thread has stopped the
- * launcher stores 0 into the exit word and wakes its futex waiters, if the word is an aligned int
- * inside one mapping, in pages that the program's grant may write and that Linux maps writable,
- * outside the launcher's own transport and every worker's, and if the kernel accepts it: with
- * root_grants a0 must be a live reference whose bounds cover the word, and in both modes the word
- * may not lie in the frame of any thread. A word that fails is not written (the launcher logs the
- * refusal) and the exit still completes; futex waiters on a refused word stay blocked, which is
- * the program's bug. */
+ * but the exit releases the frame, which ends that mapping. After the thread has stopped and its
+ * frame and stack are released, the kernel stores 0 into the exit word, and the launcher wakes the
+ * word's futex waiters, if the word is an aligned int inside one mapping that is not the
+ * allocator's metadata, in pages that the program's grant may write and that Linux maps writable,
+ * outside the launcher's own transport and every worker's, and if the kernel accepts it at the
+ * store: with root_grants a0 must be a live reference whose bounds cover the word, and in both
+ * modes the word may not lie in the frame of any thread. A word that fails is not written (the
+ * launcher logs the refusal) and the exit still completes; futex waiters on a refused word stay
+ * blocked, which is the program's bug. */
 #define CV_SERVICE_PTHREAD_EXIT 9
 /* a0 the meta block's reference, a1 the exchange region's, a2 its length. The process transport
  * (the launcher's own meta block and exchange region, named by their addresses) is served as is.
