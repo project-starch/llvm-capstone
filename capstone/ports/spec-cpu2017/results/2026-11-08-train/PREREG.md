@@ -2820,3 +2820,23 @@ bkit54-k2n-rv, after the riscv-base cache chain (Addendum 75).
 could remove) and how much is capability- or tag-specific memory traffic (the hardware path: tag reads on marked-page
 misses, the tag-write list of Addendum 76). **Prediction:** padded / unpadded riscv-base mcf = 1.15-1.35. Above 1.40
 means footprint explains nearly all of mcf's gap; below 1.10 means it is the tag or capability path.
+
+## Addendum 78 (2026-11-13 08:30): RETRACTION of the "firmware" columns of Addenda 75 and 77
+
+Addenda 75 and 77 split the twin instruction profiles into user, kernel and "firmware", counting every PC in
+[0x8000_0000, 0x8100_0000) as firmware. That range also holds the kernel's text at its physical addresses, which the
+windows execute (kernel memset, found by the compiler lane, which retracted the same split in its imagick profile).
+Re-split with OpenSBI as [0x8000_0000, 0x8020_0000) only:
+
+| window | OpenSBI | kernel at physical PCs | kernel (virtual) | user |
+|---|---|---|---|---|
+| gcc train01 native, no cache | 0.001 G | 0.174 G | 1.831 G | 12.420 G |
+| gcc train01 native, cache | 0.001 G | 0.041 G | 0.432 G | 12.585 G |
+| gcc train01 riscv-base | 0.001 G | 0.078 G | 0.823 G | 10.779 G |
+| mcf native, no cache | 0.002 G | 0.226 G | 2.264 G | 26.800 G |
+| mcf riscv-base | 0.002 G | 0.076 G | 0.741 G | 27.323 G |
+
+So the "firmware 0.18 G / 0.04 G / 0.08 G" (gcc) and "0.23 G / 0.08 G" (mcf) were kernel work; real M-mode firmware is
+about 0.001-0.002 G in every window. Totals, user counts and the instruction ratios (gcc 1.235 / 1.118, mcf 1.041) are
+unchanged. The twin never modelled the firmware's CSCHECK emulation, so nothing here measured it; the board's own
+reading (Addendum 79) prices it.
