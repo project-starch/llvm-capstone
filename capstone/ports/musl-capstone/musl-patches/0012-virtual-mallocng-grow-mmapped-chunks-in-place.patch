@@ -1,0 +1,72 @@
+Virtual mallocng grows an individually mmapped chunk in place
+
+musl grows a large chunk with mremap, which moves its page-table entries
+and copies nothing. The capability heap has no mremap: patch 0009's
+realloc takes its remap branch only when the chunk's address can be
+published at the new size, and __heap_remapping then maps, copies and
+unmaps anyway. So every large growth copied the whole old object, and on
+the native route the copy also read, and so pinned, every untouched page
+of the old mapping. 505.mcf_r's two resizes copied 235 MB and 459 MB arc
+arrays twice each: 230k of the test run's 395k pinned pages, where
+riscv-base's musl moves them for nothing.
+
+A growing mmapped chunk now stays where it is when its mapping has the
+room and its address is aligned for the new size: a fresh child for the
+new size, the old child ended, the in-place branch's bookkeeping. When
+it must move, it moves to a mapping with room for twice the new size
+(up to REALLOC_ROOM_MAX), aligned for that capacity, so the next growth
+stays in place: one copy of the old size, as with doubling. The room is
+address space until touched, because a native arena pins a page at its
+first access. Shrinking and small chunks are unchanged.
+
+--- a/src/malloc/mallocng/realloc.c
++++ b/src/malloc/mallocng/realloc.c
+@@ -4,6 +4,9 @@
+ #include <string.h>
+ #include "meta.h"
+ 
++// the largest mapping a growing chunk is moved to with room to grow in
++#define REALLOC_ROOM_MAX (1UL<<30)
++
+ void *realloc(void *p, size_t n)
+ {
+ 	if (!p) return malloc(n);
+@@ -21,6 +24,38 @@
+ 	size_t avail_size = end-(unsigned char *)p;
+ 	void *new;
+ 
++	// an individually mmapped chunk that grows: in place when its mapping
++	// has the room and its address can be published at the new size (a
++	// fresh child for n and the old one ended, as the small in-place
++	// branch below does); otherwise moved to a mapping with room for twice
++	// n, its address aligned for that capacity, so the next growth stays
++	// in place. The capability heap has no mremap (__heap_remapping maps,
++	// copies and unmaps), so without this every growth copies the whole
++	// old object: mcf's two resizes copied 235 MB and 459 MB arrays twice
++	// each. Untouched room costs address space only: native arenas pin a
++	// page at its first access.
++	if (g->sizeclass==63 && n>=MMAP_THRESHOLD && n>=old_size) {
++		if (n <= avail_size && !((uintptr_t)p & (heap_granule(n)-1))) {
++			void *fresh = heap_alloc_issue(p, n);
++			heap_alloc_end(p, issued);
++			set_size(p, end, n);
++			return fresh;
++		}
++		size_t room = n <= REALLOC_ROOM_MAX/2 ? heap_round(2*n) : 0;
++		void *wide = room ? aligned_alloc(heap_granule(room), room) : 0;
++		if (wide) {
++			unsigned char *q = heap_access(wide);
++			struct meta *h = get_meta(q);
++			unsigned char *qend = h->mem->storage + get_stride(h) - IB;
++			void *fresh = heap_alloc_issue(q, n);
++			heap_alloc_end(q, wide);
++			set_size(q, qend, n);
++			memcpy(fresh, p, old_size);
++			free(issued);
++			return fresh;
++		}
++	}
++
+ 	// only resize in-place if size class matches
+ 	if (n <= avail_size && n<MMAP_THRESHOLD
+ 	    && !((uintptr_t)p & (heap_granule(n)-1))
