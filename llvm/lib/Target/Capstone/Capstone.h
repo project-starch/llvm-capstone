@@ -29,6 +29,8 @@ class CapstoneTargetMachine;
 FunctionPass *createCapstoneCodeGenPreparePass();
 void initializeCapstoneCodeGenPreparePass(PassRegistry &);
 
+FunctionPass *createCapstoneMemcpyAlignDispatchPass();
+void initializeCapstoneMemcpyAlignDispatchPass(PassRegistry &);
 FunctionPass *createCapstoneMisalignedCapAccessPass();
 void initializeCapstoneMisalignedCapAccessPass(PassRegistry &);
 
