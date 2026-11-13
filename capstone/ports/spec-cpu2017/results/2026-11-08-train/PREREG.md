@@ -2961,3 +2961,26 @@ pass their twins; that is pre-registered separately.
 **Predictions** (against plain-rv64fr's readings where they exist): imagick, nab, lbm, perl within ±1.5 %; gcc
 train01 1,650-1,725 s; mcf 2-8 % faster than without any cache (5,146.72 s); xz and x264 within ±2 % of their
 no-cache readings.
+
+## Addendum 84 (2026-11-13 11:45, before it runs): the Capstone arm on its matching allocator, all eight rows, board 2
+
+**Images (compiler lane):** llvm-capstone nat-realloc-evict 3e70344d8c3f = nat-fair-cache + nat-realloc-inplace
+f097dd782aae (musl patch 0011: a growing mmapped chunk stays in place when its mapping has room, otherwise moves to a
+mapping with room for twice the new size) + mr_make_room (a mapping that fits the 64 MiB bound by itself evicts older
+cached mappings until it fits: the rule riscv-base's plain-rv64fre now has, Addendum 83). Results and the riscv-base
+diffs at 6aa944e5ee3b (realloc-grow/RESULTS.md, realloc-grow/riscv-base/plain-reuse-round-evict.diff). Exes
+perf/natevict/exes, built with nat-fair-cache's replay and flags. Twins (outputs byte-identical to the cache and
+in-place arms): mcf kernel -63.1 %, gcc train01 -3.2 % (service escapes 2,600 -> 2,303), imagick +0.3 %, xz and perl
+0.0 %; lbm and nab identical outputs; x264's twin still running (its board row runs last).
+
+**Stages** perf/natstage/board-evict/*: built with the same converter and kit script as board-cache; each differs from
+its board-cache stage only in the program image and the plan's image path (diff -rq); perl carries the same
+makerand-only edit (Addendum 74/80).
+
+**Run, board 2**, after its running gcc train01 (mapping cache A, mlp): mlp + bkit59 + arm C, imagick, nab, lbm, perl
+makerand, gcc train01, xz, mcf, x264. Board 2's remaining A stages (xz, mcf, x264) are dropped: superseded by C and
+never part of a fair pair (Addendum 82).
+
+**Predictions** (against the A readings on mlp where they exist, else against no-cache bkit56): imagick, nab, lbm,
+perl, xz within ±1.5 %; gcc train01 0 to -3 % against A on mlp (lands within the hour); mcf 3-10 % faster than its
+no-cache 8,076.96 s (twin kernel -63 % of 2.5 G instructions, at the program's CPI); x264 within ±2 % of no cache.
