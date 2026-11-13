@@ -102,6 +102,24 @@ static unsigned long cv_exit_kind[8], cv_service_register, cv_service_exchange, 
  * Linux ran meanwhile, a blocking call or another task included; check_cycles over each CSCHECKR/W (checks of
  * them): on a bitstream whose firmware emulates CSCHECK, the trap and the emulation. */
 static unsigned long cv_runs, cv_run_cycles, cv_between_cycles, cv_checks, cv_check_cycles;
+/* MEASUREMENT ONLY, read-only: hpmcounter3..8 summed over the same CSRUNV windows as run_cycles (in-domain only; read
+ * just outside the cycle reads, so run_cycles' window is unchanged). The module only READS them. Their events are set
+ * in M-mode by a firmware built with CAPSTONE_HPM_EVENTS (caplifive-opensbi hpm-events 8a39f82d, mstatus_init):
+ * hpm3 L1 I-cache miss (event 1), hpm4 L1 D-cache miss (2), hpm5 DTLB miss (4), hpm6 branch mispredict (10),
+ * hpm7 issue stall (22), hpm8 scoreboard full (14); mcountinhibit[8:3] cleared, and OpenSBI's mcounteren = -1 lets S
+ * read them. CVA6's counters have no privilege filter: a window counts the context plus any firmware work inside its
+ * CSRUNV (an emulated CSCHECK, a forwarded trap). Under a firmware without the define every value stays 0, which is
+ * itself the control that the events were set. native_hpm=0 skips the reads on a platform where they would trap. */
+#define CV_HPM_N 6
+static unsigned long cv_hpm[CV_HPM_N];
+static bool native_hpm = true;
+module_param(native_hpm, bool, 0444);
+MODULE_PARM_DESC(native_hpm, "MEASUREMENT ONLY: sum hpmcounter3..8 over every CSRUNV into native_counters (default on)");
+static __always_inline void cv_read_hpm(unsigned long v[CV_HPM_N])
+{
+    v[0] = csr_read(CSR_HPMCOUNTER3); v[1] = csr_read(CSR_HPMCOUNTER4); v[2] = csr_read(CSR_HPMCOUNTER5);
+    v[3] = csr_read(CSR_HPMCOUNTER6); v[4] = csr_read(CSR_HPMCOUNTER7); v[5] = csr_read(CSR_HPMCOUNTER8);
+}
 static int cv_counters_get(char *buffer, const struct kernel_param *kp)
 {
     static const char *const names[CV_CSC_COUNTERS] = {
@@ -109,12 +127,14 @@ static int cv_counters_get(char *buffer, const struct kernel_param *kp)
     int n = scnprintf(buffer, PAGE_SIZE, "k0=%lu k1=%lu k2=%lu k3=%lu k4=%lu k5=%lu k6=%lu k7=%lu "
                       "register=%lu exchange=%lu service_other=%lu kinds_queries=%lu emu_fingerprints=%lu "
                       "detaches=%lu adopts=%lu adopt_kind_refused=%lu "
-                      "checks=%lu check_cycles=%lu runs=%lu run_cycles=%lu between_cycles=%lu",
+                      "checks=%lu check_cycles=%lu runs=%lu run_cycles=%lu between_cycles=%lu "
+                      "hpm3=%lu hpm4=%lu hpm5=%lu hpm6=%lu hpm7=%lu hpm8=%lu",
                       cv_exit_kind[0], cv_exit_kind[1], cv_exit_kind[2], cv_exit_kind[3],
                       cv_exit_kind[4], cv_exit_kind[5], cv_exit_kind[6], cv_exit_kind[7],
                       cv_service_register, cv_service_exchange, cv_service_other,
                       cv_kinds_queries, cv_emu_fingerprints, cv_detaches, cv_adopts, cv_adopt_kind_refused,
-                      cv_checks, cv_check_cycles, cv_runs, cv_run_cycles, cv_between_cycles);
+                      cv_checks, cv_check_cycles, cv_runs, cv_run_cycles, cv_between_cycles,
+                      cv_hpm[0], cv_hpm[1], cv_hpm[2], cv_hpm[3], cv_hpm[4], cv_hpm[5]);
     unsigned i;
     if (!cv_csc_firmware()) return n + scnprintf(buffer + n, PAGE_SIZE - n, " emu=absent\n");
     for (i = 0; i < CV_CSC_COUNTERS; ++i) {
@@ -3112,7 +3132,9 @@ static long cv_step_locked(struct context *c, struct cv_step *request, const uns
         }
         {
         /* native_counters' run/between cycles; interrupts are off here, as below. */
-        unsigned long entered = csr_read(CSR_CYCLE), left;
+        unsigned long entered, left, h0[CV_HPM_N], h1[CV_HPM_N];
+        if (native_hpm) cv_read_hpm(h0);
+        entered = csr_read(CSR_CYCLE);
         if (t->left_cycle) cv_between_cycles += entered - t->left_cycle;
 #ifdef CAPSTONE_VM_BENCH_COUNTERS
         {
@@ -3132,6 +3154,10 @@ static long cv_step_locked(struct context *c, struct cv_step *request, const uns
 #endif
         left = csr_read(CSR_CYCLE);
         cv_run_cycles += left - entered; ++cv_runs; t->left_cycle = left;
+        if (native_hpm) {
+            cv_read_hpm(h1);
+            for (unsigned i = 0; i < CV_HPM_N; ++i) cv_hpm[i] += h1[i] - h0[i];
+        }
         }
         if (!t->started) t->native_satp = csr_read(CSR_SATP);
         t->started = true; t->reply_cap = false;
