@@ -822,3 +822,58 @@ apollo straight after a clean lint, with no separate gate.
 - Nothing is flashed until every one of them is clean.
 
 The keys are the batch's six above, against 3c6b9906c (routed WNS -11.930), with the 48 GB watchdog.
+
+**The batch build is launched, with one deviation.** The board lane launched it on apollo at 2026-11-13T18:30:32Z, at
+a47b588a166f0b32e61f1b7ad8e82e3b4ea81fbc, with the guard line "vivado-guard: ceiling 40 GB RSS, cgroup 44 GB, host floor
+16 GB, poll 15s".
+- **Deviation from this note's pre-registration: the ceiling is 40 GB, not 48 GB.** 40 GB is the lead's per-flow budget
+  on apollo, and a peer's request cannot raise it.
+- On apollo this flow peaked at 22.36 GB on 9972ae79d (the same 8-way I$ tree without R-72 and (a)). 40 GB is about
+  1.8x that, and about 1.2x fdk's leffe peak of 33.45 GB.
+- A guard kill would be read against both envelopes.
+
+**The STC upper-doubleword residual is CLOSED by source.**
+- The D-cache controller's R-29 granule hold (`wt_dcache_ctrl.sv:189-205`) treats a store-buffer capability entry as a
+  conflict for a plain read of its granule's high word.
+- stc-hi-load.S (perf/b-next 74131ab8d) reads correctly with the lever on and off. Its cycles are identical (6,121),
+  so the arm is consistent with the hold, not a test that fired.
+
+## The batch (a47b588a1): built, VOIDED on its sweep, isolated, cleared (2026-11-14)
+
+**Built.** Guard exit 0 after 1h34m56s, peak 29.46 GB. Mapping 5,034 MB, 0 loops, 0 routing errors, WNS -11.883
+(fdk -11.930), placed 188,298 LUT, 99.29 % slices, congestion level 4. `.bit` sha256
+ff36870de12a133ebdf0a5fcc254a8bdbf8bacab2373666c79fcb2f0286076e1, tarball
+cde5b5317a51d730f314cdf844162a8034f81e6e0f7c08c2901a927d003c043e, both recomputed by the RTL lane from synth's
+files.
+
+**Voided** on the RTL sweep of 11bb7427b (the batch's core): RVFI traces differed from 6d0e754d5 in ten tests
+(call-hot, call-cold, interrupt, jalr, sbi-domain, call-ctx-save, and the four s07-wbuf tests), each at a plain store
+right behind an STC. The first void reason named domain-save-C; that was wrong. Its +52 retired is timing in a parking
+test, and its trace is identical over the prefix.
+
+**Isolated, ten tests per arm, compared over the common trace prefix against fdk:**
+
+| arm | tree | result |
+|---|---|---|
+| tenon | 11bb7427b, lever (a) on | all ten differ, at the store behind an STC |
+| tenoff | 11bb7427b, +CAPSTONE_NO_STC_NOCLAIM | 10/10 identical |
+| tenr72 | ca1a4cdc7, R-72 alone | 10/10 identical |
+| tenbase | 6d0e754d5 | 10/10 identical |
+| tenic8 | 9972ae79d | 10/10 identical |
+| tenfdk | 3c6b9906c | reference (= swfinal on 6d0e754d5) |
+
+So lever (a) is the only variable, and fdk and 9972ae79d (the board trees) are unaffected.
+
+**A trace defect, not a value defect: ISSUES I-16** (dev 986506b840dc). The load-back arm stc-st-wdata (capstone-ariane
+perf/stc-wdata 4230a264a) reads correct memory with the lever on and off. The tap files the STC's write-back lane under
+the plain store's trans_id. The lever makes the overlap reachable because a store on the STC's own base now arrives one
+cycle earlier (10189 vs 10190). The run totals are equal only because the following load's memory wait absorbs that
+cycle; a retraction of this point was itself retracted, see the I-16 entry. A claim-auditor found every hardware
+STORE_WB consumer paired by the port's own trans_id. AMO/LR/SC junk forwarding is guarded by the AMO commit flush;
+that is upstream behaviour and the batch does not touch it.
+
+stc-stc-wdata (f5b3e4138) covers STC→STC and the UNINIT cases. It reads identically with the lever on and off, but
+it created no STC-on-STC overlap on either tree.
+
+**Cleared** 2026-11-14 06:02 local (+08): the seal word went to synth (the seal step and VOID.txt are theirs) and to the
+board lane. The flash is runtime's call (board 1, after its FRCDK gcc boot).
