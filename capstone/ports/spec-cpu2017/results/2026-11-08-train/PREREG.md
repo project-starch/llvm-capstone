@@ -3266,3 +3266,21 @@ resume_quantum=1, step_budget_ns=10 s and retire_exit_sweep=2. The board's nativ
 every board run has had arena_pin=0. Whether the per-exec cost exists on the board's configuration is being measured on
 twins of board-fr's own run.sh. The compiler lane's arena_pin_image_end (llvm-capstone 6364813be083) acts only under
 arena_pin=1. Kit bkit70 (bkit68 + that kernel) is built and is NOT queued.
+
+## Addendum 99 (2026-11-14 01:55, before fdk's gcc boots run): the 8-way I$ gcc reading; Addendum 98's gcc band revised
+
+**Reading.** final-IC 8-way (9972ae79d, no DTLB 64, bkit69, FR, board 1), gcc train01: 2,649.21 s, specdiff PASS. That
+is -6.4 % against the final's 2,831.36 and -9.6 % against the base's 2,930.01. Ratio against plain-rv64fre 1,722.35:
+1.538. run_cycles 63.60 G (final 67.96 G). L1I misses 549.5 -> 260.4 M (-53 %). DTLB walks 21.6 M without DTLB 64.
+Issue-stall cycles 18.11 G. The bkit69 chain was stopped after this boot (Addendum 98). Its booking was released and
+the boot classified by hand: smoke PASS, all 9 steps.
+
+**Revision.** Addendum 98's gcc band for fdk (2,760-2,850 s) was set before this reading and is superseded for the two
+gcc boots, which have not started. Both stay recorded.
+- gcc train01 FR on fdk: 2,580-2,660 s (the 8-way I$ plus DTLB 64's walk savings).
+- FRCDK against FR on fdk: 0 to -4 %, since the 8-way I$ already removes half of gcc's L1I misses.
+The perl and mcf bands are unchanged.
+
+**Process note.** The follow-on script that ends the stopped chain lost its log lines, and with them the unbook and the
+classifiers: `local N=… L=$N/…` expands L before N is assigned. It had not been dry-run itself, only the chain it
+launches (board-run rule 8). The steps were done by hand; the fdk chain was unaffected.
