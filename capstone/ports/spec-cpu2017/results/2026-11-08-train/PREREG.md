@@ -3400,3 +3400,37 @@ smoke failure stops the chain.
 - rc 0, specdiff 2/2 PASS on both;
 - FR full perl 15,500-19,500 s (ratio 1.23-1.55);
 - FRCDK against FR -4 % .. +1 %.
+
+## Addendum 104 (2026-11-14 06:05, before it runs): the batch bitstream (fdk + R-72 + lever (a)) on board 1
+
+**Bitstream.** caplifive_ids55-native-tagcache-mlp-fpieee-hpmreplay-dynbypass3-dtlb64-shrinkfix-ic32k-r72-stcnoclaim_a47b588a1
+(capstone-ariane a47b588a1 = fdk 3c6b9906c + the R-72 PCC fetch-end check + lever (a): an STC claims rs1 only when
+rs1 is UNINIT, and forwards rs1 only when it claimed it).
+- **Build:** apollo, synth-guard exit=0, 1h34m, peak 29.41 GB under the 40 GB ceiling; WNS -11.883; 0 routing errors.
+- **Hash:** sha256 ff36870de12a133ebdf0a5fcc254a8bdbf8bacab2373666c79fcb2f0286076e1, recomputed on the local copy.
+- **Lint:** every counter at baseline.
+- **R-72:** passed its synthesis-only gate on leffe (area within the floor, no loops, no top-200 path through commit_stage).
+
+**rtl lane's checks before the seal:**
+- **A refuted draft of lever (a).** Its first fix (6784c69e8) kept an STC as an rs1 forwarding source while it no
+  longer claimed rs1. stc-fwd-hazard.S reproduced the stale read with the lever on, and the forwarding gate fixed it:
+  0x8e with the lever on and off.
+- **A void that was withdrawn.** The b-next sweep's trace differences in ten tests are an RVFI-tap artefact (I-16, dev
+  986506b840dc). The tap files an STC's write-back lane under the plain store presented in the same cycle. Load-backs
+  read the right memory with the lever on and off, and the claim-auditor finds every hardware consumer of the port
+  paired with the port's own trans_id.
+- **Same traces as fdk.** With the lever compiled out, R-72 alone and the base each equal fdk on all ten tests.
+- **fdk itself.** It equals the base on all ten, so no fdk reading is affected.
+
+**Run, board 1, after the running FRCDK gcc boot** (chain ak-b1, nat-run2.sh, kit bkit73 = bkit71 with only the
+bitstream changed). It runs the images last read on fdk, so each row is a one-variable pair against fdk:
+- FRCDK perl makerand (fdk 335.14 s);
+- FRCDK gcc train01 (fdk: the boot now running);
+- FR mcf (fdk 7,382.19 s).
+A stubbed dry run reaches all three.
+
+**Predictions.** Lever (a) takes an STC from 5.28 to 2.73 cycles in simulation. FR mcf runs about 0.73 G STCs.
+- perl makerand: -0.5 to -3 %;
+- gcc train01: -0.5 to -3 %;
+- mcf: -0.3 to -1.5 %;
+- specdiff PASS, smoke PASS.
