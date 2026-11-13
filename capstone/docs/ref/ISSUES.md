@@ -4485,6 +4485,58 @@ byte-identical (blob 213b9e5cea99) on ffb82d5bb, 6d0e754d5, 105c464bc and 9972ae
 - **Synthesis:** no FLU signal is on the standing loop list. The cost was not measured by a gate, but the final
   6d0e754d5 carrying the fix routed and sealed on every key.
 
+### R-72 — the PC capability's bounds check reads only the instruction's START address: in M-mode capability mode an instruction whose upper bytes lie past bound_end commits `DEMONSTRATED IN SIMULATION 2026-11-14 on 6d0e754d5's RTL (5f41c486e by source identity), claim-audited (SUPPORTED); M-mode only; NOT MEASURED ON SILICON; QEMU's virtual-context path checks the whole instruction, its plain M path has no PCC fetch-bounds check found; no fix written`
+
+Siblings: none on this check. Found while clearing standard RVC for Capstone code
+(`docs/plans/2026-11-13-rvc-in-capability-mode.md`): RVC makes the shape reachable under 4-aligned bounds.
+
+**The mechanism (5f41c486e = 6d0e754d5 for these files).**
+- `commit_stage.sv` `pc_cap_check` (:388-417, M + capmode only) faults with 28 when
+  `commit_instr_i[0].pc < bound_start || pc >= bound_end` (:404-405). No instruction length enters it, although
+  `is_compressed` is available at commit.
+- Nothing else checks the upper bytes in M. Every `bound_end` comparison under core/ was listed:
+  - the data checks (`load_store_unit.sv:1426`, `:1501`);
+  - the CPMP checks (`pmp_data_if.sv:229/254/265`);
+  - the CPMP fetch check, which is gated off in M (`:323`);
+  - pc_metadata, which only passes through the frontend.
+- The bound is decoded at the instruction's own pc (`commit_stage.sv:355`).
+
+**The reading** (capstone-ariane perf/rvc-capmode, `pcc-end-rvc.S`: 4190b2ebd run, readings at b4b98207b; vp9
+.sup/pe1, rtl dirty=no; predictions in the header before the run).
+- A LINEAR RWX code capability [0x80000080, END) is entered by cjalr. With compressed code, `straddle`, a 32-bit
+  `addi s7, s7, 0x123`, sits at 0x80000102. The three arms differ only in END.
+- The readings are s7, mcause, mepc - straddle, mtval - straddle, traps:
+
+  | arm | END | readings |
+  |---|---|---|
+  | default | 0x80000104, the upper half past the end | 0x123 0x1c 0x4 0x4 0x1 |
+  | PE_IN | 0x80000106, the instruction wholly inside | 0x123 0x1c 0x4 0x4 0x1 |
+  | PE_OUT | 0x80000102 | 0x0 0x1c 0x0 0x0 0x1 |
+
+- The default arm reads exactly as the wholly-inside arm. The retirement trace shows `0x80000102 (0x123b8b93) x23
+  0x123` and then `exception @ 0x80000106`.
+- END is exact, not rounded: a 0x84-byte length encodes at E = 0 byte-exact, checked against the RTL encoder and the
+  committed `bounds-model.py`. So the default arm really ends at 0x104.
+
+**Reach and scope.**
+- **M-mode only.** At S/U the CPMP fetch check tests each 4-byte fetch word (FETCH_WIDTH 32). Which pc a fault
+  there would report is untested, and this entry claims nothing about S/U.
+- **Contexts.** CSRUNV contexts run at raw M, so they go through this check.
+- **Not specific to RVC (by source, untested).** Any capability under 4 KiB has a byte-exact END, so a 4-aligned
+  32-bit instruction with END at 4k+1..4k+3 would also commit with up to 3 bytes past the end. With iE = 1, ENDs are
+  multiples of at least 8, so 32-bit-only code cannot straddle them. RVC adds the 2-mod-4 case under 4-aligned bounds.
+- **Practical reach.** Compilers place no code across their own PCC end, and the excess is at most 3 bytes of the
+  same instruction. It is an enforcement gap, not a known corruption.
+- **QEMU.**
+  - The virtual-context path checks [pc, pc + len) (qemu55 `translate.c:1530/1538`, `capstone_supervisor.c:1215-1219`;
+    virtual-capstone `:1126/1144`).
+  - The plain M capability-mode path has no PCC fetch-bounds comparison that a grep could find; nothing was run.
+  - So the divergence that is established is between silicon contexts, which go through `pc_cap_check` at raw M,
+    and QEMU's virtual-context path. QEMU is the stricter side.
+- **Fix candidate (not written).** Compare `pc + (is_compressed ? 2 : 4) > bound_end` in `pc_cap_check`. That adds
+  one 64-bit add and compare on the commit path, which is on the standing worst-path family, so it needs a
+  synthesis-only run.
+
 ### R-57 — a capability STORE whose translation faults retires WITHOUT its page fault and is committed to the store buffer, which copies an INVALID speculative entry into its commit queue (a ghost head that never drains) and underflows its speculative count: the vp2 wedges r8..r11 `OPEN ON SILICON (caplifive_vp2_bf3db3175); DEMONSTRATED in simulation 2026-10-18 by a matched pair; FIXED on virtual-profile-2-c 2114e11bd for the next bitstream; the store-side twin of R-56; software rule S-25 (no capability store as a page's first access) until then`
 
 **What happens** (bf3db3175, read by the RTL lane and audited by a claim-auditor against the trace). The store syncer
