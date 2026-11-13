@@ -3029,3 +3029,20 @@ eviction, in-place realloc: Capstone's runtime, Addendum 84).
   board 3 now. Prediction: none recorded before on K2N; specdiff/hash PASS.
 - Arm C ratios so far against the stock baseline: imagick 13.29 / 11.26 = 1.180; nab 741.97 / 675.63 = 1.098; lbm
   1,083.68 / 1,077.88 = 1.005.
+
+## Addendum 87 (2026-11-13 13:35, before it runs): the lead's CLARIFICATION of Addendum 86 — same allocator on both arms, the baseline's RTL only
+
+**Clarification (the lead, 13 Nov, after Addendum 86):** the allocator must be the SAME on both arms; what is the
+baseline's own is the RTL (the bitstream). So Addendum 86's withdrawal of riscv-base's mapping cache is itself
+withdrawn: riscv-base runs plain-rv64fre (Addendum 83: the mapping cache with the rounding fix and eviction, the same
+policy as the Capstone arm's allocator, whose large reallocs riscv-base's musl already grows in place through mremap)
+on the stock-CVA6 bitstream caplifive_rvbase_d31345cf3. Everything else stays equal on both arms (compiler and flags,
+static linking, K2N kernel, inputs, measurement).
+
+**Baseline readings of the table** (plain-rv64fre, board 3, specdiff PASS): imagick 11.08 s, nab 679.92, lbm 1,077.50,
+perl makerand 257.90, gcc train01 1,722.35; xz 4,993.81 (no-cache reading; QEMU shows the cache does not move xz,
+Addendum 85). Missing: mcf (stopped mid-run under Addendum 86) and x264.
+**Run, board 3:** riscv-base plain-rv64fre mcf, then x264 (the stock-musl x264 started under Addendum 86 is stopped).
+Predictions as Addendum 83 (mcf 2-8 % faster than its no-cache 5,146.72 s; x264 within ±2 % of a no-cache reading,
+which does not exist on K2N).
+**Ratios so far** (arm C on mlp + bkit59 against plain-rv64fre): imagick 1.1995, nab 1.091, lbm 1.006.
