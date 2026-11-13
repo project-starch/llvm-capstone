@@ -32,6 +32,7 @@ through a volatile pointer, on identically prepared buffers of tagged capabiliti
 **Cases.**
 - Offsets: both cursors 16-aligned; dst 8 mod 16; src 8 mod 16; both 8 mod 16.
 - Sizes: 16 (the pass's scope) and 32 (left a call).
+- An exact self-copy (`d == s`), aligned and 8 mod 16, matched against memcpy's own self-copy.
 
 Tags are read with `__builtin_capstone_cap_get_tag`, never inferred from values.
 
@@ -63,6 +64,17 @@ The arms are FR's configuration: `-capstone-fold-global-lo`, `+relax`, padded li
 - `memcpy-align-dispatch.ll` checks both arms and the cases the pass leaves alone. Its ON checks fail without the flag.
 - Dynamic cost per copy: `mv, mv, or, andi, beqz` plus two loads, two stores and a return or continue. That replaces a
   call of about 40 instructions. Each `ptrtoint` of a capability lowers to a `mv`.
+
+## Self-copy cases (added 2026-11-14, after the table above)
+
+24 checks, kit spec/kit-prof:
+- C8 on (llvm-c8 FR configuration, and llvm-c9 FRCDK configuration): 24/24.
+- C8 off: 24/24.
+- `-DC8_MUTANT`: FAIL 18/24, exactly `both_aligned_16_*` and `self_aligned_*` plus the two summary checks.
+
+The runner's default `--runtime` path pointed one level too shallow (`capstone/tests/runtime/virtual`). The first run of
+these cases read no checks and FAILED, as a run without data must. It is fixed, and the fix is checked by a default-path
+run (24/24). The table above came from the gate's copy of the runner with an explicit runtime path.
 
 ## Twin results (native twin, shift-1 capmix3, nat-fair stages as for arm FR; 2026-11-14)
 

@@ -5,7 +5,7 @@ control fired, the C8_DONE line with zero failures, and exit 0. A missing line i
 import argparse, json, re, shutil, subprocess, sys
 from pathlib import Path
 p = argparse.ArgumentParser()
-p.add_argument('--runtime', type=Path, default=Path(__file__).resolve().parents[2] / 'runtime/virtual',
+p.add_argument('--runtime', type=Path, default=Path(__file__).resolve().parents[3] / 'runtime/virtual',
                help='runtime/virtual checkout with run-staged.py (default: this repo\'s)')
 for n in ('adapter', 'application', 'qemu', 'images', 'work'):
     p.add_argument('--' + n, type=Path, required=True)
@@ -32,7 +32,8 @@ serial = a.work / 'guest/serial.log'
 log = serial.read_text(errors='replace').replace('\r', '') if serial.exists() else ''
 got = dict(re.findall(r'^C8_CHECK:(\w+):(PASS|FAIL)$', log, re.M))
 want = [f'{c}_{n}_{k}' for c in ('both_aligned', 'dst_misaligned', 'src_misaligned', 'both_8_mod_16')
-        for n in (16, 32) for k in ('matches_memcpy', 'tags')] + ['control_word_copy_drops_tag']
+        for n in (16, 32) for k in ('matches_memcpy', 'tags')] + [f'{c}_{k}' for c in ('self_aligned', 'self_8_mod_16')
+        for k in ('matches_memcpy', 'tags')] + ['control_word_copy_drops_tag']
 tests = {w: got.get(w) == 'PASS' for w in want}
 tests['no_unexpected_checks'] = set(got) <= set(want)
 tests['done_zero_failures'] = re.search(rf'^C8_DONE:{len(want)}:0$', log, re.M) is not None

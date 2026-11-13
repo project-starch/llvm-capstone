@@ -6,6 +6,7 @@
  *   dst 8 mod 16              no granule moves as a capability, every granule the copy touches loses its tag;
  *   src 8 mod 16              the same;
  *   both 8 mod 16             the same at 16 bytes; at 32 the middle granule is whole on both sides and keeps its tag.
+ * Also an exact self-copy (d == s) at both alignments, matched against memcpy's own self-copy.
  * Sizes 16 (the pass's scope) and 32 (left a memcpy call by the pass; the expectation covers it so a later extension
  * is tested by the same file). The control is a plain-word copy of the aligned case, which must lose the tag: it shows the tag
  * read can report a loss. Tags are read with the compiler builtin, never inferred from values. */
@@ -110,6 +111,28 @@ static void run_case(const char *name, unsigned doff, unsigned soff, unsigned n)
 	check(ok, nm);
 }
 
+/* An exact self-copy (d == s, which llvm.memcpy permits and an aggregate self-assignment lowers to): every load
+ * precedes every store, so the result is memcpy's own self-copy. Aligned, the tag survives; at 8 mod 16 the word path
+ * rewrites the bytes and, as memcpy does, clears the tags of the two granules it touches. */
+static void self_case(const char *name, unsigned off)
+{
+	char nm[96];
+	fill();
+	unsigned long *p = (unsigned long *)((char *)dst + 16 + off);
+	copy16(p, p);
+	memcpy_call((char *)ref + 16 + off, (char *)ref + 16 + off, 16);
+	BARRIER();
+	snprintf(nm, sizeof nm, "%s_matches_memcpy", name);
+	check(same_as_memcpy(), nm);
+	int ok = 1;
+	for (unsigned g = 0; g < G; ++g) {
+		int touched = off ? (g == 1 || g == 2) : g == 1;
+		ok &= TAG(dst[g]) == (touched ? !off : 1) && (!touched || off || dst[g] == &cells[G + g]);
+	}
+	snprintf(nm, sizeof nm, "%s_tags", name);
+	check(ok, nm);
+}
+
 int main(void)
 {
 	for (int i = 0; i < 3 * G; ++i)
@@ -120,6 +143,8 @@ int main(void)
 		run_case(cases[c].name, cases[c].doff, cases[c].soff, 16);
 		run_case(cases[c].name, cases[c].doff, cases[c].soff, 32);
 	}
+	self_case("self_aligned", 0);
+	self_case("self_8_mod_16", 8);
 	fill();
 	copy16_words((unsigned long *)((char *)dst + 16), (const unsigned long *)((char *)src + 16));
 	BARRIER();
