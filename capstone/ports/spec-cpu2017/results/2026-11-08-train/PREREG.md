@@ -3079,3 +3079,16 @@ fix and the counter), and the base for the DTLB-64, L1D-64K and DYN-bypass bitst
 same kit and images when sealed. **Predictions:** perl makerand 375-395 s; gcc train01 2,900-2,960 s; mcf within ±1.5 %
 of 7,605.65 s; hpm4/hpm5 non-zero and monotone over each command, hpm5 (DTLB misses) on the order of the model's
 (mcf ~0.9 G, gcc ~0.2 G, perl ~36 M).
+
+## Addendum 90 (2026-11-13 17:15, before it runs): Addendum 89's base boot FAILED its smoke; bisection on board 1
+
+**Reading:** board 1, bkit61 (all-optimisations bitstream 5f41c486e + HPM-counter module e517119e12c4 + dom_grant_root,
+dom_null, dom_local_tmp), perl makerand: the native smoke failed at step 20 (io-exchange). Every native task died at
+once with SIGSEGV (rc 139) and "release retires attempted=0"; plain-control passed. The chain stopped as designed. No
+SPEC reading. bkit61 changed three things at once against the last passing kit (bkit59 on mlp): the bitstream, the
+kernel module (HPM reads around every CSRUNV) and three command-line parameters.
+**Bisection, board 1, two boots in this order** (perl makerand, FR images):
+1. bkit60 = the new bitstream with bkit59's kernel and command line (only the bitstream changes against the passing kit);
+2. bkit61n = bkit61 with capstone_vm.native_hpm=0 (the HPM reads off; bitstream, module and parameters otherwise as bkit61).
+**Prediction:** 1 passes (the bitstream changes no cycles in simulation and its sweep is identical); then 2 passes if
+the HPM reads are the cause, fails if the dom_* parameters are.
