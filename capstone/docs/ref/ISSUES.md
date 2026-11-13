@@ -12007,6 +12007,71 @@ one and then `(0x80003000, 1)`, T5 four times `(0x80003000, 1)`, T6 `(0x80003000
 and a suite of such tests reports a clean sweep. This one sat in the sweep for months. Any arm whose "expected"
 values live only in comments should be read as unmeasured until its checks are in the instruction stream.
 
+### I-16 — the RVFI trace records the PREVIOUS STC's write-back lane as the data of a plain store that reaches the LSU in that STC's write-back cycle; memory is right `OPEN 2026-11-14 — sim instrument defect on every tree with the DYN-bypass store-result mux (`ex_stage.sv:1637`), reached only when a store enters the LSU in an STC's write-back cycle (observed only with lever (a); not seen on 6d0e754d5 in the ten tests); fix is sim-only, not written. Do not read a trace diff on a back-to-back STC→store as a value defect`
+
+**What the trace shows.** On capstone-ariane 11bb7427b (lever (a), `CAPSTONE_STC_NOCLAIM`) ten sweep tests differ
+from the base 6d0e754d5 in their RVFI traces, each at a plain store right behind an STC, and only there: `c.sd
+a0,48(a1)` recorded as `0` (the STC's `a7`) where `a0 = 0x0000000a00040000` (call-hot, call-cold, interrupt, jalr,
+call-ctx-save, sbi-domain); `sd zero,16(s1)` recorded as `0x80003140` (the stored capability's cursor) in the four
+`s07-wbuf-*` tests. Compiled out (`+CAPSTONE_NO_STC_NOCLAIM`, same commit) all ten equal fdk 3c6b9906c, which
+equals the base: one variable.
+
+**Memory is right.** `stc-st-wdata.S` (capstone-ariane perf/stc-wdata 4230a264a; tests only): STC then at once a
+plain store of a known value to a word nothing else writes, three shapes, each read back at once and after a
+drain. Lever on, the trace records the STC's data for all three stores (the condition is created) and every
+load-back is correct; SUCCESS on both trees; the `-DSTW_NEG` wrong-expectation build fails at check 12 on both.
+
+**Mechanism, read from a per-cycle print** (`STW_TRACE`, sim-only, 065cecf4f). The tap
+(`core/cva6_rvfi.sv:160`, `:257-260`) writes `mem_n[lsu_ctrl.trans_id].lsu_wdata = wbdata[STORE_WB]` in every cycle
+`lsu_ctrl.fu == STORE`. A store's own write-back comes one cycle AFTER its `lsu_ctrl` cycle, so the port's data in
+that cycle belongs to whatever wrote back then. With the cap path that is an STC's lane:
+`store_result_o = store_cap_valid_o ? byp_rd_cursor_q[store_trans_id_o] : store_result` (`core/ex_stage.sv:1637`).
+At cyc 10189 the LSU held the `sd` (tid 7, its own data 0x1122334455667788) while the port carried tid 6, the STC,
+with 0x80003100. Lever off the `sd` arrives one cycle later (10190, behind the STC's claim of `s1`), the port is idle
+in its cycle, and `wbdata[STORE_WB]` happens to equal its own `lsu_ctrl.data` (`core/store_unit.sv:201`) -- which is
+why the tap looks right on the base. The run totals are identical (18,783 both) because the following load's memory
+wait absorbs the cycle.
+
+**No hardware consumer is mis-paired.** The scoreboard write-back (`core/scoreboard.sv:220`) and the WB-port
+forwarding (`:319`) are keyed on the port's own trans_id, and for an STC the data is selected by that same id
+(`ex_stage.sv:1633-1637`). A plain store's OWN write-back carries junk -- the NEXT cycle's `lsu_ctrl.data`, 0 in the
+print -- but an ordinary store's `rd` is x0, which is never clobbered (`core/issue_read_operands.sv:657`), so no forward request
+can select it (`:1056-1059`), and every GPR file is built `ZERO_REG_ZERO(1)`. That pairing is by reading, not by an
+arm. A companion arm (`stc-stc-wdata.S`, f5b3e4138: STC→STC→STC, UNINIT STC then `sd` of its rs1, UNINIT STC then
+STC of its rs1, two UNINIT STCs on two bases) reads identically on and off and as predicted, but it did NOT create
+an STC-on-STC overlap on either tree: every STC's write-back cycle has an empty `lsu_ctrl`, and the UNINIT cases
+stall on the claim by design. The overlaps lever (a) adds are STC→LDC and STC→plain store; the LDCs read correctly.
+
+**Claim-audited 2026-11-14** (adversarial, by source; config read from
+`core/include/capstone_cv64a6_imafdc_sv39_config_pkg.sv:23-37`: DYN_BYPASS, DYN_BYPASS_RAWLANE and STC_NOCLAIM on by
+default). SUPPORTED: every consumer of STORE_WB pairs data with the port's own trans_id, which is one net from the
+store syncer to the scoreboard's `trans_id_i[1]` (`ex_stage.sv:1554`, `:1633-1637`, `cva6.sv:1513`, `:1944`);
+`cap_wbdata[3]` is `'0` for a plain store (`store_cap_valid_o`, `:1633`); no store or AMO is in `check_fwd_rs1`
+(`ariane_pkg.sv:1098`); ordinary stores (integer, FP, compressed) never assign `rd` (`decoder.sv:193`,
+`:1079-1083`, `:1446-1451`), and `is_rd_fpr` excludes FSD..FSB (`ariane_pkg.sv:1113-1116`). Three corrections to
+the text above:
+1. **AMO/LR/SC are the exception to "the junk cannot reach a younger instruction".** They decode as `fu = STORE`
+   with a real `rd` (`decoder.sv:1715-1718`), so their STORE_WB write-back puts junk in `sbe.result`, and a younger
+   reader of that `rd` CAN be forwarded it. Architectural state is protected by the AMO commit path alone: the
+   value written is `amo_resp_i.result` (`commit_stage.sv:512`) and the pipeline flushes on the AMO's ack
+   (`:842-848`), squashing anything that consumed the junk. Upstream CVA6 behaviour; no batch commit touches
+   decoder, scoreboard, store_unit or the AMO branch of commit_stage. UNRESOLVED: whether a squashed consumer can
+   leave a side effect a flush does not undo (a DYN op starting a rev-node write) -- the same exposure as any
+   wrong-path instruction, not a new class.
+2. **The junk is not always 0**: it is the next cycle's `lsu_ctrl.data`, e.g. a load's 0x60 (cyc 12024 in the
+   print). Harmless for ordinary stores (rd x0).
+3. **The overlap does not need lever (a).** The lever makes it reachable for a store on the STC's own base; a store
+   on a DIFFERENT base could reach the LSU in an STC's write-back cycle with the lever off. Not seen in the ten tests.
+Also noted, unrelated to this entry: x0's "no forward" rests on the clobber arbiter decoding an all-idle request as
+`NONE` (enum 0), which with `NumIn = NR_SB_ENTRIES + 1 = 9` the audit traced to an out-of-range leaf that returns `'0`
+(`vendor/pulp-platform/common_cells/src/rr_arb_tree.sv:284-288`; the leaf is verified, the all-idle path to it is
+the audit's reading); with a 7-entry scoreboard the same path would return `clobber_fu[7]`. A scoreboard-size
+change should re-check it.
+
+**Fix (sim-only, not written).** Record a store's data from its OWN `lsu_ctrl.data` in its `lsu_ctrl` cycle, gated
+on `lsu_ctrl.valid`. Gating on the write-back port's trans_id instead would record the junk above for every plain
+store.
+
 ## Compiler / toolchain (ours)
 
 ### C-27 — `delin` of a NONLIN gp-derived global base traps on silicon (cause 26) `FIXED 2026-10-18 under -capstone-image-gp (the vp2 virtual SDK's ABI), on dev with the backend fix; the default capability ABI keeps the DELIN by design. Reopened the same day: the FIXED 2026-09-05 claim in ISSUES-ARCHIVE.md was WRONG and cost vp2's Tier 1/2 boot 2`
