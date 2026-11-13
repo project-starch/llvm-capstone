@@ -350,3 +350,34 @@ too.
 
 A routing failure or a WNS outside the band is a NEGATIVE result: its artefacts are collected and labelled, with no
 further runs on that variant, and nothing is tuned to fit.
+
+## Pre-registration: DYN bypass v2 + DTLB 64, without the L1D (2026-11-13, before any build)
+
+**Why.** The SPEC lane asked for it: this is the realistic final bitstream if both single-change A/Bs come out
+positive, and it should not wait behind the L1D 64 KiB build's routing verdict (+7 k LUT, TOP ~191 k).
+
+**The build.**
+- capstone-ariane perf/ids55-dynbypass-dtlb64 **bec4beb51** (pushed) = eb101c351 + 097401036's config change
+  (DataTlbEntries 64).
+- Name: `caplifive_ids55-native-tagcache-mlp-fpieee-hpmreplay-dynbypass-dtlb64_bec4beb51`.
+- Host: apollo, through the board lane (leffe is at its cap).
+- Speculative: it flashes only after both single changes have shown positive on silicon.
+
+**The checks it rests on.**
+- The bypass's checks all passed on eb101c351: arms 33/33 identical off vs on, sweep RVFI 92/92, lint PASS.
+- DTLB 64's synthesis-only gate passed: core +3,005 LUT / +4,526 FF, the DTLB 881 -> 4,894 LUT, and no DTLB/MMU path
+  in the worst 200.
+- Its own lint is sent with the hand-off.
+
+**Predicted area.** Base placed 181,565. The DTLB adds about +3.0 k LUT, and the bypass's own delta comes from its gate
+(running on leffe), so roughly 185 k placed or more. This is a report, not a key.
+
+**Keys.** As above: the gate keys, plus the full build's congestion <= 5, 0 routing errors, 0 loops, WNS against
+-15.077 (a value), and sha256. A routing failure or a WNS outside the band is a NEGATIVE result: collected and
+labelled, no reruns.
+
+**Prepared, not launched: L1D 48 KiB / 12 ways** (perf/ids55-e2-l1d48k b9ab75c41).
+- It is NOT config-only. The D$ victim LFSR is $clog2(ways) wide and would name ways 12..15, which do not exist, so
+  those values fold onto 8..11 (wt_dcache_missunit.sv). A power-of-two way count never takes the fold.
+- Its lint and a simulation smoke test against the base are running. It launches only if L1D 64 KiB fails to route,
+  on the SPEC lane's word.
