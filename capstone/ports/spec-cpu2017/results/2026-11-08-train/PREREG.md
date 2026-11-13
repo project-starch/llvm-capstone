@@ -3107,3 +3107,29 @@ fail again. In its place, after the running bkit60 boot: **bkit61h** = bkit61 wi
 command line equals bkit59's), HPM counters on, which is the intended A/B base. Rows: perl makerand, gcc train01, mcf
 (FR images). The full perl row waits for the fixed module.
 **Prediction:** bkit60 and bkit61h pass the smoke; the hpm fields are non-zero and monotone over each command.
+
+## Addendum 92 (2026-11-13 18:00, before it runs): RETRACTION of the DTLB-64 predictions; first silicon HPM readings; the bypass + DTLB 64 bitstream on the A/B board
+
+**RETRACTION (rtl lane):** the cache-model DTLB predictions relayed to the lead (DTLB 16 -> 64: perl -5..10 %, gcc and
+mcf -4..8 %) are withdrawn. The model maps 4 KiB pages only; CVA6's DTLB holds superpages and the native route is
+mapped with 2 MiB pages where Linux allows it, so the model counted walks that never happen (perl: model ~36 M at 16
+entries, silicon 4.27 M). Event 4 is one data-side page walk (cva6_ptw.sv:372; no shared TLB, UseSharedTlb = 0).
+Silicon bound for perl: at most 4.27 M walks x 15-30 cycles = <= 0.7-1.3 %. gcc and mcf bounds follow from their
+event-4 counts.
+
+**First silicon HPM readings** (board 1, base 5f41c486e + bkit61h, FR images; in-domain CSRUNV windows): perl makerand
+389.12 s, specdiff PASS (bkit60, the same bitstream with bkit59's kernel: 389.36 s; arm C on mlp: 400.04 s, so the FR
+compiler gives -2.7 %; ratio against plain-rv64fre 257.90 s: 1.509). run_cycles 9.590 G; L1I misses 44.51 M; L1D misses
+0.114 M; DTLB walks 4.27 M; branch mispredicts 130.8 M; issue-stall cycles 1.696 G (17.7 %); scoreboard full 0.187 M.
+L1I misses (Capstone has no compressed encodings) are now the larger memory-side term on perl; the rtl lane is sizing
+three I$ variants (8 ways, 32-byte lines, 64-byte lines).
+
+**Bitstream:** caplifive_ids55-native-tagcache-mlp-fpieee-hpmreplay-dynbypass-dtlb64_bec4beb51 (sha256
+5190f43a963b2b4f..., apollo; WNS -14.885, 0 routing errors, 0 loops; 193,954 LUT = base +12.4 k, slices 99.6 %;
+router congestion 6, one level over the pre-registered key, which exists to predict routability; routing succeeded).
+Kit bkit63 = bkit61h with only the bitstream changed. It combines two changes (DYN bypass v2, DTLB 64), so against the
+base it reads their sum; the single-change bitstreams (leffe) attribute it afterwards.
+**Run, board 1**, after the base chain (gcc train01, mcf): perl makerand, gcc train01, mcf with the same FR images.
+**Predictions** (bypass: LDC 4.22 -> 2.75, STC 6.29 -> 2.73 cycles in simulation, one-base STC 7.21 -> 5.28; DTLB:
+<= the base's event-4 walks x 30 cycles): perl makerand 330-375 s (-4..-15 %); gcc train01 and mcf -3..-10 % against the
+base. specdiff PASS everywhere; event-4 counts fall.
