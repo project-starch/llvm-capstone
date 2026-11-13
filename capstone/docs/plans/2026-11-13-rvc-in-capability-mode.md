@@ -67,6 +67,28 @@ on (32 compressed instructions in the text) and off.
 - One prediction was refuted on both builds alike: the integer-base load's cause reads 24, not 5. The 5 came from a
   vp2-era note.
 
+**Inside a CSRUNV context** (va-runv-rvc.S, capstone-ariane perf/rvc-capmode 929799815 + its reading commit,
+6d0e754d5's RTL; the same source with RVC on and off): every reading is identical except the layout checks and the
+2-mod-4 resume count, which differ by design.
+- A 3000-cycle quantum preempted a 2000-iteration mixed 16/32-bit loop 5 times, and S resumed each one. In the on
+  build 2 of the 5 resumes were at a 2-mod-4 pc, and the loop's sums are identical (0x1e9fd8, 0x9f6ba470).
+- The ECALL at 2 mod 4 saved its exact pc, and the reply (switcher mode 4, pc + 4) resumed at 2 mod 4.
+- A capability fault at 2 mod 4 escaped with cause 28 and its exact pc.
+- The first run's 2-mod-4 count was VOID: S read the frame through an unmapped address (cause 13, skipped by the
+  handler). The count was moved into M and re-run.
+
+**QEMU's PCC check covers the whole instruction** (qemu55 `translate.c:1530/1538`, `helper_capstone_check_pcc(pc,
+len)`; `capstone_supervisor.c:1215-1219`). It is stricter than silicon's start-only check, so a twin pass cannot hide
+the silicon leniency.
+
+**The .dom loader does no relocation or patching of text** (compiler lane: `binfmt-dom.h`, `capstone_vm.c`), so the
+data-side hazard does not apply to domain images.
+
+**Straddle fault attribution (read, not run).** The stock frontend attaches a fetch exception to every instruction of
+its fetch packet (`instr_queue.sv:225-226`). A straddling instruction issues with the packet that holds its second
+half, so a fault on that half is taken with mepc = the instruction's start and mtval = the faulting fetch address,
+which RISC-V permits.
+
 ## Silicon evidence
 
 The board firmware is already compiled with RVC. The build-fpga `fw_jump.elf` (2026-10-17) disassembles to 18,951
@@ -80,12 +102,12 @@ The board firmware is already compiled with RVC. The build-fpga `fw_jump.elf` (2
 - **Data-side hazard.** A misaligned DATA access inside a domain is not emulated (`fault_return_from_domain`). Code
   that reads or patches instructions with 32-bit loads breaks on compressed text. Relocation did exactly this: an RVC
   kernel module once hung insmod (`docs/history/07-10-2026_16-11-23_virtual-capstone-stack-audit-and-landing.md`).
-- **Open (not read, or not run):**
-  - fault attribution when the second half of a straddling fetch faults (stock CVA6);
-  - whether QEMU's PCC check uses pc or pc + ilen;
-  - the `.dom` loader's relocation handling;
+- **Open:**
   - whether CPMP bounds can end at 2 mod 4;
-  - an RVC arm inside a CSRUNV context with a resume at a 2-mod-4 pc (read as exact, not run).
+  - the M-mode PCC-end leniency itself (a 32-bit instruction starting at bound_end - 2 commits), to become an R-entry
+    once characterised by an arm;
+  - the straddle attribution by an arm, not only by source;
+  - silicon: the compiler lane's RVC images on board 1.
 
 ## Stage 2: free compressed encoding space on this core (Zcb on, Zcmp/Zcmt off, F/D on)
 
