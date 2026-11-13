@@ -83,14 +83,14 @@ the generation check, so condition 3 needs no parent field.
 Condition 4 is a policy choice, not a safety condition. The abstract machine
 lets any live reference release its object, whatever its bounds, and
 `CREVOKE` checks only the lifetime. The kernel asks for the bounds so that a
-reference narrowed to part of a block removes no page outside its bounds and
-cannot end the block.
+reference narrowed to part of a block removes no page outside its bounds, so
+it ends the block only when the pages it covers are the last mapped ones.
 
-A `munmap` that names the whole block ends it: the kernel executes `CREVOKE`
-on the passed reference, and only then does Linux remove the pages and free
-the address range. A `munmap` that names part of the block is a partial
-`munmap` (below): it removes pages and ends no lifetime, also when it removes
-the last mapped pages. Only a call that names the whole block ends a block. A
+A `munmap` that removes the last mapped pages of a block ends it, and a call
+that names the whole block is one such call: the kernel executes `CREVOKE` on
+the passed reference, and only then does Linux remove the pages and free the
+address range. A `munmap` that leaves mapped pages in the block is a partial
+`munmap` (below): it removes pages and ends no lifetime. A
 refused operand never reaches an instruction that can trap, and the kernel
 changes nothing on a refused request. The `CREVOKE` has an exception-table
 entry, and a `CREVOKE` that faults refuses the request before anything
@@ -201,10 +201,9 @@ commit then unpinned while it stayed mapped. The transition protocol:
 1. Check. The kernel checks the reference, the range and, for a refill, the
    refill rule. It pins every resident page of the range that it does not hold
    yet, so that the commit clears that page's tags too. Then it opens the
-   transition. A call that names the whole block opens nothing: it ends the
-   block at once with `CREVOKE` on the passed reference. A removal of the last
-   mapped pages opens a transition like any other removal and ends no
-   lifetime.
+   transition. A removal of the last mapped pages, a call that names the
+   whole block included, opens nothing: it ends the block at once with
+   `CREVOKE` on the passed reference.
 2. Linux. The launcher changes the protection of the range with `mprotect`:
    `PROT_NONE` for a removal, the asked protection for a refill. A refill then
    discards the old contents with `MADV_DONTNEED`, while the kernel still holds
@@ -320,9 +319,9 @@ launcher and the kernel refuse a block that reaches it.
 | Call | Rule |
 |---|---|
 | `mmap` | a new block, a child of R of depth 1, as above. `PROT_EXEC` is refused (`EACCES`): only the image's text is executable. |
-| `munmap` | through an accepted reference (conditions 1 to 4). A call that names the whole block ends it: `CREVOKE` on the passed reference, then Linux removes the pages and the address range becomes free. A call that names any other page range inside it removes those pages and ends no lifetime (a partial `munmap`, below). A range beyond the block, across two blocks or by a plain address is refused. |
+| `munmap` | through an accepted reference (conditions 1 to 4). A call that removes the block's last mapped pages ends it, a call that names the whole block included: `CREVOKE` on the passed reference, then Linux removes the pages and the address range becomes free. A call that leaves mapped pages in the block removes those pages and ends no lifetime (a partial `munmap`, below). A range beyond the block, across two blocks or by a plain address is refused. |
 | `MAP_FIXED` | inside a block: only with an accepted reference and under the refill rule, only while the program derived no object below P (the record after P's in the preorder list is not deeper, one step). The pages of the range, removed ones included, read zero afterwards with the protection asked for; no lifetime ends. By a plain address and into free address space it is refused. |
-| `mremap` | first validates the whole old range: it lies inside one block, every page of it is mapped, and the reference is accepted (conditions 1 to 4, any cursor). Then it shrinks in place (a partial `munmap` of the tail; no lifetime ends, and the block keeps its address range) or grows in place inside the block's visible length, into its own removed pages, under the refill rule of `MAP_FIXED`. Elsewhere `MREMAP_MAYMOVE` moves the range: a new block, a copy of the contents with their tags, and a `munmap` of the old range through its reference. That `munmap` ends the old block only when the old range is the whole block; otherwise it removes those pages, and the block keeps its address range. `mremap` thus gives an address to another mapping only after the block that covered it has ended. Without `MREMAP_MAYMOVE` the answer is `ENOMEM`. `MREMAP_FIXED` and `MREMAP_DONTUNMAP` are refused. |
+| `mremap` | first validates the whole old range: it lies inside one block, every page of it is mapped, and the reference is accepted (conditions 1 to 4, any cursor). Then it shrinks in place (a partial `munmap` of the tail; no lifetime ends, and the block keeps its address range) or grows in place inside the block's visible length, into its own removed pages, under the refill rule of `MAP_FIXED`. Elsewhere `MREMAP_MAYMOVE` moves the range: a new block, a copy of the contents with their tags, and a `munmap` of the old range through its reference. That `munmap` ends the old block when the old range held its last mapped pages; otherwise it removes those pages, and the block keeps its address range. `mremap` thus gives an address to another mapping only after the block that covered it has ended. Without `MREMAP_MAYMOVE` the answer is `ENOMEM`. `MREMAP_FIXED` and `MREMAP_DONTUNMAP` are refused. |
 | `mprotect` | with an accepted reference (conditions 1 to 4); the named page range may be part of the block. It ends nothing. `PROT_EXEC` is refused (`EACCES`), and so is a removed page (`ENOMEM`, as for an unmapped page). |
 | `madvise` | `MADV_DONTNEED` and `MADV_FREE` as `mprotect`: an accepted reference (conditions 1 to 4). The range reads zero afterwards. It ends nothing. Other advice answers `ENOSYS`. |
 | kernel-owned blocks | the image, the startup block, the main stack and the shared region: the kernel refuses `munmap`, `mremap` and `mprotect` on them, and `madvise` of the image as well. The image's data reference covers the whole image, so only the page's write bit protects the text, and only the kernel may change it. |
@@ -336,10 +335,10 @@ adapter plan) removes pages and ends no lifetime. The kernel makes the pages
 It never admits a removed page again until a refill maps it, and gives no
 other mapping an address inside the block while the block lives. A reference
 into a removed page stays live; an access through it is a page fault, as on a
-page of no mapping, never a lifetime fault. The block ends with `CREVOKE` only
-when one call names the whole block, or at exit. A partial `munmap` that
-removes the last mapped pages leaves the block and its address range in
-place, and unmapping a removed page again changes nothing. The kernel clears
+page of no mapping, never a lifetime fault. The block ends with `CREVOKE` on
+the passed reference when a `munmap` removes its last logically mapped pages,
+a call that names the whole block included, or at exit. Unmapping a removed
+page again changes nothing. The kernel clears
 the tags of every removed page it held and unpins it before Linux can reuse
 its frame, and the frame leaves the duplicate check of the block, so a refill
 may receive it again. Without root grants the kernel cannot read the
@@ -422,14 +421,15 @@ reference is refused, and the range stays unusable until `exit`. That is a
 leak in a faulty program, not a safety problem: every reference into the
 range is already stale.
 
-A program that narrows P and then renews the narrowed reference can no longer
-end that block. The renewal ends the lifetime of P, of every copy of it and of
-every object below it, and gives R a new child of depth 1 with the narrowed
-bounds. That child passes conditions 1 to 3, so it can remove, protect or
-advise the pages it covers. It does not cover the whole block, so no call can
-name the whole block with it, and the block keeps its address range until
-exit. That is a leak, not a safety problem: every reference to the old object
-is stale, and the kernel frees no address range.
+A program that narrows P and then renews the narrowed reference ends the
+lifetime of P, of every copy of it and of every object below it, and gives R a
+new child of depth 1 with the narrowed bounds. That child passes conditions 1
+to 3, so it can remove, protect or advise the pages it covers, and it ends the
+block when it removes the block's last mapped pages. Mapped pages outside its
+bounds can no longer be removed, and then the block keeps its address range
+until exit. That is a leak, not a safety problem: every reference to the old
+object is stale, and the kernel frees no address range while a page of the
+block is mapped.
 
 The adapter until M goes. With root grants (module parameter `root_grants=1`),
 the adapter's code of today differs from this section in these points, which
@@ -442,9 +442,9 @@ directly follows M's in the preorder list, has M's depth plus one and is live
 `mremap` and the other requests that end a mapping or remove pages of it,
 condition 4 asks that the bounds cover the whole visible length, so a narrowed
 and renewed P, a new child of M, can no longer remove pages either. The
-adapter ends a mapping with `CREVOKE` of M, also when a partial `munmap`
-removes the last logically mapped page, which the block object counts, and
-every commit that fails closed ends M. No kernel-owned flag exists yet: the
+adapter ends a mapping with `CREVOKE` of M instead of the passed reference
+(when a `munmap` removes the last logically mapped page, which the block
+object counts), and every commit that fails closed ends M. No kernel-owned flag exists yet: the
 adapter refuses `mprotect`, `madvise` and `munmap` of the image, and the
 launcher never unmaps the main stack. Without root grants the adapter runs the
 earlier design (section What runs today).
