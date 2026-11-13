@@ -3181,3 +3181,23 @@ trip (bypass v2 + DTLB 64: 193,954). Kits bkit67 (= bkit61h, the A/B base kit, w
 with the same kit footing, images and rows (perl makerand, gcc train01, mcf): v3 and v2 are cycle-identical in
 simulation, and the fix changes no cycles, so this reads what Addendum 92 would have read, on the bitstream that is the
 candidate. Addendum 92's predictions carry over. Addendum 94's L1D 64 KiB chain follows it.
+
+## Addendum 96 (2026-11-13 22:10, before it runs): first reading of the final bitstream; base HPM for mcf; final-IC 8-way replaces the L1D 64 KiB A/B on board 1
+
+**Readings** (board 1, FR images, specdiff PASS):
+- Base (5f41c486e, bkit61h) mcf: 7,610.69 s (ratio against plain-rv64fre 5,125.02: 1.485). HPM: L1D misses 3.758 G
+  (20.4 per 1k in-domain cycles), DTLB walks 471.0 M (2.55 per 1k), L1I 13.8 M, mispredicts 838.5 M, issue-stall cycles
+  107.5 G (58 % of 184.43 G). mcf's DTLB walks make DTLB 64 worth keeping for mcf (gcc 19.4 M and perl 4.27 M do not).
+- Final (6d0e754d5, bkit67) perl makerand: 360.60 s against the base's 389.12 s = -7.3 % (Addendum 92's band 330-375
+  holds); ratio 1.398. In-domain cycles 9.590 G -> 8.883 G; issue-stall cycles 1.696 G -> 1.020 G; DTLB walks 4.27 M ->
+  15.6 k; L1I misses unchanged (44.8 M).
+**Bitstream:** caplifive_ids55-native-tagcache-mlp-fpieee-hpmreplay-dynbypass3-shrinkfix-ic32k_9972ae79d (apollo; sha256
+d00bb291dc5e507d..., checked; WNS -13.038, 185,791 LUT, slices 98.7 %, 0 routing errors, congestion 5/5): bypass v3 +
+the SHRINKTO fix + I$ 32 KiB 8-way, without DTLB 64. Kit bkit69 = bkit61h with only this bitstream. Its I$ gate: +264
+LUT, RAMB36 12 -> 24.
+**Change before it runs:** Addendum 94's L1D 64 KiB chain (not started) is dropped: the cache model gives it 0-2.5 %
+and, beside the bypass and a larger I$, it does not fit (the three-way combination failed placement). In its place, after
+the final's gcc and mcf: final-IC 8-way, perl makerand, gcc train01, mcf.
+**Predictions** (against the final, same board): perl makerand -3..-9 % (its 44.8 M L1I misses mostly removed, by the
+model's 8-way reading); gcc train01 -4..-12 % (L1I misses 550 M -> roughly 40 %); mcf +1..+8 % (DTLB 64 removed: its
+walks return toward the base's 471 M).
