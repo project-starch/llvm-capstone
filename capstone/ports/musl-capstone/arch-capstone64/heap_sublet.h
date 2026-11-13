@@ -42,7 +42,6 @@ struct heap_mid { struct heap_leaf *leaf[512]; };
 __attribute__((visibility("hidden"))) extern struct heap_mid *__malloc_page_root[512];
 __attribute__((visibility("hidden"))) void *__heap_mapping(size_t);
 __attribute__((visibility("hidden"))) int __heap_unmapping(void *, size_t);
-__attribute__((visibility("hidden"))) void *__heap_remapping(void *, size_t, size_t);
 
 static inline void *heap_issue(void *at, size_t n)
 {
@@ -73,13 +72,15 @@ static inline void *heap_renew(void *object)
  * primitives above, independently of the outer heap's measurement arm.
  *
  * The failure result (block A): where the lifetime table has no slot left and
- * cannot grow, CDERIVE writes an untagged 0 instead of trapping (the 62-bit
+ * cannot grow, CDERIVE writes an untagged 0 instead of trapping (the 63-bit
  * format with NOGROW), and malloc returns NULL with ENOMEM. heap_alloc_issue,
  * for a slot that malloc or aligned_alloc just took, gives that slot back
  * (__malloc_unissue: mallocng's free without a lifetime to end).
  * heap_alloc_reissue, for realloc's in-place paths, returns 0 and leaves the
- * slot and the object's old lifetime as they are, so a failed realloc keeps the
- * original (realloc.c, patch 0009). */
+ * slot and the object's old lifetime as they are. realloc ends the old object
+ * only after the new one exists: in place after heap_alloc_reissue, and a
+ * resize that would move a mapping takes malloc, memcpy and free, so a failed
+ * realloc returns NULL with the original intact (realloc.c, patch 0009). */
 __attribute__((visibility("hidden"))) void __malloc_unissue(void *);
 static inline void *heap_alloc_reissue(void *p, size_t n)
 {

@@ -1,12 +1,18 @@
 # Address-space root: adapter and libc plan
 
 Status: plan of 2026-11-12 on the branch `address-space-root`. Stages 0 to 4f
-are done (see each stage). Block A (the format alignment) is under way: step F4
-is done for its format-independent part (the follow-ups of stage 4f, no
-capability rights, the preorder child rule, one format header, the growth
-protocol and the failure result written), and its 62-bit part waits for the
-new layout of the paper (2026-11-13), which QEMU follows first. Then stage 5,
-in a reduced form until the project lead decides on the old path.
+are done (see each stage). Block A (the format alignment): step F4 is done (part
+1, the format-independent part; part 2, the follow-ups of its review and the
+module, launcher and libc on the 63-bit format of capstone-qemu `c1985bb529`).
+On QEMU `c1985bb529` itself the 63-bit runs are partial: both platform
+firmwares enter the capability monitor with CSCAPENTER, which that format makes
+illegal, and without the monitor QEMU drops a timer interrupt raised during a
+virtual-C run (the escape restores the caller's `mip`, and only `cap_mem`, which
+CSCAPENTER sets, reasserts the lines), so every mode that sleeps or waits after
+a run hangs. With that QEMU change in a test copy and Sstc on, every mode passes
+(F4 part 2). The ports' lifetime patches do not yet handle the failure result. F5
+is next, then stage 5, in a reduced form until the project lead decides on the
+old path.
 Design: [the kernel as the outermost allocator](../design/virtual-capstone/address-space-root.md).
 
 ## What the code does today
@@ -772,6 +778,117 @@ A. **Format alignment: no capability rights** (block A, after stage 4e; decided
    with the growth, NOGROW and failure-result cases and their controls, the
    unpinned patch's id-bits, and the eight lifetime patches of the ports, which
    must handle a NULL from `capstone_cap_derive`.
+
+   **F4, part 2 (2026-11-13).** The follow-ups of the review of part 1, then the
+   63-bit format (capstone-qemu `c1985bb529`, `x-capstone-ids=63`).
+   - `realloc` ends the old object only after the new one exists (patch 0009):
+     in place it derives first, and a resize that would move a large group's
+     mapping takes `malloc`, `memcpy` and `free`, so a `realloc` that fails
+     answers `NULL` with the original intact. `__heap_remapping` is gone.
+   - NOGROW means that after the last growth attempt the requirement is unmet,
+     and only `ensure_nodes` writes it: its target is the requirement and more
+     than the 256 slots of the reserve, it grows when fewer are available
+     (`node_grow` writes no NOGROW), and it sets NOGROW exactly when the target
+     is still unmet; a met target clears it, without a page added. A
+     requirement no table can meet is refused without touching NOGROW.
+     `grant_nodes` refuses a grant with `ENOMEM` before any change when the
+     table cannot grow and has fewer than its two records. A batch of zero
+     pages is refused at load and a smaller `node_initial_pages` is raised to
+     one batch. The literal 256 of the collection threshold is the header's.
+     New counters `table_growths`, `pressure_escapes`.
+   - The in-place clearing of a fail-closed commit (`clear_unheld`) clears
+     every page it can and counts the rest; `pages_close` returns the retire's
+     error and tells the launcher (`CV_PAGES_ENDED_HELD`) to keep the extent
+     mapped `PROT_NONE` and never give it to Linux (`hold_range`,
+     `CAPSTONE_VM_RELEASE_HELD`, `held=` in `CAPSTONE_VM_RELEASES`;
+     `closed_unclear`, `closed_unclear_pages`).
+   - No mapping block reaches the topmost page below 2^38: the launcher holds it
+     with a `PROT_NONE` mapping from its start (`top_guard`), `grant_mapping`
+     refuses a block there (`ENOMEM`), and so does `add()` (`EINVAL`,
+     `CV_BLOCK_END`). Under 63 `root_create` refuses a user range above 2^38.
+   - The startup block cannot be made writable through a service: every page
+     operation passes `range_mapping`, which takes only the program's heap
+     mappings; the protect-exec mode checks it through the startup reference
+     that `_start` leaves on the main stack.
+   - `cv-format.h` follows the 63-bit layout (id generation[62:31] | slot[30:0];
+     record word 0 = next[29:0] << 34 | depth << 3, word 1 = generation << 32 |
+     previous << 1 | next[30]; 32 root entries; 2^31 slots; generation
+     2^32 - 1 never live), built with `make CAPSTONE_VM_IDS=63` against that
+     commit's ABI header; the switch 62 is gone, and root_grants=0 is refused at
+     load (insmod 22). The unpinned kernel patch accepts id-bits 63.
+   - Test modes: top-page, pages-unclear (hooks), grow-maps, grow-objects,
+     nogrow-map, nogrow-malloc and realloc-exhausted (`--module-args
+     node_max_pages=16`); the runner's `--ids`, `--module-args`, `--no-unload`
+     and `--libc-control old-realloc`.
+   Runs on the build host (`~/asr-work/f4b`, STATUS). Old formats (the old
+   QEMU, keep and stock firmware), batch b2 on the part 2 binaries: every part 1
+   mode passes with both root_grants values, pinned and unpinned (731, 726 and
+   728 checks), the hooks (241, 227, 205), pages-run, block frames, the pthread
+   gate, hosted, mapcache, both launcher variants, mremap-contract and the
+   captag=off refusal; the new modes top-page and pages-unclear pass, the growth
+   modes skip. The final test image passes one boot each with root grants 1
+   and 0 (b3).
+   63-bit format (QEMU `c1985bb529`, module `CAPSTONE_VM_IDS=63`). Both platform
+   firmwares execute CSCAPENTER at boot, which this format makes illegal, so the
+   runs use fw63, the same OpenSBI without `CAPSTONE_ENTER_C`. On that QEMU,
+   one boot per mode, every mode that neither sleeps nor waits after a program
+   ran passes, pinned and unpinned; every mode that does hangs, and the 30-bit
+   module and the F0 kit hang the same way on fw63. The cause is QEMU's: the
+   escape from a virtual-C run restores the caller's `mip` (`restore_state`),
+   which drops a timer interrupt raised during the run, and only `cap_mem`,
+   which CSCAPENTER sets, makes QEMU reassert the interrupt lines
+   (`riscv_cpu_check_interrupts`).
+   With `restore_state` keeping the lines (a test copy of QEMU, outside every
+   branch) and Sstc on, every set passes in one boot: pinned 730 checks, hooks
+   241, pages-run 56, block frames 157, both launcher variants, NOGROW 50,
+   malloc-contract 24, mremap-contract, root_grants=0 refused; unpinned 727,
+   hooks 205, pages-run 54, block frames 154, NOGROW 50, malloc-contract 24,
+   mremap-contract, the captag=off refusal. realloc-exhausted (steps of 64
+   frees) passes on `c1985bb529` itself, pinned and unpinned: `NULL` at the full
+   table with the object intact, the object moved with its contents after 64
+   frees. Without Sstc the test copy still loses the timer after a run (open).
+   Controls (one change each, outside the worktree, hashes in STATUS): the
+   63-bit `ref_child` by depth alone accepts the full-range grandchild (refuse,
+   protect, mremap and advise fail at it); the growth handler that publishes
+   the capacity without the pages makes the program's next fetch fault 25 and
+   the module's next lifetime operation fault 29 in S (a kernel Oops); with the
+   module that never sets NOGROW, `nogrow-malloc` never ends: the guest runs
+   until the host's timeout while the launcher alternates between `ioctl` and
+   `sched_yield` (2.19 million traps in QEMU's log), and the guest's own kill
+   after 30 s never comes, because the guest's timer stops in that loop even on
+   the test copy (the default module answers `NULL` after one escape, in 3 s);
+   the part 1 libc whose `CDERIVE` after the move gives the failure result
+   loses the object (the `realloc` after 64 frees answers `NULL`, the read
+   faults 25), while the part 1 libc as it was keeps it, because the move's
+   `munmap` frees the old mapping's slots before that `CDERIVE`.
+   The ports: not done. None of the eight lifetime patches handles the failure
+   result: FFmpeg (2 sites), SQLite (11, and its generator script), CPython (5),
+   memcached (3), mruby (1), Perl (1), PostgreSQL (23) and Wireshark (12) either
+   dereference the 0, use it as the next parent, or keep a slot or block taken;
+   SQLite, CPython and PostgreSQL also end the old object before the new one
+   exists in a realloc path, as part 1's libc did. Each fix belongs in the
+   patch and must be applied to the upstream archive and rebuilt.
+   Review of part 2 (three reviewers, 2026-11-13): sound for temporal safety
+   and for tags while the process runs; the 63-bit layout, the top page and
+   every realloc branch hold. Follow-ups, stage F4c, before F5:
+   - QEMU (capstone-qemu): `restore_state` keeps the live device-driven bits
+     of `mip` (MTIP, MEIP, MSIP, SEIP, and STIP under Sstc) and restores only
+     the software bits, on both restores, then rechecks `stimecmp` and the
+     interrupt lines, independent of `cap_mem`. A test raises and clears an
+     interrupt during a virtual-C run. The timer loss without Sstc on the
+     test copy is part of this. Until then the 63-bit runs need the test copy.
+   - Quarantine in the kernel: an uncleared extent of a fail-closed commit
+     stays the module's (it keeps a reference on every frame it could not
+     clear and clears them at context close before it lets them go), so no
+     tagged frame reaches Linux at process exit in the pinned profile;
+     `hold_range` stops the program when `mprotect` fails; a lost
+     `CV_PAGES_ENDED_HELD` no longer matters.
+   - Growth edges: `node_max_records` below 257 refused at load (otherwise
+     cause 30 repeats forever); requests bounded by the usable slots
+     (2^31 - 2).
+   - `top_guard` failure made explicit.
+   - The ports (stage F4d): the 61 call sites above. Until then no gate runs
+     a port with `node_max_pages` set or near a memory limit.
 5. **Remove the old path.** Drop the parameter, `arena.ancestor`, the private
    parents and the collection paths that exist only for them. `CSMINT` stays
    at one site. Pending a decision of the project lead (2026-11-13): the

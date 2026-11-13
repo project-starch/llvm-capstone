@@ -5,8 +5,8 @@
  * processor's lifetime-id width), CAPSTONE_VM_FLAT_TABLE and CAPSTONE_VM_INDEX_BITS. capstone_vm.c
  * names records and ids only through the macros below, so a new layout is a change of one section of
  * this file. The values come from cap_rev_table_abi.h, which build-adapter.sh copies from the
- * capstone-qemu tree beside this file; the SUBLET constants exist only in a header of the 62-bit
- * format, so only the CAPSTONE_VM_IDS=62 section names them.
+ * capstone-qemu tree beside this file; the SUBLET constants exist only in a header of the 63-bit
+ * format (capstone-qemu c1985bb529 or later), so only the CAPSTONE_VM_IDS=63 section names them.
  *
  * What every section defines:
  *   CV_ID_RECORDS_MAX       slots a table may publish (the namespace)
@@ -19,16 +19,18 @@
  *                           retired slot, no linear record (a linear record is never an operand)
  *   CV_REC_HOLDS(r, id)     the record holds the lifetime id, linear or not: R's own record, which
  *                           the older formats make linear (a root of CSMINT); root_create asks it
- *   CV_REC_HAS_PARENT       1 if records keep a parent field, CV_REC_PARENT(r) then reads it; only
- *                           root_create's check of the old CSMINT answer uses it
  *   CV_MINT_ANSWERS_ROOT    1 if CSMINT answers R's own id and makes R alone (at depth 0); 0 if it
- *                           makes a private parent and R below it and answers the parent's id
+ *                           makes a private parent and R below it and answers the parent's id, whose
+ *                           record's parent field CV_REC_PARENT(r) reads
  *   CV_TABLE_*              the paged table: root entries, walk, header words, flags, magic
  *   CV_TABLE_GROWTH         1 if the table has the growth word (NOGROW) and the growth protocol of
  *                           cause 30 and the pressure escape (cap_rev_table_abi.h, SUBLET tables)
  *   CV_TABLE_COLLECTS       1 if the processor reclaims retired records (CSRUNV action 3)
  *   CV_LEGACY_GRANTS        1 if the format still has CSMINT grants with rights and CSRETIRE, the
  *                           path without root grants (root_grants=0)
+ *   CV_USER_ADDRESS_END     the first user address that no reference of the program can carry as its
+ *                           cursor (2^38 in every format on Sv39); R ends there, and no mapping block
+ *                           comes closer to it than a page (capstone_vm.c, CV_BLOCK_END)
  */
 #ifndef CAPSTONE_VM_FORMAT_H
 #define CAPSTONE_VM_FORMAT_H
@@ -36,21 +38,22 @@
 
 /* The processor's lifetime-id width: 30 (every bitstream so far, the namespace's 2^30), 55 (QEMU's
  * x-capstone-ids=55: a 25-bit slot, so at most 2^25 records, and a table that publishes more is refused
- * at CSRUNV) or 62 (QEMU's x-capstone-ids=62, the Sublet format of the paper's Section 5). A BUILD
- * define, like CAPSTONE_VM_FLAT_TABLE: the kit picks it with the processor. The 55 and 62 limits come
- * from the ABI header the build copies beside this file, so a build against a header without them does
- * not compile. The 30 build compiles to the same object as before this header existed. */
+ * at CSRUNV) or 63 (QEMU's x-capstone-ids=63, the Sublet format of the paper's Section 5). A BUILD
+ * define, like CAPSTONE_VM_FLAT_TABLE: the kit picks it with the processor (make CAPSTONE_VM_IDS=63,
+ * module/Makefile). The 55 and 63 limits come from the ABI header the build copies beside this file, so
+ * a build against a header without them does not compile. The 30 build compiles to the same object as
+ * before this header existed. */
 #ifndef CAPSTONE_VM_IDS
 #define CAPSTONE_VM_IDS 30
 #endif
-#if CAPSTONE_VM_IDS != 30 && CAPSTONE_VM_IDS != 55 && CAPSTONE_VM_IDS != 62
-#error "CAPSTONE_VM_IDS: 30, 55 or 62"
+#if CAPSTONE_VM_IDS != 30 && CAPSTONE_VM_IDS != 55 && CAPSTONE_VM_IDS != 63
+#error "CAPSTONE_VM_IDS: 30, 55 or 63"
 #endif
 #if CAPSTONE_VM_IDS == 55 && !defined(CAP_REV_WIDE_RECORDS)
 #error "CAPSTONE_VM_IDS=55 needs the ids-55 cap_rev_table_abi.h beside the module"
 #endif
-#if CAPSTONE_VM_IDS == 62 && !defined(CAP_REV_SUBLET_SLOTS)
-#error "CAPSTONE_VM_IDS=62 needs the Sublet cap_rev_table_abi.h beside the module"
+#if CAPSTONE_VM_IDS == 63 && (!defined(CAP_REV_SUBLET_ID_BITS) || CAP_REV_SUBLET_ID_BITS != 63)
+#error "CAPSTONE_VM_IDS=63 needs the Sublet cap_rev_table_abi.h of capstone-qemu c1985bb529 or later beside the module"
 #endif
 
 /* vp2 implements only the FLAT table format. CAP_REV_TABLE_FLAGS is RECYCLE|PAGED, so the default
@@ -74,8 +77,8 @@
 #else
 #define node_table_flat 0
 #endif
-#if CAPSTONE_VM_IDS == 62 && node_table_flat
-#error "CAPSTONE_VM_IDS=62: the module keeps a paged table (a flat SUBLET table never grows)"
+#if CAPSTONE_VM_IDS == 63 && node_table_flat
+#error "CAPSTONE_VM_IDS=63: the module keeps a paged table (a flat SUBLET table never grows)"
 #endif
 /* The flat table's index width, which is the BITSTREAM's (isa.md: a virtual id is {generation, index}
  * inside 30 bits). 16 for vp2 and the batch bitstream c721c1a2a; 18 for the bitstream after it (the RTL
@@ -103,7 +106,7 @@
 /* ---- The paged table, every format: a root page with the header and the root entries, two directory
  * levels of 512 entries and record pages of 256 records of 16 bytes. A slot splits into root entry
  * (slot >> 26), directory indices (slot >> 17, slot >> 8, 9 bits each) and record (slot & 255): 4:9:9:8
- * for 30-bit ids (16 root entries), 6:9:9:8 for 32-bit SUBLET slots (64 root entries). Header words
+ * for 30-bit ids (16 root entries), 5:9:9:8 for 31-bit SUBLET slots (32 root entries). Header words
  * (u64, word index = byte offset / 8): capacity | flags, next never-used slot, free head | free count
  * << 32, allocations, magic, retired, and in a SUBLET table the growth word (NOGROW). */
 #define CV_TABLE_DIRECTORY (CAP_REV_TABLE_DIRECTORY / 8)   /* the first root entry, as a word index */
@@ -124,28 +127,30 @@
 #define CV_HDR_GROWTH 6                                    /* SUBLET tables only */
 #define CV_FREE_COUNT(word) ((word) >> 32)
 
-#if CAPSTONE_VM_IDS == 62
-/* ---- x-capstone-ids=62, the Sublet format, AS QEMU IMPLEMENTS IT TODAY (capstone-qemu ad02a0f70b):
- * id = generation[61:32] | slot[31:0]; record word 0 = next[63:32] | depth[31:0], word 1 =
- * generation[63:34] | reserved[33:32] | previous[31:0]; no parent, no VALID, LINEAR or FREE flag. A
- * record holds exactly the id {its generation, its slot}: a free record holds its next generation and a
- * retired one the last generation, which no capability names. CSMINT makes R alone, at depth 0, and
- * answers R's id. 64 root entries (6:9:9:8), at most 2^32 slots.
- * NOT BUILT YET (held on 2026-11-13): the paper's layout changed (generation 32 bits at 127:96, slot 31
- * bits at 95:65, 38-bit address; record generation 127:96, previous 95:65, next 64:34, depth 33:3; 2^31
- * slots, 5:9:9:8 walk, 32 root entries), and QEMU is updated first. That change replaces this section
- * (and the header offsets above if QEMU moves them); nothing else in the module names a field. */
+#if CAPSTONE_VM_IDS == 63
+/* ---- x-capstone-ids=63, the Sublet format of the paper's Section 5 (capstone-qemu c1985bb529):
+ * id = generation[62:31] | slot[30:0]. The record, 128 bits: generation 127:96, previous 95:65, next
+ * 64:34, depth 33:3, reserved zero 2:0, so next straddles the two words:
+ *   word 0 = next[29:0] << 34 | depth << 3
+ *   word 1 = generation << 32 | previous << 1 | next[30]
+ * No parent, no VALID, LINEAR or FREE flag: a record holds exactly the id {its generation, its slot}. A
+ * free record holds its next generation, which no reference names, and a retired slot the generation
+ * 2^32 - 1, which is never issued (so no id with it is live, CV_REC_LIVE). CSMINT makes R alone, at
+ * depth 0, and answers R's id. 32 root entries (5:9:9:8), at most 2^31 slots (0 and 1 reserved). A
+ * reference's cursor is the zero extension of 38 bits, so R = [0, 2^38) is the largest range R can
+ * cover. */
 #define CV_ID_RECORDS_MAX CAP_REV_SUBLET_SLOTS
 #define CV_TABLE_ROOT_ENTRIES CAP_REV_SUBLET_ROOT_ENTRIES
 #define CV_REF_FORMAT 1
 #define CV_ID_SLOT(id) ((id) & CAP_REV_SUBLET_SLOT_MASK)
 #define CV_ID_GENERATION(id) ((id) >> CAP_REV_SUBLET_SLOT_BITS)
-#define CV_REC_NEXT(r) (READ_ONCE((r)[0]) >> CAP_REV_SUBLET_NEXT_SHIFT)
-#define CV_REC_DEPTH(r) (READ_ONCE((r)[0]) & CAP_REV_SUBLET_DEPTH_MAX)
+#define CV_REC_NEXT(r) ((READ_ONCE((r)[0]) >> CAP_REV_SUBLET_NEXT_LO_SHIFT) | \
+                        ((READ_ONCE((r)[1]) & 1UL) << CAP_REV_SUBLET_NEXT_LO_BITS))
+#define CV_REC_DEPTH(r) ((READ_ONCE((r)[0]) >> CAP_REV_SUBLET_DEPTH_SHIFT) & CAP_REV_SUBLET_FIELD_MASK)
 #define CV_REC_GENERATION(r) ((READ_ONCE((r)[1]) >> CAP_REV_SUBLET_GEN_SHIFT) & CAP_REV_SUBLET_GEN_MASK)
-#define CV_REC_LIVE(r, id) (CV_REC_GENERATION(r) == CV_ID_GENERATION(id))
+#define CV_REC_LIVE(r, id) (CV_ID_GENERATION(id) != CAP_REV_SUBLET_GEN_RETIRED && \
+                            CV_REC_GENERATION(r) == CV_ID_GENERATION(id))
 #define CV_REC_HOLDS(r, id) CV_REC_LIVE(r, id)
-#define CV_REC_HAS_PARENT 0
 #define CV_MINT_ANSWERS_ROOT 1
 #define CV_TABLE_GROWTH 1
 #define CV_NOGROW CAP_REV_SUBLET_NOGROW
@@ -156,13 +161,18 @@ _Static_assert(CAP_REV_TABLE_HDR_CAPACITY == CV_HDR_CAPACITY * 8 && CAP_REV_TABL
                CAP_REV_TABLE_HDR_FREE == CV_HDR_FREE * 8 && CAP_REV_TABLE_HDR_MAGIC == CV_HDR_MAGIC * 8 &&
                CAP_REV_TABLE_HDR_RETIRED == CV_HDR_RETIRED * 8 && CAP_REV_TABLE_HDR_GROWTH == CV_HDR_GROWTH * 8,
                "the SUBLET root header");
+_Static_assert(CAP_REV_SUBLET_ROOT_ENTRIES << CV_TABLE_ROOT_SHIFT == CAP_REV_SUBLET_SLOTS &&
+               CAP_REV_SUBLET_NEXT_LO_SHIFT + CAP_REV_SUBLET_NEXT_LO_BITS == 64 &&
+               CAP_REV_SUBLET_DEPTH_SHIFT + CAP_REV_SUBLET_SLOT_BITS == CAP_REV_SUBLET_NEXT_LO_SHIFT &&
+               CAP_REV_SUBLET_GEN_SHIFT + 32 == 64 && CAP_REV_SUBLET_PREV_SHIFT == 1 &&
+               CAP_REV_SUBLET_GEN_RETIRED == CAP_REV_SUBLET_GEN_MASK,
+               "the SUBLET record: 5:9:9:8 walk, next straddling the words, depth at 33:3");
 #else
 /* ---- The 30-bit and 55-bit formats: a record carries VALID, LINEAR and FREE flags in word 1 at 62:60
  * and its parent's index; CSMINT makes a private parent and R below it and answers the parent's id. */
 #define CV_TABLE_ROOT_ENTRIES CAP_REV_TABLE_ROOT_ENTRIES
 #define CV_REC_STATE(r) ((READ_ONCE((r)[1]) >> CAP_REV_TABLE_FLAGS_SHIFT) & \
                          (CAP_REV_TABLE_VALID | CAP_REV_TABLE_LINEAR | CAP_REV_TABLE_FREE))
-#define CV_REC_HAS_PARENT 1
 #define CV_MINT_ANSWERS_ROOT 0
 #define CV_TABLE_GROWTH 0
 #define CV_NOGROW 0UL
@@ -223,6 +233,10 @@ _Static_assert(CAP_REV_TABLE_HDR_CAPACITY == CV_HDR_CAPACITY * 8 && CAP_REV_TABL
 #endif
 
 #define CV_ID_PAGES_MAX (CV_ID_RECORDS_MAX / CV_TABLE_PAGE_RECORDS)
+/* Sv39: the user half ends at 2^38. The older formats keep a cursor as the sign extension of 39 bits,
+ * which 2^38 is not; the 63-bit format keeps it as the zero extension of 38 bits (capstone-qemu cap.h,
+ * CAP_SUBLET_ADDR_BITS), so 2^38 is not representable there either. */
+#define CV_USER_ADDRESS_END (1UL << 38)
 #define CV_FLAT_RECORDS_MAX (1UL << CAPSTONE_VM_INDEX_BITS)
 #if CV_FLAT_RECORDS_MAX > CV_ID_RECORDS_MAX
 #error "the flat table's index width exceeds the lifetime id's"

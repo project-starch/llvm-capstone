@@ -15,8 +15,10 @@ cp "$CAPSTONE_REPO_ROOT/capstone/capstone-qemu/target/riscv/cap_rev_table_abi.h"
 # the bounds encoder by tests/exact-bounds-iii/repr-cross-check.py. Copied from the tree being
 # built, like the ABI header above, so a kit cannot pair a module and an SDK across revisions.
 cp "$here/../include/capstone/representable.h" "$out/module/"
+# CAPSTONE_VM_IDS (30 when unset, 55 or 63) is the processor's lifetime-id width (module/cv-format.h).
 make -C "$KERNEL_BUILD" ARCH=riscv CROSS_COMPILE="$CROSS_COMPILE" \
-    M="$(cd "$out/module" && pwd)" -j"${CAPSTONE_BUILD_JOBS:-12}" modules
+    M="$(cd "$out/module" && pwd)" -j"${CAPSTONE_BUILD_JOBS:-12}" \
+    ${CAPSTONE_VM_IDS:+CAPSTONE_VM_IDS=$CAPSTONE_VM_IDS} modules
 torture_flags=()
 [[ ${CAPSTONE_VM_TORTURE:-0} != 1 ]] || torture_flags+=(-DCAPSTONE_VM_TORTURE)
 "${CROSS_COMPILE}gcc" "${torture_flags[@]}" -O2 -static -pthread -Wall -Wextra -Werror \

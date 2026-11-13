@@ -236,6 +236,31 @@ child-depth (--module whose ref_child accepts any live record deeper than M): th
 page or mapping is accepted, so refuse, protect, mremap and advise fail at it, and renew still passes;
 --launcher-control discard-abort (a hooks launcher that aborts after a failed discard, as stage 4f did):
 pages-discard's MAP_FIXED answers EAGAIN and the block stays live (exit 1).
+Block A, F4 part 2 (root-contract.c lists the checks of each): protect-exec also checks that the
+startup block stays read-only through every service; top-page (--launcher-hooks:
+CAPSTONE_VM_TEST_TOP_PAGE, the runner reads CAPSTONE_VM_TEST_TOP_PAGE guard=1 launcher=12 module=22: the
+launcher holds the topmost page below 2^38, grant_mapping refuses it with ENOMEM and the module's add()
+with EINVAL); pages-unclear (--launcher-hooks and --module-hooks, test_close_unheld=2: as pages-closed,
+and the in-place clearing leaves the unheld page, so the launcher keeps the ended block's extent mapped
+PROT_NONE, CAPSTONE_VM_RELEASE_HELD); grow-maps and grow-objects (the table grows beyond its first batch
+through the module's grants and through the pressure escape); nogrow-map, nogrow-malloc and
+realloc-exhausted, which need --module-args node_max_pages=16 (one batch, so the table cannot grow) and
+are not in the default list: mmap answers ENOMEM and malloc NULL without a loop of escapes, both recover
+after frees, and realloc at a full table answers NULL with the original intact. The growth modes skip
+unless the module is a CAPSTONE_VM_IDS=63 build (--ids 63, the processor's x-capstone-ids=63); there the
+refuse mode expects no collection (the 63-bit format reuses slots through generations).
+Every run reads CAPSTONE_VM_RELEASES at exit: no failed release, no held extent except in pages-unclear,
+and the launcher's guard of the top page held (top_guard=1).
+--module-args ARGS appends ARGS to the module's insmod line. --no-unload leaves the module loaded at
+the end (the firmware without the capability monitor, which the 63-bit format needs, hangs the unload
+after a program ran; module_unloaded is then not checked).
+--libc-control old-realloc says that the --application was built against the libc of F4 part 1, whose
+realloc moves a mapping through __heap_remapping and ends the old object before it issues the new one,
+with the CDERIVE that follows the move given its failure result (errno ENOMEM, an untagged 0): the
+first realloc that gets past the move answers NULL with the object lost, and realloc-exhausted faults
+25 at its read (exit 139). Without that failure the move's munmap frees the old mapping's slots before
+the CDERIVE, so a single-threaded run never reaches the window.
+
 --no-refs runs on a processor without supervisor references. The module must not load. Where the
 firmware hands cause 24 to S the load is refused with a message. The gate platform's monitor keeps
 the trap and halts the machine at the module's probe, after the module printed why.
@@ -259,7 +284,11 @@ MODES = ('unmap', 'refuse', 'narrow', 'renew', 'renew-ref', 'mremap',
          'futex-remap', 'die-blocked', 'word-metadata',
          'futex-readonly', 'futex-park', 'futex-end', 'futex-flags', 'die-stderr', 'protect-exec',
          'partial-hole', 'partial-all', 'partial-narrow', 'partial-fixed', 'partial-mremap',
-         'mremap-validate', 'pages-enomem', 'pages-tagged', 'futex-stale')
+         'mremap-validate', 'pages-enomem', 'pages-tagged', 'futex-stale', 'grow-maps', 'grow-objects')
+# The modes that need a table that cannot grow (--module-args node_max_pages=16); not in the default list.
+NOGROW_MODES = ('nogrow-map', 'nogrow-malloc', 'realloc-exhausted')
+# The modes that run only on the 63-bit format (they skip in the older ones).
+SUBLET_MODES = {'grow-maps', 'grow-objects'} | set(NOGROW_MODES)
 # The modes that need the launcher's test hooks, and the environment that sets their delays.
 HOOK_ENV = {
     'futex-race': 'CAPSTONE_VM_TEST_FUTEX_DELAY_MS=2000',
@@ -275,6 +304,8 @@ HOOK_ENV = {
     'release-fail': 'CAPSTONE_VM_TEST_RELEASE_FAIL=1',
     'pages-closed': 'CAPSTONE_VM_TEST_PAGES_DELAY_MS=2000',
     'pages-discard': 'CAPSTONE_VM_TEST_DISCARD_FAIL=1',
+    'pages-unclear': 'CAPSTONE_VM_TEST_PAGES_DELAY_MS=2000',
+    'top-page': 'CAPSTONE_VM_TEST_TOP_PAGE=1',
 }
 # The hook modes whose window --pages-run opens to the program (the hooks module's test_pages_run).
 PAGES_RUN_MODES = ('pages-derive', 'pages-fault', 'pages-admit')
@@ -285,13 +316,14 @@ MODULE_HOOK_PARAMS = {
     'eintr-exit': ('test_hold_ms', '1000'),
     'advise-refuse': ('test_advise_refuse', '3'),
     'pages-closed': ('test_close_unheld', '1'),
+    'pages-unclear': ('test_close_unheld', '2'),
 }
 MODULE_HOOK_MODES = tuple(MODULE_HOOK_PARAMS)
 # The environment of a mode that needs one without a hooks build.
 MODE_ENV = {'futex-park': 'CAPSTONE_VM_MAPCACHE=1048576'}
 # The modes that run with diag_admit on; the runner reads their admission and removal lines.
 DIAG_MODES = {'futex-readonly', 'partial-fixed', 'pages-tagged', 'pages-derive', 'pages-fault',
-              'pages-admit', 'pages-closed'}
+              'pages-admit', 'pages-closed', 'pages-unclear'}
 # Per mode: the checks, those that need root grants (skipped otherwise), and the expected exit.
 CHECKS = {
     'unmap': ('grant_reads_and_writes', 'libc_accepts_copyable_grant',
@@ -358,7 +390,7 @@ CHECKS = {
     'advise-refuse': ('advise_refused_changes_nothing',),
     'die-stderr': ('die_stderr_blocks',),
     'protect-exec': ('image_protect_refused', 'image_unmap_refused', 'map_exec_refused',
-                     'protect_exec_refused', 'fixed_exec_refused'),
+                     'protect_exec_refused', 'fixed_exec_refused', 'startup_stays_read_only'),
     'partial-hole': ('partial_unmap_middle', 'partial_unmap_wakes_waiter', 'outer_pages_work',
                      'no_mapping_in_hole', 'hole_unmap_repeats', 'hole_requests_refused'),
     'partial-all': ('hole_unmap_idempotent', 'prot_none_page_counts', 'count_exact_with_mprotect',
@@ -383,6 +415,13 @@ CHECKS = {
     'release-fail': ('release_failure_keeps_range_unused',),
     'pages-closed': ('pages_closed_fails_closed',),
     'pages-discard': ('pages_discard_fails_closed',),
+    'pages-unclear': ('pages_unclear_extent_held',),
+    'top-page': ('top_page_mapping_below',),
+    'grow-maps': ('grow_maps_through_grants',),
+    'grow-objects': ('grow_objects_through_escape',),
+    'nogrow-map': ('nogrow_map_enomem', 'nogrow_map_recovers'),
+    'nogrow-malloc': ('nogrow_malloc_null', 'nogrow_malloc_recovers'),
+    'realloc-exhausted': ('realloc_exhausted_keeps_object',),
 }
 # pages-derive with --pages-run: the commit fails closed instead.
 CHECKS_PAGES_RUN = {'pages-derive': ('pages_derive_fails_closed',)}
@@ -408,7 +447,7 @@ ROOT_ONLY = {'stale_reference_at_reused_address_refused', 'address_refused',
              'mremap_grow_refused_with_object', 'mremap_grow_into_tail', 'fixed_enomem_changes_nothing',
              'futex_stale_waiter_not_counted', 'pages_derive_after_refill', 'pages_derive_fails_closed',
              'pages_fault_waits_then_proceeds', 'pages_admit_store_after_refill',
-             'pages_closed_fails_closed', 'pages_discard_fails_closed'}
+             'pages_closed_fails_closed', 'pages_discard_fails_closed', 'pages_unclear_extent_held'}
 FAULTING = {'unmap', 'renew', 'renew-ref', 'mremap', 'exit-renew', 'create', 'partial-all', 'futex-end',
             'release-fail', 'pages-discard'}
 # Modes whose stale read does not map the address again first (the frame is not reused, or the
@@ -493,6 +532,13 @@ REFUSALS = {
     'release-fail': [],
     'pages-closed': [('objects derived below the mapping', 'map fixed commit')],
     'pages-discard': [],
+    'pages-unclear': [('objects derived below the mapping', 'map fixed commit')],
+    'top-page': [],
+    'grow-maps': [],
+    'grow-objects': [],
+    'nogrow-map': [],
+    'nogrow-malloc': [],
+    'realloc-exhausted': [],
 }
 REFUSALS_PAGES_RUN = {'pages-derive': [('objects derived below the mapping', 'map fixed commit')]}
 # What each control changes: the mode it must break, and how.
@@ -589,6 +635,11 @@ LIBC_CUTS = {
     # block and answers success.
     'shrink-unchecked': {'mremap-validate': ('ROOT_MREMAP_VALIDATE shrink_over_hole failed=0',
                                              'mremap_shrink_over_hole_refused')},
+    # Block A, F4 part 2: the libc of F4 part 1, whose realloc moves a mapping before it issues the new
+    # object (__heap_remapping, then heap_alloc_reissue), the CDERIVE after the move failing: the NULL
+    # after frees lost the object, and the read faults 25.
+    'old-realloc': {'realloc-exhausted': ('ROOT_REALLOC_NULL_AFTER_FREES', 'realloc_exhausted_keeps_object',
+                                          'domain-fault')},
 }
 # The attach modes end when the launcher refuses the attachment: it exits 125 after it logged the
 # refusal with the reason here, and the worker's read (attach-readonly) or its attachment call never
@@ -734,6 +785,11 @@ def main():
                                    'modes only with --launcher-hooks)')
     p.add_argument('--no-refs', action='store_true', help='the processor has no supervisor references: insmod must fail')
     p.add_argument('--unpinned', action='store_true', help='load the module with unpinned=1')
+    p.add_argument('--module-args', default='', help='more insmod arguments (node_max_pages=16 for '
+                                                       + ', '.join(NOGROW_MODES) + ')')
+    p.add_argument('--no-unload', action='store_true', help='skip the final rmmod (see above)')
+    p.add_argument('--ids', type=int, choices=(30, 63), default=30,
+                   help='the module\'s CAPSTONE_VM_IDS build and the processor\'s x-capstone-ids')
     p.add_argument('--timeout', type=int, default=600)
     a = p.parse_args()
     if a.modes is None:
@@ -742,8 +798,10 @@ def main():
                      (m not in MODULE_HOOK_MODES or a.module_hooks)]
         a.modes = ','.join(MODES + tuple(hooked))
     modes = [m for m in a.modes.split(',') if m]
-    if any(m not in MODES + HOOK_MODES + MODULE_HOOK_MODES for m in modes):
+    if any(m not in MODES + HOOK_MODES + MODULE_HOOK_MODES + NOGROW_MODES for m in modes):
         p.error(f'unknown mode in {a.modes}')
+    if any(m in NOGROW_MODES for m in modes) and a.ids == 63 and 'node_max_pages=' not in a.module_args:
+        p.error('the modes ' + ', '.join(NOGROW_MODES) + ' need --module-args node_max_pages=16')
     if any(m in HOOK_MODES for m in modes) and not a.launcher_hooks:
         p.error('the hook modes need --launcher-hooks')
     if any(m in MODULE_HOOK_MODES for m in modes) and not a.module_hooks:
@@ -770,6 +828,8 @@ def main():
         module_args += ' root_grants=1'
     if a.block_frames:
         module_args += ' block_frames=1'
+    if a.module_args:
+        module_args += ' ' + a.module_args
     parameters = '/sys/module/capstone_vm/parameters'
 
     def run_mode(mode):
@@ -783,7 +843,7 @@ def main():
         if mode in DIAG_MODES:
             before.append(f'echo 1 > {parameters}/diag_admit')
             after.append(f'echo 0 > {parameters}/diag_admit')
-        if (a.pages_run and mode in PAGES_RUN_MODES) or mode == 'pages-closed':
+        if (a.pages_run and mode in PAGES_RUN_MODES) or mode in ('pages-closed', 'pages-unclear'):
             before.append(f'echo 1 > {parameters}/test_pages_run')
             after.append(f'echo 0 > {parameters}/test_pages_run')
         if a.module_hooks and not a.unpinned and mode == 'pages-tagged':
@@ -823,8 +883,7 @@ dmesg -c > /dev/null
 echo "ROOT_UNMAP_REFUSED:$(cat /sys/module/capstone_vm/parameters/unmap_refused 2>/dev/null || echo A)"
 echo "ROOT_RETIRE_REFUSED:$(cat /sys/module/capstone_vm/parameters/retire_refused 2>/dev/null || echo A)"
 echo "ROOT_EXIT_KEPT:$(cat /sys/module/capstone_vm/parameters/exit_kept 2>/dev/null || echo A)"
-rmmod capstone_vm
-echo ROOT_CLEANUP:$?
+{'echo ROOT_CLEANUP:skipped' if a.no_unload else 'rmmod capstone_vm' + chr(10) + 'echo ROOT_CLEANUP:$?'}
 echo VIRTUAL_STAGED_DONE
 ''')
     subprocess.run([sys.executable, str(HERE / 'run-staged.py'), '--qemu', str(a.qemu.resolve()),
@@ -963,7 +1022,9 @@ echo VIRTUAL_STAGED_DONE
                     tests[f'{mode}:kernel_refusals'] = refusals_match(seen[:len(expected)], expected)
                 continue
             for name in checks[mode]:
-                if a.root_grants or name not in ROOT_ONLY:
+                if mode in SUBLET_MODES and a.ids != 63:
+                    tests[f'{mode}:{name}:skipped'] = re.search(rf'^ROOT_SKIP:{name}:\S', part, re.M) is not None
+                elif a.root_grants or name not in ROOT_ONLY:
                     tests[f'{mode}:{name}'] = f'ROOT_CHECK:{name}:PASS' in part
                 else:
                     tests[f'{mode}:{name}:skipped'] = re.search(rf'^ROOT_SKIP:{name}:\S', part, re.M) is not None
@@ -1035,9 +1096,38 @@ echo VIRTUAL_STAGED_DONE
                 # Block A: the launcher counts the failed releases (CAPSTONE_VM_RELEASES at exit).
                 tests['release-fail:release_failure_counted'] = re.search(
                     r'^CAPSTONE_VM_RELEASE_FAILED .* failed=1$', part, re.M) is not None
-            releases = line(r'^CAPSTONE_VM_RELEASES failed=(\d+)$', part)
-            if releases is not None and not (a.launcher_hooks and mode == 'release-fail'):
-                tests[f'{mode}:no_release_failed'] = releases == '0'
+            releases = re.search(r'^CAPSTONE_VM_RELEASES failed=(\d+) held=(\d+) top_guard=(\d+)$', part, re.M)
+            if releases and not (a.launcher_hooks and mode == 'release-fail'):
+                tests[f'{mode}:no_release_failed'] = releases.group(1) == '0'
+            if releases:
+                held_expected = '1' if mode == 'pages-unclear' and a.root_grants and not a.unpinned else '0'
+                tests[f'{mode}:held_extents'] = releases.group(2) == held_expected
+                tests[f'{mode}:top_page_guarded'] = releases.group(3) == '1'
+            if mode == 'top-page':
+                # Block A, F4: the launcher holds the topmost page below 2^38, grant_mapping refuses it
+                # (ENOMEM) and, past that check, the module's add() (EINVAL).
+                tests['top-page:launcher_and_module_refuse_top_page'] = re.search(
+                    r'^CAPSTONE_VM_TEST_TOP_PAGE guard=1 launcher=12 module=22$', part, re.M) is not None
+                tests['top-page:module_refusal_logged'] = re.search(
+                    r'^CAPSTONE_VM_ADD_REFUSED base=0x3ffffff000 bytes=4096 errno=22 ', part, re.M) is not None
+            if mode == 'pages-unclear' and a.root_grants and not a.unpinned:
+                base = line(r'^ROOT_PAGES_UNCLEAR base=(0x[0-9a-f]+)$', part)
+                ktext = '\n'.join(kernel)
+                unheld = re.findall(rf'^test unhold arena {base}\+0x[0-9a-f]+ page 0 pfn (0x[0-9a-f]+)$',
+                                    ktext, re.M) if base else []
+                refused_pfns = re.findall(r'^clear in place refused pfn (0x[0-9a-f]+) at ', ktext, re.M)
+                closed = re.findall(rf'^page operation closed: arena {base}\+0x[0-9a-f]+ retire preparation '
+                                    r'failed \(-?\d+\), unheld pages cleared in place, (-?\d+) left as they were$',
+                                    ktext, re.M) if base else []
+                tests['pages-unclear:unheld_page_left_uncleared'] = (len(unheld) == 1 and
+                                                                     refused_pfns == unheld and closed == ['1'])
+                tests['pages-unclear:extent_held_logged'] = re.search(
+                    rf'^CAPSTONE_VM_RELEASE_HELD base={base} bytes=\d+ errno=0 held=1$', part, re.M) is not None
+            if mode == 'realloc-exhausted':
+                tries = re.findall(r'^ROOT_REALLOC_TRY freed=(\d+) null errno=(\d+)$', part, re.M)
+                summary = line(r'^ROOT_REALLOC_EXHAUSTED (filled=\d+ nulls=\d+ moved_at=-?\d+)$', part)
+                frames_reused[mode] = {'tries': tries, 'summary': summary, 'status': status,
+                                       'causes': mode_causes}
             if mode == 'pages-tagged':
                 base = line(r'^ROOT_PAGES_TAGGED base=(0x[0-9a-f]+)$', part)
                 counts = re.search(r'^ROOT_PAGES_TAGGED cleared_before=(-?\d+) cleared_after=(-?\d+)$', part, re.M)
@@ -1078,7 +1168,7 @@ echo VIRTUAL_STAGED_DONE
                                     ktext, re.M) if base else []
                 cleared = re.findall(r'^clear in place pfn (0x[0-9a-f]+) at ', ktext, re.M)
                 closed = re.findall(rf'^page operation closed: arena {base}\+0x[0-9a-f]+ retire preparation '
-                                    r'failed \(-?\d+\), unheld pages cleared in place \((-?\d+)\)$',
+                                    r'failed \(-?\d+\), unheld pages cleared in place, (-?\d+) left as they were$',
                                     ktext, re.M) if base else []
                 delta = (int(counts.group(2)) - int(counts.group(1))
                          if counts and int(counts.group(1)) >= 0 and int(counts.group(2)) >= 0 else None)
@@ -1087,6 +1177,7 @@ echo VIRTUAL_STAGED_DONE
                         len(unheld) == 1 and not cleared and delta is not None and delta >= 1)
                 else:
                     tests['pages-closed:retire_preparation_failed'] = closed == ['0']
+                    tests['pages-closed:extent_released'] = 'CAPSTONE_VM_RELEASE_HELD' not in part
                     tests['pages-closed:unheld_page_cleared_in_place'] = len(unheld) == 1 and unheld[0] in cleared
                     tests['pages-closed:no_tagged_frame_freed'] = delta == 0
             if mode == 'pages-discard' and a.root_grants and a.launcher_control != 'discard-abort':
@@ -1127,7 +1218,7 @@ echo VIRTUAL_STAGED_DONE
             if mode in STACKS_KEPT and (a.root_grants or mode != 'exit-victim'):
                 stacks_kept = len(re.findall(r'^CAPSTONE_VM_STACK_UNMAP_REFUSED ', part, re.M))
                 tests[f'{mode}:launcher_stacks_kept'] = stacks_kept == STACKS_KEPT[mode]
-            if mode == 'refuse' and a.root_grants:
+            if mode == 'refuse' and a.root_grants and a.ids != 63:
                 collections = line(r'^CAPSTONE_VM_STATS .*\bcollections=(\d+)', part)
                 tests['refuse:collected'] = collections is not None and int(collections) >= 1
             if a.root_grants:
@@ -1158,7 +1249,7 @@ echo VIRTUAL_STAGED_DONE
             tests['kernel_count_matches_reports'] = refused_count == str(len(reports))
             tests['kernel_kept_count_matches_reports'] = \
                 line(r'^ROOT_EXIT_KEPT:(\w+)$') == str(len(kept_reports))
-            tests['module_unloaded'] = 'ROOT_CLEANUP:0' in log
+            tests['module_unloaded'] = 'ROOT_CLEANUP:' + ('skipped' if a.no_unload else '0') in log
         tests['no_kernel_fault'] = 'Oops' not in log and 'Kernel panic' not in log
 
     result = dict(status='PASS' if all(tests.values()) else 'FAIL', root_grants=a.root_grants,
@@ -1175,7 +1266,7 @@ echo VIRTUAL_STAGED_DONE
                   exit_kept=line(r'^ROOT_EXIT_KEPT:(\w+)$'), no_refs_outcome=outcome,
                   module_hooks=a.module_hooks, block_frames=a.block_frames,
                   launcher_range_bypass=a.launcher_range_bypass, frames_reused=frames_reused,
-                  pages_run=a.pages_run)
+                  pages_run=a.pages_run, ids=a.ids, module_args=a.module_args, no_unload=a.no_unload)
     (a.work / 'result.json').write_text(json.dumps(result, indent=2) + '\n')
     print(json.dumps({k: result[k] for k in ('status', 'passed', 'total', 'exits', 'fault_causes')}))
     for name, ok in tests.items():

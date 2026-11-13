@@ -202,6 +202,11 @@ __attribute__((format(printf, 1, 2))) static void note(const char *format, ...)
  *   CAPSTONE_VM_TEST_DISCARD_FAIL=1   (block A) a refill's discard discards the range's first page and
  *                                     then acts as if Linux's MADV_DONTNEED had failed (EAGAIN): a
  *                                     discard that failed part way, which must end the block
+ *   CAPSTONE_VM_TEST_TOP_PAGE=1       (block A, F4) the first mapping service first grants the topmost
+ *                                     page below 2^38 (top_guard's page) through grant_mapping, which
+ *                                     must refuse it (ENOMEM), and then once more past that check, which
+ *                                     the module's add() must refuse (EINVAL); it prints
+ *                                     CAPSTONE_VM_TEST_TOP_PAGE guard= launcher= module= with the errnos
  * A delay prints CAPSTONE_VM_TEST_DELAY with its name. */
 static long test_number(const char *name)
 {
@@ -283,6 +288,9 @@ static void test_eintr_disarm(void)
         fprintf(stderr, "CAPSTONE_VM_TEST_EINTR op=%s retries=%u\n", name, retries); } while (0)
 #define TEST_RELEASE_FAILS() (test_number("CAPSTONE_VM_TEST_RELEASE_FAIL") > 0)
 #define TEST_DISCARD_FAILS() (test_number("CAPSTONE_VM_TEST_DISCARD_FAIL") > 0)
+/* Set while test_top_page grants the top page past grant_mapping's own check. */
+static int test_top_raw;
+#define TEST_TOP_RAW() test_top_raw
 #else
 #define TEST_DELAY(name) ((void)0)
 #define TEST_CREATE_FAILS() 0
@@ -292,6 +300,7 @@ static void test_eintr_disarm(void)
 #define TEST_EINTR_REPORT(name, retries) ((void)(retries))
 #define TEST_RELEASE_FAILS() 0
 #define TEST_DISCARD_FAILS() 0
+#define TEST_TOP_RAW() 0
 #endif
 
 /* An ioctl whose only EINTR comes before any effect, repeated until it answers otherwise: the module
@@ -744,6 +753,11 @@ static int grant_mapping(void *base, size_t bytes, size_t visible, unsigned reg,
      * length exactly, and neither writable_span nor page_all indexes past m->pages. A violation is a
      * launcher defect. */
     if ((visible & 4095) || (rx_bytes & 4095) || rx_bytes > visible || visible > bytes) abort();
+    /* No block reaches the topmost page below 2^38 (top_guard). Linux hands out no part of that page
+     * while the guard holds it, so this refuses only a defect; the module refuses it as well. */
+    if ((uintptr_t)base > CV_BLOCK_END_MAX || bytes > CV_BLOCK_END_MAX - (uintptr_t)base) {
+        if (!TEST_TOP_RAW()) { errno = ENOMEM; return -1; }
+    }
     if (map_reserve()) return -1;
     /* Option (iii): refuse to mint an arena whose bounds the encoder cannot represent, rather
      * than hand the domain a capability silently widened below its base or above its end.
@@ -1001,6 +1015,7 @@ static struct mc_entry *mc_find(size_t bytes, size_t alignment)
 }
 static long mapping_gate(const struct mapping *m, size_t bytes);
 static void release_range(struct mapping *m);
+static void release_ended(struct mapping *m, uint64_t ended);
 static struct mapping *range_mapping(uintptr_t base, size_t bytes, long *error);
 static long remove_range(uint64_t tid, uintptr_t base, size_t bytes);
 /* The domain thread tid's munmap of [base, + bytes) (CV_SERVICE_UNMAP, base the cursor of the
@@ -1146,7 +1161,7 @@ static long pages_change(uint64_t tid, struct mapping *m, uint64_t op, uintptr_t
         request.commit = CV_PAGES_FAIL;
         if (vm_call(CV_PAGES, &request, "pages") || !request.ended)
             die_errno("fail of a page operation");
-        release_range(m);
+        release_ended(m, request.ended);
         return -EINVAL;
     }
     TEST_DELAY("CAPSTONE_VM_TEST_PAGES_LATE_DELAY_MS");
@@ -1157,7 +1172,7 @@ static long pages_change(uint64_t tid, struct mapping *m, uint64_t op, uintptr_t
         /* A refill whose rule failed at the commit: the module ended the block (fail closed). */
         note("CAPSTONE_VM_PAGES_ENDED op=%llu base=0x%lx pages=%zu\n", (unsigned long long)op,
              (unsigned long)base, end - first);
-        release_range(m);
+        release_ended(m, request.ended);
         return removal ? 0 : -EINVAL;
     }
     page_set(m, first, end, removal ? PAGE_REMOVED : prot);
@@ -1240,9 +1255,9 @@ static long mapping_gate(const struct mapping *m, size_t bytes)
     if (m->holder) return -EBUSY;
     return 0;
 }
-/* Releases of an ended block whose munmap Linux refused (release_range), printed with the statistics
- * (CAPSTONE_VM_RELEASES). */
-static unsigned long release_failed;
+/* Releases of an ended block whose munmap Linux refused (release_range), and ended blocks that this
+ * launcher keeps mapped (hold_range), printed with the statistics (CAPSTONE_VM_RELEASES). */
+static unsigned long release_failed, release_held;
 /* Give the range of m, whose arena the module has released, back to Linux and drop its
  * registration. Waiters on words in it are woken first (futex_wake_range). The block's lifetime has
  * ended already (every reference into it is stale), so this cannot fail for the program: if Linux
@@ -1265,6 +1280,27 @@ static void release_range(struct mapping *m)
         reuse_address = m->address; reuse_bytes = m->bytes;
     }
     map_remove(m);
+}
+/* An ended block whose module answered CV_PAGES_ENDED_HELD (a commit that failed closed and could not
+ * clear a page of the block in place, so a frame may keep its tags): the whole extent stays mapped in
+ * Linux and becomes PROT_NONE, so Linux neither frees its frames nor gives an address inside it to
+ * another mapping while this process runs; the registration goes (no request may name the ended block).
+ * Waiters on words in it are woken first. Logged and counted. */
+static void hold_range(struct mapping *m)
+{
+    int error = 0;
+    futex_wake_range((uintptr_t)m->address, m->bytes);
+    if (mprotect(m->address, m->bytes, PROT_NONE)) error = errno;
+    ++release_held;
+    note("CAPSTONE_VM_RELEASE_HELD base=0x%lx bytes=%zu errno=%d held=%lu\n",
+         (unsigned long)(uintptr_t)m->address, m->bytes, error, release_held);
+    map_remove(m);
+}
+/* The release of a block that a page operation ended: hold_range or release_range, as the module said. */
+static void release_ended(struct mapping *m, uint64_t ended)
+{
+    if (ended == CV_PAGES_ENDED_HELD) hold_range(m);
+    else release_range(m);
 }
 /* The registered mapping that holds the page range [base, + bytes) that a request of the program
  * names (mprotect, madvise, a partial munmap, a refill, mremap's check), or NULL with *error set: a
@@ -1654,6 +1690,45 @@ static long futex_operation(uint64_t tid, const struct cv_step *step)
     if (command == FUTEX_WAKE || command == FUTEX_WAKE_BITSET) return futex_wake(step);
     return -ENOSYS;
 }
+/* The topmost page below 2^38 (wire.h, CV_BLOCK_END_MAX): no mapping block reaches it. The launcher holds
+ * the page with a PROT_NONE mapping of its own from its start, before its first reservation, so Linux
+ * hands no part of it to reserve() or reserve_aligned(), whose placement this launcher does not choose.
+ * Where something else holds the page already (EEXIST: the launcher's own stack, under a layout without
+ * randomization), Linux hands it out no more than with the guard. grant_mapping refuses a block that
+ * reaches the page anyway, and so does the module's add(). */
+static int top_guard_held;
+static void top_guard(void)
+{
+    void *at = (void *)CV_BLOCK_END_MAX;
+    void *p = mmap(at, 4096, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE | MAP_FIXED_NOREPLACE,
+                   -1, 0);
+    int error = p == MAP_FAILED ? errno : 0;
+    top_guard_held = p == at;
+    if (p != MAP_FAILED && p != at) munmap(p, 4096);   /* a kernel that took the address as a hint */
+    if (trace)
+        fprintf(stderr, "CAPSTONE_VM_TOP_GUARD at=0x%lx held=%d errno=%d\n", (unsigned long)CV_BLOCK_END_MAX,
+                top_guard_held, error);
+}
+#ifdef CAPSTONE_VM_TEST_HOOKS
+/* CAPSTONE_VM_TEST_TOP_PAGE (see the hooks above): once, at the first mapping service of thread tid. */
+static void test_top_page(uint64_t tid)
+{
+    static int done;
+    void *top = (void *)CV_BLOCK_END_MAX;
+    int launcher, module;
+    if (done || test_number("CAPSTONE_VM_TEST_TOP_PAGE") <= 0) return;
+    done = 1;
+    launcher = grant_mapping(top, 4096, 4096, 10, PROT_READ | PROT_WRITE, (uintptr_t)top, 1, tid, 0) ? errno : 0;
+    test_top_raw = 1;
+    module = grant_mapping(top, 4096, 4096, 10, PROT_READ | PROT_WRITE, (uintptr_t)top, 1, tid, 0) ? errno : 0;
+    test_top_raw = 0;
+    fprintf(stderr, "CAPSTONE_VM_TEST_TOP_PAGE guard=%d launcher=%d module=%d\n", top_guard_held, launcher,
+            module);
+}
+#define TEST_TOP_PAGE(tid) test_top_page(tid)
+#else
+#define TEST_TOP_PAGE(tid) ((void)(tid))
+#endif
 /* The domain thread tid's mapping service (CV_SERVICE_MAP: a0 the visible length, a1 the alignment, a2
  * the protection, a3 the kind). The grant carries no right (block A): what a page of the mapping allows
  * is the protection Linux maps, which only mprotect and a refill change, and never to PROT_EXEC. */
@@ -1670,6 +1745,7 @@ static long acquire_mapping(uint64_t tid, struct cv_step *step)
         (prot & ~(PROT_READ | PROT_WRITE | PROT_EXEC)) || kind > CV_MAP_METADATA ||
         (kind != CV_MAP_APPLICATION && prot != (PROT_READ | PROT_WRITE))) return -EINVAL;
     if (bytes < alignment) bytes = alignment;
+    TEST_TOP_PAGE(tid);
     void *p;
     if (kind == CV_MAP_HEAP && mc.cap) {
         struct mc_entry *e = mc_find(visible, alignment);
@@ -2430,7 +2506,8 @@ static int virtual_service(uint64_t tid, struct cv_step *step)
                         (unsigned long long)thread_last_id);
                 pthread_mutex_unlock(&thread_state_lock);
                 /* Releases of ended blocks whose munmap Linux refused (release_range). */
-                fprintf(stderr, "CAPSTONE_VM_RELEASES failed=%lu\n", release_failed);
+                fprintf(stderr, "CAPSTONE_VM_RELEASES failed=%lu held=%lu top_guard=%d\n", release_failed,
+                        release_held, top_guard_held);
             }
             if (tid == 0 && mc.cap && (getenv("CAPSTONE_VM_STATS") || getenv("CAPSTONE_DELEGATE_STATS")))
                 fprintf(stderr, "CAPSTONE_VM_MAPCACHE cap=%zu parks=%lu hits=%lu misses=%lu evictions=%lu"
@@ -2598,6 +2675,7 @@ int main(int argc, char **argv)
     start_ns = now_ns();
     trace = getenv("CAPSTONE_VM_TRACE") != NULL;
     grants = trace || getenv("CAPSTONE_VM_GRANTS") != NULL;
+    top_guard();
     mc_init(getenv("CAPSTONE_VM_MAPCACHE"));
     struct capstone_application_descriptor_v2 desc;
     char resumed_path[64];

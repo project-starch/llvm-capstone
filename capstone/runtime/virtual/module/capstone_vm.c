@@ -214,8 +214,9 @@ struct context {
 };
 static DEFINE_MUTEX(vm_lock);
 /* Quotas are in base pages; zero means the format's limit. Parameters are
- * read-only after module load so concurrent contexts see a stable policy. A SUBLET table (62) starts
- * with one batch and grows by batches (cap_rev_table_abi.h). */
+ * read-only after module load so concurrent contexts see a stable policy. A SUBLET table (63) starts
+ * with at least one batch (init() raises a smaller node_initial_pages to node_batch_pages) and grows by
+ * batches (cap_rev_table_abi.h); a batch of zero pages is refused at load. */
 static unsigned long node_initial_pages = CV_TABLE_GROWTH ? CV_TABLE_BATCH_PAGES : 4,
                      node_batch_pages = CV_TABLE_BATCH_PAGES;
 static unsigned long node_max_pages;
@@ -482,7 +483,7 @@ struct ref_page {
  *
  * No capability right protects anything (block A, decided 2026-11-13): Sublet checks bounds and
  * lifetime, and read, write and execute are the page table's. So the module never chooses rights. R
- * is minted with every right and NONLIN, the one descriptor the 62-bit format accepts (0x10f) and one
+ * is minted with every right and NONLIN, the one descriptor the 63-bit format accepts (0x10f) and one
  * the older formats accept too; every grant derived from it inherits them. Without root grants (the
  * legacy path of the 30-bit and 55-bit formats) each grant is minted with read, write and execute;
  * the page table decides each access, and only the image's text is ever mapped executable. */
@@ -599,17 +600,25 @@ static void node_publish(struct context *c, unsigned long pages)
  * table, and a virtual-C context escapes to its adapter (event 5, cause 30) while at most 256 slots are
  * left. The module never lets its own allocations trap: each of its CDERIVEs runs after a growth
  * attempt (grant_nodes), and a table that cannot grow has NOGROW set, so a CDERIVE without a slot
- * writes its failure result, an untagged 0, which the module turns into ENOMEM. The answer to the
- * pressure escape is a batch of record pages, published before the larger capacity; when memory is
- * short (a page allocation fails, or node_max_pages is reached) the module sets NOGROW instead, so the
- * resumed instruction fails with 0 and the allocator returns NULL. Either answer makes progress: more
- * than 256 slots available afterwards, or NOGROW. NOGROW is cleared when memory comes back, defined as:
- * while it is set, every growth attempt of the module (a grant, the revive of a pooled mapping, the
- * allocator's preflight CV_NODES) tries a whole batch, and the first that succeeds clears it. QEMU reads
- * the growth word at every operation. Counted in nogrow_sets and nogrow_clears. */
-static unsigned long nogrow_sets, nogrow_clears;
+ * writes its failure result, an untagged 0, which the module turns into ENOMEM.
+ *
+ * Every growth attempt is one call of ensure_nodes(c, required), and only ensure_nodes writes NOGROW.
+ * NOGROW means: after this call the requirement is unmet. ensure_nodes adds record pages when fewer
+ * than required slots are available (node_grow: at least one batch, published before the larger
+ * capacity), and then sets NOGROW exactly when the table still has fewer than required slots, or no
+ * more than the processor's reserve of 256 (the progress rule: an answer to cause 30 or the pressure
+ * escape leaves more than 256 slots, or NOGROW). So a call whose requirement is met clears NOGROW, also
+ * without adding a page (slots came back through releases), and the next allocation that needs the
+ * table to grow asks again; a call that falls short (a page allocation fails, or node_max_pages is
+ * reached) sets it, so the resumed instruction uses the last slots and then fails with its result 0,
+ * and the allocator returns NULL. QEMU reads the growth word at every operation. Counted in
+ * nogrow_sets and nogrow_clears; table_growths counts the growths that added pages (every context), and
+ * pressure_escapes the pressure escapes the module answered. Diagnostic. */
+static unsigned long nogrow_sets, nogrow_clears, table_growths, pressure_escapes;
 module_param(nogrow_sets, ulong, 0444);
 module_param(nogrow_clears, ulong, 0444);
+module_param(table_growths, ulong, 0444);
+module_param(pressure_escapes, ulong, 0444);
 
 static bool node_nogrow(const struct context *c)
 {
@@ -625,28 +634,27 @@ static void node_set_nogrow(struct context *c, bool nogrow)
 }
 
 /* Make at least required slots available by adding record pages, at least one batch at a time, and
- * publishing the capacity once after them. 0, or -ENOMEM when the pages could not all be added (memory
- * or node_max_pages): then a SUBLET table gets NOGROW. While NOGROW is set a whole batch is tried even
- * if the slots suffice, and success clears it. */
+ * publishing the capacity once after them: 0, or -ENOMEM when fewer were added (memory, or
+ * node_max_pages). Writes no NOGROW: ensure_nodes decides it from the result. */
 static int node_grow(struct context *c, unsigned long required)
 {
     unsigned long limit = node_max_pages ?: CV_ID_PAGES_MAX;
     unsigned long pages = node_capacity(c) / CV_TABLE_PAGE_RECORDS, before = pages;
-    bool nogrow = node_nogrow(c), short_of = node_available(c) < required;
     unsigned long need, want;
+
+    if (node_available(c) >= required) return 0;
     /* Flat capacity is fixed at creation; node_add_page writes the paged directory, which in a
      * flat table is record space. Exhaustion is the ordinary ENOMEM/resource path. */
-    if (node_table_flat) return short_of ? -ENOMEM : 0;
-    if (!short_of && !nogrow) return 0;
-    need = short_of ? DIV_ROUND_UP(required - node_available(c), CV_TABLE_PAGE_RECORDS) : 0;
-    want = before + max(node_batch_pages, need);
-    for (; pages < min(limit, want); ++pages)
+    if (node_table_flat) return -ENOMEM;
+    need = DIV_ROUND_UP(required - node_available(c), CV_TABLE_PAGE_RECORDS);
+    want = min(limit, before + max(node_batch_pages, need));
+    for (; pages < want; ++pages)
         if (node_add_page(c, pages * CV_TABLE_PAGE_RECORDS)) break;
     if (pages != before) {
         node_publish(c, pages);
         ++c->stats.node_growths;
+        ++table_growths;
     }
-    node_set_nogrow(c, pages != want);
     return node_available(c) >= required ? 0 : -ENOMEM;
 }
 
@@ -880,24 +888,40 @@ static void clear_thread_frame(struct cv_thread *t)
  * tags; swapped and huge mappings are outside this profile and fail closed, as they always
  * did (-EOPNOTSUPP), a bad table -EFAULT. Called with mmap_read_lock held.
  *
- * The CV_ADVISE modes (walk_unheld) do not stop at a present entry. CV_WALK_CHECK only checks:
- * each present page must be the zero page or exclusive anonymous memory, private to this mapping
- * (PageAnon, mapcount 1), else -EACCES. CV_WALK_CLEAR then overwrites each such page with zeros in
- * place, data and tags, while it holds the entry's page-table lock, which keeps the page mapped
- * while the stores run, and marks the folio dirty; the zero page is skipped. In both a migration
- * entry (a page that migration or compaction is moving) answers -EAGAIN, and the caller waits and
- * walks again. 0 at the end. A present entry includes one of a PROT_NONE VMA, which no GUP can pin. */
+ * The other modes (walk_unheld, clear_unheld) do not stop at a present entry. CV_WALK_CHECK only
+ * checks: each present page must be the zero page or exclusive anonymous memory, private to this
+ * mapping (PageAnon, mapcount 1), else -EACCES; a migration entry (a page that migration or compaction
+ * is moving) answers -EAGAIN, and the caller waits and walks again. CV_WALK_CLEAR overwrites each such
+ * page with zeros in place, data and tags, while it holds the entry's page-table lock, which keeps the
+ * page mapped while the stores run, and marks the folio dirty; the zero page is skipped. It does not
+ * stop at a page it cannot clear (a swapped, shared or huge page, or one that migration is moving): it
+ * counts the page in clear->unclear, notes a migration in clear->moving, and clears the rest. 0 at the
+ * end. A present entry includes one of a PROT_NONE VMA, which no GUP can pin. */
 enum cv_walk { CV_WALK_FIND, CV_WALK_CHECK, CV_WALK_CLEAR };
+struct cv_clear {
+    unsigned long unclear;  /* pages left with their contents and tags */
+    bool moving;            /* one of them was a migration entry: a later walk may clear it */
+};
+#ifdef CV_TEST_HOOKS
+/* Hooks build only (test_close_unheld=2): clearable pages that the next in-place clearing leaves as
+ * they are, as if it could not clear them (pages-unclear). */
+static unsigned test_unclear_budget;
+#define TEST_UNCLEAR_TAKE() (test_unclear_budget ? (--test_unclear_budget, true) : false)
+#else
+#define TEST_UNCLEAR_TAKE() false
+#endif
 static void clear_page_full(struct page *page);
 static long walk_resident(struct mm_struct *mm, unsigned long address, unsigned long end,
-                          unsigned long *at, unsigned long *pfn, enum cv_walk mode);
+                          unsigned long *at, unsigned long *pfn, enum cv_walk mode,
+                          struct cv_clear *clear);
 static long next_resident(struct mm_struct *mm, unsigned long address, unsigned long end,
                           unsigned long *at, unsigned long *pfn)
 {
-    return walk_resident(mm, address, end, at, pfn, CV_WALK_FIND);
+    return walk_resident(mm, address, end, at, pfn, CV_WALK_FIND, NULL);
 }
 static long walk_resident(struct mm_struct *mm, unsigned long address, unsigned long end,
-                          unsigned long *at, unsigned long *pfn, enum cv_walk mode)
+                          unsigned long *at, unsigned long *pfn, enum cv_walk mode,
+                          struct cv_clear *clear)
 {
     while (address < end) {
         pgd_t *pgd = pgd_offset(mm, address);
@@ -915,10 +939,22 @@ static long walk_resident(struct mm_struct *mm, unsigned long address, unsigned 
         if (p4d_bad(*p4d)) return -EFAULT;
         pud = pud_offset(p4d, address);
         if (pud_none(*pud)) { address = pud_addr_end(address, end); continue; }
+        if (pud_leaf(*pud) && mode == CV_WALK_CLEAR) {
+            stop = pud_addr_end(address, end);
+            clear->unclear += (stop - address) >> PAGE_SHIFT;
+            address = stop;
+            continue;
+        }
         if (pud_leaf(*pud)) return -EOPNOTSUPP;
         if (pud_bad(*pud)) return -EFAULT;
         pmd = pmd_offset(pud, address);
         if (pmd_none(*pmd)) { address = pmd_addr_end(address, end); continue; }
+        if (pmd_leaf(*pmd) && mode == CV_WALK_CLEAR) {
+            stop = pmd_addr_end(address, end);
+            clear->unclear += (stop - address) >> PAGE_SHIFT;
+            address = stop;
+            continue;
+        }
         if (pmd_leaf(*pmd)) return -EOPNOTSUPP;
         if (pmd_bad(*pmd)) return -EFAULT;
         pte = pte_offset_map_lock(mm, pmd, address, &lock);
@@ -928,21 +964,33 @@ static long walk_resident(struct mm_struct *mm, unsigned long address, unsigned 
             pte_t value = READ_ONCE(pte[i]);
             if (pte_none(value)) continue;
             if (!pte_present(value)) {
-                found = mode != CV_WALK_FIND && is_swap_pte(value) &&
-                        is_migration_entry(pte_to_swp_entry(value)) ? -EAGAIN : -EOPNOTSUPP;
+                bool moving = mode != CV_WALK_FIND && is_swap_pte(value) &&
+                              is_migration_entry(pte_to_swp_entry(value));
+                if (mode == CV_WALK_CLEAR) {
+                    ++clear->unclear;
+                    clear->moving |= moving;
+                    continue;
+                }
+                found = moving ? -EAGAIN : -EOPNOTSUPP;
                 break;
             }
             if (mode != CV_WALK_FIND) {
                 unsigned long frame = pte_pfn(value);
                 struct page *page = pfn_valid(frame) ? pfn_to_page(frame) : NULL;
+                bool exclusive = page && PageAnon(page) && page_mapcount(page) == 1;
                 if (is_zero_pfn(frame)) continue;
-                if (!page || !PageAnon(page) || page_mapcount(page) != 1) { found = -EACCES; break; }
-                if (mode == CV_WALK_CLEAR) {
-                    clear_page_full(page);
-                    folio_mark_dirty(page_folio(page));
+                if (mode == CV_WALK_CHECK && !exclusive) { found = -EACCES; break; }
+                if (mode == CV_WALK_CHECK) continue;
+                if (!exclusive || TEST_UNCLEAR_TAKE()) {
+                    ++clear->unclear;
                     if (diag_admit)
-                        pr_info("capstone_vm: clear in place pfn 0x%lx at 0x%lx\n", frame, address);
+                        pr_info("capstone_vm: clear in place refused pfn 0x%lx at 0x%lx\n", frame, address);
+                    continue;
                 }
+                clear_page_full(page);
+                folio_mark_dirty(page_folio(page));
+                if (diag_admit)
+                    pr_info("capstone_vm: clear in place pfn 0x%lx at 0x%lx\n", frame, address);
                 continue;
             }
             *at = address; *pfn = pte_pfn(value);
@@ -1505,10 +1553,9 @@ out:
     return error;
 }
 
-/* Caller holds vm_lock, with interrupts/preemption enabled. The same path
- * supplies user instructions, privileged mint and the allocator's preflight.
- * A count is available capacity, not a reservation against other C threads. */
-static int ensure_nodes(struct context *c, unsigned long required)
+/* The attempt of ensure_nodes: a collection where the format collects, then growth. 0 if required
+ * slots are available afterwards, else an error. */
+static int ensure_nodes_attempt(struct context *c, unsigned long required)
 {
     struct cv_thread *owner = NULL, *t;
     unsigned long available = node_available(c);
@@ -1516,10 +1563,6 @@ static int ensure_nodes(struct context *c, unsigned long required)
     unsigned long collect_min;
     bool collected = false;
     int error;
-    if (required > CV_ID_RECORDS_MAX) return -ENOMEM;
-    /* vp2's 16-bit node index: refuse growth past the flat table's ceiling. */
-    if (node_max_records && required > node_max_records) return -ENOMEM;
-    if (node_table_flat && required > CV_FLAT_RECORDS) return -ENOMEM;
     if (available >= required) return 0;
     list_for_each_entry(t, &c->threads, link)
         if (t->started && !t->terminal) { owner = t; break; }
@@ -1528,7 +1571,7 @@ static int ensure_nodes(struct context *c, unsigned long required)
      * Amortize that scan over at least as many retired identities and one
      * growth batch; a tiny table beside a large sparse VMA must not cause a
      * full scan every few hundred allocations. Existing free IDs win above. */
-    collect_min = max(sweep_pages, node_batch_pages * 256);
+    collect_min = max(sweep_pages, node_batch_pages * CV_TABLE_PAGE_RECORDS);
     collect_min = max(collect_min, node_capacity(c) / 4);
     /* A SUBLET table never reclaims a retired slot (CV_TABLE_COLLECTS 0): it only grows. */
     if (CV_TABLE_COLLECTS && owner && node_retired(c) >= max(required - available, collect_min)) {
@@ -1550,6 +1593,31 @@ static int ensure_nodes(struct context *c, unsigned long required)
         if (error) return error;
     }
     return node_available(c) >= required ? 0 : -ENOMEM;
+}
+
+/* Caller holds vm_lock, with interrupts/preemption enabled. The same path
+ * supplies user instructions, privileged mint and the allocator's preflight.
+ * A count is available capacity, not a reservation against other C threads.
+ * In a SUBLET table this is the one place that writes NOGROW (the growth protocol above). Its target
+ * is the requirement and more than the processor's reserve; after the attempt, NOGROW is set exactly
+ * when the target is unmet. 0 if required slots are available. */
+static int ensure_nodes(struct context *c, unsigned long required)
+{
+    unsigned long target = CV_TABLE_GROWTH ? max(required, (unsigned long)CAP_REV_TABLE_RESERVE + 1) :
+                           required;
+    int error;
+
+    /* A requirement no table of this format can meet is refused without an attempt, and NOGROW stays
+     * as it is: the table may still grow for smaller ones. */
+    if (required > CV_ID_RECORDS_MAX) return -ENOMEM;
+    /* vp2's 16-bit node index: refuse growth past the flat table's ceiling. */
+    if (node_max_records && required > node_max_records) return -ENOMEM;
+    if (node_table_flat && required > CV_FLAT_RECORDS) return -ENOMEM;
+
+    error = ensure_nodes_attempt(c, target);
+    node_set_nogrow(c, node_available(c) < target);
+    if (node_available(c) >= required) return 0;
+    return error ?: -ENOMEM;
 }
 
 /* Q-?? / sparse wedge: an OPTIONAL hardware fence immediately before the domain entry.
@@ -1680,7 +1748,7 @@ static void restore_root(unsigned long root)
  *
  * Encodings as in capstone-qemu tests/address-space-root/root.S. The selector of LCC is a register
  * NUMBER in the rs2 field. The module executes no instruction that sets a right (block A): TIGHTEN is
- * gone from it, and the 62-bit format makes TIGHTEN illegal. */
+ * gone from it, and the 63-bit format makes TIGHTEN illegal. */
 #define CV_RUN ".balign 64\n"
 #define CV_LDC(rd, base) ".insn i 0x5b, 3, " rd ", " base ", 0\n"
 #define CV_STC(src, base) ".insn s 0x5b, 4, " src ", 0(" base ")\n"
@@ -1693,7 +1761,7 @@ static void restore_root(unsigned long root)
 #define CV_DERIVE(rd, parent, size) ".insn r 0x5b, 1, 0x51, " rd ", " parent ", " size "\n"
 #define CV_KILL(object) ".insn r 0x5b, 1, 0x52, zero, " object ", zero\n"
 /* What LCC selector 1 answers for a reference that CDERIVE and CREVOKE accept: a tagged, non-linear
- * value. Every tagged value of the 62-bit format answers it; an untagged value answers 7 in every
+ * value. Every tagged value of the 63-bit format answers it; an untagged value answers 7 in every
  * format, and a linear one 0 in the older formats. A check of this answer is a tag test, not a right. */
 #define CV_TYPE_NONLIN 1UL
 
@@ -1704,6 +1772,13 @@ static void restore_root(unsigned long root)
  * executes CSMINT, which would trap on a range the format does not hold. */
 #define CV_ROOT_BASE 0UL
 #define CV_ROOT_END ((unsigned long)TASK_SIZE)
+/* No mapping block reaches the topmost page below R's end: a block ends at CV_BLOCK_END or below, and
+ * add() refuses any other. Only R ends at TASK_SIZE (2^38 under Sv39). A reference's cursor cannot be
+ * 2^38 (CV_USER_ADDRESS_END: the 63-bit format keeps a cursor as the zero extension of 38 bits, the
+ * older ones as the sign extension of 39), so an object ending there could not hold a tagged pointer
+ * one past its end, which C allows every object. The launcher keeps that page out of every reservation
+ * (exec.c, top_guard). */
+#define CV_BLOCK_END (CV_ROOT_END - PAGE_SIZE)
 
 /* The id of a lifetime as LCC selector 8 answers it, and the fields of its record, are cv-format.h's
  * (CV_ID_*, CV_REC_*). */
@@ -1778,7 +1853,7 @@ static unsigned long *node_record(struct context *c, unsigned long slot)
 }
 
 /* The record of the lifetime id if that lifetime is live, else NULL: the record holds exactly that id
- * (CV_REC_LIVE: in the 62-bit format the generation matches; in the older ones the record is VALID,
+ * (CV_REC_LIVE: in the 63-bit format the generation matches; in the older ones the record is VALID,
  * not LINEAR, not FREE, at the id's generation). Every check of a lifetime in this file asks this one
  * predicate: the request checks, the words, and CV_LIVE. */
 static unsigned long *ref_live(struct context *c, unsigned long id)
@@ -1869,7 +1944,7 @@ static void ref_bounds(unsigned long *slot, unsigned long *type, unsigned long *
  *   1. The operand is a non-linear reference (LCC type 1; an integer answers 7).
  *   2. Its lifetime is live.
  *   3. It is a child of M, the reservation's record, which the kernel slot names and which is live.
- *      Records keep no parent field in the 62-bit format, so the child is decided from the preorder
+ *      Records keep no parent field in the 63-bit format, so the child is decided from the preorder
  *      list (block A, decided 2026-11-13), in every format: P is the child of M exactly when P's record
  *      directly follows M's in the list (M's next is P's slot), P's depth is M's plus one, and P's
  *      lifetime is live (its generation matches). This holds because only the kernel holds M, it
@@ -2112,7 +2187,7 @@ static void root_end(struct context *c, struct arena *a)
  * (copy) with its cursor at the base. Run P: t1 is M again, and t0 is P, which CDERIVE makes from M with
  * the same bounds, into the frame slot. Run cursor: P moved to the requested cursor, into the frame
  * slot and into slot2 (the frame slot again where the request needs one slot). Separate runs, so that
- * a CDERIVE that gives its failure result (the 62-bit format with NOGROW: an untagged 0 in rd) is seen
+ * a CDERIVE that gives its failure result (the 63-bit format with NOGROW: an untagged 0 in rd) is seen
  * by an integer check between runs before anything uses its result: a CDERIVE or CINCOFFSET from an
  * untagged value would trap in S. Each run is straight-line inside one 64-byte block. */
 #define CV_DERIVE_M_RUN()                                                                        \
@@ -2174,17 +2249,18 @@ module_param(derive_failures, ulong, 0444);
 
 /* Make room for one grant before its CDERIVEs run, so that none of them traps in S. In the older formats
  * a CDERIVE without a slot traps (30), so the grant needs the room: ENOMEM otherwise. In a SUBLET table a
- * CDERIVE without a slot traps only while the table can grow; a growth that falls short sets NOGROW
- * (node_grow), and this sets it as well for any other failure, so the CDERIVE then writes its failure
- * result, which root_derive turns into ENOMEM. The grant goes ahead on whatever slots are left. */
+ * CDERIVE without a slot traps only while the table can grow; a growth attempt that falls short sets
+ * NOGROW (ensure_nodes), so a CDERIVE then writes its failure result, which root_derive turns into
+ * ENOMEM. The grant goes ahead on the slots that are left if they hold its records (M and P), and is
+ * refused with ENOMEM before anything changes otherwise: a grant that can derive M but not P would end M
+ * again and burn its slot. */
 static int grant_nodes(struct context *c)
 {
     int error = ensure_nodes(c, CV_GRANT_NODES);
 
     if (!error || !CV_TABLE_GROWTH)
         return error;
-    node_set_nogrow(c, true);
-    return 0;
+    return node_available(c) >= CV_GRANT_RECORDS ? 0 : -ENOMEM;
 }
 
 /* End the reservation whose reference the kernel slot copy holds, if it holds one: CREVOKE of M ends P
@@ -2247,10 +2323,10 @@ static int root_derive(struct context *c, unsigned long *copy, unsigned long *sl
 }
 
 /* Create R, once, when the context's table exists: the one step that makes a reference from
- * numbers. CSMINT writes R into its slot. In the 62-bit format it makes R alone and answers R's id; in
+ * numbers. CSMINT writes R into its slot. In the 63-bit format it makes R alone and answers R's id; in
  * the older formats it makes a private parent and R below it and answers the parent's number. The
  * function then reads R back the way every later use does and checks the answer against the table:
- * LCC selector 8 must name a live record that is R (62) or whose parent is the one CSMINT answered. A
+ * LCC selector 8 must name a live record that is R (63) or whose parent is the one CSMINT answered. A
  * processor that answers 0 there (no supervisor references) is refused here, and so is a table format
  * this code misreads. R's depth is kept: every reservation record lies one level below it. */
 static int root_create(struct context *c)
@@ -2261,6 +2337,15 @@ static int root_create(struct context *c)
 
     if (!c->exact_bounds && !capstone_repr_ok(CV_ROOT_BASE, CV_ROOT_END - CV_ROOT_BASE))
         return -EOPNOTSUPP;
+#if CAPSTONE_VM_IDS == 63
+    /* The 63-bit format holds cursors below 2^38 only: a larger user range (Sv48, Sv57) has addresses
+     * that no reference can carry. */
+    if (CV_ROOT_END > CV_USER_ADDRESS_END) {
+        pr_emerg("capstone_vm: root_grants: the user range ends at 0x%lx, above the 63-bit format's "
+                 "addresses (0x%lx): refused\n", CV_ROOT_END, CV_USER_ADDRESS_END);
+        return -EOPNOTSUPP;
+    }
+#endif
     slot = ref_slot_get(c);
     if (!slot) return -ENOMEM;
 
@@ -2745,6 +2830,7 @@ static int add(struct context *c, struct cv_thread *t, struct cv_map *r)
         (!c->exact_bounds && !capstone_repr_ok(r->address, r->bytes)) ||
         r->address > ULONG_MAX - r->bytes ||
         !access_ok((void __user *)r->address, r->bytes) ||
+        r->address + r->bytes > CV_BLOCK_END ||
         r->reserved || r->linear > 1 || r->reg > 31 ||
         (r->visible & (PAGE_SIZE - 1)) || r->visible > r->bytes ||
         r->cursor < r->address || r->cursor > r->address + r->bytes ||
@@ -3130,10 +3216,13 @@ module_param(test_unhold_pages, bool, 0644);
  * (pages_close) first drops the pin of every page of the arena outside the operation's range that
  * pages[] holds, without clearing it and with its entry left in the page table, and then acts as if its
  * retire preparation had failed: a resident tagged page that the retire would not clear, which the
- * in-place clearing must reach before Linux gets the frame back (pages-closed). */
-static bool test_close_unheld;
-module_param(test_close_unheld, bool, 0644);
+ * in-place clearing must reach before Linux gets the frame back (1, pages-closed). With 2 the in-place
+ * clearing then leaves the first such page as it is, as if it could not clear it: the launcher must keep
+ * the extent mapped PROT_NONE (pages-unclear). */
+static unsigned test_close_unheld;
+module_param(test_close_unheld, uint, 0644);
 #define TEST_CLOSE_UNHELD() READ_ONCE(test_close_unheld)
+#define TEST_UNCLEAR_ARM(close) (test_unclear_budget = (close) == 2)
 #else
 #define TEST_HOOK(at) do { } while (0)
 #define TEST_GUP(pages) do { } while (0)
@@ -3161,7 +3250,8 @@ module_param(test_close_unheld, bool, 0644);
 #define TEST_HOLD() do { } while (0)
 #define TEST_PAGES_RUN() false
 #define TEST_UNHOLD_PAGES() false
-#define TEST_CLOSE_UNHELD() false
+#define TEST_CLOSE_UNHELD() 0U
+#define TEST_UNCLEAR_ARM(close) do { (void)(close); } while (0)
 #endif
 
 /* Pending work for this task, or the end of its budget: return to the
@@ -4408,15 +4498,16 @@ static int pages_request(struct context *c, struct cv_pages *r, void __user *use
 
 /* Commits that failed closed (pages_close): ended their reservation at a page operation's commit. Of
  * those, the ones whose retire preparation failed, so that the module overwrote the unheld pages of
- * the arena in place (closed_cleared), and the ones where that clearing failed too (closed_unclear,
- * which should stay 0). Diagnostic. */
-static unsigned long pages_closed, closed_cleared, closed_unclear;
+ * the arena in place (closed_cleared), and the ones where that clearing left a page as it was
+ * (closed_unclear, which should stay 0; their pages in closed_unclear_pages): the launcher keeps such an
+ * extent mapped PROT_NONE and never gives it back to Linux. Diagnostic. */
+static unsigned long pages_closed, closed_cleared, closed_unclear, closed_unclear_pages;
 module_param(pages_closed, ulong, 0444);
 module_param(closed_cleared, ulong, 0444);
 module_param(closed_unclear, ulong, 0444);
+module_param(closed_unclear_pages, ulong, 0444);
 
-static int walk_unheld(struct context *c, struct arena *a, unsigned first, unsigned end,
-                       enum cv_walk mode);
+static long clear_unheld(struct context *c, struct arena *a, unsigned first, unsigned end);
 
 /* Hooks build only (test_close_unheld): drop the pin of every page of arena a outside [first, end) that
  * pages[] holds, keeping its contents and its page-table entry. True if it dropped one. */
@@ -4443,31 +4534,38 @@ static bool test_close_unhold(struct context *c, struct arena *a, unsigned long 
 /* End arena a's reservation at the commit of a page operation (fail closed): the commit found an object
  * below P (a hooks build only, since no thread runs between the check and the commit), or the launcher's
  * discard of a refill failed part way (CV_PAGES_FAIL). CREVOKE of M, the sweep and the release of the
- * arena, as a munmap of the whole block does; the launcher then gives the extent back to Linux. No thread
- * of the program runs and vm_lock is held. retire_prepare pins every resident page that pages[] does not
- * hold, so that retire_commit clears its tags before Linux reuses its frame. If the preparation fails (a
- * page that migration moves past GUP), the commit does not continue with frames that may keep their tags:
- * the module first overwrites every page of the arena that pages[] does not hold, in place through the
- * page table, data and tags (walk_unheld with CV_WALK_CLEAR, as advise does; it waits for a migration),
- * and then retires. So no tagged frame of the arena reaches Linux. A clearing that fails as well (a
- * swapped or shared page, outside this profile) is counted and warned about. The unpinned module holds no
- * page, and Linux clears the tags of every frame it frees. [first, end) is the operation's range. */
-static void pages_close(struct context *c, struct arena *a, unsigned long first, unsigned long end)
+ * arena, as a munmap of the whole block does. No thread of the program runs and vm_lock is held.
+ * retire_prepare pins every resident page that pages[] does not hold, so that retire_commit clears its
+ * tags before Linux reuses its frame. If the preparation fails (a page that migration moves past GUP),
+ * the commit does not continue with frames that may keep their tags: the module first overwrites every
+ * page of the arena that pages[] does not hold, in place through the page table, data and tags
+ * (clear_unheld, which waits for a migration), and then retires. A page that the clearing cannot clear
+ * (a swapped, shared or huge page, outside this profile) does not stop it: it clears the rest, and *held
+ * tells the launcher to keep the whole extent mapped PROT_NONE instead of giving it back to Linux, so no
+ * tagged frame of the arena reaches Linux's allocator while the process runs. The unpinned module holds
+ * no page, and Linux clears the tags of every frame it frees. [first, end) is the operation's range.
+ * 0, or the error of retire_commit (only without root grants: CSRETIRE refused, nothing ended). */
+static int pages_close(struct context *c, struct arena *a, unsigned long first, unsigned long end,
+                       bool *held)
 {
-    int rc = !unpinned && TEST_CLOSE_UNHELD() && test_close_unhold(c, a, first, end) ? -EAGAIN :
-             retire_prepare(c, a, NULL);
+    unsigned close_unheld = !unpinned ? TEST_CLOSE_UNHELD() : 0;
+    int rc = close_unheld && test_close_unhold(c, a, first, end) ? -EAGAIN : retire_prepare(c, a, NULL);
+    long left = 0;
 
     ++pages_closed;
     if (rc && !unpinned) {
-        int cleared = walk_unheld(c, a, 0, a->count, CV_WALK_CLEAR);
+        TEST_UNCLEAR_ARM(close_unheld);
+        left = clear_unheld(c, a, 0, a->count);
         ++closed_cleared;
-        if (cleared)
+        if (left) {
             ++closed_unclear;
+            closed_unclear_pages += left > 0 ? left : a->count;
+        }
         CV_EMIT("capstone_vm: page operation closed: arena 0x%lx+0x%lx retire preparation failed (%d), "
-                "unheld pages cleared in place (%d)\n", a->address, a->bytes, rc, cleared);
-        WARN_ONCE(cleared, "capstone_vm: CV_PAGES: the fail-closed commit could not clear every unheld page\n");
+                "unheld pages cleared in place, %ld left as they were\n", a->address, a->bytes, rc, left);
     }
-    retire_commit(c, a, false);
+    *held = left != 0;
+    return retire_commit(c, a, false);
 }
 
 /* The commit, the fail or the abort of the page operation that the check of thread r->thread recorded
@@ -4479,7 +4577,9 @@ static void pages_close(struct context *c, struct arena *a, unsigned long first,
  * The fail follows a refill's discard (MADV_DONTNEED) that failed, possibly part way, after the
  * protection change: the old contents of part of the range may be gone and Linux may supply fresh frames
  * there, which neither the program's view nor pages[] describes. So it fails closed (pages_close): it
- * ends the reservation and answers ended 1, the launcher gives the extent back and answers EINVAL.
+ * ends the reservation and answers ended CV_PAGES_ENDED, the launcher gives the extent back and answers
+ * EINVAL; or CV_PAGES_ENDED_HELD if a page of the arena kept its tags, and the launcher keeps the extent
+ * mapped PROT_NONE.
  * The commit follows Linux's change of the range:
  *   - a refill asks the refill rule again; if an object below P exists now, the commit fails
  *     closed (pages_close) and answers ended 1, so the object is stale before any access can see its
@@ -4495,8 +4595,9 @@ module_param(pages_failed, ulong, 0444);
 static int pages_finish(struct context *c, struct arena *a, struct cv_pages *r, void __user *user)
 {
     struct cv_pending p = c->pending;
-    bool removal = r->op == CV_PAGES_REMOVE || r->op == CV_PAGES_SHRINK;
+    bool removal = r->op == CV_PAGES_REMOVE || r->op == CV_PAGES_SHRINK, held;
     unsigned long fresh = 0, dropped = 0;
+    int rc;
 
     if (!p.op || p.op != r->op || p.arena != a->id || p.thread != r->thread)
         return -EINVAL;
@@ -4509,9 +4610,11 @@ static int pages_finish(struct context *c, struct arena *a, struct cv_pages *r, 
     }
     if (r->commit == CV_PAGES_FAIL) {
         ++pages_failed;
-        r->ended = 1;
+        rc = pages_close(c, a, p.first, p.end, &held);
+        if (rc)
+            return rc;
+        r->ended = held ? CV_PAGES_ENDED_HELD : CV_PAGES_ENDED;
         r->removed = 0;
-        pages_close(c, a, p.first, p.end);
         return copy_to_user(user, r, sizeof(*r)) ? -EFAULT : 0;
     }
     for (unsigned long i = p.first; i < p.end; ++i)
@@ -4522,9 +4625,11 @@ static int pages_finish(struct context *c, struct arena *a, struct cv_pages *r, 
         (removal && fresh && fresh == a->mapped)) {
         /* The program did not run since the check, so neither can happen outside a hooks build. */
         WARN_ONCE(removal, "capstone_vm: CV_PAGES: the commit would end the reservation\n");
-        r->ended = 1;
+        rc = pages_close(c, a, p.first, p.end, &held);
+        if (rc)
+            return rc;
+        r->ended = held ? CV_PAGES_ENDED_HELD : CV_PAGES_ENDED;
         r->removed = 0;
-        pages_close(c, a, p.first, p.end);
         return copy_to_user(user, r, sizeof(*r)) ? -EFAULT : 0;
     }
     if (removal && fresh && !a->removed)
@@ -4728,19 +4833,52 @@ static int walk_unheld(struct context *c, struct arena *a, unsigned first, unsig
             for (run = j + 1; run < end && !a->pages[run]; ++run)
                 ;
             rc = walk_resident(c->mm, base + (unsigned long)j * PAGE_SIZE,
-                               base + (unsigned long)run * PAGE_SIZE, &at, &pfn, mode);
+                               base + (unsigned long)run * PAGE_SIZE, &at, &pfn, mode, NULL);
             j = run;
         }
         mmap_read_unlock(c->mm);
         if (rc == -EAGAIN) {
             /* The entry becomes a page again when the migration ends, outside every lock this
-             * walk holds. Clearing is idempotent, so the clear pass starts again from the first
-             * page. */
+             * walk holds. */
             if (++retries > CV_WALK_RETRIES) break;
             msleep(1);
         }
     } while (rc == -EAGAIN);
     return rc;
+}
+
+/* Overwrite every page of pages [first, end) of arena a that pages[] does not hold with zeros, data and
+ * tags, in place through the page table (walk_resident, CV_WALK_CLEAR), whatever the protection of its
+ * VMA. A page it cannot clear does not stop it. When one of those was a migration entry it waits and
+ * walks the range again, up to its retry budget (clearing is idempotent). The number of pages left as
+ * they were (0 when every unheld page is clear), or -EFAULT for a bad page table. */
+static long clear_unheld(struct context *c, struct arena *a, unsigned first, unsigned end)
+{
+    unsigned long base = a->address + a->rx_bytes, at, pfn;
+    unsigned retries = 0;
+    struct cv_clear clear;
+    long rc;
+
+    for (;;) {
+        unsigned j = first, run;
+        clear = (struct cv_clear){0};
+        rc = 0;
+        mmap_read_lock(c->mm);
+        while (j < end && !rc) {
+            if (a->pages[j]) { ++j; continue; }
+            for (run = j + 1; run < end && !a->pages[run]; ++run)
+                ;
+            rc = walk_resident(c->mm, base + (unsigned long)j * PAGE_SIZE,
+                               base + (unsigned long)run * PAGE_SIZE, &at, &pfn, CV_WALK_CLEAR, &clear);
+            j = run;
+        }
+        mmap_read_unlock(c->mm);
+        if (rc)
+            return rc;
+        if (!clear.moving || ++retries > CV_WALK_RETRIES)
+            return clear.unclear;
+        msleep(1);
+    }
 }
 
 /* Held pages of an advise whose backing is not private to the mapping: never seen, reported. */
@@ -4772,6 +4910,7 @@ static int advise(struct context *c, struct cv_advise *r)
     struct cv_thread *t = find_thread(c, r->thread);
     unsigned long address = CV_CALLER_ARG(t, 0), bytes = CV_CALLER_ARG(t, 1);
     unsigned first, end;
+    long left;
     int rc;
 
     if (!a || a->parked || a->rx_bytes)
@@ -4811,13 +4950,13 @@ static int advise(struct context *c, struct cv_advise *r)
     rc = walk_unheld(c, a, first, end, CV_WALK_CHECK);
     if (rc)
         return rc;
-    rc = walk_unheld(c, a, first, end, CV_WALK_CLEAR);
-    if (rc) {
+    left = clear_unheld(c, a, first, end);
+    if (left) {
         /* Under vm_lock and mmap_read_lock only a migration can change an entry after the check,
-         * and the walk waits for it, up to its retry budget: past that budget part of the range is
+         * and the clearing waits for it, up to its retry budget: past that budget part of the range is
          * zeroed and the rest is not (see above). */
-        WARN_ONCE(1, "capstone_vm: advise: the clear failed (%d) after the check passed\n", rc);
-        return rc;
+        WARN_ONCE(1, "capstone_vm: advise: the clear left %ld pages after the check passed\n", left);
+        return left < 0 ? (int)left : -EAGAIN;
     }
     for (unsigned i = first; i < end; ++i)
         if (a->pages[i]) {
@@ -5377,10 +5516,9 @@ thread_unwind:
              * (kind 1). In the older formats a table that cannot grow ends the context instead:
              * those formats have no failure result. */
             int error = ensure_nodes(c, CAP_REV_TABLE_RESERVE + 1);
-            if (error && CV_TABLE_GROWTH) {
-                node_set_nogrow(c, true);
-                error = 0;
-            }
+            ++pressure_escapes;
+            if (error && CV_TABLE_GROWTH)
+                error = 0;    /* ensure_nodes set NOGROW */
             t->frame[2] = error ? 2 : 1;
         }
         r.kind = t->frame[2]; r.cause = t->frame[3];
@@ -5752,8 +5890,21 @@ static int __init init(void)
             return error;
         }
     }
+    /* The table's batch, checked at load: a batch of zero pages would answer a growth attempt without a
+     * page. A SUBLET table starts with at least one batch (cap_rev_table_abi.h), so a smaller
+     * node_initial_pages is raised to one batch, with a line. */
+    if (!node_batch_pages || node_batch_pages > CV_ID_PAGES_MAX) {
+        pr_emerg("capstone_vm: node_batch_pages=%lu must be 1..%lu\n", node_batch_pages,
+                 (unsigned long)CV_ID_PAGES_MAX);
+        return -EINVAL;
+    }
+    if (CV_TABLE_GROWTH && node_initial_pages < node_batch_pages) {
+        pr_emerg("capstone_vm: node_initial_pages=%lu raised to one batch, %lu pages\n", node_initial_pages,
+                 node_batch_pages);
+        node_initial_pages = node_batch_pages;
+    }
 #if !CV_LEGACY_GRANTS
-    /* The 62-bit format has no grant without root grants: CSMINT makes R alone with every right and
+    /* The 63-bit format has no grant without root grants: CSMINT makes R alone with every right and
      * no other descriptor, CSRETIRE is illegal, and records keep no parent for the private-parent
      * scheme. Refuse the load with the reason, before any context exists. */
     if (!root_grants) {

@@ -25,9 +25,12 @@ and lifetime changes:
   issue and revoke a temporary object child.
 - free validates the supplied capability, recovers mapping authority for musl
   metadata, revokes the object child and follows ordinary mallocng free.
-- Successful realloc replaces the old lifetime. In-place and mapping-resize
-  paths also check representable alignment; otherwise musl allocates, copies
-  with tags preserved and frees. Failure leaves the original object live.
+- Successful realloc replaces the old lifetime. The in-place paths (the slot,
+  or a large group whose mapping keeps its size) also check representable
+  alignment and issue the new object before they end the old one; a resize
+  that would move the mapping, and every other case, allocates, copies with
+  tags preserved and frees. Failure leaves the original object live, also when
+  the lifetime table is full (block A, F4).
 
 Patch `0010` retains the existing metadata-area protection batching.
 `check-mallocng-policy.py` verifies the upstream archive hash, applies these

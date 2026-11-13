@@ -151,7 +151,7 @@ new file mode 100644
 +		!of_property_read_u32(node, "exact-bounds", &exact) &&
 +		!of_property_read_u32(node, "page-size", &page) &&
 +		!of_property_read_u32(node, "granule-size", &granule) &&
-+		(ids == 30 || ids == 55) && exact <= 1 &&
++		(ids == 30 || ids == 55 || ids == 63) && exact <= 1 &&
 +		page == PAGE_SIZE && granule == 16;
 +	of_node_put(node);
 +	if (!valid || captag_disabled)

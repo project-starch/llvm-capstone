@@ -166,17 +166,42 @@ and clears tags before freeing all table pages and its saved frame.
 Every id and record constant of the module (the id split, the record fields,
 the root entries and walk, the header words, the growth word) lives in
 `module/cv-format.h`, selected by the build defines `CAPSTONE_VM_IDS` (30, 55
-or 62), `CAPSTONE_VM_FLAT_TABLE` and `CAPSTONE_VM_INDEX_BITS`; a new layout
-changes one section of that file (block A). The 62 section follows QEMU's
-`x-capstone-ids=62` of capstone-qemu `ad02a0f70b` and is not built yet: the
-paper's layout changed on 2026-11-13 and QEMU follows first. In that format
-the module grows the table itself: it answers the pressure escape with a batch
-of record pages published before the capacity, or with NOGROW when memory is
-short, never lets its own `CDERIVE` trap, turns a `CDERIVE` that gives 0 into
-`ENOMEM` for `mmap`, and refuses to load without `root_grants=1`
-(`address-space-root.md`, section Mappings).
+or 63; `make CAPSTONE_VM_IDS=63`, or the same variable for `build-adapter.sh`),
+`CAPSTONE_VM_FLAT_TABLE` and `CAPSTONE_VM_INDEX_BITS`; a new layout changes one
+section of that file (block A). The 63 section follows QEMU's
+`x-capstone-ids=63` of capstone-qemu `c1985bb529` (the paper's Section 5:
+generation 127:96, slot 95:65, bounds 64:38, a 38-bit address; record
+generation 127:96, previous 95:65, next 64:34 straddling the two words, depth
+33:3; up to 2^31 slots, a 5:9:9:8 walk with 32 root entries, generation
+2^32 - 1 for a retired slot) and needs that commit's `cap_rev_table_abi.h`
+beside the module. In that format the module grows the table itself: every
+growth attempt (its own grants, the pressure escape, the allocator's preflight)
+adds record pages published before the capacity when fewer slots than needed
+are available, and sets NOGROW exactly when the need, or more than the 256
+slots of the reserve, is still unmet afterwards; it never lets its own
+`CDERIVE` trap, refuses an `mmap` with `ENOMEM` when the table cannot grow and
+has no room for M and P, turns a `CDERIVE` that gives 0 into `ENOMEM`, and
+refuses to load without `root_grants=1` (`address-space-root.md`, section
+Mappings). The parameters `table_growths`, `pressure_escapes`, `nogrow_sets`
+and `nogrow_clears` count growths, answered escapes and NOGROW changes.
+On Linux that format needs a firmware that does not enter the capability
+monitor (CSCAPENTER is illegal there), and QEMU `c1985bb529` then drops a timer
+interrupt raised during a virtual-C run, so a program that sleeps or waits
+after it hangs; the plan's F4 part 2 names the QEMU change that removes the
+hang and the runs with and without it.
 
-`node_initial_pages` (default 4; one batch, 16, in a SUBLET table), `node_batch_pages` (16) and `node_max_pages`
+No mapping block reaches the topmost page below 2^38, where only R ends (a
+cursor at 2^38 is not representable, so an object ending there could not hold
+a tagged one-past-the-end pointer): the launcher holds that page with a
+`PROT_NONE` mapping from its start (`top_guard`, reported as `top_guard=` in
+`CAPSTONE_VM_RELEASES`), `grant_mapping` refuses a block that reaches it, and
+so does the module's `add()`. A page operation's commit that fails closed and
+cannot clear a page of the block in place answers `CV_PAGES_ENDED_HELD`: the
+launcher keeps the block's whole extent mapped `PROT_NONE` and never gives it
+back to Linux (`CAPSTONE_VM_RELEASE_HELD`, `held=` in `CAPSTONE_VM_RELEASES`;
+the module counts it in `closed_unclear`).
+
+`node_initial_pages` (default 4; one batch, 16, in a SUBLET table, which raises a smaller value to one batch at load), `node_batch_pages` (16, at least 1) and `node_max_pages`
 (0 means the id format's limit: 2^30 records, or 2^25 in a module built with
 `-DCAPSTONE_VM_IDS=55` for QEMU's `x-capstone-ids=55`, where a larger value is
 refused) count record pages and are read-only module
@@ -226,9 +251,10 @@ rounded bound inside its own slot, short of the neighbouring slot's in-band head
 The option remains available, and the suites are run both ways as a two-sided control.
 This prototype contract is not an RTL or one-bit-tag qualification. Public
 anonymous mmap, page-range mprotect and whole-mapping munmap retain their prior
-scope. mallocng's realloc of a large group maps a new group mapping, copies the
-contents with their tags and unmaps the old one (`__heap_remapping`,
-`malloc-mapping.c`).
+scope. mallocng's realloc of a large group resizes it in place when its
+mapping keeps its size; a resize that would move the mapping takes malloc,
+memcpy and free, so the old object ends only after the new one exists and a
+failed realloc keeps the original (block A, F4; `__heap_remapping` is gone).
 See the [ownership, policy and VM contract](mallocng.md) and the allocator gate.
 
 The collector is only enabled after a complete namespace sweep. If growth
@@ -975,8 +1001,8 @@ it: `ENOMEM`): only a range that is read-write over its whole length moves
 stale pointer into an ended mapping faults, and the new one is read-write. A
 write of another thread to the old range during the copy may be lost, as for
 realloc. `MREMAP_FIXED` stays `ENOSYS` (`mremap-contract.c`, mode `legacy`
-without root grants). mallocng's large realloc does the same map,
-copy and unmap through its own group mappings (`__heap_remapping`). Anonymous
+without root grants). mallocng's large realloc that would move its group
+mapping takes malloc, memcpy and free instead (block A, F4). Anonymous
 `MAP_SHARED` and SysV segments are process-local compatibility for nested
 ports, since there is no fork; every other mapping form fails explicitly.
 

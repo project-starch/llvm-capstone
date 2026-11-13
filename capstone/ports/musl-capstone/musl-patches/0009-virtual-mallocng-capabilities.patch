@@ -400,7 +400,7 @@ Minimal virtual mallocng: capability layout, mapping access and direct object li
  
  	struct meta *g = get_meta(p);
  	int idx = get_slot_index(p);
-@@ -20,32 +23,50 @@
+@@ -20,32 +23,40 @@
  
  	// only resize in-place if size class matches
  	if (n <= avail_size && n<MMAP_THRESHOLD
@@ -424,28 +424,22 @@ Minimal virtual mallocng: capability layout, mapping access and direct object li
 -		size_t needed = (n + base + UNIT + IB + 4095) & -4096;
 -		new = g->maplen*4096UL == needed ? g->mem :
 -			mremap(g->mem, g->maplen*4096UL, needed, MREMAP_MAYMOVE);
-+		size_t needed = (n + base + GRP_SIZE + IB + 4095) & -4096;
-+		int moved = g->maplen*4096UL != needed;
-+		new = !moved ? g->mem :
-+			__heap_remapping(g->mem, g->maplen*4096UL, needed);
- 		if (new!=MAP_FAILED) {
- 			g->mem = new;
- 			g->maplen = needed/4096;
- 			p = g->mem->storage + base;
+-		if (new!=MAP_FAILED) {
+-			g->mem = new;
+-			g->maplen = needed/4096;
+-			p = g->mem->storage + base;
 -			end = g->mem->storage + (needed - UNIT) - IB;
++		size_t needed = (n + base + GRP_SIZE + IB + 4095) & -4096;
++		/* Only a resize that keeps the mapping stays here. A
++		 * move takes malloc, memcpy and free below, which keep
++		 * the original until the new object exists, so a
++		 * realloc that fails returns NULL with it intact. */
++		if (g->maplen*4096UL == needed) {
++			void *fresh = heap_alloc_reissue(p, n);
++			if (!fresh) return 0;
++			heap_alloc_end(issued);
 +			end = g->mem->storage + (needed - GRP_SIZE) - IB;
  			*end = 0;
-+			void *fresh = heap_alloc_reissue(p, n);
-+			if (!fresh && moved) {
-+				/* The move ended the old mapping and every
-+				 * reference into it, so the object cannot stay:
-+				 * its slot goes back and realloc answers NULL. */
-+				set_size(p, end, n);
-+				__malloc_unissue(p);
-+				return 0;
-+			}
-+			if (!fresh) return 0;
-+			if (!moved) heap_alloc_end(issued);
  			set_size(p, end, n);
 -			return p;
 +			return fresh;

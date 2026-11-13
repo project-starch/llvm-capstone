@@ -9,7 +9,7 @@
  * once per mode (argv[1]) in one boot. Build with the virtual SDK.
  *
  * Every mode first reads the module's parameter root_grants (ROOT_GRANT_TYPE: 1 with root grants, 0
- * without; until block A it read the type of a grant, non-linear or linear, which the 62-bit format
+ * without; until block A it read the type of a grant, non-linear or linear, which the 63-bit format
  * no longer stores) and prints the type LCC answers for a grant (ROOT_GRANT_LCC). A check that holds
  * only with root grants prints ROOT_SKIP with the reason without them, so the same program runs in
  * both forms.
@@ -328,6 +328,9 @@
  *   image_unmap_refused             munmap of a page of the image or of the whole image: EINVAL
  *   map_exec_refused, protect_exec_refused, fixed_exec_refused
  *                                   PROT_EXEC at mmap, mprotect and MAP_FIXED: EACCES
+ *   startup_stays_read_only         (block A, F4) the startup block's reference, as _start left it on
+ *                                   the main stack: mprotect to read-write, MAP_FIXED, madvise and
+ *                                   munmap of it are refused, and its page stays read-only
  * Stage 4e, partial munmap as a page operation:
  * partial-hole (ends with a page fault, cause 13):
  *   partial_unmap_middle, partial_unmap_wakes_waiter
@@ -432,6 +435,42 @@
  * pages-discard (ends with a fault 25; the hooks launcher's discard of a refill fails part way):
  *   pages_discard_fails_closed      MAP_FIXED of two pages of a block answers EINVAL and the block has
  *                                   ended; the last line reads through the block's reference: fault 25
+ * Block A, F4 part 2:
+ * pages-unclear (hooks launcher and module, test_close_unheld=2; root grants): as pages-closed, and the
+ *   in-place clearing leaves the unheld page as it is:
+ *   pages_unclear_extent_held       MAP_FIXED answers EINVAL, the block has ended, its extent stays
+ *                                   mapped PROT_NONE (never given back to Linux) and the module counts
+ *                                   the commit in closed_unclear
+ * top-page (hooks launcher, CAPSTONE_VM_TEST_TOP_PAGE): the launcher's first mapping service grants the
+ *   topmost page below 2^38 first, which the launcher and then the module refuse (the runner reads the
+ *   launcher's line):
+ *   top_page_mapping_below          the mapping that follows works and ends a page or more below 2^38
+ * The growth modes of the 63-bit format (they skip in the older formats, which have no failure result
+ * and end the context at exhaustion):
+ * grow-maps (exit 0):
+ *   grow_maps_through_grants        2,500 one-page mmaps (5,000 records, more than the first batch of
+ *                                   4,096 slots) all succeed: the module grows the table before its own
+ *                                   CDERIVEs (table_growths rises), and no pressure escape is needed
+ * grow-objects (exit 0):
+ *   grow_objects_through_escape     6,000 objects of 48 bytes all come from malloc: the table grows,
+ *                                   through the pressure escape too (pressure_escapes and table_growths
+ *                                   rise), and every object keeps its value
+ * nogrow-map (exit 0; module loaded with node_max_pages=16, one batch):
+ *   nogrow_map_enomem               mmap answers ENOMEM once the table is full, without a loop (a few
+ *                                   escapes at most), and NOGROW is set
+ *   nogrow_map_recovers             after 300 munmaps an mmap succeeds again
+ * nogrow-malloc (exit 0; node_max_pages=16):
+ *   nogrow_malloc_null              malloc returns NULL with ENOMEM once the table is full, without a
+ *                                   loop, and NOGROW is set
+ *   nogrow_malloc_recovers          after half the objects are freed malloc succeeds again
+ * realloc-exhausted (exit 0; node_max_pages=16):
+ *   realloc_exhausted_keeps_object  a large object (256 KiB), the table then filled by small objects:
+ *                                   realloc to 384 KiB (the same granule of 512 bytes, so the F4 part 1
+ *                                   libc took its moving path), which needs a larger mapping, answers
+ *                                   NULL with ENOMEM and the object intact; then after each step of 64
+ *                                   frees it answers NULL with the object intact or, once the frees
+ *                                   made room, a new object with the contents, which it must reach; a
+ *                                   read of a lost object would fault 25
  *
  * registered() asks the launcher whether an address lies in a registered mapping, by integer: a
  * futex wake of no waiter there answers 0, outside every mapping EFAULT.
@@ -2755,6 +2794,34 @@ static int mode_protect_exec(void)
     require(mmap(two + PAGE, PAGE, PROT_READ | PROT_EXEC, MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED,
                  -1, 0) == MAP_FAILED && errno == EACCES, "MAP_FIXED with PROT_EXEC");
     pass("fixed_exec_refused");
+
+    /* The startup block (block A): its grant carried the only right a grant ever narrowed (read only),
+     * and since block A the page alone protects it. The program still holds its reference: _start
+     * stored a2 at 32(sp) after sp -= 80, at the top of the main stack. No service may make it
+     * writable, take its pages or end it. */
+    void *sp;
+    __asm__ volatile("movc %0, sp" : "=r"(sp));
+    void *startup = *(void **)at_address(sp, end_of(sp) - 80 + 32);
+    unsigned long start = base_of(startup), length = end_of(startup) - start;
+    printf("ROOT_STARTUP base=0x%lx bytes=0x%lx type=%lu\n", start, length, type_of(startup));
+    fflush(stdout);
+    require(type_of(startup) == 1 && length >= PAGE && !(start & (PAGE - 1)) && !(length & (PAGE - 1)) &&
+            protected_as(start, "r--"), "the startup block's reference on the main stack");
+    char *first = at_address(startup, start);
+    errno = 0;
+    require(mprotect(first, PAGE, PROT_READ | PROT_WRITE) == -1 && errno == EINVAL,
+            "mprotect of the startup block to read-write");
+    errno = 0;
+    require(mprotect(first, length, PROT_READ | PROT_WRITE) == -1 && errno == EINVAL,
+            "mprotect of the whole startup block to read-write");
+    require(mmap(first, PAGE, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED, -1, 0) ==
+            MAP_FAILED, "MAP_FIXED over the startup block");
+    errno = 0;
+    require(madvise(first, PAGE, MADV_DONTNEED) == -1 && errno == EINVAL, "madvise of the startup block");
+    require(refused(munmap(first, length)) && refused(munmap(first, PAGE)), "munmap of the startup block");
+    require(protected_as(start, "r--") && first[0] == ((char *)at_address(startup, start))[0],
+            "the startup block stays read-only and mapped");
+    pass("startup_stays_read_only");
     return 0;
 }
 
@@ -3504,6 +3571,333 @@ static int mode_pages_discard(void)
     return 0;
 }
 
+/* ---- Block A, F4 part 2: held extents, the top page, growth and the failure result ---- */
+
+/* pages-unclear (block A, F4): as pages-closed, with test_close_unheld=2, so the in-place clearing
+ * leaves the unheld tagged page as it is. The commit still fails closed, and the launcher keeps the
+ * block's whole extent mapped PROT_NONE instead of giving it back to Linux. */
+static int mode_pages_unclear(void)
+{
+    (void)grant();
+    if (!root_grants) {
+        skip("pages_unclear_extent_held", "root_grants=0 refuses MAP_FIXED before Linux acts");
+        return 0;
+    }
+    spin_calibrate();
+    char *stacks = map(2 * STACK);
+    char *target = map(PAGE);
+    target[1] = 0x71;
+    char *three = map(3 * PAGE);
+    unsigned long base = cursor(three);
+    memset(three, 0x5a, 3 * PAGE);
+    *(char **)(three + 64) = target;
+    require(type_of(*(char **)(three + 64)) == 1, "a reference stored in the first page");
+    long unclear = read_number("/sys/module/capstone_vm/parameters/closed_unclear");
+    printf("ROOT_PAGES_UNCLEAR base=0x%lx\n", base);
+    fflush(stdout);
+    derive_parent = three;
+    derive_offset = 2 * PAGE;
+    derive_spin = 500;
+    long deriver = context(derive_entry, stacks + STACK);
+    errno = 0;
+    char *q = mmap(three + PAGE, 2 * PAGE, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED,
+                   -1, 0);
+    int fixed_errno = errno;
+    require(wait_for(&derive_done, 1, 15000), "the context derives its object");
+    require(!capstone_virtual_thread_join(deriver), "join the context");
+    long unclear_after = read_number("/sys/module/capstone_vm/parameters/closed_unclear");
+    int held = protected_as(base, "---") && protected_as(base + 2 * PAGE, "---");
+    printf("ROOT_PAGES_UNCLEAR fixed=%d errno=%d registered=%d held=%d unclear_before=%ld unclear_after=%ld\n",
+           q != MAP_FAILED, fixed_errno, registered(base), held, unclear, unclear_after);
+    fflush(stdout);
+    require(q == MAP_FAILED && fixed_errno == EINVAL && !registered(base),
+            "the refill failed closed: the block has ended");
+    require(held, "the ended block's extent stays mapped PROT_NONE");
+    require(unclear >= 0 && unclear_after == unclear + 1, "the module counts the commit in closed_unclear");
+    pass("pages_unclear_extent_held");
+    return 0;
+}
+
+/* top-page (block A, F4; hooks launcher with CAPSTONE_VM_TEST_TOP_PAGE): the launcher's first mapping
+ * service tries the topmost page below 2^38 first; the runner reads its line. The mapping the program
+ * gets works and ends a page or more below 2^38. */
+static int mode_top_page(void)
+{
+    (void)grant();
+    char *page = map(PAGE);
+    page[100] = 0x42;
+    require(page[100] == 0x42 && cursor(page) + PAGE <= (1UL << 38) - PAGE,
+            "the mapping works and ends a page or more below 2^38");
+    pass("top_page_mapping_below");
+    require(!munmap(page, PAGE), "munmap of the mapping");
+    return 0;
+}
+
+/* The lifetime-id width of the module's build: its parameter ids (absent in the 30-bit build). */
+static int sublet_format(void)
+{
+    return read_number("/sys/module/capstone_vm/parameters/ids") == 63;
+}
+
+static long module_number(const char *name)
+{
+    char path[96];
+    snprintf(path, sizeof path, "/sys/module/capstone_vm/parameters/%s", name);
+    return read_number(path);
+}
+
+/* An array of n pointers in a mapping of its own, made before the table fills. */
+static void **pointer_array(unsigned long n)
+{
+    unsigned long bytes = (n * sizeof(void *) + PAGE - 1) & ~(PAGE - 1);
+    void **array = (void **)map(bytes);
+    memset(array, 0, bytes);
+    return array;
+}
+
+#define GROW_MAPS 2500UL
+#define GROW_OBJECTS 6000UL
+
+/* grow-maps: more mappings than the first batch holds records for, two records each. */
+static int mode_grow_maps(void)
+{
+    (void)grant();
+    if (!sublet_format()) {
+        skip("grow_maps_through_grants", "the older formats: no growth word");
+        return 0;
+    }
+    void **maps = pointer_array(GROW_MAPS);
+    long growths = module_number("table_growths"), escapes = module_number("pressure_escapes");
+    unsigned long done = 0;
+    for (; done < GROW_MAPS; ++done) {
+        char *p = mmap(NULL, PAGE, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+        if (p == MAP_FAILED) break;
+        p[8] = (char)done;
+        maps[done] = p;
+    }
+    long growths_after = module_number("table_growths"), escapes_after = module_number("pressure_escapes");
+    unsigned long kept = 0;
+    for (unsigned long i = 0; i < done; ++i) {
+        kept += ((char *)maps[i])[8] == (char)i;
+        require(!munmap(maps[i], PAGE), "munmap of a grown mapping");
+    }
+    printf("ROOT_GROW_MAPS maps=%lu kept=%lu growths=%ld escapes=%ld\n", done, kept,
+           growths_after - growths, escapes_after - escapes);
+    fflush(stdout);
+    require(done == GROW_MAPS && kept == GROW_MAPS, "every mmap succeeds and keeps its value");
+    require(growths >= 0 && growths_after > growths, "the module grows the table for its own CDERIVEs");
+    pass("grow_maps_through_grants");
+    return 0;
+}
+
+/* grow-objects: more objects than the first batch holds, one record each. */
+static int mode_grow_objects(void)
+{
+    (void)grant();
+    if (!sublet_format()) {
+        skip("grow_objects_through_escape", "the older formats: no growth word");
+        return 0;
+    }
+    void **objects = pointer_array(GROW_OBJECTS);
+    long growths = module_number("table_growths"), escapes = module_number("pressure_escapes");
+    unsigned long done = 0, kept = 0;
+    for (; done < GROW_OBJECTS; ++done) {
+        long *o = malloc(48);
+        if (!o) break;
+        o[0] = (long)done;
+        objects[done] = o;
+    }
+    long growths_after = module_number("table_growths"), escapes_after = module_number("pressure_escapes");
+    for (unsigned long i = 0; i < done; ++i) {
+        kept += ((long *)objects[i])[0] == (long)i;
+        free(objects[i]);
+    }
+    printf("ROOT_GROW_OBJECTS objects=%lu kept=%lu growths=%ld escapes=%ld\n", done, kept,
+           growths_after - growths, escapes_after - escapes);
+    fflush(stdout);
+    require(done == GROW_OBJECTS && kept == GROW_OBJECTS, "every malloc succeeds and keeps its value");
+    require(growths >= 0 && growths_after > growths && escapes_after > escapes,
+            "the table grows, through the pressure escape too");
+    pass("grow_objects_through_escape");
+    return 0;
+}
+
+/* malloc and realloc called through volatile pointers: the compiler treats the named functions as
+ * builtins that touch only memory the program cannot see, so it would carry errno = 0 across the call
+ * and the failure's ENOMEM would read as 0. */
+static void *(*volatile try_malloc)(size_t) = malloc;
+static void *(*volatile try_realloc)(void *, size_t) = realloc;
+
+#define NOGROW_LIMIT 8000UL
+/* At most this many pressure escapes while the table fills: one answer sets NOGROW. */
+#define NOGROW_ESCAPES 4L
+
+/* nogrow-map (node_max_pages=16): mmap until the table is full. */
+static int mode_nogrow_map(void)
+{
+    (void)grant();
+    if (!sublet_format()) {
+        skip("nogrow_map_enomem", "the older formats end the context at exhaustion");
+        skip("nogrow_map_recovers", "the older formats end the context at exhaustion");
+        return 0;
+    }
+    void **maps = pointer_array(NOGROW_LIMIT);
+    long escapes = module_number("pressure_escapes"), sets = module_number("nogrow_sets");
+    unsigned long done = 0;
+    int error = 0;
+    for (; done < NOGROW_LIMIT; ++done) {
+        errno = 0;
+        char *p = mmap(NULL, PAGE, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+        if (p == MAP_FAILED) { error = errno; break; }
+        maps[done] = p;
+    }
+    long escapes_after = module_number("pressure_escapes"), sets_after = module_number("nogrow_sets");
+    require(done >= 300, "the first batch holds more than 300 mappings");
+    unsigned long keep = done - 300;
+    for (unsigned long i = keep; i < done; ++i)
+        require(!munmap(maps[i], PAGE), "munmap at exhaustion");
+    char *again = mmap(NULL, PAGE, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    int recovered = again != MAP_FAILED;
+    if (recovered) { again[0] = 3; require(!munmap(again, PAGE), "munmap after recovery"); }
+    long clears = module_number("nogrow_clears");
+    for (unsigned long i = 0; i < keep; ++i)
+        require(!munmap(maps[i], PAGE), "munmap of the rest");
+    printf("ROOT_NOGROW_MAP maps=%lu errno=%d escapes=%ld nogrow_sets=%ld recovered=%d nogrow_clears=%ld\n",
+           done, error, escapes_after - escapes, sets_after - sets, recovered, clears);
+    fflush(stdout);
+    require(done < NOGROW_LIMIT && error == ENOMEM, "mmap answers ENOMEM once the table is full");
+    require(escapes_after - escapes <= NOGROW_ESCAPES && sets_after > sets,
+            "NOGROW is set, without a loop of escapes");
+    pass("nogrow_map_enomem");
+    require(recovered, "an mmap succeeds again after munmaps");
+    pass("nogrow_map_recovers");
+    return 0;
+}
+
+/* nogrow-malloc (node_max_pages=16): malloc until the table is full. */
+static int mode_nogrow_malloc(void)
+{
+    (void)grant();
+    if (!sublet_format()) {
+        skip("nogrow_malloc_null", "the older formats end the context at exhaustion");
+        skip("nogrow_malloc_recovers", "the older formats end the context at exhaustion");
+        return 0;
+    }
+    void **objects = pointer_array(NOGROW_LIMIT);
+    long escapes = module_number("pressure_escapes"), sets = module_number("nogrow_sets");
+    unsigned long done = 0;
+    int error = 0;
+    for (; done < NOGROW_LIMIT; ++done) {
+        errno = 0;
+        long *o = try_malloc(48);
+        if (!o) { error = errno; break; }
+        o[0] = (long)done;
+        objects[done] = o;
+    }
+    long escapes_after = module_number("pressure_escapes"), sets_after = module_number("nogrow_sets");
+    unsigned long kept = 0;
+    for (unsigned long i = done / 2; i < done; ++i) {
+        kept += ((long *)objects[i])[0] == (long)i;
+        free(objects[i]);
+    }
+    long *again = malloc(48);
+    int recovered = again != NULL;
+    free(again);
+    for (unsigned long i = 0; i < done / 2; ++i) {
+        kept += ((long *)objects[i])[0] == (long)i;
+        free(objects[i]);
+    }
+    printf("ROOT_NOGROW_MALLOC objects=%lu kept=%lu errno=%d escapes=%ld nogrow_sets=%ld recovered=%d\n",
+           done, kept, error, escapes_after - escapes, sets_after - sets, recovered);
+    fflush(stdout);
+    require(done < NOGROW_LIMIT && error == ENOMEM && kept == done,
+            "malloc returns NULL with ENOMEM once the table is full, every object intact");
+    require(escapes_after - escapes <= NOGROW_ESCAPES && sets_after > sets,
+            "NOGROW is set, without a loop of escapes");
+    pass("nogrow_malloc_null");
+    require(recovered, "malloc succeeds again after frees");
+    pass("nogrow_malloc_recovers");
+    return 0;
+}
+
+#define REALLOC_FROM (256UL * 1024)
+/* Larger than REALLOC_FROM within the same representability granule (512 bytes for 256 KiB to 512 KiB),
+ * so that a libc that resizes a large group's mapping in place or moves it (F4 part 1: __heap_remapping)
+ * takes that path: at 1 MiB the granule is 2 KiB and the object's offset in its mapping does not meet
+ * it, so every libc copies through malloc. */
+#define REALLOC_TO (384UL * 1024)
+
+static int pattern_kept(const unsigned char *p, unsigned long bytes)
+{
+    for (unsigned long i = 0; i < bytes; i += 509)
+        if (p[i] != (unsigned char)(i * 7 + 3)) return 0;
+    return 1;
+}
+
+/* Objects freed between two tries of realloc-exhausted. One object frees one slot, and a try whose new
+ * mapping lands at a new address keeps the index pages it mapped (malloc-mapping.c never unmaps them),
+ * so frees of one object at a time may never catch up with a move. */
+#define REALLOC_STEP 64UL
+
+/* realloc-exhausted (node_max_pages=16): realloc of a large object while the table is full, then
+ * after each step of frees until it succeeds. */
+static int mode_realloc_exhausted(void)
+{
+    (void)grant();
+    if (!sublet_format()) {
+        skip("realloc_exhausted_keeps_object", "the older formats end the context at exhaustion");
+        return 0;
+    }
+    void **objects = pointer_array(NOGROW_LIMIT);
+    unsigned char *big = malloc(REALLOC_FROM);
+    require(big != NULL, "malloc of the large object");
+    for (unsigned long i = 0; i < REALLOC_FROM; i += 509)
+        big[i] = (unsigned char)(i * 7 + 3);
+    unsigned long done = 0;
+    while (done < NOGROW_LIMIT && (objects[done] = malloc(48)) != NULL)
+        ++done;
+    require(done < NOGROW_LIMIT, "the table fills");
+
+    unsigned long filled = done, freed = 0;
+    long moved_at = -1;
+    int nulls = 0;
+    for (;;) {
+        errno = 0;
+        unsigned char *q = try_realloc(big, REALLOC_TO);
+        if (q) {
+            require(pattern_kept(q, REALLOC_FROM), "a realloc that succeeds keeps the contents");
+            big = q;
+            moved_at = (long)freed;
+            break;
+        }
+        int error = errno;
+        printf("ROOT_REALLOC_TRY freed=%lu null errno=%d\n", freed, error);
+        /* A NULL once frees made room: a libc that ended the object before the move's last step lost
+         * it here, and the read below faults 25. */
+        if (freed)
+            printf("ROOT_REALLOC_NULL_AFTER_FREES freed=%lu\n", freed);
+        fflush(stdout);
+        require(error == ENOMEM, "a failed realloc answers ENOMEM");
+        require(pattern_kept(big, REALLOC_FROM), "a failed realloc keeps the original intact");
+        ++nulls;
+        if (!done)
+            break;
+        for (unsigned long i = 0; i < REALLOC_STEP && done; ++i, ++freed)
+            free(objects[--done]);
+    }
+
+    for (unsigned long i = 0; i < done; ++i)
+        free(objects[i]);
+    require(pattern_kept(big, REALLOC_FROM), "the object after the frees");
+    free(big);
+    printf("ROOT_REALLOC_EXHAUSTED filled=%lu nulls=%d moved_at=%ld\n", filled, nulls, moved_at);
+    fflush(stdout);
+    require(nulls >= 1, "realloc at a full table answers NULL at least once");
+    require(moved_at > 0, "realloc succeeds once frees made room, and keeps the contents");
+    pass("realloc_exhausted_keeps_object");
+    return 0;
+}
+
 int main(int argc, char **argv)
 {
     const char *mode = argc > 1 ? argv[1] : "unmap";
@@ -3567,6 +3961,13 @@ int main(int argc, char **argv)
     if (!strcmp(mode, "release-fail")) return mode_release_fail();
     if (!strcmp(mode, "pages-closed")) return mode_pages_closed();
     if (!strcmp(mode, "pages-discard")) return mode_pages_discard();
+    if (!strcmp(mode, "pages-unclear")) return mode_pages_unclear();
+    if (!strcmp(mode, "top-page")) return mode_top_page();
+    if (!strcmp(mode, "grow-maps")) return mode_grow_maps();
+    if (!strcmp(mode, "grow-objects")) return mode_grow_objects();
+    if (!strcmp(mode, "nogrow-map")) return mode_nogrow_map();
+    if (!strcmp(mode, "nogrow-malloc")) return mode_nogrow_malloc();
+    if (!strcmp(mode, "realloc-exhausted")) return mode_realloc_exhausted();
     fail("unknown mode");
     return 1;
 }

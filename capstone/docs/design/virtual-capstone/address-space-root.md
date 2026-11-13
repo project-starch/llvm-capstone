@@ -194,7 +194,12 @@ commit then unpinned while it stayed mapped. The transition protocol:
    preparation fails (a page that migration moves past the pin), the kernel
    does not go on with frames that may keep their tags: it overwrites every
    page of the reservation that it does not hold in place through the page
-   table, data and tags, while no thread runs, and then retires (block A).
+   table, data and tags, while no thread runs, and then retires (block A). A
+   page it cannot overwrite (a swapped, shared or huge page, outside the
+   profile) does not stop it: it clears every other page, retires, and tells
+   the launcher, which keeps the reservation's whole extent mapped `PROT_NONE`
+   and never gives it back to Linux, so no frame that may keep a tag reaches
+   Linux's allocator while the process runs (block A, F4).
 4. A removal's pages are discarded after the commit. If Linux refuses that
    discard, the pages stay removed: `PROT_NONE`, never admitted, and without
    tags.
@@ -238,30 +243,40 @@ the page table decides there as well.
 Allocation can fail (block A). Where the lifetime table has no slot and cannot
 grow, the processor's `CDERIVE` gives its failure result, an untagged 0, and
 no record changes. The kernel turns a 0 from its own `CDERIVE` (the
-reservation M or the program's P) into `ENOMEM` for `mmap`. The libc's
-allocator turns a 0 from its object's `CDERIVE` into `NULL` from `malloc` with
-`ENOMEM`, and gives the slot back to its free list; a `realloc` that fails in
-place keeps the original. One case cannot keep it: when `realloc` already moved
-a large object's mapping (map, copy and unmap of the old one) and the table
-then has no slot for the new object, the old mapping has ended, the slot goes
-back and `realloc` answers `NULL`.
+reservation M or the program's P) into `ENOMEM` for `mmap`, and it refuses an
+`mmap` with `ENOMEM` before any change when the table cannot grow and has no
+room for both M and P. The libc's allocator turns a 0 from its object's
+`CDERIVE` into `NULL` from `malloc` with `ENOMEM`, and gives the slot back to
+its free list. `realloc` ends the old object only after the new one exists: in
+place it derives the new object first, and a resize that would move a large
+object's mapping takes `malloc`, a copy and `free`, so a `realloc` that fails
+answers `NULL` with the original intact (block A, F4; part 1 moved the mapping
+first and ended the old object before the new one was issued).
 
 The kernel grows the table itself (block A, the Sublet format). It never lets
 its own allocations trap: before its `CDERIVE`s it makes room for them, and a
 table it cannot grow has NOGROW set, so its `CDERIVE` then fails with the 0
 above instead of raising cause 30 in S. A program's context escapes to the
-kernel while at most 256 slots are left (the pressure escape, cause 30). The
-kernel answers with a batch of record pages (16 pages, 4,096 slots), published
-before the larger capacity, or, when memory is short (a page allocation fails
-or the table's page quota is reached), by setting NOGROW; the resumed
-instruction then takes the last slots and fails with 0 afterwards. Either
-answer makes progress: more than 256 slots available, or NOGROW. NOGROW is
-cleared when memory comes back, defined as: while it is set, every growth
-attempt of the kernel (a mapping, a revived mapping of the pool, the
-allocator's preflight for nodes) tries a whole batch, and the first that
-succeeds clears it. The table starts with one batch. Written for the Sublet
-format and not yet run: the format's layout changed in the paper on
-2026-11-13 and QEMU follows first.
+kernel while at most 256 slots are left (the pressure escape, cause 30). Every
+growth attempt of the kernel, for its own `CDERIVE`s, for the pressure escape
+or for the allocator's preflight, names how many slots it needs, adds record
+pages when fewer are available (at least a batch of 16 pages, 4,096 slots,
+published before the larger capacity), and then sets NOGROW exactly when the
+need is still unmet or no more than 256 slots remain. NOGROW thus means that
+after the last attempt the requirement is unmet: an attempt whose need is met
+clears it, also without adding a page (releases gave slots back), and an
+attempt that falls short (a page allocation fails, or the table's page quota is
+reached) sets it, so the resumed instruction takes the last slots and fails
+with 0 afterwards. Either answer to the escape makes progress: more than 256
+slots available, or NOGROW. The table starts with at least one batch.
+
+No mapping block holds the topmost page below 2^38 (block A, F4). The Sublet
+format keeps a reference's cursor as the zero extension of 38 bits, so a
+cursor at 2^38 is not representable, and an object ending exactly there could
+not hold a tagged pointer one past its end, which C allows every object. Only
+R ends at 2^38. The launcher holds that page with a `PROT_NONE` mapping of its
+own from its start, so Linux hands no part of it to a reservation, and both
+the launcher and the kernel refuse a block that reaches it.
 
 | Call | Rule |
 |---|---|

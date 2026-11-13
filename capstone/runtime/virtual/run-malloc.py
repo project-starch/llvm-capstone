@@ -70,6 +70,7 @@ def main():
     p.add_argument('--malloc-count',type=int,default=70000)
     p.add_argument('--exact-bounds',action=argparse.BooleanOptionalAction,default=False)
     p.add_argument('--unpinned',action='store_true')
+    p.add_argument('--no-unload',action='store_true',help='skip the final rmmod (the firmware without the capability monitor hangs it after a program ran)')
     a=p.parse_args()
     if a.malloc_count<1:p.error('--malloc-count must be positive')
     config=json.loads((a.sdk/'sdk.json').read_text())
@@ -86,7 +87,7 @@ def main():
     gate=['#!/bin/sh','cd /mnt/vm || exit 1','dmesg -n 1',f'insmod capstone_vm.ko {memory_mode.args(a.unpinned)} || exit 1',memory_mode.echo('MALLOC_'),f'export CAPSTONE_MALLOC_COUNT={a.malloc_count}']
     for name in cases:
         gate+=['echo MALLOC_CASE:'+name, './native ok' if name=='native' else ('CAPSTONE_VM_TRACE=1 ' if name in ('hot','hot-service-control') else '')+'./capstone-vexec malloc.dom '+name+(' may-survive' if not lifetimes else ''),'echo MALLOC_EXIT:'+name+':$?']
-    gate+=['rmmod capstone_vm','echo MALLOC_CLEANUP:$?','echo VIRTUAL_STAGED_DONE']
+    gate+=(['echo MALLOC_CLEANUP:0'] if a.no_unload else ['rmmod capstone_vm','echo MALLOC_CLEANUP:$?'])+['echo VIRTUAL_STAGED_DONE']
     (stage/'gate.sh').write_text('\n'.join(gate)+'\n')
     run=subprocess.run([sys.executable,str(HERE/'run-staged.py'),'--qemu',str(a.qemu.resolve()),'--images',str(a.images.resolve()),'--stage',str(stage.resolve()),'--work',str((a.work/'guest').resolve()),'--timeout',str(a.timeout),'--exact-bounds' if a.exact_bounds else '--no-exact-bounds'])
     log=(a.work/'guest/serial.log').read_text(errors='replace').replace('\r','')

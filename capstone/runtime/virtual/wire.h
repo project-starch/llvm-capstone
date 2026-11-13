@@ -4,6 +4,13 @@
 #include <linux/types.h>
 #include <linux/ioctl.h>
 
+/* The end of the user address range under Sv39 (2^38) and the highest end of a mapping block, a page
+ * below it. No reference's cursor can be 2^38, so an object ending there could not hold a tagged pointer
+ * one past its end: no block holds the topmost page (the module's add() refuses it, capstone_vm.c
+ * CV_BLOCK_END; the launcher holds the page itself, exec.c top_guard). Only R ends at 2^38. */
+#define CV_USER_END (1UL << 38)
+#define CV_BLOCK_END_MAX (CV_USER_END - 4096)
+
 /* Experimental one-hart adapter; all thread and mapping addresses belong to
  * the owning Linux mm and share one lifetime table. */
 /* A grant. reserved is 0: a grant carries no capability rights of its own (block A, 2026-11-13; it was
@@ -282,7 +289,9 @@ struct cv_advise {
  *   A commit that fails closed, at CV_PAGES_COMMIT or CV_PAGES_FAIL, clears the tags of every page of the
  *     arena before Linux reuses its frame: the pages it holds through the retire, and, if the retire's
  *     preparation cannot pin a resident page, every page it does not hold in place through the page
- *     table.
+ *     table. If a page stays as it was there (a swapped, shared or huge page, outside the profile), the
+ *     module answers ended CV_PAGES_ENDED_HELD instead of CV_PAGES_ENDED: the launcher keeps the whole
+ *     extent mapped PROT_NONE and never gives it back to Linux.
  * removed (out): the arena's removed pages after the call, which the launcher compares with its own
  * count. A removed page is never admitted until a refill maps it again; no other mapping receives an
  * address inside the block while it lives. */
@@ -297,6 +306,8 @@ struct cv_pages {
 #define CV_PAGES_COMMIT 1
 #define CV_PAGES_ABORT 2
 #define CV_PAGES_FAIL 3
+#define CV_PAGES_ENDED 1          /* ended: the block's lifetime ended, its extent goes back to Linux */
+#define CV_PAGES_ENDED_HELD 2     /* ended, and a page kept its tags: the extent stays mapped PROT_NONE */
 #define CV_PAGES _IOWR('V', 37, struct cv_pages)
 /* Is the lifetime id (a futex waiter's, cv_word.lifetime) still live (stage 4f)? live (out): 1 if
  * it is, or if the module cannot tell (no root_grants, id 0). Reads the table only. */
