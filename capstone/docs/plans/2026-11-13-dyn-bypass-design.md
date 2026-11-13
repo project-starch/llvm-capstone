@@ -843,8 +843,8 @@ a47b588a166f0b32e61f1b7ad8e82e3b4ea81fbc, with the guard line "vivado-guard: cei
 **Built.** Guard exit 0 after 1h34m56s, peak 29.46 GB. Mapping 5,034 MB, 0 loops, 0 routing errors, WNS -11.883
 (fdk -11.930), placed 188,298 LUT, 99.29 % slices, congestion level 4. `.bit` sha256
 ff36870de12a133ebdf0a5fcc254a8bdbf8bacab2373666c79fcb2f0286076e1, tarball
-cde5b5317a51d730f314cdf844162a8034f81e6e0f7c08c2901a927d003c043e, both recomputed by the RTL lane from synth's
-files.
+cde5b5317a51d730f314cdf844162a8034f81e6e0f7c08c2901a927d003c043e, both recomputed by the RTL lane from the board
+lane's build on apollo (`<mnt-hdd>/synth/batch-full`).
 
 **Voided** on the RTL sweep of 11bb7427b (the batch's core): RVFI traces differed from 6d0e754d5 in ten tests
 (call-hot, call-cold, interrupt, jalr, sbi-domain, call-ctx-save, and the four s07-wbuf tests), each at a plain store
@@ -875,5 +875,5 @@ that is upstream behaviour and the batch does not touch it.
 stc-stc-wdata (f5b3e4138) covers STC→STC and the UNINIT cases. It reads identically with the lever on and off, but
 it created no STC-on-STC overlap on either tree.
 
-**Cleared** 2026-11-14 06:02 local (+08): the seal word went to synth (the seal step and VOID.txt are theirs) and to the
-board lane. The flash is runtime's call (board 1, after its FRCDK gcc boot).
+**Cleared** 2026-11-14 06:02 local (+08): the seal word went to the board lane, which built the job on apollo and owns its VOID.txt
+and seal step (first sent to synth by mistake: leffe has none of the job). The flash is runtime's call (board 1, after its FRCDK gcc boot).
