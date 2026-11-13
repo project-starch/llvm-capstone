@@ -27,11 +27,11 @@ void *mmap(void *addr, size_t n, int prot, int flags, int fd, off_t off)
     unsigned long bytes;
     if (flags & MAP_FIXED) {
         /* Stage 4e: MAP_FIXED only inside a mapping the program holds, through that mapping's own
-         * reference with its cursor at the first page: the kernel maps fresh zero pages over the
-         * range (removed pages included) with prot, and only while the program derived no object
-         * below the mapping's reference (with root grants; EOPNOTSUPP without). The reference comes
-         * back, as Linux returns the address. MAP_FIXED by a plain address, outside every mapping or
-         * across two is refused (EINVAL). */
+         * reference with its cursor at the first page: the kernel gives the range zero pages with
+         * prot (removed pages included), and only while the program derived no object below the
+         * mapping's reference (the refill rule; with root grants, EOPNOTSUPP without). The reference
+         * comes back, as Linux returns the address. MAP_FIXED by a plain address, outside every
+         * mapping or across two is refused (EINVAL). */
         if (!addr || (__builtin_capstone_cap_get_cursor(addr) & 4095)) {
             errno = EINVAL; return MAP_FAILED;
         }
@@ -108,29 +108,34 @@ int madvise(void *p, size_t n, int advice)
 }
 int __madvise(void *p, size_t n, int advice) { return madvise(p, n, advice); }
 /* Public mremap (2026-10-22: cpython's mmap.resize, which corpus cell lt0 18 needs before its bug
- * runs; stage 4e: in place where it can). p is the block's own reference with its cursor at the
- * first page of the range [p, p + old), any page range of one block, as a partial munmap may name it.
- *   - Shrink (n below old, in pages): a partial munmap of the tail [p + n, p + old) through p. The
- *     block keeps its range and p keeps working; the removed pages fault as unmapped ones do.
- *   - Same page count: the mapping check (CV_SERVICE_MAPPING_CHECK) and p back, as Linux returns
- *     the same address.
- *   - Growth: in place first (CV_SERVICE_REFILL, CV_PAGES_GROW), into the block's own removed pages
- *     right after the range, inside the block's original extent (its visible length): those pages
- *     read zero afterwards with the protection of the range's last page, and p comes back. Where that
- *     is not possible the kernel answers ENOMEM; without MREMAP_MAYMOVE that is the answer (as Linux
- *     answers when there is no room), with it the range moves as map, copy and unmap: the mapping
- *     check first, which changes nothing (the range must be one a munmap through p would remove, no
- *     page of it removed, every page read-write: EINVAL, EFAULT or ENOTSUP otherwise, nothing
- *     changed, never a fault in the copy), then a new read-write private anonymous mapping, a copy of
- *     the old range's bytes with their tags (memcpy), and a munmap of [p, p + old) through p, which
- *     ends the block if that range held every page still mapped (every capability to it is then
- *     revoked, the lifetime contract a moved mapping must keep) and removes those pages otherwise.
- * The check states what holds when it answers, not what holds at the copy: another thread of the
- * program may end the old mapping or change its protection between the check and the copy, and the
- * copy then faults instead of answering EINVAL. That affects only the program itself, as a
+ * runs; stage 4e: in place where it can; stage 4f: one validator first). p is the block's own
+ * reference with its cursor at the first page of the old range [p, p + old), any page range of one
+ * block. Every path validates that old range before it changes anything, the same way: the range lies
+ * inside one block, every page of it is logically mapped (EFAULT otherwise, as Linux answers for an
+ * unmapped part of the old range), and with root grants p covers the whole block (EINVAL otherwise).
+ *   - Same page count: the mapping check (CV_SERVICE_MAPPING_CHECK) and p back, as Linux returns the
+ *     same address.
+ *   - Shrink or growth in place: one service (CV_SERVICE_RESIZE) validates the old range and then, in
+ *     the same step, removes the tail [p + n, p + old) as a partial munmap does (the block keeps the
+ *     pages of the new length, so the shrink never ends it, and p keeps working), or refills the new
+ *     tail [p + old, p + n) when every page of it is a removed page inside the block's original extent
+ *     (its visible length) and no object is derived below p (the refill rule of MAP_FIXED): those
+ *     pages read zero afterwards with the protection of the range's last page, and p comes back.
+ *     Where growth in place is not possible the kernel answers ENOMEM; without MREMAP_MAYMOVE that is
+ *     the answer (as Linux answers when there is no room), with it the range moves.
+ *   - Move: the mapping check with CV_CHECK_MOVE (the validator, and every page read-write: ENOTSUP
+ *     otherwise; nothing changed, never a fault in the copy), then a new read-write private anonymous
+ *     mapping, a copy of the old range's bytes with their tags (memcpy), and a munmap of [p, p + old)
+ *     through p, which ends the block if that range held every page still mapped (every capability to
+ *     it is then revoked, the lifetime contract a moved mapping must keep) and removes those pages
+ *     otherwise.
+ * The move's check states what holds when it answers, not what holds at the copy: another thread of
+ * the program may end the old mapping or change its protection between the check and the copy, and
+ * the copy then faults instead of answering EINVAL. That affects only the program itself, as a
  * concurrent free does for realloc. The copy reads at most the old range, which p covers, and writes
  * at most the new mapping, which mmap's reference covers. Without root grants the address is the
- * authority, as for munmap, so a reference that does not cover the range faults in the copy.
+ * authority, as for munmap, so a reference that does not cover the range faults in the copy, and
+ * growth in place is never possible (the refill rule needs the reference): it moves.
  * MREMAP_FIXED and MREMAP_DONTUNMAP stay ENOSYS. The copy is not atomic with respect to the program's
  * other threads: a write to the old range during the copy may be lost, as for realloc. If the munmap
  * of the old range fails after the copy (another thread changed it in between), the new mapping is
@@ -146,21 +151,19 @@ void *mremap(void *p, size_t old, size_t n, int flags, ...)
     if ((address & 4095) || mapping_length(old, &old_bytes) || mapping_length(n, &new_bytes)) {
         errno = EINVAL; return MAP_FAILED;
     }
-    if (new_bytes < old_bytes) {
-        if (munmap((char *)p + new_bytes, old_bytes - new_bytes)) return MAP_FAILED;
-        return p;
-    }
     long rc;
     if (new_bytes == old_bytes) {
-        rc = __capstone_vm_mapping_check(p, old_bytes);
+        rc = __capstone_vm_mapping_check(p, old_bytes, 0);
         if (rc) { errno = -rc; return MAP_FAILED; }
         return p;
     }
-    rc = __capstone_vm_refill((char *)p + old_bytes, new_bytes - old_bytes, 0, CAP_VM_REFILL_GROW);
+    rc = __capstone_vm_resize(p, old_bytes, new_bytes);
     if (!rc) return p;
-    if (rc != -ENOMEM || !(flags & MREMAP_MAYMOVE)) { errno = -rc; return MAP_FAILED; }
+    if (new_bytes < old_bytes || rc != -ENOMEM || !(flags & MREMAP_MAYMOVE)) {
+        errno = -rc; return MAP_FAILED;
+    }
 
-    rc = __capstone_vm_mapping_check(p, old_bytes);
+    rc = __capstone_vm_mapping_check(p, old_bytes, CV_CHECK_MOVE);
     if (rc) { errno = -rc; return MAP_FAILED; }
     void *q = mmap(NULL, n, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     if (q == MAP_FAILED) return MAP_FAILED;

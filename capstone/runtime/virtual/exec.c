@@ -10,6 +10,7 @@
 #include "../linux/delegate-service.h"
 #include <elf.h>
 #include <errno.h>
+#include <stdarg.h>
 #include <stdbool.h>
 #include <limits.h>
 #include <fcntl.h>
@@ -133,12 +134,12 @@ static int trace;
  * stderr goes -- a 9p file in a harness that does not redirect it. */
 static int grants;
 /* CV_STEP returns by kind (1 quantum, 3 service, 4 fault, else other) and services by their
- * vm-abi.h number (CV_SERVICE_DELEGATE 0 .. CV_SERVICE_REFILL 17; not Linux syscall numbers),
+ * vm-abi.h number (CV_SERVICE_DELEGATE 0 .. CV_SERVICE_RESIZE 18; not Linux syscall numbers),
  * for the CAPSTONE_VM_STEPS line: which exits the step protocol actually makes, and how many. A
  * number above the last service counts as other. A retried EINTR/EAGAIN is not a return.
  * Relaxed atomics on both sides: every virtual thread's loop counts, and the main thread reads
  * at exit while a worker may still be returning. */
-#define STEP_SERVICE_COUNT (CV_SERVICE_REFILL + 1)
+#define STEP_SERVICE_COUNT (CV_SERVICE_RESIZE + 1)
 static unsigned long step_kinds[8], step_services[STEP_SERVICE_COUNT + 1];
 static unsigned long step_count(const unsigned long *counter)
 { return __atomic_load_n(counter, __ATOMIC_RELAXED); }
@@ -148,6 +149,25 @@ static struct mapping *map_find(uintptr_t base);
 static _Noreturn void die(const char *what);
 static _Noreturn void die_errno(const char *what);
 static void futex_wake_range(uintptr_t base, size_t bytes);
+
+/* This launcher's own lines about a refused or failed request (stage 4f): one write through a
+ * non-blocking open of stderr (/proc/self/fd/2, opened once at startup, a description of its own, so
+ * the flags of the stderr that other processes share stay as they are), dropped when the pipe is
+ * full or the open failed. Such a line often comes right before die(), and a blocking fprintf to a
+ * full pipe whose reader stopped would hold the launcher before it ends the program. */
+static int note_fd = -1;
+__attribute__((format(printf, 1, 2))) static void note(const char *format, ...)
+{
+    char line[512];
+    va_list ap;
+    int n;
+    va_start(ap, format);
+    n = vsnprintf(line, sizeof line, format, ap);
+    va_end(ap);
+    if (n < 0) return;
+    if (n > (int)sizeof line - 1) n = sizeof line - 1;
+    if (note_fd >= 0 && write(note_fd, line, (size_t)n) < 0) { /* a full pipe: the line is dropped */ }
+}
 
 #ifdef CAPSTONE_VM_TEST_HOOKS
 /* Test build only (exec.c compiled with -DCAPSTONE_VM_TEST_HOOKS; run-root-grants.py
@@ -173,6 +193,16 @@ static void futex_wake_range(uintptr_t base, size_t bytes);
  *                                     sends this one signal 63 every 50 ms until the ioctl returns:
  *                                     the ioctl answers EINTR and vm_call repeats it
  *                                     (CAPSTONE_VM_TEST_EINTR op=... retries=N)
+ *   CAPSTONE_VM_TEST_PAGES_DELAY_MS   (stage 4f) a page operation sleeps this long after the module's
+ *                                     check opened it, with service_lock held, before its first Linux
+ *                                     step: the window in which stage 4e let other threads derive an
+ *                                     object below the block or store into the range
+ *   CAPSTONE_VM_TEST_PAGES_LATE_DELAY_MS  the same after the Linux steps, before the commit: the window
+ *                                     in which stage 4e let a fault admit a page of the new range that
+ *                                     the commit then unpinned while it stayed mapped
+ *   CAPSTONE_VM_TEST_RELEASE_FAIL=1   (stage 4f) every release of a mapping whose arena the module has
+ *                                     released acts as if Linux's munmap had failed (ENOMEM): the range
+ *                                     stays mapped in Linux, and the launcher drops its registration
  * A delay prints CAPSTONE_VM_TEST_DELAY with its name. */
 static long test_number(const char *name)
 {
@@ -252,6 +282,7 @@ static void test_eintr_disarm(void)
 #define TEST_EINTR_DISARM() test_eintr_disarm()
 #define TEST_EINTR_REPORT(name, retries) do { if (retries) \
         fprintf(stderr, "CAPSTONE_VM_TEST_EINTR op=%s retries=%u\n", name, retries); } while (0)
+#define TEST_RELEASE_FAILS() (test_number("CAPSTONE_VM_TEST_RELEASE_FAIL") > 0)
 #else
 #define TEST_DELAY(name) ((void)0)
 #define TEST_CREATE_FAILS() 0
@@ -259,14 +290,16 @@ static void test_eintr_disarm(void)
 #define TEST_EINTR_ARM(op) ((void)0)
 #define TEST_EINTR_DISARM() ((void)0)
 #define TEST_EINTR_REPORT(name, retries) ((void)(retries))
+#define TEST_RELEASE_FAILS() 0
 #endif
 
 /* An ioctl whose only EINTR comes before any effect, repeated until it answers otherwise: the module
  * takes vm_lock with mutex_lock_interruptible first thing (capstone_vm.c, vm_ioctl), so a signal
  * that interrupts that wait changes nothing, and the module then holds the lock for the whole call.
- * The futex wait's CV_WORD, the thread exit's CV_THREAD_EXIT (stage 4e: before, a futex wait answered
- * EFAULT and an exit ended the launcher) and both calls of a page operation (CV_PAGES, whose commit
- * must follow Linux's change) use it. */
+ * (Inside a call only a fatal signal interrupts a wait, and the process then ends.) Since stage 4f
+ * every module ioctl of this launcher goes through it but CV_STEP, whose own loop repeats EINTR and
+ * EAGAIN, and the test hook's hold; before, a signal made CV_UNMAP, CV_PROTECT, CV_ADVISE, CV_ADD,
+ * CV_ATTACH or CV_THREAD_CREATE fail with EINTR and CV_RESOLVE end the program with a fault. */
 static int vm_call(unsigned long op, void *arg, const char *name)
 {
     unsigned retries = 0;
@@ -619,8 +652,9 @@ static void map_remove(struct mapping *m)
  * no mprotect ever changed in part: a registration and its removal call no allocator. The first
  * change of part of a mapping gives it one byte per page (page_split), and a change of the whole
  * mapping returns it to the one value. A byte per page and not a bit: three protection bits, and
- * room for the state that stage 4e adds when a partial munmap removes a page (a removed page stays
- * a PROT_NONE placeholder that the program can map again only under the MAP_FIXED rule). The cost is
+ * room for the state that stage 4e adds when a partial munmap removes a page (a removed page stays a
+ * PROT_NONE part of the block, its contents discarded, that the program can map again only under the
+ * refill rule). The cost is
  * bounded: a mapping is at most CV_MAX_REGION_BYTES (512 Ki pages, 512 KiB of state) and all
  * mappings of a context together at most CV_MAX_BYTES (1 MiB), paid only where a protection changed
  * in part. Only protect_range changes a protection, and it keeps the state conservative where
@@ -732,7 +766,7 @@ static int grant_mapping(void *base, size_t bytes, size_t visible, unsigned reg,
         memset(pages + rx_bytes / 4096, PROT_READ | PROT_WRITE, (visible - rx_bytes) / 4096);
     }
     struct cv_map r = {thread, (uintptr_t)base, bytes, perms, reg, cursor, linear, 0, rx_bytes, visible};
-    if (ioctl(device, CV_ADD, &r)) {
+    if (vm_call(CV_ADD, &r, "add")) {
         /* Evaluate add()'s two disjuncts on the REAL values the module saw. The domain cannot do
          * this: cap_vm_acquire clears its slot on failure, so the base never reaches it, and a
          * power-of-two size refused with EINVAL is then indistinguishable from a misaligned one. */
@@ -743,8 +777,8 @@ static int grant_mapping(void *base, size_t bytes, size_t visible, unsigned reg,
          * globally is not the fix -- churn alone performs 70,000 allocations and would bury the
          * serial in boundary lines. A diagnostic on an error path does not need a verbosity flag. */
         int err = errno;
-        fprintf(stderr, "CAPSTONE_VM_ADD_REFUSED base=0x%lx bytes=%zu errno=%d"
-                        " pow2=%d naturally_aligned=%d\n",
+        note("CAPSTONE_VM_ADD_REFUSED base=0x%lx bytes=%zu errno=%d"
+             " pow2=%d naturally_aligned=%d\n",
                 (unsigned long)r.address, bytes, err,
                 (bytes & (bytes - 1)) == 0, (r.address & (bytes - 1)) == 0);
         free(pages);
@@ -792,9 +826,9 @@ static struct mapping *transport_mapping(uint64_t tid, unsigned i)
     struct mapping *m = map_floor(at);
     if (m && at - (uintptr_t)m->address < m->visible && m->id == transport_at[i].id &&
         m->holder == tid) return m;
-    fprintf(stderr, "CAPSTONE_VM_TRANSPORT_MISMATCH tid=%llu block=%u at=0x%lx id=%llu found=%llu\n",
-            (unsigned long long)tid, i, (unsigned long)at, (unsigned long long)transport_at[i].id,
-            m ? (unsigned long long)m->id : 0ULL);
+    note("CAPSTONE_VM_TRANSPORT_MISMATCH tid=%llu block=%u at=0x%lx id=%llu found=%llu\n",
+         (unsigned long long)tid, i, (unsigned long)at, (unsigned long long)transport_at[i].id,
+         m ? (unsigned long long)m->id : 0ULL);
     return NULL;
 }
 /* Release the calling worker's holds and its host state: the worker's own detach service and
@@ -895,7 +929,7 @@ static void mc_evict(struct mc_entry *e)
 {
     int rc;
     mc_unlink(e);
-    do { rc = ioctl(device, CV_RETIRE, &e->m.id); } while (rc && errno == EINTR);
+    rc = vm_call(CV_RETIRE, &e->m.id, "retire");
     if (!rc) {
         if (!munmap(e->m.address, e->m.bytes)) { reuse_address = e->m.address; reuse_bytes = e->m.bytes; }
         else { ++mc.lost; mc.broken = 1; }
@@ -981,7 +1015,7 @@ static long unmap_arena_for(uintptr_t base, size_t bytes, uint64_t tid)
     if (gate) return gate;
     int pool = mc_eligible(m);
     struct cv_unmap request = {.thread = tid, .id = m->id, .park = pool};
-    if (ioctl(device, CV_UNMAP, &request)) return -errno;
+    if (vm_call(CV_UNMAP, &request, "unmap")) return -errno;
     if (request.park == CV_UNMAP_PARKED) { mc_pool(m); return 0; }
     if (pool) {
         /* The module retired the mapping instead of parking it. */
@@ -990,95 +1024,186 @@ static long unmap_arena_for(uintptr_t base, size_t bytes, uint64_t tid)
     }
     return release_range(m);
 }
-/* Stage 4e: a partial munmap of [base, + bytes), any page range inside the visible length of one
- * heap block that is not the allocator's metadata and that no worker holds (range_mapping: EINVAL,
- * EBUSY); a range beyond the block or across two blocks is refused. With root_grants only the
- * block's own reference, whose bounds cover the whole block, may do it (the module's check). The
- * pages go and leave a placeholder: PROT_NONE, MAP_NORESERVE, mapped MAP_FIXED over the range, so
- * Linux gives no address inside the block to any other mapping while the block lives, and the
- * module never admits a removed page. No lifetime ends. Unmapping removed pages again changes
- * nothing. When the call takes the last pages that are still mapped, the module ends the block in
- * its check (ended), and the whole extent goes back to Linux as at a whole-block munmap. The order:
- * the module's check, which changes nothing (or ends the block); Linux's placeholder; the module's
- * commit, which clears the tags of the pages it held, unpins them and counts. The commit follows a
- * change Linux has already made, so a failure of the placeholder or of the commit ends the program
- * rather than leave the module and Linux disagreeing about the range. service_lock is held
- * throughout, so the accounting of the block is serialized. Waiters on words in the range are woken
- * (futex_wake_range). */
+/* ---- Page operations: partial munmap, MAP_FIXED, mremap in place (stages 4e and 4f) ----
+ *
+ * A partial munmap, a refill (MAP_FIXED inside a block) and mremap's shrink and growth in place act
+ * on a page range of one heap block and end no lifetime. Each is one step for the program, in this
+ * order, with service_lock held throughout (pages_change):
+ *   1. the module's check (CV_PAGES, CV_PAGES_CHECK): the reference, the range, for a refill the
+ *      refill rule; the module pins the resident pages of the range it does not hold and opens the
+ *      operation, and from then on no thread of the program runs and no page of the range is
+ *      admitted. A removal of the last pages that are still mapped ends the block instead (ended),
+ *      and the whole extent goes back to Linux as at a whole-block munmap.
+ *   2. Linux: mprotect of the range (PROT_NONE for a removal, the asked protection for a refill),
+ *      then for a refill MADV_DONTNEED, which discards the old contents while the module still holds
+ *      its pages pinned. No MAP_FIXED: the VMA, its VM_NOHUGEPAGE and the address range stay, and no
+ *      new mapping can take the range, even for a moment. mprotect can fail (ENOMEM: a VMA split at
+ *      vm.max_map_count) before or part way through its change; then the range gets back the
+ *      protection the page state records, the module aborts the operation (CV_PAGES_ABORT), and the
+ *      program gets the error with nothing changed. A discard that fails is handled the same way
+ *      (private anonymous VMAs that are not locked never refuse it).
+ *   3. the module's commit (CV_PAGES_COMMIT): a refill asks the refill rule again and fails closed by
+ *      ending the block (ended: the extent goes back to Linux, EINVAL); otherwise the module clears
+ *      the tags of the pages it held and unpins them, counts, and lets the program run.
+ *   4. for a removal, MADV_DONTNEED frees the removed pages. If it fails, the pages stay removed:
+ *      PROT_NONE, never admitted, their tags cleared at the commit (pinned) or by Linux when it frees
+ *      the frames (unpinned), and a later refill discards them before its commit. Logged.
+ * Then the page state, the count of removed pages (which must equal the module's: the launcher ends
+ * the program if they differ) and the wake of every futex waiter in the range. A failure of the
+ * module after its check (a commit or an abort it refuses) ends the program: the module and the page
+ * state would no longer describe Linux. */
+
+/* Give the pages [first, end) of m back the protection that the page state records (PROT_NONE for a
+ * removed page), after a protection change or a discard of a page operation failed: mprotect changes
+ * VMA by VMA, so part of the range may have changed. 0, or -1 with errno. */
+static int restore_protection(struct mapping *m, size_t first, size_t end)
+{
+    for (size_t i = first; i < end;) {
+        unsigned prot = page_get(m, i);
+        size_t run = i + 1;
+        while (run < end && page_get(m, run) == prot) ++run;
+        if (mprotect((char *)m->address + i * 4096, (run - i) * 4096,
+                     prot == PAGE_REMOVED ? PROT_NONE : (int)prot))
+            return -1;
+        i = run;
+    }
+    return 0;
+}
+
+/* Close the operation that the module's check opened, without a change, after Linux refused the step
+ * named step with errno error: the range first gets back the protection it had, then the module aborts.
+ * Answers -error, which the program gets. If either fails, the program ends: it would stay stopped, or
+ * the page state would no longer describe Linux. */
+static long pages_abort(struct mapping *m, struct cv_pages *request, size_t first, size_t end,
+                        int error, const char *step)
+{
+    note("CAPSTONE_VM_PAGES_ABORTED op=%llu base=0x%lx pages=%zu step=%s errno=%d\n",
+         (unsigned long long)request->op, (unsigned long)((uintptr_t)m->address + first * 4096),
+         end - first, step, error);
+    if (restore_protection(m, first, end)) die_errno("restore after a failed page operation");
+    request->commit = CV_PAGES_ABORT;
+    if (vm_call(CV_PAGES, request, "pages")) die_errno("abort of a page operation");
+    return -error;
+}
+
+/* The page operation op (CV_PAGES_*) of the domain thread tid, paused at its service, on the pages
+ * [base, + bytes) of m: CV_PAGES_REMOVE or CV_PAGES_SHRINK removes them, CV_PAGES_FIXED or
+ * CV_PAGES_GROW refills them with zero pages of protection prot. The module checks the request first;
+ * a growth's range is the module's to accept (a range beyond the block or with a mapped page answers
+ * ENOMEM there), so this launcher reads its page state for the range only afterwards. */
+static long pages_change(uint64_t tid, struct mapping *m, uint64_t op, uintptr_t base, size_t bytes,
+                         unsigned prot)
+{
+    int removal = op == CV_PAGES_REMOVE || op == CV_PAGES_SHRINK;
+    int whole = base == (uintptr_t)m->address && bytes == m->visible;
+    struct cv_pages request = {.thread = tid, .id = m->id, .op = op, .commit = CV_PAGES_CHECK};
+    size_t first, end, gone;
+
+    /* A change of part of the mapping needs a byte per page, made before anything changes. */
+    if (!whole && page_split(m)) return -ENOMEM;
+    if (vm_call(CV_PAGES, &request, "pages")) return -errno;
+    if (request.ended) {
+        /* The removal took the last pages that are still mapped: the module ended the block. */
+        release_range(m);
+        return 0;
+    }
+    if (base < (uintptr_t)m->address || base - (uintptr_t)m->address > m->visible ||
+        bytes > m->visible - (base - (uintptr_t)m->address))
+        die("the module accepted a page range outside the mapping");
+    first = (base - (uintptr_t)m->address) / 4096;
+    end = first + bytes / 4096;
+    gone = page_removed_count(m, first, end);
+    if (op == CV_PAGES_GROW && gone != end - first)
+        die("the module and this launcher disagree about the removed pages of a growth");
+    TEST_DELAY("CAPSTONE_VM_TEST_PAGES_DELAY_MS");
+
+    if ((!removal || gone < end - first) &&
+        mprotect((void *)base, bytes, removal ? PROT_NONE : (int)prot))
+        return pages_abort(m, &request, first, end, errno, "protect");
+    if (!removal && madvise((void *)base, bytes, MADV_DONTNEED))
+        return pages_abort(m, &request, first, end, errno, "discard");
+    TEST_DELAY("CAPSTONE_VM_TEST_PAGES_LATE_DELAY_MS");
+
+    request.commit = CV_PAGES_COMMIT;
+    if (vm_call(CV_PAGES, &request, "pages")) die_errno("commit of a page operation");
+    if (request.ended) {
+        /* A refill whose rule failed at the commit: the module ended the block (fail closed). */
+        note("CAPSTONE_VM_PAGES_ENDED op=%llu base=0x%lx pages=%zu\n", (unsigned long long)op,
+             (unsigned long)base, end - first);
+        release_range(m);
+        return removal ? 0 : -EINVAL;
+    }
+    page_set(m, first, end, removal ? PAGE_REMOVED : prot);
+    if (removal) {
+        m->removed += end - first - gone;
+    } else {
+        m->removed -= gone;
+        m->protected_range = 1;
+    }
+    if (request.removed != m->removed)
+        die("the module and this launcher disagree about the removed pages");
+    futex_wake_range(base, bytes);
+    if (removal && gone < end - first && madvise((void *)base, bytes, MADV_DONTNEED))
+        note("CAPSTONE_VM_DISCARD_FAILED base=0x%lx bytes=%zu errno=%d\n", (unsigned long)base,
+             bytes, errno);
+    return 0;
+}
+
+/* The domain thread tid's partial munmap of [base, + bytes) (CV_SERVICE_UNMAP, a call that does not
+ * name a whole block): any page range inside the visible length of one heap block that is not the
+ * allocator's metadata and that no worker holds (range_mapping: EINVAL, EBUSY); a range beyond the
+ * block or across two blocks is refused. With root_grants only the block's own reference, whose
+ * bounds cover the whole block, may do it (the module's check). Without root_grants the address is
+ * the authority: a legacy profile without the reference guarantee. The pages go: PROT_NONE, their
+ * contents discarded, still part of the block's VMAs, so Linux gives no address inside the block to
+ * any other mapping while the block lives, and the module never admits a removed page. No lifetime
+ * ends. Unmapping removed pages again changes nothing. When the call takes the last pages that are
+ * still mapped, the module ends the block in its check, and the whole extent goes back to Linux as at
+ * a whole-block munmap. Waiters on words in the range are woken. */
 static long remove_range(uint64_t tid, uintptr_t base, size_t bytes)
 {
     long error;
     struct mapping *m = range_mapping(base, bytes, &error);
     if (!m) return error;
-    size_t first = (base - (uintptr_t)m->address) / 4096, end = first + bytes / 4096;
-    size_t gone = page_removed_count(m, first, end);
-    if (page_split(m)) return -ENOMEM;
-    struct cv_pages request = {.thread = tid, .id = m->id, .op = CV_PAGES_REMOVE};
-    if (vm_call(CV_PAGES, &request, "pages")) return -errno;
-    if (request.ended) {
-        futex_wake_range((uintptr_t)m->address, m->bytes);
-        return release_range(m);
-    }
-    /* Also for a range that is removed already: the placeholder over a placeholder changes nothing,
-     * and the module's commit keeps its count exact by itself (a removed page counts once). */
-    if (mmap((void *)base, bytes, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED | MAP_NORESERVE,
-             -1, 0) == MAP_FAILED)
-        die_errno("placeholder of a partial munmap");
-    request.commit = 1;
-    if (vm_call(CV_PAGES, &request, "pages")) die_errno("commit of a partial munmap");
-    page_set(m, first, end, PAGE_REMOVED);
-    m->removed += end - first - gone;
-    futex_wake_range(base, bytes);
-    return 0;
+    return pages_change(tid, m, CV_PAGES_REMOVE, base, bytes, PROT_NONE);
 }
-/* Stage 4e: the domain thread tid's refill of [base, + bytes) (CV_SERVICE_REFILL, a2 the protection,
- * op CV_PAGES_FIXED or CV_PAGES_GROW). CV_PAGES_FIXED is mmap(MAP_FIXED) inside a block: a range that
- * range_mapping accepts, with root_grants only through the block's own reference and only while the
- * program derived no object below it (the module's check, EOPNOTSUPP without root_grants); every
- * page of the range reads zero afterwards with protection prot, a removed page is mapped again, and
- * no lifetime ends. CV_PAGES_GROW is mremap's growth in place: the block is the one that holds the
- * page before base, every page of the range lies inside its visible length and is removed, and the
- * page before it is not (ENOMEM otherwise, and the libc moves); the range gets the protection of
- * that page. PROT_EXEC is refused (EACCES). The order is the partial munmap's: the module's check,
- * Linux's fresh anonymous pages mapped MAP_FIXED over the range, the module's commit (which drops
- * the pages it held there and counts the removed ones as mapped again), and the page state. */
+
+/* The domain thread tid's mmap(MAP_FIXED) of [base, + bytes) inside a block (CV_SERVICE_REFILL, a2
+ * the protection, a3 CV_PAGES_FIXED): a range that range_mapping accepts, with root_grants only
+ * through the block's own reference and only while the program derived no object below it (the
+ * refill rule, the module's; EOPNOTSUPP without root_grants). Every page of the range reads zero
+ * afterwards with protection prot, a removed page is mapped again, and no lifetime ends. PROT_EXEC is
+ * refused (EACCES). */
 static long refill_range(uint64_t tid, uintptr_t base, size_t bytes, unsigned prot, uint64_t op)
 {
     long error;
-    struct mapping *m;
-    if (op != CV_PAGES_FIXED && op != CV_PAGES_GROW) return -EINVAL;
-    if (op == CV_PAGES_GROW) {
-        m = base ? map_floor(base - 1) : NULL;
-        if (!m || !bytes || ((base | bytes) & 4095) || base - (uintptr_t)m->address > m->visible ||
-            !m->heap || m->kind == CV_MAP_METADATA)
-            return -EINVAL;
-        if (bytes > m->visible - (base - (uintptr_t)m->address)) return -ENOMEM;
-    }
-    m = range_mapping(base, bytes, &error);
-    if (!m) return error;
-    size_t first = (base - (uintptr_t)m->address) / 4096, end = first + bytes / 4096;
-    if (op == CV_PAGES_GROW) {
-        if (!first || page_removed(m, first - 1) || page_removed_count(m, first, end) != end - first)
-            return -ENOMEM;
-        prot = page_get(m, first - 1);
-    }
+    if (op != CV_PAGES_FIXED) return -EINVAL;
     if (prot & PROT_EXEC) return -EACCES;
     if (prot & ~(PROT_READ | PROT_WRITE)) return -EINVAL;
-    if ((first || end != page_count(m)) && page_split(m)) return -ENOMEM;
-    struct cv_pages request = {.thread = tid, .id = m->id, .op = op};
-    if (vm_call(CV_PAGES, &request, "pages")) return -errno;
-    size_t gone = page_removed_count(m, first, end);
-    if (mmap((void *)base, bytes, (int)prot, MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED, -1, 0) == MAP_FAILED)
-        die_errno("refill");
-    /* The module admits base pages only (add() requires the policy on kernels with huge pages). */
-    if (madvise((void *)base, bytes, MADV_NOHUGEPAGE) && errno != EINVAL) die_errno("refill");
-    request.commit = 1;
-    if (vm_call(CV_PAGES, &request, "pages")) die_errno("commit of a refill");
-    m->protected_range = 1;
-    m->removed -= gone;
-    page_set(m, first, end, prot);
-    return 0;
+    struct mapping *m = range_mapping(base, bytes, &error);
+    if (!m) return error;
+    return pages_change(tid, m, CV_PAGES_FIXED, base, bytes, prot);
 }
+
+static struct mapping *old_range(uintptr_t base, size_t bytes, long *error);
+/* The domain thread tid's mremap in place (CV_SERVICE_RESIZE, stage 4f): the old range [base, + old)
+ * of one block, the new length new. The old range is validated first, here (old_range) and in the
+ * module (the reference, every page mapped), whatever happens next. A shorter length removes the tail
+ * [base + new, base + old), a partial munmap that cannot end the block (the pages of the new length
+ * stay mapped). A longer one refills [base + old, base + new) when every page of it is a removed page
+ * of the block, inside its visible length, under the refill rule (the module: ENOMEM otherwise, and
+ * the libc moves): the tail reads zero with the protection of the old range's last page. */
+static long resize_range(uint64_t tid, uintptr_t base, size_t old, size_t new)
+{
+    long error;
+    struct mapping *m = old_range(base, old, &error);
+    if (!m) return error;
+    if (!new || (new & 4095) || new == old) return -EINVAL;
+    if (new < old) return pages_change(tid, m, CV_PAGES_SHRINK, base + new, old - new, PROT_NONE);
+    return pages_change(tid, m, CV_PAGES_GROW, base + old, new - old,
+                        page_get(m, (base - (uintptr_t)m->address + old) / 4096 - 1));
+}
+
 /* May a request of the program end m, a mapping of exactly bytes: munmap, the frame's hand-over
  * at thread creation, the stack at thread exit? Only a registered heap mapping of that visible
  * length that is not the allocator's metadata (else EINVAL) and that no worker holds (else
@@ -1091,12 +1216,22 @@ static long mapping_gate(const struct mapping *m, size_t bytes)
     return 0;
 }
 /* Give the range of m, whose arena the module has released, back to Linux and drop its
- * registration. Waiters on words in it are woken first (futex_wake_range). */
+ * registration. Waiters on words in it are woken first (futex_wake_range). The block's lifetime has
+ * ended already (every reference into it is stale), so this cannot fail for the program: if Linux
+ * refuses the munmap (ENOMEM, a VMA split at vm.max_map_count; stage 4f), the range stays mapped in
+ * Linux, which then gives no address inside it to another mapping, the registration goes anyway (no
+ * request may name the ended block), and the failure is logged. The frames keep no tag: the module
+ * cleared the tags of the pages it held, and in the unpinned mode Linux clears them when it frees
+ * the frames at exit. Answers 0. */
 static long release_range(struct mapping *m)
 {
     futex_wake_range((uintptr_t)m->address, m->bytes);
-    if (munmap(m->address, m->bytes)) return -errno;
-    reuse_address = m->address; reuse_bytes = m->bytes;
+    if (TEST_RELEASE_FAILS() ? (errno = ENOMEM, 1) : munmap(m->address, m->bytes)) {
+        note("CAPSTONE_VM_RELEASE_FAILED base=0x%lx bytes=%zu errno=%d\n",
+             (unsigned long)(uintptr_t)m->address, m->bytes, errno);
+    } else {
+        reuse_address = m->address; reuse_bytes = m->bytes;
+    }
     map_remove(m);
     return 0;
 }
@@ -1139,7 +1274,7 @@ static long protect_range(uint64_t tid, uintptr_t base, size_t bytes, int prot)
     if (page_removed_count(m, first, end)) return -ENOMEM;
     if ((first || end != page_count(m)) && page_split(m)) return -ENOMEM;
     struct cv_protect request = {.thread = tid, .id = m->id};
-    if (ioctl(device, CV_PROTECT, &request)) return -errno;
+    if (vm_call(CV_PROTECT, &request, "protect")) return -errno;
     m->protected_range = 1;
     page_and(m, first, end, prot);
     if (mprotect((void *)base, bytes, prot)) return -errno;
@@ -1161,30 +1296,42 @@ static long advise_range(uint64_t tid, uintptr_t base, size_t bytes, int advice)
     size_t first = (base - (uintptr_t)m->address) / 4096;
     if (page_removed_count(m, first, first + bytes / 4096)) return -ENOMEM;
     struct cv_advise request = {.thread = tid, .id = m->id};
-    if (ioctl(device, CV_ADVISE, &request)) return -errno;
+    if (vm_call(CV_ADVISE, &request, "advise")) return -errno;
     if (!request.zeroed && madvise((void *)base, bytes, MADV_DONTNEED)) return -errno;
     return 0;
 }
-/* The domain thread tid asks, before mremap moves the page range [base, + bytes)
- * (CV_SERVICE_MAPPING_CHECK, a0 the reference, a1 the length; mapping.c), whether that range may
- * move: a munmap of it through the same reference would be accepted, no page of it is removed and
- * every page of it is read-write. Changes nothing. Since stage 4e the range is any page range of one
- * block (range_mapping: EINVAL, or EBUSY for a held mapping), as a partial munmap may name it; then
- * EFAULT for a removed page, as Linux answers for an unmapped one; then with root_grants the
- * module's check of the reference (CV_PROTECT, which reads the service from the caller's a7: the
- * block's own reference, bounds over the whole block); then the protection: ENOTSUP unless every page
- * of the range is exactly read-write and the grant may write (the libc's mremap moves only such a
- * range). */
-static long check_mapping(uint64_t tid, uintptr_t base, size_t bytes)
+/* mremap's validator of its old range, this launcher's half (stage 4f): the mapping that holds the
+ * page range [base, + bytes), as range_mapping finds it (EINVAL, EBUSY), with every page of the range
+ * logically mapped (EFAULT, as Linux answers for an unmapped part of mremap's old range), or NULL with
+ * *error set. The module's half checks the reference (capstone_vm.c, old_range_accept). */
+static struct mapping *old_range(uintptr_t base, size_t bytes, long *error)
+{
+    struct mapping *m = range_mapping(base, bytes, error);
+    if (!m) return NULL;
+    size_t first = (base - (uintptr_t)m->address) / 4096;
+    if (page_removed_count(m, first, first + bytes / 4096)) {
+        *error = -EFAULT;
+        return NULL;
+    }
+    return m;
+}
+/* The domain thread tid's mapping check (CV_SERVICE_MAPPING_CHECK, a0 the reference, a1 the length,
+ * a2 flags; mapping.c): mremap's validator of the old range [base, + bytes) (old_range, then with
+ * root_grants the module's check of the reference through CV_PROTECT, which reads the service from
+ * the caller's a7: the block's own reference, bounds over the whole block), and with CV_CHECK_MOVE the
+ * condition of a move: ENOTSUP unless every page of the range is exactly read-write and the grant may
+ * write (the libc's mremap moves only such a range). Changes nothing. */
+static long check_mapping(uint64_t tid, uintptr_t base, size_t bytes, unsigned long flags)
 {
     long error;
-    struct mapping *m = range_mapping(base, bytes, &error);
+    if (flags & ~(unsigned long)CV_CHECK_MOVE) return -EINVAL;
+    struct mapping *m = old_range(base, bytes, &error);
     if (!m) return error;
     size_t first = (base - (uintptr_t)m->address) / 4096, end = first + bytes / 4096;
-    if (page_removed_count(m, first, end)) return -EFAULT;
     struct cv_protect request = {.thread = tid, .id = m->id};
-    if (ioctl(device, CV_PROTECT, &request)) return -errno;
-    if (!m->grant_writes || !page_all(m, first, end, PROT_READ | PROT_WRITE, 1))
+    if (vm_call(CV_PROTECT, &request, "check")) return -errno;
+    if ((flags & CV_CHECK_MOVE) &&
+        (!m->grant_writes || !page_all(m, first, end, PROT_READ | PROT_WRITE, 1)))
         return -ENOTSUP;
     return 0;
 }
@@ -1200,10 +1347,8 @@ static long check_mapping(uint64_t tid, uintptr_t base, size_t bytes)
 static int touch(uintptr_t address, size_t bytes)
 {
     struct cv_touch r = {address, bytes};
-    int rc;
     /* Admission is idempotent, including pages pinned before an interruption. */
-    do { rc = ioctl(device, CV_TOUCH, &r); } while (rc < 0 && errno == EINTR);
-    return rc;
+    return vm_call(CV_TOUCH, &r, "touch");
 }
 /* The initial exchange cannot be retired by domain services. Cache
  * only successful admissions for this mapping; worker transports instead repeat
@@ -1306,10 +1451,19 @@ static const char *word_precheck(uintptr_t p, int write)
  * wake needs service_lock. So a wake that follows the program's store either comes before the
  * compare, which then reads the stored value, or finds the waiter in the list and marks it woken
  * (futex_waiter.woken) before it wakes the waiter's sleep, a private Linux futex wait on that word
- * that returns at once if the mark came first. Waiters on one key wake oldest first. */
+ * that returns at once if the mark came first. Waiters on one key wake oldest first.
+ *
+ * A wake counts only waiters whose reference is still live (stage 4f). An object can end while its
+ * mapping lives (the program frees it) and a new object take its address; a waiter that sleeps on the
+ * old object's word must not take a wake meant for the new one. So each waiter keeps the lifetime of
+ * the reference the module accepted (cv_word.lifetime), and a wake asks the module whether it is live
+ * (CV_LIVE): a stale waiter is woken too, since its sleep can end no other way, but does not count
+ * against the wake's number, and its libc reads the word again through the stale reference and
+ * faults. Without root_grants the module knows no lifetime, and every waiter counts, as before. */
 struct futex_waiter {
     struct futex_waiter *older, *newer;
     uintptr_t address;        /* the key: the word's address, as the module checked it */
+    uint64_t lifetime;        /* the reference's lifetime id (root_grants), else 0 */
     uint32_t bitset;
     int woken;                /* 1 once a wake counted this waiter: this launcher's word, not the program's */
 };
@@ -1334,16 +1488,31 @@ static void futex_wake_one(struct futex_waiter *w)
     __atomic_store_n(&w->woken, 1, __ATOMIC_RELEASE);
     syscall(SYS_futex, &w->woken, FUTEX_WAKE_PRIVATE, 1, NULL, NULL, 0);
 }
-/* Wake the oldest waiters on address whose bitset meets bitset: at most count, and at least one, as
- * Linux's FUTEX_WAKE does. Answers how many. Called with service_lock held. */
+/* Is waiter w's reference still live? A waiter without a lifetime (no root_grants), and one the module
+ * cannot answer for, counts as live. */
+static int futex_live(const struct futex_waiter *w)
+{
+    struct cv_live query = {.lifetime = w->lifetime};
+    if (!w->lifetime || vm_call(CV_LIVE, &query, "live")) return 1;
+    return query.live != 0;
+}
+/* Wake the oldest waiters on address whose bitset meets bitset and whose reference is live: at most
+ * count, and at least one, as Linux's FUTEX_WAKE does. Every stale waiter on the address is woken as
+ * well and not counted (see above). Answers how many live waiters it woke. Called with service_lock
+ * held. */
 static long futex_wake_key(uintptr_t address, int count, uint32_t bitset)
 {
-    long woken = 0;
+    long woken = 0, limit = count > 0 ? count : 1;
     for (struct futex_waiter *w = futex_oldest, *next; w; w = next) {
         next = w->newer;
         if (w->address != address || !(w->bitset & bitset)) continue;
+        if (!futex_live(w)) {
+            futex_wake_one(w);
+            continue;
+        }
+        if (woken >= limit) continue;
         futex_wake_one(w);
-        if (++woken >= count) break;
+        ++woken;
     }
     return woken;
 }
@@ -1402,13 +1571,13 @@ static long futex_wait(uint64_t tid, const struct cv_step *step)
         if (rc || word.reason) refused = rc ? "refused by the kernel" : word_reason(word.reason);
     }
     if (refused) {
-        fprintf(stderr, "CAPSTONE_VM_FUTEX_REFUSED tid=%llu word=0x%lx reason=%s\n",
-                (unsigned long long)tid, (unsigned long)step->args[0], refused);
+        note("CAPSTONE_VM_FUTEX_REFUSED tid=%llu word=0x%lx reason=%s\n",
+             (unsigned long long)tid, (unsigned long)step->args[0], refused);
         return -EFAULT;
     }
     if (!word.equal) return -EAGAIN;
 
-    struct futex_waiter waiter = {.address = step->args[0], .bitset = bitset};
+    struct futex_waiter waiter = {.address = step->args[0], .lifetime = word.lifetime, .bitset = bitset};
     long result = 0;
     futex_link(&waiter);
     pthread_mutex_unlock(&service_lock);
@@ -1475,7 +1644,7 @@ static long acquire_mapping(uint64_t tid, struct cv_step *step)
         struct mc_entry *e = mc_find(visible, alignment);
         if (e && !map_reserve()) {
             struct cv_map r = {tid, (uintptr_t)e->m.address, visible, 6, 10, (uintptr_t)e->m.address, 1, e->m.id, 0, visible};
-            if (!ioctl(device, CV_REVIVE, &r)) {
+            if (!vm_call(CV_REVIVE, &r, "revive")) {
                 mc_unlink(e);
                 if (grants)
                     fprintf(stderr, "CAPSTONE_VM_ADD_OK slot=%zu base=0x%lx bytes=%zu reg=%u perms=%u linear=%d\n",
@@ -1741,7 +1910,7 @@ static int image_denied(int *fd, struct capstone_application_descriptor_v2 *desc
     char path[64];
     if (capstone_application_fixed(*fd))
         return -1;
-    if (!ioctl(device, CV_IMAGE, fd))
+    if (!vm_call(CV_IMAGE, fd, "image"))
         return 0;
     if (errno == ENOTTY || errno == EINVAL) {
         /* An ioctl the module does not know: a module from before CV_IMAGE.
@@ -1766,7 +1935,7 @@ static int image_denied(int *fd, struct capstone_application_descriptor_v2 *desc
     }
     close(*fd);
     *fd = image_fd = sealed;
-    return capstone_application_fixed(sealed) || ioctl(device, CV_IMAGE, fd) ? -1 : 0;
+    return capstone_application_fixed(sealed) || vm_call(CV_IMAGE, fd, "image") ? -1 : 0;
 }
 
 static int above_stdio(int fd) {
@@ -1914,8 +2083,8 @@ static void thread_rollback(uint64_t thread, struct mapping *frame)
     if (vm_call(CV_THREAD_EXIT, &rollback, "rollback")) die_errno("thread rollback");
     rc = rollback.released & CV_EXIT_FRAME ? release_range(frame) : -EBUSY;
     if (rc)
-        fprintf(stderr, "CAPSTONE_VM_FRAME_RELEASE_FAILED frame=0x%lx error=%ld\n",
-                (unsigned long)(uintptr_t)frame->address, -rc);
+        note("CAPSTONE_VM_FRAME_RELEASE_FAILED frame=0x%lx error=%ld\n",
+             (unsigned long)(uintptr_t)frame->address, -rc);
 }
 
 /* Attach the calling worker's own transport at its first delegate service: a0 the meta block's
@@ -1942,7 +2111,7 @@ static const char *transport_attach(uint64_t tid, const struct cv_step *step,
     if (!mapping_writable(held_meta) || !mapping_writable(held_exchange)) return "not writable";
     struct cv_attach check = {.thread = tid, .meta = held_meta->id, .exchange = held_exchange->id,
                               .meta_bytes = CAPSTONE_DELEGATE_META_BYTES};
-    if (ioctl(device, CV_ATTACH, &check))
+    if (vm_call(CV_ATTACH, &check, "attach"))
         return errno == EBUSY ? "holds a thread's frame" : "reference refused";
     if (touch(step->args[0], CAPSTONE_DELEGATE_META_BYTES) || touch(step->args[1], step->args[2]))
         return "not admitted";
@@ -1990,7 +2159,7 @@ static int virtual_service(uint64_t tid, struct cv_step *step)
         long gate = mapping_gate(frame, 4096);
         if (gate) {
             step->result = gate;
-        } else if (ioctl(device, CV_THREAD_CREATE, &request)) {
+        } else if (vm_call(CV_THREAD_CREATE, &request, "create")) {
             step->result = -errno;
         } else if (thread_add(request.thread, frame)) {
             /* The rollback gives the id back to the module (the thread never ran). */
@@ -2040,8 +2209,8 @@ static int virtual_service(uint64_t tid, struct cv_step *step)
         struct mapping *stack = posix && step->args[1] ? map_find(step->args[1]) : NULL;
         const char *refused = clear ? word_precheck(clear, 1) : NULL;
         if (refused) {
-            fprintf(stderr, "CAPSTONE_VM_EXIT_WORD_REFUSED tid=%llu word=0x%lx reason=%s\n",
-                    (unsigned long long)tid, (unsigned long)clear, refused);
+            note("CAPSTONE_VM_EXIT_WORD_REFUSED tid=%llu word=0x%lx reason=%s\n",
+                 (unsigned long long)tid, (unsigned long)clear, refused);
             clear = 0;
         }
         TEST_DELAY("CAPSTONE_VM_TEST_EXIT_DELAY_MS");
@@ -2066,22 +2235,22 @@ static int virtual_service(uint64_t tid, struct cv_step *step)
         if (rc) return -1;
         if (clear && request.word_reason) {
             if (request.word_reason != CV_WORD_RELEASED)
-                fprintf(stderr, "CAPSTONE_VM_EXIT_WORD_REFUSED tid=%llu word=0x%lx reason=%s\n",
-                        (unsigned long long)tid, (unsigned long)clear,
-                        word_reason(request.word_reason));
+                note("CAPSTONE_VM_EXIT_WORD_REFUSED tid=%llu word=0x%lx reason=%s\n",
+                     (unsigned long long)tid, (unsigned long)clear,
+                     word_reason(request.word_reason));
             else
-                fprintf(stderr, "CAPSTONE_VM_EXIT_WORD_DROPPED tid=%llu word=0x%lx\n",
-                        (unsigned long long)tid, (unsigned long)clear);
+                note("CAPSTONE_VM_EXIT_WORD_DROPPED tid=%llu word=0x%lx\n",
+                     (unsigned long long)tid, (unsigned long)clear);
             clear = 0;
         }
         if (!(request.released & CV_EXIT_FRAME) || release_range(frame))
-            fprintf(stderr, "CAPSTONE_VM_FRAME_RELEASE_FAILED frame=0x%lx\n",
-                    frame ? (unsigned long)(uintptr_t)frame->address : 0UL);
+            note("CAPSTONE_VM_FRAME_RELEASE_FAILED frame=0x%lx\n",
+                 frame ? (unsigned long)(uintptr_t)frame->address : 0UL);
         if (posix && step->args[1] &&
             (!(request.released & CV_EXIT_STACK) || release_range(stack)))
-            fprintf(stderr, "CAPSTONE_VM_STACK_UNMAP_REFUSED tid=%llu base=0x%lx bytes=%lu\n",
-                    (unsigned long long)tid, (unsigned long)step->args[1],
-                    (unsigned long)step->args[2]);
+            note("CAPSTONE_VM_STACK_UNMAP_REFUSED tid=%llu base=0x%lx bytes=%lu\n",
+                 (unsigned long long)tid, (unsigned long)step->args[1],
+                 (unsigned long)step->args[2]);
         /* musl's join may retire the child's stack and TLS once the word reads 0. The virtual CPU
          * has stopped and its tagged frame is gone first, and the word's waiters wake through
          * this launcher's key, after the releases. */
@@ -2119,10 +2288,10 @@ static int virtual_service(uint64_t tid, struct cv_step *step)
                 if (!worker_host) {
                     const char *refused = transport_attach(tid, step, request);
                     if (refused) {
-                        fprintf(stderr, "CAPSTONE_VM_TRANSPORT_REFUSED tid=%llu meta=0x%lx"
-                                        " exchange=0x%lx reason=%s\n",
-                                (unsigned long long)tid, (unsigned long)step->args[0],
-                                (unsigned long)step->args[1], refused);
+                        note("CAPSTONE_VM_TRANSPORT_REFUSED tid=%llu meta=0x%lx"
+                             " exchange=0x%lx reason=%s\n",
+                             (unsigned long long)tid, (unsigned long)step->args[0],
+                             (unsigned long)step->args[1], refused);
                         return -1;
                     }
                 }
@@ -2168,7 +2337,7 @@ static int virtual_service(uint64_t tid, struct cv_step *step)
                 }
             }
             if (tid == 0 && (getenv("CAPSTONE_VM_STATS") || getenv("CAPSTONE_DELEGATE_STATS")) &&
-                !ioctl(device, CV_STATS, &stats)) {
+                !vm_call(CV_STATS, &stats, "stats")) {
                 fprintf(stderr, "CAPSTONE_VM_STATS arenas=%llu pages=%llu peak=%llu nodes=%llu steps=%llu faults=%llu collections=%llu reclaimed=%llu rounds=%llu bytes_in=%llu bytes_out=%llu node_bytes=%llu node_capacity=%llu node_growths=%llu launch_ns=%llu elapsed_ns=%llu\n",
                     stats.arenas, stats.pinned_pages, stats.peak_pages, stats.nodes, stats.steps,
                     stats.faults, stats.collections, stats.reclaimed, (unsigned long long)host.rounds,
@@ -2201,7 +2370,8 @@ static int virtual_service(uint64_t tid, struct cv_step *step)
                                 " service10_thread_delegate=%lu service11_thread_self=%lu"
                                 " service12_nodes=%lu service13_unassigned=%lu"
                                 " service14_transport_detach=%lu service15_mapping_check=%lu"
-                                " service16_advise=%lu service17_refill=%lu service_other=%lu\n",
+                                " service16_advise=%lu service17_refill=%lu service18_resize=%lu"
+                                " service_other=%lu\n",
                     step_count(&step_kinds[1]), step_count(&step_kinds[3]), step_count(&step_kinds[4]),
                     step_count(&step_kinds[0]) + step_count(&step_kinds[2]) + step_count(&step_kinds[5]) +
                         step_count(&step_kinds[6]) + step_count(&step_kinds[7]),
@@ -2214,7 +2384,7 @@ static int virtual_service(uint64_t tid, struct cv_step *step)
                     step_count(&step_services[12]), step_count(&step_services[13]),
                     step_count(&step_services[14]), step_count(&step_services[15]),
                     step_count(&step_services[16]), step_count(&step_services[17]),
-                    step_count(&step_services[STEP_SERVICE_COUNT]));
+                    step_count(&step_services[18]), step_count(&step_services[STEP_SERVICE_COUNT]));
                 /* The thread table's census at the program's exit: count is the number of entries
                  * in use, the main thread's included, so 1 once every other thread has exited and
                  * its last joiner (if any) has left. An entry freed twice shows as 0 or less. */
@@ -2258,7 +2428,7 @@ static int virtual_service(uint64_t tid, struct cv_step *step)
     } else if (step->args[7] == CV_SERVICE_MAP) {
         step->result = acquire_mapping(tid, step);
     } else if (step->args[7] == CV_SERVICE_MAPPING_CHECK) {
-        step->result = check_mapping(tid, step->args[0], step->args[1]);
+        step->result = check_mapping(tid, step->args[0], step->args[1], step->args[2]);
     } else if (step->args[7] == CV_SERVICE_UNMAP) {
         step->result = unmap_arena_for(step->args[0], step->args[1], tid);
     } else if (step->args[7] == CV_SERVICE_TRANSPORT_DETACH) {
@@ -2271,6 +2441,8 @@ static int virtual_service(uint64_t tid, struct cv_step *step)
     } else if (step->args[7] == CV_SERVICE_REFILL) {
         step->result = refill_range(tid, step->args[0], step->args[1], (unsigned)step->args[2],
                                     step->args[3]);
+    } else if (step->args[7] == CV_SERVICE_RESIZE) {
+        step->result = resize_range(tid, step->args[0], step->args[1], step->args[2]);
     } else if (step->args[7] == CV_SERVICE_WAIT) {
         /* The heap's contended atomic mutex must let its owner run, including
          * the owner's mapping service. Never yield with the wire lock held. */
@@ -2279,7 +2451,7 @@ static int virtual_service(uint64_t tid, struct cv_step *step)
         pthread_mutex_lock(&service_lock);
     } else if (step->args[7] == CV_SERVICE_NODES) {
         struct cv_nodes nodes = {.thread = tid, .available = step->args[0]};
-        step->result = ioctl(device, CV_NODES, &nodes) ? -errno : 0;
+        step->result = vm_call(CV_NODES, &nodes, "nodes") ? -errno : 0;
     } else {
         step->result = -ENOSYS;
     }
@@ -2306,7 +2478,16 @@ static int virtual_service_loop(uint64_t tid)
         }
         if (step.kind == 4) {
             struct cv_thread_control control = {.thread = step.thread};
-            if (!ioctl(device, CV_RESOLVE, &control)) continue;
+            if (!vm_call(CV_RESOLVE, &control, "resolve")) continue;
+            if (errno == EINPROGRESS) {
+                /* Stage 4f: the page lies in the range of a page operation that another thread's
+                 * service holds open (between the module's check and its commit, with service_lock
+                 * held throughout). Wait for that service to end, then let the program fault again:
+                 * it then meets the page as the operation left it. */
+                pthread_mutex_lock(&service_lock);
+                pthread_mutex_unlock(&service_lock);
+                continue;
+            }
         }
         if (step.kind != 3) {
             pthread_mutex_lock(&service_lock);
@@ -2375,6 +2556,7 @@ int main(int argc, char **argv)
     image_path = app_args ? argv[2] : argv[1];
     unsigned stdio_mask;
     if (reserve_stdio(&stdio_mask)) return 125;
+    note_fd = open("/proc/self/fd/2", O_WRONLY | O_NONBLOCK | O_APPEND | O_NOCTTY | O_CLOEXEC);
     start_ns = now_ns();
     trace = getenv("CAPSTONE_VM_TRACE") != NULL;
     grants = trace || getenv("CAPSTONE_VM_GRANTS") != NULL;

@@ -90,7 +90,31 @@ Stage 4e (root-contract.c lists the checks of each):
   partial-fixed   MAP_FIXED refills a hole with zeros, refused while an object exists below P; with
                   diag_admit the removal reports the tags of the removed page before and after it
                   cleared them, and the refill's admission reports its frame
-  partial-mremap  mremap shrinks in place, grows back in place, ENOMEM beyond the extent, moves
+  partial-mremap  mremap shrinks in place; growth into the removed tail is refused while an object
+                  exists below the block (stage 4f, root grants), grows back in place once it ended;
+                  ENOMEM beyond the extent, moves
+Stage 4f (root-contract.c lists the checks of each):
+  mremap-validate  shrink over a hole and growth with a hole in the old range: EFAULT, nothing
+                  changed; a cursor below the block: EINVAL
+  pages-enomem    vm.max_map_count lowered to the map count: a partial munmap and (root grants)
+                  MAP_FIXED answer ENOMEM with nothing changed; the launcher logs each abort
+                  (CAPSTONE_VM_PAGES_ABORTED step=protect errno=12)
+  pages-tagged    the partial munmap of a page that holds a reference: with root grants and pinned the
+                  module's census shows the tags cleared; with --module-hooks (pinned) the page was
+                  unheld first (test_unhold_pages) and the check pinned it again (scan line); the
+                  kernel's count of tagged frames cleared at their free (captag cleared_pages) grows
+                  in the unpinned mode and stays in the pinned one
+  futex-stale     (root grants) a wake of one reaches the live waiter, not the stale one at the same
+                  address
+Hook modes of stage 4f (--launcher-hooks): pages-derive, pages-fault, pages-admit (root grants;
+CAPSTONE_VM_TEST_PAGES_DELAY_MS or _LATE_DELAY_MS open a window inside a MAP_FIXED; the module stops
+the program in it, "step waits" in the census) and release-fail (CAPSTONE_VM_TEST_RELEASE_FAIL: the
+block's munmap answers 0, the range stays out of reuse, the stale reference faults 25). With
+--pages-run (needs --module-hooks) the module lets the program run in the window
+(test_pages_run): pages-derive's commit then fails closed (the block ends, EINVAL, fault 25 on the
+object, refusal "objects derived below the mapping" at "map fixed commit"), and pages-fault's and
+pages-admit's faults are deferred ("resolve refused at moving"). pages-admit also checks that no page
+admitted before the commit was unpinned by it.
 Modes that need a launcher built with -DCAPSTONE_VM_TEST_HOOKS (--launcher-hooks; the runner sets
 their delays, HOOK_ENV, and runs them by default only then):
   futex-race   the futex window: a waiter compared and sleeps while the word's mapping is replaced
@@ -187,6 +211,16 @@ count-repeats (the count decrements for removed pages too: partial-all's live re
 munmaps faults with 25), no-tag-clear (the removal does not clear tags: partial-fixed's census line
 reports tags after the clearing; the program's own read after the refill cannot see it, since Linux
 zeroes every page it maps fresh).
+Stage 4f controls: --control no-mark (--module a hooks build of the module without the transition
+mark, with the hooks launcher): pages-derive's object, derived while the MAP_FIXED waits, has its
+page replaced under it (exit 1), pages-admit's frame admitted in the window is unpinned at the commit
+while it stays mapped, and pages-fault's store into the page being refilled ends the program with a
+page fault; --control no-check-pin (--module a hooks build whose check pins no unheld page): with
+test_unhold_pages, pages-tagged's unheld tagged page gets no census line and reaches Linux tagged
+(captag cleared_pages grows); --launcher-control futex-count-all (a wake counts stale waiters too):
+futex-stale's wake of one wakes the stale waiter and not the live one (exit 1); --libc-control
+shrink-unchecked (--application built against a libc whose mremap shrinks without validating the
+old range): mremap-validate's shrink over a hole ends the block and answers success (exit 1).
 --no-refs runs on a processor without supervisor references. The module must not load. Where the
 firmware hands cause 24 to S the load is refused with a message. The gate platform's monitor keeps
 the trap and halts the machine at the module's probe, after the module printed why.
@@ -209,7 +243,8 @@ MODES = ('unmap', 'refuse', 'narrow', 'renew', 'renew-ref', 'mremap',
          'exit-word-refs', 'futex', 'advise', 'join-burned', 'attach-exchange', 'attach-address',
          'futex-remap', 'die-blocked', 'word-metadata',
          'futex-readonly', 'futex-park', 'futex-end', 'futex-flags', 'die-stderr', 'protect-exec',
-         'partial-hole', 'partial-all', 'partial-narrow', 'partial-fixed', 'partial-mremap')
+         'partial-hole', 'partial-all', 'partial-narrow', 'partial-fixed', 'partial-mremap',
+         'mremap-validate', 'pages-enomem', 'pages-tagged', 'futex-stale')
 # The modes that need the launcher's test hooks, and the environment that sets their delays.
 HOOK_ENV = {
     'futex-race': 'CAPSTONE_VM_TEST_FUTEX_DELAY_MS=2000',
@@ -219,7 +254,13 @@ HOOK_ENV = {
     'rollback-fail': 'CAPSTONE_VM_TEST_CREATE_FAIL=1 CAPSTONE_VM_TEST_ROLLBACK_FAIL=1',
     'eintr-word': 'CAPSTONE_VM_TEST_EINTR=word',
     'eintr-exit': 'CAPSTONE_VM_TEST_EINTR=exit',
+    'pages-derive': 'CAPSTONE_VM_TEST_PAGES_DELAY_MS=2000',
+    'pages-fault': 'CAPSTONE_VM_TEST_PAGES_DELAY_MS=2000',
+    'pages-admit': 'CAPSTONE_VM_TEST_PAGES_LATE_DELAY_MS=2000',
+    'release-fail': 'CAPSTONE_VM_TEST_RELEASE_FAIL=1',
 }
+# The hook modes whose window --pages-run opens to the program (the hooks module's test_pages_run).
+PAGES_RUN_MODES = ('pages-derive', 'pages-fault', 'pages-admit')
 HOOK_MODES = tuple(HOOK_ENV)
 # The modes that need a module built with CV_TEST_HOOKS, and the parameter the gate sets for each.
 MODULE_HOOK_PARAMS = {
@@ -231,7 +272,8 @@ MODULE_HOOK_MODES = tuple(MODULE_HOOK_PARAMS)
 # The environment of a mode that needs one without a hooks build.
 MODE_ENV = {'futex-park': 'CAPSTONE_VM_MAPCACHE=1048576'}
 # The modes that run with diag_admit on; the runner reads their admission and removal lines.
-DIAG_MODES = {'futex-readonly', 'partial-fixed'}
+DIAG_MODES = {'futex-readonly', 'partial-fixed', 'pages-tagged', 'pages-derive', 'pages-fault',
+              'pages-admit'}
 # Per mode: the checks, those that need root grants (skipped otherwise), and the expected exit.
 CHECKS = {
     'unmap': ('grant_reads_and_writes', 'libc_accepts_copyable_grant',
@@ -309,9 +351,21 @@ CHECKS = {
     'partial-fixed': ('fixed_refill_reads_zero', 'removed_page_tags_cleared',
                       'fixed_replaces_mapped_page', 'fixed_refused_with_object',
                       'fixed_after_object_released'),
-    'partial-mremap': ('mremap_shrink_in_place', 'mremap_grow_into_tail', 'mremap_grow_beyond_enomem',
-                       'mremap_grow_beyond_moves'),
+    'partial-mremap': ('mremap_shrink_in_place', 'mremap_grow_refused_with_object', 'mremap_grow_into_tail',
+                       'mremap_grow_beyond_enomem', 'mremap_grow_beyond_moves'),
+    'mremap-validate': ('mremap_shrink_over_hole_refused', 'mremap_grow_over_hole_refused',
+                        'mremap_cursor_outside_refused'),
+    'pages-enomem': ('partial_unmap_enomem_changes_nothing', 'fixed_enomem_changes_nothing',
+                     'partial_unmap_after_limit'),
+    'pages-tagged': ('tagged_page_removed',),
+    'futex-stale': ('futex_stale_waiter_not_counted',),
+    'pages-derive': ('pages_derive_after_refill',),
+    'pages-fault': ('pages_fault_waits_then_proceeds',),
+    'pages-admit': ('pages_admit_store_after_refill',),
+    'release-fail': ('release_failure_keeps_range_unused',),
 }
+# pages-derive with --pages-run: the commit fails closed instead.
+CHECKS_PAGES_RUN = {'pages-derive': ('pages_derive_fails_closed',)}
 # create-fail behind a launcher whose table is smaller than the module's limit.
 CHECKS_SMALL_TABLE = {'create-fail': ('failed_create_releases_frame', 'failed_create_id_refused')}
 ROOT_ONLY = {'stale_reference_at_reused_address_refused', 'address_refused',
@@ -330,11 +384,15 @@ ROOT_ONLY = {'stale_reference_at_reused_address_refused', 'address_refused',
              'exit_word_after_revoke_not_written',
              'partial_narrowed_refused', 'partial_nested_object_refused', 'partial_address_refused',
              'fixed_refill_reads_zero', 'removed_page_tags_cleared', 'fixed_replaces_mapped_page',
-             'fixed_refused_with_object', 'fixed_after_object_released'}
-FAULTING = {'unmap', 'renew', 'renew-ref', 'mremap', 'exit-renew', 'create', 'partial-all', 'futex-end'}
+             'fixed_refused_with_object', 'fixed_after_object_released',
+             'mremap_grow_refused_with_object', 'mremap_grow_into_tail', 'fixed_enomem_changes_nothing',
+             'futex_stale_waiter_not_counted', 'pages_derive_after_refill', 'pages_derive_fails_closed',
+             'pages_fault_waits_then_proceeds', 'pages_admit_store_after_refill'}
+FAULTING = {'unmap', 'renew', 'renew-ref', 'mremap', 'exit-renew', 'create', 'partial-all', 'futex-end',
+            'release-fail'}
 # Modes whose stale read does not map the address again first (the frame is not reused, or the
 # fault comes from a waiter's own read).
-NO_REMAP = {'create', 'futex-end'}
+NO_REMAP = {'create', 'futex-end', 'release-fail'}
 # Modes that end with a page fault of a live reference (stage 4e: a removed page), by cause.
 PAGE_FAULTING = {'partial-hole': 13}
 # The kernel's refusals per mode with root grants, as (reason, request) in order
@@ -399,8 +457,17 @@ REFUSALS = {
     'partial-narrow': [('does not cover the mapping', 'munmap'), ('not the mapping', 'munmap'),
                        ('not a reference', 'munmap')],
     'partial-fixed': [('objects derived below the mapping', 'map fixed')],
-    'partial-mremap': [],
+    'partial-mremap': [('objects derived below the mapping', 'mremap')],
+    'mremap-validate': [],
+    'pages-enomem': [],
+    'pages-tagged': [],
+    'futex-stale': [],
+    'pages-derive': [],
+    'pages-fault': [],
+    'pages-admit': [],
+    'release-fail': [],
 }
+REFUSALS_PAGES_RUN = {'pages-derive': [('objects derived below the mapping', 'map fixed commit')]}
 # What each control changes: the mode it must break, and how.
 CONTROL_CUTS = {
     'cover': {'narrow': ('ROOT_FAIL:munmap through a narrowed reference', 'narrowed_reference_refused')},
@@ -423,6 +490,18 @@ CONTROL_CUTS = {
                       'partial-hole': ('ROOT_CHECK:no_mapping_in_hole:PASS', 'hole_unmap_repeats',
                                        'domain-fault')},
     'no-tag-clear': {},
+    # Stage 4f: the module without the transition mark (no wait in CV_STEP, no deferred admission, no
+    # second check of the refill rule at the commit): pages-derive's object, derived while the
+    # MAP_FIXED waits, has its page replaced under it (the program fails at that check, exit 1).
+    # pages-admit's program passes, and the runner reads the frame admitted in the window and
+    # unpinned at the commit (control_frame_unpinned_while_mapped). pages-fault's store into the page
+    # being refilled is refused as a removed page, and the program ends with a page fault.
+    'no-mark': {'pages-derive': ('ROOT_PAGES_DERIVE value_now=', 'pages_derive_after_refill'),
+                'pages-fault': ('ROOT_PAGES_FAULT base=', 'pages_fault_waits_then_proceeds', 'domain-fault')},
+    # The check of a page operation does not pin the resident pages it does not hold (stage 4e): with
+    # the hooks module's test_unhold_pages, pages-tagged's unheld tagged page gets no census line and
+    # reaches Linux with its tag (the kernel's count of tagged frames cleared at their free grows).
+    'no-check-pin': {},
 }
 # Launcher controls (--launcher-control): the mode each must break, and how. A third element says
 # how the mode ends: 'launcher-fault' (exit 139 without a domain fault: the launcher itself faulted),
@@ -450,11 +529,20 @@ LAUNCHER_CUTS = {
     'exit-word-4c': {'exit-race': ('ROOT_EXIT_RACE value=0x0', 'exit_word_after_revoke_not_written')},
     'withdraw-4c': {'join-withdrawn': ('ROOT_FAIL:the joiner of the failed create\'s id returns',
                                        'joiner_on_withdrawn_id_returns')},
+    # Stage 4f: a wake counts every waiter, stale or live (stage 4e): futex-stale's wake of one wakes
+    # the stale waiter, and the live one is not woken.
+    'futex-count-all': {'futex-stale': ('ROOT_FUTEX_STALE woken=1 live_done=0',
+                                        'futex_stale_waiter_not_counted')},
 }
 # Libc controls (--libc-control): the --application was built against a libc one change away.
 LIBC_CUTS = {
     'no-remap-check': {'mremap': ('ROOT_MREMAP case=oversized', 'mremap_oversized_old_refused',
                                   'domain-fault')},
+    # Stage 4f: a libc whose mremap shrinks through a partial munmap of the tail without validating
+    # the old range first (stage 4e): the shrink over a hole removes the last mapped page, ends the
+    # block and answers success.
+    'shrink-unchecked': {'mremap-validate': ('ROOT_MREMAP_VALIDATE shrink_over_hole failed=0',
+                                             'mremap_shrink_over_hole_refused')},
 }
 # The attach modes end when the launcher refuses the attachment: it exits 125 after it logged the
 # refusal with the reason here, and the worker's read (attach-readonly) or its attachment call never
@@ -500,7 +588,8 @@ def reasons_match(seen, expected):
 # must count only the main thread.
 CENSUS_MODES = {'create-fail', 'join-two', 'join-after', 'exit-many', 'exit-word', 'exit-word-refs',
                 'futex', 'join-burned', 'futex-race', 'futex-remap', 'exit-race', 'join-withdrawn',
-                'word-metadata', 'futex-park', 'futex-flags', 'eintr-exit'}
+                'word-metadata', 'futex-park', 'futex-flags', 'eintr-exit', 'futex-stale', 'pages-derive',
+                'pages-fault', 'pages-admit'}
 # The arenas that a thread exit names and the module keeps, per mode, as the reasons it reports:
 # the two stacks that exit-victim's threads named (root grants only), and the frame that
 # exit-frame's thread named as its stack. exit-length's and exit-huge's stacks reach the module
@@ -513,6 +602,8 @@ EXIT_KEPT_BYPASS = {'exit-length': ['request refused'], 'exit-huge': ['request r
 STACKS_KEPT = {'exit-victim': 2, 'exit-length': 1, 'exit-huge': 1, 'exit-frame': 1, 'exit-word': 0,
                'exit-word-refs': 0}
 REPORT = re.compile(r'^ROOT_KERNEL:([\w-]+):unmap refused \(([^)]*)\) at ([a-z ]+):', re.M)
+ABORT_REPORT = re.compile(r'^CAPSTONE_VM_PAGES_ABORTED op=\d+ base=0x[0-9a-f]+ pages=\d+ step=(\w+) errno=(\d+)$',
+                          re.M)
 RETIRE_REPORT = re.compile(r'^ROOT_KERNEL:([\w-]+):retire refused:', re.M)
 KEPT_REPORT = re.compile(r'^ROOT_KERNEL:([\w-]+):thread exit keeps the (stack|frame) \(([^)]*)\)', re.M)
 
@@ -528,10 +619,11 @@ def refusals_match(seen, expected):
     return True
 
 
-def expected_refusals(mode, control, bypass, frame_floor, victim_reason, range_bypass=False):
+def expected_refusals(mode, control, bypass, frame_floor, victim_reason, range_bypass=False,
+                       pages_run=False):
     """The (reason, request) list a mode's kernel log must show, or None where a control cuts the
     mode short (then only a prefix is checked)."""
-    refusals = list(REFUSALS[mode])
+    refusals = list(REFUSALS_PAGES_RUN[mode] if pages_run and mode in REFUSALS_PAGES_RUN else REFUSALS[mode])
     if frame_floor and mode == 'create-gate' and control != 'create-address':
         # The frame reference moved inside the page reaches the module, which compares it.
         refusals.append(('range is not the mapping', 'thread create'))
@@ -583,6 +675,9 @@ def main():
                    help='the --module is a CV_TEST_HOOKS build; the module hook modes run')
     p.add_argument('--block-frames', action='store_true',
                    help='load the module with block_frames=1; partial-fixed must show the frame reused')
+    p.add_argument('--pages-run', action='store_true',
+                   help='the hooks module lets the program run inside a page operation (test_pages_run) '
+                        'in the modes ' + ', '.join(PAGES_RUN_MODES))
     p.add_argument('--root-grants', type=int, choices=(0, 1), default=1)
     p.add_argument('--control', choices=sorted(CONTROL_CUTS), help='the module is this control (see above)')
     p.add_argument('--launcher-control', choices=sorted(LAUNCHER_CUTS),
@@ -609,6 +704,8 @@ def main():
         p.error('the module hook modes need --module-hooks')
     if a.module_hooks and not a.module:
         p.error('--module-hooks needs --module')
+    if a.pages_run and not a.module_hooks:
+        p.error('--pages-run needs --module-hooks')
     if a.control and not a.module:
         p.error('--control needs --module')
     if a.launcher_control and not a.launcher:
@@ -640,6 +737,12 @@ def main():
         if mode in DIAG_MODES:
             before.append(f'echo 1 > {parameters}/diag_admit')
             after.append(f'echo 0 > {parameters}/diag_admit')
+        if a.pages_run and mode in PAGES_RUN_MODES:
+            before.append(f'echo 1 > {parameters}/test_pages_run')
+            after.append(f'echo 0 > {parameters}/test_pages_run')
+        if a.module_hooks and not a.unpinned and mode == 'pages-tagged':
+            before.append(f'echo 1 > {parameters}/test_unhold_pages')
+            after.append(f'echo 0 > {parameters}/test_unhold_pages')
         if mode == 'die-stderr':
             # stderr goes into a FIFO whose reader holds it open and never reads, so the pipe fills;
             # the launcher must still end with 125 at once (its line is dropped).
@@ -657,7 +760,8 @@ echo ROOT_EXIT:{mode}:$?'''
         lines = ['echo ROOT_MODE_BEGIN:' + mode] + before + [command] + after
         lines.append(f"dmesg -c | grep 'capstone_vm: \\(unmap refused\\|retire refused\\|thread exit keeps"
                      f"\\|resolve refused at\\|touch arena\\|unpinned touch arena\\|remove arena"
-                     f"\\|admit arena\\)' | sed 's/^.*capstone_vm: /ROOT_KERNEL:{mode}:/'")
+                     f"\\|admit arena\\|step waits\\|scan arena\\|test unhold\\)'"
+                     f" | sed 's/^.*capstone_vm: /ROOT_KERNEL:{mode}:/'")
         return '\n'.join(lines) + '\n'
     runs = '\n'.join(run_mode(mode) for mode in modes)
     (stage / 'gate.sh').write_text(f'''#!/bin/sh
@@ -712,6 +816,8 @@ echo VIRTUAL_STAGED_DONE
         checks = dict(CHECKS)
         if a.launcher_small_table:
             checks.update(CHECKS_SMALL_TABLE)
+        if a.pages_run:
+            checks.update(CHECKS_PAGES_RUN)
         halting = [m for m, cut in cuts.items() if m in modes and cut[2:] == ('machine-halt',)]
         reports = REPORT.findall(log)
         retire_reports = RETIRE_REPORT.findall(log)
@@ -819,7 +925,7 @@ echo VIRTUAL_STAGED_DONE
                 EXIT_WORD_REPORT.findall(part), EXIT_WORD_REFUSALS[a.root_grants].get(mode, []))
             tests[f'{mode}:futex_refusals'] = reasons_match(
                 FUTEX_REPORT.findall(part), FUTEX_REFUSALS[a.root_grants].get(mode, []))
-            if mode in CENSUS_MODES:
+            if mode in CENSUS_MODES and not (a.pages_run and mode == 'pages-derive' and a.root_grants):
                 tests[f'{mode}:thread_census_one'] = \
                     re.search(r'^CAPSTONE_VM_THREADS count=1 ', part, re.M) is not None
             if mode == 'exit-word':
@@ -828,7 +934,19 @@ echo VIRTUAL_STAGED_DONE
                 # The hooks build's witness: the joiner waited on the entry when it was withdrawn.
                 tests['join-withdrawn:joiner_waited_on_entry'] = re.search(
                     r'^CAPSTONE_VM_TEST_WITHDRAWN id=\d+ waiters=[1-9]', part, re.M) is not None
-            if mode in FAULTING:
+            kernel = [l for l in re.findall(rf'^ROOT_KERNEL:{re.escape(mode)}:(.*)$', log, re.M)]
+            waits = sum(l.startswith('step waits for a page operation') for l in kernel)
+            moving = [l for l in kernel if l.startswith('resolve refused at moving')]
+            if mode in PAGES_RUN_MODES and a.root_grants and a.control != 'no-mark':
+                if a.pages_run:
+                    tests[f'{mode}:fault_deferred_or_run'] = bool(moving) or mode == 'pages-derive'
+                else:
+                    tests[f'{mode}:program_stopped_in_window'] = waits >= 1 and not moving
+            if mode == 'pages-derive' and a.pages_run and a.root_grants:
+                tests['pages-derive:commit_fails_closed'] = 'CAPSTONE_VM_PAGES_ENDED op=2 ' in part
+                tests['pages-derive:stale_access_faults_25'] = mode_causes == [25] and status == '139'
+                tests['pages-derive:stale_access_did_not_read'] = 'ROOT_STALE_READ' not in part
+            elif mode in FAULTING:
                 if mode not in NO_REMAP:
                     tests[f'{mode}:remapped_at_the_same_address'] = 'ROOT_REMAP same_address=1' in part
                 tests[f'{mode}:stale_access_faults_25'] = mode_causes == [25] and status == '139'
@@ -862,6 +980,54 @@ echo VIRTUAL_STAGED_DONE
                                      log, re.M)
                 tests['futex-readonly:read_admits_no_page'] = base is not None and base not in touched
                 tests['futex-readonly:store_admits_its_page'] = store is not None and store in touched
+            if mode == 'pages-enomem':
+                aborts = ABORT_REPORT.findall(part)
+                tests['pages-enomem:aborts_logged'] = aborts == [('protect', '12')] * (2 if a.root_grants else 1)
+            if mode == 'release-fail':
+                tests['release-fail:release_failure_logged'] = 'CAPSTONE_VM_RELEASE_FAILED ' in part
+            if mode == 'pages-tagged':
+                base = line(r'^ROOT_PAGES_TAGGED base=(0x[0-9a-f]+)$', part)
+                counts = re.search(r'^ROOT_PAGES_TAGGED cleared_before=(-?\d+) cleared_after=(-?\d+)$', part, re.M)
+                if a.control == 'no-check-pin' and base:
+                    removed = re.findall(rf'^remove arena {base}\+0x[0-9a-f]+ page 1 ', '\n'.join(kernel), re.M)
+                    unheld = re.findall(rf'^test unhold arena {base}\+0x[0-9a-f]+ page 1 ', '\n'.join(kernel), re.M)
+                    delta = (int(counts.group(2)) - int(counts.group(1))) if counts else -1
+                    tests['pages-tagged:control_unheld_page_reaches_linux_tagged'] = (
+                        len(unheld) == 1 and not removed and delta >= 1)
+                elif a.root_grants and not a.unpinned and base:
+                    removed = re.findall(rf'^remove arena {base}\+0x[0-9a-f]+ page 1 pfn (0x[0-9a-f]+) '
+                                         r'tags (\d+) after (\d+)$', '\n'.join(kernel), re.M)
+                    tests['pages-tagged:census_tags_cleared'] = (len(removed) == 1 and int(removed[0][1]) >= 1
+                                                                 and removed[0][2] == '0')
+                    if a.module_hooks:
+                        unheld = re.findall(rf'^test unhold arena {base}\+0x[0-9a-f]+ page 1 pfn (0x[0-9a-f]+)$',
+                                            '\n'.join(kernel), re.M)
+                        scanned = re.findall(rf'^scan arena {base}\+0x[0-9a-f]+ page 1 pfn (0x[0-9a-f]+) ',
+                                             '\n'.join(kernel), re.M)
+                        tests['pages-tagged:unheld_page_pinned_by_check'] = (
+                            len(unheld) == 1 and scanned == unheld and bool(removed) and removed[0][0] == unheld[0])
+                if counts and int(counts.group(1)) >= 0 and int(counts.group(2)) >= 0 and \
+                        a.control != 'no-check-pin':
+                    delta = int(counts.group(2)) - int(counts.group(1))
+                    if a.unpinned:
+                        tests['pages-tagged:kernel_cleared_tagged_frame'] = delta >= 1
+                    elif a.root_grants:
+                        tests['pages-tagged:no_tagged_frame_freed'] = delta == 0
+            if mode == 'pages-admit' and a.root_grants and not a.unpinned:
+                base = line(r'^ROOT_PAGES_ADMIT base=(0x[0-9a-f]+)$', part)
+                order = re.findall(rf'^(admit|remove) arena {base}\+0x[0-9a-f]+ page 2 .*?pfn (0x[0-9a-f]+)',
+                                   '\n'.join(kernel), re.M) if base else []
+                admitted, unpinned_mapped = set(), False
+                for kind, pfn in order:
+                    if kind == 'admit':
+                        admitted.add(pfn)
+                    elif pfn in admitted:
+                        unpinned_mapped = True
+                if a.control == 'no-mark':
+                    tests['pages-admit:control_frame_unpinned_while_mapped'] = unpinned_mapped
+                else:
+                    tests['pages-admit:no_frame_unpinned_while_mapped'] = bool(base) and not unpinned_mapped
+                    tests['pages-admit:page_admitted_after_commit'] = any(k == 'admit' for k, _ in order)
             if mode == 'partial-fixed' and a.root_grants and not a.unpinned:
                 base = line(r'^ROOT_PARTIAL_FIXED base=(0x[0-9a-f]+)$', part)
                 removed = re.findall(rf'^ROOT_KERNEL:partial-fixed:remove arena {base}\+0x[0-9a-f]+ page (\d+) '
@@ -892,7 +1058,7 @@ echo VIRTUAL_STAGED_DONE
                     tests['exit-victim:operand_is_a_reference'] = operand == '1'
                 expected = expected_refusals(mode, a.control, a.launcher_bypass,
                                              a.launcher_frame_floor, victim_reason,
-                                             a.launcher_range_bypass)
+                                             a.launcher_range_bypass, a.pages_run)
                 tests[f'{mode}:kernel_refusals'] = refusals_match(seen, expected)
             else:
                 tests[f'{mode}:kernel_refuses_nothing'] = seen == []
@@ -928,7 +1094,8 @@ echo VIRTUAL_STAGED_DONE
                   retire_refused=line(r'^ROOT_RETIRE_REFUSED:(\w+)$'),
                   exit_kept=line(r'^ROOT_EXIT_KEPT:(\w+)$'), no_refs_outcome=outcome,
                   module_hooks=a.module_hooks, block_frames=a.block_frames,
-                  launcher_range_bypass=a.launcher_range_bypass, frames_reused=frames_reused)
+                  launcher_range_bypass=a.launcher_range_bypass, frames_reused=frames_reused,
+                  pages_run=a.pages_run)
     (a.work / 'result.json').write_text(json.dumps(result, indent=2) + '\n')
     print(json.dumps({k: result[k] for k in ('status', 'passed', 'total', 'exits', 'fault_causes')}))
     for name, ok in tests.items():

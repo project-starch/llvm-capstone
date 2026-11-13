@@ -123,11 +123,65 @@ checks it at the access.
   ended mapping meets a wake of a later mapping at the same address. (Stage 4d
   keyed the waiter by the mapping's arena id and the offset, and a revive from
   the mapping cache, which gives the mapping a new id, stranded its waiters.)
+  The same can happen inside a live mapping: the program frees the object
+  that holds the word and a new object takes its address. So a waiter keeps
+  the lifetime of the reference the kernel checked, and a wake counts only
+  waiters whose lifetime is still live (stage 4f): a stale waiter is woken as
+  well, since nothing else would end its sleep, but it does not take the wake
+  from a live waiter at the same address. Without root grants the kernel
+  knows no lifetime of a word, and every waiter counts.
   A waiter enters the queue in the same critical section as the compare, and
   a wake needs that section, so a wake between the compare and the sleep marks
   the waiter, whose sleep then returns at once. The kernel's wait for its own
   lock comes before any effect, so a signal that interrupts it makes the
   launcher repeat the step.
+
+A page operation is one step as well (decided on 2026-11-13, stage 4f of the
+adapter plan). A partial `munmap`, a `MAP_FIXED` refill and `mremap`'s shrink
+and growth in place change pages of a reservation in three moves: the kernel
+checks the request, Linux changes the range, and the kernel commits. In the
+prototype these are two module calls with Linux's change between them, and
+the launcher holds its service lock across all three. The check opens a
+transition in the module. Until the commit or an abort closes it, no thread of
+the program runs, and no page of the range is admitted. So no thread can
+derive an object below P, store a capability into a page of the range, or
+have a page of the range admitted between the check and the commit. Stage 4e
+let the program run in between: a thread could derive an object below P after
+the refill rule was checked, or have a page of the new range admitted that the
+commit then unpinned while it stayed mapped. The transition protocol:
+
+1. Check. The kernel checks the reference, the range and, for a refill, the
+   refill rule. It pins every resident page of the range that it does not hold
+   yet, so that the commit clears that page's tags too. Then it opens the
+   transition. A removal of the last mapped pages opens nothing: it ends the
+   reservation at once, as a `munmap` of the whole reservation does.
+2. Linux. The launcher changes the protection of the range with `mprotect`:
+   `PROT_NONE` for a removal, the asked protection for a refill. A refill then
+   discards the old contents with `MADV_DONTNEED`, while the kernel still holds
+   its pages pinned. No `MAP_FIXED` replaces the range: the VMA, its
+   `VM_NOHUGEPAGE` and the address range stay, and no other mapping can take
+   the range even for a moment. `mprotect` can fail before or part way through
+   its change, with `ENOMEM` when a VMA split meets `vm.max_map_count`. Then
+   the launcher restores the protection the range had, the kernel aborts the
+   transition, and the program gets `ENOMEM` with nothing changed.
+3. Commit. A refill checks the refill rule again. If an object below P exists
+   now, the commit fails closed: it ends the reservation, so the object is
+   stale before any access can see its pages replaced, and the program gets
+   `EINVAL`. Otherwise the kernel clears the tags of every page of the range
+   that it held, unpins it and lets Linux reuse the frame; it updates the
+   removed pages and the count, and closes the transition.
+4. A removal's pages are discarded after the commit. If Linux refuses that
+   discard, the pages stay removed: `PROT_NONE`, never admitted, and without
+   tags.
+
+A fault on a page of an open transition does not stop the program: the thread
+waits for the transition to end and then meets the page as the transition
+left it. In the prototype that is a thread whose fault reached the
+launcher before the check, since no thread runs during the transition. If the
+launcher's release of a reservation that the kernel has already ended fails
+in Linux, the range stays mapped in Linux. Linux then gives no address inside
+it to another mapping, and the launcher drops its record, since every
+reference into the range is stale.
 
 One access stays outside the rule, as a diagnostic: after a fault has stopped
 the program for good, the launcher walks the frame chain of the main stack for
@@ -147,8 +201,8 @@ mapping block.
 |---|---|
 | `mmap` | a new reservation, as above. `PROT_EXEC` is refused (`EACCES`): only the image's text is executable. |
 | `munmap` | through an accepted reference (conditions 1 to 4). A call that names the whole reservation ends it: `CREVOKE` of M, then the address range becomes free. A call that names any other page range inside it removes those pages (a partial `munmap`, below). A range beyond the reservation, across two reservations or by a plain address is refused. |
-| `MAP_FIXED` | inside a reservation: only with an accepted reference and only while the program derived no object below P (the record after P's in the preorder list is not deeper, one step). The pages of the range, removed ones included, read zero afterwards with the protection asked for; no lifetime ends. By a plain address and into free address space it is refused. |
-| `mremap` | shrinks in place (a partial `munmap` of the tail; the references stay valid) and grows in place inside the reservation's visible length, into its own removed pages. Elsewhere `MREMAP_MAYMOVE` moves the range, atomic for the reservations: a new reservation, the pages move with their tags, and a `munmap` of the old range through P, which ends the old reservation when that range held its last mapped pages. Without `MREMAP_MAYMOVE` the answer is `ENOMEM`. `MREMAP_FIXED` and `MREMAP_DONTUNMAP` are refused. |
+| `MAP_FIXED` | inside a reservation: only with an accepted reference and under the refill rule, only while the program derived no object below P (the record after P's in the preorder list is not deeper, one step). The pages of the range, removed ones included, read zero afterwards with the protection asked for; no lifetime ends. By a plain address and into free address space it is refused. |
+| `mremap` | first validates the whole old range: it lies inside one reservation, every page of it is mapped, and the reference is accepted (conditions 1 to 4, any cursor). Then it shrinks in place (a partial `munmap` of the tail; the references stay valid) or grows in place inside the reservation's visible length, into its own removed pages, under the refill rule of `MAP_FIXED`. Elsewhere `MREMAP_MAYMOVE` moves the range, atomic for the reservations: a new reservation, the pages move with their tags, and a `munmap` of the old range through P, which ends the old reservation when that range held its last mapped pages. Without `MREMAP_MAYMOVE` the answer is `ENOMEM`. `MREMAP_FIXED` and `MREMAP_DONTUNMAP` are refused. |
 | `mprotect` | with a reference that passes conditions 1 to 3 and covers the named page range, which may be part of the reservation. It ends nothing. `PROT_EXEC` is refused (`EACCES`), and so is a removed page (`ENOMEM`, as for an unmapped page). |
 | `madvise` | `MADV_DONTNEED` and `MADV_FREE` as `mprotect`: a reference that passes conditions 1 to 3 and covers the named page range. The range reads zero afterwards. It ends nothing. Other advice answers `ENOSYS`. |
 | the image | `mprotect`, `madvise` and `munmap` of the image are refused: its data reference covers the whole image, so only the page's write bit protects the text, and only the kernel may change it. |
@@ -156,10 +210,11 @@ mapping block.
 | shared region | the system-call region belongs to the kernel, is never unmapped, and its address range is never reused |
 
 A partial `munmap` (decided on 2026-11-13 after review, stage 4e of the
-adapter plan) removes pages and ends no lifetime. The kernel replaces the
-pages with a placeholder (`PROT_NONE`, `MAP_NORESERVE`, mapped `MAP_FIXED` over
-the range), never admits a removed page again until a refill maps it, and
-gives no other mapping an address inside the reservation while M lives. A
+adapter plan) removes pages and ends no lifetime. The kernel makes the pages
+`PROT_NONE` and discards their contents; they stay part of the reservation's
+VMAs (stage 4f; stage 4e mapped a `PROT_NONE` placeholder `MAP_FIXED` over
+them). It never admits a removed page again until a refill maps it, and gives
+no other mapping an address inside the reservation while M lives. A
 reference into a removed page stays live; an access through it is a page
 fault, as on a page of no mapping, never a lifetime fault. The reservation
 ends with `CREVOKE` of M when the last logically mapped page goes, when one
@@ -169,7 +224,11 @@ touched count. The count is exact: a page counts once, unmapping a removed
 page again changes nothing, and `mprotect` changes no count. The kernel clears
 the tags of every removed page it held and unpins it before Linux can reuse
 its frame, and the frame leaves the duplicate check of the reservation, so a
-refill may receive it again.
+refill may receive it again. Without root grants the kernel cannot read the
+operand, and a partial `munmap` is authorised by the address alone: a legacy
+profile without the reference guarantee of this section, kept until the
+bitstream has supervisor references (adapter plan, stage 5). No refill is
+possible there, since the refill rule needs the reference.
 
 The abstract machine keeps its lifetimes exact under this rule. Page presence
 is the page table's business, as page rights are: a partial `munmap` changes
@@ -187,18 +246,28 @@ its whole reservation has ended, so no stale reference reaches a new mapping.
 The cost is address space: a hole stays unusable by other mappings until its
 reservation ends.
 
-`MAP_FIXED` keeps its rule inside a reservation, removed pages included: a
-refill gives the pages of the same object fresh zero pages, and an object that
-a nested allocator derived below P would see its memory reappear, which the
-rule excludes. The growth of `mremap` into the reservation's own removed tail
-needs no such condition: it maps only removed pages, whose contents are gone
-already, and replaces nothing.
+The refill rule (stage 4f): a refill gives pages of the reservation fresh
+zero pages, `MAP_FIXED` and the growth of `mremap` into the reservation's own
+removed tail alike, so it is allowed only while the program derived no object
+below P. An object that a nested allocator derived below P would otherwise
+see its memory replaced or, after a partial `munmap` of its pages, reappear.
+One rule for both operations, checked in one place, at the check and again at
+the commit. Stage 4e exempted the growth, on the grounds that it maps only
+removed pages; but an object derived over a page before that page's removal
+lives on, and the growth would give its memory back.
 
-The prototype's `mremap` (stages 4b and 4e of the adapter plan) moves as map,
-copy and unmap in the libc, not one kernel step. Before it copies anything it
-asks the kernel, without changing anything, whether that range may move: a
-`munmap` of it through the same reference would be accepted, no page of it is
-removed and every page of it is read-write. So a stale reference, an object
+The prototype's `mremap` (stages 4b, 4e and 4f of the adapter plan) validates
+the whole old range first on every path, the same way: the range lies inside
+one reservation, every page of it is mapped (`EFAULT` otherwise, as Linux
+answers for an unmapped part of the old range), and the reference is the
+reservation's own. Stage 4e checked only the tail for a shrink and a growth:
+a shrink over a hole could remove the last mapped page, end the reservation
+and still answer success, and a growth succeeded with holes in the old range
+or with a cursor outside the reservation. A shrink and a growth in place are
+one kernel step each, the validation included. A move is map, copy and unmap
+in the libc, not one kernel step. Before it copies anything it asks the
+kernel, without changing anything, whether that range may move: the
+validation, and every page of it read-write. So a stale reference, an object
 below P or a range beyond the reservation fails with nothing changed and never
 faults in the copy. The answer holds when it is given: another thread of the
 program may end the old mapping or change its protection between the check
@@ -217,11 +286,18 @@ the pages it holds through its pin, and any other page with contents in place
 through the page table (there is none in a heap mapping, since every page the
 program touches is admitted at its fault, but the kernel does not rely on
 that). It checks every page first, that each is still private to the mapping,
-and zeroes only when all pass, so a refusal changes nothing; a page that
-migration or compaction is moving makes it wait and look again. It marks each
-zeroed page dirty, and keeps its pages pinned and mapped, so no tagged page
-goes back to Linux. The unpinned kernel holds no pages, and Linux gives the
-range back, as at the unpinned release of a whole mapping.
+and zeroes only when all pass, so a refusal of that check changes nothing; a
+page that migration or compaction is moving makes it wait and look again. A
+migration that outlasts the wait (about 10 s) makes the zeroing fail after it
+zeroed part of the range: the zeroed pages hold no tag and stay mapped, the
+others keep their contents, and no lifetime changes (stage 4f corrects the
+claim of stage 4e that every failure changes nothing). It marks each zeroed
+page dirty, and keeps its pages pinned and mapped, so no tagged page goes back
+to Linux. The unpinned kernel holds no pages, and Linux gives the range back,
+as at the unpinned release of a whole mapping. The unpinned kernel relies on
+Linux to clear the tags of every frame it frees (the tag-aware page free of
+the unpinned kernel patch); the module refuses to load in the unpinned mode
+unless the kernel reports that hook active.
 
 A program that ends a mapping's lifetime itself and hands back the stale
 reference is refused, and the range stays unusable until `exit`. That is a

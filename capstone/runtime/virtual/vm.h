@@ -30,19 +30,23 @@ extern void *__capstone_vm_acquire(unsigned long, unsigned long, int, unsigned, 
  * and a1 name; the range may be part of the mapping. */
 extern long __capstone_vm_unmap(void *, unsigned long);
 extern long __capstone_vm_protect(void *, unsigned long, int);
-/* The mapping check (CV_SERVICE_MAPPING_CHECK) takes a reference and a length as the unmap service
- * does, and answers 0 if that unmap would be accepted and every page of the mapping is read-write
- * (ENOTSUP otherwise). It changes nothing: mremap asks it before it copies. */
-extern long __capstone_vm_mapping_check(void *, unsigned long);
+/* The mapping check (CV_SERVICE_MAPPING_CHECK) takes a reference, a length and flags: mremap's
+ * validator of its old range (the reference covers the whole block, the range lies inside it and every
+ * page of it is mapped), and with CV_CHECK_MOVE every page read-write (ENOTSUP otherwise). It changes
+ * nothing: mremap asks it before it copies. */
+extern long __capstone_vm_mapping_check(void *, unsigned long, unsigned long);
 /* The advise service (CV_SERVICE_ADVISE) takes a reference, a length and MADV_DONTNEED or MADV_FREE,
  * and checks the reference as the protect service does. The range reads zero afterwards. */
 extern long __capstone_vm_advise(void *, unsigned long, int);
 /* The refill service (CV_SERVICE_REFILL, stage 4e) takes the block's reference with its cursor at the
  * first page of a range, the range's length, a protection and CV_PAGES_FIXED (mmap with MAP_FIXED
- * inside the block) or CV_PAGES_GROW (mremap's growth in place into the block's removed pages). */
+ * inside the block). */
 extern long __capstone_vm_refill(void *, unsigned long, int, unsigned long);
 #define CAP_VM_REFILL_FIXED 2   /* CV_PAGES_FIXED, wire.h */
-#define CAP_VM_REFILL_GROW 3    /* CV_PAGES_GROW */
+/* The resize service (CV_SERVICE_RESIZE, stage 4f) takes the block's reference with its cursor at the
+ * first page of mremap's old range, the old length and the new length, and shrinks or grows that
+ * range in place; ENOMEM when it cannot grow in place. */
+extern long __capstone_vm_resize(void *, unsigned long, unsigned long);
 extern long __capstone_vm_wait(void);
 extern long __capstone_vm_nodes(unsigned long);
 

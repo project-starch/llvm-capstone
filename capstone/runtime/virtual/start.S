@@ -143,6 +143,11 @@ __capstone_vm_refill:
     li a7, CV_SERVICE_REFILL
     ecall
     ret
+.global __capstone_vm_resize
+__capstone_vm_resize:
+    li a7, CV_SERVICE_RESIZE
+    ecall
+    ret
 .section .gct,"a",@progbits
 .balign 16
 .global __capstone_gct_start

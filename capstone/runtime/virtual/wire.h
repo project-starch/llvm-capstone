@@ -198,10 +198,12 @@ struct cv_protect {
  * refusal. equal (out): 1 if the word read holds the value. arena and offset (out, when accepted):
  * the arena id of the mapping that holds the word and the word's offset in it (stage 4d's key; since
  * stage 4e the launcher keys its waiter by the checked address, as Linux does, and wakes the waiters
- * of every range that stops being mapped). Linux never sees the program's address. The ioctl itself
- * fails only for a caller that is not paused at the service (EINVAL). Changes no program memory. */
+ * of every range that stops being mapped). lifetime (out, when accepted, stage 4f): the lifetime id
+ * of the reference in a0 with root_grants, else 0; a wake counts the waiter only while it is live
+ * (CV_LIVE). Linux never sees the program's address. The ioctl itself fails only for a caller that
+ * is not paused at the service (EINVAL). Changes no program memory. */
 struct cv_word {
-    __u64 thread, reason, equal, arena, offset;
+    __u64 thread, reason, equal, arena, offset, lifetime;
 };
 #define CV_WORD_ACCEPTED 0
 #define CV_WORD_NOT_REFERENCE 1
@@ -240,35 +242,56 @@ struct cv_advise {
     __u64 thread, id, zeroed;
 };
 #define CV_ADVISE _IOWR('V', 36, struct cv_advise)
-/* Stage 4e: a page operation inside one mapping block, which ends no lifetime: a partial munmap
- * (CV_PAGES_REMOVE, the caller paused at CV_SERVICE_UNMAP), MAP_FIXED inside the block
- * (CV_PAGES_FIXED) and mremap's growth in place (CV_PAGES_GROW), both at CV_SERVICE_REFILL with the
- * operation in a3. thread is the caller, id the arena the launcher resolved; the range is
- * [a0's cursor, + a1), read from the caller's saved registers. Two calls with service_lock held
- * across both, and Linux's change of the range between them:
- *   commit 0, the check: the range is a nonempty page range inside the visible length, the arena
- *     holds no thread's frame (EBUSY), a refill asks for no PROT_EXEC (a2, EACCES), and with
- *     root_grants a0 holds the block's own reference: live, a child of M, its bounds covering the
- *     whole visible length whatever its cursor (EINVAL otherwise). CV_PAGES_FIXED needs root_grants
- *     (EOPNOTSUPP) and no object derived below P (EINVAL). CV_PAGES_GROW needs every page of the
- *     range removed and the page before it mapped (ENOMEM). Changes nothing, except that a removal
- *     of every logically mapped page that is left ends the reservation in this call (CREVOKE of M
- *     and the release of the arena, as CV_UNMAP's retire) and answers ended 1, written before the
- *     end; the launcher then gives the whole extent back to Linux.
- *   commit 1, after the launcher removed the range (a PROT_NONE, MAP_NORESERVE placeholder mapped
- *     MAP_FIXED over it) or mapped fresh pages there: the module clears the tags of every page of
- *     the range it holds, unpins it and deletes its frame from the arena's frame set, and updates
- *     the removed pages and the count of logically mapped pages. It does not check the reference
- *     again.
- * A removed page is never admitted until a refill maps it again; no other mapping receives an
+/* A page operation inside one mapping block, which ends no lifetime (stage 4e; stage 4f makes it one
+ * step for the program): a partial munmap (CV_PAGES_REMOVE, the caller paused at CV_SERVICE_UNMAP,
+ * the range [a0's cursor, + a1)), MAP_FIXED inside the block (CV_PAGES_FIXED, at CV_SERVICE_REFILL
+ * with the operation in a3, the range [a0's cursor, + a1), the protection a2) and mremap's shrink and
+ * growth in place (CV_PAGES_SHRINK, CV_PAGES_GROW, at CV_SERVICE_RESIZE: the old range [a0's cursor,
+ * + a1) and the new length a2; a shrink removes [+ a2, + a1), a growth refills [+ a1, + a2)). thread is
+ * the caller, id the arena the launcher resolved; the registers are read from the caller's saved
+ * frame. Three calls with service_lock held across them, and Linux's change of the range between
+ * the first two:
+ *   commit CV_PAGES_CHECK: the range (for a resize the old range) is a nonempty page range inside the
+ *     visible length, the arena holds no thread's frame (EBUSY), MAP_FIXED asks for no PROT_EXEC (a2,
+ *     EACCES), no other page operation of the context is open (EBUSY), and with root_grants a0 holds
+ *     the block's own reference: live, a child of M, its bounds covering the whole visible length
+ *     whatever its cursor (EINVAL otherwise). A resize first validates the whole old range: every page
+ *     of it logically mapped (EFAULT). A growth needs every page of the new tail inside the visible
+ *     length and removed (ENOMEM). MAP_FIXED and a growth follow the refill rule: no object derived
+ *     below P (EINVAL for MAP_FIXED, ENOMEM for a growth; without root_grants EOPNOTSUPP and ENOMEM).
+ *     Then the module pins every resident page of the range it does not hold yet and opens the
+ *     operation: until its commit or abort no thread of the program runs and no page of the range is
+ *     admitted. A removal of every logically mapped page that is left opens nothing: it ends the
+ *     reservation in this call (CREVOKE of M and the release of the arena, as CV_UNMAP's retire) and
+ *     answers ended 1, written before the end; the launcher then gives the whole extent back to Linux.
+ *   commit CV_PAGES_COMMIT, after the launcher changed the protection of the range with mprotect
+ *     (PROT_NONE for a removal) and, for a refill, discarded its contents with MADV_DONTNEED: a refill
+ *     asks the refill rule again and fails closed (ends the reservation, ended 1) if an object below P
+ *     exists now; the module clears the tags of every page of the range it holds and unpins it,
+ *     rebuilds the arena's frame set, updates the removed pages and the count of logically mapped
+ *     pages, and closes the operation.
+ *   commit CV_PAGES_ABORT, after the launcher's first Linux step failed and the launcher restored the
+ *     range's protection: the module closes the operation and changes nothing.
+ * removed (out): the arena's removed pages after the call, which the launcher compares with its own
+ * count. A removed page is never admitted until a refill maps it again; no other mapping receives an
  * address inside the block while it lives. */
 struct cv_pages {
-    __u64 thread, id, op, commit, ended;
+    __u64 thread, id, op, commit, ended, removed;
 };
 #define CV_PAGES_REMOVE 1
 #define CV_PAGES_FIXED 2
 #define CV_PAGES_GROW 3
+#define CV_PAGES_SHRINK 4
+#define CV_PAGES_CHECK 0
+#define CV_PAGES_COMMIT 1
+#define CV_PAGES_ABORT 2
 #define CV_PAGES _IOWR('V', 37, struct cv_pages)
+/* Is the lifetime id (a futex waiter's, cv_word.lifetime) still live (stage 4f)? live (out): 1 if
+ * it is, or if the module cannot tell (no root_grants, id 0). Reads the table only. */
+struct cv_live {
+    __u64 lifetime, live;
+};
+#define CV_LIVE _IOWR('V', 38, struct cv_live)
 /* The image file, by descriptor, before the launcher validates it: the module
  * denies writers to it (ETXTBSY, as Linux does for a running executable) until
  * the context is released, so the bytes validated are the bytes loaded. */

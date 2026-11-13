@@ -1,6 +1,6 @@
 # Address-space root: adapter and libc plan
 
-Status: plan of 2026-11-12 on the branch `address-space-root`. Stages 0 to 4e
+Status: plan of 2026-11-12 on the branch `address-space-root`. Stages 0 to 4f
 are done (see each stage); block A (the format alignment) is next, then stage 5,
 in a reduced form until the project lead decides on the old path.
 Design: [the kernel as the outermost allocator](../design/virtual-capstone/address-space-root.md).
@@ -520,6 +520,126 @@ in the last stage, when every feature is in.
    futex-remap (the waiter, now woken by the unmap, exited and released its frame,
    whose address the launcher then reused for the remap) and runner reads of kernel
    lines printed after a mode's exit; both fixed before e2.
+4f. **Page operations in one step, and the follow-ups of stage 4e. Done** (2026-11-13,
+   uncommitted at the time of the runs). Rule, decided after the review of stage 4e: a page operation
+   (a partial munmap, `MAP_FIXED` inside a block, `mremap`'s shrink and growth in place) is one step
+   for the program, as a check and an access in one ioctl are (design note, section Mappings, "A page
+   operation is one step as well"). Stage 4e checked in one ioctl and committed in another, with the
+   program running in between: a thread could derive an object below P after the refill rule was
+   checked, or have a page of the new range admitted that the commit then unpinned while it stayed
+   mapped. Refill of removed pages, by `MAP_FIXED` or by `mremap`'s growth, follows one rule, checked
+   in one place and again at the commit. `MAP_FIXED` into free address space stays refused.
+
+   The transition protocol, as implemented (capstone_vm.c `pages_request`, `pages_finish`; exec.c
+   `pages_change`, `pages_abort`, `restore_protection`):
+   - Check (`CV_PAGES`, commit `CV_PAGES_CHECK`): the reference and the range as in stage 4e; a
+     resize first validates the whole old range (`old_range_accept`); a refill asks the refill rule
+     (`refill_rule`); one operation per context at a time (EBUSY). Then the module pins every resident
+     page of the range that `pages[]` does not hold (`pin_resident`, FOLL_FORCE | FOLL_NOFAULT, as
+     `retire_prepare` does), and records the operation in `c->pending` (op, arena, thread, page range,
+     P's lifetime). A removal of the last mapped pages ends the block instead (`ended`), as in stage 4e.
+   - While `c->pending` is set, `CV_STEP` of every thread of the context waits (drops `vm_lock`,
+     `wait_event_interruptible` on `slot_wait`, then EAGAIN, which the launcher's loop repeats; counted
+     in `pages_waits`, a census line under `diag_admit`), `resolve` answers EINPROGRESS for a page of
+     the range ("resolve refused at moving"), and the launcher's worker then waits for `service_lock`
+     and lets the program fault again; `pin_ahead` and `admit_page` stop at the range.
+   - Linux, with `service_lock` held: `mprotect` of the range (`PROT_NONE` for a removal, the asked
+     protection for a refill), then for a refill `MADV_DONTNEED`, while the module still holds its
+     pages pinned. No `MAP_FIXED`: the VMA, `VM_NOHUGEPAGE` and the address range stay. If either
+     fails, `restore_protection` gives each page back the protection the page state records, the
+     module aborts (`CV_PAGES_ABORT`, nothing changes) and the program gets the errno
+     (`CAPSTONE_VM_PAGES_ABORTED`). If the restore or the abort fails, the program ends.
+   - Commit (`CV_PAGES_COMMIT`): a refill asks the refill rule again and fails closed: it ends the
+     block (retire, `ended`), the launcher releases the extent and answers EINVAL
+     (`CAPSTONE_VM_PAGES_ENDED`). Otherwise every page of the range that the module holds loses its
+     tags and its pin (`page_drop`), the frame set is rebuilt once (`frame_rebuild`), the removed bits
+     and the count change, and `removed` reports the arena's removed pages, which the launcher compares
+     with its own count (it ends the program if they differ).
+   - A removal's pages are discarded (`MADV_DONTNEED`) after the commit; a failure is logged
+     (`CAPSTONE_VM_DISCARD_FAILED`), and the pages stay removed and tag-free.
+   - Every waiter on a word of the range is woken after the commit, a refill's included (stage 4e woke
+     none at a refill).
+
+   Other changes:
+   - `mremap`: one validator of the whole old range (launcher `old_range`, module `old_range_accept`:
+     inside one block, every page mapped, EFAULT otherwise; the block's own reference) before any
+     shrink, growth or move. The shrink and the growth in place are one new service, `CV_SERVICE_RESIZE`
+     (18; ops `CV_PAGES_SHRINK` and `CV_PAGES_GROW`), so the validation and the change are one step;
+     the move asks the mapping check with `CV_CHECK_MOVE` (read-write over the whole range). The growth
+     follows the refill rule (ENOMEM while an object exists below P, the libc then moves). Without root
+     grants no refill is possible, so growth in place answers ENOMEM there.
+   - Every module ioctl of the launcher goes through `vm_call` (EINTR repeated) but `CV_STEP`; before,
+     a signal failed `CV_UNMAP`, `CV_PROTECT`, `CV_ADVISE`, `CV_ADD`, `CV_ATTACH` and
+     `CV_THREAD_CREATE`, and ended the program at `CV_RESOLVE`.
+   - Futex: `CV_WORD` reports the reference's lifetime (`cv_word.lifetime`), the waiter keeps it, and a
+     wake counts only waiters whose lifetime is live (`CV_LIVE`, ioctl 38); a stale waiter is woken
+     and not counted.
+   - The release of a block whose arena the module has released never fails for the program: if Linux
+     refuses the `munmap`, the range stays mapped (so Linux places no other mapping there), the
+     registration goes, and `CAPSTONE_VM_RELEASE_FAILED` is logged. This covers the block that the
+     module ended at a page operation's check or commit.
+   - The unpinned module's load requires the kernel's tag-clearing page free: it refuses with a line of
+     its own when `capstone_unpinned_config` is missing or answers an error (captag off).
+   - The root_grants=0 partial munmap is documented as a legacy profile without the reference
+     guarantee (vm-abi.h, exec.c, design note, README).
+   - The claim that a failed madvise changes nothing is corrected (capstone_vm.c `advise`, design note,
+     README): the check's refusal changes nothing, but a migration that outlasts the clear walk's
+     retry budget leaves part of the range zeroed.
+   - The launcher's own refusal lines go through a non-blocking write of stderr (`note`), as `die`'s.
+   - Simplified: the frame set has no tombstones; the commit rebuilds it once. `park_prepare` and
+     `attach` ask `arena_has_holes` (the count) instead of the bitmap, which a failed check may leave
+     allocated with no bit set.
+   ABI: `struct cv_pages` gains `removed` and commit values `CV_PAGES_CHECK`, `CV_PAGES_COMMIT`,
+   `CV_PAGES_ABORT`; op `CV_PAGES_SHRINK` (4) is new and `CV_PAGES_GROW` moves to service 18; `struct
+   cv_word` gains `lifetime` (ioctl 34 changes size); ioctl 38 `CV_LIVE` and service 18
+   `CV_SERVICE_RESIZE` are new; service 17 serves `CV_PAGES_FIXED` only; `CV_SERVICE_MAPPING_CHECK`
+   takes flags in a2 (`CV_CHECK_MOVE`). Test hooks: launcher `CAPSTONE_VM_TEST_PAGES_DELAY_MS`,
+   `CAPSTONE_VM_TEST_PAGES_LATE_DELAY_MS`, `CAPSTONE_VM_TEST_RELEASE_FAIL`; module `test_pages_run`,
+   `test_unhold_pages`.
+
+   Unit test: root-contract.c, new modes `mremap-validate`, `pages-enomem`, `pages-tagged`,
+   `futex-stale`, the hook modes `pages-derive`, `pages-fault`, `pages-admit`, `release-fail`;
+   `partial-mremap` changed (growth refused while an object exists below P, in place after it ended;
+   without root grants it moves). `mremap-contract.c` runs for the first time on this branch (modes
+   `ok`, `stale`, `fresh`, and `legacy` without root grants). Runs on QEMU (`~/asr-work/stage4f` on
+   the build host). Two batches on the final images with equal counts (f3, f4; f1 and f2 before them
+   ran the same module and launcher binaries with the admit mode under an earlier name, with the same
+   counts): root_grants=1 608 of 608 pinned and 605 of 605 unpinned, root_grants=0 600 of 600 (every mode
+   of stage 4e and the four new ones); the hook modes with the hooks launcher and module 151 of 151
+   pinned and 137 of 137 unpinned with root grants, 142 of 142 without (the derive, fault and admit modes
+   skip there); `--pages-run` 50 of 50 pinned and 48 of 48 unpinned; block_frames=1 on the partial modes
+   136 of 136 pinned and 133 of 133 unpinned; the pthread gate 29 of 29 with and without root grants;
+   the hosted contract 94 of 94; mapcache park and revive (3 parks, 2 revives, no refusal); the launcher
+   without its length check 98 of 98; the launcher without its range check 24 of 24; `mremap-contract.c`
+   `ok`, `stale` (fault 25) and `fresh` pinned and unpinned with root grants and `legacy`, `stale` and
+   `fresh` without. Witnesses: with the default module the program never runs inside an open operation
+   (census "step waits for a page operation" in pages-derive, pages-fault and pages-admit, no "resolve
+   refused at moving"); the object of pages-derive is derived after the refill and reads 0 at its
+   derivation and later; with `--pages-run` the object is derived inside the window (reads 0x5a), the
+   commit refuses it ("objects derived below the mapping" at "map fixed commit"), the block ends, MAP_FIXED
+   answers EINVAL and the object faults 25; the faults of pages-fault and pages-admit are deferred
+   ("resolve refused at moving") and land after the commit, and no frame admitted before the commit is
+   unpinned by it; pages-enomem reads a map count of 24 under the default limit of 65530 and logs two
+   aborts (`step=protect errno=12`, one without root grants); pages-tagged's census shows one tagged
+   granule before the clearing and none after, the unheld page (test_unhold_pages) re-pinned by the check
+   (scan line, FOLL_FORCE | FOLL_NOFAULT), and the kernel's count of tagged frames cleared at their free
+   unchanged in the pinned mode and one higher in the unpinned mode; futex-stale's wake of one answers 1
+   and reaches the live waiter, the stale one returns too; the unpinned module refuses to load on a
+   kernel booted with `captag=off` (insmod 95, its line "needs the kernel's tag-clearing page free"),
+   and the pinned one loads there.
+   Controls, each one change away (built outside the worktree, deleted after the runs, hashes in
+   STATUS), in both batches: the module without the transition mark (patch-no-mark.py: no wait in
+   CV_STEP, no deferred admission, no second check of the refill rule): pages-derive's object, derived
+   in the window, reads 0x5a and then 0 (its page replaced under it, the program fails, exit 1);
+   pages-admit's frame admitted in the window is unpinned at the commit while it stays mapped (an admit
+   line and a remove line with the same frame, the program's store landing in it); pages-fault's store
+   into the page being refilled is refused as a removed page and the program ends with a page fault
+   (15). The check without the pin of unheld pages (patch-no-check-pin.py): pages-tagged's unheld
+   tagged page gets no census line and reaches Linux with its tag (the kernel's count grows by one). A
+   libc whose mremap shrinks without the validator (patch-shrink-unchecked.py, stage 4e's shrink):
+   mremap-validate's shrink over a hole answers success and the block has ended. A launcher whose wake
+   counts stale waiters (patch-futex-count-all.py): futex-stale's wake of one wakes the stale waiter
+   and the live one stays asleep. Not run in this stage: the corpora and the gates of stage 6.
 A. **Format alignment: no capability rights** (block A, after stage 4e; decided
    2026-11-13). Sublet checks bounds and lifetime only, and the page table
    checks mapping and rights. Remove capability rights from the module and the
