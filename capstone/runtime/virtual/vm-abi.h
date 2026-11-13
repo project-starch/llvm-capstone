@@ -9,7 +9,18 @@
  * differs, must be rebuilt, not re-run. */
 #define CV_IMAGE_MAGIC 0x374d56564e4f5043
 #define CV_SERVICE_DELEGATE 0
+/* a0 the visible length, a1 the alignment, a2 the protection (PROT_EXEC refused with EACCES: only
+ * the image's text is executable), a3 the rights, a4 the kind. */
 #define CV_SERVICE_MAP 1
+/* a0 the mapping's reference, its cursor the first page; a1 the length. A call that names the whole
+ * block, [base, + visible length), ends it (with root_grants through a live reference to the
+ * mapping that covers it: CREVOKE of M). Since stage 4e a call that names any other page range
+ * inside the block is a partial munmap, with root_grants only through the block's own reference,
+ * whose bounds cover the whole block, whatever its cursor: the kernel removes those pages and keeps
+ * a PROT_NONE placeholder over them; no lifetime ends, and no other mapping receives addresses
+ * inside the block. Unmapping a removed page again changes nothing. The removal of the last pages
+ * that are still mapped ends the block as a whole-block call does. A range beyond the block, across
+ * two blocks or by a plain address (with root_grants) is refused (EINVAL). */
 #define CV_SERVICE_UNMAP 2
 /* a0: the start frame's reference. With root_grants the kernel checks it as a munmap operand and
  * ends the frame's mapping when it creates the thread. -EAGAIN: the kernel took the frame and the
@@ -25,25 +36,36 @@
 /* a0: the reference of the mapping, its cursor the first page; a1 the length; a2 the protection.
  * With root_grants the kernel checks the reference as for munmap, except that the range may be
  * any page range inside the mapping, which the reference must cover. It ends nothing. A mapping
- * that holds a worker's transport answers EBUSY, as for munmap. */
+ * that holds a worker's transport answers EBUSY, as for munmap. PROT_EXEC is refused (EACCES): only
+ * the image's text is executable. A range with a page that a partial munmap removed answers ENOMEM,
+ * as Linux answers for an unmapped page. The image and the launcher's other mappings are refused
+ * (EINVAL): the image's data reference covers the whole image, so only the page's write bit
+ * protects its text. */
 #define CV_SERVICE_PROTECT 6
 #define CV_SERVICE_WAIT 7
 /* a0 the word's reference, a1 the operation (FUTEX_WAIT, FUTEX_WAKE and their BITSET forms), a2
- * the value, a3 and a4 the timeout (seconds -1: none), a5 the bitset. A wait reads the word, so
- * the kernel checks it as an exit word, without the conditions on writing: with root_grants a live
- * reference whose bounds cover the word, and in both modes an aligned int inside one mapping that is
- * not the allocator's metadata and in no thread's frame (EFAULT otherwise). The kernel checks the
- * reference and compares the word with the value in one step (EAGAIN if they differ), and the
- * waiter then sleeps on a key of the mapping and the offset, never on the program's address. A wake
- * neither reads nor writes the word, so an integer address is enough; it must be an aligned int
- * inside one registered mapping (EFAULT otherwise), and it wakes only waiters of the mapping that
- * holds that address now. */
+ * the value, a3 and a4 the timeout (seconds -1: none; a relative timeout that overflows the clock
+ * waits without one, as Linux clamps it), a5 the bitset. A wait reads the word, so the kernel checks
+ * it as an exit word, without the conditions on writing: with root_grants a live reference whose
+ * bounds cover the word, and in both modes an aligned int inside one mapping, in a page that is not
+ * removed, that is not the allocator's metadata and in no thread's frame (EFAULT otherwise). The
+ * kernel checks the reference and compares the word with the value in one step (EAGAIN if they
+ * differ), and the waiter then sleeps on the address the kernel checked, as Linux keys a private
+ * futex (stage 4e). When a mapping ends or a page range of it is removed (munmap, a park, a thread's
+ * stack or frame at its exit, a partial munmap) every waiter in that range is woken and answers 0:
+ * the libc reads the word again through its own reference, which faults if it is stale, so the
+ * wake is a spurious one. A wake neither reads nor writes the word, so an integer address is
+ * enough; it must be an aligned int inside one registered mapping, in a page that is not removed
+ * (EFAULT otherwise). FUTEX_CLOCK_REALTIME with any operation but FUTEX_WAIT_BITSET answers ENOSYS,
+ * as Linux does, and so does an unknown operation or flag. */
 #define CV_SERVICE_FUTEX 8
 /* a0 the exit word's reference (or 0), a1 the reference of the mapping that holds the thread's
  * stack (or 0), a2 its length, a3 the status. With root_grants the stack is unmapped only through
  * a1, as for munmap. A refused stack does not stop the exit: the mapping stays, and the program can
- * still unmap it through a reference it kept. A stack of the wrong length and one that holds the
- * exit word are refused this way. A stack that is the thread's own frame is refused as a stack too,
+ * still unmap it through a reference it kept. A stack of the wrong length is refused this way. An
+ * exit word inside the stack does not keep it (stage 4e): the stack is released and the word is not
+ * written, without an error, as Linux drops a clear_child_tid store into an unmapped stack. A stack
+ * that is the thread's own frame is refused as a stack too,
  * but the exit releases the frame, which ends that mapping. After the thread has stopped and its
  * frame and stack are released, the kernel stores 0 into the exit word, and the launcher wakes the
  * word's futex waiters, if the word is an aligned int inside one mapping that is not the
@@ -52,7 +74,8 @@
  * store: with root_grants a0 must be a live reference whose bounds cover the word, and in both
  * modes the word may not lie in the frame of any thread. A word that fails is not written (the
  * launcher logs the refusal) and the exit still completes; futex waiters on a refused word stay
- * blocked, which is the program's bug. */
+ * blocked, which is the program's bug. The kernel's wait for its own lock is retried after a signal
+ * (EINTR comes before any effect). */
 #define CV_SERVICE_PTHREAD_EXIT 9
 /* a0 the meta block's reference, a1 the exchange region's, a2 its length. The process transport
  * (the launcher's own meta block and exchange region, named by their addresses) is served as is.
@@ -70,11 +93,12 @@
  * writing into them and releases its hold on their mappings, which until then refuses their
  * unmap to everyone, the worker included. The worker's next delegate service attaches again. */
 #define CV_SERVICE_TRANSPORT_DETACH 14
-/* a0 the reference of a mapping, a1 its length. Answers 0 if a request to end that mapping would
- * be accepted (as for munmap: with root_grants a live reference to the whole mapping, and a1 its
- * whole visible length; EINVAL otherwise, EBUSY while a worker's transport holds it) and every
- * page of it is read-write (ENOTSUP otherwise). Changes nothing. The libc's mremap asks it before
- * it copies anything. */
+/* a0 the reference of a mapping, its cursor the first page of a range; a1 the range's length.
+ * Answers 0 if mremap may move that range (since stage 4e any page range inside one block, as a
+ * partial munmap may name it: with root_grants the block's own reference, whose bounds cover the
+ * whole block; EINVAL otherwise, EBUSY while a worker's transport holds the block), no page of it is
+ * removed (EFAULT otherwise) and every page of it is read-write (ENOTSUP otherwise). Changes
+ * nothing. The libc's mremap asks it before it copies anything. */
 #define CV_SERVICE_MAPPING_CHECK 15
 /* a0 the reference of a mapping, its cursor the first page; a1 the length; a2 MADV_DONTNEED or
  * MADV_FREE (EINVAL otherwise). The range reads zero afterwards. With root_grants the kernel checks
@@ -82,6 +106,17 @@
  * whose bounds cover the page range. It ends nothing. A mapping that holds a worker's transport
  * answers EBUSY, as for mprotect. */
 #define CV_SERVICE_ADVISE 16
+/* Stage 4e. a0 the block's reference, its cursor the first page of the range; a1 the length; a2 the
+ * protection (CV_PAGES_FIXED; PROT_EXEC refused with EACCES); a3 CV_PAGES_FIXED or CV_PAGES_GROW
+ * (wire.h). CV_PAGES_FIXED is MAP_FIXED inside the block: with root_grants only, through the block's
+ * own reference (bounds over the whole block) and only while the program derived no object below
+ * it (EINVAL otherwise, EOPNOTSUPP without root_grants); the range then reads zero with protection
+ * a2, removed pages count as mapped again, and no lifetime ends. CV_PAGES_GROW is mremap's growth in
+ * place: every page of the range is removed and the page before it is mapped, inside the block's
+ * visible length (ENOMEM otherwise, and the libc moves with MREMAP_MAYMOVE); the range then reads
+ * zero with the protection of the page before it. A mapping that a worker's transport holds answers
+ * EBUSY. */
+#define CV_SERVICE_REFILL 17
 /* Node instructions pause at this remaining cleanup reserve. */
 #define CV_NODE_RESERVE 256
 #define CV_MAP_HEAP 0

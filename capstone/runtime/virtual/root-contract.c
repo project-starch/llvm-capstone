@@ -30,8 +30,9 @@
  *   nested_object_refused (root grants)
  *                                   munmap through an object derived over the whole page, one
  *                                   level below the mapping; the object and the mapping still work
- *   partial_unmap_refused           munmap of either page of a two-page mapping; the whole mapping
- *                                   then unmaps through its reference
+ *   unmap_beyond_block_refused      munmap of a range that reaches beyond a two-page mapping (since
+ *                                   stage 4e a page range inside the mapping is a partial munmap);
+ *                                   the whole mapping then unmaps through its reference
  *   stale_reference_refused (root grants)
  *                                   the program ends a mapping itself with CREVOKE: munmap
  *                                   through the stale reference is refused, twice, without a fault
@@ -55,8 +56,9 @@
  * mremap (ends with a fault): the libc's mremap (map, copy, unmap) of a two-page mapping that
  *                                   holds data and, at offset 64, a reference to another mapping.
  *                                   Its mapping check refuses before anything is copied.
- *   mremap_wrong_length_refused     an old length shorter than the mapping's: mremap fails with
+ *   mremap_beyond_block_refused     an old range that reaches beyond the mapping: mremap fails with
  *                                   EINVAL, and the old mapping keeps its contents and takes writes
+ *                                   (since stage 4e any page range inside a block may move)
  *   mremap_oversized_old_refused    the same with an old length beyond the mapping: EINVAL, no
  *                                   fault (a copy before the check reads past the reference)
  *   mremap_nested_object_refused (root grants)
@@ -72,10 +74,11 @@
  *                                   which still reads its object; the third page reads zero
  *   mremap_old_reference_refused    munmap through the old reference afterwards is refused
  *                                   (the old mapping is gone)
- *   public_mremap_shrinks           mremap of the grown mapping to one page keeps the data of that
- *                                   page and the stored reference; the last line reads through the
- *                                   grown mapping's reference after the program mapped its address
- *                                   again, and must fault with 25.
+ *   public_mremap_shrinks           mremap of the grown mapping to one page shrinks it in place
+ *                                   (stage 4e): the reference comes back and keeps the data of that
+ *                                   page and the stored reference; the munmap of that last page ends
+ *                                   the mapping, and the last line reads through its reference after
+ *                                   the program mapped its address again, and must fault with 25.
  * exit-victim (exit 0; root grants):
  *   exit_with_own_stack_at_victim_refused
  *                                   a thread exits naming a victim mapping with its own stack's
@@ -134,6 +137,8 @@
  *                                   and is released at the exit
  *   read_only_exit_word_not_written a word in a page the program made read-only
  *   writable_exit_word_written      the same word after write rights are restored: written
+ *   stack_exit_word_dropped         a word inside the stack the exit names (stage 4e): the stack is
+ *                                   released and the store dropped without an error
  *   frame_exit_word_not_written     a word in the exiting thread's own frame, which the exit
  *                                   releases, named through the frame's reference from before the
  *                                   create (stale with root grants)
@@ -177,16 +182,16 @@
  *   futex_wait_never_reads_new_mapping
  *                                   a context waits on a word that holds 5; inside the window the
  *                                   main thread unmaps the word's whole mapping, maps a new one at
- *                                   the same address and writes 6 there: the wait times out, since
- *                                   it compared before the unmap (a read of the new mapping answers
- *                                   EAGAIN)
+ *                                   the same address and writes 6 there: the unmap wakes the waiter
+ *                                   (stage 4e), which answers 0, since it compared before the unmap
+ *                                   (a read of the new mapping answers EAGAIN)
  *   futex_wake_in_window_caught     inside the window the main thread stores 0 and wakes: the wake
  *                                   counts the waiter, which returns 0
  * futex-remap (exit 0):
  *   futex_wake_reaches_only_its_mapping
  *                                   a context sleeps on a word; the main thread unmaps its mapping,
- *                                   maps a new one at the same address and wakes that address: the
- *                                   wake counts nobody and the waiter times out
+ *                                   which wakes the waiter (0, stage 4e), maps a new one at the same
+ *                                   address and wakes that address: the wake counts nobody
  * exit-race (exit 0; root grants; hooks: the exit sleeps 3 s after the launcher's own checks):
  *   exit_word_after_revoke_not_written
  *                                   a context exits naming an exit word inside an object; inside the
@@ -284,6 +289,81 @@
  *                                   (run-root-grants.py --launcher-frame-floor) leaves it to the
  *                                   module, which compares the frame with a0's cursor
  *   create_after_refusals           the create through the frame's own reference then succeeds
+ *
+ * Stage 4e, the follow-ups of stage 4d:
+ * futex-readonly (exit 0):
+ *   futex_wait_read_only_compares   a wait on a word of a read-only page never written compares
+ *                                   (ETIMEDOUT with 0, EAGAIN with 1): the read admits no page
+ *   futex_wait_protected_compares   the same for a page that held data and was made read-only
+ * futex-park (exit 0; the runner turns the mapping pool on):
+ *   futex_waiter_woken_at_park      a waiter on a word of a heap mapping returns 0 when the program
+ *                                   unmaps (parks) the mapping, and a wake of the mapping revived at
+ *                                   the same address finds nobody
+ * futex-end (ends with a fault):
+ *   futex_spurious_wake_rewaits     a waiter in the libc's loop reads the word again after a wake
+ *                                   that left it unchanged and waits again; then the munmap of the
+ *                                   word's mapping wakes it, and its read through the stale reference
+ *                                   must fault with 25
+ * futex-flags (exit 0):
+ *   futex_clock_realtime_refused    FUTEX_CLOCK_REALTIME with FUTEX_WAIT or FUTEX_WAKE: ENOSYS
+ *   futex_unknown_flag_refused      an unknown flag bit: ENOSYS
+ *   futex_huge_timeout_waits        a wait with a relative timeout of 2^63 - 1 seconds sleeps until
+ *                                   woken (the deadline overflowed before)
+ * eintr-word, eintr-exit (exit 0; a hooks launcher and a module built with CV_TEST_HOOKS whose
+ *                                   test_hold_ms the runner sets: another launcher thread holds
+ *                                   vm_lock while a signal interrupts the wait for it):
+ *   eintr_futex_wait_retries        the futex wait compares as without the signal
+ *   eintr_thread_exit_retries       the exit completes and writes its word
+ * advise-refuse (exit 0; a module built with CV_TEST_HOOKS, test_advise_refuse=3):
+ *   advise_refused_changes_nothing  a madvise whose third page cannot be cleared fails with EIO and
+ *                                   no page of the range changes
+ * die-stderr (exit 125; the runner sends stderr into a pipe nobody reads):
+ *   die_stderr_blocks               the main thread blocks in a write to the full stderr pipe; a
+ *                                   pthread's malformed transport (the process meta block with a
+ *                                   wrong exchange region) ends the program with 125 at once
+ * protect-exec (exit 0):
+ *   image_protect_refused           mprotect and madvise of the image's text and data: EINVAL
+ *   image_unmap_refused             munmap of a page of the image or of the whole image: EINVAL
+ *   map_exec_refused, protect_exec_refused, fixed_exec_refused
+ *                                   PROT_EXEC at mmap, mprotect and MAP_FIXED: EACCES
+ * Stage 4e, partial munmap as a page operation:
+ * partial-hole (ends with a page fault, cause 13):
+ *   partial_unmap_middle, partial_unmap_wakes_waiter
+ *                                   munmap of the middle page of three; a futex waiter on a word of
+ *                                   that page returns 0
+ *   outer_pages_work                the outer pages keep their data and take writes through the old
+ *                                   reference
+ *   no_mapping_in_hole              16 new mappings all lie outside the block
+ *   hole_unmap_repeats              munmap of the hole twice more succeeds and changes nothing
+ *   hole_requests_refused           mprotect and madvise of the hole: ENOMEM; a futex wait there:
+ *                                   EFAULT; a wake answers EFAULT in the hole only
+ *   the last line reads the hole through the live reference: a page fault, not a lifetime fault
+ * partial-all (ends with a fault):
+ *   hole_unmap_idempotent           the second page three more times: the live pages still work
+ *   prot_none_page_counts           with the first page PROT_NONE and the others removed, the block
+ *                                   lives
+ *   count_exact_with_mprotect       the first page restored keeps its data
+ *   last_page_ends_block            its munmap ends the block; the old reference must fault with 25
+ *                                   at the reused address
+ * partial-narrow (exit 0):
+ *   partial_narrowed_refused, partial_nested_object_refused, partial_address_refused (root grants)
+ *                                   a reference narrowed to the page, an object over the whole block
+ *                                   and an integer address cannot remove a page
+ *   partial_beyond_block_refused    a range beyond the block: EINVAL
+ *   partial_through_moved_reference the block's reference moved to the page removes it
+ *   whole_unmap_with_hole           munmap of the whole block with its hole ends it
+ * partial-fixed (exit 0; the refill checks need root grants):
+ *   fixed_refill_reads_zero         MAP_FIXED into the hole returns the reference; the page reads zero
+ *   removed_page_tags_cleared       a reference stored in the page before its removal is gone
+ *   fixed_replaces_mapped_page      MAP_FIXED over a mapped page leaves it reading zero
+ *   fixed_refused_with_object       with an object derived below the block's reference: EINVAL
+ *   fixed_after_object_released     after that object ends, the refill works again
+ * partial-mremap (exit 0):
+ *   mremap_shrink_in_place          mremap from three pages to one keeps the reference and an object
+ *                                   derived in the first page; the tail is removed
+ *   mremap_grow_into_tail           without MREMAP_MAYMOVE it grows back in place, page by page
+ *   mremap_grow_beyond_enomem       beyond the block's extent without MREMAP_MAYMOVE: ENOMEM
+ *   mremap_grow_beyond_moves        with it the range moves and the old block ends
  *
  * registered() asks the launcher whether an address lies in a registered mapping, by integer: a
  * futex wake of no waiter there answers 0, outside every mapping EFAULT.
@@ -531,11 +611,10 @@ static int mode_refuse(void)
 
     char *two = map(2 * PAGE);
     two[PAGE] = 2;
-    require(refused(munmap(two, PAGE)), "munmap of the first page of two");
-    require(refused(munmap(two + PAGE, PAGE)), "munmap of the second page of two");
-    require(two[0] == 1 && two[PAGE] == 2, "the mapping after the partial munmaps");
+    require(refused(munmap(two + PAGE, 2 * PAGE)), "munmap of a range beyond the mapping");
+    require(two[0] == 1 && two[PAGE] == 2, "the mapping after the refused munmap");
     require(!munmap(two, 2 * PAGE), "munmap of the whole mapping afterwards");
-    pass("partial_unmap_refused");
+    pass("unmap_beyond_block_refused");
 
     if (root_grants) {
         char *page = map(PAGE);
@@ -628,12 +707,12 @@ static int mode_mremap(void)
     *(char **)(p + 64) = target;
 
     errno = 0;
-    require(mremap(p, PAGE, 3 * PAGE, MREMAP_MAYMOVE) == MAP_FAILED && errno == EINVAL,
-            "mremap with an old length that is not the mapping's");
+    require(mremap(p + PAGE, 2 * PAGE, 3 * PAGE, MREMAP_MAYMOVE) == MAP_FAILED && errno == EINVAL,
+            "mremap of a range that reaches beyond the mapping");
     p[2] = 0x62;
     require(p[0] == 0x61 && p[2] == 0x62 && p[2 * PAGE - 1] == 0x61 &&
             (*(char **)(p + 64))[1] == 0x71, "the old mapping after the refused mremap");
-    pass("mremap_wrong_length_refused");
+    pass("mremap_beyond_block_refused");
 
     printf("ROOT_MREMAP case=oversized\n");
     fflush(stdout);
@@ -706,13 +785,16 @@ static int mode_mremap(void)
 
     unsigned long grown = cursor(q);
     char *r = mremap(q, 3 * PAGE, PAGE, MREMAP_MAYMOVE);
-    require(r != MAP_FAILED && cursor(r) != grown, "mremap to one page moves the mapping");
+    require(r != MAP_FAILED && cursor(r) == grown && type_of(r) == 1,
+            "mremap to one page shrinks the mapping in place (stage 4e)");
     moved = *(char **)(r + 64);
-    require(r[0] == 0x61 && r[2] == 0x62 && r[PAGE - 1] == 0x61,
+    require(q[0] == 0x61 && q[2] == 0x62 && q[PAGE - 1] == 0x61,
             "the shrunk mapping keeps the data of its page");
     require(type_of(moved) == 1 && moved[1] == 0x71, "the shrunk mapping keeps the stored reference");
     pass("public_mremap_shrinks");
 
+    /* The last page that is still mapped goes: the mapping ends, and q with it. */
+    require(!munmap(q, PAGE), "munmap of the last page of the shrunk mapping");
     stale = q;
     stale_read_bytes(grown, 3 * PAGE);
     return 0;
@@ -1484,6 +1566,21 @@ static int mode_exit_word(void)
     require(*(volatile int *)(page + 64) == 0, "the launcher writes the word again");
     pass("writable_exit_word_written");
 
+    /* Stage 4e: a word inside the stack that the exit releases no longer keeps the stack; the
+     * store is dropped without an error (CAPSTONE_VM_EXIT_WORD_DROPPED), as Linux drops a
+     * clear_child_tid store into a stack that is gone. */
+    sublet_cap held_slot;
+    require(!cap_vm_acquire(&held_slot, STACK, PAGE, PROT_READ | PROT_WRITE, 6, CAP_VM_HEAP),
+            "a stack that holds the exit word");
+    char *held = cap_vm_copyable(&held_slot);
+    unsigned long held_address = cursor(held);
+    *(volatile int *)(held + 128) = 0x6666;
+    printf("ROOT_EXIT_WORD case=in-stack word=0x%lx\n", held_address + 128);
+    fflush(stdout);
+    exit_with_word(held + 128, held, STACK, own + STACK);
+    require(!registered(held_address), "the stack that holds the exit word is released");
+    pass("stack_exit_word_dropped");
+
     uintptr_t identity;
     unsigned char *frame = frame_new(word_exit_worker, own + STACK, &identity);
     unsigned long frame_address = cursor(frame);
@@ -2010,13 +2107,27 @@ static void spin_ms(unsigned long ms)
 static int *volatile race_word;
 static volatile int race_value, race_started, race_done;
 static volatile long race_rc, race_seconds;
+/* With race_hold set the waiter, once it has answered, waits until the main thread sets
+ * race_release, so its exit (which releases its frame's mapping, and with it the address the
+ * launcher reuses next) comes only after the main thread mapped the old address again. */
+static volatile int race_hold;
+static int race_release;
 
 static void *race_wait_entry(void *arg)
 {
     __atomic_store_n(&race_started, 1, __ATOMIC_RELEASE);
     race_rc = __capstone_vm_futex(race_word, 0 /* FUTEX_WAIT */, race_value, race_seconds, 0, 0);
     __atomic_store_n(&race_done, 1, __ATOMIC_RELEASE);
+    while (race_hold && !__atomic_load_n(&race_release, __ATOMIC_ACQUIRE))
+        __capstone_vm_futex(&race_release, 0 /* FUTEX_WAIT */, 0, -1, 0, 0);
     return arg;
+}
+
+/* Let a held waiter exit. */
+static void race_let_go(void)
+{
+    __atomic_store_n(&race_release, 1, __ATOMIC_RELEASE);
+    __capstone_vm_futex(untagged(cursor(&race_release)), 1 /* FUTEX_WAKE */, 1, -1, 0, 0);
 }
 
 static long race_waiter(int *word, int value, long seconds, char *stack_top)
@@ -2025,6 +2136,7 @@ static long race_waiter(int *word, int value, long seconds, char *stack_top)
     race_value = value;
     race_seconds = seconds;
     race_started = race_done = 0;
+    race_release = 0;
     race_rc = 1;
     return context(race_wait_entry, stack_top);
 }
@@ -2050,7 +2162,9 @@ static int mode_futex_race(void)
     printf("ROOT_FUTEX_RACE remap rc=%ld\n", race_rc);
     fflush(stdout);
     require(cursor(again) == address, "the new mapping lies at the old address");
-    require(race_rc == -ETIMEDOUT, "the waiter compared the old mapping's word, never the new one's");
+    /* Stage 4e: the unmap woke the waiter, which compared the old mapping's word (EAGAIN would mean
+     * the new one's) and then answers 0. */
+    require(race_rc == 0, "the waiter compared the old mapping's word, never the new one's");
     require(!capstone_virtual_thread_join(waiter), "join the waiter");
     pass("futex_wait_never_reads_new_mapping");
 
@@ -2079,6 +2193,7 @@ static int mode_futex_remap(void)
     unsigned long address = cursor(page);
 
     *(volatile int *)(page + 64) = 3;
+    race_hold = 1;
     long waiter = race_waiter((int *)(page + 64), 3, 3, stacks + STACK);
     require(wait_for(&race_started, 1, 5000), "the waiter starts");
     pause_ms(500);
@@ -2090,8 +2205,11 @@ static int mode_futex_remap(void)
            race_rc);
     fflush(stdout);
     require(cursor(again) == address, "the new mapping lies at the old address");
-    require(woken == 0 && race_rc == -ETIMEDOUT,
+    /* Stage 4e: the unmap woke the waiter (0), and the wake of the new mapping finds nobody. */
+    require(woken == 0 && race_rc == 0,
             "a wake of the new mapping does not reach the old mapping's waiter");
+    race_let_go();
+    race_hold = 0;
     require(!capstone_virtual_thread_join(waiter), "join the waiter");
     pass("futex_wake_reaches_only_its_mapping");
     return 0;
@@ -2263,6 +2381,545 @@ static int mode_word_metadata(void)
     return 0;
 }
 
+/* ---- Stage 4e: the follow-ups of stage 4d ---- */
+
+/* futex-readonly: a futex wait reads the word without admitting its page, so a word in a page the
+ * program may only read compares as any other. */
+static int mode_futex_readonly(void)
+{
+    (void)grant();
+    char *fresh = mmap(NULL, PAGE, PROT_READ, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    require(fresh != MAP_FAILED, "a read-only mapping");
+    printf("ROOT_FUTEX_RO base=0x%lx\n", cursor(fresh));
+    fflush(stdout);
+    long same = futex_wait_ms(fresh + 64, 0), other = futex_wait_ms(fresh + 64, 1);
+    printf("ROOT_FUTEX_RO fresh same=%ld other=%ld\n", same, other);
+    fflush(stdout);
+    require(same == -ETIMEDOUT && other == -EAGAIN, "a wait on a word of a page never written");
+    pass("futex_wait_read_only_compares");
+
+    char *page = map(PAGE);
+    *(volatile int *)(page + 64) = 7;
+    require(!mprotect(page, PAGE, PROT_READ), "make the word's page read-only");
+    same = futex_wait_ms(page + 64, 7);
+    other = futex_wait_ms(page + 64, 8);
+    printf("ROOT_FUTEX_RO protected same=%ld other=%ld\n", same, other);
+    fflush(stdout);
+    require(same == -ETIMEDOUT && other == -EAGAIN, "a wait on a word of a page made read-only");
+    pass("futex_wait_protected_compares");
+
+    /* The positive control of the runner's admission check: an exit word's store into a page never
+     * touched admits that page (one touch line under diag_admit). */
+    char *own = map(STACK);
+    char *untouched = mmap(NULL, PAGE, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    require(untouched != MAP_FAILED, "a mapping never touched");
+    printf("ROOT_FUTEX_RO store_base=0x%lx\n", cursor(untouched));
+    fflush(stdout);
+    exit_with_word(untouched + 64, NULL, 0, own + STACK);
+    require(*(volatile int *)(untouched + 64) == 0, "the exit word's store into the untouched page");
+    return 0;
+}
+
+static long elapsed_ms(const struct timespec *from)
+{
+    struct timespec now;
+    clock_gettime(CLOCK_MONOTONIC, &now);
+    return (now.tv_sec - from->tv_sec) * 1000L + (now.tv_nsec - from->tv_nsec) / 1000000L;
+}
+
+/* futex-park (run with the mapping pool on): a waiter on a word of a heap mapping that the program
+ * unmaps is woken when the mapping is parked, and a wake of the mapping revived at the same address
+ * finds nobody. Stage 4d keyed waiters by the arena id, which the revive changes: the waiter slept
+ * until its timeout. */
+static int mode_futex_park(void)
+{
+    (void)grant();
+    char *stacks = map(2 * STACK);
+    sublet_cap slot;
+    require(!cap_vm_acquire(&slot, PAGE, PAGE, PROT_READ | PROT_WRITE, 6, CAP_VM_HEAP), "a heap mapping");
+    char *heap = cap_vm_copyable(&slot);
+    unsigned long address = cursor(heap);
+    *(volatile int *)(heap + 64) = 9;
+    long waiter = race_waiter((int *)(heap + 64), 9, 8, stacks + STACK);
+    require(wait_for(&race_started, 1, 5000), "the waiter starts");
+    pause_ms(300);
+    struct timespec unmapped;
+    clock_gettime(CLOCK_MONOTONIC, &unmapped);
+    require(!munmap(heap, PAGE), "munmap of the heap mapping (parked)");
+    int returned = wait_for(&race_done, 1, 3000);
+    long after = elapsed_ms(&unmapped);
+    require(!cap_vm_acquire(&slot, PAGE, PAGE, PROT_READ | PROT_WRITE, 6, CAP_VM_HEAP),
+            "a heap mapping of the same size (revived)");
+    char *again = cap_vm_copyable(&slot);
+    long woken = __capstone_vm_futex(untagged(address + 64), 1 /* FUTEX_WAKE */, 1, -1, 0, 0);
+    printf("ROOT_FUTEX_PARK same_address=%d returned=%d after_ms=%ld woken=%ld rc=%ld\n",
+           cursor(again) == address, returned, after, woken, race_rc);
+    fflush(stdout);
+    require(returned && race_rc == 0, "the waiter returns when its mapping is parked");
+    /* Without the pool (the unpinned module refuses a park) the mapping is retired, the next one lies
+     * elsewhere and the old address belongs to no mapping (EFAULT); the runner checks the park and
+     * the revive from the pool's counters where the pool works. */
+    require(woken == 0 || (cursor(again) != address && woken == -EFAULT),
+            "a wake of the revived mapping finds nobody");
+    require(!capstone_virtual_thread_join(waiter), "join the waiter");
+    pass("futex_waiter_woken_at_park");
+    return 0;
+}
+
+/* futex-end (ends with a fault): a waiter in the libc's loop (read the word through its own
+ * reference, wait while it holds the value). A wake that leaves the word unchanged makes it read
+ * and wait again; the end of the word's mapping wakes it, and its read through the stale reference
+ * must fault with 25. */
+static int *volatile end_word;
+static volatile int end_passes, end_done;
+
+static void *end_waiter_entry(void *arg)
+{
+    while (__atomic_load_n(end_word, __ATOMIC_ACQUIRE) == 1) {
+        __atomic_add_fetch(&end_passes, 1, __ATOMIC_RELEASE);
+        __capstone_vm_futex(end_word, 0 /* FUTEX_WAIT */, 1, -1, 0, 0);
+    }
+    __atomic_store_n(&end_done, 1, __ATOMIC_RELEASE);
+    return arg;
+}
+
+static int mode_futex_end(void)
+{
+    (void)grant();
+    char *stacks = map(2 * STACK);
+    char *page = map(PAGE);
+    end_word = (int *)(page + 64);
+    *end_word = 1;
+    long waiter = context(end_waiter_entry, stacks + STACK);
+    require(wait_for(&end_passes, 1, 5000), "the waiter reads the word and waits");
+    pause_ms(300);
+    long woken = __capstone_vm_futex(untagged(cursor(end_word)), 1 /* FUTEX_WAKE */, 1, -1, 0, 0);
+    require(woken == 1 && wait_for(&end_passes, 2, 5000) && !end_done,
+            "a wake that leaves the word unchanged: the waiter reads it and waits again");
+    pass("futex_spurious_wake_rewaits");
+    pause_ms(300);
+    printf("ROOT_FUTEX_END unmap passes=%d\n", end_passes);
+    fflush(stdout);
+    require(!munmap(page, PAGE), "munmap of the word's mapping");
+    pause_ms(3000);
+    printf("ROOT_STALE_READ waiter survived done=%d passes=%d\n", end_done, end_passes);
+    fflush(stdout);
+    (void)waiter;
+    return 0;
+}
+
+/* futex-flags: the operations and flags that Linux refuses are refused, and a relative timeout that
+ * overflows the clock waits without one. */
+static int mode_futex_flags(void)
+{
+    (void)grant();
+    char *stacks = map(2 * STACK);
+    char *page = map(PAGE);
+    int *word = (int *)(page + 64);
+    *word = 3;
+    long wait_rt = __capstone_vm_futex(word, 0 | 256 /* FUTEX_WAIT | FUTEX_CLOCK_REALTIME */, 3, 0,
+                                       1000000, 0);
+    long wake_rt = __capstone_vm_futex(untagged(cursor(word)), 1 | 256, 1, -1, 0, 0);
+    long unknown = __capstone_vm_futex(word, 0 | 1024 /* an unknown flag */, 3, 0, 1000000, 0);
+    long bitset_rt = __capstone_vm_futex(word, 9 | 256 /* FUTEX_WAIT_BITSET | REALTIME */, 3, 1, 0, -1);
+    printf("ROOT_FUTEX_FLAGS wait_rt=%ld wake_rt=%ld unknown=%ld bitset_rt=%ld\n", wait_rt, wake_rt,
+           unknown, bitset_rt);
+    fflush(stdout);
+    require(wait_rt == -ENOSYS && wake_rt == -ENOSYS, "FUTEX_CLOCK_REALTIME without FUTEX_WAIT_BITSET");
+    pass("futex_clock_realtime_refused");
+    require(unknown == -ENOSYS, "an unknown futex flag");
+    pass("futex_unknown_flag_refused");
+    require(bitset_rt == -ETIMEDOUT, "FUTEX_WAIT_BITSET with FUTEX_CLOCK_REALTIME and a past deadline");
+
+    long waiter = race_waiter(word, 3, 0x7fffffffffffffffL, stacks + STACK);
+    require(wait_for(&race_started, 1, 5000), "the waiter with a huge timeout starts");
+    pause_ms(500);
+    int early = race_done;
+    __atomic_store_n(word, 0, __ATOMIC_RELEASE);
+    long woken = __capstone_vm_futex(untagged(cursor(word)), 1 /* FUTEX_WAKE */, 1, -1, 0, 0);
+    require(wait_for(&race_done, 1, 5000), "the waiter returns");
+    printf("ROOT_FUTEX_FLAGS huge early=%d woken=%ld rc=%ld\n", early, woken, race_rc);
+    fflush(stdout);
+    require(!early && woken == 1 && race_rc == 0, "a wait with a huge relative timeout sleeps until woken");
+    require(!capstone_virtual_thread_join(waiter), "join the waiter");
+    pass("futex_huge_timeout_waits");
+    return 0;
+}
+
+/* eintr-word (hooks: CAPSTONE_VM_TEST_EINTR=word and the module's test_hold_ms): the futex wait's
+ * CV_WORD waits for vm_lock and a signal interrupts the wait; the launcher repeats the ioctl, and the
+ * wait compares as without the signal. */
+static int mode_eintr_word(void)
+{
+    (void)grant();
+    char *page = map(PAGE);
+    int *word = (int *)(page + 64);
+    *word = 5;
+    long same = futex_wait_ms(word, 5), other = futex_wait_ms(word, 6);
+    printf("ROOT_EINTR word same=%ld other=%ld\n", same, other);
+    fflush(stdout);
+    require(same == -ETIMEDOUT && other == -EAGAIN, "the futex wait after interrupted waits for vm_lock");
+    pass("eintr_futex_wait_retries");
+    return 0;
+}
+
+/* eintr-exit (hooks: CAPSTONE_VM_TEST_EINTR=exit): the same for a thread's exit, which then
+ * completes and writes its exit word. */
+static int mode_eintr_exit(void)
+{
+    (void)grant();
+    char *own = map(STACK);
+    char *page = map(PAGE);
+    *(volatile int *)(page + 64) = 0x5555;
+    exit_with_word(page + 64, NULL, 0, own + STACK);
+    printf("ROOT_EINTR exit word=0x%x\n", *(volatile int *)(page + 64));
+    fflush(stdout);
+    require(*(volatile int *)(page + 64) == 0, "the exit after interrupted waits writes its word");
+    pass("eintr_thread_exit_retries");
+    return 0;
+}
+
+/* advise-refuse (module hook test_advise_refuse=3): the module refuses the third page of a madvise,
+ * as a page that cannot be cleared: the call fails and no page of the range changes. */
+static int mode_advise_refuse(void)
+{
+    (void)grant();
+    char *target = map(PAGE);
+    char *three = map(3 * PAGE);
+    memset(three, 0x77, 3 * PAGE);
+    *(char **)(three + 64) = target;
+    errno = 0;
+    int rc = madvise(three, 3 * PAGE, MADV_DONTNEED);
+    int error = errno;
+    printf("ROOT_ADVISE_REFUSE rc=%d errno=%d\n", rc, error);
+    fflush(stdout);
+    require(rc == -1 && error == EIO, "madvise with a page the kernel cannot clear");
+    require(three[0] == 0x77 && three[PAGE] == 0x77 && three[3 * PAGE - 1] == 0x77 &&
+            type_of(*(char **)(three + 64)) == 1, "no page of the range changed");
+    pass("advise_refused_changes_nothing");
+    return 0;
+}
+
+/* die-stderr (the runner sends stderr into a pipe that nobody reads): the main thread writes into
+ * stderr until the pipe is full and blocks there; a pthread names the process transport with a
+ * wrong exchange region, which the launcher refuses without a line of its own (virtual_service
+ * answers -1), and the launcher ends the program with 125 at once, its own line dropped. */
+static void *volatile die_meta;
+
+static void *die_stderr_worker(void *arg)
+{
+    int sleeper = 0;
+    __capstone_vm_futex(&sleeper, 0 /* FUTEX_WAIT */, 0, 0, 500000000, 0);
+    __capstone_vm_transport_detach();
+    __capstone_vm_delegate_transport(die_meta, NULL, 0);
+    __atomic_store_n(&attach_returned, 1, __ATOMIC_RELEASE);
+    return arg;
+}
+
+static int mode_die_stderr(void)
+{
+    (void)grant();
+    pthread_t thread;
+    static char block[4096];
+    die_meta = launcher_grant(0);
+    require(type_of(die_meta) == 1, "the launcher's meta block as the program holds it");
+    memset(block, 'x', sizeof block);
+    require(!pthread_create(&thread, NULL, die_stderr_worker, NULL), "pthread_create");
+    pass("die_stderr_blocks");
+    for (unsigned i = 0; i < 256; ++i)
+        if (write(2, block, sizeof block) < 0) break;
+    printf("ROOT_DIE_WRITTEN\n");
+    fflush(stdout);
+    return 0;
+}
+
+/* protect-exec: only the image's text is executable, and the image is no mapping the program may
+ * protect, advise or unmap: its data reference (gp) covers the whole image, so only the page's write
+ * bit protects the text. */
+static int mode_protect_exec(void)
+{
+    (void)grant();
+    void *image;
+    __asm__ volatile("movc %0, gp" : "=r"(image));
+    unsigned long base = base_of(image), end = end_of(image);
+    char *text = at_address(image, base), *data = at_address(image, end - PAGE);
+    printf("ROOT_PROTECT_EXEC image=0x%lx+0x%lx type=%lu\n", base, end - base, type_of(image));
+    fflush(stdout);
+    require(type_of(text) == 1 && type_of(data) == 1, "the image's reference at its text and data");
+    errno = 0;
+    require(mprotect(text, PAGE, PROT_READ | PROT_WRITE) == -1 && errno == EINVAL,
+            "mprotect of the image's text");
+    errno = 0;
+    require(mprotect(data, PAGE, PROT_READ) == -1 && errno == EINVAL, "mprotect of the image's data");
+    errno = 0;
+    require(madvise(text, PAGE, MADV_DONTNEED) == -1 && errno == EINVAL, "madvise of the image");
+    pass("image_protect_refused");
+    require(refused(munmap(text, PAGE)) && refused(munmap(data, PAGE)) &&
+            refused(munmap(text, end - base)), "munmap of the image");
+    pass("image_unmap_refused");
+
+    errno = 0;
+    void *exec = mmap(NULL, PAGE, PROT_READ | PROT_EXEC, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    require(exec == MAP_FAILED && errno == EACCES, "mmap with PROT_EXEC");
+    pass("map_exec_refused");
+    char *page = map(PAGE);
+    errno = 0;
+    require(mprotect(page, PAGE, PROT_READ | PROT_EXEC) == -1 && errno == EACCES &&
+            protected_as(cursor(page), "rw-"), "mprotect with PROT_EXEC");
+    pass("protect_exec_refused");
+    char *two = map(2 * PAGE);
+    errno = 0;
+    require(mmap(two + PAGE, PAGE, PROT_READ | PROT_EXEC, MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED,
+                 -1, 0) == MAP_FAILED && errno == EACCES, "MAP_FIXED with PROT_EXEC");
+    pass("fixed_exec_refused");
+    return 0;
+}
+
+/* ---- Stage 4e: partial munmap as a page operation ---- */
+
+/* partial-hole (ends with a page fault): the middle page of three goes. The outer pages keep working
+ * through the old references, no new mapping lands in the hole, requests on the hole are refused as
+ * for an unmapped page, and the last line reads the hole through the live reference: a page fault
+ * (13), not a lifetime fault. */
+static int mode_partial_hole(void)
+{
+    (void)grant();
+    char *stacks = map(2 * STACK);
+    char *three = map(3 * PAGE);
+    unsigned long base = cursor(three);
+    memset(three, 0x31, 3 * PAGE);
+    int *middle = (int *)(three + PAGE + 64);
+    *middle = 4;
+    long waiter = race_waiter(middle, 4, 10, stacks + STACK);
+    require(wait_for(&race_started, 1, 5000), "the waiter on the middle page starts");
+    pause_ms(300);
+    require(!munmap(three + PAGE, PAGE), "munmap of the middle page");
+    pass("partial_unmap_middle");
+    require(wait_for(&race_done, 1, 5000) && race_rc == 0, "the waiter on the removed page returns");
+    require(!capstone_virtual_thread_join(waiter), "join the waiter");
+    pass("partial_unmap_wakes_waiter");
+
+    require(three[0] == 0x31 && three[PAGE - 1] == 0x31 && three[2 * PAGE] == 0x31 &&
+            three[3 * PAGE - 1] == 0x31, "the outer pages keep their data");
+    three[1] = 0x32;
+    three[2 * PAGE + 1] = 0x33;
+    require(three[1] == 0x32 && three[2 * PAGE + 1] == 0x33, "the outer pages take writes");
+    pass("outer_pages_work");
+
+    for (unsigned i = 0; i < 16; ++i) {
+        char *q = map(PAGE);
+        require(cursor(q) + PAGE <= base || cursor(q) >= base + 4 * PAGE,
+                "a new mapping lies outside the block");
+    }
+    pass("no_mapping_in_hole");
+
+    require(!munmap(three + PAGE, PAGE) && !munmap(three + PAGE, PAGE),
+            "munmap of the hole again, twice");
+    require(three[0] == 0x31 && three[1] == 0x32 && three[2 * PAGE + 1] == 0x33,
+            "the outer pages after the repeated munmaps");
+    pass("hole_unmap_repeats");
+
+    errno = 0;
+    require(mprotect(three + PAGE, PAGE, PROT_READ) == -1 && errno == ENOMEM, "mprotect of the hole");
+    errno = 0;
+    require(madvise(three + PAGE, PAGE, MADV_DONTNEED) == -1 && errno == ENOMEM, "madvise of the hole");
+    require(futex_wait_ms(three + PAGE + 64, 0) == -EFAULT, "a futex wait in the hole");
+    require(!registered(base + PAGE) && registered(base) && registered(base + 2 * PAGE),
+            "a wake answers EFAULT in the hole only");
+    pass("hole_requests_refused");
+
+    printf("ROOT_HOLE_READ address=0x%lx\n", base + PAGE);
+    fflush(stdout);
+    char seen = *(volatile char *)(three + PAGE + 5);
+    printf("ROOT_HOLE_SURVIVED value=0x%x\n", seen);
+    fflush(stdout);
+    return 0;
+}
+
+/* partial-all (ends with a fault): the pages of a block go one by one. Unmapping a removed page again
+ * changes nothing, a PROT_NONE page still counts as mapped, and the munmap of the last page that is
+ * still mapped ends the block: the old reference must then fault with 25 at the reused address. */
+static int mode_partial_all(void)
+{
+    (void)grant();
+    char *four = map(4 * PAGE);
+    unsigned long base = cursor(four);
+    memset(four, 0x41, 4 * PAGE);
+
+    require(!munmap(four + PAGE, PAGE), "munmap of the second page");
+    for (unsigned i = 0; i < 3; ++i)
+        require(!munmap(four + PAGE, PAGE), "munmap of the second page again");
+    printf("ROOT_PARTIAL repeats_done\n");
+    fflush(stdout);
+    require(four[0] == 0x41 && four[3 * PAGE] == 0x41, "the live pages after the repeated munmaps");
+    four[2 * PAGE] = 0x42;
+    require(four[2 * PAGE] == 0x42, "a live page takes a write");
+    pass("hole_unmap_idempotent");
+
+    require(!mprotect(four, PAGE, PROT_NONE), "make the first page inaccessible");
+    require(!munmap(four + 2 * PAGE, PAGE) && !munmap(four + 3 * PAGE, PAGE),
+            "munmap of the third and the fourth page");
+    require(registered(base), "the block lives while its inaccessible page is mapped");
+    pass("prot_none_page_counts");
+    require(!mprotect(four, PAGE, PROT_READ | PROT_WRITE), "restore the first page");
+    require(four[0] == 0x41, "the first page keeps its data");
+    pass("count_exact_with_mprotect");
+
+    require(!munmap(four, PAGE), "munmap of the last page that is still mapped");
+    require(!registered(base), "the block has ended");
+    pass("last_page_ends_block");
+    stale = four;
+    stale_read_bytes(base, 4 * PAGE);
+    return 0;
+}
+
+/* partial-narrow (exit 0): only the block's own reference removes pages, whatever its cursor. */
+static int mode_partial_narrow(void)
+{
+    (void)grant();
+    char *three = map(3 * PAGE);
+    unsigned long base = cursor(three);
+    memset(three, 0x21, 3 * PAGE);
+    if (root_grants) {
+        char *narrow = __builtin_capstone_cap_shrink(three, base + PAGE, base + 2 * PAGE);
+        require(refused(munmap(narrow, PAGE)), "munmap through a reference narrowed to the page");
+        require(three[PAGE] == 0x21, "the page after the refusal");
+        pass("partial_narrowed_refused");
+        char *object = capstone_cap_derive(three, 0, 3 * PAGE);
+        require(refused(munmap(object + PAGE, PAGE)), "munmap through an object over the whole block");
+        require(three[PAGE] == 0x21 && object[PAGE] == 0x21, "the page after the refusal");
+        pass("partial_nested_object_refused");
+        require(refused(munmap(untagged(base + PAGE), PAGE)), "munmap with an integer address");
+        pass("partial_address_refused");
+        capstone_cap_release(object);
+    } else {
+        skip("partial_narrowed_refused", BY_ADDRESS);
+        skip("partial_nested_object_refused", BY_ADDRESS);
+        skip("partial_address_refused", BY_ADDRESS);
+    }
+    require(refused(munmap(three + 2 * PAGE, 2 * PAGE)), "munmap of a range beyond the block");
+    require(three[2 * PAGE] == 0x21, "the last page after the refusal");
+    pass("partial_beyond_block_refused");
+    require(!munmap(three + PAGE, PAGE), "munmap through the block's reference moved to the page");
+    require(three[0] == 0x21 && three[2 * PAGE] == 0x21, "the outer pages");
+    pass("partial_through_moved_reference");
+    require(!munmap(three, 3 * PAGE), "munmap of the whole block with its hole");
+    require(!registered(base), "the block has ended");
+    pass("whole_unmap_with_hole");
+    return 0;
+}
+
+/* partial-fixed (exit 0): MAP_FIXED inside a block refills pages of the same object with zeros, while
+ * the program derived no object below the block's reference. A reference stored in a removed page is
+ * gone after the refill. */
+static int mode_partial_fixed(void)
+{
+    (void)grant();
+    char *target = map(PAGE);
+    target[1] = 0x71;
+    char *three = map(3 * PAGE);
+    unsigned long base = cursor(three);
+    memset(three, 0x51, 3 * PAGE);
+    *(char **)(three + PAGE + 64) = target;
+    require(type_of(*(char **)(three + PAGE + 64)) == 1, "a reference stored in the middle page");
+    printf("ROOT_PARTIAL_FIXED base=0x%lx\n", base);
+    fflush(stdout);
+    require(!munmap(three + PAGE, PAGE), "munmap of the middle page");
+    if (!root_grants) {
+        errno = 0;
+        require(mmap(three + PAGE, PAGE, PROT_READ | PROT_WRITE,
+                     MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED, -1, 0) == MAP_FAILED &&
+                errno == EOPNOTSUPP, "MAP_FIXED without root grants");
+        skip("fixed_refill_reads_zero", "root_grants=0 cannot read the reference's objects");
+        skip("removed_page_tags_cleared", "follows the refill");
+        skip("fixed_replaces_mapped_page", "follows the refill");
+        skip("fixed_refused_with_object", "follows the refill");
+        skip("fixed_after_object_released", "follows the refill");
+        return 0;
+    }
+    char *q = mmap(three + PAGE, PAGE, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED,
+                   -1, 0);
+    require(q != MAP_FAILED && cursor(q) == base + PAGE && type_of(q) == 1,
+            "MAP_FIXED into the hole returns the reference");
+    unsigned long nonzero = 0;
+    for (unsigned long i = 0; i < PAGE; ++i)
+        nonzero += three[PAGE + i] != 0;
+    printf("ROOT_PARTIAL_FIXED refill nonzero=%lu stored_type=%lu\n", nonzero,
+           type_of(*(char **)(three + PAGE + 64)));
+    fflush(stdout);
+    require(!nonzero, "the refilled page reads zero");
+    three[PAGE + 1] = 0x52;
+    require(three[PAGE + 1] == 0x52 && three[0] == 0x51 && three[2 * PAGE] == 0x51,
+            "the refilled page takes a write, the outer pages keep their data");
+    pass("fixed_refill_reads_zero");
+    require(type_of(*(char **)(three + PAGE + 64)) == 7, "the reference stored before the removal is gone");
+    pass("removed_page_tags_cleared");
+
+    require(mmap(three, PAGE, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED, -1, 0) ==
+            three && three[0] == 0 && three[PAGE + 1] == 0x52, "MAP_FIXED over a mapped page");
+    pass("fixed_replaces_mapped_page");
+
+    char *object = capstone_cap_derive(three, 2 * PAGE, 64);
+    object[0] = 0x53;
+    require(!munmap(three + PAGE, PAGE), "munmap of the middle page again");
+    errno = 0;
+    require(mmap(three + PAGE, PAGE, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED,
+                 -1, 0) == MAP_FAILED && errno == EINVAL, "MAP_FIXED while an object exists below");
+    require(object[0] == 0x53 && three[2 * PAGE] == 0x53, "the object after the refusal");
+    pass("fixed_refused_with_object");
+    capstone_cap_release(object);
+    require(mmap(three + PAGE, PAGE, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED,
+                 -1, 0) == three + PAGE && three[PAGE] == 0, "MAP_FIXED after the object ended");
+    three[PAGE] = 0x54;
+    require(three[PAGE] == 0x54, "the page refilled again takes a write");
+    pass("fixed_after_object_released");
+    require(!munmap(three, 3 * PAGE), "munmap of the whole block");
+    return 0;
+}
+
+/* partial-mremap (exit 0): mremap shrinks in place, and the references stay valid; it grows back in
+ * place into the block's own removed tail; beyond the block's extent it answers ENOMEM without
+ * MREMAP_MAYMOVE and moves with it. */
+static int mode_partial_mremap(void)
+{
+    (void)grant();
+    char *target = map(PAGE);
+    target[1] = 0x71;
+    char *p = map(3 * PAGE);
+    unsigned long base = cursor(p);
+    memset(p, 0x61, 3 * PAGE);
+    *(char **)(p + 64) = target;
+    char *object = capstone_cap_derive(p, 128, 64);
+
+    char *r = mremap(p, 3 * PAGE, PAGE, 0);
+    require(r != MAP_FAILED && cursor(r) == base, "mremap shrinks in place");
+    require(p[0] == 0x61 && object[0] == 0x61 && (*(char **)(p + 64))[1] == 0x71,
+            "the references after the shrink");
+    require(registered(base) && !registered(base + PAGE), "the tail is removed");
+    pass("mremap_shrink_in_place");
+
+    r = mremap(p, PAGE, 2 * PAGE, 0);
+    require(r == p && p[PAGE] == 0 && p[2 * PAGE - 1] == 0, "mremap grows by one page in place");
+    r = mremap(p, 2 * PAGE, 3 * PAGE, 0);
+    require(r == p && p[2 * PAGE] == 0 && p[0] == 0x61, "mremap grows into the rest of the tail");
+    p[3 * PAGE - 1] = 0x62;
+    require(p[3 * PAGE - 1] == 0x62 && object[1] == 0x61, "the grown pages take writes");
+    pass("mremap_grow_into_tail");
+
+    errno = 0;
+    require(mremap(p, 3 * PAGE, 4 * PAGE, 0) == MAP_FAILED && errno == ENOMEM,
+            "mremap beyond the block without MREMAP_MAYMOVE");
+    require(p[0] == 0x61 && p[3 * PAGE - 1] == 0x62, "the block after the refusal");
+    pass("mremap_grow_beyond_enomem");
+
+    char *q = mremap(p, 3 * PAGE, 5 * PAGE, MREMAP_MAYMOVE);
+    require(q != MAP_FAILED && cursor(q) != base && q[0] == 0x61 && q[3 * PAGE - 1] == 0x62 &&
+            (*(char **)(q + 64))[1] == 0x71 && q[4 * PAGE] == 0, "mremap beyond the block moves");
+    require(!registered(base), "the old block has ended");
+    pass("mremap_grow_beyond_moves");
+    return 0;
+}
+
 int main(int argc, char **argv)
 {
     const char *mode = argc > 1 ? argv[1] : "unmap";
@@ -2302,6 +2959,20 @@ int main(int argc, char **argv)
     if (!strcmp(mode, "rollback-fail")) return mode_rollback_fail();
     if (!strcmp(mode, "die-blocked")) return mode_die_blocked();
     if (!strcmp(mode, "word-metadata")) return mode_word_metadata();
+    if (!strcmp(mode, "futex-readonly")) return mode_futex_readonly();
+    if (!strcmp(mode, "futex-park")) return mode_futex_park();
+    if (!strcmp(mode, "futex-end")) return mode_futex_end();
+    if (!strcmp(mode, "futex-flags")) return mode_futex_flags();
+    if (!strcmp(mode, "eintr-word")) return mode_eintr_word();
+    if (!strcmp(mode, "eintr-exit")) return mode_eintr_exit();
+    if (!strcmp(mode, "advise-refuse")) return mode_advise_refuse();
+    if (!strcmp(mode, "die-stderr")) return mode_die_stderr();
+    if (!strcmp(mode, "protect-exec")) return mode_protect_exec();
+    if (!strcmp(mode, "partial-hole")) return mode_partial_hole();
+    if (!strcmp(mode, "partial-all")) return mode_partial_all();
+    if (!strcmp(mode, "partial-narrow")) return mode_partial_narrow();
+    if (!strcmp(mode, "partial-fixed")) return mode_partial_fixed();
+    if (!strcmp(mode, "partial-mremap")) return mode_partial_mremap();
     fail("unknown mode");
     return 1;
 }

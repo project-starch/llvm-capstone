@@ -16,14 +16,31 @@ static int mapping_length(size_t n, unsigned long *bytes)
 }
 void *mmap(void *addr, size_t n, int prot, int flags, int fd, off_t off)
 {
+    int kind = flags & ~MAP_FIXED;
     if (flags & MAP_HUGETLB) { errno = ENOMEM; return MAP_FAILED; }
     /* The existing MAP_SHARED compatibility remains process-local. */
-    if (addr || (prot & ~(PROT_READ | PROT_WRITE | PROT_EXEC)) ||
-        (flags != (MAP_PRIVATE | MAP_ANONYMOUS) &&
-         flags != (MAP_SHARED | MAP_ANONYMOUS)) || fd != -1 || off) {
+    if ((prot & ~(PROT_READ | PROT_WRITE | PROT_EXEC)) ||
+        (kind != (MAP_PRIVATE | MAP_ANONYMOUS) && kind != (MAP_SHARED | MAP_ANONYMOUS)) ||
+        fd != -1 || off) {
         errno = EINVAL; return MAP_FAILED;
     }
     unsigned long bytes;
+    if (flags & MAP_FIXED) {
+        /* Stage 4e: MAP_FIXED only inside a mapping the program holds, through that mapping's own
+         * reference with its cursor at the first page: the kernel maps fresh zero pages over the
+         * range (removed pages included) with prot, and only while the program derived no object
+         * below the mapping's reference (with root grants; EOPNOTSUPP without). The reference comes
+         * back, as Linux returns the address. MAP_FIXED by a plain address, outside every mapping or
+         * across two is refused (EINVAL). */
+        if (!addr || (__builtin_capstone_cap_get_cursor(addr) & 4095)) {
+            errno = EINVAL; return MAP_FAILED;
+        }
+        if (mapping_length(n, &bytes)) return MAP_FAILED;
+        long rc = __capstone_vm_refill(addr, bytes, prot, CAP_VM_REFILL_FIXED);
+        if (rc) { errno = -rc; return MAP_FAILED; }
+        return addr;
+    }
+    if (addr) { errno = EINVAL; return MAP_FAILED; }
     if (mapping_length(n, &bytes)) return MAP_FAILED;
     sublet_cap slot;
     /* PTEs enforce current protection. The grant retains the maximum rights
@@ -90,53 +107,64 @@ int madvise(void *p, size_t n, int advice)
     return 0;
 }
 int __madvise(void *p, size_t n, int advice) { return madvise(p, n, advice); }
-/* Public mremap, the MREMAP_MAYMOVE form only, as map-copy-unmap (2026-10-22: cpython's
- * mmap.resize, which corpus cell lt0 18 needs before its bug runs). The old mapping is unmapped
- * through the ordinary service, so it is RETIRED: every capability to it is revoked and a stale
- * pointer faults, which is the lifetime contract a moved mapping must keep. The bytes, and any
- * capability tags among them, move with memcpy.
- *
- * Nothing moves before the mapping check (CV_SERVICE_MAPPING_CHECK), which changes nothing: `old`
- * must name a whole registered mapping of the program, which no worker's transport holds, and with
- * root_grants p must be a live reference to that whole mapping, as for munmap. A refusal returns
- * MAP_FAILED with nothing changed (EINVAL, or EBUSY for a held mapping), never a fault in the copy.
+/* Public mremap (2026-10-22: cpython's mmap.resize, which corpus cell lt0 18 needs before its bug
+ * runs; stage 4e: in place where it can). p is the block's own reference with its cursor at the
+ * first page of the range [p, p + old), any page range of one block, as a partial munmap may name it.
+ *   - Shrink (n below old, in pages): a partial munmap of the tail [p + n, p + old) through p. The
+ *     block keeps its range and p keeps working; the removed pages fault as unmapped ones do.
+ *   - Same page count: the mapping check (CV_SERVICE_MAPPING_CHECK) and p back, as Linux returns
+ *     the same address.
+ *   - Growth: in place first (CV_SERVICE_REFILL, CV_PAGES_GROW), into the block's own removed pages
+ *     right after the range, inside the block's original extent (its visible length): those pages
+ *     read zero afterwards with the protection of the range's last page, and p comes back. Where that
+ *     is not possible the kernel answers ENOMEM; without MREMAP_MAYMOVE that is the answer (as Linux
+ *     answers when there is no room), with it the range moves as map, copy and unmap: the mapping
+ *     check first, which changes nothing (the range must be one a munmap through p would remove, no
+ *     page of it removed, every page read-write: EINVAL, EFAULT or ENOTSUP otherwise, nothing
+ *     changed, never a fault in the copy), then a new read-write private anonymous mapping, a copy of
+ *     the old range's bytes with their tags (memcpy), and a munmap of [p, p + old) through p, which
+ *     ends the block if that range held every page still mapped (every capability to it is then
+ *     revoked, the lifetime contract a moved mapping must keep) and removes those pages otherwise.
  * The check states what holds when it answers, not what holds at the copy: another thread of the
  * program may end the old mapping or change its protection between the check and the copy, and the
  * copy then faults instead of answering EINVAL. That affects only the program itself, as a
- * concurrent free does for realloc. Then the copy reads at most the old mapping's visible length, which p covers, and writes at most
- * the new mapping's, which mmap's reference covers. Without root_grants the address is the
- * authority, as for munmap, so a reference that does not cover the mapping faults in the copy.
- * Limits, each explicit:
- *   - without MREMAP_MAYMOVE (in-place resizing, which musl's pthread_getattr_np uses to probe the
- *     main stack and stops on any error but ENOMEM), and with MREMAP_FIXED or DONTUNMAP, the
- *     answer stays ENOSYS, as before;
- *   - only a mapping that is read-write over its whole length moves (ENOTSUP otherwise, nothing
- *     changed), into a new read-write private anonymous mapping. The program's mappings are all
- *     anonymous; a MAP_SHARED one is process-local here (mmap), so the private copy keeps what
- *     the program can observe;
- *   - the copy is not atomic with respect to the program's other threads: a write to the old
- *     mapping during the copy may be lost, as for realloc, and the caller serializes such writes.
- * If the unmap of the old mapping fails after the copy (another thread changed it in between),
- * the new mapping is unmapped again and the error returned; that unmap of a fresh mapping cannot
- * fail, and a failure traps. A same-page-count resize returns p unchanged after the check, as Linux
- * returns the same address. */
+ * concurrent free does for realloc. The copy reads at most the old range, which p covers, and writes
+ * at most the new mapping, which mmap's reference covers. Without root grants the address is the
+ * authority, as for munmap, so a reference that does not cover the range faults in the copy.
+ * MREMAP_FIXED and MREMAP_DONTUNMAP stay ENOSYS. The copy is not atomic with respect to the program's
+ * other threads: a write to the old range during the copy may be lost, as for realloc. If the munmap
+ * of the old range fails after the copy (another thread changed it in between), the new mapping is
+ * unmapped again and the error returned; that unmap of a fresh mapping cannot fail, and a failure
+ * traps. */
 #ifndef MREMAP_MAYMOVE
 #define MREMAP_MAYMOVE 1   /* Linux's value; <sys/mman.h> declares it only under _GNU_SOURCE */
 #endif
 void *mremap(void *p, size_t old, size_t n, int flags, ...)
 {
     unsigned long old_bytes, new_bytes, address = __builtin_capstone_cap_get_cursor(p);
-    if (flags != MREMAP_MAYMOVE) { errno = ENOSYS; return MAP_FAILED; }
+    if (flags & ~MREMAP_MAYMOVE) { errno = ENOSYS; return MAP_FAILED; }
     if ((address & 4095) || mapping_length(old, &old_bytes) || mapping_length(n, &new_bytes)) {
         errno = EINVAL; return MAP_FAILED;
     }
-    long rc = __capstone_vm_mapping_check(p, old_bytes);
-    if (rc) { errno = -rc; return MAP_FAILED; }
-    if (new_bytes == old_bytes) return p;
+    if (new_bytes < old_bytes) {
+        if (munmap((char *)p + new_bytes, old_bytes - new_bytes)) return MAP_FAILED;
+        return p;
+    }
+    long rc;
+    if (new_bytes == old_bytes) {
+        rc = __capstone_vm_mapping_check(p, old_bytes);
+        if (rc) { errno = -rc; return MAP_FAILED; }
+        return p;
+    }
+    rc = __capstone_vm_refill((char *)p + old_bytes, new_bytes - old_bytes, 0, CAP_VM_REFILL_GROW);
+    if (!rc) return p;
+    if (rc != -ENOMEM || !(flags & MREMAP_MAYMOVE)) { errno = -rc; return MAP_FAILED; }
 
+    rc = __capstone_vm_mapping_check(p, old_bytes);
+    if (rc) { errno = -rc; return MAP_FAILED; }
     void *q = mmap(NULL, n, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     if (q == MAP_FAILED) return MAP_FAILED;
-    memcpy(q, p, old_bytes < new_bytes ? old_bytes : new_bytes);
+    memcpy(q, p, old_bytes);
 
     if (munmap(p, old)) {
         int error = errno;

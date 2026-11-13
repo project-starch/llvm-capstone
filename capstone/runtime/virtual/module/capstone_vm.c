@@ -5,6 +5,10 @@
 #include <linux/dma-mapping.h>
 #include <linux/fs.h>
 #include <linux/mm.h>
+#include <linux/mman.h>
+#include <linux/swap.h>
+#include <linux/swapops.h>
+#include <linux/delay.h>
 #include <linux/version.h>
 #include <linux/uaccess.h>
 #include <linux/sched/signal.h>
@@ -68,7 +72,8 @@ struct arena {
      * check (frames_distinct, commit 35fee9127ec2) kept for the arena's lifetime, so a page
      * admitted after the mint -- at a fault, in a pin-ahead window or by the resident scan --
      * is held to the same rule as one pinned at mint. NULL for a linear arena, which was never
-     * frame-checked and still is not. */
+     * frame-checked and still is not, unless the module runs with block_frames. A page that leaves
+     * the arena (stage 4e: a partial munmap, a MAP_FIXED refill) leaves the set (frame_delete). */
     unsigned long *frames;
     /* Data fault events received on this arena's pages, counted under diag_admit where CV_STEP
      * receives the event (not where CAPSTONE_VM_STATS faults is advanced, at the resolution or
@@ -116,6 +121,16 @@ struct arena {
      * root_grants a request to end the mapping must name this length and its reference must
      * cover it (request_operand, condition 4). */
     unsigned long visible;
+    /* Stage 4e, partial munmap as a page operation (CV_PAGES). removed: one bit per page of
+     * pages[], set for a page that a partial munmap removed and that no refill has mapped again;
+     * NULL while no page of the arena was ever removed. A removed page is never admitted (resolve,
+     * pin_ahead, pin_resident, admit_page), and the launcher keeps a PROT_NONE placeholder over it.
+     * mapped: the pages of the visible length that are logically mapped, that is not removed;
+     * PROT_NONE pages and pages never touched count. The reservation ends with CREVOKE of M when
+     * a removal takes the last of them. frame_tombs: deleted entries in the frame set. */
+    unsigned long *removed;
+    unsigned long mapped;
+    unsigned frame_tombs;
 };
 struct context;
 struct cv_thread {
@@ -450,6 +465,15 @@ module_param(fault_ahead_windows, ulong, 0444);
 static bool lazy_grants = true;
 module_param(lazy_grants, bool, 0444);
 MODULE_PARM_DESC(lazy_grants, "admit NONLIN grants page by page at first access (0: pin whole at mint)");
+/* Stage 4e: give every arena a frame set, the program's mappings (the heap's linear request shape)
+ * included, so each page admitted there is held to the duplicate check too. Off by default: the
+ * heap's shape has never been frame-checked, and a mapping with a frame set is never pooled
+ * (park_prepare). With it on, a partial munmap and a later refill of the same block exercise the
+ * frame set's deletion (frame_delete): Linux may hand the removed page's frame back at the refill.
+ * Read-only, so a run's module-params.txt records which arm it ran. */
+static bool block_frames;
+module_param(block_frames, bool, 0444);
+MODULE_PARM_DESC(block_frames, "give every arena a frame set, the program's mappings included");
 /* One line per page an arena gains outside a window: `admit` at a fault (with cause and pc),
  * `scan` from the resident scan, `touch` from CV_TOUCH; and one `retire` line per arena with its
  * whole census (admit, window, scan, touch, eager, released, swept). The instrument for a run
@@ -842,21 +866,24 @@ static void clear_thread_frame(struct cv_thread *t)
  * tags; swapped and huge mappings are outside this profile and fail closed, as they always
  * did (-EOPNOTSUPP), a bad table -EFAULT. Called with mmap_read_lock held.
  *
- * With clear (CV_ADVISE, clear_unheld): the walk does not stop at a present entry. It overwrites
- * the page with zeros in place, while it holds the entry's page-table lock, which keeps the page
- * mapped while the stores run, and goes on; the zero page is skipped. The page must be exclusive
- * anonymous memory, private to this mapping (PageAnon, mapcount 1), else -EACCES. 0 at the end. A
- * present entry includes one of a PROT_NONE VMA, which no GUP can pin. */
+ * The CV_ADVISE modes (walk_unheld) do not stop at a present entry. CV_WALK_CHECK only checks:
+ * each present page must be the zero page or exclusive anonymous memory, private to this mapping
+ * (PageAnon, mapcount 1), else -EACCES. CV_WALK_CLEAR then overwrites each such page with zeros in
+ * place, data and tags, while it holds the entry's page-table lock, which keeps the page mapped
+ * while the stores run, and marks the folio dirty; the zero page is skipped. In both a migration
+ * entry (a page that migration or compaction is moving) answers -EAGAIN, and the caller waits and
+ * walks again. 0 at the end. A present entry includes one of a PROT_NONE VMA, which no GUP can pin. */
+enum cv_walk { CV_WALK_FIND, CV_WALK_CHECK, CV_WALK_CLEAR };
 static void clear_page_full(struct page *page);
 static long walk_resident(struct mm_struct *mm, unsigned long address, unsigned long end,
-                          unsigned long *at, unsigned long *pfn, bool clear);
+                          unsigned long *at, unsigned long *pfn, enum cv_walk mode);
 static long next_resident(struct mm_struct *mm, unsigned long address, unsigned long end,
                           unsigned long *at, unsigned long *pfn)
 {
-    return walk_resident(mm, address, end, at, pfn, false);
+    return walk_resident(mm, address, end, at, pfn, CV_WALK_FIND);
 }
 static long walk_resident(struct mm_struct *mm, unsigned long address, unsigned long end,
-                          unsigned long *at, unsigned long *pfn, bool clear)
+                          unsigned long *at, unsigned long *pfn, enum cv_walk mode)
 {
     while (address < end) {
         pgd_t *pgd = pgd_offset(mm, address);
@@ -886,13 +913,20 @@ static long walk_resident(struct mm_struct *mm, unsigned long address, unsigned 
         for (unsigned long i = 0; address < stop; address += PAGE_SIZE, ++i) {
             pte_t value = READ_ONCE(pte[i]);
             if (pte_none(value)) continue;
-            if (!pte_present(value)) { found = -EOPNOTSUPP; break; }
-            if (clear) {
+            if (!pte_present(value)) {
+                found = mode != CV_WALK_FIND && is_swap_pte(value) &&
+                        is_migration_entry(pte_to_swp_entry(value)) ? -EAGAIN : -EOPNOTSUPP;
+                break;
+            }
+            if (mode != CV_WALK_FIND) {
                 unsigned long frame = pte_pfn(value);
                 struct page *page = pfn_valid(frame) ? pfn_to_page(frame) : NULL;
                 if (is_zero_pfn(frame)) continue;
                 if (!page || !PageAnon(page) || page_mapcount(page) != 1) { found = -EACCES; break; }
-                clear_page_full(page);
+                if (mode == CV_WALK_CLEAR) {
+                    clear_page_full(page);
+                    folio_mark_dirty(page_folio(page));
+                }
                 continue;
             }
             *at = address; *pfn = pte_pfn(value);
@@ -912,22 +946,79 @@ static unsigned long frame_slots(long n)
     return roundup_pow_of_two(2 * (unsigned long)n);
 }
 
+/* A deleted entry of a frame set: probing goes on past it, and an insertion may reuse it. No frame
+ * number plus one reaches it. */
+#define CV_FRAME_TOMB (~0UL)
+
+static unsigned long frame_hash(unsigned long key, unsigned long mask)
+{
+    return (key * 0x9e3779b97f4a7c15UL) >> 32 & mask;
+}
+
 /* Record a page's frame in the arena's frame set: false if the frame is there already, i.e.
- * another page of the arena holds it. Expected O(1): the set is at most half full, since no
- * index of pages[] is filled twice. A linear arena has no set and is never refused here. */
+ * another page of the arena holds it. Expected O(1): live entries are at most count, half the
+ * slots, since no index of pages[] holds two pages, and frame_delete rebuilds the set before its
+ * deleted entries pass count / 2, so at least a quarter of the slots stay empty and every probe
+ * ends. A linear arena has no set and is never refused here. */
 static bool frame_insert(struct arena *a, struct page *page)
 {
-    unsigned long mask, key, at;
+    unsigned long mask, key, at, tomb = CV_FRAME_TOMB;
     if (!a->frames) return true;
     mask = frame_slots(a->count) - 1;
     key = page_to_pfn(page) + 1;
-    at = (key * 0x9e3779b97f4a7c15UL) >> 32 & mask;
+    at = frame_hash(key, mask);
     while (a->frames[at]) {
         if (a->frames[at] == key) return false;
+        if (a->frames[at] == CV_FRAME_TOMB && tomb == CV_FRAME_TOMB) tomb = at;
         at = (at + 1) & mask;
+    }
+    if (tomb != CV_FRAME_TOMB) {
+        at = tomb;
+        --a->frame_tombs;
     }
     a->frames[at] = key;
     return true;
+}
+
+/* Give the frame set only the frames that pages[] holds now, without deleted entries. */
+static void frame_rebuild(struct arena *a)
+{
+    memset(a->frames, 0, frame_slots(a->count) * sizeof(*a->frames));
+    a->frame_tombs = 0;
+    for (unsigned i = 0; i < a->count; ++i)
+        if (a->pages[i]) frame_insert(a, a->pages[i]);
+}
+
+/* A page leaves the arena (stage 4e: a partial munmap removes it, or a MAP_FIXED refill replaces
+ * it): its frame leaves the frame set, so Linux may hand the same frame back at a later fault of
+ * this arena and the duplicate check admits it. The caller has already taken the page out of
+ * pages[]. Without the deletion the set would keep the frame for the arena's lifetime and refuse
+ * that refill. */
+static void frame_delete(struct arena *a, struct page *page)
+{
+    unsigned long mask, key, at;
+    if (!a->frames) return;
+    mask = frame_slots(a->count) - 1;
+    key = page_to_pfn(page) + 1;
+    for (at = frame_hash(key, mask); a->frames[at]; at = (at + 1) & mask) {
+        if (a->frames[at] != key) continue;
+        a->frames[at] = CV_FRAME_TOMB;
+        if (++a->frame_tombs > a->count / 2) frame_rebuild(a);
+        return;
+    }
+}
+
+/* Has a partial munmap removed page index of pages[] (stage 4e)? */
+static bool page_removed(const struct arena *a, unsigned index)
+{
+    return a->removed && test_bit(index, a->removed);
+}
+
+/* Does address lie in a removed page of arena a? */
+static bool address_removed(const struct arena *a, unsigned long address)
+{
+    return a->removed && address - a->address >= a->rx_bytes &&
+           test_bit((address - a->address - a->rx_bytes) >> PAGE_SHIFT, a->removed);
 }
 
 /* Pin, check and record every resident page of the arena that pages[] does not hold yet,
@@ -950,7 +1041,7 @@ static int pin_remaining(struct context *c, struct arena *a, unsigned int gup_fl
 }
 
 /* pin_remaining for the pages [first, end) of pages[] alone. (CV_ADVISE used it in stage 4c; since
- * stage 4d it zeroes such pages in place instead, clear_unheld, since GUP cannot pin a page of a
+ * stage 4d it zeroes such pages in place instead, walk_unheld, since GUP cannot pin a page of a
  * PROT_NONE VMA.) */
 static int pin_resident(struct context *c, struct arena *a, unsigned first, unsigned end,
                         unsigned int gup_flags)
@@ -966,10 +1057,12 @@ static int pin_resident(struct context *c, struct arena *a, unsigned first, unsi
          * a heap arena that is every page (519.lbm_r's 105 K), and a walk per page there cost
          * 8 M attempts when this was first written. Only the runs of absent entries between
          * them are walked, and those a table level at a time. */
-        if (a->pages[j]) { ++j; continue; }
+        /* A removed page (stage 4e) lies under the launcher's placeholder and holds nothing; it
+         * is never admitted. */
+        if (a->pages[j] || page_removed(a, j)) { ++j; continue; }
         if (run_end <= j) {
             run_end = j + 1;
-            while (run_end < end && !a->pages[run_end]) ++run_end;
+            while (run_end < end && !a->pages[run_end] && !page_removed(a, run_end)) ++run_end;
         }
         resident = next_resident(c->mm, base + (unsigned long)j * PAGE_SIZE,
                                  base + (unsigned long)run_end * PAGE_SIZE, &address, &pfn);
@@ -1826,11 +1919,12 @@ enum cv_unmap_reason {
     CV_UNMAP_NOT_MAPPING,       /* 3 */
     CV_UNMAP_NOT_COVERING,      /* 4 */
     CV_UNMAP_CALL,              /* the call names another address or length */
+    CV_UNMAP_DERIVED,           /* MAP_FIXED inside a block: the program derived an object below P */
     CV_UNMAP_REASONS
 };
 static const char *const cv_unmap_reasons[CV_UNMAP_REASONS] = {
     "accepted", "not a reference", "not live", "not the mapping", "does not cover the mapping",
-    "range is not the mapping",
+    "range is not the mapping", "objects derived below the mapping",
 };
 
 /* Why a reference with LCC type `type` and lifetime `id` is not a live child of the record with
@@ -1903,32 +1997,47 @@ static bool caller_paused(struct cv_thread *t, unsigned long service)
            CV_FRAME_ARG(t, 7) == service;
 }
 
-/* Does the call [address, address + bytes) name what a request may name in arena a? whole: a
- * request that ends the mapping names its whole visible length. Else (mprotect) any nonempty page
- * range inside the visible length. */
+/* What a request names and what its reference must cover (stage 4e adds the block form):
+ *   CV_CALL_WHOLE  a request that ends the whole mapping: the call names the whole visible length,
+ *                  and the reference covers it (munmap of the whole block, a park, the stack at
+ *                  thread exit, the frame's hand-over, a worker's attachment);
+ *   CV_CALL_RANGE  any nonempty page range inside the visible length, which the reference covers
+ *                  (mprotect, madvise);
+ *   CV_CALL_BLOCK  any nonempty page range inside the visible length, and the reference covers the
+ *                  whole visible length, whatever its cursor (a partial munmap, a MAP_FIXED refill,
+ *                  mremap's growth in place and its mapping check): only the mapping's own
+ *                  reference, never one narrowed to part of it, may remove or replace pages. */
+enum cv_call { CV_CALL_RANGE, CV_CALL_WHOLE, CV_CALL_BLOCK };
+
+/* Does the call [address, address + bytes) name what a request of kind call may name in arena a? */
 static bool request_call(const struct arena *a, unsigned long address, unsigned long bytes,
-                         bool whole)
+                         enum cv_call call)
 {
-    if (whole)
+    if (call == CV_CALL_WHOLE)
         return address == a->address && bytes == a->visible;
     return bytes && !((address | bytes) & ~PAGE_MASK) && address >= a->address &&
            bytes <= a->visible && address - a->address <= a->visible - bytes;
 }
 
-/* Why the reference in register reg of thread t cannot act on arena a for a call that names
- * [address, address + bytes), or CV_UNMAP_ACCEPTED (whole as for request_call). Ends nothing. */
+/* Why the reference in register reg of thread t cannot act on arena a for a call of kind call that
+ * names [address, address + bytes), or CV_UNMAP_ACCEPTED. *id (if not NULL) receives the
+ * reference's lifetime id. Ends nothing. */
 static enum cv_unmap_reason request_operand(struct context *c, struct cv_thread *t,
                                             struct arena *a, unsigned reg,
                                             unsigned long address, unsigned long bytes,
-                                            bool whole)
+                                            enum cv_call call, unsigned long *lifetime)
 {
     unsigned long flags, old, type, id, base, end;
-    unsigned long m_type, m_id;
+    unsigned long m_type, m_id, from = address, to = address + bytes;
     enum cv_unmap_reason reason;
     bool m_live;
 
-    if (!request_call(a, address, bytes, whole))
+    if (!request_call(a, address, bytes, call))
         return CV_UNMAP_CALL;
+    if (call == CV_CALL_BLOCK) {
+        from = a->address;
+        to = a->address + a->visible;
+    }
 
     preempt_disable(); local_irq_save(flags);
     old = select_root(c);
@@ -1943,9 +2052,42 @@ static enum cv_unmap_reason request_operand(struct context *c, struct cv_thread 
     reason = ref_child(c, type, id, m_live ? CV_ID_INDEX(m_id) : ~0UL);
     if (reason != CV_UNMAP_ACCEPTED)
         return reason;
-    if (base > address || end < address + bytes)
+    if (base > from || end < to)
         return CV_UNMAP_NOT_COVERING;
+    if (lifetime)
+        *lifetime = id;
     return CV_UNMAP_ACCEPTED;
+}
+
+/* Does the live lifetime id have a live descendant, an object the program derived below it? The
+ * table keeps the allocation tree as a preorder list, and a release takes the released records out
+ * of it, so the lifetime has one exactly when the record after its own lies deeper. One step, as
+ * the design note's MAP_FIXED rule says. True also where this code cannot read the format (then
+ * the refill is refused). */
+#if CAPSTONE_VM_IDS == 55
+#define CV_RECORD_NEXT(w0) (((w0) >> CAP_REV_WIDE_INDEX_BITS) & CAP_REV_WIDE_INDEX_MASK)
+#define CV_RECORD_DEPTH(w0, w1) ((((w0) >> CAP_REV_WIDE_DEPTH_LOW_SHIFT) & \
+                                  ((1UL << CAP_REV_WIDE_DEPTH_LOW_BITS) - 1)) | \
+                                 (((w1) & CAP_REV_WIDE_DEPTH_HIGH_MASK) << CAP_REV_WIDE_DEPTH_LOW_BITS))
+#else
+#define CV_RECORD_NEXT(w0) ((w0) >> 32)
+#define CV_RECORD_DEPTH(w0, w1) ((w1) & CAP_REV_TABLE_FIELD_MASK)
+#endif
+static bool ref_has_descendant(struct context *c, unsigned long id)
+{
+    unsigned long *record = node_record(c, CV_ID_INDEX(id)), *next;
+    unsigned long index;
+
+    if (!CV_REF_FORMAT || !record)
+        return true;
+    index = CV_RECORD_NEXT(READ_ONCE(record[0]));
+    if (!index)
+        return false;
+    next = node_record(c, index);
+    if (!next)
+        return true;
+    return CV_RECORD_DEPTH(READ_ONCE(next[0]), READ_ONCE(next[1])) >
+           CV_RECORD_DEPTH(READ_ONCE(record[0]), READ_ONCE(record[1]));
 }
 
 /* Is the reservation of arena a still live? Its kernel slot names M until root_end. */
@@ -2167,6 +2309,24 @@ static void clear_page_tags(struct page *page)
     }
 }
 
+/* The tagged granules of a page, read with LDC through the kernel's mapping and LCC selector 1,
+ * which answers 7 for an untagged granule (a diagnostic of stage 4e's page_drop under diag_admit,
+ * root_grants only: without supervisor references S cannot load a granule with its tag). No
+ * reference stays in a register past its run. */
+static unsigned page_tags(struct context *c, struct page *page)
+{
+    unsigned long *p = page_address(page), flags, old;
+    unsigned tagged = 0;
+
+    preempt_disable(); local_irq_save(flags);
+    old = select_root(c);
+    for (unsigned j = 0; j < PAGE_SIZE / 16; ++j)
+        tagged += ref_type(p + 2 * j) != 7;
+    restore_root(old);
+    local_irq_restore(flags); preempt_enable();
+    return tagged;
+}
+
 static int retire_prepare(struct context *c, struct arena *a, struct cv_thread *skip);
 static int retire_commit(struct context *c, struct arena *a, bool destroying);
 
@@ -2268,6 +2428,7 @@ static int retire_commit(struct context *c, struct arena *a, bool destroying)
     if (a->ref) ref_slot_put(c, a->ref);
     kvfree(a->pages);
     kvfree(a->frames);
+    kvfree(a->removed);
     kfree(a);
     return 0;
 }
@@ -2335,7 +2496,10 @@ static int park(struct context *c, struct arena *a)
 static int park_prepare(struct context *c, struct arena *a)
 {
     if (unpinned) return -EOPNOTSUPP;
-    if (a->parked || a->ancestor_retired || !a->linear || !a->lazy || a->rx_bytes || a->frames)
+    /* A mapping with removed pages (stage 4e) is not pooled: the pool hands the same range to a
+     * later grant of the same size, every page of it mapped. */
+    if (a->parked || a->ancestor_retired || !a->linear || !a->lazy || a->rx_bytes || a->frames ||
+        a->removed)
         return -EINVAL;
     if (arena_has_thread_frame(c, a)) return -EBUSY;
     return pin_remaining(c, a, FOLL_FORCE | FOLL_NOFAULT);
@@ -2570,7 +2734,9 @@ static int add(struct context *c, struct cv_thread *t, struct cv_map *r)
             bad = (v->vm_flags & (VM_READ | VM_WRITE)) != (VM_READ | VM_WRITE) ||
                   (v->vm_flags & VM_EXEC);
         else
-            bad = v->vm_file ||
+            /* Only the image's text is executable (stage 4e): no other arena may be mapped with
+             * execute, whatever rights its grant carries. */
+            bad = v->vm_file || (v->vm_flags & VM_EXEC) ||
                   ((r->permissions & 4) && !(v->vm_flags & (r->linear ? VM_MAYREAD : VM_READ))) ||
                   ((r->permissions & 2) && !(v->vm_flags & (r->linear ? VM_MAYWRITE : VM_WRITE))) ||
                   ((r->permissions & 1) && !(v->vm_flags & (r->linear ? VM_MAYEXEC : VM_EXEC)));
@@ -2616,9 +2782,10 @@ static int add(struct context *c, struct cv_thread *t, struct cv_map *r)
      * accounted like the page array. */
     a->address = r->address; a->bytes = r->bytes; a->rx_bytes = r->rx_bytes;
     a->visible = r->visible ? r->visible : r->bytes;
+    a->mapped = a->visible >> PAGE_SHIFT;
     a->pages = pages; a->count = count; a->linear = r->linear;
     a->lazy = r->linear || (lazy_grants && !eager_grant(t, r));
-    if (!r->linear) {
+    if (!r->linear || block_frames) {
         a->frames = kvcalloc(frame_slots(count), sizeof(*a->frames), GFP_KERNEL_ACCOUNT);
         if (!a->frames) { kvfree(pages); xa_erase(&c->ids, a->id); kfree(a); return -ENOMEM; }
     }
@@ -2887,6 +3054,16 @@ static void test_report(const char *why)
 #define TEST_REAL_STOP(window, deadline) test_real_stop(window, deadline)
 /* Which route resolved the fault: CV_STEP's own loop or the launcher's CV_RESOLVE. */
 #define TEST_BY() (test_in_step ? " by=step" : " by=resolve")
+/* Stage 4e, run-root-grants.py's module hook modes (writable, so a gate sets them for one run):
+ *   test_advise_refuse  N > 0: CV_ADVISE's check refuses the N-th page of the range as if it were no
+ *                       longer private (advise-refuse: a refused madvise changes nothing)
+ *   test_hold_ms        CV_STATS holds vm_lock this long (eintr-word, eintr-exit: another thread's
+ *                       ioctl then waits for vm_lock, and a signal interrupts that wait) */
+static unsigned long test_advise_refuse, test_hold_ms;
+module_param(test_advise_refuse, ulong, 0644);
+module_param(test_hold_ms, ulong, 0644);
+#define TEST_ADVISE_REFUSE(i) (READ_ONCE(test_advise_refuse) && (i) + 1 == READ_ONCE(test_advise_refuse))
+#define TEST_HOLD() do { unsigned long ms_ = READ_ONCE(test_hold_ms); if (ms_) msleep(ms_); } while (0)
 #else
 #define TEST_HOOK(at) do { } while (0)
 #define TEST_GUP(pages) do { } while (0)
@@ -2910,6 +3087,8 @@ static void test_report(const char *why)
 #define TEST_RESOLVE(a, i) do { } while (0)
 #define TEST_REAL_STOP(window, deadline) do { } while (0)
 #define TEST_BY() ""
+#define TEST_ADVISE_REFUSE(i) false
+#define TEST_HOLD() do { } while (0)
 #endif
 
 /* Pending work for this task, or the end of its budget: return to the
@@ -2940,7 +3119,8 @@ static unsigned long pin_ahead(struct context *c, struct arena *a,
     unsigned long fixed = pin_ahead_pages ? pin_ahead_pages - 1 : 0;
     unsigned long limit = max(fixed, extra);
     while ((arena_pin || count < limit) && first + count < a->count &&
-           start + count * PAGE_SIZE < v->vm_end && !a->pages[first + count])
+           start + count * PAGE_SIZE < v->vm_end && !a->pages[first + count] &&
+           !page_removed(a, first + count))
         ++count;
     for (done = 0; done < count;) {
         unsigned long batch = min(count - done, (unsigned long)PIN_AHEAD_BATCH);
@@ -3374,6 +3554,13 @@ static int resolve(struct context *c, struct cv_thread *t, u64 deadline)
     if (!t->started || cv_fault_classify(t->event, cause) == CV_FAULT_DENIED)
         return -EINVAL;
     a = arena_at(c, address);
+    if (a && address_removed(a, address)) {
+        /* Stage 4e: a partial munmap removed this page and no refill has mapped it again. The
+         * reference may be live, the page is not: a page fault of the program, as after a Linux
+         * munmap, never an admission. The launcher's placeholder (PROT_NONE) refuses it as well. */
+        CV_RESOLVE_FAIL("removed", "page removed by a partial munmap of arena 0x%lx", a->address);
+        return -EACCES;
+    }
     if (a && address - a->address < a->rx_bytes) {
         /* Image text: Linux maps the file page (and its neighbours, by
          * fault-around), with no copy and no pin. A store is refused: these
@@ -3645,6 +3832,8 @@ static int admit_page(struct context *c, struct arena *a, unsigned index)
     unsigned long address = a->address + a->rx_bytes + (unsigned long)index * PAGE_SIZE;
     struct vm_area_struct *v;
     struct page *page;
+    if (page_removed(a, index))
+        return -EACCES;
     mmap_read_lock(c->mm);
     v = find_vma(c->mm, address);
     if (!v || v->vm_start > address || !(v->vm_flags & VM_READ) || (v->vm_flags & VM_SHARED) ||
@@ -3748,23 +3937,43 @@ static void request_refused(struct arena *a, enum cv_unmap_reason reason, const 
 }
 
 /* A request of the program, named `request` in reports: thread t, paused at service, acts on
- * arena a with the reference in register reg for the call [address, address + bytes) (whole as
- * for request_call). 0 if the module accepts it. -EINVAL if t is not paused there or a is
- * missing, which is the launcher's error and not counted, or if the module refuses the operand,
- * which is counted and reported. Ends nothing. */
-static int request_accept(struct context *c, struct cv_thread *t, unsigned long service,
-                          struct arena *a, unsigned reg, unsigned long address,
-                          unsigned long bytes, bool whole, const char *request)
+ * arena a with the reference in register reg for the call [address, address + bytes) of kind call
+ * (request_call). 0 if the module accepts it, with the reference's lifetime id in *lifetime if that
+ * is not NULL. -EINVAL if t is not paused there or a is missing, which is the launcher's error and
+ * not counted, or if the module refuses the operand, which is counted and reported. Ends nothing. */
+static int request_accept_id(struct context *c, struct cv_thread *t, unsigned long service,
+                             struct arena *a, unsigned reg, unsigned long address,
+                             unsigned long bytes, enum cv_call call, const char *request,
+                             unsigned long *lifetime)
 {
     enum cv_unmap_reason reason;
 
     if (!caller_paused(t, service) || !a)
         return -EINVAL;
-    reason = request_operand(c, t, a, reg, address, bytes, whole);
+    reason = request_operand(c, t, a, reg, address, bytes, call, lifetime);
     if (reason == CV_UNMAP_ACCEPTED)
         return 0;
     request_refused(a, reason, request, address, bytes);
     return -EINVAL;
+}
+
+static int request_accept(struct context *c, struct cv_thread *t, unsigned long service,
+                          struct arena *a, unsigned reg, unsigned long address,
+                          unsigned long bytes, enum cv_call call, const char *request)
+{
+    return request_accept_id(c, t, service, a, reg, address, bytes, call, request, NULL);
+}
+
+/* Does the page range [address, address + bytes) of arena a, inside its visible length, hold a page
+ * that a partial munmap removed (stage 4e)? */
+static bool range_removed(const struct arena *a, unsigned long address, unsigned long bytes)
+{
+    unsigned long first = (address - a->address - a->rx_bytes) >> PAGE_SHIFT;
+    unsigned long end = first + (bytes >> PAGE_SHIFT);
+
+    if (!a->removed)
+        return false;
+    return find_next_bit(a->removed, end, first) < end;
 }
 
 /* CV_UNMAP (wire.h): a program's munmap of arena r->id, which r->park asks to pool. Three steps.
@@ -3782,10 +3991,10 @@ static int unmap(struct context *c, struct cv_unmap *r, void __user *user)
     bool pool = r->park;
     int rc;
 
-    if (!a || r->park > 1)
+    if (!a || r->park > 1 || a->rx_bytes)   /* the image is never the program's to unmap */
         return -EINVAL;
     if (root_grants && request_accept(c, t, CV_SERVICE_UNMAP, a, 10, CV_CALLER_ARG(t, 0),
-                                      CV_CALLER_ARG(t, 1), true, pool ? "park" : "munmap"))
+                                      CV_CALLER_ARG(t, 1), CV_CALL_WHOLE, pool ? "park" : "munmap"))
         return -EINVAL;
 
     r->park = CV_UNMAP_RETIRED;
@@ -3809,26 +4018,198 @@ static int unmap(struct context *c, struct cv_unmap *r, void __user *user)
 }
 
 /* CV_PROTECT (wire.h): may the program's mprotect of [a0's cursor, + a1) in arena r->id go ahead?
- * Or, when the caller is paused at CV_SERVICE_MAPPING_CHECK (its a7): would its request to end
- * that mapping be accepted? mremap asks this before it copies anything. Without root_grants the
- * launcher's resolution of the address is the authority, and the module accepts. With root_grants
- * the reference in the caller's saved a0 is: conditions 1 to 3, and its bounds cover the named
- * range (request_call), which for the mapping check is the whole visible length, as for munmap,
- * and for mprotect any page range inside it. Ends nothing. */
+ * Or, when the caller is paused at CV_SERVICE_MAPPING_CHECK (its a7): may mremap move that page
+ * range (stage 4e: any page range of the block, which a partial munmap through the same reference
+ * would then remove)? mremap asks this before it copies anything. In both modes an mprotect may not
+ * ask for PROT_EXEC (EACCES): only the image's text is executable, and the program's mappings are
+ * data; and neither request may name a page that a partial munmap removed (ENOMEM for mprotect, as
+ * Linux answers for an unmapped page, EFAULT for mremap). Without root_grants the launcher's
+ * resolution of the address is the authority for the rest, and the module accepts. With root_grants
+ * the reference in the caller's saved a0 is: conditions 1 to 3, and its bounds cover the named range
+ * (mprotect) or the whole visible length, whatever its cursor (the mapping check, CV_CALL_BLOCK).
+ * Ends nothing. */
 static int protect(struct context *c, const struct cv_protect *r)
 {
     struct arena *a = xa_load(&c->ids, r->id);
     struct cv_thread *t = find_thread(c, r->thread);
+    unsigned long address = CV_CALLER_ARG(t, 0), bytes = CV_CALLER_ARG(t, 1);
+    bool check = CV_CALLER_ARG(t, 7) == CV_SERVICE_MAPPING_CHECK;
 
-    if (!a)
+    /* The image is no mapping the program may protect (stage 4e): its data reference covers the
+     * whole image, so only the page's write bit protects its text. The launcher refuses it first. */
+    if (!a || a->rx_bytes)
         return -EINVAL;
+    if (!check && (CV_CALLER_ARG(t, 2) & PROT_EXEC))
+        return -EACCES;
+    if (request_call(a, address, bytes, CV_CALL_RANGE) && range_removed(a, address, bytes))
+        return check ? -EFAULT : -ENOMEM;
     if (!root_grants)
         return 0;
-    if (CV_CALLER_ARG(t, 7) == CV_SERVICE_MAPPING_CHECK)
-        return request_accept(c, t, CV_SERVICE_MAPPING_CHECK, a, 10, CV_CALLER_ARG(t, 0),
-                              CV_CALLER_ARG(t, 1), true, "mremap");
-    return request_accept(c, t, CV_SERVICE_PROTECT, a, 10, CV_CALLER_ARG(t, 0),
-                          CV_CALLER_ARG(t, 1), false, "mprotect");
+    if (check)
+        return request_accept(c, t, CV_SERVICE_MAPPING_CHECK, a, 10, address, bytes,
+                              CV_CALL_BLOCK, "mremap");
+    return request_accept(c, t, CV_SERVICE_PROTECT, a, 10, address, bytes, CV_CALL_RANGE,
+                          "mprotect");
+}
+
+/* ---- Stage 4e: page operations inside a mapping block (CV_PAGES) ----
+ *
+ * A partial munmap, a MAP_FIXED refill and mremap's growth in place act on a page range of one
+ * mapping block and end no lifetime (docs/design/virtual-capstone/address-space-root.md, section
+ * Mappings). Page presence is the page table's business, as page rights are: a removed page faults
+ * as a page of no mapping does, through a live reference, and no other mapping receives an address
+ * inside the block while M lives (arena_overlaps keeps the arena's whole extent, and the launcher
+ * keeps a PROT_NONE placeholder over every removed page). Each operation is two calls of the
+ * launcher, which holds service_lock across both, with Linux's change of the range between them:
+ *   check   (commit 0): the module checks the request and changes nothing that Linux's change
+ *           would not undo. A partial munmap that removes the last logically mapped pages ends the
+ *           reservation instead, at once and in this call, as munmap of the whole block does
+ *           (ended 1): CREVOKE of M, the sweep, the release of the arena; the launcher then gives
+ *           the whole extent back to Linux.
+ *   commit  (commit 1): after Linux removed the pages (the placeholder) or mapped fresh ones, the
+ *           module follows: it clears the tags of every page it held in the range and unpins it,
+ *           so no frame goes back to Linux with a tag and the frame set no longer holds it, and it
+ *           updates the removed pages and the count. The commit does not check the reference again:
+ *           the check accepted it while the caller was paused at its service, and Linux has already
+ *           changed the range.
+ * The count is exact and idempotent: a page counts once, removing a removed page changes nothing,
+ * and a refill counts only the pages it maps again. */
+
+/* Take page index out of arena a's pages[]: Linux removed it from the program's page table (the
+ * placeholder) or replaced it (MAP_FIXED), so the module clears its tags, deletes its frame from
+ * the frame set and unpins it, after which Linux may reuse the frame. A page the module does not
+ * hold (never admitted, or the unpinned mode, which holds none) needs nothing. */
+static void page_drop(struct context *c, struct arena *a, unsigned index)
+{
+    struct page *page = a->pages[index];
+
+    if (!page)
+        return;
+    a->pages[index] = NULL;
+    frame_delete(a, page);
+    if (diag_admit && root_grants) {
+        unsigned before = page_tags(c, page);
+        clear_page_tags(page);
+        pr_info("capstone_vm: remove arena 0x%lx+0x%lx page %u pfn 0x%lx tags %u after %u\n",
+                a->address, a->bytes, index, page_to_pfn(page), before, page_tags(c, page));
+    } else {
+        clear_page_tags(page);
+    }
+    unpin_user_pages_dirty_lock(&page, 1, true);
+    --c->stats.pinned_pages;
+    ++a->released;
+}
+
+/* CV_PAGES (wire.h): the page operation r->op of thread r->thread, paused at its service
+ * (CV_SERVICE_UNMAP for CV_PAGES_REMOVE, CV_SERVICE_REFILL with r->op in a3 for the others), on
+ * the page range [a0's cursor, + a1) of arena r->id. The check (r->commit 0):
+ *   - the range is a nonempty page range inside the visible length (else EINVAL, counted with
+ *     root_grants as "range is not the mapping"); the arena is no image and holds no thread's
+ *     frame (EBUSY); a refill asks for no PROT_EXEC (a2, EACCES);
+ *   - with root_grants a0 holds the block's own reference: conditions 1 to 3, and its bounds cover
+ *     the whole visible length, whatever its cursor (CV_CALL_BLOCK), so a narrowed reference or an
+ *     object below P is refused (EINVAL, counted);
+ *   - CV_PAGES_FIXED: only with root_grants (EOPNOTSUPP otherwise, where the module cannot read the
+ *     operand), and only while the program derived no object below P (EINVAL, counted as "objects
+ *     derived below the mapping"), the MAP_FIXED rule of the design note;
+ *   - CV_PAGES_GROW: every page of the range is removed and the page before it is not (ENOMEM:
+ *     growth in place only into the block's own removed pages, the libc then moves);
+ *   - CV_PAGES_REMOVE: if the range holds every logically mapped page that is left, the module ends
+ *     the reservation now (ended 1, see above); otherwise it makes room for the removed pages.
+ * The commit (r->commit 1) applies the operation to the module's state (see above). */
+static int pages_request(struct context *c, struct cv_pages *r, void __user *user)
+{
+    struct arena *a = xa_load(&c->ids, r->id);
+    struct cv_thread *t = find_thread(c, r->thread);
+    unsigned long service = r->op == CV_PAGES_REMOVE ? CV_SERVICE_UNMAP : CV_SERVICE_REFILL;
+    unsigned long address = CV_CALLER_ARG(t, 0), bytes = CV_CALLER_ARG(t, 1), lifetime = 0;
+    const char *request = r->op == CV_PAGES_REMOVE ? "munmap" :
+                          r->op == CV_PAGES_FIXED ? "map fixed" : "mremap";
+    unsigned long first, end, fresh = 0;
+    int rc;
+
+    if (!a || r->op < CV_PAGES_REMOVE || r->op > CV_PAGES_GROW || r->commit > 1 ||
+        !caller_paused(t, service) || (r->op != CV_PAGES_REMOVE && CV_CALLER_ARG(t, 3) != r->op) ||
+        a->parked || a->rx_bytes)
+        return -EINVAL;
+    if (!request_call(a, address, bytes, CV_CALL_RANGE)) {
+        if (root_grants)
+            request_refused(a, CV_UNMAP_CALL, request, address, bytes);
+        return -EINVAL;
+    }
+    first = (address - a->address) >> PAGE_SHIFT;
+    end = first + (bytes >> PAGE_SHIFT);
+    for (unsigned long i = first; i < end; ++i)
+        fresh += !page_removed(a, i);
+
+    if (r->commit) {
+        r->ended = 0;
+        if (r->op == CV_PAGES_REMOVE && fresh && fresh == a->mapped) {
+            /* The check answered otherwise, and nothing changes in between under service_lock. */
+            WARN_ONCE(1, "capstone_vm: CV_PAGES: the commit would end the reservation\n");
+            r->ended = 1;
+            if (copy_to_user(user, r, sizeof(*r)))
+                return -EFAULT;
+            return retire(c, a, false);
+        }
+        if (r->op == CV_PAGES_REMOVE) {
+            if (!a->removed)
+                return fresh ? -EINVAL : 0;   /* the check made room; a commit without its check */
+            for (unsigned long i = first; i < end; ++i)
+                if (!test_and_set_bit(i, a->removed)) {
+                    --a->mapped;
+                    page_drop(c, a, i);
+                }
+        } else {
+            for (unsigned long i = first; i < end; ++i) {
+                if (page_removed(a, i)) {
+                    clear_bit(i, a->removed);
+                    ++a->mapped;
+                } else if (r->op == CV_PAGES_FIXED) {
+                    page_drop(c, a, i);
+                }
+            }
+            if (a->removed && a->mapped == a->visible >> PAGE_SHIFT) {
+                kvfree(a->removed);
+                a->removed = NULL;
+            }
+        }
+        return copy_to_user(user, r, sizeof(*r)) ? -EFAULT : 0;
+    }
+
+    if (arena_has_thread_frame(c, a))
+        return -EBUSY;
+    if (r->op != CV_PAGES_REMOVE && (CV_CALLER_ARG(t, 2) & PROT_EXEC))
+        return -EACCES;
+    if (root_grants) {
+        rc = request_accept_id(c, t, service, a, 10, address, bytes, CV_CALL_BLOCK, request,
+                               &lifetime);
+        if (rc)
+            return rc;
+    }
+    if (r->op == CV_PAGES_FIXED) {
+        if (!root_grants)
+            return -EOPNOTSUPP;
+        if (ref_has_descendant(c, lifetime)) {
+            request_refused(a, CV_UNMAP_DERIVED, request, address, bytes);
+            return -EINVAL;
+        }
+    }
+    if (r->op == CV_PAGES_GROW && (fresh || !first || page_removed(a, first - 1)))
+        return -ENOMEM;
+    r->ended = r->op == CV_PAGES_REMOVE && fresh && fresh == a->mapped;
+    if (r->ended) {
+        rc = retire_prepare(c, a, NULL);
+        if (rc)
+            return rc;
+    } else if (r->op == CV_PAGES_REMOVE && fresh && !a->removed) {
+        a->removed = kvcalloc(BITS_TO_LONGS(a->count), sizeof(*a->removed), GFP_KERNEL_ACCOUNT);
+        if (!a->removed)
+            return -ENOMEM;
+    }
+    if (copy_to_user(user, r, sizeof(*r)))
+        return -EFAULT;
+    return r->ended ? retire_commit(c, a, false) : 0;
 }
 
 /* Does the page at address hold the frame of a thread? A frame is a page the module owns from the
@@ -3900,7 +4281,7 @@ static unsigned word_check(struct context *c, struct cv_thread *t, struct cv_wor
         return CV_WORD_UNALIGNED;
     a = arena_at(c, w->address);
     if (!a || w->address - a->address < a->rx_bytes || a->visible < bytes ||
-        w->address - a->address > a->visible - bytes)
+        w->address - a->address > a->visible - bytes || address_removed(a, w->address))
         return CV_WORD_NOT_MAPPED;
     if (frame_page(c, w->address))
         return CV_WORD_IN_FRAME;
@@ -3915,11 +4296,13 @@ static unsigned word_check(struct context *c, struct cv_thread *t, struct cv_wor
  * those releases could change: with root_grants the lifetime of the reference is still live (the end
  * of the stack's reservation ends every object in it), the same arena still holds the word (arena
  * ids are never reused, and a released arena is gone), and no thread's frame holds it. Nothing else
- * can change in between: the ioctl holds vm_lock. Then the module admits the word's page as the
- * program's own fault would (touch, the rule of CV_TOUCH), so the access creates no backing the
- * module does not hold, and accesses the word through the program's mapping with put_user or
- * get_user: the page table decides the right, and a page without it answers an error, not a fault.
- * A scalar store clears the tag of the granule it writes, as the launcher's store did. */
+ * can change in between: the ioctl holds vm_lock. A store first admits the word's page as the
+ * program's own fault would (touch, the rule of CV_TOUCH), so it creates no backing the module does
+ * not hold; a load admits nothing (stage 4e): a read of a page never touched maps Linux's zero page,
+ * which holds no tag, and a read-only page then compares as any other. The module accesses the word
+ * through the program's mapping with put_user or get_user: the page table decides the right, and a
+ * page without it answers an error, not a fault. A scalar store clears the tag of the granule it
+ * writes, as the launcher's store did. */
 static unsigned word_access(struct context *c, const struct cv_word_ref *w, u32 *value, bool store)
 {
     struct cv_touch page = {w->address, sizeof(u32)};
@@ -3929,11 +4312,11 @@ static unsigned word_access(struct context *c, const struct cv_word_ref *w, u32 
 
     if (root_grants && ref_lifetime(c, w->lifetime, &parent) != CAP_REV_TABLE_VALID)
         return CV_WORD_NOT_LIVE;
-    if (!a || a->id != w->arena)
+    if (!a || a->id != w->arena || address_removed(a, w->address))
         return CV_WORD_NOT_MAPPED;
     if (frame_page(c, w->address))
         return CV_WORD_IN_FRAME;
-    if (touch(c, &page))
+    if (store && touch(c, &page))
         return CV_WORD_NOT_ADMITTED;
     if (store ? put_user(*value, word) : get_user(*value, word))
         return CV_WORD_NO_ACCESS;
@@ -3965,43 +4348,58 @@ static int attach(struct context *c, const struct cv_attach *r)
     struct cv_thread *t = find_thread(c, r->thread);
 
     if (!meta || !exchange || meta == exchange || meta->parked || exchange->parked ||
-        !caller_paused(t, CV_SERVICE_THREAD_DELEGATE))
+        meta->removed || exchange->removed || !caller_paused(t, CV_SERVICE_THREAD_DELEGATE))
         return -EINVAL;
     if (arena_has_thread_frame(c, meta) || arena_has_thread_frame(c, exchange))
         return -EBUSY;
     if (!root_grants)
         return 0;
     return request_accept(c, t, CV_SERVICE_THREAD_DELEGATE, meta, 10, CV_CALLER_ARG(t, 0),
-                          r->meta_bytes, true, "attach") ?:
+                          r->meta_bytes, CV_CALL_WHOLE, "attach") ?:
            request_accept(c, t, CV_SERVICE_THREAD_DELEGATE, exchange, 11, CV_CALLER_ARG(t, 1),
-                          CV_CALLER_ARG(t, 2), true, "attach");
+                          CV_CALLER_ARG(t, 2), CV_CALL_WHOLE, "attach");
 }
 
-/* Overwrite with zeros, in place, every page of pages [first, end) of arena a that pages[] does not
- * hold and that has contents, whatever the protection of its VMA (walk_resident with clear). In
- * pinned mode a heap arena has no such page: the program's accesses are admitted at their faults,
- * the launcher writes only after CV_TOUCH and a delegated call writes only the process exchange, so
- * a page that pages[] does not hold has no entry or maps the zero page, holds nothing, and reads
- * zero. The walk makes the advise exact even where that does not hold, where GUP could not pin the
- * page (a PROT_NONE VMA): it zeroes such a page while it holds its page-table lock. A swapped entry
- * fails closed (EOPNOTSUPP); swap is outside this profile. Only the runs of pages[] that it does not
- * hold are walked, as in pin_resident. */
-static int clear_unheld(struct context *c, struct arena *a, unsigned first, unsigned end)
+/* Walk every page of pages [first, end) of arena a that pages[] does not hold, in mode (CV_WALK_CHECK
+ * or CV_WALK_CLEAR, walk_resident), whatever the protection of its VMA. In pinned mode a heap arena
+ * has no such page with contents: the program's accesses are admitted at their faults, the launcher
+ * writes only after CV_TOUCH and a delegated call writes only the process exchange, so a page that
+ * pages[] does not hold has no entry or maps the zero page, holds nothing, and reads zero. The walk
+ * makes the advise exact even where that does not hold, where GUP could not pin the page (a
+ * PROT_NONE VMA). A migration entry makes the walk wait and start again (a page that migration or
+ * compaction moves comes back as exclusive anonymous memory); a swapped entry fails closed
+ * (EOPNOTSUPP), swap is outside this profile. Only the runs of pages[] that it does not hold are
+ * walked, as in pin_resident. A removed page (stage 4e) has no entry: advise refuses a range with
+ * one before it walks. */
+#define CV_WALK_RETRIES 10000U
+static int walk_unheld(struct context *c, struct arena *a, unsigned first, unsigned end,
+                       enum cv_walk mode)
 {
     unsigned long base = a->address + a->rx_bytes, at, pfn;
-    unsigned j = first, run;
-    long rc = 0;
+    unsigned retries = 0;
+    long rc;
 
-    mmap_read_lock(c->mm);
-    while (j < end && !rc) {
-        if (a->pages[j]) { ++j; continue; }
-        for (run = j + 1; run < end && !a->pages[run]; ++run)
-            ;
-        rc = walk_resident(c->mm, base + (unsigned long)j * PAGE_SIZE,
-                           base + (unsigned long)run * PAGE_SIZE, &at, &pfn, true);
-        j = run;
-    }
-    mmap_read_unlock(c->mm);
+    do {
+        unsigned j = first, run;
+        rc = 0;
+        mmap_read_lock(c->mm);
+        while (j < end && !rc) {
+            if (a->pages[j]) { ++j; continue; }
+            for (run = j + 1; run < end && !a->pages[run]; ++run)
+                ;
+            rc = walk_resident(c->mm, base + (unsigned long)j * PAGE_SIZE,
+                               base + (unsigned long)run * PAGE_SIZE, &at, &pfn, mode);
+            j = run;
+        }
+        mmap_read_unlock(c->mm);
+        if (rc == -EAGAIN) {
+            /* The entry becomes a page again when the migration ends, outside every lock this
+             * walk holds. Clearing is idempotent, so the clear pass starts again from the first
+             * page. */
+            if (++retries > CV_WALK_RETRIES) break;
+            msleep(1);
+        }
+    } while (rc == -EAGAIN);
     return rc;
 }
 
@@ -4011,15 +4409,19 @@ static unsigned advise_shared_prints;
 /* CV_ADVISE (wire.h): the program's madvise(MADV_DONTNEED or MADV_FREE) of [a0's cursor, + a1) in
  * arena r->id. With root_grants the reference in a0 is the authority, as for mprotect: conditions
  * 1 to 3, and its bounds cover the named page range. In both modes the arena may not hold a
- * thread's frame. Pinned, the module overwrites every page of the range with zeros, data and tags
- * (clear_page_full), whatever the protection Linux maps it with, a PROT_NONE page included: the
- * pages it holds through pages[], after it checked that each is still exclusive anonymous memory
- * (PageAnon, mapcount 1, as at its admission: a store through the kernel's mapping then reaches
- * this mapping alone), and every other page with contents through the page table (clear_unheld).
- * The held pages stay pinned and mapped, so pages[] stays exact and no tagged page goes back to
- * Linux. Unpinned, the module holds no pages, and the launcher gives the range back to Linux
- * (r->zeroed 0), as the unpinned retire does with a whole arena; Linux's madvise accepts a PROT_NONE
- * range. Ends no lifetime: madvise changes contents, not lifetimes. */
+ * thread's frame, and the range may not hold a page that a partial munmap removed (ENOMEM, as
+ * Linux answers for an unmapped page). Pinned, the module overwrites every page of the range with
+ * zeros, data and tags (clear_page_full), whatever the protection Linux maps it with, a PROT_NONE
+ * page included: the pages it holds through pages[], and every other page with contents through the
+ * page table (walk_unheld). It checks every page first and zeroes only when all pass, so a refusal
+ * changes nothing (stage 4e; before, the walk could zero part of the range and then fail): each
+ * held page must still be exclusive anonymous memory (PageAnon, mapcount 1, as at its admission: a
+ * store through the kernel's mapping then reaches this mapping alone), and so must each other page
+ * with contents. It marks each zeroed folio dirty. The held pages stay pinned and mapped, so pages[]
+ * stays exact and no tagged page goes back to Linux. Unpinned, the module holds no pages, and the
+ * launcher gives the range back to Linux (r->zeroed 0), as the unpinned retire does with a whole
+ * arena; Linux's madvise accepts a PROT_NONE range. Ends no lifetime: madvise changes contents, not
+ * lifetimes. */
 static int advise(struct context *c, struct cv_advise *r)
 {
     struct arena *a = xa_load(&c->ids, r->id);
@@ -4031,14 +4433,18 @@ static int advise(struct context *c, struct cv_advise *r)
     if (!a || a->parked || a->rx_bytes)
         return -EINVAL;
     if (root_grants) {
-        rc = request_accept(c, t, CV_SERVICE_ADVISE, a, 10, address, bytes, false, "madvise");
+        rc = request_accept(c, t, CV_SERVICE_ADVISE, a, 10, address, bytes, CV_CALL_RANGE,
+                            "madvise");
         if (rc)
             return rc;
-    } else if (!caller_paused(t, CV_SERVICE_ADVISE) || !request_call(a, address, bytes, false)) {
+    } else if (!caller_paused(t, CV_SERVICE_ADVISE) ||
+               !request_call(a, address, bytes, CV_CALL_RANGE)) {
         return -EINVAL;
     }
     if (arena_has_thread_frame(c, a))
         return -EBUSY;
+    if (range_removed(a, address, bytes))
+        return -ENOMEM;
 
     r->zeroed = 0;
     if (unpinned)
@@ -4049,20 +4455,30 @@ static int advise(struct context *c, struct cv_advise *r)
         return -EINVAL;
     for (unsigned i = first; i < end; ++i) {
         struct page *page = a->pages[i];
-        if (!page || (PageAnon(page) && page_mapcount(page) == 1))
+        if (!TEST_ADVISE_REFUSE(i - first) &&
+            (!page || (PageAnon(page) && page_mapcount(page) == 1)))
             continue;
         CV_EMIT_FIRST(advise_shared_prints,
                       "capstone_vm: advise refused: arena 0x%lx+0x%lx page %u is no longer private "
-                      "(anon %d mapcount %d)\n", a->address, a->bytes, i, !!PageAnon(page),
-                      page_mapcount(page));
+                      "(anon %d mapcount %d)\n", a->address, a->bytes, i,
+                      page ? !!PageAnon(page) : -1, page ? page_mapcount(page) : -1);
         return -EIO;
     }
-    rc = clear_unheld(c, a, first, end);
+    rc = walk_unheld(c, a, first, end, CV_WALK_CHECK);
     if (rc)
         return rc;
+    rc = walk_unheld(c, a, first, end, CV_WALK_CLEAR);
+    if (rc) {
+        /* Not reachable under vm_lock and mmap_read_lock: the check found every page clearable,
+         * and only a migration can change an entry in between, which the walk waits for. */
+        WARN_ONCE(1, "capstone_vm: advise: the clear failed (%d) after the check passed\n", rc);
+        return rc;
+    }
     for (unsigned i = first; i < end; ++i)
-        if (a->pages[i])
+        if (a->pages[i]) {
             clear_page_full(a->pages[i]);
+            set_page_dirty_lock(a->pages[i]);
+        }
     r->zeroed = 1;
     return 0;
 }
@@ -4083,7 +4499,8 @@ static struct arena *exit_stack(struct context *c, struct cv_thread *t, u64 id);
  * (word_check), and stored at the end, after the releases are committed, by word_access, which
  * checks again what the releases could change. The store comes after the releases as the
  * launcher's store did in stages 4b and 4c, and in the same ioctl as the check, so no thread of the
- * program runs in between. The outcome goes to the launcher last (r->word_reason). */
+ * program runs in between. A word in the released stack is not stored (CV_WORD_RELEASED). The
+ * outcome goes to the launcher last (r->word_reason). */
 static int thread_exit(struct context *c, struct cv_thread_exit *r, void __user *user)
 {
     struct cv_thread *t = find_thread(c, r->thread);
@@ -4091,6 +4508,7 @@ static int thread_exit(struct context *c, struct cv_thread_exit *r, void __user 
     struct cv_word_ref word;
     unsigned word_reason = CV_WORD_ACCEPTED;
     unsigned long flags;
+    u64 stack_id;
     u32 zero = 0;
     int error = 0;
 
@@ -4104,6 +4522,7 @@ static int thread_exit(struct context *c, struct cv_thread_exit *r, void __user 
         stack = exit_stack(c, t, r->stack);
     if (r->word)
         word_reason = word_check(c, t, &word);
+    stack_id = stack ? stack->id : 0;
     r->released = (frame ? CV_EXIT_FRAME : 0) | (stack ? CV_EXIT_STACK : 0);
     r->word_reason = 0;
 
@@ -4128,8 +4547,12 @@ static int thread_exit(struct context *c, struct cv_thread_exit *r, void __user 
         error = retire_commit(c, stack, false);
     if (frame)
         error = retire_commit(c, frame, false) ?: error;
+    /* A word in the stack this exit released (stage 4e: the launcher always names the stack now)
+     * is dropped without an error, as Linux drops a clear_child_tid store into a stack that is no
+     * longer mapped. */
     if (r->word && word_reason == CV_WORD_ACCEPTED)
-        word_reason = word_access(c, &word, &zero, true);
+        word_reason = stack_id && word.arena == stack_id ? CV_WORD_RELEASED :
+                      word_access(c, &word, &zero, true);
     drop_thread_frame(t);
     kvfree(t);
     if (r->word && put_user((__u64)word_reason, &((struct cv_thread_exit __user *)user)->word_reason))
@@ -4176,7 +4599,7 @@ static struct arena *exit_stack(struct context *c, struct cv_thread *t, u64 id)
         return NULL;
     }
     if (root_grants && request_accept(c, t, CV_SERVICE_PTHREAD_EXIT, a, 11, CV_FRAME_ARG(t, 1),
-                                      CV_FRAME_ARG(t, 2), true, "thread exit")) {
+                                      CV_FRAME_ARG(t, 2), CV_CALL_WHOLE, "thread exit")) {
         exit_keeps(a, "stack", "request refused");
         return NULL;
     }
@@ -4334,7 +4757,7 @@ static long vm_ioctl(struct file *f, unsigned int op, unsigned long arg)
              * the program named. Checked before anything changes; the mapping ends last, below. */
             struct cv_thread *creator = find_thread(c, r.creator);
             if (request_accept(c, creator, CV_SERVICE_THREAD_CREATE, fa, 10,
-                               CV_CALLER_ARG(creator, 0), PAGE_SIZE, true, "thread create")) {
+                               CV_CALLER_ARG(creator, 0), PAGE_SIZE, CV_CALL_WHOLE, "thread create")) {
                 rc = -EINVAL; goto out;
             }
         }
@@ -4658,6 +5081,10 @@ thread_unwind:
         struct cv_protect r;
         if (copy_from_user(&r, (void __user *)arg, sizeof(r))) { rc = -EFAULT; goto out; }
         rc = protect(c, &r);
+    } else if (op == CV_PAGES) {
+        struct cv_pages r;
+        if (copy_from_user(&r, (void __user *)arg, sizeof(r))) { rc = -EFAULT; goto out; }
+        rc = pages_request(c, &r, (void __user *)arg);
     } else if (op == CV_WORD) {
         struct cv_word r;
         struct cv_thread *t;
@@ -4689,6 +5116,7 @@ thread_unwind:
             t->terminal = true; rc = -EFAULT;
         }
     } else if (op == CV_STATS) {
+        TEST_HOLD();
         node_stats(c);
         rc = copy_to_user((void __user *)arg, &c->stats, sizeof(c->stats)) ? -EFAULT : 0;
     } else rc = -ENOTTY;

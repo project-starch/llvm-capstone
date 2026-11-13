@@ -1,6 +1,8 @@
-/* mremap probe for the runtime's map-copy-unmap mremap (runtime/app-mremap). Modes:
- *   ok     grow 3 -> 5 pages (bytes and a stored capability survive), shrink 5 -> 2, same-page
- *          resize returns the same pointer, no-MAYMOVE stays ENOSYS, a non-mapping fails cleanly;
+/* mremap probe for the runtime's mremap (runtime/app-mremap). Modes:
+ *   ok     grow 3 -> 5 pages (beyond the block: moves; bytes and a stored capability survive),
+ *          shrink 5 -> 2 in place (stage 4e: the same pointer), same-page resize returns the same
+ *          pointer, without MAYMOVE it grows back in place into the removed tail and answers ENOMEM
+ *          beyond the block's extent, a non-mapping fails cleanly;
  *   stale  grow, then read through the OLD pointer: must fault (revoked);
  *   fresh  grow, then read through the NEW pointer: the control for stale. */
 #define _GNU_SOURCE
@@ -29,7 +31,9 @@ int main(int argc, char **argv)
     unsigned char *r = mremap(q, 5 * P, 2 * P, MREMAP_MAYMOVE);
     require(r != MAP_FAILED && r[100] == (unsigned char)700 && **(int **)(r + 64) == 4242, "shrink");
     require(mremap(r, 2 * P, 2 * P - 100, MREMAP_MAYMOVE) == r, "same pages returns same pointer");
-    errno = 0; require(mremap(r, 2 * P, 4 * P, 0) == MAP_FAILED && errno == ENOSYS, "no MAYMOVE stays ENOSYS");
+    require(r == q, "shrink in place returns the same pointer");
+    require(mremap(r, 2 * P, 4 * P, 0) == r && r[3 * P] == 0, "no MAYMOVE grows in place into the removed tail");
+    errno = 0; require(mremap(r, 4 * P, 9 * P, 0) == MAP_FAILED && errno == ENOMEM, "no MAYMOVE beyond the extent: ENOMEM");
     char *heap = malloc(8192); errno = 0;
     void *bad = mremap(heap, 8192, 3 * P, MREMAP_MAYMOVE);
     require(bad == MAP_FAILED && errno != 0, "non-mapping refused");

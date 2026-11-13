@@ -20,8 +20,10 @@ extern void *__capstone_vm_acquire(unsigned long, unsigned long, int, unsigned, 
 /* The unmap service takes the mapping's reference itself in a0, with its tag, and the length in
  * a1. With root_grants the kernel ends the mapping only through that reference: a live reference
  * to the mapping (not to an object inside it, not a narrowed one) whose bounds cover the whole
- * mapping as mmap exposed it, and a1 must be that whole length. Without it the launcher reads the
- * address from a0, which is the reference's cursor. The thread-create service takes the frame's
+ * mapping as mmap exposed it, and a1 must be that whole length. Since stage 4e a0's cursor and a1
+ * may name any page range of the mapping: the kernel removes those pages and ends nothing, through
+ * the mapping's own reference only. Without root grants the launcher reads the address from a0,
+ * which is the reference's cursor. The thread-create service takes the frame's
  * reference in a0 and the exit service the stack's reference in a1, under the same rule. The
  * protect service takes the reference in a0 as well: with root_grants it must be a live reference
  * to the mapping, not to an object inside it, whose bounds cover the page range that a0's cursor
@@ -35,6 +37,12 @@ extern long __capstone_vm_mapping_check(void *, unsigned long);
 /* The advise service (CV_SERVICE_ADVISE) takes a reference, a length and MADV_DONTNEED or MADV_FREE,
  * and checks the reference as the protect service does. The range reads zero afterwards. */
 extern long __capstone_vm_advise(void *, unsigned long, int);
+/* The refill service (CV_SERVICE_REFILL, stage 4e) takes the block's reference with its cursor at the
+ * first page of a range, the range's length, a protection and CV_PAGES_FIXED (mmap with MAP_FIXED
+ * inside the block) or CV_PAGES_GROW (mremap's growth in place into the block's removed pages). */
+extern long __capstone_vm_refill(void *, unsigned long, int, unsigned long);
+#define CAP_VM_REFILL_FIXED 2   /* CV_PAGES_FIXED, wire.h */
+#define CAP_VM_REFILL_GROW 3    /* CV_PAGES_GROW */
 extern long __capstone_vm_wait(void);
 extern long __capstone_vm_nodes(unsigned long);
 

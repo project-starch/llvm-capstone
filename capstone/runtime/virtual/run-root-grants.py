@@ -8,17 +8,18 @@ the memory mode plus x-capstone-supervisor-refs=true.
 Modes (root-contract.c lists the checks of each):
   unmap        munmap through the mapping's reference, a second munmap, the old reference at the
                reused address; ends with a stale read that must fault with 25 (exit 139)
-  refuse       an integer address, an object over the whole page, a partial munmap, a reference
-               the program ended itself, the same after a collection; nothing faults (exit 0)
+  refuse       an integer address, an object over the whole page, a range beyond the mapping (a
+               page range inside it is a partial munmap since stage 4e), a reference the program
+               ended itself, the same after a collection; nothing faults (exit 0)
   narrow       a reference narrowed to part of the mapping (exit 0)
   renew        the reference from before CRENEW, then the renewed one; ends with a fault through
                an object derived in the renewed mapping (139)
   renew-ref    the same, and the fault is through the renewed reference itself (139)
-  mremap       the libc's map-copy-unmap mremap: its mapping check refuses a short and an
-               oversized old length and an object, without a fault; a same-size resize returns the
-               reference, through a stale one it is refused; a read-only mapping is refused
-               (ENOTSUP); then grows and shrinks with data and a stored reference; ends with a fault
-               through the old reference (139)
+  mremap       the libc's mremap: a range beyond the mapping, an oversized old length and an
+               object are refused without a fault; a same-size resize returns the reference, through
+               a stale one it is refused; a read-only mapping is refused (ENOTSUP); then grows (moves)
+               and shrinks in place with data and a stored reference; the munmap of the last page
+               ends the mapping; ends with a fault through its reference (139)
   exit-victim  a thread exits naming a victim mapping it holds no reference to (exit 0)
   exit-renew   a thread renews its stack's mapping and exits; the main thread's copy of the renewed
                reference must fault with 25 (139)
@@ -65,26 +66,53 @@ Modes (root-contract.c lists the checks of each):
                launcher refuses the attachment and ends the program (exit 125)
   attach-address the same with a mapping named by its plain address (exit 125; skipped without
                root grants, exit 0)
-  futex-remap  a waiter of a mapping that is unmapped and mapped again at the same address is not
-               woken by a wake of the new mapping (exit 0)
+  futex-remap  a waiter of a mapping that is unmapped and mapped again at the same address is woken
+               by the unmap, and a wake of the new mapping finds nobody (exit 0)
   die-blocked  the launcher ends the program (a refused attachment) while the main thread blocks in
                a delegated read: exit 125 without a crash
   word-metadata a futex wait and an exit word in the allocator's metadata are refused (exit 0)
   advise       (stage 4d) also zeroes a page made PROT_NONE after it held data
+Stage 4e (root-contract.c lists the checks of each):
+  futex-readonly  a futex wait on a read-only page compares; with diag_admit the read admits no page
+                  (no touch line for it) and an exit word's store does (one touch line)
+  futex-park   (the mapping pool on) a waiter on a parked mapping is woken; the revived mapping's
+               wake finds nobody
+  futex-end    a spurious wake makes the libc's loop wait again; the end of the mapping wakes it and
+               its read through the stale reference must fault with 25 (exit 139)
+  futex-flags  FUTEX_CLOCK_REALTIME without WAIT_BITSET and an unknown flag: ENOSYS; a huge relative
+               timeout waits
+  die-stderr   stderr is a pipe nobody reads and full: the launcher still ends with 125 at once
+  protect-exec the image refuses mprotect, madvise and munmap; PROT_EXEC is refused everywhere
+  partial-hole the middle page of three goes; ends with a page fault (13) in the hole (exit 139)
+  partial-all  pages go one by one, repeats change nothing, the last one ends the block; ends with
+               the stale read (25, exit 139)
+  partial-narrow  narrowed, nested and integer references cannot remove a page (root grants)
+  partial-fixed   MAP_FIXED refills a hole with zeros, refused while an object exists below P; with
+                  diag_admit the removal reports the tags of the removed page before and after it
+                  cleared them, and the refill's admission reports its frame
+  partial-mremap  mremap shrinks in place, grows back in place, ENOMEM beyond the extent, moves
 Modes that need a launcher built with -DCAPSTONE_VM_TEST_HOOKS (--launcher-hooks; the runner sets
 their delays, HOOK_ENV, and runs them by default only then):
   futex-race   the futex window: a waiter compared and sleeps while the word's mapping is replaced
-               (the wait times out, never comparing the new mapping), and a wake inside the window
-               reaches the waiter (exit 0)
+               (the unmap wakes it, 0, and it never compares the new mapping), and a wake inside the
+               window reaches the waiter (exit 0)
   exit-race    the exit-word window: the word's object is revoked and its memory reused between the
                launcher's checks and the store: the word is refused (not live) and the new object
                keeps its value (exit 0; skipped without root grants)
   join-withdrawn a joiner waits on the entry of a create that fails: ESRCH (exit 0)
   rollback-fail a refused rollback of a failed create ends the program (exit 125)
+  eintr-word, eintr-exit (also --module-hooks) a signal interrupts the wait for vm_lock of the
+               futex wait's and the thread exit's ioctl; the launcher repeats it (exit 0)
+Modes that need a module built with CV_TEST_HOOKS=1 (--module-hooks with --module; the runner sets
+its parameters for the mode, MODULE_HOOK_PARAMS):
+  advise-refuse a madvise whose third page the module refuses changes nothing (exit 0)
 The modes that join every thread also read the launcher's thread census at exit
 (CAPSTONE_VM_THREADS count=1: every entry freed once). Every refused exit word and futex wait is
 logged by the launcher with its reason (CAPSTONE_VM_EXIT_WORD_REFUSED, CAPSTONE_VM_FUTEX_REFUSED),
 and the runner compares them per mode.
+--launcher-range-bypass says that the --launcher lacks the check that a page range lies inside one
+block (range_mapping): partial-narrow's munmap beyond the block then reaches the module, which must
+refuse it ("range is not the mapping").
 Every refusal of a request is counted (parameter unmap_refused) and reported in the kernel log
 with its reason and request, and so is every CV_RETIRE that the module refuses because the
 mapping's reservation is live (parameter retire_refused; no launcher path asks for one any more)
@@ -150,6 +178,15 @@ module's limit: create-fail then reaches the launcher's rollback.
 --launcher-hooks says that the --launcher (or the adapter's) is a hooks build; the hook modes then run.
 --libc-control no-remap-check says that the --application was built with a libc whose mremap
 copies before any check (stage 4): the mremap mode faults at the oversized old length (139).
+--block-frames loads the module with block_frames=1 (every arena gets a frame set, the program's
+mappings included), and partial-fixed must then show that Linux handed the removed page's frame back
+at the refill and the module admitted it.
+Stage 4e module controls (--control, with --module): frames-insert-only (the frame set is never
+deleted from: with --block-frames the refill's admission is refused and partial-fixed faults),
+count-repeats (the count decrements for removed pages too: partial-all's live read after the repeated
+munmaps faults with 25), no-tag-clear (the removal does not clear tags: partial-fixed's census line
+reports tags after the clearing; the program's own read after the refill cannot see it, since Linux
+zeroes every page it maps fresh).
 --no-refs runs on a processor without supervisor references. The module must not load. Where the
 firmware hands cause 24 to S the load is refused with a message. The gate platform's monitor keeps
 the trap and halts the machine at the module's probe, after the module printed why.
@@ -170,7 +207,9 @@ MODES = ('unmap', 'refuse', 'narrow', 'renew', 'renew-ref', 'mremap',
          'exit-length', 'exit-huge', 'exit-frame', 'protect', 'protect-held', 'create-gate',
          'join-two', 'join-after', 'exit-many', 'exit-word', 'attach-readonly',
          'exit-word-refs', 'futex', 'advise', 'join-burned', 'attach-exchange', 'attach-address',
-         'futex-remap', 'die-blocked', 'word-metadata')
+         'futex-remap', 'die-blocked', 'word-metadata',
+         'futex-readonly', 'futex-park', 'futex-end', 'futex-flags', 'die-stderr', 'protect-exec',
+         'partial-hole', 'partial-all', 'partial-narrow', 'partial-fixed', 'partial-mremap')
 # The modes that need the launcher's test hooks, and the environment that sets their delays.
 HOOK_ENV = {
     'futex-race': 'CAPSTONE_VM_TEST_FUTEX_DELAY_MS=2000',
@@ -178,19 +217,32 @@ HOOK_ENV = {
     'join-withdrawn': ('CAPSTONE_VM_TEST_JOIN_DELAY_MS=1000 CAPSTONE_VM_TEST_CREATE_FAIL=2 '
                        'CAPSTONE_VM_TEST_CREATE_DELAY_MS=2000'),
     'rollback-fail': 'CAPSTONE_VM_TEST_CREATE_FAIL=1 CAPSTONE_VM_TEST_ROLLBACK_FAIL=1',
+    'eintr-word': 'CAPSTONE_VM_TEST_EINTR=word',
+    'eintr-exit': 'CAPSTONE_VM_TEST_EINTR=exit',
 }
 HOOK_MODES = tuple(HOOK_ENV)
+# The modes that need a module built with CV_TEST_HOOKS, and the parameter the gate sets for each.
+MODULE_HOOK_PARAMS = {
+    'eintr-word': ('test_hold_ms', '1000'),
+    'eintr-exit': ('test_hold_ms', '1000'),
+    'advise-refuse': ('test_advise_refuse', '3'),
+}
+MODULE_HOOK_MODES = tuple(MODULE_HOOK_PARAMS)
+# The environment of a mode that needs one without a hooks build.
+MODE_ENV = {'futex-park': 'CAPSTONE_VM_MAPCACHE=1048576'}
+# The modes that run with diag_admit on; the runner reads their admission and removal lines.
+DIAG_MODES = {'futex-readonly', 'partial-fixed'}
 # Per mode: the checks, those that need root grants (skipped otherwise), and the expected exit.
 CHECKS = {
     'unmap': ('grant_reads_and_writes', 'libc_accepts_copyable_grant',
               'unmap_through_mapping_reference', 'other_mapping_survives_unmap',
               'second_unmap_refused', 'stale_reference_at_reused_address_refused'),
-    'refuse': ('address_refused', 'nested_object_refused', 'partial_unmap_refused',
+    'refuse': ('address_refused', 'nested_object_refused', 'unmap_beyond_block_refused',
                'stale_reference_refused', 'stale_reference_after_collection_refused'),
     'narrow': ('narrowed_reference_refused', 'whole_reference_after_narrowed'),
     'renew': ('renewed_old_reference_refused', 'renewed_mapping_unmaps'),
     'renew-ref': ('renewed_old_reference_refused', 'renewed_mapping_unmaps'),
-    'mremap': ('mremap_wrong_length_refused', 'mremap_oversized_old_refused',
+    'mremap': ('mremap_beyond_block_refused', 'mremap_oversized_old_refused',
                'mremap_nested_object_refused', 'mremap_same_size_returns_reference',
                'mremap_same_size_stale_refused', 'mremap_read_only_refused', 'public_mremap_grows',
                'mremap_old_reference_refused', 'public_mremap_shrinks'),
@@ -216,7 +268,7 @@ CHECKS = {
     'exit-many': ('exit_unjoined_many_then_create',),
     'exit-word': ('unaligned_exit_word_not_written', 'straddling_exit_word_not_written',
                   'read_only_exit_word_not_written', 'writable_exit_word_written',
-                  'frame_exit_word_not_written'),
+                  'stack_exit_word_dropped', 'frame_exit_word_not_written'),
     'attach-readonly': ('attach_protect_before_attach',),
     'exit-word-refs': ('other_frame_word_not_written', 'middle_protected_word_written',
                        'stale_reference_word_not_written', 'narrow_reference_word_not_written'),
@@ -236,6 +288,29 @@ CHECKS = {
     'exit-race': ('exit_word_after_revoke_not_written',),
     'join-withdrawn': ('joiner_on_withdrawn_id_returns',),
     'rollback-fail': ('rollback_create_started',),
+    'futex-readonly': ('futex_wait_read_only_compares', 'futex_wait_protected_compares'),
+    'futex-park': ('futex_waiter_woken_at_park',),
+    'futex-end': ('futex_spurious_wake_rewaits',),
+    'futex-flags': ('futex_clock_realtime_refused', 'futex_unknown_flag_refused',
+                    'futex_huge_timeout_waits'),
+    'eintr-word': ('eintr_futex_wait_retries',),
+    'eintr-exit': ('eintr_thread_exit_retries',),
+    'advise-refuse': ('advise_refused_changes_nothing',),
+    'die-stderr': ('die_stderr_blocks',),
+    'protect-exec': ('image_protect_refused', 'image_unmap_refused', 'map_exec_refused',
+                     'protect_exec_refused', 'fixed_exec_refused'),
+    'partial-hole': ('partial_unmap_middle', 'partial_unmap_wakes_waiter', 'outer_pages_work',
+                     'no_mapping_in_hole', 'hole_unmap_repeats', 'hole_requests_refused'),
+    'partial-all': ('hole_unmap_idempotent', 'prot_none_page_counts', 'count_exact_with_mprotect',
+                    'last_page_ends_block'),
+    'partial-narrow': ('partial_narrowed_refused', 'partial_nested_object_refused',
+                       'partial_address_refused', 'partial_beyond_block_refused',
+                       'partial_through_moved_reference', 'whole_unmap_with_hole'),
+    'partial-fixed': ('fixed_refill_reads_zero', 'removed_page_tags_cleared',
+                      'fixed_replaces_mapped_page', 'fixed_refused_with_object',
+                      'fixed_after_object_released'),
+    'partial-mremap': ('mremap_shrink_in_place', 'mremap_grow_into_tail', 'mremap_grow_beyond_enomem',
+                       'mremap_grow_beyond_moves'),
 }
 # create-fail behind a launcher whose table is smaller than the module's limit.
 CHECKS_SMALL_TABLE = {'create-fail': ('failed_create_releases_frame', 'failed_create_id_refused')}
@@ -252,10 +327,16 @@ ROOT_ONLY = {'stale_reference_at_reused_address_refused', 'address_refused',
              'futex_wait_integer_refused', 'futex_wait_stale_refused', 'futex_wait_narrow_refused',
              'advise_integer_refused', 'advise_stale_refused', 'advise_narrowed_refused',
              'advise_nested_object_refused', 'attach_address_refused',
-             'exit_word_after_revoke_not_written'}
-FAULTING = {'unmap', 'renew', 'renew-ref', 'mremap', 'exit-renew', 'create'}
-# Modes whose stale read does not map the address again first (the frame is not reused).
-NO_REMAP = {'create'}
+             'exit_word_after_revoke_not_written',
+             'partial_narrowed_refused', 'partial_nested_object_refused', 'partial_address_refused',
+             'fixed_refill_reads_zero', 'removed_page_tags_cleared', 'fixed_replaces_mapped_page',
+             'fixed_refused_with_object', 'fixed_after_object_released'}
+FAULTING = {'unmap', 'renew', 'renew-ref', 'mremap', 'exit-renew', 'create', 'partial-all', 'futex-end'}
+# Modes whose stale read does not map the address again first (the frame is not reused, or the
+# fault comes from a waiter's own read).
+NO_REMAP = {'create', 'futex-end'}
+# Modes that end with a page fault of a live reference (stage 4e: a removed page), by cause.
+PAGE_FAULTING = {'partial-hole': 13}
 # The kernel's refusals per mode with root grants, as (reason, request) in order
 # (capstone_vm.c cv_unmap_reasons, request_refused). The other refusals (a second munmap, the
 # second page of a partial munmap, the old reference after mremap, the wrong old length of mremap)
@@ -304,6 +385,21 @@ REFUSALS = {
     'exit-race': [],
     'join-withdrawn': [],
     'rollback-fail': [],
+    'futex-readonly': [],
+    'futex-park': [],
+    'futex-end': [],
+    'futex-flags': [],
+    'eintr-word': [],
+    'eintr-exit': [],
+    'advise-refuse': [],
+    'die-stderr': [],
+    'protect-exec': [],
+    'partial-hole': [],
+    'partial-all': [],
+    'partial-narrow': [('does not cover the mapping', 'munmap'), ('not the mapping', 'munmap'),
+                       ('not a reference', 'munmap')],
+    'partial-fixed': [('objects derived below the mapping', 'map fixed')],
+    'partial-mremap': [],
 }
 # What each control changes: the mode it must break, and how.
 CONTROL_CUTS = {
@@ -320,6 +416,13 @@ CONTROL_CUTS = {
                                   'protect_integer_address_refused')},
     'create-address': {'create-gate': ('ROOT_FAIL:thread create with a frame reference whose cursor '
                                        'is not the frame\'s address', 'create_mismatched_frame_refused')},
+    'frames-insert-only': {'partial-fixed': ('ROOT_PARTIAL_FIXED base=', 'fixed_refill_reads_zero',
+                                             'domain-fault')},
+    'count-repeats': {'partial-all': ('ROOT_PARTIAL repeats_done', 'hole_unmap_idempotent',
+                                      'domain-fault'),
+                      'partial-hole': ('ROOT_CHECK:no_mapping_in_hole:PASS', 'hole_unmap_repeats',
+                                       'domain-fault')},
+    'no-tag-clear': {},
 }
 # Launcher controls (--launcher-control): the mode each must break, and how. A third element says
 # how the mode ends: 'launcher-fault' (exit 139 without a domain fault: the launcher itself faulted),
@@ -379,8 +482,9 @@ EXIT_WORD_REFUSALS = {
 }
 FUTEX_REFUSALS = {
     1: {'futex': ['not a reference', 'not live', 'does not cover the word', STALE],
-        'word-metadata': ["in the allocator's metadata"]},
-    0: {'futex': ["in a thread's frame"], 'word-metadata': ["in the allocator's metadata"]},
+        'word-metadata': ["in the allocator's metadata"], 'partial-hole': ['not inside one mapping']},
+    0: {'futex': ["in a thread's frame"], 'word-metadata': ["in the allocator's metadata"],
+        'partial-hole': ['not inside one mapping']},
 }
 EXIT_WORD_REPORT = re.compile(r'^CAPSTONE_VM_EXIT_WORD_REFUSED tid=\d+ word=0x[0-9a-f]+ reason=(.*)$', re.M)
 FUTEX_REPORT = re.compile(r'^CAPSTONE_VM_FUTEX_REFUSED tid=\d+ word=0x[0-9a-f]+ reason=(.*)$', re.M)
@@ -396,7 +500,7 @@ def reasons_match(seen, expected):
 # must count only the main thread.
 CENSUS_MODES = {'create-fail', 'join-two', 'join-after', 'exit-many', 'exit-word', 'exit-word-refs',
                 'futex', 'join-burned', 'futex-race', 'futex-remap', 'exit-race', 'join-withdrawn',
-                'word-metadata'}
+                'word-metadata', 'futex-park', 'futex-flags', 'eintr-exit'}
 # The arenas that a thread exit names and the module keeps, per mode, as the reasons it reports:
 # the two stacks that exit-victim's threads named (root grants only), and the frame that
 # exit-frame's thread named as its stack. exit-length's and exit-huge's stacks reach the module
@@ -424,7 +528,7 @@ def refusals_match(seen, expected):
     return True
 
 
-def expected_refusals(mode, control, bypass, frame_floor, victim_reason):
+def expected_refusals(mode, control, bypass, frame_floor, victim_reason, range_bypass=False):
     """The (reason, request) list a mode's kernel log must show, or None where a control cuts the
     mode short (then only a prefix is checked)."""
     refusals = list(REFUSALS[mode])
@@ -435,13 +539,9 @@ def expected_refusals(mode, control, bypass, frame_floor, victim_reason):
         return []
     if mode == 'exit-victim':
         refusals[0] = (victim_reason, 'thread exit')
-    if bypass and mode == 'refuse':
-        # The first page of the partial munmap reaches the module; the second page does not
-        # start a mapping and the launcher still refuses it.
-        refusals.insert(2, ('range is not the mapping', 'munmap'))
-    if bypass and mode == 'mremap':
-        # The mapping checks with the short and the oversized old length.
-        refusals[0:0] = [('range is not the mapping', 'mremap')] * 2
+    if range_bypass and mode == 'partial-narrow':
+        # The munmap beyond the block reaches the module (stage 4e).
+        refusals.insert(3, ('range is not the mapping', 'munmap'))
     if bypass and mode in ('exit-length', 'exit-huge'):
         # The stack named with a wrong length.
         refusals.append(('range is not the mapping', 'thread exit'))
@@ -457,6 +557,8 @@ def expected_refusals(mode, control, bypass, frame_floor, victim_reason):
         refusals[0] = ('does not cover the mapping', 'thread exit')
     if control == 'cover' and mode == 'narrow':
         return []
+    if control == 'frames-insert-only' and mode == 'partial-fixed':
+        return []                           # the refill faults before the refused MAP_FIXED
     return refusals
 
 
@@ -474,6 +576,13 @@ def main():
                    help='the launcher\'s thread table has 4 entries; create-fail reaches its rollback')
     p.add_argument('--launcher-hooks', action='store_true',
                    help='the launcher is a hooks build (-DCAPSTONE_VM_TEST_HOOKS); the hook modes run')
+    p.add_argument('--launcher-range-bypass', action='store_true',
+                   help='the launcher lacks the check that a page range lies inside one block; the '
+                        'module must refuse partial-narrow\'s munmap beyond the block')
+    p.add_argument('--module-hooks', action='store_true',
+                   help='the --module is a CV_TEST_HOOKS build; the module hook modes run')
+    p.add_argument('--block-frames', action='store_true',
+                   help='load the module with block_frames=1; partial-fixed must show the frame reused')
     p.add_argument('--root-grants', type=int, choices=(0, 1), default=1)
     p.add_argument('--control', choices=sorted(CONTROL_CUTS), help='the module is this control (see above)')
     p.add_argument('--launcher-control', choices=sorted(LAUNCHER_CUTS),
@@ -487,12 +596,19 @@ def main():
     p.add_argument('--timeout', type=int, default=600)
     a = p.parse_args()
     if a.modes is None:
-        a.modes = ','.join(MODES + (HOOK_MODES if a.launcher_hooks else ()))
+        hooked = [m for m in HOOK_MODES + ('advise-refuse',)
+                  if (m not in HOOK_MODES or a.launcher_hooks) and
+                     (m not in MODULE_HOOK_MODES or a.module_hooks)]
+        a.modes = ','.join(MODES + tuple(hooked))
     modes = [m for m in a.modes.split(',') if m]
-    if any(m not in MODES + HOOK_MODES for m in modes):
+    if any(m not in MODES + HOOK_MODES + MODULE_HOOK_MODES for m in modes):
         p.error(f'unknown mode in {a.modes}')
     if any(m in HOOK_MODES for m in modes) and not a.launcher_hooks:
         p.error('the hook modes need --launcher-hooks')
+    if any(m in MODULE_HOOK_MODES for m in modes) and not a.module_hooks:
+        p.error('the module hook modes need --module-hooks')
+    if a.module_hooks and not a.module:
+        p.error('--module-hooks needs --module')
     if a.control and not a.module:
         p.error('--control needs --module')
     if a.launcher_control and not a.launcher:
@@ -509,11 +625,41 @@ def main():
     module_args = memory_mode.args(a.unpinned).replace(' root_grants=1', '')
     if a.root_grants:
         module_args += ' root_grants=1'
-    runs = '\n'.join(f'''echo ROOT_MODE_BEGIN:{mode}
-{HOOK_ENV.get(mode, '') if a.launcher_hooks else ''} CAPSTONE_VM_STATS=1 ./capstone-vexec root.dom {mode}
+    if a.block_frames:
+        module_args += ' block_frames=1'
+    parameters = '/sys/module/capstone_vm/parameters'
+
+    def run_mode(mode):
+        env = ' '.join(e for e in (HOOK_ENV.get(mode, '') if a.launcher_hooks else '',
+                                   MODE_ENV.get(mode, '')) if e)
+        before, after = [], []
+        if mode in MODULE_HOOK_PARAMS:
+            name, value = MODULE_HOOK_PARAMS[mode]
+            before.append(f'echo {value} > {parameters}/{name}')
+            after.append(f'echo 0 > {parameters}/{name}')
+        if mode in DIAG_MODES:
+            before.append(f'echo 1 > {parameters}/diag_admit')
+            after.append(f'echo 0 > {parameters}/diag_admit')
+        if mode == 'die-stderr':
+            # stderr goes into a FIFO whose reader holds it open and never reads, so the pipe fills;
+            # the launcher must still end with 125 at once (its line is dropped).
+            command = f'''rm -f /tmp/die.fifo; mkfifo /tmp/die.fifo
+( exec 3</tmp/die.fifo; sleep 40 ) &
+die_reader=$!
+die_start=$(date +%s)
+{env} CAPSTONE_VM_STATS=1 ./capstone-vexec root.dom {mode} 2>/tmp/die.fifo
 echo ROOT_EXIT:{mode}:$?
-dmesg -c | grep 'capstone_vm: \\(unmap refused\\|retire refused\\|thread exit keeps\\)' | sed 's/^.*capstone_vm: /ROOT_KERNEL:{mode}:/'
-''' for mode in modes)
+echo ROOT_DIE_SECONDS:$(( $(date +%s) - die_start ))
+kill $die_reader 2>/dev/null'''
+        else:
+            command = f'''{env} CAPSTONE_VM_STATS=1 ./capstone-vexec root.dom {mode}
+echo ROOT_EXIT:{mode}:$?'''
+        lines = ['echo ROOT_MODE_BEGIN:' + mode] + before + [command] + after
+        lines.append(f"dmesg -c | grep 'capstone_vm: \\(unmap refused\\|retire refused\\|thread exit keeps"
+                     f"\\|resolve refused at\\|touch arena\\|unpinned touch arena\\|remove arena"
+                     f"\\|admit arena\\)' | sed 's/^.*capstone_vm: /ROOT_KERNEL:{mode}:/'")
+        return '\n'.join(lines) + '\n'
+    runs = '\n'.join(run_mode(mode) for mode in modes)
     (stage / 'gate.sh').write_text(f'''#!/bin/sh
 cd /mnt/vm || exit 1
 dmesg -n 1
@@ -547,6 +693,7 @@ echo VIRTUAL_STAGED_DONE
     outcome = None
     exits = {}
     refusals_seen = {}
+    frames_reused = {}
     if a.no_refs:
         refused = insmod not in (None, '0') and 'root_grants needs supervisor references' in log
         halted = insmod is None and 'Print = Scalar(0x18)' in log and 'VIRTUAL_STAGED_DONE' not in log
@@ -610,6 +757,16 @@ echo VIRTUAL_STAGED_DONE
                     tests[f'{mode}:no_contract_failure'] = 'ROOT_FAIL' not in part
                 if a.root_grants:
                     tests[f'{mode}:kernel_refusals'] = refusals_match(seen, REFUSALS[mode])
+                continue
+            if mode == 'die-stderr':
+                # stderr went into a full pipe: the program's and the launcher's lines are not in
+                # the log, only the exit status and the time the launcher took to end.
+                seconds = line(r'^ROOT_DIE_SECONDS:(\d+)$')   # printed after ROOT_EXIT
+                tests[f'{mode}:die_stderr_blocks'] = 'ROOT_CHECK:die_stderr_blocks:PASS' in part
+                tests[f'{mode}:launcher_ended_program'] = status == '125' and mode_causes == []
+                tests[f'{mode}:ended_at_once'] = seconds is not None and int(seconds) < 20
+                tests[f'{mode}:write_never_returned'] = 'ROOT_DIE_WRITTEN' not in part
+                tests[f'{mode}:no_contract_failure'] = 'ROOT_FAIL' not in part
                 continue
             if mode in ENDING_MODES:
                 # The launcher ends the program inside the service: the runner reads its line and
@@ -676,8 +833,51 @@ echo VIRTUAL_STAGED_DONE
                     tests[f'{mode}:remapped_at_the_same_address'] = 'ROOT_REMAP same_address=1' in part
                 tests[f'{mode}:stale_access_faults_25'] = mode_causes == [25] and status == '139'
                 tests[f'{mode}:stale_access_did_not_read'] = 'ROOT_STALE_READ' not in part
+            elif mode in PAGE_FAULTING:
+                # A live reference into a removed page: a page fault, which the module reports as a
+                # refused resolution at a removed page, never a lifetime fault.
+                tests[f'{mode}:hole_access_page_fault'] = (mode_causes == [PAGE_FAULTING[mode]] and
+                                                          status == '139')
+                tests[f'{mode}:hole_access_did_not_read'] = 'ROOT_HOLE_SURVIVED' not in part
+                tests[f'{mode}:module_refused_removed_page'] = \
+                    f'ROOT_KERNEL:{mode}:resolve refused at removed' in log
             else:
                 tests[f'{mode}:exit_zero'] = mode_causes == [] and status == '0'
+            if mode == 'exit-word':
+                tests['exit-word:stack_word_dropped_once'] = \
+                    len(re.findall(r'^CAPSTONE_VM_EXIT_WORD_DROPPED ', part, re.M)) == 1
+            if mode in ('eintr-word', 'eintr-exit'):
+                op = mode.split('-')[1]
+                retries = line(rf'^CAPSTONE_VM_TEST_EINTR op={op} retries=(\d+)$', part)
+                tests[f'{mode}:ioctl_interrupted_and_repeated'] = retries is not None and int(retries) >= 1
+            if mode == 'futex-park' and not a.unpinned:
+                pool = re.search(r'^CAPSTONE_VM_MAPCACHE .*\bparks=(\d+) hits=(\d+)', part, re.M)
+                tests['futex-park:parked_and_revived'] = (pool is not None and int(pool.group(1)) >= 1
+                                                          and int(pool.group(2)) >= 1)
+            if mode == 'futex-readonly':
+                # diag_admit: the futex read admits no page, the exit word's store admits one.
+                base = line(r'^ROOT_FUTEX_RO base=(0x[0-9a-f]+)$', part)
+                store = line(r'^ROOT_FUTEX_RO store_base=(0x[0-9a-f]+)$', part)
+                touched = re.findall(r'^ROOT_KERNEL:futex-readonly:(?:unpinned )?touch arena (0x[0-9a-f]+)\+',
+                                     log, re.M)
+                tests['futex-readonly:read_admits_no_page'] = base is not None and base not in touched
+                tests['futex-readonly:store_admits_its_page'] = store is not None and store in touched
+            if mode == 'partial-fixed' and a.root_grants and not a.unpinned:
+                base = line(r'^ROOT_PARTIAL_FIXED base=(0x[0-9a-f]+)$', part)
+                removed = re.findall(rf'^ROOT_KERNEL:partial-fixed:remove arena {base}\+0x[0-9a-f]+ page (\d+) '
+                                     r'pfn (0x[0-9a-f]+) tags (\d+) after (\d+)$', log, re.M) if base else []
+                admitted = re.findall(rf'^ROOT_KERNEL:partial-fixed:admit arena {base}\+0x[0-9a-f]+ page (\d+) '
+                                      r'cause \d+ pc 0x[0-9a-f]+ pfn (0x[0-9a-f]+)$', log, re.M) if base else []
+                tagged = [r for r in removed if r[0] == '1' and int(r[2]) >= 1]
+                census = bool(tagged) and all(int(r[3]) == 0 for r in removed)
+                if a.control == 'no-tag-clear':
+                    tests['partial-fixed:control_census_shows_tags'] = any(int(r[3]) >= 1 for r in tagged)
+                else:
+                    tests['partial-fixed:census_tags_cleared'] = census
+                reused = sorted({pfn for page, pfn, *_ in removed} & {pfn for page, pfn in admitted})
+                frames_reused[mode] = reused
+                if a.block_frames:
+                    tests['partial-fixed:refill_admits_reused_frame'] = bool(reused)
             if mode in STACKS_KEPT and (a.root_grants or mode != 'exit-victim'):
                 stacks_kept = len(re.findall(r'^CAPSTONE_VM_STACK_UNMAP_REFUSED ', part, re.M))
                 tests[f'{mode}:launcher_stacks_kept'] = stacks_kept == STACKS_KEPT[mode]
@@ -691,10 +891,19 @@ echo VIRTUAL_STAGED_DONE
                     victim_reason = 'not a reference' if operand == '7' else 'not the mapping'
                     tests['exit-victim:operand_is_a_reference'] = operand == '1'
                 expected = expected_refusals(mode, a.control, a.launcher_bypass,
-                                             a.launcher_frame_floor, victim_reason)
+                                             a.launcher_frame_floor, victim_reason,
+                                             a.launcher_range_bypass)
                 tests[f'{mode}:kernel_refusals'] = refusals_match(seen, expected)
             else:
                 tests[f'{mode}:kernel_refuses_nothing'] = seen == []
+        default_launcher = (a.adapter / 'capstone-vexec').read_bytes()
+        tests['default_launcher_has_no_test_hooks'] = b'CAPSTONE_VM_TEST_' not in default_launcher
+        if a.launcher_hooks and a.launcher:
+            tests['hooks_launcher_has_test_hooks'] = b'CAPSTONE_VM_TEST_EINTR' in a.launcher.read_bytes()
+        default_module = (a.adapter / 'module/capstone_vm.ko').read_bytes()
+        tests['default_module_has_no_test_hooks'] = b'test_hold_ms' not in default_module
+        if a.module_hooks:
+            tests['hooks_module_has_test_hooks'] = b'test_hold_ms' in a.module.read_bytes()
         refused_count = line(r'^ROOT_UNMAP_REFUSED:(\w+)$')
         if halting:
             # The machine halted: the gate's closing lines never come.
@@ -717,7 +926,9 @@ echo VIRTUAL_STAGED_DONE
                   insmod=insmod, exits=exits, fault_causes=causes, refusals=refusals_seen,
                   retire_refusals=retires_seen if not a.no_refs else None,
                   retire_refused=line(r'^ROOT_RETIRE_REFUSED:(\w+)$'),
-                  exit_kept=line(r'^ROOT_EXIT_KEPT:(\w+)$'), no_refs_outcome=outcome)
+                  exit_kept=line(r'^ROOT_EXIT_KEPT:(\w+)$'), no_refs_outcome=outcome,
+                  module_hooks=a.module_hooks, block_frames=a.block_frames,
+                  launcher_range_bypass=a.launcher_range_bypass, frames_reused=frames_reused)
     (a.work / 'result.json').write_text(json.dumps(result, indent=2) + '\n')
     print(json.dumps({k: result[k] for k in ('status', 'passed', 'total', 'exits', 'fault_causes')}))
     for name, ok in tests.items():

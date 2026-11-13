@@ -21,6 +21,7 @@
 #include <sys/stat.h>
 #include <pthread.h>
 #include <sched.h>
+#include <signal.h>
 #include <time.h>
 #include <unistd.h>
 
@@ -57,6 +58,9 @@ struct mapping {
     unsigned char prot, *pages;
     /* The program's grant carries the write right (CV_GRANT_WRITE). */
     int grant_writes;
+    /* Stage 4e: the pages of the visible length that a partial munmap removed and no refill mapped
+     * again (PAGE_REMOVED in the page state). Such a mapping is never pooled. */
+    size_t removed;
 };
 /* The write right of a grant's permissions (cv_map.permissions, CAPSTONE_PERM_WRITE). */
 #define CV_GRANT_WRITE 2
@@ -129,12 +133,12 @@ static int trace;
  * stderr goes -- a 9p file in a harness that does not redirect it. */
 static int grants;
 /* CV_STEP returns by kind (1 quantum, 3 service, 4 fault, else other) and services by their
- * vm-abi.h number (CV_SERVICE_DELEGATE 0 .. CV_SERVICE_ADVISE 16; not Linux syscall numbers),
+ * vm-abi.h number (CV_SERVICE_DELEGATE 0 .. CV_SERVICE_REFILL 17; not Linux syscall numbers),
  * for the CAPSTONE_VM_STEPS line: which exits the step protocol actually makes, and how many. A
  * number above the last service counts as other. A retried EINTR/EAGAIN is not a return.
  * Relaxed atomics on both sides: every virtual thread's loop counts, and the main thread reads
  * at exit while a worker may still be returning. */
-#define STEP_SERVICE_COUNT (CV_SERVICE_ADVISE + 1)
+#define STEP_SERVICE_COUNT (CV_SERVICE_REFILL + 1)
 static unsigned long step_kinds[8], step_services[STEP_SERVICE_COUNT + 1];
 static unsigned long step_count(const unsigned long *counter)
 { return __atomic_load_n(counter, __ATOMIC_RELAXED); }
@@ -142,6 +146,8 @@ static void *meta;
 static void *virtual_thread_worker(void *opaque);
 static struct mapping *map_find(uintptr_t base);
 static _Noreturn void die(const char *what);
+static _Noreturn void die_errno(const char *what);
+static void futex_wake_range(uintptr_t base, size_t bytes);
 
 #ifdef CAPSTONE_VM_TEST_HOOKS
 /* Test build only (exec.c compiled with -DCAPSTONE_VM_TEST_HOOKS; run-root-grants.py
@@ -160,6 +166,13 @@ static _Noreturn void die(const char *what);
  *                                     pthread_create had failed, after CAPSTONE_VM_TEST_CREATE_DELAY_MS
  *   CAPSTONE_VM_TEST_ROLLBACK_FAIL=1  the rollback of a failed create names thread 0 to
  *                                     CV_THREAD_EXIT, which the module refuses
+ *   CAPSTONE_VM_TEST_EINTR=word|exit  (stage 4e) the futex wait's CV_WORD (word) or the thread exit's
+ *                                     CV_THREAD_EXIT (exit) waits for vm_lock while another thread of
+ *                                     this launcher holds it (CV_STATS, which a module built with
+ *                                     CV_TEST_HOOKS holds for its test_hold_ms), and a third thread
+ *                                     sends this one signal 63 every 50 ms until the ioctl returns:
+ *                                     the ioctl answers EINTR and vm_call repeats it
+ *                                     (CAPSTONE_VM_TEST_EINTR op=... retries=N)
  * A delay prints CAPSTONE_VM_TEST_DELAY with its name. */
 static long test_number(const char *name)
 {
@@ -182,14 +195,89 @@ static int test_create_fails(void)
     long n = test_number("CAPSTONE_VM_TEST_CREATE_FAIL");
     return n > 0 && ++creates == n;
 }
+#define TEST_EINTR_SIGNAL 63
+static int test_eintr_armed;
+static pid_t test_eintr_tid;
+static pthread_t test_eintr_holder, test_eintr_signaller;
+static void test_eintr_handler(int signo) { (void)signo; }
+static void *test_eintr_hold(void *unused)
+{
+    struct cv_stats stats;
+    if (ioctl(device, CV_STATS, &stats)) { /* the hold is the point, not the answer */ }
+    return unused;
+}
+static void *test_eintr_signal(void *unused)
+{
+    struct timespec t = {0, 50 * 1000000L};
+    while (__atomic_load_n(&test_eintr_armed, __ATOMIC_ACQUIRE)) {
+        nanosleep(&t, NULL);
+        if (__atomic_load_n(&test_eintr_armed, __ATOMIC_ACQUIRE))
+            syscall(SYS_tgkill, getpid(), test_eintr_tid, TEST_EINTR_SIGNAL);
+    }
+    return unused;
+}
+/* Arm the EINTR hook for the ioctl op names, if CAPSTONE_VM_TEST_EINTR names it. */
+static void test_eintr_arm(const char *op)
+{
+    const char *want = getenv("CAPSTONE_VM_TEST_EINTR");
+    struct sigaction action = {.sa_handler = test_eintr_handler};   /* no SA_RESTART */
+    struct timespec t = {0, 100 * 1000000L};
+    sigset_t set;
+    if (!want || strcmp(want, op)) return;
+    sigaction(TEST_EINTR_SIGNAL, &action, NULL);
+    sigemptyset(&set);
+    sigaddset(&set, TEST_EINTR_SIGNAL);
+    pthread_sigmask(SIG_UNBLOCK, &set, NULL);
+    test_eintr_tid = (pid_t)syscall(SYS_gettid);
+    __atomic_store_n(&test_eintr_armed, 1, __ATOMIC_RELEASE);
+    if (pthread_create(&test_eintr_holder, NULL, test_eintr_hold, NULL)) abort();
+    nanosleep(&t, NULL);   /* the holder takes vm_lock first */
+    if (pthread_create(&test_eintr_signaller, NULL, test_eintr_signal, NULL)) abort();
+    fprintf(stderr, "CAPSTONE_VM_TEST_EINTR_ARMED op=%s\n", op);
+}
+static void test_eintr_disarm(void)
+{
+    sigset_t set;
+    if (!__atomic_exchange_n(&test_eintr_armed, 0, __ATOMIC_ACQ_REL)) return;
+    pthread_join(test_eintr_signaller, NULL);
+    pthread_join(test_eintr_holder, NULL);
+    sigemptyset(&set);
+    sigaddset(&set, TEST_EINTR_SIGNAL);
+    pthread_sigmask(SIG_BLOCK, &set, NULL);
+}
 #define TEST_DELAY(name) test_delay(name)
 #define TEST_CREATE_FAILS() test_create_fails()
 #define TEST_ROLLBACK_FAILS() (test_number("CAPSTONE_VM_TEST_ROLLBACK_FAIL") > 0)
+#define TEST_EINTR_ARM(op) test_eintr_arm(op)
+#define TEST_EINTR_DISARM() test_eintr_disarm()
+#define TEST_EINTR_REPORT(name, retries) do { if (retries) \
+        fprintf(stderr, "CAPSTONE_VM_TEST_EINTR op=%s retries=%u\n", name, retries); } while (0)
 #else
 #define TEST_DELAY(name) ((void)0)
 #define TEST_CREATE_FAILS() 0
 #define TEST_ROLLBACK_FAILS() 0
+#define TEST_EINTR_ARM(op) ((void)0)
+#define TEST_EINTR_DISARM() ((void)0)
+#define TEST_EINTR_REPORT(name, retries) ((void)(retries))
 #endif
+
+/* An ioctl whose only EINTR comes before any effect, repeated until it answers otherwise: the module
+ * takes vm_lock with mutex_lock_interruptible first thing (capstone_vm.c, vm_ioctl), so a signal
+ * that interrupts that wait changes nothing, and the module then holds the lock for the whole call.
+ * The futex wait's CV_WORD, the thread exit's CV_THREAD_EXIT (stage 4e: before, a futex wait answered
+ * EFAULT and an exit ended the launcher) and both calls of a page operation (CV_PAGES, whose commit
+ * must follow Linux's change) use it. */
+static int vm_call(unsigned long op, void *arg, const char *name)
+{
+    unsigned retries = 0;
+    int rc, error;
+    (void)name;
+    while ((rc = ioctl(device, op, arg)) && errno == EINTR) ++retries;
+    error = errno;
+    TEST_EINTR_REPORT(name, retries);
+    errno = error;
+    return rc;
+}
 
 /* Record thread id, which CV_THREAD_CREATE has just issued and whose frame lies in the mapping
  * frame. -EAGAIN if the table is full. Until thread_publish the create can still fail
@@ -537,7 +625,12 @@ static void map_remove(struct mapping *m)
  * mappings of a context together at most CV_MAX_BYTES (1 MiB), paid only where a protection changed
  * in part. Only protect_range changes a protection, and it keeps the state conservative where
  * Linux can fail halfway: before mprotect each page of the range keeps only the rights that its old
- * and its new protection share (page_and), and after a successful mprotect it holds the new one. */
+ * and its new protection share (page_and), and after a successful mprotect it holds the new one.
+ *
+ * Stage 4e: a page that a partial munmap removed holds PAGE_REMOVED and no right, so every check of
+ * a right refuses it (writable_span, page_all) and nothing this launcher writes reaches it; only a
+ * refill (MAP_FIXED, mremap's growth) gives it a protection again. */
+#define PAGE_REMOVED 0x80
 static size_t page_count(const struct mapping *m) { return m->visible / 4096; }
 /* Page i's protection. */
 static unsigned page_get(const struct mapping *m, size_t i)
@@ -573,7 +666,20 @@ static void page_and(struct mapping *m, size_t first, size_t end, unsigned mask)
     if (!m->pages) abort();
     for (size_t i = first; i < end; ++i) m->pages[i] &= mask;
 }
-/* Do pages [first, end) all have every right in want? With exact, and no other right? */
+/* Is page i removed (stage 4e)? */
+static int page_removed(const struct mapping *m, size_t i)
+{
+    return m->removed && page_get(m, i) == PAGE_REMOVED;
+}
+/* The removed pages among [first, end). */
+static size_t page_removed_count(const struct mapping *m, size_t first, size_t end)
+{
+    size_t n = 0;
+    for (size_t i = first; m->removed && i < end; ++i) n += page_removed(m, i);
+    return n;
+}
+/* Do pages [first, end) all have every right in want? With exact, and no other right? A removed
+ * page has none. */
 static int page_all(const struct mapping *m, size_t first, size_t end, unsigned want, int exact)
 {
     for (size_t i = first; i < end; ++i) {
@@ -824,7 +930,7 @@ static int mc_eligible(const struct mapping *m)
 #else
 #define MC_PROTECTED m->protected_range
 #endif
-    return mc.cap && !mc.broken && m->kind == CV_MAP_HEAP && !MC_PROTECTED &&
+    return mc.cap && !mc.broken && m->kind == CV_MAP_HEAP && !MC_PROTECTED && !m->removed &&
            m->bytes == m->visible && m->bytes <= mc.cap / 2 && mc.spare;
 }
 /* Pool m, which the module has parked (CV_UNMAP answered CV_UNMAP_PARKED), and remove it from the
@@ -835,6 +941,8 @@ static void mc_pool(struct mapping *m)
 {
     struct mc_entry *e = mc.spare;
     mc.spare = e->chain;
+    /* The park ended the mapping's lifetime: its futex waiters are woken (futex_wake_range). */
+    futex_wake_range((uintptr_t)m->address, m->bytes);
     e->m = *m;
     e->m.pages = NULL;   /* a pooled mapping's pages share one protection (mc_eligible) */
     map_remove(m);
@@ -857,14 +965,18 @@ static struct mc_entry *mc_find(size_t bytes, size_t alignment)
 }
 static long mapping_gate(const struct mapping *m, size_t bytes);
 static long release_range(struct mapping *m);
-/* Unmap the whole mapping at base for the domain thread tid (CV_SERVICE_UNMAP, base the cursor
- * of the reference it passed in a0): one CV_UNMAP pools the mapping where the pool takes it and
- * the module can, and retires it otherwise; with root_grants the module checks that reference,
- * the address and the length first. A partial unmap is refused here, with or without root_grants,
- * and again by the module with root_grants. */
+static struct mapping *range_mapping(uintptr_t base, size_t bytes, long *error);
+static long remove_range(uint64_t tid, uintptr_t base, size_t bytes);
+/* The domain thread tid's munmap of [base, + bytes) (CV_SERVICE_UNMAP, base the cursor of the
+ * reference it passed in a0). A call that names a whole mapping, its base and its visible length,
+ * ends it: one CV_UNMAP pools the mapping where the pool takes it and the module can, and retires it
+ * otherwise; with root_grants the module checks that reference, the address and the length first.
+ * Since stage 4e any other call is a partial munmap of one block (remove_range). */
 static long unmap_arena_for(uintptr_t base, size_t bytes, uint64_t tid)
 {
-    struct mapping *m = map_find(base);
+    struct mapping *m = map_floor(base);
+    if (!m || (uintptr_t)m->address != base || m->visible != bytes)
+        return remove_range(tid, base, bytes);
     long gate = mapping_gate(m, bytes);
     if (gate) return gate;
     int pool = mc_eligible(m);
@@ -878,6 +990,95 @@ static long unmap_arena_for(uintptr_t base, size_t bytes, uint64_t tid)
     }
     return release_range(m);
 }
+/* Stage 4e: a partial munmap of [base, + bytes), any page range inside the visible length of one
+ * heap block that is not the allocator's metadata and that no worker holds (range_mapping: EINVAL,
+ * EBUSY); a range beyond the block or across two blocks is refused. With root_grants only the
+ * block's own reference, whose bounds cover the whole block, may do it (the module's check). The
+ * pages go and leave a placeholder: PROT_NONE, MAP_NORESERVE, mapped MAP_FIXED over the range, so
+ * Linux gives no address inside the block to any other mapping while the block lives, and the
+ * module never admits a removed page. No lifetime ends. Unmapping removed pages again changes
+ * nothing. When the call takes the last pages that are still mapped, the module ends the block in
+ * its check (ended), and the whole extent goes back to Linux as at a whole-block munmap. The order:
+ * the module's check, which changes nothing (or ends the block); Linux's placeholder; the module's
+ * commit, which clears the tags of the pages it held, unpins them and counts. The commit follows a
+ * change Linux has already made, so a failure of the placeholder or of the commit ends the program
+ * rather than leave the module and Linux disagreeing about the range. service_lock is held
+ * throughout, so the accounting of the block is serialized. Waiters on words in the range are woken
+ * (futex_wake_range). */
+static long remove_range(uint64_t tid, uintptr_t base, size_t bytes)
+{
+    long error;
+    struct mapping *m = range_mapping(base, bytes, &error);
+    if (!m) return error;
+    size_t first = (base - (uintptr_t)m->address) / 4096, end = first + bytes / 4096;
+    size_t gone = page_removed_count(m, first, end);
+    if (page_split(m)) return -ENOMEM;
+    struct cv_pages request = {.thread = tid, .id = m->id, .op = CV_PAGES_REMOVE};
+    if (vm_call(CV_PAGES, &request, "pages")) return -errno;
+    if (request.ended) {
+        futex_wake_range((uintptr_t)m->address, m->bytes);
+        return release_range(m);
+    }
+    /* Also for a range that is removed already: the placeholder over a placeholder changes nothing,
+     * and the module's commit keeps its count exact by itself (a removed page counts once). */
+    if (mmap((void *)base, bytes, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED | MAP_NORESERVE,
+             -1, 0) == MAP_FAILED)
+        die_errno("placeholder of a partial munmap");
+    request.commit = 1;
+    if (vm_call(CV_PAGES, &request, "pages")) die_errno("commit of a partial munmap");
+    page_set(m, first, end, PAGE_REMOVED);
+    m->removed += end - first - gone;
+    futex_wake_range(base, bytes);
+    return 0;
+}
+/* Stage 4e: the domain thread tid's refill of [base, + bytes) (CV_SERVICE_REFILL, a2 the protection,
+ * op CV_PAGES_FIXED or CV_PAGES_GROW). CV_PAGES_FIXED is mmap(MAP_FIXED) inside a block: a range that
+ * range_mapping accepts, with root_grants only through the block's own reference and only while the
+ * program derived no object below it (the module's check, EOPNOTSUPP without root_grants); every
+ * page of the range reads zero afterwards with protection prot, a removed page is mapped again, and
+ * no lifetime ends. CV_PAGES_GROW is mremap's growth in place: the block is the one that holds the
+ * page before base, every page of the range lies inside its visible length and is removed, and the
+ * page before it is not (ENOMEM otherwise, and the libc moves); the range gets the protection of
+ * that page. PROT_EXEC is refused (EACCES). The order is the partial munmap's: the module's check,
+ * Linux's fresh anonymous pages mapped MAP_FIXED over the range, the module's commit (which drops
+ * the pages it held there and counts the removed ones as mapped again), and the page state. */
+static long refill_range(uint64_t tid, uintptr_t base, size_t bytes, unsigned prot, uint64_t op)
+{
+    long error;
+    struct mapping *m;
+    if (op != CV_PAGES_FIXED && op != CV_PAGES_GROW) return -EINVAL;
+    if (op == CV_PAGES_GROW) {
+        m = base ? map_floor(base - 1) : NULL;
+        if (!m || !bytes || ((base | bytes) & 4095) || base - (uintptr_t)m->address > m->visible ||
+            !m->heap || m->kind == CV_MAP_METADATA)
+            return -EINVAL;
+        if (bytes > m->visible - (base - (uintptr_t)m->address)) return -ENOMEM;
+    }
+    m = range_mapping(base, bytes, &error);
+    if (!m) return error;
+    size_t first = (base - (uintptr_t)m->address) / 4096, end = first + bytes / 4096;
+    if (op == CV_PAGES_GROW) {
+        if (!first || page_removed(m, first - 1) || page_removed_count(m, first, end) != end - first)
+            return -ENOMEM;
+        prot = page_get(m, first - 1);
+    }
+    if (prot & PROT_EXEC) return -EACCES;
+    if (prot & ~(PROT_READ | PROT_WRITE)) return -EINVAL;
+    if ((first || end != page_count(m)) && page_split(m)) return -ENOMEM;
+    struct cv_pages request = {.thread = tid, .id = m->id, .op = op};
+    if (vm_call(CV_PAGES, &request, "pages")) return -errno;
+    size_t gone = page_removed_count(m, first, end);
+    if (mmap((void *)base, bytes, (int)prot, MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED, -1, 0) == MAP_FAILED)
+        die_errno("refill");
+    /* The module admits base pages only (add() requires the policy on kernels with huge pages). */
+    if (madvise((void *)base, bytes, MADV_NOHUGEPAGE) && errno != EINVAL) die_errno("refill");
+    request.commit = 1;
+    if (vm_call(CV_PAGES, &request, "pages")) die_errno("commit of a refill");
+    m->protected_range = 1;
+    m->removed -= gone;
+    page_set(m, first, end, prot);
+    return 0;
+}
 /* May a request of the program end m, a mapping of exactly bytes: munmap, the frame's hand-over
  * at thread creation, the stack at thread exit? Only a registered heap mapping of that visible
  * length that is not the allocator's metadata (else EINVAL) and that no worker holds (else
@@ -890,20 +1091,22 @@ static long mapping_gate(const struct mapping *m, size_t bytes)
     return 0;
 }
 /* Give the range of m, whose arena the module has released, back to Linux and drop its
- * registration. */
+ * registration. Waiters on words in it are woken first (futex_wake_range). */
 static long release_range(struct mapping *m)
 {
+    futex_wake_range((uintptr_t)m->address, m->bytes);
     if (munmap(m->address, m->bytes)) return -errno;
     reuse_address = m->address; reuse_bytes = m->bytes;
     map_remove(m);
     return 0;
 }
 /* The registered mapping that holds the page range [base, + bytes) that a request of the program
- * names (mprotect, madvise), or NULL with *error set: a nonempty range of whole pages inside the
- * visible length of one registered heap mapping that is not the allocator's metadata (EINVAL), and
- * that no worker holds (EBUSY, as mapping_gate answers): this launcher writes a held mapping
- * through Linux for the worker's whole attachment, and a protection change or a madvise would take
- * the pages from under that write. */
+ * names (mprotect, madvise, a partial munmap, a refill, mremap's check), or NULL with *error set: a
+ * nonempty range of whole pages inside the visible length of one registered heap mapping that is not
+ * the allocator's metadata (EINVAL), and that no worker holds (EBUSY, as mapping_gate answers): this
+ * launcher writes a held mapping through Linux for the worker's whole attachment, and a protection
+ * change, a madvise or a removal would take the pages from under that write. The image and the
+ * launcher's other grants are no heap mappings: a request on them is refused here. */
 static struct mapping *range_mapping(uintptr_t base, size_t bytes, long *error)
 {
     struct mapping *m = map_floor(base);
@@ -918,18 +1121,22 @@ static struct mapping *range_mapping(uintptr_t base, size_t bytes, long *error)
     return m;
 }
 /* The domain thread tid's mprotect of [base, + bytes) (CV_SERVICE_PROTECT, base the cursor of the
- * reference it passed in a0): a range that range_mapping accepts. With root_grants the module
- * checks the reference first (CV_PROTECT): a live reference to that mapping whose bounds cover the
- * range. The page state follows Linux exactly where mprotect succeeds and conservatively where it
- * fails (page_and before, page_set after); a change of part of the mapping gets its byte per page
- * before anything changes, so a failed allocation changes nothing. */
+ * reference it passed in a0): a range that range_mapping accepts, without PROT_EXEC (EACCES: only the
+ * image's text is executable, stage 4e) and without a removed page (ENOMEM, as Linux answers for an
+ * unmapped page). With root_grants the module checks the reference first (CV_PROTECT): a live
+ * reference to that mapping whose bounds cover the range. The page state follows Linux exactly where
+ * mprotect succeeds and conservatively where it fails (page_and before, page_set after); a change of
+ * part of the mapping gets its byte per page before anything changes, so a failed allocation changes
+ * nothing. */
 static long protect_range(uint64_t tid, uintptr_t base, size_t bytes, int prot)
 {
     long error;
-    if (prot & ~(PROT_READ | PROT_WRITE | PROT_EXEC)) return -EINVAL;
+    if (prot & PROT_EXEC) return -EACCES;
+    if (prot & ~(PROT_READ | PROT_WRITE)) return -EINVAL;
     struct mapping *m = range_mapping(base, bytes, &error);
     if (!m) return error;
     size_t first = (base - (uintptr_t)m->address) / 4096, end = first + bytes / 4096;
+    if (page_removed_count(m, first, end)) return -ENOMEM;
     if ((first || end != page_count(m)) && page_split(m)) return -ENOMEM;
     struct cv_protect request = {.thread = tid, .id = m->id};
     if (ioctl(device, CV_PROTECT, &request)) return -errno;
@@ -941,37 +1148,43 @@ static long protect_range(uint64_t tid, uintptr_t base, size_t bytes, int prot)
 }
 /* The domain thread tid's madvise(MADV_DONTNEED or MADV_FREE) of [base, + bytes)
  * (CV_SERVICE_ADVISE, base the cursor of the reference in a0): a range that range_mapping accepts,
- * and with root_grants a reference that the module accepts as for mprotect (CV_ADVISE). Where the
- * module holds the pages (pinned) it overwrites them with zeros itself; otherwise (unpinned) Linux
- * gives the range back. Either way the range reads zero afterwards, which MADV_DONTNEED promises
- * for private anonymous memory and MADV_FREE allows. */
+ * without a removed page (ENOMEM), and with root_grants a reference that the module accepts as for
+ * mprotect (CV_ADVISE). Where the module holds the pages (pinned) it overwrites them with zeros
+ * itself; otherwise (unpinned) Linux gives the range back. Either way the range reads zero
+ * afterwards, which MADV_DONTNEED promises for private anonymous memory and MADV_FREE allows. */
 static long advise_range(uint64_t tid, uintptr_t base, size_t bytes, int advice)
 {
     long error;
     if (advice != MADV_DONTNEED && advice != MADV_FREE) return -EINVAL;
     struct mapping *m = range_mapping(base, bytes, &error);
     if (!m) return error;
+    size_t first = (base - (uintptr_t)m->address) / 4096;
+    if (page_removed_count(m, first, first + bytes / 4096)) return -ENOMEM;
     struct cv_advise request = {.thread = tid, .id = m->id};
     if (ioctl(device, CV_ADVISE, &request)) return -errno;
     if (!request.zeroed && madvise((void *)base, bytes, MADV_DONTNEED)) return -errno;
     return 0;
 }
-/* The domain thread tid asks, before it moves a mapping (CV_SERVICE_MAPPING_CHECK, a0 the
- * reference, a1 the length; mapping.c, mremap), whether a request to end the mapping at base, of
- * exactly bytes, would be accepted, and whether every page of the mapping is read-write. Changes
- * nothing. First the gate of every request that ends a mapping (mapping_gate: EINVAL, or EBUSY
- * for a held mapping), then with root_grants the module's check of the reference (CV_PROTECT,
- * which reads the service from the caller's a7 and then checks the whole mapping, as for munmap),
- * then the protection: ENOTSUP unless every page of the visible length is exactly read-write and
- * the grant may write (the libc's mremap moves only such a mapping). */
+/* The domain thread tid asks, before mremap moves the page range [base, + bytes)
+ * (CV_SERVICE_MAPPING_CHECK, a0 the reference, a1 the length; mapping.c), whether that range may
+ * move: a munmap of it through the same reference would be accepted, no page of it is removed and
+ * every page of it is read-write. Changes nothing. Since stage 4e the range is any page range of one
+ * block (range_mapping: EINVAL, or EBUSY for a held mapping), as a partial munmap may name it; then
+ * EFAULT for a removed page, as Linux answers for an unmapped one; then with root_grants the
+ * module's check of the reference (CV_PROTECT, which reads the service from the caller's a7: the
+ * block's own reference, bounds over the whole block); then the protection: ENOTSUP unless every page
+ * of the range is exactly read-write and the grant may write (the libc's mremap moves only such a
+ * range). */
 static long check_mapping(uint64_t tid, uintptr_t base, size_t bytes)
 {
-    struct mapping *m = map_find(base);
-    long gate = mapping_gate(m, bytes);
-    if (gate) return gate;
+    long error;
+    struct mapping *m = range_mapping(base, bytes, &error);
+    if (!m) return error;
+    size_t first = (base - (uintptr_t)m->address) / 4096, end = first + bytes / 4096;
+    if (page_removed_count(m, first, end)) return -EFAULT;
     struct cv_protect request = {.thread = tid, .id = m->id};
     if (ioctl(device, CV_PROTECT, &request)) return -errno;
-    if (!m->grant_writes || !page_all(m, 0, page_count(m), PROT_READ | PROT_WRITE, 1))
+    if (!m->grant_writes || !page_all(m, first, end, PROT_READ | PROT_WRITE, 1))
         return -ENOTSUP;
     return 0;
 }
@@ -1009,12 +1222,15 @@ static int exchange_prepare_write(struct capstone_delegate_host *h, size_t offse
     }
     return 0;
 }
-/* The registered mapping that holds the int at p inside its visible length, or NULL. */
+/* The registered mapping that holds the int at p inside its visible length, in a page that is not
+ * removed (stage 4e: a block keeps its registration over its holes, but a removed page is no longer
+ * mapped), or NULL. */
 static struct mapping *word_mapping(uintptr_t p)
 {
     struct mapping *m = map_floor(p);
     size_t offset = m ? p - (uintptr_t)m->address : 0;
-    return m && offset <= m->visible && m->visible - offset >= sizeof(int) ? m : NULL;
+    if (!m || offset > m->visible || m->visible - offset < sizeof(int)) return NULL;
+    return page_removed(m, offset / 4096) ? NULL : m;
 }
 /* May this launcher write the bytes bytes at p through Linux for the program? They must lie inside
  * the visible length of one registered mapping whose grant may write, in pages that Linux maps
@@ -1038,17 +1254,11 @@ static int transport_holds(const struct mapping *m)
 {
     return m->holder || m->address == meta || m->address == host.exchange;
 }
-/* Does [p, + bytes) overlap the whole extent of m, padding included? Overflow-safe: both lengths
- * are far below 2^63. */
-static int span_overlaps(uintptr_t p, size_t bytes, const struct mapping *m)
-{
-    uintptr_t base = (uintptr_t)m->address;
-    return p - base < m->bytes || base - p < bytes;
-}
 /* The kernel's reasons to refuse a word (CV_WORD_*, wire.h). */
 static const char *const word_reasons[CV_WORD_REASONS] = {
     "accepted", "not a reference", "not live", "does not cover the word", "unaligned",
     "not inside one mapping", "in a thread's frame", "not admitted", "refused by the page table",
+    "in the released stack",
 };
 static const char *word_reason(uint64_t reason)
 {
@@ -1072,7 +1282,7 @@ static const char *word_precheck(uintptr_t p, int write)
     return NULL;
 }
 
-/* ---- Futexes of the program (stage 4d) ----
+/* ---- Futexes of the program (stages 4d and 4e) ----
  *
  * A futex word is program memory, so this launcher never names it to Linux: Linux would read the
  * word at the program's address after the service checked the reference, and another thread's
@@ -1082,12 +1292,15 @@ static const char *word_precheck(uintptr_t p, int write)
  * (CV_WORD): the module checks the reference in a0, reads the word and compares it with a2 under
  * vm_lock, which also excludes the program's execution, so no thread can end the word's lifetime,
  * unmap or remap its page between the check and the read. If the word holds the value, the waiter
- * sleeps on a key of this launcher's own: the module's identity of the mapping that holds the word
- * (its arena id, never reused) and the word's offset in it. A wake names an integer address, which
- * this launcher resolves to the same key through its registry; it reads and writes no program
- * memory, and it reaches only waiters of the mapping that holds that address now, never a waiter of
- * an earlier mapping at the same address. Every futex operation on Linux is private and on this
- * launcher's own words.
+ * sleeps on a key of this launcher's own: the address the module checked (stage 4e; stage 4d keyed
+ * by the mapping's arena id and the offset, but a revive gives a parked mapping a new id, which
+ * stranded its waiters). A wake names an integer address and reads and writes no program memory.
+ * When a range stops being mapped (an unmap, a park, a thread's stack or frame at its exit, a partial
+ * munmap: futex_wake_range), every waiter in it is woken and answers 0, so no waiter of an ended
+ * mapping can be reached by a wake of a later mapping at the same address: the libc reads the word
+ * again through its own reference, which faults if that reference is stale, and waits again
+ * otherwise. A spurious wake is legal for a futex. Every futex operation on Linux is private and on
+ * this launcher's own words.
  *
  * No wake is lost. A waiter compares and enters the waiter list in one hold of service_lock, and a
  * wake needs service_lock. So a wake that follows the program's store either comes before the
@@ -1096,7 +1309,7 @@ static const char *word_precheck(uintptr_t p, int write)
  * that returns at once if the mark came first. Waiters on one key wake oldest first. */
 struct futex_waiter {
     struct futex_waiter *older, *newer;
-    uint64_t arena, offset;   /* the key */
+    uintptr_t address;        /* the key: the word's address, as the module checked it */
     uint32_t bitset;
     int woken;                /* 1 once a wake counted this waiter: this launcher's word, not the program's */
 };
@@ -1113,38 +1326,53 @@ static void futex_unlink(struct futex_waiter *w)
     if (w->older) w->older->newer = w->newer; else futex_oldest = w->newer;
     if (w->newer) w->newer->older = w->older; else futex_newest = w->older;
 }
-/* Wake the oldest waiters on the key (arena, offset) whose bitset meets bitset: at most count, and
- * at least one, as Linux's FUTEX_WAKE does. Answers how many. Called with service_lock held, which
- * keeps every waiter in the list from returning, so its record (on the waiter's stack) outlives the
- * wake. */
-static long futex_wake_key(uint64_t arena, uint64_t offset, int count, uint32_t bitset)
+/* Mark waiter w woken and end its sleep. Called with service_lock held, which keeps every waiter in
+ * the list from returning, so its record (on the waiter's stack) outlives the wake. */
+static void futex_wake_one(struct futex_waiter *w)
+{
+    futex_unlink(w);
+    __atomic_store_n(&w->woken, 1, __ATOMIC_RELEASE);
+    syscall(SYS_futex, &w->woken, FUTEX_WAKE_PRIVATE, 1, NULL, NULL, 0);
+}
+/* Wake the oldest waiters on address whose bitset meets bitset: at most count, and at least one, as
+ * Linux's FUTEX_WAKE does. Answers how many. Called with service_lock held. */
+static long futex_wake_key(uintptr_t address, int count, uint32_t bitset)
 {
     long woken = 0;
     for (struct futex_waiter *w = futex_oldest, *next; w; w = next) {
         next = w->newer;
-        if (w->arena != arena || w->offset != offset || !(w->bitset & bitset)) continue;
-        futex_unlink(w);
-        __atomic_store_n(&w->woken, 1, __ATOMIC_RELEASE);
-        syscall(SYS_futex, &w->woken, FUTEX_WAKE_PRIVATE, 1, NULL, NULL, 0);
+        if (w->address != address || !(w->bitset & bitset)) continue;
+        futex_wake_one(w);
         if (++woken >= count) break;
     }
     return woken;
 }
+/* Wake every waiter on a word in [base, + bytes), which stops being mapped (stage 4e). Called with
+ * service_lock held, before the range can be mapped again. */
+static void futex_wake_range(uintptr_t base, size_t bytes)
+{
+    for (struct futex_waiter *w = futex_oldest, *next; w; w = next) {
+        next = w->newer;
+        if (w->address - base < bytes) futex_wake_one(w);
+    }
+}
 /* The domain thread tid's FUTEX_WAIT or FUTEX_WAIT_BITSET (CV_SERVICE_FUTEX: a0 the word's
  * reference, a1 the operation, a2 the value, a3 and a4 the timeout, seconds -1 for none, a5 the
  * bitset of FUTEX_WAIT_BITSET). This launcher's own conditions first (word_precheck), then the
- * module's check, read and compare (CV_WORD): EFAULT for a refused word, with its reason logged,
- * EAGAIN if the word does not hold the value. Otherwise the waiter enters the list under the key
- * the module answered and sleeps until a wake marks it (0), or until the timeout (ETIMEDOUT): a
- * FUTEX_WAIT timeout counts from the call on CLOCK_MONOTONIC, a FUTEX_WAIT_BITSET one is a point on
- * CLOCK_MONOTONIC, or on CLOCK_REALTIME with FUTEX_CLOCK_REALTIME, as for Linux. A signal of this
- * launcher's thread ends the sleep with EINTR, as it ended the Linux wait before. Called with
- * service_lock held, which it releases while it sleeps. */
+ * module's check, read and compare (CV_WORD, repeated if a signal interrupts its wait for vm_lock):
+ * EFAULT for a refused word, with its reason logged, EAGAIN if the word does not hold the value.
+ * Otherwise the waiter enters the list under the address the module checked and sleeps until a wake
+ * marks it (0), or until the timeout (ETIMEDOUT): a FUTEX_WAIT timeout counts from the call on
+ * CLOCK_MONOTONIC, and one so large that the deadline overflows waits without one, as Linux clamps
+ * it; a FUTEX_WAIT_BITSET one is a point on CLOCK_MONOTONIC, or on CLOCK_REALTIME with
+ * FUTEX_CLOCK_REALTIME, as for Linux. A signal of this launcher's thread ends the sleep with EINTR,
+ * as it ended the Linux wait before. Called with service_lock held, which it releases while it
+ * sleeps. The caller has refused unknown operations and flags (futex_operation). */
 static long futex_wait(uint64_t tid, const struct cv_step *step)
 {
     int op = (int)step->args[1], command = op & FUTEX_CMD_MASK;
     uint32_t bitset = command == FUTEX_WAIT_BITSET ? (uint32_t)step->args[5] : FUTEX_BITSET_MATCH_ANY;
-    int realtime = command == FUTEX_WAIT_BITSET && (op & FUTEX_CLOCK_REALTIME);
+    int realtime = (op & FUTEX_CLOCK_REALTIME) != 0;
     struct timespec deadline, *until = NULL;
     struct cv_word word = {.thread = tid};
     const char *refused;
@@ -1153,18 +1381,26 @@ static long futex_wait(uint64_t tid, const struct cv_step *step)
         if ((long)step->args[4] < 0 || step->args[4] >= 1000000000UL) return -EINVAL;
         deadline.tv_sec = (time_t)step->args[3];
         deadline.tv_nsec = (long)step->args[4];
+        until = &deadline;
         if (command == FUTEX_WAIT) {
             struct timespec now;
             clock_gettime(CLOCK_MONOTONIC, &now);
-            deadline.tv_sec += now.tv_sec;
-            deadline.tv_nsec += now.tv_nsec;
-            if (deadline.tv_nsec >= 1000000000L) { ++deadline.tv_sec; deadline.tv_nsec -= 1000000000L; }
+            if (deadline.tv_sec > (time_t)(LONG_MAX - 1) - now.tv_sec) {
+                until = NULL;   /* past the end of the clock: no timeout, as Linux saturates it */
+            } else {
+                deadline.tv_sec += now.tv_sec;
+                deadline.tv_nsec += now.tv_nsec;
+                if (deadline.tv_nsec >= 1000000000L) { ++deadline.tv_sec; deadline.tv_nsec -= 1000000000L; }
+            }
         }
-        until = &deadline;
     }
     refused = word_precheck(step->args[0], 0);
-    if (!refused && (ioctl(device, CV_WORD, &word) || word.reason))
-        refused = word.reason ? word_reason(word.reason) : "refused by the kernel";
+    if (!refused) {
+        TEST_EINTR_ARM("word");
+        int rc = vm_call(CV_WORD, &word, "word");
+        TEST_EINTR_DISARM();
+        if (rc || word.reason) refused = rc ? "refused by the kernel" : word_reason(word.reason);
+    }
     if (refused) {
         fprintf(stderr, "CAPSTONE_VM_FUTEX_REFUSED tid=%llu word=0x%lx reason=%s\n",
                 (unsigned long long)tid, (unsigned long)step->args[0], refused);
@@ -1172,7 +1408,7 @@ static long futex_wait(uint64_t tid, const struct cv_step *step)
     }
     if (!word.equal) return -EAGAIN;
 
-    struct futex_waiter waiter = {.arena = word.arena, .offset = word.offset, .bitset = bitset};
+    struct futex_waiter waiter = {.address = step->args[0], .bitset = bitset};
     long result = 0;
     futex_link(&waiter);
     pthread_mutex_unlock(&service_lock);
@@ -1194,9 +1430,9 @@ static long futex_wait(uint64_t tid, const struct cv_step *step)
 }
 /* The domain thread's FUTEX_WAKE or FUTEX_WAKE_BITSET (CV_SERVICE_FUTEX: a0 the word's address as
  * an integer, since a wake reads and writes nothing; a2 the number to wake, a5 the bitset of
- * FUTEX_WAKE_BITSET). The address must be an aligned int inside one registered mapping (EFAULT
- * otherwise, which registered() in root-contract.c relies on); the key is that mapping's identity
- * and the offset. Called with service_lock held. */
+ * FUTEX_WAKE_BITSET). The address must be an aligned int inside one registered mapping, in a page
+ * that is not removed (EFAULT otherwise, which registered() in root-contract.c relies on); the key is
+ * the address. Called with service_lock held. */
 static long futex_wake(const struct cv_step *step)
 {
     uintptr_t address = step->args[0];
@@ -1205,13 +1441,28 @@ static long futex_wake(const struct cv_step *step)
     struct mapping *m = (address & 3) ? NULL : word_mapping(address);
     if (!m) return -EFAULT;
     if (!bitset) return -EINVAL;
-    return futex_wake_key(m->id, address - (uintptr_t)m->address, (int)step->args[2], bitset);
+    return futex_wake_key(address, (int)step->args[2], bitset);
+}
+/* The futex operations this launcher serves, as Linux sorts a1 (kernel/futex/syscalls.c): the
+ * command is a1 without FUTEX_PRIVATE_FLAG and FUTEX_CLOCK_REALTIME (every futex here is private);
+ * FUTEX_CLOCK_REALTIME with any command but FUTEX_WAIT_BITSET is ENOSYS, and so is a command this
+ * launcher does not serve, unknown flag bits included (they make an unknown command). */
+static long futex_operation(uint64_t tid, const struct cv_step *step)
+{
+    int op = (int)step->args[1], command = op & FUTEX_CMD_MASK;
+    if ((op & FUTEX_CLOCK_REALTIME) && command != FUTEX_WAIT_BITSET) return -ENOSYS;
+    if (command == FUTEX_WAIT || command == FUTEX_WAIT_BITSET) return futex_wait(tid, step);
+    if (command == FUTEX_WAKE || command == FUTEX_WAKE_BITSET) return futex_wake(step);
+    return -ENOSYS;
 }
 static long acquire_mapping(uint64_t tid, struct cv_step *step)
 {
     size_t visible = step->args[0], alignment = step->args[1];
     unsigned prot = step->args[2], rights = step->args[3], kind = step->args[4];
     size_t bytes = rounded(visible);
+    /* Only the image's text is executable (stage 4e): a mapping block never is, whatever mprotect
+     * later asks (protect_range). */
+    if (prot & PROT_EXEC) return -EACCES;
     if (!bytes || (visible & 4095) || alignment < 4096 ||
         (alignment & (alignment - 1)) || alignment > CV_MAX_REGION_BYTES ||
         (prot & ~(PROT_READ | PROT_WRITE | PROT_EXEC)) || rights > 7 ||
@@ -1287,22 +1538,43 @@ static void cleanup(void)
     capstone_spawner_stop(&spawner);
     capstone_delegate_host_free(&host);
 }
-/* End the process at once with 125, after one line on stderr (unbuffered; this launcher writes
- * nothing to stdout that an exit must flush). Nothing shared is freed or closed first: another worker
- * may be inside capstone_delegate_serve with service_lock released, blocked in Linux on its own
- * transport or on the process transport's host state, and a teardown here would free that state
- * under it (stage 4c ran cleanup() here; its once-only guard kept a second cleanup out, not a use
- * after the first). _exit is exit_group: Linux stops every worker, then releases the mappings and
+/* End the process at once with 125, after one line on stderr, best effort. Nothing shared is freed
+ * or closed first: another worker may be inside capstone_delegate_serve with service_lock released,
+ * blocked in Linux on its own transport or on the process transport's host state, and a teardown
+ * here would free that state under it (stage 4c ran cleanup() here; its once-only guard kept a
+ * second cleanup out, not a use after the first). The line never blocks the exit (stage 4e): a full
+ * stderr pipe, whose reader stopped, would hold a blocking write, and every other failing worker
+ * would then wait for ever. So the line goes through a new open of the same file with O_NONBLOCK
+ * (/proc/self/fd/2: for a pipe or a terminal a description of its own, so stderr's own flags, which
+ * other processes share, stay as they are; O_APPEND for a regular file), and a write that would
+ * block is dropped. _exit is exit_group: Linux stops every worker, then releases the mappings and
  * the device, and the spawner, which watches its parent (PR_SET_PDEATHSIG), ends with it. One thread
- * prints; another that fails meanwhile waits for that exit. */
-static _Noreturn void die(const char *what)
+ * prints; another that fails meanwhile waits for that exit. error: the errno of the system call
+ * that just failed, which the line names, or 0 where none did. */
+static _Noreturn void die_with(const char *what, int error)
 {
     static int ending;
-    int error = errno;
+    char line[256];
+    int n, fd;
     if (__atomic_exchange_n(&ending, 1, __ATOMIC_ACQ_REL))
         for (;;) pause();
-    fprintf(stderr, "capstone-vexec: %s: %s\n", what, strerror(error));
+    n = error ? snprintf(line, sizeof line, "capstone-vexec: %s: %s\n", what, strerror(error))
+              : snprintf(line, sizeof line, "capstone-vexec: %s: failed\n", what);
+    if (n < 0) n = 0;
+    if (n > (int)sizeof line - 1) n = sizeof line - 1;
+    fd = open("/proc/self/fd/2", O_WRONLY | O_NONBLOCK | O_APPEND | O_NOCTTY | O_CLOEXEC);
+    if (fd >= 0 && write(fd, line, (size_t)n) < 0) { /* a full pipe: the line is dropped */ }
     _exit(125);
+}
+/* die_with for a failure that no system call reported: the line names no errno. */
+static _Noreturn void die(const char *what)
+{
+    die_with(what, 0);
+}
+/* die_with right after a system call failed: the line names its errno. */
+static _Noreturn void die_errno(const char *what)
+{
+    die_with(what, errno);
 }
 /* Whether the NUL-terminated section name at `at` in a string table of `len` bytes is `want`,
  * without reading past the table. */
@@ -1639,7 +1911,7 @@ static void thread_rollback(uint64_t thread, struct mapping *frame)
 {
     struct cv_thread_exit rollback = {.thread = TEST_ROLLBACK_FAILS() ? 0 : thread, .frame = frame->id};
     long rc;
-    if (ioctl(device, CV_THREAD_EXIT, &rollback)) die("thread rollback");
+    if (vm_call(CV_THREAD_EXIT, &rollback, "rollback")) die_errno("thread rollback");
     rc = rollback.released & CV_EXIT_FRAME ? release_range(frame) : -EBUSY;
     if (rc)
         fprintf(stderr, "CAPSTONE_VM_FRAME_RELEASE_FAILED frame=0x%lx error=%ld\n",
@@ -1747,7 +2019,6 @@ static int virtual_service(uint64_t tid, struct cv_step *step)
     } else if (step->args[7] == CV_SERVICE_THREAD_EXIT || step->args[7] == CV_SERVICE_PTHREAD_EXIT) {
         int posix = step->args[7] == CV_SERVICE_PTHREAD_EXIT;
         uintptr_t clear = posix ? step->args[0] : 0;
-        uint64_t word_arena = 0, word_offset = 0;
         if (tid == 0) return -1;
         /* The exit word (a0, its reference; clear is its cursor) is the program's. Since stage 4d
          * the module stores 0 into it, in CV_THREAD_EXIT, after the thread has stopped and the
@@ -1755,17 +2026,16 @@ static int virtual_service(uint64_t tid, struct cv_step *step)
          * ioctl, under vm_lock, so no thread can end the word's object, unmap or remap its page
          * between the check and the store (wire.h, cv_thread_exit). With root_grants the module
          * accepts the word only through a live reference that covers it, and in both modes it
-         * keeps the word out of every thread's frame and out of the frame and stack this exit
-         * releases. This launcher checks its own conditions first (word_precheck: one mapping, not
-         * the allocator's metadata, writable pages, no transport it writes itself) and then wakes
-         * the word's futex waiters through its own key (futex_wake_key), never through the
-         * program's address. musl's word is a global (the thread-list lock), never in the thread's
-         * stack. A word that fails is not written and the refusal is logged: the exit goes on,
-         * joiners through the launcher return at thread_finish as after every exit, and futex
-         * waiters on the word stay blocked, which is the program's bug. A word in the stack (the
-         * mapping this launcher found, with its whole extent, never the base and length the program
-         * names) makes the stack request a wrong one: the stack stays mapped and registered, and
-         * the word is written. */
+         * keeps the word out of every thread's frame. This launcher checks its own conditions first
+         * (word_precheck: one mapping, not the allocator's metadata, writable pages, no transport it
+         * writes itself) and then wakes the word's futex waiters through its own key, the word's
+         * address (futex_wake_key), never through Linux. musl's word is a global (the thread-list
+         * lock), never in the thread's stack. A word that fails is not written and the refusal is
+         * logged: the exit goes on, joiners through the launcher return at thread_finish as after
+         * every exit, and futex waiters on the word stay blocked, which is the program's bug. A word
+         * in the stack that this exit releases no longer keeps the stack (stage 4e): the stack is
+         * released, and the module drops the store without an error (CV_WORD_RELEASED), as Linux
+         * drops a clear_child_tid store into a stack that is gone. */
         struct mapping *frame = thread_frame_mapping(tid);
         struct mapping *stack = posix && step->args[1] ? map_find(step->args[1]) : NULL;
         const char *refused = clear ? word_precheck(clear, 1) : NULL;
@@ -1774,12 +2044,6 @@ static int virtual_service(uint64_t tid, struct cv_step *step)
                     (unsigned long long)tid, (unsigned long)clear, refused);
             clear = 0;
         }
-        if (clear) {
-            struct mapping *m = word_mapping(clear);
-            word_arena = m->id;
-            word_offset = clear - (uintptr_t)m->address;
-        }
-        int word_in_stack = clear && stack && span_overlaps(clear, sizeof(int), stack);
         TEST_DELAY("CAPSTONE_VM_TEST_EXIT_DELAY_MS");
         /* A worker that exits still attached gives its holds back here, so they keep none of its
          * mappings. */
@@ -1790,16 +2054,24 @@ static int virtual_service(uint64_t tid, struct cv_step *step)
          * the frame still holds it and ends the stack's reservation after the thread has stopped.
          * A refused stack stays mapped and registered, and the exit goes on. A stack that is the
          * thread's own frame is the exception: the module refuses it as a stack, and the frame's
-         * release still ends that mapping. */
+         * release still ends that mapping. The ioctl is repeated if a signal interrupts its wait for
+         * vm_lock (vm_call): that EINTR comes before any effect. */
         struct cv_thread_exit request = {.thread = tid, .word = clear != 0};
         if (frame && !mapping_gate(frame, 4096)) request.frame = frame->id;
-        if (stack && !word_in_stack && !mapping_gate(stack, step->args[2]))
+        if (stack && !mapping_gate(stack, step->args[2]))
             request.stack = stack->id;
-        if (ioctl(device, CV_THREAD_EXIT, &request))
-            return -1;
+        TEST_EINTR_ARM("exit");
+        int rc = vm_call(CV_THREAD_EXIT, &request, "exit");
+        TEST_EINTR_DISARM();
+        if (rc) return -1;
         if (clear && request.word_reason) {
-            fprintf(stderr, "CAPSTONE_VM_EXIT_WORD_REFUSED tid=%llu word=0x%lx reason=%s\n",
-                    (unsigned long long)tid, (unsigned long)clear, word_reason(request.word_reason));
+            if (request.word_reason != CV_WORD_RELEASED)
+                fprintf(stderr, "CAPSTONE_VM_EXIT_WORD_REFUSED tid=%llu word=0x%lx reason=%s\n",
+                        (unsigned long long)tid, (unsigned long)clear,
+                        word_reason(request.word_reason));
+            else
+                fprintf(stderr, "CAPSTONE_VM_EXIT_WORD_DROPPED tid=%llu word=0x%lx\n",
+                        (unsigned long long)tid, (unsigned long)clear);
             clear = 0;
         }
         if (!(request.released & CV_EXIT_FRAME) || release_range(frame))
@@ -1813,7 +2085,7 @@ static int virtual_service(uint64_t tid, struct cv_step *step)
         /* musl's join may retire the child's stack and TLS once the word reads 0. The virtual CPU
          * has stopped and its tagged frame is gone first, and the word's waiters wake through
          * this launcher's key, after the releases. */
-        if (clear) futex_wake_key(word_arena, word_offset, INT_MAX, FUTEX_BITSET_MATCH_ANY);
+        if (clear) futex_wake_key(clear, INT_MAX, FUTEX_BITSET_MATCH_ANY);
         /* A joiner through the launcher (CV_SERVICE_THREAD_JOIN) returns only after everything
          * above: the frame and the stack are released or kept, the exit word is stored or refused,
          * and its waiters are woken. */
@@ -1824,13 +2096,7 @@ static int virtual_service(uint64_t tid, struct cv_step *step)
         /* a0 the word's reference. A wait is the module's check, read and compare in one step and
          * a sleep on this launcher's own key (futex_wait); a wake reads and writes nothing and wakes
          * that key (futex_wake). Linux never sees the program's address. */
-        int command = (int)step->args[1] & FUTEX_CMD_MASK;
-        if (command == FUTEX_WAIT || command == FUTEX_WAIT_BITSET)
-            step->result = futex_wait(tid, step);
-        else if (command == FUTEX_WAKE || command == FUTEX_WAKE_BITSET)
-            step->result = futex_wake(step);
-        else
-            step->result = -ENOSYS;
+        step->result = futex_operation(tid, step);
     } else if (step->args[7] == CV_SERVICE_THREAD_JOIN) {
         /* The child must acquire the same transport lock to publish its
          * exit.  Do not wait while holding it, or join would deadlock. */
@@ -1935,7 +2201,7 @@ static int virtual_service(uint64_t tid, struct cv_step *step)
                                 " service10_thread_delegate=%lu service11_thread_self=%lu"
                                 " service12_nodes=%lu service13_unassigned=%lu"
                                 " service14_transport_detach=%lu service15_mapping_check=%lu"
-                                " service16_advise=%lu service_other=%lu\n",
+                                " service16_advise=%lu service17_refill=%lu service_other=%lu\n",
                     step_count(&step_kinds[1]), step_count(&step_kinds[3]), step_count(&step_kinds[4]),
                     step_count(&step_kinds[0]) + step_count(&step_kinds[2]) + step_count(&step_kinds[5]) +
                         step_count(&step_kinds[6]) + step_count(&step_kinds[7]),
@@ -1947,7 +2213,8 @@ static int virtual_service(uint64_t tid, struct cv_step *step)
                     step_count(&step_services[10]), step_count(&step_services[11]),
                     step_count(&step_services[12]), step_count(&step_services[13]),
                     step_count(&step_services[14]), step_count(&step_services[15]),
-                    step_count(&step_services[16]), step_count(&step_services[STEP_SERVICE_COUNT]));
+                    step_count(&step_services[16]), step_count(&step_services[17]),
+                    step_count(&step_services[STEP_SERVICE_COUNT]));
                 /* The thread table's census at the program's exit: count is the number of entries
                  * in use, the main thread's included, so 1 once every other thread has exited and
                  * its last joiner (if any) has left. An entry freed twice shows as 0 or less. */
@@ -2001,6 +2268,9 @@ static int virtual_service(uint64_t tid, struct cv_step *step)
         step->result = protect_range(tid, step->args[0], step->args[1], step->args[2]);
     } else if (step->args[7] == CV_SERVICE_ADVISE) {
         step->result = advise_range(tid, step->args[0], step->args[1], (int)step->args[2]);
+    } else if (step->args[7] == CV_SERVICE_REFILL) {
+        step->result = refill_range(tid, step->args[0], step->args[1], (unsigned)step->args[2],
+                                    step->args[3]);
     } else if (step->args[7] == CV_SERVICE_WAIT) {
         /* The heap's contended atomic mutex must let its owner run, including
          * the owner's mapping service. Never yield with the wire lock held. */
@@ -2021,7 +2291,7 @@ static int virtual_service_loop(uint64_t tid)
     struct cv_step step = {.thread = tid};
     for (;;) {
         while (ioctl(device, CV_STEP, &step))
-            if (errno != EINTR && errno != EAGAIN) die("step");
+            if (errno != EINTR && errno != EAGAIN) die_errno("step");
         __atomic_fetch_add(&step_kinds[step.kind < 8 ? step.kind : 7], 1, __ATOMIC_RELAXED);
         if (step.kind == 3)
             __atomic_fetch_add(&step_services[step.args[7] < STEP_SERVICE_COUNT
@@ -2126,10 +2396,10 @@ int main(int argc, char **argv)
     if (fd < 0) { perror("capstone-vexec: image"); return errno == ENOENT ? 127 : 126; }
     image_fd = fd;
     if (spawner.socket < 0) { int error = capstone_spawner_start(&spawner);
-        if (error) { errno = error; die("spawner"); } }
+        if (error) { errno = error; die_errno("spawner"); } }
     host.spawner = &spawner;
     device = open("/dev/capstone-vm", O_RDWR | O_CLOEXEC);
-    if (device < 0) die("open");
+    if (device < 0) die_errno("open");
     if (image_denied(&fd, &desc)) { perror("capstone-vexec: image"); cleanup(); return 126; }
     void *image; size_t image_bytes, image_rx, stack_bytes; uintptr_t entry;
     if (load(fd, &desc, &image, &image_bytes, &image_rx, &entry, &stack_bytes)) {
@@ -2139,14 +2409,20 @@ int main(int argc, char **argv)
     /* Option (iii): no exact-bounds profile bit is required. Bounds are representable by
      * construction -- the allocator's geometry keeps every rounded bound inside its own slot --
      * so the launcher runs on the default profile. The bit may still be set; it is not read. */
-    if (grant(image, image_bytes, 3, 7, entry, 0, 0, image_rx)) { munmap(image, image_bytes); die("image grant"); }
+    if (grant(image, image_bytes, 3, 7, entry, 0, 0, image_rx)) {
+        int error = errno;
+        munmap(image, image_bytes);
+        errno = error;
+        die_errno("image grant");
+    }
     void *stack = reserve(stack_bytes);
     domain_stack = stack; domain_stack_bytes = stack_bytes;
     meta = reserve(CAPSTONE_DELEGATE_META_BYTES);
     size_t exchange_bytes = rounded(desc.exchange_bytes);
     void *exchange = exchange_bytes ? reserve(exchange_bytes) : NULL;
     void *startup = reserve(CAPSTONE_LAUNCH_BYTES);
-    if (!stack || !meta || !exchange || !startup) die("allocate startup");
+    if (!exchange_bytes) die("the image names no exchange region");
+    if (!stack || !meta || !exchange || !startup) die_errno("allocate startup");
     char *cwd = getcwd(NULL, 0);
     struct timespec rt, mt;
     clock_gettime(CLOCK_REALTIME, &rt); clock_gettime(CLOCK_MONOTONIC, &mt);
@@ -2157,25 +2433,26 @@ int main(int argc, char **argv)
     int error = cwd ? capstone_launch_pack(startup, CAPSTONE_LAUNCH_BYTES,
         argc - (app_args ? 4 : binfmt ? 2 : 1), argv + (app_args ? 4 : binfmt ? 2 : 1), environ, cwd, stdio_mask, &task) : ENOMEM;
     free(cwd);
-    if (error) { errno = error; die("startup"); }
+    if (error) { errno = error; die_errno("startup"); }
     if (grant(stack, stack_bytes, 2, 6, (uintptr_t)stack + stack_bytes, 0, 0, 0) ||
         grant(meta, CAPSTONE_DELEGATE_META_BYTES, 10, 6, (uintptr_t)meta, 0, 0, 0) ||
         grant(exchange, exchange_bytes, 11, 6, (uintptr_t)exchange, 0, 0, 0) ||
-        grant(startup, CAPSTONE_LAUNCH_BYTES, 12, 4, (uintptr_t)startup, 0, 0, 0)) die("grant");
+        grant(startup, CAPSTONE_LAUNCH_BYTES, 12, 4, (uintptr_t)startup, 0, 0, 0)) die_errno("grant");
     if (desc.v1.heap_bytes) {
         size_t bytes = rounded(desc.v1.heap_bytes);
-        void *region = bytes ? reserve(bytes) : NULL;
+        if (!bytes) die("the nested allocator's region is too large");
+        void *region = reserve(bytes);
         if (!region || grant(region, bytes, 13, 6, (uintptr_t)region, 1, 0, 0))
-            die("nested allocator grant");
+            die_errno("nested allocator grant");
     }
     host.exchange = exchange; host.exchange_bytes = exchange_bytes;
     exchange_admitted = calloc(exchange_bytes / 4096, 1);
-    if (!exchange_admitted) die("exchange admission cache");
+    if (!exchange_admitted) die_errno("exchange admission cache");
     host.prepare_write = exchange_prepare_write;
     host.private_fds[host.private_count++] = device;
     capstone_signals_settle_libc();
     capstone_signals_init(&host.signals, (void *)((char *)meta + CAPSTONE_SIGNAL_OFFSET));
-    if ((error = capstone_delegate_seccomp())) { errno = error; die("seccomp"); }
+    if ((error = capstone_delegate_seccomp())) { errno = error; die_errno("seccomp"); }
     for (int fd = 0; fd < 3; ++fd) if (!(stdio_mask & (1u << fd))) close(fd);
     launch_ns = now_ns() - start_ns;
     return virtual_service_loop(0);

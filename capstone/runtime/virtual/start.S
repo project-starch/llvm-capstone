@@ -138,6 +138,11 @@ __capstone_vm_advise:
     li a7, CV_SERVICE_ADVISE
     ecall
     ret
+.global __capstone_vm_refill
+__capstone_vm_refill:
+    li a7, CV_SERVICE_REFILL
+    ecall
+    ret
 .section .gct,"a",@progbits
 .balign 16
 .global __capstone_gct_start

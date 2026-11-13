@@ -238,21 +238,27 @@ pair. The physical profile keeps the pair until its bitstream has Q-04 (b).
 `vm-abi.h` is shared by startup assembly, libc and the trusted launcher;
 `vm.h` is the private libc grant interface. MAP takes bytes, alignment, Linux
 protection, maximum capability rights and a mapping kind (heap, application,
-metadata). It returns a consumed linear grant or a scalar negative errno.
-UNMAP removes an exact whole visible mapping. PROTECT operates on a page range
-inside one registered payload mapping. WAIT yields to Linux without holding
+metadata). It returns a consumed linear grant or a scalar negative errno;
+`PROT_EXEC` is refused (only the image's text is executable). UNMAP of an exact
+whole visible mapping ends it; since stage 4e UNMAP of any other page range
+inside one mapping is a partial munmap, which removes those pages and ends no
+lifetime (below). PROTECT operates on a page range inside one registered
+payload mapping and refuses `PROT_EXEC` and removed pages. REFILL (17, stage 4e)
+is `MAP_FIXED` inside a mapping and `mremap`'s growth in place. WAIT yields to Linux without holding
 the transport lock. Metadata mappings are not exposed to public protection or
 retirement services. Images carry `CPONVVM7` (two load segments, see
 `link.ld`); the launcher accepts no other version. MAPPING_CHECK answers,
-without changing anything, whether an unmap of a whole mapping would be accepted
-and the mapping is read-write; `mremap` asks it before it copies. The remap
+without changing anything, whether an unmap of a page range would be accepted
+and every page of it is mapped and read-write; `mremap` asks it before it
+copies. The remap
 transaction of the first design (service 13) is gone. ADVISE (16, stage 4c)
 serves `madvise(MADV_DONTNEED)` and `MADV_FREE` on a page range that PROTECT
 could name, and the range reads zero afterwards: the pinned module overwrites
 every page of it with zeros, data and tags, a `PROT_NONE` page included (the
 pages it holds through its pin, which it keeps, and since stage 4d any other
-page with contents in place through the page table); unpinned, Linux gives the
-range back. Other advice answers ENOSYS in the libc, as before.
+page with contents in place through the page table; since stage 4e it checks
+every page before it zeroes any, so a refusal changes nothing); unpinned, Linux
+gives the range back. Other advice answers ENOSYS in the libc, as before.
 Ordinary malloc/free execute locally.
 
 Since stage 4c the launcher and the module read or write the program's memory,
@@ -277,13 +283,20 @@ end the lifetime, unmap the page or map another page there in between. The exit
 word is checked and stored inside `CV_THREAD_EXIT`, after the thread's frame
 and stack releases are committed; the module stores through the program's
 page table with `put_user`. A FUTEX wait is `CV_WORD`: check, read and compare
-in one step, then a sleep on the launcher's key (the arena id of the word's
-mapping, never reused, and the offset) on a private futex word of the
-launcher's own. A FUTEX wake neither reads nor writes the word, so its integer
-address is enough; it must be an aligned int in a registered mapping, and it
-wakes only waiters of the mapping that holds that address now. The waiter
-enters the launcher's queue in the same `service_lock` hold as the compare, so
-no wake is lost. The audit of every such path is in
+in one step (the read admits no page, stage 4e), then a sleep keyed by the
+address the module checked, as Linux keys a private futex, on a private futex
+word of the launcher's own. When a range stops being mapped (an unmap, a park,
+a thread's stack or frame at its exit, a partial munmap) the launcher wakes
+every waiter in it; the libc reads the word again through its own reference,
+which faults if it is stale (stage 4d keyed waiters by the arena id, which a
+revive changes). A FUTEX wake neither reads nor writes the word, so its integer
+address is enough; it must be an aligned int in a registered mapping, in a page
+that is not removed. The waiter enters the launcher's queue in the same
+`service_lock` hold as the compare, so no wake is lost. `CV_WORD` and
+`CV_THREAD_EXIT` are repeated when a signal interrupts the module's wait for
+`vm_lock`, which comes before any effect. FUTEX_CLOCK_REALTIME without
+FUTEX_WAIT_BITSET and unknown operations answer ENOSYS, and a relative timeout
+that overflows the clock waits without one. The audit of every such path is in
 `docs/plans/2026-11-12-address-space-root-adapter.md`, stages 4c and 4d. Application ABI-v2's
 ordinary delegated system-service format remains independent of this marker.
 
@@ -341,10 +354,11 @@ Its negative controls are the module's `test_revive_skip_clear`, `test_revive_ke
 control must fail the check it names. The pinned pages of pooled arenas stay resident until eviction
 or exit: peak pinned pages rise by the pool's resident part, and the runtime gate's `linux_pages_released`
 oracle (peak minus final pinned pages above 300) tolerates a cap of about 256K but not 1M. A futex
-waiter started on a mapping that is then parked and revived at the same address sleeps on the old
-mapping's key (stage 4d): it read the word before the park, and a wake of the revived mapping does not
-reach it. Until stage 4c Linux read the word after the service lock dropped, so such a waiter could
-compare the revived mapping's word instead.
+waiter started on a mapping that is then parked is woken at the park (stage 4e): it read the word
+before the park, and a wake of the mapping revived at the same address finds nobody. In stage 4d it
+slept on the old arena id until its timeout. Until stage 4c Linux read the word after the service
+lock dropped, so such a waiter could compare the revived mapping's word instead. A mapping with
+removed pages is never pooled.
 
 ## Floating point
 
@@ -653,23 +667,32 @@ the attachment is refused (`CAPSTONE_VM_TRANSPORT_REFUSED` with the reason),
 and the launcher ends the program. The hold ends only
 with the worker's own detach (`CV_SERVICE_TRANSPORT_DETACH`, which the SDK
 issues before it unmaps the blocks) or its exit; a later delegate service
-attaches again, `CV_TOUCH` included. A thread's exit word may not lie in the
-stack or frame mapping its exit gives back, since the word is stored after
-those releases, nor in any other thread's frame, in the allocator's metadata or
-in a transport the launcher writes itself. A refused word is not written
-(`CAPSTONE_VM_EXIT_WORD_REFUSED` with the reason), the exit completes, and
-futex waiters on that word stay blocked, which is the program's bug. The error
-exit (`die`) prints one line and ends the process at once with `_exit(125)`: it
-frees and closes nothing, since another worker may be inside a delegated
-service with the service lock released, and Linux releases the mappings after
-exit_group has stopped every worker. A failed create's rollback that the
+attaches again, `CV_TOUCH` included. A thread's exit word may not lie in a
+thread's frame, in the allocator's metadata or in a transport the launcher
+writes itself. A refused word is not written (`CAPSTONE_VM_EXIT_WORD_REFUSED`
+with the reason), the exit completes, and futex waiters on that word stay
+blocked, which is the program's bug. A word in the stack that the exit releases
+does not keep the stack (stage 4e): the stack is released and the store dropped
+without an error (`CAPSTONE_VM_EXIT_WORD_DROPPED`), as Linux drops a
+`clear_child_tid` store into an unmapped stack. The error exit (`die`) writes
+one line, best effort, and ends the process at once with `_exit(125)`: the line
+goes through a non-blocking open of the same file (`/proc/self/fd/2`), so a full
+stderr pipe drops it instead of holding the exit, and it names an errno only
+where a system call just failed. It frees and closes nothing, since another
+worker may be inside a delegated service with the service lock released, and
+Linux releases the mappings after exit_group has stopped every worker. A failed create's rollback that the
 module refuses ends the program the same way, so the module and the launcher
 never disagree about which thread ids were issued.
 
 The launcher built with `-DCAPSTONE_VM_TEST_HOOKS` (never the default build)
 has delays and failures, each switched on by an environment variable
 (`exec.c`, `CAPSTONE_VM_TEST_*`), that force the interleavings of the stage 4d
-cases in `root-contract.c` (`run-root-grants.py --launcher-hooks`).
+cases in `root-contract.c` (`run-root-grants.py --launcher-hooks`), and since
+stage 4e a signal that interrupts the module's wait for `vm_lock`. A module
+built with `CV_TEST_HOOKS=1` holds `vm_lock` in `CV_STATS` for `test_hold_ms`
+and refuses a chosen page of a madvise (`test_advise_refuse`)
+(`--module-hooks`). The runner checks that the default launcher and module hold
+none of these strings.
 
 The launcher validates and loads an image without copying the file first. It
 opens the image read-only and asks the module (`CV_IMAGE`) to deny writers to
@@ -864,17 +887,26 @@ records grow through its metadata allocator; they have no fixed object-count lim
 Fork, shared tagged mappings, file-backed
 mmap, partial unmapping, swap, migration, application register editing by
 signals need further contracts. The qualified pthread subset is described
-above. Address hints/fixed mappings remain unsupported. Public application
-`mremap` is provided in its `MREMAP_MAYMOVE` form only, as map-copy-unmap: the
-mapping check refuses a wrong length or reference before anything is copied, only
-a mapping that is read-write over its whole length moves (`ENOTSUP` otherwise),
-the old mapping is retired, so stale pointers into it fault, and the new one is
-read-write. A write of another thread to the old mapping during the copy may be
-lost, as for realloc. In-place resizing and `MREMAP_FIXED` stay `ENOSYS`
-(`mremap-contract.c`). mallocng's large realloc does the same map, copy and
-unmap through its own group mappings (`__heap_remapping`). Partial unmap
-requires a separate lifetime contract: a live wide capability must not acquire
-a replacement mapping placed into its former hole. Anonymous
+above. Address hints remain unsupported. A partial munmap (stage 4e) removes a
+page range of one mapping through the mapping's own reference (bounds over the
+whole mapping, any cursor): the pages go and a `PROT_NONE` placeholder keeps
+their addresses, so no other mapping lands in the hole while the mapping lives,
+and the module never admits a removed page; no lifetime ends, and a live
+reference into the hole page-faults. The last page that is still mapped ends
+the mapping (`CREVOKE` of M), as a whole-mapping munmap does; unmapping a hole
+again changes nothing. `MAP_FIXED` works only inside a mapping, through its
+reference and while no object is derived below it (root grants; `EOPNOTSUPP`
+without), and refills the range with zero pages. Public application `mremap`
+shrinks in place (a partial munmap of the tail), grows in place into the
+mapping's own removed tail, and otherwise moves with `MREMAP_MAYMOVE` as
+map-copy-unmap (without it: `ENOMEM`): the mapping check refuses a range
+beyond the mapping or a wrong reference before anything is copied, only a range
+that is read-write over its whole length moves (`ENOTSUP` otherwise), the old
+range is unmapped through the reference, so a stale pointer into an ended
+mapping faults, and the new one is read-write. A write of another thread to the
+old range during the copy may be lost, as for realloc. `MREMAP_FIXED` stays
+`ENOSYS` (`mremap-contract.c`). mallocng's large realloc does the same map,
+copy and unmap through its own group mappings (`__heap_remapping`). Anonymous
 `MAP_SHARED` and SysV segments are process-local compatibility for nested
 ports, since there is no fork; every other mapping form fails explicitly.
 

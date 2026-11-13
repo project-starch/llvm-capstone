@@ -1,9 +1,8 @@
 # Address-space root: adapter and libc plan
 
-Status: plan of 2026-11-12 on the branch `address-space-root`. Stages 0 to 4d
-are done (see each stage); stage 4e (partial `munmap` as a page operation) is
-next, then block A (the format alignment) and stage 5, in a reduced form until
-the project lead decides on the old path.
+Status: plan of 2026-11-12 on the branch `address-space-root`. Stages 0 to 4e
+are done (see each stage); block A (the format alignment) is next, then stage 5,
+in a reduced form until the project lead decides on the old path.
 Design: [the kernel as the outermost allocator](../design/virtual-capstone/address-space-root.md).
 
 ## What the code does today
@@ -383,17 +382,144 @@ in the last stage, when every feature is in.
    `mprotect` check, the a0 cursor at create) and the launcher controls no-hold and
    writable-interval still fail where expected. Stage 4c's launcher control
    exit-word-4b patches `exit_word_refusal`, which is gone, and was not rebuilt.
-4e. **Partial munmap as a page operation** (next). A partial `munmap` inside a
-   mapping block removes pages and leaves a `PROT_NONE` placeholder; no lifetime
-   ends, and no other mapping gets addresses inside the block while M lives. M
-   ends with `CREVOKE` when the last logically mapped page goes, when one call
-   names the whole block, or at exit. Exact per-page accounting on the page
-   state of stage 4c: `PROT_NONE` and untouched pages count as mapped, and a
-   repeated unmap of a hole is idempotent. `MAP_FIXED` into a hole only under
-   today's `MAP_FIXED` rule (an accepted reference, no object derived below P).
-   `mremap` shrinks in place and grows in place within M. The module's frame
-   set needs deletion (it is insert-only today, `frame_insert`), and the module
-   clears the tags of each removed page range before it unpins the pages.
+4e. **Follow-ups of stage 4d, and partial munmap as a page operation. Done**
+   (2026-11-13, uncommitted at the time of the runs). Rule, decided after review: a
+   `munmap(p, len)` whose p passes conditions 1 to 3 and covers the whole block
+   (any cursor, as after pointer arithmetic; a narrowed reference stays refused)
+   may name any page range inside the block. The kernel removes those pages and
+   keeps a placeholder (`PROT_NONE`, `MAP_NORESERVE`, mapped `MAP_FIXED` over the
+   range); no lifetime ends, and no other mapping receives addresses inside the
+   block while M lives. M ends with `CREVOKE` when the last logically mapped page
+   goes, when one call names the whole block, or at exit. Logically mapped: not
+   removed; `PROT_NONE` pages and untouched pages count. `MAP_FIXED` into the block
+   only under the `MAP_FIXED` rule (an accepted reference, no object derived below
+   P). `mremap` shrinks in place, grows in place into the block's own removed tail
+   within its visible length, otherwise moves with `MREMAP_MAYMOVE` and answers
+   `ENOMEM` without it.
+
+   Follow-ups of the stage 4d review:
+   - `CV_WORD` and `CV_THREAD_EXIT` (and the rollback's `CV_THREAD_EXIT`) are
+     repeated on `EINTR` (exec.c `vm_call`): the module's
+     `mutex_lock_interruptible(&vm_lock)` is its first step, so the EINTR comes
+     before any effect. Before, a futex wait answered EFAULT and an exit ended the
+     launcher.
+   - `word_access` admits the word's page (`touch`) only for a store; a futex read
+     admits nothing.
+   - Futex waiters are keyed by the checked address (as Linux keys a private
+     futex), no longer by (arena id, offset), which a revive changed. Every waiter in
+     a range that stops being mapped is woken (`futex_wake_range`: `release_range`,
+     the park in `mc_pool`, a partial munmap), answers 0, and the libc re-reads the
+     word through its own reference. `futex_wake` keeps EFAULT for an address in no
+     registered mapping, and answers it for a removed page too.
+   - The exiting thread's stack is always named and released; the launcher's
+     `word_in_stack` is gone. A word in the released stack is not stored and is no
+     error (`CV_WORD_RELEASED`, logged as `CAPSTONE_VM_EXIT_WORD_DROPPED`).
+   - Pinned `madvise` checks every page (held and unheld) before it zeroes any page
+     (`walk_unheld` with `CV_WALK_CHECK`, then `CV_WALK_CLEAR`); a migration entry
+     makes the walk wait (1 ms) and start again, up to 10 s; each zeroed folio is
+     marked dirty.
+   - `die()` writes its line through a non-blocking open of `/proc/self/fd/2` and
+     drops it when the pipe is full, then `_exit(125)`; `die_errno` names an errno
+     only after a failed system call. A futex relative timeout whose deadline
+     overflows waits without one; `FUTEX_CLOCK_REALTIME` without `FUTEX_WAIT_BITSET`
+     and unknown operations or flags answer ENOSYS (exec.c `futex_operation`). The
+     runner checks that the default launcher and module hold no test-hook string, and
+     that the hooks builds do (positive control).
+
+   Partial munmap, module (capstone_vm.c, section "Stage 4e: page operations"):
+   - `CV_PAGES` (ioctl 37, `struct cv_pages {thread, id, op, commit, ended}`) with
+     `CV_PAGES_REMOVE`, `CV_PAGES_FIXED`, `CV_PAGES_GROW`. A check call (changes
+     nothing, or ends M when the removal takes the last mapped pages: `ended`, then
+     retire as `CV_UNMAP` does), Linux's change of the range by the launcher, a
+     commit call (no second reference check: the launcher holds `service_lock`
+     across the three steps).
+   - Per arena: `removed` (a bit per page of `pages[]`, allocated at the first
+     removal, freed when a refill maps every page again), `mapped` (logically mapped
+     pages of the visible length), `frame_tombs`. The commit clears the tags of each
+     held page in the range (`clear_page_tags`), deletes its frame from the frame set
+     (`frame_delete`, tombstones, rebuilt beyond count/2 deleted entries), unpins it
+     and nulls `pages[]`. A removed page is never admitted (`resolve` refuses it with
+     "resolve refused at removed", `pin_ahead`, `pin_resident`, `admit_page`),
+     `word_check`, `word_access`, `CV_PROTECT`, `CV_ADVISE` and `CV_ATTACH` refuse
+     it, `park_prepare` refuses an arena with removed pages. `retire_commit` works on
+     an arena with holes (NULL pages are skipped).
+   - `request_operand` takes a call kind: `CV_CALL_WHOLE`, `CV_CALL_RANGE`,
+     `CV_CALL_BLOCK` (a page range, bounds over the whole visible length). The
+     mapping check of mremap is a block call now.
+   - `CV_PAGES_FIXED` refuses an object below P: P's record's successor in the
+     preorder list lies deeper (`ref_has_descendant`; reason "objects derived below
+     the mapping"). Without root grants it answers EOPNOTSUPP.
+   - The image: `CV_PROTECT` and `CV_UNMAP` refuse an arena with a read+execute
+     prefix; `add()` refuses a VMA with `VM_EXEC` for every arena but the image's
+     text; `CV_PROTECT` and `CV_PAGES` refuse `PROT_EXEC`.
+   - Program blocks have no frame set by default (the heap's linear request shape was
+     never frame-checked), so `frame_delete` matters only for arenas with one; the
+     parameter `block_frames=1` gives every arena a frame set, the arm on which the
+     frame-reuse test and its control run.
+   - Diagnostics under `diag_admit`: `remove arena ... page N pfn X tags T after A`
+     (the tagged granules before and after the clearing, read with LDC and LCC, root
+     grants only). Test hooks (`CV_TEST_HOOKS=1`): `test_hold_ms` (CV_STATS holds
+     vm_lock), `test_advise_refuse`.
+
+   Launcher (exec.c): a call that names the whole block takes the old path
+   (`CV_UNMAP`, pool or retire); any other range goes to `remove_range` (range inside
+   one heap block, `CV_PAGES` check, placeholder, commit, page state `PAGE_REMOVED`,
+   futex wake). `refill_range` serves service 17 (`CV_SERVICE_REFILL`). The page
+   state's removed value has no right, so `writable_span`, `page_all` and the transport
+   checks refuse it; `word_mapping` answers NULL for a removed page; `mprotect` and
+   `madvise` of a removed page answer ENOMEM; `mc_eligible` excludes blocks with
+   removed pages; `mmap`, `mprotect` and `MAP_FIXED` refuse `PROT_EXEC` (EACCES).
+   `map_floor` and `map_find` need no change: a block keeps its registration and its
+   extent over its holes, and the lookups that ask whether a page is mapped consult
+   the page state.
+
+   libc (mapping.c): `mmap` with `MAP_FIXED` calls the refill service with the
+   reference; `mremap` shrinks through a partial munmap, grows in place through the
+   refill service (`CV_PAGES_GROW`) and moves only when that answers ENOMEM and
+   `MREMAP_MAYMOVE` is set; the mapping check now takes a page range.
+
+   ABI: ioctl 37 `CV_PAGES` and service 17 `CV_SERVICE_REFILL` are new;
+   `CV_WORD_RELEASED` (9) is new and `CV_WORD_REASONS` is 10. Changed answers:
+   `CV_SERVICE_UNMAP` of part of a block succeeds; `CV_SERVICE_MAPPING_CHECK` takes
+   any page range of a block; `CV_SERVICE_MAP` and `CV_SERVICE_PROTECT` refuse
+   `PROT_EXEC`. The other ioctl structures keep their layout.
+
+   Unit test: root-contract.c, new modes `futex-readonly`, `futex-park`, `futex-end`,
+   `futex-flags`, `die-stderr`, `protect-exec`, `partial-hole`, `partial-all`,
+   `partial-narrow`, `partial-fixed`, `partial-mremap`, the hook modes `eintr-word`,
+   `eintr-exit` (hooks launcher and hooks module) and `advise-refuse` (hooks module);
+   changed: `refuse` (a range beyond the block instead of a partial munmap), `mremap`
+   (a range beyond the block; shrink in place), `futex-race` and `futex-remap` (the
+   unmap wakes the waiter), `exit-word` (a word in the released stack).
+   `mremap-contract.c` follows the new mremap (not run in this stage).
+
+   Runs on QEMU (`~/asr-work/stage4e` on the build host), two batches on the final
+   images with equal counts (e2, e3): root_grants=1 559 of 559 pinned and 557 of 557
+   unpinned, root_grants=0 553 of 553 (the 31 modes of stage 4d with the four changed
+   expectations, and the eleven new modes); the hook modes (hooks launcher and hooks
+   module) 88 of 88 pinned and 78 of 78 unpinned with root grants (advise-refuse is
+   pinned only) and 87 of 87 without; the pthread gate 29 of 29 with and without root
+   grants; the hosted contract 94 of 94; mapcache park and revive (3 parks, 2 revives,
+   no refusal); the launcher without its length check 98 of 98; the launcher without
+   its range check (partial-narrow: the module refuses the range beyond the block) 24
+   of 24; block_frames=1 on the partial modes 98 of 98 pinned and 96 of 96 unpinned,
+   where the refill was admitted on a frame the removal had given back (two frames
+   reused in each batch). Witnesses: each interrupted ioctl was repeated 17 times; the
+   die with a full stderr pipe ended with 125 within 1 s; the removal reported one
+   tagged granule in the removed page before its clearing and none after.
+   Controls, each a one-change copy of the module (deleted after the runs, hashes in
+   STATUS): with the frame set insert-only and block_frames=1, the first access after
+   the refill is refused ("pfn ... already backs another page of the arena") and the
+   program faults with 13; with a count that ignores the removed state, the third
+   repeated munmap of the same hole ends the block and the live reference faults with
+   25 (partial-all, and partial-hole at its repeats); without the tag clearing, the
+   census reports the tag still present after the removal, while the program's read
+   after the refill still finds the stored reference untagged, because Linux zeroes
+   every page it maps fresh (rule 1). That control therefore cannot fire through the
+   program, only through the census. A first batch (e1) found a test race in
+   futex-remap (the waiter, now woken by the unmap, exited and released its frame,
+   whose address the launcher then reused for the remap) and runner reads of kernel
+   lines printed after a mode's exit; both fixed before e2.
 A. **Format alignment: no capability rights** (block A, after stage 4e; decided
    2026-11-13). Sublet checks bounds and lifetime only, and the page table
    checks mapping and rights. Remove capability rights from the module and the

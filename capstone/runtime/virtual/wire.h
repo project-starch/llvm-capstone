@@ -65,7 +65,9 @@ struct cv_thread_control {
  * the thread asks to unmap at its exit (CV_SERVICE_PTHREAD_EXIT, a1 the
  * stack's reference, a2 its length). The launcher names only a registered heap
  * mapping, not the allocator's metadata, held by no worker, of the length the
- * call names, that does not hold the exit word (a0) the module will write. The
+ * call names; since stage 4e also one that holds the exit word (a0), whose
+ * store the module then drops (CV_WORD_RELEASED), as Linux drops a
+ * clear_child_tid store into a stack that is gone. The
  * module refuses a stack that is the thread's own frame, and releases that
  * arena once, as the frame. With root_grants the stack is a request of
  * the program: the module checks the reference in a1 before it clears the
@@ -168,14 +170,17 @@ struct cv_unmap {
 #define CV_UNMAP_NO_POOL 2   /* retired: this module does not pool (unpinned) */
 #define CV_UNMAP _IOWR('V', 32, struct cv_unmap)
 /* A program's mprotect (CV_SERVICE_PROTECT), asked before the launcher changes the protection,
- * or a program's question before mremap moves a mapping (CV_SERVICE_MAPPING_CHECK): thread is the
- * caller, paused at the service (the module reads which one from its a7), id the arena the
- * launcher resolved from the cursor of the reference in a0. Without root_grants the module ignores
- * thread and accepts. With root_grants the reference is the authority, as for munmap: the module
- * accepts only a live reference whose record is a child of the mapping's reservation record and
- * whose bounds cover [a0's cursor, + a1). For the mapping check the call must name the whole
- * visible length, as for munmap; an mprotect may name any page range inside it. It ends nothing.
- * A refusal is EINVAL, and the launcher then changes nothing. */
+ * or a program's question before mremap moves a page range (CV_SERVICE_MAPPING_CHECK): thread is
+ * the caller, paused at the service (the module reads which one from its a7), id the arena the
+ * launcher resolved from the cursor of the reference in a0. In both modes an mprotect that asks for
+ * PROT_EXEC (a2) is refused with EACCES (only the image's text is executable), and a range that
+ * holds a page a partial munmap removed with ENOMEM (mprotect) or EFAULT (the mapping check).
+ * Without root_grants the module accepts the rest. With root_grants the reference is the authority,
+ * as for munmap: the module accepts only a live reference whose record is a child of the mapping's
+ * reservation record and whose bounds cover [a0's cursor, + a1) (mprotect, any page range inside
+ * the visible length) or the whole visible length, whatever its cursor (the mapping check, any page
+ * range inside it: stage 4e). It ends nothing. A refusal of the reference is EINVAL, and the
+ * launcher then changes nothing. */
 struct cv_protect {
     __u64 thread, id;
 };
@@ -188,11 +193,13 @@ struct cv_protect {
  * thread), admits its page (CV_TOUCH's rule) and reads it through the program's mapping, so the
  * page table decides the read right, all under vm_lock, which also excludes the program's
  * execution: no thread can end the word's lifetime, unmap or remap its page between the check and
- * the read. reason (out): CV_WORD_ACCEPTED, or the reason of the refusal. equal (out): 1 if the
- * word read holds the value. arena and offset (out, when accepted): the arena id of the mapping that
- * holds the word (never reused) and the word's offset in it, the key the launcher's waiter sleeps
- * on; Linux never sees the program's address. The ioctl itself fails only for a caller that is not
- * paused at the service (EINVAL). Changes no program memory. */
+ * the read. Since stage 4e the read admits no page: a page never touched reads Linux's zero page, and
+ * a read-only page compares as any other. reason (out): CV_WORD_ACCEPTED, or the reason of the
+ * refusal. equal (out): 1 if the word read holds the value. arena and offset (out, when accepted):
+ * the arena id of the mapping that holds the word and the word's offset in it (stage 4d's key; since
+ * stage 4e the launcher keys its waiter by the checked address, as Linux does, and wakes the waiters
+ * of every range that stops being mapped). Linux never sees the program's address. The ioctl itself
+ * fails only for a caller that is not paused at the service (EINVAL). Changes no program memory. */
 struct cv_word {
     __u64 thread, reason, equal, arena, offset;
 };
@@ -205,7 +212,8 @@ struct cv_word {
 #define CV_WORD_IN_FRAME 6
 #define CV_WORD_NOT_ADMITTED 7      /* the module cannot admit the word's page (CV_TOUCH's rule) */
 #define CV_WORD_NO_ACCESS 8         /* the page table refuses the read or the write */
-#define CV_WORD_REASONS 9
+#define CV_WORD_RELEASED 9          /* an exit word in the stack this exit released: dropped, no error */
+#define CV_WORD_REASONS 10
 #define CV_WORD _IOWR('V', 34, struct cv_word)
 /* A worker's attachment of its own transport (CV_SERVICE_THREAD_DELEGATE, stage 4c): thread is the
  * caller, paused at the service; meta and exchange are the arenas the launcher resolved from the
@@ -232,6 +240,35 @@ struct cv_advise {
     __u64 thread, id, zeroed;
 };
 #define CV_ADVISE _IOWR('V', 36, struct cv_advise)
+/* Stage 4e: a page operation inside one mapping block, which ends no lifetime: a partial munmap
+ * (CV_PAGES_REMOVE, the caller paused at CV_SERVICE_UNMAP), MAP_FIXED inside the block
+ * (CV_PAGES_FIXED) and mremap's growth in place (CV_PAGES_GROW), both at CV_SERVICE_REFILL with the
+ * operation in a3. thread is the caller, id the arena the launcher resolved; the range is
+ * [a0's cursor, + a1), read from the caller's saved registers. Two calls with service_lock held
+ * across both, and Linux's change of the range between them:
+ *   commit 0, the check: the range is a nonempty page range inside the visible length, the arena
+ *     holds no thread's frame (EBUSY), a refill asks for no PROT_EXEC (a2, EACCES), and with
+ *     root_grants a0 holds the block's own reference: live, a child of M, its bounds covering the
+ *     whole visible length whatever its cursor (EINVAL otherwise). CV_PAGES_FIXED needs root_grants
+ *     (EOPNOTSUPP) and no object derived below P (EINVAL). CV_PAGES_GROW needs every page of the
+ *     range removed and the page before it mapped (ENOMEM). Changes nothing, except that a removal
+ *     of every logically mapped page that is left ends the reservation in this call (CREVOKE of M
+ *     and the release of the arena, as CV_UNMAP's retire) and answers ended 1, written before the
+ *     end; the launcher then gives the whole extent back to Linux.
+ *   commit 1, after the launcher removed the range (a PROT_NONE, MAP_NORESERVE placeholder mapped
+ *     MAP_FIXED over it) or mapped fresh pages there: the module clears the tags of every page of
+ *     the range it holds, unpins it and deletes its frame from the arena's frame set, and updates
+ *     the removed pages and the count of logically mapped pages. It does not check the reference
+ *     again.
+ * A removed page is never admitted until a refill maps it again; no other mapping receives an
+ * address inside the block while it lives. */
+struct cv_pages {
+    __u64 thread, id, op, commit, ended;
+};
+#define CV_PAGES_REMOVE 1
+#define CV_PAGES_FIXED 2
+#define CV_PAGES_GROW 3
+#define CV_PAGES _IOWR('V', 37, struct cv_pages)
 /* The image file, by descriptor, before the launcher validates it: the module
  * denies writers to it (ETXTBSY, as Linux does for a running executable) until
  * the context is released, so the bytes validated are the bytes loaded. */
