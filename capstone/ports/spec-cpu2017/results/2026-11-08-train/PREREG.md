@@ -3335,3 +3335,43 @@ Correctness: specdiff PASS on imagick, nab, lbm and xz; x264's five frame hashes
 **Run, board 1, after af-b1:** chain ah-b1 (nat-run2.sh, TAG fdk-hpm-frc, its own out-directory, bkit71) runs FRCDK
 perl makerand, then FRCDK gcc train01. A stubbed dry run reaches both. Predictions as Addendum 98/99 (FRCDK against
 FR on fdk: perl -1 to -6 %, gcc 0 to -4 %).
+
+## Addendum 102 (2026-11-14 03:15, before it runs): gcc and lbm/nab on fdk; the FULL perl test on fdk, FR and FRCDK
+
+**Readings on fdk (FR images, specdiff PASS):**
+
+| row | board | time | change | ratio |
+|---|---|---|---|---|
+| gcc train01 | 1 | 2,594.04 s | final 2,831.36 -8.4 %; 8-way I$ 2,649.21 -2.1 %; base 2,930.01 -11.5 % | 1.506 against 1,722.35 |
+| nab | 2 | 716.18 s | arm C 741.97 -3.5 % | 1.053 against 679.92 |
+| lbm | 2 | 994.66 s | arm C 1,083.68 -8.2 % | 0.923 against 1,077.50 |
+
+- gcc lies inside Addendum 99's band. Counters: run_cycles 62.24 G; L1I misses 260.7 M; DTLB walks 5.9 M; issue-stall
+  cycles 16.57 G.
+- lbm's DTLB walks are 4.7 M. The arm C run had no counters, so the lbm gain is not attributed.
+- af-b1's FRCDK gcc boot was skipped, as Addendum 101 said it would be (rc=1, the work directory was already in use).
+
+**Twin evidence at the board's settings** (compiler lane). The QEMU twins of board-fr's own run.sh ran the full perl
+test with no module writes (arena_pin=0); the kernel is the images-pinend Image with every new parameter off. Results:
+specdiff 2/2 and byte-identical outputs within each pair.
+
+| pair | user | kernel | pages | faults |
+|---|---|---|---|---|
+| C vs CC | +0.34 % | -0.16 % | -0.25 % | -0.34 % |
+| FR vs FRCDK | -0.06 % | -0.07 % | -0.07 % | -0.14 % |
+
+So the board configuration has no per-exec RVC penalty. Addendum 97's figures belonged to arena_pin=1 (Addendum 98),
+and FRCDK's full perl runs as it is.
+
+**Runs, board 1, after ah-b1** (nat-run2.sh, kit bkit72 = bkit68 on fdk: HPM plus the dom_* parameters perl's test.pl
+needs), two chains, because the two stages share a basename:
+- ai-b1: FR full perl (board-fr/500.perlbench_r-native);
+- aj-b1: FRCDK full perl (board-frc-full/500.perlbench_r-native, which differs from FR's stage only in the executable
+  and the plan's source path).
+Stubbed dry runs of both reach their boot.
+
+**Predictions:**
+- rc 0 and specdiff 2/2 PASS on both;
+- FRCDK against FR -3 % .. +1 %;
+- no absolute-time prediction: this is the first native full-perl run on silicon.
+The perl row's ratio uses riscv-base fre's full perl (board 3, Addendum 93, after its x264).
