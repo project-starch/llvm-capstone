@@ -3224,3 +3224,45 @@ perl run now.
 **Run, board 1** after final-IC 8-way: the final bitstream (bkit67) with FRCDK images, perl makerand and gcc train01;
 the pair with the final's FR readings (360.60 s, 2,831.36 s) is one variable, the images.
 **Predictions:** both -1 to -6 % against FR on the same bitstream (L1I misses -10..-25 %); specdiff PASS.
+
+## Addendum 98 (2026-11-14 01:35, before it runs): board 1 moves to fdk (the final + 8-way I$); line-end lever closed; a scope correction to Addendum 97
+
+**Readings.** final-IC 8-way (9972ae79d, no DTLB 64, bkit69, FR, board 1), perl makerand: 360.00 s, specdiff PASS
+(final 360.60 s: -0.2 %). L1I misses 44.8 -> 35.7 M (-20 %), run_cycles +0.06 %, DTLB walks back to 4.80 M without
+DTLB 64. Its gcc train01 boot is running and is read when it ends.
+
+**New sealed bitstream.** fdk = caplifive_ids55-native-tagcache-mlp-fpieee-hpmreplay-dynbypass3-dtlb64-shrinkfix-ic32k_3c6b9906c
+(capstone-ariane 3c6b9906c: the final 6d0e754d5 + I$ 32 KiB 8-way). leffe: synth-guard exit=0, 2h57m, peak 33.45 GB.
+WNS -11.930 (final -12.363; inside the noise band). 187,646 LUT, slices 99.48 %, congestion 4/5, 0 routing errors.
+sha256 141f840eb8a59149762605e47aa6fb22a7b9c2525bc51f7df7c8ace85114e7d3, recomputed on the local copy. It contains
+both the final and the 8-way I$, so it replaces both on board 1.
+
+**Stopped before they ran** (the runs are no longer needed):
+- final-IC 8-way mcf, the rest of Addendum 96's list. fdk measures the 8-way I$ with DTLB 64 present, and mcf is
+  L1D/DTLB-bound.
+- Addendum 97's FRCDK pair on the final (ab-b1). It runs on fdk instead: same images, the better bitstream.
+The bkit69 chain ends after its running gcc boot. That boot's booking is released by hand.
+
+**Run, board 1:** kit bkit71-k2n-native-fdk-hpm = bkit67 with only the bitstream changed. List af-b1, in this order:
+perl makerand FR, perl makerand FRCDK, gcc train01 FR, gcc train01 FRCDK, mcf FR. Problem rows first; each FR/FRCDK
+pair is one variable, the images. A stubbed dry run reaches all five boots.
+
+**Predictions:**
+- perl makerand FR 352-366 s;
+- gcc train01 FR 2,760-2,850 s;
+- mcf FR within ±1.5 % of 7,416.01 s;
+- FRCDK against FR on the same bitstream -1 to -6 % (L1I misses -10..-25 %);
+- specdiff PASS on all five.
+
+**Line-end lever, closed.** The rtl lane first reported, from RTL sim, that a taken transfer in the last word of a
+16-byte I$ line costs ~3.8 extra cycles. It retracted that within the hour: the control executed a quarter of the
+instructions. The corrected pair executes an identical retired stream (254,006 instructions, the same digest) and reads
+378,101 cycles against 378,101. A resident next line reads the same. A 4-byte transfer straddling a line (RVC images)
+costs ~0.06 cycles. There is no RTL fix and no compiler alignment.
+
+**Scope correction to Addendum 97.** "On exec-heavy runs a smaller text segment raises kernel page work per exec (+3.8
+pages, +18 k kernel instructions per exec)" was measured on QEMU twins whose stage writes arena_pin=1,
+resume_quantum=1, step_budget_ns=10 s and retire_exit_sweep=2. The board's native stages write no module parameter, so
+every board run has had arena_pin=0. Whether the per-exec cost exists on the board's configuration is being measured on
+twins of board-fr's own run.sh. The compiler lane's arena_pin_image_end (llvm-capstone 6364813be083) acts only under
+arena_pin=1. Kit bkit70 (bkit68 + that kernel) is built and is NOT queued.
