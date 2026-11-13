@@ -2870,3 +2870,35 @@ reading (Addendum 79) prices it.
 - **Recorded lapse:** board 3's riscv-base perl without the cache (running since 07:30) still runs test.pl; Addendum
   74 filtered the native stage and not this one. It is left to finish (stopping it would lose its makerand reading and
   move the perl row behind x264); its test.pl reading is not used.
+
+## Addendum 81 (2026-11-13 09:45, before it runs): every Capstone run moves to the best sealed configuration; the table becomes the mapping-cache table on both arms
+
+**Lead's instruction (13 Nov):** one Capstone bitstream carries ALL optimisations and best practices, it is option B
+(55-bit lifetime ids) + native, and every experiment runs on it, never on a weaker bitstream. The rtl lane is defining
+and building that bitstream (every optimisation and needed fix not yet in b98f5a517, on the 0ef470559 line). Until it
+is sealed, the best sealed one is **caplifive_ids55-native-tagcache-mlp_b98f5a517** (0ef470559 option B + native +
+R-70 -> 79cf8de17 tag page bitmap + tag-word cache -> b98f5a517 pending tag-write list; C.5a's cached verdict and
+stage-B's DYN handshake trim are inside; every full-build key PASS).
+
+**Configuration of the table from here:** Capstone = b98f5a517, kit bkit59-k2n-native-tagcache-mlp-ioalign (bkit57's
+kernel: aligned kernel I/O buffers, one check per predicted chunk, cycle counters), native route, the mapping cache
+(nat-fair-cache); riscv-base = caplifive_rvbase_d31345cf3, K2N, the mapping cache (plain-rv64fr). One configuration
+for both arms, as Addendum 74 intended: the cache is the better setting for Capstone (gcc train01 -12 %, imagick
+-2.8 % on bkit57) and its riscv-base counterpart is the same reuse policy. The no-cache readings (Addenda 73-79) stay as
+recorded, as the earlier configuration.
+
+**Stopped (on the weaker configuration, or no longer read by the table):**
+- board 2: Capstone x264 on cap-ids55-native-tagcache, bkit56, no cache (running since 06:33), and the waiting
+  Addendum 76 A/B chain (bkit58). Addendum 76's A/B is withdrawn before it ran: every reading from here is on the mlp
+  bitstream; the tagcache readings already taken remain its comparison points.
+- board 3: riscv-base x264 without the cache (not started); board 3's chain is ended after its running riscv-base
+  perl (no cache), which completes and is read.
+**Runs:**
+- board 2 (g): the eight Capstone rows on the best configuration, short first: imagick, nab, lbm, perl makerand, gcc
+  train01, xz, mcf, x264. Native cache stages for nab, lbm, xz, mcf, x264 built today with the same converter as the
+  others; each differs from its no-cache stage only in the program image and the plan's image path.
+- board 3 (h): riscv-base with the cache: nab, lbm, xz, mcf, x264.
+- board 1 (unchanged): Capstone perl with the cache on bkit57 (running; its imagick and gcc already read), then
+  riscv-base with the cache: imagick, gcc train01, perl makerand (Addendum 80), then the padded-mcf diagnostic.
+**Predictions** (mlp + cache against tagcache, same kernel where it exists): imagick 13.0-13.4 s; gcc train01
+2,850-3,050 s; every other Capstone row within -5 % to +1.5 % of its no-cache bkit56 reading; specdiff PASS everywhere.
