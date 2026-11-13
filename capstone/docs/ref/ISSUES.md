@@ -4314,7 +4314,7 @@ be unpacked; not measured.
   rd_ctag already depends on; data_rtag drives nothing that returns to the request. PLAUSIBLE-BUT-UNPROVEN: synthesis
   with a LUTLP-1 DRC on the post-synth and post-opt checkpoints decides.
 
-### R-71 — SHRINKTO with a negative immediate WIDENS a capability: inverted bounds pass the FLU's guard, encode at E = 52 and decode to a 2^55 window; CAPBOUND and CAPENTER's operand form accept the same operands unchecked `DEMONSTRATED IN SIMULATION 2026-11-13 on 5f41c486e (the sealed ids55-best, sha256 b457b57a...) and claim-audited (SUPPORTED); PRESENT BY SOURCE in every bitstream with this FLU guard, NOT RUN on the earlier ones; NOT MEASURED ON SILICON; FIXED IN RTL on capstone-ariane perf/shrinkto-fix ffb82d5bb (two-sided in simulation) and carried by the realistic final 6d0e754d5 (sealed 2026-11-13, sha256 72bf215d...); the fix's CAPBOUND limit OVER-REFUSES three exact E = 51 regions (audited; which side moves is open); no measured image is affected (the compiler lane's scan, below); exploitability under supervision PLAUSIBLE, NOT DEMONSTRATED`
+### R-71 — SHRINKTO with a negative immediate WIDENS a capability: inverted bounds pass the FLU's guard, encode at E = 52 and decode to a 2^55 window; CAPBOUND and CAPENTER's operand form accept the same operands unchecked `DEMONSTRATED IN SIMULATION 2026-11-13 on 5f41c486e (the sealed ids55-best, sha256 b457b57a...) and claim-audited (SUPPORTED); PRESENT BY SOURCE in every bitstream with this FLU guard, NOT RUN on the earlier ones; NOT MEASURED ON SILICON; FIXED IN RTL on capstone-ariane perf/shrinkto-fix ffb82d5bb (two-sided in simulation) and carried by the realistic final 6d0e754d5 (sealed 2026-11-13, sha256 72bf215d...); the fix's CAPBOUND limit OVER-REFUSES three exact E = 51 regions (audited), RULED one boundary in all three implementations (QEMU e938c97a5b, monitor cd7a03a; both two-sided, both unlanded pending the lead); no measured image is affected (the compiler lane's scan, below); exploitability under supervision PLAUSIBLE, NOT DEMONSTRATED`
 
 Siblings: R-60 (the out-of-window cursor check; it is silent at E >= 50, which is why the widened capability keeps its tag),
 R-54 (the renormalisation step that turns E = 51 into E = 52 here), R-32 (SHRINKTO's own off-by-one on a positive
@@ -4459,10 +4459,27 @@ byte-identical (blob 213b9e5cea99) on ffb82d5bb, 6d0e754d5, 105c464bc and 9972ae
     widening.
   - No other caller passes such regions. The auditor searched the LLVM target, capstone-c, the runtime, sublet, ports,
     both OpenSBI copies, capstone-sbi at the pin, and 756 test sites.
-- **OPEN: which side moves.** The semantics owner decides. Either the RTL limit is tightened to the exact E = 52
-  condition, which adds a residue add and compare on the FLU result path and so needs a synthesis-only run, or the
-  emulator's pre-check and QEMU refuse len >= 1022 x 2^54 with 29 too. The second is software only and leaves the
-  sealed and building bitstreams valid.
+- **RULED (A), by the runtime lane on 2026-11-13: one boundary, in all three implementations.** A length
+  `end - base >= 1022 x 2^54` is refused with 29, the three exact E = 51 regions included. No caller uses them,
+  and the sealed and in-flight bitstreams stay valid. (B), the exact E = 52 condition in the RTL, stays available
+  if a real caller ever needs these lengths.
+
+  | implementation | commit | two-sided reading |
+  |---|---|---|
+  | RTL CAPBOUND | capstone-ariane ffb82d5bb / 6d0e754d5 (the FLU fix above) | shrinkto-neg arm B |
+  | QEMU `helper_csmint` | capstone-qemu r71-csmint-capbound **e938c97a5b**, on the pin 0542c5556c (compiler lane) | m1 table.S case 22, [0, 0xff80000000000000), refused; case 23, 1021 x 2^54, minted. 75/76 at the pin, 76/76 with the change |
+  | vp2 monitor CSMINT pre-check | capstone-sbi vp2/csmint-r71 **cd7a03a**, off vp2/csmint-v7 (board lane) | capstone-ariane r71-csmint-arm, pre-registered at ab8aeee43, results at b872d9d01 |
+
+  - **The monitor arm** is va-csmint-mon on 6d0e754d5's RTL with two rows added: [0, 0xff80000000000000) and
+    [0, 0xff40000000000000), both exact at E = 51.
+    - With cd7a03a: 92 of 92 values as pre-registered. The first row is refused with 29 by the pre-check, the
+      second is minted, and the routine's CAPBOUND never faults.
+    - With the previous routine pin (control): the first row's CAPBOUND faults 29 in M, the monitor's trap entry
+      re-enters, and the run loops to the cycle limit. The hazard was real on the fixed RTL, and the pre-check
+      removes it.
+  - **Not landed.** Neither branch is on its shared branch (virtual-capstone; the vp2 monitor lines). That waits
+    for the lead's word on the rule. Not measured: QEMU running the monitor arm, and silicon. No current kit uses
+    vp2 CSMINT.
 - **CAPENTER:** the only production caller is OpenSBI's `sbi_capstone_init.S:34`, with addresses around 0x80xxxxxx,
   far below MEM_END = 2^40. A refused CAPENTER does not enter capmode (`commit_stage.sv:359-364`).
 - **Synthesis:** no FLU signal is on the standing loop list. The cost was not measured by a gate, but the final
