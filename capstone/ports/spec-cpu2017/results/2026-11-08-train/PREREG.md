@@ -2840,3 +2840,19 @@ So the "firmware 0.18 G / 0.04 G / 0.08 G" (gcc) and "0.23 G / 0.08 G" (mcf) wer
 about 0.001-0.002 G in every window. Totals, user counts and the instruction ratios (gcc 1.235 / 1.118, mcf 1.041) are
 unchanged. The twin never modelled the firmware's CSCHECK emulation, so nothing here measured it; the board's own
 reading (Addendum 79) prices it.
+
+## Addendum 79 (2026-11-13 08:35): readings — Capstone perl makerand; imagick on bkit57 with the first silicon cycle counters
+
+- Capstone perl makerand (native, cap-ids55-native-tagcache, bkit56, no cache): 418.64 s, specdiff PASS (riscv-base
+  running on board 3).
+- **imagick on bkit57** (Addendum 75's d): 13.68 s, specdiff PASS (bkit56: 13.75 s; ratio 1.215 against 11.26 s).
+  **Addendum 75's prediction 13.15-13.55 s FAILS:** the aligned kernel buffers are worth -0.5 %, not 2-4 %.
+- Counters over the command, 25 MHz core: checks 2,977 = the emu_fingerprints delta (prediction holds); check_cycles
+  4.06 M = 1,364 cycles per emulated check (inside the informational 1,000-20,000), 0.16 s = 1.2 % of the command;
+  runs 518, run_cycles 224.5 M (8.98 s, 65.6 %); between_cycles 73.6 M (2.95 s, 21.5 %, 5.7 ms per escape);
+  1.75 s (12.8 %) lies before the first entry and after the last escape (the task's exec, setup and teardown).
+- With the compiler lane's twin phase split (a null run, imagick -version, in the same window: native 6.9 M
+  instructions, riscv-base 9.3 M), the escape phase is the arm-specific part: native kernel about 14.5 M instructions
+  over 518 escapes against riscv-base's 6.45 M, at about CPI 5 on silicon; the program runs at CPI about 2.3. So
+  imagick's gap is escape handling (and the kernel's page work behind it), not the firmware emulation and not the
+  program's instructions.
