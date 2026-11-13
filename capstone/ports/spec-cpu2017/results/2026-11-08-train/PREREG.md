@@ -3046,3 +3046,11 @@ Addendum 85). Missing: mcf (stopped mid-run under Addendum 86) and x264.
 Predictions as Addendum 83 (mcf 2-8 % faster than its no-cache 5,146.72 s; x264 within ±2 % of a no-cache reading,
 which does not exist on K2N).
 **Ratios so far** (arm C on mlp + bkit59 against plain-rv64fre): imagick 1.1995, nab 1.091, lbm 1.006.
+
+## Addendum 88 (2026-11-13 14:30, before it runs): arm C gcc train01; board 2's idle slot takes x264
+
+**Reading:** arm C gcc train01 (mlp + bkit59, board 2): 2,963.19 s, specdiff PASS; against riscv-base plain-rv64fre
+1,722.35 s: 1.720 (run_cycles 71.2 G of the command; escapes 18,354 runs; the program's CPI carries the gap).
+Arm C so far: imagick 1.1995, nab 1.091, lbm 1.006, perl makerand 1.551, gcc train01 1.720.
+**Rebalance:** board 2 finished its arm-C rows and is idle; x264 moves from board 1's list to board 2 now (same kit,
+image and stage). Board 1's chain ends after its running mcf; it then runs xz only.
