@@ -3311,3 +3311,27 @@ since 14:53.
 | x264 | 33,500-36,500 s | 36,219.53 |
 
 Correctness: specdiff PASS on imagick, nab, lbm and xz; x264's five frame hashes equal to plain-rv64r's.
+
+## Addendum 101 (2026-11-14 02:15, before it runs): fdk perl and imagick readings; af-b1's FRCDK boots never ran; they move to their own chain
+
+**Readings on fdk (FR images, specdiff PASS):**
+- **perl makerand (board 1):** 347.44 s. That is -3.6 % against the final's 360.60 and -3.5 % against the 8-way I$'s
+  360.00. Ratio against plain-rv64fre makerand 257.90: 1.347. run_cycles 8.78 G; L1I misses 34.7 M; DTLB walks 27.7 k;
+  issue-stall cycles 1.09 G. It lies outside Addendum 98's band (352-366 s), on the fast side: the band assumed the
+  two changes would not add up on perl.
+- **imagick (board 2):** 12.93 s, against arm C's 13.29 (-2.7 %). Ratio against 11.08: 1.167.
+
+**Defect.** In af-b1 the FR and FRCDK stages of a row share a basename (500.perlbench_r-native,
+502.gcc_r-train01-native), and nat-run.sh names a boot's work directory by that basename.
+- The FRCDK perl boot found the FR boot's directory. Its bake refused it (rc=1, no board boot), and the chain then
+  re-classified the FR transcript.
+- The FR reading is intact: board.txt was written at 02:08:59, before the second bake, which overwrote only bake.out.
+- The same will happen to af-b1's FRCDK gcc boot, and its bake will overwrite gcc FR's bake.out. The chain is left
+  running for gcc FR and mcf FR, because stopping it mid-boot needs a hand-made follow-on.
+- No FRCDK reading exists yet.
+- nat-run2.sh is nat-run.sh plus a STOP when two stages of a list share a basename. It is negative-tested: it refuses
+  af-b1. It is used for every new chain; nat-run.sh is not edited while two chains run it.
+
+**Run, board 1, after af-b1:** chain ah-b1 (nat-run2.sh, TAG fdk-hpm-frc, its own out-directory, bkit71) runs FRCDK
+perl makerand, then FRCDK gcc train01. A stubbed dry run reaches both. Predictions as Addendum 98/99 (FRCDK against
+FR on fdk: perl -1 to -6 %, gcc 0 to -4 %).
