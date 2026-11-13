@@ -3092,3 +3092,18 @@ kernel module (HPM reads around every CSRUNV) and three command-line parameters.
 2. bkit61n = bkit61 with capstone_vm.native_hpm=0 (the HPM reads off; bitstream, module and parameters otherwise as bkit61).
 **Prediction:** 1 passes (the bitstream changes no cycles in simulation and its sweep is identical); then 2 passes if
 the HPM reads are the cause, fails if the dom_* parameters are.
+
+## Addendum 91 (2026-11-13 17:20, before it runs): the bkit61 failure is the dom_* parameters; the A/B base moves to bkit61h
+
+**Cause, by source reading (compiler lane):** binfmt-dom.h's dom_load_binary calls dom_resources_init after
+begin_new_exec has set point_of_no_return, so any error there becomes force_fatal_sig(SIGSEGV) before the task's first
+instruction (fs/exec.c:1267, 1906). capstone_vm.dom_grant_root=/tmp/nt/sr fails kern_path when /tmp/nt/sr does not exist
+yet (resource-dom.h:134-137: at boot and during the smoke, before any stage creates it), and dom_local_tmp=1 fails the
+exec when the root has no .capstone-tmp (:70-87). So every native exec of the smoke died; HPM reads would have Oopsed
+at KERN_EMERG, and there is no Oops. The parameters were validated only inside a stage that creates both directories.
+The compiler lane is making both non-fatal in the module (no root/alias when the path is absent, fail-closed as before).
+**Change:** Addendum 90's second boot (bkit61 with native_hpm=0) is dropped before it ran: by the reading it can only
+fail again. In its place, after the running bkit60 boot: **bkit61h** = bkit61 without the three dom_* parameters (its
+command line equals bkit59's), HPM counters on, which is the intended A/B base. Rows: perl makerand, gcc train01, mcf
+(FR images). The full perl row waits for the fixed module.
+**Prediction:** bkit60 and bkit61h pass the smoke; the hpm fields are non-zero and monotone over each command.
