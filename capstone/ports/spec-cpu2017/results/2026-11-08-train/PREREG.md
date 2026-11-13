@@ -3149,3 +3149,20 @@ SHRINKTO, CAPBOUND, CAPENTER) goes into the final bitstream; an ISSUES entry fol
 **Run, board 3** after its running x264: riscv-base plain-rv64fre, the full perl test (perf/fair/stages/500.perlbench_r-rv-fair3:
 the rv-fair2 stage with only the executables replaced by plain-rv64fre). Prediction: specdiff 2/2; makerand within
 ±1.5 % of 257.90 s.
+
+## Addendum 94 (2026-11-13 19:20, before it runs): the single-change bitstreams; base readings; the L1D 64 KiB A/B on board 1
+
+**Bitstreams (synth lane, leffe), each one change on 5f41c486e, sha256 checked after the copy:** DTLB 64
+(caplifive_..._hpmreplay-dtlb64_097401036, 7db4390e..., WNS -15.240, 184,649 LUT), L1D 64 KiB 16-way
+(..._hpmreplay-l1d64k_a7f95f371, edceb7e2..., WNS -12.241, 188,716 LUT), DYN bypass v2 (..._hpmreplay-dynbypass_eb101c351,
+aeb8639c..., WNS -15.382, 189,064 LUT); all routed with 0 errors, congestion 4/5. The combination of the three
+(ea174bfdd) is NEGATIVE: placement failed (202,498 LUT, 42,465 slices needed, 41,386 available), as pre-registered.
+Kits bkit64/65/66 = bkit61h with only the bitstream changed.
+**Base readings** (board 1, bkit61h, FR images): perl makerand 389.12 s; gcc train01 2,930.01 s (arm C on mlp 2,963.19,
+-1.1 %; ratio against plain-rv64fre 1,722.35 = 1.701), HPM: L1I misses 550.1 M, L1D 372.5 M, DTLB walks 19.4 M,
+mispredicts 492.4 M, issue-stall cycles 18.87 G (26.9 % of 70.19 G in-domain cycles). DTLB walks bound DTLB 64 at
+<= 0.8 % on gcc (<= 1.3 % on perl); the I$ misses are the larger term (gcc 8-16 %, perl 5-9 % at 10-20 cycles each).
+**Run, board 1** after the bypass + DTLB 64 chain: L1D 64 KiB alone (bkit65), gcc train01 and mcf. The bypass-alone and
+DTLB-alone runs are not queued: the bypass + DTLB 64 run minus DTLB's <= 1 % bound attributes the bypass, and the
+DTLB's own value is bounded by the base's counters.
+**Prediction** (against the base, same board): gcc train01 0 to -2 %, mcf -1 to -4 %; hpm4 (L1D misses) falls by 5-15 %.
