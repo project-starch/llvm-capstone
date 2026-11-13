@@ -7,6 +7,8 @@
 #include <sys/ipc.h>
 #include "vm.h"
 __attribute__((__weak__)) void __vm_wait(void) {}
+/* malloc-mapping.c defines the real one; a program linked without the heap keeps this. */
+__attribute__((__weak__)) void __heap_protected(size_t address, size_t bytes) { (void)address; (void)bytes; }
 static int mapping_length(size_t n, unsigned long *bytes)
 {
     if (!n || n > CV_MAX_REGION_BYTES) { errno = EINVAL; return -1; }
@@ -57,6 +59,8 @@ int mprotect(void *p, size_t n, int prot)
     if (!n) return 0;
     if (mapping_length(n, &bytes)) return -1;
     long rc = __capstone_vm_protect(address, bytes, prot);
+    /* The heap's mapping cache must not reissue a mapping whose protections may have changed (malloc-mapping.c). */
+    __heap_protected(address, bytes);
     if (rc) { errno = -rc; return -1; }
     return 0;
 }
