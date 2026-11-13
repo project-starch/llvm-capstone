@@ -140,6 +140,7 @@ extern "C" LLVM_ABI LLVM_EXTERNAL_VISIBILITY void LLVMInitializeCapstoneTarget()
   initializeCapstoneMakeCompressibleOptPass(*PR);
   initializeCapstoneGatherScatterLoweringPass(*PR);
   initializeCapstoneCodeGenPreparePass(*PR);
+  initializeCapstoneMemcpyAlignDispatchPass(*PR);
   initializeCapstoneCapGlobalInitPass(*PR);
   initializeCapstonePostRAExpandPseudoPass(*PR);
   initializeCapstoneMergeBaseOffsetOptPass(*PR);
@@ -570,6 +571,10 @@ void CapstonePassConfig::addCodeGenPrepare() {
   if (getOptLevel() != CodeGenOptLevel::None)
     addPass(createTypePromotionLegacyPass());
   TargetPassConfig::addCodeGenPrepare();
+  // After CodeGenPrepare, so no earlier IR pass re-forms or re-aligns the copy
+  // (off unless -capstone-memcpy-align-dispatch).
+  if (getOptLevel() != CodeGenOptLevel::None)
+    addPass(createCapstoneMemcpyAlignDispatchPass());
 }
 
 bool CapstonePassConfig::addInstSelector() {
