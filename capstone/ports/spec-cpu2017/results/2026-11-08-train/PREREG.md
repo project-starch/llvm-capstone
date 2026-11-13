@@ -3434,3 +3434,37 @@ A stubbed dry run reaches all three.
 - gcc train01: -0.5 to -3 %;
 - mcf: -0.3 to -1.5 %;
 - specdiff PASS, smoke PASS.
+
+## Addendum 105 (2026-11-14 06:30, before it runs): FRCDKMS images on the batch bitstream, after Addendum 104's pairs
+
+**Images: FRCDKMS** = FRCDK + C8 + the CAPSTONE_MEMSET_CAP_ZERO libc switch (compiler lane).
+- **C8:** llvm-capstone compiler-memcpy-align-dispatch d5985250bc12, carried into llvm-c9 = compiler-capbase-rvc-c8
+  29027126f39b. A 16-byte memcpy that is 8-aligned but not provably 16-aligned dispatches inline at run time, to
+  ldc/stc when both cursors are 16-aligned and otherwise to ld/sd. That is musl's own rule, and before C8 the compiler
+  emitted a call (C-81).
+- **Memset switch:** the measured 11-09 switch b68bbde23c79, cherry-picked onto the arms' SDK as
+  runtime-memset-cap-zero-arms beb1bbabe26a. A zero memset of 16 bytes or more stores the aligned middle as null
+  capabilities. The rtl source read at 3c6b9906c shows that `stc zero` writes both words as 0 and clears the tag. No
+  riscv-base mirror exists: these are Capstone-ISA stores.
+- **Hashes:** cpugcc_r 3ed5c0be9791a51f, perlbench_r a5794577321947cb, mcf_r 3d7e6211863641a4.
+- **Gate:** lit 169/170 (the known stale manifest). QEMU suites as their controls. The C8 directed test is 20/20, and
+  its mutant fails exactly the aligned case. The memset directed test is 832/832 with the switch off and with it on;
+  its mutant fails 656.
+
+**Twins** (outputs identical to FRCDK and FR):
+
+| row | user instructions | reference |
+|---|---|---|
+| gcc train01 | -1.37 % (-176.7 M) | FR |
+| perl | -0.04 % | FRCDK |
+| mcf | -0.19 % | FRCDK |
+
+**Run, board 1, after ak-b1** (chain al-b1, kit bkit73, the batch bitstream): FRCDKMS perl makerand, gcc train01, mcf.
+- perl and gcc pair with ak-b1's FRCDK readings on the same bitstream; the images are the variable.
+- mcf pairs with ak-b1's FR mcf; RVC plus memset are the variable.
+- A stubbed dry run reaches all three.
+
+**Predictions** (against ak-b1 on the same bitstream; specdiff PASS):
+- gcc -1 to -3 %;
+- perl -0.5 to +0.5 %;
+- mcf -2 to +1 %.
