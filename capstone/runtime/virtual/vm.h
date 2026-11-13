@@ -17,7 +17,6 @@
 #define CAP_VM_MAPPING CV_MAP_APPLICATION
 #define CAP_VM_METADATA CV_MAP_METADATA
 extern void *__capstone_vm_acquire(unsigned long, unsigned long, int, unsigned, unsigned);
-extern void *__capstone_vm_remap(unsigned long, unsigned long, unsigned long);
 /* The unmap service takes the mapping's reference itself in a0, with its tag, and the length in
  * a1. With root_grants the kernel ends the mapping only through that reference: a live reference
  * to the mapping (not to an object inside it, not a narrowed one) whose bounds cover the whole
@@ -29,6 +28,10 @@ extern void *__capstone_vm_remap(unsigned long, unsigned long, unsigned long);
  * and a1 name; the range may be part of the mapping. */
 extern long __capstone_vm_unmap(void *, unsigned long);
 extern long __capstone_vm_protect(void *, unsigned long, int);
+/* The mapping check (CV_SERVICE_MAPPING_CHECK) takes a reference and a length as the unmap service
+ * does, and answers 0 if that unmap would be accepted and every page of the mapping is read-write
+ * (ENOTSUP otherwise). It changes nothing: mremap asks it before it copies. */
+extern long __capstone_vm_mapping_check(void *, unsigned long);
 extern long __capstone_vm_wait(void);
 extern long __capstone_vm_nodes(unsigned long);
 

@@ -14,16 +14,20 @@ Modes (root-contract.c lists the checks of each):
   renew        the reference from before CRENEW, then the renewed one; ends with a fault through
                an object derived in the renewed mapping (139)
   renew-ref    the same, and the fault is through the renewed reference itself (139)
-  mremap       the libc's map-copy-unmap mremap: refused with a wrong old length and through an
-               object, then grows and shrinks with data and a stored reference; ends with a fault
+  mremap       the libc's map-copy-unmap mremap: its mapping check refuses a short and an
+               oversized old length and an object, without a fault; a same-size resize returns the
+               reference, through a stale one it is refused; a read-only mapping is refused
+               (ENOTSUP); then grows and shrinks with data and a stored reference; ends with a fault
                through the old reference (139)
   exit-victim  a thread exits naming a victim mapping it holds no reference to (exit 0)
   exit-renew   a thread renews its stack's mapping and exits; the main thread's copy of the renewed
                reference must fault with 25 (139)
   create       the frame's hand-over with the reference from before CRENEW (refused) and with the
                renewed one; the renewed reference must fault with 25 afterwards (139)
-  create-fail  the launcher fails a create after the module took the frame: the frame's mapping is
-               released (exit 0)
+  create-fail  contexts that wait until released fill the thread table until a create fails: the
+               module refuses (ENOSPC) and the frame stays the program's, or behind a launcher with
+               a smaller table (--launcher-small-table) the launcher fails the create after the
+               module took the frame and releases the frame's mapping (exit 0)
   detached     a detached pthread's stack is unmapped at its exit (exit 0)
   exit-length  a thread exits naming its stack with a wrong length: the exit completes, the stack
                stays mapped and unmaps later through the kept reference (exit 0)
@@ -36,6 +40,20 @@ Modes (root-contract.c lists the checks of each):
                the thread detaches its transport, the same mprotect succeeds (exit 0)
   create-gate  thread create with a metadata page, the launcher's stack and a frame reference
                moved inside the page: refused; then through the frame's own reference (exit 0)
+  join-two     two contexts join one; both return after its exit, and a new context follows
+               (exit 0)
+  join-after   joins after an exit with and without an exit word return 0; an id never issued
+               answers ESRCH (exit 0)
+  exit-many    40 contexts exit without an exit word and are never joined; one more is created
+               (exit 0)
+  exit-word    exit words that are unaligned, straddle the released stack, lie in a read-only page
+               or in the thread's frame are not written; the exits complete (exit 0)
+  attach-readonly a pthread detaches its transport and makes its exchange region read-only; its
+               next delegated call attaches again, and the launcher refuses the attachment and
+               ends the program (exit 125)
+The modes that join every thread also read the launcher's thread census at exit
+(CAPSTONE_VM_THREADS count=1: every entry freed once). Every refused exit word is logged by the
+launcher with its reason (CAPSTONE_VM_EXIT_WORD_REFUSED), and the runner compares them per mode.
 Every refusal of a request is counted (parameter unmap_refused) and reported in the kernel log
 with its reason and request, and so is every CV_RETIRE that the module refuses because the
 mapping's reservation is live (parameter retire_refused; no launcher path asks for one any more)
@@ -65,11 +83,27 @@ exit-length and exit-huge name with a wrong length then reach the module, which 
 (reason "range is not the mapping") and complete the exits. --launcher-frame-floor says that it
 names the mapping around a0's cursor as the frame at thread create: the moved frame reference of
 create-gate then reaches the module, which must refuse it (reason "range is not the mapping").
+--launcher-small-table says that the --launcher's thread table has 4 entries, fewer than the
+module's limit: create-fail then reaches the launcher's rollback.
 --launcher-control NAME says that the --launcher is one change away from the adapter's:
   old-exit-word  the exit word is checked against the stack base and length that the program
                  names, as before stage 4: exit-huge stops the launcher at the exit service
   no-hold        protect_range() lacks the check of the transport hold: protect-held fails at the
                  held mapping's mprotect (exit 1)
+  old-join       the thread table of stage 4 (an exit with an exit word frees its entry unless a
+                 joiner waits, every other exit keeps it, the first waking joiner frees it):
+                 join-two's second joiner never returns, join-after's join after a worded exit
+                 answers ESRCH, exit-many's 32nd create fails
+  no-writable-check
+                 the exit word and the transport are checked against the visible length only, not
+                 the writable range: exit-word's read-only word makes the launcher fault (139), and
+                 attach-readonly's read makes the launcher fault instead of the refusal
+  no-align       the exit word's alignment is not checked: the launcher's store to exit-word's
+                 unaligned word traps to the firmware, whose misaligned-access emulation takes a
+                 capability fault at the word's address and halts the machine (the gate never
+                 ends)
+--libc-control no-remap-check says that the --application was built with a libc whose mremap
+copies before any check (stage 4): the mremap mode faults at the oversized old length (139).
 --no-refs runs on a processor without supervisor references. The module must not load. Where the
 firmware hands cause 24 to S the load is refused with a message. The gate platform's monitor keeps
 the trap and halts the machine at the module's probe, after the module printed why.
@@ -87,7 +121,8 @@ import memory_mode
 HERE = Path(__file__).resolve().parent
 MODES = ('unmap', 'refuse', 'narrow', 'renew', 'renew-ref', 'mremap',
          'exit-victim', 'exit-renew', 'create', 'create-fail', 'detached',
-         'exit-length', 'exit-huge', 'exit-frame', 'protect', 'protect-held', 'create-gate')
+         'exit-length', 'exit-huge', 'exit-frame', 'protect', 'protect-held', 'create-gate',
+         'join-two', 'join-after', 'exit-many', 'exit-word', 'attach-readonly')
 # Per mode: the checks, those that need root grants (skipped otherwise), and the expected exit.
 CHECKS = {
     'unmap': ('grant_reads_and_writes', 'libc_accepts_copyable_grant',
@@ -98,13 +133,15 @@ CHECKS = {
     'narrow': ('narrowed_reference_refused', 'whole_reference_after_narrowed'),
     'renew': ('renewed_old_reference_refused', 'renewed_mapping_unmaps'),
     'renew-ref': ('renewed_old_reference_refused', 'renewed_mapping_unmaps'),
-    'mremap': ('mremap_wrong_length_refused', 'mremap_nested_object_refused', 'public_mremap_grows',
+    'mremap': ('mremap_wrong_length_refused', 'mremap_oversized_old_refused',
+               'mremap_nested_object_refused', 'mremap_same_size_returns_reference',
+               'mremap_same_size_stale_refused', 'mremap_read_only_refused', 'public_mremap_grows',
                'mremap_old_reference_refused', 'public_mremap_shrinks'),
     'exit-victim': ('exit_with_own_stack_at_victim_refused', 'exit_with_victim_address_refused',
                     'victim_unmaps_afterwards'),
     'exit-renew': ('stack_renewed_before_exit',),
     'create': ('create_with_stale_frame_refused', 'create_with_renewed_frame'),
-    'create-fail': ('failed_create_releases_frame',),
+    'create-fail': ('module_limit_keeps_frame',),
     'detached': ('detached_exit_unmaps_stack',),
     'exit-length': ('exit_with_wrong_length_completes', 'wrong_length_stack_stays_mapped',
                     'wrong_length_stack_unmaps_afterwards'),
@@ -117,7 +154,16 @@ CHECKS = {
     'protect-held': ('protect_held_mapping_refused', 'protect_after_detach'),
     'create-gate': ('create_metadata_frame_refused', 'create_launcher_page_refused',
                     'create_mismatched_frame_refused', 'create_after_refusals'),
+    'join-two': ('two_joiners_return', 'thread_after_two_joiners'),
+    'join-after': ('join_after_word_exit', 'join_after_raw_exit', 'join_unknown_id_refused'),
+    'exit-many': ('exit_unjoined_many_then_create',),
+    'exit-word': ('unaligned_exit_word_not_written', 'straddling_exit_word_not_written',
+                  'read_only_exit_word_not_written', 'writable_exit_word_written',
+                  'frame_exit_word_not_written'),
+    'attach-readonly': ('attach_protect_before_attach',),
 }
+# create-fail behind a launcher whose table is smaller than the module's limit.
+CHECKS_SMALL_TABLE = {'create-fail': ('failed_create_releases_frame',)}
 ROOT_ONLY = {'stale_reference_at_reused_address_refused', 'address_refused',
              'nested_object_refused', 'stale_reference_refused',
              'stale_reference_after_collection_refused', 'narrowed_reference_refused',
@@ -126,7 +172,7 @@ ROOT_ONLY = {'stale_reference_at_reused_address_refused', 'address_refused',
              'victim_unmaps_afterwards', 'create_with_stale_frame_refused',
              'protect_integer_address_refused', 'protect_stale_reference_refused',
              'protect_narrowed_reference_refused', 'protect_nested_object_refused',
-             'mremap_nested_object_refused'}
+             'mremap_nested_object_refused', 'mremap_same_size_stale_refused'}
 FAULTING = {'unmap', 'renew', 'renew-ref', 'mremap', 'exit-renew', 'create'}
 # Modes whose stale read does not map the address again first (the frame is not reused).
 NO_REMAP = {'create'}
@@ -146,7 +192,7 @@ REFUSALS = {
     'narrow': [('does not cover the mapping', 'munmap')],
     'renew': [('not live', 'munmap')],
     'renew-ref': [('not live', 'munmap')],
-    'mremap': [('not the mapping', 'munmap')],
+    'mremap': [('not the mapping', 'mremap'), ('not live', 'mremap')],
     'exit-victim': [(None, 'thread exit'), ('not a reference', 'thread exit')],
     'exit-renew': [],
     'create': [('not live', 'thread create')],
@@ -159,6 +205,11 @@ REFUSALS = {
                 ('does not cover the mapping', 'mprotect'), ('not the mapping', 'mprotect')],
     'protect-held': [],
     'create-gate': [],
+    'join-two': [],
+    'join-after': [],
+    'exit-many': [],
+    'exit-word': [],
+    'attach-readonly': [],
 }
 # What each control changes: the mode it must break, and how.
 CONTROL_CUTS = {
@@ -174,11 +225,39 @@ CONTROL_CUTS = {
     'create-address': {'create-gate': ('ROOT_FAIL:thread create with a frame reference whose cursor '
                                        'is not the frame\'s address', 'create_mismatched_frame_refused')},
 }
-# Launcher controls (--launcher-control): the mode each must break, and how.
+# Launcher controls (--launcher-control): the mode each must break, and how. A third element says
+# how the mode ends: 'launcher-fault' (exit 139 without a domain fault: the launcher itself faulted),
+# 'domain-fault' (exit 139 with a domain fault) or 'machine-halt' (the firmware halts the machine
+# at the address the mode printed, and the gate never ends); without it nothing faults.
 LAUNCHER_CUTS = {
     'old-exit-word': {'exit-huge': ('capstone-vexec: service:', 'exit_with_huge_length_completes')},
     'no-hold': {'protect-held': ('ROOT_FAIL:mprotect of a held mapping', 'protect_held_mapping_refused')},
+    'old-join': {'join-two': ('ROOT_FAIL:both joiners return', 'two_joiners_return'),
+                 'join-after': ('ROOT_FAIL:a join after an exit with an exit word',
+                                'join_after_word_exit'),
+                 'exit-many': ('ROOT_FAIL:create a context while earlier ones exited unjoined',
+                               'exit_unjoined_many_then_create')},
+    'no-writable-check': {'exit-word': ('ROOT_EXIT_WORD case=read-only',
+                                        'read_only_exit_word_not_written', 'launcher-fault')},
+    'no-align': {'exit-word': ('[CAPSTONE] domain halted by capability fault',
+                               'unaligned_exit_word_not_written', 'machine-halt')},
 }
+# Libc controls (--libc-control): the --application was built against a libc one change away.
+LIBC_CUTS = {
+    'no-remap-check': {'mremap': ('ROOT_MREMAP case=oversized', 'mremap_oversized_old_refused',
+                                  'domain-fault')},
+}
+# The attach-readonly mode ends when the launcher refuses the attachment: it exits 125 after it
+# logged the refusal, and the worker's read never completes. Behind the no-writable-check launcher
+# the launcher faults at the read's copy into the read-only exchange region instead (139).
+ATTACH_REFUSED = 'CAPSTONE_VM_TRANSPORT_REFUSED '
+# The exit words the launcher refuses per mode, as the reasons it logs, in order.
+EXIT_WORD_REFUSALS = {'exit-word': ['unaligned', 'not inside one mapping', 'not writable',
+                                    "in the thread's frame"]}
+EXIT_WORD_REPORT = re.compile(r'^CAPSTONE_VM_EXIT_WORD_REFUSED tid=\d+ word=0x[0-9a-f]+ reason=(.*)$', re.M)
+# Modes whose threads have all exited and been joined at the program's exit: the launcher's census
+# must count only the main thread.
+CENSUS_MODES = {'create-fail', 'join-two', 'join-after', 'exit-many', 'exit-word'}
 # The arenas that a thread exit names and the module keeps, per mode, as the reasons it reports:
 # the two stacks that exit-victim's threads named (root grants only), and the frame that
 # exit-frame's thread named as its stack. exit-length's and exit-huge's stacks reach the module
@@ -188,7 +267,7 @@ EXIT_KEPT = {'exit-victim': ['request refused'] * 2, 'exit-frame': ["is the thre
 EXIT_KEPT_RG0 = {'exit-frame': ["is the thread's frame"]}
 EXIT_KEPT_BYPASS = {'exit-length': ['request refused'], 'exit-huge': ['request refused']}
 # The launcher's reports of a stack it leaves mapped at a thread exit, per mode.
-STACKS_KEPT = {'exit-victim': 2, 'exit-length': 1, 'exit-huge': 1, 'exit-frame': 1}
+STACKS_KEPT = {'exit-victim': 2, 'exit-length': 1, 'exit-huge': 1, 'exit-frame': 1, 'exit-word': 0}
 REPORT = re.compile(r'^ROOT_KERNEL:([\w-]+):unmap refused \(([^)]*)\) at ([a-z ]+):', re.M)
 RETIRE_REPORT = re.compile(r'^ROOT_KERNEL:([\w-]+):retire refused:', re.M)
 KEPT_REPORT = re.compile(r'^ROOT_KERNEL:([\w-]+):thread exit keeps the (stack|frame) \(([^)]*)\)', re.M)
@@ -221,8 +300,8 @@ def expected_refusals(mode, control, bypass, frame_floor, victim_reason):
         # start a mapping and the launcher still refuses it.
         refusals.insert(2, ('range is not the mapping', 'munmap'))
     if bypass and mode == 'mremap':
-        # The unmap of the old mapping with the wrong old length.
-        refusals.insert(0, ('range is not the mapping', 'munmap'))
+        # The mapping checks with the short and the oversized old length.
+        refusals[0:0] = [('range is not the mapping', 'mremap')] * 2
     if bypass and mode in ('exit-length', 'exit-huge'):
         # The stack named with a wrong length.
         refusals.append(('range is not the mapping', 'thread exit'))
@@ -249,10 +328,14 @@ def main():
                    help='the launcher lacks its whole-mapping check; the module must refuse a partial munmap')
     p.add_argument('--launcher-frame-floor', action='store_true',
                    help='the launcher names the mapping around a0\'s cursor as the frame; the module must compare')
+    p.add_argument('--launcher-small-table', action='store_true',
+                   help='the launcher\'s thread table has 4 entries; create-fail reaches its rollback')
     p.add_argument('--root-grants', type=int, choices=(0, 1), default=1)
     p.add_argument('--control', choices=sorted(CONTROL_CUTS), help='the module is this control (see above)')
     p.add_argument('--launcher-control', choices=sorted(LAUNCHER_CUTS),
                    help='the --launcher is this control (see above)')
+    p.add_argument('--libc-control', choices=sorted(LIBC_CUTS),
+                   help='the --application was built against this control libc (see above)')
     p.add_argument('--modes', default=','.join(MODES), help='comma-separated subset of the modes')
     p.add_argument('--no-refs', action='store_true', help='the processor has no supervisor references: insmod must fail')
     p.add_argument('--unpinned', action='store_true', help='load the module with unpinned=1')
@@ -329,6 +412,11 @@ echo VIRTUAL_STAGED_DONE
         tests['memory_mode_verified'] = memory_mode.verified(log, a.unpinned, 1)
         cuts = dict(CONTROL_CUTS.get(a.control, {}))
         cuts.update(LAUNCHER_CUTS.get(a.launcher_control, {}))
+        cuts.update(LIBC_CUTS.get(a.libc_control, {}))
+        checks = dict(CHECKS)
+        if a.launcher_small_table:
+            checks.update(CHECKS_SMALL_TABLE)
+        halting = [m for m, cut in cuts.items() if m in modes and cut[2:] == ('machine-halt',)]
         reports = REPORT.findall(log)
         retire_reports = RETIRE_REPORT.findall(log)
         kept_reports = KEPT_REPORT.findall(log)
@@ -337,6 +425,8 @@ echo VIRTUAL_STAGED_DONE
             begin = log.find(f'ROOT_MODE_BEGIN:{mode}\n')
             end = log.find(f'ROOT_EXIT:{mode}:', begin)
             part = log[begin:end] if begin >= 0 and end >= 0 else ''
+            if mode in halting and begin >= 0 and end < 0:
+                part = log[begin:]              # the machine halted inside this mode
             status = line(rf'^ROOT_EXIT:{mode}:(\d+)$')
             exits[mode] = status
             mode_causes = [int(n) for n in re.findall(r'domain fault cause=(\d+)', part)]
@@ -352,27 +442,65 @@ echo VIRTUAL_STAGED_DONE
             tests[f'{mode}:kernel_exit_kept'] = kept == [('stack', why) for why in want_kept]
             tests[f'{mode}:frames_released'] = 'CAPSTONE_VM_FRAME_RELEASE_FAILED' not in part
             tests[f'{mode}:grant_type'] = line(r'^ROOT_GRANT_TYPE:(\d+)$', part) == str(a.root_grants)
+            if mode == 'attach-readonly':
+                # The program cannot report the refusal, which ends it: the runner reads the
+                # launcher's log and the exit status.
+                tests[f'{mode}:attach_protect_before_attach'] = \
+                    'ROOT_CHECK:attach_protect_before_attach:PASS' in part
+                tests[f'{mode}:read_never_completed'] = 'ROOT_ATTACH_READ' not in part
+                refused = re.search(rf'^{ATTACH_REFUSED}.*reason=not writable$', part, re.M) is not None
+                if a.launcher_control == 'no-writable-check':
+                    tests[f'{mode}:control_not_refused'] = ATTACH_REFUSED not in part
+                    tests[f'{mode}:control_launcher_fault'] = status == '139' and mode_causes == []
+                else:
+                    tests[f'{mode}:transport_refused'] = refused
+                    tests[f'{mode}:launcher_ended_program'] = (status == '125' and mode_causes == [] and
+                                                              'capstone-vexec: service:' in part)
+                    tests[f'{mode}:no_contract_failure'] = 'ROOT_FAIL' not in part
+                if a.root_grants:
+                    tests[f'{mode}:kernel_refusals'] = seen == []
+                continue
             if mode in cuts:
                 # The control must break this mode, at this point, and nothing else.
-                marker, check = cuts[mode]
-                for name in CHECKS[mode]:
+                marker, check, *ending = cuts[mode]
+                for name in checks[mode]:
                     if name == check:
                         tests[f'{mode}:{name}:control_fails'] = f'ROOT_CHECK:{name}:PASS' not in part
                         break
-                    tests[f'{mode}:{name}'] = f'ROOT_CHECK:{name}:PASS' in part
+                    if a.root_grants or name not in ROOT_ONLY:
+                        tests[f'{mode}:{name}'] = f'ROOT_CHECK:{name}:PASS' in part
                 tests[f'{mode}:control_breaks_here'] = marker in part
-                tests[f'{mode}:control_no_fault'] = mode_causes == []
+                if not ending:
+                    tests[f'{mode}:control_no_fault'] = mode_causes == []
+                elif ending[0] == 'launcher-fault':
+                    tests[f'{mode}:control_launcher_fault'] = status == '139' and mode_causes == []
+                elif ending[0] == 'machine-halt':
+                    word = line(r'^ROOT_EXIT_WORD case=unaligned word=(0x[0-9a-f]+)$', part)
+                    halt = line(r'domain halted by capability fault: .*badaddr = (0x[0-9a-f]+)', part)
+                    tests[f'{mode}:control_machine_halt_at_word'] = (status is None and word is not None
+                                                                   and halt == word)
+                else:
+                    tests[f'{mode}:control_domain_fault'] = status == '139' and mode_causes != []
                 if a.root_grants:
                     expected = expected_refusals(mode, a.control, a.launcher_bypass,
                                                  a.launcher_frame_floor, None)
+                    if a.libc_control == 'no-remap-check' and mode == 'mremap':
+                        expected = []               # the fault comes before the first refusal
                     tests[f'{mode}:kernel_refusals'] = refusals_match(seen[:len(expected)], expected)
                 continue
-            for name in CHECKS[mode]:
+            for name in checks[mode]:
                 if a.root_grants or name not in ROOT_ONLY:
                     tests[f'{mode}:{name}'] = f'ROOT_CHECK:{name}:PASS' in part
                 else:
                     tests[f'{mode}:{name}:skipped'] = re.search(rf'^ROOT_SKIP:{name}:\S', part, re.M) is not None
             tests[f'{mode}:no_contract_failure'] = 'ROOT_FAIL' not in part
+            tests[f'{mode}:exit_word_refusals'] = \
+                EXIT_WORD_REPORT.findall(part) == EXIT_WORD_REFUSALS.get(mode, [])
+            if mode in CENSUS_MODES:
+                tests[f'{mode}:thread_census_one'] = \
+                    re.search(r'^CAPSTONE_VM_THREADS count=1 ', part, re.M) is not None
+            if mode == 'exit-word':
+                tests['exit-word:straddle_adjacent'] = 'ROOT_STRADDLE adjacent=1' in part
             if mode in FAULTING:
                 if mode not in NO_REMAP:
                     tests[f'{mode}:remapped_at_the_same_address'] = 'ROOT_REMAP same_address=1' in part
@@ -398,13 +526,19 @@ echo VIRTUAL_STAGED_DONE
             else:
                 tests[f'{mode}:kernel_refuses_nothing'] = seen == []
         refused_count = line(r'^ROOT_UNMAP_REFUSED:(\w+)$')
-        tests['kernel_count_matches_reports'] = refused_count == str(len(reports))
-        tests['kernel_kept_count_matches_reports'] = line(r'^ROOT_EXIT_KEPT:(\w+)$') == str(len(kept_reports))
-        tests['module_unloaded'] = 'ROOT_CLEANUP:0' in log
+        if halting:
+            # The machine halted: the gate's closing lines never come.
+            tests['gate_did_not_end'] = 'VIRTUAL_STAGED_DONE' not in log
+        else:
+            tests['kernel_count_matches_reports'] = refused_count == str(len(reports))
+            tests['kernel_kept_count_matches_reports'] = \
+                line(r'^ROOT_EXIT_KEPT:(\w+)$') == str(len(kept_reports))
+            tests['module_unloaded'] = 'ROOT_CLEANUP:0' in log
         tests['no_kernel_fault'] = 'Oops' not in log and 'Kernel panic' not in log
 
     result = dict(status='PASS' if all(tests.values()) else 'FAIL', root_grants=a.root_grants,
                   control=a.control, launcher_control=a.launcher_control,
+                  libc_control=a.libc_control, launcher_small_table=a.launcher_small_table,
                   launcher=str(a.launcher) if a.launcher else None,
                   launcher_bypass=a.launcher_bypass, launcher_frame_floor=a.launcher_frame_floor,
                   no_refs=a.no_refs, unpinned=a.unpinned,

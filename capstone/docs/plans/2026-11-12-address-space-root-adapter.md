@@ -1,6 +1,6 @@
 # Address-space root: adapter and libc plan
 
-Status: plan of 2026-11-12 on the branch `address-space-root`. Stages 0 to 4
+Status: plan of 2026-11-12 on the branch `address-space-root`. Stages 0 to 4b
 are done (see each stage); stage 5 is next, in a reduced form until the
 project lead decides on the old path.
 Design: [the kernel as the outermost allocator](../design/virtual-capstone/address-space-root.md).
@@ -99,7 +99,9 @@ in the last stage, when every feature is in.
    the module reports. A refused stack request does not stop the exit: the
    stack stays mapped and registered, counted in `exit_kept`. `CV_UNMAP` and
    `CV_THREAD_EXIT` decide first, write the outcome to the launcher, and then
-   commit, which cannot fail with root grants. `mprotect` passes the
+   commit, which cannot fail with root grants. A stack that is the thread's own
+   frame is the exception (stage 4): the module refuses it as a stack, and the
+   frame's release still ends that mapping. `mprotect` passes the
    reference, and `CV_PROTECT` checks it: conditions 1 to 3, and the bounds
    cover the named page range, which may be part of the mapping (musl opens a
    thread stack and a mallocng meta area past a guard page this way). Thread
@@ -121,12 +123,13 @@ in the last stage, when every feature is in.
      stack mappings that it found, over their whole extent, and no longer
      against the base and length that the program names. A wrong stack
      length, however large, never stops the exit. A word inside the stack
-     keeps the stack, like every refused stack. The launcher tells its own
+     keeps the stack mapped. The launcher tells its own
      joiners that the thread is done only after the frame and stack releases
      and the store and wake of the exit word. An exit with an exit word frees
      its table entry at once, unless a joiner already waits on it. The module
      refuses a stack that is the thread's own frame before every other check
-     (`exit_kept`, reason "is the thread's frame").
+     (`exit_kept`, reason "is the thread's frame"); the frame's release then
+     ends that mapping, once.
    - `mprotect`. The launcher refuses a mapping that a worker's transport
      holds (EBUSY), as `munmap` does: it writes that mapping through Linux.
    - Thread creation. The module hands the cursor of the creator's a0 to
@@ -140,8 +143,8 @@ in the last stage, when every feature is in.
      (`mapping.c`). mallocng's realloc of a large group does the same through
      `__heap_remapping` (`malloc-mapping.c`, musl patch 0009), and musl's
      `pthread_getattr_np` calls `mremap` without `MREMAP_MAYMOVE` and gets
-     ENOSYS. The transaction stays refused with root grants, and stage 5
-     deletes it.
+     ENOSYS. The transaction stays refused with root grants (stage 4b deletes
+     it).
    No ABI change: the ioctl structures and the services keep their layout.
    Unit test: root-contract.c, three new modes (`exit-huge`, `exit-frame`,
    `protect-held`) and `mremap` rewritten (refused with a wrong old length and
@@ -157,15 +160,75 @@ in the last stage, when every feature is in.
    `request_accept` a moved frame reference creates a thread; the stage 3b
    controls (condition 3, the stack's CREVOKE, the `mprotect` check) still
    fail where expected.
+4b. **Fixes after the review of stage 4. Done** (2026-11-13).
+   - Thread table: the last one to leave frees an entry. An exit frees its
+     entry unless joiners wait; then it marks the entry done and wakes them,
+     and the last joiner to leave frees it. Earlier joiners leave it alone, so
+     two joiners of one thread both return and the entry is freed once. A join
+     answers 0 for every thread that has exited, before or after the call: the
+     module never reuses a thread id, so an id at or below the highest one
+     issued without an entry has exited. An id never issued answers ESRCH, the
+     caller's own EDEADLK. Exits without an exit word that are never joined
+     free their entries, so they cannot fill the table. `thread_remove` and the
+     `remove` parameter are gone; a rolled-back create frees its entry as an
+     exit does, after the frame. The table (32 entries) now fills only with
+     live threads, as the module's limit (32 threads) does, so the module
+     refuses first (ENOSPC, the frame stays the program's); the launcher's
+     rollback after the module took the frame is tested behind a launcher with
+     a 4-entry table.
+   - Exit word: the launcher writes it only if it is an aligned int inside one
+     registered mapping, in pages the program's grant may write and Linux maps
+     read-write (each mapping keeps a conservative writable range that
+     `protect_range` updates), outside the thread's frame, and admitted by the
+     module. Overlap tests are overflow-safe. A word that fails is not written,
+     the launcher logs `CAPSTONE_VM_EXIT_WORD_REFUSED` with the reason, and the
+     exit completes; joiners through the launcher return at its completion. A
+     word inside the stack keeps the stack mapped, as in stage 4.
+   - Attach: a worker's attachment requires both transport blocks inside the
+     writable range (`CAPSTONE_VM_TRANSPORT_REFUSED` otherwise, and the launcher
+     ends the program, as for every malformed transport). Held mappings still
+     answer EBUSY to `mprotect`.
+   - `mremap`: before it copies anything the libc asks the new mapping check
+     (`CV_SERVICE_MAPPING_CHECK`, 15): the launcher's gate as for munmap, the
+     module's whole-reference check through `CV_PROTECT` (which reads the
+     service from the caller's a7), and ENOTSUP unless the mapping is
+     read-write over its whole length. Nothing changes. Then map, copy at most
+     the old visible length and unmap the old mapping. A same-size resize
+     returns p after the check. A failed cleanup unmap of the new mapping traps,
+     here and in `__heap_remapping`, which asks no check (its group and length
+     are the allocator's own). Limits: only read-write anonymous mappings move,
+     and a write of another thread during the copy may be lost, as for
+     `realloc`.
+   - The remap transaction is deleted for both `root_grants` values: the
+     module's `remap_begin`, `remap_end` and its wait, the ioctls 25 and 26 and
+     `struct cv_remap`, the launcher's `remap_mapping`, service 13 (it answers
+     ENOSYS) and the `__capstone_vm_remap` stub.
+   ABI: service 13 removed, service 15 added, ioctls 25 and 26 removed; the
+   other ioctl structures keep their layout. The launcher's stats print a
+   thread census, `CAPSTONE_VM_THREADS count=... issued=...`.
+   Unit test: root-contract.c, five new modes (`join-two`, `join-after`,
+   `exit-many`, `exit-word`, `attach-readonly`), `mremap` extended (an
+   oversized old length, a same-size resize, a stale same-size reference, a
+   read-only mapping) and `create-fail` rewritten for live threads. Two
+   batches on the final images, equal counts: root_grants=1 274 of 274 pinned
+   and unpinned, root_grants=0 270 of 270, hosted contract 94 of 94, mapcache
+   park and revive, a launcher without its length check 90 of 90, a launcher
+   that names the frame around a0's cursor 30 of 30, the 4-entry table 50 of 50
+   with and without root grants. Controls: the stage 4 thread table makes
+   join-two's second joiner hang, the join after a worded exit answer ESRCH
+   and the 32nd unjoined create fail; without the writable range the launcher
+   faults at the read-only exit word and at the read into the read-only
+   exchange; without the alignment check the launcher's store to the unaligned
+   word traps to the firmware, which halts the machine at that address; a libc
+   whose mremap copies first takes a bounds fault (28) at the oversized old
+   length. The stage 4 controls still fail where expected.
 5. **Remove the old path.** Drop the parameter, `arena.ancestor`, the private
    parents and the collection paths that exist only for them. `CSMINT` stays
    at one site. Pending a decision of the project lead (2026-11-13): the
    root_grants=0 path stays for now, since the FPGA bitstream lacks the new
    instruction rules (supervisor references), and without that path the
-   adapter does not run on the board. Until the decision, this stage deletes
-   only the remap transaction, which neither path calls (`remap_begin`,
-   `remap_end`, `CV_REMAP_BEGIN`, `CV_REMAP_END`, `CV_SERVICE_REMAP`, the
-   launcher's `remap_mapping` and the `__capstone_vm_remap` stub).
+   adapter does not run on the board. The remap transaction, which neither
+   path called, is already gone (stage 4b).
 6. **End to end, once.** After the open design points that we implement are
    in as well: landing gates, port gates, bug corpora, Juliet, the reuse
    study. Regenerate the recorded results.

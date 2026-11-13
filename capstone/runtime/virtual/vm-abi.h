@@ -17,6 +17,9 @@
  * leaves the frame the program's. */
 #define CV_SERVICE_THREAD_CREATE 3
 #define CV_SERVICE_THREAD_EXIT 4
+/* a0 the thread id. 0 once that thread has exited, also when it exited before the call (thread
+ * ids are never reused). -ESRCH for an id never issued, -EDEADLK for the caller's own. Any number
+ * of threads may join one thread. */
 #define CV_SERVICE_THREAD_JOIN 5
 /* a0: the reference of the mapping, its cursor the first page; a1 the length; a2 the protection.
  * With root_grants the kernel checks the reference as for munmap, except that the range may be
@@ -28,19 +31,30 @@
 /* a0 the exit word, a1 the reference of the mapping that holds the thread's stack (or 0), a2 its
  * length, a3 the status. With root_grants the stack is unmapped only through a1, as for munmap.
  * A refused stack does not stop the exit: the mapping stays, and the program can still unmap it
- * through a reference it kept. A stack of the wrong length, one that holds the exit word and the
- * thread's own frame are refused this way. */
+ * through a reference it kept. A stack of the wrong length and one that holds the exit word are
+ * refused this way. A stack that is the thread's own frame is refused as a stack too, but the exit
+ * releases the frame, which ends that mapping. After the thread has stopped the launcher stores 0
+ * into the exit word and wakes its futex waiters, if the word is an aligned int inside one mapping,
+ * in pages the program may write and the launcher maps read-write, and outside the frame. A word
+ * that fails is not written (the launcher logs the refusal) and the exit still completes. */
 #define CV_SERVICE_PTHREAD_EXIT 9
 #define CV_SERVICE_THREAD_DELEGATE 10
 /* The calling context's launcher id + 1. Since the transport lock reads its identity from gp's
  * cursor (delegate.c dl_wire_identity), only a context created with no identity slot free asks. */
 #define CV_SERVICE_THREAD_SELF 11
 #define CV_SERVICE_NODES 12
-#define CV_SERVICE_REMAP 13
+/* 13 was the remap transaction of the first design (no caller since the libc's mremap became
+ * map, copy and unmap); it answers ENOSYS. */
 /* A worker gives its transport (meta block and exchange region) back: the launcher stops
  * writing into them and releases its hold on their mappings, which until then refuses their
  * unmap to everyone, the worker included. The worker's next delegate service attaches again. */
 #define CV_SERVICE_TRANSPORT_DETACH 14
+/* a0 the reference of a mapping, a1 its length. Answers 0 if a request to end that mapping would
+ * be accepted (as for munmap: with root_grants a live reference to the whole mapping, and a1 its
+ * whole visible length; EINVAL otherwise, EBUSY while a worker's transport holds it) and every
+ * page of it is read-write (ENOTSUP otherwise). Changes nothing. The libc's mremap asks it before
+ * it copies anything. */
+#define CV_SERVICE_MAPPING_CHECK 15
 /* Node instructions pause at this remaining cleanup reserve. */
 #define CV_NODE_RESERVE 256
 #define CV_MAP_HEAP 0

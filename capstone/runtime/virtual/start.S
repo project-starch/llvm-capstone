@@ -73,9 +73,9 @@ __capstone_vm_acquire:
     li a7, CV_SERVICE_MAP
     ecall
     ret
-.global __capstone_vm_remap
-__capstone_vm_remap:
-    li a7, CV_SERVICE_REMAP
+.global __capstone_vm_mapping_check
+__capstone_vm_mapping_check:
+    li a7, CV_SERVICE_MAPPING_CHECK
     ecall
     ret
 .global __capstone_vm_unmap

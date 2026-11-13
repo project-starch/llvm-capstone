@@ -86,6 +86,17 @@ runtime of today already refuses partial unmaps, fixed mappings and in-place
 `mremap`, and every evaluated program runs with these limits. Extending the
 machine with page availability is the way to allow partial unmaps later.
 
+The prototype's `mremap` (stage 4b of the adapter plan) is map, copy and
+unmap in the libc, not one kernel step. Before it copies anything it asks the
+kernel, without changing anything, whether `munmap` of the old mapping through
+the same reference and length would be accepted, so a stale reference, an
+object below P or a wrong length fails with nothing changed and never faults
+in the copy. It moves only an anonymous mapping that is read-write over its
+whole length, and refuses every other one (`ENOTSUP`). The old reservation
+ends through P, as at `munmap`. The copy is not atomic for the program's
+other threads: a write to the old mapping during the copy may be lost, as for
+`realloc`.
+
 `madvise(MADV_DONTNEED)` and `MADV_FREE` change backing, not lifetimes, and
 need no revocation: a fresh page carries no tag.
 

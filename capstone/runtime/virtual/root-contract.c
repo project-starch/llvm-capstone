@@ -53,12 +53,21 @@
  * renew-ref (ends with a fault): as renew, and the last line reads through the renewed reference
  *                                   itself.
  * mremap (ends with a fault): the libc's mremap (map, copy, unmap) of a two-page mapping that
- *                                   holds data and, at offset 64, a reference to another mapping
- *   mremap_wrong_length_refused     an old length that is not the mapping's: the unmap of the old
- *                                   mapping is refused, so mremap fails with EINVAL, and the old
- *                                   mapping keeps its contents and takes writes
+ *                                   holds data and, at offset 64, a reference to another mapping.
+ *                                   Its mapping check refuses before anything is copied.
+ *   mremap_wrong_length_refused     an old length shorter than the mapping's: mremap fails with
+ *                                   EINVAL, and the old mapping keeps its contents and takes writes
+ *   mremap_oversized_old_refused    the same with an old length beyond the mapping: EINVAL, no
+ *                                   fault (a copy before the check reads past the reference)
  *   mremap_nested_object_refused (root grants)
  *                                   the same through an object over the whole mapping
+ *   mremap_same_size_returns_reference
+ *                                   a resize to the same page count returns the reference
+ *   mremap_same_size_stale_refused (root grants)
+ *                                   the same through the reference from before CRENEW of another
+ *                                   mapping: EINVAL; the renewed reference then succeeds
+ *   mremap_read_only_refused        the mapping made read-only: ENOTSUP, the mapping stays
+ *                                   read-only with its contents; then write rights are restored
  *   public_mremap_grows             mremap to three pages moves the data and the stored reference,
  *                                   which still reads its object; the third page reads zero
  *   mremap_old_reference_refused    munmap through the old reference afterwards is refused
@@ -89,11 +98,48 @@
  *                                   reference still works
  *   create_with_renewed_frame       the create through the renewed reference succeeds; the last
  *                                   line reads the frame through it and must fault with 25.
- * create-fail (exit 0):
- *   failed_create_releases_frame    the launcher's thread table is full (31 contexts exited and not
- *                                   joined), so the launcher fails the create after the module
- *                                   took the frame: the create answers EAGAIN and the frame's
- *                                   mapping is no longer registered (registered())
+ * create-fail (exit 0): contexts that wait until the main thread releases them are created
+ *                                   until a create fails. An exit frees its table entry, so the
+ *                                   launcher's table (32 entries) fills only with live threads,
+ *                                   as the module's limit (32 threads) does:
+ *   module_limit_keeps_frame        with the launcher's own table the module refuses first
+ *                                   (ENOSPC), and the frame stays the program's and unmaps
+ *   failed_create_releases_frame    behind a launcher with a smaller table
+ *                                   (run-root-grants.py --launcher-small-table) the launcher fails
+ *                                   the create after the module took the frame: EAGAIN, and the
+ *                                   frame's mapping is no longer registered (registered())
+ * join-two (exit 0):
+ *   two_joiners_return              two contexts join one context that waits until released;
+ *                                   after the release both joins return 0
+ *   thread_after_two_joiners        a new context is then created and joined (the main thread's
+ *                                   table census at exit, CAPSTONE_VM_THREADS, shows count=1)
+ * join-after (exit 0):
+ *   join_after_word_exit            a join of a context that exited with an exit word, after the
+ *                                   launcher wrote the word, returns 0
+ *   join_after_raw_exit             the same for a context that exited without an exit word
+ *   join_unknown_id_refused         a second join of both returns 0; an id never issued: ESRCH
+ * exit-many (exit 0):
+ *   exit_unjoined_many_then_create  40 contexts exit without an exit word one after the other and
+ *                                   none is joined; then one more is created and joined
+ * exit-word (exit 0): contexts exit naming an exit word the launcher must not write. Each exit
+ *                                   completes, the join returns 0, and the word's bytes keep
+ *                                   their value. The launcher logs each refusal
+ *                                   (CAPSTONE_VM_EXIT_WORD_REFUSED reason=...)
+ *   unaligned_exit_word_not_written a word one byte into an int of the image's data
+ *   straddling_exit_word_not_written
+ *                                   a word over the end of one mapping and the start of the
+ *                                   mapping right above it, which is the exiting thread's stack
+ *                                   and is released at the exit
+ *   read_only_exit_word_not_written a word in a page the program made read-only
+ *   writable_exit_word_written      the same word after write rights are restored: written
+ *   frame_exit_word_not_written     a word in the exiting thread's own frame, which the exit
+ *                                   releases
+ * attach-readonly (exit 125):
+ *   attach_protect_before_attach    a pthread detaches its transport (the launcher's hold ends) and
+ *                                   makes its exchange region read-only; its read() then attaches
+ *                                   the transport again, the launcher refuses the attachment
+ *                                   (CAPSTONE_VM_TRANSPORT_REFUSED) and ends the program, so
+ *                                   ROOT_ATTACH_READ never prints
  * detached (exit 0):
  *   detached_exit_unmaps_stack      a detached pthread exits through musl's __unmapself: its stack
  *                                   mapping is registered before the exit and gone after it.
@@ -164,6 +210,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <unistd.h>
 #include <sys/mman.h>
 #include <capstone/capability.h>
 #include <capstone/virtual.h>
@@ -471,9 +518,11 @@ static int mode_renew(int through_object)
     return 0;
 }
 
-/* mremap: the libc's mremap maps a new reservation, copies the contents with their tags and
- * unmaps the old reservation through the program's reference (mapping.c). The stored reference
- * at offset 64 names another mapping. */
+static int protected_as(unsigned long address, const char *rights);
+
+/* mremap: the libc's mremap asks the mapping check, then maps a new reservation, copies the
+ * contents with their tags and unmaps the old reservation through the program's reference
+ * (mapping.c). The stored reference at offset 64 names another mapping. */
 static int mode_mremap(void)
 {
     (void)grant();
@@ -492,6 +541,16 @@ static int mode_mremap(void)
             (*(char **)(p + 64))[1] == 0x71, "the old mapping after the refused mremap");
     pass("mremap_wrong_length_refused");
 
+    printf("ROOT_MREMAP case=oversized\n");
+    fflush(stdout);
+    errno = 0;
+    require(mremap(p, 3 * PAGE, 4 * PAGE, MREMAP_MAYMOVE) == MAP_FAILED && errno == EINVAL,
+            "mremap with an old length beyond the mapping");
+    p[4] = 0x65;
+    require(p[0] == 0x61 && p[4] == 0x65 && p[2 * PAGE - 1] == 0x61,
+            "the old mapping after the oversized mremap");
+    pass("mremap_oversized_old_refused");
+
     if (root_grants) {
         char *object = capstone_cap_derive(p, 0, 2 * PAGE);
         errno = 0;
@@ -504,6 +563,35 @@ static int mode_mremap(void)
     } else {
         skip("mremap_nested_object_refused", BY_ADDRESS);
     }
+
+    char *same = mremap(p, 2 * PAGE, 2 * PAGE - 100, MREMAP_MAYMOVE);
+    require(same != MAP_FAILED && cursor(same) == address && type_of(same) == 1 && same[4] == 0x65,
+            "mremap to the same page count returns the reference");
+    pass("mremap_same_size_returns_reference");
+
+    if (root_grants) {
+        char *s = map(PAGE);
+        s[1] = 0x66;
+        char *renewed = capstone_cap_renew(s);
+        errno = 0;
+        require(mremap(s, PAGE, PAGE, MREMAP_MAYMOVE) == MAP_FAILED && errno == EINVAL,
+                "mremap to the same size through the reference from before CRENEW");
+        char *kept = mremap(renewed, PAGE, PAGE, MREMAP_MAYMOVE);
+        require(kept != MAP_FAILED && cursor(kept) == cursor(renewed) && renewed[1] == 0x66,
+                "mremap to the same size through the renewed reference");
+        pass("mremap_same_size_stale_refused");
+    } else {
+        skip("mremap_same_size_stale_refused", BY_ADDRESS);
+    }
+
+    require(!mprotect(p, 2 * PAGE, PROT_READ), "make the mapping read-only");
+    errno = 0;
+    require(mremap(p, 2 * PAGE, 3 * PAGE, MREMAP_MAYMOVE) == MAP_FAILED && errno == ENOTSUP,
+            "mremap of a read-only mapping");
+    require(protected_as(address, "r--") && protected_as(address + PAGE, "r--") &&
+            p[0] == 0x61 && p[4] == 0x65, "the read-only mapping after the refused mremap");
+    require(!mprotect(p, 2 * PAGE, PROT_READ | PROT_WRITE), "restore write rights");
+    pass("mremap_read_only_refused");
 
     char *q = mremap(p, 2 * PAGE, 3 * PAGE, MREMAP_MAYMOVE);
     require(q != MAP_FAILED && cursor(q) != address, "mremap to three pages moves the mapping");
@@ -744,46 +832,202 @@ static void *idle_entry(void *arg)
     return arg;
 }
 
+/* Contexts that wait until the main thread releases them (release_blocked), on a futex of the
+ * launcher's: the futex service is not a delegated call, so it needs no transport. */
+static volatile int release_word;
+
+static void *blocked_entry(void *arg)
+{
+    while (!__atomic_load_n(&release_word, __ATOMIC_ACQUIRE))
+        __capstone_vm_futex((void *)&release_word, 0 /* FUTEX_WAIT */, 0, -1, 0, 0);
+    return arg;
+}
+
+static void release_blocked(void)
+{
+    __atomic_store_n(&release_word, 1, __ATOMIC_RELEASE);
+    __capstone_vm_futex((void *)&release_word, 1 /* FUTEX_WAKE */, 1 << 30, -1, 0, 0);
+}
+
+/* Wait until *flag reaches value, for at most about ms milliseconds. */
+static int wait_for(volatile int *flag, int value, long ms)
+{
+    for (long waited = 0; __atomic_load_n(flag, __ATOMIC_ACQUIRE) < value; waited += 10) {
+        if (waited >= ms)
+            return 0;
+        pause_ms(10);
+    }
+    return 1;
+}
+
 static int mode_create_fail(void)
 {
     (void)grant();
-    char *stacks = map((IDLE_THREADS + 1) * STACK);
-    long ids[IDLE_THREADS];
+    char *stacks = map((IDLE_THREADS + 2) * STACK);
+    long ids[IDLE_THREADS + 1];
+    unsigned live = 0;
+    unsigned char *frame;
+    uintptr_t identity;
+    long id;
 
-    /* Fill the launcher's thread table: contexts that exit and are not joined keep their entries
-     * there, while the module has let them go. */
-    for (unsigned i = 0; i < IDLE_THREADS; ++i) {
-        ids[i] = __capstone_virtual_context_create(idle_entry, NULL, stacks + (i + 1) * STACK,
-                                                   thread_pointer());
-        require(ids[i] > 0, "create an idle context");
+    /* Blocked contexts until a create fails. Each exit frees its entry, so only live contexts
+     * fill the table. */
+    for (;;) {
+        frame = frame_new(blocked_entry, stacks + (live + 1) * STACK, &identity);
+        id = __capstone_vm_thread_create_frame(frame);
+        if (id <= 0)
+            break;
+        require(live < IDLE_THREADS + 1, "a create fails once the thread table is full");
+        ids[live++] = id;
     }
-    for (unsigned spins = 0; __atomic_load_n(&idle_done, __ATOMIC_ACQUIRE) < IDLE_THREADS; ++spins) {
-        require(spins < 1000, "the idle contexts finish");
+    __capstone_context_identity_give(identity);
+    int probe = registered(cursor(frame));
+    printf("ROOT_CREATE_FAIL live=%u result=%ld registered=%d\n", live, id, probe);
+    fflush(stdout);
+    if (id == -EAGAIN) {
+        require(!probe, "the frame's mapping is no longer registered");
+        pass("failed_create_releases_frame");
+    } else if (id == -ENOSPC) {
+        require(probe && !munmap(frame, PAGE), "the frame stays the program's and unmaps");
+        pass("module_limit_keeps_frame");
+    } else {
+        fail("the create fails with EAGAIN or ENOSPC");
+    }
+
+    release_blocked();
+    for (unsigned i = 0; i < live; ++i)
+        require(!capstone_virtual_thread_join(ids[i]), "join a released context");
+    return 0;
+}
+
+/* join-two: two contexts join one context. The launcher keeps the joined context's table entry
+ * while joiners wait, and the last joiner to leave frees it. */
+extern long __capstone_vm_thread_join(long thread);
+static volatile long join_target;
+static volatile long join_result[2] = {1, 1};
+static volatile int joins_returned;
+
+static void *joiner_entry(void *arg)
+{
+    long rc = __capstone_vm_thread_join(join_target);
+    unsigned k = __atomic_fetch_add(&joins_returned, 1, __ATOMIC_ACQ_REL);
+    if (k < 2)
+        join_result[k] = rc;
+    return arg;
+}
+
+static long context(void *(*entry)(void *), char *stack_top)
+{
+    long id = __capstone_virtual_context_create(entry, NULL, stack_top, thread_pointer());
+    require(id > 0, "create a context");
+    return id;
+}
+
+static int mode_join_two(void)
+{
+    (void)grant();
+    char *stacks = map(4 * STACK);
+
+    long target = context(blocked_entry, stacks + STACK);
+    join_target = target;
+    long first = context(joiner_entry, stacks + 2 * STACK);
+    long second = context(joiner_entry, stacks + 3 * STACK);
+    /* Both joiners reach the launcher's join long before this pause ends. */
+    pause_ms(500);
+    require(!__atomic_load_n(&joins_returned, __ATOMIC_ACQUIRE), "no join returns before the exit");
+    release_blocked();
+    int both = wait_for(&joins_returned, 2, 5000);
+    printf("ROOT_JOIN_TWO returned=%d first=%ld second=%ld\n", joins_returned, join_result[0],
+           join_result[1]);
+    fflush(stdout);
+    require(both, "both joiners return");
+    require(join_result[0] == 0 && join_result[1] == 0, "both joins answer 0");
+    require(!capstone_virtual_thread_join(first) && !capstone_virtual_thread_join(second),
+            "join the joiners");
+    pass("two_joiners_return");
+
+    idle_done = 0;
+    long next = context(idle_entry, stacks + STACK);
+    require(!capstone_virtual_thread_join(next) && idle_done == 1, "a new context after the joins");
+    pass("thread_after_two_joiners");
+    return 0;
+}
+
+/* join-after: joins that arrive after the exit. */
+static volatile int exit_word;
+
+static void *exit_word_worker(void *arg);
+
+static int mode_join_after(void)
+{
+    (void)grant();
+    char *stacks = map(3 * STACK);
+
+    exit_operand = NULL;
+    exit_bytes = 0;
+    exit_word = 1;
+    long worded = context(exit_word_worker, stacks + STACK);
+    for (unsigned spins = 0; __atomic_load_n(&exit_word, __ATOMIC_ACQUIRE); ++spins) {
+        require(spins < 500, "the launcher writes the exit word");
         pause_ms(10);
     }
     pause_ms(200);
+    long rc = capstone_virtual_thread_join(worded) ? -errno : 0;
+    printf("ROOT_JOIN_AFTER worded=%ld\n", rc);
+    fflush(stdout);
+    require(rc == 0, "a join after an exit with an exit word");
+    pass("join_after_word_exit");
 
-    uintptr_t identity;
-    unsigned char *frame = frame_new(frame_child, stacks + (IDLE_THREADS + 1) * STACK, &identity);
-    unsigned long address = cursor(frame);
-    long id;
-    for (unsigned tries = 0;; ++tries) {
-        id = __capstone_vm_thread_create_frame(frame);
-        if ((id == -EBUSY || id == -ENOSPC) && tries < 100) { pause_ms(20); continue; }
-        break;
+    idle_done = 0;
+    long raw = context(idle_entry, stacks + 2 * STACK);
+    require(wait_for(&idle_done, 1, 5000), "the context runs");
+    pause_ms(200);
+    rc = capstone_virtual_thread_join(raw) ? -errno : 0;
+    printf("ROOT_JOIN_AFTER raw=%ld\n", rc);
+    fflush(stdout);
+    require(rc == 0, "a join after an exit without an exit word");
+    pass("join_after_raw_exit");
+
+    require(!capstone_virtual_thread_join(worded) && !capstone_virtual_thread_join(raw),
+            "a second join of both");
+    rc = __capstone_vm_thread_join(raw + 1000);
+    printf("ROOT_JOIN_AFTER unknown=%ld\n", rc);
+    fflush(stdout);
+    require(rc == -ESRCH, "a join of an id never issued");
+    pass("join_unknown_id_refused");
+    return 0;
+}
+
+/* exit-many: more contexts than the launcher's table holds exit without an exit word, one after
+ * the other, and none is joined. */
+#define MANY_THREADS 40
+
+static int mode_exit_many(void)
+{
+    (void)grant();
+    char *stacks = map((MANY_THREADS + 1) * STACK);
+    long first = 0;
+
+    idle_done = 0;
+    for (unsigned i = 0; i < MANY_THREADS; ++i) {
+        long id = __capstone_virtual_context_create(idle_entry, NULL, stacks + (i + 1) * STACK,
+                                                    thread_pointer());
+        if (id <= 0) {
+            printf("ROOT_EXIT_MANY failed_at=%u errno=%d\n", i, errno);
+            fflush(stdout);
+            fail("create a context while earlier ones exited unjoined");
+        }
+        if (!first)
+            first = id;
+        require(wait_for(&idle_done, (int)i + 1, 5000), "the context runs");
+        pause_ms(5);
     }
-    printf("ROOT_CREATE_FAIL result=%ld\n", id);
+    long last = context(idle_entry, stacks + (MANY_THREADS + 1) * STACK);
+    require(!capstone_virtual_thread_join(last), "join the context after the unjoined ones");
+    require(!capstone_virtual_thread_join(first), "a late join of the first unjoined context");
+    printf("ROOT_EXIT_MANY contexts=%d\n", MANY_THREADS + 1);
     fflush(stdout);
-    require(id == -EAGAIN, "the launcher fails the create after the module took the frame");
-    __capstone_context_identity_give(identity);
-    int probe = registered(address);
-    printf("ROOT_FRAME_PROBE registered=%d\n", probe);
-    fflush(stdout);
-    require(!probe, "the frame's mapping is no longer registered");
-    pass("failed_create_releases_frame");
-
-    for (unsigned i = 0; i < IDLE_THREADS; ++i)
-        require(!capstone_virtual_thread_join(ids[i]), "join an idle context");
+    pass("exit_unjoined_many_then_create");
     return 0;
 }
 
@@ -841,9 +1085,8 @@ static int mode_detached(void)
  * not the mapping's, STACK - PAGE or 2^64 - 1. The exit completes and writes the exit word; the
  * mapping stays until the program unmaps it through the reference it kept. The exit word lies
  * outside the stack, so a launcher that checks it against the base and the length the program
- * names (and not against the mapping it found) stops at the huge length. */
-static volatile int exit_word;
-
+ * names (and not against the mapping it found) stops at the huge length. exit_word is defined
+ * with join-after. */
 static void *exit_word_worker(void *arg)
 {
     (void)arg;
@@ -1067,6 +1310,135 @@ static int mode_protect_held(void)
     return 0;
 }
 
+/* exit-word: exits naming an exit word that the launcher must not write. Each context runs on
+ * its own stack and exits through the exit service with the word, the stack operand and its
+ * length set here; the main thread joins it. */
+static volatile unsigned long word_address;
+static void *volatile word_stack;
+static volatile unsigned long word_stack_bytes;
+static volatile int words[2];
+
+static void *word_exit_worker(void *arg)
+{
+    (void)arg;
+    __capstone_vm_thread_exit_clear(word_address, word_stack, word_stack_bytes, 0);
+}
+
+static void exit_with_word(unsigned long word, void *stack, unsigned long bytes, char *own_top)
+{
+    word_address = word;
+    word_stack = stack;
+    word_stack_bytes = bytes;
+    long id = context(word_exit_worker, own_top);
+    require(!capstone_virtual_thread_join(id), "join the context");
+}
+
+static int mode_exit_word(void)
+{
+    (void)grant();
+    char *own = map(STACK);
+
+    words[0] = words[1] = 0x11111111;
+    printf("ROOT_EXIT_WORD case=unaligned word=0x%lx\n", cursor((void *)words) + 1);
+    fflush(stdout);
+    exit_with_word(cursor((void *)words) + 1, NULL, 0, own + STACK);
+    require(words[0] == 0x11111111 && words[1] == 0x11111111, "the unaligned word keeps its bytes");
+    pass("unaligned_exit_word_not_written");
+
+    /* Two heap grants in a row: the launcher places each one right below the one before where
+     * that range is free, so the second (low) ends where the first (the thread's stack) begins.
+     * A pair that did not land so is left mapped and the next pair tried. */
+    char *stack = NULL, *low = NULL;
+    unsigned tries = 0;
+    for (; tries < 8; ++tries) {
+        sublet_cap slot;
+        require(!cap_vm_acquire(&slot, STACK, PAGE, PROT_READ | PROT_WRITE, 6, CAP_VM_HEAP),
+                "the thread's stack");
+        stack = cap_vm_copyable(&slot);
+        require(!cap_vm_acquire(&slot, PAGE, PAGE, PROT_READ | PROT_WRITE, 6, CAP_VM_HEAP),
+                "the mapping below the stack");
+        low = cap_vm_copyable(&slot);
+        if (cursor(low) + PAGE == cursor(stack)) break;
+    }
+    unsigned long stack_address = cursor(stack);
+    printf("ROOT_STRADDLE adjacent=%d tries=%u\n", cursor(low) + PAGE == stack_address, tries + 1);
+    fflush(stdout);
+    low[PAGE - 2] = 0x5a;
+    low[PAGE - 1] = 0x5b;
+    exit_with_word(stack_address - 2, stack, STACK, stack + STACK);
+    require(low[PAGE - 2] == 0x5a && low[PAGE - 1] == 0x5b, "the straddling word keeps its bytes");
+    require(!registered(stack_address), "the stack is released");
+    pass("straddling_exit_word_not_written");
+
+    char *page = map(PAGE);
+    *(volatile int *)(page + 64) = 0x2222;
+    require(!mprotect(page, PAGE, PROT_READ), "make the word's page read-only");
+    printf("ROOT_EXIT_WORD case=read-only\n");
+    fflush(stdout);
+    exit_with_word(cursor(page) + 64, NULL, 0, own + STACK);
+    require(*(volatile int *)(page + 64) == 0x2222, "the read-only word keeps its value");
+    pass("read_only_exit_word_not_written");
+    require(!mprotect(page, PAGE, PROT_READ | PROT_WRITE), "restore write rights");
+    exit_with_word(cursor(page) + 64, NULL, 0, own + STACK);
+    require(*(volatile int *)(page + 64) == 0, "the launcher writes the word again");
+    pass("writable_exit_word_written");
+
+    uintptr_t identity;
+    unsigned char *frame = frame_new(word_exit_worker, own + STACK, &identity);
+    unsigned long frame_address = cursor(frame);
+    word_address = frame_address + 64;
+    word_stack = NULL;
+    word_stack_bytes = 0;
+    long id = __capstone_vm_thread_create_frame(frame);
+    require(id > 0, "create the thread on its frame");
+    require(!capstone_virtual_thread_join(id), "join the thread that named its frame");
+    require(!registered(frame_address), "the frame is released");
+    pass("frame_exit_word_not_written");
+    return 0;
+}
+
+/* attach-readonly: a pthread detaches its transport, which ends the launcher's hold on its
+ * blocks, and makes its exchange region read-only. Its next delegated call, a read(), attaches
+ * the transport again, and the launcher, which would write the read's data into the exchange
+ * region, refuses the attachment and ends the program. */
+static volatile int attach_errno = -1;
+static volatile int attach_ready, attach_go;
+static int attach_fds[2];
+static volatile long attach_read = -1000;
+
+static void *attach_worker(void *arg)
+{
+    char *exchange = __capstone_virtual_exchange();
+    __capstone_vm_transport_detach();
+    attach_errno = !exchange ? -2 : mprotect(exchange, LARGE, PROT_READ) ? errno : 0;
+    __atomic_store_n(&attach_ready, 1, __ATOMIC_RELEASE);
+    while (!__atomic_load_n(&attach_go, __ATOMIC_ACQUIRE))
+        __capstone_vm_futex((void *)&attach_go, 0 /* FUTEX_WAIT */, 0, -1, 0, 0);
+    char buffer[8];
+    attach_read = read(attach_fds[0], buffer, sizeof buffer);
+    return arg;
+}
+
+static int mode_attach_readonly(void)
+{
+    (void)grant();
+    pthread_t thread;
+    require(!pipe(attach_fds) && write(attach_fds[1], "transpor", 8) == 8, "a pipe with data");
+    require(!pthread_create(&thread, NULL, attach_worker, NULL), "pthread_create");
+    require(wait_for(&attach_ready, 1, 10000), "the worker starts");
+    printf("ROOT_ATTACH protect_errno=%d\n", attach_errno);
+    fflush(stdout);
+    require(attach_errno == 0, "mprotect of the exchange region before the worker attaches");
+    pass("attach_protect_before_attach");
+    __atomic_store_n(&attach_go, 1, __ATOMIC_RELEASE);
+    __capstone_vm_futex((void *)&attach_go, 1 /* FUTEX_WAKE */, 1, -1, 0, 0);
+    for (unsigned spins = 0; spins < 500 && attach_read == -1000; ++spins)
+        pause_ms(10);
+    printf("ROOT_ATTACH_READ result=%ld\n", attach_read);
+    fflush(stdout);
+    return 0;
+}
+
 /* The base of a reference's bounds (LCC selector 3). */
 static unsigned long base_of(void *p)
 {
@@ -1158,6 +1530,11 @@ int main(int argc, char **argv)
     if (!strcmp(mode, "protect-held")) return mode_protect_held();
     if (!strcmp(mode, "protect")) return mode_protect();
     if (!strcmp(mode, "create-gate")) return mode_create_gate();
+    if (!strcmp(mode, "join-two")) return mode_join_two();
+    if (!strcmp(mode, "join-after")) return mode_join_after();
+    if (!strcmp(mode, "exit-many")) return mode_exit_many();
+    if (!strcmp(mode, "exit-word")) return mode_exit_word();
+    if (!strcmp(mode, "attach-readonly")) return mode_attach_readonly();
     fail("unknown mode");
     return 1;
 }

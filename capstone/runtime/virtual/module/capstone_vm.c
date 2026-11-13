@@ -53,8 +53,7 @@ _Static_assert(sizeof(struct cv_step) == 136, "cv_step is two user-copy chunks a
 #include "native-grant.h"
 _Static_assert(CV_NODE_RESERVE == CAP_REV_TABLE_RESERVE, "processor reserve ABI");
 
-/* One registered mapping. Arenas are allocated one by one and never move, so
- * the remap window may hold a pointer across its unlocked mremap. */
+/* One registered mapping. Arenas are allocated one by one and never move. */
 struct arena {
     struct rb_node node;
     u64 id;
@@ -83,7 +82,7 @@ struct arena {
     unsigned count;
     /* The arena's page census, printed once at its retirement under diag_admit: pages admitted
      * at a fault, by a pin-ahead window, by the resident scan, by CV_TOUCH, or pinned whole at
-     * the mint; released before retirement by a remap's truncation. admits + windows + scans +
+     * the mint; released is 0 since the remap transaction is gone. admits + windows + scans +
      * touches + eager - released is what the retirement sweeps. Counted, not printed, inside a
      * window: a printk per page there added work before the next batch's deadline check. */
     unsigned admits, windows, scans, touches, eager, released;
@@ -92,8 +91,8 @@ struct arena {
     unsigned unpinned_resolves, unpinned_touches, unpinned_events, unpinned_ahead;
     /* Pages are admitted one by one at the domain's first access (resolve). */
     bool lazy;
-    /* The grant was LINEAR: the heap's move-only shape, the one CV_REMAP may grow. lazy used
-     * to imply this; since lazy_grants it does not. */
+    /* The grant was LINEAR: the heap's move-only shape. lazy used to imply this; since
+     * lazy_grants it does not. */
     bool linear;
     /* S-21: the ancestor was already CSRETIREd at CV_THREAD_CREATE, to make a child's frame
      * unreachable by the domain before its first entry. A second retire is not an error, but the
@@ -191,11 +190,6 @@ struct context {
 #endif
     /* The image file, writers denied from CV_IMAGE until release. */
     struct file *image;
-    wait_queue_head_t remap_wait;
-    struct arena *remapping;
-    struct page **remap_pages;
-    u64 remap_thread;
-    unsigned long remap_bytes;
     /* root_grants only. R is the one reference over the address space, in root_slot, and
      * root_index is the index of its record. ref_pages are the kernel pages that hold R and one
      * copy of each mapping's reference in 16-byte slots, and ref_free chains the unused slots
@@ -1722,9 +1716,10 @@ static void ref_read(unsigned long *slot, unsigned long *type, unsigned long *id
  * reference P in a register of the calling thread, which the escape saved with its tag in the
  * thread's frame: munmap and a park in the mapping cache (CV_UNMAP, a0), the stack at thread exit
  * (CV_THREAD_EXIT, a1, checked before the frame is cleared), the frame's hand-over at thread
- * creation (CV_THREAD_CREATE, a0) and mprotect (CV_PROTECT, a0). The launcher resolves the arena
- * from the reference's cursor and names the caller. The module reads P from the frame slot with
- * LDC and accepts it only if all of these hold
+ * creation (CV_THREAD_CREATE, a0), mprotect (CV_PROTECT, a0) and the mapping check that mremap
+ * makes before it copies (CV_PROTECT at CV_SERVICE_MAPPING_CHECK, a0). The launcher resolves the
+ * arena from the reference's cursor and names the caller. The module reads P from the frame slot
+ * with LDC and accepts it only if all of these hold
  * (docs/design/virtual-capstone/address-space-root.md, section Mappings):
  *
  *   1. The operand is a non-linear reference (LCC type 1; an integer answers 7).
@@ -1742,7 +1737,8 @@ static void ref_read(unsigned long *slot, unsigned long *type, unsigned long *id
  *      opens a thread's stack and a mallocng meta area past their guard page this way.
  *
  * Then a request that ends the mapping ends it with CREVOKE of M (root_end), after everything
- * that can fail: that ends P, every renewal of P and everything below. An mprotect ends nothing.
+ * that can fail: that ends P, every renewal of P and everything below. An mprotect and the
+ * mapping check end nothing.
  * Nothing between the check and the CREVOKE can change the operand: the caller is paused at its
  * service, and every other thread of the context needs vm_lock to run.
  *
@@ -2101,7 +2097,7 @@ static bool supervisor_refs_probe(void)
  * word, which was most of 519.lbm_r's module instructions. */
 /* A store to any word of a granule clears its tag; the data does not matter here, because a
  * page reaches this function only on its way back to Linux (retire of an unmapped or destroyed
- * arena, the tail a remap truncates), where every pinned page is exclusive anonymous memory
+ * arena), where every pinned page is exclusive anonymous memory
  * (resolve() admits nothing else) and nobody reads it again. So one store of zero per granule,
  * eight granules per iteration: the load-and-rewrite form it replaces cost a load, a store and
  * the loop's three instructions per granule (2.9M attempts of a gcc test run's 2129 pages). */
@@ -2287,7 +2283,6 @@ static int park_prepare(struct context *c, struct arena *a)
     if (a->parked || a->ancestor_retired || !a->linear || !a->lazy || a->rx_bytes || a->frames)
         return -EINVAL;
     if (arena_has_thread_frame(c, a)) return -EBUSY;
-    if (c->remapping) return -EBUSY;
     return pin_remaining(c, a, FOLL_FORCE | FOLL_NOFAULT);
 }
 
@@ -2678,105 +2673,6 @@ unpin:
     xa_erase(&c->ids, a->id); kfree(a);
     return -EFAULT;
 }
-/* Linux performs mremap; the adapter only updates lifetime and physical-tag
- * ownership. Pinned frames retained by mremap keep their tags. Truncated frames
- * are cleared before their pins are released. The syscall may fail without
- * changing any capability lifetime. */
-static int remap_begin(struct context *c, const struct cv_remap *r)
-{
-    struct cv_thread *t = find_thread(c, r->thread);
-    struct arena *a;
-    int error;
-    /* The remap transaction belongs to the old design: remap_end retires the private parent and
-     * mints a linear grant over the new range. With root_grants it is refused before anything
-     * changes. No libc code calls it (__capstone_vm_remap): the public mremap and mallocng's
-     * __heap_remapping both map, copy and unmap through the program's references. The removal of
-     * the old path deletes it (docs/plans/2026-11-12-address-space-root-adapter.md, stage 5). */
-    if (root_grants) return -EOPNOTSUPP;
-    if (!c->exact_bounds || c->remapping || !t || t->terminal ||
-        !t->started || t->event != 3 || t->reply_cap ||
-        !r->bytes || r->bytes > CV_MAX_REGION_BYTES || (r->bytes & ~PAGE_MASK))
-        return -EINVAL;
-    a = xa_load(&c->ids, r->id);
-    if (!a || a->parked || !a->linear || arena_has_thread_frame(c, a)) return -EINVAL;
-    if (c->registered_bytes - a->bytes + r->bytes > CV_MAX_BYTES) return -ENOMEM;
-    error = unpinned ? 0 : pin_remaining(c, a, FOLL_FORCE | FOLL_NOFAULT);
-    if (error) return error;
-    error = ensure_nodes(c, 2 + CAP_REV_TABLE_RESERVE);
-    if (error) return error;
-    c->remap_pages = kvcalloc(r->bytes / PAGE_SIZE, sizeof(struct page *), GFP_KERNEL_ACCOUNT);
-    if (!c->remap_pages) return -ENOMEM;
-    c->remapping = a; c->remap_thread = r->thread; c->remap_bytes = r->bytes;
-    return 0;
-}
-static int remap_end(struct context *c, const struct cv_remap *r)
-{
-    struct arena *a = c->remapping;
-    struct cv_thread *t = find_thread(c, r->thread);
-    unsigned long flags, root, result, desc[CV_DESC_WORDS], *slot;
-    unsigned count;
-    struct vm_area_struct *v;
-    bool valid;
-    if (!a || !t || c->remap_thread != r->thread || c->remap_bytes != r->bytes)
-        return -EINVAL;
-    if (!r->address) {
-        kvfree(c->remap_pages); c->remap_pages = NULL; c->remapping = NULL; wake_up_all(&c->remap_wait);
-        return 0;
-    }
-    if ((r->address & ~PAGE_MASK) || r->address > ULONG_MAX-r->bytes ||
-        !access_ok((void __user *)r->address, r->bytes)) return -EINVAL;
-    /* The launcher is trusted, but reject overlap with another registered
-     * arena and malformed VM state before retiring the old ancestor. */
-    if (arena_overlaps(c, r->address, r->bytes, a)) return -EINVAL;
-    mmap_read_lock(c->mm);
-    v = find_vma(c->mm, r->address);
-    valid = v && v->vm_start <= r->address && v->vm_end >= r->address+r->bytes &&
-                 !v->vm_file && !(v->vm_flags & VM_SHARED) &&
-                 (v->vm_flags & (VM_READ|VM_WRITE)) == (VM_READ|VM_WRITE);
-    mmap_read_unlock(c->mm);
-    if (!valid) return -EACCES;
-    slot = t->frame + 28;
-    /* Q-30, the same shape as add(). Unreachable in the FLAT build -- remap_begin returns -EINVAL
-     * when exact_bounds is false -- so this is for the paged build and is written to match rather
-     * than to be exercised here. remap_end only runs on a started context at its heap-grow reply,
-     * so there is no pre-start case to preserve. */
-    slot[0] = 0;
-    slot[1] = 0;
-    count = r->bytes / PAGE_SIZE;
-    for (unsigned i=0; i<min(count, a->count); ++i) c->remap_pages[i] = a->pages[i];
-    /* v7, behaviour-preserving: this slot is the heap's, which is LINEAR, and the old
-     * path let the mint default the cursor to the base. No second slot. */
-    desc[0] = r->address; desc[1] = r->address+r->bytes; desc[2] = 6;
-    desc[3] = r->address; desc[4] = 0; desc[5] = 0;
-    preempt_disable(); local_irq_save(flags); root = select_root(c);
-    asm volatile(".insn r 0x5b, 1, 0x53, %0, %1, zero"
-                 : "=&r"(result) : "r"(a->ancestor) : "memory");
-    if (!result) {
-        asm volatile(".insn r 0x5b, 1, 0x50, %0, %1, %2"
-                     : "=&r"(result) : "r"(slot), "r"(desc) : "memory");
-        a->ancestor = result;
-    } else {
-        restore_root(root); local_irq_restore(flags); preempt_enable();
-        return -EIO;
-    }
-    restore_root(root); local_irq_restore(flags); preempt_enable();
-    for (unsigned i=count; i<a->count; ++i) {
-        if (!a->pages[i]) continue;
-        clear_page_tags(a->pages[i]);
-        set_page_dirty_lock(a->pages[i]); unpin_user_page(a->pages[i]);
-        --c->stats.pinned_pages;
-        ++a->released;
-    }
-    kvfree(a->pages); a->pages = c->remap_pages; c->remap_pages = NULL;
-    /* Rekeying the tree allocates nothing: no new failure after the commit. */
-    rb_erase(&a->node, &c->arenas);
-    c->registered_bytes += r->bytes - a->bytes;
-    a->address = r->address; a->bytes = r->bytes; a->count = count;
-    arena_insert(c, a);
-    c->remapping = NULL; wake_up_all(&c->remap_wait); t->reply_cap = true;
-    return 0;
-}
-
 /* CV_STEP resolves faults and resumes for at most one supervisor quantum;
  * CV_RESOLVE gives its pin-ahead window the same bound. */
 #define CV_STEP_BUDGET_NS (5 * NSEC_PER_MSEC)
@@ -3858,10 +3754,12 @@ static int unmap(struct context *c, struct cv_unmap *r, void __user *user)
 }
 
 /* CV_PROTECT (wire.h): may the program's mprotect of [a0's cursor, + a1) in arena r->id go ahead?
- * Without root_grants the launcher's resolution of the address is the authority, and the module
- * accepts. With root_grants the reference in the caller's saved a0 is: conditions 1 to 3, and its
- * bounds cover the named page range, which lies inside the visible length (request_call). Ends
- * nothing. */
+ * Or, when the caller is paused at CV_SERVICE_MAPPING_CHECK (its a7): would its request to end
+ * that mapping be accepted? mremap asks this before it copies anything. Without root_grants the
+ * launcher's resolution of the address is the authority, and the module accepts. With root_grants
+ * the reference in the caller's saved a0 is: conditions 1 to 3, and its bounds cover the named
+ * range (request_call), which for the mapping check is the whole visible length, as for munmap,
+ * and for mprotect any page range inside it. Ends nothing. */
 static int protect(struct context *c, const struct cv_protect *r)
 {
     struct arena *a = xa_load(&c->ids, r->id);
@@ -3871,6 +3769,9 @@ static int protect(struct context *c, const struct cv_protect *r)
         return -EINVAL;
     if (!root_grants)
         return 0;
+    if (CV_CALLER_ARG(t, 7) == CV_SERVICE_MAPPING_CHECK)
+        return request_accept(c, t, CV_SERVICE_MAPPING_CHECK, a, 10, CV_CALLER_ARG(t, 0),
+                              CV_CALLER_ARG(t, 1), true, "mremap");
     return request_accept(c, t, CV_SERVICE_PROTECT, a, 10, CV_CALLER_ARG(t, 0),
                           CV_CALLER_ARG(t, 1), false, "mprotect");
 }
@@ -4001,13 +3902,7 @@ static long vm_ioctl(struct file *f, unsigned int op, unsigned long arg)
     unsigned long flags;
     if (current->mm != c->mm)
         return -EPERM;
-retry:
     if (mutex_lock_interruptible(&vm_lock)) return -EINTR;
-    if (c->remapping && op != CV_REMAP_END) {
-        mutex_unlock(&vm_lock);
-        if (wait_event_interruptible(c->remap_wait, !READ_ONCE(c->remapping))) return -EINTR;
-        goto retry;
-    }
 #ifdef CV_GRANT_TXN
     if (op == CV_GRANT_TRANSACTION) {
         struct cv_grant_transaction r;
@@ -4057,10 +3952,6 @@ retry:
         else if (!one_inode_per_file(file)) { fput(file); rc = -EOPNOTSUPP; }
         else if ((rc = deny_write_access(file))) fput(file);
         else c->image = file;
-    } else if (op == CV_REMAP_BEGIN || op == CV_REMAP_END) {
-        struct cv_remap r;
-        if (copy_from_user(&r, (void __user *)arg, sizeof(r))) { rc = -EFAULT; goto out; }
-        rc = op == CV_REMAP_BEGIN ? remap_begin(c, &r) : remap_end(c, &r);
     } else if (op == CV_NODES) {
         struct cv_nodes r;
         struct cv_thread *t;
@@ -4488,7 +4379,6 @@ static int vm_open(struct inode *inode, struct file *f)
     if (!c) return -ENOMEM;
     INIT_LIST_HEAD(&c->threads);
     INIT_LIST_HEAD(&c->ref_pages);
-    init_waitqueue_head(&c->remap_wait);
     c->arenas = RB_ROOT;
     xa_init_flags(&c->ids, XA_FLAGS_ACCOUNT);
     c->next_thread = 0;
@@ -4614,7 +4504,6 @@ static int vm_release(struct inode *inode, struct file *f)
     unsigned long flags;
     struct cv_thread *t, *tmp;
     mutex_lock(&vm_lock);
-    kvfree(c->remap_pages);
     list_del(&c->link);
     node_stats(c);
     allocated_total += c->stats.nodes;

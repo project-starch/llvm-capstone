@@ -110,8 +110,13 @@ int __heap_unmapping(void *owner,size_t n)
     return rc;
 }
 
-/* Same map-copy-unmap behavior as the baseline public mremap, retaining its
- * failure guarantee and capability-preserving memcpy. */
+/* Same map-copy-unmap behavior as the public mremap, retaining its failure
+ * guarantee and capability-preserving memcpy. It asks no mapping check first:
+ * p and old are the allocator's own group (an owner from __heap_mapping and the
+ * length it was made with), never a program's operand, and __heap_unmapping
+ * hands the kernel the mapping's own reference from the index. If the unmap of
+ * the old group fails, the new one is unmapped again, which cannot fail for a
+ * mapping made here; a failure traps. */
 void *__heap_remapping(void *p,size_t old,size_t n)
 {
     if (((old+4095)&-4096UL)==((n+4095)&-4096UL)) return p;
@@ -119,7 +124,9 @@ void *__heap_remapping(void *p,size_t old,size_t n)
     if (q==MAP_FAILED) return q;
     memcpy(q,p,old<n?old:n);
     if (__heap_unmapping(p,old)) {
-        int e=errno; __heap_unmapping(q,n); errno=e; return MAP_FAILED;
+        int e=errno;
+        if (__heap_unmapping(q,n)) __builtin_trap();
+        errno=e; return MAP_FAILED;
     }
     return q;
 }

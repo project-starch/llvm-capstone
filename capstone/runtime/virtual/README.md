@@ -209,8 +209,9 @@ rounded bound inside its own slot, short of the neighbouring slot's in-band head
 The option remains available, and the suites are run both ways as a two-sided control.
 This prototype contract is not an RTL or one-bit-tag qualification. Public
 anonymous mmap, page-range mprotect and whole-mapping munmap retain their prior
-scope. The internal mallocng remap path invokes real Linux mremap while the
-adapter parks the namespace and transfers its tracked physical frames.
+scope. mallocng's realloc of a large group maps a new group mapping, copies the
+contents with their tags and unmaps the old one (`__heap_remapping`,
+`malloc-mapping.c`).
 See the [ownership, policy and VM contract](mallocng.md) and the allocator gate.
 
 The collector is only enabled after a complete namespace sweep. If growth
@@ -238,8 +239,11 @@ UNMAP removes an exact whole visible mapping. PROTECT operates on a page range
 inside one registered payload mapping. WAIT yields to Linux without holding
 the transport lock. Metadata mappings are not exposed to public protection or
 retirement services. Images carry `CPONVVM7` (two load segments, see
-`link.ld`); the launcher accepts no other version. REMAP is an internal
-heap VM operation; ordinary malloc/free execute locally. Application ABI-v2's
+`link.ld`); the launcher accepts no other version. MAPPING_CHECK answers,
+without changing anything, whether an unmap of a whole mapping would be accepted
+and the mapping is read-write; `mremap` asks it before it copies. The remap
+transaction of the first design (service 13) is gone. Ordinary malloc/free
+execute locally. Application ABI-v2's
 ordinary delegated system-service format remains independent of this marker.
 
 Linux, the adapter and the runtime belong to the TCB. Linearity concerns
@@ -593,10 +597,12 @@ main stack.
 
 A worker's meta block and exchange region are each a mapping of their own, and
 from the worker's attachment (its first delegate service) the worker holds both
-mappings: an unmap or a remap of a held mapping answers `EBUSY` to every
-caller, the worker included, so the launcher's writes into them never meet a
-fresh mapping at the same address. An attachment naming a mapping that already
-has a holder, or both blocks in one mapping, is refused. The hold ends only
+mappings: an unmap, an `mprotect` or an `mremap` of a held mapping answers
+`EBUSY` to every caller, the worker included, so the launcher's writes into them
+never meet a fresh mapping at the same address or a changed protection. An
+attachment naming a mapping that already has a holder, both blocks in one
+mapping, or a block whose pages are not read-write for the launcher, is refused,
+and the launcher ends the program. The hold ends only
 with the worker's own detach (`CV_SERVICE_TRANSPORT_DETACH`, which the SDK
 issues before it unmaps the blocks) or its exit; a later delegate service
 attaches again, `CV_TOUCH` included. A thread's exit word may not lie in the
@@ -798,11 +804,14 @@ Fork, shared tagged mappings, file-backed
 mmap, partial unmapping, swap, migration, application register editing by
 signals need further contracts. The qualified pthread subset is described
 above. Address hints/fixed mappings remain unsupported. Public application
-`mremap` is provided in its `MREMAP_MAYMOVE` form only, as map-copy-unmap: the old
-mapping is retired, so stale pointers into it fault, and the new one is read-write;
-in-place resizing and `MREMAP_FIXED` stay `ENOSYS` (`mremap-contract.c`).
-mallocng uses the private remap slow path described in
-[the allocator contract](mallocng.md). Partial unmap
+`mremap` is provided in its `MREMAP_MAYMOVE` form only, as map-copy-unmap: the
+mapping check refuses a wrong length or reference before anything is copied, only
+a mapping that is read-write over its whole length moves (`ENOTSUP` otherwise),
+the old mapping is retired, so stale pointers into it fault, and the new one is
+read-write. A write of another thread to the old mapping during the copy may be
+lost, as for realloc. In-place resizing and `MREMAP_FIXED` stay `ENOSYS`
+(`mremap-contract.c`). mallocng's large realloc does the same map, copy and
+unmap through its own group mappings (`__heap_remapping`). Partial unmap
 requires a separate lifetime contract: a live wide capability must not acquire
 a replacement mapping placed into its former hole. Anonymous
 `MAP_SHARED` and SysV segments are process-local compatibility for nested

@@ -69,16 +69,29 @@ int __mprotect(void *p, size_t n, int prot) { return mprotect(p, n, prot); }
  * mmap.resize, which corpus cell lt0 18 needs before its bug runs). The old mapping is unmapped
  * through the ordinary service, so it is RETIRED: every capability to it is revoked and a stale
  * pointer faults, which is the lifetime contract a moved mapping must keep. The bytes, and any
- * capability tags among them, move with memcpy. Limits, each explicit:
+ * capability tags among them, move with memcpy.
+ *
+ * Nothing moves before the mapping check (CV_SERVICE_MAPPING_CHECK), which changes nothing: `old`
+ * must name a whole registered mapping of the program, which no worker's transport holds, and with
+ * root_grants p must be a live reference to that whole mapping, as for munmap. A refusal returns
+ * MAP_FAILED with nothing changed (EINVAL, or EBUSY for a held mapping), never a fault in the copy.
+ * Then the copy reads at most the old mapping's visible length, which p covers, and writes at most
+ * the new mapping's, which mmap's reference covers. Without root_grants the address is the
+ * authority, as for munmap, so a reference that does not cover the mapping faults in the copy.
+ * Limits, each explicit:
  *   - without MREMAP_MAYMOVE (in-place resizing, which musl's pthread_getattr_np uses to probe the
  *     main stack and stops on any error but ENOMEM), and with MREMAP_FIXED or DONTUNMAP, the
  *     answer stays ENOSYS, as before;
- *   - the new mapping is PROT_READ|PROT_WRITE whatever the old one's protection was, and the old
- *     one must be readable for the copy;
- *   - `old` must name a whole registered mapping (the unmap service refuses anything else, and
- *     then nothing has changed: the new mapping is released and the error returned). With
- *     root_grants p must also be a live reference to that whole mapping, as for munmap.
- * A same-page-count resize returns p unchanged, as Linux does. */
+ *   - only a mapping that is read-write over its whole length moves (ENOTSUP otherwise, nothing
+ *     changed), into a new read-write private anonymous mapping. The program's mappings are all
+ *     anonymous; a MAP_SHARED one is process-local here (mmap), so the private copy keeps what
+ *     the program can observe;
+ *   - the copy is not atomic with respect to the program's other threads: a write to the old
+ *     mapping during the copy may be lost, as for realloc, and the caller serializes such writes.
+ * If the unmap of the old mapping fails after the copy (another thread changed it in between),
+ * the new mapping is unmapped again and the error returned; that unmap of a fresh mapping cannot
+ * fail, and a failure traps. A same-page-count resize returns p unchanged after the check, as Linux
+ * returns the same address. */
 #ifndef MREMAP_MAYMOVE
 #define MREMAP_MAYMOVE 1   /* Linux's value; <sys/mman.h> declares it only under _GNU_SOURCE */
 #endif
@@ -89,13 +102,17 @@ void *mremap(void *p, size_t old, size_t n, int flags, ...)
     if ((address & 4095) || mapping_length(old, &old_bytes) || mapping_length(n, &new_bytes)) {
         errno = EINVAL; return MAP_FAILED;
     }
+    long rc = __capstone_vm_mapping_check(p, old_bytes);
+    if (rc) { errno = -rc; return MAP_FAILED; }
     if (new_bytes == old_bytes) return p;
+
     void *q = mmap(NULL, n, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     if (q == MAP_FAILED) return MAP_FAILED;
     memcpy(q, p, old_bytes < new_bytes ? old_bytes : new_bytes);
+
     if (munmap(p, old)) {
         int error = errno;
-        munmap(q, n);
+        if (munmap(q, n)) __builtin_trap();
         errno = error;
         return MAP_FAILED;
     }

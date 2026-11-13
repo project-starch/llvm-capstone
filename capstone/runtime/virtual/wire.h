@@ -65,8 +65,9 @@ struct cv_thread_control {
  * the thread asks to unmap at its exit (CV_SERVICE_PTHREAD_EXIT, a1 the
  * stack's reference, a2 its length). The launcher names only a registered heap
  * mapping, not the allocator's metadata, held by no worker, of the length the
- * call names, that does not hold the exit word (a0). The module refuses a stack
- * that is the thread's own frame. With root_grants the stack is a request of
+ * call names, that does not hold the exit word (a0) the launcher will write. The
+ * module refuses a stack that is the thread's own frame, and releases that
+ * arena once, as the frame. With root_grants the stack is a request of
  * the program: the module checks the reference in a1 before it clears the
  * frame, and after the thread has stopped it ends the stack's reservation
  * (CREVOKE of M) and releases the arena. released (out): CV_EXIT_FRAME and
@@ -80,9 +81,6 @@ struct cv_thread_exit {
 };
 #define CV_EXIT_FRAME 1
 #define CV_EXIT_STACK 2
-struct cv_remap {
-    __u64 thread, id, bytes, address; /* address zero cancels after Linux failure */
-};
 struct cv_nodes {
     __u64 thread, available;
 };
@@ -105,8 +103,7 @@ struct cv_global {
 #define CV_THREAD_CREATE _IOWR('V', 22, struct cv_thread_create)
 #define CV_THREAD_EXIT _IOWR('V', 23, struct cv_thread_exit)
 #define CV_NODES _IOW('V', 24, struct cv_nodes)
-#define CV_REMAP_BEGIN _IOW('V', 25, struct cv_remap)
-#define CV_REMAP_END _IOW('V', 26, struct cv_remap)
+/* 25 and 26 were CV_REMAP_BEGIN and CV_REMAP_END, the remap transaction of the first design. */
 #define CV_PROFILE _IOR('V', 27, __u64)
 /* A span the launcher is about to WRITE on the domain's behalf through Linux: a thread's exit
  * word, a worker's meta block and exchange region. Every page of it inside a lazily admitted
@@ -153,13 +150,15 @@ struct cv_unmap {
 #define CV_UNMAP_PARKED 1
 #define CV_UNMAP_NO_POOL 2   /* retired: this module does not pool (unpinned) */
 #define CV_UNMAP _IOWR('V', 32, struct cv_unmap)
-/* A program's mprotect (CV_SERVICE_PROTECT), asked before the launcher changes the protection:
- * thread is the caller, paused at the service, id the arena the launcher resolved from the cursor
- * of the reference in a0. Without root_grants the module ignores thread and accepts. With
- * root_grants the reference is the authority, as for munmap, except that the call may name any
- * page range inside the visible length: the module accepts only a live reference whose record is
- * a child of the mapping's reservation record and whose bounds cover [a0's cursor, + a1). It ends
- * nothing. A refusal is EINVAL, and the launcher then changes nothing. */
+/* A program's mprotect (CV_SERVICE_PROTECT), asked before the launcher changes the protection,
+ * or a program's question before mremap moves a mapping (CV_SERVICE_MAPPING_CHECK): thread is the
+ * caller, paused at the service (the module reads which one from its a7), id the arena the
+ * launcher resolved from the cursor of the reference in a0. Without root_grants the module ignores
+ * thread and accepts. With root_grants the reference is the authority, as for munmap: the module
+ * accepts only a live reference whose record is a child of the mapping's reservation record and
+ * whose bounds cover [a0's cursor, + a1). For the mapping check the call must name the whole
+ * visible length, as for munmap; an mprotect may name any page range inside it. It ends nothing.
+ * A refusal is EINVAL, and the launcher then changes nothing. */
 struct cv_protect {
     __u64 thread, id;
 };

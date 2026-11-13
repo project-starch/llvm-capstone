@@ -34,20 +34,33 @@ struct mapping {
     /* The worker whose transport block (its meta block or its exchange region) lies in this
      * mapping, or 0. This launcher writes into a worker's transport for the worker's whole
      * attachment, through Linux and with service_lock released while a service blocks, so the
-     * mapping must outlive the attachment: while a holder is set, retirement (unmap), remapping
-     * and protection changes are refused to EVERY caller, the holder included, and hence the
-     * address is never reused under it and its pages stay writable. The hold is released only by
-     * the holder's own detach (the SDK detaches before it gives the blocks back) or by its exit.
-     * One holder per mapping and one block per mapping: the SDK maps each block on its own
-     * (pthread.c), and the attachment refuses a mapping that already has a holder. Without the hold, a second worker could retire the
-     * mapping under a blocked read, map a fresh one at the same address, and the read's
-     * copy-back would create backing the module never admitted. On dev since linear arenas
-     * became lazy: the transport blocks were heap blocks. */
+     * mapping must outlive the attachment: while a holder is set, retirement (unmap) and
+     * protection changes are refused to EVERY caller, the holder included, and hence the address
+     * is never reused under it and its pages stay writable. The attachment requires the blocks'
+     * pages to be writable first (writable_span), so the hold keeps them so. The hold is released
+     * only by the holder's own detach (the SDK detaches before it gives the blocks back) or by its
+     * exit. One holder per mapping and one block per mapping: the SDK maps each block on its own
+     * (pthread.c), and the attachment refuses a mapping that already has a holder. Without the
+     * hold, a second worker could retire the mapping under a blocked read, map a fresh one at the
+     * same address, and the read's copy-back would create backing the module never admitted. On
+     * dev since linear arenas became lazy: the transport blocks were heap blocks. */
     uint64_t holder;
     /* mprotect was applied inside this mapping: its page protections are no longer the ones a fresh
      * grant has, so the mapping is never pooled (see the mapping pool below). */
     int protected_range;
+    /* Offsets [write_from, write_to) of pages that Linux maps read-write and that the program's
+     * grant may write. This launcher writes into the program's memory on its behalf (an exit word,
+     * a worker's transport) only inside this range, so neither a protection the program set nor
+     * the image's read-execute text can make that write fault. Only protect_range changes a
+     * mapping's protection, and it keeps the range conservative: pages it makes anything but
+     * read-write leave the range before Linux changes them, and pages it makes read-write join
+     * the range afterwards where they overlap or touch it (writable_cut, writable_join). */
+    size_t write_from, write_to;
+    /* The program's grant carries the write right (CV_GRANT_WRITE). */
+    int grant_writes;
 };
+/* The write right of a grant's permissions (cv_map.permissions, CAPSTONE_PERM_WRITE). */
+#define CV_GRANT_WRITE 2
 /* Registered mappings, one node each, in an AVL tree keyed by address. Registrations never
  * overlap, so the highest mapping starting at or below an address is the only one that can
  * contain it, and map_floor, map_find, map_insert and map_remove each visit one root-to-leaf
@@ -84,11 +97,19 @@ static __thread struct capstone_delegate_host *worker_host;
  * while holding host_lock. */
 static pthread_mutex_t host_lock = PTHREAD_MUTEX_INITIALIZER;
 static __thread int host_signals_attached;   /* this worker's thread records into host.signals */
+/* The thread table: one entry per live thread, the first one (the main thread) included. An exit
+ * frees its entry at once unless joiners wait on it; then the last joiner to leave frees it
+ * (thread_finish, thread_join). So an entry outlives its thread only while a joiner waits, and
+ * threads that are never joined cannot fill the table. */
 #define CV_MAX_THREADS 32
 static uint64_t thread_ids[CV_MAX_THREADS] = {0};
+/* Set by the exit of an entry's thread while joiners wait on the entry. */
 static unsigned thread_done[CV_MAX_THREADS];
 /* The joiners that wait in thread_join on each entry. */
 static unsigned thread_waiters[CV_MAX_THREADS];
+/* The highest thread id CV_THREAD_CREATE has issued. The module never reuses an id (a counter per
+ * context), so an id at or below it that has no entry belongs to a thread that has exited. */
+static uint64_t thread_last_id;
 /* Each thread's frame mapping, by address and identity (the module's arena id, never reused): the
  * exit names it to the module for release (thread_frame_mapping). */
 static struct { uintptr_t address; uint64_t id; } thread_frames[CV_MAX_THREADS];
@@ -103,13 +124,13 @@ static int trace;
  * stderr goes -- a 9p file in a harness that does not redirect it. */
 static int grants;
 /* CV_STEP returns by kind (1 quantum, 3 service, 4 fault, else other) and services by their
- * vm-abi.h number (CV_SERVICE_DELEGATE 0 .. CV_SERVICE_TRANSPORT_DETACH 14; not Linux syscall
+ * vm-abi.h number (CV_SERVICE_DELEGATE 0 .. CV_SERVICE_MAPPING_CHECK 15; not Linux syscall
  * numbers),
  * for the CAPSTONE_VM_STEPS line: which exits the step protocol actually makes, and how many. A
  * number above the last service counts as other. A retried EINTR/EAGAIN is not a return.
  * Relaxed atomics on both sides: every virtual thread's loop counts, and the main thread reads
  * at exit while a worker may still be returning. */
-#define STEP_SERVICE_COUNT (CV_SERVICE_TRANSPORT_DETACH + 1)
+#define STEP_SERVICE_COUNT (CV_SERVICE_MAPPING_CHECK + 1)
 static unsigned long step_kinds[8], step_services[STEP_SERVICE_COUNT + 1];
 static unsigned long step_count(const unsigned long *counter)
 { return __atomic_load_n(counter, __ATOMIC_RELAXED); }
@@ -117,23 +138,24 @@ static void *meta;
 static void *virtual_thread_worker(void *opaque);
 static struct mapping *map_find(uintptr_t base);
 
-/* Record thread id, whose frame lies in the mapping frame. */
+/* Record thread id, which CV_THREAD_CREATE has just issued and whose frame lies in the mapping
+ * frame. -EAGAIN if the table is full; the id still counts as issued (thread_last_id). */
 static int thread_add(uint64_t id, const struct mapping *frame)
 {
-    int result = 0;
+    int result = -EAGAIN;
     if (!id) return -EINVAL;
     pthread_mutex_lock(&thread_state_lock);
-    if (thread_count >= CV_MAX_THREADS) result = -EAGAIN;
-    else {
-        for (unsigned i = 1; i < CV_MAX_THREADS; ++i)
-            if (!thread_ids[i]) {
-                thread_ids[i] = id;
-                thread_done[i] = 0;
-                thread_frames[i].address = (uintptr_t)frame->address;
-                thread_frames[i].id = frame->id;
-                ++thread_count;
-                break;
-            }
+    if (id > thread_last_id) thread_last_id = id;
+    for (unsigned i = 1; thread_count < CV_MAX_THREADS && i < CV_MAX_THREADS; ++i) {
+        if (thread_ids[i]) continue;
+        thread_ids[i] = id;
+        thread_done[i] = 0;
+        thread_waiters[i] = 0;
+        thread_frames[i].address = (uintptr_t)frame->address;
+        thread_frames[i].id = frame->id;
+        ++thread_count;
+        result = 0;
+        break;
     }
     pthread_mutex_unlock(&thread_state_lock);
     return result;
@@ -164,49 +186,50 @@ static void thread_slot_free(unsigned i)
     thread_frames[i].id = 0;
     --thread_count;
 }
-static void thread_remove(uint64_t id)
-{
-    pthread_mutex_lock(&thread_state_lock);
-    for (unsigned i = 1; i < CV_MAX_THREADS; ++i)
-        if (thread_ids[i] == id) {
-            thread_slot_free(i);
-            break;
-        }
-    pthread_mutex_unlock(&thread_state_lock);
-}
-/* Publish thread id's exit, after all of its cleanup: a joiner through the launcher (thread_join)
- * returns from here on. remove: no joiner through the launcher is expected (a POSIX exit with an
- * exit word, which musl's join waits on), so the entry goes now, unless a joiner already waits on
- * it. That joiner then takes the entry, as after any other exit. */
-static void thread_finish(uint64_t id, int remove)
+/* Publish thread id's exit, after all of its cleanup (or the rollback of a create whose thread
+ * never ran): a joiner through the launcher (thread_join) returns from here on. The last one to
+ * leave frees the entry. With no joiner waiting, that is this exit, with or without an exit word.
+ * Otherwise the exit marks the entry done and wakes the joiners, and the last joiner to leave
+ * frees it. */
+static void thread_finish(uint64_t id)
 {
     pthread_mutex_lock(&thread_state_lock);
     for (unsigned i = 1; i < CV_MAX_THREADS; ++i) {
         if (thread_ids[i] != id) continue;
-        if (remove && !thread_waiters[i]) {
-            thread_slot_free(i);
-        } else {
+        if (thread_waiters[i]) {
             thread_done[i] = 1;
             pthread_cond_broadcast(&thread_state_cond);
+        } else {
+            thread_slot_free(i);
         }
         break;
     }
     pthread_mutex_unlock(&thread_state_lock);
 }
-static int thread_join(uint64_t id)
+/* Thread tid waits until thread id has exited (CV_SERVICE_THREAD_JOIN). 0 once it has exited,
+ * whether the exit comes before or after the call: an id at or below thread_last_id without an
+ * entry belongs to a thread that has exited (or to a create that was rolled back, whose thread
+ * never ran), since the module never reuses an id. -ESRCH for an id the module never issued (0,
+ * the main thread, included), -EDEADLK for the caller's own id. Any number of joiners may wait on
+ * one thread: each counts itself in thread_waiters while it waits, the last one to leave frees
+ * the entry, and the others leave it alone. The entry cannot be freed, nor reused, while a joiner
+ * waits on it, so every joiner sees the exit of the thread it named. */
+static int thread_join(uint64_t tid, uint64_t id)
 {
-    int result = 0;
+    int result;
+    if (!id) return -ESRCH;
+    if (id == tid) return -EDEADLK;
     pthread_mutex_lock(&thread_state_lock);
     for (unsigned i = 1; i < CV_MAX_THREADS; ++i) {
         if (thread_ids[i] != id) continue;
         ++thread_waiters[i];
         while (!thread_done[i])
             pthread_cond_wait(&thread_state_cond, &thread_state_lock);
-        thread_slot_free(i);
+        if (!--thread_waiters[i]) thread_slot_free(i);
         pthread_mutex_unlock(&thread_state_lock);
         return 0;
     }
-    result = -ESRCH;
+    result = id <= thread_last_id ? 0 : -ESRCH;
     pthread_mutex_unlock(&thread_state_lock);
     return result;
 }
@@ -284,10 +307,10 @@ static void *reserve_aligned(size_t bytes, size_t alignment)
     /* Fallback / first call. mmap() promises page alignment only. Over-map by the worst-case
      * distance to the next alignment boundary -- the raw base is already page-aligned, so that is
      * alignment - 4096 -- then trim both ends, leaving EXACTLY `bytes` mapped. Mapping exactly
-     * `bytes` is the point: remap_mapping() below matches a heap on m->bytes == m->visible, so a
-     * padded heap can never grow. At alignment == 4096 the slack is zero and this reduces to a
-     * plain mmap() of `bytes`, which is what the heap path used to do. Seed the cursor at the base
-     * so the next arena is placed just below this one. */
+     * `bytes` is the point: a heap mapping has no padding (m->bytes == m->visible), which the
+     * mapping pool requires (mc_eligible). At alignment == 4096 the slack is zero and this
+     * reduces to a plain mmap() of `bytes`, which is what the heap path used to do. Seed the
+     * cursor at the base so the next arena is placed just below this one. */
     size_t slack = alignment - 4096;
     char *raw = mmap(NULL, bytes + slack, PROT_READ | PROT_WRITE,
                      MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
@@ -397,7 +420,7 @@ static void map_remove(struct mapping *m)
     struct map_node *gone = (struct map_node *)((char *)m - offsetof(struct map_node, m));
     map_root = map_unlink(map_root, m);
     --map_count;
-    /* Kept for the next registration (remap_mapping removes, then inserts). */
+    /* Kept for the next registration. */
     gone->child[0] = map_free; map_free = gone;
 }
 /* Register [base, + bytes) with the module and grant it in register reg of thread. visible: the
@@ -416,11 +439,8 @@ static int grant_mapping(void *base, size_t bytes, size_t visible, unsigned reg,
      * is page-rounded and granule-rounded but NOT a power of two -- a 6 MiB heap grants
      * 6291456 -- so this check is load-bearing for exactly the path option (iii) changed, and
      * it is COUPLED to the alignment heap.c requests: it passes only because acquire_mapping()
-     * now aligns that mapping to the granule. The two must land together.
-     *
-     * It is also not true that every arena passes through this function: remap_mapping() grows
-     * a heap through CV_REMAP_BEGIN/END and never calls grant(), which is why that function
-     * carries its own alignment guarantee. Negative-tested in
+     * now aligns that mapping to the granule. The two must land together. Every arena passes
+     * through this function or revives a pooled one of the same range. Negative-tested in
      * tests/exact-bounds-iii/grant-repr-test.c. */
     if (!capstone_repr_ok((uintptr_t)base, bytes)) { errno = ERANGE; return -1; }
     struct cv_map r = {thread, (uintptr_t)base, bytes, perms, reg, cursor, linear, 0, rx_bytes, visible};
@@ -454,9 +474,14 @@ static int grant_mapping(void *base, size_t bytes, size_t visible, unsigned reg,
     if (grants)
         fprintf(stderr, "CAPSTONE_VM_ADD_OK slot=%zu base=0x%lx bytes=%zu reg=%u perms=%u linear=%d\n",
                 map_count, (unsigned long)(uintptr_t)base, bytes, reg, perms, linear);
+    /* Every range this launcher grants is mapped read-write past rx_bytes (the image's text,
+     * read-execute); acquire_mapping narrows the writable range for another protection. */
+    int writes = (perms & CV_GRANT_WRITE) != 0;
     map_insert((struct mapping){.address = base, .bytes = bytes, .visible = visible,
                                 .id = r.id, .heap = linear,
-                                .kind = linear ? CV_MAP_HEAP : -1});
+                                .kind = linear ? CV_MAP_HEAP : -1,
+                                .write_from = writes ? rx_bytes : 0,
+                                .write_to = writes ? visible : 0, .grant_writes = writes});
     return 0;
 }
 /* The launcher's own grants (image, stack, transport, startup data, regions): no padding. */
@@ -473,8 +498,8 @@ static int grant(void *base, size_t bytes, unsigned reg, unsigned perms,
 static __thread struct { uintptr_t at; uint64_t id; } transport_at[2];
 /* The mapping a worker's attachment holds, found by exact identity: the address must lie inside
  * the mapping, which must carry the recorded id and this worker as holder. Anything else is a
- * launcher defect (the hold refuses retirement and remapping, so it cannot happen through the
- * services); it is logged and nothing is released. */
+ * launcher defect (the hold refuses retirement, so it cannot happen through the services); it is
+ * logged and nothing is released. */
 static struct mapping *transport_mapping(uint64_t tid, unsigned i)
 {
     uintptr_t at = transport_at[i].at;
@@ -651,6 +676,8 @@ static struct mc_entry *mc_find(size_t bytes, size_t alignment)
 }
 static long mapping_gate(const struct mapping *m, size_t bytes);
 static long release_range(struct mapping *m);
+static void writable_cut(struct mapping *m, size_t from, size_t to);
+static void writable_join(struct mapping *m, size_t from, size_t to);
 /* Unmap the whole mapping at base for the domain thread tid (CV_SERVICE_UNMAP, base the cursor
  * of the reference it passed in a0): one CV_UNMAP pools the mapping where the pool takes it and
  * the module can, and retires it otherwise; with root_grants the module checks that reference,
@@ -711,7 +738,58 @@ static long protect_range(uint64_t tid, uintptr_t base, size_t bytes, int prot)
     struct cv_protect request = {.thread = tid, .id = m->id};
     if (ioctl(device, CV_PROTECT, &request)) return -errno;
     m->protected_range = 1;
-    return mprotect((void *)base, bytes, prot) ? -errno : 0;
+    size_t from = base - at, to = from + bytes;
+    int read_write = prot == (PROT_READ | PROT_WRITE);
+    if (!read_write) writable_cut(m, from, to);
+    if (mprotect((void *)base, bytes, prot)) return -errno;
+    if (read_write && m->grant_writes) writable_join(m, from, to);
+    return 0;
+}
+/* The domain thread tid asks, before it moves a mapping (CV_SERVICE_MAPPING_CHECK, a0 the
+ * reference, a1 the length; mapping.c, mremap), whether a request to end the mapping at base, of
+ * exactly bytes, would be accepted, and whether every page of the mapping is read-write. Changes
+ * nothing. First the gate of every request that ends a mapping (mapping_gate: EINVAL, or EBUSY
+ * for a held mapping), then with root_grants the module's check of the reference (CV_PROTECT,
+ * which reads the service from the caller's a7 and then checks the whole mapping, as for munmap),
+ * then the protection: ENOTSUP for a mapping that is not read-write over its whole visible length
+ * (the libc's mremap moves only such a mapping). */
+static long check_mapping(uint64_t tid, uintptr_t base, size_t bytes)
+{
+    struct mapping *m = map_find(base);
+    long gate = mapping_gate(m, bytes);
+    if (gate) return gate;
+    struct cv_protect request = {.thread = tid, .id = m->id};
+    if (ioctl(device, CV_PROTECT, &request)) return -errno;
+    if (m->write_from != 0 || m->write_to != m->visible) return -ENOTSUP;
+    return 0;
+}
+/* Remove the offsets [from, to) from m's writable range. Where the cut splits the range, the
+ * larger part stays, which keeps the range one interval of pages that are read-write. */
+static void writable_cut(struct mapping *m, size_t from, size_t to)
+{
+    if (to <= m->write_from || from >= m->write_to) return;
+    size_t low = from > m->write_from ? from - m->write_from : 0;
+    size_t high = to < m->write_to ? m->write_to - to : 0;
+    if (!low && !high) {
+        m->write_from = m->write_to = 0;
+    } else if (low >= high) {
+        m->write_to = from;
+    } else {
+        m->write_from = to;
+    }
+}
+/* Add the offsets [from, to), whose pages are now read-write, to m's writable range where they
+ * overlap or touch it, or where the range is empty. Otherwise the larger of the two stays. */
+static void writable_join(struct mapping *m, size_t from, size_t to)
+{
+    if (m->write_from == m->write_to) {
+        m->write_from = from; m->write_to = to;
+    } else if (from <= m->write_to && to >= m->write_from) {
+        if (from < m->write_from) m->write_from = from;
+        if (to > m->write_to) m->write_to = to;
+    } else if (to - from > m->write_to - m->write_from) {
+        m->write_from = from; m->write_to = to;
+    }
 }
 
 /* Before this launcher writes a span of domain memory through Linux on the domain's behalf, the
@@ -729,7 +807,7 @@ static int touch(uintptr_t address, size_t bytes)
     do { rc = ioctl(device, CV_TOUCH, &r); } while (rc < 0 && errno == EINTR);
     return rc;
 }
-/* The initial exchange cannot be retired/remapped by domain services. Cache
+/* The initial exchange cannot be retired by domain services. Cache
  * only successful admissions for this mapping; worker transports instead repeat
  * their whole-span touch on every attachment, including address reuse. */
 static unsigned char *exchange_admitted;
@@ -754,6 +832,36 @@ static int registered_span(uintptr_t p, size_t bytes)
 }
 static int registered_word(uintptr_t p)
 { return !(p & 3) && registered_span(p, sizeof(int)); }
+/* Do the bytes bytes at p lie in the writable range of one registered mapping (struct mapping,
+ * write_from)? Then this launcher may write them through Linux. */
+static int writable_span(uintptr_t p, size_t bytes)
+{
+    struct mapping *m = map_floor(p);
+    if (!m || !bytes) return 0;
+    size_t offset = p - (uintptr_t)m->address;
+    return offset >= m->write_from && offset <= m->write_to && m->write_to - offset >= bytes;
+}
+/* Does [p, + bytes) overlap the whole extent of m, padding included? Overflow-safe: both lengths
+ * are far below 2^63. */
+static int span_overlaps(uintptr_t p, size_t bytes, const struct mapping *m)
+{
+    uintptr_t base = (uintptr_t)m->address;
+    return p - base < m->bytes || base - p < bytes;
+}
+/* Why the exit word at p may not be written, or NULL. The word is an int that must lie whole in
+ * one registered mapping, be aligned, lie in pages this launcher may write (writable_span), lie
+ * outside the thread's frame mapping (the exit releases the frame before the store), and have its
+ * page admitted by the module (touch). The caller checks the stack the exit names, which stays
+ * mapped when the word lies in it. */
+static const char *exit_word_refusal(uintptr_t p, const struct mapping *frame)
+{
+    if (!registered_span(p, sizeof(int))) return "not inside one mapping";
+    if (p & (sizeof(int) - 1)) return "unaligned";
+    if (!writable_span(p, sizeof(int))) return "not writable";
+    if (frame && span_overlaps(p, sizeof(int), frame)) return "in the thread's frame";
+    if (touch(p, sizeof(int))) return "not admitted";
+    return NULL;
+}
 static long acquire_mapping(uint64_t tid, struct cv_step *step)
 {
     size_t visible = step->args[0], alignment = step->args[1];
@@ -776,8 +884,11 @@ static long acquire_mapping(uint64_t tid, struct cv_step *step)
                 if (grants)
                     fprintf(stderr, "CAPSTONE_VM_ADD_OK slot=%zu base=0x%lx bytes=%zu reg=%u perms=%u linear=%d\n",
                             map_count, (unsigned long)(uintptr_t)e->m.address, visible, 10u, 6u, 1);
+                /* A pooled mapping never had its protection changed (mc_eligible): read-write. */
                 map_insert((struct mapping){.address = e->m.address, .bytes = visible, .visible = visible,
-                                            .id = r.id, .heap = 1, .kind = CV_MAP_HEAP});
+                                            .id = r.id, .heap = 1, .kind = CV_MAP_HEAP,
+                                            .write_from = 0, .write_to = visible,
+                                            .grant_writes = 1});
                 if (trace) fprintf(stderr, "CAPSTONE_VM_MAPCACHE_HIT base=0x%lx bytes=%zu id=%llu\n",
                                    (unsigned long)(uintptr_t)e->m.address, visible, (unsigned long long)r.id);
                 mc_release(e);
@@ -792,12 +903,11 @@ static long acquire_mapping(uint64_t tid, struct cv_step *step)
     }
     for (int retried = 0;; retried = 1) {
     if (kind == CV_MAP_HEAP) {
-        /* Keyed on the HEAP, not on the alignment value. What requires bytes == visible is the
-         * heap's growth contract -- remap_mapping() matches on m->bytes == m->visible == old --
-         * and the old `alignment == 4096` spelling conflated that with the alignment mmap()
-         * happens to provide for free. Option (iii) asks for the bounds granule, which exceeds
-         * a page above 4 MiB, so every heap of 4 MiB or more silently left this path, got
-         * padded to a power of two by reserve(), and could no longer grow at all. */
+        /* Keyed on the HEAP, not on the alignment value. A heap mapping has no padding
+         * (bytes == visible, which the mapping pool requires), and the old `alignment == 4096`
+         * spelling conflated that with the alignment mmap() happens to provide for free. Option
+         * (iii) asks for the bounds granule, which exceeds a page above 4 MiB, so every heap of
+         * 4 MiB or more silently left this path and got padded to a power of two by reserve(). */
         bytes = visible;
         p = reserve_aligned(bytes, alignment);
     } else p = reserve(bytes);
@@ -821,87 +931,8 @@ static long acquire_mapping(uint64_t tid, struct cv_step *step)
     struct mapping *m = map_find((uintptr_t)p);
     if (!m) abort();
     m->visible = visible; m->kind = kind;
+    if (prot != (PROT_READ | PROT_WRITE)) m->write_from = m->write_to = 0;
     return 0;
-}
-static long remap_mapping(uint64_t tid, struct cv_step *step)
-{
-    uintptr_t base = step->args[0];
-    size_t old = step->args[1], bytes = step->args[2];
-    /* Unconditional, for the same reason the CV_ADD refusal is: heap growth has never been
-     * observed to COMPLETE in any arm of any profile -- CAPSTONE_VM_REMAP_OK reads 0 everywhere,
-     * including with exact bounds on -- and remap_begin's own gate is not shown to fire. So the
-     * question is which of these refusals happens, and a trace-gated print cannot answer it in the
-     * stages that run without the trace. */
-    if (!bytes || bytes > CV_MAX_REGION_BYTES ||
-        ((base | old | bytes) & 4095)) {
-        fprintf(stderr, "CAPSTONE_VM_REMAP_REFUSED stage=args base=0x%lx"
-                        " old=%zu bytes=%zu page_ok=%d\n",
-                (unsigned long)base, old, bytes,
-                ((base | old | bytes) & 4095) == 0);
-        return -EINVAL;
-    }
-    struct mapping *m = map_find(base);
-    if (m && m->holder) return -EBUSY;
-    if (m && m->visible == old && m->bytes == old && m->heap && m->kind == CV_MAP_HEAP) {
-        /* Option (iii): the GROWN mapping's base must still be a granule multiple, and mremap()
-         * promises only page alignment. Above 4 MiB the granule exceeds a page, so even an
-         * in-place growth can leave the base unrepresentable (2 MiB -> 4 MiB keeps the base and
-         * moves the granule from 4096 to 8192).
-         *
-         * This has to be guaranteed HERE and not refused in the domain. The domain's
-         * __capstone_malloc_group_remap() checks representability only after this ioctl pair
-         * has already moved the memory and re-registered it, so refusing there is a
-         * use-after-move, not a fallback -- realloc's malloc-plus-copy path would read from an
-         * address that no longer maps. A nonzero __capstone_malloc_remap_unaligned therefore
-         * means a bug in this function, not a measurement.
-         *
-         * Everything that can fail is done BEFORE the source is touched: mremap() fails
-         * atomically, so an error leaves the old mapping intact and only the reservation to
-         * release. */
-        size_t align = capstone_repr_granule(bytes);
-        if (align < 4096) align = 4096;
-        if (bytes % align) {
-            fprintf(stderr, "CAPSTONE_VM_REMAP_REFUSED stage=granule bytes=%zu align=%zu\n",
-                    bytes, align);
-            return -ERANGE;
-        }
-        void *dest = NULL;
-        if (align > 4096) {
-            dest = reserve_aligned(bytes, align);
-            if (!dest) return -errno;
-        }
-        struct cv_remap r = {tid, m->id, bytes, 0};
-        if (ioctl(device, CV_REMAP_BEGIN, &r)) {
-            int e = errno;
-            if (dest) munmap(dest, bytes);
-            return -e;
-        }
-        void *p = dest ? mremap(m->address, old, bytes, MREMAP_MAYMOVE | MREMAP_FIXED, dest)
-                       : mremap(m->address, old, bytes, MREMAP_MAYMOVE);
-        if (p == MAP_FAILED) {
-            int e = errno;
-            if (ioctl(device, CV_REMAP_END, &r)) abort();
-            if (dest) munmap(dest, bytes);
-            return -e;
-        }
-        r.address = (uintptr_t)p;
-        if (ioctl(device, CV_REMAP_END, &r)) abort();
-        /* A moved mapping is re-sorted; removing it first leaves room. */
-        struct mapping moved = *m;
-        moved.address = p; moved.bytes = moved.visible = bytes;
-        map_remove(m); map_insert(moved);
-        if (trace) fprintf(stderr, "CAPSTONE_VM_REMAP_OK old=%zu bytes=%zu\n", old, bytes);
-        return 0;
-    }
-    /* No arena matched. Report what the candidates looked like, because the match is on four
-     * fields at once and "no match" alone cannot say which one differed. */
-    fprintf(stderr, "CAPSTONE_VM_REMAP_REFUSED stage=nomatch base=0x%lx old=%zu bytes=%zu\n",
-            (unsigned long)base, old, bytes);
-    if (m) {   /* only the arena at this base matters */
-        fprintf(stderr, "CAPSTONE_VM_REMAP_CAND base=0x%lx visible=%zu bytes=%zu heap=%d kind=%d\n",
-                (unsigned long)(uintptr_t)m->address, m->visible, m->bytes, m->heap, m->kind);
-    }
-    return -EINVAL;
 }
 /* The error exit's cleanup. It does not unmap the registered mappings: die() runs on any worker
  * while the others may still be inside a delegated service that writes into their transport,
@@ -1286,8 +1317,10 @@ static int virtual_service(uint64_t tid, struct cv_step *step)
             if (!child || pthread_create(&worker, NULL, virtual_thread_worker,
                                          (child ? (*child = request.thread), child : NULL))) {
                 free(child);
-                thread_remove(request.thread);
+                /* The thread never ran. Its entry goes as at an exit, after its frame: a joiner
+                 * that already named the id returns then. */
                 thread_rollback(request.thread, frame);
+                thread_finish(request.thread);
                 step->result = -EAGAIN;
             } else {
                 pthread_detach(worker);
@@ -1298,18 +1331,25 @@ static int virtual_service(uint64_t tid, struct cv_step *step)
         int posix = step->args[7] == CV_SERVICE_PTHREAD_EXIT;
         uintptr_t clear = posix ? step->args[0] : 0;
         if (tid == 0) return -1;
-        if (clear && (!registered_word(clear) || touch(clear, sizeof(int)))) return -1;
-        /* The module releases the thread's frame and the stack it names before the exit word is
-         * stored, so the word must lie in neither: a store into a range just given back to Linux
-         * would land in whatever Linux maps there next. musl's word is a global (the thread-list
-         * lock), never in the thread's stack. Both checks use the mappings this launcher found,
-         * with their whole extent, never the base and length the program names. A word in the
-         * frame stops the launcher. A word in the stack makes the stack request a wrong one: the
-         * stack stays mapped, like every refused stack, and the exit goes on. */
+        /* The exit word (a0) is the program's: this launcher stores 0 into it through Linux and
+         * wakes its futex waiters after the thread has stopped. The module releases the thread's
+         * frame and the stack it names before that store, so the word must lie in neither: a store
+         * into a range just given back to Linux would land in whatever Linux maps there next.
+         * musl's word is a global (the thread-list lock), never in the thread's stack. The checks
+         * use the mappings this launcher found, with their whole extent, never the base and length
+         * the program names. A word that fails them (exit_word_refusal) is not written and the
+         * refusal is logged: the exit goes on, and joiners through the launcher return at
+         * thread_finish as after every exit. A word in the stack makes the stack request a wrong
+         * one: the stack stays mapped and registered, and the word is written. */
         struct mapping *frame = thread_frame_mapping(tid);
         struct mapping *stack = posix && step->args[1] ? map_find(step->args[1]) : NULL;
-        if (clear && frame && clear - (uintptr_t)frame->address < frame->bytes) return -1;
-        int word_in_stack = clear && stack && clear - (uintptr_t)stack->address < stack->bytes;
+        const char *refused = clear ? exit_word_refusal(clear, frame) : NULL;
+        if (refused) {
+            fprintf(stderr, "CAPSTONE_VM_EXIT_WORD_REFUSED tid=%llu word=0x%lx reason=%s\n",
+                    (unsigned long long)tid, (unsigned long)clear, refused);
+            clear = 0;
+        }
+        int word_in_stack = clear && stack && span_overlaps(clear, sizeof(int), stack);
         /* A worker that exits still attached gives its holds back here, so they keep none of its
          * mappings. */
         transport_detach(tid);
@@ -1317,7 +1357,9 @@ static int virtual_service(uint64_t tid, struct cv_step *step)
          * pthread.c __unmapself, a2 its length), each only where the program may end it. With
          * root_grants the stack is the program's request: the module checks the reference while
          * the frame still holds it and ends the stack's reservation after the thread has stopped.
-         * A refused stack stays mapped and registered, and the exit goes on. */
+         * A refused stack stays mapped and registered, and the exit goes on. A stack that is the
+         * thread's own frame is the exception: the module refuses it as a stack, and the frame's
+         * release still ends that mapping. */
         struct cv_thread_exit request = {.thread = tid};
         if (frame && !mapping_gate(frame, 4096)) request.frame = frame->id;
         if (stack && !word_in_stack && !mapping_gate(stack, step->args[2]))
@@ -1339,8 +1381,9 @@ static int virtual_service(uint64_t tid, struct cv_step *step)
             syscall(SYS_futex, (int *)clear, FUTEX_WAKE_PRIVATE, INT_MAX, NULL, NULL, 0);
         }
         /* A joiner through the launcher (CV_SERVICE_THREAD_JOIN) returns only after everything
-         * above: the frame and the stack are released or kept, and the exit word is stored. */
-        thread_finish(tid, clear != 0);
+         * above: the frame and the stack are released or kept, and the exit word is stored or
+         * refused. */
+        thread_finish(tid);
         step->reply = 0;
         return 1;
     } else if (step->args[7] == CV_SERVICE_FUTEX) {
@@ -1364,7 +1407,7 @@ static int virtual_service(uint64_t tid, struct cv_step *step)
         /* The child must acquire the same transport lock to publish its
          * exit.  Do not wait while holding it, or join would deadlock. */
         pthread_mutex_unlock(&service_lock);
-        step->result = thread_join(step->args[0]);
+        step->result = thread_join(tid, step->args[0]);
         pthread_mutex_lock(&service_lock);
     } else if (step->args[7] == CV_SERVICE_DELEGATE ||
                step->args[7] == CV_SERVICE_THREAD_DELEGATE) {
@@ -1383,14 +1426,26 @@ static int virtual_service(uint64_t tid, struct cv_step *step)
                     /* The worker's meta block (the signal block below is written at once) and
                      * its exchange region are written by this launcher from here on: each must
                      * be alone in its mapping and that mapping free of any other holder
-                     * (registered_span found both above), every page of both is admitted
-                     * (CV_TOUCH, at every attachment: a re-attachment after a detach may name a
-                     * fresh mapping at the same address), and the worker holds both mappings
-                     * until it detaches or exits. */
+                     * (registered_span found both above), every page of both must be writable
+                     * for this launcher (writable_span: a protection the program set before the
+                     * attachment would make those writes fault, and the hold keeps it from
+                     * changing afterwards), every page of both is admitted (CV_TOUCH, at every
+                     * attachment: a re-attachment after a detach may name a fresh mapping at the
+                     * same address), and the worker holds both mappings until it detaches or
+                     * exits. A refused attachment ends the program, as every malformed
+                     * transport does. */
                     struct mapping *held_meta = map_floor(step->args[0]);
                     struct mapping *held_exchange = map_floor(step->args[1]);
                     if (held_meta == held_exchange || held_meta->holder || held_exchange->holder)
                         return -1;
+                    if (!writable_span(step->args[0], CAPSTONE_DELEGATE_META_BYTES) ||
+                        !writable_span(step->args[1], step->args[2])) {
+                        fprintf(stderr, "CAPSTONE_VM_TRANSPORT_REFUSED tid=%llu meta=0x%lx"
+                                        " exchange=0x%lx reason=not writable\n",
+                                (unsigned long long)tid, (unsigned long)step->args[0],
+                                (unsigned long)step->args[1]);
+                        return -1;
+                    }
                     if (touch(step->args[0], CAPSTONE_DELEGATE_META_BYTES) ||
                         touch(step->args[1], step->args[2])) return -1;
                     held_meta->holder = held_exchange->holder = tid;
@@ -1486,8 +1541,9 @@ static int virtual_service(uint64_t tid, struct cv_step *step)
                                 " service5_thread_join=%lu service6_protect=%lu service7_wait=%lu"
                                 " service8_futex=%lu service9_pthread_exit=%lu"
                                 " service10_thread_delegate=%lu service11_thread_self=%lu"
-                                " service12_nodes=%lu service13_remap=%lu"
-                                " service14_transport_detach=%lu service_other=%lu\n",
+                                " service12_nodes=%lu service13_unassigned=%lu"
+                                " service14_transport_detach=%lu service15_mapping_check=%lu"
+                                " service_other=%lu\n",
                     step_count(&step_kinds[1]), step_count(&step_kinds[3]), step_count(&step_kinds[4]),
                     step_count(&step_kinds[0]) + step_count(&step_kinds[2]) + step_count(&step_kinds[5]) +
                         step_count(&step_kinds[6]) + step_count(&step_kinds[7]),
@@ -1498,7 +1554,15 @@ static int virtual_service(uint64_t tid, struct cv_step *step)
                     step_count(&step_services[8]), step_count(&step_services[9]),
                     step_count(&step_services[10]), step_count(&step_services[11]),
                     step_count(&step_services[12]), step_count(&step_services[13]),
-                    step_count(&step_services[14]), step_count(&step_services[STEP_SERVICE_COUNT]));
+                    step_count(&step_services[14]), step_count(&step_services[15]),
+                    step_count(&step_services[STEP_SERVICE_COUNT]));
+                /* The thread table's census at the program's exit: count is the number of entries
+                 * in use, the main thread's included, so 1 once every other thread has exited and
+                 * its last joiner (if any) has left. An entry freed twice shows as 0 or less. */
+                pthread_mutex_lock(&thread_state_lock);
+                fprintf(stderr, "CAPSTONE_VM_THREADS count=%u issued=%llu\n", thread_count,
+                        (unsigned long long)thread_last_id);
+                pthread_mutex_unlock(&thread_state_lock);
             }
             if (tid == 0 && mc.cap && (getenv("CAPSTONE_VM_STATS") || getenv("CAPSTONE_DELEGATE_STATS")))
                 fprintf(stderr, "CAPSTONE_VM_MAPCACHE cap=%zu parks=%lu hits=%lu misses=%lu evictions=%lu"
@@ -1534,8 +1598,8 @@ static int virtual_service(uint64_t tid, struct cv_step *step)
         }
     } else if (step->args[7] == CV_SERVICE_MAP) {
         step->result = acquire_mapping(tid, step);
-    } else if (step->args[7] == CV_SERVICE_REMAP) {
-        step->result = remap_mapping(tid, step);
+    } else if (step->args[7] == CV_SERVICE_MAPPING_CHECK) {
+        step->result = check_mapping(tid, step->args[0], step->args[1]);
     } else if (step->args[7] == CV_SERVICE_UNMAP) {
         step->result = unmap_arena_for(step->args[0], step->args[1], tid);
     } else if (step->args[7] == CV_SERVICE_TRANSPORT_DETACH) {

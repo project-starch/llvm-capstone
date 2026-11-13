@@ -131,7 +131,7 @@ int main(void)
         if (op == 0 && !used[i]) add(i);
         else if (op == 1 && used[i]) drop(i);
         else if (op == 2 && used[i]) {
-            /* A move, as remap_mapping does it: remove, then insert without a map_reserve. */
+            /* A move: remove, then insert without a map_reserve (map_remove keeps the node). */
             int j = (int)(next_random() % SLOTS);
             if (!used[j]) {
                 struct mapping *m = map_find(slot_address(i));
