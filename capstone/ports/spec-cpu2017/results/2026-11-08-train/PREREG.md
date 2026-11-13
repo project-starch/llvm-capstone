@@ -3166,3 +3166,18 @@ mispredicts 492.4 M, issue-stall cycles 18.87 G (26.9 % of 70.19 G in-domain cyc
 DTLB-alone runs are not queued: the bypass + DTLB 64 run minus DTLB's <= 1 % bound attributes the bypass, and the
 DTLB's own value is bounded by the base's counters.
 **Prediction** (against the base, same board): gcc train01 0 to -2 %, mcf -1 to -4 %; hpm4 (L1D misses) falls by 5-15 %.
+
+## Addendum 95 (2026-11-13 20:45, before it runs): the realistic final bitstream replaces the bypass-v2 + DTLB 64 run on board 1
+
+**Bitstream:** caplifive_ids55-native-tagcache-mlp-fpieee-hpmreplay-dynbypass3-dtlb64-shrinkfix_6d0e754d5 (apollo; sha256
+72bf215d1b4bdc74..., checked after the copy; WNS -12.363 against the base's -15.077, inside the null band; 187,333 LUT =
+base +5.8 k, slices 99.4 %; 0 routing errors, congestion 4/5; 95-test sweep identical to the base in values and RVFI):
+the cheaper DYN bypass v3 (raw capability lanes; 39 of 40 arms value-identical to v2's round trip, the 40th parks at wfi
+on both sides as on every sweep since vp3) + DTLB 64 + the producer fix (SHRINKTO refuses cursor + imm < cursor;
+CAPBOUND and CAPENTER refuse inverted / E = 52 bounds; cause 29). v3's raw lanes cost ~6.6 k LUT less than v2's round
+trip (bypass v2 + DTLB 64: 193,954). Kits bkit67 (= bkit61h, the A/B base kit, with only this bitstream) and bkit68
+(= bkit62: + the non-fatal dom_* module and parameters, for the full perl row).
+**Change before it runs:** Addendum 92's bypass-v2 + DTLB 64 chain on board 1 (not started) is replaced by this bitstream
+with the same kit footing, images and rows (perl makerand, gcc train01, mcf): v3 and v2 are cycle-identical in
+simulation, and the fix changes no cycles, so this reads what Addendum 92 would have read, on the bitstream that is the
+candidate. Addendum 92's predictions carry over. Addendum 94's L1D 64 KiB chain follows it.
