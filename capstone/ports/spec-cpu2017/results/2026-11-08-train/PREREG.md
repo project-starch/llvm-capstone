@@ -2856,3 +2856,17 @@ reading (Addendum 79) prices it.
   over 518 escapes against riscv-base's 6.45 M, at about CPI 5 on silicon; the program runs at CPI about 2.3. So
   imagick's gap is escape handling (and the kernel's page work behind it), not the firmware emulation and not the
   program's instructions.
+
+## Addendum 80 (2026-11-13 09:25, before it runs): riscv-base's perl cache stage runs makerand only; imagick with the cache
+
+- **Reading:** imagick on bkit57 with the mapping cache (Addendum 75's e): 13.30 s, specdiff PASS (no cache, same kernel:
+  13.68 s). Escapes 439 (no cache 518), between_cycles 60.1 M (no cache 73.6 M), run_cycles 223.4 M (224.5 M). Its
+  ratio waits for riscv-base's imagick with the cache.
+- **Change before it runs:** riscv-base's perl stage with the cache (Board 1, Addendum 74's chain) is replaced by a
+  copy that runs makerand.pl only (perf/fair/stages/500.perlbench_r-rv-fair2-mk: the test.pl command, its in-band
+  files and its host validation removed, nothing else). Addendum 74 compares perl on makerand, so test.pl was board
+  time that nothing reads: a riscv-base perl test takes about 3 h 40 min with test.pl, minutes without. QEMU check of
+  the copy: 1/1 commands, specdiff 1/1 PASS, 2.78 G instructions.
+- **Recorded lapse:** board 3's riscv-base perl without the cache (running since 07:30) still runs test.pl; Addendum
+  74 filtered the native stage and not this one. It is left to finish (stopping it would lose its makerand reading and
+  move the perl row behind x264); its test.pl reading is not used.
