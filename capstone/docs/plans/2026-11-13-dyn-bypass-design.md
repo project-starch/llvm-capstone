@@ -786,3 +786,39 @@ Keys, against fdk's sealed 3c6b9906c:
 4. The worst-path family and its slack: does any path through pc_cap_check's new compare enter the top 200?
 
 The batch build waits for this gate AND for the fixed lever (a)'s own gate.
+
+## Lever (a) fixed and passing; the batch moves to a47b588a1 (pre-registered before its build, 2026-11-14)
+
+**The forwarding fix** (perf/b-next 11bb7427b): an STC is an rs1 forwarding source only when it claims rs1.
+`fwd_rs1_src[e]` gates the six forwarding-request lines on the same per-entry flop. With the lever off, it equals
+`check_fwd_rs1` exactly.
+
+**The same-tree A/B on 11bb7427b** (sim13 .sup/fwdon, fwdoff; the off-define confirmed in the build line):
+
+| arm | lever on | lever off |
+|---|---|---|
+| stc-fwd-hazard (div) | 0x8e (0x80003000 before the fix, on 6784c69e8) | 0x8e |
+| c5a-cost-stc-base1 | 0xaee cycles (2.73 per STC) | 0x151a (5.28 per STC); instructions 0x503 both |
+
+- Every other arm is identical: the mul hazard, the four pcc-end-rvc arms including PE_C, the RVC arms, excodes,
+  the va-runv family and the cost arms.
+- The hazard arm's positive control fired first: on 6784c69e8 the lever on read 0x80003000, and off read 0x8e.
+
+**The batch tree** is capstone-ariane perf/b-next-dtlb64-ic32k **a47b588a1**: fdk 3c6b9906c + R-72's fix + lever (a)
+(647ef2f16, 6784c69e8, 11bb7427b). It replaces d10608fc9, which carried the refuted (a). Against 11bb7427b it differs
+only in the two I$ config lines. Name:
+`caplifive_ids55-native-tagcache-mlp-fpieee-hpmreplay-dynbypass3-dtlb64-shrinkfix-ic32k-r72-stcnoclaim_a47b588a1`.
+The fallback is perf/b-next-ic32k 31d416595.
+
+**The build.** The SPEC lane relayed the lead's order to run synthesis in parallel with the checks: a full build on
+apollo straight after a clean lint, with no separate gate.
+- synth_design is its gate: `report_utilization -hierarchical` right after synthesis, for commit_stage, csr_regfile,
+  issue_read_operands and the frontend.
+- The 48 GB watchdog kills the run if mapping balloons.
+- In parallel, any failure of which VOIDS the build before it reaches a board:
+  - leffe's R-72-only synthesis gate, 84a23b65b against fdk;
+  - the 98-test b-next sweep on 11bb7427b;
+  - the claim-auditor's re-audit of the fixed (a).
+- Nothing is flashed until every one of them is clean.
+
+The keys are the batch's six above, against 3c6b9906c (routed WNS -11.930), with the 48 GB watchdog.
