@@ -2937,3 +2937,27 @@ either the tag-write list (an rtl-lane simulation A/B is queued) or the board. *
 diagnostic: mlp + bkit59 + cache, perl makerand then imagick. Within 1 % of 409.41 s means the bitstream; within 1 %
 of 400.99 s means the board, and then every cross-board ratio carries that effect and the table needs same-board
 pairs. No outcome is favoured.
+
+## Addendum 83 (2026-11-13 11:25, before it runs): riscv-base on the fixed mapping cache, all eight rows, board 3
+
+**Reading:** riscv-base perl makerand without the cache (board 3): 254.80 s, specdiff PASS (its test.pl, 12,581 s, is
+not used; Addendum 80).
+
+**Build:** label plain-rv64fre = plain-rv64fr.cfg with only the label changed; compiler wrapper
+perf/plainevict/plain-cc-fairr-round-evict = perf/fair/plain-cc-fairr with only the musl changed, to
+perf/plainevict/musl-rv64gc-reuse-round-evict (plain_reuse.c: __plain_map rounds the mapped length to pages as free()
+does, and __plain_unmap evicts cached mappings from the front until a mapping that fits the 64 MiB bound by itself
+fits; the Capstone arm's rule). runcpu rc 0; the new __plain_map and __plain_unmap are present in the binaries
+(objdump: 116 -> 120 and 33 -> 111 instructions, a second munmap call in the eviction loop). Stages
+perf/fair/stages/*-rv-fair3 (perf/fair/mkstages3.py): copies of the *-rv-fair2 stages (perl from the makerand-only
+-mk copy, gcc from train01) whose only differences are the executables and their plan hashes (checked by diff).
+QEMU (kit-profq) on each before the board: specdiff PASS (x264 not run on QEMU: its board validation is by hash and
+imagevalidate as before).
+
+**Run, board 3** (bkit54-k2n-rv, K2N, riscv-base bitstream): imagick, nab, lbm, perl makerand, gcc train01, xz, mcf,
+x264. The Capstone arm on its matching allocator (in-place realloc + eviction) follows when the compiler lane's images
+pass their twins; that is pre-registered separately.
+
+**Predictions** (against plain-rv64fr's readings where they exist): imagick, nab, lbm, perl within ±1.5 %; gcc
+train01 1,650-1,725 s; mcf 2-8 % faster than without any cache (5,146.72 s); xz and x264 within ±2 % of their
+no-cache readings.
