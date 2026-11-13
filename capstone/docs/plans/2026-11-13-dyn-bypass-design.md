@@ -83,16 +83,22 @@ serialisation; it is withdrawn.
      permission (known at request).
 2. **The lifetime verdict joins the access's exception**, as it already does for plain accesses (`cap_exception`),
    instead of the side record `dynlt_*`. The R-43 replay marker travels the same way.
-3. **The results ride write-back port 4, which already carries metadata.**
-   - The LSU's LDC result (the loaded capability, made by the same `decompress_cap_tagged` -> `cap_lane` pair as today,
-     so it is bit-identical) and the STC result (rd = rs2 or cnull, rs1 lane) are muxed onto CAP_WB.
-   - The DYN unit no longer receives LDC/STC. Its other ops (CDERIVE, CREVOKE, ...) keep port 4 through a priority
-     arbiter: LSU results first, DYN waits on its `ep.res` handshake.
-   - Two LSU capability results in one cycle (an LDC and an STC) need a one-entry skid for the STC result, because
-     the LSU cannot be back-pressured (its acks are unconnected today).
-   - Keeping port 4 means the forwarding network into `fu_data_q` is untouched. That network is the worst timing
-     family (`cpmp_q -> fu_data_q`) and the `issue_pointer` loop cone. Adding metadata to ports 1/2 is the
-     alternative; it is rejected for that reason.
+3. **The results ride the LSU's own write-back ports, with metadata** (revised 2026-11-13, before RTL).
+   - The LDC result (the loaded capability, made by the same `decompress_cap_tagged` -> `cap_lane` pair as today, so
+     it is bit-identical) goes out on LOAD_WB (port 2). The STC result (rd = rs2 or cnull, the rs1 lane) goes out on
+     STORE_WB (port 1). `cap_wbdata` grows from two entries (ports 0 and 4) to four. Plain loads and stores keep
+     `cap_result = '0`.
+   - **Why not port 4 (the first version of this note):** the DYN unit's `ep.res` is statically timed
+     (`capstone_unit.anvilh:711`, `res : (result_pack@#1)`, no ack), so it cannot be held back. Sharing port 4 with
+     LSU results would need a queue in front of CAP_WB as deep as the in-flight window: about 8 entries x ~600 bits,
+     plus a cycle of latency on every DYN result.
+   - **The cost of this choice, and the risk the SPEC lane asked to hear about.** Metadata forwarding already walks
+     every write-back port's `cap_data` (`issue_read_operands.sv:749-757`), and ports 1/2 are constant zero today
+     (`scoreboard.sv:320-321`), so synthesis prunes them. Making them live adds live inputs to the rs1/rs2/rs3
+     metadata forwarding muxes, which feed `fu_data_q`, the worst timing family (`cpmp_q -> fu_data_q`). It adds no
+     new loop: the muxes already exist. The synthesis-only gate reads the per-module delta and the worst-path
+     family. The S-07 detector (`scoreboard.sv:327-344`), which flags an LDC retiring on port 2, is updated to the new
+     rule.
 4. **Issue.** `fu_busy` for LDC/STC drops the `fus_busy.capstone_dyn` term and keeps `fus_busy.load` / `fus_busy.store`
    (`issue_read_operands.sv:575-576`). **This edits a standing loop cone** (`issue_pointer`, `fu_busy`): the
    synthesis-only gate decides, and the SPEC lane is told before synthesis (its condition).
@@ -108,8 +114,20 @@ serialisation; it is withdrawn.
 - The commit-time rs1-lane write (`cap_we_o`, `commit_stage.sv:565-566`) becomes conditional on rs1 having been
   UNINIT, the way LDC is already excluded. In-order commit is not relied on to make an unconditional stale write
   harmless.
-- Cost: one flush per UNINIT STC. **Open question for the SPEC/compiler lane:** how often do compiled programs store
-  through an UNINIT capability (a census of the perf images)? If it is hot, the flush costs more than the claim.
+- Cost: one flush per UNINIT STC.
+- **The compiler lane's count (2026-11-13, native route, nat-fair-cache SDK):** no store of any kind through an UNINIT
+  rs1 in 500.perlbench_r test (>= 37.7 M counted capability-mode stores: 22.3 M STC, 15.5 M slow-path scalar) or 502.gcc_r
+  train01 (>= 12.6 M: 5.46 M STC, 7.1 M scalar).
+  - Instrument: a counting copy of the twin, native01 qemu55 a0501ebc39, at capstone_check_access.
+  - The stack is NONLIN, by a native CSLCC type probe of sp, a stack local, a malloc'd object and a fresh heap grant.
+  - The totals are lower bounds (progress lines; the exit line is lost).
+  - **Positive control.** The same counter code, ported to stock capstone-qemu deb7d75756 (its checks live in
+    `_helper_access_with_cap`), counts 256/256 on the module-route probe `uninit_init_then_use_ok`: the probe's
+    4,096-byte fill is 256 STCs through UNINIT x13. The negative control `linear_no_drop_ok` reads 0.
+  - That twin binary itself cannot run the probe: it halts with cause 24 before the fill. So the zero there rests on
+    the same counter code plus the routing argument: the inline fast path admits only types 0/1, and STC always
+    takes the helper.
+  - A miscount could only make (a) costlier, never incorrect.
 
 **What stays.**
 - The load unit's LDC hold, 2 cycles on a hit, needed for the linear clear. A later lever could pop early when rs1
@@ -118,6 +136,36 @@ serialisation; it is withdrawn.
 - The tag path.
 - The R-43 probe and replay.
 - The linear-LDC `commit_lsu` on port 0.
+
+## Exception order and tval (settled before RTL)
+
+- **Order.** Today an LDC/STC's LSU exception (page fault, access fault) outranks the DYN codes, because ex_stage
+  merges them in that order (`cva6.sv:1550-1573`). A plain access through a capability is the opposite: its check is
+  folded in before translation (`load_store_unit.sv:1145-1146`).
+- **The twin.** capstone-qemu deb7d75756, `_helper_access_with_cap` (`target/riscv/op_helper.c:1396+`), raises
+  24/26/27/28/25 and misalignment inside the helper, BEFORE the guest load or store (`tcg_gen_qemu_ld`/`st`, where a
+  page fault would come from). So the twin puts capability faults first for LDC/STC too.
+- **Decision.** The bypass folds the LDC/STC checks into `cap_violation_detection`, which gives the twin's order
+  (capability cause first).
+- **Not a measured divergence.** The SPEC lane's independent read (rtl-oracle, capstone-qemu deb7d75756) agrees on the
+  order (`trans_capstone.c.inc:169 -> :181` LDC, `:273 -> :283` STC; plain `trans_rvi.c.inc:278-279`, `:390-391`).
+  It adds that in that tree LDC/STC exist only in M-mode with bare translation (`cpu_helper.c:850-855`), so no page
+  fault can arise there. The native route's twin is a different build. So the corner "a capability-faulting LDC/STC
+  to an unmapped page" is unexercised on both sides; it is not a recorded silicon/twin divergence.
+- **Codes, as that read records them.** This tree's twin also differs from silicon in its codes:
+  - out-of-bounds raises 5/7, and 28 has no raise site (`op_helper.c:1539`);
+  - the access path has no permission check (`:1508`);
+  - misalignment outranks bounds;
+  - tval is cursor+imm for 4-7 and 0 for 24/25/26/29 (`cpu_helper.c:1672-1695`).
+  These are twin divergences to record, not to copy. The bypass keeps silicon's codes, order of checks and tval
+  rule, so the equivalence gate (silicon before vs after) holds.
+- **tval.**
+  - Silicon reads tval = rs1's cursor for the DYN capability codes: ldcstc-excodes L5, LDC with imm -16, reads obj.
+  - Misaligned LDC/STC read tval 0.
+  - The bypass keeps that rule, so the equivalence gate holds; the plain-access rule (tval = the effective address)
+    is not applied to LDC/STC.
+  - Whether the twin's tval equals silicon's here is not read; that goes to the SPEC lane as a twin question, not as
+    an RTL one.
 
 ## The alternative considered: keep the DYN unit and remove only its wait
 
@@ -171,7 +219,7 @@ not for synthesis.
 | arm | today | predicted with (b)+(a) | basis |
 |---|---|---|---|
 | LDC hit, distinct rd | 4.22 | 2.0-2.5 | the load unit's 2-cycle LDC hold; plain ld through a capability is 1.64 |
-| STC hit, distinct rs2 | 6.29 | 2.5-3.0 | sd through a capability on a marked page is 2.54, plus the port-4 skid |
+| STC hit, distinct rs2 | 6.29 | 2.5-3.0 | sd through a capability on a marked page is 2.54 |
 | LDC / STC miss | 16.46 / 19.20 | ~14.8 / ~15.5 | the replay path stays; a miss then costs what the plain capability access's miss costs (ld 14.83), and the STC adds the store side (sd through a capability, 2.54 against ld's 1.64, +0.9) |
 | STC stream through ONE base (spill shape) | 7.21 | ~2.5-3.0 with (a); ~4+ with (b) alone (the issue waits for the older STC's commit) | sd through one base is 2.54 |
 
@@ -192,12 +240,54 @@ not for synthesis.
 3. **`rtl-lint-gate.sh`**, paired with the base.
 4. **claim-auditor, aimed at synthesis risk:**
    - the `fu_busy` edit in the `issue_pointer` loop cone;
-   - the port-4 arbiter;
+   - the live metadata on write-back ports 1 and 2 (forwarding into fu_data_q);
    - the new checks feeding `cap_exception` (the dominant slack family);
    - equivalence with Anvil arm by arm.
 5. **The 95-test sweep with RVFI compare**, against perf/ids55-best's.
 6. **Synthesis-only gate**: per-module LUT delta (lsu, ex_stage, issue, dyn_unit; floor first, +/-2,500), loops 0,
    mapping in class. The full build only on a pass.
 
-**Size.** Several days: the checks and their arms (1-2), the result mux and arbiter (1), (a) with the flush (1), and the
+**Size.** Several days: the checks and their arms (1-2), the result path on ports 1 and 2 (1), (a) with the flush (1), and the
 gates. Built in that order, with each piece's arms green before the next.
+
+## Built and measured (2026-11-13, simulation), and lever (a) withdrawn
+
+capstone-ariane `perf/ids55-dynbypass`.
+
+**Pieces.**
+- Piece 1, 1c8691a11: the Anvil LDC/STC checks in the LSU.
+- Piece 2, 3b8bfe890: LDC/STC off the DYN unit, with their results on LOAD_WB/STORE_WB.
+- (a), cc7a73cbb: withdrawn at 44e7b933c.
+- `+define+CAPSTONE_NO_DYN_BYPASS` turns the bypass off on the same tree. Off reproduces the base's cost vector
+  exactly.
+
+**Equivalence.** 19 LDC/STC tests plus ldcstc-excodes (every Anvil check arm) read identically off and on, retired
+counts included. No invariant fires.
+
+**Cycles per access, off -> on** (`c5a-cost -DCOST_DIST`, D$ hits):
+
+| arm | off | on |
+|---|---|---|
+| LDC hit | 4.22 | 2.75 |
+| STC hit | 6.29 | 2.73 |
+| LDC miss | 16.46 | 15.82 |
+| STC miss | 19.20 | 15.54 |
+| STC through one base (spill shape) | 7.21 | 5.28 |
+| plain ld | 1.64 | 1.64 |
+
+LDC is 0.25 above its prediction band (2.0-2.5) and inside the stop key (3.0).
+
+**Lever (a) as built (cc7a73cbb) was defective.**
+- With it on, the one-base STC read 2.73, the predicted gain.
+- But r30-fill-init hangs at its `fence iorw,iorw`, and ldcstc-excodes S5c loses the second of two back-to-back
+  UNINIT STCs.
+- Likely cause: the UNINIT STC commits its store (`commit_lsu_o`) in the same cycle that (a) raises `flush_commit`.
+  No store-carrying op had ever flushed at commit before. Commit port 1 can also retire a younger reader in that
+  cycle.
+
+**Outline for (a), next bitstream.** Commit the UNINIT STC normally with commit port 1 held. Then replay the next
+valid head through the R-43 path: flush, then refetch the same pc (`replay_commit_o`; frontend `refetch_same_pc`),
+without committing it. The work is forcing a clean head not to commit: every commit output (gpr/fpr/cap writes,
+`commit_lsu`, CSR, fence, AMO) must be held that cycle. Arms: r30-fill-init, S5c, the excodes vector, the one-base cost
+arm. The flush is cold in perl/gcc: the compiler lane counts 0 UNINIT-rs1 stores, with the counter validated 256/256
+on a module-route probe.
