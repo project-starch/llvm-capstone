@@ -3008,3 +3008,24 @@ gcc train01, mcf and x264 stay on board 3 (mcf and gcc are where the fix matters
 
 **Split of board 2's arm-C queue** (lead: problem rows first): board 2 ends its chain after the running lbm and runs
 perl makerand, gcc train01; board 1 (idle, mlp resident) runs mcf, xz, x264. Same kit, images and stages as Addendum 84.
+
+## Addendum 86 (2026-11-13 13:20, before it runs): LEAD'S RULING — riscv-base is stock CVA6 with stock software; the riscv-base mapping cache is withdrawn
+
+**Ruling (the lead, 13 Nov):** the baseline is the default CVA6 processor and its default software; optimising it is
+not this project's task — only the Capstone arm is optimised. So the mapping cache that Addendum 67/74 added to
+riscv-base's musl (plain_reuse, plain-rv64fr) and Addendum 83's fixed version (plain-rv64fre) are withdrawn from the
+baseline. riscv-base is plain-rv64f: stock musl malloc, the same llvm-c4 compiler and flags as Capstone's arm
+(-fno-pie and static, as before: those are equal-conditions settings, not optimisations), the same K2N kernel, the
+stock-CVA6 bitstream caplifive_rvbase_d31345cf3. The Capstone arm keeps its own allocator work (mapping cache,
+eviction, in-place realloc: Capstone's runtime, Addendum 84).
+
+**Consequences:**
+- riscv-base readings of the table are the no-cache ones on K2N: imagick 11.26 s, nab 675.63, lbm 1,077.88, gcc
+  train01 1,879.48, mcf 5,146.72, xz 4,993.81, perl makerand 254.80 (Addenda 72-83). The plain-rv64fr/-fre readings
+  (Addenda 74-85) are kept as recorded and no longer enter any ratio.
+- Board 3's plain-rv64fre chain is stopped (its mcf mid-run, booking released). Addendum 82's "fairness defect"
+  concerned that withdrawn cache only.
+- The one missing riscv-base row, x264 without the cache (plain-rv64f, perf/fair/stages/525.x264_r-rv-fair), runs on
+  board 3 now. Prediction: none recorded before on K2N; specdiff/hash PASS.
+- Arm C ratios so far against the stock baseline: imagick 13.29 / 11.26 = 1.180; nab 741.97 / 675.63 = 1.098; lbm
+  1,083.68 / 1,077.88 = 1.005.
