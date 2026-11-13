@@ -125,3 +125,42 @@ about 2 % of mcf. The replay counter will measure the real miss rate.
 - No cycle change is expected against b98f5a517 anywhere.
 - The replay counter must read non-zero on a verdict-miss workload and 0 on the bare hit arm.
 - The fp-r64-r66 bare kit (land/rtl-r6466-kit 5adf7a954946) must read the fixed-tree vectors.
+
+## Synthesis-only gate (synth lane, leffe; against b98f5a517's synthesis checkpoint): PASS
+
+| key | reading | grade |
+|---|---|---|
+| 1 mapping | technology mapping 5,447.3 MB vs 5,114.6 (+6.5 %); guard peak 23.9 GB; retiming identical (2/27/94/26) | PASS |
+| 2 loops | check_timing 0; "Found timing loop" 0; Synth 8-326 0; LUTLP-1 0 (the S-10b control reads 1 / 31) | PASS |
+| 3 sources | add_sources.tcl, gate and full build: `fpu_div_sqrt_fix/fpnew_divsqrt_multi.sv` 1, cvfpu's 0; fixnorm 1, cvfpunorm 0; the matcher finds 17 cvfpu/src files (control) | PASS |
+| 4 area (report) | core 155,291 -> 157,186 LUT (+1,895), FF +3; TOP 182,187 -> 184,082 (+1,895) | inside the floor |
+
+**Key 3, the method.** add_sources.tcl is 5 lines long, so `grep -c` reads cvfpunorm=1 falsely: the fix file shares a
+line with cvfpu entries. The valid reading is occurrence counts (`grep -o | wc -l`). Synth's catch.
+
+**Key 4, change-local:** `i_fpnew_divsqrt_multi` +171 LUT (own +72, `i_divsqrt_lei` +99), and perf_counters -114. The
+rest is redistribution: dyn_unit +4,092 (the bistable: _spawn_0 +7,796, own -2,855, _spawn_1 -849), ex_stage +3,154,
+csr_regfile +1,008, lsu_bypass -804, issue_read_operands -4,183.
+
+**Routing risk.** The synthesis +1.9 k suggests placed LUT near 181.5 k, where this line's routing has been marginal.
+The pre-registered failure branch applies if it does not route.
+
+## Full build: SEALED (synth lane, leffe; 2h13m, `run.exit` 0, `write_bitstream` completed)
+
+`caplifive_ids55-native-tagcache-mlp-fpieee-hpmreplay_5f41c486e`, PROVENANCE HEAD 5f41c486ebde. `.bit` 11,443,722 B,
+sha256 `b457b57a44282cd630a7924ca85c509fe58be60e0c47a37cb0ec8b02f5fcf249`. The `.bit` inside synth's tarball
+(`synth-5f41c486ebde-exit0.tar.gz`, sha256 `e87351bfc57fe515…`) hashes identically.
+
+| key | reading | grade |
+|---|---|---|
+| placed LUT | 181,565 vs 179,661 (+1,904) | PASS |
+| congestion | placer max 4 (16x16, N and E); post-route router effective N 4, S 5, E 4, W 4 (max 5); Route 35-447 0; overlaps 89 -> 0 | PASS |
+| routing | 0 nets with routing errors, 229,184 fully routed | PASS |
+| loops | routed check_timing 0, routed LUTLP-1 0 (and the gate's zeros) | PASS |
+| WNS | -15.077 vs -13.738 (-1.34 ns), inside the null band; TNS -320,985, 48,239 of 204,209 endpoints failing. A value, not an attribution | PASS |
+
+Routed TOP 181,612 LUT / 68,147 FF; core 156,197 / 45,917. It routed at 181.6 k without a congestion warning.
+
+**Handed to the SPEC lane.** It becomes the bitstream for every Capstone experiment once flashed, and the problem rows
+run on it first. The next three bitstreams are each this one plus ONE change (DTLB 64, L1D 64 KiB 16-way, the DYN
+bypass), so each can be A/B'd on silicon against this one.
