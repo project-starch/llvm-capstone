@@ -291,3 +291,62 @@ without committing it. The work is forcing a clean head not to commit: every com
 `commit_lsu`, CSR, fence, AMO) must be held that cycle. Arms: r30-fill-init, S5c, the excodes vector, the one-base cost
 arm. The flush is cold in perl/gcc: the compiler lane counts 0 UNINIT-rs1 stores, with the counter validated 256/256
 on a module-route probe.
+
+## claim-auditor on 44e7b933c, and what was done (2026-11-13)
+
+The audit found four value divergences that the off/on equivalence tests could not see.
+
+- **A, fixed (e66746899).** Under translation, the folded LDC/STC capability fault made the MMU skip the walk, and
+  PMP judged the VA as if it were a PA. Without translation the fold stays. Under translation the fault is registered
+  on the MMU's request strobe and raised after a fault-free translation, behind any page or access fault: the DYN
+  path's order.
+- **B, a deliberate change from the DYN path, kept (the SPEC lane's ruling).** A dead node, an rs1 without write
+  permission and a linear-family granule now read 25 where the DYN path read the post-load 27. The verdict is checked
+  before the access, as the twin does.
+- **C, fixed (294170bc3).** A plain load's raw user lane reached the forwarding muxes on port 2. Forwarding ignores
+  cap_data's valid bit. The lanes are now '0 unless an LDC/STC lane is valid.
+- **D, fixed (294170bc3).** A faulting LDC/STC's tagged lane was forwardable before its flush. The lane's valid now
+  requires no exception.
+
+Synthesis risk named by the audit: no new combinational loop, but a new deep path into `fu_data_q` (load pipe register
+-> decompress -> syncer -> compress -> port-2 forwarding mux), plus the dispatch-time decompress/compress into the
+trans_id table. The synthesis-only gate reads it.
+
+## Pre-registration of the speculative builds (2026-11-13, before any build)
+
+**The lead's instruction (relayed by the SPEC lane):** every optimisation is built in parallel, with synthesis
+starting alongside its remaining checks. A check that fails voids that build: it is discarded and recorded.
+
+**Builds:**
+- **DYN bypass v2:** capstone-ariane perf/ids55-dynbypass-v2 **eb101c351** (pushed). It is 5f41c486e + piece 1 +
+  piece 2 + the C/D lane gating + the translation merge (capability fault outranks the MMU's result) + the trans_id
+  table with no flush clear. Its last commit is sim-only. Name: `caplifive_ids55-native-tagcache-mlp-fpieee-hpmreplay-dynbypass_eb101c351`.
+- **Combined:** perf/ids55-combo **ea174bfdd** = eb101c351 + the E2 config (DTLB 64, L1D 64 KiB). Name:
+  `...-hpmreplay-dynbypass-dtlb64-l1d64k_ea174bfdd`. It is speculative: it flashes only after each single change has
+  shown positive on silicon.
+
+**Checks still running when the builds start:** v2's bypass-on arms (every translated arm, excodes, the 19 tests,
+the cost arms), the 95-test sweep against perf/ids55-best's, and lint. v2 lint was already read on 0a1c0cf02, whose
+synthesisable RTL is identical: PASS, UNUSEDSIGNAL 1479 (-1), the rest at baseline. The combined variant's lint is run
+too.
+
+**Synthesis-only gate keys** (against the ids55-best gate checkpoint):
+1. Mapping in class.
+2. Loops 0 (check_timing, "Found timing loop", 8-326, LUTLP-1).
+3. Area report-only at the +/-2,500 floor, with the change's own rows.
+   - Bypass: load_store_unit, load_unit, ex_stage, issue_read_operands, scoreboard, the DYN unit.
+   - Combined: also the DTLB and wt_dcache.
+4. The worst-path family against the base. Watched: a new family from `i_pipe_reg_load` through the bypass's
+   decompress/compress into `fu_data_q` (the claim-auditor's named risk), and anything ending in the DTLB or the D$
+   way select.
+
+**Full build:**
+- placed LUT reported against 181,565;
+- placer <= 5 and router <= 5;
+- 0 routing errors;
+- 0 loops;
+- WNS against the base's -15.077 (null band; a value);
+- sha256.
+
+A routing failure or a WNS outside the band is a NEGATIVE result: its artefacts are collected and labelled, with no
+further runs on that variant, and nothing is tuned to fit.
