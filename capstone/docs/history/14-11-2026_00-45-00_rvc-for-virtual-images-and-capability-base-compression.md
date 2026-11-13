@@ -44,6 +44,10 @@ reference only as named:
 - **The spill fix.** With `+c`, the allocator's CostPerUse penalises registers outside x8-x15. That cost perl +626
   LDC and +271 STC sites, and +0.40 % user instructions (gcc +0.16 %). `-capstone-disable-cost-per-use` (an existing
   option) removes the whole cost, and CCD's text is slightly smaller than CC's. Every later arm carries it.
+  - The option is `cl::Hidden` and carries no status comment.
+  - It is still needed with `+cap-base-rvc`: arm CCK (CCDK without it) is +0.40 % on perl and +0.16 % on gcc again,
+    with outputs identical.
+  - Making it the SDK default, or dropping CostPerUse for this target, is a codegen decision still to be made.
 - **`+cap-base-rvc`** is compiler-capbase-rvc 74080cce29e5. Every access on this target takes a capability base
   (`Load_ri` uses `GPCRMem`), so the upstream CompressPats, which name GPR bases, never fire. With `+c` alone,
   `ld a4, 0(a1)` stays 32-bit.
@@ -66,6 +70,9 @@ reference only as named:
 | FRCDK vs FR | -0.02 % | -0.02 % |
 | FRCDK vs C | -5.63 % | -1.22 % |
 | FRCDx vs FRCD | +994 | +26 k |
+
+The FRCDx row is the twin's run-to-run noise floor. FRCDx and FRCD build byte-identical perl, yet the counts differ by
+994 instructions.
 
 - FRCDx and FRCD build byte-identical perl.
 - In gcc, 386 of 387 objects are identical without `.comment`; toplev.o embeds the compiler version.
@@ -103,32 +110,34 @@ only; instruction lengths are read from the ELF. The C and FR controls read exac
 
 lit, CodeGen/Capstone and MC/Capstone: 169 tests, 168 pass. The one failure is the known shared-patches-present.test.
 
-## A per-exec kernel cost that follows the text segment's size, not RVC
+## A per-exec kernel cost: arena_pin pinned the image region's slack (fixed behind a parameter)
 
 **What was seen.** Perl's test.pl window (about 4,800 native execs) shows the cost:
-- CC: kernel +2.7 % and pages +9.3 % against C, about 3.8 pages and 18 k kernel instructions per exec;
+- CC: kernel +2.7 % and pages +9.3 % against C;
 - FRCDK: +3.8 % and +11.1 % against FR;
 - gcc, with few execs: +0.2-0.4 %.
 
-The cost grows with the text pages removed: F about 0.4 pages per exec, CC 3.8, FRC 5.5. In a per-symbol kernel
-profile (CC against C, window 1), `memset`, GUP, page allocation and free all rise, while file-fault work
-(`filemap_map_pages`, `do_set_pte`) falls.
-
 **Two layout arms** relink CC's objects (measurement-only scripts in perf/cclever/ld):
-- **CCP:** CC with the text segment padded back to C's 0x2c0000 with zero bytes, which puts the data where C has it.
-  Pages -0.15 % and kernel -0.78 % against C. The cost is gone.
-- **CCB:** CC with .bss padded by the same 0x3a000, which leaves the data where CC has it and equalises the slack to
-  the 4 MiB region end. The cost is unchanged from CC: pages +9.2 %, kernel +2.7 %.
+- **CCP:** text padded back to C's 0x2c0000. No cost.
+- **CCB:** .bss padded instead, which equalises the slack to the 4 MiB region end and leaves the data where CC has it.
+  The full cost.
 
-So the cost depends on the text segment's size, or equivalently the data segment's position (the arms cannot tell
-those two apart). It does not depend on the slack: a slack mechanism was considered in-session and CCB refutes it.
+So the cost does not follow the slack itself, which was the first idea and is refuted. It follows the image grant's
+non-rx page count: (region - text) / PAGE, 320 for C and CCP, 378 for CC and CCB.
 
-**Not settled.** The mechanism inside the native module (lazy admission, pin-ahead or resident scan) has not been read
-to a cause.
+**The mechanism**, read in capstone_vm.c and confirmed with diag_admit:
+- Every native stage sets arena_pin. At the first data fault, arena_pin pins the rest of the arena forward
+  (pin_ahead).
+- The image arena is binfmt-dom's power-of-two region, so the window ran on past .bss through the slack.
+- The image arena's census for one makerand exec reads window=298 in C and window=356 in CC: 58 pages more, the text
+  RVC removed. Every other arena is identical.
+- The grant is lazy (eager_grant applies to reg 10 only), so this is not a mint-time pin.
 
-**Consequence.** Smaller text costs per-exec kernel work on this module. The RVC images are neutral or better on
-gcc and on makerand-only perl, but should not go to an exec-heavy row until the module side is understood or the text
-segment is padded.
+**The fix**, native-hpm-counters 6364813be083, default off:
+- The parameter `arena_pin_image_end` stops the image arena's window at the end of .bss.
+- The census reads window=261 in both C and CC.
+- Perl test-sw, CC on one Image with the parameter off against on: kernel -5.29 %, pages -13.86 %, outputs identical.
+- With the parameter on, CC against C: kernel -0.83 %, pages -0.08 %.
 
 ## Stage 2: what stays 4 bytes
 
@@ -149,8 +158,30 @@ ops. Results are dynamic, from shift-1 window 0, as a share of image instruction
 **Zcb.** The board's CVA6 configuration also enables Zcb (c.lbu/c.lhu/c.sb/c.sh/c.zext.*/c.mul). The twin's QEMU CPU
 leaves `zcb` off, so a Zcb arm needs `zcb=true` on the twin before it can be measured.
 
+## Measurements for the next compiler levers (arm C and FR, per-PC, gcc train01 / perl makerand)
+
+| Lever | Measurement | Ceiling |
+|---|---|---|
+| C1, LSR on capabilities | executed `slli` -> `cincoffset` -> access is 139 M on gcc (1.1 %); riscv-base pays the same 3 instructions (`slli; add; ld`) | small over riscv-base |
+| C3, spills | sp-relative load/store traffic is 2.36 G against riscv-base's 2.21 G on gcc | +146 M, 1.2 % |
+| gp-relative globals (new) | below | largest single perl lever |
+
+**gp-relative globals** (`perf/cclever/gpwin.py`, `gprel.py`): gp's cursor is set once into .data/.bss, and a global
+within +-2 KiB is reached as `op x, off(gp)`.
+- On FR perl makerand, 117.9 M of the 237.7 M executed `scc gp` derivations feed only straight-line accesses.
+- The best 4 KiB window saves 197.7 M instructions (235.7 M if every eligible derivation were in range). That takes
+  makerand from +12.2 % to about +5 % over riscv-base; a form that also serves derivations live across branches
+  reaches about +2.5 %.
+- gcc's globals are scattered: the best window covers 7 % of derivations.
+- It changes gp's cursor convention, so it is the lead's decision.
+
+**Line-end control transfers** (`perf/cclever/linend.py`) were counted for the rtl lane's fetch question. The cost the
+rtl lane priced them at was later retracted to about 1 cycle each, so they are a record, not a lever.
+
 ## Left
 
-- **The per-exec cost above:** the module-side mechanism, or a text-segment padding rule.
+- **The per-exec cost:** stages that set arena_pin should also set `arena_pin_image_end`. That decision is the
+  runtime lane's, as is landing 6364813be083.
+- **`-capstone-disable-cost-per-use`:** decide whether it becomes the SDK default.
 - **Zcb:** the twin CPU flag, then an arm.
 - **A compressed-capability encoding set:** the lead's and the rtl lane's choice, from the stage-2 table.
