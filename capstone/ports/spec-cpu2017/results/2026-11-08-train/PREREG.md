@@ -3054,3 +3054,28 @@ which does not exist on K2N).
 Arm C so far: imagick 1.1995, nab 1.091, lbm 1.006, perl makerand 1.551, gcc train01 1.720.
 **Rebalance:** board 2 finished its arm-C rows and is idle; x264 moves from board 1's list to board 2 now (same kit,
 image and stage). Board 1's chain ends after its running mcf; it then runs xz only.
+
+## Addendum 89 (2026-11-13 17:00, before it runs): arm C xz and mcf; board 1 becomes the A/B board, its base run on the all-optimisations bitstream with the new compiler and the HPM kit
+
+**Readings** (arm C, mlp + bkit59, specdiff PASS): mcf 7,605.65 s (board 1) against riscv-base plain-rv64fre 5,125.02
+(board 3) = 1.484; xz 5,462.89 s over 12 commands (board 1) against 4,993.81 = 1.094. Arm C, all rows so far:
+imagick 1.1995, nab 1.091, lbm 1.006, xz 1.094, perl makerand 1.551, gcc train01 1.720, mcf 1.484 (x264 running).
+
+**Base of the A/B**, board 1 (idle since 16:52):
+- bitstream caplifive_ids55-native-tagcache-mlp-fpieee-hpmreplay_5f41c486e (sealed: b457b57a44282cd6...; WNS -15.077,
+  181,565 LUT; b98f5a517 + R-64/65/66 FP fix + HPM event 23; no cycle change in simulation);
+- kit bkit61-k2n-native-best-hpm = bkit60 + native kernel with llvm-capstone native-hpm-counters e517119e12c4
+  (hpmcounter3..8 summed over each CSRUNV: hpm3 L1I miss, hpm4 L1D miss, hpm5 DTLB miss, hpm6 mispredict, hpm7 issue
+  stall, hpm8 scoreboard full; firmware wrapper 8a39f82d programs them) + command-line parameters
+  capstone_vm.dom_grant_root=/tmp/nt/sr dom_null=1 dom_local_tmp=1 (perl's full test; 540-byte CONFIG_CMDLINE, board
+  limit 1024);
+- images: FR = arm C's SDK built by llvm-c6 (llvm-capstone compiler-global-lo-fold 2f3ff76eba7b, -capstone-fold-global-lo,
+  the padded link.ld) with call relaxation (+relax codegen). Twins: outputs byte-identical to arm C on every row but
+  x264 (its twin lands about 19:05); perl makerand -6.92 % user instructions, gcc train01 -1.20 %; the QEMU gate
+  (runtime/virtual contracts) passes as the control does.
+- rows: perl makerand, gcc train01, mcf (problem rows first).
+**What it reads:** the FR compiler's effect (against arm C on mlp, same allocator; the bitstreams differ only by the FP
+fix and the counter), and the base for the DTLB-64, L1D-64K and DYN-bypass bitstreams, which run on this board with the
+same kit and images when sealed. **Predictions:** perl makerand 375-395 s; gcc train01 2,900-2,960 s; mcf within ±1.5 %
+of 7,605.65 s; hpm4/hpm5 non-zero and monotone over each command, hpm5 (DTLB misses) on the order of the model's
+(mcf ~0.9 G, gcc ~0.2 G, perl ~36 M).
