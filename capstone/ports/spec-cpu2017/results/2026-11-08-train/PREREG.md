@@ -3133,3 +3133,19 @@ base it reads their sum; the single-change bitstreams (leffe) attribute it after
 **Predictions** (bypass: LDC 4.22 -> 2.75, STC 6.29 -> 2.73 cycles in simulation, one-base STC 7.21 -> 5.28; DTLB:
 <= the base's event-4 walks x 30 cycles): perl makerand 330-375 s (-4..-15 %); gcc train01 and mcf -3..-10 % against the
 base. specdiff PASS everywhere; event-4 counts fall.
+
+## Addendum 93 (2026-11-13 18:25, before it runs): the full perl row — riscv-base on board 3; the native route is ready
+
+**Native route, perl's full test (makerand + test.pl):** passes on the twin with module native-hpm-counters a0ed3250249b
+(the HPM counters plus dom_grant_root / dom_local_tmp made non-fatal: they apply only when their directories exist) and
+the three parameters dom_grant_root=/tmp/nt/sr dom_null=1 dom_local_tmp=1: specdiff 2/2, test.out line-for-line
+identical to riscv-base's (317 ok), FR images. Kit bkit62 (all-optimisations bitstream + that kernel) carries it; the
+Capstone full-perl row runs on the final bitstream when sealed.
+**Security note (no effect on measurements):** the rtl lane confirmed in RTL simulation that SHRINKTO with a negative
+immediate widens a capability (inverted bounds encode at E = 52, a 2^55 window); every bitstream so far has it. The
+compiler lane scanned every measured image and library by encoding (86 inputs, 608,321 SHRINKTOs): none has a negative
+immediate, and the backend emits SHRINKTO only with an immediate in [1, 2047]. The fix (reject inverted bounds in
+SHRINKTO, CAPBOUND, CAPENTER) goes into the final bitstream; an ISSUES entry follows the claim-auditor pass.
+**Run, board 3** after its running x264: riscv-base plain-rv64fre, the full perl test (perf/fair/stages/500.perlbench_r-rv-fair3:
+the rv-fair2 stage with only the executables replaced by plain-rv64fre). Prediction: specdiff 2/2; makerand within
+±1.5 % of 257.90 s.
