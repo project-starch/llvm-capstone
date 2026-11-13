@@ -3375,3 +3375,28 @@ Stubbed dry runs of both reach their boot.
 - FRCDK against FR -3 % .. +1 %;
 - no absolute-time prediction: this is the first native full-perl run on silicon.
 The perl row's ratio uses riscv-base fre's full perl (board 3, Addendum 93, after its x264).
+
+## Addendum 103 (2026-11-14 05:45, before it runs): riscv-base full perl; FRCDK perl and fdk mcf/xz readings; the full-perl pair moves to board 3
+
+**Readings:**
+- riscv-base plain-rv64fre, FULL perl test (board 3, bkit54): makerand 258.00 s + test.pl 12,365.02 s = 12,623.02 s,
+  specdiff 2/2 PASS. This is the denominator of the perl row.
+- riscv-base x264 (board 3): run 35,613.24 s. The five frame hashes equal arm C's and plain-rv64r's. Arm C's x264
+  ratio is 36,219.53 / 35,613.24 = 1.017.
+- On fdk, FRCDK perl makerand (board 1): 335.14 s, against FR on fdk 347.44 s: -3.5 %, inside Addendum 98's band.
+  Ratio 1.300 against makerand 257.90. run_cycles 8.47 G (FR 8.78 G); L1I misses 31.1 M (FR 34.7 M).
+- On fdk, FR mcf (board 1): 7,382.19 s, specdiff 2/2. Ratio 1.440; final 7,416.01. run_cycles 179.62 G against the
+  final's 179.61 G: the 8-way I$ does nothing for mcf.
+- On fdk, FR xz (board 2): 5,196.56 s over 12 commands, specdiff 12/12. Ratio 1.041; arm C 1.094.
+
+**Moved:** the FR and FRCDK full-perl chains (Addendum 102, ai-b1/aj-b1) were stopped by hand before they ran and are
+relaunched as ai-b3/aj-b3 on board 3. Board 3 is free and is the board riscv-base's full perl ran on, so the perl
+row's ratio becomes a same-board ratio. Board 1 keeps the problem rows: its running FRCDK gcc, then the next
+bitstream or compiler set. Stubbed dry runs of both board-3 chains pass. The kit is bkit72 (fdk with the dom_*
+parameters). It is the first native Capstone chain on board 3, so its own smoke is the first step of each boot. A
+smoke failure stops the chain.
+
+**Predictions:**
+- rc 0, specdiff 2/2 PASS on both;
+- FR full perl 15,500-19,500 s (ratio 1.23-1.55);
+- FRCDK against FR -4 % .. +1 %.
