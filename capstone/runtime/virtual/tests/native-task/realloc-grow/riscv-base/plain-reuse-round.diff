@@ -1,0 +1,13 @@
+--- a/src/malloc/mallocng/plain_reuse.c
++++ b/src/malloc/mallocng/plain_reuse.c
+@@ -17,6 +17,10 @@
+ 
+ void *__plain_map(size_t len)
+ {
++	/* free() releases an individually mmapped chunk with its page-rounded length (maplen*4096), while malloc maps
++	 * it with the exact request: round here, so the cache can hand such a chunk back (the Capstone arm's
++	 * __heap_mapping rounds both). */
++	len = (len + 4095) & -4096UL;
+ 	pr_lock();
+ 	for (unsigned i = pr_n; i-- > 0;) {
+ 		if (pr_free[i].len != len) continue;

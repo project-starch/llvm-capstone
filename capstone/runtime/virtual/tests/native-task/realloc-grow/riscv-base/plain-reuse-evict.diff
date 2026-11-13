@@ -1,0 +1,18 @@
+--- a/src/malloc/mallocng/plain_reuse.c
++++ b/src/malloc/mallocng/plain_reuse.c
+@@ -40,6 +40,15 @@
+ void __plain_unmap(void *p, size_t len)
+ {
+ 	pr_lock();
++	/* The Capstone arm's rule (malloc-mapping.c mr_make_room, llvm-capstone nat-realloc-evict 3e70344d8c3f): a
++	 * mapping that fits the byte bound by itself gives cached mappings back, from the front of the table, until
++	 * it fits. */
++	if (len <= PR_FREE_BYTES)
++		while (pr_n && (pr_n >= PR_FREE || pr_bytes + len > PR_FREE_BYTES)) {
++			void *b = pr_free[0].base; size_t l = pr_free[0].len;
++			memmove(pr_free, pr_free + 1, --pr_n * sizeof *pr_free);
++			pr_bytes -= l; munmap(b, l); ++__plain_reuse_evicted;
++		}
+ 	if (pr_n < PR_FREE && pr_bytes + len <= PR_FREE_BYTES) {
+ 		pr_free[pr_n].base = p; pr_free[pr_n].len = len; ++pr_n; pr_bytes += len; ++__plain_reuse_puts;
+ 		pr_unlock();
