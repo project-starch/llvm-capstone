@@ -63,3 +63,21 @@ The arms are FR's configuration: `-capstone-fold-global-lo`, `+relax`, padded li
 - `memcpy-align-dispatch.ll` checks both arms and the cases the pass leaves alone. Its ON checks fail without the flag.
 - Dynamic cost per copy: `mv, mv, or, andi, beqz` plus two loads, two stores and a return or continue. That replaces a
   call of about 40 instructions. Each `ptrtoint` of a capability lowers to a `mv`.
+
+## Twin results (native twin, shift-1 capmix3, nat-fair stages as for arm FR; 2026-11-14)
+
+Arm FRM is FR plus `-capstone-memcpy-align-dispatch`, built by llvm-c8. Arm FRMx is llvm-c8 with C8 off; its gcc
+objects are identical to FR's in 386 of 387, and the one that differs is toplev.o, which embeds the compiler version.
+FRM differs from FR in 19 gcc objects.
+
+| row | outputs | user instructions, FR -> FRM | memcpy entries | image |
+|---|---|---|---|---|
+| 502.gcc_r train01 | identical (5 files) | 12.894 G -> 12.838 G, -56.1 M (-0.44 %) | 4,064,802 -> 1,585,752 | 6e5e26eb8e538075 (FR 1d2d347b47dbc0c6) |
+| 500.perlbench_r test-sw | identical (13 files) | +1.65 M; image window equal (3,094,807,145) | | byte-identical to FR's (804f0f6074a4d2d8) |
+| 505.mcf_r test | identical (6 files) | -12.9 k | | byte-identical to FR's (b85ebf872e28ccfd) |
+
+- On gcc, memcpy itself saves 76.3 M. The inlined callers grow by part of that: bitmap_elt_ior +11.1 M, bitmap_copy
+  +6.1 M.
+- perl and mcf have no candidate copy: their images are byte-identical to FR's. Why each copy was left alone was not
+  enumerated. Perl's whole-run delta, with an identical image, is run-to-run noise in non-image user code (the
+  runtime).
