@@ -37,7 +37,8 @@ def main():
         with tarfile.open(a.archive) as t: t.extractall(d, filter='data')
         root=Path(d)/'musl-1.2.5'; rel=Path('src/malloc/mallocng')
         upstream={f.name:f.read_text() for f in (root/rel).iterdir() if f.is_file()}
-        for name in ('0009-virtual-mallocng-capabilities.patch', '0010-virtual-mallocng-meta-area-at-once.patch'):
+        for name in ('0009-virtual-mallocng-capabilities.patch', '0010-virtual-mallocng-meta-area-at-once.patch',
+                     '0011-virtual-mallocng-grow-mmapped-chunks-in-place.patch'):
             with (Path(__file__).parent/'musl-patches'/name).open() as patch:
                 subprocess.run(['patch','-s','-p1','--no-backup-if-mismatch','--fuzz=0','-d',str(root)],stdin=patch,check=True)
         checks={str(rel/f.name): (a.tree/rel/f.name).is_file() and
