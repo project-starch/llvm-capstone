@@ -4314,6 +4314,160 @@ be unpacked; not measured.
   rd_ctag already depends on; data_rtag drives nothing that returns to the request. PLAUSIBLE-BUT-UNPROVEN: synthesis
   with a LUTLP-1 DRC on the post-synth and post-opt checkpoints decides.
 
+### R-71 — SHRINKTO with a negative immediate WIDENS a capability: inverted bounds pass the FLU's guard, encode at E = 52 and decode to a 2^55 window; CAPBOUND and CAPENTER's operand form accept the same operands unchecked `DEMONSTRATED IN SIMULATION 2026-11-13 on 5f41c486e (the sealed ids55-best, sha256 b457b57a...) and claim-audited (SUPPORTED); PRESENT BY SOURCE in every bitstream with this FLU guard, NOT RUN on the earlier ones; NOT MEASURED ON SILICON; FIXED IN RTL on capstone-ariane perf/shrinkto-fix ffb82d5bb (two-sided in simulation) and carried by the realistic final 6d0e754d5 (sealed 2026-11-13, sha256 72bf215d...); the fix's CAPBOUND limit OVER-REFUSES three exact E = 51 regions (audited; which side moves is open); no measured image is affected (the compiler lane's scan, below); exploitability under supervision PLAUSIBLE, NOT DEMONSTRATED`
+
+Siblings: R-60 (the out-of-window cursor check; it is silent at E >= 50, which is why the widened capability keeps its tag),
+R-54 (the renormalisation step that turns E = 51 into E = 52 here), R-32 (SHRINKTO's own off-by-one on a positive
+immediate). None of them is this: they concern legal operands.
+
+**Supersedes** a sentence in this file's 2026-08 audit block (the R-32 discussion, "*Any `imm <= 0` passes* for SHRINKTO
+— only `imm == 0`. A negative immediate wraps under the unsigned compare at `flu:243` and faults"). That was a source
+reading and it is wrong on 5f41c486e: with imm = -k, `cursor + imm` = cursor - k, which is <= end and >= start, so the
+guard passes unless cursor < k. The sentence is marked there.
+
+**The mechanism (5f41c486e).**
+- SHRINKTO (custom-2, funct3 000) takes a sign-extended 12-bit immediate (`decoder.sv` IIMM). The FLU's only guard is
+  `cursor < start || cursor + imm > end` (`capstone_flu_unit.anvil:311-312`), and the result's bounds are
+  [cursor, cursor + imm): inverted for a negative imm.
+- `compress_bounds` (`ariane_pkg.sv:801-874`) sees a length of 2^64 - k, picks E = 51, and the R-54 step makes it 52.
+  `decompress_bounds` (`:688-734`) then shifts every cursor term out (E + 14 = 66), so the decode is
+  **[0, 2^55)** regardless of the cursor: all of DRAM and MMIO on this platform.
+- R-60's window check is forced off at E >= 50 (`cursor_outside_window`), so moving the cursor anywhere in that range
+  keeps the tag.
+- Decode is ungated: SHRINKTO has no privilege, capmode, supervision or context gate (`decoder.sv:1203-1206`), unlike
+  CAPCREATE/CAPTYPE/CAPNODE/CAPPERM/CAPBOUND (illegal under supervision, `:1140-1142`).
+- CAPBOUND (`flu.anvil:467-477`) sets any start/end with no check, and CAPENTER's operand form checks nothing, so both
+  can also produce inverted bounds or near-2^64 lengths. Both are mint operations, illegal under supervision.
+
+**The reading (simulation, capstone-ariane shrinkto-neg.S; base 5a9519c7e = 5f41c486e + tests, fixed ffb82d5bb = the
+same + the FLU fix; S12_MEM_DELAY=12; predictions in the file's header before the first run).** One NONLIN RW capability
+over a 4 KiB buffer, cursor in the middle; 0x1111 in the buffer, 0x2222 at `far`, 64 KiB beyond it. Readings are value /
+mcause, -1 = no trap:
+
+| arm | base | fixed |
+|---|---|---|
+| N: shrinkto -16, then load in the buffer, then cincoffset to `far` and load | -1; 0x1111 / -1; **0x2222 / -1** | **29** at the shrinkto |
+| P: shrinkto +64 (control) | -1; 0x1111 / -1; 0 / 24 | the same |
+| O: no shrinkto (control) | 0x1111 / -1; 0 / 24 | the same |
+| B: CAPBOUND [obj+256, obj) | -1 | **29** |
+| E: CAPENTER operand 2^41 > MEM_END | -1 | **29** |
+| L: lcc start (sel 3) and end (sel 4) of N's s4 | **0x0 / -1; 0x80000000000000 / -1**: the 2^55 window, read directly | 0 / 24; 0 / 24 (the trapped shrinkto never wrote s4) |
+| C1: a 64 KiB capability, cursor at its last doubleword, ld | 0x0 / -1 | the same |
+| C2: the same capability, cursor at its end, ld | 0 / **28** | the same |
+
+Arms L, C1 and C2 come from a second run with predictions written before it (capstone-ariane perf/shrinkto-ctl-base
+5dd65dd12 and perf/shrinkto-ctl 513ac25a3, the same test on the two trees). They answer the claim-auditor's two
+caveats, and every value reads as predicted.
+- C2 is the bounds comparator's positive control. It reads 28 on both trees, against C1's no-trap one doubleword
+  lower, so N's far load succeeding on the base is the comparator passing a widened capability. A dead comparator
+  would also have let it through, and C2 rules that out.
+- L reads the decoded bounds instead of inferring them from one load.
+
+- P and O read 24, not the 28 their header predicted. The cincoffset to `far` leaves a 4 KiB capability's
+  representable window, and R-60 untags it, so the far load sees NOT_CAP. That refused prediction is kept in the file.
+  What separates N from P and O is R-60: the claim-auditor's ISS log has `SUP r60 FIRE` for P's and O's cincoffset and
+  none for N's, at the same offset.
+- Trap counts: on the first run, 2 on the base and 8 on the fix; with the controls, 3 and 11.
+
+**Reach.**
+- **No measured image.** The compiler lane scanned every measured image and library by encoding: 86 inputs, 608,321
+  SHRINKTOs, none with a negative immediate (recorded in the SPEC lane's train PREREG Addendum 93, spec-silicon
+  7ee03a18a0e0; not re-run here). The LLVM backend's only producer (`CapstoneISelDAGToDAG.cpp:1771-1780`) emits an
+  immediate in [1, 2047]. capstone-c's `pointer_bound_imm` takes a `usize`, and the assembler rejects `.insn i` immediates
+  above 2047, so a large type is a build error, not a negative immediate.
+- **Outside supervision** (U, S, M without a supervised domain or context): no extra authority. These modes can already
+  mint any capability, because CAPBOUND is ungated there. In U and S, plain loads and stores are checked against the
+  CPMP entries by physical address (`core/pmp/src/pmp_data_if.sv:387-390`), not against the register capability.
+- **Under supervision** (a classic supervised domain, or a CSRUNV virtual context): this is the escalation the mint
+  gate exists to prevent. `decoder.sv:1140-1141` names it: a supervised domain must not "mint a capability over its own
+  seal or the monitor's memory". A negative-immediate SHRINKTO does that from any tagged LINEAR, NONLIN or UNINIT
+  capability the domain holds whose cursor is at least |imm|. The decoded start and end are also what the DYN unit's
+  LDC/STC bounds check uses (`dyn.anvil:651-677`).
+- **OPEN, not traced or run:**
+  - whether capmode is set inside a context (`cap_violation_detection` requires `capmode_i`, set only by CAPENTER;
+    if it is clear there, only LDC/STC are affected);
+  - for a non-virtual supervised domain, whether translation is off (if it is, the window is physical memory, the
+    monitor included);
+  - in a virtual context, Sv39 is required (`csr_regfile.sv:2950-2951`), so the window is the context's page table.
+  - The arm that settles all three: the same probe after CSSUPERVISE and after CSRUNV.
+- **Earlier bitstreams:** before R-54 the same model gives E = 51 and an even wider window, [0, 0x8040000000000000).
+  That every bitstream so far has the defect is extrapolated from source and the model, not run.
+
+**QEMU.**
+- **dev's pin refuses it, with 26.** capstone-qemu 0542c5556c (dev's submodule pointer, = virtual-capstone's head),
+  `helper_csshrinkto` (`target/riscv/op_helper.c:1483-1487`), refuses `cursor < base || cursor > end ||
+  size > end - cursor` with RISCV_EXCP_UNEXP_CAP_TYPE (26). The check has been there since 6550f19489 (2026-09-26).
+  The native twin (qemu55) is a worktree of the same repository and holds the same code. QEMU is the reference here,
+  and the RTL was the side that widened.
+- **Cause difference, kept.** The RTL fix raises 29 (ILLEGAL_OPERAND_VALUE), and QEMU raises 26. That is a
+  pre-existing cause difference, recorded here and changed by neither side, as the runtime lane asked. The pin
+  raises 26 for SHRINKTO's tag and type checks too.
+- **RETRACTED (2026-11-13, before this entry): "the module-route twin accepts the wrap and keeps exact inverted
+  bounds".** That was read from the shared checkout's submodule working tree. It sits at deb7d75756 (detached, 88
+  commits behind the pin), where `helper_csshrinkto` still asserts. A guest arm on a clean deb7d75756 build confirms
+  that tree accepts the SHRINKTO and then denies every access with cause 5, so it never widens. It is a stale tree, not
+  the twin.
+- **OPEN, infrastructure:** `capstone-test-env.sh:55` points the runners' default QEMU at that checkout's
+  `build/qemu-system-riscv64`, dated 2026-09-14. Its `--version` prints no hash, so whether the default binary
+  predates 6550f19489 is not established.
+- At the pin, QEMU has no CAPBOUND helper, so there is nothing to compare for arm B.
+- CAPENTER is not comparable either. The pin's `helper_cscapenter` sets the PCC to [rs1, rs2) and refuses
+  rs1 >= rs2 with 26 (`op_helper.c:4290-4292`). The RTL's operand form instead splits memory into [MEM_BASE, rs1) and
+  [rs2, MEM_END), so the two models give the operands different meanings; that difference is pre-existing and is not
+  this issue. With both operands <= MEM_END, neither RTL half can invert, which is why the fix needs only the MEM_END
+  test.
+
+**The fix** (capstone-ariane perf/shrinkto-fix 8c44e4f93 + ffb82d5bb on 5a9519c7e; the same change as ee82e1c6a +
+6d0e754d5 in perf/ids55-final; one file, `capstone_flu_unit.anvil`, +23/-8). Each refuses with ILLEGAL_OPERAND_VALUE (29):
+- SHRINKTO: `cursor < start || inc > end || inc < cursor`;
+- CAPBOUND: `rs2.cursor < rs1.cursor || rs2.cursor - rs1.cursor >= 0xff80000000000000` (no inverted bounds, no
+  E = 52 length);
+- CAPENTER's operand form: either operand > MEM_END.
+
+Lint at baseline on 6d0e754d5, every counter (UNUSEDSIGNAL 1480). The bypass-v3 arms read identically on 6d0e754d5.
+The 95-test sweep on 6d0e754d5 (sim14 .sup/swfinal), against the base 5f41c486e, reads 92 / 92 identical by
+value (exceptions, readings, retired) and by retirement trace. 3 tests are absent on both sides, as on every sweep.
+That pair is NOT one variable: 6d0e754d5 also carries bypass v3 and DTLB 64. The fix is only the FLU file, which is
+byte-identical (blob 213b9e5cea99) on ffb82d5bb, 6d0e754d5, 105c464bc and 9972ae79d.
+
+**The fix's own audit (claim-auditor, 2026-11-13): it closes the widening, and it ALSO refuses three exact regions.**
+- **SHRINKTO: closed, with no false refusal.** imm = 0 and cursor + imm == end both pass.
+  - The new `inc < cursor` term also closes a second shape the old guard accepted: a cursor near 2^64 with a POSITIVE
+    imm that wraps past 2^64. `shrinkto(0xfffffffffffffff8, 16)` gave inc = 8, which passed `inc > end` and produced
+    the inverted [0xfff...f8, 0x8).
+  - A SHRINKTO child is at most 2,047 bytes, so it cannot reach E >= 50 on legal operands.
+- **CAPBOUND: every E = 52 case is caught, but the limit is wider than the defect.**
+  - 1022 x 2^54 is the right lower bound: no shorter length reaches E = 52. E = 52 needs q10 = len >> 54 equal to 1023
+    with a nonzero residue, or 1022 with a carrying residue sum (the R-54 step in `ariane_pkg.sv`).
+  - But aligned regions at or above that length encode EXACTLY at E = 51 and are refused anyway. Checked with the
+    committed `verif/tests/custom/capstone/bounds-model.py`, which carries R-54:
+    - [0, 0xff80000000000000) -> E 51, decodes exactly;
+    - [0x40000000000000, 0xffc0000000000000) -> E 51, exact;
+    - [0, 0xffc0000000000000) -> E 51, exact.
+  - So the fix's comment and the message of ee82e1c6a ("a length of 1022 * 2^54 or more compresses at E = 52") are
+    false for aligned inputs.
+  - "Inverted bounds decode to a 2^55 window" is also not universal: some decode to [0, 0). All of those are refused
+    anyway.
+  - Below the limit the auditor found no widening in 2.1 M sampled regions at E 48-51.
+- **Who passes those regions: the vp2 monitor's CSMINT emulator.** It is only on unmerged capstone-sbi vp2/* branches,
+  with a copy at `verif/tests/custom/capstone/inc/capstone_csmint.S`.
+  - Its pre-check is `bgeu` plus a granule-alignment test (:211); then it runs CAPBOUND (:265) in M-mode on S-supplied
+    base and end. QEMU's `helper_csmint` checks only for an exact round trip, so it mints them.
+  - On the fixed RTL, that CAPBOUND raises 29 in M-mode, before the routine swaps mtvec to its window-trap handler,
+    inside a handler whose header calls itself "not reentrant". Unfixed CAPBOUND never raised there.
+  - Effect: a new S-reachable M-mode trap, and the RTL, QEMU and the monitor diverge on three regions. It is NOT a
+    widening.
+  - No other caller passes such regions. The auditor searched the LLVM target, capstone-c, the runtime, sublet, ports,
+    both OpenSBI copies, capstone-sbi at the pin, and 756 test sites.
+- **OPEN: which side moves.** The semantics owner decides. Either the RTL limit is tightened to the exact E = 52
+  condition, which adds a residue add and compare on the FLU result path and so needs a synthesis-only run, or the
+  emulator's pre-check and QEMU refuse len >= 1022 x 2^54 with 29 too. The second is software only and leaves the
+  sealed and building bitstreams valid.
+- **CAPENTER:** the only production caller is OpenSBI's `sbi_capstone_init.S:34`, with addresses around 0x80xxxxxx,
+  far below MEM_END = 2^40. A refused CAPENTER does not enter capmode (`commit_stage.sv:359-364`).
+- **Synthesis:** no FLU signal is on the standing loop list. The cost was not measured by a gate, but the final
+  6d0e754d5 carrying the fix routed and sealed on every key.
+
 ### R-57 — a capability STORE whose translation faults retires WITHOUT its page fault and is committed to the store buffer, which copies an INVALID speculative entry into its commit queue (a ghost head that never drains) and underflows its speculative count: the vp2 wedges r8..r11 `OPEN ON SILICON (caplifive_vp2_bf3db3175); DEMONSTRATED in simulation 2026-10-18 by a matched pair; FIXED on virtual-profile-2-c 2114e11bd for the next bitstream; the store-side twin of R-56; software rule S-25 (no capability store as a page's first access) until then`
 
 **What happens** (bf3db3175, read by the RTL lane and audited by a claim-auditor against the trace). The store syncer
@@ -5409,7 +5563,9 @@ compiler lane, 2026-09-10; entry placed by the board lane, whose path this file 
 >   conclusion holds (it cannot exceed the new end, `:216-217`, `:203`), but the cited range showed only
 >   the half that supported the claim.
 > * *"Any `imm <= 0` passes"* for SHRINKTO — only `imm == 0`. A negative immediate wraps under the
->   unsigned compare at `flu:243` and faults.
+>   unsigned compare at `flu:243` and faults. **[SUPERSEDED 2026-11-13 by R-71: wrong. A negative immediate
+>   passes the guard whenever cursor >= |imm|, and the result's inverted bounds widen the capability to a
+>   2^55 window, demonstrated in simulation on 5f41c486e.]**
 >
 > **One route the entry closed by accident rather than by argument, now explicit:** `CINCOFFSETIMM` on a
 > LINEAR capability is **unbounded** (`flu:66-70`, no bounds check), so a cursor CAN legally be placed
