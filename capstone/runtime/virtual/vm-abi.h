@@ -10,7 +10,9 @@
 #define CV_IMAGE_MAGIC 0x374d56564e4f5043
 #define CV_SERVICE_DELEGATE 0
 /* a0 the visible length, a1 the alignment, a2 the protection (PROT_EXEC refused with EACCES: only
- * the image's text is executable), a3 the rights, a4 the kind. */
+ * the image's text is executable), a3 the kind (CV_MAP_*). Block A: a grant carries no rights (a3 was the
+ * rights and a4 the kind); the page table decides read, write and execute. ENOMEM when the lifetime
+ * table has no slot left for the mapping's reference and cannot grow. */
 #define CV_SERVICE_MAP 1
 /* a0 the mapping's reference, its cursor the first page; a1 the length. A call that names the whole
  * block, [base, + visible length), ends it (with root_grants through a live reference to the
@@ -72,7 +74,7 @@
  * but the exit releases the frame, which ends that mapping. After the thread has stopped and its
  * frame and stack are released, the kernel stores 0 into the exit word, and the launcher wakes the
  * word's futex waiters, if the word is an aligned int inside one mapping that is not the
- * allocator's metadata, in pages that the program's grant may write and that Linux maps writable,
+ * allocator's metadata, in pages that Linux maps writable (the page table alone decides the right),
  * outside the launcher's own transport and every worker's, and if the kernel accepts it at the
  * store: with root_grants a0 must be a live reference whose bounds cover the word, and in both
  * modes the word may not lie in the frame of any thread. A word that fails is not written (the
@@ -113,13 +115,16 @@
  * answers EBUSY, as for mprotect. */
 #define CV_SERVICE_ADVISE 16
 /* Stage 4e. a0 the block's reference, its cursor the first page of the range; a1 the length; a2 the
- * protection (PROT_EXEC refused with EACCES); a3 CV_PAGES_FIXED (wire.h; any other value EINVAL).
+ * protection (PROT_EXEC refused with EACCES). (Block A dropped the operation in a3, which named
+ * CV_PAGES_FIXED, the only one.)
  * MAP_FIXED inside the block: with root_grants only, through the block's own reference (bounds over
  * the whole block) and only while the program derived no object below it (the refill rule; EINVAL
  * otherwise, EOPNOTSUPP without root_grants); the range then reads zero with protection a2, removed
  * pages count as mapped again, and no lifetime ends. The same VMAs keep the range (stage 4f: mprotect
- * and MADV_DONTNEED, no new mapping), and a refusal by Linux (ENOMEM: a VMA split at the map count
- * limit) changes nothing. A mapping that a worker's transport holds answers EBUSY. */
+ * and MADV_DONTNEED, no new mapping), and a refusal by Linux of the protection change (ENOMEM: a VMA
+ * split at the map count limit) changes nothing. A discard that Linux refuses, possibly part way, ends
+ * the block (fail closed, block A): the answer is EINVAL and every reference into the block is stale.
+ * A mapping that a worker's transport holds answers EBUSY. */
 #define CV_SERVICE_REFILL 17
 /* Stage 4f. mremap in place: a0 the block's reference, its cursor the first page of the old range; a1
  * the old length; a2 the new length (whole pages, not a1). The kernel validates the whole old range

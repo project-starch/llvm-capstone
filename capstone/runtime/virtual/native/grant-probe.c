@@ -25,7 +25,7 @@ static void one(unsigned inject)
     assert(!mprotect(p,4096,PROT_READ|PROT_WRITE));
     memset(p,0x5a,4096);
     struct cv_map map = {.address=(unsigned long)p, .bytes=4096,
-        .permissions=6, .reg=13, .cursor=(unsigned long)p, .linear=1};
+        .reg=13, .cursor=(unsigned long)p, .linear=1};
     assert(!ioctl(fd,CV_ADD,&map));
     assert(!ioctl(fd,CV_STATS,&before));
     assert(before.arenas == 1);
@@ -68,7 +68,7 @@ static void refusals(void)
     char *p=guard+4096;
     assert(!mprotect(p,2*4096,PROT_READ|PROT_WRITE));
     struct cv_map map={.address=(unsigned long)p,.bytes=8192,
-        .permissions=6,.reg=13,.cursor=(unsigned long)p,.linear=1};
+        .reg=13,.cursor=(unsigned long)p,.linear=1};
     assert(!ioctl(fd,CV_ADD,&map));
     assert(!ioctl(fd,CV_STATS,&before));
     struct cv_grant_transaction r={.version=CV_GRANT_ABI_VERSION,

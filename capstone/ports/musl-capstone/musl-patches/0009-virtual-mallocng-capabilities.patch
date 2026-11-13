@@ -68,24 +68,39 @@ Minimal virtual mallocng: capability layout, mapping access and direct object li
  }
 --- a/src/malloc/mallocng/free.c
 +++ b/src/malloc/mallocng/free.c
-@@ -101,6 +101,8 @@
+@@ -98,16 +98,31 @@
+ 	return (struct mapinfo){ 0 };
+ }
+ 
++static void free_slot(void *, void *);
++
  void free(void *p)
  {
  	if (!p) return;
-+	void *issued = p;
-+	p = heap_access(p);
++	free_slot(heap_access(p), p);
++}
++
++/* A raw slot whose object child could not be derived: the lifetime table had
++ * no slot left and could not grow, and the CDERIVE gave its failure result.
++ * The slot goes back to mallocng without a lifetime to end (heap_alloc_issue). */
++hidden void __malloc_unissue(void *p)
++{
++	free_slot(p, 0);
++}
  
++static void free_slot(void *p, void *issued)
++{
  	struct meta *g = get_meta(p);
  	int idx = get_slot_index(p);
-@@ -108,6 +110,7 @@
+ 	size_t stride = get_stride(g);
  	unsigned char *start = g->mem->storage + stride*idx;
  	unsigned char *end = start + stride - IB;
  	get_nominal_size(p, end);
-+	heap_alloc_end(issued);
++	if (issued) heap_alloc_end(issued);
  	uint32_t self = 1u<<idx, all = (2u<<g->last_idx)-1;
  	((unsigned char *)p)[-3] = 255;
  	// invalidate offset to group header, and cycle offset of
-@@ -145,7 +148,7 @@
+@@ -145,7 +160,7 @@
  	unlock();
  	if (mi.len) {
  		int e = errno;
@@ -385,13 +400,14 @@ Minimal virtual mallocng: capability layout, mapping access and direct object li
  
  	struct meta *g = get_meta(p);
  	int idx = get_slot_index(p);
-@@ -20,32 +23,40 @@
+@@ -20,32 +23,50 @@
  
  	// only resize in-place if size class matches
  	if (n <= avail_size && n<MMAP_THRESHOLD
 +	    && !((uintptr_t)p & (heap_granule(n)-1))
  	    && size_to_class(n)+1 >= g->sizeclass) {
-+		void *fresh = heap_alloc_issue(p, n);
++		void *fresh = heap_alloc_reissue(p, n);
++		if (!fresh) return 0;
 +		heap_alloc_end(issued);
  		set_size(p, end, n);
 -		return p;
@@ -419,7 +435,16 @@ Minimal virtual mallocng: capability layout, mapping access and direct object li
 -			end = g->mem->storage + (needed - UNIT) - IB;
 +			end = g->mem->storage + (needed - GRP_SIZE) - IB;
  			*end = 0;
-+			void *fresh = heap_alloc_issue(p, n);
++			void *fresh = heap_alloc_reissue(p, n);
++			if (!fresh && moved) {
++				/* The move ended the old mapping and every
++				 * reference into it, so the object cannot stay:
++				 * its slot goes back and realloc answers NULL. */
++				set_size(p, end, n);
++				__malloc_unissue(p);
++				return 0;
++			}
++			if (!fresh) return 0;
 +			if (!moved) heap_alloc_end(issued);
  			set_size(p, end, n);
 -			return p;

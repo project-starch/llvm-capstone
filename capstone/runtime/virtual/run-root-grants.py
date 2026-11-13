@@ -115,6 +115,14 @@ block's munmap answers 0, the range stays out of reuse, the stale reference faul
 object, refusal "objects derived below the mapping" at "map fixed commit"), and pages-fault's and
 pages-admit's faults are deferred ("resolve refused at moving"). pages-admit also checks that no page
 admitted before the commit was unpinned by it.
+Hook modes of block A (the follow-ups of stage 4f; root grants): pages-closed (--launcher-hooks and
+--module-hooks, pinned: the module lets the program run in a MAP_FIXED's window, test_pages_run, and a
+context derives an object below the block there, so the commit fails closed; test_close_unheld then
+unholds the block's first page, which holds a reference, and fails the retire preparation: the module
+must clear that page in place, "clear in place" with the unheld frame in the census, and the kernel's
+count of tagged frames cleared at their free must not grow) and pages-discard (--launcher-hooks:
+CAPSTONE_VM_TEST_DISCARD_FAIL makes a refill's discard fail after its first page: MAP_FIXED answers
+EINVAL, the block has ended, CAPSTONE_VM_PAGES_FAILED step=discard, and the block's reference faults 25).
 Modes that need a launcher built with -DCAPSTONE_VM_TEST_HOOKS (--launcher-hooks; the runner sets
 their delays, HOOK_ENV, and runs them by default only then):
   futex-race   the futex window: a waiter compared and sleeps while the word's mapping is replaced
@@ -221,6 +229,13 @@ test_unhold_pages, pages-tagged's unheld tagged page gets no census line and rea
 futex-stale's wake of one wakes the stale waiter and not the live one (exit 1); --libc-control
 shrink-unchecked (--application built against a libc whose mremap shrinks without validating the
 old range): mremap-validate's shrink over a hole ends the block and answers success (exit 1).
+Block A controls: --control no-close-clear (--module a hooks build whose fail-closed commit retires
+without clearing the unheld pages in place, with the hooks launcher): pages-closed's unheld tagged page
+reaches Linux with its tag (no "clear in place" line, captag cleared_pages grows); --control
+child-depth (--module whose ref_child accepts any live record deeper than M): the object over the whole
+page or mapping is accepted, so refuse, protect, mremap and advise fail at it, and renew still passes;
+--launcher-control discard-abort (a hooks launcher that aborts after a failed discard, as stage 4f did):
+pages-discard's MAP_FIXED answers EAGAIN and the block stays live (exit 1).
 --no-refs runs on a processor without supervisor references. The module must not load. Where the
 firmware hands cause 24 to S the load is refused with a message. The gate platform's monitor keeps
 the trap and halts the machine at the module's probe, after the module printed why.
@@ -258,6 +273,8 @@ HOOK_ENV = {
     'pages-fault': 'CAPSTONE_VM_TEST_PAGES_DELAY_MS=2000',
     'pages-admit': 'CAPSTONE_VM_TEST_PAGES_LATE_DELAY_MS=2000',
     'release-fail': 'CAPSTONE_VM_TEST_RELEASE_FAIL=1',
+    'pages-closed': 'CAPSTONE_VM_TEST_PAGES_DELAY_MS=2000',
+    'pages-discard': 'CAPSTONE_VM_TEST_DISCARD_FAIL=1',
 }
 # The hook modes whose window --pages-run opens to the program (the hooks module's test_pages_run).
 PAGES_RUN_MODES = ('pages-derive', 'pages-fault', 'pages-admit')
@@ -267,13 +284,14 @@ MODULE_HOOK_PARAMS = {
     'eintr-word': ('test_hold_ms', '1000'),
     'eintr-exit': ('test_hold_ms', '1000'),
     'advise-refuse': ('test_advise_refuse', '3'),
+    'pages-closed': ('test_close_unheld', '1'),
 }
 MODULE_HOOK_MODES = tuple(MODULE_HOOK_PARAMS)
 # The environment of a mode that needs one without a hooks build.
 MODE_ENV = {'futex-park': 'CAPSTONE_VM_MAPCACHE=1048576'}
 # The modes that run with diag_admit on; the runner reads their admission and removal lines.
 DIAG_MODES = {'futex-readonly', 'partial-fixed', 'pages-tagged', 'pages-derive', 'pages-fault',
-              'pages-admit'}
+              'pages-admit', 'pages-closed'}
 # Per mode: the checks, those that need root grants (skipped otherwise), and the expected exit.
 CHECKS = {
     'unmap': ('grant_reads_and_writes', 'libc_accepts_copyable_grant',
@@ -363,6 +381,8 @@ CHECKS = {
     'pages-fault': ('pages_fault_waits_then_proceeds',),
     'pages-admit': ('pages_admit_store_after_refill',),
     'release-fail': ('release_failure_keeps_range_unused',),
+    'pages-closed': ('pages_closed_fails_closed',),
+    'pages-discard': ('pages_discard_fails_closed',),
 }
 # pages-derive with --pages-run: the commit fails closed instead.
 CHECKS_PAGES_RUN = {'pages-derive': ('pages_derive_fails_closed',)}
@@ -387,12 +407,15 @@ ROOT_ONLY = {'stale_reference_at_reused_address_refused', 'address_refused',
              'fixed_refused_with_object', 'fixed_after_object_released',
              'mremap_grow_refused_with_object', 'mremap_grow_into_tail', 'fixed_enomem_changes_nothing',
              'futex_stale_waiter_not_counted', 'pages_derive_after_refill', 'pages_derive_fails_closed',
-             'pages_fault_waits_then_proceeds', 'pages_admit_store_after_refill'}
+             'pages_fault_waits_then_proceeds', 'pages_admit_store_after_refill',
+             'pages_closed_fails_closed', 'pages_discard_fails_closed'}
 FAULTING = {'unmap', 'renew', 'renew-ref', 'mremap', 'exit-renew', 'create', 'partial-all', 'futex-end',
-            'release-fail'}
+            'release-fail', 'pages-discard'}
 # Modes whose stale read does not map the address again first (the frame is not reused, or the
 # fault comes from a waiter's own read).
-NO_REMAP = {'create', 'futex-end', 'release-fail'}
+NO_REMAP = {'create', 'futex-end', 'release-fail', 'pages-discard'}
+# Faulting modes that end with the stale read only with root grants (without, they skip and exit 0).
+ROOT_FAULTING = {'pages-discard'}
 # Modes that end with a page fault of a live reference (stage 4e: a removed page), by cause.
 PAGE_FAULTING = {'partial-hole': 13}
 # The kernel's refusals per mode with root grants, as (reason, request) in order
@@ -457,7 +480,9 @@ REFUSALS = {
     'partial-narrow': [('does not cover the mapping', 'munmap'), ('not the mapping', 'munmap'),
                        ('not a reference', 'munmap')],
     'partial-fixed': [('objects derived below the mapping', 'map fixed')],
-    'partial-mremap': [('objects derived below the mapping', 'mremap')],
+    # Block A: the check of an mremap growth answers ENOMEM while an object exists below P and logs no
+    # refusal (the libc then moves the range, or answers ENOMEM without MREMAP_MAYMOVE).
+    'partial-mremap': [],
     'mremap-validate': [],
     'pages-enomem': [],
     'pages-tagged': [],
@@ -466,6 +491,8 @@ REFUSALS = {
     'pages-fault': [],
     'pages-admit': [],
     'release-fail': [],
+    'pages-closed': [('objects derived below the mapping', 'map fixed commit')],
+    'pages-discard': [],
 }
 REFUSALS_PAGES_RUN = {'pages-derive': [('objects derived below the mapping', 'map fixed commit')]}
 # What each control changes: the mode it must break, and how.
@@ -502,6 +529,20 @@ CONTROL_CUTS = {
     # the hooks module's test_unhold_pages, pages-tagged's unheld tagged page gets no census line and
     # reaches Linux with its tag (the kernel's count of tagged frames cleared at their free grows).
     'no-check-pin': {},
+    # Block A: the fail-closed commit retires without clearing the unheld pages in place when its retire
+    # preparation fails (stage 4f's pages_finish): pages-closed's unheld tagged page reaches Linux with
+    # its tag (no "clear in place" line, the kernel's count grows).
+    'no-close-clear': {},
+    # Block A: ref_child by depth alone (a live record deeper than M passes condition 3, without the step
+    # from M to P in the preorder list): the object over the whole page or mapping, a grandchild of M,
+    # is accepted, so the refuse mode fails at it, and protect, mremap and advise as for 'parent'.
+    'child-depth': {'refuse': ('ROOT_FAIL:munmap through an object over the whole page', 'nested_object_refused'),
+                    'protect': ('ROOT_FAIL:mprotect through an object over the whole page',
+                                'protect_nested_object_refused'),
+                    'mremap': ('ROOT_FAIL:mremap through an object over the whole mapping',
+                               'mremap_nested_object_refused'),
+                    'advise': ('ROOT_FAIL:madvise through an object over the whole mapping',
+                               'advise_nested_object_refused')},
 }
 # Launcher controls (--launcher-control): the mode each must break, and how. A third element says
 # how the mode ends: 'launcher-fault' (exit 139 without a domain fault: the launcher itself faulted),
@@ -533,6 +574,11 @@ LAUNCHER_CUTS = {
     # the stale waiter, and the live one is not woken.
     'futex-count-all': {'futex-stale': ('ROOT_FUTEX_STALE woken=1 live_done=0',
                                         'futex_stale_waiter_not_counted')},
+    # Block A: a refill whose discard fails is aborted as if nothing had changed (stage 4f's pages_abort):
+    # pages-discard's MAP_FIXED answers the discard's error and the block stays, its first refilled page
+    # already zero (the program fails at that check, exit 1).
+    'discard-abort': {'pages-discard': ('ROOT_PAGES_DISCARD fixed=0 errno=11 registered=1',
+                                        'pages_discard_fails_closed')},
 }
 # Libc controls (--libc-control): the --application was built against a libc one change away.
 LIBC_CUTS = {
@@ -637,13 +683,13 @@ def expected_refusals(mode, control, bypass, frame_floor, victim_reason, range_b
     if bypass and mode in ('exit-length', 'exit-huge'):
         # The stack named with a wrong length.
         refusals.append(('range is not the mapping', 'thread exit'))
-    if control == 'parent' and mode == 'refuse':
+    if control in ('parent', 'child-depth') and mode == 'refuse':
         return refusals[:1]                 # the address; the nested object is accepted
-    if control == 'parent' and mode == 'protect':
+    if control in ('parent', 'child-depth') and mode == 'protect':
         return refusals[:3]                 # the nested object is accepted
-    if control == 'parent' and mode == 'mremap':
+    if control in ('parent', 'child-depth') and mode == 'mremap':
         return []                           # the nested object is accepted
-    if control == 'parent' and mode == 'advise':
+    if control in ('parent', 'child-depth') and mode == 'advise':
         return refusals[:3]                 # the nested object is accepted
     if control == 'parent' and mode == 'exit-victim' and victim_reason == 'not the mapping':
         refusals[0] = ('does not cover the mapping', 'thread exit')
@@ -737,7 +783,7 @@ def main():
         if mode in DIAG_MODES:
             before.append(f'echo 1 > {parameters}/diag_admit')
             after.append(f'echo 0 > {parameters}/diag_admit')
-        if a.pages_run and mode in PAGES_RUN_MODES:
+        if (a.pages_run and mode in PAGES_RUN_MODES) or mode == 'pages-closed':
             before.append(f'echo 1 > {parameters}/test_pages_run')
             after.append(f'echo 0 > {parameters}/test_pages_run')
         if a.module_hooks and not a.unpinned and mode == 'pages-tagged':
@@ -760,7 +806,8 @@ echo ROOT_EXIT:{mode}:$?'''
         lines = ['echo ROOT_MODE_BEGIN:' + mode] + before + [command] + after
         lines.append(f"dmesg -c | grep 'capstone_vm: \\(unmap refused\\|retire refused\\|thread exit keeps"
                      f"\\|resolve refused at\\|touch arena\\|unpinned touch arena\\|remove arena"
-                     f"\\|admit arena\\|step waits\\|scan arena\\|test unhold\\)'"
+                     f"\\|admit arena\\|step waits\\|scan arena\\|test unhold\\|clear in place"
+                     f"\\|page operation closed\\)'"
                      f" | sed 's/^.*capstone_vm: /ROOT_KERNEL:{mode}:/'")
         return '\n'.join(lines) + '\n'
     runs = '\n'.join(run_mode(mode) for mode in modes)
@@ -946,7 +993,7 @@ echo VIRTUAL_STAGED_DONE
                 tests['pages-derive:commit_fails_closed'] = 'CAPSTONE_VM_PAGES_ENDED op=2 ' in part
                 tests['pages-derive:stale_access_faults_25'] = mode_causes == [25] and status == '139'
                 tests['pages-derive:stale_access_did_not_read'] = 'ROOT_STALE_READ' not in part
-            elif mode in FAULTING:
+            elif mode in FAULTING and (a.root_grants or mode not in ROOT_FAULTING):
                 if mode not in NO_REMAP:
                     tests[f'{mode}:remapped_at_the_same_address'] = 'ROOT_REMAP same_address=1' in part
                 tests[f'{mode}:stale_access_faults_25'] = mode_causes == [25] and status == '139'
@@ -985,6 +1032,12 @@ echo VIRTUAL_STAGED_DONE
                 tests['pages-enomem:aborts_logged'] = aborts == [('protect', '12')] * (2 if a.root_grants else 1)
             if mode == 'release-fail':
                 tests['release-fail:release_failure_logged'] = 'CAPSTONE_VM_RELEASE_FAILED ' in part
+                # Block A: the launcher counts the failed releases (CAPSTONE_VM_RELEASES at exit).
+                tests['release-fail:release_failure_counted'] = re.search(
+                    r'^CAPSTONE_VM_RELEASE_FAILED .* failed=1$', part, re.M) is not None
+            releases = line(r'^CAPSTONE_VM_RELEASES failed=(\d+)$', part)
+            if releases is not None and not (a.launcher_hooks and mode == 'release-fail'):
+                tests[f'{mode}:no_release_failed'] = releases == '0'
             if mode == 'pages-tagged':
                 base = line(r'^ROOT_PAGES_TAGGED base=(0x[0-9a-f]+)$', part)
                 counts = re.search(r'^ROOT_PAGES_TAGGED cleared_before=(-?\d+) cleared_after=(-?\d+)$', part, re.M)
@@ -1013,6 +1066,33 @@ echo VIRTUAL_STAGED_DONE
                         tests['pages-tagged:kernel_cleared_tagged_frame'] = delta >= 1
                     elif a.root_grants:
                         tests['pages-tagged:no_tagged_frame_freed'] = delta == 0
+            if mode == 'pages-closed' and a.root_grants and not a.unpinned:
+                # Block A: the fail-closed commit whose retire preparation failed clears the unheld
+                # page in place (its frame in a "clear in place" line), and no tagged frame reaches
+                # Linux (captag's count of tagged frames cleared at their free does not grow).
+                base = line(r'^ROOT_PAGES_CLOSED base=(0x[0-9a-f]+)$', part)
+                counts = re.search(r'^ROOT_PAGES_CLOSED fixed=\d+ errno=\d+ registered=\d+ '
+                                   r'cleared_before=(-?\d+) cleared_after=(-?\d+)$', part, re.M)
+                ktext = '\n'.join(kernel)
+                unheld = re.findall(rf'^test unhold arena {base}\+0x[0-9a-f]+ page 0 pfn (0x[0-9a-f]+)$',
+                                    ktext, re.M) if base else []
+                cleared = re.findall(r'^clear in place pfn (0x[0-9a-f]+) at ', ktext, re.M)
+                closed = re.findall(rf'^page operation closed: arena {base}\+0x[0-9a-f]+ retire preparation '
+                                    r'failed \(-?\d+\), unheld pages cleared in place \((-?\d+)\)$',
+                                    ktext, re.M) if base else []
+                delta = (int(counts.group(2)) - int(counts.group(1))
+                         if counts and int(counts.group(1)) >= 0 and int(counts.group(2)) >= 0 else None)
+                if a.control == 'no-close-clear':
+                    tests['pages-closed:control_unheld_page_reaches_linux_tagged'] = (
+                        len(unheld) == 1 and not cleared and delta is not None and delta >= 1)
+                else:
+                    tests['pages-closed:retire_preparation_failed'] = closed == ['0']
+                    tests['pages-closed:unheld_page_cleared_in_place'] = len(unheld) == 1 and unheld[0] in cleared
+                    tests['pages-closed:no_tagged_frame_freed'] = delta == 0
+            if mode == 'pages-discard' and a.root_grants and a.launcher_control != 'discard-abort':
+                tests['pages-discard:discard_failure_logged'] = re.search(
+                    r'^CAPSTONE_VM_PAGES_FAILED op=2 base=0x[0-9a-f]+ pages=2 step=discard errno=11$',
+                    part, re.M) is not None
             if mode == 'pages-admit' and a.root_grants and not a.unpinned:
                 base = line(r'^ROOT_PAGES_ADMIT base=(0x[0-9a-f]+)$', part)
                 order = re.findall(rf'^(admit|remove) arena {base}\+0x[0-9a-f]+ page 2 .*?pfn (0x[0-9a-f]+)',

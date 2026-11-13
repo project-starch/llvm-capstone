@@ -6,7 +6,8 @@ source "$here/../../tests/capstone-test-env.sh"
 : "${CROSS_COMPILE:?RISC-V Linux compiler prefix}"
 out=${1:?Output directory}
 mkdir -p "$out/module"
-cp "$here/module/Makefile" "$here/module/capstone_vm.c" "$here/wire.h" "$here/vm-abi.h" "$out/module/"
+cp "$here/module/Makefile" "$here/module/capstone_vm.c" "$here/module/cv-format.h" "$here/wire.h" \
+   "$here/vm-abi.h" "$out/module/"
 cp "$here/native-grant.h" "$out/module/"
 cp "$CAPSTONE_REPO_ROOT/capstone/capstone-qemu/target/riscv/cap_rev_table_abi.h" "$out/module/"
 # The representability predicate, SHARED rather than copied: the module's arena test, grant() in

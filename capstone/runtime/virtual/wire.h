@@ -6,8 +6,11 @@
 
 /* Experimental one-hart adapter; all thread and mapping addresses belong to
  * the owning Linux mm and share one lifetime table. */
+/* A grant. reserved is 0: a grant carries no capability rights of its own (block A, 2026-11-13; it was
+ * the rights, 0 to 7): Sublet checks bounds and lifetime, and the page table decides read, write and
+ * execute. The field keeps the layout, so CV_ADD and CV_REVIVE keep their numbers. */
 struct cv_map {
-    __u64 thread, address, bytes, permissions, reg, cursor, linear;
+    __u64 thread, address, bytes, reserved, reg, cursor, linear;
     __u64 id;
     /* The image grant only (reg 3): its first rx_bytes are the read+execute
      * segment, mapped from the image file without write permission. They are
@@ -244,13 +247,13 @@ struct cv_advise {
 #define CV_ADVISE _IOWR('V', 36, struct cv_advise)
 /* A page operation inside one mapping block, which ends no lifetime (stage 4e; stage 4f makes it one
  * step for the program): a partial munmap (CV_PAGES_REMOVE, the caller paused at CV_SERVICE_UNMAP,
- * the range [a0's cursor, + a1)), MAP_FIXED inside the block (CV_PAGES_FIXED, at CV_SERVICE_REFILL
- * with the operation in a3, the range [a0's cursor, + a1), the protection a2) and mremap's shrink and
+ * the range [a0's cursor, + a1)), MAP_FIXED inside the block (CV_PAGES_FIXED, at CV_SERVICE_REFILL,
+ * the range [a0's cursor, + a1), the protection a2) and mremap's shrink and
  * growth in place (CV_PAGES_SHRINK, CV_PAGES_GROW, at CV_SERVICE_RESIZE: the old range [a0's cursor,
  * + a1) and the new length a2; a shrink removes [+ a2, + a1), a growth refills [+ a1, + a2)). thread is
  * the caller, id the arena the launcher resolved; the registers are read from the caller's saved
  * frame. Three calls with service_lock held across them, and Linux's change of the range between
- * the first two:
+ * the first two (block A: the refill service no longer takes the operation in a3):
  *   commit CV_PAGES_CHECK: the range (for a resize the old range) is a nonempty page range inside the
  *     visible length, the arena holds no thread's frame (EBUSY), MAP_FIXED asks for no PROT_EXEC (a2,
  *     EACCES), no other page operation of the context is open (EBUSY), and with root_grants a0 holds
@@ -270,8 +273,16 @@ struct cv_advise {
  *     exists now; the module clears the tags of every page of the range it holds and unpins it,
  *     rebuilds the arena's frame set, updates the removed pages and the count of logically mapped
  *     pages, and closes the operation.
- *   commit CV_PAGES_ABORT, after the launcher's first Linux step failed and the launcher restored the
- *     range's protection: the module closes the operation and changes nothing.
+ *   commit CV_PAGES_ABORT, after the launcher's protection change failed and the launcher restored the
+ *     range's protection: the module closes the operation and changes nothing. Only a protection change
+ *     can be undone this way.
+ *   commit CV_PAGES_FAIL (block A), after a refill's discard (MADV_DONTNEED) failed, possibly part way:
+ *     the module fails closed, ends the reservation (CREVOKE of M, the sweep and the release of the
+ *     arena) and answers ended 1; the launcher gives the extent back and answers EINVAL.
+ *   A commit that fails closed, at CV_PAGES_COMMIT or CV_PAGES_FAIL, clears the tags of every page of the
+ *     arena before Linux reuses its frame: the pages it holds through the retire, and, if the retire's
+ *     preparation cannot pin a resident page, every page it does not hold in place through the page
+ *     table.
  * removed (out): the arena's removed pages after the call, which the launcher compares with its own
  * count. A removed page is never admitted until a refill maps it again; no other mapping receives an
  * address inside the block while it lives. */
@@ -285,6 +296,7 @@ struct cv_pages {
 #define CV_PAGES_CHECK 0
 #define CV_PAGES_COMMIT 1
 #define CV_PAGES_ABORT 2
+#define CV_PAGES_FAIL 3
 #define CV_PAGES _IOWR('V', 37, struct cv_pages)
 /* Is the lifetime id (a futex waiter's, cv_word.lifetime) still live (stage 4f)? live (out): 1 if
  * it is, or if the module cannot tell (no root_grants, id 0). Reads the table only. */

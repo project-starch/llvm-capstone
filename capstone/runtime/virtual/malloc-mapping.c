@@ -55,7 +55,7 @@ void *__heap_mapping(size_t n)
     sublet_cap grant;
     size_t align=heap_granule(bytes);
     if (align < 4096) align=4096;
-    if (cap_vm_acquire(&grant,bytes,align,PROT_READ|PROT_WRITE,6,CAP_VM_HEAP))
+    if (cap_vm_acquire(&grant,bytes,align,PROT_READ|PROT_WRITE,CAP_VM_HEAP))
         return MAP_FAILED;
     void *raw=cap_vm_copyable(&grant);
     size_t base=__builtin_capstone_cap_get_cursor(raw);
@@ -75,9 +75,14 @@ void *__heap_mapping(size_t n)
         int e=errno;
         index_unlock(); munmap(raw,bytes); errno=e; return MAP_FAILED;
     }
-    /* mmap's returned capability need not carry MANAGE. This one mapping-wide
-     * child does, and becomes the parent of all objects within the mapping. */
+    /* The mapping-wide child becomes the parent of all objects within the
+     * mapping. Its CDERIVE gives the failure result, an untagged 0, when the
+     * lifetime table has no slot left and cannot grow (the 62-bit format):
+     * the mapping goes back and the allocator sees ENOMEM, nothing faults. */
     void *owner=heap_issue(raw,bytes);
+    if (!owner) {
+        index_unlock(); munmap(raw,bytes); errno=ENOMEM; return MAP_FAILED;
+    }
     for (size_t a=base; a<base+bytes; a+=4096) {
         struct heap_leaf *leaf=leaf_for(a,0);
         if (leaf->owner[(a>>12)&511]) __builtin_trap();

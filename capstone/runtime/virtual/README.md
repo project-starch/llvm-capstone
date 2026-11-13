@@ -37,8 +37,8 @@ Linux launcher: ELF loader + existing delegated services
 loadable module: owning mm, pinned frame, private lifetime table
         | CSRUNV                         ^ service / fault / quantum
 virtual C application: normal main, capability libc, growing allocator
-        | bounds + permissions + live node
-        | owning process's page tables, user PTE permissions
+        | bounds + live node (no capability rights, block A)
+        | owning process's page tables, user PTE permissions (read, write, execute)
 Linux pages, physically scattered; physical capability tags
 ```
 
@@ -163,7 +163,20 @@ then returns unpinned identities to the table free list; dead PCC identities
 remain pinned because a PCC has no tag to clear. Teardown discards the context
 and clears tags before freeing all table pages and its saved frame.
 
-`node_initial_pages` (default 4), `node_batch_pages` (16) and `node_max_pages`
+Every id and record constant of the module (the id split, the record fields,
+the root entries and walk, the header words, the growth word) lives in
+`module/cv-format.h`, selected by the build defines `CAPSTONE_VM_IDS` (30, 55
+or 62), `CAPSTONE_VM_FLAT_TABLE` and `CAPSTONE_VM_INDEX_BITS`; a new layout
+changes one section of that file (block A). The 62 section follows QEMU's
+`x-capstone-ids=62` of capstone-qemu `ad02a0f70b` and is not built yet: the
+paper's layout changed on 2026-11-13 and QEMU follows first. In that format
+the module grows the table itself: it answers the pressure escape with a batch
+of record pages published before the capacity, or with NOGROW when memory is
+short, never lets its own `CDERIVE` trap, turns a `CDERIVE` that gives 0 into
+`ENOMEM` for `mmap`, and refuses to load without `root_grants=1`
+(`address-space-root.md`, section Mappings).
+
+`node_initial_pages` (default 4; one batch, 16, in a SUBLET table), `node_batch_pages` (16) and `node_max_pages`
 (0 means the id format's limit: 2^30 records, or 2^25 in a module built with
 `-DCAPSTONE_VM_IDS=55` for QEMU's `x-capstone-ids=55`, where a larger value is
 refused) count record pages and are read-only module
@@ -237,14 +250,17 @@ pair. The physical profile keeps the pair until its bitstream has Q-04 (b).
 
 `vm-abi.h` is shared by startup assembly, libc and the trusted launcher;
 `vm.h` is the private libc grant interface. MAP takes bytes, alignment, Linux
-protection, maximum capability rights and a mapping kind (heap, application,
-metadata). It returns a consumed linear grant or a scalar negative errno;
-`PROT_EXEC` is refused (only the image's text is executable). UNMAP of an exact
+protection and a mapping kind (heap, application, metadata); since block A a
+grant carries no capability rights and the page table decides read, write and
+execute (MAP took maximum rights in a3 before). It returns a consumed grant or
+a scalar negative errno, `ENOMEM` also when the lifetime table has no slot left
+and cannot grow; `PROT_EXEC` is refused (only the image's text is executable).
+The launcher maps its startup block read-only once packed. UNMAP of an exact
 whole visible mapping ends it; since stage 4e UNMAP of any other page range
 inside one mapping is a partial munmap, which removes those pages and ends no
 lifetime (below). PROTECT operates on a page range inside one registered
 payload mapping and refuses `PROT_EXEC` and removed pages. REFILL (17, stage 4e)
-is `MAP_FIXED` inside a mapping. RESIZE (18, stage 4f) is `mremap`'s shrink and
+is `MAP_FIXED` inside a mapping (block A dropped its a3, the only operation). RESIZE (18, stage 4f) is `mremap`'s shrink and
 growth in place: it validates the whole old range, then removes the tail or
 refills the new tail in the same step. WAIT yields to Linux without holding
 the transport lock. Metadata mappings are not exposed to public protection or
@@ -280,7 +296,16 @@ follows one refill rule, no object derived below the mapping's reference, at
 the check and again at the commit, which fails closed by ending the mapping.
 When Linux refuses the protection change (`ENOMEM`: a VMA split at
 `vm.max_map_count`), the launcher restores the protections, the module aborts,
-and the program gets `ENOMEM` with nothing changed. A removal's pages are
+and the program gets `ENOMEM` with nothing changed. A refill's discard that
+fails, possibly after part of the range, cannot be undone that way: the module
+ends the mapping (block A, `CV_PAGES_FAIL`), the launcher gives the range back
+and the program gets `EINVAL` (`CAPSTONE_VM_PAGES_FAILED`). A commit that fails
+closed retires the mapping; if the retire's preparation cannot pin a resident
+page, the module first overwrites every page it does not hold in place through
+the page table, so no tagged frame reaches Linux (block A; stage 4f went on
+with a warning). A release whose `munmap` Linux refuses is counted
+(`CAPSTONE_VM_RELEASES failed=N` with the statistics) and stops the mapping
+pool from taking new mappings. A removal's pages are
 discarded after the commit. The launcher compares its count of removed pages
 with the module's after every commit and ends the program if they differ.
 Without root grants a partial munmap is authorised by the address alone, a
@@ -722,12 +747,15 @@ cases in `root-contract.c` (`run-root-grants.py --launcher-hooks`), and since
 stage 4e a signal that interrupts the module's wait for `vm_lock`, and since
 stage 4f windows inside a page operation (`CAPSTONE_VM_TEST_PAGES_DELAY_MS`
 after the check, `CAPSTONE_VM_TEST_PAGES_LATE_DELAY_MS` before the commit) and
-a failed release (`CAPSTONE_VM_TEST_RELEASE_FAIL`). A module built with
+a failed release (`CAPSTONE_VM_TEST_RELEASE_FAIL`), and since block A a refill
+discard that fails after its first page (`CAPSTONE_VM_TEST_DISCARD_FAIL`). A module built with
 `CV_TEST_HOOKS=1` holds `vm_lock` in `CV_STATS` for `test_hold_ms`, refuses a
 chosen page of a madvise (`test_advise_refuse`), lets the program run inside a
 page operation (`test_pages_run`, so the deferred admission and the commit's
 second check of the refill rule can be reached) and drops the pins of a page
-operation's range before its check (`test_unhold_pages`) (`--module-hooks`).
+operation's range before its check (`test_unhold_pages`), and since block A
+unholds the pages outside the range and fails the retire preparation of a
+commit that fails closed (`test_close_unheld`) (`--module-hooks`).
 The runner checks that the default launcher and module hold none of these
 strings. The launcher's own lines about refused requests
 (`CAPSTONE_VM_*_REFUSED`, `CAPSTONE_VM_PAGES_ABORTED` and others) go through the

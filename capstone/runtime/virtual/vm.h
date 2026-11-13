@@ -16,7 +16,9 @@
 #define CAP_VM_HEAP CV_MAP_HEAP
 #define CAP_VM_MAPPING CV_MAP_APPLICATION
 #define CAP_VM_METADATA CV_MAP_METADATA
-extern void *__capstone_vm_acquire(unsigned long, unsigned long, int, unsigned, unsigned);
+/* The map service: the visible length, the alignment, the protection and the kind (CAP_VM_*). A grant
+ * carries no capability rights (block A): the page table decides read, write and execute. */
+extern void *__capstone_vm_acquire(unsigned long, unsigned long, int, unsigned);
 /* The unmap service takes the mapping's reference itself in a0, with its tag, and the length in
  * a1. With root_grants the kernel ends the mapping only through that reference: a live reference
  * to the mapping (not to an object inside it, not a narrowed one) whose bounds cover the whole
@@ -39,10 +41,8 @@ extern long __capstone_vm_mapping_check(void *, unsigned long, unsigned long);
  * and checks the reference as the protect service does. The range reads zero afterwards. */
 extern long __capstone_vm_advise(void *, unsigned long, int);
 /* The refill service (CV_SERVICE_REFILL, stage 4e) takes the block's reference with its cursor at the
- * first page of a range, the range's length, a protection and CV_PAGES_FIXED (mmap with MAP_FIXED
- * inside the block). */
-extern long __capstone_vm_refill(void *, unsigned long, int, unsigned long);
-#define CAP_VM_REFILL_FIXED 2   /* CV_PAGES_FIXED, wire.h */
+ * first page of a range, the range's length and a protection (mmap with MAP_FIXED inside the block). */
+extern long __capstone_vm_refill(void *, unsigned long, int);
 /* The resize service (CV_SERVICE_RESIZE, stage 4f) takes the block's reference with its cursor at the
  * first page of mremap's old range, the old length and the new length, and shrinks or grows that
  * range in place; ENOMEM when it cannot grow in place. */
@@ -57,11 +57,10 @@ long __capstone_virtual_context_create(void *(*entry)(void *), void *argument,
                                        void *stack_top, void *thread_pointer);
 
 static inline int cap_vm_acquire(sublet_cap *slot, size_t bytes,
-                                 size_t alignment, int prot,
-                                 unsigned rights, unsigned kind)
+                                 size_t alignment, int prot, unsigned kind)
 {
     unsigned long raw;
-    sublet_store(slot, __capstone_vm_acquire(bytes, alignment, prot, rights, kind));
+    sublet_store(slot, __capstone_vm_acquire(bytes, alignment, prot, kind));
     __asm__ volatile("ld %0, 0(%1)" : "=r"(raw) : "r"(slot) : "memory");
     if ((long)raw <= 0) {
         errno = raw ? -(long)raw : ENOMEM;

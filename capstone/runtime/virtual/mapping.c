@@ -36,16 +36,16 @@ void *mmap(void *addr, size_t n, int prot, int flags, int fd, off_t off)
             errno = EINVAL; return MAP_FAILED;
         }
         if (mapping_length(n, &bytes)) return MAP_FAILED;
-        long rc = __capstone_vm_refill(addr, bytes, prot, CAP_VM_REFILL_FIXED);
+        long rc = __capstone_vm_refill(addr, bytes, prot);
         if (rc) { errno = -rc; return MAP_FAILED; }
         return addr;
     }
     if (addr) { errno = EINVAL; return MAP_FAILED; }
     if (mapping_length(n, &bytes)) return MAP_FAILED;
     sublet_cap slot;
-    /* PTEs enforce current protection. The grant retains the maximum rights
-     * of this private anonymous mapping so mprotect can restore them later. */
-    if (cap_vm_acquire(&slot, bytes, 4096, prot, 7, CAP_VM_MAPPING))
+    /* The page table enforces the protection, which mprotect changes later; the reference carries no
+     * rights (block A). ENOMEM also when the lifetime table has no slot left and cannot grow. */
+    if (cap_vm_acquire(&slot, bytes, 4096, prot, CAP_VM_MAPPING))
         return MAP_FAILED;
     void *p = cap_vm_copyable(&slot);
     unsigned long base = __builtin_capstone_cap_get_cursor(p);

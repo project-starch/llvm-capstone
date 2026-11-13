@@ -61,8 +61,7 @@ __capstone_yield:
 __capstone_vm_map:
     mv a1, a0
     li a2, 3
-    li a3, 6
-    li a4, 0
+    li a3, CV_MAP_HEAP
     li a7, CV_SERVICE_MAP
     ecall
     bgez a0, 1f

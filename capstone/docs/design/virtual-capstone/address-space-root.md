@@ -58,9 +58,23 @@ creation. The kernel accepts the reference only if all of these hold:
 
 1. The operand is a reference.
 2. Its lifetime is live.
-3. Its record's parent is M, the reservation's record.
+3. It is the child of M, the reservation's record.
 4. Its bounds cover the reservation's whole visible length, whatever its
    cursor, and the call names a page range inside that length.
+
+Condition 3 needs no parent field (decided on 2026-11-13 with block A; the
+records of the Sublet format have none). P is the child of M exactly when P's
+record directly follows M's in the preorder list of the allocation tree (M's
+next is P's slot), P's depth is M's plus one, and P's lifetime is live (its
+generation matches). This holds because only the kernel holds M, it derives P
+right after M in the same step, a derivation inserts the child directly after
+its parent, a renewal keeps a record's place and depth, and every object the
+program derives lies deeper, after P. So an object that an allocator made over
+the whole mapping (a grandchild of M) never passes, and a renewed P does. M is
+decided by depth: only the kernel derives from R, so every live record one
+level below R is a reservation record. The module applies this rule in every
+format (`ref_child`, `ref_reservation`); the older formats would also allow the
+parent comparison of stages 2 to 4f.
 
 A call that names the whole visible length ends the mapping: the kernel
 executes `CREVOKE` on M. A call that names part of it is a partial `munmap`
@@ -163,13 +177,24 @@ commit then unpinned while it stayed mapped. The transition protocol:
    the range even for a moment. `mprotect` can fail before or part way through
    its change, with `ENOMEM` when a VMA split meets `vm.max_map_count`. Then
    the launcher restores the protection the range had, the kernel aborts the
-   transition, and the program gets `ENOMEM` with nothing changed.
+   transition, and the program gets `ENOMEM` with nothing changed. A refill's
+   discard cannot be undone that way: it may fail after it discarded part of
+   the range, and Linux would then supply fresh frames there that neither the
+   program nor the kernel's pins describe. So a discard that fails ends the
+   reservation (block A, fail closed): the program gets `EINVAL`, and every
+   reference into the range is stale.
 3. Commit. A refill checks the refill rule again. If an object below P exists
    now, the commit fails closed: it ends the reservation, so the object is
    stale before any access can see its pages replaced, and the program gets
    `EINVAL`. Otherwise the kernel clears the tags of every page of the range
    that it held, unpins it and lets Linux reuse the frame; it updates the
-   removed pages and the count, and closes the transition.
+   removed pages and the count, and closes the transition. A commit that fails
+   closed retires the reservation as an unmap does: it first pins every
+   resident page it does not hold, so that the retire clears its tags. If that
+   preparation fails (a page that migration moves past the pin), the kernel
+   does not go on with frames that may keep their tags: it overwrites every
+   page of the reservation that it does not hold in place through the page
+   table, data and tags, while no thread runs, and then retires (block A).
 4. A removal's pages are discarded after the commit. If Linux refuses that
    discard, the pages stay removed: `PROT_NONE`, never admitted, and without
    tags.
@@ -196,6 +221,47 @@ access needs, and the reference must be live and in bounds. Read, write and
 execute rights are the page table's alone, and so is the presence of a page.
 A reference passed to `mprotect` or `munmap` only proves ownership of the
 mapping block.
+
+No capability right remains in the adapter (block A, 2026-11-13). R is minted
+with every right, the one descriptor the Sublet format accepts, and every
+grant inherits it: the kernel executes no TIGHTEN, the launcher names no
+rights, and the libc's map service takes none. What a right protected before
+is now a page right. The startup block is mapped read-only after the launcher
+packs it (it was a read-only grant over read-write pages). The image's text is
+mapped read-execute and its data read-write, as before. Every other mapping,
+the heap, its metadata, stacks, frames and the transport included, is mapped
+without execute, and `mmap`, `mprotect` and `MAP_FIXED` refuse `PROT_EXEC`, so
+only the image's text ever executes. The legacy grants without root grants
+(the 30-bit and 55-bit formats) are minted with read, write and execute, and
+the page table decides there as well.
+
+Allocation can fail (block A). Where the lifetime table has no slot and cannot
+grow, the processor's `CDERIVE` gives its failure result, an untagged 0, and
+no record changes. The kernel turns a 0 from its own `CDERIVE` (the
+reservation M or the program's P) into `ENOMEM` for `mmap`. The libc's
+allocator turns a 0 from its object's `CDERIVE` into `NULL` from `malloc` with
+`ENOMEM`, and gives the slot back to its free list; a `realloc` that fails in
+place keeps the original. One case cannot keep it: when `realloc` already moved
+a large object's mapping (map, copy and unmap of the old one) and the table
+then has no slot for the new object, the old mapping has ended, the slot goes
+back and `realloc` answers `NULL`.
+
+The kernel grows the table itself (block A, the Sublet format). It never lets
+its own allocations trap: before its `CDERIVE`s it makes room for them, and a
+table it cannot grow has NOGROW set, so its `CDERIVE` then fails with the 0
+above instead of raising cause 30 in S. A program's context escapes to the
+kernel while at most 256 slots are left (the pressure escape, cause 30). The
+kernel answers with a batch of record pages (16 pages, 4,096 slots), published
+before the larger capacity, or, when memory is short (a page allocation fails
+or the table's page quota is reached), by setting NOGROW; the resumed
+instruction then takes the last slots and fails with 0 afterwards. Either
+answer makes progress: more than 256 slots available, or NOGROW. NOGROW is
+cleared when memory comes back, defined as: while it is set, every growth
+attempt of the kernel (a mapping, a revived mapping of the pool, the
+allocator's preflight for nodes) tries a whole batch, and the first that
+succeeds clears it. The table starts with one batch. Written for the Sublet
+format and not yet run: the format's layout changed in the paper on
+2026-11-13 and QEMU follows first.
 
 | Call | Rule |
 |---|---|
@@ -441,7 +507,9 @@ mapping by its registered range and not by a reference.
 - Resource limits. Allocation can fail, and the abstract machine gets that
   outcome: `CDERIVE` reports failure and `malloc` returns NULL, no fault. A
   slot at its last generation retires. `CRENEW` on such a slot ends the old
-  lifetime, and only the new one fails when no free slot is left.
+  lifetime, and only the new one fails when no free slot is left. The adapter
+  side is in the section Mappings (block A: `ENOMEM` for `mmap`, `NULL` for
+  `malloc`, the kernel's growth and NOGROW).
 - `fork`. The kernel copies the lifetime table at `fork`, with the same slots
   and generations, since the processor writes the table through physical
   addresses and Linux's copy-on-write does not cover it. Out of scope for

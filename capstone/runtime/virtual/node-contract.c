@@ -82,8 +82,7 @@ int main(int argc, char **argv)
         return 0;
     }
     sublet_cap region, ancestor, tail, handle;
-    require(!cap_vm_acquire(&region, 4096, 4096, PROT_READ | PROT_WRITE,
-                            6, CAP_VM_HEAP), "linear root");
+    require(!cap_vm_acquire(&region, 4096, 4096, PROT_READ | PROT_WRITE, CAP_VM_HEAP), "linear root");
     if (sublet_type(&region) == SUBLET_TYPE_NONLIN) return growth_derived(&region, mode);
     for (unsigned round = 0; round < 2; ++round) {
         sublet_handle(&region, &ancestor);

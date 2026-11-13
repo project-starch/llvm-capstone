@@ -71,7 +71,7 @@ static int add_image_grant(const char *image, const char *text, int *error)
         perror("memfd-launch: mmap"); *error = errno; return -2;
     }
     madvise(base, size, MADV_NOHUGEPAGE);   /* the module requires it where huge pages exist */
-    struct cv_map r = { .address = (unsigned long)base, .bytes = size, .permissions = 7, .reg = 3,
+    struct cv_map r = { .address = (unsigned long)base, .bytes = size, .reg = 3,
                         .cursor = (unsigned long)base, .rx_bytes = page };
     int rc = ioctl(device, CV_ADD, &r);
     *error = errno;

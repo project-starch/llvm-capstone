@@ -8,9 +8,11 @@
  * too and may name part of the mapping, which P must cover. run-root-grants.py runs this program
  * once per mode (argv[1]) in one boot. Build with the virtual SDK.
  *
- * Every mode first reads the type of a grant as the adapter issues it (ROOT_GRANT_TYPE): 1
- * (non-linear) under root_grants=1, 0 (linear) without. A check that holds only with root grants
- * prints ROOT_SKIP with the reason when the type is 0, so the same program runs in both forms.
+ * Every mode first reads the module's parameter root_grants (ROOT_GRANT_TYPE: 1 with root grants, 0
+ * without; until block A it read the type of a grant, non-linear or linear, which the 62-bit format
+ * no longer stores) and prints the type LCC answers for a grant (ROOT_GRANT_LCC). A check that holds
+ * only with root grants prints ROOT_SKIP with the reason without them, so the same program runs in
+ * both forms.
  * A check prints ROOT_CHECK:<name>:PASS; a failed requirement prints ROOT_FAIL and exits 1.
  *
  * unmap (the default; ends with a fault):
@@ -418,6 +420,18 @@
  *   release_failure_keeps_range_unused
  *                                   munmap of a whole block answers 0, the launcher drops it, 16 new
  *                                   mappings stay out of its range, and the old reference faults 25
+ * Block A, the follow-ups of stage 4f (hook modes, root grants):
+ * pages-closed (exit 0; the hooks module with test_pages_run and test_close_unheld, pinned):
+ *   pages_closed_fails_closed       a reference stored in the first page of a block, a MAP_FIXED of its
+ *                                   other two pages, and a context that derives an object below the
+ *                                   block inside the window: the commit fails closed (EINVAL, the
+ *                                   block has ended), and its retire preparation fails (the hook
+ *                                   unholds the first page); the runner reads that the module cleared
+ *                                   the unheld page in place (census) and that no tagged frame reached
+ *                                   Linux (captag cleared_pages unchanged)
+ * pages-discard (ends with a fault 25; the hooks launcher's discard of a refill fails part way):
+ *   pages_discard_fails_closed      MAP_FIXED of two pages of a block answers EINVAL and the block has
+ *                                   ended; the last line reads through the block's reference: fault 25
  *
  * registered() asks the launcher whether an address lies in a registered mapping, by integer: a
  * futex wake of no waiter there answers 0, outside every mapping EFAULT.
@@ -525,15 +539,29 @@ static char *map(unsigned long bytes)
     return p;
 }
 
-/* A grant as the adapter issues it, its type printed and remembered, as a copyable reference. */
+/* The module's parameter root_grants, read through the delegated calls: 1 (Y), 0 (N), or -1. */
+static int module_root_grants(void)
+{
+    char text[8];
+    int fd = open("/sys/module/capstone_vm/parameters/root_grants", O_RDONLY);
+    if (fd < 0)
+        return -1;
+    long n = read(fd, text, sizeof text);
+    close(fd);
+    return n <= 0 ? -1 : text[0] == 'Y' ? 1 : text[0] == 'N' ? 0 : -1;
+}
+
+/* A grant as the adapter issues it, as a copyable reference. The mode (root grants or not) comes from
+ * the module's parameter, printed and remembered; the type LCC answers for the grant is printed too. */
 static char *grant(void)
 {
     sublet_cap slot;
-    require(!cap_vm_acquire(&slot, PAGE, PAGE, PROT_READ | PROT_WRITE, 6, CAP_VM_HEAP), "grant");
-    unsigned long type = sublet_type(&slot);
-    printf("ROOT_GRANT_TYPE:%lu\n", type);
+    require(!cap_vm_acquire(&slot, PAGE, PAGE, PROT_READ | PROT_WRITE, CAP_VM_HEAP), "grant");
+    int mode = module_root_grants();
+    require(mode >= 0, "read the module's root_grants parameter");
+    printf("ROOT_GRANT_TYPE:%d\nROOT_GRANT_LCC:%lu\n", mode, sublet_type(&slot));
     fflush(stdout);
-    root_grants = type == SUBLET_TYPE_NONLIN;
+    root_grants = mode == 1;
     return cap_vm_copyable(&slot);
 }
 
@@ -905,7 +933,7 @@ static int mode_exit_victim(void)
         sublet_cap slot;
         victim = grant();
         address = cursor(victim);
-        require(!cap_vm_acquire(&slot, 2 * PAGE, PAGE, PROT_READ | PROT_WRITE, 6, CAP_VM_HEAP),
+        require(!cap_vm_acquire(&slot, 2 * PAGE, PAGE, PROT_READ | PROT_WRITE, CAP_VM_HEAP),
                 "the thread's stack");
         own = cap_vm_copyable(&slot);
         if (cursor(own) + 2 * PAGE == address) break;
@@ -998,7 +1026,7 @@ static unsigned char *frame_fill(unsigned char *frame, void *(*entry)(void *), v
 static unsigned char *frame_new(void *(*entry)(void *), void *stack_top, uintptr_t *identity)
 {
     sublet_cap slot;
-    require(!cap_vm_acquire(&slot, PAGE, PAGE, PROT_READ | PROT_WRITE, 6, CAP_VM_HEAP),
+    require(!cap_vm_acquire(&slot, PAGE, PAGE, PROT_READ | PROT_WRITE, CAP_VM_HEAP),
             "the frame's grant");
     return frame_fill(cap_vm_copyable(&slot), entry, stack_top, identity);
 }
@@ -1590,10 +1618,10 @@ static int mode_exit_word(void)
     unsigned tries = 0;
     for (; tries < 8; ++tries) {
         sublet_cap slot;
-        require(!cap_vm_acquire(&slot, STACK, PAGE, PROT_READ | PROT_WRITE, 6, CAP_VM_HEAP),
+        require(!cap_vm_acquire(&slot, STACK, PAGE, PROT_READ | PROT_WRITE, CAP_VM_HEAP),
                 "the thread's stack");
         stack = cap_vm_copyable(&slot);
-        require(!cap_vm_acquire(&slot, PAGE, PAGE, PROT_READ | PROT_WRITE, 6, CAP_VM_HEAP),
+        require(!cap_vm_acquire(&slot, PAGE, PAGE, PROT_READ | PROT_WRITE, CAP_VM_HEAP),
                 "the mapping below the stack");
         low = cap_vm_copyable(&slot);
         if (cursor(low) + PAGE == cursor(stack)) break;
@@ -1625,7 +1653,7 @@ static int mode_exit_word(void)
      * store is dropped without an error (CAPSTONE_VM_EXIT_WORD_DROPPED), as Linux drops a
      * clear_child_tid store into a stack that is gone. */
     sublet_cap held_slot;
-    require(!cap_vm_acquire(&held_slot, STACK, PAGE, PROT_READ | PROT_WRITE, 6, CAP_VM_HEAP),
+    require(!cap_vm_acquire(&held_slot, STACK, PAGE, PROT_READ | PROT_WRITE, CAP_VM_HEAP),
             "a stack that holds the exit word");
     char *held = cap_vm_copyable(&held_slot);
     unsigned long held_address = cursor(held);
@@ -1717,7 +1745,7 @@ static int mode_create_gate(void)
     uintptr_t identity;
     sublet_cap slot;
 
-    require(!cap_vm_acquire(&slot, PAGE, PAGE, PROT_READ | PROT_WRITE, 6, CAP_VM_METADATA),
+    require(!cap_vm_acquire(&slot, PAGE, PAGE, PROT_READ | PROT_WRITE, CAP_VM_METADATA),
             "a page of the allocator's metadata");
     unsigned char *metadata = frame_fill(cap_vm_copyable(&slot), frame_child, stack + STACK,
                                          &identity);
@@ -2420,7 +2448,7 @@ static int mode_word_metadata(void)
     char *own = map(STACK);
     sublet_cap slot;
 
-    require(!cap_vm_acquire(&slot, PAGE, PAGE, PROT_READ | PROT_WRITE, 6, CAP_VM_METADATA),
+    require(!cap_vm_acquire(&slot, PAGE, PAGE, PROT_READ | PROT_WRITE, CAP_VM_METADATA),
             "a page of the allocator's metadata");
     char *metadata = cap_vm_copyable(&slot);
     int *word = (int *)(metadata + 64);
@@ -2491,7 +2519,7 @@ static int mode_futex_park(void)
     (void)grant();
     char *stacks = map(2 * STACK);
     sublet_cap slot;
-    require(!cap_vm_acquire(&slot, PAGE, PAGE, PROT_READ | PROT_WRITE, 6, CAP_VM_HEAP), "a heap mapping");
+    require(!cap_vm_acquire(&slot, PAGE, PAGE, PROT_READ | PROT_WRITE, CAP_VM_HEAP), "a heap mapping");
     char *heap = cap_vm_copyable(&slot);
     unsigned long address = cursor(heap);
     *(volatile int *)(heap + 64) = 9;
@@ -2503,7 +2531,7 @@ static int mode_futex_park(void)
     require(!munmap(heap, PAGE), "munmap of the heap mapping (parked)");
     int returned = wait_for(&race_done, 1, 3000);
     long after = elapsed_ms(&unmapped);
-    require(!cap_vm_acquire(&slot, PAGE, PAGE, PROT_READ | PROT_WRITE, 6, CAP_VM_HEAP),
+    require(!cap_vm_acquire(&slot, PAGE, PAGE, PROT_READ | PROT_WRITE, CAP_VM_HEAP),
             "a heap mapping of the same size (revived)");
     char *again = cap_vm_copyable(&slot);
     long woken = __capstone_vm_futex(untagged(address + 64), 1 /* FUTEX_WAKE */, 1, -1, 0, 0);
@@ -3403,6 +3431,79 @@ static int mode_release_fail(void)
     return 0;
 }
 
+/* pages-closed (exit 0, block A): a page operation's commit fails closed while its retire preparation
+ * fails (the hooks module: test_pages_run lets a context derive an object below the block inside the
+ * window, test_close_unheld unholds the block's first page and fails the preparation). The first page
+ * holds a reference, so its frame is tagged; the module must clear it in place before Linux gets it. */
+static int mode_pages_closed(void)
+{
+    (void)grant();
+    if (!root_grants) {
+        skip("pages_closed_fails_closed", "root_grants=0 refuses MAP_FIXED before Linux acts");
+        return 0;
+    }
+    spin_calibrate();
+    char *stacks = map(2 * STACK);
+    char *target = map(PAGE);
+    target[1] = 0x71;
+    char *three = map(3 * PAGE);
+    unsigned long base = cursor(three);
+    memset(three, 0x5a, 3 * PAGE);
+    *(char **)(three + 64) = target;
+    require(type_of(*(char **)(three + 64)) == 1, "a reference stored in the first page");
+    long before = read_number("/sys/module/captag/parameters/cleared_pages");
+    printf("ROOT_PAGES_CLOSED base=0x%lx\n", base);
+    fflush(stdout);
+    derive_parent = three;
+    derive_offset = 2 * PAGE;
+    derive_spin = 500;
+    long deriver = context(derive_entry, stacks + STACK);
+    errno = 0;
+    char *q = mmap(three + PAGE, 2 * PAGE, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED,
+                   -1, 0);
+    int fixed_errno = errno;
+    require(wait_for(&derive_done, 1, 15000), "the context derives its object");
+    require(!capstone_virtual_thread_join(deriver), "join the context");
+    long after = read_number("/sys/module/captag/parameters/cleared_pages");
+    printf("ROOT_PAGES_CLOSED fixed=%d errno=%d registered=%d cleared_before=%ld cleared_after=%ld\n",
+           q != MAP_FAILED, fixed_errno, registered(base), before, after);
+    fflush(stdout);
+    require(q == MAP_FAILED && fixed_errno == EINVAL && !registered(base),
+            "the refill failed closed: the block has ended");
+    pass("pages_closed_fails_closed");
+    return 0;
+}
+
+/* pages-discard (ends with a fault 25, block A): the hooks launcher's discard of a refill discards the
+ * first page of the range and then fails (CAPSTONE_VM_TEST_DISCARD_FAIL): the block must end, never
+ * stay as if nothing had changed. */
+static int mode_pages_discard(void)
+{
+    (void)grant();
+    if (!root_grants) {
+        skip("pages_discard_fails_closed", "root_grants=0 refuses MAP_FIXED before Linux acts");
+        return 0;
+    }
+    char *three = map(3 * PAGE);
+    unsigned long base = cursor(three);
+    memset(three, 0x5a, 3 * PAGE);
+    errno = 0;
+    char *q = mmap(three + PAGE, 2 * PAGE, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED,
+                   -1, 0);
+    int fixed_errno = errno, live = registered(base);
+    /* With stage 4f's abort the block stays live although its first refilled page was discarded, and the
+     * module still holds that page's old frame; the program does not touch the range then. */
+    printf("ROOT_PAGES_DISCARD fixed=%d errno=%d registered=%d\n", q != MAP_FAILED, fixed_errno, live);
+    fflush(stdout);
+    require(q == MAP_FAILED && fixed_errno == EINVAL && !live, "the refill failed closed: the block has ended");
+    pass("pages_discard_fails_closed");
+    stale = three;
+    char seen = *(volatile char *)stale;
+    printf("ROOT_STALE_READ value=0x%x\n", seen);
+    fflush(stdout);
+    return 0;
+}
+
 int main(int argc, char **argv)
 {
     const char *mode = argc > 1 ? argv[1] : "unmap";
@@ -3464,6 +3565,8 @@ int main(int argc, char **argv)
     if (!strcmp(mode, "pages-fault")) return mode_pages_fault();
     if (!strcmp(mode, "pages-admit")) return mode_pages_admit();
     if (!strcmp(mode, "release-fail")) return mode_release_fail();
+    if (!strcmp(mode, "pages-closed")) return mode_pages_closed();
+    if (!strcmp(mode, "pages-discard")) return mode_pages_discard();
     fail("unknown mode");
     return 1;
 }

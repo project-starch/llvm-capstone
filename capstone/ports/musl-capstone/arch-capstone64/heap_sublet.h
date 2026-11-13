@@ -1,5 +1,6 @@
 #ifndef MALLOC_HEAP_SUBLET_H
 #define MALLOC_HEAP_SUBLET_H
+#include <errno.h>
 #include <stddef.h>
 #include <stdint.h>
 
@@ -69,12 +70,41 @@ static inline void *heap_renew(void *object)
     return renewed;
 }
 /* malloc/free's compile-time controls; nested allocators always use the direct
- * primitives above, independently of the outer heap's measurement arm. */
+ * primitives above, independently of the outer heap's measurement arm.
+ *
+ * The failure result (block A): where the lifetime table has no slot left and
+ * cannot grow, CDERIVE writes an untagged 0 instead of trapping (the 62-bit
+ * format with NOGROW), and malloc returns NULL with ENOMEM. heap_alloc_issue,
+ * for a slot that malloc or aligned_alloc just took, gives that slot back
+ * (__malloc_unissue: mallocng's free without a lifetime to end).
+ * heap_alloc_reissue, for realloc's in-place paths, returns 0 and leaves the
+ * slot and the object's old lifetime as they are, so a failed realloc keeps the
+ * original (realloc.c, patch 0009). */
+__attribute__((visibility("hidden"))) void __malloc_unissue(void *);
+static inline void *heap_alloc_reissue(void *p, size_t n)
+{
+    if (!p) return p;
+#if CAPSTONE_HEAP_LIFETIMES
+    void *child = heap_issue(p, n);
+    if (!child) errno = ENOMEM;
+    return child;
+#elif CAPSTONE_HEAP_OBJECT_BOUNDS
+    size_t base = __builtin_capstone_cap_get_cursor(p);
+    return __builtin_capstone_cap_shrink(p, base, base+(n ? n : 1));
+#else
+    return p;
+#endif
+}
 static inline void *heap_alloc_issue(void *p, size_t n)
 {
     if (!p) return p;
 #if CAPSTONE_HEAP_LIFETIMES
-    return heap_issue(p, n);
+    void *child = heap_issue(p, n);
+    if (!child) {
+        __malloc_unissue(p);
+        errno = ENOMEM;
+    }
+    return child;
 #elif CAPSTONE_HEAP_OBJECT_BOUNDS
     size_t base = __builtin_capstone_cap_get_cursor(p);
     return __builtin_capstone_cap_shrink(p, base, base+(n ? n : 1));

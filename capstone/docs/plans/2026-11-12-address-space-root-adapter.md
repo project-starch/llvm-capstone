@@ -1,7 +1,11 @@
 # Address-space root: adapter and libc plan
 
 Status: plan of 2026-11-12 on the branch `address-space-root`. Stages 0 to 4f
-are done (see each stage); block A (the format alignment) is next, then stage 5,
+are done (see each stage). Block A (the format alignment) is under way: step F4
+is done for its format-independent part (the follow-ups of stage 4f, no
+capability rights, the preorder child rule, one format header, the growth
+protocol and the failure result written), and its 62-bit part waits for the
+new layout of the paper (2026-11-13), which QEMU follows first. Then stage 5,
 in a reduced form until the project lead decides on the old path.
 Design: [the kernel as the outermost allocator](../design/virtual-capstone/address-space-root.md).
 
@@ -678,6 +682,96 @@ A. **Format alignment: no capability rights** (block A, after stage 4e; decided
    matches. This is sound because only the kernel holds M, it derives P right
    after M in the same run (`root_derive`), `CRENEW` keeps a record's position,
    and every derivation of the program lies deeper, below P.
+
+   **F4, the module, launcher and libc (2026-11-13, part done).** The paper's
+   capability and record layout changed on 2026-11-13 (generation 32 bits at
+   127:96, slot 31 bits at 95:65, a 38-bit address; record generation 127:96,
+   previous 95:65, next 64:34, depth 33:3; 2^31 slots, a 5:9:9:8 walk, 32 root
+   entries), and QEMU still implements the previous one (slot 32, generation 30,
+   address 39), so everything that depends on the bit layout is held: nothing is
+   built or run under `x-capstone-ids=62`, and the Linux unpinned patch keeps
+   id-bits 30 and 55. Done, and run on the old formats:
+   - Follow-ups of the stage 4f review. A commit that fails closed
+     (`pages_close`) whose retire preparation fails overwrites every page of the
+     arena it does not hold in place through the page table (`walk_unheld`,
+     `CV_WALK_CLEAR`) before it retires, while `vm_lock` is held and no thread
+     runs (counters `pages_closed`, `closed_cleared`, `closed_unclear`). A refill
+     whose discard fails, possibly part way, fails closed: the launcher commits
+     with `CV_PAGES_FAIL`, the module ends M, the launcher releases the extent and
+     answers EINVAL (`CAPSTONE_VM_PAGES_FAILED step=discard`); only a failed
+     protection change aborts. `CV_LIVE` asks the one exact predicate every other
+     lifetime check asks (`ref_live`; it tested only the VALID flag). The launcher
+     counts failed releases (`CAPSTONE_VM_RELEASES failed=N` with the statistics,
+     and `failed=` in each `CAPSTONE_VM_RELEASE_FAILED` line), `release_range` is
+     void and the dead failure notes after it are gone, and a failed release
+     breaks the mapping pool as `mc_evict` does. `CV_SERVICE_REFILL` lost its a3.
+     The check of an mremap growth logs no refusal (the libc then moves).
+   - No capability rights, in every format: the module executes no TIGHTEN (the
+     rights switch and `CV_TIGHTEN` are gone), mints R with `0x10f` (the one
+     descriptor the 62-bit format accepts, and one the older formats accept) and
+     legacy grants (root_grants=0) with read, write and execute; `add()` and
+     `revive()` check no rights and the image needs no execute right;
+     `cv_map.permissions` is `reserved` (0). The launcher passes no rights,
+     `grant_writes` and `CV_GRANT_WRITE` are gone (`writable_span` and the move
+     check read the page state only), the kind-dependent rights checks of
+     `acquire_mapping` are gone, and the startup block is mapped `PROT_READ`
+     after packing (the only right a grant narrowed before). The libc's map
+     service takes the kind in a3 (`cap_vm_acquire` and `__capstone_vm_map` lost
+     the rights), and mapping.c lost its "maximum rights" comment.
+     `PROT_EXEC` stays refused on every block by the page rule alone (the
+     protect-exec mode).
+   - `ref_child` by the preorder rule in every format (`ref_reservation` decides
+     M by its depth below R), so the old-format tests run it: the full-range
+     grandchild is refused with "not the mapping" and a renewed P passes.
+   - Every id and record constant behind one header,
+     `runtime/virtual/module/cv-format.h` (id split, record accessors, liveness,
+     root entries and walk, header words, growth word, batch, whether CSMINT
+     answers R, whether the format collects or has legacy grants). Its 62 section
+     follows QEMU ad02a0f70b and is the one place the new layout changes.
+   - Written for the 62-bit format, not built: the growth protocol (the pressure
+     escape answered by a batch published before the capacity, or NOGROW when
+     memory is short; `grant_nodes` before the module's own CDERIVEs, so they
+     never trap; NOGROW cleared by the first whole batch that a later growth
+     attempt adds; the table starts with one batch; no collection), the failure
+     result (`root_derive` in three runs, a 0 from CDERIVE becomes ENOMEM for
+     mmap; the libc's `__heap_mapping` gives the mapping back and answers ENOMEM,
+     malloc and aligned_alloc return NULL and give the slot back through
+     `__malloc_unissue`, realloc keeps the original when it fails in place; patch
+     0009 regenerated, the mallocng policy check passes 19 of 19), and the refusal
+     to load without `root_grants=1`.
+   Unit tests on QEMU (old formats, `~/asr-work/f4` on the build host), two
+   batches on the same binaries (b1, b2; b1 differed only in two runner
+   expectations, fixed before b2: partial-mremap still expected the growth's
+   refusal, and pages-discard without root grants skips): root_grants=1 640 of
+   640 pinned and 637 of 637 unpinned, root_grants=0 633 of 633, the hook modes
+   with the hooks launcher and module 188 of 188 pinned and 170 of 170 unpinned
+   with root grants and 175 of 175 without (pages-closed and pages-discard
+   included), `--pages-run` 52 of 52 pinned and 50 of 50 unpinned, block_frames=1
+   on the partial modes 143 of 143 pinned and 140 of 140 unpinned, the pthread
+   gate 29 of 29 with and without root grants, the hosted contract 94 of 94,
+   mapcache park and revive (3 parks, 2 revives, no refusal), the launcher
+   without its length check 102 of 102 and without its range check 25 of 25,
+   `mremap-contract.c` ok, stale (25) and fresh with root grants pinned and
+   unpinned and legacy, stale and fresh without, and the unpinned module refused
+   on a kernel booted with `captag=off`. The witnesses: pages-closed's census
+   shows the unheld page (test_close_unheld) cleared in place ("clear in place",
+   the same frame) and captag's count unchanged; pages-discard logs
+   `CAPSTONE_VM_PAGES_FAILED step=discard errno=11`, MAP_FIXED answers EINVAL and
+   the block's reference faults 25; release-fail's line reads `failed=1`; refuse
+   refuses the full-range grandchild with "not the mapping". The 55-bit, flat
+   16-bit, flat 25-bit (55) and flat 18-bit module builds compile without
+   warnings (not run). Controls (one change each, built outside the
+   worktree, hashes in STATUS): the fail-closed commit without the in-place
+   clearing lets the unheld tagged page reach Linux (captag's count 0 to 1, no
+   "clear in place" line); `ref_child` by depth alone accepts the full-range
+   grandchild (refuse, protect, mremap and advise fail at it, renew still
+   passes); the launcher that aborts after a failed discard answers EAGAIN and
+   leaves the block live. Left for the new layout (F4 rest, then F5): the 62
+   section of `cv-format.h` for the new fields (and R's end at 2^38 against the
+   38-bit address), building and running the module and the kit modes under 62
+   with the growth, NOGROW and failure-result cases and their controls, the
+   unpinned patch's id-bits, and the eight lifetime patches of the ports, which
+   must handle a NULL from `capstone_cap_derive`.
 5. **Remove the old path.** Drop the parameter, `arena.ancestor`, the private
    parents and the collection paths that exist only for them. `CSMINT` stays
    at one site. Pending a decision of the project lead (2026-11-13): the

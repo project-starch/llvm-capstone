@@ -60,7 +60,7 @@ long __capstone_virtual_context_create(void *(*entry)(void *), void *argument,
     {
         sublet_cap slot;
         if (cap_vm_acquire(&slot, 4096, 4096, PROT_READ | PROT_WRITE,
-                           6, CAP_VM_HEAP)) frame = NULL;
+                           CAP_VM_HEAP)) frame = NULL;
         else frame = cap_vm_copyable(&slot);
     }
     if (!frame) {
@@ -74,7 +74,7 @@ long __capstone_virtual_context_create(void *(*entry)(void *), void *argument,
      * x3 is the process image capability, x4 is the optional per-thread TLS
      * pointer, and x10 is the argument.  gp is process authority rather than
      * thread state, so every same-mm child inherits it -- the same bounds and
-     * permissions; only its cursor is the child's own: the identity its
+     * lifetime; only its cursor is the child's own: the identity its
      * transport lock reads (delegate.c, dl_wire_identity). */
     uintptr_t identity = __capstone_context_identity_take();
     if (!identity) {

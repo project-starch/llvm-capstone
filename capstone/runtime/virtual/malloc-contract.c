@@ -107,7 +107,7 @@ static void tagged(void)
 #ifdef __CAPSTONE_PURECAP__
     sublet_cap owner;
     require(!cap_vm_acquire(&owner, 4096, 4096, PROT_READ | PROT_WRITE,
-                            7, CAP_VM_MAPPING), "linear VM grant");
+                            CAP_VM_MAPPING), "linear VM grant");
     unsigned long base = sublet_base(&owner);
     container = calloc(1, 64); require(container != NULL, "linear container");
     sublet_move(&owner, (sublet_cap *)container);

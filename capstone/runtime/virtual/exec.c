@@ -57,14 +57,10 @@ struct mapping {
      * neither a protection the program set nor the image's read-execute text can make that write
      * fault. */
     unsigned char prot, *pages;
-    /* The program's grant carries the write right (CV_GRANT_WRITE). */
-    int grant_writes;
     /* Stage 4e: the pages of the visible length that a partial munmap removed and no refill mapped
      * again (PAGE_REMOVED in the page state). Such a mapping is never pooled. */
     size_t removed;
 };
-/* The write right of a grant's permissions (cv_map.permissions, CAPSTONE_PERM_WRITE). */
-#define CV_GRANT_WRITE 2
 /* Registered mappings, one node each, in an AVL tree keyed by address. Registrations never
  * overlap, so the highest mapping starting at or below an address is the only one that can
  * contain it, and map_floor, map_find, map_insert and map_remove each visit one root-to-leaf
@@ -203,6 +199,9 @@ __attribute__((format(printf, 1, 2))) static void note(const char *format, ...)
  *   CAPSTONE_VM_TEST_RELEASE_FAIL=1   (stage 4f) every release of a mapping whose arena the module has
  *                                     released acts as if Linux's munmap had failed (ENOMEM): the range
  *                                     stays mapped in Linux, and the launcher drops its registration
+ *   CAPSTONE_VM_TEST_DISCARD_FAIL=1   (block A) a refill's discard discards the range's first page and
+ *                                     then acts as if Linux's MADV_DONTNEED had failed (EAGAIN): a
+ *                                     discard that failed part way, which must end the block
  * A delay prints CAPSTONE_VM_TEST_DELAY with its name. */
 static long test_number(const char *name)
 {
@@ -283,6 +282,7 @@ static void test_eintr_disarm(void)
 #define TEST_EINTR_REPORT(name, retries) do { if (retries) \
         fprintf(stderr, "CAPSTONE_VM_TEST_EINTR op=%s retries=%u\n", name, retries); } while (0)
 #define TEST_RELEASE_FAILS() (test_number("CAPSTONE_VM_TEST_RELEASE_FAIL") > 0)
+#define TEST_DISCARD_FAILS() (test_number("CAPSTONE_VM_TEST_DISCARD_FAIL") > 0)
 #else
 #define TEST_DELAY(name) ((void)0)
 #define TEST_CREATE_FAILS() 0
@@ -291,6 +291,7 @@ static void test_eintr_disarm(void)
 #define TEST_EINTR_DISARM() ((void)0)
 #define TEST_EINTR_REPORT(name, retries) ((void)(retries))
 #define TEST_RELEASE_FAILS() 0
+#define TEST_DISCARD_FAILS() 0
 #endif
 
 /* An ioctl whose only EINTR comes before any effect, repeated until it answers otherwise: the module
@@ -730,8 +731,10 @@ static void page_free(struct mapping *m)
 }
 /* Register [base, + bytes) with the module and grant it in register reg of thread. visible: the
  * length the program's mmap exposes (the rest is PROT_NONE padding); the module checks a request
- * to end the mapping against it (wire.h, cv_map). */
-static int grant_mapping(void *base, size_t bytes, size_t visible, unsigned reg, unsigned perms,
+ * to end the mapping against it (wire.h, cv_map). prot: the protection Linux maps on the visible
+ * length past rx_bytes, which this launcher records as the page state. The grant itself carries no
+ * right (block A): the page table decides every access. */
+static int grant_mapping(void *base, size_t bytes, size_t visible, unsigned reg, unsigned prot,
                          uintptr_t cursor, int linear, uint64_t thread, size_t rx_bytes)
 {
     /* The page state needs whole pages: the visible length and the image's read-execute prefix are
@@ -755,7 +758,7 @@ static int grant_mapping(void *base, size_t bytes, size_t visible, unsigned reg,
      * through this function or revives a pooled one of the same range. Negative-tested in
      * tests/exact-bounds-iii/grant-repr-test.c. */
     if (!capstone_repr_ok((uintptr_t)base, bytes)) { errno = ERANGE; return -1; }
-    /* Every range this launcher grants is mapped read-write past rx_bytes (the image's text,
+    /* Every range this launcher grants is mapped with one protection past rx_bytes (the image's text,
      * read-execute), so only the image needs a byte per page, made before the kernel mints the
      * grant; acquire_mapping sets another protection afterwards. */
     unsigned char *pages = NULL;
@@ -763,9 +766,9 @@ static int grant_mapping(void *base, size_t bytes, size_t visible, unsigned reg,
         pages = malloc(visible / 4096);
         if (!pages) { errno = ENOMEM; return -1; }
         memset(pages, PROT_READ | PROT_EXEC, rx_bytes / 4096);
-        memset(pages + rx_bytes / 4096, PROT_READ | PROT_WRITE, (visible - rx_bytes) / 4096);
+        memset(pages + rx_bytes / 4096, (int)prot, (visible - rx_bytes) / 4096);
     }
-    struct cv_map r = {thread, (uintptr_t)base, bytes, perms, reg, cursor, linear, 0, rx_bytes, visible};
+    struct cv_map r = {thread, (uintptr_t)base, bytes, 0, reg, cursor, linear, 0, rx_bytes, visible};
     if (vm_call(CV_ADD, &r, "add")) {
         /* Evaluate add()'s two disjuncts on the REAL values the module saw. The domain cannot do
          * this: cap_vm_acquire clears its slot on failure, so the base never reaches it, and a
@@ -795,20 +798,19 @@ static int grant_mapping(void *base, size_t bytes, size_t visible, unsigned reg,
     /* slot= is the number of mappings registered before this one: the old array slot until the
      * first unmap, so the image's grant still reads slot=0 for the board lane's parsers. */
     if (grants)
-        fprintf(stderr, "CAPSTONE_VM_ADD_OK slot=%zu base=0x%lx bytes=%zu reg=%u perms=%u linear=%d\n",
-                map_count, (unsigned long)(uintptr_t)base, bytes, reg, perms, linear);
+        fprintf(stderr, "CAPSTONE_VM_ADD_OK slot=%zu base=0x%lx bytes=%zu reg=%u prot=%u linear=%d\n",
+                map_count, (unsigned long)(uintptr_t)base, bytes, reg, prot, linear);
     map_insert((struct mapping){.address = base, .bytes = bytes, .visible = visible,
                                 .id = r.id, .heap = linear,
                                 .kind = linear ? CV_MAP_HEAP : -1,
-                                .prot = PROT_READ | PROT_WRITE, .pages = pages,
-                                .grant_writes = (perms & CV_GRANT_WRITE) != 0});
+                                .prot = (unsigned char)prot, .pages = pages});
     return 0;
 }
 /* The launcher's own grants (image, stack, transport, startup data, regions): no padding. */
-static int grant(void *base, size_t bytes, unsigned reg, unsigned perms,
+static int grant(void *base, size_t bytes, unsigned reg, unsigned prot,
                  uintptr_t cursor, int linear, uint64_t thread, size_t rx_bytes)
 {
-    return grant_mapping(base, bytes, bytes, reg, perms, cursor, linear, thread, rx_bytes);
+    return grant_mapping(base, bytes, bytes, reg, prot, cursor, linear, thread, rx_bytes);
 }
 /* The calling worker's attachment: its meta block and exchange region, the two spans this
  * launcher writes for it, each with the identity of the mapping it holds. The identity is the
@@ -998,7 +1000,7 @@ static struct mc_entry *mc_find(size_t bytes, size_t alignment)
     return NULL;
 }
 static long mapping_gate(const struct mapping *m, size_t bytes);
-static long release_range(struct mapping *m);
+static void release_range(struct mapping *m);
 static struct mapping *range_mapping(uintptr_t base, size_t bytes, long *error);
 static long remove_range(uint64_t tid, uintptr_t base, size_t bytes);
 /* The domain thread tid's munmap of [base, + bytes) (CV_SERVICE_UNMAP, base the cursor of the
@@ -1022,7 +1024,8 @@ static long unmap_arena_for(uintptr_t base, size_t bytes, uint64_t tid)
         ++mc.refused;
         if (request.park == CV_UNMAP_NO_POOL) { mc_flush(); mc.cap = 0; }
     }
-    return release_range(m);
+    release_range(m);
+    return 0;
 }
 /* ---- Page operations: partial munmap, MAP_FIXED, mremap in place (stages 4e and 4f) ----
  *
@@ -1040,8 +1043,11 @@ static long unmap_arena_for(uintptr_t base, size_t bytes, uint64_t tid)
  *      new mapping can take the range, even for a moment. mprotect can fail (ENOMEM: a VMA split at
  *      vm.max_map_count) before or part way through its change; then the range gets back the
  *      protection the page state records, the module aborts the operation (CV_PAGES_ABORT), and the
- *      program gets the error with nothing changed. A discard that fails is handled the same way
- *      (private anonymous VMAs that are not locked never refuse it).
+ *      program gets the error with nothing changed. A discard cannot be undone that way: it may have
+ *      discarded part of the range before it failed (private anonymous VMAs that are not locked never
+ *      refuse it), and Linux would then supply fresh frames that neither the program nor the module's
+ *      pages describe. So a refill whose discard fails ends the block (block A, fail closed:
+ *      CV_PAGES_FAIL ends M, the extent goes back to Linux, EINVAL).
  *   3. the module's commit (CV_PAGES_COMMIT): a refill asks the refill rule again and fails closed by
  *      ending the block (ended: the extent goes back to Linux, EINVAL); otherwise the module clears
  *      the tags of the pages it held and unpins them, counts, and lets the program run.
@@ -1086,6 +1092,19 @@ static long pages_abort(struct mapping *m, struct cv_pages *request, size_t firs
     return -error;
 }
 
+/* A refill's discard of [base, + bytes): MADV_DONTNEED. 0, or -1 with errno. The hooks build's
+ * CAPSTONE_VM_TEST_DISCARD_FAIL discards the first page and then fails (EAGAIN): a discard that failed
+ * part way. */
+static int pages_discard(uintptr_t base, size_t bytes)
+{
+    if (TEST_DISCARD_FAILS()) {
+        if (madvise((void *)base, 4096, MADV_DONTNEED)) return -1;
+        errno = EAGAIN;
+        return -1;
+    }
+    return madvise((void *)base, bytes, MADV_DONTNEED);
+}
+
 /* The page operation op (CV_PAGES_*) of the domain thread tid, paused at its service, on the pages
  * [base, + bytes) of m: CV_PAGES_REMOVE or CV_PAGES_SHRINK removes them, CV_PAGES_FIXED or
  * CV_PAGES_GROW refills them with zero pages of protection prot. The module checks the request first;
@@ -1120,8 +1139,16 @@ static long pages_change(uint64_t tid, struct mapping *m, uint64_t op, uintptr_t
     if ((!removal || gone < end - first) &&
         mprotect((void *)base, bytes, removal ? PROT_NONE : (int)prot))
         return pages_abort(m, &request, first, end, errno, "protect");
-    if (!removal && madvise((void *)base, bytes, MADV_DONTNEED))
-        return pages_abort(m, &request, first, end, errno, "discard");
+    if (!removal && pages_discard(base, bytes)) {
+        /* Part of the range may be discarded already: fail closed, never as if nothing changed. */
+        note("CAPSTONE_VM_PAGES_FAILED op=%llu base=0x%lx pages=%zu step=discard errno=%d\n",
+             (unsigned long long)op, (unsigned long)base, end - first, errno);
+        request.commit = CV_PAGES_FAIL;
+        if (vm_call(CV_PAGES, &request, "pages") || !request.ended)
+            die_errno("fail of a page operation");
+        release_range(m);
+        return -EINVAL;
+    }
     TEST_DELAY("CAPSTONE_VM_TEST_PAGES_LATE_DELAY_MS");
 
     request.commit = CV_PAGES_COMMIT;
@@ -1169,15 +1196,13 @@ static long remove_range(uint64_t tid, uintptr_t base, size_t bytes)
 }
 
 /* The domain thread tid's mmap(MAP_FIXED) of [base, + bytes) inside a block (CV_SERVICE_REFILL, a2
- * the protection, a3 CV_PAGES_FIXED): a range that range_mapping accepts, with root_grants only
- * through the block's own reference and only while the program derived no object below it (the
- * refill rule, the module's; EOPNOTSUPP without root_grants). Every page of the range reads zero
- * afterwards with protection prot, a removed page is mapped again, and no lifetime ends. PROT_EXEC is
- * refused (EACCES). */
-static long refill_range(uint64_t tid, uintptr_t base, size_t bytes, unsigned prot, uint64_t op)
+ * the protection): a range that range_mapping accepts, with root_grants only through the block's own
+ * reference and only while the program derived no object below it (the refill rule, the module's;
+ * EOPNOTSUPP without root_grants). Every page of the range reads zero afterwards with protection prot,
+ * a removed page is mapped again, and no lifetime ends. PROT_EXEC is refused (EACCES). */
+static long refill_range(uint64_t tid, uintptr_t base, size_t bytes, unsigned prot)
 {
     long error;
-    if (op != CV_PAGES_FIXED) return -EINVAL;
     if (prot & PROT_EXEC) return -EACCES;
     if (prot & ~(PROT_READ | PROT_WRITE)) return -EINVAL;
     struct mapping *m = range_mapping(base, bytes, &error);
@@ -1215,25 +1240,31 @@ static long mapping_gate(const struct mapping *m, size_t bytes)
     if (m->holder) return -EBUSY;
     return 0;
 }
+/* Releases of an ended block whose munmap Linux refused (release_range), printed with the statistics
+ * (CAPSTONE_VM_RELEASES). */
+static unsigned long release_failed;
 /* Give the range of m, whose arena the module has released, back to Linux and drop its
  * registration. Waiters on words in it are woken first (futex_wake_range). The block's lifetime has
  * ended already (every reference into it is stale), so this cannot fail for the program: if Linux
  * refuses the munmap (ENOMEM, a VMA split at vm.max_map_count; stage 4f), the range stays mapped in
  * Linux, which then gives no address inside it to another mapping, the registration goes anyway (no
- * request may name the ended block), and the failure is logged. The frames keep no tag: the module
- * cleared the tags of the pages it held, and in the unpinned mode Linux clears them when it frees
- * the frames at exit. Answers 0. */
-static long release_range(struct mapping *m)
+ * request may name the ended block), and the failure is logged and counted. A refusal at the map count
+ * limit also stops the mapping pool from taking new mappings (mc.broken), as mc_evict does: parked
+ * mappings would hold more of the VMAs that are short. The frames keep no tag: the module cleared the
+ * tags of the pages it held, and in the unpinned mode Linux clears them when it frees the frames at
+ * exit. */
+static void release_range(struct mapping *m)
 {
     futex_wake_range((uintptr_t)m->address, m->bytes);
     if (TEST_RELEASE_FAILS() ? (errno = ENOMEM, 1) : munmap(m->address, m->bytes)) {
-        note("CAPSTONE_VM_RELEASE_FAILED base=0x%lx bytes=%zu errno=%d\n",
-             (unsigned long)(uintptr_t)m->address, m->bytes, errno);
+        ++release_failed;
+        mc.broken = 1;
+        note("CAPSTONE_VM_RELEASE_FAILED base=0x%lx bytes=%zu errno=%d failed=%lu\n",
+             (unsigned long)(uintptr_t)m->address, m->bytes, errno, release_failed);
     } else {
         reuse_address = m->address; reuse_bytes = m->bytes;
     }
     map_remove(m);
-    return 0;
 }
 /* The registered mapping that holds the page range [base, + bytes) that a request of the program
  * names (mprotect, madvise, a partial munmap, a refill, mremap's check), or NULL with *error set: a
@@ -1319,8 +1350,8 @@ static struct mapping *old_range(uintptr_t base, size_t bytes, long *error)
  * a2 flags; mapping.c): mremap's validator of the old range [base, + bytes) (old_range, then with
  * root_grants the module's check of the reference through CV_PROTECT, which reads the service from
  * the caller's a7: the block's own reference, bounds over the whole block), and with CV_CHECK_MOVE the
- * condition of a move: ENOTSUP unless every page of the range is exactly read-write and the grant may
- * write (the libc's mremap moves only such a range). Changes nothing. */
+ * condition of a move: ENOTSUP unless Linux maps every page of the range exactly read-write (the
+ * libc's mremap moves only such a range). Changes nothing. */
 static long check_mapping(uint64_t tid, uintptr_t base, size_t bytes, unsigned long flags)
 {
     long error;
@@ -1330,8 +1361,7 @@ static long check_mapping(uint64_t tid, uintptr_t base, size_t bytes, unsigned l
     size_t first = (base - (uintptr_t)m->address) / 4096, end = first + bytes / 4096;
     struct cv_protect request = {.thread = tid, .id = m->id};
     if (vm_call(CV_PROTECT, &request, "check")) return -errno;
-    if ((flags & CV_CHECK_MOVE) &&
-        (!m->grant_writes || !page_all(m, first, end, PROT_READ | PROT_WRITE, 1)))
+    if ((flags & CV_CHECK_MOVE) && !page_all(m, first, end, PROT_READ | PROT_WRITE, 1))
         return -ENOTSUP;
     return 0;
 }
@@ -1378,12 +1408,12 @@ static struct mapping *word_mapping(uintptr_t p)
     return page_removed(m, offset / 4096) ? NULL : m;
 }
 /* May this launcher write the bytes bytes at p through Linux for the program? They must lie inside
- * the visible length of one registered mapping whose grant may write, in pages that Linux maps
- * writable (the page state). */
+ * the visible length of one registered mapping, in pages that Linux maps writable (the page state):
+ * the page table alone decides the right (block A; the startup block is mapped read-only). */
 static int writable_span(uintptr_t p, size_t bytes)
 {
     struct mapping *m = map_floor(p);
-    if (!m || !bytes || !m->grant_writes) return 0;
+    if (!m || !bytes) return 0;
     size_t offset = p - (uintptr_t)m->address;
     if (offset > m->visible || bytes > m->visible - offset) return 0;
     return page_all(m, offset / 4096, (offset + bytes + 4095) / 4096, PROT_WRITE, 0);
@@ -1624,35 +1654,37 @@ static long futex_operation(uint64_t tid, const struct cv_step *step)
     if (command == FUTEX_WAKE || command == FUTEX_WAKE_BITSET) return futex_wake(step);
     return -ENOSYS;
 }
+/* The domain thread tid's mapping service (CV_SERVICE_MAP: a0 the visible length, a1 the alignment, a2
+ * the protection, a3 the kind). The grant carries no right (block A): what a page of the mapping allows
+ * is the protection Linux maps, which only mprotect and a refill change, and never to PROT_EXEC. */
 static long acquire_mapping(uint64_t tid, struct cv_step *step)
 {
     size_t visible = step->args[0], alignment = step->args[1];
-    unsigned prot = step->args[2], rights = step->args[3], kind = step->args[4];
+    unsigned prot = step->args[2], kind = step->args[3];
     size_t bytes = rounded(visible);
     /* Only the image's text is executable (stage 4e): a mapping block never is, whatever mprotect
      * later asks (protect_range). */
     if (prot & PROT_EXEC) return -EACCES;
     if (!bytes || (visible & 4095) || alignment < 4096 ||
         (alignment & (alignment - 1)) || alignment > CV_MAX_REGION_BYTES ||
-        (prot & ~(PROT_READ | PROT_WRITE | PROT_EXEC)) || rights > 7 ||
-        kind > CV_MAP_METADATA ||
-        (kind != CV_MAP_APPLICATION && (prot != (PROT_READ | PROT_WRITE) || rights != 6)) ||
-        (kind == CV_MAP_APPLICATION && rights != 7)) return -EINVAL;
+        (prot & ~(PROT_READ | PROT_WRITE | PROT_EXEC)) || kind > CV_MAP_METADATA ||
+        (kind != CV_MAP_APPLICATION && prot != (PROT_READ | PROT_WRITE))) return -EINVAL;
     if (bytes < alignment) bytes = alignment;
     void *p;
     if (kind == CV_MAP_HEAP && mc.cap) {
         struct mc_entry *e = mc_find(visible, alignment);
         if (e && !map_reserve()) {
-            struct cv_map r = {tid, (uintptr_t)e->m.address, visible, 6, 10, (uintptr_t)e->m.address, 1, e->m.id, 0, visible};
+            struct cv_map r = {tid, (uintptr_t)e->m.address, visible, 0, 10, (uintptr_t)e->m.address, 1, e->m.id, 0, visible};
             if (!vm_call(CV_REVIVE, &r, "revive")) {
                 mc_unlink(e);
                 if (grants)
-                    fprintf(stderr, "CAPSTONE_VM_ADD_OK slot=%zu base=0x%lx bytes=%zu reg=%u perms=%u linear=%d\n",
-                            map_count, (unsigned long)(uintptr_t)e->m.address, visible, 10u, 6u, 1);
+                    fprintf(stderr, "CAPSTONE_VM_ADD_OK slot=%zu base=0x%lx bytes=%zu reg=%u prot=%u linear=%d\n",
+                            map_count, (unsigned long)(uintptr_t)e->m.address, visible, 10u,
+                            (unsigned)(PROT_READ | PROT_WRITE), 1);
                 /* A pooled mapping never had its protection changed (mc_eligible): read-write. */
                 map_insert((struct mapping){.address = e->m.address, .bytes = visible, .visible = visible,
                                             .id = r.id, .heap = 1, .kind = CV_MAP_HEAP,
-                                            .prot = PROT_READ | PROT_WRITE, .grant_writes = 1});
+                                            .prot = PROT_READ | PROT_WRITE});
                 if (trace) fprintf(stderr, "CAPSTONE_VM_MAPCACHE_HIT base=0x%lx bytes=%zu id=%llu\n",
                                    (unsigned long)(uintptr_t)e->m.address, visible, (unsigned long long)r.id);
                 mc_release(e);
@@ -1682,7 +1714,7 @@ static long acquire_mapping(uint64_t tid, struct cv_step *step)
      * is mapped readable and writable, so that protection needs no call. */
     if ((visible < bytes && mprotect((char *)p + visible, bytes - visible, PROT_NONE)) ||
         (prot != (PROT_READ | PROT_WRITE) && mprotect(p, visible, prot)) ||
-        grant_mapping(p, bytes, visible, 10, rights, (uintptr_t)p, 1, tid, 0)) {
+        grant_mapping(p, bytes, visible, 10, prot, (uintptr_t)p, 1, tid, 0)) {
         int error = errno;
         munmap(p, bytes);
         if (error == ENOMEM && !retried && mc_flush()) continue;
@@ -2079,12 +2111,12 @@ static int reserve_stdio(unsigned *mask) {
 static void thread_rollback(uint64_t thread, struct mapping *frame)
 {
     struct cv_thread_exit rollback = {.thread = TEST_ROLLBACK_FAILS() ? 0 : thread, .frame = frame->id};
-    long rc;
     if (vm_call(CV_THREAD_EXIT, &rollback, "rollback")) die_errno("thread rollback");
-    rc = rollback.released & CV_EXIT_FRAME ? release_range(frame) : -EBUSY;
-    if (rc)
-        note("CAPSTONE_VM_FRAME_RELEASE_FAILED frame=0x%lx error=%ld\n",
-             (unsigned long)(uintptr_t)frame->address, -rc);
+    if (rollback.released & CV_EXIT_FRAME)
+        release_range(frame);
+    else
+        note("CAPSTONE_VM_FRAME_RELEASE_FAILED frame=0x%lx error=%d\n",
+             (unsigned long)(uintptr_t)frame->address, EBUSY);
 }
 
 /* Attach the calling worker's own transport at its first delegate service: a0 the meta block's
@@ -2243,11 +2275,16 @@ static int virtual_service(uint64_t tid, struct cv_step *step)
                      (unsigned long long)tid, (unsigned long)clear);
             clear = 0;
         }
-        if (!(request.released & CV_EXIT_FRAME) || release_range(frame))
+        /* A release never fails (release_range); what is reported here is a frame or a stack that
+         * the module kept. */
+        if (request.released & CV_EXIT_FRAME)
+            release_range(frame);
+        else
             note("CAPSTONE_VM_FRAME_RELEASE_FAILED frame=0x%lx\n",
                  frame ? (unsigned long)(uintptr_t)frame->address : 0UL);
-        if (posix && step->args[1] &&
-            (!(request.released & CV_EXIT_STACK) || release_range(stack)))
+        if (posix && step->args[1] && (request.released & CV_EXIT_STACK))
+            release_range(stack);
+        else if (posix && step->args[1])
             note("CAPSTONE_VM_STACK_UNMAP_REFUSED tid=%llu base=0x%lx bytes=%lu\n",
                  (unsigned long long)tid, (unsigned long)step->args[1],
                  (unsigned long)step->args[2]);
@@ -2392,6 +2429,8 @@ static int virtual_service(uint64_t tid, struct cv_step *step)
                 fprintf(stderr, "CAPSTONE_VM_THREADS count=%u issued=%llu\n", thread_count,
                         (unsigned long long)thread_last_id);
                 pthread_mutex_unlock(&thread_state_lock);
+                /* Releases of ended blocks whose munmap Linux refused (release_range). */
+                fprintf(stderr, "CAPSTONE_VM_RELEASES failed=%lu\n", release_failed);
             }
             if (tid == 0 && mc.cap && (getenv("CAPSTONE_VM_STATS") || getenv("CAPSTONE_DELEGATE_STATS")))
                 fprintf(stderr, "CAPSTONE_VM_MAPCACHE cap=%zu parks=%lu hits=%lu misses=%lu evictions=%lu"
@@ -2439,8 +2478,7 @@ static int virtual_service(uint64_t tid, struct cv_step *step)
     } else if (step->args[7] == CV_SERVICE_ADVISE) {
         step->result = advise_range(tid, step->args[0], step->args[1], (int)step->args[2]);
     } else if (step->args[7] == CV_SERVICE_REFILL) {
-        step->result = refill_range(tid, step->args[0], step->args[1], (unsigned)step->args[2],
-                                    step->args[3]);
+        step->result = refill_range(tid, step->args[0], step->args[1], (unsigned)step->args[2]);
     } else if (step->args[7] == CV_SERVICE_RESIZE) {
         step->result = resize_range(tid, step->args[0], step->args[1], step->args[2]);
     } else if (step->args[7] == CV_SERVICE_WAIT) {
@@ -2591,7 +2629,9 @@ int main(int argc, char **argv)
     /* Option (iii): no exact-bounds profile bit is required. Bounds are representable by
      * construction -- the allocator's geometry keeps every rounded bound inside its own slot --
      * so the launcher runs on the default profile. The bit may still be set; it is not read. */
-    if (grant(image, image_bytes, 3, 7, entry, 0, 0, image_rx)) {
+    /* No grant carries a right (block A): the image's text is read-execute and its data read-write in
+     * the page table, and so is every other range by the protection named here. */
+    if (grant(image, image_bytes, 3, PROT_READ | PROT_WRITE, entry, 0, 0, image_rx)) {
         int error = errno;
         munmap(image, image_bytes);
         errno = error;
@@ -2616,15 +2656,19 @@ int main(int argc, char **argv)
         argc - (app_args ? 4 : binfmt ? 2 : 1), argv + (app_args ? 4 : binfmt ? 2 : 1), environ, cwd, stdio_mask, &task) : ENOMEM;
     free(cwd);
     if (error) { errno = error; die_errno("startup"); }
-    if (grant(stack, stack_bytes, 2, 6, (uintptr_t)stack + stack_bytes, 0, 0, 0) ||
-        grant(meta, CAPSTONE_DELEGATE_META_BYTES, 10, 6, (uintptr_t)meta, 0, 0, 0) ||
-        grant(exchange, exchange_bytes, 11, 6, (uintptr_t)exchange, 0, 0, 0) ||
-        grant(startup, CAPSTONE_LAUNCH_BYTES, 12, 4, (uintptr_t)startup, 0, 0, 0)) die_errno("grant");
+    /* The startup block is read-only once packed: a read-only grant (rights 4) protected it until block
+     * A; now the page does. The module pins its packed pages at the grant (FOLL_FORCE, the resident
+     * scan) and the program only reads them (runtime/domain/application.c copies them once). */
+    if (mprotect(startup, CAPSTONE_LAUNCH_BYTES, PROT_READ)) die_errno("startup protection");
+    if (grant(stack, stack_bytes, 2, PROT_READ | PROT_WRITE, (uintptr_t)stack + stack_bytes, 0, 0, 0) ||
+        grant(meta, CAPSTONE_DELEGATE_META_BYTES, 10, PROT_READ | PROT_WRITE, (uintptr_t)meta, 0, 0, 0) ||
+        grant(exchange, exchange_bytes, 11, PROT_READ | PROT_WRITE, (uintptr_t)exchange, 0, 0, 0) ||
+        grant(startup, CAPSTONE_LAUNCH_BYTES, 12, PROT_READ, (uintptr_t)startup, 0, 0, 0)) die_errno("grant");
     if (desc.v1.heap_bytes) {
         size_t bytes = rounded(desc.v1.heap_bytes);
         if (!bytes) die("the nested allocator's region is too large");
         void *region = reserve(bytes);
-        if (!region || grant(region, bytes, 13, 6, (uintptr_t)region, 1, 0, 0))
+        if (!region || grant(region, bytes, 13, PROT_READ | PROT_WRITE, (uintptr_t)region, 1, 0, 0))
             die_errno("nested allocator grant");
     }
     host.exchange = exchange; host.exchange_bytes = exchange_bytes;

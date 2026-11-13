@@ -114,7 +114,7 @@ static int mode_stale(int reuse)
 static int mode_stale_grant(int reuse, int hole)
 {
     sublet_cap slot, again;
-    require(!cap_vm_acquire(&slot, GRANT_BYTES, 4096, PROT_READ | PROT_WRITE, 6, CAP_VM_HEAP), "grant");
+    require(!cap_vm_acquire(&slot, GRANT_BYTES, 4096, PROT_READ | PROT_WRITE, CAP_VM_HEAP), "grant");
     char *p = cap_vm_copyable(&slot);
     require(p != NULL, "copy of the grant");
     memset(p, 0x5c, hole ? 4096 : GRANT_BYTES);   /* hole: only the first page is ever resident */
@@ -122,7 +122,7 @@ static int mode_stale_grant(int reuse, int hole)
     unsigned long address = cursor(p);
     require(!munmap(p, GRANT_BYTES), "unmap of the grant");
     if (reuse) {
-        require(!cap_vm_acquire(&again, GRANT_BYTES, 4096, PROT_READ | PROT_WRITE, 6, CAP_VM_HEAP), "second grant");
+        require(!cap_vm_acquire(&again, GRANT_BYTES, 4096, PROT_READ | PROT_WRITE, CAP_VM_HEAP), "second grant");
         char *q = cap_vm_copyable(&again);
         require(q != NULL, "copy of the second grant");
         for (size_t i = 0; i < (hole ? 4096 : GRANT_BYTES); ++i) if (q[i]) fail("data of the previous grant is visible");
@@ -144,7 +144,7 @@ static int mode_stale_grant(int reuse, int hole)
 static int mode_procmem(void)
 {
     sublet_cap slot, again;
-    require(!cap_vm_acquire(&slot, GRANT_BYTES, 4096, PROT_READ | PROT_WRITE, 6, CAP_VM_HEAP), "grant");
+    require(!cap_vm_acquire(&slot, GRANT_BYTES, 4096, PROT_READ | PROT_WRITE, CAP_VM_HEAP), "grant");
     char *p = cap_vm_copyable(&slot);
     require(p != NULL, "copy of the grant");
     p[0] = 1;                                  /* page 0 only is resident */
@@ -157,7 +157,7 @@ static int mode_procmem(void)
     ssize_t n = pwrite(fd, marker, sizeof marker, (off_t)(address + 2 * 4096));
     if (n != (ssize_t)sizeof marker) { printf("MAPCACHE_PROCMEM_UNAVAILABLE write=%zd errno=%d\n", n, errno); return 0; }
     close(fd);
-    require(!cap_vm_acquire(&again, GRANT_BYTES, 4096, PROT_READ | PROT_WRITE, 6, CAP_VM_HEAP), "second grant");
+    require(!cap_vm_acquire(&again, GRANT_BYTES, 4096, PROT_READ | PROT_WRITE, CAP_VM_HEAP), "second grant");
     char *q = cap_vm_copyable(&again);
     require(q != NULL, "copy of the second grant");
     int same = cursor(q) == address;
