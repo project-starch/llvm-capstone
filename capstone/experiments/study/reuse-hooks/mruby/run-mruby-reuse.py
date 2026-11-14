@@ -28,6 +28,7 @@ GATE = r'''#!/bin/sh
 cd /mnt/vm || exit 1
 dmesg -n 1
 ./capstone-vexec --platform > /dev/null || exit 1
+export CAPSTONE_EXEC_DIAGNOSTICS=1
 export HOME=/tmp TMPDIR=/tmp
 echo "RG_VSTATS:before $(./capstone-vexec --stats)"
 t0=$(date +%s)
