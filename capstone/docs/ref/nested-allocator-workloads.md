@@ -5,7 +5,7 @@
 | Item | State | Configuration |
 |---|---|---|
 | speedtest1 `--size 1`, QEMU twin | **measured**: answers equal; program +0.63 % instructions; 28,216 CREVOKEs, subtree mean 1.0001 / max 3; peak table +4.8 KB; kernel +3 % from the native syscall page scan, all of it from the patch's `aReq` array (lifetimes: kernel ±0, in-context +0.39 %) | FRCDKMS, native route, ids55, QEMU qemu55 a0501ebc39 |
-| speedtest1 on silicon | pending. Boot 1 (board 1, 14:27-14:35) is VOID: the smoke passed, and no command ran because the stage's empty `train/in` was not baked (see the addendum below). Fixed stage awaiting a board slot | bitstream `a47b588a1`, kit bkit73 |
+| speedtest1 `--size 1` on silicon | **measured** (board 2, 15:00-15:30): 32/32 answers in every command; in-context +1.04 %, wall-clock +1.90 % (both inside the pre-registered bands); kernel repeat spread 2.47 % > 2 %, so the kernel difference is not read. Boot 1 on board 1 was VOID (unbaked empty `train/in`) | bitstream `a47b588a1`, kit bkit73 |
 | speedtest1 `--size 100` | pending (after `--size 1` has been looked at) | as above |
 | CPython, PostgreSQL, tshark, FFmpeg, memcached | pending, in that order, after speedtest1 | as above |
 | CREVOKE worst case (subtree 1 .. 10^6) | pending: RTL simulation | capstone-ariane `a47b588a1` |
@@ -281,4 +281,67 @@ dir is `spec/board/out-nat-batch-nested-st1-b1/b1-stage`.
     `cp: cannot stat '…/train/in/.'`.
   - The kit's `spec-classify.py` reads boot 1 as `NO RESULT` (rc 2), so the gate itself fired.
 - Every prediction above stands unchanged for the re-run.
+
+### Results: silicon, speedtest1 `--size 1` (measured 2026-11-14)
+
+**Configuration.**
+- Bitstream `…_a47b588a1`, sha256 `ff36870d…`, on **board 2**, not board 1 as pre-registered. The board-1 slot went to
+  another lane's runs, and the SPEC lane placed the re-run on board 2 as train PREREG Addendum 111 (spec-silicon cbb22e752fd4).
+  That addendum cites 9b325ad6fcac and records boot 1 as void. Board 2 was flashed once to this bitstream.
+- Kit bkit73, the fixed stage (`train/run.sh` `6cd49b361db37dd9…`, the two images above). Boot 15:00-15:30.
+- Transcript `nested/st1/board/b2-run/b1-stage/board.txt` (sha256 `9a2c1a61ee4ec18d…`), read by
+  `stage-gen/parse.py` into `nested/st1/b2.json`.
+
+**Controls.**
+- `b0-stats` and `b0-hello` returned 0.
+- The native smoke passed under the kit's documented waiver (`classify.py --waive-accounting`). Step 70 (task) fails
+  only its two user-tick checks, "compute charged to user" and "compute resumes" (`native task failures=2`).
+  Domain time is system time on this kernel.
+- The kit's `spec-classify.py` reads this boot as `NO RESULT`. That is a format mismatch, not a failure: it expects
+  `@@SPEC-DONE <n>` and three fields before `rc=`, and this stage prints `@@SPEC-DONE speedtest1 nested` and four.
+  All four commands printed `@@SPEC-END`, and the stage reached `@@SPEC-DONE`.
+
+**Readings.** The counters are summed over the same in-context windows as `run_cycles`. The uptime span runs from
+before `mark1` to after `mark2`, so it covers the whole command.
+
+| | u1 | p1 | p2 | u2 | repeat spread, u / p | protected vs not (ABBA means) |
+|---|---|---|---|---|---|---|
+| rc, oracle lines equal to the reference | 0, 32/32 | 0, 32/32 | 0, 32/32 | 0, 32/32 | | |
+| `run_cycles` (in-context) | 807,968,123 | 813,284,712 | 813,924,141 | 802,440,785 | 0.69 % / 0.08 % | **+1.04 %** |
+| `between_cycles` (kernel and other) | 5,036,804,504 | 5,169,234,617 | 5,248,671,297 | 5,162,802,037 | **2.47 %** / 1.53 % | +2.14 % (not interpretable, see below) |
+| uptime span, s | 235.56 | 240.69 | 243.90 | 239.99 | 1.86 % / 1.32 % | **+1.90 %** |
+| runs (context entries) | 15,393 | 15,443 | 15,441 | 15,393 | | +0.32 % |
+| hpm3 L1I miss | 6,035,763 | 6,249,153 | 6,250,741 | 6,074,924 | 0.65 % / 0.03 % | +3.21 % |
+| hpm4 L1D miss | 2,982,717 | 3,195,543 | 3,163,910 | 2,980,011 | 0.09 % / 0.99 % | +6.65 % |
+| hpm5 DTLB miss | 86,981 | 109,138 | 111,151 | 86,079 | 1.04 % / 1.83 % | +27.3 % (+23.6 k) |
+| hpm6 mispredict | 7,072,042 | 7,251,661 | 7,250,507 | 7,075,927 | 0.05 % / 0.02 % | +2.50 % |
+| hpm7 issue stall | 157,130,907 | 162,271,990 | 163,067,601 | 157,143,349 | 0.01 % / 0.49 % | +3.52 % (+5.5 M cycles) |
+| hpm8 scoreboard full | 10,041,036 | 9,835,725 | 9,674,390 | 10,219,890 | 1.77 % / 1.65 % | -3.71 % |
+
+The SPEC lane's wall-clock cross-check from the same `@@SPEC-END` lines (235.56 / 240.69 / 243.90 / 239.99 s) agrees.
+
+**Against the pre-registration.**
+- Answers: **met.** Every command exits 0 with 32/32 reference answers, protected arm included.
+- Repeats: **met for `run_cycles` (0.69 % and 0.08 %, within 1 %). Missed for `between_cycles`: the unprotected
+  pair is 2.47 % apart, over the 2 % band.** By the pre-registered rule, the arm difference in `between_cycles` is
+  therefore not interpretable at N = 2.
+  - The kernel time rises through the boot (u1 < p1 < p2) and falls back for u2, which is not a linear drift that
+    ABBA would cancel. The ABBA mean, +2.14 %, is recorded and not read.
+- In-context cost: **met. +1.04 %**, inside the +0.5 % to +3 % band. On the twin it was +0.62 %.
+  - That is 8.4 M cycles per protected run, or 149 cycles per lifetime instruction (56,442 per run on the twin) if all
+    of it were charged to them. This boot cannot attribute it: it carries no event 23 (verdict-cache miss replays).
+  - The in-domain counters move together: issue stall +5.5 M cycles, L1D misses +6.7 %, DTLB misses +27 %.
+  - On the twin, 0.39 points of the in-context cost were the lifetimes, 0.17 the request-size reporting and 0.06 the
+    `aReq` array (see the cost attribution above). That split is a twin reading, not a silicon one.
+  - The pre-registration called for a follow-up boot with event 23 only above the band, so none is triggered.
+- Kernel (`between_cycles`): **not interpretable** (the repeat rule above). The twin's +3.3 % is the `aReq` array.
+- Whole command (uptime span): **met. +1.90 %**, inside +1 % to +4 %.
+- Duration: **missed.** Each command took 236-244 s, not 1-2 min, and the boot took 31 min, not 15-20. The
+  prediction had no measured basis; the budget, 3,600 s, held with room.
+
+**So, on silicon:** protecting SQLite's nested allocators (memsys5 blocks and lookaside slots as Sublet lifetimes)
+costs speedtest1 `--size 1` +1.0 % in-context cycles and +1.9 % wall-clock, with every answer unchanged. This file
+does not yet compare that with the SPEC temporal increment the brief expects it to be close to. The kernel share is
+not read from this boot. On the twin it is the patch's `aReq` array working through the native route's per-syscall page
+scan, not the lifetimes.
 
