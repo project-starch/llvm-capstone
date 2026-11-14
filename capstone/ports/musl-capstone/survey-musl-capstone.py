@@ -31,7 +31,7 @@ import sys
 
 # Pinned baseline: the OK count this port is known to reach. Raise it when a
 # patch improves things (that is the point), never lower it to make a run pass.
-BASELINE_OK = 1343
+BASELINE_OK = 1349
 
 # RAISED 2026-09-16, 1270 -> 1355, measured against clang built from f7b50f081ca4 (dev plus
 # three commits, only one of which touches the backend and it is an unrelated ra-spill fix).
@@ -48,6 +48,7 @@ BASELINE_OK = 1343
 # b9dd0ccc clang plus that change: virtual surveyed 1349 / compiled 1349 / failed 0;
 # physical surveyed 1349 / compiled 1343 / failed 6, all six src/malloc/mallocng (the
 # MUST_FAIL control, as before). Every file that compiled before still compiles.
+# 2026-11-14: the physical profile was deleted, and BASELINE_OK is the virtual count, 1349.
 
 # A file that MUST compile, and a file that MUST NOT, with the reason it fails.
 CONTROL_MUST_PASS = "src/stdlib/abs.c"
@@ -74,9 +75,8 @@ CONTROL_MUST_PASS = "src/stdlib/abs.c"
 # The replacement fails for a reason that is structural rather than a missing backend feature:
 # mallocng derives a static assert from sizeof(void*), and a 16-byte pointer makes the assert
 # expression zero, so the negative-size array reports "array is too large (2^64-1 elements)".
-# The virtual profile now ports this layout while preserving UNIT=16 and
-# requires the control to PASS. The physical profile keeps the upstream layout
-# and its failure control. Virtual mallocng runs in the Capstone application.
+# The virtual profile ports this layout while preserving UNIT=16 and requires
+# the control to PASS. Virtual mallocng runs in the Capstone application.
 CONTROL_MUST_FAIL = "src/malloc/mallocng/malloc.c"
 
 FOREIGN_ARCH_KEEP = {"riscv64", "capstone64", "generic"}
@@ -150,10 +150,9 @@ def bucket(message: str) -> str:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("musl_dir")
-    parser.add_argument("--profile", choices=("physical", "virtual"), default="virtual",
-                        help="virtual (the default): representable gp, within-PCC calls and "
-                             "hardware F and D, as virtual C compiles; physical: the "
-                             "physical profile's code")
+    parser.add_argument("--profile", choices=("virtual",), default="virtual",
+                        help="virtual, the only profile: representable gp, within-PCC calls and "
+                             "hardware F and D, as virtual C compiles")
     parser.add_argument("--expect-ok", type=int, default=None)
     parser.add_argument("--jobs", type=int, default=min(16, (os.cpu_count() or 4)))
     parser.add_argument("--list-failures", action="store_true")
@@ -163,9 +162,8 @@ def main() -> int:
                              "file set then have exactly one definition, here.")
     args = parser.parse_args()
 
-    virtual = args.profile == "virtual"
     if args.expect_ok is None:
-        args.expect_ok = 1349 if virtual else BASELINE_OK
+        args.expect_ok = BASELINE_OK
     musl = pathlib.Path(args.musl_dir).resolve()
     clang = os.environ.get("CAPSTONE_CLANG")
     if not clang or not pathlib.Path(clang).exists():
@@ -224,16 +222,15 @@ def main() -> int:
         keep = os.environ.get("CAPSTONE_VIRTUAL_MOVC_KEEP", "ON").upper() not in ("OFF", "0", "FALSE", "NO")
         return ("+" if keep else "-") + "movc-keeps-integer-source"
 
-    if virtual:
-        # The virtual code generation of runtime/cmake/VirtualCodegen.cmake: libm
-        # and the rest run F and D in hardware under the lp64 calling convention,
-        # and MOVC keeps an untagged source (+movc-keeps-integer-source, Q-04).
-        flags += ["-mllvm", "-capstone-gp-free", "-mllvm", "-capstone-image-gp",
-                  "-Xclang", "-target-feature", "-Xclang", "+f",
-                  "-Xclang", "-target-feature", "-Xclang", "+d",
-                  "-Xclang", "-target-abi", "-Xclang", "lp64",
-                  "-Xclang", "-target-feature", "-Xclang", movc_feature(),
-                  "-DCAPSTONE_MUSL_MALLOC=1"]
+    # The virtual code generation of runtime/cmake/VirtualCodegen.cmake: libm
+    # and the rest run F and D in hardware under the lp64 calling convention,
+    # and MOVC keeps an untagged source (+movc-keeps-integer-source, Q-04).
+    flags += ["-mllvm", "-capstone-gp-free", "-mllvm", "-capstone-image-gp",
+              "-Xclang", "-target-feature", "-Xclang", "+f",
+              "-Xclang", "-target-feature", "-Xclang", "+d",
+              "-Xclang", "-target-abi", "-Xclang", "lp64",
+              "-Xclang", "-target-feature", "-Xclang", movc_feature(),
+              "-DCAPSTONE_MUSL_MALLOC=1"]
 
     objdir = pathlib.Path(args.objects).resolve() if args.objects else None
 
@@ -296,7 +293,7 @@ def main() -> int:
             print(f"  {r[0]}\n      {r[2]}")
 
     status = 0
-    for control, must_pass in ((CONTROL_MUST_PASS, True), (CONTROL_MUST_FAIL, virtual)):
+    for control, must_pass in ((CONTROL_MUST_PASS, True), (CONTROL_MUST_FAIL, True)):
         got = by_path.get(control)
         if got is None:
             print(f"\nERROR: control {control} was not surveyed at all", file=sys.stderr)

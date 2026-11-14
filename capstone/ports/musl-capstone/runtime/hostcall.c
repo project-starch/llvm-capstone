@@ -198,7 +198,7 @@ long __capstone_unserved_at(unsigned long i) {
 
 /* Constructors and destructors: .init_array and .fini_array (ISSUES C-64).
  *
- * Nothing else in a domain runs them. start-musl.S runs only .capstone_cap_init,
+ * Nothing else in a domain runs them. The entry code runs only .capstone_cap_init,
  * and musl's __libc_start_main, which would, is not used. musl's exit() walks
  * .fini_array through uintptr_t,
  *

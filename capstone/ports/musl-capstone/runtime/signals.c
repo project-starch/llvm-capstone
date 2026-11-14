@@ -143,7 +143,7 @@ static int signal_context(void) { return block != 0; }
    then cancels. After the result the handler is shown __cp_end, and musl
    sends the signal again for the next cancellation point. A handler's own
    cancellation point nests: the state is saved around it. The three symbols
-   are addresses to compare, never code that runs (start-musl.S). */
+   are addresses to compare, never code that runs (runtime/virtual/start.S). */
 extern const char __cp_begin[1], __cp_end[1], __cp_cancel[1];
 static __thread int in_cp, cp_unfinished, cp_cancelled;
 

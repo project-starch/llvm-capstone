@@ -43,7 +43,7 @@
 
 /* The context arena (docs/plans/delegation-threads.md): a strong definition
    only when the application asked for one; the runtime's weak 0 otherwise.
-   Allocated, unlike the section above, because start-musl.S reads it at the
+   Allocated, unlike the section above, because the entry code reads it at the
    first entry. */
 #if defined(CAPSTONE_CONTEXT_ARENA_BYTES) && CAPSTONE_CONTEXT_ARENA_BYTES
 .section .rodata.capstone_context_arena,"a",@progbits

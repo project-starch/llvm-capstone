@@ -198,7 +198,8 @@ class SourceListing(unittest.TestCase):
     def test_a_checkout_lists_its_sources(self):
         done = self.listing()
         self.assertEqual(done.returncode, 0, done.stderr)
-        self.assertGreater(len(done.stdout.split()), 200, "a checkout has hundreds of these")
+        # 89 since the adapter and the physical route went (2026-11-14); hundreds before.
+        self.assertGreater(len(done.stdout.split()), 50, "a checkout has dozens of these")
 
     def test_a_tree_export_without_git_falls_back_to_find(self):
         root = Path(tempfile.mkdtemp(prefix="export-"))

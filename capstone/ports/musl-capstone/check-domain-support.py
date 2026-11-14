@@ -164,7 +164,7 @@ def main():
     defined -= baseline
 
     # Symbols the port defines itself are not musl's, whatever the archive also
-    # holds under that name: level0.c answers to __libc_malloc, and reading
+    # holds under that name: a port heap answers to __libc_malloc, and reading
     # lite_malloc.c for it would report a brk that nothing in the image calls.
     ours = set()
     for obj in args.port_objects:

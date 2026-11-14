@@ -25,10 +25,11 @@ mkdir -p "$OBJ_DIR"
 # partial archive is the point. Only a harness error (2) is fatal.
 set +e
 # MUSL_SURVEY_JOBS controls shared-host parallelism.
+# The virtual profile is the only one (the physical profile was deleted on 2026-11-14).
 PROFILE=${CAPSTONE_APPLICATION_PROFILE:-virtual}
 case "$PROFILE" in
-  physical|virtual) ;;
-  *) echo "invalid CAPSTONE_APPLICATION_PROFILE" >&2; exit 2 ;;
+  virtual) ;;
+  *) echo "invalid CAPSTONE_APPLICATION_PROFILE (only virtual remains)" >&2; exit 2 ;;
 esac
 python3 "$SCRIPT_DIR/survey-musl-capstone.py" "$MUSL_SRC_DIR" \
         ${MUSL_SURVEY_JOBS:+--jobs "$MUSL_SURVEY_JOBS"} \

@@ -155,7 +155,7 @@ __capstone_gct_start:
 .section .capstone_virtual,"",@progbits
 .quad CV_IMAGE_MAGIC
 
-/* The same non-executable cancellation markers used by start-musl.S. */
+/* Non-executable cancellation markers: addresses that signals.c compares, never code that runs. */
 .section .rodata.capstone_cancel_points,"a",@progbits
 .global __cp_begin
 .global __cp_end

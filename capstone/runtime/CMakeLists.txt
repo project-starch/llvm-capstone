@@ -1,4 +1,4 @@
-# Shared headers, domain build support, and an optional Linux fault policy.
+# Shared headers and the application build of the virtual profile.
 foreach(header capstone/capability.h capstone/capability-slot.h sublet/sublet.h)
   if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/include/${header}")
     message(FATAL_ERROR "Incomplete Capstone runtime: missing include/${header}")
@@ -9,18 +9,4 @@ add_library(Capstone::Runtime ALIAS capstone-runtime)
 target_include_directories(capstone-runtime INTERFACE
   "${CMAKE_CURRENT_SOURCE_DIR}/include")
 
-include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/Domain.cmake")
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/Application.cmake")
-add_library(capstone-launch STATIC EXCLUDE_FROM_ALL common/launch.c)
-add_library(Capstone::Launch ALIAS capstone-launch)
-target_compile_definitions(capstone-launch PRIVATE _POSIX_C_SOURCE=200809L)
-target_link_libraries(capstone-launch PUBLIC Capstone::Runtime)
-add_library(capstone-delegate STATIC EXCLUDE_FROM_ALL common/delegate.c common/spawn.c common/msghdr.c)
-add_library(Capstone::Delegate ALIAS capstone-delegate)
-target_link_libraries(capstone-delegate PUBLIC Capstone::Runtime)
-if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-  find_package(Threads REQUIRED)
-  add_library(capstone-linux-fault-policy STATIC EXCLUDE_FROM_ALL linux/domain-fault.c)
-  add_library(Capstone::LinuxFaultPolicy ALIAS capstone-linux-fault-policy)
-  target_link_libraries(capstone-linux-fault-policy PUBLIC Capstone::Runtime Threads::Threads)
-endif()

@@ -105,7 +105,7 @@ int __capstone_init_tls(void)
 	/* What musl's __init_libc takes from auxv's AT_PAGESZ, and a domain has
 	   no auxv: PAGE_SIZE is libc.page_size on this port, so without it
 	   sysconf(_SC_PAGESIZE) answered 0 and pthread_create's ROUND() sized
-	   every thread's mapping 0. Linux's page, and mmap_shm_level0.c's. */
+	   every thread's mapping 0. Linux's page. */
 	libc.page_size = 4096;
 	describe_tls();
 	/* calloc: __init_tp expects every field it does not set to be zero, and

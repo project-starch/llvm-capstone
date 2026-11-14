@@ -1,7 +1,9 @@
 include_guard(GLOBAL)
-# The profile every application of the project is built for: virtual unless
-# the project or its cache says OFF (the physical profile).
-option(CAPSTONE_APPLICATION_VIRTUAL "Use the virtual C runtime adapter (OFF: the physical profile)" ON)
+# Every application is built for the virtual profile. The physical profile was
+# deleted on 2026-11-14 (tag pre-trap-route-2026-11-14).
+if(DEFINED CAPSTONE_APPLICATION_VIRTUAL AND NOT CAPSTONE_APPLICATION_VIRTUAL)
+  message(FATAL_ERROR "CAPSTONE_APPLICATION_VIRTUAL=OFF selected the physical profile, which was deleted")
+endif()
 
 # A normal main(argc, argv), linked against the shared musl application ABI:
 # the delegated runtime (ABI v2), the only one. The caller selects the existing
@@ -38,42 +40,31 @@ function(capstone_configure_application target)
   set_target_properties(${target} PROPERTIES CAPSTONE_DOMAIN_CONFIGURED TRUE)
   get_filename_component(capstone "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/../.." ABSOLUTE)
   set(musl "${capstone}/ports/musl-capstone/runtime")
-  set(startup "${musl}/start-musl.S")
   # In the function, not at the module's top: the caller may be a parent
   # directory that never saw the module's variables.
   include("${CMAKE_CURRENT_FUNCTION_LIST_DIR}/VirtualCodegen.cmake")
   list(JOIN CAPSTONE_VIRTUAL_CODEGEN " " virtual_codegen)
-  if(CAPSTONE_APPLICATION_VIRTUAL)
-    set(startup "${capstone}/runtime/virtual/start.S")
-    target_compile_options(${target} PRIVATE
-      "$<$<COMPILE_LANGUAGE:C>:SHELL:${virtual_codegen}>")
-    target_compile_definitions(${target} PRIVATE CAPSTONE_RUNTIME_VIRTUAL=1)
-  endif()
+  target_compile_options(${target} PRIVATE
+    "$<$<COMPILE_LANGUAGE:C>:SHELL:${virtual_codegen}>")
+  target_compile_definitions(${target} PRIVATE CAPSTONE_RUNTIME_VIRTUAL=1)
   if(NOT TARGET capstone-application-core)
     add_library(capstone-application-core OBJECT
-      "${startup}" "${musl}/set_thread_area.S" "${musl}/setjmp.S"
+      "${capstone}/runtime/virtual/start.S" "${musl}/set_thread_area.S" "${musl}/setjmp.S"
       "${musl}/hostcall.c" "${musl}/tls.c" "${musl}/atomic_libcalls.c"
       "${musl}/lock.c"
-      "${capstone}/runtime/common/launch.c")
-    if(CAPSTONE_APPLICATION_VIRTUAL)
-      target_sources(capstone-application-core PRIVATE
-        "${capstone}/runtime/virtual/thread.c"
-        "${capstone}/runtime/virtual/pthread.c"
-        "${capstone}/runtime/virtual/fenv.c")
-      target_compile_definitions(capstone-application-core PRIVATE CAPSTONE_RUNTIME_VIRTUAL=1)
-      target_compile_options(capstone-application-core PRIVATE
-        "$<$<COMPILE_LANGUAGE:C>:SHELL:${virtual_codegen}>")
-    else()
-      target_sources(capstone-application-core PRIVATE "${musl}/context.c")
-    endif()
+      "${capstone}/runtime/common/launch.c"
+      "${capstone}/runtime/virtual/thread.c"
+      "${capstone}/runtime/virtual/pthread.c"
+      "${capstone}/runtime/virtual/fenv.c")
+    target_compile_definitions(capstone-application-core PRIVATE CAPSTONE_RUNTIME_VIRTUAL=1)
+    target_compile_options(capstone-application-core PRIVATE
+      "$<$<COMPILE_LANGUAGE:C>:SHELL:${virtual_codegen}>")
     file(STRINGS "${musl}/libc_overrides.list" overrides)
     foreach(source IN LISTS overrides)
-      if(CAPSTONE_APPLICATION_VIRTUAL AND source STREQUAL "mmap_shm_level0")
-        target_sources(capstone-application-core PRIVATE "${capstone}/runtime/virtual/mapping.c")
-      else()
-        target_sources(capstone-application-core PRIVATE "${musl}/${source}.c")
-      endif()
+      target_sources(capstone-application-core PRIVATE "${musl}/${source}.c")
     endforeach()
+    # mmap, munmap and the rest of the mapping calls, after the overrides as before.
+    target_sources(capstone-application-core PRIVATE "${capstone}/runtime/virtual/mapping.c")
     target_include_directories(capstone-application-core PRIVATE
       "${PORT_MUSL_ROOT}/src/include" "${PORT_MUSL_ROOT}/src/internal"
       "${PORT_MUSL_ROOT}/obj/src/internal" "${PORT_MUSL_ROOT}/src/multibyte")
@@ -95,36 +86,29 @@ function(capstone_configure_application target)
         "${capstone}/../compiler-rt/lib/builtins/${source}.c")
     endforeach()
     target_compile_options(capstone-application-builtins PRIVATE
-      -ffunction-sections -fdata-sections)
-    if(CAPSTONE_APPLICATION_VIRTUAL)
-      target_compile_options(capstone-application-builtins PRIVATE
-        "$<$<COMPILE_LANGUAGE:C>:SHELL:${virtual_codegen}>")
-    endif()
+      -ffunction-sections -fdata-sections
+      "$<$<COMPILE_LANGUAGE:C>:SHELL:${virtual_codegen}>")
   endif()
-  # The heap: musl mallocng on the virtual profile, level0 on the physical one.
+  # The heap: musl mallocng.
   set(heap_bytes 0)
-  if(CAPSTONE_APPLICATION_VIRTUAL)
-    set(heap "${capstone}/runtime/virtual/malloc-mapping.c")
-    target_include_directories(${target} PRIVATE "${capstone}/sublet" "${PORT_MUSL_ROOT}/arch/capstone64")
-    # heap.c's measurement switches: a caller that never set them gets the default heap,
-    # lifetimes on, no scrub on free and per-object bounds (runtime/application/CMakeLists.txt).
-    if(DEFINED CAPSTONE_HEAP_LIFETIMES AND NOT CAPSTONE_HEAP_LIFETIMES)
-      target_compile_definitions(${target} PRIVATE CAPSTONE_HEAP_LIFETIMES=0)
-    else()
-      target_compile_definitions(${target} PRIVATE CAPSTONE_HEAP_LIFETIMES=1)
-    endif()
-    if(CAPSTONE_HEAP_SCRUB_FREE)
-      target_compile_definitions(${target} PRIVATE CAPSTONE_HEAP_SCRUB_FREE=1)
-    else()
-      target_compile_definitions(${target} PRIVATE CAPSTONE_HEAP_SCRUB_FREE=0)
-    endif()
-    if(DEFINED CAPSTONE_HEAP_OBJECT_BOUNDS AND NOT CAPSTONE_HEAP_OBJECT_BOUNDS)
-      target_compile_definitions(${target} PRIVATE CAPSTONE_HEAP_OBJECT_BOUNDS=0)
-    else()
-      target_compile_definitions(${target} PRIVATE CAPSTONE_HEAP_OBJECT_BOUNDS=1)
-    endif()
+  set(heap "${capstone}/runtime/virtual/malloc-mapping.c")
+  target_include_directories(${target} PRIVATE "${capstone}/sublet" "${PORT_MUSL_ROOT}/arch/capstone64")
+  # heap.c's measurement switches: a caller that never set them gets the default heap,
+  # lifetimes on, no scrub on free and per-object bounds (runtime/application/CMakeLists.txt).
+  if(DEFINED CAPSTONE_HEAP_LIFETIMES AND NOT CAPSTONE_HEAP_LIFETIMES)
+    target_compile_definitions(${target} PRIVATE CAPSTONE_HEAP_LIFETIMES=0)
   else()
-    set(heap "${musl}/level0.c")
+    target_compile_definitions(${target} PRIVATE CAPSTONE_HEAP_LIFETIMES=1)
+  endif()
+  if(CAPSTONE_HEAP_SCRUB_FREE)
+    target_compile_definitions(${target} PRIVATE CAPSTONE_HEAP_SCRUB_FREE=1)
+  else()
+    target_compile_definitions(${target} PRIVATE CAPSTONE_HEAP_SCRUB_FREE=0)
+  endif()
+  if(DEFINED CAPSTONE_HEAP_OBJECT_BOUNDS AND NOT CAPSTONE_HEAP_OBJECT_BOUNDS)
+    target_compile_definitions(${target} PRIVATE CAPSTONE_HEAP_OBJECT_BOUNDS=0)
+  else()
+    target_compile_definitions(${target} PRIVATE CAPSTONE_HEAP_OBJECT_BOUNDS=1)
   endif()
   if(app_GRANT_BYTES)
     if(NOT app_GRANT_BYTES MATCHES "^[0-9]+$" OR app_GRANT_BYTES GREATER 268435456)
@@ -180,17 +164,13 @@ function(capstone_configure_application target)
     "${capstone}/runtime/domain/gct-section-end.S")
   target_compile_definitions(${target} PRIVATE _XOPEN_SOURCE=700
     CAPSTONE_DOMREQ_DATA=${data_bytes} CAPSTONE_DOMREQ_STACK=${app_STACK_BYTES}
-    CAPSTONE_CONTEXT_ARENA_BYTES=${app_CONTEXT_BYTES}
-    CAPSTONE_LEVEL0_ARENA_BYTES=${app_ARENA_BYTES})
+    CAPSTONE_CONTEXT_ARENA_BYTES=${app_CONTEXT_BYTES})
   target_compile_options(${target} PRIVATE -ffunction-sections -fdata-sections)
   target_sources(${target} PRIVATE $<TARGET_OBJECTS:capstone-application-core>)
   target_link_libraries(${target} PRIVATE Capstone::Runtime
     "${CAPSTONE_MUSL_ARCHIVE}" capstone-application-builtins)
-  set(script "${capstone}/my_first_domain/link.ld")
-  if(CAPSTONE_APPLICATION_VIRTUAL)
-    # Two load segments, text mapped from the image file.
-    set(script "${capstone}/runtime/virtual/link.ld")
-  endif()
+  # Two load segments, text mapped from the image file.
+  set(script "${capstone}/runtime/virtual/link.ld")
   target_link_options(${target} PRIVATE --gc-sections -T "${script}")
   get_target_property(kind ${target} TYPE)
   if(kind STREQUAL "EXECUTABLE")

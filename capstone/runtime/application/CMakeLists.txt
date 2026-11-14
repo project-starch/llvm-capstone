@@ -4,43 +4,34 @@ cmake_minimum_required(VERSION 3.25)
 set(CMAKE_C_FLAGS_RELEASE "-O1 -DNDEBUG" CACHE STRING "Release C flags")
 project(capstone_application LANGUAGES C ASM)
 set(CMAKE_C_STANDARD 11)
-option(CAPSTONE_APPLICATION_VIRTUAL "Use the virtual C runtime adapter (OFF: the physical profile)" ON)
-set(profile_codegen)
-set(sdk_profile physical)
-set(sdk_script my_first_domain/link.ld)
-if(CAPSTONE_APPLICATION_VIRTUAL)
-  set(sdk_profile virtual)
-  # Two load segments, text mapped from the image file (virtual/link.ld).
-  set(sdk_script runtime/virtual/link.ld)
-  set(sdk_allocator mallocng)
-  include("${CMAKE_CURRENT_LIST_DIR}/../cmake/VirtualCodegen.cmake")
-  set(profile_codegen ${CAPSTONE_VIRTUAL_CODEGEN})
-  list(JOIN profile_codegen " " virtual_codegen)
-  add_compile_options("$<$<COMPILE_LANGUAGE:C>:SHELL:${virtual_codegen}>")
-  list(JOIN profile_codegen "\", \"" sdk_codegen)
-  set(sdk_codegen "[\"${sdk_codegen}\"]")
-else()
-  set(sdk_profile physical)
-  set(sdk_allocator level0)
-  set(sdk_codegen "[]")
+# The virtual profile is the only one; the physical profile was deleted on
+# 2026-11-14 (tag pre-trap-route-2026-11-14).
+if(DEFINED CAPSTONE_APPLICATION_VIRTUAL AND NOT CAPSTONE_APPLICATION_VIRTUAL)
+  message(FATAL_ERROR "CAPSTONE_APPLICATION_VIRTUAL=OFF selected the physical profile, which was deleted")
 endif()
+set(sdk_profile virtual)
+# Two load segments, text mapped from the image file (virtual/link.ld).
+set(sdk_script runtime/virtual/link.ld)
+set(sdk_allocator mallocng)
+include("${CMAKE_CURRENT_LIST_DIR}/../cmake/VirtualCodegen.cmake")
+set(profile_codegen ${CAPSTONE_VIRTUAL_CODEGEN})
+list(JOIN profile_codegen " " virtual_codegen)
+add_compile_options("$<$<COMPILE_LANGUAGE:C>:SHELL:${virtual_codegen}>")
+list(JOIN profile_codegen "\", \"" sdk_codegen)
+set(sdk_codegen "[\"${sdk_codegen}\"]")
 # The virtual heap's measurement switches (runtime/virtual/malloc-mapping.c). The defaults, LIFETIMES=ON
 # and SCRUB_FREE=OFF, are the profile; the other settings build the arms of the
 # spatial-versus-temporal comparison: LIFETIMES=OFF gives every object exact bounds but no
-# lifetime of its own. SCRUB_FREE=ON is rejected by the minimal port. The
-# physical profile's level0 has its own switches and takes these only at their defaults.
+# lifetime of its own. SCRUB_FREE=ON is rejected by the minimal port.
 option(CAPSTONE_HEAP_LIFETIMES "Virtual heap: a lifetime per object, CDERIVE on malloc and CREVOKE on free" ON)
 option(CAPSTONE_HEAP_SCRUB_FREE "Virtual heap: zero a payload on free" OFF)
 # OBJECT_BOUNDS=OFF (the Caps arm): malloc returns mapping authority, cursor at the object, instead
 # of a capability over the object alone. It needs LIFETIMES=OFF (a lifetime per object is a bounded child).
 option(CAPSTONE_HEAP_OBJECT_BOUNDS "Virtual heap: a capability over each object's own bytes" ON)
-if(NOT CAPSTONE_APPLICATION_VIRTUAL AND (NOT CAPSTONE_HEAP_LIFETIMES OR CAPSTONE_HEAP_SCRUB_FREE OR NOT CAPSTONE_HEAP_OBJECT_BOUNDS))
-  message(FATAL_ERROR "CAPSTONE_HEAP_LIFETIMES, CAPSTONE_HEAP_SCRUB_FREE and CAPSTONE_HEAP_OBJECT_BOUNDS are switches of the virtual heap")
-endif()
 if(NOT CAPSTONE_HEAP_OBJECT_BOUNDS AND CAPSTONE_HEAP_LIFETIMES)
   message(FATAL_ERROR "CAPSTONE_HEAP_OBJECT_BOUNDS=OFF requires CAPSTONE_HEAP_LIFETIMES=OFF")
 endif()
-if(CAPSTONE_APPLICATION_VIRTUAL AND CAPSTONE_HEAP_SCRUB_FREE)
+if(CAPSTONE_HEAP_SCRUB_FREE)
   message(FATAL_ERROR "The minimal mallocng port does not scrub freed payloads")
 endif()
 foreach(switch IN ITEMS CAPSTONE_HEAP_LIFETIMES CAPSTONE_HEAP_SCRUB_FREE CAPSTONE_HEAP_OBJECT_BOUNDS)
@@ -62,9 +53,8 @@ if(CAPSTONE_CHECK_COMPILER_ABI)
     message(FATAL_ERROR "Capstone compiler ABI check failed: ${compiler_probe_error}")
   endif()
 endif()
-# The heap is level0 on the physical profile and musl mallocng on the virtual one; the
-# Sublet heap and its HEAP/HEAP_LOG selection were removed on 2026-10-11. A recipe that
-# still passes them would otherwise build level0 under its old label.
+# The heap is musl mallocng. The Sublet heap and its HEAP/HEAP_LOG selection were removed
+# on 2026-10-11, and level0 with the physical profile on 2026-11-14.
 if(DEFINED CAPSTONE_APPLICATION_HEAP OR DEFINED CAPSTONE_APPLICATION_HEAP_LOG)
   message(FATAL_ERROR "CAPSTONE_APPLICATION_HEAP and CAPSTONE_APPLICATION_HEAP_LOG were removed with the Sublet heap; drop them")
 endif()

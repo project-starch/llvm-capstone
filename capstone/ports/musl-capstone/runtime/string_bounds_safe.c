@@ -131,7 +131,7 @@ char *strchrnul(const char *, int) __attribute__((weak, alias("__strchrnul")));
  * cannot be preserved by any copy, which is also CHERI's rule, and the bytes
  * of it are still copied correctly, only untagged.
  *
- * This is the same rule level0.c's realloc has to follow, and does now, by
+ * This is the same rule the physical profile's level0.c realloc followed, by
  * calling memmove. Found via libc-test's inet_pton, whose inet_ntop compresses
  * the zero run with memmove: the wrong answer there was the visible half of a
  * defect whose invisible half is every pointer-bearing struct any program ever
