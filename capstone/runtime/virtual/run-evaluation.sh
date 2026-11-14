@@ -24,6 +24,7 @@
 #   corpora   SDK and LLVM_BIN: bug-corpora/tools/run-virtual-cases.py for each of CORPORA x ARMS, with the
 #             words of CORPUS_ARGS_DIR/<corpus-with-dashes>-cc-args.txt when that file exists
 #   plan      EVAL_PLAN: a file of further runner commands, one per line (# comments), run with KIT,
+#             logged as plan<PLAN_TAG>-<n> (PLAN_TAG keeps the logs of a second plan apart),
 #             SDK, LLVM_BIN and OUT in the environment; the reuse study and the prebuilt nested arms
 #             go here, because each needs its own build directory
 #
@@ -160,7 +161,7 @@ step_plan() {
   while IFS= read -r line; do
     case $line in ''|'#'*) continue ;; esac
     n=$((n + 1))
-    in_lane timed "plan-$n" bash -c "cd '$REPO' && $line"
+    in_lane timed "plan${PLAN_TAG:-}-$n" bash -c "cd '$REPO' && $line"
   done < "$EVAL_PLAN"
   wait_lanes
 }

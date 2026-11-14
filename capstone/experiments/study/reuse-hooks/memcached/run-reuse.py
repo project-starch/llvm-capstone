@@ -35,7 +35,10 @@ def sha(path):
 
 
 def gate(reps):
-    lines = ['#!/bin/sh', 'cd /mnt/vm || exit 1', 'dmesg -n 1', './capstone-vexec --platform > /dev/null || exit 1']
+    # The trap libc returns ENOSYS for epoll until its opaque-reference side tables exist, so libevent
+    # takes its poll backend (EVENT_NOEPOLL); the slab allocator the study observes is the same.
+    lines = ['#!/bin/sh', 'cd /mnt/vm || exit 1', 'dmesg -n 1', './capstone-vexec --platform > /dev/null || exit 1',
+             'export EVENT_NOEPOLL=1']
     for rep in range(1, reps + 1):
         out = f'/tmp/rg-{rep}'
         lines += [f'echo RG_BEGIN:{rep}', f'mkdir -p {out}; chmod 777 {out}',
