@@ -203,3 +203,30 @@ The syscall boundary assumes the step-3 register slots preserve references
 across ordinary ecalls. Native nested signal structures require the
 translations above, not a capability-layout kernel sigaction structure.
 No additional plan-v5 interface change is introduced.
+
+## CDERIVE failure in mallocng
+
+When the lifetime table has no free slot and the kernel cannot grow it, the
+kernel sets NOGROW and the resumed CDERIVE writes an untagged 0. The libc
+treats that result like its own out-of-memory case. malloc and aligned_alloc
+give the raw slot back with `__malloc_unissue`, which is mallocng's free
+without a lifetime to end, and return NULL with ENOMEM. realloc creates the
+new object before it ends the old one. An in-place resize derives the new
+object first and returns NULL if that fails, leaving the old object live. A
+resize that would move a mapping goes through malloc, memcpy and free. The
+internal `__heap_remapping` is gone.
+
+`malloc-fail.c` checks this with a libc compiled with
+`-DCAPSTONE_HEAP_DERIVE_INJECTION=1`, where the test makes the next derive
+fail. Set `TRAP_LIBC_INJECTION_ARCHIVE` to that archive and the build links
+`mf-1.dom` to `mf-6.dom`. They cover a small malloc, slot and mapping leaks over
+repeated failures, and realloc in place, on a mapping, and with a move.
+`stale-free.dom` reads an object after free and must die with cause 25.
+
+On 14 November 2026, on p13 under `~/asr-work/libc-fail` with kernel
+`Image-0133b9e21cd`, all six cases exited 0. stale-free faulted with cause 25,
+and smoke, malloc-smoke, threads-smoke and setjmp-smoke passed. In the control,
+the libc of `0133b9e21cd` was built with the same injection hook. It returned
+NULL with errno 0 and leaked slots (a 262 KB address span) and mappings (3,152
+pages). Each of the three failed reallocs ended the old object, so the next
+read of that object faulted with cause 25.

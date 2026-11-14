@@ -34,7 +34,7 @@ for src in "$here/runtime/"{linux-start.c,tls.c,delegate.c,native-syscall.S,set_
 done
 "$CAPSTONE_LLVM_BIN/llvm-ar" rcs "$out/libtrap-runtime.a" "${objects[@]}"
 "$CAPSTONE_CLANG" "${flags[@]}" -c "$here/tests/trap/jump-register.S" -o "$out/jump-register.o"
-for test in smoke malloc-smoke threads-smoke threads-disabled futex-stale setjmp-smoke signal-smoke; do
+for test in smoke malloc-smoke threads-smoke threads-disabled futex-stale setjmp-smoke signal-smoke stale-free; do
     source_test=$test
     test_flags=()
     extra=()
@@ -66,6 +66,16 @@ if [[ -n ${TRAP_CONTROL_START:-} ]]; then
     "$CAPSTONE_LLVM_BIN/llvm-readelf" -x .capstone_virtual "$out/control-start.o" > "$out/control-handshake.txt"
     grep -q '43504f4e 56564d37' "$out/control-handshake.txt"
     echo 'PASS: baseline startup contains the launcher image handshake'
+fi
+# The CDERIVE failure cases link against a libc built with
+# MUSL_CAPSTONE_EXTRA_CFLAGS=-DCAPSTONE_HEAP_DERIVE_INJECTION=1.
+if [[ -n ${TRAP_LIBC_INJECTION_ARCHIVE:-} ]]; then
+    for case in 1 2 3 4 5 6; do
+        "$CAPSTONE_CLANG" "${flags[@]}" -DCASE=$case -c "$here/tests/trap/malloc-fail.c" -o "$out/mf-$case.o"
+        "$CAPSTONE_LD_LLD" --gc-sections -T "$rt/virtual/link.ld" -o "$out/mf-$case.dom" \
+            "$out/mf-$case.o" --whole-archive "$out/libtrap-runtime.a" --no-whole-archive \
+            "$TRAP_LIBC_INJECTION_ARCHIVE"
+    done
 fi
 printf 'Built %s\n' "$out/"*.dom
 

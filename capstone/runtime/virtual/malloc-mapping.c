@@ -87,17 +87,3 @@ int __heap_unmapping(void *owner,size_t n)
     index_unlock();
     return rc;
 }
-
-/* Same map-copy-unmap behavior as the baseline public mremap, retaining its
- * failure guarantee and capability-preserving memcpy. */
-void *__heap_remapping(void *p,size_t old,size_t n)
-{
-    if (((old+4095)&-4096UL)==((n+4095)&-4096UL)) return p;
-    void *q=__heap_mapping(n);
-    if (q==MAP_FAILED) return q;
-    memcpy(q,p,old<n?old:n);
-    if (__heap_unmapping(p,old)) {
-        int e=errno; __heap_unmapping(q,n); errno=e; return MAP_FAILED;
-    }
-    return q;
-}
