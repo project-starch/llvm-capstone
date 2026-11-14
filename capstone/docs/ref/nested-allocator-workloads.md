@@ -1,16 +1,18 @@
 # Nested-allocator workloads: the cost of protecting an application's own allocator
 
-## Status (2026-11-14)
+## Status (2026-11-15)
 
 | Item | State | Configuration |
 |---|---|---|
 | speedtest1 `--size 1`, QEMU twin | **measured**: answers equal; program +0.63 % instructions; 28,216 CREVOKEs, subtree mean 1.0001 / max 3; peak table +4.8 KB; kernel +3 % from the native syscall page scan, all of it from the patch's `aReq` array (lifetimes: kernel ±0, in-context +0.39 %) | FRCDKMS, native route, ids55, QEMU qemu55 a0501ebc39 |
 | speedtest1 `--size 1` on silicon | **measured** (board 2, 15:00-15:30): 32/32 answers in every command; in-context +1.04 %, wall-clock +1.90 % (both inside the pre-registered bands); kernel repeat spread 2.47 % > 2 %, so the kernel difference is not read. Boot 1 on board 1 was VOID (unbaked empty `train/in`) | bitstream `a47b588a1`, kit bkit73 |
-| speedtest1 `--size 1` on silicon, bitstream F, with event 23 | **queued**: board 3 after its x264 run (~03:00 15 Nov), pre-registered below; both arms again (ABBA), hpm8 = event 23 (verdict-cache miss replays) | bitstream F `a948e4134` (`ec675c2b…`), kit bkit75n |
+| speedtest1 `--size 1` on silicon, bitstream F, with event 23 | **measured** (board 3, 15 Nov 02:26-02:51): 32/32 answers in every command; in-context +1.67 %, kernel +2.10 % (repeats in band this time), wall-clock +1.95 %; event 23 +46,588 verdict-cache miss replays per run, which at the RTL's estimated 17-20 cycles each explain 7-8 % of the in-context cost | bitstream F `a948e4134` (`ec675c2b…`), kit bkit75n, board 3 |
 | speedtest1 `--size 100` | **deferred** (SPEC-lane default, 14 Nov 21:40: breadth first; the lead may override): about 6.5 h per command on silicon | - |
 | CPython 3.13.7, pyperformance subset (7 benchmarks), QEMU twin | **measured**: 28/28 answers equal to native; in-context +0.66 % (richards) to +2.84 % (json_dumps), +1.63 % summed; kernel ±0.5 %; 2.99 M CDERIVEs, subtree max 2, peak live records 76,767 (1.23 MB) | FRCDKMS SDK, -O2, trimmed built-ins, linked --no-relax; QEMU qemu55 a0501ebc39 |
 | CPython on silicon | **queued**: pre-registered below; four one-arm boots U P P U on one board, F with event 23 | F `a948e4134`, kit bkit75n |
-| PostgreSQL (single-user pgbench), tshark (pcap), FFmpeg (decode), memcached (load) | **queued, in that order**: each twin first, then silicon. Patches in tree: postgresql-17.0-0003, wireshark-4.6.8-0001, ffmpeg-9.0.1-0003, memcached-1.6.45-0006. Each needs the native-route rebuild CPython needed (FRCDKMS SDK) | FRCDKMS, native route |
+| PostgreSQL 17.5, single-user pgbench-derived workload, QEMU twin | **running** (bring-up on the twin, 15 Nov): both arms build and start. The native route needed harness changes, the same in both arms: run as root (the domain loader admits euid 0 only), and `access`/`rename`/`realpath`/`setitimer`/`posix_fallocate`/`preadv`/`pwritev` shims over calls the route refuses or does not serve. The protected arm uses patch 0003 with the Q-15 placement repair (lane `q15-placement` 57215acb2dbb): without it CDERIVE refuses a large chunk (29), as Q-15 recorded | FRCDKMS SDK, -O2, native route, QEMU qemu55 a0501ebc39 |
+| tshark (pcap), FFmpeg (decode) | **queued, in that order**: each twin first, then silicon. Patches in tree: wireshark-4.6.8-0001, ffmpeg-9.0.1-0003. Each needs the native-route rebuild (FRCDKMS SDK); tshark's six dependencies too | FRCDKMS, native route |
+| memcached (load) | **deferred**: the native route refuses `socket`, `socketpair`, `epoll_create1` and `epoll_ctl` (`native-syscall-table.c:92-101`, `NS_REFUSE`), so the server cannot take a load on this route. Running it elsewhere (e.g. the virtual route) is a different instrument; the lead's call | - |
 | CREVOKE worst case (subtree 1 .. 10^6, latency, interruptibility; PostgreSQL context reset) | **measured** (RTL sim, memory delay 0): 6 cycles per node up to 2,048 nodes, about 11 beyond; at most 65,532 nodes per subtree (10^6 cannot be built), so the worst single CREVOKE is 720,892 cycles; **not interruptible**: a timer interrupt waits for the whole walk (180,518 cycles at 32,768 nodes, against 1-6 without). PostgreSQL context-reset sizes: queued with the PostgreSQL twin | capstone-ariane `a948e4134` (F), `--sv_seed 1` |
 | record-cache counters | event 23 is on hpm8 in kits bkit73n (batch) and bkit75n (F). Events 29-31 (lookups, raw misses, walk-busy cycles) would need a new bitstream; that is **the lead's call** and is not requested | - |
 
@@ -448,6 +450,63 @@ with hpm8 now event 23.
     are estimates from the source, not measurements.
 - The share of the in-context cost that misses explain is therefore read as (event-23 delta x 17-20 cycles) against the
   `run_cycles` delta, a lower bound on the misses' share.
+
+### Results: silicon on bitstream F, speedtest1 `--size 1`, with event 23 (board 3, 2026-11-15 02:26-02:51)
+
+**Configuration.** As pre-registered above: bitstream F `a948e4134` (`ec675c2b…`, read back resident), board 3, kit
+bkit75n, stage `nested/st1/board/f3-stage` (the board-2 stage, byte-identical). Board firmware `21951b56b89cced0`
+(19,566,088 B; the kit relinks the native kernel `c6e0a4d07274cbff` into it at bake time), monitor `4f51541`.
+Transcript `spec/board/out-nat-twcf-hpmnest-nested-st1-b3/f3-stage/board.txt` (sha256 `6264fcd227d07ec7…`), read by
+`stage-gen/parse.py`.
+
+**Controls.** `b0-stats` and `b0-hello` returned 0. The native smoke passed all 9 steps under the kit's waiver (step 70,
+the two user-tick checks, as on board 2). The driver's rc=1 is that waived step's retval 70, as on board 2's boot. The
+kit's `spec-classify.py` again reads `NO RESULT` for the format mismatch described above: all four commands printed
+`@@SPEC-END` and the stage reached `@@SPEC-DONE`. Not VOID.
+
+| | u1 | p1 | p2 | u2 | repeat spread, u / p | protected vs not (ABBA means) |
+|---|---|---|---|---|---|---|
+| rc, oracle lines equal to the reference | 0, 32/32 | 0, 32/32 | 0, 32/32 | 0, 32/32 | | |
+| `run_cycles` (in-context) | 690,770,499 | 700,409,377 | 699,492,998 | 686,082,488 | 0.68 % / 0.13 % | **+1.67 %** (+11.52 M) |
+| `between_cycles` (kernel and other) | 5,012,130,102 | 5,113,802,329 | 5,106,738,817 | 4,998,316,847 | 0.28 % / 0.14 % | **+2.10 %** (+105 M) |
+| uptime span, s | 229.86 | 233.92 | 233.61 | 228.71 | 0.50 % / 0.13 % | **+1.95 %** |
+| runs (context entries) | 15,384 | 15,432 | 15,432 | 15,385 | | +0.31 % |
+| hpm3 L1I miss | 6,097,496 | 6,268,797 | 6,265,791 | 6,098,602 | 0.02 % / 0.05 % | +2.78 % |
+| hpm4 L1D miss | 3,143,886 | 3,277,722 | 3,283,124 | 3,082,790 | 1.96 % / 0.16 % | +5.37 % (+167 k) |
+| hpm5 DTLB miss | 87,328 | 106,775 | 110,638 | 86,849 | 0.55 % / 3.55 % | +24.8 % (+21.6 k) |
+| hpm6 mispredict | 7,071,579 | 7,249,691 | 7,249,537 | 7,072,391 | 0.01 % / 0.00 % | +2.51 % |
+| hpm7 issue stall | 123,406,716 | 127,552,618 | 126,952,636 | 122,261,592 | 0.93 % / 0.47 % | +3.60 % (+4.42 M cycles) |
+| **hpm8 event 23** (verdict-cache miss replays) | 65,472 | 111,877 | 111,938 | 65,168 | 0.47 % / 0.05 % | **+46,588** (+71 %) |
+
+**Against the pre-registration.**
+- Answers: **met**, 32/32 in every command.
+- Repeats: **met** on both: `run_cycles` 0.68 % / 0.13 % (band 1 %), `between_cycles` 0.28 % / 0.14 % (band 2 %).
+  Unlike the batch boot, this boot's kernel difference is readable.
+- In-context cost on F: **met, +1.67 %**, inside +0.5 % to +3 %. On batch it read +1.04 %; the two are different
+  bitstreams and boards, N = 2 each, and the difference between them is not attributed.
+- Whole command: **met, +1.95 %**, inside +1 % to +4 % (batch +1.90 %).
+- Event 23, protected minus not: **met, +46,588 per command**, inside +28,000 to +200,000. Addendum 1 had already
+  removed the premise of the lower bound (CDERIVE installs the new record live), so the reading is read as capacity and
+  conflict misses: 1.65 per CDERIVE at the twin's 28,226 derives per run.
+- Event 23, not protected: 65,320 per command (mean). That is not "small next to the protected arm": the protected
+  arm adds 71 % to it. The unprotected arm's misses come from mallocng's own lifetimes and everything else the verdict
+  cache serves; this boot does not split them.
+- Duration: **met**: 229-234 s per command, 25 min for the boot.
+
+**Derived, as pre-registered.**
+- Upper bound on cycles per verdict-cache miss, if the whole in-context delta were misses: 11,524,694 / 46,588 =
+  **247 cycles**.
+- At the RTL estimate of 17-20 cycles per miss (Addendum 1, from source, an estimate), the added misses account for
+  0.79-0.93 M cycles: **6.9 % to 8.1 % of the in-context cost**. So verdict-cache misses explain under a tenth of the
+  protection's in-context cost on F. The rest moves with issue stall (+4.42 M cycles, 38 % of the delta), L1D misses
+  (+167 k) and DTLB misses (+21.6 k). This boot cannot attribute it further: events 29-31 (lookups, raw misses,
+  walk-busy cycles) are not in this bitstream.
+- Kernel: +2.10 % (+105 M cycles per command). On the twin the whole kernel rise was the patch's `aReq` array through
+  the native route's per-syscall page scan, not the lifetimes. This boot reads the size, not the cause.
+
+**So, on bitstream F:** protecting SQLite's nested allocators costs speedtest1 `--size 1` **+1.67 % in-context cycles,
++2.10 % kernel cycles and +1.95 % wall-clock**, with every answer unchanged. The protection adds 46.6 k verdict-cache
+miss replays per run, which at the RTL's estimated cost explain about 7-8 % of the in-context cost.
 
 ## CREVOKE worst case (RTL simulation, measured 2026-11-14)
 
