@@ -170,16 +170,17 @@ README record each change.
 |---|---|---|---|
 | FR | llvm-c6 (compiler-global-lo-fold 2f3ff76eba7b) | -capstone-fold-global-lo, padded link.ld, +relax; arms SDK (nat-realloc-evict) | old base |
 | FRCDK | + standard RVC and capability-base RVC (llvm-capstone 74080cce29e5), -capstone-disable-cost-per-use | same SDK | perl -3.5 %, gcc -2.0 % on silicon |
-| FRCDKMS | llvm-c9 = compiler-capbase-rvc-c8 29027126f39b (+ C8 inline 16-byte memcpy) | SDK perf/memset (runtime-memset-cap-zero-arms beb1bbabe26a, the null-capability memset) | **current temporal images**, all 8 rows |
-| FRCDKMSsp | same | SDK perf/memset-spatial: only `CAPSTONE_HEAP_LIFETIMES=OFF` | **spatial arm**, all 8 rows |
-| GPC / GPR2 | llvm-c10 = compiler-gp-relax 81193d42edb0 | gp SDK (runtime-gp-cursor e120e53b053f); GPR2 = gp relaxation on, LLVM-default GlobalMerge | gp decision pair |
-| RVGP | riscv-base: llvm-c4 codegen + `-msmall-data-limit=8`, lld --relax-gp | label plain-rv64gp, `spec/tree-plain` | riscv-base half of gp |
+| FRCDKMS | llvm-c9 = compiler-capbase-rvc-c8 29027126f39b (+ C8 inline 16-byte memcpy) for the benchmarks; the SDK's libc and runtime are compiled by llvm-c4 | SDK perf/memset (wt-ms beb1bbabe26a = 7166a346d516, the cherry-pick of b68bbde23c79 CAPSTONE_MEMSET_CAP_ZERO, + a test commit) | **current temporal images**, all 8 rows |
+| FRCDKMSsp | same | SDK perf/memset-spatial: only `CAPSTONE_HEAP_LIFETIMES=OFF`. By archive member it differs only in libc's four mallocng objects and malloc-mapping.c.obj, and all 774 benchmark objects of the 8 rows are byte-identical to FRCDKMS's (spatial/objcmp.py, textcmp.py) | **spatial arm**, all 8 rows |
+| GPC / GPR2 | llvm-c10 = compiler-gp-relax 81193d42edb0 (branch: 784137547b99 + 81193d42edb0; lit 221/223, both failures also on llvm-c9) | gp SDK perf/gpsdk (perf/memset's script on wt-gp = runtime-gp-cursor, built at ea3ab7249002; e120e53b053f differs only in comments). GPC = every gp flag off (control). GPR2 = `-capstone-mark-gp-relaxable -capstone-small-data-limit=16 -global-merge-min-data-size=17` + lld `--relax-gp` (sdk/ld.lld-relax-gp) | gp decision pair |
+| RVGP | riscv-base: llvm-c4 codegen + `-msmall-data-limit=8`; link by llvm-c10's lld --relax-gp (wrapper perf/fair/plain-cc-gp) | label plain-rv64gp, `spec/tree-plain`; stages 500.perlbench_r-rv-gp-mk, 502.gcc_r-train01-rv-gp | riscv-base half of gp |
 
 **riscv-base images:** fair3 build (`plain-rv64fre`), stages in `$H/perf/fair/stages/*-rv-fair3`.
 
 **Twins.** QEMU twins (native route): `$H/perf/faultesc/run.sh <slot> <images>`. Slots 25-28 are free for others;
-the compiler lane uses 29-31. A twin must use the board's kernel module and parameters, i.e. images-a0ed with
-node_flat_records 262144 and the dom_* parameters. A cross-arm "outputs identical" needs each arm's own specdiff N/N
+the compiler lane uses 29-31. A twin must use the board's kernel module and parameters, i.e. images-a0ed (Image f463a092e905178e) with
+node_flat_records 262144, the dom_* parameters and TWIN_CMDLINE_MAX=1024 (the a0ed command line is 557 bytes; the
+runner's default limit is 512). A cross-arm "outputs identical" needs each arm's own specdiff N/N
 first.
 
 ---
@@ -227,10 +228,19 @@ first.
   and all 8 spatial rows. Board-ready stages: `$H/perf/natstage/board-frcdkms/*`, `board-frcdkms-full/500…`,
   `board-frcdkmssp/*`. perl full needs a dom kit; an F dom kit (bkit74-style on F) still has to be made from bkit75
   plus bkit74's command line.
-- **gp-relative.** The rule (Addendum 110) is to adopt it on both arms iff the perl ratio improves and perl×gcc
-  improves. riscv-base RVGP is already read: perl makerand -6.2 %, gcc -0.60 %. The Capstone GPC/GPR2 pair is queued
-  on board 1. If adopted, both columns are rerun in full, and the dev landing of runtime-gp-cursor needs a dev-matched
-  virtual kit, deferred until then.
+- **gp-relative.**
+  - **Rule (Addendum 110):** adopt it on both arms iff the perl ratio improves and perl×gcc improves.
+  - **riscv-base silicon, RVGP against RVF3:** perl makerand -6.2 %, gcc -0.60 %.
+  - **Capstone twins** (shift-1 user instructions, each arm 2/2), GPR2 against GPC: perl makerand -12.7 %, gcc
+    +0.67 %, mcf +0.28 M, nab +0.13 %, imagick/lbm/xz flat. The riscv-base twin gives perl -8.7 %, gcc -0.42 %. So
+    the twin predicts gcc worsens on Capstone; the board pair, queued on board 1, decides.
+  - **GlobalMerge rule:** decided by riscv-base alone, pre-registered, outcome "LLVM default". It is
+    `docs/plans/2026-11-14-gp-relax-globalmerge-rule.md` on lane branch `gp-relax-prereg` (707931298371, aa1e91b0628e,
+    7125fd54bf4d), not on dev.
+  - **If adopted:** both columns are rerun in full. The dev landing uses the local, unpushed branch
+    runtime-gp-cursor-dev = origin/dev d07a38aedfaf + d75791670ef1 + bd6cf22e49b0 (the pthread-contract rewrite with 4
+    mutants, NOT YET RUN). It needs a dev-matched virtual kit: kit-prof fails dev's own contract, and the QEMU
+    0542c5556c kit dies in OpenSBI.
 - **F2.** Flash it as its own A/B only if page fills (ev27) are frequent on F/B. Otherwise F2 becomes the base of the
   next set.
 
@@ -303,13 +313,27 @@ CDERIVE/CREVOKE counts, revoked-subtree size, peak table memory). Give CREVOKE's
 
 **In progress:**
 - F's remaining readings, and the gp-relative decision pair (§8). F2 is sealed and flash-ready.
-- Kernel cost of perl's full test.pl. Capstone runs +4.73 G kernel instructions against riscv-base on the same twin
-  kernel, and touches 2.5× the pages.
-  - First finding: each native exec cma_allocs and memsets a node table of node_flat_records × 16 B, then frees it
-    (318 execs).
-  - Proposed: a pool of flat tables, under two conditions: (1) a context can never read stale records, with a
-    directed test; (2) the rev-node unit does not cache records by table PA across a root switch (rtl-oracle).
-  - The per-arena census is running.
+- **Kernel cost of perl's full test.pl.**
+  - **The measurement.** Capstone runs +4.73 G kernel instructions against riscv-base. That was measured at
+    node_flat_records 524288, twice the board's table, on s1-FRCDKMSqk2 vs s1-RVBqk2. Corrected table:
+    `$H/perf/kpin/perl-full-cap-vs-rv-v2.txt`.
+  - **Correction.** The earlier "OpenSBI +0.56 G" was kernel memset running at the kernel's physical alias. OpenSBI
+    itself is +0.3 M. memset is +588 M, of which about 354 M is the node table (318 execs × 8 MiB).
+  - **Node table.** Each native exec cma_allocs and memsets a node table of node_flat_records × 16 B, then frees it.
+  - **Per-arena census** (kernel a143573f, perf/census; FRCDKMS perl test-sw 2/2, 318 execs):
+    - pinned pages swept 530,337 = 91 % of pgalloc;
+    - 460 k of them were pinned by adaptive fault-ahead windows (image 126 k, heap 314 k, exchange 20 k), only about
+      68 k by faults;
+    - per exec: image 403 pages (data+bss is 283), exchange 64, heap 1,190, stack 6.3;
+    - the 1 MiB stack is not pre-touched, so it is not a lever.
+    - riscv-base's per-exec footprint is being measured; the proposed cut follows from it.
+  - **Candidate: a pool of node tables.** rtl-oracle reading of rtl-ids55 afd35e449:
+    - no record cache is keyed by table PA;
+    - the LSU revocation cache is flushed on an edge of srevroot or the namespace flag (ex_stage.sv:1486);
+    - the pool must also reset header words table[2] and table[3] (read on every allocation,
+      capstone_rev_node.anvil:284-301);
+    - virtual-namespace reads have no index bound, so records above the old bump pointer must be provably never
+      written.
 - Capstone ISA stage 2 (16-bit capability ops). The decoder sketch is on dev (option A: take the compressed FP-double
   slots; option B: a per-image decode mode). The choice is the lead's, and it comes last.
 
@@ -319,6 +343,8 @@ CDERIVE/CREVOKE counts, revoked-subtree size, peak table memory). Give CREVOKE's
 - C6 (fold constant offsets): about 7 M instructions, and the rest is blocked by the cursor-safety rule.
 - C4 (movc) and C3 (spills): no concentrated idiom.
 - Allocator trims inside the same policy: about 10 M, below noise.
+- The pin-scan lever (pin_remaining/next_resident): 0.01 % of user on gcc, mcf and xz; not built. History doc
+  a0ba0ad8130f, lane branch gp-relax-prereg.
 - L1D 64 KiB: not timing-closed beside F2 (-5.5 ns, congestion 5). A 48 KiB 12-way variant (b9ab75c41) exists unbuilt,
   and is worth building only if the tag counters say L1D matters.
 
@@ -342,7 +368,8 @@ CDERIVE/CREVOKE counts, revoked-subtree size, peak table memory). Give CREVOKE's
   - many twins this week used node_flat_records 524288 against the board's 262144, which doubles the per-exec
     node-table cost;
   - the twin kernel's cmdline limit was 512 against the board's 1024.
-  Match the board when a twin is meant to predict it.
+  Match the board when a twin is meant to predict it. cmpc.py now WARNs when an arm's own validation is not N/N:
+  perl test-sw read 1/2 on every Capstone twin until images-a0ed (dom_grant_root), and that figure was retracted.
 - **Cross-board spread** is about 0.9 % on the same image; same-board run-to-run is 0.06 % (perl). perl full and x264
   ratios are same-board (board 3).
 - **Simulation traps** (now in the rtl-sim skill):
