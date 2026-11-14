@@ -1,5 +1,6 @@
 #ifndef MALLOC_HEAP_SUBLET_H
 #define MALLOC_HEAP_SUBLET_H
+#include <errno.h>
 #include <stddef.h>
 #include <stdint.h>
 
@@ -41,7 +42,6 @@ struct heap_mid { struct heap_leaf *leaf[512]; };
 __attribute__((visibility("hidden"))) extern struct heap_mid *__malloc_page_root[512];
 __attribute__((visibility("hidden"))) void *__heap_mapping(size_t);
 __attribute__((visibility("hidden"))) int __heap_unmapping(void *, size_t);
-__attribute__((visibility("hidden"))) void *__heap_remapping(void *, size_t, size_t);
 
 static inline void *heap_issue(void *at, size_t n)
 {
@@ -69,12 +69,58 @@ static inline void *heap_renew(void *object)
     return renewed;
 }
 /* malloc/free's compile-time controls; nested allocators always use the direct
- * primitives above, independently of the outer heap's measurement arm. */
+ * primitives above, independently of the outer heap's measurement arm.
+ *
+ * The failure result: a CDERIVE that finds no free slot traps with cause 30,
+ * and the kernel grows the task's lifetime table. When it cannot, it sets
+ * NOGROW (ensure_nodes, kernel patch 0011), and the resumed CDERIVE writes an
+ * untagged 0 instead of trapping again. malloc then returns NULL with ENOMEM.
+ * heap_alloc_issue,
+ * for a slot that malloc or aligned_alloc just took, gives that slot back
+ * (__malloc_unissue: mallocng's free without a lifetime to end).
+ * heap_alloc_reissue, for realloc's in-place paths, returns 0 and leaves the
+ * slot and the object's old lifetime as they are. realloc ends the old object
+ * only after the new one exists: in place after heap_alloc_reissue, and a
+ * resize that would move a mapping takes malloc, memcpy and free, so a failed
+ * realloc returns NULL with the original intact (realloc.c, patch 0009). */
+__attribute__((visibility("hidden"))) void __malloc_unissue(void *);
+#if CAPSTONE_HEAP_DERIVE_INJECTION
+/* Test builds only: the derive whose 1-based count equals
+ * __heap_derive_fail_at gives the failure result without executing CDERIVE. */
+__attribute__((__weak__, visibility("hidden"))) unsigned long __heap_derive_calls;
+__attribute__((__weak__, visibility("hidden"))) unsigned long __heap_derive_fail_at;
+#endif
+static inline void *heap_alloc_derive(void *p, size_t n)
+{
+#if CAPSTONE_HEAP_DERIVE_INJECTION
+    if (++__heap_derive_calls == __heap_derive_fail_at) return 0;
+#endif
+    return heap_issue(p, n);
+}
+static inline void *heap_alloc_reissue(void *p, size_t n)
+{
+    if (!p) return p;
+#if CAPSTONE_HEAP_LIFETIMES
+    void *child = heap_alloc_derive(p, n);
+    if (!child) errno = ENOMEM;
+    return child;
+#elif CAPSTONE_HEAP_OBJECT_BOUNDS
+    size_t base = __builtin_capstone_cap_get_cursor(p);
+    return __builtin_capstone_cap_shrink(p, base, base+(n ? n : 1));
+#else
+    return p;
+#endif
+}
 static inline void *heap_alloc_issue(void *p, size_t n)
 {
     if (!p) return p;
 #if CAPSTONE_HEAP_LIFETIMES
-    return heap_issue(p, n);
+    void *child = heap_alloc_derive(p, n);
+    if (!child) {
+        __malloc_unissue(p);
+        errno = ENOMEM;
+    }
+    return child;
 #elif CAPSTONE_HEAP_OBJECT_BOUNDS
     size_t base = __builtin_capstone_cap_get_cursor(p);
     return __builtin_capstone_cap_shrink(p, base, base+(n ? n : 1));

@@ -82,7 +82,7 @@ diff --git sv.c sv.c
 index 1737a1e..7b66c92 100644
 --- a/sv.c
 +++ b/sv.c
-@@ -249,4 +249,92 @@ Public API:
+@@ -249,4 +249,94 @@ Public API:
   * case is for it to be reused. */
  
 +#ifdef PERL_CAPSTONE_SUBLET
@@ -133,6 +133,8 @@ index 1737a1e..7b66c92 100644
 +    SV *const sva = S_sv_arena_of(sv);
 +    SV *const child = (SV *)capstone_cap_derive(sva,
 +        PTR2UV(sv) - __builtin_capstone_cap_get_base(sva), sizeof(SV));
++    if (!child)
++        croak_no_mem();
 +    SV_ARENA_ISSUED(sva)[sv - (sva + 1)] = child;
 +    return child;
 +}
@@ -175,13 +177,13 @@ index 1737a1e..7b66c92 100644
 +#else
  #define plant_SV(p) \
      STMT_START {					\
-@@ -263,4 +351,5 @@ Public API:
+@@ -263,4 +353,5 @@ Public API:
          --PL_sv_count;					\
      } STMT_END
 +#endif
  
  
-@@ -272,5 +361,10 @@ Perl_more_sv(pTHX)
+@@ -272,5 +363,10 @@ Perl_more_sv(pTHX)
      SV* sv;
      char *chunk;                /* must use New here to match call to */
 +#ifdef PERL_CAPSTONE_SUBLET
@@ -192,7 +194,7 @@ index 1737a1e..7b66c92 100644
 +#endif
      sv_add_arena(chunk, PERL_ARENA_SIZE, 0);
      uproot_SV(sv);
-@@ -681,4 +775,7 @@ Perl_sv_free_arenas(pTHX)
+@@ -681,4 +777,7 @@ Perl_sv_free_arenas(pTHX)
      PL_sv_arenaroot = 0;
      PL_sv_root = 0;
 +#ifdef PERL_CAPSTONE_SUBLET
@@ -228,7 +230,7 @@ diff --git sv_inline.h sv_inline.h
 index 096d0d8..81fc419 100644
 --- a/sv_inline.h
 +++ b/sv_inline.h
-@@ -57,4 +57,16 @@
+@@ -57,4 +57,15 @@
  #endif
  
 +#ifdef PERL_CAPSTONE_SUBLET
@@ -237,15 +239,14 @@ index 096d0d8..81fc419 100644
 +PERL_CALLCONV SV *Perl_sv_arena_issue(SV *sv);
 +#  define uproot_SV(p) \
 +    STMT_START {                                        \
-+        (p) = PL_sv_root;                               \
-+        PL_sv_root = MUTABLE_SV(SvARENA_CHAIN(p));              \
++        (p) = Perl_sv_arena_issue(PL_sv_root);           \
++        PL_sv_root = MUTABLE_SV(SvARENA_CHAIN(PL_sv_root)); \
 +        ++PL_sv_count;                                  \
-+        (p) = Perl_sv_arena_issue(p);                   \
 +    } STMT_END
 +#else
  #define uproot_SV(p) \
      STMT_START {                                        \
-@@ -63,4 +75,5 @@
+@@ -63,4 +74,5 @@
          ++PL_sv_count;                                  \
      } STMT_END
 +#endif

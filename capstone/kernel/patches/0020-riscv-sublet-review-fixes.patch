@@ -1,0 +1,279 @@
+--- a/arch/riscv/include/asm/sublet-test.h
++++ b/arch/riscv/include/asm/sublet-test.h
+@@ -12,7 +12,11 @@
+  *   SUBLET_MUTANT_NATIVE_EXEC_OFF  a protected program may exec an ordinary ELF
+  *   SUBLET_MUTANT_OPEN_SOCKOPT     every socket option passes the binder
+  *   SUBLET_MUTANT_NO_SHRINK        startup pointers cover the whole stack block
+- *   SUBLET_MUTANT_NO_DERIVE_CHECK  the kernel's CDERIVE runs without a slot */
++ *   SUBLET_MUTANT_NO_DERIVE_CHECK  the kernel's CDERIVE runs without a slot
++ *   SUBLET_MUTANT_STORE_IRQOFF     the loader stores startup pointers with t0 and interrupts
++ *                                  off, outside the routines for user memory
++ *   SUBLET_MUTANT_FUTEX_UNCHECKED  futex keys a word without an access through its reference
++ *   SUBLET_MUTANT_OPEN_PRLIMIT     prlimit64 reaches any process */
+ #ifndef _ASM_RISCV_SUBLET_TEST_H
+ #define _ASM_RISCV_SUBLET_TEST_H
+ 
+--- a/arch/riscv/include/asm/sublet-thread.h
++++ b/arch/riscv/include/asm/sublet-thread.h
+@@ -8,6 +8,7 @@ int sublet_copy_thread(struct task_struct *, const struct kernel_clone_args *);
+ int sublet_set_tid(struct task_struct *, unsigned long);
+ void sublet_exit_tid(struct task_struct *);
+ int sublet_futex_read(u32 *, u32 __user *);
++int sublet_futex_check(u32 __user *, int, u32 __user *);
+ int sublet_futex_op(int, int, int *, u32 __user *);
+ int sublet_futex_cmpxchg(u32 *, u32 __user *, u32, u32);
+ #endif
+--- a/arch/riscv/include/asm/sublet.h
++++ b/arch/riscv/include/asm/sublet.h
+@@ -64,7 +64,8 @@ int sublet_grant_slot(struct sublet_context *c, const struct sublet_grant *g, un
+ /* Store into the user cell at cell (16-byte aligned) the reference in kslot, whose cursor is
+  * from_cursor, moved to cursor and narrowed to [cursor, cursor + length), which must be
+  * representable. The loader only, before srevroot names the program's table: the store is a
+- * plain supervisor access to a user page. */
++ * plain supervisor access to a user page, made by a routine for user memory (a fault gives
++ * EFAULT, never a lost tag). */
+ int sublet_store_user_ref(const unsigned long *kslot, unsigned long from_cursor,
+ 			  unsigned long cell, unsigned long cursor, unsigned long length);
+ /* Answer cause 30 of the context's program: at least one slot, or NOGROW. */
+--- a/arch/riscv/kernel/sublet/bind-core.c
++++ b/arch/riscv/kernel/sublet/bind-core.c
+@@ -110,6 +110,19 @@ static long sockopt_command(const struct sublet_bind_args *a, unsigned int *poin
+ 	return -ENOPROTOOPT;
+ }
+ 
++/* prlimit64(pid, resource, new_limit, old_limit): the program's own limits only. A server
++ * raises its own RLIMIT_NOFILE at startup, which reaches no other process. */
++static long prlimit_command(const struct sublet_bind_args *a, unsigned int *pointers)
++{
++	(void)pointers;
++#ifdef SUBLET_MUTANT_OPEN_PRLIMIT
++	return 0;
++#endif
++	if ((int)a->arg[0] != 0)
++		return -EPERM;
++	return 0;
++}
++
+ static long prctl_command(const struct sublet_bind_args *a, unsigned int *pointers)
+ {
+ 	switch (a->arg[0]) {
+@@ -165,7 +178,7 @@ static const struct sublet_allowed allowed[] = {
+ 	CALL(getpid), CALL(getppid), CALL(getuid), CALL(geteuid), CALL(getgid), CALL(getegid),
+ 	CALL(gettid), CALL(getpgid), CALL(getsid), CALL(getresuid), CALL(getresgid),
+ 	CALL(getgroups), CALL(getrusage), CALL(getpriority), CALL(uname), CALL(sysinfo),
+-	CALL(prlimit64), CALL(getrandom), CALL(sched_yield), CALL(sched_getaffinity),
++	CALL_COMMAND(prlimit64, prlimit_command), CALL(getrandom), CALL(sched_yield), CALL(sched_getaffinity),
+ 	CALL(sched_get_priority_max), CALL(sched_get_priority_min), CALL(sched_rr_get_interval),
+ 	CALL(rt_sigprocmask), CALL(rt_sigaction), CALL(sigaltstack), CALL(kill), CALL(tkill),
+ 	CALL(tgkill), CALL(exit), CALL(exit_group), CALL_COMMAND(prctl, prctl_command),
+--- a/arch/riscv/kernel/sublet/binfmt.h
++++ b/arch/riscv/kernel/sublet/binfmt.h
+@@ -146,6 +146,25 @@ static struct linux_binfmt capstone_dom;
+ /* Test only: the next n loads fail after the point of no return, right before the entry. */
+ static int test_fail_after_mark;
+ module_param(test_fail_after_mark, int, 0644);
++/* Test only: the next n loads drop the page of the first pointer cell before the stores into
++ * it, as reclaim or migration could, so the first store faults. */
++static int test_zap_stack;
++module_param(test_zap_stack, int, 0644);
++
++static void dom_test_zap(unsigned long at)
++{
++	struct vm_area_struct *vma;
++
++	if (READ_ONCE(test_zap_stack) <= 0)
++		return;
++	WRITE_ONCE(test_zap_stack, READ_ONCE(test_zap_stack) - 1);
++	at &= PAGE_MASK;
++	mmap_read_lock(current->mm);
++	vma = find_vma(current->mm, at);
++	if (vma && vma->vm_start <= at)
++		zap_page_range(vma, at, PAGE_SIZE);
++	mmap_read_unlock(current->mm);
++}
+ #endif
+ 
+ /*
+@@ -388,6 +407,10 @@ static int dom_load_binary(struct linux_binprm *bprm)
+ 	mutex_unlock(&sublet_lock);
+ 	if (rc) { fail_line = __LINE__; goto out; }
+ 	/* The pointer cells become references into the stack block. */
++#ifdef CONFIG_RISCV_CAPSTONE_TRAP_TEST
++	if (st->count)
++		dom_test_zap(sp + 16 * st->ptr[0].cell);
++#endif
+ 	for (unsigned int i = 0; i < st->count && !rc; ++i)
+ 		rc = sublet_store_user_ref(slots[2], top, sp + 16 * st->ptr[i].cell,
+ 					   sp + st->ptr[i].target, st->ptr[i].length);
+--- a/arch/riscv/kernel/sublet/threads.c
++++ b/arch/riscv/kernel/sublet/threads.c
+@@ -8,6 +8,7 @@
+ #include <asm/sublet-trap.h>
+ #include <asm/sublet-uaccess.h>
+ #include <asm/sublet-thread.h>
++#include <asm/sublet-test.h>
+ 
+ /* op -1 reads one word, 0 to 4 are FUTEX_OP_*, 5 stores without reading. */
+ int __sublet_word(unsigned long *, unsigned long, int, u32, u32 *);
+@@ -85,13 +86,11 @@ void sublet_exit_tid(struct task_struct *task)
+ 	u32 ignored;
+ 	unsigned long address = (unsigned long)task->clear_child_tid;
+ 
+-	if (address) {
+-		/* mm_release still has the mm, its table and the task flag. Drop a
+-		 * failing store as Linux does, and wake by address without a read. */
+-		__sublet_word(task->thread.sublet_clear_tid, address, 5, 0, &ignored);
++	/* mm_release still has the mm, its table and the task flag. A store that fails
++	 * shows the reference stale or out of bounds, so no waiter is woken by address. */
++	if (address && !__sublet_word(task->thread.sublet_clear_tid, address, 5, 0, &ignored))
+ 		do_futex((u32 __user *)address, FUTEX_WAKE | FUTEX_PRIVATE_FLAG,
+ 			 1, NULL, NULL, 0, 0);
+-	}
+ 	task->clear_child_tid = NULL;
+ 	memset(task->thread.sublet_clear_tid, 0, 16);
+ }
+@@ -105,6 +104,27 @@ int sublet_futex_read(u32 *value, u32 __user *word)
+ 	return __sublet_word(slot, sublet_handle_address(handle), -1, 0, value);
+ }
+ 
++/* A futex call of a protected program names its words through references, like any
++ * other access. A wake and a requeue read no word before they key it, so the check reads
++ * each word the call names: the first, and the second for the calls that take one. A word
++ * that the program reaches through no live reference gets EFAULT. */
++int sublet_futex_check(u32 __user *word, int op, u32 __user *word2)
++{
++	int cmd = op & FUTEX_CMD_MASK;
++	u32 value;
++	int error;
++
++#ifdef SUBLET_MUTANT_FUTEX_UNCHECKED
++	return 0;
++#endif
++	error = sublet_futex_read(&value, word);
++	if (error)
++		return error;
++	if (cmd == FUTEX_REQUEUE || cmd == FUTEX_CMP_REQUEUE || cmd == FUTEX_WAKE_OP)
++		return sublet_futex_read(&value, word2);
++	return 0;
++}
++
+ int sublet_futex_op(int op, int arg, int *old, u32 __user *word)
+ {
+ 	unsigned long handle = (unsigned long)word, *slot = sublet_handle_slot(handle);
+--- a/arch/riscv/kernel/sublet/uaccess-asm.S
++++ b/arch/riscv/kernel/sublet/uaccess-asm.S
+@@ -20,10 +20,12 @@
+ #include <asm/asm.h>
+ #include <asm/csr.h>
+ #include <asm/asm-extable.h>
++#include <asm/sublet-test.h>
+ 
+ #define LDC(rd, base)		.insn i 0x5b, 3, rd, base, 0
+ #define LCC(rd, src, sel)	.insn r 0x5b, 1, 4, rd, src, sel
+ #define INC(rd, src, off)	.insn r 0x5b, 1, 0x0c, rd, src, off
++#define SHRINK(rd, base, end)	.insn r 0x5b, 1, 0x01, rd, base, end
+ 
+ /*
+  * Turn on SUM (the page-fault handler expects it for a user address) and load the reference
+@@ -275,3 +277,34 @@ ENTRY(__sublet_load_ref)
+ 	sublet_leave t5
+ 	_asm_extable	1b, .Lref_fault
+ ENDPROC(__sublet_load_ref)
++
++/*
++ * long __sublet_store_ref(const unsigned long *kslot, unsigned long offset, unsigned long base,
++ *                         unsigned long end, unsigned long cell)
++ * Load the reference in the kernel slot kslot into t6, move its address by offset, narrow it
++ * to [base, end) with CSSHRINK and store it with STC into the 16-byte user cell at cell, a plain
++ * address. 0, or -EFAULT when the slot holds no reference or an instruction faults. The .dom
++ * loader writes the startup pointers with it, before srevroot names the program's table.
++ */
++ENTRY(__sublet_store_ref)
++	li	t0, SR_SUM
++	csrs	CSR_STATUS, t0
++	LDC(t6, a0)
++	LCC(t0, t6, x1)
++	li	t1, 1
++	bne	t0, t1, .Lstore_fault
++1:	INC(t6, t6, a1)
++#ifndef SUBLET_MUTANT_NO_SHRINK
++2:	SHRINK(t6, a2, a3)
++#endif
++3:	.insn s 0x5b, 4, t6, 0(a4)
++	sublet_leave zero
++.Lstore_fault:
++	li	t5, -14
++	sublet_leave t5
++	_asm_extable	1b, .Lstore_fault
++#ifndef SUBLET_MUTANT_NO_SHRINK
++	_asm_extable	2b, .Lstore_fault
++#endif
++	_asm_extable	3b, .Lstore_fault
++ENDPROC(__sublet_store_ref)
+--- a/arch/riscv/mm/sublet-table.c
++++ b/arch/riscv/mm/sublet-table.c
+@@ -627,13 +627,39 @@ void sublet_context_destroy(struct sublet_context *c)
+     mmdrop(c->mm);
+     kvfree(c);
+ }
++#if defined(CONFIG_RISCV_CAPSTONE_TRAP) && !defined(SUBLET_MUTANT_STORE_IRQOFF)
++long __sublet_store_ref(const unsigned long *kslot, unsigned long offset, unsigned long base,
++                        unsigned long end, unsigned long cell);
++#else
++static int store_user_ref_irqoff(const unsigned long *kslot, unsigned long offset,
++                                 unsigned long cell, unsigned long cursor, unsigned long end);
++#endif
++
+ int sublet_store_user_ref(const unsigned long *kslot, unsigned long from_cursor,
+                           unsigned long cell, unsigned long cursor, unsigned long length)
+ {
+-    unsigned long flags, offset = cursor - from_cursor, end = cursor + length;
++    unsigned long offset = cursor - from_cursor, end = cursor + length;
+ 
+     if (cell & 15 || !access_ok((void __user *)cell, 16) || !capstone_repr_ok(cursor, length))
+         return -EFAULT;
++#if defined(CONFIG_RISCV_CAPSTONE_TRAP) && !defined(SUBLET_MUTANT_STORE_IRQOFF)
++    /* The routine keeps the reference in t6, whose tag a trap from S keeps, so a page fault at
++     * the store is served like any fault in a routine for user memory, and one that nothing
++     * serves becomes EFAULT through the exception table. */
++    return __sublet_store_ref(kslot, offset, cursor, end, cell);
++#else
++    return store_user_ref_irqoff(kslot, offset, cell, cursor, end);
++#endif
++}
++
++#if !defined(CONFIG_RISCV_CAPSTONE_TRAP) || defined(SUBLET_MUTANT_STORE_IRQOFF)
++/* Without the trap route no program runs with these pointers. The control kernel keeps the
++ * store of patch 0019 here: t0 holds the reference and a page fault at the STC loses it. */
++static int store_user_ref_irqoff(const unsigned long *kslot, unsigned long offset,
++                                 unsigned long cell, unsigned long cursor, unsigned long end)
++{
++    unsigned long flags;
++
+     local_irq_save(flags);
+     csr_set(CSR_STATUS, SR_SUM);
+ #ifdef SUBLET_MUTANT_NO_SHRINK
+@@ -660,6 +686,7 @@ int sublet_store_user_ref(const unsigned long *kslot, unsigned long from_cursor,
+     local_irq_restore(flags);
+     return 0;
+ }
++#endif
+ 
+ int sublet_grow(struct sublet_context *c)
+ {
+--- a/kernel/futex/syscalls.c
++++ b/kernel/futex/syscalls.c
+@@ -177,6 +177,13 @@ SYSCALL_DEFINE6(futex, u32 __user *, uaddr, int, op, u32, val,
+ 	ktime_t t, *tp = NULL;
+ 	struct timespec64 ts;
+ 
++#ifdef CONFIG_RISCV_CAPSTONE_TRAP
++	if (sublet_uaccess_protected()) {
++		ret = sublet_futex_check(uaddr, op, uaddr2);
++		if (ret)
++			return ret;
++	}
++#endif
+ 	if (utime && futex_cmd_has_timeout(cmd)) {
+ 		if (unlikely(should_fail_futex(!(op & FUTEX_PRIVATE_FLAG))))
+ 			return -EFAULT;

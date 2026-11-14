@@ -1,0 +1,161 @@
+--- a/arch/riscv/include/asm/sublet-test.h
++++ b/arch/riscv/include/asm/sublet-test.h
+@@ -16,7 +16,9 @@
+  *   SUBLET_MUTANT_STORE_IRQOFF     the loader stores startup pointers with t0 and interrupts
+  *                                  off, outside the routines for user memory
+  *   SUBLET_MUTANT_FUTEX_UNCHECKED  futex keys a word without an access through its reference
+- *   SUBLET_MUTANT_OPEN_PRLIMIT     prlimit64 reaches any process */
++ *   SUBLET_MUTANT_OPEN_PRLIMIT     prlimit64 reaches any process
++ *   SUBLET_MUTANT_FPU_OFF          the .dom loader enters with the FPU off
++ *   SUBLET_MUTANT_PAGE_PLACEMENT   mmap places a block at any page, representable or not */
+ #ifndef _ASM_RISCV_SUBLET_TEST_H
+ #define _ASM_RISCV_SUBLET_TEST_H
+ 
+--- a/arch/riscv/kernel/sublet/bind-core.c
++++ b/arch/riscv/kernel/sublet/bind-core.c
+@@ -177,7 +177,8 @@ static const struct sublet_allowed allowed[] = {
+ 	/* The process. */
+ 	CALL(getpid), CALL(getppid), CALL(getuid), CALL(geteuid), CALL(getgid), CALL(getegid),
+ 	CALL(gettid), CALL(getpgid), CALL(getsid), CALL(getresuid), CALL(getresgid),
+-	CALL(getgroups), CALL(getrusage), CALL(getpriority), CALL(uname), CALL(sysinfo),
++	CALL(getgroups), CALL(setgroups), CALL(setuid), CALL(setgid), CALL(setreuid),
++	CALL(setregid), CALL(setresuid), CALL(setresgid), CALL(setsid), CALL(getrusage), CALL(getpriority), CALL(uname), CALL(sysinfo),
+ 	CALL_COMMAND(prlimit64, prlimit_command), CALL(getrandom), CALL(sched_yield), CALL(sched_getaffinity),
+ 	CALL(sched_get_priority_max), CALL(sched_get_priority_min), CALL(sched_rr_get_interval),
+ 	CALL(rt_sigprocmask), CALL(rt_sigaction), CALL(sigaltstack), CALL(kill), CALL(tkill),
+--- a/arch/riscv/kernel/sublet/binfmt.h
++++ b/arch/riscv/kernel/sublet/binfmt.h
+@@ -14,6 +14,7 @@
+ #include <linux/pid_namespace.h>
+ #include <linux/ptrace.h>
+ #include <linux/security.h>
++#include <asm/sublet-test.h>
+ #include <asm/processor.h>
+ #include <asm/cacheflush.h>
+ #include "capstone/delegate.h"
+@@ -253,6 +254,8 @@ static int dom_stack_build(struct linux_binprm *bprm, struct dom_stack *st)
+ 	dom_stack_aux(st, &cell, AT_NULL, 0);
+ 	/* A multiple of the largest string granule, so sp keeps every string's alignment. */
+ 	st->bytes = ALIGN(used, align);
++	if (st->bytes > DOM_ARGS_BYTES)
++		return -E2BIG;
+ 	return 0;
+ }
+ 
+@@ -280,8 +283,15 @@ static int dom_enter(struct sublet_context *c, struct linux_binprm *bprm, unsign
+ 	set_binfmt(&capstone_dom);
+ 	finalize_exec(bprm);
+ 	memset(regs, 0, sizeof(*regs));
++#ifdef SUBLET_MUTANT_FPU_OFF
+ 	regs->status = SR_PIE | SR_UXL_64;
+ 	regs->epc = entry;
++#else
++	/* As for an ordinary task: SR_PIE, UXL 64 and, with an FPU, FS Initial with the cleared
++	 * floating-point state of flush_thread. Linux then saves and restores that state at every
++	 * switch once the program dirties it. */
++	start_thread(regs, entry, 0);
++#endif
+ 	for (unsigned int n = 1; n < 32; ++n)
+ 		sublet_set_user_int(regs, n, 0);
+ 	sublet_set_user_ref_cursor(regs, 2, slots[2], sp - top);
+@@ -324,7 +334,7 @@ static int dom_load_binary(struct linux_binprm *bprm)
+ 
+ 	if (memcmp(h->e_ident, ELFMAG, SELFMAG) || h->e_machine != 259)
+ 		return -ENOEXEC;
+-	if (!uid_eq(current_euid(), GLOBAL_ROOT_UID) || bprm->secureexec ||
++	if (bprm->secureexec ||
+ 	    (bprm->unsafe & LSM_UNSAFE_SHARE) ||
+ 	    (file_inode(bprm->file)->i_mode & (S_ISUID | S_ISGID)))
+ 		return -EACCES;
+--- a/arch/riscv/kernel/sublet_trap.c
++++ b/arch/riscv/kernel/sublet_trap.c
+@@ -254,6 +254,16 @@ asmlinkage __visible void do_trap_sublet(struct pt_regs *regs)
+ #ifdef CONFIG_RISCV_CAPSTONE_TRAP_TEST
+ 	WRITE_ONCE(sublet_test_last_cause, cause);
+ #endif
++	if (sublet_uaccess_protected() && sublet_in_uaccess(regs->epc)) {
++		struct pt_regs *user = task_pt_regs(current);
++
++		/* One line per access that the processor refused for the program's reference,
++		 * read by the evaluation harness like the fault line of U. nr and pc name the
++		 * system call and its ecall, whose epc the entry already moved past it. */
++		pr_info("sublet: kernel fault cause=%lu address=0x%lx nr=%ld pid=%d comm=%s pc=0x%lx\n",
++			cause, regs->badaddr, (long)user->a7, task_pid_nr(current), current->comm,
++			user->epc - 4);
++	}
+ 	if (fixup_exception(regs))
+ 		return;
+ 	die(regs, "Oops - Sublet fault in the kernel");
+--- a/arch/riscv/mm/sublet-blocks.c
++++ b/arch/riscv/mm/sublet-blocks.c
+@@ -10,6 +10,8 @@
+ #include <linux/userfaultfd_k.h>
+ #include "sublet-format.h"
+ #include "sublet-blocks-internal.h"
++#include "representable.h"
++#include <asm/sublet-test.h>
+ 
+ struct sublet_move {
+ 	struct sublet_context *c;
+@@ -180,12 +182,25 @@ int sublet_mapping_check(struct mm_struct *mm, unsigned long handle,
+ 	return 0;
+ }
+ 
++/* The alignment of a block's base: the granule of its length (capstone/representable.h),
++ * so that a block of a representable length gets exact bounds wherever it starts. */
++static unsigned long mapping_alignment(struct sublet_context *c, unsigned long bytes)
++{
++#ifdef SUBLET_MUTANT_PAGE_PLACEMENT
++	return PAGE_SIZE;
++#endif
++	if (c->exact_bounds)
++		return PAGE_SIZE;
++	return max(capstone_repr_granule(bytes), PAGE_SIZE);
++}
++
+ /* Linux's holes are not all free: an unmapped page of a live block still
+- * belongs to that block. Search above any collision, including a VMA. */
++ * belongs to that block. Search above any collision, including a VMA. Linux
++ * picks a hole with room for the alignment, and every candidate is aligned. */
+ static unsigned long mapping_area(struct sublet_context *c, unsigned long hint,
+ 		unsigned long bytes, bool fixed)
+ {
+-	unsigned long at = hint, next;
++	unsigned long at = hint, next, align = mapping_alignment(c, bytes);
+ 	struct arena *a;
+ 
+ 	if (fixed) {
+@@ -197,9 +212,12 @@ static unsigned long mapping_area(struct sublet_context *c, unsigned long hint,
+ 			return -EEXIST;
+ 		return at;
+ 	}
+-	at = get_unmapped_area(NULL, at, bytes, 0, 0);
++	if (bytes > CV_USER_ADDRESS_END - align)
++		return -ENOMEM;
++	at = get_unmapped_area(NULL, at, bytes + align - PAGE_SIZE, 0, 0);
+ 	if (IS_ERR_VALUE(at))
+ 		return at;
++	at = ALIGN(at, align);
+ 	for (;;) {
+ 		struct vm_area_struct *v;
+ 		if (at > CV_USER_ADDRESS_END - PAGE_SIZE - bytes)
+@@ -211,7 +229,7 @@ static unsigned long mapping_area(struct sublet_context *c, unsigned long hint,
+ 		next = a ? a->address + a->bytes : at;
+ 		if (v && v->vm_end > next)
+ 			next = v->vm_end;
+-		at = PAGE_ALIGN(next);
++		at = ALIGN(next, align);
+ 	}
+ }
+ 
+--- a/arch/riscv/mm/sublet-table.c
++++ b/arch/riscv/mm/sublet-table.c
+@@ -506,7 +506,7 @@ int sublet_block_new(struct sublet_context *c, const struct sublet_grant *g, str
+     struct arena *a;
+     int error;
+ 
+-    if (!g->bytes || g->bytes > CV_MAX_EAGER_BYTES || ((g->address | g->bytes) & ~PAGE_MASK) ||
++    if (!g->bytes || g->bytes > CV_MAX_BYTES || ((g->address | g->bytes) & ~PAGE_MASK) ||
+         (!c->exact_bounds && !capstone_repr_ok(g->address, g->bytes)) ||
+         g->address > CV_BLOCK_END || g->bytes > CV_BLOCK_END - g->address ||
+         !access_ok((void __user *)g->address, g->bytes) || g->reg > 31 ||

@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 
 EDITS = [
-    # The aReq table goes: block bounds need no record of the request.
+    # Remove request-size bookkeeping.
     ("""  /*
   ** Sublet: the request each checked-out block was issued for, rounded to
   ** 8 bytes, by the block's first atom.  It bounds the caller's capability
@@ -16,27 +16,31 @@ EDITS = [
   */
   u32 *aReq;
 
-""", ""),
-    # memsys5Size: stock, the block.
-    ("  iSize = (int)mem5.aReq[i];\n",
-     "  iSize = mem5.szAtom * (1 << (mem5.aCtrl[i]&CTRL_LOGSIZE));\n"),
-    # memsys5MallocUnsafe: the child is the whole block.
+""",
+     ''),
+    # Report the whole block.
+    ("""  iSize = (int)mem5.aReq[i];
+""",
+     """  iSize = mem5.szAtom * (1 << (mem5.aCtrl[i]&CTRL_LOGSIZE));
+"""),
+    # Issue the whole block before changing the free lists.
     ("""  /* Return the block as a child of the pool, bounded to the request: the
   ** request rounded to 8, then up to its bounds granule (Q-15), which stays
   ** inside the block because a block is a power-of-two number of atoms. */
   mem5.aReq[i] = (u32)capstone_repr_round(ROUND8(nByte));
   assert( mem5.aReq[i]<=(u32)iFullSz );
   capstoneQ15Note(mem5.aReq[i] - ROUND8(nByte));
-  return capstone_cap_derive(mem5.zPool, (unsigned long)i*mem5.szAtom, mem5.aReq[i]);
-""", """  /* Return the block as a child of the pool, bounded to the whole block,
+  pNew = capstone_cap_derive(mem5.zPool, (unsigned long)i*mem5.szAtom, mem5.aReq[i]);
+""",
+     """  /* Return the block as a child of the pool, bounded to the whole block,
   ** as stock memsys5 hands it out and reports it.  A block is a power-of-two
   ** number of atoms at an index that is a multiple of its size, and the pool
   ** base carries the heap's granule alignment, so the child is representable
   ** without a pad (Q-15 counts it with pad 0). */
   capstoneQ15Note(0);
-  return capstone_cap_derive(mem5.zPool, (unsigned long)i*mem5.szAtom, iFullSz);
+  pNew = capstone_cap_derive(mem5.zPool, (unsigned long)i*mem5.szAtom, iFullSz);
 """),
-    # memsys5Realloc: stock assertion, and the in-place branch renews the lifetime.
+    # Restore the stock power-of-two assertion.
     ("""  assert( pPrior!=0 );
   assert( (nBytes&7)==0 );
   assert( nBytes>=0 );
@@ -45,9 +49,10 @@ EDITS = [
   }
   nOld = memsys5Size(pPrior);
   if( nBytes<=nOld ){
-    return pPrior;
+    return memsys5Renew(pPrior);
   }
-""", """  assert( pPrior!=0 );
+""",
+     """  assert( pPrior!=0 );
   assert( (nBytes&(nBytes-1))==0 );  /* EV: R-46199-30249 */
   assert( nBytes>=0 );
   if( nBytes==0 ){
@@ -58,35 +63,7 @@ EDITS = [
     return memsys5Renew(pPrior);
   }
 """),
-    # memsys5Renew, before memsys5Realloc's comment block.
-    ("""/*
-** Change the size of an existing memory allocation.
-**
-** The outer layer memory allocator prevents this routine from
-""", """/*
-** Sublet: a realloc that keeps its block still ends the old allocation, as
-** realloc's contract says, so the block's lifetime is renewed (CRENEW):
-** every copy of the old pointer faults, and the returned pointer reaches
-** the same bytes at the same address.  The new lifetime takes the old
-** one's place under the pool, with the cursor and bounds of pPrior.  Those
-** are the block's: memsys5 hands out every block at its first byte and
-** bounded to the whole block.  With SUBLET_REALLOC_KEEPS_LIFETIME (the
-** ablation) the old child is returned.
-*/
-static void *memsys5Renew(void *pPrior){
-#ifdef SUBLET_REALLOC_KEEPS_LIFETIME
-  return pPrior;
-#else
-  return capstone_cap_renew(pPrior);
-#endif
-}
-
-/*
-** Change the size of an existing memory allocation.
-**
-** The outer layer memory allocator prevents this routine from
-"""),
-    # memsys5Roundup: stock.
+    # Restore stock rounding.
     ("""**
 ** Sublet: the caller's capability is bounded to its request, so the size
 ** reported back is the request rounded to 8 bytes, as sqlite3MemRoundup
@@ -96,7 +73,8 @@ static int memsys5Roundup(int n){
   if( n > 0x40000000 ) return 0;
   return ROUND8(n);
 }
-""", """*/
+""",
+     """*/
 static int memsys5Roundup(int n){
   int iFullSz;
   if( n > 0x40000000 ) return 0;
@@ -104,59 +82,15 @@ static int memsys5Roundup(int n){
   return iFullSz;
 }
 """),
-    # memsys5Init: stock geometry.
+    # Restore stock heap geometry.
     ("""  mem5.nBlock = ((nByte-8) / (mem5.szAtom+sizeof(u8)+sizeof(u32)));
-""", """  mem5.nBlock = (nByte / (mem5.szAtom+sizeof(u8)));
+""",
+     """  mem5.nBlock = (nByte / (mem5.szAtom+sizeof(u8)));
 """),
+    # Remove the request-size table.
     ("""  mem5.aReq = (u32 *)&mem5.aCtrl[(mem5.nBlock+3)&~3];
-""", ""),
-    # The lookaside's realloc in place renews the slot's lifetime the same way.
-    ("""static LookasideSlot *lookasideRelease(sqlite3 *db, void *p){
-  capstone_cap_release(p);
-  return (LookasideSlot*)&((u8*)db->lookaside.pStart)[(u8*)p-(u8*)db->lookaside.pStart];
-}
-""", """static LookasideSlot *lookasideRelease(sqlite3 *db, void *p){
-  capstone_cap_release(p);
-  return (LookasideSlot*)&((u8*)db->lookaside.pStart)[(u8*)p-(u8*)db->lookaside.pStart];
-}
-/* A realloc that keeps its slot renews the slot's lifetime (memsys5Renew
-** says why): p has the slot's cursor and bounds, as lookasideIssue gave
-** them.  The ablation returns the old child. */
-static void *lookasideRenew(void *p){
-#ifdef SUBLET_REALLOC_KEEPS_LIFETIME
-  return p;
-#else
-  return capstone_cap_renew(p);
-#endif
-}
-"""),
-    ("  if( isLookaside(db,p) && n<=db->lookaside.sz ) return p;\n",
-     "  if( isLookaside(db,p) && n<=db->lookaside.sz ) return lookasideRenew(p);\n"),
-    # SQLITE_DEBUG trashes a freed slot through the lookaside's own authority, not the revoked child.
-    ("      memset(p, 0xaa, db->lookaside.sz);\n",
-     "      memset(pBuf, 0xaa, db->lookaside.sz);\n"),
-    # sqlite3Realloc: no shortcut for an unchanged size; xRealloc renews the lifetime.
-    ("""  nNew = sqlite3GlobalConfig.m.xRoundup((int)nBytes);
-  if( nOld==nNew ){
-    pNew = pOld;
-  }else if( sqlite3GlobalConfig.bMemstat ){
-""", """  nNew = sqlite3GlobalConfig.m.xRoundup((int)nBytes);
-  /* Sublet: no shortcut when the rounded size is unchanged.  The realloc
-  ** still ends the old allocation, so it goes to xRealloc, which renews the
-  ** block's lifetime (memsys5Renew).  The ablation keeps the shortcut. */
-#ifdef SUBLET_REALLOC_KEEPS_LIFETIME
-  if( nOld==nNew ){
-    pNew = pOld;
-  }else
-#endif
-  if( sqlite3GlobalConfig.bMemstat ){
-"""),
-    # The lookaside buffer's memsys5 block is now a power of two at least sz*cnt.
-    ("""    /* Q-15: sz*cnt rounded up to its granule (tail pad only), inside pStart,
-    ** whose memsys5 block was rounded the same way. */
-""", """    /* Q-15: sz*cnt rounded up to its granule (tail pad only), inside pStart,
-    ** whose memsys5 block is a power of two at least that large. */
-"""),
+""",
+     ''),
 ]
 
 

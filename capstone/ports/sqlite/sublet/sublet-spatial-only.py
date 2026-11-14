@@ -22,12 +22,10 @@ lifetime node, and a reissued block is derived while its previous child is still
 import sys
 
 EDITS = [
-    ("  /* End the caller's block (CREVOKE); faults on a pointer that is not live. */\n"
+    ("  /* All address calculations precede the lifetime end. */\n"
      "  capstone_cap_release(pOld);\n",
      "  /* spatial-only arm: the caller's block is NOT revoked; its child stays live. */\n"),
-    ("static LookasideSlot *lookasideRelease(sqlite3 *db, void *p){\n"
-     "  capstone_cap_release(p);\n",
-     "static LookasideSlot *lookasideRelease(sqlite3 *db, void *p){\n"
+    ("  capstone_cap_release(p);\n",
      "  /* spatial-only arm: the slot is NOT revoked. */\n"),
 ]
 
@@ -55,8 +53,8 @@ BLOCK_PORT_EDITS = [
      "  return p;\n"
      "#else\n"
      "  return lookasideIssue(db, lookasideRelease(db, p));\n"),
-    ("  if( isLookaside(db,p) && n<=db->lookaside.sz ) return lookasideRenew(p);\n",
-     "  if( isLookaside(db,p) && n<=db->lookaside.sz ) return lookasideRenew(db, p);\n"),
+    ("    void *pNew = lookasideRenew(p);\n",
+     "    void *pNew = lookasideRenew(db, p);\n"),
 ]
 
 

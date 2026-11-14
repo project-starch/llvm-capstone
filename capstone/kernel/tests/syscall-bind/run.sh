@@ -74,6 +74,8 @@ control() {   # control <name> <expected failing check> <table> [cflags...]
 }
 # The binder that keeps the program's upper bits lets the forged integer select a3's reference.
 control keep-upper "forged: the integer does not select" "$work/syscall-pointers.c" -DSUBLET_MUTANT_KEEP_UPPER
+# A binder that passes prlimit64 unchanged lets the program reach another process's limits.
+control open-prlimit "prlimit: another process's limit is refused" "$work/syscall-pointers.c" -DSUBLET_MUTANT_OPEN_PRLIMIT
 # A generator that counts argument positions from 1 gives read's buffer the wrong bit.
 sed 's/mask = sum(1 << i for i, t/mask = sum(1 << (i + 1) for i, t/' "$kernel_dir/tools/gen-syscall-pointers.py" > "$work/gen-off-by-one.py"
 if cmp -s "$work/gen-off-by-one.py" "$kernel_dir/tools/gen-syscall-pointers.py"; then

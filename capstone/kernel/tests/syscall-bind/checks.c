@@ -97,6 +97,26 @@ int main(void)
 	memset(&a, 0, sizeof(a));
 	a.arg[0] = PR_SET_MM;
 	check(sublet_bind_core(__NR_prctl, &a) == -EINVAL, "bind: prctl PR_SET_MM is refused");
+	/* prlimit64: its own limits, read only. */
+	memset(&a, 0, sizeof(a));
+	a.arg[1] = 7; a.arg[3] = ADDR; a.tagged = 0x8;
+	check(sublet_bind_core(__NR_prlimit64, &a) == 0 && NUMBER(a.arg[3]) == 4,
+	      "prlimit: reading its own limit binds old_rlim");
+	memset(&a, 0, sizeof(a));
+	a.arg[0] = 1; a.arg[1] = 7; a.arg[3] = ADDR; a.tagged = 0x8;
+	check(sublet_bind_core(__NR_prlimit64, &a) == -EPERM, "prlimit: another process's limit is refused");
+	memset(&a, 0, sizeof(a));
+	a.arg[1] = 7; a.arg[2] = ADDR; a.tagged = 0x4;
+	check(sublet_bind_core(__NR_prlimit64, &a) == 0 && NUMBER(a.arg[2]) == 3,
+	      "prlimit: setting its own limit binds new_rlim");
+	/* The credential calls of a server's startup. */
+	memset(&a, 0, sizeof(a));
+	a.arg[0] = 1; a.arg[1] = ADDR; a.tagged = 0x2;
+	check(sublet_bind_core(__NR_setgroups, &a) == 0 && NUMBER(a.arg[1]) == 2,
+	      "credentials: setgroups binds its gid array");
+	memset(&a, 0, sizeof(a));
+	check(sublet_bind_core(__NR_setresuid, &a) == 0 && sublet_bind_core(__NR_setsid, &a) == 0,
+	      "credentials: setresuid and setsid pass");
 	/* Calls outside the allow-list. */
 	memset(&a, 0, sizeof(a));
 	check(sublet_bind_core(__NR_ptrace, &a) == -ENOSYS, "bind: ptrace gets ENOSYS");

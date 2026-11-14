@@ -37,6 +37,11 @@ retires itself.
 # A pointer found in no block faults on a load through it, as a stale one
 # does once its block went back to the system allocator.
 #
+# When the lifetime table has no slot left and cannot grow, CDERIVE and
+# CRENEW return an untagged 0 and change nothing.  wmem never answers NULL:
+# GLib's g_malloc aborts when memory runs out, and every derive and renew
+# here ends the program the same way, through g_error (wmem_sublet_check).
+#
 # block keeps its free-list links inside free chunks, and they carry the
 # whole block's bounds. A chunk handed out is cleared of them over the
 # caller's range, and so is the range a realloc grows into. block_fast keeps
@@ -57,6 +62,7 @@ retires itself.
 # The pad is counted; the corpus driver prints it (Q15_PAD).
 # WMEM_SUBLET_Q15_PLANT_UNPADDED_JUMBO restores the unrounded jumbo block, for
 # the planted negative control only.
+
 --- a/wsutil/wmem/wmem_allocator.h
 +++ b/wsutil/wmem/wmem_allocator.h
 @@ -16,6 +16,9 @@
@@ -69,7 +75,7 @@ retires itself.
  #ifdef __cplusplus
  extern "C" {
  #endif /* __cplusplus */
-@@ -44,6 +47,190 @@
+@@ -44,6 +47,204 @@
      bool                         in_scope;
  };
  
@@ -87,17 +93,31 @@ retires itself.
 +    void *generation;
 +} wmem_sublet_block_t;
 +
++/*
++ * When the lifetime table has no slot left and cannot grow, CDERIVE and
++ * CRENEW return an untagged 0 and change nothing.  wmem never answers NULL:
++ * its system allocator, GLib's g_malloc, aborts when memory runs out.  An
++ * exhausted table ends the program the same way, through g_error.
++ */
++static inline void *
++wmem_sublet_check(void *ref)
++{
++    if (ref == NULL)
++        g_error("wmem: the lifetime table is exhausted");
++    return ref;
++}
++
 +/* The block is the malloc'd object block, size bytes. */
 +static inline void
 +wmem_sublet_block_init(wmem_sublet_block_t *s, void *block, size_t size)
 +{
-+    s->generation = capstone_cap_derive(block, 0, size);
++    s->generation = wmem_sublet_check(capstone_cap_derive(block, 0, size));
 +}
 +
 +static inline void
 +wmem_sublet_block_renew(wmem_sublet_block_t *s)
 +{
-+    s->generation = capstone_cap_renew(s->generation);
++    s->generation = wmem_sublet_check(capstone_cap_renew(s->generation));
 +}
 +
 +/* Whether ptr's address lies in the block. */
@@ -203,9 +223,9 @@ retires itself.
 +    }
 +    if (at_out)
 +        *at_out = at;
-+    return capstone_cap_derive(s->generation,
++    return wmem_sublet_check(capstone_cap_derive(s->generation,
 +            __builtin_capstone_cap_get_cursor(at) -
-+            __builtin_capstone_cap_get_base(s->generation), n);
++            __builtin_capstone_cap_get_base(s->generation), n));
 +}
 +
 +static inline void *
@@ -299,11 +319,11 @@ retires itself.
  
 -    block = (wmem_block_hdr_t *) wmem_realloc(NULL, block, size
 +    block = (wmem_block_hdr_t *) wmem_realloc(NULL, block, wmem_sublet_block_size(size
-+            + WMEM_BLOCK_HEADER_SIZE
-+            + WMEM_CHUNK_HEADER_SIZE));
-+    wmem_sublet_block_init(&block->sublet, block, wmem_sublet_block_size(size
              + WMEM_BLOCK_HEADER_SIZE
 -            + WMEM_CHUNK_HEADER_SIZE);
++            + WMEM_CHUNK_HEADER_SIZE));
++    wmem_sublet_block_init(&block->sublet, block, wmem_sublet_block_size(size
++            + WMEM_BLOCK_HEADER_SIZE
 +            + WMEM_CHUNK_HEADER_SIZE));
  
      if (block->next) {
@@ -316,10 +336,12 @@ retires itself.
              cur = cur->next;
          }
      }
-@@ -1089,6 +1098,107 @@
-     wmem_free(NULL, private_data);
- }
+@@ -1087,8 +1096,109 @@
  
+     /* then just free the allocator structs */
+     wmem_free(NULL, private_data);
++}
++
 +/* SUBLET: the consumer functions above work on the allocator's own pointers;
 + * these hand out and take back the callers'. */
 +
@@ -364,8 +386,8 @@ retires itself.
 +    wmem_block_hdr_t *block = wmem_block_sublet_find(allocator, ptr);
 +
 +    return wmem_sublet_release(block, ptr);
-+}
-+
+ }
+ 
 +/* For realloc: the object's bytes go back to the chunk's data, and its
 + * length is returned. */
 +static void *

@@ -1,8 +1,8 @@
 # Trap threads and futex
 
-Apply `series.s8-threads` after the step 3 trap patches and the step 5
-user-memory and binder patches. The fragment contains 0050 and 0051.
-It does not change the main series while those dependencies are in flight.
+The main series at `2443072aa6b` includes patches 0050 and 0051 after their
+trap and binder dependencies. `series.s8-threads` also lists these two patches.
+Do not apply the fragment again to an integrated tree.
 
 0050 admits protected same-mm threads with CLONE_VM, CLONE_SIGHAND,
 CLONE_THREAD and CLONE_SETTLS. Each child receives its own tagged register
@@ -42,15 +42,60 @@ the generic timeout-pointer mask. That control must fail.
 The libc smoke creates two workers. Each updates its own object and TLS
 counter across 1,000 yields. A mutex protects a shared counter. Both joins
 must return their original object pointers, and the program must exit zero.
-The build checks its link and the tag-preserving clone assembly. Linking
-alone does not establish that it runs.
+The build checks its link and the tag-preserving clone assembly.
+`threads-disabled.dom` restores the erroneous startup flag before creating
+threads and must exit one. `futex-stale.dom` derives a four-byte object,
+renews it and accesses the same address through the stale and fresh references.
+A mismatching WAIT returns EAGAIN for each live reference and EFAULT for the
+stale one. A stale WAKE_OP returns EFAULT without changing the replacement
+word. A fresh WAKE_OP writes zero successfully.
 
 The modified kernel objects and the full Linux Image build on p13 with the
 existing RISC-V Buildroot GCC toolchain. The Capstone LLVM installation used
 for libc is `~/lanes/gatefix/llvm/bin`. Its source freshness cannot be checked
-because that installation has no build.ninja. These are build results only.
+because that installation has no build.ninja.
 
-## Integration contract
+## Integrated execution, 14 November 2026
+
+All 1,349 libc files rebuilt on p13. The supplied kernel
+`~/asr-work/eval/kernel/Image-2443072aa6b`, QEMU
+`~/asr-work/q1b/bin/qemu-1b` and firmware
+`~/asr-work/del-fw/out/f-keep/fw_jump.elf` passed these guest checks:
+
+| Program | Required and observed exit |
+| --- | --- |
+| `threads-smoke.dom` | 0 |
+| `threads-disabled.dom` | 1 |
+| `futex-stale.dom` | 0 |
+
+The startup called `__init_tp`, which enabled threads, then overwrote
+`libc.can_do_threads` with zero. Musl returned ENOSYS from `pthread_create`
+before clone. Keeping `__init_tp`'s result fixes the failure. No kernel patch
+change was needed for these tests.
+
+The runner uses the first-program initramfs packing recipe and boot helper.
+It enables `sublet.dom_binfmt=1`, runs one hart with SSTC off, and checks all
+three exit statuses. A shell watchdog bounds each program to 15 seconds.
+On p13, after building the images in `~/asr-work/s8t/smoke`:
+
+```sh
+source capstone/tests/capstone-test-env.sh
+export TRAPTEST_BASE_INITRAMFS=$HOME/asr-work/del-fw/linux/initramfs.cpio.gz
+export TRAPTEST_APPEND=sublet.trace_errors=1
+bash capstone/kernel/tests/threads/run-guest.sh \
+  "$HOME/asr-work/q1b/bin/qemu-1b" \
+  "$HOME/asr-work/del-fw/out/f-keep/fw_jump.elf" \
+  "$HOME/asr-work/eval/kernel/Image-2443072aa6b" \
+  "$HOME/asr-work/s8t/smoke" "$HOME/asr-work/s8t/guest-final"
+```
+
+The log is `~/asr-work/s8t/guest-final/threads.log`. It records EFAULT for both
+stale futex calls and EAGAIN for the live mismatching reads. The host binder
+test also passes, with its incorrect requeue-mask control rejected. Its runner
+generates `sublet-nr.h` from the selected kernel and enables the GNU fcntl
+constants used by the integrated binder.
+
+## Original build integration contract
 
 The build used base kernel patches 0001 to 0012, step 3 patches 0013 and 0014,
 and a snapshot of the step 5 sources from its p13 Linux tree. The step 3
@@ -78,8 +123,8 @@ The implementation does not yet record a waiter's lifetime in `futex_q`.
 Linux can count a stale waiter toward the requested wake count. Reference
 loads still prevent a stale waiter from reading a replacement object, but
 this does not satisfy the plan's live-waiter counting rule. Requeue races,
-revocation during blocked IO, fatal-signal exit, invalid stack references
-and stale wake-op need guest execution. Fatal Linux signals normally kill
+revocation during blocked IO, fatal-signal exit and invalid stack references
+still need guest execution. Fatal Linux signals normally kill
 the thread group, so a surviving-joiner test needs a kernel test hook.
 Caught signals, robust-list translation, PI futexes and pthread cancellation
 remain outside this slice. Raw runtime contexts have no join protocol.
@@ -91,9 +136,12 @@ must call `futex_get_value_locked` through the stale handle and require EFAULT.
 In a control build, strip the handle and perform the read by integer address.
 With supervisor hardening disabled for that control, it reads the new word
 and must fail the oracle. With hardening enabled, the raw read itself faults,
-so it cannot demonstrate the bypass. This experiment has not run.
+so it cannot demonstrate the bypass. This kernel mutation experiment has not
+run. The guest probe above establishes stale-read refusal with a same-address
+fresh-reference control.
 
 For the wake-op retry control, replace reference add-zero in
 `fault_in_user_writeable` with address-only fault-in. A stale wake-op must
 then hit a short timeout instead of returning EFAULT. Run this only in a
-separate control build. The production build must return EFAULT promptly.
+separate control build. The production guest probe now returns EFAULT promptly.
+The address-only fault-in mutation has not been run.

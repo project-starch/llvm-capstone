@@ -68,24 +68,39 @@ Minimal virtual mallocng: capability layout, mapping access and direct object li
  }
 --- a/src/malloc/mallocng/free.c
 +++ b/src/malloc/mallocng/free.c
-@@ -101,6 +101,8 @@
+@@ -98,16 +98,31 @@
+ 	return (struct mapinfo){ 0 };
+ }
+ 
++static void free_slot(void *, void *);
++
  void free(void *p)
  {
  	if (!p) return;
-+	void *issued = p;
-+	p = heap_access(p);
++	free_slot(heap_access(p), p);
++}
++
++/* A raw slot whose object child could not be derived: the lifetime table had
++ * no slot left and could not grow, and the CDERIVE gave its failure result.
++ * The slot goes back to mallocng without a lifetime to end (heap_alloc_issue). */
++hidden void __malloc_unissue(void *p)
++{
++	free_slot(p, 0);
++}
  
++static void free_slot(void *p, void *issued)
++{
  	struct meta *g = get_meta(p);
  	int idx = get_slot_index(p);
-@@ -108,6 +110,7 @@
+ 	size_t stride = get_stride(g);
  	unsigned char *start = g->mem->storage + stride*idx;
  	unsigned char *end = start + stride - IB;
  	get_nominal_size(p, end);
-+	heap_alloc_end(issued);
++	if (issued) heap_alloc_end(issued);
  	uint32_t self = 1u<<idx, all = (2u<<g->last_idx)-1;
  	((unsigned char *)p)[-3] = 255;
  	// invalidate offset to group header, and cycle offset of
-@@ -145,7 +148,7 @@
+@@ -145,7 +160,7 @@
  	unlock();
  	if (mi.len) {
  		int e = errno;
@@ -391,7 +406,8 @@ Minimal virtual mallocng: capability layout, mapping access and direct object li
  	if (n <= avail_size && n<MMAP_THRESHOLD
 +	    && !((uintptr_t)p & (heap_granule(n)-1))
  	    && size_to_class(n)+1 >= g->sizeclass) {
-+		void *fresh = heap_alloc_issue(p, n);
++		void *fresh = heap_alloc_reissue(p, n);
++		if (!fresh) return 0;
 +		heap_alloc_end(issued);
  		set_size(p, end, n);
 -		return p;
@@ -408,19 +424,22 @@ Minimal virtual mallocng: capability layout, mapping access and direct object li
 -		size_t needed = (n + base + UNIT + IB + 4095) & -4096;
 -		new = g->maplen*4096UL == needed ? g->mem :
 -			mremap(g->mem, g->maplen*4096UL, needed, MREMAP_MAYMOVE);
-+		size_t needed = (n + base + GRP_SIZE + IB + 4095) & -4096;
-+		int moved = g->maplen*4096UL != needed;
-+		new = !moved ? g->mem :
-+			__heap_remapping(g->mem, g->maplen*4096UL, needed);
- 		if (new!=MAP_FAILED) {
- 			g->mem = new;
- 			g->maplen = needed/4096;
- 			p = g->mem->storage + base;
+-		if (new!=MAP_FAILED) {
+-			g->mem = new;
+-			g->maplen = needed/4096;
+-			p = g->mem->storage + base;
 -			end = g->mem->storage + (needed - UNIT) - IB;
++		size_t needed = (n + base + GRP_SIZE + IB + 4095) & -4096;
++		/* Only a resize that keeps the mapping stays here. A
++		 * move takes malloc, memcpy and free below, which keep
++		 * the original until the new object exists, so a
++		 * realloc that fails returns NULL with it intact. */
++		if (g->maplen*4096UL == needed) {
++			void *fresh = heap_alloc_reissue(p, n);
++			if (!fresh) return 0;
++			heap_alloc_end(issued);
 +			end = g->mem->storage + (needed - GRP_SIZE) - IB;
  			*end = 0;
-+			void *fresh = heap_alloc_issue(p, n);
-+			if (!moved) heap_alloc_end(issued);
  			set_size(p, end, n);
 -			return p;
 +			return fresh;

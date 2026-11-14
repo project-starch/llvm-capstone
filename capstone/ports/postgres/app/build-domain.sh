@@ -126,7 +126,11 @@ MODE_FILE=$ROOT/domain/nested.mode
 # the paths made every build root look stale outside the tree that made it.
 PATCH_HASH=$({ for p in "$SCRIPT_DIR"/patches/*.patch; do
                  printf '%s ' "$(basename "$p")"; sha256sum < "$p"
-               done; } | sha256sum | cut -d' ' -f1)
+               done
+               if [[ $NESTED == sublet ]]; then
+                 sha256sum < "$MANAGER/patches/postgresql-17.0-0003-memory-contexts-sublet-lifetimes.patch"
+               fi
+             } | sha256sum | cut -d' ' -f1)
 if [[ -d postgresql-17.5 && $(cat "$ROOT/domain/patchset.sha256" 2>/dev/null) != "$PATCH_HASH" ]]; then
   echo "source patch set changed; use a fresh PG_SU_ROOT" >&2; exit 2
 fi

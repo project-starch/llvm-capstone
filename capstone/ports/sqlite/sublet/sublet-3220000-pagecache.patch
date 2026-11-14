@@ -47,7 +47,7 @@ number they belonged to.
 # btree's own cell bounds to answer, not this patch's.
 --- a/sqlite3-capstone.c
 +++ b/sqlite3-capstone.c
-@@ -46234,6 +46234,8 @@ struct PgHdr1 {
+@@ -46287,6 +46287,8 @@
    unsigned int iKey;             /* Key value (page number) */
    u8 isBulkLocal;                /* This page from bulk local storage */
    u8 isAnchor;                   /* This is the PGroup.lru element */
@@ -56,7 +56,7 @@ number they belonged to.
    PgHdr1 *pNext;                 /* Next in hash table chain */
    PCache1 *pCache;               /* Cache that currently owns this page */
    PgHdr1 *pLruNext;              /* Next in LRU list of unpinned pages */
-@@ -46431,7 +46433,8 @@ static int pcache1InitBulk(PCache1 *pCache){
+@@ -46484,7 +46486,8 @@
      int nBulk = sqlite3MallocSize(zBulk)/pCache->szAlloc;
      do{
        PgHdr1 *pX = (PgHdr1*)&zBulk[pCache->szPage];
@@ -66,7 +66,7 @@ number they belonged to.
        pX->page.pExtra = &pX[1];
        pX->isBulkLocal = 1;
        pX->isAnchor = 0;
-@@ -46576,15 +46579,42 @@ static PgHdr1 *pcache1AllocPage(PCache1 *pCache, int benignMalloc){
+@@ -46629,13 +46632,46 @@
      pcache1EnterMutex(pCache->pGroup);
  #endif
      if( pPg==0 ) return 0;
@@ -79,8 +79,8 @@ number they belonged to.
    }
    (*pCache->pnPurgeable)++;
    return p;
- }
- 
++}
++
 +/*
 +** Sublet lifetimes.  A page object is assigned to a page number and later
 +** recycled for a different one, or dropped; the buffer is reused, not freed,
@@ -91,13 +91,19 @@ number they belonged to.
 +** dies with the page number it belonged to.  The cache keeps reaching the
 +** buffer through PgHdr1.pRaw, so recycling and freeing are unaffected.
 +*/
-+static void pcache1Issue(PgHdr1 *p, int szPage){
++static int pcache1Issue(PgHdr1 *p, int szPage){
 +  assert( p->isIssued==0 );
++  if( !capstone_repr_ok((uptr)p->pRaw, szPage) ) return 0;
 +  /* The offset is relative to the parent's BASE, and a bulk-pool page's
 +  ** pointer is an offset into one allocation whose base is the pool's start. */
 +  p->page.pBuf = capstone_cap_derive(p->pRaw,
 +      (uptr)p->pRaw - __builtin_capstone_cap_get_base(p->pRaw), szPage);
++  if( p->page.pBuf==0 ){
++    p->page.pBuf = p->pRaw;
++    return 0;
++  }
 +  p->isIssued = 1;
++  return 1;
 +}
 +static void pcache1Retire(PgHdr1 *p){
 +  if( p->isIssued ){
@@ -105,12 +111,10 @@ number they belonged to.
 +    p->page.pBuf = p->pRaw;
 +    p->isIssued = 0;
 +  }
-+}
-+
+ }
+ 
  /*
- ** Free a page object allocated by pcache1AllocPage().
- */
-@@ -46597,7 +46627,7 @@ static void pcache1FreePage(PgHdr1 *p){
+@@ -46650,7 +46686,7 @@
      p->pNext = pCache->pFree;
      pCache->pFree = p;
    }else{
@@ -119,7 +123,7 @@ number they belonged to.
  #ifdef SQLITE_PCACHE_SEPARATE_HEADER
      sqlite3_free(p);
  #endif
-@@ -46731,6 +46761,7 @@ static void pcache1RemoveFromHash(PgHdr1 *pPage, int freeFlag){
+@@ -46784,6 +46820,7 @@
    *pp = (*pp)->pNext;
  
    pCache->nPage--;
@@ -127,7 +131,7 @@ number they belonged to.
    if( freeFlag ) pcache1FreePage(pPage);
  }
  
-@@ -46796,6 +46827,7 @@ static void pcache1TruncateUnsafe(
+@@ -46849,6 +46886,7 @@
          pCache->nPage--;
          *pp = pPage->pNext;
          if( PAGE_IS_UNPINNED(pPage) ) pcache1PinPage(pPage);
@@ -135,15 +139,19 @@ number they belonged to.
          pcache1FreePage(pPage);
        }else{
          pp = &pPage->pNext;
-@@ -47041,6 +47073,7 @@ static SQLITE_NOINLINE PgHdr1 *pcache1FetchStage2(
+@@ -47092,6 +47130,11 @@
+ 
+   if( pPage ){
      unsigned int h = iKey % pCache->nHash;
++    pPage->pCache = pCache;
++    if( !pcache1Issue(pPage, pCache->szPage) ){
++      pcache1FreePage(pPage);
++      return 0;
++    }
      pCache->nPage++;
      pPage->iKey = iKey;
-+    pcache1Issue(pPage, pCache->szPage);
      pPage->pNext = pCache->apHash[h];
-     pPage->pCache = pCache;
-     pPage->pLruPrev = 0;
-@@ -47355,7 +47388,7 @@ SQLITE_PRIVATE int sqlite3PcacheReleaseMemory(int nReq){
+@@ -47408,7 +47451,7 @@
         &&  (p=pcache1.grp.lru.pLruPrev)!=0
         &&  p->isAnchor==0
      ){

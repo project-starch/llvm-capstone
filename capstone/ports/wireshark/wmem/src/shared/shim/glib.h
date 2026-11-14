@@ -17,6 +17,9 @@
 #define g_realloc(p, n) wm_sys_realloc((p), (n))
 #define g_assert_true(x) ((x) ? (void)0 : wm_fail(101))
 #define g_assert_not_reached() wm_fail(102)
+/* GLib's fatal error, with which the Sublet patch reports an exhausted
+ * lifetime table (wmem never answers NULL). */
+#define g_error(...) wm_fail(209)
 #define g_warning(...) ((void)0)
 /* Each pool's allocator is chosen explicitly by the port; there is no
  * environment override. */

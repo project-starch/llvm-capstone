@@ -16,21 +16,37 @@
  
  //#define DEBUG_SLAB_MOVER
  /* powers-of-N allocation structures */
-@@ -424,7 +433,13 @@
+@@ -466,8 +475,19 @@
      // wiping memory as it's being pulled out of the global pool instead of
      // blocking startup all at once.
      memset(ptr, 0, (size_t)len);
 +#ifdef EXP_REUSE_GAP
 +    mc_rg_splitting = 1;
 +#endif
-     split_slab_page_into_freelist(ptr, id);
++#ifdef MC_CAPSTONE_SUBLET
++    bool split = split_slab_page_into_freelist(ptr, id);
++#else
++    split_slab_page_into_freelist(ptr, id);
++#endif
 +#ifdef EXP_REUSE_GAP
 +    mc_rg_splitting = 0;
 +#endif
+ #ifdef MC_CAPSTONE_SUBLET
+-    if (!split_slab_page_into_freelist(ptr, id)) {
++    if (!split) {
+         /* No lifetime for the page: it goes back where it came from, and the
+          * class gets no page, as when memory runs out. */
+         if (g->slabs < pooled)
+@@ -477,8 +497,6 @@
+         MEMCACHED_SLABS_SLABCLASS_ALLOCATE_FAILED(id);
+         return 0;
+     }
+-#else
+-    split_slab_page_into_freelist(ptr, id);
+ #endif
  
      p->slab_list[p->slabs++] = ptr;
-     MEMCACHED_SLABS_SLABCLASS_ALLOCATE(id);
-@@ -473,6 +488,9 @@
+@@ -538,6 +556,9 @@
      }
  
      if (ret) {
@@ -40,7 +56,7 @@
          MEMCACHED_SLABS_ALLOCATE(id, p->size, ret);
      } else {
          MEMCACHED_SLABS_ALLOCATE_FAILED(id);
-@@ -517,6 +535,9 @@
+@@ -582,6 +603,9 @@
          assert(chunk->it_flags == ITEM_CHUNK);
          chunk->it_flags = ITEM_SLABBED;
          p = &slabclass[chunk->slabs_clsid];
@@ -50,7 +66,7 @@
          next_chunk = chunk->next;
  
          chunk->prev = 0;
-@@ -543,6 +564,10 @@
+@@ -608,6 +632,10 @@
      p = &slabclass[id];
  
      it = (item *)ptr;
@@ -61,20 +77,36 @@
      if ((it->it_flags & ITEM_CHUNKED) == 0) {
          it->it_flags = ITEM_SLABBED;
          it->slabs_clsid = id;
-@@ -812,7 +837,13 @@
+@@ -877,8 +905,19 @@
      /* Don't need to split the page into chunks if we're just storing it */
      if (did > SLAB_GLOBAL_PAGE_POOL) {
          memset(page, 0, (size_t)settings.slab_page_size);
 +#ifdef EXP_REUSE_GAP
 +        mc_rg_splitting = 1;
 +#endif
-         split_slab_page_into_freelist(page, did);
++#ifdef MC_CAPSTONE_SUBLET
++        bool split = split_slab_page_into_freelist(page, did);
++#else
++        split_slab_page_into_freelist(page, did);
++#endif
 +#ifdef EXP_REUSE_GAP
 +        mc_rg_splitting = 0;
 +#endif
+ #ifdef MC_CAPSTONE_SUBLET
+-        if (!split_slab_page_into_freelist(page, did)) {
++        if (!split) {
+             /* No lifetime for the page in its new class: it goes to the
+              * global page pool instead. */
+             d_cls->slabs--;
+@@ -886,8 +925,6 @@
+             slabclass[SLAB_GLOBAL_PAGE_POOL].slab_list[
+                 slabclass[SLAB_GLOBAL_PAGE_POOL].slabs++] = page;
+         }
+-#else
+-        split_slab_page_into_freelist(page, did);
+ #endif
      } else if (did == SLAB_GLOBAL_PAGE_POOL) {
          /* memset just enough to signal restart handler to skip */
-         memset(page, 0, sizeof(item));
 --- a/cache.c
 +++ b/cache.c
 @@ -9,6 +9,15 @@
@@ -104,7 +136,7 @@
      return object;
  }
  
-@@ -139,6 +152,9 @@
+@@ -150,6 +163,9 @@
      }
      ptr = pre;
  #endif

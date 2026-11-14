@@ -39,12 +39,15 @@ The capability platforms build `spatial`, or `sublet` with `PG_SUBLET=ON` (capst
 only); native builds the pristine managers. Patch 0003 needs no table and no
 new file: every block keeps a generation in its header, the
 managers issue each chunk at their return sites as a child of the generation
-covering the chunk header and the request, and store the parent in the header.
-`pfree` reads the parent through the caller's own pointer, revokes the chunk
-through that pointer, and hands the context method a pointer derived from the
-parent. A reset that keeps a block renews its generation (`CRENEW`). Its header
-states the reasons and the one thing it gives up: a live pointer can load its
-block's generation from the header in front of it.
+covering the chunk header and the request, and store the block's malloc
+reference in the header. `pfree` reads that reference through the caller's own
+pointer, revokes the chunk through that pointer, and hands the context method a
+pointer derived from the reference. A reset that keeps a block revokes its
+generation (`CREVOKE`), and the next allocation derives a new one. A failed
+`CDERIVE` (no free table slot) is reported as out of memory, and every realloc
+creates the new chunk before it ends the old one. Its header states the
+reasons and the one thing it gives up: a live pointer can load its block's
+malloc reference from the header in front of it.
 
 The patches require PostgreSQL's release-layout configuration; `MEMORY_CONTEXT_CHECKING` and
 `CLOBBER_FREED_MEMORY` are not supported.
