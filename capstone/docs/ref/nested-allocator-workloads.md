@@ -895,3 +895,44 @@ answers):
   32,768-node 360,485 and the 65,532-node 720,892. At delay 12 (about 60 cycles per node) it is about 2.1 M cycles.
   CREVOKE is not interruptible, so a timer interrupt waits that long.
 - Every other app here is at subtree max 2-3. PostgreSQL's resets are the case where CREVOKE's walk matters.
+
+### Pre-registration: PostgreSQL on silicon, bitstream F, both arms in one boot (written before the boot)
+
+**Configuration.**
+- Bitstream F `a948e4134` (`ec675c2b…`), kit bkit75n (hpm8 = event 23), a board the SPEC lane slots.
+- Rung budget **1800**: `BAKED_TIMEOUT=7200` at the kit's x4, as the stubbed run prints.
+- Stage `nested/pg/board/p2-stage` (`p2-stage.SHA256SUMS`): the f3 native-smoke skeleton, byte-identical, plus
+  `train/`. Its `run.sh` is byte-identical to the twin's ABBA stage `pg/stages/a1`. ABBA u1 p1 p2 u2 on `w2-main`;
+  image set 10, stripped `1ea084ab…` (not protected) and `4cc5f247…` (protected); fixture `tmp/fix2`.
+- Everything in the PostgreSQL section above applies: the harness changes in both arms, the Q-15-repaired 0003, and
+  the settings.
+- Checked off the board, as rule 8 asks (`nested/pg/board/p2-recheck`, `recheck-p2.sh`):
+  - a real bake: cpio `5fcd7fd2aba2d1b0` holds all 26 manifest files. The baked `run.sh`, `in.tar.xz` and both
+    `.xz` images match the stage hashes. `run.sh`'s setup line, run on the extracted tree, unpacks the cluster, the
+    share directory and `w.sql`. The two images it unpacks hash to the measured `4cc5f247…` and `1ea084ab…`.
+  - The board image's BusyBox is a different build from the twin's (`27f322b7…` against `365a0d98…`; libc differs
+    too). Its applet table is identical: 279 applets, including `xz` and `tar`, BusyBox 1.36.1. `/usr/bin/xz` and
+    `/bin/tar` link to it. The twin ran this exact unpack, so the board's unpack rests on that table, not on a board run.
+  - The kit's `BOARD_STUB=2` run relinked the native kernel (`121b267274cf524f`) and classified the smoke PASS, with
+    `BAKED_TIMEOUT=7200`.
+  - A real firmware build: `5b11bde4c5a1c21e…`, **25,857,544 B against the 26,000,000 cap (142 KB to spare)**,
+    dom_stack gate PASS. At about 115 KiB/s the upload takes about 220 s of its 300 s budget.
+
+**Predictions.**
+- **Answers:** every command exits 0 with the native reference answers (`work/nref4-main/ref.txt`: 4 CHECK lines,
+  2,000 rows). Anything else stops the comparison.
+- **Repeats:** within 1 % on `run_cycles` and 2 % on `between_cycles`, or that difference is not read.
+- **In-context cost: +2 % to +12 %.** The twin reads +4.04 %. speedtest1 read 1.7-2.7 times its twin cost on silicon
+  (+0.62 % twin; +1.04 % batch, +1.67 % F).
+- **Kernel: -2 % to +4 %** (twin +0.43 %). **Whole command (uptime span): +2 % to +10 %.**
+- **Event 23, protected minus not, per command: +0.5 M to +10 M.** The protected run derives 2.31 M lifetimes and peaks
+  at 105,043 live records against a 256-entry verdict cache. speedtest1, at 28 k derives and 398 peak records, read
+  1.65 misses per derive.
+- **Derived, not predicted:** the share of the in-context cost that event 23 explains at 17-20 cycles per miss.
+  Also the lifetime-op cycles: 2.31 M CDERIVE plus 668 k CREVOKE (2.31 M nodes) at the per-op costs the timing boot
+  reads.
+- **Duration:** about 650 s per command, from the twin and speedtest1's ratios (in-context x4.1, kernel x2.5,
+  24 M cycles/s). Each command first unpacks for one to five minutes, outside the marks, and is silent while it
+  runs. So 50-70 min of commands, under the 7,200 s rung budget. For a `spec.sh` stage the kit sets the idle limit to the
+  same 7,200 s (`board-run.sh:155`), far above one silent command.
+- **VOID** if `b0-stats` or `b0-hello` fails, or the smoke fails outside the kit's accounting waiver.
