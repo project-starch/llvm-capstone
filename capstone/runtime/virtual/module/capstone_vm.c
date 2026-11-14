@@ -655,10 +655,114 @@ static int node_grow(struct context *c, unsigned long required)
 #else
 #define CV_MAX_ALLOC_ORDER (MAX_ORDER - 1)
 #endif
+/* THE FLAT-TABLE POOL (node_table_pool=N, default 0 = off): up to N released flat tables are kept,
+ * each returned to the all-zero state of a fresh cma_alloc + memset, and the next context_create takes
+ * one instead of allocating. Measured on perl test.pl (native twin, node_flat_records=262144, 318
+ * execs, 2026-11-14): each exec's table peaks at a mean of 7,791 records (max 132,493) of 262,144, so
+ * the per-exec 4 MiB memset and the cma_alloc/cma_release around it were almost all waste.
+ *
+ * WHY ZEROING [0, next) RESTORES THE WHOLE TABLE. next is table[1], the hardware's bump pointer
+ * (capstone_rev_node.anvil vp_alloc_slot), which only grows. Every record write the rev-node unit
+ * makes is to an allocated record (index < next): the bump allocation writes the header and then the
+ * record at the old next; a pop requires head < next and an exactly-FREE record; kill, retire and
+ * splice writes need a valid record or a walked link, and an all-zero record is invalid. In flat mode
+ * this module writes only table[0] and table[1]. So records at and above next are still zero from the
+ * table's first zeroing, and zeroing [0, next) -- which includes the header, table[2] {free count,
+ * free head} and table[3] (allocations), both read by every allocation -- leaves the table exactly as
+ * a fresh one. This matters for every record, not only those below next: a virtual-namespace read has
+ * no index bound (ex_stage.sv rev_rd_oob is physical-only), so a stale id can read any record.
+ * node_table_pool_verify=1 checks that claim on every reuse (memchr_inv over the whole table) and
+ * counts a violation; a table that fails is zeroed whole before use.
+ *
+ * Same physical address for consecutive contexts is not new: CMA's first fit already returns it. The
+ * LSU revocation cache is flushed on an EDGE of srevroot (ex_stage.sv revnode_ns_flush_o), which the
+ * csrw 0x5c1, zero of restore_root provides between every window, so no verdict survives a context.
+ * A table whose header does not read as a flat RECYCLE table of this capacity with
+ * CV_NODE_FIRST <= next <= capacity is freed, not pooled. Read-only: set at boot. */
+#define CV_TABLE_POOL_MAX 16U
+static unsigned node_table_pool;
+module_param(node_table_pool, uint, 0444);
+MODULE_PARM_DESC(node_table_pool, "flat tables kept for reuse across contexts (0 = off, at most 16)");
+static bool node_table_pool_verify;
+module_param(node_table_pool_verify, bool, 0444);
+MODULE_PARM_DESC(node_table_pool_verify, "check a reused flat table is all zero (whole-table scan per reuse)");
+static unsigned long node_table_pool_hits, node_table_pool_puts, node_table_pool_refused,
+                     node_table_pool_zeroed, node_table_pool_violations;
+module_param(node_table_pool_hits, ulong, 0444);
+module_param(node_table_pool_puts, ulong, 0444);
+module_param(node_table_pool_refused, ulong, 0444);
+module_param(node_table_pool_zeroed, ulong, 0444);
+module_param(node_table_pool_violations, ulong, 0444);
+#ifdef CV_TEST_HOOKS
+/* Test build only, the pool's positive controls: 1 leaves table[2..3] (free list, allocations)
+ * stale; 2 leaves the last allocated record, next - 1, stale. */
+static unsigned test_pool_mutant;
+module_param(test_pool_mutant, uint, 0644);
+#endif
+static DEFINE_SPINLOCK(table_pool_lock);
+static struct { unsigned long *table; bool cma; } table_pool[CV_TABLE_POOL_MAX];
+static unsigned table_pool_count;
+
+static void *cv_table_pool_get(struct context *c)
+{
+    unsigned long *table = NULL;
+    spin_lock(&table_pool_lock);
+    if (table_pool_count) {
+        --table_pool_count;
+        table = table_pool[table_pool_count].table;
+        c->table_cma = table_pool[table_pool_count].cma;
+        ++node_table_pool_hits;
+    }
+    spin_unlock(&table_pool_lock);
+    if (table && node_table_pool_verify && memchr_inv(table, 0, CV_FLAT_BYTES)) {
+        ++node_table_pool_violations;
+        memset(table, 0, CV_FLAT_BYTES);
+    }
+    return table;
+}
+/* True if the table was zeroed back and kept; false leaves it to the caller to free. */
+static bool cv_table_pool_put(struct context *c)
+{
+    unsigned long *table = c->table, next = READ_ONCE(table[1]), bytes;
+    bool kept = false;
+    if (!node_table_pool || READ_ONCE(table[0]) != (CAP_REV_TABLE_RECYCLE | CV_FLAT_RECORDS) ||
+        next < CV_NODE_FIRST || next > CV_FLAT_RECORDS) {
+        if (node_table_pool) ++node_table_pool_refused;
+        return false;
+    }
+    spin_lock(&table_pool_lock);
+    kept = table_pool_count < min(node_table_pool, CV_TABLE_POOL_MAX);
+    spin_unlock(&table_pool_lock);
+    if (!kept) return false;
+    bytes = next * CAP_REV_TABLE_RECORD;
+#ifdef CV_TEST_HOOKS
+    if (test_pool_mutant == 1) {
+        memset(table, 0, 16);
+        memset((char *)table + 32, 0, bytes - 32);
+    } else if (test_pool_mutant == 2) {
+        memset(table, 0, bytes - CAP_REV_TABLE_RECORD);
+    } else
+#endif
+    memset(table, 0, bytes);
+    spin_lock(&table_pool_lock);
+    kept = table_pool_count < min(node_table_pool, CV_TABLE_POOL_MAX);
+    if (kept) {
+        table_pool[table_pool_count].table = table;
+        table_pool[table_pool_count].cma = c->table_cma;
+        ++table_pool_count;
+        ++node_table_pool_puts;
+        node_table_pool_zeroed += bytes;
+    }
+    spin_unlock(&table_pool_lock);
+    return kept;
+}
+
 static void *cv_flat_alloc(struct context *c)
 {
     unsigned long count = CV_FLAT_BYTES >> PAGE_SHIFT;
     struct page *page = NULL;
+    void *pooled = node_table_pool ? cv_table_pool_get(c) : NULL;
+    if (pooled) return pooled;
     /* CMA first: a multi-MiB buddy block can be unavailable on a fragmented, small board guest. */
     if (dma_contiguous_default_area)
         page = cma_alloc(dma_contiguous_default_area, count, 0, true);
@@ -676,6 +780,10 @@ static void node_free_table(struct context *c)
 {
     if (!c->table) return;
     if (node_table_flat) {
+        if (cv_table_pool_put(c)) {
+            c->table = NULL;
+            return;
+        }
         if (!c->table_cma)
             free_pages((unsigned long)c->table, get_order(CV_FLAT_BYTES));
         else
