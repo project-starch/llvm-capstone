@@ -3,14 +3,14 @@
 This is a live table: rows are filled as board runs land. Pre-registrations, predictions and the run-by-run trail are
 in [`../2026-11-08-train/PREREG.md`](../2026-11-08-train/PREREG.md) (Addendum 107 onward for this table).
 
-## Status (updated 2026-11-14 14:30 +08)
+## Status (updated 2026-11-14 14:35 +08)
 
 - **riscv-base:** complete, all 8 rows.
 - **Capstone temporal:**
   - The table below holds the best silicon reading per row, with the bitstream named on each row.
   - The final uniform configuration (one bitstream and one image set for every row) is being measured now.
   - 5 of 8 rows are already below the 1.20 target. perl, gcc and mcf are above it.
-- **Capstone spatial:** all 8 images are built (arm FRCDKMSsp).
+- **Capstone spatial:** all 8 images are built (arm FRCDKMSsp). First silicon row: gcc train01 2,431.58 s, against temporal's 2,446.30 s on the same bitstream, board and kit, so the temporal increment on gcc is +0.6 %.
   - The SDK differs from temporal in 4 libc mallocng members plus the runtime's malloc-mapping object, and nothing else.
     This is shown by member hashes, and a control on the memset switch fires.
   - Every benchmark object is byte-identical to temporal FRCDKMS's.
@@ -25,7 +25,7 @@ in [`../2026-11-08-train/PREREG.md`](../2026-11-08-train/PREREG.md) (Addendum 10
 
 | Board | Now | Then, in order |
 |---|---|---|
-| 1 | spatial gcc, batch / FRCDKMSsp | 1. the nested-allocator lane's speedtest1 (protected vs unprotected)<br>2. bitstream **F**: mcf, gcc, perl makerand (FRCDKMS; one variable against batch: the tag-word cache)<br>3. F with tag-path counters: mcf, gcc<br>4. gp-relative decision pair on F: GPC then GPR2 (perl makerand, gcc) |
+| 1 | the nested-allocator lane's speedtest1 (now) | 1. (speedtest1 running) (protected vs unprotected)<br>2. bitstream **F**: mcf, gcc, perl makerand (FRCDKMS; one variable against batch: the tag-word cache)<br>3. F with tag-path counters: mcf, gcc<br>4. gp-relative decision pair on F: GPC then GPR2 (perl makerand, gcc) |
 | 2 | x264, fdk / FR (until ~15:00) | bitstream **B** (old tag cache + tag-path counters): mcf, gcc |
 | 3 | full perl, fdk / FRCDK (until ~16:00) | riscv-base with gp relaxation (RVGP): perl makerand, gcc. Then the long final rows (x264, full perl) on the chosen final bitstream |
 
@@ -108,7 +108,7 @@ the table being measured now. A row moves into them as its run lands.
 | Benchmark | riscv-base (s) | Capstone temporal, best so far (s) | ratio | configuration | final config: temporal ratio | final config: spatial ratio |
 |---|---|---|---|---|---|---|
 | 500.perlbench_r (full: makerand + test.pl) | 12,623.02 | 17,601.71 | 1.394 | fdk / FR | pending | pending |
-| 502.gcc_r (train01) | 1,722.35 | 2,446.30 | 1.420 | batch / FRCDKMS | 1.420 | pending |
+| 502.gcc_r (train01) | 1,722.35 | 2,446.30 | 1.420 | batch / FRCDKMS | 1.420 | 1.412 (2,431.58 s) |
 | 505.mcf_r | 5,125.02 | 7,349.81 | 1.434 | batch / FR | 1.438 (7,372.16 s) | pending |
 | 519.lbm_r | 1,077.50 | 994.66 | **0.923** | fdk / FR | pending | pending |
 | 525.x264_r | 35,613.24 | 36,219.53 | **1.017** | mlp / arm C | pending | pending |
