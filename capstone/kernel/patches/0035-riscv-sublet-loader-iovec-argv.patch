@@ -1,0 +1,288 @@
+--- a/arch/riscv/include/asm/sublet-uaccess.h
++++ b/arch/riscv/include/asm/sublet-uaccess.h
+@@ -44,8 +44,13 @@
+ #define SUBLET_HANDLE_FIRST_ARG		1	/* the number of a0's slot */
+ #define SUBLET_HANDLE_ARGS		6	/* a0 to a5 */
+ #define SUBLET_HANDLE_FIRST_LIST	7	/* the first entry of the per-call list */
+-/* The per-call list holds at most this many embedded references. */
+-#define SUBLET_CALL_REFS_MAX		1024
++/* The per-call list holds at most this many embedded references. execve loads each argument
++ * pointer twice (count, then copy), so this bounds argv plus envp at 2048 entries. */
++#define SUBLET_CALL_REFS_MAX		4096
++/* The user layout of the libc: a pointer is a 16-byte reference, struct iovec is the base
++ * reference, the length and 8 bytes of padding. */
++#define SUBLET_USER_POINTER_SIZE	16
++#define SUBLET_USER_IOVEC_SIZE		32
+ 
+ #ifndef __ASSEMBLY__
+ #include <linux/types.h>
+@@ -106,6 +111,18 @@ int sublet_put_user(void __user *to, const void *value, unsigned long size);
+ /* The kernel slot of the reference a handle names, or NULL (guard bit set, number 0, number
+  * outside the call's list). */
+ unsigned long *sublet_handle_slot(unsigned long handle);
++/* Whether a kernel slot holds a reference (LDC and LCC in one run with interrupts off). */
++bool sublet_kslot_tagged(unsigned long *slot);
++
++/* The compat-style loader. sublet_load_user_pointer reads the 16-byte user pointer at the
++ * handle at through its reference with LDC into the current call's list and returns in *out a
++ * handle numbered from SUBLET_HANDLE_FIRST_LIST, or the integer itself (number 0) for an
++ * untagged pointer. 0, -EFAULT or -E2BIG. sublet_copy_iovec_from_user reads an iovec array in
++ * the user layout this way, for import_iovec. */
++int sublet_load_user_pointer(unsigned long at, unsigned long *out);
++struct iovec;
++int sublet_copy_iovec_from_user(struct iovec *iov, const struct iovec __user *uvec,
++				unsigned long nr_segs);
+ 
+ struct pt_regs;
+ /* Bind the arguments of system call nr of the current protected task and call it: the result,
+--- a/arch/riscv/kernel/sublet/bind.c
++++ b/arch/riscv/kernel/sublet/bind.c
+@@ -7,6 +7,7 @@
+  * them by the handle's number, and the return to U loads the slots, not pt_regs.
+  */
+ #include <linux/sched.h>
++#include <linux/mm.h>
+ #include <linux/slab.h>
+ #include <linux/irqflags.h>
+ #include <linux/build_bug.h>
+@@ -22,29 +23,13 @@ static_assert(offsetof(struct pt_regs, a5) - offsetof(struct pt_regs, a0) == 5 *
+ typedef long (*sublet_syscall_fn)(unsigned long, unsigned long, unsigned long, unsigned long,
+ 				  unsigned long, unsigned long);
+ 
+-/* Whether a kernel slot holds a reference: LDC into t0 and LCC selector 1, which answers 1 for
+- * a reference and 7 for an integer and never faults, in one run with interrupts off that
+- * clears t0 before it ends. */
+-static bool sublet_slot_tagged(unsigned long *slot)
+-{
+-	unsigned long flags, kind;
+-
+-	local_irq_save(flags);
+-	asm volatile(".insn i 0x5b, 3, t0, %[slot], 0\n\t"
+-		     ".insn r 0x5b, 1, 4, %[kind], t0, x1\n\t"
+-		     "li t0, 0"
+-		     : [kind] "=&r"(kind) : [slot] "r"(slot) : "t0", "memory");
+-	local_irq_restore(flags);
+-	return kind == 1;
+-}
+-
+ /* Clear the per-call list: plain stores clear each slot's tag. */
+ static void sublet_call_refs_clear(struct sublet_call_refs *refs)
+ {
+ 	if (!refs->slot)
+ 		return;
+ 	memset(refs->slot, 0, refs->count * sizeof(refs->slot[0]));
+-	kfree(refs->slot);
++	kvfree(refs->slot);
+ 	refs->slot = NULL;
+ 	refs->count = 0;
+ }
+@@ -62,7 +47,7 @@ long sublet_syscall_bound(struct pt_regs *regs, unsigned long nr)
+ 		return -ENOSYS;
+ 	for (i = 0; i < SUBLET_HANDLE_ARGS; ++i) {
+ 		a.arg[i] = view[i];
+-		if (sublet_slot_tagged(sublet_user_slot(current, 10 + i)))
++		if (sublet_kslot_tagged(sublet_user_slot(current, 10 + i)))
+ 			a.tagged |= 1u << i;
+ 	}
+ 	ret = sublet_bind_core(nr, &a);
+@@ -73,17 +58,18 @@ long sublet_syscall_bound(struct pt_regs *regs, unsigned long nr)
+ 	if (e->flags & SUBLET_EMBEDDED) {
+ 		ret = sublet_load_embedded(nr, &a, &refs);
+ 		if (ret)
+-			goto out;
++			return ret;
+ 	}
+ 
+ 	for (i = 0; i < SUBLET_HANDLE_ARGS; ++i)
+ 		view[i] = a.arg[i];
+ 	regs->orig_a0 = a.arg[0];
++	/* The loader's use sites (import_iovec, execve's argument arrays) fill the list during
++	 * the call; it ends with the call, so no handle outlives it. */
+ 	current->thread.sublet_refs = &refs;
+ 	ret = ((sublet_syscall_fn)sys_call_table[nr])(a.arg[0], a.arg[1], a.arg[2], a.arg[3],
+ 						       a.arg[4], a.arg[5]);
+ 	current->thread.sublet_refs = NULL;
+-out:
+ 	sublet_call_refs_clear(&refs);
+ 	return ret;
+ }
+--- a/arch/riscv/kernel/sublet/bind.h
++++ b/arch/riscv/kernel/sublet/bind.h
+@@ -64,10 +64,9 @@ long sublet_pointer_positions(const struct sublet_allowed *e, const struct suble
+ long sublet_bind_core(unsigned long nr, struct sublet_bind_args *a);
+ 
+ #ifdef __KERNEL__
+-/* The compat-style loader (loader.c) for a call with SUBLET_EMBEDDED: read the structures in
+- * the user layout through the outer reference, load each embedded reference into refs and
+- * point the call's arguments at kernel copies whose pointers are handles numbered from
+- * SUBLET_HANDLE_FIRST_LIST. 0 or a negative error. */
++/* The compat-style loader (loader.c) for a call with SUBLET_EMBEDDED: 0 if the call's use
++ * sites load its embedded references into the call's list (handles numbered from
++ * SUBLET_HANDLE_FIRST_LIST), or -ENOSYS while its loader is missing. */
+ long sublet_load_embedded(unsigned long nr, struct sublet_bind_args *a,
+ 			  struct sublet_call_refs *refs);
+ #endif
+--- a/arch/riscv/kernel/sublet/loader.c
++++ b/arch/riscv/kernel/sublet/loader.c
+@@ -1,8 +1,12 @@
+ // SPDX-License-Identifier: GPL-2.0-only
+ /*
+- * The compat-style loader of plan v5 step 5 for the calls whose structures hold pointers.
+- * Not built yet: only pselect6 without a sigset pack passes, every other call that needs the
+- * loader gets ENOSYS.
++ * The compat-style loader of plan v5 step 5 for the calls whose structures hold pointers. The
++ * loading happens where Linux reads the structure: import_iovec reads an iovec array through
++ * sublet_copy_iovec_from_user, execve's get_user_arg_ptr reads each argument pointer through
++ * sublet_load_user_pointer (arch/riscv/kernel/sublet/uaccess.c). Each embedded reference goes
++ * into the call's list with its tag and becomes its own handle. This function only admits
++ * the calls whose use sites load: the iovec calls and execve, and pselect6 without a sigset
++ * pack. msghdr (sendmsg, recvmsg) and the sigset pack get ENOSYS until their loaders exist.
+  */
+ #include <linux/errno.h>
+ #include <asm/unistd.h>
+@@ -12,7 +16,16 @@
+ long sublet_load_embedded(unsigned long nr, struct sublet_bind_args *a,
+ 			  struct sublet_call_refs *refs)
+ {
+-	if (nr == __NR_pselect6 && !a->arg[5])
++	switch (nr) {
++	case __NR_readv:
++	case __NR_writev:
++	case __NR_preadv:
++	case __NR_pwritev:
++	case __NR_execve:
+ 		return 0;
+-	return -ENOSYS;
++	case __NR_pselect6:
++		return a->arg[5] ? -ENOSYS : 0;
++	default:
++		return -ENOSYS;
++	}
+ }
+--- a/arch/riscv/kernel/sublet/uaccess.c
++++ b/arch/riscv/kernel/sublet/uaccess.c
+@@ -8,6 +8,9 @@
+ #include <linux/export.h>
+ #include <linux/sched.h>
+ #include <linux/string.h>
++#include <linux/irqflags.h>
++#include <linux/mm.h>
++#include <linux/uio.h>
+ #include <linux/uaccess.h>
+ #include <asm/sublet-trap.h>
+ #include <asm/sublet-uaccess.h>
+@@ -18,6 +21,22 @@ unsigned long __sublet_copy_out(unsigned long *slot, unsigned long to, const voi
+ unsigned long __sublet_clear(unsigned long *slot, unsigned long to, unsigned long n);
+ long __sublet_strncpy(char *dst, unsigned long *slot, unsigned long src, long count);
+ long __sublet_strnlen(unsigned long *slot, unsigned long src, long count);
++long __sublet_load_ref(unsigned long *kslot, unsigned long *slot, unsigned long from);
++
++/* LDC into t0 and LCC selector 1, which answers 1 for a reference and 7 for an integer and
++ * never faults, in one run with interrupts off that clears t0 before it ends. */
++bool sublet_kslot_tagged(unsigned long *slot)
++{
++	unsigned long flags, kind;
++
++	local_irq_save(flags);
++	asm volatile(".insn i 0x5b, 3, t0, %[slot], 0\n\t"
++		     ".insn r 0x5b, 1, 4, %[kind], t0, x1\n\t"
++		     "li t0, 0"
++		     : [kind] "=&r"(kind) : [slot] "r"(slot) : "t0", "memory");
++	local_irq_restore(flags);
++	return kind == 1;
++}
+ 
+ unsigned long *sublet_handle_slot(unsigned long handle)
+ {
+@@ -98,6 +117,62 @@ int sublet_put_user(void __user *to, const void *value, unsigned long size)
+ 	return sublet_copy_to_user(to, value, size) ? -EFAULT : 0;
+ }
+ 
++int sublet_load_user_pointer(unsigned long at, unsigned long *out)
++{
++	struct sublet_call_refs *refs = current->thread.sublet_refs;
++	unsigned long *slot = sublet_handle_slot(at), *k, value;
++
++	if (!refs || !slot || sublet_handle_address(at) & (SUBLET_USER_POINTER_SIZE - 1))
++		return -EFAULT;
++	if (refs->count == SUBLET_CALL_REFS_MAX)
++		return -E2BIG;
++	if (!refs->slot) {
++		refs->slot = kvzalloc(SUBLET_CALL_REFS_MAX * sizeof(refs->slot[0]), GFP_KERNEL);
++		if (!refs->slot)
++			return -ENOMEM;
++	}
++	k = refs->slot[refs->count];
++	if (__sublet_load_ref(k, slot, sublet_handle_address(at)))
++		return -EFAULT;
++	if (sublet_kslot_tagged(k)) {
++		*out = sublet_handle(READ_ONCE(k[0]), SUBLET_HANDLE_FIRST_LIST + refs->count);
++		refs->count++;
++		return 0;
++	}
++
++	/* An untagged pointer names no reference: its integer, if it has no bits above the
++	 * address, and the slot goes back to zero. */
++	value = READ_ONCE(k[0]);
++	WRITE_ONCE(k[0], 0UL);
++	WRITE_ONCE(k[1], 0UL);
++	if (value >> SUBLET_HANDLE_ADDR_BITS)
++		return -EFAULT;
++	*out = value;
++	return 0;
++}
++
++int sublet_copy_iovec_from_user(struct iovec *iov, const struct iovec __user *uvec,
++				unsigned long nr_segs)
++{
++	unsigned long base = (__force unsigned long)uvec, seg, at, ptr, len;
++	int err;
++
++	for (seg = 0; seg < nr_segs; seg++) {
++		at = base + seg * SUBLET_USER_IOVEC_SIZE;
++		err = sublet_load_user_pointer(at, &ptr);
++		if (err)
++			return err;
++		if (copy_from_user(&len, (const void __user *)(at + SUBLET_USER_POINTER_SIZE),
++				   sizeof(len)))
++			return -EFAULT;
++		if ((ssize_t)len < 0)
++			return -EINVAL;
++		iov[seg].iov_base = (void __user *)ptr;
++		iov[seg].iov_len = len;
++	}
++	return 0;
++}
++
+ /* untagged_addr for RISC-V: the address of a protected task's handle, every other value
+  * unchanged. A handle with a guard bit set stays as it is, so the range checks refuse it. */
+ unsigned long sublet_untagged_addr(unsigned long addr)
+--- a/fs/exec.c
++++ b/fs/exec.c
+@@ -419,6 +419,14 @@ static const char __user *get_user_arg_ptr(struct user_arg_ptr argv, int nr)
+ 		return compat_ptr(compat);
+ 	}
+ #endif
++	/* A protected program's argv and envp hold references (asm/sublet-uaccess.h). */
++	if (sublet_uaccess_protected()) {
++		unsigned long p;
++		int err = sublet_load_user_pointer((__force unsigned long)argv.ptr.native +
++						   (unsigned long)nr * SUBLET_USER_POINTER_SIZE, &p);
++
++		return err ? ERR_PTR(err) : (const char __user *)p;
++	}
+ 
+ 	if (get_user(native, argv.ptr.native + nr))
+ 		return ERR_PTR(-EFAULT);
+--- a/lib/iov_iter.c
++++ b/lib/iov_iter.c
+@@ -1717,6 +1717,9 @@ static int copy_iovec_from_user(struct iovec *iov,
+ {
+ 	unsigned long seg;
+ 
++	/* A protected program's iovec holds references (asm/sublet-uaccess.h). */
++	if (sublet_uaccess_protected())
++		return sublet_copy_iovec_from_user(iov, uvec, nr_segs);
+ 	if (copy_from_user(iov, uvec, nr_segs * sizeof(*uvec)))
+ 		return -EFAULT;
+ 	for (seg = 0; seg < nr_segs; seg++) {

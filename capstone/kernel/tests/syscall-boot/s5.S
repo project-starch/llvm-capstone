@@ -4,14 +4,16 @@
  * the test loader of step 3 (a0 and a1 come back as references to A and B). From then on it
  * passes references to system calls, which go through the binder and the routines for user
  * memory. Each check compares a result; the first mismatch exits with the check's number.
- * Exit 0: every check passed. The bounds check (C20) needs the processor to check an S access
- * through t6 (plan v5 step 1, rule 1); it does not decide the status but prints its outcome:
+ * Exit 0: every check passed, the last one (C27) by exec of a shell that prints "S5: exec ok"
+ * and exits 0. The bounds check (C20) needs the processor to check an S access through t6
+ * (plan v5 step 1, rule 1); it does not decide the status but prints its outcome:
  * "S5: rule1 enforced", "S5: rule1 missing" or "S5: rule1 inconclusive". A reference moves
  * between registers by CINCOFFSET with offset zero: an integer instruction such as mv clears
  * the tag. */
 #define LCC(rd, src, sel) .insn r 0x5b, 1, 4, rd, src, sel
 #define INC(rd, src, off) .insn r 0x5b, 1, 0x0c, rd, src, off
 #define SUBLET_NR_TEST_ENTER 0x5b100
+#define STC(src, off, base) .insn s 0x5b, 4, src, off(base)
 #define AT_FDCWD -100
 
 /* rd = reference s2 (A) moved to offset off */
@@ -22,6 +24,21 @@
 .macro refb rd, off
     li t0, \off
     INC(\rd, s3, t0)
+.endm
+/* store an iovec {reference A + off, len} at A + at, through A's reference */
+.macro iova at, off, len
+    refa t2, \off
+    refa t3, \at
+    STC(t2, 0, t3)
+    refa t3, \at + 16
+    li t2, \len
+    sd t2, 0(t3)
+.endm
+/* store the reference A + off at A + at, through A's reference */
+.macro ptra at, off
+    refa t2, \off
+    refa t3, \at
+    STC(t2, 0, t3)
 .endm
 /* fail with status n unless a0 == value */
 .macro expect n, value
@@ -81,6 +98,15 @@ _start:
     put 0x400, msg_enforced, 20
     put 0x420, msg_missing, 20
     put 0x440, msg_inconclusive, 25
+    put 0x8e0, path_sh, 8
+    put 0x900, arg_sh, 3
+    put 0x910, arg_c, 3
+    put 0x920, arg_echo, 18
+    li t0, 0x100
+    add t0, s1, t0
+    li t1, -1
+    sd t1, 0(t0)
+    sd t1, 8(t0)
     li t0, 0x210
     add t0, s0, t0
     li t1, 1
@@ -209,6 +235,54 @@ _start:
     li s8, 19
     bltz a0, fail
 
+    /* C21: writev of two entries whose bases are references (the compat-style loader). */
+    iova 0x600, 0x000, 4
+    iova 0x620, 0x004, 8
+    mv a0, s5
+    refa a1, 0x600
+    li a2, 2
+    sys 66
+    expect 21, 12
+    /* C22: readv into B through an iovec that lies in A: the embedded reference, not the
+     * outer one, reaches B. */
+    refb t2, 0x100
+    refa t3, 0x640
+    STC(t2, 0, t3)
+    refa t3, 0x650
+    li t2, 16
+    sd t2, 0(t3)
+    mv a0, s4
+    refa a1, 0x640
+    li a2, 1
+    sys 65
+    expect 22, 16
+    refb t1, 0x100
+    ld a0, 0(t1)
+    expect 23, 0
+    refb t1, 0x108
+    ld a0, 0(t1)
+    expect 24, 0
+    /* C25: an untagged base in an iovec names no reference. */
+    refa t3, 0x660
+    li t2, 0x700
+    add t2, s0, t2
+    sd t2, 0(t3)
+    refa t3, 0x670
+    li t2, 8
+    sd t2, 0(t3)
+    mv a0, s4
+    refa a1, 0x660
+    li a2, 1
+    sys 65
+    expect 25, -14
+    /* C26: an iovec entry that runs into the hole reads the bytes before it. */
+    iova 0x680, 0xeff8, 16
+    mv a0, s4
+    refa a1, 0x680
+    li a2, 1
+    sys 65
+    expect 26, 8
+
     /* C20 (rule 1): getrandom of 32 bytes at B + 0xfff0 runs 16 bytes past B's bounds. With
      * B right below A the bytes past the bounds are mapped, so only the processor's check of
      * the S access through t6 stops the copy at 16. */
@@ -233,8 +307,15 @@ _start:
 report:
     li a0, 1
     sys 64
-    li a0, 0
-    sys 93
+    /* C27: execve with argv references; the shell prints "S5: exec ok" and exits 0. */
+    ptra 0x800, 0x900
+    ptra 0x810, 0x910
+    ptra 0x820, 0x920
+    refa a0, 0x8e0
+    refa a1, 0x800
+    li a2, 0
+    sys 221
+    li s8, 27
 fail:
     mv a0, s8
     sys 93
@@ -248,3 +329,7 @@ ones:             .fill 16, 1, 0xff
 msg_enforced:     .ascii "S5: rule1 enforced \n"
 msg_missing:      .ascii "S5: rule1 missing  \n"
 msg_inconclusive: .ascii "S5: rule1 inconclusive \n\n"
+path_sh:          .asciz "/bin/sh"
+arg_sh:           .asciz "sh"
+arg_c:            .asciz "-c"
+arg_echo:         .asciz "echo S5: exec ok"
