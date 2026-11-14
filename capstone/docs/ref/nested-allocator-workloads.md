@@ -5,7 +5,7 @@
 | Item | State | Configuration |
 |---|---|---|
 | speedtest1 `--size 1`, QEMU twin | **measured**: answers equal; program +0.63 % instructions; 28,216 CREVOKEs, subtree mean 1.0001 / max 3; peak table +4.8 KB; kernel +3 % from the native syscall page scan (cause of the +3 % open) | FRCDKMS, native route, ids55, QEMU qemu55 a0501ebc39 |
-| speedtest1 on silicon | pending (after the twin; a board slot from the SPEC lane) | bitstream `a47b588a1`, kit bkit73 |
+| speedtest1 on silicon | pending. Boot 1 (board 1, 14:27-14:35) is VOID: the smoke passed, and no command ran because the stage's empty `train/in` was not baked (see the addendum below). Fixed stage awaiting a board slot | bitstream `a47b588a1`, kit bkit73 |
 | speedtest1 `--size 100` | pending (after `--size 1` has been looked at) | as above |
 | CPython, PostgreSQL, tshark, FFmpeg, memcached | pending, in that order, after speedtest1 | as above |
 | CREVOKE worst case (subtree 1 .. 10^6) | pending: RTL simulation | capstone-ariane `a47b588a1` |
@@ -224,3 +224,27 @@ If a control fails, the boot is VOID.
 
 The chain runs on board 1 as train PREREG Addendum 109 (spec-silicon 92b7b2662c97), which cites c3663f0362a1. The work
 dir is `spec/board/out-nat-batch-nested-st1-b1/b1-stage`.
+
+**Addendum 1 (2026-11-14, after boot 1): boot 1 is VOID, and the stage is fixed.**
+- Boot 1 ran on board 1 from 14:27 to 14:35 (work dir `nested/st1/board/b1-run/b1-stage`). The native smoke passed all
+  9 steps (`@@NS-RESULT 70`).
+- No command ran. Right after `@@SPEC-ARM-BEGIN u1`, the console reads
+  `cp: can't stat '/test-domains/vbatch/train/in/.': No such file or directory`.
+- Cause: speedtest1 takes no input files, so the stage's `train/in` was an empty directory. The kit builds its bake
+  manifest from `find . -type f`, so it never stages an empty directory. The baked `rootfs.cpio` lists
+  `test-domains/vbatch/train/` with `bin/`, `mark1`, `mark2`, `plan.json` and `run.sh`, and no `in/`.
+  - The QEMU twin copies the stage directory whole, which is why it did not show this.
+- Fix: `train/in/NO-INPUTS`, a one-line text file, sha256 `298a9444…`. It lands in the run directory and speedtest1
+  never reads it. The stage generator (`stage-gen/make-stage.py`) now writes it for every stage.
+  - Nothing else changed: `train/run.sh` is still `6cd49b361db37dd9…`, and both images are the same.
+  - `b1-stage.SHA256SUMS` gains exactly that one line.
+- Checked off the board, on a real bake of the fixed stage (kit `bake-manifest.sh`, then the kit's `BOARD_STUB=2` deep
+  dry run, which relinks the native kernel on that cpio):
+  - The new cpio (`8ab3e5d7…`) carries `test-domains/vbatch/train/in/NO-INPUTS`.
+  - The stub's native relink rebuilt the initramfs from that cpio, and the smoke classifier ran (PASS on boot 1's transcript).
+  - run.sh's own setup line, run on the tree extracted from each cpio, succeeds on the new one: the run directory
+    holds `NO-INPUTS` and `.capstone-tmp`, and `b/` holds both images. On boot 1's cpio it fails with the board's error,
+    `cp: cannot stat '…/train/in/.'`.
+  - The kit's `spec-classify.py` reads boot 1 as `NO RESULT` (rc 2), so the gate itself fired.
+- Every prediction above stands unchanged for the re-run.
+
