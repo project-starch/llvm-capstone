@@ -60,10 +60,10 @@ static int copy(struct ns_session *s, const struct cn_capref *ref, cn_u64 offset
                 void *buffer, size_t length, enum ns_direction direction,
                 struct ns_result *result, size_t *done)
 {
+    struct ns_copy_result r;
     *done = 0;
     if (!s->ops.copy) return -ENOSYS;
-    struct ns_copy_result r = s->ops.copy(s->opaque, s->context, &s->owner,
-                                         ref, offset, buffer, length, direction);
+    r = s->ops.copy(s->opaque, s->context, &s->owner, ref, offset, buffer, length, direction);
     ++s->counters.copy_calls;
     if (r.bytes_done > length || (!r.cause && r.bytes_done != length)) return -EPROTO;
     *done = r.bytes_done;
@@ -162,6 +162,7 @@ static int prepare(struct ns_session *s, struct snapshot *p, struct ns_result *r
 {
     const struct ns_descriptor *d = p->call.descriptor;
     const struct capstone_delegate_shape *shape = capstone_delegate_shape(d->nr);
+    cn_u64 scalars[6];
     int rc;
     size_t done;
     if (d->route == NS_REFUSE || d->route == NS_GRANT || d->nr == CAPSTONE_SYS_pipe2)
@@ -178,10 +179,11 @@ static int prepare(struct ns_session *s, struct snapshot *p, struct ns_result *r
     }
     if (d->route == NS_VECTOR) return vector_snapshot(s, p, result);
     /* Length sources stay in this immutable scalar snapshot. */
-    cn_u64 scalars[6];
     memcpy(scalars, p->call.scalar, sizeof(scalars));
     for (unsigned i = 0; i < shape->argc; ++i) {
         struct capstone_delegate_arg effective = shape->args[i];
+        const struct capstone_delegate_arg *a = &effective;
+        cn_u64 length = 0;
         /* SETLK/W only consume flock. Never require write authority or publish
          * a buffer after a successful side effect for these commands. */
         if (d->nr == CAPSTONE_SYS_clock_nanosleep && i == 3 && (p->call.scalar[1] & 1)) {
@@ -190,18 +192,17 @@ static int prepare(struct ns_session *s, struct snapshot *p, struct ns_result *r
         }
         if (d->nr == CAPSTONE_NR_FCNTL_LOCK && i == 2 && scalars[1] != NS_F_GETLK)
             effective.kind = CAPSTONE_ARG_IN;
-        const struct capstone_delegate_arg *a = &effective;
-        cn_u64 length = 0;
         if (a->kind == CAPSTONE_ARG_INT) continue;
         if (p->offsets[i] > UINT64_MAX - NS_MAX_BYTES) return -EOVERFLOW;
         p->call.scalar[i] = 0;
         if (optional(a->kind) && (p->nulls & (1U << i))) continue;
         if (!s->ops.copy) return -ENOSYS;
         if (a->kind == CAPSTONE_ARG_STR || a->kind == CAPSTONE_ARG_OPT_STR) {
+            char *path;
+            size_t j;
             if (!(p->tagged & (1U << i))) return -EFAULT;
             if ((rc = allocate(p, &p->call.buffer[i], NS_MAX_PATH))) return rc;
-            char *path = p->call.buffer[i].data;
-            size_t j;
+            path = p->call.buffer[i].data;
             /* Byte copies do not read past the first NUL or a tight bound. */
             for (j = 0; j < NS_MAX_PATH; ++j) {
                 rc = copy(s, &p->refs[i], p->offsets[i] + j, path + j, 1, NS_FROM_DOMAIN, result, &done);
@@ -257,6 +258,7 @@ static int partial_result(cn_u64 nr)
 static int output(struct ns_session *s, struct snapshot *p, struct ns_result *result)
 {
     const struct ns_descriptor *d = p->call.descriptor;
+    const struct capstone_delegate_shape *shape;
     size_t done;
     int rc;
     if (result->value < 0 && result->value != -EINTR) return 0;
@@ -267,11 +269,11 @@ static int output(struct ns_session *s, struct snapshot *p, struct ns_result *re
         if (s->ops.snapshot_iov(s->opaque, s->context, &s->owner, &p->refs[1],
                                p->call.vector_count, p->iov)) return -EFAULT;
 #endif
-        size_t total = 0;
+        size_t total = 0, left;
         for (unsigned i = 0; i < p->call.vector_count; ++i) total += p->iov[i].length;
         if ((cn_u64)result->value > total) return -EPROTO;
         if (!byte_result(d->nr)) return 0;
-        size_t left = result->value;
+        left = result->value;
         for (unsigned i = 0; i < p->call.vector_count && left; ++i) {
             size_t n = p->iov[i].length < left ? p->iov[i].length : left;
             rc = copy(s, &p->iov[i].base, 0, p->call.vector[i].data, n,
@@ -281,7 +283,7 @@ static int output(struct ns_session *s, struct snapshot *p, struct ns_result *re
         }
         return 0;
     }
-    const struct capstone_delegate_shape *shape = capstone_delegate_shape(d->nr);
+    shape = capstone_delegate_shape(d->nr);
     if ((d->nr == CAPSTONE_SYS_write || d->nr == CAPSTONE_SYS_pwrite64) &&
         (cn_u64)result->value > p->call.buffer[1].length) return -EPROTO;
     /* Reject an invalid backend count before any publication. */
@@ -292,10 +294,11 @@ static int output(struct ns_session *s, struct snapshot *p, struct ns_result *re
         if ((cn_u64)result->value > total) return -EPROTO;
     }
     for (unsigned i = 0; i < shape->argc; ++i) {
+        size_t n;
         if (d->nr == CAPSTONE_SYS_clock_nanosleep && i == 3 && (p->call.scalar[1] & 1)) continue;
         if (d->nr == CAPSTONE_NR_FCNTL_LOCK && p->call.scalar[1] != NS_F_GETLK) continue;
         if (!writes(shape->args[i].kind) || !p->call.buffer[i].data) continue;
-        size_t n = capstone_delegate_result_bytes(d->nr, i, p->call.buffer[i].length, result->value);
+        n = capstone_delegate_result_bytes(d->nr, i, p->call.buffer[i].length, result->value);
         if (n && (rc = copy(s, &p->refs[i], p->offsets[i], p->call.buffer[i].data, n,
                            NS_TO_DOMAIN, result, &done))) return rc;
     }
@@ -305,13 +308,15 @@ int ns_session_create(struct cn_context *context, const struct cn_owner *owner,
                       const struct ns_ops *ops, void *opaque, struct ns_session **out)
 {
     cn_u64 epoch;
+    struct ns_session *s;
+    int rc;
     if (!out) return -EINVAL;
     *out = NULL;
     if (!context || !owner || !ops || !ops->acquire || !ops->issue || !ops->release)
         return -EINVAL;
-    int rc = cn_get_epoch(context, owner, &epoch);
+    rc = cn_get_epoch(context, owner, &epoch);
     if (rc) return rc;
-    struct ns_session *s = calloc(1, sizeof(*s));
+    s = calloc(1, sizeof(*s));
     if (!s) return -ENOMEM;
     s->context = context; s->owner = *owner; s->ops = *ops; s->opaque = opaque;
     *out = s;
@@ -322,13 +327,15 @@ void ns_get_counters(const struct ns_session *s, struct ns_counters *out) { *out
 int ns_dispatch_request(struct ns_session *s, cn_u64 epoch,
                         const struct ns_request *request, struct ns_result *result)
 {
-    if (!s || !result) return -EINVAL;
-    *result = (struct ns_result){0};
-    struct snapshot *p = calloc(1, sizeof(*p));
-    if (!p) { result->value = -ENOMEM; return 0; }
+    struct snapshot *p;
     void *held = NULL;
     unsigned acquired = 0;
-    int rc = capture(s, epoch, p, request);
+    int rc;
+    if (!s || !result) return -EINVAL;
+    *result = (struct ns_result){0};
+    p = calloc(1, sizeof(*p));
+    if (!p) { result->value = -ENOMEM; return 0; }
+    rc = capture(s, epoch, p, request);
     if (!rc) rc = prepare(s, p, result);
     if (!rc) {
         rc = s->ops.acquire(s->opaque, &p->call, &held);

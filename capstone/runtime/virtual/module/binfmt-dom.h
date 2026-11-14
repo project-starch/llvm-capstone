@@ -254,8 +254,7 @@ static long dom_service(struct context *c, struct cv_step *s)
     case CV_SERVICE_MAP: s->result = dom_map(c, s); break;
     case CV_SERVICE_UNMAP: s->result = dom_unmap(c, s->args[0], s->args[1]); break;
     case CV_SERVICE_NODES:
-        s->result = s->args[0] > CV_ID_RECORDS_MAX - CV_NODE_RESERVE ? -ENOMEM :
-                    ensure_nodes(c, s->args[0] + CV_NODE_RESERVE);
+        s->result = s->args[0] > CV_ID_RECORDS_MAX ? -ENOMEM : ensure_nodes(c, s->args[0] ?: 1);
         break;
     case CV_SERVICE_WAIT: s->result = 0; break;
     }
