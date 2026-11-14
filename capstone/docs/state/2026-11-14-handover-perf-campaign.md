@@ -55,7 +55,7 @@ for quick A/B work only.
 
 ---
 
-## 3. Current results (14 Nov, 16:50)
+## 3. Current results (14 Nov, 17:30; the live table in §1 is always newer)
 
 Ratio = Capstone time / riscv-base time on the board. specdiff PASS on every row. x264 is checked by its 5 decoded-frame
 hashes against a plain board run, because the native stage has no imagevalidate.
@@ -63,16 +63,17 @@ hashes against a plain board run, because the native stage has no imagevalidate.
 | Row | riscv-base (s) | Capstone temporal, best (s) | Ratio | Bitstream / images |
 |---|---|---|---|---|
 | perl full | 12,623.02 | 17,051.48 | 1.351 | fdk / FRCDK |
-| gcc train01 | 1,722.35 | 2,446.30 | 1.420 | batch / FRCDKMS |
+| gcc train01 | 1,722.35 | 1,989.28 | 1.155 | **F** / FRCDKMS |
 | mcf | 5,125.02 | 6,576.13 | 1.283 | **F** / FRCDKMS |
 | lbm | 1,077.50 | 994.66 | 0.923 | fdk / FR |
 | x264 | 35,613.24 | 34,053.48 | 0.956 | fdk / FR |
 | imagick | 11.08 | 12.76 | 1.152 | batch / FRCDKMS |
 | nab | 679.92 | 714.92 | 1.051 | batch / FRCDKMS |
 | xz | 4,993.81 | 5,196.56 | 1.041 | fdk / FR |
-| geomean | | | 1.134 | |
+| geomean | | | 1.105 | |
 
-Five rows are below 1.20. **perl, gcc and mcf are above it.**
+Six rows are below 1.20. **perl (1.351) and mcf (1.283) are above it.** F is the final temporal bitstream
+(Addendum 113): against the batch with the same images, mcf -10.8 % and gcc -18.7 %.
 
 **Spatial arm so far:** gcc train01 at 2,431.58 s (1.412) against temporal's 2,446.30 s on the same bitstream, board
 and kit. So the temporal increment on gcc is +0.6 %. The other seven spatial rows are twinned and ready (§8).
@@ -83,7 +84,7 @@ and kit. So the temporal increment on gcc is +0.6 %. The other seven spatial row
 |---|---|---|---|
 | 13 Nov arm C | 1.551 (makerand) | 1.720 | 1.484 |
 | fdk (8-way I$) | 1.347 (makerand); 1.394 full | 1.506 | 1.440 |
-| best now | 1.278 (makerand); 1.351 full | 1.420 | 1.283 (F) |
+| best now | 1.278 (makerand); 1.351 full | 1.155 (F) | 1.283 (F) |
 
 ---
 
@@ -216,18 +217,16 @@ first.
 
 ## 8. What is running and queued right now
 
-| Board | Now | Queued after it |
+| Board | Now | Queued after it (chains, nat-run2.sh) |
 |---|---|---|
-| 1 | F: gcc train01 FRCDKMS (until ~17:20) | F: perl makerand FRCDKMS → F tag counters (mcf, gcc; bkit76) → gp pair on F: GPC then GPR2 (perl makerand, gcc). Chains an-b1 → ao-b1 → as-gpc-b1 → as-gpr2-b1 |
-| 2 | B: mcf with tag counters (until ~17:35) | B: gcc. Chain am-b2 |
-| 3 | F: flashing, then temporal FRCDKMS x264 (~10 h, Addendum 112) | nothing |
+| 1 | F: perl makerand FRCDKMS (chain an-b1) | ao-b1 (F tag counters mcf, gcc; bkit76) → as-gpc-b1 → as-gpr2-b1 (gp pair on F) → aw-s (spatial gcc, mcf, imagick, nab, lbm, xz on F; bkit75) → aw-sp (spatial full perl on F; bkit80) |
+| 2 | B: mcf then gcc with tag counters (chain am-b2) | aw-t (temporal imagick, nab, lbm, xz on F) → aw-tp (temporal full perl on F; bkit80) → aw-sx (spatial x264 on F) |
+| 3 | temporal x264 on F (chain av-b3, ~10 h) | — free after about 03:00 on 15 Nov: candidates are F2's A/B, nested apps, gp reruns if adopted |
 
 **Decisions waiting on readings:**
-- **F as final.** If gcc on F does not lose to the batch, F becomes the final temporal configuration, and the
-  three-arms "final config" columns are re-measured on F: temporal imagick, nab, lbm, xz, gcc, mcf, perl full, x264,
-  and all 8 spatial rows. Board-ready stages: `$H/perf/natstage/board-frcdkms/*`, `board-frcdkms-full/500…`,
-  `board-frcdkmssp/*`. perl full needs a dom kit; an F dom kit (bkit74-style on F) still has to be made from bkit75
-  plus bkit74's command line.
+- **F is final (decided, Addendum 113).** The final-config rows on F are all queued (table above). The F dom kit for
+  full perl is bkit80. The tag counters (B against F) are the pre-registered deciding reading for WHY F helps; they
+  are due tonight.
 - **gp-relative.**
   - **Rule (Addendum 110):** adopt it on both arms iff the perl ratio improves and perl×gcc improves.
   - **riscv-base silicon, RVGP against RVF3:** perl makerand -6.2 %, gcc -0.60 %.
