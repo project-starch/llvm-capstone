@@ -11,7 +11,7 @@
  
  /* We don't even really need the extable code, but for now keep it simple */
  #ifndef CONFIG_MMU
-@@ -37,6 +41,10 @@
+@@ -37,6 +41,10 @@ static inline int
  arch_futex_atomic_op_inuser(int op, int oparg, int *oval, u32 __user *uaddr)
  {
  	int oldval = 0, ret = 0;
@@ -22,7 +22,7 @@
  
  	if (!access_ok(uaddr, sizeof(u32)))
  		return -EFAULT;
-@@ -79,6 +87,10 @@
+@@ -79,6 +87,10 @@ futex_atomic_cmpxchg_inatomic(u32 *uval, u32 __user *uaddr,
  	int ret = 0;
  	u32 val;
  	uintptr_t tmp;
@@ -35,7 +35,7 @@
  		return -EFAULT;
 --- a/arch/riscv/kernel/sublet/bind-core.c
 +++ b/arch/riscv/kernel/sublet/bind-core.c
-@@ -100,7 +100,26 @@
+@@ -100,7 +100,26 @@ static long prctl_command(const struct sublet_bind_args *a, unsigned int *pointe
  #define CALL_EMBEDDED(name)		{ __NR_##name, 0, SUBLET_EMBEDDED, NULL }
  #define CALL_COMMAND(name, fn)		{ __NR_##name, 0, 0, fn }
  
@@ -64,16 +64,16 @@
  	CALL_COMMAND(ioctl, ioctl_command), CALL(mkdirat), CALL(unlinkat), CALL(symlinkat),
 --- a/arch/riscv/kernel/sublet/bind.c
 +++ b/arch/riscv/kernel/sublet/bind.c
-@@ -83,6 +83,9 @@
+@@ -70,6 +70,9 @@ long sublet_syscall_bound(struct pt_regs *regs, unsigned long nr)
  	ret = ((sublet_syscall_fn)sys_call_table[nr])(a.arg[0], a.arg[1], a.arg[2], a.arg[3],
  						       a.arg[4], a.arg[5]);
  	current->thread.sublet_refs = NULL;
 +	if (ret == -ERESTARTSYS || ret == -ERESTARTNOINTR ||
 +	    ret == -ERESTARTNOHAND || ret == -ERESTART_RESTARTBLOCK)
 +		ret = -EINTR;
- out:
  	sublet_call_refs_clear(&refs);
  	return ret;
+ }
 --- a/kernel/futex/core.c
 +++ b/kernel/futex/core.c
 @@ -39,6 +39,10 @@
@@ -87,7 +87,7 @@
  #include "../locking/rtmutex_common.h"
  
  /*
-@@ -225,6 +229,14 @@
+@@ -225,6 +229,14 @@ int get_futex_key(u32 __user *uaddr, bool fshared, union futex_key *key,
  	struct page *page, *tail;
  	struct address_space *mapping;
  	int err, ro = 0;
@@ -102,7 +102,7 @@
  
  	/*
  	 * The futex address must be "naturally" aligned.
-@@ -410,6 +422,13 @@
+@@ -410,6 +422,13 @@ int fault_in_user_writeable(u32 __user *uaddr)
  {
  	struct mm_struct *mm = current->mm;
  	int ret;
@@ -116,7 +116,7 @@
  
  	mmap_read_lock(mm);
  	ret = fixup_user_fault(mm, (unsigned long)uaddr,
-@@ -453,7 +472,12 @@
+@@ -453,7 +472,12 @@ int futex_get_value_locked(u32 *dest, u32 __user *from)
  	int ret;
  
  	pagefault_disable();
@@ -143,7 +143,7 @@
  
  /*
   * Support for robust futexes: the kernel cleans up held futexes at
-@@ -87,6 +91,10 @@
+@@ -87,6 +91,10 @@ long do_futex(u32 __user *uaddr, int op, u32 val, ktime_t *timeout,
  {
  	int cmd = op & FUTEX_CMD_MASK;
  	unsigned int flags = 0;
@@ -167,7 +167,7 @@
  
  /*
   * READ this before attempting to hack on futexes!
-@@ -611,7 +615,12 @@
+@@ -611,7 +615,12 @@ int futex_wait_setup(u32 __user *uaddr, u32 val, unsigned int flags,
  	if (ret) {
  		futex_q_unlock(*hb);
  

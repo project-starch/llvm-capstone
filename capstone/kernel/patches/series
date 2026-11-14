@@ -28,3 +28,8 @@
 0041-mm-sublet-mapping-hooks.patch
 # Integration of steps 4 to 6: mapping results and handles, the exec stack of the libc.
 0017-riscv-sublet-integrate-mappings-exec-stack.patch
+# Plan v5 step 8: threads and futex.
+0050-riscv-sublet-shared-mm-threads.patch
+0051-riscv-sublet-futex-handles.patch
+# Signal registration; delivery to a handler kills the program (plan v5 step 9 builds frames).
+0018-riscv-sublet-signal-registration.patch

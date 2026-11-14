@@ -17,10 +17,10 @@
  #include <linux/sched.h>
 --- a/arch/riscv/include/asm/processor.h
 +++ b/arch/riscv/include/asm/processor.h
-@@ -39,6 +39,8 @@
- #ifdef CONFIG_RISCV_CAPSTONE_TRAP
- 	/* The embedded references of the current system call (asm/sublet-uaccess.h), or NULL. */
+@@ -41,6 +41,8 @@ struct thread_struct {
  	struct sublet_call_refs *sublet_refs;
+ 	/* The current call's result in a0 is a reference (sublet_mapping_return). */
+ 	bool sublet_result_ref;
 +	/* Kept independently of syscall slots until mm_release. */
 +	unsigned long sublet_clear_tid[2] __aligned(16);
  #endif
@@ -44,7 +44,7 @@
 +#endif
 --- a/arch/riscv/kernel/capstone_task.c
 +++ b/arch/riscv/kernel/capstone_task.c
-@@ -31,22 +31,23 @@
+@@ -31,22 +31,23 @@ int riscv_capstone_bind(void *context, unsigned long root)
  }
  #endif
  
@@ -55,17 +55,17 @@
  void riscv_capstone_release(struct task_struct *task)
  {
 -	void *context;
-+	clear_tsk_thread_flag(task, TIF_CAPSTONE);
-+}
- 
+-
 -	if (!test_tsk_thread_flag(task, TIF_CAPSTONE))
 -		return;
 -	WARN_ON_ONCE(task != current || !task->mm);
--	clear_tsk_thread_flag(task, TIF_CAPSTONE);
+ 	clear_tsk_thread_flag(task, TIF_CAPSTONE);
 -	context = task->mm->context.capstone_namespace;
 -	task->mm->context.capstone_namespace = NULL;
 -	/* No table stays selected once its context goes. */
 -	if (task->mm->context.capstone_root && csr_read(0x5c1) == task->mm->context.capstone_root)
++}
++
 +/* Last mm user only, in process context under mmap_read_lock. */
 +void arch_exit_mmap(struct mm_struct *mm)
 +{
@@ -92,7 +92,7 @@
  #endif
  #include <linux/sched/debug.h>
  #include <linux/sched/task_stack.h>
-@@ -157,6 +160,11 @@
+@@ -157,6 +160,11 @@ int arch_dup_task_struct(struct task_struct *dst, struct task_struct *src)
  {
  	fstate_save(src, task_pt_regs(src));
  	*dst = *src;
@@ -104,7 +104,7 @@
  #ifdef CONFIG_RISCV_CAPSTONE_TASK
  	dst->thread.capstone_spawn = NULL;
  	clear_tsk_thread_flag(dst, TIF_CAPSTONE);
-@@ -172,8 +180,11 @@
+@@ -172,8 +180,11 @@ int copy_thread(struct task_struct *p, const struct kernel_clone_args *args)
  	struct pt_regs *childregs = task_pt_regs(p);
  
  #ifdef CONFIG_RISCV_CAPSTONE_TASK
@@ -118,7 +118,7 @@
  		if (!capstone_native_spawn_clone(p, args))
  			return -EOPNOTSUPP;
  	}
-@@ -200,6 +211,21 @@
+@@ -200,6 +211,21 @@ int copy_thread(struct task_struct *p, const struct kernel_clone_args *args)
  		childregs->a0 = 0; /* Return value of fork() */
  		p->thread.ra = (unsigned long)ret_from_fork;
  	}
@@ -144,8 +144,8 @@
 +++ b/arch/riscv/kernel/sublet/Makefile
 @@ -4,4 +4,5 @@
  obj-y += sublet.o
- obj-$(CONFIG_RISCV_CAPSTONE_TRAP) += bind.o bind-core.o syscall-pointers.o loader.o uaccess.o \
- 	uaccess-asm.o
+ obj-$(CONFIG_RISCV_CAPSTONE_TRAP) += bind.o bind-core.o syscall-pointers.o loader.o
+ obj-$(CONFIG_RISCV_CAPSTONE_TRAP) += uaccess.o uaccess-asm.o
 +obj-$(CONFIG_RISCV_CAPSTONE_TRAP) += threads.o thread-asm.o
  ccflags-y += -I$(src)
 --- /dev/null
@@ -378,34 +378,34 @@
 +}
 --- a/fs/exec.c
 +++ b/fs/exec.c
-@@ -1295,12 +1295,12 @@
+@@ -1303,12 +1303,12 @@ int begin_new_exec(struct linux_binprm * bprm)
  	 * Release all of the old mmap stuff
  	 */
  	acct_arg_size(bprm, 0);
-+	retval = exec_mmap(bprm->mm);
-+	if (retval)
-+		goto out;
- #ifdef CONFIG_RISCV_CAPSTONE_TASK
- 	riscv_capstone_release(current);
- #endif
--	retval = exec_mmap(bprm->mm);
--	if (retval)
--		goto out;
+-#ifdef CONFIG_RISCV_CAPSTONE_TASK
+-	riscv_capstone_release(current);
+-#endif
+ 	retval = exec_mmap(bprm->mm);
+ 	if (retval)
+ 		goto out;
++#ifdef CONFIG_RISCV_CAPSTONE_TASK
++	riscv_capstone_release(current);
++#endif
  
  	bprm->mm = NULL;
  
 --- a/kernel/exit.c
 +++ b/kernel/exit.c
-@@ -810,9 +810,11 @@
+@@ -810,9 +810,11 @@ void __noreturn do_exit(long code)
  
  #ifdef CONFIG_RISCV_CAPSTONE_TASK
  	capstone_native_spawn_exit(current);
-+#endif
-+	exit_mm();
-+#ifdef CONFIG_RISCV_CAPSTONE_TASK
- 	riscv_capstone_release(current);
+-	riscv_capstone_release(current);
  #endif
--	exit_mm();
+ 	exit_mm();
++#ifdef CONFIG_RISCV_CAPSTONE_TASK
++	riscv_capstone_release(current);
++#endif
  
  	if (group_dead)
  		acct_process();
@@ -421,7 +421,7 @@
  #endif
  #include <linux/anon_inodes.h>
  #include <linux/slab.h>
-@@ -1468,6 +1471,10 @@
+@@ -1476,6 +1479,10 @@ static void mm_release(struct task_struct *tsk, struct mm_struct *mm)
  	 * because we want to leave the value intact for debugging
  	 * purposes.
  	 */
@@ -432,7 +432,7 @@
  	if (tsk->clear_child_tid) {
  		if (atomic_read(&mm->mm_users) > 1) {
  			/*
-@@ -1768,7 +1775,14 @@
+@@ -1776,7 +1783,14 @@ static void copy_seccomp(struct task_struct *p)
  
  SYSCALL_DEFINE1(set_tid_address, int __user *, tidptr)
  {
@@ -448,23 +448,3 @@
  
  	return task_pid_vnr(current);
  }
---- a/scripts/mod/modpost.c
-+++ b/scripts/mod/modpost.c
-@@ -827,7 +827,7 @@
- 		".kprobes.text", ".cpuidle.text", ".noinstr.text"
- #define OTHER_TEXT_SECTIONS ".ref.text", ".head.text", ".spinlock.text", \
- 		".fixup", ".entry.text", ".exception.text", ".text.*", \
--		".coldtext", ".softirqentry.text"
-+		".coldtext", ".softirqentry.text", ".sublet.uaccess.text"
- 
- #define INIT_SECTIONS      ".init.*"
- #define MEM_INIT_SECTIONS  ".meminit.*"
-@@ -889,7 +889,7 @@
- struct sectioncheck {
- 	const char *fromsec[20];
- 	const char *bad_tosec[20];
--	const char *good_tosec[20];
-+	const char *good_tosec[21];
- 	enum mismatch mismatch;
- 	void (*handler)(const char *modname, struct elf_info *elf,
- 			const struct sectioncheck* const mismatch,

@@ -1,0 +1,32 @@
+--- a/arch/riscv/kernel/signal.c
++++ b/arch/riscv/kernel/signal.c
+@@ -239,6 +239,17 @@ static void handle_signal(struct ksignal *ksig, struct pt_regs *regs)
+ 	sigset_t *oldset = sigmask_to_save();
+ 	int ret;
+ 
++#ifdef CONFIG_RISCV_CAPSTONE_TRAP
++	/* A protected program may register handlers, but the kernel builds no signal frame
++	 * for it yet (plan v5 step 9): a signal that would run a handler kills the program
++	 * with that signal instead. */
++	if (test_thread_flag(TIF_CAPSTONE)) {
++		pr_info("sublet: %s[%d]: signal %d has a handler, caught signals are not supported: killed\n",
++			current->comm, task_pid_nr(current), ksig->sig);
++		do_group_exit(ksig->sig);
++	}
++#endif
++
+ 	/* Are we from a system call? */
+ 	if (regs->cause == EXC_SYSCALL) {
+ 		/* Avoid additional syscall restarting via ret_from_exception */
+--- a/arch/riscv/kernel/sublet/bind-core.c
++++ b/arch/riscv/kernel/sublet/bind-core.c
+@@ -140,7 +140,8 @@ static const struct sublet_allowed allowed[] = {
+ 	CALL(getgroups), CALL(getrusage), CALL(getpriority), CALL(uname), CALL(sysinfo),
+ 	CALL(prlimit64), CALL(getrandom), CALL(sched_yield), CALL(sched_getaffinity),
+ 	CALL(sched_get_priority_max), CALL(sched_get_priority_min), CALL(sched_rr_get_interval),
+-	CALL(rt_sigprocmask), CALL(exit), CALL(exit_group), CALL_COMMAND(prctl, prctl_command),
++	CALL(rt_sigprocmask), CALL(rt_sigaction), CALL(sigaltstack), CALL(kill), CALL(tkill),
++	CALL(tgkill), CALL(exit), CALL(exit_group), CALL_COMMAND(prctl, prctl_command),
+ 	CALL_EMBEDDED(execve),
+ 	/* Mappings: the address arguments are pointers (mremap's new_addr too). */
+ 	CALL_EXTRA(mmap, 0x01), CALL_EXTRA(munmap, 0x01), CALL_EXTRA(mprotect, 0x01),

@@ -14,7 +14,9 @@
  *              unmaps it through the reference and exits with 44; a failed munmap exits with
  *              100 + its error number
  *   5 (unmapped) the same, then loads through the reference it unmapped: the munmap of the
- *              block's last page revoked it, so the kernel prints the fault line with cause 25 */
+ *              block's last page revoked it, so the kernel prints the fault line with cause 25
+ *   6 (signal) registers a handler for SIGUSR1 and sends itself SIGUSR1: the kernel builds no
+ *              signal frame for a protected program and kills it with SIGUSR1 instead */
 #define LCC(rd, src, sel) .insn r 0x5b, 1, 4, rd, src, sel
 #define INC(rd, src, off) .insn r 0x5b, 1, 0x0c, rd, src, off
 #define DERIVE(rd, parent, size) .insn r 0x5b, 1, 0x51, rd, parent, size
@@ -100,6 +102,29 @@ _start:
     j finish
 #endif
     li a0, 44
+    j finish
+#endif
+#if MODE == 6
+    li t0, -64
+    INC(t1, sp, t0)
+    li t2, 0x1234
+    sd t2, 0(t1)
+    sd zero, 8(t1)
+    sd zero, 16(t1)
+    li a0, 10
+    INC(a1, t1, zero)
+    li a2, 0
+    li a3, 8
+    li a7, 134
+    ecall
+    li s11, 13
+    bnez a0, fail
+    li a7, 172
+    ecall
+    li a1, 10
+    li a7, 129
+    ecall
+    li a0, 96
     j finish
 #endif
     /* getpid */
