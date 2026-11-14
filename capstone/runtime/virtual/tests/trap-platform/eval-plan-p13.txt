@@ -2,3 +2,6 @@
 # KIT, OUT, SDK, LLVM_BIN and PREBUILT (eval-p13.env) in the environment.
 # The reuse study: SQLite speedtest1 with the reuse-distance hooks, both arms in one boot.
 python3 capstone/ports/sqlite/poisoncap/reuse/run-sublet.py --platform "$KIT" --work "$OUT/reuse/sqlite" --timeout 14400 --per-process 7200 --run "sqlite-stock=$PREBUILT/reuse/sqlite-stock/speedtest1.dom" --run "sqlite-protected=$PREBUILT/reuse/sqlite-protected/speedtest1.dom"
+# The reuse study: CPython 3.13.7 with the pymalloc reuse-distance hooks, one boot per arm.
+python3 capstone/experiments/study/reuse-hooks/cpython/run-cpython-reuse.py --arm stock --rep 1 --build "$PREBUILT/reuse/cpython-stock" --kit "$KIT" --run-staged capstone/runtime/virtual/run-staged.py --work "$OUT/reuse/cpython-stock-1"
+python3 capstone/experiments/study/reuse-hooks/cpython/run-cpython-reuse.py --arm protected --rep 1 --build "$PREBUILT/reuse/cpython-protected" --kit "$KIT" --run-staged capstone/runtime/virtual/run-staged.py --work "$OUT/reuse/cpython-protected-1"
