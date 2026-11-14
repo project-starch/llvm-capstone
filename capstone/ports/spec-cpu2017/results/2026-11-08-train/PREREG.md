@@ -3878,3 +3878,25 @@ the chain stopped. No benchmark ran, so this is not a perl result of any kind.
 Addendum 117) → **aw-tp on board 3** → ax-b3 (pool A/B). Board 3 is the riscv-base board, so the perl row's ratio
 becomes same-board. It also gives the pool A/B a same-board control, where Addendum 115 had a cross-board one. Addendum
 113's predictions for this row stand unchanged.
+
+## Addendum 119 (2026-11-14 22:00 +08): board 2's no-boot is explained: the switches were left at 217
+
+Addendum 118 called the cause "open". The board lane found it, and I checked it in the driver logs:
+- **Every good board-2 run** connected with switch_state [0,0,0,0,0,0,0,0].
+- **Both failing runs** connected with [1,0,0,1,1,0,1,1] = 217: aw-tp's perl at 21:07 and aw-sx's x264 at 21:54. The
+  x264 run's first cold boot failed exactly like perl's three.
+- **Bit 0** hands the console TX pin to the tracer. A healthy boot therefore transmits nothing on the console, which is
+  "not one UART byte".
+- **The source** is the 21:06 xz run (aw-t). After its rungs, BAKED_FINAL_APERTURES stepped the switches through the
+  wedge apertures. The trap-log tval step timed out waiting for `switch_state`, and the `finally: setsw(0)` park
+  timed out the same way. 217, the last value written, is the trap-log tval aperture.
+
+So the board, bitstream F, the bkit80 kit and both images are not implicated. No benchmark ran in either failed boot.
+
+**Consequences:**
+- The aw-sx driver was stopped by hand at 21:58 (SIGINT; the booking was released). The board lane parks the switches
+  at 0, verified by readback. Then aw-sx (spatial x264 on F, Addendum 113) is relaunched on board 2, unchanged.
+- The temporal full-perl row stays on board 3 (Addendum 118), for the same-board ratio and the pool A/B control.
+- The board lane hardens the driver: a park verified with retries, and a cold boot that refuses, or parks first, when
+  sw[0] or sw[1] is set at connect. Until that lands, any boot's final aperture read can void the next boot on its
+  board the same way. A chain's smoke gate catches it (STOP, no false result). The cost is a board left idle.
