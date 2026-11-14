@@ -4,7 +4,7 @@
 
 | Item | State | Configuration |
 |---|---|---|
-| speedtest1 `--size 1` | **images built**; QEMU twin pre-registered below, not yet run | FRCDKMS, native route, ids55 |
+| speedtest1 `--size 1`, QEMU twin | **measured**: answers equal; program +0.63 % instructions; 28,216 CREVOKEs, subtree mean 1.0001 / max 3; peak table +4.8 KB; kernel +3 % from the native syscall page scan (cause of the +3 % open) | FRCDKMS, native route, ids55, QEMU qemu55 a0501ebc39 |
 | speedtest1 on silicon | pending (after the twin; a board slot from the SPEC lane) | bitstream `a47b588a1`, kit bkit73 |
 | speedtest1 `--size 100` | pending (after `--size 1` has been looked at) | as above |
 | CPython, PostgreSQL, tshark, FFmpeg, memcached | pending, in that order, after speedtest1 | as above |
@@ -89,3 +89,78 @@ Predictions:
 - **Control:** the static count above (two-sided). In the run itself, the protected arm must show more ended lifetimes
   than the unprotected arm; if the two arms report equal lifetime counts, the patch did not take effect and the run says
   nothing about protection.
+
+### Results: QEMU twin, speedtest1 `--size 1` (measured 2026-11-14)
+
+Two boots on slot 28. The pre-registration is commit 0bfc5c7ebec4, pushed before the second boot.
+- `nst1-q1`: plain twin, the four commands as pre-registered.
+- `nst1-q2`: the file-database pair in ABBA order (u, p, p, u), under `capmixn`. That plugin is the SPEC lane's capmix3
+  with CDERIVE and CREVOKE counted as their own classes. Its window runs from the stage's `mark1` to its `mark2`, around
+  each command.
+
+The program-instruction rule is capmix3-read.py's: user buckets below 0x40_0000_0000 that execute capability
+instructions, with the firmware range excluded.
+
+**Pre-registration check.**
+
+| Prediction | Verdict |
+|---|---|
+| Answers equal to the reference | **holds**: 32/32 phases equal `phases.json` in all six file-database runs, both arms |
+| File database works on this kit | **holds**: every file-database run exits 0 |
+| `--memdb` | **void; my error in the plan.** Both arms exit 1 with `unknown option: --memdb`, because SQLite 3.22.0's speedtest1 has no such option (the earlier `--memdb` runs used the 3.53 port). The file database is the configuration, as in every earlier 3.22 run. |
+| About 28,000 more lifetimes | **holds**: CDERIVE 28,226 vs 9, CREVOKE 28,216 vs 2 (executed, in the program window) |
+| Program instructions +0.5 % to +5 % | **holds**: +0.63 % |
+| Control: more ended lifetimes on protected | **fired**: 28,216 CREVOKEs vs 2 |
+
+**Measured.**
+
+| Arm | Run | Program instructions | CDERIVE | CREVOKE | Kernel instructions in the window |
+|---|---|---|---|---|---|
+| not protected | u1 | 190,752,302 | 9 | 2 | 2,030,194,185 |
+| protected | p1 | 191,946,580 | 28,226 | 28,216 | 2,090,533,368 |
+| protected | p2 | 191,946,569 | 28,226 | 28,216 | 2,090,831,007 |
+| not protected | u2 | 190,752,280 | 9 | 2 | 2,029,918,641 |
+
+- Program instructions: **+1,194,284 (+0.626 %)**. Repeats agree within 22 instructions. That is about 42 instructions
+  per CDERIVE/CREVOKE pair, the two lifetime instructions included.
+- Kernel instructions in the same window: **+60.6 M (+3.0 %)**. The native counters agree: `between_cycles`, the time
+  outside the context, is +61 M. Kernel instructions are ten times the program's on this twin. They are attributed
+  below.
+- Twin wall time per command, about 2.25 s in both arms: QEMU time, not a measurement.
+
+**Where the cost comes from (twin, `nst1-q3u` / `nst1-q3p`, one boot per arm).**
+
+These two boots used a private, measurement-only QEMU: `nested/qemu-nst` = qemu55 `a0501ebc39`, plus counters in
+`target/riscv/cap_rev_tree.c` for allocations, CREVOKE subtree sizes and peak live records. They also ran `capmixn` at
+64-byte granularity, mapped to `perf/natio/linux-twin/System.map`. Both arms again gave 32/32 reference answers.
+
+| Quantity | not protected | protected |
+|---|---|---|
+| CDERIVE (allocations by derive), whole boot | 9 | 28,226 |
+| CREVOKE, successful / refused | 2 / 0 | 28,216 / 0 |
+| Nodes ended by CREVOKE | 2 | 28,219 |
+| Revoked subtree size: mean / max | 1 / 1 | **1.0001 / 3** (28,214 of size 1, 2 of size 2-3) |
+| Peak live records (all allocations minus all invalidations, whole boot) | 95 | 398 |
+| Peak table memory at 16 B per live record | 1.5 KB | **6.4 KB** (+4.8 KB) |
+
+- **The protection itself.** Each memsys5 block or lookaside slot is a leaf: CREVOKE at its free ends one node.
+  - The only larger subtrees are the pool and lookaside-generation teardowns at close, and they end at most 3 nodes,
+    because by then almost every block has been freed.
+  - So on speedtest1, CREVOKE's subtree walk costs nothing beyond a single record.
+  - In the program, the cost is +1.19 M instructions, about 42 per protected allocation, the lifetime pair included.
+- **The kernel delta is not lifetime work.** In both arms the kernel's time is dominated by the native route's
+  syscall path, which has nothing to do with the patch:
+  - `pin_remaining` (1.20 G instructions not protected, 1.22 G protected) and `next_resident` (0.55 G / 0.57 G);
+  - called from checked copy (`checked-copy-dom.h:190`) on every syscall that passes a user buffer, 15,151 per run in
+    both arms;
+  - each call scans the arena's page array linearly and walks the page tables for pages not yet held.
+- **The protected arm's extra +60 M kernel instructions:**
+  - +33.5 M in those two functions;
+  - +25 M in the spinlock helpers they take;
+  - +1.4 M in `native_rw`;
+  - the node-record functions (`retire`, `resolve`) move by under 40 k.
+- **Why the scan costs 2-3 % more when protected is not attributed yet.** My working hypothesis is different page
+  residency in the 8 MiB memsys5 arena: protected memsys5 rounds blocks to the bounds granule, and its peak "Memory
+  Used" differs.
+- **The scan is real on silicon too.** The board kernel's `capstone_vm.c`
+  (`perf/k2n/linux-board-k2n-native-hpm`) differs from the twin's only by the HPM reads.
