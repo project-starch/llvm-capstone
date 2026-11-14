@@ -58,8 +58,25 @@ slots.** Everything else is 3-bit registers (x8-x15) or a single operand.
 | (spare) | Q0 100 111, two Q1 unary slots | |
 
 - **The cost:** compressed fld/fsd/fldsp/fsdsp disappear for every program on the bitstream (the 4-byte forms stay).
-  That costs FP-heavy code size and fetch. A census of executed c.fld/c.fsd/c.fldsp/c.fsdsp on the FP SPEC rows is
-  needed before choosing; it is the compiler lane's measurement.
+  That costs FP-heavy code size and fetch. **Measured (compiler lane, 2026-11-14):** the census of executed
+  c.fld / c.fsd / c.fldsp / c.fsdsp. Source: arm FRCDKMS (llvm-c9 29027126f39b), native-twin capmix3 shift-1
+  profiles, user instructions inside the measurement windows, every executed PC decoded from the stage's own
+  binary (perf/cclever/fpcount.py), each row specdiff 1/1:
+
+  | row | user insns | c.fld | c.fsd | c.fldsp | c.fsdsp | all four, share of user | share of compressed |
+  |---|---|---|---|---|---|---|---|
+  | 544.nab_r test | 7.157 G | 462.6 M | 90.8 M | 119.2 M | 46.5 M | **10.05 %** | 47.2 % |
+  | 519.lbm_r test | 6.155 G | 8.2 M | 52.4 M | 144.3 M | 144.3 M | **5.67 %** | 62.0 % |
+  | 538.imagick_r test-ref (benchmark window) | 97.4 M | 1,253 | 83 | 318,045 | 39 | **0.33 %** | 2.4 % |
+
+  Limits:
+  - lbm has 1.02 % of window instructions outside the image text, not decoded.
+  - imagick's second window (imagevalidate, 5.27 %) is not the benchmark.
+  - These are the dynamic instructions option A would turn into 4-byte forms. The text and I$ effect of that is
+    not measured.
+
+  The gain side (the shape table above) is measured on gcc and perl, the cost falls on the FP rows: option A trades
+  one population's code for another's, which option B (a decode mode) does not.
 - **Option B, a decode mode.** Keep D's meaning by default and reinterpret the four slots only when a per-image mode bit
   is set (CHERI's capability-mode pattern). A decoder input driven by a CSR needs a flushing CSR write. The twin and the
   compiler must agree on the bit, and images mix only at a domain switch. This is more RTL and more ABI, and no FP cost.
@@ -85,5 +102,5 @@ slots.** Everything else is 3-bit registers (x8-x15) or a single operand.
 
 ## Next
 
-The compiler lane's census of the FP compressed forms (option A's cost) and of register classes for shapes 2, 5 and 6;
+The FP census is in (above). Still owed by the compiler lane: the register-class census for shapes 2, 5 and 6;
 then the lead picks A or B and the encodings. The decoder RTL and the twin follow in one change, after this bitstream.
