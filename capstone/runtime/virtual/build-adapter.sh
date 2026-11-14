@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # build-adapter.sh OUT: the adapter directory of a native kit.
 #
-# The Capstone adapter is built into the kernel (install-native-task.sh, then
+# The kernel's Sublet code is built into the kernel (capstone/kernel/apply.sh, then
 # Image with CONFIG_RISCV_CAPSTONE_TASK=y), so this directory holds no module.
 # It holds the two programs the runners stage next to an image:
 #   capstone-vexec  starts an image as a native task and prints the launcher's

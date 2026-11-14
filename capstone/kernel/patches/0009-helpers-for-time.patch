@@ -10,7 +10,7 @@
  #include <linux/sched/signal.h>
  #include <linux/sched/rt.h>
  #include <linux/syscalls.h>
-@@ -1447,3 +1450,69 @@
+@@ -1447,3 +1450,69 @@ COMPAT_SYSCALL_DEFINE5(ppoll_time64, struct pollfd __user *, ufds,
  }
  
  #endif

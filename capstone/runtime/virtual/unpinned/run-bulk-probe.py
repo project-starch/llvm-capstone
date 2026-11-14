@@ -46,7 +46,7 @@ echo VIRTUAL_STAGED_DONE
     for arg in args.kernel_arg:
         cmd += ['--kernel-arg', arg]
     paths = [args.qemu, args.module] + [args.images / n for n in ['Image', 'fw_jump.elf', 'rootfs.ext2']]
-    paths += [Path(__file__), here.parent / 'run-staged.py', here / 'linux-6.1-unpinned.patch']
+    paths += [Path(__file__), here.parent / 'run-staged.py', here.parents[2] / 'kernel' / 'patches' / '0001-riscv-mm-capability-tags-follow-pages.patch']
     record = {'command': cmd, 'expected': args.expect,
               'sha256': {str(p): hashlib.sha256(p.read_bytes()).hexdigest() for p in paths}}
     (args.work / 'inputs.json').write_text(json.dumps(record, indent=2) + '\n')

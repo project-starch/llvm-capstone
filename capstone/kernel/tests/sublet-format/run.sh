@@ -1,17 +1,43 @@
 #!/usr/bin/env bash
 # The kernel's sublet-format.h and sublet-table.h against QEMU's table and capability code, on
 # the host (checks.c), then mutants of sublet-format.h that must each fail.
-#   tests/sublet-format/run.sh QEMU_TARGET_RISCV KERNEL_SOURCES
+#   tests/sublet-format/run.sh QEMU_TARGET_RISCV [KERNEL_SOURCES]
 # QEMU_TARGET_RISCV is capstone-qemu's target/riscv at the revision the kernel runs on (it supplies
-# cap_rev_table_abi.h too). KERNEL_SOURCES is the directory that holds sublet-format.h and
-# sublet-table.h. Exit 0 only if the checks pass and every mutant fails.
+# cap_rev_table_abi.h too). KERNEL_SOURCES is a directory that holds sublet-format.h and
+# sublet-table.h, such as arch/riscv/mm of a tree with the series applied. Without it the two
+# files come from the series itself (patches/0011-riscv-mm-sublet-table.patch). Exit 0 only if
+# the checks pass and every mutant fails.
 set -euo pipefail
 qemu=$(cd -- "${1:?capstone-qemu target/riscv}" && pwd)
-kernel=$(cd -- "${2:?directory with sublet-format.h and sublet-table.h}" && pwd)
 here=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 work=$(mktemp -d)
 trap 'rm -rf -- "$work"' EXIT
 status=0
+if (($# >= 2)); then
+    kernel=$(cd -- "$2" && pwd)
+else
+    # The new files of the series patch, written out: every line of a "--- /dev/null" file.
+    kernel=$work/series
+    python3 - "$here/../../patches/0011-riscv-mm-sublet-table.patch" "$kernel" <<'PYTHON'
+import os, sys
+patch, out = sys.argv[1], sys.argv[2]
+os.makedirs(out)
+lines, name = open(patch).read().split('\n'), None
+for i, line in enumerate(lines):
+    if line.startswith('+++ b/') and lines[i - 1] == '--- /dev/null':
+        name = os.path.basename(line[6:])
+        body = []
+    elif name and line.startswith('@@'):
+        continue
+    elif name and line.startswith('+'):
+        body.append(line[1:])
+    elif name:
+        open(os.path.join(out, name), 'w').write('\n'.join(body) + '\n')
+        name = None
+if name:
+    open(os.path.join(out, name), 'w').write('\n'.join(body) + '\n')
+PYTHON
+fi
 
 build() {   # build <header dir> <output>
     ${CC:-cc} -std=gnu11 -O2 -Wall -Wextra -Werror -Wno-unused-function -I"$1" -I"$qemu" "$here/checks.c" \

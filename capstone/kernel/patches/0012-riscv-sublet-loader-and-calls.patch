@@ -1,0 +1,2059 @@
+--- a/arch/riscv/kernel/Makefile
++++ b/arch/riscv/kernel/Makefile
+@@ -90,3 +90,5 @@ obj-$(CONFIG_COMPAT)		+= compat_signal.o
+ obj-$(CONFIG_COMPAT)		+= compat_vdso/
+ 
+ obj-$(CONFIG_RISCV_CAPSTONE_TASK) += capstone_task.o capstone_spawn.o
++
++obj-$(CONFIG_RISCV_CAPSTONE_TASK) += sublet/
+--- /dev/null
++++ b/arch/riscv/kernel/sublet/Makefile
+@@ -0,0 +1,5 @@
++# SPDX-License-Identifier: GPL-2.0-only
++# The headers shared with the libc (capstone/, vm-abi.h) and the wire code (delegate-wire.c,
++# spawn-wire.c, native-syscall-table.c) are copied here by capstone/kernel/apply.sh.
++obj-y += sublet.o
++ccflags-y += -I$(src)
+--- /dev/null
++++ b/arch/riscv/kernel/sublet/binfmt.h
+@@ -0,0 +1,328 @@
++/* SPDX-License-Identifier: GPL-2.0-only */
++/* The .dom loader: it parses a protected program's image, maps it with its stack, startup,
++ * metadata and exchange regions, creates the context and derives one block per region from R.
++ * Root only. The protected entry does not exist yet (plan v5 steps 3 and 4), so the loader
++ * refuses after it has built everything. Past the point of no return that kills the task. */
++#include <linux/binfmts.h>
++#include <linux/elf.h>
++#include <linux/mman.h>
++#include <linux/uio.h>
++#include <linux/fs_struct.h>
++#include <linux/path.h>
++#include <linux/cred.h>
++#include <linux/pid_namespace.h>
++#include <linux/ptrace.h>
++#include <linux/security.h>
++#include <asm/processor.h>
++#include <asm/cacheflush.h>
++#include "capstone/delegate.h"
++
++/* Read-only attribution record: the image base of the last load. */
++static unsigned long dom_last_base;
++module_param(dom_last_base, ulong, 0400);
++static bool dom_binfmt;
++module_param(dom_binfmt, bool, 0444);
++MODULE_PARM_DESC(dom_binfmt, "required root-only native .dom exec admission");
++#define DOM_LAUNCH_BYTES 65536UL
++#define DOM_META_BYTES 16384UL
++#define DOM_MAX_STRINGS 1024
++#define DOM_APP_MAGIC 0x315050414e4f5043ULL
++#define DOM_REQ_MAGIC 0x5145524d4f445043ULL
++#define DOM_HELLO 0xc0de0001ULL
++
++struct dom_image {
++    Elf64_Phdr text, data;
++    u64 entry, bytes, stack, exchange;
++};
++struct dom_app { u64 magic, version, flags, launch, heap, exchange, contexts; };
++struct dom_launch_header {
++    u8 magic[8];
++    u32 version, bytes, argc, envc, cwd, stdio_mask, pid, ppid;
++    u32 uid, euid, gid, egid;
++    u64 realtime_ns, monotonic_ns, ticks, ticks_per_second;
++};
++_Static_assert(sizeof(struct dom_launch_header) == 88, "launch ABI");
++_Static_assert(sizeof(struct capstone_delegate_entry) == 96, "delegate ABI");
++
++static int dom_read(struct file *f, void *buf, size_t n, u64 at)
++{
++    loff_t pos = at;
++    ssize_t got = kernel_read(f, buf, n, &pos);
++    return got == n ? 0 : got < 0 ? got : -ENOEXEC;
++}
++static bool dom_within(u64 at, u64 n, u64 size)
++{ return at <= size && n <= size - at; }
++static bool dom_name(const char *names, u64 len, u64 at, const char *want)
++{
++    size_t n = strlen(want) + 1;
++    return dom_within(at, n, len) && !memcmp(names + at, want, n);
++}
++static int dom_parse(struct file *f, struct dom_image *im)
++{
++    Elf64_Ehdr h;
++    Elf64_Phdr *ph = NULL;
++    Elf64_Shdr *sh = NULL;
++    char *names = NULL;
++    struct dom_app app = {0};
++    u64 size = i_size_read(file_inode(f)), magic = 0, req[3];
++    unsigned i, loads = 0, markers = 0, apps = 0, reqs = 0;
++    int rc = -ENOEXEC;
++    if (size < sizeof(h) || size > (512UL << 20) || dom_read(f, &h, sizeof(h), 0)) return rc;
++    if (memcmp(h.e_ident, ELFMAG, SELFMAG) || h.e_ident[EI_CLASS] != ELFCLASS64 ||
++        h.e_ident[EI_DATA] != ELFDATA2LSB || h.e_ident[EI_VERSION] != EV_CURRENT ||
++        h.e_machine != 259 || h.e_type != ET_EXEC || h.e_version != EV_CURRENT ||
++        h.e_ehsize != sizeof(h) || h.e_phentsize != sizeof(*ph) ||
++        h.e_shentsize != sizeof(*sh) || !h.e_phnum || h.e_phnum > 16 ||
++        !h.e_shnum || h.e_shnum > 512 || h.e_shstrndx >= h.e_shnum ||
++        !dom_within(h.e_phoff, h.e_phnum * sizeof(*ph), size) ||
++        !dom_within(h.e_shoff, h.e_shnum * sizeof(*sh), size)) return rc;
++    ph = kmalloc_array(h.e_phnum, sizeof(*ph), GFP_KERNEL);
++    sh = kmalloc_array(h.e_shnum, sizeof(*sh), GFP_KERNEL);
++    if (!ph || !sh) { rc = -ENOMEM; goto out; }
++    if (dom_read(f, ph, h.e_phnum * sizeof(*ph), h.e_phoff) ||
++        dom_read(f, sh, h.e_shnum * sizeof(*sh), h.e_shoff)) goto out;
++    if (sh[h.e_shstrndx].sh_type != SHT_STRTAB || !sh[h.e_shstrndx].sh_size ||
++        sh[h.e_shstrndx].sh_size > DOM_LAUNCH_BYTES ||
++        !dom_within(sh[h.e_shstrndx].sh_offset, sh[h.e_shstrndx].sh_size, size)) goto out;
++    names = kmalloc(sh[h.e_shstrndx].sh_size, GFP_KERNEL);
++    if (!names) { rc = -ENOMEM; goto out; }
++    if (dom_read(f, names, sh[h.e_shstrndx].sh_size, sh[h.e_shstrndx].sh_offset)) goto out;
++    for (i = 0; i < h.e_phnum; ++i) {
++        if (ph[i].p_type == PT_INTERP || ph[i].p_type == PT_DYNAMIC) goto out;
++        if (ph[i].p_type != PT_LOAD) continue;
++        if (loads >= 2 || !ph[i].p_memsz || ph[i].p_memsz > CV_MAX_EAGER_BYTES ||
++            ph[i].p_filesz > ph[i].p_memsz || ph[i].p_vaddr > ULONG_MAX - ph[i].p_memsz ||
++            !dom_within(ph[i].p_offset, ph[i].p_filesz, size)) goto out;
++        if (!loads++) im->text = ph[i]; else im->data = ph[i];
++    }
++    if (loads != 2 || im->text.p_flags != (PF_R | PF_X) || im->data.p_flags != (PF_R | PF_W) ||
++        ((im->text.p_offset | im->text.p_vaddr | im->text.p_memsz |
++          im->data.p_offset | im->data.p_vaddr) & ~PAGE_MASK) ||
++        im->text.p_filesz != im->text.p_memsz ||
++        im->data.p_vaddr != im->text.p_vaddr + im->text.p_memsz ||
++        h.e_entry < im->text.p_vaddr || h.e_entry - im->text.p_vaddr >= im->text.p_memsz)
++        goto out;
++    im->stack = 1UL << 20;
++    for (i = 0; i < h.e_shnum; ++i) {
++        Elf64_Shdr *s = sh + i;
++        u64 len = sh[h.e_shstrndx].sh_size;
++        if (s->sh_name >= len || !memchr(names + s->sh_name, 0, len - s->sh_name) ||
++            (s->sh_type != SHT_NOBITS && !dom_within(s->sh_offset, s->sh_size, size))) goto out;
++        if (dom_name(names, len, s->sh_name, ".capstone_virtual")) {
++            if (markers++ || s->sh_type != SHT_PROGBITS || s->sh_size != sizeof(magic) ||
++                dom_read(f, &magic, sizeof(magic), s->sh_offset)) goto out;
++        } else if (dom_name(names, len, s->sh_name, ".capstone_application")) {
++            if (apps++ || s->sh_type != SHT_PROGBITS || s->sh_size != sizeof(app) ||
++                dom_read(f, &app, sizeof(app), s->sh_offset)) goto out;
++        } else if (dom_name(names, len, s->sh_name, ".capstone_domreq")) {
++            if (reqs++ || s->sh_type != SHT_PROGBITS || s->sh_size != sizeof(req) ||
++                dom_read(f, req, sizeof(req), s->sh_offset) || req[0] != DOM_REQ_MAGIC ||
++                req[1] < 256 || req[1] > CV_MAX_EAGER_BYTES || !req[2] || req[2] > req[1] - 256)
++                goto out;
++            im->stack = roundup_pow_of_two(max_t(u64, req[2], PAGE_SIZE));
++        }
++    }
++    if (markers != 1 || apps != 1 || magic != CV_IMAGE_MAGIC || app.magic != DOM_APP_MAGIC ||
++        app.version != 2 || app.flags != 3 || app.launch != DOM_LAUNCH_BYTES ||
++        app.heap || app.contexts > 15 || app.exchange < PAGE_SIZE || app.exchange > (1UL << 20) ||
++        (app.exchange & ~PAGE_MASK)) goto out;
++    im->bytes = roundup_pow_of_two(im->text.p_memsz + PAGE_ALIGN(im->data.p_memsz));
++    if (im->bytes > CV_MAX_EAGER_BYTES) goto out;
++    im->entry = h.e_entry - im->text.p_vaddr;
++    im->exchange = roundup_pow_of_two(app.exchange);
++    rc = 0;
++out:
++    kfree(names); kfree(sh); kfree(ph);
++    return rc;
++}
++
++/* Always private base pages; the experiment refuses THP kernels at load. */
++static unsigned long dom_reserve(unsigned long bytes, unsigned long align, unsigned long prot)
++{
++    unsigned long raw, base, total = bytes + align - PAGE_SIZE;
++    raw = vm_mmap(NULL, 0, total, prot, MAP_PRIVATE | MAP_ANONYMOUS, 0);
++    if (IS_ERR_VALUE(raw)) return raw;
++    base = ALIGN(raw, align);
++    if (base != raw) vm_munmap(raw, base - raw);
++    if (raw + total > base + bytes) vm_munmap(base + bytes, raw + total - base - bytes);
++    return base;
++}
++static int dom_grant(struct sublet_context *c, unsigned long base, unsigned long bytes,
++                     unsigned reg, unsigned long cursor, unsigned long rx)
++{
++    struct sublet_grant g = {.address = base, .bytes = bytes, .reg = reg,
++                             .cursor = cursor, .rx_bytes = rx};
++    return sublet_grant(c, &g);
++}
++
++#include "capsule.h"
++#include "syscall.h"
++
++static void dom_context_destroy(struct sublet_context *c)
++{
++    dom_delegate_free(c);
++    sublet_context_destroy(c);
++}
++/* The release of the context an address space carries, called by riscv_capstone_release at
++ * exec and exit. */
++void sublet_context_release(void *context)
++{
++    dom_context_destroy(context);
++}
++static int dom_startup(struct linux_binprm *bprm, void *block)
++{
++    struct dom_launch_header *h = block;
++    unsigned long header_bytes = sizeof(*h);
++    u32 *offsets = block + header_bytes;
++    unsigned long at = bprm->p, used = header_bytes + (bprm->argc + bprm->envc) * sizeof(u32);
++    struct path pwd;
++    char *cwd, *tmp;
++    unsigned i;
++    memcpy(h->magic, "CPLAUNCH", 8);
++    h->version = 2;
++    h->argc = bprm->argc; h->envc = bprm->envc;
++    h->pid = task_tgid_vnr(current); h->ppid = task_ppid_nr_ns(current, task_active_pid_ns(current));
++    h->uid = from_kuid_munged(current_user_ns(), current_uid());
++    h->euid = from_kuid_munged(current_user_ns(), current_euid());
++    h->gid = from_kgid_munged(current_user_ns(), current_gid());
++    h->egid = from_kgid_munged(current_user_ns(), current_egid());
++    h->realtime_ns = ktime_get_real_ns(); h->monotonic_ns = ktime_get_ns();
++    for (i = 0; i < 3; ++i) {
++        struct file *f = fget(i);
++        if (f) { h->stdio_mask |= 1U << i; fput(f); }
++    }
++    tmp = (char *)__get_free_page(GFP_KERNEL);
++    if (!tmp) return -ENOMEM;
++    get_fs_pwd(current->fs, &pwd);
++    cwd = d_path(&pwd, tmp, PAGE_SIZE);
++    path_put(&pwd);
++    if (IS_ERR(cwd)) { free_page((unsigned long)tmp); return PTR_ERR(cwd); }
++    h->cwd = used;
++    i = strlen(cwd) + 1;
++    memcpy(block + used, cwd, i); used += i;
++    free_page((unsigned long)tmp);
++    current->mm->arg_start = at;
++    for (i = 0; i < bprm->argc + bprm->envc; ++i) {
++        long n = strnlen_user((char __user *)at, DOM_LAUNCH_BYTES - used);
++        if (n <= 0 || n > DOM_LAUNCH_BYTES - used) return -E2BIG;
++        offsets[i] = used;
++        if (copy_from_user(block + used, (void __user *)at, n)) return -EFAULT;
++        at += n; used += n;
++        if (i + 1 == bprm->argc) current->mm->arg_end = current->mm->env_start = at;
++    }
++    current->mm->env_end = at;
++    h->bytes = used;
++    return 0;
++}
++
++static struct linux_binfmt capstone_dom;
++static int dom_load_binary(struct linux_binprm *bprm)
++{
++    struct dom_image im = {0};
++    struct sublet_context *c = NULL;
++    unsigned long base, stack, startup, whole, part;
++    void *block = NULL, *tail = NULL;
++    int rc;
++    Elf64_Ehdr *h = (void *)bprm->buf;
++    if (memcmp(h->e_ident, ELFMAG, SELFMAG) || h->e_machine != 259) return -ENOEXEC;
++    if (!uid_eq(current_euid(), GLOBAL_ROOT_UID) || bprm->secureexec ||
++        (bprm->unsafe & LSM_UNSAFE_SHARE) ||
++        (file_inode(bprm->file)->i_mode & (S_ISUID | S_ISGID))) return -EACCES;
++    if (!one_inode_per_file(bprm->file) || !file_inode(bprm->file)->i_nlink) return -EOPNOTSUPP;
++    if (bprm->argc < 1 || bprm->argc > DOM_MAX_STRINGS ||
++        bprm->envc > DOM_MAX_STRINGS - bprm->argc) return -E2BIG;
++    if (current->seccomp.mode != SECCOMP_MODE_DISABLED) return -EOPNOTSUPP;
++    if (current->ptrace || (read_thread_flags() & _TIF_SYSCALL_WORK))
++        return -EOPNOTSUPP;
++    rc = dom_parse(bprm->file, &im);
++    if (rc) return rc;
++    block = kvzalloc(DOM_LAUNCH_BYTES, GFP_KERNEL);
++    tail = kmalloc(PAGE_SIZE, GFP_KERNEL);
++    if (!block || !tail) { rc = -ENOMEM; goto out; }
++    /* Read the partial data page before the point of no return. */
++    whole = im.data.p_filesz & PAGE_MASK; part = im.data.p_filesz - whole;
++    if (part && (rc = dom_read(bprm->file, tail, part, im.data.p_offset + whole))) goto out;
++    rc = begin_new_exec(bprm);
++    if (rc) goto out;
++    setup_new_exec(bprm);
++    rc = setup_arg_pages(bprm, STACK_TOP, EXSTACK_DISABLE_X);
++    if (rc) goto out;
++    rc = dom_startup(bprm, block);
++    if (rc) goto out;
++    rc = sublet_context_create(&c);
++    if (rc) goto out;
++    rc = dom_resources_init(c);
++    if (rc) goto out;
++    rc = deny_write_access(bprm->file);
++    if (rc) goto out;
++    c->image = get_file(bprm->file);
++    base = dom_reserve(im.bytes, im.bytes, PROT_READ | PROT_WRITE);
++    if (IS_ERR_VALUE(base)) { rc = base; goto out; }
++    {
++        unsigned long mapped = vm_mmap(bprm->file, base, im.text.p_memsz, PROT_READ | PROT_EXEC,
++                                       MAP_PRIVATE | MAP_FIXED, im.text.p_offset);
++        if (IS_ERR_VALUE(mapped)) { rc = mapped; goto out; }
++    }
++    if (whole) {
++        unsigned long mapped = vm_mmap(bprm->file, base + im.text.p_memsz, whole,
++                                      PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_FIXED, im.data.p_offset);
++        if (IS_ERR_VALUE(mapped)) { rc = mapped; goto out; }
++    }
++    if (part && copy_to_user((void __user *)(base + im.text.p_memsz + whole), tail, part)) {
++        rc = -EFAULT; goto out;
++    }
++    stack = dom_reserve(im.stack, im.stack, PROT_READ | PROT_WRITE);
++    startup = dom_reserve(DOM_LAUNCH_BYTES, DOM_LAUNCH_BYTES, PROT_READ | PROT_WRITE);
++    c->dom_meta = dom_reserve(DOM_META_BYTES, DOM_META_BYTES, PROT_READ | PROT_WRITE);
++    c->dom_exchange_bytes = im.exchange;
++    c->dom_exchange = dom_reserve(im.exchange, im.exchange, PROT_READ | PROT_WRITE);
++    if (IS_ERR_VALUE(stack) || IS_ERR_VALUE(startup) || IS_ERR_VALUE(c->dom_meta) ||
++        IS_ERR_VALUE(c->dom_exchange)) { rc = -ENOMEM; goto out; }
++    if (copy_to_user((void __user *)startup, block, ((struct dom_launch_header *)block)->bytes)) {
++        rc = -EFAULT; goto out;
++    }
++    mutex_lock(&sublet_lock);
++    /* One block per region. The image's block covers text and data with its cursor at the
++     * base: a data reference for the program's globals, not a code capability. The processor
++     * checks no fetch, and the page table keeps the text executable and never writable. */
++    rc = dom_grant(c, base, im.bytes, 3, base, im.text.p_memsz);
++    if (!rc) rc = dom_grant(c, stack, im.stack, 2, stack + im.stack, 0);
++    if (!rc) rc = dom_grant(c, c->dom_meta, DOM_META_BYTES, 10, c->dom_meta, 0);
++    if (!rc) rc = dom_grant(c, c->dom_exchange, im.exchange, 11, c->dom_exchange, 0);
++    if (!rc) rc = dom_grant(c, startup, DOM_LAUNCH_BYTES, 12, startup, 0);
++    if (!rc) {
++        u64 inherited[2] = {0, 0};
++        unsigned long irqflags;
++        unsigned sig;
++        spin_lock_irqsave(&current->sighand->siglock, irqflags);
++        inherited[0] = current->blocked.sig[0];
++        for (sig = 1; sig <= 64; ++sig)
++            if (current->sighand->action[sig - 1].sa.sa_handler == SIG_IGN)
++                inherited[1] |= 1ULL << (sig - 1);
++        spin_unlock_irqrestore(&current->sighand->siglock, irqflags);
++        rc = dom_store(c, c->dom_meta + CAPSTONE_SIGNAL_OFFSET +
++                        offsetof(struct capstone_signal_block, initial_mask),
++                        inherited, sizeof(inherited));
++    }
++    mutex_unlock(&sublet_lock);
++    if (rc) goto out;
++    WRITE_ONCE(dom_last_base, base);
++    /* Plan v5 step 3 adds the trap entry and step 4 binds the context to the mm and enters
++     * the program at base + entry. Until then nothing may return to the image: an ordinary
++     * return would run it as an unprotected program. */
++    pr_info("sublet: image ready at 0x%lx, entry 0x%lx: no protected entry yet, refused\n",
++            base, base + (unsigned long)im.entry);
++    rc = -ENOEXEC;
++out:
++    if (c) dom_context_destroy(c);
++    kvfree(block); kfree(tail);
++    /* Linux 6.1's ordinary post-PONR SIGSEGV is ptrace-suppressible. Never let a failure
++     * after the point of no return recover scalar execution. */
++    if (rc && bprm->point_of_no_return)
++        force_exit_sig(SIGSEGV);
++    return rc;
++}
++static struct linux_binfmt capstone_dom = {
++    .module = THIS_MODULE, .load_binary = dom_load_binary,
++    .capstone_native = true,
++};
+--- /dev/null
++++ b/arch/riscv/kernel/sublet/capsule.h
+@@ -0,0 +1,50 @@
++/* SPDX-License-Identifier: GPL-2.0-only */
++/* The task-owned resource capsule: the directories, devices and descriptors a protected
++ * program may use, and its spawned children. */
++#include "delegate-wire.c"
++#include <linux/namei.h>
++#include <linux/mount.h>
++#include <linux/magic.h>
++#include <linux/kdev_t.h>
++#include <linux/fdtable.h>
++
++#define DOM_FDS 1024
++#define DOM_EXTRA_DIRS 2
++#define DOM_DEVICES 3
++#define DOM_CHILDREN 64
++
++struct dom_delegate {
++    struct path root, cwd_path; /* immutable grant; mutable Linux working directory */
++    struct path dirs[DOM_EXTRA_DIRS], devices[DOM_DEVICES];
++    char *root_name; /* admission name only; live names come from pinned paths */
++    DECLARE_BITMAP(fds, DOM_FDS);
++    struct file *shell; /* explicitly provisioned executable, no directory authority */
++    struct pid *children[DOM_CHILDREN];
++};
++
++static int dom_spawn_resources(struct sublet_context *c);
++#include "resource.h"
++
++/* A plain store into the program's memory, before the program runs. The page-tag code keeps
++ * tags with physical pages, so no page needs to be held for it. */
++static int dom_store(struct sublet_context *c, unsigned long at, const void *src, size_t bytes)
++{
++    (void)c;
++    return copy_to_user((void __user *)at, src, bytes) ? -EFAULT : 0;
++}
++static void dom_delegate_free(struct sublet_context *c)
++{
++    struct dom_delegate *d = c->dom_delegate;
++    if (!d) return;
++    path_put(&d->root);
++    path_put(&d->cwd_path);
++    for (unsigned i = 0; i < DOM_EXTRA_DIRS; ++i)
++        if (d->dirs[i].dentry) path_put(&d->dirs[i]);
++    for (unsigned i = 0; i < DOM_DEVICES; ++i)
++        if (d->devices[i].dentry) path_put(&d->devices[i]);
++    if (d->shell) fput(d->shell);
++    for (unsigned i = 0; i < DOM_CHILDREN; ++i)
++        if (d->children[i]) put_pid(d->children[i]);
++    kfree(d->root_name);
++    kfree(d); c->dom_delegate = NULL;
++}
+--- /dev/null
++++ b/arch/riscv/kernel/sublet/process-spawn.h
+@@ -0,0 +1,300 @@
++/* SPDX-License-Identifier: GPL-2.0-only */
++/* Process services. The kernel owns bootstrap, exec and reaping. This frontend takes a
++ * request already copied into kernel memory and carries only explicitly admitted resources.
++ * Plan v5 step 5's binder copies the request in and the wait results out through the
++ * program's references. */
++#include <linux/capstone_native_spawn.h>
++#include <linux/resource.h>
++#include <capstone/spawn.h>
++#include "spawn-wire.c"
++
++struct native_spawn_request {
++    struct sublet_context *shadow; /* resource-only context; never a protected context */
++    void *block;
++    char *argv[CAPSTONE_SPAWN_STRINGS + 1];
++    char *envp[CAPSTONE_SPAWN_STRINGS + 1];
++    const char *paths[CAPSTONE_SPAWN_ACTIONS];
++    struct capstone_spawn_view view;
++};
++
++static void native_spawn_release(void *data)
++{
++    struct native_spawn_request *r = data;
++    if (r->shadow) {
++        dom_delegate_free(r->shadow);
++        kfree(r->shadow);
++    }
++    kvfree(r->block);
++    kfree(r);
++}
++
++static int native_spawn_clone_resources(struct native_spawn_request *r, struct sublet_context *c)
++{
++    struct dom_delegate *src = c->dom_delegate, *d;
++    r->shadow = kzalloc(sizeof(*r->shadow), GFP_KERNEL);
++    if (!r->shadow) return -ENOMEM;
++    d = kzalloc(sizeof(*d), GFP_KERNEL);
++    if (!d) return -ENOMEM;
++    r->shadow->dom_delegate = d;
++    d->root = src->root; path_get(&d->root);
++    d->cwd_path = src->cwd_path; path_get(&d->cwd_path);
++    for (unsigned i = 0; i < DOM_EXTRA_DIRS; ++i)
++        if (src->dirs[i].dentry) { d->dirs[i] = src->dirs[i]; path_get(&d->dirs[i]); }
++    for (unsigned i = 0; i < DOM_DEVICES; ++i)
++        if (src->devices[i].dentry) { d->devices[i] = src->devices[i]; path_get(&d->devices[i]); }
++    if (src->shell) d->shell = get_file(src->shell);
++    bitmap_copy(d->fds, src->fds, DOM_FDS);
++    d->root_name = kstrdup(src->root_name, GFP_KERNEL);
++    return d->root_name ? 0 : -ENOMEM;
++}
++
++/* Called only by native binfmt admission in the authenticated bootstrap.
++ * Transfer ownership once; exec failure cleanup uses the normal context path. */
++static int dom_spawn_resources(struct sublet_context *c)
++{
++    struct native_spawn_request *r = capstone_native_spawn_data();
++    struct dom_delegate *d;
++    if (!r) return 0;
++    if (!r->shadow || !r->shadow->dom_delegate) return -EPERM;
++    d = r->shadow->dom_delegate;
++    r->shadow->dom_delegate = NULL;
++    c->dom_delegate = d;
++    for (unsigned i = 0; i < DOM_FDS; ++i) {
++        struct file *f;
++        if (!test_bit(i, d->fds)) continue;
++        f = fget(i);
++        if (f) fput(f);
++        else clear_bit(i, d->fds); /* exec has applied CLOEXEC */
++    }
++    return 1;
++}
++
++static int native_spawn_dup(struct sublet_context *c, unsigned src, unsigned dst, unsigned flags)
++{
++    struct file *f;
++    int rc;
++    if (dst >= DOM_FDS || !dom_fd_allowed(c, src)) return -EBADF;
++    f = fget(src);
++    if (!f) return -EBADF;
++    if (src == dst) { set_close_on_exec(dst, flags & O_CLOEXEC); rc = dst; }
++    else rc = replace_fd(dst, f, flags);
++    fput(f);
++    if (rc >= 0) set_bit(dst, c->dom_delegate->fds);
++    return rc < 0 ? rc : 0;
++}
++
++static int native_spawn_exec(void *data)
++{
++    struct native_spawn_request *r = data;
++    struct sublet_context *c = r->shadow;
++    struct dom_delegate *d = c->dom_delegate;
++    struct capstone_delegate_entry e = {.nr = CAPSTONE_SYS_openat};
++    struct file *image;
++    int rc;
++    /* Child files/fs are private. No unadmitted inherited descriptor may be
++     * usable by an action, survive exec, or prolong an ambient pipe lifetime. */
++    __close_range(DOM_FDS, ~0U, 0);
++    for (unsigned i = 0; i < DOM_FDS; ++i)
++        if (!test_bit(i, d->fds)) close_fd(i);
++    set_fs_pwd(current->fs, &d->cwd_path);
++    if (r->view.flags & CAPSTONE_SPAWN_SETSIGDEF) {
++        for (unsigned sig = 1; sig <= 64; ++sig) {
++            if (sig == SIGKILL || sig == SIGSTOP || !(r->view.sigdefault & (1ULL << (sig - 1)))) continue;
++            rc = capstone_native_signal_action(sig, 0, 0);
++            if (rc) return rc;
++        }
++    }
++    if (r->view.flags & CAPSTONE_SPAWN_SETSIGMASK) {
++        sigset_t mask;
++        sigemptyset(&mask);
++        mask.sig[0] = r->view.sigmask;
++        sigdelsetmask(&mask, sigmask(SIGKILL) | sigmask(SIGSTOP));
++        set_current_blocked(&mask);
++    }
++    for (unsigned i = 0; i < r->view.actions; ++i) {
++        struct capstone_spawn_action a;
++        memcpy(&a, &r->view.action[i], sizeof(a)); /* wire may be unaligned */
++        if (a.fd >= DOM_FDS || a.srcfd >= DOM_FDS) return -EBADF;
++        switch (a.cmd) {
++        case CAPSTONE_SPAWN_CLOSE:
++            if (!dom_fd_allowed(c, a.fd)) return -EBADF;
++            rc = close_fd(a.fd);
++            if (!rc) clear_bit(a.fd, d->fds);
++            break;
++        case CAPSTONE_SPAWN_DUP2:
++            rc = native_spawn_dup(c, a.srcfd, a.fd, 0);
++            break;
++        case CAPSTONE_SPAWN_OPEN: {
++            long fd;
++            /* POSIX open actions close the destination before opening. */
++            if (dom_fd_allowed(c, a.fd)) { close_fd(a.fd); clear_bit(a.fd, d->fds); }
++            e.args[0] = (u64)(s64)AT_FDCWD;
++            e.args[2] = a.oflag; e.args[3] = a.mode;
++            fd = dom_path_operation_name(c, &e, r->paths[i]);
++            if (fd < 0) return fd;
++            rc = fd == a.fd ? 0 : native_spawn_dup(c, fd, a.fd, a.oflag & O_CLOEXEC);
++            if (fd != a.fd) { close_fd(fd); clear_bit(fd, d->fds); }
++            break;
++        }
++        case CAPSTONE_SPAWN_CHDIR:
++            rc = dom_chdir_name(c, r->paths[i]);
++            break;
++        case CAPSTONE_SPAWN_FCHDIR: {
++            struct file *f;
++            struct path old;
++            if (!dom_fd_allowed(c, a.fd)) return -EBADF;
++            f = fget(a.fd);
++            if (!f) return -EBADF;
++            rc = !S_ISDIR(file_inode(f)->i_mode) ? -ENOTDIR :
++                 !dom_directory_grant(d, &f->f_path) ? -EACCES :
++                 inode_permission(mnt_user_ns(f->f_path.mnt), file_inode(f), MAY_EXEC | MAY_CHDIR);
++            if (!rc) {
++                old = d->cwd_path; d->cwd_path = f->f_path; path_get(&d->cwd_path);
++                set_fs_pwd(current->fs, &d->cwd_path); path_put(&old);
++            }
++            fput(f);
++            break;
++        }
++        default: return -EINVAL;
++        }
++        if (rc) return rc;
++    }
++    e.args[0] = (u64)(s64)AT_FDCWD;
++    if (!strcmp(r->view.path, "/bin/sh") && d->shell)
++        image = get_file(d->shell);
++    else image = dom_path_file_name(c, &e, r->view.path);
++    if (IS_ERR(image)) return PTR_ERR(image);
++    rc = capstone_native_exec_file(image, (const char *const *)r->argv,
++                                    (const char *const *)r->envp);
++    fput(image);
++    return rc;
++}
++
++static const struct capstone_native_spawn_ops native_spawn_ops = {
++    .exec = native_spawn_exec, .release = native_spawn_release,
++};
++
++/* posix_spawn from the request block [block, block + bytes) in kernel memory. Caller holds
++ * sublet_lock. The child's pid, or an error. */
++long sublet_spawn(struct sublet_context *c, const void *block, size_t bytes)
++{
++    struct native_spawn_request *r;
++    struct pid *pid = NULL;
++    unsigned slot;
++    long rc;
++    if (current->seccomp.mode != SECCOMP_MODE_DISABLED) return -EOPNOTSUPP;
++    if (bytes < sizeof(struct capstone_spawn_header) || bytes > CAPSTONE_SPAWN_BYTES) return -EINVAL;
++    /* SIGCHLD=SIG_IGN/SA_NOCLDWAIT may have autoreaped earlier children.
++     * Drop only detached PID objects; live tasks and zombies keep their slot. */
++    for (slot = 0; slot < DOM_CHILDREN; ++slot) {
++        struct pid *old = c->dom_delegate->children[slot];
++        bool detached;
++        if (!old) continue;
++        rcu_read_lock();
++        detached = !pid_task(old, PIDTYPE_PID);
++        rcu_read_unlock();
++        if (detached) { c->dom_delegate->children[slot] = NULL; put_pid(old); }
++    }
++    for (slot = 0; slot < DOM_CHILDREN; ++slot)
++        if (!c->dom_delegate->children[slot]) break;
++    if (slot == DOM_CHILDREN) return -EAGAIN;
++    r = kzalloc(sizeof(*r), GFP_KERNEL);
++    if (!r) return -ENOMEM;
++    r->block = kvmalloc(bytes, GFP_KERNEL);
++    if (!r->block) { rc = -ENOMEM; goto fail; }
++    memcpy(r->block, block, bytes);
++    rc = -capstone_spawn_unpack(r->block, bytes, r->argv, ARRAY_SIZE(r->argv),
++             r->envp, ARRAY_SIZE(r->envp), r->paths, ARRAY_SIZE(r->paths), &r->view);
++    if (rc) goto fail;
++    if (!r->view.argc) { rc = -EINVAL; goto fail; }
++    if (r->view.flags & ~(CAPSTONE_SPAWN_SETSIGDEF | CAPSTONE_SPAWN_SETSIGMASK)) {
++        rc = -EOPNOTSUPP; goto fail;
++    }
++    rc = native_spawn_clone_resources(r, c);
++    if (rc) goto fail;
++    mutex_unlock(&sublet_lock);
++    rc = capstone_native_spawn(&native_spawn_ops, r, &pid); /* consumes r */
++    mutex_lock(&sublet_lock);
++    if (rc > 0) c->dom_delegate->children[slot] = pid;
++    return rc;
++fail:
++    native_spawn_release(r);
++    return rc;
++}
++
++/* Kill and reap the child number, when the binder cannot publish its pid. */
++void sublet_spawn_cancel(struct sublet_context *c, long number)
++{
++    for (unsigned i = 0; i < DOM_CHILDREN; ++i) {
++        struct pid *pid = c->dom_delegate->children[i];
++        if (!pid || pid_vnr(pid) != number) continue;
++        c->dom_delegate->children[i] = NULL;
++        mutex_unlock(&sublet_lock);
++        capstone_native_cancel(pid);
++        put_pid(pid);
++        mutex_lock(&sublet_lock);
++        return;
++    }
++}
++
++/* wait4 for a spawned child, with the status and the usage in kernel buffers. Caller holds
++ * sublet_lock. As in Linux, the reap precedes the binder's copy out. */
++long sublet_wait(struct sublet_context *c, s64 number, u64 options, int *status_out,
++                 struct rusage *usage_out)
++{
++    struct rusage usage = {};
++    int status = 0;
++    struct pid *pid;
++    unsigned slot;
++    long rc;
++    if ((number <= 0 && number != -1) || number > INT_MAX) return -ECHILD;
++    if (options & ~(u64)WNOHANG) return -EINVAL;
++    for (slot = 0; slot < DOM_CHILDREN; ++slot) {
++        pid = c->dom_delegate->children[slot];
++        if (pid && (number == -1 || pid_vnr(pid) == number)) break;
++    }
++    if (slot == DOM_CHILDREN) return -ECHILD;
++    if (number == -1) {
++        DEFINE_WAIT_FUNC(wait, woken_wake_function);
++        u64 gone = 0;
++        mutex_unlock(&sublet_lock);
++        add_wait_queue(&current->signal->wait_chldexit, &wait);
++        for (;;) {
++            bool alive = false;
++            rc = 0;
++            for (slot = 0; slot < DOM_CHILDREN; ++slot) {
++                pid = c->dom_delegate->children[slot];
++                if (!pid || (gone & (1ULL << slot))) continue;
++                rc = capstone_native_wait(pid, WNOHANG, &status, &usage);
++                if (rc == -ECHILD) { gone |= 1ULL << slot; rc = 0; continue; }
++                alive = true;
++                if (rc) break;
++            }
++            if (rc || !alive || (options & WNOHANG)) {
++                if (!rc && !alive) rc = -ECHILD;
++                break;
++            }
++            if (signal_pending(current)) { rc = -EINTR; break; }
++            wait_woken(&wait, TASK_INTERRUPTIBLE, MAX_SCHEDULE_TIMEOUT);
++        }
++        remove_wait_queue(&current->signal->wait_chldexit, &wait);
++        mutex_lock(&sublet_lock);
++        if (rc > 0) gone |= 1ULL << slot;
++        for (slot = 0; slot < DOM_CHILDREN; ++slot) if (gone & (1ULL << slot)) {
++            put_pid(c->dom_delegate->children[slot]);
++            c->dom_delegate->children[slot] = NULL;
++        }
++    } else {
++        mutex_unlock(&sublet_lock);
++        rc = capstone_native_wait(pid, options, &status, &usage);
++        mutex_lock(&sublet_lock);
++        if (rc > 0 || rc == -ECHILD) {
++            c->dom_delegate->children[slot] = NULL;
++            put_pid(pid);
++        }
++    }
++    if (rc <= 0) return rc;
++    if (status_out) *status_out = status;
++    if (usage_out) *usage_out = usage;
++    return rc;
++}
+--- /dev/null
++++ b/arch/riscv/kernel/sublet/resource.h
+@@ -0,0 +1,466 @@
++/* SPDX-License-Identifier: GPL-2.0-only */
++#include <linux/security.h>
++/* A protected program's resource boundary: the initial cwd is a directory grant,
++ * not ambient path access. Linux 6.1 has no in-kernel openat2 entry point for
++ * this code. Walk one pinned
++ * O_PATH component at a time instead: '..' stays inside its original grant,
++ * with no symlinks (including magic links) or mount transitions. Never open a
++ * device before checking its inode. */
++#include <linux/fs_struct.h>
++static char *dom_shell;
++module_param(dom_shell, charp, 0400);
++MODULE_PARM_DESC(dom_shell, "trusted pinned native shell executable for /bin/sh (unset by default)");
++static bool dom_null;
++module_param(dom_null, bool, 0400);
++MODULE_PARM_DESC(dom_null, "explicit pinned /dev/null grant (default off)");
++static bool dom_local_tmp;
++module_param(dom_local_tmp, bool, 0400);
++MODULE_PARM_DESC(dom_local_tmp,
++    "alias /tmp to private .capstone-tmp inside the initial cwd grant (default off)");
++static bool dom_wide_grants;
++module_param(dom_wide_grants, bool, 0444);
++MODULE_PARM_DESC(dom_wide_grants,
++    "native exec also pins /tmp, /usr and null/zero/urandom (default off)");
++static const char *const dom_dir_names[] = {"/tmp", "/usr"};
++static const char *const dom_device_names[] = {"/dev/null", "/dev/zero", "/dev/urandom"};
++static const unsigned dom_device_minors[] = {3, 5, 9};
++
++static bool dom_disk_inode(const struct inode *inode)
++{
++    switch (inode->i_sb->s_magic) {
++    case TMPFS_MAGIC: case EXT4_SUPER_MAGIC: case V9FS_MAGIC:
++        return S_ISREG(inode->i_mode) || S_ISDIR(inode->i_mode);
++    default: return false;
++    }
++}
++
++static bool dom_stdio_file(const struct file *f)
++{
++    const struct inode *inode = file_inode(f);
++    return (dom_disk_inode(inode) && S_ISREG(inode->i_mode)) ||
++           (inode->i_sb->s_magic == PIPEFS_MAGIC && S_ISFIFO(inode->i_mode)) ||
++           (S_ISCHR(inode->i_mode) &&
++            (inode->i_rdev == MKDEV(1, 3) || inode->i_rdev == MKDEV(5, 1) ||
++             inode->i_rdev == MKDEV(4, 64))); /* null/console/first serial terminal */
++}
++
++static bool dom_fd_allowed(struct sublet_context *c, u64 fd)
++{
++    return fd < DOM_FDS &&
++           test_bit(fd, c->dom_delegate->fds);
++}
++
++/* Only the trusted exec policy chooses these roots. No application name is
++ * resolved here. Pin /dev first so even the intermediate component cannot
++ * traverse a symlink; the exact three character devices get individual
++ * grants, never a directory grant to /dev or permission to open aliases. */
++static int dom_extra_resources(struct dom_delegate *d)
++{
++    struct file *f, *dev;
++    int rc = 0;
++    /* /tmp cannot simultaneously name the entire launch grant and its
++     * private child. Preserve physical-root pathname round trips elsewhere. */
++    if (dom_local_tmp && (dom_wide_grants || !strcmp(d->root_name, "/tmp"))) return -EINVAL;
++    if (dom_local_tmp) {
++        struct inode *inode;
++        /* Trusted launch policy creates this reserved child before exec.
++         * Pin the object once; an application rename or replacement must
++         * never redirect the logical /tmp prefix into ambient storage. */
++        f = file_open_root(&d->root, ".capstone-tmp",
++                           O_PATH | O_NOFOLLOW | O_DIRECTORY, 0);
++        if (IS_ERR(f)) return PTR_ERR(f);
++        inode = file_inode(f);
++        if (f->f_path.mnt != d->root.mnt ||
++            !is_subdir(f->f_path.dentry, d->root.dentry) ||
++            !dom_disk_inode(inode) || !S_ISDIR(inode->i_mode) ||
++            (inode->i_mode & (S_IRWXUGO | S_ISUID | S_ISGID | S_ISVTX)) != 0700 ||
++            !uid_eq(i_uid_into_mnt(mnt_user_ns(f->f_path.mnt), inode), current_fsuid()))
++            rc = -EACCES;
++        if (!rc) { d->dirs[0] = f->f_path; path_get(&d->dirs[0]); }
++        fput(f);
++        if (rc) return rc;
++    }
++    if (!dom_wide_grants && !dom_null) return 0;
++    for (unsigned i = 0; dom_wide_grants && i < DOM_EXTRA_DIRS; ++i) {
++        f = filp_open(dom_dir_names[i], O_PATH | O_NOFOLLOW | O_DIRECTORY, 0);
++        if (IS_ERR(f)) return PTR_ERR(f);
++        if (!dom_disk_inode(file_inode(f))) rc = -EACCES;
++        if (!rc) { d->dirs[i] = f->f_path; path_get(&d->dirs[i]); }
++        fput(f);
++        if (rc) return rc;
++    }
++    dev = filp_open("/dev", O_PATH | O_NOFOLLOW | O_DIRECTORY, 0);
++    if (IS_ERR(dev)) return PTR_ERR(dev);
++    for (unsigned i = 0; i < (dom_wide_grants ? DOM_DEVICES : 1); ++i) {
++        f = file_open_root(&dev->f_path, dom_device_names[i] + 5, O_PATH | O_NOFOLLOW, 0);
++        if (IS_ERR(f)) { rc = PTR_ERR(f); break; }
++        if (f->f_path.mnt != dev->f_path.mnt || !S_ISCHR(file_inode(f)->i_mode) ||
++            file_inode(f)->i_rdev != MKDEV(1, dom_device_minors[i])) rc = -EACCES;
++        if (!rc) { d->devices[i] = f->f_path; path_get(&d->devices[i]); }
++        fput(f);
++        if (rc) break;
++    }
++    fput(dev);
++    return rc;
++}
++
++static const struct path *dom_device_path(struct dom_delegate *d, const char *name)
++{
++    for (unsigned i = 0; i < DOM_DEVICES; ++i)
++        if (d->devices[i].dentry && !strcmp(name, dom_device_names[i]))
++            return &d->devices[i];
++    return NULL;
++}
++
++static int dom_resources_init(struct sublet_context *c)
++{
++    struct dom_delegate *d;
++    char *buf, *name;
++    unsigned i;
++    int inherited = dom_spawn_resources(c);
++    if (inherited) return inherited < 0 ? inherited : 0;
++    d = kzalloc(sizeof(*d), GFP_KERNEL);
++    if (!d) return -ENOMEM;
++    c->dom_delegate = d;
++    get_fs_pwd(current->fs, &d->root);
++    d->cwd_path = d->root;
++    path_get(&d->cwd_path);
++    if (!dom_disk_inode(d_inode(d->root.dentry))) return -EACCES;
++    buf = kmalloc(PATH_MAX, GFP_KERNEL);
++    if (!buf) return -ENOMEM;
++    name = d_path(&d->root, buf, PATH_MAX);
++    if (!IS_ERR(name)) d->root_name = kstrdup(name, GFP_KERNEL);
++    kfree(buf);
++    if (IS_ERR(name)) return PTR_ERR(name);
++    if (!d->root_name) return -ENOMEM;
++    /* A whole-filesystem cwd is not a useful confinement grant. */
++    if (!strcmp(d->root_name, "/")) return -EACCES;
++    for (i = 0; i < 3; ++i) {
++        struct file *f = fget(i);
++        if (f) {
++            if (dom_stdio_file(f)) set_bit(i, d->fds);
++            fput(f);
++        }
++    }
++    if (dom_shell && *dom_shell) {
++        d->shell = filp_open(dom_shell, O_RDONLY | O_NOFOLLOW | O_CLOEXEC, 0);
++        if (IS_ERR(d->shell)) {
++            int rc = PTR_ERR(d->shell);
++            d->shell = NULL;
++            return rc;
++        }
++        if (!dom_disk_inode(file_inode(d->shell)) || !S_ISREG(file_inode(d->shell)->i_mode))
++            return -EACCES;
++    }
++    return dom_extra_resources(d);
++}
++
++static bool dom_beneath(const struct path *path, const struct path *root)
++{
++    return path->mnt == root->mnt && is_subdir(path->dentry, root->dentry);
++}
++
++static const struct path *dom_directory_grant(struct dom_delegate *d,
++                                              const struct path *path)
++{
++    if (dom_beneath(path, &d->root)) return &d->root;
++    for (unsigned i = 0; i < DOM_EXTRA_DIRS; ++i)
++        /* The local alias remains a descendant of the original grant,
++         * unlike independent explicitly granted directories. */
++        if (!(dom_local_tmp && i == 0) &&
++            d->dirs[i].dentry && dom_beneath(path, &d->dirs[i]))
++            return &d->dirs[i];
++    return NULL;
++}
++
++/* Return a held parent and a single final component in an owned string.
++ * Absolute names select an explicit pinned grant by component boundary;
++ * this is an authority prefix, not a blacklist or a security canonicalizer.
++ * The subsequent component walk supplies the actual resolution guarantee. */
++static int dom_parent(struct sublet_context *c, const struct capstone_delegate_entry *e,
++                      struct path *parent, char **storage, char **leaf,
++                      const struct path **grant, const char *snapshot)
++{
++    struct dom_delegate *d = c->dom_delegate;
++    const struct path *root = NULL;
++    struct file *f;
++    char *name, *at, *part;
++    unsigned rename_seq = read_seqbegin(&rename_lock);
++    bool dotdot = false;
++    long bytes;
++    int rc = 0;
++    if (snapshot) {
++        name = kstrdup(snapshot, GFP_KERNEL);
++        if (!name) return -ENOMEM;
++    } else {
++    bytes = strnlen_user((char __user *)(c->dom_exchange + e->args[1]),
++                         min_t(u64, PATH_MAX, c->dom_exchange_bytes - e->args[1]));
++    if (bytes <= 0 || bytes > PATH_MAX || bytes > c->dom_exchange_bytes - e->args[1])
++        return -EFAULT;
++    name = memdup_user((void __user *)(c->dom_exchange + e->args[1]), bytes);
++    if (IS_ERR(name)) return PTR_ERR(name);
++    }
++    at = name;
++    if (!*at) { rc = -ENOENT; goto out; }
++    if (*at == '/') {
++        char *root_buf = kmalloc(PATH_MAX, GFP_KERNEL), *root_name;
++        size_t n;
++        if (!root_buf) { rc = -ENOMEM; goto out; }
++        /* The pinned object is immutable authority; its pathname is not.
++         * Resolve absolute names under its current name so getcwd remains
++         * usable after a trusted rename of the launch directory. */
++        root_name = d_path(&d->root, root_buf, PATH_MAX);
++        if (IS_ERR(root_name)) { rc = PTR_ERR(root_name); kfree(root_buf); goto out; }
++        n = strlen(root_name);
++        if (!strncmp(at, root_name, n) && (!at[n] || at[n] == '/')) root = &d->root;
++        kfree(root_buf);
++        for (unsigned i = 0; i < DOM_EXTRA_DIRS; ++i) {
++            size_t len = strlen(dom_dir_names[i]);
++            if (d->dirs[i].dentry && (!root || len > n) &&
++                (!(dom_local_tmp && i == 0) || dom_beneath(&d->dirs[i], &d->root)) &&
++                !strncmp(at, dom_dir_names[i], len) && (!at[len] || at[len] == '/')) {
++                root = &d->dirs[i]; n = len;
++            }
++        }
++        /* Exact device names resolve directly to pinned objects. The final
++         * dot lookup below cannot turn a device into a directory authority. */
++        if (!root) {
++            root = dom_device_path(d, at);
++            if (root) n = strlen(at);
++        }
++        if (!root) {
++            /* Metadata lookup does not reveal the existence of objects
++             * outside the grant. This also preserves optional search paths
++             * (for example a compiler's absent system include directory). */
++            rc = (e->nr == CAPSTONE_SYS_newfstatat || e->nr == CAPSTONE_SYS_statx) ?
++                 -ENOENT : -EACCES;
++            goto out;
++        }
++        at += n;
++        while (*at == '/') ++at;
++        *parent = *root; path_get(parent);
++    } else if ((int)e->args[0] == AT_FDCWD) {
++        *parent = d->cwd_path; path_get(parent);
++    } else {
++        if (!dom_fd_allowed(c, e->args[0])) { rc = -EBADF; goto out; }
++        f = fget(e->args[0]);
++        if (!f) { rc = -EBADF; goto out; }
++        *parent = f->f_path; path_get(parent); fput(f);
++        if (!S_ISDIR(d_inode(parent->dentry)->i_mode)) { rc = -ENOTDIR; goto put; }
++    }
++    if (!root) root = dom_directory_grant(d, parent);
++    if (!root || !dom_beneath(parent, root) ||
++        (dom_local_tmp && root == &d->dirs[0] && !dom_beneath(parent, &d->root))) {
++        rc = -EACCES; goto put;
++    }
++    while ((part = strsep(&at, "/")) != NULL) {
++        if (!strcmp(part, "..")) {
++            struct path up = {.mnt = parent->mnt};
++            dotdot = true;
++            if (path_equal(parent, root) || parent->dentry == parent->mnt->mnt_root ||
++                !dom_beneath(parent, root)) { rc = -EACCES; goto put; }
++            rc = inode_permission(mnt_user_ns(parent->mnt), d_inode(parent->dentry), MAY_EXEC);
++            if (rc) goto put;
++            up.dentry = dget_parent(parent->dentry);
++            /* As in namei's scoped handle_dots(), a rename anywhere since
++             * this walk began makes parent traversal ambiguous. Never use
++             * a lexical prefix or a check made before dget_parent(). */
++            if (read_seqretry(&rename_lock, rename_seq)) rc = -EAGAIN;
++            else if (!dom_beneath(&up, root)) rc = -EACCES;
++            if (rc) { dput(up.dentry); goto put; }
++            dput(parent->dentry);
++            parent->dentry = up.dentry;
++            part = ".";
++        }
++        if (!at) {
++            if (dotdot && read_seqretry(&rename_lock, rename_seq)) { rc = -EAGAIN; goto put; }
++            if (!dom_beneath(parent, root) ||
++                (dom_local_tmp && root == &d->dirs[0] && !dom_beneath(parent, &d->root))) {
++                rc = -EACCES; goto put;
++            }
++            *leaf = *part ? part : ".";
++            *storage = name;
++            *grant = root;
++            return 0;
++        }
++        if (!*part || !strcmp(part, ".")) continue;
++        f = file_open_root(parent, part, O_PATH | O_NOFOLLOW | O_DIRECTORY, 0);
++        if (IS_ERR(f)) { rc = PTR_ERR(f); goto put; }
++        if (f->f_path.mnt != parent->mnt || !dom_disk_inode(file_inode(f))) rc = -EACCES;
++        if (!rc) { path_put(parent); *parent = f->f_path; path_get(parent); }
++        fput(f);
++        if (rc) goto put;
++    }
++    rc = -ENOENT;
++put:
++    path_put(parent);
++out:
++    kfree(name);
++    return rc;
++}
++
++static struct file *dom_lookup(struct sublet_context *c, const struct path *parent,
++                               const char *leaf, const struct path *grant)
++{
++    struct file *f;
++    /* A direct device grant has no pathname traversal and no aliases. */
++    for (unsigned i = 0; i < DOM_DEVICES; ++i) {
++        const struct path *p = &c->dom_delegate->devices[i];
++        if (p->dentry && path_equal(parent, p) && !strcmp(leaf, "."))
++            return dentry_open(p, O_PATH, current_cred());
++    }
++    f = file_open_root(parent, leaf, O_PATH | O_NOFOLLOW, 0);
++    if (!IS_ERR(f) && (!dom_beneath(&f->f_path, grant) ||
++                      !dom_disk_inode(file_inode(f)))) {
++        fput(f); return ERR_PTR(-EACCES);
++    }
++    return f;
++}
++
++static struct file *dom_path_file_name(struct sublet_context *c, const struct capstone_delegate_entry *e, const char *snapshot)
++{
++    struct path parent;
++    const struct path *grant;
++    struct file *f;
++    char *storage, *leaf;
++    int rc = dom_parent(c, e, &parent, &storage, &leaf, &grant, snapshot);
++    if (rc) return ERR_PTR(rc);
++    f = dom_lookup(c, &parent, leaf, grant);
++    path_put(&parent); kfree(storage);
++    return f;
++}
++
++static long dom_path_operation_name(struct sublet_context *c, const struct capstone_delegate_entry *e, const char *snapshot)
++{
++    struct path parent;
++    const struct path *grant;
++    struct file *pin, *f;
++    char *storage, *leaf;
++    long rc;
++    unsigned flags = e->args[2];
++    unsigned allowed = O_ACCMODE | O_CREAT | O_EXCL | O_TRUNC | O_APPEND |
++                       O_NONBLOCK | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC |
++                       O_LARGEFILE | O_SYNC | O_DSYNC | O_NOCTTY;
++    if (e->nr == CAPSTONE_SYS_openat && (e->args[2] & ~((u64)allowed))) return -EINVAL;
++    if (e->nr == CAPSTONE_SYS_openat && (flags & O_ACCMODE) == O_ACCMODE) return -EINVAL;
++    if (e->nr == CAPSTONE_SYS_unlinkat && flags) return -ENOSYS;
++    rc = dom_parent(c, e, &parent, &storage, &leaf, &grant, snapshot);
++    if (rc) return rc;
++    if (e->nr == CAPSTONE_SYS_unlinkat) {
++        struct dentry *victim;
++        if (!S_ISDIR(d_inode(parent.dentry)->i_mode)) { rc = -EACCES; goto out; }
++        rc = mnt_want_write(parent.mnt);
++        if (rc) goto out;
++        inode_lock(d_inode(parent.dentry));
++        victim = lookup_one_len(leaf, parent.dentry, strlen(leaf));
++        if (IS_ERR(victim)) rc = PTR_ERR(victim);
++        else {
++            if (d_is_negative(victim)) rc = -ENOENT;
++            else rc = security_path_unlink(&parent, victim);
++            if (!rc) rc = vfs_unlink(mnt_user_ns(parent.mnt), d_inode(parent.dentry), victim, NULL);
++            dput(victim);
++        }
++        inode_unlock(d_inode(parent.dentry));
++        mnt_drop_write(parent.mnt);
++        goto out;
++    }
++    pin = dom_lookup(c, &parent, leaf, grant);
++    if (IS_ERR(pin)) {
++        rc = PTR_ERR(pin);
++        if (rc != -ENOENT || !(flags & O_CREAT)) goto out;
++        /* O_EXCL is essential: a racing special file must never be opened.
++         * Creation can only make a regular file on the admitted filesystem. */
++        f = file_open_root(&parent, leaf, flags | O_EXCL | O_NOFOLLOW,
++                           (e->args[3] & 0777) & ~current_umask());
++    } else {
++        struct inode *inode = file_inode(pin);
++        unsigned access = MAY_OPEN;
++        if ((flags & (O_CREAT | O_EXCL)) == (O_CREAT | O_EXCL)) {
++            fput(pin); rc = -EEXIST; goto out;
++        }
++        if ((flags & O_DIRECTORY) && !S_ISDIR(file_inode(pin)->i_mode)) {
++            fput(pin); rc = -ENOTDIR; goto out;
++        }
++        if ((flags & O_ACCMODE) != O_WRONLY) access |= MAY_READ;
++        if ((flags & O_ACCMODE) != O_RDONLY || (flags & O_TRUNC)) access |= MAY_WRITE;
++        if (flags & O_APPEND) access |= MAY_APPEND;
++        /* O_PATH deliberately bypasses final-inode access checks, and
++         * dentry_open does not perform may_open. Preserve Linux's permission
++         * and append-only restrictions on the very same pinned inode. */
++        rc = inode_permission(mnt_user_ns(pin->f_path.mnt), inode, access);
++        if (!rc && S_ISDIR(inode->i_mode) && ((access & MAY_WRITE) || (flags & O_CREAT))) rc = -EISDIR;
++        if (!rc && IS_APPEND(inode) &&
++            (((access & MAY_WRITE) && !(flags & O_APPEND)) || (flags & O_TRUNC))) rc = -EPERM;
++        if (rc) { fput(pin); goto out; }
++        f = dentry_open(&pin->f_path, flags & ~(O_CREAT | O_EXCL | O_TRUNC), current_cred());
++        fput(pin);
++        if (!IS_ERR(f) && (flags & O_TRUNC) && S_ISREG(file_inode(f)->i_mode)) {
++            rc = (f->f_mode & FMODE_WRITE) ? vfs_truncate(&f->f_path, 0) : -EACCES;
++            if (rc) { fput(f); goto out; }
++        }
++    }
++    if (IS_ERR(f)) { rc = PTR_ERR(f); goto out; }
++    rc = get_unused_fd_flags(flags & O_CLOEXEC);
++    if (rc >= DOM_FDS) { put_unused_fd(rc); rc = -EMFILE; }
++    if (rc < 0) fput(f);
++    else { set_bit(rc, c->dom_delegate->fds); fd_install(rc, f); }
++out:
++    path_put(&parent); kfree(storage);
++    return rc;
++}
++
++static long dom_chdir_name(struct sublet_context *c, const char *name)
++{
++    struct capstone_delegate_entry e = {.nr = CAPSTONE_SYS_chdir};
++    struct dom_delegate *d = c->dom_delegate;
++    struct path old;
++    struct file *f;
++    int rc;
++    e.args[0] = (u64)(s64)AT_FDCWD;
++    f = dom_path_file_name(c, &e, name);
++    if (IS_ERR(f)) return PTR_ERR(f);
++    rc = -ENOTDIR;
++    if (!S_ISDIR(file_inode(f)->i_mode)) goto out;
++    rc = inode_permission(mnt_user_ns(f->f_path.mnt), file_inode(f), MAY_EXEC | MAY_CHDIR);
++    if (rc) goto out;
++    /* Nothing fallible follows publication. Linux's fs cwd is kept in sync
++     * so a future native spawn inherits the same directory. The immutable
++     * root grant never changes here. */
++    old = d->cwd_path;
++    d->cwd_path = f->f_path;
++    path_get(&d->cwd_path);
++    set_fs_pwd(current->fs, &d->cwd_path);
++    path_put(&old);
++out:
++    fput(f);
++    return rc;
++}
++
++static long dom_getcwd(struct sublet_context *c, void *buffer, size_t bytes)
++{
++    char *storage, *name;
++    unsigned rename_seq;
++    long rc;
++    if (!bytes) return -ERANGE;
++    if (d_unlinked(c->dom_delegate->cwd_path.dentry)) return -ENOENT;
++    storage = kmalloc(PATH_MAX, GFP_KERNEL);
++    if (!storage) return -ENOMEM;
++    rename_seq = read_seqbegin(&rename_lock);
++    /* A trusted process may have moved cwd outside its grant. Do not expose
++     * the external pathname, including a move racing the rendering below. */
++    if (!dom_directory_grant(c->dom_delegate, &c->dom_delegate->cwd_path)) {
++        rc = -ENOENT;
++        goto out;
++    }
++    name = d_path(&c->dom_delegate->cwd_path, storage, PATH_MAX);
++    if (IS_ERR(name)) rc = PTR_ERR(name);
++    else if (read_seqretry(&rename_lock, rename_seq)) rc = -EAGAIN;
++    else {
++        rc = strlen(name) + 1;
++        if (rc > bytes) rc = -ERANGE;
++        else memcpy(buffer, name, rc);
++    }
++out:
++    kfree(storage);
++    return rc;
++}
+--- /dev/null
++++ b/arch/riscv/kernel/sublet/sublet.c
+@@ -0,0 +1,47 @@
++// SPDX-License-Identifier: GPL-2.0-only
++/* The kernel's Sublet code, task side: the .dom loader, the resource capsule of a protected
++ * program, and the issue side of the system calls the kernel implements for it.
++ *
++ * The protected entry does not exist yet (plan v5 steps 3 and 4), so the loader builds a
++ * program and refuses, and nothing calls the system calls until plan v5 step 5 binds them. */
++#include <linux/fs.h>
++#include <linux/init.h>
++#include <linux/mm.h>
++#include <linux/moduleparam.h>
++#include <linux/mutex.h>
++#include <linux/sched/signal.h>
++#include <linux/slab.h>
++#include <linux/uaccess.h>
++#include <linux/capstone_native_helpers.h>
++#include <asm/capstone_task.h>
++#include <asm/sublet.h>
++#include "vm-abi.h"
++#undef MODULE_PARAM_PREFIX
++#define MODULE_PARAM_PREFIX "sublet."
++
++/* Does the image's filesystem keep one inode per file, so the writers Linux counts on it
++ * (i_writecount) are all the file's writers? Named by the superblock's type, which the
++ * filesystem cannot misreport. */
++static bool one_inode_per_file(struct file *file)
++{
++	static const char *const fs[] = {"tmpfs", "ext2", "ext3", "ext4", "btrfs",
++					 "xfs", "erofs", "squashfs"};
++	const char *name = file_inode(file)->i_sb->s_type->name;
++
++	for (unsigned int i = 0; i < ARRAY_SIZE(fs); ++i)
++		if (!strcmp(name, fs[i]))
++			return true;
++	return false;
++}
++
++#include "binfmt.h"
++
++/* The loader admits .dom images only with sublet.dom_binfmt=1 on a Sublet platform. */
++static int __init sublet_loader_init(void)
++{
++	if (dom_binfmt && sublet_ready())
++		insert_binfmt(&capstone_dom);
++	pr_info("sublet: .dom loader %s\n", dom_binfmt && sublet_ready() ? "registered" : "off");
++	return 0;
++}
++device_initcall(sublet_loader_init);
+--- /dev/null
++++ b/arch/riscv/kernel/sublet/syscall-directory.h
+@@ -0,0 +1,338 @@
++/* SPDX-License-Identifier: GPL-2.0-only */
++/* Path operations on pinned directory grants. Normal opens never admit a
++ * symlink; only the metadata/readlink path below admits a final link inode. */
++#include <linux/delayed_call.h>
++#include <linux/dirent.h>
++#include <linux/namei.h>
++#include <linux/stat.h>
++#include <asm/stat.h>
++
++
++struct native_directory_entries {
++    struct dir_context ctx;
++    char *next;
++    int remaining, previous, error;
++};
++
++static bool native_directory_entry(struct dir_context *ctx, const char *name,
++        int length, loff_t offset, u64 ino, unsigned int type)
++{
++    struct native_directory_entries *out = container_of(ctx, struct native_directory_entries, ctx);
++    struct linux_dirent64 *entry, *previous;
++    int bytes;
++    /* Match Linux 6.1 verify_dirent_name/filldir64, including returning
++     * already completed records if a later record cannot be emitted. */
++    if (length <= 0 || length >= PATH_MAX || memchr(name, '/', length)) {
++        out->error = -EIO;
++        return false;
++    }
++    bytes = ALIGN(offsetof(struct linux_dirent64, d_name) + length + 1, sizeof(u64));
++    out->error = -EINVAL;
++    if (bytes > out->remaining || (out->previous && signal_pending(current))) return false;
++    entry = (struct linux_dirent64 *)out->next;
++    if (out->previous) {
++        previous = (struct linux_dirent64 *)(out->next - out->previous);
++        previous->d_off = offset;
++    }
++    memset(entry, 0, bytes);
++    entry->d_ino = ino;
++    entry->d_reclen = bytes;
++    entry->d_type = type;
++    memcpy(entry->d_name, name, length);
++    out->next += bytes;
++    out->remaining -= bytes;
++    out->previous = bytes;
++    return true;
++}
++
++static long native_directory_getdents(struct file *file, void *data, size_t bytes)
++{
++    struct native_directory_entries out = {
++        .ctx.actor = native_directory_entry, .next = data, .remaining = bytes
++    };
++    bool locked = file->f_mode & FMODE_ATOMIC_POS;
++    long rc;
++    BUILD_BUG_ON(offsetof(struct linux_dirent64, d_name) != 19);
++    if (bytes > INT_MAX) return -EINVAL;
++    if (file->f_mode & FMODE_PATH) return -EBADF;
++    if (locked) mutex_lock(&file->f_pos_lock);
++    rc = iterate_dir(file, &out.ctx);
++    if (rc >= 0) rc = out.error;
++    if (out.previous) {
++        struct linux_dirent64 *last = (struct linux_dirent64 *)(out.next - out.previous);
++        last->d_off = out.ctx.pos;
++        rc = bytes - out.remaining;
++    }
++    if (locked) mutex_unlock(&file->f_pos_lock);
++    return rc;
++}
++
++static bool native_directory_metadata_inode(const struct inode *inode)
++{
++    if (dom_disk_inode(inode)) return true;
++    if (!S_ISLNK(inode->i_mode)) return false;
++    switch (inode->i_sb->s_magic) {
++    case TMPFS_MAGIC: case EXT4_SUPER_MAGIC: case V9FS_MAGIC: return true;
++    default: return false;
++    }
++}
++
++static struct file *native_directory_metadata_file(struct sublet_context *c,
++        const struct capstone_delegate_entry *e, const char *name)
++{
++    struct path parent;
++    const struct path *grant;
++    struct file *file;
++    char *storage, *leaf;
++    int rc = dom_parent(c, e, &parent, &storage, &leaf, &grant, name);
++    if (rc) return ERR_PTR(rc);
++    /* Preserve the existing exact device-pin case without granting aliases. */
++    if (!strcmp(leaf, ".")) file = dom_lookup(c, &parent, leaf, grant);
++    else {
++        file = file_open_root(&parent, leaf, O_PATH | O_NOFOLLOW, 0);
++        if (!IS_ERR(file) &&
++            (!dom_beneath(&file->f_path, grant) ||
++             !native_directory_metadata_inode(file_inode(file)))) {
++            fput(file);
++            file = ERR_PTR(-EACCES);
++        }
++    }
++    path_put(&parent);
++    kfree(storage);
++    return file;
++}
++
++static long native_directory_change(struct sublet_context *c,
++        const struct capstone_delegate_entry *e, const char *snapshot,
++        const char *target)
++{
++    struct path parent;
++    const struct path *grant;
++    struct inode *dir;
++    struct dentry *entry;
++    char *storage, *leaf, *name;
++    size_t length;
++    umode_t mode = e->args[2];
++    long rc;
++
++    name = kstrdup(snapshot, GFP_KERNEL);
++    if (!name) return -ENOMEM;
++    /* mkdir/rmdir accept a trailing slash without requiring the final
++     * directory to exist before mkdir. Intermediate components still use
++     * the ordinary no-symlink grant walk. */
++    if (e->nr != CAPSTONE_SYS_symlinkat) {
++        length = strlen(name);
++        while (length > 1 && name[length - 1] == '/') name[--length] = 0;
++    }
++    rc = dom_parent(c, e, &parent, &storage, &leaf, &grant, name);
++    if (rc) goto free_name;
++    dir = d_inode(parent.dentry);
++    if (!S_ISDIR(dir->i_mode)) { rc = -ENOTDIR; goto put_parent; }
++    if (!dom_disk_inode(dir) || !dom_beneath(&parent, grant)) {
++        rc = -EACCES;
++        goto put_parent;
++    }
++    /* dom_parent normalizes a final '..' and an exact grant root to '.'.
++     * Never pass that dentry to vfs_rmdir while locking its own inode. */
++    if (!strcmp(leaf, ".")) {
++        rc = -EEXIST;
++        if (e->nr == CAPSTONE_SYS_unlinkat) {
++            const char *last = strrchr(name, '/');
++            last = last ? last + 1 : name;
++            rc = !strcmp(last, "..") ? -ENOTEMPTY :
++                 !strcmp(last, ".") ? -EINVAL : -EBUSY;
++        }
++        goto put_parent;
++    }
++    rc = mnt_want_write(parent.mnt);
++    if (rc) goto put_parent;
++    inode_lock_nested(dir, I_MUTEX_PARENT);
++    entry = lookup_one(mnt_user_ns(parent.mnt), leaf, parent.dentry, strlen(leaf));
++    if (IS_ERR(entry)) rc = PTR_ERR(entry);
++    else {
++        switch (e->nr) {
++        case CAPSTONE_SYS_mkdirat:
++            if (d_is_positive(entry)) rc = -EEXIST;
++            else {
++                /* Linux's mode_strip_umask is local to namei.c. Its LSM
++                 * argument leaves ACL-supported filesystems to apply umask. */
++                umode_t checked_mode = IS_POSIXACL(dir) ? mode : mode & ~current_umask();
++                rc = security_path_mkdir(&parent, entry, checked_mode);
++                if (!rc) rc = vfs_mkdir(mnt_user_ns(parent.mnt), dir, entry, mode);
++            }
++            break;
++        case CAPSTONE_SYS_unlinkat:
++            if (d_is_negative(entry)) rc = -ENOENT;
++            else {
++                rc = security_path_rmdir(&parent, entry);
++                if (!rc) rc = vfs_rmdir(mnt_user_ns(parent.mnt), dir, entry);
++            }
++            break;
++        default: /* symlinkat: target is inert text, never resolved here. */
++            if (d_is_positive(entry)) rc = -EEXIST;
++            else {
++                rc = security_path_symlink(&parent, entry, target);
++                if (!rc) rc = vfs_symlink(mnt_user_ns(parent.mnt), dir, entry, target);
++            }
++            break;
++        }
++        dput(entry);
++    }
++    inode_unlock(dir);
++    mnt_drop_write(parent.mnt);
++put_parent:
++    path_put(&parent);
++    kfree(storage);
++free_name:
++    kfree(name);
++    return rc;
++}
++
++static long native_directory_link(struct sublet_context *c, const struct ns_invocation *call)
++{
++    struct capstone_delegate_entry e = {.nr = CAPSTONE_SYS_linkat};
++    struct file *source;
++    struct path parent;
++    const struct path *grant;
++    struct dentry *entry;
++    char *storage, *leaf;
++    long rc = -ENOSYS;
++    if (call->scalar[4]) return -EINVAL; /* No FOLLOW or EMPTY_PATH authority. */
++    e.args[0] = call->scalar[0];
++    source = dom_path_file_name(c, &e, call->buffer[1].data);
++    if (IS_ERR(source)) return PTR_ERR(source);
++    if (!dom_disk_inode(file_inode(source)) || !S_ISREG(file_inode(source)->i_mode)) {
++        rc = -EPERM;
++        goto put_source;
++    }
++    e.args[0] = call->scalar[2];
++    rc = dom_parent(c, &e, &parent, &storage, &leaf, &grant, call->buffer[3].data);
++    if (rc) goto put_source;
++    if (!dom_disk_inode(d_inode(parent.dentry)) || !dom_beneath(&parent, grant)) {
++        rc = -EACCES;
++        goto put_parent;
++    }
++    if (!S_ISDIR(d_inode(parent.dentry)->i_mode)) { rc = -ENOTDIR; goto put_parent; }
++    if (!strcmp(leaf, ".")) { rc = -EEXIST; goto put_parent; }
++    rc = mnt_want_write(parent.mnt);
++    if (rc) goto put_parent;
++    inode_lock_nested(d_inode(parent.dentry), I_MUTEX_PARENT);
++    entry = lookup_one(mnt_user_ns(parent.mnt), leaf, parent.dentry, strlen(leaf));
++    if (IS_ERR(entry)) rc = PTR_ERR(entry);
++    else {
++        rc = d_is_positive(entry) ? -EEXIST : capstone_native_path_link(&source->f_path, &parent, entry);
++        dput(entry);
++    }
++    inode_unlock(d_inode(parent.dentry));
++    mnt_drop_write(parent.mnt);
++put_parent:
++    path_put(&parent);
++    kfree(storage);
++put_source:
++    fput(source);
++    return rc;
++}
++
++static bool native_directory_issue(struct sublet_context *c,
++        const struct ns_invocation *call, struct file *held, long *result)
++{
++    const u64 *a = call->scalar;
++    u64 nr = call->descriptor->nr;
++    struct capstone_delegate_entry e = {.nr = nr};
++    struct file *file;
++    struct kstat stat;
++    long rc = -ENOSYS;
++
++    memcpy(e.args, a, sizeof(e.args));
++    switch (nr) {
++    case CAPSTONE_SYS_linkat:
++        mutex_unlock(&sublet_lock);
++        rc = native_directory_link(c, call);
++        mutex_lock(&sublet_lock);
++        break;
++    case CAPSTONE_SYS_getdents64:
++        mutex_unlock(&sublet_lock);
++        rc = native_directory_getdents(held, call->buffer[1].data, call->buffer[1].length);
++        mutex_lock(&sublet_lock);
++        break;
++    case CAPSTONE_SYS_mkdirat:
++    case CAPSTONE_SYS_unlinkat:
++        if (nr == CAPSTONE_SYS_unlinkat) {
++            if (!a[2]) return false; /* Existing ordinary unlink path. */
++            if (a[2] != AT_REMOVEDIR) { rc = -EINVAL; break; }
++        }
++        mutex_unlock(&sublet_lock);
++        rc = native_directory_change(c, &e, call->buffer[1].data, NULL);
++        mutex_lock(&sublet_lock);
++        break;
++    case CAPSTONE_SYS_symlinkat:
++        e.args[0] = a[1]; /* dom_parent's directory argument is always arg0. */
++        if (!*(const char *)call->buffer[0].data) { rc = -ENOENT; break; }
++        mutex_unlock(&sublet_lock);
++        rc = native_directory_change(c, &e, call->buffer[2].data,
++                                      call->buffer[0].data);
++        mutex_lock(&sublet_lock);
++        break;
++    case CAPSTONE_SYS_fchmodat:
++        mutex_unlock(&sublet_lock);
++        file = dom_path_file_name(c, &e, call->buffer[1].data);
++        if (IS_ERR(file)) rc = PTR_ERR(file);
++        else {
++            rc = dom_disk_inode(file_inode(file)) ? capstone_native_path_chmod(&file->f_path, a[2]) : -EACCES;
++            fput(file);
++        }
++        mutex_lock(&sublet_lock);
++        break;
++    case CAPSTONE_SYS_truncate:
++        if ((s64)a[1] < 0) { rc = -EINVAL; break; }
++        e.args[0] = (u64)(s64)AT_FDCWD;
++        mutex_unlock(&sublet_lock);
++        file = dom_path_file_name(c, &e, call->buffer[0].data);
++        if (IS_ERR(file)) rc = PTR_ERR(file);
++        else {
++            rc = dom_disk_inode(file_inode(file)) ? vfs_truncate(&file->f_path, (s64)a[1]) : -EACCES;
++            fput(file);
++        }
++        mutex_lock(&sublet_lock);
++        break;
++    case CAPSTONE_SYS_newfstatat:
++        if (!(a[3] & AT_SYMLINK_NOFOLLOW)) return false;
++        if (a[3] & ~(u64)(AT_SYMLINK_NOFOLLOW | AT_NO_AUTOMOUNT)) {
++            rc = -EINVAL;
++            break;
++        }
++        mutex_unlock(&sublet_lock);
++        file = native_directory_metadata_file(c, &e, call->buffer[1].data);
++        if (IS_ERR(file)) rc = PTR_ERR(file);
++        else {
++            rc = vfs_getattr(&file->f_path, &stat, STATX_BASIC_STATS, AT_STATX_SYNC_AS_STAT);
++            if (!rc) rc = capstone_native_stat(&stat, call->buffer[2].data);
++            fput(file);
++        }
++        mutex_lock(&sublet_lock);
++        break;
++    case CAPSTONE_SYS_readlinkat:
++        if (!a[3] || a[3] > INT_MAX) { rc = -EINVAL; break; }
++        mutex_unlock(&sublet_lock);
++        file = native_directory_metadata_file(c, &e, call->buffer[1].data);
++        if (IS_ERR(file)) rc = PTR_ERR(file);
++        else {
++            DEFINE_DELAYED_CALL(done);
++            const char *link = vfs_get_link(file->f_path.dentry, &done);
++            if (IS_ERR(link)) rc = PTR_ERR(link);
++            else if (!link) rc = -EIO;
++            else {
++                touch_atime(&file->f_path);
++                rc = strnlen(link, a[3]);
++                memcpy(call->buffer[2].data, link, rc);
++            }
++            do_delayed_call(&done);
++            fput(file);
++        }
++        mutex_lock(&sublet_lock);
++        break;
++    default: return false;
++    }
++    *result = rc;
++    return true;
++}
+--- /dev/null
++++ b/arch/riscv/kernel/sublet/syscall-files.h
+@@ -0,0 +1,99 @@
++/* SPDX-License-Identifier: GPL-2.0-only */
++/* Native fd services: authority is checked by native_acquire before issue. */
++#include <linux/fcntl.h>
++struct native_wire_flock {
++    s16 type, whence;
++    u32 pad;
++    s64 start, length;
++    s32 pid;
++    u32 pad2;
++};
++/* The caller holds an authorized file reference until after this operation.
++ * close_fd removes the descriptor and performs flush/POSIX lock cleanup; fput
++ * alone cannot replace it. The grant stays cleared even if close reports error. */
++static long native_close_issue(struct sublet_context *c, unsigned int fd)
++{
++    long rc;
++    clear_bit(fd, c->dom_delegate->fds);
++    mutex_unlock(&sublet_lock);
++    rc = close_fd(fd);
++    mutex_lock(&sublet_lock);
++    if (rc <= -ERESTARTSYS && rc >= -ERESTART_RESTARTBLOCK) rc = -EINTR;
++    return rc;
++}
++
++/* Held-file operations: sync, truncate and metadata. */
++static long native_fd_issue(struct file *file, u64 nr, u64 first, u64 second)
++{
++    long rc;
++    mutex_unlock(&sublet_lock);
++    switch (nr) {
++    case CAPSTONE_SYS_fsync: case CAPSTONE_SYS_fdatasync:
++        rc = vfs_fsync(file, nr == CAPSTONE_SYS_fdatasync);
++        break;
++    case CAPSTONE_SYS_ftruncate:
++        rc = capstone_native_ftruncate(file, (s64)first, 0);
++        break;
++    case CAPSTONE_SYS_fchmod: case CAPSTONE_SYS_fchown:
++        /* Match the existing Linux helper's narrowing, including uid/gid -1. */
++        rc = capstone_native_fmetadata(file, nr == CAPSTONE_SYS_fchmod ? 0 : 1,
++                                      (u32)first, (u32)second);
++        break;
++    default:
++        rc = -ENOSYS;
++        break;
++    }
++    mutex_lock(&sublet_lock);
++    if (rc <= -ERESTARTSYS && rc >= -ERESTART_RESTARTBLOCK) rc = -EINTR;
++    return rc;
++}
++
++static bool native_files_issue(struct sublet_context *c, const struct ns_invocation *call,
++                               struct file *file, long *result)
++{
++    const u64 *a = call->scalar;
++    u64 nr = call->descriptor->nr;
++    struct native_wire_flock wire;
++    struct flock lock = {0};
++    long rc = -ENOSYS;
++    bool duplicate;
++    BUILD_BUG_ON(sizeof(wire) != 32);
++    BUILD_BUG_ON(F_GETLK != NS_F_GETLK || F_SETLK != NS_F_SETLK || F_SETLKW != NS_F_SETLKW);
++    switch (nr) {
++    case CAPSTONE_NR_FCNTL_LOCK:
++    case CAPSTONE_SYS_fcntl:
++        /* An unsupported 64-bit command must not alias an accepted low word. */
++        if (a[1] > UINT_MAX) { rc = -EINVAL; break; }
++        if (nr == CAPSTONE_NR_FCNTL_LOCK) {
++            if (a[1] != F_GETLK && a[1] != F_SETLK && a[1] != F_SETLKW) { rc = -EINVAL; break; }
++            if (!call->buffer[2].data || call->buffer[2].length != sizeof(wire)) { rc = -EFAULT; break; }
++            memcpy(&wire, call->buffer[2].data, sizeof(wire));
++            lock.l_type = wire.type; lock.l_whence = wire.whence;
++            lock.l_start = wire.start; lock.l_len = wire.length; lock.l_pid = wire.pid;
++        } else if (a[1] == F_GETLK || a[1] == F_SETLK || a[1] == F_SETLKW) {
++            rc = -EINVAL; break; /* pointer commands require the checked wire service */
++        }
++        duplicate = a[1] == F_DUPFD || a[1] == F_DUPFD_CLOEXEC;
++        mutex_unlock(&sublet_lock);
++        rc = capstone_native_fcntl(a[0], file, a[1], a[2], nr == CAPSTONE_NR_FCNTL_LOCK ? &lock : NULL, DOM_FDS);
++        mutex_lock(&sublet_lock);
++        /* The helper reserves below DOM_FDS; no close-on-failure rollback that
++         * would accidentally release the caller's existing POSIX locks. */
++        if (rc >= 0 && duplicate) set_bit(rc, c->dom_delegate->fds);
++        if (!rc && nr == CAPSTONE_NR_FCNTL_LOCK && a[1] == F_GETLK) {
++            memset(&wire, 0, sizeof(wire));
++            wire.type = lock.l_type; wire.whence = lock.l_whence;
++            wire.start = lock.l_start; wire.length = lock.l_len; wire.pid = lock.l_pid;
++            memcpy(call->buffer[2].data, &wire, sizeof(wire));
++        }
++        break;
++    case CAPSTONE_SYS_fsync: case CAPSTONE_SYS_fdatasync:
++    case CAPSTONE_SYS_ftruncate:
++    case CAPSTONE_SYS_fchmod: case CAPSTONE_SYS_fchown:
++        rc = native_fd_issue(file, nr, a[1], a[2]);
++        break;
++    default: return false;
++    }
++    *result = rc;
++    return true;
++}
+--- /dev/null
++++ b/arch/riscv/kernel/sublet/syscall-paths.h
+@@ -0,0 +1,103 @@
++/* SPDX-License-Identifier: GPL-2.0-only */
++/* Path, metadata, limit, signal mask and directory calls on kernel buffers. */
++#include <linux/stat.h>
++#include <linux/resource.h>
++#include <linux/sysinfo.h>
++#include <asm/stat.h>
++
++/* One path policy and stat layout for both stat calls. sublet_lock held. */
++static long native_stat_issue(struct sublet_context *c, u64 nr, const u64 *args,
++                              struct file *held, const char *name, struct stat *out)
++{
++    struct capstone_delegate_entry e = {0};
++    struct kstat st;
++    struct file *file;
++    long rc;
++    if (nr == CAPSTONE_SYS_newfstatat &&
++        (args[3] & ~(u64)(AT_SYMLINK_NOFOLLOW | AT_NO_AUTOMOUNT))) return -EINVAL;
++    mutex_unlock(&sublet_lock);
++    if (nr == CAPSTONE_SYS_newfstatat) {
++        e.nr = nr; memcpy(e.args, args, sizeof(e.args));
++        file = dom_path_file_name(c, &e, name);
++    } else { file = held; get_file(file); }
++    if (IS_ERR(file)) rc = PTR_ERR(file);
++    else {
++        rc = vfs_getattr(&file->f_path, &st, STATX_BASIC_STATS, AT_STATX_SYNC_AS_STAT);
++        if (!rc) rc = capstone_native_stat(&st, out);
++        fput(file);
++    }
++    mutex_lock(&sublet_lock);
++    return rc;
++}
++
++/* Ordinary unlink and open share the confined resolver and fd publication.
++ * sublet_lock held; a failed open can already have created or truncated a file. */
++static long native_path_issue(struct sublet_context *c, u64 nr, const u64 *args,
++                              const char *name)
++{
++    struct capstone_delegate_entry e = {0};
++    long rc;
++    e.nr = nr; memcpy(e.args, args, sizeof(e.args));
++    mutex_unlock(&sublet_lock);
++    rc = dom_path_operation_name(c, &e, name);
++    mutex_lock(&sublet_lock);
++    if (rc <= -ERESTARTSYS && rc >= -ERESTART_RESTARTBLOCK) rc = -EINTR;
++    return rc;
++}
++
++static bool native_gcc_issue(struct sublet_context *c, const struct ns_invocation *call,
++                             struct file *held, long *result)
++{
++    const u64 *a = call->scalar;
++    u64 nr = call->descriptor->nr;
++    long rc = -ENOSYS;
++    sigset_t old, set;
++    switch (nr) {
++    case CAPSTONE_SYS_openat:
++    case CAPSTONE_SYS_unlinkat:
++        rc = native_path_issue(c, nr, a, call->buffer[1].data);
++        break;
++    case CAPSTONE_SYS_newfstatat:
++    case CAPSTONE_SYS_fstat:
++        rc = native_stat_issue(c, nr, a, held, call->buffer[1].data,
++                               call->buffer[nr == CAPSTONE_SYS_fstat ? 1 : 2].data);
++        break;
++    case CAPSTONE_SYS_sysinfo:
++        rc = capstone_native_sysinfo(call->buffer[0].data);
++        break;
++    case CAPSTONE_SYS_prlimit64:
++        if ((pid_t)a[0] != 0 && (pid_t)a[0] != task_tgid_vnr(current)) { rc = -EPERM; break; }
++        /* Limits are read-only for a protected program. */
++        if (call->buffer[2].data) { rc = -EPERM; break; }
++        {
++            struct rlimit limit;
++            rc = capstone_native_getrlimit(a[1], &limit);
++            if (!rc && call->buffer[3].data) memcpy(call->buffer[3].data, &limit, sizeof(limit));
++        }
++        break;
++    case CAPSTONE_SYS_rt_sigprocmask:
++        if (a[3] != sizeof(sigset_t)) { rc = -EINVAL; break; }
++        old = current->blocked;
++        rc = 0;
++        if (call->buffer[1].data) {
++            memcpy(&set, call->buffer[1].data, sizeof(set));
++            sigdelsetmask(&set, sigmask(SIGKILL) | sigmask(SIGSTOP));
++            rc = sigprocmask(a[0], &set, NULL);
++        }
++        if (!rc && call->buffer[2].data) memcpy(call->buffer[2].data, &old, sizeof(old));
++        break;
++    case CAPSTONE_SYS_getcwd:
++        mutex_unlock(&sublet_lock);
++        rc = dom_getcwd(c, call->buffer[0].data, a[1]);
++        mutex_lock(&sublet_lock);
++        break;
++    case CAPSTONE_SYS_chdir:
++        mutex_unlock(&sublet_lock);
++        rc = dom_chdir_name(c, call->buffer[0].data);
++        mutex_lock(&sublet_lock);
++        break;
++    default: return false;
++    }
++    *result = rc;
++    return true;
++}
+--- /dev/null
++++ b/arch/riscv/kernel/sublet/syscall-time.h
+@@ -0,0 +1,66 @@
++/* SPDX-License-Identifier: GPL-2.0-only */
++#include <linux/capstone_native_time.h>
++#include <linux/hrtimer.h>
++#include <linux/time_namespace.h>
++#include <linux/restart_block.h>
++
++static bool native_time_issue(struct sublet_context *c, const struct ns_invocation *call, long *result)
++{
++    const u64 *a = call->scalar;
++    u64 nr = call->descriptor->nr;
++    struct timespec64 request, remaining;
++    long rc;
++    unsigned request_arg, remaining_arg;
++    clockid_t clock;
++    ktime_t expires;
++    enum hrtimer_mode mode;
++    if (nr == CAPSTONE_SYS_pselect6) {
++        if (a[0] > DOM_FDS) { *result = -EINVAL; return true; }
++        for (unsigned arg = 1; arg <= 3; ++arg) {
++            const unsigned long *bits = call->buffer[arg].data;
++            if (!bits) continue;
++            for (unsigned fd = 0; fd < a[0]; ++fd)
++                if (test_bit(fd, bits) && !dom_fd_allowed(c, fd)) {
++                    *result = -EBADF; return true;
++                }
++        }
++        mutex_unlock(&sublet_lock);
++        *result = capstone_native_select(a[0], call->buffer[1].data,
++            call->buffer[2].data, call->buffer[3].data,
++            call->buffer[4].data, call->buffer[5].data);
++        mutex_lock(&sublet_lock);
++        return true;
++    }
++    if (nr != CAPSTONE_SYS_nanosleep && nr != CAPSTONE_SYS_clock_nanosleep) return false;
++    request_arg = nr == CAPSTONE_SYS_nanosleep ? 0 : 2;
++    remaining_arg = request_arg + 1;
++    clock = nr == CAPSTONE_SYS_nanosleep ? CLOCK_MONOTONIC : a[0];
++    mode = nr == CAPSTONE_SYS_nanosleep || !a[1] ? HRTIMER_MODE_REL : HRTIMER_MODE_ABS;
++    if (nr == CAPSTONE_SYS_clock_nanosleep &&
++        ((a[1] & ~(u64)TIMER_ABSTIME) || (a[0] != CLOCK_REALTIME && a[0] != CLOCK_MONOTONIC))) {
++        *result = -EINVAL; return true;
++    }
++    memcpy(&request, call->buffer[request_arg].data, sizeof(request));
++    if (!timespec64_valid(&request)) { *result = -EINVAL; return true; }
++    /* Linux's timer machinery, but never its user-pointer remaining-time
++     * copy or scalar syscall restart. The dispatcher owns checked copy-out. */
++    current->restart_block.nanosleep.type = TT_NONE;
++    current->restart_block.nanosleep.rmtp = NULL;
++    expires = timespec64_to_ktime(request);
++    if (mode == HRTIMER_MODE_ABS && clock == CLOCK_MONOTONIC)
++        expires = timens_ktime_to_host(clock, expires);
++    mutex_unlock(&sublet_lock);
++    rc = hrtimer_nanosleep(expires, mode, clock);
++    if (rc == -ERESTART_RESTARTBLOCK || rc == -ERESTARTNOHAND) {
++        if (mode == HRTIMER_MODE_REL && call->buffer[remaining_arg].data) {
++            s64 left = current->restart_block.nanosleep.expires - ktime_get_ns();
++            remaining = ktime_to_timespec64(max_t(s64, left, 0));
++            memcpy(call->buffer[remaining_arg].data, &remaining, sizeof(remaining));
++        }
++        rc = -EINTR;
++    }
++    current->restart_block.fn = do_no_restart_syscall;
++    mutex_lock(&sublet_lock);
++    *result = rc;
++    return true;
++}
+--- /dev/null
++++ b/arch/riscv/kernel/sublet/syscall.h
+@@ -0,0 +1,216 @@
++/* SPDX-License-Identifier: GPL-2.0-only */
++/* The issue side of the system calls the kernel implements for a protected program: the
++ * allow-list, the descriptor admission and the Linux operations on kernel buffers. Plan v5
++ * step 5 binds them to the trap route, where a binder copies each argument through the
++ * program's reference before sublet_syscall_issue and back after it. Until then nothing
++ * calls them. No program address reaches a Linux API. */
++#include <linux/seccomp.h>
++#include <linux/timekeeping.h>
++#include <capstone/native-syscall.h>
++#include "native-syscall-table.c"
++
++/* sublet_lock held; preserve Linux's shared open-file-description position lock. */
++static long native_seek_issue(struct file *file, u64 offset, u64 whence)
++{
++    long rc;
++    /* Reject malformed 64-bit selectors before narrowing to Linux's type. */
++    if (whence > SEEK_MAX) return -EINVAL;
++    mutex_unlock(&sublet_lock);
++    if (file->f_mode & FMODE_ATOMIC_POS) mutex_lock(&file->f_pos_lock);
++    rc = vfs_llseek(file, (s64)offset, whence);
++    if (rc <= -ERESTARTSYS && rc >= -ERESTART_RESTARTBLOCK) rc = -EINTR;
++    if (file->f_mode & FMODE_ATOMIC_POS) mutex_unlock(&file->f_pos_lock);
++    mutex_lock(&sublet_lock);
++    return rc;
++}
++static bool native_supported(u64 nr)
++{
++    switch (nr) {
++    case CAPSTONE_SYS_read: case CAPSTONE_SYS_write:
++    case CAPSTONE_SYS_pread64: case CAPSTONE_SYS_pwrite64:
++    case CAPSTONE_SYS_getdents64:
++    case CAPSTONE_SYS_close: case CAPSTONE_SYS_lseek:
++    case CAPSTONE_SYS_dup: case CAPSTONE_SYS_dup3:
++    case CAPSTONE_NR_FCNTL_LOCK: case CAPSTONE_SYS_fcntl:
++    case CAPSTONE_SYS_fsync: case CAPSTONE_SYS_fdatasync:
++    case CAPSTONE_SYS_ftruncate: case CAPSTONE_SYS_unlinkat:
++    case CAPSTONE_SYS_fchmod: case CAPSTONE_SYS_fchown:
++    case CAPSTONE_SYS_getpid: case CAPSTONE_SYS_getppid: case CAPSTONE_SYS_gettid:
++    case CAPSTONE_SYS_getuid: case CAPSTONE_SYS_geteuid:
++    case CAPSTONE_SYS_getgid: case CAPSTONE_SYS_getegid:
++    case CAPSTONE_SYS_clock_gettime:
++    case CAPSTONE_SYS_sched_yield:
++    case CAPSTONE_SYS_nanosleep: case CAPSTONE_SYS_clock_nanosleep: case CAPSTONE_SYS_pselect6:
++    case CAPSTONE_SYS_mkdirat: case CAPSTONE_SYS_fchmodat: case CAPSTONE_SYS_symlinkat:
++    case CAPSTONE_SYS_readlinkat: case CAPSTONE_SYS_truncate: case CAPSTONE_SYS_linkat:
++    case CAPSTONE_SYS_openat: case CAPSTONE_SYS_newfstatat: case CAPSTONE_SYS_fstat:
++    case CAPSTONE_SYS_sysinfo: case CAPSTONE_SYS_prlimit64:
++    case CAPSTONE_NR_SIGACTION:
++    case CAPSTONE_SYS_rt_sigprocmask: case CAPSTONE_SYS_getcwd: case CAPSTONE_SYS_chdir:
++        return true;
++    default: return false;
++    }
++}
++static int native_acquire(void *opaque, const struct ns_invocation *call, void **held)
++{
++    struct sublet_context *c = opaque;
++    struct file *file;
++    u64 nr = call->descriptor->nr;
++    /* Linux has no API to evaluate an inherited seccomp filter against a protected
++     * program's arguments. Refuse filtered tasks rather than skip their policy. */
++    if (current->seccomp.mode != SECCOMP_MODE_DISABLED) return -EOPNOTSUPP;
++    if (!native_supported(nr)) return -ENOSYS;
++    if (nr == CAPSTONE_SYS_openat || nr == CAPSTONE_SYS_newfstatat || nr == CAPSTONE_SYS_unlinkat ||
++        nr == CAPSTONE_SYS_mkdirat || nr == CAPSTONE_SYS_fchmodat || nr == CAPSTONE_SYS_symlinkat ||
++        nr == CAPSTONE_SYS_readlinkat || nr == CAPSTONE_SYS_truncate || nr == CAPSTONE_SYS_linkat) return 0;
++    if (!call->descriptor->fd_mask) return 0;
++    if (call->scalar[0] > INT_MAX || !dom_fd_allowed(c, call->scalar[0])) return -EBADF;
++    file = fget(call->scalar[0]);
++    if (!file) return -EBADF;
++    if (file->private_data == c || !file->f_op) { fput(file); return -EBADF; }
++    *held = file;
++    return 0;
++}
++/* Value of a call without arguments that Linux answers from the task alone, or false. */
++static bool native_task_value(u64 nr, long *value)
++{
++    switch (nr) {
++    case CAPSTONE_SYS_getpid: *value = task_tgid_vnr(current); return true;
++    case CAPSTONE_SYS_getppid: *value = task_ppid_nr_ns(current, task_active_pid_ns(current)); return true;
++    case CAPSTONE_SYS_gettid: *value = task_pid_vnr(current); return true;
++    case CAPSTONE_SYS_getuid: *value = from_kuid_munged(current_user_ns(), current_uid()); return true;
++    case CAPSTONE_SYS_geteuid: *value = from_kuid_munged(current_user_ns(), current_euid()); return true;
++    case CAPSTONE_SYS_getgid: *value = from_kgid_munged(current_user_ns(), current_gid()); return true;
++    case CAPSTONE_SYS_getegid: *value = from_kgid_munged(current_user_ns(), current_egid()); return true;
++    default: return false;
++    }
++}
++/* read, write, pread64, pwrite64 on a held file and a kernel buffer; sublet_lock is dropped. */
++static long native_rw(struct file *file, u64 nr, u64 offset, void *data, size_t length)
++{
++    bool positional = nr == CAPSTONE_SYS_pread64 || nr == CAPSTONE_SYS_pwrite64, locked = false;
++    bool read = nr == CAPSTONE_SYS_read || nr == CAPSTONE_SYS_pread64;
++    loff_t pos, *ppos;
++    long rc;
++    if (positional && (s64)offset < 0) return -EINVAL;
++    if (positional && !(file->f_mode & (nr == CAPSTONE_SYS_pread64 ? FMODE_PREAD : FMODE_PWRITE)))
++        return -ESPIPE;
++    /* The descriptor's own open mode decides, as in Linux: kernel_write() warns (and a
++     * panic_on_warn kernel stops) when it is handed a file that was not opened for writing. */
++    if (!(file->f_mode & (read ? FMODE_READ : FMODE_WRITE))) return -EBADF;
++    if (!(file->f_mode & (read ? FMODE_CAN_READ : FMODE_CAN_WRITE))) return -EINVAL;
++    mutex_unlock(&sublet_lock);
++    if (!positional && (file->f_mode & FMODE_ATOMIC_POS)) {
++        mutex_lock(&file->f_pos_lock); locked = true;
++    }
++    pos = positional ? offset : file->f_pos;
++    ppos = !positional && (file->f_mode & FMODE_STREAM) ? NULL : &pos;
++    if (read) rc = kernel_read(file, data, length, ppos);
++    else {
++        file_start_write(file);
++        rc = kernel_write(file, data, length, ppos);
++        file_end_write(file);
++    }
++    if (!positional && ppos && rc >= 0) file->f_pos = pos;
++    if (locked) mutex_unlock(&file->f_pos_lock);
++    mutex_lock(&sublet_lock);
++    return rc;
++}
++#include "syscall-paths.h"
++#include "syscall-files.h"
++#include "syscall-directory.h"
++#include "syscall-time.h"
++
++static struct ns_completion native_issue(void *opaque, const struct ns_invocation *call,
++                                          void *held)
++{
++    struct sublet_context *c = opaque;
++    struct file *file = held;
++    const u64 *a = call->scalar;
++    u64 nr = call->descriptor->nr;
++    long rc = -ENOSYS;
++    struct timespec64 ts;
++    if (native_task_value(nr, &rc)) goto done;
++    if (native_directory_issue(c, call, file, &rc)) goto done;
++    if (native_time_issue(c, call, &rc)) goto done;
++    if (native_gcc_issue(c, call, file, &rc)) goto done;
++    if (native_files_issue(c, call, file, &rc)) goto done;
++    switch (nr) {
++    case CAPSTONE_SYS_dup: {
++        mutex_unlock(&sublet_lock);
++        rc = capstone_native_dupfd(0, file, 0, DOM_FDS);
++        mutex_lock(&sublet_lock);
++        if (rc >= 0) set_bit(rc, c->dom_delegate->fds);
++        break;
++    }
++    case CAPSTONE_SYS_dup3: {
++        struct file *dst;
++        if (a[0] == a[1] || (a[2] & ~(u64)O_CLOEXEC)) { rc = -EINVAL; break; }
++        if (a[1] >= DOM_FDS) { rc = -EBADF; break; }
++        dst = fget(a[1]);
++        if (dst) {
++            fput(dst);
++            if (!dom_fd_allowed(c, a[1])) { rc = -EBADF; break; }
++        }
++        mutex_unlock(&sublet_lock);
++        rc = replace_fd(a[1], file, a[2]);
++        mutex_lock(&sublet_lock);
++        if (rc >= 0) {
++            set_bit(a[1], c->dom_delegate->fds);
++            rc = a[1];
++        }
++        break;
++    }
++    case CAPSTONE_NR_SIGACTION:
++        if (!a[0] || a[0] > 64 || a[1] > CAPSTONE_SIGNAL_CAUGHT || a[2] > UINT_MAX) {
++            rc = -EINVAL; break;
++        }
++        mutex_unlock(&sublet_lock);
++        rc = capstone_native_signal_action(a[0], a[1], a[2]);
++        mutex_lock(&sublet_lock);
++        break;
++    case CAPSTONE_SYS_sched_yield:
++        mutex_unlock(&sublet_lock); yield(); mutex_lock(&sublet_lock); rc = 0; break;
++    case CAPSTONE_SYS_clock_gettime:
++        BUILD_BUG_ON(sizeof(struct timespec64) != 16);
++        BUILD_BUG_ON(offsetof(struct timespec64, tv_sec) != 0);
++        BUILD_BUG_ON(offsetof(struct timespec64, tv_nsec) != 8);
++        if (a[0] != CLOCK_REALTIME && a[0] != CLOCK_MONOTONIC) { rc = -EINVAL; break; }
++        if (a[0] == CLOCK_REALTIME) ktime_get_real_ts64(&ts);
++        else ktime_get_ts64(&ts);
++        if (call->buffer[1].data) memcpy(call->buffer[1].data, &ts, sizeof(ts));
++        rc = 0; break;
++    case CAPSTONE_SYS_close:
++        rc = native_close_issue(c, a[0]);
++        break;
++    case CAPSTONE_SYS_lseek:
++        rc = native_seek_issue(file, a[1], a[2]);
++        break;
++    case CAPSTONE_SYS_read: case CAPSTONE_SYS_write:
++    case CAPSTONE_SYS_pread64: case CAPSTONE_SYS_pwrite64:
++        rc = native_rw(file, nr, a[3], call->buffer[1].data, call->buffer[1].length);
++        break;
++    }
++done:
++    if (rc <= -ERESTARTSYS && rc >= -ERESTART_RESTARTBLOCK) rc = -EINTR;
++    /* No automatic replay: Linux may already have consumed input. */
++    return (struct ns_completion){rc, 1, 0};
++}
++static void native_release(void *opaque, void *held)
++{ (void)opaque; if (held) fput(held); }
++
++
++/* One call on kernel buffers: admit the descriptor, issue, release. Caller holds sublet_lock,
++ * which the Linux operations drop while they block. */
++long sublet_syscall_issue(struct sublet_context *c, const struct ns_invocation *call)
++{
++    void *held = NULL;
++    long rc = native_acquire(c, call, &held);
++
++    if (rc) return rc;
++    rc = native_issue(c, call, held).value;
++    native_release(c, held);
++    return rc;
++}
++
++#include "process-spawn.h"

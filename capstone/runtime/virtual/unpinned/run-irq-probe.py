@@ -61,7 +61,7 @@ echo VIRTUAL_STAGED_DONE
            '--kernel-arg', 'captag_bulk=' + args.bulk,
            '--kernel-arg', 'init_on_alloc=0', '--kernel-arg', 'init_on_free=0']
     paths = [args.qemu, args.module] + [args.images / n for n in ['Image', 'fw_jump.elf', 'rootfs.ext2']]
-    paths += [Path(__file__), runner, here / 'linux-6.1-unpinned.patch']
+    paths += [Path(__file__), runner, here.parents[2] / 'kernel' / 'patches' / '0001-riscv-mm-capability-tags-follow-pages.patch']
     extra = 'x-capstone-raw-moves=true,x-capstone-test-csrs=false'
     if args.cpu_extra:
         extra += ',' + args.cpu_extra

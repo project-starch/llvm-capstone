@@ -1,7 +1,6 @@
-diff --git a/mm/mprotect.c b/mm/mprotect.c
 --- a/mm/mprotect.c
 +++ b/mm/mprotect.c
-@@ -13,6 +13,7 @@
+@@ -12,6 +12,7 @@
  #include <linux/pagewalk.h>
  #include <linux/hugetlb.h>
  #include <linux/shm.h>
@@ -9,7 +8,7 @@ diff --git a/mm/mprotect.c b/mm/mprotect.c
  #include <linux/mman.h>
  #include <linux/fs.h>
  #include <linux/highmem.h>
-@@ -819,6 +819,14 @@ SYSCALL_DEFINE3(mprotect, unsigned long, start, size_t, len,
+@@ -819,6 +820,14 @@ SYSCALL_DEFINE3(mprotect, unsigned long, start, size_t, len,
  	return do_mprotect_pkey(start, len, prot, -1);
  }
  

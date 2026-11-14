@@ -1,7 +1,6 @@
-diff --git a/arch/riscv/include/asm/page.h b/arch/riscv/include/asm/page.h
 --- a/arch/riscv/include/asm/page.h
 +++ b/arch/riscv/include/asm/page.h
-@@ -49,12 +49,28 @@
+@@ -49,13 +49,29 @@
  
  #ifndef __ASSEMBLY__
  
@@ -14,7 +13,7 @@ diff --git a/arch/riscv/include/asm/page.h b/arch/riscv/include/asm/page.h
 +#define clear_user_page(pgaddr, vaddr, page)	clear_page(pgaddr)
  #define copy_user_page(vto, vfrom, vaddr, topg) \
  			memcpy((vto), (vfrom), PAGE_SIZE)
-+
+ 
 +/*
 + * Optional Capstone raw transport: capability tags follow physical pages.
 + * See arch/riscv/mm/captag.c. Every page copy also moves the copied page's tags, and every
@@ -29,13 +28,13 @@ diff --git a/arch/riscv/include/asm/page.h b/arch/riscv/include/asm/page.h
 +			unsigned long vaddr, struct vm_area_struct *vma);
 +#define HAVE_ARCH_FREE_PAGE
 +void arch_free_page(struct page *page, int order);
- 
++
  /*
   * Use struct definitions to apply C type checking
-diff --git a/arch/riscv/include/asm/pgtable.h b/arch/riscv/include/asm/pgtable.h
+  */
 --- a/arch/riscv/include/asm/pgtable.h
 +++ b/arch/riscv/include/asm/pgtable.h
-@@ -829,4 +829,11 @@
+@@ -829,4 +829,11 @@ extern unsigned long empty_zero_page[PAGE_SIZE / sizeof(unsigned long)];
  
  #endif /* !__ASSEMBLY__ */
  
@@ -47,10 +46,9 @@ diff --git a/arch/riscv/include/asm/pgtable.h b/arch/riscv/include/asm/pgtable.h
 +#endif
 +
  #endif /* _ASM_RISCV_PGTABLE_H */
-diff --git a/arch/riscv/mm/Makefile b/arch/riscv/mm/Makefile
 --- a/arch/riscv/mm/Makefile
 +++ b/arch/riscv/mm/Makefile
-@@ -13,6 +13,7 @@
+@@ -13,6 +13,7 @@ obj-y += extable.o
  obj-$(CONFIG_MMU) += fault.o pageattr.o
  obj-y += cacheflush.o
  obj-y += context.o
@@ -58,8 +56,6 @@ diff --git a/arch/riscv/mm/Makefile b/arch/riscv/mm/Makefile
  
  ifeq ($(CONFIG_MMU),y)
  obj-$(CONFIG_SMP) += tlbflush.o
-diff --git a/arch/riscv/mm/captag.c b/arch/riscv/mm/captag.c
-new file mode 100644
 --- /dev/null
 +++ b/arch/riscv/mm/captag.c
 @@ -0,0 +1,311 @@
