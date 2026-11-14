@@ -11,9 +11,12 @@
 | CPython 3.13.7, pyperformance subset (7 benchmarks), QEMU twin | **measured**: 28/28 answers equal to native; in-context +0.66 % (richards) to +2.84 % (json_dumps), +1.63 % summed; kernel ±0.5 %; 2.99 M CDERIVEs, subtree max 2, peak live records 76,767 (1.23 MB) | FRCDKMS SDK, -O2, trimmed built-ins, linked --no-relax; QEMU qemu55 a0501ebc39 |
 | CPython on silicon | **queued**: pre-registered below; four one-arm boots U P P U on one board, F with event 23 | F `a948e4134`, kit bkit75n |
 | PostgreSQL 17.5, single-user pgbench-derived workload, QEMU twin | **measured** (15 Nov 04:21-04:42): 4/4 commands give the native answers; in-context **+4.04 %**, kernel +0.43 %, repeats within 0.02 %; 2.31 M CDERIVEs and 668 k CREVOKEs per run, subtree mean 3.45 / **max 34,509** (a context reset), peak live records 105,043 (1.68 MB). Bring-up found a port defect, **ISSUES.md M-15** (int2vector/oidvector read 8 bytes off at MAXALIGN 16, caught as CAP_OOB by the protected arm). Harness changes, the same in both arms: root (the loader admits euid 0 only), shims over refused or unserved calls; patch 0003 with the Q-15 placement repair | FRCDKMS SDK, -O2, native route, image set 10, QEMU qemu55 a0501ebc39 (counts: qemu-nst) |
-| tshark (pcap), FFmpeg (decode) | **queued, in that order**: each twin first, then silicon. Patches in tree: wireshark-4.6.8-0001, ffmpeg-9.0.1-0003. Each needs the native-route rebuild (FRCDKMS SDK); tshark's six dependencies too | FRCDKMS, native route |
+| PostgreSQL on silicon, bitstream F | **queued**: board 1, chain be-b1 (~10:00 15 Nov), pre-registered below (87b463da4d10; SPEC lane Addendum 126); ABBA in one boot, rung budget 1800 | F `a948e4134`, kit bkit75n |
+| FFmpeg 9.0.1 decode (10 s clip, 300 frames), QEMU twin | **measured** (15 Nov 05:21): all commands decode the stock reference frames; in-context **-0.030 %**, kernel -0.36 %. The protection adds about 3,300 lifetimes per decode (pools recycle), subtree max 2, peak 474 live records. Needs `-fno-builtin` in both arms (else cause 24 in both, a compiler defect) and this lane's Q-15 placement repair of 0003 (unrepaired, CDERIVE refuses a frame-plane buffer) | FRCDKMS SDK, -O2 -fno-builtin, native route, set w4, QEMU qemu55 a0501ebc39 |
+| tshark (pcap) | **running**: the native-route build of tshark and its six dependencies (FRCDKMS SDK); wmem 0001 already carries its Q-15 repair (d75137deed6e). Twin next, then silicon | FRCDKMS, native route |
 | memcached (load) | **deferred**: the native route refuses `socket`, `socketpair`, `epoll_create1` and `epoll_ctl` (`native-syscall-table.c:92-101`, `NS_REFUSE`), so the server cannot take a load on this route. Running it elsewhere (e.g. the virtual route) is a different instrument; the lead's call | - |
 | CREVOKE worst case (subtree 1 .. 10^6, latency, interruptibility; PostgreSQL context reset) | **measured** (RTL sim, memory delay 0): 6 cycles per node up to 2,048 nodes, about 11 beyond; at most 65,532 nodes per subtree (10^6 cannot be built), so the worst single CREVOKE is 720,892 cycles; **not interruptible**: a timer interrupt waits for the whole walk (180,518 cycles at 32,768 nodes, against 1-6 without). PostgreSQL context resets (twin): the largest ends **34,509 nodes** in one CREVOKE, about 0.38 M cycles at delay 0 and 2.1 M at delay 12. CDERIVE: 21 cycles alone, 27 / 157 back to back at delay 0 / 12; CREVOKE about 60 cycles per node at delay 12 | capstone-ariane `a948e4134` (F), `--sv_seed 1` |
+| CDERIVE / CREVOKE timed on silicon (lone, back to back, subtrees 1 .. 10^5, a probe to 10^6) | **queued**: board 2, chain bd-b2, after the CPython boot (~11:30 15 Nov), pre-registered below (d0b72cfe7a21; SPEC lane Addendum 125) | F `a948e4134`, kit bkit75n |
 | record-cache counters | event 23 is on hpm8 in kits bkit73n (batch) and bkit75n (F). Events 29-31 (lookups, raw misses, walk-busy cycles) would need a new bitstream; that is **the lead's call** and is not requested | - |
 
 Only rows marked "measured" hold measurements; the rest say what runs next and where.
@@ -936,3 +939,91 @@ answers):
   runs. So 50-70 min of commands, under the 7,200 s rung budget. For a `spec.sh` stage the kit sets the idle limit to the
   same 7,200 s (`board-run.sh:155`), far above one silent command.
 - **VOID** if `b0-stats` or `b0-hello` fails, or the smoke fails outside the kit's accounting waiver.
+
+## FFmpeg 9.0.1: decode (matroska, mpeg4, single thread)
+
+**Patch.** `capstone/ports/ffmpeg/buffer-pool/patches/ffmpeg-9.0.1-0003-libavutil-pools-as-sublet-lifetimes.patch`
+(`5d3cd35a00ae199c…`). With it, every `AVBufferPool` and `AVRefStructPool` entry a pool hands out is a CDERIVE child of
+the entry, and returning it to the pool CREVOKEs that child. It is written against the buffer-pool port's 0001 (pool
+event hooks). The app port prepares it with `prepare-source.sh --sublet`, together with 0001, `trace.h` and the app's
+no-op recorder and observer.
+
+**Arms.** Both arms carry the port's own patches and the 0001 hooks with the no-op recorder and observer. The hooks
+cost a call per pool event, and that cost belongs in both arms. The protected arm adds 0003 and the repair below. The
+unprotected arm is the protected tree with 0003 reverse-applied at fuzz 0. The trees differ in exactly
+`libavutil/{buffer.c,buffer_internal.h,refstruct.c}`.
+
+**Build.** `nested/ffmpeg/build-domain-native.sh` (`c25dd62a6aba91a9…`), derived from the port's `build-domain.sh`:
+- the FRCDKMS SDK and flags at -O2, as the other apps here, with `capstone-cc` supplying libc;
+- the input path relative (a native task opens nothing above its run directory);
+- only the full decoder and its flipped-input control image;
+- the C-50 scan gate and the undefined-weak gate pass, and no input object carries a TPREL relocation. The check
+  finds 4 in the known TLS reproducer, as its control.
+
+**`-fno-builtin` in both arms, as the port's qualified build has it.** Without it, this compiler's FFmpeg faults in
+`avformat_open_input` with cause 24 (an untagged pointer reaching `__libc_free`). That is so in both arms, so it is not
+the protection. Bisection, one twin run each, unprotected arm:
+
+| added to -O2 + FRCD | result |
+|---|---|
+| nothing | cause 24 |
+| -O1 instead of -O2 | cause 24 |
+| -O2 without FRCD | cause 24 |
+| `-fno-jump-tables` | cause 24 |
+| `-fno-builtin` | 300/300 frames match |
+| `-ffreestanding` | 300/300 frames match |
+| the port's qualified flags (-O1, frame pointer, freestanding, no builtins, no jump tables), no FRCD | 300/300 match |
+
+C-79 (library calls the simplifier emits return integers) is the recorded defect of this shape, and its fix is in
+llvm-c9's source (a14ed97ccfa1 is an ancestor of 29027126f39b). So this is another instance, or a residual of it, and
+it is handed to the compiler lane.
+
+**Q-15 placement repair of 0003, by this lane** (`nested/ffmpeg/ffmpeg-9.0.1-0003-q15-pool-placement.patch`,
+`4e33c7e6ee4a76fc…`; protected arm only, applied after 0003 at fuzz 0). Unrepaired, the protected arm stops twice
+on the twin:
+- At the first frame, CDERIVE refuses a frame-plane pool buffer (29 in `av_buffer_pool_get`). A 57,600-byte child
+  at malloc's 16-byte alignment cannot be held exactly by the compact format (Q-15). No branch carries a repaired 0003.
+  - The repair allocates each `AVBufferPool` entry with one granule of slack and places the entry's lifetime at its
+    first granule-aligned address.
+  - The lifetime's length is the size rounded up to a granule (`capstone/representable.h`), and every child it
+    issues has that length: tail padding inside the entry's own allocation only, as in the memcached, postgres and
+    wmem repairs.
+- At teardown, after every frame, mallocng's `free` refuses a CREVOKE (29). `pool_return_entry` keeps an
+  `AVRefStructPool` entry as a pointer derived from its lifetime, a grandchild of the heap, and `pool_free_entry`
+  freed that pointer.
+  - The repair records the allocator's own pointer in the entry's header (`sublet_raw`) and frees that. The user
+    can read the header, but it already holds `sublet_life`, which outlives the user's child the same way, so the
+    repair widens nothing.
+- Residual: refstruct pool children are still derived exactly. None of this decode's sizes is refused.
+
+**Inputs.** A 10-second clip, made by the port's `build-native.sh` with `FFAPP_CLIP_SECONDS=10`: 320x180, 30 fps,
+300 frames, mpeg4 in matroska (`input-10s.mkv`, `3b27ca89df1e49ce…`). The reference is stock FFmpeg's framemd5
+(`stock-10s.framemd5`, `f3d81ef3cc56304d…`), from the unpatched tree. The port's own native oracle check MATCHes, and
+its flipped-input control FIRES (3 hashes change).
+
+**Twin results (2026-11-15 05:21-05:23)**, image set w4: unprotected `dfd15bb734a6e26c…`, protected
+`daf46ea0cca1bdf8…`. One ABBA boot (`nff-a1`), and a control boot (`nff-s4`) in which both flipped-input runs FIRE.
+Every command decodes 300 frames equal to the stock reference.
+
+| | u1 | p1 | p2 | u2 | protected vs not (ABBA means) |
+|---|---|---|---|---|---|
+| in-context (`run_cycles`) | 889,344,936 | 889,077,223 | 889,076,677 | 889,344,727 | **-0.030 %** (-268 k) |
+| kernel and other (`between_cycles`) | 12,134,980 | 12,086,302 | 12,067,036 | 12,106,157 | -0.36 % |
+| context entries | 690 | 684 | 684 | 690 | -6 |
+
+**Lifetime counts** (qemu-nst, one boot per arm):
+
+| | not protected | protected |
+|---|---|---|
+| CDERIVE, whole boot | 5,730 | 9,057 |
+| CREVOKE / nodes ended | 5,677 / 5,677 | 8,974 / 9,007 |
+| revoked subtree size: max | 1 | 2 |
+| peak live records | 420 | 474 |
+
+- FFmpeg's pools recycle their entries, so the protection adds about 3,300 lifetimes per 300-frame decode: 11 per
+  frame, against 889 M in-context cycles. Its direct cost is below the twin's resolution of a few hundred thousand
+  cycles.
+- The protected arm reads 268 k in-context cycles **fewer**, which the repeats (equal to 0.0001 %) say is real on the
+  twin. It is not read as a speed-up from the protection. The repair changes the pools' allocation sizes (slack
+  and rounding), and the protected arm enters the kernel 6 times fewer per run, so its allocation path differs. This
+  file does not separate the two.
