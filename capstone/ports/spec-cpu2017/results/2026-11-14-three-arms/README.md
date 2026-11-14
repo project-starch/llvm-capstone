@@ -3,7 +3,7 @@
 This is a live table: rows are filled as board runs land. Pre-registrations, predictions and the run-by-run trail are
 in [`../2026-11-08-train/PREREG.md`](../2026-11-08-train/PREREG.md) (Addendum 107 onward for this table).
 
-## Status (updated 2026-11-14 13:10 +08)
+## Status (updated 2026-11-14 13:40 +08)
 
 - **riscv-base:** complete, all 8 rows.
 - **Capstone temporal:**
@@ -25,7 +25,7 @@ in [`../2026-11-08-train/PREREG.md`](../2026-11-08-train/PREREG.md) (Addendum 10
 
 | Board | Now | Then |
 |---|---|---|
-| 1 | temporal imagick and nab, batch / FRCDKMS (now) | 1. **spatial gcc**, batch / FRCDKMSsp (the first spatial row; twin outputs identical to temporal)<br>2. nested-allocator lane: speedtest1 (protected vs unprotected), ~20 min<br>3. mcf, gcc and perl makerand on bitstream **F**, for the one-variable F-vs-batch pairs<br>4. F's tag-path counters (mcf, gcc) |
+| 1 | **spatial gcc**, batch / FRCDKMSsp (now) | 1. (spatial gcc running), batch / FRCDKMSsp (the first spatial row; twin outputs identical to temporal)<br>2. nested-allocator lane: speedtest1 (protected vs unprotected), ~20 min<br>3. mcf, gcc and perl makerand on bitstream **F**, for the one-variable F-vs-batch pairs<br>4. F's tag-path counters (mcf, gcc) |
 | 2 | x264, fdk / FR (until ~15:00) | bitstream **B** (old tag cache + tag-path counters): mcf and gcc, for where the memory time goes |
 | 3 | full perl, fdk / FRCDK (until ~16:00) | the long final rows (x264, full perl) on the chosen final bitstream |
 
@@ -107,8 +107,8 @@ the table being measured now. A row moves into them as its run lands.
 | 505.mcf_r | 5,125.02 | 7,349.81 | 1.434 | batch / FR | 1.438 (7,372.16 s) | pending |
 | 519.lbm_r | 1,077.50 | 994.66 | **0.923** | fdk / FR | pending | pending |
 | 525.x264_r | 35,613.24 | 36,219.53 | **1.017** | mlp / arm C | pending | pending |
-| 538.imagick_r | 11.08 | 12.93 | **1.167** | fdk / FR | pending | pending |
-| 544.nab_r | 679.92 | 716.18 | **1.053** | fdk / FR | pending | pending |
+| 538.imagick_r | 11.08 | 12.76 | **1.152** | batch / FRCDKMS | **1.152** | pending |
+| 544.nab_r | 679.92 | 714.92 | **1.051** | batch / FRCDKMS | **1.051** | pending |
 | 557.xz_r | 4,993.81 | 5,196.56 | **1.041** | fdk / FR | pending | pending |
 | geomean | | | 1.172 | | | |
 
