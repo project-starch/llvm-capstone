@@ -12,7 +12,10 @@
  *   pastend       cursor at the object's end: the probe is out of bounds
  *   global        a pointer to a global object: no mapping-table entry
  *   stack         a pointer to a stack object: no mapping-table entry
- *   double        the same pointer freed twice: revoked at the first free
+ *   double        the same pointer freed twice: revoked at the first free (its group is then released too)
+ *   double-live   as double, with a sibling object kept live in the same group, so the group survives: with
+ *                 lifetimes the pointer is revoked; without them (the spatial arm) the second free reaches get_meta,
+ *                 whose freed-mask assert rejects it
  *   reused        a freed pointer after its slot was reallocated: revoked
  *   remapped      a large (own-mapping) object freed, the same size allocated again; if the new object has the same
  *                 address, the OLD pointer is freed: revoked (the case a last-mapping cache must not change)
@@ -39,6 +42,11 @@ static int child(const char *c)
     else if (!strcmp(c, "global")) { setup(c); free(global_object); }
     else if (!strcmp(c, "stack")) { char s[64]; memset(s, 1, sizeof s); setup(c); free(s); }
     else if (!strcmp(c, "double")) { void *p = malloc(48); free(p); setup(c); free(p); }
+    else if (!strcmp(c, "double-live")) {
+        void *p = malloc(48), *q = malloc(48);
+        memset(q, 4, 48); free(p);
+        printf("FREJ_INFO double-live sibling-alive %d\n", ((char *)q)[0] == 4); setup(c); free(p);
+    }
     else if (!strcmp(c, "reused")) {
         void *p = malloc(48); free(p);
         void *q = malloc(48);
@@ -56,7 +64,7 @@ static int child(const char *c)
 
 int main(int argc, char **argv)
 {
-    static const char *cases[] = {"ok", "int", "interior", "pastend", "global", "stack", "double", "reused",
+    static const char *cases[] = {"ok", "int", "interior", "pastend", "global", "stack", "double", "double-live", "reused",
                                   "remapped", "remapped-new"};
     if (argc > 2 && !strcmp(argv[1], "case")) return child(argv[2]);
     for (unsigned i = 0; i < sizeof cases / sizeof *cases; ++i) {
