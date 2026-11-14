@@ -11,3 +11,4 @@
 0011-riscv-mm-sublet-table.patch
 0012-riscv-sublet-loader-and-calls.patch
 0013-riscv-sublet-trap-interfaces.patch
+0014-riscv-sublet-trap-entry-and-exit.patch
