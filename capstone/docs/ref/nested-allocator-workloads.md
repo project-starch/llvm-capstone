@@ -9,7 +9,7 @@
 | speedtest1 `--size 1` on silicon, bitstream F, with event 23 | **queued**: board 3 after its x264 run (~03:00 15 Nov), pre-registered below; both arms again (ABBA), hpm8 = event 23 (verdict-cache miss replays) | bitstream F `a948e4134` (`ec675c2b…`), kit bkit75n |
 | speedtest1 `--size 100` | **deferred** (SPEC-lane default, 14 Nov 21:40: breadth first; the lead may override): about 6.5 h per command on silicon | - |
 | CPython (pyperformance subset), PostgreSQL (single-user pgbench), tshark (pcap), FFmpeg (decode), memcached (load) | **queued, in that order**: each first on the QEMU twin, then one silicon ABBA boot. Patches in tree: cpython-3.13.7-0014, postgresql-17.0-0003, wireshark-4.6.8-0001, ffmpeg-9.0.1-0003, memcached-1.6.45-0006. CPython twin preparation is next | FRCDKMS, native route; silicon on F |
-| CREVOKE worst case (subtree 1 .. 10^6, latency, interruptibility; PostgreSQL context reset) | **queued**: RTL simulation, after the CPython twin build is under way | capstone-ariane `a948e4134` (F) |
+| CREVOKE worst case (subtree 1 .. 10^6, latency, interruptibility; PostgreSQL context reset) | **measured** (RTL sim, memory delay 0): 6 cycles per node up to 2,048 nodes, about 11 beyond; at most 65,532 nodes per subtree (10^6 cannot be built), so the worst single CREVOKE is 720,892 cycles; **not interruptible**: a timer interrupt waits for the whole walk (180,518 cycles at 32,768 nodes, against 1-6 without). PostgreSQL context-reset sizes: queued with the PostgreSQL twin | capstone-ariane `a948e4134` (F), `--sv_seed 1` |
 | record-cache counters | event 23 is on hpm8 in kits bkit73n (batch) and bkit75n (F). Events 29-31 (lookups, raw misses, walk-busy cycles) would need a new bitstream; that is **the lead's call** and is not requested | - |
 
 Only rows marked "measured" hold measurements; the rest say what runs next and where.
@@ -343,7 +343,8 @@ The SPEC lane's wall-clock cross-check from the same `@@SPEC-END` lines (235.56 
 **So, on silicon:** protecting SQLite's nested allocators (memsys5 blocks and lookaside slots as Sublet lifetimes)
 costs speedtest1 `--size 1` +1.0 % in-context cycles and +1.9 % wall-clock, with every answer unchanged. This file
 is compared below with the SPEC temporal increment, which the brief expects it to be close to. The kernel share is
-not read from this boot.
+not read from this boot. On the twin it is the patch's `aReq` array working through the native route's per-syscall
+page scan, not the lifetimes.
 
 **Against the SPEC temporal increment.** The increment is Capstone temporal (FRCDKMS, heap lifetimes ON) against
 Capstone spatial (FRCDKMSsp, lifetimes OFF; its SDK differs only in the allocator objects), on the same bitstream,
@@ -445,6 +446,59 @@ with hpm8 now event 23.
     are estimates from the source, not measurements.
 - The share of the in-context cost that misses explain is therefore read as (event-23 delta x 17-20 cycles) against the
   `run_cycles` delta, a lower bound on the misses' share.
- On the twin it is the patch's `aReq` array working through the native route's per-syscall page
-scan, not the lifetimes.
 
+## CREVOKE worst case (RTL simulation, measured 2026-11-14)
+
+**Configuration.**
+- capstone-ariane `a948e4134` (bitstream F's RTL), Verilator testharness, bare M-mode, the physical node pool.
+- `--sv_seed 1` on every run; testbench memory delay at its default, 0.
+- Worktree `nested/ariane-crevoke`. Tests are `verif/tests/custom/capstone/crevoke-cost.S`, parameterised by N, shape,
+  cold/warm cache, interrupt arm and witness, and `crevoke-cap.S`.
+- Logs in `.crv/<A..H>/`. A log counts only if it reached its end marker below the cycle ceiling with every reading
+  present.
+- The cycles are the bracket around the one CREVOKE minus an empty bracket. In every run that bracket retired exactly
+  one instruction with zero exceptions.
+- Every run checks that the subtree existed before the revoke: N derives succeeded, and head and tail were live before
+  and dead after. The witness arm counts all 32,768 stored capabilities, 32,768 live before the revoke and 0 after.
+
+**Latency against subtree size** (cycles, warm cache; cold reads the same from N = 2, because memory delay is 0):
+
+| N | 1 | 4 | 16 | 64 | 256 | 1,024 | 2,048 | 4,096 | 8,192 | 16,384 | 32,768 | 65,532 |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| chain (each node derived from the last) | 45 | 56 | 128 | 416 | 1,568 | 6,176 | 12,351 | 40,608 | 89,319 | 180,256 | 360,485 | 720,892 |
+| fan (N children of one node) | 45 | 61 | 133 | 421 | 1,573 | 6,181 | 12,340 | 37,223 | 82,534 | 172,566 | 353,030 | - |
+
+- **Up to 2,048 nodes: 6 cycles per node, exactly.** That is 6N + 32 for the chain (N = 2..2,048) and 6N + 37 for
+  the fan. It fits one record read and one write per node, plus an O(1) splice.
+- **Above 2,048 nodes: about 11 cycles per node.** 2,048 records of 16 B are 32 KiB, which is where the node
+  records stop fitting in the L1 data cache.
+  - With memory delay 0, the extra 5 cycles per node are the miss path alone, so silicon pays more per node beyond
+    this size. These are cycle counts at zero memory latency, not silicon times.
+- **The largest subtree is 65,532 nodes.** `crevoke-cap.S` derives a chain until CDERIVE refuses:
+  - 65,532 derives succeed, and the next one raises cause 30 (out of nodes);
+  - one CREVOKE of the whole chain takes 720,892 cycles with no exception;
+  - afterwards 65,532 fresh derives succeed again, so every record went back to the free list exactly once.
+  - The 16-bit slot head explains the number: it starts at 3, and 65,535 means full.
+  - **So a subtree of 10^5 or 10^6 nodes cannot be built on this RTL.** The largest single CREVOKE is about 0.72 M
+    cycles at zero memory latency.
+  - The native route's flat table (node_flat_records 262,144) is a different record store, and its limit was not
+    measured here.
+
+**Can it be interrupted?** No.
+- The test: chain N = 32,768, with a machine-timer interrupt pending at 49.9 % of the walk (4.000 cycles per mtime
+  tick, measured by a polling arm).
+- The interrupt is taken only after the CREVOKE retires:
+  - mepc = CREVOKE pc + 4;
+  - the handler enters 180,518 to 180,523 cycles after the interrupt became pending, 13 cycles after the walk's
+    measured end;
+  - the control arm, with no CREVOKE in flight, takes the same interrupt in 1 to 6 cycles.
+- The CREVOKE is neither restarted nor resumed: the trace holds one retirement of it, no exception, and every node dead.
+- The reason, by reading `core/decoder.sv:2046-2090` before the run: interrupts are attached to the instruction in
+  decode, and the CREVOKE was already issued.
+- **So the worst-case interrupt latency the lifetime unit adds is one whole CREVOKE:** up to about 0.72 M cycles at
+  65,532 nodes, plus memory latency on silicon. There is no abort path.
+- Read with the twin's subtree sizes: speedtest1's CREVOKEs end 1 node (mean 1.0001, max 3), so they cost about 45
+  cycles each.
+
+**Still to read: a real large revoke (PostgreSQL context reset).** The subtree a PostgreSQL `MemoryContextReset` ends
+will come from the PostgreSQL twin's histogram, and its latency from the table above.
