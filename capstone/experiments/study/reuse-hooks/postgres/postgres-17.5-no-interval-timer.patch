@@ -1,0 +1,20 @@
+--- a/src/backend/utils/misc/timeout.c
++++ b/src/backend/utils/misc/timeout.c
+@@ -339,6 +339,17 @@
+ 		if (setitimer(ITIMER_REAL, &timeval, NULL) != 0)
+ 		{
+ 			/*
++			 * Reuse study: the single-user backend on Sublet has no interval
++			 * timer (setitimer returns ENOSYS for a protected program, and a
++			 * delivered SIGALRM would end it anyway).  The timeout is then not
++			 * enforced; in the one-session workload of the study none fires.
++			 */
++			if (errno == ENOSYS)
++			{
++				signal_pending = false;
++				return;
++			}
++			/*
+ 			 * Clearing signal_pending here is a bit pro forma, but not
+ 			 * entirely so, since something in the FATAL exit path could try
+ 			 * to use timeout facilities.

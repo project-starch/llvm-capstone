@@ -15,7 +15,8 @@
 #      exp-reuse-gap.h and reuse-gap-observer.h beside it, and
 #      postgres-17.5-private-shmem.patch (both arms): the single-user
 #      backend's main segment and dynamic segments as private anonymous
-#      mappings, since a protected program cannot map shared memory.
+#      mappings, since a protected program cannot map shared memory, and
+#      postgres-17.5-no-interval-timer.patch (both arms): no SIGALRM timer.
 #   3. build-domain.sh with PGSU_FROM=configure and CPPFLAGS=-DEXP_REUSE_GAP
 #      (configure takes CPPFLAGS from the environment into Makefile.global).
 #   4. build.py, the same relink build-virtual.sh runs.
@@ -61,6 +62,11 @@ log "applied hooks-$ARM.patch"
 (cd "$SRC" && patch --batch --forward --fuzz=0 -p1 -s < "$HERE/postgres-17.5-private-shmem.patch") \
   || { echo "postgres-17.5-private-shmem.patch did not apply" >&2; exit 2; }
 log "applied postgres-17.5-private-shmem.patch"
+# No interval timer for a protected program (setitimer returns ENOSYS): the timeouts are not enforced,
+# the same patch in both arms; in the one-session workload none would fire.
+(cd "$SRC" && patch --batch --forward --fuzz=0 -p1 -s < "$HERE/postgres-17.5-no-interval-timer.patch") \
+  || { echo "postgres-17.5-no-interval-timer.patch did not apply" >&2; exit 2; }
+log "applied postgres-17.5-no-interval-timer.patch"
 
 # 3. configure, make, link.
 CPPFLAGS=-DEXP_REUSE_GAP PGSU_FROM=configure bash "$PORTS/postgres/app/build-domain.sh"

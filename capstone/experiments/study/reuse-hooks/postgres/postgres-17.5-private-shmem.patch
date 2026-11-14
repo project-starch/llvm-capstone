@@ -53,7 +53,7 @@
 +		{
 +			ereport(elevel,
 +					(errcode_for_dynamic_shared_memory(),
-+					 errmsg("could not unmap shared memory segment "%s": %m",
++					 errmsg("could not unmap shared memory segment \"%s\": %m",
 +							name)));
 +			return false;
 +		}
@@ -65,7 +65,7 @@
 +	{
 +		ereport(elevel,
 +				(errcode_for_dynamic_shared_memory(),
-+				 errmsg("could not attach to segment "%s": private segments cannot be shared",
++				 errmsg("could not attach to segment \"%s\": private segments cannot be shared",
 +						name)));
 +		return false;
 +	}
@@ -75,7 +75,7 @@
 +	{
 +		ereport(elevel,
 +				(errcode_for_dynamic_shared_memory(),
-+				 errmsg("could not map shared memory segment "%s": %m",
++				 errmsg("could not map shared memory segment \"%s\": %m",
 +						name)));
 +		return false;
 +	}
