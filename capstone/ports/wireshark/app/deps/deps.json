@@ -2,7 +2,7 @@
   "_comment": "Pinned third-party sources for the tshark port. sha256 values are upstream's published digests, checked at download; see each build-<name>.sh.",
   "zlib": {
     "version": "1.3.2",
-    "url": "https://zlib.net/zlib-1.3.2.tar.xz",
+    "url": "https://github.com/madler/zlib/releases/download/v1.3.2/zlib-1.3.2.tar.xz",
     "sha256": "d7a0654783a4da529d1bb793b7ad9c3318020af77667bcae35f95d0e42a792f3",
     "sha256_source": "https://zlib.net/ (the release table), read 2026-09-24"
   },

@@ -33,7 +33,7 @@ from the kernel's fault line for its child. Words the kernel line lacks read
 0x0; the code base falls back to the loader's sublet.dom_last_base.
 
   trap_platform.py make-kit KIT [--kernel IMAGE] [--firmware FW] [--qemu QEMU]
-  trap_platform.py run --kit KIT --work DIR [--step-timeout S] PROGRAM...
+  trap_platform.py run --kit KIT --work DIR [--step-timeout S] [--file DEST=SRC]... [--step NAME=CMD]... [PROGRAM...]
 
 A fault or a watchdog kill (CAPSTONE_STEP_TIMEOUT, default 600 s per step)
 ends one program and the boot goes on. Only a dead or hung guest ends a boot;
@@ -41,6 +41,7 @@ its current program then reads kind 'harness' and a fresh boot runs the rest.
 """
 import argparse
 import gzip
+import json
 import os
 import re
 import select
@@ -128,17 +129,21 @@ poweroff -f
 
 @dataclass
 class Program:
-    """One program of a run: a host file staged under its own name, and its arguments."""
-    path: Path
+    """One step of a run: a host file staged under its own name and run with ARGS, or a shell COMMAND."""
+    path: Path = None
     args: list = field(default_factory=list)
     name: str = ''
     protected: bool = None
+    command: str = ''
 
     def __post_init__(self):
-        self.path = Path(self.path)
-        self.name = self.name or self.path.name
-        if self.protected is None:
-            self.protected = self.path.suffix == '.dom'
+        if self.path is not None:
+            self.path = Path(self.path)
+            self.name = self.name or self.path.name
+            if self.protected is None:
+                self.protected = self.path.suffix == '.dom'
+        elif not (self.name and self.command):
+            raise ValueError('a step without a program file needs a name and a command')
 
 
 @dataclass
@@ -171,7 +176,11 @@ def main():
     run.add_argument('--timeout', type=int, help='seconds for one whole boot (default: from the step limit)')
     run.add_argument('--step-timeout', type=int, default=STEP_LIMIT, help='seconds per program before the watchdog')
     run.add_argument('--kernel-arg', action='append', default=[])
-    run.add_argument('programs', nargs='+', type=Path)
+    run.add_argument('--step', action='append', default=[], metavar='NAME=COMMAND',
+                     help='a shell command run from /mnt/vm as one step (repeatable, after the programs)')
+    run.add_argument('--file', action='append', default=[], metavar='DEST=SOURCE',
+                     help='a host file or directory staged read-only at /mnt/vm/DEST (repeatable)')
+    run.add_argument('programs', nargs='*', type=Path)
 
     a = parser.parse_args()
     if a.command == 'make-kit':
@@ -179,8 +188,15 @@ def main():
         print(a.kit)
         return 0
     elif a.command == 'run':
-        results, harness_ok = run_programs(a.kit, [Program(p) for p in a.programs], a.work, a.timeout,
-                                           a.kernel_arg, a.step_timeout)
+        steps = [Program(p) for p in a.programs]
+        steps += [Program(name=n, command=c) for n, _, c in (w.partition('=') for w in a.step)]
+        files = dict((d, Path(s)) for d, _, s in (w.partition('=') for w in a.file))
+        if not steps:
+            parser.error('run needs a program or a --step')
+        results, harness_ok = run_programs(a.kit, steps, a.work, a.timeout, a.kernel_arg, a.step_timeout, files)
+        (a.work / 'results.json').write_text(json.dumps(
+            [{'name': r.name, 'kind': r.kind, 'value': r.value, 'fault': r.fault, 'output': r.output}
+             for r in results], indent=1) + '\n')
         for r in results:
             print(f'{r.name} {r.kind} {"" if r.value is None else r.value}'.rstrip()
                   + (f' | {r.fault}' if r.fault else ''))
@@ -282,6 +298,11 @@ def build_initramfs(out, base=DEFAULT_BASE_INITRAMFS, libraries=DEFAULT_LIBRARIE
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(source, target)
 
+        # root and nobody: the postgres gates start the server with `su nobody`, memcached's job drops to 65534.
+        (root / 'etc').mkdir(exist_ok=True)
+        (root / 'etc/passwd').write_text('root:x:0:0:root:/root:/bin/sh\nnobody:x:65534:65534:nobody:/tmp:/bin/sh\n')
+        (root / 'etc/group').write_text('root:x:0:\nnogroup:x:65534:\n')
+        (root / 'root').mkdir(exist_ok=True)
         (root / 'init').write_text(INIT_SCRIPT)
         (root / 'init').chmod(0o755)
 
@@ -398,12 +419,13 @@ STEP_LIMIT = int(os.environ.get('CAPSTONE_STEP_TIMEOUT', '600'))
 HANG_MARGIN = 120   # seconds past a step's limit after which the host declares the guest hung
 
 
-def run_programs(kit, programs, work, timeout=None, kernel_args=(), step_limit=STEP_LIMIT):
+def run_programs(kit, programs, work, timeout=None, kernel_args=(), step_limit=STEP_LIMIT, files=None):
     """Run PROGRAMS on the kit, as many per boot as the guest survives. Returns ([Result], harness_ok).
 
     A .dom program runs through the kit's capstone-vexec, which prints the fault line; an ordinary
     program runs directly. A fault or a watchdog kill ends one program and the boot goes on. When the
     guest itself dies, the program it was running reads kind 'harness' and a fresh boot runs the rest.
+    FILES {dest: host path} are staged beside the programs.
     """
     paths = kit_paths(kit)
     work = Path(work)
@@ -416,8 +438,18 @@ def run_programs(kit, programs, work, timeout=None, kernel_args=(), step_limit=S
         boot_stage.mkdir(parents=True)
         shutil.copy2(paths['launcher'], boot_stage / LAUNCHER)
         (boot_stage / LAUNCHER).chmod(0o755)
+        for dest, source in (files or {}).items():
+            target = boot_stage / dest
+            target.parent.mkdir(parents=True, exist_ok=True)
+            if Path(source).is_dir():
+                shutil.copytree(source, target, symlinks=False)
+            else:
+                shutil.copy2(source, target)
         steps = []
         for p in remaining:
+            if p.command:
+                steps.append((p.name, p.command, step_limit))
+                continue
             shutil.copy2(p.path, boot_stage / p.name)
             (boot_stage / p.name).chmod(0o755)
             args = ' '.join(shell_quote(x) for x in p.args)
