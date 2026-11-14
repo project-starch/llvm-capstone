@@ -3,7 +3,7 @@
 This is a live table: rows are filled as board runs land. Pre-registrations, predictions and the run-by-run trail are
 in [`../2026-11-08-train/PREREG.md`](../2026-11-08-train/PREREG.md) (Addendum 107 onward for this table).
 
-## Status (updated 2026-11-14 12:15 +08)
+## Status (updated 2026-11-14 11:35 +08)
 
 - **riscv-base:** complete, all 8 rows.
 - **Capstone temporal:**
@@ -16,7 +16,8 @@ in [`../2026-11-08-train/PREREG.md`](../2026-11-08-train/PREREG.md) (Addendum 10
   - Every benchmark object is byte-identical to temporal FRCDKMS's.
   - QEMU twins (outputs must equal temporal's) are landing. gcc passes: outputs identical, user instructions +0.01 %, so
     in instruction count spatial is no cheaper. Lifetimes cost per-instruction latency (CDERIVE/CREVOKE and node work),
-    which only silicon shows. Spatial gcc is queued on board 1; the other rows follow their twins.
+    which only silicon shows. Spatial gcc is queued on board 1. The mcf and perl twins also pass (outputs identical, user +0.00 % and +0.02 %).
+    imagick, nab, lbm, xz and x264 are still twinning.
 - **Expected completion:** short rows today; x264 and the full perl test take ~10 h and ~5 h per arm, so the full
   three-arm table is expected on 15 Nov.
 
