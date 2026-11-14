@@ -130,24 +130,28 @@ virtual profile.
      }
      if (!tmp->region) {
        mrb_free(mrb, tmp);
-@@ -601,6 +669,9 @@
+@@ -601,6 +669,14 @@
      add_heap(mrb, gc);
    }
  
 +#ifdef MRB_CAPSTONE_SUBLET
 +  mrb_heap_page *page = gc->free_heaps;
++  struct RBasic *obj = gc_issue(page, page->freelist);
++  if (!obj) {
++    gc->out_of_memory = TRUE;
++    mrb_raise_nomemory(mrb);
++  }
 +#endif
    RVALUE *p = gc->free_heaps->freelist;
    gc->free_heaps->freelist = p->as.free.next;
    if (gc->free_heaps->freelist == NULL) {
-@@ -608,6 +679,19 @@
+@@ -608,6 +684,18 @@
    }
  
    gc->live++;
 +#ifdef MRB_CAPSTONE_SUBLET
 +  /* The arena and the caller get the object's child, never the GC's pointer. */
 +  *p = RVALUE_zero;
-+  struct RBasic *obj = gc_issue(page, p);
 +  gc_protect(mrb, gc, obj);
 +  obj->tt = ttype;
 +  obj->c = cls;
@@ -160,7 +164,7 @@ virtual profile.
    gc_protect(mrb, gc, &p->as.basic);
    *p = RVALUE_zero;
    p->as.basic.tt = ttype;
-@@ -617,6 +701,7 @@
+@@ -617,6 +705,7 @@
    }
    paint_partial_white(gc, &p->as.basic);
    return &p->as.basic;
@@ -168,7 +172,7 @@ virtual profile.
  }
  
  static inline void
-@@ -901,10 +986,20 @@
+@@ -901,10 +990,20 @@
  
            while (ce <= ci) {
              struct REnv *e = ci->u.env;
@@ -189,7 +193,7 @@ virtual profile.
              ci--;
            }
          }
-@@ -1193,6 +1288,9 @@
+@@ -1193,6 +1292,9 @@
          if (p->as.basic.tt != MRB_TT_FREE) {
            obj_free(mrb, &p->as.basic, FALSE);
            if (p->as.basic.tt == MRB_TT_FREE) {
@@ -199,7 +203,7 @@ virtual profile.
              p->as.free.next = page->freelist;
              page->freelist = p;
              freed++;
-@@ -1645,8 +1743,16 @@
+@@ -1645,8 +1747,16 @@
  
      p = page->objects;
      for (int i=0; i < MRB_HEAP_PAGE_SIZE; i++) {

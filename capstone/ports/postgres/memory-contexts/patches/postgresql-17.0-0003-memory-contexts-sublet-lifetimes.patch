@@ -1,55 +1,45 @@
-Subject: [PATCH 3/3] Memory-context chunks as Sublet lifetimes (CDERIVE/CREVOKE/CRENEW)
-Upstream: postgresql 17.0
-Upstream-Archive: https://ftp.postgresql.org/pub/source/v17.0/postgresql-17.0.tar.bz2
-Upstream-SHA256: 7e276131c0fdd6b62588dbad9b3bb24b8c3498d5009328dba59af16e819109de
-Build-Variants: Sublet replay; the 17.5 server with PGSU_NESTED=sublet
-Depends-On: postgresql-17.0-0001-allocset-capstone-size-classes.patch
-  postgresql-17.0-0002-memorychunk-capstone-alignment.patch
+Subject: [PATCH 3/3] Memory-context chunks as Sublet lifetimes
+Upstream: postgresql 17.0 and 17.5
+Build-Variants: Sublet replay and PGSU_NESTED=sublet
+Depends-On: patches 0001 and 0002 of the memory-context component
 Apply-From: upstream source root, with patch --batch --forward --fuzz=0 -p1
 
-Every chunk a memory context hands out is a child lifetime of its block,
-bounded to its header and the MAXALIGNed request; pfree and repalloc revoke it, so
-every copy of the caller's pointer dies with it. The 17.0 and 17.5
-manager sources are identical, so the same patch serves the replay and
-the server.
+Every chunk a memory context hands out is a child lifetime (CDERIVE) of
+its block's generation, bounded to the chunk header and MAXALIGN(size).
+pfree and repalloc end it (CREVOKE), so every copy of the caller's
+pointer dies with it. Allocator metadata and libc calls use the block's
+malloc reference. The chunk header keeps that reference, so pfree needs
+nothing but the caller's pointer.
 
-# Three instructions do the work. CDERIVE makes a child capability of a
-# non-linear parent, bounded to a sub-range. CREVOKE(object) ends the object
-# and everything below it, and faults when the object is not live.
-# CRENEW(object) does the same and begins a new lifetime in the same place,
-# under the same parent, with the operand's cursor and bounds.
-#
-# Every block carries one lifetime in its header: the generation, derived
-# from the malloc'd object. Where a manager returns a chunk,
-# MemoryChunkIssue derives the caller's pointer from the generation,
-# covering the chunk header and MAXALIGN(size), and stores the generation in
-# the header. MAXALIGN, PostgreSQL's allocation unit, and not the exact
-# request: its own string hashing (fasthash_accum_cstring_aligned) reads the
-# whole aligned word that holds a terminator, and exact bounds made that read
-# fault in the search-path cache on the first run of this design. So pfree needs nothing but the pointer: it reads the parent
-# from the header, revokes the chunk through the caller's pointer, and hands
-# the context method a pointer at the same address derived from the parent.
-# repalloc does the same and issues the result again when the manager kept
-# the chunk in place.
-#
-# Freeing a block revokes the system allocator's lifetime of it, and every
-# chunk lies below. A reset that keeps a block (AllocSet, Generation, Bump
-# keepers) renews its generation: CRENEW revokes every chunk of the block and
-# gives the block a new generation with the same bounds. Bump chunks have no
-# header and no pfree; bump derives them itself, at its chunk size, and gives
-# a zero-byte request one MAXALIGN unit, because CDERIVE takes no empty child.
-#
-# The caller's pointer can read the header in front of its chunk, as it can
-# without the patch, and so can load the generation: a reference with
-# block-wide bounds, whose CREVOKE ends every chunk of the block. A stale
-# pointer cannot, since it is revoked; a live one handed to code that loads
-# the header deliberately gets the block. Overwriting the stored parent
-# clears its tag and the next pfree faults. The chunk header grows from 16
-# to 32 bytes, and every block header by one capability.
+A block derives its generation on first use. A reset that keeps the
+block revokes the generation, which ends every chunk of the block, and
+the next allocation derives a new one. Reset therefore takes no table
+slot and cannot fail. Freeing a block ends its malloc lifetime and every
+chunk below it.
+
+CDERIVE returns an untagged 0 when the lifetime table has no free slot
+and cannot grow. The managers then give the chunk back through their own
+free path (Bump rewinds its cursor) and report out of memory the way
+they do for a failed malloc. Below 4 KiB the bounds are exact. Above,
+the bounds format rounds both edges to a granule, and the managers keep
+their placement: the child then also covers the granule slack around
+the chunk, inside its block's malloc object.
+
+Every realloc creates the new chunk before it ends the old one. The
+in-place paths issue the new child, then revoke the old. The moving
+paths allocate and copy first. An AllocSet single-chunk block uses
+malloc, issue, copy and free instead of libc realloc, which would end
+the old block before the new chunk exists. A failed realloc therefore
+leaves the old chunk live and unchanged.
+
+The bounds include the chunk header. A live caller can therefore load
+its block's malloc reference from the header. This patch does not
+isolate allocator metadata from a live caller.
+
 diff --git a/src/backend/utils/mmgr/aset.c b/src/backend/utils/mmgr/aset.c
 --- a/src/backend/utils/mmgr/aset.c
 +++ b/src/backend/utils/mmgr/aset.c
-@@ -187,6 +187,7 @@ typedef struct AllocBlockData
+@@ -187,6 +187,7 @@
  	AllocBlock	next;			/* next block in aset's blocks list, if any */
  	char	   *freeptr;		/* start of free space in this block */
  	char	   *endptr;			/* end of space in this block */
@@ -57,7 +47,7 @@ diff --git a/src/backend/utils/mmgr/aset.c b/src/backend/utils/mmgr/aset.c
  }			AllocBlockData;
  
  /*
-@@ -467,6 +468,7 @@ AllocSetContextCreateInternal(MemoryContext parent,
+@@ -467,6 +468,7 @@
  	block->endptr = ((char *) set) + firstBlockSize;
  	block->prev = NULL;
  	block->next = NULL;
@@ -65,7 +55,7 @@ diff --git a/src/backend/utils/mmgr/aset.c b/src/backend/utils/mmgr/aset.c
  
  	/* Mark unallocated space NOACCESS; leave the block header alone. */
  	VALGRIND_MAKE_MEM_NOACCESS(block->freeptr, block->endptr - block->freeptr);
-@@ -578,6 +580,7 @@ AllocSetReset(MemoryContext context)
+@@ -578,6 +580,7 @@
  			block->freeptr = datastart;
  			block->prev = NULL;
  			block->next = NULL;
@@ -73,7 +63,7 @@ diff --git a/src/backend/utils/mmgr/aset.c b/src/backend/utils/mmgr/aset.c
  		}
  		else
  		{
-@@ -722,6 +725,7 @@ AllocSetAllocLarge(MemoryContext context, Size size, int flags)
+@@ -722,6 +725,7 @@
  
  	block->aset = set;
  	block->freeptr = block->endptr = ((char *) block) + blksize;
@@ -81,25 +71,50 @@ diff --git a/src/backend/utils/mmgr/aset.c b/src/backend/utils/mmgr/aset.c
  
  	chunk = (MemoryChunk *) (((char *) block) + ALLOC_BLOCKHDRSZ);
  
-@@ -765,7 +769,7 @@ AllocSetAllocLarge(MemoryContext context, Size size, int flags)
+@@ -765,7 +769,15 @@
  	/* Disallow access to the chunk header. */
  	VALGRIND_MAKE_MEM_NOACCESS(chunk, ALLOC_CHUNKHDRSZ);
  
 -	return MemoryChunkGetPointer(chunk);
-+	return MemoryChunkIssue(chunk, block->sublet.generation, size);
++	{
++		void *issued = MemoryChunkIssue(chunk, &block->sublet, size);
++		if (!issued)
++		{
++			AllocSetFree(MemoryChunkGetPointer(chunk));
++			return MemoryContextAllocationFailure(context, size, flags);
++		}
++		return issued;
++	}
  }
  
  /*
-@@ -807,7 +811,7 @@ AllocSetAllocChunkFromBlock(MemoryContext context, AllocBlock block,
+@@ -774,7 +786,7 @@
+  */
+ static inline void *
+ AllocSetAllocChunkFromBlock(MemoryContext context, AllocBlock block,
+-							Size size, Size chunk_size, int fidx)
++							Size size, Size chunk_size, int fidx, int flags)
+ {
+ 	MemoryChunk *chunk;
+ 
+@@ -807,7 +819,15 @@
  	/* Disallow access to the chunk header. */
  	VALGRIND_MAKE_MEM_NOACCESS(chunk, ALLOC_CHUNKHDRSZ);
  
 -	return MemoryChunkGetPointer(chunk);
-+	return MemoryChunkIssue(chunk, block->sublet.generation, size);
++	{
++		void *issued = MemoryChunkIssue(chunk, &block->sublet, size);
++		if (!issued)
++		{
++			AllocSetFree(MemoryChunkGetPointer(chunk));
++			return MemoryContextAllocationFailure(context, size, flags);
++		}
++		return issued;
++	}
  }
  
  /*
-@@ -929,6 +933,7 @@ AllocSetAllocFromNewBlock(MemoryContext context, Size size, int flags,
+@@ -929,6 +949,7 @@
  	block->aset = set;
  	block->freeptr = ((char *) block) + ALLOC_BLOCKHDRSZ;
  	block->endptr = ((char *) block) + blksize;
@@ -107,30 +122,138 @@ diff --git a/src/backend/utils/mmgr/aset.c b/src/backend/utils/mmgr/aset.c
  
  	/* Mark unallocated space NOACCESS. */
  	VALGRIND_MAKE_MEM_NOACCESS(block->freeptr,
-@@ -1033,7 +1038,9 @@ AllocSetAlloc(MemoryContext context, Size size, int flags)
+@@ -940,7 +961,7 @@
+ 		block->next->prev = block;
+ 	set->blocks = block;
+ 
+-	return AllocSetAllocChunkFromBlock(context, block, size, chunk_size, fidx);
++	return AllocSetAllocChunkFromBlock(context, block, size, chunk_size, fidx, flags);
+ }
+ 
+ /*
+@@ -1033,7 +1054,18 @@
  		/* Disallow access to the chunk header. */
  		VALGRIND_MAKE_MEM_NOACCESS(chunk, ALLOC_CHUNKHDRSZ);
  
 -		return MemoryChunkGetPointer(chunk);
-+		return MemoryChunkIssue(chunk,
-+								((AllocBlock) MemoryChunkGetBlock(chunk))->sublet.generation,
++		{
++			void	   *issued = MemoryChunkIssue(chunk,
++								&((AllocBlock) MemoryChunkGetBlock(chunk))->sublet,
 +								size);
++
++			if (!issued)
++			{
++				AllocSetFree(MemoryChunkGetPointer(chunk));
++				return MemoryContextAllocationFailure(context, size, flags);
++			}
++			return issued;
++		}
  	}
  
  	/*
-@@ -1242,6 +1249,8 @@ AllocSetRealloc(void *pointer, Size size, int flags)
- 		/* Update pointers since block has likely been moved */
+@@ -1053,7 +1085,7 @@
+ 		return AllocSetAllocFromNewBlock(context, size, flags, fidx);
+ 
+ 	/* There's enough space on the current block, so allocate from that */
+-	return AllocSetAllocChunkFromBlock(context, block, size, chunk_size, fidx);
++	return AllocSetAllocChunkFromBlock(context, block, size, chunk_size, fidx, flags);
+ }
+ 
+ /*
+@@ -1170,6 +1202,8 @@
+ void *
+ AllocSetRealloc(void *pointer, Size size, int flags)
+ {
++	void *issued = pointer;
++	pointer = MemoryChunkInside(pointer);
+ 	AllocBlock	block;
+ 	AllocSet	set;
+ 	MemoryChunk *chunk = PointerGetMemoryChunk(pointer);
+@@ -1189,6 +1223,8 @@
+ 		Size		chksize;
+ 		Size		blksize;
+ 		Size		oldblksize;
++		AllocBlock	newblock;
++		void	   *fresh;
+ 
+ 		block = ExternalChunkGetBlock(chunk);
+ 
+@@ -1225,21 +1261,39 @@
+ 		blksize = chksize + ALLOC_BLOCKHDRSZ + ALLOC_CHUNKHDRSZ;
+ 		oldblksize = block->endptr - ((char *) block);
+ 
+-		block = (AllocBlock) realloc(block, blksize);
+-		if (block == NULL)
++		/*
++		 * Sublet: malloc, issue, copy and free instead of realloc, so that
++		 * the caller's chunk stays live until its replacement exists.  libc
++		 * realloc ends the old block's lifetime before the new chunk could
++		 * be issued.
++		 */
++		newblock = (AllocBlock) malloc(blksize);
++		if (newblock == NULL)
++		{
++			/* Disallow access to the chunk header. */
++			VALGRIND_MAKE_MEM_NOACCESS(chunk, ALLOC_CHUNKHDRSZ);
++			return MemoryContextAllocationFailure(&set->header, size, flags);
++		}
++		memcpy(newblock, block, Min(blksize, oldblksize));
++		newblock->freeptr = newblock->endptr = ((char *) newblock) + blksize;
++		SubletBlockInit(&newblock->sublet, newblock, newblock, blksize);
++		fresh = MemoryChunkIssue((MemoryChunk *) (((char *) newblock) + ALLOC_BLOCKHDRSZ),
++								 &newblock->sublet, size);
++		if (fresh == NULL)
+ 		{
++			free(newblock);
+ 			/* Disallow access to the chunk header. */
+ 			VALGRIND_MAKE_MEM_NOACCESS(chunk, ALLOC_CHUNKHDRSZ);
+ 			return MemoryContextAllocationFailure(&set->header, size, flags);
+ 		}
++		free(block);
++		block = newblock;
+ 
+ 		/* updated separately, not to underflow when (oldblksize > blksize) */
+ 		set->header.mem_allocated -= oldblksize;
+ 		set->header.mem_allocated += blksize;
+ 
+-		block->freeptr = block->endptr = ((char *) block) + blksize;
+-
+-		/* Update pointers since block has likely been moved */
++		/* Update pointers since block has moved */
  		chunk = (MemoryChunk *) (((char *) block) + ALLOC_BLOCKHDRSZ);
  		pointer = MemoryChunkGetPointer(chunk);
-+		SubletBlockInit(&block->sublet, block, block, blksize);
-+		chunk->sublet_parent = block->sublet.generation;
  		if (block->prev)
- 			block->prev->next = block;
- 		else
+@@ -1299,7 +1353,7 @@
+ 		/* Disallow access to the chunk header . */
+ 		VALGRIND_MAKE_MEM_NOACCESS(chunk, ALLOC_CHUNKHDRSZ);
+ 
+-		return pointer;
++		return fresh;
+ 	}
+ 
+ 	block = MemoryChunkGetBlock(chunk);
+@@ -1372,7 +1426,8 @@
+ 		/* Disallow access to the chunk header. */
+ 		VALGRIND_MAKE_MEM_NOACCESS(chunk, ALLOC_CHUNKHDRSZ);
+ 
+-		return pointer;
++		return MemoryChunkReplace(chunk, &block->sublet, issued,
++			(MemoryContext) set, size, flags);
+ 	}
+ 	else
+ 	{
+@@ -1421,6 +1476,7 @@
+ 		memcpy(newPointer, pointer, oldsize);
+ 
+ 		/* free old chunk */
++		capstone_cap_release(issued);
+ 		AllocSetFree(pointer);
+ 
+ 		return newPointer;
 diff --git a/src/backend/utils/mmgr/bump.c b/src/backend/utils/mmgr/bump.c
 --- a/src/backend/utils/mmgr/bump.c
 +++ b/src/backend/utils/mmgr/bump.c
-@@ -91,6 +91,7 @@ struct BumpBlock
+@@ -91,6 +91,7 @@
  #endif
  	char	   *freeptr;		/* start of free space in this block */
  	char	   *endptr;			/* end of space in this block */
@@ -138,7 +261,7 @@ diff --git a/src/backend/utils/mmgr/bump.c b/src/backend/utils/mmgr/bump.c
  };
  
  /*
-@@ -196,6 +197,7 @@ BumpContextCreate(MemoryContext parent, const char *name, Size minContextSize,
+@@ -196,6 +197,7 @@
  	/* determine the block size and initialize it */
  	firstBlockSize = allocSize - MAXALIGN(sizeof(BumpContext));
  	BumpBlockInit(set, block, firstBlockSize);
@@ -146,7 +269,7 @@ diff --git a/src/backend/utils/mmgr/bump.c b/src/backend/utils/mmgr/bump.c
  
  	/* add it to the doubly-linked list of blocks */
  	dlist_push_head(&set->blocks, &block->node);
-@@ -257,7 +259,10 @@ BumpReset(MemoryContext context)
+@@ -257,7 +259,10 @@
  		BumpBlock  *block = dlist_container(BumpBlock, node, miter.cur);
  
  		if (IsKeeperBlock(set, block))
@@ -157,7 +280,7 @@ diff --git a/src/backend/utils/mmgr/bump.c b/src/backend/utils/mmgr/bump.c
  		else
  			BumpBlockFree(set, block);
  	}
-@@ -308,7 +313,7 @@ BumpAllocLarge(MemoryContext context, Size size, int flags)
+@@ -308,7 +313,7 @@
  	/* ensure there's always space for the sentinel byte */
  	chunk_size = MAXALIGN(size + 1);
  #else
@@ -166,7 +289,7 @@ diff --git a/src/backend/utils/mmgr/bump.c b/src/backend/utils/mmgr/bump.c
  #endif
  
  	required_size = chunk_size + Bump_CHUNKHDRSZ;
-@@ -322,6 +327,7 @@ BumpAllocLarge(MemoryContext context, Size size, int flags)
+@@ -322,6 +327,7 @@
  
  	/* the block is completely full */
  	block->freeptr = block->endptr = ((char *) block) + blksize;
@@ -174,26 +297,51 @@ diff --git a/src/backend/utils/mmgr/bump.c b/src/backend/utils/mmgr/bump.c
  
  #ifdef MEMORY_CONTEXT_CHECKING
  	/* block with a single (used) chunk */
-@@ -359,7 +365,8 @@ BumpAllocLarge(MemoryContext context, Size size, int flags)
+@@ -359,7 +365,16 @@
  
  	return MemoryChunkGetPointer(chunk);
  #else
 -	return (void *) (((char *) block) + Bump_BLOCKHDRSZ);
-+	return SubletDerive(block->sublet.generation,
-+						((char *) block) + Bump_BLOCKHDRSZ, chunk_size);
++	{
++		void *issued = SubletDerive(&block->sublet,
++			((char *) block) + Bump_BLOCKHDRSZ, chunk_size);
++		if (!issued)
++		{
++			BumpBlockFree(set, block);
++			return MemoryContextAllocationFailure(context, size, flags);
++		}
++		return issued;
++	}
  #endif
  }
  
-@@ -415,7 +422,7 @@ BumpAllocChunkFromBlock(MemoryContext context, BumpBlock *block, Size size,
+@@ -369,7 +384,7 @@
+  */
+ static inline void *
+ BumpAllocChunkFromBlock(MemoryContext context, BumpBlock *block, Size size,
+-						Size chunk_size)
++						Size chunk_size, int flags)
+ {
+ #ifdef MEMORY_CONTEXT_CHECKING
+ 	MemoryChunk *chunk;
+@@ -415,7 +430,15 @@
  
  	return MemoryChunkGetPointer(chunk);
  #else
 -	return ptr;
-+	return SubletDerive(block->sublet.generation, ptr, chunk_size);
++	{
++		void *issued = SubletDerive(&block->sublet, ptr, chunk_size);
++		if (!issued)
++		{
++			block->freeptr = ptr;
++			return MemoryContextAllocationFailure(context, size, flags);
++		}
++		return issued;
++	}
  #endif							/* MEMORY_CONTEXT_CHECKING */
  }
  
-@@ -459,6 +466,7 @@ BumpAllocFromNewBlock(MemoryContext context, Size size, int flags,
+@@ -459,11 +482,12 @@
  
  	/* initialize the new block */
  	BumpBlockInit(set, block, blksize);
@@ -201,7 +349,13 @@ diff --git a/src/backend/utils/mmgr/bump.c b/src/backend/utils/mmgr/bump.c
  
  	/* add it to the doubly-linked list of blocks */
  	dlist_push_head(&set->blocks, &block->node);
-@@ -501,7 +509,7 @@ BumpAlloc(MemoryContext context, Size size, int flags)
+ 
+-	return BumpAllocChunkFromBlock(context, block, size, chunk_size);
++	return BumpAllocChunkFromBlock(context, block, size, chunk_size, flags);
+ }
+ 
+ /*
+@@ -501,7 +525,7 @@
  	/* ensure there's always space for the sentinel byte */
  	chunk_size = MAXALIGN(size + 1);
  #else
@@ -210,10 +364,19 @@ diff --git a/src/backend/utils/mmgr/bump.c b/src/backend/utils/mmgr/bump.c
  #endif
  
  	/*
+@@ -523,7 +547,7 @@
+ 		return BumpAllocFromNewBlock(context, size, flags, chunk_size);
+ 
+ 	/* The current block has space, so just allocate chunk there. */
+-	return BumpAllocChunkFromBlock(context, block, size, chunk_size);
++	return BumpAllocChunkFromBlock(context, block, size, chunk_size, flags);
+ }
+ 
+ /*
 diff --git a/src/backend/utils/mmgr/generation.c b/src/backend/utils/mmgr/generation.c
 --- a/src/backend/utils/mmgr/generation.c
 +++ b/src/backend/utils/mmgr/generation.c
-@@ -93,6 +93,7 @@ struct GenerationBlock
+@@ -93,6 +93,7 @@
  	int			nfree;			/* number of free chunks */
  	char	   *freeptr;		/* start of free space in this block */
  	char	   *endptr;			/* end of space in this block */
@@ -221,7 +384,7 @@ diff --git a/src/backend/utils/mmgr/generation.c b/src/backend/utils/mmgr/genera
  };
  
  /*
-@@ -228,6 +229,7 @@ GenerationContextCreate(MemoryContext parent,
+@@ -228,6 +229,7 @@
  	/* determine the block size and initialize it */
  	firstBlockSize = allocSize - MAXALIGN(sizeof(GenerationContext));
  	GenerationBlockInit(set, block, firstBlockSize);
@@ -229,7 +392,7 @@ diff --git a/src/backend/utils/mmgr/generation.c b/src/backend/utils/mmgr/genera
  
  	/* add it to the doubly-linked list of blocks */
  	dlist_push_head(&set->blocks, &block->node);
-@@ -304,7 +306,10 @@ GenerationReset(MemoryContext context)
+@@ -304,7 +306,10 @@
  		GenerationBlock *block = dlist_container(GenerationBlock, node, miter.cur);
  
  		if (IsKeeperBlock(set, block))
@@ -240,7 +403,7 @@ diff --git a/src/backend/utils/mmgr/generation.c b/src/backend/utils/mmgr/genera
  		else
  			GenerationBlockFree(set, block);
  	}
-@@ -375,6 +380,7 @@ GenerationAllocLarge(MemoryContext context, Size size, int flags)
+@@ -375,6 +380,7 @@
  
  	/* the block is completely full */
  	block->freeptr = block->endptr = ((char *) block) + blksize;
@@ -248,25 +411,50 @@ diff --git a/src/backend/utils/mmgr/generation.c b/src/backend/utils/mmgr/genera
  
  	chunk = (MemoryChunk *) (((char *) block) + Generation_BLOCKHDRSZ);
  
-@@ -402,7 +408,7 @@ GenerationAllocLarge(MemoryContext context, Size size, int flags)
+@@ -402,7 +408,15 @@
  	/* Disallow access to the chunk header. */
  	VALGRIND_MAKE_MEM_NOACCESS(chunk, Generation_CHUNKHDRSZ);
  
 -	return MemoryChunkGetPointer(chunk);
-+	return MemoryChunkIssue(chunk, block->sublet.generation, size);
++	{
++		void *issued = MemoryChunkIssue(chunk, &block->sublet, size);
++		if (!issued)
++		{
++			GenerationFree(MemoryChunkGetPointer(chunk));
++			return MemoryContextAllocationFailure(context, size, flags);
++		}
++		return issued;
++	}
  }
  
  /*
-@@ -447,7 +453,7 @@ GenerationAllocChunkFromBlock(MemoryContext context, GenerationBlock *block,
+@@ -411,7 +425,7 @@
+  */
+ static inline void *
+ GenerationAllocChunkFromBlock(MemoryContext context, GenerationBlock *block,
+-							  Size size, Size chunk_size)
++							  Size size, Size chunk_size, int flags)
+ {
+ 	MemoryChunk *chunk = (MemoryChunk *) (block->freeptr);
+ 
+@@ -447,7 +461,15 @@
  	/* Disallow access to the chunk header. */
  	VALGRIND_MAKE_MEM_NOACCESS(chunk, Generation_CHUNKHDRSZ);
  
 -	return MemoryChunkGetPointer(chunk);
-+	return MemoryChunkIssue(chunk, block->sublet.generation, size);
++	{
++		void *issued = MemoryChunkIssue(chunk, &block->sublet, size);
++		if (!issued)
++		{
++			GenerationFree(MemoryChunkGetPointer(chunk));
++			return MemoryContextAllocationFailure(context, size, flags);
++		}
++		return issued;
++	}
  }
  
  /*
-@@ -491,6 +497,7 @@ GenerationAllocFromNewBlock(MemoryContext context, Size size, int flags,
+@@ -491,6 +513,7 @@
  
  	/* initialize the new block */
  	GenerationBlockInit(set, block, blksize);
@@ -274,14 +462,67 @@ diff --git a/src/backend/utils/mmgr/generation.c b/src/backend/utils/mmgr/genera
  
  	/* add it to the doubly-linked list of blocks */
  	dlist_push_head(&set->blocks, &block->node);
+@@ -498,7 +521,7 @@
+ 	/* make this the current block */
+ 	set->block = block;
+ 
+-	return GenerationAllocChunkFromBlock(context, block, size, chunk_size);
++	return GenerationAllocChunkFromBlock(context, block, size, chunk_size, flags);
+ }
+ 
+ /*
+@@ -584,7 +607,7 @@
+ 			return GenerationAllocChunkFromBlock(context,
+ 												 freeblock,
+ 												 size,
+-												 chunk_size);
++												 chunk_size, flags);
+ 		}
+ 		else
+ 		{
+@@ -597,7 +620,7 @@
+ 	}
+ 
+ 	/* The current block has space, so just allocate chunk there. */
+-	return GenerationAllocChunkFromBlock(context, block, size, chunk_size);
++	return GenerationAllocChunkFromBlock(context, block, size, chunk_size, flags);
+ }
+ 
+ /*
+@@ -799,6 +822,8 @@
+ void *
+ GenerationRealloc(void *pointer, Size size, int flags)
+ {
++	void *issued = pointer;
++	pointer = MemoryChunkInside(pointer);
+ 	MemoryChunk *chunk = PointerGetMemoryChunk(pointer);
+ 	GenerationContext *set;
+ 	GenerationBlock *block;
+@@ -901,7 +926,8 @@
+ 		/* Disallow access to the chunk header. */
+ 		VALGRIND_MAKE_MEM_NOACCESS(chunk, Generation_CHUNKHDRSZ);
+ 
+-		return pointer;
++		return MemoryChunkReplace(chunk, &block->sublet, issued,
++			(MemoryContext) set, size, flags);
+ 	}
+ 
+ 	/* allocate new chunk (this also checks size is valid) */
+@@ -934,6 +960,7 @@
+ 	memcpy(newPointer, pointer, oldsize);
+ 
+ 	/* free old chunk */
++	capstone_cap_release(issued);
+ 	GenerationFree(pointer);
+ 
+ 	return newPointer;
 diff --git a/src/backend/utils/mmgr/mcxt.c b/src/backend/utils/mmgr/mcxt.c
 --- a/src/backend/utils/mmgr/mcxt.c
 +++ b/src/backend/utils/mmgr/mcxt.c
-@@ -232,6 +232,55 @@ GetMemoryChunkHeader(const void *pointer)
- 	return header;
+@@ -233,6 +233,40 @@
  }
  
-+/*
+ /*
 + * Sublet: the managers hand out every chunk as a child of its block's
 + * generation, covering the chunk header, and keep that parent in the header
 + * (MemoryChunkIssue).  An aligned redirect chunk is a view of an ordinary one
@@ -298,7 +539,7 @@ diff --git a/src/backend/utils/mmgr/mcxt.c b/src/backend/utils/mmgr/mcxt.c
 +		return pointer;
 +	parent = PointerGetMemoryChunk(pointer)->sublet_parent;
 +	return (char *) parent +
-+		((uintptr_t) pointer - __builtin_capstone_cap_get_base(parent));
++		((uintptr_t) pointer - __builtin_capstone_cap_get_cursor(parent));
 +}
 +
 +/* End the caller's chunk (CREVOKE); faults on a pointer that is not live. */
@@ -315,25 +556,11 @@ diff --git a/src/backend/utils/mmgr/mcxt.c b/src/backend/utils/mmgr/mcxt.c
 +	return inside;
 +}
 +
-+/* A chunk realloc kept in place comes back as the allocator's pointer. */
-+static void *
-+SubletReissue(void *pointer, Size size)
-+{
-+	MemoryChunk *chunk;
-+
-+	if (pointer == NULL ||
-+		GetMemoryChunkMethodID(pointer) == MCTX_ALIGNED_REDIRECT_ID)
-+		return pointer;
-+	chunk = PointerGetMemoryChunk(pointer);
-+	if (__builtin_capstone_cap_get_base(pointer) == (uintptr_t) chunk)
-+		return pointer;			/* moved: the manager issued the new chunk */
-+	return MemoryChunkIssue(chunk, chunk->sublet_parent, size);
-+}
-+
- /*
++/*
   * MemoryContextTraverseNext
   *		Helper function to traverse all descendants of a memory context
-@@ -706,6 +755,7 @@ MemoryContextAllowInCriticalSection(MemoryContext context, bool allow)
+  *		without recursion.
+@@ -706,6 +740,7 @@
  MemoryContext
  GetMemoryChunkContext(void *pointer)
  {
@@ -341,7 +568,7 @@ diff --git a/src/backend/utils/mmgr/mcxt.c b/src/backend/utils/mmgr/mcxt.c
  	return MCXT_METHOD(pointer, get_chunk_context) (pointer);
  }
  
-@@ -720,6 +770,7 @@ GetMemoryChunkContext(void *pointer)
+@@ -720,6 +755,7 @@
  Size
  GetMemoryChunkSpace(void *pointer)
  {
@@ -349,7 +576,7 @@ diff --git a/src/backend/utils/mmgr/mcxt.c b/src/backend/utils/mmgr/mcxt.c
  	return MCXT_METHOD(pointer, get_chunk_space) (pointer);
  }
  
-@@ -1524,6 +1575,7 @@ pfree(void *pointer)
+@@ -1524,6 +1560,7 @@
  	MemoryContext context = GetMemoryChunkContext(pointer);
  #endif
  
@@ -357,31 +584,10 @@ diff --git a/src/backend/utils/mmgr/mcxt.c b/src/backend/utils/mmgr/mcxt.c
  	MCXT_METHOD(pointer, free_p) (pointer);
  
  #ifdef USE_VALGRIND
-@@ -1562,7 +1614,8 @@ repalloc(void *pointer, Size size)
- 	 * this call, consider making it the responsibility of the 'realloc'
- 	 * function instead.
- 	 */
--	ret = MCXT_METHOD(pointer, realloc) (pointer, size, 0);
-+	pointer = SubletRelease(pointer);
-+	ret = SubletReissue(MCXT_METHOD(pointer, realloc) (pointer, size, 0), size);
- 
- #ifdef USE_VALGRIND
- 	if (method != MCTX_ALIGNED_REDIRECT_ID)
-@@ -1600,7 +1653,9 @@ repalloc_extended(void *pointer, Size size, int flags)
- 	 * this call, consider making it the responsibility of the 'realloc'
- 	 * function instead.
- 	 */
--	ret = MCXT_METHOD(pointer, realloc) (pointer, size, flags);
-+	/* A NO_OOM failure returns NULL with the old chunk already ended. */
-+	pointer = SubletRelease(pointer);
-+	ret = SubletReissue(MCXT_METHOD(pointer, realloc) (pointer, size, flags), size);
- 	if (unlikely(ret == NULL))
- 		return NULL;
- 
 diff --git a/src/backend/utils/mmgr/slab.c b/src/backend/utils/mmgr/slab.c
 --- a/src/backend/utils/mmgr/slab.c
 +++ b/src/backend/utils/mmgr/slab.c
-@@ -151,6 +151,7 @@ typedef struct SlabBlock
+@@ -151,6 +151,7 @@
  	MemoryChunk *freehead;		/* pointer to the first free chunk */
  	MemoryChunk *unused;		/* pointer to the next unused chunk */
  	dlist_node	node;			/* doubly-linked list for blocklist[] */
@@ -389,16 +595,33 @@ diff --git a/src/backend/utils/mmgr/slab.c b/src/backend/utils/mmgr/slab.c
  } SlabBlock;
  
  
-@@ -531,7 +532,7 @@ SlabAllocSetupNewChunk(MemoryContext context, SlabBlock *block,
+@@ -496,7 +497,7 @@
+  */
+ static inline void *
+ SlabAllocSetupNewChunk(MemoryContext context, SlabBlock *block,
+-					   MemoryChunk *chunk, Size size)
++					   MemoryChunk *chunk, Size size, int flags)
+ {
+ 	SlabContext *slab = (SlabContext *) context;
+ 
+@@ -531,7 +532,15 @@
  	/* Disallow access to the chunk header. */
  	VALGRIND_MAKE_MEM_NOACCESS(chunk, Slab_CHUNKHDRSZ);
  
 -	return MemoryChunkGetPointer(chunk);
-+	return MemoryChunkIssue(chunk, block->sublet.generation, size);
++	{
++		void *issued = MemoryChunkIssue(chunk, &block->sublet, size);
++		if (!issued)
++		{
++			SlabFree(MemoryChunkGetPointer(chunk));
++			return MemoryContextAllocationFailure(context, size, flags);
++		}
++		return issued;
++	}
  }
  
  pg_noinline
-@@ -569,6 +570,7 @@ SlabAllocFromNewBlock(MemoryContext context, Size size, int flags)
+@@ -569,6 +578,7 @@
  
  		block->slab = slab;
  		context->mem_allocated += slab->blockSize;
@@ -406,19 +629,57 @@ diff --git a/src/backend/utils/mmgr/slab.c b/src/backend/utils/mmgr/slab.c
  
  		/* use the first chunk in the new block */
  		chunk = SlabBlockGetChunk(slab, block, 0);
+@@ -590,7 +600,7 @@
+ 
+ 	slab->curBlocklistIndex = blocklist_idx;
+ 
+-	return SlabAllocSetupNewChunk(context, block, chunk, size);
++	return SlabAllocSetupNewChunk(context, block, chunk, size, flags);
+ }
+ 
+ /*
+@@ -690,7 +700,7 @@
+ 		}
+ 	}
+ 
+-	return SlabAllocSetupNewChunk(context, block, chunk, size);
++	return SlabAllocSetupNewChunk(context, block, chunk, size, flags);
+ }
+ 
+ /*
+@@ -825,6 +835,8 @@
+ void *
+ SlabRealloc(void *pointer, Size size, int flags)
+ {
++	void *issued = pointer;
++	pointer = MemoryChunkInside(pointer);
+ 	MemoryChunk *chunk = PointerGetMemoryChunk(pointer);
+ 	SlabBlock  *block;
+ 	SlabContext *slab;
+@@ -849,7 +861,8 @@
+ 
+ 	/* can't do actual realloc with slab, but let's try to be gentle */
+ 	if (size == slab->chunkSize)
+-		return pointer;
++		return MemoryChunkReplace(chunk, &((SlabBlock *) MemoryChunkGetBlock(chunk))->sublet,
++		issued, (MemoryContext) slab, size, flags);
+ 
+ 	elog(ERROR, "slab allocator does not support realloc()");
+ 	return NULL;				/* keep compiler quiet */
 diff --git a/src/include/utils/memutils_memorychunk.h b/src/include/utils/memutils_memorychunk.h
 --- a/src/include/utils/memutils_memorychunk.h
 +++ b/src/include/utils/memutils_memorychunk.h
-@@ -89,6 +89,8 @@
+@@ -89,6 +89,9 @@
  
  #include "utils/memutils_internal.h"
  
 +#include <capstone/capability.h>
++#include <capstone/representable.h>
 +
   /*
    * The maximum allowed value that MemoryContexts can store in the value
    * field.  Must be 1 less than a power of 2.
-@@ -139,6 +141,13 @@ typedef struct MemoryChunk
+@@ -139,6 +142,13 @@
  	 * one word: MemoryChunkSetHdrMask and its readers are written against
  	 * a single sixty-four-bit field.
  	 */
@@ -432,55 +693,124 @@ diff --git a/src/include/utils/memutils_memorychunk.h b/src/include/utils/memuti
  	uint64		capstone_pad;
  	/* bitfield for storing details about the chunk */
  	uint64		hdrmask;		/* must be last */
-@@ -263,4 +272,51 @@ MemoryChunkGetBlock(MemoryChunk *chunk)
+@@ -262,5 +272,120 @@
+ #undef HdrMaskGetValue
  #undef HdrMaskBlockOffset
  #undef HdrMaskCheckMagic
- 
++
 +/*
 + * Sublet lifetimes.  Every block has a generation, a lifetime derived from
 + * its malloc'd object; the chunks are children of the generation.  Freeing
-+ * the block revokes all of them; a reset that keeps the block renews the
-+ * generation (CRENEW), which revokes the chunks.
++ * the block ends all of them; a reset that keeps the block revokes the
++ * generation (CREVOKE), which ends the chunks, and the next allocation
++ * derives a new one.
 + */
 +typedef struct SubletBlock
 +{
 +	void	   *generation;
++	void	   *allocation;
++	Size		size;
 +} SubletBlock;
 +
-+/* The block [start, start + size) inside the malloc'd object alloc. */
++/* Keep the malloc reference for allocator accesses. Derive lazily so reset
++ * needs no new table slot and cannot fail halfway through reclaiming a block. */
 +static inline void
 +SubletBlockInit(SubletBlock *b, void *alloc, void *start, Size size)
 +{
-+	b->generation = capstone_cap_derive(alloc,
-+										(char *) start - (char *) alloc, size);
++	b->allocation = (char *) alloc + ((char *) start - (char *) alloc);
++	b->size = size;
++	b->generation = NULL;
 +}
-+
+ 
 +static inline void
 +SubletBlockRenew(SubletBlock *b)
 +{
-+	b->generation = capstone_cap_renew(b->generation);
-+}
-+
-+/* The caller's pointer to [p, p + size), a child of parent. */
-+static inline void *
-+SubletDerive(void *parent, void *p, Size size)
-+{
-+	return capstone_cap_derive(parent, (uintptr_t) p -
-+							   __builtin_capstone_cap_get_base(parent), size);
++	if (b->generation)
++		capstone_cap_release(b->generation);
++	b->generation = NULL;
 +}
 +
 +/*
-+ * The caller's pointer to chunk: its header and MAXALIGN(size) bytes, a child
-+ * of parent.  MAXALIGN and not size: PostgreSQL's own code reads whole
-+ * aligned words past a string's terminator (fasthash_accum_cstring_aligned).
++ * The child of parent over the smallest representable range that holds
++ * [p, p + size), with its cursor at p, or NULL.  Below 4 KiB the range is
++ * exact.  Above, the bounds format rounds both edges to a granule, and the
++ * allocator keeps its own placement: the child then also covers the granule
++ * slack around the range.  NULL when that range leaves the parent, or when
++ * CDERIVE finds no free slot in the lifetime table.
 + */
 +static inline void *
-+MemoryChunkIssue(MemoryChunk *chunk, void *parent, Size size)
++SubletDeriveCover(void *parent, void *p, Size size)
 +{
-+	chunk->sublet_parent = parent;
-+	return (char *) SubletDerive(parent, chunk,
-+								 sizeof(MemoryChunk) + MAXALIGN(size)) +
-+		sizeof(MemoryChunk);
++	uintptr_t	start = (uintptr_t) p;
++	uintptr_t	base;
++	Size		len = capstone_repr_round(size);
++	char	   *child;
++
++	for (;;)
++	{
++		base = capstone_repr_base_down(start, len);
++		if (base + len >= start + size)
++			break;
++		len = capstone_repr_round(len + 1);
++	}
++	if (base < __builtin_capstone_cap_get_base(parent) ||
++		base + len > __builtin_capstone_cap_get_end(parent))
++		return NULL;
++	child = capstone_cap_derive(parent,
++		base - __builtin_capstone_cap_get_base(parent), len);
++	if (!child)
++		return NULL;
++	return child + (start - base);
++}
++
++/* Both failures leave the block reusable. Do not retain a new generation
++ * when the first chunk cannot be issued. */
++static inline void *
++SubletDerive(SubletBlock *b, void *p, Size size)
++{
++	bool		fresh = b->generation == NULL;
++	void	   *child;
++
++	if (fresh)
++	{
++		b->generation = SubletDeriveCover(b->allocation, b->allocation, b->size);
++		if (!b->generation)
++			return NULL;
++	}
++	child = SubletDeriveCover(b->generation, p, size);
++	if (!child && fresh)
++		SubletBlockRenew(b);
++	return child;
++}
++
++static inline void *
++MemoryChunkIssue(MemoryChunk *chunk, SubletBlock *b, Size size)
++{
++	void *child = SubletDerive(b, chunk, sizeof(MemoryChunk) + MAXALIGN(size));
++	if (!child)
++		return NULL;
++	chunk->sublet_parent = b->allocation;
++	return (char *) child + sizeof(MemoryChunk);
++}
++
++static inline void *
++MemoryChunkInside(void *pointer)
++{
++	void *parent = PointerGetMemoryChunk(pointer)->sublet_parent;
++	return (char *) parent + ((uintptr_t) pointer -
++		__builtin_capstone_cap_get_cursor(parent));
++}
++
++/* Replace an in-place chunk only after its new reference exists. */
++static inline void *
++MemoryChunkReplace(MemoryChunk *chunk, SubletBlock *b, void *issued,
++				   MemoryContext context, Size size, int flags)
++{
++	void *fresh = MemoryChunkIssue(chunk, b, size);
++	if (!fresh)
++		return MemoryContextAllocationFailure(context, size, flags);
++	capstone_cap_release(issued);
++	return fresh;
 +}
 +
  #endif							/* MEMUTILS_MEMORYCHUNK_H */
