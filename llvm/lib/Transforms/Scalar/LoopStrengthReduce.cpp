@@ -108,6 +108,7 @@
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/MathExtras.h"
+#include "llvm/Support/FileSystem.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Transforms/Scalar.h"
 #include "llvm/Transforms/Utils.h"
@@ -154,6 +155,25 @@ static cl::opt<bool> EnablePhiElim(
 static cl::opt<bool> CapabilityByteIV(
     "lsr-capability-byte-iv", cl::Hidden, cl::init(false),
     cl::desc("Use shared byte-index IVs for capability address groups"));
+
+// The default reduction, then the shared byte IV for what it leaves: the first
+// pass over the candidates is the default one, so every group whose anchor is
+// accessed on every iteration gets the capability recurrence exactly as without
+// this option; a second pass gives the byte form to each candidate still
+// unreduced (a conditional access, or one through a constant-offset GEP of the
+// anchor: perl's S_regcppop). Because the byte pass comes last, no capability
+// recurrence can absorb a byte-form GEP, and a family's form does not depend on
+// which of its GEPs comes first in the block order.
+static cl::opt<bool> CapabilityByteIVFallback(
+    "lsr-capability-byte-iv-fallback", cl::Hidden, cl::init(false),
+    cl::desc("Use a shared byte-index IV for a capability address group whose "
+             "accessed anchor cannot be proved"));
+static cl::opt<std::string> CapabilityGroupLog(
+    "lsr-capability-group-log", cl::Hidden, cl::init(""),
+    cl::desc("Append one line per loop with reduced capability address groups "
+             "(capability and byte forms) to this file; '-' is stderr"));
+STATISTIC(NumCapabilityIVGroups, "Capability address groups given a capability recurrence");
+STATISTIC(NumCapabilityByteGroups, "Capability address groups given a byte-index IV");
 
 // The flag adds instruction count to solutions cost comparison.
 static cl::opt<bool> InsnsCost(
@@ -7176,6 +7196,7 @@ static bool reduceCapabilityIndexGroups(Loop *L, ScalarEvolution &SE,
     }
 
   bool Changed = false;
+  SmallVector<WeakVH, 4> CapIVs, ByteIVList;
   DenseMap<const SCEV *, PHINode *> ByteIVs;
   struct CursorExitCandidate {
     const SCEVAddRecExpr *Index;
@@ -7185,6 +7206,8 @@ static bool reduceCapabilityIndexGroups(Loop *L, ScalarEvolution &SE,
     PHINode *IV;
   };
   SmallVector<CursorExitCandidate, 4> ExitCandidates;
+  unsigned Passes = CapabilityByteIVFallback && !CapabilityByteIV ? 2 : 1;
+  for (unsigned Pass = 0; Pass < Passes; ++Pass)
   for (WeakVH &Candidate : Candidates) {
     auto *Anchor = dyn_cast_or_null<GetElementPtrInst>(Candidate);
     if (!Anchor)
@@ -7206,7 +7229,8 @@ static bool reduceCapabilityIndexGroups(Loop *L, ScalarEvolution &SE,
     const auto *Step = dyn_cast<SCEVConstant>(Index->getStepRecurrence(SE));
     if (!Step || Step->isZero())
       continue;
-    if (!CapabilityByteIV &&
+    bool ByteForm = CapabilityByteIV || Pass == 1;
+    if (!ByteForm &&
         !capabilityAnchorAccessedEveryIteration(L, Base, ElementTy, Index, SE))
       continue;
 
@@ -7237,7 +7261,7 @@ static bool reduceCapabilityIndexGroups(Loop *L, ScalarEvolution &SE,
     Value *Start = Expander.expandCodeFor(Index->getStart(), IndexTy,
                                          Preheader->getTerminator());
     PHINode *IV;
-    if (CapabilityByteIV) {
+    if (ByteForm) {
       const SCEV *ByteRec =
           SE.getMulExpr(Index, SE.getConstant(IndexTy, Size.getFixedValue()));
       PHINode *&ByteIV = ByteIVs[ByteRec];
@@ -7251,6 +7275,7 @@ static bool reduceCapabilityIndexGroups(Loop *L, ScalarEvolution &SE,
         Value *Next = Builder.CreateAdd(
             ByteIV, ConstantInt::get(IndexTy, ByteStep), "lsr.byte.next");
         ByteIV->addIncoming(Next, Latch);
+        ByteIVList.push_back(ByteIV);
       }
       IV = ByteIV;
     } else {
@@ -7269,13 +7294,14 @@ static bool reduceCapabilityIndexGroups(Loop *L, ScalarEvolution &SE,
                                      ConstantInt::get(IndexTy, ByteStep),
                                      "lsr.cap.next");
       IV->addIncoming(Next, Latch);
+      CapIVs.push_back(IV);
       ExitCandidates.push_back({Index, Base, ElementTy, ByteStep, IV});
     }
     for (auto [GEP, Offset] : Uses) {
       Value *Residual = Expander.expandCodeFor(Offset, IndexTy, GEP);
       IRBuilder<> Builder(GEP);
       Value *Address;
-      if (CapabilityByteIV) {
+      if (ByteForm) {
         Value *Bytes = Builder.CreateMul(
             Residual, ConstantInt::get(IndexTy, Size.getFixedValue()));
         Bytes = Offset->isZero() ? IV
@@ -7307,6 +7333,28 @@ static bool reduceCapabilityIndexGroups(Loop *L, ScalarEvolution &SE,
         break;
     DeleteDeadPHIs(Header);
     SE.forgetLoop(L);
+  }
+  // Count the recurrences that survive: a byte IV whose GEPs another group took
+  // over, or that only fed dead code, is gone by now.
+  unsigned NumIVGroups = count_if(CapIVs, [](const WeakVH &V) { return V; });
+  unsigned NumByteGroups = count_if(ByteIVList, [](const WeakVH &V) { return V; });
+  NumCapabilityIVGroups += NumIVGroups;
+  NumCapabilityByteGroups += NumByteGroups;
+  if (Changed && !CapabilityGroupLog.empty()) {
+    std::string Line;
+    raw_string_ostream(Line)
+        << "lsr-capability-groups: " << Header->getModule()->getSourceFileName()
+        << " " << Header->getParent()->getName() << " " << Header->getName()
+        << " cap " << NumIVGroups << " byte " << NumByteGroups << "\n";
+    if (CapabilityGroupLog == "-") {
+      errs() << Line;
+    } else {
+      std::error_code EC;
+      raw_fd_ostream OS(CapabilityGroupLog, EC,
+                        sys::fs::OF_Append | sys::fs::OF_Text);
+      if (!EC)
+        OS << Line;
+    }
   }
   return Changed;
 }

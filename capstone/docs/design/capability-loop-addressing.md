@@ -154,6 +154,35 @@ register pressure remains unresolved: the byte form still needs the large
 invariant offsets, and replacing the cursor alone does not prove a pressure
 improvement. Compare complete validated profiles before introducing a policy.
 
+`-mllvm -lsr-capability-byte-iv-fallback` (hidden, default off) applies the byte
+form only to what the accessed-cursor recurrence leaves unreduced. It makes two
+passes over the candidates:
+
+1. The default reduction, unchanged. Every group whose anchor is proved accessed
+   on every iteration gets the capability recurrence, exactly as without the
+   option.
+2. The byte form for each candidate still unreduced, for example a conditional
+   access, or an access through a constant-offset GEP of the anchor.
+
+The pass order is what makes this the default plus the byte form, and not a
+third policy:
+- A family's form does not depend on which of its GEPs comes first in block
+  order.
+- A capability recurrence never absorbs a byte-form GEP: the byte pass runs
+  after every recurrence exists, and a recurrence's own GEPs have the recurrence,
+  not the base, as their pointer operand.
+
+A one-pass version let an earlier failing candidate take a whole family into the
+byte form, which cost a provable anchor in x264's `InitParams` and xz's
+`parse_details`. It also let a later anchored i8 group rebase a byte-form GEP
+onto its cursor recurrence (claim audit 2026-11-15). The check is that per loop,
+the capability-group count with the option equals the count without it.
+
+`-lsr-capability-group-log=<file>` appends one line per changed loop with the
+number of capability recurrences and byte IVs that survive cleanup. Perl's
+`S_regcppop` is the motivating case: its save-stack loop keeps its recurrence,
+and its undef-parens loop goes from nine instructions per iteration to six.
+
 ## Regression coverage
 
 The focused tests are:
@@ -163,6 +192,7 @@ The focused tests are:
 - `llvm/test/CodeGen/Capstone/gep-complete-offset.ll`
 - `llvm/test/CodeGen/Capstone/lsr-capability-diamond-iv.ll`
 - `llvm/test/CodeGen/Capstone/lsr-capability-byte-iv.ll`
+- `llvm/test/CodeGen/Capstone/lsr-capability-byte-iv-fallback.ll`
 - `llvm/test/Transforms/LoopStrengthReduce/Capstone/capability-pointer-iv.ll`
 - `llvm/test/Transforms/LoopStrengthReduce/Capstone/cursor-boundaries.ll`
 - `llvm/test/Transforms/LoopStrengthReduce/Capstone/accessed-affine-cursor.ll`
