@@ -3,7 +3,7 @@
 This is a live table: rows are filled as board runs land. Pre-registrations, predictions and the run-by-run trail are
 in [`../2026-11-08-train/PREREG.md`](../2026-11-08-train/PREREG.md) (Addendum 107 onward for this table).
 
-## Status (updated 2026-11-14 17:30 +08)
+## Status (updated 2026-11-14 17:45 +08)
 
 - **riscv-base:** complete, all 8 rows.
 - **Capstone temporal:**
@@ -28,7 +28,7 @@ same images. The "final config" columns are being re-measured on F.
 
 | Board | Now | Then, in order |
 |---|---|---|
-| 1 | F: perl makerand (FRCDKMS) | F tag-path counters (mcf, gcc) → gp decision pair on F (GPC, GPR2) → **spatial** gcc, mcf, imagick, nab, lbm, xz → **spatial** full perl |
+| 1 | F tag-path counters (mcf) | F tag-path counters (gcc) (mcf, gcc) → gp decision pair on F (GPC, GPR2) → **spatial** gcc, mcf, imagick, nab, lbm, xz → **spatial** full perl |
 | 2 | config B (tag-path counters): mcf, then gcc | **temporal** imagick, nab, lbm, xz → **temporal** full perl → **spatial** x264 |
 | 3 | **temporal** x264 on F (~10 h, until ~03:00) | — |
 
@@ -122,8 +122,8 @@ the table being measured now. A row moves into them as its run lands.
 | 557.xz_r | 4,993.81 | 5,196.56 | **1.041** | fdk / FR | pending | pending |
 | geomean | | | 1.105 | | | |
 
-Bold = below the 1.20 target. perl makerand alone, the quick A/B sub-run used for debugging only: 257.90 s on
-riscv-base against 329.70 s on batch / FRCDKMS, ratio 1.278.
+Bold = below the 1.20 target. perl makerand alone (the quick A/B sub-run, debugging only): 257.90 s on riscv-base
+against 288.58 s on **F** / FRCDKMS, ratio 1.119 (-12.5 % against the batch); the full test on F is queued.
 
 Configurations in the table:
 - **mlp / arm C:** `caplifive_ids55-native-tagcache-mlp_b98f5a517`, the older compiler, and the same allocator.
