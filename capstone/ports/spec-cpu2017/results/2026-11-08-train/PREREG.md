@@ -3836,3 +3836,22 @@ stage", instead of reading board-fr's perl stage and generalising from it.
 did (its run.sh line 18). So the 2.17× per-exec page footprint and the arena_pin attribution describe the twin's
 configuration, not the board's, for perl. A census on board-frcdkms-full's own run.sh (no module writes) is the
 board-faithful one.
+
+## Addendum 117 (2026-11-14 21:50 +08): board 3 queue: the nested lane's speedtest1 event-23 boot on F goes before the pool A/B
+
+**What runs.** The nested lane's speedtest1 ABBA boot (u1 p1 p2 u2, with and without the lifetime patch) on F
+(a948e4134, sha256 ec675c2b…). Kit bkit75n = bkit75 plus the nested firmware wrapper (hpm8 = event 23, R-43
+verdict-cache miss replays). The stage is nested/st1/board/f3-stage, byte-identical to the board-2 stage of
+Addendum 111. Its pre-registration, with predictions, is the nested lane's nested-workloads d3815346cc0e. The SPEC lane
+only schedules it: chain ay-b3, list line "f3-stage 900 45".
+
+**Order on board 3.** av-b3 (temporal x264 on F) → **ay-b3** (this boot, ~31 min) → ax-b3 (pool A/B, Addendum 115,
+unchanged). ax-b3's chain had not booked the board: it was still waiting on av-b3. It is relaunched to wait on ay-b3
+with the same conf and list. Its output directory was empty and is recreated.
+
+**Why here.** Boards 1 and 2 are full until 15 Nov. The lead's nested request asks what part of speedtest1's +1.04 %
+comes from record-cache misses. Only this kit reads that. The pool A/B is a 10-hour run that moves back by 45 min.
+
+**Reading.** spec-classify reads NO RESULT on this stage format, by design. The nested lane reads the result with its
+own parser. A failed smoke stops ay-b3. ax-b3 waits only on ay-b3's pid, so the pool A/B still runs: its own
+smoke gates its board state.
