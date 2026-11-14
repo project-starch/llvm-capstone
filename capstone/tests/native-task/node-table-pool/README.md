@@ -52,3 +52,25 @@ Notes on the counts:
 
 Withdrawn on the way: the first build spawned argv[0] (/tmp/nt/b), outside the grant root. posix_spawn returned
 ENOENT, so no child ran; those arms are void.
+
+## perl test-sw with the pool (2026-11-14, twin, node_flat_records=262144)
+
+The stage is FRCDKMS's perl test-sw (`@@VM` stage, with the `@@POOL` read-back), 318 native execs, all on one kernel
+(this module, Image 6cfdf267).
+- Pool off (P0) and pool=4 (P1) both read specdiff 2/2, and all 16 output files are identical.
+- pool=4 with verify (PV) also reads 2/2, with 317 hits, 318 puts, 0 violations, and 44,852,832 bytes zeroed in all
+  (about 141 KB per exec, against 4 MiB).
+- P1 against P0, capmix3 shift 1, whole run (these stages have no mark windows; the boot is common to both):
+
+| | P0 (off) | P1 (pool=4) | P1 - P0 |
+|---|---|---|---|
+| user | 89,386,863,606 | 89,386,840,062 | -23,544 |
+| kernel | 26,079,396,566 | 25,306,027,359 | **-773,369,207 (-2.97 %)** |
+| page allocator / accounting | 2,055,951,755 | 1,682,198,086 | -373,753,669 |
+| memset | 625,216,079 | 455,527,929 | -169,688,150 |
+| __free_one_page | 204,539,698 | 55,108,007 | -149,431,691 |
+| pgfree (@@VM) | 901,470 | 576,087 | -325,383 |
+| pgalloc_dma32, pgfault | 576,588, 605,704 | 576,790, 606,001 | +202, +297 |
+
+The pgfree drop matches 318 × 1024 CMA pages. The kernel drop is larger than the predicted 0.3-0.5 G: the page
+allocator's share, about 1.2 M instructions per exec of CMA isolation and freeing, was underestimated.
