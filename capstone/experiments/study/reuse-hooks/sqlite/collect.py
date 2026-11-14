@@ -108,10 +108,9 @@ def main():
         platform={
             'qemu-system-riscv64': sha(kit / 'kit-sublet/qemu-system-riscv64'),
             'capstone-vexec': sha(kit / 'kit-sublet/adapter/capstone-vexec'),
-            'capstone_vm.ko': sha(kit / 'kit-sublet/adapter/module/capstone_vm.ko'),
             'Image': sha(kit / 'kit-sublet/images/Image'),
             'fw_jump.elf': sha(kit / 'kit-sublet/images/fw_jump.elf'),
-            'rootfs.ext2': sha(kit / 'kit-sublet/images/rootfs.ext2'),
+            'initramfs.cpio.gz': sha(kit / 'kit-sublet/images/initramfs.cpio.gz'),
             'clang': sha(kit / 'toolchain/bin/clang'),
             'gate.sh stock': sha(run / 'stages/sqlite-stock/gate.sh'),
             'gate.sh protected': sha(run / 'stages/sqlite-protected/gate.sh')})

@@ -3,7 +3,7 @@
 
     run-controls.py --builds <dir with release/ and protected/ from build-controls.sh>
                     --kit <platform kit: qemu-system-riscv64, images/, adapter/capstone-vexec,
-                           adapter/module/capstone_vm.ko> --llvm-bin <dir> --work <new dir>
+                           images/initramfs.cpio.gz (trap_platform.py make-kit)> --llvm-bin <dir> --work <new dir>
                     [--jobs 8] [--locks <dir>]
 
 A local runner, not the corpus's: shared/run-virtual.py in engine-repros judges bug cases by
@@ -54,12 +54,12 @@ PROBE = re.compile(r'^PROBE (\S+) (read|write) (\S+):(\d+) addr=(0x[0-9a-f]+) le
 GATE = """#!/bin/sh
 cd /mnt/vm || exit 1
 dmesg -n 1
-insmod capstone_vm.ko || exit 1
+./capstone-vexec --platform > /dev/null || exit 1
 export HOME=/tmp TMPDIR=/tmp CAPSTONE_EXEC_DIAGNOSTICS=1
 echo PORT_BEGIN:{tag}
 ./capstone-vexec ./{tag}.dom {tag}
 echo PORT_END:{tag}:$?
-rmmod capstone_vm
+! grep -q '^capstone_vm ' /proc/modules
 echo VIRTUAL_STAGED_DONE
 """
 
@@ -96,7 +96,6 @@ def run_one(a, arm, tag):
     stage.mkdir(parents=True)
     shutil.copy(image, stage / image.name)
     shutil.copy(a.kit / 'adapter/capstone-vexec', stage / 'capstone-vexec')
-    shutil.copy(a.kit / 'adapter/module/capstone_vm.ko', stage / 'capstone_vm.ko')
     (stage / 'gate.sh').write_text(GATE.format(tag=tag))
     (stage / 'gate.sh').chmod(0o755)
     boot = a.work / 'boot' / f'{arm}-{tag}'

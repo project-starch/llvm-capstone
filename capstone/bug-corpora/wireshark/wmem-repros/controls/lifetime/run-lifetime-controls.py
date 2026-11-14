@@ -7,7 +7,7 @@
 B is the wmem port configured with the capstone-application preset, -DWM_CORPUS_DIR=<this
 directory>, WM_SUBLET=ON for protected and OFF for release; the runner refuses a build whose
 WM_SUBLET does not match the arm. K holds the platform: qemu-system-riscv64, images/{Image,
-fw_jump.elf,rootfs.ext2}, adapter/capstone-vexec, adapter/module/capstone_vm.ko. One boot runs
+fw_jump.elf,initramfs.cpio.gz}, adapter/capstone-vexec (trap_platform.py make-kit). One boot runs
 every program of this directory in order, each as its own process under capstone-vexec
 (capstone/runtime/virtual/run-staged.py: one hart, exact bounds), so a fault in one cannot hide
 another's result.
@@ -39,8 +39,7 @@ import sdk_builtins  # noqa: E402  (C-81: refuse a builtins build before anythin
 import verdicts as v  # noqa: E402
 
 KIT_FILES = {"qemu": "qemu-system-riscv64", "kernel": "images/Image", "firmware": "images/fw_jump.elf",
-             "rootfs": "images/rootfs.ext2", "launcher": "adapter/capstone-vexec",
-             "module": "adapter/module/capstone_vm.ko"}
+             "rootfs": "images/initramfs.cpio.gz", "launcher": "adapter/capstone-vexec"}
 LABELS = {"wm_defect_probe": ("bug-corpora/wireshark/wmem-repros/shared/driver.c", "wm_defect_probe:"),
           "wm_defect_write": ("bug-corpora/wireshark/wmem-repros/shared/driver.c", "wm_defect_write:"),
           "wm_ctl_load_insn": ("bug-corpora/wireshark/wmem-repros/controls/lifetime/lifetime.h",
@@ -90,7 +89,7 @@ def label_addresses(llvm_bin, image):
 GATE_HEAD = """#!/bin/sh
 cd /mnt/vm || exit 1
 dmesg -n 1
-insmod capstone_vm.ko || { echo VIRTUAL_STAGED_DONE; exit 1; }
+./capstone-vexec --platform > /dev/null || { echo VIRTUAL_STAGED_DONE; exit 1; }
 chmod 666 /dev/capstone-vm
 export CAPSTONE_EXEC_DIAGNOSTICS=1
 """
@@ -228,12 +227,11 @@ def main():
         record["programs"][stem] = {"control": name, "image_sha256": fsha(stage / f"{stem}.dom"),
                                     "labels": {k: hex(x) for k, x in label_addresses(a.llvm_bin, image).items()}}
         script += GATE_RUN.format(stem=stem, n=n)
-    script += "rmmod capstone_vm\necho VIRTUAL_STAGED_DONE\n"
+    script += "echo VIRTUAL_STAGED_DONE\n"
     (stage / "gate.sh").write_text(script)
     record["gate_sha256"] = hashlib.sha256(script.encode()).hexdigest()
     shutil.copy2(a.kit / KIT_FILES["launcher"], stage / "capstone-vexec")
     (stage / "capstone-vexec").chmod(0o755)
-    shutil.copy2(a.kit / KIT_FILES["module"], stage / "capstone_vm.ko")
     env = dict(os.environ)
     env["LD_LIBRARY_PATH"] = str(a.kit) + (":" + env["LD_LIBRARY_PATH"] if env.get("LD_LIBRARY_PATH") else "")
     import time

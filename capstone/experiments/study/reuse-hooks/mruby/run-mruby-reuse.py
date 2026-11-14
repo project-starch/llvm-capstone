@@ -27,7 +27,7 @@ import time
 GATE = r'''#!/bin/sh
 cd /mnt/vm || exit 1
 dmesg -n 1
-insmod capstone_vm.ko || exit 1
+./capstone-vexec --platform > /dev/null || exit 1
 export HOME=/tmp TMPDIR=/tmp
 echo "RG_VSTATS:before $(./capstone-vexec --stats)"
 t0=$(date +%s)
@@ -40,7 +40,7 @@ echo "RG_OUT_BYTES:$(wc -c < /tmp/rg.out)"
 echo RG_OUT_FILE; gzip -c /tmp/rg.out | base64; echo RG_OUT_FILE_END
 sed 's/^/RG_ERR:/' /tmp/rg.err
 echo "RG_VSTATS:after $(./capstone-vexec --stats)"
-rmmod capstone_vm; echo "RG_CLEANUP:$?"
+! grep -q '^capstone_vm ' /proc/modules; echo "RG_CLEANUP:$?"
 echo VIRTUAL_STAGED_DONE
 '''
 
@@ -96,9 +96,8 @@ def main():
     shutil.copy2(tree / 'build/capstone/bin/mruby', stage / 'mruby')
     shutil.copy2(tree / 'benchmark/bm_ao_render.rb', stage / 'bm_ao_render.rb')
     shutil.copy2(a.kit / 'adapter/capstone-vexec', stage / 'capstone-vexec')
-    shutil.copy2(a.kit / 'adapter/module/capstone_vm.ko', stage / 'capstone_vm.ko')
     (stage / 'gate.sh').write_text(GATE.replace('AO_ARGS', str(a.ao_width) if a.ao_width else ''))
-    staged = {n: sha(stage / n) for n in ('mruby', 'bm_ao_render.rb', 'capstone-vexec', 'capstone_vm.ko', 'gate.sh')}
+    staged = {n: sha(stage / n) for n in ('mruby', 'bm_ao_render.rb', 'capstone-vexec', 'gate.sh')}
     t0 = time.time()
     run = subprocess.run([sys.executable, str(a.run_staged), '--qemu', str(a.kit / 'qemu-system-riscv64'),
                           '--images', str(a.kit / 'images'), '--stage', str(stage),
@@ -123,7 +122,7 @@ def main():
         'vexec_stats': {t: json.loads(j) for t, j in re.findall(r'^RG_VSTATS:(\S+) (.*)$', log, re.M)},
         'cleanup': (m.group(1) if (m := re.search(r'^RG_CLEANUP:(\d+)$', log, re.M)) else None),
         'staged_sha256': staged,
-        'platform_sha256': {n: sha(a.kit / 'images' / n) for n in ('Image', 'fw_jump.elf', 'rootfs.ext2')}
+        'platform_sha256': {n: sha(a.kit / 'images' / n) for n in ('Image', 'fw_jump.elf', 'initramfs.cpio.gz')}
                            | {'qemu-system-riscv64': sha(a.kit / 'qemu-system-riscv64')},
         'run_staged_sha256': sha(a.run_staged),
     }

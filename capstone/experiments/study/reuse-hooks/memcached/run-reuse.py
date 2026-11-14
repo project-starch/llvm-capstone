@@ -33,7 +33,7 @@ def sha(path):
 
 
 def gate(reps):
-    lines = ['#!/bin/sh', 'cd /mnt/vm || exit 1', 'dmesg -n 1', 'insmod capstone_vm.ko || exit 1',
+    lines = ['#!/bin/sh', 'cd /mnt/vm || exit 1', 'dmesg -n 1', './capstone-vexec --platform > /dev/null || exit 1',
              'chmod 666 /dev/capstone-vm']
     for rep in range(1, reps + 1):
         out = f'/tmp/rg-{rep}'
@@ -44,7 +44,7 @@ def gate(reps):
                   f'for f in transcript.norm status.txt identity.txt job.json server.out server.err; do '
                   f'[ -f {out}/$f ] || continue; echo RG_FILE:$f; gzip -c {out}/$f | base64; echo RG_FILE_END; done',
                   f'echo RG_END:{rep}:$rc']
-    lines += ['rmmod capstone_vm', 'echo RG_CLEANUP:$?', 'echo VIRTUAL_STAGED_DONE']
+    lines += ["! grep -q '^capstone_vm ' /proc/modules", 'echo RG_CLEANUP:$?', 'echo VIRTUAL_STAGED_DONE']
     return '\n'.join(lines) + '\n'
 
 
@@ -70,7 +70,7 @@ def main():
     a.work.mkdir(parents=True, exist_ok=False)
     stage = a.work / 'stage'
     stage.mkdir()
-    staged = {'capstone-vexec': a.adapter / 'capstone-vexec', 'capstone_vm.ko': a.adapter / 'module/capstone_vm.ko',
+    staged = {'capstone-vexec': a.adapter / 'capstone-vexec',
               'capstone-job': a.job, 'memcached.dom': a.image, 'mc-harness': a.harness}
     for name, src in staged.items():
         shutil.copy2(src, stage / name)
@@ -103,7 +103,7 @@ def main():
                repetitions=reps, flags=FLAGS,
                staged_sha256={name: sha(stage / name) for name in sorted(staged)},
                gate_sha256=hashlib.sha256(script.encode()).hexdigest(),
-               platform_sha256={name: sha(a.images / name) for name in ('Image', 'fw_jump.elf', 'rootfs.ext2')}
+               platform_sha256={name: sha(a.images / name) for name in ('Image', 'fw_jump.elf', 'initramfs.cpio.gz')}
                | {'qemu-system-riscv64': sha(a.qemu.resolve())})
     (a.work / 'result.json').write_text(json.dumps(rec, indent=1) + '\n')
     ok = rec['completed'] and len(reps) == a.reps and all(r['harness_status'] == 0 and r['reuse'] for r in reps)

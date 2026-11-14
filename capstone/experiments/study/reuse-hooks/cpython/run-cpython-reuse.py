@@ -29,7 +29,7 @@ ONE_LINER = ('import json,gc; a=[{"n":n} for n in range(1000)]; '
 GATE = r'''#!/bin/sh
 cd /mnt/vm || exit 1
 dmesg -n 1
-insmod capstone_vm.ko || exit 1
+./capstone-vexec --platform > /dev/null || exit 1
 export HOME=/tmp TMPDIR=/tmp
 echo "RG_VSTATS:before $(./capstone-vexec --stats)"
 t0=$(date +%s)
@@ -40,7 +40,7 @@ echo "RG_RC:$rc"
 sed 's/^/RG_OUT:/' /tmp/rg.out
 sed 's/^/RG_ERR:/' /tmp/rg.err
 echo "RG_VSTATS:after $(./capstone-vexec --stats)"
-rmmod capstone_vm; echo "RG_CLEANUP:$?"
+! grep -q '^capstone_vm ' /proc/modules; echo "RG_CLEANUP:$?"
 echo VIRTUAL_STAGED_DONE
 '''.replace('ONE_LINER', ONE_LINER)
 
@@ -96,7 +96,6 @@ def main():
     if sha(stage / 'cpython.dom') != manifest['image_sha256']:
         sys.exit('staged image does not match its manifest')
     shutil.copy2(a.kit / 'adapter/capstone-vexec', stage / 'capstone-vexec')
-    shutil.copy2(a.kit / 'adapter/module/capstone_vm.ko', stage / 'capstone_vm.ko')
     src = a.build / 'source'
     lib = stage / 'cpy/lib/python3.13'
     shutil.copytree(src / 'src/Python-3.13.7/Lib', lib, ignore=shutil.ignore_patterns('__pycache__', '*.pyc'))
@@ -112,7 +111,7 @@ def main():
     comp = subprocess.run([str(native), '-B', '-m', 'compileall', '-q', '-f', '-x', '/test/',
                            '-d', '/mnt/vm/cpy/lib/python3.13', str(lib)], capture_output=True, text=True)
     (stage / 'gate.sh').write_text(GATE)
-    staged = {n: sha(stage / n) for n in ('cpython.dom', 'capstone-vexec', 'capstone_vm.ko', 'gate.sh')}
+    staged = {n: sha(stage / n) for n in ('cpython.dom', 'capstone-vexec', 'gate.sh')}
     t0 = time.time()
     run = subprocess.run([sys.executable, str(a.run_staged), '--qemu', str(a.kit / 'qemu-system-riscv64'),
                           '--images', str(a.kit / 'images'), '--stage', str(stage),
@@ -136,7 +135,7 @@ def main():
         'manifest_runtime_dirty': manifest.get('runtime_dirty'),
         'stdlib_py_tree_sha256': py_tree, 'stdlib_with_bytecode_tree_sha256': tree_sha(lib),
         'compileall_rc': comp.returncode, 'native_python': ver,
-        'platform_sha256': {n: sha(a.kit / 'images' / n) for n in ('Image', 'fw_jump.elf', 'rootfs.ext2')}
+        'platform_sha256': {n: sha(a.kit / 'images' / n) for n in ('Image', 'fw_jump.elf', 'initramfs.cpio.gz')}
                            | {'qemu-system-riscv64': sha(a.kit / 'qemu-system-riscv64')},
         'run_staged_sha256': sha(a.run_staged), 'one_liner': ONE_LINER,
     }

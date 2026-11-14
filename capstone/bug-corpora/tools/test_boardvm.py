@@ -89,14 +89,14 @@ def params_checks(root, body):
         sysfs = Path(root) / "sysfs"
         sysfs.mkdir()
         (sysfs / "arena_pin").write_text("0\n")
-        old, boardvm.virtualvm.SYSFS = boardvm.virtualvm.SYSFS, str(sysfs)
+        old, boardvm.virtualvm.BOARD_SYSFS = boardvm.virtualvm.BOARD_SYSFS, str(sysfs)
         try:
             ok = subprocess.run(["sh"], input="\n".join(boardvm.virtualvm.param_lines([("arena_pin", "1")])) + "\n",
                                 text=True, capture_output=True)
             missing = subprocess.run(["sh"], input="\n".join(boardvm.virtualvm.param_lines([("no_such", "1")])) + "\n",
                                      text=True, capture_output=True)
         finally:
-            boardvm.virtualvm.SYSFS = old
+            boardvm.virtualvm.BOARD_SYSFS = old
         checks += [("params: under sh the write lands and its read-back prints",
                     ok.returncode == 0 and ok.stdout.strip() == "@@PARAM arena_pin=1"),
                    ("params: under sh a parameter that does not exist ends the batch (negative control)",
