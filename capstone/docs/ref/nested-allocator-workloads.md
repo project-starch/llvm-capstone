@@ -14,7 +14,7 @@
 | PostgreSQL on silicon, bitstream F | **queued**: board 1, chain be-b1 (~10:00 15 Nov), pre-registered below (87b463da4d10; SPEC lane Addendum 126); ABBA in one boot, rung budget 1800 | F `a948e4134`, kit bkit75n |
 | FFmpeg 9.0.1 decode (10 s clip, 300 frames), QEMU twin | **measured** (15 Nov 05:21): all commands decode the stock reference frames; in-context **-0.030 %**, kernel -0.36 %. The protection adds about 3,300 lifetimes per decode (pools recycle), subtree max 2, peak 474 live records. Needs `-fno-builtin` in both arms (else cause 24 in both, a compiler defect) and this lane's Q-15 placement repair of 0003 (unrepaired, CDERIVE refuses a frame-plane buffer) | FRCDKMS SDK, -O2 -fno-builtin, native route, set w4, QEMU qemu55 a0501ebc39 |
 | tshark (pcap) | **running**: the native-route build of tshark and its six dependencies (FRCDKMS SDK); wmem 0001 already carries its Q-15 repair (d75137deed6e). Twin next, then silicon | FRCDKMS, native route |
-| memcached (load) | **deferred**: the native route refuses `socket`, `socketpair`, `epoll_create1` and `epoll_ctl` (`native-syscall-table.c:92-101`, `NS_REFUSE`), so the server cannot take a load on this route. Running it elsewhere (e.g. the virtual route) is a different instrument; the lead's call | - |
+| memcached (load) | **deferred**: the native route cannot run it. The table refuses `socket`, `socketpair`, `epoll_create1` and `epoll_ctl` (`native-syscall-table.c:92-101`, `NS_REFUSE`). A twin probe (`nested/mcprobe`, 15 Nov) confirms it after a passing control (`open` in the run directory): `socket(AF_INET)` and `socket(AF_UNIX)` give ENOSYS, `epoll_create1` ENOSYS, `pthread_create` EAGAIN. memcached needs all three (four worker threads). Running it elsewhere (e.g. the virtual route) is a different instrument; the lead's call | - |
 | CREVOKE worst case (subtree 1 .. 10^6, latency, interruptibility; PostgreSQL context reset) | **measured** (RTL sim, memory delay 0): 6 cycles per node up to 2,048 nodes, about 11 beyond; at most 65,532 nodes per subtree (10^6 cannot be built), so the worst single CREVOKE is 720,892 cycles; **not interruptible**: a timer interrupt waits for the whole walk (180,518 cycles at 32,768 nodes, against 1-6 without). PostgreSQL context resets (twin): the largest ends **34,509 nodes** in one CREVOKE, about 0.38 M cycles at delay 0 and 2.1 M at delay 12. CDERIVE: 21 cycles alone, 27 / 157 back to back at delay 0 / 12; CREVOKE about 60 cycles per node at delay 12 | capstone-ariane `a948e4134` (F), `--sv_seed 1` |
 | CDERIVE / CREVOKE timed on silicon (lone, back to back, subtrees 1 .. 10^5, a probe to 10^6) | **queued**: board 2, chain bd-b2, after the CPython boot (~11:30 15 Nov), pre-registered below (d0b72cfe7a21; SPEC lane Addendum 125) | F `a948e4134`, kit bkit75n |
 | record-cache counters | event 23 is on hpm8 in kits bkit73n (batch) and bkit75n (F). Events 29-31 (lookups, raw misses, walk-busy cycles) would need a new bitstream; that is **the lead's call** and is not requested | - |
@@ -648,6 +648,43 @@ gives the lead's worst-case question (subtree 1 .. 10^6) its silicon latency.
   34,509-node reset at the per-node cost read here.
 - Duration: under a minute of commands. Budget 3,600 s for the rung.
 - **VOID** if `b0-stats` or `b0-hello` fails, or the smoke fails outside the kit's accounting waiver.
+
+**Addendum 1 (2026-11-15 05:40, before the boot): the stage is replaced by `nested/crvt/board/c3-stage`, because whether
+a native-route domain may read a cycle counter on silicon is not established.**
+- The record is mixed:
+  - `tests/rtl-smoke/README.md:20-30, :176-190` carries a collaborator's note that the board gates the unprivileged
+    `cycle`;
+  - QEMU domains read it;
+  - a CSRUNV context runs at raw M (R-60).
+  - On the twin, `cycle` reads and `mcycle` traps (cause 2).
+- In c2-stage every test read `cycle` first, so a trap would have cost every timing line.
+- The program now takes `CRVT_CLOCK`, and the stage has 22 commands:
+  - t0-control on `mono` (`clock_gettime(CLOCK_MONOTONIC)`, ns), which cannot trap;
+  - one-read probes of `cycle` and `mcycle`;
+  - every test on `mono`;
+  - every test again on the first counter the probes found readable. `run.sh` decides and prints `@@CRVT-COUNTER`;
+    with none, it skips those commands with rc 255;
+  - the probe toward 10^6.
+- Each command is its own process, so a counter that traps loses only its probe.
+- A test is added: `lonefence`, which is `lone` with a fence before each op, comparable to the RTL's fence-drained
+  21 / 42 cycles.
+- Checked:
+  - on the twin (`ncrv-w3`): `cycle` readable, `mcycle` cause 2, counter tests on `cycle`, the probe refused (30) after
+    196,609;
+  - the no-counter branch, with a stub binary on the host: 22 `@@SPEC-END` lines, 9 skips;
+  - rule 8 again (`c3-recheck`): cpio `1458c4e07f84a0aa`, 24 files with the baked binary and `run.sh` hash-matching,
+    stub smoke PASS (`BAKED_TIMEOUT=3600`), firmware `3da21cf758582af2…` at 19,566,088 B, gate PASS.
+  - Binary `a1b9475179b25875…`.
+- **Predictions added (the bands above are unchanged and apply to the counter tests):**
+  - **Mono resolution:** `clock_gettime` advances in steps of the kernel's timebase, about 1 µs on this board, so a
+    lone mono bracket reads 0 or one step. Only the means over 10,000 brackets, `b2b`'s loop and chains of 10,000 or
+    more are read from mono. Cycle figures from mono use the board's core clock, which the transcript does not state;
+    they are labelled as such.
+  - **Refusal cause:** on silicon, node exhaustion refuses with **cause 30** (ISSUES.md R-12). The silicon README's
+    table names 30 differently (ILLEGAL_OPERAND_VALUE), and R-12's reading is the one used.
+  - R-12 also records a 65,536-node pool in the RTL. If the board's limit is that pool and not the 262,144-record
+    table, **t3-chain100k is refused with 30**, and t4's last progress line is 65,537 or below. That outcome is read as
+    the per-subtree limit, not as a failure.
 
 **The real large revoke: PostgreSQL's context resets** (twin, `w2-main`, details in the PostgreSQL section). 668,247
 CREVOKEs per run. 92 % end one node, 52,685 end a context's chunks, and the largest ends 34,509 nodes. That one costs
