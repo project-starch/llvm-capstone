@@ -13,3 +13,10 @@
 0013-riscv-sublet-trap-interfaces.patch
 0014-riscv-sublet-trap-entry-and-exit.patch
 0015-riscv-sublet-loader-enters-and-exits.patch
+0016-modpost-sublet-uaccess-text.patch
+0030-riscv-sublet-handles.patch
+0031-riscv-sublet-syscall-pointer-table.patch
+0032-riscv-sublet-binder.patch
+0033-riscv-sublet-user-memory-routines.patch
+0034-riscv-sublet-dispatch-to-binder.patch
+0035-riscv-sublet-loader-iovec-argv.patch
