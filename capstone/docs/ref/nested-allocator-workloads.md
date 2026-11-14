@@ -162,9 +162,17 @@ These two boots used a private, measurement-only QEMU: `nested/qemu-nst` = qemu5
   - +25 M in the spinlock helpers they take;
   - +1.4 M in `native_rw`;
   - the node-record functions (`retire`, `resolve`) move by under 40 k.
-- **Why the scan costs 2-3 % more when protected is not attributed yet.** My working hypothesis is different page
-  residency in the 8 MiB memsys5 arena: protected memsys5 rounds blocks to the bounds granule, and its peak "Memory
-  Used" differs.
+- **Why the scan costs 2-3 % more when protected: the protected arm touches more of the heap.**
+  - Diagnostic boot `nst1-q4`: `diag_admit=1`, vmstat around each command. It was not used for any cost number.
+  - At retire, the 8 MiB memsys5 arena (`+0x808000`, 2,056 pages) has **268 pages resident not protected and 337
+    protected (+69, +26 %)**. Every other arena of the process is identical between the arms.
+  - Page faults in the command window: +725 vs +795.
+  - The scan's cost grows with the arena's resident and absent runs, so the protected arm pays more on each of the
+    same 15,151 syscalls.
+  - Why protected memsys5 spreads over more pages is not traced. Its patch rounds each block child to its bounds granule
+    (Q-15 repair, a tail pad inside the block), which changes block sizes and placement.
+  - So the kernel share of the protection's cost is a side effect: the native route's per-syscall scan multiplies a
+    small footprint change. It is not lifetime work.
 - **The scan is real on silicon too.** The board kernel's `capstone_vm.c`
   (`perf/k2n/linux-board-k2n-native-hpm`) differs from the twin's only by the HPM reads.
 
