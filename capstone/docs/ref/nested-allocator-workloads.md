@@ -417,6 +417,34 @@ with hpm8 now event 23.
 - **Duration:** 236-244 s per command on batch, so about 4 min each and about 31 min per boot. Budget 3,600 s per
   rung.
 - **VOID** if `b0-stats` or `b0-hello` fails, or if the smoke fails outside the kit's accounting waiver.
+
+**Addendum 1 (2026-11-14 22:30, before the boot): the RTL undercuts the event-23 lower bound; the band is not edited.**
+- Read from a948e4134: the node unit's record writes are broadcast to the LSU's verdict cache, and a write with
+  `valid = 1` installs the entry live.
+  - Install: `load_store_unit.sv` `rvc_ins_valid = (revnode_fill_valid_i && revnode_fill_nodeval_i) || …`.
+  - Tap: `ex_stage.sv:2014-2016`, `revnode_fill_valid = mem_rev_wr_req_valid && !vp_hdr_wr`,
+    `revnode_fill_nodeval = node_wr_req[31]`, id `{generation, slot}`.
+  - CDERIVE writes the new node with `valid = 1'd1` (`capstone_rev_node.anvil`, the `new_node` literal) through
+    `send_revnode_update`.
+  - So a freshly derived child is installed, and its first access is not a compulsory miss, unless its entry was
+    evicted first (256 entries, round-robin) or a namespace flush emptied the cache.
+  - CREVOKE writes `valid = 0`, which clears liveness and keeps the entry, so a later access through the dead child
+    is denied at once with no replay.
+  - Not checked by simulation: that the installed id equals the child capability's `revnode_id` as the LSU compares it.
+- So the prediction's lower bound (+28,000, one compulsory miss per CDERIVE) rests on a premise the RTL contradicts.
+  - A reading below it is consistent with the RTL. It is read as "the protection's misses are capacity or conflict
+    misses", not as a broken counter.
+  - The pre-registered band and every other prediction stand as written above.
+- The cost of one miss, read from the RTL (`commit_stage.sv:906-914`, `frontend.sv:385`): a pipeline flush and a refetch
+  of the same pc. It is not a local LSU stall.
+  - With the node unit idle and the record read hitting the L1D: about 17-20 cycles. The source's own "5 typical"
+    cycles from accept to resolve, plus about 3 to reach commit, plus the refill.
+  - On an L1D miss for the record, add the memory latency.
+  - While a revoke walk runs, the probe waits, without a bound short of a 1 M-cycle timeout.
+  - The refill depth, the idle accept delay and whether the record region is cacheable were not read. These figures
+    are estimates from the source, not measurements.
+- The share of the in-context cost that misses explain is therefore read as (event-23 delta x 17-20 cycles) against the
+  `run_cycles` delta, a lower bound on the misses' share.
  On the twin it is the patch's `aReq` array working through the native route's per-syscall page
 scan, not the lifetimes.
 
