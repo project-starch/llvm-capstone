@@ -4019,3 +4019,23 @@ and then for 900 s more.
 
 **Reading.** As with ay-b3, the SPEC classifier reads NO RESULT on this stage format, and the nested lane reads the
 result with its own parser. A failed smoke stops the chain.
+
+## Addendum 124 (2026-11-14 23:21 +08): chains launched from now park the switches before each boot (nat-run3.sh); the kit driver pin is unchanged
+
+`$H/perf/natstage/nat-run3.sh` is nat-run2.sh plus one step inside each booking, right before board-run.sh:
+`python3 $H/wt-park/capstone/tests/rtl-smoke/fpga_driver/pre_boot_park.py <board>`. That is the board lane's
+standalone park, dev cba01ed3090d, run from a detached worktree at that commit.
+- **Exit codes:** 0 means clean at connect, nothing emitted. 10 means bits were set and [0]*8 was confirmed after the
+  park. Anything else STOPs the chain, with the booking released and no boot. The tool's must-fire line goes into the
+  chain log. A missing tool is a STOP at chain start.
+- **Why it does not break the instrument:** the kits' pinned driver (BOARD_DRIVER_SHA fd38816a90c64c22) and the kit
+  files are untouched, and the step runs before board-run.sh, not inside it. It closes Addendum 119's risk, where a
+  failed park voids the next boot, for every chain started with nat-run3.sh.
+- **Checks before first use:**
+  - the tool's own tests in that worktree, 6/6 PASS: clean rc 0, 217 parked rc 10, never-confirmed rc 1 with one
+    toggle, no switch_state rc 1, exception rc 1 with nothing leaked, bad board rc 1;
+  - a real call with a bad board: rc 1 with the must-fire line;
+  - a stubbed nat-run3 dry run;
+  - the chain's case block exercised with fake park exits 0, 10, 1 and 2, giving continue, continue, STOP and STOP.
+- **Scope:** chains already waiting keep nat-run2.sh, because a running script is not edited. Those are boards 1-3's
+  queues as of this addendum.
