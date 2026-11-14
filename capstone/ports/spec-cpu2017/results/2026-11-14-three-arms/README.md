@@ -9,7 +9,7 @@ in [`../2026-11-08-train/PREREG.md`](../2026-11-08-train/PREREG.md) (Addendum 10
 |---|---|---|
 | **riscv-base** | stock CVA6, `caplifive_rvbase_d31345cf3` | plain RV64 build `plain-rv64fre`: static musl with the same allocator policy as Capstone (mapping cache with page rounding, eviction, in-place large realloc via mremap), K2N kernel |
 | **Capstone temporal** (spatial + temporal safety) | `caplifive_ids55-native-tagcache-mlp-fpieee-hpmreplay-dynbypass3-dtlb64-shrinkfix-ic32k-r72-stcnoclaim_a47b588a1` (sha256 `ff36870d…76e1`) | FRCDKMS images (below), native route, heap lifetimes ON |
-| **Capstone spatial** (spatial safety only) | the same bitstream | the same compiler and benchmark objects; the SDK differs only in the heap object (heap lifetimes OFF) |
+| **Capstone spatial** (spatial safety only) | the same bitstream | the same compiler and benchmark objects; the SDK differs only in `CAPSTONE_HEAP_LIFETIMES=OFF`, so only in the allocator objects (libc mallocng, the runtime's malloc-mapping). An allocation gets exact bounds (CSHRINK) under its mapping's lifetime node instead of a node of its own (CDERIVE), and free does no CREVOKE. Size classes, the mapping cache, eviction and in-place realloc are unchanged |
 
 The rule for the baseline: riscv-base keeps its own RTL (stock CVA6) and shares everything else that both arms
 can share: compiler front end and flags, static linking, kernel, inputs, measurement, allocator policy.
@@ -29,35 +29,37 @@ can share: compiler front end and flags, static linking, kernel, inputs, measure
 specdiff PASS on every row. x264 is checked against plain-rv64r's five frame hashes, because its native stage has no
 imagevalidate step.
 
-## Table
+## Table: best measured so far (updated as runs land)
 
-| Benchmark | riscv-base (s) | Capstone temporal (s) | ratio | Capstone spatial (s) | ratio |
-|---|---|---|---|---|---|
-| 500.perlbench_r (full: makerand + test.pl) | 12,623.02 | pending | | pending | |
-| 502.gcc_r (train01) | 1,722.35 | 2,446.30 | 1.420 | pending | |
-| 505.mcf_r | 5,125.02 | running | | pending | |
-| 519.lbm_r | 1,077.50 | pending | | pending | |
-| 525.x264_r | 35,613.24 | pending | | pending | |
-| 538.imagick_r | 11.08 | pending | | pending | |
-| 544.nab_r | 679.92 | pending | | pending | |
-| 557.xz_r | 4,993.81 | pending | | pending | |
-| geomean | | | | | |
+Each Capstone temporal number is the best silicon reading for that row so far, with its configuration. The last
+two columns are the uniform final configuration (batch bitstream + FRCDKMS images), temporal and spatial, which is
+the table being measured now. A row moves into them as its run lands.
 
-**Readings on earlier configurations** (the same riscv-base column):
+| Benchmark | riscv-base (s) | Capstone temporal, best so far (s) | ratio | configuration | final config: temporal ratio | final config: spatial ratio |
+|---|---|---|---|---|---|---|
+| 500.perlbench_r (full: makerand + test.pl) | 12,623.02 | 17,601.71 | 1.394 | fdk / FR | pending | pending |
+| 502.gcc_r (train01) | 1,722.35 | 2,446.30 | 1.420 | batch / FRCDKMS | 1.420 | pending |
+| 505.mcf_r | 5,125.02 | 7,349.81 | 1.434 | batch / FR | running | pending |
+| 519.lbm_r | 1,077.50 | 994.66 | **0.923** | fdk / FR | pending | pending |
+| 525.x264_r | 35,613.24 | 36,219.53 | **1.017** | mlp / arm C | pending | pending |
+| 538.imagick_r | 11.08 | 12.93 | **1.167** | fdk / FR | pending | pending |
+| 544.nab_r | 679.92 | 716.18 | **1.053** | fdk / FR | pending | pending |
+| 557.xz_r | 4,993.81 | 5,196.56 | **1.041** | fdk / FR | pending | pending |
+| geomean | | | 1.172 | | | |
 
-| Row | Ratio | Configuration |
-|---|---|---|
-| perl full | 1.394 | fdk / FR |
-| perl makerand | 1.278 | batch / FRCDKMS |
-| mcf | 1.434 | batch / FR |
-| lbm | 0.923 | fdk / FR |
-| x264 | 1.017 | mlp / arm C |
-| imagick | 1.167 | fdk / FR |
-| nab | 1.053 | fdk / FR |
-| xz | 1.041 | fdk / FR |
+Bold = below the 1.20 target. perl makerand alone, the quick A/B sub-run used for debugging only: 257.90 s on
+riscv-base against 329.70 s on batch / FRCDKMS, ratio 1.278.
 
-The riscv-base xz reading is its no-cache build. In QEMU the mapping cache does not move xz: 59.618 G against 59.576 G
-instructions.
+Configurations in the table:
+- **mlp / arm C:** `caplifive_ids55-native-tagcache-mlp_b98f5a517`, the older compiler, and the same allocator.
+- **fdk:** `caplifive_ids55-native-tagcache-mlp-fpieee-hpmreplay-dynbypass3-dtlb64-shrinkfix-ic32k_3c6b9906c`.
+- **batch:** fdk plus R-72 plus lever (a), the bitstream in the arm table above.
+- **FR:** the global-lo fold plus relaxation.
+- **FRCDK:** FR plus RVC.
+- **FRCDKMS:** FRCDK plus C8 and the memset switch.
+
+The riscv-base xz reading is its no-cache build. In QEMU the mapping cache does not move xz: 59.618 G against
+59.576 G instructions.
 
 ## Where the time goes
 
