@@ -10,9 +10,12 @@ illegal, and without the monitor QEMU drops a timer interrupt raised during a
 virtual-C run (the escape restores the caller's `mip`, and only `cap_mem`, which
 CSCAPENTER sets, reasserts the lines), so every mode that sleeps or waits after
 a run hangs. With that QEMU change in a test copy and Sstc on, every mode passes
-(F4 part 2). The ports' lifetime patches do not yet handle the failure result. F5
-is next, then stage 5, in a reduced form until the project lead decides on the
-old path.
+(F4 part 2). The ports' lifetime patches do not yet handle the failure result.
+The stage "drop M" (2026-11-14, after F4 part 2: mapping blocks are depth-1
+children of R, decision 8 of plan v5) is done, uncommitted at the time of its
+runs: every unit test and every control passes on both formats (see the
+stage). F5 is next, then stage 5, in a reduced form until the project lead
+decides on the old path.
 Design: [the kernel as the outermost allocator](../design/virtual-capstone/address-space-root.md).
 
 ## What the code does today
@@ -889,6 +892,154 @@ A. **Format alignment: no capability rights** (block A, after stage 4e; decided
    - `top_guard` failure made explicit.
    - The ports (stage F4d): the 61 call sites above. Until then no gate runs
      a port with `node_max_pages` set or near a memory limit.
+- **Stage "drop M": mapping blocks are depth-1 children of R. Done** (2026-11-14, uncommitted at the
+  time of the runs). Rule, decided on 2026-11-13 (plan v5, decision 8, after review; design note, section Mappings):
+  `mmap` derives the block P from R with one `CDERIVE` (depth 1), and the kernel keeps only bookkeeping,
+  no reference and no private record M. A request with a reference r is accepted if and only if r is
+  tagged, live, its record has depth exactly 1, and its bounds cover the page range the call names,
+  which lies inside one block. The request that removes a block's last logically mapped pages, a call
+  that names the whole block included, ends it with `CREVOKE` on r; a partial `munmap` that leaves
+  mapped pages ends nothing. Kernel-owned blocks refuse `munmap`, `mremap` and `mprotect`.
+  Module (`capstone_vm.c`), with root grants:
+  - `ref_reservation`, `ref_child`, `ref_kill`, `root_live`, `root_end`, `root_unwind` and the kernel slot
+    per arena (`arena.ref`) are gone. `ref_block` decides conditions 1 to 3 (the depth one below R, read
+    from the record that the id names, in the same step as the generation). `request_operand` checks the
+    named range (condition 4); `CV_CALL_BLOCK`, which asked for bounds over the whole visible length, is
+    gone, so the mapping check, a partial `munmap`, `MAP_FIXED` and `mremap` accept a covering reference
+    narrowed to part of a block. A growth in place also needs the reference to cover the new tail
+    (`ENOMEM` otherwise, without a counted refusal; the libc then moves).
+  - `block_revoke` ends a block: it reads the operand from the caller's frame again, checks conditions 1
+    to 3 and the lifetime accepted at the check, and executes `CREVOKE` with preemption and interrupts
+    off and an exception-table entry; a fault refuses the request (`revoke_faults`). It runs at
+    `CV_UNMAP` (munmap and a park), at `CV_PAGES` (the removal of the last mapped pages), at
+    `CV_THREAD_EXIT` (the stack, through a1, before the frame is cleared; a refused one is kept,
+    `exit_kept`) and at `CV_THREAD_CREATE` (the frame, through the creator's a0, after every other step
+    that can fail); where it stands relative to the answer to the launcher: see the fixes below. A
+    commit that fails closed (`pages_close`) ends the block through the request's reference, which the
+    paused caller's a0 still holds; if that `CREVOKE` is refused (only a hooks build lets the program
+    run in the window), the extent is held (`CV_PAGES_ENDED_HELD`, `closed_unended`) and the arena
+    quarantined (fixes below). `lifetime_ended` (formerly `ancestor_retired`) marks a block that the
+    module ended; `CV_RETIRE` refuses every other one. Teardown ends nothing: it frees the table.
+  - `root_derive` makes P in the context's grant slot (taken at `root_create`), moves it to the cursor
+    into the frame slot, and clears the grant slot; a cursor the format cannot hold rolls back with
+    `CREVOKE(P)` through the grant slot. `CV_GRANT_RECORDS` is 1 with root grants (2 without, CSMINT's
+    parent and child), so `grant_nodes` admits an `mmap` with one free record.
+  - The kernel-owned flag (`arena.kernel_owned`, `block_owned`, counter `owned_refused`): every grant
+    made before the program starts but the nested allocator's region (register 13), that is the image,
+    the main stack, the shared region and the startup block, with root grants only (fixes below). It
+    refuses `CV_UNMAP`, `CV_PAGES`, `CV_PROTECT` (mprotect and the mapping check), `CV_ADVISE`,
+    `CV_ATTACH`, the frame at `CV_THREAD_CREATE` and the stack at `CV_THREAD_EXIT`. It replaces the
+    image's `rx_bytes` special cases in `unmap` and `protect` with root grants; `CV_PAGES` and
+    `CV_ADVISE` keep theirs, since their page indices start after the text prefix.
+    `CV_GRANT_TRANSACTION` (bootstrap test ioctl) is refused with root grants.
+  Launcher (`exec.c`): as first written, `mapping_gate` and `range_mapping` no longer refused the
+  launcher's own mappings (`heap`); the fixes below restore that check, with a test bypass. A worker's
+  attachment requires heap mappings past the bypass too (reason "not a whole mapping of the program").
+  The libc, `vm.h`, `vm-abi.h`, `wire.h` and
+  the README describe the rule. ABI: no structure changes; new read-only parameters `owned_refused`,
+  `blocks_ended`, `revoke_faults`, `closed_unended`. root_grants=0 keeps CSMINT per mapping.
+  Unit tests (`root-contract.c`, `run-root-grants.py`): `partial-narrow` rewritten (a reference narrowed
+  to the middle page cannot remove the next page as well, "does not cover the mapping", and removes its
+  own page; the block lives on); `partial-all` reads through a copy of the block's reference stored in
+  another mapping; `nogrow-map` adds `nogrow_map_one_record` (one munmap at a full table, one mmap fits,
+  the next answers `ENOMEM`; the F4 part 2 module, which needs two records, is the comparison);
+  `grow-maps` maps 5,000 blocks (one record each); new modes `partial-renew` (root grants; a reference
+  narrowed and renewed keeps the narrowed bounds, cannot remove pages beyond them, removes its own page
+  and the block keeps its range, and in a second block removes the last mapped page and ends it: fault
+  25 through an object derived in it at the reused address), `mremap-move` (a moved page leaves a hole
+  and the block lives; a moved whole block ends, a copy of its reference cannot unmap it, fault 25
+  through an object at the reused address) and `kernel-owned` (munmap, mremap and mprotect of the image
+  and of the main stack, whole and a page: `EINVAL`; per request, see the fixes below).
+  The runner: exit-victim's refusal is now "does not cover the mapping" (the own stack's reference is a
+  block's), the controls `parent` and `child-depth` are replaced by `any-depth`. Controls, one change
+  each in a copy of the module outside the worktree (a patch script per control, each replacement
+  matching once): `any-depth` (`ref_block` accepts any depth below R: refuse, protect, mremap, advise and
+  partial-narrow fail at the depth-2 object), `no-last-revoke` (the removal of the last mapped pages
+  without `CREVOKE`: partial-all, partial-renew and mremap read through the stale copy at the remapped
+  range), `no-kernel-owned` (`add()` never sets the flag: kernel-owned's munmap of the whole image
+  succeeds and the next fetch faults; it needs the hooks launcher's bypass) and `exit-operand`
+  (the stack at exit without `CREVOKE` on a1: exit-renew reads through the copy).
+  The build host was unreachable when the stage was written; it was built and run after the fixes of
+  its review (Runs, below).
+  Fixes after the review of the written stage (three reviewers, 2026-11-14; no hole found in the
+  decided design as implemented):
+  - `exit_keeps` has its prototype before `thread_exit` (an implicit declaration before the static
+    definition would not compile).
+  - The order of the CREVOKE and the answer: at `CV_UNMAP`, at the removal of the last mapped pages and
+    at `CV_THREAD_CREATE` the module writes its answer first and then executes the CREVOKE; a refused
+    one answers `EINVAL`, the launcher discards the answer, and nothing has changed. So a create fails
+    only with the frame still the program's (but `EAGAIN`), as `vm-abi.h` states, and no answer can
+    fail after a block ended. At `CV_THREAD_EXIT` the stack's CREVOKE stays before the answer (it needs
+    a1 in the paused thread's frame); a failed answer there makes the launcher end the program (its
+    service fails, `die`), and the ended stack's arena stays registered until teardown.
+  - The kernel-owned flag is set with root grants only; without them the module refuses only the image,
+    as before (`kernel_block` in `unmap` and `protect`; the other sites never refused anything there),
+    so root_grants=0 behaves as before this stage. The launcher's own check of the program's mappings
+    (`!m->heap` in `mapping_gate` and `range_mapping`) is back as defense in depth; the hooks launcher's
+    `CAPSTONE_VM_TEST_OWNED_BYPASS=1` skips it, so that the module's flag can be tested alone.
+  - A commit that fails closed and whose CREVOKE is refused no longer retires the arena: `pages_close`
+    quarantines it (`arena.quarantined`, `arena_quarantine`): registered, so no block takes its range;
+    invisible to `arena_at` and refused by `request_accept_id`, so no page is admitted and no request
+    reaches it; its pages stay pinned until teardown; the launcher holds the extent `PROT_NONE`
+    (`CV_PAGES_ENDED_HELD`). `arena_quarantine` is the hook for F4c's frame quarantine.
+  - `block_revoke` takes the arena and marks it ended (the field `ancestor_retired` is renamed
+    `lifetime_ended`, for both modes); its fault path clears t0 as the normal path does, and its comment
+    states that the exception-table entry helps only where S's capability causes reach Linux's
+    exception-table lookup; the gate platform's monitor does not delegate cause 25, so the re-check in
+    the same window is what prevents the fault.
+  - `root_create` requires R at depth 0 in the 63-bit format (a block then has depth exactly 1); the
+    older formats stay relative to R, which sits below CSMINT's private parent. A failed answer after a
+    successful `root_derive` (`CV_ADD`, `CV_REVIVE`) marks the thread terminal: the block stays
+    registered, and the launcher's next step of that thread fails and ends the program.
+  - The mapping cache's negative control (`test_revive_keep_ancestor`) parks without ending the block,
+    and `CV_RETIRE` now releases such a parked arena, as the control intends.
+  - Tests: `kernel-owned` checks each request on its own: EINVAL in every run, and with root grants and
+    the hooks launcher (the runner sets the bypass) a rise of `owned_refused` at each request
+    (`owned_flag_refuses_each`, skipped otherwise). The control `no-kernel-owned` needs that launcher;
+    protect-exec is no longer one of its cuts, since the launcher refuses there first. The control
+    patches follow the new code.
+  Not taken: dropping the `rx_bytes` checks in `pages_request` and `advise` (without root grants the
+  image has no flag, so they are not redundant there), and one combined coverage check for a growth in
+  place (the second operand read is cheap and keeps `old_range_accept` unchanged).
+  Runs on QEMU (`~/asr-work/dropm` on the build host, STATUS there), after the fixes. Builds: the module
+  for the 30-bit format and for `CAPSTONE_VM_IDS=63`, the hooks modules, the launcher (one binary), the
+  hooks launcher and both launcher variants compile without a warning; so do the 55-bit, flat 16-bit,
+  flat 25-bit (55) and flat 18-bit builds (not run). The default launcher and modules hold no test hook,
+  the hooks builds do. One test change was needed: `nogrow_map_one_record` first made its free record
+  with a munmap, which frees two records under the F4 part 2 module, so that module passed the check too
+  (run q1, the comparison did not fire); the check now lets malloc take the records the mmaps left and
+  frees one object reserved before the fill (`ROOT_NOGROW_ONE rests=0 one=1`; with the F4 part 2 module
+  `one=0 one_errno=12`, the check fails there). The runner's `cover` control (condition 4 skipped) now
+  also cuts protect, advise, partial-narrow and partial-renew, whose narrowed references rest on
+  condition 4 since M is gone. No module or launcher change was needed. Two complete
+  batches on the same module and launcher binaries (d1 and q1, then d2 and q2 on the final test image;
+  equal counts): old formats (the old QEMU, keep and stock firmware) root_grants=1 777 of 777 pinned and
+  774 of 774 unpinned, root_grants=0 773 of 773, the hook modes 260 of 260 pinned and 224 of 224
+  unpinned with root grants and 246 of 246 without, `--pages-run` 56 of 56 and 54 of 54, block frames
+  (the partial modes, partial-renew and mremap-move included) 184 of 184 and 181 of 181, the launcher
+  without its length check 110 of 110 and without its range check 28 of 28, the pthread gate with and
+  without root grants, the hosted contract 94 of 94, mapcache park and revive (3 parks, 2 revives, no
+  refusal), `mremap-contract.c` ok, stale (25) and fresh pinned and unpinned and legacy without root
+  grants, and the unpinned module refused on a kernel booted with `captag=off`. 63-bit format (the QEMU
+  test copy `f4b/qemu63-irq` with Sstc, the fw63 platforms): pinned 776 of 776, hooks 260 of 260,
+  `--pages-run` 56 of 56, block frames 184 of 184, both launcher variants (109 and 28), NOGROW 51 of 51
+  (`node_max_pages=16`: 4,075 one-page mmaps fit in one batch, 2,028 with the F4 part 2 module),
+  malloc-contract 24 of 24, mremap-contract, root_grants=0 refused at load; unpinned 773 of 773, hooks
+  224 of 224, `--pages-run` 54 of 54, block frames 181 of 181, NOGROW 51 of 51, malloc-contract 24 of
+  24, mremap-contract, the `captag=off` refusal. grow-maps maps 5,000 blocks with one table growth.
+  Witnesses: kernel-owned with the hooks launcher's bypass reads `owned_refused` 1 to 12, one rise at
+  each request, pinned and unpinned on both formats (skipped without the bypass and without root
+  grants); partial-renew, mremap-move and partial-all fault 25 at the reused address
+  (`ROOT_REMAP same_address=1`). Controls, each one change in a copy of the module built outside the
+  worktree (`patch-control.py`, hashes in STATUS), on both formats and in both batches: `any-depth`
+  (refuse, protect, mremap, advise and partial-narrow fail at the depth-2 object, exit 1, renew and
+  renew-ref still pass), `no-last-revoke` (partial-all, partial-renew and mremap read through the stale
+  copy at the remapped range, `ROOT_STALE_READ`; unmap and mremap-move, whose blocks end through
+  `CV_UNMAP`, still fault 25), `no-kernel-owned` (hooks launcher with the bypass: kernel-owned's munmap
+  of the whole image succeeds and the next fetch faults, cause 12; protect-exec still passes, refused by
+  the launcher), `cover` (narrow, protect, advise, partial-narrow and partial-renew fail at the narrowed
+  reference, refuse still passes) and `exit-operand` (exit-renew reads through the copy of the renewed
+  stack reference). Not run in this stage: the corpora and the gates of stage 6.
 5. **Remove the old path.** Drop the parameter, `arena.ancestor`, the private
    parents and the collection paths that exist only for them. `CSMINT` stays
    at one site. Pending a decision of the project lead (2026-11-13): the

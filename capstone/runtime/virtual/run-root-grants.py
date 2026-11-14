@@ -86,7 +86,9 @@ Stage 4e (root-contract.c lists the checks of each):
   partial-hole the middle page of three goes; ends with a page fault (13) in the hole (exit 139)
   partial-all  pages go one by one, repeats change nothing, the last one ends the block; ends with
                the stale read (25, exit 139)
-  partial-narrow  narrowed, nested and integer references cannot remove a page (root grants)
+  partial-narrow  a reference narrowed to the middle page cannot remove the pages beyond it, removes its
+                  own page, and the block lives on; nested and integer references cannot remove a page
+                  (root grants)
   partial-fixed   MAP_FIXED refills a hole with zeros, refused while an object exists below P; with
                   diag_admit the removal reports the tags of the removed page before and after it
                   cleared them, and the refill's admission reports its frame
@@ -155,14 +157,22 @@ does. Every thread's frame must be released at its exit (no CAPSTONE_VM_FRAME_RE
 --root-grants 0 loads the module without the parameter. The checks that hold only with root
 grants print ROOT_SKIP with a reason, and the runner requires those skips instead.
 --control NAME runs against a module that is one change away from the adapter's (--module):
-  cover          the unmap check skips condition 4 (the bounds cover the mapping): the narrowed
-                 munmap is accepted, and the narrow mode fails at that check (exit 1)
-  parent         the check skips condition 3 (the operand's record is a child of M): the object
-                 over the whole page ends the whole mapping, and the refuse mode fails there; the
-                 protect mode fails at the object's mprotect, the mremap mode at the object's
-                 mremap and the advise mode at the object's madvise
-  exit-operand   the stack's arena at thread exit is released without the CREVOKE of M: the
-                 renewed stack lifetime survives, and exit-renew reads through it
+  cover          the unmap check skips condition 4 (the bounds cover the named range): a narrowed
+                 reference acts beyond its bounds, and narrow, protect, advise, partial-narrow and
+                 partial-renew fail at that check (exit 1)
+  any-depth      condition 3 accepts a live record at any depth below R, not only one level below it
+                 (the stage that dropped M; it replaces the controls parent and child-depth of the
+                 child-of-M check): the object over the whole page or block, depth 2, is accepted, so
+                 refuse, protect, mremap, advise and partial-narrow fail at it
+  exit-operand   the stack's arena at thread exit is released without the CREVOKE on the reference in
+                 a1: the renewed stack lifetime survives, and exit-renew reads through it
+  no-last-revoke a partial munmap that removes a block's last mapped pages releases the block without
+                 the CREVOKE on the passed reference: a stale copy reaches the range mapped again, and
+                 partial-all, partial-renew and mremap read through it (ROOT_STALE_READ, no fault)
+  no-kernel-owned
+                 add() never sets the kernel-owned flag (needs --launcher-hooks, whose bypass lets the
+                 requests reach the module): kernel-owned's munmap of the whole image succeeds and the
+                 program faults at its next fetch (a domain fault)
   protect-check  CV_PROTECT accepts without checking the reference: the protect mode fails at the
                  integer address (exit 1)
   create-address thread create without the comparison of the launcher's frame with a0's cursor:
@@ -231,10 +241,9 @@ shrink-unchecked (--application built against a libc whose mremap shrinks withou
 old range): mremap-validate's shrink over a hole ends the block and answers success (exit 1).
 Block A controls: --control no-close-clear (--module a hooks build whose fail-closed commit retires
 without clearing the unheld pages in place, with the hooks launcher): pages-closed's unheld tagged page
-reaches Linux with its tag (no "clear in place" line, captag cleared_pages grows); --control
-child-depth (--module whose ref_child accepts any live record deeper than M): the object over the whole
-page or mapping is accepted, so refuse, protect, mremap and advise fail at it, and renew still passes;
---launcher-control discard-abort (a hooks launcher that aborts after a failed discard, as stage 4f did):
+reaches Linux with its tag (no "clear in place" line, captag cleared_pages grows); (the control
+child-depth of block A, a ref_child that accepted any live record deeper than M, is any-depth since M is
+gone); --launcher-control discard-abort (a hooks launcher that aborts after a failed discard, as stage 4f did):
 pages-discard's MAP_FIXED answers EAGAIN and the block stays live (exit 1).
 Block A, F4 part 2 (root-contract.c lists the checks of each): protect-exec also checks that the
 startup block stays read-only through every service; top-page (--launcher-hooks:
@@ -251,6 +260,19 @@ unless the module is a CAPSTONE_VM_IDS=63 build (--ids 63, the processor's x-cap
 refuse mode expects no collection (the 63-bit format reuses slots through generations).
 Every run reads CAPSTONE_VM_RELEASES at exit: no failed release, no held extent except in pages-unclear,
 and the launcher's guard of the top page held (top_guard=1).
+The stage that dropped the reservation record M (root-contract.c lists the checks of each): every mapping
+is a block of depth 1, a child of R, and a request is accepted through a live reference one level below R
+whose bounds cover the page range it names; the call that removes a block's last mapped pages ends the
+block with CREVOKE on that reference. partial-renew (root grants): a reference narrowed and renewed
+removes its own pages and ends the block only when they are the last mapped ones, and the stale read
+through an object derived in it must fault with 25 (139). mremap-move: a move of part of a block removes
+only those pages; a move of a whole block ends it, and the stale read through an object derived in it at
+the reused address must fault with 25 (139). kernel-owned: munmap, mremap and mprotect of the image and of
+the main stack are refused (exit 0), by the launcher's own check of the program's mappings; with root
+grants and --launcher-hooks the runner sets CAPSTONE_VM_TEST_OWNED_BYPASS=1 for this mode, the launcher
+then passes each request to the module, and the module's kernel-owned flag must refuse every one
+(owned_refused rises at each, owned_flag_refuses_each; skipped otherwise). nogrow-map also checks that one
+free record holds one mmap.
 --module-args ARGS appends ARGS to the module's insmod line. --no-unload leaves the module loaded at
 the end (the firmware without the capability monitor, which the 63-bit format needs, hangs the unload
 after a program ran; module_unloaded is then not checked).
@@ -284,7 +306,8 @@ MODES = ('unmap', 'refuse', 'narrow', 'renew', 'renew-ref', 'mremap',
          'futex-remap', 'die-blocked', 'word-metadata',
          'futex-readonly', 'futex-park', 'futex-end', 'futex-flags', 'die-stderr', 'protect-exec',
          'partial-hole', 'partial-all', 'partial-narrow', 'partial-fixed', 'partial-mremap',
-         'mremap-validate', 'pages-enomem', 'pages-tagged', 'futex-stale', 'grow-maps', 'grow-objects')
+         'mremap-validate', 'pages-enomem', 'pages-tagged', 'futex-stale', 'grow-maps', 'grow-objects',
+         'partial-renew', 'mremap-move', 'kernel-owned')
 # The modes that need a table that cannot grow (--module-args node_max_pages=16); not in the default list.
 NOGROW_MODES = ('nogrow-map', 'nogrow-malloc', 'realloc-exhausted')
 # The modes that run only on the 63-bit format (they skip in the older ones).
@@ -310,6 +333,11 @@ HOOK_ENV = {
 # The hook modes whose window --pages-run opens to the program (the hooks module's test_pages_run).
 PAGES_RUN_MODES = ('pages-derive', 'pages-fault', 'pages-admit')
 HOOK_MODES = tuple(HOOK_ENV)
+# Modes that run with every launcher but take this environment from a hooks launcher, with root grants:
+# kernel-owned's requests then pass the launcher's own check and reach the module's kernel-owned flag.
+HOOKS_ROOT_ENV = {'kernel-owned': 'CAPSTONE_VM_TEST_OWNED_BYPASS=1'}
+# Checks that run only with that environment (skipped otherwise).
+HOOKS_ROOT_ONLY = {'owned_flag_refuses_each'}
 # The modes that need a module built with CV_TEST_HOOKS, and the parameter the gate sets for each.
 MODULE_HOOK_PARAMS = {
     'eintr-word': ('test_hold_ms', '1000'),
@@ -395,9 +423,10 @@ CHECKS = {
                      'no_mapping_in_hole', 'hole_unmap_repeats', 'hole_requests_refused'),
     'partial-all': ('hole_unmap_idempotent', 'prot_none_page_counts', 'count_exact_with_mprotect',
                     'last_page_ends_block'),
-    'partial-narrow': ('partial_narrowed_refused', 'partial_nested_object_refused',
+    'partial-narrow': ('partial_narrowed_beyond_refused', 'partial_nested_object_refused',
                        'partial_address_refused', 'partial_beyond_block_refused',
-                       'partial_through_moved_reference', 'whole_unmap_with_hole'),
+                       'partial_narrowed_removes_own_page', 'partial_through_moved_reference',
+                       'whole_unmap_with_hole'),
     'partial-fixed': ('fixed_refill_reads_zero', 'removed_page_tags_cleared',
                       'fixed_replaces_mapped_page', 'fixed_refused_with_object',
                       'fixed_after_object_released'),
@@ -419,9 +448,14 @@ CHECKS = {
     'top-page': ('top_page_mapping_below',),
     'grow-maps': ('grow_maps_through_grants',),
     'grow-objects': ('grow_objects_through_escape',),
-    'nogrow-map': ('nogrow_map_enomem', 'nogrow_map_recovers'),
+    'nogrow-map': ('nogrow_map_enomem', 'nogrow_map_one_record', 'nogrow_map_recovers'),
     'nogrow-malloc': ('nogrow_malloc_null', 'nogrow_malloc_recovers'),
     'realloc-exhausted': ('realloc_exhausted_keeps_object',),
+    'partial-renew': ('renewed_narrow_keeps_block', 'renewed_narrow_ends_block'),
+    'mremap-move': ('mremap_move_part_removes_pages', 'mremap_move_whole_ends_block'),
+    'kernel-owned': ('owned_image_unmap_refused', 'owned_image_mremap_refused', 'owned_image_mprotect_refused',
+                     'owned_stack_unmap_refused', 'owned_stack_mremap_refused', 'owned_stack_mprotect_refused',
+                     'owned_flag_refuses_each'),
 }
 # pages-derive with --pages-run: the commit fails closed instead.
 CHECKS_PAGES_RUN = {'pages-derive': ('pages_derive_fails_closed',)}
@@ -441,28 +475,31 @@ ROOT_ONLY = {'stale_reference_at_reused_address_refused', 'address_refused',
              'advise_integer_refused', 'advise_stale_refused', 'advise_narrowed_refused',
              'advise_nested_object_refused', 'attach_address_refused',
              'exit_word_after_revoke_not_written',
-             'partial_narrowed_refused', 'partial_nested_object_refused', 'partial_address_refused',
+             'partial_narrowed_beyond_refused', 'partial_nested_object_refused', 'partial_address_refused',
              'fixed_refill_reads_zero', 'removed_page_tags_cleared', 'fixed_replaces_mapped_page',
              'fixed_refused_with_object', 'fixed_after_object_released',
              'mremap_grow_refused_with_object', 'mremap_grow_into_tail', 'fixed_enomem_changes_nothing',
              'futex_stale_waiter_not_counted', 'pages_derive_after_refill', 'pages_derive_fails_closed',
              'pages_fault_waits_then_proceeds', 'pages_admit_store_after_refill',
-             'pages_closed_fails_closed', 'pages_discard_fails_closed', 'pages_unclear_extent_held'}
+             'pages_closed_fails_closed', 'pages_discard_fails_closed', 'pages_unclear_extent_held',
+             'renewed_narrow_keeps_block', 'renewed_narrow_ends_block'}
 FAULTING = {'unmap', 'renew', 'renew-ref', 'mremap', 'exit-renew', 'create', 'partial-all', 'futex-end',
-            'release-fail', 'pages-discard'}
+            'release-fail', 'pages-discard', 'partial-renew', 'mremap-move'}
 # Modes whose stale read does not map the address again first (the frame is not reused, or the
 # fault comes from a waiter's own read).
 NO_REMAP = {'create', 'futex-end', 'release-fail', 'pages-discard'}
 # Faulting modes that end with the stale read only with root grants (without, they skip and exit 0).
-ROOT_FAULTING = {'pages-discard'}
+ROOT_FAULTING = {'pages-discard', 'partial-renew'}
 # Modes that end with a page fault of a live reference (stage 4e: a removed page), by cause.
 PAGE_FAULTING = {'partial-hole': 13}
 # The kernel's refusals per mode with root grants, as (reason, request) in order
 # (capstone_vm.c cv_unmap_reasons, request_refused). The other refusals (a second munmap, the
 # second page of a partial munmap, the old reference after mremap, the wrong old length of mremap)
-# are the launcher's, which finds no whole mapping at that address or of that length. exit-victim's
-# first exit names the victim with the own stack's reference moved there, the stack's end: a live reference to another
-# reservation (its reason is filled in from the operand's type). A reason may be a tuple of
+# are the launcher's, which finds no whole mapping at that address or of that length. "not the
+# mapping" is condition 3 (the record is not one level below R: an object inside a block). exit-victim's
+# first exit names the victim with the own stack's reference moved there, the stack's end: a live
+# reference to another block, whose bounds do not cover the victim (its reason is filled in from the
+# operand's type). The kernel-owned blocks' refusals are counted in owned_refused, not here. A reason may be a tuple of
 # alternatives: the collection in the refuse mode may clear the tag of the program's own stale
 # reference before the munmap hands it over.
 REFUSALS = {
@@ -539,19 +576,49 @@ REFUSALS = {
     'nogrow-map': [],
     'nogrow-malloc': [],
     'realloc-exhausted': [],
+    'partial-renew': [('does not cover the mapping', 'munmap'), ('not live', 'munmap'), ('not live', 'munmap')],
+    # The copy's munmap after the whole block moved is the launcher's refusal: no mapping there.
+    'mremap-move': [],
+    'kernel-owned': [],
 }
 REFUSALS_PAGES_RUN = {'pages-derive': [('objects derived below the mapping', 'map fixed commit')]}
 # What each control changes: the mode it must break, and how.
 CONTROL_CUTS = {
-    'cover': {'narrow': ('ROOT_FAIL:munmap through a narrowed reference', 'narrowed_reference_refused')},
-    'parent': {'refuse': ('ROOT_FAIL:munmap through an object over the whole page', 'nested_object_refused'),
-               'protect': ('ROOT_FAIL:mprotect through an object over the whole page',
-                           'protect_nested_object_refused'),
-               'mremap': ('ROOT_FAIL:mremap through an object over the whole mapping',
-                          'mremap_nested_object_refused'),
-               'advise': ('ROOT_FAIL:madvise through an object over the whole mapping',
-                          'advise_nested_object_refused')},
+    # Condition 4 skipped: a narrowed reference acts beyond its bounds. Since the stage that dropped M the
+    # partial munmap, mprotect and madvise of a narrowed reference rest on it too.
+    'cover': {'narrow': ('ROOT_FAIL:munmap through a narrowed reference', 'narrowed_reference_refused'),
+              'protect': ('ROOT_FAIL:mprotect of two pages through a reference narrowed to one',
+                          'protect_narrowed_reference_refused'),
+              'advise': ('ROOT_FAIL:madvise of two pages through a reference narrowed to one',
+                         'advise_narrowed_refused'),
+              'partial-narrow': ('ROOT_FAIL:munmap of two pages through a reference narrowed to the middle page',
+                                 'partial_narrowed_beyond_refused'),
+              'partial-renew': ('ROOT_FAIL:munmap of the middle and the last page through the reference renewed '
+                                'over the middle one', 'renewed_narrow_keeps_block')},
+    # The stage that dropped M: condition 3 accepts any depth below R (the object over the whole page or
+    # block, depth 2, passes). In refuse the munmap through it then ends only the object while the
+    # module releases the block, whose reference lives on: the program fails at that check.
+    'any-depth': {'refuse': ('ROOT_FAIL:munmap through an object over the whole page', 'nested_object_refused'),
+                  'protect': ('ROOT_FAIL:mprotect through an object over the whole page',
+                              'protect_nested_object_refused'),
+                  'mremap': ('ROOT_FAIL:mremap through an object over the whole mapping',
+                             'mremap_nested_object_refused'),
+                  'advise': ('ROOT_FAIL:madvise through an object over the whole mapping',
+                             'advise_nested_object_refused'),
+                  'partial-narrow': ('ROOT_FAIL:munmap through an object over the whole block',
+                                     'partial_nested_object_refused')},
+    # The stack's arena at thread exit released without the CREVOKE on a1.
     'exit-operand': {'exit-renew': ('ROOT_STALE_READ', None)},
+    # The stage that dropped M: the partial munmap of a block's last mapped pages releases it without the
+    # CREVOKE on the passed reference; the stale read through a copy then reads the new mapping.
+    'no-last-revoke': {'partial-all': ('ROOT_STALE_READ', None),
+                       'partial-renew': ('ROOT_STALE_READ', None),
+                       'mremap': ('ROOT_STALE_READ', None)},
+    # The stage that dropped M: add() never sets the kernel-owned flag. With the hooks launcher's bypass,
+    # kernel-owned's munmap of the whole image reaches the module and succeeds, and the program's next
+    # fetch faults. (Every other mode meets the launcher's own check first.)
+    'no-kernel-owned': {'kernel-owned': ('ROOT_KERNEL_OWNED try=image-unmap', 'owned_image_unmap_refused',
+                                         'domain-fault')},
     'protect-check': {'protect': ('ROOT_FAIL:mprotect with an integer address',
                                   'protect_integer_address_refused')},
     'create-address': {'create-gate': ('ROOT_FAIL:thread create with a frame reference whose cursor '
@@ -579,16 +646,6 @@ CONTROL_CUTS = {
     # preparation fails (stage 4f's pages_finish): pages-closed's unheld tagged page reaches Linux with
     # its tag (no "clear in place" line, the kernel's count grows).
     'no-close-clear': {},
-    # Block A: ref_child by depth alone (a live record deeper than M passes condition 3, without the step
-    # from M to P in the preorder list): the object over the whole page or mapping, a grandchild of M,
-    # is accepted, so the refuse mode fails at it, and protect, mremap and advise as for 'parent'.
-    'child-depth': {'refuse': ('ROOT_FAIL:munmap through an object over the whole page', 'nested_object_refused'),
-                    'protect': ('ROOT_FAIL:mprotect through an object over the whole page',
-                                'protect_nested_object_refused'),
-                    'mremap': ('ROOT_FAIL:mremap through an object over the whole mapping',
-                               'mremap_nested_object_refused'),
-                    'advise': ('ROOT_FAIL:madvise through an object over the whole mapping',
-                               'advise_nested_object_refused')},
 }
 # Launcher controls (--launcher-control): the mode each must break, and how. A third element says
 # how the mode ends: 'launcher-fault' (exit 139 without a domain fault: the launcher itself faulted),
@@ -734,18 +791,20 @@ def expected_refusals(mode, control, bypass, frame_floor, victim_reason, range_b
     if bypass and mode in ('exit-length', 'exit-huge'):
         # The stack named with a wrong length.
         refusals.append(('range is not the mapping', 'thread exit'))
-    if control in ('parent', 'child-depth') and mode == 'refuse':
+    if control == 'any-depth' and mode == 'refuse':
         return refusals[:1]                 # the address; the nested object is accepted
-    if control in ('parent', 'child-depth') and mode == 'protect':
+    if control == 'any-depth' and mode == 'protect':
         return refusals[:3]                 # the nested object is accepted
-    if control in ('parent', 'child-depth') and mode == 'mremap':
+    if control == 'any-depth' and mode == 'mremap':
         return []                           # the nested object is accepted
-    if control in ('parent', 'child-depth') and mode == 'advise':
+    if control == 'any-depth' and mode == 'advise':
         return refusals[:3]                 # the nested object is accepted
-    if control == 'parent' and mode == 'exit-victim' and victim_reason == 'not the mapping':
-        refusals[0] = ('does not cover the mapping', 'thread exit')
-    if control == 'cover' and mode == 'narrow':
+    if control == 'any-depth' and mode == 'partial-narrow':
+        return refusals[:1]                 # the narrowed reference; the nested object is accepted
+    if control == 'cover' and mode in ('narrow', 'partial-narrow', 'partial-renew'):
         return []
+    if control == 'cover' and mode in ('protect', 'advise'):
+        return refusals[:2]                 # the integer and the stale reference; the narrowed one passes
     if control == 'frames-insert-only' and mode == 'partial-fixed':
         return []                           # the refill faults before the refused MAP_FIXED
     return refusals
@@ -816,6 +875,8 @@ def main():
         p.error('--launcher-control needs --launcher')
     if a.control == 'create-address' and not a.launcher_frame_floor:
         p.error('--control create-address needs a --launcher built --launcher-frame-floor')
+    if a.control == 'no-kernel-owned' and not (a.launcher_hooks and a.root_grants):
+        p.error('--control no-kernel-owned needs --launcher-hooks and root grants (the launcher\'s bypass)')
 
     a.work.mkdir(parents=True, exist_ok=False)
     stage = a.work / 'stage'
@@ -834,6 +895,7 @@ def main():
 
     def run_mode(mode):
         env = ' '.join(e for e in (HOOK_ENV.get(mode, '') if a.launcher_hooks else '',
+                                   HOOKS_ROOT_ENV.get(mode, '') if a.launcher_hooks and a.root_grants else '',
                                    MODE_ENV.get(mode, '')) if e)
         before, after = [], []
         if mode in MODULE_HOOK_PARAMS:
@@ -1023,6 +1085,8 @@ echo VIRTUAL_STAGED_DONE
                 continue
             for name in checks[mode]:
                 if mode in SUBLET_MODES and a.ids != 63:
+                    tests[f'{mode}:{name}:skipped'] = re.search(rf'^ROOT_SKIP:{name}:\S', part, re.M) is not None
+                elif name in HOOKS_ROOT_ONLY and not (a.launcher_hooks and a.root_grants):
                     tests[f'{mode}:{name}:skipped'] = re.search(rf'^ROOT_SKIP:{name}:\S', part, re.M) is not None
                 elif a.root_grants or name not in ROOT_ONLY:
                     tests[f'{mode}:{name}'] = f'ROOT_CHECK:{name}:PASS' in part
@@ -1225,7 +1289,9 @@ echo VIRTUAL_STAGED_DONE
                 victim_reason = None
                 if mode == 'exit-victim':
                     operand = line(r'^ROOT_OPERAND own_stack_at_victim type=(\d+) adjacent=1 tries=\d+$', part)
-                    victim_reason = 'not a reference' if operand == '7' else 'not the mapping'
+                    # A live reference of another block (the own stack's): depth 1, but its bounds do not
+                    # cover the victim (condition 4). Under M it failed condition 3 ("not the mapping").
+                    victim_reason = 'not a reference' if operand == '7' else 'does not cover the mapping'
                     tests['exit-victim:operand_is_a_reference'] = operand == '1'
                 expected = expected_refusals(mode, a.control, a.launcher_bypass,
                                              a.launcher_frame_floor, victim_reason,

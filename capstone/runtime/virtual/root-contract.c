@@ -1,12 +1,15 @@
-/* Root grants (module parameter root_grants=1): each mapping is a reservation, a record M that the
- * kernel derives from the one reference over the address space and keeps to itself, and the
- * program's reference P is a child of M. Every request of the program to end a mapping comes with
- * P: munmap, the stack at thread exit, the frame's hand-over at thread creation (stages 2 to 4 of
- * docs/plans/2026-11-12-address-space-root-adapter.md). The kernel accepts the reference
- * only if it is a live child of M whose bounds cover the mapping as mmap exposed it, and the call
- * names that whole length; then it ends the mapping with CREVOKE of M. An mprotect comes with P
- * too and may name part of the mapping, which P must cover. run-root-grants.py runs this program
- * once per mode (argv[1]) in one boot. Build with the virtual SDK.
+/* Root grants (module parameter root_grants=1): each mapping is a block of depth 1, a child of the
+ * one reference over the address space, R, which only the kernel holds; the kernel keeps no reference
+ * to the block. Every request of the program to end a block or to change its pages comes with a
+ * reference: munmap, the stack at thread exit, the frame's hand-over at thread creation, mprotect,
+ * madvise, MAP_FIXED and mremap (stages 2 to 4f and the stage "drop M" of
+ * docs/plans/2026-11-12-address-space-root-adapter.md). The kernel accepts a reference only if it is
+ * live, its record lies one level below R (a block's, never an object's inside the block) and its
+ * bounds cover the page range that the call names; a call that removes the block's last mapped pages,
+ * a call that names the whole block included, ends the block with CREVOKE on that reference. The
+ * kernel-owned blocks (the image, the main stack, the shared region, the startup block) refuse every
+ * such request, in both modes. run-root-grants.py runs this program once per mode (argv[1]) in one
+ * boot. Build with the virtual SDK.
  *
  * Every mode first reads the module's parameter root_grants (ROOT_GRANT_TYPE: 1 with root grants, 0
  * without; until block A it read the type of a grant, non-linear or linear, which the 63-bit format
@@ -348,15 +351,20 @@
  *   prot_none_page_counts           with the first page PROT_NONE and the others removed, the block
  *                                   lives
  *   count_exact_with_mprotect       the first page restored keeps its data
- *   last_page_ends_block            its munmap ends the block; the old reference must fault with 25
- *                                   at the reused address
- * partial-narrow (exit 0):
- *   partial_narrowed_refused, partial_nested_object_refused, partial_address_refused (root grants)
- *                                   a reference narrowed to the page, an object over the whole block
- *                                   and an integer address cannot remove a page
+ *   last_page_ends_block            its munmap ends the block (CREVOKE on the passed reference); a copy
+ *                                   of the block's reference that the program stored in another mapping
+ *                                   must fault with 25 at the reused address
+ * partial-narrow (exit 0): a reference acts only on the pages its bounds cover.
+ *   partial_narrowed_beyond_refused, partial_nested_object_refused, partial_address_refused (root grants)
+ *                                   a reference narrowed to the middle page cannot remove the middle
+ *                                   and the last page; an object over the whole block (depth 2) and an
+ *                                   integer address cannot remove a page
  *   partial_beyond_block_refused    a range beyond the block: EINVAL
- *   partial_through_moved_reference the block's reference moved to the page removes it
- *   whole_unmap_with_hole           munmap of the whole block with its hole ends it
+ *   partial_narrowed_removes_own_page
+ *                                   the reference narrowed to the middle page removes that page, and
+ *                                   the block lives on
+ *   partial_through_moved_reference the block's reference moved to the last page removes it
+ *   whole_unmap_with_hole           munmap of the whole block with its holes ends it
  * partial-fixed (exit 0; the refill checks need root grants):
  *   fixed_refill_reads_zero         MAP_FIXED into the hole returns the reference; the page reads zero
  *   removed_page_tags_cleared       a reference stored in the page before its removal is gone
@@ -448,9 +456,10 @@
  * The growth modes of the 63-bit format (they skip in the older formats, which have no failure result
  * and end the context at exhaustion):
  * grow-maps (exit 0):
- *   grow_maps_through_grants        2,500 one-page mmaps (5,000 records, more than the first batch of
- *                                   4,096 slots) all succeed: the module grows the table before its own
- *                                   CDERIVEs (table_growths rises), and no pressure escape is needed
+ *   grow_maps_through_grants        5,000 one-page mmaps (5,000 records, one each, more than the first
+ *                                   batch of 4,096 slots) all succeed: the module grows the table before
+ *                                   its own CDERIVEs (table_growths rises), and no pressure escape is
+ *                                   needed
  * grow-objects (exit 0):
  *   grow_objects_through_escape     6,000 objects of 48 bytes all come from malloc: the table grows,
  *                                   through the pressure escape too (pressure_escapes and table_growths
@@ -458,6 +467,10 @@
  * nogrow-map (exit 0; module loaded with node_max_pages=16, one batch):
  *   nogrow_map_enomem               mmap answers ENOMEM once the table is full, without a loop (a few
  *                                   escapes at most), and NOGROW is set
+ *   nogrow_map_one_record           then malloc takes the records that are left and the free of one
+ *                                   object reserved before the fill gives one back: one mmap fits into
+ *                                   it and works, and the next one answers ENOMEM (an mmap needs one
+ *                                   record, the block's; the F4 part 2 module needs two and fails here)
  *   nogrow_map_recovers             after 300 munmaps an mmap succeeds again
  * nogrow-malloc (exit 0; node_max_pages=16):
  *   nogrow_malloc_null              malloc returns NULL with ENOMEM once the table is full, without a
@@ -471,6 +484,34 @@
  *                                   frees it answers NULL with the object intact or, once the frees
  *                                   made room, a new object with the contents, which it must reach; a
  *                                   read of a lost object would fault 25
+ * The stage that dropped the reservation record M (blocks of depth 1):
+ * partial-renew (ends with a fault 25; root grants, skipped without):
+ *   renewed_narrow_keeps_block      the block's reference narrowed to the middle page of three and
+ *                                   renewed: it keeps the narrowed bounds; munmap of two pages through
+ *                                   it and of the whole block through the reference from before are
+ *                                   refused; it removes the middle page, the outer pages stay mapped and
+ *                                   the block keeps its range (16 new mappings lie outside it)
+ *   renewed_narrow_ends_block       a block of two pages loses its first page, its reference narrowed to
+ *                                   the second page is renewed and an object derived in it; the
+ *                                   reference from before cannot remove the page, the renewed one can,
+ *                                   and that ends the block; the last line reads through the object at
+ *                                   the reused address and must fault with 25
+ * mremap-move (ends with a fault 25):
+ *   mremap_move_part_removes_pages  mremap of the middle page of three to two pages moves it: the new
+ *                                   mapping holds its data, the old page is a hole, the block lives on
+ *   mremap_move_whole_ends_block    mremap of a whole block of two pages to three moves it and ends the
+ *                                   old block: a copy of its reference cannot unmap it; the last line
+ *                                   reads through an object derived in it at the reused address and must
+ *                                   fault with 25
+ * kernel-owned (exit 0): the image (gp) and the main stack (sp):
+ *   owned_image_unmap_refused       munmap of the whole image and of its last page: EINVAL
+ *   owned_image_mremap_refused      mremap shrinking, growing (MREMAP_MAYMOVE) and to its own size: EINVAL
+ *   owned_image_mprotect_refused    mprotect of its last page: EINVAL, the protection unchanged
+ *   owned_stack_unmap_refused, owned_stack_mremap_refused, owned_stack_mprotect_refused
+ *                                   the same for the main stack (its lowest page)
+ *   owned_flag_refuses_each         (root grants and the hooks launcher's CAPSTONE_VM_TEST_OWNED_BYPASS,
+ *                                   skipped otherwise) every one of those requests reached the module,
+ *                                   whose kernel-owned flag refused it: owned_refused rose at each
  *
  * registered() asks the launcher whether an address lies in a registered mapping, by integer: a
  * futex wake of no waiter there answers 0, outside every mapping EFAULT.
@@ -815,8 +856,8 @@ static int mode_renew(int through_object)
 
 static int protected_as(unsigned long address, const char *rights);
 
-/* mremap: the libc's mremap asks the mapping check, then maps a new reservation, copies the
- * contents with their tags and unmaps the old reservation through the program's reference
+/* mremap: the libc's mremap asks the mapping check, then maps a new block, copies the
+ * contents with their tags and unmaps the old block through the program's reference
  * (mapping.c). The stored reference at offset 64 names another mapping. */
 static int mode_mremap(void)
 {
@@ -2888,13 +2929,16 @@ static int mode_partial_hole(void)
 
 /* partial-all (ends with a fault): the pages of a block go one by one. Unmapping a removed page again
  * changes nothing, a PROT_NONE page still counts as mapped, and the munmap of the last page that is
- * still mapped ends the block: the old reference must then fault with 25 at the reused address. */
+ * still mapped ends the block with CREVOKE on the reference it passes: every copy of that reference,
+ * here one stored in another mapping, must then fault with 25 at the reused address. */
 static int mode_partial_all(void)
 {
     (void)grant();
+    char **saved = (char **)map(PAGE);
     char *four = map(4 * PAGE);
     unsigned long base = cursor(four);
     memset(four, 0x41, 4 * PAGE);
+    *saved = four;
 
     require(!munmap(four + PAGE, PAGE), "munmap of the second page");
     for (unsigned i = 0; i < 3; ++i)
@@ -2918,23 +2962,26 @@ static int mode_partial_all(void)
     require(!munmap(four, PAGE), "munmap of the last page that is still mapped");
     require(!registered(base), "the block has ended");
     pass("last_page_ends_block");
-    stale = four;
+    stale = *saved;
     stale_read_bytes(base, 4 * PAGE);
     return 0;
 }
 
-/* partial-narrow (exit 0): only the block's own reference removes pages, whatever its cursor. */
+/* partial-narrow (exit 0): a reference acts only on the pages its bounds cover, whatever its cursor. A
+ * reference narrowed to the middle page removes that page and no other; an object over the whole block
+ * and an integer address remove none. */
 static int mode_partial_narrow(void)
 {
     (void)grant();
     char *three = map(3 * PAGE);
     unsigned long base = cursor(three);
     memset(three, 0x21, 3 * PAGE);
+    char *narrow = __builtin_capstone_cap_shrink(three, base + PAGE, base + 2 * PAGE);
     if (root_grants) {
-        char *narrow = __builtin_capstone_cap_shrink(three, base + PAGE, base + 2 * PAGE);
-        require(refused(munmap(narrow, PAGE)), "munmap through a reference narrowed to the page");
-        require(three[PAGE] == 0x21, "the page after the refusal");
-        pass("partial_narrowed_refused");
+        require(refused(munmap(narrow, 2 * PAGE)),
+                "munmap of two pages through a reference narrowed to the middle page");
+        require(three[PAGE] == 0x21 && three[2 * PAGE] == 0x21, "the pages after the refusal");
+        pass("partial_narrowed_beyond_refused");
         char *object = capstone_cap_derive(three, 0, 3 * PAGE);
         require(refused(munmap(object + PAGE, PAGE)), "munmap through an object over the whole block");
         require(three[PAGE] == 0x21 && object[PAGE] == 0x21, "the page after the refusal");
@@ -2943,17 +2990,21 @@ static int mode_partial_narrow(void)
         pass("partial_address_refused");
         capstone_cap_release(object);
     } else {
-        skip("partial_narrowed_refused", BY_ADDRESS);
+        skip("partial_narrowed_beyond_refused", BY_ADDRESS);
         skip("partial_nested_object_refused", BY_ADDRESS);
         skip("partial_address_refused", BY_ADDRESS);
     }
     require(refused(munmap(three + 2 * PAGE, 2 * PAGE)), "munmap of a range beyond the block");
     require(three[2 * PAGE] == 0x21, "the last page after the refusal");
     pass("partial_beyond_block_refused");
-    require(!munmap(three + PAGE, PAGE), "munmap through the block's reference moved to the page");
-    require(three[0] == 0x21 && three[2 * PAGE] == 0x21, "the outer pages");
+    require(!munmap(narrow, PAGE), "munmap of the middle page through the reference narrowed to it");
+    require(three[0] == 0x21 && three[2 * PAGE] == 0x21 && registered(base) && !registered(base + PAGE),
+            "the outer pages and the block after the removal");
+    pass("partial_narrowed_removes_own_page");
+    require(!munmap(three + 2 * PAGE, PAGE), "munmap through the block's reference moved to the last page");
+    require(three[0] == 0x21 && registered(base), "the first page and the block");
     pass("partial_through_moved_reference");
-    require(!munmap(three, 3 * PAGE), "munmap of the whole block with its hole");
+    require(!munmap(three, 3 * PAGE), "munmap of the whole block with its holes");
     require(!registered(base), "the block has ended");
     pass("whole_unmap_with_hole");
     return 0;
@@ -3655,10 +3706,11 @@ static void **pointer_array(unsigned long n)
     return array;
 }
 
-#define GROW_MAPS 2500UL
+#define GROW_MAPS 5000UL
 #define GROW_OBJECTS 6000UL
 
-/* grow-maps: more mappings than the first batch holds records for, two records each. */
+/* grow-maps: more mappings than the first batch holds records for, one record each (the block; two
+ * before the stage that dropped the reservation record M, when GROW_MAPS was 2,500). */
 static int mode_grow_maps(void)
 {
     (void)grant();
@@ -3732,27 +3784,55 @@ static void *(*volatile try_realloc)(void *, size_t) = realloc;
 /* At most this many pressure escapes while the table fills: one answer sets NOGROW. */
 #define NOGROW_ESCAPES 4L
 
-/* nogrow-map (node_max_pages=16): mmap until the table is full. */
+/* nogrow-map (node_max_pages=16): mmap until the table is full. Each mmap needs one record, the block's.
+ * The test then makes exactly one record free whatever a mapping costs: malloc takes every record the
+ * mmaps left, and the free of one object reserved before the fill gives back one. One mmap then fits and
+ * the next one does not (the module of F4 part 2 needed two records, M and P, and answers ENOMEM there; a
+ * munmap would free two records under that module, so it cannot be the test's one record). */
 static int mode_nogrow_map(void)
 {
     (void)grant();
     if (!sublet_format()) {
         skip("nogrow_map_enomem", "the older formats end the context at exhaustion");
+        skip("nogrow_map_one_record", "the older formats end the context at exhaustion");
         skip("nogrow_map_recovers", "the older formats end the context at exhaustion");
         return 0;
     }
     void **maps = pointer_array(NOGROW_LIMIT);
     long escapes = module_number("pressure_escapes"), sets = module_number("nogrow_sets");
-    unsigned long done = 0;
+    unsigned long done = 0, filled, rests = 0;
     int error = 0;
+    void *rest[16];
+    void *spare = try_malloc(48), *sibling = try_malloc(48);
+    require(spare && sibling, "two objects before the table fills");
     for (; done < NOGROW_LIMIT; ++done) {
         errno = 0;
         char *p = mmap(NULL, PAGE, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
         if (p == MAP_FAILED) { error = errno; break; }
         maps[done] = p;
     }
+    filled = done;
     long escapes_after = module_number("pressure_escapes"), sets_after = module_number("nogrow_sets");
     require(done >= 300, "the first batch holds more than 300 mappings");
+
+    while (rests < 16 && (rest[rests] = try_malloc(48)) != NULL)
+        ++rests;
+    require(rests < 16, "malloc takes the records that the mmaps left");
+    free(spare);
+    errno = 0;
+    char *one = mmap(NULL, PAGE, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    int one_errno = errno, one_ok = one != MAP_FAILED, one_reads = 0;
+    if (one_ok) {
+        one[8] = 0x55;
+        one_reads = one[8] == 0x55;
+        maps[done++] = one;
+    }
+    errno = 0;
+    char *extra = mmap(NULL, PAGE, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    int extra_errno = errno, full_again = extra == MAP_FAILED;
+    if (!full_again)
+        maps[done++] = extra;
+
     unsigned long keep = done - 300;
     for (unsigned long i = keep; i < done; ++i)
         require(!munmap(maps[i], PAGE), "munmap at exhaustion");
@@ -3763,12 +3843,20 @@ static int mode_nogrow_map(void)
     for (unsigned long i = 0; i < keep; ++i)
         require(!munmap(maps[i], PAGE), "munmap of the rest");
     printf("ROOT_NOGROW_MAP maps=%lu errno=%d escapes=%ld nogrow_sets=%ld recovered=%d nogrow_clears=%ld\n",
-           done, error, escapes_after - escapes, sets_after - sets, recovered, clears);
+           filled, error, escapes_after - escapes, sets_after - sets, recovered, clears);
+    for (unsigned long i = 0; i < rests; ++i)
+        free(rest[i]);
+    free(sibling);
+    printf("ROOT_NOGROW_ONE rests=%lu one=%d one_errno=%d one_reads=%d extra=%d extra_errno=%d\n", rests,
+           one_ok, one_errno, one_reads, !full_again, extra_errno);
     fflush(stdout);
-    require(done < NOGROW_LIMIT && error == ENOMEM, "mmap answers ENOMEM once the table is full");
+    require(filled < NOGROW_LIMIT && error == ENOMEM, "mmap answers ENOMEM once the table is full");
     require(escapes_after - escapes <= NOGROW_ESCAPES && sets_after > sets,
             "NOGROW is set, without a loop of escapes");
     pass("nogrow_map_enomem");
+    require(one_ok && one_reads, "an mmap fits into the one record that the free gave back");
+    require(full_again && extra_errno == ENOMEM, "the next mmap answers ENOMEM: the table is full again");
+    pass("nogrow_map_one_record");
     require(recovered, "an mmap succeeds again after munmaps");
     pass("nogrow_map_recovers");
     return 0;
@@ -3898,6 +3986,200 @@ static int mode_realloc_exhausted(void)
     return 0;
 }
 
+/* ---- The stage that dropped the reservation record M: blocks of depth 1 ---- */
+
+/* partial-renew (ends with a fault 25; root grants): a reference narrowed to part of a block and renewed
+ * is a block's reference with the narrower bounds (CRENEW keeps the record's place and depth), and the
+ * reference from before is stale. It removes the pages it covers and ends the block only when they are
+ * the last mapped ones; mapped pages outside its bounds it cannot remove, and the block then keeps its
+ * address range. */
+static int mode_partial_renew(void)
+{
+    (void)grant();
+    if (!root_grants) {
+        skip("renewed_narrow_keeps_block", BY_ADDRESS);
+        skip("renewed_narrow_ends_block", BY_ADDRESS);
+        return 0;
+    }
+
+    char *three = map(3 * PAGE);
+    unsigned long base = cursor(three);
+    memset(three, 0x31, 3 * PAGE);
+    char *renewed = capstone_cap_renew(__builtin_capstone_cap_shrink(three, base + PAGE, base + 2 * PAGE));
+    printf("ROOT_PARTIAL_RENEW middle type=%lu base=0x%lx end=0x%lx\n", type_of(renewed),
+           base_of(renewed), end_of(renewed));
+    fflush(stdout);
+    require(type_of(renewed) == 1 && base_of(renewed) == base + PAGE && end_of(renewed) == base + 2 * PAGE &&
+            renewed[0] == 0x31, "the renewed reference keeps the narrowed bounds and the page's data");
+    require(refused(munmap(renewed, 2 * PAGE)),
+            "munmap of the middle and the last page through the reference renewed over the middle one");
+    require(refused(munmap(three, 3 * PAGE)), "munmap of the whole block through the reference from before");
+    require(!munmap(renewed, PAGE), "munmap of the middle page through the renewed reference");
+    require(registered(base) && !registered(base + PAGE) && registered(base + 2 * PAGE),
+            "the block lives on with the outer pages mapped");
+    require(!munmap(renewed, PAGE), "the renewed reference is still live: munmap of its hole again");
+    for (unsigned i = 0; i < 16; ++i) {
+        char *q = map(PAGE);
+        require(cursor(q) + PAGE <= base || cursor(q) >= base + 3 * PAGE,
+                "a new mapping lies outside the block");
+    }
+    pass("renewed_narrow_keeps_block");
+
+    char *two = map(2 * PAGE);
+    unsigned long base2 = cursor(two);
+    memset(two, 0x41, 2 * PAGE);
+    require(!munmap(two, PAGE), "munmap of the first page through the block's reference");
+    char *last = capstone_cap_renew(__builtin_capstone_cap_shrink(two, base2 + PAGE, base2 + 2 * PAGE));
+    char *object = capstone_cap_derive(last, 64, 64);
+    object[0] = 0x42;
+    require(last[64] == 0x42, "the object lies in the renewed block");
+    require(refused(munmap(two + PAGE, PAGE)), "munmap of the last page through the reference from before");
+    require(!munmap(last, PAGE), "munmap of the last mapped page through the renewed reference");
+    require(!registered(base2), "the block has ended");
+    pass("renewed_narrow_ends_block");
+    stale = object;
+    stale_read_bytes(base2, 2 * PAGE);
+    return 0;
+}
+
+/* mremap-move (ends with a fault 25): a move maps a new block, copies, and unmaps the old range through
+ * the reference the program passed. A move of part of a block removes only those pages, and the block
+ * lives on. A move of a whole block ends the old block with CREVOKE on that reference, so no reference
+ * into it, a copy of the block's reference or an object derived in it, reaches a later mapping at the
+ * old address; the last line reads through the object after the program mapped the old address again,
+ * and must fault with 25. */
+static char *volatile moved_copy;
+
+static int mode_mremap_move(void)
+{
+    (void)grant();
+    char *three = map(3 * PAGE);
+    unsigned long base3 = cursor(three);
+    memset(three, 0x51, 3 * PAGE);
+    char *part = mremap(three + PAGE, PAGE, 2 * PAGE, MREMAP_MAYMOVE);
+    require(part != MAP_FAILED && (cursor(part) + 2 * PAGE <= base3 || cursor(part) >= base3 + 3 * PAGE),
+            "mremap moves the middle page out of the block");
+    require(part[0] == 0x51 && part[PAGE] == 0 && three[0] == 0x51 && three[2 * PAGE] == 0x51,
+            "the moved page keeps its data, the outer pages keep theirs");
+    require(registered(base3) && !registered(base3 + PAGE) && registered(base3 + 2 * PAGE),
+            "the block lives on without the moved page");
+    pass("mremap_move_part_removes_pages");
+
+    char *two = map(2 * PAGE);
+    unsigned long base2 = cursor(two);
+    memset(two, 0x61, 2 * PAGE);
+    char *object = capstone_cap_derive(two, 64, 64);
+    moved_copy = two;
+    char *moved = mremap(two, 2 * PAGE, 3 * PAGE, MREMAP_MAYMOVE);
+    require(moved != MAP_FAILED && cursor(moved) != base2 && moved[0] == 0x61 &&
+            moved[2 * PAGE - 1] == 0x61 && moved[2 * PAGE] == 0, "mremap moves the whole block");
+    require(!registered(base2), "the old block has ended");
+    require(refused(munmap(moved_copy, 2 * PAGE)), "munmap through a copy of the old block's reference");
+    pass("mremap_move_whole_ends_block");
+    stale = object;
+    stale_read_bytes(base2, 2 * PAGE);
+    return 0;
+}
+
+/* kernel-owned (exit 0): the kernel's own blocks refuse munmap, mremap and mprotect, of the whole block
+ * or of a page, through the references the program holds to them: the image (gp) and the main stack
+ * (sp). The launcher refuses each request itself (its check of the program's mappings). With root grants
+ * and the hooks launcher's CAPSTONE_VM_TEST_OWNED_BYPASS, which skips that check, each request reaches
+ * the module instead, and the module's kernel-owned flag must refuse it: owned_refused rises at every
+ * one (owned_flag_refuses_each). Without the bypass that check skips. */
+static int owned_counting;
+static long owned_count;
+
+/* A request of the kernel-owned mode: it failed with EINVAL (refused), and where the run counts, the
+ * module's kernel-owned flag refused it, so owned_refused rose since the last request. */
+static int owned_refusal(int refused_einval, const char *request)
+{
+    long now;
+
+    if (!refused_einval)
+        return 0;
+    if (!owned_counting)
+        return 1;
+    now = module_number("owned_refused");
+    printf("ROOT_KERNEL_OWNED %s owned_refused=%ld\n", request, now);
+    fflush(stdout);
+    if (now <= owned_count)
+        return 0;
+    owned_count = now;
+    return 1;
+}
+
+static int mode_kernel_owned(void)
+{
+    (void)grant();
+    void *image, *sp = stack_pointer();
+    __asm__ volatile("movc %0, gp" : "=r"(image));
+    unsigned long image_base = base_of(image), image_bytes = end_of(image) - image_base;
+    unsigned long stack_base = base_of(sp), stack_bytes = end_of(sp) - stack_base;
+    char *text = at_address(image, image_base), *data = at_address(image, image_base + image_bytes - PAGE);
+    char *low = at_address(sp, stack_base);
+    char data_rights[4], low_rights[4];
+    const char *bypass = getenv("CAPSTONE_VM_TEST_OWNED_BYPASS");
+    protection(image_base + image_bytes - PAGE, data_rights);
+    protection(stack_base, low_rights);
+    owned_counting = root_grants && bypass && atoi(bypass) > 0;
+    owned_count = owned_counting ? module_number("owned_refused") : 0;
+    printf("ROOT_KERNEL_OWNED image=0x%lx+0x%lx stack=0x%lx+0x%lx counting=%d owned_refused=%ld\n",
+           image_base, image_bytes, stack_base, stack_bytes, owned_counting, owned_count);
+    fflush(stdout);
+    require(type_of(text) == 1 && type_of(data) == 1 && type_of(low) == 1 &&
+            !(image_bytes & (PAGE - 1)) && !(stack_bytes & (PAGE - 1)) && image_bytes > PAGE &&
+            stack_bytes > PAGE && (!owned_counting || owned_count >= 0),
+            "the references to the image and the main stack");
+
+    printf("ROOT_KERNEL_OWNED try=image-unmap\n");
+    fflush(stdout);
+    require(owned_refusal(refused(munmap(text, image_bytes)), "image-unmap") &&
+            owned_refusal(refused(munmap(data, PAGE)), "image-unmap-page"),
+            "munmap of the whole image and of its last page");
+    pass("owned_image_unmap_refused");
+    errno = 0;
+    require(owned_refusal(mremap(text, image_bytes, image_bytes - PAGE, 0) == MAP_FAILED && errno == EINVAL,
+                          "image-shrink"), "mremap shrinking the image");
+    errno = 0;
+    require(owned_refusal(mremap(text, image_bytes, image_bytes + PAGE, MREMAP_MAYMOVE) == MAP_FAILED &&
+                          errno == EINVAL, "image-grow"), "mremap growing or moving the image");
+    errno = 0;
+    require(owned_refusal(mremap(text, image_bytes, image_bytes, MREMAP_MAYMOVE) == MAP_FAILED &&
+                          errno == EINVAL, "image-same"), "mremap of the image to its own size");
+    pass("owned_image_mremap_refused");
+    errno = 0;
+    require(owned_refusal(mprotect(data, PAGE, PROT_READ) == -1 && errno == EINVAL, "image-protect") &&
+            protected_as(image_base + image_bytes - PAGE, data_rights), "mprotect of the image's last page");
+    pass("owned_image_mprotect_refused");
+
+    require(owned_refusal(refused(munmap(low, stack_bytes)), "stack-unmap") &&
+            owned_refusal(refused(munmap(low, PAGE)), "stack-unmap-page"),
+            "munmap of the whole main stack and of its lowest page");
+    pass("owned_stack_unmap_refused");
+    errno = 0;
+    require(owned_refusal(mremap(low, stack_bytes, stack_bytes - PAGE, 0) == MAP_FAILED && errno == EINVAL,
+                          "stack-shrink"), "mremap shrinking the main stack");
+    errno = 0;
+    require(owned_refusal(mremap(low, stack_bytes, stack_bytes + PAGE, MREMAP_MAYMOVE) == MAP_FAILED &&
+                          errno == EINVAL, "stack-grow"), "mremap growing or moving the main stack");
+    errno = 0;
+    require(owned_refusal(mremap(low, stack_bytes, stack_bytes, MREMAP_MAYMOVE) == MAP_FAILED &&
+                          errno == EINVAL, "stack-same"), "mremap of the main stack to its own size");
+    pass("owned_stack_mremap_refused");
+    errno = 0;
+    require(owned_refusal(mprotect(low, PAGE, PROT_READ) == -1 && errno == EINVAL, "stack-protect") &&
+            protected_as(stack_base, low_rights), "mprotect of the main stack's lowest page");
+    pass("owned_stack_mprotect_refused");
+
+    if (owned_counting)
+        pass("owned_flag_refuses_each");
+    else
+        skip("owned_flag_refuses_each", root_grants ? "the launcher refuses these blocks first "
+             "(no CAPSTONE_VM_TEST_OWNED_BYPASS)" : "root_grants=0 has no kernel-owned flag");
+    return 0;
+}
+
 int main(int argc, char **argv)
 {
     const char *mode = argc > 1 ? argv[1] : "unmap";
@@ -3968,6 +4250,9 @@ int main(int argc, char **argv)
     if (!strcmp(mode, "nogrow-map")) return mode_nogrow_map();
     if (!strcmp(mode, "nogrow-malloc")) return mode_nogrow_malloc();
     if (!strcmp(mode, "realloc-exhausted")) return mode_realloc_exhausted();
+    if (!strcmp(mode, "partial-renew")) return mode_partial_renew();
+    if (!strcmp(mode, "mremap-move")) return mode_mremap_move();
+    if (!strcmp(mode, "kernel-owned")) return mode_kernel_owned();
     fail("unknown mode");
     return 1;
 }

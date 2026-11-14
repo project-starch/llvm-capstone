@@ -20,11 +20,12 @@
  * carries no capability rights (block A): the page table decides read, write and execute. */
 extern void *__capstone_vm_acquire(unsigned long, unsigned long, int, unsigned);
 /* The unmap service takes the mapping's reference itself in a0, with its tag, and the length in
- * a1. With root_grants the kernel ends the mapping only through that reference: a live reference
- * to the mapping (not to an object inside it, not a narrowed one) whose bounds cover the whole
- * mapping as mmap exposed it, and a1 must be that whole length. Since stage 4e a0's cursor and a1
- * may name any page range of the mapping: the kernel removes those pages and ends nothing, through
- * the mapping's own reference only. Without root grants the launcher reads the address from a0,
+ * a1. With root_grants the kernel acts only through that reference: a live reference to the mapping
+ * (not to an object inside it) whose bounds cover the page range that a0's cursor and a1 name. A call
+ * that names the whole mapping as mmap exposed it ends the mapping, with CREVOKE on that reference;
+ * since stage 4e any other page range of the mapping is removed and nothing ends, unless those were
+ * the last mapped pages, which ends the mapping too. A reference narrowed to part of the mapping
+ * removes only pages it covers. Without root grants the launcher reads the address from a0,
  * which is the reference's cursor. The thread-create service takes the frame's
  * reference in a0 and the exit service the stack's reference in a1, under the same rule. The
  * protect service takes the reference in a0 as well: with root_grants it must be a live reference
@@ -33,15 +34,16 @@ extern void *__capstone_vm_acquire(unsigned long, unsigned long, int, unsigned);
 extern long __capstone_vm_unmap(void *, unsigned long);
 extern long __capstone_vm_protect(void *, unsigned long, int);
 /* The mapping check (CV_SERVICE_MAPPING_CHECK) takes a reference, a length and flags: mremap's
- * validator of its old range (the reference covers the whole block, the range lies inside it and every
- * page of it is mapped), and with CV_CHECK_MOVE every page read-write (ENOTSUP otherwise). It changes
+ * validator of its old range (the range lies inside one block, the block's reference covers it and
+ * every page of it is mapped), and with CV_CHECK_MOVE every page read-write (ENOTSUP otherwise). It changes
  * nothing: mremap asks it before it copies. */
 extern long __capstone_vm_mapping_check(void *, unsigned long, unsigned long);
 /* The advise service (CV_SERVICE_ADVISE) takes a reference, a length and MADV_DONTNEED or MADV_FREE,
  * and checks the reference as the protect service does. The range reads zero afterwards. */
 extern long __capstone_vm_advise(void *, unsigned long, int);
-/* The refill service (CV_SERVICE_REFILL, stage 4e) takes the block's reference with its cursor at the
- * first page of a range, the range's length and a protection (mmap with MAP_FIXED inside the block). */
+/* The refill service (CV_SERVICE_REFILL, stage 4e) takes a block's reference that covers a range, with
+ * its cursor at the first page of the range, the range's length and a protection (mmap with MAP_FIXED
+ * inside the block). */
 extern long __capstone_vm_refill(void *, unsigned long, int);
 /* The resize service (CV_SERVICE_RESIZE, stage 4f) takes the block's reference with its cursor at the
  * first page of mremap's old range, the old length and the new length, and shrinks or grows that

@@ -26,10 +26,11 @@ void *mmap(void *addr, size_t n, int prot, int flags, int fd, off_t off)
     }
     unsigned long bytes;
     if (flags & MAP_FIXED) {
-        /* Stage 4e: MAP_FIXED only inside a mapping the program holds, through that mapping's own
-         * reference with its cursor at the first page: the kernel gives the range zero pages with
-         * prot (removed pages included), and only while the program derived no object below the
-         * mapping's reference (the refill rule; with root grants, EOPNOTSUPP without). The reference
+        /* Stage 4e: MAP_FIXED only inside a mapping the program holds, through a reference of that
+         * mapping (not of an object inside it) that covers the range, with its cursor at the first
+         * page: the kernel gives the range zero pages with prot (removed pages included), and only
+         * while the program derived no object below that reference (the refill rule; with root
+         * grants, EOPNOTSUPP without). The reference
          * comes back, as Linux returns the address. MAP_FIXED by a plain address, outside every
          * mapping or across two is refused (EINVAL). */
         if (!addr || (__builtin_capstone_cap_get_cursor(addr) & 4095)) {
@@ -112,23 +113,26 @@ int __madvise(void *p, size_t n, int advice) { return madvise(p, n, advice); }
  * reference with its cursor at the first page of the old range [p, p + old), any page range of one
  * block. Every path validates that old range before it changes anything, the same way: the range lies
  * inside one block, every page of it is logically mapped (EFAULT otherwise, as Linux answers for an
- * unmapped part of the old range), and with root grants p covers the whole block (EINVAL otherwise).
+ * unmapped part of the old range), and with root grants p is a reference of the block (not of an
+ * object inside it) that covers the old range (EINVAL otherwise).
  *   - Same page count: the mapping check (CV_SERVICE_MAPPING_CHECK) and p back, as Linux returns the
  *     same address.
  *   - Shrink or growth in place: one service (CV_SERVICE_RESIZE) validates the old range and then, in
  *     the same step, removes the tail [p + n, p + old) as a partial munmap does (the block keeps the
  *     pages of the new length, so the shrink never ends it, and p keeps working), or refills the new
  *     tail [p + old, p + n) when every page of it is a removed page inside the block's original extent
- *     (its visible length) and no object is derived below p (the refill rule of MAP_FIXED): those
+ *     (its visible length) that p covers and no object is derived below p (the refill rule of
+ *     MAP_FIXED): those
  *     pages read zero afterwards with the protection of the range's last page, and p comes back.
  *     Where growth in place is not possible the kernel answers ENOMEM; without MREMAP_MAYMOVE that is
  *     the answer (as Linux answers when there is no room), with it the range moves.
  *   - Move: the mapping check with CV_CHECK_MOVE (the validator, and every page read-write: ENOTSUP
  *     otherwise; nothing changed, never a fault in the copy), then a new read-write private anonymous
  *     mapping, a copy of the old range's bytes with their tags (memcpy), and a munmap of [p, p + old)
- *     through p, which ends the block if that range held every page still mapped (every capability to
- *     it is then revoked, the lifetime contract a moved mapping must keep) and removes those pages
- *     otherwise.
+ *     through p, which ends the block with CREVOKE on p if that range held every page still mapped
+ *     (every capability to it is then revoked, the lifetime contract a moved mapping must keep: an
+ *     address of the old block goes to another mapping only after the block has ended) and removes
+ *     those pages otherwise.
  * The move's check states what holds when it answers, not what holds at the copy: another thread of
  * the program may end the old mapping or change its protection between the check and the copy, and
  * the copy then faults instead of answering EINVAL. That affects only the program itself, as a

@@ -80,12 +80,16 @@ struct cv_thread_control {
  * clear_child_tid store into a stack that is gone. The
  * module refuses a stack that is the thread's own frame, and releases that
  * arena once, as the frame. With root_grants the stack is a request of
- * the program: the module checks the reference in a1 before it clears the
- * frame, and after the thread has stopped it ends the stack's reservation
- * (CREVOKE of M) and releases the arena. released (out): CV_EXIT_FRAME and
+ * the program: the module checks the reference in a1 and ends the stack's
+ * block through it (CREVOKE on a1, while the paused thread's frame still holds
+ * it) before the outcome is written, and after the thread has stopped it
+ * releases the arena. A kernel-owned block (root_grants) is never a stack the
+ * module releases. released (out): CV_EXIT_FRAME and
  * CV_EXIT_STACK for the arenas the module released; the launcher then unmaps
- * those ranges. The module writes it before the first irreversible step, and
- * with root_grants nothing after that step can fail. A refused or impossible
+ * those ranges. The module writes it before the thread stops, and with
+ * root_grants nothing after that can fail; the stack's CREVOKE comes before it,
+ * so if that write fails, the ioctl answers EFAULT, the ended stack stays
+ * registered and the launcher ends the program. A refused or impossible
  * release does not stop the exit: the thread exits and that arena stays
  * registered (a leak, counted in exit_kept and reported).
  *
@@ -156,9 +160,9 @@ struct cv_touch {
  *              and tags), mints a new ancestor and gives the arena a new id, returned in .id. */
 #define CV_PARK _IOW('V', 30, __u64)
 #define CV_REVIVE _IOWR('V', 31, struct cv_map)
-/* With root_grants, CV_RETIRE releases only an arena whose mapping has already ended: through a
+/* With root_grants, CV_RETIRE releases only an arena whose block has already ended: through a
  * program's request (CV_UNMAP, the frame's hand-over at CV_THREAD_CREATE) or a park. While the
- * mapping lives it is refused with EPERM and changes nothing. The launcher's one CV_RETIRE is the
+ * block lives it is refused with EPERM and changes nothing. The launcher's one CV_RETIRE is the
  * eviction of a parked mapping from its pool. CV_PARK is refused with EPERM: a park is a
  * program's request and goes through CV_UNMAP. */
 /* A program's own unmap (CV_SERVICE_UNMAP): thread is the caller, paused at the service, id the
@@ -167,11 +171,14 @@ struct cv_touch {
  * did, one of the CV_UNMAP_* values; the launcher unmaps the range unless it reads
  * CV_UNMAP_PARKED. One call decides, so a refused reference is refused and counted once. Without
  * root_grants the module ignores thread. With root_grants the reference is the authority: the
- * module reads it with its tag from the caller's saved a0 and ends the mapping only if it is a
- * live reference whose record is a child of the mapping's reservation record and whose bounds
- * cover the length the program's mmap exposed, and the call names exactly that length
- * (capstone_vm.c, request_operand). A refusal is EINVAL and changes nothing. The module writes
- * park (out) before it ends anything, and nothing after that can fail. */
+ * module reads it with its tag from the caller's saved a0 and ends the block only if it is a live
+ * reference whose record lies one level below R (a block's, never an object inside it) and whose
+ * bounds cover the length the program's mmap exposed, and the call names exactly that length
+ * (capstone_vm.c, request_operand). The module writes park (out) and then ends the block with
+ * CREVOKE on that reference; a refused CREVOKE answers EINVAL, the launcher then discards park (out),
+ * and nothing has changed. Every other refusal is EINVAL and changes nothing too; so is a kernel-owned
+ * block with root_grants, and the image without (as before the stage "drop M"). After the CREVOKE
+ * nothing can fail. */
 struct cv_unmap {
     __u64 thread, id, park;
 };
@@ -186,11 +193,10 @@ struct cv_unmap {
  * PROT_EXEC (a2) is refused with EACCES (only the image's text is executable), and a range that
  * holds a page a partial munmap removed with ENOMEM (mprotect) or EFAULT (the mapping check).
  * Without root_grants the module accepts the rest. With root_grants the reference is the authority,
- * as for munmap: the module accepts only a live reference whose record is a child of the mapping's
- * reservation record and whose bounds cover [a0's cursor, + a1) (mprotect, any page range inside
- * the visible length) or the whole visible length, whatever its cursor (the mapping check, any page
- * range inside it: stage 4e). It ends nothing. A refusal of the reference is EINVAL, and the
- * launcher then changes nothing. */
+ * as for munmap: the module accepts only a live reference whose record lies one level below R and
+ * whose bounds cover [a0's cursor, + a1), any page range inside the visible length, whatever its
+ * cursor. A kernel-owned block is refused with root_grants, the image without. It ends nothing. A
+ * refusal is EINVAL, and the launcher then changes nothing. */
 struct cv_protect {
     __u64 thread, id;
 };
@@ -231,9 +237,9 @@ struct cv_word {
  * caller, paused at the service; meta and exchange are the arenas the launcher resolved from the
  * cursors of a0 (the meta block's reference) and a1 (the exchange region's); meta_bytes is the
  * meta block's length, a2 the exchange region's. With root_grants each reference must pass the
- * whole-mapping check of munmap (a live reference whose record is a child of the mapping's
- * reservation record and whose bounds cover the visible length, which the call names). In both
- * modes neither arena may hold the frame of a thread (EBUSY). Ends nothing. A refused reference is
+ * whole-block check of munmap (a live reference whose record lies one level below R and whose bounds
+ * cover the visible length, which the call names) and neither arena may be kernel-owned (EINVAL). In
+ * both modes neither arena may hold the frame of a thread (EBUSY). Ends nothing. A refused reference is
  * EINVAL, and the launcher then refuses the attachment. */
 struct cv_attach {
     __u64 thread, meta, exchange, meta_bytes;
@@ -241,9 +247,10 @@ struct cv_attach {
 #define CV_ATTACH _IOW('V', 35, struct cv_attach)
 /* A program's madvise(MADV_DONTNEED or MADV_FREE) of [a0's cursor, + a1) in arena id
  * (CV_SERVICE_ADVISE, stage 4c): thread is the caller, paused at the service. With root_grants
- * the reference in a0 must be a live reference whose record is a child of the mapping's
- * reservation record and whose bounds cover the named page range, which may be part of the
- * mapping, as for mprotect. In both modes the arena may not hold the frame of a thread (EBUSY).
+ * the reference in a0 must be a live reference whose record lies one level below R and whose bounds
+ * cover the named page range, which may be part of the block, as for mprotect, and the block may not
+ * be kernel-owned (EINVAL). In both modes the arena may not hold the frame of a thread (EBUSY) or be the
+ * image (EINVAL).
  * zeroed (out): 1 if the module, after pinning every resident page of the range, overwrote every
  * page of it that it holds with zeros (data and tags); the launcher then changes nothing. 0 in the
  * unpinned mode, where the module holds no pages: the launcher gives the range back to Linux with
@@ -263,35 +270,43 @@ struct cv_advise {
  * the first two (block A: the refill service no longer takes the operation in a3):
  *   commit CV_PAGES_CHECK: the range (for a resize the old range) is a nonempty page range inside the
  *     visible length, the arena holds no thread's frame (EBUSY), MAP_FIXED asks for no PROT_EXEC (a2,
- *     EACCES), no other page operation of the context is open (EBUSY), and with root_grants a0 holds
- *     the block's own reference: live, a child of M, its bounds covering the whole visible length
- *     whatever its cursor (EINVAL otherwise). A resize first validates the whole old range: every page
- *     of it logically mapped (EFAULT). A growth needs every page of the new tail inside the visible
- *     length and removed (ENOMEM). MAP_FIXED and a growth follow the refill rule: no object derived
- *     below P (EINVAL for MAP_FIXED, ENOMEM for a growth; without root_grants EOPNOTSUPP and ENOMEM).
+ *     EACCES), no other page operation of the context is open (EBUSY), the block is not the image
+ *     (EINVAL), and with root_grants it is not kernel-owned (EINVAL) and a0 holds a block's reference:
+ *     live, its record one level below
+ *     R, its bounds covering the range whatever its cursor (EINVAL otherwise). A resize first validates
+ *     the whole old range: every page of it logically mapped (EFAULT). A growth needs every page of the
+ *     new tail inside the visible length, removed and covered by the reference (ENOMEM). MAP_FIXED and
+ *     a growth follow the refill rule: no object derived below the reference (EINVAL for MAP_FIXED,
+ *     ENOMEM for a growth; without root_grants EOPNOTSUPP and ENOMEM).
  *     Then the module pins every resident page of the range it does not hold yet and opens the
  *     operation: until its commit or abort no thread of the program runs and no page of the range is
  *     admitted. A removal of every logically mapped page that is left opens nothing: it ends the
- *     reservation in this call (CREVOKE of M and the release of the arena, as CV_UNMAP's retire) and
- *     answers ended 1, written before the end; the launcher then gives the whole extent back to Linux.
+ *     block in this call: ended 1 is written, then the CREVOKE on the passed reference (a refused one
+ *     answers EINVAL, the launcher discards ended, and nothing has changed), then the release of the
+ *     arena, as CV_UNMAP's retire; the launcher then gives the whole extent back to Linux.
  *   commit CV_PAGES_COMMIT, after the launcher changed the protection of the range with mprotect
  *     (PROT_NONE for a removal) and, for a refill, discarded its contents with MADV_DONTNEED: a refill
- *     asks the refill rule again and fails closed (ends the reservation, ended 1) if an object below P
- *     exists now; the module clears the tags of every page of the range it holds and unpins it,
+ *     asks the refill rule again and fails closed (ends the block through the request's reference,
+ *     ended 1) if an object below it exists now; the module clears the tags of every page of the range
+ *     it holds and unpins it,
  *     rebuilds the arena's frame set, updates the removed pages and the count of logically mapped
  *     pages, and closes the operation.
  *   commit CV_PAGES_ABORT, after the launcher's protection change failed and the launcher restored the
  *     range's protection: the module closes the operation and changes nothing. Only a protection change
  *     can be undone this way.
  *   commit CV_PAGES_FAIL (block A), after a refill's discard (MADV_DONTNEED) failed, possibly part way:
- *     the module fails closed, ends the reservation (CREVOKE of M, the sweep and the release of the
- *     arena) and answers ended 1; the launcher gives the extent back and answers EINVAL.
+ *     the module fails closed, ends the block (CREVOKE on the request's reference, the sweep and the
+ *     release of the arena) and answers ended 1; the launcher gives the extent back and answers
+ *     EINVAL.
  *   A commit that fails closed, at CV_PAGES_COMMIT or CV_PAGES_FAIL, clears the tags of every page of the
  *     arena before Linux reuses its frame: the pages it holds through the retire, and, if the retire's
  *     preparation cannot pin a resident page, every page it does not hold in place through the page
  *     table. If a page stays as it was there (a swapped, shared or huge page, outside the profile), the
  *     module answers ended CV_PAGES_ENDED_HELD instead of CV_PAGES_ENDED: the launcher keeps the whole
- *     extent mapped PROT_NONE and never gives it back to Linux.
+ *     extent mapped PROT_NONE and never gives it back to Linux. So it does when the CREVOKE on the
+ *     request's reference is refused (the reference was renewed or ended in the operation's window,
+ *     which only a hooks build allows), since the block may then live on in a renewal: the module then
+ *     keeps the arena registered and quarantined instead of releasing it.
  * removed (out): the arena's removed pages after the call, which the launcher compares with its own
  * count. A removed page is never admitted until a refill maps it again; no other mapping receives an
  * address inside the block while it lives. */

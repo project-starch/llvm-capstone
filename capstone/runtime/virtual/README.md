@@ -180,7 +180,7 @@ adds record pages published before the capacity when fewer slots than needed
 are available, and sets NOGROW exactly when the need, or more than the 256
 slots of the reserve, is still unmet afterwards; it never lets its own
 `CDERIVE` trap, refuses an `mmap` with `ENOMEM` when the table cannot grow and
-has no room for M and P, turns a `CDERIVE` that gives 0 into `ENOMEM`, and
+has no room for the block's one record, turns a `CDERIVE` that gives 0 into `ENOMEM`, and
 refuses to load without `root_grants=1` (`address-space-root.md`, section
 Mappings). The parameters `table_growths`, `pressure_escapes`, `nogrow_sets`
 and `nogrow_clears` count growths, answered escapes and NOGROW changes.
@@ -981,18 +981,26 @@ records grow through its metadata allocator; they have no fixed object-count lim
 Fork, shared tagged mappings, file-backed
 mmap, partial unmapping, swap, migration, application register editing by
 signals need further contracts. The qualified pthread subset is described
-above. Address hints remain unsupported. A partial munmap (stage 4e) removes a
-page range of one mapping through the mapping's own reference (bounds over the
-whole mapping, any cursor): the pages go `PROT_NONE` with their contents
-discarded and stay part of the mapping's VMAs, so no other mapping lands in the
-hole while the mapping lives, and the module never admits a removed page; no
-lifetime ends, and a live reference into the hole page-faults. The last page
-that is still mapped ends the mapping (`CREVOKE` of M), as a whole-mapping
-munmap does; unmapping a hole again changes nothing. `MAP_FIXED` works only
-inside a mapping, through its reference and while no object is derived below
-it (root grants; `EOPNOTSUPP` without), and refills the range with zero pages.
+above. Address hints remain unsupported. With root grants each mapping is a
+block of depth 1, a child of R; the kernel keeps no reference to it, and a
+request is accepted through a reference of the block (not of an object inside
+it) that covers the page range the call names, any cursor. A partial munmap
+(stage 4e) removes such a page range: the pages go `PROT_NONE` with their
+contents discarded and stay part of the mapping's VMAs, so no other mapping
+lands in the hole while the mapping lives, and the module never admits a
+removed page; no lifetime ends, and a live reference into the hole
+page-faults. A reference narrowed to part of a mapping removes only pages it
+covers. The call that removes the last pages that are still mapped ends the
+mapping (`CREVOKE` on the passed reference), as a whole-mapping munmap does;
+unmapping a hole again changes nothing. `MAP_FIXED` works only inside a
+mapping, through a covering reference and while no object is derived below it
+(root grants; `EOPNOTSUPP` without), and refills the range with zero pages.
+The kernel-owned blocks (the image, the main stack, the shared region, the
+startup block) refuse `munmap`, `mremap`, `mprotect`, `MAP_FIXED` and
+`madvise`: the launcher refuses them as its own mappings, and with root grants
+the module's kernel-owned flag refuses them as well.
 Public application `mremap` validates the whole old range first (inside one
-mapping, every page mapped: `EFAULT` otherwise; the mapping's own reference),
+mapping, every page mapped: `EFAULT` otherwise; a covering reference of the block),
 then shrinks in place (a partial munmap of the tail), grows in place into the
 mapping's own removed tail under the refill rule of `MAP_FIXED` (root grants
 only), and otherwise moves with `MREMAP_MAYMOVE` as map-copy-unmap (without

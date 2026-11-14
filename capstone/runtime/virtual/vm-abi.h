@@ -14,23 +14,27 @@
  * rights and a4 the kind); the page table decides read, write and execute. ENOMEM when the lifetime
  * table has no slot left for the mapping's reference and cannot grow. */
 #define CV_SERVICE_MAP 1
-/* a0 the mapping's reference, its cursor the first page; a1 the length. A call that names the whole
- * block, [base, + visible length), ends it (with root_grants through a live reference to the
- * mapping that covers it: CREVOKE of M). Since stage 4e a call that names any other page range
- * inside the block is a partial munmap, with root_grants only through the block's own reference,
- * whose bounds cover the whole block, whatever its cursor: the kernel removes those pages (they stay
- * part of the block's VMAs, PROT_NONE, their contents discarded); no lifetime ends, and no other
- * mapping receives addresses inside the block. Unmapping a removed page again changes nothing. The
- * removal of the last pages that are still mapped ends the block as a whole-block call does. A range
- * beyond the block, across two blocks or by a plain address (with root_grants) is refused (EINVAL).
+/* a0 the mapping's reference, its cursor the first page; a1 the length. With root_grants the
+ * reference must be a block's (live, its record one level below R, so no object inside the block)
+ * and cover the page range that the call names, whatever its cursor. A call that names the whole
+ * block, [base, + visible length), ends it: CREVOKE on the passed reference, then the pages go and the
+ * address range is free. Since stage 4e a call that names any other page range inside the block is a
+ * partial munmap: the kernel removes those pages (they stay part of the block's VMAs, PROT_NONE, their
+ * contents discarded); no lifetime ends, and no other mapping receives addresses inside the block. A
+ * reference narrowed to part of the block removes only pages it covers. Unmapping a removed page
+ * again changes nothing. The removal of the last pages that are still mapped ends the block as a
+ * whole-block call does, through the passed reference. A range beyond the block, across two blocks,
+ * by a plain address (with root_grants) or of a kernel-owned block (the image, the main stack, the
+ * shared region, the startup block) is refused (EINVAL).
  * A refusal by Linux (ENOMEM: a VMA split at the map count limit) changes nothing (stage 4f). With
  * root_grants=0 a partial munmap is authorised by the address alone: a legacy profile without the
  * reference guarantee. */
 #define CV_SERVICE_UNMAP 2
-/* a0: the start frame's reference. With root_grants the kernel checks it as a munmap operand and
- * ends the frame's mapping when it creates the thread. -EAGAIN: the kernel took the frame and the
- * launcher released it after a later failure, so the program must not unmap it; every other error
- * leaves the frame the program's. */
+/* a0: the start frame's reference. With root_grants the kernel checks it as a munmap operand of the
+ * whole one-page block and ends the frame's block through it as the last step of the thread's
+ * creation, after it wrote its answer. -EAGAIN: the kernel took the frame and the launcher released it
+ * after a later failure, so the program must not unmap it; every other error leaves the frame the
+ * program's. */
 #define CV_SERVICE_THREAD_CREATE 3
 #define CV_SERVICE_THREAD_EXIT 4
 /* a0 the thread id. 0 once that thread has exited, also when it exited before the call (thread
@@ -43,9 +47,9 @@
  * any page range inside the mapping, which the reference must cover. It ends nothing. A mapping
  * that holds a worker's transport answers EBUSY, as for munmap. PROT_EXEC is refused (EACCES): only
  * the image's text is executable. A range with a page that a partial munmap removed answers ENOMEM,
- * as Linux answers for an unmapped page. The image and the launcher's other mappings are refused
- * (EINVAL): the image's data reference covers the whole image, so only the page's write bit
- * protects its text. */
+ * as Linux answers for an unmapped page. The kernel-owned blocks (the image, the main stack, the
+ * shared region, the startup block) are refused (EINVAL): the image's data reference covers the whole
+ * image, so only the page's write bit protects its text. */
 #define CV_SERVICE_PROTECT 6
 #define CV_SERVICE_WAIT 7
 /* a0 the word's reference, a1 the operation (FUTEX_WAIT, FUTEX_WAKE and their BITSET forms), a2
@@ -66,7 +70,8 @@
 #define CV_SERVICE_FUTEX 8
 /* a0 the exit word's reference (or 0), a1 the reference of the mapping that holds the thread's
  * stack (or 0), a2 its length, a3 the status. With root_grants the stack is unmapped only through
- * a1, as for munmap. A refused stack does not stop the exit: the mapping stays, and the program can
+ * a1, as a munmap of the whole block, which ends it through a1. A refused stack does not stop the
+ * exit: the mapping stays, and the program can
  * still unmap it through a reference it kept. A stack of the wrong length is refused this way. An
  * exit word inside the stack does not keep it (stage 4e): the stack is released and the word is not
  * written, without an error, as Linux drops a clear_child_tid store into an unmapped stack. A stack
@@ -102,23 +107,24 @@
  * flags (stage 4f). mremap's validator of its old range: answers 0 if the range is a page range inside
  * one block (EINVAL otherwise, EBUSY while a worker's transport holds the block), every page of it is
  * logically mapped (EFAULT otherwise, as Linux answers for an unmapped part of mremap's old range),
- * and with root_grants a0 is the block's own reference, whose bounds cover the whole block (EINVAL
- * otherwise); with CV_CHECK_MOVE in a2 also every page of it read-write (ENOTSUP otherwise), the
+ * and with root_grants a0 is a block's reference whose bounds cover the range (EINVAL otherwise); a
+ * kernel-owned block is refused (EINVAL); with CV_CHECK_MOVE in a2 also every page of it read-write
+ * (ENOTSUP otherwise), the
  * condition of a move. Changes nothing. The libc's mremap asks it before it returns the reference of a
  * resize to the same page count (flags 0) and before it copies anything (CV_CHECK_MOVE). */
 #define CV_SERVICE_MAPPING_CHECK 15
 #define CV_CHECK_MOVE 1
 /* a0 the reference of a mapping, its cursor the first page; a1 the length; a2 MADV_DONTNEED or
  * MADV_FREE (EINVAL otherwise). The range reads zero afterwards. With root_grants the kernel checks
- * the reference as for mprotect: a live reference to the mapping, not to an object inside it,
+ * the reference as for mprotect: a live reference to the block, not to an object inside it,
  * whose bounds cover the page range. It ends nothing. A mapping that holds a worker's transport
- * answers EBUSY, as for mprotect. */
+ * answers EBUSY, as for mprotect, and a kernel-owned block EINVAL. */
 #define CV_SERVICE_ADVISE 16
 /* Stage 4e. a0 the block's reference, its cursor the first page of the range; a1 the length; a2 the
  * protection (PROT_EXEC refused with EACCES). (Block A dropped the operation in a3, which named
  * CV_PAGES_FIXED, the only one.)
- * MAP_FIXED inside the block: with root_grants only, through the block's own reference (bounds over
- * the whole block) and only while the program derived no object below it (the refill rule; EINVAL
+ * MAP_FIXED inside the block: with root_grants only, through a block's reference whose bounds cover
+ * the range and only while the program derived no object below it (the refill rule; EINVAL
  * otherwise, EOPNOTSUPP without root_grants); the range then reads zero with protection a2, removed
  * pages count as mapped again, and no lifetime ends. The same VMAs keep the range (stage 4f: mprotect
  * and MADV_DONTNEED, no new mapping), and a refusal by Linux of the protection change (ENOMEM: a VMA
@@ -131,8 +137,9 @@
  * first, as the mapping check does without CV_CHECK_MOVE (EINVAL, EBUSY, EFAULT). A shorter length
  * removes the tail [a0 + a2, a0 + a1) as a partial munmap does (the references stay valid, and the block
  * keeps at least the pages of the new length). A longer one refills the new tail [a0 + a1, a0 + a2)
- * under the refill rule of MAP_FIXED: every page of it removed and inside the block's visible length,
- * no object derived below the block's reference (ENOMEM otherwise, and always without root_grants:
+ * under the refill rule of MAP_FIXED: every page of it removed, inside the block's visible length and
+ * covered by the reference, no object derived below the reference (ENOMEM otherwise, and always
+ * without root_grants:
  * the libc then moves with MREMAP_MAYMOVE); the tail reads zero with the protection of the old range's
  * last page. A refusal by Linux (ENOMEM) changes nothing. */
 #define CV_SERVICE_RESIZE 18

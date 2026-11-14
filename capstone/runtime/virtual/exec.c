@@ -207,6 +207,11 @@ __attribute__((format(printf, 1, 2))) static void note(const char *format, ...)
  *                                     must refuse it (ENOMEM), and then once more past that check, which
  *                                     the module's add() must refuse (EINVAL); it prints
  *                                     CAPSTONE_VM_TEST_TOP_PAGE guard= launcher= module= with the errnos
+ *   CAPSTONE_VM_TEST_OWNED_BYPASS=1   (stage "drop M", root grants only) mapping_gate and range_mapping
+ *                                     do not refuse this launcher's own mappings, so the program's
+ *                                     munmap, mremap and mprotect of the image, the main stack and the
+ *                                     other kernel-owned blocks reach the module, whose kernel-owned
+ *                                     flag must refuse each (root-contract.c, mode kernel-owned)
  * A delay prints CAPSTONE_VM_TEST_DELAY with its name. */
 static long test_number(const char *name)
 {
@@ -288,6 +293,7 @@ static void test_eintr_disarm(void)
         fprintf(stderr, "CAPSTONE_VM_TEST_EINTR op=%s retries=%u\n", name, retries); } while (0)
 #define TEST_RELEASE_FAILS() (test_number("CAPSTONE_VM_TEST_RELEASE_FAIL") > 0)
 #define TEST_DISCARD_FAILS() (test_number("CAPSTONE_VM_TEST_DISCARD_FAIL") > 0)
+#define TEST_OWNED_BYPASS() (test_number("CAPSTONE_VM_TEST_OWNED_BYPASS") > 0)
 /* Set while test_top_page grants the top page past grant_mapping's own check. */
 static int test_top_raw;
 #define TEST_TOP_RAW() test_top_raw
@@ -300,6 +306,7 @@ static int test_top_raw;
 #define TEST_EINTR_REPORT(name, retries) ((void)(retries))
 #define TEST_RELEASE_FAILS() 0
 #define TEST_DISCARD_FAILS() 0
+#define TEST_OWNED_BYPASS() 0
 #define TEST_TOP_RAW() 0
 #endif
 
@@ -1021,8 +1028,10 @@ static long remove_range(uint64_t tid, uintptr_t base, size_t bytes);
 /* The domain thread tid's munmap of [base, + bytes) (CV_SERVICE_UNMAP, base the cursor of the
  * reference it passed in a0). A call that names a whole mapping, its base and its visible length,
  * ends it: one CV_UNMAP pools the mapping where the pool takes it and the module can, and retires it
- * otherwise; with root_grants the module checks that reference, the address and the length first.
- * Since stage 4e any other call is a partial munmap of one block (remove_range). */
+ * otherwise; with root_grants the module checks that reference, the address and the length first,
+ * and ends the block with CREVOKE on that reference. This launcher's own mappings are refused
+ * (mapping_gate), and with root_grants the module's kernel-owned flag refuses them too. Since stage 4e
+ * any other call is a partial munmap of one block (remove_range). */
 static long unmap_arena_for(uintptr_t base, size_t bytes, uint64_t tid)
 {
     struct mapping *m = map_floor(base);
@@ -1062,7 +1071,8 @@ static long unmap_arena_for(uintptr_t base, size_t bytes, uint64_t tid)
  *      discarded part of the range before it failed (private anonymous VMAs that are not locked never
  *      refuse it), and Linux would then supply fresh frames that neither the program nor the module's
  *      pages describe. So a refill whose discard fails ends the block (block A, fail closed:
- *      CV_PAGES_FAIL ends M, the extent goes back to Linux, EINVAL).
+ *      CV_PAGES_FAIL ends the block through the request's reference, the extent goes back to Linux,
+ *      EINVAL).
  *   3. the module's commit (CV_PAGES_COMMIT): a refill asks the refill rule again and fails closed by
  *      ending the block (ended: the extent goes back to Linux, EINVAL); otherwise the module clears
  *      the tags of the pages it held and unpins them, counts, and lets the program run.
@@ -1194,14 +1204,15 @@ static long pages_change(uint64_t tid, struct mapping *m, uint64_t op, uintptr_t
 /* The domain thread tid's partial munmap of [base, + bytes) (CV_SERVICE_UNMAP, a call that does not
  * name a whole block): any page range inside the visible length of one heap block that is not the
  * allocator's metadata and that no worker holds (range_mapping: EINVAL, EBUSY); a range beyond the
- * block or across two blocks is refused. With root_grants only the block's own reference, whose
- * bounds cover the whole block, may do it (the module's check). Without root_grants the address is
- * the authority: a legacy profile without the reference guarantee. The pages go: PROT_NONE, their
- * contents discarded, still part of the block's VMAs, so Linux gives no address inside the block to
- * any other mapping while the block lives, and the module never admits a removed page. No lifetime
- * ends. Unmapping removed pages again changes nothing. When the call takes the last pages that are
- * still mapped, the module ends the block in its check, and the whole extent goes back to Linux as at
- * a whole-block munmap. Waiters on words in the range are woken. */
+ * block or across two blocks is refused. With root_grants only a block's reference whose bounds cover the range may do it (the module's check),
+ * so a reference narrowed to part of the block removes only pages it covers. Without root_grants
+ * the address is the authority: a legacy profile without the reference guarantee. The pages go:
+ * PROT_NONE, their contents discarded, still part of the block's VMAs, so Linux gives no address
+ * inside the block to any other mapping while the block lives, and the module never admits a
+ * removed page. No lifetime ends. Unmapping removed pages again changes nothing. When the call
+ * takes the last pages that are still mapped, the module ends the block in its check, with CREVOKE
+ * on the passed reference, and the whole extent goes back to Linux as at a whole-block munmap.
+ * Waiters on words in the range are woken. */
 static long remove_range(uint64_t tid, uintptr_t base, size_t bytes)
 {
     long error;
@@ -1211,10 +1222,11 @@ static long remove_range(uint64_t tid, uintptr_t base, size_t bytes)
 }
 
 /* The domain thread tid's mmap(MAP_FIXED) of [base, + bytes) inside a block (CV_SERVICE_REFILL, a2
- * the protection): a range that range_mapping accepts, with root_grants only through the block's own
- * reference and only while the program derived no object below it (the refill rule, the module's;
- * EOPNOTSUPP without root_grants). Every page of the range reads zero afterwards with protection prot,
- * a removed page is mapped again, and no lifetime ends. PROT_EXEC is refused (EACCES). */
+ * the protection): a range that range_mapping accepts, with root_grants only through a block's
+ * reference that covers it and only while the program derived no object below it (the refill rule,
+ * the module's; EOPNOTSUPP without root_grants). Every page of the range reads zero afterwards with
+ * protection prot, a removed page is mapped again, and no lifetime ends. PROT_EXEC is refused
+ * (EACCES). */
 static long refill_range(uint64_t tid, uintptr_t base, size_t bytes, unsigned prot)
 {
     long error;
@@ -1245,12 +1257,16 @@ static long resize_range(uint64_t tid, uintptr_t base, size_t old, size_t new)
 }
 
 /* May a request of the program end m, a mapping of exactly bytes: munmap, the frame's hand-over
- * at thread creation, the stack at thread exit? Only a registered heap mapping of that visible
- * length that is not the allocator's metadata (else EINVAL) and that no worker holds (else
- * EBUSY). The launcher's own mappings (image, stack, transport, startup data) never are. */
+ * at thread creation, the stack at thread exit, a worker's attachment? Only a registered heap mapping
+ * of that visible length that is not the allocator's metadata (else EINVAL) and that no worker holds
+ * (else EBUSY). This launcher's own mappings (image, stack, transport, startup data) never are. With
+ * root grants the module refuses them as well, by its kernel-owned flag; this check stays as defense
+ * in depth, and the test build's CAPSTONE_VM_TEST_OWNED_BYPASS skips it so that the module's flag
+ * can be tested alone. */
 static long mapping_gate(const struct mapping *m, size_t bytes)
 {
-    if (!m || m->visible != bytes || !m->heap || m->kind == CV_MAP_METADATA)
+    if (!m || m->visible != bytes || (!m->heap && !TEST_OWNED_BYPASS()) ||
+        m->kind == CV_MAP_METADATA)
         return -EINVAL;
     if (m->holder) return -EBUSY;
     return 0;
@@ -1304,17 +1320,19 @@ static void release_ended(struct mapping *m, uint64_t ended)
 }
 /* The registered mapping that holds the page range [base, + bytes) that a request of the program
  * names (mprotect, madvise, a partial munmap, a refill, mremap's check), or NULL with *error set: a
- * nonempty range of whole pages inside the visible length of one registered heap mapping that is not
+ * nonempty range of whole pages inside the visible length of one registered mapping that is not
  * the allocator's metadata (EINVAL), and that no worker holds (EBUSY, as mapping_gate answers): this
  * launcher writes a held mapping through Linux for the worker's whole attachment, and a protection
- * change, a madvise or a removal would take the pages from under that write. The image and the
- * launcher's other grants are no heap mappings: a request on them is refused here. */
+ * change, a madvise or a removal would take the pages from under that write. The image and this
+ * launcher's other grants are no heap mappings: a request on them is refused here, and with root
+ * grants again by the module's kernel-owned flag (the test build's CAPSTONE_VM_TEST_OWNED_BYPASS skips
+ * this check, as in mapping_gate). */
 static struct mapping *range_mapping(uintptr_t base, size_t bytes, long *error)
 {
     struct mapping *m = map_floor(base);
     uintptr_t at = m ? (uintptr_t)m->address : 0;
     *error = -EINVAL;
-    if (!bytes || (base & 4095) || (bytes & 4095) || !m || !m->heap ||
+    if (!bytes || (base & 4095) || (bytes & 4095) || !m || (!m->heap && !TEST_OWNED_BYPASS()) ||
         m->kind == CV_MAP_METADATA || base - at > m->visible || bytes > m->visible - (base - at))
         return NULL;
     *error = -EBUSY;
@@ -1385,7 +1403,7 @@ static struct mapping *old_range(uintptr_t base, size_t bytes, long *error)
 /* The domain thread tid's mapping check (CV_SERVICE_MAPPING_CHECK, a0 the reference, a1 the length,
  * a2 flags; mapping.c): mremap's validator of the old range [base, + bytes) (old_range, then with
  * root_grants the module's check of the reference through CV_PROTECT, which reads the service from
- * the caller's a7: the block's own reference, bounds over the whole block), and with CV_CHECK_MOVE the
+ * the caller's a7: a block's reference whose bounds cover the range), and with CV_CHECK_MOVE the
  * condition of a move: ENOTSUP unless Linux maps every page of the range exactly read-write (the
  * libc's mremap moves only such a range). Changes nothing. */
 static long check_mapping(uint64_t tid, uintptr_t base, size_t bytes, unsigned long flags)
@@ -2176,8 +2194,9 @@ static int reserve_stdio(unsigned *mask) {
 
 /* Undo a CV_THREAD_CREATE that succeeded: stop the new thread (it never ran) and release its
  * frame's mapping, which the module names in its answer. The create ended every reference of the
- * program to the frame (with root_grants the module ended the reservation; without, it retired
- * the frame's ancestor), so the program cannot unmap the frame itself any more; without this
+ * program to the frame (with root_grants the module ended the frame's block through the creator's
+ * reference; without, it retired the frame's ancestor), so the program cannot unmap the frame itself
+ * any more; without this
  * release the frame would stay pinned and registered until exit. The rollback also gives the id
  * back to the module, which issues it to the next create (capstone_vm.c, thread_exit). If the
  * module refuses the rollback, it keeps the thread and the id, while this launcher withdraws the
@@ -2199,7 +2218,8 @@ static void thread_rollback(uint64_t thread, struct mapping *frame)
  * reference, a1 the exchange region's, a2 its length (request is the meta block). This launcher
  * writes both blocks from here on, so each must be a whole mapping of the program that the program
  * may end and that no worker holds (mapping_gate, which also refuses this launcher's own transport:
- * it is no heap mapping), the two distinct, every page of both writable (mapping_writable: a
+ * it is no heap mapping; checked again here, past the test build's bypass), the two distinct, every
+ * page of both writable (mapping_writable: a
  * protection the program set before the attachment would make those writes fault, and the hold
  * keeps it from changing afterwards), and with root_grants both references must pass the module's
  * whole-mapping check, as for munmap and ending nothing (CV_ATTACH, which also refuses a mapping
@@ -2215,7 +2235,8 @@ static const char *transport_attach(uint64_t tid, const struct cv_step *step,
     long gate = mapping_gate(held_meta, CAPSTONE_DELEGATE_META_BYTES);
     if (!gate) gate = mapping_gate(held_exchange, step->args[2]);
     if (gate == -EBUSY) return "held by a worker";
-    if (gate || held_meta == held_exchange) return "not a whole mapping of the program";
+    if (gate || held_meta == held_exchange || !held_meta->heap || !held_exchange->heap)
+        return "not a whole mapping of the program";
     if (!mapping_writable(held_meta) || !mapping_writable(held_exchange)) return "not writable";
     struct cv_attach check = {.thread = tid, .meta = held_meta->id, .exchange = held_exchange->id,
                               .meta_bytes = CAPSTONE_DELEGATE_META_BYTES};
@@ -2328,7 +2349,7 @@ static int virtual_service(uint64_t tid, struct cv_step *step)
         /* The frame, and the stack that the program asks to unmap (a1 the stack's reference,
          * pthread.c __unmapself, a2 its length), each only where the program may end it. With
          * root_grants the stack is the program's request: the module checks the reference while
-         * the frame still holds it and ends the stack's reservation after the thread has stopped.
+         * the frame still holds it and ends the stack's block through it, then stops the thread.
          * A refused stack stays mapped and registered, and the exit goes on. A stack that is the
          * thread's own frame is the exception: the module refuses it as a stack, and the frame's
          * release still ends that mapping. The ioctl is repeated if a signal interrupts its wait for

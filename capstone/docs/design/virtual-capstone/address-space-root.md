@@ -37,12 +37,12 @@ and the only step reserved for the kernel.
 ## Mappings
 
 Decided on 2026-11-13 (plan v5, decision 8), after review. This replaces the
-kernel-private reservation record M of 2026-11-12. The adapter still
-implements M until the stage of the adapter plan that removes it, the next
-adapter stage. The paragraphs of this section that name a stage of the adapter
-plan describe the adapter's code with that next stage already applied, and the
-paragraph "The adapter until M goes", at the end of this section, lists what
-differs in the code today.
+kernel-private reservation record M of 2026-11-12. The stage "drop M" of the
+adapter plan removes M from the adapter (2026-11-14; its unit tests and
+controls pass on QEMU on both formats). The paragraphs of this section that
+name a stage of the adapter plan describe the adapter's code with that stage
+applied, and the paragraph "The adapter without M", at the end of this
+section, lists what still differs in the code.
 
 Each region of a protected program is a block of depth 1, a child of R: the
 image, the startup block, the main stack, each `mmap` and the shared region
@@ -281,8 +281,8 @@ Allocation can fail (block A). Where the lifetime table has no slot and cannot
 grow, the processor's `CDERIVE` gives its failure result, an untagged 0, and
 no record changes. The kernel turns a 0 from its `CDERIVE` of a block into
 `ENOMEM` for `mmap`, and it refuses an `mmap` with `ENOMEM` before any change
-when the table cannot grow and has no room for the block's record (the adapter
-needs room for two records, M and P, until M goes). The libc's allocator
+when the table cannot grow and has no room for the block's record (one record;
+two, M and P, before the stage "drop M"). The libc's allocator
 turns a 0 from its object's `CDERIVE` into `NULL` from `malloc` with
 `ENOMEM`, and gives the slot back to its free list. `realloc` ends the old
 object only after the new one exists: in place it derives the new object
@@ -431,23 +431,32 @@ until exit. That is a leak, not a safety problem: every reference to the old
 object is stale, and the kernel frees no address range while a page of the
 block is mapped.
 
-The adapter until M goes. With root grants (module parameter `root_grants=1`),
-the adapter's code of today differs from this section in these points, which
-the next adapter stage changes. `root_derive` derives a reservation record M
-from R for each mapping, keeps the only reference to M, and derives P from M
-with the same bounds, so P has depth 2, and an `mmap` needs room for two
-records. Condition 3 asks that the operand be the child of M: its record
-directly follows M's in the preorder list, has M's depth plus one and is live
-(`ref_child`; `ref_reservation` finds M by its depth of 1). For `munmap`,
-`mremap` and the other requests that end a mapping or remove pages of it,
-condition 4 asks that the bounds cover the whole visible length, so a narrowed
-and renewed P, a new child of M, can no longer remove pages either. The
-adapter ends a mapping with `CREVOKE` of M instead of the passed reference
-(when a `munmap` removes the last logically mapped page, which the block
-object counts), and every commit that fails closed ends M. No kernel-owned flag exists yet: the
-adapter refuses `mprotect`, `madvise` and `munmap` of the image, and the
-launcher never unmaps the main stack. Without root grants the adapter runs the
-earlier design (section What runs today).
+The adapter without M. With root grants (module parameter `root_grants=1`),
+the stage "drop M" of the adapter plan gives the adapter the rules of this
+section: `root_derive` derives each block with one `CDERIVE` from R (R has
+depth 0 in the 63-bit format, so a block has depth 1), condition 3 reads the
+depth of the operand's record (`ref_block`), condition 4 asks for the range
+the call names, and the request that removes a block's last mapped pages, a
+commit that fails closed included, ends the block with `CREVOKE` on the passed
+reference (`block_revoke`). Four points of the code differ from this section
+or add to it. The kernel-owned flag refuses `madvise` and `MAP_FIXED` on every
+kernel-owned block, not only on the image, a worker's attachment of one, and a
+kernel-owned block as a thread's frame or stack, as it refuses its `munmap`;
+the launcher refuses all of these requests first, by its own check of the
+program's mappings, which stays as defense in depth, so the module's flag acts
+only behind the launcher's test bypass. At `munmap`, at the removal of the
+last mapped pages and at thread creation the `CREVOKE` runs right after the
+module wrote its answer to the launcher: a refused `CREVOKE` answers an error,
+the launcher discards the answer, and nothing has changed. At thread exit the
+stack's `CREVOKE` must run while the paused thread's frame still holds the
+reference, before the answer; if writing the answer fails, the launcher ends
+the program, and the ended stack stays registered until teardown. A commit
+that fails closed and whose `CREVOKE` is refused (only a test build lets the
+program run between the check and the commit) does not release the block: the
+module keeps it registered and quarantined, invisible to faults and requests,
+its pages pinned, and the launcher keeps its extent mapped `PROT_NONE` until
+exit, since a renewal of the reference may still live. Without root grants the
+adapter runs the earlier design unchanged (section What runs today).
 
 ## Supervisor references
 
@@ -617,15 +626,15 @@ adapter, `CSRUNV` contexts or a paged table.
 
 ## What runs today
 
-With root grants (module parameter `root_grants=1`, stages 1 to 4f and block
-A of the adapter plan), the adapter creates R with the table and derives every
-grant from R, but it still keeps a reservation record M per mapping (section
-Mappings, "The adapter until M goes"). Without root grants, the default, the
-adapter creates one root per mapping with `CSMINT`, which makes a private
-parent record and a child, and it ends a mapping with `CSRETIRE` on the
-parent's number. The kernel then holds no reference, and `munmap` names the
-mapping by its registered range and not by a reference. In both modes the
-program runs through `CSRUNV`.
+With root grants (module parameter `root_grants=1`, stages 1 to 4f, block A
+and the stage "drop M" of the adapter plan), the adapter creates R with the
+table and derives every grant from R as a block of depth 1, without a
+reservation record (section Mappings, "The adapter without M"). Without root
+grants, the default, the adapter creates one root per mapping with `CSMINT`,
+which makes a private parent record and a child, and it ends a mapping with
+`CSRETIRE` on the parent's number. The kernel then holds no reference, and
+`munmap` names the mapping by its registered range and not by a reference. In
+both modes the program runs through `CSRUNV`.
 
 ## Work that follows from the decision
 
@@ -633,7 +642,7 @@ program runs through `CSRUNV`.
    (image, stack, startup data, exchange, `mmap`) a child of R, check and end
    the operand at `munmap`, carry `mremap` over, and drop the private parent
    records and their collection paths. Stages 1 to 4f did this with M, and
-   the next adapter stage removes M.
+   the stage "drop M" removed M.
 2. libc: `munmap` and `mremap` hand the reference to the kernel.
 3. Model and contract tests for the adapter path, then the landing gates, the
    port gates and the bug corpora.
