@@ -3592,3 +3592,20 @@ Stubbed dry runs reach every boot. ao-b1's firmware is wt-wrap-hpmtag; the other
 - The twin shows no instruction saving.
 - The silicon difference is the cost of CDERIVE/CREVOKE and node work, which the twin cannot see.
 - specdiff PASS.
+
+## Addendum 109 (2026-11-14 12:05, before it runs): the nested lane's speedtest1 boot on board 1
+
+**Run, board 1:**
+- **Where in the queue:** chain ar-b1 (nat-run2.sh, kit bkit73, the batch bitstream a47b588a1 already resident), after
+  aq-b1 (spatial gcc) and before the F chains. an-b1 and ao-b1 had not started and are re-chained behind it, with
+  their lists unchanged.
+- **Stage:** nested/st1/board/b1-stage (under the measurement root), built by the nested lane with the kit's
+  make-train-stage.sh. Checksums verified against b1-stage.SHA256SUMS.
+- **Workload:** four commands, ABBA (unprotected, protected, protected, unprotected): speedtest1 --heap 8388608 64
+  --size 1.
+- **Timeout:** 900 s, so 3,600 s under BOARD_TIMEOUT_MULT.
+- **Output:** nested/st1/board/b1-run, read by the nested lane.
+- **Dry run:** a stubbed dry run reaches the boot.
+
+**Pre-registration and predictions:** the nested lane's, at llvm-capstone nested-workloads c3663f0362a1, section
+"Pre-registration: silicon, speedtest1". This addendum only places the boot.
