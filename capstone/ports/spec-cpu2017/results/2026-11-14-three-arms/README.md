@@ -3,14 +3,18 @@
 This is a live table: rows are filled as board runs land. Pre-registrations, predictions and the run-by-run trail are
 in [`../2026-11-08-train/PREREG.md`](../2026-11-08-train/PREREG.md) (Addendum 107 onward for this table).
 
-## Status (updated 2026-11-14 11:30 +08)
+## Status (updated 2026-11-14 11:50 +08)
 
 - **riscv-base:** complete, all 8 rows.
 - **Capstone temporal:**
   - The table below holds the best silicon reading per row, with the bitstream named on each row.
   - The final uniform configuration (one bitstream and one image set for every row) is being measured now.
   - 5 of 8 rows are already below the 1.20 target. perl, gcc and mcf are above it.
-- **Capstone spatial:** the compiler lane is building the images; nothing measured yet.
+- **Capstone spatial:** all 8 images are built (arm FRCDKMSsp).
+  - The SDK differs from temporal in 4 libc mallocng members plus the runtime's malloc-mapping object, and nothing else.
+    This is shown by member hashes, and a control on the memset switch fires.
+  - Every benchmark object is byte-identical to temporal FRCDKMS's.
+  - QEMU twins (outputs must equal temporal's) are running. Board runs follow, on the final bitstream.
 - **Expected completion:** short rows today; x264 and the full perl test take ~10 h and ~5 h per arm, so the full
   three-arm table is expected on 15 Nov.
 
