@@ -10,8 +10,13 @@
 #   gate      PROTECTED_FAULT (a .dom that makes a Sublet access fault) and PROTECTED_OK (a .dom that
 #             exits 0) in one boot: the first must die by SIGSEGV with the launcher's fault line, the
 #             second must then exit 0. The run stops here when the kernel does not pass.
-#   juliet    JULIET_BUILD and JULIET_HELPER: bug-corpora/juliet/run.py
-#   corpora   SDK and LLVM_BIN: bug-corpora/tools/run-virtual-cases.py for each of CORPORA x ARMS
+#   juliet    JULIET_PREBUILT, JULIET_SRC, JULIET_HELPER, SDK and LLVM_BIN: for each set of JULIET_SETS
+#             (default: temporal spatial), bug-corpora/juliet/run.py on the census build and the seeded
+#             build, probe.py, and judge.py's first judgement. A set without a prebuilt census build
+#             (spatial: 18,276 images, 2.9 GB) builds it into OUT first with build.py (about a minute).
+#             The twin and ASan rounds of run-set.sh follow from the first judgement's verdicts.
+#   corpora   SDK and LLVM_BIN: bug-corpora/tools/run-virtual-cases.py for each of CORPORA x ARMS, with the
+#             words of CORPUS_ARGS_DIR/<corpus-with-dashes>-cc-args.txt when that file exists
 #   plan      EVAL_PLAN: a file of further runner commands, one per line (# comments), run with KIT,
 #             SDK, LLVM_BIN and OUT in the environment; the reuse study and the prebuilt nested arms
 #             go here, because each needs its own build directory
@@ -69,12 +74,32 @@ step_gate() {
 }
 
 step_juliet() {
-  if [ -z "${JULIET_BUILD:-}" ] || [ -z "${JULIET_HELPER:-}" ]; then
-    echo "=== juliet skipped: set JULIET_BUILD and JULIET_HELPER"
+  if [ -z "${JULIET_PREBUILT:-}" ] || [ -z "${JULIET_SRC:-}" ] || [ -z "${JULIET_HELPER:-}" ] ||
+     [ -z "${SDK:-}" ] || [ -z "${LLVM_BIN:-}" ]; then
+    echo "=== juliet skipped: set JULIET_PREBUILT, JULIET_SRC, JULIET_HELPER, SDK and LLVM_BIN"
     return 0
   fi
-  timed juliet python3 "$REPO/capstone/bug-corpora/juliet/run.py" --build "$JULIET_BUILD" --kit "$KIT" \
-    --helper "$JULIET_HELPER" --out "$OUT/juliet"
+  local J=$REPO/capstone/bug-corpora/juliet set d out build
+  for set in ${JULIET_SETS:-temporal spatial}; do
+    d=$JULIET_PREBUILT/$set
+    out=$OUT/juliet/$set
+    mkdir -p "$out"
+    build=$d/build
+    if [ ! -d "$build" ]; then
+      build=$out/build
+      timed "juliet-$set-build" python3 "$J/build.py" --manifest "$d/manifest.json" --juliet "$JULIET_SRC" \
+        --sdk "$SDK" --out "$build"
+    fi
+    timed "juliet-$set-run" python3 "$J/run.py" --build "$build" --kit "$KIT" --helper "$JULIET_HELPER" \
+      --out "$out/run"
+    timed "juliet-$set-run-seeded" python3 "$J/run.py" --build "$d/build-seeded" --kit "$KIT" \
+      --helper "$JULIET_HELPER" --out "$out/run-seeded"
+    timed "juliet-$set-probe" python3 "$J/probe.py" --sdk "$SDK" --kit "$KIT" --helper "$JULIET_HELPER" \
+      --out "$out/probe"
+    timed "juliet-$set-judge" python3 "$J/judge.py" --manifest "$d/manifest.json" --juliet "$JULIET_SRC" \
+      --build "$build" --run "$out/run" --seeded-build "$d/build-seeded" --seeded-run "$out/run-seeded" \
+      --llvm-bin "$LLVM_BIN" --out "$out/results" --probe "$out/probe/probe.json"
+  done
 }
 
 step_corpora() {
@@ -82,13 +107,17 @@ step_corpora() {
     echo "=== corpora skipped: set SDK and LLVM_BIN"
     return 0
   fi
-  local corpus arm name
+  local corpus arm name args
   for corpus in $CORPORA; do
+    args=()
+    if [ -n "${CORPUS_ARGS_DIR:-}" ] && [ -f "$CORPUS_ARGS_DIR/$(echo "$corpus" | tr / -)-cc-args.txt" ]; then
+      read -r -a args < "$CORPUS_ARGS_DIR/$(echo "$corpus" | tr / -)-cc-args.txt"
+    fi
     for arm in $ARMS; do
       name=$(echo "$corpus-$arm" | tr / -)
       timed "$name" python3 "$REPO/capstone/bug-corpora/tools/run-virtual-cases.py" \
         --corpus "$REPO/capstone/bug-corpora/$corpus" --arm "$arm" --virtual-kit "$KIT" --sdk "$SDK" \
-        --llvm-bin "$LLVM_BIN" --out "$OUT/corpora/$name" --raw "$OUT/raw/$name"
+        --llvm-bin "$LLVM_BIN" --out "$OUT/corpora/$name" --raw "$OUT/raw/$name" "${args[@]}"
     done
   done
 }
