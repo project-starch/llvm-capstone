@@ -3468,3 +3468,53 @@ A stubbed dry run reaches all three.
 - gcc -1 to -3 %;
 - perl -0.5 to +0.5 %;
 - mcf -2 to +1 %.
+
+## Addendum 106 (2026-11-14 11:00, before it runs): readings on the batch bitstream and the full perl test; config B on board 2 with the tag-path counters
+
+**Readings:**
+- **Batch a47b588a1, one-variable pairs against fdk** (Addendum 104), specdiff PASS. Lever (a)'s net is small: the
+  issue stall it removes reappears largely as scoreboard-full time behind memory, as rtl's sbfull arm shows in
+  simulation.
+
+  | row | image | batch | fdk | change | ratio | against the band (-0.5..-3 %; mcf -0.3..-1.5 %) |
+  |---|---|---|---|---|---|---|
+  | perl makerand | FRCDK | 336.66 s | 335.14 s | +0.45 % | 1.305 | outside |
+  | gcc train01 | FRCDK | 2,526.03 s | 2,541.18 s | -0.6 % | 1.467 | at the edge |
+  | mcf | FR | 7,349.81 s | 7,382.19 s | -0.44 % | 1.434 | inside |
+
+  Board run-to-run spread is 0.06 % on perl: same image and bitstream, two kits, 9.7998 G against 9.7937 G
+  run_cycles.
+- **FRCDKMS perl makerand on the batch:** 329.70 s, against FRCDK on the batch's 336.66 s: -2.1 %, ratio 1.278.
+  Addendum 105's band was ±0.5 %, so this lies outside it, on the fast side. The twin's user delta is -0.04 %. L1I
+  misses fell 30.1 → 27.1 M, so the gain is front-end, probably libc layout, which is not attributed.
+- **FULL perl, FR on fdk, board 3** (kit bkit72, the board riscv-base's full perl ran on): makerand 344.14 s +
+  test.pl 17,257.57 s = 17,601.71 s, specdiff 2/2. Ratio against riscv-base's 12,623.02 s: 1.394, inside Addendum
+  103's band. The same makerand image on board 1 read 347.44 s, so the cross-board difference is -0.9 %. FRCDK's full
+  perl runs next on board 3.
+
+**Bitstream: config B.**
+- **Name:** caplifive_ids55-native-tagcache-mlp-fpieee-hpmreplay-dynbypass3-dtlb64-shrinkfix-ic32k-r72-stcnoclaim-hpmtag_afe4e643e.
+- **Content:** capstone-ariane afe4e643e = the batch's TWC (256 entries, no merge) plus the adapter's HPM events 24-28
+  (24 tag read issued; 25 marked-page load freed by the TWC; 26 tag write issued; 27 page fill; 28 cycles in a tag
+  phase).
+- **Build and seal:** built on leffe; sealed by the board lane; sha256 5f8273b413cae0e668242395b5ad7f35a0b438490ff09098495b1a35847dbae9.
+- **Sim evidence:** WNS -10.761. Its 95-test sweep equals the batch's in values, RVFI traces and cycles, so the
+  counters observe only.
+- **Kit:** bkit77 = bkit73 with this bitstream and the firmware wrapper caplifive-opensbi hpm-events-tag 18596d3e
+  (-DCAPSTONE_HPM_EVENTS_TAG). It programs hpm3..8 = events 24, 25, 26, 27, 28, 2 (L1D miss). A real, board-free
+  firmware build passes its dom_stack gate, and its disassembly shows `csrw mhpmevent3,24` … `csrw mhpmevent8,2`.
+
+**Run, board 2, after its x264 boot:**
+- **Chain:** am-b2, nat-run2.sh.
+- **Rows:** FRCDKMS mcf, then gcc train01. The same images run later on F with the same firmware, so the B/F pair
+  differs only in the TWC.
+- **Dry run:** a stubbed dry run reaches both boots, with FW_WRAP = wt-wrap-hpmtag.
+
+**Predictions** (the rtl lane's hypothesis that marked-page tag reads are mcf's memory cost):
+- **mcf:**
+  - (ev24 + ev25) / ev2 ≥ 0.5: most L1D load misses land on capability-holding pages;
+  - ev24 / (ev24 + ev25) ≥ 0.5: the 32 KB-reach TWC misses at least half of them;
+  - ev28 / run_cycles in 3-30 %.
+- **gcc:** (ev24 + ev25) / ev2 in 0.2-0.9.
+- **Both:** run_cycles within ±0.3 % of the batch FRCDKMS readings on board 1 (cross-board, so ±1 %); specdiff PASS.
+- **If the hypothesis fails:** a small ev24 or ev28 would mean F's TWC cannot move mcf.
