@@ -3855,3 +3855,26 @@ comes from record-cache misses. Only this kit reads that. The pool A/B is a 10-h
 **Reading.** spec-classify reads NO RESULT on this stage format, by design. The nested lane reads the result with its
 own parser. A failed smoke stops ay-b3. ax-b3 waits only on ay-b3's pid, so the pool A/B still runs: its own
 smoke gates its board state.
+
+## Addendum 118 (2026-11-14 21:50 +08): temporal full perl on F did not boot on board 2; it reruns on board 3, before the pool A/B
+
+**What happened.** aw-tp (Addendum 113: temporal FRCDKMS full perl on F, kit bkit80) booked board 2 at 21:07. The
+driver made three cold boots. Each uploaded the firmware (23,760,392 B, 201.6 s at 115 KiB/s) and sent `continue`.
+After that the board sent not one UART byte: the console shows only the replay of the previous boot's xz tail, and
+`cold_boot failed (timed out waiting for UART /login:/` was logged three times. At 21:42 the smoke read NO RESULT and
+the chain stopped. No benchmark ran, so this is not a perl result of any kind.
+
+**What it is not.**
+- **Not F with an image this size.** F booted 23,760,392-byte firmware on board 1 four times today: perl makerand
+  FRCDKMS, GPC and GPR2, and gcc tag-HPM.
+- **Not the size on board 2.** Board 2 booted this size on 13 Nov: mlp perl and gcc, four boots.
+- **Open.** Two things are untested: the bkit80 kit with the full-perl stage, which has never booted anywhere, and a
+  board-2 fault, transient or not. Two runs on the queue already separate them:
+  - board 2's next boot (aw-sx, spatial x264 on F, 21.7 MB class, its boot began at 21:42) tests the board;
+  - ax-b3 (bkit81 = bkit80 + the pool, the full-perl stage) and aw-sp (bkit80, spatial full perl) test the kit with
+    the stage.
+
+**The rerun.** aw-tp's conf and list run unchanged on board 3. Order: av-b3 (x264, until ~03:00) → ay-b3 (nested,
+Addendum 117) → **aw-tp on board 3** → ax-b3 (pool A/B). Board 3 is the riscv-base board, so the perl row's ratio
+becomes same-board. It also gives the pool A/B a same-board control, where Addendum 115 had a cross-board one. Addendum
+113's predictions for this row stand unchanged.
