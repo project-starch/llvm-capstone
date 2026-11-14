@@ -1,0 +1,8 @@
+# Plan v5 step 5, kernel side: handles, the binder and the routines for user memory.
+# Applies after patches/series and the trap-route patches of step 3 (0013 and 0014 of the
+# step-3 stream); 0034 edits the dispatch stub in step 3's arch/riscv/kernel/sublet_trap.c.
+0030-riscv-sublet-handles.patch
+0031-riscv-sublet-syscall-pointer-table.patch
+0032-riscv-sublet-binder.patch
+0033-riscv-sublet-user-memory-routines.patch
+0034-riscv-sublet-dispatch-to-binder.patch

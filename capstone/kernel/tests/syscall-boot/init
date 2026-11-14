@@ -1,0 +1,11 @@
+#!/bin/sh
+# The system-call test's /init: run the protected program, print its status, power off.
+mount -t proc proc /proc
+mount -t sysfs sys /sys
+mount -t devtmpfs dev /dev 2>/dev/null
+echo "S5TEST: up, kernel $(uname -r)"
+/s5
+echo "S5TEST: s5 status $?"
+dmesg | grep -E "sublet" | sed 's/^/S5TEST: dmesg /'
+echo "S5TEST: done"
+poweroff -f

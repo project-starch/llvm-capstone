@@ -1,0 +1,395 @@
+--- a/arch/riscv/kernel/sublet/Makefile
++++ b/arch/riscv/kernel/sublet/Makefile
+@@ -2,4 +2,5 @@
+ # The headers shared with the libc (capstone/, vm-abi.h) and the wire code (delegate-wire.c,
+ # spawn-wire.c, native-syscall-table.c) are copied here by capstone/kernel/apply.sh.
+ obj-y += sublet.o
++obj-$(CONFIG_RISCV_CAPSTONE_TRAP) += bind.o bind-core.o syscall-pointers.o loader.o
+ ccflags-y += -I$(src)
+--- /dev/null
++++ b/arch/riscv/kernel/sublet/bind-core.c
+@@ -0,0 +1,193 @@
++// SPDX-License-Identifier: GPL-2.0-only
++/*
++ * The allow-list and the pure core of the binder (plan v5 step 5).
++ *
++ * A protected program may make about a hundred calls, the Linux calls of the libc's call
++ * table plus the mmap family, sockets and epoll. Every other call gets ENOSYS. For an allowed
++ * call the pointer positions come from the SYSCALL_DEFINE types (syscall-pointers.c,
++ * generated), plus the positions the types miss: the address arguments of the mmap family,
++ * which Linux declares as unsigned long, and the arguments whose meaning depends on a command
++ * (ioctl, fcntl, prctl). A command outside the allow-list is refused, so no integer position
++ * reaches a routine for user memory. Calls whose structures hold pointers (iovec, msghdr,
++ * argv, envp, the sigset pack of pselect6) carry SUBLET_EMBEDDED, and the compat-style loader
++ * serves them.
++ *
++ * In a pointer position a reference becomes a handle with the number of its slot (1 to 6 for
++ * a0 to a5). An integer with no bits above the address becomes a handle with number 0, which
++ * names no reference. An integer with bits above the address is a forged handle and the call
++ * fails with EFAULT, so a program cannot select another argument's reference by number.
++ * Integer positions pass unchanged.
++ */
++#ifdef __KERNEL__
++#include <linux/kernel.h>
++#include <linux/fcntl.h>
++#include <linux/prctl.h>
++#include <asm/ioctls.h>
++#else
++#include <stddef.h>
++#include <fcntl.h>
++#include <sys/ioctl.h>
++#include <linux/prctl.h>
++#define ARRAY_SIZE(a) (sizeof(a) / sizeof((a)[0]))
++#endif
++#include "bind.h"
++
++/* ioctl(fd, cmd, arg): the terminal and file commands the libc uses. */
++static long ioctl_command(const struct sublet_bind_args *a, unsigned int *pointers)
++{
++	switch ((unsigned int)a->arg[1]) {
++	case TCGETS:
++	case TCSETS:
++	case TCSETSW:
++	case TCSETSF:
++	case TIOCGWINSZ:
++	case TIOCSWINSZ:
++	case TIOCGPGRP:
++	case TIOCSPGRP:
++	case FIONREAD:
++	case FIONBIO:
++		*pointers |= 1u << 2;
++		return 0;
++	case FIOCLEX:
++	case FIONCLEX:
++		return 0;
++	default:
++		return -ENOTTY;
++	}
++}
++
++/* fcntl(fd, cmd, arg): the integer commands and the record locks, whose arg is a pointer. */
++static long fcntl_command(const struct sublet_bind_args *a, unsigned int *pointers)
++{
++	switch ((unsigned int)a->arg[1]) {
++	case F_DUPFD:
++	case F_DUPFD_CLOEXEC:
++	case F_GETFD:
++	case F_SETFD:
++	case F_GETFL:
++	case F_SETFL:
++	case F_GETOWN:
++	case F_SETOWN:
++		return 0;
++	case F_GETLK:
++	case F_SETLK:
++	case F_SETLKW:
++	case F_OFD_GETLK:
++	case F_OFD_SETLK:
++	case F_OFD_SETLKW:
++		*pointers |= 1u << 2;
++		return 0;
++	default:
++		return -EINVAL;
++	}
++}
++
++/* prctl(option, arg2, ...): the thread name only. */
++static long prctl_command(const struct sublet_bind_args *a, unsigned int *pointers)
++{
++	switch (a->arg[0]) {
++	case PR_SET_NAME:
++	case PR_GET_NAME:
++		*pointers |= 1u << 1;
++		return 0;
++	default:
++		return -EINVAL;
++	}
++}
++
++#define CALL(name)			{ __NR_##name, 0, 0, NULL }
++#define CALL_EXTRA(name, extra)		{ __NR_##name, extra, 0, NULL }
++#define CALL_EMBEDDED(name)		{ __NR_##name, 0, SUBLET_EMBEDDED, NULL }
++#define CALL_COMMAND(name, fn)		{ __NR_##name, 0, 0, fn }
++
++static const struct sublet_allowed allowed[] = {
++	/* Files and directories. */
++	CALL(getcwd), CALL(dup), CALL(dup3), CALL_COMMAND(fcntl, fcntl_command),
++	CALL_COMMAND(ioctl, ioctl_command), CALL(mkdirat), CALL(unlinkat), CALL(symlinkat),
++	CALL(linkat), CALL(renameat2), CALL(ftruncate), CALL(truncate), CALL(faccessat),
++	CALL(faccessat2), CALL(fchmodat), CALL(fchmod), CALL(fchown), CALL(fchownat), CALL(chdir),
++	CALL(fchdir), CALL(openat), CALL(close), CALL(pipe2), CALL(getdents64), CALL(lseek),
++	CALL(read), CALL(write), CALL(pread64), CALL(pwrite64), CALL_EMBEDDED(readv),
++	CALL_EMBEDDED(writev), CALL_EMBEDDED(preadv), CALL_EMBEDDED(pwritev), CALL(readlinkat),
++	CALL(newfstatat), CALL(fstat), CALL(statx), CALL(fsync), CALL(fdatasync), CALL(utimensat),
++	CALL(sync_file_range), CALL(flock), CALL(statfs), CALL(fstatfs), CALL(fallocate),
++	CALL(sendfile), CALL(copy_file_range), CALL(readahead), CALL(fadvise64), CALL(umask),
++	/* Time. */
++	CALL(nanosleep), CALL(clock_nanosleep), CALL(clock_gettime), CALL(clock_getres),
++	CALL(gettimeofday), CALL(times), CALL_EMBEDDED(pselect6), CALL(ppoll),
++	/* The process. */
++	CALL(getpid), CALL(getppid), CALL(getuid), CALL(geteuid), CALL(getgid), CALL(getegid),
++	CALL(gettid), CALL(getpgid), CALL(getsid), CALL(getresuid), CALL(getresgid),
++	CALL(getgroups), CALL(getrusage), CALL(getpriority), CALL(uname), CALL(sysinfo),
++	CALL(prlimit64), CALL(getrandom), CALL(sched_yield), CALL(sched_getaffinity),
++	CALL(sched_get_priority_max), CALL(sched_get_priority_min), CALL(sched_rr_get_interval),
++	CALL(rt_sigprocmask), CALL(exit), CALL(exit_group), CALL_COMMAND(prctl, prctl_command),
++	CALL_EMBEDDED(execve),
++	/* Mappings: the address arguments are pointers (mremap's new_addr too). */
++	CALL_EXTRA(mmap, 0x01), CALL_EXTRA(munmap, 0x01), CALL_EXTRA(mprotect, 0x01),
++	CALL_EXTRA(madvise, 0x01), CALL_EXTRA(mremap, 0x11), CALL_EXTRA(msync, 0x01),
++	CALL_EXTRA(mincore, 0x01),
++	/* Sockets. */
++	CALL(socket), CALL(socketpair), CALL(bind), CALL(listen), CALL(accept4), CALL(connect),
++	CALL(getsockname), CALL(getpeername), CALL(sendto), CALL(recvfrom), CALL(setsockopt),
++	CALL(getsockopt), CALL(shutdown), CALL_EMBEDDED(sendmsg), CALL_EMBEDDED(recvmsg),
++	/* Events. */
++	CALL(epoll_create1), CALL(epoll_ctl), CALL(epoll_pwait), CALL(eventfd2),
++	CALL(timerfd_create), CALL(timerfd_settime), CALL(timerfd_gettime),
++};
++
++const struct sublet_allowed *sublet_allowed_call(unsigned long nr)
++{
++	size_t i;
++
++	for (i = 0; i < ARRAY_SIZE(allowed); ++i)
++		if (allowed[i].nr == nr)
++			return &allowed[i];
++	return NULL;
++}
++
++long sublet_pointer_positions(const struct sublet_allowed *e, const struct sublet_bind_args *a)
++{
++	unsigned int pointers = sublet_syscall_pointers[e->nr] | e->extra;
++	long err;
++
++	if (e->command) {
++		err = e->command(a, &pointers);
++		if (err)
++			return err;
++	}
++	return pointers;
++}
++
++long sublet_bind_core(unsigned long nr, struct sublet_bind_args *a)
++{
++	const struct sublet_allowed *e = sublet_allowed_call(nr);
++	long pointers;
++	unsigned int i;
++
++	if (!e)
++		return -ENOSYS;
++	pointers = sublet_pointer_positions(e, a);
++	if (pointers < 0)
++		return pointers;
++
++	for (i = 0; i < SUBLET_HANDLE_ARGS; ++i) {
++		unsigned long v = a->arg[i];
++
++		if (!(pointers & (1u << i)))
++			continue;
++		if (a->tagged & (1u << i)) {
++			a->arg[i] = sublet_handle(v, SUBLET_HANDLE_FIRST_ARG + i);
++		} else if (v >> SUBLET_HANDLE_ADDR_BITS) {
++#ifdef SUBLET_MUTANT_KEEP_UPPER
++			/* Control: the program's upper bits stay and select a slot by number. */
++			continue;
++#else
++			return -EFAULT;
++#endif
++		} else {
++			a->arg[i] = sublet_handle(v, 0);
++		}
++	}
++	return 0;
++}
+--- /dev/null
++++ b/arch/riscv/kernel/sublet/bind.c
+@@ -0,0 +1,89 @@
++// SPDX-License-Identifier: GPL-2.0-only
++/*
++ * The binder at the system call entry of a protected program (plan v5 step 5). It reads which
++ * of a0 to a5 held a reference from their saved slots, lets the core turn the pointer
++ * positions into handles, writes the handles into the integer view of pt_regs and calls the
++ * Linux implementation. The slots keep the references, so the routines for user memory find
++ * them by the handle's number, and the return to U loads the slots, not pt_regs.
++ */
++#include <linux/sched.h>
++#include <linux/slab.h>
++#include <linux/irqflags.h>
++#include <linux/build_bug.h>
++#include <asm/ptrace.h>
++#include <asm/syscall.h>
++#include <asm/sublet-trap.h>
++#include <asm/sublet-uaccess.h>
++#include "bind.h"
++
++static_assert(__NR_syscalls <= SUBLET_NR_SYSCALLS);
++static_assert(offsetof(struct pt_regs, a5) - offsetof(struct pt_regs, a0) == 5 * sizeof(long));
++
++typedef long (*sublet_syscall_fn)(unsigned long, unsigned long, unsigned long, unsigned long,
++				  unsigned long, unsigned long);
++
++/* Whether a kernel slot holds a reference: LDC into t0 and LCC selector 1, which answers 1 for
++ * a reference and 7 for an integer and never faults, in one run with interrupts off that
++ * clears t0 before it ends. */
++static bool sublet_slot_tagged(unsigned long *slot)
++{
++	unsigned long flags, kind;
++
++	local_irq_save(flags);
++	asm volatile(".insn i 0x5b, 3, t0, %[slot], 0\n\t"
++		     ".insn r 0x5b, 1, 4, %[kind], t0, x1\n\t"
++		     "li t0, 0"
++		     : [kind] "=&r"(kind) : [slot] "r"(slot) : "t0", "memory");
++	local_irq_restore(flags);
++	return kind == 1;
++}
++
++/* Clear the per-call list: plain stores clear each slot's tag. */
++static void sublet_call_refs_clear(struct sublet_call_refs *refs)
++{
++	if (!refs->slot)
++		return;
++	memset(refs->slot, 0, refs->count * sizeof(refs->slot[0]));
++	kfree(refs->slot);
++	refs->slot = NULL;
++	refs->count = 0;
++}
++
++long sublet_syscall_bound(struct pt_regs *regs, unsigned long nr)
++{
++	unsigned long *view = &regs->a0;
++	struct sublet_call_refs refs = { 0 };
++	struct sublet_bind_args a = { 0 };
++	const struct sublet_allowed *e;
++	unsigned int i;
++	long ret;
++
++	if (nr >= __NR_syscalls)
++		return -ENOSYS;
++	for (i = 0; i < SUBLET_HANDLE_ARGS; ++i) {
++		a.arg[i] = view[i];
++		if (sublet_slot_tagged(sublet_user_slot(current, 10 + i)))
++			a.tagged |= 1u << i;
++	}
++	ret = sublet_bind_core(nr, &a);
++	if (ret)
++		return ret;
++
++	e = sublet_allowed_call(nr);
++	if (e->flags & SUBLET_EMBEDDED) {
++		ret = sublet_load_embedded(nr, &a, &refs);
++		if (ret)
++			goto out;
++	}
++
++	for (i = 0; i < SUBLET_HANDLE_ARGS; ++i)
++		view[i] = a.arg[i];
++	regs->orig_a0 = a.arg[0];
++	current->thread.sublet_refs = &refs;
++	ret = ((sublet_syscall_fn)sys_call_table[nr])(a.arg[0], a.arg[1], a.arg[2], a.arg[3],
++						       a.arg[4], a.arg[5]);
++	current->thread.sublet_refs = NULL;
++out:
++	sublet_call_refs_clear(&refs);
++	return ret;
++}
+--- /dev/null
++++ b/arch/riscv/kernel/sublet/bind.h
+@@ -0,0 +1,75 @@
++/* SPDX-License-Identifier: GPL-2.0-only */
++/*
++ * The binder of a protected program's system calls (plan v5 step 5). The core (bind-core.c)
++ * is pure: it takes the call number, the integer views of a0 to a5 and which of them held a
++ * reference, and turns every pointer position into a handle (asm/sublet-uaccess.h). It builds
++ * in the kernel and, for the unit test, on the host with the call numbers of a Linux tree.
++ */
++#ifndef _SUBLET_BIND_H
++#define _SUBLET_BIND_H
++
++#ifdef __KERNEL__
++#include <linux/errno.h>
++#include <linux/types.h>
++#include <asm/unistd.h>
++#include <asm/sublet-uaccess.h>
++#else
++#include <errno.h>
++#include <stdbool.h>
++#include <stdint.h>
++#include "sublet-nr.h"	/* the riscv64 __NR_ constants, which the unit test generates */
++typedef uint8_t u8;
++typedef uint16_t u16;
++#define SUBLET_HANDLE_ADDR_BITS		38
++#define SUBLET_HANDLE_NUMBER_SHIFT	40
++#define SUBLET_HANDLE_FIRST_ARG		1
++#define SUBLET_HANDLE_ARGS		6
++#define SUBLET_HANDLE_ADDR_MASK		((1UL << SUBLET_HANDLE_ADDR_BITS) - 1)
++static inline unsigned long sublet_handle(unsigned long address, unsigned long number)
++{
++	return (address & SUBLET_HANDLE_ADDR_MASK) | (number << SUBLET_HANDLE_NUMBER_SHIFT);
++}
++#endif
++
++/* Room for every riscv64 call number of Linux 6.1 (__NR_syscalls is 451). */
++#define SUBLET_NR_SYSCALLS 512
++
++/* Bit i: argument i of the call is a pointer, by its SYSCALL_DEFINE type (generated). */
++extern const u8 sublet_syscall_pointers[SUBLET_NR_SYSCALLS];
++
++/* The arguments of one call: the integer views of a0 to a5, and bit i of tagged when the
++ * saved slot of ai holds a reference. */
++struct sublet_bind_args {
++	unsigned long arg[SUBLET_HANDLE_ARGS];
++	unsigned int tagged;
++};
++
++/* What the binder knows about an allowed call. */
++#define SUBLET_EMBEDDED	0x1	/* a structure behind a pointer holds pointers: the loader */
++struct sublet_allowed {
++	u16 nr;
++	u8 extra;	/* pointer positions the types miss (the mmap family) */
++	u8 flags;
++	/* For a command-dependent call: add the pointer positions of the command in a->arg, or
++	 * refuse it with an error. */
++	long (*command)(const struct sublet_bind_args *a, unsigned int *pointers);
++};
++
++/* The allowed call nr, or NULL. */
++const struct sublet_allowed *sublet_allowed_call(unsigned long nr);
++/* The pointer positions of an allowed call for these arguments, or a negative error. */
++long sublet_pointer_positions(const struct sublet_allowed *e, const struct sublet_bind_args *a);
++/* Bind call nr: 0 and handles in a->arg, or -ENOSYS (not allowed), -EFAULT (an integer with
++ * bits above the address in a pointer position) or the command's error. */
++long sublet_bind_core(unsigned long nr, struct sublet_bind_args *a);
++
++#ifdef __KERNEL__
++/* The compat-style loader (loader.c) for a call with SUBLET_EMBEDDED: read the structures in
++ * the user layout through the outer reference, load each embedded reference into refs and
++ * point the call's arguments at kernel copies whose pointers are handles numbered from
++ * SUBLET_HANDLE_FIRST_LIST. 0 or a negative error. */
++long sublet_load_embedded(unsigned long nr, struct sublet_bind_args *a,
++			  struct sublet_call_refs *refs);
++#endif
++
++#endif
+--- /dev/null
++++ b/arch/riscv/kernel/sublet/loader.c
+@@ -0,0 +1,18 @@
++// SPDX-License-Identifier: GPL-2.0-only
++/*
++ * The compat-style loader of plan v5 step 5 for the calls whose structures hold pointers.
++ * Not built yet: only pselect6 without a sigset pack passes, every other call that needs the
++ * loader gets ENOSYS.
++ */
++#include <linux/errno.h>
++#include <asm/unistd.h>
++#include <asm/sublet-uaccess.h>
++#include "bind.h"
++
++long sublet_load_embedded(unsigned long nr, struct sublet_bind_args *a,
++			  struct sublet_call_refs *refs)
++{
++	if (nr == __NR_pselect6 && !a->arg[5])
++		return 0;
++	return -ENOSYS;
++}
