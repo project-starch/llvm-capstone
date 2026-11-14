@@ -1,0 +1,88 @@
+Lean virtual mallocng, part 1: malloc issues an object in one call, and reaches the context through one pointer. The upstream malloc body becomes an always-inline helper that malloc uses after its own size check; __malloc_alloc keeps the checked entry for aligned_alloc and realloc. Same policy: the same size classes, groups, steps and order.
+
+--- a/src/malloc/mallocng/malloc.c	2026-11-14 21:10:25.047015237 +0800
++++ b/src/malloc/mallocng/malloc.c	2026-11-14 21:10:25.047015237 +0800
+@@ -288,9 +288,12 @@
+ 	return 0;
+ }
+ 
+-void *__malloc_alloc(size_t n)
++/* The upstream malloc body. Inlined into malloc, so one call issues the object; the caller has checked
++ * size_overflows. The context is reached through one pointer: each direct ctx.x access re-formed the
++ * bounded global capability (address, end, scc, shrink). Same policy, same steps. */
++static inline __attribute__((always_inline)) void *malloc_alloc(size_t n)
+ {
+-	if (size_overflows(n)) return 0;
++	struct malloc_context *const c = &ctx;
+ 	struct meta *g;
+ 	uint32_t mask, first;
+ 	int sc;
+@@ -318,7 +321,7 @@
+ 		g->avail_mask = g->freed_mask = 0;
+ 		// use a global counter to cycle offset in
+ 		// individually-mmapped allocations.
+-		ctx.mmap_counter++;
++		c->mmap_counter++;
+ 		idx = 0;
+ 		goto success;
+ 	}
+@@ -326,22 +329,22 @@
+ 	sc = size_to_class(n);
+ 
+ 	rdlock();
+-	g = ctx.active[sc];
++	g = c->active[sc];
+ 
+ 	// use coarse size classes initially when there are not yet
+ 	// any groups of desired size. this allows counts of 2 or 3
+ 	// to be allocated at first rather than having to start with
+ 	// 7 or 5, the min counts for even size classes.
+-	if (!g && sc>=4 && sc<32 && sc!=6 && !(sc&1) && !ctx.usage_by_class[sc]) {
+-		size_t usage = ctx.usage_by_class[sc|1];
++	if (!g && sc>=4 && sc<32 && sc!=6 && !(sc&1) && !c->usage_by_class[sc]) {
++		size_t usage = c->usage_by_class[sc|1];
+ 		// if a new group may be allocated, count it toward
+ 		// usage in deciding if we can use coarse class.
+-		if (!ctx.active[sc|1] || (!ctx.active[sc|1]->avail_mask
+-		    && !ctx.active[sc|1]->freed_mask))
++		if (!c->active[sc|1] || (!c->active[sc|1]->avail_mask
++		    && !c->active[sc|1]->freed_mask))
+ 			usage += 3;
+ 		if (usage <= 12)
+ 			sc |= 1;
+-		g = ctx.active[sc];
++		g = c->active[sc];
+ 	}
+ 
+ 	for (;;) {
+@@ -362,14 +365,20 @@
+ 		unlock();
+ 		return 0;
+ 	}
+-	g = ctx.active[sc];
++	g = c->active[sc];
+ 
+ success:
+-	ctr = ctx.mmap_counter;
++	ctr = c->mmap_counter;
+ 	unlock();
+ 	return enframe(g, idx, n, ctr);
+ }
+ 
++void *__malloc_alloc(size_t n)
++{
++	if (size_overflows(n)) return 0;
++	return malloc_alloc(n);
++}
++
+ int is_allzero(void *p)
+ {
+ 	p = heap_access(p);
+@@ -385,6 +394,6 @@
+ {
+ 	if (size_overflows(n)) return 0;
+ 	if (n >= 4096) return aligned_alloc(heap_granule(heap_round(n)), n);
+-	return heap_alloc_issue(__malloc_alloc(n), n);
++	return heap_alloc_issue(malloc_alloc(n), n);
+ }
+ void HEAP_POLICY_SYMBOL(void) {}

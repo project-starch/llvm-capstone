@@ -6,12 +6,19 @@ out=${1:?Output directory}
 musl=${2:?Prepared Capstone musl source tree}
 shift 2
 export CAPSTONE_APPLICATION_PROFILE=virtual
-for patchfile in "$here/../../ports/musl-capstone/musl-patches/"*.patch; do
-    if ! patch -d "$musl" -p1 -R --dry-run -s -f < "$patchfile" >/dev/null 2>&1; then
-        echo "musl source is not current: run prepare-musl-capstone.sh (missing $(basename "$patchfile"))" >&2
+# The patches are a series (0012 edits lines 0009 adds), so they are reversed together, last first, on a copy of
+# the trees they touch: each must come out cleanly from the state the later ones leave.
+patches=("$here/../../ports/musl-capstone/musl-patches/"*.patch)
+check=$(mktemp -d)
+cp -a "$musl/src" "$musl/include" "$check/"
+for ((i = ${#patches[@]} - 1; i >= 0; --i)); do
+    if ! patch -d "$check" -p1 -R -s -f --no-backup-if-mismatch < "${patches[i]}" >/dev/null 2>&1; then
+        echo "musl source is not current: run prepare-musl-capstone.sh (missing $(basename "${patches[i]}"))" >&2
+        rm -rf "${check:?}"
         exit 2
     fi
 done
+rm -rf "${check:?}"
 # These options affect libc now, as well as the runtime. The policy symbol in
 # malloc-mapping.c makes mixing differently configured archives a link error.
 heap_flags=()
