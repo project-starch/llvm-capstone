@@ -4485,7 +4485,7 @@ byte-identical (blob 213b9e5cea99) on ffb82d5bb, 6d0e754d5, 105c464bc and 9972ae
 - **Synthesis:** no FLU signal is on the standing loop list. The cost was not measured by a gate, but the final
   6d0e754d5 carrying the fix routed and sealed on every key.
 
-### R-73 — the debug module's system-bus master writes DRAM around the AXI adapter, so its writes update neither capability tags, the tag-word cache nor the page bitmap `OPEN 2026-11-14 — by source (claim-audited while auditing the TWC change); present on every tree with the shadow-tag adapter; exposure on the board UNMEASURED: whether the JTAG load path uses this master and is followed by a reset is not established; no fix written`
+### R-73 — the debug module's system-bus master writes DRAM around the AXI adapter, so its writes update neither capability tags, the tag-word cache nor the page bitmap `OPEN 2026-11-14 — by source (claim-audited while auditing the TWC change); present on every tree with the shadow-tag adapter; board exposure NIL IF the board's `reset halt` asserts ndmreset (one gdb read; see Exposure); no fix written`
 
 **Mechanism.** The SoC crossbar has two masters: `localparam NBSlave = 2; // debug, ariane`
 (`corev_apu/fpga/src/ariane_xilinx.sv:220`). The debug module's AXI master is `slave[1]` (`i_dm_axi_master`, with
@@ -4501,11 +4501,18 @@ directly and does none of these. So:
 The only other crossbar master slot is the core's own (`corev_apu/tb/ariane_soc_pkg.sv:20`, `NrSlaves = 2`); the I$
 path only reads.
 
-**Exposure.** Debug-only by construction, but the board's image load goes over JTAG. If that load writes memory
-through this master into pages a previous run had marked, and no reset (which clears the bitmap and the TWC) follows,
-the loaded program starts with stale tags. Not established either way: the load flow's use of the system bus and its
-reset sequence have not been read. What would settle it: read the board driver's load sequence for `sbaccess` /
-`ndmreset`, or a board arm that STCs into a page, re-loads an image over it without a power cycle, and reads the tag.
+**Exposure.** Debug-only by construction, but the board's image load goes over JTAG. Read from the drivers (board
+lane, 2026-11-14; `tests/rtl-smoke/fpga_driver`: run_rtl_smoke.py:203-224, run_ladder_perf_fpga.py:259-261,
+run_ladder_base_fpga.py:80-82, run_base_bare_fpga.py:133-136): every boot is `monitor reset halt`, then
+`load_image`, then `continue`, and no reset follows the load. The page bitmap's clear and the TWC's reset run on the
+adapter's `rst_ni`, which is `ndmreset_n` (`ariane_xilinx.sv:316-320` → `i_ariane .rst_ni` `:778` → cva6 →
+`wt_cache_subsystem.sv:237`). So if `reset halt` asserts ndmreset, every page is unmarked when the load writes; an
+unmarked page's leftover tag bytes are invisible until its first tagged store zeroes them, and everything loaded
+after (kernel, domains) is written by the core's own LSU. In that case the exposure is nil whether the load uses the
+system bus or the program buffer. NOT ESTABLISHED: what `reset halt` asserts is the OpenOCD configuration on the
+board's host (the in-tree `ariane.cfg` is stock upstream, not the board's; riscv-013 resets through dmcontrol.ndmreset
+unless reset_config overrides it). One read settles it: the board config's reset-assert setting, or
+`monitor riscv set_mem_access` and `reset_config` in a gdb session.
 
 **Siblings.** I-16 (a sim-trace defect found in the same session), and the TWC work on capstone-ariane
 perf/twc-reach (where this was found; that change neither fixes nor worsens it).
