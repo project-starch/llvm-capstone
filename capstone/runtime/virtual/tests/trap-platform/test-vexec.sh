@@ -4,6 +4,8 @@
 #   2. Control: an image that exits 3 prints no line and exits 3.
 #   3. Control: --platform refuses when dom_binfmt is not Y.
 #   4. --stats prints the numeric parameters as JSON and skips the others.
+#   5. A kernel access fault of the child: the kernel-fault line, and the child's own exit status 0.
+#      Control: another pid's kernel fault prints nothing.
 set -u
 here=$(cd "$(dirname "$0")" && pwd)
 vexec=$here/../../trap-vexec.sh
@@ -22,6 +24,13 @@ echo "[ 1.0] sublet: fault cause=25 pc=0x4000001010 address=0x55 pid=\$\$ comm=f
 kill -SEGV \$\$
 IMG
 printf '#!/bin/sh\nexit 3\n' > "$work/three.dom"
+cat > "$work/kfault.dom" <<IMG
+#!/bin/sh
+echo "[ 2.0] sublet: kernel fault cause=25 address=0x4000002000 nr=63 pid=\$\$ comm=kfault.dom" >> "$work/log"
+echo "[ 2.1] sublet: kernel fault cause=28 address=0x1 nr=64 pid=999999 comm=other" >> "$work/log"
+exit 0
+IMG
+chmod +x "$work/kfault.dom"
 chmod +x "$work/bin/dmesg" "$work/fault.dom" "$work/three.dom"
 fail=0
 export PATH="$work/bin:$PATH" SUBLET_PARAMETERS="$work/sublet/parameters" CAPSTONE_EXEC_DIAGNOSTICS=1
@@ -45,4 +54,8 @@ case $out in
     "$want") echo "PASS --stats" ;;
     *) echo "FAIL --stats: $out"; fail=1 ;;
 esac
+out=$(cd "$work" && sh "$vexec" kfault.dom 2>&1)
+rc=$?
+want="capstone-exec: kernel fault cause=25 address=0x4000002000 nr=63 image=kfault.dom"
+if [ "$rc" = 0 ] && [ "$out" = "$want" ]; then echo "PASS kernel fault line, exit 0, other pid ignored"; else echo "FAIL kernel fault: rc=$rc out=$out"; fail=1; fi
 exit $fail

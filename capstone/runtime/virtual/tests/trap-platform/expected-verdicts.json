@@ -1,0 +1,12 @@
+{
+  "note": "Verdicts the evaluation expects by design, so a run's report lists them apart from unexpected misses.",
+  "expected": [
+    {
+      "corpus": "ffmpeg/carved-repros",
+      "arm": "virtual-malloc",
+      "cases": "all (00-12)",
+      "verdict": "MISSED",
+      "reason": "Each defect crosses between two regions that FFmpeg carves out of one allocation by pointer arithmetic, and the case checks that the whole overshoot stays inside that allocation. The malloc arm bounds and revokes whole allocations only, so the access stays inside a live object it handed out and cannot fault. The corpus note records the same 0 of 12 for every per-allocation arm (ASan, CheriBSD, PoisonCap, Capstone bounds, Capstone with Sublet); only carve bounds (the virtual-nested-pools arm) catch these. The virtual-malloc bundle of 2026-10-10 reads MISSED for all 13 cases."
+    }
+  ]
+}

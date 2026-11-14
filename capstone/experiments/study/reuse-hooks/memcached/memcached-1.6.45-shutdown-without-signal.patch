@@ -1,0 +1,38 @@
+--- a/proto_text.c
++++ b/proto_text.c
+@@ -1236,7 +1236,7 @@
+     if (pr->tok.ntokens == 1) {
+         c->close_reason = SHUTDOWN_CLOSE;
+         conn_set_state(c, conn_closing);
+-        raise(SIGINT);
++        mc_request_stop(); /* reuse study: the stop the SIGINT handler makes, without a signal */
+     } else if (pr->tok.ntokens == 2 && mc_prcmp(pr, SUBCOMMAND_TOKEN, "graceful") == 0) {
+         c->close_reason = SHUTDOWN_CLOSE;
+         conn_set_state(c, conn_closing);
+--- a/memcached.c
++++ b/memcached.c
+@@ -4274,6 +4274,12 @@
+     stop_main_loop = EXIT_NORMALLY;
+ }
+ 
++/* reuse study: what sig_handler does, called by the shutdown command instead of raise(SIGINT).
++ * On the trap route a delivered signal ends a protected program even when it has a handler. */
++void mc_request_stop(void) {
++    *(volatile int *)&stop_main_loop = EXIT_NORMALLY;
++}
++
+ static void sighup_handler(const int sig) {
+     settings.sig_hup = true;
+ }
+--- a/memcached.h
++++ b/memcached.h
+@@ -1130,6 +1130,9 @@
+ #define drop_worker_privileges()
+ #endif
+ 
++/* reuse study: the shutdown command stops the main loop without raising a signal (memcached.c) */
++void mc_request_stop(void);
++
+ /* If supported, give compiler hints for branch prediction. */
+ #if !defined(__GNUC__) || (__GNUC__ == 2 && __GNUC_MINOR__ < 96)
+ #define __builtin_expect(x, expected_value) (x)

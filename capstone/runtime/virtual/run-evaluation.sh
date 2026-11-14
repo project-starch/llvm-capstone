@@ -42,6 +42,10 @@ OUT=$(cd "$OUT" && pwd)
 export CAPSTONE_QEMU_LOCK=${CAPSTONE_QEMU_LOCK:-$HOME/asr-work/qemu-gate.lock}
 export CAPSTONE_QEMU_DOMAIN_LOCK=${CAPSTONE_QEMU_DOMAIN_LOCK:-$OUT/lock}
 export JULIET_LANES=${JULIET_LANES:-16}
+# Each Juliet program's own limit (juliet-timeout). A program start costs one to three seconds under
+# QEMU and 16 VMs at once slow each guest, so the 10 s of the deleted route cut faulting runs short
+# (run-2 spatial seeded, 14 Nov 2026); 30 s still ends a looping case.
+JULIET_LIMIT_MS=${JULIET_LIMIT_MS:-30000}
 EVAL_LANES=${EVAL_LANES:-16}
 SUMMARY=$OUT/summary.tsv
 [ -f "$SUMMARY" ] || printf 'step\trc\tseconds\n' > "$SUMMARY"
@@ -61,6 +65,8 @@ main() {
       *) echo "STOPPED: unknown step $step"; exit 2 ;;
     esac
   done
+  # Steps in which the kernel refused an access through the program's reference: counted apart.
+  python3 "$HERE/kernel-faults.py" "$OUT" | tee "$OUT/kernel-faults.txt"
   echo "DONE: $SUMMARY"
   cat "$SUMMARY"
 }
@@ -108,10 +114,10 @@ juliet_part() {
           --sdk "$SDK" --out "$build"
       fi
       timed "juliet-$set-run" python3 "$J/run.py" --build "$build" --kit "$KIT" --helper "$JULIET_HELPER" \
-        --out "$out/run" ;;
+        --limit-ms "$JULIET_LIMIT_MS" --out "$out/run" ;;
     seeded)
       timed "juliet-$set-run-seeded" python3 "$J/run.py" --build "$d/build-seeded" --kit "$KIT" \
-        --helper "$JULIET_HELPER" --out "$out/run-seeded" ;;
+        --helper "$JULIET_HELPER" --limit-ms "$JULIET_LIMIT_MS" --out "$out/run-seeded" ;;
     probe)
       timed "juliet-$set-probe" python3 "$J/probe.py" --sdk "$SDK" --kit "$KIT" --helper "$JULIET_HELPER" \
         --out "$out/probe" ;;

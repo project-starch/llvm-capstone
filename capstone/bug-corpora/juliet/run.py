@@ -52,7 +52,8 @@ def observe(text, result):
     return {"exit": [result.get("kind"), result.get("value")], "fault_line": fault, "qemu_line": q[-1] if q else None,
             "events": [e for _, e in pos], "timeout": "[runner] TIMEOUT" in text,
             "twin": dict(re.findall(r"^@@TWIN (\w+)=(\S+)$", text, re.M)),
-            "randcheck": dict(re.findall(r"RAND seed=(\d) first2=(\d\d)", text))}
+            "randcheck": dict(re.findall(r"RAND seed=(\d) first2=(\d\d)", text)),
+            "kernel_faults": [l.strip() for l in text.splitlines() if "capstone-exec: kernel fault " in l]}
 
 
 def main():

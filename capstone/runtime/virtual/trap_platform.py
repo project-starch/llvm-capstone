@@ -110,6 +110,7 @@ INIT_SCRIPT = f"""#!/bin/busybox sh
 /bin/busybox mount -t devtmpfs dev /dev 2>/dev/null
 /bin/busybox --install -s
 mount -t tmpfs tmpfs /tmp
+ifconfig lo 127.0.0.1 up 2>/dev/null || ip link set lo up
 export PATH=/bin:/sbin:/usr/bin:/usr/sbin HOME=/root
 echo "{INIT_UP}, kernel $(uname -r)"
 if [ -b /dev/vda ]; then
@@ -154,6 +155,7 @@ class Result:
     value: int = None
     fault: str = None
     output: str = ''
+    kernel_faults: list = field(default_factory=list)
 
 
 def main():
@@ -195,7 +197,8 @@ def main():
             parser.error('run needs a program or a --step')
         results, harness_ok = run_programs(a.kit, steps, a.work, a.timeout, a.kernel_arg, a.step_timeout, files)
         (a.work / 'results.json').write_text(json.dumps(
-            [{'name': r.name, 'kind': r.kind, 'value': r.value, 'fault': r.fault, 'output': r.output}
+            [{'name': r.name, 'kind': r.kind, 'value': r.value, 'fault': r.fault,
+              'kernel_faults': r.kernel_faults, 'output': r.output}
              for r in results], indent=1) + '\n')
         for r in results:
             print(f'{r.name} {r.kind} {"" if r.value is None else r.value}'.rstrip()
@@ -547,14 +550,15 @@ def split_steps(serial):
     for m in re.finditer(pattern, serial, re.S | re.M):
         name, text, rc = m.group(1), m.group(2), m.group(3)
         fault = next((line.strip() for line in text.splitlines() if 'domain fault cause=' in line), None)
+        kernel = [line.strip() for line in text.splitlines() if 'capstone-exec: kernel fault ' in line]
         if rc is None:
-            results[name] = Result(name, 'none', fault=fault, output=text)
+            results[name] = Result(name, 'none', fault=fault, output=text, kernel_faults=kernel)
         elif f'{BOUND}{name} ' in text:
-            results[name] = Result(name, 'timeout', None, fault, text)
+            results[name] = Result(name, 'timeout', None, fault, text, kernel)
         elif 128 < int(rc) <= 128 + NSIG:
-            results[name] = Result(name, 'signal', int(rc) - 128, fault, text)
+            results[name] = Result(name, 'signal', int(rc) - 128, fault, text, kernel)
         else:
-            results[name] = Result(name, 'exit', int(rc), fault, text)
+            results[name] = Result(name, 'exit', int(rc), fault, text, kernel)
     return results
 
 

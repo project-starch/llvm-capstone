@@ -19,7 +19,8 @@
 #
 # Words the kernel line lacks read 0x0. The entry is the kernel's entry= word, else the address
 # of the loader's line `sublet: COMM[PID] enters 0x..` for the child. The code base is the
-# kernel's code= word, else the loader's dom_last_base. As before, the line goes to stderr when stderr is a terminal or
+# kernel's code= word, else the loader's dom_last_base. The record is the newest one that names
+# the child's pid (a fault of another thread of the child names that thread's id and prints no line). As before, the line goes to stderr when stderr is a terminal or
 # CAPSTONE_EXEC_DIAGNOSTICS is set, and to the file CAPSTONE_FAULT_RECORD names when that is set.
 #
 # The child runs as an asynchronous command, so it starts with SIGINT and SIGQUIT ignored.
@@ -83,7 +84,6 @@ run() {
         *) image=./$image ;;
     esac
 
-    seen=$(dmesg | grep -cE "$RECORDS")
     exec 3<&0
     "$image" "$@" <&3 3<&- &
     child=$!
@@ -99,50 +99,90 @@ run() {
     done
     trap - HUP INT TERM USR1 USR2 ALRM
 
+    # One read of the kernel log serves both reports: each process start costs a second or more
+    # under QEMU, so the reports parse in the shell and start nothing else.
+    log=$(dmesg | grep -E "$RECORDS|sublet: kernel fault |sublet: .*\[$child\] enters ")
+    kernel_faults "$child" "$image"
     if [ $rc -le 128 ] || [ $rc -gt 192 ]; then
         exit $rc
     fi
-    report "$child" "$image" "$seen"
+    report "$child" "$image"
     signal=$((rc - 128))
     trap - $signal 2>/dev/null
     kill -$signal $$
     exit $rc
 }
 
-# report PID IMAGE SEEN: print the launcher's fault line from the first new kernel record for PID,
-# or from the first new record when none names PID (a thread's record names its own id).
-report() {
-    records=$(dmesg | grep -E "$RECORDS" | tail -n +$(($3 + 1)))
-    [ -n "$records" ] || return 0
-    record=$(echo "$records" | grep " pid=$1 " | head -n 1)
-    [ -n "$record" ] || record=$(echo "$records" | head -n 1)
+# emit LINE: the launcher's line, to stderr and the fault record as the launcher of the deleted route did.
+emit() {
+    if [ -n "$CAPSTONE_FAULT_RECORD" ]; then
+        echo "$1" >> "$CAPSTONE_FAULT_RECORD"
+    fi
+    if [ -t 2 ] || [ -n "$CAPSTONE_EXEC_DIAGNOSTICS" ]; then
+        echo "$1" >&2
+    fi
+}
 
-    base=$(cat "$PARAMETERS/dom_last_base" 2>/dev/null)
+# kernel_faults PID IMAGE: one line per kernel access through the child's reference that faulted,
+#   sublet: kernel fault cause=C address=A nr=N pid=PID comm=NAME
+# printed as
+#   capstone-exec: kernel fault cause=C address=A nr=N image=IMAGE
+# The kernel refused the access (EFAULT or a short count) and the program went on, so these lines
+# stand beside the exit status: the judges count such a run as blocked in the kernel, apart from
+# caught and missed.
+kernel_faults() {
+    echo "$log" | while IFS= read -r line; do
+        case $line in
+            *"sublet: kernel fault "*" pid=$1 "*) ;;
+            *) continue ;;
+        esac
+        cause= address= nr=
+        for word in ${line#*sublet: kernel fault }; do
+            case $word in
+                cause=*) cause=${word#cause=} ;;
+                address=*) address=${word#address=} ;;
+                nr=*) nr=${word#nr=} ;;
+            esac
+        done
+        emit "capstone-exec: kernel fault cause=$cause address=$address nr=$nr image=${2##*/}"
+    done
+}
+
+# report PID IMAGE: the launcher's fault line from the newest kernel fault record for PID. Words the
+# record lacks read 0x0; the entry falls back to the loader's `enters` line for PID, the code base to
+# the loader's dom_last_base.
+report() {
+    record= entered=
+    while IFS= read -r line; do
+        case $line in
+            *"sublet: fault "*" pid=$1 "*|*"capstone_task: fault "*" pid=$1 "*) record=$line ;;
+            *"[$1] enters 0x"*) entered=${line##* enters }; entered=${entered%%,*} ;;
+        esac
+    done <<EOF_LOG
+$log
+EOF_LOG
+    [ -n "$record" ] || return 0
+
+    base=0
+    read -r base < "$PARAMETERS/dom_last_base" 2>/dev/null
     case $base in
         ''|*[!0-9]*) base=0 ;;
     esac
     base=$(printf '0x%x' "$base")
-    entered=$(dmesg | grep "sublet: .*\[$1\] enters 0x" | tail -n 1 | sed 's/.* enters \(0x[0-9a-f]*\).*/\1/')
 
-    line=$(echo "$record" | awk -v image="$2" -v base="$base" -v entered="${entered:-0x0}" '{
-        for (i = 1; i <= NF; i++) {
-            k = $i; v = $i
-            if (sub(/=.*/, "", k) && sub(/^[^=]*=/, "", v)) f[k] = v
-        }
-        ra = ("ra" in f) ? f["ra"] : "0x0"
-        fp = ("fp" in f) ? f["fp"] : "0x0"
-        entry = ("entry" in f) ? f["entry"] : entered
-        code = ("code" in f) ? f["code"] : base "-" base
-        printf "capstone-exec: domain fault cause=%s pc=%s address=%s ra=%s fp=%s entry=%s code=%s image=%s\n",
-               f["cause"], f["pc"], f["address"], ra, fp, entry, code, image
-    }')
-
-    if [ -n "$CAPSTONE_FAULT_RECORD" ]; then
-        echo "$line" >> "$CAPSTONE_FAULT_RECORD"
-    fi
-    if [ -t 2 ] || [ -n "$CAPSTONE_EXEC_DIAGNOSTICS" ]; then
-        echo "$line" >&2
-    fi
+    cause= pc= address= ra=0x0 fp=0x0 entry=${entered:-0x0} code=$base-$base
+    for word in ${record#*fault }; do
+        case $word in
+            cause=*) cause=${word#cause=} ;;
+            pc=*) pc=${word#pc=} ;;
+            address=*) address=${word#address=} ;;
+            ra=*) ra=${word#ra=} ;;
+            fp=*) fp=${word#fp=} ;;
+            entry=*) entry=${word#entry=} ;;
+            code=*) code=${word#code=} ;;
+        esac
+    done
+    emit "capstone-exec: domain fault cause=$cause pc=$pc address=$address ra=$ra fp=$fp entry=$entry code=$code image=$2"
 }
 
 main "$@"

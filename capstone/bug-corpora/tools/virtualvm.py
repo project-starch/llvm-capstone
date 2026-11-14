@@ -244,5 +244,10 @@ def split(serial):
             result = {"kind": "signal", "value": rc - 128} if 128 < rc <= 128 + NSIG else {"kind": "exit", "value": rc}
         if fault:
             result["fault"] = fault
+        # the kernel refused an access through the program's reference and the program went on
+        # (trap-vexec.sh's `kernel fault` lines): counted apart from caught and missed
+        kernel = [l.strip() for l in text.splitlines() if "capstone-exec: kernel fault " in l]
+        if kernel:
+            result["kernel_faults"] = kernel
         steps[name] = (text, result)
     return steps

@@ -7,9 +7,11 @@
 Each repetition is the protocol oracle unchanged: host/mc-harness/mc-harness.c (one connection
 through phases 1 and 2, eight concurrent connections in phase 3, the stats of phase 4) against a
 fresh server started as host/run-virtual.py starts it (capstone-job as uid 65534, capstone-vexec,
-`-l 127.0.0.1 -p 21299 -U 0 -m 64 -t 4`), stopped with TERM. memcached's SIGTERM handler ends the
-event loop and main returns, so the observer's atexit handler prints the REUSE-GAP lines on the
-server's stderr. CAPSTONE_QEMU_LOCK must name this VM's own lock. NEW_DIR/result.json holds, per
+`-l 127.0.0.1 -p 21299 -U 0 -m 64 -t 4 -A`), stopped with the `shutdown` command (mc-harness
+--stop shutdown). On the trap route a delivered signal ends a protected program even with a handler,
+so memcached-1.6.45-shutdown-without-signal.patch makes `shutdown` set the main loop's stop flag
+directly, as the SIGINT handler would; main returns and the observer's atexit handler prints the
+REUSE-GAP lines on the server's stderr. Both arms carry the patch. CAPSTONE_QEMU_LOCK must name this VM's own lock. NEW_DIR/result.json holds, per
 repetition, the parsed REUSE-GAP lines, the harness and job status and the sha256 of the normalised
 transcript; NEW_DIR/rep<N>/ the files the guest sent back. The console log stays in NEW_DIR/guest/.
 """
@@ -25,7 +27,9 @@ import subprocess
 import sys
 import time
 
-FLAGS = '-l 127.0.0.1 -p 21299 -U 0 -m 64 -t 4'
+# The kernel admits a .dom image only for root (sublet.dom_binfmt), so the server runs as root, which
+# memcached allows with -u root; capstone-job no longer drops to uid 65534.
+FLAGS = '-l 127.0.0.1 -p 21299 -U 0 -m 64 -t 4 -A -u root'
 
 
 def sha(path):
@@ -33,13 +37,12 @@ def sha(path):
 
 
 def gate(reps):
-    lines = ['#!/bin/sh', 'cd /mnt/vm || exit 1', 'dmesg -n 1', './capstone-vexec --platform > /dev/null || exit 1',
-             'chmod 666 /dev/capstone-vm']
+    lines = ['#!/bin/sh', 'cd /mnt/vm || exit 1', 'dmesg -n 1', './capstone-vexec --platform > /dev/null || exit 1']
     for rep in range(1, reps + 1):
         out = f'/tmp/rg-{rep}'
         lines += [f'echo RG_BEGIN:{rep}', f'mkdir -p {out}; chmod 777 {out}',
-                  f'./mc-harness --out {out} --port 21299 --stop TERM -- ./capstone-job {out}/job.json '
-                  f'--user 65534:65534 -- ./capstone-vexec ./memcached.dom {FLAGS}',
+                  f'./mc-harness --out {out} --port 21299 --stop shutdown -- ./capstone-job {out}/job.json '
+                  f'-- ./capstone-vexec ./memcached.dom {FLAGS}',
                   'rc=$?',
                   f'for f in transcript.norm status.txt identity.txt job.json server.out server.err; do '
                   f'[ -f {out}/$f ] || continue; echo RG_FILE:$f; gzip -c {out}/$f | base64; echo RG_FILE_END; done',
