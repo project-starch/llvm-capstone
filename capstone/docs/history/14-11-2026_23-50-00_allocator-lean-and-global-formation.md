@@ -86,3 +86,20 @@ F2 is Capstone-only: plain musl's free has no table walk. The writers of the pag
 two paths and __heap_unmapping's two paths, plus table creation in leaf_for, all under index_lock. Lookups take no
 lock, so a cache needs a generation counter and a seqlock read: about 10 instructions saved per free, about 0.18 G on
 perl. The alternative proposed is a 2-level table with the same writers (about 0.1 G).
+
+**Measured: the 2-level table, not adopted (2026-11-15).**
+- The change: a 2^18-entry directory of 2 MiB leaves, mapped at the first heap mapping. The diff is kept on the build
+  host (perf/alean/f2-two-level-table.diff); it is not committed.
+- The gate passed:
+  - free-reject MATCH on 11 cases;
+  - its mutant (skip the owner clear at the reuse put) MISMATCHes through the reissue trap;
+  - the hosted contract is identical;
+  - a claim-auditor did not refute it (no missing reader or writer across the repository and its submodules).
+- But it loses on cost. perl full against 0012+0013:
+  - user -110.7 M;
+  - kernel +133.4 M;
+  - pages +2,278;
+  - one more service exit per exec (k3 +318), the directory's own mmap.
+- gcc: user -6.0 M, kernel +3.3 M, pages +481 (its stage's arena_pin pins the directory).
+- The lookup keeps three dependent loads; it saves only the mid index's arithmetic.
+- The seqlock cache waits on the FRCDKMSa3 board pair.
