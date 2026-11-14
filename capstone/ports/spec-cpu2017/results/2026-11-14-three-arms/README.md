@@ -30,8 +30,13 @@ in [`../2026-11-08-train/PREREG.md`](../2026-11-08-train/PREREG.md) (Addendum 10
 | 3 | riscv-base with gp relaxation (RVGP): perl makerand, gcc | riscv-base with gp relaxation (RVGP): perl makerand, gcc. Then the long final rows (x264, full perl) on the chosen final bitstream |
 
 - **Final bitstream.** F's first reading: mcf -10.8 % against the batch with the same images (in-domain cycles
-  179.4 G -> 159.6 G; issue-stall cycles -18 G). F becomes the final temporal configuration if gcc on F (running) does
-  not lose. Then the 'final config' columns are re-measured on F.
+  179.4 G -> 159.6 G; issue-stall cycles -18 G; L1D misses, DTLB walks, faults and checks unchanged).
+  - Read it as the tag-word-cache change, reach and merge-on-write together. No silicon build separates the two.
+  - N = 1 per image. Config B (the batch's old tag cache on F's tree, with counters, board 2) is the control that the
+    gain is the tag cache and not the rest of the tree; its mcf should sit near the batch's.
+  - The pre-registered deciding reading is the tag counters (tag reads per marked-page miss on B, their fall on F),
+    still running.
+  - F becomes the final temporal configuration if gcc on F (running) does not lose. Then the 'final config' columns are re-measured on F.
 - **Next bitstream.** F2 + L1D 64 KiB (capstone-ariane b0f02bac7) and F2 alone (eeb654104, the fallback and
   one-variable control) are being built on apollo now.
 - **gp-relative globals** (pre-registered in Addendum 110). The lever is taken for both arms or neither, by the board
