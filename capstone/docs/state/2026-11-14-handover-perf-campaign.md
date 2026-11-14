@@ -313,6 +313,12 @@ CDERIVE/CREVOKE counts, revoked-subtree size, peak table memory). Give CREVOKE's
 **In progress:**
 - F's remaining readings, and the gp-relative decision pair (§8). F2 is sealed and flash-ready.
 - **Kernel cost of perl's full test.pl.**
+  - **Caveat, 14 Nov evening.** Every Capstone full-perl twin this week (the FRCDKMS/spatial/gp "q" stages and the
+    kernel table) ran with gcc's tuning set: arena_pin=1, resume_quantum=1, step_budget 10 s and retire_exit_sweep=2.
+    The board's perl stages write no parameter. So the kernel and page figures below describe that tuned
+    configuration, and are withdrawn as board-representative until the board-faithful census (census-bf, queued)
+    reads. User instruction counts are believed unaffected, not yet checked. The pool pair is internally one-variable;
+    its board effect is what bkit81 measures. (The gcc board stages DO carry that tuning: Addendum 116.)
   - **The measurement.** Capstone runs +4.73 G kernel instructions against riscv-base. That was measured at
     node_flat_records 524288, twice the board's table, on s1-FRCDKMSqk2 vs s1-RVBqk2. Corrected table:
     `$H/perf/kpin/perl-full-cap-vs-rv-v2.txt`.
