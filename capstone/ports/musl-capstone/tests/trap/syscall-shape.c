@@ -15,3 +15,9 @@ long probe_exit(int n) { return __syscall(SYS_exit, n); }
 long probe_exit_group(int n) { return __syscall(SYS_exit_group, n); }
 long probe_getpid(void) { return __syscall(SYS_getpid); }
 long probe_clock_gettime(int clock, void *p) { return __syscall(SYS_clock_gettime, clock, p); }
+long probe_rt_sigaction(int sig, const void *act, void *old)
+{ return __syscall(SYS_rt_sigaction, sig, act, old, 8); }
+long probe_rt_sigprocmask(int how, const void *set, void *old)
+{ return __syscall(SYS_rt_sigprocmask, how, set, old, 8); }
+long probe_sigaltstack(const void *ss, void *old)
+{ return __syscall(SYS_sigaltstack, ss, old); }

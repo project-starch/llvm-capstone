@@ -19,14 +19,18 @@ Image builds against snapshots of steps 3 and 5. Guest execution
 and live-waiter wake counting remain outstanding.
 [Integration contract and tests](../../kernel/tests/threads/README.md).
 
-## Trap libc build baseline, 14 November 2026
+## Trap libc integrated execution, 14 November 2026
 
-On `trap/s5-libc`, the virtual runtime uses stack startup and plain Linux
-ecalls with numbers in a7. All 1,349 musl files compiled on p13. The static
-write/mmap/munmap smoke and mallocng smoke linked and passed disassembly checks.
-The old startup object retained its image magic as the negative control.
-The CMake SDK and its smoke link also passed. Execution awaits the kernel
-loader. [Build procedure and exact integration contract](../../ports/musl-capstone/tests/trap/README.md).
+On `trap/s5-libc-int`, the setjmp and signal-registration changes are integrated
+onto `2443072aa6b`. The exec stack contract and thread runtime are preserved.
+All 1,349 musl files rebuilt on p13. The five smoke images linked and passed
+disassembly checks, including the clone reference checks. With the integrated
+kernel, `setjmp-smoke.dom` preserves the reference tag across longjmp and
+siglongjmp and exits 0. `signal-smoke.dom` registers SIGINT, changes its mask,
+checks the alternate stack and exits 0. `smoke.dom` writes `ok` and exits 7.
+Caught signal delivery remains deferred. The alternate-stack reference is
+thread-local to coexist with the integrated thread runtime.
+[Build, execution and controls](../../ports/musl-capstone/tests/trap/README.md).
 
 ## Rebased native kernel: full existing SPEC C-port gate passes
 

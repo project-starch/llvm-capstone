@@ -14,16 +14,15 @@ and stale wake-op controls described in the [thread tests](../../kernel/tests/th
 Complete lifetime-aware wake counting before claiming plan v5 step 8 complete.
 The current evidence covers compilation, linking and the host binder only.
 
-## Integrate the trap libc with the exec loader
+## Continue trap libc qualification
 
-On `trap/s5-libc`, use the [stack and syscall contract](../../ports/musl-capstone/tests/trap/README.md)
-when connecting the libc to the kernel. The loader must write tagged argv,
-envp and pointer-valued auxv entries, then restore tagged sp and image gp.
-Syscall numbers now arrive in a7. mmap must return a tagged depth-1 block.
-Run the linked smoke first and require stdout `ok` and exit status 7.
-Then run the mallocng smoke. Neither program has run yet.
-Run the thread smoke after the step 8 fragment is integrated. Caught signals
-and epoll side tables remain later work.
+The integrated kernel `2443072aa6b` runs the write/mapping, setjmp and
+signal-registration probes successfully with the rebuilt libc on
+`trap/s5-libc-int`. Preserve the [stack and syscall contract](../../ports/musl-capstone/tests/trap/README.md)
+and the existing thread runtime when integrating this commit. Run the thread
+smoke after the step 8 kernel fragment is integrated. Caught signals and epoll
+side tables remain later work. Registration success does not establish caught
+signal delivery.
 
 ## RTL implementation from the rebased native branch
 

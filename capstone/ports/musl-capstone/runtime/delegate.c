@@ -3,7 +3,66 @@
 #include <errno.h>
 #include <sys/syscall.h>
 #include <syscall_arch.h>
+#include <signal.h>
+#include "ksigaction.h"
 long __capstone_native_syscall(long, void *, void *, void *, void *, void *, void *);
+
+/* RISC-V Linux uses 8-byte addresses in these structures. Only registration
+ * is supported. The kernel refuses caught delivery for protected tasks. */
+struct linux_sigaction {
+    unsigned long handler, flags, mask;
+};
+struct linux_sigaltstack {
+    unsigned long sp;
+    int flags;
+    unsigned long size;
+};
+
+static long trap_sigaction(void *sig, const struct k_sigaction *act,
+                           struct k_sigaction *old, void *size)
+{
+    struct linux_sigaction in, out;
+    if (act) {
+        in.handler = (unsigned long)act->handler;
+        in.flags = act->flags;
+        __builtin_memcpy(&in.mask, act->mask, sizeof in.mask);
+    }
+    long r = __capstone_native_syscall(SYS_rt_sigaction, sig,
+        act ? &in : 0, old ? &out : 0, size, 0, 0);
+    if (!r && old) {
+        /* Code addresses use ordinary jalr in the trap ABI. */
+        old->handler = (void (*)(int))out.handler;
+        old->flags = out.flags;
+        __builtin_memcpy(old->mask, &out.mask, sizeof out.mask);
+    }
+    return r;
+}
+
+/* Retain each thread's registered stack reference so a query does not
+ * manufacture a pointer from an address. Caught delivery remains deferred. */
+static __thread void *trap_altstack;
+static long trap_sigaltstack(const stack_t *ss, stack_t *old)
+{
+    struct linux_sigaltstack in, out;
+    void *next = ss ? ss->ss_sp : 0;
+    int disable = ss && (ss->ss_flags & SS_DISABLE);
+    if (ss) {
+        in.sp = (unsigned long)ss->ss_sp;
+        in.flags = ss->ss_flags;
+        in.size = ss->ss_size;
+    }
+    long r = __capstone_native_syscall(SYS_sigaltstack,
+        ss ? &in : 0, old ? &out : 0, 0, 0, 0, 0);
+    if (!r) {
+        if (old) {
+            old->ss_sp = out.flags & SS_DISABLE ? 0 : trap_altstack;
+            old->ss_flags = out.flags;
+            old->ss_size = out.size;
+        }
+        if (ss) trap_altstack = disable ? 0 : next;
+    }
+    return r;
+}
 
 long __capstone_linux_syscall(long n, void *a, void *b, void *c,
                             void *d, void *e, void *f)
@@ -11,8 +70,11 @@ long __capstone_linux_syscall(long n, void *a, void *b, void *c,
     /* These need thread, signal or opaque-value support in a later step.
      * Refuse them before passing a layout that the kernel cannot yet read. */
     switch (n) {
+    case SYS_rt_sigaction:
+        return trap_sigaction(a, b, c, d);
+    case SYS_sigaltstack:
+        return trap_sigaltstack(a, b);
     case SYS_brk: case SYS_clone: case SYS_execve:
-    case SYS_rt_sigaction: case SYS_sigaltstack:
     case SYS_rt_sigreturn: case SYS_rt_sigtimedwait: case SYS_rt_sigqueueinfo:
     case SYS_rt_tgsigqueueinfo: case SYS_timer_create: case SYS_mq_notify:
     case SYS_epoll_ctl: case SYS_epoll_pwait:

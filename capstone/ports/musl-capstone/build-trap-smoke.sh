@@ -33,10 +33,13 @@ for src in "$here/runtime/"{linux-start.c,tls.c,delegate.c,native-syscall.S,set_
     objects+=("$obj")
 done
 "$CAPSTONE_LLVM_BIN/llvm-ar" rcs "$out/libtrap-runtime.a" "${objects[@]}"
-for test in smoke malloc-smoke threads-smoke; do
+"$CAPSTONE_CLANG" "${flags[@]}" -c "$here/tests/trap/jump-register.S" -o "$out/jump-register.o"
+for test in smoke malloc-smoke threads-smoke setjmp-smoke signal-smoke; do
+    extra=()
+    if [[ $test == setjmp-smoke ]]; then extra+=("$out/jump-register.o"); fi
     "$CAPSTONE_CLANG" "${flags[@]}" -c "$here/tests/trap/$test.c" -o "$out/$test.o"
     "$CAPSTONE_LD_LLD" --gc-sections -T "$rt/virtual/link.ld" -o "$out/$test.dom" \
-        "$out/$test.o" --whole-archive "$out/libtrap-runtime.a" --no-whole-archive \
+        "$out/$test.o" "${extra[@]}" --whole-archive "$out/libtrap-runtime.a" --no-whole-archive \
         "$TRAP_LIBC_ARCHIVE"
     "$CAPSTONE_LLVM_BIN/llvm-objdump" -d "$out/$test.dom" > "$out/$test.dis"
     "$CAPSTONE_LLVM_BIN/llvm-readelf" -SW "$out/$test.dom" > "$out/$test.sections"
@@ -58,5 +61,21 @@ if [[ -n ${TRAP_CONTROL_START:-} ]]; then
     grep -q '43504f4e 56564d37' "$out/control-handshake.txt"
     echo 'PASS: baseline startup contains the launcher image handshake'
 fi
-printf 'Built %s, %s and %s. Execution requires the trap-route kernel loader.\n' \
-    "$out/smoke.dom" "$out/malloc-smoke.dom" "$out/threads-smoke.dom"
+printf 'Built %s\n' "$out/"*.dom
+
+if [[ -n ${TRAP_CONTROL_SETJMP:-} ]]; then
+    "$CAPSTONE_CLANG" "${flags[@]}" -c "$TRAP_CONTROL_SETJMP" -o "$out/control-setjmp.o"
+    control_objects=()
+    for obj in "${objects[@]}"; do
+        [[ $obj == "$out/obj/setjmp.o" ]] || control_objects+=("$obj")
+    done
+    if "$CAPSTONE_LD_LLD" --gc-sections -T "$rt/virtual/link.ld" -o "$out/control-setjmp.dom" \
+        "$out/setjmp-smoke.o" "$out/jump-register.o" "$out/control-setjmp.o" \
+        "${control_objects[@]}" "$TRAP_LIBC_ARCHIVE" > "$out/control-setjmp.log" 2>&1; then
+        echo 'FAIL: baseline setjmp unexpectedly linked' >&2
+        exit 1
+    fi
+    grep -q 'undefined symbol: __capstone_sigsetjmp_save' "$out/control-setjmp.log"
+    grep -q 'undefined symbol: __capstone_longjmp_reap' "$out/control-setjmp.log"
+    echo 'PASS: baseline setjmp fails to link with both missing launcher hooks'
+fi

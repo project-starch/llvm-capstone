@@ -70,6 +70,15 @@ __sigsetjmp:
 	stc sp, 208(a0)
 	sd a1, 224(a0)
 	beqz a1, 1f
+#ifdef CAPSTONE_RUNTIME_TRAP
+	/* __ss starts at byte 232. Linux has one 64-bit signal-mask word. */
+	cincoffsetimm a2, a0, 232
+	li a0, 2 /* SIG_SETMASK, ignored when set is null */
+	li a1, 0
+	li a3, 8
+	li a7, 135 /* rt_sigprocmask */
+	ecall
+#else
 	cincoffsetimm sp, sp, -32
 	stc ra, 16(sp)
 2:
@@ -86,16 +95,40 @@ __sigsetjmp:
 #endif
 	ldc ra, 16(sp)
 	cincoffsetimm sp, sp, 32
+#endif
 1:
 	li a0, 0
 	ret
 .size sigsetjmp, .-sigsetjmp
+
+#ifdef CAPSTONE_RUNTIME_TRAP
+.global siglongjmp
+.type siglongjmp, %function
+siglongjmp:
+	ld t0, 224(a0)
+	beqz t0, longjmp
+	cincoffsetimm sp, sp, -32
+	stc a0, 0(sp)
+	sd a1, 16(sp)
+	cincoffsetimm a1, a0, 232
+	li a0, 2 /* SIG_SETMASK */
+	li a2, 0
+	li a3, 8
+	li a7, 135 /* rt_sigprocmask */
+	ecall
+	ldc a0, 0(sp)
+	ld a1, 16(sp)
+	cincoffsetimm sp, sp, 32
+	j longjmp
+.size siglongjmp, .-siglongjmp
+#endif
 
 .global longjmp
 .global _longjmp
 .type longjmp, %function
 longjmp:
 _longjmp:
+#ifndef CAPSTONE_RUNTIME_TRAP
 	/* A jump out of a signal handler must acknowledge the abandoned event
 	   using the destination sp, before restoring the saved register image. */
 	cincoffsetimm sp, sp, -32
@@ -113,6 +146,7 @@ _longjmp:
 	ldc a0, 0(sp)
 	ld a1, 16(sp)
 	cincoffsetimm sp, sp, 32
+#endif
 	ldc ra,   0(a0)
 	ldc s0,  16(a0)
 	ldc s1,  32(a0)

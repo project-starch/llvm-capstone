@@ -20,12 +20,12 @@ application ABI 3. Physical SDKs retain ABI 2.
 
 `smoke.dom` writes `ok`, maps a page, writes and reads through the returned
 reference, unmaps it and returns 7. `malloc-smoke.dom` allocates, accesses
-and frees an object through mallocng. These programs have been linked and
-inspected, but have not been run. Execution needs the kernel's trap loader.
+and frees an object through mallocng. The write/mapping smoke now runs on
+the integrated kernel as recorded below. The malloc smoke was rebuilt and
+checked here, but was not rerun in this qualification.
 
-The script retains disassemblies and checks the eleven Linux numbers used by
-read, write, openat, close, mmap, munmap, mprotect, exit, exit_group, getpid and
-clock_gettime. It also checks the six MOVC instructions, the ecall, the musl
+The script retains disassemblies and checks fourteen Linux syscall numbers,
+including rt_sigaction, rt_sigprocmask and sigaltstack. It also checks the six MOVC instructions, the ecall, the musl
 startup symbols, absence of launcher stubs and absence of the image handshake.
 
 For the negative control, extract `runtime/virtual/start.S` and `vm-abi.h`
@@ -87,8 +87,8 @@ without consuming launcher grants or performing an image handshake.
 
 Mallocng already obtains its metadata through mappings. Its payload mappings
 now use real mmap and munmap too. The trap syscall wrapper refuses brk.
-Thread creation now uses tagged clone arguments in the step 8 slice. Signal
-registration remains unsupported. The trap build
+Thread creation uses tagged clone arguments in the step 8 slice. Caught
+signal delivery remains unsupported. The trap build
 excludes the launcher thread and signal transports. Epoll operations and the
 signal operations that need opaque-reference translation return ENOSYS until
 the side tables from plan v5 are implemented. Execve also remains deferred.
@@ -113,5 +113,90 @@ or TLS access.
 On p13 in `~/asr-work/s8t`, all 1,349 libc files compiled. The two-thread
 `threads-smoke.dom` linked without undefined symbols and passed the clone
 disassembly checks. The existing write/mapping and malloc smokes still link.
-The three images have not run against the integrated kernel.
+Thread execution remains outside this libc qualification.
 See the [kernel thread contract and controls](../../../../kernel/tests/threads/README.md).
+
+## Jump buffers and signal registration
+
+The trap build keeps ra, sp and s0 to s11 in fourteen tagged STC/LDC slots.
+`sigsetjmp` saves the mask with Linux rt_sigprocmask (135 in a7), and
+`siglongjmp` restores it when savemask was nonzero. `longjmp` does not change
+the mask. Neither jump path calls the launcher save or reap hooks.
+The SDK defines CAPSTONE_RUNTIME_TRAP for assembly as well as C.
+
+Registration uses ordinary Linux rt_sigaction and sigaltstack calls. Their
+structures contain 8-byte addresses, so the trap dispatcher translates the
+libc's 16-byte pointer fields before calling the kernel. RISC-V's native
+sigaction layout has no restorer field. Handler addresses use ordinary jalr
+in this ABI. A thread-local reference preserves each thread's registered alternate stack
+when it is queried.
+No launcher signal metadata or signals.c object is linked.
+Signal masks go directly through rt_sigprocmask without translation.
+The kernel must refuse caught delivery and kill the task until tagged signal
+frames are implemented. These changes do not implement caught delivery.
+
+`setjmp-smoke.dom` jumps across two frames after clearing a reference in s2.
+It checks s2 with LCC and reads the referenced integer after both longjmp and
+siglongjmp. It also checks the zero-to-one return rule, saved-mask restoration
+and the savemask-zero case. `signal-smoke.dom` installs and queries SIGINT,
+uses signal(), blocks and restores the mask, and registers, queries and
+restores an alternate stack. It never delivers a signal.
+
+Both programs link and pass disassembly checks on p13. The rebuilt CMake SDK
+also links the sigsetjmp probe. To reproduce the link-failure control, extract
+runtime/setjmp.S from bfb7cd559bb and set TRAP_CONTROL_SETJMP to that file.
+The build requires that control to fail on both missing launcher hooks.
+Artifacts are under ~/asr-work/s5l/signal-smoke and sdk-setjmp.dom.
+
+## Integrated execution on 14 November 2026
+
+Branch `trap/s5-libc-int` combines the jump and signal changes with base
+`2443072aa6b`, including its exec stack contract and thread runtime. On p13,
+the existing LLVM installation rebuilt all 1,349 libc files with zero failures.
+All five smoke images linked and passed disassembly checks, including the
+thread clone checks. The startup-magic and missing-launcher-hook controls
+still passed. The installed toolchain's source freshness remains unverified.
+
+The guest used these inputs:
+
+- Kernel: `~/asr-work/eval/kernel/Image-2443072aa6b`.
+- QEMU: `~/asr-work/q1b/bin/qemu-1b`, one hart, sstc off.
+- Firmware: `~/asr-work/del-fw/out/f-keep/fw_jump.elf`.
+- Kernel parameter: `sublet.dom_binfmt=1`.
+- Initramfs: the busybox base at `~/asr-work/s5k/base-initramfs.cpio.gz`,
+  packed with the repository's `kernel/tests/libc-smoke/run.sh`. It uses the
+  extraction and repacking procedure from `kernel/tests/first-program/run.sh`.
+
+| Program | Output | Exit |
+| --- | --- | --- |
+| `setjmp-smoke.dom` | `setjmp ok` | 0 |
+| `signal-smoke.dom` | `signal ok` | 0 |
+| `smoke.dom` | `ok` | 7 |
+
+The jump probe checks the restored reference's tag with LCC before reading
+through it. The signal probe checks registration and masks without delivering
+a signal. The existing integration start contract and thread sources are
+retained. The alternate-stack reference is now thread-local because the
+combined runtime supports threads. Thread execution and caught signal
+delivery remain outside this qualification.
+
+Two short execution controls use the same libc archive and kernel. Replacing
+s2's jump-buffer STC stores with SD makes the jump probe exit 1. Linking the
+signal probe with the integration base's dispatcher, which refuses signal
+registration, makes it exit 1. Ordinary busybox commands still exit 0 after
+both positive and control runs. Neither run reports a kernel panic or a
+Sublet fault.
+
+Build output is in `~/asr-work/s5l/build-integrated.log`. Binaries,
+disassemblies and serial logs are in `~/asr-work/s5l/integrated`, with
+`integrated.log` for the positive run and `controls.log` for the controls.
+The boot wrapper printed EOF because its pattern did not match doubled
+carriage returns. The verdicts above were checked directly in the serial
+logs. The base initramfs also lacked bare head and sed commands used by the
+wrapper's final dmesg filter. The complete serial logs were checked for faults.
+The earlier loader rejection remains recorded in `~/asr-work/s5l/signal-run`.
+
+The syscall boundary assumes the step-3 register slots preserve references
+across ordinary ecalls. Native nested signal structures require the
+translations above, not a capability-layout kernel sigaction structure.
+No additional plan-v5 interface change is introduced.
