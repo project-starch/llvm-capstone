@@ -4039,3 +4039,24 @@ standalone park, dev cba01ed3090d, run from a detached worktree at that commit.
   - the chain's case block exercised with fake park exits 0, 10, 1 and 2, giving continue, continue, STOP and STOP.
 - **Scope:** chains already waiting keep nat-run2.sh, because a running script is not edited. Those are boards 1-3's
   queues as of this addendum.
+
+## Addendum 125 (2026-11-15 04:48 +08): board 2 times CDERIVE and CREVOKE on silicon after the CPython ABBA
+
+**What runs.** The nested lane's crvtime domain, stage nested/crvt/board/c2-stage (domain stripped 44b1492101016471). It
+runs on kit bkit75n on F. Its pre-registration is nested-workloads d0b72cfe7a21. It is under a minute of commands:
+- a control with sentinel 0x5ca1ab1e;
+- lone CDERIVE and a one-node CREVOKE;
+- 10k back-to-back CDERIVEs;
+- CREVOKE of chains of 1, 10, 100, 1k, 10k and 100k nodes;
+- last, a probe toward 1M, which the 262,144-record table must refuse.
+
+The probe is the one expected failure, and it is placed last. Silicon cause numbers are read from the silicon table, not
+from QEMU's: on the twin it dies with QEMU cause 30, which is node exhaustion.
+
+**Why.** The lead asks what CREVOKE costs in the worst case, from 1 to 10^6 nodes, and what explains the nested
+workloads' cost. The RTL timings bracket speedtest1's lifetime cost at 15-98 %, which depends on the memory delay. Only
+a board reading narrows that.
+
+**Order on board 2.** aw-sx → 15-minute gap → bc-b2 (CPython ABBA, Addendum 123) → **bd-b2** (this stage, list
+"c2-stage 900 20"). It is launched with nat-run3.sh, so the pre-boot switch park runs (Addendum 124). Checksums are
+verified against c2-stage.SHA256SUMS, and the stubbed nat-run3 dry run passes.
