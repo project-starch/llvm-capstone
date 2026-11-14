@@ -19,6 +19,9 @@ markers, the fault and the timeout appeared, and any `@@TWIN` reading.
 Exit 0 when every batch completed, 75 when any boot did not, 1 when a staged image differs from the build record.
 """
 import argparse
+import concurrent.futures
+import os
+import queue
 import json
 import re
 import shutil
@@ -62,6 +65,8 @@ def main():
     p.add_argument("--out", type=Path, required=True)
     p.add_argument("--pairs", type=int, default=32, help="cases per boot; a batch holds up to 2 x pairs images")
     p.add_argument("--limit-ms", type=int, default=10000)
+    p.add_argument("--lanes", type=int, default=int(os.environ.get("JULIET_LANES", "8")),
+                   help="batches booted at once (default: JULIET_LANES or 8); one without CAPSTONE_QEMU_DOMAIN_LOCK")
     a = p.parse_args()
     Batch, kit = boardvm.select(a.kit, a.board_kit)
     if a.out.exists():
@@ -72,56 +77,28 @@ def main():
     rank = {"good": 0, "bad": 1}
     images = sorted((i for i in build["images"] if i["ok"]), key=lambda i: (i["case"], rank[i["arm"]], i["seed_pattern"] or ""))
     per = 2 * a.pairs
-    batches, steps_out, t_all = [], [], time.time()
-    for bi in range(0, len(images), per):
-        chunk = images[bi:bi + per]
-        bdir = a.out / f"batch{bi // per:03d}"
-        b = Batch(bdir / "stage")
-        stage_img = bdir / "images"; stage_img.mkdir(parents=True)
-        staged = {}
-        for n in build["support_images"]:
-            shutil.copy2(img / f"{n}.dom", stage_img)
-            staged[n] = C.sha256(stage_img / f"{n}.dom")
-            if staged[n] != build["support_images"][n]:
-                sys.exit(f"{n}.dom differs from the build record")
-        for i in chunk:
-            shutil.copy2(img / f"{i['image']}.dom", stage_img)
-            staged[i["image"]] = C.sha256(stage_img / f"{i['image']}.dom")
-            if staged[i["image"]] != i["sha256"]:
-                sys.exit(f"{i['image']}.dom differs from the build record")
-        b.put("images", stage_img)
-        b.put("juliet-timeout", a.helper)
-        plan = []
+    t_all = time.time()
+    chunks = [images[bi:bi + per] for bi in range(0, len(images), per)]
+    # Lanes: batches are independent boots, so N lanes run N QEMUs at once, each under its own domain lock
+    # (CAPSTONE_QEMU_DOMAIN_LOCK.<lane>, holding the global lock shared). Without a domain lock every boot takes
+    # the global lock exclusive, so more lanes would only queue: one lane then.
+    domain = os.environ.get("CAPSTONE_QEMU_DOMAIN_LOCK", "").strip()
+    lanes = max(1, a.lanes) if domain and not a.board_kit else 1
+    free = queue.Queue()
+    for lane in range(lanes):
+        free.put(lane)
 
-        def step(name, image, args="", item=None):
-            b.step(name, f"./juliet-timeout {name} {a.limit_ms} -- ./capstone-vexec ./images/{image}.dom {args}")
-            plan.append((name, image, item))
-        step("ok-0", "ok")
-        step("ctl-bounds-0", "controls", "bounds-malloc"); step("ctl-uaf-0", "controls", "uaf-malloc")
-        if "randcheck" in build["support_images"]:
-            step("randcheck", "randcheck")
-        for k, i in enumerate(chunk):
-            step(f"s{k:03d}", i["image"], item=i)
-        step("ctl-bounds-1", "controls", "bounds-malloc"); step("ctl-uaf-1", "controls", "uaf-malloc")
-        step("ok-1", "ok")
-        b.step("stats", "./capstone-vexec --stats")
-        t0 = time.time()
-        steps, serial, completed = b.execute(kit, bdir / "work", 300 + 15 * len(b.steps))
-        # the order the guest actually began steps in, duplicates kept: split() returns a dict and would hide them
-        log = Path(serial).read_text(errors="replace") if Path(serial).exists() else ""
-        serial_sequence = re.findall(rf"^{re.escape(virtualvm.BEGIN)}(\S+)", log, re.M)
-        for name, image, item in plan:
-            text, result = steps.get(name, ("", {"kind": "none"}))
-            rec = {"batch": bdir.name, "step": name, "image": image, "sha256": staged[image], **observe(text, result)}
-            if item:
-                rec.update(case=item["case"], cwe=item["cwe"], arm=item["arm"], seed_pattern=item["seed_pattern"],
-                           twin_family=item.get("twin"))
-            steps_out.append(rec)
-        stats = re.search(r"\{.*\}", steps.get("stats", ("", {}))[0], re.S)
-        batches.append({"batch": bdir.name, "plan": [n for n, _, _ in plan], "serial_sequence": serial_sequence,
-                        "completed": completed, **({"firmware": boardvm.record_firmware({}, bdir / "work")} if a.board_kit else {}),
-                        "wall_s": round(time.time() - t0, 1), "stats": json.loads(stats.group(0)) if stats else None})
-        print(f"{bdir.name}: {len(chunk)} images, completed={completed}, {time.time() - t0:.0f} s", flush=True)
+    def run_batch(index, chunk):
+        lane = free.get()
+        try:
+            return one_batch(a, Batch, kit, build, img, index, chunk, f"{domain}.{lane}" if lanes > 1 else None)
+        finally:
+            free.put(lane)
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=lanes) as pool:
+        done = list(pool.map(run_batch, range(len(chunks)), chunks))
+    batches = [b for b, _ in done]
+    steps_out = [s for _, steps in done for s in steps]
     record = {"set": build["set"], "mode": build["mode"], "wall_s": round(time.time() - t_all, 1),
               "limit_ms": a.limit_ms, "helper_sha256": C.sha256(a.helper), "runner_sha256": C.sha256(Path(__file__)),
               "cc_sha256": build["cc_sha256"], "platform": platform(a, Path(__file__)),
@@ -129,6 +106,60 @@ def main():
     (a.out / "observations.json").write_text(json.dumps(record, indent=0))
     print(f"{len(batches)} batches in {record['wall_s']} s -> {a.out / 'observations.json'}")
     sys.exit(0 if all(x["completed"] for x in batches) else 75)
+
+
+def one_batch(a, Batch, kit, build, img, index, chunk, domain_lock):
+    """One boot: the support images, CHUNK's images and the controls. Returns (batch record, step records)."""
+    steps_out = []
+    bdir = a.out / f"batch{index:03d}"
+    b = Batch(bdir / "stage")
+    b.domain_lock = domain_lock
+    stage_img = bdir / "images"; stage_img.mkdir(parents=True)
+    staged = {}
+    for n in build["support_images"]:
+        shutil.copy2(img / f"{n}.dom", stage_img)
+        staged[n] = C.sha256(stage_img / f"{n}.dom")
+        if staged[n] != build["support_images"][n]:
+            sys.exit(f"{n}.dom differs from the build record")
+    for i in chunk:
+        shutil.copy2(img / f"{i['image']}.dom", stage_img)
+        staged[i["image"]] = C.sha256(stage_img / f"{i['image']}.dom")
+        if staged[i["image"]] != i["sha256"]:
+            sys.exit(f"{i['image']}.dom differs from the build record")
+    b.put("images", stage_img)
+    b.put("juliet-timeout", a.helper)
+    plan = []
+
+    def step(name, image, args="", item=None):
+        b.step(name, f"./juliet-timeout {name} {a.limit_ms} -- ./capstone-vexec ./images/{image}.dom {args}")
+        plan.append((name, image, item))
+    step("ok-0", "ok")
+    step("ctl-bounds-0", "controls", "bounds-malloc"); step("ctl-uaf-0", "controls", "uaf-malloc")
+    if "randcheck" in build["support_images"]:
+        step("randcheck", "randcheck")
+    for k, i in enumerate(chunk):
+        step(f"s{k:03d}", i["image"], item=i)
+    step("ctl-bounds-1", "controls", "bounds-malloc"); step("ctl-uaf-1", "controls", "uaf-malloc")
+    step("ok-1", "ok")
+    b.step("stats", "./capstone-vexec --stats")
+    t0 = time.time()
+    steps, serial, completed = b.execute(kit, bdir / "work", 300 + 15 * len(b.steps))
+    # the order the guest actually began steps in, duplicates kept: split() returns a dict and would hide them
+    log = Path(serial).read_text(errors="replace") if Path(serial).exists() else ""
+    serial_sequence = re.findall(rf"^{re.escape(virtualvm.BEGIN)}(\S+)", log, re.M)
+    for name, image, item in plan:
+        text, result = steps.get(name, ("", {"kind": "none"}))
+        rec = {"batch": bdir.name, "step": name, "image": image, "sha256": staged[image], **observe(text, result)}
+        if item:
+            rec.update(case=item["case"], cwe=item["cwe"], arm=item["arm"], seed_pattern=item["seed_pattern"],
+                       twin_family=item.get("twin"))
+        steps_out.append(rec)
+    stats = re.search(r"\{.*\}", steps.get("stats", ("", {}))[0], re.S)
+    batch = {"batch": bdir.name, "plan": [n for n, _, _ in plan], "serial_sequence": serial_sequence,
+             "completed": completed, **({"firmware": boardvm.record_firmware({}, bdir / "work")} if a.board_kit else {}),
+             "wall_s": round(time.time() - t0, 1), "stats": json.loads(stats.group(0)) if stats else None}
+    print(f"{bdir.name}: {len(chunk)} images, completed={completed}, {time.time() - t0:.0f} s", flush=True)
+    return batch, steps_out
 
 
 if __name__ == "__main__":

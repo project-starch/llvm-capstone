@@ -176,6 +176,8 @@ class Batch:
         env = dict(os.environ)
         env["LD_LIBRARY_PATH"] = str(kit) + (":" + env["LD_LIBRARY_PATH"] if env.get("LD_LIBRARY_PATH") else "")
         env.setdefault("CAPSTONE_QEMU_LOCK", str(Path.home() / ".capstone-locks/qemu.lock"))
+        if getattr(self, "domain_lock", None):   # a runner's parallel lane (juliet/run.py --lanes)
+            env["CAPSTONE_QEMU_DOMAIN_LOCK"] = self.domain_lock
         Path(env["CAPSTONE_QEMU_LOCK"]).parent.mkdir(parents=True, exist_ok=True)
         limit = max([STEP_LIMIT, *[b for b in self.bounds.values() if b]])
 
