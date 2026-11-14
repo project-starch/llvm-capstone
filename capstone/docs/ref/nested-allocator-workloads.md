@@ -10,10 +10,10 @@
 | speedtest1 `--size 100` | **deferred** (SPEC-lane default, 14 Nov 21:40: breadth first; the lead may override): about 6.5 h per command on silicon | - |
 | CPython 3.13.7, pyperformance subset (7 benchmarks), QEMU twin | **measured**: 28/28 answers equal to native; in-context +0.66 % (richards) to +2.84 % (json_dumps), +1.63 % summed; kernel ±0.5 %; 2.99 M CDERIVEs, subtree max 2, peak live records 76,767 (1.23 MB) | FRCDKMS SDK, -O2, trimmed built-ins, linked --no-relax; QEMU qemu55 a0501ebc39 |
 | CPython on silicon | **queued**: pre-registered below; four one-arm boots U P P U on one board, F with event 23 | F `a948e4134`, kit bkit75n |
-| PostgreSQL 17.5, single-user pgbench-derived workload, QEMU twin | **running** on the twin (slot 28, 15 Nov ~04:25): ABBA timing boot `npg-a1` on `w2-main`, then one counting boot per arm on qemu-nst. The smoke on `w2-small` gives the native answers in both arms. Bring-up found a port defect, **ISSUES.md M-15**: generic array code reads `int2vector`/`oidvector` 8 bytes off at MAXALIGN 16, which the protected arm catches as CAP_OOB. Harness changes, the same in both arms: run as root (the domain loader admits euid 0 only), shims over refused or unserved calls; patch 0003 carries the Q-15 placement repair (`q15-placement` 57215acb2dbb) | FRCDKMS SDK, -O2, native route, image set 10, QEMU qemu55 a0501ebc39 |
+| PostgreSQL 17.5, single-user pgbench-derived workload, QEMU twin | **measured** (15 Nov 04:21-04:42): 4/4 commands give the native answers; in-context **+4.04 %**, kernel +0.43 %, repeats within 0.02 %; 2.31 M CDERIVEs and 668 k CREVOKEs per run, subtree mean 3.45 / **max 34,509** (a context reset), peak live records 105,043 (1.68 MB). Bring-up found a port defect, **ISSUES.md M-15** (int2vector/oidvector read 8 bytes off at MAXALIGN 16, caught as CAP_OOB by the protected arm). Harness changes, the same in both arms: root (the loader admits euid 0 only), shims over refused or unserved calls; patch 0003 with the Q-15 placement repair | FRCDKMS SDK, -O2, native route, image set 10, QEMU qemu55 a0501ebc39 (counts: qemu-nst) |
 | tshark (pcap), FFmpeg (decode) | **queued, in that order**: each twin first, then silicon. Patches in tree: wireshark-4.6.8-0001, ffmpeg-9.0.1-0003. Each needs the native-route rebuild (FRCDKMS SDK); tshark's six dependencies too | FRCDKMS, native route |
 | memcached (load) | **deferred**: the native route refuses `socket`, `socketpair`, `epoll_create1` and `epoll_ctl` (`native-syscall-table.c:92-101`, `NS_REFUSE`), so the server cannot take a load on this route. Running it elsewhere (e.g. the virtual route) is a different instrument; the lead's call | - |
-| CREVOKE worst case (subtree 1 .. 10^6, latency, interruptibility; PostgreSQL context reset) | **measured** (RTL sim, memory delay 0): 6 cycles per node up to 2,048 nodes, about 11 beyond; at most 65,532 nodes per subtree (10^6 cannot be built), so the worst single CREVOKE is 720,892 cycles; **not interruptible**: a timer interrupt waits for the whole walk (180,518 cycles at 32,768 nodes, against 1-6 without). PostgreSQL context-reset sizes: queued with the PostgreSQL twin | capstone-ariane `a948e4134` (F), `--sv_seed 1` |
+| CREVOKE worst case (subtree 1 .. 10^6, latency, interruptibility; PostgreSQL context reset) | **measured** (RTL sim, memory delay 0): 6 cycles per node up to 2,048 nodes, about 11 beyond; at most 65,532 nodes per subtree (10^6 cannot be built), so the worst single CREVOKE is 720,892 cycles; **not interruptible**: a timer interrupt waits for the whole walk (180,518 cycles at 32,768 nodes, against 1-6 without). PostgreSQL context resets (twin): the largest ends **34,509 nodes** in one CREVOKE, about 0.38 M cycles at delay 0 and 2.1 M at delay 12. CDERIVE: 21 cycles alone, 27 / 157 back to back at delay 0 / 12; CREVOKE about 60 cycles per node at delay 12 | capstone-ariane `a948e4134` (F), `--sv_seed 1` |
 | record-cache counters | event 23 is on hpm8 in kits bkit73n (batch) and bkit75n (F). Events 29-31 (lookups, raw misses, walk-busy cycles) would need a new bitstream; that is **the lead's call** and is not requested | - |
 
 Only rows marked "measured" hold measurements; the rest say what runs next and where.
@@ -599,8 +599,9 @@ miss replays per run, which at the RTL's estimated cost explain about 7-8 % of t
 - What would settle it: time CDERIVE and CREVOKE on the board itself, in a native-route domain on F (a loop of each,
   back to back and spaced). It is a few seconds of board time in any future boot. Not pre-registered yet.
 
-**Still to read: a real large revoke (PostgreSQL context reset).** The subtree a PostgreSQL `MemoryContextReset` ends
-will come from the PostgreSQL twin's histogram, and its latency from the table above.
+**The real large revoke: PostgreSQL's context resets** (twin, `w2-main`, details in the PostgreSQL section). 668,247
+CREVOKEs per run. 92 % end one node, 52,685 end a context's chunks, and the largest ends 34,509 nodes. That one costs
+about 0.38 M cycles at memory delay 0 and about 2.1 M at delay 12, without interruption.
 
 ## CPython 3.13.7: pyperformance subset
 
@@ -807,5 +808,43 @@ own MAXALIGN-16 build, through `work/mkref.py`.
   stripped `1ea084ab…` / `4cc5f247…`) on `w2-small` (stage `pg/stages/s12`): **both arms give the native reference
   answers** (4 CHECK lines, 600 rows, rc 0). The protected arm reports `Q15_PAD chunks=842636 padded=1899
   pad_bytes_total=53280 pad_bytes_max=8160`: 0.23 % of its chunks carry tail padding, 53 KB in all.
-- Running: the ABBA timing boot on `w2-main` (stage `pg/stages/a1`, u1 p1 p2 u2), then one counting boot per arm on
-  `qemu-nst` (`pg/stages/c1u`, `c1p`), for the CDERIVE/CREVOKE counts and the context-reset subtree histogram.
+
+**Twin results (2026-11-15 04:21-04:42), image set 10, `w2-main`, one ABBA boot `npg-a1` (stage `pg/stages/a1`).**
+Every command exits 0 with the native reference answers (4 CHECK lines, 2,000 rows).
+
+| | u1 | p1 | p2 | u2 | repeat spread, u / p | protected vs not (ABBA means) |
+|---|---|---|---|---|---|---|
+| in-context (`run_cycles`) | 2,809,800,924 | 2,923,410,930 | 2,923,569,480 | 2,810,038,007 | 0.008 % / 0.005 % | **+4.04 %** |
+| kernel and other (`between_cycles`) | 1,655,094,160 | 1,662,098,571 | 1,662,081,963 | 1,654,764,826 | 0.02 % / 0.001 % | **+0.43 %** |
+| context entries (`runs`) | 83,025 | 83,137 | 83,137 | 83,025 | | +0.13 % |
+
+- The cost is in the program, not the kernel: +113.6 M in-context cycles per run against +7.2 M kernel.
+- It is the largest in-context cost of the three applications on the twin: speedtest1 +0.63 % in program instructions,
+  CPython +1.63 % summed, PostgreSQL +4.04 %. PostgreSQL also does the most lifetime work per run (below).
+- Twin time per command, about 4.5 s, and 3.0 s to unpack: QEMU time, not a measurement.
+
+**Lifetime counts** (counting QEMU `qemu-nst`, one boot per arm, `pg/stages/c1u` and `c1p`; both runs give the native
+answers):
+
+| | not protected | protected |
+|---|---|---|
+| CDERIVE (allocations by derive), whole boot | 35,153 (mallocng's own heap lifetimes) | **2,311,710** |
+| CREVOKE, successful / refused | 34,518 / 0 | 668,247 / 0 |
+| nodes ended by CREVOKE | 34,518 | 2,307,406 |
+| revoked subtree size: mean / max | 1 / 1 | **3.45 / 34,509** |
+| peak live records | 1,073 | **105,043** |
+| live-record memory at 16 B per record | 17 KB | **1.68 MB**: 40 % of the 262,144-record (4 MiB) flat table |
+
+**The real case for CREVOKE: PostgreSQL's context resets.** The protected run's subtree sizes, from `hist_log2`:
+
+| nodes ended by one CREVOKE | 1 | 2-3 | 4-7 | 8-15 | 16-31 | 32-63 | 64-127 | 128-1,023 | 1,024-8,191 | 8,192-32,767 | 32,768-65,535 |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| CREVOKEs | 615,562 | 6,956 | 9,078 | 10,547 | 5,035 | 15,525 | 5,515 | 14 | 10 | 4 | **1** |
+
+- 92 % of CREVOKEs end a single chunk (pfree). The rest end a context's chunks at once (MemoryContextReset or
+  Delete): 52,685 of them, mostly up to 127 nodes. 29 end 128 or more, and the largest ends **34,509 nodes** in one
+  instruction.
+- Its latency from the RTL table (CREVOKE worst case section) is about 0.38 M cycles at memory delay 0, between the
+  32,768-node 360,485 and the 65,532-node 720,892. At delay 12 (about 60 cycles per node) it is about 2.1 M cycles.
+  CREVOKE is not interruptible, so a timer interrupt waits that long.
+- Every other app here is at subtree max 2-3. PostgreSQL's resets are the case where CREVOKE's walk matters.
