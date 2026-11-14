@@ -164,3 +164,43 @@ These two boots used a private, measurement-only QEMU: `nested/qemu-nst` = qemu5
   Used" differs.
 - **The scan is real on silicon too.** The board kernel's `capstone_vm.c`
   (`perf/k2n/linux-board-k2n-native-hpm`) differs from the twin's only by the HPM reads.
+
+### Pre-registration: silicon, speedtest1 `--size 1` (written before the boot)
+
+**Configuration.**
+- Bitstream `caplifive_ids55-native-tagcache-mlp-fpieee-hpmreplay-dynbypass3-dtlb64-shrinkfix-ic32k-r72-stcnoclaim_a47b588a1`,
+  sha256 `ff36870d…`, on board 1. It is the board's resident bitstream, so no flash.
+- Kit `t3-smoke/bkit73-k2n-native-batch-hpm`: K2N native kernel with HPM counters, monitor 4f51541, node_flat_records
+  262144.
+- Stage `nested/st1/board/b1-stage` (`make-train-stage.sh` of the twin's `stages/q2`). Its `train/run.sh` sha256 is
+  `6cd49b361db37dd9…`, and the images are the two above.
+- Budget: 900 s × BOARD_TIMEOUT_MULT 4 = 3,600 s. The kit's stub dry run prints `BAKED_TIMEOUT=3600`.
+
+**Order.**
+1. The kit's controls `b0-stats` and `b0-hello`.
+2. The native smoke.
+3. The four commands u1, p1, p2, u2 (ABBA), each in a fresh run directory.
+
+If a control fails, the boot is VOID.
+
+**Readings per command:** rc, the 32 oracle lines, and the native counters' deltas:
+- `run_cycles`: in-context cycles;
+- `between_cycles`: kernel and other work between context entries;
+- `runs`;
+- hpm3..8: L1I miss, L1D miss, DTLB miss, mispredict, issue stall, scoreboard full;
+- the uptime span.
+
+**Predictions.**
+- **Answers:** every command exits 0 with 32/32 oracle lines equal to the reference. Anything else stops the
+  comparison. A protected-only failure would be a silicon finding, recorded as such.
+- **Repeats agree.** The two runs of each arm agree within 1 % on `run_cycles` and within 2 % on `between_cycles`.
+  If they do not, the arm difference below is not interpretable at N = 2.
+- **In-context cost (`run_cycles`, protected minus not protected): +0.5 % to +3 %.**
+  - The twin's instruction delta is +0.63 %.
+  - Each of the 56,442 lifetime instructions also pays the rev-node unit's record traffic: a header load, a record
+    read and write, and a header publish for CREVOKE.
+  - Taken as 20-60 cycles each, against roughly 300-400 M program cycles, that adds +0.3 % to +1 %.
+- **Kernel (`between_cycles`): +1 % to +5 %.** The twin reads +3 %, from the native syscall page scan. The board kernel
+  runs the same code.
+- **Whole command (uptime span): +1 % to +4 %.** The kernel scan dominates both arms.
+- **Duration:** each command takes 1-2 min; the boot about 15-20 min in all.
