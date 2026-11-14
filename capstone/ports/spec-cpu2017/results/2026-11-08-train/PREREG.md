@@ -3705,3 +3705,38 @@ unchanged.
 **Predictions:**
 - x264 within -4 % .. +1 % of fdk/FR's 34,053.48 s;
 - the five frame hashes equal plain-rv64r's.
+
+## Addendum 113 (2026-11-14 17:25, before it runs): F is the final temporal bitstream; the final-config rows on F, temporal and spatial
+
+**Reading.** F (a948e4134, bkit75, board 1), FRCDKMS gcc train01: 1,989.28 s, specdiff PASS. Against the batch's
+2,446.30 s with the same image: -18.7 %. Ratio 1.155.
+- Counters: run_cycles 58.58 → 47.26 G (-19.3 %); issue-stall cycles 16.17 → 12.45 G; scoreboard-full 1.68 → 0.83 G;
+  L1I misses, L1D misses, DTLB walks and mispredicts unchanged.
+- Addendum 107's band (-1..-8 %) is MISSED, on the fast side: the band underestimated how much of gcc's time was
+  marked-page tag reads.
+- Scope: as for mcf, this is the tag-word-cache change (reach + merge together), at N = 1. The tag counters (F on
+  board 1, B on board 2) are the deciding reading, still owed.
+
+**Decision under Addendum 107's rule:** F beats the batch on mcf (-10.8 %) and gcc (-18.7 %), so **F is the final
+temporal configuration.** The three-arms table's "final config" columns are re-measured on F with FRCDKMS (temporal)
+and FRCDKMSsp (spatial) images.
+
+**Runs on F** (all chains nat-run2.sh; stage-check passes; stubbed dry runs reach every boot):
+
+| board | chain | kit | rows |
+|---|---|---|---|
+| 2, after config B | aw-t | bkit75 | temporal imagick, nab, lbm, xz |
+| 2 | aw-tp | bkit80 (bkit74's dom kit on F) | temporal full perl |
+| 2 | aw-sx | bkit75 | spatial x264 |
+| 1, after its queue (F perl makerand, F tag counters, the gp pair) | aw-s | bkit75 | spatial gcc, mcf, imagick, nab, lbm, xz |
+| 1 | aw-sp | bkit80 | spatial full perl |
+
+Temporal x264 on F already runs on board 3 (Addendum 112). mcf and gcc temporal on F are read above.
+
+**Predictions, against the batch readings of the same images:**
+- temporal imagick, nab, lbm: within -5 % .. +1 %;
+- xz: -2 % .. -12 %;
+- full perl: -3 % .. -15 %. The test.pl part is memory-heavy, so the TWC may help.
+- spatial: each row within -3 % .. +0.5 % of its temporal reading on F. On the batch, gcc's temporal increment was
+  +0.6 %.
+- specdiff PASS everywhere.
