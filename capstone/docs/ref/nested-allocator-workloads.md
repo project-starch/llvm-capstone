@@ -8,7 +8,9 @@
 | speedtest1 `--size 1` on silicon | **measured** (board 2, 15:00-15:30): 32/32 answers in every command; in-context +1.04 %, wall-clock +1.90 % (both inside the pre-registered bands); kernel repeat spread 2.47 % > 2 %, so the kernel difference is not read. Boot 1 on board 1 was VOID (unbaked empty `train/in`) | bitstream `a47b588a1`, kit bkit73 |
 | speedtest1 `--size 1` on silicon, bitstream F, with event 23 | **queued**: board 3 after its x264 run (~03:00 15 Nov), pre-registered below; both arms again (ABBA), hpm8 = event 23 (verdict-cache miss replays) | bitstream F `a948e4134` (`ec675c2b…`), kit bkit75n |
 | speedtest1 `--size 100` | **deferred** (SPEC-lane default, 14 Nov 21:40: breadth first; the lead may override): about 6.5 h per command on silicon | - |
-| CPython (pyperformance subset), PostgreSQL (single-user pgbench), tshark (pcap), FFmpeg (decode), memcached (load) | **queued, in that order**: each first on the QEMU twin, then one silicon ABBA boot. Patches in tree: cpython-3.13.7-0014, postgresql-17.0-0003, wireshark-4.6.8-0001, ffmpeg-9.0.1-0003, memcached-1.6.45-0006. CPython twin preparation is next | FRCDKMS, native route; silicon on F |
+| CPython 3.13.7, pyperformance subset (7 benchmarks), QEMU twin | **measured**: 28/28 answers equal to native; in-context +0.66 % (richards) to +2.84 % (json_dumps), +1.63 % summed; kernel ±0.5 %; 2.99 M CDERIVEs, subtree max 2, peak live records 76,767 (1.23 MB) | FRCDKMS SDK, -O2, trimmed built-ins, linked --no-relax; QEMU qemu55 a0501ebc39 |
+| CPython on silicon | **queued**: pre-registered below; four one-arm boots U P P U on one board, F with event 23 | F `a948e4134`, kit bkit75n |
+| PostgreSQL (single-user pgbench), tshark (pcap), FFmpeg (decode), memcached (load) | **queued, in that order**: each twin first, then silicon. Patches in tree: postgresql-17.0-0003, wireshark-4.6.8-0001, ffmpeg-9.0.1-0003, memcached-1.6.45-0006. Each needs the native-route rebuild CPython needed (FRCDKMS SDK) | FRCDKMS, native route |
 | CREVOKE worst case (subtree 1 .. 10^6, latency, interruptibility; PostgreSQL context reset) | **measured** (RTL sim, memory delay 0): 6 cycles per node up to 2,048 nodes, about 11 beyond; at most 65,532 nodes per subtree (10^6 cannot be built), so the worst single CREVOKE is 720,892 cycles; **not interruptible**: a timer interrupt waits for the whole walk (180,518 cycles at 32,768 nodes, against 1-6 without). PostgreSQL context-reset sizes: queued with the PostgreSQL twin | capstone-ariane `a948e4134` (F), `--sv_seed 1` |
 | record-cache counters | event 23 is on hpm8 in kits bkit73n (batch) and bkit75n (F). Events 29-31 (lookups, raw misses, walk-busy cycles) would need a new bitstream; that is **the lead's call** and is not requested | - |
 
@@ -502,3 +504,124 @@ with hpm8 now event 23.
 
 **Still to read: a real large revoke (PostgreSQL context reset).** The subtree a PostgreSQL `MemoryContextReset` ends
 will come from the PostgreSQL twin's histogram, and its latency from the table above.
+
+## CPython 3.13.7: pyperformance subset
+
+**Patch.** `capstone/ports/cpython/app/patches/cpython-3.13.7-0014-pymalloc-sublet-lifetimes.patch` (sha256
+`6c2c170e…`). With it, obmalloc hands out each block as a CDERIVE child of its arena, bounded to the request, and
+CREVOKEs it on free. The two arms' source trees differ in exactly `Objects/obmalloc.c` and
+`Include/internal/pycore_obmalloc.h` (`diff -rq`). In both arms, malloc lifetimes are ON underneath (mallocng).
+
+**Workload.**
+- pyperformance 1.14.0 (tarball sha256 `2eb90812…`): `json_dumps`, `json_loads`, `pickle` (C accelerator),
+  `richards`, `deltablue`, `regex_v8` and `nbody`. These are the subset `docs/plans/application-benchmark-study.md`
+  names.
+- Each body runs unchanged under a stand-in for `pyperf` (`nested/cpy/pyperf-run/pyperf.py`, sha `2b058b90…`). The
+  stand-in calls the body a fixed number of times, `CPY_LOOPS=1` times pyperformance's own inner_loops, with no
+  calibration, no worker processes and no timing.
+- The driver (`run.py`, `ff1b0dd9…`) then prints one `CHECK` digest read from the benchmark module's own state:
+  - nbody's planet positions;
+  - richards' result;
+  - the json and pickle round trips of the benchmarks' own data;
+  - regex matches over the benchmark's strings.
+- The reference is native CPython 3.13.7 from the same tarball (`native-ref.txt`, `bfc163bc…`). Host Python 3.12 gives
+  the same seven digests. Each check is stable across runs and hash seeds, and nbody's changes when the work doubles.
+- `PYTHONHASHSEED=0`. Each command runs in a fresh directory.
+
+**Build** (`nested/cpy/build-native.sh` with `prepare-native-trim.sh`; arms `n2-arm0` / `n2-arm1`).
+- The port's own recipe (prepare, survey, link), with these changes, all identical on both arms:
+  - **SDK:** FRCDKMS, the SPEC and speedtest1 images' SDK (llvm-c9 `29027126f39b`; the `wt-ms` runtime and libc with
+    native I/O; heap lifetimes ON). The FRCDKMS `-mllvm` flags go in through `CFLAGS`, and `OPT=-DNDEBUG -O2`.
+    - The port's own SDK is dev's runtime, which has no native-route syscall path. Its images fault at the first musl
+      `mmap` (cause 26, a `delin` on the virtual-VM delegation reply).
+  - **Linked `-Wl,--no-relax`.** lld's Capstone TPREL relaxation rewrites C-47's `addi a0,a0,%tprel_lo` into
+    `addi a0, tp, lo`, and the following `cincoffset a1, tp, a0` then adds tp twice.
+    - CPython faults on it in `_PyThreadState_Attach` (cause 24).
+    - A 4-line reproducer is in `nested/cpy/tprel-repro/`. It went to the compiler lane through the SPEC lane.
+    - The deviation from FRCDKMS's link is the same on both arms.
+  - **35 `Setup.stdlib` built-ins disabled.** The twin never loads them for this subset (`modules-twin-mu.txt`): the
+    CJK codecs, `unicodedata`, `_decimal`, `pyexpat`, `_socket` and so on. This keeps one arm's board firmware at
+    21.66 MB, under the kit's 26 MB cap.
+    - The trimmed build's 14 twin commands loaded none of them, checked from each command's `sys.modules`.
+- 214 of 214 objects compiled, and the link has no undefined symbol.
+- The stripped image is 6,369,128 B in both arms: unprot sha256 `b0b29e89…`, prot `eabba900…`.
+- **stdlib:** the 54 pure-Python modules the twin loads, as sourceless `.pyc` (1.43 MB, `nested/cpy/cpyhome2`).
+- **Start:** `-S -c "runpy.run_path('bench/run.py')"`. Running a script file by path returns ENOSYS on the native
+  route; `open`, `stat` and `import` work.
+
+**Results, QEMU twin** (qemu55 `a0501ebc39`, native route, ids55; one boot per benchmark, ABBA u1 p1 p2 u2). Every
+command exits 0 with its CHECK equal to native. The repeats agree within 0.01 % in-context.
+
+| benchmark | in-context, not protected | protected vs not | kernel (`between_cycles`) |
+|---|---|---|---|
+| json_dumps | 458.4 M | **+2.84 %** | -0.23 % |
+| json_loads | 387.1 M | **+2.37 %** | -0.44 % |
+| pickle | 327.8 M | **+1.30 %** | +0.26 % |
+| richards | 2,551.5 M | **+0.66 %** | +0.27 % |
+| deltablue | 370.8 M | **+1.16 %** | -0.49 % |
+| regex_v8 | 1,115.6 M | **+2.28 %** | -0.12 % |
+| nbody | 3,101.4 M | **+2.01 %** | +0.32 % |
+| all seven (sum) | 8,312.6 M | **+1.63 %** | |
+
+- The kernel does not move, unlike speedtest1's: CPython's arenas carry no array like memsys5's `aReq`.
+- **A twin reading must be ABBA within one boot.** A single pass of all 14 commands in one boot (`ncpy-c6`) read
+  richards at -2.22 %, while its own ABBA boot reads +0.66 % with repeats 30 k apart. Position in the boot moves a
+  command's count by several percent (boot history), so the single-pass readings are not used.
+
+**Lifetime counts** (counting QEMU `qemu-nst`; one boot per arm runs all seven benchmarks, each in its own process):
+
+| | not protected | protected |
+|---|---|---|
+| CDERIVE (allocations by derive), whole boot | 121,554 (mallocng's own heap lifetimes) | 2,987,570 |
+| CREVOKE, successful / refused | 119,466 / 0 | 2,936,354 / 0 |
+| revoked subtree size: mean / max | 1.00003 / 2 | **1.000001 / 2** |
+| peak live records | 5,681 | **76,767** |
+| live-record memory at 16 B per record | 91 KB | **1.23 MB**, inside the fixed 4 MiB flat table |
+
+- The peak of 76,767 live records exceeds the RTL's physical node pool (65,532, measured above). On the native route
+  the records live in the flat table (262,144 per context), so this is not a limit there. It would be one on the
+  physical pool.
+- 76,767 live records is about 300 times the verdict cache's 256 entries. So the silicon reading of event 23 is
+  expected to show capacity misses, which speedtest1 (398 live records) could not.
+
+### Pre-registration: silicon, CPython pyperformance subset (written before the boots)
+
+**Configuration.**
+- Bitstream F (`…-twc16k-merge-hpmtag_a948e4134`, sha256 `ec675c2b…`), the table's.
+- Kit `t3-smoke/bkit75n-k2n-native-twcf-hpmnest`: hpm8 = event 23 (verdict-cache miss replays), hpm3..7 = L1I, L1D,
+  DTLB, mispredict, issue stall.
+- Board and slot: placed by the SPEC lane. All four boots on one board.
+- **One arm per boot, four boots U P P U.** Both arms in one boot exceed the console's upload limit.
+- Each boot runs the seven benchmarks once, in the same order (json_dumps, json_loads, pickle, richards, deltablue,
+  regex_v8, nbody), so the boot history is the same for both arms.
+- Board stages:
+  - `nested/cpy/board/cpy-u-stage` (unprot image `b0b29e89…`, `train/run.sh` `3a7263ea…`);
+  - `nested/cpy/board/cpy-p-stage` (prot image `eabba900…`, `train/run.sh` `b7165ae6…`);
+  - both made by the kit's `make-train-stage.sh`, with manifests `cpy-{u,p}-stage.SHA256SUMS`.
+- Checked off the board for the U stage: a real bake (cpio 19,208,704 B), the kit's `BOARD_STUB=2` relink, and a real
+  firmware build of 21,663,240 B that passes the dom_stack gate.
+
+**Readings:** per command: rc, the CHECK against native, `run_cycles`, `between_cycles`, hpm3..8 and the uptime span.
+
+**Predictions.**
+- **Answers:** 28 of 28 commands exit 0 with CHECK equal to native. Anything else stops the comparison; a
+  protected-only failure is a silicon finding.
+- **Repeats across boots** (U1 against U2, P1 against P2, per benchmark): within 1 % on `run_cycles` and 2 % on
+  `between_cycles`. A benchmark that misses is not read.
+- **In-context cost, protected vs not, all seven summed: +1.3 % to +5 %.**
+  - The twin reads +1.63 %.
+  - On speedtest1, silicon read 1.7 times the twin (+1.04 % against +0.62 %).
+  - CPython's 76,767 live records against a 256-entry verdict cache can add capacity misses the twin does not model.
+  - Per benchmark: positive for each of the seven, with json_dumps, json_loads and regex_v8 among the four largest, as
+    on the twin.
+- **Kernel:** within ±2 % (twin ±0.5 %).
+- **Whole command (uptime span), all seven: +1 % to +5 %.**
+- **Event 23, protected minus not protected, summed over the seven: positive.**
+  - No lower bound is claimed. CDERIVE installs the new node live (Addendum 1 of the F speedtest1 pre-registration), so
+    the 2.87 M extra derives are not 2.87 M compulsory misses.
+  - The size is the reading. With 76,767 peak live records against 256 entries, capacity misses are expected.
+  - The cycles misses explain are read as (event-23 delta) x 17-20 cycles, a lower bound from the RTL replay path,
+    against the `run_cycles` delta.
+- **Duration:** about 25 min of commands per boot, from the twin-to-silicon ratios of speedtest1 (in-context x4.1,
+  kernel x2.5, 24 M cycles/s). Budget 3,600 s per rung; book 50 min per boot.
+- **VOID** if a control (`b0-stats`, `b0-hello`) fails, or the smoke fails outside the kit's accounting waiver.
