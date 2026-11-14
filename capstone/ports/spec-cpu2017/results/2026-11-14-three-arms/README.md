@@ -3,14 +3,14 @@
 This is a live table: rows are filled as board runs land. Pre-registrations, predictions and the run-by-run trail are
 in [`../2026-11-08-train/PREREG.md`](../2026-11-08-train/PREREG.md) (Addendum 107 onward for this table).
 
-## Status (updated 2026-11-15 01:15 +08)
+## Status (updated 2026-11-15 02:35 +08)
 
 - **riscv-base:** complete, all 8 rows.
 - **Capstone temporal:**
   - The table below holds the best silicon reading per row, with the bitstream named on each row.
   - The final uniform configuration (one bitstream and one image set for every row) is being measured now.
   - 5 of 8 rows are already below the 1.20 target. perl, gcc and mcf are above it.
-- **Capstone spatial:** all 8 images are built (arm FRCDKMSsp). gcc train01 on F: 1,975.51 s (ratio 1.147) against temporal's 1,989.28 s on the same bitstream, board and kit, so the temporal increment on gcc is +0.70 % (+0.6 % on the batch bitstream). mcf on F: 6,308.53 s (ratio 1.231) against temporal's 6,576.13 s, a temporal increment of +4.2 %; L1D misses are 4.9 % lower than temporal's. Spatial imagick, nab, lbm and xz on F follow on board 1.
+- **Capstone spatial:** all 8 images are built (arm FRCDKMSsp). gcc train01 on F: 1,975.51 s (ratio 1.147) against temporal's 1,989.28 s on the same bitstream, board and kit, so the temporal increment on gcc is +0.70 % (+0.6 % on the batch bitstream). mcf on F: 6,308.53 s (ratio 1.231) against temporal's 6,576.13 s, a temporal increment of +4.2 %; L1D misses are 4.9 % lower than temporal's. imagick 1.134, nab 1.021 and lbm 0.919 on F are within 0.2 % of temporal. xz follows on board 1 and x264 runs on board 2.
   - The SDK differs from temporal in 4 libc mallocng members plus the runtime's malloc-mapping object, and nothing else.
     This is shown by member hashes, and a control on the memset switch fires.
   - Every benchmark object is byte-identical to temporal FRCDKMS's.
@@ -32,7 +32,7 @@ same images. The "final config" columns are being re-measured on F.
 |---|---|---|
 | 1 | **spatial** gcc, mcf, imagick, nab, lbm, xz on F (from 22:16) | **spatial** full perl |
 | 2 | **spatial** x264 on F (from 22:00, ~10 h) | — |
-| 3 | **temporal** x264 on F (~10 h, until ~03:00) | nested-lane speedtest1 (event 23) → **temporal** full perl on F → node-table pool A/B |
+| 3 | nested-lane speedtest1 (event 23, ~30 min); temporal x264 on F done 02:25 (0.870) | **temporal** full perl on F (~03:00-08:30) → node-table pool A/B → allocator-step pair (FRCDKMSa3 full perl) |
 
 - **F's scope.** The gain is the tag-word-cache change, reach and merge together, at N = 1 per row.
   - It comes at unchanged L1I/L1D misses, DTLB walks and mispredicts.
@@ -128,12 +128,12 @@ the table being measured now. A row moves into them as its run lands.
 | 500.perlbench_r (full: makerand + test.pl) | 12,623.02 | 17,051.48 | 1.351 | fdk / FRCDK | pending | pending |
 | 502.gcc_r (train01) | 1,722.35 | 1,989.28 | **1.155** | **F** / FRCDKMS | **1.155** (F) | **1.147** (F) |
 | 505.mcf_r | 5,125.02 | 6,576.13 | 1.283 | **F** / FRCDKMS | 1.283 (F) | 1.231 (F) |
-| 519.lbm_r | 1,077.50 | 990.36 | **0.919** | **F** / FRCDKMS | **0.919** (F) | pending |
-| 525.x264_r | 35,613.24 | 34,053.48 | **0.956** | fdk / FR | pending | pending |
-| 538.imagick_r | 11.08 | 12.58 | **1.135** | **F** / FRCDKMS | **1.135** (F) | pending |
-| 544.nab_r | 679.92 | 695.34 | **1.023** | **F** / FRCDKMS | **1.023** (F) | pending |
+| 519.lbm_r | 1,077.50 | 990.36 | **0.919** | **F** / FRCDKMS | **0.919** (F) | **0.919** (F) |
+| 525.x264_r | 35,613.24 | 30,975.87 | **0.870** | **F** / FRCDKMS | **0.870** (F) | running (board 2) |
+| 538.imagick_r | 11.08 | 12.58 | **1.135** | **F** / FRCDKMS | **1.135** (F) | **1.134** (F) |
+| 544.nab_r | 679.92 | 695.34 | **1.023** | **F** / FRCDKMS | **1.023** (F) | **1.021** (F) |
 | 557.xz_r | 4,993.81 | 4,998.36 | **1.001** | **F** / FRCDKMS | **1.001** (F) | pending |
-| geomean | | | 1.093 | | | |
+| geomean | | | 1.081 | | | |
 
 Bold = below the 1.20 target. perl makerand alone (the quick A/B sub-run, debugging only): 257.90 s on riscv-base
 against 288.58 s on **F** / FRCDKMS, ratio 1.119 (-12.5 % against the batch); the full test on F runs on board 3 after x264 (~03:30). Board 2's attempt at 21:07 never booted, because switches were left
