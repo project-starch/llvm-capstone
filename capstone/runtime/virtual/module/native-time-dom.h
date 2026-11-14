@@ -1,5 +1,4 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
-#ifdef CV_TASK_BACKEND
 #include <linux/capstone_native_time.h>
 #include <linux/hrtimer.h>
 #include <linux/time_namespace.h>
@@ -65,7 +64,3 @@ static bool native_time_issue(struct context *c, const struct ns_invocation *cal
     *result = rc;
     return true;
 }
-#else
-static bool native_time_issue(struct context *c, const struct ns_invocation *call, long *result)
-{ return false; }
-#endif

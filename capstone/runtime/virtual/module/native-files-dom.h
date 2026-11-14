@@ -22,14 +22,7 @@ static long native_close_issue(struct context *c, unsigned int fd)
     return rc;
 }
 
-/* The exchange and register transports share these held-file operations. */
-static bool native_fd_supported(u64 nr)
-{
-    return nr == CAPSTONE_SYS_fsync || nr == CAPSTONE_SYS_fdatasync ||
-           nr == CAPSTONE_SYS_ftruncate || nr == CAPSTONE_SYS_fchmod ||
-           nr == CAPSTONE_SYS_fchown;
-}
-
+/* Held-file operations: sync, truncate and metadata. */
 static long native_fd_issue(struct file *file, u64 nr, u64 first, u64 second)
 {
     long rc;

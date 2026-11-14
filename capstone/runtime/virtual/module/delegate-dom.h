@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
-/* Native exchange wire validation and the task-owned resource capsule. */
+/* The task-owned resource capsule: the directories, devices and descriptors a protected
+ * program may use, and its spawned children. */
 #include "delegate-wire.c"
 #include <linux/namei.h>
 #include <linux/mount.h>
@@ -24,20 +25,12 @@ struct dom_delegate {
 static int dom_spawn_resources(struct context *c);
 #include "resource-dom.h"
 
-static int dom_touch(struct context *c, unsigned long at, size_t bytes)
-{
-    struct cv_touch r = {.address = at, .bytes = bytes};
-    return bytes ? touch(c, &r) : 0;
-}
+/* A plain store into the program's memory, before the program runs. The page-tag code keeps
+ * tags with physical pages, so no page needs to be held for it. */
 static int dom_store(struct context *c, unsigned long at, const void *src, size_t bytes)
 {
-    int rc = dom_touch(c, at, bytes);
-    return rc ? rc : copy_to_user((void __user *)at, src, bytes) ? -EFAULT : 0;
-}
-static bool dom_vector(u64 nr)
-{
-    return nr == CAPSTONE_SYS_readv || nr == CAPSTONE_SYS_writev ||
-           nr == CAPSTONE_SYS_preadv || nr == CAPSTONE_SYS_pwritev;
+    (void)c;
+    return copy_to_user((void __user *)at, src, bytes) ? -EFAULT : 0;
 }
 static void dom_delegate_free(struct context *c)
 {

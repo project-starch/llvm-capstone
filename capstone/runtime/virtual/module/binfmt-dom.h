@@ -1,5 +1,8 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
-/* Native exec driver, using the shared arena/context lifecycle. */
+/* The .dom loader: it parses a protected program's image, maps it with its stack, startup,
+ * metadata and exchange regions, creates the context and derives one block per region from R.
+ * Root only. The protected entry does not exist yet (plan v5 steps 3 and 4), so the loader
+ * refuses after it has built everything. Past the point of no return that kills the task. */
 #include <linux/binfmts.h>
 #include <linux/elf.h>
 #include <linux/mman.h>
@@ -14,39 +17,9 @@
 #include <asm/cacheflush.h>
 #include "capstone/delegate.h"
 
-/* Read-only attribution records; sampled outside measurement windows. */
-static unsigned long dom_last_base, dom_last_trampoline;
+/* Read-only attribution record: the image base of the last load. */
+static unsigned long dom_last_base;
 module_param(dom_last_base, ulong, 0400);
-module_param(dom_last_trampoline, ulong, 0400);
-#ifdef CV_TASK_BACKEND
-static bool native_task;
-static bool native_clock;
-module_param(native_clock, bool, 0444);
-MODULE_PARM_DESC(native_clock, "announce direct basic clock service with native_io");
-static bool native_path;
-module_param(native_path, bool, 0444);
-MODULE_PARM_DESC(native_path, "announce direct confined openat and unlinkat services with native_io");
-static bool native_close;
-module_param(native_close, bool, 0444);
-MODULE_PARM_DESC(native_close, "announce direct close service with native_io");
-static bool native_fd;
-module_param(native_fd, bool, 0444);
-MODULE_PARM_DESC(native_fd, "announce direct fd sync, truncate and metadata services with native_io");
-static bool native_seek;
-module_param(native_seek, bool, 0444);
-MODULE_PARM_DESC(native_seek, "announce direct lseek service with native_io");
-static bool native_stat;
-module_param(native_stat, bool, 0444);
-MODULE_PARM_DESC(native_stat, "announce direct metadata service with native_io");
-static bool native_locks;
-module_param(native_locks, bool, 0444);
-MODULE_PARM_DESC(native_locks, "announce direct POSIX lock service with native_io");
-static bool native_io;
-module_param(native_io, bool, 0444);
-MODULE_PARM_DESC(native_io, "announce launch v3 direct small I/O ABI, rebuilt SDK required");
-module_param(native_task, bool, 0444);
-MODULE_PARM_DESC(native_task, "required task-owned architecture entry; false refuses initialization");
-#endif
 static bool dom_binfmt;
 module_param(dom_binfmt, bool, 0444);
 MODULE_PARM_DESC(dom_binfmt, "required root-only native .dom exec admission");
@@ -175,173 +148,38 @@ static unsigned long dom_reserve(unsigned long bytes, unsigned long align, unsig
     return base;
 }
 static int dom_grant(struct context *c, unsigned long base, unsigned long bytes,
-                     unsigned reg, unsigned perms, unsigned long cursor,
-                     unsigned long rx)
+                     unsigned reg, unsigned long cursor, unsigned long rx)
 {
-    struct cv_map m = {.address = base, .bytes = bytes, .reg = reg,
-                      .permissions = perms, .cursor = cursor, .rx_bytes = rx};
-#ifdef CV_RACE_TEST
-    /* The racer's MAP service grants into the racer's own frame. */
-    if (rt.map_for_b && rt.b) return add(c, rt.b, &m);
-#endif
-    return add(c, c->main_thread, &m);
-}
-static long dom_map(struct context *c, struct cv_step *s)
-{
-    unsigned long bytes = s->args[0], align = s->args[1], base;
-    unsigned prot = s->args[2], rights = s->args[3], kind = s->args[4];
-    int rc;
-    if (!bytes || bytes > CV_MAX_REGION_BYTES || (bytes & ~PAGE_MASK) ||
-        align < PAGE_SIZE || align > CV_MAX_REGION_BYTES || !is_power_of_2(align) ||
-        prot & ~(PROT_READ | PROT_WRITE | PROT_EXEC) || kind > CV_MAP_METADATA ||
-        (kind != CV_MAP_APPLICATION && (prot != (PROT_READ | PROT_WRITE) || rights != 6)) ||
-        (kind == CV_MAP_APPLICATION && rights != 7)) return -EINVAL;
-    align = max(align, capstone_repr_granule(bytes));
-    if (bytes & (align - 1)) return -EINVAL;
-    base = dom_reserve(bytes, align, prot);
-    if (IS_ERR_VALUE(base)) return base;
-    rc = dom_grant(c, base, bytes, 10, rights, base, 0);
-    if (rc) vm_munmap(base, bytes);
-    else {
-        struct arena *a = arena_at(c, base);
-        a->dom_dynamic = true;
-        a->dom_metadata = kind == CV_MAP_METADATA;
-    }
-    return rc;
-}
-static long dom_unmap(struct context *c, unsigned long base, unsigned long bytes)
-{
-    struct arena *a = find_arena(c, base, bytes);
-    int rc;
-    bool held;
-    if (!a || !a->dom_dynamic || a->dom_metadata) return -EINVAL;
-    held = a->copy_holds != 0;
-    rc = retire(c, a, false);
-    if (!rc && held) {
-        /* retire retained the held arena; keep its VMA as a VA reservation.
-         * Last release performs physical unmap after all checked windows. */
-        a->copy_unmap_pending = true;
-        return 0;
-    }
-    return rc ? rc : vm_munmap(base, bytes);
+    struct sublet_grant g = {.address = base, .bytes = bytes, .reg = reg,
+                             .cursor = cursor, .rx_bytes = rx};
+    return add(c, &g);
 }
 
-#ifdef CV_RACE_TEST
-#include "rt-dom.h"
-#endif
 #include "delegate-dom.h"
 #include "native-syscall-dom.h"
 
-static long dom_service(struct context *c, struct cv_step *s)
+static void dom_context_destroy(struct context *c)
 {
-    long rc;
-    s->reply = 1;
-    s->result = -ENOSYS;
-    if (s->args[7] == NS_SERVICE_NATIVE)
-        return native_service_direct(c, s);
-    if (s->args[7] == CV_SERVICE_DELEGATE ||
-        s->args[7] == CV_SERVICE_THREAD_DELEGATE)
-        return native_service(c, s);
-#ifdef CV_RACE_TEST
-    if (rt_service(c, s)) return 0;
-#endif
-    switch (s->args[7]) {
-    case CV_SERVICE_THREAD_SELF: s->result = 1; break;
-    case CV_SERVICE_PROTECT:
-        rc = native_protect(c, s);
-        if (rc) s->result = rc;
-        return 0;
-    case CV_SERVICE_MAP: s->result = dom_map(c, s); break;
-    case CV_SERVICE_UNMAP: s->result = dom_unmap(c, s->args[0], s->args[1]); break;
-    case CV_SERVICE_NODES:
-        s->result = s->args[0] > CV_ID_RECORDS_MAX ? -ENOMEM : ensure_nodes(c, s->args[0] ?: 1);
-        break;
-    case CV_SERVICE_WAIT: s->result = 0; break;
-    }
-    return 0;
-}
-static void dom_context_destroy(void *private)
-{
-    struct context *c = private;
-#ifdef CV_RACE_TEST
-    if (rt.b && rt.b->context == c) { rt.b = NULL; rt.armed = false; rt.c = NULL; }
-#endif
-    native_session_destroy(c);
     dom_delegate_free(c);
     context_destroy(c);
 }
-#ifdef CV_TASK_BACKEND
-/* One transition per architecture-return iteration. Linux handles return work
- * between transitions. Requests/replies remain in protected kernel state. */
-static void dom_task_step(void *private, struct pt_regs *regs)
+/* The release of the context an address space carries, called by riscv_capstone_release at
+ * exec and exit. */
+void sublet_context_release(void *context)
 {
-    struct context *c = private;
-    struct cv_step *s = &c->dom_step;
-    unsigned long deadline = jiffies + CV_STEP_BUDGET_J;
-    long rc;
-    if (current->mm != c->mm || task_pid_nr(current) != c->dom_pid ||
-        current->ptrace || (read_thread_flags() & _TIF_SYSCALL_WORK)) {
-        force_exit_sig(SIGSYS);
-        return;
-    }
-    if (mutex_lock_interruptible(&vm_lock)) return;
-    rc = cv_step_locked(c, s, &deadline);
-    if (rc == -EINTR || rc == -EAGAIN) goto out;
-    if (rc) goto fault;
-    /* Diagnostic projection only; never restored as capability authority. */
-    regs->epc = s->pc;
-    regs->badaddr = s->address;
-    regs->cause = -1UL; /* no scalar Linux syscall restart of domain state */
-    s->reply = 0;
-    if (s->kind == 1) goto out;
-    if (s->kind == 4) {
-        rc = resolve(c, c->main_thread, ktime_get_ns() + CV_STEP_BUDGET_NS);
-        if (!rc) { c->main_thread->sfence_pending = true; goto out; }
-        goto fault;
-    }
-    if (s->kind != 3) { rc = -EFAULT; goto fault; }
-    rc = dom_service(c, s);
-    if (rc < 0 || c->main_thread->terminal) goto fault;
-    if (rc > 256) goto fault; /* only encoded exit statuses may be positive */
-    if (rc > 0) {
-        slot_changed();
-        mutex_unlock(&vm_lock);
-        do_exit(((rc - 1) & 255) << 8);
-    }
-    goto out;
-fault:
-    /* One record per fault, read by capstone-vexec (runtime/linux/native-exec.c),
-     * which prints the launcher's "domain fault" line from it. The first four
-     * words keep their order. The code range is the image text the loader
-     * mapped, so a reader can turn pc into an offset in the image. */
-    pr_info("capstone_task: fault rc=%ld kind=%llu cause=%llu pc=0x%llx address=0x%llx ra=0x%llx fp=0x%llx pid=%d entry=0x%lx code=0x%lx-0x%lx\n",
-            rc, s->kind, s->cause, s->pc, s->address, s->ra, s->fp,
-            task_pid_nr(current), c->dom_entry,
-            current->mm->start_code, current->mm->end_code);
-    force_exit_sig(SIGSEGV);
-out:
-    slot_changed();
-    mutex_unlock(&vm_lock);
+    dom_context_destroy(context);
 }
-static const struct riscv_capstone_ops dom_task_ops = {
-    .step = dom_task_step, .release = dom_context_destroy,
-};
-#endif
 static int dom_startup(struct linux_binprm *bprm, void *block)
 {
     struct dom_launch_header *h = block;
-    unsigned long header_bytes = sizeof(*h) + (native_io ? 16 : 0);
+    unsigned long header_bytes = sizeof(*h);
     u32 *offsets = block + header_bytes;
     unsigned long at = bprm->p, used = header_bytes + (bprm->argc + bprm->envc) * sizeof(u32);
     struct path pwd;
     char *cwd, *tmp;
     unsigned i;
     memcpy(h->magic, "CPLAUNCH", 8);
-    h->version = native_io ? 3 : 2;
-    if (native_io) {
-        u32 feature[4] = {1, 1 | (native_locks ? 2 : 0) | (native_stat ? 4 : 0) | (native_seek ? 8 : 0) | (native_fd ? 16 : 0) | (native_close ? 64 : 0) | (native_path ? 128 : 0) | (native_clock ? 256 : 0), 65536, 0}; /* ABI, small IO, max bytes, reserved */
-        memcpy(block + sizeof(*h), feature, sizeof feature);
-    }
+    h->version = 2;
     h->argc = bprm->argc; h->envc = bprm->envc;
     h->pid = task_tgid_vnr(current); h->ppid = task_ppid_nr_ns(current, task_active_pid_ns(current));
     h->uid = from_kuid_munged(current_user_ns(), current_uid());
@@ -382,8 +220,6 @@ static int dom_load_binary(struct linux_binprm *bprm)
 {
     struct dom_image im = {0};
     struct context *c = NULL;
-    bool task_published = false;
-    struct pt_regs *regs = current_pt_regs();
     unsigned long base, stack, startup, whole, part;
     void *block = NULL, *tail = NULL;
     int rc;
@@ -446,11 +282,14 @@ static int dom_load_binary(struct linux_binprm *bprm)
         rc = -EFAULT; goto out;
     }
     mutex_lock(&vm_lock);
-    rc = dom_grant(c, base, im.bytes, 3, 7, base + im.entry, im.text.p_memsz);
-    if (!rc) rc = dom_grant(c, stack, im.stack, 2, 6, stack + im.stack, 0);
-    if (!rc) rc = dom_grant(c, c->dom_meta, DOM_META_BYTES, 10, 6, c->dom_meta, 0);
-    if (!rc) rc = dom_grant(c, c->dom_exchange, im.exchange, 11, 6, c->dom_exchange, 0);
-    if (!rc) rc = dom_grant(c, startup, DOM_LAUNCH_BYTES, 12, 4, startup, 0);
+    /* One block per region. The image's block covers text and data with its cursor at the
+     * base: a data reference for the program's globals, not a code capability. The processor
+     * checks no fetch, and the page table keeps the text executable and never writable. */
+    rc = dom_grant(c, base, im.bytes, 3, base, im.text.p_memsz);
+    if (!rc) rc = dom_grant(c, stack, im.stack, 2, stack + im.stack, 0);
+    if (!rc) rc = dom_grant(c, c->dom_meta, DOM_META_BYTES, 10, c->dom_meta, 0);
+    if (!rc) rc = dom_grant(c, c->dom_exchange, im.exchange, 11, c->dom_exchange, 0);
+    if (!rc) rc = dom_grant(c, startup, DOM_LAUNCH_BYTES, 12, startup, 0);
     if (!rc) {
         u64 inherited[2] = {0, 0};
         unsigned long irqflags;
@@ -467,41 +306,23 @@ static int dom_load_binary(struct linux_binprm *bprm)
     }
     mutex_unlock(&vm_lock);
     if (rc) goto out;
-    c->dom_pid = task_pid_nr(current);
-    c->dom_entry = base + im.entry;
     WRITE_ONCE(dom_last_base, base);
-    current->mm->start_code = base;
-    current->mm->end_code = base + im.text.p_memsz;
-    current->mm->start_data = base + im.text.p_memsz;
-    current->mm->end_data = base + im.text.p_memsz + im.data.p_memsz;
-    current->mm->start_stack = bprm->p;
-    set_binfmt(&capstone_dom);
-    finalize_exec(bprm);
-    /* begin_new_exec reset thread/FPU state. Architecture return enters the
-     * attached protected context; these scalar registers are diagnostic only. */
-    memset(regs, 0, sizeof(*regs));
-    regs->status = SR_PIE | SR_UXL_64;
-    rc = riscv_capstone_attach(c, &dom_task_ops);
-    if (rc) goto out;
-    task_published = true;
-    regs->epc = base + im.entry;
-    regs->sp = stack + im.stack;
-    regs->cause = -1UL;
-    rc = 0;
+    /* Plan v5 step 3 adds the trap entry and step 4 binds the context to the mm and enters
+     * the program at base + entry. Until then nothing may return to the image: an ordinary
+     * return would run it as an unprotected program. */
+    pr_info("capstone_task: image ready at 0x%lx, entry 0x%lx: no protected entry yet, refused\n",
+            base, base + (unsigned long)im.entry);
+    rc = -ENOEXEC;
 out:
-    if (c && !task_published) dom_context_destroy(c);
+    if (c) dom_context_destroy(c);
     kvfree(block); kfree(tail);
-#ifdef CV_TASK_BACKEND
-    /* Linux 6.1's ordinary post-PONR SIGSEGV is ptrace-suppressible. Never
-     * allow an attach during loader preparation to recover scalar execution. */
+    /* Linux 6.1's ordinary post-PONR SIGSEGV is ptrace-suppressible. Never let a failure
+     * after the point of no return recover scalar execution. */
     if (rc && bprm->point_of_no_return)
         force_exit_sig(SIGSEGV);
-#endif
     return rc;
 }
 static struct linux_binfmt capstone_dom = {
     .module = THIS_MODULE, .load_binary = dom_load_binary,
-#ifdef CV_TASK_BACKEND
     .capstone_native = true,
-#endif
 };

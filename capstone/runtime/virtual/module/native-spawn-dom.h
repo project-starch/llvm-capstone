@@ -1,7 +1,8 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
-/* Native process services. The kernel owns bootstrap/exec/reaping; this
- * frontend snapshots requests and carries only explicitly admitted resources. */
-#ifdef CV_TASK_BACKEND
+/* Process services. The kernel owns bootstrap, exec and reaping. This frontend takes a
+ * request already copied into kernel memory and carries only explicitly admitted resources.
+ * Plan v5 step 5's binder copies the request in and the wait results out through the
+ * program's references. */
 #include <linux/capstone_native_spawn.h>
 #include <linux/resource.h>
 #include <capstone/spawn.h>
@@ -54,7 +55,7 @@ static int dom_spawn_resources(struct context *c)
     struct native_spawn_request *r = capstone_native_spawn_data();
     struct dom_delegate *d;
     if (!r) return 0;
-    if (!native_task || !r->shadow || !r->shadow->dom_delegate) return -EPERM;
+    if (!r->shadow || !r->shadow->dom_delegate) return -EPERM;
     d = r->shadow->dom_delegate;
     r->shadow->dom_delegate = NULL;
     c->dom_delegate = d;
@@ -173,14 +174,15 @@ static const struct capstone_native_spawn_ops native_spawn_ops = {
     .exec = native_spawn_exec, .release = native_spawn_release,
 };
 
-static long native_spawn_call(struct context *c, const struct cn_capref *ref, u64 offset, u64 bytes)
+/* posix_spawn from the request block [block, block + bytes) in kernel memory. Caller holds
+ * vm_lock. The child's pid, or an error. */
+long sublet_spawn(struct context *c, const void *block, size_t bytes)
 {
     struct native_spawn_request *r;
-    struct cu_result copied;
     struct pid *pid = NULL;
     unsigned slot;
     long rc;
-    if (!native_task || current->seccomp.mode != SECCOMP_MODE_DISABLED) return -EOPNOTSUPP;
+    if (current->seccomp.mode != SECCOMP_MODE_DISABLED) return -EOPNOTSUPP;
     if (bytes < sizeof(struct capstone_spawn_header) || bytes > CAPSTONE_SPAWN_BYTES) return -EINVAL;
     /* SIGCHLD=SIG_IGN/SA_NOCLDWAIT may have autoreaped earlier children.
      * Drop only detached PID objects; live tasks and zombies keep their slot. */
@@ -200,8 +202,7 @@ static long native_spawn_call(struct context *c, const struct cn_capref *ref, u6
     if (!r) return -ENOMEM;
     r->block = kvmalloc(bytes, GFP_KERNEL);
     if (!r->block) { rc = -ENOMEM; goto fail; }
-    copied = cv_checked_copy(c, c->main_thread, ref, offset, r->block, bytes, CU_FROM_DOMAIN);
-    if (copied.cause || copied.bytes_done != bytes) { rc = -EFAULT; goto fail; }
+    memcpy(r->block, block, bytes);
     rc = -capstone_spawn_unpack(r->block, bytes, r->argv, ARRAY_SIZE(r->argv),
              r->envp, ARRAY_SIZE(r->envp), r->paths, ARRAY_SIZE(r->paths), &r->view);
     if (rc) goto fail;
@@ -221,7 +222,8 @@ fail:
     return rc;
 }
 
-static void native_spawn_cancel(struct context *c, long number)
+/* Kill and reap the child number, when the binder cannot publish its pid. */
+void sublet_spawn_cancel(struct context *c, long number)
 {
     for (unsigned i = 0; i < DOM_CHILDREN; ++i) {
         struct pid *pid = c->dom_delegate->children[i];
@@ -235,17 +237,16 @@ static void native_spawn_cancel(struct context *c, long number)
     }
 }
 
-static long native_wait_call(struct context *c, s64 number, u64 options,
-                              const struct cn_capref *status_ref, u64 status_offset,
-                              const struct cn_capref *usage_ref, u64 usage_offset)
+/* wait4 for a spawned child, with the status and the usage in kernel buffers. Caller holds
+ * vm_lock. As in Linux, the reap precedes the binder's copy out. */
+long sublet_wait(struct context *c, s64 number, u64 options, int *status_out,
+                 struct rusage *usage_out)
 {
     struct rusage usage = {};
     int status = 0;
     struct pid *pid;
-    struct cu_result copied;
     unsigned slot;
     long rc;
-    if (!native_task) return -EOPNOTSUPP;
     if ((number <= 0 && number != -1) || number > INT_MAX) return -ECHILD;
     if (options & ~(u64)WNOHANG) return -EINVAL;
     for (slot = 0; slot < DOM_CHILDREN; ++slot) {
@@ -253,10 +254,6 @@ static long native_wait_call(struct context *c, s64 number, u64 options,
         if (pid && (number == -1 || pid_vnr(pid) == number)) break;
     }
     if (slot == DOM_CHILDREN) return -ECHILD;
-    if (status_ref && (rc = cn_authorize(c->native_context, &c->native_context->owner,
-                                        status_ref, status_offset, sizeof(status), 1))) return rc;
-    if (usage_ref && (rc = cn_authorize(c->native_context, &c->native_context->owner,
-                                       usage_ref, usage_offset, sizeof(usage), 1))) return rc;
     if (number == -1) {
         DEFINE_WAIT_FUNC(wait, woken_wake_function);
         u64 gone = 0;
@@ -297,17 +294,7 @@ static long native_wait_call(struct context *c, s64 number, u64 options,
         }
     }
     if (rc <= 0) return rc;
-    /* As Linux wait4, reap precedes copy-out: an output fault consumes status. */
-    if (status_ref) {
-        copied = cv_checked_copy(c, c->main_thread, status_ref, status_offset, &status, sizeof(status), CU_TO_DOMAIN);
-        if (copied.cause || copied.bytes_done != sizeof(status)) return -EFAULT;
-    }
-    if (usage_ref) {
-        copied = cv_checked_copy(c, c->main_thread, usage_ref, usage_offset, &usage, sizeof(usage), CU_TO_DOMAIN);
-        if (copied.cause || copied.bytes_done != sizeof(usage)) return -EFAULT;
-    }
+    if (status_out) *status_out = status;
+    if (usage_out) *usage_out = usage;
     return rc;
 }
-#else
-static int dom_spawn_resources(struct context *c) { return 0; }
-#endif

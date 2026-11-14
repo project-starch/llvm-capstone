@@ -1,45 +1,40 @@
 --- a/arch/riscv/Kconfig
 +++ b/arch/riscv/Kconfig
-@@ -694,3 +694,12 @@
+@@ -694,3 +694,13 @@ source "drivers/cpuidle/Kconfig"
  endmenu # "CPU Power Management"
  
  source "arch/riscv/kvm/Kconfig"
 +
 +config RISCV_CAPSTONE_TASK
-+	bool "Experimental Capstone native task backend"
++	bool "Experimental Sublet protected programs"
 +	depends on 64BIT && MMU && !SMP
-+	depends on VIRT_CPU_ACCOUNTING_GEN && CONTEXT_TRACKING_USER_FORCE
 +	default n
 +	help
-+	  Experimental, default-off task-owned Capstone entry/return. Requires
-+	  matching copyable-only model and tag-aware memory patches. Root only.
++	  Experimental, default-off kernel code for programs protected by the
++	  Sublet processor: lifetime tables, the root reference and the .dom
++	  loader. Requires the 63-bit Sublet format and the tag-aware memory
++	  patch. Root only.
 --- /dev/null
 +++ b/arch/riscv/include/asm/capstone_task.h
-@@ -0,0 +1,21 @@
+@@ -0,0 +1,15 @@
 +/* SPDX-License-Identifier: GPL-2.0-only */
 +#ifndef _ASM_RISCV_CAPSTONE_TASK_H
 +#define _ASM_RISCV_CAPSTONE_TASK_H
 +#include <linux/types.h>
-+struct pt_regs;
 +struct task_struct;
-+struct riscv_capstone_ops {
-+	void (*step)(void *, struct pt_regs *);
-+	void (*release)(void *);
-+};
 +#ifdef CONFIG_RISCV_CAPSTONE_TASK
-+bool riscv_capstone_owns(void *);
-+int riscv_capstone_attach(void *, const struct riscv_capstone_ops *);
-+void riscv_capstone_release(struct task_struct *);
-+void riscv_capstone_return(struct pt_regs *);
-+long riscv_capstone_run_user(unsigned long, unsigned long);
-+void riscv_capstone_trap_enter(void);
++/* A task that runs a protected program carries TIF_CAPSTONE, and its mm carries the
++ * program's context in mm->context.capstone_namespace. The Sublet code releases a context
++ * through sublet_context_release. */
++void sublet_context_release(void *context);
++void riscv_capstone_release(struct task_struct *task);
 +#else
 +static inline void riscv_capstone_release(struct task_struct *task) { }
 +#endif
 +#endif
 --- a/arch/riscv/include/asm/mmu.h
 +++ b/arch/riscv/include/asm/mmu.h
-@@ -16,6 +16,9 @@
+@@ -16,6 +16,9 @@ typedef struct {
  	atomic_long_t id;
  #endif
  	void *vdso;
@@ -51,32 +46,19 @@
  	cpumask_t icache_stale_mask;
 --- a/arch/riscv/include/asm/mmu_context.h
 +++ b/arch/riscv/include/asm/mmu_context.h
-@@ -30,6 +30,9 @@
+@@ -29,6 +29,9 @@ static inline int init_new_context(struct task_struct *tsk,
+ {
  #ifdef CONFIG_MMU
  	atomic_long_set(&mm->context.id, 0);
- #endif
++#endif
 +#ifdef CONFIG_RISCV_CAPSTONE_TASK
 +	mm->context.capstone_namespace = NULL;
-+#endif
+ #endif
  	return 0;
  }
- 
---- a/arch/riscv/include/asm/processor.h
-+++ b/arch/riscv/include/asm/processor.h
-@@ -33,6 +33,10 @@
- 
- /* CPU-specific state of a task */
- struct thread_struct {
-+#ifdef CONFIG_RISCV_CAPSTONE_TASK
-+	struct riscv_capstone_task *capstone;
-+	bool capstone_user;
-+#endif
- 	/* Callee-saved registers */
- 	unsigned long ra;
- 	unsigned long sp;	/* Kernel mode stack */
 --- a/arch/riscv/include/asm/thread_info.h
 +++ b/arch/riscv/include/asm/thread_info.h
-@@ -99,6 +99,8 @@
+@@ -99,6 +99,8 @@ struct thread_info {
  #define TIF_SECCOMP		8	/* syscall secure computing */
  #define TIF_NOTIFY_SIGNAL	9	/* signal notifications exist */
  #define TIF_UPROBE		10	/* uprobe breakpoint or singlestep */
@@ -87,15 +69,7 @@
  #define _TIF_SYSCALL_TRACE	(1 << TIF_SYSCALL_TRACE)
 --- a/arch/riscv/kernel/Makefile
 +++ b/arch/riscv/kernel/Makefile
-@@ -37,6 +37,7 @@
- obj-y	+= cpufeature.o
- obj-y	+= entry.o
- obj-y	+= irq.o
-+
- obj-y	+= process.o
- obj-y	+= ptrace.o
- obj-y	+= reset.o
-@@ -88,3 +89,5 @@
+@@ -88,3 +88,5 @@ obj-$(CONFIG_EFI)		+= efi.o
  obj-$(CONFIG_COMPAT)		+= compat_syscall_table.o
  obj-$(CONFIG_COMPAT)		+= compat_signal.o
  obj-$(CONFIG_COMPAT)		+= compat_vdso/
@@ -103,164 +77,45 @@
 +obj-$(CONFIG_RISCV_CAPSTONE_TASK) += capstone_task.o
 --- /dev/null
 +++ b/arch/riscv/kernel/capstone_task.c
-@@ -0,0 +1,109 @@
+@@ -0,0 +1,20 @@
 +// SPDX-License-Identifier: GPL-2.0-only
-+#include <linux/context_tracking.h>
-+#include <linux/errno.h>
 +#include <linux/mm.h>
 +#include <linux/sched.h>
-+#include <linux/sched/signal.h>
-+#include <linux/slab.h>
-+#include <asm/asm-extable.h>
 +#include <asm/capstone_task.h>
-+#include <asm/ptrace.h>
 +
-+struct riscv_capstone_task {
-+	void *private;
-+	const struct riscv_capstone_ops *ops;
-+	struct mm_struct *mm; /* backend keeps mm_count, never mm_users */
-+};
-+
-+/* Synchronous callbacks cannot release, transfer or retain private state.
-+ * The current task owns its lifetime until the step returns, even across sleep.
-+ * Shared-mm and asynchronous providers will need independent references. */
-+bool riscv_capstone_owns(void *private)
-+{
-+	struct riscv_capstone_task *state = current->thread.capstone;
-+	return state && state->private == private && state->mm == current->mm;
-+}
-+
-+int riscv_capstone_attach(void *private, const struct riscv_capstone_ops *ops)
-+{
-+	struct riscv_capstone_task *state;
-+	if (!private || !ops || !current->mm || current->thread.capstone ||
-+	    current->mm->context.capstone_namespace || !ops->step || !ops->release)
-+		return -EINVAL;
-+	state = kzalloc(sizeof(*state), GFP_KERNEL);
-+	if (!state)
-+		return -ENOMEM;
-+	/* setup_new_exec has dropped cred_guard_mutex. Publish under the same
-+	 * lock as ptrace_attach, checking tracers admitted during image setup. */
-+	mutex_lock(&current->signal->cred_guard_mutex);
-+	if (current->ptrace || (read_thread_flags() & _TIF_SYSCALL_WORK)) {
-+		mutex_unlock(&current->signal->cred_guard_mutex);
-+		kfree(state);
-+		return -EOPNOTSUPP;
-+	}
-+	state->private = private;
-+	state->ops = ops;
-+	state->mm = current->mm;
-+	current->mm->context.capstone_namespace = private;
-+	current->thread.capstone = state;
-+	set_thread_flag(TIF_CAPSTONE);
-+	mutex_unlock(&current->signal->cred_guard_mutex);
-+	return 0;
-+}
-+
-+/* Called before exit_mm and before irreversible exec changes the old mm. */
++/* Called at exec before exec_mmap and at exit before exit_mm, while task->mm is still the
++ * protected program's. Clears the task's flag and the mm's context, then ends the context. */
 +void riscv_capstone_release(struct task_struct *task)
 +{
-+	struct riscv_capstone_task *state = task->thread.capstone;
-+	if (!state)
++	void *context;
++
++	if (!test_tsk_thread_flag(task, TIF_CAPSTONE))
 +		return;
-+	WARN_ON_ONCE(task != current || task->thread.capstone_user);
-+	task->thread.capstone = NULL;
++	WARN_ON_ONCE(task != current || !task->mm);
 +	clear_tsk_thread_flag(task, TIF_CAPSTONE);
-+	WARN_ON_ONCE(state->mm->context.capstone_namespace != state->private);
-+	state->mm->context.capstone_namespace = NULL;
-+	state->ops->release(state->private);
-+	kfree(state);
++	context = task->mm->context.capstone_namespace;
++	task->mm->context.capstone_namespace = NULL;
++	if (context)
++		sublet_context_release(context);
 +}
-+
-+/* Entry.S calls with IRQs off, after Linux return-work checks. */
-+void riscv_capstone_return(struct pt_regs *regs)
-+{
-+	struct riscv_capstone_task *state = current->thread.capstone;
-+	BUG_ON(!irqs_disabled() || !state || current->mm != state->mm);
-+	local_irq_enable();
-+	state->ops->step(state->private, regs);
-+	local_irq_disable();
-+	/* A failure must not return through scalar sret into domain text. */
-+	BUG_ON(current->thread.capstone != state);
-+}
-+
-+/* An S-origin admission exception can happen after CT_USER was entered.
-+ * Entry.S invokes this before tracing or ordinary exception handling. */
-+noinstr void riscv_capstone_trap_enter(void)
-+{
-+	if (READ_ONCE(current->thread.capstone_user)) {
-+		user_exit_irqoff();
-+		WRITE_ONCE(current->thread.capstone_user, false);
-+	}
-+}
-+
-+/* No frame access, lock, counter or trace instrumentation while in CT_USER.
-+ * The admitted model restores caller SIE=0 on normal escape. Refusals use an
-+ * exception-table fixup; the early trap hook balances context tracking first. */
-+noinstr long riscv_capstone_run_user(unsigned long frame, unsigned long action)
-+{
-+	long error = 0;
-+	WRITE_ONCE(current->thread.capstone_user, true);
-+	user_enter_irqoff();
-+	asm volatile("1: .insn r 0x5b, 1, 0x24, x0, %1, %2\n\t"
-+		     "csrw 0x5c1, zero\n\tj 2f\n"
-+		     "3: li %0, -14\n\tcsrw 0x5c1, zero\n2:\n"
-+		     _ASM_EXTABLE(1b, 3b)
-+		     : "+r"(error) : "r"(frame), "r"(action) : "memory");
-+	if (READ_ONCE(current->thread.capstone_user)) {
-+		user_exit_irqoff();
-+		WRITE_ONCE(current->thread.capstone_user, false);
-+	}
-+	return error;
-+}
---- a/arch/riscv/kernel/entry.S
-+++ b/arch/riscv/kernel/entry.S
-@@ -107,6 +107,9 @@
- 	la gp, __global_pointer$
- .option pop
- 
-+#ifdef CONFIG_RISCV_CAPSTONE_TASK
-+	call riscv_capstone_trap_enter
-+#endif
- #ifdef CONFIG_TRACE_IRQFLAGS
- 	call __trace_hardirqs_off
- #endif
-@@ -268,6 +271,15 @@
- 	REG_L s0, TASK_TI_FLAGS(tp) /* current_thread_info->flags */
- 	andi s1, s0, _TIF_WORK_MASK
- 	bnez s1, work_pending
-+#ifdef CONFIG_RISCV_CAPSTONE_TASK
-+	li t0, _TIF_CAPSTONE
-+	and t0, s0, t0
-+	beqz t0, 8f
-+	mv a0, sp
-+	call riscv_capstone_return
-+	j ret_from_exception
-+8:
-+#endif
- 
- #ifdef CONFIG_CONTEXT_TRACKING_USER
- 	call user_enter_callable
 --- a/arch/riscv/kernel/process.c
 +++ b/arch/riscv/kernel/process.c
-@@ -154,6 +154,11 @@
+@@ -154,6 +154,9 @@ int arch_dup_task_struct(struct task_struct *dst, struct task_struct *src)
  {
  	fstate_save(src, task_pt_regs(src));
  	*dst = *src;
 +#ifdef CONFIG_RISCV_CAPSTONE_TASK
-+	dst->thread.capstone = NULL;
-+	dst->thread.capstone_user = false;
 +	clear_tsk_thread_flag(dst, TIF_CAPSTONE);
 +#endif
  	return 0;
  }
  
-@@ -164,6 +169,9 @@
+@@ -164,6 +167,9 @@ int copy_thread(struct task_struct *p, const struct kernel_clone_args *args)
  	unsigned long tls = args->tls;
  	struct pt_regs *childregs = task_pt_regs(p);
  
 +#ifdef CONFIG_RISCV_CAPSTONE_TASK
-+	if (current->thread.capstone) return -EOPNOTSUPP;
++	if (test_thread_flag(TIF_CAPSTONE)) return -EOPNOTSUPP;
 +#endif
  	memset(&p->thread.s, 0, sizeof(p->thread.s));
  
@@ -277,7 +132,7 @@
  #include <linux/kernel_read_file.h>
  #include <linux/slab.h>
  #include <linux/file.h>
-@@ -1291,6 +1294,9 @@
+@@ -1291,6 +1294,9 @@ int begin_new_exec(struct linux_binprm * bprm)
  	 * Release all of the old mmap stuff
  	 */
  	acct_arg_size(bprm, 0);
@@ -299,7 +154,7 @@
  #include <linux/mm.h>
  #include <linux/slab.h>
  #include <linux/sched/autogroup.h>
-@@ -804,6 +807,9 @@
+@@ -804,6 +807,9 @@ void __noreturn do_exit(long code)
  	tsk->exit_code = code;
  	taskstats_exit(tsk, group_dead);
  
@@ -311,13 +166,13 @@
  	if (group_dead)
 --- a/kernel/ptrace.c
 +++ b/kernel/ptrace.c
-@@ -428,6 +428,14 @@
+@@ -428,6 +428,14 @@ static int ptrace_attach(struct task_struct *task, long request,
  	if (mutex_lock_interruptible(&task->signal->cred_guard_mutex))
  		goto out;
  
 +#ifdef CONFIG_RISCV_CAPSTONE_TASK
 +	/* Serialize publication by exec with debugger admission. */
-+	if (READ_ONCE(task->thread.capstone)) {
++	if (test_tsk_thread_flag(task, TIF_CAPSTONE)) {
 +		retval = -EOPNOTSUPP;
 +		goto unlock_creds;
 +	}
