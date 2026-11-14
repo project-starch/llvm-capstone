@@ -1,3 +1,35 @@
+#ifdef CAPSTONE_RUNTIME_TRAP
+/* Protected tasks issue Linux calls directly with their original references. */
+#include <errno.h>
+#include <sys/syscall.h>
+#include <syscall_arch.h>
+long __capstone_native_syscall(long, void *, void *, void *, void *, void *, void *);
+
+long __capstone_linux_syscall(long n, void *a, void *b, void *c,
+                            void *d, void *e, void *f)
+{
+    /* These need thread, signal or opaque-value support in a later step.
+     * Refuse them before passing a layout that the kernel cannot yet read. */
+    switch (n) {
+    case SYS_brk: case SYS_clone: case SYS_execve:
+    case SYS_rt_sigaction: case SYS_rt_sigprocmask: case SYS_sigaltstack:
+    case SYS_rt_sigreturn: case SYS_rt_sigtimedwait: case SYS_rt_sigqueueinfo:
+    case SYS_rt_tgsigqueueinfo: case SYS_timer_create: case SYS_mq_notify:
+    case SYS_epoll_ctl: case SYS_epoll_pwait:
+        return -ENOSYS;
+    }
+    return __capstone_native_syscall(n, a, b, c, d, e, f);
+}
+
+/* Cancellation is deferred with threads. Keep the cancellation entry's
+ * pointer arguments intact even in single-threaded stdio. */
+long __syscall_cp_asm(volatile int *cancel, void *n, void *a, void *b,
+                     void *c, void *d, void *e, void *f)
+{
+    (void)cancel;
+    return __capstone_linux_syscall((long)n, a, b, c, d, e, f);
+}
+#else
 /* The delegated syscall stub: musl's syscall entry in every application.
  *
  * Every Linux call becomes one entry in the entry region and one yield. Pointer
@@ -1741,3 +1773,5 @@ long __syscall_cp_asm(volatile int *cancel, syscall_arg_t nr, syscall_arg_t u, s
     return __cancel();
   return r;
 }
+
+#endif

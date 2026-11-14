@@ -4,7 +4,7 @@
 #include <stdint.h>
 #include <sys/mman.h>
 #include <string.h>
-#include "vm.h"
+#include <sched.h>
 #include <heap_sublet.h>
 
 struct heap_mid *__malloc_page_root[512];
@@ -12,7 +12,7 @@ static unsigned index_mutex;
 static void index_lock(void)
 {
     while (__atomic_exchange_n(&index_mutex, 1, __ATOMIC_ACQUIRE))
-        if (__capstone_vm_wait()) __builtin_trap();
+        sched_yield();
 }
 static void index_unlock(void)
 { __atomic_store_n(&index_mutex, 0, __ATOMIC_RELEASE); }
@@ -42,15 +42,11 @@ static struct heap_leaf *leaf_for(size_t a, int create)
 
 void *__heap_mapping(size_t n)
 {
-    if (!n || n > CV_MAX_REGION_BYTES) { errno=ENOMEM; return MAP_FAILED; }
+    if (!n || n > PTRDIFF_MAX - 8192) { errno=ENOMEM; return MAP_FAILED; }
     size_t bytes=heap_round((n+4095)&-4096UL);
     HEAP_POLICY_SYMBOL(); /* Link-time check: libc and SDK use the same policy. */
-    sublet_cap grant;
-    size_t align=heap_granule(bytes);
-    if (align < 4096) align=4096;
-    if (cap_vm_acquire(&grant,bytes,align,PROT_READ|PROT_WRITE,6,CAP_VM_HEAP))
-        return MAP_FAILED;
-    void *raw=cap_vm_copyable(&grant);
+    void *raw=mmap(0,bytes,PROT_READ|PROT_WRITE,MAP_PRIVATE|MAP_ANONYMOUS,-1,0);
+    if (raw == MAP_FAILED) return raw;
     size_t base=__builtin_capstone_cap_get_cursor(raw);
     if (base >= (1UL<<39) || bytes > (1UL<<39)-base) {
         munmap(raw,bytes); errno=ENOMEM; return MAP_FAILED;
@@ -63,9 +59,9 @@ void *__heap_mapping(size_t n)
             index_unlock(); munmap(raw,bytes); errno=e; return MAP_FAILED;
         }
     }
-    /* mmap's returned capability need not carry MANAGE. This one mapping-wide
-     * child does, and becomes the parent of all objects within the mapping. */
-    void *owner=heap_issue(raw,bytes);
+    /* Keep the kernel's depth-1 block as owner. A child reference cannot
+     * authorize munmap under the trap-route mapping contract. */
+    void *owner=raw;
     for (size_t a=base; a<base+bytes; a+=4096) {
         struct heap_leaf *leaf=leaf_for(a,0);
         if (leaf->owner[(a>>12)&511]) __builtin_trap();

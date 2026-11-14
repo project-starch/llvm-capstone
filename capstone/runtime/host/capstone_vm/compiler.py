@@ -731,7 +731,8 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         sdk = Path(os.environ.get("CAPSTONE_SDK", Path(sys.argv[0]).absolute().parent))
         config = json.loads((sdk / "sdk.json").read_text())
-        if config["version"] != 1 or config.get("application_abi") != 2:
+        expected_abi = 3 if config.get("profile") == "virtual" else 2
+        if config["version"] != 1 or config.get("application_abi") != expected_abi:
             raise ValueError("unsupported SDK version; rebuild the SDK")
         if arguments == ["--check-toolchain"]:
             check_profile(config)

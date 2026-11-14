@@ -6,6 +6,16 @@ contracts. Reconcile the loader stream's grant-slot output with the block
 structure now shared by the table and mapping code.
 [Interfaces and current verification](../design/sublet-mappings.md).
 
+## Integrate the trap libc with the exec loader
+
+On `trap/s5-libc`, use the [stack and syscall contract](../../ports/musl-capstone/tests/trap/README.md)
+when connecting the libc to the kernel. The loader must write tagged argv,
+envp and pointer-valued auxv entries, then restore tagged sp and image gp.
+Syscall numbers now arrive in a7. mmap must return a tagged depth-1 block.
+Run the linked smoke first and require stdout `ok` and exit status 7.
+Then run the mallocng smoke. Neither program has run yet.
+Threads, caught signals and epoll side tables remain later work.
+
 ## RTL implementation from the rebased native branch
 
 The developer entry is the [RTL handoff](../plans/native-task-rtl-handoff.md).

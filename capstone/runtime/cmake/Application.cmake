@@ -4,9 +4,8 @@ include_guard(GLOBAL)
 option(CAPSTONE_MUSL_NATIVE_IO "Opt-in loader-negotiated direct small I/O" OFF)
 option(CAPSTONE_APPLICATION_VIRTUAL "Use the virtual C runtime adapter (OFF: the physical profile)" ON)
 
-# A normal main(argc, argv), linked against the shared musl application ABI:
-# the delegated runtime (ABI v2), the only one. The caller selects the existing
-# capstone-domain toolchain and musl headers.
+# A normal main(argc, argv), linked against musl. Virtual applications use
+# the Linux trap ABI. The physical profile retains its delegated runtime.
 
 function(capstone_configure_application target)
   if(CAPSTONE_MUSL_NATIVE_IO AND NOT CAPSTONE_APPLICATION_VIRTUAL)
@@ -56,24 +55,20 @@ function(capstone_configure_application target)
   if(NOT TARGET capstone-application-core)
     add_library(capstone-application-core OBJECT
       "${startup}" "${musl}/set_thread_area.S" "${musl}/setjmp.S"
-      "${musl}/hostcall.c" "${musl}/tls.c" "${musl}/atomic_libcalls.c"
-      "${musl}/lock.c"
-      "${capstone}/runtime/common/launch.c")
+      "${musl}/tls.c" "${musl}/atomic_libcalls.c" "${musl}/lock.c")
     if(CAPSTONE_APPLICATION_VIRTUAL)
       target_sources(capstone-application-core PRIVATE
         "${capstone}/runtime/virtual/thread.c"
         "${capstone}/runtime/virtual/pthread.c"
         "${capstone}/runtime/virtual/fenv.c")
       target_compile_definitions(capstone-application-core PRIVATE CAPSTONE_RUNTIME_VIRTUAL=1)
-      if(CAPSTONE_MUSL_NATIVE_IO)
-        target_sources(capstone-application-core PRIVATE "${musl}/native-syscall.S")
-        target_compile_definitions(capstone-application-core PRIVATE
-          CAPSTONE_MUSL_NATIVE_IO=1 CAPSTONE_NATIVE_SYSCALL_ABI=1)
-      endif()
+      target_sources(capstone-application-core PRIVATE
+        "${musl}/native-syscall.S" "${musl}/linux-start.c" "${musl}/delegate.c")
       target_compile_options(capstone-application-core PRIVATE
         "$<$<COMPILE_LANGUAGE:C>:SHELL:${virtual_codegen}>")
     else()
-      target_sources(capstone-application-core PRIVATE "${musl}/context.c")
+      target_sources(capstone-application-core PRIVATE "${musl}/context.c"
+        "${musl}/hostcall.c" "${capstone}/runtime/common/launch.c")
     endif()
     file(STRINGS "${musl}/libc_overrides.list" overrides)
     foreach(source IN LISTS overrides)
@@ -87,12 +82,14 @@ function(capstone_configure_application target)
       "${PORT_MUSL_ROOT}/src/include" "${PORT_MUSL_ROOT}/src/internal"
       "${PORT_MUSL_ROOT}/obj/src/internal" "${PORT_MUSL_ROOT}/src/multibyte")
     target_compile_definitions(capstone-application-core PRIVATE _XOPEN_SOURCE=700)
-    target_sources(capstone-application-core PRIVATE
+    if(NOT CAPSTONE_APPLICATION_VIRTUAL)
+      target_sources(capstone-application-core PRIVATE
         "${musl}/delegate.c" "${musl}/posix_spawn_delegate.c" "${musl}/signals.c" "${musl}/altstack.S"
         "${capstone}/runtime/common/delegate.c" "${capstone}/runtime/common/spawn.c"
         "${capstone}/runtime/common/msghdr.c")
-    set_source_files_properties("${musl}/posix_spawn_delegate.c" PROPERTIES
+      set_source_files_properties("${musl}/posix_spawn_delegate.c" PROPERTIES
         INCLUDE_DIRECTORIES "${PORT_MUSL_ROOT}/src/process")
+    endif()
     target_compile_options(capstone-application-core PRIVATE
       -ffunction-sections -fdata-sections
       "$<$<COMPILE_LANGUAGE:C>:-Wno-int-conversion>")
@@ -184,9 +181,12 @@ function(capstone_configure_application target)
     message(FATAL_ERROR "CONTEXT_BYTES must be a multiple of 4096")
   endif()
   math(EXPR data_bytes "${app_DATA_BYTES} + 256 + ${app_CONTEXT_BYTES}")
-  target_sources(${target} PRIVATE "${capstone}/runtime/domain/application.c"
-    "${heap}" "${capstone}/runtime/domain/domreq.S"
+  target_sources(${target} PRIVATE "${heap}"
     "${capstone}/runtime/domain/gct-section-end.S")
+  if(NOT CAPSTONE_APPLICATION_VIRTUAL)
+    target_sources(${target} PRIVATE "${capstone}/runtime/domain/application.c"
+      "${capstone}/runtime/domain/domreq.S")
+  endif()
   target_compile_definitions(${target} PRIVATE _XOPEN_SOURCE=700
     CAPSTONE_DOMREQ_DATA=${data_bytes} CAPSTONE_DOMREQ_STACK=${app_STACK_BYTES}
     CAPSTONE_CONTEXT_ARENA_BYTES=${app_CONTEXT_BYTES}

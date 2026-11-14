@@ -191,7 +191,6 @@ SECTIONS {
     . = ALIGN(16);
   } :data
 
-  .capstone_virtual 0 : { KEEP(*(.capstone_virtual)) }
 
   /DISCARD/ : {
     *(.comment)

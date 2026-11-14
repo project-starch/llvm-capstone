@@ -1,0 +1,55 @@
+--- a/src/env/__libc_start_main.c
++++ b/src/env/__libc_start_main.c
+@@ -22,6 +22,10 @@
+ #endif
+ void __init_libc(char **envp, char *pn)
+ {
++#ifdef CAPSTONE_RUNTIME_TRAP
++    extern void __capstone_linux_init(char **, char *);
++    __capstone_linux_init(envp, pn);
++#else
+ 	size_t i, *auxv, aux[AUX_CNT] = { 0 };
+ 	__environ = envp;
+ 	for (i=0; envp[i]; i++);
+@@ -54,6 +58,7 @@
+ 		if (__sys_open("/dev/null", O_RDWR)<0)
+ 			a_crash();
+ 	libc.secure = 1;
++#endif
+ }
+ 
+ static void libc_start_init(void)
+--- a/src/malloc/mallocng/glue.h
++++ b/src/malloc/mallocng/glue.h
+@@ -48,9 +48,15 @@
+ static inline uint64_t get_random_secret()
+ {
+ 	uint64_t secret = (uintptr_t)&secret * 1103515245;
++#ifdef CAPSTONE_RUNTIME_TRAP
++    extern void *__capstone_aux_random;
++    if (__capstone_aux_random)
++        memcpy(&secret, (char *)__capstone_aux_random+8, sizeof secret);
++#else
+ 	for (size_t i=0; libc.auxv && libc.auxv[i]; i+=2)
+ 		if (libc.auxv[i]==AT_RANDOM)
+ 			memcpy(&secret, (char *)libc.auxv[i+1]+8, sizeof secret);
++#endif
+ 	return secret;
+ }
+ 
+--- a/src/env/__init_tls.c
++++ b/src/env/__init_tls.c
+@@ -71,6 +71,7 @@
+ 	return td;
+ }
+ 
++#ifndef CAPSTONE_RUNTIME_TRAP
+ #if ULONG_MAX == 0xffffffff
+ typedef Elf32_Phdr Phdr;
+ #else
+@@ -151,3 +152,5 @@
+ }
+ 
+ weak_alias(static_init_tls, __init_tls);
++
++#endif

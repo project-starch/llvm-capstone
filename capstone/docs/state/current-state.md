@@ -7,6 +7,15 @@ The Linux 6.1 Image builds on p13 without warnings. Trap-mode mapping execution
 still requires the handle and tagged return-slot streams.
 [Design, interfaces and limits](../design/sublet-mappings.md).
 
+## Trap libc build baseline, 14 November 2026
+
+On `trap/s5-libc`, the virtual runtime uses stack startup and plain Linux
+ecalls with numbers in a7. All 1,349 musl files compiled on p13. The static
+write/mmap/munmap smoke and mallocng smoke linked and passed disassembly checks.
+The old startup object retained its image magic as the negative control.
+The CMake SDK and its smoke link also passed. Execution awaits the kernel
+loader. [Build procedure and exact integration contract](../../ports/musl-capstone/tests/trap/README.md).
+
 ## Rebased native kernel: full existing SPEC C-port gate passes
 
 All ten existing C-port entries pass on branch source `04350015dcad`, runtime

@@ -1,3 +1,15 @@
+#ifdef CAPSTONE_RUNTIME_TRAP
+#include <capstone/virtual.h>
+#include <errno.h>
+#include <unistd.h>
+#include <stdlib.h>
+long capstone_virtual_thread_create(void *(*entry)(void *), void *arg, void *sp, void *tp)
+{ errno = ENOSYS; return -1; }
+long __capstone_virtual_context_create(void *(*entry)(void *), void *arg, void *sp, void *tp)
+{ errno = ENOSYS; return -1; }
+int capstone_virtual_thread_join(long thread) { errno = ENOSYS; return -1; }
+_Noreturn void capstone_virtual_thread_exit(void *result) { _Exit(127); }
+#else
 #include <capstone/capability.h>
 #include <capstone/virtual.h>
 #include <errno.h>
@@ -123,3 +135,5 @@ int capstone_virtual_thread_join(long thread)
     }
     return 0;
 }
+
+#endif

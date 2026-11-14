@@ -1,28 +1,21 @@
-/* SPDX-License-Identifier: MIT */
-#include <capstone/native-syscall-abi.h>
-#if !defined(CAPSTONE_RUNTIME_VIRTUAL) || !defined(CAPSTONE_NATIVE_SYSCALL_ABI)
-#error "native syscall stubs require explicit virtual native ABI selection"
-#endif
-/* long __capstone_native_syscall(long nr, void *a, void *b, void *c,
- *                               void *d, void *e, void *f);
- * Preserve all six argument tags. Only the number and selector are scalar.
- * The native kernel backend must return a scalar result with its tag cleared.
- * Capability-returning mapping services require a separate typed interface. */
+/* Linux syscall ABI. MOVC preserves all six argument references.
+ * Scalar calls return long. The reference-return alias is used by mmap so
+ * no C integer return or cast discards the result tag. */
 .text
 .global __capstone_native_syscall
+.global __capstone_linux_syscall_ref
 .type __capstone_native_syscall, @function
+.type __capstone_linux_syscall_ref, @function
 __capstone_native_syscall:
-    mv t0, a0
+__capstone_linux_syscall_ref:
+    mv a7, a0
     movc a0, a1
     movc a1, a2
     movc a2, a3
     movc a3, a4
     movc a4, a5
     movc a5, a6
-    movc a6, zero
-    mv a6, t0
-    movc a7, zero
-    li a7, NS_SERVICE_NATIVE
     ecall
     ret
 .size __capstone_native_syscall, .-__capstone_native_syscall
+.size __capstone_linux_syscall_ref, .-__capstone_linux_syscall_ref

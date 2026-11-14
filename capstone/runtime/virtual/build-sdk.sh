@@ -6,12 +6,15 @@ out=${1:?Output directory}
 musl=${2:?Prepared Capstone musl source tree}
 shift 2
 export CAPSTONE_APPLICATION_PROFILE=virtual
-for patchfile in "$here/../../ports/musl-capstone/musl-patches/"*.patch; do
-    if ! patch -d "$musl" -p1 -R --dry-run -s -f < "$patchfile" >/dev/null 2>&1; then
-        echo "musl source is not current: run prepare-musl-capstone.sh (missing $(basename "$patchfile"))" >&2
-        exit 2
-    fi
-done
+# The final startup overlay changes an older allocator patch's context.
+# Validate the composed allocator instead of reversing each patch in place.
+python3 "$here/../../ports/musl-capstone/check-mallocng-policy.py" "$musl" \
+    "${MUSL_ARCHIVE:-${MUSL_CACHE_ROOT:-$CAPSTONE_TMP_ROOT/musl-src}/musl-${MUSL_VERSION:-1.2.5}.tar.gz}"
+if ! patch -d "$musl" -p1 -R --dry-run -s -f \
+    < "$here/../../ports/musl-capstone/musl-patches/0011-linux-trap-startup.patch" >/dev/null 2>&1; then
+    echo "musl source lacks trap startup: run prepare-musl-capstone.sh" >&2
+    exit 2
+fi
 # These options affect libc now, as well as the runtime. The policy symbol in
 # malloc-mapping.c makes mixing differently configured archives a link error.
 heap_flags=()
