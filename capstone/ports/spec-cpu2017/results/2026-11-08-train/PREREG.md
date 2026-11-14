@@ -4091,3 +4091,25 @@ Twin of record (c249cedc61fc): every frame equal to stock, in-context -0.030 %, 
 
 **Order on board 2:** aw-sx → gap → bc-b2 (CPython, Addendum 123) → bd-b2 (op timing, Addendum 125) → **bf-b2**,
 launched with nat-run3.sh. The stubbed dry run passes.
+
+## Addendum 128 (2026-11-15 05:39 +08): Addendum 125's op-timing stage is replaced by c3, which probes the counters
+
+At the nested lane's request (its pre-registration addendum, nested-workloads 4b5f8a732f90, pushed before the boot),
+the op-timing stage is nested/crvt/board/c3-stage, in place of c2-stage. It is checked against c3-stage.SHA256SUMS.
+
+**Why:** c2 read `csrr cycle` in every test, and it is not established that a native-route domain may read a counter
+on silicon. On the twin, cycle reads and mcycle traps.
+
+**How c3 works:**
+- It runs 22 commands, each its own process: a clock_gettime control that cannot trap, one-read probes of cycle and
+  mcycle, and every test on the monotonic clock.
+- It then repeats them on whichever counter its probes found readable. It prints `@@CRVT-COUNTER`, and skips those
+  tests with rc 255 when none is readable.
+- The 1M probe stays last.
+
+**Prediction.** It is the nested lane's: exhaustion refuses with silicon cause 30 (R-12). If the board's limit is R-12's
+65,536-node pool, chain100k is refused too, and that refusal is then the per-subtree limit.
+
+**Chains.** The waiting bd-b2 and bf-b2 were stopped before any board contact, and their empty out directories
+removed. They were relaunched as bd2-b2 (c3, list "c3-stage 900 20") and bf-b2 (FFmpeg, unchanged), in the same
+order after the CPython ABBA, on nat-run3.sh. The stubbed dry run of bd2-b2 passes, with BAKED_TIMEOUT 3600.
