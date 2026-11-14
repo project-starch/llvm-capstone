@@ -1027,3 +1027,31 @@ Every command decodes 300 frames equal to the stock reference.
   twin. It is not read as a speed-up from the protection. The repair changes the pools' allocation sizes (slack
   and rounding), and the protected arm enters the kernel 6 times fewer per run, so its allocation path differs. This
   file does not separate the two.
+
+### Pre-registration: FFmpeg on silicon, bitstream F, both arms in one boot (written before the boot)
+
+**Configuration.**
+- Bitstream F `a948e4134` (`ec675c2b…`), kit bkit75n (hpm8 = event 23), a board the SPEC lane slots, rung budget 900
+  (`BAKED_TIMEOUT=3600`).
+- Stage `nested/ffmpeg/board/f2-stage` (`f2-stage.SHA256SUMS`): the f3 skeleton, byte-identical, plus `train/`.
+  Its `run.sh` is byte-identical to the twin stage `ffmpeg/stages/b1` that the twin ran (`nff-b1`): u1 p1 p2 u2 MATCH,
+  in-context 889.344 M / 889.076 M, as in `nff-a1`, and fp FIRES.
+- Commands u1 p1 p2 u2 (ABBA), then fp, the protected flipped-input control: it must decode 300 frames and differ.
+- Images and inputs are xz-packed and unpacked per command, outside the marks. Image set w4 (unprotected `d6668eed…`,
+  protected `eb2d5228…`), the 10-second clip.
+- Checked off the board, as rule 8 asks (`nested/ffmpeg/board/f2-recheck`):
+  - a real bake: cpio `e213187a3ec857dc`, all 27 manifest files. The baked `.xz` files unpack to the measured image
+    hashes and the measured input `3b27ca89…`.
+  - The kit's `BOARD_STUB=2` run (relink `b4a719fa8ad9e53b`, smoke PASS, `BAKED_TIMEOUT=3600`).
+  - A real firmware build: `69c202367c075729…`, 23,760,392 B (cap 26,000,000), dom_stack gate PASS.
+  - The board BusyBox's applet table is the one checked for PostgreSQL (279 applets, with `xz`).
+
+**Predictions.**
+- **Answers:** u1 p1 p2 u2 each decode 300 frames equal to stock's framemd5; fp decodes 300 frames with at least one
+  different. Anything else stops the comparison.
+- **Repeats:** within 1 % on `run_cycles` and 2 % on `between_cycles`, or that difference is not read.
+- **In-context cost: -1 % to +1 %.** The twin reads -0.030 %. The protection adds about 3,300 lifetimes per decode, about
+  11 per frame, which at even 500 cycles each is about 1.7 M cycles, under 0.1 % of the work.
+- **Event 23, protected minus not:** under +10,000 per command, on the same count.
+- **Duration:** about 150 s per command (twin x speedtest1's ratios), so about 13 min of commands.
+- **VOID** if `b0-stats` or `b0-hello` fails, or the smoke fails outside the kit's accounting waiver.
