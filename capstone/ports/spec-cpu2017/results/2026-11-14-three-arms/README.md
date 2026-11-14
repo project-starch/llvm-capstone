@@ -32,7 +32,10 @@ same images. The "final config" columns are being re-measured on F.
 | 2 | config B (tag-path counters): mcf, then gcc | **temporal** imagick, nab, lbm, xz → **temporal** full perl → **spatial** x264 |
 | 3 | **temporal** x264 on F (~10 h, until ~03:00) | — |
 
-- **F's scope.** The gain is the tag-word-cache change, reach and merge together, at N = 1 per row. The pre-registered
+- **F's scope.** The gain is the tag-word-cache change, reach and merge together, at N = 1 per row.
+  - It comes at unchanged L1I/L1D misses, DTLB walks and mispredicts.
+  - On mcf, the issue-stall drop covers 18.1 of the 19.75 G-cycle fall.
+  - On gcc, issue plus scoreboard stalls cover only 40 % of the 11.3 G-cycle fall; the rest is not yet attributed. The pre-registered
   deciding reading, the tag counters of B against F, is due tonight.
 - **Next bitstream.** F2 (F + targeted fill invalidation, eeb654104) is sealed and flash-ready. L1D 64 KiB
   (b0f02bac7) failed timing and is not flashed.
