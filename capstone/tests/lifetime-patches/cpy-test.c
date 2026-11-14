@@ -5,6 +5,8 @@
  *                     got no lifetime goes back to its pool (the next request of the size gets it)
  *   cpy-test realloc  a failed CDERIVE in an in-place PyObject_Realloc: NULL, old block intact */
 #include <Python.h>
+#include "pycore_pystate.h"
+#include "pycore_interp.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -62,13 +64,32 @@ static int realloc_inplace(void)
     return 0;
 }
 
+static int tagged(void *p)
+{
+    unsigned long t;
+    __asm__ volatile(".insn r 0x5b, 0x1, 0x04, %0, %1, x1" : "=r"(t) : "r"(p));
+    return t != 7;
+}
+
+static int arenas(void)
+{
+    struct _obmalloc_state *st = _PyInterpreterState_GET()->obmalloc;
+    struct arena_object *a = st->mgmt.arenas;
+    printf("CPYTEST arenas: max=%u array_tagged=%d\n", st->mgmt.maxarenas, tagged(a));
+    for (unsigned i = 0; i < st->mgmt.maxarenas; i++)
+        if (a[i].address)
+            printf("CPYTEST arenas: %u address=%lx arena_ptr_tagged=%d pool_address_tagged=%d\n", i,
+                   (unsigned long)a[i].address, tagged(a[i].arena_ptr), tagged(a[i].pool_address));
+    return 0;
+}
+
 int main(int argc, char **argv)
 {
     Py_NoSiteFlag = 1;
     Py_InitializeEx(0);
     const char *mode = argc > 1 ? argv[1] : "";
     int rc = !strcmp(mode, "stale") ? stale() : !strcmp(mode, "alloc") ? alloc()
-           : !strcmp(mode, "realloc") ? realloc_inplace() : 2;
+           : !strcmp(mode, "realloc") ? realloc_inplace() : !strcmp(mode, "arenas") ? arenas() : 2;
     printf("CPYTEST %s: rc=%d\n", mode, rc);
     fflush(stdout);
     return rc;
