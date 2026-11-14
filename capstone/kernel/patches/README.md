@@ -39,10 +39,17 @@ firmware-interrupt window, lifecycle double).
 
 ## Headers the kernel's Sublet code needs
 
-The deleted adapter build copied two headers next to the module sources. The
-kernel build of plan v5 step 6 needs the same two, and no script copies them
-any more. Copy both into the kernel's Sublet directory from the revisions the
-kernel is built against:
+The deleted adapter build copied six headers next to the module sources:
+`cv-format.h`, `wire.h`, `vm-abi.h`, `native-grant.h`, `cap_rev_table_abi.h`
+and `representable.h`. Plan v5 step 6 copies the mapping code, which is written
+against the adapter's `cv-format.h` (the 63-bit capability and record layout)
+and `wire.h` (the block and request structures). It takes both from the tag
+`pre-trap-route-2026-11-14` (`capstone/runtime/virtual/module/cv-format.h` and
+`capstone/runtime/virtual/wire.h`), because the native lane has no
+`cv-format.h` and its `wire.h` differs. `vm-abi.h` stays in this repository for
+the libc until plan v5 step 5. No script copies the remaining two any more.
+Copy both into the kernel's Sublet directory from the revisions the kernel is
+built against:
 
 - `capstone/capstone-qemu/target/riscv/cap_rev_table_abi.h` (the lifetime table
   layout and the growth protocol, from the QEMU that runs the kernel);
