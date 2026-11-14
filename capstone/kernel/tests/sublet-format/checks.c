@@ -16,6 +16,11 @@
 #include "cap_rev_table.h"
 #include "cap_compress.h"
 
+/* QEMU's capability code must be the 63-bit Sublet format. At capstone-qemu 35de150cef the
+ * width is the constant CAP_ID_BITS (cap.h), not a run-time variable an older cap.c defaulted
+ * to 30, so a QEMU tree of another width does not compile here. run.sh checks that control. */
+_Static_assert(CAP_ID_BITS == 63, "QEMU's capability code is not the 63-bit Sublet format");
+
 #define READ_ONCE(x) (*(const volatile __typeof__(x) *)&(x))
 #define WRITE_ONCE(x, v) (*(volatile __typeof__(x) *)&(x) = (v))
 
@@ -156,11 +161,36 @@ static void check_table(void)
     expect("sublet_kernel_frees_every_page", pages_live == 0);
 }
 
+/* Growth counts from the never-used slot: a new table's reserved slots 0 and 1 hold no record,
+ * so 255 slots need two record pages, and a limit of one page cannot give them. */
+static void check_growth(void)
+{
+    unsigned long allocated = 0, *one = sublet_table_create(), *two = sublet_table_create();
+    unsigned long *grown = sublet_table_create();
+    bool ok = one && two && grown;
+
+    ok = ok && sublet_table_grow(one, 254, 1, 1, &allocated) == 0 && sublet_table_capacity(one) == 256 &&
+         sublet_table_available(one) == 254;
+    expect("sublet_growth_one_page_holds_254", ok);
+    ok = two && sublet_table_grow(two, 255, 1, 2, &allocated) == 0 && sublet_table_capacity(two) == 512 &&
+         sublet_table_available(two) == 510;
+    expect("sublet_growth_255_takes_two_pages", ok);
+    ok = grown && sublet_table_grow(grown, 255, 1, 1, &allocated) == -ENOMEM &&
+         sublet_table_capacity(grown) == 256;
+    expect("sublet_growth_limit_refuses_255", ok);
+    sublet_table_free(one);
+    sublet_table_free(two);
+    sublet_table_free(grown);
+    expect("sublet_growth_frees_every_page", pages_live == 0);
+}
+
 /* Slots under root entry 31, the last slot of the table among them: the kernel's add_page and
  * record walk put each record where QEMU's walk finds it. */
 static void check_walk(void)
 {
-    static const uint64_t slots[] = {3, (1ULL << 30) + 5, 31ULL << 26, (31ULL << 26) + 7, (1ULL << 31) - 1};
+    /* Every directory index nonzero and asymmetric in one of them, so a shifted index misses. */
+    static const uint64_t slots[] = {3, (1ULL << 30) + 5, 31ULL << 26, (31ULL << 26) + 7, (1ULL << 31) - 1,
+                                     3ULL << 26 | 0x155ULL << 17 | 0xaaULL << 8 | 0x33};
     unsigned long allocated = 0, *root = sublet_table_create();
     bool found = root != NULL;
     uint64_t pa = 0;
@@ -225,6 +255,7 @@ static void check_capability(void)
 int main(void)
 {
     check_table();
+    check_growth();
     check_walk();
     check_capability();
     printf("%d failures\n", failures);

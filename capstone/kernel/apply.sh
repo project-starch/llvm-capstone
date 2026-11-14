@@ -12,7 +12,8 @@
 #                        kernel runs on; sublet-format.h refuses any format but the 63-bit one
 #   representable.h, capstone/*.h, vm-abi.h, delegate.c, spawn.c, native-syscall-table.c
 #                        from ../runtime, shared with the libc
-# Then: make ARCH=riscv olddefconfig, and build Image.
+# The caller provides LINUX/.config. Then: make ARCH=riscv olddefconfig, and build Image.
+# Plain bash 3.2 is enough.
 set -euo pipefail
 here=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 runtime=$here/../runtime
@@ -21,12 +22,17 @@ kernel=${1:?Linux 6.1 source tree}
 [[ -f $kernel/Makefile && -f $kernel/arch/riscv/kernel/entry.S ]] || { echo "not a Linux tree: $kernel" >&2; exit 1; }
 [[ ! -e $kernel/arch/riscv/kernel/sublet ]] || { echo "use a fresh tree: the series is already applied" >&2; exit 1; }
 [[ -f $qemu/target/riscv/cap_rev_table_abi.h ]] || { echo "no QEMU tree at $qemu (set CAPSTONE_QEMU_SOURCE)" >&2; exit 1; }
+# The caller provides the kernel configuration; this script only adds the Sublet option to it.
+[[ -f $kernel/.config ]] || { echo "no $kernel/.config: provide the platform's configuration first" >&2; exit 1; }
 
 # Check the whole series on copies of the files it touches before Linux changes, so a patch
 # that does not apply leaves the tree as it was.
 stage=$(mktemp -d)
 trap 'rm -rf -- "$stage"' EXIT
-mapfile -t patches < <(grep -v '^#' "$here/patches/series" | sed '/^$/d')
+patches=()
+while IFS= read -r p; do
+    [[ -z $p || $p == \#* ]] || patches+=("$p")
+done < "$here/patches/series"
 for p in "${patches[@]}"; do
     sed -n 's|^--- a/||p' "$here/patches/$p"
 done | sort -u | while read -r file; do
@@ -38,6 +44,18 @@ done
 for p in "${patches[@]}"; do
     patch -s -d "$stage" -p1 --forward < "$here/patches/$p" || { echo "does not apply: $p" >&2; exit 1; }
 done
+
+# Check the shared files too, so a missing one also leaves the tree as it was.
+shared=("$qemu/target/riscv/cap_rev_table_abi.h" "$runtime/include/capstone/representable.h"
+        "$runtime/virtual/vm-abi.h" "$runtime/common/delegate.c" "$runtime/common/spawn.c"
+        "$runtime/common/native-syscall-table.c")
+for h in delegate native-syscall native-syscall-abi native-context spawn; do
+    shared+=("$runtime/include/capstone/$h.h")
+done
+for f in "${shared[@]}"; do
+    [[ -r $f ]] || { echo "missing shared file: $f" >&2; exit 1; }
+done
+
 for p in "${patches[@]}"; do
     patch -s -d "$kernel" -p1 --forward < "$here/patches/$p"
 done
@@ -53,7 +71,5 @@ cp "$runtime/common/delegate.c" "$sublet/delegate-wire.c"
 cp "$runtime/common/spawn.c" "$sublet/spawn-wire.c"
 cp "$runtime/common/native-syscall-table.c" "$sublet/"
 
-if [[ -f $kernel/.config ]]; then
-    "$kernel/scripts/config" --file "$kernel/.config" --disable SMP --enable RISCV_CAPSTONE_TASK
-fi
+"$kernel/scripts/config" --file "$kernel/.config" --disable SMP --enable RISCV_CAPSTONE_TASK
 echo "Series applied. Run make ARCH=riscv olddefconfig, then build Image."

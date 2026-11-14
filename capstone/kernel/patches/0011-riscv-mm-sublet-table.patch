@@ -824,7 +824,7 @@
 +subsys_initcall(sublet_table_init);
 --- /dev/null
 +++ b/arch/riscv/mm/sublet-table.h
-@@ -0,0 +1,155 @@
+@@ -0,0 +1,159 @@
 +/* SPDX-License-Identifier: GPL-2.0-only */
 +/* The paged lifetime table of one address space: create, grow, walk and free.
 + *
@@ -921,8 +921,12 @@
 +
 +    if (sublet_table_available(t) >= required) return 0;
 +    if (limit > CV_ID_PAGES_MAX) limit = CV_ID_PAGES_MAX;
-+    need = (required - sublet_table_available(t) + CV_TABLE_PAGE_RECORDS - 1) / CV_TABLE_PAGE_RECORDS;
-+    want = before + (batch > need ? batch : need);
++    /* The record pages that hold every slot below next and the slots the free list lacks.
++     * Counting from next keeps the reserved slots 0 and 1 of a new table out of the count.
++     * required > available >= free count, so the sum does not underflow. */
++    need = (sublet_table_next(t) + required - sublet_table_free_count(t) + CV_TABLE_PAGE_RECORDS - 1) /
++           CV_TABLE_PAGE_RECORDS;
++    want = before + batch > need ? before + batch : need;
 +    if (want > limit) want = limit;
 +    for (; record_pages < want; ++record_pages)
 +        if (sublet_table_add_page(t, record_pages * CV_TABLE_PAGE_RECORDS, pages)) break;
