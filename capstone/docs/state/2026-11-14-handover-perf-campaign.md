@@ -219,9 +219,9 @@ first.
 
 | Board | Now | Queued after it (chains, nat-run2.sh) |
 |---|---|---|
-| 1 | spatial gcc train01 on F (chain aw-s, from 22:16), then mcf, imagick, nab, lbm, xz | aw-sp (spatial full perl on F; bkit80) |
-| 2 | spatial x264 on F (aw-sx relaunched 22:00 into out-…-x-b2r, ~10 h) | — (free from ~08:00 on 15 Nov). The two failed boots at 21:07 and 21:54 were caused by switches stuck at 217 after a failed aperture park (Addendum 119). The board lane parked them, and the relaunch booted at [0]*8 |
-| 3 | temporal x264 on F (chain av-b3, ~10 h, until ~03:00) | ay-b3 (the nested lane's speedtest1 event-23 ABBA boot on F, kit bkit75n, ~31 min; Addendum 117) → aw-tp on board 3 (the temporal full-perl row, rerun after board 2's failed boot; Addendum 118) → ax-b3 (pool A/B: temporal full perl on F with node_table_pool=4, bkit81, Addendum 115; now same-board against aw-tp) |
+| 1 | spatial mcf on F (chain aw-s2, from 23:19; spatial gcc done, 1,975.51 s) then imagick, nab, lbm, xz | aw-sp (spatial full perl on F; bkit80) → bb-b1 (allocator step FRCDKMSa3 gcc train01, Addendum 121). Board 1 sat idle 22:59-23:19 after my in-place driver edit broke the kits' driver pin; reverted (Addendum 122) |
+| 2 | spatial x264 on F (aw-sx relaunched 22:00 into out-…-x-b2r, ~10 h) | 15-min gap for the board lane's no-boot switch_reset_all check → bc-b2 (nested CPython ABBA U P P U, kit bkit75n, ~3.3 h; Addendum 123). Message the board lane when aw-sx writes DONE |
+| 3 | temporal x264 on F (chain av-b3, ~10 h, until ~03:00) | ay-b3 (nested speedtest1 event 23, Addendum 117) → aw-tp on board 3 (temporal full perl, the table row; Addendum 118) → ax-b3 (pool A/B, Addendum 115) → ba-b3 (allocator step FRCDKMSa3 full perl, Addendum 121) |
 
 **Decisions waiting on readings:**
 - **F is final (decided, Addendum 113).** The final-config rows on F are all queued (table above). The F dom kit for
@@ -248,6 +248,24 @@ first.
   next set.
 
 ---
+
+**Chain drivers.** Chains launched after 23:21 on 14 Nov use `nat-run3.sh`: nat-run2 plus the board lane's
+standalone pre-boot switch park (`$H/wt-park`, dev cba01ed3090d), inside each booking (Addendum 124). Never edit
+`/tmp/capstone/wt-gate` in place: every SPEC kit pins its run_baked_rungs_fpga.py (BOARD_DRIVER_SHA fd38816a90c64c22),
+and board-run.sh refuses a different one.
+
+**Allocator step (compiler lane, alloc-lean).**
+- mallocng 0012 + 0013 are arm FRCDKMSa3: perl full -0.83 % and gcc -0.30 % user instructions on the twins, gates pass.
+- On silicon it runs as one pair per row against same-board FRCDKMS controls (Addendum 121).
+- Adoption rule: perl better by more than 0.3 % and gcc not worse by more than 0.15 %.
+- 0013 applies to plain musl too, so riscv-base gets it (images in progress) and is rerun before any table ratio uses it.
+
+**Compiler codegen (bounded-global formation).**
+- Formation is 6.0 % of perl user instructions, and 1.3 % of that is redundant.
+- Fix 1 (relaxable small data under gp) only pays with gp, and gp was rejected. It is parked.
+- gcc's gp loss is explained: 25 KB of small data against gp's 4 KiB reach, and min-data-size=17 un-merges globals.
+- Fix 2 (spill instead of rematerialize) or PCC-relative jump tables wait on an RTL answer: can PCC be used for data
+  reads? If that needs new authority it is the lead's call.
 
 ## 9. The nested-allocator workloads (lane `nested`)
 
