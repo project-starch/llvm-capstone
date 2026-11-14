@@ -139,7 +139,7 @@ SECTIONS {
 
   /* THE SMALL-DATA BLOCK AND __global_pointer$. gp's cursor is __global_pointer$ in every
    * context (start.S, thread.c), and lld --relax-gp rebases a global access on gp when the
-   * global lies within 2 KiB of it (-capstone-gp-relax-globals; -capstone-small-data-limit
+   * global lies within 2 KiB of it (-capstone-mark-gp-relaxable; -capstone-small-data-limit
    * puts small defined variables in .sdata/.sbss). Both small sections therefore form one
    * block at the head of .data, .sbss included (its zeros become file bytes, at most the
    * block's size), and __global_pointer$ is 0x800 into it: the block's first 4 KiB are

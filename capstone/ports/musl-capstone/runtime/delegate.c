@@ -220,7 +220,7 @@ static unsigned dl_rights(unsigned kind) {
  * gp's cursor is NOT free. Until 2026-11-14 each context carried its identity
  * in gp's cursor (gp.base + 16 k), on the premise that the gp-free codegen
  * never reads gp's own cursor. With linker gp relaxation
- * (-capstone-gp-relax-globals, lld --relax-gp) global accesses are rebased on
+ * (-capstone-mark-gp-relaxable, lld --relax-gp) global accesses are rebased on
  * gp itself (`ld rd, x - __global_pointer$(gp)`), so gp's cursor is
  * __global_pointer$ in every context: start.S sets it before anything else,
  * and a new context's start frame copies the creator's gp (thread.c). Nothing
@@ -243,7 +243,11 @@ static unsigned dl_rights(unsigned kind) {
  * the mode is unchanged. Context creation is not async-signal-safe (POSIX), so
  * only a program already outside the standard reaches it. Otherwise no call is
  * in flight on this context and none on any other (there is no other), and the
- * switch is one store. The lock is deliberately not taken around the store: a
+ * switch is one store. THE FLIP IS SAFE ONLY BECAUSE SINGLE MODE HAS EXACTLY ONE
+ * CONTEXT: a change that lets a second context exist before the first call to
+ * __capstone_context_identity_take (a context the launcher starts, a create
+ * path that bypasses it) would let two contexts share DL_IDENTITY_SINGLE, and
+ * must take this switch with it. The lock is deliberately not taken around the store: a
  * handler arriving between the store and the release would ask under the
  * service identity for a wire owned under the single one, by its own context,
  * and spin forever.
