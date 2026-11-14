@@ -12,7 +12,10 @@
 #      0001-0016 and memory-contexts 0003 for protected). Its link step then
 #      stops on the missing objects; that exit is expected and checked.
 #   2. hooks-<arm>.patch into src/backend/utils/mmgr/mcxt.c, with
-#      exp-reuse-gap.h and reuse-gap-observer.h beside it.
+#      exp-reuse-gap.h and reuse-gap-observer.h beside it, and
+#      postgres-17.5-private-shmem.patch (both arms): the single-user
+#      backend's main segment and dynamic segments as private anonymous
+#      mappings, since a protected program cannot map shared memory.
 #   3. build-domain.sh with PGSU_FROM=configure and CPPFLAGS=-DEXP_REUSE_GAP
 #      (configure takes CPPFLAGS from the environment into Makefile.global).
 #   4. build.py, the same relink build-virtual.sh runs.
@@ -53,6 +56,11 @@ cp "$HERE/exp-reuse-gap.h" "$REPO/capstone/experiments/study/reuse-gap-observer.
 (cd "$SRC" && patch --batch --forward --fuzz=0 -p1 -s < "$HERE/hooks-$ARM.patch") \
   || { echo "hooks-$ARM.patch did not apply" >&2; exit 2; }
 log "applied hooks-$ARM.patch"
+# The single-user backend's shared memory as private anonymous mappings, the same patch in both arms:
+# a protected program cannot map shared memory, and a single-user backend shares it with nobody.
+(cd "$SRC" && patch --batch --forward --fuzz=0 -p1 -s < "$HERE/postgres-17.5-private-shmem.patch") \
+  || { echo "postgres-17.5-private-shmem.patch did not apply" >&2; exit 2; }
+log "applied postgres-17.5-private-shmem.patch"
 
 # 3. configure, make, link.
 CPPFLAGS=-DEXP_REUSE_GAP PGSU_FROM=configure bash "$PORTS/postgres/app/build-domain.sh"
