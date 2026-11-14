@@ -6,12 +6,13 @@
 |---|---|---|
 | speedtest1 `--size 1`, QEMU twin | **measured**: answers equal; program +0.63 % instructions; 28,216 CREVOKEs, subtree mean 1.0001 / max 3; peak table +4.8 KB; kernel +3 % from the native syscall page scan, all of it from the patch's `aReq` array (lifetimes: kernel ±0, in-context +0.39 %) | FRCDKMS, native route, ids55, QEMU qemu55 a0501ebc39 |
 | speedtest1 `--size 1` on silicon | **measured** (board 2, 15:00-15:30): 32/32 answers in every command; in-context +1.04 %, wall-clock +1.90 % (both inside the pre-registered bands); kernel repeat spread 2.47 % > 2 %, so the kernel difference is not read. Boot 1 on board 1 was VOID (unbaked empty `train/in`) | bitstream `a47b588a1`, kit bkit73 |
-| speedtest1 `--size 100` | pending (after `--size 1` has been looked at) | as above |
-| CPython, PostgreSQL, tshark, FFmpeg, memcached | pending, in that order, after speedtest1 | as above |
-| CREVOKE worst case (subtree 1 .. 10^6) | pending: RTL simulation | capstone-ariane `a47b588a1` |
-| record-cache counters | event 23 (verdict-cache miss replays) exists; lookups / raw misses / walk-busy cycles proposed as events 29-31 for the next bitstream, **waiting on the lead** | - |
+| speedtest1 `--size 1` on silicon, bitstream F, with event 23 | **queued**: board 3 after its x264 run (~03:00 15 Nov), pre-registered below; both arms again (ABBA), hpm8 = event 23 (verdict-cache miss replays) | bitstream F `a948e4134` (`ec675c2b…`), kit bkit75n |
+| speedtest1 `--size 100` | **deferred** (SPEC-lane default, 14 Nov 21:40: breadth first; the lead may override): about 6.5 h per command on silicon | - |
+| CPython (pyperformance subset), PostgreSQL (single-user pgbench), tshark (pcap), FFmpeg (decode), memcached (load) | **queued, in that order**: each first on the QEMU twin, then one silicon ABBA boot. Patches in tree: cpython-3.13.7-0014, postgresql-17.0-0003, wireshark-4.6.8-0001, ffmpeg-9.0.1-0003, memcached-1.6.45-0006. CPython twin preparation is next | FRCDKMS, native route; silicon on F |
+| CREVOKE worst case (subtree 1 .. 10^6, latency, interruptibility; PostgreSQL context reset) | **queued**: RTL simulation, after the CPython twin build is under way | capstone-ariane `a948e4134` (F) |
+| record-cache counters | event 23 is on hpm8 in kits bkit73n (batch) and bkit75n (F). Events 29-31 (lookups, raw misses, walk-busy cycles) would need a new bitstream; that is **the lead's call** and is not requested | - |
 
-Nothing in this file is a measurement yet unless a row says "measured".
+Only rows marked "measured" hold measurements; the rest say what runs next and where.
 
 ## What is compared
 
@@ -362,6 +363,60 @@ PREREG Addendum 108, 07d80585e4b2). Its figures, read from the two transcripts
 - The two are different programs measured one way each: N = 1 SPEC row, ABBA N = 2 here. Nothing is normalised for
   allocation rate: speedtest1 runs 56,442 lifetime instructions per run, and gcc's count is not in this file.
 - The other seven spatial rows land in the SPEC lane's table (spec-silicon
-  `capstone/ports/spec-cpu2017/results/2026-11-14-three-arms/README.md`). On the twin it is the patch's `aReq` array working through the native route's per-syscall page
+  `capstone/ports/spec-cpu2017/results/2026-11-14-three-arms/README.md`).
+
+### Pre-registration: silicon on bitstream F, speedtest1 `--size 1`, with event 23 (written before the boot)
+
+**Why this boot.**
+- The lead's standing ruling: experiments run only on the best bitstream, and F is now the table's.
+- This boot re-measures both arms on F.
+- It also reads how many verdict-cache misses the protection adds. That is the only record-cache event this RTL has.
+  The batch boot could not attribute its +1.04 %.
+
+**Configuration.**
+- Bitstream F: `caplifive_ids55-native-tagcache-mlp-fpieee-hpmreplay-dynbypass3-dtlb64-shrinkfix-ic32k-r72-stcnoclaim-twc16k-merge-hpmtag_a948e4134`,
+  sha256 `ec675c2b…`. It is the batch plus a 16 K-entry tag-word cache.
+- Board 3, after its x264 run, placed by the SPEC lane.
+- Kit `t3-smoke/bkit75n-k2n-native-twcf-hpmnest`: bkit75 (bkit73 with F's bitstream) plus one firmware change. hpm8
+  counts event 23 (R-43 verdict-cache miss replays, `perf_counters.sv` `5'b10111`, the same on a948e4134 and
+  a47b588a1) instead of 14 (scoreboard full). hpm3..7 are unchanged (L1I, L1D, DTLB, mispredict, issue stall).
+- Firmware `e246852282202790`. A real build passes the dom_stack gate. It differs from bkit73's board firmware
+  (`38284328eff704a3`, reproduced by a rebuild) in the mhpmevent8 immediate only (`csrwi mhpmevent8, 0xe` -> `0x17`;
+  2 bytes).
+- Stage `nested/st1/board/f3-stage`: a byte-identical copy of the board-2 stage (`f3-stage.SHA256SUMS`, `train/run.sh`
+  `6cd49b361db37dd9…`, the same two images), ABBA u1 p1 p2 u2, `--heap 8388608 64 --size 1 st.db`.
+- Checked off the board, as rule 8 asks:
+  - a real bake (cpio `f0243639…`, carries `train/in/NO-INPUTS`);
+  - the kit's `BOARD_STUB=2` run on that bake: the native relink rebuilt the initramfs, the smoke classified PASS, and
+    `BAKED_TIMEOUT=3600`.
+  - Record: `nested/st1/board/f3-recheck`.
+
+**Readings:** as on the batch boot (rc, 32 oracle lines, `run_cycles`, `between_cycles`, runs, hpm3..8, uptime span),
+with hpm8 now event 23.
+
+**Predictions.**
+- **Answers:** every command exits 0 with 32/32 reference answers. Anything else stops the comparison.
+- **Repeats:** within 1 % on `run_cycles` and within 2 % on `between_cycles`, or that difference is not read.
+  - The batch boot missed the kernel band (2.47 %).
+- **In-context cost on F:** +0.5 % to +3 %, the same band as on batch, where it read +1.04 %. F's change is the
+  tag-word cache, not the lifetime records, so there is no reason to expect a different cost.
+- **Whole command:** +1 % to +4 % (batch: +1.90 %).
+- **Event 23, protected minus not protected, per command: +28,000 to +200,000.**
+  - The lower bound is the compulsory miss of each new lifetime. The twin counts 28,226 CDERIVEs per run, and each
+    new block or slot gets a fresh record whose first checked access cannot hit.
+  - The cache is 256 entries (64 x 4), and the protected arm's peak live records on the twin are 398. So capacity and
+    conflict misses are expected to add at most a few times the compulsory count.
+  - Below 28,000, either a new lifetime's first access is not a checked access, or the event does not count what this
+    file assumes. Either way, the miss count does not explain the cost.
+  - Above 200,000, the verdict cache thrashes under the protected heap.
+- **Event 23, not protected:** small next to the protected arm. Its whole 8 MiB heap is one lifetime.
+- **What will be derived, not predicted:**
+  - an upper bound on cycles per verdict-cache miss: (`run_cycles` delta) / (event-23 delta);
+  - the share of the in-context cost that misses could explain at a cost per miss taken from the RTL replay path
+    (to be read from the RTL before the boot ends, not fitted to the result).
+- **Duration:** 236-244 s per command on batch, so about 4 min each and about 31 min per boot. Budget 3,600 s per
+  rung.
+- **VOID** if `b0-stats` or `b0-hello` fails, or if the smoke fails outside the kit's accounting waiver.
+ On the twin it is the patch's `aReq` array working through the native route's per-syscall page
 scan, not the lifetimes.
 
