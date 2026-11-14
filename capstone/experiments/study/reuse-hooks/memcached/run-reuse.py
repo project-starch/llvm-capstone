@@ -27,9 +27,7 @@ import subprocess
 import sys
 import time
 
-# The kernel admits a .dom image only for root (sublet.dom_binfmt), so the server runs as root, which
-# memcached allows with -u root; capstone-job no longer drops to uid 65534.
-FLAGS = '-l 127.0.0.1 -p 21299 -U 0 -m 64 -t 4 -A -u root'
+FLAGS = '-l 127.0.0.1 -p 21299 -U 0 -m 64 -t 4 -A'
 
 
 def sha(path):
@@ -42,7 +40,7 @@ def gate(reps):
         out = f'/tmp/rg-{rep}'
         lines += [f'echo RG_BEGIN:{rep}', f'mkdir -p {out}; chmod 777 {out}',
                   f'./mc-harness --out {out} --port 21299 --stop shutdown -- ./capstone-job {out}/job.json '
-                  f'-- ./capstone-vexec ./memcached.dom {FLAGS}',
+                  f'--user 65534:65534 -- ./capstone-vexec ./memcached.dom {FLAGS}',
                   'rc=$?',
                   f'for f in transcript.norm status.txt identity.txt job.json server.out server.err; do '
                   f'[ -f {out}/$f ] || continue; echo RG_FILE:$f; gzip -c {out}/$f | base64; echo RG_FILE_END; done',
