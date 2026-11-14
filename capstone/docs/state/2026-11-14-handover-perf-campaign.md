@@ -328,5 +328,5 @@ lane reads the lead's "record-TLB" as the verdict cache, since no separate recor
   `train/in` is not baked; `stage-check.sh` and `nat-run2.sh` now refuse both.
 - `local A=x B=$A` in bash leaves B empty.
 - Pre-registration timestamps come from `date`, not from memory.
-- Count retractions as they happen; this session had several, all surfaced: line-end jump, the scoreboard reading,
-  the twin's test.pl kernel figure, the riscv images used in the lever census, C6.
+- Count retractions as they happen; this session had several, all surfaced: the line-end jump cost, lever (a)'s first fix,
+  the twin's test.pl kernel figure, the riscv-base images used in the lever census, C6.
