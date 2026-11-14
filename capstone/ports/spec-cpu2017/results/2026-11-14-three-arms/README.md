@@ -3,7 +3,7 @@
 This is a live table: rows are filled as board runs land. Pre-registrations, predictions and the run-by-run trail are
 in [`../2026-11-08-train/PREREG.md`](../2026-11-08-train/PREREG.md) (Addendum 107 onward for this table).
 
-## Status (updated 2026-11-14 21:40 +08)
+## Status (updated 2026-11-14 22:22 +08)
 
 - **riscv-base:** complete, all 8 rows.
 - **Capstone temporal:**
@@ -30,9 +30,9 @@ same images. The "final config" columns are being re-measured on F.
 
 | Board | Now | Then, in order |
 |---|---|---|
-| 1 | gp decision pair on F: GPR2 gcc train01 (from 21:33) | **spatial** gcc, mcf, imagick, nab, lbm, xz → **spatial** full perl |
-| 2 | **temporal** full perl on F (bkit80) | **spatial** x264 |
-| 3 | **temporal** x264 on F (~10 h, until ~03:00) | — |
+| 1 | **spatial** gcc, mcf, imagick, nab, lbm, xz on F (from 22:16) | **spatial** full perl |
+| 2 | **spatial** x264 on F (from 22:00, ~10 h) | — |
+| 3 | **temporal** x264 on F (~10 h, until ~03:00) | nested-lane speedtest1 (event 23) → **temporal** full perl on F → node-table pool A/B |
 
 - **F's scope.** The gain is the tag-word-cache change, reach and merge together, at N = 1 per row.
   - It comes at unchanged L1I/L1D misses, DTLB walks and mispredicts.
@@ -46,10 +46,10 @@ same images. The "final config" columns are being re-measured on F.
   - Repeats with the tag-counter firmware on the same board: mcf +0.08 %, gcc +0.04 %.
 - **Next bitstream.** F2 (F + targeted fill invalidation, eeb654104) is sealed and flash-ready. L1D 64 KiB
   (b0f02bac7) failed timing and is not flashed.
-- **gp-relative globals.** Taken for both arms or neither, by the board pairs (Addendum 110). riscv-base with gp:
-  perl makerand -6.2 %, gcc -0.6 %. Capstone on F: perl makerand -8.7 % (GPC 287.74 s → GPR2 262.62 s, specdiff
-  PASS both), so the makerand ratio improves by about 2.7 %. The deciding row is gcc train01 (GPR2 running on board 1):
-  if gcc's ratio worsens under gp, gp is not adopted; otherwise a full-perl pair decides (Addendum 114).
+- **gp-relative globals: NOT adopted** (Addendum 120). On F, gp sped up perl makerand by 8.7 % but slowed gcc train01
+  by 0.62 % (1,992.35 → 2,004.71 s). On riscv-base it sped up gcc by 0.60 %, so gcc's ratio worsens from 1.157 to
+  1.171. The pre-registered rule (Addendum 114) rejects gp on both arms when gcc's ratio worsens. The table keeps
+  FRCDKMS and RVF3.
 
 ### Bitstreams referenced here
 
@@ -136,7 +136,8 @@ the table being measured now. A row moves into them as its run lands.
 | geomean | | | 1.093 | | | |
 
 Bold = below the 1.20 target. perl makerand alone (the quick A/B sub-run, debugging only): 257.90 s on riscv-base
-against 288.58 s on **F** / FRCDKMS, ratio 1.119 (-12.5 % against the batch); the full test on F is running on board 2 (from 21:07).
+against 288.58 s on **F** / FRCDKMS, ratio 1.119 (-12.5 % against the batch); the full test on F runs on board 3 after x264 (~03:30). Board 2's attempt at 21:07 never booted, because switches were left
+at an odd value by the previous run (Addendum 119), and no benchmark ran.
 
 Configurations in the table:
 - **mlp / arm C:** `caplifive_ids55-native-tagcache-mlp_b98f5a517`, the older compiler, and the same allocator.
