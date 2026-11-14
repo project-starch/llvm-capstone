@@ -59,13 +59,21 @@ print(count(0x51), count(0x52))
 PY
   rm -f "$t"
 }
-# CDERIVE and CREVOKE outside the C library's allocator functions, attributed by symbol.
+# CDERIVE and CREVOKE outside the functions the C library archive and the runtime archives define,
+# attributed by symbol name.
 insn_outside_libc() {
-  python3 - "$1" "$CAPSTONE_LLVM_BIN" <<'PY'
+  python3 - "$1" "$CAPSTONE_LLVM_BIN" "$MC_LIBC_ARCHIVE" "$MC_RUNTIME_DIR"/*.a <<'PY'
 import bisect, struct, subprocess, sys
-image, bindir = sys.argv[1], sys.argv[2]
-ALLOCATOR = {'__libc_malloc_impl', '__libc_malloc', 'malloc', 'aligned_alloc', '__libc_realloc', 'realloc',
-             '__libc_free', 'free', 'calloc', '__libc_calloc'}
+image, bindir, archives = sys.argv[1], sys.argv[2], sys.argv[3:]
+ALLOCATOR = set()
+for archive in archives:
+    for line in subprocess.run([bindir + '/llvm-nm', '--defined-only', archive], capture_output=True,
+                               text=True).stdout.splitlines():
+        q = line.split()
+        if len(q) == 3 and q[1] in 'tTwW':
+            ALLOCATOR.add(q[2])
+if not ALLOCATOR:
+    sys.exit('insn_outside_libc: no symbols in ' + ' '.join(archives))
 sections = subprocess.run([bindir + '/llvm-readelf', '-S', '-W', image], capture_output=True, text=True).stdout
 for line in sections.splitlines():
     p = line.split()
@@ -92,14 +100,14 @@ for arm in stock protected; do
   read -r d r < <(insn "$f")
   echo "$arm memcached.dom: sha256 $(sha256sum < "$f" | cut -c1-16) bytes $(stat -c %s "$f") cderive=$d crevoke=$r"
   # On the trap route the C library's mallocng gives every heap object a lifetime itself, so both arms
-  # carry its CDERIVE and CREVOKE (malloc, aligned_alloc, realloc, free). The gate counts the
-  # instructions outside those functions: none in stock, some in protected (the slab lifetimes).
+  # carry its CDERIVE and CREVOKE. The gate counts the instructions outside the functions of the C
+  # library and the application runtime: none in stock, some in protected (the slab lifetimes).
   read -r ad ar < <(insn_outside_libc "$f")
-  echo "$arm memcached.dom: outside the C library's allocator cderive=$ad crevoke=$ar"
+  echo "$arm memcached.dom: outside the C library and the runtime cderive=$ad crevoke=$ar"
   if [ $arm = protected ]; then
     [ "$ad" -gt 0 ] && [ "$ar" -gt 0 ] || { echo "INSN GATE: $f carries no CDERIVE or no CREVOKE of its own"; exit 1; }
   else
-    [ "$ad" = 0 ] && [ "$ar" = 0 ] || { echo "INSN GATE: $f carries cderive=$ad crevoke=$ar outside the C library's allocator"; exit 1; }
+    [ "$ad" = 0 ] && [ "$ar" = 0 ] || { echo "INSN GATE: $f carries cderive=$ad crevoke=$ar outside the C library and the runtime"; exit 1; }
   fi
   python3 -c 'import sys; sys.exit(0 if b"REUSE-GAP %s arm=" in open(sys.argv[1],"rb").read() else 1)' "$f" \
     || { echo "HOOK GATE: $f lacks the observer report"; exit 1; }
