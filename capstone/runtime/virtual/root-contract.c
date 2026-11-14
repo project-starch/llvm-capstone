@@ -8,12 +8,13 @@
  * bounds cover the page range that the call names; a call that removes the block's last mapped pages,
  * a call that names the whole block included, ends the block with CREVOKE on that reference. The
  * kernel-owned blocks (the image, the main stack, the shared region, the startup block) refuse every
- * such request, in both modes. run-root-grants.py runs this program once per mode (argv[1]) in one
- * boot. Build with the virtual SDK.
+ * such request, in both modes. run-root-grants.py (deleted with the adapter on 2026-11-14, see the tag
+ * pre-trap-route-2026-11-14) ran this program once per mode (argv[1]) in one boot. Build with the
+ * virtual SDK.
  *
  * This program is the only test of the kernel-owned flag and of the CREVOKE that ends a block with its
  * last mapped page. Plan v5 step 6 (docs/plans/2026-11-13-kernel-trap-entry.md) ports it to the trap
- * route; its runner went with the adapter (capstone/kernel/patches/README.md).
+ * route (capstone/kernel/patches/README.md).
  *
  * Every mode first reads the module's parameter root_grants (ROOT_GRANT_TYPE: 1 with root grants, 0
  * without; until block A it read the type of a grant, non-linear or linear, which the 63-bit format

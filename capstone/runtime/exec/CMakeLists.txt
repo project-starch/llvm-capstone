@@ -33,12 +33,6 @@ endif()
 if(BUILD_TESTING AND NOT CMAKE_CROSSCOMPILING)
   find_package(Python3 COMPONENTS Interpreter REQUIRED)
   find_package(Threads REQUIRED)
-  foreach(contract transport-host detach-deadlock)
-    add_test(NAME virtual-${contract}
-      COMMAND bash "${runtime}/virtual/test-${contract}.sh")
-    set_tests_properties(virtual-${contract} PROPERTIES
-      TIMEOUT 60 ENVIRONMENT "CC=${CMAKE_C_COMPILER}")
-  endforeach()
   add_executable(level0-realloc-probe ../tests/application/level0-realloc-probe.c)
   target_compile_definitions(level0-realloc-probe PRIVATE CAPSTONE_LEVEL0_TEST_NATIVE)
   target_include_directories(level0-realloc-probe PRIVATE ../include)

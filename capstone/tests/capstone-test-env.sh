@@ -92,8 +92,8 @@ capstone_with_qemu_lock() {
   fi
 }
 
-# QEMU lock DOMAINS (2026-10-21): the global lock above is a reader-writer lock. A SNAPSHOT-class session -- run-staged.py
-# or run.py in capstone/runtime/virtual, and everything behind bug-corpora/tools/virtualvm.Batch: rootfs under -snapshot,
+# QEMU lock DOMAINS (2026-10-21): the global lock above is a reader-writer lock. A SNAPSHOT-class session -- the adapter
+# runners deleted on 2026-11-14 were the first, and everything behind bug-corpora/tools/virtualvm.Batch: rootfs under -snapshot,
 # a private read-only stage disk, no network -- may run in a domain: it takes the global lock SHARED and the domain's
 # lock EXCLUSIVE (runtime/virtual/qemu_lock.py), so the two domains run in parallel on their own CPUs. Everything else
 # keeps taking the global lock EXCLUSIVE, exactly as before, and so waits for, and excludes, every domain session:
