@@ -1,0 +1,35 @@
+#!/bin/sh
+# The first-program test's /init (plan v5 step 4). One TRAPTEST line per verdict.
+mount -t proc proc /proc
+mount -t sysfs sys /sys
+mount -t devtmpfs dev /dev 2>/dev/null
+P=/sys/module/sublet/parameters
+# The loader grants the working directory, which must be a disk-like directory other than /.
+busybox mkdir -p /work && mount -t tmpfs tmpfs /work && busybox cp /*.dom /work/ && cd /work
+echo "TRAPTEST: up, kernel $(uname -r)"
+c0=$(cat $P/live_contexts); p0=$(cat $P/table_pages)
+# A fault of a protected program kills only that program, and the machine runs on.
+./stale.dom; echo "TRAPTEST: stale status $?"
+./bounds.dom; echo "TRAPTEST: bounds status $?"
+./ok.dom; echo "TRAPTEST: ok status $?"
+busybox echo hello | busybox wc -c > /dev/null; echo "TRAPTEST: busybox status $?"
+# /proc/PID/mem of a running protected program is refused.
+./spin.dom & pid=$!
+sleep 1
+echo "TRAPTEST: during spin contexts $(cat $P/live_contexts) pages $(cat $P/table_pages)"
+echo "TRAPTEST: procmem protected: $(busybox dd if=/proc/$pid/mem of=/dev/null bs=8 count=1 2>&1 | busybox head -1)"
+echo "TRAPTEST: procmem ordinary: $(busybox dd if=/proc/1/mem of=/dev/null bs=8 count=1 2>&1 | busybox head -1)"
+wait $pid; echo "TRAPTEST: spin status $?"
+# 210 exec and exit cycles, ten of them failing after the mark.
+echo 10 > $P/test_fail_after_mark
+i=0; ok=0; failed=0
+while [ $i -lt 210 ]; do
+    ./ok.dom
+    if [ $? = 42 ]; then ok=$((ok + 1)); else failed=$((failed + 1)); fi
+    i=$((i + 1))
+done
+echo "TRAPTEST: cycles ok $ok failed $failed"
+echo "TRAPTEST: counters contexts $c0 -> $(cat $P/live_contexts) pages $p0 -> $(cat $P/table_pages)"
+busybox dmesg | grep "sublet: fault" | head -3 | sed 's/^/TRAPTEST: dmesg /'
+echo "TRAPTEST: done"
+busybox poweroff -f
