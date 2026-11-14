@@ -3,7 +3,7 @@
 This is a live table: rows are filled as board runs land. Pre-registrations, predictions and the run-by-run trail are
 in [`../2026-11-08-train/PREREG.md`](../2026-11-08-train/PREREG.md) (Addendum 107 onward for this table).
 
-## Status (updated 2026-11-14 21:10 +08)
+## Status (updated 2026-11-14 21:40 +08)
 
 - **riscv-base:** complete, all 8 rows.
 - **Capstone temporal:**
@@ -28,7 +28,7 @@ same images. The "final config" columns are being re-measured on F.
 
 | Board | Now | Then, in order |
 |---|---|---|
-| 1 | F tag-path counters (mcf) | F tag-path counters (gcc) (mcf, gcc) → gp decision pair on F (GPC, GPR2) → **spatial** gcc, mcf, imagick, nab, lbm, xz → **spatial** full perl |
+| 1 | gp decision pair on F: GPR2 gcc train01 (from 21:33) | **spatial** gcc, mcf, imagick, nab, lbm, xz → **spatial** full perl |
 | 2 | **temporal** full perl on F (bkit80) | **spatial** x264 |
 | 3 | **temporal** x264 on F (~10 h, until ~03:00) | — |
 
@@ -41,12 +41,13 @@ same images. The "final config" columns are being re-measured on F.
     - mcf: tag reads 1.62 → 0.81 G, tag writes 0.82 → 0.24 G, tag-cache miss rate 48 % → 24 %;
     - gcc: tag reads 157 → 73 M, tag writes 1.29 → 0.42 G;
     - L1D misses and page fills unchanged on both.
-  - Repeats with the tag-counter firmware on the same board: mcf +0.08 %, gcc +0.04 %. The pre-registered
-  deciding reading, the tag counters of B against F, is due tonight.
+  - Repeats with the tag-counter firmware on the same board: mcf +0.08 %, gcc +0.04 %.
 - **Next bitstream.** F2 (F + targeted fill invalidation, eeb654104) is sealed and flash-ready. L1D 64 KiB
   (b0f02bac7) failed timing and is not flashed.
 - **gp-relative globals.** Taken for both arms or neither, by the board pairs (Addendum 110). riscv-base with gp:
-  perl makerand -6.2 %, gcc -0.6 %. The Capstone pair runs on board 1.
+  perl makerand -6.2 %, gcc -0.6 %. Capstone on F: perl makerand -8.7 % (GPC 287.74 s → GPR2 262.62 s, specdiff
+  PASS both), so the makerand ratio improves by about 2.7 %. The deciding row is gcc train01 (GPR2 running on board 1):
+  if gcc's ratio worsens under gp, gp is not adopted; otherwise a full-perl pair decides (Addendum 114).
 
 ### Bitstreams referenced here
 
