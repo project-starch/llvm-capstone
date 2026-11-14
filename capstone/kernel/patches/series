@@ -10,3 +10,4 @@
 0010-helpers-interface.patch
 0011-riscv-mm-sublet-table.patch
 0012-riscv-sublet-loader-and-calls.patch
+0013-riscv-sublet-trap-interfaces.patch

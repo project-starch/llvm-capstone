@@ -1,0 +1,217 @@
+--- a/arch/riscv/Kconfig
++++ b/arch/riscv/Kconfig
+@@ -704,3 +704,33 @@ config RISCV_CAPSTONE_TASK
+ 	  Sublet processor: lifetime tables, the root reference and the .dom
+ 	  loader. Requires the 63-bit Sublet format and the tag-aware memory
+ 	  patch. Root only.
++
++config RISCV_CAPSTONE_TRAP
++	bool "Enter and leave protected programs through ordinary traps"
++	depends on RISCV_CAPSTONE_TASK && 64BIT && !SMP
++	default n
++	help
++	  The trap entry and exit of plan v5 step 3: every entry from U saves
++	  the user registers with their tags into 16-byte slots of the task,
++	  every return to a protected program loads them back, t6 keeps its
++	  tag across a trap from S, and a guard on every return to U checks
++	  that srevroot names the task's table. Needs a Sublet processor with
++	  supervisor references (QEMU x-capstone-supervisor-refs) and a
++	  firmware that keeps register tags across M traps.
++
++config RISCV_CAPSTONE_TRAP_SENTINEL
++	bool "Stop the kernel on a stray tagged kernel register"
++	depends on RISCV_CAPSTONE_TRAP
++	default n
++	help
++	  Debug check on every trap: a tagged register other than t6, or a
++	  tagged t6 outside the routines for user memory, stops the kernel.
++
++config RISCV_CAPSTONE_TRAP_TEST
++	bool "Test loader and test hooks for the trap route"
++	depends on RISCV_CAPSTONE_TRAP
++	default n
++	help
++	  A test loader that turns the calling process into a protected
++	  program over two anonymous mappings, and a hook that holds a
++	  program reference in t6 across a sleeping page fault. Test only.
+--- a/arch/riscv/include/asm/capstone_task.h
++++ b/arch/riscv/include/asm/capstone_task.h
+@@ -9,6 +9,11 @@ struct task_struct;
+  * through sublet_context_release. */
+ void sublet_context_release(void *context);
+ void riscv_capstone_release(struct task_struct *task);
++#ifdef CONFIG_RISCV_CAPSTONE_TRAP
++/* Make the current task run a protected program: the mm carries context and its table's root,
++ * the task carries TIF_CAPSTONE, and srevroot names the table. */
++int riscv_capstone_bind(void *context, unsigned long root);
++#endif
+ #else
+ static inline void riscv_capstone_release(struct task_struct *task) { }
+ #endif
+--- a/arch/riscv/include/asm/mmu.h
++++ b/arch/riscv/include/asm/mmu.h
+@@ -18,6 +18,9 @@ typedef struct {
+ 	void *vdso;
+ #ifdef CONFIG_RISCV_CAPSTONE_TASK
+ 	void *capstone_namespace;
++	/* The selected-root record: the physical root of the mm's lifetime table, which
++	 * srevroot holds while the mm runs, or 0 for an ordinary mm. */
++	unsigned long capstone_root;
+ #endif
+ #ifdef CONFIG_SMP
+ 	/* A local icache flush is needed before user execution can resume. */
+--- a/arch/riscv/include/asm/mmu_context.h
++++ b/arch/riscv/include/asm/mmu_context.h
+@@ -32,6 +32,7 @@ static inline int init_new_context(struct task_struct *tsk,
+ #endif
+ #ifdef CONFIG_RISCV_CAPSTONE_TASK
+ 	mm->context.capstone_namespace = NULL;
++	mm->context.capstone_root = 0;
+ #endif
+ 	return 0;
+ }
+--- a/arch/riscv/include/asm/ptrace.h
++++ b/arch/riscv/include/asm/ptrace.h
+@@ -51,6 +51,12 @@ struct pt_regs {
+ 	unsigned long cause;
+ 	/* a0 value before the syscall */
+ 	unsigned long orig_a0;
++#ifdef CONFIG_RISCV_CAPSTONE_TRAP
++	/* The registers that held a tag at the trap (bit n for xn), for the sentinel. */
++	unsigned long capstone_tagged;
++	/* t6 with its tag, saved by a trap from S and loaded back by its return. */
++	unsigned long capstone_t6[2] __aligned(16);
++#endif
+ };
+ 
+ #ifdef CONFIG_64BIT
+--- /dev/null
++++ b/arch/riscv/include/asm/sublet-trap.h
+@@ -0,0 +1,58 @@
++/* SPDX-License-Identifier: GPL-2.0-only */
++/*
++ * The interfaces of the trap route (plan v5 step 3) that the other parts of the kernel's
++ * Sublet code use:
++ *
++ *   - The user registers of a task, with their tags: one 16-byte slot per register, indexed
++ *     by register number (1 to 31, slot 0 unused), in thread_info within a 12-bit offset of
++ *     tp. Every entry from U writes all of them with STC, and every return to a protected
++ *     program loads them with LDC. pt_regs holds the integer view, which C code reads. Change
++ *     a user register only through sublet_set_user_int or sublet_set_user_ref.
++ *   - t6 with its tag across a trap from S: the 16-byte slot regs->capstone_t6 of the S trap
++ *     frame. The handler itself runs with t6 as an integer.
++ *   - The routines for user memory: code in the section .sublet.uaccess.text, between
++ *     sublet_uaccess_start and sublet_uaccess_end, may hold a program reference in t6 across an
++ *     instruction that can trap. Each such routine clears t6 before it returns.
++ *   - A task's Sublet context: mm->context.capstone_namespace while the task has TIF_CAPSTONE,
++ *     and mm->context.capstone_root, the table's physical root that srevroot holds while the
++ *     mm runs (0 for an ordinary mm).
++ */
++#ifndef _ASM_RISCV_SUBLET_TRAP_H
++#define _ASM_RISCV_SUBLET_TRAP_H
++#include <linux/mm_types.h>
++#include <linux/sched.h>
++#include <asm/ptrace.h>
++#include <asm/thread_info.h>
++
++#define SUBLET_CSR_SREVROOT 0x5c1
++
++struct sublet_context;
++
++/* The slot of user register xn of a task. */
++static inline unsigned long *sublet_user_slot(struct task_struct *task, unsigned int n)
++{
++	return task->thread_info.capstone_slots[n];
++}
++
++/* The t6 slot of an S trap frame. */
++static inline unsigned long *sublet_frame_t6(struct pt_regs *regs)
++{
++	return regs->capstone_t6;
++}
++
++/* The Sublet context of a task that runs a protected program, or NULL. */
++static inline struct sublet_context *sublet_task_context(struct task_struct *task)
++{
++	if (!test_tsk_thread_flag(task, TIF_CAPSTONE) || !task->mm)
++		return NULL;
++	return task->mm->context.capstone_namespace;
++}
++
++/* Set user register xn of the current task to an integer, or to the reference in a kernel
++ * slot. Each writes the register's slot and its integer view in pt_regs. */
++void sublet_set_user_int(struct pt_regs *regs, unsigned int n, unsigned long value);
++void sublet_set_user_ref(struct pt_regs *regs, unsigned int n, unsigned long *kslot);
++
++extern char sublet_uaccess_start[], sublet_uaccess_end[];
++
++#endif
+--- a/arch/riscv/include/asm/sublet.h
++++ b/arch/riscv/include/asm/sublet.h
+@@ -55,6 +55,10 @@ int sublet_context_create(struct sublet_context **out);
+ void sublet_context_destroy(struct sublet_context *c);
+ /* Make a block: check its range and mappings, derive P from R. Caller holds sublet_lock. */
+ int sublet_grant(struct sublet_context *c, const struct sublet_grant *g);
++/* The same, and *slot receives the kernel slot that holds P, which the context owns. */
++int sublet_grant_slot(struct sublet_context *c, const struct sublet_grant *g, unsigned long **slot);
++/* Answer cause 30 of the context's program: at least one slot, or NOGROW. */
++int sublet_grow(struct sublet_context *c);
+ 
+ /* The issue side of the system calls on kernel buffers, for the binder of plan v5 step 5,
+  * which copies each argument through the program's reference. Caller holds sublet_lock. */
+@@ -64,4 +68,8 @@ long sublet_wait(struct sublet_context *c, s64 number, u64 options, int *status,
+ 		 struct rusage *usage);
+ void sublet_spawn_cancel(struct sublet_context *c, long number);
+ 
++#ifdef CONFIG_RISCV_CAPSTONE_TRAP_TEST
++void sublet_test_fault(struct pt_regs *regs);
++#endif
++
+ #endif
+--- a/arch/riscv/include/asm/thread_info.h
++++ b/arch/riscv/include/asm/thread_info.h
+@@ -66,6 +66,13 @@ struct thread_info {
+ 	long			kernel_sp;	/* Kernel stack pointer */
+ 	long			user_sp;	/* User stack pointer */
+ 	int			cpu;
++#ifdef CONFIG_RISCV_CAPSTONE_TRAP
++	/* The user registers x1 to x31 with their tags, one 16-byte slot each, indexed by
++	 * register number (slot 0 unused). Every entry from U writes them, and a return to a
++	 * protected program loads them. C code changes a user register through
++	 * sublet_set_user_int or sublet_set_user_ref, never here directly. */
++	unsigned long		capstone_slots[32][2] __aligned(16);
++#endif
+ };
+ 
+ /*
+--- a/arch/riscv/kernel/asm-offsets.c
++++ b/arch/riscv/kernel/asm-offsets.c
+@@ -37,6 +37,13 @@ void asm_offsets(void)
+ 	OFFSET(TASK_TI_PREEMPT_COUNT, task_struct, thread_info.preempt_count);
+ 	OFFSET(TASK_TI_KERNEL_SP, task_struct, thread_info.kernel_sp);
+ 	OFFSET(TASK_TI_USER_SP, task_struct, thread_info.user_sp);
++#ifdef CONFIG_RISCV_CAPSTONE_TRAP
++	OFFSET(TASK_TI_CAPSTONE_SLOTS, task_struct, thread_info.capstone_slots);
++	OFFSET(TASK_MM_SUBLET, task_struct, mm);
++	OFFSET(MM_CONTEXT_CAPSTONE_ROOT, mm_struct, context.capstone_root);
++	OFFSET(PT_CAPSTONE_TAGGED, pt_regs, capstone_tagged);
++	OFFSET(PT_CAPSTONE_T6, pt_regs, capstone_t6);
++#endif
+ 
+ 	OFFSET(TASK_THREAD_F0,  task_struct, thread.fstate.f[0]);
+ 	OFFSET(TASK_THREAD_F1,  task_struct, thread.fstate.f[1]);
+--- a/arch/riscv/kernel/vmlinux.lds.S
++++ b/arch/riscv/kernel/vmlinux.lds.S
+@@ -41,6 +41,12 @@ SECTIONS
+ 		_text = .;
+ 		_stext = .;
+ 		TEXT_TEXT
++#ifdef CONFIG_RISCV_CAPSTONE_TRAP
++		. = ALIGN(16);
++		sublet_uaccess_start = .;
++		*(.sublet.uaccess.text)
++		sublet_uaccess_end = .;
++#endif
+ 		SCHED_TEXT
+ 		CPUIDLE_TEXT
+ 		LOCK_TEXT
