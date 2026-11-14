@@ -17,7 +17,9 @@ in [`../2026-11-08-train/PREREG.md`](../2026-11-08-train/PREREG.md) (Addendum 10
   - QEMU twins (outputs must equal temporal's) are landing. gcc passes: outputs identical, user instructions +0.01 %, so
     in instruction count spatial is no cheaper. Lifetimes cost per-instruction latency (CDERIVE/CREVOKE and node work),
     which only silicon shows. Spatial gcc is queued on board 1. The mcf and perl twins also pass (outputs identical, user +0.00 % and +0.02 %).
-    imagick, nab, lbm, xz and x264 are still twinning.
+    The other twins have finished too: imagick, nab, lbm and xz rc 0 with full specdiff. perl full test is 2/2 on
+    the board-matching kernel (images-a0ed). x264 reads specdiff 0/3, as every native x264 stage does: its frames are
+    checked by hash on the board run.
 - **Expected completion:** short rows today; x264 and the full perl test take ~10 h and ~5 h per arm, so the full
   three-arm table is expected on 15 Nov.
 
@@ -57,7 +59,7 @@ same images. The "final config" columns are being re-measured on F.
 | mlp | `caplifive_ids55-native-tagcache-mlp_b98f5a517` | 5e8421a5… | Capstone, 55-bit lifetime ids, native route, lifetime-record (tag) cache, memory-level parallelism |
 | fdk | `caplifive_ids55-native-tagcache-mlp-fpieee-hpmreplay-dynbypass3-dtlb64-shrinkfix-ic32k_3c6b9906c` | 141f840e… | mlp + FP fix + HPM counters + LDC/STC bypassing the DYN unit (v3) + DTLB 64 entries + SHRINKTO/CAPBOUND fix + I-cache 32 KiB 8-way |
 | batch | `…-ic32k-r72-stcnoclaim_a47b588a1` | ff36870d… | fdk + R-72 (PCC fetch-end check) + lever (a) (an STC claims rs1 only when it is UNINIT) |
-| F (next) | `…-ic32k-r72-stcnoclaim-twc16k-merge-hpmtag_a948e4134` | ec675c2b… | batch + a 16 K-entry tag-word cache (2 MB reach, was 32 KB) with merge-on-write, plus tag-path HPM counters. Sealed 14 Nov; first board runs pending |
+| **F** (final) | `…-ic32k-r72-stcnoclaim-twc16k-merge-hpmtag_a948e4134` | ec675c2b… | batch + a 16 K-entry tag-word cache (2 MB reach, was 32 KB) with merge-on-write, plus tag-path HPM counters. Sealed 14 Nov; the final temporal and spatial bitstream (Addendum 113) |
 | B (control) | `…-ic32k-r72-stcnoclaim-hpmtag_afe4e643e` | 5f8273b4… | batch + tag-path HPM counters only (old tag cache); a diagnostic, not a table configuration |
 
 ### How we got here (temporal ratio, problem rows)
@@ -94,7 +96,7 @@ perl makerand is the quick sub-run used for A/B work; the table's perl row is th
 | Arm | Bitstream | Software |
 |---|---|---|
 | **riscv-base** | stock CVA6, `caplifive_rvbase_d31345cf3` | plain RV64 build `plain-rv64fre`: static musl with the same allocator policy as Capstone (mapping cache with page rounding, eviction, in-place large realloc via mremap), K2N kernel |
-| **Capstone temporal** (spatial + temporal safety) | `caplifive_ids55-native-tagcache-mlp-fpieee-hpmreplay-dynbypass3-dtlb64-shrinkfix-ic32k-r72-stcnoclaim_a47b588a1` (sha256 `ff36870d…76e1`) | FRCDKMS images (below), native route, heap lifetimes ON |
+| **Capstone temporal** (spatial + temporal safety) | **F**: `caplifive_ids55-native-tagcache-mlp-fpieee-hpmreplay-dynbypass3-dtlb64-shrinkfix-ic32k-r72-stcnoclaim-twc16k-merge-hpmtag_a948e4134` (sha256 `ec675c2b…`). Until 14 Nov evening it was batch, `…_a47b588a1` (`ff36870d…76e1`) | FRCDKMS images (below), native route, heap lifetimes ON |
 | **Capstone spatial** (spatial safety only) | the same bitstream | the same compiler and benchmark objects; the SDK differs only in `CAPSTONE_HEAP_LIFETIMES=OFF`, so only in the allocator objects (libc mallocng, the runtime's malloc-mapping). An allocation gets exact bounds (CSHRINK) under its mapping's lifetime node instead of a node of its own (CDERIVE), and free does no CREVOKE. Size classes, the mapping cache, eviction and in-place realloc are unchanged |
 
 The rule for the baseline: riscv-base keeps its own RTL (stock CVA6) and shares everything else that both arms
@@ -118,7 +120,7 @@ imagevalidate step.
 ## Table: best measured so far (updated as runs land)
 
 Each Capstone temporal number is the best silicon reading for that row so far, with its configuration. The last
-two columns are the uniform final configuration (batch bitstream + FRCDKMS images), temporal and spatial, which is
+two columns are the uniform final configuration (bitstream F + FRCDKMS images), temporal and spatial, which is
 the table being measured now. A row moves into them as its run lands.
 
 | Benchmark | riscv-base (s) | Capstone temporal, best so far (s) | ratio | configuration | final config: temporal ratio | final config: spatial ratio |
@@ -134,7 +136,7 @@ the table being measured now. A row moves into them as its run lands.
 | geomean | | | 1.093 | | | |
 
 Bold = below the 1.20 target. perl makerand alone (the quick A/B sub-run, debugging only): 257.90 s on riscv-base
-against 288.58 s on **F** / FRCDKMS, ratio 1.119 (-12.5 % against the batch); the full test on F is queued.
+against 288.58 s on **F** / FRCDKMS, ratio 1.119 (-12.5 % against the batch); the full test on F is running on board 2 (from 21:07).
 
 Configurations in the table:
 - **mlp / arm C:** `caplifive_ids55-native-tagcache-mlp_b98f5a517`, the older compiler, and the same allocator.
