@@ -3927,3 +3927,47 @@ F, so the +0.62 % is well outside the same-board spread (0.04-0.15 %).
 
 **Why gcc loses is not attributed.** The twin predicted the loss, but the pair says only that gcc is slower under
 gp, not why.
+
+## Addendum 121 (2026-11-14 23:12 +08, before it runs): the allocator step (mallocng 0012 + 0013) on silicon, full perl and gcc on F
+
+**Arm FRCDKMSa3** (compiler lane, alloc-lean c80c27d198dd, ac89efcc832f and 93f25d631a79) is FRCDKMS built on SDK
+perf/alean/sdkm13b. Only libc's mallocng differs (5 objects): malloc's body is inlined after its size check, and
+get_meta is inlined into free with sizeclass and maplen read once, after the secret check. The benchmark objects are
+byte-identical to FRCDKMS's (gcc 387/387, perl 69/69).
+- **Gate:** free-reject 11/11 MATCH, temporal and spatial (the spatial double-live case reaches get_meta's assert).
+  The hosted contract is identical (42/45 PASS on both).
+- **Twins, outputs identical:** perl full -0.83 % user instructions (2/2), gcc train01 -0.30 % (1/1). Kernel ±0.01 %.
+- **Images:** perlbench_r.strip.dom c1744e87cb2244f6, cpugcc_r.strip.dom 58124bcc766ceb17.
+- **Board stages:** board-frcdkmsa3-full/500.perlbench_r-native and board-frcdkmsa3/502.gcc_r-train01-native. Each
+  differs from FRCDKMS's board stage only in the executable and plan.json (diff -rq). The smoke files are identical by
+  SHA256SUMS.
+
+**Runs (F, a948e4134):**
+- **Chain ba-b3,** board 3, kit bkit80: full perl. It runs after ax-b3, so the board-3 order is av-b3 → ay-b3 → aw-tp
+  → ax-b3 → ba-b3. The control is aw-tp (FRCDKMS full perl, same board, kit and bitstream).
+- **Chain bb-b1,** board 1, kit bkit75: gcc train01, after aw-sp. The control is FRCDKMS gcc on F on board 1: 1,989.28 s,
+  with repeats at 1,990.13 and 1,992.35 s.
+
+**Predictions (run time against the same-board control):**
+
+| row | twin user instructions | predicted silicon run time |
+|---|---|---|
+| perl full | -0.83 % | -0.3..-1.2 % |
+| gcc train01 | -0.30 % | -0.1..-0.5 % |
+
+The perl band assumes user time is most of the run and that malloc/free saves at least what the instructions say. The
+gcc band reaches into the same-board spread (0.04-0.15 %), so a gcc reading inside ±0.15 % is "no measurable change",
+not a miss. Both arms must pass specdiff, and outputs must be equal to the control's.
+
+**Adoption rule.** FRCDKMSa3 replaces FRCDKMS on both Capstone arms if:
+- perl full improves by more than 0.3 %;
+- gcc does not worsen by more than 0.15 %.
+
+The spatial arm then gets the same patches on its own SDK, with the gate already run on spatial, and is re-measured
+before its column changes.
+
+**riscv-base under the same-software rule.** 0012 and 0013 are mostly generic mallocng restructuring: malloc's body
+inlined after its size check, and get_meta's fields read once. So riscv-base's musl must get every part that applies
+to it, and riscv-base's perl and gcc are rerun before any table ratio uses FRCDKMSa3. A shared software change is the
+lead's stated reason for a riscv-base rerun. The compiler lane is asked which hunks apply to plain musl. Until both
+arms carry the change, a FRCDKMSa3 reading is reported as an optimisation result, not as a table row.
