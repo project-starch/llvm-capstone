@@ -4060,3 +4060,17 @@ a board reading narrows that.
 **Order on board 2.** aw-sx → 15-minute gap → bc-b2 (CPython ABBA, Addendum 123) → **bd-b2** (this stage, list
 "c2-stage 900 20"). It is launched with nat-run3.sh, so the pre-boot switch park runs (Addendum 124). Checksums are
 verified against c2-stage.SHA256SUMS, and the stubbed nat-run3 dry run passes.
+
+## Addendum 126 (2026-11-15 04:52 +08): board 1 runs the nested lane's PostgreSQL ABBA after the allocator gcc pair
+
+**What runs.** The nested lane's PostgreSQL workload ABBA: u1 p1 p2 u2 on w2-main, image set 10, in one boot, on F with
+kit bkit75n. Stage nested/pg/board/p2-stage, checked against its SHA256SUMS. Its pre-registration, with predictions
+and the disclosed harness patches (superuser, vacuum analyze by table name), is nested-workloads 87b463da4d10.
+- **Rung budget:** 1800 s, for BAKED_TIMEOUT 7200 and the same idle limit. The commands run about 50-70 min, each
+  silent for about 11 min. The booking is 120 min.
+- **Firmware:** 25,857,544 B, under the kit's 26,000,000 cap. The upload is about 220 s of load_image's 300 s.
+- **Known first-use risk:** the board's BusyBox xz/tar unpack has not run on the board before. If it fails, run.sh
+  exits at u1's setup line, before any measurement. That costs the boot but produces no false reading.
+
+**Order on board 1:** aw-sp (spatial full perl) → bb-b1 (FRCDKMSa3 gcc, Addendum 121) → **be-b1**, launched with
+nat-run3.sh. The stubbed nat-run3 dry run passes and prints BAKED_TIMEOUT=7200.
