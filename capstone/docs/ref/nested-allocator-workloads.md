@@ -4,7 +4,7 @@
 
 | Item | State | Configuration |
 |---|---|---|
-| speedtest1 `--size 1`, QEMU twin | **measured**: answers equal; program +0.63 % instructions; 28,216 CREVOKEs, subtree mean 1.0001 / max 3; peak table +4.8 KB; kernel +3 % from the native syscall page scan (cause of the +3 % open) | FRCDKMS, native route, ids55, QEMU qemu55 a0501ebc39 |
+| speedtest1 `--size 1`, QEMU twin | **measured**: answers equal; program +0.63 % instructions; 28,216 CREVOKEs, subtree mean 1.0001 / max 3; peak table +4.8 KB; kernel +3 % from the native syscall page scan, all of it from the patch's `aReq` array (lifetimes: kernel ±0, in-context +0.39 %) | FRCDKMS, native route, ids55, QEMU qemu55 a0501ebc39 |
 | speedtest1 on silicon | pending. Boot 1 (board 1, 14:27-14:35) is VOID: the smoke passed, and no command ran because the stage's empty `train/in` was not baked (see the addendum below). Fixed stage awaiting a board slot | bitstream `a47b588a1`, kit bkit73 |
 | speedtest1 `--size 100` | pending (after `--size 1` has been looked at) | as above |
 | CPython, PostgreSQL, tshark, FFmpeg, memcached | pending, in that order, after speedtest1 | as above |
@@ -162,17 +162,51 @@ These two boots used a private, measurement-only QEMU: `nested/qemu-nst` = qemu5
   - +25 M in the spinlock helpers they take;
   - +1.4 M in `native_rw`;
   - the node-record functions (`retire`, `resolve`) move by under 40 k.
-- **Why the scan costs 2-3 % more when protected: the protected arm touches more of the heap.**
-  - Diagnostic boot `nst1-q4`: `diag_admit=1`, vmstat around each command. It was not used for any cost number.
-  - At retire, the 8 MiB memsys5 arena (`+0x808000`, 2,056 pages) has **268 pages resident not protected and 337
-    protected (+69, +26 %)**. Every other arena of the process is identical between the arms.
-  - Page faults in the command window: +725 vs +795.
-  - The scan's cost grows with the arena's resident and absent runs, so the protected arm pays more on each of the
-    same 15,151 syscalls.
-  - Why protected memsys5 spreads over more pages is not traced. Its patch rounds each block child to its bounds granule
-    (Q-15 repair, a tail pad inside the block), which changes block sizes and placement.
-  - So the kernel share of the protection's cost is a side effect: the native route's per-syscall scan multiplies a
-    small footprint change. It is not lifetime work.
+- **Why the scan costs 2-3 % more when protected: the patch's `aReq` array, not the lifetimes.** This bullet replaced
+  an earlier reading (c0440089f41c) that put the kernel delta on the protected arm's +69 resident heap pages. The pages
+  are real, but they are not what costs.
+  - Diagnostic boot `nst1-q4`: `diag_admit=1`, vmstat around each command. It was not used for any cost number. At
+    retire, the 8 MiB memsys5 arena (`+0x808000`, 2,056 pages) has 268 pages resident not protected and 337 protected
+    (+69). Every other arena of the process is identical between the arms.
+  - The patch changes memsys5 in four ways. Three are not lifetimes:
+    - it carves a smaller pool, (nByte-8)/(szAtom+5) atoms instead of nByte/(szAtom+1);
+    - it keeps `aReq`, one u32 per atom at the heap's tail (475 KB), written at every malloc;
+    - it reports the 8-byte-rounded request instead of the power-of-two block as the usable size.
+    The fourth is the per-block CDERIVE/CREVOKE.
+  - Three attribution arms, each one step from the last, measurement only (`nested/st1/build-var.sh` and `bin/preq`):
+
+    | arm | what it is | image sha256 |
+    |---|---|---|
+    | `ucarve` | not protected, pool carved as protected | `3d4854e6…` |
+    | `preq` | plus `aReq` written and the block size reported, no per-block derive or revoke (13 CDERIVEs per boot) | `c578ff71…` |
+    | `ppow2` | plus the per-block lifetimes (27,761 CDERIVEs); the block size is still reported | `5e537407…` |
+    | protected | plus the request size reported (the full patch) | `945fb69f…` |
+
+  - Every arm gave 32/32 reference answers.
+  - Kernel instructions (`capmixn`, one profiled boot per arm, `nst1-q3u`, `q6uc`, `q6pr`, `q6pp`, `q3p`), and
+    memsys5 pages swept at retire (`nst1-q5`, one boot running not protected, `ucarve`, `ppow2` and protected):
+
+    | step | kernel instructions | of which `next_resident` + `pin_remaining` | in-context cycles | pages swept |
+    |---|---|---|---|---|
+    | not protected | 2,030.2 M | | 196.45 M | 268 |
+    | pool carve | -13.6 M | ~0 | ±0 | 264 |
+    | `aReq` | **+66.1 M (+3.3 %)** | +39.4 M; the spinlock helpers carry most of the rest | +0.06 % | not measured |
+    | per-block lifetimes | **-0.6 M** | ~0 | **+0.39 %** | 278 (`ppow2`) |
+    | request-size reporting | +8.4 M | +5.5 M | +0.17 % | **337** |
+    | total | +60.2 M | | +0.62 % | +69 |
+
+    In-context cycles come from the profiled boots for the middle arms (`q6pr`, `q6pp`). The first and last rows are
+    the unprofiled `nst1-q5` boot, where `ucarve` and `ppow2` read the same as their profiled boots within 0.001 %.
+  - **The protection's lifetimes cost the kernel nothing.** They cost the program +0.39 % in-context.
+  - **The kernel's +3 % is the `aReq` array.** Most of the extra pages come from request-size reporting, which costs the
+    kernel little. So the scan's cost is not proportional to the resident page count. Which part of the scan grows
+    (more absent runs, or a page table instantiated where the walk used to skip a whole 2 MiB level) is not resolved.
+  - The scan is the native kernel's (`capstone_vm.c`, `pin_remaining` → `next_resident`, on every syscall that passes
+    a user buffer). Without it, the protection's whole cost on speedtest1 would be the in-context +0.6 %.
+  - An alternative the patch could take, untested: `memsys5Size` could read the request from the block capability's
+    bounds length instead of `aReq`, which would remove the array.
+  - A host x86 build (lifetimes stubbed, residency by `mincore`) shows the same direction, 243 vs 298 resident heap
+    pages, but splits it differently, because its pointers are 8 bytes rather than 16. The twin is the authority here.
 - **The scan is real on silicon too.** The board kernel's `capstone_vm.c`
   (`perf/k2n/linux-board-k2n-native-hpm`) differs from the twin's only by the HPM reads.
 
