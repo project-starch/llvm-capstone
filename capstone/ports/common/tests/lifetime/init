@@ -1,0 +1,30 @@
+#!/bin/sh
+mount -t proc proc /proc
+mount -t sysfs sysfs /sys
+mount -t devtmpfs devtmpfs /dev
+busybox mkdir -p /work
+mount -t tmpfs tmpfs /work
+busybox cp /*.dom /work/
+cd /work
+for p in sqlite-request sqlite-block sqlite-page sqlite-old ffmpeg ffmpeg-old; do
+    echo "TRAPTEST: start $p"
+    ./$p.dom
+    echo "TRAPTEST: result $p $?"
+done
+for p in ffmpeg ffmpeg-old; do
+    echo "TRAPTEST: start $p-ref-failure"
+    ./$p.dom failure
+    echo "TRAPTEST: result $p-ref-failure $?"
+done
+for p in sqlite-request sqlite-block sqlite-page; do
+    echo "TRAPTEST: stale $p"
+    ./$p.dom stale
+    echo "TRAPTEST: stale-result $p $?"
+done
+for kind in buffer refstruct; do
+    echo "TRAPTEST: stale ffmpeg-$kind"
+    ./ffmpeg.dom "$kind"
+    echo "TRAPTEST: stale-result ffmpeg-$kind $?"
+done
+echo 'TRAPTEST: done'
+busybox poweroff -f

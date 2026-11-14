@@ -31,33 +31,49 @@ the allocation's current lifetime.
 # The system allocator gives every object a lifetime of its own, as the
 # virtual heap does with lifetimes on. Without that, the pointer names the
 # lifetime of something larger, and renewing it would end that.
-diff --git a/libavutil/buffer.c b/libavutil/buffer.c
+A failed renewal leaves the old reference live. The return path then frees
+the entry through that reference and drops its pool reference as usual.
+
 --- a/libavutil/buffer.c
 +++ b/libavutil/buffer.c
-@@ -362,6 +362,10 @@ static void pool_release_buffer(void *opaque, uint8_t *data)
+@@ -362,10 +362,22 @@
      AVBufferPool *pool = buf->pool;
      uint64_t call = ff2_begin(FF2_RETURN, FF2_BUFFER, pool, 0, 0, data);
  
+-    ff_mutex_lock(&pool->mutex);
+-    buf->next = pool->pool;
+-    pool->pool = buf;
+-    ff_mutex_unlock(&pool->mutex);
 +    /* The entry is its own allocation. Renewing its lifetime (CRENEW) ends
 +     * every copy of the user's pointer before the entry is reissued. */
-+    buf->data = capstone_cap_renew(buf->data);
-+
-     ff_mutex_lock(&pool->mutex);
-     buf->next = pool->pool;
-     pool->pool = buf;
-diff --git a/libavutil/buffer_internal.h b/libavutil/buffer_internal.h
++    uint8_t *fresh = capstone_cap_renew(buf->data);
++    if (fresh) {
++        buf->data = fresh;
++        ff_mutex_lock(&pool->mutex);
++        buf->next = pool->pool;
++        pool->pool = buf;
++        ff_mutex_unlock(&pool->mutex);
++    } else {
++        /* Renewal failure leaves the old allocation live. Free it instead
++         * of caching an entry whose old aliases still work. */
++        ff2_drop(FF2_BUFFER, pool, buf->data);
++        buf->free(buf->opaque, buf->data);
++        av_free(buf);
++    }
+ 
+     if (atomic_fetch_sub_explicit(&pool->refcount, 1, memory_order_acq_rel) == 1)
+         buffer_pool_free(pool);
 --- a/libavutil/buffer_internal.h
 +++ b/libavutil/buffer_internal.h
-@@ -25,6 +25,8 @@
+@@ -24,6 +24,8 @@
+ 
  #include "buffer.h"
  #include "thread.h"
- 
-+#include <capstone/capability.h>
 +
++#include <capstone/capability.h>
+ 
  /**
   * The buffer was av_realloc()ed, so it is reallocatable.
-  */
-diff --git a/libavutil/refstruct.c b/libavutil/refstruct.c
 --- a/libavutil/refstruct.c
 +++ b/libavutil/refstruct.c
 @@ -21,6 +21,7 @@
@@ -68,14 +84,23 @@ diff --git a/libavutil/refstruct.c b/libavutil/refstruct.c
  
  #include "avassert.h"
  #include "error.h"
-@@ -246,7 +247,9 @@ static void pool_free_entry(AVRefStructPool *pool, RefCount *ref)
+@@ -246,11 +247,16 @@
  
  static void pool_return_entry(void *ref_)
  {
 -    RefCount *ref = ref_;
+-    AVRefStructPool *pool = ref->opaque.nc;
 +    /* The entry is its own allocation. Renewing its lifetime (CRENEW) ends
 +     * every copy of the user's pointer before the entry is reissued. */
 +    RefCount *ref = capstone_cap_renew(ref_);
-     AVRefStructPool *pool = ref->opaque.nc;
++    AVRefStructPool *pool = ref ? ref->opaque.nc : ((RefCount *)ref_)->opaque.nc;
++    int renewed = ref != NULL;
++    if (!renewed)
++        ref = ref_;
  
      ff_mutex_lock(&pool->mutex);
+-    if (!pool->uninited) {
++    if (renewed && !pool->uninited) {
+         ref->opaque.nc = pool->available_entries;
+         pool->available_entries = ref;
+         ref = NULL;
