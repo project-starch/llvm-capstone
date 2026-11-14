@@ -4074,3 +4074,20 @@ and the disclosed harness patches (superuser, vacuum analyze by table name), is 
 
 **Order on board 1:** aw-sp (spatial full perl) → bb-b1 (FRCDKMSa3 gcc, Addendum 121) → **be-b1**, launched with
 nat-run3.sh. The stubbed nat-run3 dry run passes and prints BAKED_TIMEOUT=7200.
+
+## Addendum 127 (2026-11-15 05:30 +08): board 2 runs the nested lane's FFmpeg decode ABBA after the op-timing domain
+
+**What runs.** A 10 s, 300-frame FFmpeg decode: u1 p1 p2 u2, then fp. fp is a protected, flipped-input control that must
+FIRE, and it is placed last as the one expected fault. Kit bkit75n on F, stage nested/ffmpeg/board/f2-stage, checked
+against its SHA256SUMS. The commands take about 13 minutes. List "f2-stage 900 40", BAKED_TIMEOUT 3600, firmware
+23,760,392 B.
+
+The pre-registration is nested-workloads fe20549f1931. It discloses two build conditions, the same on both arms:
+- -fno-builtin, because without it this compiler's FFmpeg faults in avformat_open_input in both arms (handed to the
+  compiler lane);
+- the nested lane's Q-15 repair of the pool patch 0003.
+
+Twin of record (c249cedc61fc): every frame equal to stock, in-context -0.030 %, kernel -0.36 %.
+
+**Order on board 2:** aw-sx → gap → bc-b2 (CPython, Addendum 123) → bd-b2 (op timing, Addendum 125) → **bf-b2**,
+launched with nat-run3.sh. The stubbed dry run passes.
