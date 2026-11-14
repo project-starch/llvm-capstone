@@ -3,7 +3,7 @@
 This is a live table: rows are filled as board runs land. Pre-registrations, predictions and the run-by-run trail are
 in [`../2026-11-08-train/PREREG.md`](../2026-11-08-train/PREREG.md) (Addendum 107 onward for this table).
 
-## Status (updated 2026-11-14 11:50 +08)
+## Status (updated 2026-11-14 12:15 +08)
 
 - **riscv-base:** complete, all 8 rows.
 - **Capstone temporal:**
@@ -14,7 +14,9 @@ in [`../2026-11-08-train/PREREG.md`](../2026-11-08-train/PREREG.md) (Addendum 10
   - The SDK differs from temporal in 4 libc mallocng members plus the runtime's malloc-mapping object, and nothing else.
     This is shown by member hashes, and a control on the memset switch fires.
   - Every benchmark object is byte-identical to temporal FRCDKMS's.
-  - QEMU twins (outputs must equal temporal's) are running. Board runs follow, on the final bitstream.
+  - QEMU twins (outputs must equal temporal's) are landing. gcc passes: outputs identical, user instructions +0.01 %, so
+    in instruction count spatial is no cheaper. Lifetimes cost per-instruction latency (CDERIVE/CREVOKE and node work),
+    which only silicon shows. Spatial gcc is queued on board 1; the other rows follow their twins.
 - **Expected completion:** short rows today; x264 and the full perl test take ~10 h and ~5 h per arm, so the full
   three-arm table is expected on 15 Nov.
 
@@ -22,7 +24,7 @@ in [`../2026-11-08-train/PREREG.md`](../2026-11-08-train/PREREG.md) (Addendum 10
 
 | Board | Now | Then |
 |---|---|---|
-| 1 | temporal mcf, batch / FRCDKMS (until ~13:00) | 1. temporal imagick and nab, batch / FRCDKMS<br>2. mcf, gcc and perl makerand on bitstream **F**, for the one-variable F-vs-batch pairs<br>3. F's tag-path counters (mcf, gcc) |
+| 1 | temporal mcf, batch / FRCDKMS (until ~13:00) | 1. temporal imagick and nab, batch / FRCDKMS<br>2. **spatial gcc**, batch / FRCDKMSsp (the first spatial row; twin outputs identical to temporal)<br>3. mcf, gcc and perl makerand on bitstream **F**, for the one-variable F-vs-batch pairs<br>4. F's tag-path counters (mcf, gcc) |
 | 2 | x264, fdk / FR (until ~15:00) | bitstream **B** (old tag cache + tag-path counters): mcf and gcc, for where the memory time goes |
 | 3 | full perl, fdk / FRCDK (until ~16:00) | the long final rows (x264, full perl) on the chosen final bitstream |
 
