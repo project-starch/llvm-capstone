@@ -458,8 +458,7 @@
  *   topmost page below 2^38 first, which the launcher and then the module refuse (the runner reads the
  *   launcher's line):
  *   top_page_mapping_below          the mapping that follows works and ends a page or more below 2^38
- * The growth modes of the 63-bit format (they skip in the older formats, which have no failure result
- * and end the context at exhaustion):
+ * The growth modes (the 63-bit format, the only one since 2026-11-14):
  * grow-maps (exit 0):
  *   grow_maps_through_grants        5,000 one-page mmaps (5,000 records, one each, more than the first
  *                                   batch of 4,096 slots) all succeed: the module grows the table before
@@ -3689,12 +3688,6 @@ static int mode_top_page(void)
     return 0;
 }
 
-/* The lifetime-id width of the module's build: its parameter ids (absent in the 30-bit build). */
-static int sublet_format(void)
-{
-    return read_number("/sys/module/capstone_vm/parameters/ids") == 63;
-}
-
 static long module_number(const char *name)
 {
     char path[96];
@@ -3719,10 +3712,6 @@ static void **pointer_array(unsigned long n)
 static int mode_grow_maps(void)
 {
     (void)grant();
-    if (!sublet_format()) {
-        skip("grow_maps_through_grants", "the older formats: no growth word");
-        return 0;
-    }
     void **maps = pointer_array(GROW_MAPS);
     long growths = module_number("table_growths"), escapes = module_number("pressure_escapes");
     unsigned long done = 0;
@@ -3751,10 +3740,6 @@ static int mode_grow_maps(void)
 static int mode_grow_objects(void)
 {
     (void)grant();
-    if (!sublet_format()) {
-        skip("grow_objects_through_escape", "the older formats: no growth word");
-        return 0;
-    }
     void **objects = pointer_array(GROW_OBJECTS);
     long growths = module_number("table_growths"), escapes = module_number("pressure_escapes");
     unsigned long done = 0, kept = 0;
@@ -3797,12 +3782,6 @@ static void *(*volatile try_realloc)(void *, size_t) = realloc;
 static int mode_nogrow_map(void)
 {
     (void)grant();
-    if (!sublet_format()) {
-        skip("nogrow_map_enomem", "the older formats end the context at exhaustion");
-        skip("nogrow_map_one_record", "the older formats end the context at exhaustion");
-        skip("nogrow_map_recovers", "the older formats end the context at exhaustion");
-        return 0;
-    }
     void **maps = pointer_array(NOGROW_LIMIT);
     long escapes = module_number("pressure_escapes"), sets = module_number("nogrow_sets");
     unsigned long done = 0, filled, rests = 0;
@@ -3871,11 +3850,6 @@ static int mode_nogrow_map(void)
 static int mode_nogrow_malloc(void)
 {
     (void)grant();
-    if (!sublet_format()) {
-        skip("nogrow_malloc_null", "the older formats end the context at exhaustion");
-        skip("nogrow_malloc_recovers", "the older formats end the context at exhaustion");
-        return 0;
-    }
     void **objects = pointer_array(NOGROW_LIMIT);
     long escapes = module_number("pressure_escapes"), sets = module_number("nogrow_sets");
     unsigned long done = 0;
@@ -3937,10 +3911,6 @@ static int pattern_kept(const unsigned char *p, unsigned long bytes)
 static int mode_realloc_exhausted(void)
 {
     (void)grant();
-    if (!sublet_format()) {
-        skip("realloc_exhausted_keeps_object", "the older formats end the context at exhaustion");
-        return 0;
-    }
     void **objects = pointer_array(NOGROW_LIMIT);
     unsigned char *big = malloc(REALLOC_FROM);
     require(big != NULL, "malloc of the large object");

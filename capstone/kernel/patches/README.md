@@ -24,7 +24,7 @@ Makefile:
 - `captag=off` disables the hooks for negative tests.
 
 The patch enables these hooks only when the device tree has a
-`capstone,unpinned-v1` node (QEMU publishes it) with `id-bits` 30, 55 or 63, exact-bounds
+`capstone,unpinned-v1` node (QEMU publishes it) with `id-bits` 63 (the only format since 2026-11-14), exact-bounds
 0 or 1, the base page size and a 16-byte granule, and refuses KSM and
 transparent huge pages. It still exports `capstone_unpinned_config` for the
 deleted module; plan v5 step 6 decides whether the built-in code keeps it.
