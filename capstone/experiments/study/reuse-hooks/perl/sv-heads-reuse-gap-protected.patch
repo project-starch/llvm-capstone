@@ -2,8 +2,10 @@ Reuse-distance hooks for Perl 5.36.3, PROTECTED arm: applies to the port tree
 plus ports/perl/sublet/patches/5.36.3/0001 (PERLD_SUBLET=1). That patch puts
 uproot_SV and plant_SV under #ifdef PERL_CAPSTONE_SUBLET with the upstream
 macros in #else, so the same two hook lines go into both branches, at the same
-place as in the stock variant: in uproot_SV right after ++PL_sv_count (before
-Perl_sv_arena_issue derives the child), in plant_SV right before --PL_sv_count.
+place as in the stock variant: in uproot_SV right after ++PL_sv_count, in
+plant_SV right before --PL_sv_count. Since the audited 0001 (native-kernel-new-qemu
+a779395ed7) uproot_SV derives the child first, so the issue hook sees the child,
+whose address is the head's.
 
 Everything is under EXP_REUSE_GAP (passed by the wrapper through PERLD_OPT, so
 it reaches the target compile only, not perl-cross's host miniperl). Without
@@ -38,13 +40,13 @@ into the source root.
  /* The free list holds the arena's own pointers; the head is handed out as a
     child lifetime of its arena, bounded to it (sv.c). */
 @@ -65,6 +78,7 @@
-         (p) = PL_sv_root;                               \
-         PL_sv_root = MUTABLE_SV(SvARENA_CHAIN(p));              \
+         (p) = Perl_sv_arena_issue(PL_sv_root);           \
+         PL_sv_root = MUTABLE_SV(SvARENA_CHAIN(PL_sv_root)); \
          ++PL_sv_count;                                  \
 +        REUSE_GAP_SV_ISSUE(p);                          \
-         (p) = Perl_sv_arena_issue(p);                   \
      } STMT_END
  #else
+ #define uproot_SV(p) \
 @@ -73,6 +87,7 @@
          (p) = PL_sv_root;                               \
          PL_sv_root = MUTABLE_SV(SvARENA_CHAIN(p));              \
