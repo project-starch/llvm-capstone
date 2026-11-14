@@ -3678,3 +3678,30 @@ the new cpio and failing on the old one.
 
 **Pre-registration:** the nested lane's, nested-workloads 9b325ad6fcac, which cites c3663f0362a1. Predictions are
 unchanged.
+
+## Addendum 112 (2026-11-14 16:50, before it runs): F's first readings; riscv-base gp readings; temporal x264 on F, board 3
+
+**Readings:**
+- **F on silicon** (bkit75, board 1), FRCDKMS mcf: 6,576.13 s, specdiff 2/2. Against the batch's 7,372.16 s with the
+  same image: -10.8 %. Ratio 1.283.
+  - Counters: run_cycles 179.38 → 159.63 G; issue-stall cycles 112.18 → 94.08 G; L1D misses, DTLB walks, faults and
+    checks unchanged.
+  - It sits inside Addendum 107's band (-2..-20 %).
+  - Scope: this is the tag-word-cache change, reach and merge together (no silicon build separates them), at N = 1.
+  - The deciding reading pre-registered by the rtl lane is the tag counters (F on board 1 and B on board 2), still
+    running. Config B on board 2 is the tree control: its mcf should sit near the batch's.
+- **riscv-base RVGP** (gp relaxation, board 3), against the board-3 RVF3 controls, both specdiff PASS:
+  - perl makerand 241.91 s against 257.90 s: -6.2 %;
+  - gcc train01 1,712.00 s against 1,722.35 s: -0.60 %.
+  - Both lie inside Addendum 110's bands. The Capstone half, GPC/GPR2 on F, runs later on board 1.
+
+**Run, board 3:**
+- **Chain:** av-b3 (nat-run2.sh; stage-check passes; a stubbed dry run reaches the boot).
+- **Bitstream and kit:** F, kit bkit75.
+- **Row:** temporal FRCDKMS x264 (image ab2161daa18df906, twinned against FR: encodes and frames byte-identical).
+- **Why now:** board 3 is free, and F is the expected final bitstream on mcf's reading. If gcc on F loses to the batch,
+  this row is re-run on the batch.
+
+**Predictions:**
+- x264 within -4 % .. +1 % of fdk/FR's 34,053.48 s;
+- the five frame hashes equal plain-rv64r's.
