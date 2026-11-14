@@ -543,6 +543,20 @@ def tprel_add_symbol : Operand<XLenVT> {
   let ParserMatchClass = TPRelAddSymbol;
 }
 
+def GPSCCSymbol : AsmOperandClass {
+  let Name = "GPSCCSymbol";
+  let RenderMethod = "addImmOperands";
+  let DiagnosticType = "InvalidGPSCCSymbol";
+  let DiagnosticString = "operand must be a symbol with %gp_scc specifier";
+  let ParserMethod = "parseOperandWithSpecifier";
+}
+
+// A bare symbol with the %gp_scc variant: the label of the auipc whose result
+// this scc consumes (R_Capstone_GP_SCC, -capstone-gp-relax-globals).
+def gp_scc_symbol : Operand<XLenVT> {
+  let ParserMatchClass = GPSCCSymbol;
+}
+
 def CSRSystemRegister : AsmOperandClass {
   let Name = "CSRSystemRegister";
   let ParserMethod = "parseCSRSystemRegister";
@@ -2761,6 +2775,25 @@ def DELIN : RVInstR<0b0000011, 0b001, OPC_CAP_OP, (outs GPCR:$rd),
 // llvm/test/CodeGen/Capstone/global-base-nonlinear.ll.
 let hasSideEffects = 0, mayLoad = 0, mayStore = 0, Size = 8, Uses = [X3] in
 def PseudoCapGlobalBase : Pseudo<(outs GPCR:$rd), (ins GPR:$rs1), []>;
+
+// -capstone-gp-relax-globals (CapstoneMergeBaseOffset.cpp,
+// foldIntoCapGlobalMemoryOps): a PseudoCapGlobalBase under the image-gp ABI
+// whose operand is an auipc's result used by nothing else, and whose result is
+// used only as the base of accesses carrying that auipc's %pcrel_lo. $src is
+// the auipc's label. It expands to PseudoSCCGpRel: the same `scc $rd, gp,
+// $rs1`, plus an R_Capstone_GP_SCC relocation against the label, so that the
+// linker can delete the auipc and this scc together and rebase every access on
+// gp when the global lies within 2 KiB of __global_pointer$ (lld, --relax-gp).
+let hasSideEffects = 0, mayLoad = 0, mayStore = 0, Size = 4, Uses = [X3] in
+def PseudoCapGlobalBaseGpRel : Pseudo<(outs GPCR:$rd),
+                                      (ins GPR:$rs1, gp_scc_symbol:$src), []>;
+
+// The MC form: `scc $rd, $rs1, $rs2, %gp_scc(label)`, emitted as SCC with the
+// relocation (CapstoneMCCodeEmitter::expandSCCGpRel), like PseudoAddTPRel.
+let hasSideEffects = 0, mayLoad = 0, mayStore = 0, Size = 4, isCodeGenOnly = 0 in
+def PseudoSCCGpRel : Pseudo<(outs GPCR:$rd),
+                            (ins GPCR:$rs1, GPR:$rs2, gp_scc_symbol:$src), [],
+                            "scc", "$rd, $rs1, $rs2, $src">;
 
 // MREV: Create revocation capability
 // hasSideEffects: allocates a revocation-tree node and deepens the source's, so

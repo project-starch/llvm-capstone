@@ -14,8 +14,20 @@
 #include "llvm/MC/MCContext.h"
 #include "llvm/MC/MCSectionELF.h"
 #include "llvm/MC/MCValue.h"
+#include "llvm/Support/CommandLine.h"
 
 using namespace llvm;
+
+// Small data for VARIABLES on the Capstone target, whose clang emits no
+// SmallDataLimit module flag: a defined variable of at most this many bytes goes
+// to .sdata/.sbss, where the image link script puts it inside the 4 KiB that
+// __global_pointer$ reaches (lld gp relaxation, -capstone-gp-relax-globals).
+// Constants are not affected: under the image-gp ABI the constant pool stays in
+// .rodata (getSectionForConstant). 0 (the default) changes nothing.
+static cl::opt<unsigned> CapstoneSmallDataLimit(
+    "capstone-small-data-limit", cl::Hidden, cl::init(0),
+    cl::desc("Place defined variables of at most this many bytes in "
+             ".sdata/.sbss (constants unaffected); default 0"));
 
 bool capstoneImageGpAbiActive(); // CapstoneISelDAGToDAG.cpp
 
@@ -100,8 +112,10 @@ bool CapstoneELFTargetObjectFile::isGlobalInSmallSection(
   if (!Ty->isSized())
     return false;
 
-  return isInSmallSection(
-      GVA->getDataLayout().getTypeAllocSize(Ty));
+  uint64_t Size = GVA->getDataLayout().getTypeAllocSize(Ty);
+  if (CapstoneSmallDataLimit && Size > 0 && Size <= CapstoneSmallDataLimit)
+    return true;
+  return isInSmallSection(Size);
 }
 
 MCSection *CapstoneELFTargetObjectFile::SelectSectionForGlobal(

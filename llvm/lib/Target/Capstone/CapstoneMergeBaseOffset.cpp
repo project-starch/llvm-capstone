@@ -50,6 +50,26 @@ static cl::opt<bool> CapstoneFoldGlobalLo(
              "gp; ld %pcrel_lo(cap)); needs the image link script's 2 KiB "
              "gp margins"));
 
+// Linker gp relaxation of global accesses. On a fold above whose auipc is a
+// global's (not a constant pool's) and whose result feeds nothing but the scc,
+// the scc becomes PseudoCapGlobalBaseGpRel: the same instruction plus an
+// R_Capstone_GP_SCC relocation against the auipc's label. That relocation is
+// the compiler's statement that the auipc's value reaches only this scc, and
+// the scc's only through accesses that carry the label's %pcrel_lo, which is
+// what the fold already requires. lld (--relax-gp) may then delete the auipc and
+// the scc and rebase each access on gp, provided the global lies within 2 KiB of
+// __global_pointer$ and every one of those relocations is marked relaxable.
+// That form reads gp's own cursor, which must therefore be __global_pointer$ in
+// every context (the runtime's convention under this option). Default off.
+static cl::opt<bool> CapstoneGpRelaxGlobals(
+    "capstone-gp-relax-globals", cl::Hidden, cl::init(false),
+    cl::desc("Mark folded global derivations (auipc; scc gp; access "
+             "%pcrel_lo) for lld's gp relaxation (R_Capstone_GP_SCC); needs "
+             "-capstone-fold-global-lo, +relax, and a runtime that keeps gp's "
+             "cursor at __global_pointer$"));
+
+STATISTIC(NumGpSccMarked, "Number of global bases marked for gp relaxation");
+
 namespace {
 
 class CapstoneMergeBaseOffsetOpt : public MachineFunctionPass {
@@ -787,8 +807,26 @@ bool CapstoneMergeBaseOffsetOpt::foldIntoCapGlobalMemoryOps(MachineInstr &Hi,
   MRI->clearKillFlags(HiReg);
   LLVM_DEBUG(dbgs() << "folded %pcrel_lo of " << Hi << "  into the accesses of "
                     << Base);
+  // ImmOp is Lo's operand: take the label before Lo goes.
+  MCSymbol *HiLabel = ImmOp.isMCSymbol() ? ImmOp.getMCSymbol() : nullptr;
   Lo.eraseFromParent();
   ++NumGlobalLoFolded;
+
+  // The gp-relaxation mark (see CapstoneGpRelaxGlobals): a global's auipc whose
+  // only use is now this scc. Every use of CapReg carries HiLabel's %pcrel_lo.
+  if (CapstoneGpRelaxGlobals && HiOp.isGlobal() && HiLabel &&
+      MRI->hasOneNonDBGUse(HiReg)) {
+    MachineInstr *NewBase =
+        BuildMI(*Base.getParent(), Base, Base.getDebugLoc(),
+                ST->getInstrInfo()->get(Capstone::PseudoCapGlobalBaseGpRel),
+                CapReg)
+            .addReg(HiReg)
+            .addSym(HiLabel, CapstoneII::MO_GP_SCC);
+    LLVM_DEBUG(dbgs() << "marked for gp relaxation: " << *NewBase);
+    (void)NewBase;
+    Base.eraseFromParent();
+    ++NumGpSccMarked;
+  }
   return true;
 }
 

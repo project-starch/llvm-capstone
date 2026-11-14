@@ -1629,6 +1629,9 @@ static MCOperand lowerSymbolOperand(const MachineOperand &MO, MCSymbol *Sym,
   case CapstoneII::MO_TPREL_ADD:
     Kind = ELF::R_Capstone_TPREL_ADD;
     break;
+  case CapstoneII::MO_GP_SCC:
+    Kind = ELF::R_Capstone_GP_SCC;
+    break;
   case CapstoneII::MO_TLS_GOT_HI:
     Kind = ELF::R_Capstone_TLS_GOT_HI20;
     break;

@@ -614,6 +614,17 @@ public:
            VK == ELF::R_Capstone_TPREL_ADD;
   }
 
+  bool isGPSCCSymbol() const {
+    int64_t Imm;
+    // Must be of 'immediate' type but not a constant.
+    if (!isImm() || evaluateConstantImm(getImm(), Imm))
+      return false;
+
+    Capstone::Specifier VK = Capstone::S_None;
+    return CapstoneAsmParser::classifySymbolRef(getImm(), VK) &&
+           VK == ELF::R_Capstone_GP_SCC;
+  }
+
   bool isTLSDESCCallSymbol() const {
     int64_t Imm;
     // Must be of 'immediate' type but not a constant.

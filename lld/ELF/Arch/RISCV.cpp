@@ -71,6 +71,11 @@ public:
 #define INTERNAL_R_RISCV_X0REL_I 258
 #define INTERNAL_R_RISCV_X0REL_S 259
 
+// Capstone: R_Capstone_GP_SCC (llvm ELFRelocs/Capstone.def) marks the `scc rd,
+// gp, rs` that consumes the auipc at the referenced label, for the PC-relative
+// gp relaxation below. It has no bits to write.
+#define R_CAPSTONE_GP_SCC 66
+
 const uint64_t dtpOffset = 0x800;
 
 namespace {
@@ -335,6 +340,12 @@ RelExpr RISCV::getRelExpr(const RelType type, const Symbol &s,
   case R_RISCV_TPREL_ADD:
   case R_RISCV_RELAX:
     return ctx.arg.relax ? R_RELAX_HINT : R_NONE;
+  case R_CAPSTONE_GP_SCC:
+    if (ctx.arg.emachine == EM_CAPSTONE)
+      return ctx.arg.relax ? R_RELAX_HINT : R_NONE;
+    Err(ctx) << getErrorLoc(ctx, loc) << "unknown relocation (" << type.v
+             << ") against symbol " << &s;
+    return R_NONE;
   case R_RISCV_SET_ULEB128:
   case R_RISCV_SUB_ULEB128:
     return RE_RISCV_LEB128;
@@ -846,6 +857,80 @@ static void relaxHi20Lo12(Ctx &ctx, const InputSection &sec, size_t i,
   }
 }
 
+// PC-relative gp relaxation (--relax-gp), as GNU ld performs it:
+//   auipc rs, %pcrel_hi(x)          (deleted)
+//   ld rd, %pcrel_lo(1b)(rs)   ->   ld rd, x - __global_pointer$(gp)
+// when x lies within 2 KiB of __global_pointer$. All or nothing per auipc: the
+// auipc goes only if it and every %pcrel_lo naming its label are relaxable, so
+// that no instruction is left reading the deleted auipc's register. On Capstone
+// the access's base is not the auipc's register but a capability `scc cap, gp,
+// rs` derived from it, so the auipc also needs that scc's R_CAPSTONE_GP_SCC
+// marker, and the scc is deleted with it. The compiler emits the marker only
+// where the auipc feeds nothing but the scc and the scc nothing but those
+// accesses (-capstone-gp-relax-globals); unmarked Capstone code, the runtime's
+// and libc's included, is left alone. The relaxed accesses read gp's own
+// value, so the program must keep gp (on Capstone: gp's cursor) at
+// __global_pointer$.
+//
+// Returns, for each relaxable PCREL_HI20 index, true; and in hiOf, for each
+// PCREL_LO12 or marker, the index of the PCREL_HI20 at its label. Relocation
+// offsets are the original ones throughout relax(), so a label is located by
+// its original offset, taken from the symbol anchors.
+static void findPcgp(Ctx &ctx, const InputSection &sec,
+                     DenseMap<uint32_t, bool> &hiOk,
+                     DenseMap<uint32_t, uint32_t> &hiOf) {
+  const Defined *gp = ctx.sym.riscvGlobalPointer;
+  if (!gp)
+    return;
+  const ArrayRef<Relocation> relocs = sec.relocs();
+  const auto &aux = *sec.relaxAux;
+  DenseMap<const Defined *, uint64_t> orig;
+  for (const SymbolAnchor &a : aux.anchors)
+    if (!a.end)
+      orig.try_emplace(a.d, a.offset);
+  struct Use {
+    uint32_t lo = 0, mark = 0;
+    bool bad = false;
+  };
+  DenseMap<uint32_t, Use> uses;
+  for (auto [i, r] : llvm::enumerate(relocs)) {
+    if (r.type != R_RISCV_PCREL_LO12_I && r.type != R_RISCV_PCREL_LO12_S &&
+        r.type != R_CAPSTONE_GP_SCC)
+      continue;
+    auto *d = dyn_cast<Defined>(r.sym);
+    if (!d || d->section != &sec)
+      continue;
+    auto it = orig.find(d);
+    if (it == orig.end())
+      continue;
+    const uint64_t off = it->second;
+    const Relocation *hi = llvm::partition_point(
+        relocs, [&](const Relocation &x) { return x.offset < off; });
+    for (; hi != relocs.end() && hi->offset == off; ++hi)
+      if (hi->type == R_RISCV_PCREL_HI20)
+        break;
+    if (hi == relocs.end() || hi->offset != off)
+      continue;
+    const uint32_t j = hi - relocs.begin();
+    hiOf[i] = j;
+    Use &u = uses[j];
+    if (!relaxable(relocs, i))
+      u.bad = true;
+    if (r.type == R_CAPSTONE_GP_SCC)
+      ++u.mark;
+    else
+      ++u.lo;
+  }
+  const bool capstone = ctx.arg.emachine == EM_CAPSTONE;
+  for (auto &[j, u] : uses) {
+    const Relocation &hi = relocs[j];
+    hiOk[j] = !u.bad && u.lo && (capstone ? u.mark == 1 : u.mark == 0) &&
+              relaxable(relocs, j) && hi.sym->isDefined() &&
+              !hi.sym->isPreemptible && !hi.sym->isGnuIFunc() &&
+              isInt<12>(hi.sym->getVA(ctx, hi.addend) - gp->getVA(ctx));
+  }
+}
+
 static bool relax(Ctx &ctx, int pass, InputSection &sec) {
   const uint64_t secAddr = sec.getVA();
   const MutableArrayRef<Relocation> relocs = sec.relocs();
@@ -857,6 +942,14 @@ static bool relax(Ctx &ctx, int pass, InputSection &sec) {
 
   std::fill_n(aux.relocTypes.get(), relocs.size(), R_RISCV_NONE);
   aux.writes.clear();
+  aux.pcgpLo.clear();
+  DenseMap<uint32_t, bool> pcgpHiOk;
+  DenseMap<uint32_t, uint32_t> pcgpHiOf;
+  findPcgp(ctx, sec, pcgpHiOk, pcgpHiOf);
+  auto pcgpOk = [&](uint32_t j) {
+    auto it = pcgpHiOk.find(j);
+    return it != pcgpHiOk.end() && it->second;
+  };
   for (auto [i, r] : llvm::enumerate(relocs)) {
     const uint64_t loc = secAddr + r.offset - delta;
     uint32_t &cur = aux.relocDeltas[i], remove = 0;
@@ -901,6 +994,29 @@ static bool relax(Ctx &ctx, int pass, InputSection &sec) {
       if (relaxable(relocs, i))
         relaxHi20Lo12(ctx, sec, i, loc, r, remove);
       break;
+    case R_RISCV_PCREL_HI20:
+      if (pcgpOk(i)) {
+        aux.relocTypes[i] = R_RISCV_RELAX; // auipc deleted
+        remove = 4;
+      }
+      break;
+    case R_RISCV_PCREL_LO12_I:
+    case R_RISCV_PCREL_LO12_S:
+    case R_CAPSTONE_GP_SCC: {
+      auto it = pcgpHiOf.find(i);
+      if (it == pcgpHiOf.end() || !pcgpOk(it->second))
+        break;
+      if (r.type == R_CAPSTONE_GP_SCC) {
+        aux.relocTypes[i] = R_RISCV_RELAX; // scc deleted
+        remove = 4;
+      } else {
+        aux.relocTypes[i] = r.type == R_RISCV_PCREL_LO12_I
+                                ? INTERNAL_R_RISCV_GPREL_I
+                                : INTERNAL_R_RISCV_GPREL_S;
+        aux.pcgpLo.emplace_back(i, it->second);
+      }
+      break;
+    }
     case R_RISCV_TLSDESC_HI20:
       // For TLSDESC=>LE, we can use the short form if hi20 is zero.
       tlsdescRelax = relaxable(relocs, i);
@@ -1103,6 +1219,16 @@ void RISCV::finalizeRelax(int passes) const {
       sec->content_ = p;
       sec->size = newSize;
       sec->bytesDropped = 0;
+
+      // A relaxed PCREL_LO12 resolves against its PCREL_HI20's target, whose
+      // relocation is retyped below and so can no longer be found from the
+      // label (getRISCVPCRelHi20): give it that target directly, as an absolute
+      // value; INTERNAL_R_RISCV_GPREL_* subtracts __global_pointer$.
+      for (auto [lo, hi] : aux.pcgpLo) {
+        rels[lo].expr = R_ABS;
+        rels[lo].sym = rels[hi].sym;
+        rels[lo].addend = rels[hi].addend;
+      }
 
       // Update section content: remove NOPs for R_RISCV_ALIGN and rewrite
       // instructions for relaxed relocations.

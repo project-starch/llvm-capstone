@@ -60,6 +60,10 @@ public:
                          SmallVectorImpl<MCFixup> &Fixups,
                          const MCSubtargetInfo &STI) const;
 
+  void expandSCCGpRel(const MCInst &MI, SmallVectorImpl<char> &CB,
+                      SmallVectorImpl<MCFixup> &Fixups,
+                      const MCSubtargetInfo &STI) const;
+
   void expandAddTPRel(const MCInst &MI, SmallVectorImpl<char> &CB,
                       SmallVectorImpl<MCFixup> &Fixups,
                       const MCSubtargetInfo &STI) const;
@@ -247,6 +251,30 @@ void CapstoneMCCodeEmitter::expandAddTPRel(const MCInst &MI,
   support::endian::write(CB, Binary, llvm::endianness::little);
 }
 
+// Expand PseudoSCCGpRel to SCC with an R_Capstone_GP_SCC relocation against the
+// label of the auipc whose result it consumes (no bits of the instruction).
+void CapstoneMCCodeEmitter::expandSCCGpRel(const MCInst &MI,
+                                           SmallVectorImpl<char> &CB,
+                                           SmallVectorImpl<MCFixup> &Fixups,
+                                           const MCSubtargetInfo &STI) const {
+  MCOperand Label = MI.getOperand(3);
+  assert(Label.isExpr() && "Expected expression as fourth input to scc gp_scc");
+  const auto *Expr = dyn_cast<MCSpecifierExpr>(Label.getExpr());
+  assert(Expr && Expr->getSpecifier() == ELF::R_Capstone_GP_SCC &&
+         "Expected gp_scc relocation on the auipc label");
+
+  addFixup(Fixups, 0, Expr, ELF::R_Capstone_GP_SCC);
+  if (STI.hasFeature(Capstone::FeatureRelax))
+    Fixups.back().setLinkerRelaxable();
+
+  MCInst TmpInst = MCInstBuilder(Capstone::SCC)
+                       .addOperand(MI.getOperand(0))
+                       .addOperand(MI.getOperand(1))
+                       .addOperand(MI.getOperand(2));
+  uint32_t Binary = getBinaryCodeForInstr(TmpInst, Fixups, STI);
+  support::endian::write(CB, Binary, llvm::endianness::little);
+}
+
 static unsigned getInvertedBranchOp(unsigned BrOp) {
   switch (BrOp) {
   default:
@@ -416,6 +444,10 @@ void CapstoneMCCodeEmitter::encodeInstruction(const MCInst &MI,
   case Capstone::PseudoJump:
     expandFunctionCall(MI, CB, Fixups, STI);
     MCNumEmitted += 2;
+    return;
+  case Capstone::PseudoSCCGpRel:
+    expandSCCGpRel(MI, CB, Fixups, STI);
+    MCNumEmitted += 1;
     return;
   case Capstone::PseudoAddTPRel:
     expandAddTPRel(MI, CB, Fixups, STI);
@@ -623,6 +655,9 @@ uint64_t CapstoneMCCodeEmitter::getImmOpValue(const MCInst &MI, unsigned OpNo,
       // encounter it here is an error.
       llvm_unreachable(
           "ELF::R_Capstone_TPREL_ADD should not represent an instruction operand");
+    case ELF::R_Capstone_GP_SCC:
+      llvm_unreachable(
+          "ELF::R_Capstone_GP_SCC should not represent an instruction operand");
     case Capstone::S_LO:
       if (MIFrm == CapstoneII::InstFormatI)
         FixupKind = Capstone::fixup_capstone_lo12_i;

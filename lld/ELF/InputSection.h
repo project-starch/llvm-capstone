@@ -138,6 +138,9 @@ struct RelaxAux {
   // For relocations[i], the actual type is relocTypes[i].
   std::unique_ptr<RelType[]> relocTypes;
   SmallVector<uint32_t, 0> writes;
+  // RISC-V/Capstone PC-relative gp relaxation: (index of a relaxed
+  // R_RISCV_PCREL_LO12_{I,S}, index of its R_RISCV_PCREL_HI20), last pass.
+  SmallVector<std::pair<uint32_t, uint32_t>, 0> pcgpLo;
 };
 
 // This corresponds to a section of an input file.

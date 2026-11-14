@@ -63,6 +63,8 @@ private:
                        MachineBasicBlock::iterator MBBI);
   bool expandCapGlobalBase(MachineBasicBlock &MBB,
                           MachineBasicBlock::iterator MBBI);
+  bool expandCapGlobalBaseGpRel(MachineBasicBlock &MBB,
+                                MachineBasicBlock::iterator MBBI);
   bool expandMV_FPR16INX(MachineBasicBlock &MBB,
                          MachineBasicBlock::iterator MBBI);
   bool expandMV_FPR32INX(MachineBasicBlock &MBB,
@@ -129,6 +131,8 @@ bool CapstoneExpandPseudo::expandMI(MachineBasicBlock &MBB,
     return expandBridgeCap(MBB, MBBI);
   case Capstone::PseudoCapGlobalBase:
     return expandCapGlobalBase(MBB, MBBI);
+  case Capstone::PseudoCapGlobalBaseGpRel:
+    return expandCapGlobalBaseGpRel(MBB, MBBI);
   case Capstone::PseudoMV_FPR16INX:
     return expandMV_FPR16INX(MBB, MBBI);
   case Capstone::PseudoMV_FPR32INX:
@@ -423,6 +427,23 @@ bool CapstoneExpandPseudo::expandCapGlobalBase(MachineBasicBlock &MBB,
     BuildMI(MBB, MBBI, DL, TII->get(Capstone::DELIN), DstReg).addReg(DstReg);
   }
 
+  MBBI->eraseFromParent();
+  return true;
+}
+
+// PseudoCapGlobalBaseGpRel $rd, $rs1, label -> scc $rd, gp, $rs1, %gp_scc(label).
+// Created only under the image-gp ABI (CapstoneMergeBaseOffset.cpp), where
+// PseudoCapGlobalBase is a plain scc of gp with no DELIN, so the instruction is
+// the same and only the relocation is added.
+bool CapstoneExpandPseudo::expandCapGlobalBaseGpRel(
+    MachineBasicBlock &MBB, MachineBasicBlock::iterator MBBI) {
+  assert(capstoneImageGpAbiActive() && "gp_scc base outside the image-gp ABI");
+  BuildMI(MBB, MBBI, MBBI->getDebugLoc(), TII->get(Capstone::PseudoSCCGpRel),
+          MBBI->getOperand(0).getReg())
+      .addReg(Capstone::C3)
+      .addReg(MBBI->getOperand(1).getReg(),
+              getKillRegState(MBBI->getOperand(1).isKill()))
+      .add(MBBI->getOperand(2));
   MBBI->eraseFromParent();
   return true;
 }

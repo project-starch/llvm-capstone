@@ -30,6 +30,7 @@ Capstone::Specifier Capstone::parseSpecifierName(StringRef name) {
       .Case("tprel_lo", Capstone::S_TPREL_LO)
       .Case("tprel_hi", ELF::R_Capstone_TPREL_HI20)
       .Case("tprel_add", ELF::R_Capstone_TPREL_ADD)
+      .Case("gp_scc", ELF::R_Capstone_GP_SCC)
       .Case("tls_ie_pcrel_hi", ELF::R_Capstone_TLS_GOT_HI20)
       .Case("tls_gd_pcrel_hi", ELF::R_Capstone_TLS_GD_HI20)
       .Case("tlsdesc_hi", ELF::R_Capstone_TLSDESC_HI20)
@@ -63,6 +64,8 @@ StringRef Capstone::getSpecifierName(Specifier S) {
     return "tprel_hi";
   case ELF::R_Capstone_TPREL_ADD:
     return "tprel_add";
+  case ELF::R_Capstone_GP_SCC:
+    return "gp_scc";
   case ELF::R_Capstone_TLS_GOT_HI20:
     return "tls_ie_pcrel_hi";
   case ELF::R_Capstone_TLSDESC_HI20:

@@ -3541,6 +3541,7 @@ CapstoneInstrInfo::getSerializableDirectMachineOperandTargetFlags() const {
       {MO_TPREL_LO, "capstone-tprel-lo"},
       {MO_TPREL_HI, "capstone-tprel-hi"},
       {MO_TPREL_ADD, "capstone-tprel-add"},
+      {MO_GP_SCC, "capstone-gp-scc"},
       {MO_TLS_GOT_HI, "capstone-tls-got-hi"},
       {MO_TLS_GD_HI, "capstone-tls-gd-hi"},
       {MO_TLSDESC_HI, "capstone-tlsdesc-hi"},
@@ -3716,7 +3717,8 @@ CapstoneInstrInfo::getOutliningTypeImpl(const MachineModuleInfo &MMI,
 
     // pcrel-hi and pcrel-lo can't put in separate sections, filter that out
     // if any possible.
-    if (MO.getTargetFlags() == CapstoneII::MO_PCREL_LO &&
+    if ((MO.getTargetFlags() == CapstoneII::MO_PCREL_LO ||
+         MO.getTargetFlags() == CapstoneII::MO_GP_SCC) &&
         (MI.getMF()->getTarget().getFunctionSections() || F.hasComdat() ||
          F.hasSection() || F.getSectionPrefix()))
       return outliner::InstrType::Illegal;
