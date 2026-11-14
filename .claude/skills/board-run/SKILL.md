@@ -309,7 +309,11 @@ one that wedged**.
 
 Rules that follow:
 
-* **Never HOLD an odd value while a domain runs**, and park back at 0 after any read. Most useful
+* **Never HOLD an odd value while a domain runs**, and park back at 0 after any read, **confirmed by a
+  fresh `switch_state` reading all zero**. A park whose confirmation times out did not happen: on
+  2026-11-14 an aperture read's `finally: setsw(0)` timed out and left board 2 at 217, and the next four
+  boots sent no UART byte. `FpgaConsole.power(True)` now parks verified before every power-on
+  (`switch_park.py`); a hand-rolled session must read the state back itself. Most useful
   apertures are odd — `191` (the trap-log clear), `197/199/201/203`, `225`, `249`, `255` — while
   `196`, `200`, `204`, `224` are safe.
 * **The trap summary (`255`) has no safe aperture.** It exists only at bank `3'b111` reg
