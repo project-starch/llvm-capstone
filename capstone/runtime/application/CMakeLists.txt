@@ -7,9 +7,11 @@ set(CMAKE_C_STANDARD 11)
 option(CAPSTONE_APPLICATION_VIRTUAL "Use the virtual C runtime adapter (OFF: the physical profile)" ON)
 set(profile_codegen)
 set(sdk_profile physical)
+set(sdk_application_abi 2)
 set(sdk_script my_first_domain/link.ld)
 if(CAPSTONE_APPLICATION_VIRTUAL)
   set(sdk_profile virtual)
+  set(sdk_application_abi 3)
   # Two load segments, text mapped from the image file (virtual/link.ld).
   set(sdk_script runtime/virtual/link.ld)
   set(sdk_allocator mallocng)
@@ -116,7 +118,7 @@ if(CAPSTONE_APPLICATION_SDK)
   file(GENERATE OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/sdk.json" CONTENT
 "{
   \"version\": 1,
-  \"application_abi\": 2,
+  \"application_abi\": ${sdk_application_abi},
   \"profile\": \"${sdk_profile}\",
   \"allocator\": \"${sdk_allocator}\",
   \"heap_lifetimes\": ${sdk_CAPSTONE_HEAP_LIFETIMES},

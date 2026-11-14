@@ -25,6 +25,7 @@ else()
   set(CAPSTONE_VIRTUAL_MOVC_FEATURE -movc-keeps-integer-source)
 endif()
 set(CAPSTONE_VIRTUAL_CODEGEN
+  -DCAPSTONE_RUNTIME_TRAP=1
   -mllvm -capstone-gp-free -mllvm -capstone-image-gp
   -Xclang -target-feature -Xclang +f -Xclang -target-feature -Xclang +d
   -Xclang -target-abi -Xclang lp64
