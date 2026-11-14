@@ -3,7 +3,7 @@
 This is a live table: rows are filled as board runs land. Pre-registrations, predictions and the run-by-run trail are
 in [`../2026-11-08-train/PREREG.md`](../2026-11-08-train/PREREG.md) (Addendum 107 onward for this table).
 
-## Status (updated 2026-11-14 11:35 +08)
+## Status (updated 2026-11-14 13:10 +08)
 
 - **riscv-base:** complete, all 8 rows.
 - **Capstone temporal:**
@@ -25,7 +25,7 @@ in [`../2026-11-08-train/PREREG.md`](../2026-11-08-train/PREREG.md) (Addendum 10
 
 | Board | Now | Then |
 |---|---|---|
-| 1 | temporal mcf, batch / FRCDKMS (until ~13:00) | 1. temporal imagick and nab, batch / FRCDKMS<br>2. **spatial gcc**, batch / FRCDKMSsp (the first spatial row; twin outputs identical to temporal)<br>3. mcf, gcc and perl makerand on bitstream **F**, for the one-variable F-vs-batch pairs<br>4. F's tag-path counters (mcf, gcc) |
+| 1 | temporal imagick and nab, batch / FRCDKMS (now) | 1. **spatial gcc**, batch / FRCDKMSsp (the first spatial row; twin outputs identical to temporal)<br>2. nested-allocator lane: speedtest1 (protected vs unprotected), ~20 min<br>3. mcf, gcc and perl makerand on bitstream **F**, for the one-variable F-vs-batch pairs<br>4. F's tag-path counters (mcf, gcc) |
 | 2 | x264, fdk / FR (until ~15:00) | bitstream **B** (old tag cache + tag-path counters): mcf and gcc, for where the memory time goes |
 | 3 | full perl, fdk / FRCDK (until ~16:00) | the long final rows (x264, full perl) on the chosen final bitstream |
 
@@ -53,7 +53,7 @@ table records the switch.
 | + I-cache 8-way (fdk) | 1.347 (makerand); full test 1.394 | 1.506 | 1.440 |
 | + RVC images (FRCDK) | 1.300 (makerand) | 1.475 | — |
 | + R-72, lever (a) (batch) | 1.305 (makerand) | 1.467 | 1.434 |
-| + C8, memset (FRCDKMS) | 1.278 (makerand) | **1.420** | running |
+| + C8, memset (FRCDKMS) | 1.278 (makerand) | **1.420** | 1.438 (FR's 1.434 stays the best) |
 
 perl makerand is the quick sub-run used for A/B work; the table's perl row is the full test.
 
@@ -104,7 +104,7 @@ the table being measured now. A row moves into them as its run lands.
 |---|---|---|---|---|---|---|
 | 500.perlbench_r (full: makerand + test.pl) | 12,623.02 | 17,601.71 | 1.394 | fdk / FR | pending | pending |
 | 502.gcc_r (train01) | 1,722.35 | 2,446.30 | 1.420 | batch / FRCDKMS | 1.420 | pending |
-| 505.mcf_r | 5,125.02 | 7,349.81 | 1.434 | batch / FR | running | pending |
+| 505.mcf_r | 5,125.02 | 7,349.81 | 1.434 | batch / FR | 1.438 (7,372.16 s) | pending |
 | 519.lbm_r | 1,077.50 | 994.66 | **0.923** | fdk / FR | pending | pending |
 | 525.x264_r | 35,613.24 | 36,219.53 | **1.017** | mlp / arm C | pending | pending |
 | 538.imagick_r | 11.08 | 12.93 | **1.167** | fdk / FR | pending | pending |
