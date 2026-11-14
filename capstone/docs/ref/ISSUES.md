@@ -4548,8 +4548,26 @@ themselves, which no current instrument observes.
 
 **Consequence for the boards (runtime lane's ruling, 2026-11-14).** a948e4134 may be flashed for PERFORMANCE
 measurement once it seals and its sweep on the built hash is clean: the window reads clean on the base and on
-a948e4134, the RTL lane's flash rule. The targeted variant now reads clean on its own handling too. It is a candidate
-for a later bitstream, not this one. Siblings: R-73 (the debug module writes DRAM around the adapter).
+a948e4134, the RTL lane's flash rule. The targeted variant now reads clean on its own handling too.
+
+**Update 2026-11-14: config B credited, and the targeted variant built.**
+- Config B (afe4e643e: 256 entries, no merge) is credited on the same window instance. The board lane's winB arms
+  are 0166b23fa = afe4e643e + the sim-only instruments, every inserted line under a sim-only ifdef. Readings: as
+  built, poisoned (12 / 0x18); without poison, installed at idx 165 and not validated; with validation during
+  the fill, poisoned; with both removed, FORGED (the S-06 invariant). The same limits as above apply.
+- The targeted variant is built as **eeb654104** (F2 on a948e4134, `CAPSTONE_TWC_FILL_TARGETED` on by default;
+  board lane, sha256 57f8b1e2ba865c25cb1c4339a5904a62896a8bd313a5141a4a5c9465793bf8de). It passes all nine full-build
+  keys against a948e4134, WNS -12.229.
+  - The window credit above ran on 325cf3bff. That carries F2 with the earlier spelling of the last-word index;
+    eeb654104 computes the same bits at the index's width. tw-fill arm 1, which reads that index, was re-read on the
+    built hash.
+  - On the built hash: lint is at baseline; the 95-sweep is identical to a948e4134's in values and RVFI; tw-fill
+    reads both arms, with its forging control (`TWC_SIM_NOFILLCLEAR`) forging on both.
+  - It is the next bitstream. The flash is the runtime lane's.
+- F2 + L1D 64 KiB (b0f02bac7) also routed, but fails WNS (-17.714) and placer congestion. It is sealed for identity
+  only and not flashed. The record is in the plan.
+
+Siblings: R-73 (the debug module writes DRAM around the adapter).
 
 ### R-73 — the debug module's system-bus master writes DRAM around the AXI adapter, so its writes update neither capability tags, the tag-word cache nor the page bitmap `OPEN 2026-11-14 — by source (claim-audited while auditing the TWC change); present on every tree with the shadow-tag adapter; board exposure NIL IF the board's `reset halt` asserts ndmreset (one gdb read; see Exposure); no fix written`
 
