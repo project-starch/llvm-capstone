@@ -376,7 +376,15 @@ CDERIVE/CREVOKE counts, revoked-subtree size, peak table memory). Give CREVOKE's
   and is worth building only if the tag counters say L1D matters.
 
 **Waiting on the lead:** CCSRRW privilege (S/U can write CPMP/ctvec in sim); CAPBOUND option (A) landing (QEMU
-`r71-csmint-capbound`, capstone-sbi `vp2/csmint-r71`); the stage-2 ISA option; HPM 29-31.
+`r71-csmint-capbound`, capstone-sbi `vp2/csmint-r71`); the stage-2 ISA option; HPM 29-31; and a PC-relative
+capability instruction (14 Nov, compiler lane via rtl-oracle).
+- What it is: an auipcc-style instruction, or a PCC-based load.
+- The problem today: auipc yields an untagged integer, and a load through it faults with cause 24
+  (load_store_unit.sv:1352-1354), so no instruction can read data through PCC.
+- What it would buy: jump tables and read-only tables could skip the scc gp + shrink formation. The prize is ~0.37 G
+  on perl in S_regmatch's jump table alone, plus the bison tables.
+- It is an ISA change, so it is not pursued without the lead's decision. The in-model alternative (fix 2: spill
+  instead of rematerialize) is uncertain on silicon.
 
 ---
 
