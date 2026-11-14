@@ -55,16 +55,16 @@ which the wrapper copies into libavutil/.
          ff2_drop(FF2_BUFFER, pool, buf->data);
          buf->free(buf->opaque, buf->data);
          av_freep(&buf);
-@@ -366,6 +377,9 @@
-      * every copy of the user's pointer before the entry is reissued. */
-     buf->data = capstone_cap_renew(buf->data);
- 
+@@ -378,6 +389,9 @@
+     uint8_t *fresh = capstone_cap_renew(buf->data);
+     if (fresh) {
+         buf->data = fresh;
 +#ifdef EXP_REUSE_GAP
-+    reuse_gap_hook_release(&buffer_pool_reuse_gap, (uint64_t)(uintptr_t)buf->data);
++        reuse_gap_hook_release(&buffer_pool_reuse_gap, (uint64_t)(uintptr_t)buf->data);
 +#endif
-     ff_mutex_lock(&pool->mutex);
-     buf->next = pool->pool;
-     pool->pool = buf;
+         ff_mutex_lock(&pool->mutex);
+         buf->next = pool->pool;
+         pool->pool = buf;
 @@ -431,6 +445,16 @@
      }
      ff_mutex_unlock(&pool->mutex);
@@ -109,15 +109,16 @@ which the wrapper copies into libavutil/.
      av_free(ref);
  }
  
-@@ -252,6 +263,9 @@
-     RefCount *ref = capstone_cap_renew(ref_);
-     AVRefStructPool *pool = ref->opaque.nc;
+@@ -266,6 +277,10 @@
+     if (!renewed)
+         ref = ref_;
  
 +#ifdef EXP_REUSE_GAP
-+    reuse_gap_hook_release(&refstruct_pool_reuse_gap, (uint64_t)(uintptr_t)ref);
++    if (renewed)
++        reuse_gap_hook_release(&refstruct_pool_reuse_gap, (uint64_t)(uintptr_t)ref);
 +#endif
      ff_mutex_lock(&pool->mutex);
-     if (!pool->uninited) {
+     if (renewed && !pool->uninited) {
          ref->opaque.nc = pool->available_entries;
 @@ -282,6 +296,9 @@
      uint64_t call = ff2_begin(FF2_GET, FF2_REFSTRUCT, pool, 0, 0, NULL);
