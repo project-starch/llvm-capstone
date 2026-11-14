@@ -3,7 +3,7 @@
 This is a live table: rows are filled as board runs land. Pre-registrations, predictions and the run-by-run trail are
 in [`../2026-11-08-train/PREREG.md`](../2026-11-08-train/PREREG.md) (Addendum 107 onward for this table).
 
-## Status (updated 2026-11-14 19:10 +08)
+## Status (updated 2026-11-14 19:35 +08)
 
 - **riscv-base:** complete, all 8 rows.
 - **Capstone temporal:**
@@ -119,7 +119,7 @@ the table being measured now. A row moves into them as its run lands.
 | 500.perlbench_r (full: makerand + test.pl) | 12,623.02 | 17,051.48 | 1.351 | fdk / FRCDK | pending | pending |
 | 502.gcc_r (train01) | 1,722.35 | 1,989.28 | **1.155** | **F** / FRCDKMS | **1.155** (F) | 1.412 (batch; F pending) |
 | 505.mcf_r | 5,125.02 | 6,576.13 | 1.283 | **F** / FRCDKMS | 1.283 (F) | pending |
-| 519.lbm_r | 1,077.50 | 994.66 | **0.923** | fdk / FR | pending | pending |
+| 519.lbm_r | 1,077.50 | 990.36 | **0.919** | **F** / FRCDKMS | **0.919** (F) | pending |
 | 525.x264_r | 35,613.24 | 34,053.48 | **0.956** | fdk / FR | pending | pending |
 | 538.imagick_r | 11.08 | 12.58 | **1.135** | **F** / FRCDKMS | **1.135** (F) | pending |
 | 544.nab_r | 679.92 | 695.34 | **1.023** | **F** / FRCDKMS | **1.023** (F) | pending |
