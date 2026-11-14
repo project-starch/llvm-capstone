@@ -1,0 +1,27 @@
+#!/bin/sh
+mount -t proc proc /proc
+mount -t sysfs sys /sys
+mount -t devtmpfs dev /dev 2>/dev/null
+busybox mkdir -p /work
+mount -t tmpfs tmpfs /work
+busybox cp /*.dom /work/
+cd /work
+echo 'TRAPTEST: up'
+for port in postgres mruby perl; do
+  ./fixed-$port.dom
+  echo "TRAPTEST: $port fixed status $?"
+  ./unfixed-$port.dom
+  echo "TRAPTEST: $port unfixed status $?"
+  ./fixed-$port.dom stale
+  echo "TRAPTEST: $port stale status $?"
+done
+./fixed-postgres.dom large
+echo "TRAPTEST: postgres large status $?"
+./unfixed-postgres.dom large
+echo "TRAPTEST: postgres unfixed large status $?"
+./fixed-postgres.dom external
+echo "TRAPTEST: postgres external status $?"
+./unfixed-postgres.dom external
+echo "TRAPTEST: postgres unfixed external status $?"
+echo 'TRAPTEST: done' 
+busybox poweroff -f
