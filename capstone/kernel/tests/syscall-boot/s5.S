@@ -4,8 +4,8 @@
  * the test loader of step 3 (a0 and a1 come back as references to A and B). From then on it
  * passes references to system calls, which go through the binder and the routines for user
  * memory. Each check compares a result; the first mismatch exits with the check's number.
- * Exit 0: every check passed, the last one (C27) by exec of a shell that prints "S5: exec ok"
- * and exits 0. The bounds check (C20) needs the processor to check an S access through t6
+ * Exit 0: every check passed, the last one (C27) an execve of /bin/sh that the kernel refuses,
+ * since a protected program may exec only a .dom image. The bounds check (C20) needs the processor to check an S access through t6
  * (plan v5 step 1, rule 1); it does not decide the status but prints its outcome:
  * "S5: rule1 enforced", "S5: rule1 missing" or "S5: rule1 inconclusive". A reference moves
  * between registers by CINCOFFSET with offset zero: an integer instruction such as mv clears
@@ -307,7 +307,8 @@ _start:
 report:
     li a0, 1
     sys 64
-    /* C27: execve with argv references; the shell prints "S5: exec ok" and exits 0. */
+    /* C27: execve with argv references, which the compat loader reads, of /bin/sh, an
+     * ordinary ELF: a protected program may exec only a .dom image, so ENOEXEC. */
     ptra 0x800, 0x900
     ptra 0x810, 0x910
     ptra 0x820, 0x920
@@ -315,7 +316,8 @@ report:
     refa a1, 0x800
     li a2, 0
     sys 221
-    li s8, 27
+    expect 27, -8
+    li s8, 0
 fail:
     mv a0, s8
     sys 93

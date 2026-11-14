@@ -15,6 +15,10 @@ c0=$(cat $P/live_contexts); p0=$(cat $P/table_pages)
 ./map.dom; echo "TRAPTEST: map status $?"
 ./unmapped.dom; echo "TRAPTEST: unmapped status $?"
 ./signal.dom; echo "TRAPTEST: signal status $?"
+./gup.dom; echo "TRAPTEST: gup status $?"
+./exec.dom; echo "TRAPTEST: exec status $?"
+./sockopt.dom; echo "TRAPTEST: sockopt status $?"
+./argv.dom; echo "TRAPTEST: argv status $?"
 busybox echo hello | busybox wc -c > /dev/null; echo "TRAPTEST: busybox status $?"
 # /proc/PID/mem of a running protected program is refused.
 ./spin.dom & pid=$!
@@ -33,6 +37,9 @@ while [ $i -lt 210 ]; do
 done
 echo "TRAPTEST: cycles ok $ok failed $failed"
 echo "TRAPTEST: counters contexts $c0 -> $(cat $P/live_contexts) pages $p0 -> $(cat $P/table_pages)"
+# The table runs out of slots right before the kernel's CDERIVE of the next block.
+echo 1 > $P/test_exhaust_before_derive
+./map.dom; echo "TRAPTEST: exhausted map status $?"
 busybox dmesg | grep "sublet: fault" | head -3 | sed 's/^/TRAPTEST: dmesg /'
 echo "TRAPTEST: done"
 busybox poweroff -f

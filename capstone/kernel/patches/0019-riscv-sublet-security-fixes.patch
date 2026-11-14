@@ -1,0 +1,429 @@
+--- a/arch/riscv/include/asm/sublet-test.h
++++ b/arch/riscv/include/asm/sublet-test.h
+@@ -7,12 +7,18 @@
+  *   SUBLET_MUTANT_LEAK_ROOT     switch_mm leaves srevroot set for an ordinary mm
+  *   SUBLET_MUTANT_NO_GUARD      the return to U skips the guard
+  *   SUBLET_MUTANT_SKIP_TABLE_FREE  context release keeps the table pages
+- *   SUBLET_MUTANT_PANIC_ON_U_FAULT a fault of a protected program stops the kernel */
++ *   SUBLET_MUTANT_PANIC_ON_U_FAULT a fault of a protected program stops the kernel
++ *   SUBLET_MUTANT_ALLOW_GUP        GUP pins a protected program's pages
++ *   SUBLET_MUTANT_NATIVE_EXEC_OFF  a protected program may exec an ordinary ELF
++ *   SUBLET_MUTANT_OPEN_SOCKOPT     every socket option passes the binder
++ *   SUBLET_MUTANT_NO_SHRINK        startup pointers cover the whole stack block
++ *   SUBLET_MUTANT_NO_DERIVE_CHECK  the kernel's CDERIVE runs without a slot */
+ #ifndef _ASM_RISCV_SUBLET_TEST_H
+ #define _ASM_RISCV_SUBLET_TEST_H
+ 
+ /* The test loader's and the test hook's call numbers, above every Linux call. */
+ #define SUBLET_NR_TEST_ENTER	0x5b100
+ #define SUBLET_NR_TEST_HOLD	0x5b101
++#define SUBLET_NR_TEST_GUP	0x5b102
+ 
+ #endif
+--- a/arch/riscv/include/asm/sublet.h
++++ b/arch/riscv/include/asm/sublet.h
+@@ -62,10 +62,11 @@ int sublet_grant(struct sublet_context *c, const struct sublet_grant *g);
+ /* The same, and *slot receives the kernel slot that holds P, which the context owns. */
+ int sublet_grant_slot(struct sublet_context *c, const struct sublet_grant *g, unsigned long **slot);
+ /* Store into the user cell at cell (16-byte aligned) the reference in kslot, whose cursor is
+- * from_cursor, moved to cursor. The loader only, before srevroot names the program's table:
+- * the store is a plain supervisor access to a user page. */
++ * from_cursor, moved to cursor and narrowed to [cursor, cursor + length), which must be
++ * representable. The loader only, before srevroot names the program's table: the store is a
++ * plain supervisor access to a user page. */
+ int sublet_store_user_ref(const unsigned long *kslot, unsigned long from_cursor,
+-			  unsigned long cell, unsigned long cursor);
++			  unsigned long cell, unsigned long cursor, unsigned long length);
+ /* Answer cause 30 of the context's program: at least one slot, or NOGROW. */
+ int sublet_grow(struct sublet_context *c);
+ 
+--- a/arch/riscv/kernel/sublet/bind-core.c
++++ b/arch/riscv/kernel/sublet/bind-core.c
+@@ -20,6 +20,7 @@
+  */
+ #ifdef __KERNEL__
+ #include <linux/kernel.h>
++#include <asm/sublet-test.h>
+ #include <linux/fcntl.h>
+ #include <linux/prctl.h>
+ #include <asm/ioctls.h>
+@@ -83,6 +84,32 @@ static long fcntl_command(const struct sublet_bind_args *a, unsigned int *pointe
+ }
+ 
+ /* prctl(option, arg2, ...): the thread name only. */
++/* setsockopt and getsockopt(fd, level, optname, *optval, ...): only options whose value
++ * holds no pointer, since the kernel would read an embedded pointer as a plain integer (for
++ * example sock_fprog.filter of SO_ATTACH_FILTER). The numbers are Linux's riscv64 ones,
++ * spelled out so that the host test compiles this file. */
++static long sockopt_command(const struct sublet_bind_args *a, unsigned int *pointers)
++{
++	static const struct { int level, option; } allowed_options[] = {
++		{1, 1}, {1, 2}, {1, 3}, {1, 4}, {1, 5}, {1, 6}, {1, 7}, {1, 8}, {1, 9},
++		{1, 10}, {1, 13}, {1, 15}, {1, 18}, {1, 19}, {1, 20}, {1, 21}, {1, 30},
++		{1, 38}, {1, 39}, {1, 66}, {1, 67},	/* SOL_SOCKET: SO_DEBUG to SO_SNDTIMEO_NEW */
++		{6, 1}, {6, 2}, {6, 4}, {6, 5}, {6, 6},	/* IPPROTO_TCP: NODELAY to KEEPCNT */
++		{0, 1}, {0, 2},				/* IPPROTO_IP: IP_TOS, IP_TTL */
++		{41, 26},				/* IPPROTO_IPV6: IPV6_V6ONLY */
++	};
++
++	(void)pointers;
++#ifdef SUBLET_MUTANT_OPEN_SOCKOPT
++	return 0;
++#endif
++	for (size_t i = 0; i < sizeof(allowed_options) / sizeof(allowed_options[0]); ++i)
++		if ((int)a->arg[1] == allowed_options[i].level &&
++		    (int)a->arg[2] == allowed_options[i].option)
++			return 0;
++	return -ENOPROTOOPT;
++}
++
+ static long prctl_command(const struct sublet_bind_args *a, unsigned int *pointers)
+ {
+ 	switch (a->arg[0]) {
+@@ -149,8 +176,8 @@ static const struct sublet_allowed allowed[] = {
+ 	CALL_EXTRA(mincore, 0x01),
+ 	/* Sockets. */
+ 	CALL(socket), CALL(socketpair), CALL(bind), CALL(listen), CALL(accept4), CALL(connect),
+-	CALL(getsockname), CALL(getpeername), CALL(sendto), CALL(recvfrom), CALL(setsockopt),
+-	CALL(getsockopt), CALL(shutdown), CALL_EMBEDDED(sendmsg), CALL_EMBEDDED(recvmsg),
++	CALL(getsockname), CALL(getpeername), CALL(sendto), CALL(recvfrom), CALL_COMMAND(setsockopt, sockopt_command),
++	CALL_COMMAND(getsockopt, sockopt_command), CALL(shutdown), CALL_EMBEDDED(sendmsg), CALL_EMBEDDED(recvmsg),
+ 	/* Events. */
+ 	CALL(epoll_create1), CALL(epoll_ctl), CALL(epoll_pwait), CALL(eventfd2),
+ 	CALL(timerfd_create), CALL(timerfd_settime), CALL(timerfd_gettime),
+--- a/arch/riscv/kernel/sublet/binfmt.h
++++ b/arch/riscv/kernel/sublet/binfmt.h
+@@ -17,6 +17,7 @@
+ #include <asm/processor.h>
+ #include <asm/cacheflush.h>
+ #include "capstone/delegate.h"
++#include "../../mm/representable.h"
+ #ifdef CONFIG_RISCV_CAPSTONE_TRAP
+ #include <asm/sublet-trap.h>
+ #endif
+@@ -160,14 +161,16 @@ struct dom_stack {
+ 	void *buf;
+ 	unsigned long bytes;
+ 	unsigned int count;
+-	struct { unsigned long cell, target; } ptr[DOM_MAX_STRINGS + 3];
++	struct { unsigned long cell, target, length; } ptr[DOM_MAX_STRINGS + 3];
+ };
+ 
+-static void dom_stack_pointer(struct dom_stack *st, unsigned long cell, unsigned long target)
++static void dom_stack_pointer(struct dom_stack *st, unsigned long cell, unsigned long target,
++			      unsigned long length)
+ {
+ 	((u64 *)st->buf)[2 * cell] = target;
+ 	st->ptr[st->count].cell = cell;
+ 	st->ptr[st->count].target = target;
++	st->ptr[st->count].length = length;
+ 	++st->count;
+ }
+ 
+@@ -184,6 +187,7 @@ static int dom_stack_build(struct linux_binprm *bprm, struct dom_stack *st)
+ {
+ 	unsigned long cells = 1 + bprm->argc + 1 + bprm->envc + 1 + 2 * DOM_AUX_ENTRIES;
+ 	unsigned long random = cells * 16, used = random + 16, at = bprm->p, cell, argv0 = 0;
++	unsigned long argv0_length = 0, align = 16;
+ 	unsigned int i;
+ 
+ 	if (used > DOM_ARGS_BYTES)
+@@ -191,17 +195,28 @@ static int dom_stack_build(struct linux_binprm *bprm, struct dom_stack *st)
+ 	((u64 *)st->buf)[0] = bprm->argc;
+ 	for (i = 0; i < bprm->argc + bprm->envc; ++i) {
+ 		long n = strnlen_user((char __user *)at, DOM_ARGS_BYTES - used);
++		unsigned long length, granule;
+ 
+ 		if (n <= 0 || n > DOM_ARGS_BYTES - used)
+ 			return -E2BIG;
++		/* Each string gets its own reference over exactly its bytes, so its storage starts
++		 * and ends where the bounds format can hold it. */
++		length = capstone_repr_round(n);
++		granule = capstone_repr_granule(length);
++		used = ALIGN(used, granule);
++		align = max(align, granule);
++		if (length > DOM_ARGS_BYTES - used)
++			return -E2BIG;
+ 		if (copy_from_user(st->buf + used, (void __user *)at, n))
+ 			return -EFAULT;
+-		if (!i)
++		if (!i) {
+ 			argv0 = used;
++			argv0_length = length;
++		}
+ 		/* argv[i] is cell 1 + i; envp[j] is cell argc + 2 + j, after argv's zero cell. */
+-		dom_stack_pointer(st, i < bprm->argc ? 1 + i : 2 + i, used);
++		dom_stack_pointer(st, i < bprm->argc ? 1 + i : 2 + i, used, length);
+ 		at += n;
+-		used += n;
++		used += length;
+ 	}
+ 	get_random_bytes(st->buf + random, 16);
+ 	cell = 1 + bprm->argc + 1 + bprm->envc + 1;
+@@ -212,12 +227,13 @@ static int dom_stack_build(struct linux_binprm *bprm, struct dom_stack *st)
+ 	dom_stack_aux(st, &cell, AT_GID, from_kgid_munged(current_user_ns(), current_gid()));
+ 	dom_stack_aux(st, &cell, AT_EGID, from_kgid_munged(current_user_ns(), current_egid()));
+ 	dom_stack_aux(st, &cell, AT_SECURE, 0);
+-	dom_stack_pointer(st, cell + 1, random);
++	dom_stack_pointer(st, cell + 1, random, 16);
+ 	dom_stack_aux(st, &cell, AT_RANDOM, random);
+-	dom_stack_pointer(st, cell + 1, argv0);
++	dom_stack_pointer(st, cell + 1, argv0, argv0_length);
+ 	dom_stack_aux(st, &cell, AT_EXECFN, argv0);
+ 	dom_stack_aux(st, &cell, AT_NULL, 0);
+-	st->bytes = ALIGN(used, 16);
++	/* A multiple of the largest string granule, so sp keeps every string's alignment. */
++	st->bytes = ALIGN(used, align);
+ 	return 0;
+ }
+ 
+@@ -374,7 +390,7 @@ static int dom_load_binary(struct linux_binprm *bprm)
+ 	/* The pointer cells become references into the stack block. */
+ 	for (unsigned int i = 0; i < st->count && !rc; ++i)
+ 		rc = sublet_store_user_ref(slots[2], top, sp + 16 * st->ptr[i].cell,
+-					   sp + st->ptr[i].target);
++					   sp + st->ptr[i].target, st->ptr[i].length);
+ 	if (rc) { fail_line = __LINE__; goto out; }
+ 	WRITE_ONCE(dom_last_base, base);
+ 	current->mm->start_code = base;
+--- a/arch/riscv/kernel/sublet_trap.c
++++ b/arch/riscv/kernel/sublet_trap.c
+@@ -179,6 +179,15 @@ asmlinkage void sublet_syscall(struct pt_regs *regs)
+ 	case SUBLET_NR_TEST_HOLD:
+ 		ret = sublet_test_hold(regs);
+ 		break;
++	case SUBLET_NR_TEST_GUP: {
++		/* Test only: pin the page at a0's address, as direct I/O would. */
++		struct page *page;
++
++		ret = get_user_pages_fast(regs->a0 & SUBLET_ADDR_MASK, 1, FOLL_WRITE, &page);
++		if (ret == 1)
++			put_page(page);
++		break;
++	}
+ #endif
+ 	default:
+ 		/* Every other call passes the binder (plan v5 step 5). */
+--- a/arch/riscv/mm/sublet-table.c
++++ b/arch/riscv/mm/sublet-table.c
+@@ -90,6 +90,11 @@ static void node_free_table(struct sublet_context *c)
+  * The table never reclaims a slot: a release puts it on the free list at its next generation.
+  * Counted in nogrow_sets, nogrow_clears and table_growths, for diagnosis. */
+ static unsigned long nogrow_sets, nogrow_clears, table_growths;
++#ifdef CONFIG_RISCV_CAPSTONE_TRAP_TEST
++/* Test only: the next n blocks find the table exhausted right before their CDERIVE. */
++static int test_exhaust_before_derive;
++module_param(test_exhaust_before_derive, int, 0644);
++#endif
+ module_param(nogrow_sets, ulong, 0444);
+ module_param(nogrow_clears, ulong, 0444);
+ module_param(table_growths, ulong, 0444);
+@@ -168,6 +173,8 @@ static void restore_root(unsigned long root)
+ #define CV_LCC_ID "x8"
+ #define CV_DERIVE(rd, parent, size) ".insn r 0x5b, 1, 0x51, " rd ", " parent ", " size "\n"
+ #define CV_KILL(object) ".insn r 0x5b, 1, 0x52, zero, " object ", zero\n"
++/* SHRINK narrows the reference in rd to [base, end) in place, without a new lifetime. */
++#define CV_SHRINK(rd, base, end) ".insn r 0x5b, 1, 0x01, " rd ", " base ", " end "\n"
+ #define CV_MINT(rd, slot, desc) ".insn r 0x5b, 1, 0x50, " rd ", " slot ", " desc "\n"
+ /* What LCC selector 1 answers for a tagged value of the 63-bit format; an untagged value
+  * answers 7. A check of this answer is a tag test. */
+@@ -339,6 +346,16 @@ static int root_derive(struct sublet_context *c, unsigned long *slot, unsigned l
+     preempt_disable(); local_irq_save(flags);
+     old = select_root(c);
+ 
++#ifndef SUBLET_MUTANT_NO_DERIVE_CHECK
++    /* Another thread may have taken the last slot while this one slept after grant_nodes. A
++     * CDERIVE without a slot in a table that can grow raises cause 30 in S, which has no
++     * exception-table entry. With interrupts off nothing takes a slot between this check and
++     * the CDERIVE; the caller grows the table and calls again. */
++    if (!sublet_table_available(c->table) && !sublet_table_nogrow(c->table)) {
++        status = -EAGAIN;
++    } else
++#endif
++    {
+     CV_DERIVE_P_RUN();
+     if (ref_type(fresh) != CV_TYPE_NONLIN) {
+         status = -ENOMEM;
+@@ -349,6 +366,7 @@ static int root_derive(struct sublet_context *c, unsigned long *slot, unsigned l
+             grant_unwind(fresh);
+         }
+     }
++    }
+ 
+     restore_root(old);
+     local_irq_restore(flags); preempt_enable();
+@@ -507,7 +525,16 @@ int sublet_block_new(struct sublet_context *c, const struct sublet_grant *g, str
+     if (!a->state.present) { kfree(a); return -ENOMEM; }
+     a->slot = ref_slot_get(c);
+     if (!a->slot) { kvfree(a->state.present); kfree(a); return -ENOMEM; }
++#ifdef CONFIG_RISCV_CAPSTONE_TRAP_TEST
++    /* Test only: the table runs out of slots during the sleeping allocations above. */
++    if (READ_ONCE(test_exhaust_before_derive) > 0 && !sublet_table_free_count(c->table)) {
++        WRITE_ONCE(test_exhaust_before_derive, READ_ONCE(test_exhaust_before_derive) - 1);
++        WRITE_ONCE(c->table[CV_HDR_NEXT], sublet_table_capacity(c->table));
++    }
++#endif
+     error = root_derive(c, a->slot, NULL, g);
++    if (error == -EAGAIN)
++        error = grant_nodes(c) ? -ENOMEM : root_derive(c, a->slot, NULL, g);
+     if (error) {
+         ref_slot_put(c, a->slot);
+         kvfree(a->state.present);
+@@ -601,14 +628,16 @@ void sublet_context_destroy(struct sublet_context *c)
+     kvfree(c);
+ }
+ int sublet_store_user_ref(const unsigned long *kslot, unsigned long from_cursor,
+-                          unsigned long cell, unsigned long cursor)
++                          unsigned long cell, unsigned long cursor, unsigned long length)
+ {
+-    unsigned long flags, offset = cursor - from_cursor;
++    unsigned long flags, offset = cursor - from_cursor, end = cursor + length;
+ 
+-    if (cell & 15 || !access_ok((void __user *)cell, 16))
++    if (cell & 15 || !access_ok((void __user *)cell, 16) || !capstone_repr_ok(cursor, length))
+         return -EFAULT;
+     local_irq_save(flags);
+     csr_set(CSR_STATUS, SR_SUM);
++#ifdef SUBLET_MUTANT_NO_SHRINK
++    end = 0;
+     asm volatile(CV_RUN
+                  CV_LDC("t0", "%[from]")
+                  CV_INC("t0", "t0", "%[offset]")
+@@ -616,6 +645,17 @@ int sublet_store_user_ref(const unsigned long *kslot, unsigned long from_cursor,
+                  "li t0, 0\n"
+                  : : [from] "r"(kslot), [offset] "r"(offset), [cell] "r"(cell)
+                  : "t0", "memory");
++#else
++    asm volatile(CV_RUN
++                 CV_LDC("t0", "%[from]")
++                 CV_INC("t0", "t0", "%[offset]")
++                 CV_SHRINK("t0", "%[base]", "%[end]")
++                 CV_STC("t0", "%[cell]")
++                 "li t0, 0\n"
++                 : : [from] "r"(kslot), [offset] "r"(offset), [base] "r"(cursor), [end] "r"(end),
++                     [cell] "r"(cell)
++                 : "t0", "memory");
++#endif
+     csr_clear(CSR_STATUS, SR_SUM);
+     local_irq_restore(flags);
+     return 0;
+--- a/fs/exec.c
++++ b/fs/exec.c
+@@ -27,6 +27,9 @@
+ #include <asm/capstone_task.h>
+ #include <linux/capstone_native_spawn.h>
+ #endif
++#ifdef CONFIG_RISCV_CAPSTONE_TRAP
++#include <asm/sublet-test.h>
++#endif
+ #include <linux/kernel_read_file.h>
+ #include <linux/slab.h>
+ #include <linux/file.h>
+@@ -1524,6 +1527,11 @@ static struct linux_binprm *alloc_bprm(int fd, struct filename *filename)
+ 	int retval = -ENOMEM;
+ 	if (!bprm)
+ 		goto out;
++#if defined(CONFIG_RISCV_CAPSTONE_TRAP) && !defined(SUBLET_MUTANT_NATIVE_EXEC_OFF)
++	/* A protected program may exec only another protected image: only the .dom format
++	 * admits it, so no exec leaves protection. */
++	bprm->capstone_native = test_thread_flag(TIF_CAPSTONE);
++#endif
+ 
+ 	if (fd == AT_FDCWD || filename->name[0] == '/') {
+ 		bprm->filename = filename->name;
+--- a/fs/fcntl.c
++++ b/fs/fcntl.c
+@@ -5,6 +5,9 @@
+  *  Copyright (C) 1991, 1992  Linus Torvalds
+  */
+ 
++#ifdef CONFIG_RISCV_CAPSTONE_TRAP
++#include <asm/sublet-test.h>
++#endif
+ #include <linux/capstone_native_helpers.h>
+ #include <linux/syscalls.h>
+ #include <linux/init.h>
+@@ -39,6 +42,12 @@ static int setfl(int fd, struct file * filp, unsigned long arg)
+ 	struct inode * inode = file_inode(filp);
+ 	int error = 0;
+ 
++#ifdef CONFIG_RISCV_CAPSTONE_TRAP
++	/* Direct I/O pins the program's pages and copies past its references. */
++	if (test_thread_flag(TIF_CAPSTONE) && (arg & O_DIRECT))
++		return -EINVAL;
++#endif
++
+ 	/*
+ 	 * O_APPEND cannot be cleared if the file is marked as append-only
+ 	 * and the file is open for write.
+--- a/fs/open.c
++++ b/fs/open.c
+@@ -5,6 +5,9 @@
+  *  Copyright (C) 1991, 1992  Linus Torvalds
+  */
+ 
++#ifdef CONFIG_RISCV_CAPSTONE_TRAP
++#include <asm/sublet-test.h>
++#endif
+ #include <linux/capstone_native_helpers.h>
+ #include <linux/string.h>
+ #include <linux/mm.h>
+@@ -1310,9 +1313,16 @@ static long do_sys_openat2(int dfd, const char __user *filename,
+ 			   struct open_how *how)
+ {
+ 	struct open_flags op;
+-	int fd = build_open_flags(how, &op);
++	int fd;
+ 	struct filename *tmp;
+ 
++#ifdef CONFIG_RISCV_CAPSTONE_TRAP
++	/* Direct I/O pins the program's pages and copies past its references. */
++	if (test_thread_flag(TIF_CAPSTONE) && (how->flags & O_DIRECT))
++		return -EINVAL;
++#endif
++	fd = build_open_flags(how, &op);
++
+ 	if (fd)
+ 		return fd;
+ 
+--- a/mm/gup.c
++++ b/mm/gup.c
+@@ -1,5 +1,8 @@
+ // SPDX-License-Identifier: GPL-2.0-only
+ #include <linux/kernel.h>
++#ifdef CONFIG_RISCV_CAPSTONE_TRAP
++#include <asm/sublet-test.h>
++#endif
+ #include <linux/errno.h>
+ #include <linux/err.h>
+ #include <linux/spinlock.h>
+@@ -1168,6 +1171,14 @@ static long __get_user_pages(struct mm_struct *mm,
+ 	if (!nr_pages)
+ 		return 0;
+ 
++#ifdef CONFIG_RISCV_CAPSTONE_TASK
++#ifndef SUBLET_MUTANT_ALLOW_GUP
++	/* A protected program's pages are reached only through its references, so every
++	 * pin-and-access path refuses its mm (plan v5, refused paths). */
++	if (mm && mm->context.capstone_marked)
++		return -EFAULT;
++#endif
++#endif
+ 	start = untagged_addr(start);
+ 
+ 	VM_BUG_ON(!!pages != !!(gup_flags & (FOLL_GET | FOLL_PIN)));
+@@ -3020,6 +3031,14 @@ static int internal_get_user_pages_fast(unsigned long start,
+ 				       FOLL_FORCE | FOLL_PIN | FOLL_GET |
+ 				       FOLL_FAST_ONLY | FOLL_NOFAULT)))
+ 		return -EINVAL;
++#ifdef CONFIG_RISCV_CAPSTONE_TASK
++#ifndef SUBLET_MUTANT_ALLOW_GUP
++	/* A protected program's pages are reached only through its references, so every
++	 * pin-and-access path refuses its mm (plan v5, refused paths). */
++	if (current->mm && current->mm->context.capstone_marked)
++		return -EFAULT;
++#endif
++#endif
+ 
+ 	if (gup_flags & FOLL_PIN)
+ 		mm_set_has_pinned_flag(&current->mm->flags);

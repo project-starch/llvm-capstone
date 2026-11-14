@@ -33,3 +33,4 @@
 0051-riscv-sublet-futex-handles.patch
 # Signal registration; delivery to a handler kills the program (plan v5 step 9 builds frames).
 0018-riscv-sublet-signal-registration.patch
+0019-riscv-sublet-security-fixes.patch
