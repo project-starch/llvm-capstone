@@ -211,90 +211,82 @@ static unsigned dl_rights(unsigned kind) {
  * TLS and default transport. Sharing a pthread's private TLS is rejected at
  * context creation. Nested signal handlers may enter recursively.
  *
- * THE OWNER'S IDENTITY IS THE CURSOR OF gp. The lock needs a value that differs
- * between any two live contexts and stays the same within one, across a nested
- * handler and an alternate signal stack. The TLS pointer is no such value
- * (explicit contexts may share TLS, and with it this transport), nor is the
- * stack (an alternate signal stack is another one). gp is: it is a register,
- * so every context has its own, saved and restored with its other registers at
- * every escape; no handler, stack switch, setjmp or longjmp changes it
- * (setjmp.S saves neither gp nor tp); and its cursor is free, because the
- * gp-free codegen of the virtual profile sets the cursor of every gp-derived
- * capability ABSOLUTELY (SCC, CapstoneExpandPseudoInsts.cpp expandCapGlobalBase)
- * and never reads gp's own. So each context carries its identity in gp's cursor,
- * kept inside gp's bounds, where a compressed capability can represent it:
+ * THE OWNER'S IDENTITY. The lock needs a value that differs between any two
+ * live contexts and stays the same within one, across a nested handler and an
+ * alternate signal stack. The TLS pointer is no such value (explicit contexts
+ * may share TLS, and with it this transport), nor is the stack (an alternate
+ * signal stack is another one).
  *
- *   the first context     gp.base               (set here, when the regions arrive)
- *   a further context     gp.base + 16 k, k in 1..63, one of the slots below,
- *                         chosen by its creator in its start frame (thread.c) and
- *                         given back right before its final exit (thread.c, pthread.c;
- *                         code that ends a context with the raw exit services itself
- *                         calls __capstone_context_identity_release first, or the slot
- *                         stays taken: after 63 such exits contexts take the service)
- *   no slot free          gp.base + 16 * 64: this context asks the launcher
- *                         (CV_SERVICE_THREAD_SELF) on each acquisition, as every
- *                         context did before, with bit 63 set so that the answer
- *                         can never equal a cursor (an Sv39 address)
+ * gp's cursor is NOT free. Until 2026-11-14 each context carried its identity
+ * in gp's cursor (gp.base + 16 k), on the premise that the gp-free codegen
+ * never reads gp's own cursor. With linker gp relaxation
+ * (-capstone-gp-relax-globals, lld --relax-gp) global accesses are rebased on
+ * gp itself (`ld rd, x - __global_pointer$(gp)`), so gp's cursor is
+ * __global_pointer$ in every context: start.S sets it before anything else,
+ * and a new context's start frame copies the creator's gp (thread.c). Nothing
+ * may move it.
  *
- * Reading it is a register read, not a service exit: before this, every
- * delegated system call cost two exits, CV_SERVICE_THREAD_SELF and the delegate
- * round itself. The identity is the domain's own, as the lock is: the launcher
- * validates every request it serves whatever the lock does, so a context that
- * forged another's identity could corrupt only its own process's transport. */
-#define DL_IDENTITY_SLOTS 64   /* slot 0: the first context; 1..63: further contexts */
-static volatile uint64_t dl_identity_taken = 1;   /* bit k: slot k is in use */
+ * So the identity comes from the launcher, in two modes:
+ *   single context   until the process first creates a further context, the
+ *                    only context there is owns every acquisition: the
+ *                    identity is the constant DL_IDENTITY_SINGLE, and taking
+ *                    the lock costs no service exit;
+ *   service          from the first creation on, every context, the first
+ *                    included, asks the launcher (CV_SERVICE_THREAD_SELF) on
+ *                    each acquisition, with bit 63 set so that the answer is
+ *                    never DL_IDENTITY_SINGLE or 0 (vacant).
+ * The switch happens in the creating context, in __capstone_context_identity_take,
+ * before the new context exists. If that context holds the wire at that point
+ * (it is creating from a handler that interrupted a delegated round), a switch
+ * would leave the round owned under the single identity while the context's
+ * later acquisitions name another: the create fails with EDEADLK instead, and
+ * the mode is unchanged. Context creation is not async-signal-safe (POSIX), so
+ * only a program already outside the standard reaches it. Otherwise no call is
+ * in flight on this context and none on any other (there is no other), and the
+ * switch is one store. The lock is deliberately not taken around the store: a
+ * handler arriving between the store and the release would ask under the
+ * service identity for a wire owned under the single one, by its own context,
+ * and spin forever.
+ *
+ * The identity is the domain's own, as the lock is: the launcher validates
+ * every request it serves whatever the lock does. */
+#define DL_IDENTITY_SINGLE ((uintptr_t)1)
+static volatile int dl_identity_service;   /* 0: single context; 1: service mode */
 static void *dl_gp(void) {
   void *gp;
   __asm__ volatile("movc %0, gp" : "=r"(gp));
   return gp;
 }
 static uintptr_t dl_wire_identity(void) {
-  void *gp = dl_gp();
-  uintptr_t cursor = __builtin_capstone_cap_get_cursor(gp);
-  if (cursor - __builtin_capstone_cap_get_base(gp) != DL_IDENTITY_SLOTS * 16)
-    return cursor;
+  if (!__atomic_load_n(&dl_identity_service, __ATOMIC_ACQUIRE))
+    return DL_IDENTITY_SINGLE;
   extern long __capstone_vm_thread_self(void);
   return (uintptr_t)1 << 63 | (uintptr_t)__capstone_vm_thread_self();
 }
-/* The first context's identity: gp's cursor moves from the launcher's (the entry point) to
- * gp's base. Before any delegated call and before any further context exists. */
-static void dl_identity_first(void) {
-  uintptr_t base = __builtin_capstone_cap_get_base(dl_gp());
-  __asm__ volatile("scc gp, gp, %0" : : "r"(base) : "memory");
-}
-/* For a new context's start frame: the cursor its gp starts with. A slot is free once the
- * context that held it has given it back, which it does after its last delegated call. */
+/* The first context's identity needs no setup: gp's cursor was set by start.S and the mode
+   is single-context until the first creation. */
+static void dl_identity_first(void) {}
+/* For a new context's start frame: the cursor its gp starts with, which is the creator's own
+   (__global_pointer$). Switches the process to service mode first (see above). 0, with errno
+   EDEADLK, when the calling context holds the wire. */
 uintptr_t __capstone_context_identity_take(void) {
-  void *gp = dl_gp();
-  uintptr_t base = __builtin_capstone_cap_get_base(gp);
-  /* gp covers the whole image, text and data, so this never fails for a linked program; a gp
-     too short for the slots gives no identity, and the create fails (EAGAIN). */
-  if (__builtin_capstone_cap_get_end(gp) - base < (DL_IDENTITY_SLOTS + 1) * 16)
-    return 0;
-  uint64_t taken = __atomic_load_n(&dl_identity_taken, __ATOMIC_RELAXED);
-  for (;;) {
-    if (!~taken)
-      return base + DL_IDENTITY_SLOTS * 16;
-    unsigned k = (unsigned)__builtin_ctzll(~taken);
-    if (__atomic_compare_exchange_n(&dl_identity_taken, &taken, taken | (uint64_t)1 << k, 0,
-                                    __ATOMIC_ACQ_REL, __ATOMIC_RELAXED))
-      return base + 16 * k;
+  if (!__atomic_load_n(&dl_identity_service, __ATOMIC_ACQUIRE)) {
+    if (__atomic_load_n(&dl_wire_owner, __ATOMIC_ACQUIRE) == DL_IDENTITY_SINGLE ||
+        __atomic_load_n(&default_transport.wire_owner, __ATOMIC_ACQUIRE) == DL_IDENTITY_SINGLE) {
+      errno = EDEADLK;
+      return 0;
+    }
+    __atomic_store_n(&dl_identity_service, 1, __ATOMIC_RELEASE);
   }
+  return __builtin_capstone_cap_get_cursor(dl_gp());
 }
-/* A slot taken for a context that was never created, or that of the calling context, which
- * makes no delegated call after this (its next step is its exit service). */
-void __capstone_context_identity_give(uintptr_t identity) {
-  uintptr_t slot = (identity - __builtin_capstone_cap_get_base(dl_gp())) / 16;
-  /* A handler can exit while a delegated round still owns the shared wire.
-   * Quarantine that slot: recycling it would let an unrelated context enter
-   * through the recursive-owner path. This does not unwind abandoned rounds. */
-  if (__atomic_load_n(&default_transport.wire_owner, __ATOMIC_ACQUIRE) == identity)
-    return;
-  if (slot && slot < DL_IDENTITY_SLOTS && !(identity & 15))
-    __atomic_fetch_and(&dl_identity_taken, ~((uint64_t)1 << slot), __ATOMIC_RELEASE);
-}
-void __capstone_context_identity_release(void) {
-  __capstone_context_identity_give(__builtin_capstone_cap_get_cursor(dl_gp()));
+/* Kept for the callers of the slot scheme (thread.c, pthread.c): identities are no longer
+   handed out, so there is nothing to give back. */
+void __capstone_context_identity_give(uintptr_t identity) { (void)identity; }
+void __capstone_context_identity_release(void) {}
+/* For the contract tests: 0 in single-context mode, 1 in service mode. */
+int __capstone_context_identity_mode(void) {
+  return __atomic_load_n(&dl_identity_service, __ATOMIC_ACQUIRE);
 }
 static void dl_wire_acquire(void) {
   uintptr_t identity = dl_wire_identity();

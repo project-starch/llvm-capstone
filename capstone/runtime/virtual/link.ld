@@ -137,8 +137,20 @@ SECTIONS {
   ASSERT(ADDR(.data) == ADDR(.text_end) + SIZEOF(.text_end),
          "data segment does not start where the text segment ends")
 
+  /* THE SMALL-DATA BLOCK AND __global_pointer$. gp's cursor is __global_pointer$ in every
+   * context (start.S, thread.c), and lld --relax-gp rebases a global access on gp when the
+   * global lies within 2 KiB of it (-capstone-gp-relax-globals; -capstone-small-data-limit
+   * puts small defined variables in .sdata/.sbss). Both small sections therefore form one
+   * block at the head of .data, .sbss included (its zeros become file bytes, at most the
+   * block's size), and __global_pointer$ is 0x800 into it: the block's first 4 KiB are
+   * reachable. Everything else is reached as before. With no small data the block is empty
+   * and nothing moves; __global_pointer$ then lies in .data, .tdata or .bss, inside the
+   * image either way (the 2 KiB pad after .bss, ASSERT below). */
   .data : ALIGN(4096) {
+    __capstone_sdata_start = .;
     *(.sdata .sdata.*)
+    *(.sbss .sbss.*)
+    __global_pointer$ = __capstone_sdata_start + 0x800;
     *(.data .data.*)
   } :data
 
@@ -183,13 +195,28 @@ SECTIONS {
   ASSERT(ALIGNOF(.tdata) <= 4096 && ALIGNOF(.tbss) <= 4096,
          "a thread-local aligned above 4096 bytes: runtime/tls.c aligns tp to a page")
 
-  /* .bss last in the data segment: NOBITS, so it adds to p_memsz only. */
+  /* .bss last in the data segment: NOBITS, so it adds to p_memsz only.
+   *
+   * gp's margins. The image capability (gp) spans the whole image from the
+   * text segment's start, and the compiler's -capstone-fold-global-lo forms a
+   * global's cursor from the auipc's partial address, up to 2 KiB before or
+   * after the accessed address. Every such cursor must lie inside gp's bounds
+   * or the address policy may refuse it (capstone/docs/design/
+   * capability-loop-addressing.md, "The global-address exception"). In front,
+   * .text is the margin: nothing reached through gp lies in it, and the ASSERT
+   * after this section keeps it at least 2 KiB. Behind, the 2 KiB below closes
+   * the image: gp's end (the image size rounded up to a power of two) can fall
+   * as little as 16 bytes after .bss otherwise. It costs no file bytes. */
   .bss (NOLOAD) : ALIGN(16) {
-    *(.sbss .sbss.*)
     *(.bss .bss.*)
     *(COMMON)
     . = ALIGN(16);
+    . += 2048;
   } :data
+  ASSERT(ADDR(.text) == 0x10000 && SIZEOF(.text) >= 2048,
+         "gp's front margin: .text must open the image and be at least 2 KiB")
+  ASSERT(__global_pointer$ < ADDR(.bss) + SIZEOF(.bss),
+         "__global_pointer$ (gp's cursor) must lie inside the image")
 
   .capstone_virtual 0 : { KEEP(*(.capstone_virtual)) }
 

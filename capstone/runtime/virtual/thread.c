@@ -9,7 +9,7 @@
 extern long __capstone_vm_thread_create_frame(void *frame);
 extern void __capstone_vm_thread_exit(void);
 extern long __capstone_vm_thread_join(long thread);
-/* delegate.c: the context identities its transport lock reads from gp's cursor */
+/* delegate.c: the transport lock's context identity (single-context or service mode) */
 extern uintptr_t __capstone_context_identity_take(void);
 extern void __capstone_context_identity_give(uintptr_t identity);
 extern void __capstone_context_identity_release(void);
@@ -71,13 +71,16 @@ long __capstone_virtual_context_create(void *(*entry)(void *), void *argument,
     /* Initial x1 is a return trampoline; x2 is the caller-selected stack,
      * x3 is the process image capability, x4 is the optional per-thread TLS
      * pointer, and x10 is the argument.  gp is process authority rather than
-     * thread state, so every same-mm child inherits it -- the same bounds and
-     * permissions; only its cursor is the child's own: the identity its
-     * transport lock reads (delegate.c, dl_wire_identity). */
+     * thread state, so every same-mm child inherits it -- the same bounds,
+     * permissions and cursor, __global_pointer$, which gp-relaxed global
+     * accesses read (delegate.c, "THE OWNER'S IDENTITY"). Taking it switches
+     * the transport lock to service identities; it fails with EDEADLK when
+     * this context holds the wire (a create from a handler mid-round). */
     uintptr_t identity = __capstone_context_identity_take();
     if (!identity) {
+        int error = errno == EDEADLK ? EDEADLK : EAGAIN;
         __capstone_vm_unmap((uintptr_t)frame, 4096);
-        errno = EAGAIN;
+        errno = error;
         return -1;
     }
     capstone_cap_store((capstone_cap_slot *)(frame + 64 + 1 * 16),

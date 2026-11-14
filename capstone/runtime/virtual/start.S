@@ -1,10 +1,22 @@
 #include "vm-abi.h"
 /* Virtual application startup: all authority arrives in explicit registers.
  * gp is an image capability with a representable cursor; gp-free codegen
- * uses SCC for globals and ordinary calls within PCC. */
+ * uses SCC for globals and ordinary calls within PCC.
+ *
+ * gp's cursor is __global_pointer$ (the image link script: 0x800 into the
+ * small-data block) from the first instruction on, in every context: global
+ * accesses relaxed by lld --relax-gp read it as `ld rd, x - __global_pointer$(gp)`,
+ * and new contexts copy it (thread.c). delegate.c no longer keeps an identity
+ * in it. The lla is not relaxable (no R_Capstone_GP_SCC marker), and norelax
+ * keeps it so. */
 .section .text.entry,"ax"
 .global _start
 _start:
+    .option push
+    .option norelax
+    lla t0, __global_pointer$
+    .option pop
+    scc gp, gp, t0
     cincoffsetimm sp, sp, -80
     stc a0, 0(sp)
     stc a1, 16(sp)
