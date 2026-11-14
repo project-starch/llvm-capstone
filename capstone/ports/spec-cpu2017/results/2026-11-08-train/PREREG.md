@@ -3900,3 +3900,30 @@ So the board, bitstream F, the bkit80 kit and both images are not implicated. No
 - The board lane hardens the driver: a park verified with retries, and a cold boot that refuses, or parks first, when
   sw[0] or sw[1] is set at connect. Until that lands, any boot's final aperture read can void the next boot on its
   board the same way. A chain's smoke gate catches it (STOP, no false result). The cost is a board left idle.
+
+## Addendum 120 (2026-11-14 22:20 +08): gp relaxation is NOT adopted (Addendum 114's rule, gcc's ratio worsens)
+
+**Silicon pair on F, board 1, kit bkit75, both arms specdiff PASS:**
+
+| | GPC (control) | GPR2 (gp relaxation) | change |
+|---|---|---|---|
+| perl makerand | 287.74 s | 262.62 s | -8.7 % |
+| gcc train01 | 1,992.35 s | 2,004.71 s | +0.62 % (run_cycles 47.34 → 47.65 G, +0.65 %) |
+
+riscv-base, RVF3 against RVGP, board 3 (Addendum 110): perl makerand -6.2 %, gcc -0.60 %.
+
+**Ratios.**
+- gcc: GPC/RVF3 1.1568, GPR2/RVGP 1.1710, so gp makes it **+1.23 % worse**.
+- perl makerand: 1.116 → 1.086, -2.7 %.
+
+The Capstone gcc twin predicted +0.67 % and silicon read +0.62 %. The gcc control GPC sits within 0.15 % of FRCDKMS on
+F, so the +0.62 % is well outside the same-board spread (0.04-0.15 %).
+
+**Decision by the rule as pre-registered.** "If gcc train01's silicon ratio worsens under gp, gp is NOT adopted."
+- It worsens, so gp relaxation is not adopted on either arm.
+- The full-perl gp pair is not run. The twins put full perl at about -0.4 % in ratio, which cannot offset gcc.
+- The table keeps the FRCDKMS images on both arms, and RVF3 stays the riscv-base build.
+- The GPC/GPR2 stages and images stay on disk as recorded evidence.
+
+**Why gcc loses is not attributed.** The twin predicted the loss, but the pair says only that gcc is slower under
+gp, not why.
