@@ -10,7 +10,7 @@
 | speedtest1 `--size 100` | **deferred** (SPEC-lane default, 14 Nov 21:40: breadth first; the lead may override): about 6.5 h per command on silicon | - |
 | CPython 3.13.7, pyperformance subset (7 benchmarks), QEMU twin | **measured**: 28/28 answers equal to native; in-context +0.66 % (richards) to +2.84 % (json_dumps), +1.63 % summed; kernel ±0.5 %; 2.99 M CDERIVEs, subtree max 2, peak live records 76,767 (1.23 MB) | FRCDKMS SDK, -O2, trimmed built-ins, linked --no-relax; QEMU qemu55 a0501ebc39 |
 | CPython on silicon | **queued**: pre-registered below; four one-arm boots U P P U on one board, F with event 23 | F `a948e4134`, kit bkit75n |
-| PostgreSQL 17.5, single-user pgbench-derived workload, QEMU twin | **running** (bring-up on the twin, 15 Nov): both arms build and start. The native route needed harness changes, the same in both arms: run as root (the domain loader admits euid 0 only), and `access`/`rename`/`realpath`/`setitimer`/`posix_fallocate`/`preadv`/`pwritev` shims over calls the route refuses or does not serve. The protected arm uses patch 0003 with the Q-15 placement repair (lane `q15-placement` 57215acb2dbb): without it CDERIVE refuses a large chunk (29), as Q-15 recorded | FRCDKMS SDK, -O2, native route, QEMU qemu55 a0501ebc39 |
+| PostgreSQL 17.5, single-user pgbench-derived workload, QEMU twin | **running** on the twin (slot 28, 15 Nov ~04:25): ABBA timing boot `npg-a1` on `w2-main`, then one counting boot per arm on qemu-nst. The smoke on `w2-small` gives the native answers in both arms. Bring-up found a port defect, **ISSUES.md M-15**: generic array code reads `int2vector`/`oidvector` 8 bytes off at MAXALIGN 16, which the protected arm catches as CAP_OOB. Harness changes, the same in both arms: run as root (the domain loader admits euid 0 only), shims over refused or unserved calls; patch 0003 carries the Q-15 placement repair (`q15-placement` 57215acb2dbb) | FRCDKMS SDK, -O2, native route, image set 10, QEMU qemu55 a0501ebc39 |
 | tshark (pcap), FFmpeg (decode) | **queued, in that order**: each twin first, then silicon. Patches in tree: wireshark-4.6.8-0001, ffmpeg-9.0.1-0003. Each needs the native-route rebuild (FRCDKMS SDK); tshark's six dependencies too | FRCDKMS, native route |
 | memcached (load) | **deferred**: the native route refuses `socket`, `socketpair`, `epoll_create1` and `epoll_ctl` (`native-syscall-table.c:92-101`, `NS_REFUSE`), so the server cannot take a load on this route. Running it elsewhere (e.g. the virtual route) is a different instrument; the lead's call | - |
 | CREVOKE worst case (subtree 1 .. 10^6, latency, interruptibility; PostgreSQL context reset) | **measured** (RTL sim, memory delay 0): 6 cycles per node up to 2,048 nodes, about 11 beyond; at most 65,532 nodes per subtree (10^6 cannot be built), so the worst single CREVOKE is 720,892 cycles; **not interruptible**: a timer interrupt waits for the whole walk (180,518 cycles at 32,768 nodes, against 1-6 without). PostgreSQL context-reset sizes: queued with the PostgreSQL twin | capstone-ariane `a948e4134` (F), `--sv_seed 1` |
@@ -559,7 +559,45 @@ miss replays per run, which at the RTL's estimated cost explain about 7-8 % of t
 - **So the worst-case interrupt latency the lifetime unit adds is one whole CREVOKE:** up to about 0.72 M cycles at
   65,532 nodes, plus memory latency on silicon. There is no abort path.
 - Read with the twin's subtree sizes: speedtest1's CREVOKEs end 1 node (mean 1.0001, max 3), so they cost about 45
-  cycles each.
+  cycles each at memory delay 0. That is a lower bound; the delay-12 readings below are several times higher.
+
+**CDERIVE latency, and both instructions at memory delay 12 (measured 2026-11-15).**
+- Same tree and seed. `crevoke-cost.S` gained a knob, `DERIVE_BRACKET`: it brackets c1's CDERIVE, and the chain
+  build's n-1 derives in their loop (5 instructions per iteration; reading 27, the loop's instret, is 1,281 = 256 x 5 + 1
+  at n = 257, as designed). Logs `.crv/J2` (delay 0) and `.crv/I2` (delay 12). Every run is valid with 0 build and 0
+  bracket exceptions.
+- Delay 12 means the testbench memory delay `+define+S12_MEM_DELAY=12`, under the knob's mod-16 wrap. The model's
+  `verFiles.dat` records `S12_MEM_DELAY=12` for I2 and no define for J2. Calibration: J2's CREVOKE chain controls
+  repeat the delay-0 table exactly (45, 416 and 6,176 cycles at n = 1, 64, 1,024), and every delay-12 reading is higher.
+- A first attempt (`.crv/J`, `.crv/I`) is void: its derive loop copied the parent with an integer `mv`, which drops the
+  tag, so all 256 loop derives trapped (`build_exc` 256). The loop now copies with `MOVC`.
+
+| cycles | memory delay 0 | memory delay 12 |
+|---|---|---|
+| CDERIVE alone, after a fence | 21 | 21 |
+| CDERIVE back to back, per loop iteration (the CDERIVE plus 4 one-cycle instructions) | 31.0 | 161.1 |
+| CREVOKE of 1 node, after a fence / right after the derives | 38 / 45 | 42 / 244 |
+| CREVOKE of 64 nodes, cold / warm | 416 | 3,511 / 3,692 |
+| CREVOKE of 257 nodes (the n = 257 chain), cold / warm | 1,574 | 15,117 / 15,191 |
+| CREVOKE of 1,024 nodes, cold / warm | 6,176 | 61,111 / 61,301 |
+
+- The very first CDERIVE after reset reads 3,716 (delay 0) and 3,085 (delay 12) cycles without a fence before it, and 21
+  with one. It waits for something still in flight at program start. That is a start-up effect, not a per-instruction
+  cost.
+- A lone CDERIVE or CREVOKE whose predecessor's record write has drained costs 21-50 cycles at either delay. Back to
+  back, each one waits for the previous record write: about 157 cycles per CDERIVE and 60 per revoked node at delay 12.
+- So the walk costs 6 cycles per node at delay 0 and about 60 at delay 12. The node unit's record traffic goes to
+  memory, and these costs scale with memory latency.
+
+**What these give for speedtest1 on F** (28,226 CDERIVE and 28,216 one-node CREVOKE per protected run, from the twin):
+- Every op drained, about 21 + 42 cycles: 1.8 M cycles, 15 % of the +11.5 M in-context cost.
+- Delay 0, back to back (27 + 45): 2.0 M, 18 %.
+- Delay 12, back to back (157 + 244): 11.3 M, 98 %.
+- The bracket is too wide to attribute the cost. Where speedtest1 falls inside it depends on how often one lifetime op
+  follows another before its record write drains, and on the board's real memory latency. A simulation at delay 0 or
+  12 gives neither.
+- What would settle it: time CDERIVE and CREVOKE on the board itself, in a native-route domain on F (a loop of each,
+  back to back and spaced). It is a few seconds of board time in any future boot. Not pre-registered yet.
 
 **Still to read: a real large revoke (PostgreSQL context reset).** The subtree a PostgreSQL `MemoryContextReset` ends
 will come from the PostgreSQL twin's histogram, and its latency from the table above.
@@ -684,3 +722,90 @@ command exits 0 with its CHECK equal to native. The repeats agree within 0.01 % 
 - **Duration:** about 25 min of commands per boot, from the twin-to-silicon ratios of speedtest1 (in-context x4.1,
   kernel x2.5, 24 M cycles/s). Budget 3,600 s per rung; book 50 min per boot.
 - **VOID** if a control (`b0-stats`, `b0-hello`) fails, or the smoke fails outside the kit's accounting waiver.
+
+## PostgreSQL 17.5: single-user, pgbench-derived workload
+
+**Patch.** `capstone/ports/postgres/memory-contexts/patches/postgresql-17.0-0003-memory-contexts-sublet-lifetimes.patch`
+as repaired for Q-15 on lane `q15-placement` (57215acb2dbb; sha256 `657c0e1fed593ca0…`, with
+`capstone/runtime/include/capstone/representable.h` from the same commit, `7c41a409acb7a897…`). With it, aset, generation,
+slab and bump hand out each chunk as a CDERIVE child of its block's generation lifetime, and pfree, reset and delete
+CREVOKE them. dev's 0003, without the repair, cannot run here: its protected backend faults at startup with
+`ILLEGAL_OP_VAL` (29) on the CDERIVE of a large chunk's block, which the compact format cannot hold exactly. That is
+Q-15's recorded refusal (ISSUES.md Q-15; the same instance as the 2026-10-18 `virtual-pg-pools` reading). The repaired
+patch places such blocks on their granule and pads children at the tail only. It reports the padding at exit: on the
+small workload, `Q15_PAD chunks=112762 padded=573 pad_bytes_total=12832 pad_bytes_max=992`.
+
+**Build.** `nested/pg/build.sh` with the port's `build-domain.sh` forked as `build-domain-native.sh`. It compiles and links
+with the FRCDKMS SDK and flags at -O2, as the other apps here, and `PGSU_NESTED=none|sublet` selects the arm. The two
+arms' trees differ only in `utils/mmgr/{aset,bump,generation,mcxt,slab}.c`,
+`include/utils/memutils_memorychunk.h`, the runtime include path and configure's record of the flags.
+
+**The native route needed harness changes. They are the same in both arms and touch nothing on the query path.**
+- **Root.** The native route's domain loader runs an image only for euid 0
+  (`linux-twin/drivers/misc/capstone/binfmt-dom.h:392`; the SPEC lane confirms this is the module's design). PostgreSQL
+  refuses root. `harness-patches/pg-17.5-native-route-harness.patch` (`d5243294605547fd…`) therefore:
+  - drops the root refusal (`main.c` check_root);
+  - takes the `--single` role name from `PGUSER` (default `postgres`), because a native task cannot read
+    `/etc/passwd`.
+  - A standalone backend authenticates as `BOOTSTRAP_SUPERUSERID` whatever that name is (`postinit.c:897-899`). So
+    **both arms and the native reference run as the bootstrap superuser**, and every permission and RLS check passes as
+    superuser in all three.
+- **Calls the route refuses or does not serve**, given replacements in one object linked into both images
+  (`harness-src/pg-native-shims.c`, `e7d3f31a99ea4e7a…`). It overrides musl members that define only those symbols:
+  - `access` (faccessat is NS_REFUSE) on stat;
+  - `rename` (renameat2 is NS_REFUSE) as link then unlink;
+  - `realpath`, lexical: musl's walks every prefix from `/`, and a native task may not look above its directory;
+  - `setitimer` (ENOSYS) arms nothing, and every timeout setting is 0;
+  - `posix_fallocate` returns EOPNOTSUPP, so PostgreSQL writes zeros itself (fd.c:2401);
+  - `preadv` and `pwritev` are pg_iovec.h's own per-iovec fallback over `pread`/`pwrite`.
+  - Each was found by a twin run failing on it, in that order. A table-driven pass over the image's libc members
+    (`native-syscall-table.c` against the linked syscall wrappers) is the faster way next time.
+- **Inputs.** The fixture `tmp/fix2` is the port's `build-native16-fixture.py` recipe with `initdb -U postgres`, so the
+  catalog carries no host account name. It is trimmed: templates dropped, 1 MiB WAL segments. The stage carries it
+  xz-packed and unpacks it per command, outside the marks. On the twin the unpack takes 3.0 s per command.
+- **Settings**, all three runs: `shared_buffers=4MB max_connections=10 timezone=GMT log_timezone=GMT
+  dynamic_shared_memory_type=sysv exit_on_error=true fsync=off log_startup_progress_interval=0`.
+
+**Workload.** `work/gen.py` (`f67f7fc6871f4755…`), scale 1 as `pgbench -i -s 1` builds it, in pgbench's step order:
+tables, data, `VACUUM ANALYZE` of the four tables, primary keys. Then select-only, simple-update and tpcb-like
+transactions from a fixed-seed PRNG, with a fixed mtime, and four CHECK queries. `w2-small.sql` (200/200/200,
+`a5c4e910d13893c2…`) and `w2-main.sql` (500/500/1000, `03465ac436fdda41…`). The native reference is the fixture's
+own MAXALIGN-16 build, through `work/mkref.py`.
+
+**A defect the protected arm found: generic array code reads `int2vector`/`oidvector` 8 bytes off on the
+16-byte-MAXALIGN port.**
+- The first workload ended its init with a database-wide `VACUUM ANALYZE`. The protected arm faulted there with
+  `CAP_OOB` (28), in `array_iter_next`, called from `array_cmp` during `ANALYZE pg_catalog.pg_index`. QEMU's `-d int`
+  gives `tval 0x3ff61751a4`.
+- An instrumented `array_iter_next` (debug build only; its first 3 calls print unconditionally, as the check's
+  positive control) reads element 0 at that address. The pointer's capability ends at `0x3ff61751a0`: the array's
+  header is inside it, and its data starts 4 bytes past the end.
+- **Mechanism, from the source:**
+  - Generic array code finds the data at `ARR_OVERHEAD_NONULLS(1)` = `MAXALIGN(16 + 8)` (`utils/array.h:310`).
+  - `int2vector` and `oidvector` fix `values[]` at offset 24 (`c.h:715-734`), and their size is 24 plus the elements.
+  - With MAXALIGN 8 both are 24. With the port's 16 (`pg_config.h`, forced by its build), generic array code reads
+    from offset 32.
+- **Without any capability machine** (native host, same query):
+
+  | query | stock 17.5, MAXALIGN 8 | the port's MAXALIGN-16 build |
+  |---|---|---|
+  | `'1 2'::int2vector = '1 3'::int2vector` | f | **t** |
+  | `('1'::int2vector)::int2[]` | `[0:0]={1}` | **`[0:0]={0}`** |
+
+- So the unprotected arm reads the same wrong bytes silently, and the protected arm stops at them. It is a defect of
+  the port's MAXALIGN choice, not of upstream PostgreSQL and not of the lifetime patch. It is reported to the SPEC
+  lane for the port and bug-corpus owners. Earlier MAXALIGN-16 results that compare or cast these types through
+  generic array code have not been audited.
+- The measurement workload's vacuum step now does what `pgbench -i` does: the four tables by name, which never compares
+  a catalog vector. The native answers are unchanged.
+
+- Filed as ISSUES.md **M-15** (lane branch), with the audit of corpus case 04 that this file does not repeat.
+
+**Twin bring-up** (QEMU qemu55 a0501ebc39, slot 28, native route):
+- Image set 9 on `w-small`: the unprotected arm gave the native answers exactly; the protected arm stopped at M-15.
+- Image set 10 (clean rebuild, byte-identical to set 9: none `e1a8c8083ff41a34…`, sublet `03e0c47ead40882e…`;
+  stripped `1ea084ab…` / `4cc5f247…`) on `w2-small` (stage `pg/stages/s12`): **both arms give the native reference
+  answers** (4 CHECK lines, 600 rows, rc 0). The protected arm reports `Q15_PAD chunks=842636 padded=1899
+  pad_bytes_total=53280 pad_bytes_max=8160`: 0.23 % of its chunks carry tail padding, 53 KB in all.
+- Running: the ABBA timing boot on `w2-main` (stage `pg/stages/a1`, u1 p1 p2 u2), then one counting boot per arm on
+  `qemu-nst` (`pg/stages/c1u`, `c1p`), for the CDERIVE/CREVOKE counts and the context-reset subtree histogram.

@@ -10263,6 +10263,67 @@ split. Rounding inward in the RTL would reverse R-33's decision; that trade-off 
 - **Consequence:** a monitor bug on silicon reads as a silent wedge with a misleading trap log. Bisect it with trace
   points, as C-76 was. The cheap tells are mepc at `_cap_trap_entry`+4 and a kernel-stack tval.
 
+### M-15 — the 16-byte-MAXALIGN PostgreSQL port reads `int2vector`/`oidvector` elements 8 bytes off through generic array code `CHARACTERISED 2026-11-15 (nested lane): mechanism from source, two-sided native evidence, a Capstone fault on the protected arm; unfixed`
+
+**Repro**, one statement on any build of the port (`MAXIMUM_ALIGNOF 16`):
+
+    SELECT '1 2'::int2vector = '1 3'::int2vector, ('1'::int2vector)::int2[];
+
+| | stock PostgreSQL 17.5 (MAXALIGN 8) | the port's MAXALIGN-16 build, native host |
+|---|---|---|
+| `'1 2'::int2vector = '1 3'::int2vector` | f | **t** |
+| `('1'::int2vector)::int2[]` | `[0:0]={1}` | **`[0:0]={0}`** |
+| `array[1,2]::oidvector` (case 04's control) | `1 2` | **`0 0`** |
+
+Both builds are the same 17.5 source, built `-O1` on the host. Stock is `nested/pg/tmp/stock8`. The port's is the
+`build-native16-fixture.py` recipe (`nested/pg/tmp/fix2`), with the port's patch 0004 and `MAXIMUM_ALIGNOF` forced to
+16. No capability machine is involved.
+
+**Mechanism, from the source.**
+- `int2vector` and `oidvector` are fixed C structs whose `values[]` sit at offset 24 (`src/include/c.h:715-734`, "these
+  fields must match ArrayType"). Their size is `offsetof(values) + n * elemsize` (`Int2VectorSize`).
+- Generic array code locates a no-nulls array's data at `ARR_OVERHEAD_NONULLS(ndim)` =
+  `MAXALIGN(sizeof(ArrayType) + 2 * sizeof(int) * ndim)` (`src/include/utils/array.h:310`). For ndim 1 that is
+  `MAXALIGN(24)`: 24 upstream, **32** on the port.
+- So `array_eq`, `array_cmp`, `array_iter_next` and any binary reinterpretation between `int2[]`/`oid[]` and the
+  vector types use a data pointer 8 bytes past where the vector stores its elements, and the reverse for an array cast
+  to a vector. It reads the wrong elements: `[32, 32 + n * elemsize)` against a vector that ends at
+  `24 + n * elemsize`. The last 8 bytes are past the vector's end for every n; they land in the allocation's padding
+  or beyond it. The vector's own I/O functions (`int2vectorout`, `oidvectorout`) use the struct and are right.
+
+**On Capstone.** The nested lane's protected PostgreSQL arm (native route, patch 0003 with every chunk a CDERIVE child,
+twin QEMU qemu55 a0501ebc39) faults on it: `CAP_OOB` (28) in `array_iter_next`, called from `array_cmp` during
+`ANALYZE pg_catalog.pg_index`, with QEMU's `tval 0x3ff61751a4`. An instrumented `array_iter_next` (debug build, its first
+calls printed as the positive control) reads element 0 at that address. The chunk capability ends at `0x3ff61751a0`:
+the vector's header is inside it, and the data the generic code looks for starts 4 bytes past the end. The unprotected
+arm reads the same bytes silently. Details: `docs/ref/nested-allocator-workloads.md`, PostgreSQL section (lane branch
+`nested-workloads`).
+
+**Who is exposed.** Every MAXALIGN-16 build: the virtual and native ports (`ports/postgres/app/README.md:39-65` pins
+16), the native fixture builder, and the CheriBSD purecap build (`ports/postgres/app/build-cheribsd.sh:56-57`, asserted
+at `:104`). It is reached by ANALYZE of a catalog with vector columns (pg_index, pg_proc, pg_trigger, ...), by `=`/`<`
+on these types, and by casts between them and arrays.
+
+**Possibly affected records** (checked 2026-11-15 by reading and re-running, not by re-scoring):
+- `bug-corpora/postgres/sql-repros/04_3d160401b65e_oidvector_oob_read`:
+  - **Control** (`array[1,2]::oidvector`, `::int2vector`): on every MAXALIGN-16 arm it prints `0 0`, the header
+    padding at 24-32, instead of `1 2`. The read stays inside the allocation, and the oracle asks only that the
+    control completes, so the recorded `control-held` verdicts stand. The control does not read the elements it is
+    meant to exercise.
+  - **Trigger** (`array[]::…`): the upstream defect reads `dim1` and `values` past a 16-byte empty-array allocation.
+    That size is 16 at either MAXALIGN, and the vector output functions use the struct offsets. So the trigger's
+    overread does not depend on M-15. The `virtual-pg-pools` CAUGHT (cause 28 in `oidvectorout`) is consistent with
+    the upstream defect, not with M-15.
+  - The case's fidelity note reads the purecap arm's empty value as "a different amount of the same defect". That is
+    adjacent-memory content: on the port's native build the same trigger prints `""` for oidvector and heap words for
+    int2vector, and stock prints heap words for both. The note is not evidence for or against M-15.
+- Other MAXALIGN-16 PostgreSQL results that ANALYZE the catalogs or compare and cast these types through generic array
+  code: **not audited.**
+
+**Fix (not made here):** move `values[]` of both structs to `ARR_OVERHEAD_NONULLS(1)`, for example with padding before
+`values` under `MAXIMUM_ALIGNOF > 8`. That changes the on-disk layout, so every MAXALIGN-16 cluster and fixture must be
+rebuilt. The alternative is to teach the array code the vectors' fixed offset. The port owner chooses.
+
 ### C-59 — `isValidInsnFormat` is defined non-`static` in BOTH the RISCV and the Capstone asm parser, so a static build of LLVM does not link `OPEN — PARTIALLY FIXED. The Capstone copy of isValidInsnFormat is static as of da5e88488080 (branch compiler/c59-odr, efe9b957d538), which removes the one collision that was actually observed. It is ONE OF SIXTEEN: a BUILD_SHARED_LIBS=OFF link still fails, with fifteen errors instead of sixteen`
 
 > **Scope, measured 2026-09-25 by the compiler lane.** Every strong (T/D/B) defined symbol in both
