@@ -1,4 +1,4 @@
-; -capstone-gp-relax-globals: on a derivation that -capstone-fold-global-lo
+; -capstone-mark-gp-relaxable: on a derivation that -capstone-fold-global-lo
 ; folded (auipc; scc gp; accesses %pcrel_lo), and whose auipc feeds nothing but
 ; the scc, the scc carries an R_Capstone_GP_SCC relocation against the auipc's
 ; label, written `scc rd, gp, rs, %gp_scc(label)`. lld --relax-gp may then
@@ -10,7 +10,7 @@
 ; RUN: llc -mtriple=capstone64 -mattr=+m,+relax -capstone-gp-free -capstone-image-gp \
 ; RUN:   -capstone-shrinkto-globals -capstone-shrinkto-end-adjust=1 -capstone-drop-redundant-shrink \
 ; RUN:   -capstone-drop-redundant-shrink-declarations \
-; RUN:   -capstone-fold-global-lo -capstone-gp-relax-globals < %s \
+; RUN:   -capstone-fold-global-lo -capstone-mark-gp-relaxable < %s \
 ; RUN:   | FileCheck %s --check-prefixes=CHECK,MARK
 ; RUN: llc -mtriple=capstone64 -mattr=+m,+relax -capstone-gp-free -capstone-image-gp \
 ; RUN:   -capstone-shrinkto-globals -capstone-shrinkto-end-adjust=1 -capstone-drop-redundant-shrink \
@@ -20,17 +20,17 @@
 ; RUN: llc -mtriple=capstone64 -mattr=+m,+relax -capstone-gp-free -capstone-image-gp \
 ; RUN:   -capstone-shrinkto-globals -capstone-shrinkto-end-adjust=1 -capstone-drop-redundant-shrink \
 ; RUN:   -capstone-drop-redundant-shrink-declarations \
-; RUN:   -capstone-gp-relax-globals < %s | FileCheck %s --check-prefix=NOFOLD
+; RUN:   -capstone-mark-gp-relaxable < %s | FileCheck %s --check-prefix=NOFOLD
 ; The relocation, and R_Capstone_RELAX only under +relax.
 ; RUN: llc -mtriple=capstone64 -mattr=+m,+relax -capstone-gp-free -capstone-image-gp \
 ; RUN:   -capstone-shrinkto-globals -capstone-shrinkto-end-adjust=1 -capstone-drop-redundant-shrink \
 ; RUN:   -capstone-drop-redundant-shrink-declarations \
-; RUN:   -capstone-fold-global-lo -capstone-gp-relax-globals -filetype=obj < %s -o %t.relax.o
+; RUN:   -capstone-fold-global-lo -capstone-mark-gp-relaxable -filetype=obj < %s -o %t.relax.o
 ; RUN: llvm-readelf -r %t.relax.o | FileCheck %s --check-prefix=RELOC
 ; RUN: llc -mtriple=capstone64 -mattr=+m -capstone-gp-free -capstone-image-gp \
 ; RUN:   -capstone-shrinkto-globals -capstone-shrinkto-end-adjust=1 -capstone-drop-redundant-shrink \
 ; RUN:   -capstone-drop-redundant-shrink-declarations \
-; RUN:   -capstone-fold-global-lo -capstone-gp-relax-globals -filetype=obj < %s -o %t.norelax.o
+; RUN:   -capstone-fold-global-lo -capstone-mark-gp-relaxable -filetype=obj < %s -o %t.norelax.o
 ; RUN: llvm-readelf -r %t.norelax.o | FileCheck %s --check-prefix=NORELAX
 ; Small data.
 ; RUN: llc -mtriple=capstone64 -mattr=+m,+relax -capstone-gp-free -capstone-image-gp \

@@ -867,7 +867,7 @@ static void relaxHi20Lo12(Ctx &ctx, const InputSection &sec, size_t i,
 // rs` derived from it, so the auipc also needs that scc's R_CAPSTONE_GP_SCC
 // marker, and the scc is deleted with it. The compiler emits the marker only
 // where the auipc feeds nothing but the scc and the scc nothing but those
-// accesses (-capstone-gp-relax-globals); unmarked Capstone code, the runtime's
+// accesses (-capstone-mark-gp-relaxable); unmarked Capstone code, the runtime's
 // and libc's included, is left alone. The relaxed accesses read gp's own
 // value, so the program must keep gp (on Capstone: gp's cursor) at
 // __global_pointer$.

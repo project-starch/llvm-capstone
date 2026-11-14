@@ -61,7 +61,7 @@ ELF_RELOC(R_Capstone_TLSDESC_LOAD_LO12, 63)
 ELF_RELOC(R_Capstone_TLSDESC_ADD_LO12,  64)
 ELF_RELOC(R_Capstone_TLSDESC_CALL,      65)
 // Capstone: marks the scc that derives a global's base from gp for the auipc at the
-// referenced label (linker gp relaxation, -capstone-gp-relax-globals). No bits.
+// referenced label (linker gp relaxation, -capstone-mark-gp-relaxable). No bits.
 ELF_RELOC(R_Capstone_GP_SCC,           66)
 ELF_RELOC(R_Capstone_VENDOR,           191)
 ELF_RELOC(R_Capstone_CUSTOM192,        192)

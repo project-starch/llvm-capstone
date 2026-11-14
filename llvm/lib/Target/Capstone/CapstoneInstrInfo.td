@@ -552,7 +552,7 @@ def GPSCCSymbol : AsmOperandClass {
 }
 
 // A bare symbol with the %gp_scc variant: the label of the auipc whose result
-// this scc consumes (R_Capstone_GP_SCC, -capstone-gp-relax-globals).
+// this scc consumes (R_Capstone_GP_SCC, -capstone-mark-gp-relaxable).
 def gp_scc_symbol : Operand<XLenVT> {
   let ParserMatchClass = GPSCCSymbol;
 }
@@ -2776,7 +2776,7 @@ def DELIN : RVInstR<0b0000011, 0b001, OPC_CAP_OP, (outs GPCR:$rd),
 let hasSideEffects = 0, mayLoad = 0, mayStore = 0, Size = 8, Uses = [X3] in
 def PseudoCapGlobalBase : Pseudo<(outs GPCR:$rd), (ins GPR:$rs1), []>;
 
-// -capstone-gp-relax-globals (CapstoneMergeBaseOffset.cpp,
+// -capstone-mark-gp-relaxable (CapstoneMergeBaseOffset.cpp,
 // foldIntoCapGlobalMemoryOps): a PseudoCapGlobalBase under the image-gp ABI
 // whose operand is an auipc's result used by nothing else, and whose result is
 // used only as the base of accesses carrying that auipc's %pcrel_lo. $src is
@@ -2784,7 +2784,9 @@ def PseudoCapGlobalBase : Pseudo<(outs GPCR:$rd), (ins GPR:$rs1), []>;
 // $rs1`, plus an R_Capstone_GP_SCC relocation against the label, so that the
 // linker can delete the auipc and this scc together and rebase every access on
 // gp when the global lies within 2 KiB of __global_pointer$ (lld, --relax-gp).
-let hasSideEffects = 0, mayLoad = 0, mayStore = 0, Size = 4, Uses = [X3] in
+// Size = 8 as PseudoCapGlobalBase's, so that branch relaxation, and with it the
+// code, cannot differ from the unmarked build: the mark adds relocations only.
+let hasSideEffects = 0, mayLoad = 0, mayStore = 0, Size = 8, Uses = [X3] in
 def PseudoCapGlobalBaseGpRel : Pseudo<(outs GPCR:$rd),
                                       (ins GPR:$rs1, gp_scc_symbol:$src), []>;
 

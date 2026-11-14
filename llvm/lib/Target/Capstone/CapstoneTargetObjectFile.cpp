@@ -21,7 +21,7 @@ using namespace llvm;
 // Small data for VARIABLES on the Capstone target, whose clang emits no
 // SmallDataLimit module flag: a defined variable of at most this many bytes goes
 // to .sdata/.sbss, where the image link script puts it inside the 4 KiB that
-// __global_pointer$ reaches (lld gp relaxation, -capstone-gp-relax-globals).
+// __global_pointer$ reaches (lld gp relaxation, -capstone-mark-gp-relaxable).
 // Constants are not affected: under the image-gp ABI the constant pool stays in
 // .rodata (getSectionForConstant). 0 (the default) changes nothing.
 static cl::opt<unsigned> CapstoneSmallDataLimit(

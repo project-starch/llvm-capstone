@@ -61,8 +61,14 @@ static cl::opt<bool> CapstoneFoldGlobalLo(
 // __global_pointer$ and every one of those relocations is marked relaxable.
 // That form reads gp's own cursor, which must therefore be __global_pointer$ in
 // every context (the runtime's convention under this option). Default off.
-static cl::opt<bool> CapstoneGpRelaxGlobals(
-    "capstone-gp-relax-globals", cl::Hidden, cl::init(false),
+//
+// The mark changes no instruction (the scc is the same, and the pseudo's Size
+// is PseudoCapGlobalBase's), only the relocations. The ABI-level switch is the
+// link: an SDK whose linker relaxes (lld --relax-gp) and whose runtime keeps
+// gp's cursor at __global_pointer$. That is why this is not a gp ABI option in
+// capstone-cc's sense (its capstone-gp-* options must be the SDK profile's).
+static cl::opt<bool> CapstoneMarkGpRelaxable(
+    "capstone-mark-gp-relaxable", cl::Hidden, cl::init(false),
     cl::desc("Mark folded global derivations (auipc; scc gp; access "
              "%pcrel_lo) for lld's gp relaxation (R_Capstone_GP_SCC); needs "
              "-capstone-fold-global-lo, +relax, and a runtime that keeps gp's "
@@ -812,9 +818,9 @@ bool CapstoneMergeBaseOffsetOpt::foldIntoCapGlobalMemoryOps(MachineInstr &Hi,
   Lo.eraseFromParent();
   ++NumGlobalLoFolded;
 
-  // The gp-relaxation mark (see CapstoneGpRelaxGlobals): a global's auipc whose
+  // The gp-relaxation mark (see CapstoneMarkGpRelaxable): a global's auipc whose
   // only use is now this scc. Every use of CapReg carries HiLabel's %pcrel_lo.
-  if (CapstoneGpRelaxGlobals && HiOp.isGlobal() && HiLabel &&
+  if (CapstoneMarkGpRelaxable && HiOp.isGlobal() && HiLabel &&
       MRI->hasOneNonDBGUse(HiReg)) {
     MachineInstr *NewBase =
         BuildMI(*Base.getParent(), Base, Base.getDebugLoc(),
