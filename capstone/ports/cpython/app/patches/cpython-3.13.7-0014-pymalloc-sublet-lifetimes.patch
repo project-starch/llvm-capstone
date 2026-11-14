@@ -18,14 +18,19 @@ and takes it back (docs/design/virtual-capstone/isa.md):
   returns NULL and so does pymalloc_alloc, as upstream: _PyObject_Malloc then
   falls back to the system allocator, and its failure is MemoryError. Deriving
   from the NULL instead faulted (cause 24) where the stock image raised
-  MemoryError (results/2026-10-11-same-answers, finding F1).
+  MemoryError (results/2026-10-11-same-answers, finding F1). When the
+  lifetime table has no slot left and cannot grow, CDERIVE returns an untagged
+  0: pymalloc_alloc then gives the block back to its pool and returns NULL,
+  the same out-of-memory path.
 - pymalloc_free ends that child's lifetime (CREVOKE). The client's reference
   is the only operand, and CREVOKE faults when it is stale, so a double free
   stops there. obmalloc then continues with its own pointer at the same
   address. That pointer is derived from arena_ptr, which outlives every
   block.
 - pymalloc_realloc replaces the client's child by one of the new length when
-  the block stays, and copies only the issued length when it moves.
+  the block stays, and copies only the issued length when it moves. The new
+  child begins before the old one ends: without a lifetime left the realloc
+  returns NULL and the old block stays the client's.
 
 A client's pointer is bounded to its block, so obmalloc cannot reach the
 pool header by aligning it down. The radix tree's leaf therefore also
@@ -84,15 +89,15 @@ upstream, which on the virtual profile bounds and retires them itself.
          uintptr_t arena_base_next = arena_base + ARENA_SIZE;
          /* If arena_base is a legit arena address, so is arena_base_next - 1
           * (last address in arena).  If arena_base_next overflows then it
-@@ -1790,10 +1794,56 @@
+@@ -1790,8 +1794,58 @@
          }
          int i3_next = MAP_BOT_INDEX(arena_base_next);
          n_lo->arenas[i3_next].tail_lo = is_used ? tail : 0;
 +        n_lo->arenas[i3_next].arena_lo = is_used ? arena + 1 : 0;
      }
      return 1;
- }
- 
++}
++
 +/* Sublet: the arena P lies in, or NULL. P may be a client's pointer, which
 + * is bounded to its block and so cannot reach the pool header. */
 +static struct arena_object *
@@ -129,6 +134,10 @@ upstream, which on the virtual profile bounds and retires them itself.
 +                               nbytes ? nbytes : 1);
 +}
 +
++/* Sublet: link obmalloc's own pointer P back into its pool, as pymalloc_free
++ * does once the client's lifetime of the block has ended. */
++static int pymalloc_give_back(OMState *state, pymem_block *p);
++
 +/* Sublet: the length a client's block was issued with. */
 +static size_t
 +block_requested(void *p)
@@ -136,12 +145,10 @@ upstream, which on the virtual profile bounds and retires them itself.
 +    capstone_cap_slot slot;
 +    capstone_cap_store(&slot, p);
 +    return capstone_cap_end(&slot) - capstone_cap_base(&slot);
-+}
-+
+ }
+ 
  /* Return true if 'p' is a pointer inside an obmalloc arena.
-  * _PyObject_Free() calls this so it needs to be very fast. */
- static int
-@@ -1888,7 +1938,8 @@
+@@ -1888,7 +1942,8 @@
      address = _PyObject_Arena.alloc(_PyObject_Arena.ctx, ARENA_SIZE);
  #if WITH_PYMALLOC_RADIX_TREE
      if (address != NULL) {
@@ -151,7 +158,7 @@ upstream, which on the virtual profile bounds and retires them itself.
              /* marking arena in radix tree failed, abort */
              _PyObject_Arena.free(_PyObject_Arena.ctx, address, ARENA_SIZE);
              address = NULL;
-@@ -2238,7 +2289,12 @@
+@@ -2238,7 +2293,19 @@
          bp = allocate_from_new_pool(state, size);
      }
  
@@ -161,11 +168,18 @@ upstream, which on the virtual profile bounds and retires them itself.
 +    if (UNLIKELY(bp == NULL)) {
 +        return NULL;
 +    }
-+    return block_issue(state, bp, nbytes);
++    void *issued = block_issue(state, bp, nbytes);
++    if (UNLIKELY(issued == NULL)) {
++        /* The table has no lifetime left (CDERIVE's untagged 0): the block
++           goes back to its pool, and the request fails as when no arena can
++           be had. */
++        pymalloc_give_back(state, bp);
++    }
++    return issued;
  }
  
  
-@@ -2380,7 +2436,7 @@
+@@ -2380,7 +2447,7 @@
  
  #if WITH_PYMALLOC_RADIX_TREE
          /* mark arena region as not under control of obmalloc */
@@ -174,7 +188,7 @@ upstream, which on the virtual profile bounds and retires them itself.
  #endif
  
          /* Free the entire arena. */
-@@ -2481,7 +2537,12 @@
+@@ -2481,8 +2548,18 @@
      if (UNLIKELY(!address_in_range(state, p, pool))) {
          return 0;
      }
@@ -183,12 +197,18 @@ upstream, which on the virtual profile bounds and retires them itself.
 +       CREVOKE faults on a stale reference, so a double free stops here. */
 +    struct arena_object *ao = arena_map_arena(state, p);
 +    capstone_cap_release(p);
-+    p = arena_inside(ao, p);
-+    pool = POOL_ADDR(p);
++    return pymalloc_give_back(state, arena_inside(ao, p));
++}
  
++static int
++pymalloc_give_back(OMState *state, pymem_block *p)
++{
++    poolp pool = POOL_ADDR(p);
++
      /* Link p to the start of the pool's freeblock list.  Since
       * the pool had at least the p block outstanding, the pool
-@@ -2585,6 +2646,8 @@
+      * wasn't empty (so it's already in a usedpools[] list, or
+@@ -2585,6 +2662,8 @@
      }
  
      /* pymalloc is in charge of this block */
@@ -197,16 +217,23 @@ upstream, which on the virtual profile bounds and retires them itself.
      size = INDEX2SIZE(pool->szidx);
      if (nbytes <= size) {
          /* The block is staying the same or shrinking.
-@@ -2595,12 +2658,18 @@
+@@ -2595,12 +2674,25 @@
             The compromise here is to copy on shrink only if at least 25% of
             size can be shaved off. */
          if (4 * nbytes > 3 * size) {
 -            /* It's the same, or shrinking and new/old > 3/4. */
 -            *newptr_p = p;
 +            /* It's the same, or shrinking and new/old > 3/4. The block stays;
-+               its client lifetime is replaced by one of the new length. */
++               its client lifetime is replaced by one of the new length. The
++               new one begins before the old one ends, so that without a
++               lifetime left the realloc fails with the old block intact. */
++            void *issued = block_issue(state, arena_inside(ao, p), nbytes);
++            if (UNLIKELY(issued == NULL)) {
++                *newptr_p = NULL;
++                return 1;
++            }
 +            capstone_cap_release(p);
-+            *newptr_p = block_issue(state, arena_inside(ao, p), nbytes);
++            *newptr_p = issued;
              return 1;
          }
          size = nbytes;
