@@ -4485,7 +4485,7 @@ byte-identical (blob 213b9e5cea99) on ffb82d5bb, 6d0e754d5, 105c464bc and 9972ae
 - **Synthesis:** no FLU signal is on the standing loop list. The cost was not measured by a gate, but the final
   6d0e754d5 carrying the fix routed and sealed on every key.
 
-### R-74 — a page fill can start while a tag read of a word the page shares is in flight; whether the tag-word cache can then keep a stale tag is UNVERIFIED on every bitstream with the page bitmap and TWC `OPEN 2026-11-14 — UNVERIFIED either way; argued safe by reading (claim-audited), NOT measured: three simulation instruments have not opened the window, silicon can. Covers the base TWC in service (fdk 3c6b9906c, the batch a47b588a1) and the 16,384-entry TWC (capstone-ariane a948e4134) alike. Until a testbench that grants writes during reads reads clean, no security claim (paper, an ISSUES "fixed", a README) may rest on TWC fill safety`
+### R-74 — a page fill can start while a tag read of a word the page shares is in flight; the tag-word cache keeps no stale tag on the one instance measured `OPEN 2026-11-14 — MEASURED CLEAN ON ONE WINDOW INSTANCE in simulation, for the base TWC in service (fdk 3c6b9906c, the batch a47b588a1), the 16,384-entry TWC (capstone-ariane a948e4134) and the targeted variant, each with a forging control that forges. N = 1 window instance (1 of 24 fills), one test shape, the simulator built with the boards' crossbar setting: NOT a proof for every timing. A claim may cite this instance with that scope, never as "TWC fill safety is verified"`
 
 **The window.** Capability tags live in shadow DRAM behind `core/cache_subsystem/wt_axi_adapter.sv`, one tag byte per
 16-byte granule at `CAP_TAG_MEM_BASE = 0xBC2D2D2D`, cached in a direct-mapped tag-word cache (TWC) of 8-byte tag words.
@@ -4505,7 +4505,7 @@ is poisoned (`twc_poison_now ... | (fill_req & axi_wr_gnt)`, held until the next
 targeted-invalidation variant (capstone-ariane perf/twc-fill-targeted-1w, NOT built) supported the same argument and
 named this window as its untested gap.
 
-**Why it is not measured yet.** Three instruments, each calibrated or traced, did not open it:
+**Why three instruments missed it.** Three instruments, each calibrated or traced, did not open it:
 1. tw-fill-gap.S (twelve trials, the store then 0..48 instructions then the load): every fill entry read
    `inflight=0` (24 of 24) on the base and on a948e4134's design.
 2. The testbench memory delay cannot widen the window: `S12_MEM_DELAY` feeds `stream_delay`'s 4-bit counter
@@ -4517,19 +4517,39 @@ named this window as its untested gap.
    instrument's own doing (board lane's read): holding R unaccepted keeps the testbench memory `axi2mem` in READ
    (`corev_apu/axi_mem_if/src/axi2mem.sv:175-210`), and it raises `aw_ready` only in IDLE (`:105-145`). So the hold
    cannot open the window by construction. On silicon the DRAM controller accepts writes with reads open.
+The cause common to all three: the simulation testharness builds the SoC crossbar with LatencyMode NO_LATENCY
+(`corev_apu/tb/ariane_testharness.sv:532`), the FPGA top with CUT_ALL_PORTS (`corev_apu/fpga/src/ariane_xilinx.sv:352`),
+both with MaxMstTrans 1. With MaxMstTrans 1 each port's `axi_demux` refuses every core AW while any read is outstanding
+(`vendor/pulp-platform/axi/src/axi_demux.sv:205`, `:644`, `:678`), and with no spill registers that refusal reaches the
+core, so in simulation a fill could not start mid tag-read. On the boards a spill register accepts the write.
 The record of all three, with every hash: llvm-capstone `capstone/docs/plans/2026-11-14-twc-reach.md`
 (branch land/rtl-twc-reach).
 
-**What would settle it.** A sim-only delayed presentation: the adapter accepts the tag beat on the bus at once (so
-the memory returns to IDLE and accepts writes) and presents it to its own tag-return logic N cycles later, with the
-tag read still marked in flight -- a slow tag read with the bus free, which is the silicon case. Run on the base TWC, on a948e4134's and on the targeted variant, with an unsafe positive control (installs ignoring
-the poison, `TWC_SIM_NOPOISON`) that must forge, a calibration that the hold acts, and at least one fill entry with a
-tag read in flight. Being built (RTL lane).
+**The measurement (2026-11-14).** `TB_XBAR_CUT_ALL` (sim only, testharness; capstone-ariane 3f06c470b) builds the
+boards' crossbar setting (calibration: 1,024 load misses +4.0 cycles each, the spill stages). With it, tw-fill-gap.S
+reaches the window: `fill-enter inflight=1` at cycle 62,230, the in-flight word 0x1785A6A5 = the filled page's first
+(shared) tag word, its beat landing inside the fill at 62,377. The same event recurs in every arm. Each design has two
+protections, so each arm removes one or both of them with sim-only defines: `TWC_SIM_NOPOISON` makes installs ignore
+the poison; `TWC_SIM_NOFILLCLEAR` makes the base's fill clear nothing; `TWC_SIM_FILLVALIDATE` lets a948e4134 validate an
+install during a fill.
+
+| design (tree) | as built | one protection removed | both removed |
+|---|---|---|---|
+| base (3f06c470b; 864d112e0 for the no-clear arms) | poisoned; 12 traps / 0x18 | no poison: installed, wiped by the clear; no clear: poisoned; both 12 / 0x18 | FORGED (S-06 invariant at the LDC) |
+| a948e4134 (325cf3bff, config F) | poisoned; 12 / 0x18 | no poison: installed, not validated; validate on: poisoned; both 12 / 0x18 | FORGED |
+| targeted (325cf3bff, F2) | poisoned, 48 targeted invalidations; 12 / 0x18 | -- | FORGED |
+
+So on this instance every design protects correctly, each protection suffices alone, and the arm detects a forgery.
+On a948e4134, removing the poison and the epoch bump together does not forge: what protects this event is that
+nothing validates during a fill, not the bump. Every tree is the named design plus sim-only code, all `rtl_dirty=no`.
+The full record with directories is in llvm-capstone `capstone/docs/plans/2026-11-14-twc-reach.md`. What would widen
+it: more window instances (other shapes and timings; the test reached 1 of 24 fills), and the window on the boards
+themselves, which no current instrument observes.
 
 **Consequence for the boards (runtime lane's ruling, 2026-11-14).** a948e4134 may be flashed for PERFORMANCE
-measurement: its fill handling is equivalent by reading to the base TWC already on the boards, so it adds no exposure
-beyond what they carry. The targeted-invalidation variant stays out until the instrument above reads clean on its own
-handling. Siblings: R-73 (the debug module writes DRAM around the adapter).
+measurement once it seals and its sweep on the built hash is clean: the window reads clean on the base and on
+a948e4134, the RTL lane's flash rule. The targeted variant now reads clean on its own handling too. It is a candidate
+for a later bitstream, not this one. Siblings: R-73 (the debug module writes DRAM around the adapter).
 
 ### R-73 — the debug module's system-bus master writes DRAM around the AXI adapter, so its writes update neither capability tags, the tag-word cache nor the page bitmap `OPEN 2026-11-14 — by source (claim-audited while auditing the TWC change); present on every tree with the shadow-tag adapter; board exposure NIL IF the board's `reset halt` asserts ndmreset (one gdb read; see Exposure); no fix written`
 
