@@ -6,6 +6,14 @@ contracts. Reconcile the loader stream's grant-slot output with the block
 structure now shared by the table and mapping code.
 [Interfaces and current verification](../design/sublet-mappings.md).
 
+## Integrate the trap thread slice
+
+Apply `series.s8-threads` after the step 3 trap route and step 5 handle binder.
+Run `threads-smoke.dom` and require exit zero. Then run the stale futex read
+and stale wake-op controls described in the [thread tests](../../kernel/tests/threads/README.md).
+Complete lifetime-aware wake counting before claiming plan v5 step 8 complete.
+The current evidence covers compilation, linking and the host binder only.
+
 ## Integrate the trap libc with the exec loader
 
 On `trap/s5-libc`, use the [stack and syscall contract](../../ports/musl-capstone/tests/trap/README.md)
@@ -14,7 +22,8 @@ envp and pointer-valued auxv entries, then restore tagged sp and image gp.
 Syscall numbers now arrive in a7. mmap must return a tagged depth-1 block.
 Run the linked smoke first and require stdout `ok` and exit status 7.
 Then run the mallocng smoke. Neither program has run yet.
-Threads, caught signals and epoll side tables remain later work.
+Run the thread smoke after the step 8 fragment is integrated. Caught signals
+and epoll side tables remain later work.
 
 ## RTL implementation from the rebased native branch
 

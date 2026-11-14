@@ -33,7 +33,7 @@ for src in "$here/runtime/"{linux-start.c,tls.c,delegate.c,native-syscall.S,set_
     objects+=("$obj")
 done
 "$CAPSTONE_LLVM_BIN/llvm-ar" rcs "$out/libtrap-runtime.a" "${objects[@]}"
-for test in smoke malloc-smoke; do
+for test in smoke malloc-smoke threads-smoke; do
     "$CAPSTONE_CLANG" "${flags[@]}" -c "$here/tests/trap/$test.c" -o "$out/$test.o"
     "$CAPSTONE_LD_LLD" --gc-sections -T "$rt/virtual/link.ld" -o "$out/$test.dom" \
         "$out/$test.o" --whole-archive "$out/libtrap-runtime.a" --no-whole-archive \
@@ -58,4 +58,5 @@ if [[ -n ${TRAP_CONTROL_START:-} ]]; then
     grep -q '43504f4e 56564d37' "$out/control-handshake.txt"
     echo 'PASS: baseline startup contains the launcher image handshake'
 fi
-printf 'Built %s and %s. Execution requires the trap-route kernel loader.\n' "$out/smoke.dom" "$out/malloc-smoke.dom"
+printf 'Built %s, %s and %s. Execution requires the trap-route kernel loader.\n' \
+    "$out/smoke.dom" "$out/malloc-smoke.dom" "$out/threads-smoke.dom"

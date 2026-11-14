@@ -1,0 +1,470 @@
+--- a/arch/riscv/include/asm/mmu_context.h
++++ b/arch/riscv/include/asm/mmu_context.h
+@@ -8,7 +8,14 @@
+ #define _ASM_RISCV_MMU_CONTEXT_H
+ 
+ #include <linux/mm_types.h>
++#ifdef CONFIG_RISCV_CAPSTONE_TASK
++#define arch_exit_mmap sublet_default_exit_mmap
+ #include <asm-generic/mm_hooks.h>
++#undef arch_exit_mmap
++void arch_exit_mmap(struct mm_struct *mm);
++#else
++#include <asm-generic/mm_hooks.h>
++#endif
+ 
+ #include <linux/mm.h>
+ #include <linux/sched.h>
+--- a/arch/riscv/include/asm/processor.h
++++ b/arch/riscv/include/asm/processor.h
+@@ -39,6 +39,8 @@
+ #ifdef CONFIG_RISCV_CAPSTONE_TRAP
+ 	/* The embedded references of the current system call (asm/sublet-uaccess.h), or NULL. */
+ 	struct sublet_call_refs *sublet_refs;
++	/* Kept independently of syscall slots until mm_release. */
++	unsigned long sublet_clear_tid[2] __aligned(16);
+ #endif
+ 	/* Callee-saved registers */
+ 	unsigned long ra;
+--- /dev/null
++++ b/arch/riscv/include/asm/sublet-thread.h
+@@ -0,0 +1,13 @@
++/* SPDX-License-Identifier: GPL-2.0-only */
++#ifndef _ASM_RISCV_SUBLET_THREAD_H
++#define _ASM_RISCV_SUBLET_THREAD_H
++#include <linux/types.h>
++struct task_struct;
++struct kernel_clone_args;
++int sublet_copy_thread(struct task_struct *, const struct kernel_clone_args *);
++int sublet_set_tid(struct task_struct *, unsigned long);
++void sublet_exit_tid(struct task_struct *);
++int sublet_futex_read(u32 *, u32 __user *);
++int sublet_futex_op(int, int, int *, u32 __user *);
++int sublet_futex_cmpxchg(u32 *, u32 __user *, u32, u32);
++#endif
+--- a/arch/riscv/kernel/capstone_task.c
++++ b/arch/riscv/kernel/capstone_task.c
+@@ -31,22 +31,23 @@
+ }
+ #endif
+ 
+-/* Called at exec before exec_mmap and at exit before exit_mm, while task->mm is still the
+- * protected program's. Clears the task's flag and the mm's context, then ends the context. */
++/* The task flag survives through mm_release, which clears the exit word through
++ * its saved reference. Other threads still own the mm and its table. */
+ void riscv_capstone_release(struct task_struct *task)
+ {
+-	void *context;
++	clear_tsk_thread_flag(task, TIF_CAPSTONE);
++}
+ 
+-	if (!test_tsk_thread_flag(task, TIF_CAPSTONE))
+-		return;
+-	WARN_ON_ONCE(task != current || !task->mm);
+-	clear_tsk_thread_flag(task, TIF_CAPSTONE);
+-	context = task->mm->context.capstone_namespace;
+-	task->mm->context.capstone_namespace = NULL;
+-	/* No table stays selected once its context goes. */
+-	if (task->mm->context.capstone_root && csr_read(0x5c1) == task->mm->context.capstone_root)
++/* Last mm user only, in process context under mmap_read_lock. */
++void arch_exit_mmap(struct mm_struct *mm)
++{
++	void *context = mm->context.capstone_namespace;
++	unsigned long root = mm->context.capstone_root;
++
++	mm->context.capstone_namespace = NULL;
++	mm->context.capstone_root = 0;
++	if (root && csr_read(0x5c1) == root)
+ 		csr_write(0x5c1, 0);
+-	task->mm->context.capstone_root = 0;
+ 	if (context)
+ 		sublet_context_release(context);
+ }
+--- a/arch/riscv/kernel/process.c
++++ b/arch/riscv/kernel/process.c
+@@ -12,6 +12,9 @@
+ #include <linux/sched.h>
+ #ifdef CONFIG_RISCV_CAPSTONE_TASK
+ #include <linux/capstone_native_spawn.h>
++#ifdef CONFIG_RISCV_CAPSTONE_TRAP
++#include <asm/sublet-thread.h>
++#endif
+ #endif
+ #include <linux/sched/debug.h>
+ #include <linux/sched/task_stack.h>
+@@ -157,6 +160,11 @@
+ {
+ 	fstate_save(src, task_pt_regs(src));
+ 	*dst = *src;
++#ifdef CONFIG_RISCV_CAPSTONE_TRAP
++	dst->thread.sublet_refs = NULL;
++	memset(dst->thread.sublet_clear_tid, 0, sizeof(dst->thread.sublet_clear_tid));
++	memset(dst->thread_info.capstone_slots, 0, sizeof(dst->thread_info.capstone_slots));
++#endif
+ #ifdef CONFIG_RISCV_CAPSTONE_TASK
+ 	dst->thread.capstone_spawn = NULL;
+ 	clear_tsk_thread_flag(dst, TIF_CAPSTONE);
+@@ -172,8 +180,11 @@
+ 	struct pt_regs *childregs = task_pt_regs(p);
+ 
+ #ifdef CONFIG_RISCV_CAPSTONE_TASK
+-	if (test_thread_flag(TIF_CAPSTONE) || current->thread.capstone_spawn ||
+-	    args->capstone_bootstrap) {
++	if (
++#ifndef CONFIG_RISCV_CAPSTONE_TRAP
++	    test_thread_flag(TIF_CAPSTONE) ||
++#endif
++	    current->thread.capstone_spawn || args->capstone_bootstrap) {
+ 		if (!capstone_native_spawn_clone(p, args))
+ 			return -EOPNOTSUPP;
+ 	}
+@@ -200,6 +211,21 @@
+ 		childregs->a0 = 0; /* Return value of fork() */
+ 		p->thread.ra = (unsigned long)ret_from_fork;
+ 	}
++#ifdef CONFIG_RISCV_CAPSTONE_TRAP
++	if (test_thread_flag(TIF_CAPSTONE)) {
++		int error = sublet_copy_thread(p, args);
++		if (error)
++			return error;
++	}
++#endif
+ 	p->thread.sp = (unsigned long)childregs; /* kernel sp */
+ 	return 0;
+ }
++
++#ifdef CONFIG_RISCV_CAPSTONE_TRAP
++void arch_release_task_struct(struct task_struct *task)
++{
++	memset(task->thread_info.capstone_slots, 0, sizeof(task->thread_info.capstone_slots));
++	memset(task->thread.sublet_clear_tid, 0, sizeof(task->thread.sublet_clear_tid));
++}
++#endif
+--- a/arch/riscv/kernel/sublet/Makefile
++++ b/arch/riscv/kernel/sublet/Makefile
+@@ -4,4 +4,5 @@
+ obj-y += sublet.o
+ obj-$(CONFIG_RISCV_CAPSTONE_TRAP) += bind.o bind-core.o syscall-pointers.o loader.o uaccess.o \
+ 	uaccess-asm.o
++obj-$(CONFIG_RISCV_CAPSTONE_TRAP) += threads.o thread-asm.o
+ ccflags-y += -I$(src)
+--- /dev/null
++++ b/arch/riscv/kernel/sublet/thread-asm.S
+@@ -0,0 +1,97 @@
++/* SPDX-License-Identifier: GPL-2.0-only */
++#include <linux/linkage.h>
++#include <asm/asm.h>
++#include <asm/csr.h>
++#include <asm/asm-extable.h>
++
++	.macro enter fail
++	li t0, SR_SUM
++	csrs CSR_STATUS, t0
++	.insn i 0x5b, 3, t6, a0, 0
++	.insn r 0x5b, 1, 4, t0, t6, x1
++	li t1, 1
++	bne t0, t1, \fail
++	ld t0, 0(a0)
++	slli t0, t0, 26
++	srli t0, t0, 26
++	sub t0, a1, t0
++99:	.insn r 0x5b, 1, 0x0c, t6, t6, t0
++	_asm_extable 99b, \fail
++	.endm
++
++	.macro leave
++	li t6, 0
++	li t0, SR_SUM
++	csrc CSR_STATUS, t0
++	ret
++	.endm
++
++	.section .sublet.uaccess.text, "ax"
++	.balign 4
++ENTRY(__sublet_word)
++	enter .Lword_fault
++	bltz a2, .Lread
++	beqz a2, .Lset
++	li t0, 1
++	beq a2, t0, .Ladd
++	li t0, 2
++	beq a2, t0, .Lor
++	li t0, 3
++	beq a2, t0, .Landn
++	li t0, 4
++	beq a2, t0, .Lxor
++6:	sw a3, 0(t6)
++	li t1, 0
++	j .Lword_done
++.Lread:
++1:	lw t1, 0(t6)
++	j .Lword_done
++.Lset:
++2:	amoswap.w.aqrl t1, a3, (t6)
++	j .Lword_done
++.Ladd:
++3:	amoadd.w.aqrl t1, a3, (t6)
++	j .Lword_done
++.Lor:
++4:	amoor.w.aqrl t1, a3, (t6)
++	j .Lword_done
++.Landn:
++	not a3, a3
++5:	amoand.w.aqrl t1, a3, (t6)
++	j .Lword_done
++.Lxor:
++7:	amoxor.w.aqrl t1, a3, (t6)
++.Lword_done:
++	li t6, 0
++	sw t1, 0(a4)
++	li a0, 0
++	leave
++.Lword_fault:
++	li a0, -14
++	leave
++	_asm_extable 1b, .Lword_fault
++	_asm_extable 2b, .Lword_fault
++	_asm_extable 3b, .Lword_fault
++	_asm_extable 4b, .Lword_fault
++	_asm_extable 5b, .Lword_fault
++	_asm_extable 6b, .Lword_fault
++	_asm_extable 7b, .Lword_fault
++ENDPROC(__sublet_word)
++
++ENTRY(__sublet_cmpxchg)
++	enter .Lcmp_fault
++	sext.w a2, a2
++1:	lr.w.aqrl t1, (t6)
++	bne t1, a2, 3f
++2:	sc.w.aqrl t2, a3, (t6)
++	bnez t2, 1b
++3:	li t6, 0
++	sw t1, 0(a4)
++	li a0, 0
++	leave
++.Lcmp_fault:
++	li a0, -14
++	leave
++	_asm_extable 1b, .Lcmp_fault
++	_asm_extable 2b, .Lcmp_fault
++ENDPROC(__sublet_cmpxchg)
+--- /dev/null
++++ b/arch/riscv/kernel/sublet/threads.c
+@@ -0,0 +1,125 @@
++// SPDX-License-Identifier: GPL-2.0-only
++#include <linux/errno.h>
++#include <linux/futex.h>
++#include <linux/irqflags.h>
++#include <linux/sched/task.h>
++#include <linux/sched/task_stack.h>
++#include <linux/uaccess.h>
++#include <asm/sublet-trap.h>
++#include <asm/sublet-uaccess.h>
++#include <asm/sublet-thread.h>
++
++/* op -1 reads one word, 0 to 4 are FUTEX_OP_*, 5 stores without reading. */
++int __sublet_word(unsigned long *, unsigned long, int, u32, u32 *);
++int __sublet_cmpxchg(unsigned long *, unsigned long, u32, u32, u32 *);
++
++static void copy_ref(unsigned long *to, unsigned long *from)
++{
++	unsigned long flags;
++	local_irq_save(flags);
++	asm volatile(".insn i 0x5b, 3, t0, %0, 0\n"
++		     ".insn s 0x5b, 4, t0, 0(%1)\n"
++		     "li t0, 0" : : "r"(from), "r"(to) : "t0", "memory");
++	local_irq_restore(flags);
++}
++
++int sublet_set_tid(struct task_struct *task, unsigned long handle)
++{
++	unsigned long *slot;
++
++	if (!handle) {
++		memset(task->thread.sublet_clear_tid, 0, 16);
++		task->clear_child_tid = NULL;
++		return 0;
++	}
++	slot = sublet_handle_slot(handle);
++	if (!slot || (sublet_handle_address(handle) & 3))
++		return -EFAULT;
++	copy_ref(task->thread.sublet_clear_tid, slot);
++	task->clear_child_tid = (int __user *)sublet_handle_address(handle);
++	return 0;
++}
++
++int sublet_copy_thread(struct task_struct *child, const struct kernel_clone_args *args)
++{
++	const unsigned long required = CLONE_VM | CLONE_SIGHAND | CLONE_THREAD | CLONE_SETTLS;
++	const unsigned long allowed = required | CLONE_FS | CLONE_FILES | CLONE_SYSVSEM |
++		CLONE_PARENT_SETTID | CLONE_CHILD_CLEARTID | CLONE_DETACHED;
++	struct pt_regs *regs = task_pt_regs(child);
++	unsigned long *stack, *tls;
++	unsigned char byte;
++	unsigned int i;
++	int error;
++
++	if ((args->flags & required) != required || (args->flags & ~allowed) ||
++	    args->exit_signal || args->fn || child->mm != current->mm)
++		return -EOPNOTSUPP;
++	stack = sublet_handle_slot(args->stack);
++	tls = sublet_handle_slot(args->tls);
++	if (!stack || !tls || (sublet_handle_address(args->stack) & 15))
++		return -EFAULT;
++	/* Check the actual references before publishing the child. The child still
++	 * checks every later stack/TLS access, including revocation after clone. */
++	if (sublet_get_user(&byte, (void __user *)args->stack, 1) ||
++	    sublet_get_user(&byte, (void __user *)args->tls, 1))
++		return -EFAULT;
++	for (i = 1; i < 32; ++i)
++		copy_ref(sublet_user_slot(child, i), sublet_user_slot(current, i));
++	copy_ref(sublet_user_slot(child, 2), stack);
++	copy_ref(sublet_user_slot(child, 4), tls);
++	regs->sp = sublet_handle_address(args->stack);
++	regs->tp = sublet_handle_address(args->tls);
++	memset(sublet_user_slot(child, 10), 0, 16);
++	regs->a0 = 0;
++	if (args->flags & CLONE_CHILD_CLEARTID) {
++		error = sublet_set_tid(child, (unsigned long)args->child_tid);
++		if (error)
++			return error;
++	}
++	set_tsk_thread_flag(child, TIF_CAPSTONE);
++	return 0;
++}
++
++void sublet_exit_tid(struct task_struct *task)
++{
++	u32 ignored;
++	unsigned long address = (unsigned long)task->clear_child_tid;
++
++	if (address) {
++		/* mm_release still has the mm, its table and the task flag. Drop a
++		 * failing store as Linux does, and wake by address without a read. */
++		__sublet_word(task->thread.sublet_clear_tid, address, 5, 0, &ignored);
++		do_futex((u32 __user *)address, FUTEX_WAKE | FUTEX_PRIVATE_FLAG,
++			 1, NULL, NULL, 0, 0);
++	}
++	task->clear_child_tid = NULL;
++	memset(task->thread.sublet_clear_tid, 0, 16);
++}
++
++int sublet_futex_read(u32 *value, u32 __user *word)
++{
++	unsigned long handle = (unsigned long)word, *slot = sublet_handle_slot(handle);
++	*value = 0;
++	if (!slot || (handle & 3))
++		return -EFAULT;
++	return __sublet_word(slot, sublet_handle_address(handle), -1, 0, value);
++}
++
++int sublet_futex_op(int op, int arg, int *old, u32 __user *word)
++{
++	unsigned long handle = (unsigned long)word, *slot = sublet_handle_slot(handle);
++	if (op < FUTEX_OP_SET || op > FUTEX_OP_XOR)
++		return -ENOSYS;
++	if (!slot || (handle & 3))
++		return -EFAULT;
++	return __sublet_word(slot, sublet_handle_address(handle), op, arg, (u32 *)old);
++}
++
++int sublet_futex_cmpxchg(u32 *value, u32 __user *word, u32 old, u32 new)
++{
++	unsigned long handle = (unsigned long)word, *slot = sublet_handle_slot(handle);
++	*value = 0;
++	if (!slot || (handle & 3))
++		return -EFAULT;
++	return __sublet_cmpxchg(slot, sublet_handle_address(handle), old, new, value);
++}
+--- a/fs/exec.c
++++ b/fs/exec.c
+@@ -1295,12 +1295,12 @@
+ 	 * Release all of the old mmap stuff
+ 	 */
+ 	acct_arg_size(bprm, 0);
++	retval = exec_mmap(bprm->mm);
++	if (retval)
++		goto out;
+ #ifdef CONFIG_RISCV_CAPSTONE_TASK
+ 	riscv_capstone_release(current);
+ #endif
+-	retval = exec_mmap(bprm->mm);
+-	if (retval)
+-		goto out;
+ 
+ 	bprm->mm = NULL;
+ 
+--- a/kernel/exit.c
++++ b/kernel/exit.c
+@@ -810,9 +810,11 @@
+ 
+ #ifdef CONFIG_RISCV_CAPSTONE_TASK
+ 	capstone_native_spawn_exit(current);
++#endif
++	exit_mm();
++#ifdef CONFIG_RISCV_CAPSTONE_TASK
+ 	riscv_capstone_release(current);
+ #endif
+-	exit_mm();
+ 
+ 	if (group_dead)
+ 		acct_process();
+--- a/kernel/fork.c
++++ b/kernel/fork.c
+@@ -14,6 +14,9 @@
+ 
+ #ifdef CONFIG_RISCV_CAPSTONE_TASK
+ #include <linux/capstone_native_spawn.h>
++#ifdef CONFIG_RISCV_CAPSTONE_TRAP
++#include <asm/sublet-thread.h>
++#endif
+ #endif
+ #include <linux/anon_inodes.h>
+ #include <linux/slab.h>
+@@ -1468,6 +1471,10 @@
+ 	 * because we want to leave the value intact for debugging
+ 	 * purposes.
+ 	 */
++#ifdef CONFIG_RISCV_CAPSTONE_TRAP
++	if (test_tsk_thread_flag(tsk, TIF_CAPSTONE))
++		sublet_exit_tid(tsk);
++#endif
+ 	if (tsk->clear_child_tid) {
+ 		if (atomic_read(&mm->mm_users) > 1) {
+ 			/*
+@@ -1768,7 +1775,14 @@
+ 
+ SYSCALL_DEFINE1(set_tid_address, int __user *, tidptr)
+ {
+-	current->clear_child_tid = tidptr;
++#ifdef CONFIG_RISCV_CAPSTONE_TRAP
++	if (test_thread_flag(TIF_CAPSTONE)) {
++		int error = sublet_set_tid(current, (unsigned long)tidptr);
++		if (error)
++			return error;
++	} else
++#endif
++		current->clear_child_tid = tidptr;
+ 
+ 	return task_pid_vnr(current);
+ }
+--- a/scripts/mod/modpost.c
++++ b/scripts/mod/modpost.c
+@@ -827,7 +827,7 @@
+ 		".kprobes.text", ".cpuidle.text", ".noinstr.text"
+ #define OTHER_TEXT_SECTIONS ".ref.text", ".head.text", ".spinlock.text", \
+ 		".fixup", ".entry.text", ".exception.text", ".text.*", \
+-		".coldtext", ".softirqentry.text"
++		".coldtext", ".softirqentry.text", ".sublet.uaccess.text"
+ 
+ #define INIT_SECTIONS      ".init.*"
+ #define MEM_INIT_SECTIONS  ".meminit.*"
+@@ -889,7 +889,7 @@
+ struct sectioncheck {
+ 	const char *fromsec[20];
+ 	const char *bad_tosec[20];
+-	const char *good_tosec[20];
++	const char *good_tosec[21];
+ 	enum mismatch mismatch;
+ 	void (*handler)(const char *modname, struct elf_info *elf,
+ 			const struct sectioncheck* const mismatch,

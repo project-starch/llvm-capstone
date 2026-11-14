@@ -1,0 +1,183 @@
+--- a/arch/riscv/include/asm/futex.h
++++ b/arch/riscv/include/asm/futex.h
+@@ -12,6 +12,10 @@
+ #include <linux/errno.h>
+ #include <asm/asm.h>
+ #include <asm/asm-extable.h>
++#ifdef CONFIG_RISCV_CAPSTONE_TRAP
++#include <asm/sublet-uaccess.h>
++#include <asm/sublet-thread.h>
++#endif
+ 
+ /* We don't even really need the extable code, but for now keep it simple */
+ #ifndef CONFIG_MMU
+@@ -37,6 +41,10 @@
+ arch_futex_atomic_op_inuser(int op, int oparg, int *oval, u32 __user *uaddr)
+ {
+ 	int oldval = 0, ret = 0;
++#ifdef CONFIG_RISCV_CAPSTONE_TRAP
++	if (sublet_uaccess_protected())
++		return sublet_futex_op(op, oparg, oval, uaddr);
++#endif
+ 
+ 	if (!access_ok(uaddr, sizeof(u32)))
+ 		return -EFAULT;
+@@ -79,6 +87,10 @@
+ 	int ret = 0;
+ 	u32 val;
+ 	uintptr_t tmp;
++#ifdef CONFIG_RISCV_CAPSTONE_TRAP
++	if (sublet_uaccess_protected())
++		return sublet_futex_cmpxchg(uval, uaddr, oldval, newval);
++#endif
+ 
+ 	if (!access_ok(uaddr, sizeof(u32)))
+ 		return -EFAULT;
+--- a/arch/riscv/kernel/sublet/bind-core.c
++++ b/arch/riscv/kernel/sublet/bind-core.c
+@@ -100,7 +100,26 @@
+ #define CALL_EMBEDDED(name)		{ __NR_##name, 0, SUBLET_EMBEDDED, NULL }
+ #define CALL_COMMAND(name, fn)		{ __NR_##name, 0, 0, fn }
+ 
++static long thread_futex_command(const struct sublet_bind_args *a, unsigned int *pointers)
++{
++	switch (a->arg[1] & 127) {
++	case 0: case 9: /* WAIT, WAIT_BITSET: timeout reference */
++		*pointers = 0x09;
++		return 0;
++	case 1: case 10: /* WAKE, WAKE_BITSET: no memory read */
++		*pointers = 0x01;
++		return 0;
++	case 3: case 4: case 5: /* REQUEUE, CMP_REQUEUE, WAKE_OP: val2 is integer */
++		*pointers = 0x11;
++		return 0;
++	default:
++		return -ENOSYS;
++	}
++}
++
+ static const struct sublet_allowed allowed[] = {
++	CALL_EXTRA(clone, 0x1e), CALL(set_tid_address),
++	CALL_COMMAND(futex, thread_futex_command),
+ 	/* Files and directories. */
+ 	CALL(getcwd), CALL(dup), CALL(dup3), CALL_COMMAND(fcntl, fcntl_command),
+ 	CALL_COMMAND(ioctl, ioctl_command), CALL(mkdirat), CALL(unlinkat), CALL(symlinkat),
+--- a/arch/riscv/kernel/sublet/bind.c
++++ b/arch/riscv/kernel/sublet/bind.c
+@@ -83,6 +83,9 @@
+ 	ret = ((sublet_syscall_fn)sys_call_table[nr])(a.arg[0], a.arg[1], a.arg[2], a.arg[3],
+ 						       a.arg[4], a.arg[5]);
+ 	current->thread.sublet_refs = NULL;
++	if (ret == -ERESTARTSYS || ret == -ERESTARTNOINTR ||
++	    ret == -ERESTARTNOHAND || ret == -ERESTART_RESTARTBLOCK)
++		ret = -EINTR;
+ out:
+ 	sublet_call_refs_clear(&refs);
+ 	return ret;
+--- a/kernel/futex/core.c
++++ b/kernel/futex/core.c
+@@ -39,6 +39,10 @@
+ #include <linux/slab.h>
+ 
+ #include "futex.h"
++#ifdef CONFIG_RISCV_CAPSTONE_TRAP
++#include <asm/sublet-uaccess.h>
++#include <asm/sublet-thread.h>
++#endif
+ #include "../locking/rtmutex_common.h"
+ 
+ /*
+@@ -225,6 +229,14 @@
+ 	struct page *page, *tail;
+ 	struct address_space *mapping;
+ 	int err, ro = 0;
++#ifdef CONFIG_RISCV_CAPSTONE_TRAP
++	if (sublet_uaccess_protected()) {
++		if (sublet_handle_guarded(address))
++			return -EFAULT;
++		address = sublet_handle_address(address);
++		fshared = false;
++	}
++#endif
+ 
+ 	/*
+ 	 * The futex address must be "naturally" aligned.
+@@ -410,6 +422,13 @@
+ {
+ 	struct mm_struct *mm = current->mm;
+ 	int ret;
++#ifdef CONFIG_RISCV_CAPSTONE_TRAP
++	if (sublet_uaccess_protected()) {
++		int old;
++		/* Fault in through the reference. A stale word terminates the retry. */
++		return sublet_futex_op(FUTEX_OP_ADD, 0, &old, uaddr);
++	}
++#endif
+ 
+ 	mmap_read_lock(mm);
+ 	ret = fixup_user_fault(mm, (unsigned long)uaddr,
+@@ -453,7 +472,12 @@
+ 	int ret;
+ 
+ 	pagefault_disable();
+-	ret = __get_user(*dest, from);
++#ifdef CONFIG_RISCV_CAPSTONE_TRAP
++	if (sublet_uaccess_protected())
++		ret = sublet_futex_read(dest, from);
++	else
++#endif
++		ret = __get_user(*dest, from);
+ 	pagefault_enable();
+ 
+ 	return ret ? -EFAULT : 0;
+--- a/kernel/futex/syscalls.c
++++ b/kernel/futex/syscalls.c
+@@ -5,6 +5,10 @@
+ #include <linux/time_namespace.h>
+ 
+ #include "futex.h"
++#ifdef CONFIG_RISCV_CAPSTONE_TRAP
++#include <asm/sublet-uaccess.h>
++#include <asm/sublet-thread.h>
++#endif
+ 
+ /*
+  * Support for robust futexes: the kernel cleans up held futexes at
+@@ -87,6 +91,10 @@
+ {
+ 	int cmd = op & FUTEX_CMD_MASK;
+ 	unsigned int flags = 0;
++#ifdef CONFIG_RISCV_CAPSTONE_TRAP
++	if (sublet_uaccess_protected())
++		op |= FUTEX_PRIVATE_FLAG;
++#endif
+ 
+ 	if (!(op & FUTEX_PRIVATE_FLAG))
+ 		flags |= FLAGS_SHARED;
+--- a/kernel/futex/waitwake.c
++++ b/kernel/futex/waitwake.c
+@@ -5,6 +5,10 @@
+ #include <linux/freezer.h>
+ 
+ #include "futex.h"
++#ifdef CONFIG_RISCV_CAPSTONE_TRAP
++#include <asm/sublet-uaccess.h>
++#include <asm/sublet-thread.h>
++#endif
+ 
+ /*
+  * READ this before attempting to hack on futexes!
+@@ -611,7 +615,12 @@
+ 	if (ret) {
+ 		futex_q_unlock(*hb);
+ 
+-		ret = get_user(uval, uaddr);
++#ifdef CONFIG_RISCV_CAPSTONE_TRAP
++		if (sublet_uaccess_protected())
++			ret = sublet_futex_read(&uval, uaddr);
++		else
++#endif
++			ret = get_user(uval, uaddr);
+ 		if (ret)
+ 			return ret;
+ 

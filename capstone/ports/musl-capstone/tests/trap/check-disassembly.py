@@ -3,7 +3,8 @@ import pathlib
 import re
 import sys
 root = pathlib.Path(sys.argv[1])
-stub = (root / 'syscall.dis').read_text()
+assembly = (root / 'syscall.dis').read_text()
+stub = assembly.split('<__capstone_linux_clone>:', 1)[0]
 assert re.search(r'\bmv\s+a7,\s*a0', stub), 'Linux number must reach a7'
 assert len(re.findall(r'\becall\b', stub)) == 1
 assert not re.search(r'\bli\s+a7,', stub), 'service selector survived'
@@ -26,3 +27,14 @@ for name, nr in {'read': 63, 'write': 64, 'openat': 56, 'close': 57,
     numbers = re.findall(r'\bli\s+a0,\s*(0x[0-9a-f]+|[0-9]+)', body)
     assert nr in [int(n, 0) for n in numbers], (name, nr, numbers)
     print('PASS: Linux %s = %d' % (name, nr))
+
+clone = assembly.split('<__capstone_linux_clone>:', 1)[1].split('<__unmapself>:', 1)[0]
+for dst, src in ((2, 4), (3, 5), (4, 6)):
+    assert re.search(r'\bmovc\s+a%d,\s*a%d' % (dst, src), clone)
+for insn in ('stc', 'ldc', 'cincoffsetimm'):
+    assert re.search(r'\b' + insn + r'\b', clone), insn
+assert re.search(r'\bli\s+a7,\s*(220|0xdc)\b', clone)
+threads = (root / 'threads-smoke.dis').read_text()
+for name in ('__capstone_linux_clone', 'pthread_create', 'pthread_join'):
+    assert '<' + name + '>:' in threads or '<__' + name + '>:' in threads, name
+print('PASS: clone keeps stack, TLS and tid references, pthread smoke links')

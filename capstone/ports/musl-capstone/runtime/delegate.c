@@ -12,7 +12,7 @@ long __capstone_linux_syscall(long n, void *a, void *b, void *c,
      * Refuse them before passing a layout that the kernel cannot yet read. */
     switch (n) {
     case SYS_brk: case SYS_clone: case SYS_execve:
-    case SYS_rt_sigaction: case SYS_rt_sigprocmask: case SYS_sigaltstack:
+    case SYS_rt_sigaction: case SYS_sigaltstack:
     case SYS_rt_sigreturn: case SYS_rt_sigtimedwait: case SYS_rt_sigqueueinfo:
     case SYS_rt_tgsigqueueinfo: case SYS_timer_create: case SYS_mq_notify:
     case SYS_epoll_ctl: case SYS_epoll_pwait:

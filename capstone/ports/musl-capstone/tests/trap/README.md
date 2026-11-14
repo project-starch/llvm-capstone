@@ -87,9 +87,31 @@ without consuming launcher grants or performing an image handshake.
 
 Mallocng already obtains its metadata through mappings. Its payload mappings
 now use real mmap and munmap too. The trap syscall wrapper refuses brk.
-Thread creation and signal registration remain unsupported. The trap build
+Thread creation now uses tagged clone arguments in the step 8 slice. Signal
+registration remains unsupported. The trap build
 excludes the launcher thread and signal transports. Epoll operations and the
 signal operations that need opaque-reference translation return ENOSYS until
 the side tables from plan v5 are implemented. Execve also remains deferred.
 The kernel's syscall binder, nested-pointer loaders, mapping enforcement and
 runtime fault controls are integration work. No kernel files changed here.
+
+## Thread build slice
+
+The thread runtime issues Linux clone (220) with CLONE_VM and CLONE_THREAD.
+The child stack carries tagged entry and argument cells. Clone passes the
+stack in a1, parent tid in a2, TLS in a3 and clear-child-tid in a4. The kernel
+must restore child sp and tp from these references and return integer zero
+in the child's a0 slot. The parent receives the Linux tid.
+
+Musl owns TLS, pthread objects, join and mutex state. Its futex calls retain
+the original references through the ordinary syscall wrapper. Signal masks
+use rt_sigprocmask, which needs no opaque-reference conversion. Caught
+signals and cancellation remain deferred. Thread exit uses SYS_exit (93).
+The assembly __unmapself performs munmap then exit without another stack
+or TLS access.
+
+On p13 in `~/asr-work/s8t`, all 1,349 libc files compiled. The two-thread
+`threads-smoke.dom` linked without undefined symbols and passed the clone
+disassembly checks. The existing write/mapping and malloc smokes still link.
+The three images have not run against the integrated kernel.
+See the [kernel thread contract and controls](../../../../kernel/tests/threads/README.md).

@@ -7,6 +7,18 @@ The Linux 6.1 Image builds on p13 without warnings. Trap-mode mapping execution
 still requires the handle and tagged return-slot streams.
 [Design, interfaces and limits](../design/sublet-mappings.md).
 
+## Trap thread build slice, 14 November 2026
+
+On `trap/s8-threads`, the libc clone and futex paths now preserve references.
+All 1,349 libc files compile on p13. The two-thread TLS, mutex and join smoke
+links and passes disassembly checks. The host binder test passes, and its
+incorrect requeue pointer-mask control fails as required. Kernel fragment
+`series.s8-threads` adds shared-mm lifetime ownership, per-thread register
+slots, reference clear-child-tid and reference futex accesses. The full Linux
+Image builds against snapshots of steps 3 and 5. Guest execution
+and live-waiter wake counting remain outstanding.
+[Integration contract and tests](../../kernel/tests/threads/README.md).
+
 ## Trap libc build baseline, 14 November 2026
 
 On `trap/s5-libc`, the virtual runtime uses stack startup and plain Linux
