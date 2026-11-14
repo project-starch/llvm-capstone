@@ -3,14 +3,14 @@
 This is a live table: rows are filled as board runs land. Pre-registrations, predictions and the run-by-run trail are
 in [`../2026-11-08-train/PREREG.md`](../2026-11-08-train/PREREG.md) (Addendum 107 onward for this table).
 
-## Status (updated 2026-11-14 23:03 +08)
+## Status (updated 2026-11-15 01:15 +08)
 
 - **riscv-base:** complete, all 8 rows.
 - **Capstone temporal:**
   - The table below holds the best silicon reading per row, with the bitstream named on each row.
   - The final uniform configuration (one bitstream and one image set for every row) is being measured now.
   - 5 of 8 rows are already below the 1.20 target. perl, gcc and mcf are above it.
-- **Capstone spatial:** all 8 images are built (arm FRCDKMSsp). gcc train01 on F: 1,975.51 s (ratio 1.147) against temporal's 1,989.28 s on the same bitstream, board and kit, so the temporal increment on gcc is +0.70 % (+0.6 % on the batch bitstream). Spatial mcf, imagick, nab, lbm and xz on F follow on board 1.
+- **Capstone spatial:** all 8 images are built (arm FRCDKMSsp). gcc train01 on F: 1,975.51 s (ratio 1.147) against temporal's 1,989.28 s on the same bitstream, board and kit, so the temporal increment on gcc is +0.70 % (+0.6 % on the batch bitstream). mcf on F: 6,308.53 s (ratio 1.231) against temporal's 6,576.13 s, a temporal increment of +4.2 %; L1D misses are 4.9 % lower than temporal's. Spatial imagick, nab, lbm and xz on F follow on board 1.
   - The SDK differs from temporal in 4 libc mallocng members plus the runtime's malloc-mapping object, and nothing else.
     This is shown by member hashes, and a control on the memset switch fires.
   - Every benchmark object is byte-identical to temporal FRCDKMS's.
@@ -127,7 +127,7 @@ the table being measured now. A row moves into them as its run lands.
 |---|---|---|---|---|---|---|
 | 500.perlbench_r (full: makerand + test.pl) | 12,623.02 | 17,051.48 | 1.351 | fdk / FRCDK | pending | pending |
 | 502.gcc_r (train01) | 1,722.35 | 1,989.28 | **1.155** | **F** / FRCDKMS | **1.155** (F) | **1.147** (F) |
-| 505.mcf_r | 5,125.02 | 6,576.13 | 1.283 | **F** / FRCDKMS | 1.283 (F) | pending |
+| 505.mcf_r | 5,125.02 | 6,576.13 | 1.283 | **F** / FRCDKMS | 1.283 (F) | 1.231 (F) |
 | 519.lbm_r | 1,077.50 | 990.36 | **0.919** | **F** / FRCDKMS | **0.919** (F) | pending |
 | 525.x264_r | 35,613.24 | 34,053.48 | **0.956** | fdk / FR | pending | pending |
 | 538.imagick_r | 11.08 | 12.58 | **1.135** | **F** / FRCDKMS | **1.135** (F) | pending |
