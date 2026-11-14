@@ -37,6 +37,7 @@ add_llvm_target(CapstoneCodeGen
   CapstoneMergeStrConstants.cpp
   CapstoneCodeGenPrepare.cpp
   CapstoneMemcpyAlignDispatch.cpp
+  CapstoneMisalignedCapAccess.cpp
   CapstoneConstantPoolValue.cpp
   CapstoneCursorReadFold.cpp
   CapstoneRedundantShrink.cpp

@@ -10,6 +10,53 @@ dereference, somewhere else entirely.
     field_store     sb=16  stc=4  ld=2     <- and scattered back out as 16 bytes
     field_direct   ldc=3   lbu=0           <- the naturally-aligned control: one ldc
 
+## Status: fixed on lane `capstone-misaligned-cap-access` (2026-11-15), default on
+
+`CapstoneMisalignedCapAccess.cpp`, an IR pass after CodeGenPrepare at every optimisation level, gives each
+under-aligned capability load or store a run-time alignment test:
+- if the address is 16-aligned, the same access at align 16 runs: `ldc`/`stc`, so the tag survives;
+- otherwise the old scalar expansion runs: a misaligned granule holds no tag, and `ldc`/`stc` there would trap.
+
+That is musl `memcpy`'s result for a 16-byte copy into or out of an aligned object. The pass is off with
+`-mllvm -capstone-misaligned-cap-dispatch=false`. `-capstone-misaligned-cap-log=<file>` lists the functions it
+changes, or with the dispatch off, would change.
+
+**Second producer.** The same access comes from the C idiom `memcpy(&val, void_arg, sizeof val)` once SROA has
+folded the copy into an align-1 load: FFmpeg's `av_freep`. That is the fault the nested lane hit with builtins on
+(cause 24 in `__libc_free`, an untagged pointer with its metadata intact). With `-fno-builtin` the copy stays a call
+to musl, which tests the alignment itself. C-81's memcpy guard never sees it, because no memcpy is left.
+
+**Not covered.** A capability member of a PACKED aggregate. The test is on the access's base address. A member at an
+offset that is not a multiple of 16 stays scalar in both arms, so it still loses its tag when the base is
+misaligned by exactly the complement of that offset. Natural layout puts every capability member at a multiple of
+16, where the base test decides it.
+
+**Run-time test (`c69-run.c`).** Five shapes in noinline functions:
+- `av_freep`'s load (`load_void`), its store half (`store_void`), and the same load through an `unsigned long *`
+  (`load_word`, align 8);
+- `FF_FIELD_AT`'s load and store (`load_field`, `store_field`).
+
+Each runs at a 16-aligned address holding a tagged capability, where the tag must survive, and at a misaligned
+one, where the bytes must equal the runtime memcpy's and the tag must be clear. A plain-word copy is the control
+and must lose the tag. Every read-back the checks make is 16-aligned in the IR. An earlier version read `buf + off`
+directly, which is itself the C-69 shape, so its dispatch-off arm reported a store failure the code under test had
+not made. At -O0 there is no SROA, so the three memcpy shapes stay calls, and only the `FF_FIELD_AT` shapes are C-69
+there.
+
+Native twin (qemu55, images-a0ed, the SPEC arms' FRCDKMSa3 flags); judge `perf/c69/judge-c69.py` on the build host:
+
+| compiler | level | dispatch | result |
+|---|---|---|---|
+| llvm-c15 (29027126f39b + this fix) | -O2 | on | 10/10 |
+| llvm-c15 | -O2 | off | the 5 aligned-address checks FAIL, the other 5 pass (image identical to llvm-c9's) |
+| llvm-c15 | -O0 | on | 10/10 |
+| llvm-c15 | -O0 | off | `load_field`, `store_field` FAIL, the other 8 pass |
+| llvm-c9 (29027126f39b) | -O2 | | the 5 aligned-address checks FAIL |
+
+`check.py` now takes an optimisation level. A byte copy behind the run-time `andi ..., 15` test counts as gone: it
+is the arm a misaligned address takes. With llvm-c15 it exits 1 (gone) at -O2 and at -O0; with llvm-c9 it exits 0
+(present) at both.
+
 ## Reproducing
 
     python3 check.py <path-to-clang>
@@ -54,7 +101,7 @@ hit, via `FF_FIELD_AT` (`libavutil/internal.h`) in libavfilter's format negotiat
 (`avfiltergraph.c`). A disassembly scan for the two lowering shapes found 10 sites in the
 pre-workaround `avfilter_graph_config` and 0 after the port-side workaround.
 
-## Suggested directions, none of them taken here
+## Suggested directions (as filed; the fix took neither, see Status)
 
 1. **Refuse to lower it.** Diagnose an under-aligned capability-typed access rather than emitting a
    byte copy. Loud and cheap, and correct in the sense that the byte copy is never what was meant.

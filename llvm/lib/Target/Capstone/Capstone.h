@@ -31,6 +31,8 @@ void initializeCapstoneCodeGenPreparePass(PassRegistry &);
 
 FunctionPass *createCapstoneMemcpyAlignDispatchPass();
 void initializeCapstoneMemcpyAlignDispatchPass(PassRegistry &);
+FunctionPass *createCapstoneMisalignedCapAccessPass();
+void initializeCapstoneMisalignedCapAccessPass(PassRegistry &);
 
 // Synthesizes a per-module `__capstone_cap_init` that materializes capability
 // globals in place at runtime (constructor-codegen). See CapstoneCapGlobalInit.cpp.
