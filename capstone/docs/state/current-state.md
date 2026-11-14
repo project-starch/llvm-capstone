@@ -1,3 +1,12 @@
+## Trap-route mapping blocks, 14 November 2026
+
+The step-6 fragment `capstone/kernel/patches/series.s6-mappings` adds depth-1
+mapping checks, partial unmap state, last-page CREVOKE, refill and Linux mapping
+hooks. Its host state test passes and its missing-depth-check control fails.
+The Linux 6.1 Image builds on p13 without warnings. Trap-mode mapping execution
+still requires the handle and tagged return-slot streams.
+[Design, interfaces and limits](../design/sublet-mappings.md).
+
 ## Rebased native kernel: full existing SPEC C-port gate passes
 
 All ten existing C-port entries pass on branch source `04350015dcad`, runtime

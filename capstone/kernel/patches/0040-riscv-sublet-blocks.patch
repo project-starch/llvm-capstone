@@ -1,0 +1,836 @@
+--- /dev/null
++++ b/arch/riscv/mm/sublet-block-state.h
+@@ -0,0 +1,74 @@
++/* SPDX-License-Identifier: GPL-2.0-only */
++/* Shared by the kernel and the small host test. The includer provides bool,
++ * EINVAL, EFAULT, EPERM and PAGE_SHIFT. No stored reference is authority. */
++#ifndef SUBLET_BLOCK_STATE_H
++#define SUBLET_BLOCK_STATE_H
++struct sublet_ref_info {
++	unsigned long id, base, end, depth;
++	bool tagged, live, descendants;
++};
++struct sublet_block_state {
++	unsigned long address, bytes, mapped;
++	unsigned char *present;
++	bool kernel_owned, ended, quarantined;
++};
++static inline bool request_call(const struct sublet_block_state *b,
++		unsigned long address, unsigned long bytes)
++{
++	unsigned long mask = (1UL << PAGE_SHIFT) - 1;
++	return bytes && !((address | bytes) & mask) && address >= b->address &&
++		bytes <= b->bytes && address - b->address <= b->bytes - bytes;
++}
++static inline int request_operand(const struct sublet_block_state *b,
++		const struct sublet_ref_info *r, unsigned long address,
++		unsigned long bytes)
++{
++	if (b->kernel_owned)
++		return -EPERM;
++	if (b->ended || b->quarantined || !request_call(b, address, bytes))
++		return -EINVAL;
++	if (!r->tagged || !r->live)
++		return -EFAULT;
++	if (r->depth != 1)
++		return -EINVAL;
++	if (r->base > address || r->end < address + bytes)
++		return -EFAULT;
++	return 0;
++}
++static inline unsigned long pages_present(const struct sublet_block_state *b,
++		unsigned long address, unsigned long bytes)
++{
++	unsigned long first = (address - b->address) >> PAGE_SHIFT;
++	unsigned long count = bytes >> PAGE_SHIFT, n = 0, i;
++	for (i = first; i < first + count; ++i)
++		n += !!b->present[i];
++	return n;
++}
++static inline bool pages_last(const struct sublet_block_state *b,
++		unsigned long address, unsigned long bytes)
++{
++	unsigned long n = pages_present(b, address, bytes);
++	return n && n == b->mapped;
++}
++/* Called only after a successful CREVOKE for the last pages. */
++static inline void pages_commit(struct sublet_block_state *b,
++		unsigned long address, unsigned long bytes, bool refill)
++{
++	unsigned long first = (address - b->address) >> PAGE_SHIFT;
++	unsigned long count = bytes >> PAGE_SHIFT, i;
++	for (i = first; i < first + count; ++i) {
++		if (b->present[i] == refill)
++			continue;
++		b->present[i] = refill;
++		if (refill)
++			++b->mapped;
++		else
++			--b->mapped;
++	}
++	b->ended = !b->mapped;
++}
++static inline int refill_rule(const struct sublet_ref_info *r)
++{
++	return r->live && !r->descendants ? 0 : -EINVAL;
++}
++#endif
+--- /dev/null
++++ b/arch/riscv/mm/sublet-blocks-internal.h
+@@ -0,0 +1,24 @@
++/* SPDX-License-Identifier: GPL-2.0-only */
++#ifndef SUBLET_BLOCKS_INTERNAL_H
++#define SUBLET_BLOCKS_INTERNAL_H
++#include <asm/sublet.h>
++#include "sublet-block-state.h"
++struct arena {
++	struct rb_node node;
++	u64 id;
++	unsigned long address, bytes, rx_bytes;
++	/* Only the initial grant and a failed mmap rollback use this slot.
++	 * Requests always use the handle's slot, including after CRENEW. */
++	unsigned long *slot;
++	unsigned int reg;
++	struct sublet_block_state state;
++};
++struct arena *sublet_block_find(struct sublet_context *, unsigned long);
++struct arena *sublet_block_overlap(struct sublet_context *, unsigned long, unsigned long);
++int sublet_block_new(struct sublet_context *, const struct sublet_grant *, struct arena **);
++void sublet_block_drop(struct sublet_context *, struct arena *);
++void sublet_block_rollback(struct sublet_context *, struct arena *);
++/* Caller disables preemption and interrupts for inspection through revocation. */
++void sublet_ref_inspect(struct sublet_context *, const unsigned long *, struct sublet_ref_info *);
++int sublet_ref_revoke(struct sublet_context *, const unsigned long *);
++#endif
+--- /dev/null
++++ b/arch/riscv/mm/sublet-blocks.c
+@@ -0,0 +1,460 @@
++// SPDX-License-Identifier: GPL-2.0-only
++/* Mapping policy copied by hand from the adapter's root-grant path.
++ * Linux owns VMAs, page tables and page tags. Blocks reserve address ranges
++ * across holes and follow the program's current depth-1 reference, never M.
++ * Every public entry below runs after mmap_write_lock. */
++#include <linux/mman.h>
++#include <linux/personality.h>
++#include <linux/slab.h>
++#include <linux/sublet-mappings.h>
++#include <linux/userfaultfd_k.h>
++#include "sublet-format.h"
++#include "sublet-blocks-internal.h"
++
++struct sublet_move {
++	struct sublet_context *c;
++	struct arena *block;
++	unsigned long handle, address, bytes;
++	bool authorized, revoked, refill;
++};
++
++/* A standalone series builds before the binder lands, but cannot authorize
++ * an integer address. The binder replaces this weak definition. */
++int __weak sublet_handle_ref(unsigned long handle, const unsigned long **ref)
++{
++	return -EFAULT;
++}
++
++unsigned long sublet_mapping_address(struct mm_struct *mm, unsigned long handle)
++{
++	return sublet_mappings(mm) ? handle & CV_CAP_ADDR_MASK : handle;
++}
++
++/* Caller holds mmap_write_lock. Inspection and optional CREVOKE are one
++ * non-preemptible step on the supported single hart. No allocations here. */
++static int block_request(struct sublet_move *r, bool remove, bool refill,
++		bool require_present)
++{
++	struct sublet_ref_info info;
++	const unsigned long *slot;
++	unsigned long flags;
++	int error;
++
++	preempt_disable();
++	local_irq_save(flags);
++	error = sublet_handle_ref(r->handle, &slot);
++	if (error)
++		goto out;
++	if (!slot || ((unsigned long)slot & 15)) {
++		error = -EFAULT;
++		goto out;
++	}
++	sublet_ref_inspect(r->c, slot, &info);
++	error = request_operand(&r->block->state, &info, r->address, r->bytes);
++	if (error)
++		goto out;
++	if (require_present && pages_present(&r->block->state, r->address,
++			r->bytes) != r->bytes >> PAGE_SHIFT) {
++		error = -ENOMEM;
++		goto out;
++	}
++	if (refill) {
++		error = refill_rule(&info);
++		if (error)
++			goto out;
++	}
++	if (remove && pages_last(&r->block->state, r->address, r->bytes)) {
++		error = sublet_ref_revoke(r->c, slot);
++		if (!error)
++			r->revoked = true;
++	}
++out:
++	local_irq_restore(flags);
++	preempt_enable();
++	return error;
++}
++
++static int request_init(struct sublet_move *r, struct mm_struct *mm,
++		unsigned long handle, unsigned long bytes)
++{
++	mmap_assert_write_locked(mm);
++	memset(r, 0, sizeof(*r));
++	r->c = mm->context.capstone_namespace;
++	r->handle = handle;
++	r->address = handle & CV_CAP_ADDR_MASK;
++	r->bytes = PAGE_ALIGN(bytes);
++	if (!bytes || !r->bytes || r->bytes > CV_USER_ADDRESS_END - r->address)
++		return -EINVAL;
++	r->block = sublet_block_find(r->c, r->address);
++	if (!r->block)
++		return -EINVAL;
++	return block_request(r, false, false, false);
++}
++
++/* Linux calls this after every fallible split and allocation, immediately
++ * before detaching the VMAs. Internal unmaps have no pending user request. */
++int sublet_unmap_commit(struct mm_struct *mm, unsigned long start,
++		unsigned long end)
++{
++	struct sublet_context *c;
++	struct sublet_move *r;
++	int error;
++
++	if (!sublet_mappings(mm))
++		return 0;
++	c = mm->context.capstone_namespace;
++	r = c->mapping_unmap;
++	if (!r)
++		return 0;
++	if (start != r->address || end - start != r->bytes)
++		return -EINVAL;
++	if (!r->authorized) {
++		error = block_request(r, !r->refill, r->refill, false);
++		if (error)
++			return error;
++	}
++	pages_commit(&r->block->state, start, end - start, false);
++	if (r->refill)
++		r->block->state.ended = false;
++	return 0;
++}
++
++static void request_finish(struct sublet_move *r)
++{
++	/* A revoked block can never reach another mapping at the old address,
++	 * even if Linux kept an empty VMA following an allocation failure. */
++	if (r->revoked) {
++		mutex_lock(&sublet_lock);
++		sublet_block_drop(r->c, r->block);
++		mutex_unlock(&sublet_lock);
++	}
++}
++
++int sublet_munmap(struct mm_struct *mm, unsigned long handle,
++		unsigned long bytes, struct list_head *uf)
++{
++	struct sublet_move r;
++	int error = request_init(&r, mm, handle, bytes);
++
++	if (error)
++		return error;
++	r.c->mapping_unmap = &r;
++	error = do_munmap(mm, r.address, r.bytes, uf);
++	r.c->mapping_unmap = NULL;
++	request_finish(&r);
++	return error;
++}
++
++int sublet_mapping_check(struct mm_struct *mm, unsigned long handle,
++		unsigned long bytes, unsigned long operation, bool advise)
++{
++	struct sublet_move r;
++	struct vm_area_struct *vma;
++	unsigned long at;
++	int error = request_init(&r, mm, handle, bytes);
++
++	if (error)
++		return error;
++	if (advise) {
++		/* Only these adapter operations have the private-page contract.
++		 * In particular no KSM, remote advice, or lock-dropping operation. */
++		if (mm != current->mm ||
++		    (operation != MADV_DONTNEED && operation != MADV_FREE))
++			return -EOPNOTSUPP;
++	} else if ((operation & (PROT_EXEC | PROT_GROWSDOWN | PROT_GROWSUP)) ||
++		   ((operation & PROT_READ) &&
++		    (current->personality & READ_IMPLIES_EXEC))) {
++		return -EACCES;
++	}
++	error = block_request(&r, false, false, true);
++	if (error)
++		return error;
++	for (at = r.address; at < r.address + r.bytes; at = vma->vm_end) {
++		vma = find_vma(mm, at);
++		if (!vma || vma->vm_start > at)
++			return -ENOMEM;
++		if (vma->vm_file || (vma->vm_flags & (VM_SHARED | VM_HUGETLB)) ||
++		    userfaultfd_armed(vma))
++			return -EOPNOTSUPP;
++	}
++	return 0;
++}
++
++/* Linux's holes are not all free: an unmapped page of a live block still
++ * belongs to that block. Search above any collision, including a VMA. */
++static unsigned long mapping_area(struct sublet_context *c, unsigned long hint,
++		unsigned long bytes, bool fixed)
++{
++	unsigned long at = hint, next;
++	struct arena *a;
++
++	if (fixed) {
++		if (at & ~PAGE_MASK || at < PAGE_SIZE ||
++		    at > CV_USER_ADDRESS_END - PAGE_SIZE - bytes)
++			return -EINVAL;
++		if (sublet_block_overlap(c, at, bytes) ||
++		    find_vma_intersection(c->mm, at, at + bytes))
++			return -EEXIST;
++		return at;
++	}
++	at = get_unmapped_area(NULL, at, bytes, 0, 0);
++	if (IS_ERR_VALUE(at))
++		return at;
++	for (;;) {
++		struct vm_area_struct *v;
++		if (at > CV_USER_ADDRESS_END - PAGE_SIZE - bytes)
++			return -ENOMEM;
++		a = sublet_block_overlap(c, at, bytes);
++		v = find_vma_intersection(c->mm, at, at + bytes);
++		if (!a && !v)
++			return at;
++		next = a ? a->address + a->bytes : at;
++		if (v && v->vm_end > next)
++			next = v->vm_end;
++		at = PAGE_ALIGN(next);
++	}
++}
++
++static int mapping_new(struct sublet_context *c, unsigned long address,
++		unsigned long bytes, struct arena **out)
++{
++	struct sublet_grant g = {
++		.address = address, .bytes = bytes, .cursor = address,
++	};
++	int error;
++	mutex_lock(&sublet_lock);
++	error = sublet_block_new(c, &g, out);
++	mutex_unlock(&sublet_lock);
++	return error;
++}
++static void mapping_abort(struct sublet_context *c, struct arena *a)
++{
++	mutex_lock(&sublet_lock);
++	sublet_block_rollback(c, a);
++	mutex_unlock(&sublet_lock);
++}
++static void mapping_return(struct arena *a, unsigned long address)
++{
++	sublet_mapping_return(a->slot, address);
++	/* No private authority to end a published mapping. */
++	WRITE_ONCE(a->slot[0], 0UL);
++	WRITE_ONCE(a->slot[1], 0UL);
++}
++/* A refill that loses its authority after allocation must remove the new
++ * pages. If Linux cannot allocate its unmap bookkeeping, deny access without
++ * allocating: protect and zap every overlapping VMA, then quarantine the
++ * block until exit. A merged neighbour can lose access too on this rare path.
++ * No program can regain access to the quarantined block through these hooks. */
++static void refill_abort(struct sublet_move *r, struct list_head *uf)
++{
++	struct vm_area_struct *vma;
++	unsigned long at = r->address, end = at + r->bytes;
++
++	if (!do_munmap(r->c->mm, at, r->bytes, uf))
++		return;
++	r->block->state.quarantined = true;
++	while (at < end) {
++		vma = find_vma(r->c->mm, at);
++		if (!vma || vma->vm_start >= end)
++			break;
++		vma->vm_flags &= ~(VM_READ | VM_WRITE | VM_EXEC);
++		WRITE_ONCE(vma->vm_page_prot, vm_get_page_prot(vma->vm_flags));
++		zap_page_range(vma, vma->vm_start, vma->vm_end - vma->vm_start);
++		at = vma->vm_end;
++	}
++}
++
++static void request_return(struct sublet_move *r)
++{
++	const unsigned long *slot;
++	/* The binder owns this slot until syscall return, even if the program
++	 * renews the lifetime on another thread. Returning a stale copy is safe. */
++	if (!sublet_handle_ref(r->handle, &slot))
++		sublet_mapping_return(slot, r->address);
++}
++
++unsigned long sublet_mmap(struct file *file, unsigned long handle,
++		unsigned long bytes, unsigned long prot, unsigned long flags,
++		unsigned long pgoff, unsigned long *populate, struct list_head *uf)
++{
++	struct mm_struct *mm = current->mm;
++	struct sublet_context *c = mm->context.capstone_namespace;
++	struct arena *a;
++	struct sublet_move r;
++	unsigned long address = handle & CV_CAP_ADDR_MASK, result;
++	int error;
++
++	mmap_assert_write_locked(mm);
++	*populate = 0;
++	if (!sublet_mapping_return)
++		return -EOPNOTSUPP;
++	if (file || !(flags & MAP_ANONYMOUS) || (flags & MAP_TYPE) != MAP_PRIVATE ||
++	    (flags & ~(MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED | MAP_FIXED_NOREPLACE |
++		       MAP_NORESERVE | MAP_POPULATE | MAP_NONBLOCK)) || pgoff)
++		return -EOPNOTSUPP;
++	if ((prot & PROT_EXEC) || ((prot & PROT_READ) &&
++		(current->personality & READ_IMPLIES_EXEC)))
++		return -EACCES;
++	if (!bytes || !PAGE_ALIGN(bytes) || PAGE_ALIGN(bytes) >= CV_USER_ADDRESS_END)
++		return -EINVAL;
++	bytes = PAGE_ALIGN(bytes);
++	a = sublet_block_overlap(c, address, bytes);
++	if ((flags & MAP_FIXED) && a) {
++		if (flags & MAP_FIXED_NOREPLACE)
++			return -EEXIST;
++		error = request_init(&r, mm, handle, bytes);
++		if (error)
++			return error;
++		error = block_request(&r, false, true, false);
++		if (error)
++			return error;
++		/* End no lifetime during replacement. If a later allocation fails,
++		 * keep the holes reserved in this block, as for a partial munmap. */
++		r.refill = true;
++		c->mapping_unmap = &r;
++		error = do_munmap(mm, address, bytes, uf);
++		c->mapping_unmap = NULL;
++		if (error)
++			return error;
++		result = do_mmap(NULL, address, bytes, prot,
++			flags | MAP_FIXED_NOREPLACE, 0, populate, uf);
++		if (!IS_ERR_VALUE(result)) {
++			error = block_request(&r, false, true, false);
++			if (error) {
++				refill_abort(&r, uf);
++				*populate = 0;
++				return error;
++			}
++			pages_commit(&a->state, address, bytes, true);
++			request_return(&r);
++		}
++		return result;
++	}
++	address = mapping_area(c, address, bytes,
++			flags & (MAP_FIXED | MAP_FIXED_NOREPLACE));
++	if (IS_ERR_VALUE(address))
++		return address;
++	error = mapping_new(c, address, bytes, &a);
++	if (error)
++		return error;
++	result = do_mmap(NULL, address, bytes, prot,
++			flags | MAP_FIXED_NOREPLACE, 0, populate, uf);
++	if (IS_ERR_VALUE(result))
++		mapping_abort(c, a);
++	else
++		mapping_return(a, result);
++	return result;
++}
++
++/* move_vma calls this after moving the page tables and before destroying the
++ * old mapping. Its existing error path moves the page tables back on refusal. */
++int sublet_move_commit(struct sublet_move *r)
++{
++	int error = block_request(r, true, false, true);
++	if (!error) {
++		r->authorized = true;
++		r->c->mapping_unmap = r;
++	}
++	return error;
++}
++
++unsigned long sublet_mremap(struct mm_struct *mm, unsigned long handle,
++		unsigned long old_bytes, unsigned long bytes, unsigned long flags,
++		unsigned long destination, bool *locked,
++		struct vm_userfaultfd_ctx *uf, struct list_head *unmap)
++{
++	struct sublet_move r, tail;
++	struct arena *fresh;
++	struct vm_area_struct *vma;
++	unsigned long result, populate = 0, address, prot;
++	int error = request_init(&r, mm, handle, old_bytes);
++
++	if (error)
++		return error;
++	if (!sublet_mapping_return || (flags & MREMAP_DONTUNMAP))
++		return -EOPNOTSUPP;
++	if (!bytes || !PAGE_ALIGN(bytes) || PAGE_ALIGN(bytes) >= CV_USER_ADDRESS_END)
++		return -EINVAL;
++	bytes = PAGE_ALIGN(bytes);
++	error = block_request(&r, false, false, true);
++	if (error)
++		return error;
++	vma = find_vma(mm, r.address);
++	if (!vma || vma->vm_start > r.address ||
++	    vma->vm_end < r.address + r.bytes || vma->vm_file ||
++	    vma->vm_flags & (VM_SHARED | VM_HUGETLB | VM_GROWSDOWN | VM_GROWSUP) ||
++	    userfaultfd_armed(vma))
++		return -EOPNOTSUPP;
++	if (!(flags & MREMAP_FIXED) && bytes <= r.bytes) {
++		if (bytes < r.bytes) {
++			tail = r;
++			tail.address += bytes;
++			tail.bytes -= bytes;
++			r.c->mapping_unmap = &tail;
++			error = do_munmap(mm, tail.address, tail.bytes, unmap);
++			r.c->mapping_unmap = NULL;
++			if (error)
++				return error;
++		}
++		request_return(&r);
++		return r.address;
++	}
++	/* Growth inside the reserved block refills only its own removed pages. */
++	if (!(flags & MREMAP_FIXED) && bytes > r.bytes &&
++	    request_call(&r.block->state, r.address, bytes)) {
++		tail = r;
++		tail.address += r.bytes;
++		tail.bytes = bytes - r.bytes;
++		error = block_request(&tail, false, true, false);
++		if (!error && !pages_present(&r.block->state, tail.address, tail.bytes)) {
++			prot = (vma->vm_flags & VM_READ ? PROT_READ : 0) |
++				(vma->vm_flags & VM_WRITE ? PROT_WRITE : 0);
++			result = do_mmap(NULL, tail.address, tail.bytes, prot,
++				MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED_NOREPLACE,
++				0, &populate, unmap);
++			if (!IS_ERR_VALUE(result)) {
++				error = block_request(&tail, false, true, false);
++				if (error) {
++					refill_abort(&tail, unmap);
++					return error;
++				}
++				pages_commit(&r.block->state, tail.address, tail.bytes, true);
++				request_return(&r);
++				return r.address;
++			}
++		}
++	}
++	if (!(flags & MREMAP_MAYMOVE))
++		return -ENOMEM;
++	/* A fixed move cannot evict another block without its own reference. */
++	address = mapping_area(r.c, destination & CV_CAP_ADDR_MASK, bytes,
++			flags & MREMAP_FIXED);
++	if (IS_ERR_VALUE(address))
++		return address;
++	if (bytes < r.bytes) {
++		/* Match Linux's fixed shrinking move: remove the tail first. A
++		 * later allocation failure leaves that shrink in effect. */
++		tail = r;
++		tail.address += bytes;
++		tail.bytes -= bytes;
++		r.c->mapping_unmap = &tail;
++		error = do_munmap(mm, tail.address, tail.bytes, unmap);
++		r.c->mapping_unmap = NULL;
++		if (error)
++			return error;
++		r.bytes = bytes;
++		vma = find_vma(mm, r.address);
++	}
++	error = mapping_new(r.c, address, bytes, &fresh);
++	if (error)
++		return error;
++	result = sublet_move_vma(vma, r.address, r.bytes, bytes, address,
++			locked, flags, uf, unmap, &r);
++	r.c->mapping_unmap = NULL;
++	if (IS_ERR_VALUE(result))
++		mapping_abort(r.c, fresh);
++	else
++		mapping_return(fresh, result);
++	request_finish(&r);
++	return result;
++}
+--- /dev/null
++++ b/include/linux/sublet-mappings.h
+@@ -0,0 +1,51 @@
++/* SPDX-License-Identifier: GPL-2.0-only */
++#ifndef _LINUX_SUBLET_MAPPINGS_H
++#define _LINUX_SUBLET_MAPPINGS_H
++#include <linux/mm.h>
++#include <linux/errno.h>
++struct sublet_move;
++#ifdef CONFIG_RISCV_CAPSTONE_TASK
++/* Step 5 resolves a handle to its tagged, aligned kernel slot. It must not
++ * sleep. The slot remains owned by this syscall until it returns. */
++int sublet_handle_ref(unsigned long handle, const unsigned long **ref);
++/* Step 3/5 supplies a non-failing tagged copy into the saved a0 return slot.
++ * address is the cursor to return. The source slot may be cleared on return. */
++void sublet_mapping_return(const unsigned long *ref, unsigned long address) __weak;
++static inline bool sublet_mappings(struct mm_struct *mm)
++{
++	return mm->context.capstone_namespace != NULL;
++}
++unsigned long sublet_mapping_address(struct mm_struct *, unsigned long);
++unsigned long sublet_mmap(struct file *, unsigned long, unsigned long,
++		unsigned long, unsigned long, unsigned long, unsigned long *, struct list_head *);
++int sublet_munmap(struct mm_struct *, unsigned long, unsigned long, struct list_head *);
++int sublet_unmap_commit(struct mm_struct *, unsigned long, unsigned long);
++int sublet_mapping_check(struct mm_struct *, unsigned long, unsigned long,
++		unsigned long, bool);
++unsigned long sublet_mremap(struct mm_struct *, unsigned long, unsigned long,
++		unsigned long, unsigned long, unsigned long, bool *,
++		struct vm_userfaultfd_ctx *, struct list_head *);
++unsigned long sublet_move_vma(struct vm_area_struct *, unsigned long,
++		unsigned long, unsigned long, unsigned long, bool *, unsigned long,
++		struct vm_userfaultfd_ctx *, struct list_head *, struct sublet_move *);
++int sublet_move_commit(struct sublet_move *);
++#else
++static inline bool sublet_mappings(struct mm_struct *mm) { return false; }
++static inline unsigned long sublet_mapping_address(struct mm_struct *mm,
++		unsigned long address) { return address; }
++static inline unsigned long sublet_mmap(struct file *f, unsigned long a,
++		unsigned long n, unsigned long p, unsigned long flags, unsigned long off,
++		unsigned long *populate, struct list_head *uf) { return -EOPNOTSUPP; }
++static inline int sublet_munmap(struct mm_struct *mm, unsigned long a,
++		unsigned long n, struct list_head *uf) { return -EOPNOTSUPP; }
++static inline int sublet_unmap_commit(struct mm_struct *mm, unsigned long a,
++		unsigned long end) { return 0; }
++static inline int sublet_mapping_check(struct mm_struct *mm, unsigned long h,
++		unsigned long n, unsigned long flags, bool advise) { return 0; }
++static inline unsigned long sublet_mremap(struct mm_struct *mm, unsigned long a,
++		unsigned long old, unsigned long n, unsigned long flags, unsigned long dest,
++		bool *locked, struct vm_userfaultfd_ctx *uf, struct list_head *list)
++	{ return -EOPNOTSUPP; }
++static inline int sublet_move_commit(struct sublet_move *move) { return 0; }
++#endif
++#endif
+--- a/arch/riscv/include/asm/sublet.h
++++ b/arch/riscv/include/asm/sublet.h
+@@ -31,6 +31,8 @@
+ 	phys_addr_t table_pa;	/* the table's physical root, which srevroot names */
+ 	/* Blocks by address, under sublet_lock. registered_bytes is the sum of their sizes. */
+ 	struct rb_root arenas;
++	/* Pending syscall unmap, serialized by mmap_write_lock. */
++	void *mapping_unmap;
+ 	unsigned long registered_bytes;
+ 	u64 next_id;
+ 	bool exact_bounds;
+--- a/arch/riscv/mm/sublet-table.c
++++ b/arch/riscv/mm/sublet-table.c
+@@ -17,6 +17,7 @@
+ #include <linux/slab.h>
+ #include <linux/capstone_native_helpers.h>
+ #include <asm/csr.h>
++#include <asm/asm-extable.h>
+ #include <asm/io.h>
+ #include <asm/pgtable.h>
+ #include <asm/sublet.h>
+@@ -40,19 +41,7 @@
+  * declaration at boot, and whether that declaration names the 63-bit format. */
+ static bool copyable_exact_bounds, platform_ready;
+ 
+-/* One block: a range of the program's address space with its own lifetime, one level below
+- * R. The kernel keeps the program's reference P to it in slot until the program's entry
+- * puts it into start register reg (plan v5 step 4). Blocks never overlap. */
+-struct arena {
+-    struct rb_node node;
+-    u64 id;
+-    unsigned long address, bytes;
+-    /* The image's read and execute prefix, zero for every other block: a private mapping of
+-     * the image file that is never writable. */
+-    unsigned long rx_bytes;
+-    unsigned long *slot;
+-    unsigned reg;
+-};
++#include "sublet-blocks-internal.h"
+ DEFINE_MUTEX(sublet_lock);
+ static LIST_HEAD(contexts);
+ 
+@@ -455,7 +444,7 @@
+     unsigned long end = g->address + g->bytes, rx_end = g->address + g->rx_bytes;
+     int error = 0;
+ 
+-    mmap_read_lock(c->mm);
++    mmap_assert_locked(c->mm);
+     for (unsigned long at = g->address; at < end && !error;) {
+         struct vm_area_struct *v = find_vma(c->mm, at);
+         bool rx = at < rx_end;
+@@ -473,13 +462,12 @@
+             error = v->vm_file ? -EACCES : 0;
+         at = min(min(end, v ? v->vm_end : end), rx ? rx_end : ULONG_MAX);
+     }
+-    mmap_read_unlock(c->mm);
+     return error;
+ }
+ 
+ /* Make the block for the grant g: check its range and its mappings, derive P from R and record
+  * the block. Caller holds sublet_lock. */
+-int sublet_grant(struct sublet_context *c, const struct sublet_grant *g)
++int sublet_block_new(struct sublet_context *c, const struct sublet_grant *g, struct arena **out)
+ {
+     struct arena *a;
+     int error;
+@@ -493,26 +481,31 @@
+         return -EINVAL;
+     if (arena_overlaps(c, g->address, g->bytes)) return -EINVAL;
+     if (c->registered_bytes + g->bytes > CV_MAX_BYTES) return -ENOMEM;
+-    error = grant_mapped(c, g);
+-    if (error) return error;
+     /* A block id names one block for the context's whole life. */
+     if (c->next_id == U64_MAX) return -ENOSPC;
+     if (grant_nodes(c)) return -ENOMEM;
+ 
+     a = kzalloc(sizeof(*a), GFP_KERNEL_ACCOUNT);
+     if (!a) return -ENOMEM;
++    a->state.present = kvcalloc(g->bytes >> PAGE_SHIFT, 1, GFP_KERNEL_ACCOUNT);
++    if (!a->state.present) { kfree(a); return -ENOMEM; }
+     a->slot = ref_slot_get(c);
+-    if (!a->slot) { kfree(a); return -ENOMEM; }
++    if (!a->slot) { kvfree(a->state.present); kfree(a); return -ENOMEM; }
+     error = root_derive(c, a->slot, NULL, g);
+     if (error) {
+         ref_slot_put(c, a->slot);
++        kvfree(a->state.present);
+         kfree(a);
+         return error;
+     }
+     a->id = ++c->next_id;
+     a->address = g->address; a->bytes = g->bytes; a->rx_bytes = g->rx_bytes; a->reg = g->reg;
++    a->state.address = a->address; a->state.bytes = a->bytes;
++    a->state.mapped = a->bytes >> PAGE_SHIFT;
++    memset(a->state.present, 1, a->state.mapped);
+     arena_insert(c, a);
+     c->registered_bytes += a->bytes;
++    *out = a;
+     return 0;
+ }
+ 
+@@ -577,6 +570,7 @@
+         struct arena *a = rb_entry(n, struct arena, node);
+         next = rb_next(n);
+         rb_erase(&a->node, &c->arenas);
++        kvfree(a->state.present);
+         kfree(a);
+     }
+     c->registered_bytes = 0;
+@@ -610,3 +604,97 @@
+     return 0;
+ }
+ subsys_initcall(sublet_table_init);
++
++/* The loader holds sublet_lock before the mm is published to the task. */
++int sublet_grant(struct sublet_context *c, const struct sublet_grant *g)
++{
++	struct arena *a;
++	int error;
++
++	mmap_read_lock(c->mm);
++	error = grant_mapped(c, g);
++	if (!error)
++		error = sublet_block_new(c, g, &a);
++	if (!error)
++		a->state.kernel_owned = g->reg != 13;
++	mmap_read_unlock(c->mm);
++	return error;
++}
++
++struct arena *sublet_block_find(struct sublet_context *c, unsigned long address)
++{
++	struct arena *a = arena_below(c, address + 1);
++	return a && address - a->address < a->bytes ? a : NULL;
++}
++struct arena *sublet_block_overlap(struct sublet_context *c, unsigned long address,
++		unsigned long bytes)
++{
++	struct arena *a = arena_below(c, address + bytes);
++	return a && a->address + a->bytes > address ? a : NULL;
++}
++void sublet_block_drop(struct sublet_context *c, struct arena *a)
++{
++	rb_erase(&a->node, &c->arenas);
++	c->registered_bytes -= a->bytes;
++	ref_slot_put(c, a->slot);
++	kvfree(a->state.present);
++	kfree(a);
++}
++void sublet_block_rollback(struct sublet_context *c, struct arena *a)
++{
++	unsigned long flags, old;
++	preempt_disable(); local_irq_save(flags);
++	old = select_root(c);
++	grant_unwind(a->slot);
++	restore_root(old);
++	local_irq_restore(flags); preempt_enable();
++	sublet_block_drop(c, a);
++}
++
++void sublet_ref_inspect(struct sublet_context *c, const unsigned long *slot,
++		struct sublet_ref_info *r)
++{
++	unsigned long type, old, *record, *next;
++
++	memset(r, 0, sizeof(*r));
++	old = select_root(c);
++	ref_read((unsigned long *)slot, &type, &r->id);
++	r->tagged = type == CV_TYPE_NONLIN;
++	if (!r->tagged)
++		goto out;
++	asm volatile(CV_RUN
++		CV_LDC("t0", "%[slot]")
++		CV_LCC("%[base]", "t0", "x3")
++		CV_LCC("%[end]", "t0", "x4")
++		"li t0, 0\n"
++		: [base] "=&r"(r->base), [end] "=&r"(r->end)
++		: [slot] "r"(slot) : "t0", "memory");
++	record = sublet_table_record(c->table, CV_ID_SLOT(r->id));
++	r->live = record && CV_REC_LIVE(record, r->id);
++	if (!r->live)
++		goto out;
++	r->depth = CV_REC_DEPTH(record);
++	if (CV_REC_NEXT(record)) {
++		next = sublet_table_record(c->table, CV_REC_NEXT(record));
++		r->descendants = !next || CV_REC_DEPTH(next) > r->depth;
++	}
++out:
++	restore_root(old);
++}
++
++/* The caller rechecks the handle's slot in the same non-preemptible window.
++ * A fault takes the fixup before any page or block state changes. */
++int sublet_ref_revoke(struct sublet_context *c, const unsigned long *slot)
++{
++	unsigned long old = select_root(c), faulted;
++	asm volatile("li %[faulted], 0\n" CV_RUN
++		CV_LDC("t0", "%[slot]")
++		"1:\n" CV_KILL("t0")
++		"li t0, 0\n j 3f\n"
++		"2:\n li t0, 0\n li %[faulted], 1\n 3:\n"
++		_ASM_EXTABLE(1b, 2b)
++		: [faulted] "=&r"(faulted) : [slot] "r"(slot)
++		: "t0", "memory");
++	restore_root(old);
++	return faulted ? -EFAULT : 0;
++}
+--- a/arch/riscv/mm/Makefile
++++ b/arch/riscv/mm/Makefile
+@@ -33,4 +33,4 @@
+ obj-$(CONFIG_DEBUG_VIRTUAL) += physaddr.o
+ obj-$(CONFIG_RISCV_DMA_NONCOHERENT) += dma-noncoherent.o
+ 
+-obj-$(CONFIG_RISCV_CAPSTONE_TASK) += sublet-table.o
++obj-$(CONFIG_RISCV_CAPSTONE_TASK) += sublet-table.o sublet-blocks.o

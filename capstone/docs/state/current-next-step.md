@@ -1,3 +1,11 @@
+## Trap-route mapping integration
+
+Apply `series.s6-mappings` after the kernel base series. Supply the handle-slot
+resolver and tagged mapping return helper, then run the trap-mode mapping
+contracts. Reconcile the loader stream's grant-slot output with the block
+structure now shared by the table and mapping code.
+[Interfaces and current verification](../design/sublet-mappings.md).
+
 ## RTL implementation from the rebased native branch
 
 The developer entry is the [RTL handoff](../plans/native-task-rtl-handoff.md).
