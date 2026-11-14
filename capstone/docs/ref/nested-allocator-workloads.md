@@ -599,6 +599,53 @@ miss replays per run, which at the RTL's estimated cost explain about 7-8 % of t
 - What would settle it: time CDERIVE and CREVOKE on the board itself, in a native-route domain on F (a loop of each,
   back to back and spaced). It is a few seconds of board time in any future boot. Not pre-registered yet.
 
+### Pre-registration: CDERIVE and CREVOKE timed on silicon (bitstream F, board 2; written before the boot)
+
+**Why.** The RTL brackets speedtest1's lifetime-op cost at 15-98 % of its in-context cost, because the per-op cost
+depends on memory latency, which simulation does not have. Timing both instructions on the board settles it. It also
+gives the lead's worst-case question (subtree 1 .. 10^6) its silicon latency.
+
+**Configuration.**
+- Bitstream F `a948e4134` (`ec675c2b…`), kit bkit75n, board 2, chained by the SPEC lane after the CPython boot
+  (nat-run3, switch park).
+- Stage `nested/crvt/board/c2-stage` (`c2-stage.SHA256SUMS`): the f3 stage's native-smoke skeleton, byte-identical, plus
+  `train/`, written by `nested/crvt/make-stage-crv.py`.
+- One native-route domain, `crvtime` (`crvt/crvtime.c`, FRCDKMS SDK -O2; stripped `44b1492101016471…`). One test per
+  command, each in its own process. Times are `csrr cycle` deltas; the domain runs at machine privilege.
+- The parent of every derive is a 4 KiB `malloc` block, a mallocng lifetime.
+
+| command | test |
+|---|---|
+| t0-control | empty bracket, and an empty loop of 100,000 (sentinel `0x5ca1ab1e`) |
+| t1-lone | 10,000 times: bracketed CDERIVE of a 64-byte child, spin 200, bracketed CREVOKE of it, spin 200 |
+| t2-b2b | 10,000 back-to-back sibling CDERIVEs under Q, then one bracketed CREVOKE of Q (10,001 nodes) |
+| t3-chain1 .. t3-chain100k | a chain of N = 1, 10, 100, 1,000, 10,000, 100,000, then one bracketed CREVOKE |
+| t4-probe1m | derive a chain toward 10^6 with progress lines every 65,536; the table must refuse first |
+
+- Checked on the twin (`ncrv-w2`): every test completes, and t4 dies on cause 30 after reporting 196,609. The twin's
+  cycle counter counts instructions, so its latencies are not readings.
+- Checked off the board, as rule 8 asks (`nested/crvt/board/c2-recheck`, via `recheck-c2.sh`):
+  - a real bake: cpio `d7afda9720b976da` holds all 24 manifest files, and the baked `crvtime` and `run.sh` match the
+    stage hashes. `run.sh`'s setup line succeeds on the tree extracted from that cpio.
+  - The kit's `BOARD_STUB=2` run on that bake relinked the native kernel (`9809b4295d967487`) and classified the smoke
+    PASS, with `BAKED_TIMEOUT=3600`.
+  - A real firmware build on that Image: `9ff675d9b2ff4d23…`, 19,566,088 B (cap 26,000,000), dom_stack gate PASS.
+
+**Predictions.**
+- t0: completes, with the sentinel. Anything else voids the timing lines.
+- **Lone CDERIVE: 15-150 cycles. Lone CREVOKE of 1 node: 30-300.** The RTL reads 21 and 38-50 drained, at either delay.
+- **Back-to-back CDERIVE: 20-400 cycles each.** The RTL reads 27 (delay 0) and 157 (delay 12); the board's memory may
+  be slower than delay 12.
+- **CREVOKE per node, N >= 1,000: 5-200 cycles.** The RTL reads 6 (delay 0) and about 60 (delay 12).
+- t3-chain100k completes: the native table holds 262,144 records. If it is refused with cause 30, that is a
+  per-subtree cap on silicon. It is read as such, and the largest N is taken from t4's progress.
+- t4 is refused before 262,144 nodes (twin: after 196,609). A 10^6-node subtree cannot exist on this configuration.
+- **What will be derived:** speedtest1's per-run lifetime-op cycles on F, as 28,226 x (CDERIVE) + 28,216 x (CREVOKE of 1),
+  for lone and for back-to-back costs, against its +11.5 M in-context delta. Also the latency of PostgreSQL's
+  34,509-node reset at the per-node cost read here.
+- Duration: under a minute of commands. Budget 3,600 s for the rung.
+- **VOID** if `b0-stats` or `b0-hello` fails, or the smoke fails outside the kit's accounting waiver.
+
 **The real large revoke: PostgreSQL's context resets** (twin, `w2-main`, details in the PostgreSQL section). 668,247
 CREVOKEs per run. 92 % end one node, 52,685 end a context's chunks, and the largest ends 34,509 nodes. That one costs
 about 0.38 M cycles at memory delay 0 and about 2.1 M at delay 12, without interruption.
