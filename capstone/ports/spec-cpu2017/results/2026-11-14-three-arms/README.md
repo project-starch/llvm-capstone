@@ -69,6 +69,10 @@ perl makerand is the quick sub-run used for A/B work; the table's perl row is th
 
 ### Open caveats a reader should know
 
+- **gcc's Capstone stages carry a disclosed gcc-only module tuning:** arena_pin=1, resume_quantum=1 and
+  step_budget_ns=10 s, restored after the run (train PREREG Addenda 69 and 116). Every Capstone gcc arm has it alike,
+  and riscv-base has no counterpart module. perl, mcf, xz and the rest write no module parameter.
+
 - **x264 correctness.** It is checked by the five decoded frames' sha256 against plain-rv64r's board run, because the
   native x264 stage has no imagevalidate step. specdiff therefore reads "0/3" on x264, which is not a failure.
 - **riscv-base xz.** It is the no-cache build. In QEMU the mapping cache moves xz by 0.07 %.
