@@ -110,10 +110,13 @@ signals and cancellation remain deferred. Thread exit uses SYS_exit (93).
 The assembly __unmapself performs munmap then exit without another stack
 or TLS access.
 
-On p13 in `~/asr-work/s8t`, all 1,349 libc files compiled. The two-thread
-`threads-smoke.dom` linked without undefined symbols and passed the clone
-disassembly checks. The existing write/mapping and malloc smokes still link.
-Thread execution remains outside this libc qualification.
+On p13 in `~/asr-work/s8t`, all 1,349 libc files rebuilt. On integrated kernel
+`2443072aa6b`, `threads-smoke.dom` now exits zero. Trap startup must retain
+`__init_tp`'s `libc.can_do_threads` result. Resetting it to zero caused
+`pthread_create` to return ENOSYS before clone. The `threads-disabled.dom`
+control restores that reset and exits one. `futex-stale.dom` confirms EFAULT
+for stale reads and wake-op writes, with successful fresh-reference controls
+at the same address. The link and clone disassembly checks also pass.
 See the [kernel thread contract and controls](../../../../kernel/tests/threads/README.md).
 
 ## Jump buffers and signal registration

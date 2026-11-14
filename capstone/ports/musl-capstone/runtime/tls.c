@@ -30,7 +30,8 @@ void __init_tls(size_t *aux)
         __syscall(SYS_exit_group, 127);
         __builtin_trap();
     }
-    libc.can_do_threads = 0;
+    /* Keep __init_tp's thread support result. The trap clone path uses the
+     * same TLS layout and does not need a launcher to enable pthreads. */
     __capstone_tls_ready = 1;
 }
 #else

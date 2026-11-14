@@ -6,13 +6,13 @@ contracts. Reconcile the loader stream's grant-slot output with the block
 structure now shared by the table and mapping code.
 [Interfaces and current verification](../design/sublet-mappings.md).
 
-## Integrate the trap thread slice
+## Complete the trap futex lifetime contract
 
-Apply `series.s8-threads` after the step 3 trap route and step 5 handle binder.
-Run `threads-smoke.dom` and require exit zero. Then run the stale futex read
-and stale wake-op controls described in the [thread tests](../../kernel/tests/threads/README.md).
-Complete lifetime-aware wake counting before claiming plan v5 step 8 complete.
-The current evidence covers compilation, linking and the host binder only.
+The integrated thread smoke and stale futex access checks pass on kernel
+`2443072aa6b` with the corrected libc startup. Complete lifetime-aware wake
+counting before claiming plan v5 step 8 complete. Requeue races, revocation
+while blocked and fatal-signal exit remain untested.
+[Verified cases and reproduction](../../kernel/tests/threads/README.md).
 
 ## Continue trap libc qualification
 

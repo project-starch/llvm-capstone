@@ -34,10 +34,16 @@ for src in "$here/runtime/"{linux-start.c,tls.c,delegate.c,native-syscall.S,set_
 done
 "$CAPSTONE_LLVM_BIN/llvm-ar" rcs "$out/libtrap-runtime.a" "${objects[@]}"
 "$CAPSTONE_CLANG" "${flags[@]}" -c "$here/tests/trap/jump-register.S" -o "$out/jump-register.o"
-for test in smoke malloc-smoke threads-smoke setjmp-smoke signal-smoke; do
+for test in smoke malloc-smoke threads-smoke threads-disabled futex-stale setjmp-smoke signal-smoke; do
+    source_test=$test
+    test_flags=()
     extra=()
+    if [[ $test == threads-disabled ]]; then
+        source_test=threads-smoke
+        test_flags+=(-DTHREADS_DISABLED_CONTROL)
+    fi
     if [[ $test == setjmp-smoke ]]; then extra+=("$out/jump-register.o"); fi
-    "$CAPSTONE_CLANG" "${flags[@]}" -c "$here/tests/trap/$test.c" -o "$out/$test.o"
+    "$CAPSTONE_CLANG" "${flags[@]}" "${test_flags[@]}" -c "$here/tests/trap/$source_test.c" -o "$out/$test.o"
     "$CAPSTONE_LD_LLD" --gc-sections -T "$rt/virtual/link.ld" -o "$out/$test.dom" \
         "$out/$test.o" "${extra[@]}" --whole-archive "$out/libtrap-runtime.a" --no-whole-archive \
         "$TRAP_LIBC_ARCHIVE"

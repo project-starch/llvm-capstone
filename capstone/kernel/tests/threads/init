@@ -1,0 +1,21 @@
+#!/bin/sh
+mount -t proc proc /proc
+mount -t sysfs sys /sys
+mount -t devtmpfs dev /dev 2>/dev/null
+busybox mkdir -p /work
+mount -t tmpfs tmpfs /work
+busybox cp /*.dom /work/
+cd /work || exit 1
+for name in threads-smoke threads-disabled futex-stale; do
+    "./$name.dom" &
+    pid=$!
+    (sleep 15; kill -9 "$pid" 2>/dev/null) &
+    watchdog=$!
+    wait "$pid"
+    status=$?
+    kill "$watchdog" 2>/dev/null
+    wait "$watchdog" 2>/dev/null
+    echo "TRAPTEST: $name status $status"
+done
+echo 'TRAPTEST: done'
+busybox poweroff -f
