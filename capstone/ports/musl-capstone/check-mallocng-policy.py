@@ -40,7 +40,8 @@ def main():
         upstream={f.name:f.read_text() for f in (root/rel).iterdir() if f.is_file()}
         reviewed=None
         for name in ('0009-virtual-mallocng-capabilities.patch', '0010-virtual-mallocng-meta-area-at-once.patch',
-                     '0011-virtual-mallocng-grow-mmapped-chunks-in-place.patch', '0012-virtual-mallocng-one-call-malloc.patch'):
+                     '0011-virtual-mallocng-grow-mmapped-chunks-in-place.patch', '0012-virtual-mallocng-one-call-malloc.patch',
+                     '0013-virtual-mallocng-get-meta-inline.patch'):
             if name.startswith('0012'): reviewed=(root/rel/'malloc.c').read_text()
             with (Path(__file__).parent/'musl-patches'/name).open() as patch:
                 subprocess.run(['patch','-s','-p1','--no-backup-if-mismatch','--fuzz=0','-d',str(root)],stdin=patch,check=True)

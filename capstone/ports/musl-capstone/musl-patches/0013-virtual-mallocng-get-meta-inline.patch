@@ -1,0 +1,41 @@
+Lean virtual mallocng, part 2: get_meta is always inlined (free, realloc and calloc called it out of line, an indirect call on this target), and reads sizeclass and maplen once, after the secret check, where they were first read before. Same checks in the same order; no access to the meta moves ahead of a check that guarded it.
+
+--- a/src/malloc/mallocng/meta.h
++++ b/src/malloc/mallocng/meta.h
+@@ -128,7 +128,11 @@
+ 	return p[-3] & 31;
+ }
+ 
+-static inline struct meta *get_meta(const unsigned char *p)
++/* Always inlined (0013): free, realloc and calloc each called it out of line, which on this target costs an
++ * indirect call and its return. Same checks in the same order. sizeclass and maplen are read once, after the
++ * secret check where they were first read before; last_idx keeps its own read at its check, so no access to the
++ * meta moves ahead of a check that guarded it. */
++static inline __attribute__((always_inline)) struct meta *get_meta(const unsigned char *p)
+ {
+ 	assert(!((uintptr_t)p & 15));
+ 	int offset = *(const uint16_t *)(p - 2);
+@@ -146,14 +150,17 @@
+ 	assert(!(meta->freed_mask & (1u<<index)));
+ 	const struct meta_area *area = (void *)((char *)meta - ((uintptr_t)meta & 4095));
+ 	assert(area->check == ctx.secret);
+-	if (meta->sizeclass < 48) {
+-		assert(offset >= size_classes[meta->sizeclass]*index);
+-		assert(offset < size_classes[meta->sizeclass]*(index+1));
++	/* Read once, here: the same point as their first read before 0013, after every check that guards it. */
++	const int sizeclass = meta->sizeclass;
++	const size_t maplen = meta->maplen;
++	if (sizeclass < 48) {
++		assert(offset >= size_classes[sizeclass]*index);
++		assert(offset < size_classes[sizeclass]*(index+1));
+ 	} else {
+-		assert(meta->sizeclass == 63);
++		assert(sizeclass == 63);
+ 	}
+-	if (meta->maplen) {
+-		assert(offset <= meta->maplen*4096UL/UNIT - 1);
++	if (maplen) {
++		assert(offset <= maplen*4096UL/UNIT - 1);
+ 	}
+ 	return (struct meta *)meta;
+ }
