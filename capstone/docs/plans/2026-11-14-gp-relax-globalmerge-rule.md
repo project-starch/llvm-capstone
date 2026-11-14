@@ -40,3 +40,19 @@ complete (N/N): gcc train01 whole run, mcf test whole run, perl makerand window.
 
 The chosen policy then applies to all 8 rows on both arms. There is no per-row or per-arm choice. The Capstone
 figures above do not enter the decision.
+
+## Outcome (2026-11-14 14:20)
+
+The riscv-base figures: native-twin shift-1 user instructions, each arm's validation complete; RVF3 = board 3's
+images.
+
+| row | RVF3 | RVGP (LLVM default) | RVGPM (merge unchanged) | RVGPM / RVGP |
+|---|---|---|---|---|
+| gcc train01 | 10,860,282,131 | 10,814,311,062 | 10,845,295,645 | 1.00287 |
+| perl makerand | 2,758,076,175 | 2,518,504,925 | 2,518,504,925 | 1.00000 |
+| mcf test | 27,364,791,454 | (pending) | 27,364,108,101 | (not needed) |
+
+RVGPM exceeds RVGP × 1.0005 on gcc, so by the rule **both arms use the LLVM default**:
+- Capstone: GPR2's flags (`-capstone-small-data-limit=16 -global-merge-min-data-size=17`);
+- riscv-base: RVGP's (`-msmall-data-limit=8`, whose module flag sets GlobalMerge's minimum).
+mcf could not change the outcome.
