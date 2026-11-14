@@ -35,7 +35,13 @@ same images. The "final config" columns are being re-measured on F.
 - **F's scope.** The gain is the tag-word-cache change, reach and merge together, at N = 1 per row.
   - It comes at unchanged L1I/L1D misses, DTLB walks and mispredicts.
   - On mcf, the issue-stall drop covers 18.1 of the 19.75 G-cycle fall.
-  - On gcc, issue plus scoreboard stalls cover only 40 % of the 11.3 G-cycle fall; the rest is not yet attributed. The pre-registered
+  - On gcc, issue plus scoreboard stalls cover only 40 % of the 11.3 G-cycle fall. The tag-path counters account for
+    all of it: the adapter's tag-phase cycles fall by 11.8 G, mostly tag writes (1.29 G → 0.42 G).
+  - Tag-path counters, config B (old cache) → F, same images:
+    - mcf: tag reads 1.62 → 0.81 G, tag writes 0.82 → 0.24 G, tag-cache miss rate 48 % → 24 %;
+    - gcc: tag reads 157 → 73 M, tag writes 1.29 → 0.42 G;
+    - L1D misses and page fills unchanged on both.
+  - Repeats with the tag-counter firmware on the same board: mcf +0.08 %, gcc +0.04 %. The pre-registered
   deciding reading, the tag counters of B against F, is due tonight.
 - **Next bitstream.** F2 (F + targeted fill invalidation, eeb654104) is sealed and flash-ready. L1D 64 KiB
   (b0f02bac7) failed timing and is not flashed.
