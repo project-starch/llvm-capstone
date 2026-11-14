@@ -13,7 +13,7 @@
 | PostgreSQL 17.5, single-user pgbench-derived workload, QEMU twin | **measured** (15 Nov 04:21-04:42): 4/4 commands give the native answers; in-context **+4.04 %**, kernel +0.43 %, repeats within 0.02 %; 2.31 M CDERIVEs and 668 k CREVOKEs per run, subtree mean 3.45 / **max 34,509** (a context reset), peak live records 105,043 (1.68 MB). Bring-up found a port defect, **ISSUES.md M-15** (int2vector/oidvector read 8 bytes off at MAXALIGN 16, caught as CAP_OOB by the protected arm). Harness changes, the same in both arms: root (the loader admits euid 0 only), shims over refused or unserved calls; patch 0003 with the Q-15 placement repair | FRCDKMS SDK, -O2, native route, image set 10, QEMU qemu55 a0501ebc39 (counts: qemu-nst) |
 | PostgreSQL on silicon, bitstream F | **queued**: board 1, chain be-b1 (~10:00 15 Nov), pre-registered below (87b463da4d10; SPEC lane Addendum 126); ABBA in one boot, rung budget 1800 | F `a948e4134`, kit bkit75n |
 | FFmpeg 9.0.1 decode (10 s clip, 300 frames), QEMU twin | **measured** (15 Nov 05:21): all commands decode the stock reference frames; in-context **-0.030 %**, kernel -0.36 %. The protection adds about 3,300 lifetimes per decode (pools recycle), subtree max 2, peak 474 live records. Needs `-fno-builtin` in both arms (else cause 24 in both, a compiler defect) and this lane's Q-15 placement repair of 0003 (unrepaired, CDERIVE refuses a frame-plane buffer) | FRCDKMS SDK, -O2 -fno-builtin, native route, set w4, QEMU qemu55 a0501ebc39 |
-| tshark (pcap) | **running**: the native-route build of tshark and its six dependencies (FRCDKMS SDK); wmem 0001 already carries its Q-15 repair (d75137deed6e). Twin next, then silicon | FRCDKMS, native route |
+| tshark 4.6.8, `-r -V -n` on 9,000 frames, QEMU twin | **measured** (15 Nov 05:45-06:45): every output equals stock tshark's byte for byte; in-context **+2.69 %**, kernel +0.02 %; 7.18 M CDERIVEs and 2.73 M CREVOKEs per run, with one packet-scope reset of 256-1,023 nodes per frame, subtree max 29,134, peak live records 33,998 | FRCDKMS SDK and flags on tshark and its seven dependencies, `--no-relax`, native route, QEMU qemu55 a0501ebc39 |
 | memcached (load) | **deferred**: the native route cannot run it. The table refuses `socket`, `socketpair`, `epoll_create1` and `epoll_ctl` (`native-syscall-table.c:92-101`, `NS_REFUSE`). A twin probe (`nested/mcprobe`, 15 Nov) confirms it after a passing control (`open` in the run directory): `socket(AF_INET)` and `socket(AF_UNIX)` give ENOSYS, `epoll_create1` ENOSYS, `pthread_create` EAGAIN. memcached needs all three (four worker threads). Running it elsewhere (e.g. the virtual route) is a different instrument; the lead's call | - |
 | CREVOKE worst case (subtree 1 .. 10^6, latency, interruptibility; PostgreSQL context reset) | **measured** (RTL sim, memory delay 0): 6 cycles per node up to 2,048 nodes, about 11 beyond; at most 65,532 nodes per subtree (10^6 cannot be built), so the worst single CREVOKE is 720,892 cycles; **not interruptible**: a timer interrupt waits for the whole walk (180,518 cycles at 32,768 nodes, against 1-6 without). PostgreSQL context resets (twin): the largest ends **34,509 nodes** in one CREVOKE, about 0.38 M cycles at delay 0 and 2.1 M at delay 12. CDERIVE: 21 cycles alone, 27 / 157 back to back at delay 0 / 12; CREVOKE about 60 cycles per node at delay 12 | capstone-ariane `a948e4134` (F), `--sv_seed 1` |
 | CDERIVE / CREVOKE timed on silicon (lone, back to back, subtrees 1 .. 10^5, a probe to 10^6) | **queued**: board 2, chain bd-b2, after the CPython boot (~11:30 15 Nov), pre-registered below (d0b72cfe7a21; SPEC lane Addendum 125) | F `a948e4134`, kit bkit75n |
@@ -1011,9 +1011,14 @@ the protection. Bisection, one twin run each, unprotected arm:
 | `-ffreestanding` | 300/300 frames match |
 | the port's qualified flags (-O1, frame pointer, freestanding, no builtins, no jump tables), no FRCD | 300/300 match |
 
-C-79 (library calls the simplifier emits return integers) is the recorded defect of this shape, and its fix is in
-llvm-c9's source (a14ed97ccfa1 is an ancestor of 29027126f39b). So this is another instance, or a residual of it, and
-it is handed to the compiler lane.
+It is not C-79: that fix is in llvm-c9's source (a14ed97ccfa1 is an ancestor of 29027126f39b). The compiler lane
+identified it as **C-69**, the existing under-aligned capability byte-copy defect
+(`compiler-repros/C69-underaligned-capability-bytecopy`):
+- with builtins on, SROA folds `av_freep`'s pointer-typed `memcpy` into an align-1 capability load;
+- the backend expands that load bytewise and drops the tag, and `free` then receives an integer.
+Their run-time dispatch fix (llvm-c14/c15) changes no SPEC image: their census over the 8 SPEC rows finds the shape in
+0 functions, with a positive control on `av_freep`. A builtins-on FFmpeg arm on that compiler is a later rerun, not
+part of this measurement.
 
 **Q-15 placement repair of 0003, by this lane** (`nested/ffmpeg/ffmpeg-9.0.1-0003-q15-pool-placement.patch`,
 `4e33c7e6ee4a76fc…`; protected arm only, applied after 0003 at fuzz 0). Unrepaired, the protected arm stops twice
@@ -1060,10 +1065,14 @@ Every command decodes 300 frames equal to the stock reference.
 - FFmpeg's pools recycle their entries, so the protection adds about 3,300 lifetimes per 300-frame decode: 11 per
   frame, against 889 M in-context cycles. Its direct cost is below the twin's resolution of a few hundred thousand
   cycles.
-- The protected arm reads 268 k in-context cycles **fewer**, which the repeats (equal to 0.0001 %) say is real on the
-  twin. It is not read as a speed-up from the protection. The repair changes the pools' allocation sizes (slack
-  and rounding), and the protected arm enters the kernel 6 times fewer per run, so its allocation path differs. This
-  file does not separate the two.
+- **The arms differ by 0.03 % either way, and the difference is not attributed.** The repeats agree to 0.0001 %, so it
+  is real on the twin, but the protected arm differs in more than the lifetime ops:
+  - its pool buffers are allocated with a granule of slack and rounded up;
+  - its `RefCount` header is 16 bytes wider (`sublet_raw`, on top of 0003's two fields), so every refstruct allocation
+    is larger;
+  - it enters the kernel 6 times fewer per run.
+  - Separating the allocation path from the protection would take a third image with the repair's sizing and no
+    derives. It was not built.
 
 ### Pre-registration: FFmpeg on silicon, bitstream F, both arms in one boot (written before the boot)
 
@@ -1092,3 +1101,60 @@ Every command decodes 300 frames equal to the stock reference.
 - **Event 23, protected minus not:** under +10,000 per command, on the same count.
 - **Duration:** about 150 s per command (twin x speedtest1's ratios), so about 13 min of commands.
 - **VOID** if `b0-stats` or `b0-hello` fails, or the smoke fails outside the kit's accounting waiver.
+
+## tshark 4.6.8: offline dissection (`-r w.pcap -V -n`)
+
+**Patch.** `capstone/ports/wireshark/wmem/patches/wireshark-4.6.8-0001-wmem-sublet-lifetimes.patch`, as on dev (which
+carries its Q-15 repair, d75137deed6e: every derive exact, tail padding only). With it, every wmem `block` and
+`block_fast` object is a CDERIVE child of its block, revoked by free, by realloc, and by the reset that ends its pool.
+The arms' source trees differ in exactly `wsutil/wmem/{wmem_allocator_block.c,wmem_allocator_block_fast.c,wmem_allocator.h}`.
+Applying the patch to the unprotected tree reproduces the protected one byte for byte.
+
+**Build.** `nested/tshark/scripts/`: forks of the port's `deps/env.sh`, `deps/capstone-cc`, `host/cross-build.sh` and
+`host/build-domain.sh`, with the diffs in `scripts/diffs/`.
+- The FRCDKMS SDK and flags are on every compile and link, of tshark and of its seven dependencies (zlib, pcre2,
+  c-ares, libgpg-error, libgcrypt, libxml2, glib). The dependencies were built once and are shared by both arms.
+- The port's own flags are kept (-O2 -DNDEBUG, single-threaded domain, `-fno-stack-protector`).
+- The build's gates pass (no undefined weak symbol, no stray constructor section), and both were negative-tested.
+- **`-Wl,--no-relax`**: the SDK's runtime archive carries 236 TPREL relocations; tshark's own objects and the
+  dependencies have none. Relinking without it changes both images.
+- The build was done by a delegated agent. I re-checked the image hashes and the source diff; the rest is from its
+  report.
+- Images (m5, unstripped): unprotected `5c2a75c6c79f7154…`, protected `46d254b58b415d1e…`. Stripped they are
+  `2061f661…` and `bcc251f3…`, 20.3 MB each.
+- tshark ran on the native route with no harness change. Its stderr carries the minimal build's registration notices,
+  and the runtime's own report (`TSAPP-HEAP status=0 … unserved=160x5,48,278x4`) of calls the route did not serve:
+  uname, faccessat and getrandom. None of them changed the output.
+
+**Workload.** `nested/tshark/wl/w1000.pcap` (`5ba7788d208894d1…`, by `wl/mkpcap.py`): the port's whitelisted
+captures `dhcp`, `dns_port` and `http` (link type 1), concatenated 1,000 times over, 9,000 frames. `arp.pcap` is link
+type 107 and is left out. The reference is stock native tshark 4.6.8's output on the same file (`wl/ref1000.out`,
+`056c1f8ce80b4012…`, 1,140,005 lines), compared by sha256, as the port's oracle compares stdout byte for byte. An
+empty capture (`w0.pcap`) measures startup alone.
+
+**Twin results (2026-11-15 05:45-06:45).** One ABBA boot `nts-a1`; every command's output equals the stock reference
+(sha256, 1,140,005 lines, 9,000 frames).
+
+| | u1 | p1 | p2 | u2 | repeat spread, u / p | protected vs not (ABBA means) |
+|---|---|---|---|---|---|---|
+| in-context (`run_cycles`) | 7,556,567,751 | 7,711,471,512 | 7,779,724,440 | 7,528,730,252 | 0.37 % / 0.88 % | **+2.69 %** (+203 M) |
+| kernel and other (`between_cycles`) | 516,743,172 | 516,657,412 | 516,762,201 | 516,437,594 | 0.06 % / 0.02 % | +0.02 % |
+
+- Startup is not what is measured: the empty capture costs 10.4 M in-context cycles in both arms (`nts-z1`), 0.14 % of
+  a run.
+- The cost is 22.5 k in-context cycles per frame.
+- The repeats are wider than the other apps' twin repeats (0.37 % and 0.88 % against 0.01 % or less), but within the
+  1 % band.
+
+**Lifetime counts** (qemu-nst, one boot per arm, `w1000`; both outputs equal the reference):
+
+| | not protected | protected |
+|---|---|---|
+| CDERIVE, whole boot | 2,670,583 (mallocng's own) | **7,177,567** |
+| CREVOKE / nodes ended | 2,670,335 / 2,670,335 | 2,727,471 / 7,177,318 |
+| revoked subtree size: mean / max | 1 / 1 | **2.63 / 29,134** |
+| peak live records | 3,218 | **33,998** (544 KB) |
+
+- The subtree histogram shows the packet scope: 9,001 CREVOKEs end 256-1,023 nodes each, one per frame. That is
+  the reset of the packet-scope wmem pool, which ends every object a frame's dissection allocated, in one instruction.
+- The largest single CREVOKE ends 29,134 nodes.
