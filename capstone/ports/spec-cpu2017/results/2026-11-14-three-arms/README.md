@@ -3,7 +3,7 @@
 This is a live table: rows are filled as board runs land. Pre-registrations, predictions and the run-by-run trail are
 in [`../2026-11-08-train/PREREG.md`](../2026-11-08-train/PREREG.md) (Addendum 107 onward for this table).
 
-## Status (updated 2026-11-14 13:40 +08)
+## Status (updated 2026-11-14 14:30 +08)
 
 - **riscv-base:** complete, all 8 rows.
 - **Capstone temporal:**
@@ -23,14 +23,19 @@ in [`../2026-11-08-train/PREREG.md`](../2026-11-08-train/PREREG.md) (Addendum 10
 
 ### Running now (three FPGA boards, serialized by bookings)
 
-| Board | Now | Then |
+| Board | Now | Then, in order |
 |---|---|---|
-| 1 | **spatial gcc**, batch / FRCDKMSsp (now) | 1. (spatial gcc running), batch / FRCDKMSsp (the first spatial row; twin outputs identical to temporal)<br>2. nested-allocator lane: speedtest1 (protected vs unprotected), ~20 min<br>3. mcf, gcc and perl makerand on bitstream **F**, for the one-variable F-vs-batch pairs<br>4. F's tag-path counters (mcf, gcc) |
-| 2 | x264, fdk / FR (until ~15:00) | bitstream **B** (old tag cache + tag-path counters): mcf and gcc, for where the memory time goes |
-| 3 | full perl, fdk / FRCDK (until ~16:00) | the long final rows (x264, full perl) on the chosen final bitstream |
+| 1 | spatial gcc, batch / FRCDKMSsp | 1. the nested-allocator lane's speedtest1 (protected vs unprotected)<br>2. bitstream **F**: mcf, gcc, perl makerand (FRCDKMS; one variable against batch: the tag-word cache)<br>3. F with tag-path counters: mcf, gcc<br>4. gp-relative decision pair on F: GPC then GPR2 (perl makerand, gcc) |
+| 2 | x264, fdk / FR (until ~15:00) | bitstream **B** (old tag cache + tag-path counters): mcf, gcc |
+| 3 | full perl, fdk / FRCDK (until ~16:00) | riscv-base with gp relaxation (RVGP): perl makerand, gcc. Then the long final rows (x264, full perl) on the chosen final bitstream |
 
-If F beats the batch on mcf and gcc (readings due ~16:00-18:00), F becomes the final temporal configuration, and the
-table records the switch.
+- **Final bitstream.** If F beats the batch on mcf and gcc, F becomes the final temporal configuration and the table
+  records the switch.
+- **Next bitstream.** F2 + L1D 64 KiB (capstone-ariane b0f02bac7) and F2 alone (eeb654104, the fallback and
+  one-variable control) are being built on apollo now.
+- **gp-relative globals** (pre-registered in Addendum 110). The lever is taken for both arms or neither, by the board
+  pairs. If it is taken, both columns, riscv-base included, are re-measured with it: today's riscv-base images use no
+  gp-relative access, because lld does not relax by default, while GNU ld would.
 
 ### Bitstreams referenced here
 
