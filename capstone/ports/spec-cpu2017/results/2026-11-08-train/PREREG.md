@@ -3804,3 +3804,35 @@ board 2), so the one variable is the pool. The pair is cross-board, with about 0
 - the smoke passes on the new module (its first silicon boot);
 - full perl -0.5 % .. -3 % against aw-tp. Kernel memset and CMA work is about 0.7 % of instructions, but memory-bound.
 If it wins beyond the cross-board spread, the pool joins the final config, and spatial full perl reruns on it.
+
+## Addendum 116 (2026-11-14 19:30): RETRACTION of part of Addendum 98's scope correction (module parameters on the board)
+
+**What Addendum 98 said:** "The board's native stages write no module parameter, so every board run has had
+arena_pin=0."
+
+**What is true, read from each board stage's train/run.sh:**
+
+| stage | module parameters written |
+|---|---|
+| gcc train01, every arm (board-fr, board-frcdkms, board-frcdkmssp, and the GPC/GPR2 stages built the same way) | arena_pin=1, resume_quantum=1, step_budget_ns=10 s, each restored after the run |
+| perl (makerand and full), mcf, xz | none |
+
+So the claim holds for perl, mcf and xz, and is FALSE for gcc. The gcc settings are the fair stages' disclosed gcc-only
+Capstone tuning (Addendum 69: "arena_pin=1 and step_budget_ns=10 s, disclosed as gcc-only Capstone tuning"; the stage
+comment also names resume_quantum).
+
+**What it affects:**
+- **The gcc rows.** Every Capstone gcc reading in this file, from arm C to F, ran with this tuning. All arms of each
+  gcc pair (batch vs F, temporal vs spatial, GPC vs GPR2) have it alike, so the pairs stay one-variable. riscv-base has
+  no capstone_vm and no counterpart.
+- **The table.** gcc's ratio (1.155 on F) includes this Capstone-only tuning; the three-arms README will say so.
+- **Addendum 97's RVC per-exec cost.** It was measured under arena_pin=1. It applies to gcc's board configuration and
+  not to perl's. gcc train01 runs few execs, so the cost is immaterial there.
+
+**What would have caught it:** grepping every board stage's run.sh for `parameters/` writes before writing "no board
+stage", instead of reading board-fr's perl stage and generalising from it.
+
+**Related, for the compiler lane's (a0) census.** The board's perl stages do NOT set arena_pin. The census twin's stage
+did (its run.sh line 18). So the 2.17× per-exec page footprint and the arena_pin attribution describe the twin's
+configuration, not the board's, for perl. A census on board-frcdkms-full's own run.sh (no module writes) is the
+board-faithful one.
