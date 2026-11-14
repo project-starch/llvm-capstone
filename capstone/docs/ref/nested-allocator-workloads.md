@@ -341,7 +341,27 @@ The SPEC lane's wall-clock cross-check from the same `@@SPEC-END` lines (235.56 
 
 **So, on silicon:** protecting SQLite's nested allocators (memsys5 blocks and lookaside slots as Sublet lifetimes)
 costs speedtest1 `--size 1` +1.0 % in-context cycles and +1.9 % wall-clock, with every answer unchanged. This file
-does not yet compare that with the SPEC temporal increment the brief expects it to be close to. The kernel share is
-not read from this boot. On the twin it is the patch's `aReq` array working through the native route's per-syscall page
+is compared below with the SPEC temporal increment, which the brief expects it to be close to. The kernel share is
+not read from this boot.
+
+**Against the SPEC temporal increment.** The increment is Capstone temporal (FRCDKMS, heap lifetimes ON) against
+Capstone spatial (FRCDKMSsp, lifetimes OFF; its SDK differs only in the allocator objects), on the same bitstream,
+board and kit. So far it has one silicon row: gcc train01, bitstream `a47b588a1`, bkit73, board 1 (spec-silicon train
+PREREG Addendum 108, 07d80585e4b2). Its figures, read from the two transcripts
+(`spec/board/out-nat-batch-hpm-frcdkms{,sp}-b1/502.gcc_r-train01-native/board.txt`, end minus begin):
+
+| | gcc train01: temporal vs spatial | speedtest1 `--size 1`: protected vs not |
+|---|---|---|
+| in-domain cycles (`run_cycles`) | 58.377 G vs 58.016 G, **+0.62 %** | **+1.04 %** |
+| wall-clock | 2,446.30 s vs 2,431.58 s, **+0.61 %** | **+1.90 %** |
+
+- Protecting the nested allocator costs speedtest1 about 1.7 times gcc's temporal increment in-domain, and about 3
+  times on wall-clock.
+- The wall-clock gap includes the kernel time this boot cannot read. On the twin, that time is the patch's `aReq` array
+  working through the per-syscall page scan, not the lifetimes.
+- The two are different programs measured one way each: N = 1 SPEC row, ABBA N = 2 here. Nothing is normalised for
+  allocation rate: speedtest1 runs 56,442 lifetime instructions per run, and gcc's count is not in this file.
+- The other seven spatial rows land in the SPEC lane's table (spec-silicon
+  `capstone/ports/spec-cpu2017/results/2026-11-14-three-arms/README.md`). On the twin it is the patch's `aReq` array working through the native route's per-syscall page
 scan, not the lifetimes.
 
