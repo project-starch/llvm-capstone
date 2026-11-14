@@ -72,22 +72,20 @@
  /* obmalloc state for main interpreter and shared by all interpreters without
   * their own obmalloc state.  By not explicitly initalizing this structure, it
   * will be allocated in the BSS which is a small performance win.  The radix
-@@ -2291,6 +2356,11 @@
-         bp = allocate_from_new_pool(state, size);
+@@ -2298,6 +2363,9 @@
+     if (UNLIKELY(bp == NULL)) {
+         return NULL;
      }
- 
 +#ifdef EXP_REUSE_GAP
-+    if (bp != NULL) {
-+        exp_reuse_gap_issue(AS_UINT(bp), INDEX2SIZE(size));
-+    }
++    exp_reuse_gap_issue(AS_UINT(bp), INDEX2SIZE(size));
 +#endif
-     return block_issue(state, bp, nbytes);
- }
- 
-@@ -2543,6 +2613,9 @@
-     capstone_cap_release(p);
-     p = arena_inside(ao, p);
-     pool = POOL_ADDR(p);
+     void *issued = block_issue(state, bp, nbytes);
+     if (UNLIKELY(issued == NULL)) {
+         /* The table has no lifetime left (CDERIVE's untagged 0): the block
+@@ -2559,6 +2627,9 @@
+ pymalloc_give_back(OMState *state, pymem_block *p)
+ {
+     poolp pool = POOL_ADDR(p);
 +#ifdef EXP_REUSE_GAP
 +    exp_reuse_gap_release(AS_UINT(p));
 +#endif

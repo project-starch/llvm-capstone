@@ -10,9 +10,9 @@
 # configured Makefile's CONFIGURE_CPPFLAGS. protected = CPY_SUBLET=1 (patch 0014); 0014 rewrites
 # the two lines the hooks sit next to, so each arm has its own patch file. The added lines are
 # the same in both and sit at the same place: the hand-out hook just before pymalloc_alloc
-# returns (block_issue in protected), the release hook in pymalloc_free once the block is known
-# to be pymalloc's and p is obmalloc's own pointer (after arena_inside in protected), before
-# the block is linked into the pool's free list.
+# returns (before block_issue in protected), the release hook in pymalloc_free once the block is
+# known to be pymalloc's and p is obmalloc's own pointer (at the top of pymalloc_give_back in
+# protected), before the block is linked into the pool's free list.
 set -euo pipefail
 HERE=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 CAP=$(cd -- "$HERE/../../../.." && pwd)
