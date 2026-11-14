@@ -3,7 +3,7 @@
 This is a live table: rows are filled as board runs land. Pre-registrations, predictions and the run-by-run trail are
 in [`../2026-11-08-train/PREREG.md`](../2026-11-08-train/PREREG.md) (Addendum 107 onward for this table).
 
-## Status (updated 2026-11-14 19:35 +08)
+## Status (updated 2026-11-14 21:10 +08)
 
 - **riscv-base:** complete, all 8 rows.
 - **Capstone temporal:**
@@ -29,7 +29,7 @@ same images. The "final config" columns are being re-measured on F.
 | Board | Now | Then, in order |
 |---|---|---|
 | 1 | F tag-path counters (mcf) | F tag-path counters (gcc) (mcf, gcc) → gp decision pair on F (GPC, GPR2) → **spatial** gcc, mcf, imagick, nab, lbm, xz → **spatial** full perl |
-| 2 | config B (tag-path counters): mcf, then gcc | **temporal** imagick, nab, lbm, xz → **temporal** full perl → **spatial** x264 |
+| 2 | **temporal** full perl on F (bkit80) | **spatial** x264 |
 | 3 | **temporal** x264 on F (~10 h, until ~03:00) | — |
 
 - **F's scope.** The gain is the tag-word-cache change, reach and merge together, at N = 1 per row.
@@ -129,8 +129,8 @@ the table being measured now. A row moves into them as its run lands.
 | 525.x264_r | 35,613.24 | 34,053.48 | **0.956** | fdk / FR | pending | pending |
 | 538.imagick_r | 11.08 | 12.58 | **1.135** | **F** / FRCDKMS | **1.135** (F) | pending |
 | 544.nab_r | 679.92 | 695.34 | **1.023** | **F** / FRCDKMS | **1.023** (F) | pending |
-| 557.xz_r | 4,993.81 | 5,196.56 | **1.041** | fdk / FR | pending | pending |
-| geomean | | | 1.099 | | | |
+| 557.xz_r | 4,993.81 | 4,998.36 | **1.001** | **F** / FRCDKMS | **1.001** (F) | pending |
+| geomean | | | 1.093 | | | |
 
 Bold = below the 1.20 target. perl makerand alone (the quick A/B sub-run, debugging only): 257.90 s on riscv-base
 against 288.58 s on **F** / FRCDKMS, ratio 1.119 (-12.5 % against the batch); the full test on F is queued.
