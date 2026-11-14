@@ -38,9 +38,9 @@ static long trap_sigaction(void *sig, const struct k_sigaction *act,
     return r;
 }
 
-/* Until threads and caught delivery exist, retain the one registered stack
- * reference so querying it does not manufacture a pointer from an address. */
-static void *trap_altstack;
+/* Retain each thread's registered stack reference so a query does not
+ * manufacture a pointer from an address. Caught delivery remains deferred. */
+static __thread void *trap_altstack;
 static long trap_sigaltstack(const stack_t *ss, stack_t *old)
 {
     struct linux_sigaltstack in, out;

@@ -1,14 +1,36 @@
-## Trap libc build baseline, 14 November 2026
+## Trap-route mapping blocks, 14 November 2026
 
-On `trap/s5-libc`, the virtual runtime uses stack startup and plain Linux
-ecalls with numbers in a7. All 1,349 musl files compiled on p13. The static
-write/mmap/munmap smoke and mallocng smoke linked and passed disassembly checks.
-The old startup object retained its image magic as the negative control.
-The CMake SDK and its smoke link also passed. Jump buffers now preserve
-tags without launcher hooks, and signal registration uses Linux syscalls.
-The jump and signal probes link and pass disassembly checks. The old jump
-object fails to link as the negative control. The SDK also links sigsetjmp.
-Execution awaits a compatible kernel loader. [Build procedure and exact integration contract](../../ports/musl-capstone/tests/trap/README.md).
+The step-6 fragment `capstone/kernel/patches/series.s6-mappings` adds depth-1
+mapping checks, partial unmap state, last-page CREVOKE, refill and Linux mapping
+hooks. Its host state test passes and its missing-depth-check control fails.
+The Linux 6.1 Image builds on p13 without warnings. Trap-mode mapping execution
+still requires the handle and tagged return-slot streams.
+[Design, interfaces and limits](../design/sublet-mappings.md).
+
+## Trap thread build slice, 14 November 2026
+
+On `trap/s8-threads`, the libc clone and futex paths now preserve references.
+All 1,349 libc files compile on p13. The two-thread TLS, mutex and join smoke
+links and passes disassembly checks. The host binder test passes, and its
+incorrect requeue pointer-mask control fails as required. Kernel fragment
+`series.s8-threads` adds shared-mm lifetime ownership, per-thread register
+slots, reference clear-child-tid and reference futex accesses. The full Linux
+Image builds against snapshots of steps 3 and 5. Guest execution
+and live-waiter wake counting remain outstanding.
+[Integration contract and tests](../../kernel/tests/threads/README.md).
+
+## Trap libc integrated execution, 14 November 2026
+
+On `trap/s5-libc-int`, the setjmp and signal-registration changes are integrated
+onto `2443072aa6b`. The exec stack contract and thread runtime are preserved.
+All 1,349 musl files rebuilt on p13. The five smoke images linked and passed
+disassembly checks, including the clone reference checks. With the integrated
+kernel, `setjmp-smoke.dom` preserves the reference tag across longjmp and
+siglongjmp and exits 0. `signal-smoke.dom` registers SIGINT, changes its mask,
+checks the alternate stack and exits 0. `smoke.dom` writes `ok` and exits 7.
+Caught signal delivery remains deferred. The alternate-stack reference is
+thread-local to coexist with the integrated thread runtime.
+[Build, execution and controls](../../ports/musl-capstone/tests/trap/README.md).
 
 ## Rebased native kernel: full existing SPEC C-port gate passes
 

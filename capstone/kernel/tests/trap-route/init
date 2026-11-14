@@ -1,0 +1,18 @@
+#!/bin/sh
+# The trap-route test's /init: an ordinary busybox loop runs beside the protected program,
+# which reports through its exit status. One line per verdict, then power off.
+mount -t proc proc /proc
+mount -t sysfs sys /sys
+mount -t devtmpfs dev /dev 2>/dev/null
+echo "TRAPTEST: up, kernel $(uname -r)"
+( i=0; while :; do i=$((i + 1)); done ) &
+loop=$!
+sleep 1
+/regs
+echo "TRAPTEST: regs status $?"
+sleep 1
+if kill -0 $loop 2>/dev/null; then echo "TRAPTEST: loop alive"; else echo "TRAPTEST: loop dead"; fi
+kill $loop 2>/dev/null
+busybox dmesg | grep -E "sublet|captag" | sed 's/^/TRAPTEST: dmesg /'
+echo "TRAPTEST: done"
+busybox poweroff -f

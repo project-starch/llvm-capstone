@@ -1,14 +1,28 @@
-## Integrate the trap libc with the exec loader
+## Trap-route mapping integration
 
-On `trap/s5-libc`, use the [stack and syscall contract](../../ports/musl-capstone/tests/trap/README.md)
-when connecting the libc to the kernel. The loader must write tagged argv,
-envp and pointer-valued auxv entries, then restore tagged sp and image gp.
-Syscall numbers now arrive in a7. mmap must return a tagged depth-1 block.
-Run the linked smoke first and require stdout `ok` and exit status 7.
-Then run the mallocng, setjmp and signal-registration probes. Their builds
-and disassembly checks pass, but execution remains unverified. Require
-`setjmp ok` and `signal ok` with exit zero from the two new probes.
-Threads, caught signals and epoll side tables remain later work.
+Apply `series.s6-mappings` after the kernel base series. Supply the handle-slot
+resolver and tagged mapping return helper, then run the trap-mode mapping
+contracts. Reconcile the loader stream's grant-slot output with the block
+structure now shared by the table and mapping code.
+[Interfaces and current verification](../design/sublet-mappings.md).
+
+## Integrate the trap thread slice
+
+Apply `series.s8-threads` after the step 3 trap route and step 5 handle binder.
+Run `threads-smoke.dom` and require exit zero. Then run the stale futex read
+and stale wake-op controls described in the [thread tests](../../kernel/tests/threads/README.md).
+Complete lifetime-aware wake counting before claiming plan v5 step 8 complete.
+The current evidence covers compilation, linking and the host binder only.
+
+## Continue trap libc qualification
+
+The integrated kernel `2443072aa6b` runs the write/mapping, setjmp and
+signal-registration probes successfully with the rebuilt libc on
+`trap/s5-libc-int`. Preserve the [stack and syscall contract](../../ports/musl-capstone/tests/trap/README.md)
+and the existing thread runtime when integrating this commit. Run the thread
+smoke after the step 8 kernel fragment is integrated. Caught signals and epoll
+side tables remain later work. Registration success does not establish caught
+signal delivery.
 
 ## RTL implementation from the rebased native branch
 

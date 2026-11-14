@@ -1,0 +1,16 @@
+#!/bin/sh
+# The libc smoke test's /init: run the SDK's protected programs one after another from a tmpfs
+# working directory, then an ordinary busybox command. One TRAPTEST line per status.
+mount -t proc proc /proc
+mount -t sysfs sys /sys
+mount -t devtmpfs dev /dev 2>/dev/null
+echo "TRAPTEST: up, kernel $(uname -r)"
+busybox mkdir -p /work && mount -t tmpfs tmpfs /work && busybox cp /*.dom /work/ && cd /work
+for p in *.dom; do
+    out=$(./$p 2>&1); s=$?
+    echo "TRAPTEST: $p status $s output [$out]"
+done
+busybox echo hello | busybox wc -c > /dev/null; echo "TRAPTEST: busybox status $?"
+busybox dmesg | grep -E "sublet: (fault|.*load failed)" | head -5 | sed 's/^/TRAPTEST: dmesg /'
+echo "TRAPTEST: done"
+busybox poweroff -f

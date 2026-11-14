@@ -1,0 +1,132 @@
+--- a/arch/riscv/include/asm/processor.h
++++ b/arch/riscv/include/asm/processor.h
+@@ -35,6 +35,10 @@ struct pt_regs;
+ struct thread_struct {
+ #ifdef CONFIG_RISCV_CAPSTONE_TASK
+ 	struct capstone_native_spawn *capstone_spawn;
++#endif
++#ifdef CONFIG_RISCV_CAPSTONE_TRAP
++	/* The embedded references of the current system call (asm/sublet-uaccess.h), or NULL. */
++	struct sublet_call_refs *sublet_refs;
+ #endif
+ 	/* Callee-saved registers */
+ 	unsigned long ra;
+--- /dev/null
++++ b/arch/riscv/include/asm/sublet-uaccess.h
+@@ -0,0 +1,116 @@
++/* SPDX-License-Identifier: GPL-2.0-only */
++/*
++ * Handles and the routines for user memory of a protected program (plan v5 step 5, design B3
++ * with S1).
++ *
++ * Inside the kernel a user pointer of a protected program is a handle:
++ *
++ *   bits 37:0   the address
++ *   bits 39:38  zero (the guard: a carry out of the address sets them, and every routine
++ *               refuses a handle with a guard bit set)
++ *   bits 63:40  the number of the reference the handle names
++ *
++ * Number 0 names no reference, and every access through it fails with EFAULT. Numbers 1 to 6
++ * name the saved slots of a0 to a5 (x10 to x15), which hold the tagged arguments of the
++ * current system call. Numbers from 7 name the per-call list of the compat-style loader
++ * (iovec, msghdr, argv, envp), which holds the embedded references of the current call. A
++ * handle with a number is not canonical in Sv39, so a plain access through it faults.
++ *
++ * The binder (arch/riscv/kernel/sublet/bind.c) makes the handles at the system call entry.
++ * The routines for user memory (arch/riscv/kernel/sublet_uaccess.S) load the named reference
++ * into t6, set its address, access through it and clear t6. The processor checks bounds and
++ * lifetime of every such access (plan v5 step 1, rule 1).
++ *
++ * Interfaces this file assumes from the trap route of plan v5 step 3 (asm/sublet-trap.h of
++ * the step-3 patches 0013 and 0014; adapt the names here if they change):
++ *   A1  sublet_user_slot(task, n): the 16-byte slot of user register xn, saved with its tag
++ *       by STC at every entry from U, indexed by register number. a0 is x10.
++ *   A2  The S trap frame saves t6 with STC and a return to S loads it with LDC, so a
++ *       reference in t6 survives a page fault, an interrupt and a nested trap.
++ *   A3  Code in the section .sublet.uaccess.text (between sublet_uaccess_start and
++ *       sublet_uaccess_end) may hold a reference in t6 across a trap; the sentinel admits it.
++ *   A4  The handler of causes 24 to 30 calls fixup_exception for a fault from S, so the
++ *       exception table entries of the routines turn a reference fault into their result.
++ *   A5  TIF_CAPSTONE marks a task that runs a protected program. The protected dispatch
++ *       passes the Linux system call number to sublet_syscall_bound.
++ *   A6  LCC selector 1 answers 7 for an untagged value and 1 for a reference, and never
++ *       faults. LDC is funct3 3, STC funct3 4 and CINCOFFSET funct7 0x0c of opcode 0x5b.
++ */
++#ifndef _ASM_RISCV_SUBLET_UACCESS_H
++#define _ASM_RISCV_SUBLET_UACCESS_H
++
++#define SUBLET_HANDLE_ADDR_BITS		38
++#define SUBLET_HANDLE_NUMBER_SHIFT	40
++#define SUBLET_HANDLE_FIRST_ARG		1	/* the number of a0's slot */
++#define SUBLET_HANDLE_ARGS		6	/* a0 to a5 */
++#define SUBLET_HANDLE_FIRST_LIST	7	/* the first entry of the per-call list */
++/* The per-call list holds at most this many embedded references. */
++#define SUBLET_CALL_REFS_MAX		1024
++
++#ifndef __ASSEMBLY__
++#include <linux/types.h>
++
++#define SUBLET_HANDLE_ADDR_MASK		((1UL << SUBLET_HANDLE_ADDR_BITS) - 1)
++#define SUBLET_HANDLE_GUARD_MASK	(3UL << SUBLET_HANDLE_ADDR_BITS)
++
++static inline unsigned long sublet_handle(unsigned long address, unsigned long number)
++{
++	return (address & SUBLET_HANDLE_ADDR_MASK) | (number << SUBLET_HANDLE_NUMBER_SHIFT);
++}
++
++static inline unsigned long sublet_handle_address(unsigned long handle)
++{
++	return handle & SUBLET_HANDLE_ADDR_MASK;
++}
++
++static inline unsigned long sublet_handle_number(unsigned long handle)
++{
++	return handle >> SUBLET_HANDLE_NUMBER_SHIFT;
++}
++
++static inline bool sublet_handle_guarded(unsigned long handle)
++{
++	return handle & SUBLET_HANDLE_GUARD_MASK;
++}
++
++#include <linux/thread_info.h>
++
++/* The per-call list of embedded references: 16-byte slots that the compat-style loader fills
++ * with LDC and STC, numbered from SUBLET_HANDLE_FIRST_LIST, cleared at the end of the call. */
++struct sublet_call_refs {
++	unsigned int count;
++	unsigned long (*slot)[2];
++};
++
++/* Whether the current task's user pointers are handles. Without the trap route never, so the
++ * compiler drops every call below. */
++static inline bool sublet_uaccess_protected(void)
++{
++#ifdef CONFIG_RISCV_CAPSTONE_TRAP
++	return test_thread_flag(TIF_CAPSTONE);
++#else
++	return false;
++#endif
++}
++
++unsigned long sublet_copy_from_user(void *to, const void __user *from, unsigned long n);
++unsigned long sublet_copy_to_user(void __user *to, const void *from, unsigned long n);
++unsigned long sublet_clear_user(void __user *to, unsigned long n);
++long sublet_strncpy_from_user(char *dst, const char __user *src, long count);
++long sublet_strnlen_user(const char __user *src, long count);
++/* get_user and put_user of size 1, 2, 4 or 8: 0 or -EFAULT. get_user zeroes *value on
++ * failure. */
++int sublet_get_user(void *value, const void __user *from, unsigned long size);
++int sublet_put_user(void __user *to, const void *value, unsigned long size);
++
++/* The kernel slot of the reference a handle names, or NULL (guard bit set, number 0, number
++ * outside the call's list). */
++unsigned long *sublet_handle_slot(unsigned long handle);
++
++struct pt_regs;
++/* Bind the arguments of system call nr of the current protected task and call it: the result,
++ * -ENOSYS for a call outside the allow-list, -EFAULT for a forged integer in a pointer
++ * position, -ENOTTY or -EINVAL for a command outside the allow-list. */
++long sublet_syscall_bound(struct pt_regs *regs, unsigned long nr);
++#endif /* !__ASSEMBLY__ */
++#endif

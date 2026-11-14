@@ -34,7 +34,7 @@ for src in "$here/runtime/"{linux-start.c,tls.c,delegate.c,native-syscall.S,set_
 done
 "$CAPSTONE_LLVM_BIN/llvm-ar" rcs "$out/libtrap-runtime.a" "${objects[@]}"
 "$CAPSTONE_CLANG" "${flags[@]}" -c "$here/tests/trap/jump-register.S" -o "$out/jump-register.o"
-for test in smoke malloc-smoke setjmp-smoke signal-smoke; do
+for test in smoke malloc-smoke threads-smoke setjmp-smoke signal-smoke; do
     extra=()
     if [[ $test == setjmp-smoke ]]; then extra+=("$out/jump-register.o"); fi
     "$CAPSTONE_CLANG" "${flags[@]}" -c "$here/tests/trap/$test.c" -o "$out/$test.o"
@@ -61,7 +61,7 @@ if [[ -n ${TRAP_CONTROL_START:-} ]]; then
     grep -q '43504f4e 56564d37' "$out/control-handshake.txt"
     echo 'PASS: baseline startup contains the launcher image handshake'
 fi
-printf 'Built %s and %s. Execution requires the trap-route kernel loader.\n' "$out/smoke.dom" "$out/malloc-smoke.dom"
+printf 'Built %s\n' "$out/"*.dom
 
 if [[ -n ${TRAP_CONTROL_SETJMP:-} ]]; then
     "$CAPSTONE_CLANG" "${flags[@]}" -c "$TRAP_CONTROL_SETJMP" -o "$out/control-setjmp.o"

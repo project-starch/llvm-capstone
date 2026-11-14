@@ -1,0 +1,550 @@
+--- a/arch/riscv/include/asm/pgtable.h
++++ b/arch/riscv/include/asm/pgtable.h
+@@ -829,6 +829,14 @@ extern unsigned long empty_zero_page[PAGE_SIZE / sizeof(unsigned long)];
+ 
+ #endif /* !__ASSEMBLY__ */
+ 
++#if !defined(__ASSEMBLY__) && defined(CONFIG_RISCV_CAPSTONE_TRAP)
++/* The address of a protected task's handle (asm/sublet-uaccess.h), every other value as it is.
++ * This covers the sites where Linux already untags arm64's tagged addresses. */
++unsigned long sublet_untagged_addr(unsigned long addr);
++#define untagged_addr(addr)						\
++	((__force __typeof__(addr))sublet_untagged_addr((__force unsigned long)(addr)))
++#endif
++
+ #ifndef __ASSEMBLY__
+ /* EXPERIMENT experiment/tag-aware-mm: a page that holds capability tags is not swapped out
+  * (there is no swap-side tag store); see arch/riscv/mm/captag.c. */
+--- a/arch/riscv/include/asm/uaccess.h
++++ b/arch/riscv/include/asm/uaccess.h
+@@ -21,6 +21,23 @@
+ #include <asm/byteorder.h>
+ #include <asm/extable.h>
+ #include <asm/asm.h>
++#include <asm/sublet-uaccess.h>
++
++#ifdef CONFIG_RISCV_CAPSTONE_TRAP
++/*
++ * A protected task's user pointer is a handle (asm/sublet-uaccess.h). access_ok strips it and
++ * checks only the address range, as stock Linux does: the declared count may exceed the
++ * object when a transfer ends short, and the processor checks each access at its reference.
++ */
++#define __access_ok __access_ok
++static inline int __access_ok(const void __user *ptr, unsigned long size)
++{
++	unsigned long limit = TASK_SIZE;
++	unsigned long addr = (__force unsigned long)untagged_addr(ptr);
++
++	return (size <= limit) && (addr <= (limit - size));
++}
++#endif
+ #include <asm-generic/access_ok.h>
+ 
+ #define __enable_user_access()							\
+@@ -135,13 +152,27 @@ do {								\
+ 								\
+ 	__chk_user_ptr(__gu_ptr);				\
+ 								\
+-	__enable_user_access();					\
+-	__get_user_nocheck(x, __gu_ptr, __gu_err);		\
+-	__disable_user_access();				\
++	if (sublet_uaccess_protected()) {			\
++		__sublet_get_user(x, __gu_ptr, __gu_err);	\
++	} else {						\
++		__enable_user_access();				\
++		__get_user_nocheck(x, __gu_ptr, __gu_err);	\
++		__disable_user_access();			\
++	}							\
+ 								\
+ 	__gu_err;						\
+ })
+ 
++/* get_user of a protected task: through the reference its handle names. */
++#define __sublet_get_user(x, ptr, err)					\
++do {									\
++	u64 __sg_raw = 0;						\
++									\
++	(err) = sublet_get_user(&__sg_raw, (ptr), sizeof(*(ptr)));	\
++	(x) = (__force __typeof__(*(ptr)))				\
++		(__typeof__((*(ptr)) - (*(ptr))))__sg_raw;		\
++} while (0)
++
+ /**
+  * get_user: - Get a simple variable from user space.
+  * @x:   Variable to store result.
+@@ -252,9 +283,14 @@ do {								\
+ 								\
+ 	__chk_user_ptr(__gu_ptr);				\
+ 								\
+-	__enable_user_access();					\
+-	__put_user_nocheck(__val, __gu_ptr, __pu_err);		\
+-	__disable_user_access();				\
++	if (sublet_uaccess_protected()) {			\
++		__pu_err = sublet_put_user(__gu_ptr, &__val,	\
++					   sizeof(__val));	\
++	} else {						\
++		__enable_user_access();				\
++		__put_user_nocheck(__val, __gu_ptr, __pu_err);	\
++		__disable_user_access();			\
++	}							\
+ 								\
+ 	__pu_err;						\
+ })
+@@ -293,12 +329,16 @@ unsigned long __must_check __asm_copy_from_user(void *to,
+ static inline unsigned long
+ raw_copy_from_user(void *to, const void __user *from, unsigned long n)
+ {
++	if (sublet_uaccess_protected())
++		return sublet_copy_from_user(to, from, n);
+ 	return __asm_copy_from_user(to, from, n);
+ }
+ 
+ static inline unsigned long
+ raw_copy_to_user(void __user *to, const void *from, unsigned long n)
+ {
++	if (sublet_uaccess_protected())
++		return sublet_copy_to_user(to, from, n);
+ 	return __asm_copy_to_user(to, from, n);
+ }
+ 
+@@ -313,8 +353,11 @@ static inline
+ unsigned long __must_check clear_user(void __user *to, unsigned long n)
+ {
+ 	might_fault();
+-	return access_ok(to, n) ?
+-		__clear_user(to, n) : n;
++	if (!access_ok(to, n))
++		return n;
++	if (sublet_uaccess_protected())
++		return sublet_clear_user(to, n);
++	return __clear_user(to, n);
+ }
+ 
+ #define __get_kernel_nofault(dst, src, type, err_label)			\
+--- a/arch/riscv/kernel/sublet/Makefile
++++ b/arch/riscv/kernel/sublet/Makefile
+@@ -3,4 +3,5 @@
+ # spawn-wire.c, native-syscall-table.c) are copied here by capstone/kernel/apply.sh.
+ obj-y += sublet.o
+ obj-$(CONFIG_RISCV_CAPSTONE_TRAP) += bind.o bind-core.o syscall-pointers.o loader.o
++obj-$(CONFIG_RISCV_CAPSTONE_TRAP) += uaccess.o uaccess-asm.o
+ ccflags-y += -I$(src)
+--- /dev/null
++++ b/arch/riscv/kernel/sublet/uaccess-asm.S
+@@ -0,0 +1,277 @@
++/* SPDX-License-Identifier: GPL-2.0-only */
++/*
++ * The routines for user memory of a protected program (plan v5 step 5). Each takes the kernel
++ * slot of the reference a handle names and the handle's address, loads the reference into t6
++ * with LDC, moves its address there with CINCOFFSET and accesses through t6, so the processor
++ * checks bounds and lifetime of every access (plan v5 step 1, rule 1). A page fault is an
++ * ordinary fault: the trap frame keeps t6 with its tag, Linux resolves the fault, and the
++ * access runs again. A fault that nothing resolves (no mapping, causes 24 to 30) reaches the
++ * exception table, and the routine returns what it has done so far.
++ *
++ * No routine issues a misaligned access through a reference: doublewords only where the user
++ * address is 8-byte aligned and the kernel address agrees modulo 8, bytes everywhere else. The
++ * string routines read byte by byte, so a string that ends in its object's last byte passes.
++ * No routine moves t6 past the last byte it accesses. Each clears t6 before it returns.
++ *
++ * The code lies in .sublet.uaccess.text, the only code that may hold a reference in t6 across
++ * a trap (assumption A3 of asm/sublet-uaccess.h).
++ */
++#include <linux/linkage.h>
++#include <asm/asm.h>
++#include <asm/csr.h>
++#include <asm/asm-extable.h>
++
++#define LDC(rd, base)		.insn i 0x5b, 3, rd, base, 0
++#define LCC(rd, src, sel)	.insn r 0x5b, 1, 4, rd, src, sel
++#define INC(rd, src, off)	.insn r 0x5b, 1, 0x0c, rd, src, off
++
++/*
++ * Turn on SUM (the page-fault handler expects it for a user address) and load the reference
++ * in the kernel slot \slot into t6 with its address moved to \addr. Branch to \fail if the
++ * slot holds no reference or the move faults. Clobbers t0 and t1.
++ */
++	.macro	sublet_enter slot, addr, fail
++	li	t0, SR_SUM
++	csrs	CSR_STATUS, t0
++	LDC(t6, \slot)
++	LCC(t0, t6, x1)
++	li	t1, 1
++	bne	t0, t1, \fail
++	ld	t0, 0(\slot)
++	slli	t0, t0, 64 - 38
++	srli	t0, t0, 64 - 38
++	sub	t0, \addr, t0
++99:	INC(t6, t6, t0)
++	_asm_extable	99b, \fail
++	.endm
++
++/* Clear t6 and SUM, return \result. */
++	.macro	sublet_leave result
++	li	t6, 0
++	li	t0, SR_SUM
++	csrc	CSR_STATUS, t0
++	mv	a0, \result
++	ret
++	.endm
++
++	.section .sublet.uaccess.text, "ax"
++	.balign	4
++
++/*
++ * unsigned long __sublet_copy_in(void *to, unsigned long *slot, unsigned long from, unsigned long n)
++ * Copy n bytes from user address from through the reference in slot to kernel address to.
++ * Returns the bytes not copied.
++ */
++ENTRY(__sublet_copy_in)
++	mv	t5, a3
++	beqz	t5, .Lin_out
++	sublet_enter a1, a2, .Lin_out
++	xor	t1, a0, a2
++	andi	t1, t1, 7
++	bnez	t1, .Lin_bytes
++.Lin_head:
++	andi	t1, a2, 7
++	beqz	t1, .Lin_words
++1:	lb	t1, 0(t6)
++	sb	t1, 0(a0)
++	addi	a0, a0, 1
++	addi	a2, a2, 1
++	addi	t5, t5, -1
++	beqz	t5, .Lin_out
++	li	t2, 1
++2:	INC(t6, t6, t2)
++	j	.Lin_head
++.Lin_words:
++	li	t2, 8
++	bltu	t5, t2, .Lin_bytes
++3:	ld	t1, 0(t6)
++	sd	t1, 0(a0)
++	addi	a0, a0, 8
++	addi	t5, t5, -8
++	beqz	t5, .Lin_out
++4:	INC(t6, t6, t2)
++	j	.Lin_words
++.Lin_bytes:
++5:	lb	t1, 0(t6)
++	sb	t1, 0(a0)
++	addi	a0, a0, 1
++	addi	t5, t5, -1
++	beqz	t5, .Lin_out
++	li	t2, 1
++6:	INC(t6, t6, t2)
++	j	.Lin_bytes
++.Lin_out:
++	sublet_leave t5
++	_asm_extable	1b, .Lin_out
++	_asm_extable	2b, .Lin_out
++	_asm_extable	3b, .Lin_out
++	_asm_extable	4b, .Lin_out
++	_asm_extable	5b, .Lin_out
++	_asm_extable	6b, .Lin_out
++ENDPROC(__sublet_copy_in)
++
++/*
++ * unsigned long __sublet_copy_out(unsigned long *slot, unsigned long to, const void *from, unsigned long n)
++ * Copy n bytes from kernel address from through the reference in slot to user address to.
++ * Returns the bytes not copied.
++ */
++ENTRY(__sublet_copy_out)
++	mv	t5, a3
++	beqz	t5, .Lout_out
++	sublet_enter a0, a1, .Lout_out
++	xor	t1, a1, a2
++	andi	t1, t1, 7
++	bnez	t1, .Lout_bytes
++.Lout_head:
++	andi	t1, a1, 7
++	beqz	t1, .Lout_words
++	lb	t1, 0(a2)
++1:	sb	t1, 0(t6)
++	addi	a1, a1, 1
++	addi	a2, a2, 1
++	addi	t5, t5, -1
++	beqz	t5, .Lout_out
++	li	t2, 1
++2:	INC(t6, t6, t2)
++	j	.Lout_head
++.Lout_words:
++	li	t2, 8
++	bltu	t5, t2, .Lout_bytes
++	ld	t1, 0(a2)
++3:	sd	t1, 0(t6)
++	addi	a2, a2, 8
++	addi	t5, t5, -8
++	beqz	t5, .Lout_out
++4:	INC(t6, t6, t2)
++	j	.Lout_words
++.Lout_bytes:
++	lb	t1, 0(a2)
++5:	sb	t1, 0(t6)
++	addi	a2, a2, 1
++	addi	t5, t5, -1
++	beqz	t5, .Lout_out
++	li	t2, 1
++6:	INC(t6, t6, t2)
++	j	.Lout_bytes
++.Lout_out:
++	sublet_leave t5
++	_asm_extable	1b, .Lout_out
++	_asm_extable	2b, .Lout_out
++	_asm_extable	3b, .Lout_out
++	_asm_extable	4b, .Lout_out
++	_asm_extable	5b, .Lout_out
++	_asm_extable	6b, .Lout_out
++ENDPROC(__sublet_copy_out)
++
++/*
++ * unsigned long __sublet_clear(unsigned long *slot, unsigned long to, unsigned long n)
++ * Write n zero bytes through the reference in slot at user address to. Returns the bytes not
++ * written.
++ */
++ENTRY(__sublet_clear)
++	mv	t5, a2
++	beqz	t5, .Lclr_out
++	sublet_enter a0, a1, .Lclr_out
++.Lclr_head:
++	andi	t1, a1, 7
++	beqz	t1, .Lclr_words
++1:	sb	zero, 0(t6)
++	addi	a1, a1, 1
++	addi	t5, t5, -1
++	beqz	t5, .Lclr_out
++	li	t2, 1
++2:	INC(t6, t6, t2)
++	j	.Lclr_head
++.Lclr_words:
++	li	t2, 8
++	bltu	t5, t2, .Lclr_bytes
++3:	sd	zero, 0(t6)
++	addi	t5, t5, -8
++	beqz	t5, .Lclr_out
++4:	INC(t6, t6, t2)
++	j	.Lclr_words
++.Lclr_bytes:
++5:	sb	zero, 0(t6)
++	addi	t5, t5, -1
++	beqz	t5, .Lclr_out
++	li	t2, 1
++6:	INC(t6, t6, t2)
++	j	.Lclr_bytes
++.Lclr_out:
++	sublet_leave t5
++	_asm_extable	1b, .Lclr_out
++	_asm_extable	2b, .Lclr_out
++	_asm_extable	3b, .Lclr_out
++	_asm_extable	4b, .Lclr_out
++	_asm_extable	5b, .Lclr_out
++	_asm_extable	6b, .Lclr_out
++ENDPROC(__sublet_clear)
++
++/*
++ * long __sublet_strncpy(char *dst, unsigned long *slot, unsigned long src, long count)
++ * Copy bytes from user address src through the reference in slot to dst until a NUL (copied
++ * too) or count bytes. Returns the length without the NUL, count if no NUL came, or -EFAULT.
++ * count is positive.
++ */
++ENTRY(__sublet_strncpy)
++	li	t5, 0
++	sublet_enter a1, a2, .Lscpy_fault
++1:	lbu	t1, 0(t6)
++	add	t3, a0, t5
++	sb	t1, 0(t3)
++	beqz	t1, .Lscpy_out
++	addi	t5, t5, 1
++	beq	t5, a3, .Lscpy_out
++	li	t2, 1
++2:	INC(t6, t6, t2)
++	j	1b
++.Lscpy_out:
++	sublet_leave t5
++.Lscpy_fault:
++	li	t5, -14
++	sublet_leave t5
++	_asm_extable	1b, .Lscpy_fault
++	_asm_extable	2b, .Lscpy_fault
++ENDPROC(__sublet_strncpy)
++
++/*
++ * long __sublet_strnlen(unsigned long *slot, unsigned long src, long count)
++ * The length of the string at user address src, read through the reference in slot, with its
++ * NUL; count + 1 if the first count bytes hold no NUL; 0 on a fault. count is positive.
++ */
++ENTRY(__sublet_strnlen)
++	li	t5, 0
++	sublet_enter a0, a1, .Lslen_fault
++1:	lbu	t1, 0(t6)
++	addi	t5, t5, 1
++	beqz	t1, .Lslen_out
++	beq	t5, a2, .Lslen_long
++	li	t2, 1
++2:	INC(t6, t6, t2)
++	j	1b
++.Lslen_long:
++	addi	t5, t5, 1
++.Lslen_out:
++	sublet_leave t5
++.Lslen_fault:
++	sublet_leave zero
++	_asm_extable	1b, .Lslen_fault
++	_asm_extable	2b, .Lslen_fault
++ENDPROC(__sublet_strnlen)
++
++/*
++ * long __sublet_load_ref(unsigned long *kslot, unsigned long *slot, unsigned long from)
++ * Load the 16 bytes at user address from (16-byte aligned) through the reference in slot with
++ * LDC, which keeps their tag, and store them with STC into the kernel slot kslot. 0 or -EFAULT.
++ * The compat-style loader moves embedded references into the per-call list with it.
++ */
++ENTRY(__sublet_load_ref)
++	sublet_enter a1, a2, .Lref_fault
++1:	LDC(t6, t6)
++	.insn s 0x5b, 4, t6, 0(a0)
++	sublet_leave zero
++.Lref_fault:
++	li	t5, -14
++	sublet_leave t5
++	_asm_extable	1b, .Lref_fault
++ENDPROC(__sublet_load_ref)
+--- /dev/null
++++ b/arch/riscv/kernel/sublet/uaccess.c
+@@ -0,0 +1,114 @@
++// SPDX-License-Identifier: GPL-2.0-only
++/*
++ * The C side of the routines for user memory of a protected program (plan v5 step 5): find the
++ * kernel slot of the reference a handle names, and call the routine in uaccess-asm.S that
++ * accesses through it. A handle that names no reference fails like a fault at its first byte.
++ */
++#include <linux/errno.h>
++#include <linux/export.h>
++#include <linux/sched.h>
++#include <linux/string.h>
++#include <linux/uaccess.h>
++#include <asm/sublet-trap.h>
++#include <asm/sublet-uaccess.h>
++
++unsigned long __sublet_copy_in(void *to, unsigned long *slot, unsigned long from, unsigned long n);
++unsigned long __sublet_copy_out(unsigned long *slot, unsigned long to, const void *from,
++				unsigned long n);
++unsigned long __sublet_clear(unsigned long *slot, unsigned long to, unsigned long n);
++long __sublet_strncpy(char *dst, unsigned long *slot, unsigned long src, long count);
++long __sublet_strnlen(unsigned long *slot, unsigned long src, long count);
++
++unsigned long *sublet_handle_slot(unsigned long handle)
++{
++	unsigned long n = sublet_handle_number(handle);
++	struct sublet_call_refs *refs = current->thread.sublet_refs;
++
++	if (sublet_handle_guarded(handle))
++		return NULL;
++	if (n >= SUBLET_HANDLE_FIRST_ARG && n < SUBLET_HANDLE_FIRST_ARG + SUBLET_HANDLE_ARGS)
++		return sublet_user_slot(current, 10 + n - SUBLET_HANDLE_FIRST_ARG);
++	if (refs && n >= SUBLET_HANDLE_FIRST_LIST && n - SUBLET_HANDLE_FIRST_LIST < refs->count)
++		return refs->slot[n - SUBLET_HANDLE_FIRST_LIST];
++	return NULL;
++}
++
++unsigned long sublet_copy_from_user(void *to, const void __user *from, unsigned long n)
++{
++	unsigned long handle = (__force unsigned long)from, *slot = sublet_handle_slot(handle);
++
++	if (!slot)
++		return n;
++	return __sublet_copy_in(to, slot, sublet_handle_address(handle), n);
++}
++
++unsigned long sublet_copy_to_user(void __user *to, const void *from, unsigned long n)
++{
++	unsigned long handle = (__force unsigned long)to, *slot = sublet_handle_slot(handle);
++
++	if (!slot)
++		return n;
++	return __sublet_copy_out(slot, sublet_handle_address(handle), from, n);
++}
++
++unsigned long sublet_clear_user(void __user *to, unsigned long n)
++{
++	unsigned long handle = (__force unsigned long)to, *slot = sublet_handle_slot(handle);
++
++	if (!slot)
++		return n;
++	return __sublet_clear(slot, sublet_handle_address(handle), n);
++}
++
++long sublet_strncpy_from_user(char *dst, const char __user *src, long count)
++{
++	unsigned long handle = (__force unsigned long)src, *slot = sublet_handle_slot(handle);
++
++	if (count <= 0)
++		return 0;
++	if (!slot)
++		return -EFAULT;
++	return __sublet_strncpy(dst, slot, sublet_handle_address(handle), count);
++}
++
++long sublet_strnlen_user(const char __user *src, long count)
++{
++	unsigned long handle = (__force unsigned long)src, *slot = sublet_handle_slot(handle);
++
++	if (count <= 0 || !slot)
++		return 0;
++	return __sublet_strnlen(slot, sublet_handle_address(handle), count);
++}
++
++/* get_user and put_user go through the copy routines, which split a misaligned value into
++ * bytes. A value of 8 aligned bytes moves in one access. */
++int sublet_get_user(void *value, const void __user *from, unsigned long size)
++{
++	unsigned long left = sublet_copy_from_user(value, from, size);
++
++	if (left) {
++		memset(value, 0, size);
++		return -EFAULT;
++	}
++	return 0;
++}
++
++int sublet_put_user(void __user *to, const void *value, unsigned long size)
++{
++	return sublet_copy_to_user(to, value, size) ? -EFAULT : 0;
++}
++
++/* untagged_addr for RISC-V: the address of a protected task's handle, every other value
++ * unchanged. A handle with a guard bit set stays as it is, so the range checks refuse it. */
++unsigned long sublet_untagged_addr(unsigned long addr)
++{
++	if (!test_thread_flag(TIF_CAPSTONE) || sublet_handle_guarded(addr) || (long)addr < 0)
++		return addr;
++	return sublet_handle_address(addr);
++}
++EXPORT_SYMBOL(sublet_untagged_addr);
++EXPORT_SYMBOL(sublet_copy_from_user);
++EXPORT_SYMBOL(sublet_copy_to_user);
++EXPORT_SYMBOL(sublet_clear_user);
++EXPORT_SYMBOL(sublet_get_user);
++EXPORT_SYMBOL(sublet_put_user);
+--- a/lib/strncpy_from_user.c
++++ b/lib/strncpy_from_user.c
+@@ -119,6 +119,8 @@ long strncpy_from_user(char *dst, const char __user *src, long count)
+ 		return -EFAULT;
+ 	if (unlikely(count <= 0))
+ 		return 0;
++	if (sublet_uaccess_protected())
++		return sublet_strncpy_from_user(dst, src, count);
+ 
+ 	max_addr = TASK_SIZE_MAX;
+ 	src_addr = (unsigned long)untagged_addr(src);
+--- a/lib/strnlen_user.c
++++ b/lib/strnlen_user.c
+@@ -95,6 +95,8 @@ long strnlen_user(const char __user *str, long count)
+ 
+ 	if (unlikely(count <= 0))
+ 		return 0;
++	if (sublet_uaccess_protected())
++		return sublet_strnlen_user(str, count);
+ 
+ 	max_addr = TASK_SIZE_MAX;
+ 	src_addr = (unsigned long)untagged_addr(str);

@@ -1,0 +1,811 @@
+--- /dev/null
++++ b/arch/riscv/include/asm/sublet-test.h
+@@ -0,0 +1,16 @@
++/* SPDX-License-Identifier: GPL-2.0-only */
++/* Test switches of the trap route. The tests of plan v5 step 3 build control kernels by
++ * adding one define here; a normal build defines none:
++ *   SUBLET_MUTANT_SKIP_STC_S7   the entry from U saves s7 without its tag
++ *   SUBLET_MUTANT_SKIP_CLEAR    the entry from U leaves the program's tags in kernel registers
++ *   SUBLET_MUTANT_T6_INTEGER    a trap from S saves t6 as an integer
++ *   SUBLET_MUTANT_LEAK_ROOT     switch_mm leaves srevroot set for an ordinary mm
++ *   SUBLET_MUTANT_NO_GUARD      the return to U skips the guard */
++#ifndef _ASM_RISCV_SUBLET_TEST_H
++#define _ASM_RISCV_SUBLET_TEST_H
++
++/* The test loader's and the test hook's call numbers, above every Linux call. */
++#define SUBLET_NR_TEST_ENTER	0x5b100
++#define SUBLET_NR_TEST_HOLD	0x5b101
++
++#endif
+--- a/arch/riscv/kernel/Makefile
++++ b/arch/riscv/kernel/Makefile
+@@ -92,3 +92,4 @@ obj-$(CONFIG_COMPAT)		+= compat_vdso/
+ obj-$(CONFIG_RISCV_CAPSTONE_TASK) += capstone_task.o capstone_spawn.o
+ 
+ obj-$(CONFIG_RISCV_CAPSTONE_TASK) += sublet/
++obj-$(CONFIG_RISCV_CAPSTONE_TRAP) += sublet_trap.o sublet_trap_asm.o
+--- a/arch/riscv/kernel/capstone_task.c
++++ b/arch/riscv/kernel/capstone_task.c
+@@ -1,7 +1,35 @@
+ // SPDX-License-Identifier: GPL-2.0-only
+ #include <linux/mm.h>
+ #include <linux/sched.h>
++#include <linux/sched/signal.h>
+ #include <asm/capstone_task.h>
++#include <asm/csr.h>
++
++#ifdef CONFIG_RISCV_CAPSTONE_TRAP
++/* Under cred_guard_mutex, as ptrace_attach, so no tracer admitted earlier keeps a protected
++ * task. The mm's context and root first, then the flag, then srevroot: from here on every
++ * return to U loads the task's slots and the guard expects this root. */
++int riscv_capstone_bind(void *context, unsigned long root)
++{
++	struct mm_struct *mm = current->mm;
++	int error = 0;
++
++	if (!context || !root || !mm)
++		return -EINVAL;
++	mutex_lock(&current->signal->cred_guard_mutex);
++	if (current->ptrace || (read_thread_flags() & _TIF_SYSCALL_WORK) ||
++	    mm->context.capstone_namespace || test_thread_flag(TIF_CAPSTONE)) {
++		error = -EOPNOTSUPP;
++	} else {
++		mm->context.capstone_namespace = context;
++		mm->context.capstone_root = root;
++		set_thread_flag(TIF_CAPSTONE);
++		csr_write(0x5c1, root);
++	}
++	mutex_unlock(&current->signal->cred_guard_mutex);
++	return error;
++}
++#endif
+ 
+ /* Called at exec before exec_mmap and at exit before exit_mm, while task->mm is still the
+  * protected program's. Clears the task's flag and the mm's context, then ends the context. */
+@@ -15,6 +43,10 @@ void riscv_capstone_release(struct task_struct *task)
+ 	clear_tsk_thread_flag(task, TIF_CAPSTONE);
+ 	context = task->mm->context.capstone_namespace;
+ 	task->mm->context.capstone_namespace = NULL;
++	/* No table stays selected once its context goes. */
++	if (task->mm->context.capstone_root && csr_read(0x5c1) == task->mm->context.capstone_root)
++		csr_write(0x5c1, 0);
++	task->mm->context.capstone_root = 0;
+ 	if (context)
+ 		sublet_context_release(context);
+ }
+--- a/arch/riscv/kernel/entry.S
++++ b/arch/riscv/kernel/entry.S
+@@ -14,6 +14,49 @@
+ #include <asm/asm-offsets.h>
+ #include <asm/errata_list.h>
+ 
++#ifdef CONFIG_RISCV_CAPSTONE_TRAP
++#include <asm/sublet-test.h>
++/* The Sublet instructions the entry and exit use: LDC and STC with a plain kernel base, which
++ * keep the tag, and LCC selector 1 (x1), which answers 7 for an untagged value and never
++ * faults. A register's slot lies at SUBLET_SLOT(n) from tp. */
++#define SUBLET_SLOT(n) (16 * (n) + TASK_TI_CAPSTONE_SLOTS)
++	.macro sublet_ldc rd, off, base
++	.insn i 0x5b, 3, \rd, \base, \off
++	.endm
++	.macro sublet_stc src, off, base
++	.insn s 0x5b, 4, \src, \off(\base)
++	.endm
++	.macro sublet_lcc rd, src, sel
++	.insn r 0x5b, 1, 4, \rd, \src, \sel
++	.endm
++#ifdef CONFIG_RISCV_CAPSTONE_TRAP_SENTINEL
++	/* Bit n of t0 for every register xn that holds a tag, x1, x3 and x5 to x31, into the
++	 * frame's capstone_tagged. Clobbers t0 and t1, which the frame already holds. */
++	.macro sublet_sentinel_mask
++	sublet_lcc t0, t0, x1
++	addi t0, t0, -7
++	snez t0, t0
++	slli t0, t0, 5
++	sublet_lcc t1, t1, x1
++	addi t1, t1, -7
++	snez t1, t1
++	slli t1, t1, 6
++	or t0, t0, t1
++	.irp n,1,3,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31
++	sublet_lcc t1, x\n, x1
++	addi t1, t1, -7
++	snez t1, t1
++	slli t1, t1, \n
++	or t0, t0, t1
++	.endr
++	REG_S t0, PT_CAPSTONE_TAGGED(sp)
++	.endm
++#else
++	.macro sublet_sentinel_mask
++	.endm
++#endif
++#endif
++
+ #if !IS_ENABLED(CONFIG_PREEMPTION)
+ .set resume_kernel, restore_all
+ #endif
+@@ -25,7 +68,11 @@ ENTRY(handle_exception)
+ 	 * register will contain 0, and we should continue on the current TP.
+ 	 */
+ 	csrrw tp, CSR_SCRATCH, tp
++#ifdef CONFIG_RISCV_CAPSTONE_TRAP
++	bnez tp, _save_user
++#else
+ 	bnez tp, _save_context
++#endif
+ 
+ _restore_kernel_tpsp:
+ 	csrr tp, CSR_SCRATCH
+@@ -73,6 +120,61 @@ _save_context:
+ 	REG_S x30, PT_T5(sp)
+ 	REG_S x31, PT_T6(sp)
+ 
++#ifdef CONFIG_RISCV_CAPSTONE_TRAP
++	/*
++	 * A trap from S. t6 may hold a program reference inside a routine for user memory, so it
++	 * keeps its tag in the frame's slot. Every other register goes to pt_regs as an integer.
++	 */
++#ifdef SUBLET_MUTANT_T6_INTEGER
++	REG_S t6, PT_CAPSTONE_T6(sp)
++	REG_S zero, PT_CAPSTONE_T6+8(sp)
++#else
++	sublet_stc t6, PT_CAPSTONE_T6, sp
++#endif
++	sublet_sentinel_mask
++	/* The handler runs with t6 as an integer: the reference stays in the slot only. */
++	REG_L t6, PT_T6(sp)
++	csrr s5, CSR_SCRATCH
++	REG_S s5, PT_TP(sp)
++	csrw CSR_SCRATCH, x0
++	j _save_common
++
++	/*
++	 * An entry from U. Each user register goes to pt_regs as an integer and to its slot with
++	 * its tag. sscratch gives back the user tp with its tag and keeps 0.
++	 */
++_save_user:
++	sublet_stc sp, SUBLET_SLOT(2), tp
++	REG_S sp, TASK_TI_USER_SP(tp)
++	REG_L sp, TASK_TI_KERNEL_SP(tp)
++	addi sp, sp, -(PT_SIZE_ON_STACK)
++	.irp n,1,3,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31
++	REG_S x\n, 8 * \n(sp)
++#ifdef SUBLET_MUTANT_SKIP_STC_S7
++	.if \n - 23
++	sublet_stc x\n, SUBLET_SLOT(\n), tp
++	.endif
++#else
++	sublet_stc x\n, SUBLET_SLOT(\n), tp
++#endif
++	.endr
++	csrrw s5, CSR_SCRATCH, x0
++	REG_S s5, PT_TP(sp)
++	sublet_stc s5, SUBLET_SLOT(4), tp
++#ifndef SUBLET_MUTANT_SKIP_CLEAR
++	/*
++	 * Clear: STC copied each reference, so the registers still hold the program's tags.
++	 * Reload every one of them from pt_regs as an integer, which clears the tag and keeps the
++	 * value that the system call path reads.
++	 */
++	.irp n,1,3,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31
++	REG_L x\n, 8 * \n(sp)
++	.endr
++#endif
++	sublet_sentinel_mask
++
++_save_common:
++#endif
+ 	/*
+ 	 * Disable user-mode memory access as it should only be set in the
+ 	 * actual user copy routines.
+@@ -87,12 +189,15 @@ _save_context:
+ 	csrr s2, CSR_EPC
+ 	csrr s3, CSR_TVAL
+ 	csrr s4, CSR_CAUSE
++#ifndef CONFIG_RISCV_CAPSTONE_TRAP
+ 	csrr s5, CSR_SCRATCH
++#endif
+ 	REG_S s0, PT_SP(sp)
+ 	REG_S s1, PT_STATUS(sp)
+ 	REG_S s2, PT_EPC(sp)
+ 	REG_S s3, PT_BADADDR(sp)
+ 	REG_S s4, PT_CAUSE(sp)
++#ifndef CONFIG_RISCV_CAPSTONE_TRAP
+ 	REG_S s5, PT_TP(sp)
+ 
+ 	/*
+@@ -100,6 +205,7 @@ _save_context:
+ 	 * occurs, the exception vector knows it came from the kernel
+ 	 */
+ 	csrw CSR_SCRATCH, x0
++#endif
+ 
+ 	/* Load the global pointer */
+ .option push
+@@ -107,6 +213,14 @@ _save_context:
+ 	la gp, __global_pointer$
+ .option pop
+ 
++#ifdef CONFIG_RISCV_CAPSTONE_TRAP_SENTINEL
++	REG_L a0, PT_CAPSTONE_TAGGED(sp)
++	beqz a0, 70f
++	move a0, sp
++	call sublet_trap_sentinel
++70:
++#endif
++
+ #ifdef CONFIG_TRACE_IRQFLAGS
+ 	call __trace_hardirqs_off
+ #endif
+@@ -195,6 +309,25 @@ handle_syscall:
+ 	 */
+ 	addi s2, s2, 0x4
+ 	REG_S s2, PT_EPC(sp)
++#ifdef CONFIG_RISCV_CAPSTONE_TRAP
++	/* A protected program's call goes to the Sublet dispatcher, which writes the result. */
++	REG_L t0, TASK_TI_FLAGS(tp)
++	li t1, _TIF_CAPSTONE
++	and t1, t0, t1
++	beqz t1, 71f
++	move a0, sp
++	call sublet_syscall
++	j ret_from_syscall_rejected
++71:
++#ifdef CONFIG_RISCV_CAPSTONE_TRAP_TEST
++	li t0, SUBLET_NR_TEST_ENTER
++	bne a7, t0, 72f
++	move a0, sp
++	call sublet_test_enter
++	j ret_from_syscall
++72:
++#endif
++#endif
+ 	/* Trace syscalls, but only if requested by the user. */
+ 	REG_L t0, TASK_TI_FLAGS(tp)
+ 	andi t0, t0, _TIF_SYSCALL_WORK
+@@ -269,6 +402,30 @@ resume_userspace:
+ 	andi s1, s0, _TIF_WORK_MASK
+ 	bnez s1, work_pending
+ 
++#ifdef CONFIG_RISCV_CAPSTONE_TRAP
++	/*
++	 * The guard: srevroot must name the table of current->mm (0 for an ordinary mm), and
++	 * TIF_CAPSTONE must agree with the mm's protection. Otherwise sublet_guard_trip writes 0,
++	 * raises SIGKILL and goes back to the work loop, so the task never reaches U.
++	 */
++	REG_L t1, TASK_MM_SUBLET(tp)
++	li t2, 0
++	beqz t1, 73f
++	li t3, MM_CONTEXT_CAPSTONE_ROOT
++	add t1, t1, t3
++	REG_L t2, 0(t1)
++73:
++#ifndef SUBLET_MUTANT_NO_GUARD
++	csrr t3, 0x5c1
++	bne t2, t3, sublet_guard_trip
++	li t0, _TIF_CAPSTONE
++	and t0, s0, t0
++	snez t0, t0
++	snez t2, t2
++	bne t0, t2, sublet_guard_trip
++#endif
++#endif
++
+ #ifdef CONFIG_CONTEXT_TRACKING_USER
+ 	call user_enter_callable
+ #endif
+@@ -283,6 +440,13 @@ resume_userspace:
+ 	 */
+ 	csrw CSR_SCRATCH, tp
+ 
++#ifdef CONFIG_RISCV_CAPSTONE_TRAP
++	REG_L s0, TASK_TI_FLAGS(tp)
++	li t0, _TIF_CAPSTONE
++	and s0, s0, t0
++	bnez s0, restore_user
++#endif
++
+ restore_all:
+ #ifdef CONFIG_TRACE_IRQFLAGS
+ 	REG_L s1, PT_STATUS(sp)
+@@ -317,6 +481,9 @@ restore_all:
+ 
+ 	csrw CSR_STATUS, a0
+ 	csrw CSR_EPC, a2
++#ifdef CONFIG_RISCV_CAPSTONE_TRAP
++	andi x31, a0, SR_SPP
++#endif
+ 
+ 	REG_L x1,  PT_RA(sp)
+ 	REG_L x3,  PT_GP(sp)
+@@ -347,7 +514,17 @@ restore_all:
+ 	REG_L x28, PT_T3(sp)
+ 	REG_L x29, PT_T4(sp)
+ 	REG_L x30, PT_T5(sp)
++#ifdef CONFIG_RISCV_CAPSTONE_TRAP
++	/* A return to S takes t6 with its tag from the frame's slot. */
++	beqz x31, 74f
++	sublet_ldc x31, PT_CAPSTONE_T6, sp
++	j 75f
++74:
+ 	REG_L x31, PT_T6(sp)
++75:
++#else
++	REG_L x31, PT_T6(sp)
++#endif
+ 
+ 	REG_L x2,  PT_SP(sp)
+ 
+@@ -357,6 +534,41 @@ restore_all:
+ 	sret
+ #endif
+ 
++#ifdef CONFIG_RISCV_CAPSTONE_TRAP
++	/*
++	 * The return to a protected program: status and epc as for every return, then every
++	 * register from its slot with its tag, sp next to last and tp last. The program never
++	 * sees pt_regs, which C code reads as the integer view.
++	 */
++restore_user:
++#ifdef CONFIG_TRACE_IRQFLAGS
++	REG_L s1, PT_STATUS(sp)
++	andi t0, s1, SR_PIE
++	beqz t0, 76f
++	call __trace_hardirqs_on
++	j 77f
++76:
++	call __trace_hardirqs_off
++77:
++#endif
++	REG_L a0, PT_STATUS(sp)
++	REG_L  a2, PT_EPC(sp)
++	REG_SC x0, a2, PT_EPC(sp)
++	csrw CSR_STATUS, a0
++	csrw CSR_EPC, a2
++	.irp n,1,3,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31
++	sublet_ldc x\n, SUBLET_SLOT(\n), tp
++	.endr
++	sublet_ldc sp, SUBLET_SLOT(2), tp
++	sublet_ldc tp, SUBLET_SLOT(4), tp
++	sret
++
++sublet_guard_trip:
++	move a0, sp
++	call sublet_guard_fail
++	j ret_from_exception
++#endif
++
+ #if IS_ENABLED(CONFIG_PREEMPTION)
+ resume_kernel:
+ 	REG_L s0, TASK_TI_PREEMPT_COUNT(tp)
+@@ -604,6 +816,14 @@ ENTRY(excp_vect_table)
+ 	RISCV_PTR do_page_fault   /* load page fault */
+ 	RISCV_PTR do_trap_unknown
+ 	RISCV_PTR do_page_fault   /* store page fault */
++#ifdef CONFIG_RISCV_CAPSTONE_TRAP
++	.rept 8
++	RISCV_PTR do_trap_unknown	/* 16 to 23 */
++	.endr
++	.rept 7
++	RISCV_PTR do_trap_sublet	/* 24 to 30: the Sublet causes */
++	.endr
++#endif
+ excp_vect_table_end:
+ END(excp_vect_table)
+ 
+--- /dev/null
++++ b/arch/riscv/kernel/sublet_trap.c
+@@ -0,0 +1,221 @@
++// SPDX-License-Identifier: GPL-2.0-only
++/*
++ * The C side of the trap route (plan v5 step 3): the helpers that change a user register,
++ * the dispatch stub for a protected program's system calls, the handler of the Sublet causes
++ * 24 to 30, the guard's kill path and the debug sentinel. With CONFIG_RISCV_CAPSTONE_TRAP_TEST
++ * also the test loader and the test hook.
++ */
++#include <linux/delay.h>
++#include <linux/irqflags.h>
++#include <linux/mm.h>
++#include <linux/sched.h>
++#include <linux/sched/signal.h>
++#include <linux/sched/task.h>
++#include <linux/syscalls.h>
++#include <asm/capstone_task.h>
++#include <asm/csr.h>
++#include <asm/extable.h>
++#include <asm/ptrace.h>
++#include <asm/sublet.h>
++#include <asm/sublet-test.h>
++#include <asm/sublet-trap.h>
++
++#define SUBLET_ADDR_MASK ((1UL << 38) - 1)
++
++static bool sublet_in_uaccess(unsigned long pc)
++{
++	return pc >= (unsigned long)sublet_uaccess_start && pc < (unsigned long)sublet_uaccess_end;
++}
++
++/* Set user register xn to an integer: pt_regs and both doublewords of its slot, with plain
++ * stores, which clear the slot's tag. */
++void sublet_set_user_int(struct pt_regs *regs, unsigned int n, unsigned long value)
++{
++	unsigned long *slot = sublet_user_slot(current, n);
++
++	if (WARN_ON_ONCE(n == 0 || n > 31))
++		return;
++	((unsigned long *)regs)[n] = value;
++	WRITE_ONCE(slot[1], 0UL);
++	WRITE_ONCE(slot[0], value);
++}
++
++/* Set user register xn to the reference in a kernel slot: LDC and STC in one run with
++ * interrupts off, and the reference's address into pt_regs. */
++void sublet_set_user_ref(struct pt_regs *regs, unsigned int n, unsigned long *kslot)
++{
++	unsigned long *slot = sublet_user_slot(current, n), flags;
++
++	if (WARN_ON_ONCE(n == 0 || n > 31))
++		return;
++	local_irq_save(flags);
++	asm volatile(".balign 64\n"
++		     ".insn i 0x5b, 3, t0, %[from], 0\n"
++		     ".insn s 0x5b, 4, t0, 0(%[to])\n"
++		     "li t0, 0\n"
++		     : : [from] "r"(kslot), [to] "r"(slot) : "t0", "memory");
++	local_irq_restore(flags);
++	((unsigned long *)regs)[n] = READ_ONCE(slot[0]) & SUBLET_ADDR_MASK;
++}
++
++#ifdef CONFIG_RISCV_CAPSTONE_TRAP_TEST
++/* The cause of the last Sublet fault from S, and whether the test hook's fault sleeps. */
++static unsigned long sublet_test_last_cause;
++static bool sublet_test_sleeping;
++
++long sublet_test_hold_asm(unsigned long *slot, unsigned long *ticks_at, unsigned long ticks);
++
++/* The page fault of the test hook sleeps 20 ms, so another task runs while t6 holds the
++ * program's reference in the trap frame's slot. */
++void sublet_test_fault(struct pt_regs *regs)
++{
++	if (READ_ONCE(sublet_test_sleeping) && sublet_in_uaccess(regs->epc))
++		msleep(20);
++}
++
++/* The program's reference in a0 held in t6 across a sleeping page fault and two timer
++ * ticks. The doubleword at the reference, or minus the cause of a reference fault. */
++static long sublet_test_hold(struct pt_regs *regs)
++{
++	long ret;
++
++	WRITE_ONCE(sublet_test_last_cause, 0);
++	WRITE_ONCE(sublet_test_sleeping, true);
++	ret = sublet_test_hold_asm(sublet_user_slot(current, 10),
++				   (unsigned long *)&jiffies, 2);
++	WRITE_ONCE(sublet_test_sleeping, false);
++	if (ret == -EFAULT && READ_ONCE(sublet_test_last_cause))
++		ret = -(long)READ_ONCE(sublet_test_last_cause);
++	return ret;
++}
++
++/*
++ * The test loader: it turns the calling process into a protected program. It creates the
++ * context with sublet_context_create, which mints R, derives one block over [a0, a0 + a1) and
++ * one over [a2, a2 + a3), both anonymous private mappings, puts their references into the
++ * caller's a0 and a1, and binds the context to the mm, which sets TIF_CAPSTONE and srevroot.
++ * Every other register of the caller keeps the integer its entry saved. Root only.
++ */
++asmlinkage long sublet_test_enter(struct pt_regs *regs)
++{
++	struct sublet_grant a = {.address = regs->a0, .bytes = regs->a1, .cursor = regs->a0, .reg = 10};
++	struct sublet_grant b = {.address = regs->a2, .bytes = regs->a3, .cursor = regs->a2, .reg = 11};
++	struct sublet_context *c;
++	unsigned long *slot_a, *slot_b;
++	long rc;
++
++	if (!capable(CAP_SYS_ADMIN))
++		return -EPERM;
++	if (!sublet_ready() || test_thread_flag(TIF_CAPSTONE) || current->mm->context.capstone_namespace)
++		return -EBUSY;
++	rc = sublet_context_create(&c);
++	if (rc)
++		return rc;
++	mutex_lock(&sublet_lock);
++	rc = sublet_grant_slot(c, &a, &slot_a);
++	if (!rc)
++		rc = sublet_grant_slot(c, &b, &slot_b);
++	mutex_unlock(&sublet_lock);
++	if (!rc)
++		rc = riscv_capstone_bind(c, c->table_pa);
++	if (rc) {
++		sublet_context_destroy(c);
++		return rc;
++	}
++	sublet_set_user_ref(regs, 10, slot_a);
++	sublet_set_user_ref(regs, 11, slot_b);
++	pr_info("sublet: test loader: pid %d protected, table 0x%llx\n", task_pid_nr(current),
++		(unsigned long long)c->table_pa);
++	return 0;
++}
++#endif
++
++/*
++ * The dispatch stub. Until plan v5 step 5 binds the system calls, a protected program may
++ * call only the calls that take no pointer: the Linux number in a7, the result in a0 through
++ * the integer helper. Every other call returns ENOSYS.
++ */
++asmlinkage void sublet_syscall(struct pt_regs *regs)
++{
++	long ret;
++
++	switch (regs->a7) {
++	case __NR_getpid:
++		ret = task_tgid_vnr(current);
++		break;
++	case __NR_gettid:
++		ret = task_pid_vnr(current);
++		break;
++	case __NR_sched_yield:
++		yield();
++		ret = 0;
++		break;
++	case __NR_exit:
++		do_exit((regs->a0 & 0xff) << 8);
++	case __NR_exit_group:
++		do_group_exit((regs->a0 & 0xff) << 8);
++#ifdef CONFIG_RISCV_CAPSTONE_TRAP_TEST
++	case SUBLET_NR_TEST_HOLD:
++		ret = sublet_test_hold(regs);
++		break;
++#endif
++	default:
++		ret = -ENOSYS;
++	}
++	sublet_set_user_int(regs, 10, ret);
++}
++
++/*
++ * Causes 24 to 30. From U: cause 30 asks for a table slot, which ensure_nodes grows; every
++ * other cause kills the program with SIGSEGV and one fault line. From S: the exception table
++ * of the routine for user memory turns the fault into EFAULT; without an entry the kernel
++ * stops.
++ */
++asmlinkage __visible void do_trap_sublet(struct pt_regs *regs)
++{
++	unsigned long cause = regs->cause;
++
++	if (user_mode(regs)) {
++		struct sublet_context *c = sublet_task_context(current);
++
++		if (cause == 30 && c && !sublet_grow(c))
++			return;
++		pr_info("sublet: fault cause=%lu pc=0x%lx address=0x%lx pid=%d comm=%s\n",
++			cause, regs->epc, regs->badaddr, task_pid_nr(current), current->comm);
++		force_sig_fault(SIGSEGV, SEGV_ACCERR, (void __user *)regs->badaddr);
++		return;
++	}
++#ifdef CONFIG_RISCV_CAPSTONE_TRAP_TEST
++	WRITE_ONCE(sublet_test_last_cause, cause);
++#endif
++	if (fixup_exception(regs))
++		return;
++	die(regs, "Oops - Sublet fault in the kernel");
++}
++
++/* The guard found srevroot or TIF_CAPSTONE wrong on the way to U: no table stays selected,
++ * and the task dies before it reaches U. Interrupts are off. */
++asmlinkage void sublet_guard_fail(struct pt_regs *regs)
++{
++	unsigned long root = csr_read(SUBLET_CSR_SREVROOT);
++
++	csr_write(SUBLET_CSR_SREVROOT, 0);
++	pr_warn_ratelimited("sublet: guard: srevroot 0x%lx does not match %s[%d], killed\n",
++			    root, current->comm, task_pid_nr(current));
++	force_sig(SIGKILL);
++}
++
++#ifdef CONFIG_RISCV_CAPSTONE_TRAP_SENTINEL
++/* A tagged register at a trap: only t6, and only inside the routines for user memory. */
++asmlinkage void sublet_trap_sentinel(struct pt_regs *regs)
++{
++	unsigned long tagged = regs->capstone_tagged;
++
++	if (!user_mode(regs) && sublet_in_uaccess(regs->epc))
++		tagged &= ~BIT(31);
++	if (tagged)
++		panic("sublet: sentinel: tagged kernel registers 0x%lx at %pS (%s), t6 0x%lx slot 0x%lx 0x%lx ra %pS\n",
++		      tagged, (void *)regs->epc, user_mode(regs) ? "entry from U" : "trap from S",
++		      regs->t6, regs->capstone_t6[0], regs->capstone_t6[1], (void *)regs->ra);
++}
++#endif
+--- a/arch/riscv/mm/context.c
++++ b/arch/riscv/mm/context.c
+@@ -15,6 +15,9 @@
+ #include <asm/tlbflush.h>
+ #include <asm/cacheflush.h>
+ #include <asm/mmu_context.h>
++#ifdef CONFIG_RISCV_CAPSTONE_TRAP
++#include <asm/sublet-test.h>
++#endif
+ 
+ #ifdef CONFIG_MMU
+ 
+@@ -310,6 +313,14 @@ void switch_mm(struct mm_struct *prev, struct mm_struct *next,
+ 	if (unlikely(prev == next))
+ 		return;
+ 
++#ifdef CONFIG_RISCV_CAPSTONE_TRAP
++	/* srevroot names the table of the mm that runs next, or none. */
++#ifdef SUBLET_MUTANT_LEAK_ROOT
++	if (next->context.capstone_root)
++#endif
++	csr_write(0x5c1, next->context.capstone_root);
++#endif
++
+ 	/*
+ 	 * Mark the current MM context as inactive, and the next as
+ 	 * active.  This is at least used by the icache flushing
+--- a/arch/riscv/mm/fault.c
++++ b/arch/riscv/mm/fault.c
+@@ -17,6 +17,9 @@
+ #include <linux/kfence.h>
+ 
+ #include <asm/ptrace.h>
++#ifdef CONFIG_RISCV_CAPSTONE_TRAP_TEST
++#include <asm/sublet.h>
++#endif
+ #include <asm/tlbflush.h>
+ 
+ #include "../kernel/head.h"
+@@ -254,6 +257,12 @@ asmlinkage void do_page_fault(struct pt_regs *regs)
+ 	if (likely(regs->status & SR_PIE))
+ 		local_irq_enable();
+ 
++#ifdef CONFIG_RISCV_CAPSTONE_TRAP_TEST
++	/* The trap-route test hook's page fault sleeps, with a reference held in t6. */
++	if (!user_mode(regs))
++		sublet_test_fault(regs);
++#endif
++
+ 	/*
+ 	 * If we're in an interrupt, have no user context, or are running
+ 	 * in an atomic region, then we must not take the fault.
+--- a/arch/riscv/mm/sublet-table.c
++++ b/arch/riscv/mm/sublet-table.c
+@@ -113,20 +113,21 @@ static int ensure_nodes(struct sublet_context *c, unsigned long required)
+     return error;
+ }
+ 
+-/* Name the context's table in srevroot for one window of capability instructions. */
++/* Name the context's table in srevroot for one window of capability instructions. In S the
++ * running task's own table stays selected, so select_root writes srevroot only when it
++ * selects another table, and restore_root writes back the value select_root found. */
+ static unsigned long select_root(struct sublet_context *c)
+ {
+-    unsigned long old;
+-    asm volatile("csrr %0, 0x5c1\ncsrw 0x5c1, %1"
+-                 : "=&r"(old) : "r"(c->table_pa) : "memory");
++    unsigned long old = csr_read(0x5c1);
++
++    if (old != c->table_pa)
++        csr_write(0x5c1, c->table_pa);
+     return old;
+ }
+-/* Outside a window S names no table. Plan v5 step 3 makes this write back the value that
+- * select_root found, once a protected program's own table can be the one in srevroot. */
+ static void restore_root(unsigned long root)
+ {
+-    (void)root;
+-    asm volatile("csrw 0x5c1, zero" : : : "memory");
++    if (csr_read(0x5c1) != root)
++        csr_write(0x5c1, root);
+ }
+ 
+ /* ---- R and the grants derived from it ----
+@@ -479,7 +480,7 @@ static int grant_mapped(struct sublet_context *c, const struct sublet_grant *g)
+ 
+ /* Make the block for the grant g: check its range and its mappings, derive P from R and record
+  * the block. Caller holds sublet_lock. */
+-int sublet_grant(struct sublet_context *c, const struct sublet_grant *g)
++int sublet_grant_slot(struct sublet_context *c, const struct sublet_grant *g, unsigned long **slot)
+ {
+     struct arena *a;
+     int error;
+@@ -513,9 +514,15 @@ int sublet_grant(struct sublet_context *c, const struct sublet_grant *g)
+     a->address = g->address; a->bytes = g->bytes; a->rx_bytes = g->rx_bytes; a->reg = g->reg;
+     arena_insert(c, a);
+     c->registered_bytes += a->bytes;
++    if (slot) *slot = a->slot;
+     return 0;
+ }
+ 
++int sublet_grant(struct sublet_context *c, const struct sublet_grant *g)
++{
++    return sublet_grant_slot(c, g, NULL);
++}
++
+ /* A context for the current address space: its table with node_initial_pages record pages,
+  * published before the processor sees it, and R. One context per mm. */
+ int sublet_context_create(struct sublet_context **out)
+@@ -587,6 +594,16 @@ void sublet_context_destroy(struct sublet_context *c)
+     mmdrop(c->mm);
+     kvfree(c);
+ }
++int sublet_grow(struct sublet_context *c)
++{
++    int error;
++
++    mutex_lock(&sublet_lock);
++    error = ensure_nodes(c, 1);
++    mutex_unlock(&sublet_lock);
++    return error;
++}
++
+ bool sublet_ready(void)
+ {
+     return platform_ready;
+--- /dev/null
++++ b/arch/riscv/kernel/sublet_trap_asm.S
+@@ -0,0 +1,62 @@
++/* SPDX-License-Identifier: GPL-2.0-only */
++/*
++ * The trap route's routine for user memory of the test hook. Only code in the section
++ * .sublet.uaccess.text (between sublet_uaccess_start and sublet_uaccess_end, which the linker
++ * script defines) may hold a program reference in t6 across an instruction that can trap, and
++ * each routine clears t6 before it returns. Plan v5 step 5 adds the copy routines there.
++ */
++#include <linux/linkage.h>
++#include <asm/asm.h>
++#include <asm/csr.h>
++#include <asm/asm-extable.h>
++
++#define SUBLET_LDC(rd, base) .insn i 0x5b, 3, rd, base, 0
++#define SUBLET_INC(rd, src, offset) .insn r 0x5b, 1, 0x0c, rd, src, offset
++#define SUBLET_LCC_ID(rd, src) .insn r 0x5b, 1, 4, rd, src, x8
++
++	.section .sublet.uaccess.text, "ax"
++	.balign 64
++#ifdef CONFIG_RISCV_CAPSTONE_TRAP_TEST
++/*
++ * long sublet_test_hold_asm(unsigned long *slot, unsigned long *jiffies, unsigned long ticks)
++ *
++ * The test hook of plan v5 step 3. It loads the program reference in the kernel slot into t6,
++ * moves it one page on and loads through it from a page the program never touched, so the
++ * load page-faults (and the test fault hook sleeps). It then waits for ticks timer ticks
++ * with interrupts on, moves t6 back, reads its lifetime id with LCC selector 8, which faults
++ * with 24 unless t6 is still tagged, and returns the doubleword the program stored at the
++ * reference's address. -EFAULT if an instruction faults, with the cause
++ * recorded by do_trap_sublet. The QEMU rule that checks an S access through a reference
++ * (plan v5 step 1, rule 1) does not exist yet, so the loads are plain accesses at t6's address.
++ */
++ENTRY(sublet_test_hold_asm)
++	li t0, SR_SUM
++	csrs CSR_STATUS, t0
++	SUBLET_LDC(t6, a0)
++	li t1, 4096
++1:	SUBLET_INC(t6, t6, t1)
++2:	ld t2, 0(t6)
++	REG_L t3, 0(a1)
++	add t3, t3, a2
++3:	REG_L t4, 0(a1)
++	blt t4, t3, 3b
++	li t1, -4096
++4:	SUBLET_INC(t6, t6, t1)
++7:	SUBLET_LCC_ID(t5, t6)
++5:	ld a0, 0(t6)
++	li t6, 0
++	li t0, SR_SUM
++	csrc CSR_STATUS, t0
++	ret
++6:	li t6, 0
++	li t0, SR_SUM
++	csrc CSR_STATUS, t0
++	li a0, -14
++	ret
++	_asm_extable 1b, 6b
++	_asm_extable 2b, 6b
++	_asm_extable 4b, 6b
++	_asm_extable 5b, 6b
++	_asm_extable 7b, 6b
++ENDPROC(sublet_test_hold_asm)
++#endif

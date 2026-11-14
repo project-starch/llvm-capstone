@@ -1,16 +1,44 @@
 #ifdef CAPSTONE_RUNTIME_TRAP
+#define _GNU_SOURCE
+#include <sched.h>
 #include <errno.h>
 #include <stddef.h>
+#include <stdarg.h>
 #include <time.h>
-#include <unistd.h>
-#include <stdlib.h>
+#include <syscall.h>
+
+extern long __capstone_linux_clone(void *, void *, unsigned long, void *, int *, void *, int *);
+
 int __clone(int (*entry)(void *), void *stack, int flags, void *arg, ...)
-{ return -ENOSYS; }
-_Noreturn void __unmapself(void *base, size_t size) { _Exit(127); }
-_Noreturn void __capstone_virtual_pthread_exit(long status) { _Exit(status); }
+{
+    const unsigned required = CLONE_VM | CLONE_FS | CLONE_FILES | CLONE_SIGHAND |
+        CLONE_THREAD | CLONE_SETTLS | CLONE_PARENT_SETTID | CLONE_CHILD_CLEARTID;
+    const unsigned allowed = required | CLONE_SYSVSEM | CLONE_DETACHED;
+    va_list ap;
+    va_start(ap, arg);
+    int *parent = va_arg(ap, int *);
+    void *tls = va_arg(ap, void *);
+    int *clear = va_arg(ap, int *);
+    va_end(ap);
+    if ((flags & required) != required || (flags & ~allowed)) return -ENOSYS;
+    if (!entry || !stack || !parent || !tls || !clear) return -EINVAL;
+    return __capstone_linux_clone((void *)entry, stack, flags, arg, parent, tls, clear);
+}
+
+/* __unmapself is assembly: after munmap neither stack nor TLS may be used. */
+_Noreturn void __capstone_virtual_pthread_exit(long status)
+{
+    __syscall(SYS_exit, status);
+    for (;;) __asm__ volatile("ebreak");
+}
+
 long __capstone_virtual_futex(void *word, int op, int value,
                              const struct timespec *timeout, int bitset)
-{ return -ENOSYS; }
+{
+    int command = op & 127;
+    if (command != 0 && command != 1 && command != 9 && command != 10) return -ENOSYS;
+    return __syscall(SYS_futex, word, op | 128, value, timeout, 0, bitset);
+}
 #else
 /* musl owns pthread objects, TLS, locks and join semantics. Linux workers
  * execute the existing virtual contexts. Only clone and final exit differ. */

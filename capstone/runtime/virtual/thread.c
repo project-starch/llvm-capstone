@@ -1,14 +1,35 @@
 #ifdef CAPSTONE_RUNTIME_TRAP
+#define _GNU_SOURCE
 #include <capstone/virtual.h>
+#include <sched.h>
 #include <errno.h>
 #include <unistd.h>
-#include <stdlib.h>
+#include <syscall.h>
+
+extern long __capstone_linux_clone(void *, void *, unsigned long, void *, int *, void *, int *);
+
 long capstone_virtual_thread_create(void *(*entry)(void *), void *arg, void *sp, void *tp)
-{ errno = ENOSYS; return -1; }
+{
+    /* Only pthread_create initializes musl's TLS and thread bookkeeping. */
+    errno = (!entry || !sp) ? EINVAL : ENOTSUP;
+    return -1;
+}
 long __capstone_virtual_context_create(void *(*entry)(void *), void *arg, void *sp, void *tp)
-{ errno = ENOSYS; return -1; }
-int capstone_virtual_thread_join(long thread) { errno = ENOSYS; return -1; }
-_Noreturn void capstone_virtual_thread_exit(void *result) { _Exit(127); }
+{
+    long id;
+    if (!entry || !sp || !tp) { errno = EINVAL; return -1; }
+    id = __capstone_linux_clone((void *)entry, sp,
+        CLONE_VM | CLONE_FS | CLONE_FILES | CLONE_SIGHAND | CLONE_THREAD |
+        CLONE_SYSVSEM | CLONE_SETTLS, arg, 0, tp, 0);
+    if (id < 0) { errno = -id; return -1; }
+    return id;
+}
+int capstone_virtual_thread_join(long thread) { errno = ENOTSUP; return -1; }
+_Noreturn void capstone_virtual_thread_exit(void *result)
+{
+    __syscall(SYS_exit, 0);
+    for (;;) __asm__ volatile("ebreak");
+}
 #else
 #include <capstone/capability.h>
 #include <capstone/virtual.h>

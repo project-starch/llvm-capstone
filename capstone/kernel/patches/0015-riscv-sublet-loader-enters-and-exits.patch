@@ -1,0 +1,415 @@
+--- a/arch/riscv/include/asm/mmu.h
++++ b/arch/riscv/include/asm/mmu.h
+@@ -21,6 +21,8 @@ typedef struct {
+ 	/* The selected-root record: the physical root of the mm's lifetime table, which
+ 	 * srevroot holds while the mm runs, or 0 for an ordinary mm. */
+ 	unsigned long capstone_root;
++	/* The loader's mark: the mm belongs to a protected program from exec on. */
++	bool capstone_marked;
+ #endif
+ #ifdef CONFIG_SMP
+ 	/* A local icache flush is needed before user execution can resume. */
+--- a/arch/riscv/include/asm/sublet-test.h
++++ b/arch/riscv/include/asm/sublet-test.h
+@@ -5,7 +5,9 @@
+  *   SUBLET_MUTANT_SKIP_CLEAR    the entry from U leaves the program's tags in kernel registers
+  *   SUBLET_MUTANT_T6_INTEGER    a trap from S saves t6 as an integer
+  *   SUBLET_MUTANT_LEAK_ROOT     switch_mm leaves srevroot set for an ordinary mm
+- *   SUBLET_MUTANT_NO_GUARD      the return to U skips the guard */
++ *   SUBLET_MUTANT_NO_GUARD      the return to U skips the guard
++ *   SUBLET_MUTANT_SKIP_TABLE_FREE  context release keeps the table pages
++ *   SUBLET_MUTANT_PANIC_ON_U_FAULT a fault of a protected program stops the kernel */
+ #ifndef _ASM_RISCV_SUBLET_TEST_H
+ #define _ASM_RISCV_SUBLET_TEST_H
+ 
+--- a/arch/riscv/include/asm/sublet.h
++++ b/arch/riscv/include/asm/sublet.h
+@@ -43,6 +43,8 @@ struct sublet_context {
+ 	struct file *image;
+ 	/* The loader's metadata and exchange regions, and the resource capsule. */
+ 	unsigned long dom_meta, dom_exchange, dom_exchange_bytes;
++	/* The program's entry, the plain address the loader started it at. */
++	unsigned long dom_entry;
+ 	struct dom_delegate *dom_delegate;
+ };
+ 
+--- a/arch/riscv/kernel/sublet/binfmt.h
++++ b/arch/riscv/kernel/sublet/binfmt.h
+@@ -1,8 +1,9 @@
+ /* SPDX-License-Identifier: GPL-2.0-only */
+ /* The .dom loader: it parses a protected program's image, maps it with its stack, startup,
+  * metadata and exchange regions, creates the context and derives one block per region from R.
+- * Root only. The protected entry does not exist yet (plan v5 steps 3 and 4), so the loader
+- * refuses after it has built everything. Past the point of no return that kills the task. */
++ * Root only. With the trap route the loader binds the context to the mm and enters the
++ * program. Without it the loader refuses after it has built everything, which past the point
++ * of no return kills the task. */
+ #include <linux/binfmts.h>
+ #include <linux/elf.h>
+ #include <linux/mman.h>
+@@ -16,6 +17,9 @@
+ #include <asm/processor.h>
+ #include <asm/cacheflush.h>
+ #include "capstone/delegate.h"
++#ifdef CONFIG_RISCV_CAPSTONE_TRAP
++#include <asm/sublet-trap.h>
++#endif
+ 
+ /* Read-only attribution record: the image base of the last load. */
+ static unsigned long dom_last_base;
+@@ -147,14 +151,65 @@ static unsigned long dom_reserve(unsigned long bytes, unsigned long align, unsig
+     if (raw + total > base + bytes) vm_munmap(base + bytes, raw + total - base - bytes);
+     return base;
+ }
++/* One block, whose reference the program finds in start register reg; slots[reg] receives
++ * the kernel slot that holds it. */
+ static int dom_grant(struct sublet_context *c, unsigned long base, unsigned long bytes,
+-                     unsigned reg, unsigned long cursor, unsigned long rx)
++                     unsigned reg, unsigned long cursor, unsigned long rx, unsigned long **slots)
+ {
+     struct sublet_grant g = {.address = base, .bytes = bytes, .reg = reg,
+                              .cursor = cursor, .rx_bytes = rx};
+-    return sublet_grant(c, &g);
++    return sublet_grant_slot(c, &g, &slots[reg]);
+ }
+ 
++static struct linux_binfmt capstone_dom;
++
++#ifdef CONFIG_RISCV_CAPSTONE_TRAP
++#ifdef CONFIG_RISCV_CAPSTONE_TRAP_TEST
++/* Test only: the next n loads fail after the point of no return, right before the entry. */
++static int test_fail_after_mark;
++module_param(test_fail_after_mark, int, 0644);
++#endif
++
++/*
++ * Enter the program (plan v5 step 4): every user register an integer 0 but the start
++ * registers, which receive their blocks' references (sp the stack, gp the image, a0 the
++ * metadata, a1 the exchange region, a2 the startup block), the program counter the plain
++ * address of the entry, then the binding: TIF_CAPSTONE, the mm's context and root, and
++ * srevroot. The loader's plain writes into the program's pages all precede it. The return
++ * from execve then loads the slots (restore_user).
++ */
++static int dom_enter(struct sublet_context *c, struct linux_binprm *bprm, unsigned long entry,
++                     unsigned long **slots)
++{
++    static const unsigned start[] = {2, 3, 10, 11, 12};
++    struct pt_regs *regs = current_pt_regs();
++    int rc;
++
++#ifdef CONFIG_RISCV_CAPSTONE_TRAP_TEST
++    if (READ_ONCE(test_fail_after_mark) > 0) {
++        WRITE_ONCE(test_fail_after_mark, READ_ONCE(test_fail_after_mark) - 1);
++        return -ENOEXEC;
++    }
++#endif
++    set_binfmt(&capstone_dom);
++    finalize_exec(bprm);
++    memset(regs, 0, sizeof(*regs));
++    regs->status = SR_PIE | SR_UXL_64;
++    regs->epc = entry;
++    for (unsigned n = 1; n < 32; ++n)
++        sublet_set_user_int(regs, n, 0);
++    for (unsigned i = 0; i < ARRAY_SIZE(start); ++i)
++        sublet_set_user_ref(regs, start[i], slots[start[i]]);
++    c->dom_entry = entry;
++    rc = riscv_capstone_bind(c, c->table_pa);
++    if (rc)
++        return rc;
++    pr_info("sublet: %s[%d] enters 0x%lx, table 0x%llx\n", current->comm, task_pid_nr(current),
++            entry, (unsigned long long)c->table_pa);
++    return 0;
++}
++#endif
++
+ #include "capsule.h"
+ #include "syscall.h"
+ 
+@@ -215,14 +270,14 @@ static int dom_startup(struct linux_binprm *bprm, void *block)
+     return 0;
+ }
+ 
+-static struct linux_binfmt capstone_dom;
+ static int dom_load_binary(struct linux_binprm *bprm)
+ {
+     struct dom_image im = {0};
+     struct sublet_context *c = NULL;
++    unsigned long *slots[32] = {0};
+     unsigned long base, stack, startup, whole, part;
+     void *block = NULL, *tail = NULL;
+-    int rc;
++    int rc, fail_line = 0;
+     Elf64_Ehdr *h = (void *)bprm->buf;
+     if (memcmp(h->e_ident, ELFMAG, SELFMAG) || h->e_machine != 259) return -ENOEXEC;
+     if (!uid_eq(current_euid(), GLOBAL_ROOT_UID) || bprm->secureexec ||
+@@ -238,38 +293,41 @@ static int dom_load_binary(struct linux_binprm *bprm)
+     if (rc) return rc;
+     block = kvzalloc(DOM_LAUNCH_BYTES, GFP_KERNEL);
+     tail = kmalloc(PAGE_SIZE, GFP_KERNEL);
+-    if (!block || !tail) { rc = -ENOMEM; goto out; }
++    if (!block || !tail) { rc = -ENOMEM; { fail_line = __LINE__; goto out; } }
+     /* Read the partial data page before the point of no return. */
+     whole = im.data.p_filesz & PAGE_MASK; part = im.data.p_filesz - whole;
+-    if (part && (rc = dom_read(bprm->file, tail, part, im.data.p_offset + whole))) goto out;
++    if (part && (rc = dom_read(bprm->file, tail, part, im.data.p_offset + whole))) { fail_line = __LINE__; goto out; }
++    /* The mark: the new mm is protected before it becomes visible, so no opener of
++     * /proc/PID/mem sees it unprotected (mm_access refuses a marked mm). */
++    bprm->mm->context.capstone_marked = true;
+     rc = begin_new_exec(bprm);
+-    if (rc) goto out;
++    if (rc) { fail_line = __LINE__; goto out; }
+     setup_new_exec(bprm);
+     rc = setup_arg_pages(bprm, STACK_TOP, EXSTACK_DISABLE_X);
+-    if (rc) goto out;
++    if (rc) { fail_line = __LINE__; goto out; }
+     rc = dom_startup(bprm, block);
+-    if (rc) goto out;
++    if (rc) { fail_line = __LINE__; goto out; }
+     rc = sublet_context_create(&c);
+-    if (rc) goto out;
++    if (rc) { fail_line = __LINE__; goto out; }
+     rc = dom_resources_init(c);
+-    if (rc) goto out;
++    if (rc) { fail_line = __LINE__; goto out; }
+     rc = deny_write_access(bprm->file);
+-    if (rc) goto out;
++    if (rc) { fail_line = __LINE__; goto out; }
+     c->image = get_file(bprm->file);
+     base = dom_reserve(im.bytes, im.bytes, PROT_READ | PROT_WRITE);
+-    if (IS_ERR_VALUE(base)) { rc = base; goto out; }
++    if (IS_ERR_VALUE(base)) { rc = base; { fail_line = __LINE__; goto out; } }
+     {
+         unsigned long mapped = vm_mmap(bprm->file, base, im.text.p_memsz, PROT_READ | PROT_EXEC,
+                                        MAP_PRIVATE | MAP_FIXED, im.text.p_offset);
+-        if (IS_ERR_VALUE(mapped)) { rc = mapped; goto out; }
++        if (IS_ERR_VALUE(mapped)) { rc = mapped; { fail_line = __LINE__; goto out; } }
+     }
+     if (whole) {
+         unsigned long mapped = vm_mmap(bprm->file, base + im.text.p_memsz, whole,
+                                       PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_FIXED, im.data.p_offset);
+-        if (IS_ERR_VALUE(mapped)) { rc = mapped; goto out; }
++        if (IS_ERR_VALUE(mapped)) { rc = mapped; { fail_line = __LINE__; goto out; } }
+     }
+     if (part && copy_to_user((void __user *)(base + im.text.p_memsz + whole), tail, part)) {
+-        rc = -EFAULT; goto out;
++        rc = -EFAULT; { fail_line = __LINE__; goto out; }
+     }
+     stack = dom_reserve(im.stack, im.stack, PROT_READ | PROT_WRITE);
+     startup = dom_reserve(DOM_LAUNCH_BYTES, DOM_LAUNCH_BYTES, PROT_READ | PROT_WRITE);
+@@ -277,19 +335,19 @@ static int dom_load_binary(struct linux_binprm *bprm)
+     c->dom_exchange_bytes = im.exchange;
+     c->dom_exchange = dom_reserve(im.exchange, im.exchange, PROT_READ | PROT_WRITE);
+     if (IS_ERR_VALUE(stack) || IS_ERR_VALUE(startup) || IS_ERR_VALUE(c->dom_meta) ||
+-        IS_ERR_VALUE(c->dom_exchange)) { rc = -ENOMEM; goto out; }
++        IS_ERR_VALUE(c->dom_exchange)) { rc = -ENOMEM; { fail_line = __LINE__; goto out; } }
+     if (copy_to_user((void __user *)startup, block, ((struct dom_launch_header *)block)->bytes)) {
+-        rc = -EFAULT; goto out;
++        rc = -EFAULT; { fail_line = __LINE__; goto out; }
+     }
+     mutex_lock(&sublet_lock);
+     /* One block per region. The image's block covers text and data with its cursor at the
+      * base: a data reference for the program's globals, not a code capability. The processor
+      * checks no fetch, and the page table keeps the text executable and never writable. */
+-    rc = dom_grant(c, base, im.bytes, 3, base, im.text.p_memsz);
+-    if (!rc) rc = dom_grant(c, stack, im.stack, 2, stack + im.stack, 0);
+-    if (!rc) rc = dom_grant(c, c->dom_meta, DOM_META_BYTES, 10, c->dom_meta, 0);
+-    if (!rc) rc = dom_grant(c, c->dom_exchange, im.exchange, 11, c->dom_exchange, 0);
+-    if (!rc) rc = dom_grant(c, startup, DOM_LAUNCH_BYTES, 12, startup, 0);
++    rc = dom_grant(c, base, im.bytes, 3, base, im.text.p_memsz, slots);
++    if (!rc) rc = dom_grant(c, stack, im.stack, 2, stack + im.stack, 0, slots);
++    if (!rc) rc = dom_grant(c, c->dom_meta, DOM_META_BYTES, 10, c->dom_meta, 0, slots);
++    if (!rc) rc = dom_grant(c, c->dom_exchange, im.exchange, 11, c->dom_exchange, 0, slots);
++    if (!rc) rc = dom_grant(c, startup, DOM_LAUNCH_BYTES, 12, startup, 0, slots);
+     if (!rc) {
+         u64 inherited[2] = {0, 0};
+         unsigned long irqflags;
+@@ -305,21 +363,33 @@ static int dom_load_binary(struct linux_binprm *bprm)
+                         inherited, sizeof(inherited));
+     }
+     mutex_unlock(&sublet_lock);
+-    if (rc) goto out;
++    if (rc) { fail_line = __LINE__; goto out; }
+     WRITE_ONCE(dom_last_base, base);
+-    /* Plan v5 step 3 adds the trap entry and step 4 binds the context to the mm and enters
+-     * the program at base + entry. Until then nothing may return to the image: an ordinary
+-     * return would run it as an unprotected program. */
+-    pr_info("sublet: image ready at 0x%lx, entry 0x%lx: no protected entry yet, refused\n",
+-            base, base + (unsigned long)im.entry);
++    current->mm->start_code = base;
++    current->mm->end_code = base + im.text.p_memsz;
++    current->mm->start_data = base + im.text.p_memsz;
++    current->mm->end_data = base + im.text.p_memsz + im.data.p_memsz;
++    current->mm->start_stack = bprm->p;
++#ifdef CONFIG_RISCV_CAPSTONE_TRAP
++    rc = dom_enter(c, bprm, base + (unsigned long)im.entry, slots);
++    if (!rc)
++        c = NULL;   /* the mm owns the context now: riscv_capstone_release ends it */
++#else
++    /* Without the trap route nothing may return to the image: an ordinary return would run
++     * it as an unprotected program. */
++    pr_info("sublet: image ready at 0x%lx: no protected entry in this kernel, refused\n", base);
+     rc = -ENOEXEC;
++#endif
+ out:
+     if (c) dom_context_destroy(c);
+     kvfree(block); kfree(tail);
+     /* Linux 6.1's ordinary post-PONR SIGSEGV is ptrace-suppressible. Never let a failure
+      * after the point of no return recover scalar execution. */
+-    if (rc && bprm->point_of_no_return)
++    if (rc && bprm->point_of_no_return) {
++        pr_info("sublet: %s[%d]: load failed after the point of no return: %d (line %d)\n",
++                current->comm, task_pid_nr(current), rc, fail_line);
+         force_exit_sig(SIGSEGV);
++    }
+     return rc;
+ }
+ static struct linux_binfmt capstone_dom = {
+--- a/arch/riscv/kernel/sublet/sublet.c
++++ b/arch/riscv/kernel/sublet/sublet.c
+@@ -25,7 +25,7 @@
+ static bool one_inode_per_file(struct file *file)
+ {
+ 	static const char *const fs[] = {"tmpfs", "ext2", "ext3", "ext4", "btrfs",
+-					 "xfs", "erofs", "squashfs"};
++					 "xfs", "erofs", "squashfs", "rootfs", "ramfs"};
+ 	const char *name = file_inode(file)->i_sb->s_type->name;
+ 
+ 	for (unsigned int i = 0; i < ARRAY_SIZE(fs); ++i)
+--- a/arch/riscv/kernel/sublet_trap.c
++++ b/arch/riscv/kernel/sublet_trap.c
+@@ -132,14 +132,18 @@ asmlinkage long sublet_test_enter(struct pt_regs *regs)
+ 
+ /*
+  * The dispatch stub. Until plan v5 step 5 binds the system calls, a protected program may
+- * call only the calls that take no pointer: the Linux number in a7, the result in a0 through
+- * the integer helper. Every other call returns ENOSYS.
++ * call only the calls that take no pointer: the Linux number in a7, or in a6 with the libc's
++ * selector in a7, the result in a0 through the integer helper. Every other call returns
++ * ENOSYS, so a protected program can map nothing executable outside its image text.
+  */
++#define SUBLET_SELECTOR_NATIVE 0x43534e31	/* NS_SERVICE_NATIVE: the number in a6 */
++
+ asmlinkage void sublet_syscall(struct pt_regs *regs)
+ {
++	unsigned long nr = regs->a7 == SUBLET_SELECTOR_NATIVE ? regs->a6 : regs->a7;
+ 	long ret;
+ 
+-	switch (regs->a7) {
++	switch (nr) {
+ 	case __NR_getpid:
+ 		ret = task_tgid_vnr(current);
+ 		break;
+@@ -167,7 +171,8 @@ asmlinkage void sublet_syscall(struct pt_regs *regs)
+ 
+ /*
+  * Causes 24 to 30. From U: cause 30 asks for a table slot, which ensure_nodes grows; every
+- * other cause kills the program with SIGSEGV and one fault line. From S: the exception table
++ * other cause kills only that program, with SIGSEGV and one fault line, and the machine runs
++ * on. From S: the exception table
+  * of the routine for user memory turns the fault into EFAULT; without an entry the kernel
+  * stops.
+  */
+@@ -180,8 +185,16 @@ asmlinkage __visible void do_trap_sublet(struct pt_regs *regs)
+ 
+ 		if (cause == 30 && c && !sublet_grow(c))
+ 			return;
+-		pr_info("sublet: fault cause=%lu pc=0x%lx address=0x%lx pid=%d comm=%s\n",
+-			cause, regs->epc, regs->badaddr, task_pid_nr(current), current->comm);
++#ifdef SUBLET_MUTANT_PANIC_ON_U_FAULT
++		panic("sublet: fault cause=%lu from U\n", cause);
++#endif
++		/* One line per fault, read by the evaluation harness: the first fields keep their
++		 * order, and the code range turns pc and ra into offsets in the image. */
++		pr_info("sublet: fault cause=%lu pc=0x%lx address=0x%lx pid=%d comm=%s ra=0x%lx fp=0x%lx entry=0x%lx code=0x%lx-0x%lx\n",
++			cause, regs->epc, regs->badaddr, task_pid_nr(current), current->comm,
++			regs->ra, regs->s0, c ? c->dom_entry : 0UL,
++			current->mm ? current->mm->start_code : 0UL,
++			current->mm ? current->mm->end_code : 0UL);
+ 		force_sig_fault(SIGSEGV, SEGV_ACCERR, (void __user *)regs->badaddr);
+ 		return;
+ 	}
+--- a/arch/riscv/mm/sublet-table.c
++++ b/arch/riscv/mm/sublet-table.c
+@@ -21,6 +21,9 @@
+ #include <asm/pgtable.h>
+ #include <asm/sublet.h>
+ #include "vm-abi.h"
++#ifdef CONFIG_RISCV_CAPSTONE_TRAP
++#include <asm/sublet-test.h>
++#endif
+ #undef MODULE_PARAM_PREFIX
+ #define MODULE_PARAM_PREFIX "sublet."
+ /* The 63-bit capability, id, record and table formats (sublet-format.h) and the paged table
+@@ -65,12 +68,23 @@ module_param(node_initial_pages, ulong, 0444);
+ module_param(node_batch_pages, ulong, 0444);
+ module_param(node_max_pages, ulong, 0444);
+ 
++/* Live contexts and the pages their tables hold, for the exec-and-exit test. */
++static unsigned long live_contexts, table_pages;
++module_param(live_contexts, ulong, 0444);
++module_param(table_pages, ulong, 0444);
++
+ static unsigned long node_capacity(const struct sublet_context *c)
+ { return sublet_table_capacity(c->table); }
+ static unsigned long node_available(const struct sublet_context *c)
+ { return sublet_table_available(c->table); }
+ static void node_free_table(struct sublet_context *c)
+ {
++#ifdef SUBLET_MUTANT_SKIP_TABLE_FREE
++    c->table = NULL;
++    return;
++#endif
++    table_pages -= c->node_bytes / PAGE_SIZE;
++    c->node_bytes = 0;
+     sublet_table_free(c->table);
+     c->table = NULL;
+ }
+@@ -101,6 +115,7 @@ static int ensure_nodes(struct sublet_context *c, unsigned long required)
+     if (!required || required > CV_ID_RECORDS_MAX) return -ENOMEM;
+     error = sublet_table_grow(c->table, required, node_batch_pages, node_max_pages ?: CV_ID_PAGES_MAX, &pages);
+     c->node_bytes += pages * PAGE_SIZE;
++    table_pages += pages;
+     if (node_capacity(c) != before) {
+         ++c->node_growths;
+         ++table_growths;
+@@ -549,6 +564,7 @@ int sublet_context_create(struct sublet_context **out)
+     c->table_pa = virt_to_phys(c->table);
+     if (sublet_table_grow(c->table, 1, node_initial_pages, node_initial_pages, &pages)) goto fail;
+     c->node_bytes = (pages + 1) * PAGE_SIZE;
++    table_pages += pages + 1;
+     error = -EOPNOTSUPP;
+     if (node_available(c) != node_capacity(c) - CV_TABLE_FIRST_SLOT) goto fail;
+     error = root_create(c);
+@@ -564,6 +580,7 @@ int sublet_context_create(struct sublet_context **out)
+             goto fail;
+         }
+     list_add(&c->link, &contexts);
++    ++live_contexts;
+     mutex_unlock(&sublet_lock);
+     *out = c;
+     return 0;
+@@ -580,6 +597,7 @@ void sublet_context_destroy(struct sublet_context *c)
+ {
+     mutex_lock(&sublet_lock);
+     list_del(&c->link);
++    --live_contexts;
+     for (struct rb_node *n = rb_first(&c->arenas), *next; n; n = next) {
+         struct arena *a = rb_entry(n, struct arena, node);
+         next = rb_next(n);
+--- a/kernel/fork.c
++++ b/kernel/fork.c
+@@ -1400,6 +1400,14 @@ struct mm_struct *mm_access(struct task_struct *task, unsigned int mode)
+ 		return ERR_PTR(err);
+ 
+ 	mm = get_task_mm(task);
++#ifdef CONFIG_RISCV_CAPSTONE_TASK
++	/* A protected program's memory is reached only through its references. */
++	if (mm && mm->context.capstone_marked) {
++		mmput(mm);
++		up_read(&task->signal->exec_update_lock);
++		return ERR_PTR(-EACCES);
++	}
++#endif
+ 	if (mm && mm != current->mm &&
+ 			!ptrace_may_access(task, mode)) {
+ 		mmput(mm);
