@@ -3740,3 +3740,25 @@ Temporal x264 on F already runs on board 3 (Addendum 112). mcf and gcc temporal 
 - spatial: each row within -3 % .. +0.5 % of its temporal reading on F. On the batch, gcc's temporal increment was
   +0.6 %.
 - specdiff PASS everywhere.
+
+## Addendum 114 (2026-11-14 17:45, before the Capstone gp pair reads): the gp adoption rule is amended to the table's perl row
+
+**New twin evidence (compiler lane).** On the full perl test (makerand + test.pl), both arms have specdiff 2/2, outputs
+are identical within each pair, kernel images-a0ed, and the count is user instructions:
+- Capstone GPR2 against GPC: -2.78 %;
+- riscv-base RVGP against RVB: -2.38 %. Caveat: the baseline image is the RVBq stage, not RVF3.
+- The Capstone/riscv-base user ratio moves 1.1261 → 1.1214, i.e. -0.4 %.
+
+On makerand alone the twins gave -12.7 % against -8.7 %. So makerand overstates gp's effect on the table's perl row,
+which is the full test.
+
+**Amendment, made before the Capstone silicon pair (board 1, chains as-gpc-b1/as-gpr2-b1) has run.** Addendum 110's
+rule used perl makerand. The table's perl row is the full test, so:
+- If gcc train01's silicon ratio worsens under gp, gp is NOT adopted. The twins give full perl about -0.4 % in ratio,
+  which cannot offset it.
+- If gcc's ratio improves or stays within ±0.3 %, a full-perl silicon pair (GPC against GPR2 on F, kit bkit80, about
+  10 board-hours) runs before the decision, and the rule is applied to gcc and full perl.
+- riscv-base RVGP's silicon readings stand as recorded: perl makerand -6.2 %, gcc -0.60 %.
+
+This changes a pre-registered rule after seeing twin data. That is stated here, and the reason is that the original rule
+referenced a sub-run, not the reported row.
