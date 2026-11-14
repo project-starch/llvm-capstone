@@ -22,6 +22,8 @@
 # kernel's code= word, else the loader's dom_last_base. The record is the newest one that names
 # the child's pid (a fault of another thread of the child names that thread's id and prints no line). As before, the line goes to stderr when stderr is a terminal or
 # CAPSTONE_EXEC_DIAGNOSTICS is set, and to the file CAPSTONE_FAULT_RECORD names when that is set.
+# A signal death with no Sublet record (Linux's own trap path: an illegal instruction, a page
+# fault) gets a diagnostic line `capstone-exec: unhandled signal=...` on stderr only; see unhandled().
 #
 # The child runs as an asynchronous command, so it starts with SIGINT and SIGQUIT ignored.
 # HUP, INT, TERM, USR1, USR2 and ALRM sent to this script go on to the child.
@@ -101,7 +103,7 @@ run() {
 
     # One read of the kernel log serves both reports: each process start costs a second or more
     # under QEMU, so the reports parse in the shell and start nothing else.
-    log=$(dmesg | grep -E "$RECORDS|sublet: kernel fault |sublet: .*\[$child\] enters ")
+    log=$(dmesg | grep -E "$RECORDS|sublet: kernel fault |sublet: .*\[$child\] enters |\[$child\]: unhandled signal |\] epc : |\] status: ")
     kernel_faults "$child" "$image"
     if [ $rc -le 128 ] || [ $rc -gt 192 ]; then
         exit $rc
@@ -118,9 +120,7 @@ emit() {
     if [ -n "$CAPSTONE_FAULT_RECORD" ]; then
         echo "$1" >> "$CAPSTONE_FAULT_RECORD"
     fi
-    if [ -t 2 ] || [ -n "$CAPSTONE_EXEC_DIAGNOSTICS" ]; then
-        echo "$1" >&2
-    fi
+    emit_stderr "$1"
 }
 
 # kernel_faults PID IMAGE: one line per kernel access through the child's reference that faulted,
@@ -161,7 +161,10 @@ report() {
     done <<EOF_LOG
 $log
 EOF_LOG
-    [ -n "$record" ] || return 0
+    if [ -z "$record" ]; then
+        unhandled "$1" "$2"
+        return 0
+    fi
 
     base=0
     read -r base < "$PARAMETERS/dom_last_base" 2>/dev/null
@@ -183,6 +186,62 @@ EOF_LOG
         esac
     done
     emit "capstone-exec: domain fault cause=$cause pc=$pc address=$address ra=$ra fp=$fp entry=$entry code=$code image=$2"
+}
+
+# unhandled PID IMAGE: a signal death that the kernel logged with no Sublet record. A trap outside
+# the Sublet causes 24 to 30 (an illegal instruction, a page fault) takes Linux's own path, which
+# logs, when the program has no handler for the signal,
+#   COMM[PID]: unhandled signal S code 0xC at 0xADDR in ...
+#   epc : PC ra : RA sp : ...
+#   status: ... badaddr: ... cause: CAUSE
+# and the script prints it as
+#   capstone-exec: unhandled signal=S code=0xC cause=N pc=0x.. address=0x.. ra=0x.. image=IMAGE
+# The line is a diagnostic: it goes to stderr only (not to CAPSTONE_FAULT_RECORD), and the
+# judges, which read `domain fault` lines, do not count it.
+unhandled() {
+    found= signal= code= address= pc= ra= cause=
+    while IFS= read -r line; do
+        case $line in
+            *"[$1]: unhandled signal "*)
+                found=1 pc= ra= cause=
+                signal_words ${line#*"[$1]: unhandled signal "} ;;
+            *"] epc : "*)
+                [ -n "$found" ] && [ -z "$pc" ] || continue
+                epc_words ${line#*"] epc : "} ;;
+            *"] status: "*" cause: "*)
+                [ -n "$found" ] && [ -z "$cause" ] || continue
+                cause=${line##* cause: } ;;
+        esac
+    done <<EOF_LOG
+$log
+EOF_LOG
+    [ -n "$found" ] || return 0
+    emit_stderr "capstone-exec: unhandled signal=$signal code=$code cause=$(hex_dec "$cause") pc=$(hex "$pc") address=$(hex "$address") ra=$(hex "$ra") image=$2"
+}
+
+# signal_words S code 0xC at 0xADDR ...; epc_words PC ra : RA ...
+signal_words() { signal=$1 code=$3 address=$5; }
+epc_words() { pc=$1 ra=$4; }
+
+emit_stderr() {
+    if [ -t 2 ] || [ -n "$CAPSTONE_EXEC_DIAGNOSTICS" ]; then
+        echo "$1" >&2
+    fi
+}
+
+# hex WORD: Linux's zero-padded register word (with or without 0x) as 0x.. without the padding; empty stays ?.
+hex() {
+    case ${1#0x} in
+        '') echo '?' ;;
+        *[!0-9a-fA-F]*) echo '?' ;;
+        *) printf '0x%x' "0x${1#0x}" ;;
+    esac
+}
+hex_dec() {
+    case ${1#0x} in
+        ''|*[!0-9a-fA-F]*) echo '?' ;;
+        *) printf '%d' "0x${1#0x}" ;;
+    esac
 }
 
 main "$@"

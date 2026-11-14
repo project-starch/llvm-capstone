@@ -6,6 +6,9 @@
 #   4. --stats prints the numeric parameters as JSON and skips the others.
 #   5. A kernel access fault of the child: the kernel-fault line, and the child's own exit status 0.
 #      Control: another pid's kernel fault prints nothing.
+#   6. A death by SIGILL that Linux logged as an unhandled signal, with no Sublet record: the
+#      diagnostic line on stderr, nothing in CAPSTONE_FAULT_RECORD, no domain fault line, exit 132.
+#      Control: another pid's unhandled signal is ignored.
 set -u
 here=$(cd "$(dirname "$0")" && pwd)
 vexec=$here/../../trap-vexec.sh
@@ -31,6 +34,21 @@ echo "[ 2.1] sublet: kernel fault cause=28 address=0x1 nr=64 pid=999999 comm=oth
 exit 0
 IMG
 chmod +x "$work/kfault.dom"
+cat > "$work/ill.dom" <<IMG
+#!/bin/sh
+cat >> "$work/log" <<LOG
+[ 3.0] other[999999]: unhandled signal 11 code 0x1 at 0x0000000000000008 in other[10000+1000]
+[ 3.0] epc : 0000000000010010 ra : 0000000000010020 sp : 0000003ff0000000
+[ 3.0] status: 0000000200004020 badaddr: 0000000000000008 cause: 000000000000000d
+[ 3.1] ill.dom[\$\$]: unhandled signal 4 code 0x1 at 0x0000003ff7f4fadc in ill.dom[3ff7e00000+174000]
+[ 3.1] CPU: 0 PID: \$\$ Comm: ill.dom Not tainted 6.1.0 #46
+[ 3.1] epc : 0000003ff7f4fadc ra : 0000003ff7f3fac4 sp : 0000003ff7dff9e0
+[ 3.1]  gp : 0000003ff7e00000 tp : 0000003ff7cff000 t0 : 0000000000000001
+[ 3.1] status: 0000000200004020 badaddr: 00000000c0001073 cause: 0000000000000002
+LOG
+kill -ILL \$\$
+IMG
+chmod +x "$work/ill.dom"
 chmod +x "$work/bin/dmesg" "$work/fault.dom" "$work/three.dom"
 fail=0
 export PATH="$work/bin:$PATH" SUBLET_PARAMETERS="$work/sublet/parameters" CAPSTONE_EXEC_DIAGNOSTICS=1
@@ -58,4 +76,10 @@ out=$(cd "$work" && sh "$vexec" kfault.dom 2>&1)
 rc=$?
 want="capstone-exec: kernel fault cause=25 address=0x4000002000 nr=63 image=kfault.dom"
 if [ "$rc" = 0 ] && [ "$out" = "$want" ]; then echo "PASS kernel fault line, exit 0, other pid ignored"; else echo "FAIL kernel fault: rc=$rc out=$out"; fail=1; fi
+
+rm -f "$work/record"
+out=$(cd "$work" && CAPSTONE_FAULT_RECORD="$work/record" sh "$vexec" ill.dom 2>&1 | grep "capstone-exec")
+rc=$(cd "$work" && sh "$vexec" ill.dom > /dev/null 2>&1; echo $?)
+want="capstone-exec: unhandled signal=4 code=0x1 cause=2 pc=0x3ff7f4fadc address=0x3ff7f4fadc ra=0x3ff7f3fac4 image=./ill.dom"
+if [ "$rc" = 132 ] && [ "$out" = "$want" ] && [ ! -s "$work/record" ]; then echo "PASS unhandled signal line, no record, SIGILL"; else echo "FAIL unhandled: rc=$rc out=$out record=$(cat "$work/record" 2>/dev/null)"; fail=1; fi
 exit $fail
