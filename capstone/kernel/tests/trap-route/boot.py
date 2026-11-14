@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 """boot.py QEMU FW IMAGE INITRAMFS LOG SSTC(on|off): boot the trap-route test kernel on QEMU virt
-(one hart) with the Sublet trap-route CPU, collect the TRAPTEST lines and a panic, print them."""
-import sys, pexpect
+(one hart) with the Sublet trap-route CPU, $TRAPTEST_APPEND added to the command line, collect the TRAPTEST lines and a panic, print them."""
+import os, sys, pexpect
 q, fw, image, initrd, log, sstc = sys.argv[1:7]
 cpu = ('rv64,sstc=%s,x-capstone-trap-route=true,x-capstone-supervisor-refs=true,'
        'x-capstone-raw-moves=true' % ('true' if sstc == 'on' else 'false'))
 cmd = [q, '-M', 'virt', '-m', '512M', '-smp', '1', '-nographic', '-cpu', cpu, '-bios', fw,
        '-kernel', image, '-initrd', initrd,
-       '-append', 'console=ttyS0 earlycon=sbi rdinit=/init panic=-1 sublet.dom_binfmt=1']
+       '-append', 'console=ttyS0 earlycon=sbi rdinit=/init panic=-1 sublet.dom_binfmt=1 ' +
+       os.environ.get('TRAPTEST_APPEND', '')]
 out = open(log, 'w')
 out.write('# ' + ' '.join(cmd) + '\n')
 p = pexpect.spawn(cmd[0], cmd[1:], encoding='utf-8', codec_errors='replace', timeout=300)

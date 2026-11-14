@@ -30,3 +30,36 @@
  	CALL_EMBEDDED(execve),
  	/* Mappings: the address arguments are pointers (mremap's new_addr too). */
  	CALL_EXTRA(mmap, 0x01), CALL_EXTRA(munmap, 0x01), CALL_EXTRA(mprotect, 0x01),
+--- a/arch/riscv/kernel/sublet_trap.c
++++ b/arch/riscv/kernel/sublet_trap.c
+@@ -23,6 +23,9 @@
+ #include <linux/sublet-mappings.h>
+ 
+ #define SUBLET_ADDR_MASK ((1UL << 38) - 1)
++#include <linux/moduleparam.h>
++#undef MODULE_PARAM_PREFIX
++#define MODULE_PARAM_PREFIX "sublet." 
+ 
+ static bool sublet_in_uaccess(unsigned long pc)
+ {
+@@ -148,6 +151,10 @@ asmlinkage long sublet_test_enter(struct pt_regs *regs)
+  * the integer helper. Every other call passes the binder of plan v5 step 5. A mapping call
+  * whose result is a reference (sublet_mapping_return) keeps it in a0.
+  */
++/* sublet.trace_errors=1: one line for every failed call of a protected program. */
++static bool trace_errors;
++module_param(trace_errors, bool, 0644);
++
+ asmlinkage void sublet_syscall(struct pt_regs *regs)
+ {
+ 	unsigned long nr = regs->a7;
+@@ -177,6 +184,9 @@ asmlinkage void sublet_syscall(struct pt_regs *regs)
+ 		/* Every other call passes the binder (plan v5 step 5). */
+ 		ret = sublet_syscall_bound(regs, regs->a7);
+ 	}
++	if (READ_ONCE(trace_errors) && ret < 0 && ret > -4096)
++		pr_info("sublet: %s[%d]: call %lu returned %ld\n", current->comm,
++			task_pid_nr(current), nr, ret);
+ 	if (current->thread.sublet_result_ref) {
+ 		current->thread.sublet_result_ref = false;
+ 		if ((unsigned long)ret == regs->a0)
