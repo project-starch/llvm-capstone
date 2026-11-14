@@ -3762,3 +3762,45 @@ rule used perl makerand. The table's perl row is the full test, so:
 
 This changes a pre-registered rule after seeing twin data. That is stated here, and the reason is that the original rule
 referenced a sub-run, not the reported row.
+
+## Addendum 115 (2026-11-14 19:20, before it runs): F's imagick and nab; config B's counters; the node-table pool A/B on full perl
+
+**Readings on F** (bkit75, board 2, FRCDKMS, specdiff PASS):
+- imagick 12.58 s (batch 12.76: -1.4 %), ratio 1.135;
+- nab 695.34 s (batch 714.92: -2.7 %), ratio 1.023.
+Both lie inside Addendum 113's bands.
+
+**Config B** (old TWC + tag-path counters, bkit77, board 2), FRCDKMS. The run times match the batch's (mcf -0.6 %, gcc
++0.07 %, cross-board), so the tree control holds.
+
+| row | marked-page share of L1D misses | TWC miss rate | tag reads | tag writes | page fills | tag-phase cycles |
+|---|---|---|---|---|---|---|
+| mcf | 0.90 | 0.479 | 1.616 G | 0.818 G | 121 k | 11.0 G (6.2 % of run_cycles) |
+| gcc | 0.913 | 0.465 | 156.7 M | **1.292 G** | 46.5 k | 17.24 G (29.4 %) |
+
+- Against Addendum 106's bands: marked share ≥ 0.5 holds; TWC miss ≥ 0.5 misses narrowly (0.479 / 0.465); mcf's tag
+  phase lies inside 3-30 %.
+- The rtl lane reads in source that ev28 stops counting once the tag AR is accepted, while the load's return waits for
+  the tag beat behind the single D$ MSHR. So ev28 is a lower bound on the read side.
+- gcc's tag cost is the store side (tag writes). The sim twc-reach-st arm shows that only reach and merge together free
+  the repeat stores.
+
+**Node-table pool** (compiler lane, llvm-capstone node-table-pool d693f2da8e88, based on the board module
+a0ed3250249b).
+- **What it does:** released flat lifetime tables are kept, zeroed over [0, next) with the header reset, and reused.
+  There is no per-exec cma_alloc+memset+cma_release of node_flat_records × 16 B.
+- **Directed test:** the pool-off, pool and verify arms pass, and both mutants are caught on 7 of 7 reuses.
+- **Twin at 262144** (perl test-sw, 2/2 both arms, 16 outputs identical): kernel -773 M (-2.97 %), user unchanged.
+  With verify on: 317 hits, 0 violations.
+- **Kit bkit81:** bkit80 with kernel tree linux-board-k2n-native-hpm2pool (hpm2 with only capstone_vm.c replaced,
+  base blob checked; tree checksums pass on it and reject hpm2) and capstone_vm.node_table_pool=4.
+
+**Run, board 3, after its temporal x264** (chain ax-b3; stage-check passes; the dry run reaches the boot): temporal
+FRCDKMS full perl on F with the pool (bkit81). It pairs with aw-tp (the same image and bitstream, bkit80, no pool, on
+board 2), so the one variable is the pool. The pair is cross-board, with about 0.9 % spread.
+
+**Predictions:**
+- specdiff 2/2;
+- the smoke passes on the new module (its first silicon boot);
+- full perl -0.5 % .. -3 % against aw-tp. Kernel memset and CMA work is about 0.7 % of instructions, but memory-bound.
+If it wins beyond the cross-board spread, the pool joins the final config, and spatial full perl reruns on it.
