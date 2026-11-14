@@ -264,8 +264,13 @@ and board-run.sh refuses a different one.
 - Formation is 6.0 % of perl user instructions, and 1.3 % of that is redundant.
 - Fix 1 (relaxable small data under gp) only pays with gp, and gp was rejected. It is parked.
 - gcc's gp loss is explained: 25 KB of small data against gp's 4 KiB reach, and min-data-size=17 un-merges globals.
-- Fix 2 (spill instead of rematerialize) or PCC-relative jump tables wait on an RTL answer: can PCC be used for data
-  reads? If that needs new authority it is the lead's call.
+- **RETRACTED (14 Nov, compiler lane): the mechanism "the register allocator rematerializes the capability at each
+  use".** MIR dumps of Perl_yyparse before and after register allocation have the same formation counts: 84
+  PseudoCapGlobalBase, 27 SHRINKTO, 225 SHRINK, 54 AUIPC (perf/licm/mir/). So the in-loop re-formation exists before
+  RA, and MachineLICM did not hoist it. The mechanism was inferred from the final code's shape. Fix 2 ("make it
+  non-rematerializable") is void with it. The formation census and its sizing stand. Next is a measured look at why
+  MachineLICM declines in these loops when it hoists in small tests.
+- PCC-relative jump tables are not possible in today's ISA (see "Waiting on the lead").
 
 ## 9. The nested-allocator workloads (lane `nested`)
 
@@ -383,8 +388,8 @@ capability instruction (14 Nov, compiler lane via rtl-oracle).
   (load_store_unit.sv:1352-1354), so no instruction can read data through PCC.
 - What it would buy: jump tables and read-only tables could skip the scc gp + shrink formation. The prize is ~0.37 G
   on perl in S_regmatch's jump table alone, plus the bison tables.
-- It is an ISA change, so it is not pursued without the lead's decision. The in-model alternative (fix 2: spill
-  instead of rematerialize) is uncertain on silicon.
+- It is an ISA change, so it is not pursued without the lead's decision. The in-model route is a MachineLICM fix,
+  still being diagnosed. The "spill instead of rematerialize" fix 2 was retracted with its mechanism.
 
 ---
 
