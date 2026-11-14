@@ -3565,3 +3565,30 @@ Stubbed dry runs reach every boot. ao-b1's firmware is wt-wrap-hpmtag; the other
   - perl makerand -1 to +1 %.
 - ao-b1: ev24 (tag reads) on F at most half of B's on the same row; ev26 (tag writes) lower than B's.
 - specdiff PASS everywhere.
+
+## Addendum 108 (2026-11-14 12:10, before it runs): the first spatial row, gcc train01 on the batch bitstream
+
+**Images: spatial arm FRCDKMSsp** (compiler lane).
+- **SDK:** perf/memset-spatial, the same committed source (beb1bbabe26a) and build script as perf/memset, with the
+  single option -DCAPSTONE_HEAP_LIFETIMES=OFF.
+- **What differs, by member hash:** 4 libc members (mallocng aligned_alloc, free, malloc, realloc) and 1 runtime member
+  (malloc-mapping.c.obj). The musl source tree is identical. The control, the same tool on memset against memset-off,
+  reports exactly that switch's object.
+- **Benchmark objects:** byte-identical to temporal FRCDKMS in all 8 rows; capstone-cc and extra-flags are identical.
+- **gcc image:** cpugcc_r b96bd3fa829b0532.
+- **Twin against temporal FRCDKMS** (3ed5c0be9791a51f): outputs identical (5 files), specdiff 1/1. User +0.01 %,
+  kernel +0.02 %, escapes identical.
+- **Per call:** malloc +2.9 instructions (CSHRINK sequence instead of one CDERIVE); free -2.0 (no CREVOKE). The mapping,
+  unmapping and realloc paths are unchanged to the instruction.
+
+**Run, board 1:**
+- **Chain:** aq-b1 (batch a47b588a1, bkit73), after ap-b1 (temporal imagick, nab).
+- **Row:** spatial gcc train01. The temporal reading on the same bitstream, board and kit is FRCDKMS gcc 2,446.30 s.
+- **Re-chained:** Addendum 107's F chains (an-b1, ao-b1) were waiting, had not started, and their output directories
+  were empty and removed. They are relaunched behind aq-b1 with their lists unchanged.
+- **Dry run:** a stubbed dry run reaches the boot.
+
+**Prediction:** spatial gcc within -3 % .. +0.5 % of temporal's 2,446.30 s.
+- The twin shows no instruction saving.
+- The silicon difference is the cost of CDERIVE/CREVOKE and node work, which the twin cannot see.
+- specdiff PASS.
