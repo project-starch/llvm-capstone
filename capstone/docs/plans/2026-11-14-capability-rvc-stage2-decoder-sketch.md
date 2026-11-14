@@ -80,9 +80,25 @@ slots.** Everything else is 3-bit registers (x8-x15) or a single operand.
 - **Option B, a decode mode.** Keep D's meaning by default and reinterpret the four slots only when a per-image mode bit
   is set (CHERI's capability-mode pattern). A decoder input driven by a CSR needs a flushing CSR write. The twin and the
   compiler must agree on the bit, and images mix only at a domain switch. This is more RTL and more ABI, and no FP cost.
-- **The 3-bit register forms are an open question.** Whether c.movc / c.scc / c.cincoffset limited to x8-x15 capture
-  shapes 2, 5 and 6 depends on register allocation; it needs the census by register class (compiler lane). The
-  HINT-space reuse for c.cincoffset16sp conflicts with any software that emits C.LUI x0 as a hint (none known).
+- **The 3-bit register forms, measured (compiler lane, 2026-11-14).** The census by register class, operands limited
+  to x8-x15. Source and decode are as for the FP census; gcc train01 is the whole run, perl is window 0 (makerand)
+  (perf/cclever/regclass.py). Control: the shape totals reproduce the table above to within 0.04 points.
+
+  | shape | gcc: fits / executed | gcc: fits, % of user | perl: fits / executed | perl: fits, % of user |
+  |---|---|---|---|---|
+  | 2: c.movc rd', rs' | 50.7 % | 2.33 % (of 4.60) | 90.3 % | 1.18 % (of 1.30) |
+  | 5: c.scc rd', gp, rs' | 67.3 % | 1.22 % (of 1.81) | 88.0 % | 6.75 % (of 7.67) |
+  | 6: c.cincoffset rd', rs' (rd == rs1) | 67.6 % | 0.61 % (of 0.90) | 99.9 % | 0.74 % (of 0.74) |
+
+  - Together the three 3-bit forms capture 4.16 % of gcc's user instructions (of the 7.31 % these shapes cover) and
+    8.67 % of perl makerand's (of 9.71 %).
+  - gcc's misses: movc rs out 28.6 %, rd out 15.5 %, both out 5.1 %; scc rd out 21.3 %. That is today's
+    allocation, with no hint steering these operands into x8-x15; what a register-class preference would recover
+    is not measured.
+  - Three-address cincoffset (rd != rs1) is a further 2.2 % of gcc and has no 16-bit form here: a Q0 100 slot holds
+    only two 3-bit registers.
+  - The HINT-space reuse for c.cincoffset16sp conflicts with any software that emits C.LUI x0 as a hint (none
+    known).
 
 ## RTL constraints found while sketching (by reading, capstone-ariane a948e4134)
 
@@ -102,5 +118,5 @@ slots.** Everything else is 3-bit registers (x8-x15) or a single operand.
 
 ## Next
 
-The FP census is in (above). Still owed by the compiler lane: the register-class census for shapes 2, 5 and 6;
-then the lead picks A or B and the encodings. The decoder RTL and the twin follow in one change, after this bitstream.
+Both censuses are in (above): option A's FP cost, and what the 3-bit forms capture. The lead picks A or B and the
+encodings. The decoder RTL and the twin follow in one change, after this bitstream.
