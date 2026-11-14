@@ -3518,3 +3518,50 @@ A stubbed dry run reaches all three.
 - **gcc:** (ev24 + ev25) / ev2 in 0.2-0.9.
 - **Both:** run_cycles within ±0.3 % of the batch FRCDKMS readings on board 1 (cross-board, so ±1 %); specdiff PASS.
 - **If the hypothesis fails:** a small ev24 or ev28 would mean F's TWC cannot move mcf.
+
+## Addendum 107 (2026-11-14 11:30, before it runs): the three-arms table; batch FRCDKMS gcc; F on board 1
+
+**The lead's request (14 Nov):** measure the whole table on three arms: riscv-base (stock CVA6), Capstone temporal and
+Capstone spatial. The table lives at `results/2026-11-14-three-arms/README.md`.
+- riscv-base is complete and is not rerun.
+- Temporal's final configuration is the batch bitstream with FRCDKMS images. If F beats the batch on the problem
+  rows, F becomes the final configuration, and the README records the switch.
+- Spatial is the same bitstream and the same benchmark objects. Its SDK is built with CAPSTONE_HEAP_LIFETIMES=OFF, a
+  difference confined to the allocator objects: an allocation gets exact bounds under its mapping's node (CSHRINK)
+  instead of a CDERIVE child, and free does no CREVOKE. The compiler lane is building these images (arm FRCDKMSsp).
+  Each one's benchmark objects are byte-compared against FRCDKMS, and each is twinned.
+
+**Reading, the batch bitstream** (a47b588a1), FRCDKMS gcc train01: 2,446.30 s, specdiff PASS, against FRCDK on the
+batch 2,526.03 s: -3.2 %. That sits at the fast edge of Addendum 105's band. Ratio 1.420. run_cycles 58.58 G against
+60.56 G. Scoreboard-full time fell from 5.11 G to 1.68 G.
+
+**Bitstream F:** caplifive_ids55-native-tagcache-mlp-fpieee-hpmreplay-dynbypass3-dtlb64-shrinkfix-ic32k-r72-stcnoclaim-twc16k-merge-hpmtag_a948e4134.
+- **Content:** capstone-ariane a948e4134 = the batch plus a 16 K-entry tag-word cache (2 MB of reach) with
+  merge-on-tag-write, epoch validity in BRAM, one pre-muxed write port, and HPM events 24-28.
+- **Seal:** sealed by the board lane at 03:03:57Z; sha256 ec675c2be4ca42e8fad6a6e5a089e9a51928921c46fc32e693ad2f5516cd62a2,
+  recomputed locally.
+- **Build keys:** WNS -9.657; 0 routing errors; 0 loops; placed LUT 188,099; 117 BRAM tiles, with the adapter's arrays
+  in BRAM and LUTRAM 0.
+- **95-test sweep on this hash:** RVFI traces 92/92 identical to the batch's. Values are identical except the
+  exception counts of two parked tests (timing). Cycles differ in 14 tests, the one-off reset scrub, which the
+  scrub-skip probe confirmed.
+- **Fill-time window** (rtl and board lanes, with TB_XBAR_CUT_ALL, the FPGA's crossbar setting): reached on base and
+  F. As built, both are clean (12 untagged traps, no S-06), and the two-protection controls forge. Scope: one window
+  instance per design and one test shape. It is not a proof for every timing. R-74 stays OPEN.
+
+**Runs, board 1, in order after al-b1** (FRCDKMS mcf on the batch):
+- ap-b1 (batch, bkit73): FRCDKMS imagick, nab. These are temporal rows of the table.
+- an-b1 (F, bkit75 = bkit73 with only the bitstream changed): FRCDKMS mcf, gcc train01, perl makerand. Each pairs
+  with the same image on the batch; the one variable is the TWC.
+- ao-b1 (F, bkit76 = bkit75 with the tag-path firmware): FRCDKMS mcf, gcc train01. This is F's counters for the B/F
+  pair (Addendum 106).
+Stubbed dry runs reach every boot. ao-b1's firmware is wt-wrap-hpmtag; the other two use wt-wrap-hpm.
+
+**Predictions:**
+- ap-b1: imagick and nab within ±2 % of fdk/FR's 12.93 s and 716.18 s.
+- an-b1 against the batch, same images:
+  - mcf -2 to -20 %. The sign is the claim; the size is open, because B's counters have not read yet.
+  - gcc -1 to -8 %.
+  - perl makerand -1 to +1 %.
+- ao-b1: ev24 (tag reads) on F at most half of B's on the same row; ev26 (tag writes) lower than B's.
+- specdiff PASS everywhere.
