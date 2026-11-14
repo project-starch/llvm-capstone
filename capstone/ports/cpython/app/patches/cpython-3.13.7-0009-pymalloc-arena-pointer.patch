@@ -20,6 +20,13 @@ new arena, which is the first small allocation of all, would trap.
   capability. They serve POOL_ADDR, which finds the pool of every block freed,
   stringlib's fastsearch and pyarena. The compiler lowers them through
   llvm.ptrmask, which it can do since C-51.
+- The pool walks of _PyInterpreterState_GetAllocatedBlocks (sys.getallocatedblocks
+  and the leak count at interpreter exit) and _PyObject_DebugMallocStats step a
+  pool pointer that starts at the arena pointer aligned up to POOL_SIZE. Writing
+  the pool as arena_ptr + (base - address) instead let the compiler hoist
+  arena_ptr - address out of the loop: a cursor far below the arena, which the
+  compact bounds format cannot represent, so the tag was lost and the first pool
+  read faulted (cause 24) at every interpreter exit.
 - _PyMem_FreeDelayed and _PyObject_FreeDelayed free at once, without the
   uintptr_t round trip, where the GIL is not disabled; free_delayed already
   did exactly that there.
@@ -102,13 +109,23 @@ radix tree and never dereference it.
      assert(!((uintptr_t)ptr & 0x01));
      // We use 0 as the size since we don't have an easy way to know the
      // actual size.  If we are freeing many objects, the write sequence
-@@ -1558,7 +1570,8 @@
-         /* visit every pool in the arena */
-         assert(base <= (uintptr_t) allarenas[i].pool_address);
-         for (; base < (uintptr_t) allarenas[i].pool_address; base += POOL_SIZE) {
+@@ -1553,12 +1565,13 @@
+             continue;
+         }
+ 
+-        uintptr_t base = (uintptr_t)_Py_ALIGN_UP(allarenas[i].address, POOL_SIZE);
+-
+-        /* visit every pool in the arena */
+-        assert(base <= (uintptr_t) allarenas[i].pool_address);
+-        for (; base < (uintptr_t) allarenas[i].pool_address; base += POOL_SIZE) {
 -            poolp p = (poolp)base;
-+            poolp p = (poolp)(_Py_ARENA_PTR(&allarenas[i])
-+                              + (base - allarenas[i].address));
++        /* visit every pool in the arena, stepping a pointer from the
++           arena's own: no pointer is rebuilt from an address, and no
++           intermediate lies below the arena */
++        pymem_block *pool = _Py_ALIGN_UP(_Py_ARENA_PTR(&allarenas[i]), POOL_SIZE);
++        assert(pool <= allarenas[i].pool_address);
++        for (; pool < allarenas[i].pool_address; pool += POOL_SIZE) {
++            poolp p = (poolp)pool;
              n += p->ref.count;
          }
      }
@@ -149,13 +166,19 @@ radix tree and never dereference it.
      }
      // free the array containing pointers to all arenas
      PyMem_RawFree(allarenas);
-@@ -3431,7 +3447,8 @@
-         /* visit every pool in the arena */
+@@ -3428,10 +3444,12 @@
+             base += POOL_SIZE;
+         }
+ 
+-        /* visit every pool in the arena */
++        /* visit every pool in the arena, stepping a pointer from the
++           arena's own, as _PyInterpreterState_GetAllocatedBlocks does */
          assert(base <= (uintptr_t) allarenas[i].pool_address);
-         for (; base < (uintptr_t) allarenas[i].pool_address; base += POOL_SIZE) {
+-        for (; base < (uintptr_t) allarenas[i].pool_address; base += POOL_SIZE) {
 -            poolp p = (poolp)base;
-+            poolp p = (poolp)(_Py_ARENA_PTR(&allarenas[i])
-+                              + (base - allarenas[i].address));
++        pymem_block *pool = _Py_ALIGN_UP(_Py_ARENA_PTR(&allarenas[i]), POOL_SIZE);
++        for (; pool < allarenas[i].pool_address; pool += POOL_SIZE) {
++            poolp p = (poolp)pool;
              const uint sz = p->szidx;
              uint freeblocks;
  
