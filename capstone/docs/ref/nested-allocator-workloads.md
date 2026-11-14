@@ -140,9 +140,12 @@ These two boots used a private, measurement-only QEMU: `nested/qemu-nst` = qemu5
 | CREVOKE, successful / refused | 2 / 0 | 28,216 / 0 |
 | Nodes ended by CREVOKE | 2 | 28,219 |
 | Revoked subtree size: mean / max | 1 / 1 | **1.0001 / 3** (28,214 of size 1, 2 of size 2-3) |
-| Peak live records (all allocations minus all invalidations, whole boot) | 95 | 398 |
-| Peak table memory at 16 B per live record | 1.5 KB | **6.4 KB** (+4.8 KB) |
+| Peak live records (all allocations minus all invalidations, every context in the boot, including 86 that are not derives) | 95 | 398 |
+| Live-record memory at 16 B per record | 1.5 KB | **6.4 KB** (+4.8 KB) |
 
+- **Table memory.** On the native route the flat lifetime table is one fixed allocation of node_flat_records x 16 B
+  = 262,144 x 16 B = 4 MiB per context, whichever arm runs. Nothing grows. The +4.8 KB above is the memory the extra
+  live records occupy inside that table, not a change in its size.
 - **The protection itself.** Each memsys5 block or lookaside slot is a leaf: CREVOKE at its free ends one node.
   - The only larger subtrees are the pool and lookaside-generation teardowns at close, and they end at most 3 nodes,
     because by then almost every block has been freed.
@@ -204,3 +207,12 @@ If a control fails, the boot is VOID.
   runs the same code.
 - **Whole command (uptime span): +1 % to +4 %.** The kernel scan dominates both arms.
 - **Duration:** each command takes 1-2 min; the boot about 15-20 min in all.
+
+**What this boot cannot show.**
+- The kit's HPM set is hpm3..8 = events 1, 2, 4, 10, 22, 14. It does not include event 23 (verdict-cache miss replays),
+  so if the in-context cost reads above its band, this boot cannot attribute it. A follow-up boot would carry event 23.
+- No counter on this boot counts CDERIVE or CREVOKE. The evidence that the protected construct runs is image identity:
+  both `.strip.dom` files in the stage have the same sha256 as the twin's, where 28,226 CDERIVEs executed.
+
+The chain runs on board 1 as train PREREG Addendum 109 (spec-silicon 92b7b2662c97), which cites c3663f0362a1. The work
+dir is `spec/board/out-nat-batch-nested-st1-b1/b1-stage`.
