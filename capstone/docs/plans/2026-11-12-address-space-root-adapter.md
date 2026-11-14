@@ -1,5 +1,7 @@
 # Address-space root: adapter and libc plan
 
+Closed on 2026-11-14: the adapter is deleted (tag `pre-trap-route-2026-11-14`), and plan v5 ([2026-11-13-kernel-trap-entry.md](2026-11-13-kernel-trap-entry.md)) carries the work on.
+
 Status: plan of 2026-11-12 on the branch `address-space-root`. Stages 0 to 4f
 are done (see each stage). Block A (the format alignment): step F4 is done (part
 1, the format-independent part; part 2, the follow-ups of its review and the

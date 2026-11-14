@@ -13,6 +13,13 @@ qualifies the rules of supervisor references, but not the rules that plan v5
 adds. The Linux adapter, the libc and the RTL still use earlier designs,
 described under "What runs today".
 
+The adapter (module `capstone_vm.ko`, launcher and ioctl ABI) was deleted on
+2026-11-14, with the 30-bit, 55-bit and flat formats, CSMINT per mapping, the
+virtual-C (CSRUNV) route and the physical route. Its rules for R, the blocks,
+the kernel-owned flag and the last-page CREVOKE move into the kernel with plan
+v5 step 6. The tag `pre-trap-route-2026-11-14` keeps its sources and evidence;
+"What runs today" and the adapter sections describe that tag.
+
 ## Decision
 
 The abstract machine starts with one object, R, and one reference to it.

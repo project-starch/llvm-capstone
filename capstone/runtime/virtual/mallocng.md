@@ -112,8 +112,8 @@ had hidden this distinction.
 
 ## Qualification
 
-The [minimal-port qualification](results/minimal-mallocng/qualification.json)
-records input hashes, functional and denial cases, policy controls, PHP and
+The minimal-port qualification (`results/minimal-mallocng/qualification.json`
+at the tag `pre-trap-route-2026-11-14`, run on the deleted adapter) records input hashes, functional and denial cases, policy controls, PHP and
 SPEC test-workload results. The tests use both compressed and exact bounds;
 compressed representability remains enforced by allocation geometry in both.
 The runtime test's `dense-churn` mode is a fixed-table silicon exhaustion
@@ -121,5 +121,5 @@ experiment, not a success test on QEMU with dynamic node growth.
 
 The compiler and Linux/QEMU platform are reused, identified inputs. This is
 not a new LLVM build, RTL qualification, full SPEC campaign or full application
-port sweep. Historical [local-mallocng results](results/local-mallocng/README.md)
-qualify the previous implementation and must not be relabelled as this port.
+port sweep. Historical local-mallocng results (`results/local-mallocng/` at
+the same tag) qualify the previous implementation and must not be relabelled as this port.

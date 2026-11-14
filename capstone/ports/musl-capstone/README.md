@@ -1,5 +1,9 @@
 # musl for Capstone pure-capability domains
 
+Since 2026-11-14 the launchers (`capstone-exec`, `capstone-vexec`), the module, their runners
+and the physical profile are deleted (tag `pre-trap-route-2026-11-14`). The runs and links
+below that use them describe that history.
+
 A port of musl's **arch layer** so that a POSIX libc can be compiled for
 `capstone64-unknown-elf` and run inside a domain. The point is to stop
 hand-writing a libc subset per workload: SQLite needed

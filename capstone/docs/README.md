@@ -1,5 +1,13 @@
 # Capstone project documentation
 
+Since 2026-11-14 the Linux adapter (module, launcher, runners), the physical
+route and the 30-bit, 55-bit and flat formats are deleted; only the 63-bit
+format and plan v5's [trap route](plans/2026-11-13-kernel-trap-entry.md)
+remain. Links below into `runtime/virtual/results`, `runtime/applications.md`
+and `runtime/tests/application` describe that history; the tag
+`pre-trap-route-2026-11-14` keeps those files. The current runtime is
+described in [runtime/virtual](../runtime/virtual/README.md).
+
 Sublet ISA extension: [contract and qualification](design/virtual-capstone/development.md#sublet-lifetime-qualification).
 QEMU and runtime support are merged, pinned to QEMU `7dbfdd534eea`. Use matching
 QEMU and adapter builds. The allocator migration on

@@ -1,5 +1,9 @@
 # Delegated application ports
 
+Since 2026-11-14 the launchers (`capstone-exec`, `capstone-vexec`), the module, their runners
+and the physical profile are deleted (tag `pre-trap-route-2026-11-14`). The runs and links
+below that use them describe that history.
+
 Application images use delegated ABI v2. Virtual images additionally identify
 VM-service ABI v5. The SDK supplies startup, argv,
 environment, cwd, standard streams, libc overrides, syscall delegation and the
