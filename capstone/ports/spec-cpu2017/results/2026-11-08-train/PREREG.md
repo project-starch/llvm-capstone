@@ -3609,3 +3609,55 @@ Stubbed dry runs reach every boot. ao-b1's firmware is wt-wrap-hpmtag; the other
 
 **Pre-registration and predictions:** the nested lane's, at llvm-capstone nested-workloads c3663f0362a1, section
 "Pre-registration: silicon, speedtest1". This addendum only places the boot.
+
+## Addendum 110 (2026-11-14 14:30, before it runs): the gp-relative decision pairs, both arms
+
+**The lever.** gp-relative access to small globals through linker relaxation (compiler lane):
+- llvm-capstone compiler-gp-relax 81193d42edb0 (llvm-c10): a marker relocation on Capstone's folded global
+  derivation, plus lld PC-relative→gp and lui/lo→gp relaxation under --relax-gp, for both targets;
+- runtime-gp-cursor e120e53b053f: gp's cursor fixed at __global_pointer$, with the transport identity moved to a
+  single-context sentinel and to the service once a second context exists;
+- the GlobalMerge rule, fixed in advance at gp-relax-prereg aa1e91b0628e.
+
+**Fairness.** riscv-base gets the same relaxation, because the software is the same on both arms and only the RTL
+differs (the lead's 13 Nov ruling). Today's riscv-base images have no small data and no gp-relative access: lld's
+--relax-gp is off by default, while GNU ld relaxes by default.
+
+**GlobalMerge policy.** The pre-registered rule picked LLVM's default on both arms: merge-unchanged was 0.29 % worse
+on riscv-base gcc.
+
+**Twins** (user instructions, outputs identical):
+
+| row | riscv-base RVGP against RVF3 | Capstone GPR2 against GPC |
+|---|---|---|
+| perl makerand | -8.7 % | -12.7 % |
+| gcc train01 | -0.42 % | +0.67 % |
+
+**Board images:**
+
+| arm | perl makerand | gcc train01 |
+|---|---|---|
+| Capstone GPC (control: the gp runtime, flags off) | c6c51c3a369600b1 | 9a69bf1b7c4dada3 |
+| Capstone GPR2 | 34e296554dbda177 | 540987ae207a185f |
+| riscv-base RVGP (plain-rv64gp) | 8b2cd2c6f86a4fdd | a6e5d84a2b3a8e59 |
+
+- GPC's twin is FRCDKMS plus 681 instructions on gcc and plus 260 on makerand.
+- The riscv-base control (RVF3) is board 3's own reading on the same bitstream and kit: perl makerand 257.90 s, gcc
+  train01 1,722.35 s. It is not rerun.
+
+**Runs:**
+- **Board 1, bitstream F (bkit75), after ao-b1:** chain as-gpc-b1 (GPC perl makerand, gcc), then as-gpr2-b1 (GPR2
+  perl makerand, gcc).
+- **Board 3, after its FRCDK full perl:** thrun.sh chain at-b3 flashes riscv-base (caplifive_rvbase_d31345cf3) and runs
+  RVGP perl makerand, then gcc. Board 3 returns to Capstone afterwards.
+- **Dry runs:** stubbed dry runs of all three chains reach every boot.
+
+**Predictions:**
+- Capstone GPR2 against GPC: perl makerand -4 to -12 %; gcc 0 to +1.5 %.
+- riscv-base RVGP against RVF3: perl makerand -3 to -9 %; gcc 0 to -1 %.
+- GPC against FRCDKMS on F: within ±0.5 %.
+- specdiff PASS everywhere.
+
+**Decision rule** (before the readings): the lever is adopted, on both arms and all 8 rows, iff the Capstone/riscv-base
+ratio improves on perl makerand AND the product of the perl and gcc ratio changes is < 1. If it is adopted, both
+columns are rerun in full. Otherwise it is recorded as measured and not adopted.
