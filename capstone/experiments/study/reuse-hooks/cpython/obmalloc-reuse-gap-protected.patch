@@ -72,7 +72,7 @@
  /* obmalloc state for main interpreter and shared by all interpreters without
   * their own obmalloc state.  By not explicitly initalizing this structure, it
   * will be allocated in the BSS which is a small performance win.  The radix
-@@ -2294,5 +2359,10 @@
+@@ -2294,6 +2359,11 @@
      if (UNLIKELY(bp == NULL)) {
          return NULL;
      }
