@@ -1,3 +1,22 @@
+--- a/arch/riscv/include/asm/sublet.h
++++ b/arch/riscv/include/asm/sublet.h
+@@ -31,6 +31,8 @@ struct sublet_context {
+ 	phys_addr_t table_pa;	/* the table's physical root, which srevroot names */
+ 	/* Blocks by address, under sublet_lock. registered_bytes is the sum of their sizes. */
+ 	struct rb_root arenas;
++	/* Pending syscall unmap, serialized by mmap_write_lock. */
++	void *mapping_unmap;
+ 	unsigned long registered_bytes;
+ 	u64 next_id;
+ 	bool exact_bounds;
+--- a/arch/riscv/mm/Makefile
++++ b/arch/riscv/mm/Makefile
+@@ -33,4 +33,4 @@ endif
+ obj-$(CONFIG_DEBUG_VIRTUAL) += physaddr.o
+ obj-$(CONFIG_RISCV_DMA_NONCOHERENT) += dma-noncoherent.o
+ 
+-obj-$(CONFIG_RISCV_CAPSTONE_TASK) += sublet-table.o
++obj-$(CONFIG_RISCV_CAPSTONE_TASK) += sublet-table.o sublet-blocks.o
 --- /dev/null
 +++ b/arch/riscv/mm/sublet-block-state.h
 @@ -0,0 +1,74 @@
@@ -565,71 +584,6 @@
 +	request_finish(&r);
 +	return result;
 +}
---- /dev/null
-+++ b/include/linux/sublet-mappings.h
-@@ -0,0 +1,51 @@
-+/* SPDX-License-Identifier: GPL-2.0-only */
-+#ifndef _LINUX_SUBLET_MAPPINGS_H
-+#define _LINUX_SUBLET_MAPPINGS_H
-+#include <linux/mm.h>
-+#include <linux/errno.h>
-+struct sublet_move;
-+#ifdef CONFIG_RISCV_CAPSTONE_TASK
-+/* Step 5 resolves a handle to its tagged, aligned kernel slot. It must not
-+ * sleep. The slot remains owned by this syscall until it returns. */
-+int sublet_handle_ref(unsigned long handle, const unsigned long **ref);
-+/* Step 3/5 supplies a non-failing tagged copy into the saved a0 return slot.
-+ * address is the cursor to return. The source slot may be cleared on return. */
-+void sublet_mapping_return(const unsigned long *ref, unsigned long address) __weak;
-+static inline bool sublet_mappings(struct mm_struct *mm)
-+{
-+	return mm->context.capstone_namespace != NULL;
-+}
-+unsigned long sublet_mapping_address(struct mm_struct *, unsigned long);
-+unsigned long sublet_mmap(struct file *, unsigned long, unsigned long,
-+		unsigned long, unsigned long, unsigned long, unsigned long *, struct list_head *);
-+int sublet_munmap(struct mm_struct *, unsigned long, unsigned long, struct list_head *);
-+int sublet_unmap_commit(struct mm_struct *, unsigned long, unsigned long);
-+int sublet_mapping_check(struct mm_struct *, unsigned long, unsigned long,
-+		unsigned long, bool);
-+unsigned long sublet_mremap(struct mm_struct *, unsigned long, unsigned long,
-+		unsigned long, unsigned long, unsigned long, bool *,
-+		struct vm_userfaultfd_ctx *, struct list_head *);
-+unsigned long sublet_move_vma(struct vm_area_struct *, unsigned long,
-+		unsigned long, unsigned long, unsigned long, bool *, unsigned long,
-+		struct vm_userfaultfd_ctx *, struct list_head *, struct sublet_move *);
-+int sublet_move_commit(struct sublet_move *);
-+#else
-+static inline bool sublet_mappings(struct mm_struct *mm) { return false; }
-+static inline unsigned long sublet_mapping_address(struct mm_struct *mm,
-+		unsigned long address) { return address; }
-+static inline unsigned long sublet_mmap(struct file *f, unsigned long a,
-+		unsigned long n, unsigned long p, unsigned long flags, unsigned long off,
-+		unsigned long *populate, struct list_head *uf) { return -EOPNOTSUPP; }
-+static inline int sublet_munmap(struct mm_struct *mm, unsigned long a,
-+		unsigned long n, struct list_head *uf) { return -EOPNOTSUPP; }
-+static inline int sublet_unmap_commit(struct mm_struct *mm, unsigned long a,
-+		unsigned long end) { return 0; }
-+static inline int sublet_mapping_check(struct mm_struct *mm, unsigned long h,
-+		unsigned long n, unsigned long flags, bool advise) { return 0; }
-+static inline unsigned long sublet_mremap(struct mm_struct *mm, unsigned long a,
-+		unsigned long old, unsigned long n, unsigned long flags, unsigned long dest,
-+		bool *locked, struct vm_userfaultfd_ctx *uf, struct list_head *list)
-+	{ return -EOPNOTSUPP; }
-+static inline int sublet_move_commit(struct sublet_move *move) { return 0; }
-+#endif
-+#endif
---- a/arch/riscv/include/asm/sublet.h
-+++ b/arch/riscv/include/asm/sublet.h
-@@ -31,6 +31,8 @@
- 	phys_addr_t table_pa;	/* the table's physical root, which srevroot names */
- 	/* Blocks by address, under sublet_lock. registered_bytes is the sum of their sizes. */
- 	struct rb_root arenas;
-+	/* Pending syscall unmap, serialized by mmap_write_lock. */
-+	void *mapping_unmap;
- 	unsigned long registered_bytes;
- 	u64 next_id;
- 	bool exact_bounds;
 --- a/arch/riscv/mm/sublet-table.c
 +++ b/arch/riscv/mm/sublet-table.c
 @@ -17,6 +17,7 @@
@@ -640,7 +594,7 @@
  #include <asm/io.h>
  #include <asm/pgtable.h>
  #include <asm/sublet.h>
-@@ -40,19 +41,7 @@
+@@ -43,19 +44,7 @@
   * declaration at boot, and whether that declaration names the 63-bit format. */
  static bool copyable_exact_bounds, platform_ready;
  
@@ -661,7 +615,7 @@
  DEFINE_MUTEX(sublet_lock);
  static LIST_HEAD(contexts);
  
-@@ -455,7 +444,7 @@
+@@ -471,7 +460,7 @@ static int grant_mapped(struct sublet_context *c, const struct sublet_grant *g)
      unsigned long end = g->address + g->bytes, rx_end = g->address + g->rx_bytes;
      int error = 0;
  
@@ -670,7 +624,7 @@
      for (unsigned long at = g->address; at < end && !error;) {
          struct vm_area_struct *v = find_vma(c->mm, at);
          bool rx = at < rx_end;
-@@ -473,13 +462,12 @@
+@@ -489,13 +478,12 @@ static int grant_mapped(struct sublet_context *c, const struct sublet_grant *g)
              error = v->vm_file ? -EACCES : 0;
          at = min(min(end, v ? v->vm_end : end), rx ? rx_end : ULONG_MAX);
      }
@@ -680,12 +634,12 @@
  
  /* Make the block for the grant g: check its range and its mappings, derive P from R and record
   * the block. Caller holds sublet_lock. */
--int sublet_grant(struct sublet_context *c, const struct sublet_grant *g)
+-int sublet_grant_slot(struct sublet_context *c, const struct sublet_grant *g, unsigned long **slot)
 +int sublet_block_new(struct sublet_context *c, const struct sublet_grant *g, struct arena **out)
  {
      struct arena *a;
      int error;
-@@ -493,26 +481,31 @@
+@@ -509,35 +497,34 @@ int sublet_grant_slot(struct sublet_context *c, const struct sublet_grant *g, un
          return -EINVAL;
      if (arena_overlaps(c, g->address, g->bytes)) return -EINVAL;
      if (c->registered_bytes + g->bytes > CV_MAX_BYTES) return -ENOMEM;
@@ -716,11 +670,20 @@
 +    memset(a->state.present, 1, a->state.mapped);
      arena_insert(c, a);
      c->registered_bytes += a->bytes;
+-    if (slot) *slot = a->slot;
 +    *out = a;
      return 0;
  }
  
-@@ -577,6 +570,7 @@
+-int sublet_grant(struct sublet_context *c, const struct sublet_grant *g)
+-{
+-    return sublet_grant_slot(c, g, NULL);
+-}
+-
+ /* A context for the current address space: its table with node_initial_pages record pages,
+  * published before the processor sees it, and R. One context per mm. */
+ int sublet_context_create(struct sublet_context **out)
+@@ -602,6 +589,7 @@ void sublet_context_destroy(struct sublet_context *c)
          struct arena *a = rb_entry(n, struct arena, node);
          next = rb_next(n);
          rb_erase(&a->node, &c->arenas);
@@ -728,13 +691,14 @@
          kfree(a);
      }
      c->registered_bytes = 0;
-@@ -610,3 +604,97 @@
+@@ -645,3 +633,106 @@ static int __init sublet_table_init(void)
      return 0;
  }
  subsys_initcall(sublet_table_init);
 +
-+/* The loader holds sublet_lock before the mm is published to the task. */
-+int sublet_grant(struct sublet_context *c, const struct sublet_grant *g)
++/* The loader holds sublet_lock before the mm is published to the task. *slot, if slot is not
++ * NULL, receives the kernel slot of the block's reference. */
++int sublet_grant_slot(struct sublet_context *c, const struct sublet_grant *g, unsigned long **slot)
 +{
 +	struct arena *a;
 +	int error;
@@ -743,10 +707,18 @@
 +	error = grant_mapped(c, g);
 +	if (!error)
 +		error = sublet_block_new(c, g, &a);
-+	if (!error)
++	if (!error) {
 +		a->state.kernel_owned = g->reg != 13;
++		if (slot)
++			*slot = a->slot;
++	}
 +	mmap_read_unlock(c->mm);
 +	return error;
++}
++
++int sublet_grant(struct sublet_context *c, const struct sublet_grant *g)
++{
++	return sublet_grant_slot(c, g, NULL);
 +}
 +
 +struct arena *sublet_block_find(struct sublet_context *c, unsigned long address)
@@ -826,11 +798,57 @@
 +	restore_root(old);
 +	return faulted ? -EFAULT : 0;
 +}
---- a/arch/riscv/mm/Makefile
-+++ b/arch/riscv/mm/Makefile
-@@ -33,4 +33,4 @@
- obj-$(CONFIG_DEBUG_VIRTUAL) += physaddr.o
- obj-$(CONFIG_RISCV_DMA_NONCOHERENT) += dma-noncoherent.o
- 
--obj-$(CONFIG_RISCV_CAPSTONE_TASK) += sublet-table.o
-+obj-$(CONFIG_RISCV_CAPSTONE_TASK) += sublet-table.o sublet-blocks.o
+--- /dev/null
++++ b/include/linux/sublet-mappings.h
+@@ -0,0 +1,51 @@
++/* SPDX-License-Identifier: GPL-2.0-only */
++#ifndef _LINUX_SUBLET_MAPPINGS_H
++#define _LINUX_SUBLET_MAPPINGS_H
++#include <linux/mm.h>
++#include <linux/errno.h>
++struct sublet_move;
++#ifdef CONFIG_RISCV_CAPSTONE_TASK
++/* Step 5 resolves a handle to its tagged, aligned kernel slot. It must not
++ * sleep. The slot remains owned by this syscall until it returns. */
++int sublet_handle_ref(unsigned long handle, const unsigned long **ref);
++/* Step 3/5 supplies a non-failing tagged copy into the saved a0 return slot.
++ * address is the cursor to return. The source slot may be cleared on return. */
++void sublet_mapping_return(const unsigned long *ref, unsigned long address) __weak;
++static inline bool sublet_mappings(struct mm_struct *mm)
++{
++	return mm->context.capstone_namespace != NULL;
++}
++unsigned long sublet_mapping_address(struct mm_struct *, unsigned long);
++unsigned long sublet_mmap(struct file *, unsigned long, unsigned long,
++		unsigned long, unsigned long, unsigned long, unsigned long *, struct list_head *);
++int sublet_munmap(struct mm_struct *, unsigned long, unsigned long, struct list_head *);
++int sublet_unmap_commit(struct mm_struct *, unsigned long, unsigned long);
++int sublet_mapping_check(struct mm_struct *, unsigned long, unsigned long,
++		unsigned long, bool);
++unsigned long sublet_mremap(struct mm_struct *, unsigned long, unsigned long,
++		unsigned long, unsigned long, unsigned long, bool *,
++		struct vm_userfaultfd_ctx *, struct list_head *);
++unsigned long sublet_move_vma(struct vm_area_struct *, unsigned long,
++		unsigned long, unsigned long, unsigned long, bool *, unsigned long,
++		struct vm_userfaultfd_ctx *, struct list_head *, struct sublet_move *);
++int sublet_move_commit(struct sublet_move *);
++#else
++static inline bool sublet_mappings(struct mm_struct *mm) { return false; }
++static inline unsigned long sublet_mapping_address(struct mm_struct *mm,
++		unsigned long address) { return address; }
++static inline unsigned long sublet_mmap(struct file *f, unsigned long a,
++		unsigned long n, unsigned long p, unsigned long flags, unsigned long off,
++		unsigned long *populate, struct list_head *uf) { return -EOPNOTSUPP; }
++static inline int sublet_munmap(struct mm_struct *mm, unsigned long a,
++		unsigned long n, struct list_head *uf) { return -EOPNOTSUPP; }
++static inline int sublet_unmap_commit(struct mm_struct *mm, unsigned long a,
++		unsigned long end) { return 0; }
++static inline int sublet_mapping_check(struct mm_struct *mm, unsigned long h,
++		unsigned long n, unsigned long flags, bool advise) { return 0; }
++static inline unsigned long sublet_mremap(struct mm_struct *mm, unsigned long a,
++		unsigned long old, unsigned long n, unsigned long flags, unsigned long dest,
++		bool *locked, struct vm_userfaultfd_ctx *uf, struct list_head *list)
++	{ return -EOPNOTSUPP; }
++static inline int sublet_move_commit(struct sublet_move *move) { return 0; }
++#endif
++#endif

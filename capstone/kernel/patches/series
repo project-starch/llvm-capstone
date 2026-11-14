@@ -1,3 +1,4 @@
+# The kernel's Sublet series against Linux 6.1, applied in this order by apply.sh.
 0001-riscv-mm-capability-tags-follow-pages.patch
 0002-mm-mprotect-helper.patch
 0003-helpers-for-stat-limits-and-paths.patch
@@ -10,13 +11,20 @@
 0010-helpers-interface.patch
 0011-riscv-mm-sublet-table.patch
 0012-riscv-sublet-loader-and-calls.patch
+# Plan v5 step 3 and 4: trap entry and exit, the loader enters the program.
 0013-riscv-sublet-trap-interfaces.patch
 0014-riscv-sublet-trap-entry-and-exit.patch
 0015-riscv-sublet-loader-enters-and-exits.patch
 0016-modpost-sublet-uaccess-text.patch
+# Plan v5 step 5: handles, binder, routines for user memory.
 0030-riscv-sublet-handles.patch
 0031-riscv-sublet-syscall-pointer-table.patch
 0032-riscv-sublet-binder.patch
 0033-riscv-sublet-user-memory-routines.patch
 0034-riscv-sublet-dispatch-to-binder.patch
 0035-riscv-sublet-loader-iovec-argv.patch
+# Plan v5 step 6: depth-1 mapping blocks.
+0040-riscv-sublet-blocks.patch
+0041-mm-sublet-mapping-hooks.patch
+# Integration of steps 4 to 6: mapping results and handles, the exec stack of the libc.
+0017-riscv-sublet-integrate-mappings-exec-stack.patch

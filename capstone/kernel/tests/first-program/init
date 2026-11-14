@@ -12,6 +12,8 @@ c0=$(cat $P/live_contexts); p0=$(cat $P/table_pages)
 ./stale.dom; echo "TRAPTEST: stale status $?"
 ./bounds.dom; echo "TRAPTEST: bounds status $?"
 ./ok.dom; echo "TRAPTEST: ok status $?"
+./map.dom; echo "TRAPTEST: map status $?"
+./unmapped.dom; echo "TRAPTEST: unmapped status $?"
 busybox echo hello | busybox wc -c > /dev/null; echo "TRAPTEST: busybox status $?"
 # /proc/PID/mem of a running protected program is refused.
 ./spin.dom & pid=$!

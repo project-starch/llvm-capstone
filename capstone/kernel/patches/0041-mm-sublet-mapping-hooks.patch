@@ -1,178 +1,3 @@
---- a/mm/util.c
-+++ b/mm/util.c
-@@ -1,4 +1,5 @@
- // SPDX-License-Identifier: GPL-2.0-only
-+#include <linux/sublet-mappings.h>
- #include <linux/mm.h>
- #include <linux/slab.h>
- #include <linux/string.h>
-@@ -517,8 +518,10 @@
- 	if (!ret) {
- 		if (mmap_write_lock_killable(mm))
- 			return -EINTR;
--		ret = do_mmap(file, addr, len, prot, flag, pgoff, &populate,
--			      &uf);
-+		if (sublet_mappings(mm))
-+			ret = sublet_mmap(file, addr, len, prot, flag, pgoff, &populate, &uf);
-+		else
-+			ret = do_mmap(file, addr, len, prot, flag, pgoff, &populate, &uf);
- 		mmap_write_unlock(mm);
- 		userfaultfd_unmap_complete(mm, &uf);
- 		if (populate)
---- a/mm/mmap.c
-+++ b/mm/mmap.c
-@@ -9,6 +9,7 @@
- 
- #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
- 
-+#include <linux/sublet-mappings.h>
- #include <linux/kernel.h>
- #include <linux/slab.h>
- #include <linux/backing-dev.h>
-@@ -2400,6 +2401,12 @@
- 			goto userfaultfd_error;
- 	}
- 
-+	/* The last-page CREVOKE must precede page-table removal. All fallible
-+	 * VMA preparation has completed, and a refusal still changes no pages. */
-+	error = sublet_unmap_commit(mm, start, end);
-+	if (error)
-+		goto userfaultfd_error;
-+
- 	/* Point of no return */
- 	mas_set_range(mas, start, end - 1);
- #if defined(CONFIG_DEBUG_VM_MAPLE_TREE)
-@@ -2772,7 +2779,10 @@
- 	if (mmap_write_lock_killable(mm))
- 		return -EINTR;
- 
--	ret = do_mas_munmap(&mas, mm, start, len, &uf, downgrade);
-+	if (sublet_mappings(mm))
-+		ret = sublet_munmap(mm, start, len, &uf);
-+	else
-+		ret = do_mas_munmap(&mas, mm, start, len, &uf, downgrade);
- 	/*
- 	 * Returning 1 indicates mmap_lock is downgraded.
- 	 * But 1 is not legal return value of vm_munmap() and munmap(), reset
---- a/mm/mremap.c
-+++ b/mm/mremap.c
-@@ -8,6 +8,7 @@
-  *	(C) Copyright 2002 Red Hat Inc, All Rights Reserved
-  */
- 
-+#include <linux/sublet-mappings.h>
- #include <linux/mm.h>
- #include <linux/mm_inline.h>
- #include <linux/hugetlb.h>
-@@ -572,7 +573,8 @@
- 		unsigned long old_addr, unsigned long old_len,
- 		unsigned long new_len, unsigned long new_addr,
- 		bool *locked, unsigned long flags,
--		struct vm_userfaultfd_ctx *uf, struct list_head *uf_unmap)
-+		struct vm_userfaultfd_ctx *uf, struct list_head *uf_unmap,
-+		struct sublet_move *sublet)
- {
- 	long to_account = new_len - old_len;
- 	struct mm_struct *mm = vma->vm_mm;
-@@ -639,6 +641,8 @@
- 		err = vma->vm_ops->mremap(new_vma);
- 	}
- 
-+	if (!err && sublet)
-+		err = sublet_move_commit(sublet);
- 	if (unlikely(err)) {
- 		/*
- 		 * On error, move entries back from new area to old,
-@@ -859,7 +863,7 @@
- 		new_addr = ret;
- 
- 	ret = move_vma(vma, addr, old_len, new_len, new_addr, locked, flags, uf,
--		       uf_unmap);
-+		       uf_unmap, NULL);
- 
- out:
- 	return ret;
-@@ -942,6 +946,14 @@
- 
- 	if (mmap_write_lock_killable(current->mm))
- 		return -EINTR;
-+	if (sublet_mappings(mm)) {
-+		ret = sublet_mremap(mm, addr, old_len, new_len, flags, new_addr,
-+				    &locked, &uf, &uf_unmap);
-+		/* The protected helper supplies the tagged result and handles its
-+		 * own growth. No unmasked handle reaches the generic lookup. */
-+		locked = false;
-+		goto out;
-+	}
- 	vma = vma_lookup(mm, addr);
- 	if (!vma) {
- 		ret = -EFAULT;
-@@ -1073,7 +1085,7 @@
- 		}
- 
- 		ret = move_vma(vma, addr, old_len, new_len, new_addr,
--			       &locked, flags, &uf, &uf_unmap);
-+			       &locked, flags, &uf, &uf_unmap, NULL);
- 	}
- out:
- 	if (offset_in_page(ret))
-@@ -1089,3 +1101,15 @@
- 	userfaultfd_unmap_complete(mm, &uf_unmap);
- 	return ret;
- }
-+
-+#ifdef CONFIG_RISCV_CAPSTONE_TASK
-+/* The protected mapping code selects and reserves the destination first. */
-+unsigned long sublet_move_vma(struct vm_area_struct *vma, unsigned long old,
-+		unsigned long old_len, unsigned long new_len, unsigned long dest,
-+		bool *locked, unsigned long flags, struct vm_userfaultfd_ctx *uf,
-+		struct list_head *unmap, struct sublet_move *request)
-+{
-+	return move_vma(vma, old, old_len, new_len, dest, locked, flags, uf,
-+			unmap, request);
-+}
-+#endif
---- a/mm/mprotect.c
-+++ b/mm/mprotect.c
-@@ -9,6 +9,7 @@
-  *  (C) Copyright 2002 Red Hat Inc, All Rights Reserved
-  */
- 
-+#include <linux/sublet-mappings.h>
- #include <linux/capstone_native_helpers.h>
- #include <linux/pagewalk.h>
- #include <linux/hugetlb.h>
-@@ -674,6 +675,7 @@
- 		unsigned long prot, int pkey)
- {
- 	unsigned long nstart, end, tmp, reqprot;
-+	unsigned long sublet_handle = start, sublet_prot = prot;
- 	struct vm_area_struct *vma, *prev;
- 	int error;
- 	const int grows = prot & (PROT_GROWSDOWN|PROT_GROWSUP);
-@@ -682,7 +684,7 @@
- 	struct mmu_gather tlb;
- 	MA_STATE(mas, &current->mm->mm_mt, 0, 0);
- 
--	start = untagged_addr(start);
-+	start = sublet_mapping_address(current->mm, untagged_addr(start));
- 
- 	prot &= ~(PROT_GROWSDOWN|PROT_GROWSUP);
- 	if (grows == (PROT_GROWSDOWN|PROT_GROWSUP)) /* can't be both */
-@@ -703,6 +705,13 @@
- 
- 	if (mmap_write_lock_killable(current->mm))
- 		return -EINTR;
-+
-+	if (sublet_mappings(current->mm)) {
-+		error = sublet_mapping_check(current->mm, sublet_handle, len,
-+				     sublet_prot, false);
-+		if (error)
-+			goto out;
-+	}
- 
- 	/*
- 	 * If userspace did not allocate the pkey, do not let
 --- a/mm/madvise.c
 +++ b/mm/madvise.c
 @@ -6,6 +6,7 @@
@@ -183,7 +8,7 @@
  #include <linux/mman.h>
  #include <linux/pagemap.h>
  #include <linux/syscalls.h>
-@@ -1386,13 +1387,13 @@
+@@ -1386,13 +1387,13 @@ int madvise_set_anon_name(struct mm_struct *mm, unsigned long start,
   */
  int do_madvise(struct mm_struct *mm, unsigned long start, size_t len_in, int behavior)
  {
@@ -199,7 +24,7 @@
  
  	if (!madvise_behavior_valid(behavior))
  		return -EINVAL;
-@@ -1413,11 +1414,12 @@
+@@ -1413,11 +1414,12 @@ int do_madvise(struct mm_struct *mm, unsigned long start, size_t len_in, int beh
  		return 0;
  
  #ifdef CONFIG_MEMORY_FAILURE
@@ -214,7 +39,7 @@
  	if (write) {
  		if (mmap_write_lock_killable(mm))
  			return -EINTR;
-@@ -1425,10 +1427,16 @@
+@@ -1425,10 +1427,16 @@ int do_madvise(struct mm_struct *mm, unsigned long start, size_t len_in, int beh
  		mmap_read_lock(mm);
  	}
  
@@ -231,3 +56,178 @@
  	if (write)
  		mmap_write_unlock(mm);
  	else
+--- a/mm/mmap.c
++++ b/mm/mmap.c
+@@ -9,6 +9,7 @@
+ 
+ #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
+ 
++#include <linux/sublet-mappings.h>
+ #include <linux/kernel.h>
+ #include <linux/slab.h>
+ #include <linux/backing-dev.h>
+@@ -2400,6 +2401,12 @@ do_mas_align_munmap(struct ma_state *mas, struct vm_area_struct *vma,
+ 			goto userfaultfd_error;
+ 	}
+ 
++	/* The last-page CREVOKE must precede page-table removal. All fallible
++	 * VMA preparation has completed, and a refusal still changes no pages. */
++	error = sublet_unmap_commit(mm, start, end);
++	if (error)
++		goto userfaultfd_error;
++
+ 	/* Point of no return */
+ 	mas_set_range(mas, start, end - 1);
+ #if defined(CONFIG_DEBUG_VM_MAPLE_TREE)
+@@ -2772,7 +2779,10 @@ static int __vm_munmap(unsigned long start, size_t len, bool downgrade)
+ 	if (mmap_write_lock_killable(mm))
+ 		return -EINTR;
+ 
+-	ret = do_mas_munmap(&mas, mm, start, len, &uf, downgrade);
++	if (sublet_mappings(mm))
++		ret = sublet_munmap(mm, start, len, &uf);
++	else
++		ret = do_mas_munmap(&mas, mm, start, len, &uf, downgrade);
+ 	/*
+ 	 * Returning 1 indicates mmap_lock is downgraded.
+ 	 * But 1 is not legal return value of vm_munmap() and munmap(), reset
+--- a/mm/mprotect.c
++++ b/mm/mprotect.c
+@@ -9,6 +9,7 @@
+  *  (C) Copyright 2002 Red Hat Inc, All Rights Reserved
+  */
+ 
++#include <linux/sublet-mappings.h>
+ #include <linux/capstone_native_helpers.h>
+ #include <linux/pagewalk.h>
+ #include <linux/hugetlb.h>
+@@ -674,6 +675,7 @@ static int do_mprotect_pkey(unsigned long start, size_t len,
+ 		unsigned long prot, int pkey)
+ {
+ 	unsigned long nstart, end, tmp, reqprot;
++	unsigned long sublet_handle = start, sublet_prot = prot;
+ 	struct vm_area_struct *vma, *prev;
+ 	int error;
+ 	const int grows = prot & (PROT_GROWSDOWN|PROT_GROWSUP);
+@@ -682,7 +684,7 @@ static int do_mprotect_pkey(unsigned long start, size_t len,
+ 	struct mmu_gather tlb;
+ 	MA_STATE(mas, &current->mm->mm_mt, 0, 0);
+ 
+-	start = untagged_addr(start);
++	start = sublet_mapping_address(current->mm, untagged_addr(start));
+ 
+ 	prot &= ~(PROT_GROWSDOWN|PROT_GROWSUP);
+ 	if (grows == (PROT_GROWSDOWN|PROT_GROWSUP)) /* can't be both */
+@@ -704,6 +706,13 @@ static int do_mprotect_pkey(unsigned long start, size_t len,
+ 	if (mmap_write_lock_killable(current->mm))
+ 		return -EINTR;
+ 
++	if (sublet_mappings(current->mm)) {
++		error = sublet_mapping_check(current->mm, sublet_handle, len,
++				     sublet_prot, false);
++		if (error)
++			goto out;
++	}
++
+ 	/*
+ 	 * If userspace did not allocate the pkey, do not let
+ 	 * them use it here.
+--- a/mm/mremap.c
++++ b/mm/mremap.c
+@@ -8,6 +8,7 @@
+  *	(C) Copyright 2002 Red Hat Inc, All Rights Reserved
+  */
+ 
++#include <linux/sublet-mappings.h>
+ #include <linux/mm.h>
+ #include <linux/mm_inline.h>
+ #include <linux/hugetlb.h>
+@@ -572,7 +573,8 @@ static unsigned long move_vma(struct vm_area_struct *vma,
+ 		unsigned long old_addr, unsigned long old_len,
+ 		unsigned long new_len, unsigned long new_addr,
+ 		bool *locked, unsigned long flags,
+-		struct vm_userfaultfd_ctx *uf, struct list_head *uf_unmap)
++		struct vm_userfaultfd_ctx *uf, struct list_head *uf_unmap,
++		struct sublet_move *sublet)
+ {
+ 	long to_account = new_len - old_len;
+ 	struct mm_struct *mm = vma->vm_mm;
+@@ -639,6 +641,8 @@ static unsigned long move_vma(struct vm_area_struct *vma,
+ 		err = vma->vm_ops->mremap(new_vma);
+ 	}
+ 
++	if (!err && sublet)
++		err = sublet_move_commit(sublet);
+ 	if (unlikely(err)) {
+ 		/*
+ 		 * On error, move entries back from new area to old,
+@@ -859,7 +863,7 @@ static unsigned long mremap_to(unsigned long addr, unsigned long old_len,
+ 		new_addr = ret;
+ 
+ 	ret = move_vma(vma, addr, old_len, new_len, new_addr, locked, flags, uf,
+-		       uf_unmap);
++		       uf_unmap, NULL);
+ 
+ out:
+ 	return ret;
+@@ -942,6 +946,14 @@ SYSCALL_DEFINE5(mremap, unsigned long, addr, unsigned long, old_len,
+ 
+ 	if (mmap_write_lock_killable(current->mm))
+ 		return -EINTR;
++	if (sublet_mappings(mm)) {
++		ret = sublet_mremap(mm, addr, old_len, new_len, flags, new_addr,
++				    &locked, &uf, &uf_unmap);
++		/* The protected helper supplies the tagged result and handles its
++		 * own growth. No unmasked handle reaches the generic lookup. */
++		locked = false;
++		goto out;
++	}
+ 	vma = vma_lookup(mm, addr);
+ 	if (!vma) {
+ 		ret = -EFAULT;
+@@ -1073,7 +1085,7 @@ SYSCALL_DEFINE5(mremap, unsigned long, addr, unsigned long, old_len,
+ 		}
+ 
+ 		ret = move_vma(vma, addr, old_len, new_len, new_addr,
+-			       &locked, flags, &uf, &uf_unmap);
++			       &locked, flags, &uf, &uf_unmap, NULL);
+ 	}
+ out:
+ 	if (offset_in_page(ret))
+@@ -1089,3 +1101,15 @@ out:
+ 	userfaultfd_unmap_complete(mm, &uf_unmap);
+ 	return ret;
+ }
++
++#ifdef CONFIG_RISCV_CAPSTONE_TASK
++/* The protected mapping code selects and reserves the destination first. */
++unsigned long sublet_move_vma(struct vm_area_struct *vma, unsigned long old,
++		unsigned long old_len, unsigned long new_len, unsigned long dest,
++		bool *locked, unsigned long flags, struct vm_userfaultfd_ctx *uf,
++		struct list_head *unmap, struct sublet_move *request)
++{
++	return move_vma(vma, old, old_len, new_len, dest, locked, flags, uf,
++			unmap, request);
++}
++#endif
+--- a/mm/util.c
++++ b/mm/util.c
+@@ -1,4 +1,5 @@
+ // SPDX-License-Identifier: GPL-2.0-only
++#include <linux/sublet-mappings.h>
+ #include <linux/mm.h>
+ #include <linux/slab.h>
+ #include <linux/string.h>
+@@ -517,8 +518,10 @@ unsigned long vm_mmap_pgoff(struct file *file, unsigned long addr,
+ 	if (!ret) {
+ 		if (mmap_write_lock_killable(mm))
+ 			return -EINTR;
+-		ret = do_mmap(file, addr, len, prot, flag, pgoff, &populate,
+-			      &uf);
++		if (sublet_mappings(mm))
++			ret = sublet_mmap(file, addr, len, prot, flag, pgoff, &populate, &uf);
++		else
++			ret = do_mmap(file, addr, len, prot, flag, pgoff, &populate, &uf);
+ 		mmap_write_unlock(mm);
+ 		userfaultfd_unmap_complete(mm, &uf);
+ 		if (populate)

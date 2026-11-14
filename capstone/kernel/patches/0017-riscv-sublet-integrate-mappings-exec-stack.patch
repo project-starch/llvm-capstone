@@ -1,0 +1,776 @@
+--- a/arch/riscv/include/asm/processor.h
++++ b/arch/riscv/include/asm/processor.h
+@@ -39,6 +39,8 @@ struct thread_struct {
+ #ifdef CONFIG_RISCV_CAPSTONE_TRAP
+ 	/* The embedded references of the current system call (asm/sublet-uaccess.h), or NULL. */
+ 	struct sublet_call_refs *sublet_refs;
++	/* The current call's result in a0 is a reference (sublet_mapping_return). */
++	bool sublet_result_ref;
+ #endif
+ 	/* Callee-saved registers */
+ 	unsigned long ra;
+--- a/arch/riscv/include/asm/sublet-trap.h
++++ b/arch/riscv/include/asm/sublet-trap.h
+@@ -52,6 +52,9 @@ static inline struct sublet_context *sublet_task_context(struct task_struct *tas
+  * slot. Each writes the register's slot and its integer view in pt_regs. */
+ void sublet_set_user_int(struct pt_regs *regs, unsigned int n, unsigned long value);
+ void sublet_set_user_ref(struct pt_regs *regs, unsigned int n, unsigned long *kslot);
++/* The same with the reference's cursor moved by offset. */
++void sublet_set_user_ref_cursor(struct pt_regs *regs, unsigned int n, unsigned long *kslot,
++				long offset);
+ 
+ extern char sublet_uaccess_start[], sublet_uaccess_end[];
+ 
+--- a/arch/riscv/include/asm/sublet.h
++++ b/arch/riscv/include/asm/sublet.h
+@@ -61,6 +61,11 @@ void sublet_context_destroy(struct sublet_context *c);
+ int sublet_grant(struct sublet_context *c, const struct sublet_grant *g);
+ /* The same, and *slot receives the kernel slot that holds P, which the context owns. */
+ int sublet_grant_slot(struct sublet_context *c, const struct sublet_grant *g, unsigned long **slot);
++/* Store into the user cell at cell (16-byte aligned) the reference in kslot, whose cursor is
++ * from_cursor, moved to cursor. The loader only, before srevroot names the program's table:
++ * the store is a plain supervisor access to a user page. */
++int sublet_store_user_ref(const unsigned long *kslot, unsigned long from_cursor,
++			  unsigned long cell, unsigned long cursor);
+ /* Answer cause 30 of the context's program: at least one slot, or NOGROW. */
+ int sublet_grow(struct sublet_context *c);
+ 
+--- a/arch/riscv/kernel/sublet/binfmt.h
++++ b/arch/riscv/kernel/sublet/binfmt.h
+@@ -27,25 +27,15 @@ module_param(dom_last_base, ulong, 0400);
+ static bool dom_binfmt;
+ module_param(dom_binfmt, bool, 0444);
+ MODULE_PARM_DESC(dom_binfmt, "required root-only native .dom exec admission");
+-#define DOM_LAUNCH_BYTES 65536UL
+-#define DOM_META_BYTES 16384UL
++/* The exec stack's strings, cells and auxv share this budget, as Linux's argument pages do. */
++#define DOM_ARGS_BYTES 65536UL
+ #define DOM_MAX_STRINGS 1024
+-#define DOM_APP_MAGIC 0x315050414e4f5043ULL
+ #define DOM_REQ_MAGIC 0x5145524d4f445043ULL
+-#define DOM_HELLO 0xc0de0001ULL
+ 
+ struct dom_image {
+     Elf64_Phdr text, data;
+-    u64 entry, bytes, stack, exchange;
++    u64 entry, bytes, stack;
+ };
+-struct dom_app { u64 magic, version, flags, launch, heap, exchange, contexts; };
+-struct dom_launch_header {
+-    u8 magic[8];
+-    u32 version, bytes, argc, envc, cwd, stdio_mask, pid, ppid;
+-    u32 uid, euid, gid, egid;
+-    u64 realtime_ns, monotonic_ns, ticks, ticks_per_second;
+-};
+-_Static_assert(sizeof(struct dom_launch_header) == 88, "launch ABI");
+ _Static_assert(sizeof(struct capstone_delegate_entry) == 96, "delegate ABI");
+ 
+ static int dom_read(struct file *f, void *buf, size_t n, u64 at)
+@@ -67,9 +57,8 @@ static int dom_parse(struct file *f, struct dom_image *im)
+     Elf64_Phdr *ph = NULL;
+     Elf64_Shdr *sh = NULL;
+     char *names = NULL;
+-    struct dom_app app = {0};
+-    u64 size = i_size_read(file_inode(f)), magic = 0, req[3];
+-    unsigned i, loads = 0, markers = 0, apps = 0, reqs = 0;
++    u64 size = i_size_read(file_inode(f)), req[3];
++    unsigned i, loads = 0, reqs = 0;
+     int rc = -ENOEXEC;
+     if (size < sizeof(h) || size > (512UL << 20) || dom_read(f, &h, sizeof(h), 0)) return rc;
+     if (memcmp(h.e_ident, ELFMAG, SELFMAG) || h.e_ident[EI_CLASS] != ELFCLASS64 ||
+@@ -86,7 +75,7 @@ static int dom_parse(struct file *f, struct dom_image *im)
+     if (dom_read(f, ph, h.e_phnum * sizeof(*ph), h.e_phoff) ||
+         dom_read(f, sh, h.e_shnum * sizeof(*sh), h.e_shoff)) goto out;
+     if (sh[h.e_shstrndx].sh_type != SHT_STRTAB || !sh[h.e_shstrndx].sh_size ||
+-        sh[h.e_shstrndx].sh_size > DOM_LAUNCH_BYTES ||
++        sh[h.e_shstrndx].sh_size > DOM_ARGS_BYTES ||
+         !dom_within(sh[h.e_shstrndx].sh_offset, sh[h.e_shstrndx].sh_size, size)) goto out;
+     names = kmalloc(sh[h.e_shstrndx].sh_size, GFP_KERNEL);
+     if (!names) { rc = -ENOMEM; goto out; }
+@@ -112,13 +101,7 @@ static int dom_parse(struct file *f, struct dom_image *im)
+         u64 len = sh[h.e_shstrndx].sh_size;
+         if (s->sh_name >= len || !memchr(names + s->sh_name, 0, len - s->sh_name) ||
+             (s->sh_type != SHT_NOBITS && !dom_within(s->sh_offset, s->sh_size, size))) goto out;
+-        if (dom_name(names, len, s->sh_name, ".capstone_virtual")) {
+-            if (markers++ || s->sh_type != SHT_PROGBITS || s->sh_size != sizeof(magic) ||
+-                dom_read(f, &magic, sizeof(magic), s->sh_offset)) goto out;
+-        } else if (dom_name(names, len, s->sh_name, ".capstone_application")) {
+-            if (apps++ || s->sh_type != SHT_PROGBITS || s->sh_size != sizeof(app) ||
+-                dom_read(f, &app, sizeof(app), s->sh_offset)) goto out;
+-        } else if (dom_name(names, len, s->sh_name, ".capstone_domreq")) {
++        if (dom_name(names, len, s->sh_name, ".capstone_domreq")) {
+             if (reqs++ || s->sh_type != SHT_PROGBITS || s->sh_size != sizeof(req) ||
+                 dom_read(f, req, sizeof(req), s->sh_offset) || req[0] != DOM_REQ_MAGIC ||
+                 req[1] < 256 || req[1] > CV_MAX_EAGER_BYTES || !req[2] || req[2] > req[1] - 256)
+@@ -126,14 +109,9 @@ static int dom_parse(struct file *f, struct dom_image *im)
+             im->stack = roundup_pow_of_two(max_t(u64, req[2], PAGE_SIZE));
+         }
+     }
+-    if (markers != 1 || apps != 1 || magic != CV_IMAGE_MAGIC || app.magic != DOM_APP_MAGIC ||
+-        app.version != 2 || app.flags != 3 || app.launch != DOM_LAUNCH_BYTES ||
+-        app.heap || app.contexts > 15 || app.exchange < PAGE_SIZE || app.exchange > (1UL << 20) ||
+-        (app.exchange & ~PAGE_MASK)) goto out;
+     im->bytes = roundup_pow_of_two(im->text.p_memsz + PAGE_ALIGN(im->data.p_memsz));
+     if (im->bytes > CV_MAX_EAGER_BYTES) goto out;
+     im->entry = h.e_entry - im->text.p_vaddr;
+-    im->exchange = roundup_pow_of_two(app.exchange);
+     rc = 0;
+ out:
+     kfree(names); kfree(sh); kfree(ph);
+@@ -163,7 +141,6 @@ static int dom_grant(struct sublet_context *c, unsigned long base, unsigned long
+ 
+ static struct linux_binfmt capstone_dom;
+ 
+-#ifdef CONFIG_RISCV_CAPSTONE_TRAP
+ #ifdef CONFIG_RISCV_CAPSTONE_TRAP_TEST
+ /* Test only: the next n loads fail after the point of no return, right before the entry. */
+ static int test_fail_after_mark;
+@@ -171,42 +148,116 @@ module_param(test_fail_after_mark, int, 0644);
+ #endif
+ 
+ /*
+- * Enter the program (plan v5 step 4): every user register an integer 0 but the start
+- * registers, which receive their blocks' references (sp the stack, gp the image, a0 the
+- * metadata, a1 the exchange region, a2 the startup block), the program counter the plain
+- * address of the entry, then the binding: TIF_CAPSTONE, the mm's context and root, and
+- * srevroot. The loader's plain writes into the program's pages all precede it. The return
+- * from execve then loads the slots (restore_user).
++ * The exec stack of the 16-byte pointer ABI (capstone/linux-start.h), built in a kernel buffer
++ * for the range [sp, top) of the stack block. From sp up: argc in the low word of the first
++ * 16-byte cell, the argv cells and a zero cell, the envp cells and a zero cell, the auxv entries
++ * of 32 bytes (type, then value at offset 16), 16 random bytes for AT_RANDOM, and the strings.
++ * Offsets in the buffer are offsets from sp. Each pointer cell is recorded so that the loader
++ * can store a reference into it once the stack block exists.
++ */
++#define DOM_AUX_ENTRIES 10
++struct dom_stack {
++	void *buf;
++	unsigned long bytes;
++	unsigned int count;
++	struct { unsigned long cell, target; } ptr[DOM_MAX_STRINGS + 3];
++};
++
++static void dom_stack_pointer(struct dom_stack *st, unsigned long cell, unsigned long target)
++{
++	((u64 *)st->buf)[2 * cell] = target;
++	st->ptr[st->count].cell = cell;
++	st->ptr[st->count].target = target;
++	++st->count;
++}
++
++static void dom_stack_aux(struct dom_stack *st, unsigned long *cell, u64 type, u64 value)
++{
++	((u64 *)st->buf)[2 * *cell] = type;
++	((u64 *)st->buf)[2 * (*cell + 1)] = value;
++	*cell += 2;
++}
++
++/* Copy the argument and environment strings from Linux's argument pages and lay out the rest.
++ * Runs before the program's table is selected, so plain user accesses still reach them. */
++static int dom_stack_build(struct linux_binprm *bprm, struct dom_stack *st)
++{
++	unsigned long cells = 1 + bprm->argc + 1 + bprm->envc + 1 + 2 * DOM_AUX_ENTRIES;
++	unsigned long random = cells * 16, used = random + 16, at = bprm->p, cell, argv0 = 0;
++	unsigned int i;
++
++	if (used > DOM_ARGS_BYTES)
++		return -E2BIG;
++	((u64 *)st->buf)[0] = bprm->argc;
++	for (i = 0; i < bprm->argc + bprm->envc; ++i) {
++		long n = strnlen_user((char __user *)at, DOM_ARGS_BYTES - used);
++
++		if (n <= 0 || n > DOM_ARGS_BYTES - used)
++			return -E2BIG;
++		if (copy_from_user(st->buf + used, (void __user *)at, n))
++			return -EFAULT;
++		if (!i)
++			argv0 = used;
++		/* argv[i] is cell 1 + i; envp[j] is cell argc + 2 + j, after argv's zero cell. */
++		dom_stack_pointer(st, i < bprm->argc ? 1 + i : 2 + i, used);
++		at += n;
++		used += n;
++	}
++	get_random_bytes(st->buf + random, 16);
++	cell = 1 + bprm->argc + 1 + bprm->envc + 1;
++	dom_stack_aux(st, &cell, AT_PAGESZ, PAGE_SIZE);
++	dom_stack_aux(st, &cell, AT_CLKTCK, CLOCKS_PER_SEC);
++	dom_stack_aux(st, &cell, AT_UID, from_kuid_munged(current_user_ns(), current_uid()));
++	dom_stack_aux(st, &cell, AT_EUID, from_kuid_munged(current_user_ns(), current_euid()));
++	dom_stack_aux(st, &cell, AT_GID, from_kgid_munged(current_user_ns(), current_gid()));
++	dom_stack_aux(st, &cell, AT_EGID, from_kgid_munged(current_user_ns(), current_egid()));
++	dom_stack_aux(st, &cell, AT_SECURE, 0);
++	dom_stack_pointer(st, cell + 1, random);
++	dom_stack_aux(st, &cell, AT_RANDOM, random);
++	dom_stack_pointer(st, cell + 1, argv0);
++	dom_stack_aux(st, &cell, AT_EXECFN, argv0);
++	dom_stack_aux(st, &cell, AT_NULL, 0);
++	st->bytes = ALIGN(used, 16);
++	return 0;
++}
++
++#ifdef CONFIG_RISCV_CAPSTONE_TRAP
++/*
++ * Enter the program (plan v5 step 4): every user register an integer 0 but sp, a reference to
++ * the stack block with its cursor at the exec stack, and gp, a reference to the image block
++ * with its cursor at the image's base; the program counter the plain address of the entry;
++ * then the binding: TIF_CAPSTONE, the mm's context and root, and srevroot. Every plain write
++ * of the loader into the program's pages precedes it. The return from execve loads the slots
++ * (restore_user).
+  */
+ static int dom_enter(struct sublet_context *c, struct linux_binprm *bprm, unsigned long entry,
+-                     unsigned long **slots)
++		     unsigned long **slots, unsigned long sp, unsigned long top)
+ {
+-    static const unsigned start[] = {2, 3, 10, 11, 12};
+-    struct pt_regs *regs = current_pt_regs();
+-    int rc;
++	struct pt_regs *regs = current_pt_regs();
++	int rc;
+ 
+ #ifdef CONFIG_RISCV_CAPSTONE_TRAP_TEST
+-    if (READ_ONCE(test_fail_after_mark) > 0) {
+-        WRITE_ONCE(test_fail_after_mark, READ_ONCE(test_fail_after_mark) - 1);
+-        return -ENOEXEC;
+-    }
++	if (READ_ONCE(test_fail_after_mark) > 0) {
++		WRITE_ONCE(test_fail_after_mark, READ_ONCE(test_fail_after_mark) - 1);
++		return -ENOEXEC;
++	}
+ #endif
+-    set_binfmt(&capstone_dom);
+-    finalize_exec(bprm);
+-    memset(regs, 0, sizeof(*regs));
+-    regs->status = SR_PIE | SR_UXL_64;
+-    regs->epc = entry;
+-    for (unsigned n = 1; n < 32; ++n)
+-        sublet_set_user_int(regs, n, 0);
+-    for (unsigned i = 0; i < ARRAY_SIZE(start); ++i)
+-        sublet_set_user_ref(regs, start[i], slots[start[i]]);
+-    c->dom_entry = entry;
+-    rc = riscv_capstone_bind(c, c->table_pa);
+-    if (rc)
+-        return rc;
+-    pr_info("sublet: %s[%d] enters 0x%lx, table 0x%llx\n", current->comm, task_pid_nr(current),
+-            entry, (unsigned long long)c->table_pa);
+-    return 0;
++	set_binfmt(&capstone_dom);
++	finalize_exec(bprm);
++	memset(regs, 0, sizeof(*regs));
++	regs->status = SR_PIE | SR_UXL_64;
++	regs->epc = entry;
++	for (unsigned int n = 1; n < 32; ++n)
++		sublet_set_user_int(regs, n, 0);
++	sublet_set_user_ref_cursor(regs, 2, slots[2], sp - top);
++	sublet_set_user_ref(regs, 3, slots[3]);
++	c->dom_entry = entry;
++	rc = riscv_capstone_bind(c, c->table_pa);
++	if (rc)
++		return rc;
++	pr_info("sublet: %s[%d] enters 0x%lx, table 0x%llx\n", current->comm, task_pid_nr(current),
++		entry, (unsigned long long)c->table_pa);
++	return 0;
+ }
+ #endif
+ 
+@@ -215,184 +266,151 @@ static int dom_enter(struct sublet_context *c, struct linux_binprm *bprm, unsign
+ 
+ static void dom_context_destroy(struct sublet_context *c)
+ {
+-    dom_delegate_free(c);
+-    sublet_context_destroy(c);
++	dom_delegate_free(c);
++	sublet_context_destroy(c);
+ }
+ /* The release of the context an address space carries, called by riscv_capstone_release at
+  * exec and exit. */
+ void sublet_context_release(void *context)
+ {
+-    dom_context_destroy(context);
+-}
+-static int dom_startup(struct linux_binprm *bprm, void *block)
+-{
+-    struct dom_launch_header *h = block;
+-    unsigned long header_bytes = sizeof(*h);
+-    u32 *offsets = block + header_bytes;
+-    unsigned long at = bprm->p, used = header_bytes + (bprm->argc + bprm->envc) * sizeof(u32);
+-    struct path pwd;
+-    char *cwd, *tmp;
+-    unsigned i;
+-    memcpy(h->magic, "CPLAUNCH", 8);
+-    h->version = 2;
+-    h->argc = bprm->argc; h->envc = bprm->envc;
+-    h->pid = task_tgid_vnr(current); h->ppid = task_ppid_nr_ns(current, task_active_pid_ns(current));
+-    h->uid = from_kuid_munged(current_user_ns(), current_uid());
+-    h->euid = from_kuid_munged(current_user_ns(), current_euid());
+-    h->gid = from_kgid_munged(current_user_ns(), current_gid());
+-    h->egid = from_kgid_munged(current_user_ns(), current_egid());
+-    h->realtime_ns = ktime_get_real_ns(); h->monotonic_ns = ktime_get_ns();
+-    for (i = 0; i < 3; ++i) {
+-        struct file *f = fget(i);
+-        if (f) { h->stdio_mask |= 1U << i; fput(f); }
+-    }
+-    tmp = (char *)__get_free_page(GFP_KERNEL);
+-    if (!tmp) return -ENOMEM;
+-    get_fs_pwd(current->fs, &pwd);
+-    cwd = d_path(&pwd, tmp, PAGE_SIZE);
+-    path_put(&pwd);
+-    if (IS_ERR(cwd)) { free_page((unsigned long)tmp); return PTR_ERR(cwd); }
+-    h->cwd = used;
+-    i = strlen(cwd) + 1;
+-    memcpy(block + used, cwd, i); used += i;
+-    free_page((unsigned long)tmp);
+-    current->mm->arg_start = at;
+-    for (i = 0; i < bprm->argc + bprm->envc; ++i) {
+-        long n = strnlen_user((char __user *)at, DOM_LAUNCH_BYTES - used);
+-        if (n <= 0 || n > DOM_LAUNCH_BYTES - used) return -E2BIG;
+-        offsets[i] = used;
+-        if (copy_from_user(block + used, (void __user *)at, n)) return -EFAULT;
+-        at += n; used += n;
+-        if (i + 1 == bprm->argc) current->mm->arg_end = current->mm->env_start = at;
+-    }
+-    current->mm->env_end = at;
+-    h->bytes = used;
+-    return 0;
++	dom_context_destroy(context);
+ }
+ 
+ static int dom_load_binary(struct linux_binprm *bprm)
+ {
+-    struct dom_image im = {0};
+-    struct sublet_context *c = NULL;
+-    unsigned long *slots[32] = {0};
+-    unsigned long base, stack, startup, whole, part;
+-    void *block = NULL, *tail = NULL;
+-    int rc, fail_line = 0;
+-    Elf64_Ehdr *h = (void *)bprm->buf;
+-    if (memcmp(h->e_ident, ELFMAG, SELFMAG) || h->e_machine != 259) return -ENOEXEC;
+-    if (!uid_eq(current_euid(), GLOBAL_ROOT_UID) || bprm->secureexec ||
+-        (bprm->unsafe & LSM_UNSAFE_SHARE) ||
+-        (file_inode(bprm->file)->i_mode & (S_ISUID | S_ISGID))) return -EACCES;
+-    if (!one_inode_per_file(bprm->file) || !file_inode(bprm->file)->i_nlink) return -EOPNOTSUPP;
+-    if (bprm->argc < 1 || bprm->argc > DOM_MAX_STRINGS ||
+-        bprm->envc > DOM_MAX_STRINGS - bprm->argc) return -E2BIG;
+-    if (current->seccomp.mode != SECCOMP_MODE_DISABLED) return -EOPNOTSUPP;
+-    if (current->ptrace || (read_thread_flags() & _TIF_SYSCALL_WORK))
+-        return -EOPNOTSUPP;
+-    rc = dom_parse(bprm->file, &im);
+-    if (rc) return rc;
+-    block = kvzalloc(DOM_LAUNCH_BYTES, GFP_KERNEL);
+-    tail = kmalloc(PAGE_SIZE, GFP_KERNEL);
+-    if (!block || !tail) { rc = -ENOMEM; { fail_line = __LINE__; goto out; } }
+-    /* Read the partial data page before the point of no return. */
+-    whole = im.data.p_filesz & PAGE_MASK; part = im.data.p_filesz - whole;
+-    if (part && (rc = dom_read(bprm->file, tail, part, im.data.p_offset + whole))) { fail_line = __LINE__; goto out; }
+-    /* The mark: the new mm is protected before it becomes visible, so no opener of
+-     * /proc/PID/mem sees it unprotected (mm_access refuses a marked mm). */
+-    bprm->mm->context.capstone_marked = true;
+-    rc = begin_new_exec(bprm);
+-    if (rc) { fail_line = __LINE__; goto out; }
+-    setup_new_exec(bprm);
+-    rc = setup_arg_pages(bprm, STACK_TOP, EXSTACK_DISABLE_X);
+-    if (rc) { fail_line = __LINE__; goto out; }
+-    rc = dom_startup(bprm, block);
+-    if (rc) { fail_line = __LINE__; goto out; }
+-    rc = sublet_context_create(&c);
+-    if (rc) { fail_line = __LINE__; goto out; }
+-    rc = dom_resources_init(c);
+-    if (rc) { fail_line = __LINE__; goto out; }
+-    rc = deny_write_access(bprm->file);
+-    if (rc) { fail_line = __LINE__; goto out; }
+-    c->image = get_file(bprm->file);
+-    base = dom_reserve(im.bytes, im.bytes, PROT_READ | PROT_WRITE);
+-    if (IS_ERR_VALUE(base)) { rc = base; { fail_line = __LINE__; goto out; } }
+-    {
+-        unsigned long mapped = vm_mmap(bprm->file, base, im.text.p_memsz, PROT_READ | PROT_EXEC,
+-                                       MAP_PRIVATE | MAP_FIXED, im.text.p_offset);
+-        if (IS_ERR_VALUE(mapped)) { rc = mapped; { fail_line = __LINE__; goto out; } }
+-    }
+-    if (whole) {
+-        unsigned long mapped = vm_mmap(bprm->file, base + im.text.p_memsz, whole,
+-                                      PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_FIXED, im.data.p_offset);
+-        if (IS_ERR_VALUE(mapped)) { rc = mapped; { fail_line = __LINE__; goto out; } }
+-    }
+-    if (part && copy_to_user((void __user *)(base + im.text.p_memsz + whole), tail, part)) {
+-        rc = -EFAULT; { fail_line = __LINE__; goto out; }
+-    }
+-    stack = dom_reserve(im.stack, im.stack, PROT_READ | PROT_WRITE);
+-    startup = dom_reserve(DOM_LAUNCH_BYTES, DOM_LAUNCH_BYTES, PROT_READ | PROT_WRITE);
+-    c->dom_meta = dom_reserve(DOM_META_BYTES, DOM_META_BYTES, PROT_READ | PROT_WRITE);
+-    c->dom_exchange_bytes = im.exchange;
+-    c->dom_exchange = dom_reserve(im.exchange, im.exchange, PROT_READ | PROT_WRITE);
+-    if (IS_ERR_VALUE(stack) || IS_ERR_VALUE(startup) || IS_ERR_VALUE(c->dom_meta) ||
+-        IS_ERR_VALUE(c->dom_exchange)) { rc = -ENOMEM; { fail_line = __LINE__; goto out; } }
+-    if (copy_to_user((void __user *)startup, block, ((struct dom_launch_header *)block)->bytes)) {
+-        rc = -EFAULT; { fail_line = __LINE__; goto out; }
+-    }
+-    mutex_lock(&sublet_lock);
+-    /* One block per region. The image's block covers text and data with its cursor at the
+-     * base: a data reference for the program's globals, not a code capability. The processor
+-     * checks no fetch, and the page table keeps the text executable and never writable. */
+-    rc = dom_grant(c, base, im.bytes, 3, base, im.text.p_memsz, slots);
+-    if (!rc) rc = dom_grant(c, stack, im.stack, 2, stack + im.stack, 0, slots);
+-    if (!rc) rc = dom_grant(c, c->dom_meta, DOM_META_BYTES, 10, c->dom_meta, 0, slots);
+-    if (!rc) rc = dom_grant(c, c->dom_exchange, im.exchange, 11, c->dom_exchange, 0, slots);
+-    if (!rc) rc = dom_grant(c, startup, DOM_LAUNCH_BYTES, 12, startup, 0, slots);
+-    if (!rc) {
+-        u64 inherited[2] = {0, 0};
+-        unsigned long irqflags;
+-        unsigned sig;
+-        spin_lock_irqsave(&current->sighand->siglock, irqflags);
+-        inherited[0] = current->blocked.sig[0];
+-        for (sig = 1; sig <= 64; ++sig)
+-            if (current->sighand->action[sig - 1].sa.sa_handler == SIG_IGN)
+-                inherited[1] |= 1ULL << (sig - 1);
+-        spin_unlock_irqrestore(&current->sighand->siglock, irqflags);
+-        rc = dom_store(c, c->dom_meta + CAPSTONE_SIGNAL_OFFSET +
+-                        offsetof(struct capstone_signal_block, initial_mask),
+-                        inherited, sizeof(inherited));
+-    }
+-    mutex_unlock(&sublet_lock);
+-    if (rc) { fail_line = __LINE__; goto out; }
+-    WRITE_ONCE(dom_last_base, base);
+-    current->mm->start_code = base;
+-    current->mm->end_code = base + im.text.p_memsz;
+-    current->mm->start_data = base + im.text.p_memsz;
+-    current->mm->end_data = base + im.text.p_memsz + im.data.p_memsz;
+-    current->mm->start_stack = bprm->p;
++	struct dom_image im = {0};
++	struct dom_stack *st = NULL;
++	struct sublet_context *c = NULL;
++	unsigned long *slots[32] = {0};
++	unsigned long base, stack, top, sp, whole, part;
++	void *tail = NULL;
++	int rc, fail_line = 0;
++	Elf64_Ehdr *h = (void *)bprm->buf;
++
++	if (memcmp(h->e_ident, ELFMAG, SELFMAG) || h->e_machine != 259)
++		return -ENOEXEC;
++	if (!uid_eq(current_euid(), GLOBAL_ROOT_UID) || bprm->secureexec ||
++	    (bprm->unsafe & LSM_UNSAFE_SHARE) ||
++	    (file_inode(bprm->file)->i_mode & (S_ISUID | S_ISGID)))
++		return -EACCES;
++	if (!one_inode_per_file(bprm->file) || !file_inode(bprm->file)->i_nlink)
++		return -EOPNOTSUPP;
++	if (bprm->argc < 1 || bprm->argc > DOM_MAX_STRINGS ||
++	    bprm->envc > DOM_MAX_STRINGS - bprm->argc)
++		return -E2BIG;
++	if (current->seccomp.mode != SECCOMP_MODE_DISABLED)
++		return -EOPNOTSUPP;
++	if (current->ptrace || (read_thread_flags() & _TIF_SYSCALL_WORK))
++		return -EOPNOTSUPP;
++	rc = dom_parse(bprm->file, &im);
++	if (rc)
++		return rc;
++	st = kvzalloc(sizeof(*st), GFP_KERNEL);
++	tail = kmalloc(PAGE_SIZE, GFP_KERNEL);
++	if (st)
++		st->buf = kvzalloc(DOM_ARGS_BYTES, GFP_KERNEL);
++	rc = -ENOMEM;
++	if (!st || !st->buf || !tail)
++		goto out;
++	/* Read the partial data page before the point of no return. */
++	whole = im.data.p_filesz & PAGE_MASK;
++	part = im.data.p_filesz - whole;
++	if (part && (rc = dom_read(bprm->file, tail, part, im.data.p_offset + whole)))
++		goto out;
++	/* The mark: the new mm is protected before it becomes visible, so no opener of
++	 * /proc/PID/mem sees it unprotected (mm_access refuses a marked mm). */
++	bprm->mm->context.capstone_marked = true;
++	rc = begin_new_exec(bprm);
++	if (rc) { fail_line = __LINE__; goto out; }
++	setup_new_exec(bprm);
++	rc = setup_arg_pages(bprm, STACK_TOP, EXSTACK_DISABLE_X);
++	if (rc) { fail_line = __LINE__; goto out; }
++	rc = dom_stack_build(bprm, st);
++	if (!rc && st->bytes > im.stack / 2)
++		rc = -E2BIG;
++	if (rc) { fail_line = __LINE__; goto out; }
++	rc = sublet_context_create(&c);
++	if (rc) { fail_line = __LINE__; goto out; }
++	rc = dom_resources_init(c);
++	if (rc) { fail_line = __LINE__; goto out; }
++	rc = deny_write_access(bprm->file);
++	if (rc) { fail_line = __LINE__; goto out; }
++	c->image = get_file(bprm->file);
++	base = dom_reserve(im.bytes, im.bytes, PROT_READ | PROT_WRITE);
++	if (IS_ERR_VALUE(base)) { rc = base; fail_line = __LINE__; goto out; }
++	{
++		unsigned long mapped = vm_mmap(bprm->file, base, im.text.p_memsz, PROT_READ | PROT_EXEC,
++					       MAP_PRIVATE | MAP_FIXED, im.text.p_offset);
++		if (IS_ERR_VALUE(mapped)) { rc = mapped; fail_line = __LINE__; goto out; }
++	}
++	if (whole) {
++		unsigned long mapped = vm_mmap(bprm->file, base + im.text.p_memsz, whole,
++					       PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_FIXED, im.data.p_offset);
++		if (IS_ERR_VALUE(mapped)) { rc = mapped; fail_line = __LINE__; goto out; }
++	}
++	if (part && copy_to_user((void __user *)(base + im.text.p_memsz + whole), tail, part)) {
++		rc = -EFAULT; fail_line = __LINE__; goto out;
++	}
++	stack = dom_reserve(im.stack, im.stack, PROT_READ | PROT_WRITE);
++	if (IS_ERR_VALUE(stack)) { rc = stack; fail_line = __LINE__; goto out; }
++	top = stack + im.stack;
++	sp = top - st->bytes;
++	/* The integer view of each pointer cell, then the whole exec stack with plain stores. */
++	for (unsigned int i = 0; i < st->count; ++i)
++		((u64 *)st->buf)[2 * st->ptr[i].cell] = sp + st->ptr[i].target;
++	if (copy_to_user((void __user *)sp, st->buf, st->bytes)) {
++		rc = -EFAULT; fail_line = __LINE__; goto out;
++	}
++	mutex_lock(&sublet_lock);
++	/* One block per region. The image's block covers text and data with its cursor at the
++	 * base: a data reference for the program's globals and TLS template, not a code
++	 * capability. The processor checks no fetch, and the page table keeps the text executable
++	 * and never writable. */
++	rc = dom_grant(c, base, im.bytes, 3, base, im.text.p_memsz, slots);
++	if (!rc)
++		rc = dom_grant(c, stack, im.stack, 2, top, 0, slots);
++	mutex_unlock(&sublet_lock);
++	if (rc) { fail_line = __LINE__; goto out; }
++	/* The pointer cells become references into the stack block. */
++	for (unsigned int i = 0; i < st->count && !rc; ++i)
++		rc = sublet_store_user_ref(slots[2], top, sp + 16 * st->ptr[i].cell,
++					   sp + st->ptr[i].target);
++	if (rc) { fail_line = __LINE__; goto out; }
++	WRITE_ONCE(dom_last_base, base);
++	current->mm->start_code = base;
++	current->mm->end_code = base + im.text.p_memsz;
++	current->mm->start_data = base + im.text.p_memsz;
++	current->mm->end_data = base + im.text.p_memsz + im.data.p_memsz;
++	current->mm->start_stack = sp;
+ #ifdef CONFIG_RISCV_CAPSTONE_TRAP
+-    rc = dom_enter(c, bprm, base + (unsigned long)im.entry, slots);
+-    if (!rc)
+-        c = NULL;   /* the mm owns the context now: riscv_capstone_release ends it */
++	rc = dom_enter(c, bprm, base + (unsigned long)im.entry, slots, sp, top);
++	if (!rc)
++		c = NULL;	/* the mm owns the context now: riscv_capstone_release ends it */
++	else
++		fail_line = __LINE__;
+ #else
+-    /* Without the trap route nothing may return to the image: an ordinary return would run
+-     * it as an unprotected program. */
+-    pr_info("sublet: image ready at 0x%lx: no protected entry in this kernel, refused\n", base);
+-    rc = -ENOEXEC;
++	/* Without the trap route nothing may return to the image: an ordinary return would run
++	 * it as an unprotected program. */
++	pr_info("sublet: image ready at 0x%lx: no protected entry in this kernel, refused\n", base);
++	rc = -ENOEXEC;
+ #endif
+ out:
+-    if (c) dom_context_destroy(c);
+-    kvfree(block); kfree(tail);
+-    /* Linux 6.1's ordinary post-PONR SIGSEGV is ptrace-suppressible. Never let a failure
+-     * after the point of no return recover scalar execution. */
+-    if (rc && bprm->point_of_no_return) {
+-        pr_info("sublet: %s[%d]: load failed after the point of no return: %d (line %d)\n",
+-                current->comm, task_pid_nr(current), rc, fail_line);
+-        force_exit_sig(SIGSEGV);
+-    }
+-    return rc;
++	if (c)
++		dom_context_destroy(c);
++	if (st)
++		kvfree(st->buf);
++	kvfree(st);
++	kfree(tail);
++	/* Linux 6.1's ordinary post-PONR SIGSEGV is ptrace-suppressible. Never let a failure
++	 * after the point of no return recover scalar execution. */
++	if (rc && bprm->point_of_no_return) {
++		pr_info("sublet: %s[%d]: load failed after the point of no return: %d (line %d)\n",
++			current->comm, task_pid_nr(current), rc, fail_line);
++		force_exit_sig(SIGSEGV);
++	}
++	return rc;
+ }
+ static struct linux_binfmt capstone_dom = {
+-    .module = THIS_MODULE, .load_binary = dom_load_binary,
+-    .capstone_native = true,
++	.module = THIS_MODULE, .load_binary = dom_load_binary,
++	.capstone_native = true,
+ };
+--- a/arch/riscv/kernel/sublet/capsule.h
++++ b/arch/riscv/kernel/sublet/capsule.h
+@@ -25,13 +25,6 @@ struct dom_delegate {
+ static int dom_spawn_resources(struct sublet_context *c);
+ #include "resource.h"
+ 
+-/* A plain store into the program's memory, before the program runs. The page-tag code keeps
+- * tags with physical pages, so no page needs to be held for it. */
+-static int dom_store(struct sublet_context *c, unsigned long at, const void *src, size_t bytes)
+-{
+-    (void)c;
+-    return copy_to_user((void __user *)at, src, bytes) ? -EFAULT : 0;
+-}
+ static void dom_delegate_free(struct sublet_context *c)
+ {
+     struct dom_delegate *d = c->dom_delegate;
+--- a/arch/riscv/kernel/sublet_trap.c
++++ b/arch/riscv/kernel/sublet_trap.c
+@@ -20,6 +20,7 @@
+ #include <asm/sublet-test.h>
+ #include <asm/sublet-uaccess.h>
+ #include <asm/sublet-trap.h>
++#include <linux/sublet-mappings.h>
+ 
+ #define SUBLET_ADDR_MASK ((1UL << 38) - 1)
+ 
+@@ -41,9 +42,11 @@ void sublet_set_user_int(struct pt_regs *regs, unsigned int n, unsigned long val
+ 	WRITE_ONCE(slot[0], value);
+ }
+ 
+-/* Set user register xn to the reference in a kernel slot: LDC and STC in one run with
+- * interrupts off, and the reference's address into pt_regs. */
+-void sublet_set_user_ref(struct pt_regs *regs, unsigned int n, unsigned long *kslot)
++/* Set user register xn to the reference in a kernel slot with its cursor moved by offset:
++ * LDC, CINCOFFSET and STC in one run with interrupts off, and the reference's address into
++ * pt_regs. */
++void sublet_set_user_ref_cursor(struct pt_regs *regs, unsigned int n, unsigned long *kslot,
++				long offset)
+ {
+ 	unsigned long *slot = sublet_user_slot(current, n), flags;
+ 
+@@ -52,13 +55,20 @@ void sublet_set_user_ref(struct pt_regs *regs, unsigned int n, unsigned long *ks
+ 	local_irq_save(flags);
+ 	asm volatile(".balign 64\n"
+ 		     ".insn i 0x5b, 3, t0, %[from], 0\n"
++		     ".insn r 0x5b, 1, 0x0c, t0, t0, %[offset]\n"
+ 		     ".insn s 0x5b, 4, t0, 0(%[to])\n"
+ 		     "li t0, 0\n"
+-		     : : [from] "r"(kslot), [to] "r"(slot) : "t0", "memory");
++		     : : [from] "r"(kslot), [to] "r"(slot), [offset] "r"(offset) : "t0", "memory");
+ 	local_irq_restore(flags);
+ 	((unsigned long *)regs)[n] = READ_ONCE(slot[0]) & SUBLET_ADDR_MASK;
+ }
+ 
++/* Set user register xn to the reference in a kernel slot, unchanged. */
++void sublet_set_user_ref(struct pt_regs *regs, unsigned int n, unsigned long *kslot)
++{
++	sublet_set_user_ref_cursor(regs, n, kslot, 0);
++}
++
+ #ifdef CONFIG_RISCV_CAPSTONE_TRAP_TEST
+ /* The cause of the last Sublet fault from S, and whether the test hook's fault sleeps. */
+ static unsigned long sublet_test_last_cause;
+@@ -99,8 +109,9 @@ static long sublet_test_hold(struct pt_regs *regs)
+  */
+ asmlinkage long sublet_test_enter(struct pt_regs *regs)
+ {
+-	struct sublet_grant a = {.address = regs->a0, .bytes = regs->a1, .cursor = regs->a0, .reg = 10};
+-	struct sublet_grant b = {.address = regs->a2, .bytes = regs->a3, .cursor = regs->a2, .reg = 11};
++	/* reg 13: blocks the program may unmap, not kernel-owned (sublet_grant_slot) */
++	struct sublet_grant a = {.address = regs->a0, .bytes = regs->a1, .cursor = regs->a0, .reg = 13};
++	struct sublet_grant b = {.address = regs->a2, .bytes = regs->a3, .cursor = regs->a2, .reg = 13};
+ 	struct sublet_context *c;
+ 	unsigned long *slot_a, *slot_b;
+ 	long rc;
+@@ -133,15 +144,13 @@ asmlinkage long sublet_test_enter(struct pt_regs *regs)
+ 
+ /*
+  * The dispatch stub. Until plan v5 step 5 binds the system calls, a protected program may
+- * call only the calls that take no pointer: the Linux number in a7, or in a6 with the libc's
+- * selector in a7, the result in a0 through the integer helper. Every other call returns
+- * ENOSYS, so a protected program can map nothing executable outside its image text.
++ * call only the calls that take no pointer: the Linux number in a7, the result in a0 through
++ * the integer helper. Every other call passes the binder of plan v5 step 5. A mapping call
++ * whose result is a reference (sublet_mapping_return) keeps it in a0.
+  */
+-#define SUBLET_SELECTOR_NATIVE 0x43534e31	/* NS_SERVICE_NATIVE: the number in a6 */
+-
+ asmlinkage void sublet_syscall(struct pt_regs *regs)
+ {
+-	unsigned long nr = regs->a7 == SUBLET_SELECTOR_NATIVE ? regs->a6 : regs->a7;
++	unsigned long nr = regs->a7;
+ 	long ret;
+ 
+ 	switch (nr) {
+@@ -168,9 +177,32 @@ asmlinkage void sublet_syscall(struct pt_regs *regs)
+ 		/* Every other call passes the binder (plan v5 step 5). */
+ 		ret = sublet_syscall_bound(regs, regs->a7);
+ 	}
++	if (current->thread.sublet_result_ref) {
++		current->thread.sublet_result_ref = false;
++		if ((unsigned long)ret == regs->a0)
++			return;
++	}
+ 	sublet_set_user_int(regs, 10, ret);
+ }
+ 
++/* The kernel slot of the reference a handle names (plan v5 step 6, sublet-mappings.h). */
++int sublet_handle_ref(unsigned long handle, const unsigned long **ref)
++{
++	*ref = sublet_handle_slot(handle);
++	return *ref ? 0 : -EFAULT;
++}
++
++/* A mapping call's result: the reference in ref, moved to address, into a0's slot. The
++ * dispatch stub keeps it when the call returns address. Interrupts are off for the run. */
++void sublet_mapping_return(const unsigned long *ref, unsigned long address)
++{
++	struct pt_regs *regs = current_pt_regs();
++
++	sublet_set_user_ref_cursor(regs, 10, (unsigned long *)ref,
++				   address - (READ_ONCE(ref[0]) & SUBLET_ADDR_MASK));
++	current->thread.sublet_result_ref = true;
++}
++
+ /*
+  * Causes 24 to 30. From U: cause 30 asks for a table slot, which ensure_nodes grows; every
+  * other cause kills only that program, with SIGSEGV and one fault line, and the machine runs
+--- a/arch/riscv/mm/sublet-table.c
++++ b/arch/riscv/mm/sublet-table.c
+@@ -600,6 +600,27 @@ void sublet_context_destroy(struct sublet_context *c)
+     mmdrop(c->mm);
+     kvfree(c);
+ }
++int sublet_store_user_ref(const unsigned long *kslot, unsigned long from_cursor,
++                          unsigned long cell, unsigned long cursor)
++{
++    unsigned long flags, offset = cursor - from_cursor;
++
++    if (cell & 15 || !access_ok((void __user *)cell, 16))
++        return -EFAULT;
++    local_irq_save(flags);
++    csr_set(CSR_STATUS, SR_SUM);
++    asm volatile(CV_RUN
++                 CV_LDC("t0", "%[from]")
++                 CV_INC("t0", "t0", "%[offset]")
++                 CV_STC("t0", "%[cell]")
++                 "li t0, 0\n"
++                 : : [from] "r"(kslot), [offset] "r"(offset), [cell] "r"(cell)
++                 : "t0", "memory");
++    csr_clear(CSR_STATUS, SR_SUM);
++    local_irq_restore(flags);
++    return 0;
++}
++
+ int sublet_grow(struct sublet_context *c)
+ {
+     int error;
+--- a/mm/mmap.c
++++ b/mm/mmap.c
+@@ -2806,7 +2806,10 @@ EXPORT_SYMBOL(vm_munmap);
+ 
+ SYSCALL_DEFINE2(munmap, unsigned long, addr, size_t, len)
+ {
+-	addr = untagged_addr(addr);
++	/* A protected program's munmap keeps its handle: the mapping code reads the
++	 * request's reference from the slot the handle names. */
++	if (!sublet_mappings(current->mm))
++		addr = untagged_addr(addr);
+ 	return __vm_munmap(addr, len, true);
+ }
+ 
+--- a/mm/mremap.c
++++ b/mm/mremap.c
+@@ -913,7 +913,9 @@ SYSCALL_DEFINE5(mremap, unsigned long, addr, unsigned long, old_len,
+ 	 *
+ 	 * See Documentation/arm64/tagged-address-abi.rst for more information.
+ 	 */
+-	addr = untagged_addr(addr);
++	/* A protected program's mremap keeps its handle for the mapping code. */
++	if (!sublet_mappings(current->mm))
++		addr = untagged_addr(addr);
+ 
+ 	if (flags & ~(MREMAP_FIXED | MREMAP_MAYMOVE | MREMAP_DONTUNMAP))
+ 		return ret;
