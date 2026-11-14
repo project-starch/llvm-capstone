@@ -106,3 +106,32 @@ The stage st-perl-bf is the board's run.sh plus the `@@VM` lines; it uses the bo
   - executed c.fld/c.fsd/c.fldsp/c.fsdsp: 10.05 % of nab's user instructions, 5.67 % of lbm's, 0.33 % of imagick's;
   - the x8-x15 forms capture 4.16 % (gcc) and 8.67 % (perl makerand) of the 7.31 % and 9.71 % that shapes 2, 5 and 6
     cover.
+
+## User instructions: where perl's +13 % sits (board-faithful twin, full test)
+
+Capstone FRCDKMS (s1-FRCDKMSbf) against riscv-base RVF3 (s1-RVBqk2), shift 1, both windows, each arm 2/2.
+- Tool: perf/cclever/perlfull.py, which is levers.py's classes summed over every command window.
+- test.pl's driver runs under the plain riscv natperl on both arms, at the riscv-base image's own addresses. Its
+  per-PC counts (3.04 G) are read where it is alone, on the Capstone run, and subtracted from riscv-base's.
+  Negative residuals: 0.007 %.
+
+Image instructions: 85.07 G against 75.18 G, a gap of +9.88 G (+13.15 %).
+
+| function group | delta | share |
+|---|---|---|
+| allocator (mallocng, heap mapping) | +4.21 G | 42.6 % |
+| interpreter (Perl_/S_/XS_) | +5.84 G | 59.1 % |
+| mem*/str* | -0.29 G | -3.0 % |
+
+Allocator, per call:
+- malloc: 126 against 68 instructions, over 20 M calls.
+- free with get_meta: about 228 against 140, over 18 M calls.
+- The excess is capability layout and checks. Lifetimes account for about 5 instructions per malloc/free pair
+  (the spatial arm, measured).
+
+By class (share of the gap): movc +23.7 %, scc gp +23.2 % (gp relaxation measured -2.46 G on this row),
+add/cincoffset +19.4 %, bounds +9.4 %.
+
+After gp, the interpreter's remainder (about 3.4 G) is spread thin: no function is above 0.8 G. It is structural,
+the cost of 16-byte pointers. The allocator is the one concentrated lever, bounded at 4.2 G. That bound is not a
+forecast: it needs a redesign of the capability mallocng path.
