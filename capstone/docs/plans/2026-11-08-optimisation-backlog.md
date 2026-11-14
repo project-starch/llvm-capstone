@@ -29,8 +29,8 @@ per-PC profiles):
 | A1 | direct calls + no frame pointer (dcnofp) | gcc board-validated (1.196×); QEMU twins pass for perl −2.61 %, xz −1.88 %, nab −2.19 %, imagick −0.36 %, mcf −0.26 % net | train twins; images for the universal config |
 | A2 | drop redundant SHRINK(TO), declarations mode + link-time size check | QEMU perl −1.25 %, gcc −0.80 %; authority suite clean at -O2; compiler-spec-c4 5069028a65b0 | wire the check into capstone-cc's link; images for all 8 |
 | A3 | libc built with the application's flags (-fomit-frame-pointer, direct calls) | proposed (allocator agent) | build and QEMU |
-| A4 | shrink-wrapping of libc entry paths (__unlock, free) | proposed | analysis |
-| A5 | 6-7 instructions per global access, 2 movc per byte copy, software CLZ, slot_allzero not inlined | proposed | analysis |
+| A4 | shrink-wrapping of libc entry paths (__unlock, free) | sized on U6 perl test (per-PC profile, 9 Nov): 0.009 % of in-context instructions | dropped for perl |
+| A5 | 6-7 instructions per global access, 2 movc per byte copy, software CLZ, slot_allzero not inlined | first sized on the U6 perl test (9 Nov): globals 0.19 % (one instruction fewer = 0.05 %), copy movc 0.057 %, CLZ 0.04 %, slot_allzero 0.52 %. **The globals figure is superseded (14 Nov):** a whole-profile count of global formations (compiler lane, perf/cclever/gform.py; 86 % of scc-gp executions matched) gives 5.99 % of perl full's user instructions on FRCDKMS, 3.20 % after gp relaxation, and gcc train01 4.59 %. The redundant part, formations beyond one per function entry and the ceiling for CSE/LICM, is 1.34 % (1.19 % after gp) and 0.39 %. On perl it is mostly Perl_yyparse and S_regmatch, loop-invariant, so it needs LICM with a free register. The 9 Nov profile was a perl test run whose test.pl failed (specdiff 1/2 on every Capstone twin until images-a0ed), which is the likely cause; its script was not kept | globals: a targeted LICM of bounded-global formation, about 1 % of perl, 0.4 % of gcc; the other items stay low priority; slot_allzero is a runtime item |
 
 ## B. Runtime and libc
 
@@ -81,7 +81,15 @@ per-PC profiles):
    killed for memory: U1's train peak is +5.7 % over the frozen image on the same kit (233,738 vs 221,072 pages), so
    they wait for the footprint fix. At test size, on the same kit and stage, the gap is +8.4 % (frozen 174,004, llvm-c4
    173,956, + dcnofp 173,987, against U1 188,591), so neither the compiler nor dcnofp causes it. The cause lies in the
-   SDK runtime and libc or in the remaining U flags; the crossed pair (gu, dg) decides between them. The first +8 %
+   SDK runtime and libc or in the remaining U flags. The crossed pair put it on the SDK, and four arms at a443914d9df2
+   (compiler lane, 9 Nov) name the build option CAPSTONE_HEAP_MAPPING_REUSE=ON (default OFF), which sdk-devrg was
+   configured with: 13,598 pages (7.8 %; REGION adds 54). The +999-page residual over frozen is not bisected. Next:
+   U1 train twins with REUSE off, beside its instret and exit cost, and a capped MR_FREE arm if off costs speed.
+   Done (9 Nov): REUSE off costs exits (gcc train01 x20, perl test x2.75; about 83 s and 300 s at 1.2 ms per exit).
+   U1c8 (REUSE on, MR_FREE_BYTES 8 MiB, runtime member 5aa897d3f1752657) keeps U1's exits (+260 gcc, +272 perl) and
+   U1off's footprint (mcf train 222,583, xz train 223,560 pages: both pass at 936M). Adopt it as the U recipe's
+   runtime after Wednesday. gcc's peak (56,070 against a predicted <= 52,300) points at region pieces, which the byte
+   bound exempts; not checked. The first +8 %
    figure was withdrawn because its baseline ran on another kit, and the same-kit reading confirms it.
 2. C1 kfast: Tier 1 boot alone, then perl.
 3. The bitstream variants E1-E3 in order of their expected gain, each with its Plain pair where the change also helps
