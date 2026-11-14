@@ -3,7 +3,7 @@
 This is a live table: rows are filled as board runs land. Pre-registrations, predictions and the run-by-run trail are
 in [`../2026-11-08-train/PREREG.md`](../2026-11-08-train/PREREG.md) (Addendum 107 onward for this table).
 
-## Status (updated 2026-11-14 17:45 +08)
+## Status (updated 2026-11-14 18:50 +08)
 
 - **riscv-base:** complete, all 8 rows.
 - **Capstone temporal:**
@@ -117,10 +117,10 @@ the table being measured now. A row moves into them as its run lands.
 | 505.mcf_r | 5,125.02 | 6,576.13 | 1.283 | **F** / FRCDKMS | 1.283 (F) | pending |
 | 519.lbm_r | 1,077.50 | 994.66 | **0.923** | fdk / FR | pending | pending |
 | 525.x264_r | 35,613.24 | 34,053.48 | **0.956** | fdk / FR | pending | pending |
-| 538.imagick_r | 11.08 | 12.76 | **1.152** | batch / FRCDKMS | **1.152** | pending |
+| 538.imagick_r | 11.08 | 12.58 | **1.135** | **F** / FRCDKMS | **1.135** (F) | pending |
 | 544.nab_r | 679.92 | 714.92 | **1.051** | batch / FRCDKMS | **1.051** | pending |
 | 557.xz_r | 4,993.81 | 5,196.56 | **1.041** | fdk / FR | pending | pending |
-| geomean | | | 1.105 | | | |
+| geomean | | | 1.103 | | | |
 
 Bold = below the 1.20 target. perl makerand alone (the quick A/B sub-run, debugging only): 257.90 s on riscv-base
 against 288.58 s on **F** / FRCDKMS, ratio 1.119 (-12.5 % against the batch); the full test on F is queued.
