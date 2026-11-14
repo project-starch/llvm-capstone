@@ -16,7 +16,7 @@ Default pinned discovery retains its existing behavior.
 
 ## Kernel and build
 
-`linux-6.1-unpinned.patch` is a complete patch against upstream Linux 6.1
+`capstone/kernel/patches/linux-6.1-unpinned.patch` is a complete patch against upstream Linux 6.1
 (commit `830b3c68c1fb`). Platform-dev4's Image reports Linux 6.1.0. Its embedded
 config has SHA-256
 `9c7247993f725f3f4313605a8ec1785177d6fe9906692b3c8f181231f0aa59e1`.
@@ -26,7 +26,7 @@ refused. Keep builds and writable state in a private directory on the build host
 
 ```sh
 # In an otherwise unmodified Linux 6.1 source tree:
-git apply /path/to/linux-6.1-unpinned.patch
+git apply capstone/kernel/patches/linux-6.1-unpinned.patch
 scripts/extract-ikconfig "$PLATFORM_DEV4/images/Image" > .config
 make ARCH=riscv CROSS_COMPILE="$CROSS_COMPILE" olddefconfig
 make ARCH=riscv CROSS_COMPILE="$CROSS_COMPILE" -j4 Image modules_prepare modules

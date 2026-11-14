@@ -5994,7 +5994,7 @@ static int __init init(void)
         if (node_table_flat) return -EOPNOTSUPP;
         /* The unpinned module holds no page and clears no tag before Linux frees a frame: a removed
          * page, a discarded refill, a madvise and the release of a mapping all leave that to the
-         * kernel's tag-aware page free (captag's arch_free_page, unpinned/linux-6.1-unpinned.patch),
+         * kernel's tag-aware page free (captag's arch_free_page, capstone/kernel/patches/linux-6.1-unpinned.patch),
          * which clears every tagged frame before the allocator reuses it. The kernel's
          * capstone_unpinned_config answers 0 only while that hook is active (captag on, the model's
          * capstone,unpinned-v1 node found, captag=off not given), so its answer is the load-time

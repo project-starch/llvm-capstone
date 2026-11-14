@@ -35,7 +35,7 @@ lanes exercise their own doubles against physical page copy/clear/query.
 
 Kernel counterparts are `copy_highpage`, `copy_user_highpage`, the zeroing
 primitive, `arch_free_page`, and the physical CPTAG query/acknowledge operation
-in `../linux-6.1-unpinned.patch`. A clear must complete before any allocator
+in `capstone/kernel/patches/linux-6.1-unpinned.patch`. A clear must complete before any allocator
 reuse, including reuse for a kernel object. Anonymous-page initialization
 alone cannot provide that ordering. Ordinary scalar and DMA writes clear
 actual tags but do not clear the sticky CPTAG flag.
