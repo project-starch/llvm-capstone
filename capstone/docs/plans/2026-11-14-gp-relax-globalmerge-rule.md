@@ -56,3 +56,29 @@ RVGPM exceeds RVGP × 1.0005 on gcc, so by the rule **both arms use the LLVM def
 - Capstone: GPR2's flags (`-capstone-small-data-limit=16 -global-merge-min-data-size=17`);
 - riscv-base: RVGP's (`-msmall-data-limit=8`, whose module flag sets GlobalMerge's minimum).
 mcf could not change the outcome.
+
+## Adoption, and the deferred landing gate (2026-11-14 15:30)
+
+Adoption is decided on silicon, as a whole: one policy, both arms, all 8 rows. First the board pairs on perl makerand
+and gcc train01:
+- riscv-base: RVF3 against RVGP on board 3;
+- Capstone: GPC against GPR2 on board 1, on one bitstream.
+If those cycles improve the problem-row ratios net, the lever is adopted, and both columns are rerun in full.
+Otherwise it is recorded as measured and not adopted.
+
+Gating:
+- **Board images.** The native-route directed test is sufficient. SPEC images have exactly one context there: the
+  kernel refuses caught handlers and further contexts.
+- **Landing runtime-gp-cursor on dev** (local branch runtime-gp-cursor-dev = origin/dev d07a38aedfaf + the runtime
+  commits + the pthread-contract rewrite bd6cf22e49b0, not yet run) is **deferred, and is triggered only by
+  adoption**. It then requires:
+  1. a virtual kit from a fresh clone at dev's pins (capstone-qemu, caplifive-buildroot firmware/kernel/rootfs,
+     adapter by runtime/virtual/build-adapter.sh), built the way bug-corpora/juliet/build-kit.sh builds one;
+  2. dev's unchanged pthread contract passing on it, as the control;
+  3. then the rewritten contract and its four mutants (PC_MUTANT_SAME_IDENTITY, _GP, _HANDLER, _SINGLE), each
+     turning off its own check, and the directed gp-cursor test on the virtual route.
+
+Why no existing kit serves:
+- spec/kit-prof fails dev's own contract ("capstone-vexec: step: Device or resource busy").
+- A kit from QEMU at dev's pin and the 15 Sep build-qemu images dies in OpenSBI. That firmware predates dev's
+  caplifive-buildroot pin.
