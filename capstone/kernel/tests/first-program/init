@@ -19,6 +19,16 @@ c0=$(cat $P/live_contexts); p0=$(cat $P/table_pages)
 ./exec.dom; echo "TRAPTEST: exec status $?"
 ./sockopt.dom; echo "TRAPTEST: sockopt status $?"
 ./argv.dom; echo "TRAPTEST: argv status $?"
+./futex.dom; echo "TRAPTEST: futex status $?"
+./prlimit.dom; echo "TRAPTEST: prlimit status $?"
+./fp.dom; echo "TRAPTEST: fp status $?"
+./fp.dom & fp=$!
+./fp.dom; s=$?; wait $fp; echo "TRAPTEST: fp together status $s $?"
+./big.dom; echo "TRAPTEST: big status $?"
+./kread.dom; echo "TRAPTEST: kread status $?"
+./cred.dom; echo "TRAPTEST: cred status $?"
+echo "TRAPTEST: kernel fault lines for getrandom $(busybox dmesg | grep -c 'sublet: kernel fault cause=.* nr=278 ')"
+busybox dmesg | grep "sublet: kernel fault" | head -2 | sed 's/^/TRAPTEST: dmesg /' 
 busybox echo hello | busybox wc -c > /dev/null; echo "TRAPTEST: busybox status $?"
 # /proc/PID/mem of a running protected program is refused.
 ./spin.dom & pid=$!
@@ -40,6 +50,9 @@ echo "TRAPTEST: counters contexts $c0 -> $(cat $P/live_contexts) pages $p0 -> $(
 # The table runs out of slots right before the kernel's CDERIVE of the next block.
 echo 1 > $P/test_exhaust_before_derive
 ./map.dom; echo "TRAPTEST: exhausted map status $?"
+# The page of the first pointer cell goes away right before the loader stores into it.
+echo 1 > $P/test_zap_stack
+./zap.dom; echo "TRAPTEST: zap status $?"
 busybox dmesg | grep "sublet: fault" | head -3 | sed 's/^/TRAPTEST: dmesg /'
 echo "TRAPTEST: done"
 busybox poweroff -f

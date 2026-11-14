@@ -34,3 +34,5 @@
 # Signal registration; delivery to a handler kills the program (plan v5 step 9 builds frames).
 0018-riscv-sublet-signal-registration.patch
 0019-riscv-sublet-security-fixes.patch
+0020-riscv-sublet-review-fixes.patch
+0021-riscv-sublet-fpu-placement-kernel-faults.patch

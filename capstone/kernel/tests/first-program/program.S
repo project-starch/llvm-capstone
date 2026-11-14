@@ -25,7 +25,29 @@
  *              the binder refuses (ENOPROTOOPT) after an allowed SO_SNDBUF passed, else
  *              100 + the error number
  *  10 (argv)   loads the byte 32 bytes below argv[0], inside the stack block: the reference
- *              covers only the string, so the load faults with 28; 48 if the load passed */
+ *              covers only the string, so the load faults with 28; 48 if the load passed
+ *  11 (futex)  wakes a word through the stack reference, which passes, then wakes the address
+ *              of argv[0] as an integer and requeues to it: 49 when the kernel refuses both
+ *              (EFAULT), 50 when the integer wake passed, 51 when the integer requeue passed
+ *  12 (prlimit) reads its own RLIMIT_NOFILE, which passes, reads pid 1's and sets its own:
+ *              52 when the kernel refuses pid 1's (EPERM) and the set passes, 53 when the read
+ *              of pid 1's limit passed, 54 when the set failed
+ *  13 (zap)    checks only that the argv[0] cell holds a reference, for a load whose test hook
+ *              dropped that cell's page before the loader stored into it: 55 when it does, 56
+ *              when the store lost the tag
+ *  14 (fp)     adds its pid as a double 50 million times, across timer ticks and switches,
+ *              calls getpid and converts the sum back: 57 when it equals pid * 50000000, 58
+ *              when it does not; without the FPU the first instruction raises SIGILL
+ *  15 (big)    maps one page, so that the next hole Linux finds is no longer aligned, then
+ *              16 MiB, 64 MiB and 256 MiB anonymous blocks, all live together, and stores and
+ *              loads through each: 59, or 27, 28, 29 or 30 when the page or the first, second
+ *              or third block gives no reference
+ *  16 (kread)  asks getrandom for 64 bytes into a 16-byte child of the stack block: the
+ *              kernel's copy faults at byte 16 and the call returns 16 or EFAULT, 60; 61 for
+ *              any other result. The kernel prints one kernel fault line with nr=278
+ *  17 (cred)   drops its groups, sets gid and uid 1000, starts a session and execs ./ok.dom
+ *              as that user, which exits with 42; 62, 63, 64 or 65 when setgroups, setgid,
+ *              setuid or setsid fails, 100 + the error number when the exec fails */
 #define LCC(rd, src, sel) .insn r 0x5b, 1, 4, rd, src, sel
 #define INC(rd, src, off) .insn r 0x5b, 1, 0x0c, rd, src, off
 #define DERIVE(rd, parent, size) .insn r 0x5b, 1, 0x51, rd, parent, size
@@ -38,6 +60,15 @@
     .text
     .globl _start
 _start:
+#if MODE == 13
+    LDC(t2, 16, sp)
+    LCC(t0, t2, x1)
+    li t1, 1
+    li a0, 55
+    beq t0, t1, finish
+    li a0, 56
+    j finish
+#endif
     CHECK_TAGGED(sp, 1)
     CHECK_TAGGED(gp, 2)
     /* a register the loader left alone is an integer 0 */
@@ -214,6 +245,184 @@ _start:
 1:  mv a0, a1
     j finish
 #endif
+#if MODE == 11
+    /* FUTEX_WAKE | FUTEX_PRIVATE_FLAG on the word at sp - 32, through the stack reference */
+    li t0, -32
+    INC(t1, sp, t0)
+    sw zero, 0(t1)
+    INC(a0, t1, zero)
+    li a1, 129
+    li a2, 1
+    li a3, 0
+    li a4, 0
+    li a5, 0
+    li a7, 98
+    ecall
+    li s11, 16
+    bnez a0, fail
+    /* the address of argv[0] as an integer: the low 38 bits of its cell, word aligned */
+    ld t2, 16(sp)
+    slli t2, t2, 26
+    srli t2, t2, 26
+    andi t2, t2, -4
+    mv a0, t2
+    li a1, 129
+    li a2, 1
+    li a7, 98
+    ecall
+    li t0, -14
+    li a1, 50
+    bne a0, t0, 1f
+    /* FUTEX_REQUEUE | FUTEX_PRIVATE_FLAG from the referenced word to the integer address */
+    INC(a0, t1, zero)
+    li a1, 131
+    li a2, 0
+    li a3, 0
+    mv a4, t2
+    li a5, 0
+    li a7, 98
+    ecall
+    li t0, -14
+    li a1, 51
+    bne a0, t0, 1f
+    li a1, 49
+1:  mv a0, a1
+    j finish
+#endif
+#if MODE == 12
+    /* prlimit64(0, RLIMIT_NOFILE, NULL, sp - 32): its own limit */
+    li t0, -32
+    INC(t1, sp, t0)
+    li a0, 0
+    li a1, 7
+    li a2, 0
+    INC(a3, t1, zero)
+    li a7, 261
+    ecall
+    li s11, 17
+    bnez a0, fail
+    /* prlimit64(1, RLIMIT_NOFILE, NULL, sp - 32): pid 1's limit */
+    li a0, 1
+    li a1, 7
+    li a2, 0
+    INC(a3, t1, zero)
+    li a7, 261
+    ecall
+    li t0, -1
+    li a1, 53
+    bne a0, t0, 1f
+    /* prlimit64(0, RLIMIT_NOFILE, sp - 32, NULL): set its own limit to the value just read */
+    li a0, 0
+    li a1, 7
+    INC(a2, t1, zero)
+    li a3, 0
+    li a7, 261
+    ecall
+    li a1, 54
+    bnez a0, 1f
+    li a1, 52
+1:  mv a0, a1
+    j finish
+#endif
+#if MODE == 14
+    li a7, 172
+    ecall
+    mv s3, a0
+    fcvt.d.l fs0, s3
+    fcvt.d.l fs1, zero
+    li s2, 50000000
+    mv t0, s2
+1:  fadd.d fs1, fs1, fs0
+    addi t0, t0, -1
+    bnez t0, 1b
+    li a7, 172
+    ecall
+    fcvt.l.d t1, fs1, rtz
+    mul t2, s2, s3
+    li a0, 57
+    beq t1, t2, finish
+    li a0, 58
+    j finish
+#endif
+#if MODE == 15
+    li s3, 0x1000
+    li s11, 17
+    call map_one
+    li s3, 0x1000000
+    li s11, 18
+    call map_one
+    li s3, 0x4000000
+    li s11, 19
+    call map_one
+    li s3, 0x10000000
+    li s11, 20
+    call map_one
+    li a0, 59
+    j finish
+#endif
+#if MODE == 16
+    li t0, -64
+    INC(t1, sp, t0)
+    li t0, 16
+    DERIVE(t2, t1, t0)
+    INC(a0, t2, zero)
+    li a1, 64
+    li a2, 0
+    li a7, 278
+    ecall
+    li a1, 60
+    li t0, 16
+    beq a0, t0, 1f
+    li t0, -14
+    beq a0, t0, 1f
+    li a1, 61
+1:  mv a0, a1
+    j finish
+#endif
+#if MODE == 17
+    li a0, 0
+    li a1, 0
+    li a7, 159
+    ecall
+    li s11, 52
+    bnez a0, fail
+    li a0, 1000
+    li a7, 144
+    ecall
+    li s11, 53
+    bnez a0, fail
+    li a0, 1000
+    li a7, 146
+    ecall
+    li s11, 54
+    bnez a0, fail
+    li a7, 157
+    ecall
+    li s11, 55
+    bltz a0, fail
+    /* "./ok.dom" at sp - 64, argv = {path, NULL} at sp - 128, envp = argv + 16 */
+    li t0, -64
+    INC(t1, sp, t0)
+    li t2, 0x6d6f642e6b6f2f2e     /* "./ok.dom" */
+    sd t2, 0(t1)
+    sd zero, 8(t1)
+    li t0, -128
+    INC(t2, sp, t0)
+    STC(t1, 0, t2)
+    sd zero, 16(t2)
+    sd zero, 24(t2)
+    sd zero, 32(t2)
+    sd zero, 40(t2)
+    INC(a0, t1, zero)
+    INC(a1, t2, zero)
+    li t0, 16
+    INC(a2, t2, t0)
+    li a7, 221
+    ecall
+    neg a0, a0
+    addi a0, a0, 100
+    j finish
+#endif
 #if MODE == 10
     LDC(t2, 16, sp)
     li t0, -32
@@ -236,6 +445,28 @@ _start:
 #endif
     li a0, 42
     j finish
+#if MODE == 15
+/* mmap s3 bytes, check the reference, store and load its last doubleword; keeps it mapped */
+map_one:
+    li a0, 0
+    mv a1, s3
+    li a2, 3
+    li a3, 0x22
+    li a4, -1
+    li a5, 0
+    li a7, 222
+    ecall
+    LCC(t0, a0, x1)
+    li t1, 1
+    bne t0, t1, fail
+    addi t2, s3, -8
+    INC(t3, a0, t2)
+    li t0, 0x5a5a
+    sd t0, 0(t3)
+    ld t1, 0(t3)
+    bne t0, t1, fail
+    ret
+#endif
 fail:
     addi a0, s11, 10
 finish:
