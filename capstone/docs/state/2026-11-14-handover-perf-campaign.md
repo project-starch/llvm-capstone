@@ -17,7 +17,7 @@ directory is not written out because the pre-commit name scan forbids it. Every 
 | Pre-registration and run-by-run trail (Addenda 1-112) | same branch: `capstone/ports/spec-cpu2017/results/2026-11-08-train/PREREG.md` |
 | Raw reading log, one line per board reading | `$H/perf/natstage/RESULTS` |
 | Nested-allocator workloads (separate lane) | branch `nested-workloads`: `capstone/docs/ref/nested-allocator-workloads.md` |
-| RTL plans (tag-word cache, DYN bypass, stage-2 RVC sketch) | branches `land/rtl-twc-reach`, `land/rtl-dynbypass`; dev `capstone/docs/plans/2026-11-14-capability-rvc-stage2-decoder-sketch.md` |
+| RTL plans (tag-word cache, DYN bypass, stage-2 RVC sketch) | dev 46f8d4c6b38f (the next-bitstream plan + R-74); lane `land/rtl-twc-reach` 0b458f3595a6, `land/rtl-dynbypass`; dev `capstone/docs/plans/2026-11-14-capability-rvc-stage2-decoder-sketch.md`; capstone-ariane perf/twc-f2-build 69d5ac2c0, perf/twc-f2-l1d64 67b9ed442, testharness default b36989efd |
 | Compiler gp-relative plan and rules | llvm-capstone branch `gp-relax-prereg` |
 | Rules every agent follows | `CLAUDE.md` (repo root), skills `.claude/skills/board-run`, `.claude/skills/rtl-sim` |
 
@@ -119,7 +119,7 @@ needed: neither is inherited by tmux, and without the second, git push fails.
 - **Store:** all sealed, mode 0444, in `$H/bitstreams/`. The board lane's seal job writes there and refuses to
   overwrite, so never pre-place a file under a sealed name.
 - **Seal sidecar:** each has one in `$H/perf/natstage/SEAL-<name>.sha256`.
-- **Timing:** WNS is measured against the 40 ns operating period. Every bitstream is negative at the signoff corner
+- **Timing:** WNS is measured against the 40 ns operating period (xlnx_clk_gen clk_out1, `tcl/run.tcl:27-32`; the "50 MHz" comment at `ariane_xilinx.sv:1209` is stale). Every bitstream is negative at the signoff corner
   (F -9.66 ns), and bitstreams down to -19 ns have run clean for weeks, but no instrument measures the real margin.
 
 | Short | Name | sha256 | Content | Status |
@@ -129,10 +129,10 @@ needed: neither is inherited by tmux, and without the second, git push fails.
 | final | `…-hpmreplay-dynbypass3-dtlb64-shrinkfix_6d0e754d5` | 72bf215d… | + FP fix, HPM, DYN bypass v3, DTLB 64, SHRINKTO fix | superseded |
 | fdk | `…-dynbypass3-dtlb64-shrinkfix-ic32k_3c6b9906c` | 141f840e… | final + I$ 32 KiB 8-way | superseded by batch |
 | batch | `…-ic32k-r72-stcnoclaim_a47b588a1` | ff36870d… | fdk + R-72 fetch-end check + lever (a) (STC rs1 no-claim) | current table config |
-| **F** | `…-r72-stcnoclaim-twc16k-merge-hpmtag_a948e4134` | ec675c2b… | batch + 16 K-entry tag-word cache (2 MB reach), merge-on-tag-write, HPM events 24-28 | mcf -10.8 %; expected final |
-| B | `…-r72-stcnoclaim-hpmtag_afe4e643e` | 5f8273b4… | batch's old TWC + HPM 24-28 (counter control) | running on board 2 |
-| F2 | `…-twc16k-merge-f2-hpmtag_eeb654104` | 57f8b1e2… | F + targeted fill invalidation | sealed, all 9 keys pass, not yet flashed |
-| L1D-64K | `…-merge-f2-l1d64k-hpmtag_b0f02bac7` | 64d1c569… | F2 + L1D 64 KiB 16-way | identity only: WNS -17.71 and congestion 5 fail; not flashed |
+| **F** | `…-r72-stcnoclaim-twc16k-merge-hpmtag_a948e4134` | ec675c2b… | batch + 16 K-entry tag-word cache (2 MB reach), merge-on-tag-write, one-write-port fix, HPM events 24-28 | mcf -10.8 %; expected final |
+| B | `…-r72-stcnoclaim-hpmtag_afe4e643e` | 5f8273b4… | F's tree before the one-write-port fix (bbfc6abc1 + b9010ad23 + config), TWC at 256 entries, merge compiled out, + HPM 24-28: the tree control for F (the missing fix is functionally inert without a merge write) and the counter baseline | running on board 2 |
+| F2 | `…-twc16k-merge-f2-hpmtag_eeb654104` | 57f8b1e2… | F + targeted fill invalidation | sealed, flash-ready (9/9 keys), not yet flashed |
+| L1D-64K | `…-merge-f2-l1d64k-hpmtag_b0f02bac7` | 64d1c569… | F2 + L1D 64 KiB 16-way | identity only: WNS -17.71 (-5.5 ns against F2 alone, N=1: deeper D$ logic plus density at 99.91 % slices) and congestion 5 fail; not flashed. 64 KiB at 8 ways cannot be built (8 KiB per way exceeds the 4 KiB VIPT index limit) |
 
 **Kits.** In `$H/t3-smoke/`. A kit = bitstream + kernel tree + firmware recipe + command line. Its `board.env` and
 README record each change.
@@ -155,7 +155,9 @@ README record each change.
 - **Before a build or a board:**
   - lint (`verif/sim/rtl-lint-gate.sh`);
   - a 95-test sweep (`verif/sim/SWEEP.md`; the testharness crossbar now defaults to the FPGA's CUT_ALL_PORTS);
-  - a synthesis-only gate for wide changes.
+  - a synthesis-only gate for wide changes. Its mapping-memory key is a delta over the run's own XDC-phase peak +
+    500 MB, not an absolute band. Placed-FF keys exclude the retiming-bistable families and count the build's own FD*
+    primitive sum.
 
 ---
 
@@ -237,22 +239,52 @@ first.
 ## 9. The nested-allocator workloads (lane `nested`)
 
 **The lead's request.** For speedtest1, a pyperformance subset, single-user pgbench, tshark on a pcap, an FFmpeg
-decode and a memcached load, measure each application's own workload with and without its lifetime patch (nested
-allocators protected vs unprotected; the Sublet processor = the batch bitstream). Explain the cost (record-cache hit
-rate, CDERIVE/CREVOKE counts, revoked-subtree size, peak table memory), and give CREVOKE's worst case for subtrees from
-1 to 10^6 nodes, including whether it is interruptible. The lead agreed the plan with the lane directly.
+decode and a memcached load, measure each application's own workload, then explain the cost (record-cache hit rate,
+CDERIVE/CREVOKE counts, revoked-subtree size, peak table memory). Give CREVOKE's worst case for subtrees from 1 to
+10^6 nodes, including whether it is interruptible, and a real case such as a PostgreSQL context reset.
 
-**Status:**
-- speedtest1 `--size 1` on silicon (board 2, ABBA): in-context +1.04 %, wall-clock +1.90 %, 32/32 answers.
-- Record: `nested-workloads` 2796361a4127.
-- The comparison point is the SPEC temporal increment, gcc +0.62 % in-domain so far.
-- The nested lane asks for board slots from the SPEC lane, with a pushed pre-registration and a stage (nat-run2 chains,
-  kit bkit73).
+**Arms, the lead's rule:** exactly two per app, the app's lifetime patch applied vs not applied.
+- Everything else is identical: malloc lifetimes are ON in both, and the bitstream is the batch.
+- There is no pure-RISC-V arm.
+- The lead agreed the plan with the lane directly.
 
-**Held for the lead's word:** HPM events 29-31 (verdict-cache lookups and misses, rev_node walk-busy cycles). The
-lane reads the lead's "record-TLB" as the verdict cache, since no separate record TLB exists in the RTL.
+**Record:** branch `nested-workloads`, `capstone/docs/ref/nested-allocator-workloads.md`. The latest commit,
+3ae593fa513d, adds the gcc comparison.
 
----
+**speedtest1 `--size 1`.**
+- **Silicon** (board 2, ABBA, batch, bkit73): in-context +1.04 %, wall-clock +1.90 %, 32/32 answers. That is about
+  1.7× gcc's SPEC temporal increment (+0.62 % in-domain, +0.61 % wall).
+- **Kernel difference, not read:** the unprotected repeats were 2.47 % apart, over the pre-registered 2 %.
+- **Twin:**
+  - 28,216 CREVOKEs, revoked subtree mean 1.0001 and max 3;
+  - the lifetime table is a fixed 4 MiB (node_flat_records 262144), with 4.8 KB of live records inside it;
+  - the kernel +3.3 % comes from the SQLite patch's aReq array working through the per-syscall page scan;
+  - the lifetimes themselves cost the kernel -0.6 M instructions and the program +0.39 % in-context.
+- **Boot 1 (board 1) was VOID:** the empty `train/in` was never baked. It was fixed and redone on board 2.
+
+**Next steps.** Each waits on the lead's word after speedtest1:
+- **(a) speedtest1 `--size 100`:** twin, then one silicon pair, about 13 h of board time. The lead decides whether to
+  run it.
+- **(b) The apps, in order,** each first on the QEMU twin (slot 28: build both arms, check answers, count lifetimes),
+  then one ~1 h ABBA silicon boot:
+
+  | App | Patch |
+  |---|---|
+  | CPython pyperformance subset | cpython-3.13.7-0014, pymalloc lifetimes |
+  | PostgreSQL pgbench | postgresql-17.0-0003, memory contexts |
+  | tshark | wireshark-4.6.8-0001, wmem |
+  | FFmpeg decode | ffmpeg-9.0.1-0003, pools |
+  | memcached | memcached-1.6.45-0006, slabs and cache |
+
+  Whether each builds on FRCDKMS native is each app's first step.
+- **(c) Board slots:** about 1 h per app on the batch bitstream and bkit73, requested from the SPEC lane with a pushed
+  pre-registration and a stage.
+- **(d) HPM:**
+  - event 23 (verdict-cache miss replays) in place of hpm8. The firmware define is ready: caplifive-opensbi branch
+    `hpm-events-nested` 2c846cf7, `-DCAPSTONE_HPM_EVENTS_NESTED`, worktree `$H/wt-wrap-hpmnest`;
+  - events 29-31 need a new bitstream and are held for the lead. The lane reads the lead's "record TLB" as the verdict
+    cache, since no separate record TLB exists.
+- **(e) CREVOKE worst case:** RTL simulation, no board. Also held until the lead has seen speedtest1.
 
 ## 10. Optimisations: done, in progress, rejected
 
@@ -270,7 +302,7 @@ lane reads the lead's "record-TLB" as the verdict cache, since no separate recor
 | allocator: mapping cache + eviction + in-place realloc | runtime, both arms | basis of arm C |
 
 **In progress:**
-- F's remaining readings, F2, and the gp-relative decision pair (§8).
+- F's remaining readings, and the gp-relative decision pair (§8). F2 is sealed and flash-ready.
 - Kernel cost of perl's full test.pl. Capstone runs +4.73 G kernel instructions against riscv-base on the same twin
   kernel, and touches 2.5× the pages.
   - First finding: each native exec cma_allocs and memsets a node table of node_flat_records × 16 B, then frees it
@@ -299,7 +331,8 @@ lane reads the lead's "record-TLB" as the verdict cache, since no separate recor
 
 - **R-74 (open): tag-cache fill-time safety.** It is verified in simulation on ONE window instance per design (base,
   F, F2, B) with the FPGA's crossbar setting, and forging controls fire. It is not a proof for all timings, so no
-  safety claim may rest on it yet.
+  safety claim may rest on it yet. F2's credit ran on 325cf3bff; the built eeb654104 computes the same index bits at
+  their own width, and tw-fill arm 1 was re-read on eeb654104 with its forging control.
 - **R-73 (open): the debug module's system-bus writes bypass the tag adapter.** The exposure is nil iff the board's
   `reset halt` asserts ndmreset. One gdb read in a board gap settles it (`monitor riscv set_mem_access`, the reset
   config).
@@ -314,9 +347,12 @@ lane reads the lead's "record-TLB" as the verdict cache, since no separate recor
   ratios are same-board (board 3).
 - **Simulation traps** (now in the rtl-sim skill):
   - the memory delay wraps mod 16;
-  - cva6.py may reuse a model across defines;
-  - the testharness crossbar used to be NO_LATENCY;
-  - the D$ replaces at random, so use the CSR_DCACHE flush, not a sweep, to evict.
+  - cva6.py model reuse across define changes is UNPROVEN (both cited cases were the delay wrap). Read the define the
+    model was built with from verFiles.dat;
+  - the testharness crossbar used to be NO_LATENCY. Cycle baselines from before capstone-ariane b36989efd are on the
+    old setting, which `+define+TB_XBAR_NO_LATENCY` restores;
+  - the D$ replaces at random, so use the CSR_DCACHE flush, not a sweep, to evict. twc-reach-ld's pass-2 numbers and
+    the two s07 cold tests from before 67b9ed442 / 69d5ac2c0 came from partial evictions and are superseded.
 
 ---
 
