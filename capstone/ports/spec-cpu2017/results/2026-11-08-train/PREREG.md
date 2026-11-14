@@ -3661,3 +3661,20 @@ on riscv-base gcc.
 **Decision rule** (before the readings): the lever is adopted, on both arms and all 8 rows, iff the Capstone/riscv-base
 ratio improves on perl makerand AND the product of the perl and gcc ratio changes is < 1. If it is adopted, both
 columns are rerun in full. Otherwise it is recorded as measured and not adopted.
+
+## Addendum 111 (2026-11-14 14:45, before it runs): the nested lane's speedtest1 boot, second attempt, on board 2
+
+**The first attempt (Addendum 109) produced no reading.** It ran on board 1 from 14:27 to 14:35 and the smoke passed,
+but the stage stopped at its first command: "cp: can't stat '/test-domains/vbatch/train/in/.'". The kit's bake
+manifest is built by `find -type f`, so an empty train/in was never baked. The nested lane added train/in/NO-INPUTS.
+train/run.sh and both images are unchanged. A real bake plus the kit's BOARD_STUB=2 relink shows the cp line passing on
+the new cpio and failing on the old one.
+
+**Run, board 2:**
+- **Where in the queue:** chain au-b2 (nat-run2.sh, kit bkit73, the batch bitstream a47b588a1), after board 2's running
+  x264. Config B's chain (am-b2, Addendum 106) is re-chained behind it, with its list unchanged.
+- **Flash:** the batch bitstream for this boot, then B's.
+- **Output:** nested/st1/board/b2-run.
+
+**Pre-registration:** the nested lane's, nested-workloads 9b325ad6fcac, which cites c3663f0362a1. Predictions are
+unchanged.
