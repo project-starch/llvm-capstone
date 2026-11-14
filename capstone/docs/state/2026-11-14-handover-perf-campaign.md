@@ -219,20 +219,24 @@ first.
 
 | Board | Now | Queued after it (chains, nat-run2.sh) |
 |---|---|---|
-| 1 | F: perl makerand FRCDKMS (chain an-b1) | ao-b1 (F tag counters mcf, gcc; bkit76) → as-gpc-b1 → as-gpr2-b1 (gp pair on F) → aw-s (spatial gcc, mcf, imagick, nab, lbm, xz on F; bkit75) → aw-sp (spatial full perl on F; bkit80) |
-| 2 | B: mcf then gcc with tag counters (chain am-b2) | aw-t (temporal imagick, nab, lbm, xz on F) → aw-tp (temporal full perl on F; bkit80) → aw-sx (spatial x264 on F) |
-| 3 | temporal x264 on F (chain av-b3, ~10 h) | — free after about 03:00 on 15 Nov: candidates are F2's A/B, nested apps, gp reruns if adopted |
+| 1 | gp pair on F: GPR2 gcc train01 (chain as-gpr2-b1; GPR2 perl makerand done, 262.62 s) | aw-s (spatial gcc, mcf, imagick, nab, lbm, xz on F; bkit75) → aw-sp (spatial full perl on F; bkit80) |
+| 2 | idle: the switches are being parked (Addendum 119) | aw-sx (spatial x264 on F, ~10 h), relaunched after the park. aw-tp (temporal full perl) and the first x264 attempt never reached the UART: the 21:06 xz run's final aperture read timed out and its setsw(0) park with it, so the switches stayed at 217 and sw[0] gave the console TX to the tracer. No benchmark ran. The perl row reruns on board 3 |
+| 3 | temporal x264 on F (chain av-b3, ~10 h, until ~03:00) | ay-b3 (the nested lane's speedtest1 event-23 ABBA boot on F, kit bkit75n, ~31 min; Addendum 117) → aw-tp on board 3 (the temporal full-perl row, rerun after board 2's failed boot; Addendum 118) → ax-b3 (pool A/B: temporal full perl on F with node_table_pool=4, bkit81, Addendum 115; now same-board against aw-tp) |
 
 **Decisions waiting on readings:**
 - **F is final (decided, Addendum 113).** The final-config rows on F are all queued (table above). The F dom kit for
   full perl is bkit80. The tag counters (B against F) are the pre-registered deciding reading for WHY F helps; they
-  are due tonight.
+  were read on 14 Nov: they explain F's gain (tag reads and writes halve or better, L1D misses and page fills
+  unchanged; the RESULTS lines of 19:33 and 20:15).
 - **gp-relative.**
   - **Rule (Addendum 110):** adopt it on both arms iff the perl ratio improves and perl×gcc improves.
   - **riscv-base silicon, RVGP against RVF3:** perl makerand -6.2 %, gcc -0.60 %.
   - **Capstone twins** (shift-1 user instructions, each arm 2/2), GPR2 against GPC: perl makerand -12.7 %, gcc
     +0.67 %, mcf +0.28 M, nab +0.13 %, imagick/lbm/xz flat. The riscv-base twin gives perl -8.7 %, gcc -0.42 %. So
-    the twin predicts gcc worsens on Capstone; the board pair, queued on board 1, decides.
+    the twin predicts gcc worsens on Capstone; the board pair on board 1 decides.
+  - **Capstone silicon on F, GPR2 against GPC:** perl makerand 287.74 → 262.62 s (-8.7 %), so the makerand ratio
+    improves by about 2.7 %. gcc control GPC 1,992.35 s; GPR2 gcc is running. Addendum 114: if gcc's ratio worsens,
+    gp is not adopted; otherwise a full-perl pair decides.
   - **GlobalMerge rule:** decided by riscv-base alone, pre-registered, outcome "LLVM default". It is
     `docs/plans/2026-11-14-gp-relax-globalmerge-rule.md` on lane branch `gp-relax-prereg` (707931298371, aa1e91b0628e,
     7125fd54bf4d), not on dev.
@@ -387,6 +391,12 @@ CDERIVE/CREVOKE counts, revoked-subtree size, peak table memory). Give CREVOKE's
     the two s07 cold tests from before 67b9ed442 / 69d5ac2c0 came from partial evictions and are superseded.
 
 ---
+
+- **A failed switch park voids the NEXT boot on that board (14 Nov, Addendum 119).** BAKED_FINAL_APERTURES steps
+  the switches after the rungs. When a `switch_state` wait times out, the `finally: setsw(0)` park can time out too.
+  The next boot then connects at an odd value and transmits nothing. It looks like a dead board. Check the
+  connect-time `switch_state` in driver.log: it must be all zero. The board lane is hardening the driver (verified
+  park, refuse to cold-boot with sw[0] or sw[1] set).
 
 ## 12. Lessons from this campaign (each one cost a run or a retraction)
 
