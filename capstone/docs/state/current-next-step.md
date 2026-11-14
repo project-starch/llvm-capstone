@@ -5,7 +5,9 @@ when connecting the libc to the kernel. The loader must write tagged argv,
 envp and pointer-valued auxv entries, then restore tagged sp and image gp.
 Syscall numbers now arrive in a7. mmap must return a tagged depth-1 block.
 Run the linked smoke first and require stdout `ok` and exit status 7.
-Then run the mallocng smoke. Neither program has run yet.
+Then run the mallocng, setjmp and signal-registration probes. Their builds
+and disassembly checks pass, but execution remains unverified. Require
+`setjmp ok` and `signal ok` with exit zero from the two new probes.
 Threads, caught signals and epoll side tables remain later work.
 
 ## RTL implementation from the rebased native branch

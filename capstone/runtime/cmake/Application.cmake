@@ -50,7 +50,7 @@ function(capstone_configure_application target)
     set(startup "${capstone}/runtime/virtual/start.S")
     target_compile_options(${target} PRIVATE
       "$<$<COMPILE_LANGUAGE:C>:SHELL:${virtual_codegen}>")
-    target_compile_definitions(${target} PRIVATE CAPSTONE_RUNTIME_VIRTUAL=1)
+    target_compile_definitions(${target} PRIVATE CAPSTONE_RUNTIME_VIRTUAL=1 CAPSTONE_RUNTIME_TRAP=1)
   endif()
   if(NOT TARGET capstone-application-core)
     add_library(capstone-application-core OBJECT
@@ -61,7 +61,8 @@ function(capstone_configure_application target)
         "${capstone}/runtime/virtual/thread.c"
         "${capstone}/runtime/virtual/pthread.c"
         "${capstone}/runtime/virtual/fenv.c")
-      target_compile_definitions(capstone-application-core PRIVATE CAPSTONE_RUNTIME_VIRTUAL=1)
+      # Assembly needs the trap selector too. virtual_codegen applies only to C.
+      target_compile_definitions(capstone-application-core PRIVATE CAPSTONE_RUNTIME_VIRTUAL=1 CAPSTONE_RUNTIME_TRAP=1)
       target_sources(capstone-application-core PRIVATE
         "${musl}/native-syscall.S" "${musl}/linux-start.c" "${musl}/delegate.c")
       target_compile_options(capstone-application-core PRIVATE

@@ -4,8 +4,11 @@ On `trap/s5-libc`, the virtual runtime uses stack startup and plain Linux
 ecalls with numbers in a7. All 1,349 musl files compiled on p13. The static
 write/mmap/munmap smoke and mallocng smoke linked and passed disassembly checks.
 The old startup object retained its image magic as the negative control.
-The CMake SDK and its smoke link also passed. Execution awaits the kernel
-loader. [Build procedure and exact integration contract](../../ports/musl-capstone/tests/trap/README.md).
+The CMake SDK and its smoke link also passed. Jump buffers now preserve
+tags without launcher hooks, and signal registration uses Linux syscalls.
+The jump and signal probes link and pass disassembly checks. The old jump
+object fails to link as the negative control. The SDK also links sigsetjmp.
+Execution awaits a compatible kernel loader. [Build procedure and exact integration contract](../../ports/musl-capstone/tests/trap/README.md).
 
 ## Rebased native kernel: full existing SPEC C-port gate passes
 
