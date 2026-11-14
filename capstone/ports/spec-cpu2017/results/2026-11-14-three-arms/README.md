@@ -3,7 +3,7 @@
 This is a live table: rows are filled as board runs land. Pre-registrations, predictions and the run-by-run trail are
 in [`../2026-11-08-train/PREREG.md`](../2026-11-08-train/PREREG.md) (Addendum 107 onward for this table).
 
-## Status (updated 2026-11-14 16:40 +08)
+## Status (updated 2026-11-14 17:30 +08)
 
 - **riscv-base:** complete, all 8 rows.
 - **Capstone temporal:**
@@ -23,25 +23,21 @@ in [`../2026-11-08-train/PREREG.md`](../2026-11-08-train/PREREG.md) (Addendum 10
 
 ### Running now (three FPGA boards, serialized by bookings)
 
+**F is the final temporal bitstream** (Addendum 113). It beats the batch by -10.8 % on mcf and -18.7 % on gcc with the
+same images. The "final config" columns are being re-measured on F.
+
 | Board | Now | Then, in order |
 |---|---|---|
-| 1 | the nested-allocator lane's speedtest1 (now) | 1. (speedtest1 running) (protected vs unprotected)<br>2. bitstream **F**: mcf, gcc, perl makerand (FRCDKMS; one variable against batch: the tag-word cache)<br>3. F with tag-path counters: mcf, gcc<br>4. gp-relative decision pair on F: GPC then GPR2 (perl makerand, gcc) |
-| 2 | the nested-allocator lane's speedtest1 (protected vs unprotected), batch | bitstream **B** (old tag cache + tag-path counters): mcf, gcc |
-| 3 | riscv-base with gp relaxation (RVGP): perl makerand, gcc | riscv-base with gp relaxation (RVGP): perl makerand, gcc. Then the long final rows (x264, full perl) on the chosen final bitstream |
+| 1 | F: perl makerand (FRCDKMS) | F tag-path counters (mcf, gcc) → gp decision pair on F (GPC, GPR2) → **spatial** gcc, mcf, imagick, nab, lbm, xz → **spatial** full perl |
+| 2 | config B (tag-path counters): mcf, then gcc | **temporal** imagick, nab, lbm, xz → **temporal** full perl → **spatial** x264 |
+| 3 | **temporal** x264 on F (~10 h, until ~03:00) | — |
 
-- **Final bitstream.** F's first reading: mcf -10.8 % against the batch with the same images (in-domain cycles
-  179.4 G -> 159.6 G; issue-stall cycles -18 G; L1D misses, DTLB walks, faults and checks unchanged).
-  - Read it as the tag-word-cache change, reach and merge-on-write together. No silicon build separates the two.
-  - N = 1 per image. Config B (the batch's old tag cache on F's tree, with counters, board 2) is the control that the
-    gain is the tag cache and not the rest of the tree; its mcf should sit near the batch's.
-  - The pre-registered deciding reading is the tag counters (tag reads per marked-page miss on B, their fall on F),
-    still running.
-  - F becomes the final temporal configuration if gcc on F (running) does not lose. Then the 'final config' columns are re-measured on F.
-- **Next bitstream.** F2 + L1D 64 KiB (capstone-ariane b0f02bac7) and F2 alone (eeb654104, the fallback and
-  one-variable control) are being built on apollo now.
-- **gp-relative globals** (pre-registered in Addendum 110). The lever is taken for both arms or neither, by the board
-  pairs. If it is taken, both columns, riscv-base included, are re-measured with it: today's riscv-base images use no
-  gp-relative access, because lld does not relax by default, while GNU ld would.
+- **F's scope.** The gain is the tag-word-cache change, reach and merge together, at N = 1 per row. The pre-registered
+  deciding reading, the tag counters of B against F, is due tonight.
+- **Next bitstream.** F2 (F + targeted fill invalidation, eeb654104) is sealed and flash-ready. L1D 64 KiB
+  (b0f02bac7) failed timing and is not flashed.
+- **gp-relative globals.** Taken for both arms or neither, by the board pairs (Addendum 110). riscv-base with gp:
+  perl makerand -6.2 %, gcc -0.6 %. The Capstone pair runs on board 1.
 
 ### Bitstreams referenced here
 
@@ -114,14 +110,14 @@ the table being measured now. A row moves into them as its run lands.
 | Benchmark | riscv-base (s) | Capstone temporal, best so far (s) | ratio | configuration | final config: temporal ratio | final config: spatial ratio |
 |---|---|---|---|---|---|---|
 | 500.perlbench_r (full: makerand + test.pl) | 12,623.02 | 17,051.48 | 1.351 | fdk / FRCDK | pending | pending |
-| 502.gcc_r (train01) | 1,722.35 | 2,446.30 | 1.420 | batch / FRCDKMS | 1.420 | 1.412 (2,431.58 s) |
-| 505.mcf_r | 5,125.02 | 6,576.13 | 1.283 | **F** / FRCDKMS | 1.438 (7,372.16 s, batch) | pending |
+| 502.gcc_r (train01) | 1,722.35 | 1,989.28 | **1.155** | **F** / FRCDKMS | **1.155** (F) | 1.412 (batch; F pending) |
+| 505.mcf_r | 5,125.02 | 6,576.13 | 1.283 | **F** / FRCDKMS | 1.283 (F) | pending |
 | 519.lbm_r | 1,077.50 | 994.66 | **0.923** | fdk / FR | pending | pending |
 | 525.x264_r | 35,613.24 | 34,053.48 | **0.956** | fdk / FR | pending | pending |
 | 538.imagick_r | 11.08 | 12.76 | **1.152** | batch / FRCDKMS | **1.152** | pending |
 | 544.nab_r | 679.92 | 714.92 | **1.051** | batch / FRCDKMS | **1.051** | pending |
 | 557.xz_r | 4,993.81 | 5,196.56 | **1.041** | fdk / FR | pending | pending |
-| geomean | | | 1.134 | | | |
+| geomean | | | 1.105 | | | |
 
 Bold = below the 1.20 target. perl makerand alone, the quick A/B sub-run used for debugging only: 257.90 s on
 riscv-base against 329.70 s on batch / FRCDKMS, ratio 1.278.
