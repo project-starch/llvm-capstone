@@ -14,6 +14,9 @@ from pathlib import Path
 import common as C
 import boardvm  # noqa: E402
 import virtualvm  # noqa: E402
+# virtualvm puts runtime/virtual first on sys.path, and it has a run.py of its own: take juliet's run.py by path.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.modules.pop("run", None)
 from run import platform  # noqa: E402  (the same platform record as run.py, so judge.py can compare them)
 
 
