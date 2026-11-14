@@ -3,7 +3,7 @@
 This is a live table: rows are filled as board runs land. Pre-registrations, predictions and the run-by-run trail are
 in [`../2026-11-08-train/PREREG.md`](../2026-11-08-train/PREREG.md) (Addendum 107 onward for this table).
 
-## Status (updated 2026-11-14 14:35 +08)
+## Status (updated 2026-11-14 15:00 +08)
 
 - **riscv-base:** complete, all 8 rows.
 - **Capstone temporal:**
@@ -26,7 +26,7 @@ in [`../2026-11-08-train/PREREG.md`](../2026-11-08-train/PREREG.md) (Addendum 10
 | Board | Now | Then, in order |
 |---|---|---|
 | 1 | the nested-allocator lane's speedtest1 (now) | 1. (speedtest1 running) (protected vs unprotected)<br>2. bitstream **F**: mcf, gcc, perl makerand (FRCDKMS; one variable against batch: the tag-word cache)<br>3. F with tag-path counters: mcf, gcc<br>4. gp-relative decision pair on F: GPC then GPR2 (perl makerand, gcc) |
-| 2 | x264, fdk / FR (until ~15:00) | bitstream **B** (old tag cache + tag-path counters): mcf, gcc |
+| 2 | the nested-allocator lane's speedtest1 (protected vs unprotected), batch | bitstream **B** (old tag cache + tag-path counters): mcf, gcc |
 | 3 | full perl, fdk / FRCDK (until ~16:00) | riscv-base with gp relaxation (RVGP): perl makerand, gcc. Then the long final rows (x264, full perl) on the chosen final bitstream |
 
 - **Final bitstream.** If F beats the batch on mcf and gcc, F becomes the final temporal configuration and the table
@@ -111,11 +111,11 @@ the table being measured now. A row moves into them as its run lands.
 | 502.gcc_r (train01) | 1,722.35 | 2,446.30 | 1.420 | batch / FRCDKMS | 1.420 | 1.412 (2,431.58 s) |
 | 505.mcf_r | 5,125.02 | 7,349.81 | 1.434 | batch / FR | 1.438 (7,372.16 s) | pending |
 | 519.lbm_r | 1,077.50 | 994.66 | **0.923** | fdk / FR | pending | pending |
-| 525.x264_r | 35,613.24 | 36,219.53 | **1.017** | mlp / arm C | pending | pending |
+| 525.x264_r | 35,613.24 | 34,053.48 | **0.956** | fdk / FR | pending | pending |
 | 538.imagick_r | 11.08 | 12.76 | **1.152** | batch / FRCDKMS | **1.152** | pending |
 | 544.nab_r | 679.92 | 714.92 | **1.051** | batch / FRCDKMS | **1.051** | pending |
 | 557.xz_r | 4,993.81 | 5,196.56 | **1.041** | fdk / FR | pending | pending |
-| geomean | | | 1.172 | | | |
+| geomean | | | 1.155 | | | |
 
 Bold = below the 1.20 target. perl makerand alone, the quick A/B sub-run used for debugging only: 257.90 s on
 riscv-base against 329.70 s on batch / FRCDKMS, ratio 1.278.
