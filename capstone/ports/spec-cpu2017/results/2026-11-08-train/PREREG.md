@@ -3971,3 +3971,34 @@ inlined after its size check, and get_meta's fields read once. So riscv-base's m
 to it, and riscv-base's perl and gcc are rerun before any table ratio uses FRCDKMSa3. A shared software change is the
 lead's stated reason for a riscv-base rerun. The compiler lane is asked which hunks apply to plain musl. Until both
 arms carry the change, a FRCDKMSa3 reading is reported as an optimisation result, not as a table row.
+
+## Addendum 122 (2026-11-14 23:18 +08): three board-1 boots refused at the driver pin; my edit to the shared driver tree is reverted
+
+**What happened.** At 22:25 I applied the board lane's switch-park hardening (dev c1a2803290ea, fpga_driver/ only) to
+/tmp/capstone/wt-gate, the driver tree the SPEC kits use. Every kit pins that driver:
+`BOARD_DRIVER_SHA=fd38816a90c64c22` is the hash of run_baked_rungs_fpga.py, checked by board-run.sh before any board
+contact. So the next three board-1 boots stopped at "STOP: the driver is not the pinned one", after bake and firmware
+and before the console:
+- aw-s's spatial mcf at 22:59;
+- aw-sp's spatial full perl at 23:00;
+- bb-b1's FRCDKMSa3 gcc at 23:12.
+
+Each stopped with rc=2, and no board was touched. Board 1 sat idle from 22:59 to the relaunch. Boards 2 and 3 were
+mid-run on drivers that had loaded before the edit, and had no new boot in the window.
+
+**The fix.** wt-gate's two driver files are restored from copies taken just before the apply, and the three added files
+are removed. The pin matches again (run_baked_rungs_fpga.py fd38816a90c64c22), and the tree's other uncommitted hunks
+are as they were (diff --stat identical). The hardening will reach the kits only as a deliberate change: a new
+BOARD_DRIVER_SHA in each kit, with its own addendum, between campaigns or with a control boot. It must not be a silent
+in-place edit. Until then, the switch-park risk of Addendum 119 stands. It is caught by the smoke gate, and costs idle
+board time.
+
+**What would have caught it:** reading the consumers of a shared tree before editing it. The pin is in every kit's
+board.env, and `grep -r wt-gate t3-smoke/*/board.env` shows it.
+
+**Relaunch on board 1, unchanged stages and pre-registrations:**
+- aw-s2: the rest of aw-s (spatial mcf, imagick, nab, lbm, xz; Addendum 113);
+- aw-sp (spatial full perl; Addendum 113);
+- bb-b1 (FRCDKMSa3 gcc; Addendum 121).
+Each writes a new out directory with suffix `-b1r`. The refused runs' directories stay as records. They hold no
+result.
