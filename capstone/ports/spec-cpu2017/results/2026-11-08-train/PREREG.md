@@ -4002,3 +4002,20 @@ board.env, and `grep -r wt-gate t3-smoke/*/board.env` shows it.
 - bb-b1 (FRCDKMSa3 gcc; Addendum 121).
 Each writes a new out directory with suffix `-b1r`. The refused runs' directories stay as records. They hold no
 result.
+
+## Addendum 123 (2026-11-14 23:20 +08): board 2 runs the nested lane's CPython ABBA after spatial x264
+
+**What runs.** The nested lane's pyperformance subset under CPython. It is four one-arm boots, U P P U, on F with kit
+bkit75n (hpm8 = event 23). Its pre-registration, with the twin of record and the predictions, is nested-workloads
+4174d368e78d. Images: unprotected b0b29e89…, protected eabba900…. Stages:
+- board-cpy/cpy-u1 and cpy-u2 are copies of nested/cpy/board/cpy-u-stage;
+- cpy-p1 and cpy-p2 are copies of cpy-p-stage.
+Each copy is checked against its source's SHA256SUMS (68 lines, train/ included) and by diff -rq. Firmware is
+21,663,240 B per boot. The list gives each boot 3,600 s and a 50-minute booking, about 3.3 h in all.
+
+**Order on board 2.** aw-sx (spatial x264, until ~08:00) → a 15-minute gap → **bc-b2** (this ABBA). The gap is for the
+board lane's one-minute switch_reset_all check (no boot) on board 2. A waiter process holds bc-b2 until aw-sx exits
+and then for 900 s more.
+
+**Reading.** As with ay-b3, the SPEC classifier reads NO RESULT on this stage format, and the nested lane reads the
+result with its own parser. A failed smoke stops the chain.
