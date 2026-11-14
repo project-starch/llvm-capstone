@@ -24,6 +24,13 @@ source "$SCRIPT_DIR/../../tests/capstone-test-env.sh"
 MUSL_SRC_DIR=$(bash "$SCRIPT_DIR/fetch-musl.sh" | tail -1)
 ARCH_DIR="$MUSL_SRC_DIR/arch/capstone64"
 
+# The startup overlay changes glue.h, whose complete content is in patch
+# 0009. Undo this final overlay before checking the older patch's context.
+startup_patch="$SCRIPT_DIR/musl-patches/0011-linux-trap-startup.patch"
+if patch -d "$MUSL_SRC_DIR" -p1 -R --dry-run -s -f < "$startup_patch" >/dev/null 2>&1; then
+  patch --no-backup-if-mismatch -d "$MUSL_SRC_DIR" -p1 -R -s -f < "$startup_patch"
+fi
+
 # Patches apply once: a patch that is already in (reverse applies cleanly) is
 # skipped, one that fits neither way is an error, not a silent partial tree.
 for patch in "$SCRIPT_DIR"/musl-patches/*.patch; do

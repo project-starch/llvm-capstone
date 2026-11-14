@@ -1,3 +1,17 @@
+#ifdef CAPSTONE_RUNTIME_TRAP
+#include <errno.h>
+#include <stddef.h>
+#include <time.h>
+#include <unistd.h>
+#include <stdlib.h>
+int __clone(int (*entry)(void *), void *stack, int flags, void *arg, ...)
+{ return -ENOSYS; }
+_Noreturn void __unmapself(void *base, size_t size) { _Exit(127); }
+_Noreturn void __capstone_virtual_pthread_exit(long status) { _Exit(status); }
+long __capstone_virtual_futex(void *word, int op, int value,
+                             const struct timespec *timeout, int bitset)
+{ return -ENOSYS; }
+#else
 /* musl owns pthread objects, TLS, locks and join semantics. Linux workers
  * execute the existing virtual contexts. Only clone and final exit differ. */
 #define _GNU_SOURCE
@@ -180,3 +194,5 @@ long __capstone_virtual_futex(void *word, int op, int value, const struct timesp
     long nanos = timeout ? timeout->tv_nsec : 0;
     return __capstone_vm_futex(word, op, value, seconds, nanos, bitset);
 }
+
+#endif

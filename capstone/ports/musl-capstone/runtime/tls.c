@@ -1,3 +1,39 @@
+#ifdef CAPSTONE_RUNTIME_TRAP
+#include <locale.h>
+#include <sys/mman.h>
+#include "pthread_impl.h"
+#include "libc.h"
+#include "syscall.h"
+
+/* Static image TLS. Linker symbols retain the image reference, unlike a
+ * cast of the integer p_vaddr in an ELF program header. */
+extern unsigned char __capstone_tls_image[], __capstone_tdata_end[], __capstone_tls_end[];
+static struct tls_module image_tls;
+int __capstone_tls_ready;
+void __init_tls(size_t *aux)
+{
+    (void)aux;
+    image_tls.image = __capstone_tls_image;
+    image_tls.len = __capstone_tdata_end - __capstone_tls_image;
+    image_tls.size = __capstone_tls_end - __capstone_tls_image;
+    image_tls.align = 4096;
+    libc.tls_head = &image_tls;
+    libc.tls_cnt = 1;
+    libc.tls_align = 4096;
+    libc.tls_size = (2 * sizeof(void *) + sizeof(struct pthread) +
+                     image_tls.size + 4096 + 15) & -16UL;
+    /* mmap may fail before errno has a thread pointer. Use its raw typed
+     * entry and terminate directly on failure. */
+    void *mem = __capstone_linux_syscall_ref(SYS_mmap, 0, __scc(libc.tls_size),
+        __scc(PROT_READ | PROT_WRITE), __scc(MAP_PRIVATE | MAP_ANONYMOUS), __scc(-1), 0);
+    if ((unsigned long)mem >= (unsigned long)-4095 || __init_tp(__copy_tls(mem))) {
+        __syscall(SYS_exit_group, 127);
+        __builtin_trap();
+    }
+    libc.can_do_threads = 0;
+    __capstone_tls_ready = 1;
+}
+#else
 /* Thread-local storage for every context of a domain.
  *
  * musl reaches errno, the locale and the cancellation state through the thread
@@ -157,3 +193,5 @@ int __capstone_context_tid(void)
  * set_tid_address answered the placeholder 1. Once the record is in, the one
  * thread's tid is the task's pid: raise() and pthread_kill() send there. */
 void __capstone_set_tid(int tid) { __pthread_self()->tid = tid; }
+
+#endif

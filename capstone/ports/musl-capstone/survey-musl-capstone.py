@@ -233,7 +233,7 @@ def main() -> int:
                   "-Xclang", "-target-feature", "-Xclang", "+d",
                   "-Xclang", "-target-abi", "-Xclang", "lp64",
                   "-Xclang", "-target-feature", "-Xclang", movc_feature(),
-                  "-DCAPSTONE_MUSL_MALLOC=1"]
+                  "-DCAPSTONE_MUSL_MALLOC=1", "-DCAPSTONE_RUNTIME_TRAP=1"]
 
     objdir = pathlib.Path(args.objects).resolve() if args.objects else None
 
