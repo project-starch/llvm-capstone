@@ -5,7 +5,13 @@
 # fault ends one program, a watchdog (CAPSTONE_STEP_TIMEOUT, default 600 s) kills a hung one, and only a
 # dead guest costs a reboot, which the step records as a harness failure, never as a verdict.
 #
-# Steps, in order. A step whose inputs are unset is skipped and says so.
+# EVAL_STEPS names the steps in order (default: gate juliet corpora plan). Besides those four it takes
+# juliet:SET:PART with PART one of census, seeded, probe or judge, so a run can put the long spatial census
+# last. A step whose inputs are unset is skipped and says so.
+#
+# Parallel VMs: Juliet batches run in JULIET_LANES lanes (run.py --lanes, default 16 here), the corpora
+# and the plan lines each in their own lane, up to EVAL_LANES (default 16) at once. Each lane holds the
+# global lock shared and its own domain lock CAPSTONE_QEMU_DOMAIN_LOCK.<lane>.
 #   kit       KIT, or a new OUT/kit from SUBLET_QEMU, SUBLET_KERNEL, SUBLET_FIRMWARE (trap_platform.py)
 #   gate      PROTECTED_FAULT (a .dom that makes a Sublet access fault) and PROTECTED_OK (a .dom that
 #             exits 0) in one boot: the first must die by SIGSEGV with the launcher's fault line, the
@@ -35,15 +41,26 @@ mkdir -p "$OUT"
 OUT=$(cd "$OUT" && pwd)
 export CAPSTONE_QEMU_LOCK=${CAPSTONE_QEMU_LOCK:-$HOME/asr-work/qemu-gate.lock}
 export CAPSTONE_QEMU_DOMAIN_LOCK=${CAPSTONE_QEMU_DOMAIN_LOCK:-$OUT/lock}
+export JULIET_LANES=${JULIET_LANES:-16}
+EVAL_LANES=${EVAL_LANES:-16}
 SUMMARY=$OUT/summary.tsv
-printf 'step\trc\tseconds\n' > "$SUMMARY"
+[ -f "$SUMMARY" ] || printf 'step\trc\tseconds\n' > "$SUMMARY"
 
 main() {
+  local step set part
   step_kit
-  step_gate || { echo "STOPPED: the kernel does not run protected programs with a fault line (see $OUT/gate)"; exit 1; }
-  step_juliet
-  step_corpora
-  step_plan
+  for step in ${EVAL_STEPS:-gate juliet corpora plan}; do
+    case $step in
+      gate) step_gate || { echo "STOPPED: the kernel does not run protected programs with a fault line (see $OUT/gate)"; exit 1; } ;;
+      juliet) for set in ${JULIET_SETS:-temporal spatial}; do
+                for part in census seeded probe judge; do juliet_part "$set" "$part"; done
+              done ;;
+      juliet:*:*) set=${step#juliet:}; part=${set#*:}; set=${set%%:*}; juliet_part "$set" "$part" ;;
+      corpora) step_corpora ;;
+      plan) step_plan ;;
+      *) echo "STOPPED: unknown step $step"; exit 2 ;;
+    esac
+  done
   echo "DONE: $SUMMARY"
   cat "$SUMMARY"
 }
@@ -73,33 +90,37 @@ step_gate() {
     grep -q "^$ok exit 0$" "$OUT/gate.txt"
 }
 
-step_juliet() {
+juliet_part() {
+  local set=$1 part=$2
   if [ -z "${JULIET_PREBUILT:-}" ] || [ -z "${JULIET_SRC:-}" ] || [ -z "${JULIET_HELPER:-}" ] ||
      [ -z "${SDK:-}" ] || [ -z "${LLVM_BIN:-}" ]; then
     echo "=== juliet skipped: set JULIET_PREBUILT, JULIET_SRC, JULIET_HELPER, SDK and LLVM_BIN"
     return 0
   fi
-  local J=$REPO/capstone/bug-corpora/juliet set d out build
-  for set in ${JULIET_SETS:-temporal spatial}; do
-    d=$JULIET_PREBUILT/$set
-    out=$OUT/juliet/$set
-    mkdir -p "$out"
-    build=$d/build
-    if [ ! -d "$build" ]; then
-      build=$out/build
-      timed "juliet-$set-build" python3 "$J/build.py" --manifest "$d/manifest.json" --juliet "$JULIET_SRC" \
-        --sdk "$SDK" --out "$build"
-    fi
-    timed "juliet-$set-run" python3 "$J/run.py" --build "$build" --kit "$KIT" --helper "$JULIET_HELPER" \
-      --out "$out/run"
-    timed "juliet-$set-run-seeded" python3 "$J/run.py" --build "$d/build-seeded" --kit "$KIT" \
-      --helper "$JULIET_HELPER" --out "$out/run-seeded"
-    timed "juliet-$set-probe" python3 "$J/probe.py" --sdk "$SDK" --kit "$KIT" --helper "$JULIET_HELPER" \
-      --out "$out/probe"
-    timed "juliet-$set-judge" python3 "$J/judge.py" --manifest "$d/manifest.json" --juliet "$JULIET_SRC" \
-      --build "$build" --run "$out/run" --seeded-build "$d/build-seeded" --seeded-run "$out/run-seeded" \
-      --llvm-bin "$LLVM_BIN" --out "$out/results" --probe "$out/probe/probe.json"
-  done
+  local J=$REPO/capstone/bug-corpora/juliet d=$JULIET_PREBUILT/$set out=$OUT/juliet/$set build
+  mkdir -p "$out"
+  build=$d/build
+  [ -d "$build" ] || build=$out/build
+  case $part in
+    census)
+      if [ ! -d "$build" ]; then
+        timed "juliet-$set-build" python3 "$J/build.py" --manifest "$d/manifest.json" --juliet "$JULIET_SRC" \
+          --sdk "$SDK" --out "$build"
+      fi
+      timed "juliet-$set-run" python3 "$J/run.py" --build "$build" --kit "$KIT" --helper "$JULIET_HELPER" \
+        --out "$out/run" ;;
+    seeded)
+      timed "juliet-$set-run-seeded" python3 "$J/run.py" --build "$d/build-seeded" --kit "$KIT" \
+        --helper "$JULIET_HELPER" --out "$out/run-seeded" ;;
+    probe)
+      timed "juliet-$set-probe" python3 "$J/probe.py" --sdk "$SDK" --kit "$KIT" --helper "$JULIET_HELPER" \
+        --out "$out/probe" ;;
+    judge)
+      timed "juliet-$set-judge" python3 "$J/judge.py" --manifest "$d/manifest.json" --juliet "$JULIET_SRC" \
+        --build "$build" --run "$out/run" --seeded-build "$d/build-seeded" --seeded-run "$out/run-seeded" \
+        --llvm-bin "$LLVM_BIN" --out "$out/results" --probe "$out/probe/probe.json" ;;
+    *) echo "STOPPED: unknown Juliet part $part"; exit 2 ;;
+  esac
 }
 
 step_corpora() {
@@ -115,11 +136,12 @@ step_corpora() {
     fi
     for arm in $ARMS; do
       name=$(echo "$corpus-$arm" | tr / -)
-      timed "$name" python3 "$REPO/capstone/bug-corpora/tools/run-virtual-cases.py" \
+      in_lane timed "$name" python3 "$REPO/capstone/bug-corpora/tools/run-virtual-cases.py" \
         --corpus "$REPO/capstone/bug-corpora/$corpus" --arm "$arm" --virtual-kit "$KIT" --sdk "$SDK" \
         --llvm-bin "$LLVM_BIN" --out "$OUT/corpora/$name" --raw "$OUT/raw/$name" "${args[@]}"
     done
   done
+  wait_lanes
 }
 
 step_plan() {
@@ -132,8 +154,22 @@ step_plan() {
   while IFS= read -r line; do
     case $line in ''|'#'*) continue ;; esac
     n=$((n + 1))
-    timed "plan-$n" bash -c "cd '$REPO' && $line"
+    in_lane timed "plan-$n" bash -c "cd '$REPO' && $line"
   done < "$EVAL_PLAN"
+  wait_lanes
+}
+
+# in_lane COMMAND...: run COMMAND in the background in the next free lane (at most EVAL_LANES at once),
+# under its own domain lock, so its boot runs beside the others.
+LANE=0
+in_lane() {
+  while [ "$(jobs -rp | wc -l)" -ge "$EVAL_LANES" ]; do sleep 2; done
+  LANE=$((LANE + 1))
+  CAPSTONE_QEMU_DOMAIN_LOCK=$CAPSTONE_QEMU_DOMAIN_LOCK.e$LANE "$@" > /dev/null &
+}
+
+wait_lanes() {
+  wait
 }
 
 # timed NAME COMMAND...: run COMMAND, log it to OUT/logs/NAME.log and record its status.
