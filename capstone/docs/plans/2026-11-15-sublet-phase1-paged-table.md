@@ -172,11 +172,21 @@ conditional go.**
     116, so -3.83 ns. On G, `cur_idx_q` lies above the worst-500 floor of -7.303, so it is at least 5.9 ns worse here.
   - Sources across the trial's 500: csr 463, cur_idx_q 37. Destinations: scoreboard `mem_q` 423, `led_stretch_cnt`
     47, `fu_data_q` 30.
-  - **Walker cells on the worst 500: 0** on the trial. The control, paths touching `fu_data_q`, reads 389.
+  - ~~Walker cells on the worst 500: 0 on the trial. The control, paths touching `fu_data_q`, reads 389.~~
+    **RETRACTED.** The count matched cell NAMES (`pw_`) only, and had no walker-logic positive control.
+    - 39 of the trial's 500 run through the walker's net `ex_stage_i/rev_node/rv_rd_res[data_rvalid]` (fan-out 129).
+      They sit at ranks 261-481, at -11.370 to -11.142. G has 0. Found by the board lane; re-counted here by script.
+    - That net is the walker's response filter, `(data_rvalid && !pw_own_rd_q) || pw_dead_rv_q` (`ex_stage.sv:1977`).
+      It hides the walker's own reads from the unit and injects DEAD. On G the D$ rvalid reached the unit directly, so
+      the walker adds one LUT level here.
+    - The 39 run `cpmp_q[5]..bE[1]` -> D$ port-2 ctrl -> the filter LUT -> rev_node event-counter logic ->
+      `led_stretch_cnt`, the debug-LED aperture counter.
+    - None is in the worst 260, so the WNS path and the two compared families stand as net-delay readings.
+    - "No walker logic on the failing paths" does not stand: the walker is on 39 of them.
 - **Reading.** Both pre-existing families lost about 4-6 ns at about equal depth, beside a router estimate one
   congestion level worse than G's (Long level 6 over a fifth of the N/S tiles).
   - That is delay per level: placement and routing in a design that is 99.7 % slice-full.
-  - It is not a path through the walker, which has no cell among the 500.
+  - The WNS-setting paths do not pass through the walker. The walker IS on 39 lower-ranked failing paths (retraction above).
   - One build cannot say whether the walker's 2 k cells caused the placement shift or merely sampled it. The null band
     itself is 3.74 ns, and this sits 0.33 ns beyond it.
 - **Attribution (board lane, routed dcps; logs `synth/twc/attr5/`).** The figures below were checked here in
