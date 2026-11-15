@@ -63,9 +63,9 @@ into the source root.
  
 +#ifdef EXP_REUSE_GAP
 +/* Reuse-distance observer, one boundary: SV heads (sv_inline.h). The table
-+   is static, 2^18 slots; the report is one REUSE-GAP line on stderr at exit. */
++   is static, 2^EXP_REUSE_GAP_SV_LOG2 slots; the report is one REUSE-GAP line on stderr at exit. */
 +#include "reuse-gap-hook.h"
-+REUSE_GAP_HOOK(sv_reuse_gap, "sv-heads", 18, 0)
++REUSE_GAP_HOOK(sv_reuse_gap, "sv-heads", EXP_REUSE_GAP_SV_LOG2, 0)
 +
 +void
 +Perl_reuse_gap_sv_issue(const SV *sv)

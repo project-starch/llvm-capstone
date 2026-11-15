@@ -17,6 +17,8 @@
 #    again from its perl stage with PERLD_OPT="-O2 -DEXP_REUSE_GAP". The
 #    define goes to the target compile only (perl-cross's -Doptimize; the host
 #    miniperl uses its own optimize). The image is ROOT/perl.dom.
+#    EXP_REUSE_GAP_SV_LOG2=N in the environment adds -DEXP_REUSE_GAP_SV_LOG2=N: an observer
+#    table of 2^N SV-head slots instead of 2^18 (reuse-gap-hook.h).
 # 3. Checks that fail the build: every object in libperl.a and lib/auto/*.a
 #    that refers to PL_sv_root (each new_SV expansion does) also refers to
 #    Perl_reuse_gap_sv_issue after step 2, and none does after step 1; the
@@ -69,7 +71,7 @@ s=$(date +%s)
 (cd "$S" && make clean > "$ROOT/clean.log" 2>&1)
 cp "$STUDY/reuse-gap-observer.h" "$HERE/reuse-gap-hook.h" "$S/"
 patch -d "$S" -p1 --batch --forward --fuzz=0 < "$HERE/sv-heads-reuse-gap-$ARM.patch" > "$ROOT/hook-patch.log"
-PERLD_FROM=perl PERLD_OPT="-O2 -DEXP_REUSE_GAP" bash "$PORT" > "$ROOT/build-2.log" 2>&1
+PERLD_FROM=perl PERLD_OPT="-O2 -DEXP_REUSE_GAP${EXP_REUSE_GAP_SV_LOG2:+ -DEXP_REUSE_GAP_SV_LOG2=$EXP_REUSE_GAP_SV_LOG2}" bash "$PORT" > "$ROOT/build-2.log" 2>&1
 grep -q -- '-DEXP_REUSE_GAP' "$S/Makefile.config" \
   || { echo "EXP_REUSE_GAP is not in the target CFLAGS" >&2; exit 1; }
 if grep -q -- 'EXP_REUSE_GAP' <(grep '^HOSTCFLAGS' "$S/Makefile.config"); then
