@@ -336,8 +336,16 @@ CDERIVE/CREVOKE counts, revoked-subtree size, peak table memory). Give CREVOKE's
   slow run, because wrev is resting state.
   - The twin puts protection at only +4.4 % in-context, so a 3.2x silicon slowdown would need a mechanism the twin
     lacks.
-  - 0x3ff6780f04 is not tshark code (the image is a static EXEC, text 0x10000-0xecd000). It is slot-0 residue in the
-    high mmap/stack region.
+  - **Corrected 15 Nov (a retraction by the nested lane).** The earlier text here said "0x3ff6780f04 is not tshark
+    code". That was wrong: it read the ELF vaddrs as run-time addresses. The twin's /proc/pid/maps shows the native
+    route maps the image's text (file offset 0x1000, vaddr 0x10000) at 0x3ff6000000, so the pc is vaddr 0x790f04.
+    - Checked by this lane: in the baked protected image (sha256 bcc251f3…, identical in t-p1 and t-p2), the word at
+      vaddr 0x790f04 is 0xa283955b. That is opcode 0x5b, funct3 1, funct7 0x51, rd a0, rs1 t2, rs2 s0: a CDERIVE.
+    - The nested lane names the function wmem_block_fast_sublet_alloc (the protected arm's patched allocator), from
+      its unstripped build. The baked image is stripped, so this lane has not checked the name.
+    - It is still slot-0 residue (commit_instr[0].valid=0), in a hot function. The same pc in both boots, with a
+      CAPSTONE_DYN op at the bypass head, fits "a CDERIVE that does not complete", but does not show it.
+    - Assumption: the silicon load base equals the twin's (same module and image).
   - The nested lane is recording "no return within 3,600 s, 2 of 2 boots", not a wedge. It is pre-registering one
     protected-only boot with a 60 s heartbeat (uptime, native counters, output size) and a ~4 h budget. That boot
     separates a slow run, an in-process loop, and a stuck core.
