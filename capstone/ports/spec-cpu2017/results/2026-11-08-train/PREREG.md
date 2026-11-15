@@ -4364,3 +4364,41 @@ The prediction (-0.0 .. -0.5 %) is missed on the slow side. The adoption rule ne
 board: both its chain and the chain waiting on it had only printed START. bq-b3 (Addendum 135, spatial gcc untuned)
 is relaunched to wait on ba-b3 directly, unchanged otherwise. If the compiler lane revises the LSR change, a perl
 pair is pre-registered again for the new compiler.
+
+## Addendum 137 (2026-11-15 14:57 +08): the c13 mcf slowdown: a fetch-empty counter pair to test the loop-placement explanation
+
+**Why.** Addendum 136 rejected c13, whose mcf was +0.30 % slower in-context. The compiler lane reports that mcf's hot
+loops have the same instructions in both builds, and only their placement changed. The arc loop's head moved from
+0 mod 4 to 2 mod 4, and it is a 32-bit instruction. In the RTL (instr_realign.sv:103-110, FETCH_WIDTH 32), a taken
+redirect into such a head costs fetch bubbles.
+
+The compiler lane's directed RTL-sim test (fetch-realign-loop-head.S, seed 1): a 3-instruction loop of 32-bit
+instructions takes 4.0 / 5.0 / 6.0 cycles per iteration depending on the head offset mod 16. The `if_empty` count
+(event 15) rises cycle for cycle with that penalty. When the backend stalls (a dependent DIV body), both disappear.
+
+This pair is about attribution only. Addendum 136's decision stands whatever it reads.
+
+**Firmware and kit.**
+- caplifive-opensbi `hpm-events-ifempty` 143fbd06 (pushed) is 8a39f82d plus `CAPSTONE_HPM_EVENTS_IFEMPTY`, which sets
+  mhpmevent3 = 15 (if_empty_i) in place of 1 (L1 I-cache miss).
+- Kit bkit84 is bkit75 with that wrapper and that define. Only board.env differs, and its SHA256SUMS line was
+  regenerated.
+- Positive control: the run's fw.log must name wrapper 143fbd06 and the define. hpm3 must read far above the I-cache
+  miss figure of the earlier runs (about 4-5 M per mcf run). Otherwise the pair is void.
+
+**Runs, board 3, F, after bq-b3. Chains br-b3 then bs-b3, nat-run3.**
+- br-b3: the control, FRCDKMSa3 mcf, board-frcdkmsa3/505.mcf_r-native, binary fa650b98b77a.
+- bs-b3: c13, board-frcdkmsa3hy2/505.mcf_r-native, binary ad7832413d89.
+
+The images are the same as in Addendum 136's pair. Only the hpm3 event and the board differ.
+
+**Predictions (the compiler lane's, recorded here before the run):**
+- specdiff 2/2 on both;
+- in-context run_cycles: c13 minus control repeats Addendum 136's +0.30 % within the noise.
+
+**Readings of in-context Δif_empty (c13 minus control):**
+| Δif_empty | Reading |
+|---|---|
+| +340 .. +630 M (+485 M ± 30 %) | placement is the cause |
+| +150 .. +340 M | placement is a partial cause |
+| below +150 M, or negative | placement is not the main cause |
