@@ -4113,3 +4113,17 @@ on silicon. On the twin, cycle reads and mcycle traps.
 **Chains.** The waiting bd-b2 and bf-b2 were stopped before any board contact, and their empty out directories
 removed. They were relaunched as bd2-b2 (c3, list "c3-stage 900 20") and bf-b2 (FFmpeg, unchanged), in the same
 order after the CPython ABBA, on nat-run3.sh. The stubbed dry run of bd2-b2 passes, with BAKED_TIMEOUT 3600.
+
+## Addendum 129 (2026-11-15 08:59 +08): board 1 runs the nested lane's tshark ABBA after the PostgreSQL ABBA
+
+**What runs.** The tshark workload, four one-arm boots U P P U, all on board 1, on F with kit bkit75n. One arm per boot,
+because both images in one boot would exceed the 26 MB firmware cap.
+- Stages `board-tshark/t-u1` and `t-u2` are copies of nested/tshark/board/t-u-stage; `t-p1` and `t-p2` are copies of
+  t-p-stage. Each copy is checked against its source's SHA256SUMS and by diff -rq.
+- Images 2061f661 (unprotected) and bcc251f3 (protected); firmware 23,760,392 B.
+- List: 900 s / 35 min per boot, about 22 min of commands each.
+- Its pre-registration, with the twin of record (both outputs equal stock), is nested-workloads b12fa3f29eb2.
+
+**Order on board 1:** be-b1 (PostgreSQL, Addendum 126) → **bg-b1**, on nat-run3.sh with the pre-boot park. The stubbed
+dry run reaches all four boots. Bitstream G takes board 1 only after this chain, unless G's seal lands first. In that
+case G goes first and bg-b1 is relaunched behind it, in a recorded swap.
