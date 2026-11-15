@@ -1,0 +1,35 @@
+SAME    01_12a6206864a0_to_char_tz_overflow                  run-4 CAUGHT                   run-6 CAUGHT
+        run-4: cause=28 pc=0x3ff7000eb4 in __stpcpy; by function: __stpcpy is a declared fault site
+        run-6: cause=28 pc=0x3ff6000ec0 in __stpcpy; by function: __stpcpy is a declared fault site
+SAME    02_3ed3dbbf44_ts_headline_int16_overflow             run-4 CAUGHT                   run-6 CAUGHT
+        run-4: cause=28 pc=0x3ff7001128 in memcpy; by control: control.sql (the statement below the threshold) completed on t
+        run-6: cause=28 pc=0x3ff6001134 in memcpy; by control: control.sql (the statement below the threshold) completed on t
+SAME    03_8c34261109_ltree_lquery_uint16_overflow           run-4 CAUGHT                   run-6 CAUGHT
+        run-4: cause=28 pc=0x3ff700114c in memcpy; by control: control.sql (the statement below the threshold) completed on t
+        run-6: cause=28 pc=0x3ff6001158 in memcpy; by control: control.sql (the statement below the threshold) completed on t
+SAME    04_3d160401b65e_oidvector_oob_read                   run-4 CAUGHT                   run-6 CAUGHT
+        run-4: cause=28 pc=0x3ff78857d8 in oidvectorout; by function: oidvectorout is a declared fault site
+        run-6: cause=28 pc=0x3ff68857e4 in oidvectorout; by function: oidvectorout is a declared fault site
+SAME    05_849da8210539_ascii_multibyte_oob_read             run-4 MISSED                   run-6 MISSED
+        run-4: reached (the trigger statement ran (3 prompts, 1 setup line(s))) and completed with no fault
+        run-6: reached (the trigger statement ran (3 prompts, 1 setup line(s))) and completed with no fault
+SAME    06_e91dcfccaa_regexp_conv_buf_overrun                run-4 CAUGHT                   run-6 CAUGHT
+        run-4: cause=28 pc=0x3ff7a9e5d0 in pg_wchar2utf_with_len; by function: pg_wchar2utf_with_len is a declared fault site
+        run-6: cause=28 pc=0x3ff6a9fe28 in pg_wchar2utf_with_len; by function: pg_wchar2utf_with_len is a declared fault site
+SAME    07_1af08af694_pg_trgm_picksplit_getsign_on_bitvec    run-4 CAUGHT                   run-6 CAUGHT
+        run-4: cause=28 pc=0x3ff7a7d718 in pg_popcount_optimized; by control: control.sql (the statement below the threshold)
+        run-6: cause=28 pc=0x3ff6a7ef70 in pg_popcount_optimized; by control: control.sql (the statement below the threshold)
+SAME    08_c4d51b6274_levenshtein_stop_column_oob_write      run-4 CAUGHT                   run-6 CAUGHT
+        run-4: cause=28 pc=0x3ff793b0a4 in varstr_levenshtein_less_equal; by function: varstr_levenshtein_less_equal is a dec
+        run-6: cause=28 pc=0x3ff693b0b0 in varstr_levenshtein_less_equal; by function: varstr_levenshtein_less_equal is a dec
+SAME    09_7a7d9693c7_pgp_sesskey_overflow                   run-4 NO-READING:unattributed  run-6 NO-READING:unattributed
+        run-4: cause=28 pc=0x3ff700114c in memcpy; in memcpy; declared sites none
+        run-6: cause=28 pc=0x3ff6001158 in memcpy; in memcpy; declared sites none
+SAME    10_1f5b6a5e5d_tuplestore_double_free_on_abort        run-4 CAUGHT                   run-6 CAUGHT
+        run-4: cause=25 pc=0x3ff7a1fc3c in SubletRelease; by control: control.sql (the statement below the threshold) complet
+        run-6: cause=25 pc=0x3ff6a1ea40 in SubletChunkInside; by control: control.sql (the statement below the threshold) com
+SAME    11_9e0b4b1ab5_reorderbuffer_progress_reads_freed_cha run-4 MISSED                   run-6 MISSED
+        run-4: reached (the trigger statement ran (9 prompts, 0 setup line(s)); errors 2/0 expected -- the defect is visible)
+        run-6: reached (the trigger statement ran (9 prompts, 0 setup line(s)); errors 2/0 expected -- the defect is visible)
+run-4 {'CAUGHT': 8, 'MISSED': 2, 'NO-READING:unattributed': 1}
+run-6 {'CAUGHT': 8, 'MISSED': 2, 'NO-READING:unattributed': 1}

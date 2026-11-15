@@ -1,0 +1,9 @@
+stock rc 0 rows_equal_native True guest_s 1160 {'issues': 4831360, 'reuses': 4825194, 'distinct_starts': 6166, 'error': 0}
+protected rc 0 rows_equal_native True guest_s 1448 {'issues': 4833143, 'reuses': 4826977, 'distinct_starts': 6166, 'error': 0}
+protected EXP-SLACK issues=4833143 below_payload=6 below_header=6 max=96
+block census rows differing: 0 of 41 ; blocks 80838 80838
+   ('aset-new', 'MessageContext') (40000, 491520000) (40000, 491520000)
+   ('aset-new', 'index info') (117, 148480) (117, 148480)
+issues total 4831360 4833143
+   +1783  'PgStat Pending'                         stock 6058 protected 7841
+reusediff stock/protected 0.000596

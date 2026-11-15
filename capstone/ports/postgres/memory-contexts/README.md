@@ -36,18 +36,21 @@ each variant as a mirror of the manager files with its ordered patches applied:
 | 0003 memory-contexts-sublet-lifetimes | the Sublet protection: every chunk a child lifetime of its block (`CDERIVE`), revoked by `pfree` and `repalloc` (`CREVOKE`) | | x |
 
 The capability platforms build `spatial`, or `sublet` with `PG_SUBLET=ON` (capstone-application
-only); native builds the pristine managers. Patch 0003 needs no table and no
-new file: every block keeps a generation in its header, the
-managers issue each chunk at their return sites as a child of the generation
-covering the chunk header and the request, and store the block's malloc
-reference in the header. `pfree` reads that reference through the caller's own
-pointer, revokes the chunk through that pointer, and hands the context method a
-pointer derived from the reference. A reset that keeps a block revokes its
+only); native builds the pristine managers. Patch 0003 keeps the stock chunk
+and block headers, so every block holds as many chunks as in stock and the
+managers request the same blocks from malloc. The managers issue each chunk at
+their return sites as a child of its block's generation that covers the
+payload alone, so the chunk header lies outside the caller's bounds. Each
+block's malloc reference and generation live in a block table in `mcxt.c`:
+static memory outside every block, filled without an allocator call, with a
+two-level page map that finds the block holding an address. `pfree`,
+`repalloc`, `GetMemoryChunkContext` and `GetMemoryChunkSpace` first load
+through the caller's pointer (a stale one faults), find the block by the
+pointer's address, read the header through the block's reference, and revoke
+the chunk through the caller's pointer. A reset that keeps a block revokes its
 generation (`CREVOKE`), and the next allocation derives a new one. A failed
-`CDERIVE` (no free table slot) is reported as out of memory, and every realloc
-creates the new chunk before it ends the old one. Its header states the
-reasons and the one thing it gives up: a live pointer can load its block's
-malloc reference from the header in front of it.
+`CDERIVE` (no free table slot) or a full block table is reported as out of
+memory, and every realloc creates the new chunk before it ends the old one.
 
 The patches require PostgreSQL's release-layout configuration; `MEMORY_CONTEXT_CHECKING` and
 `CLOBBER_FREED_MEMORY` are not supported.
