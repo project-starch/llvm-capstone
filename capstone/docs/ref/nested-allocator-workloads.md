@@ -9,15 +9,16 @@
 | speedtest1 `--size 1` on silicon, bitstream F, with event 23 | **measured** (board 3, 15 Nov 02:26-02:51): 32/32 answers in every command; in-context +1.67 %, kernel +2.10 % (repeats in band this time), wall-clock +1.95 %; event 23 +46,588 verdict-cache miss replays per run, which at the RTL's estimated 17-20 cycles each explain 7-8 % of the in-context cost | bitstream F `a948e4134` (`ec675c2b…`), kit bkit75n, board 3 |
 | speedtest1 `--size 100` | **deferred** (SPEC-lane default, 14 Nov 21:40: breadth first; the lead may override): about 6.5 h per command on silicon | - |
 | CPython 3.13.7, pyperformance subset (7 benchmarks), QEMU twin | **measured**: 28/28 answers equal to native; in-context +0.66 % (richards) to +2.84 % (json_dumps), +1.63 % summed; kernel ±0.5 %; 2.99 M CDERIVEs, subtree max 2, peak live records 76,767 (1.23 MB) | FRCDKMS SDK, -O2, trimmed built-ins, linked --no-relax; QEMU qemu55 a0501ebc39 |
-| CPython on silicon | **queued**: pre-registered below; four one-arm boots U P P U on one board, F with event 23 | F `a948e4134`, kit bkit75n |
+| CPython on silicon, bitstream F | **measured** (board 2, 15 Nov 07:55-09:58): 28/28 answers equal to native; richards' protected repeats differ 1.22 % (band 1 %), so it is not read; the six read sum to in-context **+5.17 %** (above the pre-registered +1.3 % to +5 %; twin +2.06 % over the same six), kernel +0.30 %, wall-clock +4.43 %; event 23 +5.41 M, explaining 10.5-12.3 % of the cost; L1D misses +14.7 % | F `a948e4134`, kit bkit75n, board 2 |
 | PostgreSQL 17.5, single-user pgbench-derived workload, QEMU twin | **measured** (15 Nov 04:21-04:42): 4/4 commands give the native answers; in-context **+4.04 %**, kernel +0.43 %, repeats within 0.02 %; 2.31 M CDERIVEs and 668 k CREVOKEs per run, subtree mean 3.45 / **max 34,509** (a context reset), peak live records 105,043 (1.68 MB). Bring-up found a port defect, **ISSUES.md M-15** (int2vector/oidvector read 8 bytes off at MAXALIGN 16, caught as CAP_OOB by the protected arm). Harness changes, the same in both arms: root (the loader admits euid 0 only), shims over refused or unserved calls; patch 0003 with the Q-15 placement repair | FRCDKMS SDK, -O2, native route, image set 10, QEMU qemu55 a0501ebc39 (counts: qemu-nst) |
-| PostgreSQL on silicon, bitstream F | **queued**: board 1, chain be-b1 (~10:00 15 Nov), pre-registered below (87b463da4d10; SPEC lane Addendum 126); ABBA in one boot, rung budget 1800 | F `a948e4134`, kit bkit75n |
-| FFmpeg 9.0.1 decode (10 s clip, 300 frames), QEMU twin | **measured** (15 Nov 05:21): all commands decode the stock reference frames; in-context **-0.030 %**, kernel -0.36 %. The protection adds about 3,300 lifetimes per decode (pools recycle), subtree max 2, peak 474 live records. Needs `-fno-builtin` in both arms on llvm-c9 (else cause 24 in both: C-69). With llvm-c15's C-69 fix and builtins on, all commands match and the cost reads -0.031 % and this lane's Q-15 placement repair of 0003 (unrepaired, CDERIVE refuses a frame-plane buffer) | FRCDKMS SDK, -O2 -fno-builtin, native route, set w4, QEMU qemu55 a0501ebc39 |
+| PostgreSQL on silicon, bitstream F | **measured** (board 1, 15 Nov 08:34-10:00): every command gives the native answers; the protected pair's in-context repeats differ 1.10 % (band 1 %), so the in-context difference is **not read** (ABBA mean +6.67 %); kernel +1.07 %, wall-clock **+4.38 %**; event 23 +2.04 M per command; L1D misses +11.4 %, DTLB +30 % | F `a948e4134`, kit bkit75n, board 1 |
+| FFmpeg 9.0.1 decode (10 s clip, 300 frames), QEMU twin | **measured** (15 Nov 05:21): all commands decode the stock reference frames; in-context **-0.030 %**, kernel -0.36 %. The protection adds about 3,300 lifetimes per decode (pools recycle), subtree max 2, peak 474 live records. Needs this lane's Q-15 placement repair of 0003 (unrepaired, CDERIVE refuses a frame-plane buffer), and on llvm-c9 `-fno-builtin` in both arms (else cause 24 in both: C-69). With llvm-c15's C-69 fix and builtins on, all commands match and the cost reads -0.031 % | FRCDKMS SDK, -O2 -fno-builtin, native route, set w4, QEMU qemu55 a0501ebc39; builtins-on reading: FRCDKMSc15 SDK, set w6 |
+| FFmpeg on silicon, bitstream F | **queued**: board 2, chain bf-b2, after the timing boot; pre-registered below (fe20549f1931); ABBA plus the flipped control in one boot | F `a948e4134`, kit bkit75n |
 | tshark 4.6.8, `-r -V -n` on 9,000 frames, QEMU twin | **measured** (15 Nov 05:45-06:45): every output equals stock tshark's byte for byte; in-context **+2.69 %**, kernel +0.02 %; 7.18 M CDERIVEs and 2.73 M CREVOKEs per run, with one packet-scope reset of 256-1,023 nodes per frame, subtree max 29,134, peak live records 33,998 | FRCDKMS SDK and flags on tshark and its seven dependencies, `--no-relax`, native route, QEMU qemu55 a0501ebc39 |
-| tshark on silicon, bitstream F | **queued**: pre-registered below; four one-arm boots U P P U on one board, budget 900 | F `a948e4134`, kit bkit75n |
+| tshark on silicon, bitstream F | **running**: board 1, chain bg-b1, from 10:00 15 Nov; pre-registered below (b12fa3f29eb2; SPEC lane Addendum 129); four one-arm boots U P P U, budget 900 | F `a948e4134`, kit bkit75n |
 | memcached (load) | **deferred**: the native route cannot run it. The table refuses `socket`, `socketpair`, `epoll_create1` and `epoll_ctl` (`native-syscall-table.c:92-101`, `NS_REFUSE`). A twin probe (`nested/mcprobe`, 15 Nov) confirms it after a passing control (`open` in the run directory): `socket(AF_INET)` and `socket(AF_UNIX)` give ENOSYS, `epoll_create1` ENOSYS, `pthread_create` EAGAIN. memcached needs all three (four worker threads). Running it elsewhere (e.g. the virtual route) is a different instrument; the lead's call | - |
 | CREVOKE worst case (subtree 1 .. 10^6, latency, interruptibility; PostgreSQL context reset) | **measured** (RTL sim, memory delay 0): 6 cycles per node up to 2,048 nodes, about 11 beyond; at most 65,532 nodes per subtree (10^6 cannot be built), so the worst single CREVOKE is 720,892 cycles; **not interruptible**: a timer interrupt waits for the whole walk (180,518 cycles at 32,768 nodes, against 1-6 without). PostgreSQL context resets (twin): the largest ends **34,509 nodes** in one CREVOKE, about 0.38 M cycles at delay 0 and 2.1 M at delay 12. CDERIVE: 21 cycles alone, 27 / 157 back to back at delay 0 / 12; CREVOKE about 60 cycles per node at delay 12 | capstone-ariane `a948e4134` (F), `--sv_seed 1` |
-| CDERIVE / CREVOKE timed on silicon (lone, back to back, subtrees 1 .. 10^5, a probe to 10^6) | **queued**: board 2, chain bd-b2, after the CPython boot (~11:30 15 Nov), pre-registered below (d0b72cfe7a21; SPEC lane Addendum 125) | F `a948e4134`, kit bkit75n |
+| CDERIVE / CREVOKE timed on silicon (lone, back to back, subtrees 1 .. 10^5, a probe to 10^6) | **running**: board 2, chain bd-b2, since 09:58 15 Nov, pre-registered below (d0b72cfe7a21; SPEC lane Addendum 125) | F `a948e4134`, kit bkit75n |
 | record-cache counters | event 23 is on hpm8 in kits bkit73n (batch) and bkit75n (F). Events 29-31 (lookups, raw misses, walk-busy cycles) would need a new bitstream; that is **the lead's call** and is not requested | - |
 
 Only rows marked "measured" hold measurements; the rest say what runs next and where.
@@ -27,8 +28,8 @@ Only rows marked "measured" hold measurements; the rest say what runs next and w
 | application, workload | what the arms differ in | in-context cost: twin | silicon (F) | added CDERIVE per run | per M in-context cycles | CREVOKE per run (protected) | max subtree | peak live records (protected) |
 |---|---|---|---|---|---|---|---|---|
 | speedtest1 `--size 1` | memsys5 + lookaside patch | +0.6 % | **+1.67 %** (batch: +1.04 %) | 28,217 | 41 (silicon cycles) | 28,216 | 3 | 398 |
-| CPython 3.13.7, 7 pyperformance benchmarks | pymalloc patch 0014 | +1.63 % (summed) | queued | 2,866,016 (all seven) | 345 | 2,936,354 | 2 | 76,767 |
-| PostgreSQL 17.5, pgbench-derived | 0003 **with lane q15-placement's Q-15 repair**; harness (root, shims) in both arms | **+4.04 %** | queued | 2,276,557 | 810 | 668,247 | **34,509** | 105,043 |
+| CPython 3.13.7, 7 pyperformance benchmarks | pymalloc patch 0014 | +1.63 % (summed) | **+5.17 %** (six summed; twin +2.06 % on those six) | 2,866,016 (all seven) | 345 | 2,936,354 | 2 | 76,767 |
+| PostgreSQL 17.5, pgbench-derived | 0003 **with lane q15-placement's Q-15 repair**; harness (root, shims) in both arms | **+4.04 %** | not read (repeats 1.10 %; ABBA mean +6.67 %); wall-clock +4.38 % | 2,276,557 | 810 | 668,247 | **34,509** | 105,043 |
 | tshark 4.6.8, 9,000 frames | wmem 0001 (dev, Q-15-repaired) | **+2.69 %** | queued | 4,506,984 | 598 | 2,727,471 | 29,134 | 33,998 |
 | FFmpeg 9.0.1, 300-frame decode | 0003 **with this lane's Q-15 repair**; 0001 hooks and `-fno-builtin` in both arms | 0.03 % either way, not attributed | queued | 3,327 | 3.7 | 8,974 | 2 | 474 |
 | memcached | - | deferred: the native route has no sockets, epoll or threads | - | | | | | |
@@ -38,8 +39,9 @@ Only rows marked "measured" hold measurements; the rest say what runs next and w
   CPython 345 per M) pay +1.6 % to +4 % on the twin, and FFmpeg, at 3.7, pays nothing measurable. speedtest1 costs
   more than its 41 per M suggests: on the twin only 0.39 of its 0.62 points are the lifetimes; 0.17 are the patch's
   request-size reporting and 0.06 its `aReq` array (speedtest1 section).
-- On silicon, speedtest1's cost is 1.7-2.7 times its twin cost, and 1.7 times the SPEC temporal increment. The other
-  apps' silicon boots are queued.
+- On silicon, speedtest1's cost is 1.7-2.7 times its twin cost, and 1.7 times the SPEC temporal increment. CPython's
+  is 2.5 times (six benchmarks summed), and about a third of it is issue stalls, with L1D misses up 14.7 %. PostgreSQL's
+  wall-clock cost is +4.38 % (its in-context repeats missed the band). tshark and FFmpeg are queued.
 - Both large-subtree applications reset whole pools in one CREVOKE: PostgreSQL's memory contexts, up to 34,509 nodes,
   and tshark's packet scope, every frame. That is where CREVOKE's walk (6-60 cycles per node, uninterruptible) matters.
 
@@ -833,6 +835,68 @@ command exits 0 with its CHECK equal to native. The repeats agree within 0.01 % 
   kernel x2.5, 24 M cycles/s). Budget 3,600 s per rung; book 50 min per boot.
 - **VOID** if a control (`b0-stats`, `b0-hello`) fails, or the smoke fails outside the kit's accounting waiver.
 
+### Results: silicon, CPython pyperformance subset (board 2, 2026-11-15 07:55-09:58)
+
+**Configuration.** As pre-registered above:
+- Bitstream F, read back resident on board 2 by name (`…-twc16k-merge-hpmtag_a948e4134`; the board does not expose its
+  sha256), kit bkit75n.
+- Four one-arm boots, U P P U: `cpy-u1` 07:55, `cpy-p1` 08:25, `cpy-p2` 08:57, `cpy-u2` 09:28.
+- The SPEC lane's stage copies (`perf/natstage/board-cpy/cpy-*`) carry the pre-registered images and `run.sh`:
+  unprotected `b0b29e89…` / `3a7263ea…`, protected `eabba900…` / `b7165ae6…`.
+- Transcripts `spec/board/out-nat-twcf-hpmnest-cpy-b2/cpy-*/board.txt` (sha256 `5e733822…`, `8d860992…`, `77f5ffb6…`,
+  `de6c436a…`), read by `cpy/parse-cpy.py`.
+
+**Controls.** In every boot `b0-stats` and `b0-hello` returned 0, and the smoke passed all 9 steps under the kit's
+waiver (the two accounting checks). The kit's classifier printed `MALFORMED: @@SPEC-DONE 7 but 0 commands ended`, the
+same format mismatch as the speedtest1 boots: all seven commands printed `@@SPEC-END` in every boot. Not VOID.
+
+**Answers.** 28 of 28 commands exit 0 with CHECK equal to native.
+
+| benchmark | in-context, not protected (mean) | repeat spread u / p | **in-context cost** | twin | silicon / twin | kernel cost | event 23, p − u |
+|---|---|---|---|---|---|---|---|
+| json_dumps | 1,569.3 M | 0.17 % / 0.02 % | **+5.82 %** | +2.84 % | 2.0 | -0.07 % | +722,942 |
+| json_loads | 1,424.1 M | 0.41 % / 0.07 % | **+5.05 %** | +2.37 % | 2.1 | -0.03 % | +744,642 |
+| pickle | 1,315.4 M | 0.25 % / 0.50 % | **+4.20 %** | +1.30 % | 3.2 | +0.31 % | +800,276 |
+| richards | 8,314.3 M | 0.05 % / **1.22 %** | not read (+3.22 %) | +0.66 % | - | +0.30 % | +1,754,032 |
+| deltablue | 1,463.0 M | 0.00 % / 0.05 % | **+3.18 %** | +1.16 % | 2.7 | +0.42 % | +778,657 |
+| regex_v8 | 3,619.5 M | 0.27 % / 0.02 % | **+4.02 %** | +2.28 % | 1.8 | +0.24 % | +929,342 |
+| nbody | 7,591.5 M | 0.06 % / 0.19 % | **+6.15 %** | +2.01 % | 3.1 | +0.92 % | +1,431,908 |
+
+Summed over the six that are read (richards' protected repeats differ by 1.22 %, over the 1 % band, so it is left out
+as pre-registered):
+
+| | not protected | protected | protected vs not |
+|---|---|---|---|
+| in-context (`run_cycles`) | 16,982.9 M | 17,860.4 M | **+5.17 %** (+877.6 M) |
+| kernel and other (`between_cycles`) | 2,595.6 M | 2,603.4 M | +0.30 % |
+| uptime span | 802 s | 838 s | +4.43 % |
+| hpm4 L1D miss | 45.66 M | 52.38 M | +14.7 % |
+| hpm7 issue stall | 3,059.8 M | 3,336.6 M | +9.05 % (+276.8 M cycles) |
+| hpm8 event 23 (verdict-cache miss replays) | 674,577 | 6,082,344 | **+5.41 M** (x9.0) |
+
+With richards included, the seven sum to +4.53 % in-context and +7.16 M event 23. That figure is not the reading.
+
+**Against the pre-registration.**
+- Answers: **met**, 28/28.
+- Repeats: `run_cycles` within 1 % for 13 of 14 pairs; **missed for richards' protected pair (1.22 %)**, so richards is
+  not read. `between_cycles` within 2 % for all 14 pairs (largest 1.84 %).
+- In-context cost, summed: **missed, +5.17 %, above the +1.3 % to +5 % band** by 0.17 points. It is 2.5 times the twin's
+  +2.06 % over the same six. The ratio sits at the top of speedtest1's 1.7-2.7.
+- Per benchmark: **met for "positive for each"**: all six read are positive, +3.2 % to +6.2 %. **Missed for the
+  ordering**: regex_v8 is fifth, not among the four largest (nbody, json_dumps, json_loads, pickle).
+- Kernel: **met**, +0.30 % (band ±2 %).
+- Whole command: **met**, +4.43 % (band +1 % to +5 %).
+- Event 23: **met (positive)**, +5.41 M over the six, at a 76,767-record peak against 256 entries.
+
+**Derived.**
+- Event 23 at 17-20 cycles per replay explains **10.5-12.3 %** of the in-context cost over the six: 92-108 M of
+  877.6 M cycles. Per benchmark it explains 5 % (nbody) to 34 % (deltablue).
+- The L1D miss count rises 14.7 % and issue stalls rise by 277 M cycles, 32 % of the cost.
+  - Event 23 explains about a ninth of the cost, so most of it is something else.
+  - Candidates are the lifetime records competing for the L1D (16 B each, 1.23 MB at the peak) and the patched
+    pymalloc's layout. This boot cannot separate them, and the twin models no caches, so it cannot show either.
+- Silicon in-context cycles are 2.5-4.0 times the twin's per benchmark, against 4.1 for speedtest1.
+
 ## PostgreSQL 17.5: single-user, pgbench-derived workload
 
 **Patch.** `capstone/ports/postgres/memory-contexts/patches/postgresql-17.0-0003-memory-contexts-sublet-lifetimes.patch`
@@ -999,6 +1063,54 @@ answers):
   same 7,200 s (`board-run.sh:155`), far above one silent command.
 - **VOID** if `b0-stats` or `b0-hello` fails, or the smoke fails outside the kit's accounting waiver.
 
+### Results: PostgreSQL on silicon, bitstream F (board 1, 2026-11-15 08:34-10:00)
+
+**Configuration.** As pre-registered above (87b463da4d10):
+- Bitstream F, read back resident on board 1 by name (`…-twc16k-merge-hpmtag_a948e4134`; the board does not expose
+  its sha256), kit bkit75n.
+- Stage `nested/pg/board/p2-stage`: it still matches `p2-stage.SHA256SUMS`, and its images unpack to `1ea084ab…`
+  (not protected) and `4cc5f247…` (protected).
+- Board firmware `764b4194…`. Transcript `spec/board/out-nat-twcf-hpmnest-pg-b1/p2-stage/board.txt` (sha256
+  `753cbed87d9b208b…`), read by `pg/parse-pg.py` with `PG_REF=pg/work/nref4-main/ref.txt`.
+
+**Controls.** `b0-stats` and `b0-hello` returned 0. The smoke passed all 9 steps under the kit's waiver. The kit's
+classifier printed MALFORMED for this stage's format, as for the other nested stages; all four commands printed
+`@@SPEC-END`. Not VOID. The board's BusyBox unpacked the cluster and images, as the applet-table check predicted.
+
+| | u1 | p1 | p2 | u2 | repeat spread, u / p | protected vs not (ABBA means) |
+|---|---|---|---|---|---|---|
+| rc, answers equal to native (4 CHECK, 2,000 rows) | 0, yes | 0, yes | 0, yes | 0, yes | | |
+| `run_cycles` (in-context) | 12,674,463,103 | 13,541,252,270 | 13,393,561,130 | 12,576,864,815 | 0.78 % / **1.10 %** | not read (+6.67 %, +842 M) |
+| `between_cycles` (kernel and other) | 8,720,015,275 | 8,847,970,498 | 8,908,895,659 | 8,848,799,845 | 1.48 % / 0.69 % | **+1.07 %** |
+| uptime span, s | 860.6 | 900.5 | 897.1 | 861.6 | 0.12 % / 0.39 % | **+4.38 %** |
+| context entries | 83,343 | 83,487 | 83,487 | 83,343 | | +0.17 % |
+| hpm3 L1I miss | 160.71 M | 171.68 M | 171.69 M | 160.81 M | | +6.79 % |
+| hpm4 L1D miss | 66.36 M | 73.90 M | 74.00 M | 66.45 M | | +11.36 % |
+| hpm5 DTLB miss | 1.968 M | 2.561 M | 2.570 M | 1.972 M | | +30.2 % |
+| hpm6 mispredict | 103.77 M | 110.37 M | 110.27 M | 103.69 M | | +6.35 % |
+| hpm7 issue stall | 1,988.5 M | 2,230.6 M | 2,212.8 M | 1,980.3 M | | +11.96 % (+237 M cycles) |
+| **hpm8 event 23** | 1,384,173 | 3,421,271 | 3,435,300 | 1,385,128 | 0.07 % / 0.41 % | **+2.04 M** (x2.5) |
+
+**Against the pre-registration.**
+- Answers: **met**, every command gives the native reference.
+- Repeats: **missed on `run_cycles` for the protected pair** (1.10 %, band 1 %), so the in-context difference is not
+  read. Met for the unprotected pair (0.78 %), and for `between_cycles` (1.48 % / 0.69 %, band 2 %).
+  - Both arms fall from their first run to their second (u1 to u2 -0.78 %, p1 to p2 -1.10 %), which is a drift
+    across the boot. ABBA cancels a linear drift, so the ABBA mean, +6.67 %, sits inside the +2 % to +12 % band.
+  - It is still not the reading. The rule was written to cover exactly this case.
+- Kernel: **met, +1.07 %** (band -2 % to +4 %).
+- Whole command: **met, +4.38 %** (band +2 % to +10 %).
+- Event 23: **met, +2.04 M per command** (band +0.5 M to +10 M), 0.88 per added derive (2.31 M on the twin).
+
+**Derived.**
+- Against the ABBA in-context mean, which is not read, event 23 at 17-20 cycles per replay would explain 4.1-4.9 %
+  of the difference.
+- As on CPython, the L1D misses (+11.4 %), DTLB misses (+30 %) and issue stalls (+237 M cycles) rise more than the
+  verdict cache explains.
+- The protection's lifetime ops (2.31 M CDERIVE; 668 k CREVOKE ending 2.31 M nodes, the largest 34,509) are costed
+  from the timing boot when it reads.
+- Silicon in-context cycles are 4.5 times the twin's (12.63 G against 2.81 G per unprotected run).
+
 ## FFmpeg 9.0.1: decode (matroska, mpeg4, single thread)
 
 **Patch.** `capstone/ports/ffmpeg/buffer-pool/patches/ffmpeg-9.0.1-0003-libavutil-pools-as-sublet-lifetimes.patch`
@@ -1049,7 +1161,7 @@ set w4:
   `src/libavutil/mem.c av_freep tested 2 realigned 0`.
 - Set w6: unprotected `8ba6e3fc…`, protected `7900e008…`. In one ABBA boot plus the flipped-input control
   (`nff-c15a1`), u1 p1 p2 u2 each decode 300 frames equal to stock, and fp FIRES (3 hashes change).
-  - In-context, protected vs not: **-0.031 %** (885,431,613 against 885,160,252, the ABBA means). That equals the
+  - In-context, protected vs not: **-0.031 %** (protected 885,160,252 against unprotected 885,431,613, the ABBA means: 271 k fewer). That equals the
     `-fno-builtin` set's -0.030 %. Kernel: -0.22 %.
   - Builtins on are 0.44 % faster in-context than set w4, in both arms. That is a different compiler as well as a
     different flag, so the 0.44 % is not attributed to builtins.
