@@ -1,0 +1,16 @@
+Layout trace for PHP 5.0.0's Zend allocator (docs/plans/2026-11-15-php-port-layout-fix.md). One
+line: the blank line after the zend_mm.h include becomes the include of zend-layout-trace-def.h,
+which is inert without ZEND_CAP_LAYOUT_TRACE. No line moves, so the nested layer's patch still
+applies at fuzz 0 and without offset (build-layout-trace.sh checks it).
+
+--- a/Zend/zend_alloc.c
++++ b/Zend/zend_alloc.c
+@@ -31,7 +31,7 @@
+ #endif
+ 
+ #include "zend_mm.h"
+-
++#include "zend-layout-trace-def.h" /* layout trace, inert without ZEND_CAP_LAYOUT_TRACE */
+ #ifndef ZTS
+ ZEND_API zend_alloc_globals alloc_globals;
+ #endif

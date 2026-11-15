@@ -1,0 +1,2 @@
+static-stock exit 0 LAYOUT-STATIC sizeof(zend_mem_header)=48 MEM_HEADER_PADDING=0 offsetof(pNext)=0 offsetof(pLast)=16 sizeof(void*)=16 PLATFORM_ALIGNMENT=16 MAX_CACHED_MEMORY=11 MAX_CACHED_ENTRIES=256
+static-protected exit 0 LAYOUT-STATIC sizeof(zend_mem_header)=48 MEM_HEADER_PADDING=0 offsetof(pNext)=0 offsetof(pLast)=16 sizeof(void*)=16 PLATFORM_ALIGNMENT=16 MAX_CACHED_MEMORY=11 MAX_CACHED_ENTRIES=256

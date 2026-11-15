@@ -10,12 +10,14 @@ the list macros, not the cache policy, not the control flow of any function. The
 statement to the file: it is seven substitutions of an expression.
 
   hunk 1  after the ZEND_DO_* macro chain
-          Adds the nested layer's own block: the include of zend-cap-mode.h, the three ZEND_DO_*
-          macros redirected to the nested layer's counted 16-grained malloc, its arm-dependent free
-          and its move-always realloc, and the three ZEND_CAP_* macros with their inert
-          fallbacks. This is the only hunk that adds more than one line of code.
+          Adds the nested layer's own block: the include of zend-cap-mode.h, a compile-time
+          check that PHP's header is the 48 bytes the layer places the payload behind, the three
+          ZEND_DO_* macros redirected to the nested layer's malloc (PHP's own request, the block
+          entered in the layer's block table), its arm-dependent free and its realloc, and the
+          three ZEND_CAP_* macros with their inert fallbacks. This is the only hunk that adds
+          more than one line of code.
           ZEND_DO_REALLOC reads the old request from p->size, which _erealloc overwrites only
-          AFTER the realloc: that is the copy length of the fresh block.
+          AFTER the realloc: the header plus that many payload bytes must survive the realloc.
 
   hunk 2  _emalloc, the AG(cache) HIT return
           (void *)((char *)p + sizeof(zend_mem_header) + MEM_HEADER_PADDING)
@@ -31,9 +33,10 @@ statement to the file: it is seven substitutions of an expression.
           (zend_mem_header *)((char *)ptr - 48) -> ZEND_CAP_RECLAIM(ptr)
           By RECLAIM, not arithmetic: the caller's capability is bounded to its own object and
           cannot reach the header at all, which is what makes an under-read below the object
-          catchable. The reclaim is the libc's (__capstone_malloc_reclaim): it ends the caller's
-          child and returns the block from its own slot record. So the payload's lifetime ends in
-          the FIRST line of _efree, and everything below it -- p->size, p->cached = 1, the park
+          catchable. The reclaim probes the caller's pointer for liveness, ends the caller's
+          child in the revoking arms, and returns the block from the nested layer's own block
+          table, which holds the reference malloc returned. So the payload's lifetime ends in the
+          FIRST line of _efree, and everything below it -- p->size, p->cached = 1, the park
           itself, REMOVE_POINTER_FROM_LIST and ZEND_DO_FREE -- runs against the block's own
           reference, live, exactly as upstream. An interior pointer, or one in no block of this
           heap, is refused by name before anything ends (ZEND_CAP_FAIL code 4 / 3).
@@ -42,18 +45,17 @@ statement to the file: it is seven substitutions of an expression.
           hoisted REMOVE_POINTER_FROM_LIST above the revoke and made it unconditional -- a
           change to PHP's own _efree that cost four false CAUGHT verdicts to find and still
           costs CRASH-057 a NO-READING. The child bounded to the payload makes it unnecessary.
-          The previous nested (2026-10-12 to 2026-10-28) did the same with a lookup in its own
-          index and a separate retire statement placed after CALCULATE_REAL_SIZE_AND_CACHE_INDEX;
-          the libc's reclaim returns the block, so the statement is gone and the ordering is
-          no longer a concern.
+          Until 2026-11-15 the block reference sat in a prefix below the header, which changed
+          every malloc request; the table keeps PHP's block layout.
 
   hunk 5  _erealloc, the header derivation (p = orig = ...) -> ZEND_CAP_HEADER(ptr).
           The LOOKUP alone: nothing ends here. `orig` is load-bearing in upstream: the failure
           path does ADD_POINTER_TO_LIST(orig), so the old block must still be alive after a
           failed realloc, and so must the caller's pointer into it. ZEND_DO_REALLOC (hunk 1)
-          takes a fresh block, copies, and releases the old one only then -- which, in the
-          arms that return blocks to the heap, is what ends the caller's old child, with the
-          block. On failure nothing has changed.
+          calls realloc with PHP's request, as upstream does, so the block stays in place
+          whenever malloc keeps it there; realloc ends the old block lifetime, and with it the
+          caller's old child, in the arms that return blocks to the heap. On failure nothing has
+          changed.
 
   hunk 6  _erealloc, the payload return -- same substitution as hunks 2 and 3. Note the
           upstream text here has no spaces around the + signs, which is why it is a separate

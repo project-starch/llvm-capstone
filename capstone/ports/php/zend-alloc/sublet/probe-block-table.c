@@ -1,4 +1,6 @@
-/* Exercise the saved-parent prefix through the real PHP adapter. */
+/* Exercise the block table through the real PHP adapter: the block found again from the
+ * payload after a re-issue, a realloc that fails, one that grows past the 16 KiB slack threshold,
+ * and emalloc(0). Until 2026-11-15 this probe exercised the saved-parent prefix the table replaced. */
 #include "zend-cap-mode.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -6,7 +8,7 @@
 
 #define HDR 48UL
 #define MODE (ZEND_CAP_MODE_EXACT | ZEND_CAP_MODE_REVOKE | ZEND_CAP_MODE_RETURN)
-#define CHECK(c) do { if (!(c)) { printf("PREFIX_FAIL line=%d\n", __LINE__); return 1; } } while (0)
+#define CHECK(c) do { if (!(c)) { printf("TABLE_FAIL line=%d\n", __LINE__); return 1; } } while (0)
 
 int main(int argc, char **argv)
 {
@@ -26,15 +28,15 @@ int main(int argc, char **argv)
     CHECK(((unsigned char *)p)[54] == 0x6b);
     CHECK(zend_cap_header(p, HDR) == block);
     if (mode == 1) {
-        puts("PREFIX_FAULT_READY stale-free-after-reissue"); fflush(stdout);
+        puts("TABLE_FAULT_READY stale-free-after-reissue"); fflush(stdout);
         zend_cap_reclaim(old, HDR);
         return 1;
     }
     if (mode == 2) {
-        puts("PREFIX_FAULT_READY header-underread"); fflush(stdout);
+        puts("TABLE_FAULT_READY header-underread"); fflush(stdout);
         return ((volatile unsigned char *)p)[-1];
     }
-    /* Allocation failure must leave both the old child and its parent usable. */
+    /* Allocation failure must leave both the old child and its block usable. */
     CHECK(zend_cap_reblock(block, (size_t)-1, HDR + 55) == NULL);
     CHECK(zend_cap_reblock(block, (size_t)-129, HDR + 55) == NULL);
     CHECK(((unsigned char *)p)[54] == 0x6b);
@@ -48,7 +50,7 @@ int main(int argc, char **argv)
     CHECK(zend_cap_reclaim(p, HDR) == fresh);
     zend_cap_release(fresh);
 
-    /* Cache reuse keeps a single parent; each issue gets a fresh child. */
+    /* Cache reuse keeps a single block; each issue gets a fresh child. */
     block = zend_cap_block(HDR);
     CHECK(block);
     for (unsigned i = 0; i < 10000; ++i) {
@@ -58,7 +60,8 @@ int main(int argc, char **argv)
     }
     zend_cap_release(block);
     zend_cap_stats(stats);
-    CHECK(stats[0] == 3 && stats[2] == 10003 && stats[3] == 10003);
-    puts("PREFIX_PASS cache-54-to-55 realloc-failure realloc-large zero-size reuse-10000");
+    /* Two malloc calls: the realloc is no block of its own. */
+    CHECK(stats[0] == 2 && stats[2] == 10003 && stats[3] == 10003 && stats[6] == 1);
+    puts("TABLE_PASS cache-54-to-55 realloc-failure realloc-large zero-size reuse-10000");
     return 0;
 }

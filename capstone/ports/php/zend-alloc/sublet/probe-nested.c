@@ -19,7 +19,7 @@
  *   2  READ through a reclaimed payload alias                       expect FAULT
  *   3  AG(cache)'s shape: reclaim, re-issue to a new tenant, then use the OLD alias   FAULT
  *   4  the intrusive list: three blocks, reclaim the middle, walk the neighbours' headers
- *   5  realloc moves the payload: contents preserved, the old alias dead              FAULT
+ *   5  realloc the payload: contents preserved, the old alias dead                    FAULT
  *   6  the STOCK arm (revoke off): the same stale use must COMPLETE
  *   7  the bound: one byte past the request, exact vs stock rounding
  *   8  the SYSTEM-ALLOCATOR arm on a CACHE-ABSORBED free: must NOT fault
@@ -184,9 +184,9 @@ int main(int argc, char **argv)
         memset(pay, 'z', 32);
         report("before  ", pay);
         say("S5 realloc to 96 bytes");
-        /* What _erealloc does: recover the block WITHOUT ending anything, take a fresh block
-         * with the old contents (the old block released, which ends the caller's child with
-         * it), issue the new payload. */
+        /* What _erealloc does: recover the block WITHOUT ending anything, realloc it (in place
+         * when mallocng can; either way realloc ends the old block lifetime, and the caller's
+         * child with it), issue the new payload. */
         hdr = zend_cap_header(pay, HDR);
         grown = zend_cap_reblock(hdr, (size_t)BLOCK_FOR(96), HDR + 32);
         if (!grown) { say("S5 FAIL: reblock returned NULL"); return 1; }
@@ -199,7 +199,7 @@ int main(int argc, char **argv)
                     printf("S5 FAIL: byte %lu did not survive the copy\n", i); return 1;
                 }
             }
-            say("S5 contents survived the move; now using the OLD payload alias (expect a fault)");
+            say("S5 contents survived the realloc; now using the OLD payload alias (expect a fault)");
             ((char *)pay)[0] = 'x';
             say("S5 RESULT: NO FAULT -- the old payload alias outlived the realloc.");
             return 1;

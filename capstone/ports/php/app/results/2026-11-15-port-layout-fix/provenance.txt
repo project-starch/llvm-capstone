@@ -1,0 +1,87 @@
+PHP port layout fix, 2026-11-15. Plan 367e6a39890, implementation dfe68e4a9fc (branch fix/php-port-layout). Platform: Image-0133b9e21cd, qemu-1b, f-keep; kit-run-3 (reuse, layout), kit-run-4 (corpora). Run directories under ~/asr-work/eval/run-6 on p13; builds under ~/asr-work/fix-php/prebuilt.
+2026-11-15T09:47Z builds start (reuse-hooks/php/build.sh stock and protected, build-layout-trace.sh stock and protected, the common entry's php protected image as run-4 build-whole.sh plus build-virtual.sh nested-probe)
+2026-11-15T09:50Z protected builds restarted after the exit line gained table_peak; build-layout-trace.sh's nm check failed under pipefail (grep -q closing the pipe) after trace.dom was built, so its last two steps (nm check, layout-static.dom) were run by hand with the script's commands, and the script fixed
+about 2026-11-15T09:55Z unit test (runs/unit-1) and probe regression (runs/probes-1) on kit-run-3, all as declared
+2026-11-15T11:08Z diagnostic, after the reuse runs: stock image run with PHP_CAP_MODE=6 in its environment (stock-env, trace-stock-env), to separate the arm variable's own allocations from the layer
+
+images (sha256):
+fc4bbd8187617c4e6a2879dd6b9cff6f0224a7a08031710186fecf1b037664e9  php-stock/php.dom (run-5 stock: 6ebdb090...; not identical, stock rerun)
+74f4c81cfb3f3fc47e97891b7c45ad66e2874e5d4a726c42a21ffda880c823d8  php-protected/php.dom
+d685d05ec32507bff5c9b290eeae9eecea6c8079102967c1ce22b8214e24763d  trace-stock/trace.dom
+96f286ed2a46d2f968c415bed584abc7614f6cfd6fd20b7ef707b1a4d9af7f1b  trace-protected/trace.dom
+acd4b0e8b2d5f467c5a7550aded53bcdad6f28b9dd59305694a93c8723f133fc  whole-php-protected/realphp/php-real-nested.dom (run-4: 39713917...)
+be891dfaed1752b83d7c9e218518115412a63b068784dc7d10e9339d36bc3363  whole-php-protected/probe-nested.dom (run-4: 852bed3a...)
+6b9fc8f9ba15cb7a0972408b8e69724787085e5a50fc59898b49d0c52b934606  bench.php (run-5 pinned one-tenth setting)
+
+== run-6/reuse/php-stock-1
+command: cd /mnt/vm; ./capstone-vexec ./php.dom -n bench.php (trap_platform.py run, kit-run-3, step timeout 14400)
+start 2026-11-15T09:53:17Z end 2026-11-15T10:51:49Z wall 3512 s, trap_platform rc=0
+fc4bbd8187617c4e6a2879dd6b9cff6f0224a7a08031710186fecf1b037664e9  ~/asr-work/fix-php/prebuilt/php-stock/php.dom
+== run-6/reuse/php-stock-2
+command: cd /mnt/vm; ./capstone-vexec ./php.dom -n bench.php (trap_platform.py run, kit-run-3, step timeout 14400)
+start 2026-11-15T09:53:17Z end 2026-11-15T10:52:23Z wall 3546 s, trap_platform rc=0
+fc4bbd8187617c4e6a2879dd6b9cff6f0224a7a08031710186fecf1b037664e9  ~/asr-work/fix-php/prebuilt/php-stock/php.dom
+== run-6/reuse/php-protected-1
+command: cd /mnt/vm; PHP_CAP_MODE=6 ./capstone-vexec ./php.dom -n bench.php (trap_platform.py run, kit-run-3, step timeout 14400)
+start 2026-11-15T09:55:59Z end 2026-11-15T11:05:12Z wall 4153 s, trap_platform rc=0
+74f4c81cfb3f3fc47e97891b7c45ad66e2874e5d4a726c42a21ffda880c823d8  ~/asr-work/fix-php/prebuilt/php-protected/php.dom
+== run-6/reuse/php-protected-2
+command: cd /mnt/vm; PHP_CAP_MODE=6 ./capstone-vexec ./php.dom -n bench.php (trap_platform.py run, kit-run-3, step timeout 14400)
+start 2026-11-15T09:55:59Z end 2026-11-15T11:05:26Z wall 4167 s, trap_platform rc=0
+74f4c81cfb3f3fc47e97891b7c45ad66e2874e5d4a726c42a21ffda880c823d8  ~/asr-work/fix-php/prebuilt/php-protected/php.dom
+== run-6/reuse/php-exact-1
+command: cd /mnt/vm; PHP_CAP_MODE=7 ./capstone-vexec ./php.dom -n bench.php (trap_platform.py run, kit-run-3, step timeout 14400)
+start 2026-11-15T09:55:59Z end 2026-11-15T11:05:26Z wall 4167 s, trap_platform rc=0
+74f4c81cfb3f3fc47e97891b7c45ad66e2874e5d4a726c42a21ffda880c823d8  ~/asr-work/fix-php/prebuilt/php-protected/php.dom
+== run-6/reuse/php-exact-2
+command: cd /mnt/vm; PHP_CAP_MODE=7 ./capstone-vexec ./php.dom -n bench.php (trap_platform.py run, kit-run-3, step timeout 14400)
+start 2026-11-15T09:55:59Z end 2026-11-15T11:05:08Z wall 4149 s, trap_platform rc=0
+74f4c81cfb3f3fc47e97891b7c45ad66e2874e5d4a726c42a21ffda880c823d8  ~/asr-work/fix-php/prebuilt/php-protected/php.dom
+== run-6/reuse/php-stock-env-1
+command: cd /mnt/vm; PHP_CAP_MODE=6 ./capstone-vexec ./php.dom -n bench.php (trap_platform.py run, kit-run-3, step timeout 14400)
+start 2026-11-15T11:09:16Z end 2026-11-15T11:59:05Z wall 2989 s, trap_platform rc=0
+fc4bbd8187617c4e6a2879dd6b9cff6f0224a7a08031710186fecf1b037664e9  ~/asr-work/fix-php/prebuilt/php-stock/php.dom
+== run-6/reuse/php-stock-env-2
+command: cd /mnt/vm; PHP_CAP_MODE=6 ./capstone-vexec ./php.dom -n bench.php (trap_platform.py run, kit-run-3, step timeout 14400)
+start 2026-11-15T11:09:16Z end 2026-11-15T12:00:38Z wall 3082 s, trap_platform rc=0
+fc4bbd8187617c4e6a2879dd6b9cff6f0224a7a08031710186fecf1b037664e9  ~/asr-work/fix-php/prebuilt/php-stock/php.dom
+== run-6/layout/php-trace-stock-1
+command: cd /mnt/vm; ./capstone-vexec ./php.dom -n bench.php (trap_platform.py run, kit-run-3, step timeout 14400)
+start 2026-11-15T09:53:17Z end 2026-11-15T10:45:22Z wall 3125 s, trap_platform rc=0
+d685d05ec32507bff5c9b290eeae9eecea6c8079102967c1ce22b8214e24763d  ~/asr-work/fix-php/prebuilt/trace-stock/trace.dom
+== run-6/layout/php-trace-protected-1
+command: cd /mnt/vm; PHP_CAP_MODE=6 ./capstone-vexec ./php.dom -n bench.php (trap_platform.py run, kit-run-3, step timeout 14400)
+start 2026-11-15T09:55:59Z end 2026-11-15T10:58:08Z wall 3729 s, trap_platform rc=0
+96f286ed2a46d2f968c415bed584abc7614f6cfd6fd20b7ef707b1a4d9af7f1b  ~/asr-work/fix-php/prebuilt/trace-protected/trace.dom
+== run-6/layout/php-trace-stock-env-1
+command: cd /mnt/vm; PHP_CAP_MODE=6 ./capstone-vexec ./php.dom -n bench.php (trap_platform.py run, kit-run-3, step timeout 14400)
+start 2026-11-15T11:09:16Z end 2026-11-15T11:54:42Z wall 2726 s, trap_platform rc=0
+d685d05ec32507bff5c9b290eeae9eecea6c8079102967c1ce22b8214e24763d  ~/asr-work/fix-php/prebuilt/trace-stock/trace.dom
+== run-6/corpora/php-engine
+start 2026-11-15T10:46:30Z end 2026-11-15T11:11:28Z wall 1498 s, runner rc=0, kit-run-4
+acd4b0e8b2d5f467c5a7550aded53bcdad6f28b9dd59305694a93c8723f133fc  ~/asr-work/fix-php/prebuilt/whole-php-protected/realphp/php-real-nested.dom
+be891dfaed1752b83d7c9e218518115412a63b068784dc7d10e9339d36bc3363  ~/asr-work/fix-php/prebuilt/whole-php-protected/probe-nested.dom
+== run-6/corpora/php-engine-tav
+start 2026-11-15T10:53:11Z end 2026-11-15T11:17:15Z wall 1444 s, runner rc=0, kit-run-4
+acd4b0e8b2d5f467c5a7550aded53bcdad6f28b9dd59305694a93c8723f133fc  ~/asr-work/fix-php/prebuilt/whole-php-protected/realphp/php-real-nested.dom
+be891dfaed1752b83d7c9e218518115412a63b068784dc7d10e9339d36bc3363  ~/asr-work/fix-php/prebuilt/whole-php-protected/probe-nested.dom
+== run-6/corpora/php-plain-temporal
+start 2026-11-15T10:53:11Z end 2026-11-15T11:03:06Z wall 595 s, runner rc=0, kit-run-4
+acd4b0e8b2d5f467c5a7550aded53bcdad6f28b9dd59305694a93c8723f133fc  ~/asr-work/fix-php/prebuilt/whole-php-protected/realphp/php-real-nested.dom
+be891dfaed1752b83d7c9e218518115412a63b068784dc7d10e9339d36bc3363  ~/asr-work/fix-php/prebuilt/whole-php-protected/probe-nested.dom
+== run-6/corpora/php-zend-alloc
+start 2026-11-15T11:06:04Z end 2026-11-15T11:12:26Z wall 382 s, runner rc=0, kit-run-4
+acd4b0e8b2d5f467c5a7550aded53bcdad6f28b9dd59305694a93c8723f133fc  ~/asr-work/fix-php/prebuilt/whole-php-protected/realphp/php-real-nested.dom
+be891dfaed1752b83d7c9e218518115412a63b068784dc7d10e9339d36bc3363  ~/asr-work/fix-php/prebuilt/whole-php-protected/probe-nested.dom
+== kit-run-3
+150d969243a01faf6597bcb6c1b5e29f72b1766c7463997f6e64f29ec745b37c  adapter/capstone-vexec
+0ea6d1ef545071326ce2ef4270e492ced585d089876517b460b6678d00e43ae8  images/Image
+975a24215dd17e5123c6f019328bce2683c9a9ca1d4e29cdddba4d0545c6e3c1  images/fw_jump.elf
+2d846ebece5024b3682316ad5339e1ca07e8683683d62e0f24fa15117c68cddb  images/initramfs.cpio.gz
+c55fcdd2c620916690e9604a1b95f204d8287fce79631a8a8909c69952223b49  qemu-system-riscv64
+== kit-run-4
+150d969243a01faf6597bcb6c1b5e29f72b1766c7463997f6e64f29ec745b37c  adapter/capstone-vexec
+0ea6d1ef545071326ce2ef4270e492ced585d089876517b460b6678d00e43ae8  images/Image
+975a24215dd17e5123c6f019328bce2683c9a9ca1d4e29cdddba4d0545c6e3c1  images/fw_jump.elf
+464653151bafbab9fbf5081fe5e4ce188e4c1be770b8ec5a31a6e873de71df24  images/initramfs.cpio.gz
+c55fcdd2c620916690e9604a1b95f204d8287fce79631a8a8909c69952223b49  qemu-system-riscv64

@@ -1,0 +1,112 @@
+{
+ "php-engine/bundle-php-real-stock": {
+  "caught_run4": 5,
+  "caught_run6": 5,
+  "cases": 39,
+  "changed": []
+ },
+ "php-engine/bundle-virtual-malloc": {
+  "caught_run4": 12,
+  "caught_run6": 12,
+  "cases": 39,
+  "changed": []
+ },
+ "php-engine/bundle-virtual-nested-exact": {
+  "caught_run4": 29,
+  "caught_run6": 29,
+  "cases": 39,
+  "changed": []
+ },
+ "php-engine/bundle-virtual-nested-pools": {
+  "caught_run4": 25,
+  "caught_run6": 25,
+  "cases": 39,
+  "changed": []
+ },
+ "php-engine-tav/bundle-php-real-stock": {
+  "caught_run4": 1,
+  "caught_run6": 1,
+  "cases": 31,
+  "changed": []
+ },
+ "php-engine-tav/bundle-virtual-malloc": {
+  "caught_run4": 5,
+  "caught_run6": 5,
+  "cases": 31,
+  "changed": []
+ },
+ "php-engine-tav/bundle-virtual-nested-exact": {
+  "caught_run4": 5,
+  "caught_run6": 5,
+  "cases": 31,
+  "changed": []
+ },
+ "php-engine-tav/bundle-virtual-nested-pools": {
+  "caught_run4": 5,
+  "caught_run6": 5,
+  "cases": 31,
+  "changed": []
+ },
+ "php-plain-temporal/sensitivity/virtual-malloc": {
+  "caught_run4": 1,
+  "caught_run6": 1,
+  "cases": 26,
+  "changed": [
+   {
+    "case": "22_e000da960b5c_call-user-function-byref-param-refcount1",
+    "run4": [
+     "NO-READING",
+     "infra"
+    ],
+    "run6": [
+     "NO-READING",
+     "not-reached"
+    ],
+    "run4_evidence": "killed by the per-run watchdog after ?s",
+    "run6_evidence": "silent, but reach is not established: sanity=ok, baseline completed=False, host pristine=SIGNAL:11"
+   }
+  ]
+ },
+ "php-plain-temporal/sensitivity/virtual-nested-pools": {
+  "caught_run4": 16,
+  "caught_run6": 16,
+  "cases": 26,
+  "changed": []
+ },
+ "php-plain-temporal/virtual-malloc": {
+  "caught_run4": 0,
+  "caught_run6": 0,
+  "cases": 26,
+  "changed": []
+ },
+ "php-plain-temporal/virtual-nested-pools": {
+  "caught_run4": 7,
+  "caught_run6": 7,
+  "cases": 26,
+  "changed": []
+ },
+ "php-zend-alloc/sensitivity/virtual-malloc": {
+  "caught_run4": 1,
+  "caught_run6": 1,
+  "cases": 30,
+  "changed": []
+ },
+ "php-zend-alloc/sensitivity/virtual-nested-pools": {
+  "caught_run4": 28,
+  "caught_run6": 28,
+  "cases": 30,
+  "changed": []
+ },
+ "php-zend-alloc/virtual-malloc": {
+  "caught_run4": 0,
+  "caught_run6": 0,
+  "cases": 30,
+  "changed": []
+ },
+ "php-zend-alloc/virtual-nested-pools": {
+  "caught_run4": 20,
+  "caught_run6": 20,
+  "cases": 30,
+  "changed": []
+ }
+}

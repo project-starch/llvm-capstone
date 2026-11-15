@@ -1,30 +1,37 @@
-/* The PHP nested allocator layer. The original malloc capability is stored
- * in one pointer-sized prefix before PHP's unchanged header. The minimal musl
- * mapping accessor reaches that prefix; direct CDERIVE/CREVOKE manage payload
- * lifetimes. No per-object registry, additional parent lifetime or scrubbing.
- * This adapter targets the minimal mallocng SDK providing heap_sublet.h.
+/* The PHP nested allocator layer: direct CDERIVE/CREVOKE lifetimes for PHP 5.0.0's emalloc
+ * payloads, over the minimal mallocng SDK that provides heap_sublet.h. No per-object registry,
+ * no additional parent lifetime, no scrubbing.
  *
  * WHAT THE NESTED LAYER IS. PHP 5.0.0 is not a chunk allocator -- Zend/zend_mm.h unconditionally
  * undefines ZEND_MM -- so ZEND_DO_MALLOC is plain malloc and the structure is flat: one malloc
- * per emalloc, a 48-byte zend_mem_header in front of the payload. The PHP block is rounded up to a
- * 16-byte grain, at least 64 bytes, as the previous layer did, so that a payload bounded to
- * REAL_SIZE(n) -- or to n -- always lies inside it, emalloc(0) included. The caller's pointer is
- * rounded/aligned further when compressed bounds require it. It is
- * bounded to the payload in EVERY arm, so no capability the caller holds spans the header:
+ * per emalloc, PHP's own 48-byte zend_mem_header in front of the payload. The layer keeps that
+ * layout: it hands malloc PHP's own request (the header plus REAL_SIZE(n)) and the header sits
+ * at the address malloc returns, as in stock PHP. The caller's pointer is bounded to the payload
+ * in EVERY arm, so no capability the caller holds spans the header:
  *
- *     malloc base                         PHP block B      payload B+48
- *     [optional alignment][saved parent] [48-byte header] [bound(n) bytes]
- *     <---------------- malloc parent ---------------->
- *                                                         <--- child -->
+ *     malloc block = PHP block B            payload B+48
+ *     [48-byte header                    ] [bound(n) bytes]
+ *     <------------ malloc's reference (the block) ------->
+ *                                          <--- child --->
  *
-
- * At _efree the caller's child ends through its saved parent, which hands back the PHP header at
- * B, so everything below the first line of _efree -- p->size, p->cached, the AG(cache) park,
- * REMOVE_POINTER_FROM_LIST -- runs on live memory exactly as upstream. _erealloc recovers the
- * block WITHOUT ending anything (zend_cap_header), allocates a fresh block, copies, and only
- * then releases the old one: a failed realloc leaves the caller's pointer alive, as upstream's
- * ADD_POINTER_TO_LIST(orig) requires. A block handed back from the cache is re-issued as a FRESH
- * child, which is what leaves the previous tenant's alias dead over live bytes. */
+ * TWO EXCEPTIONS, both forced by the representable-bounds rule, never by PHP's logic. emalloc(0)
+ * asks for 48 bytes, which leaves no room for the one-byte child, so the layer asks for 49 (the
+ * same mallocng size class). And a child bound of 16 KiB or more has a granule of 32 bytes or
+ * more, while mallocng aligns the block start, so a payload 48 bytes in cannot carry exact bounds;
+ * such a block gets the smallest slack in front of the header that aligns the payload.
+ *
+ * THE BLOCK TABLE. The caller's child cannot reach the header, so _efree and _erealloc find the
+ * block through the layer's own table: a static open-addressing table in this layer's .bss that
+ * maps a header address to the block reference malloc returned. It lies outside every client
+ * bound, never allocates, and is the layer's only source of authority over a block. At _efree
+ * the caller's child ends and the table hands back the block, so everything below the first
+ * line of _efree -- p->size, p->cached, the AG(cache) park, REMOVE_POINTER_FROM_LIST -- runs on
+ * live memory exactly as upstream. _erealloc recovers the block WITHOUT ending anything
+ * (zend_cap_header) and reallocates it with realloc, so the block stays in place whenever
+ * mallocng keeps it in place; realloc ends the old block lifetime, and the old child with it.
+ * A failed realloc leaves the caller's pointer alive, as upstream's ADD_POINTER_TO_LIST(orig)
+ * requires. A block handed back from the cache is re-issued as a FRESH child, which is what
+ * leaves the previous tenant's alias dead over live bytes. */
 #ifndef ZEND_CAP_MODE_H
 #define ZEND_CAP_MODE_H
 
@@ -46,8 +53,9 @@
  * here, and the temporal axis has three columns:
  *
  *   mode 0  stock                    nothing revoked anywhere: no child, and a block is never returned to the
- *                       heap, realloc included (a fresh block, a copy, the old one kept). A freed
- *                       block stays readable exactly as on stock PHP -- what ASAN sees.
+ *                       heap, realloc included (a fresh block, a copy, the old one kept and left in
+ *                       the block table). A freed block stays readable exactly as on stock PHP --
+ *                       what ASAN sees.
  *   mode 4  system allocator         the block is returned, so mallocng revokes per BLOCK, but no child per
  *           (virtual-malloc)         object. Catches a use-after-free on a block PHP actually freed; MISSES one
  *                                    on a block AG(cache) absorbed.
@@ -70,19 +78,24 @@
 unsigned int zend_cap_mode(void);
 void zend_cap_set_mode(unsigned int mode);
 
+/* PHP's header on this target: sizeof(zend_mem_header) + MEM_HEADER_PADDING, pNext and pLast at
+ * 16 bytes each, size and cached, padding to 48. The patched zend_alloc.c asserts it at compile
+ * time, so the block geometry below and PHP agree on where the payload starts. */
+#define ZEND_CAP_HEADER_BYTES 48u
+
 /* The nested layer calls, from the patched zend_alloc.c's macros. `hdr` is sizeof(zend_mem_header) plus
  * its padding, passed by the macros so this file never includes PHP's headers. */
-void *zend_cap_block(size_t bytes);                            /* ZEND_DO_MALLOC: a 16-grained block, counted */
+void *zend_cap_block(size_t bytes);                            /* ZEND_DO_MALLOC: malloc(PHP's request), entered in the block table */
 void *zend_cap_issue(void *p, size_t hdr, size_t size);        /* ZEND_CAP_PAYLOAD: the caller's pointer over the payload */
 void *zend_cap_header(void *ptr, size_t hdr);                  /* ZEND_CAP_HEADER: the block holding ptr; nothing ends */
 void *zend_cap_reclaim(void *ptr, size_t hdr);                 /* ZEND_CAP_RECLAIM: the block, after ending ptr's lifetime */
-void *zend_cap_reblock(void *p, size_t bytes, size_t oldbytes); /* ZEND_DO_REALLOC: a fresh block, the copy, the old released */
-void  zend_cap_release(void *p);                               /* ZEND_DO_FREE: free(p), or nothing without RETURN */
+void *zend_cap_reblock(void *p, size_t bytes, size_t oldbytes); /* ZEND_DO_REALLOC: realloc(block, PHP's request); mode 0: fresh, copy, old leaked */
+void  zend_cap_release(void *p);                               /* ZEND_DO_FREE: free(block), or nothing without RETURN */
 
 /* How much the nested layer did, for the probes; the same counters are printed at exit as the
  * PHP_VIRTUAL NESTED line, the runner's gate that a revoking arm revokes more than its control.
- * out[] = blocks taken, frees (returned or leaked), payloads issued, lifetimes retired, revokes
- * (== retired), splits (always 0), reallocs, live (issued - retired). */
+ * out[] = blocks taken (malloc calls), frees (returned or leaked), payloads issued, lifetimes
+ * retired, revokes (== retired), splits (always 0), reallocs, live (issued - retired). */
 void zend_cap_stats(unsigned long out[8]);
 
 #endif
