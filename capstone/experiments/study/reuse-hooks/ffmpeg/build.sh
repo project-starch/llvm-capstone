@@ -7,6 +7,11 @@
 #
 # Environment as for ports/common/application/build-virtual.sh
 # (CAPSTONE_LLVM_BUILD_DIR, CAPSTONE_REPO_ROOT, CAPSTONE_TMP_ROOT, FFAPP_JOBS).
+# FFREUSE_CONFIGURE (optional): further configure options for a workload that
+# needs more demuxers or decoders than the run of record's matroska/mpeg4, e.g.
+# the FATE decode subset of docs/plans/2026-11-15-ffmpeg-established-workload.md
+# (--enable-demuxer=h264,hevc,ivf --enable-decoder=h264,hevc,vp8,vp9). Unset,
+# the build is the run of record's.
 #
 # The steps are build-virtual.sh's ffmpeg branch, with the hook patch applied
 # between source preparation and the build:
@@ -35,7 +40,7 @@ APP=$R/capstone/ports/ffmpeg/app
 [[ ! -e $OUT ]] || { echo "use a fresh output directory: $OUT" >&2; exit 2; }
 source "$R/capstone/tests/capstone-test-env.sh" >/dev/null
 export CAPSTONE_APPLICATION_PROFILE=virtual FFAPP_WORK=$OUT/source FFAPP_SUBLET=$SUB
-export FFAPP_EXTRA_CONFIGURE=--extra-cflags=-DEXP_REUSE_GAP FFAPP_EXTRA_FIXTURES="11 12 13 14 15"
+export FFAPP_EXTRA_CONFIGURE="--extra-cflags=-DEXP_REUSE_GAP${FFREUSE_CONFIGURE:+ $FFREUSE_CONFIGURE}" FFAPP_EXTRA_FIXTURES="11 12 13 14 15"
 mkdir -p "$FFAPP_WORK"
 cp "$TARBALL" "$FFAPP_WORK/ffmpeg-9.0.1.tar.xz"
 

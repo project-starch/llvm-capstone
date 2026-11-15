@@ -3,15 +3,17 @@
 
 #include <libavcodec/avcodec.h>
 #include <libavformat/avformat.h>
+#include <libavutil/adler32.h>
 #include <libavutil/imgutils.h>
 #include <libavutil/md5.h>
 #include <libavutil/mem.h>
 
 #include "ffapp_decode.h"
 
-/* One framemd5-style line. Stream 0, timestamps are the frame index at tb 1/30, as in the
- * reference produced by record.sh; only the hash column is the oracle. */
-static int emit_frame(const AVFrame *f, int n)
+/* One framemd5-style line (or framecrc-style, see FFAPP_HASH_CRC). Stream 0, timestamps are
+ * the frame index at tb 1/30, as in the reference produced by record.sh; only the size and hash
+ * columns are the oracle. */
+static int emit_frame(const AVFrame *f, int n, int hash)
 {
     uint8_t md5[16];
     int size = av_image_get_buffer_size(f->format, f->width, f->height, 1);
@@ -20,6 +22,12 @@ static int emit_frame(const AVFrame *f, int n)
         return FFAPP_E_HASH;
     av_image_copy_to_buffer(buf, size, (const uint8_t *const *)f->data, f->linesize,
                             f->format, f->width, f->height, 1);
+    if (hash == FFAPP_HASH_CRC) {
+        uint32_t crc = (uint32_t)av_adler32_update(0, buf, size);
+        av_free(buf);
+        printf("0, %10d, %10d, %8d, %8d, 0x%08x\n", n, n, 1, size, (unsigned)crc);
+        return 0;
+    }
     av_md5_sum(md5, buf, size);
     av_free(buf);
     printf("0, %8d, %8d, %8d, %8d, ", n, n, 1, size);
@@ -64,6 +72,11 @@ static void ffapp_diag_probe(const char *path)
 #endif
 
 int ffapp_run(const char *path, int stop_at)
+{
+    return ffapp_run_hash(path, stop_at, FFAPP_HASH_MD5);
+}
+
+int ffapp_run_hash(const char *path, int stop_at, int hash)
 {
     AVFormatContext *fmt = NULL;
     AVCodecContext *dec = NULL;
@@ -138,7 +151,7 @@ int ffapp_run(const char *path, int stop_at)
         }
         if (pkt->stream_index == vs && avcodec_send_packet(dec, pkt) >= 0) {
             while (avcodec_receive_frame(dec, frm) >= 0) {
-                if ((status = emit_frame(frm, frames++)) != 0) {
+                if ((status = emit_frame(frm, frames++, hash)) != 0) {
                     av_packet_unref(pkt);
                     goto out;
                 }
@@ -164,7 +177,7 @@ int ffapp_run(const char *path, int stop_at)
     }
     avcodec_send_packet(dec, NULL);           /* drain */
     while (avcodec_receive_frame(dec, frm) >= 0)
-        if ((status = emit_frame(frm, frames++)) != 0)
+        if ((status = emit_frame(frm, frames++, hash)) != 0)
             goto out;
     if (frames == 0) {
         status = FFAPP_E_NOFRAME;

@@ -34,6 +34,14 @@
 #define FFAPP_E_HASH        41  /* could not allocate the frame-packing buffer   */
 #define FFAPP_E_NOFRAME     42  /* stream ended before any frame decoded         */
 
-int ffapp_run(const char *path, int stop_at);
+/* The per-frame hash column. MD5 is the framemd5 muxer's, the default and the run of record's.
+ * CRC is the framecrc muxer's: av_adler32_update(0, packet), printed as 0x%08x with framecrc's
+ * column widths, so the size and hash columns compare with a FATE framecrc reference. Both hash
+ * the same packed frame. */
+#define FFAPP_HASH_MD5 0
+#define FFAPP_HASH_CRC 1
+
+int ffapp_run(const char *path, int stop_at);                 /* FFAPP_HASH_MD5 */
+int ffapp_run_hash(const char *path, int stop_at, int hash);
 
 #endif
