@@ -1,0 +1,31 @@
+stock EXP-BLOCKS-END slots=40 overflow=0 {'issues': 1210316, 'distinct_starts': 5862, 'error': 0}
+protected EXP-BLOCKS-END slots=40 overflow=0 {'issues': 1210353, 'distinct_starts': 6322, 'error': 0}
+layout EXP-BLOCKS-END slots=40 overflow=0 {'issues': 1210329, 'distinct_starts': 6322, 'error': 0}
+reusediff census stock/protected 0.072835 stock/layout 0.072871 protected/layout 5.8e-05
+
+per path: blocks (bytes)
+aset-context               121 (      349184)        121 (      349184)        121 (      349184)
+aset-large                2557 (    70662544)       2557 (    70826192)       2557 (    70826192)
+aset-new                 18152 (   214532096)      20213 (   280223744)      20213 (   280223744)
+aset-realloc                 1 (       16480)          1 (       16544)          1 (       16544)
+total                    20831      22892      22892
+
+contexts whose block count differs between stock and protected (stock, protected, layout):
+  aset-new         MessageContext                              10000    12001    12001  (+2001)
+  aset-new         index info                                    117      177      177  (+60)
+
+stock-notrack            {'issues': 1210352, 'releases': 1207923, 'reuses': 1204490, 'distinct_starts': 5862, 'error': 0}
+stock-notrack-2          {'issues': 1210355, 'releases': 1207926, 'reuses': 1204493, 'distinct_starts': 5862, 'error': 0}
+protected-notrack        {'issues': 1210435, 'releases': 1208006, 'reuses': 1204113, 'distinct_starts': 6322, 'error': 0}
+var-realloc-notrack      {'issues': 1210435, 'releases': 1208006, 'reuses': 1204113, 'distinct_starts': 6322, 'error': 0}
+var-layout-notrack       {'issues': 1210357, 'releases': 1207928, 'reuses': 1204035, 'distinct_starts': 6322, 'error': 0}
+stock-notrack            stock-notrack-2          0.000040
+stock-notrack            protected-notrack        0.072838
+stock-notrack            var-realloc-notrack      0.072839
+stock-notrack            var-layout-notrack       0.072909
+stock-notrack-2          protected-notrack        0.072809
+stock-notrack-2          var-realloc-notrack      0.072809
+stock-notrack-2          var-layout-notrack       0.072883
+protected-notrack        var-realloc-notrack      0.000002
+protected-notrack        var-layout-notrack       0.000390
+var-realloc-notrack      var-layout-notrack       0.000392

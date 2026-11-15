@@ -31,6 +31,12 @@
 #include <unistd.h>
 #include "reuse-gap-observer.h"
 
+/* log2 of the SV-head table size: build.sh passes -DEXP_REUSE_GAP_SV_LOG2=N when its
+   environment sets EXP_REUSE_GAP_SV_LOG2, otherwise 18 as in the October study. */
+#ifndef EXP_REUSE_GAP_SV_LOG2
+#define EXP_REUSE_GAP_SV_LOG2 18
+#endif
+
 struct reuse_gap_hook {
   const char *boundary;
   struct reuse_gap_slot *slots;
