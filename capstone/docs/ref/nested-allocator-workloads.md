@@ -14,12 +14,34 @@
 | PostgreSQL on silicon, bitstream F | **queued**: board 1, chain be-b1 (~10:00 15 Nov), pre-registered below (87b463da4d10; SPEC lane Addendum 126); ABBA in one boot, rung budget 1800 | F `a948e4134`, kit bkit75n |
 | FFmpeg 9.0.1 decode (10 s clip, 300 frames), QEMU twin | **measured** (15 Nov 05:21): all commands decode the stock reference frames; in-context **-0.030 %**, kernel -0.36 %. The protection adds about 3,300 lifetimes per decode (pools recycle), subtree max 2, peak 474 live records. Needs `-fno-builtin` in both arms (else cause 24 in both, a compiler defect) and this lane's Q-15 placement repair of 0003 (unrepaired, CDERIVE refuses a frame-plane buffer) | FRCDKMS SDK, -O2 -fno-builtin, native route, set w4, QEMU qemu55 a0501ebc39 |
 | tshark 4.6.8, `-r -V -n` on 9,000 frames, QEMU twin | **measured** (15 Nov 05:45-06:45): every output equals stock tshark's byte for byte; in-context **+2.69 %**, kernel +0.02 %; 7.18 M CDERIVEs and 2.73 M CREVOKEs per run, with one packet-scope reset of 256-1,023 nodes per frame, subtree max 29,134, peak live records 33,998 | FRCDKMS SDK and flags on tshark and its seven dependencies, `--no-relax`, native route, QEMU qemu55 a0501ebc39 |
+| tshark on silicon, bitstream F | **queued**: pre-registered below; four one-arm boots U P P U on one board, budget 900 | F `a948e4134`, kit bkit75n |
 | memcached (load) | **deferred**: the native route cannot run it. The table refuses `socket`, `socketpair`, `epoll_create1` and `epoll_ctl` (`native-syscall-table.c:92-101`, `NS_REFUSE`). A twin probe (`nested/mcprobe`, 15 Nov) confirms it after a passing control (`open` in the run directory): `socket(AF_INET)` and `socket(AF_UNIX)` give ENOSYS, `epoll_create1` ENOSYS, `pthread_create` EAGAIN. memcached needs all three (four worker threads). Running it elsewhere (e.g. the virtual route) is a different instrument; the lead's call | - |
 | CREVOKE worst case (subtree 1 .. 10^6, latency, interruptibility; PostgreSQL context reset) | **measured** (RTL sim, memory delay 0): 6 cycles per node up to 2,048 nodes, about 11 beyond; at most 65,532 nodes per subtree (10^6 cannot be built), so the worst single CREVOKE is 720,892 cycles; **not interruptible**: a timer interrupt waits for the whole walk (180,518 cycles at 32,768 nodes, against 1-6 without). PostgreSQL context resets (twin): the largest ends **34,509 nodes** in one CREVOKE, about 0.38 M cycles at delay 0 and 2.1 M at delay 12. CDERIVE: 21 cycles alone, 27 / 157 back to back at delay 0 / 12; CREVOKE about 60 cycles per node at delay 12 | capstone-ariane `a948e4134` (F), `--sv_seed 1` |
 | CDERIVE / CREVOKE timed on silicon (lone, back to back, subtrees 1 .. 10^5, a probe to 10^6) | **queued**: board 2, chain bd-b2, after the CPython boot (~11:30 15 Nov), pre-registered below (d0b72cfe7a21; SPEC lane Addendum 125) | F `a948e4134`, kit bkit75n |
 | record-cache counters | event 23 is on hpm8 in kits bkit73n (batch) and bkit75n (F). Events 29-31 (lookups, raw misses, walk-busy cycles) would need a new bitstream; that is **the lead's call** and is not requested | - |
 
 Only rows marked "measured" hold measurements; the rest say what runs next and where.
+
+## Summary across applications (twin unless marked; each section below carries the configuration)
+
+| application, workload | what the arms differ in | in-context cost: twin | silicon (F) | added CDERIVE per run | per M in-context cycles | CREVOKE per run (protected) | max subtree | peak live records (protected) |
+|---|---|---|---|---|---|---|---|---|
+| speedtest1 `--size 1` | memsys5 + lookaside patch | +0.6 % | **+1.67 %** (batch: +1.04 %) | 28,217 | 41 (silicon cycles) | 28,216 | 3 | 398 |
+| CPython 3.13.7, 7 pyperformance benchmarks | pymalloc patch 0014 | +1.63 % (summed) | queued | 2,866,016 (all seven) | 345 | 2,936,354 | 2 | 76,767 |
+| PostgreSQL 17.5, pgbench-derived | 0003 **with lane q15-placement's Q-15 repair**; harness (root, shims) in both arms | **+4.04 %** | queued | 2,276,557 | 810 | 668,247 | **34,509** | 105,043 |
+| tshark 4.6.8, 9,000 frames | wmem 0001 (dev, Q-15-repaired) | **+2.69 %** | queued | 4,506,984 | 598 | 2,727,471 | 29,134 | 33,998 |
+| FFmpeg 9.0.1, 300-frame decode | 0003 **with this lane's Q-15 repair**; 0001 hooks and `-fno-builtin` in both arms | 0.03 % either way, not attributed | queued | 3,327 | 3.7 | 8,974 | 2 | 474 |
+| memcached | - | deferred: the native route has no sockets, epoll or threads | - | | | | | |
+| *SPEC temporal increment, gcc train01* | *heap lifetimes on vs off* | | *+0.62 % (batch)* | | | | | |
+
+- The cost follows the added lifetime work. The three apps that add the most per cycle (PostgreSQL 810, tshark 598,
+  CPython 345 per M) pay +1.6 % to +4 % on the twin, and FFmpeg, at 3.7, pays nothing measurable. speedtest1 costs
+  more than its 41 per M suggests: on the twin only 0.39 of its 0.62 points are the lifetimes; 0.17 are the patch's
+  request-size reporting and 0.06 its `aReq` array (speedtest1 section).
+- On silicon, speedtest1's cost is 1.7-2.7 times its twin cost, and 1.7 times the SPEC temporal increment. The other
+  apps' silicon boots are queued.
+- Both large-subtree applications reset whole pools in one CREVOKE: PostgreSQL's memory contexts, up to 34,509 nodes,
+  and tshark's packet scope, every frame. That is where CREVOKE's walk (6-60 cycles per node, uninterruptible) matters.
 
 ## What is compared
 
@@ -1158,3 +1180,54 @@ empty capture (`w0.pcap`) measures startup alone.
 - The subtree histogram shows the packet scope: 9,001 CREVOKEs end 256-1,023 nodes each, one per frame. That is
   the reset of the packet-scope wmem pool, which ends every object a frame's dissection allocated, in one instruction.
 - The largest single CREVOKE ends 29,134 nodes.
+
+### Pre-registration: tshark on silicon, bitstream F, one arm per boot (written before the boots)
+
+**Configuration.**
+- Bitstream F `a948e4134` (`ec675c2b…`), kit bkit75n (hpm8 = event 23), a board the SPEC lane slots.
+- Rung budget 900: `BAKED_TIMEOUT=3600` at the kit's x4, as the stubbed runs print.
+- **One arm per boot, four boots U P P U, all on one board.** Each image is 20.3 MB stripped, and both in one boot
+  exceed the 26,000,000 B firmware cap.
+- Board stages (the f3 native-smoke skeleton, byte-identical, plus `train/`):
+  - `nested/tshark/board/t-u-stage` (`t-u-stage.SHA256SUMS`), unprotected image `2061f661…`;
+  - `nested/tshark/board/t-p-stage` (`t-p-stage.SHA256SUMS`), protected image `bcc251f3…`.
+  - Each `train/` equals the twin stage `tshark/stages/b-{u,p}/stage` file for file, plus the skeleton's
+    `in/NO-INPUTS`.
+  - The baked `w.pcap.xz` unpacks to the measured workload `5ba7788d…` (w1000, 9,000 frames).
+  - `plan.json` names the size `w100`. That label is stale; the file is w1000, by its hash.
+- The image and the capture are xz-packed and unpacked per command, outside the marks.
+- The twin ran these exact stages, one arm per boot (`nts-bu`, `nts-bp`, 15 Nov):
+  - both outputs equal stock tshark's (sha256, 9,000 frames);
+  - in-context 7,449,089,370 (u) and 7,777,037,664 (p).
+  - Across one-arm boots, the twin reads +4.40 % against the ABBA boot's +2.69 %. Its u1 also differs by 1.4 % from
+    the ABBA boot's u1. On the twin, a boot's history moves this program's cycles by about 1.4 %. That is why the
+    silicon boots run U P P U and are read as means.
+- Checked off the board, as rule 8 asks (`nested/tshark/board/recheck-t-{u,p}.sh`, output in `t-{u,p}-recheck/`):
+  - real bakes: cpio `0521309f0c19f77d` (U) and `12bd33d953202c99` (P), each holding all 25 manifest files. Each baked
+    `.xz` image unpacks to the measured stripped hash (`2061f661…`, `bcc251f3…`).
+  - The kit's `BOARD_STUB=2` runs, both classified as smoke PASS (all 9 steps) at `BAKED_TIMEOUT=3600`.
+  - Real firmware builds: `3dc28c9685f99f84…` (U) and `65b4d2acc7a93ea7…` (P), 23,760,392 B each, under the
+    26,000,000 B cap (the same size as FFmpeg's f2; the hashes differ). The dom_stack gate PASSES on both
+    (25,872 B of 32,768).
+
+**Readings:** per boot: rc, the output's sha256, lines and frames against the stock reference, `run_cycles`,
+`between_cycles`, hpm3..8 and the uptime span.
+
+**Predictions.**
+- **Answers:** every boot's output equals stock tshark's (sha256 `056c1f8c…`, 1,140,005 lines, 9,000 frames). Anything
+  else stops the comparison; a protected-only failure is a silicon finding.
+- **Repeats across boots** (U1 against U2, P1 against P2): within 1 % on `run_cycles` and 2 % on `between_cycles`, or
+  that difference is not read.
+- **In-context cost, protected vs not (means of the two boots each): +1.5 % to +10 %.**
+  - The twin reads +2.69 % (ABBA) and +4.40 % (one-arm boots).
+  - speedtest1 read 1.7-2.7 times its twin cost on silicon.
+  - The 33,998 peak live records against a 256-entry verdict cache can add capacity misses the twin does not model.
+- **Kernel: -2 % to +4 %** (twin +0.02 %). **Whole command (uptime span): +1.5 % to +9 %.**
+- **Event 23, protected minus not, per command: +1 M to +20 M.** The protected run adds 4.51 M derives. At F's
+  speedtest1 rate, 1.65 misses per derive, that is +7.4 M; PostgreSQL's band scales the same way.
+- **Derived, not predicted:**
+  - the share of the in-context cost that event 23 explains, at 17-20 cycles per miss;
+  - the cost of the 9,001 packet-scope CREVOKEs (256-1,023 nodes each) at the per-node cost the timing boot reads.
+- **Duration:** about 22 min per command (twin x speedtest1's ratios: in-context x4.1, kernel x2.5, 24 M cycles/s;
+  about 31 G + 1.3 G cycles). It is silent while it runs, against a 3,600 s idle limit. Book 35 min per boot.
+- **VOID** if `b0-stats` or `b0-hello` fails, or the smoke fails outside the kit's accounting waiver.
