@@ -17,8 +17,8 @@
 | tshark 4.6.8, `-r -V -n` on 9,000 frames, QEMU twin | **measured** (15 Nov 05:45-06:45): every output equals stock tshark's byte for byte; in-context **+2.69 %**, kernel +0.02 %; 7.18 M CDERIVEs and 2.73 M CREVOKEs per run, with one packet-scope reset of 256-1,023 nodes per frame, subtree max 29,134, peak live records 33,998 | FRCDKMS SDK and flags on tshark and its seven dependencies, `--no-relax`, native route, QEMU qemu55 a0501ebc39 |
 | tshark on silicon, bitstream F | **running**: board 1, chain bg-b1, from 10:00 15 Nov; pre-registered below (b12fa3f29eb2; SPEC lane Addendum 129); four one-arm boots U P P U, budget 900 | F `a948e4134`, kit bkit75n |
 | memcached (load) | **deferred**: the native route cannot run it. The table refuses `socket`, `socketpair`, `epoll_create1` and `epoll_ctl` (`native-syscall-table.c:92-101`, `NS_REFUSE`). A twin probe (`nested/mcprobe`, 15 Nov) confirms it after a passing control (`open` in the run directory): `socket(AF_INET)` and `socket(AF_UNIX)` give ENOSYS, `epoll_create1` ENOSYS, `pthread_create` EAGAIN. memcached needs all three (four worker threads). Running it elsewhere (e.g. the virtual route) is a different instrument; the lead's call | - |
-| CREVOKE worst case (subtree 1 .. 10^6, latency, interruptibility; PostgreSQL context reset) | **measured** (RTL sim, memory delay 0): 6 cycles per node up to 2,048 nodes, about 11 beyond; at most 65,532 nodes per subtree (10^6 cannot be built), so the worst single CREVOKE is 720,892 cycles; **not interruptible**: a timer interrupt waits for the whole walk (180,518 cycles at 32,768 nodes, against 1-6 without). PostgreSQL context resets (twin): the largest ends **34,509 nodes** in one CREVOKE, about 0.38 M cycles at delay 0 and 2.1 M at delay 12. CDERIVE: 21 cycles alone, 27 / 157 back to back at delay 0 / 12; CREVOKE about 60 cycles per node at delay 12 | capstone-ariane `a948e4134` (F), `--sv_seed 1` |
-| CDERIVE / CREVOKE timed on silicon (lone, back to back, subtrees 1 .. 10^5, a probe to 10^6) | **running**: board 2, chain bd-b2, since 09:58 15 Nov, pre-registered below (d0b72cfe7a21; SPEC lane Addendum 125) | F `a948e4134`, kit bkit75n |
+| CREVOKE worst case (subtree 1 .. 10^6, latency, interruptibility; PostgreSQL context reset) | **measured** (RTL sim, memory delay 0): 6 cycles per node up to 2,048 nodes, about 11 beyond; at most 65,532 nodes per subtree (10^6 cannot be built), so the worst single CREVOKE is 720,892 cycles; **not interruptible**: a timer interrupt waits for the whole walk (180,518 cycles at 32,768 nodes, against 1-6 without). PostgreSQL context resets (twin): the largest ends **34,509 nodes** in one CREVOKE, about 0.38 M cycles at delay 0 and 2.1 M at delay 12. CDERIVE: 21 cycles alone, 27 / 157 back to back at delay 0 / 12; CREVOKE about 60 cycles per node at delay 12. **On silicon (F):** 28 cycles per node from 10,000 nodes; 100,000 nodes in 2.82 M cycles (about 113 ms); PostgreSQL's 34,509-node reset about 0.97 M cycles (about 39 ms) | capstone-ariane `a948e4134` (F), `--sv_seed 1` |
+| CDERIVE / CREVOKE timed on silicon (lone, back to back, subtrees 1 .. 10^5, a probe to 10^6) | **measured** (board 2, 15 Nov 09:58-10:11): CDERIVE (the runtime's helper) **63** cycles lone, 98 back to back; CREVOKE of 1 node **55**; per node 16.7 at 1,000 nodes, **28** at 10,000 and 100,000; a 100,000-node subtree revokes in **2.82 M cycles (about 113 ms at 25 MHz)**; 10^6 cannot be built (refused after 196,609). The lifetime ops are 29-38 % of speedtest1's F cost | F `a948e4134`, kit bkit75n |
 | record-cache counters | event 23 is on hpm8 in kits bkit73n (batch) and bkit75n (F). Events 29-31 (lookups, raw misses, walk-busy cycles) would need a new bitstream; that is **the lead's call** and is not requested | - |
 
 Only rows marked "measured" hold measurements; the rest say what runs next and where.
@@ -43,7 +43,8 @@ Only rows marked "measured" hold measurements; the rest say what runs next and w
   is 2.5 times (six benchmarks summed), and about a third of it is issue stalls, with L1D misses up 14.7 %. PostgreSQL's
   wall-clock cost is +4.38 % (its in-context repeats missed the band). tshark and FFmpeg are queued.
 - Both large-subtree applications reset whole pools in one CREVOKE: PostgreSQL's memory contexts, up to 34,509 nodes,
-  and tshark's packet scope, every frame. That is where CREVOKE's walk (6-60 cycles per node, uninterruptible) matters.
+  and tshark's packet scope, every frame. That is where CREVOKE's walk matters: uninterruptible, and 28 cycles per
+  node on silicon for large subtrees, so PostgreSQL's largest reset holds the core for about 39 ms.
 
 ## What is compared
 
@@ -713,6 +714,70 @@ a native-route domain may read a cycle counter on silicon is not established.**
 **The real large revoke: PostgreSQL's context resets** (twin, `w2-main`, details in the PostgreSQL section). 668,247
 CREVOKEs per run. 92 % end one node, 52,685 end a context's chunks, and the largest ends 34,509 nodes. That one costs
 about 0.38 M cycles at memory delay 0 and about 2.1 M at delay 12, without interruption.
+
+### Results: CDERIVE and CREVOKE timed on silicon (board 2, 2026-11-15 09:58-10:11)
+
+**Configuration.** As pre-registered, with Addendum 1:
+- Stage `nested/crvt/board/c3-stage`, binary `a1b94751…`, bitstream F (read back resident by name), kit bkit75n.
+- Transcript `spec/board/out-nat-twcf-hpmnest-crvt-b2/c3-stage/board.txt`.
+- `b0-stats` and `b0-hello` returned 0, and the smoke passed under the kit's waiver. Not VOID. The kit's classifier
+  printed MALFORMED for this stage's format; all 22 commands printed `@@SPEC-END`.
+
+**What a figure is.** Each latency is a `cycle` delta minus the empty bracket (6 cycles), read in `crvt/crvtime.c`.
+- "CDERIVE" is the runtime's `capstone_cap_derive` (`capstone/capability.h`): three field reads, a range check, a
+  cursor set and the CDERIVE itself, about eleven instructions. The heap patches call the same sequence.
+- "CREVOKE" is the single instruction.
+
+**Counters.** `cycle` is readable from the native domain on silicon (`p-cycle` rc 0; the empty bracket reads 6
+cycles). `mcycle` faults (`p-mcycle` rc 139), as on the twin. `run.sh` chose `cycle`.
+
+| test | reading (cycles) | band | RTL (delay 0 / 12) |
+|---|---|---|---|
+| lone CDERIVE of a 64-byte child, mean of 10,000 | **63.0** (min 63, max 128) | 15-150, met | 21 (CDERIVE alone) |
+| lone CREVOKE of 1 node, mean of 10,000 | **55.0** (min 55, max 111) | 30-300, met | 38-50 drained |
+| the same, fenced before each op | 63.0 / 55.0 | - | - |
+| back-to-back sibling CDERIVEs, per derive | **98.2** | 20-400, met | 27 / 157 |
+| CREVOKE of those 10,001 siblings | 258,541 (25.9 per node) | - | - |
+| CREVOKE of a chain of 1 / 10 / 100 nodes | 100 / 164 / 1,489 | - | - |
+| CREVOKE of a chain of 1,000 | 16,705 (**16.7 per node**) | 5-200 per node, met | 6 / ~60 |
+| CREVOKE of a chain of 10,000 | 279,394 (**27.9 per node**) | met | |
+| CREVOKE of a chain of 100,000 | **2,815,062** (**28.2 per node**) | met | |
+| building a chain of 100,000 (each derive from the last child) | 9,008,132 (90 per derive) | - | - |
+
+- **A 100,000-node subtree builds and revokes**, so silicon has no 65,536-node per-subtree cap. The pool recorded in
+  R-12 is not this configuration's limit.
+- **10^6 cannot be built.** The probe reports 65,537, 131,073 and 196,609 nodes, then dies (rc 139) before 262,145,
+  as on the twin. The board console does not carry the kernel's fault line, so the silicon cause is not read. The
+  twin's is 30, node exhaustion. The native table's 262,144 records bound every subtree, including the records other
+  lifetimes hold.
+- Per node, CREVOKE costs 16-17 cycles up to 1,000 nodes and 28 from 10,000. The rise is consistent with the subtree
+  outgrowing a cache level. This boot does not show which.
+
+**Clock rate and the mono clock.**
+- On the native route a `clock_gettime(CLOCK_MONOTONIC)` pair costs about 1.95 ms, against the 1 µs step predicted
+  in Addendum 1. So every short mono bracket is void: the lone means wrap below zero.
+- The long mono readings give the cycle rate. The 100,000-chain revoke takes 114.68 ms minus a 1.94 ms bracket for
+  2,815,062 cycles, and the 10,000-chain gives the same within 4 %. So the core clock is about **25 MHz**, which agrees
+  with the 24 M cycles/s used in the duration estimates.
+
+**Against the pre-registration.**
+- **met:** every latency band (lone, back to back, per node), t3-chain100k completes, and t4 is refused before
+  262,144.
+- **wrong:** the mono resolution prediction, as above. No cycle reading depends on it.
+
+**Derived.**
+- **speedtest1 on F:** 28,226 derives x 63-98 cycles + 28,216 single-node revokes x 55 cycles = 3.3-4.3 M cycles. Its
+  in-context delta is +11.52 M, so **the lifetime ops themselves are 29-38 % of speedtest1's cost**. That narrows the
+  RTL's 15-98 % bracket. Event 23's replays are 7-8 %. The rest is not attributed here.
+- **CREVOKE worst case:**
+  - a 100,000-node subtree revokes in **2.82 M cycles, about 113 ms at 25 MHz**, in one uninterruptible instruction
+    (interruptibility from the RTL: a timer interrupt waits for the whole walk);
+  - the largest subtree this configuration can hold is under 262,144 nodes, so the worst single CREVOKE is under
+    about 7.4 M cycles, about 0.3 s, at 28 per node.
+- **PostgreSQL's real case:** its largest context reset, 34,509 nodes, costs about **0.97 M cycles, about 39 ms**, at
+  28 per node. The RTL estimate at delay 12 was 2.1 M.
+- **tshark:** its 9,001 per-frame packet-scope resets of 256-1,023 nodes cost about 4-17 k cycles each at 16-17 per
+  node.
 
 ## CPython 3.13.7: pyperformance subset
 
