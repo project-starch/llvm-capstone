@@ -1,0 +1,14 @@
+PASS old-scan: exit 1
+PASS old-stale: signal 11 | capstone-exec: domain fault cause=25 pc=0x3ff7fe2cac address=0x3ff7dff760 ra=0x3ff7fe20b8 fp=0x3ff7effcc0 entry=0x3ff7fe0000 code=0x3ff7fe0000-0x3ff7ff5000 image=./old.dom
+PASS old-bounds: signal 11 | capstone-exec: domain fault cause=28 pc=0x3ff7fe2cac address=0x3ff7dff790 ra=0x3ff7fe2408 fp=0x3ff7effcc0 entry=0x3ff7fe0000 code=0x3ff7fe0000-0x3ff7ff5000 image=./old.dom
+PASS old-move: signal 11 | capstone-exec: domain fault cause=25 pc=0x3ff7fe2cac address=0x3ff7ccd7e0 ra=0x3ff7fe2b90 fp=0x3ff7effba0 entry=0x3ff7fe0000 code=0x3ff7fe0000-0x3ff7ff5000 image=./old.dom
+PASS new-scan: exit 0
+PASS new-stale: signal 11 | capstone-exec: domain fault cause=25 pc=0x3ff7fe2cac address=0x3ff7dff7d0 ra=0x3ff7fe20b8 fp=0x3ff7effcc0 entry=0x3ff7fe0000 code=0x3ff7fe0000-0x3ff7ff5000 image=./new.dom
+PASS new-bounds: signal 11 | capstone-exec: domain fault cause=28 pc=0x3ff7fe2cac address=0x3ff7dff800 ra=0x3ff7fe2408 fp=0x3ff7effcc0 entry=0x3ff7fe0000 code=0x3ff7fe0000-0x3ff7ff5000 image=./new.dom
+PASS new-move: signal 11 | capstone-exec: domain fault cause=25 pc=0x3ff7fe2cac address=0x3ff7cd7150 ra=0x3ff7fe2b90 fp=0x3ff7effba0 entry=0x3ff7fe0000 code=0x3ff7fe0000-0x3ff7ff5000 image=./new.dom
+PASS new-move-prealloc: signal 11 | capstone-exec: domain fault cause=25 pc=0x3ff7fe2cac address=0x3ff5ad8950 ra=0x3ff7fe2b90 fp=0x3ff7effba0 entry=0x3ff7fe0000 code=0x3ff7fe0000-0x3ff7ff5000 image=./
+sublet-layout: 9 of 9 steps as predicted
+21d4aa200190f184b083f9f8ed9146bbf6a9b5bc6206adde3f89bc5894fd860b  ~/asr-work/fix-memcached/tree-old/capstone/ports/memcached/app/patches/memcached-1.6.45-0006-slabs-and-cache-sublet-lifetimes.patch
+49dcdb596a9b9f8b6e8bcfd33ccd7c6fa760cd291115cf91532eca564f7dad2c  ~/asr-work/fix-memcached/unit/old/sublet-layout.dom
+1c1b08b5e6046453b50aef66bf14d10480a6f2d3fbd0a407c8cccac89d940848  ~/asr-work/fix-memcached/tree/capstone/ports/memcached/app/patches/memcached-1.6.45-0006-slabs-and-cache-sublet-lifetimes.patch
+8f2ad4af1e45a353eac5f28efbd1a67b2fdea402ba7410a6689acf40846ed850  ~/asr-work/fix-memcached/unit/new/sublet-layout.dom

@@ -19,8 +19,9 @@ and begins a new lifetime in the same place. Neither names a parent or needs a r
 Layout. The patch adds no field and changes no size: item and item_chunk, the chunk sizes, the
 chunks per page, the pages and every malloc request stay upstream's. The allocator keeps its
 authority where upstream keeps its pages: each class's slab_list holds every page as
-memory_allocate returned it, and that reference covers the page. No memory that a caller
-receives holds a reference to a page or to another object.
+memory_allocate returned it, and that reference covers the page. The allocators leave none of
+their own references, to a page or to another free chunk or object, in memory they hand out.
+What a chunk's previous owner wrote into it stays there, as upstream leaves it.
 
 Slabs. Each page is one lifetime, the one its slab_list reference names:
 - do_slabs_alloc returns a CDERIVE child of the page, bounded to the class's chunk size. It
