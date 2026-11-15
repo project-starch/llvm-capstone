@@ -205,7 +205,11 @@ def main() -> int:
             archives.append(str(name))
 
     sdk = pathlib.Path(os.environ["CAPSTONE_SDK"])
-    base = [str(sdk / "capstone-cc"), "-Wl,--error-limit=0", *present, *archives]
+    # zlib is linked as an external archive (prepare-cpython-capstone.sh cross-built
+    # it); without it _zlib's objects leave inflate/deflate undefined in this survey.
+    libz = build.parent / "zlib/libz.a"
+    extra_archives = [str(libz)] if libz.is_file() else []
+    base = [str(sdk / "capstone-cc"), "-Wl,--error-limit=0", *present, *archives, *extra_archives]
     strict = run([*base, "-o", str(out / "python.dom")])
     (out / "link-strict.log").write_text(strict.stdout + strict.stderr)
     undefined = parse_undefined(strict.stderr)

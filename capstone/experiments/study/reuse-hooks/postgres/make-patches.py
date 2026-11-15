@@ -9,11 +9,12 @@ Bases: src/backend/utils/mmgr/mcxt.c of 17.5 as build-domain.sh prepares it.
   protected  port patches 0001-0016 and memory-contexts patch 0003
 The same hook text goes into both at the same places: after each manager
 alloc call, before each reset/delete method call, and around the free and
-realloc method calls. Patch 0003 rewrites the free and realloc call lines
-(SubletRelease before, SubletReissue around), so there the arm's own call
-sequence is the anchor: the old chunk is read before the sequence (in the
-protected arm before SubletRelease revokes the caller's pointer) and the
-outcome is recorded after it. Every anchor must match the expected number of
+realloc method calls. Patch 0003 rewrites the free call line (SubletRelease
+before it), so there the arm's own call sequence is the anchor: the old chunk
+is read before the sequence (in the protected arm before SubletRelease revokes
+the caller's pointer) and the outcome is recorded after it. The realloc call
+line is the same in both arms since the audited 0003 (the managers create the
+new chunk first). Every anchor must match the expected number of
 times or the script stops.
 """
 import difflib
@@ -62,9 +63,10 @@ FREE_SEQ = {
 }
 REALLOC_SEQ = {
     'stock': r'\tret = MCXT_METHOD\(pointer, realloc\) \(pointer, size, (?:0|flags)\);\n',
-    'protected': r'\tpointer = SubletRelease\(pointer\);\n'
-                 r'\tret = SubletReissue\(MCXT_METHOD\(pointer, realloc\) '
-                 r'\(pointer, size, (?:0|flags)\), size\);\n',
+    # Since the audited memory-contexts patch 0003 (native-kernel-new-qemu a779395ed7) the managers'
+    # realloc methods create the new chunk first and end the old one themselves, so mcxt.c's realloc
+    # call is the stock line in both arms.
+    'protected': r'\tret = MCXT_METHOD\(pointer, realloc\) \(pointer, size, (?:0|flags)\);\n',
 }
 
 

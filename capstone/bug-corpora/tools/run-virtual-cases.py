@@ -158,6 +158,8 @@ def main():
     p.add_argument("--only")
     p.add_argument("--prebuilt", type=Path, help="the port's capstone-application build of the corpus")
     p.add_argument("--prebuilt-controls", type=Path, help="the same build of the corpus's virtual controls")
+    p.add_argument("--build-only", action="store_true",
+                   help="build the case and control images into RAW/bin, write RAW/build.json and stop before the boot")
     a = p.parse_args()
     # C-81: a builtins build can elide the allocations a case observes; refused before anything boots
     extra = [w for c in a.cc_arg for w in ("--extra", c)]
@@ -252,6 +254,14 @@ def main():
         if d.name in built:
             n = str(int(d.name[:2]))
             plan += [(f"{d.name}-fixed", built[d.name], ["fixed", n]), (f"{d.name}-buggy", built[d.name], ["buggy", n])]
+
+    if a.build_only:
+        (raw / "build.json").write_text(json.dumps(
+            {"corpus": str(corpus), "arm": a.arm, "configuration": config, "sdk": str(a.sdk),
+             "built": {n: str(i) for n, i in built.items()}, "build_errors": build_errors,
+             "plan": [[n, str(i), argv] for n, i, argv in plan]}, indent=2) + "\n")
+        print(f"build-only: {len(built)} built, {len(build_errors)} failed: {raw / 'build.json'}")
+        return 1 if build_errors else 0
 
     # ---- one boot ----
     batch = Batch(raw / "stage")

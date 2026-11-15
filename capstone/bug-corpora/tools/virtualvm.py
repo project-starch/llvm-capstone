@@ -5,17 +5,17 @@ started through `capstone-vexec`: a capability fault ends that task and not the 
 run is one boot that executes every control and every case in turn, staged on a read-only disk,
 through runtime/virtual/run-staged.py -- the same harness that qualified the platform.
 
-The Capstone adapter is built into the kit's kernel (runtime/virtual/native_platform.py). A batch
-loads no module: its script asks the launcher whether the kernel runs native tasks and stops when it
-does not.
+On the trap route (runtime/virtual/trap_platform.py) the kernel runs a protected program through its
+.dom loader. A batch loads no module: its script asks the kit's capstone-vexec (a shell script now,
+runtime/virtual/trap-vexec.sh) whether the kernel runs protected programs and stops when it does not.
 
 A Batch collects files to stage and named shell steps. execute() returns, per step, the console
 text and a result dict shaped like the persistent VM's (`kind`, `value`, `fault`), so a corpus's
 observe() reads a virtual step exactly as it reads a physical run. Nothing here judges.
 
 The platform is a kit directory holding exactly what the qualification recorded:
-qemu-system-riscv64 (+ libslirp.so.0), images/{Image,fw_jump.elf,rootfs.ext2},
-adapter/capstone-vexec, and optionally adapter/params (see kernel_params()).
+qemu-system-riscv64, images/{Image,fw_jump.elf,initramfs.cpio.gz}, adapter/capstone-vexec, and
+optionally adapter/params (see kernel_params()). `trap_platform.py make-kit KIT` writes one.
 """
 import os
 import re
@@ -30,20 +30,23 @@ REPO = Path(__file__).resolve().parents[3]
 STAGED = REPO / "capstone/runtime/virtual/run-staged.py"
 sys.path.insert(0, str(STAGED.parent))
 import native_platform  # noqa: E402
+import trap_platform  # noqa: E402
 
-FILES = ("qemu-system-riscv64", "images/Image", "images/fw_jump.elf", "images/rootfs.ext2",
+FILES = ("qemu-system-riscv64", "images/Image", "images/fw_jump.elf", "images/initramfs.cpio.gz",
          "adapter/capstone-vexec")
 BEGIN, END = "@@STEP-BEGIN ", "@@STEP-END "
 BOUND = "@@STEP-BOUND "   # a board step killed at its bound (boardvm): it reads as a timeout, never as a signal
+STEP_LIMIT = trap_platform.STEP_LIMIT   # a step's watchdog bound when the runner set none, s (CAPSTONE_STEP_TIMEOUT)
 NSIG = 64   # Linux _NSIG: the highest signal number a step's 128+N status can carry
 PARAMS = "adapter/module/params"   # a board kit: its module's parameters, written through sysfs (boardvm)
-KERNEL_PARAMS = "adapter/params"   # a QEMU kit: the adapter's parameters, given on the kernel command line
-SYSFS = "/sys/module/capstone_vm/parameters"
+KERNEL_PARAMS = "adapter/params"   # a QEMU kit: the loader's parameters, given on the kernel command line
+SYSFS = "/sys/module/sublet/parameters"   # the trap route's loader (MODULE_PARAM_PREFIX "sublet.")
+BOARD_SYSFS = "/sys/module/capstone_vm/parameters"   # a board kit's module (boardvm)
 
 
 def kernel_params(kit):
     """A QEMU kit's adapter parameters: adapter/params, in the format of module_params(). The adapter is built into the
-    kernel, so execute() puts each on the kernel command line as `capstone_vm.name=value`. The guest script prints the
+    kernel, so execute() puts each on the kernel command line as `sublet.name=value`. The guest script prints the
     read-back of each as `@@PARAM name=<value>`, and the run is refused unless every one reads back as set."""
     return module_params(kit, KERNEL_PARAMS)
 
@@ -76,7 +79,7 @@ def module_params(kit, file=PARAMS):
 def param_lines(params):
     """The guest lines that set the parameters and print their read-back; a parameter the module does not have, or a
     write that fails, ends the batch."""
-    return [f"[ -f {SYSFS}/{n} ] && echo {v} > {SYSFS}/{n} && echo \"@@PARAM {n}=$(cat {SYSFS}/{n})\" || "
+    return [f"[ -f {BOARD_SYSFS}/{n} ] && echo {v} > {BOARD_SYSFS}/{n} && echo \"@@PARAM {n}=$(cat {BOARD_SYSFS}/{n})\" || "
             f"{{ echo '@@PARAM {n} REFUSED'; echo VIRTUAL_STAGED_DONE; exit 1; }}" for n, v in params]
 
 
@@ -120,8 +123,8 @@ class Batch:
         self.stage.mkdir(parents=True)
         self.steps = []
         self.params = []
-        # {step: the runner's own per-run limit, s}. A QEMU batch does not enforce it (its script is unchanged); a board
-        # batch bounds each step at this times its kit's BOARD_STEP_MULT (boardvm).
+        # {step: the runner's own per-run limit, s}. A QEMU batch's guest watchdog kills the step at it (STEP_LIMIT when
+        # unset); a board batch bounds each step at this times its kit's BOARD_STEP_MULT (boardvm).
         self.bounds = {}
 
     def put(self, dest, source=None, text=None):
@@ -141,43 +144,81 @@ class Batch:
             raise ValueError(f"step name {name!r} must be unique and shell-safe")
         self.steps.append((name, command))
 
-    def script(self):
+    def script(self, steps=None):
+        """The guest script for STEPS (default: every step). Each step runs in its own session under a watchdog
+        (trap_platform.step_lines): at its bound, self.bounds[name] or STEP_LIMIT, the watchdog kills the step's
+        process group and prints @@STEP-BOUND, which split() reads as a timeout. The boot goes on."""
         lines = ["#!/bin/sh", "cd /mnt/vm || exit 1", "dmesg -n 1",
                  f"./{native_platform.LAUNCHER} --platform || {{ echo VIRTUAL_STAGED_DONE; exit 1; }}",
-                 # The launcher prints its `capstone-exec: domain fault cause= pc= ... code=` line only
-                 # with diagnostics on (as run-ports.py runs it); without it a fault is a bare
-                 # SIGSEGV, which no observe() may read as the mechanism reporting.
+                 # capstone-vexec prints its `capstone-exec: domain fault cause= pc= ... code=` line only
+                 # with diagnostics on; without it a fault is a bare SIGSEGV, which no observe() may read
+                 # as the mechanism reporting.
                  "export CAPSTONE_EXEC_DIAGNOSTICS=1"] + read_back_lines(self.params)
-        for name, command in self.steps:
-            lines += [f"echo '{BEGIN}{name}'", f"( {command} ) > /tmp/step.out 2>&1", "rc=$?",
-                      "cat /tmp/step.out", f"echo \"{END}{name} $rc\""]
+        for name, command in (self.steps if steps is None else steps):
+            lines += trap_platform.step_lines(name, command, self.bounds.get(name) or STEP_LIMIT)
         lines += ["echo VIRTUAL_STAGED_DONE", ""]
         return "\n".join(lines)
 
     def execute(self, kit, work, timeout):
-        """Boot once, run every step. Returns ({name: (text, result)}, serial path, completed)."""
-        kit = Path(kit)
+        """Run every step, as many per boot as the guest survives. Returns ({name: (text, result)}, serial path,
+        completed).
+
+        A fault or a watchdog kill ends one step and the boot goes on. When the guest itself dies (panic, power-off,
+        hang), the step it was running reads kind "none" with harness="guest died" -- a harness failure, which no
+        observe() reads as a verdict -- and a fresh boot (WORK.boot-N) runs the steps after it. Every boot's serial
+        log is appended to WORK/serial.log behind an @@HARNESS-RESTART line. completed is True only when one boot ran
+        every step to the end."""
+        kit, work = Path(kit), Path(work)
         shutil.copy2(kit / "adapter/capstone-vexec", self.stage / "capstone-vexec")
         (self.stage / "capstone-vexec").chmod(0o755)
         self.params = kernel_params(kit)
-        (self.stage / "gate.sh").write_text(self.script())
         size = sum(f.stat().st_size for f in self.stage.rglob("*") if f.is_file())
         env = dict(os.environ)
         env["LD_LIBRARY_PATH"] = str(kit) + (":" + env["LD_LIBRARY_PATH"] if env.get("LD_LIBRARY_PATH") else "")
         env.setdefault("CAPSTONE_QEMU_LOCK", str(Path.home() / ".capstone-locks/qemu.lock"))
+        if getattr(self, "domain_lock", None):   # a runner's parallel lane (juliet/run.py --lanes)
+            env["CAPSTONE_QEMU_DOMAIN_LOCK"] = self.domain_lock
         Path(env["CAPSTONE_QEMU_LOCK"]).parent.mkdir(parents=True, exist_ok=True)
-        run = subprocess.run([sys.executable, str(STAGED), "--qemu", str(kit / FILES[0]),
-                              "--images", str(kit / "images"), "--stage", str(self.stage),
-                              "--work", str(work), "--timeout", str(timeout),
-                              "--disk-mib", str(max(1024, (size >> 20) * 2 + 256)),
-                              # the cases write to /tmp from the read-only stage
-                              "--kernel-arg", native_platform.WIDE_GRANTS,
-                              *[word for n, v in self.params for word in ("--kernel-arg", f"capstone_vm.{n}={v}")]],
-                             env=env)
-        serial = Path(work) / "serial.log"
-        text = serial.read_text(errors="replace").replace("\r\n", "\n") if serial.exists() else ""
-        check_params(self.params, text)
-        return split(text), serial, run.returncode == 0
+        limit = max([STEP_LIMIT, *[b for b in self.bounds.values() if b]])
+
+        steps, remaining, completed, n = {}, list(self.steps), True, 0
+        while remaining:
+            n += 1
+            boot_work = work if n == 1 else work.with_name(f"{work.name}.boot-{n}")
+            (self.stage / "gate.sh").write_text(self.script(remaining))
+            subprocess.run([sys.executable, str(STAGED), "--qemu", str(kit / FILES[0]),
+                            "--images", str(kit / "images"), "--stage", str(self.stage),
+                            "--work", str(boot_work), "--timeout", str(timeout), "--step-limit", str(limit),
+                            "--disk-mib", str(max(1024, (size >> 20) * 2 + 256)),
+                            # the cases write to /tmp from the read-only stage
+                            "--kernel-arg", native_platform.WIDE_GRANTS,
+                            *[word for n_, v in self.params for word in ("--kernel-arg", f"sublet.{n_}={v}")]],
+                           env=env)
+            serial = boot_work / "serial.log"
+            text = serial.read_text(errors="replace").replace("\r\n", "\n") if serial.exists() else ""
+            if n > 1:
+                with (work / "serial.log").open("a") as log:
+                    log.write(f"\n{trap_platform.RESTART}{n} after a dead guest\n{text}")
+            check_params(self.params, text)
+            finished = "\nVIRTUAL_STAGED_DONE\n" in text
+            completed = completed and finished
+            booted = split(text)
+
+            ran = 0
+            for name, _ in remaining:
+                if name not in booted:
+                    break
+                ran += 1
+                steps[name] = booted[name]
+                if not re.search(rf"{re.escape(END)}{re.escape(name)} \d+$", text, re.M):   # began, never ended
+                    booted[name][1]["harness"] = "guest died"
+                    steps[name] = (booted[name][0] + f"\n[harness] the guest died during this step (boot {n})\n",
+                                   booted[name][1])
+                    break
+            if ran == 0:
+                break   # the boot began no step: a broken platform, not something a restart fixes
+            remaining = remaining[ran:]
+        return steps, work / "serial.log", completed
 
 
 def split(serial):
@@ -203,5 +244,10 @@ def split(serial):
             result = {"kind": "signal", "value": rc - 128} if 128 < rc <= 128 + NSIG else {"kind": "exit", "value": rc}
         if fault:
             result["fault"] = fault
+        # the kernel refused an access through the program's reference and the program went on
+        # (trap-vexec.sh's `kernel fault` lines): counted apart from caught and missed
+        kernel = [l.strip() for l in text.splitlines() if "capstone-exec: kernel fault " in l]
+        if kernel:
+            result["kernel_faults"] = kernel
         steps[name] = (text, result)
     return steps

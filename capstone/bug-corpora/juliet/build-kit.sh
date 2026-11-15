@@ -4,7 +4,13 @@
 #
 #   build-kit.sh <work-dir> <llvm-capstone commit> [first step]
 #
-# Steps: clone llvm build buildroot sdk adapter kit. Every step is timed into <work-dir>/timings.tsv and stops the
+# Trap route (14 Nov 2026): QEMU, firmware and the kernel Image come from the trap-route build, not from this
+# commit's gitlinks, so the default steps skip qemu and buildroot. The kit step writes the kit with
+# capstone/runtime/virtual/trap_platform.py make-kit (QEMU, Image, fw_jump.elf from SUBLET_QEMU, SUBLET_KERNEL,
+# SUBLET_FIRMWARE, defaults in trap_platform.py) and the adapter step builds only juliet-timeout: there is no module.
+# CROSS_COMPILE_TRAP names the guest's Linux cross prefix (default: the caplifive buildroot host tools).
+#
+# Steps: clone llvm qemu buildroot sdk adapter kit (qemu and buildroot only when asked as the first step). Every step is timed into <work-dir>/timings.tsv and stops the
 # script on failure; every step checks its ARTIFACTS, because the buildroot Makefile can exit 0 with a failed inner
 # build. QEMU is the commit's own capstone/capstone-qemu gitlink: the runtime, module and SDK of a commit target that
 # QEMU, not a newer one.
@@ -16,6 +22,8 @@ set -uo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd)
 ROOT=${1:?work dir}; DEV=${2:?llvm-capstone commit}; START=${3:-clone}
 STEPS="clone llvm qemu buildroot sdk adapter kit"
+TRAP_SKIP=${TRAP_SKIP:-"qemu buildroot"}
+TRAP_CROSS=${CROSS_COMPILE_TRAP:-$HOME/caplifive-system/sw/buildroot/build/host/bin/riscv64-buildroot-linux-gnu-}
 known=0; for s in $STEPS; do [ "$s" = "$START" ] && known=1; done
 [ $known = 1 ] || { echo "unknown first step '$START' (one of: $STEPS)" >&2; exit 2; }
 mkdir -p "$ROOT" && ROOT=$(cd "$ROOT" && pwd)
@@ -92,39 +100,28 @@ do_sdk() {
 }
 
 do_adapter() {
-  cd "$SRC" || return 1
-  export CAPSTONE_LLVM_BUILD_DIR=$BLLVM
-  source capstone/tests/capstone-test-env.sh || return 1
-  local BRO=$SRC/capstone/caplifive-buildroot/build-qemu gcc
-  export KERNEL_BUILD=$BRO/build/linux-custom
-  gcc=$(ls "$BRO"/host/bin/riscv64-*linux-gcc | head -1); export CROSS_COMPILE=${gcc%gcc}
-  bash capstone/runtime/virtual/build-adapter.sh "$OUT/adapter" || return 1
-  "${CROSS_COMPILE}gcc" -O2 -static -Wall -Wextra -Werror "$HERE/juliet-timeout.c" -o "$OUT/juliet-timeout" || return 1
-  need "$OUT/adapter/capstone-vexec" "$OUT/adapter/module/capstone_vm.ko" "$OUT/juliet-timeout"
+  mkdir -p "$OUT" || return 1
+  "${TRAP_CROSS}gcc" -O2 -static -Wall -Wextra -Werror "$HERE/juliet-timeout.c" -o "$OUT/juliet-timeout" || return 1
+  need "$OUT/juliet-timeout"
 }
 
 do_kit() {
-  local BRO=$SRC/capstone/caplifive-buildroot/build-qemu Q=$SRC/capstone/capstone-qemu/build
-  rm -rf "$KIT" && mkdir -p "$KIT/images" "$KIT/adapter/module" || return 1
-  cp "$Q/qemu-system-riscv64" "$KIT/" && cp -L "$(ldd "$Q/qemu-system-riscv64" | awk '/libslirp/ {print $3}')" "$KIT/" || return 1
-  cp "$BRO/images/Image" "$BRO/images/fw_jump.elf" "$BRO/images/rootfs.ext2" "$KIT/images/" || return 1
-  cp "$OUT/adapter/capstone-vexec" "$KIT/adapter/" && cp "$OUT/adapter/module/capstone_vm.ko" "$KIT/adapter/module/" || return 1
-  (cd "$KIT" && find . -type f ! -name SHA256SUMS ! -name PROVENANCE | sort | xargs sha256sum > SHA256SUMS) || return 1
-  local head subs brsubs clang cc helper
+  rm -rf "$KIT" || return 1
+  python3 "$SRC/capstone/runtime/virtual/trap_platform.py" make-kit "$KIT" || return 1
+  local head clang cc helper
   head=$(git -C "$SRC" rev-parse HEAD) || return 1
-  subs=$(git -C "$SRC" submodule status capstone/capstone-qemu capstone/caplifive-buildroot capstone/capstone-c) || return 1
-  brsubs=$(git -C "$SRC/capstone/caplifive-buildroot" submodule status buildroot components/linux components/opensbi \
-           package/capstone-sbi-domain/capstone-sbi) || return 1
   clang=$(sha256sum "$BLLVM/bin/clang") && cc=$(sha256sum "$OUT/sdk/capstone-cc") \
     && helper=$(sha256sum "$OUT/juliet-timeout") || return 1
-  printf 'llvm-capstone %s\n%s\n%s\nclang %s\ncapstone-cc %s\njuliet-timeout %s\n' "$head" "$subs" "$brsubs" \
-    "${clang%% *}" "${cc%% *}" "${helper%% *}" > "$KIT/PROVENANCE"
+  printf 'llvm-capstone %s\ntrap route kit (trap_platform.py make-kit, SHA256SUMS)\nclang %s\ncapstone-cc %s\njuliet-timeout %s\n' \
+    "$head" "${clang%% *}" "${cc%% *}" "${helper%% *}" > "$KIT/PROVENANCE"
 }
 
 echo "build-kit.sh dev=$DEV start $(date -u +%FT%TZ)"
 go=0
 for s in $STEPS; do
   [ "$s" = "$START" ] && go=1
-  if [ $go = 1 ]; then step "$s" "do_$s"; else echo "=== $s skipped (START=$START)"; fi
+  if [ $go = 1 ] && [ "$s" != "$START" ] && [[ " $TRAP_SKIP " == *" $s "* ]]; then
+    echo "=== $s skipped (trap route: TRAP_SKIP)"
+  elif [ $go = 1 ]; then step "$s" "do_$s"; else echo "=== $s skipped (START=$START)"; fi
 done
 echo "ALL DONE $(date -u +%FT%TZ)"

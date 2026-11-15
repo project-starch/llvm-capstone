@@ -10,7 +10,7 @@
  /************** Begin file mem5.c ********************************************/
  /*
  ** 2007 October 14
-@@ -23181,6 +23184,10 @@
+@@ -23222,6 +23225,10 @@
      memsys5Link(i+newSize, iBin);
    }
    mem5.aCtrl[i] = iLogsize;
@@ -21,7 +21,7 @@
  
  #if defined(SQLITE_DEBUG) || defined(SQLITE_TEST)
    /* Update allocator performance statistics. */
-@@ -23218,6 +23225,10 @@
+@@ -23254,6 +23261,10 @@
    ** the array of mem5.szAtom byte blocks pointed to by mem5.zPool.
    */
    iBlock = (int)(((u8 *)pOld-mem5.zPool)/mem5.szAtom);
@@ -32,9 +32,9 @@
  
    /* Check that the pointer pOld points to a valid, non-free block. */
    assert( iBlock>=0 && iBlock<mem5.nBlock );
-@@ -25541,6 +25552,9 @@
+@@ -25609,6 +25620,9 @@
        /* Trash all content in the buffer being freed */
-       memset(p, 0xaa, db->lookaside.sz);
+       memset(pBuf, 0xaa, db->lookaside.sz);
  #endif
 +#ifdef EXP_REUSE_GAP
 +      exp_gap_release(&exp_gap_lookaside, (uint64_t)(uintptr_t)pBuf);
@@ -42,22 +42,25 @@
        pBuf->pNext = db->lookaside.pFree;
        db->lookaside.pFree = pBuf;
        return;
-@@ -25706,10 +25720,18 @@
-     }else if( (pBuf = db->lookaside.pFree)!=0 ){
+@@ -25785,6 +25799,10 @@
+       }
        db->lookaside.pFree = pBuf->pNext;
        db->lookaside.anStat[0]++;
 +#ifdef EXP_REUSE_GAP
 +      exp_gap_issue(&exp_gap_lookaside, (uint64_t)(uintptr_t)pBuf,
 +                    (uint64_t)db->lookaside.sz);
 +#endif
-       return lookasideIssue(db, pBuf);
+       return pNew;
      }else if( (pBuf = db->lookaside.pInit)!=0 ){
+       void *pNew = lookasideIssue(db, pBuf);
+@@ -25794,6 +25812,10 @@
+       }
        db->lookaside.pInit = pBuf->pNext;
        db->lookaside.anStat[0]++;
 +#ifdef EXP_REUSE_GAP
 +      exp_gap_issue(&exp_gap_lookaside, (uint64_t)(uintptr_t)pBuf,
 +                    (uint64_t)db->lookaside.sz);
 +#endif
-       return lookasideIssue(db, pBuf);
+       return pNew;
      }else{
        db->lookaside.anStat[2]++;

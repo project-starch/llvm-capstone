@@ -1,0 +1,88 @@
+--- a/src/backend/port/sysv_shmem.c
++++ b/src/backend/port/sysv_shmem.c
+@@ -734,6 +734,33 @@
+ 	/* Room for a header? */
+ 	Assert(size > MAXALIGN(sizeof(PGShmemHeader)));
+ 
++	/*
++	 * Reuse study: the single-user backend on Sublet.  A protected program
++	 * cannot map shared memory (the kernel refuses shared mappings, and a
++	 * protected task does not fork), and a single-user backend shares its
++	 * segment with nobody, so the whole segment is one private anonymous
++	 * mapping and no System V shim is created.
++	 */
++	memAddress = mmap(NULL, size, PROT_READ | PROT_WRITE,
++					  MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
++	if (memAddress == MAP_FAILED)
++		ereport(FATAL,
++				(errmsg("could not map private anonymous memory: %m"),
++				 errdetail("Failed system call was mmap(NULL, %zu, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0).",
++						   size)));
++	SetConfigOption("huge_pages_status", "off",
++					PGC_INTERNAL, PGC_S_DYNAMIC_DEFAULT);
++	hdr = (PGShmemHeader *) memAddress;
++	hdr->creatorPID = getpid();
++	hdr->magic = PGShmemMagic;
++	hdr->dsm_control = 0;
++	hdr->device = statbuf.st_dev;
++	hdr->inode = statbuf.st_ino;
++	hdr->totalsize = size;
++	hdr->freeoffset = MAXALIGN(sizeof(PGShmemHeader));
++	*shim = hdr;
++	return hdr;
++
+ 	if (shared_memory_type == SHMEM_TYPE_MMAP)
+ 	{
+ 		AnonymousShmem = CreateAnonymousSegment(&size);
+--- a/src/backend/storage/ipc/dsm_impl.c
++++ b/src/backend/storage/ipc/dsm_impl.c
+@@ -801,6 +801,49 @@
+ 	snprintf(name, 64, PG_DYNSHMEM_DIR "/" PG_DYNSHMEM_MMAP_FILE_PREFIX "%u",
+ 			 handle);
+ 
++	/*
++	 * Reuse study: the single-user backend on Sublet (see PGSharedMemoryCreate).
++	 * A segment is a private anonymous mapping with no file behind it; only the
++	 * process that created it can use it, which in single-user mode is every
++	 * process there is.
++	 */
++	if (op == DSM_OP_DETACH || op == DSM_OP_DESTROY)
++	{
++		if (*mapped_address != NULL
++			&& munmap(*mapped_address, *mapped_size) != 0)
++		{
++			ereport(elevel,
++					(errcode_for_dynamic_shared_memory(),
++					 errmsg("could not unmap shared memory segment \"%s\": %m",
++							name)));
++			return false;
++		}
++		*mapped_address = NULL;
++		*mapped_size = 0;
++		return true;
++	}
++	if (op != DSM_OP_CREATE)
++	{
++		ereport(elevel,
++				(errcode_for_dynamic_shared_memory(),
++				 errmsg("could not attach to segment \"%s\": private segments cannot be shared",
++						name)));
++		return false;
++	}
++	address = mmap(NULL, request_size, PROT_READ | PROT_WRITE,
++				   MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
++	if (address == MAP_FAILED)
++	{
++		ereport(elevel,
++				(errcode_for_dynamic_shared_memory(),
++				 errmsg("could not map shared memory segment \"%s\": %m",
++						name)));
++		return false;
++	}
++	*mapped_address = address;
++	*mapped_size = request_size;
++	return true;
++
+ 	/* Handle teardown cases. */
+ 	if (op == DSM_OP_DETACH || op == DSM_OP_DESTROY)
+ 	{

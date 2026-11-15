@@ -1,7 +1,7 @@
 --- a/src/backend/utils/mmgr/mcxt.c
 +++ b/src/backend/utils/mmgr/mcxt.c
-@@ -281,6 +281,10 @@
- 	return MemoryChunkIssue(chunk, chunk->sublet_parent, size);
+@@ -266,6 +266,10 @@
+ 	return inside;
  }
  
 +#ifdef EXP_REUSE_GAP
@@ -11,7 +11,7 @@
  /*
   * MemoryContextTraverseNext
   *		Helper function to traverse all descendants of a memory context
-@@ -465,6 +469,9 @@
+@@ -450,6 +454,9 @@
  		 * the programmer got it right.
  		 */
  
@@ -21,7 +21,7 @@
  		context->methods->reset(context);
  		context->isReset = true;
  		VALGRIND_DESTROY_MEMPOOL(context);
-@@ -574,6 +581,9 @@
+@@ -559,6 +566,9 @@
  	 */
  	context->ident = NULL;
  
@@ -31,7 +31,7 @@
  	context->methods->delete_context(context);
  
  	VALGRIND_DESTROY_MEMPOOL(context);
-@@ -1248,6 +1258,9 @@
+@@ -1233,6 +1243,9 @@
  	 * function instead.
  	 */
  	ret = context->methods->alloc(context, size, 0);
@@ -41,7 +41,7 @@
  
  	VALGRIND_MEMPOOL_ALLOC(context, ret, size);
  
-@@ -1272,6 +1285,9 @@
+@@ -1257,6 +1270,9 @@
  	context->isReset = false;
  
  	ret = context->methods->alloc(context, size, 0);
@@ -51,7 +51,7 @@
  
  	VALGRIND_MEMPOOL_ALLOC(context, ret, size);
  
-@@ -1299,6 +1315,9 @@
+@@ -1284,6 +1300,9 @@
  	context->isReset = false;
  
  	ret = context->methods->alloc(context, size, flags);
@@ -61,7 +61,7 @@
  	if (unlikely(ret == NULL))
  		return NULL;
  
-@@ -1386,6 +1405,9 @@
+@@ -1371,6 +1390,9 @@
  	 * function instead.
  	 */
  	ret = context->methods->alloc(context, size, 0);
@@ -71,7 +71,7 @@
  	/* We expect OOM to be handled by the alloc function */
  	Assert(ret != NULL);
  	VALGRIND_MEMPOOL_ALLOC(context, ret, size);
-@@ -1406,6 +1428,9 @@
+@@ -1391,6 +1413,9 @@
  	context->isReset = false;
  
  	ret = context->methods->alloc(context, size, 0);
@@ -81,7 +81,7 @@
  
  	VALGRIND_MEMPOOL_ALLOC(context, ret, size);
  
-@@ -1427,6 +1452,9 @@
+@@ -1412,6 +1437,9 @@
  	context->isReset = false;
  
  	ret = context->methods->alloc(context, size, flags);
@@ -91,7 +91,7 @@
  	if (unlikely(ret == NULL))
  	{
  		return NULL;
-@@ -1575,8 +1603,17 @@
+@@ -1560,8 +1588,17 @@
  	MemoryContext context = GetMemoryChunkContext(pointer);
  #endif
  
@@ -109,7 +109,7 @@
  
  #ifdef USE_VALGRIND
  	if (method != MCTX_ALIGNED_REDIRECT_ID)
-@@ -1614,8 +1651,27 @@
+@@ -1599,7 +1636,26 @@
  	 * this call, consider making it the responsibility of the 'realloc'
  	 * function instead.
  	 */
@@ -118,8 +118,7 @@
 +	MemoryContext exp_gap_old_context = GetMemoryChunkContext(pointer);
 +	MemoryContextMethodID exp_gap_old_method = GetMemoryChunkMethodID(pointer);
 +#endif
- 	pointer = SubletRelease(pointer);
- 	ret = SubletReissue(MCXT_METHOD(pointer, realloc) (pointer, size, 0), size);
+ 	ret = MCXT_METHOD(pointer, realloc) (pointer, size, 0);
 +#ifdef EXP_REUSE_GAP
 +	if (ret != NULL && exp_gap_old_method != MCTX_ALIGNED_REDIRECT_ID)
 +	{
@@ -137,17 +136,16 @@
  
  #ifdef USE_VALGRIND
  	if (method != MCTX_ALIGNED_REDIRECT_ID)
-@@ -1654,8 +1710,27 @@
+@@ -1637,7 +1693,26 @@
+ 	 * this call, consider making it the responsibility of the 'realloc'
  	 * function instead.
  	 */
- 	/* A NO_OOM failure returns NULL with the old chunk already ended. */
 +#ifdef EXP_REUSE_GAP
 +	uintptr_t	exp_gap_old_base = exp_gap_base(pointer);
 +	MemoryContext exp_gap_old_context = GetMemoryChunkContext(pointer);
 +	MemoryContextMethodID exp_gap_old_method = GetMemoryChunkMethodID(pointer);
 +#endif
- 	pointer = SubletRelease(pointer);
- 	ret = SubletReissue(MCXT_METHOD(pointer, realloc) (pointer, size, flags), size);
+ 	ret = MCXT_METHOD(pointer, realloc) (pointer, size, flags);
 +#ifdef EXP_REUSE_GAP
 +	if (ret != NULL && exp_gap_old_method != MCTX_ALIGNED_REDIRECT_ID)
 +	{
@@ -165,7 +163,7 @@
  	if (unlikely(ret == NULL))
  		return NULL;
  
-@@ -1711,6 +1786,9 @@
+@@ -1693,6 +1768,9 @@
  	 * function instead.
  	 */
  	ret = context->methods->alloc(context, size, MCXT_ALLOC_HUGE);

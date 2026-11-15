@@ -51,7 +51,9 @@ TL=$N/build/meson-logs/testlog.txt
 tzonly=0
 if [ "$nfail" = 1 ] && grep -qE '^ *[0-9]+/[0-9]+ glib[^ ]* - glib:gdatetime +ERROR' "$TL" &&
    [ "$(grep -cE '^ *[0-9]+/[0-9]+ .* (FAIL|ERROR|TIMEOUT) ' "$TL")" = 1 ] &&
-   grep -q 'test_posix_parse: assertion failed (g_time_zone_get_abbreviation (tz, 0) == "PST"): ("LMT" == "PST")' "$TL"; then
+   { grep -q 'test_posix_parse: assertion failed (g_time_zone_get_abbreviation (tz, 0) == "PST"): ("LMT" == "PST")' "$TL" ||
+     # tzdata 2025b and later drop PST8PDT altogether, so the same case finds no zone at all.
+     { [ ! -e /usr/share/zoneinfo/PST8PDT ] && grep -q "test_posix_parse: 'tz' should not be NULL" "$TL"; }; }; then
   tzonly=1
 fi
 [ "${nok:-0}" -gt 50 ] && { [ "$nfail" = 0 ] || [ "$tzonly" = 1 ]; } ||

@@ -1,6 +1,6 @@
 /* mc-harness: the memcached port's oracle driver.
  *
- *   mc-harness --out DIR [--port P] [--conns N] [--stop TERM|USR1] [--signal-child] [--perturb none|value|cas]
+ *   mc-harness --out DIR [--port P] [--conns N] [--stop TERM|USR1|shutdown] [--signal-child] [--perturb none|value|cas]
  *              -- SERVER-COMMAND...
  *   mc-harness --out DIR [--port P] --fixture N -- SERVER-COMMAND...
  *
@@ -21,6 +21,11 @@
  * --fixture N (the Safety milestone) runs no script: once the server listens it sends the hidden
  * `mc_capstone_fixture N` (patch 0005), reads until the server closes the connection, and records how
  * the server ended without signalling it (DIR/fixture-reply.txt, DIR/status.txt "stop=none ...").
+ *
+ * --stop shutdown sends no signal: after the script it opens one more connection and sends the
+ * `shutdown` command, which a server started with -A ends on. On the trap route a delivered signal
+ * kills a protected program even when it has a handler, so the reuse study stops memcached this way
+ * (with experiments/study/reuse-hooks/memcached/memcached-1.6.45-shutdown-without-signal.patch).
  *
  * --signal-child sends the stop signal to SERVER-COMMAND's child (its process group) instead of to
  * SERVER-COMMAND itself. capstone-job forwards SIGINT, SIGTERM and SIGHUP to its child and nothing
@@ -308,19 +313,23 @@ static pid_t only_child(pid_t parent) {
 static double now(void) { struct timespec t; clock_gettime(CLOCK_MONOTONIC, &t); return t.tv_sec + t.tv_nsec / 1e9; }
 
 int main(int argc, char **argv) {
-  int stopsig = SIGTERM, signal_child = 0, fixture = 0, i;
+  int stopsig = SIGTERM, signal_child = 0, fixture = 0, shutdown_cmd = 0, i;
   for (i = 1; i < argc && strcmp(argv[i], "--"); i++) {
     if (!strcmp(argv[i], "--out")) outdir = argv[++i];
     else if (!strcmp(argv[i], "--port")) port = atoi(argv[++i]);
     else if (!strcmp(argv[i], "--conns")) nconns = atoi(argv[++i]);
-    else if (!strcmp(argv[i], "--stop")) stopsig = !strcmp(argv[++i], "USR1") ? SIGUSR1 : SIGTERM;
+    else if (!strcmp(argv[i], "--stop")) {
+      i++;
+      shutdown_cmd = !strcmp(argv[i], "shutdown");
+      stopsig = !strcmp(argv[i], "USR1") ? SIGUSR1 : SIGTERM;
+    }
     else if (!strcmp(argv[i], "--signal-child")) signal_child = 1;
     else if (!strcmp(argv[i], "--fixture")) fixture = atoi(argv[++i]);
     else if (!strcmp(argv[i], "--perturb")) { i++; perturb_value = !strcmp(argv[i], "value"); perturb_cas = !strcmp(argv[i], "cas"); }
     else { fprintf(stderr, "mc-harness: unknown option %s\n", argv[i]); return 2; }
   }
   if (!outdir || i + 1 >= argc || nconns < 1 || nconns > 64) {
-    fprintf(stderr, "usage: mc-harness --out DIR [--port P] [--conns N] [--stop TERM|USR1] [--signal-child] [--perturb none|value|cas] -- SERVER...\n");
+    fprintf(stderr, "usage: mc-harness --out DIR [--port P] [--conns N] [--stop TERM|USR1|shutdown] [--signal-child] [--perturb none|value|cas] -- SERVER...\n");
     return 2;
   }
   char **server = argv + i + 1;
@@ -405,11 +414,22 @@ int main(int argc, char **argv) {
     fprintf(stderr, "mc-harness: stop signal to %s %d\n", target < 0 ? "process group" : "process", (int)(target < 0 ? -target : target));
   }
   double t0 = now();
-  kill(target, stopsig);
+  if (shutdown_cmd) {
+    int s = dial();
+    if (s < 0 || write(s, "shutdown\r\n", 10) != 10) {
+      fprintf(stderr, "mc-harness: could not send shutdown; killing the server\n");
+      kill(pid, SIGKILL);
+      return 7;
+    }
+    close(s);
+  } else {
+    kill(target, stopsig);
+  }
   int st = 0; while (waitpid(pid, &st, 0) < 0 && errno == EINTR) ;
   double t1 = now();
   char status[256];
-  int sn = snprintf(status, sizeof status, "stop=%s %s=%d stop_seconds=%.2f\n", stopsig == SIGUSR1 ? "USR1" : "TERM",
+  int sn = snprintf(status, sizeof status, "stop=%s %s=%d stop_seconds=%.2f\n",
+                    shutdown_cmd ? "shutdown" : stopsig == SIGUSR1 ? "USR1" : "TERM",
                     WIFSIGNALED(st) ? "signal" : "exit", WIFSIGNALED(st) ? WTERMSIG(st) : WEXITSTATUS(st), t1 - t0);
   writefile("status.txt", status, (size_t)sn);
   writefile("transcript.raw", all_raw.p, all_raw.n);

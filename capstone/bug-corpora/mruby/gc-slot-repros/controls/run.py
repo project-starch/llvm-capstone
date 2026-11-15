@@ -42,7 +42,7 @@ MODES = ("parent", "sibling", "successor", "stale")
 GATE = r'''#!/bin/sh
 cd /mnt/vm || exit 1
 dmesg -n 1
-insmod capstone_vm.ko || exit 1
+./capstone-vexec --platform > /dev/null || exit 1
 chmod 666 /dev/capstone-vm
 export CAPSTONE_EXEC_DIAGNOSTICS=1
 O=/tmp/ctl; mkdir -p $O; chmod 777 $O
@@ -54,7 +54,7 @@ for m in MODES; do
   emit $m.out $O/$m.out
   emit $m.err $O/$m.err
 done
-rmmod capstone_vm; echo "CTL_CLEANUP:$?"
+! grep -q '^capstone_vm ' /proc/modules; echo "CTL_CLEANUP:$?"
 echo VIRTUAL_STAGED_DONE
 '''.replace("MODES", " ".join(MODES))
 
@@ -117,7 +117,7 @@ def main():
     a.work.mkdir(parents=True, exist_ok=False)
     stage = a.work / "stage"
     stage.mkdir()
-    staged = {"capstone-vexec": a.adapter / "capstone-vexec", "capstone_vm.ko": a.adapter / "module/capstone_vm.ko",
+    staged = {"capstone-vexec": a.adapter / "capstone-vexec",
               "controls.dom": a.image}
     for name, src in staged.items():
         shutil.copy2(src, stage / name)
@@ -142,7 +142,7 @@ def main():
     rec = {"arm": a.arm, "rep": a.rep, "boot_completed": run.returncode == 0, "boot_wall_seconds": round(wall, 1),
            "modes": modes, "gate_sha256": hashlib.sha256(GATE.encode()).hexdigest(),
            "staged_sha256": {n: sha(stage / n) for n in sorted(staged)},
-           "platform_sha256": {n: sha(a.images / n) for n in ("Image", "fw_jump.elf", "rootfs.ext2")}
+           "platform_sha256": {n: sha(a.images / n) for n in ("Image", "fw_jump.elf", "initramfs.cpio.gz")}
            | {"qemu-system-riscv64": sha(a.qemu.resolve())},
            "runner_sha256": sha(HERE), "run_staged_sha256": sha(a.run_staged)}
     (a.work / "rep.json").write_text(json.dumps(rec, indent=1, sort_keys=True) + "\n")

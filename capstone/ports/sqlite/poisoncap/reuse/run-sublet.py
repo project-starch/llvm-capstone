@@ -5,8 +5,8 @@ directory, with its own arguments.
     run-sublet.py --platform DIR --work NEW --run NAME=IMAGE[:ARGS] [--run ...] [--timeout S]
                           [--per-process S]
 
-platform: qemu-system-riscv64, images/{fw_jump.elf,Image,rootfs.ext2}, adapter/{capstone-vexec,
-module/capstone_vm.ko}, as the dev gates use it. Each process's stdout and stderr go to files (never a
+platform: a trap-route kit (runtime/virtual/trap_platform.py make-kit): qemu-system-riscv64,
+images/{fw_jump.elf,Image,initramfs.cpio.gz}, adapter/capstone-vexec. No module: --module-args is recorded only. Each process's stdout and stderr go to files (never a
 pipe: a pipe changed PoisonCap's speedtest1 at start-up), which are printed after it ends, between
 @@BEGIN/@@END markers with its exit status and the launcher's fault record (CAPSTONE_FAULT_RECORD).
 WORK/results.jsonl, one row per process: name, image sha256, arguments, exit status, the fault record,
@@ -26,11 +26,10 @@ REPO = Path(__file__).resolve().parents[5]
 
 
 def gate_script(runs, module_args, per_process):
-    """The guest's script: load the module, then each image as its own process in an empty directory, its
+    """The guest's script: check that the kernel runs protected programs, then each image as its own process in an empty directory, its
     stdout, stderr and fault record printed between @@BEGIN/@@END markers."""
     lines = ['#!/bin/sh', 'dmesg -n 1',
-             f'insmod /mnt/vm/capstone_vm.ko {module_args} || {{ echo "@@INSMOD failed"; echo VIRTUAL_STAGED_DONE; exit 1; }}',
-             'echo "@@PARAMS $(cat /sys/module/capstone_vm/parameters/node_flat_records)"',
+             '/mnt/vm/capstone-vexec --platform > /dev/null || { echo "@@INSMOD failed"; echo VIRTUAL_STAGED_DONE; exit 1; }',
              'cp /mnt/vm/capstone-vexec /tmp/vexec && chmod 755 /tmp/vexec']
     for i, (name, _, args) in enumerate(runs):
         d = f'/tmp/w{i}'
@@ -42,14 +41,13 @@ def gate_script(runs, module_args, per_process):
                   f'echo "@@OUT {name}"; cat {d}/out; echo "@@ERR {name}"; cat {d}/err',
                   f'echo "@@FAULT {name}"; [ -f {d}/fault ] && cat {d}/fault',
                   f'echo "@@END {name} rc=$rc"', 'cd /']
-    return lines + ['rmmod capstone_vm', 'echo VIRTUAL_STAGED_DONE']
+    return lines + ['echo VIRTUAL_STAGED_DONE']
 
 
 def stage_files(stage, platform, runs, script):
     """The staged directory the guest mounts at /mnt/vm: launcher, module, images i<N>.dom, gate.sh."""
     stage.mkdir()
     shutil.copy2(platform / 'adapter/capstone-vexec', stage / 'capstone-vexec')
-    shutil.copy2(platform / 'adapter/module/capstone_vm.ko', stage / 'capstone_vm.ko')
     for i, (_, image, _) in enumerate(runs):
         shutil.copy2(image, stage / f'i{i}.dom')
     (stage / 'gate.sh').write_text('\n'.join(script) + '\n')
@@ -101,7 +99,7 @@ def main():
     serial = (a.work / 'boot/serial.log').read_bytes().decode(errors='replace').replace('\r', '')
     failures = [] if '\nVIRTUAL_STAGED_DONE\n' in serial else ['the boot did not finish']
     if '@@INSMOD failed' in serial:
-        failures.append(f'insmod failed with {a.module_args!r}')
+        failures.append('the kernel does not run protected programs (capstone-vexec --platform)')
     fm = re.search(r'^@@PARAMS (\d+)$', serial, re.M)
     flat = int(fm.group(1)) if fm else None
     with (a.work / 'results.jsonl').open('w') as out:

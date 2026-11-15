@@ -22,8 +22,7 @@ CAPTURES = ['dhcp', 'dns_port', 'http', 'arp', 'dhcp.flip', 'dns_port.flip', 'ht
 HEAD = r'''#!/bin/sh
 cd /mnt/vm || exit 1
 dmesg -n 1
-insmod capstone_vm.ko || { echo VIRTUAL_STAGED_DONE; exit 1; }
-chmod 666 /dev/capstone-vm
+./capstone-vexec --platform > /dev/null || { echo VIRTUAL_STAGED_DONE; exit 1; }
 export CAPSTONE_EXEC_DIAGNOSTICS=1
 '''
 RUN = r'''rm -rf /tmp/cfg; mkdir /tmp/cfg
@@ -62,8 +61,7 @@ def main():
         (stage / 'cap' / (cap + '.pcap')).write_bytes(data)
     shutil.copy2(a.kit / 'adapter/capstone-vexec', stage / 'capstone-vexec')
     (stage / 'capstone-vexec').chmod(0o755)
-    shutil.copy2(a.kit / 'adapter/module/capstone_vm.ko', stage / 'capstone_vm.ko')
-    script = HEAD + ''.join(RUN.replace('{cap}', c) for c in CAPTURES) + 'rmmod capstone_vm\necho VIRTUAL_STAGED_DONE\n'
+    script = HEAD + ''.join(RUN.replace('{cap}', c) for c in CAPTURES) + 'echo VIRTUAL_STAGED_DONE\n'
     (stage / 'gate.sh').write_text(script)
     env = dict(os.environ)
     env['LD_LIBRARY_PATH'] = str(a.kit) + (':' + env['LD_LIBRARY_PATH'] if env.get('LD_LIBRARY_PATH') else '')

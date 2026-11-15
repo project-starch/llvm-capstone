@@ -92,7 +92,7 @@ def main():
                            cppflags='-DEXP_REUSE_GAP' + (' -DMC_CAPSTONE_SUBLET' if arm == 'protected' else ''))
     assert stock['platform_sha256'] == prot['platform_sha256']
     assert all(stock['staged_sha256'][n] == prot['staged_sha256'][n]
-               for n in ('capstone-vexec', 'capstone_vm.ko', 'capstone-job', 'mc-harness'))
+               for n in ('capstone-vexec', 'capstone-job', 'mc-harness'))
     out = {
         'program': 'memcached 1.6.45', 'pre_registration': '16d2171a3edc',
         'workload': ('the protocol oracle unchanged (ports/memcached/app/host/mc-harness/mc-harness.c, sha256 '
@@ -107,7 +107,7 @@ def main():
         'images': images,
         'platform': dict(sha256=stock['platform_sha256'],
                          launcher_sha256=stock['staged_sha256']['capstone-vexec'],
-                         module_sha256=stock['staged_sha256']['capstone_vm.ko'],
+                         module_sha256='built into the kernel (trap route)',
                          job_sha256=stock['staged_sha256']['capstone-job'],
                          harness_sha256=stock['staged_sha256']['mc-harness'],
                          harts=1, workers=4,
