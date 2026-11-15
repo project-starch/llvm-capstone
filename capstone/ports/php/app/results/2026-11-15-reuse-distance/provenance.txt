@@ -1,0 +1,22 @@
+2026-11-15T04:56:25Z plan committed 762c8af4036; instrumented builds start
+2026-11-15T04:59:17Z hook patch v2 (no line moves; v1 left zend_alloc.c.orig in the nested overlay, build refused); trees reset to pristine zend_alloc.c; builds restart
+2026-11-15T05:00:57Z measured runs start; tree commit 87e6adc8a6e (plan 762c8af4036)
+0ea6d1ef545071326ce2ef4270e492ced585d089876517b460b6678d00e43ae8  kernel/Image-0133b9e21cd
+kit-run-3 150d969243a01faf6597bcb6c1b5e29f72b1766c7463997f6e64f29ec745b37c  adapter/capstone-vexec
+kit-run-3 0ea6d1ef545071326ce2ef4270e492ced585d089876517b460b6678d00e43ae8  images/Image
+kit-run-3 975a24215dd17e5123c6f019328bce2683c9a9ca1d4e29cdddba4d0545c6e3c1  images/fw_jump.elf
+kit-run-3 2d846ebece5024b3682316ad5339e1ca07e8683683d62e0f24fa15117c68cddb  images/initramfs.cpio.gz
+kit-run-3 c55fcdd2c620916690e9604a1b95f204d8287fce79631a8a8909c69952223b49  qemu-system-riscv64
+6ebdb090734768dbd714cdaa7fdcdd2027b22b04c77d7f823c7c194ee88d25f7  prebuilt/reuse/php-stock/php.dom
+314c072cec141492f662efe325f1becb5f9952f7af7f0fd844179e033bdacae6  prebuilt/reuse/php-protected/php.dom
+ed4308ecaf0f4d763c1f0db3e3ed38c87f6978a082edb2fff436f5b8c346ce15  prebuilt/reuse/php-stock/uninstrumented.dom
+680ebeba457f9b61d9f2554db4eb829851ac397cd8a273cdfed70dc7714b6993  prebuilt/reuse/php-protected/uninstrumented.dom
+6b9fc8f9ba15cb7a0972408b8e69724787085e5a50fc59898b49d0c52b934606  prebuilt/reuse/php-inputs/bench.php
+7e2c1dfd3b5fab50b4f6d5ed3826f5567f0a31000e1900c20802d30f305f3f32  prebuilt/reuse/php-stock/sdk/sdk.json
+f59e8e29efa0c8dc458d332a49d11cc49378ed31f96535bab0bcef0066237621  prebuilt/reuse/php-protected/sdk/sdk.json
+fe8f030e9897eb27699c04d555a2cc23cf14beeac43c8a521664a8af64d55b2b  prebuilt/reuse/php-stock/sdk-build/libc/libc-capstone-virtual.a
+a11a1cb02262f3ba62aa3d000bea608cad50cba040cc16c641d920952bbe6ed9  prebuilt/reuse/php-stock/sdk-build/sdk/libcapstone-application-builtins.a
+fe8f030e9897eb27699c04d555a2cc23cf14beeac43c8a521664a8af64d55b2b  prebuilt/reuse/php-protected/sdk-build/libc/libc-capstone-virtual.a
+a11a1cb02262f3ba62aa3d000bea608cad50cba040cc16c641d920952bbe6ed9  prebuilt/reuse/php-protected/sdk-build/sdk/libcapstone-application-builtins.a
+2026-11-15T06:54:34Z six runs exit 0 (stock 05:58Z, protected and exact 06:09-06:10Z); collected with reuse-hooks/php/collect.py into run-5/reuse/php/reuse.json
+calibration (uninstrumented corpus image php-real-nested.dom, mode 6): full bench.php stopped unfinished after 140 min; the one-tenth setting ran in 67 min
