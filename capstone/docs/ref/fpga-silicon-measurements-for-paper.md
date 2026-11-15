@@ -7884,7 +7884,9 @@ The reference G is v6c (capstone-ariane 9fd9d2530): its own synthesis-only gate 
       response view into rev_node (`core/ex_stage.sv:1657-1658` at d83d3a633; absent at 9fd9d2530), a net with fanout 129.
     - All 39 start at csr `cpmp_q_reg[5][comp_metadata][bounds][bE][1]` and pass the D$ port-2 controller. The net is
       driven by one LUT, `gen_rd_ports[2].i_wt_dcache_ctrl/revnode_rdfill_valid_q_i_1`, named for R-35's fill tap.
-      Whether that LUT holds the walker's response mux is not established.
+      By source, that net carries the walker's filter, `rv_rd_res.data_rvalid = (rev_mem_rd_res_i.data_rvalid &&
+      !pw_own_rd_q) || pw_dead_rv_q` (`core/ex_stage.sv:1977` at d83d3a633). It hides the walker's own reads and injects
+      the DEAD response. At 9fd9d2530, `rev_mem_rd_res_i` went to the unit unfiltered.
     - From the net, the paths run through rev_node's `_thread_3_event_counter` logic and end at `led_stretch_cnt_reg`
       (D or CE). Slack ranges from −11.370 to −11.142, at ranks 261-481.
     - G's worst 500 contain no `rv_rd_res`.
