@@ -4548,8 +4548,26 @@ themselves, which no current instrument observes.
 
 **Consequence for the boards (runtime lane's ruling, 2026-11-14).** a948e4134 may be flashed for PERFORMANCE
 measurement once it seals and its sweep on the built hash is clean: the window reads clean on the base and on
-a948e4134, the RTL lane's flash rule. The targeted variant now reads clean on its own handling too. It is a candidate
-for a later bitstream, not this one. Siblings: R-73 (the debug module writes DRAM around the adapter).
+a948e4134, the RTL lane's flash rule. The targeted variant now reads clean on its own handling too.
+
+**Update 2026-11-14: config B credited, and the targeted variant built.**
+- Config B (afe4e643e: 256 entries, no merge) is credited on the same window instance. The board lane's winB arms
+  are 0166b23fa = afe4e643e + the sim-only instruments, every inserted line under a sim-only ifdef. Readings: as
+  built, poisoned (12 / 0x18); without poison, installed at idx 165 and not validated; with validation during
+  the fill, poisoned; with both removed, FORGED (the S-06 invariant). The same limits as above apply.
+- The targeted variant is built as **eeb654104** (F2 on a948e4134, `CAPSTONE_TWC_FILL_TARGETED` on by default;
+  board lane, sha256 57f8b1e2ba865c25cb1c4339a5904a62896a8bd313a5141a4a5c9465793bf8de). It passes all nine full-build
+  keys against a948e4134, WNS -12.229.
+  - The window credit above ran on 325cf3bff. That carries F2 with the earlier spelling of the last-word index;
+    eeb654104 computes the same bits at the index's width. tw-fill arm 1, which reads that index, was re-read on the
+    built hash.
+  - On the built hash: lint is at baseline; the 95-sweep is identical to a948e4134's in values and RVFI; tw-fill
+    reads both arms, with its forging control (`TWC_SIM_NOFILLCLEAR`) forging on both.
+  - It is the next bitstream. The flash is the runtime lane's.
+- F2 + L1D 64 KiB (b0f02bac7) also routed, but fails WNS (-17.714) and placer congestion. It is sealed for identity
+  only and not flashed. The record is in the plan.
+
+Siblings: R-73 (the debug module writes DRAM around the adapter).
 
 ### R-73 — the debug module's system-bus master writes DRAM around the AXI adapter, so its writes update neither capability tags, the tag-word cache nor the page bitmap `OPEN 2026-11-14 — by source (claim-audited while auditing the TWC change); present on every tree with the shadow-tag adapter; board exposure NIL IF the board's `reset halt` asserts ndmreset (one gdb read; see Exposure); no fix written`
 
@@ -10930,6 +10948,82 @@ and passes against the patched one, and libc-test's `pthread_cond` passes
 (`runtime/tests/application/results/20260930-pthreads.json`). Every image relinks against the new
 libc; objects compiled against the old headers that embed a `pthread_cond_t` must be recompiled
 (perl and mruby embed none).
+
+### C-69 — an under-aligned capability load or store is expanded in scalar pieces, which drops the tag even when the address is aligned at run time `FIXED 2026-11-15 on capstone-misaligned-cap-access — COMPILER; filed 2026-09-29 by the FFmpeg/wmem port lane (libavfilter's FF_FIELD_AT), reproducer only until now; met again 2026-11-15 by the nested lane (FFmpeg av_freep, builtins on)`
+
+**What happens.** A load or store of a capability whose IR alignment is below 16 reaches SelectionDAG as an
+under-aligned access. Legalization expands it through a stack slot: two `ld`/`sd` at align 8, sixteen `lbu`/`sb` at
+align 1, then an `ldc`. A scalar access never carries a tag. So the capability is untagged with its metadata
+intact, even when the address was 16-aligned and the granule held a tagged capability. Two producers:
+- `*(T **)((char *)&obj + runtime_offset)`: clang gives it align 1 (`FF_FIELD_AT`, the folder's `repro.c`).
+- `memcpy(&val, void_arg, sizeof val)`, with builtins on: SROA folds the copy into an align-1 capability load,
+  so no memcpy is left for C-81 to send to musl. FFmpeg's `av_freep` then frees an untagged pointer: cause 24 at
+  `__libc_free+0x28`, the trap's `value_hi` nonzero. With `-fno-builtin` the copy stays a call, and musl tests the
+  alignment itself.
+
+**Fix.** `CapstoneMisalignedCapAccess.cpp`, an IR pass after CodeGenPrepare at every optimisation level. It does not
+call `skipFunction`, because clang marks every -O0 function optnone. For each non-atomic load or store whose type
+is or holds a non-integral pointer below that pointer's ABI alignment, it tests `(ptrtoint(p) & 15) == 0`:
+- aligned: a clone at align 16, so `ldc`/`stc`, and capability members at their natural offsets;
+- otherwise: the original access, whose scalar expansion is correct for a misaligned granule (it holds no tag).
+
+A misaligned `ldc`/`stc` traps (cause 4/6), so the access cannot simply be raised. An address that
+`getKnownAlignment` proves 16-aligned is re-aligned in place, with no test. The result equals musl `memcpy`'s for a
+16-byte copy into or out of an aligned object. Atomics are left alone: AtomicExpand, which runs earlier, makes every
+16-byte atomic a library call. The pass is off with `-capstone-misaligned-cap-dispatch=false`.
+`-capstone-misaligned-cap-log=<file>` writes one line per function it changes, or with the dispatch off, would
+change, and a dispatch-off build with the log on is byte-identical to one without the pass.
+
+**Not covered.** A capability member of a PACKED aggregate. The test is on the base. A member at a non-16 offset
+stays scalar in both arms, and loses its tag when the base is misaligned by the complement of that offset.
+
+**Measured (2026-11-15, llvm-c15 = 29027126f39b + this change, assertions on).**
+- **Lit.** CodeGen/Capstone, MC/Capstone, CodeGen/RISCV and six Transforms directories: 4926 results, 2 failing.
+  The two are `shared-patches-present.test` (its manifest was stale on this base before the change) and
+  `CodeGen/RISCV/emutls.ll`, the same two that llvm-c13 (29027126f39b + an unrelated LSR change) fails.
+- **New test `misaligned-capability-access.ll`.** Its ASM (-O2), ASM0 (-O0) and IR prefixes fail against the
+  dispatch-off lowering, which its OFF prefix records. It also has an `optnone` case.
+- **Run-time test** `compiler-repros/C69-underaligned-capability-bytecopy/c69-run.c`, on the native twin (qemu55),
+  one variable apart:
+  - -O2 on: 10/10. -O2 off: the 5 aligned-address checks FAIL. llvm-c9 at -O2 fails the same 5, and its image is
+    byte-identical to c15's dispatch-off image.
+  - -O0 on: 10/10. -O0 off: only the two FF_FIELD_AT checks fail; without SROA the memcpy shapes stay calls.
+- **check.py.** Gone at -O2 and -O0 with llvm-c15; present at both with llvm-c9.
+- **SPEC CPU2017, the 8 rows with FRCDKMSa3's flags.**
+  - With the dispatch off and the census log on, every object and image is byte-identical to the shipped
+    FRCDKMSa3 build (objcmp rc=0).
+  - The census names no function. The positive control: the same SDK and flags log `av_freep` and all five
+    shapes of the run-time test.
+  - With the dispatch on (llvm-c14, and again llvm-c15) all 11 images are byte-identical to FRCDKMSa3. No SPEC
+    image changes, and no twin number moves.
+  - Not covered: the prebuilt musl and runtime archives, which were not recompiled.
+- **QEMU gate** (kit-prof; `c1-gate/gt2/gate-c15`, a clone of gate-c9 that rebuilds llvm-c9 beside llvm-c15; the
+  runtime/virtual contracts at -O2 in FRCDK's configuration). Of the contract images only hosted-contract changes,
+  one tested access in `main`. With the dispatch off, llvm-c15 reproduces all six of llvm-c9's images byte for byte.
+  Results, identical on both arms:
+  - hosted 93/93, fp-s2 10/10, c8-copy 20/20;
+  - malloc, nodes, w55-malloc and w55-nodes fail with identical failing-check lists (the known ABI-7 environment).
+- **FFmpeg, the second producer, at run time** (the nested lane, `nested-workloads` a28b93d0b02b; QEMU twin, -O2
+  with builtins on, FRCD flags). The census names `src/libavutil/mem.c av_freep tested 2`.
+  - Fix on: every command in an ABBA run decodes 300 frames equal to stock, and the flipped-input control fires.
+  - Fix off, the same compiler and source with `-capstone-misaligned-cap-dispatch=false`: cause 24 at
+    `__libc_free+0x28` and 0 frames, llvm-c9's signature.
+  - Cost of the protection, protected against unprotected: -0.031 %, the same as the `-fno-builtin` build's -0.030 %.
+- **On dev** (llvm-c16 = origin/dev cba01ed3090d + this change; dev has none of the lane codegen flags). lit over
+  the same directories: 4922 tests, the same 2 failures. QEMU gate `gate-c16`, the dev-T3-mk SDK's codegen
+  unchanged, dispatch off against on. Again only hosted-contract changes. Results, identical on both arms:
+  - hosted 93/93, fp-s2 10/10, c8-copy 20/20;
+  - malloc, nodes, w55-malloc and w55-nodes fail with identical failing-check lists.
+- **Claim audit (2026-11-15).** It refuted the first version, llvm-c14, which skipped optnone functions and so
+  missed every function at clang -O0. That version also had an -O0 lit check tied to specific registers. Both
+  are corrected in llvm-c15. The audit confirmed:
+  - no new trap for aggregates (SelectionDAG gives members `commonAlignment(base, offset)`);
+  - no later pass re-splits the access;
+  - the atomics exclusion;
+  - off-build identity.
+
+The clang warning `-Wcapstone-capability-alignment` still says a pointer copied through under-aligned memory "is
+lost". Since this fix that holds only when the address is misaligned at run time. The text is unchanged.
 
 ### C-81 — a copy of 16 bytes or more whose 16-byte alignment the compiler cannot prove is inlined as scalar loads and stores, which strip the tags of the capabilities it carries `FIXED 2026-10-16 on compiler/memcpy-unknown-alignment — COMPILER; found 2026-10-15 by SPEC CPU2017 500.perlbench_r (op/pack.t, pack 'p')`
 

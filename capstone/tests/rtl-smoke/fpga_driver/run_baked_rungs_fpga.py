@@ -134,7 +134,20 @@ def read_wedge_apertures(console):
         for sw, a, b in unstable:
             lines.append(f"UNSTABLE sw={sw}: {a} then {b}")
     finally:
-        setsw(0)   # park: an odd value hands the console TX pin to the tracer
+        # park: an odd value hands the console TX pin to the tracer. VERIFIED, not assumed: on 2026-11-14 this setsw(0)
+        # timed out exactly as the read before it had, left board 2 at 217, and the next four boots sent no UART byte.
+        try:
+            setsw(0)
+        except ActionTimeout:
+            pass
+        st = console.latest(C.SWITCH_STATE_EVENT)
+        cur = (st or {}).get(C.SWITCH_STATE_KEY) if isinstance(st, dict) else None
+        if not (isinstance(cur, list) and cur and not any(cur)):
+            from fpga_driver.switch_park import park_switches, SwitchParkFailed
+            try:
+                park_switches(console)
+            except SwitchParkFailed:
+                pass   # its must-fire line is printed; the next power-on parks again before it boots
     return lines
 
 URL = os.environ.get("FPGA_URL")

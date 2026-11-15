@@ -957,6 +957,11 @@ class FpgaConsole:
                                  "starts); released at once, neither a failure nor a reading")
             raise LeaseYield("[fpga-lease] a person is waiting for the board (or a booking starts): "
                              "no new cycle may start; finish and release")
+        if on:
+            # Every boot path powers on through here. An odd switch value hands the console TX to the tracer, so a
+            # boot over it transmits nothing (board 2, 2026-11-14, four boots): park first, verified, or raise.
+            from .switch_park import park_switches
+            park_switches(self)
         cur = self._current_state(C.POWER_STATE_EVENT, timeout=5.0)
         if cur == want:
             self._log(f"power already {want}")
