@@ -1,0 +1,15 @@
+--- a/mc-crusher.c
++++ b/mc-crusher.c
+@@ -641,7 +641,11 @@
+     // could also mix or adjust time, but according to the PCG documentation
+     // this shouldn't matter and we're not after secure randomization.
+     // TODO: Should find some way to make this deterministic.
+-    pcg32_srandom_r(&c->rng, time(NULL), (intptr_t)c);
++    // Reuse study, fixed-seed addendum (capstone docs/plans/2026-11-15-memcached-fixed-seed.md): a
++    // constant seed, and the connection's order in the configuration as its stream, so that every
++    // run draws the same key sequence on every connection.
++    static uint64_t conn_seq;
++    pcg32_srandom_r(&c->rng, 0x6d632d6372757368ULL, conn_seq++);
+     if (t->rand == conn_rand_zipf) {
+         c->zipf_t = zipf_calc_t(c->key_count, c->zipf_skew);
+     }
