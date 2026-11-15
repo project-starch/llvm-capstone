@@ -136,9 +136,100 @@ Image census, f4 against unaligned (`perf/lgep/placement/f4census.py`):
   longer relax to the short form after the text grows (perl +18 KB, gcc +92 KB, imagick +15 KB).
 - So f4 is not placement-only for those three rows. They need twins before f4 could be a compiler setting.
 
-perl full on the board-faithful stage (st-perl-a3 with each binary) is being twinned for both f4 arms
-(`perf/lgep/chain-f4perl.sh`). perl is the row where the fallback's QEMU gain (−0.553 %) is large enough for a board
-pair to decide anything.
+## perl full: function alignment does not control the loop that carries the gain
+
+Twins on the board-faithful stage (st-perl-a3 with each binary, `perf/lgep/chain-f4perl.sh`), shift 1, both
+specdiff 2/2 with result files identical to the unaligned base's:
+- strip.dom 82392ea004accec4 (f4b) and 03ccab6a160b0d7a (f4h);
+- f4b against unaligned FRCDKMSa3: +548,235 user (+0.001 %), so the `jal` → `auipc` + `jalr` edits cost nothing that
+  matters;
+- f4h − f4b: −483,917,429 (−0.553 %), within 37 K of the unaligned pair's −483,880,297.
+
+Placement check (`f4census.py`): in the f4 pair none of perl's 2,903 functions moves mod 16, and 99 bodies differ.
+Without alignment, c13 moves 1,364 of them mod 4 and 2,722 mod 16.
+
+Per-function split (`perf/lgep/placement/ufunc2.py`):
+- **Why a new tool.** ufunc.py refused perl: one load delta places only 96.3 % of user instructions. The rest is
+  - the stage's `natperl`, a static ELF at its link address that drives test.pl, 3.04 G, with identical per-PC counts in
+    both arms;
+  - shared-library code at randomized addresses.
+  ufunc2 reports what the delta leaves outside .text as `?`, with its own A−B, which is exactly what it adds to the
+  total. It errors if that exceeds 1 % of |A−B|.
+- **Controls.**
+  - Here the remainder reads −14,368.
+  - Negative control: mcf's ELF on the perl profile leaves +50.9 G outside, and the tool errors.
+  - mcf's f4 pair reproduces ufunc.py's split exactly.
+- **Result.** S_regcppop accounts for −425,065,427 and Perl_yyparse for −66,223,443. Everything else nets +7.4 M.
+
+S_regcppop, the paren-invalidation loop, 183.9 M iterations per run:
+
+| | instructions per iteration | side block (110.6 M of them) | loop head (both entries are redirects) |
+|---|---:|---:|---|
+| f4b | 8 | 4 | 0xf8378, 8 mod 16, 32-bit `sub` |
+| f4h | 6 | 3 | 0xf842a, 10 mod 16, 32-bit `cincoffset` |
+| unaligned base c1744e87 | 8 | 4 | 0xf61ea, 10 mod 16 |
+| unaligned c13 8cf05081 | 6 | 3 | 0xf627c, 12 mod 16 |
+
+- **Instructions.** 2 × 183.9 M + 110.6 M = −478.4 M in the loop. The setup gains 4 instructions × 13.34 M, +53.4 M.
+  Net −425.0 M.
+- **Placement.** `-align-all-functions=4` fixes every function's entry. It cannot fix a loop head inside a function
+  whose body the change rewrites. In the f4 pair the 2-mod-4 head is c13's; in the unaligned board images it is the
+  base's.
+
+Directed test capstone-ariane `regcppop-loop-head` (branch fetch-realign-loop-head, c83f7f98b):
+- **What it runs.** Both loop bodies, every instruction's size kept from the f4 disassembly, the head at each even offset
+  mod 16, perl's 60 % side-path split, entry through the `j` target as in the binary.
+- **Substitution.** `add` stands in for `cincoffset`, because bare M-mode has no capability to offset.
+- **Checks.** RVFI shows every head retiring 512 times and the side block 306 of 511 times. The B8 and H10 layouts match
+  f4b and f4h one for one.
+- **Setup.** Seed 1, models at F's and G's exact RTL (see the retraction above). The first run, on 062f4453b, is kept
+  as a superseded row.
+
+Cycles per iteration (warm-up and the drift repeat of B8 last: F 20.30 cold, then 13.68; G 20.02, then 13.73):
+
+| head mod 16 | 0 | 2 | 4 | 6 | 8 | 10 | 12 | 14 |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| F base body | 13.66 | 13.67 | 13.68 | 13.67 | 13.67 | 13.67 | 13.67 | 13.68 |
+| F c13 body | 7.88 | 8.30 | 7.87 | 8.28 | 7.88 | 8.29 | 7.89 | 8.29 |
+| G base body | 13.69 | 13.71 | 13.73 | 13.71 | 13.71 | 13.71 | 13.71 | 13.73 |
+| G c13 body | 8.41 | 8.82 | 8.40 | 8.81 | 8.41 | 8.83 | 8.43 | 8.83 |
+| 062f4453b base (superseded) | 13.66 | 13.67 | 13.70 | 13.67 | 13.67 | 13.68 | 13.67 | 13.69 |
+| 062f4453b c13 (superseded) | 9.56 | 9.97 | 9.53 | 9.95 | 9.54 | 10.35 | 9.95 | 9.95 |
+
+- **Base.** Bound in the backend at every offset on every model, so its head placement costs nothing.
+- **c13.** It removes the dependent `sub` → `add` → `c.sd` address chain, worth far more than its two instructions. On F
+  its head costs 0.41 cycles per iteration at bit 1 set.
+- **The pairs.** On F, the f4 pair (B8 → H10) reads −5.38 cycles per iteration and the unaligned pair (B10 → H12)
+  −5.79. On G, −4.88 and −5.29. On 062f the readings were −3.32 and −3.73; the 3-instruction model had predicted −1.6
+  and −3.6.
+
+Predicted in-context Δcycles, c13 − base, per full perl run:
+- **S_regcppop.** The per-iteration cost × 183.9 M, plus the setup's +53.4 M instructions at one cycle each.
+- **Denominator, derived.** ba-b3's full perl recorded no run_cycles, so 13,994 s × about 24 M cycles/s (mcf's and gcc's
+  in-context rate on F) gives about 336 G.
+
+| pair, model | S_regcppop | Perl_yyparse | rest | total | % of F's 336 G |
+|---|---:|---:|---:|---:|---:|
+| f4, F | −0.99 + 0.05 = −0.94 G | −0.02..−0.07 G | +0.01 G | −0.95..−1.00 G | −0.28..−0.30 % |
+| unaligned (the board images), F | −1.06 + 0.05 = −1.01 G | −0.02..−0.07 G | +0.01 G | −1.02..−1.07 G | −0.30..−0.32 %, plus the term from 2,722 moved functions |
+| f4, G | −0.90 + 0.05 = −0.84 G | −0.02..−0.07 G | +0.01 G | −0.85..−0.90 G | G's perl cycles are not known here |
+| unaligned, G | −0.97 + 0.05 = −0.92 G | −0.02..−0.07 G | +0.01 G | −0.93..−0.98 G | |
+
+Fidelity limits:
+- the substitution of `add` for `cincoffset`;
+- perl's trip count, about 13.8 iterations per call against the test's 512;
+- the test's warm buffer.
+
+Two earlier versions of this table went to the SPEC lane the same afternoon and are withdrawn:
+- one from the 3-instruction model: −0.05..−0.15 % for the f4 pair;
+- one from the 062f4453b model: −0.17..−0.18 %.
+With them goes the recommendation built on them, that the f4 perl pair should not run.
+
+- **The f4 perl pair.** On F it predicts about −0.29 %: past the ±0.15 % same-board spread and the 0.2 % bar, so it is
+  informative. Its arms are not shippable images (`jal` relaxation changes in perl, gcc and imagick).
+- **The real images.** An unaligned perl pair is predicted at −0.30..−0.32 % on F from the changed code. Its unknown
+  term is the placement of the 2,722 moved functions, the kind of term that cost mcf +0.30 %. Run on the event-15
+  firmware, Δif_empty reads that term beside the cycles.
 
 ## The lesson
 
@@ -146,3 +237,9 @@ A QEMU instruction twin cannot see placement. Any codegen change that shifts unc
 controls before its silicon delta is attributed to what it emits:
 - a placement-controlled pair;
 - event 15 read beside the cycles.
+
+A directed test speaks for silicon only when its model is built at the bitstream's own RTL revision. The shared
+checkout's HEAD was another line of the RTL, and both its tables had to be withdrawn.
+
+Function alignment controls entries only. When the change rewrites the hot function itself (perl's S_regcppop), its
+loop heads move with the body, and they must be read by hand in every image of the pair.
