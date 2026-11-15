@@ -4251,3 +4251,32 @@ Controls: F on board 1, same images.
 **Adoption rule.** G becomes the table's Capstone bitstream if mcf and gcc both improve beyond the same-board spread
 (0.15 %), with outputs passing and no prediction missed on the slow side. All eight temporal rows and the spatial rows
 are then re-measured on G before any table cell changes. F's cells stand until then.
+
+## Addendum 133 (2026-11-15 13:45 +08): the node-table pool is adopted; spatial full perl reruns on it, on board 2 after the LSR mcf
+
+**Addendum 115's run, read.** ax-b3 ran temporal FRCDKMS full perl on F with the pool (bkit81) on board 3. The
+result: makerand 288.97 s + test.pl 13,716.45 s = 14,005.42 s, specdiff 2/2 PASS, smoke 9/9 on the module's first
+silicon boot. The control is aw-tp, the same image and bitstream on bkit80 with no pool. After Addendum 118 it is on
+the SAME board: 14,151.55 s. The difference is -1.03 %. That is inside the predicted -0.5 .. -3 % and beyond the
+cross-board spread (about 0.9 %) that Addendum 115's rule used. The rule fires: the pool joins the final config.
+
+The board.txt of this run lost some UART lines at chunk boundaries, so the per-run bench counters (instret, cycles,
+nodes) are not fresh and are not read. The times come from the up0/up1 pair on each @@SPEC-END line, and the hashes
+(561) and specdiff come from the stage reader.
+
+The temporal perl cell becomes 14,005.42 / 12,623.02 (riscv-base, board 3) = 1.110, same board. The pool is a change
+to the Capstone module only: it reuses released lifetime tables, and riscv-base has no such table. So the
+same-software clause of Addendum 121 does not apply, and riscv-base does not rerun.
+
+**Run (chain bo-b2, nat-run3, board 2, waits on bj-b2).** Spatial FRCDKMSsp full perl on F with bkit81, using the
+same stage as aw-sp (board-frcdkmssp/500.perlbench_r-native). The one variable against aw-sp (13,981.09 s, bkit80) is
+the pool, but the pair is cross-board: board 2 now against board 1 then.
+
+**Predictions:**
+- specdiff 2/2 and smoke 9/9;
+- full perl -0.3 % .. -2.0 % against aw-sp;
+- the ratio against riscv-base (board 3, cross-board) 1.09 .. 1.11.
+
+If the run misses the band on the slow side, the spatial cell keeps aw-sp's figure and the miss is noted. The
+temporal allocator (ba-b3) and LSR (bk-b3) full-perl runs stay on bkit80, because their controls are on bkit80. A
+final allocator + pool perl run is queued only if the allocator is adopted.
