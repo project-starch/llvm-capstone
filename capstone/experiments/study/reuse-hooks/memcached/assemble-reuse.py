@@ -157,7 +157,7 @@ def main():
                          harness_sha256=stock['staged_sha256']['mc-harness'],
                          load_client_sha256=stock['staged_sha256'].get('mc-crusher'),
                          load_conf_sha256=stock['staged_sha256'].get('load.conf'),
-                         harts=1, workers=4,
+                         harts=1, workers=int(re.search(r'(?:^|\s)-t (\d+)', stock['flags']).group(1)),
                          boot_wall_seconds={'stock': stock['boot_wall_seconds'], 'protected': prot['boot_wall_seconds']}),
     }
     with open(a.out, 'w') as f:

@@ -1,0 +1,526 @@
+{
+ "program": "memcached 1.6.45",
+ "pre_registration": "1866247dd2f",
+ "workload": "mc-crusher 7ca3f14c, mc-crusher-established.conf, 240,000 commands, -m 32 -t 1 -o slab_automove=0 (one-worker addendum to run-6)",
+ "flags": "-l 127.0.0.1 -p 21299 -U 0 -m 32 -t 1 -A -o slab_automove=0",
+ "load": {
+  "conf": "send=ascii_set,recv=blind_read,conns=1,key_prefix=a:,value_size=100,key_count=10000,live_rand_zipf=1,pipelines=4,stop_after=15000\nsend=ascii_get,recv=blind_read,conns=1,key_prefix=a:,key_count=10000,live_rand_zipf=1,pipelines=4,stop_after=15000\nsend=ascii_get,recv=blind_read,conns=1,key_prefix=a:,key_count=10000,live_rand_zipf=1,pipelines=4,stop_after=15000\nsend=ascii_get,recv=blind_read,conns=1,key_prefix=a:,key_count=10000,live_rand_zipf=1,pipelines=4,stop_after=15000\nsend=ascii_set,recv=blind_read,conns=1,key_prefix=b:,value_size=500,key_count=10000,live_rand_zipf=1,pipelines=4,stop_after=15000\nsend=ascii_get,recv=blind_read,conns=1,key_prefix=b:,key_count=10000,live_rand_zipf=1,pipelines=4,stop_after=15000\nsend=ascii_get,recv=blind_read,conns=1,key_prefix=b:,key_count=10000,live_rand_zipf=1,pipelines=4,stop_after=15000\nsend=ascii_get,recv=blind_read,conns=1,key_prefix=b:,key_count=10000,live_rand_zipf=1,pipelines=4,stop_after=15000\nsend=ascii_set,recv=blind_read,conns=1,key_prefix=c:,value_size=2000,key_count=10000,live_rand_zipf=1,pipelines=4,stop_after=15000\nsend=ascii_get,recv=blind_read,conns=1,key_prefix=c:,key_count=10000,live_rand_zipf=1,pipelines=4,stop_after=15000\nsend=ascii_get,recv=blind_read,conns=1,key_prefix=c:,key_count=10000,live_rand_zipf=1,pipelines=4,stop_after=15000\nsend=ascii_get,recv=blind_read,conns=1,key_prefix=c:,key_count=10000,live_rand_zipf=1,pipelines=4,stop_after=15000\nsend=ascii_set,recv=blind_read,conns=1,key_prefix=d:,value_size=8000,key_count=10000,live_rand_zipf=1,pipelines=4,stop_after=15000\nsend=ascii_get,recv=blind_read,conns=1,key_prefix=d:,key_count=10000,live_rand_zipf=1,pipelines=4,stop_after=15000\nsend=ascii_get,recv=blind_read,conns=1,key_prefix=d:,key_count=10000,live_rand_zipf=1,pipelines=4,stop_after=15000\nsend=ascii_get,recv=blind_read,conns=1,key_prefix=d:,key_count=10000,live_rand_zipf=1,pipelines=4,stop_after=15000\n",
+  "expect": 240000,
+  "poll": 10,
+  "stall": 120
+ },
+ "load_per_rep": {
+  "stock": [
+   {
+    "load": "complete",
+    "expect": "240000",
+    "processed": "240000",
+    "seconds": "909.2",
+    "client": "signal=15",
+    "client_stderr_lines": 133
+   },
+   {
+    "load": "complete",
+    "expect": "240000",
+    "processed": "240000",
+    "seconds": "908.3",
+    "client": "signal=15",
+    "client_stderr_lines": 133
+   }
+  ],
+  "protected": [
+   {
+    "load": "complete",
+    "expect": "240000",
+    "processed": "240000",
+    "seconds": "929.3",
+    "client": "signal=15",
+    "client_stderr_lines": 133
+   },
+   {
+    "load": "complete",
+    "expect": "240000",
+    "processed": "240000",
+    "seconds": "942.6",
+    "client": "signal=15",
+    "client_stderr_lines": 133
+   }
+  ]
+ },
+ "boundaries": {
+  "slabs": {
+   "stock": {
+    "buckets": {
+     "1": 43117,
+     "2": 22,
+     "3": 594,
+     "4": 2259,
+     "5": 1284
+    },
+    "issues": 60352,
+    "releases": 47277,
+    "reuses": 47276,
+    "distinct_starts": 13076,
+    "attempts": 60352,
+    "error": 0,
+    "repetitions": [
+     {
+      "rep": 1,
+      "buckets": {
+       "1": 43117,
+       "2": 22,
+       "3": 594,
+       "4": 2259,
+       "5": 1284
+      },
+      "issues": 60352,
+      "releases": 47277,
+      "reuses": 47276,
+      "distinct_starts": 13076,
+      "attempts": 60352,
+      "error": 0
+     },
+     {
+      "rep": 2,
+      "buckets": {
+       "1": 43071,
+       "2": 29,
+       "3": 568,
+       "4": 2357,
+       "5": 1251
+      },
+      "issues": 60352,
+      "releases": 47277,
+      "reuses": 47276,
+      "distinct_starts": 13076,
+      "attempts": 60352,
+      "error": 0
+     }
+    ]
+   },
+   "protected": {
+    "buckets": {
+     "1": 43149,
+     "2": 25,
+     "3": 605,
+     "4": 2200,
+     "5": 1297
+    },
+    "issues": 60352,
+    "releases": 47277,
+    "reuses": 47276,
+    "distinct_starts": 13076,
+    "attempts": 60352,
+    "error": 0,
+    "repetitions": [
+     {
+      "rep": 1,
+      "buckets": {
+       "1": 43149,
+       "2": 25,
+       "3": 605,
+       "4": 2200,
+       "5": 1297
+      },
+      "issues": 60352,
+      "releases": 47277,
+      "reuses": 47276,
+      "distinct_starts": 13076,
+      "attempts": 60352,
+      "error": 0
+     },
+     {
+      "rep": 2,
+      "buckets": {
+       "1": 43068,
+       "2": 25,
+       "3": 558,
+       "4": 2295,
+       "5": 1329
+      },
+      "issues": 60352,
+      "releases": 47276,
+      "reuses": 47275,
+      "distinct_starts": 13077,
+      "attempts": 60352,
+      "error": 0
+     }
+    ]
+   }
+  },
+  "cache": {
+   "stock": {
+    "buckets": {
+     "1": 61742,
+     "2": 3,
+     "4": 1,
+     "5": 1,
+     "6": 1,
+     "7": 1,
+     "13": 1,
+     "16": 2
+    },
+    "issues": 61764,
+    "releases": 61763,
+    "reuses": 61752,
+    "distinct_starts": 12,
+    "attempts": 61764,
+    "error": 0,
+    "repetitions": [
+     {
+      "rep": 1,
+      "buckets": {
+       "1": 61742,
+       "2": 3,
+       "4": 1,
+       "5": 1,
+       "6": 1,
+       "7": 1,
+       "13": 1,
+       "16": 2
+      },
+      "issues": 61764,
+      "releases": 61763,
+      "reuses": 61752,
+      "distinct_starts": 12,
+      "attempts": 61764,
+      "error": 0
+     },
+     {
+      "rep": 2,
+      "buckets": {
+       "1": 61748,
+       "2": 3,
+       "4": 1,
+       "5": 1,
+       "6": 1,
+       "7": 1,
+       "12": 1,
+       "15": 1,
+       "16": 1
+      },
+      "issues": 61770,
+      "releases": 61769,
+      "reuses": 61758,
+      "distinct_starts": 12,
+      "attempts": 61770,
+      "error": 0
+     }
+    ]
+   },
+   "protected": {
+    "buckets": {
+     "1": 61748,
+     "2": 3,
+     "4": 1,
+     "5": 1,
+     "6": 1,
+     "7": 1,
+     "13": 1,
+     "15": 1,
+     "16": 1
+    },
+    "issues": 61770,
+    "releases": 61769,
+    "reuses": 61758,
+    "distinct_starts": 12,
+    "attempts": 61770,
+    "error": 0,
+    "repetitions": [
+     {
+      "rep": 1,
+      "buckets": {
+       "1": 61748,
+       "2": 3,
+       "4": 1,
+       "5": 1,
+       "6": 1,
+       "7": 1,
+       "13": 1,
+       "15": 1,
+       "16": 1
+      },
+      "issues": 61770,
+      "releases": 61769,
+      "reuses": 61758,
+      "distinct_starts": 12,
+      "attempts": 61770,
+      "error": 0
+     },
+     {
+      "rep": 2,
+      "buckets": {
+       "1": 61751,
+       "2": 4,
+       "4": 1,
+       "5": 1,
+       "6": 1,
+       "7": 1,
+       "13": 1,
+       "16": 2
+      },
+      "issues": 61774,
+      "releases": 61773,
+      "reuses": 61762,
+      "distinct_starts": 12,
+      "attempts": 61774,
+      "error": 0
+     }
+    ]
+   }
+  }
+ },
+ "summary": {
+  "slabs": {
+   "median_bucket": {
+    "stock": 1,
+    "protected": 1
+   },
+   "median_bucket_per_rep": {
+    "stock": [
+     1,
+     1
+    ],
+    "protected": [
+     1,
+     1
+    ]
+   },
+   "reusediff_rep1": 0.0012479905237329965,
+   "reusediff_all_pairs": [
+    0.0012479905237329965,
+    0.0017784327496767178,
+    0.0034055334630679573,
+    0.001650480415221127
+   ],
+   "reusediff_within_stock": [
+    0.0022210000846095185
+   ],
+   "reusediff_within_protected": [
+    0.002687985165278739
+   ],
+   "equal_rep1": false,
+   "identical_across_reps": {
+    "stock": false,
+    "protected": false
+   },
+   "bucket_ranges": {
+    "stock": {
+     "1": [
+      43071,
+      43117
+     ],
+     "2": [
+      22,
+      29
+     ],
+     "3": [
+      568,
+      594
+     ],
+     "4": [
+      2259,
+      2357
+     ],
+     "5": [
+      1251,
+      1284
+     ]
+    },
+    "protected": {
+     "1": [
+      43068,
+      43149
+     ],
+     "2": [
+      25,
+      25
+     ],
+     "3": [
+      558,
+      605
+     ],
+     "4": [
+      2200,
+      2295
+     ],
+     "5": [
+      1297,
+      1329
+     ]
+    }
+   },
+   "ranges_overlap": false
+  },
+  "cache": {
+   "median_bucket": {
+    "stock": 1,
+    "protected": 1
+   },
+   "median_bucket_per_rep": {
+    "stock": [
+     1,
+     1
+    ],
+    "protected": [
+     1,
+     1
+    ]
+   },
+   "reusediff_rep1": 1.6207967039920203e-05,
+   "reusediff_all_pairs": [
+    1.6207967039920203e-05,
+    1.618331961035823e-05,
+    1.6192234204475532e-05,
+    4.856936181235103e-05
+   ],
+   "reusediff_within_stock": [
+    3.2400201244395736e-05
+   ],
+   "reusediff_within_protected": [
+    3.237817629374736e-05
+   ],
+   "equal_rep1": false,
+   "identical_across_reps": {
+    "stock": false,
+    "protected": false
+   },
+   "bucket_ranges": {
+    "stock": {
+     "1": [
+      61742,
+      61748
+     ],
+     "2": [
+      3,
+      3
+     ],
+     "4": [
+      1,
+      1
+     ],
+     "5": [
+      1,
+      1
+     ],
+     "6": [
+      1,
+      1
+     ],
+     "7": [
+      1,
+      1
+     ],
+     "12": [
+      0,
+      1
+     ],
+     "13": [
+      0,
+      1
+     ],
+     "15": [
+      0,
+      1
+     ],
+     "16": [
+      1,
+      2
+     ]
+    },
+    "protected": {
+     "1": [
+      61748,
+      61751
+     ],
+     "2": [
+      3,
+      4
+     ],
+     "4": [
+      1,
+      1
+     ],
+     "5": [
+      1,
+      1
+     ],
+     "6": [
+      1,
+      1
+     ],
+     "7": [
+      1,
+      1
+     ],
+     "12": [
+      0,
+      0
+     ],
+     "13": [
+      1,
+      1
+     ],
+     "15": [
+      0,
+      1
+     ],
+     "16": [
+      1,
+      2
+     ]
+    }
+   },
+   "ranges_overlap": true
+  }
+ },
+ "sanity": {
+  "transcripts_equal_across_arms_and_reps": false,
+  "transcript_sha256": [
+   "e0a254c47e7ee28c842b4c084d4fe1d6ead3f3a62d76838b8a84ea7d34999f63",
+   "f4c5e69899ab9971c303b659fa89dc102917f070a8e8f65a74a6623d6d76948d"
+  ]
+ },
+ "images": {
+  "stock": {
+   "sha256": "6ddd173e904143a8bd66f6f10766cd39c03e74091fccc937a96379317bdf5d86",
+   "bytes": 4024312,
+   "cderive": 4,
+   "crevoke": 3,
+   "cppflags": "-DEXP_REUSE_GAP"
+  },
+  "protected": {
+   "sha256": "84ae8f5f3ef09c4f0cf290e9fe7454d1a2054674e2d0fe79f85044e53282eaaa",
+   "bytes": 4032824,
+   "cderive": 8,
+   "crevoke": 5,
+   "cppflags": "-DEXP_REUSE_GAP -DMC_CAPSTONE_SUBLET"
+  }
+ },
+ "platform": {
+  "sha256": {
+   "Image": "0ea6d1ef545071326ce2ef4270e492ced585d089876517b460b6678d00e43ae8",
+   "fw_jump.elf": "975a24215dd17e5123c6f019328bce2683c9a9ca1d4e29cdddba4d0545c6e3c1",
+   "initramfs.cpio.gz": "464653151bafbab9fbf5081fe5e4ce188e4c1be770b8ec5a31a6e873de71df24",
+   "qemu-system-riscv64": "c55fcdd2c620916690e9604a1b95f204d8287fce79631a8a8909c69952223b49"
+  },
+  "launcher_sha256": "150d969243a01faf6597bcb6c1b5e29f72b1766c7463997f6e64f29ec745b37c",
+  "module_sha256": "built into the kernel (trap route)",
+  "job_sha256": "933a8b0c3b336c51fcec64c553b993e92e9e0bf5ac72291e74a8ab01aac343d8",
+  "harness_sha256": "725ca8d1373367ae52dd58d31422bbf894f63a00301de94ba59d817f2f2fef86",
+  "load_client_sha256": "6fd931c281cc48a8dd992b5dda5509197279989822248ec4587e0d8e738433ed",
+  "load_conf_sha256": "ecd2d0751f0be901976931fd6513d0ab5cd2d9ace18d5b82d4fa26182988f3a3",
+  "harts": 1,
+  "workers": 1,
+  "boot_wall_seconds": {
+   "stock": [
+    959.9,
+    958.2
+   ],
+   "protected": [
+    979.3,
+    992.1
+   ]
+  }
+ }
+}
