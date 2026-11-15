@@ -4477,3 +4477,52 @@ The stopped output directories are kept as `*.parkstop-1522`; they hold no files
 **Process note.** A chain that STOPs still exits, and a chain waiting on its pid then runs. So a STOP early in a queue
 starts the next run early, on whatever bitstream that run flashes. Every launched chain now goes into the watcher at
 launch.
+
+## Addendum 141 (2026-11-15 16:25 +08): F2 alone on mcf, to split G's -9.9 % between F2 and the overlap lever
+
+**Why.** G (F2 + overlap v6c) ran mcf 9.89 % faster than F, which is beyond Addendum 132's band. Its tag reads
+(ev24) fell 3.3 % and its tag writes (ev26) 10.5 %, against "unchanged".
+
+The page fills (ev27) are about 121 k in mcf on both F and G. A first relay said 0, and that was retracted: the deltas
+had been rounded in G units. F2 acts at each fill: F wipes the whole 16 K-entry tag-word cache, and F2 invalidates
+two words. So F2 alone can account for the count drops:
+- ev24 + ev25 is conserved between F and G (3.372 G);
+- per fill, 219 fewer tag reads and 212 fewer tag writes.
+
+The rtl lane's sim on directed shapes: the lever moves cycles and ev28, not the tag-op counts.
+
+**Run (chain bu-b1, nat-run3, board 1, after bn-b1).**
+- Bitstream F2: caplifive_…-merge-f2-hpmtag_eeb654104, sha256 57f8b1e2ba865c25 (sealed; sidecar and local sha
+  checked).
+- Kit bkit85 = bkit76 (tag-path HPM) with the bitstream lines changed; checksums regenerated.
+- Stage board-frcdkms/505.mcf_r-native, the same as F's and G's.
+- The control is F's delta run on board 1 with the same kit family: out-nat-twcf-hpmtag-frcdkms-b1.
+
+**Predictions** (the rtl lane's, given before the run):
+
+| Reading | F2 alone | F (control) |
+|---|---|---|
+| ev24 tag reads | 779 M ±1 % | 805.6 M |
+| ev25 TWC hits | 2,593 M ±1 % | 2,566.8 M |
+| ev26 tag writes | 213.5 M ±1 % | 239.2 M |
+| ev27 page fills | about 120,990 | 120,987 |
+| L1D misses | about 3.750 G | 3.751 G |
+| ev28 tag-phase cycles | 2.9 .. 3.45 G | 3.61 G |
+| run_cycles | 158.50 .. 159.12 G (-0.28 .. -0.67 %) | 159.569 G |
+| time | 6,537 .. 6,563 s | 6,581.38 s |
+| between_cycles | unchanged | 4.909 G |
+| specdiff | PASS | PASS |
+
+The ev24, ev25 and ev26 predictions are G's values. F's run_cycles spread is 0.08 %.
+
+**Failure branches:**
+- ev24 and ev26 at F's values within ±1 %: the count drops are the lever's, through timing, not F2's.
+- Faster than 6,537 s: F2 acts through a path beyond the counted operations.
+- between_cycles moves: not F2's mechanism; suspect the boot or kit first.
+
+**If it reads as predicted:**
+- the lever's share of G's in-context drop is 14.4 .. 15.0 G of 15.44 G;
+- G's kernel -16.6 % stays unexplained by either mechanism;
+- Addendum 132's grade is unchanged (missed fast, not credited).
+
+The adoption question for G is still decided on mcf and gcc under Addendum 132.
