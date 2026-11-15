@@ -12,7 +12,8 @@
 #   $OUT/protected/memcached.dom  -DEXP_REUSE_GAP -DMC_CAPSTONE_SUBLET
 # The port's scripts are not edited: libevent comes from deps/build-libevent.sh, the SDK from
 # deps/env.sh; configure and make are those of host/build-sublet.sh's build().
-# Gates, each fatal: INSN (protected carries CDERIVE and CREVOKE, stock neither), HOOK (both carry
+# Gates, each fatal: SOURCE (the allocator sources are identical in both arms), LAYOUT (both arms compile
+# the same item layout), INSN (protected carries CDERIVE and CREVOKE, stock neither), HOOK (both carry
 # the observer's report), LINK (as build-sublet.sh).
 set -euo pipefail
 HOOKS=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
@@ -49,6 +50,32 @@ for f in slabs.c cache.c slabs_mover.c memcached.h; do
   cmp -s "$MC_WORK/stock/src/$f" "$MC_WORK/protected/src/$f" || { echo "SOURCE GATE: $f differs between the arms"; exit 1; }
 done
 echo "source: slabs.c cache.c slabs_mover.c memcached.h identical in both arms; slabs.c $(sha256sum < "$MC_WORK/stock/src/slabs.c" | cut -c1-16) cache.c $(sha256sum < "$MC_WORK/stock/src/cache.c" | cut -c1-16)"
+
+# LAYOUT gate (docs/plans/2026-11-15-memcached-port-layout-fix.md): the item layout each arm compiles,
+# from layout-probe.c built with the flags make uses for memcached's sources in that arm's tree.
+layout() {   # arm -> "sizeof(item)=N offsetof(item,data)=N sizeof(item_chunk)=N offsetof(item_chunk,data)=N"
+  local X=$MC_WORK/$1/src L=$MC_WORK/$1/logs flags
+  flags=$(cd "$X" && printf 'mc-layout-flags:\n\t@echo $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(memcached_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS)\n' \
+          | make -s -f Makefile -f - mc-layout-flags)
+  # shellcheck disable=SC2086
+  ( cd "$X" && $CC $flags -c "$HOOKS/layout-probe.c" -o "$L/layout-probe.o" ) > "$L/layout-probe.log" 2>&1 \
+    || { echo "LAYOUT GATE: the probe does not compile in $1 (see $L/layout-probe.log)" >&2; exit 1; }
+  "$CAPSTONE_LLVM_BIN/llvm-nm" -S --defined-only "$L/layout-probe.o" | python3 -c '
+import sys
+size = {q[3]: int(q[1], 16) for q in (l.split() for l in sys.stdin) if len(q) == 4}
+names = ("sizeof(item)", "offsetof(item,data)", "sizeof(item_chunk)", "offsetof(item_chunk,data)")
+syms = ("item", "item_data", "item_chunk", "item_chunk_data")
+keys = ["mc_layout_" + ("sizeof_" if n.startswith("sizeof") else "offsetof_") + s for n, s in zip(names, syms)]
+missing = [k for k in keys if k not in size]
+if missing:
+    sys.exit("LAYOUT GATE: the probe lacks " + " ".join(missing))
+print(" ".join("%s=%d" % (n, size[k]) for n, k in zip(names, keys)))'
+}
+layout_stock=$(layout stock)
+layout_protected=$(layout protected)
+echo "layout stock: $layout_stock"
+echo "layout protected: $layout_protected"
+[ "$layout_stock" = "$layout_protected" ] || { echo "LAYOUT GATE: the arms compile different item layouts"; exit 1; }
 
 insn() {   # image -> "cderive crevoke" (as host/build-sublet.sh)
   local t; t=$(mktemp)
