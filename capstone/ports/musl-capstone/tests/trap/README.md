@@ -291,3 +291,11 @@ other trap smoke programs kept their verdicts. smoke and malloc-smoke exited
 7, and futex-stale, setjmp-smoke, signal-smoke and threads-smoke exited 0.
 threads-disabled exited 1, and stale-free died with cause 25. Busybox still
 exited 0, and the kernel reported no panic or oops.
+
+CPython allocator-boundary case 07 replaces its interpreter with `os.execv`.
+In run-4 it read MISSED, because the trigger ended with OSError from ENOSYS.
+A CPython protected image rebuilt with this wrapper from the run-4 tree, run on
+the virtual-nested-pools arm with the run-4 kit, now reads CAUGHT. The program
+faulted with cause 28 in PyOS_StdioReadline, the function where host ASan
+reports the access. Both block controls faulted. The record is in
+`~/asr-work/eval/diag-execve/cpy07`.
