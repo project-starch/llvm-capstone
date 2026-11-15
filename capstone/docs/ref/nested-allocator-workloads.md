@@ -13,7 +13,7 @@
 | PostgreSQL 17.5, single-user pgbench-derived workload, QEMU twin | **measured** (15 Nov 04:21-04:42): 4/4 commands give the native answers; in-context **+4.04 %**, kernel +0.43 %, repeats within 0.02 %; 2.31 M CDERIVEs and 668 k CREVOKEs per run, subtree mean 3.45 / **max 34,509** (a context reset), peak live records 105,043 (1.68 MB). Bring-up found a port defect, **ISSUES.md M-15** (int2vector/oidvector read 8 bytes off at MAXALIGN 16, caught as CAP_OOB by the protected arm). Harness changes, the same in both arms: root (the loader admits euid 0 only), shims over refused or unserved calls; patch 0003 with the Q-15 placement repair | FRCDKMS SDK, -O2, native route, image set 10, QEMU qemu55 a0501ebc39 (counts: qemu-nst) |
 | PostgreSQL on silicon, bitstream F | **measured** (board 1, 15 Nov 08:34-10:00): every command gives the native answers; the protected pair's in-context repeats differ 1.10 % (band 1 %), so the in-context difference is **not read** (ABBA mean +6.67 %); kernel +1.07 %, wall-clock **+4.38 %**; event 23 +2.04 M per command; L1D misses +11.4 %, DTLB +30 % | F `a948e4134`, kit bkit75n, board 1 |
 | FFmpeg 9.0.1 decode (10 s clip, 300 frames), QEMU twin | **measured** (15 Nov 05:21): all commands decode the stock reference frames; in-context **-0.030 %**, kernel -0.36 %. The protection adds about 3,300 lifetimes per decode (pools recycle), subtree max 2, peak 474 live records. Needs this lane's Q-15 placement repair of 0003 (unrepaired, CDERIVE refuses a frame-plane buffer), and on llvm-c9 `-fno-builtin` in both arms (else cause 24 in both: C-69). With llvm-c15's C-69 fix and builtins on, all commands match and the cost reads -0.031 % | FRCDKMS SDK, -O2 -fno-builtin, native route, set w4, QEMU qemu55 a0501ebc39; builtins-on reading: FRCDKMSc15 SDK, set w6 |
-| FFmpeg on silicon, bitstream F | **queued**: board 2, chain bf-b2, after the timing boot; pre-registered below (fe20549f1931); ABBA plus the flipped control in one boot | F `a948e4134`, kit bkit75n |
+| FFmpeg on silicon, bitstream F | **measured** (board 2, 15 Nov 10:11-10:36): all commands decode the stock frames and the flipped control fires; the unprotected pair's repeats miss both bands (in-context 1.04 %, kernel 2.71 %), so neither difference is read (ABBA means -0.32 % / -0.34 %); wall-clock -0.74 %; event 23 +1,388 per command. Not resolved from noise, as on the twin | F `a948e4134`, kit bkit75n |
 | tshark 4.6.8, `-r -V -n` on 9,000 frames, QEMU twin | **measured** (15 Nov 05:45-06:45): every output equals stock tshark's byte for byte; in-context **+2.69 %**, kernel +0.02 %; 7.18 M CDERIVEs and 2.73 M CREVOKEs per run, with one packet-scope reset of 256-1,023 nodes per frame, subtree max 29,134, peak live records 33,998 | FRCDKMS SDK and flags on tshark and its seven dependencies, `--no-relax`, native route, QEMU qemu55 a0501ebc39 |
 | tshark on silicon, bitstream F | **running**: board 1, chain bg-b1, from 10:00 15 Nov; pre-registered below (b12fa3f29eb2; SPEC lane Addendum 129); four one-arm boots U P P U, budget 900 | F `a948e4134`, kit bkit75n |
 | memcached (load) | **deferred**: the native route cannot run it. The table refuses `socket`, `socketpair`, `epoll_create1` and `epoll_ctl` (`native-syscall-table.c:92-101`, `NS_REFUSE`). A twin probe (`nested/mcprobe`, 15 Nov) confirms it after a passing control (`open` in the run directory): `socket(AF_INET)` and `socket(AF_UNIX)` give ENOSYS, `epoll_create1` ENOSYS, `pthread_create` EAGAIN. memcached needs all three (four worker threads). Running it elsewhere (e.g. the virtual route) is a different instrument; the lead's call | - |
@@ -31,7 +31,7 @@ Only rows marked "measured" hold measurements; the rest say what runs next and w
 | CPython 3.13.7, 7 pyperformance benchmarks | pymalloc patch 0014 | +1.63 % (summed) | **+5.17 %** (six summed; twin +2.06 % on those six) | 2,866,016 (all seven) | 345 | 2,936,354 | 2 | 76,767 |
 | PostgreSQL 17.5, pgbench-derived | 0003 **with lane q15-placement's Q-15 repair**; harness (root, shims) in both arms | **+4.04 %** | not read (repeats 1.10 %; ABBA mean +6.67 %); wall-clock +4.38 % | 2,276,557 | 810 | 668,247 | **34,509** | 105,043 |
 | tshark 4.6.8, 9,000 frames | wmem 0001 (dev, Q-15-repaired) | **+2.69 %** | queued | 4,506,984 | 598 | 2,727,471 | 29,134 | 33,998 |
-| FFmpeg 9.0.1, 300-frame decode | 0003 **with this lane's Q-15 repair**; 0001 hooks and `-fno-builtin` in both arms | 0.03 % either way, not attributed | queued | 3,327 | 3.7 | 8,974 | 2 | 474 |
+| FFmpeg 9.0.1, 300-frame decode | 0003 **with this lane's Q-15 repair**; 0001 hooks and `-fno-builtin` in both arms | 0.03 % either way, not attributed | not read (repeats 1.04 %; ABBA -0.32 %); wall-clock -0.74 % | 3,327 | 3.7 | 8,974 | 2 | 474 |
 | memcached | - | deferred: the native route has no sockets, epoll or threads | - | | | | | |
 | *SPEC temporal increment, gcc train01* | *heap lifetimes on vs off* | | *+0.62 % (batch)* | | | | | |
 
@@ -41,7 +41,8 @@ Only rows marked "measured" hold measurements; the rest say what runs next and w
   request-size reporting and 0.06 its `aReq` array (speedtest1 section).
 - On silicon, speedtest1's cost is 1.7-2.7 times its twin cost, and 1.7 times the SPEC temporal increment. CPython's
   is 2.5 times (six benchmarks summed), and about a third of it is issue stalls, with L1D misses up 14.7 %. PostgreSQL's
-  wall-clock cost is +4.38 % (its in-context repeats missed the band). tshark and FFmpeg are queued.
+  wall-clock cost is +4.38 % (its in-context repeats missed the band). FFmpeg's
+  is not resolved from noise on silicon either. tshark is running.
 - Both large-subtree applications reset whole pools in one CREVOKE: PostgreSQL's memory contexts, up to 34,509 nodes,
   and tshark's packet scope, every frame. That is where CREVOKE's walk matters: uninterruptible, and 28 cycles per
   node on silicon for large subtrees, so PostgreSQL's largest reset holds the core for about 39 ms.
@@ -1317,6 +1318,42 @@ Every command decodes 300 frames equal to the stock reference.
 - **Event 23, protected minus not:** under +10,000 per command, on the same count.
 - **Duration:** about 150 s per command (twin x speedtest1's ratios), so about 13 min of commands.
 - **VOID** if `b0-stats` or `b0-hello` fails, or the smoke fails outside the kit's accounting waiver.
+
+### Results: FFmpeg on silicon, bitstream F (board 2, 2026-11-15 10:11-10:36)
+
+**Configuration.** As pre-registered above (fe20549f1931):
+- Bitstream F, read back resident on board 2 by name; kit bkit75n.
+- Stage `nested/ffmpeg/board/f2-stage`, still matching `f2-stage.SHA256SUMS`; image set w4 (`-fno-builtin`, llvm-c9).
+- Board firmware `a0ca63c3…`. Transcript `spec/board/out-nat-twcf-hpmnest-ffmpeg-b2/f2-stage/board.txt` (sha256
+  `bddbec17bd1419f8…`), read by `ffmpeg/parse-ff.py`.
+
+**Controls.** `b0-stats` and `b0-hello` returned 0, and the smoke passed all 9 steps under the kit's waiver. The kit's
+classifier printed MALFORMED for this stage's format; all five commands printed `@@SPEC-END`. Not VOID.
+
+| | u1 | p1 | p2 | u2 | repeat spread, u / p | protected vs not (ABBA means) |
+|---|---|---|---|---|---|---|
+| frames equal to stock (of 300) | 300 | 300 | 300 | 300 | | |
+| `run_cycles` (in-context) | 1,689,065,434 | 1,692,002,837 | 1,692,933,020 | 1,706,619,616 | **1.04 %** / 0.06 % | not read (-0.32 %) |
+| `between_cycles` (kernel and other) | 79,386,015 | 80,175,274 | 80,200,335 | 81,537,400 | **2.71 %** / 0.03 % | not read (-0.34 %) |
+| uptime span, s | 72.68 | 72.22 | 72.26 | 72.87 | 0.26 % / 0.06 % | -0.74 % |
+| hpm8 event 23 | 33,994 | 35,423 | 35,380 | 34,034 | | **+1,388** |
+
+The flipped-input control fp decodes 300 frames with 3 hashes different: FIRES.
+
+**Against the pre-registration.**
+- Answers: **met**: u1 p1 p2 u2 match stock's framemd5, and fp fires.
+- Repeats: **missed for the unprotected pair** on both counters (`run_cycles` 1.04 %, band 1 %; `between_cycles` 2.71 %,
+  band 2 %). So neither difference is read. The protected pair agrees to 0.06 % and 0.03 %.
+  - u2 runs 1.0 % longer than u1, while p1 and p2 agree. That is not the linear drift ABBA cancels.
+  - The ABBA means, -0.32 % in-context, sit inside the -1 % to +1 % band, but they are not the reading.
+- Event 23: **met, +1,388 per command** (band under +10,000).
+- Duration: about 72 s per command, against about 150 s predicted. Silicon in-context cycles are 1.9 times the twin's
+  here, against the 4.1 assumed from speedtest1.
+- The wall-clock span had no band. It reads -0.74 %, with repeats 0.26 % / 0.06 %.
+
+**Reading.** On silicon, as on the twin, FFmpeg's protection is not resolved from noise. The protection adds about
+3,300 lifetimes per decode. At the timing boot's 63 + 55 cycles each, that is about 0.4 M cycles, 0.02 % of a run, well
+under this boot's 1 % repeat spread.
 
 ## tshark 4.6.8: offline dissection (`-r w.pcap -V -n`)
 
