@@ -4815,3 +4815,55 @@ graded as information only, never as pair B: pair B stays the same-board pair bz
 replicate puts the paged and growing table on silicon about 3 h earlier, so a functional failure of the paged arm
 would show sooner. Its checks are pair B's: table_tree = 1, grow_loops = 0, tree_check_failures = 0, no "table tree
 check FAILED" line, specdiff and identical outputs.
+
+## Addendum 152 (2026-11-16 02:38 +08): the paged arm failed on firmware, not on the walker; pair B re-runs as B2 on the paged-CSCHECK firmware, board 1
+
+**Failure (cb-b1, the B-paged replicate, board 1).** Every native smoke step after plain-control failed: rc 139 or 1,
+with `capstone_task: fault rc=-14 kind=3 cause=11 pc=0x3ff7f800bc` on each task. B-flat on board 3 passed its smoke
+on the same P1 and firmware.
+
+**Cause.** The compiler and rtl lanes found it independently, and this lane verified it at monitor 4f51541,
+capstone_cscheck.S around lines 214-220. P1 has no hardware CSCHECKR/W, so checked_copy_emu=1 sends every checked
+copy to the firmware's emulation. That code:
+- loads header word 0 and refuses (csc_clear) unless bits 63:62 = 2 (RECYCLE set, PAGED clear);
+- indexes the table flat (srevroot + 16·slot).
+
+So with the tree build's PAGED header, every checked copy failed, and each task's first buffer syscall failed: kind 3
+is a service escape, cause 11 is its ecall, and rc -14 is the refused copy. The RTL walker and the module tree are not
+at fault.
+
+Miss recorded: the table format's readers were listed as the RTL, the module and QEMU; the firmware emulation was
+left out.
+
+**Fix.** capstone-sbi native/cscheck-emu-ids55-paged 22a907fba6dd is one commit on 4f51541, +60/-0, all of it behind
+CSC_TABLE_TREE:
+- the PAGED header walks root+64+8·(slot>>26), then L1[(slot>>17)&511], then L2[(slot>>8)&511], then
+  page + 16·(slot&255) + 8;
+- CSC_PHYS is applied at each of the four reads;
+- a zero or misaligned entry at any level fails closed (25);
+- the walk then joins the flat code's record checks.
+
+Without the define the payload is byte-identical to 4f51541's (fw e2380fb50f6e reproduced). With it, the flat path's
+only change is one branch target. None of the new code has run anywhere yet: QEMU does not decode CAPCREATE, and no
+RTL sim of the monitor was made.
+
+**Kits:**
+- bkit91 = bkit90 (tree) and bkit92 = bkit89 (treeflat). Each changes only BOARD_FW_MON (→ the
+  csbi-ids55-paged worktree), adds -DCSC_TABLE_TREE, and adds table_tree to the smoke's @@NS-PARAM list, so the arm
+  identity is printed: 1 on tree, ABSENT on flat.
+
+**Runs (board 1, P1; both B2 arms on one board; B-flat's old-firmware readings on board 3 are kept as information
+only):**
+- **cc-b1, B2-paged, first:** perl makerand, then gcc train01 (tuned), then mcf. The cheap row comes first, so a
+  walk refusal shows within minutes.
+- **cd-b1, B2-flat, after it:** the same three rows.
+
+**Positive control (B2-paged):**
+- the smoke passes 9/9, apart from the usual waived task step;
+- @@NS-PARAM table_tree=1;
+- NATIVE-CNT emu_fingerprints > 0;
+- specdiff with outputs identical.
+
+**Negative control (B2-flat):** the smoke passes on the same firmware, and table_tree=ABSENT.
+
+**Grading:** Addendum 148's pair-B checks and the rtl lane's pb-grade.py. Every reading carries "key 5 NOT MET".
