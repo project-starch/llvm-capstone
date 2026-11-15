@@ -418,3 +418,44 @@ With paging off, P1 is output-identical to G on mcf, gcc and perl makerand. Each
     the band. It was tested to fail on another bench's outputs and cycles and on the wrong bitstream, and to report NO
     DATA on a missing directory.
   - `pa-kit-check.sh <bench>` compares the rootfs contents and the Image bytes.
+
+## Pair B's paged arm cannot run: the firmware's CSCHECK emulator reads only a flat table
+
+The replicate cb-b1 ran on board 1, P1, kit bkit90 with kernel tree `linux-board-k2n-native-hpm2tree` (the
+CAPSTONE_VM_TABLE_TREE build). It stopped at the smoke.
+
+- **What failed:** plain-control (no capability context) PASS. Every native step FAILs: rc 139 / 1 / 141.
+- **dmesg:** on every native task, `capstone_task: fault rc=-14 kind=3 cause=11 pc=0x3ff7f800bc`. There is no "table
+  tree check FAILED", no grow line, and no cause 30.
+- **Control:** B-flat on board 3 (the same P1 and module source without the tree) passes its smoke.
+
+**Mechanism, by source.**
+
+- **The fault line** (`drivers/misc/capstone/binfmt-dom.h:282-321` in the kit's kernel tree):
+  - kind 3 is a service request;
+  - cause 11 is the context's `ecall` (contexts run at M);
+  - rc -14 is `dom_service()`'s answer.
+  - So the first service call failed in the module's service path, not on a processor fault. The shared pc is the
+    common syscall glue.
+- **The checked copy** behind the service path is firmware-emulated on P1 (`capstone_vm.checked_copy_emu=1`;
+  `fw/opensbi/lib/sbi/capstone-sbi/capstone_cscheck.S` in the boot's firmware tree, firmware sha256 e2380fb5…).
+  - Its liveness check is flat-only by construction.
+  - The header comment (`:25`) reads "the id … dead in the FLAT RECYCLE table at srevroot: header RECYCLE set and
+    PAGED clear".
+  - The code at `:216-220` loads header word 0, takes `>> 62`, and branches to `csc_clear` unless it reads 2.
+  - So in a PAGED table every checked copy loses its capability and is refused.
+- **The RTL walker is not in this failure.** The context dies at its first service request, before any reading. Pair A
+  passed on the same bitstream with paging off.
+
+**MY MISS (pre-registration).** The pre-registration listed the RTL, the module and QEMU as the table's readers, not the
+firmware's emulated CSCHECK, which also reads records. CLAUDE.md already requires checking every image a run reuses,
+and enumerating the consumers of a changed format is already in memory. The rule existed; it was not applied to the
+firmware. No new rule.
+
+**What pair B needs:** the emulator must walk the paged table, root + 64 + 8 x (id >> 26), then [25:17], [16:8] and
+record [7:0], as `cv_tree_check` and the RTL do. Each directory and record page is read through a CSC_PHYS capability,
+as the flat path's page is. It must keep the wide-record VALID / FREE / generation test.
+
+That change belongs to the firmware's owner. On P1 the emulator runs in the kernel's trap path, not in context, so it
+adds to between_cycles, not run_cycles. Pair B's brackets are about run_cycles and do not move. Its between_cycles
+delta, when there is one, is not graded.
