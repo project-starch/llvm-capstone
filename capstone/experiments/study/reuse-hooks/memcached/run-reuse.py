@@ -92,33 +92,46 @@ def main():
     p.add_argument('--load-expect', type=int, help='commands (cmd_get + cmd_set) the configuration sends')
     p.add_argument('--load-poll', type=int, default=10)
     p.add_argument('--load-stall', type=int, default=300)
+    p.add_argument('--rerecord', type=float, metavar='WALL_SECONDS',
+                   help='no boot: rebuild NEW_DIR/result.json from the stage and serial log a finished run left, '
+                        'with the same arguments and the boot wall time that run printed')
     a = p.parse_args()
     if bool(a.load_client) != bool(a.load_conf) or bool(a.load_client) != bool(a.load_expect):
         p.error('--load-client, --load-conf and --load-expect go together')
-    a.work.mkdir(parents=True, exist_ok=False)
     stage = a.work / 'stage'
-    stage.mkdir()
     staged = {'capstone-vexec': a.adapter / 'capstone-vexec',
               'capstone-job': a.job, 'memcached.dom': a.image, 'mc-harness': a.harness}
     if a.load_client:
         staged |= {'mc-crusher': a.load_client, 'load.conf': a.load_conf}
-    for name, src in staged.items():
-        shutil.copy2(src, stage / name)
     script = gate(a.reps, a.flags, a.load_expect, a.load_poll, a.load_stall)
-    (stage / 'gate.sh').write_text(script)
-    t0 = time.time()
-    run = subprocess.run([sys.executable, str(a.run_staged), '--qemu', str(a.qemu.resolve()),
-                          '--images', str(a.images.resolve()), '--stage', str(stage),
-                          '--work', str(a.work / 'guest'), '--timeout', str(a.timeout)])
-    wall = time.time() - t0
-    log = (a.work / 'guest/serial.log').read_text(errors='replace').replace('\r', '')
+    if a.rerecord is not None:
+        assert not (a.work / 'result.json').exists() and (stage / 'gate.sh').read_text() == script
+        assert all(sha(stage / name) == sha(src) for name, src in staged.items())
+        wall = a.rerecord
+        log = (a.work / 'guest/serial.log').read_text(errors='replace').replace('\r', '')
+        returncode = 0 if '\nVIRTUAL_STAGED_DONE' in log else 1
+    else:
+        a.work.mkdir(parents=True, exist_ok=False)
+        stage.mkdir()
+        for name, src in staged.items():
+            shutil.copy2(src, stage / name)
+        (stage / 'gate.sh').write_text(script)
+        t0 = time.time()
+        run = subprocess.run([sys.executable, str(a.run_staged), '--qemu', str(a.qemu.resolve()),
+                              '--images', str(a.images.resolve()), '--stage', str(stage),
+                              '--work', str(a.work / 'guest'), '--timeout', str(a.timeout)])
+        wall = time.time() - t0
+        returncode = run.returncode
+        log = (a.work / 'guest/serial.log').read_text(errors='replace').replace('\r', '')
     reps = []
     for rep, text, rc in re.findall(r'^RG_BEGIN:(\d+)\n(.*?)^RG_END:\1:(\d+)\n', log, re.M | re.S):
         files = {name: gzip.decompress(base64.b64decode(data)) for name, data in
                  re.findall(r'^RG_FILE:(\S+)\n(.*?)^RG_FILE_END\n', text, re.M | re.S)}
         d = a.work / f'rep{rep}'
-        d.mkdir()
+        d.mkdir(exist_ok=a.rerecord is not None)
         for name, data in files.items():
+            if a.rerecord is not None and (d / name).exists():
+                assert (d / name).read_bytes() == data, d / name
             (d / name).write_bytes(data)
         err = files.get('server.err', b'').decode(errors='replace')
         load = None
@@ -134,7 +147,7 @@ def main():
                          if 'transcript.norm' in files else None,
                          other_stderr=[l for l in err.splitlines() if not l.startswith('REUSE-GAP ')],
                          reuse=parse_reuse(err)))
-    rec = dict(arm=a.arm, completed=run.returncode == 0 and '\nRG_CLEANUP:0\n' in log, boot_wall_seconds=round(wall, 1),
+    rec = dict(arm=a.arm, completed=returncode == 0 and '\nRG_CLEANUP:0\n' in log, boot_wall_seconds=round(wall, 1),
                repetitions=reps, flags=a.flags,
                load=dict(conf=a.load_conf.read_text(), expect=a.load_expect, poll=a.load_poll, stall=a.load_stall)
                if a.load_client else None,

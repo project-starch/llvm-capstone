@@ -1,0 +1,701 @@
+{
+ "program": "memcached 1.6.45",
+ "pre_registration": "78aa45070e0",
+ "workload": "protocol oracle (mc-harness phases 1-4) then mc-crusher 7ca3f14c with mc-crusher-established.conf (240,000 commands: value sizes 100/500/2000/8000 B, 10,000 zipf keys each, 1 set + 3 get connections per size, 15,000 commands each, pipelines 4) against memcached -m 32 -t 4 -o slab_automove=0 under capstone-job as uid 65534, stopped with the shutdown command; one server per boot, three boots per arm; top-level counts are repetition 1",
+ "flags": "-l 127.0.0.1 -p 21299 -U 0 -m 32 -t 4 -A -o slab_automove=0",
+ "load": {
+  "conf": "send=ascii_set,recv=blind_read,conns=1,key_prefix=a:,value_size=100,key_count=10000,live_rand_zipf=1,pipelines=4,stop_after=15000\nsend=ascii_get,recv=blind_read,conns=1,key_prefix=a:,key_count=10000,live_rand_zipf=1,pipelines=4,stop_after=15000\nsend=ascii_get,recv=blind_read,conns=1,key_prefix=a:,key_count=10000,live_rand_zipf=1,pipelines=4,stop_after=15000\nsend=ascii_get,recv=blind_read,conns=1,key_prefix=a:,key_count=10000,live_rand_zipf=1,pipelines=4,stop_after=15000\nsend=ascii_set,recv=blind_read,conns=1,key_prefix=b:,value_size=500,key_count=10000,live_rand_zipf=1,pipelines=4,stop_after=15000\nsend=ascii_get,recv=blind_read,conns=1,key_prefix=b:,key_count=10000,live_rand_zipf=1,pipelines=4,stop_after=15000\nsend=ascii_get,recv=blind_read,conns=1,key_prefix=b:,key_count=10000,live_rand_zipf=1,pipelines=4,stop_after=15000\nsend=ascii_get,recv=blind_read,conns=1,key_prefix=b:,key_count=10000,live_rand_zipf=1,pipelines=4,stop_after=15000\nsend=ascii_set,recv=blind_read,conns=1,key_prefix=c:,value_size=2000,key_count=10000,live_rand_zipf=1,pipelines=4,stop_after=15000\nsend=ascii_get,recv=blind_read,conns=1,key_prefix=c:,key_count=10000,live_rand_zipf=1,pipelines=4,stop_after=15000\nsend=ascii_get,recv=blind_read,conns=1,key_prefix=c:,key_count=10000,live_rand_zipf=1,pipelines=4,stop_after=15000\nsend=ascii_get,recv=blind_read,conns=1,key_prefix=c:,key_count=10000,live_rand_zipf=1,pipelines=4,stop_after=15000\nsend=ascii_set,recv=blind_read,conns=1,key_prefix=d:,value_size=8000,key_count=10000,live_rand_zipf=1,pipelines=4,stop_after=15000\nsend=ascii_get,recv=blind_read,conns=1,key_prefix=d:,key_count=10000,live_rand_zipf=1,pipelines=4,stop_after=15000\nsend=ascii_get,recv=blind_read,conns=1,key_prefix=d:,key_count=10000,live_rand_zipf=1,pipelines=4,stop_after=15000\nsend=ascii_get,recv=blind_read,conns=1,key_prefix=d:,key_count=10000,live_rand_zipf=1,pipelines=4,stop_after=15000\n",
+  "expect": 240000,
+  "poll": 10,
+  "stall": 120
+ },
+ "load_per_rep": {
+  "stock": [
+   {
+    "load": "complete",
+    "expect": "240000",
+    "processed": "240000",
+    "seconds": "1087.9",
+    "client": "signal=15",
+    "client_stderr_lines": 133
+   },
+   {
+    "load": "complete",
+    "expect": "240000",
+    "processed": "240000",
+    "seconds": "1098.3",
+    "client": "signal=15",
+    "client_stderr_lines": 133
+   },
+   {
+    "load": "complete",
+    "expect": "240000",
+    "processed": "240000",
+    "seconds": "1077.0",
+    "client": "signal=15",
+    "client_stderr_lines": 133
+   }
+  ],
+  "protected": [
+   {
+    "load": "complete",
+    "expect": "240000",
+    "processed": "240000",
+    "seconds": "1087.0",
+    "client": "signal=15",
+    "client_stderr_lines": 133
+   },
+   {
+    "load": "complete",
+    "expect": "240000",
+    "processed": "240000",
+    "seconds": "1076.9",
+    "client": "signal=15",
+    "client_stderr_lines": 133
+   },
+   {
+    "load": "complete",
+    "expect": "240000",
+    "processed": "240000",
+    "seconds": "1087.3",
+    "client": "signal=15",
+    "client_stderr_lines": 133
+   }
+  ]
+ },
+ "boundaries": {
+  "slabs": {
+   "stock": {
+    "buckets": {
+     "1": 43822,
+     "2": 18,
+     "3": 515,
+     "4": 2635,
+     "5": 994
+    },
+    "issues": 60352,
+    "releases": 47986,
+    "reuses": 47984,
+    "distinct_starts": 12368,
+    "attempts": 60352,
+    "error": 0,
+    "repetitions": [
+     {
+      "rep": 1,
+      "buckets": {
+       "1": 43822,
+       "2": 18,
+       "3": 515,
+       "4": 2635,
+       "5": 994
+      },
+      "issues": 60352,
+      "releases": 47986,
+      "reuses": 47984,
+      "distinct_starts": 12368,
+      "attempts": 60352,
+      "error": 0
+     },
+     {
+      "rep": 2,
+      "buckets": {
+       "1": 43906,
+       "2": 15,
+       "3": 451,
+       "4": 2579,
+       "5": 1033
+      },
+      "issues": 60352,
+      "releases": 47986,
+      "reuses": 47984,
+      "distinct_starts": 12368,
+      "attempts": 60352,
+      "error": 0
+     },
+     {
+      "rep": 3,
+      "buckets": {
+       "1": 43917,
+       "2": 15,
+       "3": 507,
+       "4": 2504,
+       "5": 1041
+      },
+      "issues": 60352,
+      "releases": 47985,
+      "reuses": 47984,
+      "distinct_starts": 12368,
+      "attempts": 60352,
+      "error": 0
+     }
+    ]
+   },
+   "protected": {
+    "buckets": {
+     "1": 45345,
+     "2": 12,
+     "3": 423,
+     "4": 2534,
+     "5": 887
+    },
+    "issues": 60352,
+    "releases": 49202,
+    "reuses": 49201,
+    "distinct_starts": 11151,
+    "attempts": 60352,
+    "error": 0,
+    "repetitions": [
+     {
+      "rep": 1,
+      "buckets": {
+       "1": 45345,
+       "2": 12,
+       "3": 423,
+       "4": 2534,
+       "5": 887
+      },
+      "issues": 60352,
+      "releases": 49202,
+      "reuses": 49201,
+      "distinct_starts": 11151,
+      "attempts": 60352,
+      "error": 0
+     },
+     {
+      "rep": 2,
+      "buckets": {
+       "1": 45330,
+       "2": 17,
+       "3": 451,
+       "4": 2439,
+       "5": 964
+      },
+      "issues": 60352,
+      "releases": 49203,
+      "reuses": 49201,
+      "distinct_starts": 11151,
+      "attempts": 60352,
+      "error": 0
+     },
+     {
+      "rep": 3,
+      "buckets": {
+       "1": 45304,
+       "2": 13,
+       "3": 440,
+       "4": 2563,
+       "5": 881
+      },
+      "issues": 60352,
+      "releases": 49201,
+      "reuses": 49201,
+      "distinct_starts": 11151,
+      "attempts": 60352,
+      "error": 0
+     }
+    ]
+   }
+  },
+  "cache": {
+   "stock": {
+    "buckets": {
+     "1": 48622,
+     "2": 11238,
+     "3": 1848,
+     "4": 8,
+     "5": 4,
+     "6": 4,
+     "7": 1,
+     "8": 7,
+     "9": 29,
+     "13": 1,
+     "14": 3,
+     "16": 2
+    },
+    "issues": 61787,
+    "releases": 61783,
+    "reuses": 61767,
+    "distinct_starts": 20,
+    "attempts": 61787,
+    "error": 0,
+    "repetitions": [
+     {
+      "rep": 1,
+      "buckets": {
+       "1": 48622,
+       "2": 11238,
+       "3": 1848,
+       "4": 8,
+       "5": 4,
+       "6": 4,
+       "7": 1,
+       "8": 7,
+       "9": 29,
+       "13": 1,
+       "14": 3,
+       "16": 2
+      },
+      "issues": 61787,
+      "releases": 61783,
+      "reuses": 61767,
+      "distinct_starts": 20,
+      "attempts": 61787,
+      "error": 0
+     },
+     {
+      "rep": 2,
+      "buckets": {
+       "1": 48492,
+       "2": 11396,
+       "3": 1803,
+       "4": 15,
+       "5": 5,
+       "6": 4,
+       "7": 1,
+       "8": 7,
+       "9": 29,
+       "13": 1,
+       "14": 2,
+       "16": 2
+      },
+      "issues": 61777,
+      "releases": 61773,
+      "reuses": 61757,
+      "distinct_starts": 20,
+      "attempts": 61777,
+      "error": 0
+     },
+     {
+      "rep": 3,
+      "buckets": {
+       "1": 48888,
+       "2": 11112,
+       "3": 1687,
+       "4": 7,
+       "5": 4,
+       "6": 5,
+       "7": 1,
+       "8": 6,
+       "9": 29,
+       "11": 1,
+       "13": 2,
+       "14": 2,
+       "15": 2,
+       "16": 1
+      },
+      "issues": 61767,
+      "releases": 61763,
+      "reuses": 61747,
+      "distinct_starts": 20,
+      "attempts": 61767,
+      "error": 0
+     }
+    ]
+   },
+   "protected": {
+    "buckets": {
+     "1": 48786,
+     "2": 11146,
+     "3": 1774,
+     "4": 4,
+     "5": 4,
+     "6": 4,
+     "7": 3,
+     "8": 5,
+     "9": 30,
+     "11": 1,
+     "13": 1,
+     "14": 2,
+     "15": 2,
+     "16": 1
+    },
+    "issues": 61783,
+    "releases": 61779,
+    "reuses": 61763,
+    "distinct_starts": 20,
+    "attempts": 61783,
+    "error": 0,
+    "repetitions": [
+     {
+      "rep": 1,
+      "buckets": {
+       "1": 48786,
+       "2": 11146,
+       "3": 1774,
+       "4": 4,
+       "5": 4,
+       "6": 4,
+       "7": 3,
+       "8": 5,
+       "9": 30,
+       "11": 1,
+       "13": 1,
+       "14": 2,
+       "15": 2,
+       "16": 1
+      },
+      "issues": 61783,
+      "releases": 61779,
+      "reuses": 61763,
+      "distinct_starts": 20,
+      "attempts": 61783,
+      "error": 0
+     },
+     {
+      "rep": 2,
+      "buckets": {
+       "1": 49079,
+       "2": 10876,
+       "3": 1728,
+       "4": 11,
+       "5": 4,
+       "6": 4,
+       "7": 2,
+       "8": 6,
+       "9": 30,
+       "13": 1,
+       "14": 5,
+       "16": 1
+      },
+      "issues": 61767,
+      "releases": 61763,
+      "reuses": 61747,
+      "distinct_starts": 20,
+      "attempts": 61767,
+      "error": 0
+     },
+     {
+      "rep": 3,
+      "buckets": {
+       "1": 48646,
+       "2": 11268,
+       "3": 1792,
+       "4": 2,
+       "5": 4,
+       "6": 5,
+       "7": 1,
+       "8": 7,
+       "9": 29,
+       "14": 3,
+       "16": 1
+      },
+      "issues": 61778,
+      "releases": 61774,
+      "reuses": 61758,
+      "distinct_starts": 20,
+      "attempts": 61778,
+      "error": 0
+     }
+    ]
+   }
+  }
+ },
+ "summary": {
+  "slabs": {
+   "median_bucket": {
+    "stock": 1,
+    "protected": 1
+   },
+   "median_bucket_per_rep": {
+    "stock": [
+     1,
+     1,
+     1
+    ],
+    "protected": [
+     1,
+     1,
+     1
+    ]
+   },
+   "reusediff_rep1": 0.008364854943517915,
+   "reusediff_all_pairs": [
+    0.008364854943517915,
+    0.008059983091319814,
+    0.007531538547509737,
+    0.006614271415675294,
+    0.0063423167945679355,
+    0.005780955019667116,
+    0.006385028334648285,
+    0.006113073713540926,
+    0.005551711938640107
+   ],
+   "reusediff_within_stock": [
+    0.0025633544514838376,
+    0.00295931977325776,
+    0.0015630210070023331
+   ],
+   "reusediff_within_protected": [
+    0.002235726916119562,
+    0.0009552651368874284,
+    0.002520273978171165
+   ],
+   "equal_rep1": false,
+   "identical_across_reps": {
+    "stock": false,
+    "protected": false
+   },
+   "bucket_ranges": {
+    "stock": {
+     "1": [
+      43822,
+      43917
+     ],
+     "2": [
+      15,
+      18
+     ],
+     "3": [
+      451,
+      515
+     ],
+     "4": [
+      2504,
+      2635
+     ],
+     "5": [
+      994,
+      1041
+     ]
+    },
+    "protected": {
+     "1": [
+      45304,
+      45345
+     ],
+     "2": [
+      12,
+      17
+     ],
+     "3": [
+      423,
+      451
+     ],
+     "4": [
+      2439,
+      2563
+     ],
+     "5": [
+      881,
+      964
+     ]
+    }
+   },
+   "ranges_overlap": false
+  },
+  "cache": {
+   "median_bucket": {
+    "stock": 1,
+    "protected": 1
+   },
+   "median_bucket_per_rep": {
+    "stock": [
+     1,
+     1,
+     1
+    ],
+    "protected": [
+     1,
+     1,
+     1
+    ]
+   },
+   "reusediff_rep1": 0.002803478814188876,
+   "reusediff_all_pairs": [
+    0.002803478814188876,
+    0.007769768114664564,
+    0.001031916953331524,
+    0.004780950506596178,
+    0.009714772484113912,
+    0.0025132727146236974,
+    0.0019538514181053584,
+    0.0039030236286783397,
+    0.0042216146936437425
+   ],
+   "reusediff_within_stock": [
+    0.0027175621300550984,
+    0.004644052504635429,
+    0.006621504794995389
+   ],
+   "reusediff_within_protected": [
+    0.005128207977596453,
+    0.0023486387014389353,
+    0.00737965708875361
+   ],
+   "equal_rep1": false,
+   "identical_across_reps": {
+    "stock": false,
+    "protected": false
+   },
+   "bucket_ranges": {
+    "stock": {
+     "1": [
+      48492,
+      48888
+     ],
+     "2": [
+      11112,
+      11396
+     ],
+     "3": [
+      1687,
+      1848
+     ],
+     "4": [
+      7,
+      15
+     ],
+     "5": [
+      4,
+      5
+     ],
+     "6": [
+      4,
+      5
+     ],
+     "7": [
+      1,
+      1
+     ],
+     "8": [
+      6,
+      7
+     ],
+     "9": [
+      29,
+      29
+     ],
+     "11": [
+      0,
+      1
+     ],
+     "13": [
+      1,
+      2
+     ],
+     "14": [
+      2,
+      3
+     ],
+     "15": [
+      0,
+      2
+     ],
+     "16": [
+      1,
+      2
+     ]
+    },
+    "protected": {
+     "1": [
+      48646,
+      49079
+     ],
+     "2": [
+      10876,
+      11268
+     ],
+     "3": [
+      1728,
+      1792
+     ],
+     "4": [
+      2,
+      11
+     ],
+     "5": [
+      4,
+      4
+     ],
+     "6": [
+      4,
+      5
+     ],
+     "7": [
+      1,
+      3
+     ],
+     "8": [
+      5,
+      7
+     ],
+     "9": [
+      29,
+      30
+     ],
+     "11": [
+      0,
+      1
+     ],
+     "13": [
+      0,
+      1
+     ],
+     "14": [
+      2,
+      5
+     ],
+     "15": [
+      0,
+      2
+     ],
+     "16": [
+      1,
+      1
+     ]
+    }
+   },
+   "ranges_overlap": true
+  }
+ },
+ "sanity": {
+  "transcripts_equal_across_arms_and_reps": true,
+  "transcript_sha256": [
+   "ee1522c8e0eceec97a20b0372e888be774e019178e3a3c45cead03663d934651"
+  ]
+ },
+ "images": {
+  "stock": {
+   "sha256": "f272d96abda0d853dc3601cc46a9769d2b49d4361a08132e128e66d4ef5b3b07",
+   "bytes": 4024536,
+   "cderive": 4,
+   "crevoke": 3,
+   "cppflags": "-DEXP_REUSE_GAP"
+  },
+  "protected": {
+   "sha256": "734fea638b00c5c6234137034a0fba46b8492063c733123e6a08e7dce1fb8083",
+   "bytes": 4032768,
+   "cderive": 8,
+   "crevoke": 6,
+   "cppflags": "-DEXP_REUSE_GAP -DMC_CAPSTONE_SUBLET"
+  }
+ },
+ "platform": {
+  "sha256": {
+   "Image": "0ea6d1ef545071326ce2ef4270e492ced585d089876517b460b6678d00e43ae8",
+   "fw_jump.elf": "975a24215dd17e5123c6f019328bce2683c9a9ca1d4e29cdddba4d0545c6e3c1",
+   "initramfs.cpio.gz": "464653151bafbab9fbf5081fe5e4ce188e4c1be770b8ec5a31a6e873de71df24",
+   "qemu-system-riscv64": "c55fcdd2c620916690e9604a1b95f204d8287fce79631a8a8909c69952223b49"
+  },
+  "launcher_sha256": "150d969243a01faf6597bcb6c1b5e29f72b1766c7463997f6e64f29ec745b37c",
+  "module_sha256": "built into the kernel (trap route)",
+  "job_sha256": "933a8b0c3b336c51fcec64c553b993e92e9e0bf5ac72291e74a8ab01aac343d8",
+  "harness_sha256": "725ca8d1373367ae52dd58d31422bbf894f63a00301de94ba59d817f2f2fef86",
+  "load_client_sha256": "6fd931c281cc48a8dd992b5dda5509197279989822248ec4587e0d8e738433ed",
+  "load_conf_sha256": "ecd2d0751f0be901976931fd6513d0ab5cd2d9ace18d5b82d4fa26182988f3a3",
+  "harts": 1,
+  "workers": 4,
+  "boot_wall_seconds": {
+   "stock": [
+    1137.6,
+    1148.5,
+    1127.6
+   ],
+   "protected": [
+    1138.1,
+    1127.9,
+    1137.9
+   ]
+  }
+ }
+}

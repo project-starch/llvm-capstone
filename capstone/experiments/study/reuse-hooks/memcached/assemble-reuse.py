@@ -19,6 +19,7 @@ per-bucket ranges over the repetitions.
 import argparse
 import itertools
 import json
+import os
 import re
 import sys
 
@@ -62,7 +63,7 @@ def join_boots(paths, arm):
         for key in ('platform_sha256', 'staged_sha256', 'flags', 'load'):
             assert rec.get(key) == recs[0].get(key), (path, key)
     out = dict(recs[0])
-    out['repetitions'] = [dict(r, rep=i + 1, boot=str(path)) for i, (r, path) in
+    out['repetitions'] = [dict(r, rep=i + 1, boot=os.path.basename(os.path.dirname(os.path.abspath(path)))) for i, (r, path) in
                           enumerate((r, path) for rec, path in zip(recs, paths) for r in rec['repetitions'])]
     out['boot_wall_seconds'] = [rec['boot_wall_seconds'] for rec in recs]
     return out
@@ -159,7 +160,7 @@ def main():
                          harts=1, workers=4,
                          boot_wall_seconds={'stock': stock['boot_wall_seconds'], 'protected': prot['boot_wall_seconds']}),
     }
-    with open(sys.argv[4], 'w') as f:
+    with open(a.out, 'w') as f:
         json.dump(out, f, indent=1)
         f.write('\n')
     print(json.dumps(summary, indent=1))
