@@ -4526,3 +4526,36 @@ The ev24, ev25 and ev26 predictions are G's values. F's run_cycles spread is 0.0
 - Addendum 132's grade is unchanged (missed fast, not credited).
 
 The adoption question for G is still decided on mcf and gcc under Addendum 132.
+
+## Addendum 142 (2026-11-15 16:52 +08): Addendum 132 read: G is adopted; a tag-content safety gate comes before any table cell moves
+
+**Readings (board 1, kit bkit83 tag-path HPM, against F on the same board and kit):**
+
+| Row | F | G | Change | Band | In-context cycles |
+|---|---|---|---|---|---|
+| mcf | 6,581.38 s | 5,930.75 s, specdiff 2/2 | -9.89 % | -2.3 .. -5.1 % | -9.7 % |
+| gcc train01 (tuned stage, arena_pin=Y on both) | 1,990.13 s | 1,758.96 s, specdiff 1/1 | -11.62 % | -4.3 .. -9.6 % | -11.75 % |
+
+Exact counter deltas are in RESULTS. Both rows are faster than their bands, and tag reads and tag writes fell, where
+"unchanged" was predicted.
+
+The rtl lane's F2-alone mcf run (Addendum 141; its pre-registration land/rtl-twc-reach ba4081888c12) splits F2's part
+from the lever's.
+
+**Grade under Addendum 132's rule.** mcf and gcc both improve beyond the 0.15 % spread, outputs pass, and no
+prediction is missed on the slow side: **G is adopted** as the Capstone bitstream. Per the rule, the fast-side surplus
+on both rows is not credited to the lever until its mechanism is shown.
+
+**Added gate, stated before any table run on G.** G and F2 reduce tag writes (-18 % on gcc, -10.5 % on mcf). An
+output check cannot see a missing tag clear: a plain store over a tagged granule that skips its clear would leave a
+stale, forgeable tag and still pass specdiff. So no table cell moves to G until the tag CONTENT after plain overwrites
+of tagged memory is checked on G against an independent reference. That check is either the rtl lane's directed sim,
+or the bug corpus' forgery and overwrite cases on G and on F on silicon. A failure there withdraws the adoption.
+
+**Re-measure.** Per the rule, all eight temporal rows and the spatial rows are re-measured on G before any cell
+changes. The final configuration also folds in:
+- FRCDKMSa3 (Addendum 138) with riscv-base RVAL (Addendum 139);
+- the node-table pool (Addendum 133);
+- untuned gcc (Addendum 135).
+
+The order and the baseline (stock or matched-cache riscv-base) are the lead's decision, which is pending.
