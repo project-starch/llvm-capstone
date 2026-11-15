@@ -15,7 +15,7 @@
 | FFmpeg 9.0.1 decode (10 s clip, 300 frames), QEMU twin | **measured** (15 Nov 05:21): all commands decode the stock reference frames; in-context **-0.030 %**, kernel -0.36 %. The protection adds about 3,300 lifetimes per decode (pools recycle), subtree max 2, peak 474 live records. Needs this lane's Q-15 placement repair of 0003 (unrepaired, CDERIVE refuses a frame-plane buffer), and on llvm-c9 `-fno-builtin` in both arms (else cause 24 in both: C-69). With llvm-c15's C-69 fix and builtins on, all commands match and the cost reads -0.031 % | FRCDKMS SDK, -O2 -fno-builtin, native route, set w4, QEMU qemu55 a0501ebc39; builtins-on reading: FRCDKMSc15 SDK, set w6 |
 | FFmpeg on silicon, bitstream F | **measured** (board 2, 15 Nov 10:11-10:36): all commands decode the stock frames and the flipped control fires; the unprotected pair's repeats miss both bands (in-context 1.04 %, kernel 2.71 %), so neither difference is read (ABBA means -0.32 % / -0.34 %); wall-clock -0.74 %; event 23 +1,388 per command. Not resolved from noise, as on the twin | F `a948e4134`, kit bkit75n |
 | tshark 4.6.8, `-r -V -n` on 9,000 frames, QEMU twin | **measured** (15 Nov 05:45-06:45): every output equals stock tshark's byte for byte; in-context **+2.69 %**, kernel +0.02 %; 7.18 M CDERIVEs and 2.73 M CREVOKEs per run, with one packet-scope reset of 256-1,023 nodes per frame, subtree max 29,134, peak live records 33,998 | FRCDKMS SDK and flags on tshark and its seven dependencies, `--no-relax`, native route, QEMU qemu55 a0501ebc39 |
-| tshark on silicon, bitstream F | **protected arm did not return** (board 1, 15 Nov 10:01-13:40, four one-arm boots U P P U): both unprotected commands give stock's output in 1,112-1,125 s; both protected commands printed nothing for at least 3,327 s (2.98 times that) before the 3,600 s rung timeout. The residue commit pc maps to the CDERIVE in the patched allocator. Not read as a cost and not called a wedge; a heartbeat boot is pre-registered below to separate slow from stopped | F `a948e4134`, kit bkit75n, board 1 |
+| tshark on silicon, bitstream F | **protected arm did not return** (board 1, 15 Nov 10:01-13:40, four one-arm boots U P P U): both unprotected commands give stock's output in 1,112-1,125 s; both protected commands printed nothing for at least 3,327 s (2.98 times that) before the 3,600 s rung timeout. The residue commit pc maps to the CDERIVE in the patched allocator. Not read as a cost and not called a wedge. A heartbeat boot to separate slow from stopped was pre-registered below and **not run**: the nested work was paused on 15 Nov evening for the final SPEC test run (the lead's direction), so the question stays open | F `a948e4134`, kit bkit75n, board 1 |
 | memcached (load) | **deferred**: the native route cannot run it. The table refuses `socket`, `socketpair`, `epoll_create1` and `epoll_ctl` (`native-syscall-table.c:92-101`, `NS_REFUSE`). A twin probe (`nested/mcprobe`, 15 Nov) confirms it after a passing control (`open` in the run directory): `socket(AF_INET)` and `socket(AF_UNIX)` give ENOSYS, `epoll_create1` ENOSYS, `pthread_create` EAGAIN. memcached needs all three (four worker threads). Running it elsewhere (e.g. the virtual route) is a different instrument; the lead's call | - |
 | CREVOKE worst case (subtree 1 .. 10^6, latency, interruptibility; PostgreSQL context reset) | **measured** (RTL sim, memory delay 0): 6 cycles per node up to 2,048 nodes, about 11 beyond; at most 65,532 nodes per subtree (10^6 cannot be built), so the worst single CREVOKE is 720,892 cycles; **not interruptible**: a timer interrupt waits for the whole walk (180,518 cycles at 32,768 nodes, against 1-6 without). PostgreSQL context resets (twin): the largest ends **34,509 nodes** in one CREVOKE, about 0.38 M cycles at delay 0 and 2.1 M at delay 12. CDERIVE: 21 cycles alone, 27 / 157 back to back at delay 0 / 12; CREVOKE about 60 cycles per node at delay 12. **On silicon (F):** 28 cycles per node from 10,000 nodes; 100,000 nodes in 2.82 M cycles (about 113 ms); PostgreSQL's 34,509-node reset about 0.97 M cycles (about 39 ms) | capstone-ariane `a948e4134` (F), `--sv_seed 1` |
 | CDERIVE / CREVOKE timed on silicon (lone, back to back, subtrees 1 .. 10^5, a probe to 10^6) | **measured** (board 2, 15 Nov 09:58-10:11): CDERIVE (the runtime's helper) **63** cycles lone, 98 back to back; CREVOKE of 1 node **55**; per node 16.7 at 1,000 nodes, **28** at 10,000 and 100,000; a 100,000-node subtree revokes in **2.82 M cycles (about 113 ms at 25 MHz)**; 10^6 cannot be built (refused after 196,609). The lifetime ops are 29-38 % of speedtest1's F cost | F `a948e4134`, kit bkit75n |
@@ -43,7 +43,7 @@ Only rows marked "measured" hold measurements; the rest say what runs next and w
   is 2.5 times (six benchmarks summed), and about a third of it is issue stalls, with L1D misses up 14.7 %. PostgreSQL's
   wall-clock cost is +4.38 % (its in-context repeats missed the band). FFmpeg's
   is not resolved from noise on silicon either. tshark's protected arm did not return on silicon in either boot (at
-  least 3x the unprotected time); whether it is slow or stops is the next boot's question.
+  least 3x the unprotected time); whether it is slow or stops is open: the heartbeat boot pre-registered below was not run when the work was paused.
 - Both large-subtree applications reset whole pools in one CREVOKE: PostgreSQL's memory contexts, up to 34,509 nodes,
   and tshark's packet scope, every frame. That is where CREVOKE's walk matters: uninterruptible, and 28 cycles per
   node on silicon for large subtrees, so PostgreSQL's largest reset holds the core for about 39 ms.
@@ -1533,7 +1533,8 @@ frame and with what still running?
     (`@@HB-STOP`).
   - The image is the same `bcc251f3…`, the same capture, and the same command line.
 - Rung budget 3600, so the kit's x4 gives `BAKED_TIMEOUT=14400`, and the idle limit is the same 14,400 s
-  (`board-run.sh:155`). The SPEC lane's list line is `14400 300`.
+  (`board-run.sh:155`). The SPEC lane's list line is `3600 300`. This lane first sent `14400 300`, which the SPEC lane's
+  dry run showed would bake `BAKED_TIMEOUT=57600`; the SPEC lane corrected it.
 - Read by `tshark/hb-frames.py`, which maps each beat's byte count to the frame of the stock reference that holds that
   byte, and exits 2 when a transcript has no beat.
 
@@ -1563,6 +1564,8 @@ frame and with what still running?
 - **Not read:** if no beat is printed after `@@SPEC-BEGIN` while beats were printed during the unpack, a native task
   that never yields cannot be told from C at time 0. The twin control shows beats during the native task, but
   silicon's scheduling of it is not shown.
+- **Not read** either if no `@@HB` is printed during the unpack, before `@@SPEC-BEGIN` (added before the boot at the
+  SPEC lane's request).
 - **VOID** as in the four-boot pre-registration (`b0-stats`, `b0-hello`, smoke).
 
 **Prediction.** B or C: the output stops growing at some frame. No mechanism in hand would make the protected arm 3x
@@ -1572,3 +1575,7 @@ or two beats.
 
 **What follows.** A: the comparison is re-run with this budget. B or C: the frame number reduces the capture for a
 folder under `fpga-repros/`, and the hardware side gets one link.
+
+**Not run.** On 15 Nov evening the lead paused the nested work for the final SPEC test run, before this boot started
+(its chain had only waited for the board). The stage, its checksums, the stubbed dry runs and the twin control remain,
+so the boot can run as written when the work resumes.
