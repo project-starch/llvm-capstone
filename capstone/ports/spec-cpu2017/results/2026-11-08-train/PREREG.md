@@ -4426,3 +4426,28 @@ an optimisation result until riscv-base carries the generic parts of 0012/0013 (
   - other rows: FRCDKMSa3 images.
   The twins' net gain under the same-software rule is about 0.6 % on perl and 0.2 % on gcc (compiler lane,
   14 Nov 23:42).
+
+## Addendum 139 (2026-11-15 15:36 +08): riscv-base RVAL perl full and gcc train01 on board 3 (the same-software clause of Addendum 121)
+
+**Stages** (the compiler lane, perf/fair/mkstages-al3.py). Each is a copy of the stage board 3 ran for RVF3, with the
+executable swapped and plan.json's hash updated. Read here:
+
+| Stage | Executable | Files, manifest sha256 | Diff against the fair3 stage |
+|---|---|---|---|
+| 500.perlbench_r-rv-al3 | perlbench_r_base.plain-rv64 9304130748a03c57 | 561 files, eedb61d9e34e2e34 | the binary and plan.json only |
+| 502.gcc_r-train01-rv-al3 | cpugcc_r_base.plain-rv64 93bc8e196b036d07 | 7 files, 456852ed488df3ef | the binary and plan.json only |
+
+The plan diff is the one hash line. The musl is RVF3's plus 0013's get_meta hunk and 0012's context pointer. The twins
+against RVF3: perl full -0.24 %, gcc -0.11 %, outputs identical.
+
+**Run (chain bt-b3, thrun.sh, board 3, waits on bs-b3).** riscv-base bitstream caplifive_rvbase_d31345cf3: flash
+with the seal checked, then readback. Kits bkit54/bkit52 and runner run-stage-noctl.py, as the RVF3 rows used (w-b3,
+at-b3). Perl full first, then gcc. Board 3's next Capstone chain reflashes F.
+
+**Predictions** (against RVF3 on the same board):
+- perl full -0.1 .. -0.4 %, against 12,623.02 s;
+- gcc train01 -0.0 .. -0.3 %, against 1,722.35 s;
+- specdiff on both.
+
+**Then.** Each row's ratio under FRCDKMSa3 uses RVAL for riscv-base. If the lead chooses a matched-cache riscv-base
+(I$ and DTLB equal to Capstone's), these readings are kept as the stock-CVA6 disclosure point.
