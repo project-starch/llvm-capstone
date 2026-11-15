@@ -115,9 +115,17 @@ bitstream and its keys are above. The full build (key 5) waits until the board p
 
 - **Pairs, one bitstream:**
   - A = trial on the flat kit against G on the flat kit (the null control);
-  - B = trial on the paged kit against the trial on the flat kit (the paging cost, at its lower end, with record pages
-    consecutive);
-  - optional C = scattered record pages, the collaborator's call.
+  - B = trial on the paged kit against the trial on the flat kit: the paging cost, with the growth module's own layout.
+    - Table-tree 722416c35e77 grows in 64 KiB batches: 16 record pages = 4,096 slots, physically contiguous within a
+      batch.
+    - Batches are independent allocations, directory pages are single pages, and a pooled tree keeps its batches.
+    - The brackets do not depend on that layout. Walks are per 4 KiB record page and cost three directory reads
+      wherever the pages sit. Layout enters only through record-line conflicts in L1D, which is pair B's L1D-miss delta.
+    - (Corrects this section's first wording, "record pages consecutive".)
+  - optional C = a deliberately scattered layout, the collaborator's call.
+- **L1D misses are a reading in pair B, not a control.** Walks read the directories through the D$, and record lines
+  sit at new addresses. The paged arm's L1D-miss delta over the flat arm is the second-order term that check 2's 25 %
+  allows for.
 - **Inputs in hand** (the compiler lane's twin census, FRCDKMSa3; the per-op counts from the walker trace above):
 
 | row | CDERIVE | CREVOKE | next | record-page span | grows |
