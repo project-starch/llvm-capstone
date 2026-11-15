@@ -31,4 +31,9 @@ endif
 ifdef CV_IDS
 ccflags-y += -DCAPSTONE_VM_IDS=$(CV_IDS)
 endif
+# make CV_FLAT_INDEX_BITS=25 CV_IDS=55 CV_TABLE_TREE=1 (Sublet Section 5, Phase 1): the same flat ids55 table with its
+# records in a paged tree (root, two directory levels, record pages of 256, 5:9:9:8), the records one contiguous block.
+ifdef CV_TABLE_TREE
+ccflags-y += -DCAPSTONE_VM_TABLE_TREE=1
+endif
 ccflags-y += -I$(src)

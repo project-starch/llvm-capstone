@@ -268,6 +268,7 @@ struct cv_thread {
 };
 struct context {
     bool table_cma;   /* c5a: the flat table came from CMA (cv_flat_alloc) */
+    unsigned long *records;   /* CAPSTONE_VM_TABLE_TREE: the contiguous record block the tree at table points into */
     struct list_head link;
     struct mm_struct *mm;
     unsigned long *frame, *table;
@@ -351,6 +352,26 @@ MODULE_PARM_DESC(node_max_records,
 #define node_table_flat 1
 #else
 #define node_table_flat 0
+#endif
+/* CAPSTONE_VM_TABLE_TREE (Sublet Section 5, Phase 1; plan 2026-11-15-sublet-section5-rtl.md): the flat ids55 build with
+ * its records in a paged tree. Everything the flat build means stays: fixed capacity published up front, the S-23
+ * floor, the module's retired accounting, no growth and no collection, F's record format. Only where records live
+ * changes. The root page holds F's header at +0..+31 (capacity | RECYCLE | PAGED, next, free, allocations), MAGIC at
+ * +32 (QEMU's paged open requires it; the RTL reads only +0..+31 and the root entries), zero at +40..+63, and 32
+ * root entries from +64. A slot walks 5:9:9:8: root entry slot[30:26], directory slot[25:17], directory slot[16:8],
+ * record slot[7:0] in a page of 256. Entries are plain 4 KiB-aligned physical addresses, 0 = none. The record pages
+ * are ONE physically contiguous block, today's flat allocation, carved into the tree: record page k is block + 4 KiB*k,
+ * so slot s's record is at block + 16*s exactly as in the flat table. Every record page up to capacity is published
+ * before the context starts: the RTL's record TLB flushes only on an srevroot edge, and an unreachable record reads
+ * DEAD (agreed with the rtl lane, 2026-11-15). Our QEMU (virtual-capstone) walks the same tree as 4:9:9:8 with 16 root
+ * entries: for 25-bit slots, slot[29:26] = slot[30:26] = 0, so both read root entry 0 and the same directories. */
+#ifdef CAPSTONE_VM_TABLE_TREE
+#if !defined(CAPSTONE_VM_FLAT_TABLE) || CAPSTONE_VM_IDS != 55
+#error "CAPSTONE_VM_TABLE_TREE is the flat ids55 build (CV_FLAT_INDEX_BITS=25 CV_IDS=55) with its records in a paged tree"
+#endif
+#define node_table_tree 1
+#else
+#define node_table_tree 0
 #endif
 /* S-24: how many times the SAME (address, cause) may be "resolved" without changing anything
  * before the run is failed instead of retried. Generous, because a resolve followed by a quantum
@@ -700,32 +721,44 @@ static unsigned test_pool_mutant;
 module_param(test_pool_mutant, uint, 0644);
 #endif
 static DEFINE_SPINLOCK(table_pool_lock);
-static struct { unsigned long *table; bool cma; } table_pool[CV_TABLE_POOL_MAX];
+/* records is the contiguous record block: the table itself in the flat build, the block the tree points into in the
+ * tree build. A pooled tree keeps its directories, which never change (the tree covers capacity from creation). */
+static struct { unsigned long *table, *records; bool cma; } table_pool[CV_TABLE_POOL_MAX];
 static unsigned table_pool_count;
+/* The header's flag bits as this build publishes them at root+0. */
+#define CV_TABLE_HDR_FLAGS (CAP_REV_TABLE_RECYCLE | (node_table_tree ? CAP_REV_TABLE_PAGED : 0))
 
 static void *cv_table_pool_get(struct context *c)
 {
-    unsigned long *table = NULL;
+    unsigned long *table = NULL, *records = NULL;
     spin_lock(&table_pool_lock);
     if (table_pool_count) {
         --table_pool_count;
         table = table_pool[table_pool_count].table;
+        records = table_pool[table_pool_count].records;
         c->table_cma = table_pool[table_pool_count].cma;
         ++node_table_pool_hits;
     }
     spin_unlock(&table_pool_lock);
-    if (table && node_table_pool_verify && memchr_inv(table, 0, CV_FLAT_BYTES)) {
+    if (node_table_tree) c->records = records;
+    if (table && node_table_pool_verify && memchr_inv(records, 0, CV_FLAT_BYTES)) {
         ++node_table_pool_violations;
-        memset(table, 0, CV_FLAT_BYTES);
+        memset(records, 0, CV_FLAT_BYTES);
+    }
+    /* The tree's header is in the root page, outside the records: +0..+31 and +40..+63 must be zero too. */
+    if (table && node_table_tree && node_table_pool_verify && (memchr_inv(table, 0, 32) || memchr_inv(table + 5, 0, 24))) {
+        ++node_table_pool_violations;
+        memset(table, 0, 32); memset(table + 5, 0, 24);
     }
     return table;
 }
 /* True if the table was zeroed back and kept; false leaves it to the caller to free. */
 static bool cv_table_pool_put(struct context *c)
 {
-    unsigned long *table = c->table, next = READ_ONCE(table[1]), bytes;
+    unsigned long *table = c->table, *records = node_table_tree ? c->records : c->table;
+    unsigned long next = READ_ONCE(table[1]), bytes;
     bool kept = false;
-    if (!node_table_pool || READ_ONCE(table[0]) != (CAP_REV_TABLE_RECYCLE | CV_FLAT_RECORDS) ||
+    if (!node_table_pool || READ_ONCE(table[0]) != (CV_TABLE_HDR_FLAGS | CV_FLAT_RECORDS) ||
         next < CV_NODE_FIRST || next > CV_FLAT_RECORDS) {
         if (node_table_pool) ++node_table_pool_refused;
         return false;
@@ -735,6 +768,23 @@ static bool cv_table_pool_put(struct context *c)
     spin_unlock(&table_pool_lock);
     if (!kept) return false;
     bytes = next * CAP_REV_TABLE_RECORD;
+    if (node_table_tree) {
+        /* The header is in the root page, apart from the records: root+0..+31 and +40..+63 back to zero (QEMU's
+         * paged model keeps a retired count at +40), MAGIC and the root entries kept. Records as in the flat build. */
+#ifdef CV_TEST_HOOKS
+        if (test_pool_mutant == 1) {
+            table[0] = table[1] = 0;
+            memset(records, 0, bytes);
+        } else if (test_pool_mutant == 2) {
+            memset(table, 0, 32); memset(table + 5, 0, 24);
+            memset(records, 0, bytes - CAP_REV_TABLE_RECORD);
+        } else
+#endif
+        {
+            memset(table, 0, 32); memset(table + 5, 0, 24);
+            memset(records, 0, bytes);
+        }
+    } else {
 #ifdef CV_TEST_HOOKS
     if (test_pool_mutant == 1) {
         memset(table, 0, 16);
@@ -744,10 +794,12 @@ static bool cv_table_pool_put(struct context *c)
     } else
 #endif
     memset(table, 0, bytes);
+    }
     spin_lock(&table_pool_lock);
     kept = table_pool_count < min(node_table_pool, CV_TABLE_POOL_MAX);
     if (kept) {
         table_pool[table_pool_count].table = table;
+        table_pool[table_pool_count].records = records;
         table_pool[table_pool_count].cma = c->table_cma;
         ++table_pool_count;
         ++node_table_pool_puts;
@@ -757,13 +809,12 @@ static bool cv_table_pool_put(struct context *c)
     return kept;
 }
 
-static void *cv_flat_alloc(struct context *c)
+/* The contiguous record block: CMA first, since a multi-MiB buddy block can be unavailable on a fragmented, small
+ * board guest. Zeroed. */
+static void *cv_flat_block(struct context *c)
 {
     unsigned long count = CV_FLAT_BYTES >> PAGE_SHIFT;
     struct page *page = NULL;
-    void *pooled = node_table_pool ? cv_table_pool_get(c) : NULL;
-    if (pooled) return pooled;
-    /* CMA first: a multi-MiB buddy block can be unavailable on a fragmented, small board guest. */
     if (dma_contiguous_default_area)
         page = cma_alloc(dma_contiguous_default_area, count, 0, true);
     if (page) {
@@ -776,18 +827,143 @@ static void *cv_flat_alloc(struct context *c)
         return (void *)__get_free_pages(GFP_KERNEL | __GFP_ZERO, get_order(CV_FLAT_BYTES));
     return NULL;
 }
+static void cv_flat_block_free(struct context *c, void *block)
+{
+    if (!c->table_cma)
+        free_pages((unsigned long)block, get_order(CV_FLAT_BYTES));
+    else
+        cma_release(dma_contiguous_default_area, virt_to_page(block), CV_FLAT_BYTES >> PAGE_SHIFT);
+}
+#if !node_table_tree
+static void *cv_flat_alloc(struct context *c)
+{
+    void *pooled = node_table_pool ? cv_table_pool_get(c) : NULL;
+    return pooled ?: cv_flat_block(c);
+}
+#endif
+
+#if node_table_tree
+#define CV_TREE_ROOT_ENTRIES 32U
+#define CV_TREE_PAGES (CV_FLAT_RECORDS / CAP_REV_TABLE_PAGE_NODES)
+/* Directory pages: the root, one first-level directory (25-bit slots reach index 255 of it), and one second-level
+ * directory per 512 record pages. */
+#define CV_TREE_DIR_PAGES (2UL + DIV_ROUND_UP(CV_TREE_PAGES, 512UL))
+static unsigned long tree_check_failures;
+module_param(tree_check_failures, ulong, 0444);
+static unsigned long table_tree = 1;   /* read-only: a kit tells the tree build from the flat one by reading it */
+module_param(table_tree, ulong, 0444);
+#ifdef CV_TEST_HOOKS
+/* Test build only, the tree's positive controls. 1: the builder takes the second-level index from the first-level
+ * field (a wrong level index), so every record page but the last of each 512 is unreachable. 2: record page k points
+ * at block page k + 1 (mod pages), a consistent shift. test_tree_skip_check=1 publishes the tree without the check, so
+ * the processor (or QEMU) meets the mutant: 1 must fault at the first allocation; 2 is a bijection QEMU cannot see. */
+static unsigned test_tree_mutant, test_tree_skip_check;
+module_param(test_tree_mutant, uint, 0644);
+module_param(test_tree_skip_check, uint, 0644);
+#endif
+
+static void cv_tree_free_dirs(unsigned long *root)
+{
+    for (unsigned i = 0; i < CV_TREE_ROOT_ENTRIES; ++i) {
+        unsigned long pa = root[CAP_REV_TABLE_DIRECTORY / 8 + i], *l1;
+        if (!pa) continue;
+        l1 = phys_to_virt(pa);
+        for (unsigned j = 0; j < 512; ++j)
+            if (l1[j]) free_page((unsigned long)phys_to_virt(l1[j]));   /* its entries are the block's pages */
+        free_page((unsigned long)l1);
+    }
+    free_page((unsigned long)root);
+}
+/* The root and directories over a zeroed contiguous record block, every record page published. */
+static unsigned long *cv_tree_build(unsigned long *records)
+{
+    phys_addr_t pa = virt_to_phys(records);
+    unsigned long *root = (void *)get_zeroed_page(GFP_KERNEL), *l1;
+    if (!root) return NULL;
+    l1 = (void *)get_zeroed_page(GFP_KERNEL);
+    if (!l1) { free_page((unsigned long)root); return NULL; }
+    root[CAP_REV_TABLE_DIRECTORY / 8] = virt_to_phys(l1);
+    for (unsigned long k = 0; k < CV_TREE_PAGES; ++k) {
+        unsigned long id = k * CAP_REV_TABLE_PAGE_NODES, l1i = (id >> 17) & 511, l2i = (id >> 8) & 511, *l2;
+        phys_addr_t page = pa + k * PAGE_SIZE;
+#ifdef CV_TEST_HOOKS
+        if (test_tree_mutant == 1) l2i = l1i;
+        if (test_tree_mutant == 2) page = pa + ((k + 1) % CV_TREE_PAGES) * PAGE_SIZE;
+#endif
+        if (!l1[l1i]) {
+            l2 = (void *)get_zeroed_page(GFP_KERNEL);
+            if (!l2) { cv_tree_free_dirs(root); return NULL; }
+            l1[l1i] = virt_to_phys(l2);
+        } else l2 = phys_to_virt(l1[l1i]);
+        l2[l2i] = page;
+    }
+    return root;
+}
+/* The check is the hardware's walk, written apart from the builder: for every record page, root entry slot[30:26],
+ * then slot[25:17], then slot[16:8], each a non-zero 4 KiB-aligned address, must reach block + 4 KiB*k, so slot s's
+ * record is at block + 16*s. Root entries the tree does not use must be zero. */
+static bool cv_tree_check(const unsigned long *root, phys_addr_t pa)
+{
+    for (unsigned i = 1; i < CV_TREE_ROOT_ENTRIES; ++i)
+        if (root[CAP_REV_TABLE_DIRECTORY / 8 + i]) return false;
+    for (unsigned long k = 0; k < CV_TREE_PAGES; ++k) {
+        unsigned long id = k * CAP_REV_TABLE_PAGE_NODES, e = root[CAP_REV_TABLE_DIRECTORY / 8 + (id >> 26)];
+        const unsigned long *d;
+        if (!e || (e & (PAGE_SIZE - 1))) return false;
+        d = phys_to_virt(e); e = d[(id >> 17) & 511];
+        if (!e || (e & (PAGE_SIZE - 1))) return false;
+        d = phys_to_virt(e); e = d[(id >> 8) & 511];
+        if (e != pa + k * PAGE_SIZE) return false;
+    }
+    return true;
+}
+/* The root page of a tree over its record block (c->records), from the pool or new; checked either way. */
+static unsigned long *cv_tree_alloc(struct context *c)
+{
+    unsigned long *root = node_table_pool ? cv_table_pool_get(c) : NULL;
+    if (!root) {
+        c->records = cv_flat_block(c);
+        if (!c->records) return NULL;
+        root = cv_tree_build(c->records);
+        if (!root) return NULL;   /* node_free_table frees the block */
+    }
+#ifdef CV_TEST_HOOKS
+    if (test_tree_skip_check) return root;
+#endif
+    if (!cv_tree_check(root, virt_to_phys(c->records))) {
+        /* must-fire: a count, never a ratelimit, at the level the runners keep */
+        if (++tree_check_failures <= 4)
+            pr_emerg("capstone_vm: table tree check FAILED (root %llx, block %llx, pages %lu); context refused\n",
+                     (unsigned long long)virt_to_phys(root), (unsigned long long)virt_to_phys(c->records),
+                     (unsigned long)CV_TREE_PAGES);
+        cv_tree_free_dirs(root);
+        return NULL;
+    }
+    return root;
+}
+#else
+#define CV_TREE_DIR_PAGES 0UL
+#endif
+
 static void node_free_table(struct context *c)
 {
+#if node_table_tree
+    if (c->table && cv_table_pool_put(c)) {
+        c->table = NULL; c->records = NULL;
+        return;
+    }
+    if (c->table) cv_tree_free_dirs(c->table);
+    if (c->records) cv_flat_block_free(c, c->records);
+    c->table = NULL; c->records = NULL;
+    return;
+#endif
     if (!c->table) return;
     if (node_table_flat) {
         if (cv_table_pool_put(c)) {
             c->table = NULL;
             return;
         }
-        if (!c->table_cma)
-            free_pages((unsigned long)c->table, get_order(CV_FLAT_BYTES));
-        else
-            cma_release(dma_contiguous_default_area, virt_to_page(c->table), CV_FLAT_BYTES >> PAGE_SHIFT);
+        cv_flat_block_free(c, c->table);
         c->table = NULL;
         return;
     }
@@ -3379,9 +3555,14 @@ static int context_create(struct context **out)
     c->frame = (void *)get_zeroed_page(GFP_KERNEL);
     /* Native task admission requires the paged table; no misc-device CMA allocator. */
     /* c5a_model's flat RECYCLE table: one physically contiguous allocation, freed by node_free_table. */
+#if node_table_tree
+    /* The tree build: the same contiguous block, carved into a tree whose root is the table (srevroot, frame+8). */
+    c->table = cv_tree_alloc(c);
+#else
     c->table = node_table_flat ? cv_flat_alloc(c) : node_new_page(c);
+#endif
     if (c->table) c->table_pa = virt_to_phys(c->table);
-    if (c->table && node_table_flat) c->stats.node_bytes += CV_FLAT_BYTES;
+    if (c->table && node_table_flat) c->stats.node_bytes += CV_FLAT_BYTES + CV_TREE_DIR_PAGES * PAGE_SIZE;
     if (!c->frame || !c->table) {
         if (c->frame) free_page((unsigned long)c->frame);
         node_free_table(c);
@@ -3394,8 +3575,10 @@ static int context_create(struct context **out)
          * branch. Writing them would publish a table whose first record is the magic's ASCII.
          * Since the S-23 floor, root+32 and root+40 are record 2, inside the never-allocated gap
          * below CV_NODE_FIRST, and they stay zero for the same reason the whole gap does. */
-        c->table[0] = CAP_REV_TABLE_RECYCLE | CV_FLAT_RECORDS;
+        c->table[0] = CV_TABLE_HDR_FLAGS | CV_FLAT_RECORDS;
         c->table[1] = CV_NODE_FIRST;
+        /* The tree's root page is not record space, so MAGIC goes at +32 as QEMU's paged open requires. */
+        if (node_table_tree) c->table[4] = CAP_REV_TABLE_MAGIC;
     } else {
         c->table[0] = CAP_REV_TABLE_FLAGS;
         c->table[1] = 2;
