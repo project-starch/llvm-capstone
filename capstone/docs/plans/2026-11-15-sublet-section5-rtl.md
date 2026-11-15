@@ -47,10 +47,13 @@ quotes were re-read before writing this.
 The phases are ordered so that the collaborator's question ("what does paging cost?") is answered first, and
 cheaply.
 
-- **Phase 1: the paged table alone.**
+- **Phase 1: the paged table, with dynamic growth** (approved by the lead 2026-11-15).
   - The format and instructions stay as in F.
   - Add a walker (5:9:9:8) and a 16-entry record TLB in front of the existing record reads and writes.
-  - The kernel module builds the tree up front for the run's records, so no grow path is needed.
+  - **Growth, revised the same day:** the collaborator asked for the table to grow dynamically, as the paper
+    says. The first scope built the tree up front, and that did not match. The table starts with one batch, and
+    cause 30 makes the kernel add a batch, following the collaborator's own protocol: llvm-capstone
+    `native-kernel-new-qemu`, `capstone/kernel/patches/0011-riscv-mm-sublet-table.patch`, "The growth protocol".
   - The current SPEC and nested stacks run on it unchanged. The difference against F is the paging cost.
   - Estimate: several days for the rtl lane, plus a synthesis-only gate and a full build.
 - **Phase 2: the record cache** (2-way, 8 KiB, 64 B lines, write-back). It is measured against Phase 1. The design
@@ -62,6 +65,16 @@ cheaply.
   - This needs the collaborator's kernel.
 - **Phase 4: the deletions** (types, rights, CSRUNV, supervisor). The SPEC native route runs on CSRUNV, so it is
   rebuilt on the collaborator's kernel before any table is re-measured.
+
+## The collaborator's kernel needs more than Phase 1
+
+The collaborator's stack is the llvm-capstone branch `native-kernel-new-qemu`: Linux `riscv-sublet-*` patches,
+`capstone_vm.c` removed, and QEMU at `35de150ce` (CSRUNV and the supervisor deleted). Its table code checks at boot
+that the platform declares the **63-bit Sublet format** (`sublet_ready()`). It also enters protected processes by
+the trap route, not CSRUNV.
+
+So running and measuring that kernel on silicon needs Phases 3 and 4 (format, record semantics, deletions, trap
+route), not only the table. Phase 1 measures the paging and growth cost on today's stack, as a proxy for that.
 
 ## Open decisions
 
