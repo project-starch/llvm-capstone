@@ -4169,3 +4169,26 @@ Each board stage differs from its base's only in the executable and plan.json (d
 is not slower by more than 0.15 %. Rows whose images change (gcc, imagick, nab, x264) are then re-measured before their
 table cells move. LSR on capability address spaces is Capstone-only: riscv-base already strength-reduces these loops,
 as the compiler lane's lsr4 repro shows on llvm-c4 riscv. So riscv-base needs no rerun.
+
+## Addendum 131 (2026-11-15 10:33 +08, before it runs): gcc train01 on F without the gcc-only module tuning
+
+**Why.** The Capstone gcc stage alone writes three capstone_vm parameters for its run, restoring them afterwards:
+`step_budget_ns=10 s`, `resume_quantum=1` and `arena_pin=1`. Addendum 69 disclosed them as gcc-only Capstone tuning,
+and Addendum 116 recorded them. Every other row, full perl included, runs with all module parameters at their
+defaults. A fairness audit on 15 Nov named this the one remaining asymmetry that favours Capstone selectively, because
+it is applied to one row. Its silicon effect has never been measured.
+
+**Arm.** `board-frcdkms-notune/502.gcc_r-train01-native` is a copy of the table's FRCDKMS gcc stage. Two run.sh lines
+differ: the three parameter writes are removed and replaced by a comment. The `@@AP` read-back of arena_pin is kept,
+so the run prints the value in force; it must read 0. The image, inputs, kit (bkit75) and bitstream F are unchanged.
+- **Chain bl-b1**, board 1, after the tshark ABBA (bg-b1).
+- **Control:** FRCDKMS gcc on F on board 1, 1,989.28 s, with repeats 1,990.13 and 1,992.35.
+
+**Prediction.** 0 .. +5 % slower than the tuned control. arena_pin and the longer step budget exist to cut context exits
+on gcc's many short phases. The band's upper end is a guess, because no twin measured the difference.
+
+**Reporting rule.** The table reports every row in ONE configuration. If the no-tune reading differs from the tuned one
+by more than the same-board spread (0.15 %), the gcc cell becomes the no-tune value (the uniform default
+configuration), and the tuned value is shown beside it as disclosed tuning. If it is within the spread, the cell is
+unchanged and the note says the tuning has no measurable effect. Whether tuned figures may appear in the paper at all is
+the lead's call.
