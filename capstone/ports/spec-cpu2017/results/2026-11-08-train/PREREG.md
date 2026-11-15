@@ -4582,3 +4582,24 @@ go. So this run comes before Phase 1's synthesis request.
 - specdiff PASS on all three.
 - Event 23 per row: no prior to predict it from. It is report-only, and its readings are the input to the rtl
   lane's Phase 1 pre-registration.
+
+## Addendum 144 (2026-11-15 18:22 +08): RETRACTION of the sim table quoted in Addendum 137's "Why"
+
+Addendum 137 quoted the compiler lane's directed RTL test as "4.0 / 5.0 / 6.0 cycles per iteration depending on the
+head offset mod 16". That test ran at capstone-ariane 062f4453b, which is not an ancestor of F or G.
+
+On F's exact RTL (a948e4134) and G's (9fd9d2530), with seed 1, each in its own worktree with Anvil regenerated:
+- the 3-instruction loop takes 4.04..4.06 cycles per iteration at heads 0/4/8/12 and 5.04..5.06 at heads
+  2/6/10/14;
+- if_empty per iteration is 1.03..1.04 and 2.03..2.05 respectively;
+- G is the same within 0.04.
+
+So the penalty is exactly one bubble when bit 1 of the loop head is set. The "depends on the offset mod 16" reading
+is withdrawn for F and G.
+
+What stands: the 2-mod-4 mechanism; if_empty tracking the penalty one for one; and a stalled backend hiding it.
+
+**Effect on Addendum 137:** none on its bands or its run. The bands come from the measured +485 M of in-context
+cycles, not from the sim, and the one-bubble rule fits the redirect-count assumption behind them better than the
+withdrawn table did. The compiler lane's history note (capstone-loop-offset-gep 2285b1e55e3d) is corrected by its
+own commit on that branch.
