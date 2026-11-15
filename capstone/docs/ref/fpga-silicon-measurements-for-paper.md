@@ -7755,3 +7755,59 @@ Cycles per timed iteration, geomean of per-program ratios (two-level bootstrap i
     excess over the pair's own cost.**
   - **The hpm counters as exact on C.5a.** l1d_miss read one more than pre-registered on every image with a data access
     (N = 1, open, see the C.5a record).
+
+## The tag-overlap lever on synthesis: v6 and v6c gates, and v6c's routed build (board lane, apollo, 2026-11-14/15)
+
+These are build records only; neither bitstream has been flashed or read on silicon. The keys, the predictions and
+the sim gates are rtl's, in `capstone/docs/plans/2026-11-14-twc-reach.md` on llvm-capstone `land/rtl-twc-reach`:
+the key set at 4b17ec214618 and 025d3e33c97b, v6c's pre-registration at 18a1cf1cc911, and the seal recorded at
+250cbde98efc. Every run was under vivado-guard with a 40 GB cap.
+
+- **Synthesis-only gates** against faa0ee83d's kept synth checkpoint. Every gating key passed on both.
+
+  | key | v6, capstone-ariane e7f2ed8c8 | v6c, capstone-ariane 9fd9d2530 |
+  |---|---|---|
+  | mapping peak vs own XDC stage (limit +500 MB) | 5,030.1 = 5,002.2 + 27.9 MB | 5,036.8 = 5,008.9 + 27.9 MB |
+  | Synth 8-326 on load_unit / wt_dcache / wt_axi_adapter / lrsc | 0 | 0 |
+  | "Found timing loop" headers (ref 0) | 0 | 0 |
+  | LUTLP-1 on the kept dcp (toy control 1) | 0 | 0 |
+  | add_sources: axi_fix demux / vendored demux | 1 / 0 | 1 / 0 |
+  | core i_cva6 LUT (±2,500) / family-excluded FF (±300) | −14 / −1 | −17 / −2 |
+
+  - Record-only rows (sub-floor):
+    - v6: xbar +19 LUT; lrsc +3; demux[0] +22, demux[1] −10; adapter −12 LUT / −2 FF; design 190,807 LUT (−6).
+    - v6c: xbar +30 / +0; lrsc +3 / 0; demux[0] +25, demux[1] −5; design 190,835 (+22).
+  - v6c's adapter row (5,466 LUT / 934 FF) equals eeb654104's exactly. Its source is byte-identical to eeb654104's.
+  - v6 is a reading only, and rtl withdrew its full build. By rtl's one-variable sim arms, v6's adapter one-read rule
+    costs cold-I$ code +7.2 % / +16.0 %. v6c is its successor.
+  - An earlier v6 launch was stopped before synthesis on rtl's hold and gave no reading.
+- **v6c full build (9fd9d2530): FULL BUILD PASS, 4 of 4 keys**, graded by grade_full.py against eeb654104's sealed F2
+  build. The self-compare control gives PASS.
+  - Routed clean: 0 errors, 241,644 of 241,644 nets fully routed.
+  - check_timing loops: 0.
+  - Placed congestion: level 4 (ref 4).
+  - WNS: −9.107 ns against eeb654104's −12.229 (Δ +3.122). That is inside the ±3.74 ns null band, so it is not an
+    improvement.
+  - Reported, not graded:
+    - TNS −77,207.266 over 23,259 of 228,428 endpoints (ref −187,724.094 over 42,923 of 227,629); WHS +0.041.
+    - Placed 188,525 LUT (92.50 %, +430), 75,440 FF (+216), 50,685 slices (99.48 %).
+  - The build: guard exit 0 in 1 h 18 min, peak RSS 30.25 GB. The in-flight loops-only gate passed, and the
+    LUTLP-1 stop read 0 at synth and at opt.
+  - Bitstream `caplifive_ids55-native-tagcache-mlp-fpieee-hpmreplay-dynbypass3-dtlb64-shrinkfix-ic32k-r72-stcnoclaim-twc16k-merge-f2-hpmtag-lrscfix-tagoverlap6c_9fd9d2530.bit`:
+    - 11,443,722 B, sha256 `35e1fea57646c435400096f0b6bb2311e7c78f107d61e1cb0a3e78aebd496440`.
+    - The tarball synth-9fd9d2530-exit0.tar.gz has sha256 `1d7cd82a6dac…a431b813`. Its .bit is cmp-identical, and
+      its PROVENANCE HEAD is 9fd9d25305e3.
+    - rtl recomputed the sha256 independently. The flash is the runtime lane's.
+  - Post-route utilization_hier (Design State Routed), v6c against eeb654104, as LUT / FF:
+
+    | instance | v6c | eeb654104 | Δ |
+    |---|---:|---:|---:|
+    | i_cva6 | 162,781 / 52,994 | 162,686 / 52,994 | +95 / 0 |
+    | i_adapter (wt_axi_adapter) | 5,444 / 934 | 5,439 / 934 | +5 / 0 |
+    | i_axi_xbar | 6,518 / 5,126 | 6,264 / 4,946 | +254 / +180 |
+    | demux[0] | 1,342 / 803 | 826 / 749 | +516 / +54 |
+    | demux[1] | 770 / 732 | 1,223 / 685 | −453 / +47 |
+    | i_lrsc | 574 / 550 | 369 / 585 | +205 / −35 |
+
+    eeb654104 predates both lrscfix and the axi_fix demux; its add_sources lists the vendored demux. So the xbar,
+    demux and lrsc rows carry those changes as well as v6c's. All of them are below the ±2,500 per-module floor.
