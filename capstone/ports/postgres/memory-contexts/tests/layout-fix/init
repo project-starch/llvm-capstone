@@ -1,0 +1,23 @@
+#!/bin/sh
+mount -t proc proc /proc
+mount -t sysfs sys /sys
+mount -t devtmpfs dev /dev 2>/dev/null
+busybox mkdir -p /work
+mount -t tmpfs tmpfs /work
+busybox cp /*.dom /work/
+cd /work
+echo 'TRAPTEST: up'
+for arm in fixed unfixed; do
+  for mode in header stale table; do
+    echo "TRAPTEST: begin $arm $mode"
+    ./$arm-postgres.dom $mode
+    echo "TRAPTEST: end $arm $mode status $?"
+  done
+done
+for mode in injection large external; do
+  echo "TRAPTEST: begin fixed $mode"
+  if [ $mode = injection ]; then ./fixed-postgres.dom; else ./fixed-postgres.dom $mode; fi
+  echo "TRAPTEST: end fixed $mode status $?"
+done
+echo 'TRAPTEST: done'
+busybox poweroff -f

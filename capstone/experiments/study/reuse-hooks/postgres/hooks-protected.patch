@@ -1,7 +1,7 @@
 --- a/src/backend/utils/mmgr/mcxt.c
 +++ b/src/backend/utils/mmgr/mcxt.c
-@@ -266,6 +266,10 @@
- 	return inside;
+@@ -467,6 +467,10 @@
+ 									(SUBLET_LEAF_PAGES - 1)];
  }
  
 +#ifdef EXP_REUSE_GAP
@@ -11,7 +11,7 @@
  /*
   * MemoryContextTraverseNext
   *		Helper function to traverse all descendants of a memory context
-@@ -450,6 +454,9 @@
+@@ -651,6 +655,9 @@
  		 * the programmer got it right.
  		 */
  
@@ -21,7 +21,7 @@
  		context->methods->reset(context);
  		context->isReset = true;
  		VALGRIND_DESTROY_MEMPOOL(context);
-@@ -559,6 +566,9 @@
+@@ -760,6 +767,9 @@
  	 */
  	context->ident = NULL;
  
@@ -31,7 +31,7 @@
  	context->methods->delete_context(context);
  
  	VALGRIND_DESTROY_MEMPOOL(context);
-@@ -1233,6 +1243,9 @@
+@@ -1434,6 +1444,9 @@
  	 * function instead.
  	 */
  	ret = context->methods->alloc(context, size, 0);
@@ -41,7 +41,7 @@
  
  	VALGRIND_MEMPOOL_ALLOC(context, ret, size);
  
-@@ -1257,6 +1270,9 @@
+@@ -1458,6 +1471,9 @@
  	context->isReset = false;
  
  	ret = context->methods->alloc(context, size, 0);
@@ -51,7 +51,7 @@
  
  	VALGRIND_MEMPOOL_ALLOC(context, ret, size);
  
-@@ -1284,6 +1300,9 @@
+@@ -1485,6 +1501,9 @@
  	context->isReset = false;
  
  	ret = context->methods->alloc(context, size, flags);
@@ -61,7 +61,7 @@
  	if (unlikely(ret == NULL))
  		return NULL;
  
-@@ -1371,6 +1390,9 @@
+@@ -1572,6 +1591,9 @@
  	 * function instead.
  	 */
  	ret = context->methods->alloc(context, size, 0);
@@ -71,7 +71,7 @@
  	/* We expect OOM to be handled by the alloc function */
  	Assert(ret != NULL);
  	VALGRIND_MEMPOOL_ALLOC(context, ret, size);
-@@ -1391,6 +1413,9 @@
+@@ -1592,6 +1614,9 @@
  	context->isReset = false;
  
  	ret = context->methods->alloc(context, size, 0);
@@ -81,7 +81,7 @@
  
  	VALGRIND_MEMPOOL_ALLOC(context, ret, size);
  
-@@ -1412,6 +1437,9 @@
+@@ -1613,6 +1638,9 @@
  	context->isReset = false;
  
  	ret = context->methods->alloc(context, size, flags);
@@ -91,7 +91,7 @@
  	if (unlikely(ret == NULL))
  	{
  		return NULL;
-@@ -1560,8 +1588,17 @@
+@@ -1761,8 +1789,17 @@
  	MemoryContext context = GetMemoryChunkContext(pointer);
  #endif
  
@@ -109,7 +109,7 @@
  
  #ifdef USE_VALGRIND
  	if (method != MCTX_ALIGNED_REDIRECT_ID)
-@@ -1599,7 +1636,26 @@
+@@ -1800,7 +1837,26 @@
  	 * this call, consider making it the responsibility of the 'realloc'
  	 * function instead.
  	 */
@@ -136,7 +136,7 @@
  
  #ifdef USE_VALGRIND
  	if (method != MCTX_ALIGNED_REDIRECT_ID)
-@@ -1637,7 +1693,26 @@
+@@ -1838,7 +1894,26 @@
  	 * this call, consider making it the responsibility of the 'realloc'
  	 * function instead.
  	 */
@@ -163,7 +163,7 @@
  	if (unlikely(ret == NULL))
  		return NULL;
  
-@@ -1693,6 +1768,9 @@
+@@ -1894,6 +1969,9 @@
  	 * function instead.
  	 */
  	ret = context->methods->alloc(context, size, MCXT_ALLOC_HUGE);
