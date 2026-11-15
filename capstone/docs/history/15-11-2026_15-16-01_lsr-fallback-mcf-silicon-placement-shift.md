@@ -62,20 +62,41 @@ section shows why most bubbles hide: mcf is issue-stalled about 59 % of cycles (
 - **Loop:** 3 instructions, all 32-bit, 512 iterations. The head is placed at each offset mod 16 under
   `.option norelax`, and every address was checked in the ELF.
 - **Counters:** each arm reads mcycle and mhpmcounter3 programmed with event 15 (if_empty).
-- **Setup:** seed 1, the model of 062f4453b. instr_realign.sv is identical on every ref.
+- **Setup:** seed 1.
 
-| head offset mod 16 | cycles / iteration | if_empty / iteration |
-|---|---:|---:|
-| 0, 8, 12 | 4.0 | 1.0 |
-| 4, 6, 10, 14 | 5.0 | 2.0 |
-| 2 | 6.0 | 3.0 |
-| dependent DIV body, at 0 and at 2 | 5.61 | 0.0 |
+**RETRACTION (2026-11-15 18:25).** The first table below was measured on the shared checkout's model at 062f4453b,
+which is not the silicon's RTL. 062f4453b is not an ancestor of bitstream F (a948e4134) or G (9fd9d2530): 369 commits
+and 44 core files separate them. instr_realign.sv is identical on every ref, but the cost is not set by that file
+alone. Re-run on models built at F's and G's exact revisions:
+- separate worktrees;
+- Anvil regenerated and checked per run;
+- verFiles listing only each worktree's RTL;
+- provenance in perf/lgep/fgsim.
 
+| head offset mod 16 | F a948e4134: cycles / if_empty per iteration | G 9fd9d2530 | 062f4453b (first reading, withdrawn for F and G) |
+|---|---:|---:|---:|
+| 0, 4, 8, 12 | 4.04..4.06 / 1.03..1.04 | 4.06..4.09 / 1.04..1.08 | 4.0 / 1.0 at 0, 8, 12; 5.0 / 2.0 at 4 |
+| 2, 6, 10, 14 | 5.04..5.06 / 2.03..2.05 | 5.06..5.09 / 2.05..2.09 | 6.0 / 3.0 at 2; 5.0 / 2.0 at 6, 10, 14 |
+| dependent DIV body, at 0 and at 2 | 5.61 / 0.02..0.03 | 5.62..5.63 / 0.03..0.04 | 5.61 / 0.0 |
+
+On the silicon's RTL, a 32-bit head with bit 1 set costs exactly one fetch bubble per entry, and no other offset costs
+anything. Withdrawn for F and G:
+- the claim "the cost is a function of the offset, not only of bit 1";
+- the 4/12 and 2-mod-16 values.
+
+What stands:
+- the 2-mod-4 mechanism;
+- if_empty rising one for one with the penalty;
+- the stalled DIV body hiding it;
+- placement alone moving this loop by 25 %.
+
+The redirect count's "one bubble per redirect into 2 mod 4" is exactly F's rule, so the +2.07 G bound above stands as
+an upper bound. Addendum 137's bands are unaffected: they come from the measured +485 M, not from this test.
+
+The first reading, on 062f4453b:
 - The offset-0 arm, repeated last, reads 4.04.
-- Placement alone moves this loop by up to 50 %.
 - Event 15 rises one for one with the penalty.
 - A stalled backend hides the penalty completely.
-- The cost is a function of the offset, not only of bit 1. That is a second reason the 2-mod-4 count can only bound.
 
 The first version of the test lost one arm's pad to linker relaxation: its 2-mod-4 arm came out at 0 mod 4. That
 version was not pushed.
