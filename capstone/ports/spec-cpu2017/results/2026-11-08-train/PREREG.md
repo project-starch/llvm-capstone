@@ -4603,3 +4603,43 @@ What stands: the 2-mod-4 mechanism; if_empty tracking the penalty one for one; a
 cycles, not from the sim, and the one-bubble rule fits the redirect-count assumption behind them better than the
 withdrawn table did. The compiler lane's history note (capstone-loop-offset-gep 2285b1e55e3d) is corrected by its
 own commit on that branch.
+
+## Addendum 145 (2026-11-15 18:25 +08): spatial FRCDKMSspa3 on G, board 2: mcf, untuned gcc and full perl with the pool
+
+**Why.** The compiler lane released the spatial arm on 0012/0013 (FRCDKMSspa3, SDK perf/alean/sdksp13b). All 8 rows
+are twinned with outputs byte-identical to temporal a3, and every validation passes. Addendum 121 requires the spatial
+column to be re-measured before it changes.
+
+Board 2 is free after bo-b2, now that the nested heartbeat boot is cancelled. These rows run on G, adopted in
+Addendum 142, rather than F, because the table moves to G if G's tag-content gate passes. The gate's sim sweeps read
+0 mismatches; its silicon bare kit runs tonight.
+
+**If G's tag-content gate FAILS, these readings are void for the table.** They are then kept as G measurements only.
+
+**Stages** (perf/natstage; mk-native-stages.py, make-native-stage.py, then make-train-stage.sh from bkit75, as for
+temporal a3):
+
+| Stage | Binary (sha256 prefix) | Differs from the FRCDKMSsp stage in |
+|---|---|---|
+| board-frcdkmsspa3/505.mcf_r-native | mcf_r 17b2fa0b796e806e | binary and plan.json only |
+| board-frcdkmsspa3/502.gcc_r-train01-native | cpugcc_r 3d8bfb5a85a3371f | binary and plan.json, and run.sh is the untuned one (byte-identical to board-frcdkmssp-notune's, Addendum 135) |
+| board-frcdkmsspa3-full/500.perlbench_r-native | perlbench_r cdd368de816cb5c5 | binary and plan.json only |
+
+**Kits:**
+- bkit82 (G, standard HPM) for mcf and gcc;
+- bkit87 = bkit81 (dom kit, node_table_pool=4) with only the bitstream lines changed to G, for full perl.
+
+**Chains (nat-run3, board 2, after bo-b2):** bw-b2 runs mcf, then gcc; bx-b2 runs full perl.
+
+**Predictions.** Each is F's spatial reading × the measured factors. The pairs are cross-board against the board-1
+spatial readings (spread about 0.9 %).
+
+| Row | Prediction | Built from |
+|---|---|---|
+| mcf | 5,600 .. 5,760 s | F spatial 6,308.53 × G/F 0.901 × a3 about 1.00 |
+| gcc train01, untuned | 1,720 .. 1,790 s | F spatial tuned 1,975.51 × untuned 1.0067 × a3 0.9976 × G/F 0.884 |
+| perl full | 12,860 .. 13,270 s | F spatial 13,981.09 × pool 0.9897 × a3 0.9889 × G 0.94 .. 0.97 |
+
+For perl full, G's effect is unknown: makerand read -5.04 %, and test.pl is assumed -3 .. -6 %.
+
+specdiff PASS on all three, and arena_pin=N printed on gcc.
