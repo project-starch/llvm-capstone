@@ -111,7 +111,7 @@ Recorded limits (claim-auditor, 2026-11-15), both excluded by the protocol:
 Order (amended 2026-11-15, after the sweep): the synthesis-only gate is requested on d83d3a633 now, because it builds no
 bitstream and its keys are above. The full build (key 5) waits until the board pre-registration below has been pushed.
 
-## Board pre-registration (PENDING the event-23 counts, before the full build)
+## Board pre-registration (written 2026-11-15 before the full build; event-23 rows from G, runtime Addendum 143)
 
 - **Pairs, one bitstream:**
   - A = trial on the flat kit against G on the flat kit (the null control);
@@ -127,10 +127,66 @@ bitstream and its keys are above. The full build (key 5) waits until the board p
 | perl makerand | 921 | 141 | 1,974 | 8 | 0 |
 
 - Per-op record accesses through the walker: CDERIVE 9-10 and CREVOKE 11, of which 2-3 are header slots (no TLB).
-- Formula: paging cost per row = N_acc x 1 (the registered lookup) + walks x 3 x c_dir + grows x (escape + 64 KiB zero-fill
-  + resume).
-  - N_acc = about 10 x (CDERIVE + CREVOKE) + the verdict-cache-miss reads (event 23, the board's G run tonight);
-  - walks = m x N_acc for the non-header share;
-  - c_dir is 4-8 cycles on an L1D hit and 25-40 to the MIG.
-  - Events 30 and 31 read the two cost terms directly, so the pre-registration also states a self-consistency band:
-    pair B's run_cycles delta against ev30 + ev31.
+- **Each verdict-cache miss costs exactly one record read** (by source, d83d3a633).
+  - The LSU's miss probe calls `get_rev_node` once (`capstone_rev_node.anvil:809-817`). That is one `read_req` at the
+    node index, which is always >= 2 (`:232-238`).
+  - Commit replays the marked access once its probe has resolved (`commit_stage.sv:907-912`; ev23 counts these replays).
+  - So ev31 (paged record accesses) = ev23 + 6-8 x CDERIVE + 8-9 x CREVOKE. These are the per-op record accesses from
+    the walker trace, minus the 2-3 header slots per op. Header slots pass through LOOK and pay k, but they are not
+    counted in ev31.
+  - Every paged access, header slots included, is A = ev23 + 9-10 x CDERIVE + 11 x CREVOKE.
+- **Cost per access, by source and trace** (corrects the first draft's "x 1" and "4-8 cycles"):
+  - **k = 2 cycles per paged access on a record-TLB hit.** In bypass mode a request is presented and granted in the IDLE
+    cycle. In paged mode it goes IDLE -> LOOK -> ISSUE and is presented at ISSUE (`ex_stage.sv:2005-2013`, `:1970`,
+    `:2198`). The probe pays this, and so does every header access.
+  - **Walk, directories L1D-hot: about 7 cycles more.** That is three dependent levels at 2 cycles each, plus the
+    LOOK -> WALK cycle. The trace is va-runv-grow, `pwall2`: levels at 84,853 / 84,855 / 84,857.
+  - **Walk, directories missing L1D: + 3 x c_mig.** The first walk in that trace took 216 / 93 / 53 cycles per level.
+    That is sim memory delay, not silicon. The bracket assumes c_mig of 25-40 cycles on silicon; this is an assumption and not a measurement. ev30 / ev29 reads the real figure.
+  - **m, the walk fraction, is not predicted. Pair B reads it** as ev29 / ev31.
+    - The TLB covers 16 x 256 = 4,096 slots.
+    - Uniform use of mcf's ~33 record pages would give m ~ 0.5. That is reported, not graded.
+  - Grows (mcf 2, gcc ~17): each is one escape, a 64 KiB zero-fill and a resume. That is under 0.1 M cycles per grow,
+    negligible against the terms above.
+- **Brackets, Delta run_cycles of pair B (paged - flat on the trial)**, from G's Addendum 143 rows (bv-b1, board 1,
+  kit bkit86, exact end - begin):
+
+| row | ev23 | run_cycles | m = 0 (k only) | m = 1, dirs hot | m = 1, dirs to MIG (25-40) |
+|---|---|---|---|---|---|
+| mcf | 180,614,513 | 144,015,279,285 | +0.36 G (+0.25 %) | +1.63-1.64 G (+1.13-1.14 %) | +15.2-23.4 G (+10.6-16.3 %) |
+| gcc train01 | 6,409,096 | 41,536,277,321 | +0.06 G (+0.13-0.14 %) | +0.20-0.23 G (+0.49-0.55 %) | +1.80-3.16 G (+4.3-7.6 %) |
+| perl makerand | 30,296 | 6,755,758,710 | +0.08 M (+0.001 %) | +0.35 M (+0.005 %) | +3.1-5.0 M (+0.05-0.07 %) |
+
+  - The brackets come from k x A + walk x R.
+    - mcf's op traffic is about 0.7 % of ev23, so its cost is the verdict-cache misses.
+    - gcc's op traffic is about 15-18 M record accesses, 2.3-2.8 x its ev23, so its cost is the capability ops.
+  - Predicted ev31:
+
+    | row | ev31 | graded band (0.9 x low .. 1.1 x high) |
+    |---|---|---|
+    | mcf | 181.46-181.64 M | 163.3-199.8 M |
+    | gcc | 21.23-24.45 M | 19.1-26.9 M |
+    | perl | 36,950-38,933 | 33,255-42,826 |
+  - Computed with k = 2, a hot walk of 7 cycles, and 3 x 25-40 cycles for a walk to the MIG.
+  - perl makerand is the NULL row. Its 8 record pages fit in the 16-entry TLB, so after the first walks m is about 0,
+    and every bracket sits inside the 0.2 % run noise. Its Delta run_cycles must read within 0.2 %.
+    - Each namespace flush empties the record TLB, so ev29 is at most 8 x the context entries.
+    - perl has 1,140 runs, so ev29 is a few thousand or more; the count is reported.
+    - For mcf the same refill term is at most 33 x 48,930 runs, about 1.6 M walks, under 1 % of its ev31.
+  - The m = 1 columns are bounds on the record traffic, not expectations. gcc's ops allocate near next-unused, so their
+    walks should be rarer than its verdict misses.
+- **Graded on the board (pair B):**
+  1. ev31 lies in its row's graded band, recomputed with ev23 from pair B's own paged run. The op counts come from the
+     twin census. A reading outside the band means the walker's view of the traffic differs from the source reading, and the bracket
+     does not apply.
+  2. Self-consistency: Delta run_cycles is within 0.2 % of run_cycles + 25 % of (2 x ev31 + ev30 + ev29). The paged
+     run's events 29/30/31 are used.
+     - The replay waits for its probe, so the walker's latency is on the critical path, fully exposed.
+     - The 25 % covers second-order terms the counters cannot see: directory lines evicting program data, and header
+       accesses. Header accesses are A - ev31, at 2 cycles each; on gcc that is at most about 13 M cycles.
+     - A miss outside the band means the cost model is wrong, and it is reported as such.
+  3. Delta run_cycles lies inside its row's [m = 0, m = 1 to MIG at 40] bracket, widened by 0.2 % of run_cycles of run
+     noise on each side.
+- **Reported, not graded:** m = ev29 / ev31, cycles per walk = ev30 / ev29, ev32 (expected 0), and ev33 (= grows).
+- **Pair A (trial flat vs G flat):** the run_cycles delta is within 0.2 %. The only added work is one probe per
+  namespace flush.
