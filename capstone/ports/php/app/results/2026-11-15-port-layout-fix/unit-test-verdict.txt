@@ -1,0 +1,72 @@
+PASS new-geometry: want GEOMETRY_PASS, exit 0; got exit 0 cause=None
+PASS old-geometry: want GEOMETRY_FAIL (negative control); got exit 1 cause=None
+PASS new-realloc: want REALLOC_PASS, exit 0; got exit 0 cause=None
+PASS old-realloc: want REALLOC_FAIL (negative control); got exit 1 cause=None
+PASS new-stale-realloc: want in place, then cause 25; got signal 11 cause=25
+PASS old-stale-realloc: want cause 25; got signal 11 cause=25
+PASS new-stale-free: want cause 25; got signal 11 cause=25
+PASS old-stale-free: want cause 25; got signal 11 cause=25
+PASS new-bound: want cause 28; got signal 11 cause=28
+PASS new-big: want BIG_PASS, exit 0; got exit 0 cause=None
+PASS new-stale-big: want cause 25; got signal 11 cause=25
+  new-big: BIG n=20000 slack=16
+  new-big: BIG n=40000 slack=16 inplace=0
+  new-big: BIG n=70000 slack=80 inplace=0
+  new-big: BIG n=140000 slack=208 inplace=0
+  new-big: BIG n=20000 slack=16 inplace=0
+  new-big: BIG_PASS
+  new-bound: BOUND_READY reading index 104 of a 104-byte bound
+  new-geometry: GEOMETRY small=2046 equal=2046 differ=0 zero_request=49
+  new-geometry: GEOMETRY big n=16376 php_request=16424 request=16448 slack=16 payload_aligned=1
+  new-geometry: GEOMETRY big n=16384 php_request=16432 request=16448 slack=16 payload_aligned=1
+  new-geometry: GEOMETRY big n=16400 php_request=16448 request=16480 slack=16 payload_aligned=1
+  new-geometry: GEOMETRY big n=20000 php_request=20048 request=20064 slack=16 payload_aligned=1
+  new-geometry: GEOMETRY big n=32760 php_request=32808 request=32832 slack=16 payload_aligned=1
+  new-geometry: GEOMETRY big n=32768 php_request=32816 request=32832 slack=16 payload_aligned=1
+  new-geometry: GEOMETRY big n=40000 php_request=40048 request=40064 slack=16 payload_aligned=1
+  new-geometry: GEOMETRY big n=65488 php_request=65536 request=65664 slack=80 payload_aligned=1
+  new-geometry: GEOMETRY big n=65536 php_request=65584 request=65664 slack=80 payload_aligned=1
+  new-geometry: GEOMETRY big n=70000 php_request=70048 request=70144 slack=80 payload_aligned=1
+  new-geometry: GEOMETRY big n=131072 php_request=131120 request=131328 slack=208 payload_aligned=1
+  new-geometry: GEOMETRY big n=140000 php_request=140048 request=140288 slack=208 payload_aligned=1
+  new-geometry: GEOMETRY big n=300000 php_request=300048 request=300544 slack=464 payload_aligned=1
+  new-geometry: GEOMETRY_PASS
+  new-realloc: REALLOC steps=363 realloc_calls=363 stock_request=363 inplace=346 moved=17 malloc_calls=0 free_calls=0 contents_kept=363
+  new-realloc: REALLOC_PASS
+  new-stale-big: BIG n=20000 slack=16
+  new-stale-big: BIG n=40000 slack=16 inplace=0
+  new-stale-big: BIG n=70000 slack=80 inplace=0
+  new-stale-big: STALE_BIG_READY reading the pointer from before the slack change
+  new-stale-free: STALE_FREE_READY
+  new-stale-realloc: STALE_REALLOC_READY inplace=1
+  old-big: BIG n=20000 slack=16
+  old-big: BIG n=40000 slack=16 inplace=0
+  old-big: BIG n=70000 slack=80 inplace=0
+  old-big: BIG n=140000 slack=208 inplace=0
+  old-big: BIG n=20000 slack=16 inplace=0
+  old-big: BIG_PASS
+  old-bound: BOUND_READY reading index 104 of a 104-byte bound
+  old-geometry: GEOMETRY small=2046 equal=0 differ=2046 zero_request=80
+  old-geometry: GEOMETRY big n=16376 php_request=16424 request=16464 slack=16 payload_aligned=1
+  old-geometry: GEOMETRY big n=16384 php_request=16432 request=16464 slack=16 payload_aligned=1
+  old-geometry: GEOMETRY big n=16400 php_request=16448 request=16496 slack=16 payload_aligned=1
+  old-geometry: GEOMETRY big n=20000 php_request=20048 request=20080 slack=16 payload_aligned=1
+  old-geometry: GEOMETRY big n=32760 php_request=32808 request=32880 slack=16 payload_aligned=1
+  old-geometry: GEOMETRY big n=32768 php_request=32816 request=32880 slack=16 payload_aligned=1
+  old-geometry: GEOMETRY big n=40000 php_request=40048 request=40112 slack=16 payload_aligned=1
+  old-geometry: GEOMETRY big n=65488 php_request=65536 request=65712 slack=80 payload_aligned=1
+  old-geometry: GEOMETRY big n=65536 php_request=65584 request=65712 slack=80 payload_aligned=1
+  old-geometry: GEOMETRY big n=70000 php_request=70048 request=70192 slack=80 payload_aligned=1
+  old-geometry: GEOMETRY big n=131072 php_request=131120 request=131376 slack=208 payload_aligned=1
+  old-geometry: GEOMETRY big n=140000 php_request=140048 request=140336 slack=208 payload_aligned=1
+  old-geometry: GEOMETRY big n=300000 php_request=300048 request=300592 slack=464 payload_aligned=1
+  old-geometry: GEOMETRY_FAIL first n=8: the layer did not pass PHP's request to malloc
+  old-realloc: REALLOC steps=363 realloc_calls=0 stock_request=0 inplace=0 moved=363 malloc_calls=363 free_calls=363 contents_kept=363
+  old-realloc: REALLOC_FAIL: erealloc did not realloc the block with PHP's request
+  old-stale-big: BIG n=20000 slack=16
+  old-stale-big: BIG n=40000 slack=16 inplace=0
+  old-stale-big: BIG n=70000 slack=80 inplace=0
+  old-stale-big: STALE_BIG_READY reading the pointer from before the slack change
+  old-stale-free: STALE_FREE_READY
+  old-stale-realloc: STALE_REALLOC_READY inplace=0
+UNIT TEST PASS
