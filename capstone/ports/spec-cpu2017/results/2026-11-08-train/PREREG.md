@@ -4309,3 +4309,41 @@ Their prediction: B or C.
 - the smoke passes, 9/9;
 - at least one @@HB beat before SPEC-BEGIN, during the unpack, which is the heartbeat's positive control. Without it,
   the boot is not read.
+
+## Addendum 135 (2026-11-15 14:26 +08): Addendum 131 read: the gcc tuning was arena_pin alone, and it is worth 0.67 %; the gcc cells become no-tune
+
+**Reading (bl-b1, board 1, F, bkit75).** FRCDKMS gcc train01 with no parameter writes: 2,002.68 s, specdiff 1/1
+PASS, smoke 9/9. The run printed `@@AP arena_pin=N`. The tuned control on the same board, bitstream and kit was
+1,989.28 s, with repeats 1,990.13 and 1,992.35. No-tune is +0.67 % slower than the control, inside the predicted
+0 .. +5 % and beyond the 0.15 % same-board spread. Under Addendum 131's reporting rule:
+- the temporal gcc cell becomes 2,002.68 / 1,722.35 = **1.163**;
+- the tuned 1.155 is shown beside it as disclosed tuning.
+
+**Correction to Addenda 69, 116 and 131: what the tuning was on F.** Those addenda describe three parameter writes.
+On the F kits, the kernel tree k2n-native-hpm has no `step_budget_ns`, `resume_quantum` or `retire_exit_sweep`
+parameter. In the board.txt of every F gcc run read (out-nat-twcf-hpm-frcdkms-b1, out-nat-twcf-hpmtag-frcdkms-b1,
+and this run):
+- each read of those parameters prints `can't open ... No such file or directory`;
+- each write prints `can't create ... Permission denied`;
+- `@@MX-SET` prints empty values.
+
+Only `arena_pin=1` took effect, and the tuned runs print `@@AP arena_pin=Y`. So the 0.67 % is the effect of arena_pin
+alone. The QEMU twins of the perl kernel census ran on a different kernel, and this correction says nothing about
+them.
+
+**Spatial gcc becomes no-tune too.** The spatial cell, 1,975.51 s, was tuned the same way (arena_pin only), so the
+table would otherwise mix configurations within the gcc row.
+
+**Run (chain bq-b3, nat-run3, board 3, after bk-b3).** Spatial FRCDKMSsp gcc train01 on F, bkit75, stage
+board-frcdkmssp-notune.
+- The stage is a copy of the spatial gcc stage. Only train/run.sh differs, and it is byte-identical to the temporal
+  no-tune run.sh: the two writes are removed, and the `@@AP` read-back is kept.
+- Board 3 is the riscv-base gcc board (1,722.35 s), so the spatial ratio is same-board. The pair with spatial tuned
+  (board 1) is cross-board.
+
+**Predictions:**
+- specdiff 1/1, `@@AP arena_pin=N`;
+- 1,975 .. 2,010 s, i.e. the tuned figure plus 0.67 %, with the ~0.9 % cross-board spread on either side;
+- ratio 1.147 .. 1.167.
+
+Until it lands, the spatial gcc cell is marked "tuned (arena_pin), no-tune pending".
