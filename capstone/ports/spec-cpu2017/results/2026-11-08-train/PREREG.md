@@ -4675,3 +4675,25 @@ final configuration: FRCDKMSa3 with riscv-base RVAL; the node-table pool; gcc un
 The temporal G rows are on FRCDKMS, not a3, so they are re-measured. The full table re-measure, and the choice of
 baseline (stock riscv-base, or a riscv-base with Capstone's I-cache and DTLB), are the lead's decisions, which are
 pending.
+
+## Addendum 147 (2026-11-15 23:12 +08): the lead's decisions: stock CVA6 is the baseline; the final table is measured once, on the Phase 1 bitstream
+
+**Baseline (the lead, 2026-11-15).** riscv-base stays the vanilla CVA6 (caplifive_rvbase_d31345cf3: I$ 16 KiB 4-way,
+DTLB 16 entries), with no cache-matched variant. The configuration difference against Capstone (I$ 32 KiB 8-way,
+DTLB 64) is disclosed beside the table.
+
+The compiler lane's L1 model estimates that the I-cache difference alone is worth about 7-12 % of riscv-base perl's
+cycles (test.pl). The miss penalty in that estimate is inferred, not measured.
+
+The same 16 KiB 4-way I-cache makes riscv-base perl's makerand sensitive to code layout: RVAL drew a 2-set conflict,
++3.5 %, which a pad-4080 relink removes in the model. That is disclosed with the RVAL row.
+
+**When the table is re-measured.** Not now on G. G's rows (Addenda 142-146) are kept as readings. The final table is
+measured once, on the Phase 1 bitstream: G plus the paged lifetime table with dynamic growth, plan 2ebd664b3ff6 and
+61bef61363a6. The final configuration is:
+- paged kit (table_tree module, llvm-capstone table-tree 722416c35e77);
+- FRCDKMSa3 with riscv-base RVAL;
+- the node-table pool;
+- gcc untuned.
+
+It runs after Phase 1's pairs A and B (land/rtl-sublet-p1 2796b81618d8) read.
