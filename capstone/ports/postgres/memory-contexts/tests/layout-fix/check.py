@@ -18,7 +18,7 @@ log = Path(sys.argv[1]).read_text().replace('\r', '')
 
 
 def segment(arm, mode):
-    m = re.search(rf'^.*TRAPTEST: begin {arm} {mode}\n(.*?)^.*TRAPTEST: end {arm} {mode} status (\d+)$',
+    m = re.search(rf'^[^\n]*TRAPTEST: begin {arm} {mode}\n(.*?)^[^\n]*TRAPTEST: end {arm} {mode} status (\d+)$',
                   log, re.M | re.S)
     assert m, f'{arm} {mode}: no reading'
     return m.group(1), int(m.group(2))
