@@ -1,0 +1,83 @@
+Reuse-distance hooks for PHP 5.0.0's Zend allocator (docs/plans/2026-11-15-php-reuse-distance.md).
+Every hook is behind EXP_REUSE_GAP: without it the five macros expand to nothing. The hooks
+record the block header, the address Zend itself works with, at _emalloc's two hand-outs
+(AG(cache) and malloc), _efree, _efree's free to malloc, a successful _erealloc and request
+shutdown's frees. They sit away from the nested layer's seven substitutions, whose patch still
+applies to the hooked file at fuzz 0 (build.sh checks it).
+
+--- a/Zend/zend_alloc.c
++++ b/Zend/zend_alloc.c
+@@ -31,6 +31,17 @@
+ #endif
+ 
+ #include "zend_mm.h"
++
++#ifdef EXP_REUSE_GAP
++/* The reuse-distance observers (capstone/docs/plans/2026-11-15-php-reuse-distance.md). */
++# include "php-reuse-gap.h"
++#else
++# define REUSE_GAP_PHP_ISSUE(p, size, fresh)
++# define REUSE_GAP_PHP_RELEASE(p, size)
++# define REUSE_GAP_PHP_DROP(size)
++# define REUSE_GAP_PHP_SHUTDOWN_FREE(p, size)
++# define REUSE_GAP_PHP_REALLOC(old, p, oldsize, newsize)
++#endif
+ 
+ #ifndef ZTS
+ ZEND_API zend_alloc_globals alloc_globals;
+@@ -150,6 +161,7 @@
+ #if !ZEND_DISABLE_MEMORY_CACHE
+ 	if ((CACHE_INDEX < MAX_CACHED_MEMORY) && (AG(cache_count)[CACHE_INDEX] > 0)) {
+ 		p = AG(cache)[CACHE_INDEX][--AG(cache_count)[CACHE_INDEX]];
++		REUSE_GAP_PHP_ISSUE(p, size, 0);
+ #if ZEND_DEBUG
+ 		p->filename = __zend_filename;
+ 		p->lineno = __zend_lineno;
+@@ -199,6 +211,7 @@
+ 	p->cached = 0;
+ 	ADD_POINTER_TO_LIST(p);
+ 	p->size = size; /* Save real size for correct cache output */
++	REUSE_GAP_PHP_ISSUE(p, size, 1);
+ #if ZEND_DEBUG
+ 	p->filename = __zend_filename;
+ 	p->lineno = __zend_lineno;
+@@ -261,6 +274,7 @@
+ #endif
+ 
+ 	CALCULATE_REAL_SIZE_AND_CACHE_INDEX(p->size);
++	REUSE_GAP_PHP_RELEASE(p, p->size);
+ #if ZEND_DEBUG
+ 	if (!_mem_block_check(ptr, 1 ZEND_FILE_LINE_RELAY_CC ZEND_FILE_LINE_ORIG_RELAY_CC)) {
+ 		return;
+@@ -284,6 +298,7 @@
+ 	AG(allocated_memory) -= SIZE;
+ #endif
+ 	
++	REUSE_GAP_PHP_DROP(p->size);
+ 	ZEND_DO_FREE(p);
+ 	HANDLE_UNBLOCK_INTERRUPTIONS();
+ }
+@@ -357,6 +372,7 @@
+ 		return (void *)NULL;
+ 	}
+ 	ADD_POINTER_TO_LIST(p);
++	REUSE_GAP_PHP_REALLOC(orig, p, p->size, size);
+ #if ZEND_DEBUG
+ 	p->filename = __zend_filename;
+ 	p->lineno = __zend_lineno;
+@@ -488,6 +504,7 @@
+ 				AG(allocated_memory) -= REAL_SIZE(ptr->size);
+ #  endif
+ 				REMOVE_POINTER_FROM_LIST(ptr);
++				REUSE_GAP_PHP_DROP(ptr->size);
+ 				ZEND_DO_FREE(ptr);
+ 			}
+ 			AG(cache_count)[i] = 0;
+@@ -561,6 +578,7 @@
+ #endif
+ 			p = t->pNext;
+ 			REMOVE_POINTER_FROM_LIST(t);
++			REUSE_GAP_PHP_SHUTDOWN_FREE(t, t->size);
+ 			ZEND_DO_FREE(t);
+ 			t = p;
+ 		} else {
