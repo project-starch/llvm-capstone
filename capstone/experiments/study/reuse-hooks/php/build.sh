@@ -14,7 +14,7 @@
 #    ROOT/uninstrumented.dom.
 # 2. The hook patch (zend-alloc-reuse-gap.patch, fuzz 0) and the three headers into the
 #    prepared tree's Zend/, then a check that the nested layer's patch still applies to the
-#    hooked zend_alloc.c at fuzz 0, then the port's realphp build again over the same SDK with
+#    hooked zend_alloc.c at fuzz 0 and without offset, then the port's realphp build again over the same SDK with
 #    EXTRA_CF=-DEXP_REUSE_GAP. The protected image is built without a default arm, so every run
 #    names its PHP_CAP_MODE. The image is ROOT/php.dom.
 # 3. Checks that fail the build: the instrumented image defines the five hook functions and the
@@ -71,6 +71,9 @@ rm -rf "$ROOT/nested-check" && mkdir -p "$ROOT/nested-check/Zend"
 cp "$P/Zend/zend_alloc.c" "$ROOT/nested-check/Zend/"
 patch -d "$ROOT/nested-check" -p1 --batch --fuzz=0 < "$NESTED_PATCH" > "$ROOT/nested-check.log" \
   || { echo "the nested layer's patch does not apply to the hooked zend_alloc.c at fuzz 0" >&2; exit 1; }
+# An offset would make GNU patch leave zend_alloc.c.orig in the port's overlay, which refuses it.
+! grep -q 'offset\|fuzz' "$ROOT/nested-check.log" \
+  || { echo "the nested layer's patch applies to the hooked zend_alloc.c only with an offset" >&2; exit 1; }
 PHP_SRC=$P PHP_VIRTUAL_OUT=$ROOT PHP_REALPHP_ALLOC=$ALLOC EXTRA_CF=-DEXP_REUSE_GAP \
   CAPSTONE_APPLICATION_PROFILE=virtual MUSL_CACHE_ROOT=$ROOT/musl-src \
   bash "$R/capstone/ports/php/app/build-virtual.sh" realphp > "$ROOT/build-2.log" 2>&1

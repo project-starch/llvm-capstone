@@ -1,7 +1,8 @@
 /* The reuse-distance observers of PHP 5.0.0's Zend allocator
- * (docs/plans/2026-11-15-php-reuse-distance.md). Included by Zend/zend_alloc.c, after
- * zend_alloc.h, only under EXP_REUSE_GAP; the build wrapper copies this file,
- * reuse-gap-hook.h and experiments/study/reuse-gap-observer.h into Zend/.
+ * (docs/plans/2026-11-15-php-reuse-distance.md). Included by the hooked Zend/zend_alloc.c, after
+ * zend_alloc.h; without EXP_REUSE_GAP it defines the five hook macros as nothing and the file
+ * compiles as before. The build wrapper copies this file, reuse-gap-hook.h and
+ * experiments/study/reuse-gap-observer.h into Zend/.
  *
  * Two boundaries, told apart by the size class Zend itself computes (REAL_SIZE, cache_index):
  *
@@ -29,6 +30,14 @@
  * new block's boundary; shutdown_releases: blocks request shutdown freed without an _efree. */
 #ifndef PHP_REUSE_GAP_H
 #define PHP_REUSE_GAP_H
+
+#ifndef EXP_REUSE_GAP
+# define REUSE_GAP_PHP_ISSUE(p, size, fresh)
+# define REUSE_GAP_PHP_RELEASE(p, size)
+# define REUSE_GAP_PHP_DROP(size)
+# define REUSE_GAP_PHP_SHUTDOWN_FREE(p, size)
+# define REUSE_GAP_PHP_REALLOC(old, p, oldsize, newsize)
+#else
 
 #include "reuse-gap-hook.h"
 
@@ -144,4 +153,5 @@ static __attribute__((noinline)) void php_reuse_gap_realloc(const void *old, con
 #define REUSE_GAP_PHP_REALLOC(old, p, oldsize, newsize) \
   php_reuse_gap_realloc((old), (p), (oldsize), (newsize))
 
+#endif /* EXP_REUSE_GAP */
 #endif
