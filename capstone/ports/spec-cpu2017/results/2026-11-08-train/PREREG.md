@@ -4192,3 +4192,62 @@ by more than the same-board spread (0.15 %), the gcc cell becomes the no-tune va
 configuration), and the tuned value is shown beside it as disclosed tuning. If it is within the spread, the cell is
 unchanged and the note says the tuning has no measurable effect. Whether tuned figures may appear in the paper at all is
 the lead's call.
+
+## Addendum 132 (2026-11-15 12:16 +08, before it runs): bitstream G (tag-transaction overlap, v6c) on board 1 against F
+
+**Bitstream G.**
+- Name: `caplifive_…-twc16k-merge-f2-hpmtag-lrscfix-tagoverlap6c_9fd9d2530`, 11,443,722 B, sha256 35e1fea5….
+- Sealed by the board lane, sha recomputed here, PROVENANCE HEAD 9fd9d25305e3.
+- Contents: F2 (eeb654104, F + targeted fill invalidation) plus the rtl lane's tag-overlap lever v6c:
+  - a patched axi_demux holds data-class AWs, and the I$/D$ read pair, exactly as the MaxTrans-1 reference demux did;
+  - tag transactions get concurrency (MaxTrans 4);
+  - a patched axi_riscv_lrsc;
+  - the adapter file is byte-identical to the reference's.
+- Full-build keys against eeb654104: routed clean, 0 loops, congestion 4, WNS -9.107 ns (reference -12.229), placed
+  LUT 188,525 (+430).
+- Record: llvm-capstone land/rtl-twc-reach, 250cbde98efc and the history before it.
+
+**Neutrality gates passed in simulation (v6c):**
+- plain code identical to the reference to the cycle on the unmarked mix, cold-I$ (both memories) and rv64ua (both
+  memories);
+- AR-start sequences identical, with the mutant differing;
+- the AMO/younger-load race arm: the load reads after the AMO's write on v6c and on the reference, and stale on both
+  mutants;
+- equivalence at TXNS=1: 92/92;
+- the 95-sweep at TXNS=4: all end lines equal, 29 tests faster, none slower;
+- the tag-order check: 0 violations, its control firing.
+
+**Disclosed limits:**
+- a tag read waits behind an in-flight I$ read (the reference's rule), so gcc's tag gain is an upper bound;
+- F2's fill invalidation is unmeasured on silicon and predicted to contribute 0;
+- v6's AMO-R×I$ residue is gone in v6c, by construction.
+
+**Kits.** bkit82 is bkit75 and bkit83 is bkit76 (tag-path HPM), each with only BOARD_BITSTREAM and its sha changed:
+`diff -r` shows board.env alone, and SHA256SUMS was regenerated for that one line.
+
+**Runs on board 1**, after the no-tune gcc (bl-b1). The chain flashes G: sha checked against the seal, read back after.
+F stays in the store as the known-good fallback.
+- bm-b1 (bkit83): FRCDKMS mcf, then gcc train01;
+- bn-b1 (bkit82): FRCDKMS perl makerand.
+
+Controls: F on board 1, same images.
+- mcf: 6,581.38 s on bkit76 (6,576.13 s on bkit75).
+- gcc: 1,990.13 s on bkit76 (1,989.28 s on bkit75).
+- perl makerand: 288.58 s.
+
+**Predictions** (the rtl lane's, 0.4-0.9 of the registered ceilings × kept(ii)):
+
+| row | time | change against F |
+|---|---|---|
+| mcf | 6,245-6,430 s | -2.3 .. -5.1 % |
+| gcc train01 | 1,799-1,905 s | -4.3 .. -9.6 % |
+| perl makerand | report only | — |
+
+- Generic part: zero. A gcc reading faster than its band is not credited to the lever until its mechanism is shown.
+- Tag-path HPM: ev24, ev25, ev26 and ev27 unchanged within ±1 %. ev28 falls and under-counts, so it is read only with
+  run_cycles.
+- specdiff PASS on every row.
+
+**Adoption rule.** G becomes the table's Capstone bitstream if mcf and gcc both improve beyond the same-board spread
+(0.15 %), with outputs passing and no prediction missed on the slow side. All eight temporal rows and the spatial rows
+are then re-measured on G before any table cell changes. F's cells stand until then.
