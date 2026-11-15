@@ -4792,3 +4792,26 @@ The board lane found it. The withdrawal is recorded at land/rtl-sublet-p1 96092a
 **What still stands:** the WNS-setting paths (ranks 1-260, cur_idx_q and cpmp_q → fu_data_q) do not pass through
 the walker, and their loss is net delay. Addendum 149's rules are unchanged: pair A is the functional gate, and every
 P1 reading carries "key 5 NOT MET".
+
+## Addendum 151 (2026-11-16 02:14 +08): pair A passed; a B-paged replicate on board 1, for information only
+
+**Pair A, read and graded by the rtl lane's script** (land/rtl-sublet-p1 eb17212f4633, pa-check.py, negative-tested):
+P1 against G on bkit86, board 1.
+
+| Row | run_cycles | Outputs |
+|---|---|---|
+| mcf | +0.054 % | byte-identical to G's |
+| gcc | +0.055 % | byte-identical to G's |
+| perl makerand | -0.039 % | byte-identical to G's |
+
+All three are inside ±0.2 %. The smoke is 9/9 on all, and the traps are identical. The kits differ, at the byte level,
+only by the initramfs mtimes, the version stamp, and a shift of what is linked after the initramfs. Every reading
+carries "key 5 NOT MET".
+
+Under Addendum 149, pair B may now be graded.
+
+**Replicate.** Chain cb-b1 (nat-run3, board 1, now) runs B-paged's exact kit (bkit90) and stages on board 1. It is
+graded as information only, never as pair B: pair B stays the same-board pair bz-b3 / ca-b3 on board 3. The
+replicate puts the paged and growing table on silicon about 3 h earlier, so a functional failure of the paged arm
+would show sooner. Its checks are pair B's: table_tree = 1, grow_loops = 0, tree_check_failures = 0, no "table tree
+check FAILED" line, specdiff and identical outputs.
