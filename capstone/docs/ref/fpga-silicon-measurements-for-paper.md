@@ -7814,8 +7814,9 @@ the key set at 4b17ec214618 and 025d3e33c97b, v6c's pre-registration at 18a1cf1c
 
 ## The paged-table walker on synthesis: its synthesis-only gate and its routed build (d83d3a633 against v6c 9fd9d2530, board lane, apollo, 2026-11-15)
 
-These are build records only. The bitstream has not been flashed or read on silicon. The keys, the predictions and
-the board pre-registration are rtl's, in `capstone/docs/plans/2026-11-15-sublet-phase1-paged-table.md` on llvm-capstone
+This section is recorded from the build (2026-11-15). Silicon readings of this bitstream, if any, are in the runtime
+lane's Addenda 148-149 (spec-silicon, `capstone/ports/spec-cpu2017/results/2026-11-08-train/PREREG.md`). The keys, the
+predictions and the board pre-registration are the RTL lane's, in `capstone/docs/plans/2026-11-15-sublet-phase1-paged-table.md` on llvm-capstone
 `land/rtl-sublet-p1`:
 - the synthesis-gate keys at 536c022d8611 and 028f8b181660;
 - the board pre-registration at 2796b81618d8, pushed before the full build;
@@ -7853,6 +7854,8 @@ The reference G is v6c (capstone-ariane 9fd9d2530): its own synthesis-only gate 
     - placed LUT 187,368 (−1,157), FF 76,543 (+1,103), slices 50,800 / 99.71 % (+115);
     - router effective congestion max 5 against G's 4;
     - two Route 35-447 warnings against G's 0, where the router put completing the route ahead of timing;
+    - design_analysis's initial estimated router congestion: North and South Long at level 6, over 20.3 % / 20.4 % of
+      tiles, against G's worst, East Short at level 5 over 12.2 %;
     - TNS −201,219 against −77,207, and failing endpoints 47,712 against 23,259.
   - Identity: `caplifive_ids55-native-tagcache-mlp-fpieee-hpmreplay-dynbypass3-dtlb64-shrinkfix-ic32k-r72-stcnoclaim-twc16k-merge-f2-hpmtag-lrscfix-tagoverlap6c-pagedtbl_d83d3a633.bit`,
     11,443,722 B, sha256 `dc411e36fc5e68ae8e8ab5193abfdfd7fee85cfd299183f283b7cee83e4a1a40`. The tarball's .bit is
@@ -7873,9 +7876,20 @@ The reference G is v6c (capstone-ariane 9fd9d2530): its own synthesis-only gate 
   - The comparison by identical pins could not run. 148 of the walker path's 224 pins, and 155 of G's 234, do not
     exist by name in the other netlist, because synthesis numbers the LUTs differently. So the rows above match start
     and end pins, not cells.
-  - **0 of the walker build's 500 worst paths touch a walker cell.** The positive control, paths touching i_cva6,
-    reads 500, and the negative reads 0. The walker-name pattern has no positive control of its own; the runtime
-    lane's separate count from the timing report also reads 0.
+  - **RETRACTED (2026-11-15): "0 of the 500 worst paths touch a walker cell" said nothing about walker logic.** Both
+    counts matched cell names only: this lane's `ex_stage_i/...(pw_|rv_rd_res)` over the cells of each path, and the
+    RTL lane's script over `worst_500_paths.rpt`, whose control (paths touching `fu_data_q`) reads 389. Neither had a
+    walker-logic positive control. Searching the same report for the walker commit's new signal finds it:
+    - **39 of the 500 worst paths run through `ex_stage_i/rev_node/rv_rd_res[data_rvalid]`.** That is the walker's new
+      response view into rev_node (`core/ex_stage.sv:1657-1658` at d83d3a633; absent at 9fd9d2530), a net with fanout 129.
+    - All 39 start at csr `cpmp_q_reg[5][comp_metadata][bounds][bE][1]` and pass the D$ port-2 controller. The net is
+      driven by one LUT, `gen_rd_ports[2].i_wt_dcache_ctrl/revnode_rdfill_valid_q_i_1`, named for R-35's fill tap.
+      Whether that LUT holds the walker's response mux is not established.
+    - From the net, the paths run through rev_node's `_thread_3_event_counter` logic and end at `led_stretch_cnt_reg`
+      (D or CE). Slack ranges from −11.370 to −11.142, at ranks 261-481.
+    - G's worst 500 contain no `rv_rd_res`.
+    - None of the 260 worst paths, including the WNS path and both families in the table, pass through it. So the
+      net-delay reading above stands for the paths that set WNS. "No walker logic on the failing paths" does not.
   - **The walker's own paths have positive slack on the routed build:**
     - the D$ port-2 grant → `pw_slot_q`: +1.803 ns, 65 levels;
     - the worst path into any walker flop: +0.284 ns;
