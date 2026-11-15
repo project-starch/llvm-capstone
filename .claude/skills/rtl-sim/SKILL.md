@@ -231,9 +231,16 @@ $error`): all three displays compile; the assert compiles only with `--assert`. 
 four assertion messages (from `` `ifndef VERILATOR `` and from translate_off-only regions) are absent, while a
 `$display` under an enabled define is present. At capstone-ariane 9fd9d2530, core/ and corev_apu/ carry about 170
 assert lines: 71 in 26 `` `ifndef VERILATOR `` blocks, about 72 in translate_off-only regions, and the rest
-unguarded. **A clean sim says nothing about any of them.** The Capstone ones include the shadow-tag writes'
-overflow into the rev-node region (wt_axi_adapter.sv `tag_addr_no_overflow`, `tag_fill_no_overflow`,
-`tag_wr_pend_no_wrap`) and `ctag_implies_cap` (wt_dcache_wbuffer.sv).
+unguarded. **A clean sim says nothing about any of them.**
+
+**Known limitation, recorded: the vendored and upstream CVA6 asserts never run in our sim.** Verilator 5.008 cannot
+compile `--assert` on this tree (the generated C++ has `__Vilp` undeclared in `_eval`), and 5.020 faults in
+elaboration on it, with or without `--assert` (2026-11-15). The Capstone-authored ones are converted instead: every
+assert in a file the fork changed or added, whose text is not upstream's or the vendor's. There are nine, all
+single-cycle: the adapter's three tag properties and its DATA_MEM_TOP check, `ctag_implies_cap`, the R-24 debug
+sentinel, the two issue_read_operands configuration checks and the lrsc copy's TXNS > 0. Each prints
+`CAPSTONE-CHECK-FAIL <name>` and stops, and `+define+CAPSTONE_SIM_CHECK_PC` is the positive control for all of them
+(capstone-ariane rtl-twc-checks). A new Capstone assert gets the same conversion.
 
 A check that must run in sim goes in an `always_ff` under `` `ifndef SYNTHESIS ``, printing a greppable line,
 with a `+define+` positive control that makes it fire on an ordinary test. Read the control's line before reading the
