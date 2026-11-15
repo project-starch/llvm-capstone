@@ -1,13 +1,12 @@
-# LSR byte-IV fallback on silicon: mcf's +0.30 % came with a hot-code placement shift and no change to its hot loops (attribution pending)
+# LSR byte-IV fallback on silicon: mcf's +0.30 % came with a hot-code placement shift and no change to its hot loops; event 15 reads the fetch-bubble term at the predicted size
 
 The SPEC lane ran `-lsr-capability-byte-iv-fallback` (llvm-c13, arm FRCDKMSa3hy2) on silicon. It was NOT adopted:
 spec-silicon Addendum 136, 0210dc7b23d4. The twin results that preceded it are in
 `15-11-2026_09-15-01_lsr-byte-iv-fallback-twins.md`. This note records:
 - why the mcf half missed;
 - the directed test that measures the mechanism;
-- the placement-controlled builds now available.
-
-The attribution itself waits for the event-15 board pair (Addendum 137, spec-silicon 959f6ba3bb40).
+- the placement-controlled builds now available;
+- the event-15 board pair (Addendum 137, spec-silicon 959f6ba3bb40), which reads the fetch-bubble term.
 
 ## The reading
 
@@ -101,13 +100,65 @@ The first reading, on 062f4453b:
 The first version of the test lost one arm's pad to linker relaxation: its 2-mod-4 arm came out at 0 mod 4. That
 version was not pushed.
 
-## Pending: the attribution (Addendum 137)
+## The attribution: event 15 on board 3 (Addendum 137)
 
-Board 3, F, firmware caplifive-opensbi hpm-events-ifempty 143fbd06 (mhpmevent3 = 15), kit bkit84, the same two
-binaries. Pre-registered bands, in-context Δif_empty (c13 − control):
-- **placement explains the cycles:** +340..+630 M;
-- **refuted:** below +150 M;
-- **partial:** in between.
+**Setup.**
+- Board 3, bitstream F (a948e4134), kit bkit84; the same two binaries as Addendum 136 (sha256 checked on the stages).
+- Firmware: caplifive-opensbi wrapper 143fbd06 with `CAPSTONE_HPM_EVENTS_IFEMPTY`. Both runs' fw.log name the wrapper
+  and the define. The firmware payload hash differs per run (f176736bf739, f255dcf70e45) because it carries each image.
+- Counters (`sbi_hart.c:96-109` at 143fbd06): mhpmcounter3 = event 15 (if_empty) in place of 1 (L1 I-cache miss). The
+  rest are unchanged: 4 = L1 D-cache miss, 5 = DTLB miss, 6 = branch mispredict, 7 = issue stall, 8 = scoreboard full.
+- Event 15 was exercised on F's own model, not assumed: the RTL re-run above reads if_empty 2.03..2.05 per iteration
+  at a bit-1 head.
+- **Source of the figures:** `@@NATIVE-CNT 0` end minus begin in each `board.txt`. read.log and result.json carry
+  `cycles None` for these runs, so they cannot be the source here.
+- specdiff 2/2 and smoke 9/9 on both.
+
+| in-context window (event) | control fa650b98b77a | c13 ad7832413d89 | Δ board 3 (137) | Δ board 2 (136) |
+|---|---:|---:|---:|---:|
+| run_cycles | 159,975,086,190 | 160,227,087,935 | **+252,001,745 (+0.158 %)** | +477,585,199 (+0.299 %) |
+| hpm3: if_empty (15) on board 3; I-miss (1) on board 2 | 4,707,988,494 | 5,170,060,249 | **+462,071,755 (+9.8 %)** | I-miss −187,725 |
+| hpm4: L1D miss (2) | 3,750,348,852 | 3,750,501,943 | +153,091 | +156,548 |
+| hpm5: DTLB miss (4) | 381,029,616 | 381,075,040 | +45,424 | −53,060 |
+| hpm6: mispredict (10) | 843,924,960 | 801,723,806 | −42,201,154 (−5.00 %) | −42,221,129 (−5.00 %) |
+| hpm7: issue stall (22) | 94,463,720,729 | 94,362,699,714 | −101,021,015 | +51,010,618 |
+| hpm8: scoreboard full (14) | 326,217,696 | 331,375,261 | +5,157,565 | +8,351,122 |
+| between_cycles | 4,939,162,566 | 4,917,820,913 | −21,341,653 | −6,889,487 |
+| wall | 6,598.82 s | 6,608.04 s | +0.14 % | +0.29 % |
+
+The board-2 run_cycles in the first table of this note are the end values (+485 M). The window, end minus begin, is
++477.6 M.
+
+**Scored against the pre-registration.**
+- **Positive control: holds.** hpm3 reads 4.71 G and 5.17 G, a thousand times the 4.67 M and 4.48 M that event 1 gave
+  on board 2.
+- **Δif_empty +462 M: inside the band +340..+630 M, whose pre-registered reading is "placement is the cause". MET.**
+- **Cycles: "repeats Addendum 136's +0.30 % within the noise". Missed (the SPEC lane records it as a partial miss).**
+  - It reads +0.158 % against +0.299 %, a gap of 0.141 points.
+  - The prediction stated no width. Against the one measured same-image repeat (0.08 %) the gap is too large; against
+    the ±0.15 % same-board spread this note uses for the f4 decision it is at the edge. So it cannot be scored cleanly,
+    and that is the defect in how it was written.
+
+**What the two pairs show, and what they cannot tell apart.**
+- The deterministic events reproduce across boards: mispredicts −42.20 M and −42.22 M, L1D misses +153 K and +157 K.
+  The two pairs ran the same program pair.
+- Between the boards the spread is in issue stalls and cycles, per arm:
+  - control: +104 M issue stall, +132 M cycles from board 2 to board 3;
+  - c13: −48 M issue stall, −93 M cycles.
+  The control moves +0.083 % and c13 −0.058 %, in opposite directions. Together they make the 0.141-point gap
+  between the two pairs' cycle deltas.
+- **The fetch-bubble term is present at the predicted size, +462 M. Whether it accounts for all of +0.30 % or for +0.16 %
+  the two boards do not agree**, and there is one pair per board with no same-board repeat.
+- if_empty rises more than the cycles (+462 M against +252 M) while issue stalls fall 101 M. That fits the directed
+  test's stalled-backend arm, where a bubble overlapping a backend stall cost nothing. It is not a decomposition: the
+  counters overlap, and they do not add up to cycles.
+- The +462 M is 22 % of the +2.07 G redirect upper bound above. That is reported as a ratio, not fitted to a model.
+- The fallback's own changed loops cannot supply it. The store loop runs 38 M iterations and the basket loop 4.26 M, so
+  one bubble per iteration in both is under 45 M.
+- **Not explained here:** mispredicts fall 5.00 % in c13, identically on both boards. That works against the bubbles.
+  The pairs do not separate its cause, which could be the changed code or the predictor's PC indexing.
+
+Addendum 136's decision is unchanged: c13 is not adopted.
 
 ## Placement-controlled builds: `-mllvm -align-all-functions=4` on both arms
 
@@ -243,3 +294,6 @@ checkout's HEAD was another line of the RTL, and both its tables had to be withd
 
 Function alignment controls entries only. When the change rewrites the hot function itself (perl's S_regcppop), its
 loop heads move with the body, and they must be read by hand in every image of the pair.
+
+A prediction "within the noise" needs its width written beside it. Addendum 137's cycle prediction gave none, so its
++0.158 % against +0.299 % could only be called a miss or a pass by choosing a width after the fact.
