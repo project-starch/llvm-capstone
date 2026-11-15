@@ -4347,3 +4347,20 @@ board-frcdkmssp-notune.
 - ratio 1.147 .. 1.167.
 
 Until it lands, the spatial gcc cell is marked "tuned (arena_pin), no-tune pending".
+
+## Addendum 136 (2026-11-15 14:35 +08): Addendum 130 read on mcf: LSR c13 is not adopted; its full-perl run is dropped
+
+**Reading (bj-b2, board 2, F, bkit75).** mcf built with c13 (hy2): 6,612.07 s, specdiff 2/2 PASS, smoke 9/9. Its
+same-board control is FRCDKMSa3 mcf, 6,593.26 s. Against it:
+- wall: +0.29 %;
+- in-context run_cycles: 160.32 G against 159.84 G (+0.30 %), so the slowdown is in the program, not the kernel;
+- between_cycles: 4.93 G in both;
+- mispredicts (hpm6): -5 %; issue stalls (hpm7): +0.05 %.
+
+The prediction (-0.0 .. -0.5 %) is missed on the slow side. The adoption rule needs mcf not slower than +0.15 %, so
+**c13 is not adopted**, whatever perl reads.
+
+**Board 3.** bk-b3 (hy2 full perl, ~4 h) cannot change the decision any more. It was stopped before it reached the
+board: both its chain and the chain waiting on it had only printed START. bq-b3 (Addendum 135, spatial gcc untuned)
+is relaunched to wait on ba-b3 directly, unchanged otherwise. If the compiler lane revises the LSR change, a perl
+pair is pre-registered again for the new compiler.
