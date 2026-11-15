@@ -5,7 +5,8 @@
 #     KIT       a trap-route kit: qemu-system-riscv64, images/, adapter/, capstone-job
 #     IMAGES    build-reuse.sh's output ({stock,protected}/memcached.dom)
 #     CLIENT    build-load-client.sh's output (mc-crusher, mc-harness)
-#     OUT_ROOT  NEW_ROOT/memcached-<arm>-<rep>/ per boot, NEW_ROOT/locks/
+#     OUT_ROOT  OUT_ROOT/memcached-<arm>-<rep>/ (new) and memcached-<arm>-<rep>.log per boot
+# Each boot holds its own QEMU lock file in $LOCK_DIR (default OUT_ROOT/locks).
 set -euo pipefail
 [[ $# == 4 || $# == 5 ]] || { echo 'usage: run-established.sh KIT IMAGES CLIENT OUT_ROOT [REPS]' >&2; exit 2; }
 KIT=$(realpath "$1") IMAGES=$(realpath "$2") CLIENT=$(realpath "$3") OUT=$(realpath -m "$4") REPS=${5:-3}
@@ -23,11 +24,12 @@ for line in open(sys.argv[1]):
 print(total)
 PY
 )
-mkdir -p "$OUT/locks"
+LOCK_DIR=${LOCK_DIR:-$OUT/locks}
+mkdir -p "$OUT" "$LOCK_DIR"
 pids=()
 for arm in stock protected; do
   for rep in $(seq 1 "$REPS"); do
-    CAPSTONE_QEMU_LOCK=$OUT/locks/$arm-$rep python3 "$HOOKS/run-reuse.py" --arm $arm \
+    CAPSTONE_QEMU_LOCK=$LOCK_DIR/memcached-$arm-$rep python3 "$HOOKS/run-reuse.py" --arm $arm \
       --image "$IMAGES/$arm/memcached.dom" --work "$OUT/memcached-$arm-$rep" --qemu "$KIT/qemu-system-riscv64" \
       --images "$KIT/images" --adapter "$KIT/adapter" --job "$KIT/capstone-job" --harness "$CLIENT/mc-harness" \
       --run-staged capstone/runtime/virtual/run-staged.py --reps 1 --timeout 6000 --flags "$FLAGS" \
