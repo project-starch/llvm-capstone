@@ -4127,3 +4127,45 @@ because both images in one boot would exceed the 26 MB firmware cap.
 **Order on board 1:** be-b1 (PostgreSQL, Addendum 126) → **bg-b1**, on nat-run3.sh with the pre-boot park. The stubbed
 dry run reaches all four boots. Bitstream G takes board 1 only after this chain, unless G's seal lands first. In that
 case G goes first and bg-b1 is relaunched behind it, in a recorded swap.
+
+## Addendum 130 (2026-11-15 09:04 +08, before it runs): the LSR fallback (llvm-c13) on silicon, perl full on board 3 and an mcf pair on board 2
+
+**Arm FRCDKMSa3hy2** is FRCDKMSa3 (allocator 0012+0013) compiled with llvm-c13, the compiler lane's per-group LSR
+fallback (`-lsr-capability-byte-iv-fallback`). A loop group whose capability recurrence the anchor proof admits keeps
+it. A group it rejects takes the byte-offset form: the integer offset steps, and the capability is formed only at the
+access. The claim-auditor verdict was split: it did not refute safety (no new cursor, every address equal), and it
+refuted the first description of how the form is chosen, which c13's two-pass design fixed. The off build is
+byte-identical to FRCDKMSa3 in all 11 images.
+
+**Twin user instructions against FRCDKMSa3 (QEMU, shift 1, outputs identical):**
+
+| row | change |
+|---|---|
+| perl full | -0.553 % |
+| mcf | -0.269 % |
+| gcc | -0.007 % |
+| imagick | +0.171 % |
+| x264, lbm, xz, nab | within ±0.03 % |
+
+lbm and xz are byte-identical to the previous build. x264's twin validates 0/3 on every arm, so its figure is an
+instruction count only.
+
+**Images:**
+- perlbench_r 8cf050818865bc80 (base c1744e87cb2244f6);
+- mcf_r ad7832413d890c90 (base fa650b98b77a1ba1).
+Each board stage differs from its base's only in the executable and plan.json (diff -rq). The smoke files are identical.
+
+**Runs (F, a948e4134):**
+- **bk-b3** (board 3, bkit80): hy2 full perl, after ba-b3. ba-b3 is FRCDKMSa3 full perl on the same board, so it is
+  the control.
+- **bi-b2 → bj-b2** (board 2, bkit75): FRCDKMSa3 mcf, then hy2 mcf, after the nested FFmpeg ABBA. This is a matched
+  pair. FRCDKMSa3 mcf has not run on silicon before.
+
+**Predictions (silicon run time, hy2 against its same-board control):**
+- perl full -0.2 .. -0.9 %;
+- mcf -0.0 .. -0.5 %. The same-board spread is about 0.1 %, so a reading inside ±0.1 % is "no measurable change".
+
+**Adoption rule.** c13 becomes the Capstone compiler for the next table images if perl is at least 0.2 % faster and mcf
+is not slower by more than 0.15 %. Rows whose images change (gcc, imagick, nab, x264) are then re-measured before their
+table cells move. LSR on capability address spaces is Capstone-only: riscv-base already strength-reduces these loops,
+as the compiler lane's lsr4 repro shows on llvm-c4 riscv. So riscv-base needs no rerun.
