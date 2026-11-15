@@ -179,6 +179,23 @@ conditional go.**
   - It is not a path through the walker, which has no cell among the 500.
   - One build cannot say whether the walker's 2 k cells caused the placement shift or merely sampled it. The null band
     itself is 3.74 ns, and this sits 0.33 ns beyond it.
+- **Attribution (board lane, routed dcps; logs `synth/twc/attr5/`).** The figures below were checked here in
+  `spW_dump.log` / `spW_onG.log`.
+  - Same-cell retiming is NO-DATA: synthesis renumbered the LUTs, and 148 of the trial path's 224 pins do not exist on
+    G. So the comparison uses the same start and end pins.
+  - Trial worst, `cur_idx_q_reg[3]` -> `fu_data_q[..][cap_metadata_a][19]`: trial -13.173, 111 levels, logic 8.399, net
+    44.857. G -8.032, 114 levels, logic 9.247, net 38.699.
+  - G's worst, `cpmp_q[9]..iE_rep` -> `fu_data_q[..][rd_metadata][23]`: G -9.107, 116 levels, logic 9.833, net 38.617.
+    Trial -12.333, 120 levels, logic 9.586, net 42.738.
+  - **Both directions: equal or less logic, 4-6 ns more net delay.** That is placement and routing on pre-existing
+    paths, not added logic.
+  - The walker's own routed paths all meet timing:
+    - worst into a walker flop +0.284 (`cpmp_q` -> `pw_slot_q` CE, 78 levels);
+    - worst out of one +3.160 (`pw_tag_pw_q` -> `fu_data_q`);
+    - grant copies -> `pw_slot_q` +1.803;
+    - grant -> fill taps +10.812 on the trial, +14.364 on G.
+  - What it cannot separate: whether the walker's +1.1 k FF crowded placement, or whether this is draw-to-draw noise. A
+    second build of the same commit would answer it, and none is proposed.
 - **Consequence.** WNS -13.173 is 0.94 ns past the worst bitstream known to run correctly (-12.229, per the runtime
   lane).
   - The board readings carry "key 5 NOT MET".
