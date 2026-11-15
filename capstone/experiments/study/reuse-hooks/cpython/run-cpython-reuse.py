@@ -2,16 +2,25 @@
 """One boot of the CPython reuse-distance measurement: one arm, one repetition.
 
     run-cpython-reuse.py --arm stock|protected --rep N --build BUILD_OUT --kit KIT \
-        --run-staged RUN_STAGED --work NEW_DIR
+        --run-staged RUN_STAGED --work NEW_DIR \
+        [--workload one-liner|pyperformance --pyperformance-wheel WHL --pyperf-wheel WHL \
+         [--driver-args ARGS]]
 
 BUILD_OUT is a build-cpython-reuse.sh output. Stages its cpython.dom, the build's own Lib/ as
 /mnt/vm/cpy/lib/python3.13 (with its _sysconfigdata__linux_.py and an empty lib-dynload, compiled
 by the build's native 3.13.7 with guest paths, as the memory-behaviour run did), the kit's
-launcher and module, and a gate that runs the run-ports.py JSON/GC one-liner verbatim once,
-between two `capstone-vexec --stats` readings. Boots it through runtime/virtual/run-staged.py
-(CAPSTONE_QEMU_LOCK must name this VM's own lock) and writes NEW_DIR/rep.json with the parsed
-REUSE-GAP line, the oracle, the exit status, the --stats readings and the staged hashes. The
-console log stays in NEW_DIR/guest/.
+launcher and module, and a gate that runs the workload once, between two `capstone-vexec --stats`
+readings. Boots it through runtime/virtual/run-staged.py (CAPSTONE_QEMU_LOCK must name this VM's
+own lock) and writes NEW_DIR/rep.json with the parsed REUSE-GAP line, the oracle, the exit
+status, the --stats readings and the staged hashes. The console log stays in NEW_DIR/guest/.
+
+--workload one-liner (the default) runs the run-ports.py JSON/GC one-liner verbatim.
+--workload pyperformance (plan capstone/docs/plans/2026-11-15-cpython-established-workload.md)
+stages pyperf and the candidate benchmarks of pyperformance from the two pinned PyPI wheels
+(checked by SHA-256), unchanged, beside pyperformance-subset.py, compiled like the standard
+library. The gate first runs the interpreter start-up alone (-S -c pass) and records its
+REUSE-GAP line under "startup", then runs pyperformance-subset.py with DRIVER_ARGS (default: none,
+the registered subset). Both processes get PYTHONHASHSEED=0.
 """
 import argparse
 import hashlib
@@ -22,6 +31,7 @@ import shutil
 import subprocess
 import sys
 import time
+import zipfile
 
 ONE_LINER = ('import json,gc; a=[{"n":n} for n in range(1000)]; '
              'assert json.loads(json.dumps(a))==a; del a; gc.collect(); print("CPYTHON-OK 1000")')
@@ -44,6 +54,49 @@ echo "RG_VSTATS:after $(./capstone-vexec --stats)"
 ! grep -q '^capstone_vm ' /proc/modules; echo "RG_CLEANUP:$?"
 echo VIRTUAL_STAGED_DONE
 '''.replace('ONE_LINER', ONE_LINER)
+
+# Interpreter start-up alone, then the pyperformance subset, both with the same hash seed.
+GATE_PYPERFORMANCE = r'''#!/bin/sh
+cd /mnt/vm || exit 1
+dmesg -n 1
+./capstone-vexec --platform > /dev/null || exit 1
+export CAPSTONE_EXEC_DIAGNOSTICS=1
+export HOME=/tmp TMPDIR=/tmp
+export PYTHONHASHSEED=HASH_SEED
+echo "RG_VSTATS:before $(./capstone-vexec --stats)"
+PYTHONHOME=/mnt/vm/cpy ./capstone-vexec ./cpython.dom -S -c pass > /tmp/rs.out 2> /tmp/rs.err
+echo "RS_RC:$?"
+sed 's/^/RS_OUT:/' /tmp/rs.out
+sed 's/^/RS_ERR:/' /tmp/rs.err
+t0=$(date +%s)
+PYTHONHOME=/mnt/vm/cpy ./capstone-vexec ./cpython.dom -S /mnt/vm/bench/pyperformance-subset.py DRIVER_ARGS > /tmp/rg.out 2> /tmp/rg.err
+rc=$?
+echo "RG_TIME:$(( $(date +%s) - t0 ))"
+echo "RG_RC:$rc"
+sed 's/^/RG_OUT:/' /tmp/rg.out
+sed 's/^/RG_ERR:/' /tmp/rg.err
+echo "RG_VSTATS:after $(./capstone-vexec --stats)"
+! grep -q '^capstone_vm ' /proc/modules; echo "RG_CLEANUP:$?"
+echo VIRTUAL_STAGED_DONE
+'''
+
+HASH_SEED = '0'
+# pyperformance 1.14.0 and the pyperf release published with it, as PyPI serves them.
+PYPERFORMANCE = {
+    'version': '1.14.0',
+    'url': 'https://files.pythonhosted.org/packages/39/fc/793a5bf51635d90151c7a4c5ca8aad3fb5eef910321f7bad307314c4a857/'
+           'pyperformance-1.14.0-py3-none-any.whl',
+    'sha256': '94068ac2935b6952ccb5e8a302eb9cebc26e82454494bef6e53822738adf0049',
+}
+PYPERF = {
+    'version': '2.10.0',
+    'url': 'https://files.pythonhosted.org/packages/91/26/f7bd5e37c254c2671f4dfff316d123eba13663bdfee941a01b09ab02d72d/'
+           'pyperf-2.10.0-py3-none-any.whl',
+    'sha256': '79196bc4a11e3c926dd4c6b14c80136c6b37f884fe913cbc57037f37636e9841',
+}
+# Staged benchmarks: the registered subset and the candidates calibration looked at.
+CANDIDATES = ('json_dumps', 'json_loads', 'richards', 'deltablue', 'chaos', 'go', 'raytrace', 'nbody',
+              'unpack_sequence', 'gc_collect', 'gc_traversal')
 
 FIELDS = ('capacity', 'attempts', 'issues', 'releases', 'reuses', 'distinct_starts', 'error')
 
@@ -87,7 +140,18 @@ def main():
     for name in ('build', 'kit', 'run-staged', 'work'):
         p.add_argument('--' + name, type=Path, required=True)
     p.add_argument('--timeout', type=int, default=1800)
+    p.add_argument('--workload', choices=('one-liner', 'pyperformance'), default='one-liner')
+    p.add_argument('--pyperformance-wheel', type=Path, help='pyperformance-1.14.0-py3-none-any.whl')
+    p.add_argument('--pyperf-wheel', type=Path, help='pyperf-2.10.0-py3-none-any.whl')
+    p.add_argument('--driver-args', default='', help='pyperformance-subset.py arguments (calibration only)')
     a = p.parse_args()
+    pyperformance = a.workload == 'pyperformance'
+    if pyperformance and not (a.pyperformance_wheel and a.pyperf_wheel):
+        p.error('--workload pyperformance needs --pyperformance-wheel and --pyperf-wheel')
+    if not pyperformance and (a.pyperformance_wheel or a.pyperf_wheel or a.driver_args):
+        p.error('the wheels and --driver-args belong to --workload pyperformance')
+    if not re.fullmatch(r'[A-Za-z0-9_,= -]*', a.driver_args):
+        p.error('--driver-args: letters, digits, _ , = - and spaces only')
     a.work.mkdir(parents=True, exist_ok=False)
     stage = a.work / 'stage'
     stage.mkdir()
@@ -111,7 +175,16 @@ def main():
         sys.exit('native python is ' + ver)
     comp = subprocess.run([str(native), '-B', '-m', 'compileall', '-q', '-f', '-x', '/test/',
                            '-d', '/mnt/vm/cpy/lib/python3.13', str(lib)], capture_output=True, text=True)
-    (stage / 'gate.sh').write_text(GATE)
+    if pyperformance:
+        bench = stage_pyperformance(stage / 'bench', a.pyperformance_wheel, a.pyperf_wheel)
+        bench_tree = tree_sha(bench)
+        bench_comp = subprocess.run([str(native), '-B', '-m', 'compileall', '-q', '-f',
+                                     '-d', '/mnt/vm/bench', str(bench)], capture_output=True, text=True)
+        gate = (GATE_PYPERFORMANCE.replace('HASH_SEED', HASH_SEED)
+                .replace(' DRIVER_ARGS', (' ' + a.driver_args.strip()) if a.driver_args.strip() else ''))
+    else:
+        gate = GATE
+    (stage / 'gate.sh').write_text(gate)
     staged = {n: sha(stage / n) for n in ('cpython.dom', 'capstone-vexec', 'gate.sh')}
     t0 = time.time()
     run = subprocess.run([sys.executable, str(a.run_staged), '--qemu', str(a.kit / 'qemu-system-riscv64'),
@@ -138,14 +211,73 @@ def main():
         'compileall_rc': comp.returncode, 'native_python': ver,
         'platform_sha256': {n: sha(a.kit / 'images' / n) for n in ('Image', 'fw_jump.elf', 'initramfs.cpio.gz')}
                            | {'qemu-system-riscv64': sha(a.kit / 'qemu-system-riscv64')},
-        'run_staged_sha256': sha(a.run_staged), 'one_liner': ONE_LINER,
+        'run_staged_sha256': sha(a.run_staged), 'workload': a.workload,
     }
+    if pyperformance:
+        s_err = re.findall(r'^RS_ERR:(.*)$', log, re.M)
+        rec |= {
+            'pythonhashseed': HASH_SEED, 'driver_args': a.driver_args.strip(),
+            'pyperformance': PYPERFORMANCE, 'pyperf': PYPERF,
+            'bench_tree_sha256': bench_tree, 'bench_with_bytecode_tree_sha256': tree_sha(bench),
+            'bench_compileall_rc': bench_comp.returncode,
+            'benchmark_ns': {n: int(ns) for n, ns in
+                             re.findall(r'^PYPERF-TIME (\S+) loops=\d+ ns=(\d+)$', '\n'.join(err), re.M)},
+            'startup': {
+                'command': '-S -c pass',
+                'rc': int(m.group(1)) if (m := re.search(r'^RS_RC:(\d+)$', log, re.M)) else None,
+                'stdout': re.findall(r'^RS_OUT:(.*)$', log, re.M),
+                'stderr_other': [l for l in s_err if not l.startswith('REUSE-GAP ')],
+                'reuse_gap': parse_reuse('\n'.join(s_err)),
+            },
+        }
+    else:
+        rec['one_liner'] = ONE_LINER
     (a.work / 'rep.json').write_text(json.dumps(rec, indent=1, sort_keys=True) + '\n')
     rg = rec['reuse_gap'].get('pymalloc')
     print(f'cpython {a.arm} rep{a.rep}: completed={rec["completed"]} rc={rec["rc"]} out={out} '
           f'error={rg and rg["error"]} issues={rg and rg["issues"]} {wall:.0f}s')
-    ok = rec['completed'] and rec['rc'] == 0 and out == ['CPYTHON-OK 1000'] and rg and rg['error'] == 0
+    ok = rec['completed'] and rec['rc'] == 0 and rg and rg['error'] == 0
+    if pyperformance:
+        st = rec['startup']['reuse_gap'].get('pymalloc')
+        benches = [l for l in out if l.startswith('BENCH ')]
+        print(f'  startup: rc={rec["startup"]["rc"]} error={st and st["error"]} issues={st and st["issues"]}')
+        ok = (ok and out == benches + [f'PYPERFORMANCE-OK {len(benches)}'] and len(benches) > 0
+              and rec['startup']['rc'] == 0 and st and st['error'] == 0)
+    else:
+        ok = ok and out == ['CPYTHON-OK 1000']
     return 0 if ok else 1
+
+
+def stage_pyperformance(bench, pyperformance_wheel, pyperf_wheel):
+    """bench/ with pyperf/, benchmarks/bm_NAME/ for CANDIDATES and the driver, from the wheels."""
+    for wheel, pin in ((pyperformance_wheel, PYPERFORMANCE), (pyperf_wheel, PYPERF)):
+        if sha(wheel) != pin['sha256']:
+            sys.exit(f'{wheel}: SHA-256 is not the pinned {pin["sha256"]}')
+    bench.mkdir()
+    extract(pyperf_wheel, 'pyperf/', bench / 'pyperf', skip='pyperf/tests/')
+    for name in CANDIDATES:
+        prefix = f'pyperformance/data-files/benchmarks/bm_{name}/'
+        if not extract(pyperformance_wheel, prefix, bench / 'benchmarks' / f'bm_{name}'):
+            sys.exit(f'{pyperformance_wheel}: no {prefix}')
+    shutil.copy2(Path(__file__).with_name('pyperformance-subset.py'), bench / 'pyperformance-subset.py')
+    return bench
+
+
+def extract(wheel, prefix, dest, skip=None):
+    """Copy the wheel's files under prefix to dest; returns how many."""
+    n = 0
+    with zipfile.ZipFile(wheel) as z:
+        for info in z.infolist():
+            name = info.filename
+            if not name.startswith(prefix) or name.endswith('/') or (skip and name.startswith(skip)):
+                continue
+            rel = Path(name[len(prefix):])
+            if rel.is_absolute() or '..' in rel.parts:
+                sys.exit(f'{wheel}: unsafe member {name}')
+            (dest / rel).parent.mkdir(parents=True, exist_ok=True)
+            (dest / rel).write_bytes(z.read(info))
+            n += 1
+    return n
 
 
 if __name__ == '__main__':
