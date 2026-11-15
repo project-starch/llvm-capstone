@@ -1,0 +1,15 @@
+stock     EXP-BLOCKS-END slots=40 overflow=0 rc=0 rows_equal_native=True guest_s=299 {'issues': 1210352, 'releases': 1207923, 'reuses': 1204490, 'distinct_starts': 5862, 'error': 0}
+protected EXP-BLOCKS-END slots=40 overflow=0 rc=0 rows_equal_native=True guest_s=373 {'issues': 1210414, 'releases': 1207985, 'reuses': 1204552, 'distinct_starts': 5862, 'error': 0}
+protected EXP-SLACK issues=1210414 below_payload=6 below_header=6 max=96
+reusediff stock/protected 0.000358
+
+per path: blocks (bytes), stock then protected
+aset-context              121 (     349184)       121 (     349184)
+aset-large               2557 (   70662544)      2557 (   70662544)
+aset-new                18152 (  214532096)     18152 (  214532096)
+aset-realloc                1 (      16480)         1 (      16480)
+total                   20831                   20831
+
+rows: stock 40, protected 40, differing 0
+   ('aset-new', 'MessageContext') stock (10000, 122880000) protected (10000, 122880000)
+   ('aset-new', 'index info') stock (117, 148480) protected (117, 148480)

@@ -1,0 +1,48 @@
+# ~/asr-work/q1b/bin/qemu-1b -M virt -m 512M -smp 1 -nographic -cpu rv64,sstc=false,x-capstone-trap-route=true,x-capstone-supervisor-refs=true,x-capstone-raw-moves=true -bios ~/asr-work/del-fw/out/f-keep/fw_jump.elf -kernel ~/asr-work/eval/kernel/Image-0133b9e21cd -initrd ~/asr-work/fix-postgres/unit/layout/initramfs.cpio.gz -append console=ttyS0 earlycon=sbi rdinit=/init panic=-1 sublet.dom_binfmt=1 
+TRAPTEST: up
+TRAPTEST: begin fixed header
+TRAPTEST: postgres header load -16 armed
+[    9.995905] sublet: fault cause=28 pc=0x3ff780ced0 address=0x3ff76f9ae0 pid=43 comm=fixed-postgres. ra=0x3ff780cecc fp=0x3ff77ffd20 entry=0x3ff7800000 code=0x3ff7800000-0x3ff781a000
+TRAPTEST: end fixed header status 139
+TRAPTEST: begin fixed stale
+TRAPTEST: postgres stale armed
+[   10.155454] sublet: fault cause=25 pc=0x3ff780cba8 address=0x3ff76f9af0 pid=44 comm=fixed-postgres. ra=0x3ff780cba8 fp=0x3ff77ffd20 entry=0x3ff7800000 code=0x3ff7800000-0x3ff781a000
+TRAPTEST: end fixed stale status 139
+TRAPTEST: begin fixed table
+TRAPTEST: postgres table PASS
+TRAPTEST: end fixed table status 0
+TRAPTEST: begin unfixed header
+TRAPTEST: postgres header load -16 armed
+TRAPTEST: postgres header load -32 armed
+TRAPTEST: postgres header reference at -32 covers 8192 bytes
+TRAPTEST: end unfixed header status 23
+TRAPTEST: begin unfixed stale
+TRAPTEST: postgres stale armed
+[   13.320892] sublet: fault cause=25 pc=0x3ff7feb2c8 address=0x3ff7fd9b30 pid=47 comm=unfixed-postgre ra=0x3ff7feb2c8 fp=0x3ff7effd20 entry=0x3ff7fe0000 code=0x3ff7fe0000-0x3ff7ff9000
+TRAPTEST: end unfixed stale status 139
+TRAPTEST: begin unfixed table
+TRAPTEST: postgres table PASS
+TRAPTEST: end unfixed table status 0
+TRAPTEST: begin fixed injection
+TRAPTEST: postgres injection PASS
+TRAPTEST: end fixed injection status 0
+TRAPTEST: begin fixed large
+TRAPTEST: postgres large success
+TRAPTEST: end fixed large status 0
+TRAPTEST: begin fixed external
+TRAPTEST: postgres external failure old read armed
+TRAPTEST: end fixed external status 0
+TRAPTEST: done
+unfixed header: tagged block reference at -32, bounds 8192 bytes (negative control holds)
+fixed header: the first load in front of the chunk faults with cause 28
+fixed stale: cause 25
+fixed table: PASS
+unfixed stale: cause 25
+unfixed table: PASS
+fixed injection: PASS
+fixed large: PASS
+fixed external: PASS
+layout-fix unit test PASS
+3cdfad0d3402056b8aec4b352b8c14b6a9a5dc92185abb401809c80dded8211e  fixed/postgres.dom
+ec8039cc6f94036794fd169d59a639aee7e7efe26344237382a3053a4a6d0f20  unfixed/postgres.dom
+f92791c9af09333eb4c781ce1a91d7cf40547a738c5ad9c3c8a6a7ac0ce8162b  initramfs.cpio.gz

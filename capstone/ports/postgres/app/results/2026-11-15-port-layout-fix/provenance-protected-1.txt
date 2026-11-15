@@ -1,0 +1,61 @@
+PostgreSQL 17.5 reuse run, pgbench TPC-B-like workload, arm protected, postgres-protected-1 (run-6, port layout fix)
+pre-registration: capstone/docs/plans/2026-11-15-postgres-port-layout-fix.md (branch fix/postgres-port-layout, 7d7d1e0fd3c)
+tree: export of fix/postgres-port-layout 38b1e0a3529 at ~/asr-work/fix-postgres/tree-38b1e0a (local snapshot commit 4d2ac50)
+platform (kit-run-3):
+c55fcdd2c620916690e9604a1b95f204d8287fce79631a8a8909c69952223b49  qemu-system-riscv64
+0ea6d1ef545071326ce2ef4270e492ced585d089876517b460b6678d00e43ae8  images/Image
+975a24215dd17e5123c6f019328bce2683c9a9ca1d4e29cdddba4d0545c6e3c1  images/fw_jump.elf
+2d846ebece5024b3682316ad5339e1ca07e8683683d62e0f24fa15117c68cddb  images/initramfs.cpio.gz
+150d969243a01faf6597bcb6c1b5e29f72b1766c7463997f6e64f29ec745b37c  adapter/capstone-vexec
+platform sources: qemu-1b c55fcdd2c620916690e9604a1b95f204d8287fce79631a8a8909c69952223b49, Image-0133b9e21cd 0ea6d1ef545071326ce2ef4270e492ced585d089876517b460b6678d00e43ae8, f-keep fw_jump.elf 975a24215dd17e5123c6f019328bce2683c9a9ca1d4e29cdddba4d0545c6e3c1
+image:
+f672346f4b00b2cd5dd3cba66183b63bbc820110b919fab35bfa12e7e5d58c8e  ~/asr-work/fix-postgres/build/reuse-protected/image/postgres.dom
+f672346f4b00b2cd5dd3cba66183b63bbc820110b919fab35bfa12e7e5d58c8e  ~/asr-work/eval/run-6/reuse/postgres-protected-1/stage-1/bin/postgres-protected.dom
+build inputs:
+fcb7ab38e23b264d1902cb25e6adafb4525a6ebcbd015434aeef9eda80f528d8  ~/asr-work/fix-postgres/tmp/pg-mmgr-host/pg.tar.bz2
+bd01ed94b50953d9d3cdf2340ff542d95b1a02332ae3c10b47f362a93b49b8a7  ~/asr-work/fix-postgres/tree-38b1e0a/capstone/experiments/study/reuse-hooks/postgres/build.sh
+755eeb5d7d809ef75156b692e5d4dc8e5d4ae05b07048952807d22df7d36eed4  ~/asr-work/fix-postgres/tree-38b1e0a/capstone/experiments/study/reuse-hooks/postgres/hooks-protected.patch
+61897b987f51ecb23ee90763072ce18fa97a8b8a8cba0f6e3376299b41d02ec5  ~/asr-work/fix-postgres/tree-38b1e0a/capstone/experiments/study/reuse-hooks/postgres/exp-reuse-gap.h
+ffc3500317b397f18286667040aa27ed9820dfa5862fba18cdfe5f37acd3246a  ~/asr-work/fix-postgres/tree-38b1e0a/capstone/experiments/study/reuse-hooks/postgres/postgres-17.5-private-shmem.patch
+1f7a1cba6039796d4487987ce938030514fda859294b718247a0079bd332a149  ~/asr-work/fix-postgres/tree-38b1e0a/capstone/experiments/study/reuse-hooks/postgres/postgres-17.5-no-interval-timer.patch
+627b0fe3ac30d75b384b35f37e9436c329f9f506afc13b94fb3ab87fc2df1769  ~/asr-work/fix-postgres/tree-38b1e0a/capstone/experiments/study/reuse-gap-observer.h
+9b859bface904296b0f313cca6fb662cc2591b39d40e3c370fc96961e0435d04  ~/asr-work/fix-postgres/tree-38b1e0a/capstone/ports/postgres/memory-contexts/patches/postgresql-17.0-0003-memory-contexts-sublet-lifetimes.patch
+workload (~/asr-work/bench-postgres-perl/gen/s1-t4000):
+f095983baae4ef24531555eb228d13382641600958df768e2965586b968b0d33  ~/asr-work/bench-postgres-perl/gen/s1-t4000/tpcb.sql
+602b65a4192c84f1bd92a7fc43118b408bb039b333b27d9e690fdcfbd5da4ab5  ~/asr-work/bench-postgres-perl/gen/s1-t4000/native.out
+5ebf46c47bdbd492299efff696374f8ceb84b92ba8284874171baddf14928ee8  ~/asr-work/bench-postgres-perl/gen/s1-t4000/manifest.txt
+f095983baae4ef24531555eb228d13382641600958df768e2965586b968b0d33  ~/asr-work/eval/run-6/reuse/postgres-protected-1/stage-1/tpcb.sql
+cluster tree fa14e86858245d7dd058c2a9774b4ebbd0c743c7b7dfbb3e225e19e5b920fbf7, staged fa14e86858245d7dd058c2a9774b4ebbd0c743c7b7dfbb3e225e19e5b920fbf7
+share tree ca745babad51c96587d9a61380264f12a44340cc93ba8352230400b03dfdac35 (from ~/asr-work/eval/prebuilt/reuse/pg-share)
+harness:
+e6d94237584a34070fb252b496ddabbf6d982a3d91d112a79a1b977df8fd0cf2  ~/asr-work/fix-postgres/tree-38b1e0a/capstone/runtime/virtual/trap_platform.py
+d28973f4188ee7cd7e2f58929b8aad2362f3f634f1026112c0067f0c32f04a70  ~/asr-work/fix-postgres/tree-38b1e0a/capstone/experiments/study/reuse-hooks/postgres/run-pgbench-reuse.py
+f2ed12db4f80d2edb8a660fa1d72a88b0cc5af761e1adcb815ed7a74c0307e70  ~/asr-work/fix-postgres/tree-38b1e0a/capstone/experiments/study/reuse-hooks/postgres/make-pgbench-workload.sh
+2b60020529ee7e06f82df065699b0ff1913f848ef100e1e1ad3dace6689c1da9  ~/asr-work/fix-postgres/tree-38b1e0a/capstone/experiments/study/reuse-hooks/postgres/collect.py
+52710376350cb05e74ae26f059a812b562b6b574bce42b84b25ebc8a110bcbda  ~/asr-work/eval/run-6/reuse/postgres-protected-1/stage-1/gate.sh
+wall time (run-reuse.sh): RUN postgres-protected-1 rc=0 wall=1419s
+workload manifest:
+  made 2026-11-15T04:03:39Z by make-pgbench-workload.sh f2ed12db4f80d2edb8a660fa1d72a88b0cc5af761e1adcb815ed7a74c0307e70
+  postgres: postgres (PostgreSQL) 17.5 0ec491f67d2acd96e20dd8c868e0263c2bd47c39e327e9924e72b412ebc52822
+  pgbench: pgbench (PostgreSQL) 17.5 ab47ba9d7ce6c9647f852585830fbe56dfd14eefb86e899d5e628749ad48b65e
+  fixture: ~/asr-work/eval/prebuilt/reuse/pg-fixture/cluster tree 46228fb03bbd941ff344f993db3ac2a2637c5d9e34b8ae9f6c01eb56fff86711
+  init: pgbench -i -s 1 postgres (default init steps dtgvp)
+  run: pgbench -n -c 1 -j 1 -t 4000 --random-seed=1 -M simple --debug postgres (built-in tpcb-like)
+  native replay: postgres --single -D CLUSTER -c shared_buffers=4MB -c max_connections=10 -c timezone=GMT -c log_timezone=GMT -c dynamic_shared_memory_type=mmap -c exit_on_error=true postgres < tpcb.sql
+  cluster tree: fa14e86858245d7dd058c2a9774b4ebbd0c743c7b7dfbb3e225e19e5b920fbf7
+  f095983baae4ef24531555eb228d13382641600958df768e2965586b968b0d33  tpcb.sql
+  602b65a4192c84f1bd92a7fc43118b408bb039b333b27d9e690fdcfbd5da4ab5  native.out
+  pgbench report (generation 1):
+    pgbench (17.5)
+    transaction type: <builtin: TPC-B (sort of)>
+    scaling factor: 1
+    query mode: simple
+    number of clients: 1
+    number of threads: 1
+    maximum number of tries: 1
+    number of transactions per client: 4000
+    number of transactions actually processed: 4000/4000
+    number of failed transactions: 0 (0.000%)
+    latency average = 1.174 ms
+    initial connection time = 3.343 ms
+    tps = 852.081251 (without initial connection time)

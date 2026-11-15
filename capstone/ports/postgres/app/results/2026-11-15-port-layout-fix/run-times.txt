@@ -1,0 +1,13 @@
+RUN postgres-census-stock rc=0 wall=352s
+RUN postgres-census-protected rc=0 wall=425s
+RUN postgres-stock-1 rc=0 wall=1118s
+RUN postgres-stock-2 rc=0 wall=1126s
+RUN postgres-issues-stock rc=0 wall=364s
+RUN postgres-protected-1 rc=0 wall=1419s
+RUN postgres-protected-2 rc=0 wall=1424s
+RUN postgres-issues-protected rc=0 wall=433s
+CORPUS postgres-sql-virtual-pg-pools rc=0 wall=1876s step_timeout=default
+RUN postgres-issues-t4000-stock rc=0 wall=1221s
+CORPUS postgres-sql-10-11-virtual-pg-pools rc=0 wall=2933s step_timeout=5400
+CORPUS postgres-sql-07-virtual-pg-pools rc=0 wall=1028s step_timeout=5400
+RUN postgres-issues-t4000-protected rc=0 wall=1504s

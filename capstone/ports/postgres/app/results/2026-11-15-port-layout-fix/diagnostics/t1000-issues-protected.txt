@@ -1,0 +1,21 @@
+EXP-ISSUES name=TopMemoryContext issues=19481
+EXP-ISSUES name=dynahash issues=80
+EXP-ISSUES name=GUCMemoryContext issues=120
+EXP-ISSUES name=config file processing issues=115
+EXP-ISSUES name=TZParserMemory issues=247
+EXP-ISSUES name=WAL record construction issues=3
+EXP-ISSUES name=CacheMemoryContext issues=1401
+EXP-ISSUES name=TopTransactionContext issues=25646
+EXP-ISSUES name=MdSmgr issues=52
+EXP-ISSUES name=index info issues=858
+EXP-ISSUES name=RowDescriptionContext issues=1
+EXP-ISSUES name=MessageContext issues=956608
+EXP-ISSUES name=PgStat Shared Ref Hash issues=2
+EXP-ISSUES name=PgStat Shared Ref issues=1
+EXP-ISSUES name=PgStat Pending issues=321
+EXP-ISSUES name=TopPortalContext issues=7000
+EXP-ISSUES name=PortalContext issues=8000
+EXP-ISSUES name=search_path processing cache issues=32
+EXP-ISSUES name=ExecutorState issues=190446
+EXP-ISSUES name=ErrorContext issues=6
+EXP-ISSUES-END slots=20 overflow=0

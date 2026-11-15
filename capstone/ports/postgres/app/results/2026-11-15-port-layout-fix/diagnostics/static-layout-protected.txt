@@ -1,0 +1,162 @@
+=== reuse-protected (this branch, patch 0003)
+0 | struct MemoryChunk
+         0 |   uint64 capstone_pad
+         8 |   uint64 hdrmask
+           | [sizeof=16, align=8]
+
+0 | struct AllocBlockData
+         0 |   AllocSet aset
+        16 |   AllocBlock prev
+        32 |   AllocBlock next
+        48 |   char * freeptr
+        64 |   char * endptr
+           | [sizeof=80, align=16]
+
+0 | struct AllocSetContext
+         0 |   struct MemoryContextData header
+         0 |     NodeTag type
+         4 |     _Bool isReset
+         5 |     _Bool allowInCritSection
+         8 |     Size mem_allocated
+        16 |     const MemoryContextMethods * methods
+        32 |     MemoryContext parent
+        48 |     MemoryContext firstchild
+        64 |     MemoryContext prevchild
+        80 |     MemoryContext nextchild
+        96 |     const char * name
+       112 |     const char * ident
+       128 |     MemoryContextCallback * reset_cbs
+       144 |   AllocBlock blocks
+       160 |   MemoryChunk *[10] freelist
+       320 |   uint32 initBlockSize
+       324 |   uint32 maxBlockSize
+       328 |   uint32 nextBlockSize
+       332 |   uint32 allocChunkLimit
+       336 |   int freeListIndex
+           | [sizeof=352, align=16]
+
+0 | struct GenerationBlock
+         0 |   struct dlist_node node
+         0 |     dlist_node * prev
+        16 |     dlist_node * next
+        32 |   GenerationContext * context
+        48 |   Size blksize
+        56 |   int nchunks
+        60 |   int nfree
+        64 |   char * freeptr
+        80 |   char * endptr
+           | [sizeof=96, align=16]
+
+0 | struct GenerationContext
+         0 |   struct MemoryContextData header
+         0 |     NodeTag type
+         4 |     _Bool isReset
+         5 |     _Bool allowInCritSection
+         8 |     Size mem_allocated
+        16 |     const MemoryContextMethods * methods
+        32 |     MemoryContext parent
+        48 |     MemoryContext firstchild
+        64 |     MemoryContext prevchild
+        80 |     MemoryContext nextchild
+        96 |     const char * name
+       112 |     const char * ident
+       128 |     MemoryContextCallback * reset_cbs
+       144 |   uint32 initBlockSize
+       148 |   uint32 maxBlockSize
+       152 |   uint32 nextBlockSize
+       156 |   uint32 allocChunkLimit
+       160 |   GenerationBlock * block
+       176 |   GenerationBlock * freeblock
+       192 |   struct dlist_head blocks
+       192 |     struct dlist_node head
+       192 |       dlist_node * prev
+       208 |       dlist_node * next
+           | [sizeof=224, align=16]
+
+0 | struct SlabBlock
+         0 |   SlabContext * slab
+        16 |   int32 nfree
+        20 |   int32 nunused
+        32 |   MemoryChunk * freehead
+        48 |   MemoryChunk * unused
+        64 |   struct dlist_node node
+        64 |     dlist_node * prev
+        80 |     dlist_node * next
+           | [sizeof=96, align=16]
+
+0 | struct SlabContext
+         0 |   struct MemoryContextData header
+         0 |     NodeTag type
+         4 |     _Bool isReset
+         5 |     _Bool allowInCritSection
+         8 |     Size mem_allocated
+        16 |     const MemoryContextMethods * methods
+        32 |     MemoryContext parent
+        48 |     MemoryContext firstchild
+        64 |     MemoryContext prevchild
+        80 |     MemoryContext nextchild
+        96 |     const char * name
+       112 |     const char * ident
+       128 |     MemoryContextCallback * reset_cbs
+       144 |   uint32 chunkSize
+       148 |   uint32 fullChunkSize
+       152 |   uint32 blockSize
+       156 |   int32 chunksPerBlock
+       160 |   int32 curBlocklistIndex
+       164 |   int32 blocklist_shift
+       176 |   struct dclist_head emptyblocks
+       176 |     struct dlist_head dlist
+       176 |       struct dlist_node head
+       176 |         dlist_node * prev
+       192 |         dlist_node * next
+       208 |     uint32 count
+       224 |   dlist_head[3] blocklist
+           | [sizeof=320, align=16]
+
+0 | struct BumpBlock
+         0 |   struct dlist_node node
+         0 |     dlist_node * prev
+        16 |     dlist_node * next
+        32 |   char * freeptr
+        48 |   char * endptr
+           | [sizeof=64, align=16]
+
+0 | struct BumpContext
+         0 |   struct MemoryContextData header
+         0 |     NodeTag type
+         4 |     _Bool isReset
+         5 |     _Bool allowInCritSection
+         8 |     Size mem_allocated
+        16 |     const MemoryContextMethods * methods
+        32 |     MemoryContext parent
+        48 |     MemoryContext firstchild
+        64 |     MemoryContext prevchild
+        80 |     MemoryContext nextchild
+        96 |     const char * name
+       112 |     const char * ident
+       128 |     MemoryContextCallback * reset_cbs
+       144 |   uint32 initBlockSize
+       148 |   uint32 maxBlockSize
+       152 |   uint32 nextBlockSize
+       156 |   uint32 allocChunkLimit
+       160 |   struct dlist_head blocks
+       160 |     struct dlist_node head
+       160 |       dlist_node * prev
+       176 |       dlist_node * next
+           | [sizeof=192, align=16]
+
+0 | struct MemoryContextData
+         0 |   NodeTag type
+         4 |   _Bool isReset
+         5 |   _Bool allowInCritSection
+         8 |   Size mem_allocated
+        16 |   const MemoryContextMethods * methods
+        32 |   MemoryContext parent
+        48 |   MemoryContext firstchild
+        64 |   MemoryContext prevchild
+        80 |   MemoryContext nextchild
+        96 |   const char * name
+       112 |   const char * ident
+       128 |   MemoryContextCallback * reset_cbs
+           | [sizeof=144, align=16]
+

@@ -1,0 +1,321 @@
+--- a/src/backend/utils/mmgr/aset.c
++++ b/src/backend/utils/mmgr/aset.c
+@@ -51,6 +51,40 @@
+ #include "utils/memutils.h"
+ #include "utils/memutils_internal.h"
+ #include "utils/memutils_memorychunk.h"
++
++#ifdef EXP_REUSE_GAP
++/* Reuse diagnostic (scratch): block census per manager path and context name. */
++#include <stdio.h>
++#include <stdlib.h>
++#include <string.h>
++#define EXP_BLK_SLOTS 256
++static struct { const char *path, *name; unsigned long long blocks, bytes; } exp_blk[EXP_BLK_SLOTS];
++static int exp_blk_used, exp_blk_overflow;
++static void exp_blk_report(void)
++{
++	for (int i = 0; i < exp_blk_used; i++)
++		fprintf(stderr, "EXP-BLOCKS path=%s name=%s blocks=%llu bytes=%llu\n", exp_blk[i].path,
++				exp_blk[i].name, exp_blk[i].blocks, exp_blk[i].bytes);
++	fprintf(stderr, "EXP-BLOCKS-END slots=%d overflow=%d\n", exp_blk_used, exp_blk_overflow);
++}
++void exp_blk_count(const char *path, const char *name, size_t bytes)
++{
++	int i;
++	if (!name) name = "?";
++	for (i = 0; i < exp_blk_used; i++)
++		if (exp_blk[i].path == path && strcmp(exp_blk[i].name, name) == 0) break;
++	if (i == exp_blk_used)
++	{
++		if (exp_blk_used == EXP_BLK_SLOTS) { exp_blk_overflow++; return; }
++		if (exp_blk_used == 0) atexit(exp_blk_report);
++		exp_blk[i].path = path;
++		exp_blk[i].name = name;
++		exp_blk_used++;
++	}
++	exp_blk[i].blocks++;
++	exp_blk[i].bytes += bytes;
++}
++#endif
+ 
+ /*--------------------
+  * Chunk freelist k holds chunks of size 1 << (k + ALLOC_MINBITS),
+@@ -444,6 +478,9 @@
+ 	 * the context header and its block header follows that.
+ 	 */
+ 	set = (AllocSet) malloc(firstBlockSize);
++#ifdef EXP_REUSE_GAP
++	exp_blk_count("aset-context", name, firstBlockSize);
++#endif
+ 	if (set == NULL)
+ 	{
+ 		if (TopMemoryContext)
+@@ -715,6 +752,9 @@
+ 
+ 	blksize = chunk_size + ALLOC_BLOCKHDRSZ + ALLOC_CHUNKHDRSZ;
+ 	block = (AllocBlock) malloc(blksize);
++#ifdef EXP_REUSE_GAP
++	exp_blk_count("aset-large", context->name, blksize);
++#endif
+ 	if (block == NULL)
+ 		return MemoryContextAllocationFailure(context, size, flags);
+ 
+@@ -908,6 +948,9 @@
+ 
+ 	/* Try to allocate it */
+ 	block = (AllocBlock) malloc(blksize);
++#ifdef EXP_REUSE_GAP
++	exp_blk_count("aset-new", context->name, blksize);
++#endif
+ 
+ 	/*
+ 	 * We could be asking for pretty big blocks here, so cope if malloc fails.
+@@ -919,6 +962,9 @@
+ 		if (blksize < required_size)
+ 			break;
+ 		block = (AllocBlock) malloc(blksize);
++#ifdef EXP_REUSE_GAP
++	exp_blk_count("aset-new-retry", context->name, blksize);
++#endif
+ 	}
+ 
+ 	if (block == NULL)
+@@ -1226,6 +1272,9 @@
+ 		oldblksize = block->endptr - ((char *) block);
+ 
+ 		block = (AllocBlock) realloc(block, blksize);
++#ifdef EXP_REUSE_GAP
++	exp_blk_count("aset-realloc", set->header.name, blksize);
++#endif
+ 		if (block == NULL)
+ 		{
+ 			/* Disallow access to the chunk header. */
+--- a/src/backend/utils/mmgr/generation.c
++++ b/src/backend/utils/mmgr/generation.c
+@@ -41,6 +41,10 @@
+ #include "utils/memutils.h"
+ #include "utils/memutils_internal.h"
+ #include "utils/memutils_memorychunk.h"
++
++#ifdef EXP_REUSE_GAP
++extern void exp_blk_count(const char *path, const char *name, size_t bytes);
++#endif
+ 
+ 
+ #define Generation_BLOCKHDRSZ	MAXALIGN(sizeof(GenerationBlock))
+@@ -207,6 +211,9 @@
+ 	 * starts with the context header and its block header follows that.
+ 	 */
+ 	set = (GenerationContext *) malloc(allocSize);
++#ifdef EXP_REUSE_GAP
++	exp_blk_count("generation-context", name, allocSize);
++#endif
+ 	if (set == NULL)
+ 	{
+ 		MemoryContextStats(TopMemoryContext);
+@@ -362,6 +369,9 @@
+ 	blksize = required_size + Generation_BLOCKHDRSZ;
+ 
+ 	block = (GenerationBlock *) malloc(blksize);
++#ifdef EXP_REUSE_GAP
++	exp_blk_count("generation-large", context->name, blksize);
++#endif
+ 	if (block == NULL)
+ 		return MemoryContextAllocationFailure(context, size, flags);
+ 
+@@ -483,6 +493,9 @@
+ 		blksize = pg_nextpower2_size_t(required_size);
+ 
+ 	block = (GenerationBlock *) malloc(blksize);
++#ifdef EXP_REUSE_GAP
++	exp_blk_count("generation-new", context->name, blksize);
++#endif
+ 
+ 	if (block == NULL)
+ 		return MemoryContextAllocationFailure(context, size, flags);
+--- a/src/backend/utils/mmgr/slab.c
++++ b/src/backend/utils/mmgr/slab.c
+@@ -74,6 +74,10 @@
+ #include "utils/memutils_internal.h"
+ #include "utils/memutils_memorychunk.h"
+ 
++#ifdef EXP_REUSE_GAP
++extern void exp_blk_count(const char *path, const char *name, size_t bytes);
++#endif
++
+ #define Slab_BLOCKHDRSZ	MAXALIGN(sizeof(SlabBlock))
+ 
+ #ifdef MEMORY_CONTEXT_CHECKING
+@@ -362,6 +366,9 @@
+ 
+ 
+ 	slab = (SlabContext *) malloc(Slab_CONTEXT_HDRSZ(chunksPerBlock));
++#ifdef EXP_REUSE_GAP
++	exp_blk_count("slab-context", name, Slab_CONTEXT_HDRSZ(chunksPerBlock));
++#endif
+ 	if (slab == NULL)
+ 	{
+ 		MemoryContextStats(TopMemoryContext);
+@@ -563,6 +570,9 @@
+ 	else
+ 	{
+ 		block = (SlabBlock *) malloc(slab->blockSize);
++#ifdef EXP_REUSE_GAP
++	exp_blk_count("slab-new", context->name, slab->blockSize);
++#endif
+ 
+ 		if (unlikely(block == NULL))
+ 			return MemoryContextAllocationFailure(context, size, flags);
+--- a/src/backend/utils/mmgr/bump.c
++++ b/src/backend/utils/mmgr/bump.c
+@@ -44,6 +44,10 @@
+ #include "utils/memutils.h"
+ #include "utils/memutils_memorychunk.h"
+ #include "utils/memutils_internal.h"
++
++#ifdef EXP_REUSE_GAP
++extern void exp_blk_count(const char *path, const char *name, size_t bytes);
++#endif
+ 
+ #define Bump_BLOCKHDRSZ	MAXALIGN(sizeof(BumpBlock))
+ 
+@@ -175,6 +179,9 @@
+ 	 * the context header and its block header follows that.
+ 	 */
+ 	set = (BumpContext *) malloc(allocSize);
++#ifdef EXP_REUSE_GAP
++	exp_blk_count("bump-context", name, allocSize);
++#endif
+ 	if (set == NULL)
+ 	{
+ 		MemoryContextStats(TopMemoryContext);
+@@ -315,6 +322,9 @@
+ 	blksize = required_size + Bump_BLOCKHDRSZ;
+ 
+ 	block = (BumpBlock *) malloc(blksize);
++#ifdef EXP_REUSE_GAP
++	exp_blk_count("bump-large", context->name, blksize);
++#endif
+ 	if (block == NULL)
+ 		return NULL;
+ 
+@@ -451,6 +461,9 @@
+ 		blksize = pg_nextpower2_size_t(required_size);
+ 
+ 	block = (BumpBlock *) malloc(blksize);
++#ifdef EXP_REUSE_GAP
++	exp_blk_count("bump-new", context->name, blksize);
++#endif
+ 
+ 	if (block == NULL)
+ 		return MemoryContextAllocationFailure(context, size, flags);
+--- a/src/backend/utils/mmgr/mcxt.c
++++ b/src/backend/utils/mmgr/mcxt.c
+@@ -247,6 +247,34 @@
+ 
+ #ifdef EXP_REUSE_GAP
+ #include "exp-reuse-gap.h"
++#endif
++
++#ifdef EXP_REUSE_GAP
++/* Diagnostic (scratch): issued chunks per context name. */
++#define EXP_NAME_SLOTS 1024
++static struct { const char *name; unsigned long long issues; } exp_name[EXP_NAME_SLOTS];
++static int exp_name_used, exp_name_overflow;
++static void exp_name_report(void)
++{
++	for (int i = 0; i < exp_name_used; i++)
++		fprintf(stderr, "EXP-ISSUES name=%s issues=%llu\n", exp_name[i].name, exp_name[i].issues);
++	fprintf(stderr, "EXP-ISSUES-END slots=%d overflow=%d\n", exp_name_used, exp_name_overflow);
++}
++static void exp_name_issue(MemoryContext context)
++{
++	const char *name = context && context->name ? context->name : "?";
++	int i;
++	for (i = 0; i < exp_name_used; i++)
++		if (exp_name[i].name == name || strcmp(exp_name[i].name, name) == 0) break;
++	if (i == exp_name_used)
++	{
++		if (exp_name_used == EXP_NAME_SLOTS) { exp_name_overflow++; return; }
++		if (exp_name_used == 0) atexit(exp_name_report);
++		exp_name[i].name = name;
++		exp_name_used++;
++	}
++	exp_name[i].issues++;
++}
+ #endif
+ 
+ /*
+@@ -1227,6 +1255,7 @@
+ 	 */
+ 	ret = context->methods->alloc(context, size, 0);
+ #ifdef EXP_REUSE_GAP
++	exp_name_issue(context);
+ 	exp_gap_issue((uintptr_t) context, (uintptr_t) ret, size);
+ #endif
+ #ifdef PG_SPATIAL_GAP_OBSERVER
+@@ -1257,6 +1286,7 @@
+ 
+ 	ret = context->methods->alloc(context, size, 0);
+ #ifdef EXP_REUSE_GAP
++	exp_name_issue(context);
+ 	exp_gap_issue((uintptr_t) context, (uintptr_t) ret, size);
+ #endif
+ #ifdef PG_SPATIAL_GAP_OBSERVER
+@@ -1290,6 +1320,7 @@
+ 
+ 	ret = context->methods->alloc(context, size, flags);
+ #ifdef EXP_REUSE_GAP
++	exp_name_issue(context);
+ 	exp_gap_issue((uintptr_t) context, (uintptr_t) ret, size);
+ #endif
+ #ifdef PG_SPATIAL_GAP_OBSERVER
+@@ -1383,6 +1414,7 @@
+ 	 */
+ 	ret = context->methods->alloc(context, size, 0);
+ #ifdef EXP_REUSE_GAP
++	exp_name_issue(context);
+ 	exp_gap_issue((uintptr_t) context, (uintptr_t) ret, size);
+ #endif
+ #ifdef PG_SPATIAL_GAP_OBSERVER
+@@ -1409,6 +1441,7 @@
+ 
+ 	ret = context->methods->alloc(context, size, 0);
+ #ifdef EXP_REUSE_GAP
++	exp_name_issue(context);
+ 	exp_gap_issue((uintptr_t) context, (uintptr_t) ret, size);
+ #endif
+ #ifdef PG_SPATIAL_GAP_OBSERVER
+@@ -1436,6 +1469,7 @@
+ 
+ 	ret = context->methods->alloc(context, size, flags);
+ #ifdef EXP_REUSE_GAP
++	exp_name_issue(context);
+ 	exp_gap_issue((uintptr_t) context, (uintptr_t) ret, size);
+ #endif
+ #ifdef PG_SPATIAL_GAP_OBSERVER
+@@ -1666,6 +1700,7 @@
+ 		else
+ 		{
+ 			exp_gap_release(exp_gap_old_base);
++			exp_name_issue(exp_gap_old_context);
+ 			exp_gap_issue((uintptr_t) exp_gap_old_context, exp_gap_new_base, size);
+ 		}
+ 	}
+@@ -1739,6 +1774,7 @@
+ 		else
+ 		{
+ 			exp_gap_release(exp_gap_old_base);
++			exp_name_issue(exp_gap_old_context);
+ 			exp_gap_issue((uintptr_t) exp_gap_old_context, exp_gap_new_base, size);
+ 		}
+ 	}
+@@ -1810,6 +1846,7 @@
+ 	 */
+ 	ret = context->methods->alloc(context, size, MCXT_ALLOC_HUGE);
+ #ifdef EXP_REUSE_GAP
++	exp_name_issue(context);
+ 	exp_gap_issue((uintptr_t) context, (uintptr_t) ret, size);
+ #endif
+ #ifdef PG_SPATIAL_GAP_OBSERVER
