@@ -55,7 +55,7 @@ for quick A/B work only.
 
 ---
 
-## 3. Current results (15 Nov, 08:40; the live table in §1 is always newer)
+## 3. Current results (15 Nov, 13:48; the live table in §1 is always newer)
 
 Ratio = Capstone time / riscv-base time on the board. specdiff PASS on every row. x264 is checked by its 5 decoded-frame
 hashes against a plain board run, because the native stage has no imagevalidate. Every Capstone number below is on
@@ -63,7 +63,7 @@ bitstream **F** (a948e4134) with the FRCDKMS images (temporal) or FRCDKMSsp (spa
 
 | Row | riscv-base (s) | temporal (s) | temporal ratio | spatial (s) | spatial ratio |
 |---|---|---|---|---|---|
-| perl full | 12,623.02 | 14,151.55 (board 3) | 1.121 | 13,981.09 (board 1, cross-board) | 1.108 |
+| perl full | 12,623.02 | 14,005.42 (board 3, node-table pool) | 1.110 | 13,981.09 (board 1, cross-board, no pool yet) | 1.108 |
 | gcc train01 | 1,722.35 | 1,989.28 | 1.155 | 1,975.51 | 1.147 |
 | mcf | 5,125.02 | 6,576.13 | **1.283** | 6,308.53 | 1.231 |
 | lbm | 1,077.50 | 990.36 | 0.919 | 990.55 | 0.919 |
@@ -71,7 +71,11 @@ bitstream **F** (a948e4134) with the FRCDKMS images (temporal) or FRCDKMSsp (spa
 | imagick | 11.08 | 12.58 | 1.135 | 12.57 | 1.134 |
 | nab | 679.92 | 695.34 | 1.023 | 693.98 | 1.021 |
 | xz | 4,993.81 | 4,998.36 | 1.001 | 4,999.49 | 1.001 |
-| geomean | | | **1.056** | | **1.047** |
+| geomean | | | **1.054** | | **1.047** |
+
+**Node-table pool adopted (Addendum 133):** temporal full perl 14,005.42 s with `node_table_pool=4`, against
+14,151.55 s without it on the same board (-1.03 %, in the predicted band). The kit does not read the pool's hit counter.
+Spatial full perl reruns on the pool (bo-b2).
 
 **Seven rows are below 1.20; only mcf (1.283) is above it.** Its lever is the RTL tag-overlap bitstream G (§8).
 Spatial mcf read -4.07 % against temporal, outside Addendum 113's pre-registered -3..+0.5 % band (on the fast side).
@@ -215,11 +219,11 @@ first.
 
 ## 8. What is running and queued right now
 
-| Board | Now (15 Nov 08:40) | Queued after it |
+| Board | Now (15 Nov 13:48) | Queued after it |
 |---|---|---|
-| 1 | nested PostgreSQL ABBA (be-b1, nat-run3, from 08:34; first real pre-boot park read PARK rc=0) | free: the overlap-lever bitstream **G** (v6c) when it is sealed |
-| 2 | nested CPython ABBA (bc-b2, 4 boots, from 07:55) | bd2-b2 (nested CDERIVE/CREVOKE op timing, c3 stage, Addendum 128) → bf-b2 (nested FFmpeg ABBA, Addendum 127) |
-| 3 | node-table pool A/B (ax-b3, temporal full perl, pool=4, from 07:07) | ba-b3 (allocator step FRCDKMSa3 full perl, Addendum 121, ~13:00-18:00) |
+| 1 | bl-b1: gcc train01 with the gcc-only module tuning removed (Addendum 131, from 13:40) | bm-b1: flash **G**, G tag-HPM mcf + gcc → bn-b1: G perl makerand (Addendum 132) |
+| 2 | bj-b2: mcf on LSR c13 (hy2, Addendum 130, from 12:35; control FRCDKMSa3 mcf 6,593.26 s) | bo-b2: spatial full perl on the pool (bkit81, Addendum 133) |
+| 3 | ba-b3: allocator FRCDKMSa3 full perl (Addendum 121, from 11:14; control 14,151.55 s) | bk-b3: LSR c13 full perl (Addendum 130) |
 
 **Overlap lever, bitstream G (rtl lane, record llvm-capstone land/rtl-twc-reach).** It went through v1-v6c in sim, each
 stopped by a registered neutrality gate: plain-store timing, plain read/write ordering, the I$/D$ read rule, the
@@ -317,7 +321,36 @@ CDERIVE/CREVOKE counts, revoked-subtree size, peak table memory). Give CREVOKE's
   - the lifetimes themselves cost the kernel -0.6 M instructions and the program +0.39 % in-context.
 - **Boot 1 (board 1) was VOID:** the empty `train/in` was never baked. It was fixed and redone on board 2.
 
-**Next steps.** Each waits on the lead's word after speedtest1:
+**Silicon results on F (15 Nov; RESULTS lines, nested-workloads records):**
+
+| App | Answers | In-context | Kernel | Wall | Event 23 (verdict-cache miss replays) |
+|---|---|---|---|---|---|
+| speedtest1 `--size 1` (board 3, ABBA) | 32/32 | +1.67 % | +2.10 % | +1.95 % | +46.6 k/run, 7-8 % of the cost |
+| CPython, 6 benchmarks (board 2) | 28/28 | +5.17 % (band +1.3..+5 % missed; twin +2.06 %) | +0.30 % | +4.43 % | +5.41 M, ~11 % of the cost; L1D misses +14.7 % |
+| PostgreSQL pgbench (board 1) | all | not read (protected repeats 1.10 % apart, band 1 %) | +1.07 % | +4.38 % | +2.04 M per command |
+| FFmpeg decode (board 2) | 300/300 frames | not resolvable (unprotected repeats outside their bands) | — | -0.74 % | +1.4 k per command |
+| tshark on a pcap (board 1) | unprotected 9,000 frames | **NO protected reading** | — | — | — |
+
+- **tshark:** both protected arms (t-p1, t-p2) did not return within the 3,600 s rung cap. Unprotected took about
+  1,120 s. Both boots ended at the same commit pc (0x3ff6780f04, user space). The apertures do not tell a hang from a
+  slow run, because wrev is resting state.
+  - The twin puts protection at only +4.4 % in-context, so a 3.2x silicon slowdown would need a mechanism the twin
+    lacks.
+  - 0x3ff6780f04 is not tshark code (the image is a static EXEC, text 0x10000-0xecd000). It is slot-0 residue in the
+    high mmap/stack region.
+  - The nested lane is recording "no return within 3,600 s, 2 of 2 boots", not a wedge. It is pre-registering one
+    protected-only boot with a 60 s heartbeat (uptime, native counters, output size) and a ~4 h budget. That boot
+    separates a slow run, an in-process loop, and a stuck core.
+  - Not filed as a silicon defect.
+- **CDERIVE/CREVOKE timing on silicon** (board 2, cycle counter):
+  - CDERIVE: 63 cycles alone, 98 back-to-back;
+  - CREVOKE: 55 cycles for 1 node; about 28 cycles per node at 10k-100k (100k nodes = 2.82 M cycles, about 113 ms);
+  - CREVOKE is **not interruptible**;
+  - the 10^6-node probe died at 196,609 nodes (table 262,144);
+  - a PostgreSQL context reset (34,509 nodes) costs about 0.97 M cycles (39 ms).
+- **memcached:** deferred, because the native route refuses socket/epoll.
+
+**Next steps (as first planned).** Each waited on the lead's word after speedtest1:
 - **(a) speedtest1 `--size 100`:** twin, then one silicon pair, about 13 h of board time. The lead decides whether to
   run it.
 - **(b) The apps, in order,** each first on the QEMU twin (slot 28: build both arms, check answers, count lifetimes),

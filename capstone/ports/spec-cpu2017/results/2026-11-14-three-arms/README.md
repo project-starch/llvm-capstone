@@ -3,7 +3,7 @@
 This is a live table: rows are filled as board runs land. Pre-registrations, predictions and the run-by-run trail are
 in [`../2026-11-08-train/PREREG.md`](../2026-11-08-train/PREREG.md) (Addendum 107 onward for this table).
 
-## Status (updated 2026-11-15 08:40 +08)
+## Status (updated 2026-11-15 13:47 +08)
 
 - **riscv-base:** complete, all 8 rows.
 - **Capstone temporal:**
@@ -20,6 +20,12 @@ in [`../2026-11-08-train/PREREG.md`](../2026-11-08-train/PREREG.md) (Addendum 10
     The other twins have finished too: imagick, nab, lbm and xz rc 0 with full specdiff. perl full test is 2/2 on
     the board-matching kernel (images-a0ed). x264 reads specdiff 0/3, as every native x264 stage does: its frames are
     checked by hash on the board run.
+- **Node-table pool: ADOPTED** (Addendum 133). Temporal full perl on F with `node_table_pool=4` (released lifetime
+  tables are reused instead of allocated and zeroed for every exec) ran 14,005.42 s, against 14,151.55 s without it on
+  the same board: -1.03 %, inside the predicted -0.5..-3 %. specdiff 2/2. The pool is a change to the Capstone kernel
+  module only, and riscv-base has no such table. The temporal perl cell is now 1.110. Spatial full perl reruns on the
+  pool next on board 2. Caveat: the kit does not read the pool's hit counter, so the evidence that the pool ran on
+  silicon is the kernel tree checksum and the parameter, not a counter.
 - **Expected completion:** short rows today; x264 and the full perl test take ~10 h and ~5 h per arm, so the full
   three-arm table is expected on 15 Nov.
 
@@ -30,9 +36,9 @@ same images. The "final config" columns are being re-measured on F.
 
 | Board | Now | Then, in order |
 |---|---|---|
-| 1 | nested PostgreSQL ABBA (from 08:34) | — (overlap-lever bitstream G, when sealed) |
-| 2 | 15-min switch check (board lane), then the nested CPython ABBA | nested op-timing domain → nested FFmpeg ABBA |
-| 3 | node-table pool A/B: temporal full perl with node_table_pool=4 (from 07:07, ~4 h) | allocator-step pair (FRCDKMSa3 full perl) |
+| 1 | gcc train01 without the gcc-only module tuning (Addendum 131, from 13:40) | bitstream **G** (overlap lever v6c): flash, then mcf and gcc with tag-path counters, then perl makerand (Addendum 132) |
+| 2 | mcf on the LSR compiler change c13 (Addendum 130, from 12:35) | spatial full perl on the node-table pool (Addendum 133) |
+| 3 | allocator step FRCDKMSa3 full perl (Addendum 121, from 11:14) | LSR c13 full perl (Addendum 130) |
 
 - **F's scope.** The gain is the tag-word-cache change, reach and merge together, at N = 1 per row.
   - It comes at unchanged L1I/L1D misses, DTLB walks and mispredicts.
@@ -125,7 +131,7 @@ the table being measured now. A row moves into them as its run lands.
 
 | Benchmark | riscv-base (s) | Capstone temporal, best so far (s) | ratio | configuration | final config: temporal ratio | final config: spatial ratio |
 |---|---|---|---|---|---|---|
-| 500.perlbench_r (full: makerand + test.pl) | 12,623.02 | 14,151.55 | **1.121** | **F** / FRCDKMS | **1.121** (F) | **1.108** (F, board 1; cross-board) |
+| 500.perlbench_r (full: makerand + test.pl) | 12,623.02 | 14,005.42 | **1.110** | **F** / FRCDKMS + node-table pool | **1.110** (F + pool) | **1.108** (F, no pool yet; board 1, cross-board) |
 | 502.gcc_r (train01) | 1,722.35 | 1,989.28 | **1.155** | **F** / FRCDKMS | **1.155** (F) | **1.147** (F) |
 | 505.mcf_r | 5,125.02 | 6,576.13 | 1.283 | **F** / FRCDKMS | 1.283 (F) | 1.231 (F) |
 | 519.lbm_r | 1,077.50 | 990.36 | **0.919** | **F** / FRCDKMS | **0.919** (F) | **0.919** (F) |
@@ -133,7 +139,7 @@ the table being measured now. A row moves into them as its run lands.
 | 538.imagick_r | 11.08 | 12.58 | **1.135** | **F** / FRCDKMS | **1.135** (F) | **1.134** (F) |
 | 544.nab_r | 679.92 | 695.34 | **1.023** | **F** / FRCDKMS | **1.023** (F) | **1.021** (F) |
 | 557.xz_r | 4,993.81 | 4,998.36 | **1.001** | **F** / FRCDKMS | **1.001** (F) | **1.001** (F) |
-| geomean | | | 1.056 | | **1.056** (F) | **1.047** (F) |
+| geomean | | | 1.054 | | **1.054** (F) | **1.047** (F) |
 
 Bold = below the 1.20 target. perl makerand alone (the quick A/B sub-run, debugging only): 257.90 s on riscv-base
 against 288.58 s on **F** / FRCDKMS, ratio 1.119 (-12.5 % against the batch). The full test on F ran on board 3, the riscv-base board: makerand 292.76 s + test.pl 13,858.79 s = 14,151.55 s, ratio 1.121 (fdk/FRCDK 17,051.48 s: -17 %). Board 2's attempt at 21:07 never booted, because switches were left
