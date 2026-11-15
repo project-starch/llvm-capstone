@@ -1,7 +1,7 @@
 /* mc-harness: the memcached port's oracle driver.
  *
  *   mc-harness --out DIR [--port P] [--conns N] [--stop TERM|USR1|shutdown] [--signal-child] [--perturb none|value|cas]
- *              -- SERVER-COMMAND...
+ *              [--load CLIENT-COMMAND --load-expect N [--load-poll S] [--load-stall S]] -- SERVER-COMMAND...
  *   mc-harness --out DIR [--port P] --fixture N -- SERVER-COMMAND...
  *
  * Starts SERVER-COMMAND (memcached natively, or capstone-job ... capstone-exec memcached.dom in the guest),
@@ -26,6 +26,18 @@
  * `shutdown` command, which a server started with -A ends on. On the trap route a delivered signal
  * kills a protected program even when it has a handler, so the reuse study stops memcached this way
  * (with experiments/study/reuse-hooks/memcached/memcached-1.6.45-shutdown-without-signal.patch).
+ *
+ * --load runs an external load client against the same server after phase 4 and before the stop (the reuse
+ * study's established workload, experiments/study/reuse-hooks/memcached/run-reuse.py). CLIENT-COMMAND runs under
+ * /bin/sh -c in its own process group, with its stdout and stderr in DIR/load.out and DIR/load.err. The harness
+ * reads `stats` on one monitor connection every --load-poll seconds (default 10), as the load client's own
+ * sampler does, and counts the commands the server has processed since the load began (cmd_get + cmd_set). The
+ * load is complete when that count reaches --load-expect. It has stalled when the count has not moved for
+ * --load-stall seconds (default 300). Then the harness ends the client's process group with SIGTERM and writes
+ *   DIR/load.txt           complete|stalled, the expected and processed counts, the seconds, the client's status
+ *   DIR/load-progress.txt  one line per poll: seconds since the load began, commands processed
+ *   DIR/load-stats.txt     the raw `stats`, `stats slabs` and `stats items` after the load: not compared
+ * A load that did not complete makes the harness exit 8 after the stop. The transcript holds phases 1 to 4 only.
  *
  * --signal-child sends the stop signal to SERVER-COMMAND's child (its process group) instead of to
  * SERVER-COMMAND itself. capstone-job forwards SIGINT, SIGTERM and SIGHUP to its child and nothing
@@ -53,6 +65,9 @@
 
 static int port = 11211, nconns = 8, perturb_value, perturb_cas;
 static const char *outdir;
+static const char *load_cmd;
+static unsigned long long load_expect;
+static int load_poll = 10, load_stall = 300;
 
 /* ---- a growable text buffer: one per connection, joined into the transcript at the end ---- */
 struct buf { char *p; size_t n, cap; };
@@ -312,6 +327,90 @@ static pid_t only_child(pid_t parent) {
 }
 static double now(void) { struct timespec t; clock_gettime(CLOCK_MONOTONIC, &t); return t.tv_sec + t.tv_nsec / 1e9; }
 
+/* ---- the load phase: an external client, measured by the server's own command counters ---- */
+/* one stats-style command on the monitor connection: every line up to END */
+static void stats_cmd(struct conn *m, const char *cmdline, struct buf *dst) {
+  char line[1024];
+  sends(m, cmdline);
+  for (;;) {
+    size_t n = readline(m, line, sizeof line);
+    if (!n) break;
+    if (dst) bput(dst, line, n);
+    if (!strcmp(line, "END\r\n")) break;
+  }
+}
+static unsigned long long stat_of(const char *text, const char *name) {
+  char pat[160];
+  snprintf(pat, sizeof pat, "STAT %s ", name);
+  const char *p = strstr(text, pat);
+  return p ? strtoull(p + strlen(pat), NULL, 10) : 0;
+}
+static unsigned long long commands_processed(struct conn *m) {
+  struct buf s = {0};
+  stats_cmd(m, "stats\r\n", &s);
+  unsigned long long v = stat_of(s.p ? s.p : "", "cmd_get") + stat_of(s.p ? s.p : "", "cmd_set");
+  free(s.p);
+  return v;
+}
+static int run_load(void) {
+  struct conn *m = calloc(1, sizeof *m);
+  m->fd = dial();
+  if (m->fd < 0) { fprintf(stderr, "mc-harness: load: no monitor connection\n"); return 8; }
+  unsigned long long base = commands_processed(m);
+
+  char path[1024];
+  double t0 = now();
+  pid_t lp = fork();
+  if (lp == 0) {
+    setpgid(0, 0);
+    snprintf(path, sizeof path, "%s/load.out", outdir); int o = open(path, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+    snprintf(path, sizeof path, "%s/load.err", outdir); int e = open(path, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+    if (o >= 0) dup2(o, 1);
+    if (e >= 0) dup2(e, 2);
+    execl("/bin/sh", "sh", "-c", load_cmd, (char *)NULL); perror("exec load"); _exit(127);
+  }
+  if (lp < 0) { perror("mc-harness: load: fork"); return 8; }
+  setpgid(lp, lp);
+
+  struct buf progress = {0};
+  unsigned long long done = 0, last = 0;
+  double last_change = t0;
+  const char *result;
+  int lst = 0, exited = 0;
+  for (;;) {
+    sleep((unsigned)load_poll);
+    done = commands_processed(m) - base;
+    double t = now();
+    bprintf(&progress, "%.1f %llu\n", t - t0, done);
+    if (done >= load_expect) { result = "complete"; break; }
+    if (timed_out) { result = "monitor-timeout"; break; }
+    if (done != last) { last = done; last_change = t; }
+    else if (t - last_change >= load_stall) { result = "stalled"; break; }
+    if (!exited && waitpid(lp, &lst, WNOHANG) == lp) exited = 1;
+  }
+  double t1 = now();
+
+  if (!exited) {
+    kill(-lp, SIGTERM);
+    while (waitpid(lp, &lst, 0) < 0 && errno == EINTR) ;
+  }
+  struct buf post = {0};
+  stats_cmd(m, "stats\r\n", &post);
+  stats_cmd(m, "stats slabs\r\n", &post);
+  stats_cmd(m, "stats items\r\n", &post);
+  close(m->fd);
+  writefile("load-stats.txt", post.p ? post.p : "", post.n);
+  writefile("load-progress.txt", progress.p ? progress.p : "", progress.n);
+
+  char line[512];
+  int n = snprintf(line, sizeof line, "load=%s expect=%llu processed=%llu seconds=%.1f client=%s%s=%d\n", result,
+                   load_expect, done, t1 - t0, exited ? "ended-early," : "",
+                   WIFSIGNALED(lst) ? "signal" : "exit", WIFSIGNALED(lst) ? WTERMSIG(lst) : WEXITSTATUS(lst));
+  writefile("load.txt", line, (size_t)n);
+  printf("mc-harness: %s", line);
+  return strcmp(result, "complete") ? 8 : 0;
+}
+
 int main(int argc, char **argv) {
   int stopsig = SIGTERM, signal_child = 0, fixture = 0, shutdown_cmd = 0, i;
   for (i = 1; i < argc && strcmp(argv[i], "--"); i++) {
@@ -326,10 +425,16 @@ int main(int argc, char **argv) {
     else if (!strcmp(argv[i], "--signal-child")) signal_child = 1;
     else if (!strcmp(argv[i], "--fixture")) fixture = atoi(argv[++i]);
     else if (!strcmp(argv[i], "--perturb")) { i++; perturb_value = !strcmp(argv[i], "value"); perturb_cas = !strcmp(argv[i], "cas"); }
+    else if (!strcmp(argv[i], "--load")) load_cmd = argv[++i];
+    else if (!strcmp(argv[i], "--load-expect")) load_expect = strtoull(argv[++i], NULL, 10);
+    else if (!strcmp(argv[i], "--load-poll")) load_poll = atoi(argv[++i]);
+    else if (!strcmp(argv[i], "--load-stall")) load_stall = atoi(argv[++i]);
     else { fprintf(stderr, "mc-harness: unknown option %s\n", argv[i]); return 2; }
   }
-  if (!outdir || i + 1 >= argc || nconns < 1 || nconns > 64) {
-    fprintf(stderr, "usage: mc-harness --out DIR [--port P] [--conns N] [--stop TERM|USR1|shutdown] [--signal-child] [--perturb none|value|cas] -- SERVER...\n");
+  if (!outdir || i + 1 >= argc || nconns < 1 || nconns > 64 ||
+      (load_cmd && (!load_expect || load_poll < 1 || load_stall < load_poll))) {
+    fprintf(stderr, "usage: mc-harness --out DIR [--port P] [--conns N] [--stop TERM|USR1|shutdown] [--signal-child] [--perturb none|value|cas] "
+                    "[--load CLIENT --load-expect N [--load-poll S] [--load-stall S]] -- SERVER...\n");
     return 2;
   }
   char **server = argv + i + 1;
@@ -404,6 +509,7 @@ int main(int argc, char **argv) {
   bput(&all_raw, "== phase 4\n", 11); bput(&all_raw, stats.p ? stats.p : "", stats.n);
   bput(&all_norm, "== phase 4\n", 11); bput(&all_norm, stats.p ? stats.p : "", stats.n);
   close(c0->fd);
+  int load_rc = load_cmd ? run_load() : 0;
 
   pid_t target = pid;
   if (signal_child) {
@@ -436,5 +542,6 @@ int main(int argc, char **argv) {
   writefile("transcript.norm", all_norm.p, all_norm.n);
   printf("mc-harness: %zu bytes of transcript, %s", all_norm.n, status);
   if (timed_out) { printf("mc-harness: a read timed out (see <TIMEOUT> in the transcript)\n"); return 5; }
+  if (load_rc) { printf("mc-harness: the load did not complete (see load.txt)\n"); return load_rc; }
   return 0;
 }

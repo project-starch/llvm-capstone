@@ -4,7 +4,10 @@
 #   upstream + ports/memcached/app/patches/*.patch (0001-0006, as host/build-domain.sh and
 #   host/build-sublet.sh apply them) + memcached-1.6.45-reuse-gap-hooks.patch (this directory).
 # Patch 0006 is inert without -DMC_CAPSTONE_SUBLET, so the hook patch applies to the same tree in
-# both arms, and the two configure lines differ by that one define:
+# both arms, and the two configure lines differ by that one define. Two study patches outside the
+# allocators apply to both arms as well: memcached-1.6.45-shutdown-without-signal.patch (the
+# `shutdown` command stops the main loop without a signal) and memcached-1.6.45-tcp-writev.patch
+# (responses go out through writev, since the trap route answers sendmsg with ENOSYS):
 #   $OUT/stock/memcached.dom      -DEXP_REUSE_GAP
 #   $OUT/protected/memcached.dom  -DEXP_REUSE_GAP -DMC_CAPSTONE_SUBLET
 # The port's scripts are not edited: libevent comes from deps/build-libevent.sh, the SDK from
@@ -30,7 +33,7 @@ build() {   # arm, extra CPPFLAGS
   local arm=$1 defs=$2 X=$MC_WORK/$1/src L=$MC_WORK/$1/logs
   mkdir -p "$L"; cp -a "$MSRC" "$X"
   for p in "$APP"/patches/*.patch "$HOOKS/memcached-1.6.45-reuse-gap-hooks.patch" \
-           "$HOOKS/memcached-1.6.45-shutdown-without-signal.patch"; do
+           "$HOOKS/memcached-1.6.45-shutdown-without-signal.patch" "$HOOKS/memcached-1.6.45-tcp-writev.patch"; do
     ( cd "$X" && patch --batch --forward --fuzz=0 -p1 < "$p" > "$L/patch-$(basename "$p").log" ) || { echo "patch $p FAILED" >&2; exit 1; }
   done
   cp "$APP/src/mcapp-safety.c" "$X/"

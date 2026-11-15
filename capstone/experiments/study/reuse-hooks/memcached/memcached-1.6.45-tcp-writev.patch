@@ -1,0 +1,15 @@
+--- a/memcached.c
++++ b/memcached.c
+@@ -134,6 +134,12 @@
+ 
+ ssize_t tcp_sendmsg(conn *c, struct msghdr *msg, int flags) {
+     assert (c != NULL);
++    /* reuse study: the trap route answers sendmsg with ENOSYS (the kernel has no msghdr loader
++     * yet), so every response failed and each connection closed after its first command. On a
++     * connected TCP socket a message without a name, control data or flags carries the same bytes
++     * through writev, whose iovec loader exists. */
++    if (msg->msg_name == NULL && msg->msg_controllen == 0 && flags == 0)
++        return writev(c->sfd, msg->msg_iov, msg->msg_iovlen);
+     return sendmsg(c->sfd, msg, flags);
+ }
+ 
