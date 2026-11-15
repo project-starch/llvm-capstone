@@ -3,7 +3,7 @@
 This is a live table: rows are filled as board runs land. Pre-registrations, predictions and the run-by-run trail are
 in [`../2026-11-08-train/PREREG.md`](../2026-11-08-train/PREREG.md) (Addendum 107 onward for this table).
 
-## Status (updated 2026-11-15 14:36 +08)
+## Status (updated 2026-11-15 18:39 +08)
 
 - **riscv-base:** complete, all 8 rows.
 - **Capstone temporal:**
@@ -136,7 +136,7 @@ the table being measured now. A row moves into them as its run lands.
 
 | Benchmark | riscv-base (s) | Capstone temporal, best so far (s) | ratio | configuration | final config: temporal ratio | final config: spatial ratio |
 |---|---|---|---|---|---|---|
-| 500.perlbench_r (full: makerand + test.pl) | 12,623.02 | 14,005.42 | **1.110** | **F** / FRCDKMS + node-table pool | **1.110** (F + pool) | **1.108** (F, no pool yet; board 1, cross-board) |
+| 500.perlbench_r (full: makerand + test.pl) | 12,623.02 | 14,005.42 | **1.110** | **F** / FRCDKMS + node-table pool | **1.110** (F + pool) | **1.096** (F + pool, board 2; cross-board) |
 | 502.gcc_r (train01) | 1,722.35 | 2,002.68 | **1.163** | **F** / FRCDKMS, no module tuning (tuned: 1,989.28 s, 1.155) | **1.163** (F) | **1.147** (F, tuned; untuned pending) |
 | 505.mcf_r | 5,125.02 | 6,576.13 | 1.283 | **F** / FRCDKMS | 1.283 (F) | 1.231 (F) |
 | 519.lbm_r | 1,077.50 | 990.36 | **0.919** | **F** / FRCDKMS | **0.919** (F) | **0.919** (F) |
@@ -144,7 +144,7 @@ the table being measured now. A row moves into them as its run lands.
 | 538.imagick_r | 11.08 | 12.58 | **1.135** | **F** / FRCDKMS | **1.135** (F) | **1.134** (F) |
 | 544.nab_r | 679.92 | 695.34 | **1.023** | **F** / FRCDKMS | **1.023** (F) | **1.021** (F) |
 | 557.xz_r | 4,993.81 | 4,998.36 | **1.001** | **F** / FRCDKMS | **1.001** (F) | **1.001** (F) |
-| geomean | | | 1.055 | | **1.055** (F) | **1.047** (F, gcc tuned) |
+| geomean | | | 1.055 | | **1.055** (F) | **1.046** (F, gcc tuned) |
 
 Bold = below the 1.20 target. perl makerand alone (the quick A/B sub-run, debugging only): 257.90 s on riscv-base
 against 288.58 s on **F** / FRCDKMS, ratio 1.119 (-12.5 % against the batch). The full test on F ran on board 3, the riscv-base board: makerand 292.76 s + test.pl 13,858.79 s = 14,151.55 s, ratio 1.121 (fdk/FRCDK 17,051.48 s: -17 %). Board 2's attempt at 21:07 never booted, because switches were left

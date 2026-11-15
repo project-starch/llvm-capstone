@@ -63,7 +63,7 @@ bitstream **F** (a948e4134) with the FRCDKMS images (temporal) or FRCDKMSsp (spa
 
 | Row | riscv-base (s) | temporal (s) | temporal ratio | spatial (s) | spatial ratio |
 |---|---|---|---|---|---|
-| perl full | 12,623.02 | 14,005.42 (board 3, node-table pool) | 1.110 | 13,981.09 (board 1, cross-board, no pool yet) | 1.108 |
+| perl full | 12,623.02 | 14,005.42 (board 3, node-table pool) | 1.110 | 13,840.64 (board 2, pool; cross-board) | 1.096 |
 | gcc train01 | 1,722.35 | 2,002.68 (no module tuning; tuned 1,989.28) | 1.163 | 1,975.51 (tuned; untuned queued) | 1.147 |
 | mcf | 5,125.02 | 6,576.13 | **1.283** | 6,308.53 | 1.231 |
 | lbm | 1,077.50 | 990.36 | 0.919 | 990.55 | 0.919 |
@@ -71,7 +71,7 @@ bitstream **F** (a948e4134) with the FRCDKMS images (temporal) or FRCDKMSsp (spa
 | imagick | 11.08 | 12.58 | 1.135 | 12.57 | 1.134 |
 | nab | 679.92 | 695.34 | 1.023 | 693.98 | 1.021 |
 | xz | 4,993.81 | 4,998.36 | 1.001 | 4,999.49 | 1.001 |
-| geomean | | | **1.055** | | **1.047** |
+| geomean | | | **1.055** | | **1.046** |
 
 **Node-table pool adopted (Addendum 133):** temporal full perl 14,005.42 s with `node_table_pool=4`, against
 14,151.55 s without it on the same board (-1.03 %, in the predicted band). The kit does not read the pool's hit counter.
