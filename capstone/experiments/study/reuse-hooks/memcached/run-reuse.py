@@ -2,7 +2,15 @@
 """One boot of the memcached reuse-distance row: one arm, REPS servers in turn.
 
     run-reuse.py --arm stock|protected --image MEMCACHED_DOM --work NEW_DIR --qemu QEMU --images IMAGES \
-        --adapter ADAPTER --job CAPSTONE_JOB --harness MC_HARNESS --run-staged RUN_STAGED [--reps 3]
+        --adapter ADAPTER --job CAPSTONE_JOB --harness MC_HARNESS --run-staged RUN_STAGED [--reps 3] \
+        [--flags SERVER_FLAGS] [--load-client MC_CRUSHER --load-conf CONF --load-expect N [--load-poll S] [--load-stall S]]
+
+With --load-client (the established workload, docs/plans/2026-11-15-memcached-established-workload.md), each
+server runs the protocol oracle first and then mc-crusher (build-load-client.sh) with CONF against it, natively
+in the guest over loopback TCP, through mc-harness's --load phase: the harness waits until the server has
+processed N commands (cmd_get + cmd_set), ends the client and then sends `shutdown`. The client runs with
+libevent's default backend (EVENT_NOEPOLL is set for the server only). NEW_DIR/rep<N>/load.txt says whether the
+load completed; load-stats.txt holds the server's stats, slab and item counters after it.
 
 Each repetition is the protocol oracle unchanged: host/mc-harness/mc-harness.c (one connection
 through phases 1 and 2, eight concurrent connections in phase 3, the stats of phase 4) against a
@@ -34,18 +42,26 @@ def sha(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 
-def gate(reps):
+LOAD_FILES = 'load.txt load-progress.txt load-stats.txt load.out load.err'
+
+
+def gate(reps, flags, load_expect=None, load_poll=10, load_stall=300):
     # The trap libc returns ENOSYS for epoll until its opaque-reference side tables exist, so libevent
     # takes its poll backend (EVENT_NOEPOLL); the slab allocator the study observes is the same.
     lines = ['#!/bin/sh', 'cd /mnt/vm || exit 1', 'dmesg -n 1', './capstone-vexec --platform > /dev/null || exit 1',
              'export EVENT_NOEPOLL=1']
+    load = ''
+    if load_expect:
+        load = (f'--load "unset EVENT_NOEPOLL; exec ./mc-crusher --conf ./load.conf --ip 127.0.0.1 --port 21299" '
+                f'--load-expect {load_expect} --load-poll {load_poll} --load-stall {load_stall} ')
     for rep in range(1, reps + 1):
         out = f'/tmp/rg-{rep}'
         lines += [f'echo RG_BEGIN:{rep}', f'mkdir -p {out}; chmod 777 {out}',
-                  f'./mc-harness --out {out} --port 21299 --stop shutdown -- ./capstone-job {out}/job.json '
-                  f'--user 65534:65534 -- ./capstone-vexec ./memcached.dom {FLAGS}',
+                  f'./mc-harness --out {out} --port 21299 --stop shutdown {load}-- ./capstone-job {out}/job.json '
+                  f'--user 65534:65534 -- ./capstone-vexec ./memcached.dom {flags}',
                   'rc=$?',
-                  f'for f in transcript.norm status.txt identity.txt job.json server.out server.err; do '
+                  f'for f in transcript.norm status.txt identity.txt job.json server.out server.err'
+                  f'{" " + LOAD_FILES if load_expect else ""}; do '
                   f'[ -f {out}/$f ] || continue; echo RG_FILE:$f; gzip -c {out}/$f | base64; echo RG_FILE_END; done',
                   f'echo RG_END:{rep}:$rc']
     lines += ["! grep -q '^capstone_vm ' /proc/modules", 'echo RG_CLEANUP:$?', 'echo VIRTUAL_STAGED_DONE']
@@ -70,32 +86,60 @@ def main():
         p.add_argument('--' + name, type=Path, required=True)
     p.add_argument('--reps', type=int, default=3)
     p.add_argument('--timeout', type=int, default=3600)
+    p.add_argument('--flags', default=FLAGS, help='memcached flags (default: those of the protocol-oracle row)')
+    p.add_argument('--load-client', type=Path, help='mc-crusher, static for the guest (build-load-client.sh)')
+    p.add_argument('--load-conf', type=Path, help="mc-crusher's configuration file")
+    p.add_argument('--load-expect', type=int, help='commands (cmd_get + cmd_set) the configuration sends')
+    p.add_argument('--load-poll', type=int, default=10)
+    p.add_argument('--load-stall', type=int, default=300)
+    p.add_argument('--rerecord', type=float, metavar='WALL_SECONDS',
+                   help='no boot: rebuild NEW_DIR/result.json from the stage and serial log a finished run left, '
+                        'with the same arguments and the boot wall time that run printed')
     a = p.parse_args()
-    a.work.mkdir(parents=True, exist_ok=False)
+    if bool(a.load_client) != bool(a.load_conf) or bool(a.load_client) != bool(a.load_expect):
+        p.error('--load-client, --load-conf and --load-expect go together')
     stage = a.work / 'stage'
-    stage.mkdir()
     staged = {'capstone-vexec': a.adapter / 'capstone-vexec',
               'capstone-job': a.job, 'memcached.dom': a.image, 'mc-harness': a.harness}
-    for name, src in staged.items():
-        shutil.copy2(src, stage / name)
-    script = gate(a.reps)
-    (stage / 'gate.sh').write_text(script)
-    t0 = time.time()
-    run = subprocess.run([sys.executable, str(a.run_staged), '--qemu', str(a.qemu.resolve()),
-                          '--images', str(a.images.resolve()), '--stage', str(stage),
-                          '--work', str(a.work / 'guest'), '--timeout', str(a.timeout)])
-    wall = time.time() - t0
-    log = (a.work / 'guest/serial.log').read_text(errors='replace').replace('\r', '')
+    if a.load_client:
+        staged |= {'mc-crusher': a.load_client, 'load.conf': a.load_conf}
+    script = gate(a.reps, a.flags, a.load_expect, a.load_poll, a.load_stall)
+    if a.rerecord is not None:
+        assert not (a.work / 'result.json').exists() and (stage / 'gate.sh').read_text() == script
+        assert all(sha(stage / name) == sha(src) for name, src in staged.items())
+        wall = a.rerecord
+        log = (a.work / 'guest/serial.log').read_text(errors='replace').replace('\r', '')
+        returncode = 0 if '\nVIRTUAL_STAGED_DONE' in log else 1
+    else:
+        a.work.mkdir(parents=True, exist_ok=False)
+        stage.mkdir()
+        for name, src in staged.items():
+            shutil.copy2(src, stage / name)
+        (stage / 'gate.sh').write_text(script)
+        t0 = time.time()
+        run = subprocess.run([sys.executable, str(a.run_staged), '--qemu', str(a.qemu.resolve()),
+                              '--images', str(a.images.resolve()), '--stage', str(stage),
+                              '--work', str(a.work / 'guest'), '--timeout', str(a.timeout)])
+        wall = time.time() - t0
+        returncode = run.returncode
+        log = (a.work / 'guest/serial.log').read_text(errors='replace').replace('\r', '')
     reps = []
     for rep, text, rc in re.findall(r'^RG_BEGIN:(\d+)\n(.*?)^RG_END:\1:(\d+)\n', log, re.M | re.S):
         files = {name: gzip.decompress(base64.b64decode(data)) for name, data in
                  re.findall(r'^RG_FILE:(\S+)\n(.*?)^RG_FILE_END\n', text, re.M | re.S)}
         d = a.work / f'rep{rep}'
-        d.mkdir()
+        d.mkdir(exist_ok=a.rerecord is not None)
         for name, data in files.items():
+            if a.rerecord is not None and (d / name).exists():
+                assert (d / name).read_bytes() == data, d / name
             (d / name).write_bytes(data)
         err = files.get('server.err', b'').decode(errors='replace')
-        reps.append(dict(rep=int(rep), harness_status=int(rc),
+        load = None
+        if a.load_client:
+            line = files.get('load.txt', b'').decode(errors='replace').strip()
+            load = dict(item.split('=', 1) for item in line.split()) if line else {}
+            load['client_stderr_lines'] = len(files.get('load.err', b'').splitlines())
+        reps.append(dict(rep=int(rep), harness_status=int(rc), load=load,
                          status=files.get('status.txt', b'').decode().strip(),
                          job=json.loads(files.get('job.json', b'{}') or b'{}'),
                          identity=files.get('identity.txt', b'').decode().strip(),
@@ -103,14 +147,17 @@ def main():
                          if 'transcript.norm' in files else None,
                          other_stderr=[l for l in err.splitlines() if not l.startswith('REUSE-GAP ')],
                          reuse=parse_reuse(err)))
-    rec = dict(arm=a.arm, completed=run.returncode == 0 and '\nRG_CLEANUP:0\n' in log, boot_wall_seconds=round(wall, 1),
-               repetitions=reps, flags=FLAGS,
+    rec = dict(arm=a.arm, completed=returncode == 0 and '\nRG_CLEANUP:0\n' in log, boot_wall_seconds=round(wall, 1),
+               repetitions=reps, flags=a.flags,
+               load=dict(conf=a.load_conf.read_text(), expect=a.load_expect, poll=a.load_poll, stall=a.load_stall)
+               if a.load_client else None,
                staged_sha256={name: sha(stage / name) for name in sorted(staged)},
                gate_sha256=hashlib.sha256(script.encode()).hexdigest(),
                platform_sha256={name: sha(a.images / name) for name in ('Image', 'fw_jump.elf', 'initramfs.cpio.gz')}
                | {'qemu-system-riscv64': sha(a.qemu.resolve())})
     (a.work / 'result.json').write_text(json.dumps(rec, indent=1) + '\n')
-    ok = rec['completed'] and len(reps) == a.reps and all(r['harness_status'] == 0 and r['reuse'] for r in reps)
+    ok = rec['completed'] and len(reps) == a.reps and all(r['harness_status'] == 0 and r['reuse'] for r in reps) \
+        and all(r['load'] is None or r['load'].get('load') == 'complete' for r in reps)
     print(f'{a.arm}: completed={rec["completed"]} reps={len(reps)} ok={ok} {wall:.0f}s')
     return 0 if ok else 1
 

@@ -1,16 +1,25 @@
 #!/usr/bin/env python3
-"""Assemble the memcached row of the reuse-distance measurement from two run-reuse.py records.
+"""Assemble the memcached row of the reuse-distance measurement from run-reuse.py records.
 
     assemble-reuse.py STOCK_RESULT_JSON PROTECTED_RESULT_JSON BUILD_LOG OUT_JSON
+    assemble-reuse.py --stock RESULT_JSON... --protected RESULT_JSON... --build-log BUILD_LOG --out OUT_JSON \
+        --pre-registration HASH --workload TEXT
+
+The first form reads one boot per arm with its servers in turn (the protocol-oracle row). The second reads
+one or more boots per arm and joins their repetitions in the order given (the established workload, one
+server per boot); it also requires every load to have completed with processed == expected.
 
 Each arm's top-level counts are repetition 1 (the pre-registration's one run per arm); every
 repetition is kept under "repetitions". Bucket k is the observer's bins[k-1]; empty buckets are
 omitted. Also prints, per boundary: the median bucket per arm, the share of reuses whose bucket
 differs between the arms (sum over k of |s_k/N_s - p_k/N_p| / 2) for repetition 1 and for every
-stock x protected repetition pair, and the per-bucket ranges over the repetitions.
+stock x protected repetition pair, the same share within each arm (the noise floor), and the
+per-bucket ranges over the repetitions.
 """
+import argparse
 import itertools
 import json
+import os
 import re
 import sys
 
@@ -46,15 +55,46 @@ def reusediff(s, p):
     return sum(abs(s.get(k, 0) / ns - p.get(k, 0) / np_) for k in keys) / 2
 
 
+def join_boots(paths, arm):
+    """One record for an arm from one or more boots: their repetitions in order, renumbered."""
+    recs = [json.load(open(path)) for path in paths]
+    for rec, path in zip(recs, paths):
+        assert rec['arm'] == arm and rec['completed'], (path, rec['arm'], rec['completed'])
+        for key in ('platform_sha256', 'staged_sha256', 'flags', 'load'):
+            assert rec.get(key) == recs[0].get(key), (path, key)
+    out = dict(recs[0])
+    out['repetitions'] = [dict(r, rep=i + 1, boot=os.path.basename(os.path.dirname(os.path.abspath(path)))) for i, (r, path) in
+                          enumerate((r, path) for rec, path in zip(recs, paths) for r in rec['repetitions'])]
+    out['boot_wall_seconds'] = [rec['boot_wall_seconds'] for rec in recs]
+    return out
+
+
+def parse_args():
+    if len(sys.argv) == 5 and not sys.argv[1].startswith('-'):
+        return argparse.Namespace(stock=[sys.argv[1]], protected=[sys.argv[2]], build_log=sys.argv[3],
+                                  out=sys.argv[4], pre_registration='16d2171a3edc', workload=None)
+    p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    p.add_argument('--stock', nargs='+', required=True)
+    p.add_argument('--protected', nargs='+', required=True)
+    p.add_argument('--build-log', required=True)
+    p.add_argument('--out', required=True)
+    p.add_argument('--pre-registration', required=True)
+    p.add_argument('--workload', required=True)
+    return p.parse_args()
+
+
 def main():
-    stock, prot = (json.load(open(path)) for path in sys.argv[1:3])
-    build_log = open(sys.argv[3]).read()
+    a = parse_args()
+    stock, prot = join_boots(a.stock, 'stock'), join_boots(a.protected, 'protected')
+    build_log = open(a.build_log).read()
     for rec, arm in ((stock, 'stock'), (prot, 'protected')):
-        assert rec['arm'] == arm and rec['completed'], (arm, rec['completed'])
         for rep in rec['repetitions']:
             assert rep['harness_status'] == 0 and rep['job'] == {'version': 1, 'kind': 'exit', 'value': 0}, (arm, rep)
             for b in BOUNDARIES:
                 assert rep['reuse'][b]['arm'] == arm and rep['reuse'][b]['error'] == 0, (arm, b, rep['reuse'][b])
+            if rec.get('load'):
+                assert rep['load']['load'] == 'complete' and int(rep['load']['processed']) == rec['load']['expect'], \
+                    (arm, rep['rep'], rep['load'])
     transcripts = {r['transcript_sha256'] for rec in (stock, prot) for r in rec['repetitions']}
     reps = {arm: [arm_record(r) for r in rec['repetitions']] for arm, rec in (('stock', stock), ('protected', prot))}
     boundaries = {}
@@ -90,16 +130,21 @@ def main():
                            else prot['staged_sha256']['memcached.dom'],
                            bytes=int(m[2]), cderive=int(m[3]), crevoke=int(m[4]),
                            cppflags='-DEXP_REUSE_GAP' + (' -DMC_CAPSTONE_SUBLET' if arm == 'protected' else ''))
-    assert stock['platform_sha256'] == prot['platform_sha256']
+    assert stock['platform_sha256'] == prot['platform_sha256'] and stock['flags'] == prot['flags']
+    assert stock.get('load') == prot.get('load')
     assert all(stock['staged_sha256'][n] == prot['staged_sha256'][n]
-               for n in ('capstone-vexec', 'capstone-job', 'mc-harness'))
+               for n in ('capstone-vexec', 'capstone-job', 'mc-harness') + (('mc-crusher', 'load.conf') if stock.get('load') else ()))
     out = {
-        'program': 'memcached 1.6.45', 'pre_registration': '16d2171a3edc',
-        'workload': ('the protocol oracle unchanged (ports/memcached/app/host/mc-harness/mc-harness.c, sha256 '
+        'program': 'memcached 1.6.45', 'pre_registration': a.pre_registration,
+        'workload': a.workload or
+                    ('the protocol oracle unchanged (ports/memcached/app/host/mc-harness/mc-harness.c, sha256 '
                      '1e569a8b63b4...: one connection through every command family and values 1 B-900 KB plus one '
                      'too large, then 8 concurrent pipelining connections x 40 set/get/incr, then stats) against '
                      '`memcached ' + stock['flags'] + '` under capstone-job as uid 65534, stopped with TERM; '
                      'three servers in turn per boot, one boot per arm; top-level counts are repetition 1'),
+        'flags': stock['flags'],
+        'load': stock.get('load'),
+        'load_per_rep': {arm: [r.get('load') for r in rec['repetitions']] for arm, rec in (('stock', stock), ('protected', prot))},
         'boundaries': boundaries,
         'summary': summary,
         'sanity': dict(transcripts_equal_across_arms_and_reps=len(transcripts) == 1,
@@ -110,10 +155,12 @@ def main():
                          module_sha256='built into the kernel (trap route)',
                          job_sha256=stock['staged_sha256']['capstone-job'],
                          harness_sha256=stock['staged_sha256']['mc-harness'],
+                         load_client_sha256=stock['staged_sha256'].get('mc-crusher'),
+                         load_conf_sha256=stock['staged_sha256'].get('load.conf'),
                          harts=1, workers=4,
                          boot_wall_seconds={'stock': stock['boot_wall_seconds'], 'protected': prot['boot_wall_seconds']}),
     }
-    with open(sys.argv[4], 'w') as f:
+    with open(a.out, 'w') as f:
         json.dump(out, f, indent=1)
         f.write('\n')
     print(json.dumps(summary, indent=1))
