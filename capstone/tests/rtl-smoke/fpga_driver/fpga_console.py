@@ -89,8 +89,9 @@ def _redact(msg: str, url: str) -> str:
 # unset means 1, so every script written before board #2 keeps meaning board #1). The board selects the console-URL
 # secret file and the host-side lock. The constructor checks that the URL it was given IS that board's secret, so a
 # wrapper that read the wrong file cannot drive the other board. Neither the URL nor the file content is ever printed.
-BOARD_SECRETS = {"1": "~/.claude-kisp/secrets/fpga-console-url", "2": "~/.claude-kisp/secrets/fpga-console-url-board2"}
-BOARD_LOCKS = {"1": "/tmp/capstone/.board.lock", "2": "/tmp/capstone/.board2.lock"}
+BOARD_SECRETS = {"1": "~/.claude-kisp/secrets/fpga-console-url", "2": "~/.claude-kisp/secrets/fpga-console-url-board2",
+                 "3": "~/.claude-kisp/secrets/fpga-console-url-board3"}   # board 3: 2026-11-06
+BOARD_LOCKS = {"1": "/tmp/capstone/.board.lock", "2": "/tmp/capstone/.board2.lock", "3": "/tmp/capstone/.board3.lock"}
 
 # SERVER-SIDE LEASES (2026-10-19; the console's board-lease, first mode LEASE_ENFORCE=log). A lease is taken where the
 # local board lock is taken and released where the console is closed; the local flock stays as the backstop. While held,
@@ -154,7 +155,7 @@ class FpgaConsole:
         # as possible human interference when above 1, this client), and a power or NV-bitstream transition that this
         # client did not make stops the run at once: the board is left exactly as found (no power-off, no release),
         # since a human may be mid-session, and the stop prints [fpga-foreign] so no wrapper retries over it.
-        self._watch = (self.board == "2" and not allow_unverified and client is None)
+        self._watch = (self.board in ("2", "3") and not allow_unverified and client is None)   # board 3 is shared as board 2 is
         self._own_until = 0.0
         self._users = {"start": None, "max": None, "last": None, "flagged": False, "samples": []}
         self._last_power = None
@@ -434,7 +435,8 @@ class FpgaConsole:
             nv = data.get("nv_bitstream_name")
             if self._last_nv is not None and nv is not None and nv != self._last_nv and now > self._own_until:
                 self._foreign(f"nv_bitstream_name {self._last_nv} -> {nv}")
-            if data.get("state") not in (None, "done", "idle") and now > self._own_until:
+            # "error" is a finished state (board 3 kept its first, failed flash's), not someone else's flash in progress
+            if data.get("state") not in (None, "done", "idle", "error") and now > self._own_until:
                 self._foreign(f"flash_state {data.get('state')}")
             if nv is not None:
                 self._last_nv = nv
