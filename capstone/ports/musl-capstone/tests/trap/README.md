@@ -91,7 +91,9 @@ Thread creation uses tagged clone arguments in the step 8 slice. Caught
 signal delivery remains unsupported. The trap build
 excludes the launcher thread and signal transports. Epoll operations and the
 signal operations that need opaque-reference translation return ENOSYS until
-the side tables from plan v5 are implemented. Execve also remains deferred.
+the side tables from plan v5 are implemented. Execve passes its references
+to the kernel, as described under [Exec](#exec). Fork, vfork and posix_spawn
+remain refused.
 The kernel's syscall binder, nested-pointer loaders, mapping enforcement and
 runtime fault controls are integration work. No kernel files changed here.
 
@@ -230,3 +232,62 @@ the libc of `0133b9e21cd` was built with the same injection hook. It returned
 NULL with errno 0 and leaked slots (a 262 KB address span) and mappings (3,152
 pages). Each of the three failed reallocs ended the old object, so the next
 read of that object faulted with cause 25.
+
+## Exec
+
+The trap syscall wrapper passes execve (221) to the kernel unchanged. a0
+holds a reference to the path, a1 a reference to the argv array and a2 a
+reference to the envp array. Each array is a list of 16-byte tagged cells
+that ends with a zero cell, as on the exec stack. The kernel's binder turns
+the three arguments into handles. For each cell, the kernel loads the
+reference through the array's handle and reads the string through the
+loaded reference. An untagged array, a cell outside the array's bounds or an
+untagged string gives EFAULT. A cell read outside the bounds also logs one
+`sublet: kernel fault cause=28` line. A protected program may exec only
+another `.dom` image, and any other image gives ENOEXEC. After a successful
+exec, the kernel releases the old image's lifetime table with its mm.
+
+The kernel refuses execveat (281) with ENOSYS. musl's fexecve then falls back
+to execve of `/proc/self/fd/N`, so fexecve works without a wrapper change.
+The wrapper still refuses clone, so fork, vfork and posix_spawn get ENOSYS.
+A child would need a copy of the lifetime table.
+
+`exec-smoke.dom` runs three refused calls and continues after each one. It
+execs `/bin/busybox`, a plain ELF, then passes an untagged argv. Last, it
+passes an argv reference that covers only its first cell, although the next
+cell in memory holds the terminator. It then execs itself with the arguments
+`alpha` and `beta` and one environment variable. That variable carries the
+`sublet.live_contexts` count before the exec. The new image prints its
+arguments and environment and requires the same count, so the old table must
+be gone. It then runs itself once more through fexecve and exits 0. All three
+refused calls use an environment that makes an unexpectedly started image
+fail.
+
+Set `TRAP_CONTROL_DELEGATE` to the `runtime/delegate.c` of `7ba3f427f9` to
+link `control-exec.dom`, the same test with the wrapper that refuses execve.
+It must stop at its first call with ENOSYS and exit 1.
+
+On 15 November 2026, on p13 under `~/asr-work/libc-execve`, the libc rebuilt
+1,349 of 1,349 files. The guest used kernel `Image-0133b9e21cd`, QEMU
+`qemu-1b` and the `f-keep` firmware, booted with `libc-smoke/run.sh`.
+`exec-smoke.dom` exited 0 with this output:
+
+```
+exec-smoke: plain ELF /bin/busybox refused, execve -1, errno 8 (Exec format error)
+exec-smoke: untagged argv refused, execve -1, errno 14 (Bad address)
+exec-smoke: argv reference of one cell without its terminator refused, execve -1, errno 14 (Bad address)
+exec-smoke: execve ./exec-smoke.dom with 1 live lifetime tables, 19 table pages
+exec-smoke child: argc 3, argv[1] alpha, argv[2] beta, environ[0] EXEC_SMOKE_PARENT=1
+exec-smoke child: live lifetime tables 1 before execve, 1 after, 19 table pages
+exec-smoke: execve ok
+exec-smoke: fexecve ok, argc 1
+```
+
+The log shows three `enters` lines for the one pid. With
+`sublet.trace_errors=1`, it shows execve returning -8, -14 and -14, then
+execveat returning -38 before the fallback. `control-exec.dom` exited 1 after
+`errno 38 (Function not implemented)`. In the same boot as exec-smoke, the
+other trap smoke programs kept their verdicts. smoke and malloc-smoke exited
+7, and futex-stale, setjmp-smoke, signal-smoke and threads-smoke exited 0.
+threads-disabled exited 1, and stale-free died with cause 25. Busybox still
+exited 0, and the kernel reported no panic or oops.

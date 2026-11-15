@@ -68,13 +68,17 @@ long __capstone_linux_syscall(long n, void *a, void *b, void *c,
                             void *d, void *e, void *f)
 {
     /* These need thread, signal or opaque-value support in a later step.
-     * Refuse them before passing a layout that the kernel cannot yet read. */
+     * Refuse them before passing a layout that the kernel cannot yet read.
+     * fork, vfork and posix_spawn reach this point as clone, which stays
+     * refused: a child would need a copy of the lifetime table. execve passes
+     * on unchanged. Its path, argv and envp arguments are references, and the
+     * kernel loads each 16-byte argv and envp cell through them. */
     switch (n) {
     case SYS_rt_sigaction:
         return trap_sigaction(a, b, c, d);
     case SYS_sigaltstack:
         return trap_sigaltstack(a, b);
-    case SYS_brk: case SYS_clone: case SYS_execve:
+    case SYS_brk: case SYS_clone:
     case SYS_rt_sigreturn: case SYS_rt_sigtimedwait: case SYS_rt_sigqueueinfo:
     case SYS_rt_tgsigqueueinfo: case SYS_timer_create: case SYS_mq_notify:
     case SYS_epoll_ctl: case SYS_epoll_pwait:

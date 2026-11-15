@@ -34,7 +34,7 @@ for src in "$here/runtime/"{linux-start.c,tls.c,delegate.c,native-syscall.S,set_
 done
 "$CAPSTONE_LLVM_BIN/llvm-ar" rcs "$out/libtrap-runtime.a" "${objects[@]}"
 "$CAPSTONE_CLANG" "${flags[@]}" -c "$here/tests/trap/jump-register.S" -o "$out/jump-register.o"
-for test in smoke malloc-smoke threads-smoke threads-disabled futex-stale setjmp-smoke signal-smoke stale-free; do
+for test in smoke malloc-smoke threads-smoke threads-disabled futex-stale setjmp-smoke signal-smoke stale-free exec-smoke; do
     source_test=$test
     test_flags=()
     extra=()
@@ -78,6 +78,19 @@ if [[ -n ${TRAP_LIBC_INJECTION_ARCHIVE:-} ]]; then
     done
 fi
 printf 'Built %s\n' "$out/"*.dom
+
+# Supply the delegate.c of a base that refuses execve to build the exec control,
+# which must stop at its first execve with ENOSYS.
+if [[ -n ${TRAP_CONTROL_DELEGATE:-} ]]; then
+    "$CAPSTONE_CLANG" "${flags[@]}" -c "$TRAP_CONTROL_DELEGATE" -o "$out/control-delegate.o"
+    control_objects=()
+    for obj in "${objects[@]}"; do
+        [[ $obj == "$out/obj/delegate.o" ]] || control_objects+=("$obj")
+    done
+    "$CAPSTONE_LD_LLD" --gc-sections -T "$rt/virtual/link.ld" -o "$out/control-exec.dom" \
+        "$out/exec-smoke.o" "$out/control-delegate.o" "${control_objects[@]}" "$TRAP_LIBC_ARCHIVE"
+    echo "Built $out/control-exec.dom"
+fi
 
 if [[ -n ${TRAP_CONTROL_SETJMP:-} ]]; then
     "$CAPSTONE_CLANG" "${flags[@]}" -c "$TRAP_CONTROL_SETJMP" -o "$out/control-setjmp.o"
