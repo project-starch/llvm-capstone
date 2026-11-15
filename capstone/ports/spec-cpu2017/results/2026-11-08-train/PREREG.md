@@ -4402,3 +4402,27 @@ The images are the same as in Addendum 136's pair. Only the hpm3 event and the b
 | +340 .. +630 M (+485 M ± 30 %) | placement is the cause |
 | +150 .. +340 M | placement is a partial cause |
 | below +150 M, or negative | placement is not the main cause |
+
+## Addendum 138 (2026-11-15 15:25 +08): Addendum 121 read: the allocator step FRCDKMSa3 is adopted; the table waits for riscv-base RVAL and the spatial SDK
+
+**Readings (F, against FRCDKMS on the same board, bitstream and kit):**
+
+| Row | Board, kit | FRCDKMSa3 | FRCDKMS | Change | Predicted |
+|---|---|---|---|---|---|
+| perl full (ba-b3) | board 3, bkit80 | 291.21 + 13,703.22 = 13,994.43 s, specdiff 2/2 PASS | 14,151.55 s | -1.11 % | -0.3 .. -1.2 % |
+| gcc train01 | board 1, bkit75 | 1,984.55 s | 1,989.28 s | -0.24 % | -0.1 .. -0.5 % |
+
+The gcc pair is tuned on both sides (arena_pin only, Addendum 135). The rule needs perl better by more than 0.3 % and
+gcc not worse by more than 0.15 %, and both conditions hold. **FRCDKMSa3 replaces FRCDKMS on both Capstone arms.**
+
+**What follows, before any table cell uses it.** Addendum 121's same-software clause holds the allocator result as
+an optimisation result until riscv-base carries the generic parts of 0012/0013 (RVAL):
+- RVAL perl full and gcc train01 run on riscv-base. The board is board 3, which needs reflashes to riscv-base and
+  back. The compiler lane provides board stages for the RVAL images.
+- The spatial arm gets 0012/0013 on its own SDK and is re-measured before its column changes.
+- The temporal column moves row by row as runs land in the final configuration:
+  - perl: FRCDKMSa3 + node-table pool;
+  - gcc: FRCDKMSa3 untuned;
+  - other rows: FRCDKMSa3 images.
+  The twins' net gain under the same-software rule is about 0.6 % on perl and 0.2 % on gcc (compiler lane,
+  14 Nov 23:42).
