@@ -147,6 +147,44 @@ conditional go.**
      through port 2's rd_ack_q_reg/D net. That cone was local. The arbiter-output readings above replace it, and the
      rvc flops were not re-read by that method.
 
+**FULL BUILD, KEY 5 (sealed 2026-11-15 15:24Z by the board lane; graded here from the build's own reports).**
+
+- **Seal:** `caplifive_…-tagoverlap6c-pagedtbl_d83d3a633.bit`, sha256 dc411e36fc5e68ae…, 11,443,722 B.
+  - The tarball `synth-d83d3a633-exit0.tar.gz` (4d3f3990…) holds the same .bit; PROVENANCE HEAD is d83d3a633.
+  - Run peak 27.39 GB.
+
+| key 5 | trial d83d3a633 | G 9fd9d2530 | grade |
+|---|---|---|---|
+| routes | 241,265 / 241,265 nets, 0 routing errors | routed | PASS |
+| loops | check_timing loops 0, latch loops 0 | 0 | PASS |
+| congestion <= 5: placer final | "No congestion windows above level 5" | same | PASS |
+| congestion: router initial estimate | Long N/S level 6 (20.3 / 20.4 % of tiles); Global/Short N/S level 5 | East Short 5 only | reported: WORSE than G |
+| WNS in ±3.74 of G's -9.107 | **-13.173** (TNS -201,219; 47,712 / 231,920 failing; WHS +0.049) | -9.107 | **NOT MET (0.33 ns outside, bad side)** |
+
+- Placed: 187,368 LUT (91.94 %), 76,543 FF, 50,800 slices (99.71 %). G: 188,525 LUT, 50,685 slices (99.48 %).
+- The board lane's own grade agrees: FULL BUILD FAIL 3/4, key 5 WNS.
+  - Its congestion readings come from different reports: placed level 4 (G 4), router effective max 5 (G 4).
+  - Route 35-447 appears 2 times (G 0): the router put completion ahead of timing.
+  - TNS -201,219 against -77,207; failing endpoints 47,712 against 23,259.
+- **Worst paths.** `worst_500_paths.rpt` on both builds, read by script.
+  - Trial worst 20: dom_switcher `cur_idx_q_reg[3]` -> issue_read_operands `fu_data_q` (cap metadata), 109-111 levels.
+  - By family on the trial: `cur_idx_q` -13.173 at 111 levels. `cpmp_q` -12.937 at 120 levels, against G's -9.107 at
+    116, so -3.83 ns. On G, `cur_idx_q` lies above the worst-500 floor of -7.303, so it is at least 5.9 ns worse here.
+  - Sources across the trial's 500: csr 463, cur_idx_q 37. Destinations: scoreboard `mem_q` 423, `led_stretch_cnt`
+    47, `fu_data_q` 30.
+  - **Walker cells on the worst 500: 0** on the trial. The control, paths touching `fu_data_q`, reads 389.
+- **Reading.** Both pre-existing families lost about 4-6 ns at about equal depth, beside a router estimate one
+  congestion level worse than G's (Long level 6 over a fifth of the N/S tiles).
+  - That is delay per level: placement and routing in a design that is 99.7 % slice-full.
+  - It is not a path through the walker, which has no cell among the 500.
+  - One build cannot say whether the walker's 2 k cells caused the placement shift or merely sampled it. The null band
+    itself is 3.74 ns, and this sits 0.33 ns beyond it.
+- **Consequence.** WNS -13.173 is 0.94 ns past the worst bitstream known to run correctly (-12.229, per the runtime
+  lane).
+  - The board readings carry "key 5 NOT MET".
+  - Pair A's outputs bit-exact against G (specdiff) plus the smoke are the functional check. No pair-B number is cited
+    before pair A has passed it.
+
 Order (amended 2026-11-15, after the sweep): the synthesis-only gate is requested on d83d3a633 now, because it builds no
 bitstream and its keys are above. The full build (key 5) waits until the board pre-registration below has been pushed.
 
