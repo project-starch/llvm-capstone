@@ -55,28 +55,26 @@ for quick A/B work only.
 
 ---
 
-## 3. Current results (14 Nov, 17:30; the live table in §1 is always newer)
+## 3. Current results (15 Nov, 08:40; the live table in §1 is always newer)
 
 Ratio = Capstone time / riscv-base time on the board. specdiff PASS on every row. x264 is checked by its 5 decoded-frame
-hashes against a plain board run, because the native stage has no imagevalidate.
+hashes against a plain board run, because the native stage has no imagevalidate. Every Capstone number below is on
+bitstream **F** (a948e4134) with the FRCDKMS images (temporal) or FRCDKMSsp (spatial).
 
-| Row | riscv-base (s) | Capstone temporal, best (s) | Ratio | Bitstream / images |
-|---|---|---|---|---|
-| perl full | 12,623.02 | 17,051.48 | 1.351 | fdk / FRCDK |
-| gcc train01 | 1,722.35 | 1,989.28 | 1.155 | **F** / FRCDKMS |
-| mcf | 5,125.02 | 6,576.13 | 1.283 | **F** / FRCDKMS |
-| lbm | 1,077.50 | 994.66 | 0.923 | fdk / FR |
-| x264 | 35,613.24 | 34,053.48 | 0.956 | fdk / FR |
-| imagick | 11.08 | 12.76 | 1.152 | batch / FRCDKMS |
-| nab | 679.92 | 714.92 | 1.051 | batch / FRCDKMS |
-| xz | 4,993.81 | 5,196.56 | 1.041 | fdk / FR |
-| geomean | | | 1.105 | |
+| Row | riscv-base (s) | temporal (s) | temporal ratio | spatial (s) | spatial ratio |
+|---|---|---|---|---|---|
+| perl full | 12,623.02 | 14,151.55 (board 3) | 1.121 | 13,981.09 (board 1, cross-board) | 1.108 |
+| gcc train01 | 1,722.35 | 1,989.28 | 1.155 | 1,975.51 | 1.147 |
+| mcf | 5,125.02 | 6,576.13 | **1.283** | 6,308.53 | 1.231 |
+| lbm | 1,077.50 | 990.36 | 0.919 | 990.55 | 0.919 |
+| x264 | 35,613.24 | 30,975.87 (board 3) | 0.870 | 30,972.91 (board 2) | 0.870 |
+| imagick | 11.08 | 12.58 | 1.135 | 12.57 | 1.134 |
+| nab | 679.92 | 695.34 | 1.023 | 693.98 | 1.021 |
+| xz | 4,993.81 | 4,998.36 | 1.001 | 4,999.49 | 1.001 |
+| geomean | | | **1.056** | | **1.047** |
 
-Six rows are below 1.20. **perl (1.351) and mcf (1.283) are above it.** F is the final temporal bitstream
-(Addendum 113): against the batch with the same images, mcf -10.8 % and gcc -18.7 %.
-
-**Spatial arm so far:** gcc train01 at 2,431.58 s (1.412) against temporal's 2,446.30 s on the same bitstream, board
-and kit. So the temporal increment on gcc is +0.6 %. The other seven spatial rows are twinned and ready (§8).
+**Seven rows are below 1.20; only mcf (1.283) is above it.** Its lever is the RTL tag-overlap bitstream G (§8).
+Spatial mcf read -4.07 % against temporal, outside Addendum 113's pre-registered -3..+0.5 % band (on the fast side).
 
 **History on the problem rows** (temporal ratio):
 
@@ -84,7 +82,7 @@ and kit. So the temporal increment on gcc is +0.6 %. The other seven spatial row
 |---|---|---|---|
 | 13 Nov arm C | 1.551 (makerand) | 1.720 | 1.484 |
 | fdk (8-way I$) | 1.347 (makerand); 1.394 full | 1.506 | 1.440 |
-| best now | 1.278 (makerand); 1.351 full | 1.155 (F) | 1.283 (F) |
+| F (16K-entry tag-word cache + merge), FRCDKMS | 1.119 (makerand); **1.121 full** | **1.155** | 1.283 |
 
 ---
 
@@ -217,11 +215,32 @@ first.
 
 ## 8. What is running and queued right now
 
-| Board | Now | Queued after it (chains, nat-run2.sh) |
+| Board | Now (15 Nov 08:40) | Queued after it |
 |---|---|---|
-| 1 | spatial mcf on F (chain aw-s2, from 23:19; spatial gcc done, 1,975.51 s) then imagick, nab, lbm, xz | aw-sp (spatial full perl on F; bkit80) → bb-b1 (allocator step FRCDKMSa3 gcc train01, Addendum 121). Board 1 sat idle 22:59-23:19 after my in-place driver edit broke the kits' driver pin; reverted (Addendum 122) |
-| 2 | spatial x264 on F (aw-sx relaunched 22:00 into out-…-x-b2r, ~10 h) | 15-min gap for the board lane's no-boot switch_reset_all check → bc-b2 (nested CPython ABBA U P P U, kit bkit75n, ~3.3 h; Addendum 123). Message the board lane when aw-sx writes DONE |
-| 3 | temporal x264 on F (chain av-b3, ~10 h, until ~03:00) | ay-b3 (nested speedtest1 event 23, Addendum 117) → aw-tp on board 3 (temporal full perl, the table row; Addendum 118) → ax-b3 (pool A/B, Addendum 115) → ba-b3 (allocator step FRCDKMSa3 full perl, Addendum 121) |
+| 1 | nested PostgreSQL ABBA (be-b1, nat-run3, from 08:34; first real pre-boot park read PARK rc=0) | free: the overlap-lever bitstream **G** (v6c) when it is sealed |
+| 2 | nested CPython ABBA (bc-b2, 4 boots, from 07:55) | bd2-b2 (nested CDERIVE/CREVOKE op timing, c3 stage, Addendum 128) → bf-b2 (nested FFmpeg ABBA, Addendum 127) |
+| 3 | node-table pool A/B (ax-b3, temporal full perl, pool=4, from 07:07) | ba-b3 (allocator step FRCDKMSa3 full perl, Addendum 121, ~13:00-18:00) |
+
+**Overlap lever, bitstream G (rtl lane, record llvm-capstone land/rtl-twc-reach).** It went through v1-v6c in sim, each
+stopped by a registered neutrality gate: plain-store timing, plain read/write ordering, the I$/D$ read rule, the
+cold-I$ shape. The candidate is **v6c = capstone-ariane 9fd9d2530**, on F2 (eeb654104):
+- a patched axi_demux holds data-class AWs and the I$/D$ read pair as the reference demux did;
+- tag transactions get concurrency (MaxTrans 4);
+- the adapter file is byte-identical to the reference's.
+
+Gates read so far:
+- neutral to the cycle on cold-I$, rv64ua and the unmarked mix;
+- AR-start sequences identical to the reference;
+- the AMO/younger-load race arm passes, with its mutant firing on both trees.
+
+kept(ii) is mcf 0.920 and gcc 0.990. Predictions against F on board 1 (bkit75/76 copies with only BOARD_BITSTREAM
+changed): mcf 6,245-6,430 s, gcc 1,799-1,905 s, generic part 0, perl report-only, ev24-27 ±1 %. The synthesis-only
+gate is requested. The full build waits for the remaining sim gates: mutant, default memory, equivalence and the 95-sweep
+at 4. Pre-register G's pair from rtl's numbers when the seal lands.
+
+**Finding, 15 Nov:** no RTL assertion has ever run in our simulation. The verilate command has no --assert, so
+Verilator drops every assert; about 170 assert lines, Capstone ones included. A one-off --assert 95-sweep is queued after
+G's gates.
 
 **Decisions waiting on readings:**
 - **F is final (decided, Addendum 113).** The final-config rows on F are all queued (table above). The F dom kit for
