@@ -7811,3 +7811,84 @@ the key set at 4b17ec214618 and 025d3e33c97b, v6c's pre-registration at 18a1cf1c
 
     eeb654104 predates both lrscfix and the axi_fix demux; its add_sources lists the vendored demux. So the xbar,
     demux and lrsc rows carry those changes as well as v6c's. All of them are below the ±2,500 per-module floor.
+
+## The paged-table walker on synthesis: its synthesis-only gate and its routed build (d83d3a633 against v6c 9fd9d2530, board lane, apollo, 2026-11-15)
+
+These are build records only. The bitstream has not been flashed or read on silicon. The keys, the predictions and
+the board pre-registration are rtl's, in `capstone/docs/plans/2026-11-15-sublet-phase1-paged-table.md` on llvm-capstone
+`land/rtl-sublet-p1`:
+- the synthesis-gate keys at 536c022d8611 and 028f8b181660;
+- the board pre-registration at 2796b81618d8, pushed before the full build;
+- the gate recorded at 95e7b885d9c1, and the seal at 3ce54954e255.
+
+The reference G is v6c (capstone-ariane 9fd9d2530): its own synthesis-only gate for the gate, and its routed build
+(WNS −9.107, the section above) for the full build. Every run was under vivado-guard: a 40 GB cap for synthesis, and
+8-12 GB for the checkpoint probes.
+
+- **The synthesis-only gate passed every gating key.**
+
+  | key | d83d3a633 | G |
+  |---|---|---|
+  | mapping peak (G ± 500 MB) | 5,041.7 MB (+4.9) | 5,036.8 MB |
+  | Synth 8-326 lines | 0 | 0 |
+  | "Found timing loop" headers / LUTLP-1 (toy 1) / check_timing loops (toy 1) | 0 / 0 / 0 | 0 / 0 / 0 |
+  | ex_stage LUT minus the walker's own (±2,500) | +673 | n/a |
+  | core i_cva6 LUT minus the walker's own (±2,500) | −1,888 (core 162,403, −1,136) | 163,539 |
+  | NEG / POS name controls | 0 / 1 | 0 / 1 |
+
+  - The walker's own cells, by name (`pw_*` under ex_stage_i): 1,197 FF and 752 LUT, 0 RAM. The FF count is inside
+    rtl's predicted 1.0-1.6 k. The LUT count is below the predicted 1.5-3 k; the prediction bands do not gate.
+  - perf_counters moved +98 LUT / +6 FF, also outside its prediction and also not gating.
+  - The design totals 189,693 LUT (−1,142).
+  - rev_node moved −7,458 LUT and dyn_unit _spawn_0 +5,935, though neither module's source changed. The two net to
+    −2,311, which reads as logic re-homed between those hierarchies.
+
+- **The routed build: FULL BUILD FAIL, 3 of 4 keys.** The failed key is WNS, which is 0.33 ns outside the band.
+  - Passed:
+    - routing is clean: 0 errors, 0 unrouted, 241,265/241,265 nets routed;
+    - placed congestion is level 4, against G's 4;
+    - check_timing loops read 0.
+  - Failed: WNS is −13.173 against −9.107 ± 3.74 (Δ −4.066).
+  - Reported only:
+    - placed LUT 187,368 (−1,157), FF 76,543 (+1,103), slices 50,800 / 99.71 % (+115);
+    - router effective congestion max 5 against G's 4;
+    - two Route 35-447 warnings against G's 0, where the router put completing the route ahead of timing;
+    - TNS −201,219 against −77,207, and failing endpoints 47,712 against 23,259.
+  - Identity: `caplifive_ids55-native-tagcache-mlp-fpieee-hpmreplay-dynbypass3-dtlb64-shrinkfix-ic32k-r72-stcnoclaim-twc16k-merge-f2-hpmtag-lrscfix-tagoverlap6c-pagedtbl_d83d3a633.bit`,
+    11,443,722 B, sha256 `dc411e36fc5e68ae8e8ab5193abfdfd7fee85cfd299183f283b7cee83e4a1a40`. The tarball's .bit is
+    byte-identical, and PROVENANCE HEAD is d83d3a633. Peak RSS was 27.39 GB.
+
+- **Where the WNS went. The routed checkpoints were queried both ways; these readings are reported, not graded.**
+
+  | path (by start and end pin) | on the walker build | on G |
+  |---|---|---|
+  | the walker build's worst: dom_switcher `cur_idx_q_reg[3]` → issue_read_operands `fu_data_q_reg[0][cap_data][cap_metadata_a][19]` | −13.173 ns, 111 levels; logic 8.40, net 44.86 ns | −8.032 ns, 114 levels; logic 9.25, net 38.70 ns |
+  | G's worst: csr `cpmp_q_reg[9][comp_metadata][bounds][iE]_rep` → `fu_data_q_reg[0][cap_data][rd_metadata][23]` | −12.333 ns, 120 levels; logic 9.59, net 42.74 ns | −9.107 ns, 116 levels; logic 9.83, net 38.62 ns |
+  | 500th-worst setup path | −11.136 ns | −7.303 ns |
+
+  - On both paths the walker build carries 4-6 ns more net delay, at equal or lower logic delay. Logic depth went
+    −3 levels on one path and +4 on the other, but logic delay fell on both.
+  - The same comparison over each build's worst-20 families agrees: G's cpmp families read −12.84 to −12.91 on the
+    walker build, and the walker build's cur_idx families read −8.43 to −8.53 on G.
+  - The comparison by identical pins could not run. 148 of the walker path's 224 pins, and 155 of G's 234, do not
+    exist by name in the other netlist, because synthesis numbers the LUTs differently. So the rows above match start
+    and end pins, not cells.
+  - **0 of the walker build's 500 worst paths touch a walker cell.** The positive control, paths touching i_cva6,
+    reads 500, and the negative reads 0. The walker-name pattern has no positive control of its own; the runtime
+    lane's separate count from the timing report also reads 0.
+  - **The walker's own paths have positive slack on the routed build:**
+    - the D$ port-2 grant → `pw_slot_q`: +1.803 ns, 65 levels;
+    - the worst path into any walker flop: +0.284 ns;
+    - the worst path out of one: +3.160 ns;
+    - the grant → R-35's fill taps: +10.812 ns, against G's +14.364.
+  - The grant here means both of the arbiter's output copies, `rd_ack_q_i_1` and `vld_sel_q[1]_i_1`, with 43,072 and
+    43,197 endpoints. They reach 85 walker flops and 74 of the 131 fill taps.
+  - What this cannot separate: whether the walker's +1.1 k FF and their placement are what crowded these paths at
+    99.7 % slices, or whether this is build-to-build noise. The documented null change moved WNS 3.7 ns. Telling
+    them apart would take a second build of the same commit, which nobody has proposed.
+
+- **A retraction from the gate's timing probe (lane-only, not previously on dev).** The gate's probe found the
+  grant from the net at `rd_ack_q_reg/D`. That handle saw 9,733 endpoints on G and 5 on the trial, and reported no
+  grant path to the fill taps or to the walker. Both conclusions were withdrawn the same day. From the arbiter's
+  output nets the cone is about 43,000 endpoints and does reach the fill taps. The gate's grant readings are void;
+  its readings through the ex_stage boundary pins stand.
