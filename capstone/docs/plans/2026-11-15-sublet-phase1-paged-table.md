@@ -459,3 +459,25 @@ as the flat path's page is. It must keep the wide-record VALID / FREE / generati
 That change belongs to the firmware's owner. On P1 the emulator runs in the kernel's trap path, not in context, so it
 adds to between_cycles, not run_cycles. Pair B's brackets are about run_cycles and do not move. Its between_cycles
 delta, when there is one, is not graded.
+
+### The fixed emulation (capstone-sbi 22a907fba6dd, `-DCSC_TABLE_TREE`): PASS in RTL simulation
+
+- **The instrument:** `va-cscheck-mon` (capstone-ariane), the monitor's CSCHECK/CSMINT emulation #included under a
+  real M trap entry.
+  - `-DPAGED` (rtl/paged-cscheck 39c98db31, predictions in the header before any run) builds its table as the RTL
+    walker's tree. Rows 14-16 remove the walk entry at levels 0, 1 and 2 and check a live slot.
+  - The emulation files are byte-identical to the firmware under test: 4f51541's for cb-b1, and 22a907f's for the
+    cscfix kits bkit91/92.
+  - Core d83d3a633; sim13 `.sup/cscpg1` and `.sup/cscpg2`.
+- **The board failure, reproduced in sim with 4f51541's emulation on the tree:** 51 of 51 readings as pre-registered.
+  - Every row that reaches the liveness test reads 25.
+  - CSMINT's CSNODE allocated ids 4/6/8 through the walker.
+  - The processor's own LDC of a live slot stayed tagged; rows 9 and 10 read 25, not 24.
+- **22a907f's emulation (b8f08083c):**
+  - On the flat table, all 42 values are identical to 4f51541's.
+  - On the tree, rows 1-13 and the final read value for value as flat, and rows 14-16 read 25 (fail-closed at every
+    level).
+  - The grader accepts paged-new and rejects paged-old on that log.
+- **Review:** the walk matches `ex_stage.sv:2078-2087` and `cv_tree_check`, then rejoins the flat record checks. One
+  nit was sent to the compiler lane, not blocking: the RTL also reads an entry with bits [63:56] set as dead
+  (`ex_stage.sv:1996`), but the emulation tests only zero and 4 KiB alignment.
