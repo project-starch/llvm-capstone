@@ -4753,3 +4753,27 @@ inputs came from.
   - Kernel reads at the end: table_tree = 1 on the paged arm and absent on the flat arm; grow_loops = 0;
     tree_check_failures = 0.
   - No "table tree check FAILED" line may appear.
+
+## Addendum 149 (2026-11-15 23:30 +08): P1's build grade is FAIL 3/4 on WNS; pair A is the functional gate for every P1 reading
+
+**Grade.** The board lane's independent full-build grade of P1 (d83d3a633) is FAIL 3/4:
+- PASS: routes 0 errors / 241,265; loops 0; placer congestion ≤ 5;
+- FAIL: key 5, WNS. It is -13.173 against G's -9.107 ± 3.74, so 0.33 ns outside on the bad side.
+
+The rtl lane read the routed worst 500 paths of both builds by script (land/rtl-sublet-p1 3ce54954e255):
+- the walker has 0 cells on them, while the control fu_data_q appears on 389;
+- the two families G already had both slowed at about equal depth (cpmp_q -9.107 → -12.937; dom_switcher cur_idx_q →
+  -13.173);
+- the router reads one level worse.
+
+So the cause is delay per level from placement and routing at 99.7 % slices. One build cannot say whether the walker's
+2 k cells pushed the placement or merely sampled it.
+
+**Rules, binding before any P1 reading is used:**
+1. **Pair A is the functional gate.** On all three rows (mcf, gcc, perl makerand) specdiff must PASS with outputs
+   bit-identical to G's run, the smoke must PASS, and no unexpected trap may appear.
+2. **No pair-B number is cited until pair A passes.** The B arms may run meanwhile; their readings stay unread for
+   claims until then.
+3. **If pair A shows any output difference or an unexpected trap,** it is treated as possibly timing: the B arms
+   stop, and the question goes to the lead.
+4. **Every P1 reading carries "key 5 NOT MET"** beside it.
