@@ -4559,3 +4559,26 @@ changes. The final configuration also folds in:
 - untuned gcc (Addendum 135).
 
 The order and the baseline (stock or matched-cache riscv-base) are the lead's decision, which is pending.
+
+## Addendum 143 (2026-11-15 17:43 +08): verdict-cache miss replays (event 23) on G for mcf, gcc and perl makerand, the input to the Phase 1 paging-cost prediction
+
+**Why.** Phase 1 of the Sublet paper's Section 5, the paged lifetime table, is approved by the lead. The plan is
+2ebd664b3ff6. The rtl lane's paging-cost model is N_rec × 1 + N_walk × 3 × c_dir. It needs N_rec per row, and the
+verdict-cache miss replays (event 23) are its board-side measure. No SPEC row has ever been counted with event 23:
+only the nested kit counts it.
+
+Without N_rec, the build's prediction band is close to uninformative, and by the project rule such a build does not
+go. So this run comes before Phase 1's synthesis request.
+
+**Run (chain bv-b1, nat-run3, board 1, after bu-b1).**
+- G (9fd9d2530, sealed).
+- Kit bkit86 = bkit75n (hpm8 = event 23, firmware hpm-events-nested 2c846cf7) with only the bitstream lines changed;
+  checksums regenerated.
+- Stages board-frcdkms: mcf, gcc train01 (tuned, as in Addendum 132's pair) and perl makerand.
+
+**Predictions:**
+- Times equal to G's Addendum 132 readings within the cross-kit spread (about 0.2 %): mcf 5,930.75 s, gcc
+  1,758.96 s, perl makerand 274.03 s. Only hpm8's event differs.
+- specdiff PASS on all three.
+- Event 23 per row: no prior to predict it from. It is report-only, and its readings are the input to the rtl
+  lane's Phase 1 pre-registration.
