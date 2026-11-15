@@ -3,7 +3,7 @@
 This is a live table: rows are filled as board runs land. Pre-registrations, predictions and the run-by-run trail are
 in [`../2026-11-08-train/PREREG.md`](../2026-11-08-train/PREREG.md) (Addendum 107 onward for this table).
 
-## Status (updated 2026-11-15 14:26 +08)
+## Status (updated 2026-11-15 14:36 +08)
 
 - **riscv-base:** complete, all 8 rows.
 - **Capstone temporal:**
@@ -20,6 +20,8 @@ in [`../2026-11-08-train/PREREG.md`](../2026-11-08-train/PREREG.md) (Addendum 10
     The other twins have finished too: imagick, nab, lbm and xz rc 0 with full specdiff. perl full test is 2/2 on
     the board-matching kernel (images-a0ed). x264 reads specdiff 0/3, as every native x264 stage does: its frames are
     checked by hash on the board run.
+- **LSR compiler change c13: NOT adopted** (Addendum 136). mcf built with it ran +0.29 % slower on the same board
+  (in-context cycles +0.30 %); the rule allowed at most +0.15 %. The full-perl run on c13 was dropped.
 - **Node-table pool: ADOPTED** (Addendum 133). Temporal full perl on F with `node_table_pool=4` (released lifetime
   tables are reused instead of allocated and zeroed for every exec) ran 14,005.42 s, against 14,151.55 s without it on
   the same board: -1.03 %, inside the predicted -0.5..-3 %. specdiff 2/2. The pool is a change to the Capstone kernel
@@ -37,8 +39,8 @@ same images. The "final config" columns are being re-measured on F.
 | Board | Now | Then, in order |
 |---|---|---|
 | 1 | bitstream **G** (overlap lever v6c): flash, then mcf and gcc with tag-path counters (Addendum 132, from 14:23) | perl makerand on G |
-| 2 | mcf on the LSR compiler change c13 (Addendum 130, from 12:35) | spatial full perl on the node-table pool (Addendum 133) → the nested lane's tshark heartbeat boot (Addendum 134) |
-| 3 | allocator step FRCDKMSa3 full perl (Addendum 121, from 11:14) | LSR c13 full perl (Addendum 130) → spatial gcc untuned (Addendum 135) |
+| 2 | spatial full perl on the node-table pool (Addendum 133, from 14:34) | the nested lane's tshark heartbeat boot (Addendum 134) |
+| 3 | allocator step FRCDKMSa3 full perl (Addendum 121, from 11:14) | spatial gcc untuned (Addendum 135) |
 
 - **F's scope.** The gain is the tag-word-cache change, reach and merge together, at N = 1 per row.
   - It comes at unchanged L1I/L1D misses, DTLB walks and mispredicts.

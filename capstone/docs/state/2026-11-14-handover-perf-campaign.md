@@ -226,8 +226,8 @@ first.
 | Board | Now (15 Nov 13:48) | Queued after it |
 |---|---|---|
 | 1 | bm-b1: flash **G**, G tag-HPM mcf + gcc (Addendum 132, from 14:23) | bn-b1: G perl makerand |
-| 2 | bj-b2: mcf on LSR c13 (hy2, Addendum 130, from 12:35; control FRCDKMSa3 mcf 6,593.26 s) | bo-b2: spatial full perl on the pool (bkit81, Addendum 133) → bp-b2: nested tshark heartbeat boot (Addendum 134) |
-| 3 | ba-b3: allocator FRCDKMSa3 full perl (Addendum 121, from 11:14; control 14,151.55 s) | bk-b3: LSR c13 full perl (Addendum 130) → bq-b3: spatial gcc untuned (Addendum 135) |
+| 2 | bo-b2: spatial full perl on the pool (bkit81, Addendum 133, from 14:34) | bp-b2: nested tshark heartbeat boot (Addendum 134) |
+| 3 | ba-b3: allocator FRCDKMSa3 full perl (Addendum 121, from 11:14; control 14,151.55 s) | bq-b3: spatial gcc untuned (Addendum 135). bk-b3 (c13 full perl) dropped: c13 not adopted on mcf (Addendum 136) |
 
 **Overlap lever, bitstream G (rtl lane, record llvm-capstone land/rtl-twc-reach).** It went through v1-v6c in sim, each
 stopped by a registered neutrality gate: plain-store timing, plain read/write ordering, the I$/D$ read rule, the
