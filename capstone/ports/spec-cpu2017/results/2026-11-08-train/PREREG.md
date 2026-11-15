@@ -4777,3 +4777,18 @@ So the cause is delay per level from placement and routing at 99.7 % slices. One
 3. **If pair A shows any output difference or an unexpected trap,** it is treated as possibly timing: the B arms
    stop, and the question goes to the lead.
 4. **Every P1 reading carries "key 5 NOT MET"** beside it.
+
+## Addendum 150 (2026-11-15 23:49 +08): RETRACTION of Addendum 149's "the walker has 0 cells on them"
+
+The rtl lane's count matched walker cell NAMES only. Re-counted from the routed report, 39 of P1's worst 500 paths
+pass through rv_rd_res[data_rvalid]:
+- ranks 261-481, slack -11.370 to -11.142;
+- G has 0 such paths;
+- that net is the walker's response filter (ex_stage.sv:1977), one added LUT level;
+- the paths end at the debug-LED stretch counter.
+
+The board lane found it. The withdrawal is recorded at land/rtl-sublet-p1 96092a45c6a4 and on dev at 58c14a198e55.
+
+**What still stands:** the WNS-setting paths (ranks 1-260, cur_idx_q and cpmp_q → fu_data_q) do not pass through
+the walker, and their loss is net delay. Addendum 149's rules are unchanged: pair A is the functional gate, and every
+P1 reading carries "key 5 NOT MET".
