@@ -3,7 +3,7 @@
 This is a live table: rows are filled as board runs land. Pre-registrations, predictions and the run-by-run trail are
 in [`../2026-11-08-train/PREREG.md`](../2026-11-08-train/PREREG.md) (Addendum 107 onward for this table).
 
-## Status (updated 2026-11-15 20:43 +08)
+## Status (updated 2026-11-15 22:45 +08)
 
 - **riscv-base:** complete, all 8 rows.
 - **Capstone temporal:**
@@ -20,6 +20,11 @@ in [`../2026-11-08-train/PREREG.md`](../2026-11-08-train/PREREG.md) (Addendum 10
     The other twins have finished too: imagick, nab, lbm and xz rc 0 with full specdiff. perl full test is 2/2 on
     the board-matching kernel (images-a0ed). x264 reads specdiff 0/3, as every native x264 stage does: its frames are
     checked by hash on the board run.
+- **Bitstream G is cleared for the table** (Addenda 142, 146). G is F2 plus tag-transaction overlap. Against F on the same
+  board: mcf -9.89 %, gcc -11.62 %. Its tag-content safety gate passed in simulation (0 mismatches over 328 runs) and on
+  silicon (a bare kit reading DRAM tag bytes after plain overwrites: 1,024 of 1,024 right). The cells below are still
+  F's: each row moves to G when it is re-measured on G in the final configuration. Rows on G so far: spatial a3 mcf
+  1.104 and gcc 1.019; temporal mcf 1.157 (FRCDKMS, to be re-measured on a3).
 - **LSR compiler change c13: NOT adopted** (Addendum 136). mcf built with it ran +0.29 % slower on the same board
   (in-context cycles +0.30 %); the rule allowed at most +0.15 %. The full-perl run on c13 was dropped.
 - **Node-table pool: ADOPTED** (Addendum 133). Temporal full perl on F with `node_table_pool=4` (released lifetime
