@@ -1,0 +1,14 @@
+# G (9fd9d2530), board 1, 2026-11-15 21:55-21:56, runtime lane spec/board/out-bare-tagc-g-b1 (result lines only)
+resident NV bitstream = 'caplifive_ids55-native-tagcache-mlp-fpieee-hpmreplay-dynbypass3-dtlb64-shrinkfix-ic32k-r72-stcnoclaim-twc16k-merge-f2-hpmtag-lrscfix-tagoverlap6c_9fd9d2530.bit'
+image sha256 273e77e9da57f4d5c96d0fde4fbc762af58b493ee1e10a80d55edc55232d192a (booted file hashed by the RTL lane); board_rec 0x80007000
+SUPTEST BEGIN T
+SB1
+SR 0000000000000007
+SV 0000000000000400
+SV 0000000000000000
+SV 000000000000FFFF
+SV 0000000000000000
+SV 0000000000000101
+SV 0000000000000004
+SV 0000000000000000
+SUPTEST END
