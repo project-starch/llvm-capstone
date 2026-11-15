@@ -1,0 +1,41 @@
+EXP-BLOCKS path=aset-context name=TopMemoryContext blocks=1 bytes=8192
+EXP-BLOCKS path=aset-context name=ErrorContext blocks=1 bytes=8192
+EXP-BLOCKS path=aset-context name=dynahash blocks=11 bytes=90112
+EXP-BLOCKS path=aset-new name=dynahash blocks=20 bytes=262144
+EXP-BLOCKS path=aset-large name=dynahash blocks=1 bytes=96096
+EXP-BLOCKS path=aset-context name=GUCMemoryContext blocks=1 bytes=8192
+EXP-BLOCKS path=aset-context name=config file processing blocks=1 bytes=8192
+EXP-BLOCKS path=aset-context name=TZParserMemory blocks=1 bytes=1024
+EXP-BLOCKS path=aset-large name=TZParserMemory blocks=1 bytes=8352
+EXP-BLOCKS path=aset-new name=TZParserMemory blocks=4 bytes=15360
+EXP-BLOCKS path=aset-realloc name=TZParserMemory blocks=1 bytes=16544
+EXP-BLOCKS path=aset-new name=GUCMemoryContext blocks=1 bytes=16384
+EXP-BLOCKS path=aset-large name=TopMemoryContext blocks=5 bytes=738432
+EXP-BLOCKS path=aset-new name=TopMemoryContext blocks=3 bytes=57344
+EXP-BLOCKS path=aset-context name=Pending ops context blocks=1 bytes=8192
+EXP-BLOCKS path=aset-context name=MdSmgr blocks=1 bytes=8192
+EXP-BLOCKS path=aset-context name=WAL record construction blocks=1 bytes=8192
+EXP-BLOCKS path=aset-large name=WAL record construction blocks=1 bytes=42160
+EXP-BLOCKS path=aset-new name=CacheMemoryContext blocks=7 bytes=1040384
+EXP-BLOCKS path=aset-context name=TopPortalContext blocks=1 bytes=8192
+EXP-BLOCKS path=aset-context name=TransactionAbortContext blocks=1 bytes=32768
+EXP-BLOCKS path=aset-context name=TopTransactionContext blocks=2 bytes=16384
+EXP-BLOCKS path=aset-new name=index info blocks=177 bytes=271360
+EXP-BLOCKS path=aset-context name=index info blocks=85 bytes=87040
+EXP-BLOCKS path=aset-large name=index info blocks=15 bytes=22000
+EXP-BLOCKS path=aset-large name=TopTransactionContext blocks=457 bytes=12613200
+EXP-BLOCKS path=aset-context name=RowDescriptionContext blocks=1 bytes=8192
+EXP-BLOCKS path=aset-context name=PgStat Pending blocks=1 bytes=1024
+EXP-BLOCKS path=aset-context name=PgStat Shared Ref blocks=1 bytes=1024
+EXP-BLOCKS path=aset-context name=PgStat Shared Ref Hash blocks=1 bytes=1024
+EXP-BLOCKS path=aset-large name=PgStat Shared Ref Hash blocks=1 bytes=8352
+EXP-BLOCKS path=aset-context name=PortalContext blocks=4 bytes=4096
+EXP-BLOCKS path=aset-context name=search_path processing cache blocks=1 bytes=8192
+EXP-BLOCKS path=aset-large name=search_path processing cache blocks=3 bytes=82800
+EXP-BLOCKS path=aset-new name=MessageContext blocks=12001 bytes=188448768
+EXP-BLOCKS path=aset-large name=MessageContext blocks=69 bytes=1904400
+EXP-BLOCKS path=aset-context name=ExecutorState blocks=1 bytes=8192
+EXP-BLOCKS path=aset-large name=ExecutorState blocks=2004 bytes=55310400
+EXP-BLOCKS path=aset-context name=ExprContext blocks=3 bytes=24576
+EXP-BLOCKS path=aset-new name=ExecutorState blocks=8000 bytes=90112000
+EXP-BLOCKS-END slots=40 overflow=0

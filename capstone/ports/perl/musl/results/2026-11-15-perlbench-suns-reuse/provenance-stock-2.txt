@@ -1,0 +1,29 @@
+Perl 5.36.3 reuse run, 500.perlbench_r train suns.pl, arm stock, repetition 2
+pre-registration: capstone/docs/plans/2026-11-15-perl-established-workload.md (faed41c8783, branch bench/postgres-perl)
+tree: export of trap/eval ed8cc375c2 at ~/asr-work/bench-postgres-perl/tree plus the branch's reuse-hooks/perl files (EXP_REUSE_GAP_SV_LOG2=19)
+platform (kit-run-3):
+c55fcdd2c620916690e9604a1b95f204d8287fce79631a8a8909c69952223b49  qemu-system-riscv64
+0ea6d1ef545071326ce2ef4270e492ced585d089876517b460b6678d00e43ae8  images/Image
+975a24215dd17e5123c6f019328bce2683c9a9ca1d4e29cdddba4d0545c6e3c1  images/fw_jump.elf
+2d846ebece5024b3682316ad5339e1ca07e8683683d62e0f24fa15117c68cddb  images/initramfs.cpio.gz
+150d969243a01faf6597bcb6c1b5e29f72b1766c7463997f6e64f29ec745b37c  adapter/capstone-vexec
+image:
+e35eb3fb1d20a4dc0d8191e45e9a5d09aa1ac0890ed7d36c54d081f1933baf1a  ~/asr-work/bench-postgres-perl/build/perl-stock/perl.dom
+e35eb3fb1d20a4dc0d8191e45e9a5d09aa1ac0890ed7d36c54d081f1933baf1a  ~/asr-work/eval/run-5/reuse/perl-stock-2/stage-1/perl-stock.dom
+build inputs:
+f2a1ad88116391a176262dd42dfc52ef22afb40f4c0e9810f15d561e6f1c726a  ~/asr-work/bench-postgres-perl/tmp/perl-mirror/perl-5.36.3.tar.gz
+4cdb02dcf0954e242b3e2c281dbc86e0c77e5b1da8a148314c75781d485b6568  ~/asr-work/bench-postgres-perl/tree/capstone/experiments/study/reuse-hooks/perl/build.sh
+71c28f28a0cae3ce01b3276a5b3f0a4affdfe9316fa7d631e52d8cb0fe3c3cbd  ~/asr-work/bench-postgres-perl/tree/capstone/experiments/study/reuse-hooks/perl/reuse-gap-hook.h
+78969c2e967efe23f3e606721ca704bc3e69e33ea0fa90dda06de56fc6f969a6  ~/asr-work/bench-postgres-perl/tree/capstone/experiments/study/reuse-hooks/perl/sv-heads-reuse-gap-stock.patch
+627b0fe3ac30d75b384b35f37e9436c329f9f506afc13b94fb3ab87fc2df1769  ~/asr-work/bench-postgres-perl/tree/capstone/experiments/study/reuse-gap-observer.h
+perl-cross: c2d8f8b7027ed20cd982c9f2c091463510b89f33
+SPEC CPU2017 1.0.2:
+7545b37d13e129110d3d49145f0a784e50947f832628fb492c24da0decfd9f9a  ~/spec2017/SPEC17/benchspec/CPU/500.perlbench_r/data/train/input/suns.pl
+f32a0a4b191d86e8fa4a01daa07d59f0c5118e51f961f8a4bdddc46702152a7a  ~/spec2017/SPEC17/benchspec/CPU/500.perlbench_r/data/train/input/WORDS
+01688ea0c1058063ea9ec46758ccc8bef30bf08693b36506e4c33080b3520036  ~/spec2017/SPEC17/benchspec/CPU/500.perlbench_r/data/train/output/suns.out
+96611d1ca9418e473aadab9a77371f9014a9611541c5b50587a36d8097d0d6a2  ~/spec2017/SPEC17/benchspec/CPU/500.perlbench_r/data/train/output/validate
+lib tree 8289d7ccf2a305d3db94cc0e679b4a345782f17dce2490120640b27291c3fb67, staged 8289d7ccf2a305d3db94cc0e679b4a345782f17dce2490120640b27291c3fb67
+harness:
+e6d94237584a34070fb252b496ddabbf6d982a3d91d112a79a1b977df8fd0cf2  ~/asr-work/bench-postgres-perl/tree/capstone/runtime/virtual/trap_platform.py
+a40554a7abed644b31da4e801dacb645c7654228ce9f61973666e3773184d872  ~/asr-work/bench-postgres-perl/tree/capstone/experiments/study/reuse-hooks/perl/run-perlbench-suns-reuse.py
+bd6d620829bc9316e841f65cc20a0f5c1382061a0b081b4d4ff17a4d2156b771  ~/asr-work/eval/run-5/reuse/perl-stock-2/stage-1/gate.sh

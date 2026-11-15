@@ -1,0 +1,82 @@
+{
+ "arm": "protected",
+ "boot_wall_seconds": 876.7,
+ "completed": true,
+ "fault": null,
+ "guest_seconds": 834,
+ "kernel_faults": [],
+ "kind": "exit",
+ "outputs_equal_spec": true,
+ "platform_sha256": {
+  "Image": "0ea6d1ef545071326ce2ef4270e492ced585d089876517b460b6678d00e43ae8",
+  "capstone-vexec": "150d969243a01faf6597bcb6c1b5e29f72b1766c7463997f6e64f29ec745b37c",
+  "fw_jump.elf": "975a24215dd17e5123c6f019328bce2683c9a9ca1d4e29cdddba4d0545c6e3c1",
+  "initramfs.cpio.gz": "2d846ebece5024b3682316ad5339e1ca07e8683683d62e0f24fa15117c68cddb",
+  "qemu-system-riscv64": "c55fcdd2c620916690e9604a1b95f204d8287fce79631a8a8909c69952223b49"
+ },
+ "program": "perl",
+ "rc": 0,
+ "rep": 2,
+ "reuse_gap": {
+  "sv-heads": {
+   "attempts": 1077566,
+   "bins": [
+    106868,
+    160534,
+    298986,
+    226886,
+    39824,
+    4590,
+    442,
+    134,
+    135,
+    256,
+    512,
+    1024,
+    2048,
+    4096,
+    8192,
+    10022,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "capacity": 524288,
+   "distinct_starts": 213017,
+   "error": 0,
+   "issues": 1077566,
+   "releases": 864589,
+   "reuses": 864549
+  }
+ },
+ "run_staged_sha256": "e6d94237584a34070fb252b496ddabbf6d982a3d91d112a79a1b977df8fd0cf2",
+ "spec_match": [
+  "suns.out",
+  "validate"
+ ],
+ "spec_version": "1.0.2",
+ "staged_sha256": {
+  "WORDS": "f32a0a4b191d86e8fa4a01daa07d59f0c5118e51f961f8a4bdddc46702152a7a",
+  "capstone-vexec": "150d969243a01faf6597bcb6c1b5e29f72b1766c7463997f6e64f29ec745b37c",
+  "expected/suns.out": "01688ea0c1058063ea9ec46758ccc8bef30bf08693b36506e4c33080b3520036",
+  "expected/validate": "96611d1ca9418e473aadab9a77371f9014a9611541c5b50587a36d8097d0d6a2",
+  "gate.sh": "c39b170392a66eddbdc7d83da76f9feb83f8d759e389299ecc7cf055e09d52f4",
+  "lib_tree": "bcc951f2a93da4d2ef99cd2778e41bde8f3a2979491898e44e448acbf38d2e08",
+  "perl.dom": "ba23019ae42a3105a8ddd314dab0c578582109b0c3d59084c968d98931d16d36",
+  "suns.pl": "7545b37d13e129110d3d49145f0a784e50947f832628fb492c24da0decfd9f9a"
+ },
+ "step_command": "rm -rf /tmp/run; mkdir -p /tmp/run; cp -a /mnt/vm/spec/. /tmp/run/; cd /tmp/run; t0=$(date +%s); PERL_HASH_SEED=0 /mnt/vm/capstone-vexec /mnt/vm/perl-protected.dom -I. -I./lib suns.pl > suns.out; rc=$?; echo \"PERL_TIME:$(( $(date +%s) - t0 ))\"; for f in suns.out validate; do cmp $f /mnt/vm/expected/$f && echo \"SPEC_MATCH:$f\"; done; exit $rc"
+}
