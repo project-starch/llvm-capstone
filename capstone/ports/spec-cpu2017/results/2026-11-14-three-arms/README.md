@@ -3,7 +3,7 @@
 This is a live table: rows are filled as board runs land. Pre-registrations, predictions and the run-by-run trail are
 in [`../2026-11-08-train/PREREG.md`](../2026-11-08-train/PREREG.md) (Addendum 107 onward for this table).
 
-## Status (updated 2026-11-15 13:47 +08)
+## Status (updated 2026-11-15 14:26 +08)
 
 - **riscv-base:** complete, all 8 rows.
 - **Capstone temporal:**
@@ -36,9 +36,9 @@ same images. The "final config" columns are being re-measured on F.
 
 | Board | Now | Then, in order |
 |---|---|---|
-| 1 | gcc train01 without the gcc-only module tuning (Addendum 131, from 13:40) | bitstream **G** (overlap lever v6c): flash, then mcf and gcc with tag-path counters, then perl makerand (Addendum 132) |
-| 2 | mcf on the LSR compiler change c13 (Addendum 130, from 12:35) | spatial full perl on the node-table pool (Addendum 133) |
-| 3 | allocator step FRCDKMSa3 full perl (Addendum 121, from 11:14) | LSR c13 full perl (Addendum 130) |
+| 1 | bitstream **G** (overlap lever v6c): flash, then mcf and gcc with tag-path counters (Addendum 132, from 14:23) | perl makerand on G |
+| 2 | mcf on the LSR compiler change c13 (Addendum 130, from 12:35) | spatial full perl on the node-table pool (Addendum 133) → the nested lane's tshark heartbeat boot (Addendum 134) |
+| 3 | allocator step FRCDKMSa3 full perl (Addendum 121, from 11:14) | LSR c13 full perl (Addendum 130) → spatial gcc untuned (Addendum 135) |
 
 - **F's scope.** The gain is the tag-word-cache change, reach and merge together, at N = 1 per row.
   - It comes at unchanged L1I/L1D misses, DTLB walks and mispredicts.
@@ -84,9 +84,12 @@ perl makerand is the quick sub-run used for A/B work; the table's perl row is th
 
 ### Open caveats a reader should know
 
-- **gcc's Capstone stages carry a disclosed gcc-only module tuning:** arena_pin=1, resume_quantum=1 and
-  step_budget_ns=10 s, restored after the run (train PREREG Addenda 69 and 116). Every Capstone gcc arm has it alike,
-  and riscv-base has no counterpart module. perl, mcf, xz and the rest write no module parameter.
+- **gcc no longer uses a gcc-only module tuning** (Addendum 135). The gcc stages used to write module parameters for
+  their run, and no other row did. On F's kernel only `arena_pin=1` took effect: the other two parameters
+  (step_budget_ns, resume_quantum) do not exist there, and those writes failed. Measured on the same board, arena_pin
+  is worth 0.67 % on gcc (1,989.28 s tuned against 2,002.68 s untuned). The table's gcc cells are now the untuned,
+  uniform default configuration. The tuned 1.155 is kept only as disclosed tuning. Spatial gcc untuned is queued on
+  board 3.
 
 - **x264 correctness.** It is checked by the five decoded frames' sha256 against plain-rv64r's board run, because the
   native x264 stage has no imagevalidate step. specdiff therefore reads "0/3" on x264, which is not a failure.
@@ -132,14 +135,14 @@ the table being measured now. A row moves into them as its run lands.
 | Benchmark | riscv-base (s) | Capstone temporal, best so far (s) | ratio | configuration | final config: temporal ratio | final config: spatial ratio |
 |---|---|---|---|---|---|---|
 | 500.perlbench_r (full: makerand + test.pl) | 12,623.02 | 14,005.42 | **1.110** | **F** / FRCDKMS + node-table pool | **1.110** (F + pool) | **1.108** (F, no pool yet; board 1, cross-board) |
-| 502.gcc_r (train01) | 1,722.35 | 1,989.28 | **1.155** | **F** / FRCDKMS | **1.155** (F) | **1.147** (F) |
+| 502.gcc_r (train01) | 1,722.35 | 2,002.68 | **1.163** | **F** / FRCDKMS, no module tuning (tuned: 1,989.28 s, 1.155) | **1.163** (F) | **1.147** (F, tuned; untuned pending) |
 | 505.mcf_r | 5,125.02 | 6,576.13 | 1.283 | **F** / FRCDKMS | 1.283 (F) | 1.231 (F) |
 | 519.lbm_r | 1,077.50 | 990.36 | **0.919** | **F** / FRCDKMS | **0.919** (F) | **0.919** (F) |
 | 525.x264_r | 35,613.24 | 30,975.87 | **0.870** | **F** / FRCDKMS | **0.870** (F) | **0.870** (F, board 2) |
 | 538.imagick_r | 11.08 | 12.58 | **1.135** | **F** / FRCDKMS | **1.135** (F) | **1.134** (F) |
 | 544.nab_r | 679.92 | 695.34 | **1.023** | **F** / FRCDKMS | **1.023** (F) | **1.021** (F) |
 | 557.xz_r | 4,993.81 | 4,998.36 | **1.001** | **F** / FRCDKMS | **1.001** (F) | **1.001** (F) |
-| geomean | | | 1.054 | | **1.054** (F) | **1.047** (F) |
+| geomean | | | 1.055 | | **1.055** (F) | **1.047** (F, gcc tuned) |
 
 Bold = below the 1.20 target. perl makerand alone (the quick A/B sub-run, debugging only): 257.90 s on riscv-base
 against 288.58 s on **F** / FRCDKMS, ratio 1.119 (-12.5 % against the batch). The full test on F ran on board 3, the riscv-base board: makerand 292.76 s + test.pl 13,858.79 s = 14,151.55 s, ratio 1.121 (fdk/FRCDK 17,051.48 s: -17 %). Board 2's attempt at 21:07 never booted, because switches were left

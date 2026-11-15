@@ -64,18 +64,22 @@ bitstream **F** (a948e4134) with the FRCDKMS images (temporal) or FRCDKMSsp (spa
 | Row | riscv-base (s) | temporal (s) | temporal ratio | spatial (s) | spatial ratio |
 |---|---|---|---|---|---|
 | perl full | 12,623.02 | 14,005.42 (board 3, node-table pool) | 1.110 | 13,981.09 (board 1, cross-board, no pool yet) | 1.108 |
-| gcc train01 | 1,722.35 | 1,989.28 | 1.155 | 1,975.51 | 1.147 |
+| gcc train01 | 1,722.35 | 2,002.68 (no module tuning; tuned 1,989.28) | 1.163 | 1,975.51 (tuned; untuned queued) | 1.147 |
 | mcf | 5,125.02 | 6,576.13 | **1.283** | 6,308.53 | 1.231 |
 | lbm | 1,077.50 | 990.36 | 0.919 | 990.55 | 0.919 |
 | x264 | 35,613.24 | 30,975.87 (board 3) | 0.870 | 30,972.91 (board 2) | 0.870 |
 | imagick | 11.08 | 12.58 | 1.135 | 12.57 | 1.134 |
 | nab | 679.92 | 695.34 | 1.023 | 693.98 | 1.021 |
 | xz | 4,993.81 | 4,998.36 | 1.001 | 4,999.49 | 1.001 |
-| geomean | | | **1.054** | | **1.047** |
+| geomean | | | **1.055** | | **1.047** |
 
 **Node-table pool adopted (Addendum 133):** temporal full perl 14,005.42 s with `node_table_pool=4`, against
 14,151.55 s without it on the same board (-1.03 %, in the predicted band). The kit does not read the pool's hit counter.
 Spatial full perl reruns on the pool (bo-b2).
+
+**gcc tuning measured and removed (Addendum 135):** without module parameters, gcc runs 2,002.68 s against
+1,989.28 s (+0.67 %, same board), so the gcc cell is now untuned (1.163). On F's kernel only arena_pin existed; the
+step_budget_ns and resume_quantum writes failed.
 
 **Seven rows are below 1.20; only mcf (1.283) is above it.** Its lever is the RTL tag-overlap bitstream G (§8).
 Spatial mcf read -4.07 % against temporal, outside Addendum 113's pre-registered -3..+0.5 % band (on the fast side).
@@ -221,9 +225,9 @@ first.
 
 | Board | Now (15 Nov 13:48) | Queued after it |
 |---|---|---|
-| 1 | bl-b1: gcc train01 with the gcc-only module tuning removed (Addendum 131, from 13:40) | bm-b1: flash **G**, G tag-HPM mcf + gcc → bn-b1: G perl makerand (Addendum 132) |
-| 2 | bj-b2: mcf on LSR c13 (hy2, Addendum 130, from 12:35; control FRCDKMSa3 mcf 6,593.26 s) | bo-b2: spatial full perl on the pool (bkit81, Addendum 133) |
-| 3 | ba-b3: allocator FRCDKMSa3 full perl (Addendum 121, from 11:14; control 14,151.55 s) | bk-b3: LSR c13 full perl (Addendum 130) |
+| 1 | bm-b1: flash **G**, G tag-HPM mcf + gcc (Addendum 132, from 14:23) | bn-b1: G perl makerand |
+| 2 | bj-b2: mcf on LSR c13 (hy2, Addendum 130, from 12:35; control FRCDKMSa3 mcf 6,593.26 s) | bo-b2: spatial full perl on the pool (bkit81, Addendum 133) → bp-b2: nested tshark heartbeat boot (Addendum 134) |
+| 3 | ba-b3: allocator FRCDKMSa3 full perl (Addendum 121, from 11:14; control 14,151.55 s) | bk-b3: LSR c13 full perl (Addendum 130) → bq-b3: spatial gcc untuned (Addendum 135) |
 
 **Overlap lever, bitstream G (rtl lane, record llvm-capstone land/rtl-twc-reach).** It went through v1-v6c in sim, each
 stopped by a registered neutrality gate: plain-store timing, plain read/write ordering, the I$/D$ read rule, the
