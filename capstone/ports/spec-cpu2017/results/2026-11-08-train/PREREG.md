@@ -4903,3 +4903,23 @@ is max − min within an arm. d1 = r1 paged − r1 flat, and d2 = the same for r
 
 Each grade still comes from pb-grade.py, on each replicate pair. cd-b1's gcc and mcf rows are read alongside: (op)
 predicts an excess over their model in proportion to op count. Every reading carries "key 5 NOT MET".
+
+## Addendum 153a (2026-11-16): erratum to Addendum 153's reading, before any replicate landed
+
+The rtl lane read Addendum 153 at dedb1dd8564b, and its reading under-determines in two places. It is corrected here,
+before ce-b1 (the first replicate) has booted:
+
+1. **"(op) holds" is renamed "reproducible (op or kernel variant)".** The two kits' kernels differ in the table-tree
+   build. A layout or code effect of the tree kernel is therefore deterministic per kit, and would reproduce on every
+   replicate exactly as a per-op paging cost would.
+   - The perl replicates can only separate a reproducible difference from run-to-run variance.
+   - "(run)" now means run-to-run variance only; kernel variant is removed from it, because a kernel variant cannot
+     produce that outcome.
+   - Attribution between op cost and kernel variant comes from cd-b1's gcc and mcf flat rows. Their paged-mode record
+     traffic (ev31) is about 600x perl's, so a per-op cost would scale there. The perl replicates do not attribute it.
+2. **No directed sim is planned.** Addendum 153's "will run a directed sim" is withdrawn. By the source
+   (capstone-ariane d83d3a633 ex_stage.sv:2005 and :1964), the walker acts only on a rev-unit request, and it uses the
+   D$ only in PROBE and WALK. So every paged-only cycle sits on a rev-unit access, and each one is counted (ev31,
+   ev29/ev30), except the header reads. Those are bounded by perl's unit traffic (ev23 30.7 k) to tens of k cycles.
+
+The runs, controls and thresholds are unchanged. Every reading carries "key 5 NOT MET".
