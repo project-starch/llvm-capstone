@@ -4280,3 +4280,32 @@ the pool, but the pair is cross-board: board 2 now against board 1 then.
 If the run misses the band on the slow side, the spatial cell keeps aw-sp's figure and the miss is noted. The
 temporal allocator (ba-b3) and LSR (bk-b3) full-perl runs stay on bkit80, because their controls are on bkit80. A
 final allocator + pool perl run is queued only if the allocator is adopted.
+
+## Addendum 134 (2026-11-15 14:00 +08): board 2 queue: the nested lane's tshark protected-only heartbeat boot after bo-b2
+
+**Why.** In Addendum 129's tshark ABBA on F (board 1), both protected arms gave no return within the 3,600 s rung cap.
+The unprotected arms took about 1,120 s. Both boots ended at the same pc. That pc is image vaddr 0x790f04, a CDERIVE in
+the protected allocator: in the baked image (bcc251f3) the word is 0xa283955b. It is slot-0 residue, so it shows
+neither a hang nor a slow run. The twin puts the protection cost at +4.4 % in-context.
+
+**Run (chain bp-b2, nat-run3, board 2, waits on bo-b2).** F, kit bkit75n. One boot, protected arm only, stage
+board-tshark/t-ph. The stage is the nested lane's t-ph-stage, copied, with its 21-file checksums passing on the copy.
+It is t-p1's stage plus a heartbeat in train/run.sh and train/hb-period = 60. The run.sh diff was read by this lane:
+- a backgrounded loop prints `@@HB n uptime out=<bytes of st.out> cnt <native counters>` every 60 s;
+- it is killed after the command, and @@HB-STOP is printed.
+
+Budget: 14,400 s rung, 300 min booking.
+
+**The nested lane's pre-registration** (nested-workloads 5d3b273eabb1, on origin) defines the reading, using
+hb-frames.py against the stock reference:
+- A: beats continue and the output grows, so the run is slow;
+- B: beats continue but the output is frozen for 10 or more beats, so the process stops while the kernel runs;
+- C: beats stop, so the core or the kernel stops, at the last beat's frame;
+- no beat after SPEC-BEGIN: not read.
+
+Their prediction: B or C.
+
+**This lane's checks:**
+- the smoke passes, 9/9;
+- at least one @@HB beat before SPEC-BEGIN, during the unpack, which is the heartbeat's positive control. Without it,
+  the boot is not read.
