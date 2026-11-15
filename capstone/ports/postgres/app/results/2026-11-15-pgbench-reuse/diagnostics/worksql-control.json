@@ -1,0 +1,12 @@
+{
+ "pg-stock": {
+  "kind": "exit",
+  "value": 0,
+  "reuse_gap": "REUSE-GAP contexts attempts=54090 issues=54090 releases=51235 reuses=44472 distinct=9618 capacity=131072 error=0 reset_releases=14832 resizes=0 bins=13772,5855,6989,13039,1882,1081,358,307,236,130,282,167,216,58,47,53,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0"
+ },
+ "pg-protected": {
+  "kind": "exit",
+  "value": 0,
+  "reuse_gap": "REUSE-GAP contexts attempts=54090 issues=54090 releases=51235 reuses=44464 distinct=9626 capacity=131072 error=0 reset_releases=14832 resizes=0 bins=13772,5854,6985,13042,1889,1080,348,301,222,97,194,237,268,40,67,68,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0"
+ }
+}

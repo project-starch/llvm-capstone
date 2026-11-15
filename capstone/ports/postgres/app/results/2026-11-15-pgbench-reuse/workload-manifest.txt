@@ -1,0 +1,24 @@
+made 2026-11-15T04:03:39Z by make-pgbench-workload.sh f2ed12db4f80d2edb8a660fa1d72a88b0cc5af761e1adcb815ed7a74c0307e70
+postgres: postgres (PostgreSQL) 17.5 0ec491f67d2acd96e20dd8c868e0263c2bd47c39e327e9924e72b412ebc52822
+pgbench: pgbench (PostgreSQL) 17.5 ab47ba9d7ce6c9647f852585830fbe56dfd14eefb86e899d5e628749ad48b65e
+fixture: ~/asr-work/eval/prebuilt/reuse/pg-fixture/cluster tree 46228fb03bbd941ff344f993db3ac2a2637c5d9e34b8ae9f6c01eb56fff86711
+init: pgbench -i -s 1 postgres (default init steps dtgvp)
+run: pgbench -n -c 1 -j 1 -t 4000 --random-seed=1 -M simple --debug postgres (built-in tpcb-like)
+native replay: postgres --single -D CLUSTER -c shared_buffers=4MB -c max_connections=10 -c timezone=GMT -c log_timezone=GMT -c dynamic_shared_memory_type=mmap -c exit_on_error=true postgres < tpcb.sql
+cluster tree: fa14e86858245d7dd058c2a9774b4ebbd0c743c7b7dfbb3e225e19e5b920fbf7
+f095983baae4ef24531555eb228d13382641600958df768e2965586b968b0d33  tpcb.sql
+602b65a4192c84f1bd92a7fc43118b408bb039b333b27d9e690fdcfbd5da4ab5  native.out
+pgbench report (generation 1):
+  pgbench (17.5)
+  transaction type: <builtin: TPC-B (sort of)>
+  scaling factor: 1
+  query mode: simple
+  number of clients: 1
+  number of threads: 1
+  maximum number of tries: 1
+  number of transactions per client: 4000
+  number of transactions actually processed: 4000/4000
+  number of failed transactions: 0 (0.000%)
+  latency average = 1.174 ms
+  initial connection time = 3.343 ms
+  tps = 852.081251 (without initial connection time)

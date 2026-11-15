@@ -2,7 +2,7 @@
 """One boot of the PostgreSQL reuse-distance measurement on pgbench's TPC-B-like workload.
 
     run-pgbench-reuse.py --arm stock|protected --rep N --image POSTGRES_DOM --share PG_SHARE \
-        --workload WORKLOAD_DIR --kit KIT --work NEW_DIR [--step-timeout S]
+        --workload WORKLOAD_DIR --kit KIT --work NEW_DIR [--step-timeout S] [--setting NAME=VALUE]...
 
 WORKLOAD_DIR is a make-pgbench-workload.sh output: the pgbench-initialised cluster, tpcb.sql (the
 statements pgbench sent) and native.out (the native single-user replay). The boot is the run-3
@@ -13,7 +13,8 @@ holds trap_platform.py's results.json, boot-1/ and stage-1/ (the run-3 layout) a
 record collect-reuse.py reads: the REUSE-GAP contexts line (parsed with collect.py's pattern),
 the exit status, the result rows against native.out, and the hashes of everything staged.
 Exits nonzero when the run is to be rejected: incomplete boot, nonzero exit, fault, observer
-error, or result rows that differ from the native replay.
+error, or result rows that differ from the native replay. --setting appends `-c NAME=VALUE` to the
+run-3 options, for diagnostic runs outside the pre-registered ones (recorded in rep.json).
 """
 import argparse
 import hashlib
@@ -71,10 +72,15 @@ def main():
     for name in ('image', 'share', 'workload', 'kit', 'work'):
         p.add_argument('--' + name, type=Path, required=True)
     p.add_argument('--step-timeout', type=int, default=3600)
+    p.add_argument('--setting', action='append', default=[], help='NAME=VALUE, a further -c option')
     a = p.parse_args()
+    for setting in a.setting:
+        if not re.fullmatch(r'[a-z_]+=[A-Za-z0-9_.]+', setting):
+            sys.exit(f'setting {setting!r} is not NAME=VALUE')
 
     name = f'pg-{a.arm}'
-    command = STEP.format(arm=a.arm, options=OPTIONS)
+    options = ' '.join([OPTIONS] + [f'-c {setting}' for setting in a.setting])
+    command = STEP.format(arm=a.arm, options=options)
     argv = [sys.executable, str(TRAP_PLATFORM), 'run', '--kit', str(a.kit), '--work', str(a.work),
             '--step-timeout', str(a.step_timeout),
             '--file', f'pgcluster={a.workload / "cluster"}', '--file', f'tpcb.sql={a.workload / "tpcb.sql"}',
@@ -109,7 +115,7 @@ def main():
         'rows': len(rows), 'rows_sha256': rows_sha, 'native_rows': len(native_rows),
         'native_rows_sha256': native_sha, 'rows_equal_native': rows_sha == native_sha,
         'abalance_rows': sum(1 for x in rows if x.startswith('\t 1: abalance = ')),
-        'step_command': command,
+        'step_command': command, 'extra_settings': a.setting,
         'staged_sha256': {'postgres.dom': sha(stage / f'bin/postgres-{a.arm}.dom'),
                           'capstone-vexec': sha(stage / 'capstone-vexec'), 'gate.sh': sha(stage / 'gate.sh'),
                           'tpcb.sql': sha(stage / 'tpcb.sql'), 'pgcluster_tree': tree_sha(stage / 'pgcluster'),

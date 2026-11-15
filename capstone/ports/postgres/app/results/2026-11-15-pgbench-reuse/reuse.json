@@ -1,0 +1,295 @@
+{
+ "program": "PostgreSQL 17.5",
+ "pre_registration": "c001d6b1f0 (capstone/docs/plans/2026-11-15-postgres-established-workload.md, branch bench/postgres-perl)",
+ "workload": "pgbench 17.5 built-in tpcb-like script, scale 1, 4000 transactions, --random-seed=1, statements replayed in one single-user backend (make-pgbench-workload.sh, run-pgbench-reuse.py)",
+ "boundaries": {
+  "contexts": {
+   "stock": {
+    "buckets": {
+     "1": 104410,
+     "2": 91618,
+     "3": 125429,
+     "4": 118194,
+     "5": 89425,
+     "6": 100591,
+     "7": 175012,
+     "8": 394338,
+     "9": 664367,
+     "10": 705785,
+     "11": 900037,
+     "12": 568972,
+     "13": 441800,
+     "14": 220231,
+     "15": 100173,
+     "16": 19884,
+     "17": 3065,
+     "18": 1247,
+     "19": 200,
+     "20": 148,
+     "21": 100,
+     "22": 42
+    },
+    "issues": 4831234,
+    "releases": 4828805,
+    "reuses": 4825068,
+    "distinct_starts": 6166,
+    "attempts": 4831234,
+    "error": 0,
+    "capacity": 131072,
+    "median_bucket": 10,
+    "guest_seconds": 1110,
+    "boot_wall_seconds": 1179.3,
+    "repetitions": [
+     {
+      "buckets": {
+       "1": 104410,
+       "2": 91618,
+       "3": 125429,
+       "4": 118194,
+       "5": 89425,
+       "6": 100591,
+       "7": 175012,
+       "8": 394338,
+       "9": 664367,
+       "10": 705785,
+       "11": 900037,
+       "12": 568972,
+       "13": 441800,
+       "14": 220231,
+       "15": 100173,
+       "16": 19884,
+       "17": 3065,
+       "18": 1247,
+       "19": 200,
+       "20": 148,
+       "21": 100,
+       "22": 42
+      },
+      "issues": 4831234,
+      "releases": 4828805,
+      "reuses": 4825068,
+      "distinct_starts": 6166,
+      "attempts": 4831234,
+      "error": 0,
+      "capacity": 131072,
+      "median_bucket": 10,
+      "guest_seconds": 1110,
+      "boot_wall_seconds": 1179.3
+     },
+     {
+      "buckets": {
+       "1": 104410,
+       "2": 91639,
+       "3": 125429,
+       "4": 118189,
+       "5": 89409,
+       "6": 100591,
+       "7": 175012,
+       "8": 394401,
+       "9": 664283,
+       "10": 705821,
+       "11": 899889,
+       "12": 569019,
+       "13": 441766,
+       "14": 220230,
+       "15": 100167,
+       "16": 19885,
+       "17": 3065,
+       "18": 1247,
+       "19": 200,
+       "20": 148,
+       "21": 100,
+       "22": 42
+      },
+      "issues": 4831108,
+      "releases": 4828679,
+      "reuses": 4824942,
+      "distinct_starts": 6166,
+      "attempts": 4831108,
+      "error": 0,
+      "capacity": 131072,
+      "median_bucket": 10,
+      "guest_seconds": 1092,
+      "boot_wall_seconds": 1161.0
+     }
+    ],
+    "buckets_from": "repetition 1"
+   },
+   "protected": {
+    "buckets": {
+     "1": 104410,
+     "2": 91391,
+     "3": 125428,
+     "4": 114132,
+     "5": 81717,
+     "6": 88879,
+     "7": 158753,
+     "8": 422643,
+     "9": 616031,
+     "10": 665589,
+     "11": 1136578,
+     "12": 469789,
+     "13": 320231,
+     "14": 195222,
+     "15": 164479,
+     "16": 32064,
+     "17": 31826,
+     "18": 5915,
+     "19": 363,
+     "20": 154,
+     "21": 88,
+     "22": 39
+    },
+    "issues": 4832596,
+    "releases": 4830167,
+    "reuses": 4825721,
+    "distinct_starts": 6875,
+    "attempts": 4832596,
+    "error": 0,
+    "capacity": 131072,
+    "median_bucket": 10,
+    "guest_seconds": 1396,
+    "boot_wall_seconds": 1463.5,
+    "repetitions": [
+     {
+      "buckets": {
+       "1": 104410,
+       "2": 91391,
+       "3": 125428,
+       "4": 114132,
+       "5": 81717,
+       "6": 88879,
+       "7": 158753,
+       "8": 422643,
+       "9": 616031,
+       "10": 665589,
+       "11": 1136578,
+       "12": 469789,
+       "13": 320231,
+       "14": 195222,
+       "15": 164479,
+       "16": 32064,
+       "17": 31826,
+       "18": 5915,
+       "19": 363,
+       "20": 154,
+       "21": 88,
+       "22": 39
+      },
+      "issues": 4832596,
+      "releases": 4830167,
+      "reuses": 4825721,
+      "distinct_starts": 6875,
+      "attempts": 4832596,
+      "error": 0,
+      "capacity": 131072,
+      "median_bucket": 10,
+      "guest_seconds": 1396,
+      "boot_wall_seconds": 1463.5
+     },
+     {
+      "buckets": {
+       "1": 104410,
+       "2": 91390,
+       "3": 125428,
+       "4": 114133,
+       "5": 81717,
+       "6": 88879,
+       "7": 158753,
+       "8": 422643,
+       "9": 616033,
+       "10": 665587,
+       "11": 1136591,
+       "12": 469786,
+       "13": 320219,
+       "14": 195234,
+       "15": 164478,
+       "16": 32061,
+       "17": 31826,
+       "18": 5915,
+       "19": 363,
+       "20": 154,
+       "21": 88,
+       "22": 39
+      },
+      "issues": 4832602,
+      "releases": 4830173,
+      "reuses": 4825727,
+      "distinct_starts": 6875,
+      "attempts": 4832602,
+      "error": 0,
+      "capacity": 131072,
+      "median_bucket": 10,
+      "guest_seconds": 1391,
+      "boot_wall_seconds": 1458.1
+     }
+    ],
+    "buckets_from": "repetition 1"
+   }
+  }
+ },
+ "comparison": {
+  "contexts": {
+   "median_bucket": {
+    "stock": [
+     10,
+     10
+    ],
+    "protected": [
+     10,
+     10
+    ]
+   },
+   "reusediff_rep1": 0.07765429193981786,
+   "reusediff_all_pairs": [
+    0.07765429193981786,
+    0.0776666673616215
+   ],
+   "reusediff_within_arm": {
+    "stock": [
+     4.820227560171892e-05,
+     4.820227560171892e-05
+    ],
+    "protected": [
+     5.270974514062302e-06,
+     5.270974514062302e-06
+    ]
+   },
+   "identical_bins_rep1": false
+  }
+ },
+ "images": {
+  "stock": {
+   "sha256": "43f0d5d37358c0126a83a82b1fdb13efb774790825cf2068bda3f0627fbf525d",
+   "staged_sha256": {
+    "capstone-vexec": "150d969243a01faf6597bcb6c1b5e29f72b1766c7463997f6e64f29ec745b37c",
+    "gate.sh": "284cdccce17f1fdd31ffed3ccdecc8b8055eb9c4cc73f168d10e512505fb12ca",
+    "pgcluster_tree": "257c908c73c440038bf54c8faa9792581387409fcd37be24a0cb655d4ad06b33",
+    "postgres.dom": "43f0d5d37358c0126a83a82b1fdb13efb774790825cf2068bda3f0627fbf525d",
+    "share_tree": "a4bb87d5d8bf24645778ea226616c3ce9ab67d7a46403a5563cf7229084fa08b",
+    "tpcb.sql": "f095983baae4ef24531555eb228d13382641600958df768e2965586b968b0d33"
+   }
+  },
+  "protected": {
+   "sha256": "98ca3e35b6c189c11e6ab1d0f88085c5ec5b602ffa61cf60d6860c0e4302ccea",
+   "staged_sha256": {
+    "capstone-vexec": "150d969243a01faf6597bcb6c1b5e29f72b1766c7463997f6e64f29ec745b37c",
+    "gate.sh": "52710376350cb05e74ae26f059a812b562b6b574bce42b84b25ebc8a110bcbda",
+    "pgcluster_tree": "257c908c73c440038bf54c8faa9792581387409fcd37be24a0cb655d4ad06b33",
+    "postgres.dom": "98ca3e35b6c189c11e6ab1d0f88085c5ec5b602ffa61cf60d6860c0e4302ccea",
+    "share_tree": "a4bb87d5d8bf24645778ea226616c3ce9ab67d7a46403a5563cf7229084fa08b",
+    "tpcb.sql": "f095983baae4ef24531555eb228d13382641600958df768e2965586b968b0d33"
+   }
+  }
+ },
+ "platform": {
+  "platform_sha256": {
+   "Image": "0ea6d1ef545071326ce2ef4270e492ced585d089876517b460b6678d00e43ae8",
+   "capstone-vexec": "150d969243a01faf6597bcb6c1b5e29f72b1766c7463997f6e64f29ec745b37c",
+   "fw_jump.elf": "975a24215dd17e5123c6f019328bce2683c9a9ca1d4e29cdddba4d0545c6e3c1",
+   "initramfs.cpio.gz": "2d846ebece5024b3682316ad5339e1ca07e8683683d62e0f24fa15117c68cddb",
+   "qemu-system-riscv64": "c55fcdd2c620916690e9604a1b95f204d8287fce79631a8a8909c69952223b49"
+  },
+  "run_staged_sha256": "e6d94237584a34070fb252b496ddabbf6d982a3d91d112a79a1b977df8fd0cf2"
+ }
+}
