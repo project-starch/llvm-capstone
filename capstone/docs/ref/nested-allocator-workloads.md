@@ -12,7 +12,7 @@
 | CPython on silicon | **queued**: pre-registered below; four one-arm boots U P P U on one board, F with event 23 | F `a948e4134`, kit bkit75n |
 | PostgreSQL 17.5, single-user pgbench-derived workload, QEMU twin | **measured** (15 Nov 04:21-04:42): 4/4 commands give the native answers; in-context **+4.04 %**, kernel +0.43 %, repeats within 0.02 %; 2.31 M CDERIVEs and 668 k CREVOKEs per run, subtree mean 3.45 / **max 34,509** (a context reset), peak live records 105,043 (1.68 MB). Bring-up found a port defect, **ISSUES.md M-15** (int2vector/oidvector read 8 bytes off at MAXALIGN 16, caught as CAP_OOB by the protected arm). Harness changes, the same in both arms: root (the loader admits euid 0 only), shims over refused or unserved calls; patch 0003 with the Q-15 placement repair | FRCDKMS SDK, -O2, native route, image set 10, QEMU qemu55 a0501ebc39 (counts: qemu-nst) |
 | PostgreSQL on silicon, bitstream F | **queued**: board 1, chain be-b1 (~10:00 15 Nov), pre-registered below (87b463da4d10; SPEC lane Addendum 126); ABBA in one boot, rung budget 1800 | F `a948e4134`, kit bkit75n |
-| FFmpeg 9.0.1 decode (10 s clip, 300 frames), QEMU twin | **measured** (15 Nov 05:21): all commands decode the stock reference frames; in-context **-0.030 %**, kernel -0.36 %. The protection adds about 3,300 lifetimes per decode (pools recycle), subtree max 2, peak 474 live records. Needs `-fno-builtin` in both arms (else cause 24 in both, a compiler defect) and this lane's Q-15 placement repair of 0003 (unrepaired, CDERIVE refuses a frame-plane buffer) | FRCDKMS SDK, -O2 -fno-builtin, native route, set w4, QEMU qemu55 a0501ebc39 |
+| FFmpeg 9.0.1 decode (10 s clip, 300 frames), QEMU twin | **measured** (15 Nov 05:21): all commands decode the stock reference frames; in-context **-0.030 %**, kernel -0.36 %. The protection adds about 3,300 lifetimes per decode (pools recycle), subtree max 2, peak 474 live records. Needs `-fno-builtin` in both arms on llvm-c9 (else cause 24 in both: C-69). With llvm-c15's C-69 fix and builtins on, all commands match and the cost reads -0.031 % and this lane's Q-15 placement repair of 0003 (unrepaired, CDERIVE refuses a frame-plane buffer) | FRCDKMS SDK, -O2 -fno-builtin, native route, set w4, QEMU qemu55 a0501ebc39 |
 | tshark 4.6.8, `-r -V -n` on 9,000 frames, QEMU twin | **measured** (15 Nov 05:45-06:45): every output equals stock tshark's byte for byte; in-context **+2.69 %**, kernel +0.02 %; 7.18 M CDERIVEs and 2.73 M CREVOKEs per run, with one packet-scope reset of 256-1,023 nodes per frame, subtree max 29,134, peak live records 33,998 | FRCDKMS SDK and flags on tshark and its seven dependencies, `--no-relax`, native route, QEMU qemu55 a0501ebc39 |
 | tshark on silicon, bitstream F | **queued**: pre-registered below; four one-arm boots U P P U on one board, budget 900 | F `a948e4134`, kit bkit75n |
 | memcached (load) | **deferred**: the native route cannot run it. The table refuses `socket`, `socketpair`, `epoll_create1` and `epoll_ctl` (`native-syscall-table.c:92-101`, `NS_REFUSE`). A twin probe (`nested/mcprobe`, 15 Nov) confirms it after a passing control (`open` in the run directory): `socket(AF_INET)` and `socket(AF_UNIX)` give ENOSYS, `epoll_create1` ENOSYS, `pthread_create` EAGAIN. memcached needs all three (four worker threads). Running it elsewhere (e.g. the virtual route) is a different instrument; the lead's call | - |
@@ -1039,8 +1039,25 @@ identified it as **C-69**, the existing under-aligned capability byte-copy defec
 - with builtins on, SROA folds `av_freep`'s pointer-typed `memcpy` into an align-1 capability load;
 - the backend expands that load bytewise and drops the tag, and `free` then receives an integer.
 Their run-time dispatch fix (llvm-c14/c15) changes no SPEC image: their census over the 8 SPEC rows finds the shape in
-0 functions, with a positive control on `av_freep`. A builtins-on FFmpeg arm on that compiler is a later rerun, not
-part of this measurement.
+0 functions, with a positive control on `av_freep`.
+
+**Builtins on, with the C-69 fix (twin, 2026-11-15).** The compiler lane's llvm-c15 (29027126f39b plus
+`capstone-misaligned-cap-access` c77dd6e705ad) is SDK arm `FRCDKMSc15`, which differs from FRCDKMS only in `sdk.json`'s
+cc/ld. Built with -O2, FRCD and builtins on (`FFAPP_ARM=FRCDKMSc15 FFAPP_NOBUILTIN=-fbuiltin`), both arms otherwise as
+set w4:
+- The pass's census (`-capstone-misaligned-cap-log`) lists 10 functions per arm, among them
+  `src/libavutil/mem.c av_freep tested 2 realigned 0`.
+- Set w6: unprotected `8ba6e3fc…`, protected `7900e008…`. In one ABBA boot plus the flipped-input control
+  (`nff-c15a1`), u1 p1 p2 u2 each decode 300 frames equal to stock, and fp FIRES (3 hashes change).
+  - In-context, protected vs not: **-0.031 %** (885,431,613 against 885,160,252, the ABBA means). That equals the
+    `-fno-builtin` set's -0.030 %. Kernel: -0.22 %.
+  - Builtins on are 0.44 % faster in-context than set w4, in both arms. That is a different compiler as well as a
+    different flag, so the 0.44 % is not attributed to builtins.
+- **Matched control:** the same compiler, flags and source with the fix switched off
+  (`-mllvm -capstone-misaligned-cap-dispatch=false`; census `… av_freep tested 2 realigned 0 off`; set w7, unprotected
+  `316c0573…`). It faults as llvm-c9 did: cause 24 at `__libc_free+0x28`, a segmentation fault, 0 frames
+  (`nff-c15off`). So the fix, not the compiler change around it, is what lets FFmpeg run with builtins on.
+- The silicon boot stays on set w4 (`-fno-builtin`, llvm-c9), as pre-registered.
 
 **Q-15 placement repair of 0003, by this lane** (`nested/ffmpeg/ffmpeg-9.0.1-0003-q15-pool-placement.patch`,
 `4e33c7e6ee4a76fc…`; protected arm only, applied after 0003 at fuzz 0). Unrepaired, the protected arm stops twice
