@@ -16,101 +16,86 @@ bounded to a sub-range; CREVOKE(object) ends the object its one operand names an
 derived inside it, and faults when that object is not live; CRENEW(object) ends it the same way
 and begins a new lifetime in the same place. Neither names a parent or needs a right.
 
-Slabs. The slab lists hold each page as memory_allocate returns it. Each page carries one
-lifetime, the generation:
-- split_slab_page_into_freelist derives the generation for the class the page now serves, and
-  writes it into every chunk header (item.sublet_parent; item_chunk has the same slot, so the two
-  layouts stay in step and every item grows by one capability).
-- do_slabs_alloc returns a child of that generation bounded to the class's chunk size.
-- slabs_free reads the generation through the caller's own pointer, ends the caller's chunk and
-  passes do_slabs_free a pointer at the same address derived from the generation. The chained
-  chunks of a large item end the same way in do_slabs_free_chunked.
-- slabs_finalize_page_move ends the page's generation when the page leaves its class. That
-  ends, in one instruction, every chunk the page handed out, including the ones the mover rescued
-  or reclaimed in place without a free.
+Layout. The patch adds no field and changes no size: item and item_chunk, the chunk sizes, the
+chunks per page, the pages and every malloc request stay upstream's. The allocator keeps its
+authority where upstream keeps its pages: each class's slab_list holds every page as
+memory_allocate returned it, and that reference covers the page. No memory that a caller
+receives holds a reference to a page or to another object.
 
-Bounds. The compact bounds format holds a range of 4 KiB or more only on its granule, 2^(msb(len)-9)
-(capstone/representable.h), and CDERIVE refuses any other range (cause 29). The generation covers
-the page's chunks, perslab times the chunk size, which is rarely a granule multiple, and so do the
-chunks of the classes from 16 KiB up. sublet_derive therefore derives the smallest representable
-range around each: a large chunk reaches less than one granule, at most 1/512 of its length, into
-its neighbours, and the generation into the slack at the end of its page. The cursor stays at the
-chunk. Placement is upstream's.
+Slabs. Each page is one lifetime, the one its slab_list reference names:
+- do_slabs_alloc returns a CDERIVE child of the page, bounded to the class's chunk size. It
+  derives the child from the free-list entry, which is the allocator's own pointer into the page,
+  and clears the entry's link before the chunk leaves the list.
+- slabs_free ends the caller's chunk (CREVOKE). It then finds the page that holds the chunk's
+  address by address range over the class's slab_list, and over every class's if that fails,
+  because a chunked item's header comes from a class other than the one its owner passes.
+  do_slabs_free continues through that page reference, moved to the chunk, and writes its
+  bookkeeping into the released chunk as upstream does. do_slabs_free_chunked takes back each
+  chained chunk of a large item the same way. Nothing is read through the caller's reference.
+- slabs_finalize_page_move renews the page's lifetime (CRENEW) when the page leaves its class.
+  That ends, in one instruction, every chunk the page handed out, including the ones the mover
+  rescued or reclaimed in place without a free. The page goes on under the renewed reference, in
+  its new class or in the global page pool.
+- With -L, memory_allocate cuts every page from one preallocated block. It derives each page as a
+  child of the block (CDERIVE), so that renewing one page ends no other page's chunks.
 
-Chunks are bounded to the chunk size and not to the request: slabs_alloc is not told the request,
-and the mover copies whole chunks (memcpy of cls_size into a chunk it allocated). A page's own
-pointer has the bounds memory_allocate returns: the page when each page is one malloc, the whole
-block when pages are cut from a preallocated one (-L, which no recipe of this port passes).
+Bounds. The compact bounds format holds a range of 4 KiB or more only on its granule,
+2^(msb(len)-9) (capstone/representable.h), and CDERIVE refuses any other range (cause 29). The
+chunks of the classes from 16 KiB up rarely start and end on a granule, so sublet_derive derives
+the smallest representable range around each: a large chunk reaches less than one granule, at
+most 1/512 of its length, into its neighbours. The cursor stays at the chunk. Placement is
+upstream's.
 
-The mover walks a page through the page's own pointer. That pointer names the malloc'd memory and
-not a chunk, so a CREVOKE through it would end every chunk in that memory at once. For a linked
-item (MOVE_FROM_LRU, MOVE_BUSY_ACTIVE) the mover therefore takes the hash table's reference to it
-under the item lock, and every unlink, replace or remove that may free it uses that reference. Its
-three whole-chunk copies keep the destination's own parent.
+do_slabs_alloc bounds a chunk to the chunk size and not to the request: slabs_alloc does not
+receive the request, and the mover copies whole chunks (memcpy of cls_size into a chunk it
+allocated).
+
+The mover walks a page through the page's own reference. A CREVOKE through that reference would
+end the page and every chunk in it at once. For a linked item (MOVE_FROM_LRU, MOVE_BUSY_ACTIVE)
+the mover therefore takes the hash table's reference to it under the item lock, and every unlink,
+replace or remove that may free it uses that reference.
 
 Cache. Every cache object is one malloc, so it already has a lifetime: the one the system
-allocator gave it. cache_alloc hands out the pointer malloc returned, as upstream does.
-cache_free renews that lifetime (CRENEW), which ends every copy of the caller's pointer, and
-files the renewed pointer on the free list. cache_destroy passes free() that pointer, which
-names the allocation's current lifetime. The layout of an object is upstream's, with or without
-the debug redzone. This relies on the system allocator giving each object a lifetime of its
-own: on a heap without object lifetimes the pointer would name something larger, and renewing
-it would end that.
+allocator gave it. cache_alloc hands out the pointer malloc returned, as upstream does, and clears
+the free-list link in the object, which named the next free object. cache_free renews the
+object's lifetime (CRENEW), which ends every copy of the caller's pointer, and files the renewed
+pointer on the free list. cache_destroy passes free() that pointer, which names the allocation's
+current lifetime. The layout of an object is upstream's, with or without the debug redzone. This
+relies on the system allocator giving each object a lifetime of its own: on a heap without object
+lifetimes the pointer would name something larger, and renewing it would end that.
 
 Running out of lifetimes. When the lifetime table has no slot left and cannot grow, CDERIVE and
-CRENEW return an untagged 0 and change nothing. Each site then takes memcached's own
-out-of-memory path and keeps nothing it took: do_slabs_newslab gives the page back to the global
-pool or to memory_allocate and fails, slabs_finalize_page_move files the page in the global pool,
-do_slabs_alloc derives the chunk before it leaves the free list and returns NULL, and
+CRENEW return an untagged 0 and change nothing. do_slabs_alloc derives the chunk before it leaves
+the free list and returns NULL, memcached's own out-of-memory path. memory_allocate then gives no
+page from the preallocated block. slabs_finalize_page_move ends a page it cannot renew (CREVOKE)
+and drops it: memcached loses the page's memory, and no chunk the page handed out stays live.
 do_cache_free frees an object whose lifetime it cannot renew, as it does over the cache's limit.
 
-What it gives up: a live item pointer can read the item header, as it could without the patch,
-and so can load the generation, which has page-wide bounds and whose CREVOKE ends every chunk of
-the page. A stale pointer cannot, since it is revoked. Overwriting that slot clears its tag and
-the next free faults. Restart mode (-e) rebuilds item pointers from addresses, so the items it
-restores are not children of a generation and their first free faults.
+Costs and limits. slabs_free searches its class's page list, so its cost grows with the pages of
+the class. Restart mode (-e) rebuilds pages and items from addresses in the restored block, so
+their references name the whole block: the first free or page move ends the block, and the next
+access faults.
 
---- a/memcached.h
-+++ b/memcached.h
-@@ -618,6 +618,11 @@
-  * Structure for storing items within memcached.
-  */
- typedef struct _stritem {
-+#ifdef MC_CAPSTONE_SUBLET
-+    /* Sublet: the generation of this chunk's page. The chunk is handed out as
-+     * a CDERIVE child of it, and slabs_free reaches the chunk through it. */
-+    void            *sublet_parent;
-+#endif
-     /* Protected by LRU locks */
-     struct _stritem *next;
-     struct _stritem *prev;
-@@ -666,6 +671,9 @@
- 
- /* Header when an item is actually a chunk of another item. */
- typedef struct _strchunk {
-+#ifdef MC_CAPSTONE_SUBLET
-+    void             *sublet_parent; /* as in item: the layouts stay in step */
-+#endif
-     struct _strchunk *next;     /* points within its own chain. */
-     struct _strchunk *prev;     /* can potentially point to the head. */
-     struct _stritem  *head;     /* always points to the owner chunk */
 --- a/slabs.c
 +++ b/slabs.c
-@@ -66,6 +66,52 @@
+@@ -65,6 +65,71 @@
+    slab types can be made.  if max memory is less than 18 MB, only the
     smaller ones will be made.  */
  static void slabs_preallocate (const unsigned int maxslabs);
- 
++
 +#ifdef MC_CAPSTONE_SUBLET
 +#include <capstone/capability.h>
 +#include <capstone/representable.h>
++
++static char *slabs_page_holding(uintptr_t addr, unsigned int id);
++static char *slabs_class_page(const slabclass_t *p, uintptr_t addr);
 +
 +/* Sublet: a CDERIVE child of parent over [p, p + size), with its cursor at p.
 + * The compact bounds format holds a range of 4 KiB or more only on its
 + * granule (capstone/representable.h), and CDERIVE refuses any other range
 + * (cause 29). A range that is not representable therefore gets the smallest
 + * representable range around it: a large chunk reaches less than one granule
-+ * (at most 1/512 of its length) into its neighbours, and a generation into
-+ * the slack at the end of its page. */
++ * (at most 1/512 of its length) into its neighbours. */
 +static inline void *sublet_derive(void *parent, const void *p, size_t size) {
 +    unsigned long base = (uintptr_t)p, end = base + size;
 +    while (!capstone_repr_ok(base, end - base)) {
@@ -124,105 +109,59 @@ restores are not children of a generation and their first free faults.
 +}
 +
 +/* Sublet: end the caller's chunk (CREVOKE), which faults on a reference that
-+ * is not live, and return the allocator's pointer at its address. */
-+static void *slabs_take_back(void *ptr) {
-+    void *gen = ((item *)ptr)->sublet_parent;
++ * is not live, and return the allocator's pointer at its address: the page
++ * reference that slab_list keeps for the chunk's page, moved to the chunk.
++ * Nothing is read through the caller's reference. */
++static void *slabs_take_back(void *ptr, unsigned int id) {
++    uintptr_t addr = (uintptr_t)ptr;
 +    capstone_cap_release(ptr);
-+    return (char *)gen + ((uintptr_t)ptr - (uintptr_t)gen);
++
++    char *page = slabs_page_holding(addr, id);
++    if (page == NULL) {
++        fprintf(stderr, "slabs: no slab page holds the freed chunk at %#lx\n",
++                (unsigned long)addr);
++        exit(1);
++    }
++    return page + (addr - (uintptr_t)page);
 +}
 +
-+/* Sublet: undo memory_allocate of the page ptr, len bytes, when the page gets
-+ * no lifetime. */
-+static void memory_unallocate(void *ptr, size_t len) {
-+    if (mem_base == NULL) {
-+        free(ptr);
-+    } else {
-+        if (len % CHUNK_ALIGN_BYTES)
-+            len += CHUNK_ALIGN_BYTES - (len % CHUNK_ALIGN_BYTES);
-+        mem_current = ptr;
-+        mem_avail += len;
++/* Sublet: the page that holds addr, as slab_list keeps it. The search tries
++ * class id first and then every class, because a chunked item's header comes
++ * from a class other than the one its owner passes to slabs_free. */
++static char *slabs_page_holding(uintptr_t addr, unsigned int id) {
++    char *page = NULL;
++    if (id >= POWER_SMALLEST && id <= (unsigned int)power_largest)
++        page = slabs_class_page(&slabclass[id], addr);
++    for (int c = POWER_SMALLEST; page == NULL && c <= power_largest; c++)
++        page = slabs_class_page(&slabclass[c], addr);
++    return page;
++}
++
++/* Sublet: the page of class p whose chunks cover addr, or NULL. */
++static char *slabs_class_page(const slabclass_t *p, uintptr_t addr) {
++    for (unsigned int i = 0; i < p->slabs; i++) {
++        char *page = p->slab_list[i];
++        if (addr - (uintptr_t)page < (uintptr_t)p->size * p->perslab)
++            return page;
 +    }
-+    mem_malloced -= len;
++    return NULL;
 +}
 +#endif
-+
+ 
  /*
   * Figures out which slab class (chunk size) is required to store an item of
-  * a given size.
-@@ -351,13 +397,31 @@
-     return ret;
- }
- 
-+#ifdef MC_CAPSTONE_SUBLET
-+/* False, and no chunk filed, when the table has no lifetime left for the
-+ * generation (CDERIVE's untagged 0). */
-+static bool split_slab_page_into_freelist(char *ptr, const unsigned int id) {
-+#else
- static void split_slab_page_into_freelist(char *ptr, const unsigned int id) {
-+#endif
-     slabclass_t *p = &slabclass[id];
-     int x;
-+#ifdef MC_CAPSTONE_SUBLET
-+    /* The page's chunks in this class are children of one generation. */
-+    void *gen = sublet_derive(ptr, ptr, (size_t)p->size * p->perslab);
-+    if (gen == NULL)
-+        return false;
-+#endif
-     for (x = 0; x < p->perslab; x++) {
-+#ifdef MC_CAPSTONE_SUBLET
-+        ((item *)ptr)->sublet_parent = gen;
-+#endif
-         do_slabs_free(ptr, id);
-         ptr += p->size;
-     }
-+#ifdef MC_CAPSTONE_SUBLET
-+    return true;
-+#endif
- }
- 
- /* Fast FIFO queue */
-@@ -378,6 +442,9 @@
-         ? settings.slab_page_size
-         : p->size * p->perslab;
-     char *ptr;
-+#ifdef MC_CAPSTONE_SUBLET
-+    unsigned int pooled = g->slabs;
-+#endif
- 
-     if ((mem_limit && mem_malloced + len > mem_limit && p->slabs > 0
-          && g->slabs == 0)) {
-@@ -399,7 +466,20 @@
-     // wiping memory as it's being pulled out of the global pool instead of
-     // blocking startup all at once.
-     memset(ptr, 0, (size_t)len);
-+#ifdef MC_CAPSTONE_SUBLET
-+    if (!split_slab_page_into_freelist(ptr, id)) {
-+        /* No lifetime for the page: it goes back where it came from, and the
-+         * class gets no page, as when memory runs out. */
-+        if (g->slabs < pooled)
-+            g->slab_list[g->slabs++] = ptr;
-+        else
-+            memory_unallocate(ptr, len);
-+        MEMCACHED_SLABS_SLABCLASS_ALLOCATE_FAILED(id);
-+        return 0;
-+    }
-+#else
-     split_slab_page_into_freelist(ptr, id);
-+#endif
- 
-     p->slab_list[p->slabs++] = ptr;
-     MEMCACHED_SLABS_SLABCLASS_ALLOCATE(id);
-@@ -427,6 +507,19 @@
+@@ -427,17 +492,38 @@
          do_slabs_newslab(id);
      }
  
 +#ifdef MC_CAPSTONE_SUBLET
-+    /* The caller's chunk is a child of the page's generation. It is made
-+     * before the chunk leaves the free list, so that without a lifetime left
++    /* The caller's chunk is a CDERIVE child of its page. The free list holds
++     * the allocator's pointer into the page, and the chunk is derived from
++     * it before it leaves the list, so that without a lifetime left
 +     * (CDERIVE's untagged 0) the chunk stays filed and the request fails. */
 +    if (p->sl_curr != 0) {
 +        it = (item *)p->slots;
-+        ret = sublet_derive(it->sublet_parent, it, p->size);
++        ret = sublet_derive(it, it, p->size);
 +        if (ret == NULL) {
 +            MEMCACHED_SLABS_ALLOCATE_FAILED(id);
 +            return NULL;
@@ -232,7 +171,15 @@ restores are not children of a generation and their first free faults.
      if (p->sl_curr != 0) {
          /* return off our freelist */
          it = (item *)p->slots;
-@@ -437,7 +530,9 @@
+         p->slots = it->next;
+         if (it->next) it->next->prev = 0;
++#ifdef MC_CAPSTONE_SUBLET
++        /* The link held the allocator's pointer into the page. It does not
++         * stay in memory the caller receives. */
++        it->next = 0;
++#endif
+         /* Kill flag and initialize refcount here for lock safety in slab
+          * mover's freeness detection. */
          it->it_flags &= ~ITEM_SLABBED;
          it->refcount = 1;
          p->sl_curr--;
@@ -242,103 +189,78 @@ restores are not children of a generation and their first free faults.
      } else {
          ret = NULL;
      }
-@@ -481,6 +576,9 @@
+@@ -481,6 +567,9 @@
  
      item_chunk *next_chunk;
      while (chunk) {
 +#ifdef MC_CAPSTONE_SUBLET
-+        chunk = slabs_take_back(chunk);
++        chunk = slabs_take_back(chunk, chunk->slabs_clsid);
 +#endif
          assert(chunk->it_flags == ITEM_CHUNK);
          chunk->it_flags = ITEM_SLABBED;
          p = &slabclass[chunk->slabs_clsid];
-@@ -667,6 +765,9 @@
+@@ -626,7 +715,17 @@
+         /* mem_current pointer _must_ be aligned!!! */
+         if (size % CHUNK_ALIGN_BYTES) {
+             size += CHUNK_ALIGN_BYTES - (size % CHUNK_ALIGN_BYTES);
++        }
++#ifdef MC_CAPSTONE_SUBLET
++        /* Sublet: a page cut from the preallocated block is a CDERIVE child
++         * of the block, a lifetime of its own, so that renewing it when it
++         * leaves its class ends its chunks and no other page's. Without a
++         * lifetime left the block gives no page. */
++        ret = sublet_derive(mem_base, mem_current, size);
++        if (ret == NULL) {
++            return NULL;
+         }
++#endif
+ 
+         mem_current = ((char*)mem_current) + size;
+         if (size < mem_avail) {
+@@ -667,6 +766,9 @@
  
  void slabs_free(void *ptr, unsigned int id) {
      pthread_mutex_lock(&slabs_lock);
 +#ifdef MC_CAPSTONE_SUBLET
-+    ptr = slabs_take_back(ptr);
++    ptr = slabs_take_back(ptr, id);
 +#endif
      do_slabs_free(ptr, id);
      pthread_mutex_unlock(&slabs_lock);
  }
-@@ -755,6 +856,12 @@
+@@ -755,10 +857,30 @@
      slabclass_t *s_cls = &slabclass[sid];
      slabclass_t *d_cls = &slabclass[did];
  
 +#ifdef MC_CAPSTONE_SUBLET
-+    /* The page leaves its class: one CREVOKE ends every chunk it handed out,
-+     * the ones the mover rescued or reclaimed in place included. */
-+    if (sid != SLAB_GLOBAL_PAGE_POOL)
-+        capstone_cap_release(((item *)page)->sublet_parent);
++    /* The page leaves its class. Renewing its lifetime (CRENEW) ends every
++     * chunk it handed out, the ones the mover rescued or reclaimed in place
++     * included, and the page goes on under the renewed reference. Without a
++     * lifetime left (CRENEW's untagged 0, the old lifetime still live) the
++     * page ends instead (CREVOKE) and leaves the slab allocator. */
++    if (sid != SLAB_GLOBAL_PAGE_POOL) {
++        void *renewed = capstone_cap_renew(page);
++        if (renewed == NULL) {
++            capstone_cap_release(page);
++        }
++        page = renewed;
++    }
 +#endif
      s_cls->slabs--;
      for (int x = 0; x < s_cls->slabs; x++) {
          s_cls->slab_list[x] = s_cls->slab_list[x+1];
-@@ -770,7 +877,18 @@
-     /* Don't need to split the page into chunks if we're just storing it */
-     if (did > SLAB_GLOBAL_PAGE_POOL) {
-         memset(page, 0, (size_t)settings.slab_page_size);
+     }
 +#ifdef MC_CAPSTONE_SUBLET
-+        if (!split_slab_page_into_freelist(page, did)) {
-+            /* No lifetime for the page in its new class: it goes to the
-+             * global page pool instead. */
-+            d_cls->slabs--;
-+            do_grow_slab_list(SLAB_GLOBAL_PAGE_POOL);
-+            slabclass[SLAB_GLOBAL_PAGE_POOL].slab_list[
-+                slabclass[SLAB_GLOBAL_PAGE_POOL].slabs++] = page;
-+        }
-+#else
-         split_slab_page_into_freelist(page, did);
++    if (page == NULL) {
++        pthread_mutex_unlock(&slabs_lock);
++        return;
++    }
 +#endif
-     } else if (did == SLAB_GLOBAL_PAGE_POOL) {
-         /* memset just enough to signal restart handler to skip */
-         memset(page, 0, sizeof(item));
+ 
+     // FIXME: it's nearly impossible for this to fail. If it does it can cause
+     // writing beyond the border, lost pages, etc.
 --- a/slabs_mover.c
 +++ b/slabs_mover.c
-@@ -353,7 +353,13 @@
-     if (ch == NULL) {
-         assert((new_it->it_flags & ITEM_CHUNKED) == 0);
-         /* if free memory, memcpy. clear prev/next/h_bucket */
-+#ifdef MC_CAPSTONE_SUBLET
-+        void *parent = new_it->sublet_parent; /* new_it's own generation */
-+        memcpy(new_it, it, cls_size);
-+        new_it->sublet_parent = parent;
-+#else
-         memcpy(new_it, it, cls_size);
-+#endif
-         new_it->prev = 0;
-         new_it->next = 0;
-         new_it->h_next = 0;
-@@ -382,7 +388,13 @@
-         ch->prev->next = nch;
-         if (ch->next)
-             ch->next->prev = nch;
-+#ifdef MC_CAPSTONE_SUBLET
-+        void *parent = nch->sublet_parent;
-         memcpy(nch, ch, ch->used + sizeof(item_chunk));
-+        nch->sublet_parent = parent;
-+#else
-+        memcpy(nch, ch, ch->used + sizeof(item_chunk));
-+#endif
-         ch->refcount = 0;
-         ch->it_flags = ITEM_SLABBED|ITEM_FETCHED;
-         t->rebal.chunk_rescues++;
-@@ -409,7 +421,13 @@
- 
-     // Can only rescue active non-chunked items right now.
-     if (ch == NULL && (it->it_flags & ITEM_CHUNKED) == 0) {
-+#ifdef MC_CAPSTONE_SUBLET
-+        void *parent = new_it->sublet_parent;
-         memcpy(new_it, it, cls_size);
-+        new_it->sublet_parent = parent;
-+#else
-+        memcpy(new_it, it, cls_size);
-+#endif
-         new_it->prev = 0;
-         new_it->next = 0;
-         new_it->h_next = 0;
-@@ -464,7 +482,15 @@
+@@ -464,7 +464,15 @@
              // swap item under examination to the chunk head if we're
              // attempting to move a chunk within a larger item.
              cbarg.it = it = ch->head;
@@ -366,7 +288,19 @@ restores are not children of a generation and their first free faults.
  
  #ifndef NDEBUG
  const uint64_t redzone_pattern = 0xdeadbeefcafedeed;
-@@ -112,7 +115,25 @@
+@@ -78,6 +81,11 @@
+     if (cache->freecurr > 0) {
+         ret = STAILQ_FIRST(&cache->head);
+         STAILQ_REMOVE_HEAD(&cache->head, c_next);
++#ifdef MC_CAPSTONE_SUBLET
++        /* The link held the next free object's reference. It does not stay
++         * in memory the caller receives. */
++        STAILQ_NEXT((struct cache_free_s *)ret, c_next) = NULL;
++#endif
+         object = get_object(ret);
+         cache->freecurr--;
+     } else if (cache->limit == 0 || cache->total < cache->limit) {
+@@ -112,7 +120,25 @@
  }
  
  void do_cache_free(cache_t *cache, void *ptr) {
