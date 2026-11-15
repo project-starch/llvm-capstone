@@ -310,3 +310,111 @@ bitstream and its keys are above. The full build (key 5) waits until the board p
     alone FAILS; the perl NULL row passes; a short argument list, an unknown row and a non-numeric count each give NO DATA.
 - **Pair A (trial flat vs G flat):** the run_cycles delta is within 0.2 %. The only added work is one probe per
   namespace flush.
+
+## Pair A on silicon (key 5 NOT MET)
+
+P1 (d83d3a633, paging off) on bkit88 against G (9fd9d2530) on bkit86, board 1, runtime lane's native runner. Re-checked
+here from the raw files in `spec/board/out-nat-{p1,g}-hpmnest-frcdkms-b1/<bench>/`.
+
+- **Kits, one variable by content:** rootfs contents identical (128 files, `diff -rq --no-dereference` after extraction,
+  a one-byte edit fires it). The kernel config and native-tree check are identical, but the Image was relinked (#164
+  19:12 vs #171 23:30), so it is byte-different, and the firmware with it. Both relinks built the same 18 objects
+  (initramfs, version stamp, kallsyms, vmlinux; the `native-kernel.log` build lines are identical). Bytes of the two
+  17,468,928-byte Images, compared here:
+  - 4,628 KiB is the initramfs gzip stream. It is 4,725,139 vs 4,725,612 bytes long, and decompresses to 12,551,680 bytes
+    on both (cpio metadata differs; contents are identical, above).
+  - Version strings at three places, and the GNU build-id note.
+  - 129 bytes in 0x402788-0x42aee7, which are instruction immediates. Two decoded by hand (an `ld` offset and a `jalr`
+    offset) both move by 472 bytes, which is the gzip length difference (473) aligned to 8. That is the expected shift
+    for references to objects linked after the initramfs. Not every one of the 129 was decoded.
+  - One data pointer at Image offset 0x10a8cc0: 0xffffffff80a90b28 vs 0xffffffff80a90d00, also +472. It points just past
+    the gzip stream, so it points into the moved region, not from it.
+  - Nothing else differs. Above the initramfs's page (0xa93000), only these strings, the build-id and that one pointer
+    differ. The code there did not move.
+  Resident bitstreams were read back as `…-tagoverlap6c_9fd9d2530.bit` and
+  `…-pagedtbl_d83d3a633.bit`.
+- **Both boots are UNGATED:** PREFLIGHT=0 on both. `spec-verdict.txt` reads "NO RESULT: no @@SPEC-DONE" on both: that is
+  the SPEC-harness verdicter, which this native runner does not feed. The specdiff verdict is `read.log`'s.
+
+### mcf (505.mcf_r test): PASS
+
+- **Functional gate:**
+  - `read.log`: specdiff 2/2 PASS, rc 0, on both.
+  - inp.out, mcf.out and inp.err are byte-identical to G's (`diff -rq read/files`).
+  - smoke 9/9 on both (task's two accounting checks WAIVED, as on G).
+  - One TRAP LOG line on each, the final aperture (sw=255, 0x89), identical.
+- **Cycles**, end minus begin of `@@NATIVE-CNT`, recomputed here; they equal the runtime lane's table:
+
+  | counter | G | P1 | delta |
+  |---|---|---|---|
+  | run_cycles | 144,015,279,285 | 144,092,501,093 | +77,221,808 (+0.054 %) |
+  | hpm8 (ev23) | 180,614,513 | 180,611,374 | -3,139 |
+  | hpm4 (L1D) | 3,750,161,783 | 3,750,150,967 | -10,816 |
+  | hpm7 (issue stall) | 80,267,261,637 | 80,332,542,400 | +65,280,763 (+0.081 %) |
+  | between_cycles | 4,106,904,200 | 4,092,972,054 | -0.339 % |
+  | runs | 48,930 | 48,940 | +10 |
+
+- **Grade: +0.054 % is inside the 0.2 % band, so pair A's mcf row passes.** The +77 M is inside run noise (0.2 % is
+  288 M), so it is not attributed. Pair B's mcf row may be graded once both its arms land.
+
+### gcc (502.gcc_r train01, tuned stage, arena_pin=Y on both): PASS
+
+- **Functional gate:**
+  - `read.log`: specdiff 1/1 PASS, rc 0, on both.
+  - The two output files (`train01.opts-O3_-finline-limit_50000.out` and `.err`) are byte-identical.
+  - smoke 9/9 on both.
+  - One identical TRAP LOG line each (sw=255, 0x89).
+  - Bitstreams read back as for mcf.
+- **Kit:** the same structure as mcf.
+  - rootfs contents are identical (128 files).
+  - The Images are relinked (#168 vs #172). The gzip stream is 447 bytes shorter, and both unpack to 22,782,464 bytes.
+  - Below the stream, 134 bytes of immediates differ in 0x402788-0x42aee7. Above it, the shifted init tail, two version
+    strings, the build-id and one pointer page.
+- **Cycles**, recomputed here; they equal the runtime lane's table:
+
+  | counter | G | P1 | delta |
+  |---|---|---|---|
+  | run_cycles | 41,536,277,321 | 41,559,126,329 | +22,849,008 (+0.055 %) |
+  | hpm8 (ev23) | 6,409,096 | 6,408,717 | -379 |
+  | hpm4 (L1D) | 367,122,291 | 367,145,747 | +23,456 |
+  | hpm7 (issue stall) | 10,629,521,357 | 10,639,408,003 | +9,886,646 (+0.093 %) |
+  | between_cycles | 1,816,335,961 | 1,821,258,166 | +0.271 % |
+  | runs | 13,643 | 13,647 | +4 |
+
+- **Grade: +0.055 % is inside 0.2 %, so pair A's gcc row passes.**
+- mcf and gcc both read about +0.055 % with issue stall up by about 0.08-0.09 %. Each is inside the band, so it is not
+  attributed. Two rows with the same sign are not a measurement of a walker cost in flat mode.
+
+### perl (500.perlbench_r test, makerand, the NULL row): PASS
+
+- **Functional gate:**
+  - `read.log`: specdiff 1/1 PASS, rc 0, 558 hashes, on both.
+  - The two output files are byte-identical.
+  - smoke 9/9 on both.
+  - One identical TRAP LOG line each.
+  - Bitstreams read back as above.
+- **Kit:**
+  - rootfs contents are identical (683 files).
+  - The Images are relinked (#169 vs #173). The gzip stream is 22 bytes shorter, and both unpack to 23,700,992 bytes.
+  - The byte differences outside the stream are in the same places as gcc's.
+- **Cycles:**
+
+  | counter | G | P1 | delta |
+  |---|---|---|---|
+  | run_cycles | 6,755,758,710 | 6,753,096,627 | -2,662,083 (-0.039 %) |
+  | hpm8 (ev23) | 30,296 | 30,422 | +126 |
+  | hpm4 (L1D) | 91,413 | 98,053 | +6,640 (about 1 per million cycles) |
+  | runs | 1,140 | 1,142 | +2 |
+
+- **Grade: -0.039 % is inside 0.2 %, so pair A's perl row passes.**
+
+### Pair A: PASS on all three rows (key 5 NOT MET)
+
+With paging off, P1 is output-identical to G on mcf, gcc and perl makerand. Each row's run_cycles lies within 0.2 %:
++0.054 %, +0.055 % and -0.039 %. Pair B may now be graded (Addendum 149).
+
+- **Checkers, both run here:**
+  - `SPEC_BOARD_DIR=<spec/board> tests/rtl-smoke/sublet-p1-2026-11-15/pa-check.py <bench>` checks the functional gate, the bitstreams, the counters and
+    the band. It was tested to fail on another bench's outputs and cycles and on the wrong bitstream, and to report NO
+    DATA on a missing directory.
+  - `pa-kit-check.sh <bench>` compares the rootfs contents and the Image bytes.
