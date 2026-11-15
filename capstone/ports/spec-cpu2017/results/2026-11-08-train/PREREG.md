@@ -4643,3 +4643,35 @@ spatial readings (spread about 0.9 %).
 For perl full, G's effect is unknown: makerand read -5.04 %, and test.pl is assumed -3 .. -6 %.
 
 specdiff PASS on all three, and arena_pin=N printed on gcc.
+
+## Addendum 146 (2026-11-15 22:45 +08): G's tag-content gate (Addendum 142) is met; G carries the table as rows are re-measured on it
+
+**Sim side.** The rtl lane's DRAM-tag shadow audit (capstone-ariane sim/tag-audit e3fcf2b7d) found 0 mismatches over
+328 runs: G and the F2-equivalent, the 95-sweep plus 48 tag, TWC, cost-tab and lrsc tests, and the 48 again under
+pipelined memory. Its positive control, a mutant that skips a tag clear on any TWC hit, reads 990 / 990 mismatches,
+and the test still prints SUCCESS. Recorded at land/rtl-twc-reach 50447c066ffd.
+
+**Silicon side.** The bare kit tag-content.bin (sha256 273e77e9…, re-hashed at boot by the grader) ran on board 1
+with G resident by NV readback. The vector is 0x400 0x0 0xffff 0x0 0x101 0x4 0x0, exactly the expected column:
+- 1,024 of 1,024 DRAM tag bytes right, 0 wrong;
+- 257 ones on the raw path (the control);
+- 4 fills, 0 traps.
+
+Graded PASS by script (tc-grade.py, every branch dry-run first) against PREREG 8c905539b551; recorded at
+land/rtl-twc-reach e80712f7a4bc. F's boot on board 3 is the lineage control.
+
+Scope: these overwrite shapes and one boot. The kit's "what it cannot see" section stands.
+
+**Consequence.** Addendum 142's adoption of G stands. Table cells move to G as each row is re-measured on G in the
+final configuration: FRCDKMSa3 with riscv-base RVAL; the node-table pool; gcc untuned. Readings on G so far:
+
+| Row | Time | Ratio |
+|---|---|---|
+| spatial a3 mcf | 5,656.98 s | 1.104 |
+| spatial a3 gcc, untuned | 1,753.59 s | 1.018 against RVF3, 1.019 against RVAL |
+| temporal FRCDKMS mcf | 5,930.75 s | 1.157 |
+| temporal FRCDKMS gcc, tuned | 1,758.96 s | 1.021 (not the table's configuration) |
+
+The temporal G rows are on FRCDKMS, not a3, so they are re-measured. The full table re-measure, and the choice of
+baseline (stock riscv-base, or a riscv-base with Capstone's I-cache and DTLB), are the lead's decisions, which are
+pending.
