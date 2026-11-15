@@ -4451,3 +4451,29 @@ at-b3). Perl full first, then gcc. Board 3's next Capstone chain reflashes F.
 
 **Then.** Each row's ratio under FRCDKMSa3 uses RVAL for riscv-base. If the lead chooses a matched-cache riscv-base
 (I$ and DTLB equal to Capstone's), these readings are kept as the stock-CVA6 disclosure point.
+
+## Addendum 140 (2026-11-15 15:40 +08): board 3 order: RVAL ran first, because the three F chains stopped at the pre-boot park
+
+**What happened.** Three nat-run3 chains on board 3 stopped at their pre-boot switch park, each with no boot and the
+booking released:
+- bq-b3, spatial untuned gcc (Addendum 135), at 15:22;
+- br-b3 and bs-b3, the event-15 pair (Addendum 137), at 15:23.
+
+The park tool's fpga_console knew boards 1 and 2 only (`FPGA_BOARD='3': the boards are ['1', '2']`). nat-run3 had
+never run on board 3 before: board 3's earlier F runs used nat-run2, which has no park. The park failed safe.
+
+The stops were not noticed for 15 minutes. bt-b3 (RVAL, Addendum 139) waited on bs-b3's pid, so it started at once:
+it flashed riscv-base (seal and sha checked, readback ok) and began RVAL perl full at 15:39. RVAL is a pre-registered
+run in its own right, so only the order changed. Its readings stand.
+
+**Fix.** The park tree gets board 3: llvm-capstone park-board3 5980866f9f65. The three hunks are the ones the kit
+driver tree has carried since 6 Nov as a local edit. Checks:
+- board 1, 2 and 3 resolve and board 4 is refused;
+- test_pre_boot_park passes 6/6, and test_switch_park_mock passes.
+
+**Relaunch, unchanged otherwise.** bq-b3, then br-b3, then bs-b3, behind bt-b3. The first of them reflashes F.
+The stopped output directories are kept as `*.parkstop-1522`; they hold no files.
+
+**Process note.** A chain that STOPs still exits, and a chain waiting on its pid then runs. So a STOP early in a queue
+starts the next run early, on whatever bitstream that run flashes. Every launched chain now goes into the watcher at
+launch.
