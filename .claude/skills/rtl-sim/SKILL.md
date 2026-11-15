@@ -220,3 +220,21 @@ When a board-observed effect does not reproduce, suspect **fidelity** before sus
 hypothesis. The known gaps, in rough order of importance: bare M-mode vs a real capability
 domain; a register-resident capability vs one loaded from the cap table; a `.data` buffer vs a
 monitor-carved stack; iteration count and cache warmth.
+
+## No RTL assertion runs in our simulation
+
+The sim builds with the top Makefile's `verilate_command` (`verif/sim/Makefile:417`), which passes no `--assert`.
+Verilator 5.008 drops every `assert` statement without that flag, and it ignores `translate_off`, so the
+`` `ifndef VERILATOR `` blocks are not the only ones lost. Measured 2026-11-15 on a three-line module (a `$display`
+in plain code, one under `//pragma translate_off`, one under `// synopsys translate_off`, and an `assert ... else
+$error`): all three displays compile; the assert compiles only with `--assert`. The generated model agrees:
+four assertion messages (from `` `ifndef VERILATOR `` and from translate_off-only regions) are absent, while a
+`$display` under an enabled define is present. At capstone-ariane 9fd9d2530, core/ and corev_apu/ carry about 170
+assert lines: 71 in 26 `` `ifndef VERILATOR `` blocks, about 72 in translate_off-only regions, and the rest
+unguarded. **A clean sim says nothing about any of them.** The Capstone ones include the shadow-tag writes'
+overflow into the rev-node region (wt_axi_adapter.sv `tag_addr_no_overflow`, `tag_fill_no_overflow`,
+`tag_wr_pend_no_wrap`) and `ctag_implies_cap` (wt_dcache_wbuffer.sv).
+
+A check that must run in sim goes in an `always_ff` under `` `ifndef SYNTHESIS ``, printing a greppable line,
+with a `+define+` positive control that makes it fire on an ordinary test. Read the control's line before reading the
+check's silence (example: capstone-ariane sim/v6c-twcorder 27be88dfd, `TWC-ORDER-VIOLATION` / `TWC_SIM_ORDER_PC`).
