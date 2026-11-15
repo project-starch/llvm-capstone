@@ -4867,3 +4867,39 @@ only):**
 **Negative control (B2-flat):** the smoke passes on the same firmware, and table_tree=ABSENT.
 
 **Grading:** Addendum 148's pair-B checks and the rtl lane's pb-grade.py. Every reading carries "key 5 NOT MET".
+
+## Addendum 153 (2026-11-16): pair B perl replicates, alternating arms on board 1
+
+**Why.** Pair B2's perl makerand row FAILS checks 2 and 3 (rtl lane, pb-grade.py rc 1): paged − flat = +30,494,459
+run_cycles against a walker model of 111,268, while every other in-context counter is equal between the arms. Two
+readings are live:
+- **(op)** paged mode on d83d3a633 costs cycles on operations the events do not count. The rtl lane is reading the
+  shim and will run a directed sim. This reading predicts the same sign and size on every replicate pair.
+- **(run)** the difference is run-to-run or kernel-variant variance at N=1 per arm. Four earlier temporal perl runs
+  (G and P1, other kits) lie within 6,753.1..6,757.1 M, but no tree-kit arm has a replicate yet.
+
+**Runs.** These start after cd-b1 ends, on board 1, P1, with the same kits and the same perl stage
+(board-frcdkms/500.perlbench_r-native). The order is:
+1. bkit92 flat (TAG p1-treeflat-cscfix-r1-frcdkms);
+2. bkit91 paged (p1-tree-cscfix-r1-frcdkms);
+3. bkit92 flat (…-r2-…);
+4. bkit91 paged (…-r2-…).
+
+Each chain waits on the previous chain's PID, and the whole series is about 70 board-minutes.
+
+**Positive control on each run:**
+- smoke 9/9 and specdiff 1/1;
+- the 6 output hashes are identical to B2's;
+- ev29–31 are non-zero on the paged runs and 0 on the flat runs.
+
+A run that misses a control is VOID and is not graded.
+
+**Reading.** P1..P3 are the three paged runs (B2 plus r1, r2) and F1..F3 the three flat runs. The spread s_P and s_F
+is max − min within an arm. d1 = r1 paged − r1 flat, and d2 = the same for r2.
+- **(op) holds** if d1 and d2 both lie in +30.5 ± 10 M, and s_P and s_F are each ≤ 10 M.
+- **(run) holds** if s_P or s_F is ≥ 20 M, or if d1 or d2 is ≤ +10 M. Pair B's perl FAIL then lies inside run
+  variance at N=1 and is not evidence of a paging cost.
+- Anything else is UNDECIDED, and is reported as such.
+
+Each grade still comes from pb-grade.py, on each replicate pair. cd-b1's gcc and mcf rows are read alongside: (op)
+predicts an excess over their model in proportion to op count. Every reading carries "key 5 NOT MET".
