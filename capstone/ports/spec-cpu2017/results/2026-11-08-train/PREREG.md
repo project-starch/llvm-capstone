@@ -4697,3 +4697,59 @@ measured once, on the Phase 1 bitstream: G plus the paged lifetime table with dy
 - gcc untuned.
 
 It runs after Phase 1's pairs A and B (land/rtl-sublet-p1 2796b81618d8) read.
+
+## Addendum 148 (2026-11-15 23:26 +08): Phase 1 on silicon: bitstream P1 (paged lifetime table) pairs A and B
+
+**Bitstream P1.** caplifive_…-tagoverlap6c-pagedtbl_d83d3a633, capstone-ariane d83d3a633 = G plus the paged-table
+walker, the record TLB and growth. Sealed by the board lane at 2026-11-15T15:24Z, sha256 dc411e36fc5e68ae8e8a…;
+this lane checked the local file against the seal.
+
+The rtl lane's gates before the build:
+- sim arms, including growth and both mutants;
+- the 95-sweep identical to G (92/92);
+- lint at baseline;
+- the claim-auditor;
+- the synthesis-only gate PASS: +752 LUT, +1,197 FF, no loops.
+
+Routing is clean: 0 routing errors in 241,265 nets.
+
+**WNS on the core clock is -13.173 ns** (47,711 failing endpoints). G is -9.107, so this is 4.07 ns worse, just
+outside the ±3.74 ns null band. It is 0.94 ns worse than the worst reference that has worked on the boards
+(-12.229). That is a stated risk: pair A's bit-exact outputs and the smoke are what would show a timing failure.
+
+**Pre-registration:** the rtl lane's, llvm-capstone land/rtl-sublet-p1 2796b81618d8 ("Board pre-registration").
+- The model: one probe and one record read per verdict-cache miss; 2 cycles per paged access on a TLB hit; about 7
+  cycles more per walk with the directories in L1D; 3 × c_mig more per walk to memory.
+- Predicted delta run_cycles in pair B:
+
+| Row | Walk fraction 0 | Fraction 1, directories hot | Fraction 1, to memory |
+|---|---|---|---|
+| mcf | +0.25 % | +1.13 % | +10.6 .. 16.3 % |
+| gcc | +0.13 % | +0.49 .. 0.55 % | +4.3 .. 7.6 % |
+| perl makerand | within 0.2 % | | |
+
+- Graded checks:
+  1. ev31 in its band: mcf 163-200 M, gcc 19.1-26.9 M, perl 33-43 k;
+  2. delta run_cycles agrees with 2·ev31 + ev30 + ev29 within 0.2 % + 25 %;
+  3. delta inside its row's bracket, ±0.2 %.
+- The walk fraction ev29/ev31 is a reading.
+
+**Arms.** All on P1, all with stages board-frcdkms (mcf, gcc train01 tuned, perl makerand): the images the event-23
+inputs came from.
+
+| Arm | Chain, board | Kit | Kernel and firmware |
+|---|---|---|---|
+| A | by-b1, board 1 | bkit88 = bkit86 with only the bitstream lines changed | bkit86's: kernel hpm, its command line, the event-23 firmware |
+| B-flat | bz-b3, board 3, after F's tag-content boot | bkit89 = bkit87 (dom flags, pool = 4) with bitstream P1 | hpm2treeflat (llvm-capstone table-tree 722416c35e77, CV_TABLE_TREE off) and its tree checksum list; firmware hpm-events-paged fd31cdc4 |
+| B-paged | ca-b3, board 3, after B-flat | bkit90 = bkit89 with only the kernel changed | hpm2tree (CV_TABLE_TREE=1) and its checksum list |
+
+- **Pair A** (A against bv-b1's G run, same kit and board) is a pure bitstream variable. Predicted within 0.2 % on
+  every row.
+  - Its must-be-close controls: run_cycles, ev23 and L1D.
+  - specdiff must PASS, with outputs identical; that is the timing-risk check.
+- **Pair B** (B-paged against B-flat, same board) differs only in the module flag.
+  - Its L1D delta is a READING, not a control.
+  - table_growths is reported beside delta cycles, not predicted (pool LIFO).
+  - Kernel reads at the end: table_tree = 1 on the paged arm and absent on the flat arm; grow_loops = 0;
+    tree_check_failures = 0.
+  - No "table tree check FAILED" line may appear.
