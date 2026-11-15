@@ -108,6 +108,45 @@ Recorded limits (claim-auditor, 2026-11-15), both excluded by the protocol:
 5. A full build goes only on a pass of keys 1-3, graded on: routes (0 errors), congestion <= 5, loops 0, and WNS in the
    ±3.74 ns null band of G's -9.107. On a route failure, no WNS is recorded; the placed area and the census are.
 
+**GATE RESULT (board lane, apollo, tag pw-d83d3a633, 2026-11-15): keys 1-3 PASS. The full build was launched on the
+conditional go.**
+
+1. **Key 1 PASS.**
+   - Mapping 5,041.7 MB against G's 5,036.8, so +4.9.
+   - 0 Synth 8-326.
+   - Guard peak 27.35 GB.
+2. **Key 2 PASS.**
+   - 0 "Found timing loop" headers.
+   - LUTLP-1 0, with the toy control reading 1.
+   - check_timing loops 0, with G 0 and the toy 1.
+3. **Key 3 PASS on the floor clauses.**
+   - Own cells by name: 2,008 = 1,197 FF + 752 LUT, all `pw_*`. `rv_rd_res` has 0 cells, which fits a combinational
+     mux. NEG 0, POS 1.
+   - ex_stage +1,425 LUT / +1,092 FF; less own, +673.
+   - core 162,403 LUT (-1,136); less own, -1,888.
+   - Design 189,693 (-1,142).
+   - Predictions, not gating:
+     - own FF 1,197 is in band;
+     - own LUT 752 is BELOW the 1.5-3 k band (missed low). Post-synthesis LUT names are lossy, and ex_stage's top level
+       is +1,032;
+     - perf_counters +98 LUT / +6 FF is above "a few dozen".
+   - Redistribution past the floor in modules whose source did not change:
+     - rev_node -7,458, dyn_unit `_spawn_0` +5,935, `_spawn_1` -788. Summed, -2,311, inside the floor.
+     - Source check: forcing PAGED to 0 in the unit's slot-0 view removes one term of one refusal
+       (`capstone_rev_node.anvil:301`). That cannot fold 7.5 k LUTs, so the shift reads as re-homing between the Anvil
+       hierarchies.
+     - Also csr_buffer +2,112, issue_read_operands -2,388, csr_regfile -1,254.
+4. **Key 4 (reported).** Synthesis estimates on a created 40 ns clock.
+   - Through the D$ arbiter's two grant copies (rd_ack_q_i_1, vld_sel_q[1]_i_1):
+     - worst 7.591 on G, 6.624 on the trial;
+     - to the fill taps 23.957 on G, 24.085 on the trial;
+     - the walker adds grant -> `pw_slot_q` at 17.784, with 85 of its 1,197 cells in the grant cone.
+   - Into port 2's data_req: 13.203 on G, 13.019 on the trial; from `pw_*`, 13.924.
+   - Read data into `pw_*`: rvalid 23.357, D$ sequential 23.698.
+   - The board lane retracted its first G reading ("the grant reaches neither the fill taps nor the rvc flops"), taken
+     through port 2's rd_ack_q_reg/D net. That cone was local. The arbiter-output readings above replace it, and the
+     rvc flops were not re-read by that method.
+
 Order (amended 2026-11-15, after the sweep): the synthesis-only gate is requested on d83d3a633 now, because it builds no
 bitstream and its keys are above. The full build (key 5) waits until the board pre-registration below has been pushed.
 
