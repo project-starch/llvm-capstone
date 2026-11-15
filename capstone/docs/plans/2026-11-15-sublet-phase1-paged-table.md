@@ -82,8 +82,18 @@ Recorded limits (claim-auditor, 2026-11-15), both excluded by the protocol:
     the unit's valid alone; the compare is a sim-only `CAPSTONE-CHECK-FAIL` that never fired.
   - A one-cycle mode window at a namespace edge: fixed (pw_ns_edge).
   - Every arm reads identically on d83d3a633 and d148c2107, values and cycles.
-- **95-sweep against G:** PENDING (sim14 `pwsw6`, TAGMLP_PROBE). Predicted: values and RVFI identical. Cycles are identical
-  except tests that enter the table namespace, which pay one probe per flush. No sweep test builds a paged table.
+- **95-sweep against G: PASS.** sim14 `pwsw6`, TAGMLP_PROBE, on d83d3a633, rtl_dirty=no, SWEEP-RAN 95, 184 logs. The
+  reference is G's sim11 `v6csw4` on 9fd9d2530. Both PROVENANCE files carry the same five Anvil unit hashes, since there
+  is no Anvil change.
+  - sweep-compare: 92 identical (exceptions, readings, retired), 0 differ, 3 excused on both sides (rand,
+    perf_tcache_random, perf_riscv_random).
+  - sweep-compare-rvfi: 92 traces identical, 0 differ, 26 parked.
+  - Cycles, from the final line of each `.log.iss`: 0 of 92 differ.
+  - The registered prediction was values and RVFI identical, with cycles identical except where a test enters the table
+    namespace. By the test list, no sweep test is a virtual-context test (no va-/vb- family), so the probe never ran and
+    no cycle could move. The +93-cycle probe cost is read in va-alloc-w (above), not here.
+  - sweep-compare-cycles.py (tools-wt) no longer runs: it calls a `main()` that sweep-compare.py has dropped. The cycle
+    column above was read with the same `.log.iss` end-line pattern, from a stand-alone copy of its reader.
 
 ## Synthesis-only gate: keys, written before it runs (base: G 9fd9d2530's synthesis-only gate)
 
@@ -98,7 +108,10 @@ Recorded limits (claim-auditor, 2026-11-15), both excluded by the protocol:
 5. A full build goes only on a pass of keys 1-3, graded on: routes (0 errors), congestion <= 5, loops 0, and WNS in the
    ±3.74 ns null band of G's -9.107. On a route failure, no WNS is recorded; the placed area and the census are.
 
-## Board pre-registration (PENDING the event-23 counts, before any synthesis request)
+Order (amended 2026-11-15, after the sweep): the synthesis-only gate is requested on d83d3a633 now, because it builds no
+bitstream and its keys are above. The full build (key 5) waits until the board pre-registration below has been pushed.
+
+## Board pre-registration (PENDING the event-23 counts, before the full build)
 
 - **Pairs, one bitstream:**
   - A = trial on the flat kit against G on the flat kit (the null control);
