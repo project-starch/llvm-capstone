@@ -177,8 +177,9 @@ conditional go.**
     - 39 of the trial's 500 run through the walker's net `ex_stage_i/rev_node/rv_rd_res[data_rvalid]` (fan-out 129).
       They sit at ranks 261-481, at -11.370 to -11.142. G has 0. Found by the board lane; re-counted here by script.
     - That net is the walker's response filter, `(data_rvalid && !pw_own_rd_q) || pw_dead_rv_q` (`ex_stage.sv:1977`).
-      It hides the walker's own reads from the unit and injects DEAD. On G the D$ rvalid reached the unit directly, so
-      the walker adds one LUT level here.
+      It hides the walker's own reads from the unit and injects DEAD. On G the unit read the D$ rvalid directly (9fd9d2530
+      `ex_stage.sv:1733-1744`), so the walker adds logic on this net. How many LUT levels it adds is not counted: that would be
+      a netlist claim, and it is inferred from source only.
     - The 39 run `cpmp_q[5]..bE[1]` -> D$ port-2 ctrl -> the filter LUT -> rev_node event-counter logic ->
       `led_stretch_cnt`, the debug-LED aperture counter.
     - None is in the worst 260, so the WNS path and the two compared families stand as net-delay readings.
@@ -300,5 +301,12 @@ bitstream and its keys are above. The full build (key 5) waits until the board p
   3. Delta run_cycles lies inside its row's [m = 0, m = 1 to MIG at 40] bracket, widened by 0.2 % of run_cycles of run
      noise on each side.
 - **Reported, not graded:** m = ev29 / ev31, cycles per walk = ev30 / ev29, ev32 (expected 0), and ev33 (= grows).
+- **Grader, committed before any pair-B reading:** `tests/rtl-smoke/sublet-p1-2026-11-15/pb-grade.py <row> run_flat
+  run_paged ev23 ev29 ev30 ev31 [ev32 ev33]`. Exit 0 = checks 1-3 PASS, 1 = a check FAILS, 4 = NO DATA. Every line it prints
+  carries "key 5 NOT MET".
+  - Check 3 uses the brackets above as pre-registered, on G's ev23. The same bracket on the run's own ev23 is printed as
+    information only.
+  - Tested on synthetic inputs before use: PASS; check 1 alone FAILS; check 2 alone FAILS; checks 2 and 3 FAIL; check 3
+    alone FAILS; the perl NULL row passes; a short argument list, an unknown row and a non-numeric count each give NO DATA.
 - **Pair A (trial flat vs G flat):** the run_cycles delta is within 0.2 %. The only added work is one probe per
   namespace flush.
