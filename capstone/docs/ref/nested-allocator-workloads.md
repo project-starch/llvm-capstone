@@ -15,7 +15,7 @@
 | FFmpeg 9.0.1 decode (10 s clip, 300 frames), QEMU twin | **measured** (15 Nov 05:21): all commands decode the stock reference frames; in-context **-0.030 %**, kernel -0.36 %. The protection adds about 3,300 lifetimes per decode (pools recycle), subtree max 2, peak 474 live records. Needs this lane's Q-15 placement repair of 0003 (unrepaired, CDERIVE refuses a frame-plane buffer), and on llvm-c9 `-fno-builtin` in both arms (else cause 24 in both: C-69). With llvm-c15's C-69 fix and builtins on, all commands match and the cost reads -0.031 % | FRCDKMS SDK, -O2 -fno-builtin, native route, set w4, QEMU qemu55 a0501ebc39; builtins-on reading: FRCDKMSc15 SDK, set w6 |
 | FFmpeg on silicon, bitstream F | **measured** (board 2, 15 Nov 10:11-10:36): all commands decode the stock frames and the flipped control fires; the unprotected pair's repeats miss both bands (in-context 1.04 %, kernel 2.71 %), so neither difference is read (ABBA means -0.32 % / -0.34 %); wall-clock -0.74 %; event 23 +1,388 per command. Not resolved from noise, as on the twin | F `a948e4134`, kit bkit75n |
 | tshark 4.6.8, `-r -V -n` on 9,000 frames, QEMU twin | **measured** (15 Nov 05:45-06:45): every output equals stock tshark's byte for byte; in-context **+2.69 %**, kernel +0.02 %; 7.18 M CDERIVEs and 2.73 M CREVOKEs per run, with one packet-scope reset of 256-1,023 nodes per frame, subtree max 29,134, peak live records 33,998 | FRCDKMS SDK and flags on tshark and its seven dependencies, `--no-relax`, native route, QEMU qemu55 a0501ebc39 |
-| tshark on silicon, bitstream F | **running**: board 1, chain bg-b1, from 10:00 15 Nov; pre-registered below (b12fa3f29eb2; SPEC lane Addendum 129); four one-arm boots U P P U, budget 900 | F `a948e4134`, kit bkit75n |
+| tshark on silicon, bitstream F | **protected arm did not return** (board 1, 15 Nov 10:01-13:40, four one-arm boots U P P U): both unprotected commands give stock's output in 1,112-1,125 s; both protected commands printed nothing for at least 3,327 s (2.98 times that) before the 3,600 s rung timeout. The residue commit pc maps to the CDERIVE in the patched allocator. Not read as a cost and not called a wedge; a heartbeat boot is pre-registered below to separate slow from stopped | F `a948e4134`, kit bkit75n, board 1 |
 | memcached (load) | **deferred**: the native route cannot run it. The table refuses `socket`, `socketpair`, `epoll_create1` and `epoll_ctl` (`native-syscall-table.c:92-101`, `NS_REFUSE`). A twin probe (`nested/mcprobe`, 15 Nov) confirms it after a passing control (`open` in the run directory): `socket(AF_INET)` and `socket(AF_UNIX)` give ENOSYS, `epoll_create1` ENOSYS, `pthread_create` EAGAIN. memcached needs all three (four worker threads). Running it elsewhere (e.g. the virtual route) is a different instrument; the lead's call | - |
 | CREVOKE worst case (subtree 1 .. 10^6, latency, interruptibility; PostgreSQL context reset) | **measured** (RTL sim, memory delay 0): 6 cycles per node up to 2,048 nodes, about 11 beyond; at most 65,532 nodes per subtree (10^6 cannot be built), so the worst single CREVOKE is 720,892 cycles; **not interruptible**: a timer interrupt waits for the whole walk (180,518 cycles at 32,768 nodes, against 1-6 without). PostgreSQL context resets (twin): the largest ends **34,509 nodes** in one CREVOKE, about 0.38 M cycles at delay 0 and 2.1 M at delay 12. CDERIVE: 21 cycles alone, 27 / 157 back to back at delay 0 / 12; CREVOKE about 60 cycles per node at delay 12. **On silicon (F):** 28 cycles per node from 10,000 nodes; 100,000 nodes in 2.82 M cycles (about 113 ms); PostgreSQL's 34,509-node reset about 0.97 M cycles (about 39 ms) | capstone-ariane `a948e4134` (F), `--sv_seed 1` |
 | CDERIVE / CREVOKE timed on silicon (lone, back to back, subtrees 1 .. 10^5, a probe to 10^6) | **measured** (board 2, 15 Nov 09:58-10:11): CDERIVE (the runtime's helper) **63** cycles lone, 98 back to back; CREVOKE of 1 node **55**; per node 16.7 at 1,000 nodes, **28** at 10,000 and 100,000; a 100,000-node subtree revokes in **2.82 M cycles (about 113 ms at 25 MHz)**; 10^6 cannot be built (refused after 196,609). The lifetime ops are 29-38 % of speedtest1's F cost | F `a948e4134`, kit bkit75n |
@@ -30,7 +30,7 @@ Only rows marked "measured" hold measurements; the rest say what runs next and w
 | speedtest1 `--size 1` | memsys5 + lookaside patch | +0.6 % | **+1.67 %** (batch: +1.04 %) | 28,217 | 41 (silicon cycles) | 28,216 | 3 | 398 |
 | CPython 3.13.7, 7 pyperformance benchmarks | pymalloc patch 0014 | +1.63 % (summed) | **+5.17 %** (six summed; twin +2.06 % on those six) | 2,866,016 (all seven) | 345 | 2,936,354 | 2 | 76,767 |
 | PostgreSQL 17.5, pgbench-derived | 0003 **with lane q15-placement's Q-15 repair**; harness (root, shims) in both arms | **+4.04 %** | not read (repeats 1.10 %; ABBA mean +6.67 %); wall-clock +4.38 % | 2,276,557 | 810 | 668,247 | **34,509** | 105,043 |
-| tshark 4.6.8, 9,000 frames | wmem 0001 (dev, Q-15-repaired) | **+2.69 %** | queued | 4,506,984 | 598 | 2,727,471 | 29,134 | 33,998 |
+| tshark 4.6.8, 9,000 frames | wmem 0001 (dev, Q-15-repaired) | **+2.69 %** | **no reading**: the protected arm did not return in 3,600 s (2 of 2 boots) | 4,506,984 | 598 | 2,727,471 | 29,134 | 33,998 |
 | FFmpeg 9.0.1, 300-frame decode | 0003 **with this lane's Q-15 repair**; 0001 hooks and `-fno-builtin` in both arms | 0.03 % either way, not attributed | not read (repeats 1.04 %; ABBA -0.32 %); wall-clock -0.74 % | 3,327 | 3.7 | 8,974 | 2 | 474 |
 | memcached | - | deferred: the native route has no sockets, epoll or threads | - | | | | | |
 | *SPEC temporal increment, gcc train01* | *heap lifetimes on vs off* | | *+0.62 % (batch)* | | | | | |
@@ -42,7 +42,8 @@ Only rows marked "measured" hold measurements; the rest say what runs next and w
 - On silicon, speedtest1's cost is 1.7-2.7 times its twin cost, and 1.7 times the SPEC temporal increment. CPython's
   is 2.5 times (six benchmarks summed), and about a third of it is issue stalls, with L1D misses up 14.7 %. PostgreSQL's
   wall-clock cost is +4.38 % (its in-context repeats missed the band). FFmpeg's
-  is not resolved from noise on silicon either. tshark is running.
+  is not resolved from noise on silicon either. tshark's protected arm did not return on silicon in either boot (at
+  least 3x the unprotected time); whether it is slow or stops is the next boot's question.
 - Both large-subtree applications reset whole pools in one CREVOKE: PostgreSQL's memory contexts, up to 34,509 nodes,
   and tshark's packet scope, every frame. That is where CREVOKE's walk matters: uninterruptible, and 28 cycles per
   node on silicon for large subtrees, so PostgreSQL's largest reset holds the core for about 39 ms.
@@ -1462,3 +1463,112 @@ empty capture (`w0.pcap`) measures startup alone.
 - **Duration:** about 22 min per command (twin x speedtest1's ratios: in-context x4.1, kernel x2.5, 24 M cycles/s;
   about 31 G + 1.3 G cycles). It is silent while it runs, against a 3,600 s idle limit. Book 35 min per boot.
 - **VOID** if `b0-stats` or `b0-hello` fails, or the smoke fails outside the kit's accounting waiver.
+
+### Results: tshark on silicon, bitstream F (board 1, 2026-11-15 10:01-13:40): the protected arm did not return
+
+**Configuration.** As pre-registered above (b12fa3f29eb2):
+- Four one-arm boots, U P P U, on board 1: `t-u1` 10:01, `t-p1` 10:39, `t-p2` 11:54, `t-u2` 13:01.
+- Bitstream F, read back resident by name (`…-twc16k-merge-hpmtag_a948e4134`; the board does not expose its sha256),
+  kit bkit75n, rung timeout 3,600 s (budget 900 at the kit's x4), idle limit 3,600 s.
+- The SPEC lane's stage copies (`perf/natstage/board-tshark/t-*`) equal this lane's `t-{u,p}-stage` file for file, and
+  each stage still matches its `SHA256SUMS`. Their images unpack to `2061f661…` (unprotected) and `bcc251f3…`
+  (protected).
+- Transcripts `spec/board/out-nat-twcf-hpmnest-tshark-b1/t-*/board.txt` (sha256 `612be098…` u1, `97b15027…` p1,
+  `2fefe8e4…` p2, `dc860ad5…` u2), read by `tshark/parse-ts.py` against `wl/ref1000.out`.
+
+**Controls.** In every boot `b0-stats` and `b0-hello` returned 0, and the smoke passed all 9 steps under the kit's
+waiver. Not VOID.
+
+| | u1 | p1 | p2 | u2 |
+|---|---|---|---|---|
+| command returned | yes, rc 0 | **no** | **no** | yes, rc 0 |
+| output equal to stock (sha256 `056c1f8c…`, 1,140,005 lines, 9,000 frames) | yes | - | - | yes |
+| `run_cycles` (in-context) | 24,198,529,160 | - | - | 23,874,061,846 |
+| `between_cycles` (kernel and other) | 3,831,450,213 | - | - | 3,833,271,849 |
+| uptime span, s | 1,124.8 | > 3,327 | > 3,327 | 1,111.9 |
+| hpm8 event 23 | 3,093,334 | - | - | 3,031,588 |
+
+**The protected boots.** Both printed `@@SPEC-BEGIN` and `@@NATIVE-CNT 0 begin` at uptime 272.7 s, and then nothing.
+The runner's rung timeout ended each (`vbatch: no return within 3600s (ActionTimeout)`), so the command ran at least
+3,327 s without returning: 2.98 times the unprotected mean. The driver then read the core's apertures:
+- They are identical in the two boots except the rev-node fields (`rev_node_serving_idx_ex` 0x116c and 0xcb1).
+- The commit pc, 0x3ff6780f04, is the same in both boots, and `commit_instr[0].valid` is 0, so it is slot-0 residue.
+  - The native route maps this static executable with its text at 0x3ff6000000 (vaddr 0x10000), as a twin dump of the
+    protected process's `/proc/<pid>/maps` shows (`nts-mp`, the same image).
+  - So the pc is vaddr 0x790f04 in `work-sublet/domain/tshark_m5.dom`, whose strip is the image `bcc251f3…`. That is
+    in `wmem_block_fast_sublet_alloc`, the patched allocator, and the word there (`0xa283955b`, `.insn r 0x5b, 1,
+    0x51`) is the CDERIVE of the inlined `capstone_cap_derive`.
+  - The silicon load base is assumed to equal the twin's (the same module and image; both boots read the same pc).
+- `sw=225` reads `tbe`, `wrev` and `memwr`, and a CAPSTONE_DYN op is valid at the bypass head (`sw=220` 0x8c). On an
+  older bitstream, `wrev` and `memwait` were set in a healthy control too ("resting state", `SILICON-BLOCKER.md` §3).
+  The unprotected boots' apertures were read only after their command had ended, so there is no running sample to
+  compare. These apertures do not tell a stuck core from a running one.
+The allocator is hot, so a residue pc landing in it is not unlikely. A CDERIVE that does not complete would fit these
+readings, but this boot does not show it, and it does **not** separate "slower than 3x" from "stops". It is recorded as **no return within 3,600 s, 2 of
+2 boots**, not as a wedge.
+
+**Against the pre-registration.**
+- Answers: **missed for the protected arm**, which gave no output in either boot. Met for the unprotected arm (u1 and
+  u2 equal stock's output). As pre-registered, a protected-only failure stops the comparison and is a silicon finding.
+- Repeats: the unprotected pair's `run_cycles` differ by **1.35 %** (band 1 %), and `between_cycles` by 0.05 %.
+- In-context cost, kernel, uptime span, event 23: **not read**, as there is no protected reading.
+- Duration: 18.6 min per unprotected command against 22 min predicted. Silicon in-context cycles are 3.2 times the twin's.
+
+**What the twin says.** The same images, stages and one-arm boots run on the twin in 7.99 s (u) and 8.32 s (p) of
+uptime, and 7,449 M against 7,777 M in-context (+4.4 %). Both outputs equal stock. A silicon-only slowdown of 3x or
+more would need a mechanism the twin does not model. A silicon stop would need a defect the twin does not reproduce.
+This boot cannot choose between them. The heartbeat boot below is the instrument that can.
+
+### Pre-registration: the protected tshark with a heartbeat, one boot on F (written before the boot)
+
+**Question.** Does the protected tshark on silicon run more than 3x slower, or does it stop, and if it stops, at which
+frame and with what still running?
+
+**Configuration.**
+- Bitstream F `a948e4134`, kit bkit75n, board 2 behind the SPEC lane's bo-b2 (the board stays on F). One boot, the
+  protected arm only.
+- Stage `nested/tshark/board/t-ph-stage` (`t-ph-stage.SHA256SUMS`). It is `t-p-stage` plus a heartbeat, and nothing else:
+  - `train/run.sh` starts a background loop before the unpack. Every `train/hb-period` seconds (60) it prints
+    `@@HB <n> <uptime> out=<bytes of st.out> cnt <the native counters>`. The loop is killed after `mark2`
+    (`@@HB-STOP`).
+  - The image is the same `bcc251f3…`, the same capture, and the same command line.
+- Rung budget 3600, so the kit's x4 gives `BAKED_TIMEOUT=14400`, and the idle limit is the same 14,400 s
+  (`board-run.sh:155`). The SPEC lane's list line is `14400 300`.
+- Read by `tshark/hb-frames.py`, which maps each beat's byte count to the frame of the stock reference that holds that
+  byte, and exits 2 when a transcript has no beat.
+
+**Checked off the board** (rule 8; `recheck-t-ph.sh`, output in `t-ph-recheck/`):
+- The real bake holds 26 manifest files, `train/hb-period` among them, and the baked `run.sh` carries the heartbeat.
+- Two kit `BOARD_STUB=2` runs on synthetic transcripts that carry `@@HB` lines (`t-ph-recheck/synth/`):
+  - one that returns classifies as smoke PASS, spec MALFORMED (the nested format, as in every nested boot);
+  - one that does not return (t-p1's transcript with beats added) classifies as NO RESULT.
+  - Both print `BAKED_TIMEOUT=14400`.
+- The real firmware build is 23,760,392 B, under the cap, and the dom_stack gate passes.
+- Twin control `nts-hb` (stage `tshark/stages/b-ph`, the same run.sh, `hb-period` 1):
+  - the output equals stock's (sha256 `056c1f8c…`, 9,000 frames), rc 0;
+  - six beats: two during the unpack, four during the native command, with `out` growing (frames 1,265, 2,987,
+    5,145 and 7,834 by `hb-frames.py`), and `@@HB-STOP` printed;
+  - during the command the beats came 1.5-2.9 s apart instead of 1 s, and the span rose from 8.32 s to 11.46 s. A 1 s
+    beat costs the twin that much; a 60 s beat on silicon costs about 1/60 of it.
+
+**Outcomes, decided by the beats (pre-registered reading):**
+- **A, slow:** the beats continue and `out` grows through the run.
+  - If the command returns, its output must equal stock's. Its uptime span and `run_cycles` against the u1/u2 means
+    give the slowdown. It is one boot, so the repeat rule cannot apply and this is not the cost.
+  - If it does not return within 14,400 s, the frames per minute give the rate.
+- **B, stops while the kernel runs:** the beats continue but `out` stops growing for 10 or more beats. The counters
+  then tell where the time goes: `run_cycles` growing means in-context (a loop in the domain), `between_cycles` alone
+  means outside it.
+- **C, the core or the kernel stops:** the beats stop. The last beat gives the frame and the time.
+- **Not read:** if no beat is printed after `@@SPEC-BEGIN` while beats were printed during the unpack, a native task
+  that never yields cannot be told from C at time 0. The twin control shows beats during the native task, but
+  silicon's scheduling of it is not shown.
+- **VOID** as in the four-boot pre-registration (`b0-stats`, `b0-hello`, smoke).
+
+**Prediction.** B or C: the output stops growing at some frame. No mechanism in hand would make the protected arm 3x
+slower: the twin cost is +4.4 %, and on silicon the other four applications' protection costs at most +6.7 %.
+**Not predicted:** which frame, or whether it is B or C. The u1/u2 rate is 8.05 frames/s, so a stop shows within one
+or two beats.
+
+**What follows.** A: the comparison is re-run with this budget. B or C: the frame number reduces the capture for a
+folder under `fpga-repros/`, and the hardware side gets one link.
