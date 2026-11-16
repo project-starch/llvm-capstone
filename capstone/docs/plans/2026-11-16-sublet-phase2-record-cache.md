@@ -299,6 +299,19 @@ that run?
     mapping added 8 MB, but re-keying it is the lead's call, not mine. The full build waits for that word, and the
     rerun's keys 2-4 are recorded either way.
 
+**RETRACTION and addendum (2026-11-17, after the rerun's launch; the pre-registration above is unchanged).**
+- "An anomaly of the run" is withdrawn. I read `synth_1.runme.log`, the launcher's stdout capture, and it had
+  dropped one block of lines.
+  - Vivado's own `ariane_xilinx.vds` is complete: elaboration ends at line 22,410 (P1 22,365), with Synth 8-6157
+    ×100 on both. Re-read here.
+  - The same file gives the same Constraint Validation peak, 6,837.656 MB (P1 5,013.762).
+- So the rerun's message prong is void for both hypotheses, and **the memory prong alone decides**, as written.
+- Synth 8-7128 (×22) and 8-7156 (×18) are real and absent on P1. They are mux and shifter range optimisations at
+  scoreboard.sv:213, capstone_rev_node.anvil.sv:6135 and ariane_pkg.sv:848/862: logic that ex_stage's change
+  feeds. That is an observation, not an attribution.
+- What would have caught the slip: reading the tool's own log (`.vds`) rather than a copy of its stdout. A
+  difference that only the copy shows says nothing about the run.
+
 ### Full build (only on a gate pass)
 
 - Routes, 0 errors.
