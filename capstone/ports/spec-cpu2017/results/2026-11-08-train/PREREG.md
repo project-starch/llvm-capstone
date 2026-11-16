@@ -5081,3 +5081,41 @@ refutation key is "mcf more than +0.2 % slower than P1". A missed band here is r
 it widens the B5a pair's noise floor accordingly.
 
 Every P1 reading carries "key 5 NOT MET".
+
+## Addendum 157 (2026-11-17 07:55 +08, before it runs): the B5a pair against P1 on boards 1 and 2, after Addendum 156's baselines
+
+**Bitstream B5a:** caplifive_…-tagoverlap6c-pagedtbl-reccache_6e82d7bd2, capstone-ariane 6e82d7bd2. It is P1 plus the
+record cache.
+- Sealed by this lane at 2026-11-16T23:44:28Z, sha256 806c5f55a40ca851a9a9b29f48272137f543dd3714d6d15a0acdf4457eee9356,
+  tarball .bit cmp identical.
+- This lane's read of the routed reports: 0 nets with routing errors (246,477 routed), WNS −13.691 ns. P1 is −13.173,
+  so the change is −0.52, inside the ±3.74 band.
+- The rtl lane grades the full-build keys: routes, congestion ≤ 5, loops 0, WNS band, and rc_live_q slack reported.
+  The plan is llvm-capstone land/rtl-sublet-p2, docs/plans/2026-11-16-sublet-phase2-record-cache.md, "Full build".
+- **The flash waits for that grade.** Each chain below starts only once Addendum 156's chain on its board has ended
+  AND the file perf/natstage/B5A-GRADE-PASS exists. This lane writes that file only on the rtl lane's PASS.
+
+**Kit:** bkit93-k2n-native-b5a-tree-cscfix = bkit91 with only the two bitstream lines of board.env changed. `diff -r`
+shows board.env and its SHA256SUMS line. The kernel is hpm2tree, node_table_pool=4; the firmware is monitor 22a907f
+with -DCSC_TABLE_TREE.
+
+**Runs:** stages board-frcdkms, cc-b1's list unchanged (perl makerand, gcc train01 tuned, mcf); TAG b5a-frcdkms.
+- **cr-b1:** board 1, behind cp-b1.
+- **cs-b2:** board 2, behind cq-b2.
+
+**Predictions:** the rtl lane's, quoted from the plan's "Board readings".
+- Controls: smoke 9/9; specdiff PASS; SPEC-HASH blocks byte-equal to the P1 runs'; @@NS-PARAM table_tree=1.
+- Identity per run: ev31 − ev35 − ev37 ≥ 0.
+- **mcf:**
+  - Hit rate HPM34 / (HPM34 + HPM35) is at most 73.4 %. Below 30 % means the fill yields on the probe path, a finding.
+  - Δrun_cycles (B5a − P1, same board) lies between −6.4 G and −0.4 G.
+  - **A Δ above +0.2 % (+0.29 G) refutes "the cache does not cost on the probe path".**
+- **gcc train01:** within ±0.2 % of P1.
+- **perl:** no cycle grade at N=1 (Addendum 153a); HPM identities only.
+
+**P1 reference per board:** the mean of the same-board readings. On board 1 these are cc-b1 and cp-b1 (and cf-b1 and
+ch-b1 for perl). On board 2 it is cq-b2. If a P1 baseline misses its Addendum 156 band, the noise floor of this pair
+widens to that spread, and the reading says so.
+
+The R-76 batch (7180a83b6) is built separately and is not part of this pair. Every reading carries "key 5 NOT MET"
+for both P1 and B5a.
