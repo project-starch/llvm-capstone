@@ -4993,3 +4993,54 @@ The kit's known Image-copy window (RESULTS 02:15) is microseconds wide. A crosse
 - gcc TEST (the lead, 16 Nov: gcc at both test and train01) follows in a later addendum, once the a3/spa3/RVAL gcc
   test twins land.
 - A row outside its band is a finding, reported as read, not a fault.
+
+## Addendum 155 (2026-11-16, before it runs): gcc TEST on all three arms, and the six missing riscv-base RVAL rows, on board 3 after its perl chains
+
+**Why.** The lead (16 Nov) wants gcc at both test and train01, because the paper's Section 7.3 reports test size.
+Train01 stays in the table. Addendum 68's reason for dropping test still applies: a ~4.8 s program, where exec and
+startup weigh more. The test row will carry that caveat. Addendum 147 also needs RVAL for every row.
+
+**Stages.**
+- **Capstone gcc test, both arms** (perf/natstage/mk-gcctest-stages.py): perf/nat-fair/stages/502.gcc_r-test, the
+  untuned native run.sh with no module writes, with the arm's cpugcc_r.strip.dom swapped in (a3 58124bcc766ceb17,
+  spa3 3d8bfb5a85a3371f; plan.json's exes path asserted). The board stage comes from bkit91's make-train-stage.sh,
+  with the native smoke copied from the arm's train01 stage. Each board stage differs from its arm's train01 stage
+  only under train/ (inputs t1.c and control, plan.json, run.sh).
+- **riscv-base RVAL, six rows** (perf/fair/mkstages-al3b.py, mkstages-al3.py's method): copies of the RVF3 board
+  stages *-rv-fair3, with every executable swapped for its plain-rv64al build, each sha256 asserted equal to the
+  compiler lane's:
+
+  | Row | Executable sha256 prefix |
+  |---|---|
+  | mcf | 2d48ad97ae6009c7 |
+  | lbm | fa9deda413e452b5 |
+  | x264 | 9154b69b6104afb9 |
+  | imagick | 38b235f64538d58e |
+  | nab | 2f334fe1e63e8dbd |
+  | xz | 15a91fd819f863a4 |
+  | imagevalidate | 08168aeee1e99aca |
+
+  diff -rq shows only those binaries and plan.json.
+- **RVAL gcc test** (502.gcc_r-test-rv-al3): a copy of 502.gcc_r-rv-fair2 (test size) with cpugcc 93bc8e196b036d07.
+  Its run.sh has no ru wrapper and no GT snapshots, like the Capstone gcc test stage, so no extra exec sits inside a
+  5 s timing.
+- **Twins** (compiler lane, perf/faultesc/RESULTS 873-889): every row rc 0, outputs byte-equal to the FRCDKMS twin.
+  The exception is RVAL x264: frames byte-identical, but the encoded .264 is 54 bytes longer, so it is not exactly the
+  same work. The board's imagevalidate decides correctness, and the row carries a footnote. The cause is not
+  established.
+
+**Chains, board 3, in order after cl-b3:**
+1. cm-b3: P1, kit bkit91, a3 gcc test.
+2. cn-b3: P1, spa3 gcc test.
+3. co-b3 (thrun.sh, kits bkit54/bkit52, runner run-stage-noctl.py, as Addendum 139): flash riscv-base d31345cf3
+   (seal checked, readback), then RVAL gcc test, imagick, nab, lbm, xz, mcf, x264.
+
+All gcc test rows are therefore on board 3, a same-board ratio.
+
+**Predictions.** rc 0 and specdiff PASS on every row (x264 by imagevalidate).
+- RVAL against RVF3 on board 3: within -0.5..+0.2 % on each row. The twins differ by ≤ 0.25 %.
+- gcc test:
+  - RVAL 4.5-5.1 s (riscv-base rv64r read 4.76 s, Addendum 67);
+  - a3 and spa3 5-9 s each (wide: the startup share on silicon is unmeasured on P1).
+
+Every P1 reading carries "key 5 NOT MET".
