@@ -3,7 +3,57 @@
 This is a live table: rows are filled as board runs land. Pre-registrations, predictions and the run-by-run trail are
 in [`../2026-11-08-train/PREREG.md`](../2026-11-08-train/PREREG.md) (Addendum 107 onward for this table).
 
-## Status (updated 2026-11-15 22:45 +08)
+## Status (updated 2026-11-16 19:40 +08)
+
+**The final table is being measured on P1** (Addenda 147, 154, 155): bitstream P1 (G plus the paged lifetime table with
+dynamic growth, capstone-ariane d83d3a633), kit bkit91, images FRCDKMSa3 / FRCDKMSspa3, riscv-base RVAL, node-table
+pool, gcc untuned. gcc is reported at both train01 and test. Every P1 reading carries **key 5 NOT MET**: P1's WNS is
+−13.173 ns, outside the pre-registered band around G's −9.107 ns. Whether the table may stand on P1 with the miss
+stated is open with the lead. Outputs are bit-exact against G on every pair run.
+
+| Row (final config, P1) | riscv-base | Capstone spatial | Capstone temporal |
+|---|---|---|---|
+| gcc train01 | 1,722.35 s (RVF3; RVAL 1,720.98 s) | 1,752.53 s (board 2) | 1,771.70 s (board 1) |
+| others | running: boards 1-3, see PREREG Addenda 154-155 | | |
+
+**Phase 1 paging cost (pair B, same board 1, same firmware; flat vs paged table on P1, FRCDKMS images):**
+
+| Row | Flat | Paged | Paged − flat |
+|---|---|---|---|
+| gcc train01 | 41,557,763,869 cycles | 41,667,242,846 | +0.263 % |
+| mcf test | 144,174,982,810 | 144,518,401,489 | +0.238 % |
+| perl makerand (3 runs per arm) | | | +0.10 % pooled, run-to-run variance |
+
+- The cost is the paged record lookup itself: about 2 cycles per record access, plus tree walks on record-TLB misses.
+  - mcf: the per-access term is 363 M of the model's 402 M cycles.
+  - gcc: walks are 106 M against 46 M per-access.
+- Growth (cause 30, batch of 16 record pages = 4,096 slots) happened 17 times on gcc, twice on mcf and never on perl.
+- Grades: rtl lane's pb-grade.py PASS on gcc and mcf; rep-grade.py "RUN-TO-RUN VARIANCE" on perl
+  (land/rtl-sublet-p1 a4dc47751428). gcc and mcf are N=1.
+
+**Hardware cost** (routed -hierarchical utilization of the sealed runs, both at 25 MHz on the xc7k325t):
+
+| | riscv-base d31345cf3 | P1 d83d3a633 | P1 / riscv-base |
+|---|---|---|---|
+| core i_cva6 LUT | 43,531 | 161,602 | 3.71× |
+| core FF | 16,070 | 54,094 | 3.37× |
+| core RAMB36 | 38 | 98 | 2.58× |
+| core DSP | 27 | 27 | 1.00× |
+| whole design LUT | 68,563 | 187,393 | 2.73× |
+| WNS (40 ns clock) | +13.228 ns | −13.173 ns | |
+
+- Core growth by child (LUT, riscv-base → P1):
+  - issue stage 11,730 → 46,608;
+  - ex_stage 19,090 → 55,848;
+  - CSR file 4,146 → 26,740;
+  - cache subsystem 7,295 → 19,393;
+  - capstone_dom_switcher (supervisor) 11,077 on P1 only.
+- P1 also carries HPM and tag-path counters, debug apertures, and I$ 32 KiB 8-way / DTLB 64 (riscv-base: 16 KiB
+  4-way / 16).
+- P1 runs correctly at 25 MHz despite the negative WNS (bit-exact outputs). A clock that meets timing would be about
+  19 MHz.
+
+### Earlier status (2026-11-15 22:45 +08)
 
 - **riscv-base:** complete, all 8 rows.
 - **Capstone temporal:**
