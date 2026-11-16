@@ -326,6 +326,40 @@ that run?
     Technology Mapping" peak to the "Finished" peak) at most +500 MB, plus a whole-run peak inside the guard.
   - Recorded as a key that was mis-scoped, not as a pass of the key as written.
 
+**Launched by the runtime lane, 2026-11-17 06:16 +08**, as b5a-6e82d7bd2, the full build. It cites the lead's
+standing instruction of 16 Nov to launch the Section 5 work "in any case". Key 1 is recorded as mis-scoped (the
+recommendation above), not as a pass. The lead had not answered the key-1 question by then. This build serves the
+B5a-against-P1 performance pair.
+
+### Combined gate: B5a + R-76 (pre-registered 2026-11-17, before the run)
+
+- **Hash:** capstone-ariane `r76-ccsrrw-priv` 7180a83b6. It descends from 6e82d7bd2, and its RTL differs from it in
+  `core/csr_regfile.sv` only (+7 lines: R-76's privilege term; see ISSUES R-76).
+- **Lint on 7180a83b6** (`.sup/lint-rc10`, dirty=no): PASS, every counter at baseline: LATCH 44, MULTIDRIVEN 3,
+  UNOPTFLAT 39, UNUSEDSIGNAL 1480, UNDRIVEN 25, BLKSEQ 2, CASEOVERLAP 2, SELRANGE 100, ALWCOMBORDER 0, COMBDLY 0,
+  ANVIL_UNOPTFLAT 0.
+- **The 95-sweep** is identical to B5a's.
+- **Purpose:** the bitstream that reaches silicon with R-76. The 6e82d7bd2 build keeps the one-variable provenance for
+  the performance numbers.
+
+Keys, graded against B5a's gate (rc-6e82d7bd2 / rc2-6e82d7bd2):
+1. **Memory, in the re-scoped form:**
+   - growth across Technology Mapping itself (the "Start Technology Mapping" peak to the "Finished" peak) at most
+     +500 MB;
+   - the whole-run peak inside the guard.
+   - Reported against prediction, not keyed: Constraint Validation 6,840 ±100 MB.
+2. **Loops:**
+   - check_timing 0, and LUTLP-1 0 with its control;
+   - **no "Found timing loop" header at all**: privilege_violation is on the lint loop list, and the fix adds a term
+     to it.
+3. **BRAM:** as B5a. g_rc_way[0/1].dat_mem each map to 2 RAMB36, and no dat_mem is in distributed RAM.
+4. **Area:**
+   - core LUT within ±2,000 of B5a's 165,786;
+   - csr_regfile_i within ±2,500 of B5a's own row (the redistribution floor).
+   - Reported against prediction, not keyed: R-76's own cost is a 4-input AND into privilege_violation, under 20 LUT.
+
+Its full build, on a gate pass, follows B5a's full-build keys below. The flash is the lead's decision.
+
 ### Full build (only on a gate pass)
 
 - Routes, 0 errors.
