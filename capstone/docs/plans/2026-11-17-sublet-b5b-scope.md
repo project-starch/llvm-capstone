@@ -119,7 +119,8 @@ The options:
   the NOGROW failure, the release-time generation), with CSRUNV kept. B5b-2 is the trap route, the raw tag moves and
   the deletions.
 
-**Recommendation: (C).**
+**Recommendation: (C).** (Premise corrected on 2026-11-17, below in "What proceeds now": B5b-1 likely needs a monitor
+port, because the Sublet format has no types. C's remaining advantage is that the format gets its own synthesis gate.)
 - B5b-1 is common to all three options, and it carries the format's synthesis risks: the 63-bit id on every compare
   site and the record width. The bounds arithmetic is unchanged; see step 1 below.
 - Kept apart from the trap route, its gate isolates them. The SPEC native route keeps a measurable baseline on it.
@@ -145,6 +146,51 @@ B5b-1's design, in this order. Each step gets a synthesis-only gate before anyth
    - So the compress-to-decompress round trips behind the 94 GB mapping precedent are not what is new here. The new
      risk is the 8 extra bits on every id compare (the LSU verdict cache, the CPMP trackers, the PC tracker).
    - A register lane of {tag, generation 32, slot 31, bounds 27} is 91 bits, against today's 90.
+   **Step 1's design (2026-11-17):**
+   - **Today's split.** The memory granule is hi = `cap_metadata_t` {generation 30 | perm 4 | type 3 | bounds 27}
+     and lo = slot[24:0] << 39 | address[38:0] (`ids55_pack_lo`, `ariane_pkg.sv:917-919`). In the core the slot
+     rides in the register lane's top bits: lane = {slot 25, tag, metadata 64}, CAP_MD_W = 90.
+   - **Sublet keeps the same split.** hi = generation 32 | slot 31 | bounds[26], and lo = bounds[25:0] |
+     address[37:0]. In the core:
+     - the lane becomes {bounds[25:0], tag, hi 64}, so CAP_MD_W = 91;
+     - the cursor word is the zero extension of address[37:0];
+     - pack and unpack exchange the lane's top field with lo[63:38], as `ids55_pack_lo`/`ids55_unpack_word` do with
+       the slot today.
+     So the ~70 lane-slicing sites change a width, not a structure.
+   - **The fat capability:**
+     - its id becomes {generation 32, slot 31};
+     - `decompress_bounds`/`compress_bounds` are unchanged (same 27-bit field);
+     - `cursor_outside_window` and the genesis range are bounded by 2^38;
+     - a cursor at or above 2^38 is unrepresentable and loses its tag (QEMU `capstone_cursor_representable`).
+   - **Types and rights through a decode shim first.** QEMU's own transition did this (4bfbf02fbe, "A decode shim
+     makes every decoded value NONLIN with all rights ... so LDC never consumes a slot by a stored type"). B5b-1
+     can do the same:
+     - every decoded capability reads NONLIN with RWX;
+     - type and rights writers become no-ops or illegal;
+     - the 52 + 10 DYN and 36 + 1 FLU type and permission references stay as they are and fold to constants in
+       synthesis.
+     The real deletion moves to B5b-2. This keeps B5b-1's edit to the format and the record, which is the point of
+     staging it. Cost: the shim's constant-folding is an inference about synthesis, which the gate reads (own
+     footprint by name, and DYN/FLU LUT not above B5a's).
+   - **OPEN, and it bears on option C itself.** The Sublet capability has no room for a type: all 128 bits are
+     generation, slot, bounds and address. So under B5b-1 every capability is effectively NONLIN with all rights,
+     on the monitor's side too.
+     - Today's monitor uses types: its CPMP0-2 genesis capabilities are LINEAR (`sbi_capstone_dom.c:8-15`, read in
+       R-76's audit), and CSRUNV frames and CALL/RETURN rely on sealed and linear types.
+     - So "option C keeps the current stack running" holds only if the monitor and the runtime's CSRUNV route work
+       with every capability NONLIN and RWX. Linear moves would become copies, and sealing would be gone.
+     - That needs a census of the type and rights uses on the native route (monitor, module, runtime) before B5b-1
+       is built. If it fails, C's first step cannot keep the stack, and the choice is between B5b-1 with a ported
+       monitor or option A.
+     - **First census, the monitor only** (the shared checkout's capstone-sbi, opensbi df0e9a8 of 2026-10-15; not
+       established as the board's revision; `sbi_capstone.c` and `sbi_capstone_dom.c`, counts of identifiers):
+       - `__linear` 37, `seal` 21, `seal_cap_writer` 8, `CAP_TYPE_UNINIT` 5, `CAP_TYPE_LINEAR` 4, `CAP_TYPE_REV` 3;
+       - `seal_region` 2, `seal_region_end` 1, `sealed` 1, `C_INIT` 1, `CAPENTER` 1.
+       The monitor depends on types and sealing. **So C's first step most likely cannot keep today's stack without a
+       monitor port.** C still isolates the format's synthesis gate, but its "baseline for the native route" argument
+       no longer holds as stated.
+     - The module's and the runtime's uses are not counted yet.
+     - This was not known when the scope question went to the lead, and the lead is told now.
 2. **The record and the walker:**
    - 137 bits become 128;
    - liveness becomes "generation matches" (no VALID, FREE or LINEAR);
