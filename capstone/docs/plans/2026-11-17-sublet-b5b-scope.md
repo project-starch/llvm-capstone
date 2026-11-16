@@ -197,6 +197,21 @@ B5b-1's design, in this order. Each step gets a synthesis-only gate before anyth
        These are counts, not the executed path. Which of them the native route's boot and CSRUNV/CSMINT paths
        execute, and whether any CHECKS a type value (as opposed to making a linear or sealed capability that would
        simply become NONLIN), is NOT YET READ. That reading decides the monitor port.
+     - **`capstone_cscheck.S` (22a907f), the CSCHECKR/W emulation:** on the executed native path (P1
+       `checked_copy_emu=1`; gcc train01 emu 3,621). It must be PORTED, not shimmed, because it decodes the stored
+       capability and the record by raw bit positions:
+       - the stored type field, hi[29:27], is compared with the stored NONLIN value 2, giving 26 or "reported tagged
+         without a load" (`:183-185`, `:315-318`);
+       - the generation comes from hi >> 34 and the slot from lo >> 39 (`:199`, `:211-216`);
+       - the record header and the records are decoded by fixed shifts (`:224-251`, `:350-364`);
+       - LCC PERM must show R or W, else 27 (`:255-256`);
+       - its page capabilities are minted with the M-mode debug mints CAPCREATE/CAPTYPE/CAPPERM (`:81-85`).
+       In the Sublet format the hi word is generation | slot | bounds[26], with no type field, and lo carries
+       bounds[25:0] above address bit 38. Every one of those decodes changes.
+       - The type test becomes vacuous only if the field is dropped from the code. Read as written, it would test slot[28:26]
+         (hi = generation << 32 | slot << 1 | bounds[26]).
+       - The record decode follows the 128-bit record (generation 127:96, previous 95:65, next 64:34, depth 33:3).
+       This is the memory's "firmware CSCHECK emulators read records" case.
      - **Module and runtime** (runtime lane, 2026-11-17):
        - The module performs no capability memory access, and mints every grant NONLIN through the CSMINT descriptor.
          Its rights (x 1, w 2, r 4) act as a ceiling over the PTEs.
