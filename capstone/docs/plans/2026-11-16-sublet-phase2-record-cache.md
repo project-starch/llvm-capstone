@@ -366,8 +366,13 @@ synth_design completed successfully):
   the guard peak RSS is 25.26 GB.
   - Reported, not keyed: Constraint Validation 6,680.8 MB, outside the predicted 6,840 ±100 and 157 MB below B5a's
     6,837.7. Not explained.
-- **Key 2 OPEN.** 0 "Found timing loop" headers and 0 Synth 8-326. The check_timing and LUTLP-1 probes, with their
-  toy controls, are requested from the board lane on the gate's dcp.
+- **Key 2 PASS.** 0 "Found timing loop" headers and 0 Synth 8-326.
+  - check_timing: CHECKLOOPS 0, toy 1 (`twc/rc/rck-b5ar76-7180a83b6.log`, `rck-toy-b5ar76.log`);
+  - LUTLP-1: 0 rows, toy 1 (`lutlp/b5ar76-7180a83b6-synth.rpt`, `toy-chk-…`);
+  - all four Vivado runs exit 0. Run by the runtime lane on the gate's dcp (sha256 80b20d5875702d1c…), and the logs
+    were re-read here.
+- **THE COMBINED GATE PASSES ALL FOUR KEYS.** Its full build, b5ar76-7180a83b6, was launched by the runtime lane at
+  07:14 +08, under B5a's full-build keys.
 - **Key 3 PASS.** g_rc_way[0/1].dat_mem each map to 2 RAMB36. dat_mem rows: 4 in the Block RAM sections, 0 in
   Distributed RAM.
 - **Key 4 PASS.**
