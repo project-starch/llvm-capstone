@@ -7954,5 +7954,23 @@ under vivado-guard with a 40 GB cap, and the checkpoint probes under 12 GB.
   - From `rc_addr_q`: 13.195 ns, 76 levels, into the scoreboard's `mem_q ... [dom_switch_req][ra_data]`.
   - From the record RAMs: 16.322 ns.
   - Into `rc_live_q`: only its reset.
-- The RTL lane decides what follows: a new pre-registration, or not. No change to the keys after this reading has been
-  made.
+- **A diagnostic rerun of the same hash, pre-registered by the RTL lane (`land/rtl-sublet-p2` 03961967017c, before
+  the run), reads H-RTL: the cost repeats on the same hash, so it is not an anomaly of the first run.** What in the
+  RTL costs it is not established. The run was rc2-6e82d7bd2, on the same flow and guard.
+  - Constraint Validation peaked at 6,839.7 MB, +2.0 against the first run's 6,837.7. The pre-registered band for
+    H-RTL was ±50 MB; H-flow predicted about 5.0-5.1 GB.
+  - Elaboration and Technology Mapping read 4,244.9 and 6,867.7 MB, so key 1 FAILS again (+1,826.0).
+  - Keys 2-4 pass, and every number is identical to the first run.
+  - Guard RSS peaked at 26.10 GB.
+  - What follows, as pre-registered: key 1 reads a running peak set before mapping, and mapping itself adds 8 MB.
+    Whether to re-key it is the lead's decision, and the full build waits for it.
+- **A withdrawn reading (the RTL lane's, on its lane, c2f7a35f21b2).** The rerun was requested partly because the
+  first run's `runme.log` appeared to lack its elaboration messages.
+  - That was the stdout capture, not the run. Vivado's own `ariane_xilinx.vds` holds the whole elaboration: it ends
+    at line 22,410 (P1: 22,365), with Synth 8-6157, 8-6155 and 8-294 at their 100-message caps, as on P1.
+    `runme.log` lacks the `.vds` lines 57-21,951 as one block.
+  - The same block is missing on the rerun (3,194 lines), and is not missing on P1. Why is not established. Both
+    logs read the same memory peaks.
+  - Synth 8-7128 (×22, "2 input Mux optimized to 1 input Mux") and 8-7156 (×18, "Variable shifter node is
+    optimized using Range optimization") are real. They sit inside elaboration on both runs, at scoreboard.sv,
+    capstone_rev_node.anvil.sv and ariane_pkg.sv, none of which the change touches, and P1 has none.
