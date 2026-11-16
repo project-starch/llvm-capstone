@@ -312,6 +312,20 @@ that run?
 - What would have caught the slip: reading the tool's own log (`.vds`) rather than a copy of its stdout. A
   difference that only the copy shows says nothing about the run.
 
+**Rerun read (board lane, rc2-6e82d7bd2, from the .vds): H-RTL.**
+- Constraint Validation reads 6,839.7 MB (+2.0 against the first run, inside ±50) and Technology Mapping 6,867.7.
+  The whole-run peak was 6,935.8 and the guard RSS 26.10 GB.
+- Keys 2-4 are identical to the first run.
+- The +1.8 GB is therefore deterministic for this RTL, not noise of the run. **That the record array is the
+  mechanism remains a hypothesis:** the rerun excludes the run, not the other parts of the change.
+- As pre-registered, re-scoping key 1 is the lead's decision, and the full build waits for it.
+- **Recommendation to the lead: re-scope and launch.**
+  - Key 1's purpose was a mapping blow-up of the 94 GB class. Mapping adds 8 MB on both trees.
+  - The whole run stays under P1's guard RSS (26.1 GB against 27.35) and far below the 40 GB ceiling.
+  - Proposed key 1 for every later gate on this flow: growth across Technology Mapping itself (from the "Start
+    Technology Mapping" peak to the "Finished" peak) at most +500 MB, plus a whole-run peak inside the guard.
+  - Recorded as a key that was mis-scoped, not as a pass of the key as written.
+
 ### Full build (only on a gate pass)
 
 - Routes, 0 errors.
