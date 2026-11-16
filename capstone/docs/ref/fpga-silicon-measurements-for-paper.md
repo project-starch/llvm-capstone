@@ -7908,3 +7908,51 @@ The reference G is v6c (capstone-ariane 9fd9d2530): its own synthesis-only gate 
   grant path to the fill taps or to the walker. Both conclusions were withdrawn the same day. From the arbiter's
   output nets the cone is about 43,000 endpoints and does reach the fill taps. The gate's grant readings are void;
   its readings through the ex_stage boundary pins stand.
+
+## The record cache on synthesis: B5a's synthesis-only gate fails its mapping-memory key (6e82d7bd2 against P1 d83d3a633, board lane, apollo, 2026-11-17)
+
+This section is recorded from the gate (2026-11-17). The keys are the RTL lane's, in
+`capstone/docs/plans/2026-11-16-sublet-phase2-record-cache.md` on llvm-capstone `land/rtl-sublet-p2`:
+- the pre-registration at 23d3a2ba2e01 and 1aab7c1aa017, pushed before the gate request;
+- key 4 corrected at aa9f69edc9f6, before the gate ran (four HPM events, not one).
+
+The reference is P1 (capstone-ariane d83d3a633), through its own synthesis-only gate (the section above). The run was
+under vivado-guard with a 40 GB cap, and the checkpoint probes under 12 GB.
+
+- **The gate FAILED key 1, so no full build was launched.** The pre-registration allows no retry.
+
+  | key | 6e82d7bd2 | P1 |
+  |---|---|---|
+  | 1. peak at the Technology Mapping marker (P1 ± 500 MB) | **6,865.6 MB (+1,823.9): FAIL** | 5,041.7 MB |
+  | Synth 8-326 lines | 0 | 0 |
+  | 2. "Found timing loop" headers / LUTLP-1 (toy 1) / check_timing loops (toy 1) | 0 / 0 / 0: PASS | 0 / 0 / 0 |
+  | 3. records in block RAM (both ways in the Block RAM mapping report, none in distributed RAM, core RAMB36-eq +4) | yes: PASS | n/a |
+  | 4. core i_cva6 LUT minus the cache's own (±2,000) | +912 (core 165,786, +3,383): PASS | 162,403 |
+  | NEG / POS / rc_live_q must-fire controls | 0 / 1 / 1 | 0 / 1 / 0 |
+
+- **Where the extra memory appears.** Vivado's "peak" figure is a running maximum, so each phase was read from both
+  logs (P1 → 6e82d7bd2):
+  - after RTL Optimization Phase 1: 4,157.9 → 4,244.9 MB (+87);
+  - after Constraint Validation: 5,013.8 → 6,837.7 MB (+1,824). This step spans XDC processing and the timing
+    engine's initialisation, after elaboration and before any optimisation or mapping;
+  - Technology Mapping itself: +8.0 MB on both.
+
+  The key therefore reads a peak that was set before mapping started. What costs the 1.8 GB in that phase is not
+  established. The guard's process-group RSS peaked at 26.17 GB, against 27.35 GB for P1's gate, so this was not a
+  host-memory event.
+- **The records are in block RAM.**
+  - `g_rc_way[0].dat_mem_reg` and `g_rc_way[1].dat_mem_reg` each map to 256 x 128 (READ_FIRST), 2 RAMB36.
+  - The tags map to `tag_mem_reg` 64 x 17 → RAM64X1S x 17 per way, 34 LUTRAMs in all, against a prediction of about 40.
+- **The cache's own cells, by name** (`*/rc_*` and `*g_rc_way*` under ex_stage_i): 2,471 LUT, 897 FF and 4 RAMB36E.
+  - The LUT count is above rtl's predicted 0.6-1.5 k; the FF count is inside its 0.7-1.2 k. The bands are reported, not
+    gating.
+  - ex_stage grew +5,647 LUT, which is +3,176 beyond the cache's own cells.
+  - perf_counters moved +6 LUT and +0 FF.
+  - The design totals 193,062 LUT (+3,369) and FF +829.
+- **Timing, as a synthesis estimate on a 40 ns clock created for the probe (not graded).**
+  - Design worst slack: 2.779 ns, against P1's 3.152.
+  - From `rc_addr_q`: 13.195 ns, 76 levels, into the scoreboard's `mem_q ... [dom_switch_req][ra_data]`.
+  - From the record RAMs: 16.322 ns.
+  - Into `rc_live_q`: only its reset.
+- The RTL lane decides what follows: a new pre-registration, or not. No change to the keys after this reading has been
+  made.
