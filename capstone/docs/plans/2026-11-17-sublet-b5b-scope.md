@@ -212,6 +212,20 @@ B5b-1's design, in this order. Each step gets a synthesis-only gate before anyth
          (hi = generation << 32 | slot << 1 | bounds[26]).
        - The record decode follows the 128-bit record (generation 127:96, previous 95:65, next 64:34, depth 33:3).
        This is the memory's "firmware CSCHECK emulators read records" case.
+     - **The share path in `sbi_capstone.c` (22a907f) is on the executed native path.**
+       - The witness: the native gcc train01 transcript (`spec/board/out-nat-p1-final-a3-b1/502.gcc_r-train01-native/
+         board.txt`, P1, board 1) carries SHA0-SHA5, RGID and RCLM three times each: three region shares per boot.
+       - `shared_region_annotated` (`:2686-2760`) is built on types and on instructions B5b deletes:
+         - DEFAULT calls `__mrev(r)` and `__delin(r)` (MREV and DELIN);
+         - BORROWED relies on a LINEAR handle that revoke leaves UNINIT;
+         - SHARED tests `cap_type(r) == CAP_TYPE_LINEAR`;
+         - TRANSFERRED requires LINEAR and otherwise reports SHAX/CTYP and wedges in `while(1)`.
+       - Further type comparisons sit in `split_out_cap`, `revoke_region`, `region_de_linear`, `managed_reinit`,
+         the loan functions and `context_seal_live`. Which of those execute is not yet read; the transcript shows no
+         LNBG or MRCL tag.
+       - **Conclusion: B5b-1 needs a monitor port on the executed native path in every option.** That means the share
+         path, the CSCHECK emulation, and whatever of the rest the boot executes. Option C's first step cannot keep
+         today's monitor unchanged.
      - **Module and runtime** (runtime lane, 2026-11-17):
        - The module performs no capability memory access, and mints every grant NONLIN through the CSMINT descriptor.
          Its rights (x 1, w 2, r 4) act as a ceiling over the PTEs.
