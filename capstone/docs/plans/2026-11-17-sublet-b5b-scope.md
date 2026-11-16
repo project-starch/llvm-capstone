@@ -220,9 +220,23 @@ B5b-1's design, in this order. Each step gets a synthesis-only gate before anyth
          - BORROWED relies on a LINEAR handle that revoke leaves UNINIT;
          - SHARED tests `cap_type(r) == CAP_TYPE_LINEAR`;
          - TRANSFERRED requires LINEAR and otherwise reports SHAX/CTYP and wedges in `while(1)`.
+         (Which branch the native route takes is under "The executed branch" below.)
        - Further type comparisons sit in `split_out_cap`, `revoke_region`, `region_de_linear`, `managed_reinit`,
          the loan functions and `context_seal_live`. Which of those execute is not yet read; the transcript shows no
          LNBG or MRCL tag.
+       - **The executed branch** (runtime lane, read against the emitters, the same in all 16 final-table boots;
+         re-checked here on the gcc train01 transcript):
+         - The three boot shares are all REV_SHARED of a LINEAR capability (SHA2 0, AREV 2), on regions
+           0x1A/0x1C/0x1D with APRM 1/1/0.
+         - Each share runs `if (cap_type(r) == CAP_TYPE_LINEAR) { r = __delin(r); write_cpmp(...) }`, then
+           `__tighten(r, 6)` (INOUT) or `__tighten(r, 4)` (IN).
+         - The UNINIT reclaim, MREV and the TRANSFERRED wedge do not run.
+       - **The typeless hazard is a SILENT SKIP, not a fault.** Under a format with no type, `cap_type(r)` reads
+         NONLIN, so the branch skips both the __delin AND the write_cpmp: the region's CPMP entry is never written.
+         - The port makes the write-back unconditional, or keys it on something other than the type.
+         - DELIN and TIGHTEN are both on QEMU's deleted list, so this executed boot path uses two instructions B5b
+           removes.
+         - With rights implied, the IN region (0x1D) loses its read-only ceiling in the capability.
        - **Conclusion: B5b-1 needs a monitor port on the executed native path in every option.** That means the share
          path, the CSCHECK emulation, and whatever of the rest the boot executes. Option C's first step cannot keep
          today's monitor unchanged.
