@@ -4923,3 +4923,73 @@ before ce-b1 (the first replicate) has booted:
    ev29/ev30), except the header reads. Those are bounded by perl's unit traffic (ev23 30.7 k) to tens of k cycles.
 
 The runs, controls and thresholds are unchanged. Every reading carries "key 5 NOT MET".
+
+## Addendum 154 (2026-11-16, before it runs): the final table on P1 (Addendum 147), Capstone rows on three boards
+
+Addendum 147's precondition holds: pairs A and B are read. Pair B's perl replicates were graded RUN-TO-RUN VARIANCE
+(land/rtl-sublet-p1 a4dc47751428).
+
+**Configuration** (Addendum 147):
+- bitstream P1 `…-tagoverlap6c-pagedtbl_d83d3a633`, the sealed one;
+- kit bkit91-k2n-native-p1-tree-cscfix:
+  - table_tree kernel hpm2tree;
+  - node_table_pool=4;
+  - firmware monitor 22a907f -DCSC_TABLE_TREE;
+- images FRCDKMSa3 (temporal) and FRCDKMSspa3 (spatial);
+- gcc untuned.
+
+Every reading carries "key 5 NOT MET" (P1's WNS −13.173 ns, outside the band around G's −9.107). Whether the
+table may stand on P1 with that miss stated is open with the lead.
+
+**Stages.**
+- Already on disk and verified: a3/spa3 gcc train01, mcf and full perl.
+- New today, for lbm, x264, imagick, nab and xz on both arms:
+  - each is a copy of the FRCDKMS(sp) board stage;
+  - the one executable is swapped for the compiler lane's a3/spa3 `.strip.dom` (perf/cclever/arms/FRCDKMS{a3,spa3}/exes);
+  - plan.json's two paths are rewritten (each substitution asserted);
+  - `diff -rq` against the source stage shows exactly the binary and plan.json;
+  - the top-level SHA256SUMS are byte-equal.
+- Executable sha256 prefixes, a3 / spa3:
+
+  | Row | a3 | spa3 |
+  |---|---|---|
+  | lbm | 690e11ff1bd8c5bb | 2766576923f2bbff |
+  | x264 | 90584c69fe32acb2 | 4ed8649b1bba9f8f |
+  | imagick | 43f3fccf32ae1826 | 4559fda4206bdad3 |
+  | nab | 8e07b37e3e1dfcf0 | eeefe127e6e586dc |
+  | xz | 191cde3127ff4d0d | 6e85beb398df1c10 |
+  | mcf | fa650b98b77a1ba1 | 17b2fa0b796e806e |
+  | perl | c1744e87cb2244f6 | cdd368de816cb5c5 |
+  | gcc | 58124bcc766ceb17 | 3d8bfb5a85a3371f |
+
+  These match the compiler lane's list, and their QEMU twins have outputs equal to FRCDKMS (perf/faultesc/RESULTS).
+- **Temporal gcc untuned** is the new stage board-frcdkmsa3-notune/502.gcc_r-train01-native. It is the a3 stage with
+  board-frcdkms-notune's run.sh (Addendum 135): it differs from the a3 stage in run.sh only, and from the notune stage
+  in the binary and plan.json only. The spatial a3 gcc stage is already untuned.
+
+**Chains** (nat-run3.sh, kit bkit91):
+
+| Chain | Board | Arm | Rows, in order |
+|---|---|---|---|
+| ci-b1 | 1 | temporal a3 | gcc train01 untuned, mcf, imagick, nab, lbm, xz, x264 |
+| cj-b2 | 2 | spatial spa3 | the same rows; the chain flashes P1 first, since G is resident |
+| ck-b3, then cl-b3 | 3 | perl full | temporal a3 perl, then spatial spa3 perl. Board 3 is the riscv-base board, so the perl ratio is same-board |
+
+The kit's known Image-copy window (RESULTS 02:15) is microseconds wide. A crossed Image would show as a different
+@@SPEC-STAGE bench name, and the classifier reads it.
+
+**Predictions.** Each is a run-time band. Every row predicts rc 0, specdiff PASS and smoke 9/9.
+
+| Row | Temporal a3 (s) | Spatial spa3 (s) | Basis |
+|---|---|---|---|
+| gcc train01 | 1,760-1,790 | 1,740-1,780 | B2-paged gcc 1,762.35 (tuned) + untuned 0.67 %; spatial: G spa3 1.019 + 0.26 % |
+| mcf | 5,900-6,000 | 5,630-5,720 | B2-paged 5,945.35; G spa3 mcf 1.104 + 0.24 % |
+| perl full | 12,800-13,250 | 12,700-12,960 | G spa3 12,830.90 (board 2), temporal +1.2 %, cross-board 0.9 % |
+| lbm, x264, imagick, nab, xz | F's reading × 0.85..1.01 | same | G's gain is unmeasured on these rows; paging is ≤ 0.3 % |
+
+- Every temporal ratio is predicted below 1.20 against the current riscv-base cells.
+- The riscv-base RVAL rows (mcf, lbm, x264, imagick, nab, xz) are being built by the compiler lane. They run on the
+  riscv-base bitstream in a later addendum. Until then the table's denominators stay RVF3, marked as such.
+- gcc TEST (the lead, 16 Nov: gcc at both test and train01) follows in a later addendum, once the a3/spa3/RVAL gcc
+  test twins land.
+- A row outside its band is a finding, reported as read, not a fault.
