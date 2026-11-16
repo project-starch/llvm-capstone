@@ -4485,6 +4485,24 @@ byte-identical (blob 213b9e5cea99) on ffb82d5bb, 6d0e754d5, 105c464bc and 9972ae
 - **Synthesis:** no FLU signal is on the standing loop list. The cost was not measured by a gate, but the final
   6d0e754d5 carrying the fix routed and sealed on every key.
 
+### R-75 — after a CSRUNV service resume (action 2) and the context's next escape, an S-mode trap taken while srevroot still holds the context's table enters its handler BELOW M: the handler's first `csrr mcause` is an illegal instruction, in a loop `OPEN 2026-11-16 — DEMONSTRATED IN SIMULATION on P1 d83d3a633 (tests only added) and on capstone-ariane rtl/record-cache, identical retired traces; NOT ROOT-CAUSED; NOT MEASURED ON SILICON; the SPEC native route is unaffected by construction (below); no fix written`
+
+Siblings: R-58 (the caller inheriting the context's srevroot, fixed), S-23 (the S caller's first fetch after a CSRUNV return, a CPMP denial: a different signature).
+
+**Reading** (capstone-ariane rtl/record-cache, `verif/tests/custom/capstone/va-fetchsplit.S`, testlist_sup entries `va-rc-trap` and `va-rc-trap-z`, S12_MEM_DELAY 12, run on P1 d83d3a633 with the tests applied):
+- **The arm.** `-DVA_RC_CTX -DVA_RC_TRAP -DFS_SAMETBL -DCS4_TWO`:
+  - the caller at S sets srevroot = the context's own table (tbl3) and enters a CSRUNV context with options bit 0;
+  - the context ecalls (a kind-3 escape);
+  - S resumes it with action 2; the context ecalls again (a second kind-3 escape);
+  - S continues at CSRUNV+4 with a2 = 3, prints its readings, and executes `ecall` (a7 = 1).
+- **`va-rc-trap`:** the handler at mtvec (0x80002000) takes ILLEGAL_INSTR on its first instruction, `csrr t0, mcause`, 9,069 times, until the cycle limit.
+  - The check that fires is the CSR privilege check `access_priv < csr priv` (`csr_regfile.sv:2985`), so the handler runs below M.
+  - The SUP trace shows the namespace flag falling 1 -> 0 at the ecall, as it would on entry to M with csupctl.table clear, and `flush_ex` with `ex_valid` at each retry.
+- **`va-rc-trap-z`:** the same arm plus `-DCS4_ZERO`, i.e. `csrw 0x5c1, x0` immediately after EACH CSRUNV. It reaches M, runs the handler and passes, with the same four readings before the ecall.
+- **Not yet separated:** whether the trap is DELEGATED (medeleg/stvec as restored by the exchange, ids 5 and 61, `csr_regfile.sv:2061-2074`) or taken to M with the privilege then lowered. What would settle it is one arm that prints sepc/scause/stvec (readable at S) after the loop's first iteration, or a trace of priv_lvl_q and medeleg_q at the ecall.
+
+**Exposure.** The native module's `run()`/`run_x0()` (`capstone_vm.c:2009`, `:2021`, bkit91 kernel; the runtime lane's reading) put `csrw 0x5c1, zero` in the same asm statement as every CSRUNV. So the SPEC native route never takes an S trap with srevroot non-zero after an escape, and its service resumes (gcc train01: about 2,450 per run) complete on P1 silicon with every smoke 9/9. Any other CSRUNV caller, including B5b's replacement of CSRUNV, must keep that write or have this fixed.
+
 ### R-74 — a page fill can start while a tag read of a word the page shares is in flight; the tag-word cache keeps no stale tag on the one instance measured `OPEN 2026-11-14 — MEASURED CLEAN ON ONE WINDOW INSTANCE in simulation, for the base TWC in service (fdk 3c6b9906c, the batch a47b588a1), the 16,384-entry TWC (capstone-ariane a948e4134) and the targeted variant, each with a forging control that forges. N = 1 window instance (1 of 24 fills), one test shape, the simulator built with the boards' crossbar setting: NOT a proof for every timing. A claim may cite this instance with that scope, never as "TWC fill safety is verified"`
 
 **The window.** Capability tags live in shadow DRAM behind `core/cache_subsystem/wt_axi_adapter.sv`, one tag byte per
