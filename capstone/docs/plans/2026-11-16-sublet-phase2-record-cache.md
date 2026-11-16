@@ -257,6 +257,48 @@ Keys, graded against P1's gate (d83d3a633, board lane, `synth/pw-d83d3a633-gate`
    `rev_walk_perf` widens from 4 to 8 bits (cva6.sv, perf_counters.sv): a few tens of LUT. (Corrected 2026-11-17
    before the gate ran: this line said "+1 event", left over from a draft with one counter.)
 
+### Gate result, 2026-11-17 (board lane, rc-6e82d7bd2): KEY 1 FAIL by its letter; keys 2, 3, 4 PASS
+
+- **Key 1: FAIL.** The peak at the Technology Mapping marker is 6,865.6 MB, against 5,041.7 ±500. The whole run
+  peaked at 7,012.9 MB, with no Synth 8-326. The full build was not launched, and the FAIL is not re-keyed.
+  - Read phase by phase, the step is not in mapping. Mapping adds 8.0 MB on both runs.
+  - It lies between the two "Netlist sorting complete" lines around "Processing XDC Constraints / Initializing
+    timing engine": 4,310 to 6,838 MB on B5a, against 4,205 to 4,998 on P1.
+  - Across the 12 gate runs on this flow, Constraint Validation peaks at the elaboration peak plus 760-850 MB. B5a is
+    the outlier at +2,593. The host's free memory does not correlate: runs with 18-36 GB free sit at 5.0 GB.
+  - The guard's process-group RSS peaked at 26.17 GB, against P1's 27.35. Wall time was 51 min.
+- **An anomaly of the run, not explained.** B5a's elaboration section is 505 lines; every other gate's is about
+  22,000. It lacks the module messages (Synth 8-6157, 8-6155, 8-294) and carries Synth 8-7128 and 8-7156, which no
+  other run has. The run script `ariane_xilinx.tcl` is identical apart from the cache path, and so is
+  `~/.Xilinx/Vivado/Vivado_init.tcl`, which has not changed since 2026-11-04.
+- **Key 2 PASS:** 0 loop headers, LUTLP-1 0 (toy 1), check_timing 0 (toy 1).
+- **Key 3 PASS:** g_rc_way[0/1].dat_mem map to 2 RAMB36 each, and no dat_mem is in distributed RAM. Reported, not
+  gating:
+  - own LUT +2,471, OUTSIDE the 0.6-1.5 k band;
+  - own FF +897, inside;
+  - tags 34 LUTRAM.
+- **Key 4 PASS:**
+  - core LUT 165,786 (+3,383; +912 beyond own), FF +832;
+  - ex_stage +5,647 LUT (+3,176 beyond own);
+  - perf_counters +6 LUT.
+
+### Diagnostic rerun (pre-registered 2026-11-17, before the run)
+
+The same hash, 6e82d7bd2, and the same flow and guard. One question: is key 1's +1.8 GB a cost of the RTL or of
+that run?
+- **H-RTL** (the 8 KiB record array, 65,536 bits of RTL memory before RAM inference runs after Cross Boundary
+  Optimization, seen by the timing-engine initialisation): Constraint Validation peaks within ±50 MB of 6,837.7, and
+  the elaboration section's message set again lacks Synth 8-6157.
+- **H-flow:** Constraint Validation peaks within the other runs' class (elaboration + 760-850 MB, about 5.0-5.1 GB),
+  and the elaboration section carries the usual about 22,000 lines.
+- **Anything else** (a peak between the two, or a message set matching one hypothesis and memory matching the other)
+  is reported as read, with no decision drawn from it.
+- **What follows:**
+  - On H-flow, the gate reads PASS on key 1 at the rerun's reading, and the full build goes under the keys below.
+  - On H-RTL, key 1's band was keyed to the wrong phase. Its purpose was a mapping blow-up (the 94 GB class), and
+    mapping added 8 MB, but re-keying it is the lead's call, not mine. The full build waits for that word, and the
+    rerun's keys 2-4 are recorded either way.
+
 ### Full build (only on a gate pass)
 
 - Routes, 0 errors.
