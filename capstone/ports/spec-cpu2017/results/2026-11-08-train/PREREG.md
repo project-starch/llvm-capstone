@@ -5044,3 +5044,40 @@ All gcc test rows are therefore on board 3, a same-board ratio.
   - a3 and spa3 5-9 s each (wide: the startup share on silicon is unmeasured on P1).
 
 Every P1 reading carries "key 5 NOT MET".
+
+## Addendum 156 (2026-11-17 06:30 +08, before it runs): P1 baselines for the B5a pair, on boards 1 and 2 after x264
+
+**Why.** The record-cache bitstream B5a (capstone-ariane 6e82d7bd2) went to its full build at 06:16 on the lead's
+standing instruction to launch the Section 5 items in any case. The synthesis-only gate's key 1 is recorded as
+mis-scoped, not passed, as the rtl lane recommended. The combined B5a + R-76 gate (7180a83b6) runs beside it, with
+the rtl lane's pre-registration at land/rtl-sublet-p2 d3422085a348.
+
+B5a's pair against P1 runs on kit bkit91 with stages board-frcdkms (perl makerand, gcc train01 tuned, mcf). Those are
+cc-b1's images, and cc-b1 is B2-paged. P1 has these on board 1 at N=1 for mcf and gcc, and at N=3 for perl (cc-b1,
+cf-b1, ch-b1). Boards 1 and 2 free up when x264 ends, around 07:40, and B5a is sealed no earlier than about 09:00.
+The gap therefore buys:
+- a second same-board P1 reading of each row on board 1;
+- a full P1 baseline on board 2, so that B5a can also run on board 2.
+
+**Runs (P1, kit bkit91, stages board-frcdkms, cc-b1's list unchanged; stage SHA256SUMS re-checked 06:25):**
+- **cp-b1:** board 1, behind ci-b1 (pid 2478503), TAG p1-base5a-frcdkms.
+- **cq-b2:** board 2, behind cj-b2 (pid 2478505), the same TAG.
+
+The order is perl, gcc train01, mcf: about 2.3 board-hours each.
+
+**Predictions:** smoke 9/9; specdiff PASS; SPEC-HASH blocks byte-equal to cc-b1's. Run time, against cc-b1:
+
+| Row | cc-b1 | cp-b1, board 1 | cq-b2, board 2 |
+|---|---|---|---|
+| perl | 274.6 s | within ±0.3 % | within ±0.5 % (cross-board, information only) |
+| gcc | 1,762.35 s | within ±0.2 % | within ±0.5 % |
+| mcf | 5,945.35 s | within ±0.2 % | within ±0.5 % |
+
+The ±0.3 % for perl is the spread of cc-b1, cf-b1 and ch-b1, which is 0.21 %.
+
+**Use.** B5a's pair is graded against the mean of the same-board P1 readings of each row: cc-b1 plus cp-b1 on board 1,
+and cq-b2 on board 2. The B5a rows and their keys are pre-registered separately before B5a's flash; the rtl lane's
+refutation key is "mcf more than +0.2 % slower than P1". A missed band here is reported as P1 run-to-run variance, and
+it widens the B5a pair's noise floor accordingly.
+
+Every P1 reading carries "key 5 NOT MET".
