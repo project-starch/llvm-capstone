@@ -360,6 +360,21 @@ Keys, graded against B5a's gate (rc-6e82d7bd2 / rc2-6e82d7bd2):
 
 Its full build, on a gate pass, follows B5a's full-build keys below. The flash is the lead's decision.
 
+**Combined gate read** (runtime lane's run b5ar76-7180a83b6; graded here from its `.vds` and post-synth report;
+synth_design completed successfully):
+- **Key 1 PASS.** Technology Mapping adds +8.0 MB (Timing Optimization 6,700.8 to Technology Mapping 6,708.8), and
+  the guard peak RSS is 25.26 GB.
+  - Reported, not keyed: Constraint Validation 6,680.8 MB, outside the predicted 6,840 ±100 and 157 MB below B5a's
+    6,837.7. Not explained.
+- **Key 2 OPEN.** 0 "Found timing loop" headers and 0 Synth 8-326. The check_timing and LUTLP-1 probes, with their
+  toy controls, are requested from the board lane on the gate's dcp.
+- **Key 3 PASS.** g_rc_way[0/1].dat_mem each map to 2 RAMB36. dat_mem rows: 4 in the Block RAM sections, 0 in
+  Distributed RAM.
+- **Key 4 PASS.**
+  - i_cva6 164,962 LUT, against B5a's gate 165,786 (−824; key ±2,000);
+  - csr_regfile_i 28,077, against 28,776 (−699; key ±2,500);
+  - ex_stage_i +940, reported only.
+
 ### Full build (only on a gate pass)
 
 - Routes, 0 errors.
