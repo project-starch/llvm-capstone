@@ -189,7 +189,25 @@ B5b-1's design, in this order. Each step gets a synthesis-only gate before anyth
        The monitor depends on types and sealing. **So C's first step most likely cannot keep today's stack without a
        monitor port.** C still isolates the format's synthesis gate, but its "baseline for the native route" argument
        no longer holds as stated.
-     - The module's and the runtime's uses are not counted yet.
+     - **The board's monitor** (bkit91 BOARD_FW_MON, `native01/csbi-ids55-paged` 22a907f, in
+       `<mnt-hdd>/capstone/csbi-p`; identifier counts):
+       - `sbi_capstone.c`: `__linear` 58, `seal` 34, `domcall` 17, `CAP_TYPE_UNINIT` 5, `CAP_TYPE_LINEAR` 5,
+         `CAP_TYPE_REV` 3, `cssupervise` 3, `C_INIT` 2, `CSRUNV` 1;
+       - `capstone_csmint.S`: one `CAPENTER`.
+       These are counts, not the executed path. Which of them the native route's boot and CSRUNV/CSMINT paths
+       execute, and whether any CHECKS a type value (as opposed to making a linear or sealed capability that would
+       simply become NONLIN), is NOT YET READ. That reading decides the monitor port.
+     - **Module and runtime** (runtime lane, 2026-11-17):
+       - The module performs no capability memory access, and mints every grant NONLIN through the CSMINT descriptor.
+         Its rights (x 1, w 2, r 4) act as a ceiling over the PTEs.
+       - The 22 SPEC .full images contain no delin, mrev, seal, init, capenter, drop, split or tighten. They hold
+         CDERIVE 135, CREVOKE 69 and LCC type reads 922, rights reads 462.
+       - `capability.h` requires type == NONLIN before CDERIVE, and MANAGE for CREVOKE.
+       - So under a typeless format, LCC must answer type NONLIN and rights as the full mask including MANAGE.
+         The runtime's checks then pass vacuously.
+       - The module's r/w/x ceiling is no longer carried in the capability; the PTEs still enforce it.
+       - Runtime port: small or zero. Module: zero instructions.
+       - Unverified (runtime lane's flag): LCC type reads in cpugcc_r's omp_* and gimplify_* functions.
      - This was not known when the scope question went to the lead, and the lead is told now.
 2. **The record and the walker:**
    - 137 bits become 128;
