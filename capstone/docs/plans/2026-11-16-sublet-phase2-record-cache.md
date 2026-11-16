@@ -392,6 +392,28 @@ synth_design completed successfully):
   is recorded; the placed area, the congestion windows and a cell census of the hot windows are.
 - The flash is the lead's decision: the board lane's session, with this grade in front of the lead.
 
+### Full build read: B5a 6e82d7bd2 (sealed by the runtime lane, graded here; key 5 NOT MET carries over)
+
+- **Seal:** `caplifive_ids55-…-pagedtbl-reccache_6e82d7bd2.bit`, sha256 806c5f55a40ca851a9a9b29f48272137f543dd3714d6d15a0acdf4457eee9356,
+  11,443,722 B. Tarball sha256 2b5b69fbd216…, with the .bit cmp-identical; PROVENANCE HEAD 6e82d7bd2956. Run guard
+  peak 26.02 GB (exit 0, 1 h 17 m), collector 15.90 GB.
+- **Routes, 0 errors: PASS.** Failed, unrouted and partially routed nets are all 0, and there are 0 node overlaps.
+- **Congestion at most 5: PASS.** Effective levels 5, 5, 4, 5 by direction, from `report_design_analysis
+  -congestion` on the impl checkpoint.
+- **Loops 0: PASS.** check_timing: "There are 0 combinational loops in the design". The methodology report has no
+  TIMING-23 and no LUTLP-1, while it does list other checks (TIMING-16 ×1000, SYNTH-6 ×109), so it ran.
+- **WNS inside ±3.74 ns of P1's −13.173: PASS.** WNS −13.691 (Δ −0.518), TNS −259,470, 50,477 of 234,469 endpoints
+  failing, WHS +0.056.
+- **rc_live_q slack (reported only):**
+  - It is not among the 2,000 worst failing endpoints, whose slack runs from −13.691 to −11.477, so its slack is
+    better than −11.477. The exact value is not read.
+  - No rc_* cell is on the worst 500 paths (positive control `fu_data_q`: 1,250 hits).
+  - The worst path runs from csr_regfile `cpmp_q[3][comp_metadata][bounds][iE]_rep` to `fu_data_q[0]…
+    cap_metadata_a[20]`, the base's documented family.
+- **Not run:** the in-flight loops-only gate and the LUTLP stop. The runtime lane launched with launch-job.sh
+  directly. The routed loop checks above cover what they would have stopped.
+- **Grade: a flash candidate on every key.** Key 5 is NOT MET against G, as on P1. The flash is the lead's decision.
+
 ### Board readings (B5a against P1, same kit and board; key 5 NOT MET on both)
 
 - **Identity,** per paged run: HPM 35 (read miss) + HPM 37 (fill read) + (record writes) = ev31 (walker record
