@@ -4485,7 +4485,7 @@ byte-identical (blob 213b9e5cea99) on ffb82d5bb, 6d0e754d5, 105c464bc and 9972ae
 - **Synthesis:** no FLU signal is on the standing loop list. The cost was not measured by a gate, but the final
   6d0e754d5 carrying the fix routed and sealed on every key.
 
-### R-76 — outside supervision, S and U in capmode execute ccsrrw on CTVEC, CEPC, CSCRATCH and CPMP0-15: they read the monitor's capability out and install their own `OPEN 2026-11-17 (first observed 2026-11-13, unrecorded until now) — DEMONSTRATED IN SIMULATION on two trees; SILICON REACH NOT MEASURED; claim-audited (mechanism SUPPORTED; reach PLAUSIBLE, unproven); no fix written`
+### R-76 — outside supervision, S and U in capmode execute ccsrrw on CTVEC, CEPC, CSCRATCH and CPMP0-15: they read the monitor's capability out and install their own `OPEN 2026-11-17 (first observed 2026-11-13, unrecorded until now) — DEMONSTRATED IN SIMULATION on two trees; SILICON REACH NOT MEASURED; claim-audited (mechanism SUPPORTED; reach PLAUSIBLE, unproven); FIX IN RTL, simulation only (r76-ccsrrw-priv 7180a83b6), not synthesised`
 
 Siblings:
 - F-A of `docs/history/16-10-2026_07-00-00_rtl-audit-sublet.md`: the five debug mints are refused only under supervision. It is the same boundary, and its fence is still the lead's decision.
@@ -4526,7 +4526,19 @@ So an unsupervised Linux process could, in decreasing order of support:
 - a U arm that swaps an integer into cpmp0, after which M reads its tag (the DoS case);
 - on silicon, a benign userspace binary that swaps cscratch out and back and prints a0's tag and type. Expect a capability or SIGILL. Run it last in its boot.
 
-**Fix shape (not written):** refuse ccsrrw below M in the decoder or in the privilege check, as dev's QEMU does in U. Its users are the monitor in M and the runtime's supervised probe.
+**Fix: FIX IN RTL (simulation), not synthesised.** capstone-ariane `r76-ccsrrw-priv` 7180a83b6, on rtl/record-cache 48d84957f.
+- **The change:** one term after the supervision gate in `csr_regfile.sv` privilege_check: `ccsr_en && priv_lvl_o != M && !sup_active_q && !(DebugEn && debug_mode_q)`.
+  - Under supervision today's list stands. The runtime's test probe (`capstone/runtime/tests/application/context-probe-asm.S`) issues ccsrrw on CSCRATCH and CEPC below M inside a supervised context, as the runtime lane found.
+  - The runtime outside tests/ and the SPEC native images have no ccsrrw (runtime lane: 0 words matching `(w & 0x707f) == 0x705b`, with a positive control).
+- **Readings** (`.sup/r76fix`, dirty=no):
+  - u-ccsrrw and u-ccsrrw-scr read 0x2, 0x0, 0x0 and A, as pre-registered: the ccsrrw traps 2 and the CSR keeps M's capability.
+  - u-ccsrrw-m reads 0xb, 0x4, A, B, unchanged. q24-deleg-on, va-rc-ctx and va-runv are unchanged.
+- **Gates:**
+  - lint PASS, every counter at baseline;
+  - the 95-sweep (`rcsw6`) is identical to B5a's (`rcsw5`) in values, retired traces and cycles (92/92);
+  - sup-guards, sup-hostile and the six sup-mswap arms have identical retired traces on the fix and its base.
+- **NOT EXERCISED:** a supervised domain BELOW M issuing ccsrrw, which is the case the fix must keep legal. Every retired ccsrrw in those supervised arms is at privilege 3 (exact-mask count). Its correctness rests on the term's `!sup_active_q`, a source reading.
+- `privilege_violation` and `ccsr_en` are on the standing UNOPTFLAT list. Every input of the new term is already an input of privilege_violation, but it is a loop-cone edit, so a synthesis-only gate comes before any bitstream.
 
 **For B5b:** under the trap route, protected U is the defended boundary. So this gate and F-A's are required there, not optional.
 
