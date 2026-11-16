@@ -4499,6 +4499,11 @@ Siblings: R-58 (the caller inheriting the context's srevroot, fixed), S-23 (the 
   - The check that fires is the CSR privilege check `access_priv < csr priv` (`csr_regfile.sv:2985`), so the handler runs below M.
   - The SUP trace shows the namespace flag falling 1 -> 0 at the ecall, as it would on entry to M with csupctl.table clear, and `flush_ex` with `ex_valid` at each retry.
 - **`va-rc-trap-z`:** the same arm plus `-DCS4_ZERO`, i.e. `csrw 0x5c1, x0` immediately after EACH CSRUNV. It reaches M, runs the handler and passes, with the same four readings before the ecall.
+- **What it needs (2026-11-17, capstone-ariane rtl/record-cache 90e439a7f, tests only, run on 6e82d7bd2's RTL):** more than srevroot.
+  - `va-rc-bare` and `va-rc-bare-nosum`: S sets srevroot = tbl3 (0x80009000, the value va-rc-trap holds) and ecalls with no context ever entered, with SUM set and without. The handler's `csrr mcause` retires and both pass.
+  - `va-fetchsplit-s` (one entry and one escape, srevroot = tbl3 afterwards) passes.
+  - So the trap goes below M only after the service resume and the second escape.
+  - For B5b: a trap-route S, which runs with srevroot non-zero by design, does not meet R-75 on this RTL, unless the replacement of CSRUNV keeps the resume path.
 - **Not yet separated:** whether the trap is DELEGATED (medeleg/stvec as restored by the exchange, ids 5 and 61, `csr_regfile.sv:2061-2074`) or taken to M with the privilege then lowered. What would settle it is one arm that prints sepc/scause/stvec (readable at S) after the loop's first iteration, or a trace of priv_lvl_q and medeleg_q at the ecall.
 
 **Exposure.** The native module's `run()`/`run_x0()` (`capstone_vm.c:2009`, `:2021`, bkit91 kernel; the runtime lane's reading) put `csrw 0x5c1, zero` in the same asm statement as every CSRUNV. So the SPEC native route never takes an S trap with srevroot non-zero after an escape, and its service resumes (gcc train01: about 2,450 per run) complete on P1 silicon with every smoke 9/9. Any other CSRUNV caller, including B5b's replacement of CSRUNV, must keep that write or have this fixed.
