@@ -4485,6 +4485,51 @@ byte-identical (blob 213b9e5cea99) on ffb82d5bb, 6d0e754d5, 105c464bc and 9972ae
 - **Synthesis:** no FLU signal is on the standing loop list. The cost was not measured by a gate, but the final
   6d0e754d5 carrying the fix routed and sealed on every key.
 
+### R-76 — outside supervision, S and U in capmode execute ccsrrw on CTVEC, CEPC, CSCRATCH and CPMP0-15: they read the monitor's capability out and install their own `OPEN 2026-11-17 (first observed 2026-11-13, unrecorded until now) — DEMONSTRATED IN SIMULATION on two trees; SILICON REACH NOT MEASURED; claim-audited (mechanism SUPPORTED; reach PLAUSIBLE, unproven); no fix written`
+
+Siblings:
+- F-A of `docs/history/16-10-2026_07-00-00_rtl-audit-sublet.md`: the five debug mints are refused only under supervision. It is the same boundary, and its fence is still the lead's decision.
+- M-13: the monitor's `_cap_trap_entry` swaps cscratch in.
+
+**Mechanism** (capstone-ariane, read at 6e82d7bd2):
+- `csr_regfile.sv:3040` checks the privilege only for `csr_op_i inside {CSR_WRITE, CSR_SET, CSR_CLEAR, CSR_READ}`. ccsrrw is its own op.
+- It acts whenever capmode is set (`:2654`).
+- Its only gates are a virtual context, which refuses everything (`decoder.sv:1432`), and supervision, which refuses only CIH and CPMP (`csr_regfile.sv:3083-3090`; "CTVEC/CEPC/CSCRATCH stay legal, the runtime's probe uses them").
+- `capstone_csr_unit.anvil:3-51` writes on any rs1. A NONLIN rs1 also puts the old value in rd.
+- **CIH is the exception:** once it holds a capability it is neither read nor written (`:11-24`).
+- Capmode is sticky and set before S's first instruction (R-44, "Why it is not latent"), so Linux and its userspace run under it.
+- The write block has had no U gate since it first appeared (e318a4fea, 2025-05-06). It is the same text at bf3db3175, c721c1a2a, e7af48457, d83d3a633 and 6e82d7bd2, and at the resident-bitstream commits d93a8d66b, 776d9d859, 715bdd1fe, afcd19bea and 0568f93a9 (a source reading, not a run).
+- The dev-pinned QEMU refuses ccsrrw in U since 0d28cc3c82 (2026-10-07; `trans_csccsrrw`). QEMU before that allowed it, and `address-space-root` deletes the instruction.
+
+**Readings** (Verilator, retired traces; the leading number is the privilege):
+- **First observation:** capstone-ariane `perf/ccsrrw-priv` 5e5ad76c9 (2026-11-13), `verif/tests/custom/capstone/ccsrrw-priv.S`, run `vp9-wt/.sup/ccpriv2` (dirty=no).
+  - In U, `ccsrrw cpmp1 <- a2` retires (`0 ... (0x0116705b)`), and a plain load then reads `secret` through the new entry (`x31 0x5ec2e7 mem 0x80003000`).
+  - `ccsrrw ctvec <- a3` retires (`0x0006f05b`), and U's ecall then enters M at the arm's `evil` label (s7 = 0xe1).
+  - The S arm reads the same with 0x9. The plain-CSR control (csrr mtvec) traps 2. Every value is as pre-registered for "no privilege test".
+- **Re-derived on 2026-11-17** (capstone-ariane rtl/record-cache 48d84957f, `u-ccsrrw.S`, runs `rc-wt/.sup/uccs` and `uccs2` on 90e439a7f's RTL, byte-identical):
+  - U's `ccsrrw t1, cpmp1, a2` (`0x0116735b`) and `ccsrrw t1, cscratch, a2` (`0x0046735b`) retire at privilege 0;
+  - t1 receives M's NONLIN capability A (cursor 0x80003000, type 2, perm 6);
+  - the CSR then holds U's capability B (0x80003040);
+  - the M-mode control reads 0xb / 0x4 / A / B.
+
+**Reach on today's stack: plausible, not measured.** From the monitor source (`caplifive-system/.../capstone-sbi`; the revision on the board is not established):
+- while S or U runs, CSCRATCH holds the monitor's stack capability (`sbi_capstone.S:14`, `:185`);
+- CPMP0-2 hold its linear genesis capabilities (`sbi_capstone_dom.c:8-15`);
+- CTVEC holds `_cap_trap_entry` (`:38`).
+
+So an unsupervised Linux process could, in decreasing order of support:
+- (1) deny service, by swapping an integer into CPMP0-2, CTVEC or CSCRATCH (source only, not run);
+- (2) take those capabilities, where the legacy PMP and the page tables bound what they reach (not checked);
+- (3) choose M's next trap target or stack with a capability it holds. The CTVEC half is shown in simulation with a capability M handed over; a real attacker would need F-A's debug mints or another source.
+
+**What would settle it:**
+- a U arm that swaps an integer into cpmp0, after which M reads its tag (the DoS case);
+- on silicon, a benign userspace binary that swaps cscratch out and back and prints a0's tag and type. Expect a capability or SIGILL. Run it last in its boot.
+
+**Fix shape (not written):** refuse ccsrrw below M in the decoder or in the privilege check, as dev's QEMU does in U. Its users are the monitor in M and the runtime's supervised probe.
+
+**For B5b:** under the trap route, protected U is the defended boundary. So this gate and F-A's are required there, not optional.
+
 ### R-75 — after a CSRUNV service resume (action 2) and the context's next escape, an S-mode trap taken while srevroot still holds the context's table enters its handler BELOW M: the handler's first `csrr mcause` is an illegal instruction, in a loop `OPEN 2026-11-16 — DEMONSTRATED IN SIMULATION on P1 d83d3a633 (tests only added) and on capstone-ariane rtl/record-cache, identical retired traces; NOT ROOT-CAUSED; NOT MEASURED ON SILICON; the SPEC native route is unaffected by construction (below); no fix written`
 
 Siblings: R-58 (the caller inheriting the context's srevroot, fixed), S-23 (the S caller's first fetch after a CSRUNV return, a CPMP denial: a different signature).

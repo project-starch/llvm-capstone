@@ -120,8 +120,8 @@ The options:
   the deletions.
 
 **Recommendation: (C).**
-- B5b-1 is common to all three options, and it carries the two worst synthesis risks: the codec, which is the
-  94 GB mapping precedent, and the record width.
+- B5b-1 is common to all three options, and it carries the format's synthesis risks: the 63-bit id on every compare
+  site and the record width. The bounds arithmetic is unchanged; see step 1 below.
 - Kept apart from the trap route, its gate isolates them. The SPEC native route keeps a measurable baseline on it.
 - B5b-2 adds the trap route on a format that has already passed synthesis.
 - It costs one more synthesis cycle than (A).
@@ -136,8 +136,15 @@ B5b-1's design, in this order. Each step gets a synthesis-only gate before anyth
    - the cursor zero-extended from 38 bits;
    - the R-60 window limit (`cursor_outside_window`, E < 50) re-derived for a 38-bit address;
    - the genesis range (`flu:504-505`, 2^40) brought under 2^38.
-   It goes to a synthesis-only gate by itself. Its key is mapping in P1's class: technology mapping at 94 GB is the
-   recorded failure of a codec change.
+   It goes to a synthesis-only gate by itself. Its key is mapping in P1's class.
+   - **The bounds arithmetic does not change.** QEMU's Sublet `cap_compress`/`decode` (`cap_compress.c` at
+     9289114e06) use the 27-bit field {iE, t, tE, b, bE} and the renormalisation step of the RTL's
+     `compress_bounds` (`ariane_pkg.sv:645-651`, `:817-832`, which says the two encoders "stay bit-identical").
+   - What changes is the packing: lo = bounds[25:0] << 38 | address[37:0]; hi = generation << 32 | slot << 1 |
+     bounds[26]. The id also widens from 55 to 63 bits at about 70 width and compare sites.
+   - So the compress-to-decompress round trips behind the 94 GB mapping precedent are not what is new here. The new
+     risk is the 8 extra bits on every id compare (the LSU verdict cache, the CPMP trackers, the PC tracker).
+   - A register lane of {tag, generation 32, slot 31, bounds 27} is 91 bits, against today's 90.
 2. **The record and the walker:**
    - 137 bits become 128;
    - liveness becomes "generation matches" (no VALID, FREE or LINEAR);
@@ -158,6 +165,6 @@ B5b-1's design, in this order. Each step gets a synthesis-only gate before anyth
   or C's second step.
 - Firmware for the kernel: medeleg for causes 24-30, register tags kept across M traps, and the DT node. Which
   firmware does the collaborator's QEMU test use (`-bios $fw`)?
-- An RTL fact the census flagged and nobody has checked in simulation: CCSRRW may write CPMP entries from U outside
-  supervision (`csr_regfile.sv:433`, `:3040`, `:3080`). If true, it is a hole on today's silicon. It is not a B5b
-  item, and it is recorded here so it is not lost.
+- U-mode ccsrrw is now R-76 (measured in simulation; first observed on 2026-11-13 on `perf/ccsrrw-priv`). With F-A's
+  debug mints, it is refused only under supervision. Under the trap route, protected U is the defended boundary, so
+  B5b-2 (or A) must refuse both below M.
