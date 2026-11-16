@@ -334,7 +334,14 @@ here from the raw files in `spec/board/out-nat-{p1,g}-hpmnest-frcdkms-b1/<bench>
   Resident bitstreams were read back as `…-tagoverlap6c_9fd9d2530.bit` and
   `…-pagedtbl_d83d3a633.bit`.
 - **Both boots are UNGATED:** PREFLIGHT=0 on both. `spec-verdict.txt` reads "NO RESULT: no @@SPEC-DONE" on both: that is
-  the SPEC-harness verdicter, which this native runner does not feed. The specdiff verdict is `read.log`'s.
+  the kit's classifier, and it reads NO RESULT on every native run because it misses all three stage-format markers:
+  - `spec-classify.py:29` matches `^@@SPEC-DONE (\d+)$`, but the native stages print the bench name and size
+    (`@@SPEC-DONE 502.gcc_r train`);
+  - its BEGIN and END patterns (`:28`, `:22`) expect three fields before rc, and the native lines have four
+    (`@@SPEC-END 0 run capstone-lifetimes 0 rc=0`).
+  - The specdiff verdict is `read.log`'s.
+  - The runtime lane's fixed reader for the next kit (`perf/natstage/kitfix-next/spec-classify.py`) reads PASS on
+    mcf's paged transcript here, where the old one reads NO RESULT (rc 2), and it reads NO RESULT on a truncated copy.
 
 ### mcf (505.mcf_r test): PASS
 
@@ -481,3 +488,130 @@ delta, when there is one, is not graded.
 - **Review:** the walk matches `ex_stage.sv:2078-2087` and `cv_tree_check`, then rejoins the flat record checks. One
   nit was sent to the compiler lane, not blocking: the RTL also reads an entry with bits [63:56] set as dead
   (`ex_stage.sv:1996`), but the emulation tests only zero and 4 KiB alignment.
+
+## Pair B on silicon (key 5 NOT MET)
+
+- **Arms:** both on board 1, trial P1 d83d3a633, firmware capstone-sbi 22a907f (`-DCSC_IDS55 -DCSC_TABLE_TREE`). The
+  kernels differ only in `CV_TABLE_TREE` (capstone_vm.c table-tree 722416c35e77).
+  - B2-paged = cc-b1, bkit91, kernel hpm2tree.
+  - B2-flat = cd-b1, bkit92, kernel hpm2treeflat.
+- **HPM mapping on the paged build:** hpm3 = ev29, hpm4 = ev30, hpm5 = ev31, hpm6 = ev33, hpm7 = ev23, hpm8 = L1D
+  misses. ev32 is not measured in this build and is reported as unmeasured, not as 0.
+- **Every row was re-checked here from the raw files:**
+  - counts are the NATIVE-CNT 0 end-minus-begin deltas from `board.txt`, taken by script;
+  - the specdiff verdict is read from `read.log`;
+  - output hashes were compared against G hpmnest-b1;
+  - smoke and the trap-log lines were also read.
+
+### B2-paged (cc-b1): every row completes, outputs = G
+
+| row | run_cycles | runs | ev29 | ev30 | ev31 | ev33 | ev23 | L1D | m = ev29/ev31 | cyc/walk |
+|---|---|---|---|---|---|---|---|---|---|---|
+| perl makerand | 6,832,734,701 | 1,151 | 2,196 | 38,228 | 35,422 | 0 | 30,728 | 94,546 | 0.062 | 17.4 |
+| gcc train01 | 41,667,242,846 | 13,673 | 3,330,596 | 102,878,620 | 22,836,629 | 17 | 6,413,789 | 369,933,715 | 0.146 | 30.9 |
+| mcf test | 144,518,401,489 | 48,992 | 775,224 | 38,041,385 | 181,547,769 | 2 | 180,626,708 | 3,751,511,231 | 0.0043 | 49.1 |
+
+- **Correctness on all three rows:**
+  - specdiff passes (perl 1/1, gcc 1/1, mcf 2/2);
+  - the outputs are identical to G;
+  - smoke passes 9/9;
+  - the trap-log line is the usual end-of-run one (mepc 0xffffffff80007376, tval 0x73).
+- **Check 1 passes on every row, on the row's own ev23.** Within each row, ev29 <= ev31.
+- **The model term 2 x ev31 + ev30 + ev29 differs in kind between the rows.**
+  - mcf: 401.9 M, of which 363.1 M is the 2-cycle cost per paged record access.
+  - gcc: 151.9 M.
+  - perl: 111 k.
+- **Information only, against other boards and firmware (not grades):**
+  - mcf: +425.9 M against pair A's P1 (bkit88), +6 % above its model.
+  - perl: +37.5 M against B-flat bz-b3 (old firmware, board 3), against a model of 111 k. This is unexplained.
+  - B2-flat on the same board and firmware decides both.
+
+### B2-flat (cd-b1) and the grades
+
+- **B2-flat (cd-b1) and B2-paged have the same firmware:** fw.log carries monitor 22a907f, wrapper fd31cdc4 and the
+  same defines on both arms. The two `fw_payload.bin` are byte-identical over the firmware's 0x93000 bytes; they
+  first differ at 0x200068, inside the kernel image. The module parameter lines are identical.
+
+| row (flat) | run_cycles | runs | ev29-33 | ev23 | L1D | specdiff | outputs |
+|---|---|---|---|---|---|---|---|
+| perl makerand | 6,802,240,242 | 1,146 | 0 | 30,537 | 96,454 | 1/1 | = paged = G |
+| gcc train01 | 41,557,763,869 | 13,633 | 0 | 6,408,681 | 367,108,064 | 1/1 | 5 hashes = paged |
+| mcf test | 144,174,982,810 | 48,950 | 0 | 180,622,156 | 3,750,169,404 | 2/2 | 5 hashes = paged |
+
+### gcc (502.gcc_r train01): PASS
+
+`pb-grade.py gcc 41557763869 41667242846 6413789 3330596 102878620 22836629` (ev32 omitted), rc 0:
+
+- Check 1 PASS: ev31 22,836,629 lies in 19,115,320..26,898,913, on the paged run's own ev23.
+- Check 2 PASS: the model is 151,882,474; |Delta - model| = 42,403,497, under 121,086,146. Delta lies BELOW the model.
+- Check 3 PASS: Delta +109,478,977 (+0.263 %) lies in -27,893,976..3,245,520,616.
+- Reported: m = 0.146, 30.9 cycles per walk, ev33 = 17.
+- Flat arm, read from the raw files here: specdiff 1/1 PASS, smoke 9/9, the 5 output hashes byte-equal to the paged
+  arm's, 0 tree-check, context-ended, Oops or panic lines (the 3 "fault" matches are the module banner and the pgfault
+  vmstat counters), monitor 22a907f with the same defines as the paged arm. emu_fingerprints 3,621 on both arms.
+- **gcc tests perl's excess above the model (+30,383,191) at three scalings, each computed from perl's numbers:**
+  - per paged record access (858 cycles per ev31): +19.6 G above the model on gcc;
+  - per run (26.5 k cycles per run, 13,633 runs): +361 M;
+  - per cycle (+0.447 % of run_flat): +186 M.
+  - gcc reads -42.4 M against the model, so no excess at perl's rate exists on gcc under any of the three.
+  - That refutes "a per-op paged cost the events do not count" as the source of perl's excess: producing +30.4 M from
+    perl's 35,422 accesses takes 858 cycles each, and gcc's 22.8 M accesses show nothing of the kind.
+  - What is left: run-to-run or boot-to-boot variance, or an effect specific to perl's run. The replicates of Addendum
+    153 / 153a decide between them.
+
+### mcf (505.mcf_r test): PASS
+
+`pb-grade.py mcf 144174982810 144518401489 180626708 775224 38041385 181547769` (ev32 omitted), rc 0:
+
+- Check 1 PASS: ev31 181,547,769 lies in 163,323,274..199,816,217, on the paged run's own ev23.
+- Check 2 PASS: the model is 401,912,147; |Delta - model| = 58,493,468, under 388,828,002. Delta lies BELOW the model.
+  At mcf's size the tolerance is wide (0.25 x model + 0.002 x run_flat), so this check is weak here.
+- Check 3 PASS: Delta +343,418,679 (+0.238 %) lies in 75,289,372..23,720,251,565.
+- Reported: m = 0.0043, 49.1 cycles per walk, ev33 = 2.
+- Flat arm, read from the raw files here: specdiff 2/2 PASS, smoke all 9 steps, the 5 output hashes byte-equal to the
+  paged arm's, 0 tree-check, context-ended, Oops or panic lines (the one "fault" match is the module banner), monitor
+  22a907f with the same defines as the paged arm. emu_fingerprints 980 and checks 980 on both arms.
+- The firmware's tree walk, outside the window: check_cycles +182.8 per check on mcf (1,414,542 against 1,235,373),
+  +149.7 per check on gcc (4,661,652 against 4,119,425, 3,621 checks).
+- Perl's excess at the same three scalings predicts +155.7 G (per access), +1.30 G (per run) and +644 M (per cycle)
+  above the model on mcf. mcf reads -58.5 M. The refutation from gcc holds on mcf too.
+- The pair-A comparison (+425.9 M against bkit88's P1, residual +24.0 M) is superseded: on the same board and firmware
+  the paged arm's excess over flat is below the model.
+
+### perl (the NULL row): FAIL on checks 2 and 3
+
+`pb-grade.py perl 6802240242 6832734701 30728 2196 38228 35422` (ev32 omitted, unmeasured), rc 1:
+
+- Check 1 PASS: ev31 35,422 lies in 33,644..43,302, on the paged run's own ev23.
+- **Check 2 FAIL:** the model is 111,268, and |Delta - model| = 30,383,191, above 13,632,297.
+- **Check 3 FAIL:** Delta +30,494,459 (+0.448 %) lies outside -13,524,208..18,631,085.
+- Reported: m = 0.062, 17.4 cycles per walk, ev33 = 0.
+- **The in-context work is the same in both arms.** Every NATIVE-CNT field other than the cycle counts and the walker's
+  events is equal: k0, k2-k7, register, exchange, service_other, kinds_queries, emu_fingerprints, checks, detaches and
+  adopts.
+  - k1 and runs are +5 each. They follow the cycles: 30.5 M / 8 M quantum.
+  - check_cycles is +106 k: the firmware's tree walk, outside the window.
+  - between_cycles is -82 k, ev23 +191, and L1D -1,908. The paged arm has fewer misses.
+  - **So +30.5 M = 26.5 k cycles per run, and no counter attributes it.**
+- **By the RTL source (d83d3a633), paged mode's work outside the events is small:**
+  - header accesses (slots 0 and 1) take LOOK then ISSUE, 2 cycles each, and are not in ev31;
+  - the mode probe at the first access after a namespace flush (PROBE, PROBE_W) is not in ev30. It is present on flat
+    tables too (+93 cycles in va-alloc-w), so it cancels between the arms.
+  - `pw_busy` reaches only `rev_busy`, which gates the held namespace copies (`ex_stage.sv:1684`, `:1693`) and
+    nothing else.
+  - None of these comes near 26.5 k cycles per run.
+- **The cost model does not predict perl, and the cause is open.** Two readings are live:
+  - a per-op paged cost the events do not count, which would scale with gcc's and mcf's op counts, about 600 times
+    perl's ev31. **gcc's flat row refutes this at perl's rate** (see the gcc section above);
+  - a kernel-variant effect, since the arms' kernels differ in `CV_TABLE_TREE`. The runtime lane's note: four perl runs
+    of G's and P1's flat kits lie within 4 M, while the tree kits sit +42..49 M above them with no walker activity.
+    That is N=1 per arm and not one configuration, so it is a hint only.
+  - Same-kit replicates would separate the two readings.
+
+### Pair B: gcc and mcf PASS, perl FAIL on checks 2 and 3 (key 5 NOT MET)
+
+- The paged-table cost model holds on the two rows with real walker activity. Delta lies within tolerance of
+  2 x ev31 + ev30 + ev29, below it by 28 % on gcc and 15 % on mcf.
+- The NULL row fails. Its +30.4 M has no counter behind it and does not scale onto gcc or mcf at any of the three rates.
+  The replicates (Addendum 153 / 153a: ce-b1 flat r1, cf-b1 paged r1, cg-b1 flat r2, ch-b1 paged r2) decide between
+  variance and a perl-specific effect.
