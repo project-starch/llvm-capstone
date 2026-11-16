@@ -253,7 +253,9 @@ Keys, graded against P1's gate (d83d3a633, board lane, `synth/pw-d83d3a633-gate`
    - the tags in LUTRAM, about 40 cells.
    - Records mapped to flops or LUTRAM (+32 k FF or +8 k LUT) are a FAIL: the BRAM inference did not happen. Read it
      from the synth log's Block RAM mapping report for `g_rc_way[*].dat_mem`, as well as from the RAMB count.
-4. core LUT within ±2,000 of P1's 162,403 beyond the own footprint; perf_counters +1 event only.
+4. core LUT within ±2,000 of P1's 162,403 beyond the own footprint. perf_counters gains 4 events (HPM 34-37), and
+   `rev_walk_perf` widens from 4 to 8 bits (cva6.sv, perf_counters.sv): a few tens of LUT. (Corrected 2026-11-17
+   before the gate ran: this line said "+1 event", left over from a draft with one counter.)
 
 ### Full build (only on a gate pass)
 
