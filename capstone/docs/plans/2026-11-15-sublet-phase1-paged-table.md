@@ -606,12 +606,39 @@ delta, when there is one, is not graded.
   - a kernel-variant effect, since the arms' kernels differ in `CV_TABLE_TREE`. The runtime lane's note: four perl runs
     of G's and P1's flat kits lie within 4 M, while the tree kits sit +42..49 M above them with no walker activity.
     That is N=1 per arm and not one configuration, so it is a hint only.
-  - Same-kit replicates would separate the two readings.
+  - Same-kit replicates would separate the two readings. **They did: run-to-run variance** (next section).
 
-### Pair B: gcc and mcf PASS, perl FAIL on checks 2 and 3 (key 5 NOT MET)
+### perl replicates (Addendum 153 / 153a): run-to-run variance
+
+Four more perl runs on board 1, same kits and stage, alternating arms: ce-b1 flat r1, cf-b1 paged r1, cg-b1 flat r2,
+ch-b1 paged r2. Graded by a script that applies 153a's names and thresholds and refuses files older than 153a's
+commit. Its controls fired: every branch of the rule, B2's own arms as stand-ins, swapped arms (VOID), and the time
+stamp (NO DATA).
+
+- **Controls, all four runs:** smoke all 9 steps; specdiff 1/1; the whole 558-line SPEC-HASH block equal to B2's
+  (the addendum's "6 output hashes" was a typo, corrected by the runtime lane; the whole block is the stricter
+  control); ev29-31 non-zero on paged, 0 on flat. None is VOID.
+
+| run | flat run_cycles | paged run_cycles | paged - flat | ev31 (paged) | pb-grade |
+|---|---|---|---|---|---|
+| B2 | 6,802,240,242 | 6,832,734,701 | +30,494,459 | 35,422 | FAIL checks 2, 3 |
+| r1 | 6,813,512,693 | 6,801,286,723 | -12,225,970 | 35,302 | PASS (model 109,788) |
+| r2 | 6,814,767,940 | 6,816,399,075 | +1,631,135 | 35,362 | PASS (model 111,177) |
+
+- s_P = 31,447,978 (0.46 % of a run), s_F = 12,527,698 (0.18 %); d1 = -12.2 M, d2 = +1.6 M.
+- **Reading, by 153a's rule: RUN-TO-RUN VARIANCE**, on both clauses (s_P >= 20 M, and d1 and d2 <= +10 M).
+- Pooled over the three runs per arm, paged - flat = +6.63 M (+0.10 %), against a model of 0.11 M.
+- **B2's perl FAIL is inside run variance and is not evidence of a paging cost.** The paged arm's spread alone
+  (31.4 M) exceeds perl's check-2 and check-3 tolerances (about 13.6 M), so a single perl pair cannot pass or fail
+  the cost model on this board. That holds for the NULL row as an instrument, not only for this pair.
+- gcc and mcf were not replicated. Against two earlier runs (B-flat on board 3 with the old firmware, and pair A), their
+  flat arms sit -2.2 M and -1.4 M (gcc) and +120 M and +82 M (mcf) by the runtime lane's cross-checks. Those are
+  different kits or boards, not replicates, so gcc's and mcf's run variance on this kit is unmeasured. They stand at
+  N=1.
+
+### Pair B: gcc and mcf PASS; perl FAIL at N=1, inside run variance at N=3 (key 5 NOT MET)
 
 - The paged-table cost model holds on the two rows with real walker activity. Delta lies within tolerance of
   2 x ev31 + ev30 + ev29, below it by 28 % on gcc and 15 % on mcf.
-- The NULL row fails. Its +30.4 M has no counter behind it and does not scale onto gcc or mcf at any of the three rates.
-  The replicates (Addendum 153 / 153a: ce-b1 flat r1, cf-b1 paged r1, cg-b1 flat r2, ch-b1 paged r2) decide between
-  variance and a perl-specific effect.
+- The NULL row's B2 FAIL has no counter behind it, does not scale onto gcc or mcf at any of the three rates, and does
+  not reproduce: both replicate pairs PASS, and the reading is run-to-run variance.
