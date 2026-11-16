@@ -155,6 +155,8 @@ board-matched figure. The RCM model's lookups equal those misses on both rows.
 The hash is capstone-ariane `rtl/record-cache` **6e82d7bd2**. Its synthesised logic is 7ba62edde's: 91699f266's
 cache with the context gate (`ctx_rev_q` and `rc_live_q`) and the context-edge flush. 6e82d7bd2 differs from
 7ba62edde only inside `ifndef SYNTHESIS`: the oracle's `rco_idx_q` holds index bits [11:4] instead of [11:0].
+`verilator -E -P -DCAPSTONE_ITFC_EN -DSYNTHESIS core/ex_stage.sv` gives identical text on both commits (1,761
+lines, sha256 2fbb1f109074e593..., `rc_live_q` present). Without `SYNTHESIS` the two differ: that is the control.
 7ba62edde's lint was UNUSEDSIGNAL 1481 against 1480, and that register's low bits were the one new name. The wide
 pass and the sweep below ran on 7ba62edde, and the oracle computes the same key on both commits.
 
@@ -175,6 +177,12 @@ pass and the sweep below ran on 7ba62edde, and the oracle computes the same key 
   - `RC_SIM_BADFILL` trips `rc_addr_mismatch` (slot 3) on `va-rc-ctx` and on `va-fetchsplit`;
   - the memory oracle, applied to 46fb0ab83, fires with va-runv6-w (slot 7, pa 0x80006070);
   - all three mutants were run on 7ba62edde's RTL, before the commit.
+  - On the handed hash, 6e82d7bd2 (`rc9ctx`, `rc9m1`, dirty=no):
+    - va-rc-ctx, va-fetchsplit and va-runv6-w retire traces identical to their 7ba62edde runs;
+    - hits are 4 of 11, 31 of 52 and 0 of 80;
+    - the oracle is silent;
+    - `RC_SIM_NOCTXFLUSH` trips `rc_stale_hit` slot 2 (pa 0x80009020) on va-rc-ctx, so the narrowed key still
+      fires.
 - **A/B grading is on the retired trace (RVFI `.log`) or on values printed by retired instructions.** It is never on
   the FLU's CAPPRINT `$display`, which fires at execute: six of the seven cmp.py differences on 46fb0ab83 were that
   print on squashed paths after an excepting LDC, with retired traces identical.
@@ -188,11 +196,14 @@ pass and the sweep below ran on 7ba62edde, and the oracle computes the same key 
   - **No P1 base:** va-alloc-rcflush-w.
   - **2 differ in order only:** va-runv-fp-pre and va-runv-fp-pre2. They retire the same multiset of trace lines
     (the sorted traces hash equal), and the preemption tick lands one loop iteration earlier.
-    - The cause is a background fill. In va-runv-fp-pre, at cycle 67,694 a fill (`RC-INS slot 3 way 0 fill`) is in
-      flight while an instruction waits on what looks like a fetch refill. That instruction completes 47 cycles later
-      than on P1, and the run ends 60 cycles later (180,514 against 180,454).
-    - No hit ever uses that line. **The fill's memory reads compete with other memory traffic.** This is a cost the
-      unit-yield rule does not cover. Sim memory delay is not silicon's.
+    - The first shift **coincides with** a background fill, on one instance; the mechanism is not shown. In
+      va-runv-fp-pre both runs have a gap before the ADD at 0x800021b0: 79 cycles on P1 and 126 on this tree. It
+      looks like a fetch wait. Inside it the cache installs slot 2 on a demand miss at 67,601 and a fill installs
+      slot 3 at 67,694 (`RC-INS slot 3 way 0 fill`). The ADD commits 47 cycles later than on P1, and the run ends 60
+      cycles later (180,514 against 180,454).
+    - The trace has no D$, AXI or I$ events, so it cannot show the fill's read contending with the fetch. The fill's
+      reads are the only new memory traffic there, and no hit ever uses that line. If the fill does compete with
+      other memory traffic, that is a cost the unit-yield rule does not cover. Sim memory delay is not silicon's.
   - **The oracle is silent in all 166.** On the same grep its three mutants fire: `rcq8m1` rc_stale_hit,
     `rcq8m2` rc_hit_mismatch, `rcq8m3` rc_addr_mismatch.
   - **Lookups and hits:** 1,812 lookups and 619 hits, all in contexts, in 37 of the 141 tests that look up.
@@ -211,6 +222,24 @@ pass and the sweep below ran on 7ba62edde, and the oracle computes the same key 
   - Fill-installed hits are exercised: 230 of the 619 hits read a line that a background fill installed (15 per
     va-fetch* test, 2 in va-flat, 1 in va-rc-ctx).
 
+- **Claim-audit for synthesis** of the whole cache at 6e82d7bd2, the full file rather than the diff alone. It
+  SUPPORTED four points:
+  - `rc_live_q`/`rc_live_qq`/`ctx_rev_qq` feed only `rc_flush` and `rc_cacheable`, and every endpoint below them is
+    a flop D input or a RAM write enable;
+  - the rev unit's D$ read and write requests, `rc_busy` and `rev_busy` take no new term, so nothing enters the rev
+    read port's standing UNOPTFLAT cone;
+  - `dom_switch_busy` reaches the cache only at the `rc_live_q` flop (cva6.sv:843, :2001);
+  - the record array's code, reset and addressing are unchanged, and 6e82d7bd2 lies inside `ifndef SYNTHESIS`.
+  
+  It left two points open:
+  - whether the array really maps to RAMB (the synth log's Block RAM mapping report for `g_rc_way[*].dat_mem`
+    settles it; key 3 below);
+  - `rc_live_q` is a new endpoint one AND gate from `dom_switch_busy`, the launch point of every failing path in the
+    2026-09-07 synthesis (cva6.sv:845-850), so read it in the full build's timing report.
+  
+  Correction from the audit: `ctx_rev_qq` and the first `rc_flush` came in a38fddb70; 7ba62edde added only
+  `p_rc_live`, the third flush term and `&& rc_live_q`.
+
 ### Synthesis-only gate (under synth-guard, 40 GB)
 
 Keys, graded against P1's gate (d83d3a633, board lane, `synth/pw-d83d3a633-gate`):
@@ -222,7 +251,8 @@ Keys, graded against P1's gate (d83d3a633, board lane, `synth/pw-d83d3a633-gate`
    - **0.7-1.2 k FF** (512 valid bits, 64 LRU, and the held slot, address and data; `rc_live_q`/`rc_live_qq` add 2);
    - **RAMB36-equivalent 4** for the 2 x 256 x 128-bit records;
    - the tags in LUTRAM, about 40 cells.
-   - Records mapped to flops or LUTRAM (+32 k FF or +8 k LUT) are a FAIL: the BRAM inference did not happen.
+   - Records mapped to flops or LUTRAM (+32 k FF or +8 k LUT) are a FAIL: the BRAM inference did not happen. Read it
+     from the synth log's Block RAM mapping report for `g_rc_way[*].dat_mem`, as well as from the RAMB count.
 4. core LUT within ±2,000 of P1's 162,403 beyond the own footprint; perf_counters +1 event only.
 
 ### Full build (only on a gate pass)
@@ -230,6 +260,7 @@ Keys, graded against P1's gate (d83d3a633, board lane, `synth/pw-d83d3a633-gate`
 - Routes, 0 errors.
 - Congestion <= 5.
 - Loops 0.
+- Timing report: the worst slack of any path ending at `rc_live_q` is recorded (reported only, not a key).
 - **WNS inside ±3.74 ns of P1's -13.173.** P1 missed its own key 5 against G. This band says only that B5a does not
   move timing beyond the null band; it does not say B5a is flashable.
 - P1 placed at 99.71 % of slices (187,368 LUT). B5a adds about 1 % more LUT and FF. **Routing-failure branch:** no WNS
@@ -247,7 +278,8 @@ Keys, graded against P1's gate (d83d3a633, board lane, `synth/pw-d83d3a633-gate`
   - A rate below 30 % on mcf means the fill is yielding on the probe path. That is a finding, not noise.
 - **Cycles,** mcf: Delta(B5a - P1) between **-6.4 G** (records L1D-missing on P1, about 50 cycles saved per hit) and
   **-0.4 G** (L1D-resident, about 3 saved), plus 2 cycles per miss and per write. Neither bound counts the fill's
-  own memory traffic. The wide pass shows that traffic delaying other work (+47 cycles at one point in sim).
+  own memory traffic. In the wide pass, one +47-cycle shift coincides with a fill in flight (one instance, mechanism
+  not shown).
   - A Delta above +0.2 % (+0.29 G) on mcf refutes "the cache does not cost on the probe path".
 - **gcc** (train01, about 30 % hits in the model on test): predicted inside ±0.2 % of P1.
 - **perl:** NO GRADE at N=1 on cycles (run-to-run variance, Addendum 153a); HPM identities only.
