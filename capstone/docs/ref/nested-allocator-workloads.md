@@ -1856,6 +1856,44 @@ functions and `cache.c`, with libevent's types, the mutexes, the condition varia
 - Duration: 13 to 26 min per command (the twin's in-context x 2.3 to 4.5 at 25 M cycles/s).
 - **VOID** as above.
 
+### Pre-registration: Perl on P1, both arms in one boot, a 2^20-record table (written 2026-11-18 00:35, before the boot)
+
+**Configuration.**
+- Perl 5.36.3 built for the native route by this lane (`nested/perl/build-arms.sh`: the port's `build-perl-domain.sh`
+  with its virtual SDK build replaced by the FRCDKMS SDK, the F/P1 flags at -O2; perl-cross c2d8f8b7027e; the release
+  tarball `f2a1ad88…`). Stripped images: stock `3012f392…`, protected `ac2507d3…` (full `1a768a52…` / `2ba4dd05…`).
+  - Protected: `perl/sublet` patch 0001 `sv-heads-as-sublet-lifetimes` (dev's revision, blob `72db9236`, two-operand
+    `capstone_cap_revoke_child`), selected by the port's `PERLD_SUBLET=1` (`-DPERL_CAPSTONE_SUBLET`). The two arms'
+    `config.sh` differ only in that define and its include path.
+  - CREVOKE census: stock 0 with rs2 = x0 and 6 with rs2 != x0 (mallocng); protected 0 and 9 (3 in `Perl_sv_replace`,
+    `Perl_sv_clear` and `Perl_sv_free2`).
+- Workload, Fig. 10's: SPEC CPU2017 500.perlbench_r train `suns.pl` (`7545b37d…`, with `WORDS` `f32a0a4b…`), run as
+  `PERL_HASH_SEED=0 perl -I. -I./lib suns.pl`. The answer is stdout against SPEC's `suns.out` (`01688ea0…`). suns.pl
+  loads no module (a native `%INC` dump), so the stage carries suns.pl and WORDS without the lib tree.
+- **The record table.** At bkit91's `node_flat_records=262144` the protected arm cannot run: on the twin it ends with
+  cause 30 (node exhaustion) in both protected commands (`nperl-1`). The peak is bracketed on the twin's table model: the protected arm still ends with cause 30 at 327,680 records (`nperl-320k`) and completes at 393,216 (`nperl-384k`), 655,360 (`nperl-640k`) and 1,048,576 (`nperl-1m`), so its peak lies between 327,680 and 393,216 records, counting the floor and the context's other lifetimes. So this boot runs a copy of the kit,
+  `nested/kits/bkit91-rec1m`, which differs from bkit91 in one word of `board.env` (`node_flat_records=1048576`; `diff -r`
+  shows only that line), and **both arms run under it**. The tree build grows the table up to that ceiling
+  (`capstone_vm.c:362-364, 887-905`); 2^20 is the module's own default (`:415`). The row says: the record table is
+  configured for 2^20 records for this program, because the default 262,144 is exhausted by its peak of 327,680 to 393,216 live records.
+- Stage `nested/p1a/perl` (the rec1m kit's wrap of `nested/appd/perl/stage`), u1 p1 p2 u2 in one boot, images
+  xz-compressed in the stage. Board 1, after this lane's tshark heartbeat chain (pid 1526065); board 1 is on P1, read back
+  by name. Chain `nested/p1a/b1-perl.*`. Budget 900 (x4 = 3,600 s), booking 45 min.
+- Checked off the board: real bake on the rec1m kit, `BOARD_STUB=2` on a returning and a non-returning transcript (both
+  rc 0, both print 3,600), real firmware 23,760,392 B (`69c4d8a1…`), the stub's relinked kernel configuration carrying
+  `node_flat_records=1048576`, and an `NR_DRY=1` pass of the chain.
+- Twin control `nperl-1m` (2^20 records): four commands rc 0 with SPEC's `suns.out`. In-context 1,731.9 / 2,429.1 /
+  2,429.1 / 1,731.9 M, **+40.3 %**, repeats 0.00 %; kernel +14.5 %.
+
+**Outcomes and bands.**
+- Answers: every command's stdout equals `suns.out`, else VOID for the cost.
+- Repeat rule as above.
+- In-context cost, protected vs not: +20 % to +150 % (the twin's +40.3 %; the P1 cost ratios of the other applications
+  would put it at 75-140 %, widened down because Perl's cost may be less cache-bound).
+- Duration: 3 to 8 min per command.
+- Record-table growth (hpm6, event 33): more in the protected arm.
+- **VOID** as above.
+
 ### Results: speedtest1, PostgreSQL and CREVOKE chains on P1 (board 2, 2026-11-17 17:24-19:22)
 
 **Configuration.** As pre-registered (0a57804ea778; SPEC-lane Addendum 160, spec-silicon f7e660db383b). Board 2 was
