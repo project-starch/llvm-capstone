@@ -40,3 +40,16 @@ Readings, 2026-11-17:
     240 x 20^3 x 13 = 24.96 M from its 13-instruction inner loop, while bitstream 3's silicon window read 11.97 M with the same
     iteration count and the same inner loop. Which instrument differs is not established, so instret is compared
     silicon to silicon only.
+
+Parsing and analysis:
+- parse-board.py now also reads the native route's lines, as follows:
+  - `BENCH-INFO <id> source=context-csr rdcycle_rdinstret=<v>`: any value but ok is a problem;
+  - `@@NATIVE-CNT <n> begin|end`: one row per process in `<out>.ncnt.tsv`, the deltas of native_counters beside the
+    sum of the process's BENCH cycles;
+  - a native step has no release quote to check.
+  Control: the four bitstream-3 t3a transcripts parse byte-identically to the committed runs-t3a1..4.tsv.gz with both
+  the old and the new parser, and give no .ncnt file. On the seven P1 QEMU transcripts every kit parses with rc 0.
+  The tampered pilot copies (a missing NATIVE-CNT end, rdcycle_rdinstret=static, rc=1) each exit 1.
+- `analyze-p1.sh OUT [KIT...]` gates each landed kit with p1-check.py, parses it, and runs perf-analyze.py `report
+  --arms T1,T3` over main (the 15 allocating programs), all103 and groups (BEEBS as one group of 93). This is
+  2026-10-28's recipe for one pair of arms.

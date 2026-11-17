@@ -15,6 +15,13 @@ timer= irq= minflt= majflt= nvcsw= nivcsw=` line per iteration; those go to <out
 keyed like the main rows), and a Plain process without one per BENCH line is a problem. Its END line has no dmesg
 quote.
 
+A native-route process (P1 kits, benchmarks/virtual/p1: a direct exec, harness -DBENCH_CONTEXT_COUNTERS) prints
+`BENCH-INFO <id> source=context-csr rdcycle_rdinstret=ok`, which must say ok, and the run script brackets it with
+`@@NATIVE-CNT <n> begin <k=v ...>` and `@@NATIVE-CNT <n> end <k=v ...>` (the module's native_counters). Those go to
+<out>.ncnt.tsv, one row per process: the end-minus-begin delta of every counter both lines carry, beside the sum of the
+process's BENCH cycles over all its iterations (bench_cycles_all) and over the timed ones (bench_cycles_timed). Once any
+NATIVE-CNT line appears in a transcript, a process without both is a problem. A transcript without them parses as before.
+
 Exit 1 when any process is missing its END, has the wrong number of BENCH lines, a VERIFY-FAILED, counters other
 than present, a nonzero rc, or failed > 0 -- listed, and still written with rc carried, so perf-analyze refuses it.
 """
@@ -32,6 +39,10 @@ INFO = re.compile(r'BENCH-INFO (\S+)/(\S+) counters=(\S+) warmup=(\d+) iteration
 BENCH = re.compile(r'BENCH (\S+)/(\S+) it=(w?\d+) cycles=(\d+) instret=(\d+) entries=(\d+) ns=(-?\d+) '
                    r'check=(0x[0-9a-f]+)( VERIFY-FAILED)?')
 DONE = re.compile(r'BENCH-DONE (\S+) failed=(\d+)')
+SRC = re.compile(r'BENCH-INFO (\S+)/(\S+) source=context-csr rdcycle_rdinstret=(\S+)')
+NCNT = re.compile(r'@@NATIVE-CNT (\d+) (begin|end) (.*)$')
+NCNT_KEYS = ('runs', 'run_cycles', 'between_cycles', 'checks', 'check_cycles', 'emu_fingerprints', 'register', 'exchange',
+             'service_other', 'k0', 'k1', 'k2', 'k3', 'k4', 'k5', 'k6', 'k7', 'hpm3', 'hpm4', 'hpm5', 'hpm6', 'hpm7', 'hpm8')
 
 
 def main():
@@ -51,7 +62,7 @@ def main():
     if mid:
         print(f'parse-board: rejoined {mid} guest line(s) split by a mid-line @@HB', file=sys.stderr)
     lines = text.splitlines()
-    procs, cur, problems, last_quote = [], None, [], None
+    procs, cur, problems, last_quote, saw_ncnt = [], None, [], None, False
     for ln in lines:
         m = BEGIN.search(ln)
         if m:
@@ -59,15 +70,28 @@ def main():
                 problems.append(f'step {cur["n"]}: no @@PERF-END before the next BEGIN')
                 procs.append(cur)
             cur = dict(n=int(m[1]), program=m[2], arm=m[3], proc=m[4], K=m[5], info=None, bench=[], done=None,
-                       rc=None, kern=[])
+                       rc=None, kern=[], src=None, ncnt={})
             continue
         if cur is None:
+            continue
+        m = NCNT.search(ln)
+        if m:
+            saw_ncnt = True
+            if int(m[1]) != cur['n']:
+                problems.append(f'step {cur["n"]}: @@NATIVE-CNT for step {m[1]}')
+            else:
+                cur['ncnt'][m[2]] = dict(kv.split('=', 1) for kv in m[3].split() if '=' in kv)
+            continue
+        m = SRC.search(ln)
+        if m:
+            cur['src'] = m[3]
             continue
         m = END.search(ln)
         if m and int(m[1]) == cur['n']:
             cur['rc'] = int(m[6])
             quote = m[7].strip()
-            if cur['arm'] != 'Plain':   # a Plain step has no module release line to quote
+            # A Plain step has no module release line to quote, nor a native-route step (it is bracketed by NATIVE-CNT).
+            if cur['arm'] != 'Plain' and not cur['ncnt']:
                 if quote and quote == last_quote:
                     problems.append(f'step {cur["n"]}: release quote identical to the previous step ({quote[:60]})')
                 last_quote = quote
@@ -115,6 +139,8 @@ def main():
             problems.append(f'step {p["n"]} {p["program"]} {p["arm"]}: BENCH-DONE failed={p["done"]}')
         if rc != 0:
             problems.append(f'step {p["n"]} {p["program"]} {p["arm"]}: rc={rc}')
+        if p['src'] is not None and p['src'] != 'ok':
+            problems.append(f'step {p["n"]} {p["program"]} {p["arm"]}: rdcycle_rdinstret={p["src"]}')
         bad = 0 if rc == 0 and p['done'] == 0 and not any(b[9] for b in p['bench']) else (rc or 1)
         for b in p['bench']:
             rows.append([a.board, a.boot, b[1], p['program'], p['arm'], f'{p["proc"]}', b[3], b[4], b[5], b[7], str(bad),
@@ -132,6 +158,30 @@ def main():
             for r in kern:
                 f.write('\t'.join(map(str, r)) + '\n')
         print(f'parse-board: {len(kern)} BENCH-KERN rows -> {kout}')
+    if saw_ncnt:
+        nrows = []
+        for p in procs:
+            b, e = p['ncnt'].get('begin'), p['ncnt'].get('end')
+            if b is None or e is None:
+                problems.append(f'step {p["n"]} {p["program"]} {p["arm"]}: @@NATIVE-CNT begin/end missing')
+                continue
+            try:
+                d = [int(e[k]) - int(b[k]) if k in b and k in e else '' for k in NCNT_KEYS]
+            except ValueError:
+                problems.append(f'step {p["n"]}: unparsable @@NATIVE-CNT value'); continue
+            if d[1] == '' or d[1] <= 0:
+                problems.append(f'step {p["n"]} {p["program"]} {p["arm"]}: run_cycles did not advance')
+            allc = sum(int(x[4]) for x in p['bench'])
+            timed = sum(int(x[4]) for x in p['bench'] if not x[3].startswith('w'))
+            nrows.append([a.board, a.boot, p['program'], p['arm'], p['proc'], p['K'], str(p['n']), str(allc), str(timed)] +
+                         [str(x) for x in d])
+        nout = a.out.with_name(a.out.name + '.ncnt.tsv')
+        with nout.open('w') as f:
+            f.write('\t'.join(['board', 'boot', 'program', 'arm', 'proc', 'K', 'step', 'bench_cycles_all',
+                               'bench_cycles_timed'] + [f'd_{k}' for k in NCNT_KEYS]) + '\n')
+            for r in nrows:
+                f.write('\t'.join(r) + '\n')
+        print(f'parse-board: {len(nrows)} NATIVE-CNT rows -> {nout}')
     print(f'parse-board: {len(procs)} processes, {len(rows)} iteration rows -> {a.out}')
     if problems:
         print('parse-board: PROBLEMS:\n  ' + '\n  '.join(problems), file=sys.stderr)
