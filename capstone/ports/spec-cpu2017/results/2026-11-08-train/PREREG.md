@@ -5401,3 +5401,18 @@ These are wide bands; the readings decide.
 - **Chain:** nested/p1a/b2-mrb.conf (TAG p1a-mrb), board 2. It waits on the matched-plain repeat chain (pid 1217768), then flashes P1 from its seal with the sha checked and reads it back.
 - **Patch:** dev's two-operand 0008 with the nested lane's Q-15 repair (blob 15c05a92). Dev's revision faults on the twin, with cause 29 in add_heap.
 - **Workload:** Fig. 8's ao_render at width 16, U P P U in one boot.
+
+## Addendum 169 (2026-11-18 00:45 +08, after the plain transfer probes): the correction becomes a range
+
+- **Plain transfer probes.** Board 1, CVA6-matched, 23:33-23:52.
+  - hiccup4: HIC4-ALL 7.171 %, POST mean 2.00 over 92,983 chunks, BASE 0.00. s4 = **7.184 %**.
+  - hiccup5: NOSYS 7.859 %, and the syscall chunks' excess above their p50 (1,129) is at least 357,418 cycles. s5 ≈ **7.882 %**.
+- **Factors** (1 − s_Sublet)/(1 − s_plain):
+  - hiccup3m: **1.0811**
+  - hiccup4: **1.0734**
+  - hiccup5: **1.0807**
+- **Against Addendum 163.**
+  - The spread is 0.0077 from 1.0811, outside ±0.005. As fixed in advance, the text gives the range and calls the correction an estimate within it.
+  - **Plain s4 ≥ hiccup3m − 0.3 pp (7.62 %): MISSED**, at 7.18 %. The reuse probe's ticks cost less per gap on plain than the streaming probe's do. Its sub-threshold refill is negligible: POST minus BASE is 2 cycles per chunk.
+  - Plain s5 within ±1 pp of 7.9 %: MET.
+- **Paper.** Corrected geomeans against plain: +Spatial **+15.4 % to +16.3 %**, Full **+16.6 % to +17.5 %**. Uncorrected: +7.5 % / +8.7 %.
