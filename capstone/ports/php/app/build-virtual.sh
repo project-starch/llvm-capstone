@@ -32,7 +32,9 @@ WHAT=${1:-probe}
 export SOURCE_DATE_EPOCH=${SOURCE_DATE_EPOCH:-1700000000}
 
 OUT=${PHP_VIRTUAL_OUT:-$CAPSTONE_TMP_ROOT/virtual-runtime}
-SDK="$OUT/sdk"
+# PHP_VIRTUAL_SDK=<an existing virtual-profile SDK>: compile and link through its capstone-cc, and build no musl or
+# SDK here (steps 1-2 are skipped). The libc symbol check then reads the archives its sdk.json names.
+SDK="${PHP_VIRTUAL_SDK:-$OUT/sdk}"
 
 # The PHP tree must carry the TREE patches (prepare-sources.sh applies them; patches/README.md
 # says which). Checked the way build-sdk.sh checks musl: each must apply in reverse. A tree
@@ -57,6 +59,7 @@ assert_tree_patches() {
 CC="$SDK/capstone-cc"
 export MUSL_CACHE_ROOT=${MUSL_CACHE_ROOT:-$OUT/musl-source}
 
+if [ -z "${PHP_VIRTUAL_SDK:-}" ]; then
 # ---- 1. the musl tree ------------------------------------------------------------------
 # prepare-musl-capstone.sh is idempotent: a patch that already applies in reverse is skipped,
 # and one that fits neither way is an error rather than a silently partial tree.
@@ -74,7 +77,9 @@ if [ ! -x "$CC" ] || [ "${PHP_VIRTUAL_FRESH_SDK:-0}" = 1 ]; then
 else
   echo "  SDK: reusing $SDK (PHP_VIRTUAL_FRESH_SDK=1 to rebuild)"
 fi
+fi
 [ -x "$CC" ] || { echo "no capstone-cc at $CC" >&2; exit 1; }
+[ -z "${PHP_VIRTUAL_SDK:-}" ] || echo "  SDK: $SDK (PHP_VIRTUAL_SDK; no musl or SDK built here)"
 
 # The SDK records what it is. An image built against the physical profile is rejected by the
 # launcher with ENOEXEC rather than misbehaving, but the error arrives after a boot -- cheaper
@@ -442,7 +447,9 @@ case "$WHAT" in
     # Checked against the archives, not against a memory of what musl carries. Each of these
     # is a configure answer php_config.h asserts, and a missing one changes the TU list.
     : > "$B/libc-syms.txt"
-    find "$OUT" -name '*.a' -print 2>/dev/null | while read -r _a; do
+    if [ -n "${PHP_VIRTUAL_SDK:-}" ]; then
+      python3 -c 'import json,sys; j=json.load(open(sys.argv[1])); print("\n".join(j[k] for k in ("runtime","libc","builtins")))' "$SDK/sdk.json"
+    else find "$OUT" -name '*.a' -print 2>/dev/null; fi | while read -r _a; do
       "$CAPSTONE_LLVM_BIN/llvm-nm" --defined-only "$_a" 2>/dev/null | awk '$1!="U"{print $NF}'
     done | LC_ALL=C sort -u > "$B/libc-syms.txt"
     # LC_ALL=C is load-bearing. With uutils coreutils 0.8.0 (the sort Ubuntu 26.04 ships) under
