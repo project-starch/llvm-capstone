@@ -99,6 +99,8 @@ static struct rusage ru[2];
 static int irq_fd = -1, user_ok;
 static sigjmp_buf probe_jmp;
 static void probe_sigill(int sig) { (void)sig; siglongjmp(probe_jmp, 1); }
+#endif
+#if defined(BENCH_USER_COUNTERS) || defined(BENCH_CONTEXT_COUNTERS)
 static inline unsigned long long rd_cycle(void) {
   unsigned long long v;
   __asm__ volatile("rdcycle %0" : "=r"(v)::"memory");
@@ -109,6 +111,8 @@ static inline unsigned long long rd_instret(void) {
   __asm__ volatile("rdinstret %0" : "=r"(v)::"memory");
   return v;
 }
+#endif
+#ifdef BENCH_USER_COUNTERS
 static int probe_user_counters(void) {
   struct sigaction sa, old;
   memset(&sa, 0, sizeof sa);
@@ -173,6 +177,20 @@ static void irq_parse(int slot, unsigned long long *total, unsigned long long *t
 }
 #endif
 
+#ifdef BENCH_CONTEXT_COUNTERS
+/* Native-route Capstone arm (a .dom exec'd by the kernel's binfmt, native_task=1): the process runs inside a capability
+ * context, which on this route executes at M, and is confined to its cwd grant, so neither the perf module's sysfs
+ * counters nor /proc/interrupts are reachable. The counters are the cycle and instret CSRs read in the context with
+ * rdcycle/rdinstret. Like the Plain arm's (BENCH_USER_COUNTERS), and unlike the CSRUNV windows of the module route,
+ * these counts INCLUDE the kernel's work at every exit inside the region (quantum exits, page faults, syscalls);
+ * `entries` is not measured and reads 0. Order: begin = clock_gettime, rdcycle, rdinstret; end = rdinstret, rdcycle,
+ * clock_gettime, so the counter bracket holds no syscall of the harness's own. There is no SIGILL probe (a signal
+ * cannot be delivered into a context); instead two reads at start-up must both advance, else counters=absent and
+ * every count reads 0. */
+static unsigned long long ccy[2], cin[2];
+static int ctx_ok;
+#endif
+
 /* The mark: one pread per present counter into a static buffer. */
 static void bench_mark(int slot) {
   for (int k = 0; k < C_N; k++)
@@ -201,6 +219,10 @@ void bench_begin(void) {
     ucy[0] = rd_cycle();
     uin[0] = rd_instret();
   }
+#elif defined(BENCH_CONTEXT_COUNTERS)
+  clock_gettime(CLOCK_MONOTONIC, &t0);
+  ccy[0] = rd_cycle();
+  cin[0] = rd_instret();
 #else
   bench_mark(0);
   clock_gettime(CLOCK_MONOTONIC, &t0);
@@ -215,6 +237,10 @@ void bench_end(void) {
   }
   clock_gettime(CLOCK_MONOTONIC, &t1);
   kern_snapshot(1);
+#elif defined(BENCH_CONTEXT_COUNTERS)
+  cin[1] = rd_instret();
+  ccy[1] = rd_cycle();
+  clock_gettime(CLOCK_MONOTONIC, &t1);
 #else
   clock_gettime(CLOCK_MONOTONIC, &t1);
   bench_mark(1);
@@ -264,6 +290,13 @@ static int run(const char *id, int argc, char **argv, bench_unit_fn unit, bench_
          irq_fd >= 0 ? "ok" : "absent");
   if (!user_ok)
     present = 0;
+#elif defined(BENCH_CONTEXT_COUNTERS)
+  {
+    unsigned long long a = rd_cycle(), b = rd_instret(), c = rd_cycle(), d = rd_instret();
+    ctx_ok = c > a && d > b;
+  }
+  present = ctx_ok ? C_N : 0;
+  printf("BENCH-INFO %s source=context-csr rdcycle_rdinstret=%s\n", id, ctx_ok ? "ok" : "static");
 #else
   for (int k = 0; k < C_N; k++) {
     counter_fd[k] = open(counter_path[k], O_RDONLY);
@@ -306,6 +339,10 @@ static int run(const char *id, int argc, char **argv, bench_unit_fn unit, bench_
     d[C_CYCLES] = user_ok ? ucy[1] - ucy[0] : 0;
     d[C_INSTRET] = user_ok ? uin[1] - uin[0] : 0;
     d[C_ENTRIES] = user_ok ? (irq1 - irq0) + (unsigned long long)(minflt + majflt) : 0;
+#elif defined(BENCH_CONTEXT_COUNTERS)
+    d[C_CYCLES] = ctx_ok ? ccy[1] - ccy[0] : 0;
+    d[C_INSTRET] = ctx_ok ? cin[1] - cin[0] : 0;
+    d[C_ENTRIES] = 0;
 #else
     for (int c = 0; c < C_N; c++)
       d[c] = parsed(1, c) - parsed(0, c);
