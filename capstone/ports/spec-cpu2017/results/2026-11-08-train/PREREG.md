@@ -5394,3 +5394,10 @@ These are wide bands; the readings decide.
   - Image bcc251f3…: wmem 0001's dev-era two-operand revision.
   - Workload: a 9,000-frame capture.
 - **Correction to the suite pre-registration's deviation heading.** It is stamped "19:05 +08", but its commit 225fcfbbc8b7 is dated 18:47:34 +08. The text was written after p1k1-3 landed and before any ratio was compared with a band, as it says. Only the time in the heading is wrong.
+
+## Addendum 168 (2026-11-18 00:30 +08, before it runs): mruby on P1, board 2
+
+- **Pre-registration:** llvm-capstone nested-workloads f7b222e43189, "Pre-registration: mruby on P1, both arms in one boot". It opens that record's "Appendix D completeness on P1" section.
+- **Chain:** nested/p1a/b2-mrb.conf (TAG p1a-mrb), board 2. It waits on the matched-plain repeat chain (pid 1217768), then flashes P1 from its seal with the sha checked and reads it back.
+- **Patch:** dev's two-operand 0008 with the nested lane's Q-15 repair (blob 15c05a92). Dev's revision faults on the twin, with cause 29 in add_heap.
+- **Workload:** Fig. 8's ao_render at width 16, U P P U in one boot.
