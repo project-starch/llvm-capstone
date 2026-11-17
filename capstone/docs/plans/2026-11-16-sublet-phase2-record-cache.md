@@ -486,8 +486,8 @@ synth_design completed successfully):
   - Inference, not attribution: the fill's record reads go through the shared L1D. The extra 171.7 M cycles divided
     by 12.9 M extra L1D misses is about 13 cycles each. The fill's traffic and its pollution of the L1D are the
     candidate cost, and fewer walks do not repay it on gcc.
-  - What would settle it is a matched pair that differs only in the fill: B5a with the background fill off (one
-    define; a new bitstream). cs-b2's gcc fill count comes first.
+  - What would settle it is a matched pair that differs only in the fill: B5a with the background fill off. No switch exists:
+    it is a small edit at `RC_FSEL`'s transition (`ex_stage.sv:2363`, always to RC_IDLE), and a new bitstream. cs-b2's gcc fill count comes first.
 - **What would have caught this before the board:** the pre-registration's cycle bounds counted only hit savings and
   "2 cycles per miss and per write". The wide pass's one +47-cycle fill coincidence was recorded and then added to the
   bounds as "neither bound counts the fill's own memory traffic". It was not turned into a prediction about L1D
