@@ -22,7 +22,7 @@ main() {
     [ -f "$t" ] || { echo "$k: no transcript $t"; continue; }
     case $k in p1k*) ref=$R/2026-10-28-t3heap-bitstream3/runs-t3k${k#p1k}.tsv.gz;; *) ref=$R/2026-10-27-t3all-bitstream3/runs-t3a${k#p1a}.tsv.gz;; esac
     python3 "$V/p1/p1-check.py" "$t" "$K/$k.steps.tsv" --ref "$ref" > "$OUT/check-$k.txt" 2>&1; local rc=$?
-    echo "$k: p1-check rc=$rc $(tail -1 "$OUT/check-$k.txt")"
+    echo "$k: p1-check rc=$rc $(tail -1 "$OUT/check-$k.txt") ($(head -1 "$OUT/check-$k.txt"))"
     python3 "$V/parse-board.py" "$t" --board "$B" --boot "p1-$k" --out "$OUT/runs-$k.tsv" > "$OUT/parse-$k.txt" 2>&1; local pc=$?
     echo "$k: parse-board rc=$pc $(tail -1 "$OUT/parse-$k.txt")"
     [ $rc = 0 ] && [ $pc = 0 ] && ok+=("$k")
