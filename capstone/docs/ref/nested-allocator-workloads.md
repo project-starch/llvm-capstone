@@ -1649,3 +1649,25 @@ variants; the rows say they are not Fig. 10's revisions.
 
 **Deadline.** The SPEC lane uses P1 rows that land by 2026-11-18 14:00 +08. Until then the paper appendix carries the
 F rows, marked as the dev-era patches on bitstream F.
+
+### Pre-registration addendum: a second session on boards 1 and 3 (written 2026-11-17 evening, before these boots and before board 2's PostgreSQL result)
+
+The SPEC lane offered two more board slots tonight. Both run on P1 with bkit91, with stages made as above
+(`nested/mk-p1s2-stages.sh`, F's byte-identical `train/` inside bkit91's smoke; checksums `nested/p1s2/<name>.SHA256SUMS`).
+- **Board 1**, after the SPEC lane's x264 run (wait pid 40534). The chain flashes P1 from the matched-baseline
+  bitstream, with the seal check and readback.
+  1. `ff`: FFmpeg, U P P U, then `fp` (the protected flipped-input control); F's `f2-stage` train, budget 900. Checksums
+     `a5e54049…`; images `ff_unprot.xz` `d92e0113…`, `ff_prot.xz` `1afff123…`, `ff_prot_flip.xz` `8ef6bcc0…`.
+  2. `pg2`: PostgreSQL, a second U P P U session; the same stage as `pg` (`ccdbfbdd…`), budget 2700.
+- **Board 3**, after the SPEC lane's embedded-suite chain (wait pid 403643); it is already on P1.
+  `cpy2-u1`, `cpy2-p1`, `cpy2-p2`, `cpy2-u2`: a second CPython session, one arm per boot, the same stages as
+  `cpy-*` (`2d27c6b4…` u, `585e2049…` p), budget 3600 each.
+
+**Reading rule for two sessions.** Each session is read on its own pairs by the 1 % / 2 % rule. A cost is reported for
+each session that passes. When both sessions of an application pass, its reading is the mean of the two sessions' ABBA
+means, with both shown. A session that fails is reported as not read, and its runs are never pooled with the other
+session's. For CPython the rule applies per benchmark, as before.
+
+**Bands.** PostgreSQL and CPython: as for the first P1 session. FFmpeg, as on F: every command decodes 300 frames equal
+to stock's framemd5, `fp` decodes 300 frames with at least one different (else the comparison stops); in-context cost
+-1 % to +1 %; event 23 (hpm7 on this kit), protected minus not, under +10,000 per command.
