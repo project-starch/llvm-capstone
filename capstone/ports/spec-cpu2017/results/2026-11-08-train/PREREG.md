@@ -5306,3 +5306,35 @@ These are wide bands; the readings decide.
   - Unresolved: whether the probe's share transfers to SPEC. The probe makes no syscalls, while gcc spends about 5.4 % out of context, where 10 ms ticks run. The probe has no data reuse, so tick-induced refill is invisible to it.
   - Transfer error: at least ±0.5 pp, sign unknown.
   - Consequence: the uncorrected ratio is the measurement. The corrected one is an estimate that removes the tick share, labelled as such.
+
+## Addendum 163 (2026-11-17 19:10 +08, before any of these boots): two transfer probes for the tick correction
+
+**Why.** Addendum 162's audit left one question open: does the tick share that hiccup3m measures transfer to SPEC? hiccup3m has no data reuse, so it cannot see a tick's cache refill. It makes no syscalls, so it never leaves context, while SPEC gcc spends about 5.4 % of its time out of context, where 10 ms ticks run.
+
+**Probes.** The compiler lane built them with perf/tick/fair/build.sh and the same compilers as 159a. QEMU twins ran to DONE on both sides.
+
+| Probe | Native .dom sha256 | Plain sha256 |
+|---|---|---|
+| hiccup4 (reuse: a 16 KiB malloc'd buffer at a 16 B stride, all 1,024 D$ lines resident) | 354fda467eff1c10 | 6e30ad532e9b07a8 |
+| hiccup5 (hiccup3m plus one getpid every 1,625,000 cycles, gcc's exit rate) | 14161f5f5c5918d8 | dda72ae60669b04c |
+
+- hiccup4 adds HIC4-POST, the mean excess over p50 of the 16 chunks after each gap, and HIC4-BASE, the same over all other chunks. The positive control on the host fires and separates them.
+- hiccup5 adds HIC5-NOSYS for gaps without a syscall, and HIC5-SYS for the syscall chunks' full excess (p10/p50/p90/max).
+
+**Placement.**
+- Plain: board 1, matched baseline, kit bkit95. Chain tick2-b1.conf, right after the matched x264 (pid 40534). The nested lane's p1s2-b1 waits on this chain.
+- Sublet: board 2, P1, kit bkit91. Chain tick2-b2.conf, after the nested P1 chain (pid 537579).
+
+**Derived shares, fixed now.**
+- **s4 = (HIC4-ALL excess + (POST mean − BASE mean) × POST chunks) / cycles.** This is the tick share including sub-threshold refill.
+- **s5 = (HIC5-NOSYS excess + Σ over syscall chunks of max(0, excess − HIC5-SYS p50)) / cycles.** This is the tick share with each syscall's own median cost removed. Syscall cost is real work that both sides pay inside SPEC's measured time, so it is not part of the tick correction.
+
+**How they are used.**
+- The corrected factor stays hiccup3m's, 1.0811 (Addendum 162). It is not re-chosen after seeing these probes.
+- The paper reports the corrected ratio with a range: the minimum and maximum of (1 − s_Sublet)/(1 − s_plain) over hiccup3m, hiccup4 and hiccup5.
+- If every factor lies within ±0.005 of 1.0811, the text calls the correction robust to reuse and to escapes. Otherwise it gives the range and says the correction is an estimate within it.
+
+**Predictions.**
+- **Plain:** s4 ≥ s(hiccup3m) − 0.3 pp, since refill can only add. s5 within ±1 pp of 7.9 %.
+- **Sublet:** s4 ≤ 1 %. s5 above hiccup3m's 0.455 %, because ticks land during escapes. It stays below 3 %.
+- **Refutation:** a Sublet s5 above 3 %. That would mean the escapes expose most of plain's tick rate, and the hiccup3m factor would overstate the correction.
