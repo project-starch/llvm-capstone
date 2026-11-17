@@ -5119,3 +5119,42 @@ widens to that spread, and the reading says so.
 
 The R-76 batch (7180a83b6) is built separately and is not part of this pair. Every reading carries "key 5 NOT MET"
 for both P1 and B5a.
+
+## Addendum 158 (2026-11-17 09:20 +08): errata to Addenda 156 and 157, and board 2's B5a arm counts the record-cache events
+
+**Errata, found when cp-b1's perl landed.**
+1. **Addendum 156's perl reference was wrong.**
+   - The table's cc-b1 perl figure "274.6 s" is cf-b1's (274.57). cc-b1 read 275.83 s.
+   - "The spread of cc-b1, cf-b1 and ch-b1, which is 0.21 %" is wrong too: 274.57..275.83 is 0.46 % (run_cycles
+     7,001.9..7,033.6 M, 0.45 %).
+   - Against the correct reference the band's verdict on cp-b1 is unchanged; see the reading below. The perl band is
+     re-stated as ±0.5 % around cc-b1's 275.83 s, the measured three-run spread rounded up.
+2. **Addendum 157's control "@@NS-PARAM table_tree=1" cannot fire on these stages.**
+   - board-frcdkms's native-smoke.sh predates the table_tree print, and the stage's smoke is the one that runs, not
+     the kit's. cc-b1 and cp-b1 print no table_tree line at all.
+   - The paged-mode identity is instead read from the counters: hpm3..8 are non-zero on the paged event set, and equal
+     to cc-b1's within run noise. For cp-b1 they are 3,555 / 63,503 / 41,073 / 0 / 35,602 / 1,657,315 against cc-b1's
+     3,555 / 66,183 / 41,074 / 0 / 35,604 / 1,655,942.
+3. **Addendum 157's HPM 34/35/37 keys were unreadable on kit bkit93.**
+   - Its firmware (wt-wrap-hpmpaged fd31cdc4, CAPSTONE_HPM_EVENTS_PAGED) programs mhpmevent3..8 = 29, 30, 31, 33, 23, 2.
+   - The record-cache events 34-37 (capstone-ariane 6e82d7bd2 perf_counters.sv:154-157) would never have been counted,
+     and the hit-rate and identity keys would have read nothing.
+
+**Fix for item 3.** caplifive-opensbi hpm-events-rcache d358d21f is fd31cdc4 plus CAPSTONE_HPM_EVENTS_RCACHE, which
+takes precedence over _PAGED: mhpmevent3..8 = 34 (read hit), 35 (read miss), 31 (paged record access), 37 (fill read),
+36 (write lookup hit), 2 (L1D miss).
+- Built board-free from its own worktree (wt-wrap-hpmrc) with bkit93's defines plus -DCAPSTONE_HPM_EVENTS_RCACHE:
+  - gate PASS, fw 70930c785a84, the same kernel image 708e83654c9a;
+  - the disassembly holds the six writes (li 34 / csrw mhpmevent3 … csrw mhpmevent8,2).
+- **Kit bkit94-k2n-native-b5a-tree-cscfix-hpmrc** = bkit93 with only BOARD_FW_WRAP and that one define changed.
+
+**Arms (replacing Addendum 157's cs-b2):**
+- **Board 1, cr-b1, kit bkit93, unchanged.** Same firmware as P1's cc-b1 and cp-b1, so the cycle pair B5a − P1 is one
+  variable, the bitstream. This arm gives Δrun_cycles; its hpm counters are the paged set.
+- **Board 2, cs-b2, kit bkit94.** This arm gives the record-cache readings:
+  - the hit rate HPM34 / (HPM34 + HPM35), at most 73.4 % on mcf, a finding below 30 %;
+  - the identity ev31 − ev35 − ev37 ≥ 0.
+  - Its Δrun_cycles against cq-b2 differs in two things, the bitstream and the event selection. The counters are
+    passive, so no cycle effect is expected, but it is read as information, not graded.
+- Keys and bands are otherwise Addendum 157's. The cs-b2 chain is relaunched on its new conf before it has booked:
+  it was waiting on cq-b2's pid.
