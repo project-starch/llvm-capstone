@@ -5416,3 +5416,16 @@ These are wide bands; the readings decide.
   - **Plain s4 ≥ hiccup3m − 0.3 pp (7.62 %): MISSED**, at 7.18 %. The reuse probe's ticks cost less per gap on plain than the streaming probe's do. Its sub-threshold refill is negligible: POST minus BASE is 2 cycles per chunk.
   - Plain s5 within ±1 pp of 7.9 %: MET.
 - **Paper.** Corrected geomeans against plain: +Spatial **+15.4 % to +16.3 %**, Full **+16.6 % to +17.5 %**. Uncorrected: +7.5 % / +8.7 %.
+
+## Addendum 170 (2026-11-18 01:00 +08, before they run): memcached and PHP on P1, board 2
+
+- **Pre-registration:** llvm-capstone nested-workloads c3d5b844728e.
+- **memcached.** Chain nested/p1a/b2-mc.*, after the mruby chain (pid 1671139).
+  - It is an in-process driver of memcached's own items/slabs/assoc code with mc-crusher's mix. P1's native route refuses sockets, epoll and threads.
+  - Two boots:
+    - **-m 128, the reading.** Neither arm evicts.
+    - **-m 32, Fig. 8's setting, reported only.** The protected arm evicts more, because 0006 enlarges the item header.
+  - Patch: 0006 with the nested lane's Q-15 repair.
+- **PHP.** Chain nested/p1a/b2-php.*, after the memcached chain.
+  - One image at run-time mode 4 (unprotected) against mode 6 (protected).
+  - Fig. 8's pinned tenth of bench.php.
