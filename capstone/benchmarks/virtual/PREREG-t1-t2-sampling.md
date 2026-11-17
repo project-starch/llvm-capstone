@@ -445,3 +445,15 @@ Consequently no P1 ratio is gated against a bitstream-3 ratio. Bitstream 3 is th
 **Replacement, descriptive only, no prediction and no gate:** per arm, the distribution of bench_cycles_timed over the run_cycles delta per process, from parse-board.py's .ncnt.tsv.
 
 The gates and the T3/T1 bands above are unchanged.
+
+### Deviation: a parsing repair (2026-11-17 19:05 +08, after p1k1-3 landed, before any ratio was read against a band)
+
+- **What happened.** On the board console, kernel printk lines (`[ t] capstone_vm: release retires …`) were spliced into the middle of BENCH and BENCH-DONE lines. The gate as committed (07d3f7279267) therefore read "no BENCH-DONE failed=0" for 38, 28 and 24 steps of p1k1, p1k2 and p1k3. p1k2 also lost 4 BENCH lines.
+- **The repair.** Every timestamped kernel line that starts mid-line is removed, together with its newline, and the user line is rejoined. Native-smoke's own @@NS-DMESG quotes are exempt. The count is printed per kit.
+  - Code: p1-suite-native aacc0105e681 and 5a98f54fbed1. The gate's checks are unchanged and run on the rejoined text.
+  - Fragments removed: 38, 24 and 24, all inside BENCH or BENCH-DONE lines.
+  - Controls:
+    - capstone/benchmarks/virtual/p1/test-p1-check.sh: a spliced transcript PASSes with TSVs identical to the clean one, a deleted BENCH-DONE still FAILs, and the old scripts fail the spliced case.
+    - Ten bitstream-2/3 transcripts parse byte-identically with the old and the new parser.
+    - The seven P1 QEMU transcripts show 0 fragments.
+- **Result.** After the repair p1k1-3 PASS, with 214/240/240 BENCH lines.
