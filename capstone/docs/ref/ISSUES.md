@@ -10342,6 +10342,45 @@ on these types, and by casts between them and arrays.
 `values` under `MAXIMUM_ALIGNOF > 8`. That changes the on-disk layout, so every MAXALIGN-16 cluster and fixture must be
 rebuilt. The alternative is to teach the array code the vectors' fixed offset. The port owner chooses.
 
+### M-16 — silicon only (bitstream F): the Sublet-protected tshark does not return within 3,600 s, while the unprotected arm finishes in 1,112-1,125 s and both arms finish on the twin `OPEN — filed 2026-11-17 (nested lane); 2 of 2 boots; slow vs stopped NOT separated; not localised; the heartbeat stage that separates them is ready and unrun`
+
+**Statement.** tshark 4.6.8 with wmem patch 0001 (Sublet lifetimes for `block_fast`, dev's Q-15-repaired revision),
+`-r w.pcap -V -n` on a 9,000-frame capture, native route, bitstream F `…-twc16k-merge-hpmtag_a948e4134`, kit
+bkit75n, board 1 (2026-11-15). Both protected boots printed `@@SPEC-BEGIN` at uptime 272.7 s and then nothing until
+the runner's 3,600 s rung timeout (`vbatch: no return within 3600s`): at least 3,327 s, 2.98 times the unprotected
+mean. The unprotected boots of the same session, before and after, return with stock's output. On the QEMU twin both
+arms return with stock's output (8.0 s and 8.3 s uptime; in-context +4.4 %).
+
+**Repro.**
+- Stages `nested/tshark/board/t-{u,p}-stage` (`t-*-stage.SHA256SUMS`); images unpack to `2061f661…` (unprotected) and
+  `bcc251f3…` (protected, the strip of `work-sublet/domain/tshark_m5.dom`). One arm per boot, budget 900 (x4 = 3,600 s).
+- The heartbeat stage `nested/tshark/board/t-ph-stage` (protected only; every 60 s a line with the bytes written and the
+  native counters) passed its rule-8 dry runs and a twin control, and was cancelled before booting when the nested work
+  paused. It tells "slow" (beats continue, output grows), "stopped in the domain or kernel" (beats continue, output
+  frozen) and "core or kernel stopped" (beats stop) apart.
+
+**Evidence.**
+- Transcripts `spec/board/out-nat-twcf-hpmnest-tshark-b1/t-{u1,p1,p2,u2}/board.txt`, sha256 `612be098…`, `97b15027…`,
+  `2fefe8e4…`, `dc860ad5…`. Full readings and configuration: `docs/ref/nested-allocator-workloads.md`, "Results: tshark
+  on silicon, bitstream F".
+- After each protected timeout the apertures were identical except the rev-node serving index (0x116c, 0xcb1). The
+  commit-pc aperture reads 0x3ff6780f04 in both, with `commit_instr[0].valid` = 0 (slot-0 residue). On the native
+  route that is vaddr 0x790f04 (the text is mapped at 0x3ff6000000 = vaddr 0x10000, read from the twin's
+  `/proc/<pid>/maps`, run `nts-mp`): the CDERIVE (`0xa283955b`) of the inlined `capstone_cap_derive` in
+  `wmem_block_fast_sublet_alloc`. `sw=225` reads `tbe`, `wrev`, `memwr`, and a CAPSTONE_DYN op is valid at the bypass
+  head (`sw=220` 0x8c).
+- What this does NOT show: the allocator is hot, so a residue pc there is likely in a running program too; `wrev` was
+  also set in healthy controls on an older bitstream (`SILICON-BLOCKER.md` §3); and the unprotected boots have no
+  aperture sample taken while running. So neither a stall at that CDERIVE nor a 3x-plus slowdown is shown.
+
+**Tried.** Nothing beyond the two boots: the heartbeat boot was pre-registered (nested-workloads 5d3b273eabb1) and
+not run. The image is a dev-era revision; Fig. 10's later wmem patch (trap/eval 684a29c52685) uses the one-operand
+CREVOKE, which P1 (capstone-ariane d83d3a633, read there) does not implement: its CREVOKE takes parent and child.
+
+**Impact.** No silicon cost for tshark's protection; the paper's timing rows leave it out. The other four applications'
+protected arms return on F (speedtest1, CPython, PostgreSQL, FFmpeg). Next step: the heartbeat boot, then, if the output
+freezes, a capture reduced to the frame where it stops, for a folder under `tests/fpga-repros/`.
+
 ### C-59 — `isValidInsnFormat` is defined non-`static` in BOTH the RISCV and the Capstone asm parser, so a static build of LLVM does not link `OPEN — PARTIALLY FIXED. The Capstone copy of isValidInsnFormat is static as of da5e88488080 (branch compiler/c59-odr, efe9b957d538), which removes the one collision that was actually observed. It is ONE OF SIXTEEN: a BUILD_SHARED_LIBS=OFF link still fails, with fifteen errors instead of sixteen`
 
 > **Scope, measured 2026-09-25 by the compiler lane.** Every strong (T/D/B) defined symbol in both
