@@ -2286,3 +2286,54 @@ commands printed `@@SPEC-END` with rc 0. Not VOID. **Answers:** every command's 
   are larger candidates; this boot does not attribute the rest.
 - This is not Fig. 10's revision of 0008 (that one calls the one-operand `capstone_cap_release`, which P1 does not
   implement); the appendix row says so.
+
+### Results: Perl on P1, a 2^20-record table (board 1, 2026-11-18 02:24-03:04)
+
+**Configuration.** As pre-registered (ff011c64d374). The chain `nested/p1a/b1-perl.*` (nat-run3 pid 1793373) ran on the
+rec1m kit copy after the tshark heartbeat chain; P1 was resident and read back by name. The boot's kernel command line
+carries `capstone_vm.node_flat_records=1048576`. Stage `nested/p1a/perl`, still matching `perl.SHA256SUMS`; its images
+unpack to `3012f392…` (stock) and `ac2507d3…` (protected). Transcript `spec/board/out-nat-p1a-perl-b1/perl/board.txt`
+(sha256 `90101a1a…`, firmware `bf734d65…`), read by `nested/appd/parse-abba.py` and `nested/p1/abba.py`.
+
+**Controls.** `b0-stats` and `b0-hello` returned 0, the smoke passed all 9 steps under the kit's waiver, and all four
+commands printed `@@SPEC-END` with rc 0. Not VOID. **Answers:** every command's stdout equals SPEC's `suns.out`
+(`01688ea0…`).
+
+| | u1 | p1 | p2 | u2 | repeat spread, u / p | protected vs not (ABBA means) |
+|---|---|---|---|---|---|---|
+| `run_cycles` (in-context) | 4,915,780,479 | 15,139,569,760 | 15,137,911,482 | 4,912,103,328 | 0.07 % / 0.01 % | **+208.1 %** (+10.22 G) |
+| `between_cycles` | 409,343,475 | 579,997,839 | 565,192,418 | 401,287,422 | **2.01 %** / **2.62 %** | not read (+41.3 %) |
+| uptime span, s | 217.30 | 634.11 | 633.45 | 216.84 | 0.21 % / 0.10 % | +192.0 % |
+| context entries | 4,600 | 7,262 | 7,194 | 4,550 | | +58.0 % |
+| hpm3 record-TLB misses | 691,108 | 49,445,643 | 49,445,271 | 690,378 | | +48.75 M (71 times) |
+| hpm4 walk cycles | 18,497,874 | 1,114,841,431 | 1,114,716,428 | 18,545,254 | | +1.10 G |
+| hpm5 paged record accesses | 15,471,124 | 131,204,043 | 131,202,594 | 15,468,357 | | +115.7 M |
+| hpm6 grow | 41 | 52 | 0 | 0 | | |
+| hpm7 event 23 | 1,360,181 | 101,963,779 | 101,962,474 | 1,357,428 | | +100.6 M |
+| hpm8 L1D misses | 14,518,929 | 274,831,168 | 274,799,352 | 14,505,393 | | +260.3 M (19 times) |
+
+**Against the pre-registration.**
+- Answers, controls: **met**. Repeats: **met** for `run_cycles` (0.07 % / 0.01 %), so the in-context cost is read;
+  **missed** for `between_cycles` (2.01 % and 2.62 %, band 2 %), so the kernel difference is not read.
+- In-context cost, band +20 % to +150 %: **missed, high: +208.1 %**.
+- Duration, 3 to 8 min per command: met for the stock arm (3.6 min), **missed** for the protected arm (10.6 min).
+- Record-table growth more in the protected arm: hpm6 reads 41 / 52 / 0 / 0. The table grows during the boot's first two commands
+  and then stays grown, so this counter does not compare the arms; not read.
+
+**Reading.**
+- On P1, Perl's protection (`perl/sublet` 0001, dev's two-operand revision, a lifetime per SV head) costs **+208 %**
+  in-context: the protected arm's in-context cycles are 3.08 times the stock arm's, 15.14 G against 4.91 G. On the twin it costs +40.3 %.
+  The stock arm's silicon-to-twin ratio is 2.84, as for the other applications; the protected arm's is 6.2.
+- The counters put the difference in the record table:
+  - the protected arm misses the record TLB 49.4 M times per command, against 0.69 M (71 times);
+  - it makes 131 M paged record accesses against 15.5 M;
+  - it takes 260 M more L1D misses, 19 times the stock arm's 14.5 M;
+  - and it adds 100.6 M event-23 replays.
+- Perl's peak of 327,680-393,216 live records fills 1,280-1,536 pages of 256 records, against a 16-entry record TLB.
+- The walker's own cycles, +1.10 G at 22.5 cycles per miss, are 10.7 % of the +10.22 G. The rest is not attributed by
+  this boot. If the extra L1D misses carried it all, each would cost 39 cycles; how much comes from the table's
+  pages evicting the program's data is not shown here.
+- The protected live set is 80-96 times the record TLB's reach. The counters point at the paged table rather
+  than at the instructions the patch adds, which the twin prices at +40.3 %.
+- The record table is configured for 2^20 records for this program; the default 262,144 is exhausted by its peak of
+  327,680 to 393,216 live records.
