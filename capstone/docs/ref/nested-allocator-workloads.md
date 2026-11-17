@@ -1946,6 +1946,66 @@ the unprotected arm had 0.43 M per frame, and the fit gives the protected arm 0.
 **What follows.** If read, the cost goes into the appendix-D row together with the H1/H2 outcome. If H2, the frame
 profile from the heartbeat boot reduces the capture for a folder under `fpga-repros/`.
 
+### Pre-registration: Perl on B5a (the record cache), U P P U in one boot, a 2^20-record table (written 2026-11-18 04:50, before the boot)
+
+**Why.** On P1, Perl's protection costs +208.1 % in-context, and the counters put the difference in the record table:
+49.4 M record-TLB misses, 131 M paged record accesses and 260 M more L1D misses per protected command (results above). B5a
+adds the paper's record cache (2 ways, 8 KiB, 64-byte lines of four records, inside a context only) on P1's RTL. This
+boot asks whether the record cache removes that cost. The question was proposed by the runtime lane.
+
+**Configuration.**
+- Bitstream B5a, `caplifive_…-pagedtbl-reccache_6e82d7bd2`, sealed `806c5f55…` (capstone-ariane 6e82d7bd2, on P1
+  d83d3a633). Its grade is in land/rtl-sublet-p2 `capstone/docs/plans/2026-11-16-sublet-phase2-record-cache.md`, with
+  key 5 NOT MET as on P1. The runtime lane has run SPEC perl and gcc on it (Addenda 157/158). The flash is ours under the
+  reflash grant: the chain flashes it from the seal (sha256 checked) and reads it back by name.
+- Kit `nested/kits/bkit94-rec1m`: a `cp -rL` of bkit94 (B5a, the record-cache event set) with `node_flat_records=1048576`.
+  `diff` against bkit94 shows that one word plus a comment line. Against `bkit91-rec1m` (Perl's P1 boot), it differs in the
+  bitstream, its sha256, and the firmware wrapper and define (`wt-wrap-hpmrc`, `-DCAPSTONE_HPM_EVENTS_RCACHE`); every other
+  file but `SHA256SUMS` is identical.
+- **Events, bkit94's** (`mhpmevent3..8` = 34, 35, 31, 37, 36, 2):
+  - hpm3: record-cache read hit;
+  - hpm4: record-cache read miss;
+  - hpm5: paged record accesses (walker);
+  - hpm6: background fill reads;
+  - hpm7: record-cache write hit;
+  - hpm8: L1D misses.
+  - So the record-TLB miss and walk-cycle counts of P1's set are not read here; hpm5 and hpm8 are common to both.
+  - Read with `ABBA_EVENTS=rc python3 nested/p1/abba.py`. The `rc` label set was added today, and the default P1 output
+    is byte-identical on `p1a/perl.json`.
+- Stage `nested/b5a/perl`, a copy of `nested/p1a/perl`. `diff -r` is empty and it matches `perl.SHA256SUMS`, so the
+  images, the workload (`suns.pl`) and the answer (`suns.out`, `01688ea0…`) are the P1 boot's.
+- u1 p1 p2 u2 in one boot, budget 900 (x4 = 3,600 s), booking 60 min. Board 2, after the runtime lane's spa3p chain
+  (nat-run3 pid 1792511). Chain `nested/b5a/b2-perl.*`. **It leaves board 2 on B5a.**
+- Checked off the board:
+  - real bake on bkit94-rec1m;
+  - `BOARD_STUB=2` on a returning transcript (P1's Perl boot) and a non-returning one: rc 0 and 0, BAKED_TIMEOUT 3600 in
+    both, verdicts PASS and NO RESULT;
+  - the relinked kernel's configuration and Image carry `node_flat_records=1048576`;
+  - real firmware 23,760,392 B (`92dcc03f…`);
+  - an `NR_DRY=1` pass of the chain to DONE (`nested/b5a/dry.log`).
+
+**Outcomes and bands.**
+- Answers: every command's stdout equals `suns.out`, else VOID for the cost.
+- Repeat rule as above.
+- Counters fire: hpm3 + hpm4 > 0 in both protected commands, and ev31 − ev35 − ev37 ≥ 0 in every command (the
+  identity in the record-cache plan). Else the event readings are void; the cycles still stand.
+- **The reading:** B5a's in-context cost, protected vs not, set against P1's +208.1 %. P1's boot was on board 1, so the
+  two costs come from different boards.
+  - ≤ +104 %: the record cache removes at least half of Perl's cost;
+  - +104 % to +170 %: it removes part of it;
+  - ≥ +170 %: it does not remove it.
+- **Prediction: +120 % to +230 %, read hit rate hpm3 / (hpm3 + hpm4) 15 % to 50 % in the protected arm.**
+  - The cache holds 512 records. Perl's protected peak is 327,680-393,216 live records, and P1's 16-entry record TLB,
+    which reaches 4,096, already misses on 38 % of paged accesses (49.4 M of 131 M).
+  - Perl makerand read a 25.9 % hit rate on B5a.
+  - A hit saves at most P1's ≈88 added cycles per added paged access (10.22 G / 115.7 M). At 25 % hits that is about
+    3 G of the 10.22 G.
+  - The fill's extra L1D reads cost against that: gcc ran +0.4 % slower on B5a.
+- Stock arm against P1's stock arm (4.91 G, board 1): within ±1 %, since its record traffic is small (15.5 M paged
+  accesses). Reported only.
+- Duration: 3 to 12 min per command.
+- **VOID** as above.
+
 ### Results: speedtest1, PostgreSQL and CREVOKE chains on P1 (board 2, 2026-11-17 17:24-19:22)
 
 **Configuration.** As pre-registered (0a57804ea778; SPEC-lane Addendum 160, spec-silicon f7e660db383b). Board 2 was
