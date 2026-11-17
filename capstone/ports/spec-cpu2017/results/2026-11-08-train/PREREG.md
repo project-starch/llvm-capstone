@@ -5269,3 +5269,11 @@ These are wide bands; the readings decide.
      The prototype's other RTL changes are not ported.
    - **What would measure it:** the same plain binary on P1 against the matched baseline. Addendum 67 read plain code on
      an earlier Capstone SoC at +0.1-0.6 %. Not scheduled here; the lead decides.
+
+## Addendum 160 (2026-11-17 17:00 +08, before any of these boots): the nested lane's P1 re-timing on board 2, and the embedded suites on board 3
+
+- **Board 2, chain nested/p1/p1n-b2.conf (TAG p1-nested, kit bkit91, bitstream P1 d83d3a633), run by the nested lane.** It starts after the matched plain chain on board 2 (pid 56418) exits. Its pre-registration is the nested lane's, pushed before these boots: llvm-capstone nested-workloads 0a57804ea778, nested-allocator-workloads.md, section "Re-timing on P1 (paged lifetime table)".
+  - Contents, in order: SQLite speedtest1 (st1), PostgreSQL (pg), CREVOKE latency (crvt, including the page-strided scatter chains), then the four CPython boots.
+  - The images are bitstream F's, unchanged: the dev-era two-operand patches. Fig. 10's one-operand variants cannot run on P1.
+  - Its gates, bands and repeat rule are that section's. This addendum only registers the chain's place in the board queue.
+- **Board 3: the embedded suites on P1.** Pre-registered at spec-silicon 1bb843bef3cc (benchmarks/virtual/PREREG-t1-t2-sampling.md, "All 103 programs on P1"). Chain p1suite-b3.conf, behind the P1 tick probes (Addendum 159a/159b).
