@@ -5457,3 +5457,22 @@ The stages, kits, use and predictions are those of Addenda 164-166. Only placeme
 - **Order on board 1.** The tshark chain replaces Addendum 171's +Spatial part A as the next chain after Perl. Part A now waits on the tshark chain's pid, and part B waits on part A, as before.
   - The two waiting part A/B processes (pids 1793888, 1794127) were stopped before they started anything: part B first, then part A. Their empty output directories were removed.
   - Why: tshark is a missing row of the appendix, while the +Spatial repeat is first in the cut order. The expected ends are about 06:30 for tshark and about 11:45 for part B, so both fit before 14:00. If they do not, the cut order of Addendum 171 applies: +Spatial xz first.
+
+## Addendum 174 (2026-11-18 05:10 +08, before it runs): Perl U P P U on B5a, board 2, after the +Spatial perl repeat
+
+- **Pre-registration:** llvm-capstone nested-workloads 7fc3183ce3b2, "Pre-registration: Perl on B5a (the record cache), U P P U in one boot, a 2^20-record table". Its answers, repeat rule, counter checks and bands are the ones that apply.
+- **Question:** does the record cache remove Perl's cost on P1 (+208.1 % in context, Addendum 172, board 1)?
+  - The reading is B5a's in-context cost, protected against not.
+  - The bands are: ≤ +104 %, at least half is removed; +104 to +170 %, part is removed; ≥ +170 %, it is not removed.
+  - Predicted: +120 to +230 %, with a read hit rate of 15-50 %.
+  - The P1 reading was taken on board 1 and this one is on board 2, so the two costs come from different boards.
+- **Bitstream:** B5a 6e82d7bd2, seal 806c5f55a40c, flashed from the seal and read back by name.
+  - **Board 2 stays on B5a afterwards.** Anything queued after this chain on board 2 must flash P1 back first and pre-register that.
+- **Kit:** nested/kits/bkit94-rec1m, a copy of bkit94 (record-cache events 34/35/31/37/36/2).
+  - It differs only in node_flat_records=1048576, one comment line, and board.env's checksum. Diffed by the SPEC lane.
+  - bkit94 has no record-TLB-miss or walk-cycle events. So the comparison with P1's hpm readings is limited to paged accesses (ev31) and L1D misses (ev2).
+- **Chain:** nested/b5a/b2-perl.{conf,list}, stage nested/b5a/perl (diff -r against p1a/perl is empty), budget 900 s per command, booking 60 min.
+  - It runs on board 2 after nat-run3 pid 1792511, the +Spatial perl repeat of Addendum 171, which is expected to end about 08:05.
+  - Its own end is expected at about 09:15.
+  - The rule-8 dry runs are recorded in the lane pre-registration.
+- **Not a paper row.** This is a diagnostic of appendix D's unattributed Perl cost. The table stays on P1. Whether and how a B5a reading enters the text is the lead's call.
