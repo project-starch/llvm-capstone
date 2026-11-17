@@ -1,0 +1,3 @@
+kernel fragments removed from mid-line: 96
+steps 176, BENCH lines 1056, programs 22, reference: 22 matched, unreferenced []
+PASS

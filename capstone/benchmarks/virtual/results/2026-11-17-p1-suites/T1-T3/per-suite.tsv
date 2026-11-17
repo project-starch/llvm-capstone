@@ -1,0 +1,3 @@
+suite	programs	geomean	lo	hi	T3_slower	T3_faster	no_difference
+beebs-libc	10	1.0608	1.0574	1.0640	8	0	2
+rv8	5	1.0006	0.9988	1.0023	0	0	5

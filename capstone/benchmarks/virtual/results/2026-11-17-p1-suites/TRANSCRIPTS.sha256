@@ -1,0 +1,15 @@
+# sha256 and bytes of each P1 boot's console transcript, board 3, 2026-11-17. board.txt is what p1-check.py and parse-board.py read; board-raw.txt is the driver's capture it was reassembled from. Paths relative to <work>/spec/board/.
+f23d95a86bb6fc01e2877b9604200e84b168943418c1fbb9aba564489645f3f4  96699  out-nat-p1suite-b3/p1k1/board.txt
+30dd35baddc76b07ec2f260abb6303db01057c7b217f8f766a384b553cc47da7  122728  out-nat-p1suite-b3/p1k1/board-raw.txt
+beaa513bab45f6714d724a51de9bc7ffe3bf9ad17653e8b218411d94a9613da5  84329  out-nat-p1suite-b3/p1k2/board.txt
+ee52fd7fe4d3bc911abc7aa9cd150c339f13c835bc455c8e912aa5d85e2647f3  188310  out-nat-p1suite-b3/p1k2/board-raw.txt
+66d6983e9e09a2e223dbc4141bbc319a184bc60c0799294b90261ff48f355289  83681  out-nat-p1suite-b3/p1k3/board.txt
+aeb7f4298eca58b33b899b8e4976eee8990327d85d341d594e9f7ac91f38598f  175265  out-nat-p1suite-b3/p1k3/board-raw.txt
+aeb217474c72e4a34fddb5f00087b4b5d0abe3ee087662f783c087a011febb0c  320453  out-nat-p1suite-b3/p1a1/board.txt
+446d697ea02a3b8cd4f7ba9d04a54d0d302a50c2ab5df236408dad41b8888ff3  411387  out-nat-p1suite-b3/p1a1/board-raw.txt
+2e5aa92c73d1a43535cb1a659139bb0f903fafeeeeae9d7daf4a95365515862c  323966  out-nat-p1suite-b3/p1a2/board.txt
+58b343aef795c475a277f9c91b0e684f760a06427c98ede2cf553f6a9b73c1a0  651703  out-nat-p1suite-b3/p1a2/board-raw.txt
+bf73e574a96ccb231b749c01c7491b4178918d6718902ecec05c458ec0ab69c4  325466  out-nat-p1suite-b3/p1a3/board.txt
+e376a29df86bec1a460dafbf730cb64e640e35c992d4016996138c647b0569a6  656716  out-nat-p1suite-b3/p1a3/board-raw.txt
+a1c832055e92628412e5055c7f1ac762395f1b7a868dd16c0c148b06df80d563  310675  out-nat-p1suite-b3/p1a4/board.txt
+d9d9f972188081d96be91bfd7dd2b4075d6e0f971f6ea9a49aec0d4bc0e088a0  643425  out-nat-p1suite-b3/p1a4/board-raw.txt
