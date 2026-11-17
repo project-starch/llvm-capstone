@@ -23,7 +23,7 @@
 # child lifetime of its heap page (patches/4.0.0-rc2/0008, MRB_CAPSTONE_SUBLET):
 # handed out by CDERIVE, revoked by CREVOKE when the sweep frees it.
 # Knobs (see build_config.rb): MRBD_BOXING, MRBD_DISPATCH, MRBD_OPT, MRBD_TESTS,
-# MRBD_DEFINES. MRBD_FROM=runtime|mruby starts at that stage. MRUBY_MIRROR=<a
+# MRBD_DEFINES, MRBD_CROSS_FLAGS. MRBD_FROM=runtime|mruby starts at that stage. MRUBY_MIRROR=<a
 # local mruby clone> clones from there instead of GitHub (its Prism submodule too).
 # MRBD_SDK=<existing application SDK> reuses its libc and runtime profile.
 set -euo pipefail
@@ -45,7 +45,10 @@ case "$PROFILE" in physical|virtual) ;; *) echo "CAPSTONE_APPLICATION_PROFILE=$P
 if [[ ${MRBD_SUBLET:-0} == 1 ]]; then
   [[ -f "$SCRIPT_DIR/patches/$PIN/0008-gc-slots-as-sublet-lifetimes.patch" ]] \
     || { echo "MRBD_SUBLET=1 needs patches/$PIN/0008-gc-slots-as-sublet-lifetimes.patch" >&2; exit 2; }
+  # A virtual-profile SDK: CMake-built (its cache) or any SDK whose sdk.json says so.
   grep -qx 'CAPSTONE_APPLICATION_VIRTUAL:BOOL=ON' "${MRBD_SDK:-/nonexistent}/CMakeCache.txt" 2>/dev/null \
+    || python3 -c 'import json,sys; sys.exit(json.load(open(sys.argv[1])).get("profile") != "virtual")' \
+         "${MRBD_SDK:-/nonexistent}/sdk.json" 2>/dev/null \
     || { echo "MRBD_SUBLET=1 needs MRBD_SDK to name a virtual-profile SDK" >&2; exit 2; }
   export MRBD_SUBLET_INCLUDE=$RT/capstone/runtime/include
 fi
@@ -114,8 +117,9 @@ export CAPSTONE_SDK=$O
 export PATH=$O:$CAPSTONE_LLVM_BIN:$PATH
 export LLVM_AR=$CAPSTONE_LLVM_BIN/llvm-ar
 "$O/capstone-cc" --check-toolchain
-"$O/capstone-cc" -O1 -c "$SCRIPT_DIR/spawn-shell.c" -o "$O/spawn-shell.o"
-export MRBD_SPAWN_OBJECT=$O/spawn-shell.o
+# Under $ROOT, not the SDK: MRBD_SDK can name a shared SDK, which a build must not write into.
+"$O/capstone-cc" -O1 -c "$SCRIPT_DIR/spawn-shell.c" -o "$ROOT/spawn-shell.o"
+export MRBD_SPAWN_OBJECT=$ROOT/spawn-shell.o
 
 # ---- mruby, pinned and patched ----------------------------------------------
 M=$ROOT/src/mruby

@@ -8,6 +8,7 @@
 #   MRBD_OPT       optimisation flags, default -O2
 #   MRBD_TESTS     1 builds mrbtest for both builds
 #   MRBD_DEFINES   extra -D flags (space separated), both builds
+#   MRBD_CROSS_FLAGS  extra compile flags, the capstone build only
 #
 # Gems: stdlib, stdlib-ext, math, metaprog and stdlib-io (at head mruby-io,
 # mruby-socket, mruby-errno, mruby-dir, mruby-env, mruby-signal, mruby-process;
@@ -56,7 +57,9 @@ MRuby::CrossBuild.new('capstone') do |conf|
   # (4.0.0-rc2) have no `ports` and need none.
   conf.ports 'posix' if conf.respond_to?(:ports)
   conf.cc.command = 'capstone-cc'
-  conf.cc.flags = opt + common
+  # MRBD_CROSS_FLAGS: compile flags for the domain build only (e.g. -mllvm options the host
+  # compiler does not take), after MRBD_OPT.
+  conf.cc.flags = opt + ENV.fetch('MRBD_CROSS_FLAGS', '').split + common
   # The POSIX IO HAL uses delegated posix_spawn (patch 0009).
   # capstone64-unknown-elf defines neither __unix__ nor __linux__, and mruby reads
   # the platform from them: without the two below, IO#pread/#pwrite would be left
