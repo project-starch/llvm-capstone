@@ -5210,3 +5210,41 @@ builds take it from ariane_xilinx.sv. The build runs under full-chain.sh, guarde
 - Full over +Spatial needs no correction: same hardware, same execution mode.
 
 All key-5 caveats of the Sublet side are unchanged.
+
+## Addendum 159a (2026-11-17 12:45 +08, before it runs): the tick-probe stages and their placement
+
+**Binaries** (compiler lane, perf/tick/fair/build.sh; the flags are imagick_r's own lines of each arm):
+- the native ones use the FRCDKMSa3 SDK, clang 29027126;
+- the plain ones use RVAL's plain-cc-alean, clang 98337e20.
+
+| Probe | Native .dom sha256 | Plain sha256 |
+|---|---|---|
+| hiccup2 (idle) | 941fccfdd45e4a57 | 85069485121c7181 |
+| hiccup3m (streaming, malloc'd 8 MiB buffer) | 26c66b4c1ca279c9 | e5fcff1acc73bdad |
+| hiccup3 (streaming, 8 MiB in .bss) | 747b57aa23b9db07 | c82f33df672cb2ad |
+
+- **hiccup3m is the primary streaming probe on both sides.** It is symmetric, and it takes the path a SPEC program's
+  data takes. Every page is written before warm-up and calibration.
+- **hiccup3 is the backup, placed last in each list.** Its 9.1 MiB RW image is the largest yet tried on the native
+  route.
+
+**Stages** (perf/tick/fair/mk-probe-stages.py): copies of the imagick stage of each side, with only the program swapped,
+plus plan.json's hash on the plain side. Every hash and every `diff -rq` is asserted. Validation fails by construction,
+because the probe writes no image. The readings are the HIC2/HIC3 lines.
+
+**Placement:** both sides on board 2.
+- First, chain probe-b2: P1 (reflashed from B5a), kit bkit91, after cs-b2.
+- Then rvm-b2: the matched plain, kit bkit95, after the probe chain and the seal. Its list is mcf, lbm, xz, then the
+  three plain probes.
+- The earlier rvm-b2 chain was killed while it was still waiting, before any booking.
+
+**Readings:**
+- s_idle = HIC2-ALL share;
+- s_stream = HIC3-ALL excess share (hiccup3m);
+- the rule of Addendum 159 applies to s_stream.
+
+Predictions:
+- each probe prints its DONE line;
+- the plain idle s lies in [0, 12] %;
+- Sublet's idle s lies in [3, 10] % (Addendum 36 read 6.5 % on C.5a; the quantum is 8,000,000 cycles).
+These are wide bands; the readings decide.
