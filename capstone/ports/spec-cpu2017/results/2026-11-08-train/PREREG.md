@@ -5449,3 +5449,11 @@ The stages, kits, use and predictions are those of Addenda 164-166. Only placeme
   - Both arms run under it in one boot.
 - **Why the larger table.** The protected arm needs more than the default 262,144 records. On the twin it ends with cause 30 at 327,680 records and completes at 393,216. The appendix row states this.
 - **Order on board 1.** Perl now runs before Addendum 171's +Spatial part A. Part A waits on the Perl chain's pid, and part B waits on part A.
+
+## Addendum 173 (2026-11-18 02:45 +08, before it runs): tshark U P P U on P1, board 1, ahead of the +Spatial repeat
+
+- **Pre-registration:** llvm-capstone nested-workloads e42113e2b85d, "tshark U P P U on P1 without a heartbeat". Its bands and its H1/H2 rule are the ones that apply. The result it follows is 497d4d6a189e, with the reading corrected in e42113e2b85d. In that boot, the heartbeat run returned with stock's output, and its span is not a cost.
+- **Chain:** nested/p1tu/p1tu-b1.conf, stages tsu-{u1,p1,p2,u2}, one arm per boot, kit bkit91, bitstream P1. It runs on board 1 after the nested Perl chain (pid 1793373, Addendum 172).
+- **Order on board 1.** The tshark chain replaces Addendum 171's +Spatial part A as the next chain after Perl. Part A now waits on the tshark chain's pid, and part B waits on part A, as before.
+  - The two waiting part A/B processes (pids 1793888, 1794127) were stopped before they started anything: part B first, then part A. Their empty output directories were removed.
+  - Why: tshark is a missing row of the appendix, while the +Spatial repeat is first in the cut order. The expected ends are about 06:30 for tshark and about 11:45 for part B, so both fit before 14:00. If they do not, the cut order of Addendum 171 applies: +Spatial xz first.
