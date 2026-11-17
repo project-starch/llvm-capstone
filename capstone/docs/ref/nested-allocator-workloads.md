@@ -1750,3 +1750,58 @@ The 10^6 probe reported 65,537, 131,073 and 196,609 nodes and died (rc 139) befo
   the L1D here. A CREVOKE whose subtree's records sit on a different page at every node costs 20 % more per node than a
   contiguous one. The worst single CREVOKE measured, 100,000 scattered nodes, holds the core for 3.85 M cycles, about
   154 ms at 25 MHz, uninterruptible.
+
+### Results: CPython on P1, first session (board 2, 2026-11-17 19:22-21:15)
+
+**Configuration.** As pre-registered (0a57804ea778), the same chain as the section above (`nested/p1/p1n-b2.*`, nat-run3
+pid 537579), after the PostgreSQL stage. Four one-arm boots, U P P U: `cpy-u1` 19:22, `cpy-p1` 19:49, `cpy-p2` 20:18,
+`cpy-u2` 20:47. F's images unchanged: unprotected `b0b29e89…`, protected `eabba900…`. Transcripts
+`spec/board/out-nat-p1-nested-b2/cpy-*/board.txt` (sha256 `b8f310ce…`, `ef2f8b45…`, `170d24ea…`, `6406ce24…`), read by
+`cpy/parse-cpy.py` and `nested/p1/cpy-abba.py`. The analyzer was F's, which read event 23 from hpm8; on P1 hpm8 counts
+L1D misses and event 23 is hpm7, and it was corrected before this reading.
+
+**Controls.** In every boot `b0-stats` and `b0-hello` returned 0 and the smoke passed all 9 steps under the kit's
+waiver (the two accounting checks); all seven commands printed `@@SPEC-END`. Not VOID.
+
+**Answers.** 28 of 28 commands exit 0 with CHECK equal to native.
+
+| benchmark | in-context, not protected (mean) | `run_cycles` repeats u / p | `between_cycles` repeats u / p | **in-context cost** | kernel cost | hpm3 record-TLB misses, u / p | hpm7 event 23, p − u |
+|---|---|---|---|---|---|---|---|
+| json_dumps | 1,435.1 M | 0.05 % / 0.02 % | 0.24 % / 0.10 % | **+7.40 %** | +0.58 % | 18,910 / 145,744 | +723,746 |
+| json_loads | 1,303.0 M | 0.06 % / 0.03 % | 0.21 % / 0.01 % | **+6.46 %** | +0.40 % | 19,472 / 183,556 | +744,244 |
+| pickle | 1,217.1 M | 0.01 % / 0.03 % | 0.27 % / 0.09 % | **+5.01 %** | +0.67 % | 21,908 / 178,226 | +799,672 |
+| richards | 7,349.7 M | 0.02 % / 0.04 % | 0.10 % / 0.13 % | **+2.70 %** | +0.68 % | 28,172 / 676,478 | +1,741,838 |
+| deltablue | 1,319.9 M | 0.02 % / 0.08 % | 0.06 % / 0.23 % | **+4.54 %** | +0.46 % | 21,188 / 170,412 | +778,012 |
+| regex_v8 | 3,325.6 M | 0.15 % / 0.11 % | 0.06 % / 0.36 % | **+5.32 %** | +0.76 % | 42,536 / 275,124 | +930,196 |
+| nbody | 7,118.3 M | 0.02 % / 0.15 % | 0.20 % / 0.00 % | **+3.90 %** | +0.76 % | 23,960 / 167,274 | +1,426,855 |
+
+All seven pass the repeat rule, so all seven are read (on F richards was not). Summed over the seven:
+
+| | not protected | protected | protected vs not |
+|---|---|---|---|
+| in-context (`run_cycles`) | 23,068.8 M | 24,033.3 M | **+4.18 %** (+964.5 M) |
+| kernel and other (`between_cycles`) | 2,862.4 M | 2,880.3 M | +0.63 % |
+| uptime span | 1,051 s | 1,091 s | +3.78 % |
+| hpm3 record-TLB misses | 176,148 | 1,796,816 | x10.2 |
+| hpm4 walk cycles | 6.40 M | 40.83 M | +34.4 M |
+| hpm5 paged record accesses | 2.60 M | 54.27 M | +51.7 M |
+| hpm6 table grows (cause 30) | 1 | 19 | +18 |
+| hpm7 event 23 | 823,383 | 7,967,946 | **+7.14 M** |
+| hpm8 L1D misses | 58.08 M | 68.57 M | +18.1 % |
+
+Over F's six (without richards), for comparison with F: +4.87 % in-context (+766.0 M), against F's +5.17 % (+877.6 M).
+
+**Against the pre-registration.**
+- Answers: **met**, 28/28. Controls: **met**.
+- Repeats: **met** for all 14 pairs on both counters (largest 0.15 % `run_cycles`, 0.36 % `between_cycles`).
+- In-context cost, the benchmarks read, summed: **+4.18 %**, band +3 % to +25 %, **met**.
+- Record-TLB misses, more in the protected arm: **met** for every benchmark (6.5 to 24 times).
+
+**Reading.**
+- CPython's in-context cost on P1 is +4.18 % over all seven, each read, +2.7 % (richards) to +7.4 % (json_dumps).
+- The paged table's walker is a small part of it: +34.4 M walk cycles are 3.6 % of the +964.5 M. Event 23 at 17-20
+  cycles per replay explains 12.6-14.8 %, about the share it had on F (10.5-12.3 % over six). L1D misses rise 18 %. As
+  on F and for PostgreSQL here, most of the cost is not attributed by these counters.
+- The unprotected arm runs 7.4 % fewer in-context cycles on P1 than on F over the same six (15,719 M against
+  16,983 M), so P1's cost sits on a smaller base. The two bitstreams differ in more than the table, and this run does
+  not separate which difference moved the base.
