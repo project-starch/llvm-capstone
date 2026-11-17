@@ -5248,3 +5248,24 @@ Predictions:
 - the plain idle s lies in [0, 12] %;
 - Sublet's idle s lies in [3, 10] % (Addendum 36 read 6.5 % on C.5a; the quantum is 8,000,000 cycles).
 These are wide bands; the readings decide.
+
+## Addendum 159b (2026-11-17 13:05 +08, before any tick probe has run): erratum to Addendum 159
+
+1. **RETRACTION, the correction formula had the wrong sign.**
+   - A probe's s is the share of wall time W lost to gaps, so the time the program itself took is W·(1 − s).
+   - The tick-free ratio is therefore R × (1 − s_Sublet) / (1 − s_plain). Addendum 159 wrote the inverse.
+   - With the earlier readings (plain ≈ 9-11 %, Sublet ≈ 6.5 %), the inverse would have moved every ratio in Sublet's
+     favour by about twice the true correction. This is the form Addendum 40 used.
+   - Found by a fairness audit before any probe ran; no reading exists yet.
+   - **The rule now reads:** if |s_plain − s_Sublet| < 1 pp, no correction and both values disclosed; otherwise every
+     Sublet/plain ratio × (1 − s_Sublet) / (1 − s_plain), with uncorrected and corrected ratios both reported.
+2. **Scope correction, "the matched config differs only in Capstone logic".**
+   - That claim was checked on the config packages only. `git diff --name-only 8db8f9cda d83d3a633` lists 64 non-Anvil
+     RTL and SoC files. Among them are frontend, instr_queue, load_unit, store_buffer, mmu/tlb/ptw, the SoC axi_demux
+     and axi_riscv_lrsc (the tag-overlap lever) and the FPU div/sqrt fix.
+   - The rtl lane classifies the generic-looking ones as capability or tag specific, or plain-neutral by construction.
+     That is a classification, not a measurement.
+   - **What is claimed now:** the configuration parameters are identical, and the matched baseline is stock CVA6 RTL.
+     The prototype's other RTL changes are not ported.
+   - **What would measure it:** the same plain binary on P1 against the matched baseline. Addendum 67 read plain code on
+     an earlier Capstone SoC at +0.1-0.6 %. Not scheduled here; the lead decides.
