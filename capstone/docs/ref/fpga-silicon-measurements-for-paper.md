@@ -7964,6 +7964,15 @@ under vivado-guard with a 40 GB cap, and the checkpoint probes under 12 GB.
   - Guard RSS peaked at 26.10 GB.
   - What follows, as pre-registered: key 1 reads a running peak set before mapping, and mapping itself adds 8 MB.
     Whether to re-key it is the lead's decision, and the full build waits for it.
+  - **Status, 2026-11-17.** The lead chose to re-scope key 1 and build: key 1 is recorded as mis-scoped, not passed,
+    and is replaced by growth across Technology Mapping itself of at most +500 MB, plus a whole-run peak inside the
+    guard. The runtime lane had already launched the full build under a standing instruction, before that answer. It
+    also launched the combined B5a + R-76 tree, capstone-ariane 7180a83b6, whose RTL differs from 6e82d7bd2 only in
+    `core/csr_regfile.sv` (+7 lines).
+    - The combined gate's key-2 probes, run with this lane's scripts, were read here from their own logs:
+      check_timing loops 0 (toy 1) and LUTLP-1 0 (toy 1).
+    - Both full builds are sealed on apollo. Their grades are the RTL lane's records (`land/rtl-sublet-p2`
+      8c9e22649d4b and 87bd522f0eda), not restated here. The flash is the lead's decision.
 - **A withdrawn reading (the RTL lane's, on its lane, c2f7a35f21b2).** The rerun was requested partly because the
   first run's `runme.log` appeared to lack its elaboration messages.
   - That was the stdout capture, not the run. Vivado's own `ariane_xilinx.vds` holds the whole elaboration: it ends
