@@ -373,3 +373,63 @@ Board 1 runs t3k1 then t3k3, board 2 runs t3k2.
 run's rows (per-program replicate); then on this run's rows plus the T3-all run's rows (suite geomeans over all
 103 programs). The checks above by a script committed with the results. Nothing from bitstream 2 enters a
 bitstream-3 geomean.
+
+## All 103 programs on P1, T1 and T3, native route (2026-11-17, before any of these boots)
+
+**Why.** The paper cites the suites from bitstream 3 with an "earlier revision" footnote. The lead asked for them on P1 (d83d3a633), the prototype of the paper's SPEC section, so that every Sublet number comes from one prototype.
+
+**What changes, and it is three things, not one.**
+1. **Bitstream:** P1 instead of bitstream 3.
+2. **SDK revision:** the SPEC arms' SDKs, FRCDKMSspa3 as T1 and FRCDKMSa3 as T3, with compiler llvm-c9 29027126. They carry the protected mallocng, where bitstream 3 had the heap.c registry. check-sdks.py PASS: the two differ only in allocator objects and the sdk.json heap switches.
+3. **Instrument and route:**
+   - P1's kit (bkit91) has no capstone-vm device, so each image is direct-exec'd as SPEC's native stages are.
+   - Each BENCH line's cycles/instret are read in-context with rdcycle/rdinstret (bench-harness `-DBENCH_CONTEXT_COUNTERS`, compiler lane p1-suite-native 5d100db73039). They include kernel time at exits inside the bracket. Bitstream 3 counted CSRUNV windows only.
+   - ns (native_clock) is on every line.
+   - Per process, the run script snapshots native_counters (run_cycles, runs) before and after each process, as the window-only cross-check.
+
+Consequently no P1 ratio is gated against a bitstream-3 ratio. Bitstream 3 is the correctness reference only.
+
+**Kits.** perf/p1suite/kits/{p1k1,p1k2,p1k3,p1a1,p1a2,p1a3,p1a4}, manifests:
+
+| kit | manifest sha256 (first 16) |
+|---|---|
+| p1k1 | 2d51a8aa258c90fa |
+| p1k2 | b3f7add3fa7bb4cb |
+| p1k3 | 6bb43c3d8ecac3c0 |
+| p1a1 | 14173a38479c49d3 |
+| p1a2 | b05de35451c85be7 |
+| p1a3 | 6d3c330b183c6b59 |
+| p1a4 | 8730fe0f733cafd9 |
+
+- Each kit keeps its source kit's step order with every T2 row dropped, and the same W/I.
+- 880 processes in total.
+- QEMU functional pass: p1-check.py PASS on all seven. check= equals bitstream 3's for 103 of 103 programs.
+- Board 3, kit bkit91, one boot per kit, after the P1 tick probes. Chain nat-run3 p1suite-b3.conf.
+
+**Gates (each kit separately; a failing kit voids its own rows only).**
+1. p1-check.py TRANSCRIPT STEPS --ref <bitstream-3 runs> exits 0. It requires, for every step:
+   - rc=0 and source=context-csr ok;
+   - counters=present;
+   - exactly W+I BENCH lines, with cycles/instret/ns > 0;
+   - no VERIFY-FAILED;
+   - native_counters advancing.
+   
+   It also requires check= to be one value across arms, equal to bitstream 3's. The script has been shown to fail on tampered inputs: cycles=0, check= changed in one arm or both, a static counter source, a missing NATIVE-CNT end, rc=1. An empty transcript gives NO DATA.
+2. The boot's native smoke passes. Otherwise the kit is VOID.
+
+**Predictions (T3/T1 cycles, geometric mean per group; written before any boot).**
+- **Upstream BEEBS (80), RV8 (7), CoreMark (1):** within ±0.5 % of 1.000. These never call the runtime's malloc in their timed region. The arms' images differ only in allocator objects, and the in-context instruction counts differ by ≤0.5 % per program in QEMU.
+- **BEEBS on libc malloc (13):** T3/T1 > 1.000, between +0.5 % and +8 %.
+  - The protected mallocng's per-allocation CDERIVE/CREVOKE is the cost. The heap faults it adds fall inside the bracket.
+  - Bitstream 3 read +2.7 % with the old allocator, which is not a band for this one.
+- **The whole BEEBS group (93):** ≤ +1.5 %.
+- **Refutations:**
+  - any upstream program's T3/T1 interval excluding 1 by more than 1 %. That would mean the arms differ outside the allocator, and the SDK check says they cannot.
+  - a libc group below 1.000.
+- **Cross-check:** per process, the ratio of in-context cycles summed over its BENCH lines to its run_cycles delta is ≥ 1 in every process. A window-only count cannot exceed the bracket that includes kernel time.
+
+**Analysis.**
+- parse-board.py, adapted by the compiler lane to the context-csr lines if needed, with the adaptation committed with the results.
+- perf-analyze.py `report --arms T1,T3` over all seven kits.
+- Suite groups as in 2026-10-28 (groups/: BEEBS = upstream + libc).
+- The paper's appendix table is replaced only if every kit passes its gates. Otherwise it keeps bitstream 3 with its footnote.
