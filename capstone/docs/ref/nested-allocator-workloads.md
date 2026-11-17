@@ -1770,6 +1770,92 @@ commands in order, a fresh tmpfs per command, the arm's image staged as given) a
 - Record-TLB misses (hpm3): more in the protected arm.
 - **VOID** if `b0-stats`, `b0-hello` or the smoke fails beyond the kit's waiver.
 
+### Pre-registration: memcached on P1, an in-process driver, two boots (written 2026-11-18 00:20, before the boots)
+
+**Why a driver.** The native route refuses memcached's server by design: `native-syscall-table.c` lists `socket`,
+`socketpair`, `bind`, `listen`, `connect`, `sendto`, `setsockopt`, `shutdown`, `epoll_create1`/`epoll_ctl`, `eventfd2` and
+`timerfd_*` as NS_REFUSE, and there are no threads. So this row runs **memcached 1.6.45's own item and slab code in one
+process, not the server**: `items.c` (unchanged, through `nested/mc/driver/items_tu.c`), `slabs.c`, `assoc.c`, the hash
+functions and `cache.c`, with libevent's types, the mutexes, the condition variables and the thread starts stubbed
+(`nested/mc/driver/`). No socket, thread or event loop is built.
+
+**Configuration.**
+- Driver `nested/mc/driver/mcdrv.c`, built by `nested/mc/build-mcdrv.sh` through the FRCDKMS SDK with the F/P1 flags.
+  - The command stream is Fig. 10's mc-crusher mix (`experiments/study/reuse-hooks/memcached/mc-crusher-established.conf`
+    at 5060011844e): 16 connections, per prefix a:/b:/c:/d: one set and three get connections, values 100 / 500 /
+    2,000 / 8,000 bytes, 10,000 keys drawn zipf(0.25), pipelines of 4, 15,000 commands per connection, 240,000 in all,
+    a fixed seed. A set follows `do_store_item`'s NREAD_SET path; a get is `item_get` then `item_remove`; one `cache.c`
+    read buffer per pipeline; one LRU maintainer pass every 256 commands.
+  - Settings are `settings_init`'s with `-o slab_automove=0` and `-m` from argv[1].
+  - It prints the stream's hash, a CHECK line (hits, misses, set failures, value-integrity failures, items, slab
+    allocations, evictions) and ends `MCDRV-END rc=0`. The answer is the stream hash, `set_fail=0` and `bad=0` (the
+    other CHECK fields are layout-dependent).
+- Arms: stock = patches 0001-0005; protected = + 0006 `slabs-and-cache-sublet-lifetimes` (dev's revision, blob
+  `311a14e7`, two-operand) **with this lane's Q-15 repair**: under `MC_CAPSTONE_SUBLET` the cache's buffer size, the slab
+  class sizes, a page's generation length and a page's own length go through `capstone_repr_round`, so every CDERIVE is
+  exact (`nested/mc/src-prot` against `src-prot-0006`). Without it the protected driver faulted on the twin at its first
+  `cache_alloc` (cause 29: 16,400 bytes is not a multiple of its granule, 32; twin `nmc-1`). `diff -rq src-stock
+  src-prot` lists only the four files 0006 touches.
+- Images: stock `02cc0e9a…` (full `96680334…`), protected `df5744e2…` (full `0ce78f23…`). CREVOKE census: stock 0 with
+  rs2 = x0 and 6 with rs2 != x0 (mallocng); protected 0 and 11 (5 from 0006).
+- **Two boots, one chain** (`nested/p1a/b2-mc.*`, stages `nested/p1a/mc128` and `mc32`, bkit91 wraps of `nested/appd/mc128` and `mc32`), board 2 after this lane's mruby chain:
+  1. `mc128`: `-m 128`, **the reading**. Nothing is evicted in either arm, so both arms do the same work: on the twin
+     both read 88,691 hits, 0 evictions and 30,360 items.
+  2. `mc32`: `-m 32`, Fig. 10's setting. 0006 adds `sublet_parent` to the item header, and the Q-15 repair rounds the
+     class sizes, so the protected arm holds fewer items and evicts more: on the twin the protected arm reads 53,506 hits and 29,807 evictions against 57,586 and 27,108, and its in-context cycles are 2.41 % fewer. **The arms do different
+     work here**, and the row says so; it is reported, not read as the cost.
+  - Each: u1 p1 p2 u2 in one boot, budget 900 (x4 = 3,600 s), booking 50 min.
+- Twin controls `nmc128-1`, `nmc32-1`: all commands rc 0 with the native normalised output. `mc128` in-context
+  3,177.9 / 3,180.9 / 3,180.9 / 3,177.9 M, **+0.10 %**, kernel +6.9 %.
+- Natively the protected driver makes 120,065 CDERIVE and 105,188 CREVOKE per run at `-m 32`.
+
+- Checked off the board, for every stage: real bake, `BOARD_STUB=2` on a returning and a non-returning transcript (rc 0, the budgets printed as registered), real firmware (19,566,088 B), and an `NR_DRY=1` pass of the chain (`nested/p1a/b2-mc.*`).
+
+**Outcomes and bands.**
+- Answers: stream hash, `set_fail=0` and `bad=0` in every command, else VOID for the cost.
+- Repeat rule as above.
+- `mc128` in-context cost, protected vs not: -1 % to +3 %.
+- `mc128`: the hit, miss, eviction and item counts equal between the arms (read from the CHECK lines).
+- Duration: 5 to 10 min per command.
+- **VOID** as above.
+
+### Pre-registration: PHP on P1, both arms in one boot (written 2026-11-18 00:15, before the boot)
+
+**Configuration.**
+- PHP 5.0.0, built by the compiler lane (llvm-capstone `appd-native-images` 1ab971367ac4, from dev 83f60f4660cb;
+  `perf/appd/php/build.sh`, `build-virtual.sh realphp` with the FRCDKMS SDK and the F/P1 flags at -O2). **One image for
+  both arms**, `php-nested.strip.dom` `d63abbc5…` (full `1ec91755…`), with `zend-alloc/sublet` patch 0001 (blob
+  `a0274b91`) and `zend-cap-mode.c` (blob `2851e112`, dev's revision: `heap_end(block, ptr)`, the two-operand CREVOKE).
+- **The arms are run-time modes of that one image** (`PHP_CAP_MODE`, read from the environment; the image aborts if it
+  is unset, and prints its mode to stderr):
+  - not protected, **mode 4**: blocks returned to mallocng, and the caller handed a SHRINKed copy of the block over the
+    bound (`zend-cap-mode.c:150-155`);
+  - protected, **mode 6**: the same block geometry and the same bound, the caller handed a CDERIVE child
+    (`heap_issue`), ended at efree by `heap_end(block, ptr)`.
+  - So the arms differ in the lifetime alone. This is **not Fig. 10's pairing**: Fig. 10's stock arm was a second,
+    pristine binary (`php-stock` `13d187b0…` here), which also differs in block geometry. The row says so.
+- CREVOKE census: the image has 0 with rs2 = x0 and 7 with rs2 != x0 (1 in `zend_cap_reclaim`, 6 in mallocng).
+- Workload: Fig. 10's pinned tenth of bench.php (`bench-tenth.php` `6b9fc8f9…`, Fig. 10's own bench.php hash), run as
+  `php -n bench10-check.php`, where `bench10-check.php` (`655fd6d4…`) differs from it in one line (end_test's
+  `ob_end_clean()` is `ob_end_flush()`) so that every test's result is printed. The answer is the output with the
+  timing column stripped (`sed -E 's/ +[0-9]+\.[0-9]{3}$//'`): native reference `8f692e64…` (two native runs identical).
+  The printed results add a little output work to both arms.
+- Stage `nested/p1a/php10` (bkit91's wrap of `nested/appd/php10/stage`), u1 p1 p2 u2 in one boot. Board 2, after this
+  lane's memcached chain. Budget 2400 (x4 = 9,600 s), booking 120 min.
+- Twin control `nphp10-1`: four commands rc 0 with the native normalised output; the domain printed `ZEND_CAP_MODE 4
+  … revoke=0` and `6 … revoke=1`. In-context 8,765.5 / 8,779.2 / 8,779.2 / 8,765.5 M, **+0.16 %**, repeats 0.00 %. In
+  the smaller bench100g twin (`nphp-1`) the protected arm issued and revoked 364,388 children per run.
+
+- Checked off the board, for every stage: real bake, `BOARD_STUB=2` on a returning and a non-returning transcript (rc 0, the budgets printed as registered), real firmware (19,566,088 B), and an `NR_DRY=1` pass of the chain (`nested/p1a/b2-php.*`).
+
+**Outcomes and bands.**
+- Answers: every command's normalised output equals the native reference, else VOID for the cost.
+- Repeat rule as above.
+- In-context cost, protected vs not: -1 % to +3 % (the twin's +0.16 % is the smallest of these applications; on P1 the
+  others ran 1.9 to 3.5 times their twin cost).
+- Duration: 13 to 26 min per command (the twin's in-context x 2.3 to 4.5 at 25 M cycles/s).
+- **VOID** as above.
+
 ### Results: speedtest1, PostgreSQL and CREVOKE chains on P1 (board 2, 2026-11-17 17:24-19:22)
 
 **Configuration.** As pre-registered (0a57804ea778; SPEC-lane Addendum 160, spec-silicon f7e660db383b). Board 2 was
