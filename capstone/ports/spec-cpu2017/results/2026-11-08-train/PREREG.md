@@ -5508,3 +5508,17 @@ The stages, kits, use and predictions are those of Addenda 164-166. Only placeme
 - **Returns of the protected arm on P1:** 2 boots of 3. With the heartbeat it returned 1 of 1, and without it 1 of 2.
   - The heartbeat is therefore not needed for a return, and the non-return is intermittent. No mechanism is claimed.
   - The lane record is llvm-capstone nested-workloads 35d349afc10c, with ISSUES M-16 updated. The withdrawal of 497d4d6a189e's narrowing stands.
+
+## Addendum 177 (2026-11-18 06:40 +08): the cause of tsu-p2's kernel recompile
+
+- **Cause.** Addendum 176 left the cause of tsu-p2's recompile unknown. It was the nested lane's own B5a kit recheck (nested-workloads 83d154c7a489).
+  - `nested/b5a/recheck-kit.sh` relinked the shared tree `perf/k2n/linux-board-k2n-native-hpm2tree` from 04:47:01 to 04:47:11.
+  - It used bkit94-rec1m's command line, with node_flat_records=1048576.
+  - Its relink log recompiles the same four objects: setup.o, fdt.o, cmdline_early.o and efi-stub.o.
+  - p2's bake at 04:50 restored 262144, so kbuild recompiled the objects that depend on CONFIG_CMDLINE again.
+- **Checked by the SPEC lane.**
+  - The kit's relink runs under the tree's `.native-kernel.lock`.
+  - The relink then stops unless the built Image carries the bake's own command line (board-run.sh:110-115).
+  - So no boot ships another bake's command line, and p2's dmesg line equals p1's.
+- **Unchanged.** The objects are not archived, so Addendum 176 stands: p1 to p2 is not shown to be one variable.
+- **For later P1 bakes from this tree.** Expect the same four-object recompile after each B5a bake. It is not evidence of a changed kernel source.
