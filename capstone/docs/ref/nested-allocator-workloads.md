@@ -1579,3 +1579,73 @@ folder under `fpga-repros/`, and the hardware side gets one link.
 **Not run.** On 15 Nov evening the lead paused the nested work for the final SPEC test run, before this boot started
 (its chain had only waited for the board). The stage, its checksums, the stubbed dry runs and the twin control remain,
 so the boot can run as written when the work resumes.
+
+## Re-timing on P1 (paged lifetime table)
+
+### Pre-registration: speedtest1, PostgreSQL, CPython and CREVOKE chains on P1 (written 2026-11-17, before the boots)
+
+**Question.** The same two arms as on F (the sublet processor in both; the application's lifetime patch applied or not)
+on bitstream P1, whose lifetime table is paged and reached through a 16-entry record TLB. What does each protection cost
+there, and how does CREVOKE scale when a subtree's records span more pages than the record TLB holds?
+
+**Which patches, and why not Fig. 10's.** The images are the F images, unchanged: SQLite memsys5 + lookaside, CPython
+0014 `6c2c170e…`, PostgreSQL 0003 `657c0e1f…` (Q-15-repaired). Fig. 10's reuse rows (llvm-capstone 5060011844e, tree
+trap/eval ed8cc375c2) use later revisions, CPython 0014 `fc63552d…` and PostgreSQL 0003 `65580ed3…`. Those call
+`capstone_cap_release`, a CREVOKE with the object alone (`.insn r 0x5b, 0x1, 0x52, x0, obj, x0`; ed8cc375c2
+`capstone/runtime/include/capstone/capability.h:67`), the QEMU model's ISA. P1's CREVOKE takes rs1 = parent and
+rs2 = child, and raises UNEXPECTED_OPERAND when rs2 is not a capability (capstone-ariane d83d3a633
+`core/anvil_build/capstone_dyn_unit.anvil:303-330`). So Fig. 10's patches cannot run on P1. The SPEC lane chose these
+variants; the rows say they are not Fig. 10's revisions.
+
+**Configuration.**
+- Bitstream P1 `…-tagoverlap6c-pagedtbl_d83d3a633` (sha256 `dc411e36…`), board 2, kit bkit91
+  (`bkit91-k2n-native-p1-tree-cscfix`). Flashed by the chain if not resident, the seal's sha256 checked first and the
+  resident name read back after.
+- The kit's firmware sets the counters for the paged table (`CAPSTONE_HPM_EVENTS_PAGED`, `sbi_hart.c:99-108`):
+  hpm3 = event 29 (record-TLB miss, a walk started), hpm4 = 30 (walk cycles), hpm5 = 31 (record accesses in paged
+  mode), hpm6 = 33 (cause-30 grow), hpm7 = 23 (verdict-cache miss replays), hpm8 = 2 (L1D miss). F's L1I, DTLB,
+  mispredict and issue-stall counters are not on this kit.
+- Stages `nested/p1/<name>`, made by bkit91's `make-train-stage.sh` around each F boot's `train/` directory, which is
+  byte-identical to F's (`diff -r`); only the kit's smoke differs. Checksums `nested/p1/<name>.SHA256SUMS`: st1
+  `8448689f…`, pg `ccdbfbdd…`, crvt `81b6a7f1…`, cpy-u1/u2 `2d27c6b4…`, cpy-p1/p2 `585e2049…`.
+- Images: speedtest1 `817b1652…` / `945fb69f…`; PostgreSQL `pg_unprot.xz` `26a9511f…` / `pg_prot.xz` `194d7fec…` (they
+  unpack to F's `1ea084ab…` / `4cc5f247…`); CPython `b0b29e89…` / `eabba900…`.
+- Boots, in this order, one board:
+  1. `st1`: speedtest1 `--size 1`, U P P U in one boot, budget 900 (x4 = 3,600 s);
+  2. `pg`: PostgreSQL, U P P U in one boot, budget 2700 (10,800 s; F's boot took 86 min);
+  3. `crvt`: CREVOKE chains (below), budget 900;
+  4. `cpy-u1`, `cpy-p1`, `cpy-p2`, `cpy-u2`: CPython, one arm per boot, budget 3600 each.
+- Read by the F parsers (`stage-gen/parse.py`, `pg/parse-pg.py`, `cpy/parse-cpy.py`), with hpm3..8 relabelled as above.
+
+**CREVOKE chains (`crvt`, new domain `crvtime` `b7b4af35…`, source `crvt/crvtime.c` `6bc727e4…`; stage maker
+`crvt/make-stage-crv4.py`).** One process per command, the cycle counter as on F:
+- probes: `control`, `readclock` with cycle and mcycle, and `readclock` with `CRVT_HPM=1`. If hpmcounter3 reads from
+  the domain, the chain commands read it and hpmcounter4 around the CREVOKE;
+- contiguous, as on F: a chain of 1,000, 10,000 and 100,000 nodes, then one CREVOKE of it;
+- scattered: 16,384 siblings (64 record pages; 102,400 and 400 pages for the largest) are derived, then revoked one by
+  one page-strided, so the LIFO free list hands out records a page apart. Then a chain of 1,000, 10,000 or 100,000
+  nodes is built on them, and one CREVOKE of it;
+- last, the probe toward 10^6 nodes, with progress lines every 65,536.
+- Twin (qemu55, flat table, run `ncrv-c4`): every command returns, and the probe dies after 196,609 nodes, as on F.
+  The twin's cycle counts are instruction-based and its table is flat, so it shows only that the commands run.
+
+**Outcomes and bands.**
+- Applications:
+  - answers equal to the reference in every command, else that boot is VOID for the cost;
+  - the repeat rule as on F: within 1 % `run_cycles` and 2 % `between_cycles`, or that difference is not read;
+  - in-context cost, protected vs not: speedtest1 +0.5 % to +5 %; PostgreSQL +3 % to +25 %; CPython, the benchmarks
+    read, summed, +3 % to +25 %. The bands are wide on purpose: on F the protected arms' peak live records (398, 105,043
+    and 76,767) stayed in the flat table, and here every record-TLB miss costs a three-read walk;
+  - record-TLB misses (hpm3) per command: more in the protected arm than in the unprotected arm, for each application.
+- CREVOKE:
+  - contiguous, per node: 15 to 60 cycles for 10,000 and 100,000 nodes (F: 27.9 and 28.2);
+  - scattered, per node: more than contiguous at the same N, predicted 40 to 400 cycles at 10,000 and 100,000;
+  - the scatter took only if the scattered CREVOKE's record-TLB misses are at least 4 times the contiguous one's at the
+    same N. If they are not, or hpmcounter3 cannot be read, the scattered rows are reported as chains on churned
+    records, not as scattered;
+  - the 10^6 probe: not predicted. The paged table can grow (event 33), so it may reach 10^6. The reading is the count
+    reached and whether the process died.
+- **VOID**, as on F: `b0-stats` or `b0-hello` fails, or the smoke fails beyond the kit's waiver.
+
+**Deadline.** The SPEC lane uses P1 rows that land by 2026-11-18 14:00 +08. Until then the paper appendix carries the
+F rows, marked as the dev-era patches on bitstream F.
