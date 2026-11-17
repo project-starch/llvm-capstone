@@ -2066,3 +2066,74 @@ misses 176,114 against 1,797,613; walk cycles +34.4 M; event 23 +7.14 M; L1D mis
   unprotected arms' in-context cycles agree to 0.05 % per benchmark across boards. The P1 CPython figure, **+4.18 %**,
   is reproducible at the boot-to-boot level these counters resolve.
 - The attribution is session 1's: the walker 3.6 %, event 23 12.6-14.8 %, the rest not attributed.
+
+
+### Results: FFmpeg on P1 (board 1, 2026-11-17 23:52 - 2026-11-18 00:13)
+
+**Configuration.** As in the session-2 addendum (858ddee10a4f; SPEC-lane Addendum 161). Board 1 was flashed with P1 at
+23:52 from the seal (sha256 checked) and read back by name; chain `nested/p1s2/p1s2-b1.*`, nat-run3 pid 886911. Stage
+`nested/p1s2/ff`, F's `f2-stage` train unchanged (image set w4). Transcript
+`spec/board/out-nat-p1s2-nested-b1/ff/board.txt` (sha256 `40ec2aa5…`, firmware `46facaf2…`), read by `ffmpeg/parse-ff.py`
+and `nested/p1/abba.py`.
+
+**Controls.** `b0-stats` and `b0-hello` returned 0 and the smoke passed all 9 steps under the kit's waiver; all five
+commands printed `@@SPEC-END` with rc 5, as on F: the decode driver's success status, `FFAPP_M5_ALL` "every frame decoded, decoder drained" (`ports/ffmpeg/app/src/shared/ffapp_decode.h:20`, set at `ffapp_decode.c:173-174` after the drain), and every command's output ends `STAGE M5 frames=300 packets=300`. The stage's `train/` equals F's `f2-stage/train` file for file. Not VOID.
+
+| | u1 | p1 | p2 | u2 | repeat spread, u / p | protected vs not (ABBA means) |
+|---|---|---|---|---|---|---|
+| frames equal to stock (of 300) | 300 | 300 | 300 | 300 | | |
+| `run_cycles` (in-context) | 1,663,440,646 | 1,661,793,248 | 1,663,049,013 | 1,664,390,287 | 0.06 % / 0.08 % | **-0.09 %** (-1.5 M) |
+| `between_cycles` | 79,112,595 | 79,348,369 | 78,672,314 | 78,738,866 | 0.47 % / 0.86 % | +0.11 % |
+| uptime span, s | 70.57 | 70.51 | 70.53 | 70.60 | 0.04 % / 0.03 % | -0.09 % |
+| hpm3 record-TLB misses | 1,130 | 1,128 | 1,128 | 1,130 | | -2 |
+| hpm5 paged record accesses | 118,526 | 167,252 | 167,248 | 118,527 | | +48.7 k |
+| hpm7 event 23 | 34,008 | 35,354 | 35,392 | 34,019 | | +1,360 |
+| hpm8 L1D misses | 6,729,147 | 6,729,147 | 6,728,823 | 6,727,175 | | +0.01 % |
+
+The flipped-input control fp decodes 300 frames with 3 hashes different: FIRES.
+
+**Against the pre-registration.**
+- Answers: **met**, every command matches stock's framemd5 and fp fires.
+- Repeats: **met** on both counters (largest 0.08 % `run_cycles`, 0.86 % `between_cycles`), so the difference is read.
+- In-context cost: **-0.09 %**, band -1 % to +1 %, **met**.
+- Event 23: **met**, +1,360 per command (band under +10,000).
+
+**Reading.** FFmpeg's protection is read on silicon for the first time (on F the unprotected repeats missed the rule):
+it costs nothing measurable, -0.09 % with repeats of 0.06-0.08 %. Its 3,300 lifetimes per decode add 48.7 k paged-record
+accesses and no record-TLB misses.
+
+### Results: PostgreSQL on P1, second session, and the two sessions together (board 1, 2026-11-18 00:13-01:35)
+
+**Configuration.** As in the session-2 addendum (858ddee10a4f; SPEC-lane Addendum 161), the same chain and flash as
+FFmpeg above, the boot after it. Stage `nested/p1s2/pg2`, the same stage and images as session 1's `pg` (`ccdbfbdd…`).
+Transcript `spec/board/out-nat-p1s2-nested-b1/pg2/board.txt` (sha256 `0d192aaf…`, firmware `5e70c31c…`), read by
+`pg/parse-pg.py` (`PG_REF=pg/work/nref4-main/ref.txt`) and `nested/p1/abba.py`.
+
+**Controls.** `b0-stats` and `b0-hello` returned 0, the smoke passed all 9 steps under the kit's waiver, and all four
+commands printed `@@SPEC-END` with rc 0. Not VOID. **Answers:** every command gives the native answers (4 CHECK lines,
+2,000 rows).
+
+| | u1 | p1 | p2 | u2 | repeat spread, u / p | protected vs not (ABBA means) |
+|---|---|---|---|---|---|---|
+| `run_cycles` (in-context) | 11,731,540,161 | 12,647,014,256 | 12,651,830,481 | 11,731,043,711 | 0.00 % / 0.04 % | **+7.83 %** (+918 M) |
+| `between_cycles` | 8,718,865,729 | 8,770,925,841 | 8,838,944,285 | 8,731,608,422 | 0.15 % / 0.78 % | **+0.91 %** |
+| uptime span, s | 821.01 | 860.06 | 862.97 | 821.49 | 0.06 % / 0.34 % | +4.90 % |
+| hpm3 record-TLB misses | 201,631 | 1,184,331 | 1,313,986 | 201,631 | | +1.05 M |
+| hpm4 walk cycles | 7,408,181 | 31,364,659 | 33,898,942 | 7,383,398 | | +25.2 M |
+| hpm5 paged record accesses | 1,849,511 | 30,180,731 | 30,197,405 | 1,849,556 | | +28.3 M |
+| hpm6 grow | 0 | 25 | 0 | 0 | | |
+| hpm7 event 23 | 1,410,942 | 3,447,424 | 3,460,509 | 1,411,749 | | +2.04 M |
+| hpm8 L1D misses | 66,598,412 | 74,977,730 | 75,172,420 | 66,679,856 | | +12.7 % |
+
+**Against the pre-registration.**
+- Answers, controls: **met**. Repeats: **met** on both counters (0.04 % `run_cycles`, 0.78 % `between_cycles`), so the
+  session is read.
+- In-context cost, band +3 % to +25 %: **met**, +7.83 %. Record-TLB misses more in the protected arm: **met** (5.9 times).
+- Two-session rule: both sessions pass, so the reading is the mean of the two ABBA means: in-context **+7.83 %**
+  (session 1 +7.833 %, session 2 +7.826 %); kernel and other **+0.85 %** (+0.79 %, +0.91 %).
+
+**Reading.**
+- On two boards, the two sessions agree to 0.007 points in-context, and the unprotected arms' in-context cycles agree
+  to 0.03 %. The P1 PostgreSQL figure, **+7.83 %**, is reproducible at the boot-to-boot level these counters resolve.
+- The first protected command grew the record table 25 times and the second none, as in session 1 (25, 0). The two protected commands' record-TLB misses differ by 11 % and their walk cycles by 8 %, while
+  their in-context cycles agree to 0.04 %: the walker's +25 M is 2.7 % of the +918 M, as in session 1.
